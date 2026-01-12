@@ -10,7 +10,7 @@ The kernel (domain_os) work should proceed as follows:
 3. Identify data structures as you go.  Create header files in the appropriate namespace directory to hold those structures.  For example, if you identify a structure used by `CACHE_$CLEAR`, you might create `domain_os/cache/cache.h` to hold that structure definition.
 
 ### File Naming Conventions
-- Source files are named after the function, **without** the `<NAMESPACE>_$` prefix, in lowercase: `CAL_$APPLY_LOCAL_OFFSET` → `cal/apply_local_offset.c`
+- Source files are named after the function, **without** the `<NAMESPACE>_$` prefix, in lowercase: `CAL_$APPLY_LOCAL_OFFSET` → `cal/apply_local_offset.c`.  for functions that don't have a `$` in their name, put them in a subdirectory named `misc`.  so `CRASH_SYSTEM` would go in `misc/crash_system.c`.
 - Keep `$` in function names in the C code (e.g., `M$OIU$WLW`, not `M_OIU_WLW`)
 - Use relative includes to reference other modules: `#include "../math/math.h"`
 - Unit tests go in `<module>/test/test_<function_name>.c`
@@ -23,6 +23,8 @@ The kernel (domain_os) work should proceed as follows:
 IMPORTANT: part of the goal of this work is to make the kernel code retargetable to non-m68k architectures.  We will start with other 32-bit architectures (x86), but we'll need to address that a lot of the code is written with m68k-specific assumptions (such as byte ordering, but also things like syscall conventions).  As you work through the code, please keep that in mind and use #defines, typedefs, and other constructs to isolate architecture-specific code.
 
 ALSO IMPORTANT: the original source for much of the kernel (perhaps all of it except for obvious assembly language portions) was written in Pascal, not C.  You will likely find functions that map to nested pascal subprocedures.  Those will require additional analysis to flatten them into C functions.  Include those as static C functions within the C function they're used within.  Please add comments both to the disassembly and to the generated C files.
+
+MORE IMPORTANT INFO: things may be represented in ghidra as functions but that don't behave like C functions, and quite possibly aren't _called_ like C functions.  My expectation there is that they were actually written in assembly language.  I had converted those labels to functions so that ghidra had some better analysis it could perform, but I they should be generated assembly when emitted to fines.  Given their platform-specific nature, please use the suffix for the SAU type (in this current version of domain_os, that will be sau2) in the filename.  For example, if you identify a function that is actually an assembly language routine for the sau2, name the file `<namespace>/sau2/<function_name>.s`.
 
 AND LASTLY, ALSO IMPORTANT: please add tests you to exercise the code you work on.  I realize that this is difficult without a full OS, but please do your best to create unit tests wherever possible for the non-hairy bits.
 
