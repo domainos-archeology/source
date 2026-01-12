@@ -1,13 +1,5 @@
 #include "term.h"
 
-// DTTE offsets for eventcount pointers
-#define DTTE_SIZE           0x38
-#define DTTE_EC_INPUT_OFFSET   0x12AC  // offset 0x0c from flags base (0xe2dc9c)
-#define DTTE_EC_OUTPUT_OFFSET  0x12B8  // offset 0x18 from flags base (0xe2dca8)
-
-// External data
-extern char TERM_$FLAGS_BASE[];  // at 0xe2dc90
-
 // External functions
 extern void *EC2_$REGISTER_EC1(void *ec_ptr, status_$t *status_ret);
 
@@ -21,7 +13,6 @@ extern void *EC2_$REGISTER_EC1(void *ec_ptr, status_$t *status_ret);
 void TERM_$GET_EC(unsigned short *ec_id, short *term_line, ec2_$eventcount_t *ec_ret,
                   status_$t *status_ret) {
     unsigned short line;
-    int dtte_offset;
     void *ec_ptr;
     void *registered_ec;
 
@@ -35,14 +26,11 @@ void TERM_$GET_EC(unsigned short *ec_id, short *term_line, ec2_$eventcount_t *ec
         return;
     }
 
-    dtte_offset = (unsigned int)line * DTTE_SIZE;
-
     if (*ec_id == 0) {
-        // Input eventcount
-        ec_ptr = (void *)(TERM_$FLAGS_BASE + dtte_offset + 0x0c);
+        // Cast m68k_ptr_t (uint32_t address) to native pointer
+        ec_ptr = (void *)(uintptr_t)TERM_$DATA.dtte[line].input_ec;
     } else if (*ec_id == 1) {
-        // Output eventcount
-        ec_ptr = (void *)(TERM_$FLAGS_BASE + dtte_offset + 0x18);
+        ec_ptr = (void *)(uintptr_t)TERM_$DATA.dtte[line].output_ec;
     } else {
         return;
     }

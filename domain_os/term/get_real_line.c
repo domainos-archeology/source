@@ -3,7 +3,7 @@
 // Global variables
 extern short DTTY_$CTRL;           // at 0xe2e00e - default TTY control line
 extern short PROC1_$CURRENT;       // at 0xe20608 - current process indicator
-extern short TERM_$MAX_DTTE;       // at 0xe2dd78 - maximum DTTE entries
+extern term_data_t TERM_$DATA;     // at 0xe2c9f0
 
 // Translates a logical terminal line number to a real line number.
 //
@@ -12,13 +12,13 @@ extern short TERM_$MAX_DTTE;       // at 0xe2dd78 - maximum DTTE entries
 //   1 -> DTTY_$CTRL if PROC1_$CURRENT == 1, else 1
 //   other -> passed through unchanged
 //
-// Valid line numbers are 0-3, but must also be < TERM_$MAX_DTTE.
+// Valid line numbers are 0-3, but must also be < max_dtte.
 //
 // Returns: the real line number (or input unchanged on error)
 // Sets status_ret to:
 //   status_$ok on success
 //   status_$invalid_line_number (0xb0007) if line_num > 3
-//   status_$requested_line_or_operation_not_implemented (0xb000d) if line_num >= MAX_DTTE
+//   status_$requested_line_or_operation_not_implemented (0xb000d) if line_num >= max_dtte
 short TERM_$GET_REAL_LINE(short line_num, status_$t *status_ret) {
     *status_ret = status_$ok;
 
@@ -33,7 +33,7 @@ short TERM_$GET_REAL_LINE(short line_num, status_$t *status_ret) {
 
     if ((unsigned short)line_num > 3) {
         *status_ret = status_$invalid_line_number;
-    } else if ((unsigned short)line_num >= TERM_$MAX_DTTE) {
+    } else if ((unsigned short)line_num >= TERM_$DATA.max_dtte) {
         *status_ret = status_$requested_line_or_operation_not_implemented;
     }
 

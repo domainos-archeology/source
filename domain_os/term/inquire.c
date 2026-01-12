@@ -1,12 +1,5 @@
 #include "term.h"
 
-// DTTE offsets
-#define DTTE_SIZE       0x38
-#define DTTE_FLAG_OFFSET  0x12D6  // flag byte at offset +0x36 from base
-
-// External data
-extern char TERM_$DTTE_BASE[];  // at 0xe2c9f0
-
 // External TTY/SIO functions
 extern void TTY_$I_INQ_RAW(short line, unsigned short *raw_ret, status_$t *status_ret);
 extern void TTY_$K_INQ_FUNC_CHAR(short *line_ptr, void *func_id, unsigned short *char_ret,
@@ -31,18 +24,18 @@ static char func_id_status;     // 0xe66d8a
 // SIO parameter structure
 typedef struct {
     unsigned char unused[3];
-    unsigned char flags1;       // offset 3
+    unsigned char flags1;
     unsigned char padding[3];
-    unsigned char flags2;       // offset 7
-    unsigned long param_bits;   // offset 8
-    unsigned short speed_in;    // offset 12
-    unsigned short speed_out;   // offset 14
-    unsigned short parity;      // offset 16
-    unsigned short stop_bits;   // offset 18
-    unsigned short data_bits;   // offset 20
+    unsigned char flags2;
+    unsigned long param_bits;
+    unsigned short speed_in;
+    unsigned short speed_out;
+    unsigned short parity;
+    unsigned short stop_bits;
+    unsigned short data_bits;
 } sio_params_t;
 
-// Inquire option codes (parallel to CTRL_ codes)
+// Inquire option codes
 #define INQ_FUNC_CHAR_DEFAULT    0
 #define INQ_FUNC_CHAR_BREAK      1
 #define INQ_FUNC_CHAR_2          2
@@ -65,7 +58,6 @@ typedef struct {
 #define INQ_STOP_BITS           19
 #define INQ_DATA_BITS           20
 #define INQ_FLOW_CTRL           21
-// 22 is not used for inquire
 #define INQ_FUNC_CHAR_SUSP      23
 #define INQ_NOP_24              24
 #define INQ_DSUSP_ENABLED       25
@@ -78,14 +70,10 @@ typedef struct {
 #define INQ_SPEED_32            32
 
 // Inquires terminal settings.
-//
-// This is the query counterpart to TERM_$CONTROL, returning current values
-// for various terminal settings.
 void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *value_ret,
                    status_$t *status_ret) {
     unsigned short option;
     short real_line;
-    int dtte_offset;
     unsigned long flags;
     unsigned long func_enabled;
     sio_params_t params;
@@ -132,13 +120,11 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
             if (*status_ret != status_$ok) {
                 return;
             }
-            dtte_offset = (short)(real_line * DTTE_SIZE);
-            *(unsigned char *)value_ret = TERM_$DTTE_BASE[0x12D6 + dtte_offset];
+            *(unsigned char *)value_ret = TERM_$DATA.dtte[real_line].flags;
             break;
 
         case INQ_INT_QUIT_ENABLED:
             TTY_$K_INQ_FUNC_ENABLED(line_ptr, &func_enabled, status_ret);
-            // Both interrupt (0x2000) and quit (0x4000) must be enabled
             *(unsigned char *)value_ret = ((func_enabled & 0x4000) && (func_enabled & 0x2000))
                                           ? 0xFF : 0;
             break;
@@ -247,7 +233,6 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
 
         case INQ_PGROUP:
             TTY_$K_INQ_PGROUP(line_ptr, &pgroup, status_ret);
-            // Copy the full 8-byte UID to the return buffer
             ((uid_$t *)value_ret)->high = pgroup.high;
             ((uid_$t *)value_ret)->low = pgroup.low;
             break;

@@ -1,31 +1,12 @@
 #include "term.h"
 
-// DTTE (Display Terminal Table Entry) structure offsets
-// Each DTTE is 0x38 (56) bytes
-#define DTTE_SIZE           0x38
-#define DTTE_OFFSET_12C4    0x12C4  // some handler pointer
-#define DTTE_OFFSET_12C8    0x12C8  // TTY handler pointer
-#define DTTE_OFFSET_12CC    0x12CC  // alternate handler pointer
-#define DTTE_OFFSET_12D0    0x12D0  // another pointer
-#define DTTE_OFFSET_12D4    0x12D4  // discipline value storage
-
-// External data
-extern char TERM_$DTTE_BASE[];     // at 0xe2c9f0 - base of DTTE array
-extern short TERM_$MAX_DTTE;       // at 0xe2dd78
-extern void *TTY_$SPIN_LOCK;       // at 0xe2ce74
-
-// Handler function pointers stored in ROM/data
-extern void *PTR_TTY_$I_RCV;                           // at 0xe2ca08
-extern void *PTR_TTY_$I_OUTPUT_BUFFER_DRAINED;         // at 0xe2ca0c
-extern void *PTR_TTY_$I_HUP;                           // at 0xe2ca10
-extern void *PTR_TTY_$I_INTERRUPT;                     // at 0xe2ca14
-extern void *PTR_TTY_$I_RCV_ALT;                       // at 0xe2cab0
-extern void (*SUMA_$RCV)(void);                        // at 0xe1ad18
-
 // External functions
 extern unsigned short ML_$SPIN_LOCK(void *lock);
 extern void ML_$SPIN_UNLOCK(void *lock, unsigned short token);
 extern void DTTY_$RELOAD_FONT(void);
+
+// Handler function pointer for SUMA mode
+extern void (*SUMA_$RCV)(void);  // at 0xe1ad18
 
 // Keyboard string data
 extern char TERM_$KBD_STRING_DATA[];  // at 0xe2dd80
@@ -40,10 +21,9 @@ void TERM_$SET_REAL_LINE_DISCIPLINE(unsigned short *line_ptr, short *discipline_
                                      status_$t *status_ret) {
     unsigned short line;
     short discipline;
-    int dtte_offset;
     unsigned short token;
-    void **handler_ptr;
-    void **alt_handler_ptr;
+    dtte_t *dtte;
+    void **tty_struct;
 
     line = *line_ptr;
     if (line > 3) {
@@ -51,62 +31,59 @@ void TERM_$SET_REAL_LINE_DISCIPLINE(unsigned short *line_ptr, short *discipline_
         return;
     }
 
-    if (line >= TERM_$MAX_DTTE) {
+    if (line >= TERM_$DATA.max_dtte) {
         *status_ret = status_$requested_line_or_operation_not_implemented;
         return;
     }
 
     *status_ret = status_$ok;
     discipline = *discipline_ptr;
-    dtte_offset = (short)(line * DTTE_SIZE);
+    dtte = &TERM_$DATA.dtte[line];
 
     switch (discipline) {
         case 0:  // TTY mode
         case 3:  // SUMA mode
-            handler_ptr = (void **)(TERM_$DTTE_BASE + dtte_offset + DTTE_OFFSET_12C8);
-            if (*handler_ptr == NULL) {
+            if (dtte->tty_handler == 0) {
                 *status_ret = status_$invalid_line_number;
                 return;
             }
-            token = ML_$SPIN_LOCK(&TTY_$SPIN_LOCK);
+            token = ML_$SPIN_LOCK((void *)(uintptr_t)TERM_$DATA.tty_spin_lock);
 
+            tty_struct = (void **)(uintptr_t)dtte->tty_handler;
             if (discipline == 0) {
                 // Set up normal TTY handlers
-                void **tty_struct = (void **)*handler_ptr;
-                tty_struct[1] = *(void **)(TERM_$DTTE_BASE + dtte_offset + DTTE_OFFSET_12C4);
-                tty_struct[10] = PTR_TTY_$I_RCV;                    // offset 0x28
-                tty_struct[11] = PTR_TTY_$I_OUTPUT_BUFFER_DRAINED;  // offset 0x2c
-                tty_struct[12] = PTR_TTY_$I_HUP;                    // offset 0x30
-                tty_struct[13] = PTR_TTY_$I_INTERRUPT;              // offset 0x34
+                tty_struct[1] = (void *)(uintptr_t)dtte->handler_ptr;
+                tty_struct[10] = (void *)(uintptr_t)TERM_$DATA.ptr_tty_i_rcv;      // offset 0x28
+                tty_struct[11] = (void *)(uintptr_t)TERM_$DATA.ptr_tty_i_drain;    // offset 0x2c
+                tty_struct[12] = (void *)(uintptr_t)TERM_$DATA.ptr_tty_i_hup;      // offset 0x30
+                tty_struct[13] = (void *)(uintptr_t)TERM_$DATA.ptr_tty_i_int;      // offset 0x34
             } else {
                 // SUMA mode - set receive handler
-                void **tty_struct = (void **)*handler_ptr;
                 tty_struct[10] = (void *)SUMA_$RCV;  // offset 0x28
             }
-            ML_$SPIN_UNLOCK(&TTY_$SPIN_LOCK, token);
+            ML_$SPIN_UNLOCK((void *)(uintptr_t)TERM_$DATA.tty_spin_lock, token);
             break;
 
         case 1:  // Disable alternate handler
         case 2:  // Enable alternate handler
-            alt_handler_ptr = (void **)(TERM_$DTTE_BASE + dtte_offset + DTTE_OFFSET_12CC);
-            if (*alt_handler_ptr == NULL) {
+            if (dtte->alt_handler == 0) {
                 *status_ret = status_$invalid_line_number;
                 return;
             }
-            token = ML_$SPIN_LOCK(&TTY_$SPIN_LOCK);
+            token = ML_$SPIN_LOCK((void *)(uintptr_t)TERM_$DATA.tty_spin_lock);
 
             if (discipline == 1) {
                 // Disable - clear the handler
-                *(void **)*alt_handler_ptr = NULL;
+                *(m68k_ptr_t *)(uintptr_t)dtte->alt_handler = 0;
             } else {
                 // Enable alternate handler with font reload
-                *(void **)*alt_handler_ptr = PTR_TTY_$I_RCV_ALT;
-                ML_$SPIN_UNLOCK(&TTY_$SPIN_LOCK, token);
+                *(m68k_ptr_t *)(uintptr_t)dtte->alt_handler = TERM_$DATA.ptr_tty_i_rcv_alt;
+                ML_$SPIN_UNLOCK((void *)(uintptr_t)TERM_$DATA.tty_spin_lock, token);
                 DTTY_$RELOAD_FONT();
                 TERM_$SEND_KBD_STRING(TERM_$KBD_STRING_DATA, TERM_$KBD_STRING_LEN);
                 goto store_discipline;
             }
-            ML_$SPIN_UNLOCK(&TTY_$SPIN_LOCK, token);
+            ML_$SPIN_UNLOCK((void *)(uintptr_t)TERM_$DATA.tty_spin_lock, token);
             break;
 
         default:
@@ -116,5 +93,5 @@ void TERM_$SET_REAL_LINE_DISCIPLINE(unsigned short *line_ptr, short *discipline_
 
 store_discipline:
     // Store the discipline value in the DTTE
-    *(short *)(TERM_$DTTE_BASE + dtte_offset + DTTE_OFFSET_12D4) = discipline;
+    dtte->discipline = discipline;
 }

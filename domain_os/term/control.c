@@ -1,11 +1,6 @@
 #include "term.h"
 
-// DTTE offsets
-#define DTTE_SIZE       0x38
-#define DTTE_FLAG_OFFSET  0x12D6  // flag byte at offset +0x36 from base
-
 // External data
-extern char TERM_$DTTE_BASE[];  // at 0xe2c9f0
 extern short PROC1_$AS_ID;      // at 0xe2060a
 extern char PROC2_UID[];        // at 0xe7be94 (UID array)
 
@@ -28,7 +23,6 @@ extern void SIO_$K_TIMED_BREAK(short *line_ptr, unsigned short *duration, status
 extern void KBD_$SET_KBD_MODE(short *line_ptr, unsigned char *mode, status_$t *status_ret);
 
 // Function ID constants (these are actually addresses in the original)
-// They identify which terminal function to set/enable
 static char func_id_default;    // 0xe66898
 static char func_id_break;      // 0xe667c4
 static char func_id_2;          // 0xe66d82
@@ -38,7 +32,6 @@ static char func_id_susp;       // 0xe66d8e
 static char func_id_cond;       // 0xe66896
 static char func_id_dsusp;      // 0xe66d8c
 static char func_id_status;     // 0xe66d8a
-static char func_id_output;     // 0xe66d88
 
 // SIO parameter structure for SIO_$K_SET_PARAM
 typedef struct {
@@ -54,54 +47,48 @@ typedef struct {
 } sio_params_t;
 
 // Terminal control options (option codes for TERM_$CONTROL)
-#define CTRL_SET_FUNC_CHAR_DEFAULT    0   // Set default function character
-#define CTRL_SET_FUNC_CHAR_BREAK      1   // Set break function character
-#define CTRL_SET_FUNC_CHAR_2          2   // Set function character 2
-#define CTRL_FLUSH_SET_RAW            3   // Flush input and set raw mode
-#define CTRL_INVERT_INPUT_FLAG        4   // Invert input flag
-#define CTRL_INVERT_OUTPUT_FLAG       5   // Invert output flag
-#define CTRL_SET_SPEED                6   // Set baud rate
-#define CTRL_SET_LINE_FLAG            7   // Set line flag
-#define CTRL_ENABLE_INT_QUIT          8   // Enable interrupt/quit
-#define CTRL_NOP_9                    9   // No operation
-#define CTRL_ENABLE_SUSP             10   // Enable suspend
-#define CTRL_SET_INPUT_FLAG_COND     11   // Set input flag conditional
-#define CTRL_SET_ECHO                12   // Set echo mode
-#define CTRL_SET_SOMETHING_13        13   // Set flag 13
-#define CTRL_NOP_14                  14   // No operation (placeholder)
-#define CTRL_ENABLE_PGROUP           15   // Enable process group and set flag
-#define CTRL_NOP_16                  16   // No operation (placeholder)
-#define CTRL_SET_FLAG_17             17   // Set flag 17
-#define CTRL_SET_PARITY              18   // Set parity
-#define CTRL_SET_STOP_BITS           19   // Set stop bits
-#define CTRL_SET_DATA_BITS           20   // Set data bits
-#define CTRL_SET_FLOW_CTRL           21   // Set flow control
-#define CTRL_TIMED_BREAK             22   // Send timed break
-#define CTRL_SET_FUNC_CHAR_SUSP      23   // Set suspend function character
-#define CTRL_NOP_24                  24   // No operation
-#define CTRL_ENABLE_DSUSP            25   // Enable delayed suspend
-#define CTRL_SET_FUNC_CHAR_DSUSP     26   // Set delayed suspend character
-#define CTRL_ENABLE_STATUS           27   // Enable status
-#define CTRL_SET_FUNC_CHAR_STATUS    28   // Set status function character
-#define CTRL_SET_OUTPUT_FLAG_COND    29   // Set output flag conditional
-#define CTRL_SET_PGROUP              30   // Set process group directly
-#define CTRL_SET_FLAG_31             31   // Set flag 31
-#define CTRL_SET_SPEED_32            32   // Set speed (alternate)
-#define CTRL_FLUSH_INPUT             33   // Flush input buffer
-#define CTRL_FLUSH_OUTPUT            34   // Flush output buffer
-#define CTRL_DRAIN_OUTPUT            35   // Drain output buffer
-#define CTRL_SET_KBD_MODE            36   // Set keyboard mode
+#define CTRL_SET_FUNC_CHAR_DEFAULT    0
+#define CTRL_SET_FUNC_CHAR_BREAK      1
+#define CTRL_SET_FUNC_CHAR_2          2
+#define CTRL_FLUSH_SET_RAW            3
+#define CTRL_INVERT_INPUT_FLAG        4
+#define CTRL_INVERT_OUTPUT_FLAG       5
+#define CTRL_SET_SPEED                6
+#define CTRL_SET_LINE_FLAG            7
+#define CTRL_ENABLE_INT_QUIT          8
+#define CTRL_NOP_9                    9
+#define CTRL_ENABLE_SUSP             10
+#define CTRL_SET_INPUT_FLAG_COND     11
+#define CTRL_SET_ECHO                12
+#define CTRL_SET_SOMETHING_13        13
+#define CTRL_ENABLE_PGROUP           15
+#define CTRL_SET_FLAG_17             17
+#define CTRL_SET_PARITY              18
+#define CTRL_SET_STOP_BITS           19
+#define CTRL_SET_DATA_BITS           20
+#define CTRL_SET_FLOW_CTRL           21
+#define CTRL_TIMED_BREAK             22
+#define CTRL_SET_FUNC_CHAR_SUSP      23
+#define CTRL_NOP_24                  24
+#define CTRL_ENABLE_DSUSP            25
+#define CTRL_SET_FUNC_CHAR_DSUSP     26
+#define CTRL_ENABLE_STATUS           27
+#define CTRL_SET_FUNC_CHAR_STATUS    28
+#define CTRL_SET_OUTPUT_FLAG_COND    29
+#define CTRL_SET_PGROUP              30
+#define CTRL_SET_FLAG_31             31
+#define CTRL_SET_SPEED_32            32
+#define CTRL_FLUSH_INPUT             33
+#define CTRL_FLUSH_OUTPUT            34
+#define CTRL_DRAIN_OUTPUT            35
+#define CTRL_SET_KBD_MODE            36
 
 // Controls terminal settings and behavior.
-//
-// This is a large dispatch function handling many terminal control operations.
-// Options are passed via option_ptr, with associated values in value_ptr.
 void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *value_ptr,
                    status_$t *status_ret) {
     unsigned short option;
     unsigned char inverted;
     short real_line;
-    int dtte_offset;
     sio_params_t params;
     unsigned long param_mask;
     void *pgroup_ptr;
@@ -147,8 +134,7 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             if (*status_ret != status_$ok) {
                 return;
             }
-            dtte_offset = (short)(real_line * DTTE_SIZE);
-            TERM_$DTTE_BASE[0x12D6 + dtte_offset] = *(unsigned char *)value_ptr;
+            TERM_$DATA.dtte[real_line].flags = *(unsigned char *)value_ptr;
             goto done_no_convert;
 
         case CTRL_ENABLE_INT_QUIT:
@@ -158,7 +144,6 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
 
         case CTRL_NOP_9:
         case CTRL_NOP_24:
-            // No operation
             goto done_no_convert;
 
         case CTRL_ENABLE_SUSP:
@@ -194,8 +179,7 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             } else {
                 params.flags1 &= ~4;
             }
-            // Set process group
-            pgroup_ptr = (void *)((char *)&PROC2_UID + (short)(PROC1_$AS_ID << 3));
+            pgroup_ptr = (void *)(PROC2_UID + (short)(PROC1_$AS_ID << 3));
             TTY_$K_SET_PGROUP(line_ptr, pgroup_ptr, status_ret);
             param_mask = 0x800;
             goto set_sio_param;
@@ -211,15 +195,9 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
 
         case CTRL_SET_PARITY:
             switch (*value_ptr) {
-                case 0:
-                    params.parity = 0;
-                    break;
-                case 1:
-                    params.parity = 1;
-                    break;
-                case 3:
-                    params.parity = 3;
-                    break;
+                case 0: params.parity = 0; break;
+                case 1: params.parity = 1; break;
+                case 3: params.parity = 3; break;
                 default:
                     *status_ret = status_$term_invalid_option;
                     return;
@@ -229,18 +207,10 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
 
         case CTRL_SET_STOP_BITS:
             switch (*value_ptr) {
-                case 0:
-                    params.stop_bits = 0;
-                    break;
-                case 1:
-                    params.stop_bits = 1;
-                    break;
-                case 2:
-                    params.stop_bits = 2;
-                    break;
-                case 3:
-                    params.stop_bits = 3;
-                    break;
+                case 0: params.stop_bits = 0; break;
+                case 1: params.stop_bits = 1; break;
+                case 2: params.stop_bits = 2; break;
+                case 3: params.stop_bits = 3; break;
                 default:
                     *status_ret = status_$term_invalid_option;
                     return;
@@ -250,15 +220,9 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
 
         case CTRL_SET_DATA_BITS:
             switch (*value_ptr) {
-                case 1:
-                    params.data_bits = 1;
-                    break;
-                case 2:
-                    params.data_bits = 2;
-                    break;
-                case 3:
-                    params.data_bits = 3;
-                    break;
+                case 1: params.data_bits = 1; break;
+                case 2: params.data_bits = 2; break;
+                case 3: params.data_bits = 3; break;
                 default:
                     *status_ret = status_$term_invalid_option;
                     return;
@@ -297,7 +261,7 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
         case CTRL_ENABLE_STATUS:
             TTY_$K_ENABLE_FUNC(line_ptr, &func_id_status, value_ptr, status_ret);
         set_pgroup:
-            pgroup_ptr = (void *)((char *)&PROC2_UID + (short)(PROC1_$AS_ID << 3));
+            pgroup_ptr = (void *)(PROC2_UID + (short)(PROC1_$AS_ID << 3));
             TTY_$K_SET_PGROUP(line_ptr, pgroup_ptr, status_ret);
             goto done;
 

@@ -1,16 +1,5 @@
 #include "term.h"
 
-// DTTE structure offsets
-#define DTTE_SIZE           0x38
-#define DTTE_OFFSET_12C4    0x12C4
-#define DTTE_OFFSET_12C8    0x12C8
-#define DTTE_OFFSET_12CC    0x12CC
-#define DTTE_OFFSET_12D0    0x12D0
-
-// External data
-extern char TERM_$DTTE_BASE[];  // at 0xe2c9f0
-extern short TERM_$MAX_DTTE;    // at 0xe2dd78
-
 // Data structures for terminal initialization
 // These addresses are from the original binary and represent various
 // terminal data structures that get initialized
@@ -77,18 +66,15 @@ extern void SUMA_$INIT(void);
 void TERM_$INIT(short *param1, short *param2) {
     short i;
     unsigned long init_value = 0xFFFFFFFF;
-    char *dtte_ptr;
     void *local_vars[16];  // Stack frame for various pointers
 
     // Initialize DTTE entries (clear handler pointers)
     // There are 4 entries (indices 0-3), each 0x38 bytes
-    dtte_ptr = TERM_$DTTE_BASE;
     for (i = 3; i >= 0; i--) {
-        *(unsigned long *)(dtte_ptr + DTTE_OFFSET_12C4) = 0;
-        *(unsigned long *)(dtte_ptr + DTTE_OFFSET_12CC) = 0;
-        *(unsigned long *)(dtte_ptr + DTTE_OFFSET_12C8) = 0;
-        *(unsigned long *)(dtte_ptr + DTTE_OFFSET_12D0) = 0;
-        dtte_ptr += DTTE_SIZE;
+        TERM_$DATA.dtte[i].handler_ptr = 0;
+        TERM_$DATA.dtte[i].alt_handler = 0;
+        TERM_$DATA.dtte[i].tty_handler = 0;
+        TERM_$DATA.dtte[i].ptr_30 = 0;
     }
 
     // Initialize terminal 0 (display terminal)
@@ -162,14 +148,14 @@ void TERM_$INIT(short *param1, short *param2) {
 
     // Enable crash handler for process 1
     if (*param1 == 1) {
-        int offset = (short)(*param2 * DTTE_SIZE);
+        int offset = (short)(*param2 * sizeof(dtte_t));
         void *handler = *(void **)(DAT_00e2dcb4 + offset);
         // Enable ESC (0x1b) as crash key with mask 0xff
         TTY_$I_ENABLE_CRASH_FUNC(handler, 0x1b, 0xff);
     }
 
     // Set maximum DTTE count
-    TERM_$MAX_DTTE = 3;
+    TERM_$DATA.max_dtte = 3;
 
     // Initialize SUMA (Screen Update Manager?)
     SUMA_$INIT();
