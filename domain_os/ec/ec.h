@@ -119,15 +119,6 @@ extern void ML_$LOCK(uint16_t lock_id);
 extern void ML_$UNLOCK(uint16_t lock_id);
 extern void CRASH_SYSTEM(const void *status);
 
-/* Process functions */
-extern int16_t PROC1_$CURRENT;
-extern int16_t PROC1_$AS_ID;
-extern void *PROC1_$CURRENT_PCB;
-extern uint16_t PROC1_$EC_WAITN(void *pcb, ec_$eventcount_t **ecs,
-                                 int32_t **wait_vals, int16_t count);
-extern void PROC1_$SET_TS(void *pcb, int16_t val);
-extern void PROC1_$DISPATCH_INT(void);
-
 /* FIM (Fault/Interrupt Manager) functions */
 extern status_$t FIM_$CLEANUP(void *context);
 extern void FIM_$RLS_CLEANUP(void *context);
@@ -135,8 +126,11 @@ extern void FIM_$SIGNAL(status_$t status);
 extern ec_$eventcount_t FIM_$QUIT_EC;
 extern int32_t FIM_$QUIT_VALUE;
 
-/* Helper function at 0x00e20844 */
-extern void FUN_00e20844(void);
+/*
+ * Note: EC source files that need PROC1_$ functions/globals should
+ * include "../proc1/proc1.h" directly. This avoids circular dependencies
+ * since proc1.h already includes ec.h.
+ */
 
 /*
  * ============================================================================

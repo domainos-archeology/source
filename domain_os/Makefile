@@ -11,11 +11,12 @@ SRCS := \
   $(wildcard os/*.c) \
   $(wildcard osinfo/*.c) \
   $(wildcard pmap/*.c) \
+  $(wildcard proc1/*.c) \
   $(wildcard term/*.c) \
   $(wildcard tty/*.c)
 
 # Assembly files (platform-specific)
-ASM_SRCS := $(wildcard ec/$(TARGET_SAU)/*.s)
+ASM_SRCS := $(wildcard ec/$(TARGET_SAU)/*.s) $(wildcard proc1/$(TARGET_SAU)/*.s)
 ASM_OBJS := $(patsubst %.s,build/$(TARGET_SAU)/%.o,$(ASM_SRCS))
 OBJS := $(patsubst %.c,build/$(TARGET_SAU)/%.o,$(SRCS))
 
@@ -44,6 +45,11 @@ $(OBJS): %.o: $(patsubst build/$(TARGET_SAU)/%.o,%.c,$(OBJS))
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
 build/$(TARGET_SAU)/ec/$(TARGET_SAU)/%.o: ec/$(TARGET_SAU)/%.s
+	@mkdir -p $(dir $@)
+	@echo "[AS] $<"
+	@$(CC) $(SAU2_FLAGS) -c -o $@ $<
+
+build/$(TARGET_SAU)/proc1/$(TARGET_SAU)/%.o: proc1/$(TARGET_SAU)/%.s
 	@mkdir -p $(dir $@)
 	@echo "[AS] $<"
 	@$(CC) $(SAU2_FLAGS) -c -o $@ $<

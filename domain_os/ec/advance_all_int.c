@@ -14,6 +14,7 @@
  */
 
 #include "ec.h"
+#include "../proc1/proc1.h"
 
 /*
  * Process control block offsets for priority and wait management
@@ -81,7 +82,7 @@ void ADVANCE_ALL_INT(ec_$eventcount_t *ec)
 
                 /* If process is not inhibited (bit 1 not set), wake it */
                 if ((pcb[PCB_PRI_MAX_OFFSET] & 0x02) == 0) {
-                    FUN_00e20844();
+                    proc1_$insert_into_ready_list((proc1_t *)waiter->pcb);
                 }
             }
         }

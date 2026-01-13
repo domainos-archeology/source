@@ -15,6 +15,7 @@
  */
 
 #include "ec.h"
+#include "../proc1/proc1.h"
 
 int16_t EC_$WAIT(ec_$eventcount_t *ecs[3], int32_t *wait_val)
 {
@@ -31,7 +32,7 @@ int16_t EC_$WAIT(ec_$eventcount_t *ecs[3], int32_t *wait_val)
     }
 
     /* Call the N-wait function */
-    result = PROC1_$EC_WAITN(PROC1_$CURRENT_PCB, ecs, &wait_val, num_ecs);
+    result = PROC1_$EC_WAITN(PROC1_$CURRENT_PCB, ecs, wait_val, num_ecs);
 
     return result - 1;
 }
