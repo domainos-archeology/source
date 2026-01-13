@@ -82,13 +82,22 @@ extern uid_$t UID_$NIL;
 // =============================================================================
 // Eventcount types
 // =============================================================================
-typedef struct {
-    long value;
-} ec2_$eventcount_t;
 
-typedef struct {
-    long value;
+// Forward declaration for waiter structure
+struct ec_$eventcount_waiter_t;
+
+// Level 1 Event Count (12 bytes)
+typedef struct ec_$eventcount_t {
+    int32_t     value;              // 0x00: Current value
+    struct ec_$eventcount_waiter_t *waiter_list_head;  // 0x04: Head of waiter list
+    struct ec_$eventcount_waiter_t *waiter_list_tail;  // 0x08: Tail of waiter list
 } ec_$eventcount_t;
+
+// Level 2 Event Count (6 bytes)
+typedef struct ec2_$eventcount_t {
+    int32_t     value;              // 0x00: Current value or EC1 pointer/index
+    int16_t     awaiters;           // 0x04: Count of waiters or waiter index
+} ec2_$eventcount_t;
 
 // =============================================================================
 // Clock type

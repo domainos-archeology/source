@@ -29,14 +29,13 @@
  * Forward declarations
  */
 struct aste_t;
+struct aote_t;
 
 /*
- * Event counter structure (from base)
+ * Event counter structure - use the one from base.h (ec_$eventcount_t)
+ * Alias for compatibility with existing code
  */
-typedef struct ec_eventcount_t {
-    int32_t         value;          /* Current value */
-    /* Additional fields for waiting */
-} ec_eventcount_t;
+typedef ec_$eventcount_t ec_eventcount_t;
 
 /*
  * PMAP Global Variables
