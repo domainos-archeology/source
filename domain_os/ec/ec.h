@@ -27,16 +27,9 @@
 #include "../base/base.h"
 
 /*
- * Level 1 Event Count structure - defined in base.h
- * Size: 12 bytes (0x0C)
- *   value: 0x00 - Current value
- *   waiter_list_head: 0x04 - Head of waiter list
- *   waiter_list_tail: 0x08 - Tail of waiter list
- */
-
-/*
  * Level 1 Event Count waiter structure
  * Waiters are linked in a list from the eventcount
+ * Size: 16 bytes (0x10)
  */
 typedef struct ec_$eventcount_waiter_t {
     int32_t     wait_val;           /* 0x00: Value waiting for */
@@ -46,11 +39,23 @@ typedef struct ec_$eventcount_waiter_t {
 } ec_$eventcount_waiter_t;
 
 /*
- * Level 2 Event Count structure - defined in base.h
- * Size: 6 bytes
- *   value: 0x00 - Current value or EC1 pointer/index
- *   awaiters: 0x04 - Count of waiters or waiter index
+ * Level 1 Event Count structure
+ * Size: 12 bytes (0x0C)
  */
+typedef struct ec_$eventcount_t {
+    int32_t     value;              /* 0x00: Current value */
+    ec_$eventcount_waiter_t *waiter_list_head;  /* 0x04: Head of waiter list */
+    ec_$eventcount_waiter_t *waiter_list_tail;  /* 0x08: Tail of waiter list */
+} ec_$eventcount_t;
+
+/*
+ * Level 2 Event Count structure
+ * Size: 6 bytes
+ */
+typedef struct ec2_$eventcount_t {
+    int32_t     value;              /* 0x00: Current value or EC1 pointer/index */
+    int16_t     awaiters;           /* 0x04: Count of waiters or waiter index */
+} ec2_$eventcount_t;
 
 /*
  * EC2 waiter entry structure

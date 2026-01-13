@@ -17,7 +17,7 @@ extern uint32_t DAT_00e23344;  /* Remote purifier enabled flag */
 
 void PMAP_$WAKE_PURIFIER(int8_t wait)
 {
-    ec_eventcount_t *pages_ec;
+    ec_$eventcount_t *pages_ec;
     int32_t wait_value;
 
     /* Record the current pages event count + 1 */

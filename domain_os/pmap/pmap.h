@@ -24,18 +24,13 @@
 #define PMAP_H
 
 #include "../base/base.h"
+#include "../ec/ec.h"
 
 /*
  * Forward declarations
  */
 struct aste_t;
 struct aote_t;
-
-/*
- * Event counter structure - use the one from base.h (ec_$eventcount_t)
- * Alias for compatibility with existing code
- */
-typedef ec_$eventcount_t ec_eventcount_t;
 
 /*
  * PMAP Global Variables
@@ -45,9 +40,9 @@ typedef ec_$eventcount_t ec_eventcount_t;
     #define PMAP_GLOBALS_BASE           0xE24D44
 
     /* Event counters */
-    #define PMAP_$PAGES_EC              (*(ec_eventcount_t*)0xE25494)    /* 0x750 */
-    #define PMAP_$L_PURIFIER_EC         (*(ec_eventcount_t*)0xE254AC)    /* 0x768 */
-    #define PMAP_$R_PURIFIER_EC         (*(ec_eventcount_t*)0xE254A0)    /* 0x75C */
+    #define PMAP_$PAGES_EC              (*(ec_$eventcount_t*)0xE25494)    /* 0x750 */
+    #define PMAP_$L_PURIFIER_EC         (*(ec_$eventcount_t*)0xE254AC)    /* 0x768 */
+    #define PMAP_$R_PURIFIER_EC         (*(ec_$eventcount_t*)0xE254A0)    /* 0x75C */
 
     /* Thresholds */
     #define PMAP_$LOW_THRESH            (*(uint16_t*)0xE254E0)           /* Low threshold */
@@ -67,9 +62,9 @@ typedef ec_$eventcount_t ec_eventcount_t;
 
 #else
     /* For non-m68k platforms */
-    extern ec_eventcount_t  pmap_pages_ec;
-    extern ec_eventcount_t  pmap_l_purifier_ec;
-    extern ec_eventcount_t  pmap_r_purifier_ec;
+    extern ec_$eventcount_t  pmap_pages_ec;
+    extern ec_$eventcount_t  pmap_l_purifier_ec;
+    extern ec_$eventcount_t  pmap_r_purifier_ec;
     extern uint16_t         pmap_low_thresh;
     extern uint16_t         pmap_mid_thresh;
     extern uint16_t         pmap_ws_interval;
@@ -120,11 +115,8 @@ extern uint32_t DAT_00e23320;            /* Impure pages flag */
  */
 extern void ML_$LOCK(uint16_t lock_id);
 extern void ML_$UNLOCK(uint16_t lock_id);
-extern void EC_$ADVANCE(ec_eventcount_t *ec);
-extern void EC_$WAIT(ec_eventcount_t **ecs, void *values, int16_t count);
-extern void EC_$WAITN(ec_eventcount_t **ecs, int32_t *values, int16_t count);
+/* EC_$ADVANCE, EC_$WAIT, EC_$WAITN, CRASH_SYSTEM declared in ec/ec.h */
 extern void PROC1_$SET_LOCK(uint16_t lock_id);
-extern void CRASH_SYSTEM(const char *msg);
 
 /*
  * Time functions
@@ -156,7 +148,7 @@ extern void MMU_$REMOVE(uint32_t ppn);
  * AST functions
  */
 extern void AST_$UPDATE(void);
-extern ec_eventcount_t AST_$PMAP_IN_TRANS_EC;   /* AST pmap in-transit event counter */
+extern ec_$eventcount_t AST_$PMAP_IN_TRANS_EC;   /* AST pmap in-transit event counter */
 
 /*
  * DISK functions
