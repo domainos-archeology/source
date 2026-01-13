@@ -2,12 +2,14 @@
 TARGET_SAU := sau2
 
 SRCS := \
+  $(wildcard ast/*.c) \
   $(wildcard cal/*.c) \
   $(wildcard math/*.c) \
   $(wildcard mmap/*.c) \
   $(wildcard mmu/*.c) \
   $(wildcard os/*.c) \
   $(wildcard osinfo/*.c) \
+  $(wildcard pmap/*.c) \
   $(wildcard term/*.c) \
   $(wildcard tty/*.c)
 OBJS := $(patsubst %.c,build/$(TARGET_SAU)/%.o,$(SRCS))
