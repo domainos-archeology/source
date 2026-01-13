@@ -32,9 +32,9 @@ long M$MIS$LLW(long multiplicand,short multiplier) {
   
   uVar1 = HIGH16(multiplicand) * multiplier;
   if (multiplier < 0) {
-    uVar1 = uVar1 - LOW(multiplicand);
+    uVar1 = uVar1 - LOW16(multiplicand);
   }
-  return (uint)uVar1 * 0x10000 + (LOW(multiplicand)) * (uint)(ushort)multiplier;
+  return (uint)uVar1 * 0x10000 + (LOW16(multiplicand)) * (uint)(ushort)multiplier;
 }
 
 

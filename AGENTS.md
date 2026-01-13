@@ -14,6 +14,7 @@ The kernel (domain_os) work should proceed as follows:
 - Keep `$` in function names in the C code (e.g., `M$OIU$WLW`, not `M_OIU_WLW`)
 - Use relative includes to reference other modules: `#include "../math/math.h"`
 - Unit tests go in `<module>/test/test_<function_name>.c`
+- Add files and include paths to the Makefile as needed.
 
 ### Decompilation Guidelines
 - The Ghidra decompiler output often needs cleanup - compare against the assembly to verify correctness

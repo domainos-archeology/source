@@ -6,7 +6,7 @@
    Returns remainder only */
 
 long M$OIS$LLL(long dividend,long divisor) {
-  bool bVar1;
+  int bVar1;
   long uVar1;
   int iVar2;
   short sVar3;
@@ -40,9 +40,7 @@ long M$OIS$LLL(long dividend,long divisor) {
    Wrapper around M$OIS$LLL for 16-bit divisor
    Returns remainder as 16-bit value */
 
-short M$OIS$WLW(long dividend,short divisor)
-
-{
+short M$OIS$WLW(long dividend,short divisor) {
   long lVar1;
   
   lVar1 = M$OIS$LLL(dividend,(int)divisor);
@@ -67,6 +65,6 @@ short M$OIS$WWL(short dividend,long divisor) {
    Returns remainder as 16-bit value */
 
 short M$OIU$WLW(long dividend,short divisor) {
-  return (short)(CONCAT22(dividend._0_2_ % (ushort)divisor,dividend._2_2_) % (uint)(ushort)divisor);
+  return (short)(CONCAT(HIGH16(dividend) % (ushort)divisor,LOW16(dividend)) % (uint)(ushort)divisor);
 }
 

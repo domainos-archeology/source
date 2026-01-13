@@ -61,7 +61,6 @@ ulong M$DIU$LLL(ulong dividend,ulong divisor) {
 
   for (short i = 0; i < 32; i ++) {
     char cVar1 = (int)dividend < 0;
-    uint uVar2;
 
     dividend = dividend << 1;
     uint uVar2 = uVar2 << 1 | (uint)cVar1;

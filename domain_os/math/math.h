@@ -1,10 +1,8 @@
 
-#ifdef __M68K
-#define HIGH16(x) ((x) >> 16)
-#define LOW16(x) ((x) & 0xffff)
-#endif
+#define HIGH16(x32) ((x32) >> 16)
+#define LOW16(x32) ((x32) & 0xffff)
 
-#define CONCAT(hi, lo) (((hi) << 16) | (lo))
+#define CONCAT(hi16, lo16) (((hi16) << 16) | (lo16))
 
 typedef unsigned long ulong;
 typedef unsigned int uint;
