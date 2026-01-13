@@ -4,6 +4,7 @@ TARGET_SAU := sau2
 SRCS := \
   $(wildcard cal/*.c) \
   $(wildcard math/*.c) \
+  $(wildcard mmap/*.c) \
   $(wildcard os/*.c) \
   $(wildcard osinfo/*.c) \
   $(wildcard term/*.c) \
