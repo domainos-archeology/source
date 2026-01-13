@@ -35,10 +35,13 @@
 /*
  * Status codes
  */
-#define status_$proc2_uid_not_found     0x00190001
-#define status_$proc2_zombie            0x0019000E
-#define status_$proc2_invalid_signal    0x00190002
-#define status_$proc2_bad_process_group 0x00190003
+#define status_$proc2_uid_not_found         0x00190001
+#define status_$proc2_invalid_signal        0x00190002
+#define status_$proc2_bad_process_group     0x00190003
+#define status_$proc2_invalid_process_name  0x0019000A
+#define status_$proc2_bad_eventcount_key    0x0019000B
+#define status_$proc2_zombie                0x0019000E
+#define status_$proc2_permission_denied     0x00190012
 
 /*
  * Process flags (offset 0x2A in proc2_info_t)
@@ -155,12 +158,10 @@ typedef struct proc2_info_t {
     uint16_t    level1_pid;     /* 0x9A: PROC1 process ID */
     uint16_t    pad_9c;         /* 0x9C: Unknown */
 
-    uint8_t     pad_9e[0x20];   /* 0x9E: Unknown */
+    char        name[32];       /* 0x9E: Process name (32 chars max) */
+    uint8_t     name_len;       /* 0xBE: Process name length (0x21='!', 0x22='"' for no name) */
 
-    uint8_t     name_len;       /* 0xBE: Process name length */
-    char        name[32];       /* 0xBF: Process name */
-
-    uint8_t     pad_df[5];      /* 0xDF: Padding to 0xE4 */
+    uint8_t     pad_bf[0x25];   /* 0xBF: Padding to 0xE4 */
 } proc2_info_t;
 
 /*
@@ -283,9 +284,10 @@ void PROC2_$SET_NAME(char *name, int16_t *name_len, uid_$t *proc_uid, status_$t 
 
 /*
  * PROC2_$NAME_TO_UID - Find process by name
+ * Searches for a process with the given name and returns its UID.
  * Original address: 0x00e3ead0
  */
-void PROC2_$NAME_TO_UID(char *name, uint16_t name_len, uid_$t *uid_ret, status_$t *status_ret);
+void PROC2_$NAME_TO_UID(char *name, int16_t *name_len, uid_$t *uid_ret, status_$t *status_ret);
 
 /*
  * ============================================================================

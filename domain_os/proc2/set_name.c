@@ -15,9 +15,6 @@
 
 #include "proc2.h"
 
-/* Status code for invalid name */
-#define status_$proc2_invalid_process_name  0x0019000A
-
 void PROC2_$SET_NAME(char *name, int16_t *name_len, uid_$t *proc_uid, status_$t *status_ret)
 {
     int16_t index;
