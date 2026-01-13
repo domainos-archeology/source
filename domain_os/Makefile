@@ -12,6 +12,7 @@ SRCS := \
   $(wildcard osinfo/*.c) \
   $(wildcard pmap/*.c) \
   $(wildcard proc1/*.c) \
+  $(wildcard proc2/*.c) \
   $(wildcard term/*.c) \
   $(wildcard tty/*.c)
 
