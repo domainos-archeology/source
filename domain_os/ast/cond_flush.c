@@ -1,0 +1,64 @@
+/*
+ * AST_$COND_FLUSH - Conditionally flush an object if timestamps differ
+ *
+ * Flushes dirty pages for an object only if the object's data timestamp
+ * differs from the provided timestamp. This is used for conditional
+ * synchronization where we only want to flush if changes have occurred.
+ *
+ * Parameters:
+ *   uid - Pointer to object UID
+ *   timestamp - Pointer to timestamp to compare (6 bytes: 4-byte time + 2-byte sub)
+ *   status - Status return
+ *
+ * Original address: 0x00e05b9c
+ */
+
+#include "ast.h"
+
+/* Internal function prototypes */
+extern void FUN_00e0209e(uid_t *uid);  /* Look up AOTE by UID */
+extern void FUN_00e01ad2(aote_t *aote, int8_t flags1, uint16_t flags2,
+                         uint16_t flags3, status_$t *status);
+extern void FUN_00e00f7c(aote_t *aote);
+
+void AST_$COND_FLUSH(uid_t *uid, uint32_t *timestamp, status_$t *status)
+{
+    aote_t *aote;
+    status_$t local_status;
+    uid_t local_uid;
+
+    /* Copy UID locally */
+    local_uid.high = uid->high;
+    local_uid.low = uid->low;
+
+    local_status = status_$ok;
+
+    PROC1_$INHIBIT_BEGIN();
+    ML_$LOCK(AST_LOCK_ID);
+
+    /* Look up AOTE by UID */
+    FUN_00e0209e(&local_uid);
+    aote = NULL;  /* TODO: Get from FUN_00e0209e return in A0 */
+
+    if (aote != NULL) {
+        /* Compare timestamps */
+        /* AOTE timestamp is at offset 0x38 (4 bytes) and 0x3c (2 bytes) */
+        uint32_t aote_time = *(uint32_t *)((char *)aote + 0x38);
+        uint16_t aote_sub = *(uint16_t *)((char *)aote + 0x3C);
+
+        if (aote_time != timestamp[0] ||
+            aote_sub != *(uint16_t *)((char *)timestamp + 4)) {
+            /* Timestamps differ - flush the object */
+            FUN_00e01ad2(aote, -1, 0, 0xFF00 | 0xE0, &local_status);
+
+            if (local_status == status_$ok) {
+                FUN_00e00f7c(aote);
+            }
+        }
+    }
+
+    ML_$UNLOCK(AST_LOCK_ID);
+    PROC1_$INHIBIT_END();
+
+    *status = local_status;
+}
