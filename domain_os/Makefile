@@ -5,6 +5,7 @@ SRCS := \
   $(wildcard cal/*.c) \
   $(wildcard math/*.c) \
   $(wildcard mmap/*.c) \
+  $(wildcard mmu/*.c) \
   $(wildcard os/*.c) \
   $(wildcard osinfo/*.c) \
   $(wildcard term/*.c) \
