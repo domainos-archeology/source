@@ -1,34 +1,7 @@
 #ifndef TERM_H
 #define TERM_H
 
-#include <stddef.h>
-#include <stdint.h>
-
-typedef unsigned long ulong;
-typedef unsigned int uint;
-typedef unsigned short ushort;
-typedef long status_$t;
-
-// m68k pointer type (32-bit on original hardware)
-// Use uint32_t for structure layout, cast to actual pointer when dereferencing
-typedef uint32_t m68k_ptr_t;
-
-// Status codes
-#define status_$ok                                          0
-#define status_$invalid_line_number                         0x000b0007
-#define status_$requested_line_or_operation_not_implemented 0x000b000d
-#define status_$term_invalid_option                         0x000b0004
-
-// UID structure (8 bytes on m68k)
-typedef struct {
-    uint32_t high;
-    uint32_t low;
-} uid_$t;
-
-// Eventcount type for TERM_$GET_EC
-typedef struct {
-    long value;
-} ec2_$eventcount_t;
+#include "../base/base.h"
 
 // Maximum number of terminal lines
 #define TERM_MAX_LINES  4

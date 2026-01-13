@@ -4,7 +4,10 @@ TARGET_SAU := sau2
 SRCS := \
   $(wildcard cal/*.c) \
   $(wildcard math/*.c) \
-  $(wildcard term/*.c)
+  $(wildcard os/*.c) \
+  $(wildcard osinfo/*.c) \
+  $(wildcard term/*.c) \
+  $(wildcard tty/*.c)
 OBJS := $(patsubst %.c,build/$(TARGET_SAU)/%.o,$(SRCS))
 
 # we assume local #include's will have fully qualified paths
