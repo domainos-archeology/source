@@ -505,10 +505,11 @@ void *PROC1_$GET_USP(void);
  */
 
 /*
- * PROC1_$SET_ASID - Set address space ID for process
+ * PROC1_$SET_ASID - Set address space ID for current process
+ * Sets the ASID in the current PCB and installs it in the MMU.
  * Original address: 0x00e148f8
  */
-void PROC1_$SET_ASID(uint16_t pid, uint16_t asid);
+void PROC1_$SET_ASID(uint16_t asid);
 
 /*
  * ============================================================================

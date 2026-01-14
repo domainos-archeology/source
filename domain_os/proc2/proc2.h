@@ -409,22 +409,27 @@ void PROC2_$COMPLETE_FORK(status_$t *status_ret);
 void PROC2_$COMPLETE_VFORK(status_$t *status_ret);
 
 /*
- * PROC2_$DELETE - Delete a process
+ * PROC2_$DELETE - Delete current process
+ * Performs cleanup and enters infinite unbind loop.
+ * Does not return - process is destroyed.
  * Original address: 0x00e74398
  */
-void PROC2_$DELETE(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$DELETE(void);
 
 /*
  * PROC2_$STARTUP - Process startup
+ * Called to complete process startup after creation.
+ * Sets ASID, clears superuser mode, marks process valid, calls FIM.
  * Original address: 0x00e73454
  */
-void PROC2_$STARTUP(void);
+void PROC2_$STARTUP(void *context);
 
 /*
  * PROC2_$SET_VALID - Mark process as valid
+ * Marks current process as valid and initializes creation record if new process.
  * Original address: 0x00e73484
  */
-void PROC2_$SET_VALID(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$SET_VALID(void);
 
 /*
  * ============================================================================
