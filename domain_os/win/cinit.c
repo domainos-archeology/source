@@ -43,12 +43,12 @@ status_$t WIN_$CINIT(void *controller)
 
         /* Initialize event counter for this unit */
         unit_num = *(uint16_t *)(ctrl + 6);
-        EC__INIT((void *)(win_data + WIN_EC_ARRAY_OFFSET +
+        EC_$INIT((void *)(win_data + WIN_EC_ARRAY_OFFSET +
                          (int16_t)(unit_num * WIN_UNIT_ENTRY_SIZE)));
 
         /* Register with DISK subsystem */
-        jump_table_ptr = &WIN__JUMP_TABLE;
-        DISK__REGISTER(&WIN_TYPE, &WIN_TYPE,
+        jump_table_ptr = &WIN_$JUMP_TABLE;
+        DISK_$REGISTER(&WIN_TYPE, &WIN_TYPE,
                        win_data + WIN_FLAGS_OFFSET,
                        win_data + WIN_DEV_TYPE_OFFSET,
                        &jump_table_ptr);

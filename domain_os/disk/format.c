@@ -37,7 +37,7 @@
 #define DEV_FLAG_NO_TRACK_FORMAT  0x200
 
 /* Current process ID */
-extern int16_t PROC1__CURRENT;
+extern int16_t PROC1_$CURRENT;
 
 /* Process table base */
 #define PROC_TABLE_BASE  ((uint8_t *)0x00e7a544)
@@ -84,7 +84,7 @@ void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
     mount_state = *(uint16_t *)(vol_entry + DISK_MOUNT_STATE_OFFSET);
     mount_proc = *(int16_t *)(vol_entry + DISK_MOUNT_PROC_OFFSET);
 
-    if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1__CURRENT) {
+    if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1_$CURRENT) {
         *status = status_$volume_not_properly_mounted;
         return;
     }
@@ -102,8 +102,8 @@ void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
     FUN_00e3be8a(1, 0, &buffer, &buffer_param);
 
     /* Get event counters from process table */
-    ec1 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1__CURRENT * 0x1c)) + 1;
-    ec2 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1__CURRENT * 0x1c) + 0xc) + 1;
+    ec1 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1_$CURRENT * 0x1c)) + 1;
+    ec2 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1_$CURRENT * 0x1c) + 0xc) + 1;
 
     /* Calculate partition index from head number */
     sectors_per_track = *(uint16_t *)(vol_entry + DISK_SECTORS_PER_TRACK);

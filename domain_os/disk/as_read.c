@@ -17,7 +17,7 @@
 
 /* External functions */
 extern uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status);
-extern void WP__UNWIRE(uint32_t wired_addr);
+extern void WP_$UNWIRE(uint32_t wired_addr);
 extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *buffer,
                          void *daddr, void *info);
 
@@ -63,5 +63,5 @@ void DISK_$AS_READ(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr, uint16_t *count_p
     }
 
     /* Unwire the buffer */
-    WP__UNWIRE(wired_addr);
+    WP_$UNWIRE(wired_addr);
 }

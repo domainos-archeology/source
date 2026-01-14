@@ -98,7 +98,7 @@ uint32_t WIN_$INT(void *param)
 
 signal_done:
     /* Signal event counter for completion */
-    EC__ADVANCE_WITHOUT_DISPATCH((void *)(win_data + WIN_EC_ARRAY_OFFSET + unit_offset));
+    EC_$ADVANCE_WITHOUT_DISPATCH((void *)(win_data + WIN_EC_ARRAY_OFFSET + unit_offset));
 
     return 0xff;
 }

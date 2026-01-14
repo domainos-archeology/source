@@ -92,29 +92,29 @@ typedef struct {
  * Global variables (extern declarations)
  * Actual addresses are in the kernel data segment around 0xe24xxx
  */
-extern uint16_t MST__SEG_TN;               /* Total number of segments */
-extern uint16_t MST__GLOBAL_A_SIZE;        /* Global A segment count */
-extern uint16_t MST__SEG_GLOBAL_A;         /* First global A segment */
-extern uint16_t MST__SEG_GLOBAL_A_END;     /* Last global A segment */
-extern uint16_t MST__PRIVATE_A_SIZE;       /* Private A segment count */
-extern uint16_t MST__SEG_PRIVATE_A_END;    /* Last private A segment */
-extern uint16_t MST__SEG_PRIVATE_B;        /* First private B segment */
-extern uint16_t MST__SEG_PRIVATE_B_END;    /* Last private B segment */
-extern uint16_t MST__SEG_PRIVATE_B_OFFSET; /* Private B offset in tables */
-extern uint16_t MST__SEG_GLOBAL_B;         /* First global B segment */
-extern uint16_t MST__SEG_GLOBAL_B_OFFSET;  /* Global B offset in tables */
-extern uint16_t MST__SEG_HIGH;             /* Highest segment number */
-extern uint16_t MST__SEG_MEM_TOP;          /* Top of addressable memory */
-extern uint16_t MST__GLOBAL_B_SIZE;        /* Global B segment count */
-extern uint16_t MST__TOUCH_COUNT;          /* Touch-ahead page count */
-extern uint16_t MST__MST_PAGES_WIRED;      /* Number of wired MST pages */
-extern uint16_t MST__MST_PAGES_LIMIT;      /* Maximum MST pages to wire */
+extern uint16_t MST_$SEG_TN;               /* Total number of segments */
+extern uint16_t MST_$GLOBAL_A_SIZE;        /* Global A segment count */
+extern uint16_t MST_$SEG_GLOBAL_A;         /* First global A segment */
+extern uint16_t MST_$SEG_GLOBAL_A_END;     /* Last global A segment */
+extern uint16_t MST_$PRIVATE_A_SIZE;       /* Private A segment count */
+extern uint16_t MST_$SEG_PRIVATE_A_END;    /* Last private A segment */
+extern uint16_t MST_$SEG_PRIVATE_B;        /* First private B segment */
+extern uint16_t MST_$SEG_PRIVATE_B_END;    /* Last private B segment */
+extern uint16_t MST_$SEG_PRIVATE_B_OFFSET; /* Private B offset in tables */
+extern uint16_t MST_$SEG_GLOBAL_B;         /* First global B segment */
+extern uint16_t MST_$SEG_GLOBAL_B_OFFSET;  /* Global B offset in tables */
+extern uint16_t MST_$SEG_HIGH;             /* Highest segment number */
+extern uint16_t MST_$SEG_MEM_TOP;          /* Top of addressable memory */
+extern uint16_t MST_$GLOBAL_B_SIZE;        /* Global B segment count */
+extern uint16_t MST_$TOUCH_COUNT;          /* Touch-ahead page count */
+extern uint16_t MST_$MST_PAGES_WIRED;      /* Number of wired MST pages */
+extern uint16_t MST_$MST_PAGES_LIMIT;      /* Maximum MST pages to wire */
 
 /*
  * ASID list - bitmap tracking allocated ASIDs
  * Bit set = ASID is allocated
  */
-extern uint8_t MST__ASID_LIST[8]; /* Bitmap for 58 ASIDs (0-57) */
+extern uint8_t MST_$ASID_LIST[8]; /* Bitmap for 58 ASIDs (0-57) */
 #define MST_MAX_ASIDS 58          /* 0x3a */
 
 /*

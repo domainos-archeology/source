@@ -18,8 +18,8 @@
 
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
 extern void CRASH_SYSTEM(status_$t *status);
-extern uint32_t MMU__VTOP(uint32_t virt_addr, status_$t *status);
-extern void MMAP__WIRE(uint32_t phys_addr);
+extern uint32_t MMU_$VTOP(uint32_t virt_addr, status_$t *status);
+extern void MMAP_$WIRE(uint32_t phys_addr);
 
 /* Error status for out-of-bounds reference */
 extern status_$t MST_Ref_OutOfBounds_Err;
@@ -48,7 +48,7 @@ uint32_t MST_$FIND(uint32_t virt_addr, uint16_t flags)
     ML_$LOCK(MST_LOCK_MMU);
 
     /* Try to translate virtual to physical address */
-    phys_addr = MMU__VTOP(virt_addr, status);
+    phys_addr = MMU_$VTOP(virt_addr, status);
 
     if (status[0] == status_$ok) {
         /*
@@ -56,7 +56,7 @@ uint32_t MST_$FIND(uint32_t virt_addr, uint16_t flags)
          * Wire it if requested (bit 1 set).
          */
         if ((flags & 2) != 0) {
-            MMAP__WIRE(phys_addr);
+            MMAP_$WIRE(phys_addr);
         }
         ML_$UNLOCK(MST_LOCK_MMU);
         return phys_addr;

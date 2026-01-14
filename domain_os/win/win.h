@@ -33,7 +33,7 @@
  *   +0x0a: Flags
  *   +0x0c: Lock ID per unit (array, 0x0c bytes each)
  *   +0x30: Event counter (per unit)
- *   +0x40: Statistics counters (WIN__CNT)
+ *   +0x40: Statistics counters (WIN_$CNT)
  *   +0x58: Current status
  *   +0x5c: Current device info
  *   +0x60: Current request pointer
@@ -99,8 +99,8 @@ typedef struct {
 /*
  * Global data
  */
-extern void *WIN__JUMP_TABLE;
-extern win_stats_t WIN__CNT;
+extern void *WIN_$JUMP_TABLE;
+extern win_stats_t WIN_$CNT;
 
 /*
  * Function prototypes - Public API
@@ -143,15 +143,15 @@ extern void FUN_00e19186(uint16_t unit, char status, uint16_t *out);
  * External functions used by WIN
  */
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
-extern void EC__INIT(void *ec);
-extern int16_t EC__WAIT(void *ec_array, void *wait_val);
-extern void EC__ADVANCE_WITHOUT_DISPATCH(void *ec);
-extern void DISK__REGISTER(void *type, void *ctrl, void *flags, void *dev_type,
+extern void EC_$INIT(void *ec);
+extern int16_t EC_$WAIT(void *ec_array, void *wait_val);
+extern void EC_$ADVANCE_WITHOUT_DISPATCH(void *ec);
+extern void DISK_$REGISTER(void *type, void *ctrl, void *flags, void *dev_type,
                            void **jump_table);
-extern void DISK__SORT(void *dev_entry, void **queue_ptr);
+extern void DISK_$SORT(void *dev_entry, void **queue_ptr);
 extern uint32_t DISK_INIT(uint16_t unit, uint16_t vol_idx, void *p3, void *p4,
                           void *p5, void *p6, void *p7);
-extern int16_t PARITY__CHK_IO(uint32_t addr, uint32_t size);
+extern int16_t PARITY_$CHK_IO(uint32_t addr, uint32_t size);
 extern void CRASH_SYSTEM(void *error);
 
 /* Error messages */

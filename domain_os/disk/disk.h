@@ -114,20 +114,20 @@ typedef struct {
  */
 
 /* Disk subsystem base at 0xe7a1cc */
-extern uint8_t DISK__DATA[];
+extern uint8_t DISK_$DATA[];
 
 /* Volume table (64 entries, 72 bytes each) */
-extern disk_volume_entry_t DISK__VOLUMES[];
+extern disk_volume_entry_t DISK_$VOLUMES[];
 
 /* Device registration table at 0xe7ad5c (32 entries, 12 bytes each) */
-extern disk_device_entry_t DISK__DEVICES[];
+extern disk_device_entry_t DISK_$DEVICES[];
 
 /* Event counter for disk operations */
-extern void *DISK__EC;
+extern void *DISK_$EC;
 
 /* Exclusion locks */
-extern void *DISK__EXCLUSION_1; /* +0x90 */
-extern void *DISK__EXCLUSION_2; /* +0xa8 */
+extern void *DISK_$EXCLUSION_1; /* +0x90 */
+extern void *DISK_$EXCLUSION_2; /* +0xa8 */
 
 /*
  * Function prototypes - Public API
@@ -211,13 +211,13 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
  * External functions used by DISK
  */
 /* ML_$LOCK, ML_$UNLOCK, ML_$EXCLUSION_INIT declared in ml/ml.h */
-extern void EC__INIT(void *ec);
+extern void EC_$INIT(void *ec);
 
 /* DBUF functions */
-extern void *DBUF__GET_BLOCK(int16_t vol_idx, int32_t daddr, void *uid,
+extern void *DBUF_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *uid,
                              uint16_t p4, uint16_t p5, status_$t *status);
-extern void DBUF__SET_BUFF(void *buffer, uint16_t flags, void *param_3);
-extern void DBUF__INVALIDATE(int32_t param_1, uint16_t vol_idx);
+extern void DBUF_$SET_BUFF(void *buffer, uint16_t flags, void *param_3);
+extern void DBUF_$INVALIDATE(int32_t param_1, uint16_t vol_idx);
 
 /* Internal I/O function */
 extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *daddr, void *buffer,

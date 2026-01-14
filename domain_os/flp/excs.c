@@ -57,12 +57,12 @@
 #define FLP_ST2_BAD_CYL          0x02  /* Bad cylinder */
 #define FLP_ST2_MISSING_DAM      0x01  /* Missing data address mark */
 
-/* External event counter list for EC__WAIT */
+/* External event counter list for EC_$WAIT */
 extern uint32_t DAT_00e2b0d4;
 
 /* FLP data area fields */
-extern void *FLP__EC;            /* +0x60: Event counter */
-extern uint16_t FLP__SREGS;      /* +0x70: Status register 0 (word) */
+extern void *FLP_$EC;            /* +0x60: Event counter */
+extern uint16_t FLP_$SREGS;      /* +0x70: Status register 0 (word) */
 extern uint16_t DAT_00e7af66;    /* +0x72: Status registers 1-2 */
 extern uint8_t DAT_00e7af69;     /* +0x75: Status register 2 low byte */
 extern uint8_t DAT_00e7af6c[];   /* +0x78: Unit status array */
@@ -108,7 +108,7 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
     uint32_t ec_list[6];     /* Event counter wait list */
 
     /* Get event counter value + 1 for wait comparison */
-    ec_value_ptr = (uint32_t *)((uintptr_t)&FLP__EC + sizeof(uint32_t));
+    ec_value_ptr = (uint32_t *)((uintptr_t)&FLP_$EC + sizeof(uint32_t));
     uint32_t wait_value = *ec_value_ptr + 1;
 
     /* Send command to controller via SHAKE */
@@ -119,14 +119,14 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
 
     /*
      * Wait for command completion.
-     * EC__WAIT takes an event counter list and a value to wait for.
+     * EC_$WAIT takes an event counter list and a value to wait for.
      * The list format is complex - contains pointers to EC structures.
      */
     /* Build event counter wait list */
-    ec_list[0] = (uint32_t)(uintptr_t)&FLP__EC;
+    ec_list[0] = (uint32_t)(uintptr_t)&FLP_$EC;
     ec_list[1] = DAT_00e2b0d4 + 8;  /* Secondary EC address */
 
-    wait_result = EC__WAIT((void *)ec_list, &wait_value);
+    wait_result = EC_$WAIT((void *)ec_list, &wait_value);
 
     /* Check for DMA and parity errors (unless command was interrupt sense) */
     if ((cmd_buf[0] & 7) != 7) {  /* Not sense interrupt command */
@@ -134,7 +134,7 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
 
         /* Check for parity errors on write operations */
         if ((regs->control & 2) != 0) {
-            parity_result = PARITY__CHK_IO(1, DAT_00e7b01c);
+            parity_result = PARITY_$CHK_IO(1, DAT_00e7b01c);
             if ((int8_t)(-(parity_result != 0)) < 0) {
                 return status_$memory_parity_error_during_disk_write;
             }
@@ -149,11 +149,11 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
 
     /* If wait timed out, set status to indicate seek error */
     if (wait_result != 0) {
-        FLP__SREGS = 0x10;  /* Indicate abnormal termination */
+        FLP_$SREGS = 0x10;  /* Indicate abnormal termination */
     }
 
     /* Check if status indicates any error condition */
-    if ((FLP__SREGS & FLP_ST0_STATUS_MASK) == 0) {
+    if ((FLP_$SREGS & FLP_ST0_STATUS_MASK) == 0) {
         /* No errors - command completed successfully */
         return status_$ok;
     }
@@ -180,18 +180,18 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
 
     /*
      * Interpret status registers to determine error type.
-     * FLP__SREGS[high byte] is ST0, [low byte] is ST1
+     * FLP_$SREGS[high byte] is ST0, [low byte] is ST1
      * DAT_00e7af66[high byte] is ST2
      */
 
     /* Check for equipment check (ST0 bit 4) */
-    if ((FLP__SREGS & FLP_ST0_EQUIP_CHECK) != 0) {
+    if ((FLP_$SREGS & FLP_ST0_EQUIP_CHECK) != 0) {
         result = status_$disk_equipment_check;
         goto check_retry;
     }
 
     /* Check for abnormal termination (ST0 bit 3) */
-    if ((FLP__SREGS & FLP_ST0_ABNORMAL_TERM) != 0) {
+    if ((FLP_$SREGS & FLP_ST0_ABNORMAL_TERM) != 0) {
         DAT_00e7b026 = 0;  /* Clear retry flag */
 
         /* Check result register for specific conditions */
@@ -207,7 +207,7 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
     }
 
     /* Check if drive is not ready (ST0 bits 7:6) */
-    if ((~FLP__SREGS & FLP_ST0_NOT_READY) == 0) {
+    if ((~FLP_$SREGS & FLP_ST0_NOT_READY) == 0) {
         result = status_$disk_not_ready;
         goto clear_flag_and_return;
     }

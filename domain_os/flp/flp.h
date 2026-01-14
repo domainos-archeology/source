@@ -50,8 +50,8 @@ typedef struct {
 /*
  * Global data area at 0xe7aef4 (FLP_$DATA)
  * Layout based on analysis of code:
- *   +0x60:  FLP__EC (event counter)
- *   +0x70:  FLP__SREGS (status registers array)
+ *   +0x60:  FLP_$EC (event counter)
+ *   +0x70:  FLP_$SREGS (status registers array)
  *   +0x78:  Unit status array (2 bytes per unit)
  *   +0x80:  I/O buffer area
  *   +0xe8:  Controller table (8 bytes per controller)
@@ -68,13 +68,13 @@ typedef struct {
  */
 
 /* Event counter for floppy operations */
-extern void *FLP__EC;
+extern void *FLP_$EC;
 
 /* Saved registers from interrupt */
-extern uint16_t FLP__SREGS;
+extern uint16_t FLP_$SREGS;
 
 /* Jump table for floppy operations */
-extern void *FLP__JUMP_TABLE;
+extern void *FLP_$JUMP_TABLE;
 
 /* Current controller address */
 extern int32_t DAT_00e7b020;
@@ -165,14 +165,14 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_sig, void *req);
 void FLP_FORMAT_TRACK(void *req, void *buf);
 
 /* External functions used by FLP */
-extern void DISK__REGISTER(void *p1, void *p2, void *p3, void *p4, void **p5);
-extern void EC__INIT(void *ec);
-extern void EC__ADVANCE_WITHOUT_DISPATCH(void *ec);
-extern int16_t EC__WAIT(void *ec_list, uint32_t *value);
-extern uint32_t MMU__VTOP(uint32_t va, status_$t *status);
-extern void WP__WIRE(uint32_t phys);
+extern void DISK_$REGISTER(void *p1, void *p2, void *p3, void *p4, void **p5);
+extern void EC_$INIT(void *ec);
+extern void EC_$ADVANCE_WITHOUT_DISPATCH(void *ec);
+extern int16_t EC_$WAIT(void *ec_list, uint32_t *value);
+extern uint32_t MMU_$VTOP(uint32_t va, status_$t *status);
+extern void WP_$WIRE(uint32_t phys);
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
-extern int16_t PARITY__CHK_IO(int16_t mode, uint32_t addr);
+extern int16_t PARITY_$CHK_IO(int16_t mode, uint32_t addr);
 extern status_$t check_dma_error(int16_t channel);
 
 #endif /* FLP_H */

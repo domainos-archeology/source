@@ -12,7 +12,7 @@
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
 
 /* External process ASID */
-extern int16_t PROC1__AS_ID;
+extern int16_t PROC1_$AS_ID;
 
 /* Internal lookup function */
 extern void FUN_00e4411c(uint16_t asid, uint32_t va, void *param,
@@ -114,7 +114,7 @@ void MST_$GET_UID(uint32_t *va_ptr,
     int8_t modified_flag;
     int8_t unused;
 
-    MST_$GET_VA_INFO((uint16_t *)&PROC1__AS_ID,
+    MST_$GET_VA_INFO((uint16_t *)&PROC1_$AS_ID,
                      va_ptr,
                      uid_out,
                      adjusted_va,

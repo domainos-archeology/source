@@ -12,7 +12,7 @@
 #define DISK_DEVICE_TABLE  ((uint8_t *)0x00e7ad5c)
 
 /* Time wait function */
-extern void TIME__WAIT(void *timeout_type, void *timeout, status_$t *status);
+extern void TIME_$WAIT(void *timeout_type, void *timeout, status_$t *status);
 
 /* Timeout type constant */
 static uint16_t timeout_type = 0;  /* Embedded in code at 0xe3db72 */
@@ -56,6 +56,6 @@ void DISK_$SPIN_DOWN(int16_t vol_idx, status_$t *status)
     if (max_time > 0) {
         int32_t wait_time = (int32_t)max_time << 2;
         uint16_t wait_mode = 0;
-        TIME__WAIT(&timeout_type, &wait_time, status);
+        TIME_$WAIT(&timeout_type, &wait_time, status);
     }
 }

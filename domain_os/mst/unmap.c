@@ -9,7 +9,7 @@
 #include "mst.h"
 
 /* External process ID */
-extern int16_t PROC1__AS_ID;
+extern int16_t PROC1_$AS_ID;
 
 /*
  * MST_$UNMAP - Unmap memory from current process
@@ -28,6 +28,6 @@ void MST_$UNMAP(uid_$t *uid,
                      uid,
                      *start_va_ptr,
                      *length_ptr,
-                     PROC1__AS_ID, /* Current process ASID */
+                     PROC1_$AS_ID, /* Current process ASID */
                      status_ret);
 }

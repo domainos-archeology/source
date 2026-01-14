@@ -1,7 +1,7 @@
 /*
  * DISK_$GET_BLOCK - Get a disk block from the buffer cache
  *
- * This is a wrapper that acquires the disk lock, calls DBUF__GET_BLOCK,
+ * This is a wrapper that acquires the disk lock, calls DBUF_$GET_BLOCK,
  * then releases the lock.
  *
  * @param vol_idx       Volume index
@@ -21,7 +21,7 @@ void *DISK_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *expected_uid,
     void *result;
 
     ML_$LOCK(DISK_LOCK_ID);
-    result = DBUF__GET_BLOCK(vol_idx, daddr, expected_uid, param_4, param_5, status);
+    result = DBUF_$GET_BLOCK(vol_idx, daddr, expected_uid, param_4, param_5, status);
     ML_$UNLOCK(DISK_LOCK_ID);
 
     return result;

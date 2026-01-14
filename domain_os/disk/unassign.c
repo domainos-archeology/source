@@ -10,10 +10,10 @@
 #include "disk.h"
 
 /* Diskless flag */
-extern int8_t NETWORK__REALLY_DISKLESS;
+extern int8_t NETWORK_$REALLY_DISKLESS;
 
 /* Current process ID */
-extern int16_t PROC1__CURRENT;
+extern int16_t PROC1_$CURRENT;
 
 /* Mount state and process at offset 0x90 and 0x92 in volume entry */
 #define DISK_MOUNT_STATE_OFFSET  0x90
@@ -29,7 +29,7 @@ extern int16_t PROC1__CURRENT;
 #define DISK_MOUNT_ASSIGNED  2
 
 /* Forward declaration */
-extern void DISK__DISMOUNT(uint16_t vol_idx);
+extern void DISK_$DISMOUNT(uint16_t vol_idx);
 
 void DISK_$UNASSIGN(uint16_t *vol_idx_ptr, status_$t *status)
 {
@@ -41,7 +41,7 @@ void DISK_$UNASSIGN(uint16_t *vol_idx_ptr, status_$t *status)
     vol_idx = *vol_idx_ptr;
 
     /* Check if diskless */
-    if (NETWORK__REALLY_DISKLESS >= 0) {
+    if (NETWORK_$REALLY_DISKLESS >= 0) {
         /* Validate volume index (must be 1-10) */
         if ((((uint32_t)1 << (vol_idx & 0x1f)) & VALID_VOL_MASK) == 0) {
             *status = status_$invalid_volume_index;
@@ -53,9 +53,9 @@ void DISK_$UNASSIGN(uint16_t *vol_idx_ptr, status_$t *status)
         mount_state = *(uint16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_STATE_OFFSET);
         mount_proc = *(int16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_PROC_OFFSET);
 
-        if (mount_state == DISK_MOUNT_ASSIGNED && mount_proc == PROC1__CURRENT) {
+        if (mount_state == DISK_MOUNT_ASSIGNED && mount_proc == PROC1_$CURRENT) {
             /* Dismount the volume */
-            DISK__DISMOUNT(vol_idx);
+            DISK_$DISMOUNT(vol_idx);
             *status = status_$ok;
             return;
         }

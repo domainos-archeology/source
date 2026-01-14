@@ -12,8 +12,8 @@
 #include "mst.h"
 
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
-extern uint32_t MMU__VTOP(uint32_t virt_addr, status_$t *status);
-extern void MMAP__WIRE(uint32_t phys_addr);
+extern uint32_t MMU_$VTOP(uint32_t virt_addr, status_$t *status);
+extern void MMAP_$WIRE(uint32_t phys_addr);
 
 /*
  * MST_$WIRE - Wire a virtual page into physical memory
@@ -31,13 +31,13 @@ uint32_t MST_$WIRE(uint32_t vpn, status_$t *status_ret)
     ML_$LOCK(MST_LOCK_MMU);
 
     /* Try to translate virtual to physical address */
-    phys_addr = MMU__VTOP(vpn, &status);
+    phys_addr = MMU_$VTOP(vpn, &status);
 
     if (status == status_$ok) {
         /*
          * Page is already mapped - wire it and return.
          */
-        MMAP__WIRE(phys_addr);
+        MMAP_$WIRE(phys_addr);
         ML_$UNLOCK(MST_LOCK_MMU);
     } else {
         /*

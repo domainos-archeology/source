@@ -37,17 +37,17 @@
 #define PAGE_ALIGN_MASK  0x3ff
 
 /* External functions */
-extern uint32_t MST__WIRE(uint32_t buffer, status_$t *status);
-extern void WP__UNWIRE(uint32_t wired_addr);
-extern void CACHE__FLUSH_VIRTUAL(void);
+extern uint32_t MST_$WIRE(uint32_t buffer, status_$t *status);
+extern void WP_$UNWIRE(uint32_t wired_addr);
+extern void CACHE_$FLUSH_VIRTUAL(void);
 
 /* Internal DISK functions with different signatures */
-extern void DISK__GET_QBLKS(int16_t count, void **queue_ptr, void *param);
-extern void DISK__WRITE_MULTI(int16_t vol_idx, void *queue, status_$t *status);
-extern void DISK__READ_MULTI(uint16_t vol_idx, int32_t param_2, int32_t param_3,
+extern void DISK_$GET_QBLKS(int16_t count, void **queue_ptr, void *param);
+extern void DISK_$WRITE_MULTI(int16_t vol_idx, void *queue, status_$t *status);
+extern void DISK_$READ_MULTI(uint16_t vol_idx, int32_t param_2, int32_t param_3,
                               void *queue, void *param_5, int16_t *completed,
                               status_$t *status);
-extern void DISK__RTN_QBLKS(int16_t count, void *queue, void *param);
+extern void DISK_$RTN_QBLKS(int16_t count, void *queue, void *param);
 
 void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
                           int16_t *op_type_ptr, uint32_t *daddr_array,
@@ -91,22 +91,22 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
 
     /* Wire all buffers */
     for (i = 0; i < count; i++) {
-        wired_addrs[i] = MST__WIRE(buffer_array[i], local_status);
+        wired_addrs[i] = MST_$WIRE(buffer_array[i], local_status);
         if (local_status[0] != status_$ok) {
             /* Unwire previously wired buffers */
             int16_t j;
             for (j = 0; j < i; j++) {
-                WP__UNWIRE(wired_addrs[j]);
+                WP_$UNWIRE(wired_addrs[j]);
             }
             goto cleanup;
         }
     }
 
     /* Flush cache for DMA coherency */
-    CACHE__FLUSH_VIRTUAL();
+    CACHE_$FLUSH_VIRTUAL();
 
     /* Allocate queue blocks */
-    DISK__GET_QBLKS(count, &queue_ptr, &queue_param);
+    DISK_$GET_QBLKS(count, &queue_ptr, &queue_param);
 
     /* TODO: Set up queue blocks with addresses and info */
     /* This requires understanding the queue block structure */
@@ -114,16 +114,16 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
     /* Perform I/O */
     if (op_type == 1) {
         /* Write operation */
-        DISK__WRITE_MULTI(0, queue_ptr, local_status);
+        DISK_$WRITE_MULTI(0, queue_ptr, local_status);
         completed = count;
     } else {
         /* Read operation */
-        DISK__READ_MULTI(vol_idx, 0, 0, queue_ptr, queue_param, &completed, local_status);
+        DISK_$READ_MULTI(vol_idx, 0, 0, queue_ptr, queue_param, &completed, local_status);
     }
 
     /* Unwire buffers and collect results */
     for (i = 0; i < count; i++) {
-        WP__UNWIRE(wired_addrs[i]);
+        WP_$UNWIRE(wired_addrs[i]);
 
         /* Copy info for read operations */
         if (op_type == 0) {
@@ -135,7 +135,7 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
     }
 
     /* Return queue blocks */
-    DISK__RTN_QBLKS(count, queue_ptr, queue_param);
+    DISK_$RTN_QBLKS(count, queue_ptr, queue_param);
 
 cleanup:
     /* Copy individual statuses */

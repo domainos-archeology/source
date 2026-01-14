@@ -54,7 +54,7 @@ void WIN_$DO_IO(void *dev_entry, int32_t *req, void *param_3, uint8_t *result)
     /* For write operations with linked requests, sort by cylinder */
     if (op_type == 2 && *req != 0) {
         local_req = req;
-        DISK__SORT(dev_entry, (void **)&local_req);
+        DISK_$SORT(dev_entry, (void **)&local_req);
         req = local_req;
     }
 
@@ -87,7 +87,7 @@ retry_loop:
     wait_for_completion:
         if ((int32_t)status < 1) {
             /* Wait for I/O completion */
-            wait_result = EC__WAIT((void *)(win_data + WIN_EC_ARRAY_OFFSET), wait_val);
+            wait_result = EC_$WAIT((void *)(win_data + WIN_EC_ARRAY_OFFSET), wait_val);
 
             if (wait_result != 0) {
                 /* Timeout - clear flag and set error */
@@ -113,7 +113,7 @@ retry_loop:
         if (status == status_$memory_parity_error_during_disk_write) {
             /* Check if parity error is real */
             int32_t *cur_req = *(int32_t **)(win_data + WIN_REQ_PTR_OFFSET);
-            int16_t parity_result = PARITY__CHK_IO(
+            int16_t parity_result = PARITY_$CHK_IO(
                 (uint32_t)cur_req[4] >> 10,
                 cur_req[5]);
             if (-parity_result < 0) {

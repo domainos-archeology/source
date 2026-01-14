@@ -38,20 +38,20 @@ void MST_$PRE_INIT(void)
      * The high bit of M68020 flag indicates M68020 or later processor.
      */
     if (M68020 < 0) {  /* High bit set = M68020+ */
-        MST__SEG_TN = 0x680;             /* Total segments: 1664 */
-        MST__GLOBAL_A_SIZE = 0xe0;       /* Global A: 224 segments */
-        MST__SEG_GLOBAL_A = 0x678;       /* Global A starts here */
-        MST__SEG_GLOBAL_A_END = 0x757;   /* Global A ends here */
-        MST__PRIVATE_A_SIZE = 0x678;     /* Private A: 1656 segments */
-        MST__SEG_PRIVATE_A_END = 0x677;  /* Private A ends here */
-        MST__SEG_PRIVATE_B = 0x758;      /* Private B starts here */
-        MST__SEG_PRIVATE_B_END = 0x75f;  /* Private B ends here */
-        MST__SEG_PRIVATE_B_OFFSET = 0xe0; /* Offset for Private B in table */
-        MST__SEG_GLOBAL_B = 0x760;       /* Global B starts here */
-        MST__SEG_GLOBAL_B_OFFSET = 0x680; /* Offset for Global B in table */
-        MST__SEG_HIGH = 0x7e0;           /* Highest usable segment */
-        MST__SEG_MEM_TOP = 0x800;        /* Top of address space */
-        MST__GLOBAL_B_SIZE = 0xa0;       /* Global B: 160 segments */
+        MST_$SEG_TN = 0x680;             /* Total segments: 1664 */
+        MST_$GLOBAL_A_SIZE = 0xe0;       /* Global A: 224 segments */
+        MST_$SEG_GLOBAL_A = 0x678;       /* Global A starts here */
+        MST_$SEG_GLOBAL_A_END = 0x757;   /* Global A ends here */
+        MST_$PRIVATE_A_SIZE = 0x678;     /* Private A: 1656 segments */
+        MST_$SEG_PRIVATE_A_END = 0x677;  /* Private A ends here */
+        MST_$SEG_PRIVATE_B = 0x758;      /* Private B starts here */
+        MST_$SEG_PRIVATE_B_END = 0x75f;  /* Private B ends here */
+        MST_$SEG_PRIVATE_B_OFFSET = 0xe0; /* Offset for Private B in table */
+        MST_$SEG_GLOBAL_B = 0x760;       /* Global B starts here */
+        MST_$SEG_GLOBAL_B_OFFSET = 0x680; /* Offset for Global B in table */
+        MST_$SEG_HIGH = 0x7e0;           /* Highest usable segment */
+        MST_$SEG_MEM_TOP = 0x800;        /* Top of address space */
+        MST_$GLOBAL_B_SIZE = 0xa0;       /* Global B: 160 segments */
     }
 
     /*
@@ -59,7 +59,7 @@ void MST_$PRE_INIT(void)
      * Each ASID gets (SEG_TN + 63) / 64 words in the segment table.
      * This rounds up to ensure sufficient space.
      */
-    segments_per_asid = (uint16_t)((MST__SEG_TN + 0x3f) >> 6);
+    segments_per_asid = (uint16_t)((MST_$SEG_TN + 0x3f) >> 6);
 
     /*
      * Initialize the ASID base table.

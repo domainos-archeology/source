@@ -20,7 +20,7 @@
 extern uint8_t DAT_00e7afe0[];
 
 /* Saved status registers from result phase */
-extern uint16_t FLP__SREGS_ARRAY[];  /* Array at FLP__JUMP_TABLE + 0x1c */
+extern uint16_t FLP_$SREGS_ARRAY[];  /* Array at FLP_$JUMP_TABLE + 0x1c */
 
 /* Disk change flags - one byte per unit */
 extern uint8_t DAT_00e7b018[FLP_MAX_UNITS];
@@ -29,7 +29,7 @@ extern uint8_t DAT_00e7b018[FLP_MAX_UNITS];
 extern int32_t DAT_00e7b020;
 
 /* Event counter for floppy operations */
-extern void *FLP__EC;
+extern void *FLP_$EC;
 
 /*
  * FLP_$INT - Handle floppy interrupt
@@ -56,7 +56,7 @@ uint16_t FLP_$INT(void *int_info)
 
     result_count = 0;
     done = 0;
-    result_ptr = (uint16_t *)((uint8_t *)&FLP__JUMP_TABLE + 0x38);  /* SREGS array */
+    result_ptr = (uint16_t *)((uint8_t *)&FLP_$JUMP_TABLE + 0x38);  /* SREGS array */
 
     do {
         /* Wait for controller to be ready (not busy) */
@@ -98,13 +98,13 @@ uint16_t FLP_$INT(void *int_info)
      * If status register bits [2:0] == 6, set disk change flag
      * for the unit indicated by bits [1:0].
      */
-    if ((FLP__SREGS & 7) == 6) {
-        int16_t unit = FLP__SREGS & 3;
+    if ((FLP_$SREGS & 7) == 6) {
+        int16_t unit = FLP_$SREGS & 3;
         DAT_00e7b018[unit] = 0xFF;
     }
 
     /* Signal completion via event counter */
-    EC__ADVANCE_WITHOUT_DISPATCH(&FLP__EC);
+    EC_$ADVANCE_WITHOUT_DISPATCH(&FLP_$EC);
 
     return 0xFF;  /* Interrupt handled */
 }

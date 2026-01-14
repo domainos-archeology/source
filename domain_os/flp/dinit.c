@@ -83,10 +83,10 @@ status_$t FLP_$DINIT(uint16_t unit, uint16_t ctlr,
      */
     if (DAT_00e7b02c >= 0) {
         /* Get physical address of I/O buffer */
-        phys_addr = MMU__VTOP((uint32_t)(uintptr_t)FLP_IO_BUFFER, &vtop_status);
+        phys_addr = MMU_$VTOP((uint32_t)(uintptr_t)FLP_IO_BUFFER, &vtop_status);
 
         /* Wire the buffer into physical memory */
-        WP__WIRE(phys_addr);
+        WP_$WIRE(phys_addr);
 
         /*
          * Calculate physical address with offset within page.

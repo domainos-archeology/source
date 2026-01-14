@@ -24,13 +24,13 @@ extern uint8_t DAT_00e7afe0[];  /* Controller register address */
 extern int32_t DAT_00e7b020;
 
 /* Event counter */
-extern void *FLP__EC;
+extern void *FLP_$EC;
 
 /* Jump table */
-extern void *FLP__JUMP_TABLE;
+extern void *FLP_$JUMP_TABLE;
 
 /* Status registers */
-extern uint16_t FLP__SREGS;
+extern uint16_t FLP_$SREGS;
 
 /* Registration data areas */
 extern uint8_t DAT_00e7affc[];
@@ -82,7 +82,7 @@ status_$t FLP_$CINIT(void *ctlr_info)
     *(int32_t *)(&DAT_00e7afe0[ctlr_num * 8]) = hw_addr;
 
     /* Initialize event counter */
-    EC__INIT(&FLP__EC);
+    EC_$INIT(&FLP_$EC);
 
     regs = (volatile flp_regs_t *)(uintptr_t)hw_addr;
     status = status_$ok;
@@ -106,7 +106,7 @@ status_$t FLP_$CINIT(void *ctlr_info)
             SHAKE(local_regs, DAT_00e3e110, DAT_00e3e110);
         } else {
             /* DIO=1: Read result bytes to clear */
-            SHAKE(&FLP__SREGS, DAT_00e3ddc2, DAT_00e3e10e);
+            SHAKE(&FLP_$SREGS, DAT_00e3ddc2, DAT_00e3e10e);
         }
     }
 
@@ -121,9 +121,9 @@ controller_ready:
     }
 
     /* Register with disk subsystem */
-    jump_table_ptr[0] = &FLP__JUMP_TABLE;
+    jump_table_ptr[0] = &FLP_$JUMP_TABLE;
     local_regs[0] = ctlr_num;
-    DISK__REGISTER(DAT_00e3e110,
+    DISK_$REGISTER(DAT_00e3e110,
                    local_regs,
                    DAT_00e7b02a,
                    (uint8_t *)ctlr_info + 0x3c,

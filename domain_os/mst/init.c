@@ -24,19 +24,19 @@ extern uint16_t M_OIS_WLW(int32_t value, uint16_t divisor);       /* Modulo oper
 extern void CRASH_SYSTEM(status_$t *status);
 
 /* External: Memory map functions */
-extern int16_t MMAP__ALLOC_FREE(uint32_t *phys_addr_out, int16_t count);
-extern void MMU__INSTALL(uint32_t phys_addr, int32_t virt_addr, uint16_t flags);
+extern int16_t MMAP_$ALLOC_FREE(uint32_t *phys_addr_out, int16_t count);
+extern void MMU_$INSTALL(uint32_t phys_addr, int32_t virt_addr, uint16_t flags);
 
 /* External: Memory statistics */
-extern int32_t MMAP__REAL_PAGES;
-extern int32_t MMAP__PAGEABLE_PAGES_LOWER_LIMIT;
+extern int32_t MMAP_$REAL_PAGES;
+extern int32_t MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
 extern int8_t M68020;
 
 /* MST page tracking globals */
-extern uint32_t MST__ASID_LIST_LONG;    /* First 32 bits of ASID bitmap */
+extern uint32_t MST_$ASID_LIST_LONG;    /* First 32 bits of ASID bitmap */
 extern uint32_t DAT_00e24388;           /* Second part of ASID list */
-extern uint16_t MST__MST_PAGES_WIRED;
-extern uint16_t MST__MST_PAGES_LIMIT;
+extern uint16_t MST_$MST_PAGES_WIRED;
+extern uint16_t MST_$MST_PAGES_LIMIT;
 
 /* MST page bitmap - tracks available MST pages */
 extern uint32_t DAT_00e7cf0c[];         /* Bitmap of available MST pages */
@@ -56,19 +56,19 @@ extern status_$t PMAP_VM_Resources_exhausted_err;
  */
 static uint32_t mst_init_page(int32_t virt_addr)
 {
-    uint32_t phys_addr[3];  /* Buffer for MMAP__ALLOC_FREE */
+    uint32_t phys_addr[3];  /* Buffer for MMAP_$ALLOC_FREE */
     int16_t pages_allocated;
     int16_t i;
 
     /* Allocate one physical page */
-    pages_allocated = MMAP__ALLOC_FREE(phys_addr, 1);
+    pages_allocated = MMAP_$ALLOC_FREE(phys_addr, 1);
     if (pages_allocated == 0) {
         CRASH_SYSTEM(&PMAP_VM_Resources_exhausted_err);
     }
 
     /* Map the physical page at the virtual address */
     /* Flag 0x16 = kernel, read/write, cached */
-    MMU__INSTALL(phys_addr[0], virt_addr, 0x16);
+    MMU_$INSTALL(phys_addr[0], virt_addr, 0x16);
 
     /* Clear the entire page (256 longwords = 1024 bytes) */
     uint32_t *ptr = (uint32_t *)(uintptr_t)virt_addr;
@@ -105,7 +105,7 @@ static void mst_init_global_page(int16_t seg_index)
     mst_init_page(init_virt_addr);
 
     /* Increment wired page count */
-    MST__MST_PAGES_WIRED++;
+    MST_$MST_PAGES_WIRED++;
 
     /* Calculate MST table entry value */
     page_num = init_bit_index + init_word_index * 32;
@@ -146,15 +146,15 @@ void MST_$INIT(void)
     int32_t page_table_addr;
 
     /* Set default touch-ahead count to 4 pages */
-    MST__TOUCH_COUNT = 4;
+    MST_$TOUCH_COUNT = 4;
 
     /* Clear ASID allocation bitmap */
-    MST__ASID_LIST_LONG = 0;
+    MST_$ASID_LIST_LONG = 0;
     DAT_00e24388 = 1;  /* Mark ASID 0 as allocated (reserved for kernel) */
 
     /* Calculate number of MST pages needed */
     /* Each page covers 64 segments (1024 bytes / 16 bytes per entry) */
-    num_mst_pages = M_MIU_LLW((uint32_t)(MST__SEG_TN + 0x3f), MST_MAX_ASIDS);
+    num_mst_pages = M_MIU_LLW((uint32_t)(MST_$SEG_TN + 0x3f), MST_MAX_ASIDS);
 
     /* Allocate and initialize MST table pages */
     mst_table_addr = (int32_t)(uintptr_t)MST;  /* 0xee5800 */
@@ -177,7 +177,7 @@ void MST_$INIT(void)
     page_table_addr = MST_PAGE_TABLE_BASE;
 
     /* Clear wired page count */
-    MST__MST_PAGES_WIRED = 0;
+    MST_$MST_PAGES_WIRED = 0;
 
     /* Initialize shared state for helper function */
     init_virt_addr = page_table_addr;
@@ -188,7 +188,7 @@ void MST_$INIT(void)
      * Allocate pages for Global A segment table
      * Number of pages = GLOBAL_A_SIZE / 64 (64 segments per page)
      */
-    global_a_pages = (MST__GLOBAL_A_SIZE >> 6) - 1;
+    global_a_pages = (MST_$GLOBAL_A_SIZE >> 6) - 1;
     if (global_a_pages >= 0) {
         for (i = 0; i <= global_a_pages; i++) {
             mst_init_global_page(i);
@@ -199,10 +199,10 @@ void MST_$INIT(void)
      * Allocate pages for Global B segment table
      * Starts after Global A entries
      */
-    global_b_pages = (uint16_t)((MST__GLOBAL_A_SIZE + MST__GLOBAL_B_SIZE) >> 6) - 1;
-    global_b_pages -= (MST__GLOBAL_A_SIZE >> 6);
+    global_b_pages = (uint16_t)((MST_$GLOBAL_A_SIZE + MST_$GLOBAL_B_SIZE) >> 6) - 1;
+    global_b_pages -= (MST_$GLOBAL_A_SIZE >> 6);
     if (global_b_pages >= 0) {
-        uint16_t start_index = MST__GLOBAL_A_SIZE >> 6;
+        uint16_t start_index = MST_$GLOBAL_A_SIZE >> 6;
         for (i = 0; i <= global_b_pages; i++) {
             mst_init_global_page(start_index + i);
         }
@@ -214,16 +214,16 @@ void MST_$INIT(void)
      */
     int32_t page_base;
     if (M68020 >= 0) {
-        page_base = MMAP__PAGEABLE_PAGES_LOWER_LIMIT;
+        page_base = MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
     } else {
-        page_base = MMAP__REAL_PAGES;
+        page_base = MMAP_$REAL_PAGES;
     }
 
     /* Calculate 10% of pages */
     max_pages = M_DIU_LLW(page_base * 10, 100);
 
     /* Also limit by segment count */
-    num_mst_pages = M_MIU_LLW((uint32_t)(MST__SEG_TN >> 6), MST_MAX_ASIDS);
+    num_mst_pages = M_MIU_LLW((uint32_t)(MST_$SEG_TN >> 6), MST_MAX_ASIDS);
     if (max_pages > num_mst_pages) {
         max_pages = num_mst_pages;
     }
@@ -243,7 +243,7 @@ void MST_$INIT(void)
     if (limit < 0) {
         limit += 0x1f;
     }
-    MST__MST_PAGES_LIMIT = (limit >> 5) << 5;
+    MST_$MST_PAGES_LIMIT = (limit >> 5) << 5;
 
     /* Clear DAT_00e7cf3c (offset 0x30 from DAT_00e7cf0c) */
     DAT_00e7cf0c[12] = 0;  /* word index 12 = offset 0x30 */
@@ -252,7 +252,7 @@ void MST_$INIT(void)
      * Initialize remaining bits in page availability bitmap.
      * Mark pages beyond the limit as unavailable.
      */
-    int32_t limit_plus_one = (int16_t)MST__MST_PAGES_LIMIT + 1;
+    int32_t limit_plus_one = (int16_t)MST_$MST_PAGES_LIMIT + 1;
     word_index = (limit_plus_one < 0 ? limit_plus_one + 0x1f : limit_plus_one) >> 5;
     bit_index = M_OIS_WLW(limit_plus_one, 32);
 

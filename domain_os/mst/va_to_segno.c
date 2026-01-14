@@ -44,37 +44,37 @@ uint16_t MST_$VA_TO_SEGNO(uint32_t virtual_addr, uint16_t *segno_out,
 
     /*
      * Check if segment is within addressable memory.
-     * MST__SEG_MEM_TOP marks the end of the virtual address space.
+     * MST_$SEG_MEM_TOP marks the end of the virtual address space.
      */
-    if (va_segno >= MST__SEG_MEM_TOP) {
+    if (va_segno >= MST_$SEG_MEM_TOP) {
         /* Beyond addressable memory - return default but don't set segno_out */
         return 0;
     }
 
     /*
-     * Private A region: segments 0 to MST__PRIVATE_A_SIZE-1
-     * These map directly to table indices 0..MST__PRIVATE_A_SIZE-1
+     * Private A region: segments 0 to MST_$PRIVATE_A_SIZE-1
+     * These map directly to table indices 0..MST_$PRIVATE_A_SIZE-1
      */
-    if (va_segno < MST__PRIVATE_A_SIZE) {
+    if (va_segno < MST_$PRIVATE_A_SIZE) {
         *segno_out = va_segno;
         return default_result;
     }
 
     /*
-     * Private B region: 8 segments starting at MST__SEG_PRIVATE_B
-     * These map to table indices MST__PRIVATE_A_SIZE..MST__PRIVATE_A_SIZE+7
+     * Private B region: 8 segments starting at MST_$SEG_PRIVATE_B
+     * These map to table indices MST_$PRIVATE_A_SIZE..MST_$PRIVATE_A_SIZE+7
      */
-    if ((uint16_t)(va_segno - MST__SEG_PRIVATE_B) < 8) {
-        *segno_out = MST__PRIVATE_A_SIZE + (va_segno - MST__SEG_PRIVATE_B);
+    if ((uint16_t)(va_segno - MST_$SEG_PRIVATE_B) < 8) {
+        *segno_out = MST_$PRIVATE_A_SIZE + (va_segno - MST_$SEG_PRIVATE_B);
         return default_result;
     }
 
     /*
-     * Global A region: MST__GLOBAL_A_SIZE segments starting at MST__SEG_GLOBAL_A
-     * Table index is the offset from MST__SEG_GLOBAL_A
+     * Global A region: MST_$GLOBAL_A_SIZE segments starting at MST_$SEG_GLOBAL_A
+     * Table index is the offset from MST_$SEG_GLOBAL_A
      */
-    table_index = va_segno - MST__SEG_GLOBAL_A;
-    if (table_index < MST__GLOBAL_A_SIZE) {
+    table_index = va_segno - MST_$SEG_GLOBAL_A;
+    if (table_index < MST_$GLOBAL_A_SIZE) {
         *segno_out = table_index;
         return 0;  /* Global segment - return 0 */
     }
@@ -82,14 +82,14 @@ uint16_t MST_$VA_TO_SEGNO(uint32_t virtual_addr, uint16_t *segno_out,
     /*
      * Check for invalid gap between Global A end and Global B start
      */
-    if (va_segno < MST__SEG_GLOBAL_B) {
+    if (va_segno < MST_$SEG_GLOBAL_B) {
         return 0x3a;  /* Invalid segment in gap */
     }
 
     /*
-     * Global B region: segments starting at MST__SEG_GLOBAL_B
+     * Global B region: segments starting at MST_$SEG_GLOBAL_B
      * Table index continues after Global A entries
      */
-    *segno_out = MST__GLOBAL_A_SIZE + (va_segno - MST__SEG_GLOBAL_B);
+    *segno_out = MST_$GLOBAL_A_SIZE + (va_segno - MST_$SEG_GLOBAL_B);
     return 0;  /* Global segment - return 0 */
 }

@@ -46,18 +46,18 @@
 #define DISK_MOUNT_ASSIGNED  2
 
 /* Current process ID */
-extern int16_t PROC1__CURRENT;
+extern int16_t PROC1_$CURRENT;
 
 /* Global diagnostic mode flag at 0xe7acca */
-extern int8_t DISK__DIAG;
+extern int8_t DISK_$DIAG;
 
 /* External functions */
-extern uint32_t MST__WIRE(uint32_t buffer, status_$t *status);
-extern void WP__UNWIRE(uint32_t wired_addr);
-extern uint32_t WP__CALLOC(void *addr_ptr, status_$t *status);
-extern void MMAP__FREE(uint32_t addr);
-extern void CACHE__FLUSH_VIRTUAL(void);
-extern int8_t ACL__IS_SUSER(void);
+extern uint32_t MST_$WIRE(uint32_t buffer, status_$t *status);
+extern void WP_$UNWIRE(uint32_t wired_addr);
+extern uint32_t WP_$CALLOC(void *addr_ptr, status_$t *status);
+extern void MMAP_$FREE(uint32_t addr);
+extern void CACHE_$FLUSH_VIRTUAL(void);
+extern int8_t ACL_$IS_SUSER(void);
 extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *buffer,
                          void *daddr, void *info);
 
@@ -106,7 +106,7 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
     mount_proc = *(int16_t *)(vol_entry + DISK_MOUNT_PROC_OFFSET);
 
     /* Check if assigned to current process */
-    if (mount_state == DISK_MOUNT_ASSIGNED && mount_proc == PROC1__CURRENT) {
+    if (mount_state == DISK_MOUNT_ASSIGNED && mount_proc == PROC1_$CURRENT) {
         access_granted = -1;
     }
     /* Check if read with daddr=0 */
@@ -123,12 +123,12 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
     }
     /* Check if superuser doing a read */
     if (!access_granted) {
-        if (ACL__IS_SUSER() < 0 && op == 0) {
+        if (ACL_$IS_SUSER() < 0 && op == 0) {
             access_granted = -1;
         }
     }
     /* Check global diagnostic flag */
-    if (!access_granted && DISK__DIAG < 0) {
+    if (!access_granted && DISK_$DIAG < 0) {
         access_granted = -1;
     }
 
@@ -147,12 +147,12 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
         }
 
         /* Wire buffer for DMA */
-        wired_addr = MST__WIRE((uint32_t)(uintptr_t)buffer, status);
-        CACHE__FLUSH_VIRTUAL();
+        wired_addr = MST_$WIRE((uint32_t)(uintptr_t)buffer, status);
+        CACHE_$FLUSH_VIRTUAL();
     } else {
         if (op == 0) {
             /* Allocate buffer for read without direct access */
-            wired_addr = WP__CALLOC(&wired_addr, status);
+            wired_addr = WP_$CALLOC(&wired_addr, status);
         } else {
             /* Write without direct access not allowed */
             *status = status_$volume_in_use;
@@ -194,9 +194,9 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
 
     /* Cleanup */
     if (direct_access) {
-        WP__UNWIRE(wired_addr);
+        WP_$UNWIRE(wired_addr);
     } else {
-        MMAP__FREE(wired_addr);
+        MMAP_$FREE(wired_addr);
         /* Report volume_in_use if operation succeeded without direct access */
         if (*status == status_$ok) {
             *status = status_$volume_in_use;

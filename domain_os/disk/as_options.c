@@ -25,7 +25,7 @@
 #define DISK_MOUNT_ASSIGNED  2
 
 /* Current process ID */
-extern int16_t PROC1__CURRENT;
+extern int16_t PROC1_$CURRENT;
 
 void DISK_$AS_OPTIONS(uint16_t *vol_idx_ptr, uint16_t *options_ptr, status_$t *status)
 {
@@ -52,7 +52,7 @@ void DISK_$AS_OPTIONS(uint16_t *vol_idx_ptr, uint16_t *options_ptr, status_$t *s
     mount_state = *(uint16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_STATE_OFFSET);
     mount_proc = *(int16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_PROC_OFFSET);
 
-    if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1__CURRENT) {
+    if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1_$CURRENT) {
         *status = status_$volume_not_properly_mounted;
         return;
     }

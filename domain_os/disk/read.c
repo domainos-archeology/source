@@ -32,7 +32,7 @@
 #define DISK_MOUNT_FULL     3
 
 /* Current process ID */
-extern int16_t PROC1__CURRENT;
+extern int16_t PROC1_$CURRENT;
 
 /* External I/O function */
 extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *daddr,
@@ -60,7 +60,7 @@ void DISK_$READ(int16_t vol_idx, void *buffer, void *daddr, void *count,
     if (mount_state == DISK_MOUNT_PARTIAL) {
         /* Partially mounted - check if current process owns it */
         mount_proc = *(int16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_PROC_OFFSET);
-        if (mount_proc == PROC1__CURRENT) {
+        if (mount_proc == PROC1_$CURRENT) {
             *status = DISK_IO(DISK_OP_READ, vol_idx, daddr, buffer, count);
             return;
         }

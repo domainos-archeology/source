@@ -29,7 +29,7 @@
 #define DISK_MOUNT_ASSIGNED  2
 
 /* Current process ID */
-extern int16_t PROC1__CURRENT;
+extern int16_t PROC1_$CURRENT;
 
 /* Process table base */
 #define PROC_TABLE_BASE  ((uint8_t *)0x00e7a544)
@@ -66,7 +66,7 @@ void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
     mount_state = *(uint16_t *)(vol_entry + DISK_MOUNT_STATE_OFFSET);
     mount_proc = *(int16_t *)(vol_entry + DISK_MOUNT_PROC_OFFSET);
 
-    if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1__CURRENT) {
+    if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1_$CURRENT) {
         *status = status_$volume_not_properly_mounted;
         return;
     }
@@ -75,8 +75,8 @@ void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
     FUN_00e3be8a(1, 0, &buffer, &buffer_param);
 
     /* Get event counters from process table */
-    ec1 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1__CURRENT * 0x1c)) + 1;
-    ec2 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1__CURRENT * 0x1c) + 0xc) + 1;
+    ec1 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1_$CURRENT * 0x1c)) + 1;
+    ec2 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1_$CURRENT * 0x1c) + 0xc) + 1;
 
     /* Set format whole operation (type 0x0a) */
     *(uint8_t *)((uintptr_t)buffer + 0x1f) &= 0xf0;

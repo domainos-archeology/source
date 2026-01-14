@@ -29,14 +29,14 @@
 #define VALID_VOL_MASK  0x7fe
 
 /* Current process ID */
-extern int16_t PROC1__CURRENT;
+extern int16_t PROC1_$CURRENT;
 
 /* Mount state 2 = assigned */
 #define DISK_MOUNT_ASSIGNED  2
 
 /* External functions */
-extern uint32_t MST__WIRE(uint32_t buffer, status_$t *status);
-extern void CACHE__FLUSH_VIRTUAL(void);
+extern uint32_t MST_$WIRE(uint32_t buffer, status_$t *status);
+extern void CACHE_$FLUSH_VIRTUAL(void);
 
 uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status)
 {
@@ -66,13 +66,13 @@ uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status)
     mount_state = *(uint16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_STATE_OFFSET);
     mount_proc = *(int16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_PROC_OFFSET);
 
-    if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1__CURRENT) {
+    if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1_$CURRENT) {
         *status = status_$volume_not_properly_mounted;
         return wired_addr;
     }
 
     /* Wire the buffer for DMA access */
-    wired_addr = MST__WIRE(buffer, status);
+    wired_addr = MST_$WIRE(buffer, status);
 
     /* Set high bit of status if error */
     if ((int16_t)((*status >> 16) & 0xFFFF) != 0) {
@@ -80,7 +80,7 @@ uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status)
     }
 
     /* Flush cache for DMA coherency */
-    CACHE__FLUSH_VIRTUAL();
+    CACHE_$FLUSH_VIRTUAL();
 
     return wired_addr;
 }

@@ -14,7 +14,7 @@
 #include "mst.h"
 
 /* External process ID */
-extern int16_t PROC1__AS_ID;
+extern int16_t PROC1_$AS_ID;
 
 /* Internal mapping function */
 extern void FUN_00e43182(uint32_t addr_hint,
@@ -56,9 +56,9 @@ void MST_$MAP(uid_$t *uid,
                  *start_va_ptr,
                  *length_ptr,
                  *area_size_ptr,
-                 PROC1__AS_ID,     /* Current process ASID */
+                 PROC1_$AS_ID,     /* Current process ASID */
                  *area_id_ptr,
-                 MST__TOUCH_COUNT, /* Touch-ahead count */
+                 MST_$TOUCH_COUNT, /* Touch-ahead count */
                  *rights_ptr,
                  0,                /* direction = 0 (forward) */
                  mapped_len,
@@ -84,9 +84,9 @@ void MST_$MAP_TOP(uid_$t *uid,
                  *start_va_ptr,
                  *length_ptr,
                  *area_size_ptr,
-                 PROC1__AS_ID,     /* Current process ASID */
+                 PROC1_$AS_ID,     /* Current process ASID */
                  *area_id_ptr,
-                 MST__TOUCH_COUNT, /* Touch-ahead count */
+                 MST_$TOUCH_COUNT, /* Touch-ahead count */
                  *rights_ptr,
                  0,                /* direction = 0 (forward) */
                  mapped_len,
