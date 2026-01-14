@@ -14,12 +14,18 @@
  * CRASH_SYSTEM - Fatal system crash handler
  *
  * Called when the kernel encounters an unrecoverable error.
- * This function never returns - it halts the system.
+ * Saves system state, displays error info, and either reboots
+ * or enters the crash debugger (trap #15).
  *
- * @param error  Pointer to error info (status code, string, or struct)
+ * Special cases:
+ *   status_$ok (0) - Clean shutdown, returns to PROM
+ *   status_$system_reboot (0x1b0008) - Clean reboot
+ *
+ * @param status_p  Pointer to status code that caused the crash
+ *
+ * Original address: 0x00E1E700
  */
-__attribute__((noreturn))
-void CRASH_SYSTEM(void *error);
+void CRASH_SYSTEM(status_$t *status_p);
 
 /*
  * Common error codes used with CRASH_SYSTEM
