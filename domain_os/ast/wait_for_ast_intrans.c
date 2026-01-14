@@ -12,7 +12,7 @@
 
 void AST_$WAIT_FOR_AST_INTRANS(void)
 {
-    ec_eventcount_t *ec_ptr;
+    ec_$eventcount_t *ec_ptr;
     int32_t wait_value;
 
     /* Get current value + 1 to wait for next advance */

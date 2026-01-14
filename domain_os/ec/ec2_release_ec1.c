@@ -9,6 +9,7 @@
  */
 
 #include "ec.h"
+#include "ml/ml.h"
 
 extern uint32_t DAT_00e7cefc;
 

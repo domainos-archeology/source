@@ -13,7 +13,6 @@
 extern void FUN_00e01ad2(aote_t *aote, uint8_t flags1, uint16_t flags2, uint16_t flags3, status_$t *status);
 extern void FUN_00e00f7c(aote_t *aote);
 extern void VTOC_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status);
-extern void EC_$WAIT(ec_eventcount_t **ecs, uint32_t *values);
 
 /* External data */
 extern uint16_t DAT_00e1e0a0;
@@ -27,7 +26,7 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
     status_$t local_status;
     uint16_t vol_mask;
     aote_t *aote;
-    ec_eventcount_t *ec_array[3];
+    ec_$eventcount_t *ec_array[3];
     uint32_t ec_values[3];
 
     local_status = status_$ok;

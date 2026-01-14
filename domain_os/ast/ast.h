@@ -29,6 +29,7 @@
 
 #include "base/base.h"
 #include "ml/ml.h"
+#include "ec/ec.h"
 
 /* AST status codes (module 0x03) */
 #define status_$ast_incompatible_request 0x00030006
@@ -134,11 +135,6 @@ typedef struct segmap_entry_t {
  * Global variables for the AST subsystem, based at 0xE1DC80.
  */
 
-/* Event counters */
-typedef struct ec_eventcount_t {
-  int32_t value; /* Current value */
-                 /* Additional fields for waiting */
-} ec_eventcount_t;
 
 /*
  * Architecture-independent macros for AST access
@@ -167,8 +163,8 @@ typedef struct ec_eventcount_t {
 #define AST_$AOTE_SEQN (*(uint32_t *)0xE1E0B4)        /* 0x434 */
 
 /* Event counters */
-#define AST_$AST_IN_TRANS_EC (*(ec_eventcount_t *)0xE1E0A8)  /* 0x428 */
-#define AST_$PMAP_IN_TRANS_EC (*(ec_eventcount_t *)0xE1E0CC) /* 0x44C */
+#define AST_$AST_IN_TRANS_EC (*(ec_$eventcount_t *)0xE1E0A8)  /* 0x428 */
+#define AST_$PMAP_IN_TRANS_EC (*(ec_$eventcount_t *)0xE1E0CC) /* 0x44C */
 
 /* Statistics */
 #define AST_$ALLOC_WORST_AST (*(uint32_t *)0xE1E0C4) /* 0x444 */
@@ -198,8 +194,8 @@ extern uint32_t ast_dism_seqn;
 extern aote_t *ast_update_scan;
 extern uint16_t ast_update_timestamp;
 extern uint32_t ast_aote_seqn;
-extern ec_eventcount_t ast_ast_in_trans_ec;
-extern ec_eventcount_t ast_pmap_in_trans_ec;
+extern ec_$eventcount_t ast_ast_in_trans_ec;
+extern ec_$eventcount_t ast_pmap_in_trans_ec;
 extern uint32_t ast_alloc_worst;
 extern uint32_t ast_alloc_total;
 extern uint32_t ast_ws_flt_cnt;
@@ -274,8 +270,6 @@ extern const char OS_MMAP_bad_install[];
  */
 extern void CRASH_SYSTEM(const char *msg);
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
-extern void EC_$ADVANCE(ec_eventcount_t *ec);
-extern void EC_$WAITN(ec_eventcount_t **ecs, int32_t *values, int16_t count);
 extern void PROC1_$INHIBIT_BEGIN(void);
 extern void PROC1_$INHIBIT_END(void);
 extern void TIME_$CLOCK(uint32_t *clock);

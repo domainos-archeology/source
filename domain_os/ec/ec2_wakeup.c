@@ -12,6 +12,7 @@
  */
 
 #include "ec.h"
+#include "ml/ml.h"
 
 void EC2_$WAKEUP(ec2_$eventcount_t *ec, status_$t *status_ret)
 {
