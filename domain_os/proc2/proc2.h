@@ -309,22 +309,28 @@ void PROC2_$INFO(int16_t *pid, int16_t *offset, void *info, uint16_t *info_len,
 void PROC2_$GET_INFO(uid_$t *proc_uid, void *info, uint16_t *info_len, status_$t *status_ret);
 
 /*
- * PROC2_$LIST - List processes
+ * PROC2_$LIST - List process UIDs
+ * Returns list of active process UIDs. Max 57 entries.
+ * First entry is always system process UID.
  * Original address: 0x00e402f0
  */
-void PROC2_$LIST(void *list, uint16_t *count, status_$t *status_ret);
+void PROC2_$LIST(uid_$t *uid_list, uint16_t *max_count, uint16_t *count);
 
 /*
  * PROC2_$LIST2 - List processes (extended)
+ * Iterates all 57 slots. Filters: (flags & 0x180) == 0x180
  * Original address: 0x00e40402
  */
-void PROC2_$LIST2(void *list, uint16_t *count, status_$t *status_ret);
+void PROC2_$LIST2(uid_$t *uid_list, uint16_t *max_count, uint16_t *count,
+                  int32_t *start_index, uint8_t *more_flag, int32_t *last_index);
 
 /*
- * PROC2_$ZOMBIE_LIST - List zombie processes
+ * PROC2_$ZOMBIE_LIST - List zombie process UIDs
+ * Iterates all 57 slots. Filters: (flags & 0x2100) == 0x2100
  * Original address: 0x00e40548
  */
-void PROC2_$ZOMBIE_LIST(void *list, uint16_t *count, status_$t *status_ret);
+void PROC2_$ZOMBIE_LIST(uid_$t *uid_list, uint16_t *max_count, uint16_t *count,
+                        int32_t *start_index, uint8_t *more_flag, int32_t *last_index);
 
 /*
  * PROC2_$GET_EC - Get process eventcount
@@ -394,21 +400,23 @@ void PROC2_$SET_VALID(uid_$t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$SIGNAL - Send signal to process
+ * Checks permissions, then delivers signal via internal helper.
  * Original address: 0x00e3efa0
  */
-void PROC2_$SIGNAL(uid_$t *proc_uid, uint16_t signal, status_$t *status_ret);
+void PROC2_$SIGNAL(uid_$t *proc_uid, int16_t *signal, uint32_t *param, status_$t *status_ret);
 
 /*
- * PROC2_$SIGNAL_OS - Send signal (OS internal)
+ * PROC2_$SIGNAL_OS - Send signal (OS internal, no permission check)
  * Original address: 0x00e3f0a6
  */
-void PROC2_$SIGNAL_OS(uid_$t *proc_uid, uint16_t *signal, void *param, status_$t *status_ret);
+void PROC2_$SIGNAL_OS(uid_$t *proc_uid, int16_t *signal, uint32_t *param, status_$t *status_ret);
 
 /*
- * PROC2_$QUIT - Send quit signal
+ * PROC2_$QUIT - Send SIGQUIT to process
+ * Wrapper that calls SIGNAL with SIGQUIT (3).
  * Original address: 0x00e3f130
  */
-void PROC2_$QUIT(uid_$t *proc_uid, status_$t status, status_$t *status_ret);
+void PROC2_$QUIT(uid_$t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$SIGNAL_PGROUP - Send signal to process group
