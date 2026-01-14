@@ -21,15 +21,7 @@
  * 4. Releases spin lock
  */
 
-#include "time.h"
-#include "ml/ml.h"
-#include "cal/cal.h"
-
-/* Internal helper to insert element in sorted order */
-extern int8_t time_$q_insert_sorted(time_queue_t *queue, time_queue_elem_t *elem);
-
-/* Internal helper to setup timer if element is at head */
-extern void time_$q_setup_timer(time_queue_t *queue, clock_t *when);
+#include "time/time_internal.h"
 
 /* Queue element flags */
 #define QELEM_FLAG_IN_QUEUE  0x01    /* Element is in queue */

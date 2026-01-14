@@ -7,25 +7,7 @@
  * Original address: 0x00e58b58
  */
 
-#include "time.h"
-#include "proc1/proc1.h"
-
-/* External references */
-extern uint16_t PROC1_$AS_ID;
-extern uint16_t PROC1_$CURRENT;
-
-/* itimer database base - 28 bytes per AS */
-#define ITIMER_DB_BASE      0xE297F0
-#define ITIMER_DB_ENTRY_SIZE 0x1C  /* 28 bytes */
-
-/* Offsets within itimer entry */
-#define ITIMER_REAL_INTERVAL_HIGH   0x0C
-#define ITIMER_REAL_INTERVAL_LOW    0x10
-#define ITIMER_VIRT_INTERVAL_HIGH   0x664
-#define ITIMER_VIRT_INTERVAL_LOW    0x668
-
-/* VT queue array base */
-#define VT_QUEUE_ARRAY_BASE 0xE2A494
+#include "time/time_internal.h"
 
 void TIME_$RELEASE(void)
 {

@@ -23,7 +23,7 @@
  *   00e16c7e    rts
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 
 void TIME_$Q_INIT_QUEUE(uint8_t flags, uint16_t queue_id, time_queue_t *queue)
 {

@@ -22,6 +22,36 @@ The kernel (domain_os) work should proceed as follows:
 - Watch for endianness assumptions: use bit operations (`(*status >> 16) & 0xFF`) instead of byte pointer casts (`((char*)status)[1]`) so code runs correctly on little-endian hosts
 - Add TODO comments for known issues (e.g., missing bounds checking) and create corresponding `bd` issues for tracking
 
+### Header File Organization
+**NEVER use `extern` declarations in .c files.** All external references must come from proper header files.
+
+**Public headers (`<subsystem>/<subsystem>.h`):**
+- Contains types, constants, and function prototypes needed by OTHER subsystems
+- Example: `time/time.h` exports `TIME_$CLOCK()`, `clock_t`, etc.
+- Include with: `#include "time/time.h"`
+
+**Internal headers (`<subsystem>/<subsystem>_internal.h`):**
+- Contains internal types, constants, and static helper prototypes used ONLY within the subsystem
+- Should `#include "<subsystem>/<subsystem>.h"` at the top
+- All .c files in the subsystem should `#include "<subsystem>/<subsystem>_internal.h"`
+- Example: `time/time_internal.h` contains `time_$q_insert_sorted()`, internal data structures
+
+**Cross-subsystem dependencies:**
+- If subsystem A needs a function from subsystem B, and B's header doesn't exist yet, CREATE IT
+- Example: `time/` needs `ML_$SPIN_LOCK()` → create `ml/ml.h` with the prototype
+- Don't worry about the implementation; add stubs or leave unimplemented
+- This ensures all dependencies are explicit and traceable
+
+**Example structure:**
+```
+time/
+  time.h              # Public API - exported to other subsystems
+  time_internal.h     # Internal API - includes time.h
+  time_data.c         # #include "time_internal.h"
+  clock.c             # #include "time_internal.h"
+  ...
+```
+
 IMPORTANT: part of the goal of this work is to make the kernel code retargetable to non-m68k architectures.  We will start with other 32-bit architectures (x86), but we'll need to address that a lot of the code is written with m68k-specific assumptions (such as byte ordering, but also things like syscall conventions).  As you work through the code, please keep that in mind and use #defines, typedefs, and other constructs to isolate architecture-specific code.
 
 ALSO IMPORTANT: the original source for much of the kernel (perhaps all of it except for obvious assembly language portions) was written in Pascal, not C.  You will likely find functions that map to nested pascal subprocedures.  Those will require additional analysis to flatten them into C functions.  Include those as static C functions within the C function they're used within.  Please add comments both to the disassembly and to the generated C files.

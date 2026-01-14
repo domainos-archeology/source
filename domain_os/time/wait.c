@@ -21,19 +21,11 @@
  * 5. If interrupted, cancels the timer
  */
 
-#include "time.h"
-#include "ec/ec.h"
-#include "cal/cal.h"
-#include "proc1/proc1.h"
+#include "time/time_internal.h"
 #include "misc/crash_system.h"
 
 /* Status codes */
 #define status_$time_quit_while_waiting 0x000D0003
-
-/* External references for quit handling */
-extern uint32_t FIM_$QUIT_VALUE[];   /* Quit value array indexed by AS_ID */
-extern void *FIM_$QUIT_EC[];         /* Quit EC array indexed by AS_ID */
-extern uint16_t PROC1_$AS_ID;        /* Current address space ID */
 
 void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status)
 {

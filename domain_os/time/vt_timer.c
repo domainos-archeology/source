@@ -18,7 +18,7 @@
  *   00e2af88    rts
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 
 /*
  * Hardware timer access

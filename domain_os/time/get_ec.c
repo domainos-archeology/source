@@ -14,8 +14,7 @@
  * Original address: 0x00e1670a
  */
 
-#include "time.h"
-#include "ec/ec.h"
+#include "time/time_internal.h"
 
 /* Status code for bad key */
 #define status_$time_bad_key 0x000D0005
@@ -23,12 +22,6 @@
 /* Cached EC pointers (lazily initialized) */
 static void *time_clock_ec = NULL;
 static void *time_fast_clock_ec = NULL;
-
-/* Fast clock EC location */
-extern uint32_t TIME_$FAST_CLOCK_EC;
-
-/* External EC registration function */
-extern void *EC2_$REGISTER_EC1(void *clock_ptr, status_$t *status);
 
 void TIME_$GET_EC(uint16_t *ec_id, void **ec_ret, status_$t *status)
 {

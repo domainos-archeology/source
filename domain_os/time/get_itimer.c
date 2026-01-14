@@ -14,11 +14,7 @@
  * Original address: 0x00e58f06
  */
 
-#include "time.h"
-
-/* Internal helper to get timer values */
-extern void time_$get_itimer_internal(uint16_t which, clock_t *value, clock_t *interval);
-extern void time_$clock_to_itimer(clock_t *clock, uint32_t *itimerval);
+#include "time/time_internal.h"
 
 void TIME_$GET_ITIMER(uint16_t *which, uint32_t *value, uint32_t *interval)
 {

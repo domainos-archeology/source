@@ -12,27 +12,7 @@
  * Original address: 0x00e58f64
  */
 
-#include "time.h"
-#include "proc1/proc1.h"
-#include "proc2/proc2.h"
-#include "cal/cal.h"
-
-/* External references */
-extern uint16_t PROC1_$AS_ID;
-extern uint16_t PROC1_$CURRENT;
-extern uint8_t PROC2_UID[];
-extern void PROC1_$GET_CPUT8(clock_t *cpu_time);
-extern void PROC2_$SIGNAL_OS(void *uid, void *sig_num, void *sig_code, status_$t *status);
-
-/* CPU limit database */
-#define CPU_LIMIT_DB_BASE   0xE29198
-#define CPU_LIMIT_DB_ENTRY_SIZE 0x1C
-
-/* VT queue array base */
-#define VT_QUEUE_ARRAY_BASE 0xE2A494
-
-/* Signal number for CPU limit exceeded */
-#define SIGXCPU 24
+#include "time/time_internal.h"
 
 void TIME_$SET_CPU_LIMIT(clock_t *limit, int8_t *relative, status_$t *status)
 {

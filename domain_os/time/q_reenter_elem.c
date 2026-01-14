@@ -11,11 +11,7 @@
  * Original address: 0x00e16c8e
  */
 
-#include "time.h"
-#include "ml/ml.h"
-
-/* Internal helper to insert element in sorted order */
-extern int8_t time_$q_insert_sorted(time_queue_t *queue, time_queue_elem_t *elem);
+#include "time/time_internal.h"
 
 void TIME_$Q_REENTER_ELEM(time_queue_t *queue, time_queue_elem_t *elem)
 {

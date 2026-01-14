@@ -31,7 +31,7 @@
  *   Each tick = 4 microseconds
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 #include "arch/m68k/arch.h"
 
 /* Ticks per second */

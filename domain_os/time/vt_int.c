@@ -26,16 +26,7 @@
  *   00e16420    clr.b IN_VT_INT
  */
 
-#include "time.h"
-#include "proc1/proc1.h"
-
-/* External references */
-extern void PROC1_$VT_INT(clock_t *vt_clock);
-extern uint16_t PROC1_$CURRENT;
-
-/* Base of VT queue array and offset */
-#define VT_QUEUE_ARRAY_BASE 0xE29198
-#define VT_QUEUE_OFFSET     0x12FC
+#include "time/time_internal.h"
 
 void TIME_$VT_INT(void)
 {

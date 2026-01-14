@@ -33,14 +33,7 @@
  *   00e16dba    ; ML_$SPIN_UNLOCK
  */
 
-#include "time.h"
-#include "ml/ml.h"
-
-/* Internal helper to insert element in sorted order */
-extern int8_t time_$q_insert_sorted(time_queue_t *queue, time_queue_elem_t *elem);
-
-/* Internal helper to setup timer if element is at head */
-extern void time_$q_setup_timer(time_queue_t *queue, clock_t *when);
+#include "time/time_internal.h"
 
 void TIME_$Q_ENTER_ELEM(time_queue_t *queue, clock_t *when,
                         time_queue_elem_t *elem, status_$t *status)

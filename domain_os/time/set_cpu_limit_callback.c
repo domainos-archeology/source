@@ -10,25 +10,11 @@
  * Original address: 0x00e58af8
  */
 
-#include "time.h"
-#include "proc2/proc2.h"
-
-/* Signal numbers */
-#define SIGXCPU 24
-
-/* CPU limit database base (same structure as itimer but different base) */
-#define CPU_LIMIT_DB_BASE   0xE29198
-#define CPU_LIMIT_DB_ENTRY_SIZE 0x1C
+#include "time/time_internal.h"
 
 /* Offsets */
 #define CPU_LIMIT_HIGH      0x0C
 #define CPU_LIMIT_LOW       0x10
-
-/* Process UID array */
-extern uint8_t PROC2_UID[];
-
-/* External signal function */
-extern void PROC2_$SIGNAL_OS(void *uid, void *sig_num, void *sig_code, status_$t *status);
 
 void TIME_$SET_CPU_LIMIT_CALLBACK(void *arg)
 {

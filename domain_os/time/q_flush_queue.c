@@ -13,7 +13,7 @@
  * all elements.
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 #include "ml/ml.h"
 
 void TIME_$Q_FLUSH_QUEUE(time_queue_t *queue)

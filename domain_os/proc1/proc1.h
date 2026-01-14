@@ -430,6 +430,16 @@ uint16_t PROC1_$EC_WAITN(proc1_t *pcb, ec_$eventcount_t **ecs,
 void PROC1_$GET_CPUT(uint16_t pid, void *time);
 
 /*
+ * PROC1_$GET_CPUT8 - Get CPU time as 48-bit clock_t
+ *
+ * Returns the CPU time for the current process as a 48-bit clock value.
+ *
+ * Parameters:
+ *   cpu_time - Pointer to receive 48-bit CPU time value
+ */
+void PROC1_$GET_CPUT8(clock_t *cpu_time);
+
+/*
  * PROC1_$GET_CPU_USAGE - Get CPU usage
  * Original address: 0x00e208aa
  */

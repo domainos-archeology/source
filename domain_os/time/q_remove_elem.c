@@ -29,12 +29,7 @@
  *   00e16e88    move.l (-0x4,A6),(A0)     ; *status = local_status
  */
 
-#include "time.h"
-#include "ml/ml.h"
-
-/* Internal helper to remove element from queue */
-extern void time_$q_remove_internal(time_queue_t *queue, time_queue_elem_t *elem,
-                                    status_$t *status);
+#include "time/time_internal.h"
 
 void TIME_$Q_REMOVE_ELEM(time_queue_t *queue, time_queue_elem_t *elem,
                          status_$t *status)

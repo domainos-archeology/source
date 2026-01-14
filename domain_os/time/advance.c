@@ -17,7 +17,7 @@
  * TIME_$Q_ADD_CALLBACK with the RTEQ and TIME_$ADVANCE_CALLBACK.
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 #include "ec/ec.h"
 
 /* Interval of 0 (one-shot timer) */

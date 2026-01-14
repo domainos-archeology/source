@@ -28,10 +28,7 @@
  *   0x18: interval low (16 bits)
  */
 
-#include "time.h"
-
-/* External reference to ADD48 */
-extern void ADD48(clock_t *dest, clock_t *src);
+#include "time/time_internal.h"
 
 void TIME_$Q_ADD_CALLBACK(time_queue_t *queue, void *elem, uint16_t relative,
                           clock_t *when, void *callback, void *callback_arg,

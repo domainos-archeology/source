@@ -15,18 +15,7 @@
  * Original address: 0x00e58e58
  */
 
-#include "time.h"
-#include "proc2/proc2.h"
-
-/* External cleanup function */
-extern void PROC2_$SET_CLEANUP(uint16_t cleanup_id);
-
-/* Internal helpers for timer conversion */
-extern void time_$itimer_to_clock(clock_t *clock, uint32_t *itimerval);
-extern void time_$clock_to_itimer(clock_t *clock, uint32_t *itimerval);
-extern void time_$set_itimer_internal(uint16_t which, clock_t *value, clock_t *interval,
-                                      clock_t *ovalue, clock_t *ointerval,
-                                      status_$t *status);
+#include "time/time_internal.h"
 
 void TIME_$SET_ITIMER(uint16_t *which, uint32_t *value, uint32_t *ovalue,
                       uint32_t *ointerval_ret, uint32_t *oval_ret,

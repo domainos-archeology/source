@@ -42,7 +42,7 @@
  *   00e2b024    rts
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 #include "arch/m68k/arch.h"
 
 void TIME_$CLOCK(clock_t *clock)

@@ -13,7 +13,7 @@
  * movep.w D0,(0x5,A0) writes to offsets 0x05 and 0x07
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 
 void TIME_$WRT_TIMER(uint16_t value)
 {

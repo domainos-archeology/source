@@ -10,7 +10,7 @@
  * to TIME_$Q_INIT_QUEUE, but in the original it was a separate entry point.
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 
 void TIME_$Q_INIT(void)
 {

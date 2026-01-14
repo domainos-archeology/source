@@ -21,7 +21,7 @@
  *   TIME_$DI_RTE:         0xE2B11E (16 bytes)
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 
 /*
  * ============================================================================

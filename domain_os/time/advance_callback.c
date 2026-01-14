@@ -23,11 +23,7 @@
  *   00e16452    rts
  */
 
-#include "time.h"
-#include "ec/ec.h"
-
-/* External reference */
-extern void EC_$ADVANCE_WITHOUT_DISPATCH(void *ec);
+#include "time/time_internal.h"
 
 void TIME_$ADVANCE_CALLBACK(void *arg)
 {

@@ -15,7 +15,7 @@
  * 2. Otherwise, converts to clock ticks, adjusts boot time, and updates RTC
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 #include "cal/cal.h"
 #include "arch/m68k/arch.h"
 

@@ -14,7 +14,7 @@
  * specific RTC hardware (e.g., MC146818 or similar).
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 
 /*
  * Default epoch time (January 1, 1980 00:00:00 UTC)

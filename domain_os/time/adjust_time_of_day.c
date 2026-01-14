@@ -18,7 +18,7 @@
  * 4. Updates hardware RTC
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 #include "cal/cal.h"
 #include "arch/m68k/arch.h"
 

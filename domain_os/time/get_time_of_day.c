@@ -13,7 +13,7 @@
  * If microseconds overflow 1,000,000, it increments seconds.
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 #include "arch/m68k/arch.h"
 
 void TIME_$GET_TIME_OF_DAY(uint32_t *tv)

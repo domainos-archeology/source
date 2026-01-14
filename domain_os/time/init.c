@@ -19,12 +19,7 @@
  *   - TIMER_$INIT
  */
 
-#include "time.h"
-#include "di/di.h"
-
-/* External references */
-extern void TIMER_$INIT(void);
-extern void DI_$INIT_Q_ELEM(di_queue_elem_t *elem);
+#include "time/time_internal.h"
 
 /*
  * Apollo epoch offset

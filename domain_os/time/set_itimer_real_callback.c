@@ -10,25 +10,7 @@
  * Original address: 0x00e58a38
  */
 
-#include "time.h"
-#include "proc2/proc2.h"
-
-/* Signal numbers */
-#define SIGALRM 14
-
-/* itimer database base */
-#define ITIMER_DB_BASE      0xE297F0
-#define ITIMER_DB_ENTRY_SIZE 0x1C
-
-/* Offsets */
-#define ITIMER_REAL_INTERVAL_HIGH   0x0C
-#define ITIMER_REAL_INTERVAL_LOW    0x10
-
-/* Process UID array */
-extern uint8_t PROC2_UID[];
-
-/* External signal function */
-extern void PROC2_$SIGNAL_OS(void *uid, void *sig_num, void *sig_code, status_$t *status);
+#include "time/time_internal.h"
 
 void TIME_$SET_ITIMER_REAL_CALLBACK(void *arg)
 {

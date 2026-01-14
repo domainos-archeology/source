@@ -24,7 +24,7 @@
  *   00e163e2    rts
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 
 void TIME_$RTE_INT(void)
 {

@@ -14,10 +14,7 @@
  * Vector 0x78 = interrupt level 6, autovector
  */
 
-#include "time.h"
-
-/* Timer interrupt handler (defined elsewhere) */
-extern void TIME_$TIMER_HANDLER(void);
+#include "time/time_internal.h"
 
 /* Interrupt vector table address for timer */
 #define TIME_VECTOR_ADDRESS 0x00000078

@@ -12,7 +12,7 @@
  * Original address: 0x00e164a4
  */
 
-#include "time.h"
+#include "time/time_internal.h"
 #include "ec/ec.h"
 #include "misc/crash_system.h"
 
