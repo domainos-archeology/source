@@ -37,7 +37,7 @@ void PROC2_$SIGNAL_PGROUP(uid_$t *pgroup_uid, int16_t *signal, uint32_t *param,
     ML_$LOCK(PROC2_LOCK_ID);
 
     /* Convert pgroup UID to index */
-    pgroup_idx = PROC2_$UID_TO_PGROUP_INDEX(&uid_copy, &status);
+    pgroup_idx = PROC2_$UID_TO_PGROUP_INDEX(&uid_copy);
 
     /* Signal all processes in group with permission checking enabled (0xFF) */
     PROC2_$SIGNAL_PGROUP_INTERNAL(pgroup_idx, sig_copy, param_copy, -1, &status);

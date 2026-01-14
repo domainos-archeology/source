@@ -152,7 +152,6 @@ extern void DISK_$SORT(void *dev_entry, void **queue_ptr);
 extern uint32_t DISK_INIT(uint16_t unit, uint16_t vol_idx, void *p3, void *p4,
                           void *p5, void *p6, void *p7);
 extern int16_t PARITY_$CHK_IO(uint32_t addr, uint32_t size);
-extern void CRASH_SYSTEM(void *error);
 
 /* Error messages */
 extern void *Disk_controller_err;

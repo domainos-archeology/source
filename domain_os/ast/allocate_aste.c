@@ -11,6 +11,7 @@
  */
 
 #include "ast.h"
+#include "misc/misc.h"
 
 /* Internal function prototypes */
 static aste_t* try_free_aste(aste_t *aste, status_$t *status);

@@ -43,7 +43,7 @@ void MMU_$REMOVE_ASID(uint16_t asid)
         }
 
         /* Found a match - need to remove it with interrupts disabled */
-        SET_SR(GET_SR() | SR_IPL_DISABLE_ALL);
+        DISABLE_INTERRUPTS(saved_sr);
         old_csr = MMU_$PID_PRIV;
         MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
 
@@ -58,7 +58,7 @@ void MMU_$REMOVE_ASID(uint16_t asid)
         MMU_CSR = old_csr;
 
         /* Restore interrupts and continue */
-        SET_SR(GET_SR() & ~SR_IPL_DISABLE_ALL);
+        ENABLE_INTERRUPTS(saved_sr);
 
         pmape++;
         remaining--;

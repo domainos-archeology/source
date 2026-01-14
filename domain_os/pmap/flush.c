@@ -22,6 +22,7 @@
  */
 
 #include "pmap.h"
+#include "misc/misc.h"
 
 /* External data */
 extern int8_t PMAP_$SHUTTING_DOWN_FLAG;

@@ -15,6 +15,7 @@
 
 #include "proc2.h"
 #include "ec/ec.h"
+#include "misc/misc.h"
 
 /* External functions */
 extern void PROC1_$UNBIND(uint16_t pid, status_$t *status);

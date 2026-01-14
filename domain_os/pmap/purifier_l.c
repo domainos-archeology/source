@@ -11,6 +11,7 @@
  */
 
 #include "pmap.h"
+#include "misc/misc.h"
 
 /* External data */
 extern uint32_t DAT_00e232b4;   /* Working set 0 page count */

@@ -8,6 +8,7 @@
  */
 
 #include "mmap.h"
+#include "misc/misc.h"
 
 void MMAP_$FREE_WSL(uint16_t pid)
 {

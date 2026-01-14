@@ -11,6 +11,7 @@
  */
 
 #include "pmap.h"
+#include "misc/misc.h"
 
 /* External data */
 extern uint32_t DAT_00e23380;   /* Last global scan time */
@@ -20,7 +21,7 @@ extern uint32_t DAT_00e2336c;   /* Global scan data */
 extern uint32_t DAT_00e23368;   /* Global scan source */
 
 /* Error string */
-extern const char status_$t_00e145ec[];
+extern status_$t status_$t_00e145ec;
 
 /* Working set list entry structure offsets */
 #define WSL_FLAGS_OFFSET        0x00
@@ -53,7 +54,7 @@ void PMAP_$WS_SCAN_CALLBACK(int *param)
 
     /* Validate slot index */
     if (slot_index > 0x40) {
-        CRASH_SYSTEM(status_$t_00e145ec);
+        CRASH_SYSTEM(&status_$t_00e145ec);
     }
 
     ML_$LOCK(PMAP_LOCK_ID);

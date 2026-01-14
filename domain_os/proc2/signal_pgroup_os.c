@@ -15,11 +15,6 @@
 
 #include "proc2.h"
 
-/* Forward declaration of internal helper */
-void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,
-                                    uint32_t param, int8_t check_perms,
-                                    status_$t *status_ret);
-
 void PROC2_$SIGNAL_PGROUP_OS(uid_$t *pgroup_uid, int16_t *signal, uint32_t *param,
                              status_$t *status_ret)
 {
@@ -37,7 +32,7 @@ void PROC2_$SIGNAL_PGROUP_OS(uid_$t *pgroup_uid, int16_t *signal, uint32_t *para
     ML_$LOCK(PROC2_LOCK_ID);
 
     /* Convert pgroup UID to index */
-    pgroup_idx = PROC2_$UID_TO_PGROUP_INDEX(&uid_copy, &status);
+    pgroup_idx = PROC2_$UID_TO_PGROUP_INDEX(&uid_copy);
 
     /* Signal all processes in group without permission checking (0) */
     PROC2_$SIGNAL_PGROUP_INTERNAL(pgroup_idx, sig_copy, param_copy, 0, &status);

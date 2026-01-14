@@ -14,7 +14,6 @@
 // External functions
 extern void FUN_00e1aed0(tty_desc_t *tty);  // Lock TTY
 extern void FUN_00e1aee4(tty_desc_t *tty);  // Unlock TTY
-extern uint EC_$WAITN(void **ec_array, int *value_array, short count);
 
 // External global variables for quit handling
 extern short PROC1_$AS_ID;              // Current address space ID

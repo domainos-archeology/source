@@ -10,12 +10,10 @@
  */
 
 #include "disk.h"
+#include "misc/misc.h"
 
 /* Mount lock */
 extern void *MOUNT_LOCK;
-
-/* ML_$EXCLUSION_START, ML_$EXCLUSION_STOP declared in ml/ml.h via disk.h */
-extern void CRASH_SYSTEM(void *error);
 
 /* Error message */
 extern void *Disk_Driver_Logic_Err;

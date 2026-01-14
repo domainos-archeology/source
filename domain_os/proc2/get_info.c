@@ -13,7 +13,6 @@
  */
 
 #include "proc2.h"
-#include <string.h>
 
 /* Internal helper */
 extern void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,

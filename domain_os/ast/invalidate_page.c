@@ -8,10 +8,8 @@
  */
 
 #include "ast.h"
-
-/* External function prototypes */
-extern void MMU_$REMOVE(uint32_t ppn);
-extern void MMAP_$FREE_REMOVE(pmape_t *pmape, uint32_t ppn);
+#include "mmu/mmu.h"
+#include "mmap/mmap.h"
 
 void AST_$INVALIDATE_PAGE(aste_t *aste, uint32_t *segmap_entry, uint32_t ppn)
 {

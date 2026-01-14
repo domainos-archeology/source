@@ -9,6 +9,7 @@
  */
 
 #include "mmap.h"
+#include "misc/misc.h"
 
 void MMAP_$UNWIRE(uint32_t vpn)
 {

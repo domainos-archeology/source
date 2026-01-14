@@ -1,7 +1,5 @@
 #include "term.h"
-
-// External functions
-extern void *EC2_$REGISTER_EC1(void *ec_ptr, status_$t *status_ret);
+#include "ec/ec.h"
 
 // Gets an eventcount for a terminal line.
 //

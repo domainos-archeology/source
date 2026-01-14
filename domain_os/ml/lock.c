@@ -14,6 +14,7 @@
 
 #include "ml.h"
 #include "proc1/proc1.h"
+#include "misc/misc.h"
 
 /* External status for crash */
 extern status_$t Lock_ordering_violation;

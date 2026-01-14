@@ -1,3 +1,4 @@
+#include "base/base.h"
 #include "math/math.h"
 
 typedef long status_$t;
@@ -5,15 +6,6 @@ typedef long status_$t;
 #define status_$ok 0
 #define status_$cal_refused 0x150007
 #define status_$cal_date_or_time_invalid 0x150002
-
-// 48-bit clock value used by Domain/OS calendar functions
-// Represents time in 4-microsecond ticks since epoch (250,000 ticks/sec)
-// Constant 0x3D090 = 250,000 (ticks per second)
-// Constant 0xD090 = 0x3D090 & 0xFFFF (low word for multiplication)
-typedef struct {
-  uint high;  // upper 32 bits
-  ushort low; // lower 16 bits
-} clock_t;
 
 // Timezone record structure (12 bytes total at 0x00e7b030)
 typedef struct {

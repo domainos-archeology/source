@@ -16,9 +16,6 @@
 #include "proc2.h"
 #include "ec/ec.h"
 
-/* External declarations */
-extern ec_$eventcount_t PROC1_$SUSPEND_EC;
-
 /*
  * try_suspend - Helper function (was nested Pascal procedure)
  *

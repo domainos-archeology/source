@@ -8,6 +8,7 @@
  */
 
 #include "mmap.h"
+#include "misc/misc.h"
 
 void MMAP_$AVAIL(uint32_t vpn)
 {

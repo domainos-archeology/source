@@ -8,6 +8,8 @@
  */
 
 #include "ast.h"
+#include "misc/misc.h"
+#include "mmu/mmu.h"
 
 uint16_t AST_$ADD_AOTES(uint16_t *count, status_$t *status)
 {
@@ -34,7 +36,7 @@ uint16_t AST_$ADD_AOTES(uint16_t *count, status_$t *status)
         local_status != status_$ok) {
         WP_$CALLOC(&ppn, &local_status);
         if (local_status != status_$ok) {
-            CRASH_SYSTEM((const char*)&local_status);
+            CRASH_SYSTEM(&local_status);
         }
         MMU_$INSTALL(ppn, (uint32_t)aote_ptr, 0x16);
     }
@@ -53,7 +55,7 @@ uint16_t AST_$ADD_AOTES(uint16_t *count, status_$t *status)
         if (MMU_$VTOP(va, &local_status) == 0 && local_status != status_$ok) {
             WP_$CALLOC(&ppn, &local_status);
             if (local_status != status_$ok) {
-                CRASH_SYSTEM((const char*)&local_status);
+                CRASH_SYSTEM(&local_status);
             }
             MMU_$INSTALL(ppn, va, 0x16);
         }

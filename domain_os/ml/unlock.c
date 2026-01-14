@@ -12,12 +12,11 @@
 
 #include "ml.h"
 #include "proc1/proc1.h"
+#include "misc/misc.h"
+#include "ec/ec.h"
 
 /* External status for crash */
 extern status_$t Illegal_lock_err;
-
-/* Internal: advance lock event count */
-extern void ADVANCE_INT(ec_$eventcount_t *ec);
 
 /* Internal: process scheduling helper */
 extern void FUN_00e20824(void);
@@ -40,7 +39,7 @@ void ML_$UNLOCK(int16_t resource_id)
      * event count to wake them up.
      */
     ec_offset = resource_id << 4;
-    if (((ec_$eventcount_t *)((char *)ML_$LOCK_EVENTS + ec_offset))->count !=
+    if (((ec_$eventcount_t *)((char *)ML_$LOCK_EVENTS + ec_offset))->value !=
         ((int32_t *)((char *)ML_$LOCK_EVENTS + ec_offset + 0x0C))[0]) {
         ADVANCE_INT((ec_$eventcount_t *)((char *)ML_$LOCK_EVENTS + ec_offset));
     }

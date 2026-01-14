@@ -24,6 +24,7 @@
 
 #include "proc2.h"
 #include "ec/ec.h"
+#include "misc/misc.h"
 
 /* External globals */
 extern uid_$t UID_$NIL;

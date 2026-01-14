@@ -8,6 +8,7 @@
  */
 
 #include "mmap.h"
+#include "misc/misc.h"
 
 #define PURGE_ALL_MAGIC  0x3FFFFF
 

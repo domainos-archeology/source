@@ -16,6 +16,7 @@
 #define DISK_H
 
 #include "base/base.h"
+#include "ec/ec.h"
 #include "ml/ml.h"
 
 /*
@@ -210,9 +211,6 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
 /*
  * External functions used by DISK
  */
-/* ML_$LOCK, ML_$UNLOCK, ML_$EXCLUSION_INIT declared in ml/ml.h */
-extern void EC_$INIT(void *ec);
-
 /* DBUF functions */
 extern void *DBUF_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *uid,
                              uint16_t p4, uint16_t p5, status_$t *status);

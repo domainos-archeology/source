@@ -21,9 +21,7 @@ void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count)
 
     if (count == 0) return;
 
-    /* Disable interrupts */
-    saved_sr = GET_SR();
-    SET_SR(saved_sr | 0x0700);
+    DISABLE_INTERRUPTS(saved_sr);
 
     /* Enable PTT access */
     old_csr = MMU_$PID_PRIV;
@@ -36,5 +34,5 @@ void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count)
 
     /* Restore CSR and interrupts */
     MMU_CSR = old_csr;
-    SET_SR(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
 }

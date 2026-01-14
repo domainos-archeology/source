@@ -10,6 +10,7 @@
  */
 
 #include "mmap.h"
+#include "misc/misc.h"
 
 void MMAP_$RECLAIM(uint32_t *vpn_array, uint16_t count, int8_t use_wired)
 {

@@ -13,10 +13,10 @@
  */
 
 #include "mst.h"
+#include "misc/misc.h"
 
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
 extern void AREA_$FREE_ASID(uint16_t asid);
-extern void CRASH_SYSTEM(status_$t *status);
 
 /* External: NIL UID for unmap operations */
 extern uid_$t UID_$NIL;

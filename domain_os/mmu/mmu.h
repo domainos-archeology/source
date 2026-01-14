@@ -170,28 +170,6 @@ typedef struct mmu_globals_t {
 #define CSR_PRIV_BIT            0x0001  /* Privilege mode */
 #define CSR_PTT_ACCESS_BIT      0x0002  /* Enable PTT access */
 
-/*
- * Status Register (SR) access macros
- * These are used to disable/restore interrupts during critical sections.
- */
-#if defined(M68K)
-    /* M68K inline assembly for SR manipulation */
-    static inline uint16_t GET_SR(void) {
-        uint16_t sr;
-        __asm__ volatile("move.w %%sr, %0" : "=d"(sr));
-        return sr;
-    }
-    static inline void SET_SR(uint16_t sr) {
-        __asm__ volatile("move.w %0, %%sr" : : "d"(sr));
-    }
-#else
-    /* Non-m68k platforms: provide stubs or platform-specific implementations */
-    extern uint16_t platform_get_sr(void);
-    extern void platform_set_sr(uint16_t sr);
-    #define GET_SR()        platform_get_sr()
-    #define SET_SR(sr)      platform_set_sr(sr)
-#endif
-
 /* Interrupt priority level mask */
 #define SR_IPL_MASK             0x0700  /* Interrupt priority level bits */
 #define SR_IPL_DISABLE_ALL      0x0700  /* Disable all interrupts */
@@ -205,7 +183,6 @@ extern uint32_t MMAP_$HPPN;             /* Highest pageable page number */
 /*
  * System functions
  */
-extern void CRASH_SYSTEM(const char *msg);
 extern void CACHE_$CLEAR(void);
 
 /*

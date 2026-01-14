@@ -8,6 +8,7 @@
  */
 
 #include "ast.h"
+#include "misc/misc.h"
 
 void AST_$INIT(void)
 {
@@ -43,7 +44,7 @@ void AST_$INIT(void)
     /* Add the AOTEs */
     AST_$ADD_AOTES((uint16_t*)&aote_count, &status);
     if (status != status_$ok) {
-        CRASH_SYSTEM((const char*)&status);
+        CRASH_SYSTEM(&status);
     }
 
     /* Clamp ASTE count to maximum */
@@ -54,6 +55,6 @@ void AST_$INIT(void)
     /* Add the ASTEs */
     AST_$ADD_ASTES((uint16_t*)&aste_count, &status);
     if (status != status_$ok) {
-        CRASH_SYSTEM((const char*)&status);
+        CRASH_SYSTEM(&status);
     }
 }

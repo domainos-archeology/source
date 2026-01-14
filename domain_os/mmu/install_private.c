@@ -38,8 +38,7 @@ void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint8_t asid, uint8_t prot)
     packed_info &= ~0x0F;
 
     /* Disable interrupts and enable PTT access */
-    saved_sr = GET_SR();
-    SET_SR(saved_sr | SR_IPL_DISABLE_ALL);
+    DISABLE_INTERRUPTS(saved_sr);
 
     old_csr = MMU_$PID_PRIV;
     MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
@@ -53,5 +52,5 @@ void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint8_t asid, uint8_t prot)
 
     /* Restore CSR and interrupts */
     MMU_CSR = old_csr;
-    SET_SR(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
 }

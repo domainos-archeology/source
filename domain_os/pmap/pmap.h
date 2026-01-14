@@ -36,53 +36,16 @@ struct aote_t;
 /*
  * PMAP Global Variables
  */
-#if defined(M68K)
-    /* PMAP globals are at E24D44 + offset */
-    #define PMAP_GLOBALS_BASE           0xE24D44
 
-    /* Event counters */
-    #define PMAP_$PAGES_EC              (*(ec_$eventcount_t*)0xE25494)    /* 0x750 */
-    #define PMAP_$L_PURIFIER_EC         (*(ec_$eventcount_t*)0xE254AC)    /* 0x768 */
-    #define PMAP_$R_PURIFIER_EC         (*(ec_$eventcount_t*)0xE254A0)    /* 0x75C */
-
-    /* Thresholds */
-    #define PMAP_$LOW_THRESH            (*(uint16_t*)0xE254E0)           /* Low threshold */
-    #define PMAP_$MID_THRESH            (*(uint16_t*)0xE254E2)           /* Mid threshold */
-
-    /* Scan interval */
-    #define PMAP_$WS_INTERVAL           (*(uint16_t*)0xE254DE)           /* Working set interval */
-
-    /* Statistics */
-    #define PMAP_$T_PUR_SCANS           (*(uint32_t*)0xE254DC)           /* Timed purifier scans */
-
-    /* Shutdown flag */
-    #define PMAP_$SHUTTING_DOWN_FLAG    (*(int8_t*)0xE254E8)             /* Shutdown in progress */
-
-    /* Current purifier slot */
-    #define PMAP_$CURRENT_SLOT          (*(uint16_t*)0xE254E4)           /* 0x7A0 */
-
-#else
-    /* For non-m68k platforms */
-    extern ec_$eventcount_t  pmap_pages_ec;
-    extern ec_$eventcount_t  pmap_l_purifier_ec;
-    extern ec_$eventcount_t  pmap_r_purifier_ec;
-    extern uint16_t         pmap_low_thresh;
-    extern uint16_t         pmap_mid_thresh;
-    extern uint16_t         pmap_ws_interval;
-    extern uint32_t         pmap_t_pur_scans;
-    extern int8_t           pmap_shutting_down_flag;
-    extern uint16_t         pmap_current_slot;
-
-    #define PMAP_$PAGES_EC              pmap_pages_ec
-    #define PMAP_$L_PURIFIER_EC         pmap_l_purifier_ec
-    #define PMAP_$R_PURIFIER_EC         pmap_r_purifier_ec
-    #define PMAP_$LOW_THRESH            pmap_low_thresh
-    #define PMAP_$MID_THRESH            pmap_mid_thresh
-    #define PMAP_$WS_INTERVAL           pmap_ws_interval
-    #define PMAP_$T_PUR_SCANS           pmap_t_pur_scans
-    #define PMAP_$SHUTTING_DOWN_FLAG    pmap_shutting_down_flag
-    #define PMAP_$CURRENT_SLOT          pmap_current_slot
-#endif
+extern ec_$eventcount_t  PMAP_$PAGES_EC;
+extern ec_$eventcount_t  PMAP_$L_PURIFIER_EC;
+extern ec_$eventcount_t  PMAP_$R_PURIFIER_EC;
+extern uint16_t         PMAP_$LOW_THRESH;
+extern uint16_t         PMAP_$MID_THRESH;
+extern uint16_t         PMAP_$WS_INTERVAL;
+extern uint32_t         PMAP_$T_PUR_SCANS;
+extern int8_t           PMAP_$SHUTTING_DOWN_FLAG;
+extern uint16_t         PMAP_$CURRENT_SLOT;
 
 /*
  * External references to MMAP module
@@ -114,8 +77,6 @@ extern uint32_t DAT_00e23320;            /* Impure pages flag */
 /*
  * System functions
  */
-/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
-/* EC_$ADVANCE, EC_$WAIT, EC_$WAITN, CRASH_SYSTEM declared in ec/ec.h */
 extern void PROC1_$SET_LOCK(uint16_t lock_id);
 
 /*
@@ -189,8 +150,8 @@ extern void FUN_00e1360c(void);
 /*
  * Error strings
  */
-extern const char status_$t_00e13a14[];
-extern const char status_$t_00e145ec[];
+extern status_$t status_$t_00e13a14;
+extern status_$t status_$t_00e145ec;
 
 /*
  * Function prototypes - Page flushing

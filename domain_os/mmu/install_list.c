@@ -41,8 +41,9 @@ void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va,
     packed_base &= ~0x0F;
 
     /* Disable interrupts and enable PTT access */
-    saved_sr = GET_SR();
-    SET_SR(saved_sr | SR_IPL_DISABLE_ALL);
+    GET_SR(saved_sr);
+    uint16_t disabled_sr = saved_sr | SR_IPL_DISABLE_ALL;
+    SET_SR(disabled_sr);
 
     old_csr = MMU_$PID_PRIV;
     MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;

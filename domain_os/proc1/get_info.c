@@ -27,10 +27,6 @@ typedef struct proc1_$info_t {
     uint8_t     cpu_total[8];   /* 0x10: CPU time (6 bytes used) */
 } proc1_$info_t;
 
-/* External function to get info from interrupt context */
-extern void PROC1_$GET_INFO_INT(uint16_t pid, void *stack_base, void *stack_top,
-                                 uint16_t *usr, uint32_t *upc, uint16_t *usb, uint32_t *usp);
-
 void PROC1_$GET_INFO(int16_t *pidp, proc1_$info_t *info_ret, status_$t *status_ret)
 {
     uint16_t pid;

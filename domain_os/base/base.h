@@ -82,7 +82,14 @@ extern uid_$t UID_$NIL;
 // =============================================================================
 // Clock type
 // =============================================================================
-typedef long clock_t;
+// 48-bit clock value used by Domain/OS calendar functions
+// Represents time in 4-microsecond ticks since epoch (250,000 ticks/sec)
+// Constant 0x3D090 = 250,000 (ticks per second)
+// Constant 0xD090 = 0x3D090 & 0xFFFF (low word for multiplication)
+typedef struct {
+  uint high;  // upper 32 bits
+  ushort low; // lower 16 bits
+} clock_t;
 
 // =============================================================================
 // Boolean type (Domain/OS style)

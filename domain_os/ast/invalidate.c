@@ -16,6 +16,7 @@
  */
 
 #include "ast.h"
+#include "proc1/proc1.h"
 
 /* Internal function prototypes */
 extern void FUN_00e0209e(uid_t *uid);  /* Look up AOTE by UID */

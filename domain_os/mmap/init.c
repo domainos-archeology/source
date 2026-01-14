@@ -9,6 +9,7 @@
  */
 
 #include "mmap.h"
+#include "misc/misc.h"
 
 /* External function for virtual-to-physical translation */
 extern uint32_t mmu_$vtop_or_crash(void *vaddr);

@@ -165,11 +165,6 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_sig, void *req);
 void FLP_FORMAT_TRACK(void *req, void *buf);
 
 /* External functions used by FLP */
-extern void DISK_$REGISTER(void *p1, void *p2, void *p3, void *p4, void **p5);
-extern void EC_$INIT(void *ec);
-extern void EC_$ADVANCE_WITHOUT_DISPATCH(void *ec);
-extern int16_t EC_$WAIT(void *ec_list, uint32_t *value);
-extern uint32_t MMU_$VTOP(uint32_t va, status_$t *status);
 extern void WP_$WIRE(uint32_t phys);
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
 extern int16_t PARITY_$CHK_IO(int16_t mode, uint32_t addr);

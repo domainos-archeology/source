@@ -12,11 +12,8 @@
  */
 
 #include "ast.h"
-
-/* Internal function prototypes */
-extern void MMU_$REMOVE(uint32_t vpn);
-extern void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count);
-extern void MMAP_$RELEASE_PAGES(uint16_t proc_id, uint32_t *ppn_array, uint16_t count);
+#include "mmu/mmu.h"
+#include "mmap/mmap.h"
 
 void AST_$RELEASE_PAGES(aste_t *aste, int8_t return_to_pool)
 {

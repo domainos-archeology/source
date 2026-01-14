@@ -1,8 +1,7 @@
 #include "cal.h"
+#include "proc1/proc1.h"
 
 // External functions for disk buffer management and locking
-extern void PROC1_$SET_LOCK(short lock_id);
-extern void PROC1_$CLR_LOCK(short lock_id);
 extern void *DBUF_$GET_BLOCK(ushort vol_idx, int block, void *uid, int param4, int param5, status_$t *status);
 extern void DBUF_$SET_BUFF(void *buffer, short flags, status_$t *status);
 extern void *LV_LABEL_$UID;

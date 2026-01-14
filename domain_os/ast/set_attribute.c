@@ -15,6 +15,7 @@
  */
 
 #include "ast.h"
+#include "proc1/proc1.h"
 
 /* Internal function prototypes */
 extern void TIME_$CLOCK(uint32_t *clock);

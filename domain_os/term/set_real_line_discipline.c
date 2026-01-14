@@ -1,4 +1,5 @@
 #include "term.h"
+#include "ml/ml.h"
 
 /* ML_$SPIN_LOCK, ML_$SPIN_UNLOCK declared in ml/ml.h via term.h */
 extern void DTTY_$RELOAD_FONT(void);

@@ -15,11 +15,9 @@
  */
 
 #include "mst.h"
-
-/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
-extern void CRASH_SYSTEM(status_$t *status);
-extern uint32_t MMU_$VTOP(uint32_t virt_addr, status_$t *status);
-extern void MMAP_$WIRE(uint32_t phys_addr);
+#include "misc/misc.h"
+#include "mmap/mmap.h"
+#include "mmu/mmu.h"
 
 /* Error status for out-of-bounds reference */
 extern status_$t MST_Ref_OutOfBounds_Err;

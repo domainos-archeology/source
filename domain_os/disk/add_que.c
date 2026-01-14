@@ -18,6 +18,7 @@
  */
 
 #include "disk.h"
+#include "misc/misc.h"
 
 /* Request block offsets */
 #define REQ_NEXT_OFFSET     0x00   /* Pointer to next request */
@@ -39,10 +40,6 @@
 
 /* Error message for unsupported queued drivers */
 extern void *Disk_Queued_Drivers_Not_Supported_Err;
-
-/* External functions */
-extern void CRASH_SYSTEM(void *error);
-/* ML_$SPIN_LOCK, ML_$SPIN_UNLOCK declared in ml/ml.h via disk.h */
 
 /* Queue data at 0xe7a1cc */
 #define QUEUE_DATA_BASE  ((uint8_t *)0x00e7a1cc)

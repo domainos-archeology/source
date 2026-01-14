@@ -17,6 +17,7 @@
  */
 
 #include "base/base.h"
+#include "proc1/proc1.h"
 
 /* Status codes for special handling */
 #define status_$system_reboot  0x001b0008
@@ -33,7 +34,6 @@ uint32_t CRASH_USP;                         /* User stack pointer */
 #define CRASH_MAGIC      0xabcdef01
 
 /* External references */
-extern void *PROC1_$CURRENT;               /* Current process */
 extern uint32_t TIME_$CLOCKH;              /* High word of system clock */
 extern void *PROM_$QUIET_RET_ADDR;         /* PROM warm restart entry */
 
@@ -49,7 +49,7 @@ static void crash_puts_string(const char *str);
  *
  * @param status_p  Pointer to status code that caused the crash
  */
-void CRASH_SYSTEM(status_$t *status_p)
+void CRASH_SYSTEM(const status_$t *status_p)
 {
     uint16_t saved_sr;
     uint32_t *reg_src;

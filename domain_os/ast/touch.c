@@ -19,6 +19,8 @@
  */
 
 #include "ast.h"
+#include "misc/misc.h"
+#include "mmap/mmap.h"
 
 /* Internal function prototypes */
 extern void FUN_00e00c08(void);  /* Wait for page transition */
@@ -30,8 +32,6 @@ extern void FUN_00e02af6(aste_t *aste, uint32_t *segmap, uint32_t *ppn_array,
 extern void FUN_00e02ca6(aste_t *aste, uint32_t *segmap, uint32_t *ppn_array,
                          uint16_t page, uint16_t count, int8_t flag, status_$t *status);
 extern void FUN_00e0283c(uint32_t *segmap, uint16_t count);
-extern void MMAP_$INSTALL_LIST(uint32_t *ppn_array, uint16_t count, int8_t use_wired);
-extern void MMAP_$RECLAIM(uint32_t *ppn_array, uint16_t count, int8_t use_wired);
 extern void NETLOG_$LOG_IT(uint16_t type, void *uid, uint16_t seg, uint16_t page,
                            uint16_t ppn, uint16_t count, uint16_t remote, uint16_t unused);
 

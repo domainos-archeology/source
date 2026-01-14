@@ -15,6 +15,8 @@
  */
 
 #include "ast.h"
+#include "mmu/mmu.h"
+#include "mmap/mmap.h"
 
 /* Internal function prototypes */
 extern int16_t FUN_00e00d46(uint32_t count_flags, uint32_t *ppn_array);
@@ -24,8 +26,6 @@ extern void NETWORK_$READ_AHEAD(void *partner, void *uid_info, uint32_t *ppn_arr
                                  uint16_t flags, uint16_t count, uint32_t unused1,
                                  uint32_t unused2, void *buf1, void *buf2, void *buf3,
                                  status_$t *status);
-extern void MMU_$REMOVE(uint32_t ppn);
-extern void MMAP_$FREE(uint32_t ppn);
 
 /* External data */
 extern void *AREA_$PARTNER;

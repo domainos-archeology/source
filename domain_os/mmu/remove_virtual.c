@@ -43,8 +43,7 @@ void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
 
     do {
         /* Enable PTT access with interrupts disabled */
-        saved_sr = GET_SR();
-        SET_SR(saved_sr | 0x0700);
+        DISABLE_INTERRUPTS(saved_sr);
         old_csr = MMU_$PID_PRIV;
         MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
 
@@ -106,7 +105,7 @@ void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
 
         /* Restore CSR and interrupts */
         MMU_CSR = old_csr;
-        SET_SR(saved_sr);
+        ENABLE_INTERRUPTS(saved_sr);
 
     } while (--remaining >= 0);
 

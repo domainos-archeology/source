@@ -8,6 +8,7 @@
  */
 
 #include "ast.h"
+#include "misc/misc.h"
 
 /* Internal function prototypes */
 extern void FUN_00e03fbc(void);  /* Flush installed pages */
@@ -85,7 +86,7 @@ mark_dirty:
                 ML_$UNLOCK(PMAP_LOCK_ID);
                 BAT_$FREE(&bat_blocks[1], 0x20, flags, 1, &status);
                 if (status != status_$ok) {
-                    CRASH_SYSTEM((const char *)&status);
+                    CRASH_SYSTEM(&status);
                 }
                 ML_$LOCK(PMAP_LOCK_ID);
                 bat_count = 0;

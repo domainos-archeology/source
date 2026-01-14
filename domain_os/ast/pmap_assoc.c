@@ -16,11 +16,12 @@
  */
 
 #include "ast.h"
+#include "misc/misc.h"
+#include "mmu/mmu.h"
+#include "mmap/mmap.h"
 
 /* Internal function prototypes */
 extern void FUN_00e00c08(void);  /* Wait for page transition */
-extern void MMU_$REMOVE(uint32_t ppn);
-extern void MMAP_$FREE_REMOVE(uint8_t *pmape, uint32_t ppn);
 
 void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
                      uint16_t flags1, uint16_t flags2, status_$t *status)

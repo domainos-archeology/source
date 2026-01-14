@@ -176,7 +176,8 @@ extern int32_t LOADAV_15MIN;            /* 15-minute load average */
 /*
  * Event count for process suspension
  */
-extern uint32_t PROC1_$SUSPEND_EC;      /* 0xE205F6: Suspend event count */
+
+extern ec_$eventcount_t PROC1_$SUSPEND_EC; /* 0xE205F6: Suspend event count */
 
 /*
  * External functions
@@ -186,12 +187,7 @@ extern void TIME_$WRT_VT_TIMER(void);
 extern void TIME_$Q_ENTER_ELEM(void *queue, void *time, void *callback, status_$t *status);
 extern uint32_t TIME_$CLOCKH;
 
-extern void MMU_$INSTALL_ASID(uint16_t asid);
-extern void MMAP_$SET_WS_PRI(void);
-extern void PMAP_$INIT_WS_SCAN(uint16_t pid, uint16_t param);
-
 extern void INIT_STACK(proc1_t *pcb, void *params);
-extern void ADD48(void *a, void *b);
 
 /*
  * ============================================================================
@@ -233,6 +229,7 @@ void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret);
  * PROC1_$ALLOC_STACK - Allocate a process stack
  * Original address: 0x00e1501a
  */
+
 void *PROC1_$ALLOC_STACK(uint16_t type, status_$t *status_ret);
 
 /*

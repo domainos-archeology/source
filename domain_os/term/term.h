@@ -2,7 +2,7 @@
 #define TERM_H
 
 #include "base/base.h"
-#include "ml/ml.h"
+#include "ec/ec.h"
 
 // Maximum number of terminal lines
 #define TERM_MAX_LINES 4
@@ -32,7 +32,7 @@ typedef struct dtte {
 // Verify structure size
 _Static_assert(sizeof(dtte_t) == 0x38, "dtte_t must be 56 bytes");
 
-// =============================================================================
+// 
 // Large terminal entry structure (0x4dc = 1244 bytes per line)
 // Contains UID at offset 0x1a4 within each entry
 // Used by TERM_$P2_CLEANUP for process cleanup

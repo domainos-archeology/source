@@ -21,6 +21,7 @@
  */
 
 #include "proc1.h"
+#include "misc/misc.h"
 
 /* Error status for releasing unheld lock */
 static const status_$t Illegal_lock_err = 0x00000000;  /* TODO: Find actual value */

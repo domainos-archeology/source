@@ -15,11 +15,12 @@
  */
 
 #include "ast.h"
+#include "misc/misc.h"
+#include "mmu/mmu.h"
+#include "mmap/mmap.h"
 
 /* Internal function prototypes */
 extern void FUN_00e00c08(void);  /* Wait for page transition */
-extern void MMU_$REMOVE(uint32_t ppn);
-extern void MMAP_$FREE_REMOVE(uint8_t *pmape, uint32_t ppn);
 
 void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn, status_$t *status)
 {
@@ -75,7 +76,7 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn, status_$t *
 
     /* Validate new PPN */
     if (ppn == 0) {
-        CRASH_SYSTEM(OS_PMAP_mismatch_err);
+        CRASH_SYSTEM(&OS_PMAP_mismatch_err);
     }
 
     /* Set up new page mapping */

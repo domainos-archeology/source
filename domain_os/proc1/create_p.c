@@ -18,13 +18,6 @@
 
 #include "proc1.h"
 
-/* External functions */
-extern void *PROC1_$ALLOC_STACK(int16_t size, status_$t *status_ret);
-extern uint16_t PROC1_$BIND(void *funcptr, void *stack1, void *stack2,
-                             uint16_t ws_param, status_$t *status_ret);
-extern void PROC1_$FREE_STACK(void *stack);
-extern void PROC1_$RESUME(uint16_t pid, status_$t *status_ret);
-
 /*
  * Process types and their working set parameters:
  * Type 3, 4, 5, 10: ws_param = 5

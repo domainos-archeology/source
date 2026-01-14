@@ -11,6 +11,7 @@
  */
 
 #include "proc1.h"
+#include "mmu/mmu.h"
 
 void PROC1_$SET_ASID(uint16_t asid)
 {

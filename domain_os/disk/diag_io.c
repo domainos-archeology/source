@@ -19,6 +19,8 @@
  */
 
 #include "disk.h"
+#include "mmap/mmap.h"
+#include "mst/mst.h"
 
 /* Status codes */
 #define status_$disk_buffer_not_page_aligned     0x00080013
@@ -52,10 +54,8 @@ extern int16_t PROC1_$CURRENT;
 extern int8_t DISK_$DIAG;
 
 /* External functions */
-extern uint32_t MST_$WIRE(uint32_t buffer, status_$t *status);
 extern void WP_$UNWIRE(uint32_t wired_addr);
 extern uint32_t WP_$CALLOC(void *addr_ptr, status_$t *status);
-extern void MMAP_$FREE(uint32_t addr);
 extern void CACHE_$FLUSH_VIRTUAL(void);
 extern int8_t ACL_$IS_SUSER(void);
 extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *buffer,

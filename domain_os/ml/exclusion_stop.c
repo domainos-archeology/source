@@ -11,9 +11,7 @@
 
 #include "ml.h"
 #include "proc1/proc1.h"
-
-/* Internal: advance event count */
-extern void ADVANCE_INT(ec_$eventcount_t *ec);
+#include "ec/ec.h"
 
 /* Internal: process scheduling helper */
 extern void FUN_00e20824(void);

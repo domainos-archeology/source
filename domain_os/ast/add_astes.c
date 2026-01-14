@@ -9,6 +9,7 @@
  */
 
 #include "ast.h"
+#include "misc/misc.h"
 
 uint16_t AST_$ADD_ASTES(uint16_t *count, status_$t *status)
 {
@@ -37,7 +38,7 @@ uint16_t AST_$ADD_ASTES(uint16_t *count, status_$t *status)
         local_status != status_$ok) {
         WP_$CALLOC(&ppn, &local_status);
         if (local_status != status_$ok) {
-            CRASH_SYSTEM((const char*)&local_status);
+            CRASH_SYSTEM(&local_status);
         }
         MMU_$INSTALL(ppn, (uint32_t)aste_ptr, 0x16);
     }
@@ -62,7 +63,7 @@ uint16_t AST_$ADD_ASTES(uint16_t *count, status_$t *status)
         if (MMU_$VTOP(va, &local_status) == 0 && local_status != status_$ok) {
             WP_$CALLOC(&ppn, &local_status);
             if (local_status != status_$ok) {
-                CRASH_SYSTEM((const char*)&local_status);
+                CRASH_SYSTEM(&local_status);
             }
             MMU_$INSTALL(ppn, va, 0x16);
         }
@@ -78,7 +79,7 @@ uint16_t AST_$ADD_ASTES(uint16_t *count, status_$t *status)
         if (MMU_$VTOP(va, &local_status) == 0 && local_status != status_$ok) {
             WP_$CALLOC(&ppn, &local_status);
             if (local_status != status_$ok) {
-                CRASH_SYSTEM((const char*)&local_status);
+                CRASH_SYSTEM(&local_status);
             }
             MMU_$INSTALL(ppn, va, 0x16);
         }

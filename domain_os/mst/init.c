@@ -16,21 +16,12 @@
  */
 
 #include "mst.h"
+#include "math/math.h"
+#include "misc/misc.h"
+#include "mmap/mmap.h"
+#include "mmu/mmu.h"
 
-/* External functions */
-extern uint32_t M_MIU_LLW(uint32_t dividend, uint16_t divisor);  /* Unsigned divide */
-extern uint32_t M_DIU_LLW(int32_t dividend, int32_t divisor);     /* Signed divide */
-extern uint16_t M_OIS_WLW(int32_t value, uint16_t divisor);       /* Modulo operation */
-extern void CRASH_SYSTEM(status_$t *status);
 
-/* External: Memory map functions */
-extern int16_t MMAP_$ALLOC_FREE(uint32_t *phys_addr_out, int16_t count);
-extern void MMU_$INSTALL(uint32_t phys_addr, int32_t virt_addr, uint16_t flags);
-
-/* External: Memory statistics */
-extern int32_t MMAP_$REAL_PAGES;
-extern int32_t MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
-extern int8_t M68020;
 
 /* MST page tracking globals */
 extern uint32_t MST_$ASID_LIST_LONG;    /* First 32 bits of ASID bitmap */

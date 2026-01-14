@@ -39,8 +39,7 @@ uint32_t MMU_$VTOP(uint32_t va, status_$t *status)
     ptt = PTT_FOR_VA(va);
 
     /* Disable interrupts and enable PTT access */
-    saved_sr = GET_SR();
-    SET_SR(saved_sr | SR_IPL_DISABLE_ALL);
+    DISABLE_INTERRUPTS(saved_sr);
 
     old_csr = MMU_$PID_PRIV;
     MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
@@ -91,7 +90,7 @@ uint32_t MMU_$VTOP(uint32_t va, status_$t *status)
 
     /* Not found in chain */
     MMU_CSR = old_csr;
-    SET_SR(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
     *status = status_$mmu_miss;
     return 0;
 }

@@ -17,9 +17,7 @@ void MMU_$REMOVE(uint32_t ppn)
     uint16_t saved_sr;
     uint16_t old_csr;
 
-    /* Disable interrupts */
-    saved_sr = GET_SR();
-    SET_SR(saved_sr | 0x0700);
+    DISABLE_INTERRUPTS(saved_sr);
 
     /* Enable PTT access */
     old_csr = MMU_$PID_PRIV;
@@ -30,7 +28,7 @@ void MMU_$REMOVE(uint32_t ppn)
 
     /* Restore CSR and interrupts */
     MMU_CSR = old_csr;
-    SET_SR(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
 }
 
 /*

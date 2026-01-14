@@ -14,6 +14,7 @@
  */
 
 #include "mmap.h"
+#include "mmu/mmu.h"
 
 /* Global lock for MMAP data structures */
 extern void *MMAP_LOCK;  /* Located at MMAP_GLOBALS base */

@@ -19,6 +19,7 @@
  */
 
 #include "proc1.h"
+#include "misc/misc.h"
 
 /* Error status for lock ordering violation */
 static const status_$t Lock_order_violation_err = 0x000E2DE4;

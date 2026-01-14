@@ -8,6 +8,7 @@
  */
 
 #include "ast.h"
+#include "proc1/proc1.h"
 
 /* Internal function prototypes */
 extern void FUN_00e01ad2(aote_t *aote, uint8_t flags1, uint16_t flags2, uint16_t flags3, status_$t *status);

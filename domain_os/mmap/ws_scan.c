@@ -9,6 +9,8 @@
  */
 
 #include "mmap.h"
+#include "misc/misc.h"
+#include "mmu/mmu.h"
 
 /* Segment info table */
 extern void *SEGMENT_TABLE[];  /* At 0xEC5400 */

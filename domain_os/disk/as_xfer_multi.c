@@ -28,6 +28,7 @@
  */
 
 #include "disk.h"
+#include "mst/mst.h"
 
 /* Status codes */
 #define status_$disk_buffer_not_page_aligned  0x00080013
@@ -37,17 +38,8 @@
 #define PAGE_ALIGN_MASK  0x3ff
 
 /* External functions */
-extern uint32_t MST_$WIRE(uint32_t buffer, status_$t *status);
 extern void WP_$UNWIRE(uint32_t wired_addr);
 extern void CACHE_$FLUSH_VIRTUAL(void);
-
-/* Internal DISK functions with different signatures */
-extern void DISK_$GET_QBLKS(int16_t count, void **queue_ptr, void *param);
-extern void DISK_$WRITE_MULTI(int16_t vol_idx, void *queue, status_$t *status);
-extern void DISK_$READ_MULTI(uint16_t vol_idx, int32_t param_2, int32_t param_3,
-                              void *queue, void *param_5, int16_t *completed,
-                              status_$t *status);
-extern void DISK_$RTN_QBLKS(int16_t count, void *queue, void *param);
 
 void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
                           int16_t *op_type_ptr, uint32_t *daddr_array,

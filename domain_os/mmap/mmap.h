@@ -189,21 +189,14 @@ extern uint32_t MMAP_$HPPN;             /* Highest pageable page number */
 /*
  * Error strings (from the disassembly)
  */
-extern const char Illegal_WSL_Index_Err[];
-extern const char Illegal_PID_Err[];
-extern const char WSL_Exhausted_Err[];
-extern const char MMAP_Bad_Unavail_err[];
-extern const char mmap_bad_avail[];
-extern const char MMAP_Bad_Reclaim_Err[];
-extern const char Inconsistent_MMAPE_Err[];
-extern const char MMAP_Error_Examined_Max[];
-
-/*
- * System functions
- */
-extern void CRASH_SYSTEM(const char *msg);
-/* ML_$SPIN_LOCK, ML_$SPIN_UNLOCK declared in ml/ml.h */
-extern void MMU_$REMOVE(uint32_t vpn);
+extern status_$t Illegal_WSL_Index_Err[];
+extern status_$t Illegal_PID_Err[];
+extern status_$t WSL_Exhausted_Err[];
+extern status_$t MMAP_Bad_Unavail_err[];
+extern status_$t mmap_bad_avail[];
+extern status_$t MMAP_Bad_Reclaim_Err[];
+extern status_$t Inconsistent_MMAPE_Err[];
+extern status_$t MMAP_Error_Examined_Max[];
 
 /*
  * Function prototypes - Internal helpers

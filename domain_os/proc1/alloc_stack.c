@@ -15,12 +15,11 @@
  */
 
 #include "proc1.h"
+#include "ml/ml.h"
+#include "mmu/mmu.h"
 
 /* External functions */
-extern void ML_$LOCK(uint16_t lock_id);
-extern void ML_$UNLOCK(uint16_t lock_id);
 extern void WP_$CALLOC(uint32_t *page_out, status_$t *status);
-extern void MMU_$INSTALL(uint32_t page, uint32_t vaddr, uint16_t flags);
 
 /* Stack page size constants (also in proc1_config.h) */
 #define STACK_PAGE_SIZE     0x400   /* 1KB pages */
@@ -29,7 +28,7 @@ extern void MMU_$INSTALL(uint32_t page, uint32_t vaddr, uint16_t flags);
 /* Status code for no stack space */
 #define status_$no_stack_space_is_available 0x000A0009
 
-void *PROC1_$ALLOC_STACK(int16_t size, status_$t *status_ret)
+void *PROC1_$ALLOC_STACK(uint16_t size, status_$t *status_ret)
 {
     uint16_t rounded_size;
     void *stack_top;

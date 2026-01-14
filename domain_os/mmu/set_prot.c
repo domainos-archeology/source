@@ -20,8 +20,7 @@ uint16_t MMU_$SET_PROT(uint32_t ppn, uint16_t prot)
     pmape_word = (uint16_t*)((char*)MMU_PMAPE_BASE + ((ppn & 0xFFFF) << 2));
 
     /* Disable interrupts for atomic update */
-    saved_sr = GET_SR();
-    SET_SR(saved_sr | SR_IPL_DISABLE_ALL);
+    DISABLE_INTERRUPTS(saved_sr);
 
     /* Read current protection bits */
     old_prot = *pmape_word & PMAPE_PROT_MASK;
@@ -30,8 +29,7 @@ uint16_t MMU_$SET_PROT(uint32_t ppn, uint16_t prot)
     new_prot = prot << PMAPE_PROT_SHIFT;
     *pmape_word ^= (old_prot ^ new_prot);
 
-    /* Restore interrupts */
-    SET_SR(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
 
     /* Return previous protection value (unshifted) */
     return old_prot >> PMAPE_PROT_SHIFT;

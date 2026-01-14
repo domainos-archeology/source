@@ -1,9 +1,9 @@
 #include "cal.h"
+#include "misc/misc.h"
+#include "term/term.h"
 
 // External functions
-extern void CRASH_SYSTEM(status_$t *status);
 extern void FUN_00e825f4(char *format, ...);
-extern void TERM_$READ(void *param1, char *buffer, void *param3, status_$t *status);
 
 // String constants (addresses from disassembly)
 // These would be defined elsewhere in the actual system

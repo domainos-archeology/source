@@ -15,7 +15,6 @@
  */
 
 #include "proc2.h"
-#include <string.h>
 
 /* Internal helper */
 extern void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
@@ -62,7 +61,7 @@ void PROC2_$INFO(int16_t *pid, int16_t *offset, void *info, uint16_t *info_len,
 
     /* Copy to output buffer */
     if (len > 0) {
-        memcpy(info, local_info, len);
+        __builtin_memcpy(info, local_info, len);
     }
 
     *status_ret = status;

@@ -9,6 +9,7 @@
  */
 
 #include "mmap.h"
+#include "misc/misc.h"
 
 void MMAP_$SET_WS_PRI(void)
 {

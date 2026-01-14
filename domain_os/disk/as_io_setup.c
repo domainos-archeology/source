@@ -11,7 +11,7 @@
  */
 
 #include "disk.h"
-
+#include "mst/mst.h"
 /* Status code for buffer alignment */
 #define status_$disk_buffer_not_page_aligned  0x00080013
 
@@ -35,7 +35,6 @@ extern int16_t PROC1_$CURRENT;
 #define DISK_MOUNT_ASSIGNED  2
 
 /* External functions */
-extern uint32_t MST_$WIRE(uint32_t buffer, status_$t *status);
 extern void CACHE_$FLUSH_VIRTUAL(void);
 
 uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status)

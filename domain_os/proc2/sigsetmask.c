@@ -16,9 +16,6 @@
 
 #include "proc2.h"
 
-/* TODO: Signal delivery helper - FUN_00e3ecea */
-extern void PROC2_$DELIVER_PENDING_INTERNAL(uint16_t param);
-
 uint32_t PROC2_$SIGSETMASK(uint32_t *mask_ptr, uint32_t *result)
 {
     int16_t index;

@@ -15,6 +15,7 @@
  */
 
 #include "ast.h"
+#include "proc1/proc1.h"
 
 /* Internal function prototypes */
 extern status_$t FUN_00e00be8(uid_t *uid, uint32_t flags);

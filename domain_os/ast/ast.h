@@ -268,19 +268,9 @@ extern const char OS_MMAP_bad_install[];
 /*
  * System functions
  */
-extern void CRASH_SYSTEM(const char *msg);
-/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
-extern void PROC1_$INHIBIT_BEGIN(void);
-extern void PROC1_$INHIBIT_END(void);
 extern void TIME_$CLOCK(uint32_t *clock);
 extern uint16_t UID_$HASH(uid_t *uid, void *table);
 extern void WP_$CALLOC(uint32_t *ppn, status_$t *status);
-extern void MMAP_$INSTALL_LIST(uint32_t *ppn_array, uint16_t count,
-                               int8_t use_wired);
-extern void MMAP_$RECLAIM(uint32_t *ppn_array, uint16_t count,
-                          int8_t use_wired);
-extern void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint8_t prot);
-extern uint32_t MMU_$VTOP(uint32_t va, status_$t *status);
 extern void NETWORK_$INSTALL_NET(uint32_t node, void *info, status_$t *status);
 extern void NETWORK_$AST_GET_INFO(void *uid_info, uint16_t *flags, void *attrs,
                                   status_$t *status);

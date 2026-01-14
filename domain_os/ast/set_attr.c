@@ -16,6 +16,7 @@
  */
 
 #include "ast.h"
+#include "proc1/proc1.h"
 
 /* Internal function prototypes */
 extern void ACL_$GET_EXSID(void *exsid, status_$t *status);
