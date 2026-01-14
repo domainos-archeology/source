@@ -10,16 +10,7 @@
  * exit path (inhibit count decrement and rescheduling).
  */
 
-#include "ml.h"
-#include "proc1/proc1.h"
-#include "misc/misc.h"
-#include "ec/ec.h"
-
-/* External status for crash */
-extern status_$t Illegal_lock_err;
-
-/* Internal: process scheduling helper */
-extern void FUN_00e20824(void);
+#include "ml/ml_internal.h"
 
 void ML_$UNLOCK(int16_t resource_id)
 {

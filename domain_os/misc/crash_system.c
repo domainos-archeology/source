@@ -17,7 +17,9 @@
  */
 
 #include "base/base.h"
+#include "kbd/kbd.h"
 #include "proc1/proc1.h"
+#include "prom/prom.h"
 
 /* Status codes for special handling */
 #define status_$system_reboot  0x001b0008
@@ -32,13 +34,6 @@ uint32_t CRASH_USP;                         /* User stack pointer */
 /* Crash dump area at 0xE00000 */
 #define CRASH_DUMP_BASE  ((volatile uint32_t *)0x00e00000)
 #define CRASH_MAGIC      0xabcdef01
-
-/* External references */
-extern void *PROM_$QUIET_RET_ADDR;         /* PROM warm restart entry */
-
-/* Keyboard functions */
-extern void KBD_$RESET(void);
-extern void KBD_$CRASH_INIT(void);
 
 /* Internal: print crash message */
 static void crash_puts_string(const char *str);

@@ -12,12 +12,7 @@
  * lock ordering validation and PCB updates before the actual lock attempt.
  */
 
-#include "ml.h"
-#include "proc1/proc1.h"
-#include "misc/misc.h"
-
-/* External status for crash */
-extern status_$t Lock_ordering_violation;
+#include "ml/ml_internal.h"
 
 /* Internal helper: prepare for lock acquisition
  * This was a nested Pascal procedure in the original.

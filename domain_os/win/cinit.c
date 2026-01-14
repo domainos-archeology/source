@@ -9,13 +9,11 @@
  * @return            status_$ok on success, error code on failure
  */
 
+#include "prom/prom.h"
 #include "win.h"
 
 /* Controller type identifier */
 static uint16_t WIN_TYPE = 0;  /* Set by FUN_00e29138 */
-
-/* Probe function */
-extern int8_t FUN_00e29138(void *type, void *addr, void *result);
 
 status_$t WIN_$CINIT(void *controller)
 {

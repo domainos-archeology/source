@@ -9,12 +9,7 @@
  * Original address: 0x00E20E7E
  */
 
-#include "ml.h"
-#include "proc1/proc1.h"
-#include "ec/ec.h"
-
-/* Internal: process scheduling helper */
-extern void FUN_00e20824(void);
+#include "ml/ml_internal.h"
 
 void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
 {
