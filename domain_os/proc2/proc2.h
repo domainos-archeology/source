@@ -47,6 +47,7 @@
 #define status_$proc2_table_full                0x0019000F
 #define status_$proc2_permission_denied         0x00190012
 #define status_$proc2_process_already_debugging 0x00190011
+#define status_$proc2_another_fault_pending     0x00190009
 #define status_$proc2_process_wasnt_vforked     0x0019000C
 #define status_$proc2_already_orphan            0x00190014
 #define status_$proc2_process_is_group_leader   0x00190015
