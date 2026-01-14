@@ -87,9 +87,37 @@ extern uint8_t DTTY_$USE_DTTY;
     #define EC1_CR_REC_ARRAY    ec1_cr_rec_array
 #endif
 
+/* Address space globals for memory mapping */
+#if defined(M68K)
+    #define AS_$CR_REC              (*(uint32_t*)0xE2B930)
+    #define AS_$CR_REC_FILE_SIZE    (*(uint32_t*)0xE2B96C)
+    #define AS_$STACK_FILE_LOW      (*(uint32_t*)0xE2B92C)
+    #define AS_$INIT_STACK_FILE_SIZE (*(uint32_t*)0xE2B960)
+    #define AS_$STACK_HIGH          (*(uint32_t*)0xE2B950)
+#else
+    extern uint32_t as_cr_rec;
+    extern uint32_t as_cr_rec_file_size;
+    extern uint32_t as_stack_file_low;
+    extern uint32_t as_init_stack_file_size;
+    extern uint32_t as_stack_high;
+    #define AS_$CR_REC              as_cr_rec
+    #define AS_$CR_REC_FILE_SIZE    as_cr_rec_file_size
+    #define AS_$STACK_FILE_LOW      as_stack_file_low
+    #define AS_$INIT_STACK_FILE_SIZE as_init_stack_file_size
+    #define AS_$STACK_HIGH          as_stack_high
+#endif
+
 /* Boot file parameters - these would be in read-only data */
 static const char boot_shell_path[] = "/sys/boot_shell";
 static const char proc_dir_path[] = "/node_data/proc_dir";
+
+/* Error message strings for boot error checking */
+static const char msg_unable_to_map[] = "unable to map ";
+static const char msg_unable_to_resolve[] = "unable to resolve ";
+static const char msg_unable_to_lock[] = "unable to lock ";
+static const char msg_unable_to_unmap[] = "unable to unmap ";
+static const char msg_creation_record_area[] = "creation record area";
+static const char msg_initial_area[] = "initial area";
 
 /* Forward declaration of PROC_FORK_EC macro from create.c */
 #define PROC_FORK_EC(idx)       ((void*)((uintptr_t)EC1_FORK_ARRAY + ((idx) - 1) * 0x18))
@@ -228,8 +256,8 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
     /* Set name_len to 0x21 (indicates no name) */
     init_entry->name_len = 0x21;
 
-    /* Set creation record pointer */
-    /* init_entry->cr_rec = AS_$CR_REC; -- would be set from global */
+    /* Set creation record pointer from address space global */
+    init_entry->cr_rec = AS_$CR_REC;
 
     /* Set TTY UID to nil */
     init_entry->tty_uid = UID_$NIL;
@@ -248,23 +276,65 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
 
     /*
      * Step 9: Map creation record area
-     * TODO: Implement with proper parameters
+     *
+     * Maps the creation record file into the init process's address space.
+     * The destination is at entry + 0x08 (the pad_08 area which holds cr_rec data).
      */
-    /* MST_$MAP_AREA_AT(&AS_$CR_REC, &AS_$CR_REC_FILE_SIZE, ...); */
-    /* status = OS_$BOOT_ERRCHK("unable to map ", "creation record area", ...); */
+    {
+        uint32_t cr_rec_addr = AS_$CR_REC;
+        uint32_t cr_rec_size = AS_$CR_REC_FILE_SIZE;
+        /* Parameters from original: 0xe308c4 contains mapping flags, 0xe30892 contains mode */
+        uint32_t map_flags = 0x00010003;  /* Read/write, copy-on-write */
+        uint32_t map_mode = 0x00000001;   /* Normal mode */
+
+        MST_$MAP_AREA_AT(&cr_rec_addr, &cr_rec_size, &map_flags, &map_mode,
+                         (void*)((char*)init_entry + 0x08), status_ret);
+
+        status = OS_$BOOT_ERRCHK((char*)msg_unable_to_map, (char*)msg_creation_record_area,
+                                  &path_len, status_ret);
+        if ((int8_t)status >= 0) {
+            return status;
+        }
+    }
 
     /*
      * Step 10: Map initial stack area
-     * TODO: Implement with proper parameters
+     *
+     * Maps the initial stack file into the init process's address space.
+     * The destination is at entry + 0xDC (within pad_bf, used for stack info).
      */
-    /* MST_$MAP_AREA_AT(&AS_$STACK_FILE_LOW, &AS_$INIT_STACK_FILE_SIZE, ...); */
-    /* status = OS_$BOOT_ERRCHK("unable to map ", "initial area", ...); */
+    {
+        uint32_t stack_low = AS_$STACK_FILE_LOW;
+        uint32_t stack_size = AS_$INIT_STACK_FILE_SIZE;
+        uint32_t map_flags = 0x00010003;  /* Read/write, copy-on-write */
+        uint32_t map_mode = 0x00000002;   /* Stack mode */
+
+        MST_$MAP_AREA_AT(&stack_low, &stack_size, &map_flags, &map_mode,
+                         (void*)((char*)init_entry + 0xDC), status_ret);
+
+        status = OS_$BOOT_ERRCHK((char*)msg_unable_to_map, (char*)msg_initial_area,
+                                  &path_len, status_ret);
+        if ((int8_t)status >= 0) {
+            return status;
+        }
+    }
 
     /* Mark init entry as valid */
     init_entry->flags |= PROC2_FLAG_VALID;
 
-    /* Set stack high pointer */
-    /* init_entry->cr_rec_2 = AS_$STACK_HIGH; */
+    /* Set stack high pointer from address space global */
+    init_entry->cr_rec_2 = AS_$STACK_HIGH;
+
+    /*
+     * Store boot flags at top of stack.
+     * The original code writes boot flags 6 bytes below stack high,
+     * with a 4-byte zero value at stack high - 4.
+     */
+    {
+        uint32_t stack_top = init_entry->cr_rec_2;
+        *(uint32_t*)(stack_top - 4) = 0;
+        *(uint16_t*)(stack_top - 6) = BOOT_FLAGS;
+    }
 
     /*
      * Step 11: Initialize boot flags
@@ -307,22 +377,92 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
 
     /*
      * Step 14: Resolve and map /sys/boot_shell
-     * TODO: Full implementation with FILE_$LOCK, MST_$MAP, etc.
+     *
+     * This sequence:
+     * 1. Resolves the boot shell path to a UID
+     * 2. Locks the file
+     * 3. Maps it to get its base address and size
+     * 4. Unmaps it
+     * 5. Remaps it at a fixed address for execution
      */
     path_len = sizeof(boot_shell_path) - 1;
     NAME_$RESOLVE((char*)boot_shell_path, &path_len, &boot_shell_uid, status_ret);
 
-    /* Check for errors */
-    status = OS_$BOOT_ERRCHK("unable to resolve ", (char*)boot_shell_path, (uint16_t*)&path_len, status_ret);
+    status = OS_$BOOT_ERRCHK((char*)msg_unable_to_resolve, (char*)boot_shell_path,
+                              (uint16_t*)&path_len, status_ret);
     if ((int8_t)status >= 0) {
         return status;
     }
 
-    /*
-     * TODO: Continue with FILE_$LOCK, MST_$MAP, MST_$UNMAP, MST_$MAP_AT
-     * for the boot shell. For now, return success.
-     */
+    /* Lock the boot shell file */
+    {
+        uint8_t lock_result[8];
+        uint32_t lock_param1 = 0x00000001;  /* Lock mode */
+        uint32_t lock_param2 = 0x00000000;  /* Offset */
+        uint32_t lock_param3 = 0x00000001;  /* Length/mode */
 
-    *status_ret = status_$ok;
-    return status_$ok;
+        FILE_$LOCK(&boot_shell_uid, &lock_param1, &lock_param2, &lock_param3,
+                   lock_result, status_ret);
+
+        status = OS_$BOOT_ERRCHK((char*)msg_unable_to_lock, (char*)boot_shell_path,
+                                  (uint16_t*)&path_len, status_ret);
+        if ((int8_t)status >= 0) {
+            return status;
+        }
+    }
+
+    /* Map the boot shell to get its info */
+    {
+        uint8_t map_result[8];
+        uint32_t map_info[3];  /* Receives base address, size, flags */
+        uint32_t map_param1 = 0x00000000;  /* Start offset */
+        uint32_t map_param2 = 0xFFFFFFFF;  /* Map entire file */
+        uint32_t map_param3 = 0x00000001;  /* Read-only */
+        uint32_t map_param4 = 0x00000000;  /* No fixed address */
+        uint32_t map_param5 = 0x00000001;  /* Normal mode */
+
+        MST_$MAP(&boot_shell_uid, &map_param1, &map_param2, &map_param3,
+                 &map_param4, &map_param5, map_result, status_ret);
+
+        status = OS_$BOOT_ERRCHK((char*)msg_unable_to_map, (char*)boot_shell_path,
+                                  (uint16_t*)&path_len, status_ret);
+        if ((int8_t)status >= 0) {
+            return status;
+        }
+
+        /* Save mapping info for remap */
+        /* map_info receives: base_addr, size, attributes from A0 return */
+        /* For now, we'll use the result directly */
+
+        /* Unmap the boot shell */
+        {
+            uint8_t unmap_result[8];
+
+            MST_$UNMAP(&boot_shell_uid, map_result, unmap_result, status_ret);
+
+            status = OS_$BOOT_ERRCHK((char*)msg_unable_to_unmap, (char*)boot_shell_path,
+                                      (uint16_t*)&path_len, status_ret);
+            if ((int8_t)status >= 0) {
+                return status;
+            }
+        }
+
+        /* Remap at fixed address for execution */
+        {
+            uint8_t remap_result[8];
+            uint32_t fixed_addr = *(uint32_t*)map_result;  /* Use returned base addr */
+
+            MST_$MAP_AT(&fixed_addr, &boot_shell_uid, &map_param1, &map_param2,
+                        &map_param3, &map_param4, &map_param5, remap_result, status_ret);
+
+            status = OS_$BOOT_ERRCHK((char*)msg_unable_to_map, (char*)boot_shell_path,
+                                      (uint16_t*)&path_len, status_ret);
+            if ((int8_t)status >= 0) {
+                return status;
+            }
+
+            /* Return the final status from mapping */
+            return *(status_$t*)(map_result + 4);
+        }
+    }
 }
