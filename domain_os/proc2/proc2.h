@@ -54,8 +54,10 @@
  * Process flags (offset 0x2A in proc2_info_t)
  */
 #define PROC2_FLAG_ZOMBIE       0x2000  /* Process is zombie */
+#define PROC2_FLAG_ORPHAN       0x1000  /* Process is orphaned (no controlling parent) */
 #define PROC2_FLAG_ALT_ASID     0x0800  /* Has alternate ASID */
 #define PROC2_FLAG_VALID        0x0180  /* Process is valid */
+#define PROC2_FLAG_DEBUG        0x0008  /* Process is being debugged */
 #define PROC2_FLAG_SERVER       0x0002  /* Process is a server */
 #define PROC2_FLAG_INIT         0x8000  /* Initial flags value */
 
@@ -123,13 +125,14 @@ typedef struct proc2_info_t {
     uid_$t      uid;            /* 0x00: Process UID */
 
     uint8_t     pad_08[0x08];   /* 0x08: Unknown */
-    uint16_t    parent_idx;     /* 0x10: Parent process index (for upid lookup) */
+    uint16_t    pgroup_table_idx; /* 0x10: Index into pgroup table (also used in LIST_PGROUP) */
 
     uint16_t    next_index;     /* 0x12: Next process index in list */
     uint16_t    pad_14;         /* 0x14: Unknown */
     uint16_t    upid;           /* 0x16: Unix-style PID (returned by GET_UPIDS) */
-    uint16_t    pad_18[3];      /* 0x18: Unknown */
-    uint16_t    pgroup_idx;     /* 0x1E: Process group index (for pgroup upid lookup) */
+    uint16_t    pad_18[2];      /* 0x18: Unknown */
+    uint16_t    owner_session;  /* 0x1C: Owning session (used for permission checks) */
+    uint16_t    parent_pgroup_idx; /* 0x1E: Parent's pgroup index (for permission checks) */
     uint16_t    pad_20[3];      /* 0x20: Unknown */
     uint16_t    debugger_idx;   /* 0x26: Debugger process index (for GET_DEBUGGER_PID) */
     uint16_t    pad_28;         /* 0x28: Unknown */
@@ -145,7 +148,7 @@ typedef struct proc2_info_t {
     uid_$t      pgroup_uid;     /* 0x4C: Process group UID */
     uint16_t    pgroup_uid_idx; /* 0x54: Process group UID index */
     uint8_t     pad_56[0x06];   /* 0x56: Unknown */
-    uint16_t    tty_flags;      /* 0x5C: TTY flags (returned by GET_TTY_DATA) */
+    uint16_t    session_id;     /* 0x5C: Session ID (also returned by GET_TTY_DATA as 2nd param) */
     uint16_t    pad_5e;         /* 0x5E: Unknown */
 
     uid_$t      tty_uid;        /* 0x60: TTY UID (8 bytes, returned by GET_TTY_DATA) */
@@ -178,6 +181,19 @@ typedef struct proc2_info_t {
 } proc2_info_t;
 
 /*
+ * Process group table entry structure (8 bytes)
+ * Table has 69 entries (indices 1-69), entry 0 unused.
+ */
+typedef struct pgroup_entry_t {
+    int16_t     ref_count;      /* 0x00: Reference count (0 = free slot) */
+    int16_t     leader_count;   /* 0x02: Count of group leaders in this group */
+    uint16_t    upgid;          /* 0x04: Unix process group ID */
+    uint16_t    session_id;     /* 0x06: Session ID for this group */
+} pgroup_entry_t;
+
+#define PGROUP_TABLE_SIZE       70      /* Indices 0-69, 0 unused */
+
+/*
  * Global variables
  */
 #if defined(M68K)
@@ -193,9 +209,10 @@ typedef struct proc2_info_t {
     #define P2_PID_TO_INDEX_TABLE   ((uint16_t*)(0xEA551C + 0x3EB6))
     #define P2_PID_TO_INDEX(pid)    (P2_PID_TO_INDEX_TABLE[(pid)])
 
-    /* Parent UPID lookup table (8-byte entries at 0xEA551C + 0x3F34) */
-    #define P2_PARENT_UPID_BASE     (0xEA551C + 0x3F34)
-    #define P2_PARENT_UPID(idx)     (*(uint16_t*)(P2_PARENT_UPID_BASE + (idx) * 8))
+    /* Process group table (8-byte entries at 0xEA551C + 0x3F30) */
+    #define PGROUP_TABLE_BASE       (0xEA551C + 0x3F30)
+    #define PGROUP_TABLE            ((pgroup_entry_t*)(PGROUP_TABLE_BASE))
+    #define PGROUP_ENTRY(idx)       ((pgroup_entry_t*)(PGROUP_TABLE_BASE + (idx) * 8))
 
     /* Process UID storage */
     #define PROC2_UID               (*(uid_$t*)0xE7BE8C)
@@ -203,15 +220,15 @@ typedef struct proc2_info_t {
     extern proc2_info_t *p2_info_table;
     extern uint16_t p2_info_alloc_ptr;
     extern uint16_t *p2_pid_to_index_table;
-    extern uint16_t *p2_parent_upid_table;  /* 8-byte entries, upid at offset 0 */
+    extern pgroup_entry_t *pgroup_table;
     extern uid_$t proc2_uid;
     #define P2_INFO_TABLE           p2_info_table
     #define P2_INFO_ENTRY(idx)      (&p2_info_table[(idx) - 1])
     #define P2_INFO_ALLOC_PTR       p2_info_alloc_ptr
     #define P2_PID_TO_INDEX_TABLE   p2_pid_to_index_table
     #define P2_PID_TO_INDEX(pid)    (p2_pid_to_index_table[(pid)])
-    #define P2_PARENT_UPID_BASE     ((uintptr_t)p2_parent_upid_table)
-    #define P2_PARENT_UPID(idx)     (*(uint16_t*)(P2_PARENT_UPID_BASE + (idx) * 8))
+    #define PGROUP_TABLE            pgroup_table
+    #define PGROUP_ENTRY(idx)       (&pgroup_table[(idx)])
     #define PROC2_UID               proc2_uid
 #endif
 
@@ -452,9 +469,12 @@ void PROC2_$SIGNAL_PGROUP_OS(uid_$t *pgroup_uid, int16_t *signal, uint32_t *para
 /*
  * PROC2_$UID_TO_PGROUP_INDEX - Convert pgroup UID to index
  * Internal helper to get process group index from UID.
+ * For synthetic UIDs (high byte = 0), looks up UPGID in pgroup table.
+ * For real process UIDs, returns the process's pgroup_table_idx.
+ * Returns 0 if not found.
  * Original address: 0x00e42272
  */
-int16_t PROC2_$UID_TO_PGROUP_INDEX(uid_$t *pgroup_uid, status_$t *status_ret);
+int16_t PROC2_$UID_TO_PGROUP_INDEX(uid_$t *pgroup_uid);
 
 /*
  * PROC2_$ACKNOWLEDGE - Acknowledge signal delivery
@@ -584,9 +604,11 @@ void PROC2_$SHUTDOWN(void);
 
 /*
  * PROC2_$SET_PGROUP - Set process group
+ * Sets the process group for a target process.
+ * new_upgid is the new process group ID (0 to leave current pgroup).
  * Original address: 0x00e410c8
  */
-void PROC2_$SET_PGROUP(uid_$t *proc_uid, uid_$t *pgroup_uid, status_$t *status_ret);
+void PROC2_$SET_PGROUP(uid_$t *proc_uid, uint16_t *new_upgid, status_$t *status_ret);
 
 /*
  * PROC2_$LIST_PGROUP - List process group members
@@ -597,9 +619,12 @@ void PROC2_$LIST_PGROUP(uid_$t *pgroup_uid, uid_$t *uid_list, uint16_t *max_coun
 
 /*
  * PROC2_$PGROUP_INFO - Get process group info
+ * Returns session ID and leader status for a process group.
+ * is_leader is 0xFF if the group has no leader, 0 otherwise.
  * Original address: 0x00e41dbc
  */
-void PROC2_$PGROUP_INFO(uid_$t *pgroup_uid, void *info, status_$t *status_ret);
+void PROC2_$PGROUP_INFO(uint16_t *pgroup_id, uint16_t *session_id_ret,
+                        uint8_t *is_leader_ret, status_$t *status_ret);
 
 /*
  * PROC2_$UPGID_TO_UID - Convert UPGID to UID

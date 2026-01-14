@@ -19,8 +19,6 @@ extern status_$t FIM_$CLEANUP(void *context);
 extern void FIM_$RLS_CLEANUP(void *context);
 extern void FIM_$POP_SIGNAL(void *context);
 
-/* Helper to convert UID to pgroup index */
-extern int16_t PROC2_$UID_TO_PGROUP_INDEX(uid_$t *pgroup_uid);
 
 /* Expected status from FIM_$CLEANUP */
 #define status_$cleanup_handler_set 0x00120035
@@ -62,9 +60,9 @@ void PROC2_$LIST_PGROUP(uid_$t *pgroup_uid, uid_$t *uid_list, uint16_t *max_coun
 
                 /* Check if process is in this pgroup:
                  * - flags high bit set (0x80 in low byte = 0x0080 in word)
-                 * - parent_idx matches pgroup_idx
+                 * - pgroup_table_idx matches pgroup_idx
                  */
-                if (((entry->flags & 0x0080) != 0) && (entry->parent_idx == pgroup_idx)) {
+                if (((entry->flags & 0x0080) != 0) && (entry->pgroup_table_idx == pgroup_idx)) {
                     found_count++;
                     if (found_count <= max_entries) {
                         out_ptr->high = entry->uid.high;
