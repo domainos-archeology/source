@@ -15,15 +15,8 @@
  * Original address: 0x00e046c8
  */
 
-#include "ast.h"
-
-/* Internal function prototypes */
-extern status_$t FUN_00e00be8(uid_t *uid, uint32_t flags);
-extern void FUN_00e0209e(uid_t *uid);  /* Returns AOTE in A0 */
-extern void FUN_00e020fa(uid_t *uid, uint16_t segment, status_$t *status, int8_t force);
-
-/* External data */
-extern uint32_t ROUTE_$PORT;
+#include "ast/ast_internal.h"
+#include "route/route.h"
 
 void AST_$GET_LOCATION(uint32_t *uid_info, uint16_t flags, uint32_t unused,
                        uint32_t *vol_uid_out, status_$t *status)

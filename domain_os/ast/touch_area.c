@@ -16,20 +16,10 @@
  * Original address: 0x00e03548
  */
 
-#include "ast.h"
-
-/* Internal function prototypes */
-extern void FUN_00e00c08(void);  /* Wait for page transition */
-extern int16_t FUN_00e00d46(uint32_t count_flags, uint32_t *ppn_array);
-extern void DISK_$GET_QBLKS(int16_t count, int *qblk_head, uint32_t *qblk_tail);
-extern void DISK_$READ_MULTI(uint16_t vol, uint16_t flags1, uint16_t flags2,
-                              int qblk_head, uint32_t qblk_tail,
-                              int16_t *result_count, status_$t *status);
-extern void DISK_$RTN_QBLKS(int16_t count, int qblk_head, uint32_t qblk_tail);
-extern void ZERO_PAGE(uint32_t ppn);
-
-/* External data */
-extern uid_t ANON_$UID;
+#include "ast/ast_internal.h"
+#include "disk/disk.h"
+#include "mmu/mmu.h"
+#include "anon/anon.h"
 
 void AST_$TOUCH_AREA(aste_t *aste, uint32_t mode, uint16_t start_page,
                      uint16_t count, status_$t *status, uint16_t flags)

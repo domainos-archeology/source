@@ -10,16 +10,8 @@
  * Original address: 0x00e07220
  */
 
-#include "ast.h"
-
-/* Internal function prototypes */
-extern void DXM_$ADD_CALLBACK(void *queue, void *callback, void *param,
-                               uint32_t flags, status_$t *status);
-
-/* External data */
-extern void DXM_$UNWIRED_Q;
-extern void *PTR_AST_$SET_TROUBLE_00e07272;
-extern uid_t DAT_00e1e110;  /* AST globals offset 0x490 */
+#include "ast/ast_internal.h"
+#include "dxm/dxm.h"
 
 void AST_$SAVE_CLOBBERED_UID(uid_t *uid)
 {

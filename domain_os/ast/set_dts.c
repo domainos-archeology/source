@@ -14,12 +14,9 @@
  * Original address: 0x00e05540
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern aote_t* FUN_00e0209e(uid_t *uid);
-extern aote_t* FUN_00e020fa(uid_t *uid, uint32_t unused, status_$t *status, int8_t flag);
+#include "time/time.h"
 
 uint8_t AST_$SET_DTS(uint16_t flags, uid_t *uid, uint32_t *dtv, uint32_t *access_time, status_$t *status)
 {

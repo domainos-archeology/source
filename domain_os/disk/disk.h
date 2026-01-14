@@ -164,6 +164,10 @@ void DISK_$WRITE_MULTI(int16_t vol_idx, void *req_list, void *param_3,
                        status_$t *status);
 void DISK_$DO_IO(void *dev_entry, void *req, void *param_3, void *result);
 
+/* Allocation operations */
+void DISK_$ALLOC_W_HINT(uint16_t vol, uint32_t hint, uint32_t *block,
+                        uint32_t count, status_$t *status);
+
 /* Format operations */
 void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
                   status_$t *status);

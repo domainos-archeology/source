@@ -7,11 +7,7 @@
  * Original address: 0x00e016d0
  */
 
-#include "ast.h"
-
-/* External function prototypes */
-extern void FUN_00e013a0(aote_t *aote, uint8_t flags, status_$t *status);
-extern void FUN_00e01566(aste_t *aste, segmap_entry_t *segmap, uint16_t flags, status_$t *status);
+#include "ast/ast_internal.h"
 
 void AST_$UPDATE(void)
 {

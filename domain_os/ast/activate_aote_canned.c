@@ -11,15 +11,9 @@
  * Original address: 0x00e2f0c2
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "misc/misc.h"
-
-/* Internal function prototypes */
-extern aote_t* FUN_00e01d66(void);  /* Allocate AOTE */
-extern uint16_t UID_$HASH(uid_t *uid, void *table);
-
-/* External data */
-extern status_$t status_$_00e2f1d0;  /* Duplicate AOTE error */
+#include "uid/uid.h"
 
 void AST_$ACTIVATE_AOTE_CANNED(uint32_t *attrs, uint32_t *obj_info)
 {

@@ -6,12 +6,8 @@
  * Original address: 0x00e05476
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern aote_t* FUN_00e0209e(uid_t *uid);
-extern aote_t* FUN_00e020fa(uid_t *uid, uint32_t unused, status_$t *status, int8_t flag);
 
 void AST_$GET_DTV(uid_t *uid, uint32_t unused, uint32_t *dtv, status_$t *status)
 {

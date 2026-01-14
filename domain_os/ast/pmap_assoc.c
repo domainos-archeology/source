@@ -15,13 +15,10 @@
  * Original address: 0x00e042b0
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "misc/misc.h"
 #include "mmu/mmu.h"
 #include "mmap/mmap.h"
-
-/* Internal function prototypes */
-extern void FUN_00e00c08(void);  /* Wait for page transition */
 
 void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
                      uint16_t flags1, uint16_t flags2, status_$t *status)

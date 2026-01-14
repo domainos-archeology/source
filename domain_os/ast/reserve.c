@@ -14,21 +14,10 @@
  * Original address: 0x00e0677e
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern void FUN_00e0209e(uid_t *uid);  /* Look up AOTE by UID */
-extern void FUN_00e020fa(uid_t *uid, uint16_t segment, status_$t *status, int8_t force);
-extern aste_t* FUN_00e0250c(aote_t *aote, int16_t segment);
-extern aste_t* FUN_00e0255c(aote_t *aote, int16_t segment, status_$t *status);
-extern void FUN_00e00c08(void);  /* Wait for page transition */
-extern int16_t FUN_00e00d46(uint32_t count_flags, uint32_t *ppn_array);
-extern void FUN_00e0283c(uint32_t *segmap, uint16_t count);  /* Clear transition bits */
-extern void REM_FILE_$RESERVE(uid_t *vol_uid, uid_t *uid, uint32_t start,
-                               int16_t count, status_$t *status);
-extern void DISK_$ALLOC_W_HINT(uint16_t vol, uint32_t hint, uint32_t *block,
-                                uint16_t count, status_$t *status);
+#include "rem_file/rem_file.h"
+#include "disk/disk.h"
 
 void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count, status_$t *status)
 {

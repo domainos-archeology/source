@@ -17,23 +17,11 @@
  * Original address: 0x00e03a30
  */
 
-#include "ast.h"
-
-/* Internal function prototypes */
-extern void FUN_00e00c08(void);  /* Wait for page transition */
-extern int16_t FUN_00e00d46(uint32_t count_flags, uint32_t *ppn_array);
-extern void FUN_00e0283c(uint32_t *segmap, uint16_t count);  /* Clear transition bits */
-extern void NETBUF_$RTN_DAT(uint32_t addr);
-extern void NETBUF_$GET_DAT(uint32_t *addr);
-extern void NETWORK_$READ_AHEAD(void *partner, void *uid_info, uint32_t *ppn_array,
-                                 uint16_t size, uint16_t count, uint32_t unused1,
-                                 uint32_t unused2, void *buf1, void *buf2, void *buf3,
-                                 status_$t *status);
-extern int16_t AREA_$PARTNER_PKT_SIZE;
-
-/* External data */
-extern void *AREA_$PARTNER;
-extern uid_t ANON_$UID;
+#include "ast/ast_internal.h"
+#include "netbuf/netbuf.h"
+#include "network/network.h"
+#include "area/area.h"
+#include "anon/anon.h"
 
 void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused,
                     aste_t *src_aste, aste_t *dst_aste,

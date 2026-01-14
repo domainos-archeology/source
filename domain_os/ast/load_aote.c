@@ -7,15 +7,7 @@
  * Original address: 0x00e0238c
  */
 
-#include "ast.h"
-
-/* Internal function prototypes */
-extern aote_t* FUN_00e0209e(uid_t *uid);
-extern aote_t* FUN_00e01d66(void);
-extern void FUN_00e00f7c(aote_t *aote);
-
-/* External data */
-extern uint16_t DAT_00e1e0a0;
+#include "ast/ast_internal.h"
 
 void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
 {

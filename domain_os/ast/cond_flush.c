@@ -13,14 +13,8 @@
  * Original address: 0x00e05b9c
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern void FUN_00e0209e(uid_t *uid);  /* Look up AOTE by UID */
-extern void FUN_00e01ad2(aote_t *aote, int8_t flags1, uint16_t flags2,
-                         uint16_t flags3, status_$t *status);
-extern void FUN_00e00f7c(aote_t *aote);
 
 void AST_$COND_FLUSH(uid_t *uid, uint32_t *timestamp, status_$t *status)
 {

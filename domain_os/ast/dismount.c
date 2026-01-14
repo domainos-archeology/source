@@ -7,20 +7,10 @@
  * Original address: 0x00e069ca
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern void FUN_00e01ad2(aote_t *aote, uint8_t flags1, uint16_t flags2, uint16_t flags3, status_$t *status);
-extern void FUN_00e00f7c(aote_t *aote);
-extern void VTOC_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status);
-
-/* External data */
-extern uint16_t DAT_00e1e0a0;
-extern uint32_t DAT_00e1e088;
-extern int16_t DAT_00e1e092[];
-extern aote_t* AST_$DISMOUNT_FAILED_PTR;
-extern uid_t NETWORK_$PAGING_FILE_UID;
+#include "vtoc/vtoc.h"
+#include "network/network.h"
 
 void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
 {

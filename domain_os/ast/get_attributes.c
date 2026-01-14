@@ -14,13 +14,8 @@
  * Original address: 0x00e047a0
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern status_$t FUN_00e00be8(uid_t *uid, uint32_t flags);
-extern void FUN_00e0209e(uid_t *uid);  /* Look up AOTE by UID */
-extern void FUN_00e020fa(uid_t *uid, uint16_t segment, status_$t *status, int8_t force);
 
 void AST_$GET_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs, status_$t *status)
 {

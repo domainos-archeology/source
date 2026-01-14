@@ -18,13 +18,9 @@
  * Original address: 0x00e0567a
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern void FUN_00e0209e(uid_t *uid);  /* Look up AOTE by UID */
-extern void FUN_00e020fa(uid_t *uid, uint16_t segment, status_$t *status, int8_t force);
-extern void FUN_00e013a0(aote_t *aote, uint16_t flags, status_$t *status);
+#include "time/time.h"
 
 uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
                      uint32_t *segment_list, uint16_t unused, status_$t *status)

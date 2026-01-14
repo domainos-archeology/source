@@ -17,14 +17,8 @@
  * Original address: 0x00e06b1e
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern void FUN_00e0209e(uid_t *uid);  /* Look up AOTE by UID */
-extern void FUN_00e020fa(uid_t *uid, uint16_t segment, status_$t *status, int8_t force);
-extern aste_t* FUN_00e0250c(aote_t *aote, int16_t segment);
-extern aste_t* FUN_00e0255c(aote_t *aote, int16_t segment, status_$t *status);
 
 void AST_$GET_SEG_MAP(uint32_t *uid_info, uint32_t start_offset, uint32_t unused,
                       uid_t *vol_uid, uint32_t count, uint16_t flags,

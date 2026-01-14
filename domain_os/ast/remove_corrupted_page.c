@@ -13,10 +13,8 @@
  * Original address: 0x00e07276
  */
 
-#include "ast.h"
-
-/* Internal function prototypes */
-extern uint8_t PROC1_$TST_LOCK(uint16_t lock_id);
+#include "ast/ast_internal.h"
+#include "proc1/proc1.h"
 
 uint8_t AST_$REMOVE_CORRUPTED_PAGE(uint32_t ppn)
 {

@@ -15,16 +15,9 @@
  * Original address: 0x00e0662e
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern void FUN_00e0209e(uid_t *uid);  /* Look up AOTE by UID */
-extern void FUN_00e020fa(uid_t *uid, uint16_t segment, status_$t *status, int8_t force);
-extern status_$t FUN_00e062fa(uint16_t end_page);  /* Invalidate with wait */
-extern void FUN_00e064b0(uint16_t end_page);       /* Invalidate without wait */
-extern void REM_FILE_$INVALIDATE(uid_t *vol_uid, uid_t *uid, uint32_t start,
-                                  uint32_t count, int8_t flags, status_$t *status);
+#include "rem_file/rem_file.h"
 
 void AST_$INVALIDATE(uid_t *uid, uint32_t start_page, uint32_t count,
                      int16_t flags, status_$t *status)

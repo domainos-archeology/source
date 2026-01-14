@@ -7,13 +7,7 @@
  * Original address: 0x00e02fb8
  */
 
-#include "ast.h"
-
-/* Internal function prototypes */
-extern aote_t* FUN_00e0209e(uid_t *uid);
-extern aote_t* FUN_00e020fa(uid_t *uid, uint32_t unused, status_$t *status, int8_t flag);
-extern aste_t* FUN_00e0250c(aote_t *aote, uint16_t seg);
-extern aste_t* FUN_00e0255c(aote_t *aote, uint16_t seg, status_$t *status);
+#include "ast/ast_internal.h"
 
 aste_t* AST_$ACTIVATE_AND_WIRE(uid_t *uid, uint16_t seg, status_$t *status)
 {

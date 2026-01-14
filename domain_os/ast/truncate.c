@@ -15,18 +15,9 @@
  * Original address: 0x00e05c40
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern void FUN_00e0209e(uid_t *uid);  /* Look up AOTE by UID */
-extern void FUN_00e020fa(uid_t *uid, uint16_t segment, status_$t *status, int8_t force);
-extern aste_t* FUN_00e0250c(aote_t *aote, int16_t segment);
-extern aste_t* FUN_00e0255c(aote_t *aote, int16_t segment, status_$t *status);
-extern void FUN_00e01ad2(aote_t *aote, int8_t flags1, uint16_t flags2,
-                         uint16_t flags3, status_$t *status);
-extern void REM_FILE_$TRUNCATE(uid_t *vol_uid, uid_t *uid, uint32_t new_size,
-                                uint16_t flags, uint8_t *result, status_$t *status);
+#include "rem_file/rem_file.h"
 
 void AST_$TRUNCATE(uid_t *uid, uint32_t new_size, uint16_t flags,
                    uint8_t *result, status_$t *status)

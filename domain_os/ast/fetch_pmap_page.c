@@ -14,22 +14,12 @@
  * Original address: 0x00e041a8
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "mmu/mmu.h"
 #include "mmap/mmap.h"
-
-/* Internal function prototypes */
-extern int16_t FUN_00e00d46(uint32_t count_flags, uint32_t *ppn_array);
-extern void NETBUF_$RTN_DAT(uint32_t addr);
-extern void NETBUF_$GET_DAT(uint32_t *addr);
-extern void NETWORK_$READ_AHEAD(void *partner, void *uid_info, uint32_t *ppn_array,
-                                 uint16_t flags, uint16_t count, uint32_t unused1,
-                                 uint32_t unused2, void *buf1, void *buf2, void *buf3,
-                                 status_$t *status);
-
-/* External data */
-extern void *AREA_$PARTNER;
-extern uint32_t AST_$ZERO_BUFF[256];  /* 1KB buffer = 256 uint32_t */
+#include "netbuf/netbuf.h"
+#include "network/network.h"
+#include "area/area.h"
 
 void AST_$FETCH_PMAP_PAGE(void *uid_info, uint32_t *output_buf,
                           uint16_t flags, status_$t *status)

@@ -7,13 +7,9 @@
  * Original address: 0x00e0400c
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "misc/misc.h"
-
-/* Internal function prototypes */
-extern void FUN_00e03fbc(void);  /* Flush installed pages */
-extern void FUN_00e00c08(void);  /* Wait for page transition */
-extern void BAT_$FREE(uint32_t *blocks, uint16_t count, int16_t flags, int16_t option, status_$t *status);
+#include "bat/bat.h"
 
 void AST_$FREE_PAGES(aste_t *aste, int16_t start_page, int16_t end_page, int16_t flags)
 {

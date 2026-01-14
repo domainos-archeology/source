@@ -18,25 +18,9 @@
  * Original address: 0x00e030c0
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "misc/misc.h"
 #include "mmap/mmap.h"
-
-/* Internal function prototypes */
-extern void FUN_00e00c08(void);  /* Wait for page transition */
-extern void FUN_00e02898(aste_t *aste, uint32_t *segmap, uint16_t page,
-                         uint16_t count, uint16_t flags, status_$t *status);
-extern uint16_t FUN_00e0305c(uint32_t *segmap, uint16_t count);
-extern void FUN_00e02af6(aste_t *aste, uint32_t *segmap, uint32_t *ppn_array,
-                         uint16_t page, uint16_t count, status_$t *status);
-extern void FUN_00e02ca6(aste_t *aste, uint32_t *segmap, uint32_t *ppn_array,
-                         uint16_t page, uint16_t count, int8_t flag, status_$t *status);
-extern void FUN_00e0283c(uint32_t *segmap, uint16_t count);
-extern void NETLOG_$LOG_IT(uint16_t type, void *uid, uint16_t seg, uint16_t page,
-                           uint16_t ppn, uint16_t count, uint16_t remote, uint16_t unused);
-
-/* External data */
-extern int8_t NETLOG_$OK_TO_LOG;
 
 uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
                     uint32_t *ppn_array, status_$t *status, uint16_t flags)

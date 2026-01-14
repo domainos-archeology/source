@@ -271,4 +271,7 @@ void MMU_$MCR_CHANGE(uint16_t bit);
 /* Translate VA to PA, crash if translation fails */
 uint32_t mmu_$vtop_or_crash(uint32_t va);
 
+/* Zero a physical page */
+void ZERO_PAGE(uint32_t ppn);
+
 #endif /* MMU_H */

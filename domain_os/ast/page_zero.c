@@ -6,10 +6,8 @@
  * Original address: 0x00e00eec
  */
 
-#include "ast.h"
-
-/* External function prototypes */
-extern void ZERO_PAGE(uint32_t ppn);
+#include "ast/ast_internal.h"
+#include "mmu/mmu.h"
 
 void AST_$PAGE_ZERO(uint32_t ppn)
 {

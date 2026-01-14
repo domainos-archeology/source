@@ -7,11 +7,7 @@
  * Original address: 0x00e07050
  */
 
-#include "ast.h"
-
-/* Internal function prototypes */
-extern aote_t* FUN_00e0209e(uid_t *uid);
-extern aste_t* FUN_00e0250c(aote_t *aote, uint16_t seg);
+#include "ast/ast_internal.h"
 
 aste_t* AST_$LOCATE_ASTE(locate_request_t *request)
 {

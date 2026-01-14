@@ -14,13 +14,10 @@
  * Original address: 0x00e05380
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "proc1/proc1.h"
-
-/* Internal function prototypes */
-extern void ACL_$GET_EXSID(void *exsid, status_$t *status);
-extern void FUN_00e05214(uid_t *uid, uint16_t attr_id, void *value,
-                          int8_t flags, void *exsid, uint32_t *clock, status_$t *status);
+#include "acl/acl.h"
+#include "time/time.h"
 
 void AST_$SET_ATTRIBUTE(uid_t *uid, uint16_t attr_id, void *value, status_$t *status)
 {

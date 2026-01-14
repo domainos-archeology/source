@@ -14,13 +14,10 @@
  * Original address: 0x00e04542
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "misc/misc.h"
 #include "mmu/mmu.h"
 #include "mmap/mmap.h"
-
-/* Internal function prototypes */
-extern void FUN_00e00c08(void);  /* Wait for page transition */
 
 void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn, status_$t *status)
 {
