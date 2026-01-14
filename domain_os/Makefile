@@ -6,6 +6,7 @@ SRCS := \
   $(wildcard cal/*.c) \
   $(wildcard ec/*.c) \
   $(wildcard math/*.c) \
+  $(wildcard misc/*.c) \
   $(wildcard ml/*.c) \
   $(wildcard mmap/*.c) \
   $(wildcard mmu/*.c) \
