@@ -414,10 +414,11 @@ void PROC1_$INIT_LOADAV(void);
  */
 
 /*
- * PROC1_$SET_PRIORITY - Set process priority
+ * PROC1_$SET_PRIORITY - Set process priority range
+ * Sets min and max priority for process if mode < 0.
  * Original address: 0x00e1523c
  */
-void PROC1_$SET_PRIORITY(uint16_t pid, int16_t priority, status_$t *status_ret);
+void PROC1_$SET_PRIORITY(uint16_t pid, int16_t mode, uint16_t *min_priority, uint16_t *max_priority);
 
 /*
  * PROC1_$SET_TYPE - Set process type
