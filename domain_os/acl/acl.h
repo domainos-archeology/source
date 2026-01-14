@@ -17,4 +17,16 @@
  */
 void ACL_$GET_EXSID(void *exsid, status_$t *status);
 
+/*
+ * ACL_$IS_SUSER - Check if current process has superuser privileges
+ *
+ * Returns non-zero if the current process has superuser (root) privileges.
+ *
+ * Returns:
+ *   Non-zero if superuser, 0 otherwise
+ *
+ * Original address: TBD
+ */
+int8_t ACL_$IS_SUSER(void);
+
 #endif /* ACL_H */

@@ -7,10 +7,7 @@
  * @param blocks  Pointer to blocks to return
  */
 
-#include "disk.h"
-
-/* Internal deallocation function */
-extern void FUN_00e3c01a(int16_t vol_idx, void *blocks, void *param_3);
+#include "disk/disk_internal.h"
 
 void DISK_$RTN_QBLKS(void *blocks)
 {

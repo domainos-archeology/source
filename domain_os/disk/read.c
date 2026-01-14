@@ -13,7 +13,7 @@
  * @param status   Output: Status code
  */
 
-#include "disk.h"
+#include "disk/disk_internal.h"
 
 /* Mount state offset within volume entry */
 #define DISK_MOUNT_STATE_OFFSET  0x90
@@ -30,13 +30,6 @@
 /* Mount states */
 #define DISK_MOUNT_PARTIAL  1
 #define DISK_MOUNT_FULL     3
-
-/* Current process ID */
-extern int16_t PROC1_$CURRENT;
-
-/* External I/O function */
-extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *daddr,
-                         void *buffer, void *count);
 
 void DISK_$READ(int16_t vol_idx, void *buffer, void *daddr, void *count,
                 status_$t *status)

@@ -10,16 +10,11 @@
  * @param status       Output: Status code
  */
 
-#include "disk.h"
+#include "disk/disk_internal.h"
+#include "wp/wp.h"
 
 /* Block header error status */
 #define status_$disk_block_header_error  0x00080011
-
-/* External functions */
-extern uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status);
-extern void WP_$UNWIRE(uint32_t wired_addr);
-extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *buffer,
-                         void *daddr, void *info);
 
 void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *buffer_ptr,
                               uint32_t count, status_$t *status)

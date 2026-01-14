@@ -10,10 +10,7 @@
  * @return Pointer to allocated blocks
  */
 
-#include "disk.h"
-
-/* Internal allocation function */
-extern void *FUN_00e3be8a(int16_t vol_idx, int16_t mode, void *count, status_$t *status);
+#include "disk/disk_internal.h"
 
 void *DISK_$GET_QBLKS(int16_t vol_idx, int16_t count, status_$t *status)
 {

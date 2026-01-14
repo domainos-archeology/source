@@ -9,14 +9,8 @@
  * @param vol_idx  Volume index
  */
 
-#include "disk.h"
+#include "disk/disk_internal.h"
 #include "misc/misc.h"
-
-/* Mount lock */
-extern void *MOUNT_LOCK;
-
-/* Error message */
-extern void *Disk_Driver_Logic_Err;
 
 /* Valid volume index mask (volumes 1-10) */
 #define VALID_VOL_MASK  0x7fe

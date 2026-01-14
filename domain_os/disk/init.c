@@ -7,19 +7,7 @@
  * 3. Initializing exclusion locks for synchronization
  */
 
-#include "disk.h"
-
-/* Base data area at 0xe7a1cc */
-extern uint8_t DISK_$DATA[];
-
-/* Event counters at specific offsets */
-/* Main EC at base */
-/* Per-volume ECs at +0x1c intervals, starting at offset 0x1c */
-/* Each volume has ECs at +0x378 and +0x384 from its base */
-
-/* Exclusion locks */
-extern void *ml_$exclusion_t_00e7a274;  /* +0xa8 from base */
-extern void *ml_$exclusion_t_00e7a25c;  /* +0x90 from base */
+#include "disk/disk_internal.h"
 
 /*
  * DISK_$INIT - Initialize the disk subsystem

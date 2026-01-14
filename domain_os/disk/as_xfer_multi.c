@@ -27,8 +27,10 @@
  * 10. Fills remaining status array entries with disk_io_abandoned
  */
 
-#include "disk.h"
+#include "cache/cache.h"
+#include "disk/disk_internal.h"
 #include "mst/mst.h"
+#include "wp/wp.h"
 
 /* Status codes */
 #define status_$disk_buffer_not_page_aligned  0x00080013
@@ -36,10 +38,6 @@
 
 /* Page alignment mask */
 #define PAGE_ALIGN_MASK  0x3ff
-
-/* External functions */
-extern void WP_$UNWIRE(uint32_t wired_addr);
-extern void CACHE_$FLUSH_VIRTUAL(void);
 
 void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
                           int16_t *op_type_ptr, uint32_t *daddr_array,

@@ -18,9 +18,12 @@
  * @param status       Output: Status code
  */
 
-#include "disk.h"
+#include "acl/acl.h"
+#include "cache/cache.h"
+#include "disk/disk_internal.h"
 #include "mmap/mmap.h"
 #include "mst/mst.h"
+#include "wp/wp.h"
 
 /* Status codes */
 #define status_$disk_buffer_not_page_aligned     0x00080013
@@ -46,20 +49,6 @@
 
 /* Mount state 2 = assigned */
 #define DISK_MOUNT_ASSIGNED  2
-
-/* Current process ID */
-extern int16_t PROC1_$CURRENT;
-
-/* Global diagnostic mode flag at 0xe7acca */
-extern int8_t DISK_$DIAG;
-
-/* External functions */
-extern void WP_$UNWIRE(uint32_t wired_addr);
-extern uint32_t WP_$CALLOC(void *addr_ptr, status_$t *status);
-extern void CACHE_$FLUSH_VIRTUAL(void);
-extern int8_t ACL_$IS_SUSER(void);
-extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *buffer,
-                         void *daddr, void *info);
 
 void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
                    void *buffer, uint32_t *info, status_$t *status)

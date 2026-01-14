@@ -1,10 +1,7 @@
 #include "cal.h"
+#include "dbuf/dbuf.h"
 #include "proc1/proc1.h"
-
-// External functions for disk buffer management and locking
-extern void *DBUF_$GET_BLOCK(ushort vol_idx, int block, void *uid, int param4, int param5, status_$t *status);
-extern void DBUF_$SET_BUFF(void *buffer, short flags, status_$t *status);
-extern void *LV_LABEL_$UID;
+#include "uid/uid.h"
 
 // Lock ID for calendar operations
 #define CAL_LOCK_ID 0xe

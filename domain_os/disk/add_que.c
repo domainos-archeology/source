@@ -17,7 +17,7 @@
  * @param req_list    Linked list of requests to add
  */
 
-#include "disk.h"
+#include "disk/disk_internal.h"
 #include "misc/misc.h"
 
 /* Request block offsets */
@@ -37,9 +37,6 @@
 #define QUEUE_POS_OFFSET    0x04   /* Current position */
 #define QUEUE_HEAD_OFFSET   0x08   /* Queue head */
 #define QUEUE_TAIL_OFFSET   0x0c   /* Queue tail */
-
-/* Error message for unsupported queued drivers */
-extern void *Disk_Queued_Drivers_Not_Supported_Err;
 
 /* Queue data at 0xe7a1cc */
 #define QUEUE_DATA_BASE  ((uint8_t *)0x00e7a1cc)

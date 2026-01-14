@@ -8,7 +8,7 @@
  * @param status       Output: Status code
  */
 
-#include "disk.h"
+#include "disk/disk_internal.h"
 
 /* Volume table offsets */
 #define DISK_MOUNT_STATE_OFFSET  0x90
@@ -23,9 +23,6 @@
 
 /* Mount state 2 = assigned */
 #define DISK_MOUNT_ASSIGNED  2
-
-/* Current process ID */
-extern int16_t PROC1_$CURRENT;
 
 void DISK_$AS_OPTIONS(uint16_t *vol_idx_ptr, uint16_t *options_ptr, status_$t *status)
 {

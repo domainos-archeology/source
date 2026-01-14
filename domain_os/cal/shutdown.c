@@ -1,9 +1,6 @@
 #include "cal.h"
-
-// External functions for disk buffer management
-extern void *DBUF_$GET_BLOCK(ushort vol_idx, int block, void *uid, int param4, int param5, status_$t *status);
-extern void DBUF_$SET_BUFF(void *buffer, short flags, status_$t *status);
-extern void *LV_LABEL_$UID;
+#include "dbuf/dbuf.h"
+#include "uid/uid.h"
 
 // Called during system shutdown to write the current time to the volume label.
 // This allows the system to detect time drift on next boot.

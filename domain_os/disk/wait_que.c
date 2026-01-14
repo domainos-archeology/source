@@ -9,10 +9,7 @@
  * @param param_3  Completion counter pointer
  */
 
-#include "disk.h"
-
-/* Internal wait function */
-extern void FUN_00e3c9fe(uint16_t mask, void *counter1, void *counter2);
+#include "disk/disk_internal.h"
 
 void DISK_$WAIT_QUE(void *queue, status_$t *status)
 {

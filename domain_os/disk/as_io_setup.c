@@ -10,8 +10,10 @@
  * @return             Wired address for I/O, or undefined on error
  */
 
-#include "disk.h"
+#include "cache/cache.h"
+#include "disk/disk_internal.h"
 #include "mst/mst.h"
+
 /* Status code for buffer alignment */
 #define status_$disk_buffer_not_page_aligned  0x00080013
 
@@ -28,14 +30,8 @@
 /* Valid volume index mask (volumes 1-10) */
 #define VALID_VOL_MASK  0x7fe
 
-/* Current process ID */
-extern int16_t PROC1_$CURRENT;
-
 /* Mount state 2 = assigned */
 #define DISK_MOUNT_ASSIGNED  2
-
-/* External functions */
-extern void CACHE_$FLUSH_VIRTUAL(void);
 
 uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status)
 {

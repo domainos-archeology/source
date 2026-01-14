@@ -28,6 +28,20 @@
 void CRASH_SYSTEM(const status_$t *status_p);
 
 /*
+ * FUN_00e825f4 - Console output function (unidentified)
+ *
+ * Printf-like function for console output during boot and system messages.
+ * TODO: Identify the actual function name from symbols or documentation.
+ *
+ * Parameters:
+ *   format - Printf-style format string
+ *   ...    - Variable arguments
+ *
+ * Original address: 0x00e825f4
+ */
+void FUN_00e825f4(char *format, ...);
+
+/*
  * Common error codes used with CRASH_SYSTEM
  */
 // extern status_$t Lock_ordering_violation;

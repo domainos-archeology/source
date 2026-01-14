@@ -2,9 +2,6 @@
 #include "misc/misc.h"
 #include "term/term.h"
 
-// External functions
-extern void FUN_00e825f4(char *format, ...);
-
 // String constants (addresses from disassembly)
 // These would be defined elsewhere in the actual system
 

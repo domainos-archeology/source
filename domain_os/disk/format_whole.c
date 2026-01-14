@@ -8,7 +8,7 @@
  * @param status       Output: Status code
  */
 
-#include "disk.h"
+#include "disk/disk_internal.h"
 
 /* Volume table offsets */
 #define DISK_MOUNT_STATE_OFFSET  0x90
@@ -28,16 +28,8 @@
 /* Mount state 2 = assigned */
 #define DISK_MOUNT_ASSIGNED  2
 
-/* Current process ID */
-extern int16_t PROC1_$CURRENT;
-
 /* Process table base */
 #define PROC_TABLE_BASE  ((uint8_t *)0x00e7a544)
-
-/* External functions */
-extern void FUN_00e3be8a(int16_t param_1, int32_t param_2, void **buffer, void **param_4);
-extern void FUN_00e3c01a(int16_t param_1, void *buffer, void *param_3);
-extern void FUN_00e3c9fe(int16_t mask, void *ec1, void *ec2);
 
 void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
 {

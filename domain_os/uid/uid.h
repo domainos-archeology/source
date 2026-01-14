@@ -34,6 +34,13 @@ extern uint16_t UID_$GENERATOR_LOCK;    /* 0xE2C010: Spin lock for generator */
 extern uint32_t NODE_$ME;               /* 0xE245A4: This node's ID */
 
 /*
+ * Well-known UIDs
+ *
+ * These are UIDs for system objects that need to be referenced by name.
+ */
+extern uid_t LV_LABEL_$UID;             /* Volume label UID */
+
+/*
  * ============================================================================
  * Function Prototypes
  * ============================================================================

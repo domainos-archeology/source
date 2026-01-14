@@ -9,10 +9,7 @@
  * @param status    Output: Status code
  */
 
-#include "disk.h"
-
-/* Mount lock */
-extern void *MOUNT_LOCK;
+#include "disk/disk_internal.h"
 
 /* Status code */
 #define status_$logical_volume_not_found  0x00080010
@@ -28,8 +25,6 @@ extern void *MOUNT_LOCK;
 
 /* LV data offset */
 #define DISK_LV_DATA_OFFSET      (-0x40)
-
-/* ML_$EXCLUSION_START, ML_$EXCLUSION_STOP declared in ml/ml.h via disk.h */
 
 void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status)
 {

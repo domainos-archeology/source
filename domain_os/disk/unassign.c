@@ -7,13 +7,8 @@
  * @param status       Output: Status code
  */
 
-#include "disk.h"
-
-/* Diskless flag */
-extern int8_t NETWORK_$REALLY_DISKLESS;
-
-/* Current process ID */
-extern int16_t PROC1_$CURRENT;
+#include "disk/disk_internal.h"
+#include "network/network.h"
 
 /* Mount state and process at offset 0x90 and 0x92 in volume entry */
 #define DISK_MOUNT_STATE_OFFSET  0x90
@@ -27,9 +22,6 @@ extern int16_t PROC1_$CURRENT;
 
 /* Mount state 2 = assigned */
 #define DISK_MOUNT_ASSIGNED  2
-
-/* Forward declaration */
-extern void DISK_$DISMOUNT(uint16_t vol_idx);
 
 void DISK_$UNASSIGN(uint16_t *vol_idx_ptr, status_$t *status)
 {

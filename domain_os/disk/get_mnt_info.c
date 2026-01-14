@@ -23,12 +23,7 @@
  * @param status       Output: Status code
  */
 
-#include "disk.h"
-
-/* Mount lock */
-extern void *MOUNT_LOCK;
-
-/* ML_$EXCLUSION_START, ML_$EXCLUSION_STOP declared in ml/ml.h via disk.h */
+#include "disk/disk_internal.h"
 
 /* Volume table offsets */
 #define DISK_MOUNT_STATE_OFFSET   0x90
