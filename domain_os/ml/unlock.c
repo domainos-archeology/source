@@ -29,7 +29,8 @@ void ML_$UNLOCK(int16_t resource_id)
     int16_t ec_offset;
     uint8_t pri_flags;
 
-    DISABLE_INTERRUPTS();
+    uint16_t sr;
+    DISABLE_INTERRUPTS(sr);
 
     /* Clear the lock byte */
     ML_$LOCK_BYTES[resource_id] &= ~0x01;
@@ -91,5 +92,5 @@ void ML_$UNLOCK(int16_t resource_id)
 
     PROC1_$DISPATCH_INT2(pcb);
 
-    ENABLE_INTERRUPTS();
+    ENABLE_INTERRUPTS(sr);
 }

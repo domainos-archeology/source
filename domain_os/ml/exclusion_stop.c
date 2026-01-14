@@ -29,12 +29,14 @@ void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
 
     pcb = PROC1_$CURRENT_PCB;
 
+    uint16_t sr;
+
     if (old_state >= 1) {
         /*
          * There were waiters (state was positive before decrement).
          * Wake them up by advancing the event count.
          */
-        DISABLE_INTERRUPTS();
+        DISABLE_INTERRUPTS(sr);
 
         ADVANCE_INT((ec_$eventcount_t *)excl);
 
@@ -42,7 +44,7 @@ void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
         pcb->pad_5a--;
 
         if (pcb->pad_5a != 0) {
-            ENABLE_INTERRUPTS();
+            ENABLE_INTERRUPTS(sr);
             return;
         }
     } else {
@@ -87,5 +89,5 @@ void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
 
     PROC1_$DISPATCH_INT2(pcb);
 
-    ENABLE_INTERRUPTS();
+    ENABLE_INTERRUPTS(sr);
 }

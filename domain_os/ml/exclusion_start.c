@@ -39,7 +39,8 @@ void ML_$EXCLUSION_START(ml_$exclusion_t *excl)
          * Someone else is in the region - we need to wait.
          * Increment the event count and wait for it.
          */
-        DISABLE_INTERRUPTS();
+        uint16_t sr;
+        DISABLE_INTERRUPTS(sr);
 
         excl->f4++;
         wait_vals[0] = excl->f4;

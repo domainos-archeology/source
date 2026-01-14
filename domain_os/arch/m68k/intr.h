@@ -23,16 +23,16 @@
  * It declares a local variable to save the previous SR state.
  *
  * Usage:
- *   DISABLE_INTERRUPTS();
+ *   uint16_t sr;
+ *   DISABLE_INTERRUPTS(sr);
  *   // critical section
- *   ENABLE_INTERRUPTS();
+ *   ENABLE_INTERRUPTS(sr);
  */
-#define DISABLE_INTERRUPTS() \
-    uint16_t _saved_sr; \
+#define DISABLE_INTERRUPTS(sr) \
     __asm__ volatile ( \
         "move.w %%sr, %0\n\t" \
         "ori.w #0x0700, %%sr" \
-        : "=d" (_saved_sr) \
+        : "=d" (sr) \
         : \
         : "cc" \
     )
@@ -42,11 +42,11 @@
  *
  * Must be called after DISABLE_INTERRUPTS in the same scope.
  */
-#define ENABLE_INTERRUPTS() \
+#define ENABLE_INTERRUPTS(sr) \
     __asm__ volatile ( \
         "move.w %0, %%sr" \
         : \
-        : "d" (_saved_sr) \
+        : "d" (sr) \
         : "cc" \
     )
 

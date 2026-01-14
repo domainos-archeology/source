@@ -69,14 +69,15 @@ void ML_$LOCK(int16_t resource_id)
          * In the original m68k code, this is done with BSET which is atomic.
          * The lock byte is at LOCK_BYTES[resource_id], bit 0 indicates held.
          */
-        DISABLE_INTERRUPTS();
+        uint16_t sr;
+        DISABLE_INTERRUPTS(sr);
 
         old_lock_byte = ML_$LOCK_BYTES[resource_id];
         ML_$LOCK_BYTES[resource_id] = old_lock_byte | 0x01;
 
         if ((old_lock_byte & 0x01) == 0) {
             /* Lock was free, we got it */
-            ENABLE_INTERRUPTS();
+            ENABLE_INTERRUPTS(sr);
             return;
         }
 
