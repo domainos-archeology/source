@@ -52,7 +52,7 @@ static void log_signal_event(int event_type, int16_t target_idx, int16_t signal,
     #define P2_SESSION_ID(idx)       (p2_signal_dummy)
 #endif
 
-void PROC2_$SIGNAL(uid_$t *proc_uid, int16_t *signal, uint32_t *param,
+void PROC2_$SIGNAL(uid_t *proc_uid, int16_t *signal, uint32_t *param,
                    status_$t *status_ret)
 {
     int16_t index;
@@ -61,7 +61,7 @@ void PROC2_$SIGNAL(uid_$t *proc_uid, int16_t *signal, uint32_t *param,
     proc2_info_t *cur_info;
     status_$t status;
     uint32_t param_copy;
-    uid_$t uid_copy;
+    uid_t uid_copy;
     int8_t acl_result;
 
     /* Copy inputs before locking */

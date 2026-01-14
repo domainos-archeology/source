@@ -19,7 +19,7 @@
 extern void AREA_$FREE_ASID(uint16_t asid);
 
 /* External: NIL UID for unmap operations */
-extern uid_$t UID_$NIL;
+extern uid_t UID_$NIL;
 
 /*
  * MST_$FREE_ASID - Free an Address Space ID

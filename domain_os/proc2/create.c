@@ -27,14 +27,14 @@
 #include "proc2.h"
 
 /* External globals */
-extern uid_$t UID_$NIL;
+extern uid_t UID_$NIL;
 extern uint32_t FIM_$INITIAL_STACK_SIZE;
 
 /* External functions (not in headers) */
 extern void TIME_$CLOCK(uint32_t *clock_ret);
 extern uint16_t MST_$ALLOC_ASID(status_$t *status_ret);
 extern void MST_$FREE_ASID(uint16_t asid, status_$t *status_ret);
-extern void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_$t *parent_uid,
+extern void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
                                    uint32_t map_param, uint32_t flags, status_$t *status_ret);
 extern void FIM_$FP_INIT(uint16_t asid);
 extern void ACL_$ALLOC_ASID(uint16_t pid, status_$t *status_ret);
@@ -70,13 +70,13 @@ typedef struct startup_context_t {
     uint16_t    asid;           /* 0x0C: ASID for new process */
 } startup_context_t;
 
-void PROC2_$CREATE(uid_$t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
+void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
                    int32_t *entry_point, int32_t *user_data,
                    uint32_t reserved1, uint32_t reserved2,
-                   uint8_t *flags, uid_$t *uid_ret, void **ec_ret,
+                   uint8_t *flags, uid_t *uid_ret, void **ec_ret,
                    status_$t *status_ret)
 {
-    uid_$t local_parent_uid;
+    uid_t local_parent_uid;
     uint32_t local_code_desc;
     uint32_t local_map_param;
     int32_t local_entry_point;

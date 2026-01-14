@@ -19,13 +19,13 @@
 
 #include "proc2.h"
 
-void PROC2_$UPID_TO_UID(int16_t *upid, uid_$t *uid_ret, status_$t *status_ret)
+void PROC2_$UPID_TO_UID(int16_t *upid, uid_t *uid_ret, status_$t *status_ret)
 {
     int16_t search_upid;
     int16_t index;
     proc2_info_t *entry;
     status_$t status;
-    uid_$t found_uid;
+    uid_t found_uid;
 
     search_upid = *upid;
     status = status_$ok;

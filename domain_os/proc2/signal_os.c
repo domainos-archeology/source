@@ -31,7 +31,7 @@ static void log_signal_event(int event_type, int16_t target_idx, int16_t signal,
     (void)status;
 }
 
-void PROC2_$SIGNAL_OS(uid_$t *proc_uid, int16_t *signal, uint32_t *param,
+void PROC2_$SIGNAL_OS(uid_t *proc_uid, int16_t *signal, uint32_t *param,
                       status_$t *status_ret)
 {
     int16_t index;

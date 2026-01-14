@@ -32,7 +32,7 @@
 #define P2_LAST_ENTRY           69
 
 /* External globals */
-extern uid_$t UID_$NIL;
+extern uid_t UID_$NIL;
 
 /* Boot flags storage */
 #if defined(M68K)
@@ -44,34 +44,34 @@ extern uid_$t UID_$NIL;
 
 /* Global UID storage for system UIDs */
 #if defined(M68K)
-    #define PROC_DIR_UID        (*(uid_$t*)0xE7BE84)
-    #define SYSTEM_UID_2        (*(uid_$t*)0xE7BE9C)
+    #define PROC_DIR_UID        (*(uid_t*)0xE7BE84)
+    #define SYSTEM_UID_2        (*(uid_t*)0xE7BE9C)
     /* UID table: 8 bytes per entry, indexed by ASID */
     #define UID_TABLE_BASE      0xE7BE94
-    #define UID_TABLE_ENTRY(n)  (*(uid_$t*)(UID_TABLE_BASE + (n) * 8))
+    #define UID_TABLE_ENTRY(n)  (*(uid_t*)(UID_TABLE_BASE + (n) * 8))
 #else
-    extern uid_$t proc_dir_uid;
-    extern uid_$t system_uid_2;
-    extern uid_$t uid_table[];
+    extern uid_t proc_dir_uid;
+    extern uid_t system_uid_2;
+    extern uid_t uid_table[];
     #define PROC_DIR_UID        proc_dir_uid
     #define SYSTEM_UID_2        system_uid_2
     #define UID_TABLE_ENTRY(n)  uid_table[n]
 #endif
 
 /* External functions */
-extern void UID_$GEN(uid_$t *uid_ret);
+extern void UID_$GEN(uid_t *uid_ret);
 extern void MST_$MAP_AREA_AT(void *uid1, void *size1, void *param1, void *param2,
                               void *dest, status_$t *status_ret);
 extern int8_t OS_$BOOT_ERRCHK(char *msg1, char *msg2, uint16_t *param, status_$t *status_ret);
 extern int8_t TAPE_$BOOT(status_$t *status_ret);
 extern int8_t FLOP_$BOOT(status_$t *status_ret, status_$t *status_ret2);
-extern void NAME_$RESOLVE(char *name, int16_t *name_len, uid_$t *uid_ret, status_$t *status_ret);
-extern void FILE_$LOCK(uid_$t *uid, void *param1, void *param2, void *param3,
+extern void NAME_$RESOLVE(char *name, int16_t *name_len, uid_t *uid_ret, status_$t *status_ret);
+extern void FILE_$LOCK(uid_t *uid, void *param1, void *param2, void *param3,
                         void *result, status_$t *status_ret);
-extern void MST_$MAP(uid_$t *uid, void *param1, void *param2, void *param3,
+extern void MST_$MAP(uid_t *uid, void *param1, void *param2, void *param3,
                       void *param4, void *param5, void *result, status_$t *status_ret);
-extern void MST_$UNMAP(uid_$t *uid, void *param1, void *param2, status_$t *status_ret);
-extern void MST_$MAP_AT(void *start, uid_$t *uid, void *param1, void *param2, void *param3,
+extern void MST_$UNMAP(uid_t *uid, void *param1, void *param2, status_$t *status_ret);
+extern void MST_$MAP_AT(void *start, uid_t *uid, void *param1, void *param2, void *param3,
                          void *param4, void *param5, void *result, status_$t *status_ret);
 extern uint8_t MMU_$NORMAL_MODE(void);
 extern uint8_t DTTY_$USE_DTTY;
@@ -131,7 +131,7 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
     proc2_info_t *init_entry;
     uint16_t min_pri, max_pri;
     uint8_t mmu_mode;
-    uid_$t boot_shell_uid;
+    uid_t boot_shell_uid;
     int16_t path_len;
 
     /*

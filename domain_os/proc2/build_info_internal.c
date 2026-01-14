@@ -28,10 +28,10 @@
 
 /* External functions - use void* for flexibility with varying signatures */
 extern void PROC1_$GET_ANY_CPU_USAGE(int16_t *pid, void *usage1, void *usage2, void *usage3);
-extern void ACL_$GET_PID_SID(int16_t pid, uid_$t *sid, status_$t *status);
+extern void ACL_$GET_PID_SID(int16_t pid, uid_t *sid, status_$t *status);
 
 /* External globals */
-extern uid_$t UID_$NIL;
+extern uid_t UID_$NIL;
 
 /*
  * Combined process info structure layout (0xE4 bytes):
@@ -58,28 +58,28 @@ extern uid_$t UID_$NIL;
  * 0xD0-0xE3: CPU usage
  */
 typedef struct proc_info_combined_t {
-    uid_$t      parent_uid;     /* 0x00 */
+    uid_t      parent_uid;     /* 0x00 */
     uint32_t    cr_rec;         /* 0x08 */
     uint8_t     proc1_info[24]; /* 0x0C: PROC1 info */
-    uid_$t      sid[4];         /* 0x24: ACL SIDs */
-    uid_$t      proc_uid_2;     /* 0x48 */
+    uid_t      sid[4];         /* 0x24: ACL SIDs */
+    uid_t      proc_uid_2;     /* 0x48 */
     uint8_t     server_flag;    /* 0x50 */
     uint8_t     pad_51;         /* 0x51 */
     uint16_t    min_priority;   /* 0x52 */
     uint16_t    max_priority;   /* 0x54 */
     uint32_t    cpu_time[4];    /* 0x56: CPU timing */
-    uid_$t      pgroup_uid;     /* 0x66 */
+    uid_t      pgroup_uid;     /* 0x66 */
     uint16_t    pgroup_flags;   /* 0x6E */
     uint16_t    upid;           /* 0x70 */
     uint16_t    parent_upid;    /* 0x72 */
     uint16_t    pgroup_info;    /* 0x74 */
     uint16_t    session_upid;   /* 0x76 */
     uint16_t    asid;           /* 0x78 */
-    uid_$t      tty_uid;        /* 0x7A: 10 bytes actually */
+    uid_t      tty_uid;        /* 0x7A: 10 bytes actually */
     uint8_t     sig_masks[32];  /* 0x84 */
     uint16_t    name_len;       /* 0xA4 */
     char        name[32];       /* 0xA6 */
-    uid_$t      acct_uid;       /* 0xC6 */
+    uid_t      acct_uid;       /* 0xC6 */
     uint8_t     pad_ce[2];      /* 0xCE */
     uint32_t    cpu_usage[5];   /* 0xD0 */
 } proc_info_combined_t;
@@ -88,7 +88,7 @@ typedef struct proc_info_combined_t {
  * Helper function prototypes (internal to this module)
  * These convert indices/pointers to UIDs
  */
-static void get_pgroup_uid(proc2_info_t *entry, uid_$t *uid_ret);
+static void get_pgroup_uid(proc2_info_t *entry, uid_t *uid_ret);
 static void get_pgroup_info(proc2_info_t *entry, uint16_t *info_ret);
 
 void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
@@ -261,7 +261,7 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
 /*
  * Helper to get pgroup UID from entry
  */
-static void get_pgroup_uid(proc2_info_t *entry, uid_$t *uid_ret)
+static void get_pgroup_uid(proc2_info_t *entry, uid_t *uid_ret)
 {
     /* TODO: Implement using FUN_00e421de logic */
     *uid_ret = entry->pgroup_uid;

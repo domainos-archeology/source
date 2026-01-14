@@ -13,7 +13,7 @@
 
 #include "proc2.h"
 
-void PROC2_$RESUME(uid_$t *proc_uid, status_$t *status_ret)
+void PROC2_$RESUME(uid_t *proc_uid, status_$t *status_ret)
 {
     int16_t index;
     proc2_info_t *info;

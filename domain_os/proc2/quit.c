@@ -16,7 +16,7 @@
 static int16_t quit_signal = SIGQUIT;  /* 3 */
 static uint32_t quit_param = 0;
 
-void PROC2_$QUIT(uid_$t *proc_uid, status_$t *status_ret)
+void PROC2_$QUIT(uid_t *proc_uid, status_$t *status_ret)
 {
     PROC2_$SIGNAL(proc_uid, &quit_signal, &quit_param, status_ret);
 }

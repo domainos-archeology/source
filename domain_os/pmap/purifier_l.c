@@ -229,7 +229,7 @@ void PMAP_$PURIFIER_L(void)
 
                 /* Log if enabled */
                 if (NETLOG_$OK_TO_LOG < 0) {
-                    uid_$t nil_uid = UID_$NIL;
+                    uid_t nil_uid = UID_$NIL;
                     NETLOG_$LOG_IT(0x0D, &nil_uid, page_count, dummy_status,
                                   (int16_t)(*(uint32_t *)(qblk_main + 0x3C) >> 16),
                                   (int16_t)(*(uint32_t *)(qblk_main + 0x3C)),

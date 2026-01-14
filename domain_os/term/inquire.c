@@ -10,7 +10,7 @@ extern void TTY_$K_INQ_INPUT_FLAGS(short *line_ptr, unsigned long *flags_ret,
                                     status_$t *status_ret);
 extern void TTY_$K_INQ_OUTPUT_FLAGS(short *line_ptr, unsigned long *flags_ret,
                                      status_$t *status_ret);
-extern void TTY_$K_INQ_PGROUP(short *line_ptr, uid_$t *pgroup_ret, status_$t *status_ret);
+extern void TTY_$K_INQ_PGROUP(short *line_ptr, uid_t *pgroup_ret, status_$t *status_ret);
 extern void SIO_$K_INQ_PARAM(short *line_ptr, void *params, void *mask, status_$t *status_ret);
 
 // Function ID constants (addresses in original)
@@ -77,7 +77,7 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
     unsigned long flags;
     unsigned long func_enabled;
     sio_params_t params;
-    uid_$t pgroup;
+    uid_t pgroup;
 
     option = *option_ptr;
 
@@ -233,8 +233,8 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
 
         case INQ_PGROUP:
             TTY_$K_INQ_PGROUP(line_ptr, &pgroup, status_ret);
-            ((uid_$t *)value_ret)->high = pgroup.high;
-            ((uid_$t *)value_ret)->low = pgroup.low;
+            ((uid_t *)value_ret)->high = pgroup.high;
+            ((uid_t *)value_ret)->low = pgroup.low;
             break;
 
         case INQ_FLAG_31:

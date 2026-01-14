@@ -18,9 +18,9 @@
 extern void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
                                         void *info, status_$t *status_ret);
 
-void PROC2_$GET_INFO(uid_$t *proc_uid, void *info, uint16_t *info_len, status_$t *status_ret)
+void PROC2_$GET_INFO(uid_t *proc_uid, void *info, uint16_t *info_len, status_$t *status_ret)
 {
-    uid_$t uid;
+    uid_t uid;
     uint16_t len;
     int16_t proc2_idx;
     int16_t proc1_pid;

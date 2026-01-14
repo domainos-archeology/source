@@ -140,9 +140,9 @@ static void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_
     entry->pgroup_table_idx = new_pgroup_idx;
 }
 
-void PROC2_$SET_PGROUP(uid_$t *proc_uid, uint16_t *new_upgid, status_$t *status_ret)
+void PROC2_$SET_PGROUP(uid_t *proc_uid, uint16_t *new_upgid, status_$t *status_ret)
 {
-    uid_$t local_uid;
+    uid_t local_uid;
     uint16_t upgid;
     int16_t target_idx;
     int16_t current_idx;

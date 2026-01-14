@@ -66,20 +66,6 @@ typedef long status_$t;
 typedef uint32_t m68k_ptr_t;
 
 // =============================================================================
-// UID structure (8 bytes on m68k)
-// =============================================================================
-typedef struct {
-    uint32_t high;
-    uint32_t low;
-} uid_$t;
-
-// Alternate name for compatibility
-typedef uid_$t uid_t;
-
-// UID_$NIL - nil UID value (extern, defined in kernel)
-extern uid_$t UID_$NIL;
-
-// =============================================================================
 // Clock type
 // =============================================================================
 // 48-bit clock value used by Domain/OS calendar functions

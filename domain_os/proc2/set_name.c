@@ -15,7 +15,7 @@
 
 #include "proc2.h"
 
-void PROC2_$SET_NAME(char *name, int16_t *name_len, uid_$t *proc_uid, status_$t *status_ret)
+void PROC2_$SET_NAME(char *name, int16_t *name_len, uid_t *proc_uid, status_$t *status_ret)
 {
     int16_t index;
     proc2_info_t *entry;

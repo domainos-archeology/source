@@ -12,7 +12,7 @@
 
 #include "proc2.h"
 
-void PROC2_$WHO_AM_I(uid_$t *proc_uid)
+void PROC2_$WHO_AM_I(uid_t *proc_uid)
 {
     int16_t index;
     proc2_info_t *entry;

@@ -127,7 +127,7 @@ typedef struct proc2_sig_mask_t {
  * where base_addr is 0xEA5438 (table start - 0xE4 for 1-based indexing)
  */
 typedef struct proc2_info_t {
-    uid_$t      uid;            /* 0x00: Process UID */
+    uid_t      uid;            /* 0x00: Process UID */
 
     uint8_t     pad_08[0x08];   /* 0x08: Unknown */
     uint16_t    pgroup_table_idx; /* 0x10: Index into pgroup table (also used in LIST_PGROUP) */
@@ -151,13 +151,13 @@ typedef struct proc2_info_t {
 
     uint8_t     pad_2c[0x20];   /* 0x2C: Unknown */
 
-    uid_$t      pgroup_uid;     /* 0x4C: Process group UID */
+    uid_t      pgroup_uid;     /* 0x4C: Process group UID */
     uint16_t    pgroup_uid_idx; /* 0x54: Process group UID index */
     uint8_t     pad_56[0x06];   /* 0x56: Unknown */
     uint16_t    session_id;     /* 0x5C: Session ID (also returned by GET_TTY_DATA as 2nd param) */
     uint16_t    pad_5e;         /* 0x5E: Unknown */
 
-    uid_$t      tty_uid;        /* 0x60: TTY UID (8 bytes, returned by GET_TTY_DATA) */
+    uid_t      tty_uid;        /* 0x60: TTY UID (8 bytes, returned by GET_TTY_DATA) */
     uint32_t    cr_rec;         /* 0x68: Creation record pointer */
     uint32_t    cr_rec_2;       /* 0x6C: Creation record data */
 
@@ -224,14 +224,14 @@ typedef struct pgroup_entry_t {
     #define PGROUP_ENTRY(idx)       ((pgroup_entry_t*)(PGROUP_TABLE_BASE + (idx) * 8))
 
     /* Process UID storage */
-    #define PROC2_UID               (*(uid_$t*)0xE7BE8C)
+    #define PROC2_UID               (*(uid_t*)0xE7BE8C)
 #else
     extern proc2_info_t *p2_info_table;
     extern uint16_t p2_info_alloc_ptr;
     extern uint16_t p2_free_list_head;
     extern uint16_t *p2_pid_to_index_table;
     extern pgroup_entry_t *pgroup_table;
-    extern uid_$t proc2_uid;
+    extern uid_t proc2_uid;
     #define P2_INFO_TABLE           p2_info_table
     #define P2_INFO_ENTRY(idx)      (&p2_info_table[(idx) - 1])
     #define P2_INFO_ALLOC_PTR       p2_info_alloc_ptr
@@ -277,26 +277,26 @@ uint16_t PROC2_$MY_PID(void);
  * PROC2_$GET_PID - Get PID from UID
  * Original address: 0x00e40cba
  */
-uint16_t PROC2_$GET_PID(uid_$t *proc_uid, status_$t *status_ret);
+uint16_t PROC2_$GET_PID(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$FIND_INDEX - Find process table index by UID
  * Returns: Index in process table, 0 if not found
  * Original address: 0x00e4068e
  */
-int16_t PROC2_$FIND_INDEX(uid_$t *proc_uid, status_$t *status_ret);
+int16_t PROC2_$FIND_INDEX(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$GET_ASID - Get address space ID for process
  * Original address: 0x00e40702
  */
-void PROC2_$GET_ASID(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$GET_ASID(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$FIND_ASID - Find process by UID and return ASID/UPID
  * Original address: 0x00e40724
  */
-uint16_t PROC2_$FIND_ASID(uid_$t *proc_uid, int8_t *param_2, status_$t *status_ret);
+uint16_t PROC2_$FIND_ASID(uid_t *proc_uid, int8_t *param_2, status_$t *status_ret);
 
 /*
  * PROC2_$UPID_TO_UID - Convert Unix PID to UID
@@ -304,7 +304,7 @@ uint16_t PROC2_$FIND_ASID(uid_$t *proc_uid, int8_t *param_2, status_$t *status_r
  * Returns proc2_$uid_not_found if not found, proc2_$zombie if zombie.
  * Original address: 0x00e40ece
  */
-void PROC2_$UPID_TO_UID(int16_t *upid, uid_$t *uid_ret, status_$t *status_ret);
+void PROC2_$UPID_TO_UID(int16_t *upid, uid_t *uid_ret, status_$t *status_ret);
 
 /*
  * PROC2_$UID_TO_UPID - Convert UID to Unix PID
@@ -312,7 +312,7 @@ void PROC2_$UPID_TO_UID(int16_t *upid, uid_$t *uid_ret, status_$t *status_ret);
  * Returns proc2_$uid_not_found if not found, proc2_$zombie if zombie.
  * Original address: 0x00e40f6c
  */
-void PROC2_$UID_TO_UPID(uid_$t *proc_uid, uint16_t *upid_ret, status_$t *status_ret);
+void PROC2_$UID_TO_UPID(uid_t *proc_uid, uint16_t *upid_ret, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -324,14 +324,14 @@ void PROC2_$UID_TO_UPID(uid_$t *proc_uid, uint16_t *upid_ret, status_$t *status_
  * PROC2_$SET_NAME - Set process name
  * Original address: 0x00e3ea2c
  */
-void PROC2_$SET_NAME(char *name, int16_t *name_len, uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$SET_NAME(char *name, int16_t *name_len, uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$NAME_TO_UID - Find process by name
  * Searches for a process with the given name and returns its UID.
  * Original address: 0x00e3ead0
  */
-void PROC2_$NAME_TO_UID(char *name, int16_t *name_len, uid_$t *uid_ret, status_$t *status_ret);
+void PROC2_$NAME_TO_UID(char *name, int16_t *name_len, uid_t *uid_ret, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -350,7 +350,7 @@ void PROC2_$INFO(int16_t *pid, int16_t *offset, void *info, uint16_t *info_len,
  * PROC2_$GET_INFO - Get process info by UID
  * Original address: 0x00e4086e
  */
-void PROC2_$GET_INFO(uid_$t *proc_uid, void *info, uint16_t *info_len, status_$t *status_ret);
+void PROC2_$GET_INFO(uid_t *proc_uid, void *info, uint16_t *info_len, status_$t *status_ret);
 
 /*
  * PROC2_$LIST - List process UIDs
@@ -358,14 +358,14 @@ void PROC2_$GET_INFO(uid_$t *proc_uid, void *info, uint16_t *info_len, status_$t
  * First entry is always system process UID.
  * Original address: 0x00e402f0
  */
-void PROC2_$LIST(uid_$t *uid_list, uint16_t *max_count, uint16_t *count);
+void PROC2_$LIST(uid_t *uid_list, uint16_t *max_count, uint16_t *count);
 
 /*
  * PROC2_$LIST2 - List processes (extended)
  * Iterates all 57 slots. Filters: (flags & 0x180) == 0x180
  * Original address: 0x00e40402
  */
-void PROC2_$LIST2(uid_$t *uid_list, uint16_t *max_count, uint16_t *count,
+void PROC2_$LIST2(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
                   int32_t *start_index, uint8_t *more_flag, int32_t *last_index);
 
 /*
@@ -373,7 +373,7 @@ void PROC2_$LIST2(uid_$t *uid_list, uint16_t *max_count, uint16_t *count,
  * Iterates all 57 slots. Filters: (flags & 0x2100) == 0x2100
  * Original address: 0x00e40548
  */
-void PROC2_$ZOMBIE_LIST(uid_$t *uid_list, uint16_t *max_count, uint16_t *count,
+void PROC2_$ZOMBIE_LIST(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
                         int32_t *start_index, uint8_t *more_flag, int32_t *last_index);
 
 /*
@@ -382,14 +382,14 @@ void PROC2_$ZOMBIE_LIST(uid_$t *uid_list, uint16_t *max_count, uint16_t *count,
  * Key must be 0 (only valid key). Returns bad_eventcount_key otherwise.
  * Original address: 0x00e400c2
  */
-void PROC2_$GET_EC(uid_$t *proc_uid, int16_t *key, void **ec_ret, status_$t *status_ret);
+void PROC2_$GET_EC(uid_t *proc_uid, int16_t *key, void **ec_ret, status_$t *status_ret);
 
 /*
  * PROC2_$GET_CR_REC - Get creation record UIDs
  * Converts EC handle to process index, returns parent and process UIDs.
  * Original address: 0x00e4015c
  */
-void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_$t *parent_uid, uid_$t *proc_uid,
+void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_t *parent_uid, uid_t *proc_uid,
                        status_$t *status_ret);
 
 /*
@@ -418,10 +418,10 @@ void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_$t *parent_uid, uid_$t *proc_uid
  *
  * Original address: 0x00e726ec
  */
-void PROC2_$CREATE(uid_$t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
+void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
                    int32_t *entry_point, int32_t *user_data,
                    uint32_t reserved1, uint32_t reserved2,
-                   uint8_t *flags, uid_$t *uid_ret, void **ec_ret,
+                   uint8_t *flags, uid_t *uid_ret, void **ec_ret,
                    status_$t *status_ret);
 
 /*
@@ -443,7 +443,7 @@ void PROC2_$CREATE(uid_$t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
  * Original address: 0x00e72bce
  */
 void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
-                 uid_$t *uid_ret, uint32_t reserved, uint16_t *upid_ret,
+                 uid_t *uid_ret, uint32_t reserved, uint16_t *upid_ret,
                  void **ec_ret, status_$t *status_ret);
 
 /*
@@ -474,7 +474,7 @@ void PROC2_$COMPLETE_FORK(status_$t *status_ret);
  *
  * Original address: 0x00e73638
  */
-void PROC2_$COMPLETE_VFORK(uid_$t *proc_uid, uint32_t *code_desc, uint32_t *map_param,
+void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_param,
                            int32_t *entry_point, int32_t *user_data,
                            uint32_t reserved1, uint32_t reserved2,
                            status_$t *status_ret);
@@ -513,33 +513,33 @@ void PROC2_$SET_VALID(void);
  * Checks permissions, then delivers signal via internal helper.
  * Original address: 0x00e3efa0
  */
-void PROC2_$SIGNAL(uid_$t *proc_uid, int16_t *signal, uint32_t *param, status_$t *status_ret);
+void PROC2_$SIGNAL(uid_t *proc_uid, int16_t *signal, uint32_t *param, status_$t *status_ret);
 
 /*
  * PROC2_$SIGNAL_OS - Send signal (OS internal, no permission check)
  * Original address: 0x00e3f0a6
  */
-void PROC2_$SIGNAL_OS(uid_$t *proc_uid, int16_t *signal, uint32_t *param, status_$t *status_ret);
+void PROC2_$SIGNAL_OS(uid_t *proc_uid, int16_t *signal, uint32_t *param, status_$t *status_ret);
 
 /*
  * PROC2_$QUIT - Send SIGQUIT to process
  * Wrapper that calls SIGNAL with SIGQUIT (3).
  * Original address: 0x00e3f130
  */
-void PROC2_$QUIT(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$QUIT(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$SIGNAL_PGROUP - Send signal to process group
  * Original address: 0x00e3f23e
  */
-void PROC2_$SIGNAL_PGROUP(uid_$t *pgroup_uid, int16_t *signal, uint32_t *param,
+void PROC2_$SIGNAL_PGROUP(uid_t *pgroup_uid, int16_t *signal, uint32_t *param,
                           status_$t *status_ret);
 
 /*
  * PROC2_$SIGNAL_PGROUP_OS - Send signal to process group (OS)
  * Original address: 0x00e3f2c2
  */
-void PROC2_$SIGNAL_PGROUP_OS(uid_$t *pgroup_uid, int16_t *signal, uint32_t *param,
+void PROC2_$SIGNAL_PGROUP_OS(uid_t *pgroup_uid, int16_t *signal, uint32_t *param,
                              status_$t *status_ret);
 
 /*
@@ -550,7 +550,7 @@ void PROC2_$SIGNAL_PGROUP_OS(uid_$t *pgroup_uid, int16_t *signal, uint32_t *para
  * Returns 0 if not found.
  * Original address: 0x00e42272
  */
-int16_t PROC2_$UID_TO_PGROUP_INDEX(uid_$t *pgroup_uid);
+int16_t PROC2_$UID_TO_PGROUP_INDEX(uid_t *pgroup_uid);
 
 /*
  * PROC2_$ACKNOWLEDGE - Acknowledge signal delivery
@@ -639,13 +639,13 @@ void PROC2_$SIGPAUSE(uint32_t *new_mask, uint32_t *result);
  * PROC2_$SUSPEND - Suspend a process
  * Original address: 0x00e4126a
  */
-void PROC2_$SUSPEND(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$SUSPEND(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$RESUME - Resume a process
  * Original address: 0x00e413da
  */
-void PROC2_$RESUME(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$RESUME(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$WAIT - Wait for child process
@@ -662,7 +662,7 @@ int16_t PROC2_$WAIT(uint16_t *options, int16_t *pid, uint32_t *result,
  * PROC2_$MAKE_ORPHAN - Make process an orphan
  * Original address: 0x00e40d1a
  */
-void PROC2_$MAKE_ORPHAN(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$MAKE_ORPHAN(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$SHUTDOWN - Shutdown all other processes
@@ -684,14 +684,14 @@ void PROC2_$SHUTDOWN(void);
  * new_upgid is the new process group ID (0 to leave current pgroup).
  * Original address: 0x00e410c8
  */
-void PROC2_$SET_PGROUP(uid_$t *proc_uid, uint16_t *new_upgid, status_$t *status_ret);
+void PROC2_$SET_PGROUP(uid_t *proc_uid, uint16_t *new_upgid, status_$t *status_ret);
 
 /*
  * PROC2_$LIST_PGROUP - List process group members
  * Returns UIDs of all processes in the specified process group.
  * Original address: 0x00e401ea
  */
-void PROC2_$LIST_PGROUP(uid_$t *pgroup_uid, uid_$t *uid_list, uint16_t *max_count, uint16_t *count);
+void PROC2_$LIST_PGROUP(uid_t *pgroup_uid, uid_t *uid_list, uint16_t *max_count, uint16_t *count);
 
 /*
  * PROC2_$PGROUP_INFO - Get process group info
@@ -707,7 +707,7 @@ void PROC2_$PGROUP_INFO(uint16_t *pgroup_id, uint16_t *session_id_ret,
  * Creates a synthetic UID from the UPGID by combining with UID_NIL.
  * Original address: 0x00e4100c
  */
-void PROC2_$UPGID_TO_UID(uint16_t *upgid, uid_$t *uid_ret, status_$t *status_ret);
+void PROC2_$UPGID_TO_UID(uint16_t *upgid, uid_t *uid_ret, status_$t *status_ret);
 
 /*
  * PROC2_$PGUID_TO_UPGID - Convert process group UID to UPGID
@@ -715,7 +715,7 @@ void PROC2_$UPGID_TO_UID(uint16_t *upgid, uid_$t *uid_ret, status_$t *status_ret
  * For real process UIDs, looks up parent's UPGID.
  * Original address: 0x00e41072
  */
-void PROC2_$PGUID_TO_UPGID(uid_$t *pgroup_uid, uint16_t *upgid_ret, status_$t *status_ret);
+void PROC2_$PGUID_TO_UPGID(uid_t *pgroup_uid, uint16_t *upgid_ret, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -727,19 +727,19 @@ void PROC2_$PGUID_TO_UPGID(uid_$t *pgroup_uid, uint16_t *upgid_ret, status_$t *s
  * PROC2_$DEBUG - Start debugging a process
  * Original address: 0x00e41620
  */
-void PROC2_$DEBUG(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$DEBUG(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$OVERRIDE_DEBUG - Override debug settings
  * Original address: 0x00e41722
  */
-void PROC2_$OVERRIDE_DEBUG(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$UNDEBUG - Stop debugging a process
  * Original address: 0x00e41810
  */
-void PROC2_$UNDEBUG(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$UNDEBUG(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$GET_DEBUGGER_PID - Get debugger's PID
@@ -751,7 +751,7 @@ uint16_t PROC2_$GET_DEBUGGER_PID(void);
  * PROC2_$GET_REGS - Get process registers
  * Original address: 0x00e41d9e
  */
-void PROC2_$GET_REGS(uid_$t *proc_uid, void *regs, status_$t *status_ret);
+void PROC2_$GET_REGS(uid_t *proc_uid, void *regs, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -773,7 +773,7 @@ void PROC2_$AWAKEN_GUARDIAN(int16_t *proc_index);
  * Modifies bit 1 of the process flags field.
  * Original address: 0x00e41468
  */
-void PROC2_$SET_SERVER(uid_$t *proc_uid, int8_t *server_flag, status_$t *status_ret);
+void PROC2_$SET_SERVER(uid_t *proc_uid, int8_t *server_flag, status_$t *status_ret);
 
 /*
  * PROC2_$SET_STACK_TRUNC_SIZE - Set stack truncation size
@@ -787,7 +787,7 @@ void PROC2_$SET_STACK_TRUNC_SIZE(void);
  * Calls PROC1_$SET_PRIORITY with the process's level1_pid.
  * Original address: 0x00e414de
  */
-void PROC2_$SET_PRIORITY(uid_$t *proc_uid, uint16_t *priority_1, uint16_t *priority_2,
+void PROC2_$SET_PRIORITY(uid_t *proc_uid, uint16_t *priority_1, uint16_t *priority_2,
                          status_$t *status_ret);
 
 /*
@@ -804,7 +804,7 @@ void PROC2_$SET_CLEANUP(uint16_t bit_num);
  * Sets accounting string (max 32 bytes) and accounting UID.
  * Original address: 0x00e41ac0
  */
-void PROC2_$SET_ACCT_INFO(uint8_t *info, int16_t *info_len, uid_$t *acct_uid,
+void PROC2_$SET_ACCT_INFO(uint8_t *info, int16_t *info_len, uid_t *acct_uid,
                           status_$t *status_ret);
 
 /*
@@ -819,14 +819,14 @@ void PROC2_$GET_BOOT_FLAGS(int16_t *flags_ret);
  * Returns tty_uid (8 bytes) and tty_flags (2 bytes) from current process.
  * Original address: 0x00e41bb8
  */
-void PROC2_$GET_TTY_DATA(uid_$t *tty_uid, uint16_t *tty_flags);
+void PROC2_$GET_TTY_DATA(uid_t *tty_uid, uint16_t *tty_flags);
 
 /*
  * PROC2_$SET_TTY - Set TTY for current process
  * Sets the controlling TTY UID. Takes only one parameter (no status return).
  * Original address: 0x00e41c04
  */
-void PROC2_$SET_TTY(uid_$t *tty_uid);
+void PROC2_$SET_TTY(uid_t *tty_uid);
 
 /*
  * PROC2_$SET_SESSION_ID - Set session ID
@@ -856,13 +856,13 @@ void PROC2_$ALIGN_CTL(int param_1, int param_2, uint16_t *result_1,
  * Looks up current process in PROC2 table and returns its UID.
  * Original address: 0x00e73862
  */
-void PROC2_$WHO_AM_I(uid_$t *proc_uid);
+void PROC2_$WHO_AM_I(uid_t *proc_uid);
 
 /*
  * PROC2_$GET_UPIDS - Get Unix PIDs for process
  * Original address: 0x00e738a8
  */
-void PROC2_$GET_UPIDS(uid_$t *proc_uid, uint16_t *upid, uint16_t *upgid, uint16_t *uppid,
+void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid, uint16_t *upgid, uint16_t *uppid,
                       status_$t *status_ret);
 
 /*

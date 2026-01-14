@@ -11,7 +11,7 @@
 extern short PROC1_$CURRENT;
 
 // External UIDs
-extern uid_$t RGYC_$G_LOCKSMITH_UID;
+extern uid_t RGYC_$G_LOCKSMITH_UID;
 
 // External flags
 extern char NETWORK_$REALLY_DISKLESS;
@@ -36,7 +36,7 @@ extern void MST_$WIRE_AREA(m68k_ptr_t *start, m68k_ptr_t *end,
                            void *buf, const void *param, void *result);
 
 // External ACL functions
-extern void ACL_$GET_RE_SIDS(void *buf, uid_$t *uid, status_$t *status);
+extern void ACL_$GET_RE_SIDS(void *buf, uid_t *uid, status_$t *status);
 
 // External display and time functions
 extern void CRASH_SHOW_STRING(const char *str);
@@ -68,7 +68,7 @@ void OS_$SHUTDOWN(status_$t *status_p)
 {
     status_$t local_status;
     status_$t status;
-    uid_$t caller_uid;
+    uid_t caller_uid;
     char acl_buf[40];
     char wire_buf[400];
     char err_buf[104];

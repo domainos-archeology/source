@@ -118,7 +118,7 @@ typedef struct tty_desc {
   uint16_t reserved_4A; // 0x4A: Reserved
 
   // Process group ownership (0x4C-0x5B)
-  uid_$t pgroup_uid;            // 0x4C: Process group UID (8 bytes)
+  uid_t pgroup_uid;             // 0x4C: Process group UID (8 bytes)
   uint16_t session_id;          // 0x54: Session ID
   uint16_t saved_input_flags;   // 0x56: Saved input flags state
   uint16_t current_input_flags; // 0x58: Current input flags
@@ -396,14 +396,14 @@ extern void TTY_$K_INQ_INPUT_BREAK_MODE(short *line_ptr, void *mode_ptr,
 // @param line_ptr: Pointer to terminal line number
 // @param uid_ptr: Pointer to UID structure
 // @param status: Pointer to receive status code
-extern void TTY_$K_SET_PGROUP(short *line_ptr, uid_$t *uid_ptr,
+extern void TTY_$K_SET_PGROUP(short *line_ptr, uid_t *uid_ptr,
                               status_$t *status);
 
 // TTY_$K_INQ_PGROUP - Inquire process group UID
 // @param line_ptr: Pointer to terminal line number
 // @param uid_ptr: Pointer to receive UID structure
 // @param status: Pointer to receive status code
-extern void TTY_$K_INQ_PGROUP(short *line_ptr, uid_$t *uid_ptr,
+extern void TTY_$K_INQ_PGROUP(short *line_ptr, uid_t *uid_ptr,
                               status_$t *status);
 
 // TTY_$K_SET_SESSION_ID - Set session ID

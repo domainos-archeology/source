@@ -12,7 +12,7 @@
 
 #include "proc2.h"
 
-void PROC2_$SET_TTY(uid_$t *tty_uid)
+void PROC2_$SET_TTY(uid_t *tty_uid)
 {
     proc2_info_t *info;
     uint16_t index;

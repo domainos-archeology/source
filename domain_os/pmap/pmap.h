@@ -126,7 +126,7 @@ extern int32_t LOG_$UPDATE(void);
 /*
  * NETLOG functions
  */
-extern void NETLOG_$LOG_IT(uint16_t type, uid_$t *uid, uint16_t count, uint16_t status,
+extern void NETLOG_$LOG_IT(uint16_t type, uid_t *uid, uint16_t count, uint16_t status,
                            int16_t disk1_hi, int16_t disk1_lo,
                            int16_t disk2_hi, int16_t disk2_lo);
 

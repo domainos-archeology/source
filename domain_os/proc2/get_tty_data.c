@@ -15,7 +15,7 @@
 /* External reference to current PROC1 process */
 extern uint16_t PROC1_CURRENT;
 
-void PROC2_$GET_TTY_DATA(uid_$t *tty_uid, uint16_t *tty_flags)
+void PROC2_$GET_TTY_DATA(uid_t *tty_uid, uint16_t *tty_flags)
 {
     int16_t my_index;
     proc2_info_t *entry;

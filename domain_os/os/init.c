@@ -15,7 +15,7 @@ extern char NETWORK_$DISKLESS;
 extern char NETWORK_$REALLY_DISKLESS;
 extern char NETWORK_$DO_CHKSUM;
 extern uint32_t NETWORK_$MOTHER_NODE;
-extern uid_$t NETWORK_$PAGING_FILE_UID;
+extern uid_t NETWORK_$PAGING_FILE_UID;
 
 // External disk flag
 extern char DISK_$DO_CHKSUM;
@@ -24,12 +24,12 @@ extern char DISK_$DO_CHKSUM;
 extern char PMAP_$SHUTTING_DOWN_FLAG;
 
 // External UIDs
-extern uid_$t UID_$NIL;
-extern uid_$t OS_WIRED_$UID;
-extern uid_$t DISPLAY1_$UID;
-extern uid_$t NAME_$NODE_UID;
-extern uid_$t ACL_$FNDWRX;
-extern uid_$t LV_LABEL_$UID;
+extern uid_t UID_$NIL;
+extern uid_t OS_WIRED_$UID;
+extern uid_t DISPLAY1_$UID;
+extern uid_t NAME_$NODE_UID;
+extern uid_t ACL_$FNDWRX;
+extern uid_t LV_LABEL_$UID;
 
 // External process identifiers
 extern short PROC1_$CURRENT;
@@ -124,7 +124,7 @@ extern void AST_$PMAP_ASSOC(void *param1, short param2, uint32_t param3,
 extern void AREA_$INIT(void);
 extern void DISK_$INIT(void);
 extern void DBUF_$INIT(void);
-extern void *DBUF_$GET_BLOCK(short volx, short param2, uid_$t *uid,
+extern void *DBUF_$GET_BLOCK(short volx, short param2, uid_t *uid,
                              short param4, short param5, status_$t *status);
 extern void DBUF_$SET_BUFF(void *buf, short mode, status_$t *status);
 extern void SOCK_$INIT(void);
@@ -132,14 +132,14 @@ extern void NETWORK_$INIT(void);
 extern void NETWORK_$LOAD(void);
 extern void NETWORK_$ADD_REQUEST_SERVERS(void *param, status_$t *status);
 extern void FILE_$LOCK_INIT(void);
-extern void FILE_$LOCK(uid_$t *uid, void *param2, void *param3,
+extern void FILE_$LOCK(uid_t *uid, void *param2, void *param3,
                        void *param4, void *buf, status_$t *status);
-extern void FILE_$SET_LEN(uid_$t *uid, void *len, status_$t *status);
-extern void FILE_$SET_REFCNT(uid_$t *uid, void *param, status_$t *status);
+extern void FILE_$SET_LEN(uid_t *uid, void *len, status_$t *status);
+extern void FILE_$SET_REFCNT(uid_t *uid, void *param, status_$t *status);
 extern void HINT_$INIT(void);
 extern void HINT_$INIT_CACHE(void);
 extern void HINT_$ADD_NET(short port);
-extern void NAME_$INIT(uid_$t *uid1, uid_$t *uid2);
+extern void NAME_$INIT(uid_t *uid1, uid_t *uid2);
 extern void NAME_$SET_WDIR(const char *path, void *param, status_$t *status);
 extern void LOG_$INIT(void);
 extern void XPD_$INIT(void);
@@ -151,9 +151,9 @@ extern void AUDIT_$INIT(void);
 // External volume functions
 extern void VOLX_$MOUNT(void *boot_device, void *param2, void *param3,
                         void *param4, void *param5, void *param6,
-                        uid_$t *uid, uid_$t *uid_out, status_$t *status);
+                        uid_t *uid, uid_t *uid_out, status_$t *status);
 extern status_$t VOLX_$SHUTDOWN(void);
-extern void VOLX_$REC_ENTRY(void *param1, uid_$t *uid);
+extern void VOLX_$REC_ENTRY(void *param1, uid_t *uid);
 extern void VTOCE_$READ(void *param1, void *param2, status_$t *status);
 
 // External calendar functions
@@ -162,7 +162,7 @@ extern uint32_t CAL_$CLOCK_TO_SEC(void *clock);
 extern void CAL_$SEC_TO_CLOCK(uint32_t *sec, void *clock);
 
 // External MST functions
-extern void MST_$MAP_CANNED_AT(uint32_t vaddr, uid_$t *uid, uint32_t offset,
+extern void MST_$MAP_CANNED_AT(uint32_t vaddr, uid_t *uid, uint32_t offset,
                                 uint32_t size, uint32_t prot, uint32_t flags,
                                 uint32_t param, status_$t *status);
 extern uint16_t MST_$ALLOC_ASID(status_$t *status);
@@ -213,9 +213,9 @@ typedef struct {
 // Diskless boot info structure
 typedef struct {
     uint32_t mother_node;     // 0x00: Mother node ID
-    uid_$t paging_file_uid;   // 0x04: Paging file UID
-    uid_$t param3;            // 0x0C: Additional UID
-    uid_$t extra_uids[3];     // 0x14: Extra UIDs
+    uid_t paging_file_uid;   // 0x04: Paging file UID
+    uid_t param3;            // 0x0C: Additional UID
+    uid_t extra_uids[3];     // 0x14: Extra UIDs
 } diskless_info_t;
 
 void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
@@ -224,7 +224,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     short boot_device;
     uint16_t boot_flags;
     uint32_t boot_info;
-    uid_$t local_uid1, local_uid2;
+    uid_t local_uid1, local_uid2;
     char diskless_flag;
     char has_calendar;
     short term_param1, term_param2;
@@ -438,7 +438,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
         if (vol_unit == 0) vol_unit = 1;
 
         VOLX_$MOUNT(&boot_device, NULL, &boot_info, &vol_unit, NULL, NULL,
-                    &UID_$NIL, (uid_$t *)local_buf, &status);
+                    &UID_$NIL, (uid_t *)local_buf, &status);
 
         if (status == status_$disk_needs_salvaging) {
             FUN_00e6d1cc("    BOOT VOLUME NEEDS SALVAGING");
@@ -450,7 +450,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
                 CRASH_SYSTEM(&OS_BAT_disk_needs_salvaging_err);
             }
             VOLX_$MOUNT(&boot_device, NULL, &boot_info, &vol_unit, NULL, NULL,
-                        &UID_$NIL, (uid_$t *)local_buf, &status);
+                        &UID_$NIL, (uid_t *)local_buf, &status);
         }
 
         if (status != status_$ok) {

@@ -27,7 +27,7 @@
     #define FIM_DELIV_EC(asid)  (&fim_deliv_ec_table[(asid)])
 #endif
 
-void PROC2_$GET_EC(uid_$t *proc_uid, int16_t *key, void **ec_ret, status_$t *status_ret)
+void PROC2_$GET_EC(uid_t *proc_uid, int16_t *key, void **ec_ret, status_$t *status_ret)
 {
     int16_t proc_idx;
     proc2_info_t *entry;

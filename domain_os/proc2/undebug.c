@@ -24,9 +24,9 @@
 /* Internal helper to clear debug state */
 extern void DEBUG_CLEAR_INTERNAL(int16_t proc_idx, int8_t flag);
 
-void PROC2_$UNDEBUG(uid_$t *proc_uid, status_$t *status_ret)
+void PROC2_$UNDEBUG(uid_t *proc_uid, status_$t *status_ret)
 {
-    uid_$t uid;
+    uid_t uid;
     status_$t status;
     int16_t proc_idx;
     int16_t current_idx;

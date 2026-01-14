@@ -47,13 +47,13 @@ static void detach_from_parent(int16_t child_idx, int16_t prev_sibling_idx);
     #define P2_CHILD_FIELD(idx)     (p2_dummy_field)
 #endif
 
-void PROC2_$MAKE_ORPHAN(uid_$t *proc_uid, status_$t *status_ret)
+void PROC2_$MAKE_ORPHAN(uid_t *proc_uid, status_$t *status_ret)
 {
     int16_t target_idx;
     int16_t parent_idx;
     int16_t sibling_idx;
     status_$t status;
-    uid_$t uid_copy;
+    uid_t uid_copy;
 
     /* Copy UID to local storage */
     uid_copy = *proc_uid;

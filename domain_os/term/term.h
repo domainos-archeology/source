@@ -39,8 +39,8 @@ _Static_assert(sizeof(dtte_t) == 0x38, "dtte_t must be 56 bytes");
 // =============================================================================
 typedef struct term_line_data {
   char reserved_000[0x1a4]; // 0x000: unknown
-  uid_$t owner_uid;         // 0x1a4: UID of owning process
-  char reserved_1ac[0x4dc - 0x1a4 - sizeof(uid_$t)]; // 0x1ac to end
+  uid_t owner_uid;         // 0x1a4: UID of owning process
+  char reserved_1ac[0x4dc - 0x1a4 - sizeof(uid_t)]; // 0x1ac to end
 } term_line_data_t;
 
 // Verify structure size

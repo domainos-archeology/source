@@ -22,7 +22,7 @@
 /* EC1 eventcount entry size for calculating process index */
 #define EC1_ENTRY_SIZE      0x18        /* 24 bytes per entry */
 
-void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_$t *parent_uid, uid_$t *proc_uid,
+void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_t *parent_uid, uid_t *proc_uid,
                        status_$t *status_ret)
 {
     ec2_$eventcount_t ec2;

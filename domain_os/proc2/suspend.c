@@ -56,7 +56,7 @@ static int8_t try_suspend(int16_t index, status_$t *status, int8_t *suspend_resu
     return result;
 }
 
-void PROC2_$SUSPEND(uid_$t *proc_uid, status_$t *status_ret)
+void PROC2_$SUSPEND(uid_t *proc_uid, status_$t *status_ret)
 {
     int16_t index;
     proc2_info_t *info;

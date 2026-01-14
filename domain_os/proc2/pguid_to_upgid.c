@@ -18,7 +18,7 @@
 /* Internal helper: get UPGID from UID
  * Original address: 0x00e422cc
  */
-static uint16_t PROC2_$UID_TO_UPGID_INTERNAL(uid_$t *pgroup_uid)
+static uint16_t PROC2_$UID_TO_UPGID_INTERNAL(uid_t *pgroup_uid)
 {
     uint16_t upgid;
     int16_t index;
@@ -53,7 +53,7 @@ static uint16_t PROC2_$UID_TO_UPGID_INTERNAL(uid_$t *pgroup_uid)
     return upgid;
 }
 
-void PROC2_$PGUID_TO_UPGID(uid_$t *pgroup_uid, uint16_t *upgid_ret, status_$t *status_ret)
+void PROC2_$PGUID_TO_UPGID(uid_t *pgroup_uid, uint16_t *upgid_ret, status_$t *status_ret)
 {
     uint16_t upgid;
 

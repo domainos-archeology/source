@@ -24,7 +24,7 @@
 extern status_$t FUN_00e43f40(uint16_t asid, uint16_t flags, void *table_ptr);
 
 /* External: OS wired memory UID */
-extern uid_$t OS_WIRED_$UID;
+extern uid_t OS_WIRED_$UID;
 
 /*
  * MST_$ALLOC_ASID - Allocate a new Address Space ID

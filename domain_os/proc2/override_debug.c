@@ -22,7 +22,7 @@
 #include "proc2.h"
 
 /* External globals */
-extern uid_$t UID_$NIL;
+extern uid_t UID_$NIL;
 
 /* ACL permission check for debug rights */
 extern int8_t ACL_$CHECK_DEBUG_RIGHTS(uint16_t *pid);
@@ -30,9 +30,9 @@ extern int8_t ACL_$CHECK_DEBUG_RIGHTS(uint16_t *pid);
 /* Internal helper to set up debug relationship */
 extern void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag);
 
-void PROC2_$OVERRIDE_DEBUG(uid_$t *proc_uid, status_$t *status_ret)
+void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret)
 {
-    uid_$t uid;
+    uid_t uid;
     status_$t status;
     int16_t target_idx;
     int16_t debugger_idx;

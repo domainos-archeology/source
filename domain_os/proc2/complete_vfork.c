@@ -26,7 +26,7 @@
 #include "ec/ec.h"
 
 /* External globals */
-extern uid_$t UID_$NIL;
+extern uid_t UID_$NIL;
 
 /* Global storage addresses */
 #if defined(M68K)
@@ -40,7 +40,7 @@ extern uid_$t UID_$NIL;
     extern uint32_t as_init_stack_file_size;
     extern int32_t *fim_user_fim_addr_table;
     extern uint8_t *fim_quit_inh_table;
-    extern uid_$t uid_table[];
+    extern uid_t uid_table[];
     #define AS_$STACK_FILE_LOW          as_stack_file_low
     #define AS_$INIT_STACK_FILE_SIZE    as_init_stack_file_size
     #define FIM_USER_FIM_ADDR_TABLE     fim_user_fim_addr_table
@@ -60,7 +60,7 @@ extern uid_$t UID_$NIL;
 
 /* External functions */
 extern void FIM_$FP_INIT(uint16_t asid);
-extern void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_$t *parent_uid,
+extern void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
                                    uint32_t map_param, uint32_t flags, status_$t *status_ret);
 extern void MST_$MAP_AREA_AT(void *size_ptr, void *param_ptr, void *param2, void *param3,
                               void *dest, status_$t *status_ret);
@@ -76,17 +76,17 @@ typedef struct cr_rec_t {
     uint8_t     pad_00[0x94];
     status_$t   status;         /* 0x94: Status from map operation */
     uint8_t     pad_98[0x10];
-    uid_$t      cr_uid;         /* 0xA8: Creation record UID */
+    uid_t      cr_uid;         /* 0xA8: Creation record UID */
     uint32_t    stack_low;      /* 0xB0: Stack file low address */
     uint32_t    stack_size;     /* 0xB4: Stack file size */
 } cr_rec_t;
 
-void PROC2_$COMPLETE_VFORK(uid_$t *proc_uid, uint32_t *code_desc, uint32_t *map_param,
+void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_param,
                            int32_t *entry_point, int32_t *user_data,
                            uint32_t reserved1, uint32_t reserved2,
                            status_$t *status_ret)
 {
-    uid_$t local_uid;
+    uid_t local_uid;
     uint32_t local_code_desc;
     uint32_t local_map_param;
     int32_t local_entry_point;

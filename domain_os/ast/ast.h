@@ -250,7 +250,6 @@ extern uint16_t ast_aste_l_cnt;
 /*
  * External references
  */
-extern uid_t UID_$NIL;
 extern uint32_t NODE_$ME;
 extern int8_t NETWORK_$REALLY_DISKLESS;
 extern int8_t NETLOG_$OK_TO_LOG;

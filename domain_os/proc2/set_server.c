@@ -14,7 +14,7 @@
 
 #include "proc2.h"
 
-void PROC2_$SET_SERVER(uid_$t *proc_uid, int8_t *server_flag, status_$t *status_ret)
+void PROC2_$SET_SERVER(uid_t *proc_uid, int8_t *server_flag, status_$t *status_ret)
 {
     int8_t flag_val;
     int16_t index;

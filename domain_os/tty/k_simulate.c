@@ -8,7 +8,7 @@
 
 // External process functions
 extern void PROC2_$GET_MY_UPIDS(short *upid, short *reserved1, short *upgid);
-extern void PROC2_$UPGID_TO_UID(short *upgid, uid_$t *uid, status_$t *status);
+extern void PROC2_$UPGID_TO_UID(short *upgid, uid_t *uid, status_$t *status);
 
 void TTY_$K_SIMULATE_TERMINAL_INPUT(short *line_ptr, char *ch_ptr, status_$t *status)
 {
@@ -19,7 +19,7 @@ void TTY_$K_SIMULATE_TERMINAL_INPUT(short *line_ptr, char *ch_ptr, status_$t *st
     short upid;
     short reserved1;
     short upgid[3];
-    uid_$t my_uid;
+    uid_t my_uid;
 
     // Get TTY descriptor for this line
     tty = TTY_$I_GET_DESC(*line_ptr, status);

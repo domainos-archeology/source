@@ -19,7 +19,7 @@
 
 #include "proc2.h"
 
-void PROC2_$UID_TO_UPID(uid_$t *proc_uid, uint16_t *upid_ret, status_$t *status_ret)
+void PROC2_$UID_TO_UPID(uid_t *proc_uid, uint16_t *upid_ret, status_$t *status_ret)
 {
     uint32_t search_high;
     uint32_t search_low;

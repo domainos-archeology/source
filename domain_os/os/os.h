@@ -84,7 +84,7 @@ extern void OS_$GET_REV_INFO(void *buf);
 // @param param_2: Virtual address parameter
 // @param size: Pointer to size of display memory
 // @param touch: Pointer to touch flag (if true, touch all pages)
-extern void OS_$INSTALL_DISPLAY_ASTE(uid_$t *uid, void *param_2,
+extern void OS_$INSTALL_DISPLAY_ASTE(uid_t *uid, void *param_2,
                                      int *size, char *touch);
 
 // =============================================================================

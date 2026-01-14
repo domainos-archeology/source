@@ -27,7 +27,7 @@
 #include "misc/misc.h"
 
 /* External globals */
-extern uid_$t UID_$NIL;
+extern uid_t UID_$NIL;
 extern uint32_t FIM_$INITIAL_STACK_SIZE;
 
 /* FIM globals for user FIM address */
@@ -82,7 +82,7 @@ typedef struct startup_context_t {
 } startup_context_t;
 
 void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
-                 uid_$t *uid_ret, uint32_t reserved, uint16_t *upid_ret,
+                 uid_t *uid_ret, uint32_t reserved, uint16_t *upid_ret,
                  void **ec_ret, status_$t *status_ret)
 {
     status_$t status;

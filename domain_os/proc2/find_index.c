@@ -21,7 +21,7 @@
 
 #include "proc2.h"
 
-int16_t PROC2_$FIND_INDEX(uid_$t *proc_uid, status_$t *status_ret)
+int16_t PROC2_$FIND_INDEX(uid_t *proc_uid, status_$t *status_ret)
 {
     int16_t index;
     proc2_info_t *entry;

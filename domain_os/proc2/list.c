@@ -22,19 +22,19 @@ extern void FIM_$POP_SIGNAL(void *context);
 
 /* System process UID at table base */
 #if defined(M68K)
-#define PROC2_SYSTEM_UID    (*(uid_$t*)0xEA551C)
+#define PROC2_SYSTEM_UID    (*(uid_t*)0xEA551C)
 #else
-extern uid_$t proc2_system_uid;
+extern uid_t proc2_system_uid;
 #define PROC2_SYSTEM_UID    proc2_system_uid
 #endif
 
-void PROC2_$LIST(uid_$t *uid_list, uint16_t *max_ull, uint16_t *ull)
+void PROC2_$LIST(uid_t *uid_list, uint16_t *max_ull, uint16_t *ull)
 {
     uint16_t max_count;
     uint16_t count;
     int16_t index;
     proc2_info_t *entry;
-    uid_$t *out_ptr;
+    uid_t *out_ptr;
     uint8_t fim_context[24];
     status_$t status;
 

@@ -14,7 +14,7 @@
 
 #include "proc2.h"
 
-void PROC2_$NAME_TO_UID(char *name, int16_t *name_len, uid_$t *uid_ret, status_$t *status_ret)
+void PROC2_$NAME_TO_UID(char *name, int16_t *name_len, uid_t *uid_ret, status_$t *status_ret)
 {
     int16_t len;
     int16_t index;

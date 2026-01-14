@@ -20,12 +20,12 @@ void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,
                                     uint32_t param, int8_t check_perms,
                                     status_$t *status_ret);
 
-void PROC2_$SIGNAL_PGROUP(uid_$t *pgroup_uid, int16_t *signal, uint32_t *param,
+void PROC2_$SIGNAL_PGROUP(uid_t *pgroup_uid, int16_t *signal, uint32_t *param,
                           status_$t *status_ret)
 {
     int16_t pgroup_idx;
     status_$t status;
-    uid_$t uid_copy;
+    uid_t uid_copy;
     uint32_t param_copy;
     int16_t sig_copy;
 

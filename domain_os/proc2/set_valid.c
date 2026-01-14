@@ -14,7 +14,7 @@
 #include "proc2.h"
 
 /* External global variables */
-extern uid_$t UID_$NIL;
+extern uid_t UID_$NIL;
 extern uint32_t AS_$STACK_FILE_LOW;
 extern uint32_t AS_$INIT_STACK_FILE_SIZE;
 extern uint16_t PROC1_$AS_ID;
@@ -22,7 +22,7 @@ extern uint16_t PROC1_$AS_ID;
 /* External functions */
 extern void MST_$MAP_AREA_AT(uint32_t *addr_lo, uint32_t *size,
                               void *param3, void *param4,
-                              uid_$t *uid, status_$t *status);
+                              uid_t *uid, status_$t *status);
 
 /*
  * Creation record structure (partial - offsets determined from decompilation)
@@ -43,13 +43,13 @@ typedef struct cr_rec_t {
     uint8_t     field_90;           /* 0x90: Flag */
     uint8_t     pad_91[3];          /* 0x91: Padding */
     status_$t   status;             /* 0x94: Status */
-    uid_$t      proc_uid;           /* 0x98: Process UID */
-    uid_$t      parent_uid;         /* 0xA0: Parent UID */
-    uid_$t      stack_uid;          /* 0xA8: Stack file UID */
+    uid_t      proc_uid;           /* 0x98: Process UID */
+    uid_t      parent_uid;         /* 0xA0: Parent UID */
+    uid_t      stack_uid;          /* 0xA8: Stack file UID */
     uint32_t    addr_lo;            /* 0xB0: Stack address low */
     uint32_t    size;               /* 0xB4: Stack size */
     uint32_t    field_b8;           /* 0xB8: Parent upid */
-    uid_$t      debugger_uid;       /* 0xBC: Debugger UID */
+    uid_t      debugger_uid;       /* 0xBC: Debugger UID */
     uint8_t     pad_c4;             /* 0xC4: Padding */
     uint8_t     flags_c5;           /* 0xC5: Flags byte */
     uint16_t    count_c6;           /* 0xC6: Counter (set to 1) */
@@ -61,7 +61,7 @@ void PROC2_$SET_VALID(void)
     int16_t current_idx;
     proc2_info_t *entry;
     cr_rec_t *cr_rec;
-    uid_$t *stack_uid_ptr;
+    uid_t *stack_uid_ptr;
     status_$t status;
 
     /* Get current process's table entry */
@@ -72,7 +72,7 @@ void PROC2_$SET_VALID(void)
     cr_rec = (cr_rec_t *)entry->cr_rec;
 
     /* Get stack UID pointer (at offset in proc2 table after cr_rec_2) */
-    stack_uid_ptr = (uid_$t *)((char *)entry + 0xDC);  /* Approximate offset */
+    stack_uid_ptr = (uid_t *)((char *)entry + 0xDC);  /* Approximate offset */
 
     /*
      * If stack UID is nil, need to map the stack area
@@ -112,7 +112,7 @@ void PROC2_$SET_VALID(void)
         (entry->flags & PROC2_FLAG_ALT_ASID) == 0) {
 
         /* Set process UID from PROC2_UID table using PROC1_$AS_ID */
-        uid_$t *uid_table = &PROC2_UID;
+        uid_t *uid_table = &PROC2_UID;
         int uid_offset = PROC1_$AS_ID * 8;
         cr_rec->proc_uid.high = *(uint32_t *)((char *)uid_table + uid_offset);
         cr_rec->proc_uid.low = *(uint32_t *)((char *)uid_table + uid_offset + 4);

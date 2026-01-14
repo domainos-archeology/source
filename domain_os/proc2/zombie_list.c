@@ -23,7 +23,7 @@ extern status_$t FIM_$CLEANUP(void *context);
 extern void FIM_$RLS_CLEANUP(void *context);
 extern void FIM_$POP_SIGNAL(void *context);
 
-void PROC2_$ZOMBIE_LIST(uid_$t *uid_list, uint16_t *max_count, uint16_t *count,
+void PROC2_$ZOMBIE_LIST(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
                         int32_t *start_index, uint8_t *more_flag, int32_t *last_index)
 {
     uint16_t max_entries;
@@ -33,7 +33,7 @@ void PROC2_$ZOMBIE_LIST(uid_$t *uid_list, uint16_t *max_count, uint16_t *count,
     int16_t last_slot;
     int16_t first_match;
     proc2_info_t *entry;
-    uid_$t *out_ptr;
+    uid_t *out_ptr;
     uint8_t fim_context[24];
     status_$t status;
 

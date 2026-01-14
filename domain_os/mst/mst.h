@@ -162,18 +162,18 @@ void MST_$SET_CLEAR(void *bitmap, uint16_t size, uint16_t bit_index);
 /* Memory mapping */
 uint32_t MST_$TOUCH(uint32_t virtual_addr, status_$t *status_ret,
                     int16_t wire_flag);
-void MST_$MAP(uid_$t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
+void MST_$MAP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
               uint16_t *area_id_ptr, uint32_t *area_size_ptr,
               uint8_t *rights_ptr, int32_t *mapped_len, status_$t *status_ret);
 void MST_$MAP_AT(void);
 void MST_$MAP_CANNED_AT(void);
 void MST_$MAP_AREA(void);
 void MST_$MAP_AREA_AT(void);
-void MST_$MAP_GLOBAL(uid_$t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
+void MST_$MAP_GLOBAL(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
                      uint16_t *area_id_ptr, uint32_t *area_size_ptr,
                      uint8_t *rights_ptr, int32_t *mapped_len,
                      status_$t *status_ret);
-void MST_$MAP_TOP(uid_$t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
+void MST_$MAP_TOP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
                   uint16_t *area_id_ptr, uint32_t *area_size_ptr,
                   uint8_t *rights_ptr, int32_t *mapped_len,
                   status_$t *status_ret);
@@ -185,7 +185,7 @@ void MST_$REMAP_PRIVI(void);
 void MST_$GROW_AREA(void);
 
 /* Unmapping */
-void MST_$UNMAP(uid_$t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
+void MST_$UNMAP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
                 status_$t *status_ret);
 void MST_$UNMAP_GLOBAL(void);
 void MST_$UNMAPS(void);
@@ -206,11 +206,11 @@ void MST_$CHANGE_RIGHTS(void);
 void MST_$SET_GUARD(void);
 
 /* Query functions */
-void MST_$GET_UID(uint32_t *va_ptr, uid_$t *uid_out, uint32_t *adjusted_va,
+void MST_$GET_UID(uint32_t *va_ptr, uid_t *uid_out, uint32_t *adjusted_va,
                   status_$t *status_ret);
-void MST_$GET_UID_ASID(uint16_t *asid_p, uint32_t *va_ptr, uid_$t *uid_out,
+void MST_$GET_UID_ASID(uint16_t *asid_p, uint32_t *va_ptr, uid_t *uid_out,
                        uint32_t *adjusted_va, status_$t *status_ret);
-void MST_$GET_VA_INFO(uint16_t *asid_p, uint32_t *va_ptr, uid_$t *uid_out,
+void MST_$GET_VA_INFO(uint16_t *asid_p, uint32_t *va_ptr, uid_t *uid_out,
                       uint32_t *adjusted_va, void *param_5, int8_t *active_flag,
                       int8_t *modified_flag, status_$t *status_ret);
 void MST_$GET_PRIVATE_SIZE(void);

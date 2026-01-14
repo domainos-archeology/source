@@ -21,7 +21,7 @@
 
 #include "proc2.h"
 
-void PROC2_$GET_UPIDS(uid_$t *proc_uid, uint16_t *upid_ret, uint16_t *upgid_ret,
+void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid_ret, uint16_t *upgid_ret,
                       uint16_t *uppid_ret, status_$t *status_ret)
 {
     int16_t index;
@@ -30,7 +30,7 @@ void PROC2_$GET_UPIDS(uid_$t *proc_uid, uint16_t *upid_ret, uint16_t *upgid_ret,
     uint16_t upid = 0;
     uint16_t upgid = 0;
     uint16_t uppid = 0;
-    uid_$t uid;
+    uid_t uid;
 
     /* Copy UID to local storage */
     uid.high = proc_uid->high;

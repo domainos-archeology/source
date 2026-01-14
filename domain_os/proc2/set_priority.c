@@ -16,7 +16,7 @@
 
 #include "proc2.h"
 
-void PROC2_$SET_PRIORITY(uid_$t *proc_uid, uint16_t *priority_1, uint16_t *priority_2,
+void PROC2_$SET_PRIORITY(uid_t *proc_uid, uint16_t *priority_1, uint16_t *priority_2,
                          status_$t *status_ret)
 {
     int16_t index;

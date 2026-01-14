@@ -19,7 +19,7 @@ extern int16_t PROC1_$AS_ID;
  * @param length_ptr    Pointer to length to unmap
  * @param status_ret    Output: status code
  */
-void MST_$UNMAP(uid_$t *uid,
+void MST_$UNMAP(uid_t *uid,
                 uint32_t *start_va_ptr,
                 uint32_t *length_ptr,
                 status_$t *status_ret)

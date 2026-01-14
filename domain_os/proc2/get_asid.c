@@ -15,7 +15,7 @@
 /* Constant parameter passed to FIND_ASID (at address 0xE3E952) */
 static int8_t asid_param = 0;  /* TODO: Determine actual value */
 
-void PROC2_$GET_ASID(uid_$t *proc_uid, status_$t *status_ret)
+void PROC2_$GET_ASID(uid_t *proc_uid, status_$t *status_ret)
 {
     PROC2_$FIND_ASID(proc_uid, &asid_param, status_ret);
 }

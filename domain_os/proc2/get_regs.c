@@ -9,7 +9,7 @@
 
 #include "proc2.h"
 
-void PROC2_$GET_REGS(uid_$t *proc_uid, void *regs, status_$t *status_ret)
+void PROC2_$GET_REGS(uid_t *proc_uid, void *regs, status_$t *status_ret)
 {
     (void)proc_uid;
     (void)regs;

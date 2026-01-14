@@ -32,7 +32,7 @@ extern void FUN_00e4411c(uint16_t asid, uint32_t va, void *param,
  */
 void MST_$GET_VA_INFO(uint16_t *asid_p,
                       uint32_t *va_ptr,
-                      uid_$t *uid_out,
+                      uid_t *uid_out,
                       uint32_t *adjusted_va,
                       void *param_5,
                       int8_t *active_flag,
@@ -106,7 +106,7 @@ void MST_$GET_VA_INFO(uint16_t *asid_p,
  * @param status_ret  Output: status code
  */
 void MST_$GET_UID(uint32_t *va_ptr,
-                  uid_$t *uid_out,
+                  uid_t *uid_out,
                   uint32_t *adjusted_va,
                   status_$t *status_ret)
 {
@@ -135,7 +135,7 @@ void MST_$GET_UID(uint32_t *va_ptr,
  */
 void MST_$GET_UID_ASID(uint16_t *asid_p,
                        uint32_t *va_ptr,
-                       uid_$t *uid_out,
+                       uid_t *uid_out,
                        uint32_t *adjusted_va,
                        status_$t *status_ret)
 {

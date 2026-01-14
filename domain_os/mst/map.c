@@ -18,7 +18,7 @@ extern int16_t PROC1_$AS_ID;
 
 /* Internal mapping function */
 extern void FUN_00e43182(uint32_t addr_hint,
-                         uid_$t *uid,
+                         uid_t *uid,
                          uint32_t start_va,
                          uint32_t length,
                          uint32_t area_size,
@@ -42,7 +42,7 @@ extern void FUN_00e43182(uint32_t addr_hint,
  * @param mapped_len    Output: actual length mapped
  * @param status_ret    Output: status code
  */
-void MST_$MAP(uid_$t *uid,
+void MST_$MAP(uid_t *uid,
               uint32_t *start_va_ptr,
               uint32_t *length_ptr,
               uint16_t *area_id_ptr,
@@ -70,7 +70,7 @@ void MST_$MAP(uid_$t *uid,
  *
  * Currently identical to MST_$MAP - both search from top of space.
  */
-void MST_$MAP_TOP(uid_$t *uid,
+void MST_$MAP_TOP(uid_t *uid,
                   uint32_t *start_va_ptr,
                   uint32_t *length_ptr,
                   uint16_t *area_id_ptr,
@@ -98,7 +98,7 @@ void MST_$MAP_TOP(uid_$t *uid,
  *
  * Uses ASID 0 for global mappings and touch-ahead of 1.
  */
-void MST_$MAP_GLOBAL(uid_$t *uid,
+void MST_$MAP_GLOBAL(uid_t *uid,
                      uint32_t *start_va_ptr,
                      uint32_t *length_ptr,
                      uint16_t *area_id_ptr,

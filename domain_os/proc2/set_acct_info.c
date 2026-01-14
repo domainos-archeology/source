@@ -46,7 +46,7 @@
     #define P2_ACCT_UID_LO(idx)        (p2_acct_uid_dummy)
 #endif
 
-void PROC2_$SET_ACCT_INFO(uint8_t *info, int16_t *info_len, uid_$t *acct_uid,
+void PROC2_$SET_ACCT_INFO(uint8_t *info, int16_t *info_len, uid_t *acct_uid,
                           status_$t *status_ret)
 {
     int16_t cur_idx;

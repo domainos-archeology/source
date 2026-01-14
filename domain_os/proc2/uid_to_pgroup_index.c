@@ -44,7 +44,7 @@ static int16_t PGROUP_FIND_BY_UPGID(uint16_t upgid)
     return 0;  /* Not found */
 }
 
-int16_t PROC2_$UID_TO_PGROUP_INDEX(uid_$t *pgroup_uid)
+int16_t PROC2_$UID_TO_PGROUP_INDEX(uid_t *pgroup_uid)
 {
     int16_t result = 0;
     uint8_t high_byte;

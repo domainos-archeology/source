@@ -17,7 +17,7 @@
 
 #include "proc2.h"
 
-uint16_t PROC2_$FIND_ASID(uid_$t *proc_uid, int8_t *param_2, status_$t *status_ret)
+uint16_t PROC2_$FIND_ASID(uid_t *proc_uid, int8_t *param_2, status_$t *status_ret)
 {
     int16_t index;
     proc2_info_t *entry;

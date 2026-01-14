@@ -14,7 +14,7 @@
 
 #include "tty.h"
 
-void TTY_$K_SET_PGROUP(short *line_ptr, uid_$t *uid_ptr, status_$t *status)
+void TTY_$K_SET_PGROUP(short *line_ptr, uid_t *uid_ptr, status_$t *status)
 {
     tty_desc_t *tty;
 
@@ -29,7 +29,7 @@ void TTY_$K_SET_PGROUP(short *line_ptr, uid_$t *uid_ptr, status_$t *status)
     tty->pgroup_uid.low = uid_ptr->low;
 }
 
-void TTY_$K_INQ_PGROUP(short *line_ptr, uid_$t *uid_ptr, status_$t *status)
+void TTY_$K_INQ_PGROUP(short *line_ptr, uid_t *uid_ptr, status_$t *status)
 {
     tty_desc_t *tty;
 
