@@ -250,9 +250,6 @@ extern uint16_t ast_aste_l_cnt;
 /*
  * External references
  */
-extern uint32_t MMAP_$REAL_PAGES;
-extern uint16_t PROC1_$CURRENT;
-extern int16_t *PROC1_$TYPE;
 extern uid_t UID_$NIL;
 extern uint32_t NODE_$ME;
 extern int8_t NETWORK_$REALLY_DISKLESS;
