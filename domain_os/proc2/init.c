@@ -1,0 +1,328 @@
+/*
+ * PROC2_$INIT - Initialize PROC2 subsystem
+ *
+ * This is called during system boot to initialize the PROC2 high-level
+ * process management subsystem. It sets up:
+ *
+ * 1. Global UIDs for the system
+ * 2. PID-to-index mapping table (cleared)
+ * 3. Process group table (cleared)
+ * 4. Free list of process table entries (entries 2-69)
+ * 5. Entry 1 as the init/system process
+ * 6. Memory mappings for creation records and initial stack
+ * 7. Boot device initialization (tape/floppy if requested)
+ * 8. Resolution and mapping of boot shell
+ *
+ * Parameters:
+ *   boot_flags - Boot option flags (bit 0 = tape boot, bit 1 = floppy boot)
+ *   status_ret - Pointer to receive status
+ *
+ * Returns:
+ *   Status code (also stored in status_ret)
+ *
+ * Original address: 0x00e303d8
+ */
+
+#include "proc2.h"
+#include "../ec/ec.h"
+
+/* Number of process table entries (indices 1-69, 0 unused) */
+#define P2_MAX_ENTRIES          70
+#define P2_FIRST_FREE_ENTRY     2
+#define P2_LAST_ENTRY           69
+
+/* External globals */
+extern uid_$t UID_$NIL;
+
+/* Boot flags storage */
+#if defined(M68K)
+    #define BOOT_FLAGS          (*(uint16_t*)0xE7C068)
+#else
+    extern uint16_t boot_flags_storage;
+    #define BOOT_FLAGS          boot_flags_storage
+#endif
+
+/* Global UID storage for system UIDs */
+#if defined(M68K)
+    #define PROC_DIR_UID        (*(uid_$t*)0xE7BE84)
+    #define SYSTEM_UID_2        (*(uid_$t*)0xE7BE9C)
+    /* UID table: 8 bytes per entry, indexed by ASID */
+    #define UID_TABLE_BASE      0xE7BE94
+    #define UID_TABLE_ENTRY(n)  (*(uid_$t*)(UID_TABLE_BASE + (n) * 8))
+#else
+    extern uid_$t proc_dir_uid;
+    extern uid_$t system_uid_2;
+    extern uid_$t uid_table[];
+    #define PROC_DIR_UID        proc_dir_uid
+    #define SYSTEM_UID_2        system_uid_2
+    #define UID_TABLE_ENTRY(n)  uid_table[n]
+#endif
+
+/* External functions */
+extern void UID_$GEN(uid_$t *uid_ret);
+extern void MST_$MAP_AREA_AT(void *uid1, void *size1, void *param1, void *param2,
+                              void *dest, status_$t *status_ret);
+extern int8_t OS_$BOOT_ERRCHK(char *msg1, char *msg2, uint16_t *param, status_$t *status_ret);
+extern int8_t TAPE_$BOOT(status_$t *status_ret);
+extern int8_t FLOP_$BOOT(status_$t *status_ret, status_$t *status_ret2);
+extern void NAME_$RESOLVE(char *name, int16_t *name_len, uid_$t *uid_ret, status_$t *status_ret);
+extern void FILE_$LOCK(uid_$t *uid, void *param1, void *param2, void *param3,
+                        void *result, status_$t *status_ret);
+extern void MST_$MAP(uid_$t *uid, void *param1, void *param2, void *param3,
+                      void *param4, void *param5, void *result, status_$t *status_ret);
+extern void MST_$UNMAP(uid_$t *uid, void *param1, void *param2, status_$t *status_ret);
+extern void MST_$MAP_AT(void *start, uid_$t *uid, void *param1, void *param2, void *param3,
+                         void *param4, void *param5, void *result, status_$t *status_ret);
+extern uint8_t MMU_$NORMAL_MODE(void);
+extern uint8_t DTTY_$USE_DTTY;
+
+/* Eventcount base addresses */
+#if defined(M68K)
+    #define EC1_FORK_ARRAY      ((void*)0xE2B978)
+    #define EC1_CR_REC_ARRAY    ((void*)0xE2B96C)
+#else
+    extern void *ec1_fork_array;
+    extern void *ec1_cr_rec_array;
+    #define EC1_FORK_ARRAY      ec1_fork_array
+    #define EC1_CR_REC_ARRAY    ec1_cr_rec_array
+#endif
+
+/* Boot file parameters - these would be in read-only data */
+static const char boot_shell_path[] = "/sys/boot_shell";
+static const char proc_dir_path[] = "/node_data/proc_dir";
+
+/* Forward declaration of PROC_FORK_EC macro from create.c */
+#define PROC_FORK_EC(idx)       ((void*)((uintptr_t)EC1_FORK_ARRAY + ((idx) - 1) * 0x18))
+#define PROC_CR_REC_EC(idx)     ((void*)((uintptr_t)EC1_FORK_ARRAY + ((idx) - 1) * 0x18 + 0x0C))
+
+status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
+{
+    status_$t status;
+    int16_t i;
+    proc2_info_t *entry;
+    proc2_info_t *init_entry;
+    uint16_t min_pri, max_pri;
+    uint8_t mmu_mode;
+    uid_$t boot_shell_uid;
+    int16_t path_len;
+
+    /*
+     * Step 1: Generate system UIDs
+     */
+    UID_$GEN(&PROC2_UID);
+    UID_$GEN(&SYSTEM_UID_2);
+
+    /*
+     * Step 2: Set priority for init process
+     */
+    min_pri = 0x10;
+    max_pri = 0x10;
+    PROC1_$SET_PRIORITY(PROC1_$CURRENT, 0xFF00, &min_pri, &max_pri);
+
+    /*
+     * Step 3: Initialize UID table with generated UID
+     * (56 entries, indices 0-55)
+     */
+    for (i = 0; i < 56; i++) {
+        UID_TABLE_ENTRY(i) = PROC2_UID;
+    }
+
+    /*
+     * Step 4: Clear PID-to-index mapping table
+     * (63 entries)
+     */
+    for (i = 0; i < 63; i++) {
+        P2_PID_TO_INDEX_TABLE[i] = 0;
+    }
+
+    /*
+     * Step 5: Clear process group table
+     * (70 entries)
+     */
+    for (i = 0; i < PGROUP_TABLE_SIZE; i++) {
+        pgroup_entry_t *pg = PGROUP_ENTRY(i);
+        pg->ref_count = 0;
+    }
+
+    /*
+     * Step 6: Initialize free list (entries 2-69)
+     * Each entry points to next, with UID_NIL and cleared flags
+     */
+    P2_FREE_LIST_HEAD = P2_FIRST_FREE_ENTRY;
+
+    for (i = P2_FIRST_FREE_ENTRY; i <= P2_LAST_ENTRY; i++) {
+        entry = P2_INFO_ENTRY(i);
+
+        /* Link to next entry (or 0 for last) */
+        entry->next_index = (i < P2_LAST_ENTRY) ? (i + 1) : 0;
+
+        /* Set UID to nil */
+        *(uint32_t*)((char*)entry + 0x08) = UID_$NIL.high;
+        *(uint32_t*)((char*)entry + 0x0C) = UID_$NIL.low;
+
+        /* Clear valid/bound flags */
+        entry->flags &= ~(PROC2_FLAG_VALID | 0x01);
+
+        /* Store index for prev link (used in free list traversal) */
+        entry->first_debug_target_idx = i;
+    }
+
+    /*
+     * Step 7: Initialize entry 1 as the init/system process
+     */
+    P2_INFO_ALLOC_PTR = 1;
+    init_entry = P2_INFO_ENTRY(1);
+
+    /* Clear allocation list links */
+    init_entry->next_index = 0;
+    init_entry->pad_14 = 0;
+
+    /* Set ASID = 1 */
+    init_entry->asid = 1;
+
+    /* Set owner_session = 1 */
+    init_entry->owner_session = 1;
+
+    /* Copy system UID to entry */
+    init_entry->uid = SYSTEM_UID_2;
+
+    /* Set PROC1 PID */
+    init_entry->level1_pid = PROC1_$CURRENT;
+
+    /* Clear cleanup flags */
+    init_entry->cleanup_flags = 0;
+
+    /* Clear child/sibling list links */
+    init_entry->pad_20[0] = 0;
+    init_entry->pad_20[1] = 0;
+    init_entry->parent_pgroup_idx = 0;
+    init_entry->first_debug_target_idx = 0;
+    init_entry->next_debug_target_idx = 0;
+
+    /* Set UPID = 1 */
+    init_entry->upid = 1;
+
+    /* Clear session ID */
+    init_entry->session_id = 0;
+
+    /* Clear pgroup table index */
+    init_entry->pgroup_table_idx = 0;
+
+    /* Clear signal masks */
+    init_entry->sig_pending = 0;
+    init_entry->sig_blocked_1 = 0;
+    init_entry->sig_blocked_2 = 0;
+    init_entry->sig_mask_1 = 0;
+    init_entry->sig_mask_2 = 0;
+    init_entry->sig_mask_3 = 0;
+
+    /* Set initial flags: clear most bits, set bit 7 (0x80) */
+    init_entry->flags &= 0x01AF;
+    init_entry->flags |= 0x8000;
+
+    /* Clear padding/reserved */
+    init_entry->pad_18[0] = 0;
+    init_entry->pad_18[1] = 0;
+    init_entry->pgroup_uid_idx = 0;
+
+    /* Set name_len to 0x21 (indicates no name) */
+    init_entry->name_len = 0x21;
+
+    /* Set creation record pointer */
+    /* init_entry->cr_rec = AS_$CR_REC; -- would be set from global */
+
+    /* Set TTY UID to nil */
+    init_entry->tty_uid = UID_$NIL;
+
+    /* Set pgroup UID to nil */
+    init_entry->pgroup_uid = UID_$NIL;
+
+    /* Clear pgroup_uid_idx */
+    init_entry->pgroup_uid_idx = 0;
+
+    /*
+     * Step 8: Initialize eventcounts for init process
+     */
+    EC_$INIT(PROC_FORK_EC(init_entry->owner_session));
+    EC_$INIT(PROC_CR_REC_EC(init_entry->owner_session));
+
+    /*
+     * Step 9: Map creation record area
+     * TODO: Implement with proper parameters
+     */
+    /* MST_$MAP_AREA_AT(&AS_$CR_REC, &AS_$CR_REC_FILE_SIZE, ...); */
+    /* status = OS_$BOOT_ERRCHK("unable to map ", "creation record area", ...); */
+
+    /*
+     * Step 10: Map initial stack area
+     * TODO: Implement with proper parameters
+     */
+    /* MST_$MAP_AREA_AT(&AS_$STACK_FILE_LOW, &AS_$INIT_STACK_FILE_SIZE, ...); */
+    /* status = OS_$BOOT_ERRCHK("unable to map ", "initial area", ...); */
+
+    /* Mark init entry as valid */
+    init_entry->flags |= PROC2_FLAG_VALID;
+
+    /* Set stack high pointer */
+    /* init_entry->cr_rec_2 = AS_$STACK_HIGH; */
+
+    /*
+     * Step 11: Initialize boot flags
+     */
+    BOOT_FLAGS &= 0xC000;  /* Clear all but top 2 bits */
+
+    mmu_mode = MMU_$NORMAL_MODE();
+    BOOT_FLAGS &= 0x7FFF;  /* Clear bit 15 */
+    BOOT_FLAGS |= (mmu_mode & 0x80) << 8;  /* Set bit 15 from MMU mode */
+
+    BOOT_FLAGS &= 0xBFFF;  /* Clear bit 14 */
+    BOOT_FLAGS |= ((~DTTY_$USE_DTTY >> 7) & 1) << 14;  /* Set bit 14 from DTTY flag */
+
+    /*
+     * Step 12: Handle tape/floppy boot if requested
+     */
+    if (((uint8_t*)&boot_flags_param)[1] & 0x01) {
+        /* Tape boot requested */
+        if (TAPE_$BOOT(&status) >= 0) {
+            *status_ret = status;
+            return status;
+        }
+    }
+
+    if (((uint8_t*)&boot_flags_param)[1] & 0x02) {
+        /* Floppy boot requested */
+        if (FLOP_$BOOT(&status, status_ret) >= 0) {
+            return status;
+        }
+    }
+
+    /*
+     * Step 13: Resolve /node_data/proc_dir
+     */
+    path_len = sizeof(proc_dir_path) - 1;
+    NAME_$RESOLVE((char*)proc_dir_path, &path_len, &PROC_DIR_UID, status_ret);
+    if (*status_ret != status_$ok) {
+        PROC_DIR_UID = UID_$NIL;
+    }
+
+    /*
+     * Step 14: Resolve and map /sys/boot_shell
+     * TODO: Full implementation with FILE_$LOCK, MST_$MAP, etc.
+     */
+    path_len = sizeof(boot_shell_path) - 1;
+    NAME_$RESOLVE((char*)boot_shell_path, &path_len, &boot_shell_uid, status_ret);
+
+    /* Check for errors */
+    status = OS_$BOOT_ERRCHK("unable to resolve ", (char*)boot_shell_path, (uint16_t*)&path_len, status_ret);
+    if ((int8_t)status >= 0) {
+        return status;
+    }
+
+    /*
+     * TODO: Continue with FILE_$LOCK, MST_$MAP, MST_$UNMAP, MST_$MAP_AT
+     * for the boot shell. For now, return success.
+     */
+
+    *status_ret = status_$ok;
+    return status_$ok;
+}
