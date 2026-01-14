@@ -47,6 +47,7 @@
 #define status_$proc2_table_full                0x0019000F
 #define status_$proc2_permission_denied         0x00190012
 #define status_$proc2_process_already_debugging 0x00190011
+#define status_$proc2_process_wasnt_vforked     0x0019000C
 #define status_$proc2_already_orphan            0x00190014
 #define status_$proc2_process_is_group_leader   0x00190015
 #define status_$proc2_process_using_pgroup_id   0x00190016
@@ -452,9 +453,30 @@ void PROC2_$COMPLETE_FORK(status_$t *status_ret);
 
 /*
  * PROC2_$COMPLETE_VFORK - Complete vfork in child
+ *
+ * Called by the child process after vfork to separate from the parent's
+ * address space. Sets up a new address space for the child with the
+ * specified code and entry point.
+ *
+ * Parameters:
+ *   proc_uid    - UID for the new process
+ *   code_desc   - Pointer to code descriptor
+ *   map_param   - Parameter for memory mapping
+ *   entry_point - Pointer to entry point address
+ *   user_data   - Pointer to user data for startup
+ *   reserved1   - Reserved (unused)
+ *   reserved2   - Reserved (unused)
+ *   status_ret  - Pointer to receive status
+ *
+ * On success, this function does not return - it jumps to the entry point.
+ * On failure, calls PROC2_$DELETE.
+ *
  * Original address: 0x00e73638
  */
-void PROC2_$COMPLETE_VFORK(status_$t *status_ret);
+void PROC2_$COMPLETE_VFORK(uid_$t *proc_uid, uint32_t *code_desc, uint32_t *map_param,
+                           int32_t *entry_point, int32_t *user_data,
+                           uint32_t reserved1, uint32_t reserved2,
+                           status_$t *status_ret);
 
 /*
  * PROC2_$DELETE - Delete current process
