@@ -16,6 +16,7 @@
 #define DISK_H
 
 #include "base/base.h"
+#include "ml/ml.h"
 
 /*
  * Maximum number of volumes and devices
@@ -209,9 +210,7 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
 /*
  * External functions used by DISK
  */
-extern void ML__LOCK(int16_t lock);
-extern void ML__UNLOCK(int16_t lock);
-extern void ML__EXCLUSION_INIT(void *exclusion);
+/* ML_$LOCK, ML_$UNLOCK, ML_$EXCLUSION_INIT declared in ml/ml.h */
 extern void EC__INIT(void *ec);
 
 /* DBUF functions */

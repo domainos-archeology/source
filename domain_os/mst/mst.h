@@ -26,6 +26,7 @@
 #define MST_H
 
 #include "base/base.h"
+#include "ml/ml.h"
 
 /*
  * MST status codes (module 0x04 = MST)
@@ -38,7 +39,7 @@
 #define status_$mst_access_violation 0x00040005 /* Access rights violation */
 
 /*
- * Lock identifiers used with ML__LOCK/ML__UNLOCK
+ * Lock identifiers used with ML_$LOCK/ML_$UNLOCK (declared in ml/ml.h)
  */
 #define MST_LOCK_ASID 0x0c /* ASID allocation lock */
 #define MST_LOCK_AST 0x12  /* AST (Active Segment Table) lock */

@@ -29,9 +29,7 @@ extern void *MOUNT_LOCK;
 /* LV data offset */
 #define DISK_LV_DATA_OFFSET      (-0x40)
 
-/* External functions */
-extern void ML__EXCLUSION_START(void *lock);
-extern void ML__EXCLUSION_STOP(void *lock);
+/* ML_$EXCLUSION_START, ML_$EXCLUSION_STOP declared in ml/ml.h via disk.h */
 
 void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status)
 {
@@ -45,7 +43,7 @@ void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status)
     uid_hi = *(uint32_t *)uid_ptr;
     uid_lo = *((uint32_t *)uid_ptr + 1);
 
-    ML__EXCLUSION_START(&MOUNT_LOCK);
+    ML_$EXCLUSION_START(&MOUNT_LOCK);
 
     local_status = status_$logical_volume_not_found;
 
@@ -67,7 +65,7 @@ void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status)
         entry += DISK_VOLUME_SIZE;
     }
 
-    ML__EXCLUSION_STOP(&MOUNT_LOCK);
+    ML_$EXCLUSION_STOP(&MOUNT_LOCK);
 
     *vol_idx = result_idx;
     *status = local_status;

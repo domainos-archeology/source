@@ -13,6 +13,7 @@
 #define FLP_H
 
 #include "base/base.h"
+#include "ml/ml.h"
 
 /*
  * Maximum number of floppy units supported
@@ -170,8 +171,7 @@ extern void EC__ADVANCE_WITHOUT_DISPATCH(void *ec);
 extern int16_t EC__WAIT(void *ec_list, uint32_t *value);
 extern uint32_t MMU__VTOP(uint32_t va, status_$t *status);
 extern void WP__WIRE(uint32_t phys);
-extern void ML__LOCK(int16_t lock);
-extern void ML__UNLOCK(int16_t lock);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
 extern int16_t PARITY__CHK_IO(int16_t mode, uint32_t addr);
 extern status_$t check_dma_error(int16_t channel);
 

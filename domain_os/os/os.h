@@ -6,6 +6,7 @@
 
 #include "base/base.h"
 #include "ec/ec.h"
+#include "ml/ml.h"
 
 // =============================================================================
 // OS Revision Information

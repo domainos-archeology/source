@@ -42,8 +42,7 @@ extern void *Disk_Queued_Drivers_Not_Supported_Err;
 
 /* External functions */
 extern void CRASH_SYSTEM(void *error);
-extern uint16_t ML__SPIN_LOCK(void *queue);
-extern void ML__SPIN_UNLOCK(void *queue, uint16_t token);
+/* ML_$SPIN_LOCK, ML_$SPIN_UNLOCK declared in ml/ml.h via disk.h */
 
 /* Queue data at 0xe7a1cc */
 #define QUEUE_DATA_BASE  ((uint8_t *)0x00e7a1cc)
@@ -125,7 +124,7 @@ sort_again:
 
     /* Acquire disk lock */
     lock_id = *(int16_t *)((uint8_t *)dev_entry + QUEUE_LOCK_OFFSET);
-    ML__LOCK(lock_id);
+    ML_$LOCK(lock_id);
 
     /* Initialize counters */
     total_count = 0;
@@ -167,7 +166,7 @@ sort_again:
                 uint32_t next_lba = *(uint32_t *)((uint8_t *)next + REQ_LBA_OFFSET);
                 if (next_lba < end_lba) {
                     needs_sort = 0;
-                    ML__UNLOCK(lock_id);
+                    ML_$UNLOCK(lock_id);
                     goto sort_again;
                 }
             }
@@ -230,7 +229,7 @@ sort_again:
     *(uint32_t *)(QUEUE_DATA_BASE + (total_count + 1) * 4 + 0xb0c) = 0;
 
     /* Acquire spin lock for queue manipulation */
-    lock_token = ML__SPIN_LOCK(queue);
+    lock_token = ML_$SPIN_LOCK(queue);
 
     /* Determine merge strategy based on current queue state */
     int16_t queue_pos_flag = *(int16_t *)((uint8_t *)queue + 4);
@@ -244,7 +243,7 @@ sort_again:
     }
 
     /* Release spin lock */
-    ML__SPIN_UNLOCK(queue, lock_token);
+    ML_$SPIN_UNLOCK(queue, lock_token);
 }
 
 /*

@@ -5,6 +5,7 @@
 #define TTY_H
 
 #include "base/base.h"
+#include "ml/ml.h"
 
 // =============================================================================
 // TTY Constants

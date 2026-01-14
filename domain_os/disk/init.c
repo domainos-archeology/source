@@ -50,6 +50,6 @@ void DISK_$INIT(void)
     }
 
     /* Initialize exclusion locks */
-    ML__EXCLUSION_INIT(&ml__exclusion_t_00e7a274);
-    ML__EXCLUSION_INIT(&ml__exclusion_t_00e7a25c);
+    ML_$EXCLUSION_INIT(&ml__exclusion_t_00e7a274);
+    ML_$EXCLUSION_INIT(&ml__exclusion_t_00e7a25c);
 }

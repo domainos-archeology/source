@@ -25,6 +25,7 @@
 
 #include "base/base.h"
 #include "ec/ec.h"
+#include "ml/ml.h"
 
 /*
  * Forward declarations
@@ -113,8 +114,7 @@ extern uint32_t DAT_00e23320;            /* Impure pages flag */
 /*
  * System functions
  */
-extern void ML_$LOCK(uint16_t lock_id);
-extern void ML_$UNLOCK(uint16_t lock_id);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
 /* EC_$ADVANCE, EC_$WAIT, EC_$WAITN, CRASH_SYSTEM declared in ec/ec.h */
 extern void PROC1_$SET_LOCK(uint16_t lock_id);
 

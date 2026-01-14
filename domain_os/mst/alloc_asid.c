@@ -18,9 +18,7 @@
 
 #include "mst.h"
 
-/* External functions */
-extern void ML__LOCK(uint16_t lock_id);
-extern void ML__UNLOCK(uint16_t lock_id);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
 
 /* External: Initialize segment table page for an ASID */
 extern status_$t FUN_00e43f40(uint16_t asid, uint16_t flags, void *table_ptr);
@@ -43,7 +41,7 @@ uint16_t MST_$ALLOC_ASID(status_$t *status_ret)
     uint8_t *mst_page;
 
     /* Lock the ASID allocation lock */
-    ML__LOCK(MST_LOCK_ASID);
+    ML_$LOCK(MST_LOCK_ASID);
 
     /*
      * Search for a free ASID by scanning the bitmap.
@@ -105,7 +103,7 @@ uint16_t MST_$ALLOC_ASID(status_$t *status_ret)
     status = status_$no_asid_available;
 
 done:
-    ML__UNLOCK(MST_LOCK_ASID);
+    ML_$UNLOCK(MST_LOCK_ASID);
     *status_ret = status;
 
     if (status != status_$ok) {

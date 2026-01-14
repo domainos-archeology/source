@@ -29,13 +29,13 @@ uint32_t WIN_$DINIT(uint16_t vol_idx, uint16_t unit, void *param_3,
     lock_id = *(int16_t *)(win_data + unit_offset + 0x08);
 
     /* Acquire unit lock */
-    ML__LOCK(lock_id);
+    ML_$LOCK(lock_id);
 
     /* Call common disk initialization */
     result = DISK_INIT(unit, vol_idx, param_3, param_4, param_5, param_6, param_7);
 
     /* Release unit lock */
-    ML__UNLOCK(lock_id);
+    ML_$UNLOCK(lock_id);
 
     return result;
 }

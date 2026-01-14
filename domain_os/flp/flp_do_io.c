@@ -134,7 +134,7 @@ void FLP_DO_IO(void *req, void *buf, void *param_3, uint16_t lba_hi, uint32_t lb
     /* Acquire lock */
     ctlr_info = *(void **)(&DAT_00e7afdc[ctlr_table_offset]);
     lock_id = *(int16_t *)((uint8_t *)ctlr_info + 0x3c);
-    ML__LOCK(lock_id);
+    ML_$LOCK(lock_id);
 
     /* Get operation type */
     op_type = *(uint8_t *)((uint8_t *)buf + 0x1f) & 0x0f;
@@ -264,5 +264,5 @@ unlock_and_return:
     /* Release lock */
     ctlr_info = *(void **)(&DAT_00e7afdc[ctlr_table_offset]);
     lock_id = *(int16_t *)((uint8_t *)ctlr_info + 0x3c);
-    ML__UNLOCK(lock_id);
+    ML_$UNLOCK(lock_id);
 }

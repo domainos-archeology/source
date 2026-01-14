@@ -177,9 +177,7 @@ extern void *PMAP_$PURIFIER_R;
 extern void *DXM_$HELPER_UNWIRED;
 extern void *DXM_$HELPER_WIRED;
 
-// External lock functions
-extern void ML_$LOCK(short lock_id);
-extern void ML_$UNLOCK(short lock_id);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via os.h */
 
 // External helper functions
 extern uint16_t VTOP_OR_CRASH(uint32_t vaddr);

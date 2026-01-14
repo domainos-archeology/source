@@ -2,6 +2,7 @@
 #define TERM_H
 
 #include "base/base.h"
+#include "ml/ml.h"
 
 // Maximum number of terminal lines
 #define TERM_MAX_LINES 4

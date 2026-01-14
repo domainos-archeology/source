@@ -26,6 +26,7 @@
 
 #include "base/base.h"
 #include "proc1/proc1.h"
+#include "ml/ml.h"
 
 /*
  * Lock ID for PROC2 operations
@@ -245,8 +246,7 @@ typedef struct pgroup_entry_t {
 /*
  * External functions
  */
-extern void ML_$LOCK(uint16_t lock_id);
-extern void ML_$UNLOCK(uint16_t lock_id);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
 
 /*
  * ============================================================================

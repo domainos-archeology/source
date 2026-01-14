@@ -6,6 +6,7 @@ SRCS := \
   $(wildcard cal/*.c) \
   $(wildcard ec/*.c) \
   $(wildcard math/*.c) \
+  $(wildcard ml/*.c) \
   $(wildcard mmap/*.c) \
   $(wildcard mmu/*.c) \
   $(wildcard os/*.c) \
@@ -17,7 +18,7 @@ SRCS := \
   $(wildcard tty/*.c)
 
 # Assembly files (platform-specific)
-ASM_SRCS := $(wildcard ec/$(TARGET_SAU)/*.s) $(wildcard proc1/$(TARGET_SAU)/*.s)
+ASM_SRCS := $(wildcard ec/$(TARGET_SAU)/*.s) $(wildcard ml/$(TARGET_SAU)/*.s) $(wildcard proc1/$(TARGET_SAU)/*.s)
 ASM_OBJS := $(patsubst %.s,build/$(TARGET_SAU)/%.o,$(ASM_SRCS))
 OBJS := $(patsubst %.c,build/$(TARGET_SAU)/%.o,$(SRCS))
 
@@ -49,6 +50,11 @@ build/$(TARGET_SAU)/%.o : %.c
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
 build/$(TARGET_SAU)/ec/$(TARGET_SAU)/%.o: ec/$(TARGET_SAU)/%.s
+	@mkdir -p $(dir $@)
+	@echo "[AS] $<"
+	@$(CC) $(SAU2_FLAGS) -c -o $@ $<
+
+build/$(TARGET_SAU)/ml/$(TARGET_SAU)/%.o: ml/$(TARGET_SAU)/%.s
 	@mkdir -p $(dir $@)
 	@echo "[AS] $<"
 	@$(CC) $(SAU2_FLAGS) -c -o $@ $<

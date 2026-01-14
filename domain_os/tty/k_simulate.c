@@ -4,9 +4,7 @@
 
 #include "tty.h"
 
-// External spin lock functions
-extern ushort ML_$SPIN_LOCK(uint32_t *lock);
-extern void ML_$SPIN_UNLOCK(uint32_t *lock, ushort token);
+/* ML_$SPIN_LOCK, ML_$SPIN_UNLOCK declared in ml/ml.h via tty.h */
 
 // External process functions
 extern void PROC2_$GET_MY_UPIDS(short *upid, short *reserved1, short *upgid);

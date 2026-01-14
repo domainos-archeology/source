@@ -13,9 +13,7 @@
 
 #include "mst.h"
 
-/* External functions */
-extern void ML__LOCK(uint16_t lock_id);
-extern void ML__UNLOCK(uint16_t lock_id);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
 extern void *AST__LOCATE_ASTE(uint32_t param);
 extern void AST__RELEASE_PAGES(void *aste, uint8_t flags);
 
@@ -38,7 +36,7 @@ void MST_$REMOVE_SEG(uint32_t param_1, uint32_t param_2,
     (void)param_4;  /* Unused */
 
     /* Lock the Active Segment Table */
-    ML__LOCK(MST_LOCK_AST);
+    ML_$LOCK(MST_LOCK_AST);
 
     /* Locate the AST entry for this segment */
     aste = AST__LOCATE_ASTE(param_1);
@@ -49,5 +47,5 @@ void MST_$REMOVE_SEG(uint32_t param_1, uint32_t param_2,
     }
 
     /* Unlock the AST */
-    ML__UNLOCK(MST_LOCK_AST);
+    ML_$UNLOCK(MST_LOCK_AST);
 }

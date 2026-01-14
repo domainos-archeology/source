@@ -20,9 +20,9 @@ void *DISK_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *expected_uid,
 {
     void *result;
 
-    ML__LOCK(DISK_LOCK_ID);
+    ML_$LOCK(DISK_LOCK_ID);
     result = DBUF__GET_BLOCK(vol_idx, daddr, expected_uid, param_4, param_5, status);
-    ML__UNLOCK(DISK_LOCK_ID);
+    ML_$UNLOCK(DISK_LOCK_ID);
 
     return result;
 }

@@ -11,7 +11,7 @@
 
 void DISK_$INVALIDATE(uint16_t vol_idx)
 {
-    ML__LOCK(DISK_LOCK_ID);
+    ML_$LOCK(DISK_LOCK_ID);
     DBUF__INVALIDATE(0, vol_idx);
-    ML__UNLOCK(DISK_LOCK_ID);
+    ML_$UNLOCK(DISK_LOCK_ID);
 }

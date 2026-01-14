@@ -16,6 +16,7 @@
 #define WIN_H
 
 #include "base/base.h"
+#include "ml/ml.h"
 
 /*
  * WIN data area base at 0xe2b89c
@@ -141,8 +142,7 @@ extern void FUN_00e19186(uint16_t unit, char status, uint16_t *out);
 /*
  * External functions used by WIN
  */
-extern void ML__LOCK(int16_t lock);
-extern void ML__UNLOCK(int16_t lock);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
 extern void EC__INIT(void *ec);
 extern int16_t EC__WAIT(void *ec_array, void *wait_val);
 extern void EC__ADVANCE_WITHOUT_DISPATCH(void *ec);

@@ -14,9 +14,7 @@
 
 #include "mst.h"
 
-/* External functions */
-extern void ML__LOCK(uint16_t lock_id);
-extern void ML__UNLOCK(uint16_t lock_id);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
 extern void AREA__FREE_ASID(uint16_t asid);
 extern void CRASH_SYSTEM(status_$t *status);
 
@@ -72,7 +70,7 @@ void MST_$FREE_ASID(uint16_t asid, status_$t *status_ret)
     AREA__FREE_ASID(asid);
 
     /* Lock the ASID allocation lock */
-    ML__LOCK(MST_LOCK_ASID);
+    ML_$LOCK(MST_LOCK_ASID);
 
     /*
      * Unwire MST pages used by this ASID.
@@ -86,5 +84,5 @@ void MST_$FREE_ASID(uint16_t asid, status_$t *status_ret)
     MST_$SET_CLEAR(MST__ASID_LIST, MST_MAX_ASIDS, asid);
 
     /* Unlock and return */
-    ML__UNLOCK(MST_LOCK_ASID);
+    ML_$UNLOCK(MST_LOCK_ASID);
 }

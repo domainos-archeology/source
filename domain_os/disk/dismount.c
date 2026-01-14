@@ -14,9 +14,7 @@
 /* Mount lock */
 extern void *MOUNT_LOCK;
 
-/* External functions */
-extern void ML__EXCLUSION_START(void *lock);
-extern void ML__EXCLUSION_STOP(void *lock);
+/* ML_$EXCLUSION_START, ML_$EXCLUSION_STOP declared in ml/ml.h via disk.h */
 extern void CRASH_SYSTEM(void *error);
 
 /* Error message */
@@ -53,7 +51,7 @@ void DISK_$DISMOUNT(uint16_t vol_idx)
         return;
     }
 
-    ML__EXCLUSION_START(&MOUNT_LOCK);
+    ML_$EXCLUSION_START(&MOUNT_LOCK);
 
     /* Invalidate buffer cache for this volume */
     DISK_$INVALIDATE(vol_idx);
@@ -125,5 +123,5 @@ void DISK_$DISMOUNT(uint16_t vol_idx)
         }
     }
 
-    ML__EXCLUSION_STOP(&MOUNT_LOCK);
+    ML_$EXCLUSION_STOP(&MOUNT_LOCK);
 }

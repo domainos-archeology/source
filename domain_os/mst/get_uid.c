@@ -9,9 +9,7 @@
 
 #include "mst.h"
 
-/* External functions */
-extern void ML__LOCK(uint16_t lock_id);
-extern void ML__UNLOCK(uint16_t lock_id);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
 
 /* External process ASID */
 extern int16_t PROC1__AS_ID;
@@ -57,7 +55,7 @@ void MST_$GET_VA_INFO(uint16_t *asid_p,
     }
 
     /* Lock and look up the entry */
-    ML__LOCK(MST_LOCK_ASID);
+    ML_$LOCK(MST_LOCK_ASID);
     FUN_00e4411c(asid, va, param_5, &entry, &status);
 
     if (status == status_$ok) {
@@ -69,7 +67,7 @@ void MST_$GET_VA_INFO(uint16_t *asid_p,
         entry_copy[3] = src[3];  /* page_info, reserved */
     }
 
-    ML__UNLOCK(MST_LOCK_ASID);
+    ML_$UNLOCK(MST_LOCK_ASID);
 
     *status_ret = status;
     if (status != status_$ok) {

@@ -45,9 +45,9 @@ void WIN_$DO_IO(void *dev_entry, int32_t *req, void *param_3, uint8_t *result)
 
     /* Handle format operation specially */
     if (op_type == 3) {
-        ML__LOCK(resource_id);
+        ML_$LOCK(resource_id);
         FUN_00e196aa(dev_entry);
-        ML__UNLOCK(resource_id);
+        ML_$UNLOCK(resource_id);
         return;
     }
 
@@ -59,7 +59,7 @@ void WIN_$DO_IO(void *dev_entry, int32_t *req, void *param_3, uint8_t *result)
     }
 
     /* Acquire resource lock */
-    ML__LOCK(resource_id);
+    ML_$LOCK(resource_id);
 
     /* Save current request info */
     *(void **)(win_data + WIN_DEV_INFO_OFFSET) = dev_entry;
@@ -171,5 +171,5 @@ error_exit:
     }
 
 done:
-    ML__UNLOCK(resource_id);
+    ML_$UNLOCK(resource_id);
 }

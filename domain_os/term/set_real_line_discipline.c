@@ -1,8 +1,6 @@
 #include "term.h"
 
-// External functions
-extern unsigned short ML_$SPIN_LOCK(void *lock);
-extern void ML_$SPIN_UNLOCK(void *lock, unsigned short token);
+/* ML_$SPIN_LOCK, ML_$SPIN_UNLOCK declared in ml/ml.h via term.h */
 extern void DTTY_$RELOAD_FONT(void);
 
 // Handler function pointer for SUMA mode

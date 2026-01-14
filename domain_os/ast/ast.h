@@ -28,6 +28,7 @@
 #define AST_H
 
 #include "base/base.h"
+#include "ml/ml.h"
 
 /* AST status codes (module 0x03) */
 #define status_$ast_incompatible_request 0x00030006
@@ -272,8 +273,7 @@ extern const char OS_MMAP_bad_install[];
  * System functions
  */
 extern void CRASH_SYSTEM(const char *msg);
-extern void ML_$LOCK(uint16_t lock_id);
-extern void ML_$UNLOCK(uint16_t lock_id);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
 extern void EC_$ADVANCE(ec_eventcount_t *ec);
 extern void EC_$WAITN(ec_eventcount_t **ecs, int32_t *values, int16_t count);
 extern void PROC1_$INHIBIT_BEGIN(void);

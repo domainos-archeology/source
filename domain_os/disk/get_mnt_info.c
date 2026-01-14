@@ -28,9 +28,7 @@
 /* Mount lock */
 extern void *MOUNT_LOCK;
 
-/* External functions */
-extern void ML__EXCLUSION_START(void *lock);
-extern void ML__EXCLUSION_STOP(void *lock);
+/* ML_$EXCLUSION_START, ML_$EXCLUSION_STOP declared in ml/ml.h via disk.h */
 
 /* Volume table offsets */
 #define DISK_MOUNT_STATE_OFFSET   0x90
@@ -79,7 +77,7 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
         return;
     }
 
-    ML__EXCLUSION_START(&MOUNT_LOCK);
+    ML_$EXCLUSION_START(&MOUNT_LOCK);
 
     offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
     vol_entry = DISK_VOLUME_BASE + offset;
@@ -88,7 +86,7 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
 
     if (mount_state != DISK_MOUNT_MOUNTED && mount_state != DISK_MOUNT_ASSIGNED) {
         *status = status_$volume_not_properly_mounted;
-        ML__EXCLUSION_STOP(&MOUNT_LOCK);
+        ML_$EXCLUSION_STOP(&MOUNT_LOCK);
         return;
     }
 
@@ -190,5 +188,5 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
     /* Clear lower 9 bits of word at +0x28 */
     *(uint16_t *)(info_bytes + 0x28) &= 0xfe00;
 
-    ML__EXCLUSION_STOP(&MOUNT_LOCK);
+    ML_$EXCLUSION_STOP(&MOUNT_LOCK);
 }

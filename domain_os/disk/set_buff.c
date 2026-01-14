@@ -13,7 +13,7 @@
 
 void DISK_$SET_BUFF(void *buffer, uint16_t flags, void *param_3)
 {
-    ML__LOCK(DISK_LOCK_ID);
+    ML_$LOCK(DISK_LOCK_ID);
     DBUF__SET_BUFF(buffer, flags, param_3);
-    ML__UNLOCK(DISK_LOCK_ID);
+    ML_$UNLOCK(DISK_LOCK_ID);
 }

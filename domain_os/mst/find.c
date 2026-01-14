@@ -16,9 +16,7 @@
 
 #include "mst.h"
 
-/* External functions */
-extern void ML__LOCK(uint16_t lock_id);
-extern void ML__UNLOCK(uint16_t lock_id);
+/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
 extern void CRASH_SYSTEM(status_$t *status);
 extern uint32_t MMU__VTOP(uint32_t virt_addr, status_$t *status);
 extern void MMAP__WIRE(uint32_t phys_addr);
@@ -47,7 +45,7 @@ uint32_t MST_$FIND(uint32_t virt_addr, uint16_t flags)
     }
 
     /* Lock MMU for translation */
-    ML__LOCK(MST_LOCK_MMU);
+    ML_$LOCK(MST_LOCK_MMU);
 
     /* Try to translate virtual to physical address */
     phys_addr = MMU__VTOP(virt_addr, status);
@@ -60,12 +58,12 @@ uint32_t MST_$FIND(uint32_t virt_addr, uint16_t flags)
         if ((flags & 2) != 0) {
             MMAP__WIRE(phys_addr);
         }
-        ML__UNLOCK(MST_LOCK_MMU);
+        ML_$UNLOCK(MST_LOCK_MMU);
         return phys_addr;
     }
 
     /* Page not mapped - unlock and call MST_$TOUCH to fault it in */
-    ML__UNLOCK(MST_LOCK_MMU);
+    ML_$UNLOCK(MST_LOCK_MMU);
 
     /* Call MST_$TOUCH with wire flag based on bit 1 of flags */
     return MST_$TOUCH(virt_addr, status, (flags & 2) != 0 ? 1 : 0);

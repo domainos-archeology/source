@@ -22,6 +22,7 @@
 #define MMAP_H
 
 #include "base/base.h"
+#include "ml/ml.h"
 
 /* MMAP status codes (module 0x06) */
 #define status_$mmap_illegal_wsl_index          0x00060009
@@ -201,8 +202,7 @@ extern const char MMAP_Error_Examined_Max[];
  * System functions
  */
 extern void CRASH_SYSTEM(const char *msg);
-extern uint16_t ML_$SPIN_LOCK(void *lock);
-extern void ML_$SPIN_UNLOCK(void *lock, uint16_t token);
+/* ML_$SPIN_LOCK, ML_$SPIN_UNLOCK declared in ml/ml.h */
 extern void MMU_$REMOVE(uint32_t vpn);
 
 /*
