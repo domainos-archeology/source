@@ -29,6 +29,9 @@ CFLAGS=-I. -O2 $(SAU2_FLAGS)
 CC := m68k-elf-gcc
 SAU2_FLAGS := -DM68K -DM68010 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68010 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
 
+LD := m68k-elf-gcc
+LDFLAGS := 
+
 all:: domain_os
 
 clean:
@@ -39,9 +42,9 @@ domain_os: make-build-dirs make-dist-dir dist/$(TARGET_SAU)/domain_os
 dist/$(TARGET_SAU)/domain_os: $(OBJS) $(ASM_OBJS)
 	@mkdir -p $(dir $@)
 	@echo "[LINK] $@"
-	@$(LD) $(LDFLAGS) -o $@ $(OBJS) $(ASM_OBJS)
+	$(LD) $(LDFLAGS) -o $@ $(OBJS) $(ASM_OBJS)
 
-$(OBJS): %.o: $(patsubst build/$(TARGET_SAU)/%.o,%.c,$(OBJS))
+build/$(TARGET_SAU)/%.o : %.c
 	@echo "[CC] $@"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
