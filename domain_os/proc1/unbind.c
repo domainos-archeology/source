@@ -12,26 +12,7 @@
 
 #include "proc1.h"
 
-/* OS stack table */
-#if defined(M68K)
-    #define OS_STACK_BASE   ((void**)0xe25c18)
-#else
-    extern void *OS_STACK_BASE[];
-#endif
-
-/* Suspend event count at 0xe205f6 */
-#if defined(M68K)
-    #define PROC1_$SUSPEND_EC   (*(uint32_t*)0xe205f6)
-#else
-    extern uint32_t PROC1_$SUSPEND_EC;
-#endif
-
-/* Timer queue base */
-#if defined(M68K)
-    #define TS_QUEUE_TABLE_BASE ((char*)0xe2a494)
-#else
-    extern char *TS_QUEUE_TABLE_BASE;
-#endif
+#define TS_QUEUE_ELEM_SIZE  12
 
 /* External functions */
 extern void PMAP_$PURGE_WS(uint16_t pid, uint16_t param);
@@ -121,7 +102,7 @@ void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret)
     }
 
     /* Flush the timer queue for this process */
-    queue_elem = TS_QUEUE_TABLE_BASE + (pid * 12) - 12;
+    queue_elem = &TS_QUEUE_TABLE[pid * TS_QUEUE_ELEM_SIZE] - 12;
     TIME_$Q_FLUSH_QUEUE(queue_elem);
 
     /* Clear bound flag */

@@ -11,20 +11,6 @@
 
 #include "proc1.h"
 
-/*
- * Load average storage (12 bytes - three 32-bit values)
- * Base address: 0xe254e8
- */
-#if defined(M68K)
-    #define LOADAV_1MIN     (*(uint32_t*)0xe254e8)
-    #define LOADAV_5MIN     (*(uint32_t*)0xe254ec)
-    #define LOADAV_15MIN    (*(uint32_t*)0xe254f0)
-#else
-    extern uint32_t LOADAV_1MIN;
-    extern uint32_t LOADAV_5MIN;
-    extern uint32_t LOADAV_15MIN;
-#endif
-
 void PROC1_$GET_LOADAV(uint32_t *loadav)
 {
     loadav[0] = LOADAV_1MIN;

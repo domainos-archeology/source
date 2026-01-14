@@ -27,13 +27,6 @@ typedef struct proc1_$info_t {
     uint8_t     cpu_total[8];   /* 0x10: CPU time (6 bytes used) */
 } proc1_$info_t;
 
-/* OS stack table */
-#if defined(M68K)
-    #define OS_STACK_BASE   ((void**)0xe25c18)
-#else
-    extern void *OS_STACK_BASE[];
-#endif
-
 /* External function to get info from interrupt context */
 extern void PROC1_$GET_INFO_INT(uint16_t pid, void *stack_base, void *stack_top,
                                  uint16_t *usr, uint32_t *upc, uint16_t *usb, uint32_t *usp);

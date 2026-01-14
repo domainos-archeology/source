@@ -14,17 +14,6 @@
 
 #include "proc1.h"
 
-/* Stack allocation globals */
-#if defined(M68K)
-    /* Free list of 4KB stacks */
-    #define STACK_FREE_LIST     (*(void**)0xe26120)
-    /* Current stack allocation high water mark */
-    #define STACK_HIGH_WATER    (*(void**)0xe26124)
-#else
-    extern void *STACK_FREE_LIST;
-    extern void *STACK_HIGH_WATER;
-#endif
-
 void PROC1_$FREE_STACK(void *stack)
 {
     void **link_ptr;

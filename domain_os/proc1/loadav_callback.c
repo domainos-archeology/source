@@ -14,19 +14,6 @@
 #include "proc1.h"
 
 /*
- * Load average storage (at 0xe254e8)
- */
-#if defined(M68K)
-    #define LOADAV_1MIN     (*(int32_t*)0xe254e8)
-    #define LOADAV_5MIN     (*(int32_t*)0xe254ec)
-    #define LOADAV_15MIN    (*(int32_t*)0xe254f0)
-#else
-    extern int32_t LOADAV_1MIN;
-    extern int32_t LOADAV_5MIN;
-    extern int32_t LOADAV_15MIN;
-#endif
-
-/*
  * M$MIS$LLL - Multiply and return high 32 bits of 64-bit result
  * This is used for fixed-point multiplication.
  * Original address: 0x00e0abd4

@@ -22,13 +22,6 @@
 
 #include "proc1.h"
 
-/* External TIME_$CLOCKH - current time high word */
-#if defined(M68K)
-    #define TIME_$CLOCKH    (*(uint32_t*)0xe2b0d4)
-#else
-    extern uint32_t TIME_$CLOCKH;
-#endif
-
 /*
  * Event count waiter structure
  * This is built on the stack for each event count being waited on

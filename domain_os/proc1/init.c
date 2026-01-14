@@ -12,39 +12,6 @@
 
 #include "proc1.h"
 
-/* Stack allocation globals (relative to base 0xe254e8) */
-#if defined(M68K)
-    /* Stack region low water mark (grows up) - base + 0xc40 */
-    #define STACK_LOW_WATER     (*(uint32_t*)0xe26128)
-    /* Stack region high water mark (grows down) - base + 0xc3c */
-    #define STACK_HIGH_WATER    (*(uint32_t*)0xe26124)
-    /* Free list of 4KB stacks - base + 0xc38 */
-    #define STACK_FREE_LIST     (*(uint32_t*)0xe26120)
-    /* OS stack for PID 1 - base + 0x734 = 0xe25c1c */
-    #define OS_STACK_PID1       (*(uint32_t*)0xe25c1c)
-    /* PCB pointer for PID 2 (idle?) */
-    #define INIT_PCB            (*(proc1_t**)0xe1ead0)
-#else
-    extern uint32_t STACK_LOW_WATER;
-    extern uint32_t STACK_HIGH_WATER;
-    extern uint32_t STACK_FREE_LIST;
-    extern uint32_t OS_STACK_PID1;
-    extern proc1_t *INIT_PCB;
-#endif
-
-/* Memory region constants */
-#define STACK_LOW_START     0x00D00000  /* Start of low stack region */
-#define STACK_HIGH_START    0x00D50000  /* Start of high stack region */
-#define OS_STACK_BASE       0x00EB2000  /* OS stack base */
-
-/* External functions */
-extern void PROC1_$SET_TYPE(uint16_t pid, uint16_t type);
-extern void PROC1_$REORDER_READY(void);
-extern void PROC1_$ADD_READY(proc1_t *pcb);
-extern void PROC1_$INIT_TS_TIMER(uint16_t pid);
-extern void PROC1_$DISPATCH(void);
-extern void PMAP_$INIT_WS_SCAN(uint16_t pid, uint16_t param);
-
 void PROC1_$INIT(void)
 {
     proc1_t *pcb;
@@ -54,19 +21,20 @@ void PROC1_$INIT(void)
      * Initialize stack allocation regions
      * Low region at 0xD00000 grows upward
      * High region at 0xD50000 grows downward
+     * These values are from proc1_config.h
      */
-    STACK_LOW_WATER = STACK_LOW_START;
-    STACK_HIGH_WATER = STACK_HIGH_START;
-    STACK_FREE_LIST = 0;  /* Empty free list */
+    STACK_LOW_WATER = (void *)PROC1_STACK_LOW_START;
+    STACK_HIGH_WATER = (void *)PROC1_STACK_HIGH_START;
+    STACK_FREE_LIST = NULL;  /* Empty free list */
 
     /* Set OS stack for PID 1 */
-    OS_STACK_PID1 = OS_STACK_BASE;
+    OS_STACK_BASE[1] = (void *)PROC1_OS_STACK_BASE;
 
     /* Set process type for PID 2 to type 3 (kernel daemon?) */
     PROC1_$SET_TYPE(2, 3);
 
     /* Get PCB for initial process (PID 2) */
-    pcb = INIT_PCB;
+    pcb = PCBS[2];
 
     /* Initialize PCB fields:
      * state = 0x10 (priority 16)
@@ -90,8 +58,8 @@ void PROC1_$INIT(void)
     }
 
     /* Make PID 2 the current process */
-    PROC1_$CURRENT_PCB = INIT_PCB;
-    PROC1_$CURRENT = INIT_PCB->mypid;
+    PROC1_$CURRENT_PCB = PCBS[2];
+    PROC1_$CURRENT = PCBS[2]->mypid;
 
     /* Initialize timeslice timers for PIDs 2 and 1 */
     PROC1_$INIT_TS_TIMER(2);

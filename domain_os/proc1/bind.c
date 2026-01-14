@@ -18,20 +18,6 @@
 
 #include "proc1.h"
 
-/* OS stack table - base at 0xe25c18 (0xe254e8 + 0x730) */
-#if defined(M68K)
-    #define OS_STACK_BASE   ((void**)0xe25c18)
-#else
-    extern void *OS_STACK_BASE[];
-#endif
-
-/* Process statistics table - base at 0xe25d10 */
-#if defined(M68K)
-    #define PROC_STATS_BASE ((uint32_t*)0xe25d10)
-#else
-    extern uint32_t PROC_STATS_BASE[];
-#endif
-
 /* External functions */
 extern void ML_$LOCK(uint16_t lock_id);
 extern void ML_$UNLOCK(uint16_t lock_id);

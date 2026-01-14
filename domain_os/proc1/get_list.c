@@ -13,13 +13,6 @@
 
 #include "proc1.h"
 
-/* Process type table */
-#if defined(M68K)
-    #define PROC1_$TYPE_TABLE   ((uint16_t*)0xe2612a)
-#else
-    extern uint16_t PROC1_$TYPE_TABLE[];
-#endif
-
 /*
  * Process list entry structure (4 bytes)
  */
@@ -58,6 +51,6 @@ void PROC1_$GET_LIST(int16_t *count_ret, proc_list_entry_t *list_ret)
         /* Add to list */
         count = ++(*count_ret);
         list_ret[count - 1].pid = pcb->mypid;
-        list_ret[count - 1].type = PROC1_$TYPE_TABLE[pcb->mypid];
+        list_ret[count - 1].type = PROC1_$TYPE[pcb->mypid];
     }
 }

@@ -11,13 +11,6 @@
 
 #include "proc1.h"
 
-/* Timeslice values table indexed by state - 0xe205d2 */
-#if defined(M68K)
-    #define TIMESLICE_TABLE     ((int16_t*)0xe205d2)
-#else
-    extern int16_t TIMESLICE_TABLE[];
-#endif
-
 /*
  * Timer callback info structure
  * The first field points to another structure containing PID at offset 0x0a

@@ -23,6 +23,7 @@
 
 #include "base/base.h"
 #include "ec/ec.h"
+#include "proc1/proc1_config.h"
 
 /*
  * Process Control Block (PCB) structure
@@ -86,11 +87,6 @@ typedef struct proc1_t {
 #define PROC1_FLAG_BOUND        0x08    /* Process is bound (in use) */
 
 /*
- * Maximum number of processes
- */
-#define PROC1_MAX_PROCESSES     65      /* 0x41: PIDs 0-64 */
-
-/*
  * Lock IDs for PROC1_$SET_LOCK / PROC1_$CLR_LOCK
  * Locks are implemented as bits in resource_locks_held
  */
@@ -106,26 +102,81 @@ typedef struct proc1_t {
 #define status_$process_already_suspended   0x000A0004
 
 /*
- * Global variables
+ * Timer callback entry structure (28 bytes per process)
+ * Original address: 0xE254E8
  */
-#if defined(M68K)
-    #define PROC1_$CURRENT_PCB      (*(proc1_t**)0xE1EAC8)
-    #define PROC1_$CURRENT          (*(uint16_t*)0xE20608)
-    #define PROC1_$READY_COUNT      (*(uint16_t*)0xE1EBD0)
-    #define PROC1_$ATOMIC_OP_DEPTH  (*(uint16_t*)0xE2060E)
-    #define PROC1_$AS_ID            (*(uint16_t*)0xE2060A)
-    #define PCBS                    ((proc1_t**)0xE1EACC)
-    #define PROC1_$TYPE             ((uint16_t*)0xE2612A)
-#else
-    extern proc1_t *PROC1_$CURRENT_PCB;
-    extern proc1_t *PROC1_$READY_PCB;
-    extern uint16_t PROC1_$CURRENT;
-    extern uint16_t PROC1_$READY_COUNT;
-    extern uint16_t PROC1_$ATOMIC_OP_DEPTH;
-    extern uint16_t PROC1_$AS_ID;
-    extern proc1_t *PCBS[];
-    extern uint16_t PROC1_$TYPE[];
-#endif
+typedef struct ts_timer_entry_t {
+    uint32_t field_00;
+    uint32_t field_04;
+    uint32_t field_08;
+    uint32_t field_0c;
+    uint32_t field_10;
+    void     *callback_info;    /* 0x14 */
+    void     (*callback)(void*);/* 0x18 */
+    uint32_t callback_param;    /* 0x1C */
+    uint32_t cpu_time_high;     /* 0x20 */
+    uint16_t cpu_time_low;      /* 0x24 */
+    uint16_t field_26;          /* 0x26 */
+} ts_timer_entry_t;
+
+/*
+ * Maximum number of state/priority levels for timeslice table
+ */
+#define PROC1_MAX_STATES 32
+
+/*
+ * ============================================================================
+ * Global Variables
+ * ============================================================================
+ *
+ * These are defined in proc1_data.c with appropriate sizes.
+ * The original M68K addresses are documented for reference.
+ */
+
+/*
+ * Core process state (M68K addresses in comments)
+ */
+extern proc1_t *PROC1_$CURRENT_PCB;     /* 0xE1EAC8: Current running process */
+extern proc1_t *PROC1_$READY_PCB;       /* PC-relative: Head of ready list */
+extern uint16_t PROC1_$CURRENT;         /* 0xE20608: Current process ID */
+extern uint16_t PROC1_$READY_COUNT;     /* 0xE1EBD0: Number of ready processes */
+extern uint16_t PROC1_$ATOMIC_OP_DEPTH; /* 0xE2060E: Atomic operation nesting */
+extern uint16_t PROC1_$AS_ID;           /* 0xE2060A: Current address space ID */
+extern proc1_t *PCBS[PROC1_MAX_PROCESSES];      /* 0xE1EACC: PCB pointer table */
+extern uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES]; /* 0xE2612A: Process types */
+
+/*
+ * Stack allocation (M68K base: 0xE254E8)
+ */
+extern void *STACK_FREE_LIST;           /* 0xE26120: Free list of 4KB stacks */
+extern void *STACK_HIGH_WATER;          /* 0xE26124: High water (grows down) */
+extern void *STACK_LOW_WATER;           /* 0xE26128: Low water (grows up) */
+extern void *OS_STACK_BASE[PROC1_MAX_PROCESSES]; /* 0xE25C18: OS stacks */
+
+/*
+ * Process statistics - 16 bytes per process (4 uint32_t values)
+ * Original address: 0xE25D10
+ */
+extern uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
+
+/*
+ * Timer data
+ */
+extern ts_timer_entry_t TS_TIMER_TABLE[PROC1_MAX_PROCESSES]; /* 0xE254E8 */
+extern char TS_QUEUE_TABLE[PROC1_MAX_PROCESSES * 12];        /* 0xE2A494 */
+extern int16_t TIMESLICE_TABLE[PROC1_MAX_STATES];            /* 0xE205D2 */
+
+/*
+ * Load average data
+ */
+extern int32_t LOADAV_1MIN;             /* 1-minute load average */
+extern int32_t LOADAV_5MIN;             /* 5-minute load average */
+extern int32_t LOADAV_15MIN;            /* 15-minute load average */
+
+/*
+ * Event count for process suspension
+ */
+extern uint32_t PROC1_$SUSPEND_EC;      /* 0xE205F6: Suspend event count */
 
 /*
  * External functions

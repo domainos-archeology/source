@@ -16,27 +16,13 @@
 
 #include "proc1.h"
 
-/* Stack allocation globals (offsets from 0xe254e8 base) */
-#if defined(M68K)
-    /* Free list of 4KB stacks */
-    #define STACK_FREE_LIST     (*(void**)0xe26120)  /* base + 0xc38 */
-    /* Current stack allocation high water mark (grows down) */
-    #define STACK_HIGH_WATER    (*(void**)0xe26124)  /* base + 0xc3c */
-    /* Current stack allocation low water mark (grows up) */
-    #define STACK_LOW_WATER     (*(void**)0xe26128)  /* base + 0xc40 */
-#else
-    extern void *STACK_FREE_LIST;
-    extern void *STACK_HIGH_WATER;
-    extern void *STACK_LOW_WATER;
-#endif
-
 /* External functions */
 extern void ML_$LOCK(uint16_t lock_id);
 extern void ML_$UNLOCK(uint16_t lock_id);
 extern void WP_$CALLOC(uint32_t *page_out, status_$t *status);
 extern void MMU_$INSTALL(uint32_t page, uint32_t vaddr, uint16_t flags);
 
-/* Stack page size constants */
+/* Stack page size constants (also in proc1_config.h) */
 #define STACK_PAGE_SIZE     0x400   /* 1KB pages */
 #define STACK_MIN_LARGE     0x1000  /* 4KB threshold for "large" stacks */
 

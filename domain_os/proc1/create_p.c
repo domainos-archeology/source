@@ -18,13 +18,6 @@
 
 #include "proc1.h"
 
-/* Process type table at 0xe2612a (base + 0xc42) */
-#if defined(M68K)
-    #define PROC1_$TYPE_TABLE   ((uint16_t*)0xe2612a)
-#else
-    extern uint16_t PROC1_$TYPE_TABLE[];
-#endif
-
 /* External functions */
 extern void *PROC1_$ALLOC_STACK(int16_t size, status_$t *status_ret);
 extern uint16_t PROC1_$BIND(void *funcptr, void *stack1, void *stack2,
@@ -85,7 +78,7 @@ uint16_t PROC1_$CREATE_P(void *funcptr, uint32_t type, status_$t *status_ret)
     }
 
     /* Set process type in type table */
-    PROC1_$TYPE_TABLE[pid] = proc_type;
+    PROC1_$TYPE[pid] = proc_type;
 
     /* Resume the process to start execution */
     PROC1_$RESUME(pid, status_ret);
