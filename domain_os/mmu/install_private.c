@@ -5,20 +5,32 @@
  * mapping is private to a single address space. After installing,
  * it clears the global bit in the PMAPE entry.
  *
+ * Parameters:
+ *   ppn - Physical page number
+ *   va - Virtual address
+ *   flags - Packed flags: byte 1 = ASID, byte 3 = protection
+ *           Use MMU_FLAGS(asid, prot) macro to construct
+ *
  * Original address: 0x00e23f82
  */
 
 #include "mmu.h"
 
 /* Forward declaration of internal install helper */
-extern void mmu_$installi(uint16_t ppn, uint32_t va, uint32_t asid_prot);
+extern void mmu_$installi(uint16_t ppn, uint32_t va, uint32_t packed_info);
 
-void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint8_t asid, uint8_t prot)
+void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     uint16_t saved_sr;
     uint16_t old_csr;
     uint32_t packed_info;
     uint32_t *pmape;
+    uint8_t prot;
+    uint8_t asid;
+
+    /* Extract ASID and protection from packed flags */
+    asid = (flags >> 16) & 0xFF;
+    prot = flags & 0xFF;
 
     /* Pack ASID and protection (same as MMU_$INSTALL) */
     packed_info = va;

@@ -218,15 +218,22 @@ void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
 /* Remove all mappings for an address space ID */
 void MMU_$REMOVE_ASID(uint16_t asid);
 
+/*
+ * MMU install flags packing macro
+ * The flags parameter encodes ASID and protection bits in a packed format:
+ *   - Byte 1 (bits 16-23): ASID
+ *   - Byte 3 (bits 0-7): Protection bits
+ */
+#define MMU_FLAGS(asid, prot) (((uint32_t)(asid) << 16) | (uint32_t)(prot))
+
 /* Install a mapping (private, no global bit) */
-void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint8_t asid, uint8_t prot);
+void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint32_t flags);
 
 /* Install mappings for a list of physical pages */
-void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va,
-                       uint8_t asid, uint8_t prot);
+void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va, uint32_t flags);
 
 /* Install a mapping with global bit */
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint8_t asid, uint8_t prot);
+void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags);
 
 /* Translate virtual address to physical page number */
 uint32_t MMU_$VTOP(uint32_t va, status_$t *status);

@@ -4,24 +4,36 @@
  * Installs multiple contiguous virtual-to-physical mappings
  * efficiently in a single critical section.
  *
+ * Parameters:
+ *   count - Number of pages to map
+ *   ppn_array - Array of physical page numbers
+ *   va - Starting virtual address
+ *   flags - Packed flags: byte 1 = ASID, byte 3 = protection
+ *           Use MMU_FLAGS(asid, prot) macro to construct
+ *
  * Original address: 0x00e23fde
  */
 
 #include "mmu.h"
 
 /* Forward declaration of internal install helper */
-extern void mmu_$installi(uint16_t ppn, uint32_t va, uint32_t asid_prot);
+extern void mmu_$installi(uint16_t ppn, uint32_t va, uint32_t packed_info);
 
-void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va,
-                       uint8_t asid, uint8_t prot)
+void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va, uint32_t flags)
 {
     uint16_t saved_sr;
     uint16_t old_csr;
     uint32_t packed_base;
     uint32_t packed_info;
     int16_t i;
+    uint8_t prot;
+    uint8_t asid;
 
     if (count == 0) return;
+
+    /* Extract ASID and protection from packed flags */
+    asid = (flags >> 16) & 0xFF;
+    prot = flags & 0xFF;
 
     /* Pack ASID and protection for the base address */
     packed_base = va;
