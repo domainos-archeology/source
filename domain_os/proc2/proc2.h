@@ -45,6 +45,7 @@
 #define status_$proc2_bad_eventcount_key        0x0019000B
 #define status_$proc2_zombie                    0x0019000E
 #define status_$proc2_permission_denied         0x00190012
+#define status_$proc2_process_already_debugging 0x00190011
 #define status_$proc2_already_orphan            0x00190014
 #define status_$proc2_process_is_group_leader   0x00190015
 #define status_$proc2_process_using_pgroup_id   0x00190016
@@ -133,9 +134,10 @@ typedef struct proc2_info_t {
     uint16_t    pad_18[2];      /* 0x18: Unknown */
     uint16_t    owner_session;  /* 0x1C: Owning session (used for permission checks) */
     uint16_t    parent_pgroup_idx; /* 0x1E: Parent's pgroup index (for permission checks) */
-    uint16_t    pad_20[3];      /* 0x20: Unknown */
+    uint16_t    pad_20[2];      /* 0x20: Unknown */
+    uint16_t    first_debug_target_idx; /* 0x24: First process in debug target list (if debugger) */
     uint16_t    debugger_idx;   /* 0x26: Debugger process index (for GET_DEBUGGER_PID) */
-    uint16_t    pad_28;         /* 0x28: Unknown */
+    uint16_t    next_debug_target_idx;  /* 0x28: Next process in debugger's target list */
 
     uint16_t    flags;          /* 0x2A: Process flags */
                                 /*   Bit 13 (0x2000): Zombie */
