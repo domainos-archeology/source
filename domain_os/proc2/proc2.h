@@ -553,9 +553,14 @@ void PROC2_$RESUME(uid_$t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$WAIT - Wait for child process
+ * Unix-style wait for child state changes.
+ * Options: bit 0 = WNOHANG
+ * Pid: -1=any, 0=same pgroup, >0=specific, <0=pgroup
+ * Returns PID of waited child or 0 for WNOHANG with no child ready.
  * Original address: 0x00e3fdd0
  */
-void PROC2_$WAIT(void *status_ret, status_$t *st);
+int16_t PROC2_$WAIT(uint16_t *options, int16_t *pid, uint32_t *result,
+                    status_$t *status_ret);
 
 /*
  * PROC2_$MAKE_ORPHAN - Make process an orphan
@@ -655,9 +660,11 @@ void PROC2_$GET_REGS(uid_$t *proc_uid, void *regs, status_$t *status_ret);
 
 /*
  * PROC2_$AWAKEN_GUARDIAN - Awaken guardian process
+ * Notifies debugger/parent of child process state change.
+ * Sends SIGTSTP and SIGCHLD to guardian.
  * Original address: 0x00e3e960
  */
-void PROC2_$AWAKEN_GUARDIAN(void);
+void PROC2_$AWAKEN_GUARDIAN(int16_t *proc_index);
 
 /*
  * PROC2_$SET_SERVER - Set server flag for process
@@ -693,9 +700,11 @@ void PROC2_$SET_CLEANUP(uint16_t bit_num);
 
 /*
  * PROC2_$SET_ACCT_INFO - Set accounting info
+ * Sets accounting string (max 32 bytes) and accounting UID.
  * Original address: 0x00e41ac0
  */
-void PROC2_$SET_ACCT_INFO(void *info, status_$t *status_ret);
+void PROC2_$SET_ACCT_INFO(uint8_t *info, int16_t *info_len, uid_$t *acct_uid,
+                          status_$t *status_ret);
 
 /*
  * PROC2_$GET_BOOT_FLAGS - Get boot flags
@@ -720,9 +729,10 @@ void PROC2_$SET_TTY(uid_$t *tty_uid);
 
 /*
  * PROC2_$SET_SESSION_ID - Set session ID
+ * Sets session ID with validation for group leader and pgroup conflicts.
  * Original address: 0x00e41c42
  */
-void PROC2_$SET_SESSION_ID(uint16_t session_id, status_$t *status_ret);
+void PROC2_$SET_SESSION_ID(int8_t *flags, int16_t *session_id, status_$t *status_ret);
 
 /*
  * PROC2_$GET_CPU_USAGE - Get CPU usage for current process
