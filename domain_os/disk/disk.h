@@ -143,12 +143,12 @@ void DISK_$INVALIDATE(uint16_t vol_idx);
 
 /* Queue operations */
 void DISK_$INIT_QUE(void *queue);
-void DISK_$ADD_QUE(void *req);
+void DISK_$ADD_QUE(uint16_t flags, void *dev_entry, void *queue, void *req_list);
 void DISK_$WAIT_QUE(void *queue, status_$t *status);
 void DISK_$ERROR_QUE(void *req, uint16_t param_2, void *param_3);
 void *DISK_$GET_QBLKS(int16_t vol_idx, int16_t count, status_$t *status);
 void DISK_$RTN_QBLKS(void *blocks);
-void DISK_$SORT(void *queue, void *param_2);
+void DISK_$SORT(void *dev_entry, void **queue_ptr);
 
 /* I/O operations */
 void DISK_$READ(int16_t vol_idx, void *buffer, void *daddr, void *count,
@@ -159,11 +159,12 @@ void DISK_$READ_MULTI(int16_t vol_idx, void *req_list, void *param_3,
                       status_$t *status);
 void DISK_$WRITE_MULTI(int16_t vol_idx, void *req_list, void *param_3,
                        status_$t *status);
-void DISK_$DO_IO(void *req, void *buffer, void *param_3, uint32_t lba);
+void DISK_$DO_IO(void *dev_entry, void *req, void *param_3, void *result);
 
 /* Format operations */
-void DISK_$FORMAT(int16_t vol_idx, void *params, status_$t *status);
-void DISK_$FORMAT_WHOLE(int16_t vol_idx, void *params, status_$t *status);
+void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
+                  status_$t *status);
+void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status);
 
 /* Device management */
 uint8_t DISK_$REGISTER(uint16_t *type, uint16_t *controller, uint16_t *units,
@@ -182,6 +183,25 @@ void DISK_$REVALIDATE(int16_t vol_idx);
 void DISK_$DISMOUNT(uint16_t vol_idx);
 void DISK_$GET_ERROR_INFO(void *buffer);
 void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status);
+
+/* Async I/O operations */
+void DISK_$AS_READ(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr, uint16_t *count_ptr,
+                   uint32_t *info, status_$t *status);
+void DISK_$AS_WRITE(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr, uint32_t buffer,
+                    uint32_t *info, status_$t *status);
+void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
+                          int16_t *op_type_ptr, uint32_t *daddr_array,
+                          uint32_t **info_array, uint32_t *buffer_array,
+                          uint32_t *status_array, status_$t *status);
+void DISK_$AS_OPTIONS(uint16_t *vol_idx_ptr, uint16_t *options_ptr, status_$t *status);
+
+/* Diagnostic and manufacturing operations */
+void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
+                   void *buffer, uint32_t *info, status_$t *status);
+void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *buffer_ptr,
+                              uint32_t count, status_$t *status);
+void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
+                         status_$t *status);
 
 /*
  * External functions used by DISK
