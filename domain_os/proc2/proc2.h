@@ -439,26 +439,48 @@ void PROC2_$QUIT(uid_$t *proc_uid, status_$t *status_ret);
  * PROC2_$SIGNAL_PGROUP - Send signal to process group
  * Original address: 0x00e3f23e
  */
-void PROC2_$SIGNAL_PGROUP(uid_$t *pgroup_uid, uint16_t signal, status_$t *status_ret);
+void PROC2_$SIGNAL_PGROUP(uid_$t *pgroup_uid, int16_t *signal, uint32_t *param,
+                          status_$t *status_ret);
 
 /*
  * PROC2_$SIGNAL_PGROUP_OS - Send signal to process group (OS)
  * Original address: 0x00e3f2c2
  */
-void PROC2_$SIGNAL_PGROUP_OS(uid_$t *pgroup_uid, uint16_t signal, void *param,
+void PROC2_$SIGNAL_PGROUP_OS(uid_$t *pgroup_uid, int16_t *signal, uint32_t *param,
                              status_$t *status_ret);
 
 /*
- * PROC2_$ACKNOWLEDGE - Acknowledge signal
- * Original address: 0x00e3f338
+ * PROC2_$UID_TO_PGROUP_INDEX - Convert pgroup UID to index
+ * Internal helper to get process group index from UID.
+ * Original address: 0x00e42272
  */
-void PROC2_$ACKNOWLEDGE(status_$t *status_ret);
+int16_t PROC2_$UID_TO_PGROUP_INDEX(uid_$t *pgroup_uid, status_$t *status_ret);
 
 /*
- * PROC2_$DELIVER_FIM - Deliver fault to process
+ * PROC2_$ACKNOWLEDGE - Acknowledge signal delivery
+ * Called by signal handlers after processing a signal.
+ * Clears signal masks and handles job control suspension.
+ * Original address: 0x00e3f338
+ */
+void PROC2_$ACKNOWLEDGE(uint32_t *handler_addr, int16_t *signal, uint32_t *result);
+
+/*
+ * PROC2_$DELIVER_PENDING_INTERNAL - Deliver pending signals (internal)
+ * Internal helper to deliver all pending signals to a process.
+ * Original address: 0x00e3ecea
+ */
+void PROC2_$DELIVER_PENDING_INTERNAL(int16_t index);
+
+/*
+ * PROC2_$DELIVER_FIM - Deliver Fault Interrupt Message
+ * Delivers a fault/signal to the current process.
+ * Returns 0xFF on success, 0 on failure/no signal.
  * Original address: 0x00e3edc0
  */
-void PROC2_$DELIVER_FIM(uid_$t *proc_uid, void *fault_info, status_$t *status_ret);
+int8_t PROC2_$DELIVER_FIM(int16_t *signal_ret, status_$t *status,
+                          uint32_t *handler_addr_ret,
+                          void *fault_param1, void *fault_param2,
+                          uint32_t *mask_ret, int8_t *flag_ret);
 
 /*
  * PROC2_$DELIVER_PENDING - Deliver pending signals
@@ -496,16 +518,20 @@ uint32_t PROC2_$SIGSETMASK(uint32_t *mask_ptr, uint32_t *result);
 void PROC2_$GET_SIG_MASK(proc2_sig_mask_t *mask_ret);
 
 /*
- * PROC2_$SET_SIG_MASK - Set signal mask
+ * PROC2_$SET_SIG_MASK - Set signal mask (extended)
+ * Takes clear and set mask structures (8 uint32_t each).
+ * Operation: new = (old & ~clear) | set
  * Original address: 0x00e3f7de
  */
-void PROC2_$SET_SIG_MASK(uint32_t mask);
+void PROC2_$SET_SIG_MASK(int16_t *priority_delta, uint32_t *clear_mask,
+                          uint32_t *set_mask, uint32_t *result);
 
 /*
  * PROC2_$SIGPAUSE - Pause waiting for signal
+ * Temporarily sets signal mask and waits for signal.
  * Original address: 0x00e3fa10
  */
-void PROC2_$SIGPAUSE(uint32_t mask);
+void PROC2_$SIGPAUSE(uint32_t *new_mask, uint32_t *result);
 
 /*
  * ============================================================================
