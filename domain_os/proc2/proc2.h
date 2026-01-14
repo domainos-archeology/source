@@ -424,9 +424,25 @@ void PROC2_$CREATE(uid_$t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
 
 /*
  * PROC2_$FORK - Fork current process
+ *
+ * Forks the current process, creating a child with a copy of the
+ * address space (or shared for vfork).
+ *
+ * Parameters:
+ *   entry_point - Pointer to entry point for child
+ *   user_data   - Pointer to user data passed to child startup
+ *   fork_flags  - Pointer to fork flags (0 = vfork semantics, non-0 = fork)
+ *   uid_ret     - Output: child process UID
+ *   reserved    - Reserved (unused)
+ *   upid_ret    - Output: child's UPID
+ *   ec_ret      - Output: eventcount handle for fork completion
+ *   status_ret  - Pointer to receive status
+ *
  * Original address: 0x00e72bce
  */
-void PROC2_$FORK(void *params, uid_$t *uid_ret, status_$t *status_ret);
+void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
+                 uid_$t *uid_ret, uint32_t reserved, uint16_t *upid_ret,
+                 void **ec_ret, status_$t *status_ret);
 
 /*
  * PROC2_$COMPLETE_FORK - Complete fork in child
