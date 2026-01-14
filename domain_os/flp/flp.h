@@ -158,13 +158,21 @@ void FLP_$REVALIDATE(void *disk_info);
 void FLP_$DO_IO(void *param_1, void *param_2, void *param_3, uint32_t param_4);
 
 /* Internal functions */
-extern void FLP_DO_IO(void *p1, void *p2, void *p3, uint16_t p4_hi, uint32_t p4_lo);
-extern status_$t SHAKE(void *regs, void *data1, void *data2);
+void FLP_DO_IO(void *req, void *buf, void *param3, uint16_t lba_hi, uint32_t lba_lo);
+status_$t SHAKE(uint16_t *data_buf, int16_t *count_ptr, int16_t *dir_ptr);
+status_$t EXCS(uint16_t *cmd_buf, void *cmd_sig, void *req);
+void FLP_FORMAT_TRACK(void *req, void *buf);
+
+/* External functions used by FLP */
 extern void DISK__REGISTER(void *p1, void *p2, void *p3, void *p4, void **p5);
 extern void EC__INIT(void *ec);
 extern void EC__ADVANCE_WITHOUT_DISPATCH(void *ec);
-extern status_$t EXCS(void *p1, void *p2, void *p3);
+extern int16_t EC__WAIT(void *ec_list, uint32_t *value);
 extern uint32_t MMU__VTOP(uint32_t va, status_$t *status);
 extern void WP__WIRE(uint32_t phys);
+extern void ML__LOCK(int16_t lock);
+extern void ML__UNLOCK(int16_t lock);
+extern int16_t PARITY__CHK_IO(int16_t mode, uint32_t addr);
+extern status_$t check_dma_error(int16_t channel);
 
 #endif /* FLP_H */
