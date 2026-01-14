@@ -16,7 +16,8 @@ SRCS := \
   $(wildcard proc1/*.c) \
   $(wildcard proc2/*.c) \
   $(wildcard term/*.c) \
-  $(wildcard tty/*.c)
+  $(wildcard tty/*.c) \
+  $(wildcard uid/*.c)
 
 # Assembly files (platform-specific)
 ASM_SRCS := $(wildcard ec/$(TARGET_SAU)/*.s) $(wildcard ml/$(TARGET_SAU)/*.s) $(wildcard proc1/$(TARGET_SAU)/*.s)
