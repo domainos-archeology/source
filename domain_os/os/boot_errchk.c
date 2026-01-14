@@ -10,7 +10,6 @@
 // External formatting and display functions
 extern void VFMT_$FORMATN(const char *format, char *buf, short *len_ptr, ...);
 extern void CRASH_SHOW_STRING(const char *str);
-extern void TIME_$WAIT(const void *duration, const void *ref, status_$t *status);
 
 // Static wait duration data (from original binary)
 static const char wait_duration[] = { 0, 0 };  // Brief delay

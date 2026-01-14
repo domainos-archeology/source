@@ -8,12 +8,6 @@
 
 #include "proc1.h"
 
-/* External declarations */
-extern void TIME_$CLOCK(void *clock_out);
-extern void TIME_$Q_ENTER_ELEM(void *queue, void *time, void *callback_info, status_$t *status);
-extern void PROC1_$LOADAV_CALLBACK(void);
-extern void *TIME_$RTEQ;  /* Real-time event queue at 0xe2a7a0 */
-
 /*
  * Callback interval: 0x0013:12d0 = 5 seconds in clock ticks
  * (assuming 250 ticks per second: 5 * 250 * 256 = 0x13:12d0 in 48-bit format)

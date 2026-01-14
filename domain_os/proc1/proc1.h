@@ -179,14 +179,6 @@ extern int32_t LOADAV_15MIN;            /* 15-minute load average */
 
 extern ec_$eventcount_t PROC1_$SUSPEND_EC; /* 0xE205F6: Suspend event count */
 
-/*
- * External functions
- */
-extern void TIME_$VT_TIMER(void);
-extern void TIME_$WRT_VT_TIMER(void);
-extern void TIME_$Q_ENTER_ELEM(void *queue, void *time, void *callback, status_$t *status);
-extern uint32_t TIME_$CLOCKH;
-
 extern void INIT_STACK(proc1_t *pcb, void *params);
 
 /*

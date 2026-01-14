@@ -34,7 +34,6 @@ uint32_t CRASH_USP;                         /* User stack pointer */
 #define CRASH_MAGIC      0xabcdef01
 
 /* External references */
-extern uint32_t TIME_$CLOCKH;              /* High word of system clock */
 extern void *PROM_$QUIET_RET_ADDR;         /* PROM warm restart entry */
 
 /* Keyboard functions */

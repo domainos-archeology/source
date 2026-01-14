@@ -42,12 +42,6 @@ extern uint32_t FIM_$INITIAL_STACK_SIZE;
 #endif
 
 /* External functions */
-extern void TIME_$CLOCK(uint32_t *clock_ret);
-extern uint16_t MST_$ALLOC_ASID(status_$t *status_ret);
-extern void MST_$FREE_ASID(uint16_t asid, status_$t *status_ret);
-extern void MST_$FORK(uint16_t child_asid, uint16_t child_pid, int32_t fork_flags, status_$t *status);
-extern void MST_$GET_VA_INFO(uint16_t *asid, void *param1, void *param2, void *param3,
-                              void *param4, void *param5, void *param6, status_$t *status);
 extern void ACL_$ALLOC_ASID(uint16_t pid, status_$t *status_ret);
 extern void AUDIT_$INHERIT_AUDIT(int16_t *pid_ptr, int16_t *status_ptr);
 extern void NAME_$FORK(uint16_t *parent_asid, int16_t *child_asid);

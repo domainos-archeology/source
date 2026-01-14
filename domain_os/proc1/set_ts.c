@@ -13,11 +13,6 @@
 
 #include "proc1.h"
 
-/* External timer queue re-enter function */
-extern void TIME_$Q_REENTER_ELEM(void *queue_elem, void *time, uint16_t flags,
-                                  void *dest_time, void *callback_info,
-                                  status_$t *status);
-
 /* Size of timer queue element (12 bytes) */
 #define TS_QUEUE_ELEM_SIZE  12
 

@@ -25,18 +25,6 @@
 #include "time/time.h"
 #include "ml/ml.h"
 
-/*
- * External references:
- *   TIME_$CLOCKH - High word of system clock (0x00e2b0d4)
- *   TIME_$ABS_CLOCK - Get absolute clock value
- *   ML_$SPIN_LOCK - Acquire spin lock
- *   ML_$SPIN_UNLOCK - Release spin lock
- */
-extern uint32_t TIME_$CLOCKH;
-extern void TIME_$ABS_CLOCK(uint32_t *clock_out);
-extern uint16_t ML_$SPIN_LOCK(uint16_t *lock);
-extern void ML_$SPIN_UNLOCK(uint16_t *lock, uint16_t token);
-
 void UID_$GEN(uid_t *uid_ret)
 {
     uint32_t clock_val;

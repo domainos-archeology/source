@@ -11,9 +11,6 @@
 /* Device registration table */
 #define DISK_DEVICE_TABLE  ((uint8_t *)0x00e7ad5c)
 
-/* Time wait function */
-extern void TIME_$WAIT(void *timeout_type, void *timeout, status_$t *status);
-
 /* Timeout type constant */
 static uint16_t timeout_type = 0;  /* Embedded in code at 0xe3db72 */
 

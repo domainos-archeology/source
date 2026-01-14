@@ -30,12 +30,7 @@
 extern uid_t UID_$NIL;
 extern uint32_t FIM_$INITIAL_STACK_SIZE;
 
-/* External functions (not in headers) */
-extern void TIME_$CLOCK(uint32_t *clock_ret);
-extern uint16_t MST_$ALLOC_ASID(status_$t *status_ret);
-extern void MST_$FREE_ASID(uint16_t asid, status_$t *status_ret);
-extern void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
-                                   uint32_t map_param, uint32_t flags, status_$t *status_ret);
+/* External functions */
 extern void FIM_$FP_INIT(uint16_t asid);
 extern void ACL_$ALLOC_ASID(uint16_t pid, status_$t *status_ret);
 extern void AUDIT_$INHERIT_AUDIT(int16_t *pid_ptr, int16_t *status_ptr);

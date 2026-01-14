@@ -65,6 +65,25 @@ typedef long status_$t;
 // =============================================================================
 typedef uint32_t m68k_ptr_t;
 
+// ============================================================================= 
+// UID structure - 8 bytes
+//
+// Memory layout uses high word first (big-endian order).
+// =============================================================================
+typedef struct uid_t {
+    uint32_t high;      /* 0x00: High word (timestamp-based) */
+    uint32_t low;       /* 0x04: Low word (node ID + counter) */
+} uid_t;
+
+/*
+ * UID_$NIL - The nil/empty UID (all zeros)
+ *
+ * Used to represent "no UID" or an uninitialized UID.
+ * Original address: (data constant)
+ */
+extern const uid_t UID_$NIL;
+
+
 // =============================================================================
 // Clock type
 // =============================================================================

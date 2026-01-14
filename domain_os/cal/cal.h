@@ -30,8 +30,6 @@ extern volatile char CAL_$CONTROL_VIRTUAL_ADDR;    // 0x00ffa820
 extern volatile char CAL_$WRITE_DATA_VIRTUAL_ADDR; // 0x00ffa822
 
 // External references
-extern uint TIME_$CLOCKH; // High word of system clock at 0x00e2b0d4
-extern void TIME_$CLOCK(clock_t *clock);
 extern char NETWORK_$DISKLESS;
 extern char NETWORK_$REALLY_DISKLESS;
 

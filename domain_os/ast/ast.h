@@ -264,8 +264,6 @@ extern const char OS_MMAP_bad_install[];
 /*
  * System functions
  */
-extern void TIME_$CLOCK(uint32_t *clock);
-extern uint16_t UID_$HASH(uid_t *uid, void *table);
 extern void WP_$CALLOC(uint32_t *ppn, status_$t *status);
 extern void NETWORK_$INSTALL_NET(uint32_t node, void *info, status_$t *status);
 extern void NETWORK_$AST_GET_INFO(void *uid_info, uint16_t *flags, void *attrs,

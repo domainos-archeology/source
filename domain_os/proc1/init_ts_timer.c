@@ -11,11 +11,6 @@
 
 #include "proc1.h"
 
-/* External declarations */
-extern void TIME_$Q_ENTER_ELEM(void *queue_elem, void *time, void *callback_info,
-                                status_$t *status);
-extern void PROC1_$TS_END_CALLBACK(void *timer_info);
-
 #define TS_QUEUE_ELEM_SIZE      0x0c    /* 12 bytes per queue element */
 
 void PROC1_$INIT_TS_TIMER(uint16_t pid)

@@ -13,9 +13,6 @@
 
 #include "proc1.h"
 
-/* External TIME_$VT_TIMER */
-extern int16_t TIME_$VT_TIMER(void);
-
 void PROC1_$GET_CPU_USAGE(void *time_ret, uint32_t *stat1_ret, uint32_t *stat2_ret)
 {
     proc1_t *pcb;

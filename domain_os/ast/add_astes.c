@@ -10,6 +10,7 @@
 
 #include "ast.h"
 #include "misc/misc.h"
+#include "mmu/mmu.h"
 
 uint16_t AST_$ADD_ASTES(uint16_t *count, status_$t *status)
 {

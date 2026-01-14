@@ -13,9 +13,6 @@
 
 #include "proc1.h"
 
-/* External TIME_$VT_TIMER - returns current virtual timer value */
-extern int16_t TIME_$VT_TIMER(void);
-
 /*
  * get_current_cpu_time - Internal helper to compute current CPU time
  * Original: FUN_00e208d0

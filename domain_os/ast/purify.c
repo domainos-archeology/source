@@ -25,8 +25,6 @@
 extern void FUN_00e0209e(uid_t *uid);  /* Look up AOTE by UID */
 extern void FUN_00e020fa(uid_t *uid, uint16_t segment, status_$t *status, int8_t force);
 extern void FUN_00e013a0(aote_t *aote, uint16_t flags, status_$t *status);
-extern void TIME_$CLOCK(uint32_t *clock);
-extern void TIME_$ABS_CLOCK(uint32_t *clock, uint32_t delta);
 
 uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
                      uint32_t *segment_list, uint16_t unused, status_$t *status)

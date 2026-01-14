@@ -14,18 +14,6 @@
 
 #define TS_QUEUE_ELEM_SIZE  12
 
-/* External functions */
-extern void PMAP_$PURGE_WS(uint16_t pid, uint16_t param);
-extern void TIME_$Q_FLUSH_QUEUE(void *queue_elem);
-extern void EC_$WAIT(void *ecs[], uint32_t *wait_vals);
-extern int8_t PROC1_$SUSPEND(uint16_t pid, status_$t *status_ret);
-extern int8_t PROC1_$SUSPENDP(uint16_t pid, status_$t *status_ret);
-extern void PROC1_$TRY_TO_SUSPEND(proc1_t *pcb);
-extern void PROC1_$FREE_STACK(void *stack);
-extern void PROC1_$SET_TYPE(uint16_t pid, uint16_t type);
-extern void PROC1_$DISPATCH(void);
-extern void CRASH_SYSTEM(void *msg);
-
 /* Error message for failed self-suspend */
 static const char UNBIND_CRASH_MSG[] = "PROC1_$UNBIND: self-suspend failed";
 

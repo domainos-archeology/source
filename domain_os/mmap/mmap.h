@@ -171,10 +171,8 @@ typedef struct mmap_globals_t {
 #define PMAPE_FLAG_REFERENCED   0x2000  /* Page referenced */
 
 /*
- * External references
+ * MMAP global data
  */
-extern uint16_t PROC1_$CURRENT;         /* Current process ID (word) */
-extern uint32_t TIME_$CLOCKH;           /* High-resolution clock */
 extern uint32_t MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
 extern uint32_t MMAP_$WS_OVERFLOW;
 extern uint32_t MMAP_$WS_REMOVE;

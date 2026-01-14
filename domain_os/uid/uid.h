@@ -20,24 +20,6 @@
 #include "base/base.h"
 
 /*
- * UID structure - 8 bytes
- *
- * Original memory layout uses high word first (big-endian order).
- */
-typedef struct uid_t {
-    uint32_t high;      /* 0x00: High word (timestamp-based) */
-    uint32_t low;       /* 0x04: Low word (node ID + counter) */
-} uid_t;
-
-/*
- * UID_$NIL - The nil/empty UID (all zeros)
- *
- * Used to represent "no UID" or an uninitialized UID.
- * Original address: (data constant)
- */
-extern const uid_t UID_$NIL;
-
-/*
  * UID generator state
  *
  * Located at 0xE2C008 on M68K.

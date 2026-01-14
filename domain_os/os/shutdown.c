@@ -31,26 +31,17 @@ extern void AREA_$SHUTDOWN(void);
 extern status_$t VOLX_$SHUTDOWN(void);
 extern void FILE_$PRIV_UNLOCK_ALL(const void *param);
 
-// External wiring and memory functions
-extern void MST_$WIRE_AREA(m68k_ptr_t *start, m68k_ptr_t *end,
-                           void *buf, const void *param, void *result);
-
 // External ACL functions
 extern void ACL_$GET_RE_SIDS(void *buf, uid_t *uid, status_$t *status);
 
 // External display and time functions
 extern void CRASH_SHOW_STRING(const char *str);
-extern void TIME_$WAIT(const void *duration, const void *ref, status_$t *status);
-extern void CRASH_SYSTEM(status_$t *status);
 
 // External network functions
 extern void NETWORK_$SET_SERVICE(const void *param1, status_$t *param2, status_$t *status);
 
 // External formatting
 extern void VFMT_$FORMATN(const char *format, char *buf, short *len_ptr, ...);
-
-// External delay function
-extern status_$t M_MIS_LLL(status_$t a, status_$t b);
 
 // Code and data pointers for wiring
 extern m68k_ptr_t PTR_OS_PROC_SHUTWIRED;

@@ -88,21 +88,9 @@ typedef struct ec2_waiter_t {
 /*
  * Memory addresses (m68k)
  */
-#if defined(M68K)
-    #define EC1_ARRAY_BASE          0xE20F60
-    #define EC2_WAITER_TABLE_BASE   0xE7C06C
-    #define EC2_PBU_ECS_BASE        0xE88460
-    // #define TIME_$CLOCKH            (*(uint32_t*)0xE2B0D4)
-#else
-    extern ec_$eventcount_t ec1_array[];
-    extern ec2_waiter_t ec2_waiter_table[];
-    extern ec2_$eventcount_t ec2_pbu_ecs[];
-    extern uint32_t time_clockh;
-    #define EC1_ARRAY_BASE          ((uintptr_t)ec1_array)
-    #define EC2_WAITER_TABLE_BASE   ((uintptr_t)ec2_waiter_table)
-    #define EC2_PBU_ECS_BASE        ((uintptr_t)ec2_pbu_ecs)
-    #define TIME_$CLOCKH            time_clockh
-#endif
+extern ec_$eventcount_t EC1_ARRAY_BASE[];
+extern ec2_waiter_t EC2_WAITER_TABLE_BASE[];
+extern ec2_$eventcount_t EC2_PBU_ECS_BASE[];
 
 /*
  * External references
