@@ -35,13 +35,20 @@
 /*
  * Status codes
  */
-#define status_$proc2_uid_not_found         0x00190001
-#define status_$proc2_invalid_signal        0x00190002
-#define status_$proc2_bad_process_group     0x00190003
-#define status_$proc2_invalid_process_name  0x0019000A
-#define status_$proc2_bad_eventcount_key    0x0019000B
-#define status_$proc2_zombie                0x0019000E
-#define status_$proc2_permission_denied     0x00190012
+#define status_$proc2_uid_not_found             0x00190001
+#define status_$proc2_invalid_signal            0x00190002
+#define status_$proc2_bad_process_group         0x00190003
+#define status_$proc2_suspend_timed_out         0x00190005
+#define status_$proc2_not_suspended             0x00190006
+#define status_$proc2_already_suspended         0x00190007
+#define status_$proc2_invalid_process_name      0x0019000A
+#define status_$proc2_bad_eventcount_key        0x0019000B
+#define status_$proc2_zombie                    0x0019000E
+#define status_$proc2_permission_denied         0x00190012
+#define status_$proc2_already_orphan            0x00190014
+#define status_$proc2_process_is_group_leader   0x00190015
+#define status_$proc2_process_using_pgroup_id   0x00190016
+#define status_$proc2_pgroup_in_different_session 0x00190017
 
 /*
  * Process flags (offset 0x2A in proc2_info_t)
@@ -531,10 +538,12 @@ void PROC2_$WAIT(void *status_ret, status_$t *st);
 void PROC2_$MAKE_ORPHAN(uid_$t *proc_uid, status_$t *status_ret);
 
 /*
- * PROC2_$SHUTDOWN - Shutdown process
+ * PROC2_$SHUTDOWN - Shutdown all other processes
+ * Iterates through all processes and suspends valid ones except self.
+ * Takes no parameters and returns no status.
  * Original address: 0x00e415c2
  */
-void PROC2_$SHUTDOWN(uid_$t *proc_uid, status_$t *status_ret);
+void PROC2_$SHUTDOWN(void);
 
 /*
  * ============================================================================
