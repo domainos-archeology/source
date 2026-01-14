@@ -18,6 +18,7 @@ The kernel (domain_os) work should proceed as follows:
 
 ### Decompilation Guidelines
 - The Ghidra decompiler output often needs cleanup - compare against the assembly to verify correctness
+- **Always verify that emitted C code mirrors the behavior shown in Ghidra assembly.** Check parameter counts by examining stack offsets after register saves, and verify how parameters are accessed (full values vs individual bytes/words). Ghidra's decompiler sometimes gets parameter counts wrong.
 - Watch for endianness assumptions: use bit operations (`(*status >> 16) & 0xFF`) instead of byte pointer casts (`((char*)status)[1]`) so code runs correctly on little-endian hosts
 - Add TODO comments for known issues (e.g., missing bounds checking) and create corresponding `bd` issues for tracking
 
