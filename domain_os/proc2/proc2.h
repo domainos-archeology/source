@@ -368,15 +368,19 @@ void PROC2_$ZOMBIE_LIST(uid_$t *uid_list, uint16_t *max_count, uint16_t *count,
 
 /*
  * PROC2_$GET_EC - Get process eventcount
+ * Returns a registered eventcount for the process.
+ * Key must be 0 (only valid key). Returns bad_eventcount_key otherwise.
  * Original address: 0x00e400c2
  */
-void PROC2_$GET_EC(uid_$t *proc_uid, void *ec_ret, status_$t *status_ret);
+void PROC2_$GET_EC(uid_$t *proc_uid, int16_t *key, void **ec_ret, status_$t *status_ret);
 
 /*
- * PROC2_$GET_CR_REC - Get creation record
+ * PROC2_$GET_CR_REC - Get creation record UIDs
+ * Converts EC handle to process index, returns parent and process UIDs.
  * Original address: 0x00e4015c
  */
-void PROC2_$GET_CR_REC(uid_$t *proc_uid, void *cr_rec_ret, status_$t *status_ret);
+void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_$t *parent_uid, uid_$t *proc_uid,
+                       status_$t *status_ret);
 
 /*
  * ============================================================================
