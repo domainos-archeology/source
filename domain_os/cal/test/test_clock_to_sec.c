@@ -1,4 +1,4 @@
-#include "../cal.h"
+#include "cal.h"
 
 // Clock ticks are 4 microseconds each = 250,000 ticks per second
 // So to convert ticks to seconds, divide by 250,000

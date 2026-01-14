@@ -1,4 +1,4 @@
-#include "../cal.h"
+#include "cal.h"
 
 // CAL_$APPLY_LOCAL_OFFSET adds the timezone offset to a clock value.
 // It converts utc_delta (minutes) to seconds, then to clock ticks, and adds.

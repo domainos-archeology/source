@@ -24,7 +24,7 @@
  */
 
 #include "proc2.h"
-#include "../ec/ec.h"
+#include "ec/ec.h"
 
 /* Number of process table entries (indices 1-69, 0 unused) */
 #define P2_MAX_ENTRIES          70

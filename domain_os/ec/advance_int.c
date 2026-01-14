@@ -14,7 +14,7 @@
  */
 
 #include "ec.h"
-#include "../proc1/proc1.h"
+#include "proc1/proc1.h"
 
 /*
  * Process control block offsets for priority and wait management

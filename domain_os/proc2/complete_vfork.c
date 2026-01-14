@@ -23,7 +23,7 @@
  */
 
 #include "proc2.h"
-#include "../ec/ec.h"
+#include "ec/ec.h"
 
 /* External globals */
 extern uid_$t UID_$NIL;

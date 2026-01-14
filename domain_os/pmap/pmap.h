@@ -23,8 +23,8 @@
 #ifndef PMAP_H
 #define PMAP_H
 
-#include "../base/base.h"
-#include "../ec/ec.h"
+#include "base/base.h"
+#include "ec/ec.h"
 
 /*
  * Forward declarations

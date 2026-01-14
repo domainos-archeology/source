@@ -1,4 +1,4 @@
-#include "../cal.h"
+#include "cal.h"
 
 // CAL_$GET_INFO copies the global timezone record to a caller-provided buffer
 

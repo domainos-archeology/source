@@ -12,39 +12,39 @@
 #ifndef FLP_H
 #define FLP_H
 
-#include "../base/base.h"
+#include "base/base.h"
 
 /*
  * Maximum number of floppy units supported
  */
-#define FLP_MAX_UNITS   4
+#define FLP_MAX_UNITS 4
 
 /*
  * Floppy status codes
  */
-#define status_$io_controller_not_in_system   0x00100002
-#define status_$disk_controller_error         0x00080004
-#define status_$invalid_unit_number           0x00080018
+#define status_$io_controller_not_in_system 0x00100002
+#define status_$disk_controller_error 0x00080004
+#define status_$invalid_unit_number 0x00080018
 
 /*
  * Floppy controller registers structure
  * Accessed via memory-mapped I/O at DAT_00e7b020
  */
 typedef struct {
-    uint8_t _reserved[0x10];
-    uint8_t status;         /* 0x10: Status register */
-    uint8_t _pad1;
-    uint8_t data;           /* 0x12: Data register */
-    uint8_t _pad2;
-    uint8_t control;        /* 0x14: Control register */
+  uint8_t _reserved[0x10];
+  uint8_t status; /* 0x10: Status register */
+  uint8_t _pad1;
+  uint8_t data; /* 0x12: Data register */
+  uint8_t _pad2;
+  uint8_t control; /* 0x14: Control register */
 } flp_regs_t;
 
 /*
  * Status register bits
  */
-#define FLP_STATUS_BUSY     0x80    /* Controller busy */
-#define FLP_STATUS_DIO      0x40    /* Data I/O direction */
-#define FLP_STATUS_CMD_MASK 0x1F    /* Command status mask */
+#define FLP_STATUS_BUSY 0x80     /* Controller busy */
+#define FLP_STATUS_DIO 0x40      /* Data I/O direction */
+#define FLP_STATUS_CMD_MASK 0x1F /* Command status mask */
 
 /*
  * Global data area at 0xe7aef4 (FLP_$DATA)
@@ -107,10 +107,9 @@ status_$t FLP_$CINIT(void *ctlr_info);
  * @param flags     Output: Drive flags
  * @return Status code
  */
-status_$t FLP_$DINIT(uint16_t unit, uint16_t ctlr,
-                      int32_t *params, uint16_t *heads,
-                      uint16_t *sectors, uint32_t *geometry,
-                      uint16_t *flags);
+status_$t FLP_$DINIT(uint16_t unit, uint16_t ctlr, int32_t *params,
+                     uint16_t *heads, uint16_t *sectors, uint32_t *geometry,
+                     uint16_t *flags);
 
 /*
  * FLP_$SHUTDOWN - Shutdown a floppy unit
@@ -158,7 +157,8 @@ void FLP_$REVALIDATE(void *disk_info);
 void FLP_$DO_IO(void *param_1, void *param_2, void *param_3, uint32_t param_4);
 
 /* Internal functions */
-void FLP_DO_IO(void *req, void *buf, void *param3, uint16_t lba_hi, uint32_t lba_lo);
+void FLP_DO_IO(void *req, void *buf, void *param3, uint16_t lba_hi,
+               uint32_t lba_lo);
 status_$t SHAKE(uint16_t *data_buf, int16_t *count_ptr, int16_t *dir_ptr);
 status_$t EXCS(uint16_t *cmd_buf, void *cmd_sig, void *req);
 void FLP_FORMAT_TRACK(void *req, void *buf);

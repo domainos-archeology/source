@@ -18,7 +18,7 @@
  */
 
 #include "ec.h"
-#include "../proc1/proc1.h"
+#include "proc1/proc1.h"
 
 extern uint32_t _DAT_00e7cf04;
 extern void *DAT_00e7caf8[];

@@ -9,7 +9,7 @@
 #ifndef TAPE_H
 #define TAPE_H
 
-#include "../base/base.h"
+#include "base/base.h"
 
 /*
  * TAPE_$BOOT - Check if system booted from tape

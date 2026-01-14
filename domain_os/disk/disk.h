@@ -15,41 +15,41 @@
 #ifndef DISK_H
 #define DISK_H
 
-#include "../base/base.h"
+#include "base/base.h"
 
 /*
  * Maximum number of volumes and devices
  */
-#define DISK_MAX_VOLUMES     64   /* 0x40 */
-#define DISK_MAX_DEVICES     32   /* 0x20 */
+#define DISK_MAX_VOLUMES 64 /* 0x40 */
+#define DISK_MAX_DEVICES 32 /* 0x20 */
 
 /*
  * Volume entry size
  */
-#define DISK_VOLUME_SIZE     72   /* 0x48 bytes per volume */
+#define DISK_VOLUME_SIZE 72 /* 0x48 bytes per volume */
 
 /*
  * Device registration entry size
  */
-#define DISK_DEVICE_SIZE     12   /* 0x0c bytes per device */
+#define DISK_DEVICE_SIZE 12 /* 0x0c bytes per device */
 
 /*
  * Mount states
  */
-#define DISK_MOUNT_UNMOUNTED   0
-#define DISK_MOUNT_MOUNTED     3
+#define DISK_MOUNT_UNMOUNTED 0
+#define DISK_MOUNT_MOUNTED 3
 
 /*
  * Disk lock ID
  */
-#define DISK_LOCK_ID          15  /* 0x0f */
+#define DISK_LOCK_ID 15 /* 0x0f */
 
 /*
  * Status codes
  */
-#define status_$disk_write_protected          0x00080007
-#define status_$volume_not_properly_mounted   0x0008000d
-#define status_$invalid_volume_index          0x0008000f
+#define status_$disk_write_protected 0x00080007
+#define status_$volume_not_properly_mounted 0x0008000d
+#define status_$invalid_volume_index 0x0008000f
 #define status_$disk_illegal_request_for_device 0x0008002a
 
 /*
@@ -62,13 +62,13 @@
  *   +0xa5: Write protect flags (byte)
  */
 typedef struct {
-    uint8_t ec_data[16];           /* +0x00: Event counter data */
-    uint8_t _reserved1[0x80];      /* +0x10: Reserved */
-    uint16_t mount_state;          /* +0x90: Mount state */
-    uint8_t _reserved2[0x13];      /* +0x92: Reserved */
-    uint8_t write_protect;         /* +0xa5: Write protect flags */
-    uint8_t _reserved3[0x02];      /* +0xa6: Padding to 0x48 boundary */
-    /* Note: actual structure extends through event counters at +0x378, +0x384 */
+  uint8_t ec_data[16];      /* +0x00: Event counter data */
+  uint8_t _reserved1[0x80]; /* +0x10: Reserved */
+  uint16_t mount_state;     /* +0x90: Mount state */
+  uint8_t _reserved2[0x13]; /* +0x92: Reserved */
+  uint8_t write_protect;    /* +0xa5: Write protect flags */
+  uint8_t _reserved3[0x02]; /* +0xa6: Padding to 0x48 boundary */
+  /* Note: actual structure extends through event counters at +0x378, +0x384 */
 } disk_volume_entry_t;
 
 /*
@@ -83,11 +83,11 @@ typedef struct {
  *   +0x0a: Flags (word)
  */
 typedef struct {
-    void *jump_table;              /* +0x00: Pointer to device operations */
-    uint16_t device_type;          /* +0x04: Device type identifier */
-    uint16_t controller;           /* +0x06: Controller number */
-    uint16_t unit_count;           /* +0x08: Number of units */
-    uint16_t flags;                /* +0x0a: Device flags */
+  void *jump_table;     /* +0x00: Pointer to device operations */
+  uint16_t device_type; /* +0x04: Device type identifier */
+  uint16_t controller;  /* +0x06: Controller number */
+  uint16_t unit_count;  /* +0x08: Number of units */
+  uint16_t flags;       /* +0x0a: Device flags */
 } disk_device_entry_t;
 
 /*
@@ -101,11 +101,11 @@ typedef struct {
  *   +0x10: DO_IO - Perform I/O operation
  */
 typedef struct {
-    void *_reserved1;              /* +0x00 */
-    void *_reserved2;              /* +0x04 */
-    void *dinit;                   /* +0x08: Device init function */
-    void *_reserved3;              /* +0x0c */
-    void *do_io;                   /* +0x10: I/O function */
+  void *_reserved1; /* +0x00 */
+  void *_reserved2; /* +0x04 */
+  void *dinit;      /* +0x08: Device init function */
+  void *_reserved3; /* +0x0c */
+  void *do_io;      /* +0x10: I/O function */
 } disk_jump_table_t;
 
 /*
@@ -125,8 +125,8 @@ extern disk_device_entry_t DISK__DEVICES[];
 extern void *DISK__EC;
 
 /* Exclusion locks */
-extern void *DISK__EXCLUSION_1;   /* +0x90 */
-extern void *DISK__EXCLUSION_2;   /* +0xa8 */
+extern void *DISK__EXCLUSION_1; /* +0x90 */
+extern void *DISK__EXCLUSION_2; /* +0xa8 */
 
 /*
  * Function prototypes - Public API
@@ -143,7 +143,8 @@ void DISK_$INVALIDATE(uint16_t vol_idx);
 
 /* Queue operations */
 void DISK_$INIT_QUE(void *queue);
-void DISK_$ADD_QUE(uint16_t flags, void *dev_entry, void *queue, void *req_list);
+void DISK_$ADD_QUE(uint16_t flags, void *dev_entry, void *queue,
+                   void *req_list);
 void DISK_$WAIT_QUE(void *queue, status_$t *status);
 void DISK_$ERROR_QUE(void *req, uint16_t param_2, void *param_3);
 void *DISK_$GET_QBLKS(int16_t vol_idx, int16_t count, status_$t *status);
@@ -171,7 +172,8 @@ uint8_t DISK_$REGISTER(uint16_t *type, uint16_t *controller, uint16_t *units,
                        uint16_t *flags, void **jump_table);
 void *DISK_$GET_DRTE(int16_t index);
 void DISK_$MNT_DINIT(uint16_t vol_idx, void **dev_ptr, void *param_3,
-                     void *param_4, void *param_5, void *param_6, void *param_7);
+                     void *param_4, void *param_5, void *param_6,
+                     void *param_7);
 void DISK_$SHUTDOWN(int16_t vol_idx, status_$t *status);
 void DISK_$SPIN_DOWN(int16_t vol_idx, status_$t *status);
 void DISK_$REVALID(int16_t vol_idx);
@@ -185,23 +187,24 @@ void DISK_$GET_ERROR_INFO(void *buffer);
 void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status);
 
 /* Async I/O operations */
-void DISK_$AS_READ(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr, uint16_t *count_ptr,
-                   uint32_t *info, status_$t *status);
+void DISK_$AS_READ(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
+                   uint16_t *count_ptr, uint32_t *info, status_$t *status);
 void DISK_$AS_WRITE(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr, uint32_t buffer,
                     uint32_t *info, status_$t *status);
 void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
-                          int16_t *op_type_ptr, uint32_t *daddr_array,
-                          uint32_t **info_array, uint32_t *buffer_array,
-                          uint32_t *status_array, status_$t *status);
-void DISK_$AS_OPTIONS(uint16_t *vol_idx_ptr, uint16_t *options_ptr, status_$t *status);
+                         int16_t *op_type_ptr, uint32_t *daddr_array,
+                         uint32_t **info_array, uint32_t *buffer_array,
+                         uint32_t *status_array, status_$t *status);
+void DISK_$AS_OPTIONS(uint16_t *vol_idx_ptr, uint16_t *options_ptr,
+                      status_$t *status);
 
 /* Diagnostic and manufacturing operations */
 void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
                    void *buffer, uint32_t *info, status_$t *status);
 void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *buffer_ptr,
-                              uint32_t count, status_$t *status);
+                             uint32_t count, status_$t *status);
 void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
-                         status_$t *status);
+                        status_$t *status);
 
 /*
  * External functions used by DISK
@@ -218,7 +221,7 @@ extern void DBUF__SET_BUFF(void *buffer, uint16_t flags, void *param_3);
 extern void DBUF__INVALIDATE(int32_t param_1, uint16_t vol_idx);
 
 /* Internal I/O function */
-extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *daddr,
-                         void *buffer, void *count);
+extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *daddr, void *buffer,
+                         void *count);
 
 #endif /* DISK_H */

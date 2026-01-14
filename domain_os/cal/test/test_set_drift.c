@@ -1,4 +1,4 @@
-#include "../cal.h"
+#include "cal.h"
 
 // CAL_$SET_DRIFT copies a clock_t value to CAL_$TIMEZONE.drift
 

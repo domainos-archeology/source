@@ -26,7 +26,7 @@
  */
 
 #include "proc2.h"
-#include "../ec/ec.h"
+#include "ec/ec.h"
 
 /* WNOHANG option bit */
 #define WNOHANG 0x0001

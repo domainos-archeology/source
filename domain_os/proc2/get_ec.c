@@ -16,7 +16,7 @@
  */
 
 #include "proc2.h"
-#include "../ec/ec.h"
+#include "ec/ec.h"
 
 /* External EC tables and functions */
 #if defined(M68K)

@@ -12,7 +12,7 @@
  */
 
 #include "proc2.h"
-#include "../ec/ec.h"
+#include "ec/ec.h"
 
 /* External declarations */
 extern void PROC2_$DELIVER_SIGNAL_INTERNAL(int16_t index, int16_t signal,

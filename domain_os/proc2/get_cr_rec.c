@@ -17,7 +17,7 @@
  */
 
 #include "proc2.h"
-#include "../ec/ec.h"
+#include "ec/ec.h"
 
 /* EC1 eventcount entry size for calculating process index */
 #define EC1_ENTRY_SIZE      0x18        /* 24 bytes per entry */

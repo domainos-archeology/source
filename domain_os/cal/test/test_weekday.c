@@ -1,4 +1,4 @@
-#include "../cal.h"
+#include "cal.h"
 
 // CAL_$WEEKDAY returns: 0=Sunday, 1=Monday, ..., 6=Saturday
 

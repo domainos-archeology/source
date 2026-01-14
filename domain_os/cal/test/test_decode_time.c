@@ -1,4 +1,4 @@
-#include "../cal.h"
+#include "cal.h"
 
 // CAL_$DECODE_TIME converts a 48-bit clock to:
 // time_rec[0] = year, [1] = month, [2] = day, [3] = hour, [4] = minute, [5] = second

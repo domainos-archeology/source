@@ -26,7 +26,7 @@
 #ifndef MMU_H
 #define MMU_H
 
-#include "../base/base.h"
+#include "base/base.h"
 
 /* MMU status codes (module 0x07) */
 #define status_$mmu_miss        0x00070001

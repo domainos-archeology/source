@@ -21,8 +21,8 @@
 #ifndef PROC1_H
 #define PROC1_H
 
-#include "../base/base.h"
-#include "../ec/ec.h"
+#include "base/base.h"
+#include "ec/ec.h"
 
 /*
  * Process Control Block (PCB) structure

@@ -1,4 +1,4 @@
-#include "../math/math.h"
+#include "math/math.h"
 
 typedef long status_$t;
 
@@ -11,16 +11,16 @@ typedef long status_$t;
 // Constant 0x3D090 = 250,000 (ticks per second)
 // Constant 0xD090 = 0x3D090 & 0xFFFF (low word for multiplication)
 typedef struct {
-    uint high;      // upper 32 bits
-    ushort low;     // lower 16 bits
+  uint high;  // upper 32 bits
+  ushort low; // lower 16 bits
 } clock_t;
 
 // Timezone record structure (12 bytes total at 0x00e7b030)
 typedef struct {
-    short utc_delta;     // offset from UTC in minutes (+0)
-    char tz_name[4];     // timezone name, e.g. "EST" (+2)
-    clock_t drift;       // drift correction (+6)
-    ushort boot_volx;    // boot volume index (+12)
+  short utc_delta;  // offset from UTC in minutes (+0)
+  char tz_name[4];  // timezone name, e.g. "EST" (+2)
+  clock_t drift;    // drift correction (+6)
+  ushort boot_volx; // boot volume index (+12)
 } cal_$timezone_rec_t;
 
 // Days per month lookup table
@@ -34,11 +34,11 @@ extern cal_$timezone_rec_t CAL_$TIMEZONE;
 extern uint CAL_$LAST_VALID_TIME;
 
 // Hardware clock registers
-extern volatile char CAL_$CONTROL_VIRTUAL_ADDR;   // 0x00ffa820
+extern volatile char CAL_$CONTROL_VIRTUAL_ADDR;    // 0x00ffa820
 extern volatile char CAL_$WRITE_DATA_VIRTUAL_ADDR; // 0x00ffa822
 
 // External references
-extern uint TIME_$CLOCKH;  // High word of system clock at 0x00e2b0d4
+extern uint TIME_$CLOCKH; // High word of system clock at 0x00e2b0d4
 extern void TIME_$CLOCK(clock_t *clock);
 extern char NETWORK_$DISKLESS;
 extern char NETWORK_$REALLY_DISKLESS;
@@ -60,6 +60,8 @@ extern void CAL_$SET_DRIFT(clock_t *drift);
 extern void CAL_$READ_TIMEZONE(cal_$timezone_rec_t *tz, status_$t *status);
 extern void CAL_$WRITE_TIMEZONE(cal_$timezone_rec_t *tz, status_$t *status);
 extern void CAL_$SHUTDOWN(status_$t *status);
-extern char CAL_$VERIFY(int *max_allowed_delta, void *param_2, char *param_3, status_$t *status);
-extern void CAL_$WRITE_CALENDAR(short *year, short *month, short *day, short *weekday,
-                                 short *hour, short *minute, short *second);
+extern char CAL_$VERIFY(int *max_allowed_delta, void *param_2, char *param_3,
+                        status_$t *status);
+extern void CAL_$WRITE_CALENDAR(short *year, short *month, short *day,
+                                short *weekday, short *hour, short *minute,
+                                short *second);

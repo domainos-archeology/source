@@ -1,4 +1,4 @@
-#include "../cal.h"
+#include "cal.h"
 
 // CAL_$REMOVE_LOCAL_OFFSET subtracts the timezone offset from a clock value.
 // It converts utc_delta (minutes) to seconds, then to clock ticks, and subtracts.

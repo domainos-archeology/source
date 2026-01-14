@@ -1,4 +1,4 @@
-#include "../cal.h"
+#include "cal.h"
 
 // Test: Simple subtraction with no borrow
 // 0x00000002:0x0000 - 0x00000001:0x0000 = 0x00000001:0x0000

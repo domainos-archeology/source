@@ -12,7 +12,7 @@ The kernel (domain_os) work should proceed as follows:
 ### File Naming Conventions
 - Source files are named after the function, **without** the `<NAMESPACE>_$` prefix, in lowercase: `CAL_$APPLY_LOCAL_OFFSET` → `cal/apply_local_offset.c`.  for functions that don't have a `$` in their name, put them in a subdirectory named `misc`.  so `CRASH_SYSTEM` would go in `misc/crash_system.c`.
 - Keep `$` in function names in the C code (e.g., `M$OIU$WLW`, not `M_OIU_WLW`)
-- Use relative includes to reference other modules: `#include "../math/math.h"`
+- Use relative includes to reference other modules, rooted at the domain_os/ dir: `#include "math/math.h"`
 - Unit tests go in `<module>/test/test_<function_name>.c`
 - Add files and include paths to the Makefile as needed.
 

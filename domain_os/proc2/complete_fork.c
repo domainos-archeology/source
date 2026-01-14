@@ -11,7 +11,7 @@
  */
 
 #include "proc2.h"
-#include "../ec/ec.h"
+#include "ec/ec.h"
 
 /*
  * Per-process eventcount table.

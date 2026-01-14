@@ -4,8 +4,8 @@
 #ifndef OS_H
 #define OS_H
 
-#include "../base/base.h"
-#include "../ec/ec.h"
+#include "base/base.h"
+#include "ec/ec.h"
 
 // =============================================================================
 // OS Revision Information

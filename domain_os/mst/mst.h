@@ -25,24 +25,24 @@
 #ifndef MST_H
 #define MST_H
 
-#include "../base/base.h"
+#include "base/base.h"
 
 /*
  * MST status codes (module 0x04 = MST)
  */
-#define status_$reference_to_illegal_address  0x00040004  /* Invalid VA */
-#define status_$mst_object_not_found          0x00040001  /* Object UID not found */
-#define status_$no_asid_available             0x00040006  /* No free ASIDs */
-#define status_$no_space_available            0x00040003  /* Segment table full */
-#define status_$mst_segment_modified          0x0004000a  /* COW segment modified */
-#define status_$mst_access_violation          0x00040005  /* Access rights violation */
+#define status_$reference_to_illegal_address 0x00040004 /* Invalid VA */
+#define status_$mst_object_not_found 0x00040001 /* Object UID not found */
+#define status_$no_asid_available 0x00040006    /* No free ASIDs */
+#define status_$no_space_available 0x00040003   /* Segment table full */
+#define status_$mst_segment_modified 0x0004000a /* COW segment modified */
+#define status_$mst_access_violation 0x00040005 /* Access rights violation */
 
 /*
  * Lock identifiers used with ML__LOCK/ML__UNLOCK
  */
-#define MST_LOCK_ASID       0x0c    /* ASID allocation lock */
-#define MST_LOCK_AST        0x12    /* AST (Active Segment Table) lock */
-#define MST_LOCK_MMU        0x14    /* MMU operations lock */
+#define MST_LOCK_ASID 0x0c /* ASID allocation lock */
+#define MST_LOCK_AST 0x12  /* AST (Active Segment Table) lock */
+#define MST_LOCK_MMU 0x14  /* MMU operations lock */
 
 /*
  * Segment table configuration
@@ -50,20 +50,20 @@
  * set in MST_$PRE_INIT
  */
 typedef struct {
-    uint16_t seg_tn;                /* 0x148: Total number of segments */
-    uint16_t global_b_size;         /* 0x14a: Size of global B region */
-    uint16_t _reserved_14c;
-    uint16_t seg_global_b;          /* 0x14e: First segment in global B */
-    uint16_t seg_global_b_offset;   /* 0x150: Offset for global B mapping */
-    uint16_t seg_high;              /* 0x152: Highest segment number */
-    uint16_t seg_private_b;         /* 0x154: First segment in private B */
-    uint16_t seg_private_b_end;     /* 0x156: Last segment in private B */
-    uint16_t private_a_size;        /* 0x158: Size of private A region */
-    uint16_t seg_private_a_end;     /* 0x15a: Last segment in private A */
-    uint16_t seg_global_a;          /* 0x15c: First segment in global A */
-    uint16_t global_a_size;         /* 0x15e: Size of global A region */
-    uint16_t seg_global_a_end;      /* 0x160: Last segment in global A */
-    uint16_t seg_private_b_offset;  /* 0x162: Offset for private B mapping */
+  uint16_t seg_tn;        /* 0x148: Total number of segments */
+  uint16_t global_b_size; /* 0x14a: Size of global B region */
+  uint16_t _reserved_14c;
+  uint16_t seg_global_b;         /* 0x14e: First segment in global B */
+  uint16_t seg_global_b_offset;  /* 0x150: Offset for global B mapping */
+  uint16_t seg_high;             /* 0x152: Highest segment number */
+  uint16_t seg_private_b;        /* 0x154: First segment in private B */
+  uint16_t seg_private_b_end;    /* 0x156: Last segment in private B */
+  uint16_t private_a_size;       /* 0x158: Size of private A region */
+  uint16_t seg_private_a_end;    /* 0x15a: Last segment in private A */
+  uint16_t seg_global_a;         /* 0x15c: First segment in global A */
+  uint16_t global_a_size;        /* 0x15e: Size of global A region */
+  uint16_t seg_global_a_end;     /* 0x160: Last segment in global A */
+  uint16_t seg_private_b_offset; /* 0x162: Offset for private B mapping */
 } mst_config_t;
 
 /*
@@ -71,50 +71,50 @@ typedef struct {
  * Each entry is 16 bytes and describes the mapping for one segment
  */
 typedef struct {
-    uid_t uid;                      /* 0x00: Object UID for this segment */
-    uint16_t area_id;               /* 0x08: Area identifier */
-    uint16_t flags;                 /* 0x0a: Flags and cached AST index */
-    uint8_t page_info;              /* 0x0c: Page count info */
-    uint8_t _reserved[3];           /* 0x0d-0x0f */
+  uid_t uid;            /* 0x00: Object UID for this segment */
+  uint16_t area_id;     /* 0x08: Area identifier */
+  uint16_t flags;       /* 0x0a: Flags and cached AST index */
+  uint8_t page_info;    /* 0x0c: Page count info */
+  uint8_t _reserved[3]; /* 0x0d-0x0f */
 } mst_entry_t;
 
 /*
  * MSTE flags field bits
  */
-#define MSTE_FLAG_AST_MASK      0x01ff  /* Cached AST entry index */
-#define MSTE_FLAG_WRITABLE      0x0002  /* Segment is writable */
-#define MSTE_FLAG_COPY_ON_WRITE 0x0008  /* Copy-on-write enabled */
-#define MSTE_FLAG_MODIFIED      0x4000  /* Segment has been modified */
-#define MSTE_FLAG_ACTIVE        0x8000  /* Segment is currently active */
+#define MSTE_FLAG_AST_MASK 0x01ff      /* Cached AST entry index */
+#define MSTE_FLAG_WRITABLE 0x0002      /* Segment is writable */
+#define MSTE_FLAG_COPY_ON_WRITE 0x0008 /* Copy-on-write enabled */
+#define MSTE_FLAG_MODIFIED 0x4000      /* Segment has been modified */
+#define MSTE_FLAG_ACTIVE 0x8000        /* Segment is currently active */
 
 /*
  * Global variables (extern declarations)
  * Actual addresses are in the kernel data segment around 0xe24xxx
  */
-extern uint16_t MST__SEG_TN;            /* Total number of segments */
-extern uint16_t MST__GLOBAL_A_SIZE;     /* Global A segment count */
-extern uint16_t MST__SEG_GLOBAL_A;      /* First global A segment */
-extern uint16_t MST__SEG_GLOBAL_A_END;  /* Last global A segment */
-extern uint16_t MST__PRIVATE_A_SIZE;    /* Private A segment count */
-extern uint16_t MST__SEG_PRIVATE_A_END; /* Last private A segment */
-extern uint16_t MST__SEG_PRIVATE_B;     /* First private B segment */
-extern uint16_t MST__SEG_PRIVATE_B_END; /* Last private B segment */
+extern uint16_t MST__SEG_TN;               /* Total number of segments */
+extern uint16_t MST__GLOBAL_A_SIZE;        /* Global A segment count */
+extern uint16_t MST__SEG_GLOBAL_A;         /* First global A segment */
+extern uint16_t MST__SEG_GLOBAL_A_END;     /* Last global A segment */
+extern uint16_t MST__PRIVATE_A_SIZE;       /* Private A segment count */
+extern uint16_t MST__SEG_PRIVATE_A_END;    /* Last private A segment */
+extern uint16_t MST__SEG_PRIVATE_B;        /* First private B segment */
+extern uint16_t MST__SEG_PRIVATE_B_END;    /* Last private B segment */
 extern uint16_t MST__SEG_PRIVATE_B_OFFSET; /* Private B offset in tables */
-extern uint16_t MST__SEG_GLOBAL_B;      /* First global B segment */
-extern uint16_t MST__SEG_GLOBAL_B_OFFSET; /* Global B offset in tables */
-extern uint16_t MST__SEG_HIGH;          /* Highest segment number */
-extern uint16_t MST__SEG_MEM_TOP;       /* Top of addressable memory */
-extern uint16_t MST__GLOBAL_B_SIZE;     /* Global B segment count */
-extern uint16_t MST__TOUCH_COUNT;       /* Touch-ahead page count */
-extern uint16_t MST__MST_PAGES_WIRED;   /* Number of wired MST pages */
-extern uint16_t MST__MST_PAGES_LIMIT;   /* Maximum MST pages to wire */
+extern uint16_t MST__SEG_GLOBAL_B;         /* First global B segment */
+extern uint16_t MST__SEG_GLOBAL_B_OFFSET;  /* Global B offset in tables */
+extern uint16_t MST__SEG_HIGH;             /* Highest segment number */
+extern uint16_t MST__SEG_MEM_TOP;          /* Top of addressable memory */
+extern uint16_t MST__GLOBAL_B_SIZE;        /* Global B segment count */
+extern uint16_t MST__TOUCH_COUNT;          /* Touch-ahead page count */
+extern uint16_t MST__MST_PAGES_WIRED;      /* Number of wired MST pages */
+extern uint16_t MST__MST_PAGES_LIMIT;      /* Maximum MST pages to wire */
 
 /*
  * ASID list - bitmap tracking allocated ASIDs
  * Bit set = ASID is allocated
  */
-extern uint8_t MST__ASID_LIST[8];       /* Bitmap for 58 ASIDs (0-57) */
-#define MST_MAX_ASIDS   58              /* 0x3a */
+extern uint8_t MST__ASID_LIST[8]; /* Bitmap for 58 ASIDs (0-57) */
+#define MST_MAX_ASIDS 58          /* 0x3a */
 
 /*
  * Per-ASID base table
@@ -134,7 +134,7 @@ extern uint16_t MST[];
  * Contains mst_entry_t structures for each segment
  * Segment entries are at offset (MST[segno] * 0x400) relative to this base
  */
-#define MST_PAGE_TABLE_BASE     0xef6400
+#define MST_PAGE_TABLE_BASE 0xef6400
 
 /*
  * Function prototypes
@@ -151,27 +151,31 @@ void MST_$DEALLOCATE_ASID(uint16_t asid, status_$t *status_ret);
 void MST_$FREE_ASID(uint16_t asid, status_$t *status_ret);
 
 /* Address translation */
-uint16_t MST_$VA_TO_SEGNO(uint32_t virtual_addr, uint16_t *segno_out, uint16_t default_result);
+uint16_t MST_$VA_TO_SEGNO(uint32_t virtual_addr, uint16_t *segno_out,
+                          uint16_t default_result);
 
 /* Bit manipulation for ASID bitmap */
 void MST_$SET(void *bitmap, uint16_t size, uint16_t bit_index);
 void MST_$SET_CLEAR(void *bitmap, uint16_t size, uint16_t bit_index);
 
 /* Memory mapping */
-uint32_t MST_$TOUCH(uint32_t virtual_addr, status_$t *status_ret, int16_t wire_flag);
+uint32_t MST_$TOUCH(uint32_t virtual_addr, status_$t *status_ret,
+                    int16_t wire_flag);
 void MST_$MAP(uid_$t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
-              uint16_t *area_id_ptr, uint32_t *area_size_ptr, uint8_t *rights_ptr,
-              int32_t *mapped_len, status_$t *status_ret);
+              uint16_t *area_id_ptr, uint32_t *area_size_ptr,
+              uint8_t *rights_ptr, int32_t *mapped_len, status_$t *status_ret);
 void MST_$MAP_AT(void);
 void MST_$MAP_CANNED_AT(void);
 void MST_$MAP_AREA(void);
 void MST_$MAP_AREA_AT(void);
 void MST_$MAP_GLOBAL(uid_$t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
-                     uint16_t *area_id_ptr, uint32_t *area_size_ptr, uint8_t *rights_ptr,
-                     int32_t *mapped_len, status_$t *status_ret);
+                     uint16_t *area_id_ptr, uint32_t *area_size_ptr,
+                     uint8_t *rights_ptr, int32_t *mapped_len,
+                     status_$t *status_ret);
 void MST_$MAP_TOP(uid_$t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
-                  uint16_t *area_id_ptr, uint32_t *area_size_ptr, uint8_t *rights_ptr,
-                  int32_t *mapped_len, status_$t *status_ret);
+                  uint16_t *area_id_ptr, uint32_t *area_size_ptr,
+                  uint8_t *rights_ptr, int32_t *mapped_len,
+                  status_$t *status_ret);
 void MST_$MAP_INITIAL_AREA(void);
 void MST_$MAPS(void);
 void MST_$MAPS_AT(void);
@@ -188,12 +192,12 @@ void MST_$UNMAP_AND_FREE_AREA(void);
 void MST_$UNMAPS_AND_FREE_AREA(void);
 void MST_$UNMAP_ALL(void);
 void MST_$UNMAP_PRIVI(int16_t mode, uid_t *uid, uint32_t start, uint32_t size,
-                       uint16_t asid, status_$t *status_ret);
+                      uint16_t asid, status_$t *status_ret);
 
 /* Segment operations */
 uint32_t MST_$FIND(uint32_t virt_addr, uint16_t flags);
-void MST_$REMOVE_SEG(uint32_t param_1, uint32_t param_2,
-                      uint16_t param_3, uint16_t param_4, uint8_t flags);
+void MST_$REMOVE_SEG(uint32_t param_1, uint32_t param_2, uint16_t param_3,
+                     uint16_t param_4, uint8_t flags);
 uint32_t MST_$WIRE(uint32_t vpn, status_$t *status_ret);
 void MST_$WIRE_AREA(void);
 void MST_$INVALIDATE(void);

@@ -24,8 +24,8 @@
 #ifndef PROC2_H
 #define PROC2_H
 
-#include "../base/base.h"
-#include "../proc1/proc1.h"
+#include "base/base.h"
+#include "proc1/proc1.h"
 
 /*
  * Lock ID for PROC2 operations

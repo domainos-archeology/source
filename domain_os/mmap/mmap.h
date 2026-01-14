@@ -21,7 +21,7 @@
 #ifndef MMAP_H
 #define MMAP_H
 
-#include "../base/base.h"
+#include "base/base.h"
 
 /* MMAP status codes (module 0x06) */
 #define status_$mmap_illegal_wsl_index          0x00060009

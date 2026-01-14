@@ -15,7 +15,7 @@
  */
 
 #include "ec.h"
-#include "../proc1/proc1.h"
+#include "proc1/proc1.h"
 
 uint16_t EC_$WAITN(ec_$eventcount_t **ecs, int32_t *wait_val, int16_t num_ecs)
 {

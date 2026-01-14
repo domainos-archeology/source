@@ -1,4 +1,4 @@
-#include "../cal.h"
+#include "cal.h"
 
 // Clock ticks are 4 microseconds each = 250,000 ticks per second
 // So 1 second = 0x0003D090 ticks

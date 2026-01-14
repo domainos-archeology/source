@@ -1,4 +1,4 @@
-#include "../cal.h"
+#include "cal.h"
 
 // These tests require mocking the global state:
 // - CAL_$TIMEZONE.utc_delta (timezone offset in minutes)

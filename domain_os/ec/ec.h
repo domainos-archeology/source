@@ -24,7 +24,7 @@
 #ifndef EC_H
 #define EC_H
 
-#include "../base/base.h"
+#include "base/base.h"
 
 /*
  * Level 1 Event Count waiter structure
