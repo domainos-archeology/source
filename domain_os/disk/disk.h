@@ -49,6 +49,8 @@
  */
 #define status_$disk_write_protected          0x00080007
 #define status_$volume_not_properly_mounted   0x0008000d
+#define status_$invalid_volume_index          0x0008000f
+#define status_$disk_illegal_request_for_device 0x0008002a
 
 /*
  * Volume entry structure (partial - 72 bytes per entry)
@@ -174,6 +176,12 @@ void DISK_$SPIN_DOWN(int16_t vol_idx, status_$t *status);
 void DISK_$REVALID(int16_t vol_idx);
 void DISK_$WRITE_PROTECT(int16_t mode, int16_t vol_idx, status_$t *status);
 void DISK_$GET_STATS(int16_t vol_idx, void *stats, status_$t *status);
+void DISK_$UNASSIGN(uint16_t *vol_idx_ptr, status_$t *status);
+void DISK_$UNASSIGN_ALL(void);
+void DISK_$REVALIDATE(int16_t vol_idx);
+void DISK_$DISMOUNT(uint16_t vol_idx);
+void DISK_$GET_ERROR_INFO(void *buffer);
+void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status);
 
 /*
  * External functions used by DISK
