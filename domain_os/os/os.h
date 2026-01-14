@@ -5,6 +5,7 @@
 #define OS_H
 
 #include "../base/base.h"
+#include "../ec/ec.h"
 
 // =============================================================================
 // OS Revision Information
@@ -51,7 +52,7 @@ extern void OS_$DATA_ZERO(char *ptr, uint len);
 // Called during system boot to initialize all subsystems
 // @param param_1: Boot parameters
 // @param param_2: Additional boot parameters
-extern void OS_$INIT(void *param_1, void *param_2);
+extern void OS_$INIT(uint32_t *param_1, uint32_t *param_2);
 
 // OS_$BOOT_ERRCHK - Check and report boot errors
 // If status is non-zero, formats and displays error message, then waits

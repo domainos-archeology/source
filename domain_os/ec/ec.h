@@ -92,7 +92,7 @@ typedef struct ec2_waiter_t {
     #define EC1_ARRAY_BASE          0xE20F60
     #define EC2_WAITER_TABLE_BASE   0xE7C06C
     #define EC2_PBU_ECS_BASE        0xE88460
-    #define TIME_$CLOCKH            (*(uint32_t*)0xE2B0D4)
+    // #define TIME_$CLOCKH            (*(uint32_t*)0xE2B0D4)
 #else
     extern ec_$eventcount_t ec1_array[];
     extern ec2_waiter_t ec2_waiter_table[];
@@ -115,9 +115,6 @@ extern uint16_t DAT_00e7cf08;               /* EC2 free list head */
 /*
  * External functions
  */
-extern void ML_$LOCK(uint16_t lock_id);
-extern void ML_$UNLOCK(uint16_t lock_id);
-extern void CRASH_SYSTEM(const void *status);
 
 /* FIM (Fault/Interrupt Manager) functions */
 extern status_$t FIM_$CLEANUP(void *context);
