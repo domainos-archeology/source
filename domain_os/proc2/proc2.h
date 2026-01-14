@@ -44,6 +44,7 @@
 #define status_$proc2_invalid_process_name      0x0019000A
 #define status_$proc2_bad_eventcount_key        0x0019000B
 #define status_$proc2_zombie                    0x0019000E
+#define status_$proc2_table_full                0x0019000F
 #define status_$proc2_permission_denied         0x00190012
 #define status_$proc2_process_already_debugging 0x00190011
 #define status_$proc2_already_orphan            0x00190014
@@ -207,6 +208,9 @@ typedef struct pgroup_entry_t {
     /* Allocation pointer (index of first allocated entry) */
     #define P2_INFO_ALLOC_PTR       (*(uint16_t*)0xE7C064)  /* 0xE7BE84 + 0x1E0 */
 
+    /* Free list head (index of first free entry) */
+    #define P2_FREE_LIST_HEAD       (*(uint16_t*)0xE7C066)  /* 0xE7BE84 + 0x1E2 */
+
     /* Mapping table: PROC1 PID -> PROC2 index (at 0xEA551C + 0x3EB6) */
     #define P2_PID_TO_INDEX_TABLE   ((uint16_t*)(0xEA551C + 0x3EB6))
     #define P2_PID_TO_INDEX(pid)    (P2_PID_TO_INDEX_TABLE[(pid)])
@@ -221,12 +225,14 @@ typedef struct pgroup_entry_t {
 #else
     extern proc2_info_t *p2_info_table;
     extern uint16_t p2_info_alloc_ptr;
+    extern uint16_t p2_free_list_head;
     extern uint16_t *p2_pid_to_index_table;
     extern pgroup_entry_t *pgroup_table;
     extern uid_$t proc2_uid;
     #define P2_INFO_TABLE           p2_info_table
     #define P2_INFO_ENTRY(idx)      (&p2_info_table[(idx) - 1])
     #define P2_INFO_ALLOC_PTR       p2_info_alloc_ptr
+    #define P2_FREE_LIST_HEAD       p2_free_list_head
     #define P2_PID_TO_INDEX_TABLE   p2_pid_to_index_table
     #define P2_PID_TO_INDEX(pid)    (p2_pid_to_index_table[(pid)])
     #define PGROUP_TABLE            pgroup_table
@@ -392,9 +398,29 @@ void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_$t *parent_uid, uid_$t *proc_uid
 
 /*
  * PROC2_$CREATE - Create a new process
+ *
+ * Creates a new process with the specified parameters.
+ *
+ * Parameters:
+ *   parent_uid  - UID of parent process
+ *   code_desc   - Pointer to code descriptor
+ *   map_param   - Parameter for initial memory mapping
+ *   entry_point - Pointer to entry point address
+ *   user_data   - Pointer to user data passed to startup
+ *   reserved1   - Reserved (unused)
+ *   reserved2   - Reserved (unused)
+ *   flags       - Creation flags (bit 7 = create in new process group)
+ *   uid_ret     - Output: new process UID
+ *   ec_ret      - Output: eventcount handle for process
+ *   status_ret  - Pointer to receive status
+ *
  * Original address: 0x00e726ec
  */
-void PROC2_$CREATE(void *params, uid_$t *uid_ret, status_$t *status_ret);
+void PROC2_$CREATE(uid_$t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
+                   int32_t *entry_point, int32_t *user_data,
+                   uint32_t reserved1, uint32_t reserved2,
+                   uint8_t *flags, uid_$t *uid_ret, void **ec_ret,
+                   status_$t *status_ret);
 
 /*
  * PROC2_$FORK - Fork current process
