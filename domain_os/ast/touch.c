@@ -78,7 +78,7 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
 
     /* Wait for any pages in transition */
     while ((int16_t)*segmap_ptr < 0) {
-        FUN_00e00c08();
+        ast_$wait_for_page_transition();
     }
 
     /* Check if page is already installed */
@@ -129,7 +129,7 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
                 if ((*map_ptr & 0x400000) == 0) break;
             } while (1);
 
-            pages_touched = FUN_00e0305c(segmap_ptr, cow_count);
+            pages_touched = ast_$count_valid_pages(segmap_ptr, cow_count);
             *(uint8_t *)((char *)aote + 0xBF) |= 0x10;
         } else {
             /* Normal page fault handling */
@@ -187,12 +187,12 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
             /* Perform the actual fault-in */
             if (*(int8_t *)((char *)aote + 0xB9) < 0) {
                 /* Remote object */
-                FUN_00e02ca6(aste, segmap_ptr, ppn_array, page, fault_count,
+                ast_$read_area_pages_network(aste, segmap_ptr, ppn_array, page, fault_count,
                             -((flags & 0x01) != 0), status);
             } else {
                 /* Local object */
                 *(uint8_t *)((char *)aote + 0xBF) |= 0x10;
-                FUN_00e02af6(aste, segmap_ptr, ppn_array, page, fault_count, status);
+                ast_$read_area_pages(aste, segmap_ptr, ppn_array, page, fault_count, status);
             }
 
             pages_touched = (uint16_t)fault_count;
@@ -207,7 +207,7 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
 
         /* Clear transition bits for pages not touched */
         if (pages_touched < pages_available) {
-            FUN_00e0283c(segmap_ptr + pages_touched, pages_available - pages_touched);
+            ast_$clear_transition_bits(segmap_ptr + pages_touched, pages_available - pages_touched);
         }
 
         if (pages_touched == 0) {

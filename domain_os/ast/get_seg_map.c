@@ -60,13 +60,13 @@ void AST_$GET_SEG_MAP(uint32_t *uid_info, uint32_t start_offset, uint32_t unused
         ML_$LOCK(AST_LOCK_ID);
 
         /* Look up AOTE */
-        FUN_00e0209e((uid_t *)uid_info);
-        aote = NULL;  /* TODO: Get from FUN_00e0209e return in A0 */
+        ast_$lookup_aote_by_uid((uid_t *)uid_info);
+        aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
 
         if (aote == NULL) {
             /* Try to load the AOTE */
-            FUN_00e020fa((uid_t *)uid_info, 0, status, 0);
-            aote = NULL;  /* TODO: Get from FUN_00e020fa return in A0 */
+            ast_$force_activate_segment((uid_t *)uid_info, 0, status, 0);
+            aote = NULL;  /* TODO: Get from ast_$force_activate_segment return in A0 */
 
             if (aote == NULL) {
                 ML_$UNLOCK(AST_LOCK_ID);
@@ -78,10 +78,10 @@ void AST_$GET_SEG_MAP(uint32_t *uid_info, uint32_t start_offset, uint32_t unused
         }
 
         /* Find or create ASTE for this segment */
-        aste = FUN_00e0250c(aote, start_segment);
+        aste = ast_$lookup_aste(aote, start_segment);
         if (aste == NULL) {
             /* Create new ASTE */
-            aste = FUN_00e0255c(aote, start_segment, status);
+            aste = ast_$lookup_or_create_aste(aote, start_segment, status);
             if (aste == NULL) {
                 ML_$UNLOCK(AST_LOCK_ID);
                 PROC1_$INHIBIT_END();

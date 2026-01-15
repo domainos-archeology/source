@@ -25,7 +25,7 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up existing AOTE */
-    existing = FUN_00e0209e(uid);
+    existing = ast_$lookup_aote_by_uid(uid);
 
     if (existing != NULL) {
         /* Update existing AOTE - preserve date/time */
@@ -53,7 +53,7 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
     old_seqn = AST_$AOTE_SEQN;
 
     /* Allocate new AOTE */
-    aote = FUN_00e01d66();
+    aote = ast_$allocate_aote();
 
     /* Compute hash index */
     hash_idx = UID_$HASH(uid, (void *)0xE01BEC);
@@ -67,7 +67,7 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
             if (*(uint32_t *)((char *)existing + 0x10) == obj_info[2] &&
                 *(uint32_t *)((char *)existing + 0x14) == obj_info[3]) {
                 /* Found existing - free the one we allocated */
-                FUN_00e00f7c(aote);
+                ast_$release_aote(aote);
                 goto done;
             }
         }
@@ -76,7 +76,7 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
     /* Check if volume is being dismounted */
     uint8_t vol_index = *((uint8_t *)(obj_info + 7));
     if (vol_index < 0x10 && (DAT_00e1e0a0 & (1 << vol_index)) != 0) {
-        FUN_00e00f7c(aote);
+        ast_$release_aote(aote);
         goto done;
     }
 
@@ -110,7 +110,7 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
         status_$t status;
         NETWORK_$INSTALL_NET(obj_info[4], (void *)((char *)aote + 0x08), &status);
         if (status != status_$ok) {
-            FUN_00e00f7c(aote);
+            ast_$release_aote(aote);
             goto done;
         }
         /* Set up volume UID with network info */

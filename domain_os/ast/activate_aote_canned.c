@@ -25,7 +25,7 @@ void AST_$ACTIVATE_AOTE_CANNED(uint32_t *attrs, uint32_t *obj_info)
     ML_$LOCK(AST_LOCK_ID);
 
     /* Allocate new AOTE */
-    aote = FUN_00e01d66();
+    aote = ast_$allocate_aote();
 
     /* Clear flags */
     *(uint8_t *)((char *)aote + 0xBF) &= ~AOTE_FLAG_IN_TRANS;

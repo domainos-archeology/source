@@ -52,13 +52,13 @@ retry_loop:
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    FUN_00e0209e(&local_uid);
-    aote = NULL;  /* TODO: Get from FUN_00e0209e return in A0 */
+    ast_$lookup_aote_by_uid(&local_uid);
+    aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
 
     if (aote == NULL) {
         /* AOTE not cached - try to load it */
-        FUN_00e020fa(&local_uid, 0, &local_status, 0);
-        aote = NULL;  /* TODO: Get from FUN_00e020fa return in A0 */
+        ast_$force_activate_segment(&local_uid, 0, &local_status, 0);
+        aote = NULL;  /* TODO: Get from ast_$force_activate_segment return in A0 */
         if (aote == NULL) {
             ML_$UNLOCK(AST_LOCK_ID);
             if (retry < 0 && local_status == status_$file_object_not_found) {
@@ -104,7 +104,7 @@ retry_loop:
 
     /* Flush if needed */
     if (truncate_to_zero < 0) {
-        FUN_00e01ad2(aote, -1, 0, 0xFFE0, &local_status);
+        ast_$process_aote(aote, -1, 0, 0xFFE0, &local_status);
     }
 
     /* Clear in-transition flag */

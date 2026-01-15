@@ -34,13 +34,13 @@ void AST_$INVALIDATE(uid_t *uid, uint32_t start_page, uint32_t count,
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    FUN_00e0209e(uid);
-    aote = NULL;  /* TODO: Get from FUN_00e0209e return in A0 */
+    ast_$lookup_aote_by_uid(uid);
+    aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
 
     if (aote == NULL) {
         /* AOTE not cached - try to load it */
-        FUN_00e020fa(uid, 0, status, 0);
-        aote = NULL;  /* TODO: Get from FUN_00e020fa return in A0 */
+        ast_$force_activate_segment(uid, 0, status, 0);
+        aote = NULL;  /* TODO: Get from ast_$force_activate_segment return in A0 */
         if (aote == NULL) {
             ML_$UNLOCK(AST_LOCK_ID);
             goto done;
@@ -68,10 +68,10 @@ void AST_$INVALIDATE(uid_t *uid, uint32_t start_page, uint32_t count,
 
         if (flags < 0) {
             /* Wait for completion */
-            *status = FUN_00e062fa((uint16_t)end_page);
+            *status = ast_$invalidate_with_wait((uint16_t)end_page);
         } else {
             /* Don't wait */
-            FUN_00e064b0((uint16_t)end_page);
+            ast_$invalidate_no_wait((uint16_t)end_page);
         }
 
         /* Clear in-transition flag */

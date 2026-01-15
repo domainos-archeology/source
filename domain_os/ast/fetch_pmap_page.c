@@ -32,7 +32,7 @@ void AST_$FETCH_PMAP_PAGE(void *uid_info, uint32_t *output_buf,
     ML_$LOCK(PMAP_LOCK_ID);
 
     /* Allocate a page */
-    FUN_00e00d46(0x10001, ppn_array);
+    ast_$allocate_pages(0x10001, ppn_array);
 
     ML_$UNLOCK(PMAP_LOCK_ID);
 

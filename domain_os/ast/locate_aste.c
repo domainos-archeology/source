@@ -39,12 +39,12 @@ aste_t* AST_$LOCATE_ASTE(locate_request_t *request)
     }
 
     /* Hint invalid or didn't match - do full lookup */
-    aote = FUN_00e0209e((uid_t *)request);
+    aote = ast_$lookup_aote_by_uid((uid_t *)request);
 
     if (aote == NULL) {
         return NULL;
     }
 
     /* Search for ASTE with matching segment */
-    return FUN_00e0250c(aote, request->segment);
+    return ast_$lookup_aste(aote, request->segment);
 }

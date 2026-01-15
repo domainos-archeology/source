@@ -37,9 +37,9 @@ void AST_$FREE_PAGES(aste_t *aste, int16_t start_page, int16_t end_page, int16_t
         /* Wait if page is in transition */
         while ((int16_t)*segmap_ptr < 0) {
             if (installed_count != 0) {
-                FUN_00e03fbc();
+                ast_$flush_installed_pages();
             }
-            FUN_00e00c08();
+            ast_$wait_for_page_transition();
         }
 
         if ((*segmap_ptr & SEGMAP_FLAG_IN_USE) == 0) {
@@ -59,7 +59,7 @@ void AST_$FREE_PAGES(aste_t *aste, int16_t start_page, int16_t end_page, int16_t
             installed_pages[installed_count] = (uint32_t)(uint16_t)*segmap_ptr;
 
             if (installed_count == 0x20) {
-                FUN_00e03fbc();
+                ast_$flush_installed_pages();
             }
 
 mark_dirty:
@@ -77,7 +77,7 @@ mark_dirty:
 
             if (bat_count == 0x20) {
                 if (installed_count != 0) {
-                    FUN_00e03fbc();
+                    ast_$flush_installed_pages();
                 }
                 ML_$UNLOCK(PMAP_LOCK_ID);
                 BAT_$FREE(&bat_blocks[1], 0x20, flags, 1, &status);
@@ -95,7 +95,7 @@ mark_dirty:
 
     /* Flush any remaining installed pages */
     if (installed_count != 0) {
-        FUN_00e03fbc();
+        ast_$flush_installed_pages();
     }
 
     ML_$UNLOCK(PMAP_LOCK_ID);

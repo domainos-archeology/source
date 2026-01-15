@@ -27,26 +27,26 @@ void AST_$GET_LOCATION(uint32_t *uid_info, uint16_t flags, uint32_t unused,
 
     /* Check for NIL UID */
     if (uid->high == UID_$NIL.high && uid->low == UID_$NIL.low) {
-        *status = FUN_00e00be8(uid, 0x30F01);
+        *status = ast_$validate_uid(uid, 0x30F01);
         return;
     }
 
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    /* FUN_00e0209e returns AOTE in A0 register - simulated here */
-    FUN_00e0209e(uid);
+    /* ast_$lookup_aote_by_uid returns AOTE in A0 register - simulated here */
+    ast_$lookup_aote_by_uid(uid);
 
     /* In the original code, extraout_A0 contains the AOTE pointer */
-    /* We need to simulate this by having FUN_00e0209e return the AOTE */
+    /* We need to simulate this by having ast_$lookup_aote_by_uid return the AOTE */
     /* For now, assume we have the aote pointer somehow */
-    aote = NULL;  /* TODO: Get from FUN_00e0209e return */
+    aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return */
 
     if (aote == NULL) {
         /* AOTE not cached - try to load it */
-        FUN_00e020fa(uid, 0, status, -((flags & 1) != 0));
+        ast_$force_activate_segment(uid, 0, status, -((flags & 1) != 0));
         /* aote would be returned in A0 */
-        aote = NULL;  /* TODO: Get from FUN_00e020fa */
+        aote = NULL;  /* TODO: Get from ast_$force_activate_segment */
         if (aote == NULL) {
             ML_$UNLOCK(AST_LOCK_ID);
             return;

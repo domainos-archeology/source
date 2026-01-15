@@ -53,7 +53,7 @@ void AST_$UPDATE(void)
                               (uint32_t)aste->seg_index * 0x80 - 0x80);
 
                     /* Write dirty pages */
-                    FUN_00e01566(aste, segmap, 0, &status);
+                    ast_$update_aste(aste, segmap, 0, &status);
 
                     ML_$LOCK(AST_LOCK_ID);
 
@@ -80,7 +80,7 @@ void AST_$UPDATE(void)
             /* Flush AOTE if needed */
             if ((int8_t)aote->flags >= 0) {
                 aote->flags |= AOTE_FLAG_IN_TRANS;
-                FUN_00e013a0(aote, 0, &status);
+                ast_$purify_aote(aote, 0, &status);
                 aote->flags &= ~AOTE_FLAG_IN_TRANS;
                 EC_$ADVANCE(&AST_$AST_IN_TRANS_EC);
             }

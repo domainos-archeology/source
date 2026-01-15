@@ -56,7 +56,7 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused,
                 EC_$ADVANCE(&AST_$PMAP_IN_TRANS_EC);
                 in_transition = 0;
             }
-            FUN_00e00c08();
+            ast_$wait_for_page_transition();
         }
 
         /* Check if source page is installed */
@@ -85,7 +85,7 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused,
                 }
 
                 /* Allocate pages */
-                FUN_00e00d46((count << 16) | 1, ppn_array);
+                ast_$allocate_pages((count << 16) | 1, ppn_array);
 
                 ML_$UNLOCK(PMAP_LOCK_ID);
 
@@ -115,7 +115,7 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused,
 
                 /* Clear transition bits for remaining pages */
                 if (count > 1) {
-                    FUN_00e0283c(src_segmap + 1, count - 1);
+                    ast_$clear_transition_bits(src_segmap + 1, count - 1);
                 }
 
                 in_transition = -1;

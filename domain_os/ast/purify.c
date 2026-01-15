@@ -50,8 +50,8 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    FUN_00e0209e(&local_uid);
-    aote = NULL;  /* TODO: Get from FUN_00e0209e return in A0 */
+    ast_$lookup_aote_by_uid(&local_uid);
+    aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
 
     if (aote == NULL) {
         goto done;
@@ -107,7 +107,7 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
     }
 
     /* Flush to disk */
-    FUN_00e013a0(aote, 0, &local_status);
+    ast_$purify_aote(aote, 0, &local_status);
 
     /* Clear in-transition flag */
     aote->flags &= ~AOTE_FLAG_IN_TRANS;

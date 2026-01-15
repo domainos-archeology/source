@@ -35,11 +35,11 @@ uint8_t AST_$SET_DTS(uint16_t flags, uid_t *uid, uint32_t *dtv, uint32_t *access
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    aote = FUN_00e0209e(&local_uid);
+    aote = ast_$lookup_aote_by_uid(&local_uid);
 
     if (aote == NULL && (flags & 0x01) != 0) {
         /* AOTE not found - try to load it */
-        aote = FUN_00e020fa(&local_uid, 0, &local_status, 0xFF);
+        aote = ast_$force_activate_segment(&local_uid, 0, &local_status, 0xFF);
     }
 
     if (aote == NULL) {

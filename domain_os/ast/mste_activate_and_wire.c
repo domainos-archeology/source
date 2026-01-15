@@ -17,22 +17,22 @@ aste_t* AST_$MSTE_ACTIVATE_AND_WIRE(mste_t *mste, status_$t *status)
     *status = status_$ok;
 
     /* Look up AOTE by UID */
-    aote = FUN_00e0209e(&mste->uid);
+    aote = ast_$lookup_aote_by_uid(&mste->uid);
 
     if (aote == NULL) {
         /* AOTE not found - try to create/load it */
-        aote = FUN_00e020fa(&mste->uid, mste->vol_uid, status, 0);
+        aote = ast_$force_activate_segment(&mste->uid, mste->vol_uid, status, 0);
         if (aote == NULL) {
             return NULL;
         }
     }
 
     /* Find ASTE for this segment */
-    aste = FUN_00e0250c(aote, mste->segment);
+    aste = ast_$lookup_aste(aote, mste->segment);
 
     if (aste == NULL) {
         /* ASTE not found - try to create it */
-        aste = FUN_00e0255c(aote, mste->segment, status);
+        aste = ast_$lookup_or_create_aste(aote, mste->segment, status);
         if (aste == NULL) {
             return NULL;
         }

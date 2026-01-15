@@ -41,7 +41,7 @@ void AST_$SET_ATTR(uid_t *uid, int16_t attr_id, uint32_t value,
     PROC1_$INHIBIT_BEGIN();
 
     /* Call internal attribute setter */
-    FUN_00e05214(&local_uid, attr_id, value, flags, exsid_buf, clock, &local_status);
+    ast_$set_attribute_internal(&local_uid, attr_id, value, flags, exsid_buf, clock, &local_status);
 
     PROC1_$INHIBIT_END();
 

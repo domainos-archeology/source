@@ -16,6 +16,14 @@ The kernel (domain_os) work should proceed as follows:
 - Unit tests go in `<module>/test/test_<function_name>.c`
 - Add files and include paths to the Makefile as needed.
 
+### Ghidra Synchronization
+**When you determine the actual name of a function**, you MUST update Ghidra immediately:
+1. Use `gsk rename <ADDRESS> '<NAME>'` to rename the function in Ghidra
+2. Update any parameter names/types as needed
+3. Then add the function to the appropriate subsystem directory
+
+Do NOT use `#define FUN_XXXXXXXX actual_name` patterns. These are temporary workarounds that should be corrected by renaming in Ghidra directly.
+
 ### Decompilation Guidelines
 - The Ghidra decompiler output often needs cleanup - compare against the assembly to verify correctness
 - **Always verify that emitted C code mirrors the behavior shown in Ghidra assembly.** Check parameter counts by examining stack offsets after register saves, and verify how parameters are accessed (full values vs individual bytes/words). Ghidra's decompiler sometimes gets parameter counts wrong.

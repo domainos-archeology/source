@@ -40,7 +40,7 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
 
     /* Wait for any pages in transition */
     while (*(int16_t *)segmap_ptr < 0) {
-        FUN_00e00c08();
+        ast_$wait_for_page_transition();
     }
 
     old_entry = *(uint16_t *)segmap_ptr;

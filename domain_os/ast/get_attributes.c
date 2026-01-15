@@ -32,7 +32,7 @@ void AST_$GET_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs, status_$t *sta
 
     /* Check for NIL UID */
     if (uid->high == UID_$NIL.high && uid->low == UID_$NIL.low) {
-        *status = FUN_00e00be8(uid, 0x30F01);
+        *status = ast_$validate_uid(uid, 0x30F01);
         return;
     }
 
@@ -40,14 +40,14 @@ void AST_$GET_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs, status_$t *sta
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    FUN_00e0209e(uid);
-    aote = NULL;  /* TODO: Get from FUN_00e0209e return in A0 */
+    ast_$lookup_aote_by_uid(uid);
+    aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
 
     if (aote == NULL) {
         /* AOTE not cached - try to load it */
-        FUN_00e020fa(uid, 0, local_status, -((int8_t)flags < 0));
+        ast_$force_activate_segment(uid, 0, local_status, -((int8_t)flags < 0));
         *status = local_status[0];
-        aote = NULL;  /* TODO: Get from FUN_00e020fa return in A0 */
+        aote = NULL;  /* TODO: Get from ast_$force_activate_segment return in A0 */
         if (aote == NULL) {
             goto done;
         }

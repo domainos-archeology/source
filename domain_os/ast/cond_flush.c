@@ -32,8 +32,8 @@ void AST_$COND_FLUSH(uid_t *uid, uint32_t *timestamp, status_$t *status)
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    FUN_00e0209e(&local_uid);
-    aote = NULL;  /* TODO: Get from FUN_00e0209e return in A0 */
+    ast_$lookup_aote_by_uid(&local_uid);
+    aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
 
     if (aote != NULL) {
         /* Compare timestamps */
@@ -44,10 +44,10 @@ void AST_$COND_FLUSH(uid_t *uid, uint32_t *timestamp, status_$t *status)
         if (aote_time != timestamp[0] ||
             aote_sub != *(uint16_t *)((char *)timestamp + 4)) {
             /* Timestamps differ - flush the object */
-            FUN_00e01ad2(aote, -1, 0, 0xFF00 | 0xE0, &local_status);
+            ast_$process_aote(aote, -1, 0, 0xFF00 | 0xE0, &local_status);
 
             if (local_status == status_$ok) {
-                FUN_00e00f7c(aote);
+                ast_$release_aote(aote);
             }
         }
     }

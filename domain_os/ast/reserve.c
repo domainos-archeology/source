@@ -34,13 +34,13 @@ void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count, status_$
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    FUN_00e0209e(uid);
-    aote = NULL;  /* TODO: Get from FUN_00e0209e return in A0 */
+    ast_$lookup_aote_by_uid(uid);
+    aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
 
     if (aote == NULL) {
         /* AOTE not cached - try to load it */
-        FUN_00e020fa(uid, 0, status, 0);
-        aote = NULL;  /* TODO: Get from FUN_00e020fa return in A0 */
+        ast_$force_activate_segment(uid, 0, status, 0);
+        aote = NULL;  /* TODO: Get from ast_$force_activate_segment return in A0 */
         if (aote == NULL) {
             goto done;
         }
@@ -69,9 +69,9 @@ void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count, status_$
     /* Iterate through segments */
     while (1) {
         /* Find or create ASTE for segment */
-        aste = FUN_00e0250c(aote, end_segment);
+        aste = ast_$lookup_aste(aote, end_segment);
         if (aste == NULL) {
-            aste = FUN_00e0255c(aote, end_segment, status);
+            aste = ast_$lookup_or_create_aste(aote, end_segment, status);
         }
 
         if (aste == NULL) {
@@ -93,7 +93,7 @@ void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count, status_$
         while (1) {
             /* Wait for pages in transition */
             while (*(int16_t *)segmap_ptr < 0) {
-                FUN_00e00c08();
+                ast_$wait_for_page_transition();
             }
 
             /* Check if page needs disk allocation */
@@ -119,7 +119,7 @@ void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count, status_$
                                    0, &disk_block, alloc_count, status);
 
                 if (*status != status_$ok) {
-                    FUN_00e0283c(segmap_ptr, alloc_count);
+                    ast_$clear_transition_bits(segmap_ptr, alloc_count);
                     break;
                 }
 

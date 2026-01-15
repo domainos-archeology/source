@@ -24,11 +24,11 @@ void AST_$GET_DTV(uid_t *uid, uint32_t unused, uint32_t *dtv, status_$t *status)
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    aote = FUN_00e0209e(&local_uid);
+    aote = ast_$lookup_aote_by_uid(&local_uid);
 
     if (aote == NULL) {
         /* AOTE not found - try to load it */
-        aote = FUN_00e020fa(&local_uid, unused, &local_status, 0xFF);
+        aote = ast_$force_activate_segment(&local_uid, unused, &local_status, 0xFF);
         if (aote == NULL) {
             goto done;
         }

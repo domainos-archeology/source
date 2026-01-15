@@ -63,7 +63,7 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
                     *(uint32_t *)((char *)aote + 0x14) != NETWORK_$PAGING_FILE_UID.low) {
 
                     /* Flush cached data */
-                    FUN_00e01ad2(aote, flags, 0xFFFF, 0xFFE0, &local_status);
+                    ast_$process_aote(aote, flags, 0xFFFF, 0xFFE0, &local_status);
 
                     if (local_status != status_$ok) {
                         ML_$UNLOCK(AST_LOCK_ID);
@@ -72,7 +72,7 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
                     }
 
                     /* Free the AOTE */
-                    FUN_00e00f7c(aote);
+                    ast_$release_aote(aote);
                 }
             }
         }

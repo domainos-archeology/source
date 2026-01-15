@@ -43,7 +43,7 @@ void AST_$TOUCH_AREA(aste_t *aste, uint32_t mode, uint16_t start_page,
 
     /* Wait for any pages in transition */
     while (*(int16_t *)segmap_ptr < 0) {
-        FUN_00e00c08();
+        ast_$wait_for_page_transition();
     }
 
     /* Check if page is already installed */
@@ -52,7 +52,7 @@ void AST_$TOUCH_AREA(aste_t *aste, uint32_t mode, uint16_t start_page,
         if ((*segmap_ptr & SEGMAP_DISK_ADDR_MASK) == 0) {
             /* Zero-fill page */
             *(uint8_t *)segmap_ptr |= 0x80;  /* Mark in transition */
-            pages_requested = FUN_00e00d46(0x10001, ppn_array);
+            pages_requested = ast_$allocate_pages(0x10001, ppn_array);
             ZERO_PAGE(ppn_array[0]);
             pages_touched = 1;
         } else {
@@ -77,7 +77,7 @@ void AST_$TOUCH_AREA(aste_t *aste, uint32_t mode, uint16_t start_page,
                 }
 
                 /* Allocate pages */
-                int16_t alloc_count = FUN_00e00d46((pages_requested << 16) | 1, ppn_array);
+                int16_t alloc_count = ast_$allocate_pages((pages_requested << 16) | 1, ppn_array);
 
                 ML_$UNLOCK(PMAP_LOCK_ID);
 
