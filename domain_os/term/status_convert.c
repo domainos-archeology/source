@@ -1,10 +1,4 @@
-#include "term.h"
-
-// Translation tables for converting subsystem-specific status codes
-// to canonical status_$t values. Indexed by low word of input status.
-extern status_$t TERM_$STATUS_TRANSLATION_TABLE_33[];  // at 0xe2c9dc
-extern status_$t TERM_$STATUS_TRANSLATION_TABLE_35[];  // at 0xe2c988
-extern status_$t TERM_$STATUS_TRANSLATION_TABLE_36[];  // at 0xe2c9b0
+#include "term/term_internal.h"
 
 // Subsystem codes found in byte 1 of status_$t
 #define SUBSYSTEM_33  0x33

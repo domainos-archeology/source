@@ -1,4 +1,4 @@
-#include "term.h"
+#include "term/term_internal.h"
 #include "ec/ec.h"
 
 // Gets an eventcount for a terminal line.

@@ -1,9 +1,4 @@
-#include "term.h"
-
-// Global variables
-extern short DTTY_$CTRL;           // at 0xe2e00e - default TTY control line
-extern short PROC1_$CURRENT;       // at 0xe20608 - current process indicator
-extern term_data_t TERM_$DATA;     // at 0xe2c9f0
+#include "term/term_internal.h"
 
 // Translates a logical terminal line number to a real line number.
 //

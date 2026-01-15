@@ -1,17 +1,4 @@
-#include "term.h"
-
-// External TTY/SIO functions
-extern void TTY_$I_INQ_RAW(short line, unsigned short *raw_ret, status_$t *status_ret);
-extern void TTY_$K_INQ_FUNC_CHAR(short *line_ptr, void *func_id, unsigned short *char_ret,
-                                  status_$t *status_ret);
-extern void TTY_$K_INQ_FUNC_ENABLED(short *line_ptr, unsigned long *enabled_ret,
-                                     status_$t *status_ret);
-extern void TTY_$K_INQ_INPUT_FLAGS(short *line_ptr, unsigned long *flags_ret,
-                                    status_$t *status_ret);
-extern void TTY_$K_INQ_OUTPUT_FLAGS(short *line_ptr, unsigned long *flags_ret,
-                                     status_$t *status_ret);
-extern void TTY_$K_INQ_PGROUP(short *line_ptr, uid_t *pgroup_ret, status_$t *status_ret);
-extern void SIO_$K_INQ_PARAM(short *line_ptr, void *params, void *mask, status_$t *status_ret);
+#include "term/term_internal.h"
 
 // Function ID constants (addresses in original)
 static char func_id_default;    // 0xe66898

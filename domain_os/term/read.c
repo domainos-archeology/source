@@ -1,12 +1,8 @@
-#include "term.h"
+#include "term/term_internal.h"
 
 // Flag addresses used to select between conditional and blocking reads
 static char blocking_read_flag;   // 0xe66898
 static char cond_read_flag;       // 0xe66896
-
-// External functions
-extern unsigned short TTY_$K_GET(short *line_ptr, char *mode_flag, unsigned int buffer,
-                                  void *param3, status_$t *status_ret);
 
 // Reads from a terminal line.
 //

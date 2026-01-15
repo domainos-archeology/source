@@ -1,4 +1,4 @@
-#include "term.h"
+#include "term/term_internal.h"
 
 // Placeholder callback for terminal help functionality.
 //

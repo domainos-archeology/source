@@ -1,26 +1,4 @@
-#include "term.h"
-
-// External data
-extern short PROC1_$AS_ID;      // at 0xe2060a
-extern char PROC2_UID[];        // at 0xe7be94 (UID array)
-
-// External TTY/SIO functions
-extern void TTY_$K_FLUSH_INPUT(short *line_ptr, status_$t *status_ret);
-extern void TTY_$K_FLUSH_OUTPUT(short *line_ptr, status_$t *status_ret);
-extern void TTY_$K_DRAIN_OUTPUT(short *line_ptr, status_$t *status_ret);
-extern void TTY_$I_SET_RAW(short line, char raw_mode, status_$t *status_ret);
-extern void TTY_$K_SET_FUNC_CHAR(short *line_ptr, void *func_id, unsigned short *char_ptr,
-                                  status_$t *status_ret);
-extern void TTY_$K_ENABLE_FUNC(short *line_ptr, void *func_id, unsigned short *enable_ptr,
-                               status_$t *status_ret);
-extern void TTY_$K_SET_INPUT_FLAG(short *line_ptr, void *flag_id, unsigned long value,
-                                  status_$t *status_ret);
-extern void TTY_$K_SET_OUTPUT_FLAG(short *line_ptr, void *flag_id, unsigned long value,
-                                   status_$t *status_ret);
-extern void TTY_$K_SET_PGROUP(short *line_ptr, void *pgroup, status_$t *status_ret);
-extern void SIO_$K_SET_PARAM(short *line_ptr, void *params, void *mask, status_$t *status_ret);
-extern void SIO_$K_TIMED_BREAK(short *line_ptr, unsigned short *duration, status_$t *status_ret);
-extern void KBD_$SET_KBD_MODE(short *line_ptr, unsigned char *mode, status_$t *status_ret);
+#include "term/term_internal.h"
 
 // Function ID constants (these are actually addresses in the original)
 static char func_id_default;    // 0xe66898

@@ -1,8 +1,4 @@
-#include "term.h"
-
-// External data
-extern uid_t PROC2_UID;      // at 0xe7be94
-extern uid_t UID_$NIL;       // at 0xe1737c - the nil/invalid UID constant
+#include "term/term_internal.h"
 
 // Per-line terminal data uses 0x4dc byte entries with UID at offset 0x1a4
 // These overlap with TERM_$DATA starting at offset 0

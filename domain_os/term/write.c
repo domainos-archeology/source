@@ -1,11 +1,7 @@
-#include "term.h"
+#include "term/term_internal.h"
 
 // Mode flag for write operations
 static char write_mode_flag;  // 0xe66898
-
-// External functions
-extern void TTY_$K_PUT(void *line_ptr, char *mode_flag, void *buffer,
-                       unsigned short *count_ptr, status_$t *status_ret);
 
 // Writes to a terminal line.
 //

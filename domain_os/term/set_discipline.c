@@ -1,4 +1,4 @@
-#include "term.h"
+#include "term/term_internal.h"
 
 // Sets the terminal discipline for a logical line.
 //

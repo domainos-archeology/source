@@ -1,7 +1,4 @@
-#include "term.h"
-
-// External data
-extern term_data_t TERM_$DATA;  // at 0xe2c9f0
+#include "term/term_internal.h"
 
 // Enables or disables process history tracking.
 //

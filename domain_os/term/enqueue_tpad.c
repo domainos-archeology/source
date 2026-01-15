@@ -1,8 +1,4 @@
-#include "term.h"
-
-// External functions
-extern void TPAD_$DATA(void);
-extern short M_$OIS_WLW(long value, short modulus);
+#include "term/term_internal.h"
 
 // Structure for TPAD queue management
 // The queue appears to be a circular buffer with head and tail indices

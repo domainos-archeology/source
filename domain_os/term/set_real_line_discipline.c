@@ -1,15 +1,4 @@
-#include "term.h"
-#include "ml/ml.h"
-
-/* ML_$SPIN_LOCK, ML_$SPIN_UNLOCK declared in ml/ml.h via term.h */
-extern void DTTY_$RELOAD_FONT(void);
-
-// Handler function pointer for SUMA mode
-extern void (*SUMA_$RCV)(void);  // at 0xe1ad18
-
-// Keyboard string data
-extern char TERM_$KBD_STRING_DATA[];  // at 0xe2dd80
-extern char TERM_$KBD_STRING_LEN[];   // at 0xe1ac9c
+#include "term/term_internal.h"
 
 // Discipline values:
 //   0 = TTY mode (normal terminal I/O)

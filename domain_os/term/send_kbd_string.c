@@ -1,7 +1,4 @@
-#include "term.h"
-
-// External functions
-extern void KBD_$PUT(void *param1, void *param2, void *param3, void *param4, status_$t *status);
+#include "term/term_internal.h"
 
 // Sends a keyboard string to the terminal subsystem.
 //

@@ -1,11 +1,7 @@
-#include "term.h"
+#include "term/term_internal.h"
 
 // Mode flag for conditional read
 static char cond_read_flag;  // 0xe66896
-
-// External functions
-extern unsigned short TTY_$K_GET(void *line_ptr, char *mode_flag, void *buffer,
-                                  void *param3, status_$t *status_ret);
 
 // Performs a conditional (non-blocking) read from a terminal line.
 //
