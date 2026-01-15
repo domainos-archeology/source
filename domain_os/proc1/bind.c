@@ -16,13 +16,9 @@
  *   Process ID (PID) on success
  */
 
-#include "proc1.h"
-
-/* External functions */
-extern void ML_$LOCK(uint16_t lock_id);
-extern void ML_$UNLOCK(uint16_t lock_id);
-extern void PMAP_$INIT_WS_SCAN(uint16_t pid, uint16_t param);
-extern void INIT_STACK(proc1_t *pcb, void *params);
+#include "proc1/proc1_internal.h"
+#include "ml/ml.h"
+#include "pmap/pmap.h"
 
 /*
  * Initial CPU time value (8 bytes at 0xe14e1c)

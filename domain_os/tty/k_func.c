@@ -12,10 +12,7 @@
 // TTY_$K_INQ_FUNC_ENABLED - Inquire enabled function characters
 // Address: 0x00e67618
 
-#include "tty.h"
-
-// External helper to rebuild character class table
-extern void FUN_00e6726e(tty_desc_t *tty, char update_all);
+#include "tty/tty_internal.h"
 
 void TTY_$K_SET_FUNC_CHAR(short *line_ptr, ushort *func_ptr, char *ch_ptr,
                           status_$t *status)

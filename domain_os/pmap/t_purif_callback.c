@@ -8,12 +8,7 @@
  * Original address: 0x00e143cc
  */
 
-#include "pmap.h"
-
-/* External data */
-extern uint16_t DAT_00e254e4;   /* Current scan slot (5-69) */
-extern uint32_t PMAP_$T_PUR_SCANS;  /* Total timer purifier scans */
-extern uint32_t MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
+#include "pmap/pmap_internal.h"
 
 /* Working set list base and offsets */
 #if defined(M68K)

@@ -10,15 +10,7 @@
  * Original address: 0x00e1416c
  */
 
-#include "pmap.h"
-
-/* External data */
-extern uint32_t DAT_00e232b4;   /* Working set 0 page count */
-extern uint32_t DAT_00e232d8;   /* Working set 1 page count */
-extern uint32_t DAT_00e232fc;   /* Working set 2 page count */
-extern uint32_t DAT_00e23344;   /* Remote page count */
-extern uint16_t PMAP_$MID_THRESH;
-extern uint32_t PMAP_$PUR_R_CNT;   /* Remote purifier page count */
+#include "pmap/pmap_internal.h"
 
 /* PMAPE base addresses */
 #if defined(M68K)
@@ -34,8 +26,7 @@ extern uint32_t PMAP_$PUR_R_CNT;   /* Remote purifier page count */
     #define MMU_PTE_BASE        ((uintptr_t)mmu_pte_base)
 #endif
 
-/* Forward declarations */
-extern void FUN_00e12e5e(uint32_t vpn, status_$t *status, int8_t sync_flag);
+/* Additional data defined in pmap_internal.h */
 
 void PMAP_$PURIFIER_R(void)
 {

@@ -12,10 +12,7 @@
  * Original address: 0x00e20ea2
  */
 
-#include "proc1.h"
-
-/* External function - unknown purpose, called after removing from ready list */
-extern void FUN_00e20824(void);
+#include "proc1/proc1_internal.h"
 
 void PROC1_$INHIBIT_END(void)
 {

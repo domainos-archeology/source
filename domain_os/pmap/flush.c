@@ -21,11 +21,8 @@
  * Original address: 0x00e1376c
  */
 
-#include "pmap.h"
+#include "pmap/pmap_internal.h"
 #include "misc/misc.h"
-
-/* External data */
-extern int8_t PMAP_$SHUTTING_DOWN_FLAG;
 
 /* PMAPE base addresses */
 #if defined(M68K)
@@ -44,15 +41,6 @@ extern int8_t PMAP_$SHUTTING_DOWN_FLAG;
 #define PMAPE_SEG_IDX_OFFSET    0x02
 #define PMAPE_STATE_OFFSET      0x04
 #define PMAPE_FLAGS_OFFSET      0x09
-
-/* Forward declarations for helper functions */
-extern void FUN_00e1360c(void);  /* Batch write helper */
-extern void FUN_00e1359c(uint16_t *segmap_entry, uint32_t vpn, uint16_t page_idx);
-extern void FUN_00e12e5e(uint32_t vpn, status_$t *status, int8_t sync_flag);
-extern void FUN_00e12d38(void);  /* Cleanup helper */
-
-/* Error string for crash */
-extern const char status_$t_00e13a14[];
 
 int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                     int16_t count, uint16_t flags, status_$t *status)

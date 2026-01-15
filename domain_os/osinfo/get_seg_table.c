@@ -6,16 +6,8 @@
 // Table type 1 = AOTE (0x80 bytes per entry)
 // Table type 2 = AST (0x14 bytes per entry)
 
-#include "osinfo.h"
-
-// External segment table data
-extern short AST_$SIZE_AST;           // Number of AST entries
-
-// AOTE table at 0xed5000 (0x80 bytes per entry)
-extern uint32_t AOTE_TABLE[];
-
-// AST table at 0xec5400 (0x14 bytes per entry)
-extern uint32_t AST_TABLE[];
+#include "osinfo/osinfo.h"
+#include "ast/ast.h"
 
 void OSINFO_$GET_SEG_TABLE(short *type_ptr, void *buffer,
                            short *max_entries_ptr, short *actual_entries_ptr,

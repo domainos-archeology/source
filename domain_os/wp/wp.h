@@ -13,18 +13,15 @@
 /*
  * WP_$CALLOC - Wire and allocate memory
  *
- * Allocates and wires memory for a given virtual address.
+ * Allocates a physical page and returns its page frame number.
  *
  * Parameters:
- *   addr_ptr - Pointer to virtual address
+ *   ppn_out  - Pointer to receive physical page number
  *   status   - Receives status code
- *
- * Returns:
- *   Wired address (to be passed to WP_$UNWIRE when done)
  *
  * Original address: TBD
  */
-uint32_t WP_$CALLOC(void *addr_ptr, status_$t *status);
+void WP_$CALLOC(uint32_t *ppn_out, status_$t *status);
 
 /*
  * WP_$UNWIRE - Unwire previously wired memory

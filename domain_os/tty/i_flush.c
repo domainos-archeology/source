@@ -10,10 +10,7 @@
 // Address: 0x00e1b394
 // Size: 32 bytes
 
-#include "tty.h"
-
-// External helper functions (internal to TTY subsystem)
-extern void FUN_00e1aef8(m68k_ptr_t ec);  // Advance eventcount
+#include "tty/tty_internal.h"
 
 void TTY_$I_OUTPUT_BUFFER_DRAINED(tty_desc_t *tty)
 {

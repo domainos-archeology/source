@@ -14,15 +14,9 @@
 // Address: 0x00e671dc
 // Size: 50 bytes
 
-#include "tty.h"
-
-// External DXM and process functions
-extern void *DXM_$UNWIRED_Q;              // DXM unwired callback queue
-extern m68k_ptr_t PTR_TTY_$I_DXM_SIGNAL;  // Pointer to TTY_$I_DXM_SIGNAL
-extern void DXM_$ADD_CALLBACK(void *queue, m68k_ptr_t *callback_ptr, void *args,
-                              uint32_t options, status_$t *status);
-extern void PROC2_$SIGNAL_PGROUP_OS(uid_t *pgroup, void *signal_ptr,
-                                    void *callback, status_$t *status);
+#include "tty/tty_internal.h"
+#include "dxm/dxm.h"
+#include "proc2/proc2.h"
 
 void TTY_$I_SIGNAL(tty_desc_t *tty, short signal)
 {

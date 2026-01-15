@@ -2,11 +2,7 @@
 // Address: 0x00e672de
 // Size: 204 bytes
 
-#include "tty.h"
-
-// External lock/unlock helper functions
-extern void FUN_00e1aed0(tty_desc_t *tty);  // Lock TTY
-extern void FUN_00e1aee4(tty_desc_t *tty);  // Unlock TTY
+#include "tty/tty_internal.h"
 
 void TTY_$K_RESET(short *line_ptr, status_$t *status)
 {

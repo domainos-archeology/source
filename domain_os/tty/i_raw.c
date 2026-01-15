@@ -9,10 +9,7 @@
 // TTY_$I_ENABLE_CRASH_FUNC - Enable/disable crash character
 // Address: 0x00e67292
 
-#include "tty.h"
-
-// External helper function to set raw mode
-extern void FUN_00e1bf70(tty_desc_t *tty, char raw);
+#include "tty/tty_internal.h"
 
 void TTY_$I_SET_RAW(short line, char raw, status_$t *status)
 {

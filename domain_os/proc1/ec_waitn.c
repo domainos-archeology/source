@@ -20,7 +20,8 @@
  *   Index of the event count that was satisfied (1-based), or 0 on error
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
+#include "time/time.h"
 
 /*
  * Event count waiter structure
@@ -32,10 +33,6 @@ typedef struct ec_waiter_t {
     proc1_t *pcb;                        /* PCB of waiting process */
     uint32_t wait_val;                   /* Value being waited for */
 } ec_waiter_t;
-
-/* External functions */
-extern void proc1_$remove_from_ready_list(proc1_t *pcb);
-extern void PROC1_$DISPATCH_INT2(proc1_t *pcb);
 
 uint16_t PROC1_$EC_WAITN(proc1_t *pcb, ec_$eventcount_t **ecs,
                           int32_t *wait_vals, int16_t num_ecs)

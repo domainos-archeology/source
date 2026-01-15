@@ -5,65 +5,11 @@
 // Complex function to get and set various memory management parameters.
 // Flags in byte 1 of param_1 control which operations are performed.
 
-#include "osinfo.h"
-
-// External process identifiers
-extern short PROC1_$CURRENT;
-
-// External PMAP variables
-extern uint16_t PMAP_$MAX_WS_INTERVAL;
-extern uint16_t PMAP_$MIN_WS_INTERVAL;
-extern uint16_t PMAP_$WS_INTERVAL;
-extern uint32_t PMAP_$IDLE_INTERVAL;
-extern uint32_t PMAP_$PUR_L_CNT;
-extern uint32_t PMAP_$PUR_R_CNT;
-extern uint32_t PMAP_$T_PUR_SCANS;
-extern uint16_t PMAP_$SCAN_FRACT;
-
-// External AST variables
-extern uint32_t AST_$PAGE_FLT_CNT;
-extern uint32_t AST_$WS_FLT_CNT;
-extern uint32_t AST_$ALLOC_CNT;
-extern uint32_t AST_$ALLOC_TOO_FEW_CNT;
-
-// External MMAP variables
-extern uint32_t MMAP_$REAL_PAGES;
-extern uint32_t MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
-extern uint32_t MMAP_$REMOTE_PAGES;
-extern uint32_t MMAP_$ALLOC_CNT;
-extern uint32_t MMAP_$ALLOC_PAGES;
-extern uint32_t MMAP_$STEAL_CNT;
-extern uint32_t MMAP_$WS_OVERFLOW;
-extern uint32_t MMAP_$WS_SCAN_CNT;
-extern uint32_t MMAP_$RECLAIM_SHAR_CNT;
-extern uint32_t MMAP_$RECLAIM_PUR_CNT;
-extern uint32_t MMAP_$WS_REMOVE;
-extern uint16_t MMAP_$WSL_HI_MARK;
-extern uint32_t MMAP_$LPPN;
-extern uint32_t MMAP_$HPPN;
-
-// Working set index table at 0xe23ca8
-extern uint16_t MMAP_$WSL_INDEX_TABLE[];
-
-// Working set limit data at 0xe232b0
-extern uint32_t MMAP_$WS_LIMIT_DATA[];
-
-// Working set data array at 0xe232b4 (5 entries, 0x24 bytes apart)
-extern uint32_t MMAP_$WS_DATA[];
-
-// Process working set list at 0xe2612c
-extern uint16_t MMAP_$PROC_WS_LIST[];
-
-// Physical page table at 0xeb2800 (0x10 bytes per entry)
-extern uint8_t PMAP_$PAGE_TABLE[];
-
-// AST entry table at 0xec53f0
-extern uint32_t AST_$ENTRY_TABLE[];
-
-// External functions
-extern void MMAP_$SET_WS_MAX(uint16_t ws_index, uint32_t value, status_$t *status);
-extern void PMAP_$PURGE_WS(uint16_t asid, uint16_t flags);
-extern uint16_t PROC2_$GET_PID(void *uid_out, status_$t *status);
+#include "osinfo/osinfo.h"
+#include "mmap/mmap.h"
+#include "pmap/pmap.h"
+#include "ast/ast.h"
+#include "proc2/proc2.h"
 
 void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
                       void *ws_data, void *ws_list, void *uid_out,

@@ -10,10 +10,7 @@
  * Original address: 0x00e13a18
  */
 
-#include "pmap.h"
-
-/* External data */
-extern uint32_t DAT_00e23344;  /* Remote purifier enabled flag */
+#include "pmap/pmap_internal.h"
 
 void PMAP_$WAKE_PURIFIER(int8_t wait)
 {

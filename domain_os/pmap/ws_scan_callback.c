@@ -10,18 +10,8 @@
  * Original address: 0x00e144f6
  */
 
-#include "pmap.h"
+#include "pmap/pmap_internal.h"
 #include "misc/misc.h"
-
-/* External data */
-extern uint32_t DAT_00e23380;   /* Last global scan time */
-extern uint32_t DAT_00e2337c;   /* Previous global scan time */
-extern uint16_t DAT_00e23366;   /* Global scan counter */
-extern uint32_t DAT_00e2336c;   /* Global scan data */
-extern uint32_t DAT_00e23368;   /* Global scan source */
-
-/* Error string */
-extern status_$t status_$t_00e145ec;
 
 /* Working set list entry structure offsets */
 #define WSL_FLAGS_OFFSET        0x00

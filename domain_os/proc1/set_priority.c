@@ -16,13 +16,8 @@
  * Priority values are clamped to range [1, 16].
  */
 
-#include "proc1.h"
-
-/* External crash function */
-extern void CRASH_SYSTEM(const char *msg);
-
-/* Error message */
-static const char ILLEGAL_PID_MSG[] = "Illegal process id";
+#include "proc1/proc1_internal.h"
+#include "misc/misc.h"
 
 /*
  * clamp_priority - Clamp priority value to valid range [1, 16]
@@ -47,7 +42,7 @@ void PROC1_$SET_PRIORITY(uint16_t pid, int16_t mode, uint16_t *min_priority, uin
 
     /* Validate PID */
     if (pid == 0 || pid > 0x40) {
-        CRASH_SYSTEM(ILLEGAL_PID_MSG);
+        CRASH_SYSTEM(&Illegal_PID_Err);
         return;
     }
 

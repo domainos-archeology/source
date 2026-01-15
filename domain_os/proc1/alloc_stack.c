@@ -14,12 +14,10 @@
  *   Pointer to top of allocated stack, or NULL on failure
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 #include "ml/ml.h"
 #include "mmu/mmu.h"
-
-/* External functions */
-extern void WP_$CALLOC(uint32_t *page_out, status_$t *status);
+#include "wp/wp.h"
 
 /* Stack page size constants (also in proc1_config.h) */
 #define STACK_PAGE_SIZE     0x400   /* 1KB pages */

@@ -20,14 +20,11 @@
  *       The assembly wrapper handles that - see sau2/clr_lock.s
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 #include "misc/misc.h"
 
 /* Error status for releasing unheld lock */
 static const status_$t Illegal_lock_err = 0x00000000;  /* TODO: Find actual value */
-
-/* External function declarations */
-extern void FUN_00e20824(void);  /* Unknown function called after removing from ready list */
 
 /*
  * Internal implementation called with interrupts disabled.

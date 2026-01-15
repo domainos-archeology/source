@@ -12,14 +12,8 @@
  *   status_ret - Status return pointer
  */
 
-#include "proc1.h"
-
-/* External TIME functions */
-extern int16_t TIME_$VT_TIMER(void);
-extern void TIME_$WRT_TIMER(void *timer_data, int16_t *vtimer);
-
-/* Timer data for virtual timer - address 0xe14a06 */
-extern char PROC1_$VT_TIMER_DATA[];
+#include "proc1/proc1_internal.h"
+#include "time/time.h"
 
 void PROC1_$SET_VT(uint16_t pid, uint32_t *time_value, status_$t *status_ret)
 {
@@ -70,8 +64,8 @@ void PROC1_$SET_VT(uint16_t pid, uint32_t *time_value, status_$t *status_ret)
         /* Set new vtimer value */
         pcb->vtimer = new_vtimer;
 
-        /* Write to hardware timer */
-        TIME_$WRT_TIMER(PROC1_$VT_TIMER_DATA, &pcb->vtimer);
+        /* Write to hardware virtual timer */
+        TIME_$WRT_VT_TIMER(pcb->vtimer);
 
         ENABLE_INTERRUPTS(saved_sr);
     } else {

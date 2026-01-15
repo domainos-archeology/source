@@ -13,12 +13,8 @@
  * Note: Crashes system if PID is invalid.
  */
 
-#include "proc1.h"
-
-/* External crash function */
-extern void CRASH_SYSTEM(const char *msg);
-
-static const char ILLEGAL_PID_MSG[] = "Illegal process id";
+#include "proc1/proc1_internal.h"
+#include "misc/misc.h"
 
 void PROC1_$GET_ANY_CPU_USAGE(uint16_t *pid_ptr, void *cpu_time_ret,
                                uint32_t *stat1_ret, uint32_t *stat2_ret)
@@ -31,7 +27,7 @@ void PROC1_$GET_ANY_CPU_USAGE(uint16_t *pid_ptr, void *cpu_time_ret,
 
     /* Validate PID - crash on invalid */
     if (pid == 0 || pid > 0x40) {
-        CRASH_SYSTEM(ILLEGAL_PID_MSG);
+        CRASH_SYSTEM(&Illegal_PID_Err);
         return;
     }
 

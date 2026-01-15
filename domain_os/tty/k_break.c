@@ -6,11 +6,7 @@
 // TTY_$K_INQ_INPUT_BREAK_MODE - Inquire input break mode
 // Address: 0x00e678bc
 
-#include "tty.h"
-
-// External helper function
-extern void FUN_00e6720e(tty_desc_t *tty, uint8_t break_char, char enable);
-extern uint8_t DAT_00e82454;  // Default break character
+#include "tty/tty_internal.h"
 
 // Break mode structure (8 bytes)
 typedef struct {

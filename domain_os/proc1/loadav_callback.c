@@ -11,14 +11,8 @@
  * The values are stored as 8.24 fixed-point numbers.
  */
 
-#include "proc1.h"
-
-/*
- * M$MIS$LLL - Multiply and return high 32 bits of 64-bit result
- * This is used for fixed-point multiplication.
- * Original address: 0x00e0abd4
- */
-extern int32_t M$MIS$LLL(int32_t a, int32_t b);
+#include "proc1/proc1_internal.h"
+#include "math/math.h"
 
 /*
  * EWMA decay constants (as 16-bit fixed point fractions):

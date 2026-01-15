@@ -2,11 +2,7 @@
 // Address: 0x00e1be08
 // Size: 160 bytes
 
-#include "tty.h"
-
-// External helper functions
-extern void FUN_00e1aef8(m68k_ptr_t ec);   // Advance eventcount
-extern void FUN_00e1bcfc(void);             // Error handling helper
+#include "tty/tty_internal.h"
 
 // Error status codes
 #define ERR_FRAMING    0x360004

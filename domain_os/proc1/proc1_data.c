@@ -16,7 +16,7 @@
  *   PROC1_$TYPE:            0xE2612A (65 uint16_t values)
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 /*
  * Current process state
@@ -157,4 +157,28 @@ int32_t LOADAV_15MIN = 0;               /* 15-minute load average */
  * Suspend event count - signaled when a process is suspended
  * Original address: 0xE205F6
  */
-uint32_t PROC1_$SUSPEND_EC = 0;
+ec_$eventcount_t PROC1_$SUSPEND_EC = { 0 };
+
+/*
+ * ============================================================================
+ * Status Codes
+ * ============================================================================
+ */
+
+/*
+ * Illegal process ID error
+ * Used when a function is called with PID 0 or PID > 64
+ */
+const status_$t Illegal_PID_Err = status_$illegal_process_id;
+
+/*
+ * ============================================================================
+ * Internal Timer Data
+ * ============================================================================
+ */
+
+/*
+ * Virtual timer callback data for TIME_$WRT_VT_TIMER
+ * Original address: 0xe14a06
+ */
+char PROC1_$VT_TIMER_DATA[8] = { 0 };

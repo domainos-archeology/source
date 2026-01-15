@@ -9,16 +9,9 @@
 // TTY_$K_DRAIN_OUTPUT - Wait for output buffer to drain
 // Address: 0x00e67aae
 
-#include "tty.h"
-
-// External functions
-extern void FUN_00e1aed0(tty_desc_t *tty);  // Lock TTY
-extern void FUN_00e1aee4(tty_desc_t *tty);  // Unlock TTY
-
-// External global variables for quit handling
-extern short PROC1_$AS_ID;              // Current address space ID
-extern uint8_t FIM_$QUIT_EC[];          // Quit eventcount array (12 bytes per entry)
-extern uint32_t FIM_$QUIT_VALUE[];      // Quit value array (4 bytes per entry)
+#include "tty/tty_internal.h"
+#include "proc1/proc1.h"
+#include "fim/fim.h"
 
 void TTY_$K_SET_DELAY(short *line_ptr, ushort *delay_type_ptr, short *value_ptr,
                       status_$t *status)

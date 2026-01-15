@@ -10,35 +10,8 @@
  * Original address: 0x00e13a9c
  */
 
-#include "pmap.h"
+#include "pmap/pmap_internal.h"
 #include "misc/misc.h"
-
-/* External data */
-extern uint32_t DAT_00e232b4;   /* Working set 0 page count */
-extern uint32_t DAT_00e232d8;   /* Working set 1 page count */
-extern uint32_t DAT_00e232fc;   /* Working set 2 page count */
-extern uint32_t DAT_00e23320;   /* Free page count */
-extern uint32_t DAT_00e23344;   /* Remote page count */
-extern uint16_t PMAP_$LOW_THRESH;  /* Low page threshold */
-extern uint16_t PMAP_$MID_THRESH;  /* Middle page threshold */
-extern uint16_t PMAP_$WS_SCAN_DELTA;
-extern uint16_t PMAP_$MAX_WS_INTERVAL;
-extern uint16_t PMAP_$MIN_WS_INTERVAL;
-extern uint32_t PMAP_$IDLE_INTERVAL;
-extern uint32_t PMAP_$PUR_L_CNT;  /* Local purifier page count */
-extern uint32_t MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
-/* MMAP_$WSL_HI_MARK[0] defined in pmap.h as array */
-extern uint32_t MMAP_$STEAL_CNT;
-extern int8_t NETWORK_$DISKLESS;
-extern int8_t DISK_$DO_CHKSUM;
-extern int8_t NETLOG_$OK_TO_LOG;
-extern uint32_t *LOG_$LOGFILE_PTR;
-extern uint16_t PROC1_$CURRENT;
-extern uint16_t DAT_00e254e2;   /* Random seed for page selection */
-
-/* External time data for wait */
-extern uint32_t DAT_00e1416a;   /* Short wait time */
-extern uint32_t DAT_00e254dc;   /* Wait eventcount */
 
 /* WSL base */
 #if defined(M68K)
@@ -63,12 +36,7 @@ extern uint32_t DAT_00e254dc;   /* Wait eventcount */
     #define PUR_STATS_BASE      ((uintptr_t)pur_stats)
 #endif
 
-/* Forward declarations */
-extern void FUN_00e1327e(int *pages, int qblk, uint16_t count);
-extern void FUN_00e12d84(int16_t vpn, int16_t offset);
-extern void FUN_00e12e5e(uint32_t vpn, status_$t *status, int8_t sync_flag);
-extern void FUN_00e2f880(void);
-extern int32_t LOG_$UPDATE(void);
+/* Additional base addresses defined in pmap_internal.h */
 
 void PMAP_$PURIFIER_L(void)
 {

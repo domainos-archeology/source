@@ -15,13 +15,8 @@
  * Original address: 0x00e1471c
  */
 
-#include "proc1.h"
-
-/* External: suspend eventcount at 0xE205F6 */
-extern ec_$eventcount_t PROC1_$SUSPEND_EC;
-
-/* Forward declaration */
-extern void ADVANCE(ec_$eventcount_t *ec);  /* EC_$ADVANCE variant */
+#include "proc1/proc1_internal.h"
+#include "ec/ec.h"
 
 void PROC1_$TRY_TO_SUSPEND(proc1_t *pcb)
 {
@@ -45,7 +40,7 @@ void PROC1_$TRY_TO_SUSPEND(proc1_t *pcb)
         pcb->pri_min = (pcb->pri_min & ~PROC1_FLAG_DEFER_SUSP) | PROC1_FLAG_SUSPENDED;
 
         /* Notify waiters that a process was suspended */
-        ADVANCE(&PROC1_$SUSPEND_EC);
+        EC_$ADVANCE(&PROC1_$SUSPEND_EC);
     }
     /* If inhibited, the deferred flag remains set and
      * suspension will happen when the inhibit ends */

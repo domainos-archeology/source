@@ -2,13 +2,8 @@
 // Address: 0x00e1c148
 // Size: 188 bytes
 
-#include "tty.h"
-
-/* ML_$SPIN_LOCK, ML_$SPIN_UNLOCK declared in ml/ml.h via tty.h */
-
-// External process functions
-extern void PROC2_$GET_MY_UPIDS(short *upid, short *reserved1, short *upgid);
-extern void PROC2_$UPGID_TO_UID(short *upgid, uid_t *uid, status_$t *status);
+#include "tty/tty_internal.h"
+#include "proc2/proc2.h"
 
 void TTY_$K_SIMULATE_TERMINAL_INPUT(short *line_ptr, char *ch_ptr, status_$t *status)
 {

@@ -2,15 +2,10 @@
 // Address: 0x00e66738
 // Size: 140 bytes
 
-#include "tty.h"
-
-// External terminal subsystem functions
-extern short TERM_$GET_REAL_LINE(short line_num, status_$t *status);
-extern void TERM_$SET_DISCIPLINE(short *line_ptr, short *discipline_ptr, status_$t *status);
-extern void SMD_$UNBLANK(void);
-
-// External data
-extern char DTTY_$USE_DTTY;  // Flag indicating if display TTY is active
+#include "tty/tty_internal.h"
+#include "term/term.h"
+#include "smd/smd.h"
+#include "dtty/dtty.h"
 
 // DTTE array base (at 0xe2dc90 + 0x24 offset for handler_ptr)
 // Each DTTE is 0x38 bytes
