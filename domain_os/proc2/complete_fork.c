@@ -10,8 +10,7 @@
  * Original address: 0x00e735f8
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
+#include "proc2/proc2_internal.h"
 
 /*
  * Per-process eventcount table.

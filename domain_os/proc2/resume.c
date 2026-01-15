@@ -11,7 +11,7 @@
  * Original address: 0x00e413da
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$RESUME(uid_t *proc_uid, status_$t *status_ret)
 {

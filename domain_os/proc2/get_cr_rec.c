@@ -16,8 +16,7 @@
  * Original address: 0x00e4015c
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
+#include "proc2/proc2_internal.h"
 
 /* EC1 eventcount entry size for calculating process index */
 #define EC1_ENTRY_SIZE      0x18        /* 24 bytes per entry */

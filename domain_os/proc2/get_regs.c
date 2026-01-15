@@ -7,7 +7,7 @@
  * Original address: 0x00e41d9e
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$GET_REGS(uid_t *proc_uid, void *regs, status_$t *status_ret)
 {

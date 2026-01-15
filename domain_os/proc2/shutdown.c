@@ -11,7 +11,7 @@
  * Original address: 0x00e415c2
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$SHUTDOWN(void)
 {

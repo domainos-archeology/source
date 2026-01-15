@@ -15,11 +15,7 @@
  * Original address: 0x00e73454
  */
 
-#include "proc2.h"
-
-/* External functions */
-extern void ACL_$CLEAR_SUPER(void);
-extern void FIM_$PROC2_STARTUP(void *context);
+#include "proc2/proc2_internal.h"
 
 /*
  * Startup context structure

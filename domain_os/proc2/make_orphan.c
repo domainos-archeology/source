@@ -21,7 +21,7 @@
  * Original address: 0x00e40d1a
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Helper function to detach process from parent */
 /* Original address: 0x00e40df4 */

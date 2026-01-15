@@ -10,7 +10,7 @@
  * Original address: 0x00e3f130
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Constants from original code at PC-relative addresses */
 static int16_t quit_signal = SIGQUIT;  /* 3 */

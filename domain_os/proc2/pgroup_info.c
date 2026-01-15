@@ -14,7 +14,7 @@
  * Original address: 0x00e41dbc
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /*
  * Internal helper: search pgroup table for entry with matching UPGID.

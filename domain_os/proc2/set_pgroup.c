@@ -22,10 +22,7 @@
  * Original address: 0x00e410c8
  */
 
-#include "proc2.h"
-
-/* External reference to current process ID */
-extern uint16_t PROC1_$CURRENT;
+#include "proc2/proc2_internal.h"
 
 /*
  * Internal helper: search pgroup table for entry with matching UPGID.

@@ -9,10 +9,7 @@
  * Original address: 0x00e41b72
  */
 
-#include "proc2.h"
-
-/* External reference to current PROC1 process */
-extern uint16_t PROC1_CURRENT;
+#include "proc2/proc2_internal.h"
 
 uint16_t PROC2_$GET_DEBUGGER_PID(void)
 {

@@ -10,7 +10,7 @@
  * Original address: 0x00e40ca0
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 uint16_t PROC2_$MY_PID(void)
 {

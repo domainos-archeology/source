@@ -19,19 +19,12 @@
  * Original address: 0x00e4094c
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 #include <string.h>
 
 /* Status codes */
 #define status_$proc2_not_level_2_process           0x00190002
 #define status_$proc2_request_is_for_current_process 0x00190004
-
-/* External functions - use void* for flexibility with varying signatures */
-extern void PROC1_$GET_ANY_CPU_USAGE(int16_t *pid, void *usage1, void *usage2, void *usage3);
-extern void ACL_$GET_PID_SID(int16_t pid, uid_t *sid, status_$t *status);
-
-/* External globals */
-extern uid_t UID_$NIL;
 
 /*
  * Combined process info structure layout (0xE4 bytes):

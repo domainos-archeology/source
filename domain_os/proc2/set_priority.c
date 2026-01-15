@@ -14,7 +14,7 @@
  * Original address: 0x00e414de
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$SET_PRIORITY(uid_t *proc_uid, uint16_t *priority_1, uint16_t *priority_2,
                          status_$t *status_ret)

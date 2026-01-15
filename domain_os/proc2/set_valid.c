@@ -11,18 +11,7 @@
  * Original address: 0x00e73484
  */
 
-#include "proc2.h"
-
-/* External global variables */
-extern uid_t UID_$NIL;
-extern uint32_t AS_$STACK_FILE_LOW;
-extern uint32_t AS_$INIT_STACK_FILE_SIZE;
-extern uint16_t PROC1_$AS_ID;
-
-/* External functions */
-extern void MST_$MAP_AREA_AT(uint32_t *addr_lo, uint32_t *size,
-                              void *param3, void *param4,
-                              uid_t *uid, status_$t *status);
+#include "proc2/proc2_internal.h"
 
 /*
  * Creation record structure (partial - offsets determined from decompilation)

@@ -15,15 +15,13 @@
  * Original address: 0x00e400c2
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
+#include "proc2/proc2_internal.h"
 
 /* External EC tables and functions */
 #if defined(M68K)
     #define FIM_DELIV_EC_BASE   0xE224C4
     #define FIM_DELIV_EC(asid)  ((ec_$eventcount_t*)(FIM_DELIV_EC_BASE + (asid) * 12))
 #else
-    extern ec_$eventcount_t *fim_deliv_ec_table;
     #define FIM_DELIV_EC(asid)  (&fim_deliv_ec_table[(asid)])
 #endif
 

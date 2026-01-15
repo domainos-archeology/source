@@ -24,24 +24,7 @@
  * Original address: 0x00e726ec
  */
 
-#include "proc2.h"
-
-/* External globals */
-extern uid_t UID_$NIL;
-extern uint32_t FIM_$INITIAL_STACK_SIZE;
-
-/* External functions */
-extern void FIM_$FP_INIT(uint16_t asid);
-extern void ACL_$ALLOC_ASID(uint16_t pid, status_$t *status_ret);
-extern void AUDIT_$INHERIT_AUDIT(int16_t *pid_ptr, int16_t *status_ptr);
-extern void NAME_$INIT_ASID(int16_t *asid_ptr, int16_t *status_ptr);
-extern int8_t XPD_$INHERIT_PTRACE_OPTIONS(int16_t entry_offset);
-
-/* Internal helpers */
-extern void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry);
-extern void PGROUP_CLEANUP_INTERNAL(proc2_info_t *entry, int16_t mode);
-extern void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag);
-extern void PROC2_$CLEANUP_HANDLERS_INTERNAL(proc2_info_t *entry);
+#include "proc2/proc2_internal.h"
 
 /* Eventcount arrays - base addresses for process eventcounts */
 #if defined(M68K)

@@ -11,14 +11,7 @@
  * Original address: 0x00e3e960
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
-
-/* External declarations */
-extern void PROC2_$DELIVER_SIGNAL_INTERNAL(int16_t index, int16_t signal,
-                                            uint32_t param, status_$t *status_ret);
-extern ec_$eventcount_t AS_$CR_REC_FILE_SIZE;  /* Base of EC array */
-extern ec_$eventcount_t AS_$INIT_STACK_FILE_SIZE;  /* Another EC array */
+#include "proc2/proc2_internal.h"
 
 /*
  * Raw memory access macros for guardian-related fields

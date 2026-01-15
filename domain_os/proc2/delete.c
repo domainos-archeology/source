@@ -13,12 +13,8 @@
  * Original address: 0x00e74398
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
+#include "proc2/proc2_internal.h"
 #include "misc/misc.h"
-
-/* External functions */
-extern void PROC1_$UNBIND(uint16_t pid, status_$t *status);
 
 /*
  * PROC2_$DELETE_CLEANUP - Internal cleanup routine for process deletion

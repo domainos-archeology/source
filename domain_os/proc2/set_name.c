@@ -13,7 +13,7 @@
  * Original address: 0x00e3ea2c
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$SET_NAME(char *name, int16_t *name_len, uid_t *proc_uid, status_$t *status_ret)
 {

@@ -13,7 +13,7 @@
  * Original address: 0x00e41072
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Internal helper: get UPGID from UID
  * Original address: 0x00e422cc

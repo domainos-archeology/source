@@ -14,7 +14,7 @@
  * Original address: 0x00e3e748
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Audit enabled flag */
 #if defined(M68K)
@@ -23,10 +23,6 @@
     extern uint8_t audit_enabled;
     #define AUDIT_ENABLED       audit_enabled
 #endif
-
-/* External audit function */
-extern void AUDIT_$LOG_EVENT(void *event_header, uint16_t *success_flag,
-                              void *param_ptr, void *info, void *extra);
 
 /* Static data for audit event (from 0x00e3e806) */
 static const uint8_t audit_event_extra[] = { 0 };

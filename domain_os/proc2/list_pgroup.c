@@ -12,13 +12,7 @@
  * Original address: 0x00e401ea
  */
 
-#include "proc2.h"
-
-/* External FIM cleanup functions */
-extern status_$t FIM_$CLEANUP(void *context);
-extern void FIM_$RLS_CLEANUP(void *context);
-extern void FIM_$POP_SIGNAL(void *context);
-
+#include "proc2/proc2_internal.h"
 
 /* Expected status from FIM_$CLEANUP */
 #define status_$cleanup_handler_set 0x00120035

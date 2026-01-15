@@ -19,7 +19,7 @@
  * Original address: 0x00e4068e
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 int16_t PROC2_$FIND_INDEX(uid_t *proc_uid, status_$t *status_ret)
 {

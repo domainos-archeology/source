@@ -12,13 +12,12 @@
  * Original address: 0x00e4100c
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* UID_NIL at 0xe1737c - used as base for synthetic UIDs */
 #if defined(M68K)
 #define UID_NIL (*(uid_t*)0xE1737C)
 #else
-extern uid_t uid_nil;
 #define UID_NIL uid_nil
 #endif
 

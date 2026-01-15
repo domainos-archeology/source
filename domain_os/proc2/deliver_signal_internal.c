@@ -24,7 +24,7 @@
  * Original address: 0x00e3eb8c
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Special parameter value indicating SIGCONT from wait */
 #define SIGCONT_FROM_WAIT       0x00120019

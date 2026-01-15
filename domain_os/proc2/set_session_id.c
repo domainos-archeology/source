@@ -16,12 +16,7 @@
  * Original address: 0x00e41c42
  */
 
-#include "proc2.h"
-
-/* External declarations */
-extern int16_t FUN_00e42224(int16_t upid);  /* UPID to pgroup index lookup */
-extern void FUN_00e420b8(proc2_info_t *info, int16_t param);  /* Unknown helper */
-extern void FUN_00e41e86(proc2_info_t *info, int16_t session_id, status_$t *status);  /* Session setup */
+#include "proc2/proc2_internal.h"
 
 /*
  * Raw memory access macros for session-related fields

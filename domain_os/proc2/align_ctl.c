@@ -15,7 +15,7 @@
  * Original address: 0x00e41d74
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$ALIGN_CTL(int param_1, int param_2, uint16_t *result_1,
                       uint32_t *result_2, status_$t *status_ret)

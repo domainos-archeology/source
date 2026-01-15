@@ -16,12 +16,7 @@
  * Original address: 0x00e3efa0
  */
 
-#include "proc2.h"
-
-/* Forward declarations */
-extern void PROC2_$DELIVER_SIGNAL_INTERNAL(int16_t index, int16_t signal,
-                                           uint32_t param, status_$t *status_ret);
-extern int8_t ACL_$CHECK_FAULT_RIGHTS(int16_t src_offset, int16_t dst_offset);
+#include "proc2/proc2_internal.h"
 
 /* Log signal event (debugging) - currently a no-op */
 static void log_signal_event(int event_type, int16_t target_idx, int16_t signal,

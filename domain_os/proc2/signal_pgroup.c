@@ -13,7 +13,7 @@
  * Original address: 0x00e3f23e
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Forward declaration of internal helper */
 void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,

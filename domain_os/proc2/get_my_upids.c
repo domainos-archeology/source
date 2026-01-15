@@ -12,10 +12,7 @@
  * Original address: 0x00e73968
  */
 
-#include "proc2.h"
-
-/* External reference to current PROC1 process */
-extern uint16_t PROC1_CURRENT;
+#include "proc2/proc2_internal.h"
 
 void PROC2_$GET_MY_UPIDS(uint16_t *upid, uint16_t *upgid, uint16_t *uppid)
 {

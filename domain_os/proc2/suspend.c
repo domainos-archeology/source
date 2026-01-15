@@ -13,8 +13,7 @@
  * Nested helper at: 0x00e4120c
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
+#include "proc2/proc2_internal.h"
 
 /*
  * try_suspend - Helper function (was nested Pascal procedure)

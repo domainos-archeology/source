@@ -23,16 +23,12 @@
  * Original address: 0x00e303d8
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
+#include "proc2/proc2_internal.h"
 
 /* Number of process table entries (indices 1-69, 0 unused) */
 #define P2_MAX_ENTRIES          70
 #define P2_FIRST_FREE_ENTRY     2
 #define P2_LAST_ENTRY           69
-
-/* External globals */
-extern uid_t UID_$NIL;
 
 /* Boot flags storage */
 #if defined(M68K)
@@ -57,24 +53,6 @@ extern uid_t UID_$NIL;
     #define SYSTEM_UID_2        system_uid_2
     #define UID_TABLE_ENTRY(n)  uid_table[n]
 #endif
-
-/* External functions */
-extern void UID_$GEN(uid_t *uid_ret);
-extern void MST_$MAP_AREA_AT(void *uid1, void *size1, void *param1, void *param2,
-                              void *dest, status_$t *status_ret);
-extern int8_t OS_$BOOT_ERRCHK(char *msg1, char *msg2, uint16_t *param, status_$t *status_ret);
-extern int8_t TAPE_$BOOT(status_$t *status_ret);
-extern int8_t FLOP_$BOOT(status_$t *status_ret, status_$t *status_ret2);
-extern void NAME_$RESOLVE(char *name, int16_t *name_len, uid_t *uid_ret, status_$t *status_ret);
-extern void FILE_$LOCK(uid_t *uid, void *param1, void *param2, void *param3,
-                        void *result, status_$t *status_ret);
-extern void MST_$MAP(uid_t *uid, void *param1, void *param2, void *param3,
-                      void *param4, void *param5, void *result, status_$t *status_ret);
-extern void MST_$UNMAP(uid_t *uid, void *param1, void *param2, status_$t *status_ret);
-extern void MST_$MAP_AT(void *start, uid_t *uid, void *param1, void *param2, void *param3,
-                         void *param4, void *param5, void *result, status_$t *status_ret);
-extern uint8_t MMU_$NORMAL_MODE(void);
-extern uint8_t DTTY_$USE_DTTY;
 
 /* Eventcount base addresses */
 #if defined(M68K)

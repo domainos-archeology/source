@@ -9,13 +9,12 @@
  * Original address: 0x00e41b56
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Global boot flags at 0xe7c068 (= 0xe7be84 + 0x1e4) */
 #if defined(M68K)
 #define PROC2_BOOT_FLAGS (*(int16_t*)0xE7C068)
 #else
-extern int16_t proc2_boot_flags;
 #define PROC2_BOOT_FLAGS proc2_boot_flags
 #endif
 

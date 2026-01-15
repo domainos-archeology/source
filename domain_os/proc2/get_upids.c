@@ -19,7 +19,7 @@
  * Original address: 0x00e738a8
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid_ret, uint16_t *upgid_ret,
                       uint16_t *uppid_ret, status_$t *status_ret)

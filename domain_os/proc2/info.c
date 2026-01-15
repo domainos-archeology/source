@@ -14,11 +14,7 @@
  * Original address: 0x00e407b4
  */
 
-#include "proc2.h"
-
-/* Internal helper */
-extern void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
-                                        void *info, status_$t *status_ret);
+#include "proc2/proc2_internal.h"
 
 void PROC2_$INFO(int16_t *pid, int16_t *offset, void *info, uint16_t *info_len,
                  status_$t *status_ret)

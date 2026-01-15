@@ -12,7 +12,7 @@
  * Original address: 0x00e3ead0
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$NAME_TO_UID(char *name, int16_t *name_len, uid_t *uid_ret, status_$t *status_ret)
 {

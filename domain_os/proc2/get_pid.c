@@ -12,7 +12,7 @@
  * Original address: 0x00e40cba
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 uint16_t PROC2_$GET_PID(uid_t *proc_uid, status_$t *status_ret)
 {

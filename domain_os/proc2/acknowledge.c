@@ -21,15 +21,7 @@
  * Original address: 0x00e3f338
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
-
-/* External declarations */
-extern void PROC2_$DELIVER_SIGNAL_INTERNAL(int16_t index, int16_t signal,
-                                            uint32_t param, status_$t *status_ret);
-extern void PROC2_$DELIVER_PENDING_INTERNAL(int16_t index);
-extern void FUN_00e0a96c(void);  /* Unknown function - called during acknowledge */
-extern ec_$eventcount_t AS_$CR_REC_FILE_SIZE;  /* Base for eventcount array */
+#include "proc2/proc2_internal.h"
 
 /*
  * Signal mask constants

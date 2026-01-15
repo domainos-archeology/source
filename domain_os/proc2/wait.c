@@ -25,8 +25,7 @@
  * Original address: 0x00e3fdd0
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
+#include "proc2/proc2_internal.h"
 
 /* WNOHANG option bit */
 #define WNOHANG 0x0001
@@ -34,19 +33,6 @@
 /* Status codes */
 #define status_$proc2_wait_found_no_children    0x0019000D
 #define status_$ec2_async_fault_while_waiting   0x00180003
-
-/* External declarations */
-extern int16_t FUN_00e42224(int16_t upid);  /* UPID to pgroup index */
-extern void FUN_00e3fc5c(int16_t child_idx, uint16_t options, int16_t parent_idx,
-                          int16_t prev_idx, int8_t *found, uint32_t *result,
-                          int16_t *ret_pid);
-extern void FUN_00e3fd06(int16_t zombie_idx, uint16_t options,
-                          int8_t *found, uint32_t *result, int16_t *ret_pid);
-
-/* External EC/signal data */
-extern ec_$eventcount_t AS_$CR_REC_FILE_SIZE;  /* Base for CR_REC EC array */
-extern ec_$eventcount_t FIM_$QUIT_EC;           /* Base for FIM quit EC */
-extern int32_t FIM_$QUIT_VALUE;                 /* Base for FIM quit values */
 
 /*
  * Raw memory access macros for wait-related fields

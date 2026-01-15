@@ -13,7 +13,7 @@
  * Original address: 0x00e3f2c2
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$SIGNAL_PGROUP_OS(uid_t *pgroup_uid, int16_t *signal, uint32_t *param,
                              status_$t *status_ret)

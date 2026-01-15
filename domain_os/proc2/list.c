@@ -13,18 +13,12 @@
  * Original address: 0x00e402f0
  */
 
-#include "proc2.h"
-
-/* External FIM cleanup functions */
-extern status_$t FIM_$CLEANUP(void *context);
-extern void FIM_$RLS_CLEANUP(void *context);
-extern void FIM_$POP_SIGNAL(void *context);
+#include "proc2/proc2_internal.h"
 
 /* System process UID at table base */
 #if defined(M68K)
 #define PROC2_SYSTEM_UID    (*(uid_t*)0xEA551C)
 #else
-extern uid_t proc2_system_uid;
 #define PROC2_SYSTEM_UID    proc2_system_uid
 #endif
 

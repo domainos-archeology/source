@@ -8,7 +8,7 @@
  * Original address: 0x00e414dc
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$SET_STACK_TRUNC_SIZE(void)
 {

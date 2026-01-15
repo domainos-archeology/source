@@ -17,16 +17,7 @@
  * Original address: 0x00e41620
  */
 
-#include "proc2.h"
-
-/* External globals */
-extern uid_t UID_$NIL;
-
-/* ACL permission check for debug rights */
-extern int8_t ACL_$CHECK_DEBUG_RIGHTS(uint16_t *pid);
-
-/* Internal helper to set up debug relationship */
-extern void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag);
+#include "proc2/proc2_internal.h"
 
 void PROC2_$DEBUG(uid_t *proc_uid, status_$t *status_ret)
 {

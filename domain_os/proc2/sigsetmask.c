@@ -14,7 +14,7 @@
  * Original address: 0x00e3f6c0
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 uint32_t PROC2_$SIGSETMASK(uint32_t *mask_ptr, uint32_t *result)
 {

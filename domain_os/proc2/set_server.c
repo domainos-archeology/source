@@ -12,7 +12,7 @@
  * Original address: 0x00e41468
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$SET_SERVER(uid_t *proc_uid, int8_t *server_flag, status_$t *status_ret)
 {

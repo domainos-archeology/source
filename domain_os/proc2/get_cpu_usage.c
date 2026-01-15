@@ -10,7 +10,7 @@
  * Original address: 0x00e41d2a
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Note: PROC1_$GET_CPU_USAGE actually takes 3 pointer params, not 2 as declared
  * in proc1.h. The correct signature is:

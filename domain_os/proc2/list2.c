@@ -16,12 +16,7 @@
  * Original address: 0x00e40402
  */
 
-#include "proc2.h"
-
-/* External FIM cleanup functions */
-extern status_$t FIM_$CLEANUP(void *context);
-extern void FIM_$RLS_CLEANUP(void *context);
-extern void FIM_$POP_SIGNAL(void *context);
+#include "proc2/proc2_internal.h"
 
 void PROC2_$LIST2(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
                   int32_t *start_index, uint8_t *more_flag, int32_t *last_index)

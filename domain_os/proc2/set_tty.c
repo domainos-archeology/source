@@ -10,7 +10,7 @@
  * Original address: 0x00e41c04
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$SET_TTY(uid_t *tty_uid)
 {

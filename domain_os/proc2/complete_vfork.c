@@ -22,11 +22,7 @@
  * Original address: 0x00e73638
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
-
-/* External globals */
-extern uid_t UID_$NIL;
+#include "proc2/proc2_internal.h"
 
 /* Global storage addresses */
 #if defined(M68K)
@@ -57,15 +53,6 @@ extern uid_t UID_$NIL;
 #endif
 
 #define PROC_FORK_EC(idx)       ((ec_$eventcount_t*)(EC1_FORK_ARRAY_BASE + ((idx) - 1) * 0x18))
-
-/* External functions */
-extern void FIM_$FP_INIT(uint16_t asid);
-extern void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
-                                   uint32_t map_param, uint32_t flags, status_$t *status_ret);
-extern void MST_$MAP_AREA_AT(void *size_ptr, void *param_ptr, void *param2, void *param3,
-                              void *dest, status_$t *status_ret);
-extern void NAME_$INIT_ASID(int16_t *asid_ptr, int16_t *status_ptr);
-extern void FIM_$PROC2_STARTUP(void *context);
 
 /*
  * Creation record structure for startup

@@ -22,13 +22,7 @@
  * Original address: 0x00e3edc0
  */
 
-#include "proc2.h"
-
-/* External declarations */
-extern int16_t FUN_00e3ef38(proc2_info_t *info);  /* Get next pending signal */
-extern void XPD_$CAPTURE_FAULT(void *param1, void *param2,
-                                int16_t *signal, status_$t *status);
-extern void FUN_00e0a96c(void);  /* Unknown - called after certain signal operations */
+#include "proc2/proc2_internal.h"
 
 /*
  * Signal masks for special handling

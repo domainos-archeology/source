@@ -26,11 +26,7 @@
  * Original address: 0x00e3f7de
  */
 
-#include "proc2.h"
-
-/* External declarations */
-extern void PROC2_$DELIVER_PENDING_INTERNAL(int16_t index);
-extern void FUN_00e40df4(int16_t child_idx, int16_t prev_sibling_idx);
+#include "proc2/proc2_internal.h"
 
 /*
  * Raw memory access macros for signal mask fields

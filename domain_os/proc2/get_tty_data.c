@@ -10,10 +10,7 @@
  * Original address: 0x00e41bb8
  */
 
-#include "proc2.h"
-
-/* External reference to current PROC1 process */
-extern uint16_t PROC1_CURRENT;
+#include "proc2/proc2_internal.h"
 
 void PROC2_$GET_TTY_DATA(uid_t *tty_uid, uint16_t *tty_flags)
 {

@@ -14,14 +14,11 @@
  * Original address: 0x00e3f582
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Flag bits in flags field */
 #define FLAG_ONSTACK    0x0004  /* Bit 2: Signal handler on signal stack */
 #define FLAG_BIT_10     0x0400  /* Bit 10: Some signal flag */
-
-/* External function */
-extern void FIM_$FAULT_RETURN(void *context, void *param2, void *param3);
 
 /*
  * Signal context structure passed from signal handler

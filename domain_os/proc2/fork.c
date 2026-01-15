@@ -22,13 +22,8 @@
  * Original address: 0x00e72bce
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
+#include "proc2/proc2_internal.h"
 #include "misc/misc.h"
-
-/* External globals */
-extern uid_t UID_$NIL;
-extern uint32_t FIM_$INITIAL_STACK_SIZE;
 
 /* FIM globals for user FIM address */
 #if defined(M68K)
@@ -40,21 +35,6 @@ extern uint32_t FIM_$INITIAL_STACK_SIZE;
     #define FIM_USER_FIM_ADDR_TABLE fim_user_fim_addr_table
     #define FIM_QUIT_INH_TABLE      fim_quit_inh_table
 #endif
-
-/* External functions */
-extern void ACL_$ALLOC_ASID(uint16_t pid, status_$t *status_ret);
-extern void AUDIT_$INHERIT_AUDIT(int16_t *pid_ptr, int16_t *status_ptr);
-extern void NAME_$FORK(uint16_t *parent_asid, int16_t *child_asid);
-extern void FILE_$FORK_LOCK(void *asid_ptr, status_$t *status);
-extern void FILE_$PRIV_UNLOCK_ALL(void *asid_ptr);
-extern int8_t MSG_$FORK(uint16_t param1, void *asid_ptr);
-extern void PCHIST_$UNIX_PROFIL_FORK(void *pid_ptr, void *asid_ptr);
-extern int8_t XPD_$INHERIT_PTRACE_OPTIONS(int16_t entry_offset);
-/* Internal helpers */
-extern void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry);
-extern void PGROUP_CLEANUP_INTERNAL(proc2_info_t *entry, int16_t mode);
-extern void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag);
-extern void PROC2_$CLEANUP_HANDLERS_INTERNAL(proc2_info_t *entry);
 
 /* Eventcount arrays */
 #if defined(M68K)

@@ -10,8 +10,7 @@
  * Original address: 0x00e3ecea
  */
 
-#include "proc2.h"
-#include "ec/ec.h"
+#include "proc2/proc2_internal.h"
 
 /* FIM globals for signal delivery */
 #if defined(M68K)
@@ -19,9 +18,6 @@
     #define FIM_TRACE_STS_TABLE     ((uint32_t*)0xE223A2)
     #define FIM_QUIT_EC_BASE        0xE22002
 #else
-    extern uint8_t *fim_quit_inh_table;
-    extern uint32_t *fim_trace_sts_table;
-    extern void *fim_quit_ec_base;
     #define FIM_QUIT_INH_TABLE      fim_quit_inh_table
     #define FIM_TRACE_STS_TABLE     fim_trace_sts_table
     #define FIM_QUIT_EC_BASE        ((uintptr_t)fim_quit_ec_base)
@@ -38,9 +34,6 @@
 
 /* Fault parameter storage offset in proc2_info_t */
 #define FAULT_PARAM_OFFSET      0x90
-
-/* External functions */
-extern void FIM_$DELIVER_TRACE_FAULT(uint16_t asid);
 
 /*
  * PROC2_$GET_NEXT_PENDING_SIGNAL - Get next deliverable signal

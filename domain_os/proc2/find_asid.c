@@ -15,7 +15,7 @@
  * Original address: 0x00e40724
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 uint16_t PROC2_$FIND_ASID(uid_t *proc_uid, int8_t *param_2, status_$t *status_ret)
 {

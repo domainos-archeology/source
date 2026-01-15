@@ -10,7 +10,7 @@
  * Original address: 0x00e40702
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Constant parameter passed to FIND_ASID (at address 0xE3E952) */
 static int8_t asid_param = 0;  /* TODO: Determine actual value */

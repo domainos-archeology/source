@@ -10,7 +10,7 @@
  * Original address: 0x00e3f75a
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$GET_SIG_MASK(proc2_sig_mask_t *mask_ret)
 {

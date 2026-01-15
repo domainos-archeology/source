@@ -13,7 +13,7 @@
  * Original address: 0x00e41ac0
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /*
  * Raw memory access macros for accounting fields

@@ -17,7 +17,7 @@
  * Original address: 0x00e40f6c
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$UID_TO_UPID(uid_t *proc_uid, uint16_t *upid_ret, status_$t *status_ret)
 {

@@ -10,7 +10,7 @@
  * Original address: 0x00e73862
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 void PROC2_$WHO_AM_I(uid_t *proc_uid)
 {

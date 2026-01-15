@@ -16,13 +16,10 @@
  * Original address: 0x00e41810
  */
 
-#include "proc2.h"
+#include "proc2/proc2_internal.h"
 
 /* Status codes */
 #define status_$proc2_proc_not_debug_target     0x00190010
-
-/* Internal helper to clear debug state */
-extern void DEBUG_CLEAR_INTERNAL(int16_t proc_idx, int8_t flag);
 
 void PROC2_$UNDEBUG(uid_t *proc_uid, status_$t *status_ret)
 {
