@@ -14,7 +14,7 @@
  *   N - Bytes per sector code (usually 2 for 512 bytes)
  */
 
-#include "flp.h"
+#include "flp/flp_internal.h"
 
 /* Status codes */
 #define status_$disk_controller_busy  0x00080002
@@ -31,38 +31,6 @@
 
 /* DMA mode for write */
 #define DMA_MODE_WRITE 0x12
-
-/* FLP data area fields (relative to base 0xe7aef4) */
-extern int32_t DAT_00e7b020;    /* +0x12c: Controller address */
-extern uint16_t DAT_00e7b026;   /* +0x132: Retry counter */
-extern uint32_t DAT_00e7aff0;   /* +0xfc: Physical address of format buffer */
-extern uint8_t DAT_00e7af6c[];  /* +0x78: Unit cylinder cache */
-extern uint16_t DAT_00e7af66;   /* +0x72: Status register copy */
-
-/* Format buffer area at offset 0x80 from FLP data base */
-extern uint8_t FLP_IO_BUFFER[]; /* 0xe7af74 */
-
-/* Bytes per sector code at offset 0x103 */
-extern uint8_t DAT_00e7aff7;    /* N value for format */
-
-/* Format command buffer at offset 0x2c */
-extern uint16_t DAT_00e7af20;   /* Command byte */
-extern uint16_t DAT_00e7af22;   /* Unit + head */
-
-/* Seek command buffer at offset 0x118 */
-extern uint16_t DAT_00e7b00c;   /* Seek command */
-extern uint16_t DAT_00e7b00e;   /* Unit + head */
-extern uint16_t DAT_00e7b010;   /* Cylinder */
-
-/* Controller info table */
-extern uint8_t DAT_00e7afe0[];  /* +0xec: Controller address table */
-
-/* Constant data */
-extern uint8_t DAT_00e3ddc2[];  /* Seek command parameters */
-extern uint8_t DAT_00e3ddc4[];  /* Format command parameters */
-
-/* Error counter area */
-extern uint8_t DAT_00e7a55c[];  /* Disk error counter */
 
 /*
  * Request block structure (partial)

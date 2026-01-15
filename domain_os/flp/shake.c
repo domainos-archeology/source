@@ -15,14 +15,11 @@
  * Timeout occurs after 2000 iterations of waiting for ready.
  */
 
-#include "flp.h"
+#include "flp/flp_internal.h"
 
 /* Status codes */
 #define status_$disk_controller_timeout  0x00080003
 #define status_$disk_controller_error    0x00080004
-
-/* Current controller address */
-extern int32_t DAT_00e7b020;
 
 /*
  * SHAKE - Handshake data with controller

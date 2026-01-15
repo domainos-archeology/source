@@ -18,7 +18,7 @@
  * - DMA overruns
  */
 
-#include "flp.h"
+#include "flp/flp_internal.h"
 
 /* Status codes for floppy operations */
 #define status_$memory_parity_error_during_disk_write  0x00080025
@@ -56,37 +56,6 @@
 #define FLP_ST2_WRONG_CYL        0x10  /* Wrong cylinder */
 #define FLP_ST2_BAD_CYL          0x02  /* Bad cylinder */
 #define FLP_ST2_MISSING_DAM      0x01  /* Missing data address mark */
-
-/* External event counter list for EC_$WAIT */
-extern uint32_t DAT_00e2b0d4;
-
-/* FLP data area fields */
-extern void *FLP_$EC;            /* +0x60: Event counter */
-extern uint16_t FLP_$SREGS;      /* +0x70: Status register 0 (word) */
-extern uint16_t DAT_00e7af66;    /* +0x72: Status registers 1-2 */
-extern uint8_t DAT_00e7af69;     /* +0x75: Status register 2 low byte */
-extern uint8_t DAT_00e7af6c[];   /* +0x78: Unit status array */
-
-/* Command buffer area */
-extern uint8_t DAT_00e7b004;     /* +0x110: Command byte 0 */
-extern uint16_t DAT_00e7b006;    /* +0x112: Command byte 1 (unit + head) */
-extern uint16_t DAT_00e7b008;    /* +0x114: Recalibrate command area */
-extern uint16_t DAT_00e7b00a;    /* +0x116: Current unit number */
-
-/* Physical address for parity checking */
-extern uint32_t DAT_00e7b01c;    /* +0x128: Physical address */
-
-/* Controller address */
-extern int32_t DAT_00e7b020;     /* +0x12c: Controller address */
-
-/* Retry counters */
-extern int16_t DAT_00e7b024;     /* +0x130: Retry count */
-extern uint16_t DAT_00e7b026;    /* +0x132: Control flag */
-
-/* Constant data from ROM - command parameters */
-extern int16_t DAT_00e3e10e;     /* Read direction (0) */
-extern int16_t DAT_00e3e110;     /* Write direction (1) / count 1 */
-extern int16_t DAT_00e3e21c;     /* Count 2 */
 
 /*
  * EXCS - Execute command and check status

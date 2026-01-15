@@ -11,35 +11,7 @@
  * by polling the status register until the busy flag clears.
  */
 
-#include "flp.h"
-
-/* External function to probe for hardware */
-extern int8_t FUN_00e29138(void *signature, void *hw_addr, void *buffer);
-
-/* Controller table - 8 bytes per controller */
-extern uint8_t DAT_00e7afdc[];  /* Controller info pointer */
-extern uint8_t DAT_00e7afe0[];  /* Controller register address */
-
-/* Current controller address */
-extern int32_t DAT_00e7b020;
-
-/* Event counter */
-extern void *FLP_$EC;
-
-/* Jump table */
-extern void *FLP_$JUMP_TABLE;
-
-/* Status registers */
-extern uint16_t FLP_$SREGS;
-
-/* Registration data areas */
-extern uint8_t DAT_00e7affc[];
-extern uint8_t DAT_00e7b02a[];
-
-/* Hardware signature data */
-extern uint8_t DAT_00e3e10e[];
-extern uint8_t DAT_00e3e110[];
-extern uint8_t DAT_00e3ddc2[];
+#include "flp/flp_internal.h"
 
 /*
  * FLP_$CINIT - Initialize floppy controller

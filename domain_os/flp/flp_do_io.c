@@ -12,7 +12,7 @@
  * handles seek operations when the head position changes.
  */
 
-#include "flp.h"
+#include "flp/flp_internal.h"
 
 /* Status codes */
 #define status_$disk_controller_busy    0x00080002
@@ -42,37 +42,6 @@
 /* DMA mode values */
 #define DMA_MODE_READ  0x92   /* Read from device to memory */
 #define DMA_MODE_WRITE 0x12   /* Write from memory to device */
-
-/* FLP data area fields */
-extern uint8_t DAT_00e7afdc[];  /* +0xe8: Controller info pointer table */
-extern uint8_t DAT_00e7afe0[];  /* +0xec: Controller address table */
-extern int32_t DAT_00e7b020;    /* +0x12c: Current controller address */
-extern uint16_t DAT_00e7b024;   /* +0x130: DMA retry counter */
-extern uint16_t DAT_00e7b026;   /* +0x132: Retry counter */
-extern uint32_t DAT_00e7b01c;   /* +0x128: Physical buffer address */
-extern uint8_t DAT_00e7b018[];  /* +0x124: Disk change flags */
-extern uint8_t DAT_00e7af6c[];  /* +0x78: Unit cylinder cache */
-extern uint16_t DAT_00e7af66;   /* +0x72: Status register copy */
-
-/* Command buffer area */
-extern uint16_t DAT_00e7af3e;   /* +0x4a: Command byte */
-extern uint16_t DAT_00e7af40;   /* +0x4c: Head + unit */
-extern uint16_t DAT_00e7af42;   /* +0x4e: Cylinder */
-extern uint16_t DAT_00e7af44;   /* +0x50: Head number */
-extern uint16_t DAT_00e7af46;   /* +0x52: Sector number */
-
-/* Command code table */
-extern uint16_t DAT_00e7affa;   /* +0x106: Base command code */
-
-/* Constant data */
-extern uint8_t DAT_00e3ddc2[];  /* Seek command parameters */
-extern uint8_t DAT_00e3dfe0[];  /* Read/write command parameters */
-
-/* Error counter area */
-extern uint8_t DAT_00e7a55c[];  /* Disk error counter */
-
-/* Forward declaration */
-void FLP_FORMAT_TRACK(void *req, void *buf);
 
 /*
  * Request block structure (partial)

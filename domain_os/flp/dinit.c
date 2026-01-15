@@ -11,39 +11,7 @@
  * on first initialization to ensure DMA can access it.
  */
 
-#include "flp.h"
-
-/* Controller table entry offset to register address */
-extern uint8_t DAT_00e7afe0[];
-
-/* Current controller register address */
-extern int32_t DAT_00e7b020;
-
-/* Physical address of I/O buffer */
-extern uint32_t DAT_00e7aff0;
-
-/* Initialized flag */
-extern int8_t DAT_00e7b02c;
-
-/* Unit status */
-extern uint8_t DAT_00e7af6c[];  /* 2 bytes per unit */
-extern uint8_t DAT_00e7b018[];  /* Disk change flags */
-
-/* Control data */
-extern uint8_t DAT_00e7b008[];  /* EXCS data area */
-extern uint16_t DAT_00e7b00a;   /* Current unit number */
-extern uint16_t DAT_00e7b026;   /* Control flag */
-
-/* I/O buffer area at offset 0x80 from FLP data base */
-extern uint8_t FLP_IO_BUFFER[];  /* 0xe7af74 */
-
-/* Geometry data embedded in code */
-extern uint32_t DAT_00e3e21e;    /* Geometry word 1 */
-extern uint32_t DAT_00e3e222;    /* Geometry word 2 */
-extern uint16_t DAT_00e3e226;    /* Geometry word 3 */
-
-/* Command signature */
-extern uint8_t DAT_00e3e21c[];
+#include "flp/flp_internal.h"
 
 /*
  * FLP_$DINIT - Initialize floppy device

@@ -9,10 +9,7 @@
  * ejected or changed, preventing I/O until revalidation.
  */
 
-#include "flp.h"
-
-/* Disk change flags array - one byte per unit */
-extern uint8_t DAT_00e7b018[FLP_MAX_UNITS];
+#include "flp/flp_internal.h"
 
 /*
  * FLP_$REVALIDATE - Clear disk change flag

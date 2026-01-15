@@ -14,22 +14,7 @@
  * which determines whether we should read result bytes.
  */
 
-#include "flp.h"
-
-/* Controller table - 8 bytes per controller entry */
-extern uint8_t DAT_00e7afe0[];
-
-/* Saved status registers from result phase */
-extern uint16_t FLP_$SREGS_ARRAY[];  /* Array at FLP_$JUMP_TABLE + 0x1c */
-
-/* Disk change flags - one byte per unit */
-extern uint8_t DAT_00e7b018[FLP_MAX_UNITS];
-
-/* Current controller address */
-extern int32_t DAT_00e7b020;
-
-/* Event counter for floppy operations */
-extern void *FLP_$EC;
+#include "flp/flp_internal.h"
 
 /*
  * FLP_$INT - Handle floppy interrupt

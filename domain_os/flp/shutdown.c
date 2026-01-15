@@ -6,10 +6,7 @@
  * system shutdown or when removing a drive from service.
  */
 
-#include "flp.h"
-
-/* Unit active flags - one byte per unit, 0x80 = active */
-extern uint8_t DAT_00e7b014[FLP_MAX_UNITS];
+#include "flp/flp_internal.h"
 
 /*
  * FLP_$SHUTDOWN - Shutdown floppy unit
