@@ -9,14 +9,7 @@
  * Original address: 0x00e30970
  */
 
-#include "ec.h"
-
-extern uint32_t _DAT_00e7cf04;
-extern uint16_t DAT_00e7cf08;
-extern uint32_t DAT_00e7cf00;
-extern uint32_t DAT_00e7cefc;
-extern uint16_t DAT_00e7caf0;
-extern void *DAT_00e7cafc;
+#include "ec_internal.h"
 
 void EC2_$INIT_S(void)
 {

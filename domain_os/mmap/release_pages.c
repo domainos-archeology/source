@@ -8,10 +8,7 @@
  * Original address: 0x00e0cff8
  */
 
-#include "mmap.h"
-
-/* Segment info table (for determining if segment needs flush) */
-extern void *SEGMENT_TABLE[];  /* At 0xEC5400 */
+#include "mmap_internal.h"
 
 void MMAP_$RELEASE_PAGES(uint16_t pid, uint32_t *vpn_array, uint16_t count)
 {

@@ -11,24 +11,7 @@
  * All functions call the internal FUN_00e43182 with appropriate parameters.
  */
 
-#include "mst.h"
-
-/* External process ID */
-extern int16_t PROC1_$AS_ID;
-
-/* Internal mapping function */
-extern void FUN_00e43182(uint32_t addr_hint,
-                         uid_t *uid,
-                         uint32_t start_va,
-                         uint32_t length,
-                         uint32_t area_size,
-                         int16_t asid,
-                         uint16_t area_id,
-                         uint16_t touch_count,
-                         uint8_t access_rights,
-                         int16_t direction,
-                         int32_t *mapped_length,
-                         status_$t *status_ret);
+#include "mst_internal.h"
 
 /*
  * MST_$MAP - Map memory at any available private address

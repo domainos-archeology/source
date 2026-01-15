@@ -175,28 +175,13 @@ typedef struct mmu_globals_t {
 #define SR_IPL_DISABLE_ALL      0x0700  /* Disable all interrupts */
 
 /*
- * External references
+ * Note: Internal helper functions (mmu_$installi, mmu_$remove_internal, etc.)
+ * are declared in mmu_internal.h. Include that header in .c files that need
+ * access to internal MMU functions.
+ *
+ * CACHE_$CLEAR is declared in cache/cache.h.
+ * MMAP_$LPPN/MMAP_$HPPN are declared in mmap/mmap.h.
  */
-extern uint32_t MMAP_$LPPN;             /* Lowest pageable page number */
-extern uint32_t MMAP_$HPPN;             /* Highest pageable page number */
-
-/*
- * System functions
- */
-extern void CACHE_$CLEAR(void);
-
-/*
- * Internal helper functions (static in implementation)
- */
-
-/* Remove a PPN from the hash chain (called with interrupts disabled) */
-/* void mmu_$remove_internal(uint16_t ppn); */
-
-/* Remove PMAPE entry and update hash chain */
-/* void mmu_$remove_pmape(uint16_t ppn); */
-
-/* Unlink entry from hash chain */
-/* void mmu_$unlink_from_hash(uint16_t ppn, uint16_t prev_offset); */
 
 /*
  * Function prototypes - Public API

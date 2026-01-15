@@ -8,11 +8,8 @@
  * Original address: 0x00e0d78e
  */
 
-#include "mmap.h"
-
-/* Statistics counters */
-extern uint32_t DAT_00e23344;  /* Some page count */
-extern uint32_t DAT_00e23320;  /* Another page count */
+#include "mmap_internal.h"
+#include "proc1/proc1.h"
 
 uint16_t MMAP_$ALLOC_PURE(uint32_t *vpn_array, uint16_t count)
 {

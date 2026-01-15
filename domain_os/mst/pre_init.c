@@ -17,10 +17,7 @@
  * - Memory top: 0x800 (segment numbers >= this are invalid)
  */
 
-#include "mst.h"
-
-/* External CPU type flag - high bit set for M68020+ */
-extern int8_t M68020;
+#include "mst_internal.h"
 
 /*
  * MST_$PRE_INIT - Initialize segment table configuration

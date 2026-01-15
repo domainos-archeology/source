@@ -11,11 +11,8 @@
  * Original address: 0x00e42a8a
  */
 
-#include "ec.h"
+#include "ec_internal.h"
 #include "ml/ml.h"
-
-extern uint32_t _DAT_00e7cf04;
-extern void *DAT_00e7caf8[];
 
 ec_$eventcount_t *EC2_$GET_EC1_ADDR(ec2_$eventcount_t *ec, status_$t *status_ret)
 {

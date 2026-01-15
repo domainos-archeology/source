@@ -8,10 +8,7 @@
  * Original address: 0x00e23f0c
  */
 
-#include "mmu.h"
-
-/* Forward declaration of internal helper */
-extern void mmu_$remove_pmape(uint16_t ppn);
+#include "mmu_internal.h"
 
 void MMU_$REMOVE_ASID(uint16_t asid)
 {

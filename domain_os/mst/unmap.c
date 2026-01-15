@@ -6,10 +6,7 @@
  * with mode=2 and the current process's ASID.
  */
 
-#include "mst.h"
-
-/* External process ID */
-extern int16_t PROC1_$AS_ID;
+#include "mst_internal.h"
 
 /*
  * MST_$UNMAP - Unmap memory from current process

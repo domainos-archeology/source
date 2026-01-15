@@ -7,10 +7,7 @@
  * Original address: 0x00e24204
  */
 
-#include "mmu.h"
-
-/* External reference to DAT_00e218d5 (power control byte) */
-extern uint8_t MMU_POWER_CONTROL_BYTE;
+#include "mmu_internal.h"
 
 void MMU_$INSTALL_ASID(uint16_t asid)
 {

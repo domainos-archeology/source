@@ -7,16 +7,7 @@
  * - MST_$GET_VA_INFO: Get full segment information
  */
 
-#include "mst.h"
-
-/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
-
-/* External process ASID */
-extern int16_t PROC1_$AS_ID;
-
-/* Internal lookup function */
-extern void FUN_00e4411c(uint16_t asid, uint32_t va, void *param,
-                         void **entry_out, status_$t *status);
+#include "mst_internal.h"
 
 /*
  * MST_$GET_VA_INFO - Get full information about a virtual address

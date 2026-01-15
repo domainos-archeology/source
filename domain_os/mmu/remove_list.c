@@ -8,10 +8,7 @@
  * Original address: 0x00e23d92
  */
 
-#include "mmu.h"
-
-/* Forward declaration of internal helper */
-extern void mmu_$remove_internal(uint16_t ppn);
+#include "mmu_internal.h"
 
 void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count)
 {

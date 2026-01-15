@@ -12,14 +12,8 @@
  * a serious memory management error that cannot be recovered from.
  */
 
-#include "mst.h"
+#include "mst_internal.h"
 #include "misc/misc.h"
-
-/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
-extern void AREA_$FREE_ASID(uint16_t asid);
-
-/* External: NIL UID for unmap operations */
-extern uid_t UID_$NIL;
 
 /*
  * MST_$FREE_ASID - Free an Address Space ID

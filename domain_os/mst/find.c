@@ -14,13 +14,8 @@
  * should not be called with those flags.
  */
 
-#include "mst.h"
+#include "mst_internal.h"
 #include "misc/misc.h"
-#include "mmap/mmap.h"
-#include "mmu/mmu.h"
-
-/* Error status for out-of-bounds reference */
-extern status_$t MST_Ref_OutOfBounds_Err;
 
 /*
  * MST_$FIND - Find physical address for virtual address

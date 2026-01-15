@@ -11,11 +11,7 @@
  * 4. Unlocks the AST
  */
 
-#include "mst.h"
-
-/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
-extern void *AST_$LOCATE_ASTE(uint32_t param);
-extern void AST_$RELEASE_PAGES(void *aste, uint8_t flags);
+#include "mst_internal.h"
 
 /*
  * MST_$REMOVE_SEG - Remove segment from AST

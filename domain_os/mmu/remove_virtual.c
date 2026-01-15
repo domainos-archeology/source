@@ -8,12 +8,7 @@
  * Original address: 0x00e23e38
  */
 
-#include "mmu.h"
-
-/* Forward declaration of internal helper */
-extern void mmu_$unlink_from_hash(uint16_t ppn, uint16_t prev_offset,
-                                   uint32_t pmape_val, uint16_t *ptt_entry,
-                                   uint32_t *pmape);
+#include "mmu_internal.h"
 
 void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
                          uint32_t *ppn_array, uint16_t *removed_count)

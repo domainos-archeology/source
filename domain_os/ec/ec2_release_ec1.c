@@ -8,10 +8,8 @@
  * Original address: 0x00e42b32
  */
 
-#include "ec.h"
+#include "ec_internal.h"
 #include "ml/ml.h"
-
-extern uint32_t DAT_00e7cefc;
 
 void EC2_$RELEASE_EC1(ec2_$eventcount_t *ec, status_$t *status_ret)
 {

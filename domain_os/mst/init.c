@@ -15,26 +15,10 @@
  * 7. Initialize MST page availability bitmap
  */
 
-#include "mst.h"
+#include "mst_internal.h"
 #include "math/math.h"
 #include "misc/misc.h"
-#include "mmap/mmap.h"
-#include "mmu/mmu.h"
-
-
-
-/* MST page tracking globals */
-extern uint32_t MST_$ASID_LIST_LONG;    /* First 32 bits of ASID bitmap */
-extern uint32_t DAT_00e24388;           /* Second part of ASID list */
-extern uint16_t MST_$MST_PAGES_WIRED;
-extern uint16_t MST_$MST_PAGES_LIMIT;
-
-/* MST page bitmap - tracks available MST pages */
-extern uint32_t DAT_00e7cf0c[];         /* Bitmap of available MST pages */
-extern uint8_t DAT_00e7cf0f;            /* Flags byte in page bitmap */
-
-/* Error status for resource exhaustion */
-extern status_$t PMAP_VM_Resources_exhausted_err;
+#include "pmap/pmap.h"
 
 /*
  * Static helper: Initialize an MST page (nested Pascal procedure)

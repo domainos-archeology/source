@@ -8,23 +8,9 @@
  * Original address: 0x00e3193e
  */
 
-#include "mmap.h"
+#include "mmap_internal.h"
+#include "mmu/mmu.h"
 #include "misc/misc.h"
-
-/* External function for virtual-to-physical translation */
-extern uint32_t mmu_$vtop_or_crash(void *vaddr);
-
-/* Working set owner tracking */
-extern uint16_t MMAP_$WS_OWNER;
-
-/* Memory range tracking */
-typedef struct {
-    uint32_t start;
-    uint32_t end;
-} mem_range_t;
-
-/* Memory examination table (max 3 ranges) */
-extern mem_range_t MEM_EXAM_TABLE[];  /* At 0xE007EC */
 
 void MMAP_$INIT(void *param)
 {

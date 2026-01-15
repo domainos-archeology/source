@@ -10,10 +10,7 @@
  * Original address: 0x00e23d38
  */
 
-#include "mmu.h"
-
-/* External reference to CACHE_$CLEAR for 68010 modification */
-extern uint16_t CACHE_$CLEAR_ENTRY;
+#include "mmu_internal.h"
 
 void MMU_$INIT(void)
 {

@@ -16,15 +16,7 @@
  * segments that should never be paged out.
  */
 
-#include "mst.h"
-
-/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
-
-/* External: Initialize segment table page for an ASID */
-extern status_$t FUN_00e43f40(uint16_t asid, uint16_t flags, void *table_ptr);
-
-/* External: OS wired memory UID */
-extern uid_t OS_WIRED_$UID;
+#include "mst_internal.h"
 
 /*
  * MST_$ALLOC_ASID - Allocate a new Address Space ID

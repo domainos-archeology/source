@@ -93,28 +93,17 @@ extern ec2_waiter_t EC2_WAITER_TABLE_BASE[];
 extern ec2_$eventcount_t EC2_PBU_ECS_BASE[];
 
 /*
- * External references
+ * External references (public memory-mapped data)
  */
 extern ec2_$eventcount_t EC2_$PBU_ECS;      /* PBU eventcount pool */
-extern uint32_t DAT_00e7cf00;               /* EC2 allocation bitmap */
-extern uint32_t DAT_00e7cefc;               /* EC2 pending release bitmap */
-extern uint16_t DAT_00e7cf08;               /* EC2 free list head */
-
-/*
- * External functions
- */
-
-/* FIM (Fault/Interrupt Manager) functions */
-extern status_$t FIM_$CLEANUP(void *context);
-extern void FIM_$RLS_CLEANUP(void *context);
-extern void FIM_$SIGNAL(status_$t status);
-extern ec_$eventcount_t FIM_$QUIT_EC;
-extern int32_t FIM_$QUIT_VALUE;
 
 /*
  * Note: EC source files that need PROC1_$ functions/globals should
- * include "../proc1/proc1.h" directly. This avoids circular dependencies
+ * include "proc1/proc1.h" directly. This avoids circular dependencies
  * since proc1.h already includes ec.h.
+ *
+ * Note: Internal EC2 data (allocation bitmaps, free lists, etc.) are
+ * declared in ec_internal.h. FIM functions are in fim/fim.h.
  */
 
 /*

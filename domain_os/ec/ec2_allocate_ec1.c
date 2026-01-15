@@ -7,10 +7,8 @@
  * Original address: 0x00e429da
  */
 
-#include "ec.h"
+#include "ec_internal.h"
 #include "ml/ml.h"
-
-extern uint32_t DAT_00e7cefc;  /* Pending release bitmap */
 
 void *EC2_$ALLOCATE_EC1(status_$t *status_ret)
 {

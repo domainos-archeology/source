@@ -14,10 +14,7 @@
  * Original address: 0x00e24048
  */
 
-#include "mmu.h"
-
-/* Forward declaration of internal install helper */
-extern void mmu_$installi(uint16_t ppn, uint32_t va, uint32_t packed_info);
+#include "mmu_internal.h"
 
 void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
 {

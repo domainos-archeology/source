@@ -13,11 +13,8 @@
  * - mmap_$move_pages_to_wsl_type (FUN_00e0d274): 0x00e0d274
  */
 
-#include "mmap.h"
+#include "mmap_internal.h"
 #include "mmu/mmu.h"
-
-/* Global lock for MMAP data structures */
-extern void *MMAP_LOCK;  /* Located at MMAP_GLOBALS base */
 
 /*
  * mmap_$add_to_wsl - Add a single page to a working set list

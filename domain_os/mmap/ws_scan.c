@@ -8,12 +8,9 @@
  * Original address: 0x00e0d364
  */
 
-#include "mmap.h"
+#include "mmap_internal.h"
 #include "misc/misc.h"
 #include "mmu/mmu.h"
-
-/* Segment info table */
-extern void *SEGMENT_TABLE[];  /* At 0xEC5400 */
 
 uint32_t MMAP_$WS_SCAN(uint16_t wsl_index, int16_t mode, uint32_t pages_needed, uint32_t param4)
 {

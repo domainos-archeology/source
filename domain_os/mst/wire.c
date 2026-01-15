@@ -9,11 +9,7 @@
  * it calls MST_$TOUCH to fault in the page and wire it.
  */
 
-#include "mst.h"
-
-/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h via mst.h */
-extern uint32_t MMU_$VTOP(uint32_t virt_addr, status_$t *status);
-extern void MMAP_$WIRE(uint32_t phys_addr);
+#include "mst_internal.h"
 
 /*
  * MST_$WIRE - Wire a virtual page into physical memory

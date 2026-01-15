@@ -18,11 +18,7 @@
  * Original address: 0x00e42be0
  */
 
-#include "ec.h"
-
-/* External data */
-extern void *DAT_00e7caf8[];    /* Registration table (EC1 pointers indexed by id) */
-extern uint32_t _DAT_00e7cf04;  /* Max registered EC1 index */
+#include "ec_internal.h"
 
 int32_t EC2_$GET_VAL(ec2_$eventcount_t *ec, status_$t *status_ret)
 {

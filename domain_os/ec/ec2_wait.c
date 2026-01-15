@@ -17,15 +17,10 @@
  * Original address: 0x00e42358
  */
 
-#include "ec.h"
+#include "ec_internal.h"
+#include "fim/fim.h"
 #include "proc1/proc1.h"
 #include "ml/ml.h"
-
-extern uint32_t _DAT_00e7cf04;
-extern void *DAT_00e7caf8[];
-extern uint16_t DAT_00e7cf08;
-extern uint32_t DAT_00e7cefc;
-extern void *AS_$PROTECTION;
 
 /* Maximum number of ECs to wait on */
 #define MAX_WAIT_COUNT  128

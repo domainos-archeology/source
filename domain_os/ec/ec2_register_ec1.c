@@ -11,12 +11,8 @@
  * Original address: 0x00e4293c
  */
 
-#include "ec.h"
+#include "ec_internal.h"
 #include "ml/ml.h"
-
-extern uint32_t _DAT_00e7cf04;
-extern void *DAT_00e7caf8[];
-extern uint16_t DAT_00e7cf06;
 
 #define MAX_REGISTERED_EC1  0x100
 #define status_$ec2_registration_full   0x00180001

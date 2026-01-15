@@ -7,10 +7,7 @@
  * Original address: 0x00e0d5ea
  */
 
-#include "mmap.h"
-
-/* Segment info table */
-extern void *SEGMENT_TABLE[];  /* At 0xEC5400 */
+#include "mmap_internal.h"
 
 void MMAP_$GET_IMPURE(uint16_t wsl_index, uint32_t *vpn_array, int8_t all_pages,
                        uint16_t max_pages, uint32_t *scanned, uint16_t *returned)
