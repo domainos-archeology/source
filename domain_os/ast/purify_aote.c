@@ -15,15 +15,11 @@
 #include "ast/ast_internal.h"
 
 /* External function prototypes */
-extern void VTOCE_$WRITE(void *uid_info, void *attrs, uint8_t flags, status_$t *status);
-extern void NETWORK_$AST_GET_INFO(void *uid_info, void *flags_ptr, void *attrs, status_$t *status);
-extern void TIME_$CLOCK(clock_t *time_out);
 
 /* Network info flags pointer */
 #if defined(M68K)
 #define NET_INFO_FLAGS ((void *)0xE01500)
 #else
-extern void *net_info_flags;
 #define NET_INFO_FLAGS net_info_flags
 #endif
 

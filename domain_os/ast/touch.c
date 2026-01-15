@@ -129,7 +129,11 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
                 if ((*map_ptr & 0x400000) == 0) break;
             } while (1);
 
-            pages_touched = ast_$count_valid_pages(segmap_ptr, cow_count);
+            /* Call count_valid_pages with flattened parameters
+             * per_boot_flag comes from AOTE flags at offset 0x0F */
+            pages_touched = ast_$count_valid_pages(aste, cow_count,
+                                                   *((uint8_t *)((char *)aote + 0x0F)),
+                                                   ppn_array, status);
             *(uint8_t *)((char *)aote + 0xBF) |= 0x10;
         } else {
             /* Normal page fault handling */
@@ -217,12 +221,12 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
             for (i = 0; i < pages_touched; i++) {
                 uint32_t ppn = ppn_array[i];
                 if (ppn == 0) {
-                    CRASH_SYSTEM(OS_PMAP_mismatch_err);
+                    CRASH_SYSTEM(&OS_PMAP_mismatch_err);
                 }
 
                 int pmape_offset = ppn * 0x10;
                 if (*(int8_t *)(PMAPE_BASE + pmape_offset + 5) < 0) {
-                    CRASH_SYSTEM(OS_MMAP_bad_install);
+                    CRASH_SYSTEM(&OS_MMAP_bad_install);
                 }
 
                 /* Set up PMAPE entry */

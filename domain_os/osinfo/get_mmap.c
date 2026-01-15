@@ -7,9 +7,14 @@
 
 #include "osinfo/osinfo.h"
 #include "mmap/mmap.h"
+#include "mmap/mmap_internal.h"
 #include "pmap/pmap.h"
 #include "ast/ast.h"
 #include "proc2/proc2.h"
+
+/* TODO: These should be moved to proper headers */
+extern uint8_t PMAP_$PAGE_TABLE[];  /* Page table entries */
+extern uint8_t AST_$ENTRY_TABLE[];  /* AST entry table base */
 
 void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
                       void *ws_data, void *ws_list, void *uid_out,

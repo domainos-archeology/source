@@ -144,7 +144,7 @@ extern uint16_t MST[];
 /* Initialization */
 void MST_$PRE_INIT(void);
 void MST_$INIT(void);
-void MST_$DISKLESS_INIT(void);
+void MST_$DISKLESS_INIT(int16_t flag, uint32_t mother_node, uint32_t node_me);
 
 /* ASID management */
 uint16_t MST_$ALLOC_ASID(status_$t *status_ret);
@@ -166,7 +166,9 @@ void MST_$MAP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
               uint16_t *area_id_ptr, uint32_t *area_size_ptr,
               uint8_t *rights_ptr, int32_t *mapped_len, status_$t *status_ret);
 void MST_$MAP_AT(void);
-void MST_$MAP_CANNED_AT(void);
+void MST_$MAP_CANNED_AT(uint32_t va, uid_t *uid, uint32_t param3, uint32_t param4,
+                        uint32_t flags, uint32_t param6, uint32_t param7,
+                        status_$t *status);
 void MST_$MAP_AREA(void);
 void MST_$MAP_AREA_AT(void);
 void MST_$MAP_GLOBAL(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
@@ -200,7 +202,7 @@ uint32_t MST_$FIND(uint32_t virt_addr, uint16_t flags);
 void MST_$REMOVE_SEG(uint32_t param_1, uint32_t param_2, uint16_t param_3,
                      uint16_t param_4, uint8_t flags);
 uint32_t MST_$WIRE(uint32_t vpn, status_$t *status_ret);
-void MST_$WIRE_AREA(void);
+void MST_$WIRE_AREA(void *start, void *end, void *buf1, void *param4, void *buf2);
 void MST_$INVALIDATE(void);
 void MST_$CHANGE_RIGHTS(void);
 void MST_$SET_GUARD(void);

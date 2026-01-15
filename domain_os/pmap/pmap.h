@@ -68,11 +68,9 @@ extern uint32_t DAT_00e23320;            /* Impure pages flag */
 extern int32_t LOG_$UPDATE(void);
 
 /*
- * NETLOG functions
+ * NETLOG functions - declared in ast/ast.h
+ * Note: signature is NETLOG_$LOG_IT(type, uid, seg, page, ppn, count, param7, param8)
  */
-extern void NETLOG_$LOG_IT(uint16_t type, uid_t *uid, uint16_t count, uint16_t status,
-                           int16_t disk1_hi, int16_t disk1_lo,
-                           int16_t disk2_hi, int16_t disk2_lo);
 
 /*
  * Internal helper functions

@@ -160,10 +160,10 @@ int16_t EC2_$WAIT(ec2_$eventcount_t *ec, int32_t *wait_vals,
             ec1_array[0] = (ec_$eventcount_t *)(EC1_ARRAY_BASE + proc_offset);
             ec1_wait_vals[0] = ec1_array[0]->value + 1;
 
-            /* Set up quit EC */
+            /* Set up quit EC - FIM_$QUIT_EC is array of ECs indexed by AS_ID */
             int16_t as_offset = PROC1_$AS_ID * 0x0C;
-            ec1_array[1] = &FIM_$QUIT_EC;
-            ec1_wait_vals[1] = FIM_$QUIT_VALUE + 1;
+            ec1_array[1] = (ec_$eventcount_t *)&FIM_$QUIT_EC[PROC1_$AS_ID * 12];
+            ec1_wait_vals[1] = FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
 
             ML_$UNLOCK(EC2_LOCK_ID);
 
@@ -171,8 +171,8 @@ int16_t EC2_$WAIT(ec2_$eventcount_t *ec, int32_t *wait_vals,
             uint16_t wait_result = EC_$WAITN(ec1_array, ec1_wait_vals, ec1_count);
 
             if (wait_result == 2) {
-                /* Quit EC signaled */
-                FIM_$QUIT_VALUE = FIM_$QUIT_EC.value;
+                /* Quit EC signaled - update cached quit value from EC */
+                FIM_$QUIT_VALUE[PROC1_$AS_ID] = *(uint32_t *)&FIM_$QUIT_EC[PROC1_$AS_ID * 12];
                 *status_ret = status_$ec2_async_fault_while_waiting;
                 satisfied = 0;
             }

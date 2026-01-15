@@ -19,7 +19,7 @@ uint32_t mmu_$vtop_or_crash(uint32_t va)
     ppn = MMU_$VTOP(va, &status);
 
     if (status != status_$ok) {
-        CRASH_SYSTEM("MMU translation failed");
+        CRASH_SYSTEM(&status);
     }
 
     return ppn;

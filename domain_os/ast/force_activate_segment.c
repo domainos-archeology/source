@@ -18,13 +18,6 @@
 #include "ast/ast_internal.h"
 
 /* External function prototypes */
-extern uint16_t UID_$HASH(uid_t *uid, void *table_info);
-extern void NETWORK_$GET_NET(uint32_t node, void *net_info, status_$t *status);
-extern void FUN_00e01bee(void *uid_info, status_$t *status);
-extern void FUN_00e01c52(void *uid_info, uint32_t *vol_ptr, void *attrs, status_$t *status);
-extern void VTOCE_$READ(void *uid_info, void *attrs, status_$t *status);
-extern void VTOC_$LOOKUP(void *uid_info, status_$t *status);
-extern void NETWORK_$AST_GET_INFO(void *uid_info, void *flags, void *attrs, status_$t *status);
 
 /* Network info flags */
 #if defined(M68K)
@@ -33,10 +26,6 @@ extern void NETWORK_$AST_GET_INFO(void *uid_info, void *flags, void *attrs, stat
 #define AST_AOTH_BASE        ((aote_t **)0xE1DC80)
 #define AST_$AOTE_SEQN       (*(uint32_t *)0xE1E0B4)
 #else
-extern void *ast_hash_table_info;
-extern void *net_info_flags;
-extern aote_t **ast_aoth_base;
-extern uint32_t ast_$aote_seqn;
 #define AST_HASH_TABLE_INFO  ast_hash_table_info
 #define NET_INFO_FLAGS       net_info_flags
 #define AST_AOTH_BASE        ast_aoth_base
@@ -58,7 +47,7 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint16_t segment,
     aote = ast_$allocate_aote();
 
     /* Hash the UID */
-    hash_index = UID_$HASH(uid, AST_HASH_TABLE_INFO);
+    hash_index = UID_$HASH(uid, (uint16_t *)AST_HASH_TABLE_INFO);
 
     /* Check if another AOTE was created for this UID while we were allocating */
     while (seqn_before != AST_$AOTE_SEQN) {

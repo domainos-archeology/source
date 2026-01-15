@@ -12,7 +12,7 @@
  * Original address: 0x00e145f0
  */
 
-#include "pmap.h"
+#include "pmap_internal.h"
 
 /* Timer queue entry structure */
 typedef struct timer_entry_t {

@@ -105,7 +105,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
                     /* Verify page index matches */
                     if (*(uint8_t *)(PMAPE_BASE + pmape_offset + PMAPE_PAGE_IDX_OFFSET) != page_idx) {
-                        CRASH_SYSTEM(status_$t_00e13a14);
+                        CRASH_SYSTEM(&status_$t_00e13a14);
                     }
 
                     /* Remove page from available pool */

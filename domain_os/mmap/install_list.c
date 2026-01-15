@@ -8,6 +8,7 @@
  */
 
 #include "mmap.h"
+#include "proc1/proc1.h"
 
 void MMAP_$INSTALL_LIST(uint32_t *vpn_array, uint16_t count, int8_t use_wired)
 {

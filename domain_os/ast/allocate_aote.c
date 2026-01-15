@@ -12,12 +12,6 @@
 
 #include "ast/ast_internal.h"
 
-/* External function prototypes */
-extern void CRASH_SYSTEM(const status_$t *status);
-
-/* Error status */
-extern status_$t Some_ASTE_Error;
-
 /*
  * AOTE management globals
  */
@@ -31,14 +25,6 @@ extern status_$t Some_ASTE_Error;
 #define AST_$SIZE_AOT         (*(uint16_t *)0xE1E0EE)   /* A5+0x46E */
 #define AOTE_ARRAY_START      ((aote_t *)0xEC7B60)
 #else
-extern aote_t *ast_$free_aote_head;
-extern aote_t *ast_$aote_scan_pos;
-extern aote_t *ast_$aote_end;
-extern uint16_t ast_$free_aotes;
-extern uint32_t ast_$alloc_worst_aot;
-extern uint32_t ast_$alloc_total_aot;
-extern uint16_t ast_$size_aot;
-extern aote_t *aote_array_start;
 #define AST_$FREE_AOTE_HEAD   ast_$free_aote_head
 #define AST_$AOTE_SCAN_POS    ast_$aote_scan_pos
 #define AST_$AOTE_END         ast_$aote_end

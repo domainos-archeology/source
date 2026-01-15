@@ -20,7 +20,6 @@
 #include "ast/ast_internal.h"
 
 /* External function prototypes */
-extern void ZERO_PAGE(uint32_t ppn);
 
 /*
  * NOTE: This function is a nested procedure accessing parent frame variables.
@@ -45,14 +44,16 @@ int16_t ast_$count_valid_pages(aste_t *aste, int16_t count,
 
     /* Check if per-boot (read-only) flag is set */
     if ((per_boot_flag & 2) != 0) {
-        /* Read-only object - clear transition bits and return error */
-        ast_$clear_transition_bits(aste, count);
+        /* Read-only object - clear transition bits and return error
+         * TODO: Need to get segmap from aste properly */
+        uint32_t *segmap = (uint32_t *)((char *)aste + 0x100); /* Placeholder offset */
+        ast_$clear_transition_bits(segmap, count);
         *status = 0x50008;  /* status_$file_read_only or similar */
         return count;
     }
 
-    /* Allocate pages */
-    allocated = ast_$allocate_pages(1, count, ppn_array);
+    /* Allocate pages - count_flags = (count << 16) | flags */
+    allocated = ast_$allocate_pages(((uint32_t)count << 16) | 1, ppn_array);
 
     if (allocated != 0) {
         /* Zero each allocated page */

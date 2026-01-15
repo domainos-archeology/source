@@ -14,17 +14,7 @@
 
 #include "ast/ast_internal.h"
 
-/* External function prototypes */
-extern void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count);
-extern void MMAP_$FREE_PAGES(uint32_t *ppn_array, uint16_t flags, uint16_t count);
-
-/* Current process ID for MMAP */
-#if defined(M68K)
-#define PROC1_$CURRENT (*(uint16_t *)0xE20608)
-#else
-extern uint16_t proc1_$current;
-#define PROC1_$CURRENT proc1_$current
-#endif
+/* PROC1_$CURRENT from proc1.h via ast_internal.h */
 
 void ast_$flush_installed_pages(void)
 {

@@ -61,7 +61,7 @@ char CAL_$VERIFY(int *max_allowed_delta, void *param_2, char *param_3, status_$t
         do {
             FUN_00e825f4("Do you want to run DOMAIN/OS with the current calendar setting? (Y/N) ",
                          param_2);
-            TERM_$READ((void *)0xe684a4, input, (void *)0xe684a6, &status);
+            TERM_$READ((void *)0xe684a4, (unsigned int)(uintptr_t)input, (void *)0xe684a6, &status);
 
             if (input[0] == 'Y' || input[0] == 'y') {
                 return 0xFF;

@@ -255,11 +255,11 @@ extern int8_t NETWORK_$REALLY_DISKLESS;
 extern int8_t NETLOG_$OK_TO_LOG;
 
 /*
- * Error strings
+ * Error status codes
  */
-extern const char Some_ASTE_Error[];
-extern const char OS_PMAP_mismatch_err[];
-extern const char OS_MMAP_bad_install[];
+extern status_$t Some_ASTE_Error;
+extern status_$t OS_PMAP_mismatch_err;
+extern status_$t OS_MMAP_bad_install;
 
 /*
  * System functions

@@ -58,7 +58,7 @@ uint8_t AST_$SET_DTS(uint16_t flags, uid_t *uid, uint32_t *dtv, uint32_t *access
         }
 
         ML_$LOCK(PMAP_LOCK_ID);
-        TIME_$CLOCK((uint32_t *)((char *)aote + 0x30));
+        TIME_$CLOCK((clock_t *)((char *)aote + 0x30));
     } else {
         /* Set specific timestamps */
         ML_$LOCK(PMAP_LOCK_ID);

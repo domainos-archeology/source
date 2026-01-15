@@ -9,6 +9,7 @@
  */
 
 #include "mmap.h"
+#include "mmap_internal.h"
 #include "misc/misc.h"
 
 #define MAX_WIRE_COUNT  0x39  /* ASCII '9' */

@@ -17,26 +17,12 @@
 
 #include "ast/ast_internal.h"
 
-/* External function prototypes */
-extern void VTOCE_$LOOKUP_FM(void *uid_info, uint16_t segment, int16_t flags,
-                              uint32_t *vtoce_ptr, int32_t *block_delta,
-                              status_$t *status);
-extern void FM_$READ(void *uid_info, uint32_t vtoce_ptr, uint16_t segment,
-                     void *buffer, status_$t *status);
-extern void NETLOG_$LOG_IT(uint16_t type, void *uid, uint16_t segment,
-                           uint16_t page, uint16_t d0, uint16_t d1,
-                           uint16_t count, uint16_t d2);
-extern int8_t NETLOG_$OK_TO_LOG;
-
 /* Volume reference counts at A5+0x412 */
 #if defined(M68K)
 #define VOL_REF_COUNTS    ((int16_t *)0xE1E092)
 #define VOL_DISMOUNT_MASK (*(uint16_t *)0xE1E0A0)
 #define VOL_DISMOUNT_EC   ((ec_$eventcount_t *)0xE1E088)
 #else
-extern int16_t vol_ref_counts[];
-extern uint16_t vol_dismount_mask;
-extern ec_$eventcount_t vol_dismount_ec;
 #define VOL_REF_COUNTS    vol_ref_counts
 #define VOL_DISMOUNT_MASK vol_dismount_mask
 #define VOL_DISMOUNT_EC   (&vol_dismount_ec)

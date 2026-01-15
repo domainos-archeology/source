@@ -11,7 +11,6 @@
 #include "ast/ast_internal.h"
 
 /* External function prototypes */
-extern void MMAP_$AVAIL(uint32_t ppn);
 
 void ast_$clear_transition_bits(uint32_t *segmap, uint16_t count)
 {

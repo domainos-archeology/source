@@ -10,6 +10,8 @@
 
 #include "pmap/pmap.h"
 #include "mmap/mmap.h"
+#include "mmu/mmu.h"
+#include "time/time.h"
 #include "proc1/proc1.h"
 #include "network/network.h"
 #include "disk/disk.h"
@@ -113,8 +115,7 @@ void FUN_00e2f880(void);
  * ============================================================================
  */
 
-extern const status_$t status_$t_00e13a14;  /* Flush status */
-extern const status_$t status_$t_00e145ec;  /* Scan status */
+/* status_$t_00e13a14 and status_$t_00e145ec declared in pmap.h */
 
 /*
  * ============================================================================

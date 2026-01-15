@@ -16,23 +16,13 @@
 #include "ast/ast_internal.h"
 
 /* External function prototypes */
-extern uint16_t MMAP_$ALLOC_FREE(uint32_t *ppn_array, uint16_t count);
-extern int16_t MMAP_$ALLOC_PURE(uint32_t *ppn_array, uint16_t count);
-extern void PMAP_$WAKE_PURIFIER(uint8_t flags);
-extern void CRASH_SYSTEM(const status_$t *status);
 
 /* External variables */
-extern uint32_t DAT_00e232b4;
-extern uint32_t DAT_00e232d8;
-extern uint32_t DAT_00e232fc;
-extern uint16_t PMAP_$LOW_THRESH;
-extern int8_t NETLOG_$OK_TO_LOG;
 
 /* Local netlog function */
 static void FUN_00e00cac(void *pmape, int16_t ppn_high);
 
 /* Error status */
-extern status_$t OS_PMAP_mismatch_err;
 
 /*
  * Allocation stats at A5+0x460 and A5+0x464
@@ -41,8 +31,6 @@ extern status_$t OS_PMAP_mismatch_err;
 #define AST_$ALLOC_FAIL_CNT (*(uint32_t *)0xE1E0E0)  /* A5+0x460 */
 #define AST_$ALLOC_TRY_CNT  (*(uint32_t *)0xE1E0E4)  /* A5+0x464 */
 #else
-extern uint32_t ast_$alloc_fail_cnt;
-extern uint32_t ast_$alloc_try_cnt;
 #define AST_$ALLOC_FAIL_CNT ast_$alloc_fail_cnt
 #define AST_$ALLOC_TRY_CNT  ast_$alloc_try_cnt
 #endif

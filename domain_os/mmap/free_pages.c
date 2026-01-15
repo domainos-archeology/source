@@ -9,6 +9,7 @@
  */
 
 #include "mmap.h"
+#include "mmap_internal.h"
 #include "misc/misc.h"
 
 void MMAP_$FREE_PAGES(uint32_t *vpn_array, uint16_t count)

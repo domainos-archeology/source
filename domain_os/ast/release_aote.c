@@ -10,7 +10,6 @@
 #include "ast/ast_internal.h"
 
 /* External references */
-extern uid_t UID_$NIL;
 
 /*
  * Free AOTE list head at A5+0x3EC
@@ -19,8 +18,6 @@ extern uid_t UID_$NIL;
 #define AST_$FREE_AOTE_HEAD (*(aote_t **)0xE1E06C)  /* A5+0x3EC */
 #define AST_$FREE_AOTES     (*(uint16_t *)0xE1E0EA) /* A5+0x46A */
 #else
-extern aote_t *ast_$free_aote_head;
-extern uint16_t ast_$free_aotes;
 #define AST_$FREE_AOTE_HEAD ast_$free_aote_head
 #define AST_$FREE_AOTES     ast_$free_aotes
 #endif

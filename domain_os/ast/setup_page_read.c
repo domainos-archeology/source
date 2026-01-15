@@ -18,16 +18,6 @@
 
 #include "ast/ast_internal.h"
 
-/* External function prototypes */
-extern void BAT_$RESERVE(uint8_t vol_idx, uint32_t count, status_$t *status);
-extern void BAT_$ALLOCATE(uint8_t vol_idx, uint32_t hint, uint32_t count_flags,
-                          uint32_t *addrs, status_$t *status);
-extern void TIME_$CLOCK(clock_t *clock);
-extern void NETLOG_$LOG_IT(uint16_t type, void *uid, uint16_t segment,
-                           uint16_t page, uint16_t d0, uint16_t d1,
-                           uint16_t count, uint16_t d2);
-extern int8_t NETLOG_$OK_TO_LOG;
-
 void ast_$setup_page_read(aste_t *aste, uint32_t *segmap, uint16_t start_page,
                           uint16_t count, uint16_t flags, status_$t *status)
 {

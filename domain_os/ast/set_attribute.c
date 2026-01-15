@@ -22,7 +22,7 @@
 void AST_$SET_ATTRIBUTE(uid_t *uid, uint16_t attr_id, void *value, status_$t *status)
 {
     uid_t local_uid;
-    uint32_t clock_val;
+    clock_t clock_val;
     uint8_t exsid_buf[104];
     status_$t local_status;
 

@@ -15,11 +15,6 @@
 
 #include "ast/ast_internal.h"
 
-/* External function prototypes */
-extern void FM_$WRITE(void *uid_info, uint32_t vtoce_ptr, uint16_t segment,
-                      void *data, uint8_t flags, status_$t *status);
-extern int8_t NETLOG_$OK_TO_LOG;
-
 /* Local netlog function */
 static void FUN_00e01502(void);
 

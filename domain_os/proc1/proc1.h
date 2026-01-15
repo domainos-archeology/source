@@ -138,12 +138,18 @@ typedef struct ts_timer_entry_t {
  */
 extern proc1_t *PROC1_$CURRENT_PCB;     /* 0xE1EAC8: Current running process */
 extern proc1_t *PROC1_$READY_PCB;       /* PC-relative: Head of ready list */
+#ifndef PROC1_$CURRENT
 extern uint16_t PROC1_$CURRENT;         /* 0xE20608: Current process ID */
+#endif
 extern uint16_t PROC1_$READY_COUNT;     /* 0xE1EBD0: Number of ready processes */
 extern uint16_t PROC1_$ATOMIC_OP_DEPTH; /* 0xE2060E: Atomic operation nesting */
+#ifndef PROC1_$AS_ID
 extern uint16_t PROC1_$AS_ID;           /* 0xE2060A: Current address space ID */
+#endif
 extern proc1_t *PCBS[PROC1_MAX_PROCESSES];      /* 0xE1EACC: PCB pointer table */
+#ifndef PROC1_$TYPE
 extern uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES]; /* 0xE2612A: Process types */
+#endif
 
 /*
  * Stack allocation (M68K base: 0xE254E8)

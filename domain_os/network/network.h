@@ -18,15 +18,25 @@ extern uid_t NETWORK_$PAGING_FILE_UID;
 /*
  * NETWORK_$READ_AHEAD - Read pages ahead from network partner
  *
- * @param partner    Network partner
- * @param uid_info   UID information for the object
- * @param ppn_array  Array of physical page numbers
- * @param count      Number of pages to read
- * @param offset     Starting offset
- * @param status     Output status code
+ * @param net_info       Network partner info
+ * @param uid            UID information
+ * @param ppn_array      Physical page number array
+ * @param page_size      Page size
+ * @param count          Number of pages
+ * @param no_read_ahead  Disable read-ahead flag
+ * @param flags          Operation flags
+ * @param dtm            Data timestamp output
+ * @param clock          Clock output
+ * @param acl_info       ACL info output
+ * @param status         Output status code
+ *
+ * @return Number of pages successfully read
  */
-void NETWORK_$READ_AHEAD(void *partner, void *uid_info, uint32_t *ppn_array,
-                         uint16_t count, uint32_t offset, status_$t *status);
+int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,
+                            uint16_t page_size, int16_t count,
+                            int8_t no_read_ahead, uint8_t flags,
+                            int32_t *dtm, clock_t *clock,
+                            uint32_t *acl_info, status_$t *status);
 
 /*
  * NETWORK_$INSTALL_NET - Install network node

@@ -25,7 +25,9 @@ void AST_$FETCH_PMAP_PAGE(void *uid_info, uint32_t *output_buf,
                           uint16_t flags, status_$t *status)
 {
     uint32_t ppn_array[32];
-    uint8_t temp_buf[8];
+    int32_t dummy_dtm;
+    clock_t dummy_clock;
+    uint32_t dummy_acl;
     uint32_t temp_addr;
     int i;
 
@@ -41,7 +43,7 @@ void AST_$FETCH_PMAP_PAGE(void *uid_info, uint32_t *output_buf,
 
     /* Read from network */
     NETWORK_$READ_AHEAD(&AREA_$PARTNER, uid_info, ppn_array, flags, 1, 0, 0,
-                        temp_buf, temp_buf, temp_buf, status);
+                        &dummy_dtm, &dummy_clock, &dummy_acl, status);
 
     if (*status == status_$ok) {
         ML_$LOCK(PMAP_LOCK_ID);

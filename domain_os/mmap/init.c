@@ -123,7 +123,7 @@ void MMAP_$INIT(void *param)
     for (int i = 0; i < 56; i++) {
         if (mmape_phys_table[i] != 0) {
             void *vaddr = (char*)MMAPE_BASE + (i * 0x400);
-            mmape_phys_table[i] = mmu_$vtop_or_crash(vaddr);
+            mmape_phys_table[i] = mmu_$vtop_or_crash((uint32_t)(uintptr_t)vaddr);
         }
     }
 

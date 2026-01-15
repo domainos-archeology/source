@@ -104,7 +104,7 @@ mark_dirty:
     if (bat_count != 0) {
         BAT_$FREE(&bat_blocks[1], bat_count, flags, 1, &status);
         if (status != status_$ok) {
-            CRASH_SYSTEM((const char *)&status);
+            CRASH_SYSTEM(&status);
         }
     }
 }

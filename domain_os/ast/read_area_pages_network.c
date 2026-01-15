@@ -20,33 +20,16 @@
 
 #include "ast/ast_internal.h"
 
-/* External function prototypes */
-extern void NETBUF_$RTN_DAT(uint32_t addr);
-extern void NETBUF_$GET_DAT(uint32_t *buffer);
-extern int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,
-                                    uint16_t page_size, int16_t count,
-                                    int8_t no_read_ahead, uint8_t flags,
-                                    int32_t *dtm, clock_t *clock,
-                                    uint32_t *acl_info, status_$t *status);
-extern void TIME_$CLOCK(clock_t *clock);
-extern void ZERO_PAGE(uint32_t ppn);
-extern void MMAP_$FREE(uint32_t ppn);
-
 /* Logging function stub */
 static void FUN_00e02c52(int16_t count, int8_t zero_flag);
 
-/* Process page read statistics */
+/* Process page read statistics - PROC1_$CURRENT from proc1.h via ast_internal.h */
 #if defined(M68K)
-#define PROC1_$CURRENT     (*(uint16_t *)0xE20608)
 #define PROC_NET_STATS     ((int32_t *)0xE25D1C)
 #else
-extern uint16_t proc1_$current;
-extern int32_t proc_net_stats[];
-#define PROC1_$CURRENT     proc1_$current
 #define PROC_NET_STATS     proc_net_stats
 #endif
 
-extern int8_t NETLOG_$OK_TO_LOG;
 
 int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
                                       uint32_t *ppn_array, uint16_t start_page,
@@ -71,8 +54,8 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
 
     aote = *((aote_t **)((char *)aste + 0x04));
 
-    /* Allocate pages */
-    allocated = ast_$allocate_pages(1, count, ppn_array);
+    /* Allocate pages - count_flags = (count << 16) | flags */
+    allocated = ast_$allocate_pages(((uint32_t)count << 16) | 1, ppn_array);
 
     /* Check and clear read-ahead disable flag */
     aote_flags = *((uint16_t *)((char *)aote + 0xBE));

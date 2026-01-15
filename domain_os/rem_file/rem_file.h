@@ -28,10 +28,11 @@ void REM_FILE_$RESERVE(uid_t *vol_uid, uid_t *uid, uint32_t start,
  * @param uid         Object UID
  * @param new_size    New file size
  * @param flags       Truncation flags
+ * @param result      Output result byte
  * @param status      Output status code
  */
 void REM_FILE_$TRUNCATE(uid_t *vol_uid, uid_t *uid, uint32_t new_size,
-                        uint16_t flags, status_$t *status);
+                        uint16_t flags, uint8_t *result, status_$t *status);
 
 /*
  * REM_FILE_$INVALIDATE - Invalidate pages in a remote file

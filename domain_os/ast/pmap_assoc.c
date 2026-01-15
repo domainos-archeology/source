@@ -74,7 +74,7 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
         *segmap_ptr |= *(uint32_t *)(PMAPE_BASE + pmape_offset + 0x0C);
 
         /* Free the old page */
-        MMAP_$FREE_REMOVE((uint8_t *)(PMAPE_BASE + pmape_offset), old_ppn);
+        MMAP_$FREE_REMOVE((mmape_t *)(PMAPE_BASE + pmape_offset), old_ppn);
 
         aste->page_count--;
     } else {
@@ -92,7 +92,7 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
 
     /* Validate new PPN */
     if (ppn == 0) {
-        CRASH_SYSTEM(OS_PMAP_mismatch_err);
+        CRASH_SYSTEM(&OS_PMAP_mismatch_err);
     }
 
     /* Set up new page mapping */
@@ -101,7 +101,7 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
 
         /* Check that page is not already installed */
         if (*(int8_t *)(PMAPE_BASE + pmape_offset + 5) < 0) {
-            CRASH_SYSTEM(OS_MMAP_bad_install);
+            CRASH_SYSTEM(&OS_MMAP_bad_install);
         }
 
         /* Set up PMAPE entry */

@@ -113,7 +113,9 @@ typedef struct mmu_globals_t {
     #define MMU_SYSREV              (*(uint8_t*)0xE2426F)
 
     /* Current address space ID (from PROC1 module) */
+    #ifndef PROC1_$AS_ID
     #define PROC1_$AS_ID            (*(uint16_t*)0xE2060A)
+    #endif
 
     /* Cache control MCR shadow (for 68010) */
     #define MCR_SHADOW              (*(uint8_t*)0xE242D2)

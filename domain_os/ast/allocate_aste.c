@@ -104,7 +104,7 @@ aste_t* AST_$ALLOCATE_ASTE(void)
     }
 
     /* Failed to allocate - crash */
-    CRASH_SYSTEM(Some_ASTE_Error);
+    CRASH_SYSTEM(&Some_ASTE_Error);
     aste = NULL;
 
 found:

@@ -201,7 +201,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
 
     // Initialize time subsystem
     err_msg[0] = has_calendar;
-    TIME_$INIT((short *)err_msg);
+    TIME_$INIT((uint8_t *)err_msg);
 
     // Initialize UID generation
     UID_$INIT();
@@ -317,17 +317,19 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
 
     // Handle checksums if requested
     if (NETWORK_$DO_CHKSUM < 0) {
-        OS_$CHKSUM(NULL, NULL, NULL, &NETWORK_$DO_CHKSUM, &status);
+        uint32_t chksum_result;
+        OS_$CHKSUM(NULL, NULL, NULL, &NETWORK_$DO_CHKSUM, &chksum_result);
     }
     if (DISK_$DO_CHKSUM < 0) {
+        uint32_t chksum_result;
         DISK_$DO_CHKSUM = 0;
-        OS_$CHKSUM(NULL, NULL, NULL, flags_buf, &status);
+        OS_$CHKSUM(NULL, NULL, NULL, (char *)flags_buf, &chksum_result);
     }
 
     // Install display ASTE if needed
     {
         short result;
-        if (FUN_00e29138(0xd2, 0x4aa0, &result) < 0) {
+        if (FUN_00e29138((void *)0xd2, (void *)0x4aa0, &result) < 0) {
             OS_$INSTALL_DISPLAY_ASTE((void *)&DISPLAY1_$UID, NULL, NULL, NULL);
         }
     }
@@ -439,7 +441,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     NAME_$SET_WDIR("/", NULL, &status);
 
     // Initialize process manager phase 2
-    PROC2_$INIT(&ws_mode, &status);
+    PROC2_$INIT((int32_t)ws_mode, &status);
     if (status != status_$ok) {
         CRASH_SYSTEM(&status);
     }

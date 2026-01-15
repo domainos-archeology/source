@@ -19,9 +19,6 @@
 #define AST_$FAILED_UID_LOW  (*(uint32_t *)0xE1E0FC)  /* A5+0x47C */
 #define AST_$FAILED_FLAGS    (*(uint32_t *)0xE1E100)  /* A5+0x480 */
 #else
-extern uint32_t ast_$failed_uid_high;
-extern uint32_t ast_$failed_uid_low;
-extern uint32_t ast_$failed_flags;
 #define AST_$FAILED_UID_HIGH ast_$failed_uid_high
 #define AST_$FAILED_UID_LOW  ast_$failed_uid_low
 #define AST_$FAILED_FLAGS    ast_$failed_flags

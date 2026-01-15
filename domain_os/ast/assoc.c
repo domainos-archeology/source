@@ -17,7 +17,7 @@
  * Original address: 0x00e0444e
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 
 void AST_$ASSOC(uid_t *uid, uint16_t seg, uint32_t mode, uint16_t page,
                 uint16_t flags, uint32_t ppn, status_$t *status)

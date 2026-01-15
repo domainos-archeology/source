@@ -1,5 +1,6 @@
 #include "base/base.h"
 #include "math/math.h"
+#include "time/time.h"
 
 typedef long status_$t;
 
@@ -29,9 +30,9 @@ extern uint CAL_$LAST_VALID_TIME;
 extern volatile char CAL_$CONTROL_VIRTUAL_ADDR;    // 0x00ffa820
 extern volatile char CAL_$WRITE_DATA_VIRTUAL_ADDR; // 0x00ffa822
 
-// External references
-extern char NETWORK_$DISKLESS;
-extern char NETWORK_$REALLY_DISKLESS;
+// External references (int8_t to match ast/ast.h)
+extern int8_t NETWORK_$DISKLESS;
+extern int8_t NETWORK_$REALLY_DISKLESS;
 
 // 48-bit arithmetic
 extern void ADD48(clock_t *dst, clock_t *src);

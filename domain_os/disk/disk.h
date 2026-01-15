@@ -149,17 +149,28 @@ void DISK_$ADD_QUE(uint16_t flags, void *dev_entry, void *queue,
                    void *req_list);
 void DISK_$WAIT_QUE(void *queue, status_$t *status);
 void DISK_$ERROR_QUE(void *req, uint16_t param_2, void *param_3);
-void *DISK_$GET_QBLKS(int16_t vol_idx, int16_t count, status_$t *status);
-void DISK_$RTN_QBLKS(void *blocks);
 void DISK_$SORT(void *dev_entry, void **queue_ptr);
+
+/*
+ * Internal queue block operations (used by AST subsystem)
+ * These have different signatures from the public wrappers
+ */
+void DISK_$GET_QBLKS(int16_t count, int32_t *qblk_head, uint32_t *qblk_tail);
+void DISK_$RTN_QBLKS(int16_t count, int32_t qblk_head, uint32_t qblk_tail);
 
 /* I/O operations */
 void DISK_$READ(int16_t vol_idx, void *buffer, void *daddr, void *count,
                 status_$t *status);
 void DISK_$WRITE(int16_t vol_idx, void *buffer, void *daddr, void *count,
                  status_$t *status);
-void DISK_$READ_MULTI(int16_t vol_idx, void *req_list, void *param_3,
-                      status_$t *status);
+
+/*
+ * Internal multi-block I/O (used by AST subsystem)
+ * Takes queue block head/tail from DISK_$GET_QBLKS
+ */
+void DISK_$READ_MULTI(uint16_t vol_idx, int16_t flags1, int16_t flags2,
+                      int32_t qblk_head, uint32_t qblk_tail,
+                      int16_t *pages_read, status_$t *status);
 void DISK_$WRITE_MULTI(int16_t vol_idx, void *req_list, void *param_3,
                        status_$t *status);
 void DISK_$DO_IO(void *dev_entry, void *req, void *param_3, void *result);

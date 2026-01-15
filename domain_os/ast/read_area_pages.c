@@ -19,23 +19,12 @@
 
 #include "ast/ast_internal.h"
 
-/* External function prototypes */
-extern void DISK_$GET_QBLKS(int16_t count, int32_t *qblk_head,
-                            uint32_t *qblk_tail);
-extern void DISK_$READ_MULTI(uint16_t vol_idx, int16_t flags1, int16_t flags2,
-                              int32_t qblk_head, uint32_t qblk_tail,
-                              int16_t *pages_read, status_$t *status);
-extern void DISK_$RTN_QBLKS(int16_t count, int32_t qblk_head, uint32_t qblk_tail);
-extern void MMAP_$FREE(uint32_t ppn);
+/* PROC1_$CURRENT from proc1.h via ast_internal.h */
 
 /* Process page read statistics at A5+0x4A0 relative to process table */
 #if defined(M68K)
-#define PROC1_$CURRENT     (*(uint16_t *)0xE20608)
 #define PROC_PAGE_STATS    ((int32_t *)0xE25D18)
 #else
-extern uint16_t proc1_$current;
-extern int32_t proc_page_stats[];
-#define PROC1_$CURRENT     proc1_$current
 #define PROC_PAGE_STATS    proc_page_stats
 #endif
 
@@ -55,8 +44,8 @@ int16_t ast_$read_area_pages(aste_t *aste, uint32_t *segmap, uint32_t *ppn_array
 
     aote = *((aote_t **)((char *)aste + 0x04));
 
-    /* Allocate pages */
-    allocated = ast_$allocate_pages(1, count, ppn_array);
+    /* Allocate pages - count_flags = (count << 16) | flags */
+    allocated = ast_$allocate_pages(((uint32_t)count << 16) | 1, ppn_array);
 
     ML_$UNLOCK(PMAP_LOCK_ID);
 

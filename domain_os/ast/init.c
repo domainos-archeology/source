@@ -7,7 +7,7 @@
  * Original address: 0x00e2f000
  */
 
-#include "ast.h"
+#include "ast/ast_internal.h"
 #include "misc/misc.h"
 
 void AST_$INIT(void)

@@ -19,27 +19,12 @@
 
 #include "ast/ast_internal.h"
 
-/* External function prototypes */
-extern void FUN_00e04b00(void);  /* Attribute setting helper */
-extern void REM_FILE_$SET_ATTRIBUTE(void *net_info, uid_t *uid, uint16_t attr_type,
-                                     void *value, status_$t *status);
-
-/* Process type table */
-#if defined(M68K)
-#define PROC1_$TYPE        ((int16_t *)0xE2612C)
-#define PROC1_$CURRENT     (*(uint16_t *)0xE20608)
-#else
-extern int16_t proc1_$type[];
-extern uint16_t proc1_$current;
-#define PROC1_$TYPE        proc1_$type
-#define PROC1_$CURRENT     proc1_$current
-#endif
+/* PROC1_$TYPE and PROC1_$CURRENT from proc1.h via ast_internal.h */
 
 /* Nil UID for comparison */
 #if defined(M68K)
 #define UID_$NIL           (*(uid_t *)0xE1737C)
 #else
-extern uid_t uid_$nil;
 #define UID_$NIL           uid_$nil
 #endif
 

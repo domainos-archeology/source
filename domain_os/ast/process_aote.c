@@ -19,8 +19,6 @@
 #include "ast/ast_internal.h"
 
 /* External function prototypes */
-extern void FUN_00e01950(aste_t *aste, uint32_t flags, status_$t *status);
-extern uint16_t UID_$HASH(uid_t *uid, void *table_info);
 
 /* Status codes */
 #define status_$ast_segment_not_deactivatable 0x00030004
@@ -30,8 +28,6 @@ extern uint16_t UID_$HASH(uid_t *uid, void *table_info);
 #define AST_HASH_TABLE_INFO (*(void **)0xE01BEC)
 #define AST_AOTH_BASE ((aote_t **)0xE1DC80)
 #else
-extern void *ast_hash_table_info;
-extern aote_t **ast_aoth_base;
 #define AST_HASH_TABLE_INFO ast_hash_table_info
 #define AST_AOTH_BASE ast_aoth_base
 #endif
@@ -113,7 +109,7 @@ uint16_t ast_$process_aote(aote_t *aote, uint8_t flags1, uint16_t flags2,
 remove_from_hash:
     /* Remove AOTE from hash table */
     /* Hash using the original UID stored at offset 0xA4 */
-    hash_index = UID_$HASH((uid_t *)((char *)aote + 0xA4), &AST_HASH_TABLE_INFO);
+    hash_index = UID_$HASH((uid_t *)((char *)aote + 0xA4), (uint16_t *)AST_HASH_TABLE_INFO);
     hash_entry = AST_AOTH_BASE[hash_index];
 
     if (hash_entry == aote) {

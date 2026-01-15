@@ -65,6 +65,26 @@ extern uint32_t DAT_00e23344;  /* Page count statistic */
 extern uint32_t DAT_00e23320;  /* Page count statistic */
 
 /*
+ * Working set list index table - maps ASID to WSL index
+ */
+extern uint16_t MMAP_$WSL_INDEX_TABLE[];
+
+/*
+ * Working set limit data - per-WSL limits and parameters
+ */
+extern uint32_t MMAP_$WS_LIMIT_DATA[];
+
+/*
+ * Working set data array
+ */
+extern uint32_t MMAP_$WS_DATA[];
+
+/*
+ * Process working set list array
+ */
+extern uint16_t MMAP_$PROC_WS_LIST[];
+
+/*
  * ============================================================================
  * Error Status Arrays (internal)
  * ============================================================================

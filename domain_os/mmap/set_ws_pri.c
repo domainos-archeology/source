@@ -9,7 +9,10 @@
  */
 
 #include "mmap.h"
+#include "mmap_internal.h"
 #include "misc/misc.h"
+#include "proc1/proc1.h"
+#include "time/time.h"
 
 void MMAP_$SET_WS_PRI(void)
 {

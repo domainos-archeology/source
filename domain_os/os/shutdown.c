@@ -8,7 +8,7 @@
 #include "os/os_internal.h"
 
 // Static data for shutdown
-static const char wait_duration[] = { 0, 0 };
+static clock_t wait_duration = { 0, 0 };
 
 // Shutdown flag
 char OS_$SHUTTING_DOWN_FLAG;
@@ -44,7 +44,7 @@ void OS_$SHUTDOWN(status_$t *status_p)
 
 do_shutdown:
     // Wait briefly before starting
-    TIME_$WAIT(wait_duration, wait_duration, &local_status);
+    TIME_$WAIT(&wait_duration, &local_status);
 
     CRASH_SHOW_STRING("Beginning shutdown sequence......");
 
@@ -82,12 +82,12 @@ do_shutdown:
 
     // Wire the shutdown code and data areas
     MST_$WIRE_AREA(&PTR_OS_PROC_SHUTWIRED, &PTR_OS_PROC_SHUTWIRED_END,
-                   wire_buf, wait_duration, wire_buf);
+                   wire_buf, &wait_duration, wire_buf);
     MST_$WIRE_AREA(&PTR_OS_DATA_SHUTWIRED, &PTR_OS_DATA_SHUTWIRED_END,
-                   wire_buf, wait_duration, wire_buf);
+                   wire_buf, &wait_duration, wire_buf);
 
     // Unlock all files
-    FILE_$PRIV_UNLOCK_ALL(wait_duration);
+    FILE_$PRIV_UNLOCK_ALL(&wait_duration);
 
     // Set paging shutting down flag
     PMAP_$SHUTTING_DOWN_FLAG = (char)0xFF;
@@ -113,12 +113,12 @@ do_shutdown:
     // Clear service status
     {
         status_$t svc_status = 0;
-        NETWORK_$SET_SERVICE(wait_duration, &svc_status, &local_status);
+        NETWORK_$SET_SERVICE(&wait_duration, &svc_status, &local_status);
     }
 
     // Spin/delay loop before final crash
     for (i = 0x7D0; i >= 0; i--) {
-        local_status = M_MIS_LLL(local_status, local_status);
+        local_status = M$MIS$LLL(local_status, local_status);
     }
 
     // Final system halt

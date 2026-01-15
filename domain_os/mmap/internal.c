@@ -15,6 +15,7 @@
 
 #include "mmap_internal.h"
 #include "mmu/mmu.h"
+#include "time/time.h"
 
 /*
  * mmap_$add_to_wsl - Add a single page to a working set list

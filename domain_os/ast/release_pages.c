@@ -11,9 +11,7 @@
  * Original address: 0x00e06f88
  */
 
-#include "ast.h"
-#include "mmu/mmu.h"
-#include "mmap/mmap.h"
+#include "ast/ast_internal.h"
 
 void AST_$RELEASE_PAGES(aste_t *aste, int8_t return_to_pool)
 {

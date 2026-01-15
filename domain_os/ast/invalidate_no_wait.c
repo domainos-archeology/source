@@ -16,7 +16,6 @@
 #include "ast/ast_internal.h"
 
 /* External function prototypes */
-extern void MMAP_$IMPURE_TRANSFER(void *pmape, uint32_t ppn);
 
 void ast_$invalidate_no_wait(uint16_t end_page)
 {

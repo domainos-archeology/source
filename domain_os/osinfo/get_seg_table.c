@@ -9,6 +9,10 @@
 #include "osinfo/osinfo.h"
 #include "ast/ast.h"
 
+/* Map symbolic names to actual AST globals */
+#define AST_TABLE  ((uint32_t *)ASTE_BASE)
+#define AOTE_TABLE ((uint32_t *)AST_GLOBALS_BASE)  /* AOTE hash table at 0xE1DC80 */
+
 void OSINFO_$GET_SEG_TABLE(short *type_ptr, void *buffer,
                            short *max_entries_ptr, short *actual_entries_ptr,
                            short *total_entries_ptr, status_$t *status)

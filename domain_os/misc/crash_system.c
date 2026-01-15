@@ -20,6 +20,7 @@
 #include "kbd/kbd.h"
 #include "proc1/proc1.h"
 #include "prom/prom.h"
+#include "time/time.h"
 
 /* Status codes for special handling */
 #define status_$system_reboot  0x001b0008
@@ -59,7 +60,7 @@ void CRASH_SYSTEM(const status_$t *status_p)
 
     /* If not ok and not clean reboot, save debug info */
     if (CRASH_STATUS != status_$ok && CRASH_STATUS != status_$system_reboot) {
-        DAT_00e1e9a2 = PROC1_$CURRENT;
+        DAT_00e1e9a2 = (void *)(uintptr_t)PROC1_$CURRENT;
         /* CRASH_ECB would be set from stack - return address */
         crash_puts_string("Crash Status");
     }
@@ -157,15 +158,15 @@ status_$t Disk_Driver_Logic_Err = 0x00080031;
 status_$t Disk_controller_err = 0x00080004;
 status_$t Disk_driver_logic_err = 0x00080031;
 
-/* Error strings */
-const char *Illegal_PID_Err = "Illegal PID";
-const char *Illegal_WSL_Index_Err = "Illegal WSL Index";
-const char *WSL_Exhausted_Err = "WSL Exhausted";
-const char *Inconsistent_MMAPE_Err = "Inconsistent MMAPE";
-const char *MMAP_Bad_Unavail_err = "MMAP Bad Unavail";
-const char *mmap_bad_avail = "MMAP Bad Avail";
-const char *MMAP_Bad_Reclaim_Err = "MMAP Bad Reclaim";
-const char *MMAP_Error_Examined_Max = "MMAP Error Examined Max";
-const char *Some_ASTE_Error = "ASTE Error";
-const char *OS_PMAP_mismatch_err = "PMAP Mismatch";
-const char *OS_MMAP_bad_install = "MMAP Bad Install";
+/* Error status codes for crash conditions */
+status_$t Illegal_PID_Err = 0x00030001;
+status_$t Illegal_WSL_Index_Err = 0x00030002;
+status_$t WSL_Exhausted_Err = 0x00030003;
+status_$t Inconsistent_MMAPE_Err = 0x00030004;
+status_$t MMAP_Bad_Unavail_err = 0x00030005;
+status_$t mmap_bad_avail = 0x00030006;
+status_$t MMAP_Bad_Reclaim_Err = 0x00030007;
+status_$t MMAP_Error_Examined_Max = 0x00030008;
+status_$t Some_ASTE_Error = 0x00030009;
+status_$t OS_PMAP_mismatch_err = 0x0003000A;
+status_$t OS_MMAP_bad_install = 0x0003000B;

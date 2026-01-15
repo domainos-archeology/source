@@ -258,7 +258,7 @@ typedef struct pgroup_entry_t {
  * PROC2_$INIT - Initialize PROC2 subsystem
  * Original address: 0x00e303d8
  */
-status_$t PROC2_$INIT(int param_1, status_$t *status_ret);
+status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret);
 
 /*
  * ============================================================================

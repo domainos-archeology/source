@@ -31,7 +31,7 @@ void AST_$INVALIDATE_PAGE(aste_t *aste, uint32_t *segmap_entry, uint32_t ppn)
     *segmap_entry = (*segmap_entry & 0xFF800000) | pmape->disk_addr;
 
     /* Free the page and remove from MMAP (0xEB2800 + ppn * 16) */
-    MMAP_$FREE_REMOVE((pmape_t *)(PMAPE_BASE + ppn * sizeof(pmape_t)), ppn);
+    MMAP_$FREE_REMOVE((mmape_t *)(PMAPE_BASE + ppn * sizeof(mmape_t)), ppn);
 
     /* Decrement page count */
     aste->page_count--;

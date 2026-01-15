@@ -8,7 +8,8 @@
 #include "os/os_internal.h"
 
 // Static wait duration data (from original binary)
-static const char wait_duration[] = { 0, 0 };  // Brief delay
+// Zero duration means minimal wait
+static clock_t wait_duration = { 0, 0 };  // Brief delay
 
 char OS_$BOOT_ERRCHK(const char *format_str, const char *arg_str,
                      short *line_ptr, status_$t *status)
@@ -56,7 +57,7 @@ char OS_$BOOT_ERRCHK(const char *format_str, const char *arg_str,
     // Wait briefly before returning
     {
         status_$t wait_status;
-        TIME_$WAIT(wait_duration, wait_duration, &wait_status);
+        TIME_$WAIT(&wait_duration, &wait_status);
     }
 
     return 0;  // false - error occurred

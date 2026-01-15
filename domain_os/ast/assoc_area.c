@@ -65,7 +65,7 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn, status_$t *
         *segmap_ptr |= *(uint32_t *)(PMAPE_BASE + pmape_offset + 0x0C);
 
         /* Free the old page */
-        MMAP_$FREE_REMOVE((uint8_t *)(PMAPE_BASE + pmape_offset), old_ppn);
+        MMAP_$FREE_REMOVE((mmape_t *)(PMAPE_BASE + pmape_offset), old_ppn);
 
         /* Decrement page count in ASTE area */
         (*(int8_t *)(seg_index * 0x14 + 0xEC53FC))--;

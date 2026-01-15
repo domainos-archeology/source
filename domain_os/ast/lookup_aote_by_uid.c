@@ -12,13 +12,11 @@
 #include "ast/ast_internal.h"
 
 /* Hash function for UID lookup */
-extern uint16_t UID_$HASH(uid_t *uid, void *table_info);
 
 /* Table info for UID hashing - at address 0xE01BEC in original */
 #if defined(M68K)
 #define AST_HASH_TABLE_INFO (*(void **)0xE01BEC)
 #else
-extern void *ast_hash_table_info;
 #define AST_HASH_TABLE_INFO ast_hash_table_info
 #endif
 
@@ -29,7 +27,6 @@ extern void *ast_hash_table_info;
 #if defined(M68K)
 #define AST_AOTH_BASE ((aote_t **)0xE1DC80)
 #else
-extern aote_t **ast_aoth_base;
 #define AST_AOTH_BASE ast_aoth_base
 #endif
 
@@ -38,8 +35,9 @@ aote_t *ast_$lookup_aote_by_uid(uid_t *uid)
     uint16_t hash_index;
     aote_t *aote;
 
-    /* Hash the UID to get the bucket index */
-    hash_index = UID_$HASH(uid, &AST_HASH_TABLE_INFO);
+    /* Hash the UID to get the bucket index
+     * Note: AST_HASH_TABLE_INFO points to a structure where first field is table size */
+    hash_index = UID_$HASH(uid, (uint16_t *)AST_HASH_TABLE_INFO);
 
     while (1) {
         /* Get the head of the hash chain */

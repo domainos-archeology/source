@@ -93,14 +93,14 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
     /* Update timestamps if needed */
     if (update_time < 0) {
         ML_$LOCK(PMAP_LOCK_ID);
-        TIME_$CLOCK((uint32_t *)((char *)aote + 0x28));
+        TIME_$CLOCK((clock_t *)((char *)aote + 0x28));
 
         /* Copy current time to modification time */
         *(uint32_t *)((char *)aote + 0x40) = *(uint32_t *)((char *)aote + 0x28);
         *(uint16_t *)((char *)aote + 0x44) = *(uint16_t *)((char *)aote + 0x2C);
 
         /* Set access time */
-        TIME_$ABS_CLOCK((uint32_t *)((char *)aote + 0x38), 0);
+        TIME_$ABS_CLOCK((clock_t *)((char *)aote + 0x38));
 
         ML_$UNLOCK(PMAP_LOCK_ID);
         aote->flags |= AOTE_FLAG_DIRTY;

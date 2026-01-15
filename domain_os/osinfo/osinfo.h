@@ -86,7 +86,7 @@ extern uint32_t MMAP_$LPPN;                       // Lowest physical page number
 extern uint32_t MMAP_$HPPN; // Highest physical page number
 
 // Process variables
-extern short PROC1_$CURRENT; // Current process ID
+/* PROC1_$CURRENT declared in proc1/proc1.h */
 
 // =============================================================================
 // Paging Counters Structure (returned by MMAP_FLAG_GET_COUNTERS)

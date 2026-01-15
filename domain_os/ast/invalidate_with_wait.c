@@ -19,8 +19,6 @@
 #include "ast/ast_internal.h"
 
 /* External function prototypes */
-extern void MMU_$REMOVE(uint32_t ppn);
-extern void MMAP_$FREE_REMOVE(void *pmape, uint32_t ppn);
 
 /*
  * Note: This function is actually a nested procedure that accesses variables
