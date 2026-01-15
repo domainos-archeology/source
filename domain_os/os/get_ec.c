@@ -5,10 +5,7 @@
 // Returns a registered eventcount that can be used to monitor
 // the system shutdown state.
 
-#include "os.h"
-
-// External eventcount registration function
-extern void *EC2_$REGISTER_EC1(ec_$eventcount_t *ec, status_$t *status);
+#include "os/os_internal.h"
 
 // The shutdown eventcount (at 0xe1dc00)
 ec_$eventcount_t OS_$SHUTDOWN_EC;

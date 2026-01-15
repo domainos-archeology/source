@@ -5,7 +5,7 @@
 // Copies the OS revision information structure to the caller's buffer.
 // The structure is 0x33 (51) 4-byte words = 204 bytes.
 
-#include "os.h"
+#include "os/os_internal.h"
 
 void OS_$GET_REV_INFO(void *buf)
 {

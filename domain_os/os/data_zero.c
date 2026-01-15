@@ -5,7 +5,7 @@
 // Optimized memory zero that handles alignment and uses 4-byte writes
 // when possible.
 
-#include "os.h"
+#include "os/os_internal.h"
 
 void OS_$DATA_ZERO(char *ptr, uint len)
 {

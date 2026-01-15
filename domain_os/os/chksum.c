@@ -6,7 +6,7 @@
 // The actual checksum calculation may be implemented elsewhere or
 // this may be a placeholder for future functionality.
 
-#include "os.h"
+#include "os/os_internal.h"
 
 void OS_$CHKSUM(void *param_1, void *param_2, void *param_3,
                 char *result_byte, uint32_t *result_long)

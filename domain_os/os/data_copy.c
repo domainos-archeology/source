@@ -5,7 +5,7 @@
 // Optimized memory copy that uses 4-byte transfers when both source
 // and destination are at least 2-byte aligned.
 
-#include "os.h"
+#include "os/os_internal.h"
 
 void OS_$DATA_COPY(const char *src, char *dst, int len)
 {

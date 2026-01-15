@@ -5,49 +5,7 @@
 // Shuts down all subsystems in order and halts the system.
 // Only allowed for superuser (PROC1_$CURRENT == 1) or locksmith.
 
-#include "os.h"
-
-// External process identifiers
-extern short PROC1_$CURRENT;
-
-// External UIDs
-extern uid_t RGYC_$G_LOCKSMITH_UID;
-
-// External flags
-extern char NETWORK_$REALLY_DISKLESS;
-extern char PMAP_$SHUTTING_DOWN_FLAG;
-extern m68k_ptr_t FP_$SAVEP;
-
-// External subsystem shutdown functions
-extern void NETWORK_$DISMISS_REQUEST_SERVERS(void);
-extern void PROC2_$SHUTDOWN(void);
-extern void ROUTE_$SHUTDOWN(void);
-extern void PACCT_$SHUTDN(void);
-extern void LOG_$SHUTDN(void);
-extern void AUDIT_$SHUTDOWN(void);
-extern void HINT_$SHUTDN(void);
-extern void CAL_$SHUTDOWN(status_$t *status);
-extern void AREA_$SHUTDOWN(void);
-extern status_$t VOLX_$SHUTDOWN(void);
-extern void FILE_$PRIV_UNLOCK_ALL(const void *param);
-
-// External ACL functions
-extern void ACL_$GET_RE_SIDS(void *buf, uid_t *uid, status_$t *status);
-
-// External display and time functions
-extern void CRASH_SHOW_STRING(const char *str);
-
-// External network functions
-extern void NETWORK_$SET_SERVICE(const void *param1, status_$t *param2, status_$t *status);
-
-// External formatting
-extern void VFMT_$FORMATN(const char *format, char *buf, short *len_ptr, ...);
-
-// Code and data pointers for wiring
-extern m68k_ptr_t PTR_OS_PROC_SHUTWIRED;
-extern m68k_ptr_t PTR_OS_PROC_SHUTWIRED_END;
-extern m68k_ptr_t PTR_OS_DATA_SHUTWIRED;
-extern m68k_ptr_t PTR_OS_DATA_SHUTWIRED_END;
+#include "os/os_internal.h"
 
 // Static data for shutdown
 static const char wait_duration[] = { 0, 0 };

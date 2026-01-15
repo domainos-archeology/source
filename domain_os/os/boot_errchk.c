@@ -5,11 +5,7 @@
 // If the status is non-zero, formats and displays an error message,
 // waits briefly, then returns 0. Otherwise returns 0xFF (true).
 
-#include "os.h"
-
-// External formatting and display functions
-extern void VFMT_$FORMATN(const char *format, char *buf, short *len_ptr, ...);
-extern void CRASH_SHOW_STRING(const char *str);
+#include "os/os_internal.h"
 
 // Static wait duration data (from original binary)
 static const char wait_duration[] = { 0, 0 };  // Brief delay
