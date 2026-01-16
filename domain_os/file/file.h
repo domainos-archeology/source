@@ -39,6 +39,32 @@
 #define FILE_LOCK_ENTRY_SIZE        28
 
 /*
+ * File attribute IDs for FILE_$SET_ATTRIBUTE
+ */
+#define FILE_ATTR_TYPE_UID          4   /* Type UID */
+#define FILE_ATTR_DIR_PTR           5   /* Directory pointer */
+#define FILE_ATTR_DELETE_ON_UNLOCK  7   /* Delete-on-unlock flag */
+#define FILE_ATTR_REFCNT            8   /* Reference count */
+#define FILE_ATTR_DTM_AST           9   /* DTM (AST compat mode) */
+#define FILE_ATTR_DTU_AST           10  /* DTU (AST compat mode) */
+#define FILE_ATTR_MGR_ATTR          14  /* Manager attribute */
+#define FILE_ATTR_DEVNO             22  /* Device number */
+#define FILE_ATTR_DTM_OLD           23  /* DTM (old format) */
+#define FILE_ATTR_DTU_FULL          24  /* DTU (full format) */
+#define FILE_ATTR_DTM_CURRENT       26  /* DTM (use current time) */
+
+/*
+ * Attribute buffer sizes
+ */
+#define FILE_ATTR_INFO_SIZE         0x7A  /* 122 bytes - compact format */
+#define FILE_ATTR_FULL_SIZE         0x90  /* 144 bytes - full format */
+
+/*
+ * File status codes (module 0x0F)
+ */
+#define status_$file_invalid_arg    0x000F0014  /* Invalid argument */
+
+/*
  * ============================================================================
  * Data Structures
  * ============================================================================
@@ -269,17 +295,225 @@ void FILE_$REMOVE_WHEN_UNLOCKED(uid_t *file_uid, uint8_t *result, status_$t *sta
 /*
  * FILE_$SET_ATTRIBUTE - Set a file attribute
  *
+ * Core function for setting file attributes. Handles both local and remote
+ * files, checking ACL permissions as needed.
+ *
  * Parameters:
  *   file_uid   - UID of file to modify
- *   attr_id    - Attribute ID to set (7 = delete-on-unlock, etc.)
+ *   attr_id    - Attribute ID to set (see FILE_ATTR_* constants)
  *   value      - Pointer to attribute value
- *   flags      - Operation flags
+ *   flags      - Operation flags (low 16 bits = required rights, high 16 bits = option flags)
  *   status_ret - Receives operation status
+ *
+ * Attribute IDs:
+ *   4  = Type UID
+ *   5  = Directory pointer
+ *   7  = Delete-on-unlock flag
+ *   8  = Reference count
+ *   9  = DTM (AST compat)
+ *   10 = DTU (AST compat)
+ *   14 = Manager attribute
+ *   22 = Device number
+ *   23 = DTM (old format)
+ *   24 = DTU (full format)
+ *   26 = DTM (use current time)
  *
  * Original address: 0x00E5D242
  */
-void FILE_$SET_ATTRIBUTE(uid_t *file_uid, uint16_t attr_id, void *value,
-                         uint16_t flags, status_$t *status_ret);
+void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
+                         uint32_t flags, status_$t *status_ret);
+
+/*
+ * FILE_$GET_ATTR_INFO - Get file attribute info (compact format)
+ *
+ * Returns file attributes in a compact 122-byte format (0x7A).
+ * Checks lock status if requested via param_2 flags.
+ *
+ * Parameters:
+ *   file_uid   - UID of file
+ *   param_2    - Pointer to flags byte (bit 0=check lock, bit 1=check delete, bit 2=skip delete check)
+ *   size_ptr   - Pointer to buffer size (must be 0x7A = 122)
+ *   uid_out    - Output UID buffer (32 bytes = 8 longs)
+ *   attr_out   - Output attribute buffer (structure TBD)
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5D7F4
+ */
+void FILE_$GET_ATTR_INFO(uid_t *file_uid, void *param_2, int16_t *size_ptr,
+                         uint32_t *uid_out, void *attr_out, status_$t *status_ret);
+
+/*
+ * FILE_$GET_ATTRIBUTES - Get file attributes (full format)
+ *
+ * Returns file attributes in full 144-byte format (0x90).
+ *
+ * Parameters:
+ *   file_uid   - UID of file
+ *   param_2    - Pointer to flags
+ *   size_ptr   - Pointer to buffer size (must be 0x90 = 144)
+ *   uid_out    - Output UID buffer (32 bytes)
+ *   attr_out   - Output attribute buffer (144 bytes)
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5D984
+ */
+void FILE_$GET_ATTRIBUTES(uid_t *file_uid, void *param_2, int16_t *size_ptr,
+                          uint32_t *uid_out, void *attr_out, status_$t *status_ret);
+
+/*
+ * FILE_$ATTRIBUTES - Get file attributes (old format)
+ *
+ * Returns file attributes converted to old format via VTOCE_$NEW_TO_OLD.
+ * Uses attribute flags 0x21.
+ *
+ * Parameters:
+ *   file_uid   - UID of file
+ *   attr_out   - Output buffer for old-format attributes
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5DA4C
+ */
+void FILE_$ATTRIBUTES(uid_t *file_uid, void *attr_out, status_$t *status_ret);
+
+/*
+ * FILE_$ACT_ATTRIBUTES - Get active file attributes (old format)
+ *
+ * Like FILE_$ATTRIBUTES but uses flags 0x01 (locked access).
+ *
+ * Parameters:
+ *   file_uid   - UID of file
+ *   attr_out   - Output buffer for old-format attributes
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5DAB0
+ */
+void FILE_$ACT_ATTRIBUTES(uid_t *file_uid, void *attr_out, status_$t *status_ret);
+
+/*
+ * FILE_$SET_TYPE - Set file type UID
+ *
+ * Parameters:
+ *   file_uid - UID of file to modify
+ *   type_uid - New type UID
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5E176
+ */
+void FILE_$SET_TYPE(uid_t *file_uid, uid_t *type_uid, status_$t *status_ret);
+
+/*
+ * FILE_$SET_DIRPTR - Set file directory pointer
+ *
+ * Parameters:
+ *   file_uid - UID of file to modify
+ *   dir_uid  - UID of parent directory
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5E1B2
+ */
+void FILE_$SET_DIRPTR(uid_t *file_uid, uid_t *dir_uid, status_$t *status_ret);
+
+/*
+ * FILE_$SET_DTM_F - Set Data Time Modified (full version)
+ *
+ * Sets the DTM attribute. If flag param is negative, uses current time.
+ * Falls back to AST_$SET_ATTRIBUTE if incompatible request.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   flags      - Pointer to flags byte (negative = use current time)
+ *   time_value - Pointer to time value (uint32_t + uint16_t)
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5E1EE
+ */
+void FILE_$SET_DTM_F(uid_t *file_uid, int8_t *flags, void *time_value,
+                     status_$t *status_ret);
+
+/*
+ * FILE_$SET_DTM - Set Data Time Modified (simple version)
+ *
+ * Wrapper for FILE_$SET_DTM_F with explicit time value.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   time_value - Pointer to time value (uint32_t)
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5E28E
+ */
+void FILE_$SET_DTM(uid_t *file_uid, uint32_t *time_value, status_$t *status_ret);
+
+/*
+ * FILE_$SET_DTU_F - Set Data Time Used (full version)
+ *
+ * Sets the DTU (access time) attribute.
+ * Falls back to AST_$SET_ATTRIBUTE if incompatible request.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   time_value - Pointer to time value (uint32_t + uint16_t)
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5E2C2
+ */
+void FILE_$SET_DTU_F(uid_t *file_uid, void *time_value, status_$t *status_ret);
+
+/*
+ * FILE_$SET_DTU - Set Data Time Used (simple version)
+ *
+ * Wrapper for FILE_$SET_DTU_F.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   time_value - Pointer to time value (uint32_t)
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5E332
+ */
+void FILE_$SET_DTU(uid_t *file_uid, uint32_t *time_value, status_$t *status_ret);
+
+/*
+ * FILE_$SET_DEVNO - Set device number
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   devno      - Pointer to device number (uint16_t)
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5E362
+ */
+void FILE_$SET_DEVNO(uid_t *file_uid, uint16_t *devno, status_$t *status_ret);
+
+/*
+ * FILE_$SET_MGR_ATTR - Set manager attribute
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   mgr_attr   - Pointer to manager attribute (8 bytes)
+ *   version    - Pointer to version (must be 0)
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5E39A
+ */
+void FILE_$SET_MGR_ATTR(uid_t *file_uid, void *mgr_attr, int16_t *version,
+                        status_$t *status_ret);
+
+/*
+ * FILE_$SET_REFCNT - Set reference count
+ *
+ * If reference count is 0xFFFFFFFF, sets to 0.
+ * If >= 0xFFF5, sets to -11.
+ * If refcnt becomes 0 and status is OK, deletes the file.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   refcnt     - Pointer to new reference count
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5E3F4
+ */
+void FILE_$SET_REFCNT(uid_t *file_uid, uint32_t *refcnt, status_$t *status_ret);
 
 /*
  * ============================================================================

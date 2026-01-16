@@ -58,4 +58,24 @@ void REM_FILE_$TRUNCATE(uid_t *vol_uid, uid_t *uid, uint32_t new_size,
 void REM_FILE_$INVALIDATE(uid_t *vol_uid, uid_t *uid, uint32_t start,
                           uint32_t count, int16_t flags, status_$t *status);
 
+/*
+ * REM_FILE_$FILE_SET_ATTRIB - Set attribute on remote file
+ *
+ * @param location_info  Location info from AST_$GET_LOCATION
+ * @param file_uid       UID of file to modify
+ * @param value          Pointer to attribute value
+ * @param attr_id        Attribute ID
+ * @param exsid          Extended SID from ACL_$GET_EXSID
+ * @param required_rights Required access rights
+ * @param option_flags   Option flags
+ * @param clock_out      Output clock value
+ * @param status         Output status code
+ *
+ * Original address: 0x00E62C22
+ */
+void REM_FILE_$FILE_SET_ATTRIB(void *location_info, uid_t *file_uid,
+                               void *value, int16_t attr_id, void *exsid,
+                               uint16_t required_rights, int16_t option_flags,
+                               void *clock_out, status_$t *status);
+
 #endif /* REM_FILE_H */

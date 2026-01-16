@@ -10,6 +10,12 @@
 
 #include "file/file.h"
 #include "uid/uid.h"
+#include "ast/ast.h"
+#include "acl/acl.h"
+#include "time/time.h"
+#include "hint/hint.h"
+#include "vtoce/vtoce.h"
+#include "rem_file/rem_file.h"
 
 /*
  * ============================================================================
@@ -49,6 +55,23 @@ extern uint16_t FILE_$LOCK_TABLE2[];
  * ============================================================================
  */
 
-/* None defined yet */
+/*
+ * OS_PROC_SHUTWIRED - Shutdown wired pages (called on access denial)
+ *
+ * Called when access rights check fails. Purpose is to release
+ * any wired pages and resources.
+ *
+ * Parameters:
+ *   status - Output status code
+ *
+ * Original address: 0x00E5D050
+ */
+extern void OS_PROC_SHUTWIRED(status_$t *status);
+
+/*
+ * FILE_$DELETE_INT - Internal delete handler
+ *
+ * Declared in file.h, used internally for refcount operations.
+ */
 
 #endif /* FILE_INTERNAL_H */
