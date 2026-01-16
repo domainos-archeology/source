@@ -117,4 +117,36 @@ void ACL_$CONVERT_FUNKY_ACL(void *acl_uid, void *acl_data_out,
  */
 void ACL_$DEF_ACLDATA(void *acl_data_out, void *uid_out);
 
+/*
+ * ACL_$GET_RE_ALL_SIDS - Get all SIDs for current requester
+ *
+ * Gets the owner UID and group/org UIDs for the current process context.
+ * Used during file creation to determine default ownership.
+ *
+ * Parameters:
+ *   acl_data   - Output buffer for ACL data (40 bytes)
+ *   owner_uid  - Output owner UID (8 bytes)
+ *   prot_info  - Output protection info (16 bytes)
+ *   result     - Output result array (3 int32_t values):
+ *                result[0]: owner SID status (0xC = no SID)
+ *                result[1]: group SID status
+ *                result[2]: org SID status
+ *   status     - Output status code
+ *
+ * Returns:
+ *   Result value (typically 0)
+ *
+ * Original address: 0x00E48792
+ */
+uint32_t ACL_$GET_RE_ALL_SIDS(void *acl_data, uid_t *owner_uid,
+                              void *prot_info, int32_t *result,
+                              status_$t *status);
+
+/*
+ * Default ACL UIDs for different object types
+ * These are used during file creation to set default protections.
+ */
+extern uid_t ACL_$DNDCAL;   /* 0xE174DC: Default ACL for dirs/links */
+extern uid_t ACL_$FNDWRX;   /* 0xE174C4: Default ACL for files */
+
 #endif /* ACL_H */
