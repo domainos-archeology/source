@@ -16,6 +16,7 @@
 #include "hint/hint.h"
 #include "vtoce/vtoce.h"
 #include "rem_file/rem_file.h"
+#include "audit/audit.h"
 
 /*
  * ============================================================================

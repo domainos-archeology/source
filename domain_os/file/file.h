@@ -41,17 +41,29 @@
 /*
  * File attribute IDs for FILE_$SET_ATTRIBUTE
  */
+#define FILE_ATTR_IMMUTABLE         1   /* Immutable flag */
+#define FILE_ATTR_TROUBLE           2   /* Trouble flag */
 #define FILE_ATTR_TYPE_UID          4   /* Type UID */
 #define FILE_ATTR_DIR_PTR           5   /* Directory pointer */
 #define FILE_ATTR_DELETE_ON_UNLOCK  7   /* Delete-on-unlock flag */
 #define FILE_ATTR_REFCNT            8   /* Reference count */
 #define FILE_ATTR_DTM_AST           9   /* DTM (AST compat mode) */
 #define FILE_ATTR_DTU_AST           10  /* DTU (AST compat mode) */
+#define FILE_ATTR_AUDITED           13  /* Audited flag (0xD) */
 #define FILE_ATTR_MGR_ATTR          14  /* Manager attribute */
 #define FILE_ATTR_DEVNO             22  /* Device number */
 #define FILE_ATTR_DTM_OLD           23  /* DTM (old format) */
 #define FILE_ATTR_DTU_FULL          24  /* DTU (full format) */
+#define FILE_ATTR_MAND_LOCK         25  /* Mandatory lock flag (0x19) */
 #define FILE_ATTR_DTM_CURRENT       26  /* DTM (use current time) */
+
+/*
+ * Flag attribute masks for FILE_$SET_ATTRIBUTE
+ */
+#define FILE_FLAGS_IMMUTABLE_MASK   0x0002FFFF  /* Mask for immutable flag */
+#define FILE_FLAGS_TROUBLE_MASK     0x0000FFFF  /* Mask for trouble flag */
+#define FILE_FLAGS_AUDITED_MASK     0x0000FFFF  /* Mask for audited flag */
+#define FILE_FLAGS_MAND_LOCK_MASK   0x00080000  /* Mask for mandatory lock */
 
 /*
  * Attribute buffer sizes
@@ -514,6 +526,103 @@ void FILE_$SET_MGR_ATTR(uid_t *file_uid, void *mgr_attr, int16_t *version,
  * Original address: 0x00E5E3F4
  */
 void FILE_$SET_REFCNT(uid_t *file_uid, uint32_t *refcnt, status_$t *status_ret);
+
+/*
+ * ============================================================================
+ * File Flag Functions
+ * ============================================================================
+ */
+
+/*
+ * FILE_$MK_PERMANENT - Mark file as permanent
+ *
+ * Stub function that always returns success. The permanent flag is
+ * likely handled elsewhere in the system.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   status_ret - Receives operation status (always status_$ok)
+ *
+ * Original address: 0x00E5DBA4
+ */
+void FILE_$MK_PERMANENT(uid_t *file_uid, status_$t *status_ret);
+
+/*
+ * FILE_$MK_TEMPORARY - Mark file as temporary
+ *
+ * Stub function that always returns success. The temporary flag is
+ * likely handled elsewhere in the system.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   status_ret - Receives operation status (always status_$ok)
+ *
+ * Original address: 0x00E5DBB2
+ */
+void FILE_$MK_TEMPORARY(uid_t *file_uid, status_$t *status_ret);
+
+/*
+ * FILE_$MK_IMMUTABLE - Mark file as immutable
+ *
+ * Sets the immutable flag on a file, preventing modifications.
+ * Uses FILE_$SET_ATTRIBUTE with attr_id=1.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5DBC0
+ */
+void FILE_$MK_IMMUTABLE(uid_t *file_uid, status_$t *status_ret);
+
+/*
+ * FILE_$SET_AUDITED - Set file audit flags
+ *
+ * Sets the audit flags for a file. Requires audit administrator privileges.
+ * The two boolean parameters control different aspects of auditing:
+ *   - param_2 < 0 sets bit 0 of the audit flags
+ *   - param_3 < 0 sets bit 1 of the audit flags
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   param_2    - Pointer to first audit flag (negative = enable)
+ *   param_3    - Pointer to second audit flag (negative = enable)
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5DBE8
+ */
+void FILE_$SET_AUDITED(uid_t *file_uid, int8_t *param_2, int8_t *param_3,
+                       status_$t *status_ret);
+
+/*
+ * FILE_$SET_TROUBLE - Set file trouble flag
+ *
+ * Sets the trouble flag on a file, indicating some issue with the file.
+ * Uses FILE_$SET_ATTRIBUTE with attr_id=2.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   unused     - Unused parameter (preserved for API compatibility)
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5DC42
+ */
+void FILE_$SET_TROUBLE(uid_t *file_uid, void *unused, status_$t *status_ret);
+
+/*
+ * FILE_$SET_MAND_LOCK - Set mandatory lock flag
+ *
+ * Sets or clears the mandatory lock flag on a file.
+ * Uses FILE_$SET_ATTRIBUTE with attr_id=25 (0x19).
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   flag       - Pointer to lock flag value
+ *   status_ret - Receives operation status
+ *
+ * Original address: 0x00E5DC6A
+ */
+void FILE_$SET_MAND_LOCK(uid_t *file_uid, uint8_t *flag, status_$t *status_ret);
 
 /*
  * ============================================================================
