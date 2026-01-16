@@ -2,7 +2,7 @@
 TARGET_SAU := sau2
 
 # List of all subsystems
-SUBSYSTEMS := ast bat cal dbuf ec fm math misc ml mmap mmu netlog os osinfo pmap proc1 proc2 smd term time tpad tty uid vtoc
+SUBSYSTEMS := app ast bat cal dbuf ec fm math misc ml mmap mmu netlog net_io netbuf network os osinfo pkt pmap proc1 proc2 rip route smd sock term time tpad tty uid vtoc
 
 # we assume local #include's will have fully qualified paths
 CFLAGS := -I. -O2 $(SAU2_FLAGS)

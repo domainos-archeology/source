@@ -49,4 +49,15 @@ void NETBUF_$GETVA(uint32_t ppn_shifted, uint32_t *va_out, status_$t *status);
  */
 uint32_t NETBUF_$RTNVA(uint32_t *va_ptr);
 
+/*
+ * NETBUF_$RTN_HDR - Return a network header buffer
+ *
+ * Returns a header buffer to the pool.
+ *
+ * @param ppn_ptr  Pointer to physical page number (shifted by 10)
+ *
+ * Original address: 0x00E0EEB4
+ */
+void NETBUF_$RTN_HDR(uint32_t *ppn_ptr);
+
 #endif /* NETBUF_H */
