@@ -439,28 +439,9 @@ void ACL_$CONVERT_FUNKY_ACL(void *acl_uid, void *acl_data_out,
 void ACL_$DEF_ACLDATA(void *acl_data_out, void *uid_out);
 
 /*
- * ============================================================================
- * External AST Functions
- * ============================================================================
+ * NOTE: AST functions (AST_$GET_DISM_SEQN, AST_$GET_COMMON_ATTRIBUTES, etc.)
+ * are declared in ast/ast.h which is included above.
  */
-
-/*
- * AST_$GET_DISM_SEQN - Get dismount sequence number
- *
- * Returns a sequence number that changes when volumes are dismounted.
- * Used to detect if volume state changed during an operation.
- *
- * Original address: 0x00E01388
- */
-int32_t AST_$GET_DISM_SEQN(void);
-
-/*
- * AST_$GET_COMMON_ATTRIBUTES - Get common file attributes
- *
- * Original address: 0x00E04A00
- */
-void AST_$GET_COMMON_ATTRIBUTES(void *uid_buf, uint16_t mode,
-                                 void *attr_buf, status_$t *status_ret);
 
 /*
  * ============================================================================

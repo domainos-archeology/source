@@ -74,7 +74,8 @@
 /*
  * File status codes (module 0x0F)
  */
-#define status_$file_invalid_arg    0x000F0014  /* Invalid argument */
+#define status_$file_invalid_arg            0x000F0014  /* Invalid argument */
+#define status_$file_illegal_lock_request   0x000F0008  /* Illegal lock request */
 
 /*
  * ============================================================================
@@ -934,5 +935,74 @@ void FILE_$SET_ACL(uid_t *file_uid, uid_t *acl_uid, status_$t *status_ret);
  */
 void FILE_$OLD_AP(uid_t *file_uid, int16_t *prot_type, uint32_t *acl_data,
                   uint32_t *acl_uid, status_$t *status_ret);
+
+/*
+ * ============================================================================
+ * File Write Functions
+ * ============================================================================
+ */
+
+/*
+ * FILE_$FW_FILE - Force Write File
+ *
+ * Forces all dirty pages of a file to be written back to disk.
+ * This ensures file data durability by flushing the kernel buffer cache.
+ *
+ * Operation:
+ *   1. Checks if file is locked (via FILE_$DELETE_INT query)
+ *   2. Calls AST_$PURIFY with appropriate flags:
+ *      - If locked: flags = 0x0002 (local only)
+ *      - If not locked: flags = 0x8002 (include remote sync)
+ *
+ * Parameters:
+ *   file_uid   - UID of file to flush
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E5E622
+ */
+void FILE_$FW_FILE(uid_t *file_uid, status_$t *status_ret);
+
+/*
+ * FILE_$FW_PARTIAL - Force Write Partial File
+ *
+ * Forces dirty pages within a byte range to be written back to disk.
+ * Iterates through pages covered by the byte range and purifies each.
+ *
+ * Page size is 32KB (0x8000 bytes). The function calculates the starting
+ * page from the offset and walks through subsequent pages until the
+ * byte count is exhausted.
+ *
+ * Parameters:
+ *   file_uid     - UID of file to flush
+ *   start_offset - Pointer to starting byte offset
+ *   byte_count   - Pointer to number of bytes to flush
+ *   status_ret   - Output status code
+ *
+ * Original address: 0x00E5E680
+ */
+void FILE_$FW_PARTIAL(uid_t *file_uid, uint32_t *start_offset,
+                      int32_t *byte_count, status_$t *status_ret);
+
+/*
+ * FILE_$FW_PAGES - Force Write Specific Pages
+ *
+ * Forces specific pages to be written back to disk. Takes a list of
+ * page entries where each entry contains:
+ *   bits 5-31: page number
+ *   bits 0-4:  sub-page index
+ *
+ * Pages are processed in batches of up to 32, with each batch sorted
+ * for sequential I/O optimization before writing.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to flush
+ *   page_list  - Array of page entry values
+ *   page_count - Pointer to number of pages in list
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E5E71E
+ */
+void FILE_$FW_PAGES(uid_t *file_uid, uint32_t *page_list, uint16_t *page_count,
+                    status_$t *status_ret);
 
 #endif /* FILE_H */
