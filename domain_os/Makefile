@@ -3,6 +3,7 @@ TARGET_SAU := sau2
 
 SRCS := \
   $(wildcard ast/*.c) \
+  $(wildcard bat/*.c) \
   $(wildcard cal/*.c) \
   $(wildcard ec/*.c) \
   $(wildcard math/*.c) \
