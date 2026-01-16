@@ -11,21 +11,8 @@
  *   status_ret - Status return pointer
  */
 
-#include "proc1.h"
-
-/*
- * Process info structure returned by PROC1_$GET_INFO
- * Size appears to be at least 0x18 bytes
- */
-typedef struct proc1_$info_t {
-    int16_t     state;          /* 0x00: Process state */
-    uint16_t    usr;            /* 0x02: User status register */
-    uint32_t    upc;            /* 0x04: User PC */
-    uint32_t    usp;            /* 0x08: User stack pointer */
-    uint16_t    usb;            /* 0x0C: User stack base? */
-    uint16_t    pad_0e;         /* 0x0E: Padding */
-    uint8_t     cpu_total[8];   /* 0x10: CPU time (6 bytes used) */
-} proc1_$info_t;
+#include "proc1/proc1_internal.h"
+#include "cal/cal.h"
 
 void PROC1_$GET_INFO(int16_t *pidp, proc1_$info_t *info_ret, status_$t *status_ret)
 {
@@ -63,7 +50,7 @@ void PROC1_$GET_INFO(int16_t *pidp, proc1_$info_t *info_ret, status_$t *status_r
     *(uint32_t*)&info_ret->cpu_total[4] = pcb->cpu_usage;
 
     /* Add current accumulated time (48-bit addition) */
-    ADD48(info_ret->cpu_total, &pcb->cpu_total);
+    ADD48((clock_t *)info_ret->cpu_total, (clock_t *)&pcb->cpu_total);
 
     /* If this is the current process, we're done */
     if (pcb == PROC1_$CURRENT_PCB) {

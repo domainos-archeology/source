@@ -13,6 +13,9 @@
 #include "pmap/pmap_internal.h"
 #include "misc/misc.h"
 
+/* External working set list high mark array */
+extern uint16_t MMAP_$WSL_HI_MARK[];
+
 /* Working set list entry structure offsets */
 #define WSL_FLAGS_OFFSET        0x00
 #define WSL_INTERVAL_OFFSET     0x02

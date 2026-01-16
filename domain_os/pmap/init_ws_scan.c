@@ -14,42 +14,34 @@
 
 #include "pmap_internal.h"
 
-/* Timer queue entry structure */
-typedef struct timer_entry_t {
-    void    (*callback)(int *);     /* 0x00: Callback function */
-    uint32_t param;                 /* 0x04: Callback parameter */
-    uint16_t flags;                 /* 0x08: Timer flags */
-    uint16_t interval_lo;           /* 0x0A: Interval low word */
-    uint32_t interval;              /* 0x0C: Interval in microseconds */
-    uint16_t next_lo;               /* 0x10: Next fire time low */
-    uint16_t next_hi;               /* 0x12: Next fire time high */
-    uint16_t pad;                   /* 0x14: Padding */
-} timer_entry_t;
+/*
+ * Timer queue and element arrays for working set scanning.
+ * Each working set slot has its own timer queue and element.
+ *
+ * Original locations (M68K):
+ *   PMAP_$WS_TIMER_QUEUES:   0xE2A494
+ *   PMAP_$WS_TIMER_ELEMENTS: 0xE24D68
+ */
+extern time_queue_t PMAP_$WS_TIMER_QUEUES[];
+extern time_queue_elem_t PMAP_$WS_TIMER_ELEMENTS[];
 
-/* Timer entry array base - one per slot */
-#if defined(M68K)
-    #define TIMER_ENTRIES_BASE      0xE24D68
-#else
-    extern timer_entry_t timer_entries[];
-    #define TIMER_ENTRIES_BASE      ((uintptr_t)timer_entries)
-#endif
+/* Verify structure sizes match original layout */
+_Static_assert(sizeof(time_queue_t) == 0x0C,
+               "time_queue_t size must be 0x0C bytes");
+_Static_assert(sizeof(time_queue_elem_t) == 0x1A,
+               "time_queue_elem_t size must be 0x1A bytes");
 
-/* Timer queue base */
-#if defined(M68K)
-    #define TIMER_QUEUE_BASE        0xE2A494
-#else
-    extern uint8_t timer_queue[];
-    #define TIMER_QUEUE_BASE        ((uintptr_t)timer_queue)
-#endif
+/* Working set scan callback - declared in pmap_internal.h */
+extern void PMAP_$WS_SCAN_CALLBACK(int *arg);
 
 void PMAP_$INIT_WS_SCAN(uint16_t index, int16_t param)
 {
-    int16_t local_param;
-    status_$t status[2];
-    uint16_t dummy;
-    int entry_offset;
+    uint16_t local_param;
+    status_$t status;
+    time_queue_t *queue;
+    time_queue_elem_t *elem;
 
-    local_param = param;
+    local_param = (uint16_t)param;
 
     /* Set up working set index */
     MMAP_$SET_WS_INDEX(index, &local_param);
@@ -59,34 +51,32 @@ void PMAP_$INIT_WS_SCAN(uint16_t index, int16_t param)
         return;
     }
 
-    /* Calculate timer entry offset */
-    entry_offset = (int16_t)(index * 0x1C);
+    /* Get pointers to this slot's queue and element */
+    queue = &PMAP_$WS_TIMER_QUEUES[index];
+    elem = &PMAP_$WS_TIMER_ELEMENTS[index];
 
     /* Remove any existing timer entry */
-    TIME_$Q_REMOVE_ELEM((int16_t)(index * 0x0C) + TIMER_QUEUE_BASE,
-                        index * 0x1C + 0x4D68, (int16_t)status);
+    TIME_$Q_REMOVE_ELEM(queue, elem, &status);
 
     /* Set up new timer entry */
-    timer_entry_t *entry = (timer_entry_t *)(TIMER_ENTRIES_BASE + entry_offset);
+    /* Flags: 0x1A (repeating timer) */
+    elem->flags = 0x1A;
 
-    /* Timer flags: 0x1A */
-    *(uint16_t *)((char *)entry + 0x12) = 0x1A;
-    *(uint16_t *)((char *)entry + 0x0C) = 0;
+    /* Initial expiration time: 0 (fire immediately on next scan) */
+    elem->expire_high = 0;
+    elem->expire_low = 0;
 
     /* Interval: 250000 microseconds (250ms) */
-    *(uint32_t *)((char *)entry + 0x0E) = 250000;
-
-    /* Copy interval to next fire time */
-    *(uint32_t *)((char *)entry + 0x12) = *(uint32_t *)((char *)entry + 0x0C);
-    *(uint16_t *)((char *)entry + 0x18) = *(uint16_t *)((char *)entry + 0x10);
+    elem->interval_high = 250000;
+    elem->interval_low = 0;
 
     /* Set callback function and parameter */
-    entry->callback = PMAP_$WS_SCAN_CALLBACK;
-    entry->param = (uint32_t)index;
+    elem->callback = (uint32_t)(uintptr_t)PMAP_$WS_SCAN_CALLBACK;
+    elem->callback_arg = (uint32_t)index;
 
     /* Enter timer in queue */
-    status[1] = 0;
-    dummy = 0;
-    TIME_$Q_ENTER_ELEM((int16_t)(index * 0x0C) + TIMER_QUEUE_BASE,
-                       &status[1], (void *)(TIMER_ENTRIES_BASE + entry_offset), status);
+    {
+        clock_t when = { 0, 0 };
+        TIME_$Q_ENTER_ELEM(queue, &when, elem, &status);
+    }
 }

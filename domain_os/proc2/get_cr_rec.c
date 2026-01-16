@@ -40,7 +40,7 @@ void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_t *parent_uid, uid_t *proc_uid,
     /* Calculate process index from EC1 address:
      * index = ((ec1_addr - EC1_ARRAY_BASE) / EC1_ENTRY_SIZE) + 1
      */
-    proc_idx = (int16_t)(((uintptr_t)ec1_addr - EC1_ARRAY_BASE) / EC1_ENTRY_SIZE) + 1;
+    proc_idx = (int16_t)(((uintptr_t)ec1_addr - (uintptr_t)EC1_ARRAY_BASE) / EC1_ENTRY_SIZE) + 1;
 
     if (status != status_$ok) {
         *status_ret = status_$proc2_uid_not_found;

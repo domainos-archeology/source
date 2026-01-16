@@ -10,7 +10,8 @@
  * - Working set scanning for PIDs 1 and 2
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
+#include "pmap/pmap.h"
 
 void PROC1_$INIT(void)
 {

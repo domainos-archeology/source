@@ -252,7 +252,7 @@ int8_t PROC1_$SUSPEND(uint16_t process_id, status_$t *status_ret);
  * PROC1_$SUSPENDP - Suspend with parameters
  * Original address: 0x00e14876
  */
-void PROC1_$SUSPENDP(uint16_t pid, status_$t *status_ret);
+int8_t PROC1_$SUSPENDP(uint16_t pid, status_$t *status_ret);
 
 /*
  * PROC1_$RESUME - Resume a suspended process
@@ -430,32 +430,41 @@ uint16_t PROC1_$EC_WAITN(proc1_t *pcb, ec_$eventcount_t **ecs,
  */
 
 /*
- * PROC1_$GET_CPUT - Get CPU time for process
+ * PROC1_$GET_CPUT - Get CPU time for current process (shifted by 1)
  * Original address: 0x00e20894
- */
-void PROC1_$GET_CPUT(uint16_t pid, void *time);
-
-/*
- * PROC1_$GET_CPUT8 - Get CPU time as 48-bit clock_t
- *
- * Returns the CPU time for the current process as a 48-bit clock value.
  *
  * Parameters:
- *   cpu_time - Pointer to receive 48-bit CPU time value
+ *   time_ret - Pointer to receive 48-bit CPU time (shifted left 1)
  */
-void PROC1_$GET_CPUT8(clock_t *cpu_time);
+void PROC1_$GET_CPUT(void *time_ret);
 
 /*
- * PROC1_$GET_CPU_USAGE - Get CPU usage
- * Original address: 0x00e208aa
+ * PROC1_$GET_CPUT8 - Get CPU time for current process (unshifted)
+ * Original address: 0x00e2089c
+ *
+ * Returns the CPU time for the current process as a 48-bit value.
+ *
+ * Parameters:
+ *   time_ret - Pointer to receive 48-bit CPU time value
  */
-void PROC1_$GET_CPU_USAGE(uint16_t pid, void *usage);
+void PROC1_$GET_CPUT8(void *time_ret);
+
+/*
+ * PROC1_$GET_CPU_USAGE - Get CPU usage for current process
+ * Original address: 0x00e208aa
+ *
+ * Parameters:
+ *   time_ret - Pointer to receive CPU time (6 bytes, shifted left by 1)
+ *   stat1_ret - Pointer to receive field_60 from PCB
+ *   stat2_ret - Pointer to receive field_64 from PCB
+ */
+void PROC1_$GET_CPU_USAGE(void *time_ret, uint32_t *stat1_ret, uint32_t *stat2_ret);
 
 /*
  * PROC1_$GET_LOADAV - Get system load average
  * Original address: 0x00e14bba
  */
-void PROC1_$GET_LOADAV(void *loadav);
+void PROC1_$GET_LOADAV(uint32_t *loadav);
 
 /*
  * PROC1_$INIT_LOADAV - Initialize load averaging
@@ -498,13 +507,13 @@ uint16_t PROC1_$GET_TYPE(uint16_t pid);
  * PROC1_$SET_VT - Set virtual timer
  * Original address: 0x00e1495c
  */
-void PROC1_$SET_VT(uint16_t pid, int16_t value);
+void PROC1_$SET_VT(uint16_t pid, uint32_t *time_value, status_$t *status_ret);
 
 /*
  * PROC1_$VT_INT - Virtual timer interrupt handler
  * Original address: 0x00e1491e
  */
-void PROC1_$VT_INT(void);
+void PROC1_$VT_INT(void *cpu_time_out);
 
 /*
  * PROC1_$SET_TS - Set timeslice value
@@ -516,7 +525,7 @@ void PROC1_$SET_TS(proc1_t *pcb, int16_t value);
  * PROC1_$TS_END_CALLBACK - Timeslice end callback
  * Original address: 0x00e14a70
  */
-void PROC1_$TS_END_CALLBACK(void);
+void PROC1_$TS_END_CALLBACK(void *arg);
 
 /*
  * PROC1_$INIT_TS_TIMER - Initialize timeslice timer for process
@@ -531,22 +540,63 @@ void PROC1_$INIT_TS_TIMER(uint16_t pid);
  */
 
 /*
+ * Process info structure returned by PROC1_$GET_INFO
+ */
+typedef struct proc1_$info_t {
+    int16_t     state;          /* 0x00: Process state */
+    uint16_t    usr;            /* 0x02: User status register */
+    uint32_t    upc;            /* 0x04: User PC */
+    uint32_t    usp;            /* 0x08: User stack pointer */
+    uint16_t    usb;            /* 0x0C: User stack base? */
+    uint16_t    pad_0e;         /* 0x0E: Padding */
+    uint8_t     cpu_total[8];   /* 0x10: CPU time (6 bytes used) */
+} proc1_$info_t;
+
+/*
  * PROC1_$GET_INFO - Get process information
  * Original address: 0x00e14f52
+ *
+ * Parameters:
+ *   pidp - Pointer to process ID
+ *   info_ret - Pointer to proc1_$info_t structure to fill
+ *   status_ret - Status return pointer
  */
-void PROC1_$GET_INFO(uint16_t pid, void *info, status_$t *status_ret);
+void PROC1_$GET_INFO(int16_t *pidp, proc1_$info_t *info_ret, status_$t *status_ret);
 
 /*
- * PROC1_$GET_INFO_INT - Get process info (internal)
+ * PROC1_$GET_INFO_INT - Get process info (internal, extracts registers from stack)
  * Original address: 0x00e20f12
+ *
+ * Parameters:
+ *   pid - Process ID
+ *   stack_base - Base of stack
+ *   stack_top - Top of stack
+ *   usr_ret - Pointer to receive user SR
+ *   upc_ret - Pointer to receive user PC
+ *   usb_ret - Pointer to receive user stack base
+ *   usp_ret - Pointer to receive user SP
  */
-void PROC1_$GET_INFO_INT(void);
+void PROC1_$GET_INFO_INT(uint16_t pid, void *stack_base, void *stack_top,
+                         uint16_t *usr_ret, uint32_t *upc_ret,
+                         uint16_t *usb_ret, uint32_t *usp_ret);
 
 /*
- * PROC1_$GET_LIST - Get list of processes
- * Original address: 0x00e15362
+ * Process list entry structure (4 bytes)
  */
-void PROC1_$GET_LIST(void *list, uint16_t *count);
+typedef struct proc_list_entry_t {
+    uint16_t pid;       /* Process ID */
+    uint16_t type;      /* Process type */
+} proc_list_entry_t;
+
+/*
+ * PROC1_$GET_LIST - Get list of bound processes
+ * Original address: 0x00e15362
+ *
+ * Parameters:
+ *   count_ret - Pointer to receive count of processes found
+ *   list_ret - Array to receive process info
+ */
+void PROC1_$GET_LIST(int16_t *count_ret, proc_list_entry_t *list_ret);
 
 /*
  * PROC1_$GET_USP - Get user stack pointer

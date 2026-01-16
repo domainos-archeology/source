@@ -29,7 +29,7 @@ void UID_$GEN(uid_t *uid_ret)
 {
     uint32_t clock_val;
     uint16_t token;
-    uint32_t abs_clock[2];
+    clock_t abs_clock;
     uint32_t local_high;
     uint32_t local_low;
     uint8_t counter_nibble;
@@ -52,10 +52,10 @@ void UID_$GEN(uid_t *uid_ret)
          * UIDs per clock tick.
          */
         do {
-            TIME_$ABS_CLOCK(abs_clock);
+            TIME_$ABS_CLOCK(&abs_clock);
 
             /* Check if we're still in the same time window */
-            if (UID_$GENERATOR_STATE.high != abs_clock[0]) {
+            if (UID_$GENERATOR_STATE.high != abs_clock.high) {
                 break;  /* High word changed, we can proceed */
             }
 
@@ -65,7 +65,7 @@ void UID_$GEN(uid_t *uid_ret)
              * The counter occupies the upper nibble of byte 0 (big-endian).
              */
             if (((UID_$GENERATOR_STATE.low >> 24) & 0xF0) >> 4 !=
-                (abs_clock[1] >> 12) & 0xF) {
+                (abs_clock.low >> 12) & 0xF) {
                 break;  /* Counter space available */
             }
 
@@ -73,9 +73,9 @@ void UID_$GEN(uid_t *uid_ret)
             ML_$SPIN_UNLOCK(&UID_$GENERATOR_LOCK, token);
 
             do {
-                TIME_$ABS_CLOCK(abs_clock);
+                TIME_$ABS_CLOCK(&abs_clock);
             } while (((UID_$GENERATOR_STATE.low >> 24) & 0xF0) >> 4 ==
-                     (abs_clock[1] >> 12) & 0xF);
+                     (abs_clock.low >> 12) & 0xF);
 
             token = ML_$SPIN_LOCK(&UID_$GENERATOR_LOCK);
         } while (1);

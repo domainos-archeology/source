@@ -61,10 +61,11 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
                    status_$t *status_ret) {
     unsigned short option;
     short real_line;
-    unsigned long flags;
-    unsigned long func_enabled;
+    uint32_t flags;
+    uint32_t func_enabled;
     sio_params_t params;
     uid_t pgroup;
+    char raw_mode_temp;
 
     option = *option_ptr;
 
@@ -82,7 +83,8 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
             break;
 
         case INQ_RAW_MODE:
-            TTY_$I_INQ_RAW(*line_ptr, value_ret, status_ret);
+            TTY_$I_INQ_RAW(*line_ptr, &raw_mode_temp, status_ret);
+            *(unsigned char *)value_ret = raw_mode_temp;
             break;
 
         case INQ_INPUT_FLAG:

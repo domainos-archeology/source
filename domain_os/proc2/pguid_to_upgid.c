@@ -15,6 +15,19 @@
 
 #include "proc2/proc2_internal.h"
 
+/*
+ * Raw memory access macros for parent-child fields
+ */
+#if defined(M68K)
+    #define P2_CHILD_BASE(idx)      ((int16_t*)(0xEA551C + ((idx) * 0xE4)))
+    #define P2_PARENT_IDX(idx)      (*(P2_CHILD_BASE(idx) - 0x63))
+    #define P2_PARENT_UPID(idx)     (*(int16_t*)(0xEA944E + (idx) * 8))
+#else
+    static int16_t p2_dummy_field;
+    #define P2_PARENT_IDX(idx)      (p2_dummy_field)
+    #define P2_PARENT_UPID(idx)     (p2_dummy_field)
+#endif
+
 /* Internal helper: get UPGID from UID
  * Original address: 0x00e422cc
  */
@@ -41,7 +54,7 @@ static uint16_t PROC2_$UID_TO_UPGID_INTERNAL(uid_t *pgroup_uid)
 
         if (status == status_$ok) {
             entry = P2_INFO_ENTRY(index);
-            parent_idx = entry->parent_idx;
+            parent_idx = P2_PARENT_IDX(index);
 
             if (parent_idx != 0) {
                 /* Look up in parent UPID table */

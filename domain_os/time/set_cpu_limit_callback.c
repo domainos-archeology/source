@@ -37,7 +37,7 @@ void TIME_$SET_CPU_LIMIT_CALLBACK(void *arg)
 
     if (limit_high != 0 || limit_low != 0) {
         /* Send SIGXCPU to the process */
-        void *uid = &PROC2_UID[as_id * 8];
+        void *uid = (void *)((char *)&PROC2_UID + (as_id * 8));
         uint16_t sig_num = SIGXCPU;
         uint32_t sig_code = 0;
         PROC2_$SIGNAL_OS(uid, &sig_num, &sig_code, &status);

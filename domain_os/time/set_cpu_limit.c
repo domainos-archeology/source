@@ -57,28 +57,39 @@ void TIME_$SET_CPU_LIMIT(clock_t *limit, int8_t *relative, status_$t *status)
     }
 
     /* Check if limit is relative or absolute */
-    if (*relative >= 0) {
+    if (*relative < 0) {
+        /* Relative limit - schedule callback with relative=0 */
+        TIME_$Q_ADD_CALLBACK(vt_queue,
+                             &limit_clock,
+                             0,  /* relative */
+                             &cpu_clock,
+                             TIME_$SET_CPU_LIMIT_CALLBACK,
+                             (void *)(uintptr_t)PROC1_$AS_ID,
+                             4,  /* flags */
+                             &interval,
+                             (time_queue_elem_t *)cpu_entry,
+                             status);
+    } else {
         /* Absolute limit - check if already exceeded */
-        cmp_result = (int8_t)SUB48(&limit_clock, &cpu_clock);
+        cmp_result = SUB48(&limit_clock, &cpu_clock);
         if (cmp_result < 0) {
-            /* Already exceeded - send signal now */
-            void *uid = &PROC2_UID[PROC1_$AS_ID * 8];
+            /* limit_clock >= cpu_clock, limit not yet exceeded - schedule callback */
+            TIME_$Q_ADD_CALLBACK(vt_queue,
+                                 &limit_clock,
+                                 1,  /* relative=1 for absolute time */
+                                 &cpu_clock,
+                                 TIME_$SET_CPU_LIMIT_CALLBACK,
+                                 (void *)(uintptr_t)PROC1_$AS_ID,
+                                 4,  /* flags */
+                                 &interval,
+                                 (time_queue_elem_t *)cpu_entry,
+                                 status);
+        } else {
+            /* limit_clock < cpu_clock, already exceeded - send signal now */
+            void *uid = (void *)((char *)&PROC2_UID + (PROC1_$AS_ID << 3));
             uint16_t sig_num = SIGXCPU;
             uint32_t sig_code = 0;
             PROC2_$SIGNAL_OS(uid, &sig_num, &sig_code, status);
-            return;
         }
     }
-
-    /* Schedule the CPU limit callback */
-    TIME_$Q_ADD_CALLBACK(vt_queue,
-                         &limit_clock,
-                         (*relative >= 0) ? 1 : 0,  /* relative flag */
-                         &cpu_clock,
-                         TIME_$SET_CPU_LIMIT_CALLBACK,
-                         (void *)(uintptr_t)PROC1_$AS_ID,
-                         4,  /* flags */
-                         &interval,
-                         (time_queue_elem_t *)cpu_entry,
-                         status);
 }

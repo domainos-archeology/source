@@ -14,6 +14,7 @@
 
 #include "proc1/proc1_internal.h"
 #include "time/time.h"
+#include "cal/cal.h"
 
 void PROC1_$SET_VT(uint16_t pid, uint32_t *time_value, status_$t *status_ret)
 {
@@ -59,7 +60,7 @@ void PROC1_$SET_VT(uint16_t pid, uint32_t *time_value, status_$t *status_ret)
         delta_low = pcb->vtimer - TIME_$VT_TIMER();
 
         /* Accumulate time into CPU total */
-        ADD48(&pcb->cpu_total, &delta_high);
+        ADD48((clock_t *)&pcb->cpu_total, (clock_t *)&delta_high);
 
         /* Set new vtimer value */
         pcb->vtimer = new_vtimer;

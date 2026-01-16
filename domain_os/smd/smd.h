@@ -165,7 +165,7 @@ void SMD_$DISSOC(void);
  *
  * Original address: 0x00E6EB42
  */
-void SMD_$ACQ_DISPLAY(void *lock_data);
+uint16_t SMD_$ACQ_DISPLAY(void *lock_data);
 
 /*
  * SMD_$REL_DISPLAY - Release display lock

@@ -67,8 +67,8 @@ void TTY_$K_DRAIN_OUTPUT(short *line_ptr, status_$t *status)
     uint wait_result;
 
     // Eventcount array for waiting
-    void *ec_array[2];
-    int value_array[2];
+    ec_$eventcount_t *ec_array[2];
+    int32_t value_array[2];
 
     // Get TTY descriptor for this line
     tty = TTY_$I_GET_DESC(*line_ptr, status);
@@ -82,12 +82,12 @@ void TTY_$K_DRAIN_OUTPUT(short *line_ptr, status_$t *status)
     // Loop until output buffer is drained or quit is signaled
     while (1) {
         // Set up wait for output eventcount
-        ec_array[0] = (void *)(uintptr_t)tty->output_ec;
-        value_array[0] = ((ec_$eventcount_t *)(uintptr_t)tty->output_ec)->value + 1;
+        ec_array[0] = (ec_$eventcount_t *)(uintptr_t)tty->output_ec;
+        value_array[0] = ec_array[0]->value + 1;
 
         // Set up wait for quit eventcount
         short as_id = PROC1_$AS_ID;
-        ec_array[1] = &FIM_$QUIT_EC[as_id * 12];
+        ec_array[1] = (ec_$eventcount_t *)((char *)&FIM_$QUIT_EC + as_id * 12);
         value_array[1] = FIM_$QUIT_VALUE[as_id] + 1;
 
         // Check if output buffer is already empty

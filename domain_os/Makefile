@@ -36,7 +36,7 @@ CC := m68k-elf-gcc
 SAU2_FLAGS := -DM68K -DM68010 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68010 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
 
 LD := m68k-elf-gcc
-LDFLAGS := 
+LDFLAGS := -nostdlib -ffreestanding
 
 all:: domain_os
 

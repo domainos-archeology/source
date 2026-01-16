@@ -157,7 +157,7 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             } else {
                 params.flags1 &= ~4;
             }
-            pgroup_ptr = (void *)(PROC2_UID + (short)(PROC1_$AS_ID << 3));
+            pgroup_ptr = (void *)((char *)&PROC2_UID + (short)(PROC1_$AS_ID << 3));
             TTY_$K_SET_PGROUP(line_ptr, pgroup_ptr, status_ret);
             param_mask = 0x800;
             goto set_sio_param;
@@ -239,7 +239,7 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
         case CTRL_ENABLE_STATUS:
             TTY_$K_ENABLE_FUNC(line_ptr, &func_id_status, value_ptr, status_ret);
         set_pgroup:
-            pgroup_ptr = (void *)(PROC2_UID + (short)(PROC1_$AS_ID << 3));
+            pgroup_ptr = (void *)((char *)&PROC2_UID + (short)(PROC1_$AS_ID << 3));
             TTY_$K_SET_PGROUP(line_ptr, pgroup_ptr, status_ret);
             goto done;
 

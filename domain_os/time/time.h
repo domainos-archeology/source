@@ -234,24 +234,28 @@ void TIME_$SET_TIME_OF_DAY(uint32_t *tv, status_$t *status);
 /*
  * TIME_$ADJUST_TIME_OF_DAY - Adjust time of day gradually
  *
+ * @param delta: Pointer to delta (seconds, microseconds pair)
+ * @param old_delta: Pointer to receive previous delta
+ * @param status: Status return
+ *
  * Original address: 0x00e168de
  */
-void TIME_$ADJUST_TIME_OF_DAY(int32_t delta, status_$t *status);
+void TIME_$ADJUST_TIME_OF_DAY(int32_t *delta, int32_t *old_delta, status_$t *status);
 
 /*
  * TIME_$ADVANCE - Schedule a callback after a delay
  *
  * Parameters:
- *   delay - Pointer to delay value
- *   elem - Queue element to use
+ *   delay_type - Pointer to delay type
+ *   delay - Pointer to delay clock value
+ *   ec - Event counter or callback context
  *   callback_arg - Argument for callback
- *   interval - Repeat interval (or NULL for one-shot)
  *   status - Status return
  *
  * Original address: 0x00e16454
  */
-void TIME_$ADVANCE(uint16_t *delay, void *elem, void *callback_arg,
-                   clock_t *interval, status_$t *status);
+void TIME_$ADVANCE(uint16_t *delay_type, clock_t *delay, void *ec,
+                   void *callback_arg, status_$t *status);
 
 /*
  * TIME_$CANCEL - Cancel a scheduled callback
@@ -268,37 +272,61 @@ void TIME_$CANCEL(uint32_t *ec, void *elem, status_$t *status);
 /*
  * TIME_$WAIT - Wait for a specified time
  *
+ * @param delay_type: Pointer to delay type (0=relative, 1=absolute)
+ * @param delay: Pointer to delay clock value
+ * @param status: Status return
+ *
  * Original address: 0x00e1650a
  */
-void TIME_$WAIT(clock_t *delay, status_$t *status);
+void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status);
 
 /*
- * TIME_$WAIT2 - Wait for a specified time (variant)
+ * TIME_$WAIT2 - Wait for a specified time with extra event count
+ *
+ * Like TIME_$WAIT but allows waiting on an additional event count.
+ * Returns which EC triggered the wakeup.
+ *
+ * @param delay_type: Pointer to delay type (0=relative, 1=absolute)
+ * @param delay: Pointer to delay clock value
+ * @param extra_ec: Additional event count to wait on
+ * @param count: Pointer to count value for EC wait
+ * @param status: Status return
+ * @return: -1 if timer triggered, 0 if extra_ec triggered
  *
  * Original address: 0x00e16654
  */
-void TIME_$WAIT2(clock_t *delay, void *arg2, status_$t *status);
+int8_t TIME_$WAIT2(uint16_t *delay_type, clock_t *delay, void *extra_ec,
+                   uint32_t *count, status_$t *status);
 
 /*
- * TIME_$GET_EC - Get event count for timer
+ * TIME_$GET_EC - Get time eventcount
+ *
+ * @param ec_id: Pointer to eventcount ID (0=clock, 1=fast_clock)
+ * @param ec_ret: Pointer to receive eventcount pointer
+ * @param status: Status return
  *
  * Original address: 0x00e1670a
  */
-void TIME_$GET_EC(void *ec_ret);
+void TIME_$GET_EC(uint16_t *ec_id, void **ec_ret, status_$t *status);
 
 /*
  * TIME_$GET_ADJUST - Get clock adjustment values
  *
+ * @param delta: Pointer to receive adjustment (seconds, microseconds pair)
+ *
  * Original address: 0x00e16aa8
  */
-void TIME_$GET_ADJUST(int32_t *skew, int32_t *delta);
+void TIME_$GET_ADJUST(int32_t *delta);
 
 /*
  * TIME_$SET_VECTOR - Set timer interrupt vector
  *
+ * Sets up the interrupt vector for the time subsystem.
+ * Writes the handler address to vector 0x78.
+ *
  * Original address: 0x00e2b102
  */
-void TIME_$SET_VECTOR(uint32_t vector);
+void TIME_$SET_VECTOR(void);
 
 /*
  * TIME_$READ_CAL - Read calendar from hardware
@@ -361,8 +389,18 @@ void TIME_$Q_FLUSH_QUEUE(time_queue_t *queue);
  * TIME_$Q_REENTER_ELEM - Re-enter an element into queue
  *
  * Original address: 0x00e16c8e
+ *
+ * Parameters:
+ *   queue - The queue to enter into
+ *   when - Target time for callback
+ *   flags - Flags (0 typically)
+ *   base_time - Base time reference
+ *   elem - Queue element with callback info
+ *   status - Status return
  */
-void TIME_$Q_REENTER_ELEM(time_queue_t *queue, time_queue_elem_t *elem);
+void TIME_$Q_REENTER_ELEM(time_queue_t *queue, clock_t *when, int16_t qflags,
+                          clock_t *base_time, time_queue_elem_t *elem,
+                          status_$t *status);
 
 /*
  * TIME_$Q_ENTER_ELEM - Enter an element into queue
@@ -433,29 +471,47 @@ void TIME_$ADVANCE_CALLBACK(void *arg);
 /*
  * TIME_$SET_ITIMER - Set interval timer
  *
+ * @param which: Pointer to timer type (0=ITIMER_REAL, 1=ITIMER_VIRTUAL, 2=ITIMER_PROF)
+ * @param value: Pointer to new value (clock_t format)
+ * @param interval: Pointer to new interval (clock_t format)
+ * @param ovalue: Pointer to receive old value (clock_t format)
+ * @param ointerval: Pointer to receive old interval (clock_t format)
+ * @param status: Status return
+ *
  * Original address: 0x00e58e58
  */
-void TIME_$SET_ITIMER(int which, void *value, void *ovalue, status_$t *status);
+void TIME_$SET_ITIMER(uint16_t *which, uint32_t *value, uint32_t *interval,
+                      uint32_t *ovalue, uint32_t *ointerval, status_$t *status);
 
 /*
  * TIME_$GET_ITIMER - Get interval timer
  *
+ * @param which: Pointer to timer ID
+ * @param value: Pointer to receive current value
+ * @param interval: Pointer to receive interval
+ *
  * Original address: 0x00e58f06
  */
-void TIME_$GET_ITIMER(int which, void *value, status_$t *status);
+void TIME_$GET_ITIMER(uint16_t *which, uint32_t *value, uint32_t *interval);
 
 /*
  * TIME_$SET_CPU_LIMIT - Set CPU time limit
  *
+ * @param limit: Pointer to limit value (clock_t)
+ * @param relative: Pointer to flag: 0 = absolute, non-zero = relative to current CPU time
+ * @param status: Status return
+ *
  * Original address: 0x00e58f64
  */
-void TIME_$SET_CPU_LIMIT(uint32_t limit, status_$t *status);
+void TIME_$SET_CPU_LIMIT(clock_t *limit, int8_t *relative, status_$t *status);
 
 /*
- * TIME_$RELEASE - Release timer resources
+ * TIME_$RELEASE - Release timer resources for current process
+ *
+ * Called during process cleanup to release interval timer resources.
  *
  * Original address: 0x00e58b58
  */
-void TIME_$RELEASE(void *arg);
+void TIME_$RELEASE(void);
 
 #endif /* TIME_H */

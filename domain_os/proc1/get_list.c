@@ -11,15 +11,7 @@
  *              2 bytes PID, 2 bytes type)
  */
 
-#include "proc1.h"
-
-/*
- * Process list entry structure (4 bytes)
- */
-typedef struct proc_list_entry_t {
-    uint16_t pid;       /* Process ID */
-    uint16_t type;      /* Process type */
-} proc_list_entry_t;
+#include "proc1/proc1_internal.h"
 
 void PROC1_$GET_LIST(int16_t *count_ret, proc_list_entry_t *list_ret)
 {

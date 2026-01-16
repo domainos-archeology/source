@@ -61,7 +61,7 @@ int_exit_check:
         /* On OS stack - restore saved SP */
         movea.l IO_$SAVED_OS_SP, %sp
         clr.l   IO_$SAVED_OS_SP
-        bra.s   int_exit_return
+        bra.w   int_exit_return
 
 int_exit_level0:
         /* Check if deferred interrupt work in progress */
@@ -136,4 +136,4 @@ int_exit_return:
 PROC1_$INT_EXIT:
 _PROC1_$INT_EXIT:
         ori.w   #0x0700, %sr            /* Disable interrupts */
-        bra.s   int_exit_check          /* Join common exit path */
+        bra.w   int_exit_check          /* Join common exit path */

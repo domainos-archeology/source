@@ -65,7 +65,8 @@ extern char PROC1_$VT_TIMER_DATA[];
 /*
  * Illegal process ID error - used when a function is called
  * with an invalid PID (0 or > 64).
+ * Defined in misc/crash_system.c
  */
-extern const status_$t Illegal_PID_Err;
+extern status_$t Illegal_PID_Err;
 
 #endif /* PROC1_INTERNAL_H */

@@ -25,6 +25,7 @@
  */
 
 #include "proc2/proc2_internal.h"
+#include "time/time.h"
 
 /* Eventcount arrays - base addresses for process eventcounts */
 #if defined(M68K)
@@ -62,7 +63,7 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     uint8_t local_flags;
     status_$t status;
     status_$t temp_status;
-    uint32_t creation_time;
+    clock_t creation_time;
     int16_t new_idx;
     int16_t current_idx;
     uint16_t new_pid;
@@ -205,7 +206,7 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
 
     /* Set creation timestamp */
     new_entry->pgroup_uid_idx = 0;
-    *(uint32_t*)((char*)new_entry + 0x56) = creation_time;
+    *(uint32_t*)((char*)new_entry + 0x56) = creation_time.high;
 
     /* Copy accounting info from parent */
     *(uint32_t*)((char*)new_entry + 0x60) = *(uint32_t*)((char*)current_entry + 0x60);

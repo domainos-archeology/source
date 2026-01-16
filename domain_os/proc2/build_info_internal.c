@@ -20,7 +20,7 @@
  */
 
 #include "proc2/proc2_internal.h"
-#include <string.h>
+#include "misc/string.h"
 
 /* Status codes */
 #define status_$proc2_not_level_2_process           0x00190002
@@ -112,7 +112,10 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
         memset(out->cpu_usage, 0, sizeof(out->cpu_usage));
     } else {
         /* Get PROC1 info */
-        PROC1_$GET_INFO((uint16_t)proc1_pid, out->proc1_info, status_ret);
+        {
+            int16_t pid_inout = proc1_pid;
+            PROC1_$GET_INFO(&pid_inout, (proc1_$info_t *)out->proc1_info, status_ret);
+        }
         if ((*status_ret & 0xFFFF) != 0) {
             *status_ret |= 0x80000000;  /* Set high bit on error */
             return;

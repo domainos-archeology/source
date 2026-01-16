@@ -143,12 +143,9 @@ extern void FUN_00e32ab2(void *, void *, void *, void **, void **, void *, void 
 extern void FUN_00e32b76(void *, short);
 extern void SIO6509_$INIT(void *, void *, void *, void **, void *);
 extern void SIO2681_$INIT(void *, void *, void *, void **, void *, void *, void **, void *, void *);
-extern void TTY_$I_ENABLE_CRASH_FUNC(void *handler, short key, unsigned char mask);
+/* TTY_$I_ENABLE_CRASH_FUNC is declared in tty/tty.h */
 extern void SUMA_$INIT(void);
 
-/*
- * UID constant
- */
-extern uid_t UID_$NIL;  // at 0xe1737c - the nil/invalid UID constant
+/* UID_$NIL is declared in base/base.h */
 
 #endif /* TERM_INTERNAL_H */

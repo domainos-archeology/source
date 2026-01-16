@@ -26,8 +26,9 @@ typedef struct ts_callback_block_t {
     uint16_t pid;           /* 0x0a: Process ID */
 } ts_callback_block_t;
 
-void PROC1_$TS_END_CALLBACK(ts_callback_info_t *timer_info)
+void PROC1_$TS_END_CALLBACK(void *arg)
 {
+    ts_callback_info_t *timer_info = (ts_callback_info_t *)arg;
     proc1_t *pcb;
     uint16_t pid;
     int16_t new_state;

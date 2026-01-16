@@ -19,7 +19,6 @@
  */
 
 #include "time/time_internal.h"
-#include "cal/cal.h"
 #include "arch/m68k/arch.h"
 
 /* Maximum adjustment allowed (8000 seconds) */

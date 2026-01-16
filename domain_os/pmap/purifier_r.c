@@ -11,6 +11,7 @@
  */
 
 #include "pmap/pmap_internal.h"
+#include "math/math.h"
 
 /* PMAPE base addresses */
 #if defined(M68K)
@@ -34,7 +35,8 @@ void PMAP_$PURIFIER_R(void)
     uint32_t page_counts[3];
     uint16_t page_count;
     status_$t status[2];
-    ulong *wait_value;
+    int32_t wait_value;
+    ec_$eventcount_t *wait_ecs[3];
     uint32_t scan_time;
     uint32_t recalc_time;
     uint32_t carryover;
@@ -52,7 +54,12 @@ void PMAP_$PURIFIER_R(void)
 
     /* Initialize timing */
     scan_time = TIME_$CLOCKH + 0xE4;
-    wait_value = (ulong *)(PMAP_$R_PURIFIER_EC.value + 1);
+    wait_value = PMAP_$R_PURIFIER_EC.value + 1;
+
+    /* Set up eventcount array for EC_$WAIT (NULL-terminated) */
+    wait_ecs[0] = &PMAP_$R_PURIFIER_EC;
+    wait_ecs[1] = NULL;
+    wait_ecs[2] = NULL;
 
     carryover = 0;
     carryover_delta = 0;
@@ -61,14 +68,14 @@ void PMAP_$PURIFIER_R(void)
     /* Main purifier loop - runs forever */
     for (;;) {
         /* Wait for purifier signal */
-        EC_$WAIT(&PMAP_$R_PURIFIER_EC, wait_value);
+        EC_$WAIT(wait_ecs, &wait_value);
 
         /* Timing-based carryover updates */
         if ((int32_t)scan_time <= TIME_$CLOCKH) {
             /* Periodic recalculation of carryover rate */
             if (recalc_time <= scan_time) {
                 recalc_time = scan_time + 0xE4;
-                carryover_delta = M_DIU_LLW(DAT_00e23344 + 5, 6);
+                carryover_delta = M$DIU$LLW(DAT_00e23344 + 5, 6);
             }
 
             scan_time += 0x26;  /* ~38 ticks */
@@ -144,7 +151,7 @@ void PMAP_$PURIFIER_R(void)
         }
 
         /* Update wait value for next iteration */
-        wait_value = (ulong *)(PMAP_$R_PURIFIER_EC.value + 1);
+        wait_value = PMAP_$R_PURIFIER_EC.value + 1;
 
         ML_$UNLOCK(PMAP_LOCK_ID);
     }

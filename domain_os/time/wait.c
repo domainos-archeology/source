@@ -35,7 +35,7 @@ void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status)
     clock_t abs_clock;
     uint8_t elem_storage[32];  /* Queue element storage */
     uint16_t in_use_flag;
-    void *ec;
+    ec_$eventcount_t ec;
     status_$t local_status;
 
     *status = status_$ok;
@@ -62,7 +62,7 @@ void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status)
     }
 
     /* Schedule the timer callback */
-    TIME_$ADVANCE(&dtype, &local_delay, ec, elem_storage, &local_status);
+    TIME_$ADVANCE(&dtype, &local_delay, &ec, elem_storage, &local_status);
 
     if (local_status != status_$ok) {
         *status = local_status;

@@ -8,7 +8,7 @@ static char cond_read_flag;       // 0xe66896
 //
 // Determines whether to use blocking or conditional read based on
 // the terminal's flag settings, then calls TTY_$K_GET.
-unsigned short TERM_$READ(short *line_ptr, unsigned int buffer, void *param3,
+unsigned short TERM_$READ(short *line_ptr, void *buffer, void *param3,
                           status_$t *status_ret) {
     short real_line;
     unsigned short result;
@@ -17,7 +17,7 @@ unsigned short TERM_$READ(short *line_ptr, unsigned int buffer, void *param3,
 
     real_line = TERM_$GET_REAL_LINE(*line_ptr, status_ret);
     if (*status_ret != status_$ok) {
-        return buffer & 0xFFFF;
+        return 0;
     }
 
     dtte = &TERM_$DATA.dtte[real_line];

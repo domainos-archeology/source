@@ -69,7 +69,7 @@ void PROC2_$SET_VALID(void)
     if (stack_uid_ptr->high == UID_$NIL.high && stack_uid_ptr->low == UID_$NIL.low) {
         /* Initialize stack mapping parameters in creation record */
         cr_rec->addr_lo = AS_$STACK_FILE_LOW;
-        cr_rec->size = AS_$INIT_STACK_FILE_SIZE;
+        cr_rec->size = AS_$INIT_STACK_FILE_SIZE.value;
 
         /* Map the stack area */
         MST_$MAP_AREA_AT(&cr_rec->addr_lo, &cr_rec->size,

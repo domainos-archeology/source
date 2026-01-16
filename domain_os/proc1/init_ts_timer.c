@@ -9,7 +9,9 @@
  *   pid - Process ID to initialize timer for
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
+#include "time/time.h"
+#include "cal/cal.h"
 
 #define TS_QUEUE_ELEM_SIZE      0x0c    /* 12 bytes per queue element */
 
@@ -47,7 +49,7 @@ void PROC1_$INIT_TS_TIMER(uint16_t pid)
     entry->cpu_time_low = time_low;
 
     /* Add delta to get target time */
-    ADD48(&entry->cpu_time_high, &delta_high);
+    ADD48((clock_t *)&entry->cpu_time_high, (clock_t *)&delta_high);
 
     /* Set up callback */
     entry->callback = PROC1_$TS_END_CALLBACK;
@@ -58,5 +60,6 @@ void PROC1_$INIT_TS_TIMER(uint16_t pid)
     queue_elem = &TS_QUEUE_TABLE[pid * TS_QUEUE_ELEM_SIZE] - 0xC;
 
     /* Enter timer into queue */
-    TIME_$Q_ENTER_ELEM(queue_elem, &time_high, callback_info, &status);
+    TIME_$Q_ENTER_ELEM((time_queue_t *)queue_elem, (clock_t *)&time_high,
+                       (time_queue_elem_t *)callback_info, &status);
 }

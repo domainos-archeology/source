@@ -17,6 +17,14 @@
 #define ARCH_M68K_INTR_H
 
 /*
+ * Status Register (SR) bit definitions
+ */
+#define SR_IPL_MASK             0x0700  /* Interrupt priority level bits */
+#define SR_IPL_DISABLE_ALL      0x0700  /* Disable all interrupts (IPL=7) */
+#define SR_SUPERVISOR           0x2000  /* Supervisor mode bit */
+#define SR_TRACE                0x8000  /* Trace mode bit */
+
+/*
  * DISABLE_INTERRUPTS - Save SR and raise interrupt priority to 7
  *
  * This macro must be paired with ENABLE_INTERRUPTS in the same scope.

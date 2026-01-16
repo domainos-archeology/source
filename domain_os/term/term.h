@@ -107,7 +107,7 @@ extern void TERM_$INQ_DISCIPLINE(short *line_ptr,
                                  unsigned short *discipline_ret,
                                  status_$t *status_ret);
 extern void TERM_$INIT(short *param1, short *param2);
-extern unsigned short TERM_$READ(short *line_ptr, unsigned int buffer,
+extern unsigned short TERM_$READ(short *line_ptr, void *buffer,
                                  void *param3, status_$t *status_ret);
 extern unsigned short TERM_$READ_COND(void *line_ptr, void *buffer,
                                       void *param3, status_$t *status_ret);

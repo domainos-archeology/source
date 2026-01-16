@@ -24,6 +24,7 @@
 
 #include "proc2/proc2_internal.h"
 #include "misc/misc.h"
+#include "time/time.h"
 
 /* FIM globals for user FIM address */
 #if defined(M68K)
@@ -61,7 +62,7 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
 {
     status_$t status;
     status_$t temp_status;
-    uint32_t creation_time;
+    clock_t creation_time;
     int16_t new_idx;
     int16_t parent_idx;
     uint16_t new_pid;
@@ -205,7 +206,7 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
     new_entry->first_debug_target_idx = parent_idx;
 
     /* Set creation timestamp */
-    *(uint32_t*)((char*)new_entry + 0x56) = creation_time;
+    *(uint32_t*)((char*)new_entry + 0x56) = creation_time.high;
 
     /* Set bit 3 of high byte of flags */
     *(uint8_t*)((char*)new_entry + 0x2B) |= 0x08;

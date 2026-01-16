@@ -31,7 +31,7 @@ int8_t TIME_$WAIT2(uint16_t *delay_type, clock_t *delay, void *extra_ec,
     uint16_t dtype;
     uint8_t elem_storage[32];
     uint16_t in_use_flag;
-    void *timer_ec;
+    ec_$eventcount_t timer_ec;
     status_$t local_status;
     int16_t wait_result;
 
@@ -43,7 +43,7 @@ int8_t TIME_$WAIT2(uint16_t *delay_type, clock_t *delay, void *extra_ec,
     EC_$INIT(&timer_ec);
 
     /* Schedule the timer callback */
-    TIME_$ADVANCE(&dtype, delay, timer_ec, elem_storage, &local_status);
+    TIME_$ADVANCE(&dtype, delay, &timer_ec, elem_storage, &local_status);
 
     if (local_status != status_$ok) {
         CRASH_SYSTEM(&local_status);

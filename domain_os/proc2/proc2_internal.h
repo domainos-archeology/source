@@ -51,16 +51,16 @@ void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry);
 void PROC2_$CLEANUP_HANDLERS_INTERNAL(proc2_info_t *entry);
 
 /* Signal delivery */
-void PROC2_$DELIVER_SIGNAL_INTERNAL(int16_t index, int16_t signal,
-                                     uint32_t param, int8_t flag);
+uint32_t PROC2_$DELIVER_SIGNAL_INTERNAL(int16_t proc_index, int16_t signal,
+                                         int32_t param, status_$t *status_ret);
 
 /* Build process info structure */
 void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
-                                 void *info, uint16_t *info_len);
+                                 void *info, status_$t *status_ret);
 
 /* Signal event logging */
-void PROC2_$LOG_SIGNAL_EVENT(int16_t event_type, int16_t target_idx,
-                              int16_t signal, uint32_t param);
+void PROC2_$LOG_SIGNAL_EVENT(uint16_t event_type, int16_t target_idx,
+                              uint16_t signal, uint32_t param, int32_t success);
 
 /* Debug setup and teardown */
 void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag);
@@ -68,6 +68,11 @@ void DEBUG_CLEAR_INTERNAL(int16_t proc_idx, int8_t flag);
 
 /* Process group cleanup */
 void PGROUP_CLEANUP_INTERNAL(proc2_info_t *entry, int16_t mode);
+
+/* Signal process group internal implementation */
+void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,
+                                    uint32_t param, int8_t check_perms,
+                                    status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -83,11 +88,12 @@ void FUN_00e0a96c(void);
 
 /* Wait helper - collect child status */
 void FUN_00e3fc5c(int16_t child_idx, uint16_t options, int16_t parent_idx,
-                  uint32_t *result, status_$t *status);
+                  int16_t prev_idx, int8_t *found, uint32_t *result,
+                  int16_t *pid_ret);
 
 /* Wait helper - process zombie */
 void FUN_00e3fd06(int16_t zombie_idx, uint16_t options,
-                  int16_t *pid_ret, uint32_t *result, status_$t *status);
+                  int8_t *found, uint32_t *result, int16_t *pid_ret);
 
 /* Child list manipulation */
 void FUN_00e40df4(int16_t child_idx, int16_t prev_sibling_idx);
@@ -139,22 +145,6 @@ void FIM_$POP_SIGNAL(void *context);
 
 /*
  * ============================================================================
- * External Module Functions - MST (not in mst.h)
- * ============================================================================
- */
-
-void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
-                           void *param4, status_$t *status);
-void MST_$MAP_AREA_AT(void *addr_ptr, void *size_ptr, void *param1, void *param2,
-                      void *param3, status_$t *status);
-void MST_$MAP(uid_t *uid, void *param1, void *param2, void *param3,
-              void *param4, status_$t *status);
-void MST_$MAP_AT(void *start, uid_t *uid, void *param1, void *param2, void *param3,
-                 void *param4, status_$t *status);
-void MST_$UNMAP(uid_t *uid, void *param1, void *param2, status_$t *status_ret);
-
-/*
- * ============================================================================
  * External Module Functions - NAME
  * ============================================================================
  */
@@ -182,7 +172,7 @@ void FILE_$PRIV_UNLOCK_ALL(void *asid_ptr);
 
 void AUDIT_$INHERIT_AUDIT(int16_t *pid_ptr, int16_t *status_ptr);
 void AUDIT_$LOG_EVENT(void *event_header, uint16_t *success_flag,
-                       void *param3, status_$t *status);
+                       void *success, void *param, void *extra);
 
 /*
  * ============================================================================

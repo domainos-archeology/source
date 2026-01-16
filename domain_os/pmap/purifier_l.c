@@ -11,7 +11,22 @@
  */
 
 #include "pmap/pmap_internal.h"
+#include "ast/ast.h"
+#include "cal/cal.h"
 #include "misc/misc.h"
+#include "math/math.h"
+
+/* External working set list high mark array */
+extern uint16_t MMAP_$WSL_HI_MARK[];
+
+/* Short wait delay for working set scanning */
+extern clock_t PMAP_$SHORT_WAIT_DELAY;
+
+/* Network diskless flag */
+extern int8_t NETWORK_$DISKLESS;
+
+/* Disk checksum control flag */
+extern int8_t DISK_$DO_CHKSUM;
 
 /* WSL base */
 #if defined(M68K)
@@ -47,7 +62,8 @@ void PMAP_$PURIFIER_L(void)
     status_$t status;
     int32_t qblk_main;
     int32_t qblk_alt[3];
-    ulong *wait_value;
+    int32_t wait_value;
+    ec_$eventcount_t *wait_ecs[3];
     uint32_t scan_time;
     uint32_t log_time;
     uint32_t shutdown_time;
@@ -73,7 +89,12 @@ void PMAP_$PURIFIER_L(void)
 
     /* Initialize timing */
     scan_time = TIME_$CLOCKH + 0xE4;  /* ~228 ticks */
-    wait_value = (ulong *)(PMAP_$L_PURIFIER_EC.value + 1);
+    wait_value = PMAP_$L_PURIFIER_EC.value + 1;
+
+    /* Set up eventcount array for EC_$WAIT (NULL-terminated) */
+    wait_ecs[0] = &PMAP_$L_PURIFIER_EC;
+    wait_ecs[1] = NULL;
+    wait_ecs[2] = NULL;
 
     /* Calculate initial thresholds */
     PMAP_$LOW_THRESH = (uint16_t)(MMAP_$PAGEABLE_PAGES_LOWER_LIMIT / 0x32);
@@ -92,7 +113,7 @@ void PMAP_$PURIFIER_L(void)
     /* Main purifier loop - runs forever */
     for (;;) {
         /* Wait for purifier signal */
-        EC_$WAIT(&PMAP_$L_PURIFIER_EC, wait_value);
+        EC_$WAIT(wait_ecs, &wait_value);
 
         ML_$LOCK(PMAP_LOCK_ID);
         did_advance = 0;
@@ -160,7 +181,7 @@ void PMAP_$PURIFIER_L(void)
                 FUN_00e1327e(batch_pages, qblk_main, page_count);
 
                 /* Write pages to disk */
-                DISK_$WRITE_MULTI(0xFF, qblk_main, &status);
+                DISK_$WRITE_MULTI(0xFF, (void *)(uintptr_t)qblk_main, NULL, &status);
                 if (status != 0) {
                     CRASH_SYSTEM(&status);
                 }
@@ -226,7 +247,7 @@ void PMAP_$PURIFIER_L(void)
         } while (0);  /* Single iteration with break logic */
 
         /* Update wait value for next iteration */
-        wait_value = (ulong *)(PMAP_$L_PURIFIER_EC.value + 1);
+        wait_value = PMAP_$L_PURIFIER_EC.value + 1;
 
         /* Working set scanning when pages are low */
         total_pages = DAT_00e23320 + total_pages;
@@ -288,7 +309,7 @@ void PMAP_$PURIFIER_L(void)
 
 wait_and_continue:
             ML_$UNLOCK(PMAP_LOCK_ID);
-            TIME_$WAIT(&DAT_00e1416a, &DAT_00e254dc, &status);
+            TIME_$WAIT(&PMAP_$SHORT_WAIT_DELAY, &status);
             ML_$LOCK(PMAP_LOCK_ID);
 
             total_pages = DAT_00e232b4 + DAT_00e232d8 + DAT_00e232fc +
@@ -330,11 +351,11 @@ wait_and_continue:
 
         /* Periodic log flush and threshold recalculation */
         if (log_time <= scan_time) {
-            carryover_delta = M_DIU_LLW(DAT_00e23320 + 0x0B, 0x0C);
+            carryover_delta = M$DIU$LLW(DAT_00e23320 + 0x0B, 0x0C);
             PMAP_$LOW_THRESH = (uint16_t)((PMAP_$LOW_THRESH +
-                M_DIU_LLW(MMAP_$PAGEABLE_PAGES_LOWER_LIMIT, 0x32)) >> 1);
+                M$DIU$LLW(MMAP_$PAGEABLE_PAGES_LOWER_LIMIT, 0x32)) >> 1);
             PMAP_$MID_THRESH = (uint16_t)((PMAP_$MID_THRESH +
-                M_DIU_LLW(MMAP_$PAGEABLE_PAGES_LOWER_LIMIT, 0x14)) >> 1);
+                M$DIU$LLW(MMAP_$PAGEABLE_PAGES_LOWER_LIMIT, 0x14)) >> 1);
 
             int32_t log_vpn = LOG_$UPDATE();
             if (log_vpn != 0) {

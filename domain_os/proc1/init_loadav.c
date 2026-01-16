@@ -6,7 +6,12 @@
  * callback to update them.
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
+#include "time/time.h"
+#include "cal/cal.h"
+
+/* Forward declaration for callback */
+extern void PROC1_$LOADAV_CALLBACK(void *arg);
 
 /*
  * Callback interval: 0x0013:12d0 = 5 seconds in clock ticks
@@ -18,10 +23,8 @@
 void PROC1_$INIT_LOADAV(void)
 {
     status_$t status;
-    uint32_t current_time_high;
-    uint16_t current_time_low;
-    uint32_t delta_high;
-    uint16_t delta_low;
+    clock_t current_time;
+    clock_t delta;
     ts_timer_entry_t *loadav_entry;
 
     /*
@@ -44,26 +47,19 @@ void PROC1_$INIT_LOADAV(void)
     loadav_entry->callback_param = 0;
 
     /* Set up interval (5 seconds) */
-    delta_high = 0;
-    delta_low = 0;
-    /* Pack 0x0013:12d0 into the interval fields */
-    ((uint16_t*)&delta_high)[0] = 0;      /* High word */
-    ((uint16_t*)&delta_high)[1] = LOADAV_INTERVAL_HIGH;  /* Low word of high */
-    delta_low = LOADAV_INTERVAL_LOW;
-
-    /* Store interval in entry (fields not explicitly modeled yet) */
-    /* For now just set target time */
+    delta.high = LOADAV_INTERVAL_HIGH;
+    delta.low = LOADAV_INTERVAL_LOW;
 
     /* Get current time */
-    TIME_$CLOCK(&current_time_high);
+    TIME_$CLOCK(&current_time);
 
     /* Add interval to get target time */
-    ADD48(&delta_high, &current_time_high);
+    ADD48(&delta, &current_time);
 
     /* Store target time */
-    loadav_entry->cpu_time_high = delta_high;
-    loadav_entry->cpu_time_low = delta_low;
+    loadav_entry->cpu_time_high = delta.high;
+    loadav_entry->cpu_time_low = delta.low;
 
     /* Schedule the callback on the real-time event queue */
-    TIME_$Q_ENTER_ELEM(&TIME_$RTEQ, &current_time_high, loadav_entry->callback_info, &status);
+    TIME_$Q_ENTER_ELEM(&TIME_$RTEQ, &current_time, loadav_entry->callback_info, &status);
 }

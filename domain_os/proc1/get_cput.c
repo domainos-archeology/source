@@ -11,7 +11,8 @@
  * Note: PROC1_$GET_CPUT8 (at 0x00e2089c) returns the unshifted value.
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
+#include "time/time.h"
 
 /*
  * get_current_cpu_time - Internal helper to compute current CPU time

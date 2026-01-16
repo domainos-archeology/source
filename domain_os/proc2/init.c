@@ -399,8 +399,8 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
         uint32_t map_param4 = 0x00000000;  /* No fixed address */
         uint32_t map_param5 = 0x00000001;  /* Normal mode */
 
-        MST_$MAP(&boot_shell_uid, &map_param1, &map_param2, &map_param3,
-                 &map_param4, &map_param5, map_result, status_ret);
+        MST_$MAP(&boot_shell_uid, &map_param1, &map_param2, (uint16_t*)&map_param3,
+                 &map_param4, (uint8_t*)&map_param5, (int32_t*)map_result, status_ret);
 
         status = OS_$BOOT_ERRCHK((char*)msg_unable_to_map, (char*)boot_shell_path,
                                   (uint16_t*)&path_len, status_ret);
@@ -416,7 +416,7 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
         {
             uint8_t unmap_result[8];
 
-            MST_$UNMAP(&boot_shell_uid, map_result, unmap_result, status_ret);
+            MST_$UNMAP(&boot_shell_uid, (uint32_t*)map_result, (uint32_t*)unmap_result, status_ret);
 
             status = OS_$BOOT_ERRCHK((char*)msg_unable_to_unmap, (char*)boot_shell_path,
                                       (uint16_t*)&path_len, status_ret);

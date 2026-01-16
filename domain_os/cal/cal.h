@@ -1,10 +1,11 @@
+#ifndef CAL_H
+#define CAL_H
+
 #include "base/base.h"
 #include "math/math.h"
 #include "time/time.h"
 
-typedef long status_$t;
-
-#define status_$ok 0
+/* status_$t and status_$ok are defined in base/base.h */
 #define status_$cal_refused 0x150007
 #define status_$cal_date_or_time_invalid 0x150002
 
@@ -36,7 +37,8 @@ extern int8_t NETWORK_$REALLY_DISKLESS;
 
 // 48-bit arithmetic
 extern void ADD48(clock_t *dst, clock_t *src);
-extern void SUB48(clock_t *dst, clock_t *src);
+// Returns -1 if result is non-negative, 0 if result is negative
+extern int8_t SUB48(clock_t *dst, clock_t *src);
 
 // CAL functions
 extern void CAL_$SEC_TO_CLOCK(uint *sec, clock_t *clock_ret);
@@ -56,3 +58,5 @@ extern char CAL_$VERIFY(int *max_allowed_delta, void *param_2, char *param_3,
 extern void CAL_$WRITE_CALENDAR(short *year, short *month, short *day,
                                 short *weekday, short *hour, short *minute,
                                 short *second);
+
+#endif /* CAL_H */

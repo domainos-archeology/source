@@ -81,7 +81,7 @@ extern uint32_t MMAP_$WS_SCAN_CNT;                // Working set scan count
 extern uint32_t MMAP_$RECLAIM_SHAR_CNT;           // Shared reclaim count
 extern uint32_t MMAP_$RECLAIM_PUR_CNT;            // Purge reclaim count
 extern uint32_t MMAP_$WS_REMOVE;                  // Working set remove count
-extern uint16_t MMAP_$WSL_HI_MARK;                // Working set list high mark
+extern uint16_t MMAP_$WSL_HI_MARK[];              // Working set list high mark (per-pid)
 extern uint32_t MMAP_$LPPN;                       // Lowest physical page number
 extern uint32_t MMAP_$HPPN; // Highest physical page number
 

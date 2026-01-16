@@ -11,7 +11,8 @@
  *   timeslice - Timeslice value (in timer ticks)
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
+#include "time/time.h"
 
 /* Size of timer queue element (12 bytes) */
 #define TS_QUEUE_ELEM_SIZE  12
@@ -46,6 +47,7 @@ void PROC1_$SET_TS(proc1_t *pcb, int16_t timeslice)
     queue_elem = &TS_QUEUE_TABLE[pid * TS_QUEUE_ELEM_SIZE] - 0xC;
 
     /* Schedule the timer callback */
-    TIME_$Q_REENTER_ELEM(queue_elem, &time_high, 0, &pcb->cpu_total,
-                         callback_info, &status);
+    TIME_$Q_REENTER_ELEM((time_queue_t *)queue_elem, (clock_t *)&time_high, 0,
+                         (clock_t *)&pcb->cpu_total,
+                         (time_queue_elem_t *)callback_info, &status);
 }

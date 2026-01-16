@@ -33,7 +33,7 @@ void TIME_$SET_ITIMER_VIRT_CALLBACK(void *arg)
 
     if (interval_high != 0 || interval_low != 0) {
         /* Send SIGVTALRM to the process */
-        void *uid = &PROC2_UID[as_id * 8];
+        void *uid = (void *)((char *)&PROC2_UID + (as_id << 3));
         uint16_t sig_num = SIGVTALRM;
         uint32_t sig_code = 0;
         PROC2_$SIGNAL_OS(uid, &sig_num, &sig_code, &status);

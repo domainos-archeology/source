@@ -15,6 +15,7 @@
 
 #include "proc1/proc1_internal.h"
 #include "misc/misc.h"
+#include "cal/cal.h"
 
 void PROC1_$GET_ANY_CPU_USAGE(uint16_t *pid_ptr, void *cpu_time_ret,
                                uint32_t *stat1_ret, uint32_t *stat2_ret)
@@ -39,7 +40,7 @@ void PROC1_$GET_ANY_CPU_USAGE(uint16_t *pid_ptr, void *cpu_time_ret,
     ((uint16_t*)cpu_time_ret)[2] = pcb->cpu_usage;
 
     /* Add current accumulated time (48-bit addition) */
-    ADD48(cpu_time_ret, &pcb->cpu_total);
+    ADD48((clock_t *)cpu_time_ret, (clock_t *)&pcb->cpu_total);
 
     /* Return additional statistics from PCB */
     *stat1_ret = pcb->field_60;

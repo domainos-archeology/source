@@ -13,6 +13,7 @@
  */
 
 #include "proc2/proc2_internal.h"
+#include "misc/string.h"
 
 void PROC2_$GET_INFO(uid_t *proc_uid, void *info, uint16_t *info_len, status_$t *status_ret)
 {

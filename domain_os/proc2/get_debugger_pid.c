@@ -19,7 +19,7 @@ uint16_t PROC2_$GET_DEBUGGER_PID(void)
     proc2_info_t *debugger_entry;
 
     /* Get my proc2 index from PID mapping table */
-    my_index = P2_PID_TO_INDEX(PROC1_CURRENT);
+    my_index = P2_PID_TO_INDEX(PROC1_$CURRENT);
 
     entry = P2_INFO_ENTRY(my_index);
 

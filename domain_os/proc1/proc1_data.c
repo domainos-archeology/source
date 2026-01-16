@@ -165,11 +165,7 @@ ec_$eventcount_t PROC1_$SUSPEND_EC = { 0 };
  * ============================================================================
  */
 
-/*
- * Illegal process ID error
- * Used when a function is called with PID 0 or PID > 64
- */
-const status_$t Illegal_PID_Err = status_$illegal_process_id;
+/* Illegal_PID_Err is now defined in misc/crash_system.c */
 
 /*
  * ============================================================================

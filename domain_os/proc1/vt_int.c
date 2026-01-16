@@ -9,7 +9,8 @@
  *   cpu_time_out - Pointer to receive CPU time (6 bytes: 4-byte high + 2-byte low)
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
+#include "cal/cal.h"
 
 /*
  * CPU time structure (6 bytes total)
@@ -20,8 +21,9 @@ typedef struct {
     uint16_t low;    /* Low 16 bits */
 } cpu_time_t;
 
-void PROC1_$VT_INT(cpu_time_t *cpu_time_out)
+void PROC1_$VT_INT(void *cpu_time_arg)
 {
+    cpu_time_t *cpu_time_out = (cpu_time_t *)cpu_time_arg;
     proc1_t *pcb;
     cpu_time_t delta;
 
@@ -32,7 +34,7 @@ void PROC1_$VT_INT(cpu_time_t *cpu_time_out)
     delta.low = pcb->vtimer;
 
     /* Add delta to accumulated CPU time (48-bit addition) */
-    ADD48(&pcb->cpu_total, &delta);
+    ADD48((clock_t *)&pcb->cpu_total, (clock_t *)&delta);
 
     /* Reset virtual timer */
     pcb->vtimer = 0;

@@ -11,7 +11,8 @@
  *   stat2_ret - Pointer to receive field_64 from PCB
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
+#include "time/time.h"
 
 void PROC1_$GET_CPU_USAGE(void *time_ret, uint32_t *stat1_ret, uint32_t *stat2_ret)
 {

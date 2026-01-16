@@ -18,7 +18,7 @@ void PROC2_$GET_TTY_DATA(uid_t *tty_uid, uint16_t *tty_flags)
     proc2_info_t *entry;
 
     /* Get my proc2 index from PID mapping table */
-    my_index = P2_PID_TO_INDEX(PROC1_CURRENT);
+    my_index = P2_PID_TO_INDEX(PROC1_$CURRENT);
 
     entry = P2_INFO_ENTRY(my_index);
 
@@ -26,6 +26,7 @@ void PROC2_$GET_TTY_DATA(uid_t *tty_uid, uint16_t *tty_flags)
     tty_uid->high = entry->tty_uid.high;
     tty_uid->low = entry->tty_uid.low;
 
-    /* Copy TTY flags */
-    *tty_flags = entry->tty_flags;
+    /* Copy TTY flags (session_id field used for TTY flags) */
+    /* TODO: Verify this is the correct field for tty_flags */
+    *tty_flags = entry->session_id;
 }

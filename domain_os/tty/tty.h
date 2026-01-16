@@ -248,21 +248,21 @@ extern void TTY_$I_ENABLE_CRASH_FUNC(tty_desc_t *tty, uint8_t ch, char enable);
 
 // TTY_$K_GET - Read characters from TTY
 // @param line_ptr: Pointer to terminal line number
-// @param options: Read options
+// @param options: Pointer to read options structure (2-byte flags)
 // @param buffer: Buffer to receive characters
 // @param count: Pointer to max count (updated with actual count)
 // @param status: Pointer to receive status code
 // @return: Number of characters read
-extern ushort TTY_$K_GET(short *line_ptr, int options, void *buffer,
+extern ushort TTY_$K_GET(short *line_ptr, void *options, void *buffer,
                          ushort *count, status_$t *status);
 
 // TTY_$K_PUT - Write characters to TTY
 // @param line_ptr: Pointer to terminal line number
-// @param options: Write options
+// @param options: Pointer to write options structure (2-byte flags)
 // @param buffer: Buffer containing characters
 // @param count: Pointer to count of characters (updated on return)
 // @param status: Pointer to receive status code
-extern void TTY_$K_PUT(short *line_ptr, int options, void *buffer,
+extern void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
                        ushort *count, status_$t *status);
 
 // TTY_$K_FLUSH_INPUT - Flush input buffer (kernel level)
@@ -304,7 +304,7 @@ extern void TTY_$K_INQ_FLAGS(short *line_ptr, uint16_t *flags_ptr,
 
 // TTY_$K_SET_FUNC_CHAR - Set function character binding
 // @param line_ptr: Pointer to terminal line number
-// @param func_ptr: Pointer to function number
+// @param func_ptr: Pointer to function number (0-17)
 // @param ch_ptr: Pointer to character value
 // @param status: Pointer to receive status code
 extern void TTY_$K_SET_FUNC_CHAR(short *line_ptr, ushort *func_ptr,
@@ -312,7 +312,7 @@ extern void TTY_$K_SET_FUNC_CHAR(short *line_ptr, ushort *func_ptr,
 
 // TTY_$K_INQ_FUNC_CHAR - Inquire function character binding
 // @param line_ptr: Pointer to terminal line number
-// @param func_ptr: Pointer to function number
+// @param func_ptr: Pointer to function number (0-17)
 // @param ch_ptr: Pointer to receive character value
 // @param status: Pointer to receive status code
 extern void TTY_$K_INQ_FUNC_CHAR(short *line_ptr, ushort *func_ptr,
@@ -320,8 +320,8 @@ extern void TTY_$K_INQ_FUNC_CHAR(short *line_ptr, ushort *func_ptr,
 
 // TTY_$K_ENABLE_FUNC - Enable/disable function character
 // @param line_ptr: Pointer to terminal line number
-// @param func_ptr: Pointer to function number
-// @param enable_ptr: Pointer to enable flag (nonzero = enable)
+// @param func_ptr: Pointer to function number (0-17)
+// @param enable_ptr: Pointer to enable flag (negative = enable, zero/positive = disable)
 // @param status: Pointer to receive status code
 extern void TTY_$K_ENABLE_FUNC(short *line_ptr, ushort *func_ptr,
                                char *enable_ptr, status_$t *status);
@@ -335,8 +335,8 @@ extern void TTY_$K_INQ_FUNC_ENABLED(short *line_ptr, uint32_t *enabled_ptr,
 
 // TTY_$K_SET_INPUT_FLAG - Set input processing flag
 // @param line_ptr: Pointer to terminal line number
-// @param flag_ptr: Pointer to flag number
-// @param value_ptr: Pointer to value (nonzero = set)
+// @param flag_ptr: Pointer to flag number (bit position)
+// @param value_ptr: Pointer to value (negative = set, zero/positive = clear)
 // @param status: Pointer to receive status code
 extern void TTY_$K_SET_INPUT_FLAG(short *line_ptr, ushort *flag_ptr,
                                   char *value_ptr, status_$t *status);
@@ -350,8 +350,8 @@ extern void TTY_$K_INQ_INPUT_FLAGS(short *line_ptr, uint32_t *flags_ptr,
 
 // TTY_$K_SET_OUTPUT_FLAG - Set output processing flag
 // @param line_ptr: Pointer to terminal line number
-// @param flag_ptr: Pointer to flag number
-// @param value_ptr: Pointer to value (nonzero = set)
+// @param flag_ptr: Pointer to flag number (bit position)
+// @param value_ptr: Pointer to value (negative = set, zero/positive = clear)
 // @param status: Pointer to receive status code
 extern void TTY_$K_SET_OUTPUT_FLAG(short *line_ptr, ushort *flag_ptr,
                                    char *value_ptr, status_$t *status);

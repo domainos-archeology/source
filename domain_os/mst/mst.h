@@ -165,12 +165,14 @@ uint32_t MST_$TOUCH(uint32_t virtual_addr, status_$t *status_ret,
 void MST_$MAP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
               uint16_t *area_id_ptr, uint32_t *area_size_ptr,
               uint8_t *rights_ptr, int32_t *mapped_len, status_$t *status_ret);
-void MST_$MAP_AT(void);
+void MST_$MAP_AT(void *start, uid_t *uid, void *param1, void *param2, void *param3,
+                 void *param4, void *param5, void *result, status_$t *status);
 void MST_$MAP_CANNED_AT(uint32_t va, uid_t *uid, uint32_t param3, uint32_t param4,
                         uint32_t flags, uint32_t param6, uint32_t param7,
                         status_$t *status);
 void MST_$MAP_AREA(void);
-void MST_$MAP_AREA_AT(void);
+void MST_$MAP_AREA_AT(void *addr_ptr, void *size_ptr, void *param1, void *param2,
+                      void *param3, status_$t *status);
 void MST_$MAP_GLOBAL(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
                      uint16_t *area_id_ptr, uint32_t *area_size_ptr,
                      uint8_t *rights_ptr, int32_t *mapped_len,
@@ -179,7 +181,8 @@ void MST_$MAP_TOP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
                   uint16_t *area_id_ptr, uint32_t *area_size_ptr,
                   uint8_t *rights_ptr, int32_t *mapped_len,
                   status_$t *status_ret);
-void MST_$MAP_INITIAL_AREA(void);
+void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
+                           uint32_t map_param, uint32_t flags, status_$t *status);
 void MST_$MAPS(void);
 void MST_$MAPS_AT(void);
 void MST_$REMAP(void);
@@ -222,7 +225,7 @@ void MST_$PRIV_SET_TOUCH_AHEAD_CNT(void);
 void MST_$SET_TOUCH_AHEAD_CNT(void);
 
 /* Fork support */
-void MST_$FORK(void);
+void MST_$FORK(uint16_t asid, uint16_t pid, uint8_t flags, status_$t *status);
 
 /* Internal helper functions */
 void mst_$unwire_page(void);

@@ -10,7 +10,10 @@
  *   status_ret - Status return pointer
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
+#include "pmap/pmap.h"
+#include "time/time.h"
+#include "misc/misc.h"
 
 #define TS_QUEUE_ELEM_SIZE  12
 
@@ -23,7 +26,7 @@ void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret)
     int8_t suspend_result;
     uint32_t suspend_ec_val;
     uint32_t wait_val;
-    void *ec_list[3];
+    ec_$eventcount_t *ec_list[3];
     uint16_t saved_sr;
     char *queue_elem;
 
@@ -64,7 +67,7 @@ void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret)
          */
         if ((pcb->pri_max & PROC1_FLAG_SUSPENDED) == 0) {
             /* Get current suspend event count value */
-            suspend_ec_val = PROC1_$SUSPEND_EC;
+            suspend_ec_val = PROC1_$SUSPEND_EC.value;
 
             /* Try to suspend */
             suspend_result = PROC1_$SUSPEND(pid, status_ret);
@@ -73,10 +76,10 @@ void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret)
             while (suspend_result >= 0) {
                 /* Wait for suspend event count to change */
                 wait_val = suspend_ec_val + 1;
-                ec_list[0] = (void*)&PROC1_$SUSPEND_EC;
+                ec_list[0] = &PROC1_$SUSPEND_EC;
                 ec_list[1] = NULL;
                 ec_list[2] = NULL;
-                EC_$WAIT(ec_list, &wait_val);
+                EC_$WAIT(ec_list, (int32_t *)&wait_val);
 
                 /* Check if now suspended */
                 suspend_result = PROC1_$SUSPENDP(pid, status_ret);
@@ -91,7 +94,7 @@ void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret)
 
     /* Flush the timer queue for this process */
     queue_elem = &TS_QUEUE_TABLE[pid * TS_QUEUE_ELEM_SIZE] - 12;
-    TIME_$Q_FLUSH_QUEUE(queue_elem);
+    TIME_$Q_FLUSH_QUEUE((time_queue_t *)queue_elem);
 
     /* Clear bound flag */
     pcb->pri_max &= ~PROC1_FLAG_BOUND;

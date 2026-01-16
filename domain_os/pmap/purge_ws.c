@@ -11,7 +11,10 @@
  * Original address: 0x00e146b4
  */
 
-#include "pmap.h"
+#include "pmap_internal.h"
+
+/* MMAP_$WSL_HI_MARK - per-process working set high mark */
+extern uint16_t MMAP_$WSL_HI_MARK[];
 
 void PMAP_$PURGE_WS(int16_t index, int16_t flags)
 {
