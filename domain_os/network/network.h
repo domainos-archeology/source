@@ -58,4 +58,31 @@ void NETWORK_$INSTALL_NET(uint32_t node, void *info, status_$t *status);
 void NETWORK_$AST_GET_INFO(void *uid_info, uint16_t *flags, void *attrs,
                            status_$t *status);
 
+/*
+ * NETWORK_$GETHDR - Get a network packet header buffer
+ *
+ * Allocates a buffer for building network packet headers.
+ * If the target is the local node (loopback), allocates from wired memory.
+ * Otherwise, uses a shared header page (with lock).
+ *
+ * @param node_ptr  Pointer to target node ID
+ * @param va_out    Output pointer for virtual address
+ * @param ppn_out   Output pointer for physical address (ppn << 10)
+ *
+ * Original address: 0x00E0F37A
+ */
+void NETWORK_$GETHDR(uint32_t *node_ptr, uint32_t *va_out, uint32_t *ppn_out);
+
+/*
+ * NETWORK_$RTNHDR - Return a network packet header buffer
+ *
+ * Returns a buffer previously obtained from NETWORK_$GETHDR.
+ * Frees wired memory or releases the shared header lock.
+ *
+ * @param va_ptr  Pointer to virtual address to return
+ *
+ * Original address: 0x00E0F414
+ */
+void NETWORK_$RTNHDR(uint32_t *va_ptr);
+
 #endif /* NETWORK_H */

@@ -23,4 +23,30 @@ void NETBUF_$RTN_DAT(uint32_t addr);
  */
 void NETBUF_$GET_DAT(uint32_t *addr);
 
+/*
+ * NETBUF_$GETVA - Get virtual address for network buffer
+ *
+ * Maps a physical page number to a virtual address for network I/O.
+ *
+ * @param ppn_shifted  Physical page number shifted left by 10 (ppn << 10)
+ * @param va_out       Output pointer for virtual address
+ * @param status       Output status code
+ *
+ * Original address: 0x00E0EC78
+ */
+void NETBUF_$GETVA(uint32_t ppn_shifted, uint32_t *va_out, status_$t *status);
+
+/*
+ * NETBUF_$RTNVA - Return virtual address for network buffer
+ *
+ * Unmaps a virtual address previously obtained from NETBUF_$GETVA.
+ *
+ * @param va_ptr  Pointer to virtual address to return
+ *
+ * @return Physical page number (shifted by 10)
+ *
+ * Original address: 0x00E0ED26
+ */
+uint32_t NETBUF_$RTNVA(uint32_t *va_ptr);
+
 #endif /* NETBUF_H */

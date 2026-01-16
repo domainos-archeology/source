@@ -14,6 +14,9 @@
 #include "time/time.h"
 #include "uid/uid.h"
 /* Note: pmap/pmap.h excluded due to NETLOG_$LOG_IT signature conflict */
+#include "disk/disk.h"
+#include "misc/misc.h"
+#include "vtoc/vtoc.h"
 
 /* Restore AST's PMAPE_BASE after mmap.h (mmap.h uses a different value) */
 #ifdef PMAPE_BASE
@@ -21,34 +24,6 @@
 #endif
 #define PMAPE_BASE 0xEB2800  /* M68K physical address */
 
-/*
- * Cross-subsystem function declarations needed by AST
- * These should eventually be moved to their respective headers
- */
-
-/* OS functions */
-extern void CRASH_SYSTEM(const status_$t *status_p);
-
-/* VTOC/VTOCE functions */
-extern void VTOC_$LOOKUP(void *uid_info, status_$t *status);
-extern void VTOCE_$READ(void *uid_info, void *attrs, status_$t *status);
-extern void VTOCE_$WRITE(void *uid_info, void *attrs, uint8_t flags, status_$t *status);
-extern void VTOCE_$LOOKUP_FM(void *uid_info, uint16_t segment, int16_t flags,
-                              uint32_t *vtoce_ptr, int32_t *block_delta, status_$t *status);
-
-/* FM (File Map) functions */
-extern void FM_$READ(void *uid_info, uint32_t vtoce_ptr, uint16_t segment,
-                     void *buffer, status_$t *status);
-extern void FM_$WRITE(void *uid_info, uint32_t vtoce_ptr, uint16_t segment,
-                      void *data, uint8_t flags, status_$t *status);
-
-/* BAT (Block Allocation Table) functions */
-extern void BAT_$RESERVE(uint8_t vol_idx, uint32_t count, status_$t *status);
-extern void BAT_$ALLOCATE(uint8_t vol_idx, uint32_t hint, uint32_t count_flags,
-                          uint32_t *addrs, status_$t *status);
-
-/* DISK functions - see disk/disk.h for declarations */
-#include "disk/disk.h"
 
 /* NETWORK functions */
 extern void NETWORK_$GET_NET(uint32_t node, void *net_info, status_$t *status);

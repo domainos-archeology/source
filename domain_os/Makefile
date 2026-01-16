@@ -13,6 +13,7 @@ SRCS := \
   $(wildcard ml/*.c) \
   $(wildcard mmap/*.c) \
   $(wildcard mmu/*.c) \
+  $(wildcard netlog/*.c) \
   $(wildcard os/*.c) \
   $(wildcard osinfo/*.c) \
   $(wildcard pmap/*.c) \
