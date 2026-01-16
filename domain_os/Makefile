@@ -1,41 +1,11 @@
 
 TARGET_SAU := sau2
 
-SRCS := \
-  $(wildcard ast/*.c) \
-  $(wildcard bat/*.c) \
-  $(wildcard cal/*.c) \
-  $(wildcard dbuf/*.c) \
-  $(wildcard ec/*.c) \
-  $(wildcard fm/*.c) \
-  $(wildcard math/*.c) \
-  $(wildcard misc/*.c) \
-  $(wildcard ml/*.c) \
-  $(wildcard mmap/*.c) \
-  $(wildcard mmu/*.c) \
-  $(wildcard netlog/*.c) \
-  $(wildcard os/*.c) \
-  $(wildcard osinfo/*.c) \
-  $(wildcard pmap/*.c) \
-  $(wildcard proc1/*.c) \
-  $(wildcard proc2/*.c) \
-  $(wildcard smd/*.c) \
-  $(wildcard term/*.c) \
-  $(wildcard time/*.c) \
-  $(wildcard tpad/*.c) \
-  $(wildcard tty/*.c) \
-  $(wildcard uid/*.c) \
-  $(wildcard vtoc/*.c)
-
-# Assembly files (platform-specific)
-ASM_SRCS := $(wildcard ec/$(TARGET_SAU)/*.s) $(wildcard ml/$(TARGET_SAU)/*.s) $(wildcard proc1/$(TARGET_SAU)/*.s) $(wildcard smd/$(TARGET_SAU)/*.s)
-ASM_OBJS := $(patsubst %.s,build/$(TARGET_SAU)/%.o,$(ASM_SRCS))
-OBJS := $(patsubst %.c,build/$(TARGET_SAU)/%.o,$(SRCS))
+# List of all subsystems
+SUBSYSTEMS := ast bat cal dbuf ec fm math misc ml mmap mmu netlog os osinfo pmap proc1 proc2 smd term time tpad tty uid vtoc
 
 # we assume local #include's will have fully qualified paths
-CFLAGS=-I. -O2 $(SAU2_FLAGS)
-
-.PHONY: all clean domain_os dist-dir
+CFLAGS := -I. -O2 $(SAU2_FLAGS)
 
 CC := m68k-elf-gcc
 SAU2_FLAGS := -DM68K -DM68010 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68010 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
@@ -43,44 +13,58 @@ SAU2_FLAGS := -DM68K -DM68010 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu
 LD := m68k-elf-gcc
 LDFLAGS := -nostdlib -ffreestanding
 
+AR := m68k-elf-ar
+ARFLAGS := rcs
+
+BUILD_DIR := build/$(TARGET_SAU)
+DIST_DIR := dist/$(TARGET_SAU)
+
+# Generate library paths for all subsystems
+SUBSYSTEM_LIBS := $(foreach sub,$(SUBSYSTEMS),$(BUILD_DIR)/lib$(sub).a)
+
+.PHONY: all clean domain_os $(SUBSYSTEMS)
+
 all:: domain_os
 
-clean:
-	rm -f $(OBJS) dist/$(TARGET_SAU)/domain_os
+# Define per-subsystem rules using a template
+define SUBSYSTEM_template
+$(1)_SRCS := $$(wildcard $(1)/*.c)
+$(1)_ASM_SRCS := $$(wildcard $(1)/$$(TARGET_SAU)/*.s)
+$(1)_OBJS := $$(patsubst %.c,$$(BUILD_DIR)/%.o,$$($(1)_SRCS))
+$(1)_ASM_OBJS := $$(patsubst %.s,$$(BUILD_DIR)/%.o,$$($(1)_ASM_SRCS))
 
-domain_os: make-build-dirs make-dist-dir dist/$(TARGET_SAU)/domain_os
+# Phony target for building just this subsystem
+$(1): $$(BUILD_DIR)/lib$(1).a
 
-dist/$(TARGET_SAU)/domain_os: $(OBJS) $(ASM_OBJS)
+# The archive depends on all objects
+$$(BUILD_DIR)/lib$(1).a: $$($(1)_OBJS) $$($(1)_ASM_OBJS)
+	@mkdir -p $$(dir $$@)
+	@echo "[AR] $$@"
+	@$$(AR) $$(ARFLAGS) $$@ $$^
+endef
+
+# Instantiate the template for each subsystem
+$(foreach sub,$(SUBSYSTEMS),$(eval $(call SUBSYSTEM_template,$(sub))))
+
+# Main target
+domain_os: $(DIST_DIR)/domain_os
+
+$(DIST_DIR)/domain_os: $(SUBSYSTEM_LIBS)
 	@mkdir -p $(dir $@)
 	@echo "[LINK] $@"
-	$(LD) $(LDFLAGS) -o $@ $(OBJS) $(ASM_OBJS)
+	$(LD) $(LDFLAGS) -o $@ -Wl,--whole-archive $(SUBSYSTEM_LIBS) -Wl,--no-whole-archive
 
-build/$(TARGET_SAU)/%.o : %.c
+# Generic C compilation rule
+$(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
 	@echo "[CC] $@"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-build/$(TARGET_SAU)/ec/$(TARGET_SAU)/%.o: ec/$(TARGET_SAU)/%.s
+# Generic assembly compilation rule
+$(BUILD_DIR)/%.o: %.s
 	@mkdir -p $(dir $@)
 	@echo "[AS] $<"
 	@$(CC) $(SAU2_FLAGS) -c -o $@ $<
 
-build/$(TARGET_SAU)/ml/$(TARGET_SAU)/%.o: ml/$(TARGET_SAU)/%.s
-	@mkdir -p $(dir $@)
-	@echo "[AS] $<"
-	@$(CC) $(SAU2_FLAGS) -c -o $@ $<
-
-build/$(TARGET_SAU)/proc1/$(TARGET_SAU)/%.o: proc1/$(TARGET_SAU)/%.s
-	@mkdir -p $(dir $@)
-	@echo "[AS] $<"
-	@$(CC) $(SAU2_FLAGS) -c -o $@ $<
-
-build/$(TARGET_SAU)/smd/$(TARGET_SAU)/%.o: smd/$(TARGET_SAU)/%.s
-	@mkdir -p $(dir $@)
-	@echo "[AS] $<"
-	@$(CC) $(SAU2_FLAGS) -c -o $@ $<
-
-make-build-dirs:
-	@mkdir -p $(dir $(OBJS)) $(dir $(ASM_OBJS))
-
-make-dist-dir:
-	@mkdir -p dist/$(TARGET_SAU)
+clean:
+	rm -rf $(BUILD_DIR) $(DIST_DIR)
