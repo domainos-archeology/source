@@ -290,4 +290,211 @@ void REM_FILE_$GROW_AREA(void *addr_info, uint16_t area_handle,
                          uint32_t current_size, uint32_t new_size,
                          status_$t *status);
 
+/*
+ * REM_FILE_$LOCAL_READ_LOCK - Read lock info from remote server
+ *
+ * @param addr_info      Address info for remote node
+ * @param lock_data      Lock data to query
+ * @param result_out     Output result byte
+ * @param status         Output status code
+ *
+ * Original address: 0x00E61E9A
+ */
+void REM_FILE_$LOCAL_READ_LOCK(void *addr_info, void *lock_data,
+                                uint8_t *result_out, status_$t *status);
+
+/*
+ * REM_FILE_$NAME_ADD_HARD_LINKU - Add hard link on remote server
+ *
+ * @param addr_info      Address info for remote node
+ * @param dir_uid        Directory UID
+ * @param name           Entry name
+ * @param name_len       Name length
+ * @param file_uid       File UID to link to
+ * @param status         Output status code
+ *
+ * Original address: 0x00E624EC
+ */
+void REM_FILE_$NAME_ADD_HARD_LINKU(void *addr_info, uid_t *dir_uid,
+                                    char *name, uint16_t name_len,
+                                    uid_t *file_uid, status_$t *status);
+
+/*
+ * REM_FILE_$DROP_HARD_LINKU - Remove hard link on remote server
+ *
+ * @param addr_info      Address info for remote node
+ * @param dir_uid        Directory UID
+ * @param name           Entry name
+ * @param name_len       Name length
+ * @param flags          Additional flags
+ * @param status         Output status code
+ *
+ * Original address: 0x00E62588
+ */
+void REM_FILE_$DROP_HARD_LINKU(void *addr_info, uid_t *dir_uid,
+                                char *name, uint16_t name_len,
+                                uint16_t flags, status_$t *status);
+
+/*
+ * REM_FILE_$ACL_IMAGE - Get ACL image from remote file
+ *
+ * @param addr_info      Address info for remote node
+ * @param file_uid       File UID
+ * @param acl_type       ACL type
+ * @param bulk_data_out  Output buffer for ACL data
+ * @param acl_len_out    Output ACL length
+ * @param acl_header_out Output ACL header (11 uint32s)
+ * @param status         Output status code
+ *
+ * Original address: 0x00E627A8
+ */
+void REM_FILE_$ACL_IMAGE(void *addr_info, uid_t *file_uid,
+                         uint8_t acl_type, void *bulk_data_out,
+                         uint16_t *acl_len_out, void *acl_header_out,
+                         status_$t *status);
+
+/*
+ * REM_FILE_$ACL_CREATE - Create ACL on remote file
+ *
+ * @param addr_info      Address info for remote node
+ * @param acl_data       ACL data (up to 1KB)
+ * @param acl_header     ACL header (11 uint32s)
+ * @param parent_uid     Parent UID
+ * @param acl_uid_out    Output ACL UID
+ * @param status         Output status code
+ *
+ * Original address: 0x00E6283C
+ */
+void REM_FILE_$ACL_CREATE(void *addr_info, void *acl_data,
+                          void *acl_header, uid_t *parent_uid,
+                          uid_t *acl_uid_out, status_$t *status);
+
+/*
+ * REM_FILE_$ACL_SETIDS - Set IDs in remote ACL
+ *
+ * @param addr_info      Address info for remote node
+ * @param acl_uid        ACL UID
+ * @param sid_data       SID data (9 uint32s)
+ * @param owner_data     Owner data (3 uint32s)
+ * @param modified_flag_out Output modified flag
+ * @param status         Output status code
+ *
+ * Original address: 0x00E62930
+ */
+void REM_FILE_$ACL_SETIDS(void *addr_info, uid_t *acl_uid,
+                          void *sid_data, void *owner_data,
+                          int8_t *modified_flag_out, status_$t *status);
+
+/*
+ * REM_FILE_$ACL_CHECK_RIGHTS - Check ACL rights on remote file
+ *
+ * @param addr_info      Address info for remote node
+ * @param sid_data       SID data (9 uint32s)
+ * @param perm_data      Permission data (16 uint32s)
+ * @param file_uid       File UID
+ * @param check_flag     Check flag
+ * @param access_mask    Access mask to check
+ * @param flags          Flags
+ * @param flag2          Flag 2
+ * @param flag3          Flag 3
+ * @param result_out     Output result
+ * @param status         Output status code
+ *
+ * Original address: 0x00E629E8
+ */
+void REM_FILE_$ACL_CHECK_RIGHTS(void *addr_info, void *sid_data,
+                                 void *perm_data, uid_t *file_uid,
+                                 uint8_t check_flag, uint32_t access_mask,
+                                 uint16_t flags, uint8_t flag2, uint8_t flag3,
+                                 uint32_t *result_out, status_$t *status);
+
+/*
+ * REM_FILE_$SET_ACL - Set ACL on remote file
+ *
+ * @param addr_info      Address info for remote node
+ * @param file_uid       File UID
+ * @param acl_uid        ACL UID
+ * @param acl_header     ACL header (11 uint32s)
+ * @param sid_data       SID data (9 uint32s)
+ * @param perm_data      Permission data (16 uint32s)
+ * @param flags          Flags
+ * @param extra_flags    Extra flags
+ * @param status         Output status code
+ *
+ * Original address: 0x00E62AA8
+ */
+void REM_FILE_$SET_ACL(void *addr_info, uid_t *file_uid, uid_t *acl_uid,
+                       void *acl_header, void *sid_data, void *perm_data,
+                       uint16_t flags, uint16_t extra_flags,
+                       status_$t *status);
+
+/*
+ * REM_FILE_$FILE_SET_PROT - Set file protection on remote file server
+ *
+ * @param addr_info      Address info for remote node
+ * @param file_uid       File UID
+ * @param prot_data1     Protection data block 1 (13 uint32s)
+ * @param flags          Flags
+ * @param prot_data2     Protection data block 2 (25 uint32s)
+ * @param flag           Flag byte
+ * @param mtime_out      Output modification time
+ * @param status         Output status code
+ *
+ * Original address: 0x00E62B64
+ */
+void REM_FILE_$FILE_SET_PROT(void *addr_info, uid_t *file_uid,
+                              void *prot_data1, uint16_t flags,
+                              void *prot_data2, uint8_t flag,
+                              clock_t *mtime_out, status_$t *status);
+
+/*
+ * REM_FILE_$GET_SEG_MAP - Get segment map from remote file
+ *
+ * @param addr_info      Address info for remote node
+ * @param file_uid       File UID
+ * @param start_offset   Start offset
+ * @param end_offset     End offset
+ * @param type_flag      Type flag
+ * @param seg_map_out    Output segment map
+ * @param status         Output status code
+ *
+ * Original address: 0x00E61F3E
+ */
+void REM_FILE_$GET_SEG_MAP(void *addr_info, uid_t *file_uid,
+                            uint32_t start_offset, uint32_t end_offset,
+                            uint8_t type_flag, uint32_t *seg_map_out,
+                            status_$t *status);
+
+/*
+ * REM_FILE_$NAME_GET_ENTRYU - Get directory entry by name from remote server
+ *
+ * @param addr_info      Address info for remote node
+ * @param dir_uid        Directory UID
+ * @param name           Entry name
+ * @param name_len       Name length
+ * @param result_out     Output result structure
+ * @param status         Output status code
+ *
+ * Original address: 0x00E6209A
+ */
+void REM_FILE_$NAME_GET_ENTRYU(void *addr_info, uid_t *dir_uid,
+                                char *name, uint16_t name_len,
+                                void *result_out, status_$t *status);
+
+/*
+ * REM_FILE_$RN_DO_OP - Execute remote naming operation
+ *
+ * @param addr_info      Address info for remote node
+ * @param op_buf         Operation buffer
+ * @param base_len       Base request length
+ * @param response_size  Response buffer size
+ * @param response       Response buffer
+ * @param extra_out      Extra output data
+ *
+ * Original address: 0x00E61538
+ */
+void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buf,
+                         int16_t base_len, uint16_t response_size,
+                         void *response, void *extra_out);
+
 #endif /* REM_FILE_H */
