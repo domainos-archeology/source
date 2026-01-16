@@ -274,6 +274,49 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
 void FILE_$READ_LOCK_ENTRYUI(uid_t *file_uid, void *info_out, status_$t *status_ret);
 
 /*
+ * FILE_$LOCAL_READ_LOCK - Read local lock entry data
+ *
+ * Searches the local lock table for a lock on the specified file
+ * and returns the lock information.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to query
+ *   info_out   - Output buffer for lock info (34 bytes)
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E6050E
+ */
+void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, void *info_out, status_$t *status_ret);
+
+/*
+ * FILE_$LOCAL_LOCK_VERIFY - Verify local lock ownership
+ *
+ * Checks if the specified file is locked by the process identified
+ * in the request structure.
+ *
+ * Parameters:
+ *   request    - Lock verification request containing file UID and process info
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E6081C
+ */
+void FILE_$LOCAL_LOCK_VERIFY(void *request, status_$t *status_ret);
+
+/*
+ * FILE_$VERIFY_LOCK_HOLDER - Verify lock holder is still valid
+ *
+ * Checks if the lock holder is still holding the lock. If the lock
+ * has been released, cleans up the stale entry.
+ *
+ * Parameters:
+ *   lock_info  - Lock information structure (from read operations)
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E60732
+ */
+void FILE_$VERIFY_LOCK_HOLDER(void *lock_info, status_$t *status_ret);
+
+/*
  * Helper: Audit lock/unlock operations
  * Called when AUDIT_$ENABLED is set
  *

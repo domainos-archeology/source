@@ -769,6 +769,90 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
 
 /*
  * ============================================================================
+ * Lock Query Functions
+ * ============================================================================
+ */
+
+/*
+ * FILE_$LOCATE - Get file location from UID
+ *
+ * Retrieves the location (network node) information for a file object.
+ *
+ * Parameters:
+ *   file_uid     - Pointer to file UID to locate
+ *   location_out - Output: receives location info (uint32_t node address)
+ *   status_ret   - Output: status code
+ *
+ * Original address: 0x00E60620
+ */
+void FILE_$LOCATE(uid_t *file_uid, uint32_t *location_out, status_$t *status_ret);
+
+/*
+ * FILE_$LOCATEI - Get file location with diskless fallback
+ *
+ * Extended version of FILE_$LOCATE that handles diskless client UIDs.
+ * If normal location lookup fails and UID appears to be a diskless UID,
+ * computes location from the UID structure.
+ *
+ * Parameters:
+ *   file_uid     - Pointer to file UID to locate
+ *   location_out - Output: receives location UID (high + low)
+ *   status_ret   - Output: status code
+ *
+ * Original address: 0x00E6067C
+ */
+void FILE_$LOCATEI(uid_t *file_uid, uid_t *location_out, status_$t *status_ret);
+
+/*
+ * FILE_$READ_LOCK_ENTRY - Read lock entry information
+ *
+ * Reads information about a lock on a file. Iterates through locks.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to query
+ *   index      - Pointer to iteration index (starts at 1, updated on return)
+ *   info_out   - Output buffer for lock info (26 bytes minimum)
+ *   status_ret - Output: status code
+ *
+ * Original address: 0x00E608EC
+ */
+void FILE_$READ_LOCK_ENTRY(uid_t *file_uid, uint16_t *index,
+                            void *info_out, status_$t *status_ret);
+
+/*
+ * FILE_$READ_LOCK_ENTRYU - Read lock entry by UID
+ *
+ * Reads lock entry information for a file by its UID.
+ * Handles both local and remote files.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to query
+ *   info_out   - Output buffer for lock info (26 bytes minimum)
+ *   status_ret - Output: status code
+ *
+ * Original address: 0x00E6042E
+ */
+void FILE_$READ_LOCK_ENTRYU(uid_t *file_uid, void *info_out, status_$t *status_ret);
+
+/*
+ * FILE_$IMPORT_LK - Import a lock from another process
+ *
+ * Validates a lock index and returns the validated index if the lock
+ * exists and matches the specified file UID.
+ *
+ * Parameters:
+ *   file_uid   - UID of file the lock should be on
+ *   index_in   - Pointer to lock index to validate
+ *   index_out  - Output: validated lock index
+ *   status_ret - Output: status code
+ *
+ * Original address: 0x00E603AC
+ */
+void FILE_$IMPORT_LK(uid_t *file_uid, uint32_t *index_in, uint32_t *index_out,
+                      status_$t *status_ret);
+
+/*
+ * ============================================================================
  * File Protection/ACL Functions
  * ============================================================================
  */
