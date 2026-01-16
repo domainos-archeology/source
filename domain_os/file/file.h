@@ -533,4 +533,88 @@ void FILE_$LOCK(void);
  */
 void FILE_$UNLOCK(void);
 
+/*
+ * ============================================================================
+ * File Protection/ACL Functions
+ * ============================================================================
+ */
+
+/*
+ * FILE_$CHECK_PROT - Check file protection/access rights
+ *
+ * Checks if the current process has the requested access rights to a file.
+ * First checks a per-process lock cache, then falls back to ACL_$RIGHTS.
+ *
+ * Parameters:
+ *   file_uid    - UID of file to check
+ *   access_mask - Required access rights mask
+ *   slot_num    - Lock table slot number (0-149)
+ *   unused      - Unused parameter
+ *   rights_out  - Output: actual rights available
+ *   status_ret  - Output: status code
+ *
+ * Returns:
+ *   1 if rights check completed (check status for success/failure)
+ *   Result from ACL_$RIGHTS otherwise
+ *
+ * Original address: 0x00E5D172
+ */
+int16_t FILE_$CHECK_PROT(uid_t *file_uid, uint16_t access_mask, uint32_t slot_num,
+                         void *unused, uint16_t *rights_out, status_$t *status_ret);
+
+/*
+ * FILE_$SET_PROT - Set file protection
+ *
+ * Sets file protection based on protection type. Maps protection types
+ * to attribute IDs and handles both local and remote files.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   prot_type  - Pointer to protection type (0-6)
+ *   acl_data   - ACL data buffer (44 bytes)
+ *   acl_uid    - ACL UID (8 bytes)
+ *   status_ret - Output status code
+ *
+ * Protection types:
+ *   0-5: Standard protection modes (mapped to attr IDs 0x10-0x15)
+ *   6: Set protection by ACL UID
+ *
+ * Original address: 0x00E5DF3A
+ */
+void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, uint32_t *acl_data,
+                    uint32_t *acl_uid, status_$t *status_ret);
+
+/*
+ * FILE_$SET_ACL - Set file ACL
+ *
+ * Sets the access control list for a file using a "funky" ACL format.
+ * Converts the ACL format and calls FILE_$SET_PROT.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   acl_uid    - ACL UID in funky format (type encoded in low word)
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E5E06A
+ */
+void FILE_$SET_ACL(uid_t *file_uid, uid_t *acl_uid, status_$t *status_ret);
+
+/*
+ * FILE_$OLD_AP - Set file access protection (old/legacy interface)
+ *
+ * Legacy function for setting file access protection.
+ * Used for backward compatibility with older protection schemes.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   prot_type  - Pointer to protection type
+ *   acl_data   - ACL data buffer (44 bytes)
+ *   acl_uid    - ACL UID (8 bytes)
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E5E100
+ */
+void FILE_$OLD_AP(uid_t *file_uid, int16_t *prot_type, uint32_t *acl_data,
+                  uint32_t *acl_uid, status_$t *status_ret);
+
 #endif /* FILE_H */
