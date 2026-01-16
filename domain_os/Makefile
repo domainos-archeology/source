@@ -5,6 +5,7 @@ SRCS := \
   $(wildcard ast/*.c) \
   $(wildcard bat/*.c) \
   $(wildcard cal/*.c) \
+  $(wildcard dbuf/*.c) \
   $(wildcard ec/*.c) \
   $(wildcard fm/*.c) \
   $(wildcard math/*.c) \

@@ -249,8 +249,10 @@ int8_t MMU_$NORMAL_MODE(void);
 /* Check if power-off mode is active */
 int8_t MMU_$POWER_OFF(void);
 
-/* Mark virtual address as cache-inhibited (stub) */
-void MMU_$CACHE_INHIBIT_VA(void);
+/* Mark virtual address as cache-inhibited
+ * Original address: 0x00e2429e
+ */
+void MMU_$CACHE_INHIBIT_VA(uint32_t va);
 
 /* Toggle MCR (Memory Control Register) bits */
 void MMU_$MCR_CHANGE(uint16_t bit);
