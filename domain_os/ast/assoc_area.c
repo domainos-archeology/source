@@ -82,7 +82,7 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn, status_$t *
 
         /* Check that page is not already installed */
         if (*(int8_t *)(PMAPE_BASE + pmape_offset + 5) < 0) {
-            CRASH_SYSTEM(OS_MMAP_bad_install);
+            CRASH_SYSTEM(&OS_MMAP_bad_install);
         }
 
         /* Set up PMAPE entry */
