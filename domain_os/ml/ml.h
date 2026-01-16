@@ -49,6 +49,7 @@ typedef uint16_t ml_$spin_token_t;
  * (defined here for reference; actual definitions are in respective modules)
  */
 #define ML_LOCK_PROC2       4       /* PROC2 lock (proc2/proc2.h) */
+#define ML_LOCK_FILE        5       /* File lock (file/file.h) */
 #define ML_LOCK_EC2         6       /* EC2 lock (ec/ec.h) */
 #define ML_LOCK_PROC1       0x0B    /* Process creation lock (proc1/proc1.h) */
 #define ML_LOCK_MST_ASID    0x0C    /* MST ASID allocation lock */

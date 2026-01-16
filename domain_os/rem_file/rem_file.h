@@ -10,6 +10,17 @@
 #include "base/base.h"
 
 /*
+ * REM_FILE_$UNLOCK_ALL - Release all remote file locks
+ *
+ * Sends a network packet to all remote nodes to release any
+ * file locks held by this node. Called during initialization
+ * and cleanup to ensure no stale locks remain.
+ *
+ * Original address: 0x00E61C72
+ */
+void REM_FILE_$UNLOCK_ALL(void);
+
+/*
  * REM_FILE_$RESERVE - Reserve space in a remote file
  *
  * @param vol_uid     Volume UID
