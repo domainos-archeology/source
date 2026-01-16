@@ -21,7 +21,8 @@ SRCS := \
   $(wildcard time/*.c) \
   $(wildcard tpad/*.c) \
   $(wildcard tty/*.c) \
-  $(wildcard uid/*.c)
+  $(wildcard uid/*.c) \
+  $(wildcard vtoc/*.c)
 
 # Assembly files (platform-specific)
 ASM_SRCS := $(wildcard ec/$(TARGET_SAU)/*.s) $(wildcard ml/$(TARGET_SAU)/*.s) $(wildcard proc1/$(TARGET_SAU)/*.s) $(wildcard smd/$(TARGET_SAU)/*.s)
