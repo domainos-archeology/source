@@ -497,4 +497,23 @@ void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buf,
                          int16_t base_len, uint16_t response_size,
                          void *response, void *extra_out);
 
+/*
+ * REM_FILE_$SERVER - Remote file operations server dispatcher
+ *
+ * This is the server-side handler for incoming remote file operation requests.
+ * It receives requests from remote nodes, dispatches to the appropriate handler,
+ * and sends back responses.
+ *
+ * The server handles approximately 30 different operation codes including:
+ * - Lock/unlock operations
+ * - File attribute operations
+ * - Protection/ACL operations
+ * - Directory operations
+ * - Area management
+ * - Node/process management
+ *
+ * Original address: 0x00E63586
+ */
+void REM_FILE_$SERVER(void);
+
 #endif /* REM_FILE_H */
