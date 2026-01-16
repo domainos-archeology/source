@@ -77,6 +77,212 @@ extern void OS_PROC_SHUTWIRED(status_$t *status);
 
 /*
  * ============================================================================
+ * Internal Locking Data Structures and Globals
+ * ============================================================================
+ */
+
+/*
+ * File lock entry structure (detailed)
+ * Size: 28 bytes (0x1C)
+ *
+ * This is the complete structure for each lock entry.
+ * Entries are stored at DAT_00e935b0 (base offset for entry N = N * 0x1C)
+ */
+typedef struct file_lock_entry_detail_t {
+    uint32_t    context;        /* 0x00: Lock context (param_7/param_5) */
+    uint32_t    node_low;       /* 0x04: Node address low (or local node info) */
+    uint32_t    node_high;      /* 0x08: Node address high */
+    uint32_t    uid_high;       /* 0x0C: File UID high part */
+    uint32_t    uid_low;        /* 0x10: File UID low part */
+    uint16_t    next;           /* 0x14: Next entry in chain (hash or free) */
+    uint16_t    sequence;       /* 0x16: Lock sequence number */
+    uint8_t     refcount;       /* 0x18: Reference count */
+    uint8_t     flags1;         /* 0x19: Flags - bit 7=remote, bits 0-5=rights mask */
+    uint8_t     rights;         /* 0x1A: Access rights mask */
+    uint8_t     flags2;         /* 0x1B: Flags - bit 7=side, bits 3-6=lock mode,
+                                         bit 2=remote flag, bit 1=pending, bit 0=? */
+} file_lock_entry_detail_t;
+
+/*
+ * Lock entry flags (flags2 byte at offset 0x1B)
+ */
+#define FILE_LOCK_F2_SIDE       0x80    /* Lock side (0=reader, 1=writer) */
+#define FILE_LOCK_F2_MODE_MASK  0x78    /* Lock mode (bits 3-6) */
+#define FILE_LOCK_F2_MODE_SHIFT 3
+#define FILE_LOCK_F2_REMOTE     0x04    /* Remote lock flag */
+#define FILE_LOCK_F2_PENDING    0x02    /* Lock pending */
+#define FILE_LOCK_F2_FLAG0      0x01    /* Unknown flag */
+
+/*
+ * Lock entry flags (flags1 byte at offset 0x19)
+ */
+#define FILE_LOCK_F1_REMOTE     0x80    /* Remote lock indicator */
+#define FILE_LOCK_F1_RIGHTS     0x3F    /* Rights mask bits */
+
+/*
+ * Per-process lock table
+ * Located at 0xE9F9CA (= FILE_LOCK_TABLE_ADDR - 2)
+ * Each process (by ASID) has 300 bytes:
+ *   - Bytes 0-1: Lock count at offset 0x1D98 (relative to base + ASID*2)
+ *   - Bytes 2-299: Lock index array (up to 149 entries, 2 bytes each)
+ */
+#define FILE_PROC_LOCK_TABLE_ADDR   0xE9F9CA
+#define FILE_PROC_LOCK_ENTRY_SIZE   300     /* 0x12C */
+#define FILE_PROC_LOCK_MAX_ENTRIES  150     /* 0x96 entries per process */
+
+/*
+ * Lock hash table (array of head pointers)
+ * Located at FILE_$LOCK_CONTROL + 0xC8
+ */
+extern uint16_t FILE_$LOT_HASHTAB[];
+
+/*
+ * External lock control variables (in file_lock_control_t)
+ */
+
+/* FILE_$LOT_FREE - Head of free lock entry list (at offset 0x2CE) */
+/* Already declared in file.h */
+
+/* Highest allocated lock entry index (at offset 0x2CC) */
+extern uint16_t FILE_$LOT_HIGH;
+
+/* Lock sequence counter (at offset 0x2C4) */
+extern uint32_t FILE_$LOT_SEQN;
+
+/* Lock mode compatibility tables */
+extern uint16_t FILE_$LOCK_MODE_TABLE[];      /* At offset 0x58 (24 entries) */
+extern uint16_t FILE_$LOCK_COMPAT_TABLE[];    /* At offset 0x28 (21 entries) */
+extern uint16_t FILE_$LOCK_MAP_TABLE[];       /* At offset 0x40 (21 entries) */
+extern uint16_t FILE_$LOCK_REQ_TABLE[];       /* At offset 0x88 (21 entries) */
+extern uint16_t FILE_$LOCK_CVT_TABLE[];       /* At offset 0xA0 (21 entries) */
+extern uint16_t FILE_$LOCK_ILLEGAL_MASK;      /* At offset 0x2C8 - illegal modes */
+extern uint8_t  FILE_$LOT_FULL;               /* At offset 0x2D0 - table full flag */
+
+/* Audit log enabled flag */
+extern int8_t AUDIT_$ENABLED;
+
+/* Network log enabled flag */
+extern int8_t NETLOG_$OK_TO_LOG;
+
+/* Current node ID */
+extern uint32_t NODE_$ME;
+
+/* Current process ASID */
+extern uint16_t PROC1_$AS_ID;
+
+/*
+ * ============================================================================
+ * Internal Locking Functions
+ * ============================================================================
+ */
+
+/*
+ * FILE_$PRIV_LOCK - Core locking function
+ *
+ * Main internal function for all lock operations. Called by FILE_$LOCK,
+ * FILE_$LOCK_D, FILE_$CHANGE_LOCK_D, and remote lock handlers.
+ *
+ * Parameters:
+ *   file_uid     - UID of file to lock
+ *   asid         - Process ASID (from PROC1_$AS_ID)
+ *   lock_index   - Lock table index (0 for new lock)
+ *   lock_mode    - Lock mode (0-20)
+ *   rights       - Rights byte (mode specific)
+ *   flags        - Lock operation flags (see FILE_LOCK_FLAG_* constants)
+ *   param_7      - Context parameter (0 for local locks)
+ *   param_8      - Node address for remote locks
+ *   param_9      - Additional context
+ *   param_10     - Default address (usually &DAT_00e5e61e)
+ *   param_11     - Additional flags
+ *   lock_ptr_out - Output: lock context pointer
+ *   result_out   - Output: result status
+ *   status_ret   - Output: status code
+ *
+ * Original address: 0x00E5F0EE
+ */
+void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t lock_index,
+                     uint16_t lock_mode, int16_t rights, uint32_t flags,
+                     int32_t param_7, uint32_t param_8, uint32_t param_9,
+                     void *param_10, uint16_t param_11, uint32_t *lock_ptr_out,
+                     uint16_t *result_out, status_$t *status_ret);
+
+/*
+ * FILE_$PRIV_UNLOCK - Core unlock function
+ *
+ * Main internal function for all unlock operations.
+ *
+ * Parameters:
+ *   file_uid     - UID of file to unlock
+ *   lock_index   - Lock table index (0 to search)
+ *   mode_asid    - Combined: high word=lock_mode, low word=ASID
+ *   remote_flags - Remote operation flags
+ *   param_5      - Context high
+ *   param_6      - Context low (node address)
+ *   dtv_out      - Output: data-time-valid info
+ *   status_ret   - Output: status code
+ *
+ * Returns:
+ *   Result byte (modified flag)
+ *
+ * Original address: 0x00E5FD32
+ */
+uint8_t FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t lock_index,
+                          uint32_t mode_asid, int32_t remote_flags,
+                          int32_t param_5, int32_t param_6,
+                          uint32_t *dtv_out, status_$t *status_ret);
+
+/*
+ * FILE_$PRIV_UNLOCK_ALL - Unlock all locks for a process
+ *
+ * Releases all locks held by one or all processes.
+ *
+ * Parameters:
+ *   asid_ptr - Pointer to ASID (0 = all processes)
+ *
+ * Original address: 0x00E60BD0
+ */
+void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr);
+
+/*
+ * FILE_$READ_LOCK_ENTRYI - Read lock entry by iteration
+ *
+ * Iterates through lock entries, returning info about each.
+ *
+ * Parameters:
+ *   file_uid   - File UID to search for
+ *   index      - Pointer to iteration index (starts at 1)
+ *   info_out   - Output buffer for lock info
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E6093C
+ */
+void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
+                             void *info_out, status_$t *status_ret);
+
+/*
+ * FILE_$READ_LOCK_ENTRYUI - Read lock entry by UID (unchecked)
+ *
+ * Reads lock entry info for a file without access checks.
+ *
+ * Parameters:
+ *   file_uid   - File UID to search for
+ *   info_out   - Output buffer for lock info
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E6046E
+ */
+void FILE_$READ_LOCK_ENTRYUI(uid_t *file_uid, void *info_out, status_$t *status_ret);
+
+/*
+ * Helper: Audit lock/unlock operations
+ * Called when AUDIT_$ENABLED is set
+ *
+ * Original address: 0x00E5E88A (renamed from FUN_*)
+ */
+void FILE_$AUDIT_LOCK(status_$t status, uid_t *file_uid, uint16_t lock_mode);
+
+/*
+ * ============================================================================
  * Internal Protection/ACL Functions
  * ============================================================================
  */

@@ -631,16 +631,141 @@ void FILE_$SET_MAND_LOCK(uid_t *file_uid, uint8_t *flag, status_$t *status_ret);
  */
 
 /*
+ * Lock mode flags for FILE_$PRIV_LOCK param_6
+ * These flags control locking behavior:
+ */
+#define FILE_LOCK_FLAG_REMOTE       0x020000   /* Lock is from remote request */
+#define FILE_LOCK_FLAG_LOCAL_ONLY   0x010000   /* Skip remote flush */
+#define FILE_LOCK_FLAG_CHANGE       0x400000   /* Change existing lock */
+#define FILE_LOCK_FLAG_UPGRADE      0x040000   /* Upgrade lock mode */
+#define FILE_LOCK_FLAG_NO_RIGHTS    0x080000   /* Skip rights check */
+
+/*
+ * FILE_$LOCK_D - Lock a file with domain context
+ *
+ * Locks a file with explicit domain (distributed) context.
+ *
+ * Parameters:
+ *   file_uid     - UID of file to lock
+ *   lock_index   - Pointer to lock index (from previous lock or 0)
+ *   lock_mode    - Pointer to lock mode
+ *   rights       - Pointer to rights byte
+ *   param_5      - Additional parameter
+ *   status_ret   - Output status code
+ *
+ * Original address: 0x00E5EA2A
+ */
+void FILE_$LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
+                  uint8_t *rights, uint32_t param_5, status_$t *status_ret);
+
+/*
+ * FILE_$CHANGE_LOCK_D - Change an existing lock with domain context
+ *
+ * Changes the mode of an existing lock.
+ *
+ * Parameters:
+ *   file_uid     - UID of file with existing lock
+ *   lock_index   - Pointer to lock index
+ *   lock_mode    - Pointer to new lock mode
+ *   param_4      - Additional parameter
+ *   status_ret   - Output status code
+ *
+ * Original address: 0x00E5EA9E
+ */
+void FILE_$CHANGE_LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
+                         uint32_t param_4, status_$t *status_ret);
+
+/*
  * FILE_$LOCK - Lock a file
+ *
+ * Standard file locking function.
+ *
+ * Parameters:
+ *   file_uid     - UID of file to lock
+ *   lock_index   - Pointer to lock index
+ *   lock_mode    - Pointer to lock mode
+ *   rights       - Pointer to rights byte
+ *   param_5      - Additional parameter (unused, set to local_8)
+ *   status_ret   - Output status code
+ *
  * Original address: 0x00E5EB20
  */
-void FILE_$LOCK(void);
+void FILE_$LOCK(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
+                uint8_t *rights, uint32_t param_5, status_$t *status_ret);
+
+/*
+ * FILE_$UNLOCK_D - Unlock a file with domain context
+ *
+ * Unlocks a file with explicit domain (distributed) context.
+ *
+ * Parameters:
+ *   file_uid     - UID of file to unlock
+ *   lock_index   - Pointer to lock index
+ *   lock_mode    - Pointer to lock mode
+ *   status_ret   - Output status code
+ *
+ * Original address: 0x00E5FCC2
+ */
+void FILE_$UNLOCK_D(uid_t *file_uid, uint32_t *lock_index, uint16_t *lock_mode,
+                    status_$t *status_ret);
 
 /*
  * FILE_$UNLOCK - Unlock a file
+ *
+ * Standard file unlocking function.
+ *
+ * Parameters:
+ *   file_uid     - UID of file to unlock
+ *   lock_mode    - Pointer to lock mode
+ *   status_ret   - Output status code
+ *
  * Original address: 0x00E5FCFC
  */
-void FILE_$UNLOCK(void);
+void FILE_$UNLOCK(uid_t *file_uid, uint16_t *lock_mode, status_$t *status_ret);
+
+/*
+ * FILE_$UNLOCK_VOL - Unlock all locks on a volume
+ *
+ * Releases all locks held on a specific volume.
+ *
+ * Parameters:
+ *   vol_uid      - UID of volume
+ *   status_ret   - Output status code
+ *
+ * Original address: 0x00E60D36
+ */
+void FILE_$UNLOCK_VOL(uid_t *vol_uid, status_$t *status_ret);
+
+/*
+ * FILE_$FORCE_UNLOCK - Force unlock a file
+ *
+ * Forces release of a lock, even if not held by current process.
+ * Only works for locks on the local node.
+ *
+ * Parameters:
+ *   file_uid     - UID of file to unlock
+ *   status_ret   - Output status code
+ *
+ * Original address: 0x00E60DB0
+ */
+void FILE_$FORCE_UNLOCK(uid_t *file_uid, status_$t *status_ret);
+
+/*
+ * FILE_$UNLOCK_PROC - Unlock all locks for a process
+ *
+ * Releases all locks held by a specific process.
+ *
+ * Parameters:
+ *   proc_uid     - Process UID (or UID_$NIL for current process)
+ *   file_uid     - File UID to unlock (or UID_$NIL for all)
+ *   lock_mode    - Pointer to lock mode filter
+ *   param_4      - Additional parameter
+ *   status_ret   - Output status code
+ *
+ * Original address: 0x00E60E3E
+ */
+void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
+                       uint32_t param_4, status_$t *status_ret);
 
 /*
  * ============================================================================
