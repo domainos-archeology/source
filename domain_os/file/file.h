@@ -1005,4 +1005,39 @@ void FILE_$FW_PARTIAL(uid_t *file_uid, uint32_t *start_offset,
 void FILE_$FW_PAGES(uid_t *file_uid, uint32_t *page_list, uint16_t *page_count,
                     status_$t *status_ret);
 
+/*
+ * ============================================================================
+ * File Miscellaneous Functions
+ * ============================================================================
+ */
+
+/*
+ * FILE_$NEIGHBORS - Check if two files are on the same volume
+ *
+ * Checks if two files are "neighbors" (located on the same volume).
+ * Wrapper around FILE_$CHECK_SAME_VOLUME.
+ *
+ * Parameters:
+ *   file_uid1  - First file UID
+ *   file_uid2  - Second file UID
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E5E5AE
+ */
+void FILE_$NEIGHBORS(uid_t *file_uid1, uid_t *file_uid2, status_$t *status_ret);
+
+/*
+ * FILE_$PURIFY - Purify (flush) a file's dirty pages
+ *
+ * Flushes dirty pages of a file to disk by calling AST_$PURIFY.
+ * This performs a basic purification with default flags.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to purify
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E5E5F2
+ */
+void FILE_$PURIFY(uid_t *file_uid, status_$t *status_ret);
+
 #endif /* FILE_H */
