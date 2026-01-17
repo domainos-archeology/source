@@ -77,25 +77,40 @@ int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret, uint32_t flags, uint32_t buffer_s
 void SOCK_$CLOSE(uint16_t sock_num);
 
 /*
- * SOCK_$GET - Get socket state
+ * SOCK_$GET - Get next packet from socket receive queue
+ *
+ * Retrieves the next packet from a socket's receive queue.
  *
  * @param sock_num      Socket number
- * @param state_ret     Output: socket state
+ * @param pkt_ret       Output: pointer to packet data
+ *
+ * Returns:
+ *   Negative (< 0): Success, packet available in *pkt_ret
+ *   Non-negative (>= 0): No packet available
  *
  * Original address: 0x00E16070
  */
-void SOCK_$GET(uint16_t sock_num, void *state_ret);
+int8_t SOCK_$GET(uint16_t sock_num, void **pkt_ret);
 
 /*
- * SOCK_$PUT - Put data on socket
+ * SOCK_$PUT - Put packet on socket receive queue
+ *
+ * Queues a packet for delivery to a socket.
  *
  * @param sock_num      Socket number
- * @param data          Data to send
- * @param len           Data length
+ * @param pkt_ptr       Pointer to packet pointer
+ * @param flags         Flags
+ * @param ec_param1     Event count parameter 1
+ * @param ec_param2     Event count parameter 2
+ *
+ * Returns:
+ *   Negative (< 0): Success, packet queued
+ *   Non-negative (>= 0): Queue full or error
  *
  * Original address: 0x00E1614E
  */
-void SOCK_$PUT(uint16_t sock_num, void *data, uint16_t len);
+int8_t SOCK_$PUT(uint16_t sock_num, void **pkt_ptr, uint16_t flags,
+                 uint16_t ec_param1, uint16_t ec_param2);
 
 /*
  * SOCK_$INIT - Initialize socket subsystem
