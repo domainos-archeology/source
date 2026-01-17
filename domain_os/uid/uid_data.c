@@ -17,7 +17,7 @@
  * Used to represent "no UID" or an uninitialized UID.
  * This is a constant with all zeros.
  */
-const uid_t UID_$NIL = { 0, 0 };
+uid_t UID_$NIL = { 0, 0 };
 
 /*
  * UID generator state

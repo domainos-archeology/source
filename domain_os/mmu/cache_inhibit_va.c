@@ -9,7 +9,7 @@
 
 #include "mmu.h"
 
-void MMU_$CACHE_INHIBIT_VA(void)
+void MMU_$CACHE_INHIBIT_VA(uint32_t va)
 {
     /* Stub - no operation */
     return;

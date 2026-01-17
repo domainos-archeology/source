@@ -81,7 +81,7 @@ typedef struct uid_t {
  * Used to represent "no UID" or an uninitialized UID.
  * Original address: (data constant)
  */
-extern const uid_t UID_$NIL;
+extern uid_t UID_$NIL;
 
 
 // =============================================================================

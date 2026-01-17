@@ -8,15 +8,16 @@
 #ifndef NAME_INTERNAL_H
 #define NAME_INTERNAL_H
 
-#include "name/name.h"
 #include "acl/acl.h"
+#include "dir/dir.h"
+#include "file/file.h"
+#include "misc/crash_system.h"
+#include "misc/string.h"
+#include "name/name.h"
+#include "vtoc/vtoc.h"
 
 /* Forward declarations for external dependencies */
-extern void DIR_$INIT(void);
-extern void VTOC_$GET_NAME_DIRS(int16_t volx, uid_t *root_uid, uid_t *node_uid, status_$t *status);
-extern void FILE_$SET_DIRPTR(uid_t *dir_uid, uid_t *target_uid, status_$t *status);
 extern void VFMT_$FORMATN(char *format, char *output, void *param1, int16_t *out_len);
-extern void CRASH_SYSTEM(status_$t *status);
 
 /* Boot volume index - from CAL subsystem */
 extern int16_t CAL_$BOOT_VOLX;

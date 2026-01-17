@@ -10,12 +10,6 @@
 
 #include "vtoc/vtoc_internal.h"
 
-/* External function declarations */
-extern void DISK_$WRITE_PROTECT(int16_t flag, int16_t vol_idx, status_$t *status);
-extern void OS_DISK_PROC(int16_t vol_idx);
-extern void AUDIT_$LOG_EVENT(uint32_t event_id, int16_t *param1, int16_t *param2,
-                             char *data, uint16_t flags);
-
 /* External variables */
 extern int8_t AUDIT_$ENABLED;    /* 0xE2E09E: Audit enabled flag */
 extern int8_t DAT_00e78756;      /* VTOC dirty flag */
