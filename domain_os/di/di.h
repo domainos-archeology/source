@@ -4,6 +4,10 @@
  * Provides deferred interrupt handling for Domain/OS.
  * Deferred interrupts are scheduled to run at a later time,
  * typically after the current interrupt handler completes.
+ *
+ * The queue uses a singly-linked list with elements containing
+ * callback arguments. When an interrupt cannot be processed
+ * immediately, it is enqueued for later processing.
  */
 
 #ifndef DI_H
@@ -16,50 +20,56 @@
  *
  * Used for deferred interrupt handling. Elements are linked
  * into a queue and processed when conditions allow.
+ *
+ * Layout from assembly analysis:
+ *   Offset 0x00: next pointer (to next element in queue)
+ *   Offset 0x04: arg1 (first callback argument)
+ *   Offset 0x08: arg2 (second callback argument)
+ *   Offset 0x0C: enqueued flag (0xFF = enqueued, 0 = not enqueued)
+ *   Offset 0x0D-0x0F: padding/reserved
  */
 typedef struct di_queue_elem_t {
-    uint32_t next;          /* 0x00: Next element pointer */
-    uint32_t prev;          /* 0x04: Previous element pointer */
-    uint32_t handler;       /* 0x08: Handler function pointer */
-    uint32_t arg;           /* 0x0C: Handler argument */
+    struct di_queue_elem_t *next;  /* 0x00: Next element in queue */
+    uint32_t arg1;                 /* 0x04: First callback argument */
+    uint32_t arg2;                 /* 0x08: Second callback argument */
+    uint8_t enqueued;              /* 0x0C: Non-zero (0xFF) if enqueued */
+    uint8_t reserved[3];           /* 0x0D-0x0F: Padding */
 } di_queue_elem_t;
+
+/*
+ * Global queue head pointer
+ * Points to the first element in the deferred interrupt queue.
+ * Located at address 0x00e20602 in the original binary.
+ */
+extern di_queue_elem_t *DI_$Q_HEAD;
 
 /*
  * DI_$INIT_Q_ELEM - Initialize a DI queue element
  *
- * Initializes a deferred interrupt queue element for use.
- * Sets up the list pointers and clears handler fields.
+ * Clears all 16 bytes of the queue element structure, setting
+ * next pointer, arguments, and enqueued flag to zero.
  *
  * Parameters:
  *   elem - Pointer to the DI queue element to initialize
+ *
+ * From: 0x00e209d6
  */
 void DI_$INIT_Q_ELEM(di_queue_elem_t *elem);
 
 /*
- * DI_$ENQUEUE - Add element to deferred interrupt queue
+ * DI_$ENQ - Enqueue a deferred interrupt
  *
- * Adds a deferred interrupt element to the queue for later processing.
- *
- * Parameters:
- *   elem - Pointer to the DI queue element
- */
-void DI_$ENQUEUE(di_queue_elem_t *elem);
-
-/*
- * DI_$DEQUEUE - Remove element from deferred interrupt queue
- *
- * Removes a deferred interrupt element from the queue.
+ * Adds a deferred interrupt element to the head of the queue.
+ * The element must not already be enqueued (will crash if so).
+ * After enqueuing, the enqueued flag is set to 0xFF.
  *
  * Parameters:
- *   elem - Pointer to the DI queue element
- */
-void DI_$DEQUEUE(di_queue_elem_t *elem);
-
-/*
- * DI_$PROCESS - Process pending deferred interrupts
+ *   arg1 - First callback argument to store in element
+ *   arg2 - Second callback argument to store in element
+ *   elem - Pointer to the DI queue element to enqueue
  *
- * Processes all pending deferred interrupt elements in the queue.
+ * From: 0x00e209a8
  */
-void DI_$PROCESS(void);
+void DI_$ENQ(uint32_t arg1, uint32_t arg2, di_queue_elem_t *elem);
 
 #endif /* DI_H */
