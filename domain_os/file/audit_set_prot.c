@@ -38,45 +38,52 @@
 void FILE_$AUDIT_SET_PROT(uid_t *file_uid, void *acl_data, void *prot_info,
                           uint16_t prot_type, status_$t status)
 {
-    uint32_t event_id[2];
-    uint16_t status_flags[3];
-    uint32_t audit_data[11];
-    struct {
-        uint32_t file_uid_high;
-        uint32_t file_uid_low;
-        uint32_t prot_high;
-        uint32_t prot_low;
-        uint16_t prot_type;
-    } event_info;
+    uid_t event_uid;
+    uint16_t event_flags;
+    uint32_t status_code;
+    char audit_data[62];  /* 44 bytes ACL + 8 bytes file_uid + 8 bytes prot_info + 2 bytes prot_type */
+    uint16_t data_len;
     int16_t i;
     uint32_t *src;
-    uint32_t *dst;
+    char *dst;
 
-    /* Set up event ID */
-    event_id[0] = FILE_AUDIT_EVENT_SET_PROT;
-    event_id[1] = 0;
+    /* Set up event UID - FILE subsystem audit event for set protection */
+    event_uid.high = FILE_AUDIT_EVENT_SET_PROT;
+    event_uid.low = 0;
 
-    /* Copy ACL data (11 uint32_t values = 44 bytes) */
+    /* Copy ACL data (44 bytes) */
     src = (uint32_t *)acl_data;
     dst = audit_data;
-    for (i = 10; i >= 0; i--) {
-        *dst++ = *src++;
+    for (i = 0; i < 11; i++) {
+        *(uint32_t *)dst = src[i];
+        dst += 4;
     }
 
-    /* Copy file UID */
-    event_info.file_uid_high = file_uid->high;
-    event_info.file_uid_low = file_uid->low;
+    /* Copy file UID (8 bytes) */
+    *(uint32_t *)dst = file_uid->high;
+    dst += 4;
+    *(uint32_t *)dst = file_uid->low;
+    dst += 4;
 
     /* Copy protection info (8 bytes) */
-    event_info.prot_high = ((uint32_t *)prot_info)[0];
-    event_info.prot_low = ((uint32_t *)prot_info)[1];
+    *(uint32_t *)dst = ((uint32_t *)prot_info)[0];
+    dst += 4;
+    *(uint32_t *)dst = ((uint32_t *)prot_info)[1];
+    dst += 4;
 
-    /* Store protection type */
-    event_info.prot_type = prot_type;
+    /* Store protection type (2 bytes) */
+    *(uint16_t *)dst = prot_type;
+    dst += 2;
 
-    /* Set status flags - non-zero if operation succeeded */
-    status_flags[0] = (status != status_$ok) ? 1 : 0;
+    /* Set event flags - non-zero if operation failed */
+    event_flags = (status != status_$ok) ? 1 : 0;
+
+    /* Convert status to uint32_t */
+    status_code = (uint32_t)status;
+
+    /* Calculate data length */
+    data_len = (uint16_t)(dst - audit_data);
 
     /* Log the audit event */
-    AUDIT_$LOG_EVENT(event_id, status_flags, &status, audit_data, &event_info);
+    AUDIT_$LOG_EVENT(&event_uid, &event_flags, &status_code, audit_data, &data_len);
 }

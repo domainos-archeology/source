@@ -479,18 +479,4 @@ void ACL_$DEF_ACLDATA(void *acl_data_out, void *uid_out);
  * which is included above. No need to redeclare them here.
  */
 
-/*
- * ============================================================================
- * External AUDIT Functions
- * ============================================================================
- */
-
-/*
- * AUDIT_$LOG_EVENT - Log an audit event
- *
- * Original address: 0x00E70DF6
- */
-void AUDIT_$LOG_EVENT(void *event_id, void *flags, void *status,
-                       void *data, void *info);
-
 #endif /* FILE_INTERNAL_H */
