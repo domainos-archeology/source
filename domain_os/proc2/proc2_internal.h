@@ -63,6 +63,7 @@ void PROC2_$LOG_SIGNAL_EVENT(uint16_t event_type, int16_t target_idx,
                               uint16_t signal, uint32_t param, int32_t success);
 
 /* Debug setup and teardown */
+void DEBUG_UNLINK_FROM_LIST(int16_t proc_idx);
 void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag);
 void DEBUG_CLEAR_INTERNAL(int16_t proc_idx, int8_t flag);
 
@@ -138,6 +139,9 @@ void AUDIT_$LOG_EVENT(void *event_header, uint16_t *success_flag,
 int8_t XPD_$INHERIT_PTRACE_OPTIONS(int16_t entry_offset);
 void XPD_$CAPTURE_FAULT(void *param1, void *param2,
                         void *param3, void *param4);
+void XPD_$RESET_PTRACE_OPTS(void *ptrace_opts);
+void XPD_$WRITE(void *addr, uint32_t offset, const void *data,
+                const void *data2, status_$t *status_ret);
 
 /*
  * ============================================================================
