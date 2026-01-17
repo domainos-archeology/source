@@ -150,7 +150,7 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint16_t segment,
                     goto relock_and_check;
                 }
             }
-            VTOC_$LOOKUP((char *)aote + 0x9C, status);
+            VTOC_$LOOKUP((vtoc_$lookup_req_t *)((char *)aote + 0x9C), status);
         }
     }
 
@@ -164,7 +164,8 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint16_t segment,
                 goto relock_and_check;
             }
         }
-        VTOCE_$READ((char *)aote + 0x9C, (char *)aote + 0x0C, status);
+        VTOCE_$READ((vtoc_$lookup_req_t *)((char *)aote + 0x9C),
+                    (vtoce_$result_t *)((char *)aote + 0x0C), status);
 
         /* Clear per-boot fields if object has them */
         if ((*((uint8_t *)((char *)aote + 0x0F)) & 2) != 0) {

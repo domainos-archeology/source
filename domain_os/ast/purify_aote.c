@@ -98,7 +98,8 @@ void ast_$purify_aote(aote_t *aote, uint16_t flags, status_$t *status)
 
         /* Write to VTOCE */
         ML_$UNLOCK(AST_LOCK_ID);
-        VTOCE_$WRITE((char *)aote + 0x9C, attrs_buffer, (uint8_t)flags, status);
+        VTOCE_$WRITE((vtoc_$lookup_req_t *)((char *)aote + 0x9C),
+                     (vtoce_$result_t *)attrs_buffer, (uint8_t)flags, status);
         ML_$LOCK(AST_LOCK_ID);
 
         if (*status != status_$ok) {

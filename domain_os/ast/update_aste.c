@@ -88,10 +88,10 @@ void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, uint16_t flags,
 
     /* Write to disk via FM */
     /* VTOCE pointer at aote + 0x9C */
-    FM_$WRITE((char *)aote + 0x9C,
+    FM_$WRITE((fm_$file_ref_t *)((char *)aote + 0x9C),
               *((uint32_t *)((char *)aste + 0x08)),  /* VTOCE pointer from ASTE */
               aste->timestamp,                       /* Segment number */
-              disk_data,
+              (fm_$entry_t *)disk_data,
               (uint8_t)flags,
               status);
 

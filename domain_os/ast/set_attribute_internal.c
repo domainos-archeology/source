@@ -21,12 +21,7 @@
 
 /* PROC1_$TYPE and PROC1_$CURRENT from proc1.h via ast_internal.h */
 
-/* Nil UID for comparison */
-#if defined(M68K)
-#define UID_$NIL           (*(uid_t *)0xE1737C)
-#else
-#define UID_$NIL           uid_$nil
-#endif
+/* UID_$NIL is defined in base/base.h */
 
 /* Status codes */
 #define status_$file_object_is_remote       0x000F0002

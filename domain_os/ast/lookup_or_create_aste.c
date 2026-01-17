@@ -149,9 +149,9 @@ inserted:
             }
 
             /* Read file map from disk */
-            FM_$READ((char *)aote + 0x9C,
+            FM_$READ((fm_$file_ref_t *)((char *)aote + 0x9C),
                      *((uint32_t *)((char *)aste + 0x08)),
-                     segment, segmap, status);
+                     segment, (fm_$entry_t *)segmap, status);
         }
 
         ML_$LOCK(AST_LOCK_ID);
