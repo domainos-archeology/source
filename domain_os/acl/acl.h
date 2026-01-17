@@ -50,6 +50,28 @@ int16_t ACL_$RIGHTS(uid_t *uid, void *unused, uint32_t *required_mask,
                     int16_t *option_flags, status_$t *status);
 
 /*
+ * ACL_$RIGHTS_CHECK - Check access rights for an object (variant)
+ *
+ * Similar to ACL_$RIGHTS but with different parameter ordering.
+ *
+ * Parameters:
+ *   check_uid     - UID to check against (user/process UID, passed by value)
+ *   file_uid      - UID of object to check
+ *   required_mask - Pointer to required access rights mask (or NULL)
+ *   option_flags  - Pointer to option flags (or NULL)
+ *   check_flag    - Pointer to check flag
+ *   status        - Output status code
+ *
+ * Returns:
+ *   Non-zero if access granted, 0 if denied
+ *
+ * Original address: TBD
+ */
+int16_t ACL_$RIGHTS_CHECK(uid_t check_uid, uid_t *file_uid,
+                          void *required_mask, void *option_flags,
+                          int8_t *check_flag, status_$t *status);
+
+/*
  * ACL_$SET_ACL_CHECK - Check ACL permissions for set operation
  *
  * Verifies the caller has permission to modify ACL on a file.

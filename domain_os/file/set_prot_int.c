@@ -57,19 +57,24 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
         uint32_t data[8];       /* 32 bytes */
     } location_info;
 
+    /*
+     * Lookup context structure for AST_$GET_LOCATION
+     * AST_$GET_LOCATION expects UID at offset 8 within the structure.
+     * It writes location data and sets remote_flags bit 7 if remote.
+     */
     struct {
-        uint32_t uid_high;
-        uint32_t uid_low;
+        uint32_t data[2];       /* 8 bytes - location output starts here */
+        uid_t    uid;           /* 8 bytes - UID input at offset 8 */
+        uint32_t data2[4];      /* 16 bytes - more location output */
         uint8_t  pad[5];
-        uint8_t  remote_flags;
+        uint8_t  remote_flags;  /* Bit 7 set if remote */
     } lookup_context;
 
-    uint8_t vol_out[4];
-    uint8_t uid_out[8];
+    uint32_t vol_uid_out;       /* Volume UID output from AST_$GET_LOCATION */
 
     /* For ACL operations */
     uint8_t exsid[104];         /* Extended SID buffer */
-    uint8_t attr_result[8];     /* Attribute result from remote op */
+    clock_t attr_result;        /* Attribute result from remote op (modification time) */
     int8_t acl_check_result;
     int8_t permission_flags[2];
     int16_t locksmith_result;
@@ -104,12 +109,13 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
     if (same_volume_result >= 0) {
         /*
          * Local file - get location info
+         * Copy UID to lookup_context.uid field (at offset 8)
          */
-        lookup_context.uid_high = file_uid->high;
-        lookup_context.uid_low = file_uid->low;
+        lookup_context.uid.high = file_uid->high;
+        lookup_context.uid.low = file_uid->low;
         lookup_context.remote_flags &= ~0x40;
 
-        AST_$GET_LOCATION(&lookup_context, 0, vol_out, uid_out, &local_status);
+        AST_$GET_LOCATION((uint32_t *)&lookup_context, 0, 0, &vol_uid_out, &local_status);
 
         if (local_status != status_$ok) {
             *status_ret = local_status;
@@ -136,7 +142,7 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
                                 attr_type,
                                 exsid,
                                 (uint8_t)subsys_flag,
-                                attr_result,
+                                &attr_result,
                                 status_ret);
 
         if (*status_ret == status_$file_bad_reply_received_from_remote) {
@@ -144,7 +150,7 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
         } else if (*status_ret == status_$ok) {
             /* Update local AST cache with result */
             AST_$SET_ATTR(file_uid, attr_type, *(uint32_t *)acl_data, 0,
-                          (uint32_t *)attr_result, status_ret);
+                          (uint32_t *)&attr_result, status_ret);
             goto audit_and_return;
         } else {
             goto audit_and_return;

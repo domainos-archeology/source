@@ -27,9 +27,7 @@
 #include "proc/proc.h"
 #include "acl/acl.h"
 
-/* External references */
-extern uid_t UID_$NIL;
-extern int16_t PROC1_$AS_ID;
+/* External reference not in headers */
 extern uint32_t NODE_$ME;
 
 /* Per-process lock count table */
@@ -50,19 +48,7 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
     uint16_t req_mode;
 
     /* Lock entry info buffer from FILE_$READ_LOCK_ENTRYI */
-    struct {
-        uint32_t    context;        /* 0x00 */
-        uint32_t    node_low;       /* 0x04 */
-        uint32_t    node_high;      /* 0x08 */
-        uint32_t    uid_high;       /* 0x0C */
-        uint32_t    uid_low;        /* 0x10 */
-        uint16_t    next;           /* 0x14 */
-        uint16_t    sequence;       /* 0x16 */
-        uint8_t     refcount;       /* 0x18 */
-        uint8_t     flags1;         /* 0x19 */
-        uint8_t     rights;         /* 0x1A */
-        uint8_t     flags2;         /* 0x1B */
-    } lock_info;
+    file_lock_info_internal_t lock_info;
 
     /*
      * Determine ASID of target process
@@ -136,18 +122,18 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
              * Check if this lock entry matches the target process's node
              * and the requested file
              */
-            if ((lock_info.node_low & 0xFFFFF) == (proc_uid->low & 0xFFFFF)) {
+            if ((lock_info.owner_node & 0xFFFFF) == (proc_uid->low & 0xFFFFF)) {
                 /*
                  * Node matches - check if status is OK and UID matches
                  */
                 if ((*status_ret == status_$ok) &&
-                    (lock_info.uid_high == file_uid->high) &&
-                    (lock_info.uid_low == file_uid->low)) {
+                    (lock_info.file_uid.high == file_uid->high) &&
+                    (lock_info.file_uid.low == file_uid->low)) {
 
                     req_mode = *lock_mode;
 
                     /* Check mode matches (or mode=0 for any) */
-                    if ((req_mode == lock_info.sequence) || (req_mode == 0)) {
+                    if ((req_mode == lock_info.mode) || (req_mode == 0)) {
                         /*
                          * Call FILE_$PRIV_UNLOCK with remote unlock flags
                          * remote_flags = -1 (0xFF prefix = remote unlock)
@@ -157,7 +143,7 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
                                           (uint32_t)req_mode << 16,
                                           -1,                    /* remote_flags = -1 */
                                           lock_info.context,     /* context */
-                                          lock_info.node_low,    /* node address */
+                                          lock_info.owner_node,  /* node address */
                                           dtv_out,               /* dtv_out */
                                           status_ret);
 

@@ -734,7 +734,7 @@ static void priv_lock_remote_lock(priv_lock_ctx_t *ctx, file_lock_entry_detail_t
                    (uint16_t)(ctx->flags >> 24),
                    (entry->flags2 & 2) ? -1 : 0,
                    entry->context,
-                   ctx->lock_ptr_out, seq_out,
+                   (uint16_t *)ctx->lock_ptr_out, seq_out,
                    &ctx->attr_buf[0], ctx->status_ret);
 
     if (*ctx->status_ret == 0) {

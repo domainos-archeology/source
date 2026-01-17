@@ -48,36 +48,7 @@ extern uint16_t CAL_$BOOT_VOLX;
  */
 extern uint32_t ROUTE_$PORT;
 
-/*
- * DISK_$LVUID_TO_VOLX - Convert logical volume UID to volume index
- *
- * Parameters:
- *   lvuid      - Logical volume UID
- *   volx_table - Output table for volume info
- *
- * Sets status in volx_table[1]
- */
-extern void DISK_$LVUID_TO_VOLX(uid_t *lvuid, uint16_t *volx_table);
-
-/*
- * Internal lock entry info structure (expanded format)
- * Size: 34 bytes (0x22)
- *
- * This is the internal format used between FILE_$READ_LOCK_ENTRYI
- * and its callers. Contains more detail than the external format.
- */
-typedef struct {
-    uid_t    file_uid;      /* 0x00: File UID (8 bytes) */
-    uint32_t context;       /* 0x08: Lock context */
-    uint32_t owner_node;    /* 0x0C: Owner's node address */
-    uint16_t side;          /* 0x10: Lock side (0=reader, 1=writer) */
-    uint16_t mode;          /* 0x12: Lock mode (from flags2 bits 3-6) */
-    uint16_t sequence;      /* 0x14: Lock sequence number */
-    uint32_t holder_node;   /* 0x16: Lock holder's node (NODE_$ME if local) */
-    uint32_t holder_port;   /* 0x1A: Lock holder's port (ROUTE_$PORT if local) */
-    uint32_t remote_node;   /* 0x1E: Remote node info */
-    uint32_t remote_port;   /* 0x22: Remote port info */
-} file_lock_info_internal_t;
+/* DISK_$LVUID_TO_VOLX and file_lock_info_internal_t are declared in headers */
 
 /*
  * FILE_$READ_LOCK_ENTRYI - Read lock entry information (internal)
@@ -142,8 +113,7 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
         /*
          * Non-zero first byte: Map volume UID to volume index
          */
-        DISK_$LVUID_TO_VOLX(file_uid, volx_table);
-        local_status = volx_table[1];  /* Status returned in second word */
+        DISK_$LVUID_TO_VOLX(file_uid, (int16_t *)&volx_table[0], &local_status);
 
         if (local_status != 0) {
             *status_ret = local_status;
@@ -315,7 +285,7 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
         }
 
         /* Verify lock holder is still valid */
-        FILE_$VERIFY_LOCK_HOLDER(&info_out->file_uid, &local_status);
+        FILE_$VERIFY_LOCK_HOLDER(info_out, &local_status);
 
         /*
          * If verification returns "not locked by this process",

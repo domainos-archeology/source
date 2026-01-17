@@ -17,6 +17,9 @@
 #include "vtoce/vtoce.h"
 #include "rem_file/rem_file.h"
 #include "audit/audit.h"
+#include "route/route.h"
+#include "disk/disk.h"
+#include "proc1/proc1.h"
 
 /*
  * ============================================================================
@@ -244,6 +247,23 @@ uint8_t FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t lock_index,
 void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr);
 
 /*
+ * Internal lock info structure (34 bytes)
+ * Output format for FILE_$LOCAL_READ_LOCK and FILE_$READ_LOCK_ENTRYI
+ */
+typedef struct {
+    uid_t    file_uid;      /* 0x00: File UID (8 bytes) */
+    uint32_t context;       /* 0x08: Lock context */
+    uint32_t owner_node;    /* 0x0C: Owner's node address */
+    uint16_t side;          /* 0x10: Lock side */
+    uint16_t mode;          /* 0x12: Lock mode */
+    uint16_t sequence;      /* 0x14: Lock sequence number */
+    uint32_t holder_node;   /* 0x16: Lock holder's node */
+    uint32_t holder_port;   /* 0x1A: Lock holder's port */
+    uint32_t remote_node;   /* 0x1E: Remote node info */
+    uint32_t remote_port;   /* 0x22: Remote port info */
+} file_lock_info_internal_t;
+
+/*
  * FILE_$READ_LOCK_ENTRYI - Read lock entry by iteration
  *
  * Iterates through lock entries, returning info about each.
@@ -257,7 +277,7 @@ void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr);
  * Original address: 0x00E6093C
  */
 void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
-                             void *info_out, status_$t *status_ret);
+                             file_lock_info_internal_t *info_out, status_$t *status_ret);
 
 /*
  * FILE_$READ_LOCK_ENTRYUI - Read lock entry by UID (unchecked)
@@ -286,7 +306,18 @@ void FILE_$READ_LOCK_ENTRYUI(uid_t *file_uid, void *info_out, status_$t *status_
  *
  * Original address: 0x00E6050E
  */
-void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, void *info_out, status_$t *status_ret);
+void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out, status_$t *status_ret);
+
+/*
+ * Extended lock entry query structure
+ * Passed from callers like FILE_$READ_LOCK_ENTRYUI
+ * Contains both the file UID and process identification
+ */
+typedef struct {
+    uid_t file_uid;      /* 0x00: File UID (8 bytes) */
+    uint16_t side;       /* 0x10: Lock side (0=reader, 1=writer) from flags2 bit 7 */
+    uint16_t asid;       /* 0x12: Process ASID to check */
+} lock_verify_request_t;
 
 /*
  * FILE_$LOCAL_LOCK_VERIFY - Verify local lock ownership
@@ -300,7 +331,7 @@ void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, void *info_out, status_$t *status_re
  *
  * Original address: 0x00E6081C
  */
-void FILE_$LOCAL_LOCK_VERIFY(void *request, status_$t *status_ret);
+void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_ret);
 
 /*
  * FILE_$VERIFY_LOCK_HOLDER - Verify lock holder is still valid
@@ -314,7 +345,7 @@ void FILE_$LOCAL_LOCK_VERIFY(void *request, status_$t *status_ret);
  *
  * Original address: 0x00E60732
  */
-void FILE_$VERIFY_LOCK_HOLDER(void *lock_info, status_$t *status_ret);
+void FILE_$VERIFY_LOCK_HOLDER(file_lock_info_internal_t *lock_info, status_$t *status_ret);
 
 /*
  * Helper: Audit lock/unlock operations

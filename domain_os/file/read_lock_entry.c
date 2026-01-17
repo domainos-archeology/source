@@ -59,7 +59,7 @@ void FILE_$READ_LOCK_ENTRY(uid_t *file_uid, uint16_t *index,
                             void *info_out, status_$t *status_ret)
 {
     uid_t local_uid;
-    uint8_t internal_buf[40];  /* Internal buffer for FILE_$READ_LOCK_ENTRYI */
+    file_lock_info_internal_t internal_buf;  /* Internal buffer for FILE_$READ_LOCK_ENTRYI */
     int16_t i;
     uint8_t *src, *dst;
 
@@ -68,11 +68,11 @@ void FILE_$READ_LOCK_ENTRY(uid_t *file_uid, uint16_t *index,
     local_uid.low = file_uid->low;
 
     /* Call internal function to get lock entry info */
-    FILE_$READ_LOCK_ENTRYI(&local_uid, index, internal_buf, status_ret);
+    FILE_$READ_LOCK_ENTRYI(&local_uid, index, &internal_buf, status_ret);
 
     /* On success, copy 26 bytes to output buffer */
     if (*status_ret == status_$ok) {
-        src = internal_buf;
+        src = (uint8_t *)&internal_buf;
         dst = (uint8_t *)info_out;
 
         /*

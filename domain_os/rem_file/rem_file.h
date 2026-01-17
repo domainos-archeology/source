@@ -300,8 +300,8 @@ void REM_FILE_$GROW_AREA(void *addr_info, uint16_t area_handle,
  *
  * Original address: 0x00E61E9A
  */
-void REM_FILE_$LOCAL_READ_LOCK(void *addr_info, void *lock_data,
-                                uint8_t *result_out, status_$t *status);
+void REM_FILE_$LOCAL_READ_LOCK(void *addr_info, void *file_uid,
+                                void *lock_info_out, status_$t *status);
 
 /*
  * REM_FILE_$NAME_ADD_HARD_LINKU - Add hard link on remote server

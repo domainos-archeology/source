@@ -62,7 +62,6 @@ static void FILE_$GET_DEFAULT_PROT(uid_t *file_uid, status_$t *status_ret,
     } lookup_context;
 
     uint8_t attr_buf[24];   /* Common attributes buffer */
-    uint8_t uid_buf[8];     /* UID output buffer */
 
     /* Copy file UID */
     lookup_context.uid_high = file_uid->high;
@@ -72,7 +71,7 @@ static void FILE_$GET_DEFAULT_PROT(uid_t *file_uid, status_$t *status_ret,
     lookup_context.remote_flags &= ~0x40;
 
     /* Get common attributes (mode 1 = get protection) */
-    AST_$GET_COMMON_ATTRIBUTES(uid_buf, 1, attr_buf, status_ret);
+    AST_$GET_COMMON_ATTRIBUTES(file_uid, 1, attr_buf, status_ret);
 
     /* Return protection value (first byte of attr_buf) */
     *prot_out = (uint16_t)attr_buf[0];

@@ -63,21 +63,26 @@ void FILE_$LOCATEI(uid_t *file_uid, uid_t *location_out, status_$t *status_ret)
     uid_t local_uid;
     uint8_t *flags_ptr;
 
-    /* Local buffers for AST_$GET_LOCATION outputs */
-    uint32_t ast_output1;
-    uint32_t ast_output2;
+    /* Volume UID output from AST_$GET_LOCATION */
+    uint32_t vol_uid_out;
 
-    /* Extended UID structure for the location query */
+    /*
+     * Extended UID structure for the location query
+     * AST_$GET_LOCATION expects UID at offset 8, and writes
+     * 32 bytes of location info back to the buffer
+     */
     struct {
-        uid_t uid;
-        uid_t location;
+        uint32_t data[2];    /* 8 bytes - location output */
+        uid_t uid;           /* 8 bytes - UID at offset 8 */
+        uid_t location;      /* 8 bytes - location output at offset 16 */
+        uint8_t padding[8];  /* Pad to 32 bytes */
     } query_buf;
 
     /* Copy input UID to local buffer */
     local_uid.high = file_uid->high;
     local_uid.low = file_uid->low;
 
-    /* Copy to query buffer */
+    /* Copy to query buffer at offset 8 */
     query_buf.uid.high = local_uid.high;
     query_buf.uid.low = local_uid.low;
 
@@ -89,7 +94,7 @@ void FILE_$LOCATEI(uid_t *file_uid, uid_t *location_out, status_$t *status_ret)
     *flags_ptr &= ~0x40;  /* Clear bit 6 */
 
     /* Call AST_$GET_LOCATION to get the file's location */
-    AST_$GET_LOCATION(&query_buf, 0, &ast_output1, &ast_output2, &status);
+    AST_$GET_LOCATION((uint32_t *)&query_buf, 0, 0, &vol_uid_out, &status);
 
     if (status == status_$ok) {
         /* Success - return the location from the query buffer */

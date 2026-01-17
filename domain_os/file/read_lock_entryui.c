@@ -24,21 +24,7 @@
 
 #include "file/file_internal.h"
 
-/*
- * Internal lock info structure (34 bytes) - matches read_lock_entryi.c
- */
-typedef struct {
-    uid_t    file_uid;      /* 0x00: File UID (8 bytes) */
-    uint32_t context;       /* 0x08: Lock context */
-    uint32_t owner_node;    /* 0x0C: Owner's node address */
-    uint16_t side;          /* 0x10: Lock side */
-    uint16_t mode;          /* 0x12: Lock mode */
-    uint16_t sequence;      /* 0x14: Lock sequence number */
-    uint32_t holder_node;   /* 0x16: Lock holder's node */
-    uint32_t holder_port;   /* 0x1A: Lock holder's port */
-    uint32_t remote_node;   /* 0x1E: Remote node info */
-    uint32_t remote_port;   /* 0x22: Remote port info */
-} file_lock_info_internal_t;
+/* file_lock_info_internal_t is defined in file_internal.h */
 
 /*
  * FILE_$READ_LOCK_ENTRYUI - Read lock entry by UID (unchecked)

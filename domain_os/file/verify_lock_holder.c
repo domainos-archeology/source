@@ -20,32 +20,7 @@
 
 #include "file/file_internal.h"
 
-/*
- * Lock info structure as passed to this function
- * (from FILE_$READ_LOCK_ENTRYI output)
- */
-typedef struct {
-    uid_t    file_uid;      /* 0x00: File UID (8 bytes) */
-    uint32_t context;       /* 0x08: Lock context */
-    uint32_t owner_node;    /* 0x0C: Owner's node address (offset 12) */
-    uint16_t side;          /* 0x10: Lock side (offset 16) */
-    uint16_t mode;          /* 0x12: Lock mode (offset 18) */
-    uint16_t sequence;      /* 0x14: Lock sequence number (offset 20) */
-    uint32_t holder_node;   /* 0x16: Lock holder's node (offset 22) */
-    uint32_t holder_port;   /* 0x1A: Lock holder's port (offset 26) */
-    uint32_t remote_node;   /* 0x1E: Remote node info (offset 30) */
-    uint32_t remote_port;   /* 0x22: Remote port info (offset 34) */
-} file_lock_info_t;
-
-/*
- * REM_FILE_$LOCAL_VERIFY - Remote lock verification
- *
- * Verifies a lock with a remote node.
- *
- * Original address: 0x00E61E20
- */
-extern void REM_FILE_$LOCAL_VERIFY(void *node_info, file_lock_info_t *lock_info,
-                                    status_$t *status_ret);
+/* file_lock_info_internal_t is defined in file_internal.h */
 
 /*
  * FILE_$VERIFY_LOCK_HOLDER - Verify lock holder is still valid
@@ -65,7 +40,7 @@ extern void REM_FILE_$LOCAL_VERIFY(void *node_info, file_lock_info_t *lock_info,
  *   4. If holder says "not locked", call unlock to clean up
  *   5. If unlock succeeds, return "not locked" to signal retry
  */
-void FILE_$VERIFY_LOCK_HOLDER(file_lock_info_t *lock_info, status_$t *status_ret)
+void FILE_$VERIFY_LOCK_HOLDER(file_lock_info_internal_t *lock_info, status_$t *status_ret)
 {
     status_$t verify_status;
     uint32_t owner_node_low;

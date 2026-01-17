@@ -52,24 +52,31 @@ int8_t FILE_$CHECK_SAME_VOLUME(uid_t *file_uid1, uid_t *file_uid2,
     status_$t location_status;
     int8_t result;
 
-    /* Location info structures */
+    /*
+     * Location info structures - AST_$GET_LOCATION expects:
+     *   - UID at offset 8 (bytes 8-15) as INPUT
+     *   - Writes 32 bytes of location info back to the buffer
+     */
     struct {
-        uint32_t data[7];       /* 28 bytes of location info */
+        uint32_t data[2];       /* 8 bytes - location output starts here */
+        uid_t    uid;           /* 8 bytes - UID input at offset 8 */
+        uint32_t data2[4];      /* 16 bytes - more location output */
         uint8_t  pad[5];
         uint8_t  remote_flags;  /* Bit 7 set if remote */
     } loc_info1;
 
     struct {
-        uint32_t data[2];
+        uint32_t data[2];       /* 8 bytes */
+        uid_t    uid;           /* 8 bytes - UID input at offset 8 */
         uint16_t volume_id;
         uint8_t  pad[3];
         uint8_t  remote_flags;
     } loc_info2;
 
-    uint8_t uid_buf1[8];
-    uint8_t uid_buf2[8];
-    uint8_t vol_out1[4];
-    uint8_t vol_out2[4];
+    uint32_t vol_uid1;
+    uint32_t vol_uid2;
+    uid_t neighbor_uid1;
+    uid_t neighbor_uid2;
 
     /* Copy and mask UIDs (clear type nibble from low word high byte) */
     uid1_high = file_uid1->high;
@@ -86,15 +93,15 @@ int8_t FILE_$CHECK_SAME_VOLUME(uid_t *file_uid1, uid_t *file_uid2,
         /* Get dismount sequence number to detect changes */
         dism_seqn_start = AST_$GET_DISM_SEQN();
 
-        /* Set up UID for first lookup */
-        ((uint32_t *)uid_buf1)[0] = uid1_high;
-        ((uint32_t *)uid_buf1)[1] = uid1_masked_low;
+        /* Set up UID for first lookup at offset 8 in the structure */
+        loc_info1.uid.high = uid1_high;
+        loc_info1.uid.low = uid1_masked_low;
 
         /* Clear remote flag before lookup */
         loc_info1.remote_flags &= ~0x40;
 
         /* Get location of first file */
-        AST_$GET_LOCATION(&loc_info1, 0, vol_out1, uid_buf1, &location_status);
+        AST_$GET_LOCATION((uint32_t *)&loc_info1, 0, 0, &vol_uid1, &location_status);
 
         if (location_status != status_$ok) {
             goto done;
@@ -114,19 +121,23 @@ int8_t FILE_$CHECK_SAME_VOLUME(uid_t *file_uid1, uid_t *file_uid2,
             }
 
             /* Get neighbor info for remote file */
+            neighbor_uid1.high = uid1_high;
+            neighbor_uid1.low = uid1_low;
+            neighbor_uid2.high = uid2_high;
+            neighbor_uid2.low = uid2_low;
             result = REM_FILE_$NEIGHBORS(loc_info1.data,
-                                         &uid1_high, &uid2_high,
+                                         &neighbor_uid1, &neighbor_uid2,
                                          &location_status);
             goto done;
         }
 
         /* First file is local, check second file */
-        ((uint32_t *)uid_buf2)[0] = uid2_high;
-        ((uint32_t *)uid_buf2)[1] = uid2_masked_low;
+        loc_info2.uid.high = uid2_high;
+        loc_info2.uid.low = uid2_masked_low;
 
         loc_info2.remote_flags &= ~0x40;
 
-        AST_$GET_LOCATION(&loc_info2, 1, vol_out2, uid_buf2, &location_status);
+        AST_$GET_LOCATION((uint32_t *)&loc_info2, 1, 0, &vol_uid2, &location_status);
 
         if (location_status != status_$ok) {
             goto done;
@@ -137,7 +148,7 @@ int8_t FILE_$CHECK_SAME_VOLUME(uid_t *file_uid1, uid_t *file_uid2,
          * Both files must be local (bit 7 clear) and have matching volume IDs.
          */
         result = ((int8_t)loc_info2.remote_flags >= 0) &&
-                 (loc_info1.data[1] == loc_info2.volume_id) ? -1 : 0;
+                 (vol_uid1 == vol_uid2) ? -1 : 0;
 
         /* Check if dismount sequence changed */
         dism_seqn_end = AST_$GET_DISM_SEQN();

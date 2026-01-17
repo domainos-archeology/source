@@ -49,17 +49,6 @@
 extern uint16_t FILE_$ASID_MAP[];
 
 /*
- * Extended lock entry query structure
- * Passed from callers like FILE_$READ_LOCK_ENTRYUI
- * Contains both the file UID and process identification
- */
-typedef struct {
-    uid_t file_uid;      /* 0x00: File UID (8 bytes) */
-    uint16_t side;       /* 0x10: Lock side (0=reader, 1=writer) from flags2 bit 7 */
-    uint16_t asid;       /* 0x12: Process ASID to check */
-} lock_verify_request_t;
-
-/*
  * FILE_$LOCAL_LOCK_VERIFY - Verify local lock ownership
  *
  * Checks if the specified file is locked by the process identified
