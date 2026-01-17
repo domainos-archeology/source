@@ -40,8 +40,13 @@
 /* Default initial file size - at FILE_$LOCK_CONTROL + 0x2C0 */
 extern uint32_t FILE_$DEFAULT_SIZE;     /* 0xE823E8 */
 
-/* Nil user UID for default ownership */
-extern uid_t PPO_$NIL_USER_UID;         /* 0xE174EC */
+/*
+ * Nil UIDs for default ownership (owner, group, org)
+ * These are copied as a group (24 bytes) when no SID is available.
+ */
+extern uid_t PPO_$NIL_USER_UID;         /* 0xE174EC: Nil user (owner) UID */
+extern uid_t RGYC_$G_NIL_UID;           /* 0xE17524: Nil group UID */
+extern uid_t PPO_$NIL_ORG_UID;          /* 0xE17574: Nil org UID */
 
 /* VTOC allocation - actual signature differs from vtoc.h declaration */
 extern void VTOC_$ALLOCATE(void *location_info, void *attrs, status_$t *status);
@@ -114,8 +119,31 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
     int16_t is_dir;
     int8_t is_file;
     uid_t parent_uid;
-    uid_t owner_uid;
-    uid_t *owner_ptr;
+
+    /*
+     * Owner info buffer (48 bytes total):
+     *   - Bytes 0x00-0x07: Owner UID
+     *   - Bytes 0x08-0x0F: Group UID
+     *   - Bytes 0x10-0x17: Org UID
+     *   - Bytes 0x18-0x23: Reserved (padding, filled by acl_result in stack layout)
+     *   - Bytes 0x24-0x2F: Extended ACL data
+     *
+     * When no SID is available (acl_result[0] == 0xC), all three nil UIDs
+     * are copied here. When owner_info is provided, it points to this same
+     * structure layout.
+     *
+     * Note: In the original assembly, acl_result is stored in the 'reserved'
+     * area due to stack layout. When copying to create_attrs, the code reads
+     * from owner_ptr + 0x24 to get the extended ACL data.
+     */
+    struct {
+        uid_t owner;        /* 0x00: Owner UID */
+        uid_t group;        /* 0x08: Group UID */
+        uid_t org;          /* 0x10: Org UID */
+        int32_t reserved[3];/* 0x18: Reserved/acl_result values */
+        uint8_t ext[12];    /* 0x24: Extended ACL data */
+    } owner_buf;
+    uint8_t *owner_ptr;
     const uid_t *default_acl;
     int32_t acl_result[3];
     uint8_t acl_data[40];
@@ -175,28 +203,65 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
         is_dir = 0;
     }
 
-    /* Set up owner pointer */
-    owner_ptr = &owner_uid;
+    /* Set up owner pointer - points to 36-byte owner info buffer */
+    owner_ptr = (uint8_t *)&owner_buf;
 
     if ((flags & 2) == 0) {
         /* Get owner/ACL info from current process */
-        ACL_$GET_RE_ALL_SIDS(acl_data, &owner_uid, prot_info, acl_result, &status);
+        ACL_$GET_RE_ALL_SIDS(acl_data, &owner_buf.owner, prot_info, acl_result, &status);
 
-        /* If result[0] == 0xC (no SID), use nil user UID */
+        /*
+         * If result[0] == 0xC (no SID available), use nil UIDs for
+         * owner, group, and org. The assembly shows all three UIDs
+         * are copied from separate global addresses.
+         */
         if (acl_result[0] == 0x0C) {
-            owner_uid.high = PPO_$NIL_USER_UID.high;
-            owner_uid.low = PPO_$NIL_USER_UID.low;
+            owner_buf.owner.high = PPO_$NIL_USER_UID.high;
+            owner_buf.owner.low = PPO_$NIL_USER_UID.low;
+            owner_buf.group.high = RGYC_$G_NIL_UID.high;
+            owner_buf.group.low = RGYC_$G_NIL_UID.low;
+            owner_buf.org.high = PPO_$NIL_ORG_UID.high;
+            owner_buf.org.low = PPO_$NIL_ORG_UID.low;
+        }
+
+        /*
+         * Copy acl_result to owner_buf.ext (at offset 0x24).
+         * In the original assembly, acl_result happened to be at
+         * owner_ptr + 0x24 due to stack layout. We replicate this
+         * by explicitly copying.
+         */
+        {
+            int32_t *dst = (int32_t *)owner_buf.ext;
+            dst[0] = acl_result[0];
+            dst[1] = acl_result[1];
+            dst[2] = acl_result[2];
         }
     } else {
-        /* Use provided owner_info or nil user UID */
+        /* Use provided owner_info or nil UIDs */
         if (owner_info == NULL) {
-            owner_uid.high = PPO_$NIL_USER_UID.high;
-            owner_uid.low = PPO_$NIL_USER_UID.low;
+            /*
+             * No owner_info provided - use nil UIDs for all three
+             * and mark all SID results as unavailable (0xC).
+             */
+            owner_buf.owner.high = PPO_$NIL_USER_UID.high;
+            owner_buf.owner.low = PPO_$NIL_USER_UID.low;
+            owner_buf.group.high = RGYC_$G_NIL_UID.high;
+            owner_buf.group.low = RGYC_$G_NIL_UID.low;
+            owner_buf.org.high = PPO_$NIL_ORG_UID.high;
+            owner_buf.org.low = PPO_$NIL_ORG_UID.low;
             acl_result[0] = 0x0C;
             acl_result[1] = 0x0C;
             acl_result[2] = 0x0C;
+
+            /* Copy to owner_buf.ext for consistency */
+            {
+                int32_t *dst = (int32_t *)owner_buf.ext;
+                dst[0] = 0x0C;
+                dst[1] = 0x0C;
+                dst[2] = 0x0C;
+            }
         } else {
-            owner_ptr = owner_info;
+            owner_ptr = (uint8_t *)owner_info;
         }
     }
 
@@ -213,7 +278,7 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
         /* Create remote file */
         REM_FILE_$CREATE_TYPE((uid_t *)&parent_info.location.parent_uid,
                               file_type, (uid_t *)type_uid, size, flags,
-                              &owner_uid, parent_info.attrs,
+                              &owner_buf.owner, parent_info.attrs,
                               &create_attrs.vol_uid, &status);
 
         /* Copy returned file UID */

@@ -444,28 +444,9 @@ void ACL_$DEF_ACLDATA(void *acl_data_out, void *uid_out);
  */
 
 /*
- * ============================================================================
- * External REM_FILE Functions
- * ============================================================================
+ * NOTE: REM_FILE_$* functions are declared in rem_file/rem_file.h
+ * which is included above. No need to redeclare them here.
  */
-
-/*
- * REM_FILE_$NEIGHBORS - Get neighbor info for remote file
- *
- * Original address: 0x00E621B8
- */
-int8_t REM_FILE_$NEIGHBORS(void *location_info, void *uid1, void *uid2,
-                            status_$t *status_ret);
-
-/*
- * REM_FILE_$FILE_SET_PROT - Set protection on remote file
- *
- * Original address: 0x00E62B64
- */
-void REM_FILE_$FILE_SET_PROT(void *location_info, uid_t *file_uid,
-                              void *acl_data, uint16_t attr_type,
-                              void *exsid, uint8_t subsys_flag,
-                              void *attr_result, status_$t *status_ret);
 
 /*
  * ============================================================================
