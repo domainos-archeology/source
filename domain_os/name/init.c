@@ -12,22 +12,10 @@
  */
 
 #include "name/name_internal.h"
-#include "misc/string.h"
 
 /* External references */
 extern int16_t CAL_$BOOT_VOLX;  /* Boot volume index */
 extern uint32_t NODE_$ME;       /* This node's ID */
-
-/* Forward declarations */
-extern void ACL_$ENTER_SUPER(void);
-extern void ACL_$EXIT_SUPER(void);
-extern void DIR_$INIT(void);
-extern void VTOC_$GET_NAME_DIRS(int16_t volx, uid_t *root_uid, uid_t *node_uid, status_$t *status);
-extern void FILE_$SET_DIRPTR(uid_t *dir_uid, uid_t *target_uid, status_$t *status);
-extern void VFMT_$FORMATN(char *format, char *output, void *param1, int16_t *out_len);
-extern void ERROR_$PRINT(char *msg, void *params);
-extern void TIME_$WAIT(void *param1, void *param2, status_$t *status);
-extern void CRASH_SYSTEM(status_$t *status);
 
 /* Global NAME data area at 0xE80264 */
 uid_t NAME_$NODE_DATA_UID;      /* +0x00 */

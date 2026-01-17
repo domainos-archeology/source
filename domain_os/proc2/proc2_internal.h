@@ -109,30 +109,6 @@ void FUN_00e420b8(proc2_info_t *info, int16_t param);
 
 /*
  * ============================================================================
- * External Module Functions - PROC1
- * ============================================================================
- */
-
-extern uint16_t PROC1_$CURRENT;   /* Current process PID */
-extern uint16_t PROC1_$AS_ID;     /* Current address space ID */
-
-void PROC1_$GET_ANY_CPU_USAGE(int16_t *pid, void *usage1, void *usage2, void *usage3);
-void PROC1_$UNBIND(uint16_t pid, status_$t *status);
-
-/*
- * ============================================================================
- * External Module Functions - ACL (not in acl.h)
- * ============================================================================
- */
-
-void ACL_$ALLOC_ASID(uint16_t pid, status_$t *status_ret);
-void ACL_$CLEAR_SUPER(void);
-void ACL_$GET_PID_SID(int16_t pid, uid_t *sid, status_$t *status);
-int8_t ACL_$CHECK_DEBUG_RIGHTS(uint16_t *pid);
-int8_t ACL_$CHECK_FAULT_RIGHTS(int16_t src_offset, int16_t dst_offset);
-
-/*
- * ============================================================================
  * External Module Functions - FIM (not in fim.h)
  * ============================================================================
  */
@@ -142,27 +118,6 @@ void FIM_$PROC2_STARTUP(void *context);
 void FIM_$DELIVER_TRACE_FAULT(uint16_t asid);
 void FIM_$FAULT_RETURN(void *context, void *param2, void *param3);
 void FIM_$POP_SIGNAL(void *context);
-
-/*
- * ============================================================================
- * External Module Functions - NAME
- * ============================================================================
- */
-
-void NAME_$INIT_ASID(int16_t *asid_ptr, int16_t *status_ptr);
-void NAME_$FORK(uint16_t *parent_asid, int16_t *child_asid);
-void NAME_$RESOLVE(char *name, int16_t *name_len, uid_t *uid_ret, status_$t *status_ret);
-
-/*
- * ============================================================================
- * External Module Functions - FILE
- * ============================================================================
- */
-
-void FILE_$LOCK(uid_t *uid, void *param1, void *param2, void *param3,
-                void *param4, status_$t *status);
-void FILE_$FORK_LOCK(void *asid_ptr, status_$t *status);
-void FILE_$PRIV_UNLOCK_ALL(void *asid_ptr);
 
 /*
  * ============================================================================
@@ -209,13 +164,5 @@ void PCHIST_$UNIX_PROFIL_FORK(void *pid_ptr, void *asid_ptr);
 int8_t OS_$BOOT_ERRCHK(char *msg1, char *msg2, uint16_t *param, status_$t *status_ret);
 int8_t TAPE_$BOOT(status_$t *status_ret);
 int8_t FLOP_$BOOT(status_$t *status_ret, status_$t *status_ret2);
-
-/*
- * ============================================================================
- * External Module Functions - MMU
- * ============================================================================
- */
-
-uint8_t MMU_$NORMAL_MODE(void);
 
 #endif /* PROC2_INTERNAL_H */

@@ -24,4 +24,6 @@
  */
 extern uint32_t DIR_$FIND_NET(uint32_t param_1, uint32_t *index);
 
+extern void DIR_$INIT();
+
 #endif /* DIR_H */
