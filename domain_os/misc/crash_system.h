@@ -19,8 +19,32 @@
  * @param status_p: Pointer to status code that caused the crash
  *
  * This function does not return.
+ *
+ * Original address: 0x00E1E700
  */
 extern void CRASH_SYSTEM(const status_$t *status_p);
+
+/*
+ * CRASH_SHOW_STRING - Display a string during crash handling
+ *
+ * Outputs a formatted string to the crash console (display or serial).
+ * This function preserves ALL registers (D0-D7, A0-A7) so it can be
+ * called during crash handling without disturbing the crash state.
+ *
+ * The string format supports:
+ *   - Normal ASCII characters (0x01-0x24, 0x26-0x7F): printed as-is
+ *   - '%' (0x25): terminates string and prints CR/LF
+ *   - NUL (0x00) followed by 2 bytes: prints the 2 bytes as a hex word
+ *   - Negative byte (0x80-0xFF) followed by 4 bytes: prints as hex long
+ *
+ * Example: "Error code: \0\x12\x34%"  prints "Error code: 1234" + newline
+ *
+ * @param str: Pointer to format string
+ *
+ * Original address: 0x00E1E7B8
+ * Size: 16 bytes
+ */
+extern void CRASH_SHOW_STRING(const char *str);
 
 /*
  * Crash data - available for debugging after crash

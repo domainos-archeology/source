@@ -36,7 +36,31 @@ uint32_t CRASH_USP;                         /* User stack pointer */
 #define CRASH_DUMP_BASE  ((volatile uint32_t *)0x00e00000)
 #define CRASH_MAGIC      0xabcdef01
 
-/* Internal: print crash message */
+/* PROM vector addresses for crash console output */
+#define PROM_PUTC_VECTOR        ((void (**)(void))0x00000108)
+#define PROM_RELOAD_FONT_VECTOR ((void (**)(void))0x00000114)
+
+/* Display memory mapping constants */
+#define DISPLAY_VA_START    0x00FC0000
+#define DISPLAY_PPN_START   0x80
+#define DISPLAY_PPN_END     0x100
+#define DISPLAY_PAGE_SIZE   0x400
+
+/* MMU flags for display mapping */
+#define MMU_DISPLAY_FLAGS   0x26
+
+/* ASCII characters */
+#define ASCII_CR    0x0D
+#define ASCII_LF    0x0A
+#define ASCII_PERCENT 0x25
+
+/* External MMU function */
+extern void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint16_t flags);
+
+/* Internal helper functions for crash output */
+static void remap_display(void);
+static void call_prom_reload_font(void);
+static void call_prom_putc(char c);
 static void crash_puts_string(const char *str);
 
 /*
@@ -130,16 +154,215 @@ void CRASH_SYSTEM(const status_$t *status_p)
 }
 
 /*
- * crash_puts_string - Print string to crash console
+ * remap_display - Remap display memory for crash output
  *
- * This would output to the display or serial console.
- * Original at 0x00E1E7C8.
+ * Maps display memory (0xFC0000-0xFFFFF) to physical pages 0x80-0xFF.
+ * This ensures the display is accessible during a crash even if the
+ * normal mappings have been corrupted.
+ *
+ * Original address: 0x00E1E82A
+ * Size: 58 bytes
+ */
+static void remap_display(void)
+{
+    uint32_t ppn;
+    uint32_t va;
+    uint16_t saved_sr;
+
+    /* Disable interrupts during MMU manipulation */
+    DISABLE_INTERRUPTS(saved_sr);
+
+    va = DISPLAY_VA_START;
+    for (ppn = DISPLAY_PPN_START; ppn < DISPLAY_PPN_END; ppn++) {
+        MMU_$INSTALL(ppn, va, MMU_DISPLAY_FLAGS);
+        va += DISPLAY_PAGE_SIZE;
+    }
+
+    RESTORE_INTERRUPTS(saved_sr);
+}
+
+/*
+ * call_prom_reload_font - Reload display font from PROM
+ *
+ * Tail-calls the PROM font reload routine via vector at 0x114.
+ * This ensures the font is available for crash message display.
+ *
+ * Original address: 0x00E1E822
+ * Size: 6 bytes
+ */
+static void call_prom_reload_font(void)
+{
+    void (*reload_font)(void) = *PROM_RELOAD_FONT_VECTOR;
+    reload_font();
+}
+
+/*
+ * call_prom_putc - Output a character via PROM
+ *
+ * Calls the PROM putc routine via vector at 0x108 to output
+ * a single character to the crash console.
+ *
+ * This function preserves D0-D2 and A0 as the original does.
+ *
+ * Original address: 0x00E1E812
+ * Size: 16 bytes
+ *
+ * @param c: Character to output
+ */
+static void call_prom_putc(char c)
+{
+    /*
+     * The original saves D0-D2 and A0, calls PROM via vector,
+     * and restores them. In C we rely on the calling convention
+     * to handle this, but the PROM routine might clobber registers.
+     */
+#if defined(__m68k__) || defined(M68K)
+    register char ch __asm__("d1") = c;
+    void (*putc_func)(void) = *PROM_PUTC_VECTOR;
+
+    __asm__ volatile (
+        "movem.l %%d0-%%d2/%%a0, -(%%sp)\n\t"
+        "jsr (%0)\n\t"
+        "movem.l (%%sp)+, %%d0-%%d2/%%a0"
+        :
+        : "a" (putc_func), "d" (ch)
+        : "memory"
+    );
+#else
+    /* Non-m68k stub for compilation testing */
+    (void)c;
+#endif
+}
+
+/*
+ * crash_puts_string - Print formatted string to crash console
+ *
+ * Outputs a formatted string to the crash console. The string format
+ * supports embedded hex values:
+ *   - Normal chars (> 0): printed as-is
+ *   - '%' (0x25): terminates string, prints CR/LF
+ *   - NUL (0x00) followed by 2 bytes: prints as 4-digit hex
+ *   - Negative byte (< 0) followed by 4 bytes: prints as 8-digit hex
+ *
+ * Original address: 0x00E1E7C8
+ * Size: 74 bytes
+ *
+ * @param str: Pointer to format string
  */
 static void crash_puts_string(const char *str)
 {
-    (void)str;
-    /* TODO: Implement console output */
-    /* Original likely writes directly to display hardware */
+    const uint8_t *p = (const uint8_t *)str;
+    int8_t c;
+    uint32_t hex_val;
+    int nibbles;
+    int i;
+    uint8_t nibble;
+
+    /* Ensure display is mapped and font is loaded */
+    remap_display();
+    call_prom_reload_font();
+
+    while (1) {
+        c = (int8_t)*p++;
+
+        if (c > 0) {
+            /* Normal printable character */
+            if (c == ASCII_PERCENT) {
+                /* '%' terminates string - print newline */
+                call_prom_putc(ASCII_CR);
+                call_prom_putc(ASCII_LF);
+                return;
+            }
+            call_prom_putc(c);
+        } else if (c < 0) {
+            /* Negative byte: next 4 bytes are hex long */
+            hex_val = ((uint32_t)p[0] << 24) |
+                      ((uint32_t)p[1] << 16) |
+                      ((uint32_t)p[2] << 8) |
+                      (uint32_t)p[3];
+            p += 4;
+            nibbles = 8;  /* 8 hex digits */
+
+            /* Print hex digits */
+            for (i = 0; i < nibbles; i++) {
+                /* Rotate left 4 bits to get next nibble */
+                hex_val = (hex_val << 4) | (hex_val >> 28);
+                nibble = hex_val & 0x0F;
+                if (nibble >= 10) {
+                    nibble += 7;  /* 'A' - '0' - 10 = 7 */
+                }
+                call_prom_putc('0' + nibble);
+            }
+        } else {
+            /* NUL byte: next 2 bytes are hex word */
+            hex_val = ((uint32_t)p[0] << 24) |
+                      ((uint32_t)p[1] << 16);
+            p += 2;
+            nibbles = 4;  /* 4 hex digits */
+
+            /* Print hex digits */
+            for (i = 0; i < nibbles; i++) {
+                hex_val = (hex_val << 4) | (hex_val >> 28);
+                nibble = hex_val & 0x0F;
+                if (nibble >= 10) {
+                    nibble += 7;
+                }
+                call_prom_putc('0' + nibble);
+            }
+        }
+    }
+}
+
+/*
+ * CRASH_SHOW_STRING - Display a string during crash handling
+ *
+ * This function preserves ALL registers before calling crash_puts_string.
+ * This is critical during crash handling to preserve the crash state
+ * for debugging.
+ *
+ * Original address: 0x00E1E7B8
+ * Size: 16 bytes
+ *
+ * Assembly:
+ *   movem.l D0-D7/A0-A7,-(SP)   ; Save all registers
+ *   movea.l (0x44,SP),A0        ; Get string pointer from original stack
+ *   bsr     crash_puts_string   ; Call internal routine
+ *   movem.l (SP)+,D0-D7/A0-A7   ; Restore all registers
+ *   rts
+ *
+ * @param str: Pointer to format string
+ */
+void CRASH_SHOW_STRING(const char *str)
+{
+#if defined(__m68k__) || defined(M68K)
+    /*
+     * We need to save ALL registers, call crash_puts_string,
+     * then restore ALL registers. This is tricky in C because
+     * the compiler may use registers before we can save them.
+     *
+     * The safest approach is inline assembly for the entire function,
+     * but we can approximate by saving/restoring around the call.
+     */
+    __asm__ volatile (
+        "movem.l %%d0-%%d7/%%a0-%%a6, -(%%sp)\n\t"
+        "movea.l %0, %%a0\n\t"
+        :
+        : "g" (str)
+        : "memory"
+    );
+
+    crash_puts_string(str);
+
+    __asm__ volatile (
+        "movem.l (%%sp)+, %%d0-%%d7/%%a0-%%a6"
+        :
+        :
+        : "memory"
+    );
+#else
+    /* Non-m68k: just call directly */
+    crash_puts_string(str);
+#endif
 }
 
 /*
