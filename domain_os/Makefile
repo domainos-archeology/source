@@ -22,22 +22,29 @@ DIST_DIR := dist/$(TARGET_SAU)
 # Generate library paths for all subsystems
 SUBSYSTEM_LIBS := $(foreach sub,$(SUBSYSTEMS),$(BUILD_DIR)/lib$(sub).a)
 
-.PHONY: all clean domain_os $(SUBSYSTEMS)
+.PHONY: all clean domain_os
 
 all:: domain_os
 
 # Define per-subsystem rules using a template
 define SUBSYSTEM_template
+$(1)_LIB := $$(BUILD_DIR)/lib$(1).a
 $(1)_SRCS := $$(wildcard $(1)/*.c)
 $(1)_ASM_SRCS := $$(wildcard $(1)/$$(TARGET_SAU)/*.s)
 $(1)_OBJS := $$(patsubst %.c,$$(BUILD_DIR)/%.o,$$($(1)_SRCS))
 $(1)_ASM_OBJS := $$(patsubst %.s,$$(BUILD_DIR)/%.o,$$($(1)_ASM_SRCS))
 
+.PHONY: $(1) clean-$(1)
+
 # Phony target for building just this subsystem
-$(1): $$(BUILD_DIR)/lib$(1).a
+$(1): $$($(1)_LIB)
+
+clean-$(1):
+	@echo "[RM] $(1)_LIB $(1)_OBJS $(1)_ASM_OBJS"
+	@rm -f $$($(1)_LIB) $$($(1)_OBJS) $$($(1)_ASM_OBJS)
 
 # The archive depends on all objects
-$$(BUILD_DIR)/lib$(1).a: $$($(1)_OBJS) $$($(1)_ASM_OBJS)
+$$($(1)_LIB): $$($(1)_OBJS) $$($(1)_ASM_OBJS)
 	@mkdir -p $$(dir $$@)
 	@echo "[AR] $$@"
 	@$$(AR) $$(ARFLAGS) $$@ $$^
