@@ -79,10 +79,20 @@ This project uses **gsk** (ghidra-skill) to analyze compiled apollo code.
 gsk search <SUBSTR>                           # Finds functions with <SUBSTR> in their name
 gsk analyze <ADDRESS>                         # Prints information, xrefs, disassembly, and decompilation of the function at <ADDRESS>
 gsk rename <ADDRESS> '<NAME>'                 # Renames function at <ADDRESS> to <NAME>
-gsk xrefs to <ADDRESS>                        # Lists all callers of the function at <ADDRESS>
+gsk xrefs to <ADDRESS>                        # Lists all callers of the function at <ADDRESS>/accessors of data at <ADDRESS>.
 gsk xrefs from <ADDRESS>                      # Lists all functions called by <ADDRESS>
 gsk comment decompiler <ADDRESS> "<COMMENT>"  # Adds <COMMENT> as a PRE comment at <ADDRESS>
 gsk comment disassembly <ADDRESS> "<COMMENT>" # Adds <COMMENT> as a EOL comment at <ADDRESS>
+gsk read <ADDRESS>                            # Prints hex output for data at ADDRESS (default length = 256)
+gsk read <ADDRESS> <LENGTH>                   # Prints hex output for data at ADDRESS (length LENGTH)
+gsk data get <ADDRESS>                        # returns the type of data at <ADDRESS>
+gsk data set <ADDRESS> <TYPE>                 # sets the type of data found at <ADDRESS> to <TYPE>
+gsk label list                                # List all labels
+gsk label list --address <ADDRESS>            # Labels at specific address <ADDRESS>
+gsk label add <ADDRESS> <LABEL>               # Add global label <LABEL> at address <ADDRESS>
+gsk label add <ADDRESS> <LABEL --local        # Add function-scoped label <LABEL> at address <ADDRESS>
+gsk label delete <ADDRESS> <LABEL>            # Remove label <LABEL> at address <ADDRESS>
+
 ```
 
 For more commands use `gsk --help`
