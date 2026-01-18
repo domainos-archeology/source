@@ -137,8 +137,9 @@ typedef struct proc2_info_t {
     uint16_t    upid;           /* 0x16: Unix-style PID (returned by GET_UPIDS) */
     uint16_t    pad_18[2];      /* 0x18: Unknown */
     uint16_t    owner_session;  /* 0x1C: Owning session (used for permission checks) */
-    uint16_t    parent_pgroup_idx; /* 0x1E: Parent's pgroup index (for permission checks) */
-    uint16_t    pad_20[2];      /* 0x20: Unknown */
+    uint16_t    parent_pgroup_idx; /* 0x1E: Parent process index (for pgroup leader counting) */
+    uint16_t    first_child_idx; /* 0x20: First child process index (head of child list) */
+    uint16_t    next_child_sibling; /* 0x22: Next sibling in parent's child list */
     uint16_t    first_debug_target_idx; /* 0x24: First process in debug target list (if debugger) */
     uint16_t    debugger_idx;   /* 0x26: Debugger process index (for GET_DEBUGGER_PID) */
     uint16_t    next_debug_target_idx;  /* 0x28: Next process in debugger's target list */

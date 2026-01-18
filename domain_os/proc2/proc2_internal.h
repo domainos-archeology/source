@@ -67,8 +67,23 @@ void DEBUG_UNLINK_FROM_LIST(int16_t proc_idx);
 void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag);
 void DEBUG_CLEAR_INTERNAL(int16_t proc_idx, int8_t flag);
 
-/* Process group cleanup */
+/*
+ * ============================================================================
+ * Process Group Internal Functions
+ * ============================================================================
+ */
+
+/* Find pgroup by UPGID - returns index (1-69) or 0 if not found */
+int16_t PGROUP_FIND_BY_UPGID(uint16_t upgid);
+
+/* Process group cleanup - mode: 0=leader only, 1=refcount only, 2=both */
 void PGROUP_CLEANUP_INTERNAL(proc2_info_t *entry, int16_t mode);
+
+/* Set process's process group */
+void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_$t *status_ret);
+
+/* Decrement pgroup leader count - signals orphaned group if count reaches 0 */
+void PGROUP_DECR_LEADER_COUNT(int16_t pgroup_idx);
 
 /* Signal process group internal implementation */
 void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,
@@ -99,14 +114,6 @@ void FUN_00e3fd06(int16_t zombie_idx, uint16_t options,
 /* Child list manipulation */
 void FUN_00e40df4(int16_t child_idx, int16_t prev_sibling_idx);
 
-/* UPID to pgroup index lookup */
-int16_t FUN_00e42224(int16_t upid);
-
-/* Session setup helper */
-void FUN_00e41e86(proc2_info_t *info, int16_t session_id, status_$t *status);
-
-/* Unknown pgroup helper */
-void FUN_00e420b8(proc2_info_t *info, int16_t param);
 
 /*
  * ============================================================================

@@ -16,33 +16,6 @@
 
 #include "proc2/proc2_internal.h"
 
-/*
- * Internal helper: search pgroup table for entry with matching UPGID.
- * Returns index (1-69) if found, 0 if not found.
- * Original address: 0x00e42224
- */
-static int16_t PGROUP_FIND_BY_UPGID(uint16_t upgid)
-{
-    int16_t i;
-
-    /* Search all 69 slots (indices 1-69) */
-    for (i = 1; i < PGROUP_TABLE_SIZE; i++) {
-        pgroup_entry_t *entry = PGROUP_ENTRY(i);
-
-        /* Skip free slots */
-        if (entry->ref_count == 0) {
-            continue;
-        }
-
-        /* Check if UPGID matches */
-        if (entry->upgid == upgid) {
-            return i;
-        }
-    }
-
-    return 0;  /* Not found */
-}
-
 void PROC2_$PGROUP_INFO(uint16_t *pgroup_id, uint16_t *session_id_ret,
                         uint8_t *is_leader_ret, status_$t *status_ret)
 {
