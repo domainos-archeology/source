@@ -183,7 +183,9 @@ void MST_$MAP_TOP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
                   status_$t *status_ret);
 void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
                            uint32_t map_param, uint32_t flags, status_$t *status);
-void MST_$MAPS(void);
+void *MST_$MAPS(int16_t mode, int16_t flags, uid_t *uid, uint32_t offset,
+                uint32_t length, int16_t prot, uint32_t hint, int8_t create,
+                void *out, status_$t *status);
 void MST_$MAPS_AT(void);
 void MST_$REMAP(void);
 void MST_$REMAP_PRIVI(void);
