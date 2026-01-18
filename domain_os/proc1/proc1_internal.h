@@ -17,6 +17,22 @@
  */
 
 /*
+ * INIT_STACK - Initialize process stack for first dispatch
+ *
+ * Sets up a new process's initial stack so that when the
+ * dispatcher context-switches to it, the process will begin
+ * execution at the specified entry point.
+ *
+ * Parameters:
+ *   pcb - Pointer to process control block
+ *   entry_ptr - Pointer to entry point address
+ *   sp_ptr - Pointer to stack pointer value
+ *
+ * Original address: 0x00E20AA4 (40 bytes)
+ */
+void INIT_STACK(proc1_t *pcb, void **entry_ptr, void **sp_ptr);
+
+/*
  * FUN_00e20824 - Unknown internal function
  *
  * Called after removing a process from the ready list during
