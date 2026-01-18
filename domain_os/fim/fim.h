@@ -272,17 +272,27 @@ status_$t FIM_$CLEANUP(void *handler);
  * FIM_$RLS_CLEANUP - Release cleanup handler
  *
  * Removes the most recently established cleanup handler.
+ * Restores the cleanup context from the provided buffer.
+ *
+ * Parameters:
+ *   cleanup_data - Pointer to cleanup context buffer
  *
  * Address: 0x00e2165c (22 bytes)
  */
-void FIM_$RLS_CLEANUP(void);
+void FIM_$RLS_CLEANUP(void *cleanup_data);
 
 /*
  * FIM_$POP_SIGNAL - Pop signal from handler stack
  *
+ * Restores the stack pointer from the cleanup context and
+ * returns to the caller.
+ *
+ * Parameters:
+ *   cleanup_data - Pointer to cleanup context buffer
+ *
  * Address: 0x00e21672 (12 bytes)
  */
-void FIM_$POP_SIGNAL(void);
+void FIM_$POP_SIGNAL(void *cleanup_data);
 
 /*
  * FIM_$SIGNAL_FIRST - Signal first handler
@@ -437,9 +447,15 @@ void *FIM_$GET_USER_SR_PTR(uint16_t process, uint32_t unused);
 /*
  * FIM_$DELIVER_TRACE_FAULT - Deliver trace fault to process
  *
- * Address: 0x00e227f2 (42 bytes)
+ * Marks the specified address space for receiving a trace fault.
+ * Sets the trace bit and increments the pending trace faults counter.
+ *
+ * Parameters:
+ *   as_id - Address space ID to deliver trace fault to
+ *
+ * Address: 0x00e22866 (42 bytes)
  */
-void FIM_$DELIVER_TRACE_FAULT(void);
+void FIM_$DELIVER_TRACE_FAULT(int16_t as_id);
 
 /*
  * FIM_$CLEAR_TRACE_FAULT - Clear trace fault state
