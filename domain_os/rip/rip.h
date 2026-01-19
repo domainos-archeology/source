@@ -85,6 +85,53 @@ void RIP_$INIT(void);
 void RIP_$AGE(void);
 
 /*
+ * RIP_$UPDATE - Update routing table entry (simplified interface)
+ *
+ * Updates a routing table entry using port index directly. Constructs
+ * the source address from the port's network number and the provided
+ * host ID. Always updates standard routes (flags=0).
+ *
+ * @param network_ptr     Pointer to destination network (4 bytes)
+ * @param host_id_ptr     Pointer to source host ID (low 20 bits used)
+ * @param hop_count_ptr   Pointer to hop count / metric (2 bytes)
+ * @param port_index_ptr  Pointer to port index (0-7)
+ * @param status_ret      Output: status code
+ *
+ * Original address: 0x00E690EE
+ */
+void RIP_$UPDATE(uint32_t *network_ptr, uint32_t *host_id_ptr,
+                 uint16_t *hop_count_ptr, int16_t *port_index_ptr,
+                 status_$t *status_ret);
+
+/*
+ * RIP_$UPDATE_D - Update routing table entry (detailed interface)
+ *
+ * Updates a routing table entry using network/socket pair to identify
+ * the port. The "D" suffix likely stands for "debug" or "detailed" as
+ * this variant provides more explicit port identification.
+ *
+ * @param network_ptr    Pointer to destination network (4 bytes)
+ * @param source         Pointer to source XNS address (10 bytes)
+ * @param hop_count_ptr  Pointer to hop count / metric (2 bytes)
+ * @param port_info      Pointer to structure containing:
+ *                         +0x06: port network (2 bytes)
+ *                         +0x08: port socket (2 bytes)
+ * @param flags_ptr      Pointer to route type flags (1 byte):
+ *                         If < 0: non-standard route
+ *                         If >= 0: standard route
+ * @param status_ret     Output: status code
+ *
+ * Status codes:
+ *   status_$ok: Success
+ *   status_$internet_unknown_network_port (0x2B0003): Port not found
+ *
+ * Original address: 0x00E69084
+ */
+void RIP_$UPDATE_D(uint32_t *network_ptr, void *source,
+                   uint16_t *hop_count_ptr, uint8_t *port_info,
+                   int8_t *flags_ptr, status_$t *status_ret);
+
+/*
  * Status codes
  */
 #define RIP_$STATUS_NO_ROUTE    0x3C0001    /* No route to destination */
