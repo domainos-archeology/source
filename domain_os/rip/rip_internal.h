@@ -456,14 +456,22 @@ void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
  * RTWIRED_PROC_START - Send RIP packet to wired/local port
  *
  * Sends a RIP packet to a directly connected (wired) network using
- * NET_IO_$SEND instead of IDP routing. This is a nested Pascal procedure
- * that accesses the caller's stack frame for packet data.
+ * NET_IO_$SEND instead of IDP routing.
+ *
+ * In the original Pascal implementation, this was a nested procedure
+ * that accessed the caller's stack frame. In C, all parameters are
+ * passed explicitly.
  *
  * @param port_index    Port index (0-7)
+ * @param packet_id     Packet identifier (from PKT_$NEXT_ID)
+ * @param route_data    Route data buffer (cmd + entries)
+ * @param route_len     Route data length in bytes
  *
  * Original address: 0x00E87000
+ * Implemented in: route/rtwired_proc_start.c
  */
-void RTWIRED_PROC_START(int16_t port_index);
+void RTWIRED_PROC_START(int16_t port_index, uint16_t packet_id,
+                        void *route_data, uint16_t route_len);
 
 /*
  * RIP_$SEND - Main RIP send function

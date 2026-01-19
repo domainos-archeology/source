@@ -216,6 +216,34 @@ void route_$wire_routing_area(void);
 void ROUTE_$ANNOUNCE_NET(uint32_t network);
 
 /*
+ * RTWIRED_PROC_START - Send RIP packet to wired/local port
+ *
+ * Sends a routing information protocol packet to a directly connected
+ * (wired) network. Called from RIP_$SEND for ports that use the
+ * internet layer rather than XNS/IDP routing.
+ *
+ * In the original Pascal implementation, this was a nested procedure
+ * within RIP_$SEND that accessed the parent's stack frame. In this C
+ * implementation, all necessary data is passed explicitly.
+ *
+ * The function:
+ * 1. Allocates a network header buffer via NETWORK_$GETHDR
+ * 2. Builds an internet header via PKT_$BLD_INTERNET_HDR
+ * 3. Sends the packet via NET_IO_$SEND
+ * 4. Returns the header buffer via NETWORK_$RTNHDR
+ * 5. Advances the port's event counter if port is active
+ *
+ * @param port_index    Port index (0-7)
+ * @param packet_id     Packet identifier (from PKT_$NEXT_ID)
+ * @param route_data    Route data buffer (cmd + entries)
+ * @param route_len     Route data length in bytes
+ *
+ * Original address: 0x00E87000
+ */
+void RTWIRED_PROC_START(int16_t port_index, uint16_t packet_id,
+                        void *route_data, uint16_t route_len);
+
+/*
  * =============================================================================
  * Additional Global Data for Wired Pages
  * =============================================================================

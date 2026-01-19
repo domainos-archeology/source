@@ -18,6 +18,7 @@
  */
 
 #include "rip/rip_internal.h"
+#include "route/route_internal.h"
 #include "netbuf/netbuf.h"
 #include "pkt/pkt.h"
 #include "ec/ec.h"
@@ -40,15 +41,6 @@ extern void OS_$DATA_COPY(char *src, char *dest, int32_t len);
 extern void NETWORK_$GETHDR(void *callback, uint32_t *phys_out, uint32_t *va_out);
 extern void NETWORK_$RTNHDR(uint32_t *va_ptr);
 
-/* Network I/O send */
-extern void NET_IO_$SEND(int16_t port, uint32_t *hdr_ptr, uint32_t va,
-                         uint16_t len, uint32_t param1, void *callback,
-                         uint32_t param2, uint16_t param3, void *param4,
-                         status_$t *status);
-
-/* Event counter advance */
-extern void EC_$ADVANCE(ec_$eventcount_t *event);
-
 /*
  * =============================================================================
  * Global Data References
@@ -62,8 +54,10 @@ extern void EC_$ADVANCE(ec_$eventcount_t *event);
     /* Broadcast control parameters (30 bytes) */
     #define RIP_$BCAST_CONTROL      ((void *)0xE26EC0)
 
-    /* Port array base - each entry is 0x5C (92) bytes */
-    #define ROUTE_$PORT_ARRAY       ((uint8_t *)0xE2E0A0)
+    /* Port array base as uint8_t* for byte-level access to fields.
+     * Note: ROUTE_$PORT_ARRAY is defined in route_internal.h as route_$port_t*,
+     * so we use a different name here for byte-offset calculations. */
+    #define ROUTE_$PORT_ARRAY_BYTES ((uint8_t *)0xE2E0A0)
 
     /* This node's ID */
     #define NODE_$ME                (*(uint32_t *)0xE245A4)
@@ -76,7 +70,7 @@ extern void EC_$ADVANCE(ec_$eventcount_t *event);
 #else
     extern int16_t RIP_$STD_IDP_CHANNEL;
     extern uint8_t RIP_$BCAST_CONTROL[30];
-    extern uint8_t *ROUTE_$PORT_ARRAY;
+    extern uint8_t ROUTE_$PORT_ARRAY_BYTES[];
     extern uint32_t NODE_$ME;
     extern rip_$entry_t *RIP_$INFO;
     extern void *RIP_$SEND_CALLBACK;
@@ -157,8 +151,8 @@ static const uint8_t XNS_BROADCAST_HOST[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF
  *
  * Original address: 0x00E870DC
  */
-static void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
-                               void *route_data, uint16_t route_len)
+void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
+                        void *route_data, uint16_t route_len)
 {
     uint32_t hdr_phys;
     uint32_t hdr_va;
@@ -180,7 +174,7 @@ static void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
     NETBUF_$GET_HDR(&hdr_phys, &hdr_va);
 
     /* Get port entry pointer */
-    port_entry = ROUTE_$PORT_ARRAY + (port_index * PORT_ENTRY_SIZE);
+    port_entry = ROUTE_$PORT_ARRAY_BYTES + (port_index * PORT_ENTRY_SIZE);
 
     /* Build IDP packet header */
     hdr = (rip_$send_hdr_t *)hdr_va;
@@ -241,45 +235,9 @@ static void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
 }
 
 /*
- * =============================================================================
- * RTWIRED_PROC_START
- * =============================================================================
- *
- * Send a RIP packet to a wired/local port using NET_IO_$SEND.
- *
- * This is another nested Pascal procedure for sending to directly connected
- * (wired) networks rather than via IDP routing.
- *
- * @param port_index    Port index (0-7)
- *
- * Note: This function accesses the caller's stack frame for packet data.
- *       In C, this requires restructuring the caller to pass data explicitly.
- *
- * Original address: 0x00E87000
+ * RTWIRED_PROC_START is now implemented in route/rtwired_proc_start.c
+ * and declared in route/route_internal.h.
  */
-void RTWIRED_PROC_START(int16_t port_index)
-{
-    /*
-     * This function is a nested Pascal procedure that accesses the caller's
-     * stack frame for:
-     * - Packet ID at caller_frame - 0x70
-     * - Route data at caller_frame + 0x0E
-     * - Route length at caller_frame + 0x12
-     *
-     * The function:
-     * 1. Gets a network header via NETWORK_$GETHDR
-     * 2. Builds an internet header via PKT_$BLD_INTERNET_HDR
-     * 3. Sends via NET_IO_$SEND
-     * 4. Returns the header via NETWORK_$RTNHDR
-     * 5. Advances event counter if port is active
-     *
-     * For now, this is left as a stub that will need to be integrated
-     * with the caller (RIP_$SEND) properly.
-     */
-
-    /* TODO: Implement RTWIRED_PROC_START properly with explicit parameters */
-    /* This requires restructuring RIP_$SEND to pass the frame data explicitly */
-}
 
 /*
  * =============================================================================
@@ -334,7 +292,7 @@ void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
 
         /* Iterate through all 8 ports */
         for (i = 0; i < 8; i++) {
-            port_entry = ROUTE_$PORT_ARRAY + (i * PORT_ENTRY_SIZE);
+            port_entry = ROUTE_$PORT_ARRAY_BYTES + (i * PORT_ENTRY_SIZE);
 
             /* Copy port's network address to destination */
             *(uint32_t *)addr_buf = *(uint32_t *)port_entry;
@@ -357,7 +315,7 @@ void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
                  */
                 if ((1 << (port_flags & 0x1F)) & PORT_FLAG_MASK_STD) {
                     /* Use RTWIRED_PROC_START for wired ports */
-                    RTWIRED_PROC_START(i);
+                    RTWIRED_PROC_START(i, pkt_id, route_data, route_len);
                 } else if (flags < 0) {
                     /* Fallback check for non-standard */
                     if ((1 << (port_flags & 0x1F)) & PORT_FLAG_MASK_NONSTD) {
@@ -375,7 +333,7 @@ void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
             RIP_$SEND_TO_PORT(port_index, addr_buf, route_data, route_len);
         } else {
             /* Standard: use wired send */
-            RTWIRED_PROC_START(port_index);
+            RTWIRED_PROC_START(port_index, pkt_id, route_data, route_len);
         }
     }
 }
@@ -443,7 +401,7 @@ void RIP_$BROADCAST(uint8_t flags)
         }
 
         /* Get the port this route uses */
-        port_entry = ROUTE_$PORT_ARRAY + (route->port * PORT_ENTRY_SIZE);
+        port_entry = ROUTE_$PORT_ARRAY_BYTES + (route->port * PORT_ENTRY_SIZE);
         port_flags = *(uint16_t *)(port_entry + PORT_FLAGS_OFF);
 
         /* Check if this port should be included based on flags */
