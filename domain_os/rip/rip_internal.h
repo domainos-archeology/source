@@ -11,6 +11,7 @@
 #include "rip/rip.h"
 #include "ml/ml.h"
 #include "proc1/proc1.h"
+#include "route/route.h"
 
 /*
  * =============================================================================
@@ -134,10 +135,17 @@ typedef struct rip_$data_t {
 
     /* TIME_$CLOCKH - Current clock in ticks */
     #define TIME_$CLOCKH            (*(uint32_t *)0xE2B0D4)
+
+    /* RIP_$INFO - Base of routing table entries (separate from RIP_$DATA.entries) */
+    #define RIP_$INFO               ((rip_$entry_t *)0xE263BC)
 #else
     extern rip_$data_t RIP_$DATA;
     extern uint32_t TIME_$CLOCKH;
+    extern rip_$entry_t *RIP_$INFO;
 #endif
+
+/* Status code for unknown network port */
+#define status_$internet_unknown_network_port   0x2B0003
 
 /*
  * =============================================================================
@@ -206,6 +214,92 @@ void RIP_$SEND_UPDATES(int16_t is_std);
  */
 void RIP_$UPDATE_INT(uint32_t port, void *rip_data_ptr, uint16_t param3,
                      uint16_t param4, int16_t flags, status_$t *status_ret);
+
+/*
+ * =============================================================================
+ * Table Access Structures
+ * =============================================================================
+ */
+
+/*
+ * RIP_$TABLE_D buffer format (26 bytes)
+ *
+ * This is the data format used by RIP_$TABLE_D for reading/writing
+ * routing table entries. It contains both the route info and port
+ * identification info.
+ */
+typedef struct rip_$table_d_buf_t {
+    uint32_t    expiration;         /* 0x00: Route expiration time */
+    uint32_t    dest_network;       /* 0x04: Destination network address */
+    uint32_t    nexthop_network;    /* 0x08: Next hop network address */
+    uint8_t     nexthop_host[6];    /* 0x0C: Next hop host address (6 bytes) */
+    uint16_t    port_network;       /* 0x12: Port network identifier */
+    uint16_t    port_socket;        /* 0x14: Port socket identifier */
+    uint16_t    metric;             /* 0x16: Route metric (hop count) */
+    uint16_t    state;              /* 0x18: Route state (0-3) */
+} rip_$table_d_buf_t;
+
+/*
+ * RIP_$TABLE buffer format (16 bytes)
+ *
+ * This is the compact data format used by RIP_$TABLE for external access.
+ * It provides a simpler interface for reading/writing table entries.
+ */
+typedef struct rip_$table_buf_t {
+    uint32_t    dest_network;       /* 0x00: Destination network address */
+    uint32_t    nexthop_host_low;   /* 0x04: Lower 20 bits of nexthop host */
+    uint32_t    expiration;         /* 0x08: Route expiration time */
+    uint8_t     port_index;         /* 0x0C: Port index (0-7) */
+    uint8_t     metric;             /* 0x0D: Route metric (hop count) */
+    uint8_t     state_flags;        /* 0x0E: State in upper 2 bits */
+    uint8_t     _pad;               /* 0x0F: Padding */
+} rip_$table_buf_t;
+
+/*
+ * RIP_$TABLE_D - Direct table entry access
+ *
+ * Reads or writes a routing table entry with full detail.
+ *
+ * @param op_flag       If byte < 0, read; else write
+ * @param route_type    If byte < 0, non-standard route; else standard route
+ * @param index         Pointer to entry index (0-63, will be masked)
+ * @param buffer        Pointer to rip_$table_d_buf_t for data transfer
+ * @param status_ret    Output: status code
+ *
+ * For reads:
+ *   Copies the entry to buffer, including port network/socket info
+ *
+ * For writes:
+ *   Uses ROUTE_$FIND_PORT to map port_network/port_socket to port index,
+ *   then writes the entry. Returns status_$internet_unknown_network_port
+ *   (0x2B0003) if the port cannot be found.
+ *
+ * Original address: 0x00E68E2C
+ */
+void RIP_$TABLE_D(int8_t *op_flag, int8_t *route_type, uint16_t *index,
+                  rip_$table_d_buf_t *buffer, status_$t *status_ret);
+
+/*
+ * RIP_$TABLE - Simplified table entry access
+ *
+ * Reads or writes a routing table entry using a compact format.
+ * Always accesses standard routes (route_type = 0).
+ *
+ * @param op_flag       If byte < 0, read; else write
+ * @param index         Entry index (ignored on write, port_index used instead)
+ * @param buffer        Pointer to rip_$table_buf_t for data transfer
+ *
+ * For reads:
+ *   Uses the entry index from op_flag context (typically passed via index param)
+ *   to read the entry, then reformats into compact buffer format.
+ *
+ * For writes:
+ *   Uses port_index from buffer to look up port info, then writes via TABLE_D.
+ *   Only accepts port_index < 8.
+ *
+ * Original address: 0x00E68F90
+ */
+void RIP_$TABLE(int8_t *op_flag, uint16_t *index, rip_$table_buf_t *buffer);
 
 /*
  * =============================================================================
