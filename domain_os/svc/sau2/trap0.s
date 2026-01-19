@@ -27,7 +27,7 @@
 *
 * Processing:
 *   1. Validate syscall number < 32
-*   2. Look up handler in SVC_$TRAP0_TABLE
+*   2. Look up handler in SVC_$TRAP0_TABLE (defined in svc_tables.c)
 *   3. Call handler directly (no args)
 *   4. Return via FIM_$EXIT (RTE)
 *
@@ -41,12 +41,14 @@
 *   4e f9 00 e2 28 bc  jmp FIM_$EXIT
 *----------------------------------------------------------------------
 
+        .global SVC_$TRAP0
+
 SVC_$TRAP0:
         cmp.w   #$20,D0                 * Check syscall number < 32
         bcc.b   SVC_$TRAP1_RANGE_CHECK  * If >= 32, fall through to TRAP1 check
 
         lsl.w   #2,D0                   * D0 = syscall_num * 4 (table index)
-        lea     SVC_$TRAP0_TABLE(PC),A1 * A1 = table base
+        lea     SVC_$TRAP0_TABLE,A1     * A1 = table base (from svc_tables.c)
         movea.l (0,A1,D0.w),A0          * A0 = handler address
 
         jsr     (A0)                    * Call handler (no arguments)
@@ -58,80 +60,6 @@ SVC_$TRAP0:
 
         .extern FIM_$EXIT               * Return from exception (RTE)
         .extern SVC_$TRAP1_RANGE_CHECK  * TRAP1's range validation (fallthrough)
-        .extern SVC_$INVALID_SYSCALL    * Invalid syscall handler
-        .extern SVC_$UNIMPLEMENTED      * Unimplemented syscall handler
-
-*----------------------------------------------------------------------
-* SVC_$TRAP0_TABLE - System call handler table for TRAP #0
-*
-* 32 entries (0x00-0x1F), each a 32-bit pointer to the handler.
-*
-* From: 0x00e7b2de
-*----------------------------------------------------------------------
-
-        .data
-        .even
-
-SVC_$TRAP0_TABLE:
-        .long   PROC2_$DELETE           * 0x00: Delete process
-        .long   FUN_00e0aa04            * 0x01: Unknown (0xe0aa04)
-        .long   SVC_$INVALID_SYSCALL    * 0x02: Invalid
-        .long   DTTY_$RELOAD_FONT       * 0x03: Reload display font
-        .long   FILE_$UNLOCK_ALL        * 0x04: Unlock all files
-        .long   PEB_$ASSOC              * 0x05: Associate PEB
-        .long   PEB_$DISSOC             * 0x06: Dissociate PEB
-        .long   PROC2_$MY_PID           * 0x07: Get my PID
-        .long   SMD_$OP_WAIT_U          * 0x08: SMD operation wait (user)
-        .long   TPAD_$RE_RANGE          * 0x09: Tablet pad re-range
-        .long   SVC_$INVALID_SYSCALL    * 0x0A: Invalid
-        .long   SVC_$UNIMPLEMENTED      * 0x0B: Unimplemented
-        .long   SVC_$INVALID_SYSCALL    * 0x0C: Invalid
-        .long   ACL_$UP                 * 0x0D: ACL up (increase privilege)
-        .long   ACL_$DOWN               * 0x0E: ACL down (decrease privilege)
-        .long   SVC_$UNIMPLEMENTED      * 0x0F: Unimplemented
-        .long   TPAD_$INQ_DTYPE         * 0x10: Inquire tablet device type
-        .long   SVC_$INVALID_SYSCALL    * 0x11: Invalid
-        .long   CACHE_$CLEAR            * 0x12: Clear cache
-        .long   RIP_$ANNOUNCE_NS        * 0x13: RIP announce name server
-        .long   SVC_$UNIMPLEMENTED      * 0x14: Unimplemented
-        .long   SVC_$UNIMPLEMENTED      * 0x15: Unimplemented
-        .long   SVC_$UNIMPLEMENTED      * 0x16: Unimplemented
-        .long   SVC_$INVALID_SYSCALL    * 0x17: Invalid
-        .long   PROC2_$DELIVER_PENDING  * 0x18: Deliver pending signals
-        .long   PROC2_$COMPLETE_FORK    * 0x19: Complete fork operation
-        .long   PACCT_$STOP             * 0x1A: Stop process accounting
-        .long   PACCT_$ON               * 0x1B: Enable process accounting
-        .long   ACL_$GET_LOCAL_LOCKSMITH * 0x1C: Get local locksmith SID
-        .long   ACL_$IS_SUSER           * 0x1D: Check if superuser
-        .long   SVC_$INVALID_SYSCALL    * 0x1E: Invalid
-        .long   SMD_$N_DEVICES          * 0x1F: Get number of SMD devices
-
-SVC_$TRAP0_TABLE_END:
-
-*----------------------------------------------------------------------
-* Handler function references
-*----------------------------------------------------------------------
-
-        .extern PROC2_$DELETE
-        .extern FUN_00e0aa04
-        .extern DTTY_$RELOAD_FONT
-        .extern FILE_$UNLOCK_ALL
-        .extern PEB_$ASSOC
-        .extern PEB_$DISSOC
-        .extern PROC2_$MY_PID
-        .extern SMD_$OP_WAIT_U
-        .extern TPAD_$RE_RANGE
-        .extern ACL_$UP
-        .extern ACL_$DOWN
-        .extern TPAD_$INQ_DTYPE
-        .extern CACHE_$CLEAR
-        .extern RIP_$ANNOUNCE_NS
-        .extern PROC2_$DELIVER_PENDING
-        .extern PROC2_$COMPLETE_FORK
-        .extern PACCT_$STOP
-        .extern PACCT_$ON
-        .extern ACL_$GET_LOCAL_LOCKSMITH
-        .extern ACL_$IS_SUSER
-        .extern SMD_$N_DEVICES
+        .extern SVC_$TRAP0_TABLE        * Syscall table (defined in svc_tables.c)
 
         .end
