@@ -28,18 +28,18 @@
 void CRASH_SYSTEM(const status_$t *status_p);
 
 /*
- * FUN_00e825f4 - Console output function (unidentified)
+ * ERROR_$PRINT - Error message print function
  *
- * Printf-like function for console output during boot and system messages.
- * TODO: Identify the actual function name from symbols or documentation.
+ * Printf-like function for error/console output.
+ * The second parameter appears to be optional arguments or NULL.
  *
  * Parameters:
  *   format - Printf-style format string
- *   ...    - Variable arguments
+ *   args   - Additional arguments (can be NULL)
  *
  * Original address: 0x00e825f4
  */
-void FUN_00e825f4(char *format, ...);
+void ERROR_$PRINT(char *format, void *args);
 
 /*
  * Common error codes used with CRASH_SYSTEM
@@ -67,5 +67,19 @@ void FUN_00e825f4(char *format, ...);
 // extern status_$t Some_ASTE_Error;
 // extern status_$t OS_PMAP_mismatch_err;
 // extern status_$t OS_MMAP_bad_install;
+
+/*
+ * prompt_for_yes_or_no - Prompt user for yes/no answer
+ *
+ * Reads from terminal and waits for user to enter Y/y (yes) or N/n (no).
+ * Loops with error message until valid response is given.
+ *
+ * Returns:
+ *   0xff (true)  - User answered yes
+ *   0x00 (false) - User answered no
+ *
+ * Original address: 0x00e33778
+ */
+uint8_t prompt_for_yes_or_no(void);
 
 #endif /* MISC_H */
