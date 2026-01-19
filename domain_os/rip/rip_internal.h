@@ -499,6 +499,59 @@ void RIP_$BROADCAST(uint8_t flags);
 
 /*
  * =============================================================================
+ * Port Management Functions
+ * =============================================================================
+ */
+
+/*
+ * RIP_$STD_OPEN - Open standard RIP IDP channel
+ *
+ * Opens an XNS/IDP channel for receiving RIP packets on the standard
+ * routing port. The channel uses RIP_$STD_DEMUX as its packet demultiplexer.
+ *
+ * On success, the channel number is stored in RIP_$STD_IDP_CHANNEL.
+ *
+ * Original address: 0x00E15AAE
+ */
+void RIP_$STD_OPEN(void);
+
+/*
+ * RIP_$STD_DEMUX - Demultiplex incoming RIP packets
+ *
+ * Demultiplexer callback invoked by XNS_IDP when a packet arrives on
+ * the RIP channel. Extracts relevant information from the IDP packet
+ * and queues it for the RIP server via SOCK_$PUT on socket 8.
+ *
+ * Parameters:
+ * @param pkt           Pointer to IDP packet structure
+ * @param param_2       Pointer to event count parameter 1
+ * @param param_3       Pointer to event count parameter 2
+ * @param param_4       Unused
+ * @param status_ret    Output: status code (0x3B0016 on success)
+ *
+ * Original address: 0x00E15A2C
+ */
+void RIP_$STD_DEMUX(void *pkt, uint16_t *param_2, uint16_t *param_3,
+                    void *param_4, status_$t *status_ret);
+
+/*
+ * RIP_$PORT_CLOSE - Invalidate routes through a closing port
+ *
+ * When a port is being closed, marks all routes using that port as
+ * expired. Sets metric to infinity (0x11), state to EXPIRED, and
+ * triggers route update broadcasts.
+ *
+ * @param port_index    Port index (0-7) being closed
+ * @param flags         If < 0, process non-standard routes; else standard
+ * @param force         If < 0, invalidate all routes on port;
+ *                      If >= 0, only invalidate routes with non-zero metric
+ *
+ * Original address: 0x00E15798
+ */
+void RIP_$PORT_CLOSE(uint16_t port_index, int8_t flags, int8_t force);
+
+/*
+ * =============================================================================
  * External Global Variables (m68k addresses)
  * =============================================================================
  */
