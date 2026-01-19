@@ -431,11 +431,82 @@ void RIP_$TABLE(int8_t *op_flag, uint16_t *index, rip_$table_buf_t *buffer);
 
 /*
  * =============================================================================
+ * Send/Broadcast Functions
+ * =============================================================================
+ */
+
+/*
+ * RIP_$SEND_TO_PORT - Send RIP packet to specific port via XNS/IDP
+ *
+ * Internal helper function that sends a RIP packet to a specific port
+ * using the XNS/IDP protocol. Builds an IDP header with broadcast
+ * destination, copies route data, and sends via XNS_IDP_$OS_SEND.
+ *
+ * @param port_index    Port index (0-7)
+ * @param addr_info     Source address info (12 bytes)
+ * @param route_data    Route data buffer (cmd + entries)
+ * @param route_len     Route data length
+ *
+ * Original address: 0x00E870DC
+ */
+void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
+                        void *route_data, uint16_t route_len);
+
+/*
+ * RTWIRED_PROC_START - Send RIP packet to wired/local port
+ *
+ * Sends a RIP packet to a directly connected (wired) network using
+ * NET_IO_$SEND instead of IDP routing. This is a nested Pascal procedure
+ * that accesses the caller's stack frame for packet data.
+ *
+ * @param port_index    Port index (0-7)
+ *
+ * Original address: 0x00E87000
+ */
+void RTWIRED_PROC_START(int16_t port_index);
+
+/*
+ * RIP_$SEND - Main RIP send function
+ *
+ * Sends a RIP packet to one or all ports. Dispatches to either
+ * RIP_$SEND_TO_PORT (for XNS/IDP networks) or RTWIRED_PROC_START
+ * (for wired/local networks) based on port flags.
+ *
+ * @param addr_info     Source address info (12 bytes: network + host + socket)
+ * @param port_index    Port index (0-7), or -1 for all ports (broadcast)
+ * @param route_data    Route data buffer (cmd + entries)
+ * @param route_len     Route data length
+ * @param flags         If < 0: non-standard routes, send via IDP only
+ *                      If >= 0: standard routes, get new packet ID first
+ *
+ * Original address: 0x00E871B6
+ */
+void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
+               uint16_t route_len, int8_t flags);
+
+/*
+ * RIP_$BROADCAST - Build and broadcast full routing table
+ *
+ * Iterates through all routing table entries, builds a RIP response
+ * packet containing all valid routes, and sends it to all ports.
+ *
+ * @param flags     If < 0: broadcast non-standard routes (cap metric at 16)
+ *                  If >= 0: broadcast standard routes
+ *
+ * Original address: 0x00E87298
+ */
+void RIP_$BROADCAST(uint8_t flags);
+
+/*
+ * =============================================================================
  * External Global Variables (m68k addresses)
  * =============================================================================
  */
 
 #if defined(M68K)
+    /* RIP_$STD_IDP_CHANNEL - IDP channel for RIP packets (0xFFFF = no channel) */
+    #define RIP_$STD_IDP_CHANNEL    (*(int16_t *)0xE26EBC)
+
     /* NETWORK_$DISKLESS - Diskless boot flag (bit 7 set = diskless) */
     #define NETWORK_$DISKLESS       (*(int8_t *)0xE24C4C)
 
@@ -451,6 +522,7 @@ void RIP_$TABLE(int8_t *op_flag, uint16_t *index, rip_$table_buf_t *buffer);
     /* Socket event counter array (indexed by socket number) */
     #define SOCK_$EVENT_COUNTERS    ((ec_$eventcount_t **)0xE28DB4)
 #else
+    extern int16_t RIP_$STD_IDP_CHANNEL;
     extern int8_t NETWORK_$DISKLESS;
     extern uint32_t NETWORK_$MOTHER_NODE;
     extern uint32_t NODE_$ME;
