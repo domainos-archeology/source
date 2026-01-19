@@ -552,6 +552,47 @@ void RIP_$PORT_CLOSE(uint16_t port_index, int8_t flags, int8_t force);
 
 /*
  * =============================================================================
+ * Miscellaneous Functions
+ * =============================================================================
+ */
+
+/*
+ * RIP_$ANNOUNCE_NS - Announce name service availability via RIP
+ *
+ * Registers the routing port with the remote name service and broadcasts
+ * a name service announcement packet to all nodes on the network.
+ *
+ * This function:
+ * 1. Calls REM_NAME_$REGISTER_SERVER to register with name service
+ * 2. Gets a unique packet ID via PKT_$NEXT_ID
+ * 3. Broadcasts announcement via PKT_$SEND_INTERNET on socket 8
+ *
+ * Original address: 0x00E6914E
+ */
+void RIP_$ANNOUNCE_NS(void);
+
+/*
+ * RIP_$HALT_ROUTER - Gracefully stop the router
+ *
+ * Called when the number of routing ports drops to 1, indicating that
+ * the router should stop advertising routes. Sends a "poison" RIP
+ * response to all neighbors indicating all routes through this router
+ * are now unreachable (metric = 16).
+ *
+ * @param flags  Route type to halt:
+ *                 If < 0: Halt non-standard routes (send via IDP)
+ *                 If >= 0: Halt standard routes (send via wired)
+ *
+ * The function also clears the appropriate recent_changes flag:
+ * - flags < 0: clears RIP_$STD_RECENT_CHANGES
+ * - flags >= 0: clears RIP_$RECENT_CHANGES
+ *
+ * Original address: 0x00E87396
+ */
+void RIP_$HALT_ROUTER(int16_t flags);
+
+/*
+ * =============================================================================
  * External Global Variables (m68k addresses)
  * =============================================================================
  */
