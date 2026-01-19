@@ -136,6 +136,57 @@
  * =============================================================================
  */
 
-/* None currently defined - add as needed during implementation */
+/*
+ * ROUTE_$INIT_ROUTING - Initialize routing subsystem
+ *
+ * Called when routing is being enabled on a port. Increments the
+ * appropriate port counter and initializes the routing subsystem
+ * when the total routing ports reaches 2.
+ *
+ * @param port_index   Port index (0-7) being initialized
+ * @param port_type    Port type flag: negative = increment STD counter,
+ *                     non-negative = increment N counter
+ *
+ * Original address: 0x00E69CCC
+ */
+void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type);
+
+/*
+ * ROUTE_$CLOSE_PORT - Close and remove a routing port
+ *
+ * Called from ROUTE_$SERVICE when bit 3 (0x08) is set. Closes a
+ * routing port, cleaning up all associated resources.
+ *
+ * @param port_info    Port information structure
+ * @param status_ret   Output: status code
+ *
+ * Original address: 0x00E69EC2
+ */
+void ROUTE_$CLOSE_PORT(void *port_info, status_$t *status_ret);
+
+/*
+ * ROUTE_$DECREMENT_PORT - Decrement port counters during close
+ *
+ * Helper function that calls RIP_$PORT_CLOSE and decrements the
+ * appropriate routing port counter. May halt the router if this
+ * was the last active port.
+ *
+ * @param delete_flag      Delete notification flag
+ * @param port_index       Port index being closed
+ * @param port_type_flag   Port type flag (negative = STD)
+ *
+ * Original address: 0x00E69E40
+ */
+void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index, int8_t port_type_flag);
+
+/*
+ * ROUTE_$CLEANUP_WIRED - Cleanup wired pages
+ *
+ * Unwires wired pages when there are no more user ports and
+ * routing is not actively running.
+ *
+ * Original address: 0x00E69B7C
+ */
+void ROUTE_$CLEANUP_WIRED(void);
 
 #endif /* ROUTE_INTERNAL_H */

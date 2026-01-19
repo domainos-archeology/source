@@ -192,11 +192,19 @@ void ROUTE_$SHUTDOWN(void);
 /*
  * ROUTE_$READ_USER_STATS - Read user-visible routing statistics
  *
- * Retrieves routing statistics for user-space access.
+ * Retrieves routing statistics for a user-mode port.
+ * Looks up the port by socket number (assuming network type 2),
+ * then copies statistics data from the port's driver structure.
+ *
+ * @param socket_ptr    Pointer to socket number (uint16_t)
+ * @param stats_buf     Output buffer for statistics data
+ * @param length_ret    Output: number of bytes written to stats_buf
+ * @param status_ret    Output: status code (status_$ok or error)
  *
  * Original address: 0x00E6A65E
  */
-void ROUTE_$READ_USER_STATS(void);
+void ROUTE_$READ_USER_STATS(uint16_t *socket_ptr, uint8_t *stats_buf,
+                            int16_t *length_ret, status_$t *status_ret);
 
 /*
  * ROUTE_$PROCESS - Process routing updates
@@ -210,11 +218,19 @@ void ROUTE_$PROCESS(void);
 /*
  * ROUTE_$INCOMING - Handle incoming routed packets
  *
- * Processes packets that arrive via routing.
+ * Processes packets received from user routing ports that need
+ * to be injected into the local network. Validates packet format,
+ * copies data to network buffers, and queues for transmission.
+ *
+ * @param port_info     Port information structure (network at +6, socket at +8)
+ * @param packet_data   Packet data buffer
+ * @param length_ptr    Pointer to packet length
+ * @param status_ret    Output: status code
  *
  * Original address: 0x00E878A8
  */
-void ROUTE_$INCOMING(void);
+void ROUTE_$INCOMING(void *port_info, uint8_t *packet_data,
+                     uint16_t *length_ptr, status_$t *status_ret);
 
 /*
  * ROUTE_$OUTGOING - Handle outgoing routed packets
