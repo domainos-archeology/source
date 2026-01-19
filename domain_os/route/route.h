@@ -235,20 +235,45 @@ void ROUTE_$INCOMING(void *port_info, uint8_t *packet_data,
 /*
  * ROUTE_$OUTGOING - Handle outgoing routed packets
  *
- * Prepares packets for transmission via routing.
+ * Retrieves queued outgoing packets from user routing ports and
+ * prepares them for transmission. Finds the routing next hop,
+ * copies packet data, and optionally computes a checksum.
+ *
+ * @param port_info     Port information (network at +6, socket at +8)
+ * @param nexthop_ret   Output: next hop network address (20-bit) + flag
+ * @param packet_buf    Output: packet data buffer (4-byte header + data)
+ * @param length_ret    Output: total packet length including header
+ * @param status_ret    Output: status code
  *
  * Original address: 0x00E87A4E
  */
-void ROUTE_$OUTGOING(void);
+void ROUTE_$OUTGOING(void *port_info, uint32_t *nexthop_ret, uint8_t *packet_buf,
+                     int16_t *length_ret, status_$t *status_ret);
 
 /*
- * ROUTE_$SEND_USER_PORT - Send packet to user port
+ * ROUTE_$SEND_USER_PORT - Send packet to user routing port
  *
- * Transmits a packet through a user-specified routing port.
+ * Sends a packet through a user routing port for delivery. The packet
+ * is copied to network buffers and queued to the socket.
+ *
+ * @param socket_ptr    Pointer to socket number
+ * @param src_addr      Source address info
+ * @param dest_addr     Destination address pointer
+ * @param header_len    Header length
+ * @param flags1        Protocol flags 1
+ * @param flags2        Protocol flags 2
+ * @param data_ptr      Packet data pointer
+ * @param data_len      Packet data length
+ * @param extra_ptr     Extra protocol info pointer
+ * @param seq_ret       Output: packet sequence number
+ * @param status_ret    Output: status code
  *
  * Original address: 0x00E87C34
  */
-void ROUTE_$SEND_USER_PORT(void);
+void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, void *dest_addr,
+                           uint16_t header_len, uint16_t flags1, uint16_t flags2,
+                           void *data_ptr, uint16_t data_len, void *extra_ptr,
+                           uint16_t *seq_ret, status_$t *status_ret);
 
 /*
  * Status codes

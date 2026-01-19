@@ -189,4 +189,48 @@ void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index, int8_t port_t
  */
 void ROUTE_$CLEANUP_WIRED(void);
 
+/*
+ * route_$wire_routing_area - Wire routing memory area
+ *
+ * Wires the routing code pages in memory if not already wired.
+ * Called during routing initialization to ensure routing code
+ * is locked in physical memory.
+ *
+ * Original address: 0x00E69BCE
+ */
+void route_$wire_routing_area(void);
+
+/*
+ * =============================================================================
+ * Additional Global Data for Wired Pages
+ * =============================================================================
+ */
+
+#if defined(M68K)
+    /*
+     * ROUTE_$WIRED_PAGES - Array of wired page addresses
+     *
+     * Original address: 0xE87D80
+     */
+    #define ROUTE_$WIRED_PAGES      ((uint32_t *)0xE87D80)
+
+    /*
+     * ROUTE_$N_WIRED_PAGES - Count of currently wired pages
+     *
+     * Original address: 0xE87FD2
+     */
+    #define ROUTE_$N_WIRED_PAGES    (*(int16_t *)0xE87FD2)
+
+    /*
+     * ROUTE_$N_USER_PORTS - Count of active user ports
+     *
+     * Original address: 0xE87FD4
+     */
+    #define ROUTE_$N_USER_PORTS     (*(int16_t *)0xE87FD4)
+#else
+    extern uint32_t ROUTE_$WIRED_PAGES[];
+    extern int16_t ROUTE_$N_WIRED_PAGES;
+    extern int16_t ROUTE_$N_USER_PORTS;
+#endif
+
 #endif /* ROUTE_INTERNAL_H */
