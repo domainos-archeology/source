@@ -2,25 +2,38 @@
  * svc/svc.h - System Call (SVC) Subsystem Public API
  *
  * The SVC subsystem implements the Domain/OS system call interface.
- * User programs invoke system calls via the M68K TRAP #5 instruction
- * with the syscall number in D0.w and arguments on the user stack.
+ * Multiple TRAP instructions are used for different syscall categories:
  *
- * System Call Convention:
- *   - TRAP #5 instruction triggers supervisor mode
- *   - D0.w contains syscall number (0-98, 0x00-0x62)
- *   - Arguments passed on user stack (up to 5 longwords)
- *   - Handler address looked up from SVC_$TRAP5_TABLE
- *   - Arguments copied from USP to supervisor stack
- *   - Handler called, then RTE back to user mode
+ * TRAP #0 - Simple syscalls (0-31):
+ *   - No argument validation or copying
+ *   - Handler called directly
+ *   - Used for no-arg calls like PROC2_$MY_PID, CACHE_$CLEAR
  *
- * Address Space Protection:
+ * TRAP #1 - Medium syscalls (0-65):
+ *   - Validates USP and 1 argument
+ *   - Arguments copied from user stack
+ *
+ * TRAP #2 - Extended syscalls (0-132):
+ *   - Validates USP and 2 arguments
+ *
+ * TRAP #3 - Full syscalls (0-154):
+ *   - Validates USP and 3 arguments
+ *
+ * TRAP #5 - Complex syscalls (0-98):
+ *   - Full validation of USP and 5 arguments
+ *   - Most comprehensive protection
+ *
+ * Address Space Protection (TRAP 1-5):
  *   - User stack pointer (USP) must be < 0xCC0000
  *   - All argument pointers must be < 0xCC0000
  *   - Violation triggers protection boundary fault
  *
  * Original addresses:
- *   - SVC_$TRAP5: 0x00e7b17c (syscall dispatcher)
- *   - SVC_$TRAP5_TABLE: 0x00e7baf2 (syscall handler table)
+ *   - SVC_$TRAP0: 0x00e7b044 (simple dispatcher, 32 entries)
+ *   - SVC_$TRAP0_TABLE: 0x00e7b2de
+ *   - SVC_$TRAP1: 0x00e7b05c (1-arg dispatcher, 66 entries)
+ *   - SVC_$TRAP5: 0x00e7b17c (5-arg dispatcher, 99 entries)
+ *   - SVC_$TRAP5_TABLE: 0x00e7baf2
  */
 
 #ifndef SVC_H
@@ -34,11 +47,21 @@
  * ============================================================================
  */
 
-/* Maximum syscall number (inclusive) */
-#define SVC_MAX_SYSCALL         0x62    /* 98 decimal */
+/* TRAP #0 constants */
+#define SVC_TRAP0_MAX_SYSCALL   0x1F    /* 31 decimal */
+#define SVC_TRAP0_TABLE_SIZE    32
 
-/* Number of syscall table entries */
-#define SVC_TABLE_SIZE          99
+/* TRAP #1 constants */
+#define SVC_TRAP1_MAX_SYSCALL   0x41    /* 65 decimal */
+#define SVC_TRAP1_TABLE_SIZE    66
+
+/* TRAP #5 constants */
+#define SVC_TRAP5_MAX_SYSCALL   0x62    /* 98 decimal */
+#define SVC_TRAP5_TABLE_SIZE    99
+
+/* Legacy aliases */
+#define SVC_MAX_SYSCALL         SVC_TRAP5_MAX_SYSCALL
+#define SVC_TABLE_SIZE          SVC_TRAP5_TABLE_SIZE
 
 /* User/kernel address space boundary */
 #define SVC_USER_SPACE_LIMIT    0xCC0000
@@ -63,7 +86,44 @@
 
 /*
  * ============================================================================
- * Syscall Number Definitions
+ * TRAP #0 Syscall Numbers (Simple, no-arg syscalls)
+ * ============================================================================
+ */
+
+#define SVC0_PROC2_DELETE           0x00    /* Delete process */
+#define SVC0_GET_FIM_ADDR           0x01    /* Get FIM address (FUN_00e0aa04) */
+/* 0x02: Invalid */
+#define SVC0_DTTY_RELOAD_FONT       0x03    /* Reload display font */
+#define SVC0_FILE_UNLOCK_ALL        0x04    /* Unlock all files */
+#define SVC0_PEB_ASSOC              0x05    /* Associate PEB */
+#define SVC0_PEB_DISSOC             0x06    /* Dissociate PEB */
+#define SVC0_PROC2_MY_PID           0x07    /* Get my PID */
+#define SVC0_SMD_OP_WAIT_U          0x08    /* SMD operation wait (user) */
+#define SVC0_TPAD_RE_RANGE          0x09    /* Tablet pad re-range */
+/* 0x0A: Invalid */
+/* 0x0B: Unimplemented */
+/* 0x0C: Invalid */
+#define SVC0_ACL_UP                 0x0D    /* ACL up (increase privilege) */
+#define SVC0_ACL_DOWN               0x0E    /* ACL down (decrease privilege) */
+/* 0x0F: Unimplemented */
+#define SVC0_TPAD_INQ_DTYPE         0x10    /* Inquire tablet device type */
+/* 0x11: Invalid */
+#define SVC0_CACHE_CLEAR            0x12    /* Clear cache */
+#define SVC0_RIP_ANNOUNCE_NS        0x13    /* RIP announce name server */
+/* 0x14-0x16: Unimplemented */
+/* 0x17: Invalid */
+#define SVC0_PROC2_DELIVER_PENDING  0x18    /* Deliver pending signals */
+#define SVC0_PROC2_COMPLETE_FORK    0x19    /* Complete fork operation */
+#define SVC0_PACCT_STOP             0x1A    /* Stop process accounting */
+#define SVC0_PACCT_ON               0x1B    /* Enable process accounting */
+#define SVC0_ACL_GET_LOCAL_LOCKSMITH 0x1C   /* Get local locksmith SID */
+#define SVC0_ACL_IS_SUSER           0x1D    /* Check if superuser */
+/* 0x1E: Invalid */
+#define SVC0_SMD_N_DEVICES          0x1F    /* Get number of SMD devices */
+
+/*
+ * ============================================================================
+ * TRAP #5 Syscall Numbers (Complex, 5-arg syscalls)
  * ============================================================================
  *
  * Known syscall numbers and their handlers:
@@ -238,20 +298,40 @@
  */
 
 /*
- * SVC_$TRAP5_TABLE - Syscall handler dispatch table
+ * SVC_$TRAP0_TABLE - Simple syscall handler table (TRAP #0)
+ *
+ * Array of 32 function pointers for no-argument syscalls.
+ * Handlers are called directly without argument validation.
+ *
+ * Original address: 0x00e7b2de
+ */
+extern void (*SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE])(void);
+
+/*
+ * SVC_$TRAP5_TABLE - Complex syscall handler table (TRAP #5)
  *
  * Array of 99 function pointers indexed by syscall number.
  * Invalid/unimplemented syscalls point to error handlers.
  *
  * Original address: 0x00e7baf2
  */
-extern void (*SVC_$TRAP5_TABLE[SVC_TABLE_SIZE])(void);
+extern void (*SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE])(void);
 
 /*
  * ============================================================================
  * Entry Points (Assembly)
  * ============================================================================
  * These are assembly language routines, not C functions.
+ */
+
+/*
+ * SVC_$TRAP0 - Simple TRAP #0 syscall dispatcher
+ *
+ * Entry point for simple (no-argument) system calls.
+ * Does NOT validate user stack or copy arguments.
+ * Handler is called directly and must handle its own arguments.
+ *
+ * Original address: 0x00e7b044
  */
 
 /*
