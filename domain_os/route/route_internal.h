@@ -201,6 +201,21 @@ void ROUTE_$CLEANUP_WIRED(void);
 void route_$wire_routing_area(void);
 
 /*
+ * ROUTE_$ANNOUNCE_NET - Announce network to mother node
+ *
+ * When running diskless, sends a broadcast control packet to the
+ * mother node to announce this node's network address. Uses
+ * PKT_$SEND_INTERNET to transmit the announcement.
+ *
+ * Only sends if NETWORK_$DISKLESS flag is negative (diskless mode).
+ *
+ * @param network   Network address to announce
+ *
+ * Original address: 0x00E69FB2
+ */
+void ROUTE_$ANNOUNCE_NET(uint32_t network);
+
+/*
  * =============================================================================
  * Additional Global Data for Wired Pages
  * =============================================================================
