@@ -147,6 +147,9 @@ typedef struct rip_$data_t {
 /* Status code for unknown network port */
 #define status_$internet_unknown_network_port   0x2B0003
 
+/* Status code for too many networks in internet (routing table full) */
+#define status_$network_too_many_networks_in_internet   0x00110018
+
 /*
  * =============================================================================
  * Internal Function Prototypes
@@ -203,17 +206,44 @@ void RIP_$SEND_UPDATES(int16_t is_std);
  * Updates routing table entries with new route information.
  * Used during initialization and when receiving routing updates.
  *
- * @param port          Port the update came from
- * @param rip_data_ptr  Pointer to RIP data structure
- * @param param3        Parameter (usually 0)
- * @param param4        Parameter (usually 0)
- * @param flags         If negative, use non-standard routes; else standard
- * @param status_ret    Output: status code
+ * The function supports two modes:
+ * - Single network update: Updates a specific network entry
+ * - Bulk update: Updates all entries matching the source (when network == -1)
+ *
+ * Update logic follows standard RIP rules:
+ * 1. Accept updates from the same source (they might be withdrawing the route)
+ * 2. Accept better routes (lower metric)
+ * 3. Accept non-infinity updates to non-valid routes
+ *
+ * @param network      Network to update (-1 for all entries, 0 = no-op)
+ * @param source       Pointer to source address (10 bytes XNS address)
+ * @param hop_count    New hop count / metric (clamped to 17)
+ * @param port_index   Port index for this route
+ * @param flags        If negative, use non-standard routes; else standard
+ * @param status_ret   Output: status code
  *
  * Original address: 0x00E15922
  */
-void RIP_$UPDATE_INT(uint32_t port, void *rip_data_ptr, uint16_t param3,
-                     uint16_t param4, int16_t flags, status_$t *status_ret);
+void RIP_$UPDATE_INT(uint32_t network, rip_$xns_addr_t *source,
+                     uint16_t hop_count, uint8_t port_index,
+                     int8_t flags, status_$t *status_ret);
+
+/*
+ * Helper functions (nested Pascal procedures in original):
+ *
+ * RIP_$COMPARE_SOURCE (0x00E15830):
+ *   Compares route source addresses. For non-standard routes, compares
+ *   full 6-byte host address. For standard routes, compares lower 20 bits.
+ *   Returns 0xFF (-1) if same source, 0 otherwise.
+ *
+ * RIP_$APPLY_UPDATE (0x00E15888):
+ *   Applies update to a route entry. Handles route withdrawal (transition
+ *   to AGING with short timeout) vs normal update (copy source, set VALID).
+ *   Also sets recent_changes flag if metric changed.
+ */
+
+/* Route aging timeout (short) - used when route is being invalidated */
+#define RIP_AGING_TIMEOUT       0x28
 
 /*
  * =============================================================================
