@@ -94,18 +94,31 @@ typedef struct rip_$entry_t {
  *
  * This is the main data block for the RIP subsystem, located at 0xE26258.
  * All offsets are relative to this base address.
+ *
+ * The structure contains:
+ * - Routing port information at offset 0x00
+ * - Three exclusion locks for different subsystems
+ * - Routing table entries with reference counts
+ * - Broadcast control parameters at offset 0xC68
  */
 typedef struct rip_$data_t {
-    uint8_t             _reserved0[0x40];   /* 0x00: Reserved/unknown */
-    ml_$exclusion_t     exclusion;          /* 0x40: Exclusion lock */
-    uint8_t             _pad1[0x0A];        /* 0x52: Padding */
+    uint32_t            route_port;         /* 0x00: Route port (set during diskless init) */
+    uint8_t             _reserved0[0x0C];   /* 0x04: Reserved/unknown */
+    ml_$exclusion_t     xns_error_mutex;    /* 0x10: XNS error client mutex (18 bytes) */
+    uint8_t             _pad0[0x06];        /* 0x22: Padding to offset 0x28 */
+    ml_$exclusion_t     route_service_mutex;/* 0x28: Route service mutex (18 bytes) */
+    uint8_t             _pad0a[0x06];       /* 0x3A: Padding to offset 0x40 */
+    ml_$exclusion_t     exclusion;          /* 0x40: RIP exclusion lock (18 bytes) */
+    uint8_t             _pad1[0x0A];        /* 0x52: Padding to offset 0x5C */
     uint32_t            _reserved1;         /* 0x5C: Reserved */
     uint32_t            direct_hits;        /* 0x60: Direct route hit counter */
     uint32_t            ref_counts[RIP_TABLE_SIZE]; /* 0x64: Per-entry reference counts */
     rip_$entry_t        entries[RIP_TABLE_SIZE];    /* 0x164: Routing table entries */
-    uint8_t             _reserved2[0x882];  /* Padding to 0xC86 */
+    uint8_t             _reserved2[0x862];  /* Padding to 0xC68 */
+    uint8_t             bcast_control[30];  /* 0xC68: Broadcast control params */
+    uint8_t             _pad3[0x1C];        /* Padding to 0xC86 */
     uint8_t             std_recent_changes; /* 0xC86: Standard route changes flag */
-    uint8_t             _pad2;              /* 0xC87: Padding */
+    uint8_t             _pad4;              /* 0xC87: Padding */
     uint8_t             recent_changes;     /* 0xC88: Non-standard route changes flag */
 } rip_$data_t;
 
@@ -175,5 +188,52 @@ void RIP_$AGE(void);
  * Original address: 0x00E6887A
  */
 void RIP_$SEND_UPDATES(int16_t is_std);
+
+/*
+ * RIP_$UPDATE_INT - Internal route update function
+ *
+ * Updates routing table entries with new route information.
+ * Used during initialization and when receiving routing updates.
+ *
+ * @param port          Port the update came from
+ * @param rip_data_ptr  Pointer to RIP data structure
+ * @param param3        Parameter (usually 0)
+ * @param param4        Parameter (usually 0)
+ * @param flags         If negative, use non-standard routes; else standard
+ * @param status_ret    Output: status code
+ *
+ * Original address: 0x00E15922
+ */
+void RIP_$UPDATE_INT(uint32_t port, void *rip_data_ptr, uint16_t param3,
+                     uint16_t param4, int16_t flags, status_$t *status_ret);
+
+/*
+ * =============================================================================
+ * External Global Variables (m68k addresses)
+ * =============================================================================
+ */
+
+#if defined(M68K)
+    /* NETWORK_$DISKLESS - Diskless boot flag (bit 7 set = diskless) */
+    #define NETWORK_$DISKLESS       (*(int8_t *)0xE24C4C)
+
+    /* NETWORK_$MOTHER_NODE - Node ID of boot server */
+    #define NETWORK_$MOTHER_NODE    (*(uint32_t *)0xE24C0C)
+
+    /* NODE_$ME - This node's ID */
+    #define NODE_$ME                (*(uint32_t *)0xE245A4)
+
+    /* ROUTE_$PORT - Primary routing port */
+    #define ROUTE_$PORT             (*(uint32_t *)0xE2E0A0)
+
+    /* Socket event counter array (indexed by socket number) */
+    #define SOCK_$EVENT_COUNTERS    ((ec_$eventcount_t **)0xE28DB4)
+#else
+    extern int8_t NETWORK_$DISKLESS;
+    extern uint32_t NETWORK_$MOTHER_NODE;
+    extern uint32_t NODE_$ME;
+    extern uint32_t ROUTE_$PORT;
+    extern ec_$eventcount_t **SOCK_$EVENT_COUNTERS;
+#endif
 
 #endif /* RIP_INTERNAL_H */
