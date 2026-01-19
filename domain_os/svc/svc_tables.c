@@ -13,58 +13,58 @@
 
 #include "svc/svc.h"
 
+/* Subsystem headers for syscall handlers */
+#include "acl/acl.h"
+#include "asknode/asknode.h"
+#include "audit/audit.h"
+#include "cache/cache.h"
+#include "disk/disk.h"
+#include "dtty/dtty.h"
+#include "file/file.h"
+#include "netlog/netlog.h"
+#include "os/os.h"
+#include "smd/smd.h"
+#include "tty/tty.h"
+#include "vtoc/vtoc.h"
+
 /*
- * Forward declarations for syscall handlers.
- * These are implemented in their respective subsystems.
+ * Forward declarations for syscall handlers not yet in subsystem headers.
+ * As headers are created for these subsystems, move includes above and
+ * remove the corresponding extern declarations here.
  */
 
-/* Error handlers (in svc/sau<N>/*.s) */
+/* Error handlers (in svc/sau2/*.s) */
 extern void SVC_$INVALID_SYSCALL(void);
 extern void SVC_$UNIMPLEMENTED(void);
 
-/* TRAP #0 handlers */
+/* TRAP #0 handlers not yet in headers */
 extern void PROC2_$DELETE(void);
 extern void FUN_00e0aa04(void);          /* TODO: identify - returns FIM addr */
-extern void DTTY_$RELOAD_FONT(void);
 extern void FILE_$UNLOCK_ALL(void);
 extern void PEB_$ASSOC(void);
 extern void PEB_$DISSOC(void);
 extern void PROC2_$MY_PID(void);
 extern void SMD_$OP_WAIT_U(void);
 extern void TPAD_$RE_RANGE(void);
-extern void ACL_$UP(void);
-extern void ACL_$DOWN(void);
 extern void TPAD_$INQ_DTYPE(void);
-extern void CACHE_$CLEAR(void);
 extern void RIP_$ANNOUNCE_NS(void);
 extern void PROC2_$DELIVER_PENDING(void);
 extern void PROC2_$COMPLETE_FORK(void);
 extern void PACCT_$STOP(void);
 extern void PACCT_$ON(void);
-extern void ACL_$GET_LOCAL_LOCKSMITH(void);
-extern void ACL_$IS_SUSER(void);
-extern void SMD_$N_DEVICES(void);
 
-/* TRAP #5 handlers */
+/* TRAP #5 handlers not yet in headers */
 extern void MST_$MAP_AREA(void);
-extern void ACL_$RIGHTS(void);
-extern void ASKNODE_$INFO(void);
-extern void DISK_$AS_READ(void);
-extern void DISK_$AS_WRITE(void);
 extern void TPAD_$INQUIRE(void);
 extern void TPAD_$SET_MODE(void);
 extern void VFMT_$MAIN(void);
 extern void VOLX_$GET_INFO(void);
-extern void VTOC_$GET_UID(void);
-extern void NETLOG_$CNTL(void);
 extern void PROC2_$GET_UPIDS(void);
 extern void MST_$GET_UID_ASID(void);
 extern void MST_$INVALIDATE(void);
 extern void FILE_$INVALIDATE(void);
 extern void MST_$SET_TOUCH_AHEAD_CNT(void);
-extern void OS_$CHKSUM(void);
 extern void FILE_$GET_SEG_MAP(void);
-extern void FILE_$UNLOCK_PROC(void);
 extern void DIR_$ADDU(void);
 extern void DIR_$DROPU(void);
 extern void DIR_$CREATE_DIRU(void);
@@ -72,31 +72,20 @@ extern void DIR_$ADD_BAKU(void);
 extern void DIR_$ADD_HARD_LINKU(void);
 extern void RIP_$UPDATE(void);
 extern void DIR_$DROP_LINKU(void);
-extern void ACL_$CHECK_RIGHTS(void);
 extern void DIR_$DROP_HARD_LINKU(void);
 extern void ROUTE_$OUTGOING(void);
 extern void NET_$GET_INFO(void);
 extern void DIR_$GET_ENTRYU(void);
-extern void AUDIT_$LOG_EVENT(void);
-extern void FILE_$SET_PROT(void);
-extern void TTY_$K_GET(void);
-extern void TTY_$K_PUT(void);
 extern void PROC2_$ALIGN_CTL(void);
 extern void XPD_$READ_PROC(void);
 extern void XPD_$WRITE_PROC(void);
 extern void DIR_$SET_DEF_PROTECTION(void);
 extern void DIR_$GET_DEF_PROTECTION(void);
 extern void ACL_$COPY(void);
-extern void ACL_$CONVERT_FUNKY_ACL(void);
 extern void DIR_$SET_PROTECTION(void);
-extern void FILE_$OLD_AP(void);
 extern void ACL_$SET_RE_ALL_SIDS(void);
-extern void ACL_$GET_RE_ALL_SIDS(void);
 extern void FILE_$EXPORT_LK(void);
-extern void FILE_$CHANGE_LOCK_D(void);
 extern void XPD_$READ_PROC_ASYNC(void);
-extern void SMD_$MAP_DISPLAY_MEMORY(void);
-extern void SMD_$UNMAP_DISPLAY_MEMORY(void);
 extern void RIP_$TABLE_D(void);
 extern void XNS_ERROR_$SEND(void);
 
@@ -109,7 +98,7 @@ extern void XNS_ERROR_$SEND(void);
  *
  * Original address: 0x00e7b2de
  */
-void (*SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE])(void) = {
+void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE] = {
     /* 0x00 */ PROC2_$DELETE,
     /* 0x01 */ FUN_00e0aa04,              /* TODO: returns FIM addr for AS */
     /* 0x02 */ SVC_$INVALID_SYSCALL,
@@ -154,7 +143,7 @@ void (*SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE])(void) = {
  *
  * Original address: 0x00e7baf2
  */
-void (*SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE])(void) = {
+void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE] = {
     /* 0x00 */ SVC_$INVALID_SYSCALL,      /* Reserved */
     /* 0x01 */ MST_$MAP_AREA,
     /* 0x02 */ SVC_$INVALID_SYSCALL,

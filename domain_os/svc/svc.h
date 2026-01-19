@@ -300,22 +300,22 @@
 /*
  * SVC_$TRAP0_TABLE - Simple syscall handler table (TRAP #0)
  *
- * Array of 32 function pointers for no-argument syscalls.
+ * Array of 32 handler addresses for no-argument syscalls.
  * Handlers are called directly without argument validation.
  *
  * Original address: 0x00e7b2de
  */
-extern void (*SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE])(void);
+extern void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE];
 
 /*
  * SVC_$TRAP5_TABLE - Complex syscall handler table (TRAP #5)
  *
- * Array of 99 function pointers indexed by syscall number.
+ * Array of 99 handler addresses indexed by syscall number.
  * Invalid/unimplemented syscalls point to error handlers.
  *
  * Original address: 0x00e7baf2
  */
-extern void (*SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE])(void);
+extern void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE];
 
 /*
  * ============================================================================
