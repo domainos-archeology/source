@@ -27,7 +27,10 @@
  *   - Full validation of USP and 5 arguments
  *   - Most comprehensive protection
  *
- * Address Space Protection (TRAP 1-5):
+ * TRAP #6 - Extended syscalls (0-58):
+ *   - Validates USP and 6 arguments
+ *
+ * Address Space Protection (TRAP 1-6):
  *   - User stack pointer (USP) must be < 0xCC0000
  *   - All argument pointers must be < 0xCC0000
  *   - Violation triggers protection boundary fault
@@ -45,6 +48,8 @@
  *   - SVC_$TRAP4_TABLE: 0x00e7b8e6
  *   - SVC_$TRAP5: 0x00e7b17c (5-arg dispatcher, 99 entries)
  *   - SVC_$TRAP5_TABLE: 0x00e7baf2
+ *   - SVC_$TRAP6: 0x00e7b1d8 (6-arg dispatcher, 59 entries)
+ *   - SVC_$TRAP6_TABLE: 0x00e7bc7e
  */
 
 #ifndef SVC_H
@@ -81,6 +86,10 @@
 /* TRAP #5 constants */
 #define SVC_TRAP5_MAX_SYSCALL   0x62    /* 98 decimal */
 #define SVC_TRAP5_TABLE_SIZE    99
+
+/* TRAP #6 constants */
+#define SVC_TRAP6_MAX_SYSCALL   0x3A    /* 58 decimal */
+#define SVC_TRAP6_TABLE_SIZE    59
 
 /* Legacy aliases */
 #define SVC_MAX_SYSCALL         SVC_TRAP5_MAX_SYSCALL
@@ -381,6 +390,16 @@ extern void *SVC_$TRAP4_TABLE[SVC_TRAP4_TABLE_SIZE];
 extern void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE];
 
 /*
+ * SVC_$TRAP6_TABLE - 6-argument syscall handler table (TRAP #6)
+ *
+ * Array of 59 handler addresses for six-argument syscalls.
+ * USP and all six argument pointers validated < 0xCC0000.
+ *
+ * Original address: 0x00e7bc7e
+ */
+extern void *SVC_$TRAP6_TABLE[SVC_TRAP6_TABLE_SIZE];
+
+/*
  * ============================================================================
  * Entry Points (Assembly)
  * ============================================================================
@@ -435,6 +454,16 @@ extern void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE];
  * to the appropriate handler.
  *
  * Original address: 0x00e7b17c
+ */
+
+/*
+ * SVC_$TRAP6 - Main TRAP #6 syscall dispatcher
+ *
+ * Entry point for 6-argument system calls. Validates syscall number,
+ * checks user stack pointer and all six arguments, then dispatches
+ * to the appropriate handler.
+ *
+ * Original address: 0x00e7b1d8
  */
 
 /*

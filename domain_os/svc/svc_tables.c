@@ -418,6 +418,42 @@ extern void XPD_$READ_PROC_ASYNC(void);
 extern void RIP_$TABLE_D(void);
 extern void XNS_ERROR_$SEND(void);
 
+/* TRAP #6 handlers not yet in headers */
+extern void FILE_$LOCK(void);
+extern void MST_$MAP_AREA_AT(void);
+extern void SMD_$WRITE_STRING(void);
+extern void VFMT_$FORMATN(void);
+extern void STOP_$WATCH(void);
+extern void ASKNODE_$GET_INFO(void);
+extern void DISK_$DIAG_IO(void);
+extern void SMD_$WRITE_STR_CLIP(void);
+extern void TIME_$SET_ITIMER(void);
+extern void OSINFO_$GET_SEG_TABLE(void);
+extern void DIR_$CNAMEU(void);
+extern void DIR_$DELETE_FILEU(void);
+extern void DIR_$ADD_LINKU(void);
+extern void ASKNODE_$WHO_REMOTE(void);
+extern void MST_$REMAP(void);
+extern void DIR_$ROOT_ADDU(void);
+extern void ASKNODE_$WHO_NOTOPO(void);
+extern void NET_$OPEN(void);
+extern void NET_$CLOSE(void);
+extern void NET_$IOCTL(void);
+extern void DIR_$FIND_UID(void);
+extern void FILE_$GET_ATTRIBUTES(void);
+extern void PCHIST_$UNIX_PROFIL_CNTL(void);
+extern void XPD_$RESTART(void);
+extern void FILE_$GET_ATTR_INFO(void);
+extern void ACL_$PRIM_CREATE(void);
+extern void PROC2_$GET_REGS(void);
+extern void ACL_$CONVERT_TO_9ACL(void);
+extern void ACL_$SET_RES_ALL_SIDS(void);
+extern void ACL_$GET_RES_ALL_SIDS(void);
+extern void FILE_$LOCK_D(void);
+extern void FILE_$CREATE_IT(void);
+extern void ACL_$RIGHTS_CHECK(void);
+extern void RIP_$UPDATE_D(void);
+
 /*
  * ============================================================================
  * SVC_$TRAP0_TABLE - Simple syscall handlers (32 entries)
@@ -1110,4 +1146,77 @@ void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE] = {
     /* 0x60 */ RIP_$TABLE_D,
     /* 0x61 */ XNS_ERROR_$SEND,
     /* 0x62 */ SVC_$UNIMPLEMENTED,
+};
+
+/*
+ * ============================================================================
+ * SVC_$TRAP6_TABLE - 6-argument syscall handlers (59 entries)
+ * ============================================================================
+ *
+ * TRAP #6 syscalls take 6 arguments via user stack at (USP+0x04) through
+ * (USP+0x18). The dispatcher validates USP and all six argument pointers
+ * < 0xCC0000.
+ *
+ * Original address: 0x00e7bc7e
+ */
+void *SVC_$TRAP6_TABLE[SVC_TRAP6_TABLE_SIZE] = {
+    /* 0x00 */ FILE_$LOCK,
+    /* 0x01 */ ERROR_$PRINT,
+    /* 0x02 */ MST_$MAP_AREA_AT,
+    /* 0x03 */ SVC_$INVALID_SYSCALL,
+    /* 0x04 */ SVC_$INVALID_SYSCALL,
+    /* 0x05 */ SVC_$INVALID_SYSCALL,
+    /* 0x06 */ SVC_$UNIMPLEMENTED,
+    /* 0x07 */ SVC_$UNIMPLEMENTED,
+    /* 0x08 */ SVC_$UNIMPLEMENTED,
+    /* 0x09 */ SVC_$INVALID_SYSCALL,
+    /* 0x0A */ SVC_$INVALID_SYSCALL,
+    /* 0x0B */ SMD_$WRITE_STRING,
+    /* 0x0C */ SVC_$INVALID_SYSCALL,
+    /* 0x0D */ VFMT_$FORMATN,
+    /* 0x0E */ VFMT_$FORMATN,             /* Same handler as 0x0D */
+    /* 0x0F */ STOP_$WATCH,
+    /* 0x10 */ SVC_$INVALID_SYSCALL,
+    /* 0x11 */ SVC_$INVALID_SYSCALL,
+    /* 0x12 */ ASKNODE_$GET_INFO,
+    /* 0x13 */ DISK_$DIAG_IO,
+    /* 0x14 */ SVC_$INVALID_SYSCALL,
+    /* 0x15 */ SVC_$INVALID_SYSCALL,
+    /* 0x16 */ SMD_$WRITE_STR_CLIP,
+    /* 0x17 */ SVC_$UNIMPLEMENTED,
+    /* 0x18 */ TIME_$SET_ITIMER,
+    /* 0x19 */ OSINFO_$GET_SEG_TABLE,
+    /* 0x1A */ DIR_$CNAMEU,
+    /* 0x1B */ DIR_$DELETE_FILEU,
+    /* 0x1C */ DIR_$ADD_LINKU,
+    /* 0x1D */ SVC_$INVALID_SYSCALL,
+    /* 0x1E */ SVC_$INVALID_SYSCALL,
+    /* 0x1F */ SVC_$INVALID_SYSCALL,
+    /* 0x20 */ SVC_$INVALID_SYSCALL,
+    /* 0x21 */ ASKNODE_$WHO_REMOTE,
+    /* 0x22 */ MST_$REMAP,
+    /* 0x23 */ DIR_$ROOT_ADDU,
+    /* 0x24 */ SVC_$UNIMPLEMENTED,
+    /* 0x25 */ SVC_$UNIMPLEMENTED,
+    /* 0x26 */ SVC_$INVALID_SYSCALL,
+    /* 0x27 */ SVC_$UNIMPLEMENTED,
+    /* 0x28 */ ASKNODE_$WHO_NOTOPO,
+    /* 0x29 */ NET_$OPEN,
+    /* 0x2A */ NET_$CLOSE,
+    /* 0x2B */ NET_$IOCTL,
+    /* 0x2C */ DIR_$FIND_UID,
+    /* 0x2D */ FILE_$GET_ATTRIBUTES,
+    /* 0x2E */ SVC_$INVALID_SYSCALL,
+    /* 0x2F */ PCHIST_$UNIX_PROFIL_CNTL,
+    /* 0x30 */ XPD_$RESTART,
+    /* 0x31 */ FILE_$GET_ATTR_INFO,
+    /* 0x32 */ ACL_$PRIM_CREATE,
+    /* 0x33 */ PROC2_$GET_REGS,
+    /* 0x34 */ ACL_$CONVERT_TO_9ACL,
+    /* 0x35 */ ACL_$SET_RES_ALL_SIDS,
+    /* 0x36 */ ACL_$GET_RES_ALL_SIDS,
+    /* 0x37 */ FILE_$LOCK_D,
+    /* 0x38 */ FILE_$CREATE_IT,
+    /* 0x39 */ ACL_$RIGHTS_CHECK,
+    /* 0x3A */ RIP_$UPDATE_D,
 };
