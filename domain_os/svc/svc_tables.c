@@ -187,6 +187,126 @@ extern void XNS_IDP_$OPEN(void);
 extern void XNS_IDP_$CLOSE(void);
 extern void XNS_IDP_$GET_STATS(void);
 
+/* TRAP #3 handlers not yet in headers */
+extern void FILE_$CREATE(void);
+extern void FILE_$UNLOCK(void);
+extern void FILE_$TRUNCATE(void);
+extern void MST_$UNMAPS(void);
+extern void ERROR_$PRINT(void);
+extern void FILE_$ATTRIBUTES(void);
+extern void FILE_$SET_LEN(void);
+extern void FILE_$SET_TYPE(void);
+extern void NETWORK_$SET_SERVICE(void);
+extern void ASKNODE_$WHO(void);
+extern void FILE_$ACT_ATTRIBUTES(void);
+extern void FILE_$LOCATE(void);
+extern void FILE_$NEIGHBORS(void);
+extern void FILE_$READ_LOCK_ENTRYU(void);
+extern void FILE_$SET_ACL(void);
+extern void FILE_$SET_DIRPTR(void);
+extern void FILE_$SET_TROUBLE(void);
+extern void PROC2_$LIST(void);
+extern void FIM_$SINGLE_STEP(void);
+extern void SMD_$ASSOC(void);
+extern void SMD_$BORROW_DISPLAY(void);
+extern void SMD_$CLEAR_CURSOR(void);
+extern void SMD_$DISPLAY_CURSOR(void);
+extern void SMD_$SET_TP_CURSOR(void);
+extern void TIME_$WAIT(void);
+extern void RINGLOG_$CNTL(void);
+extern void SMD_$ALLOC_HDM(void);
+extern void SMD_$FREE_HDM(void);
+extern void OS_$GET_EC(void);
+extern void TIME_$GET_EC(void);
+extern void PROC2_$UPID_TO_UID(void);
+extern void MSG_$GET_EC(void);
+extern void DISK_$AS_OPTIONS(void);
+extern void SMD_$GET_EC(void);
+extern void NAME_$SET_ACL(void);
+extern void FILE_$SET_REFCNT(void);
+extern void PROC1_$GET_INFO(void);
+extern void AS_$GET_INFO(void);
+extern void FILE_$SET_DTM(void);
+extern void FILE_$SET_DTU(void);
+extern void LOG_$READ(void);
+extern void PROC2_$SET_PGROUP(void);
+extern void SMD_$SET_BLANK_TIMEOUT(void);
+extern void SMD_$INQ_BLANK_TIMEOUT(void);
+extern void FILE_$REMOVE_WHEN_UNLOCKED(void);
+extern void PROC2_$UPGID_TO_UID(void);
+extern void TIME_$GET_ITIMER(void);
+extern void DIR_$SET_DAD(void);
+extern void XPD_$GET_EC(void);
+extern void XPD_$SET_DEBUGGER(void);
+extern void XPD_$POST_EVENT(void);
+extern void XPD_$SET_ENABLE(void);
+extern void XPD_$CONTINUE_PROC(void);
+extern void RIP_$TABLE(void);
+extern void FILE_$LOCATEI(void);
+extern void MSG_$OPENI(void);
+extern void MSG_$ALLOCATEI(void);
+extern void MSG_$WAITI(void);
+extern void ACL_$SET_PROJ_LIST(void);
+extern void ACL_$GET_RE_SIDS(void);
+extern void MSG_$SET_HPIPC(void);
+extern void DIR_$VALIDATE_ROOT_ENTRY(void);
+extern void SMD_$ENABLE_TRACKING(void);
+extern void FILE_$READ_LOCK_ENTRYUI(void);
+extern void ROUTE_$SERVICE(void);
+extern void XPD_$GET_EVENT_AND_DATA(void);
+extern void SMD_$GET_IDM_EVENT(void);
+extern void MSG_$TEST_FOR_MESSAGE(void);
+extern void SMD_$ADD_TRK_RECT(void);
+extern void SMD_$DEL_TRK_RECT(void);
+extern void SMD_$SET_KBD_TYPE(void);
+extern void FILE_$SET_AUDITED(void);
+extern void PROC2_$ACKNOWLEDGE(void);
+extern void PROC2_$GET_MY_UPIDS(void);
+extern void TTY_$K_INQ_INPUT_FLAGS(void);
+extern void TTY_$K_INQ_OUTPUT_FLAGS(void);
+extern void TTY_$K_INQ_ECHO_FLAGS(void);
+extern void TTY_$K_SET_INPUT_BREAK_MODE(void);
+extern void TTY_$K_INQ_INPUT_BREAK_MODE(void);
+extern void TTY_$K_SET_PGROUP(void);
+extern void TTY_$K_INQ_PGROUP(void);
+extern void TTY_$K_SIMULATE_TERMINAL_INPUT(void);
+extern void TTY_$K_INQ_FUNC_ENABLED(void);
+extern void SIO_$K_TIMED_BREAK(void);
+extern void FILE_$SET_DEVNO(void);
+extern void XPD_$SET_PTRACE_OPTS(void);
+extern void XPD_$INQ_PTRACE_OPTS(void);
+extern void FILE_$SET_MAND_LOCK(void);
+extern void TIME_$SET_CPU_LIMIT(void);
+extern void CAL_$WEEKDAY(void);
+extern void SIO_$K_SIGNAL_WAIT(void);
+extern void TERM_$SET_DISCIPLINE(void);
+extern void PROC2_$SET_SERVER(void);
+extern void PACCT_$START(void);
+extern void FILE_$SET_DTU_F(void);
+extern void PROC2_$PGUID_TO_UPGID(void);
+extern void TERM_$INQ_DISCIPLINE(void);
+extern void MST_$UNMAPS_AND_FREE_AREA(void);
+extern void SMD_$ASSOC_CSRS(void);
+extern void SMD_$INQ_DISP_INFO(void);
+extern void SMD_$INQ_DISP_UID(void);
+extern void SMD_$DISPLAY_LOGO(void);
+extern void TERM_$SET_REAL_LINE_DISCIPLINE(void);
+extern void TIME_$ADJUST_TIME_OF_DAY(void);
+extern void PROC2_$UID_TO_UPID(void);
+extern void PROC2_$SET_SESSION_ID(void);
+extern void SMD_$GET_UNIT_EVENT(void);
+extern void TPAD_$SET_UNIT_CURSOR(void);
+extern void TPAD_$SET_PUNCH_IMPACT(void);
+extern void TPAD_$INQ_PUNCH_IMPACT(void);
+extern void TTY_$K_INQ_SESSION_ID(void);
+extern void TTY_$K_SET_SESSION_ID(void);
+extern void MAC_$OPEN(void);
+extern void MAC_$RECEIVE(void);
+extern void XNS_IDP_$RECEIVE(void);
+extern void XNS_IDP_$GET_PORT_INFO(void);
+extern void SMD_$SET_UNIT_CURSOR_POS(void);
+extern void SMD_$CLR_AND_LOAD_TRK_RECT(void);
+
 /* TRAP #5 handlers not yet in headers */
 extern void MST_$MAP_AREA(void);
 extern void TPAD_$INQUIRE(void);
@@ -490,6 +610,174 @@ void *SVC_$TRAP2_TABLE[SVC_TRAP2_TABLE_SIZE] = {
     /* 0x82 */ XNS_IDP_$CLOSE,
     /* 0x83 */ XNS_IDP_$GET_STATS,
     /* 0x84 */ SVC_$INVALID_SYSCALL,
+};
+
+/*
+ * ============================================================================
+ * SVC_$TRAP3_TABLE - 3-argument syscall handlers (155 entries)
+ * ============================================================================
+ *
+ * TRAP #3 syscalls take 3 arguments via user stack at (USP+0x04), (USP+0x08),
+ * and (USP+0x0C). The dispatcher validates USP and all argument pointers < 0xCC0000.
+ *
+ * Original address: 0x00e7b67a
+ */
+void *SVC_$TRAP3_TABLE[SVC_TRAP3_TABLE_SIZE] = {
+    /* 0x00 */ SVC_$UNIMPLEMENTED,
+    /* 0x01 */ SVC_$INVALID_SYSCALL,
+    /* 0x02 */ FILE_$CREATE,
+    /* 0x03 */ FILE_$UNLOCK,
+    /* 0x04 */ FILE_$TRUNCATE,
+    /* 0x05 */ MST_$UNMAPS,
+    /* 0x06 */ ERROR_$PRINT,
+    /* 0x07 */ FILE_$ATTRIBUTES,
+    /* 0x08 */ FILE_$SET_LEN,
+    /* 0x09 */ FILE_$SET_TYPE,
+    /* 0x0A */ SVC_$INVALID_SYSCALL,
+    /* 0x0B */ SVC_$INVALID_SYSCALL,
+    /* 0x0C */ SVC_$INVALID_SYSCALL,
+    /* 0x0D */ SVC_$INVALID_SYSCALL,
+    /* 0x0E */ NETWORK_$SET_SERVICE,
+    /* 0x0F */ ASKNODE_$WHO,
+    /* 0x10 */ FILE_$ACT_ATTRIBUTES,
+    /* 0x11 */ FILE_$LOCATE,
+    /* 0x12 */ FILE_$NEIGHBORS,
+    /* 0x13 */ FILE_$READ_LOCK_ENTRYU,
+    /* 0x14 */ FILE_$SET_ACL,
+    /* 0x15 */ FILE_$SET_DIRPTR,
+    /* 0x16 */ FILE_$SET_TROUBLE,
+    /* 0x17 */ SVC_$INVALID_SYSCALL,
+    /* 0x18 */ SVC_$UNIMPLEMENTED,
+    /* 0x19 */ SVC_$UNIMPLEMENTED,
+    /* 0x1A */ SVC_$UNIMPLEMENTED,
+    /* 0x1B */ SVC_$INVALID_SYSCALL,
+    /* 0x1C */ SVC_$UNIMPLEMENTED,
+    /* 0x1D */ SVC_$UNIMPLEMENTED,
+    /* 0x1E */ SVC_$UNIMPLEMENTED,
+    /* 0x1F */ PROC2_$LIST,
+    /* 0x20 */ FIM_$SINGLE_STEP,
+    /* 0x21 */ SMD_$ASSOC,
+    /* 0x22 */ SMD_$BORROW_DISPLAY,
+    /* 0x23 */ SMD_$CLEAR_CURSOR,
+    /* 0x24 */ SMD_$DISPLAY_CURSOR,
+    /* 0x25 */ SMD_$SET_TP_CURSOR,
+    /* 0x26 */ TIME_$WAIT,
+    /* 0x27 */ RINGLOG_$CNTL,
+    /* 0x28 */ SMD_$ALLOC_HDM,
+    /* 0x29 */ SMD_$FREE_HDM,
+    /* 0x2A */ SVC_$INVALID_SYSCALL,
+    /* 0x2B */ OS_$GET_EC,
+    /* 0x2C */ TIME_$GET_EC,
+    /* 0x2D */ SVC_$UNIMPLEMENTED,
+    /* 0x2E */ PROC2_$UPID_TO_UID,
+    /* 0x2F */ MSG_$GET_EC,
+    /* 0x30 */ DISK_$AS_OPTIONS,
+    /* 0x31 */ SMD_$GET_EC,
+    /* 0x32 */ NAME_$SET_ACL,
+    /* 0x33 */ FILE_$SET_REFCNT,
+    /* 0x34 */ SVC_$INVALID_SYSCALL,
+    /* 0x35 */ PROC1_$GET_INFO,
+    /* 0x36 */ SVC_$INVALID_SYSCALL,
+    /* 0x37 */ SVC_$INVALID_SYSCALL,
+    /* 0x38 */ SVC_$INVALID_SYSCALL,
+    /* 0x39 */ SVC_$INVALID_SYSCALL,
+    /* 0x3A */ SVC_$INVALID_SYSCALL,
+    /* 0x3B */ SVC_$UNIMPLEMENTED,
+    /* 0x3C */ AS_$GET_INFO,
+    /* 0x3D */ FILE_$SET_DTM,
+    /* 0x3E */ FILE_$SET_DTU,
+    /* 0x3F */ SVC_$INVALID_SYSCALL,
+    /* 0x40 */ LOG_$READ,
+    /* 0x41 */ PROC2_$SET_PGROUP,
+    /* 0x42 */ SMD_$SET_BLANK_TIMEOUT,
+    /* 0x43 */ SMD_$INQ_BLANK_TIMEOUT,
+    /* 0x44 */ FILE_$REMOVE_WHEN_UNLOCKED,
+    /* 0x45 */ SVC_$UNIMPLEMENTED,
+    /* 0x46 */ PROC2_$UPGID_TO_UID,
+    /* 0x47 */ TIME_$GET_ITIMER,
+    /* 0x48 */ DIR_$SET_DAD,
+    /* 0x49 */ XPD_$GET_EC,
+    /* 0x4A */ XPD_$SET_DEBUGGER,
+    /* 0x4B */ XPD_$POST_EVENT,
+    /* 0x4C */ XPD_$SET_ENABLE,
+    /* 0x4D */ SVC_$INVALID_SYSCALL,
+    /* 0x4E */ XPD_$CONTINUE_PROC,
+    /* 0x4F */ RIP_$TABLE,
+    /* 0x50 */ FILE_$LOCATEI,
+    /* 0x51 */ MSG_$OPENI,
+    /* 0x52 */ MSG_$ALLOCATEI,
+    /* 0x53 */ MSG_$WAITI,
+    /* 0x54 */ ACL_$SET_PROJ_LIST,
+    /* 0x55 */ ACL_$GET_RE_SIDS,
+    /* 0x56 */ SVC_$INVALID_SYSCALL,
+    /* 0x57 */ MSG_$SET_HPIPC,
+    /* 0x58 */ DIR_$VALIDATE_ROOT_ENTRY,
+    /* 0x59 */ SMD_$ENABLE_TRACKING,
+    /* 0x5A */ FILE_$READ_LOCK_ENTRYUI,
+    /* 0x5B */ SVC_$UNIMPLEMENTED,
+    /* 0x5C */ ROUTE_$SERVICE,
+    /* 0x5D */ SVC_$INVALID_SYSCALL,
+    /* 0x5E */ SVC_$UNIMPLEMENTED,
+    /* 0x5F */ SVC_$UNIMPLEMENTED,
+    /* 0x60 */ SVC_$UNIMPLEMENTED,
+    /* 0x61 */ SVC_$UNIMPLEMENTED,
+    /* 0x62 */ XPD_$GET_EVENT_AND_DATA,
+    /* 0x63 */ SMD_$GET_IDM_EVENT,
+    /* 0x64 */ MSG_$TEST_FOR_MESSAGE,
+    /* 0x65 */ SMD_$ADD_TRK_RECT,
+    /* 0x66 */ SMD_$DEL_TRK_RECT,
+    /* 0x67 */ SMD_$SET_KBD_TYPE,
+    /* 0x68 */ SVC_$UNIMPLEMENTED,
+    /* 0x69 */ FILE_$SET_AUDITED,
+    /* 0x6A */ PROC2_$ACKNOWLEDGE,
+    /* 0x6B */ PROC2_$GET_MY_UPIDS,
+    /* 0x6C */ TTY_$K_INQ_INPUT_FLAGS,
+    /* 0x6D */ TTY_$K_INQ_OUTPUT_FLAGS,
+    /* 0x6E */ TTY_$K_INQ_ECHO_FLAGS,
+    /* 0x6F */ TTY_$K_SET_INPUT_BREAK_MODE,
+    /* 0x70 */ TTY_$K_INQ_INPUT_BREAK_MODE,
+    /* 0x71 */ TTY_$K_SET_PGROUP,
+    /* 0x72 */ TTY_$K_INQ_PGROUP,
+    /* 0x73 */ TTY_$K_SIMULATE_TERMINAL_INPUT,
+    /* 0x74 */ TTY_$K_INQ_FUNC_ENABLED,
+    /* 0x75 */ SIO_$K_TIMED_BREAK,
+    /* 0x76 */ FILE_$SET_DEVNO,
+    /* 0x77 */ XPD_$SET_PTRACE_OPTS,
+    /* 0x78 */ XPD_$INQ_PTRACE_OPTS,
+    /* 0x79 */ FILE_$SET_MAND_LOCK,
+    /* 0x7A */ TIME_$SET_CPU_LIMIT,
+    /* 0x7B */ CAL_$WEEKDAY,
+    /* 0x7C */ SIO_$K_SIGNAL_WAIT,
+    /* 0x7D */ TERM_$SET_DISCIPLINE,
+    /* 0x7E */ PROC2_$SET_SERVER,
+    /* 0x7F */ PACCT_$START,
+    /* 0x80 */ FILE_$SET_DTU_F,
+    /* 0x81 */ PROC2_$PGUID_TO_UPGID,
+    /* 0x82 */ TERM_$INQ_DISCIPLINE,
+    /* 0x83 */ SVC_$UNIMPLEMENTED,
+    /* 0x84 */ SVC_$INVALID_SYSCALL,
+    /* 0x85 */ MST_$UNMAPS_AND_FREE_AREA,
+    /* 0x86 */ SMD_$ASSOC_CSRS,
+    /* 0x87 */ SMD_$INQ_DISP_INFO,
+    /* 0x88 */ SMD_$INQ_DISP_UID,
+    /* 0x89 */ SMD_$DISPLAY_LOGO,
+    /* 0x8A */ TERM_$SET_REAL_LINE_DISCIPLINE,
+    /* 0x8B */ TIME_$ADJUST_TIME_OF_DAY,
+    /* 0x8C */ PROC2_$UID_TO_UPID,
+    /* 0x8D */ PROC2_$SET_SESSION_ID,
+    /* 0x8E */ SMD_$GET_UNIT_EVENT,
+    /* 0x8F */ TPAD_$SET_UNIT_CURSOR,
+    /* 0x90 */ TPAD_$SET_PUNCH_IMPACT,
+    /* 0x91 */ TPAD_$INQ_PUNCH_IMPACT,
+    /* 0x92 */ TTY_$K_INQ_SESSION_ID,
+    /* 0x93 */ TTY_$K_SET_SESSION_ID,
+    /* 0x94 */ MAC_$OPEN,
+    /* 0x95 */ MAC_$RECEIVE,
+    /* 0x96 */ XNS_IDP_$RECEIVE,
+    /* 0x97 */ XNS_IDP_$GET_PORT_INFO,
+    /* 0x98 */ SVC_$UNIMPLEMENTED,
+    /* 0x99 */ SMD_$SET_UNIT_CURSOR_POS,
+    /* 0x9A */ SMD_$CLR_AND_LOAD_TRK_RECT,
 };
 
 /*
