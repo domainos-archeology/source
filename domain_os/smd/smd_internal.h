@@ -63,6 +63,9 @@
  */
 #define status_$display_invalid_unit_number                 0x00130001
 #define status_$display_invalid_use_of_driver_procedure     0x00130004
+#define status_$display_invalid_blt_mode_register           0x0013001A
+#define status_$display_invalid_blt_control_register        0x0013001B
+#define status_$display_invalid_screen_coordinates_in_blt   0x0013001E
 #define status_$display_hidden_display_memory_full          0x00130024
 #define status_$display_invalid_blt_op                      0x00130028
 #define status_$display_tracking_list_full                  0x00130031
@@ -364,6 +367,23 @@ void SMD_$INTERRUPT_INIT(void);
  */
 void SMD_$WRITE_STR_CLIP(uint32_t *pos, void *font, void *buffer,
                          uint16_t *length, void *param5, status_$t *status_ret);
+
+/*
+ * smd_$is_valid_blt_ctl - Validate BLT control register value
+ *
+ * Checks if a BLT control register contains one of the valid magic values.
+ *
+ * Parameters:
+ *   ctl_reg - Control register value to validate
+ *
+ * Returns:
+ *   0xFF (-1) if valid, 0 if invalid
+ *
+ * Valid values are: 0x02020020, 0x02020060, 0x06060020, 0x06060060
+ *
+ * Original address: 0x00E6FAA8
+ */
+uint8_t smd_$is_valid_blt_ctl(uint32_t ctl_reg);
 
 /*
  * Helper to get display unit pointer from unit number

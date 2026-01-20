@@ -488,6 +488,47 @@ void SMD_$LOC_EVENT(void *params, status_$t *status_ret);
 
 /*
  * ============================================================================
+ * BLT Control Structure
+ * ============================================================================
+ * Used by SMD_$BLT and SMD_$BLT_U for block transfer operations.
+ * Size: 26 bytes
+ */
+typedef struct smd_blt_ctl_t {
+    uint16_t    mode;           /* 0x00: Mode register
+                                 *       Bit 7: Must be 0 (reserved)
+                                 *       Bit 6: Must be 0 (reserved)
+                                 */
+    uint32_t    ctl_reg_1;      /* 0x02: Control register 1
+                                 *       Valid values: 0x2020020, 0x2020060,
+                                 *                     0x6060020, 0x6060060
+                                 */
+    uint32_t    ctl_reg_2;      /* 0x06: Control register 2
+                                 *       Valid values: same as ctl_reg_1
+                                 */
+    int16_t     src_y;          /* 0x0A: Source Y coordinate (>= 0) */
+    int16_t     src_x;          /* 0x0C: Source X coordinate (>= 0) */
+    int16_t     dst_y;          /* 0x0E: Destination Y coordinate (>= 0) */
+    int16_t     dst_x;          /* 0x10: Destination X coordinate (>= 0) */
+    uint16_t    src_width;      /* 0x12: Source width (<= 0x3FF) */
+    uint16_t    src_height;     /* 0x14: Source height (<= 0x3FF) */
+    uint16_t    dst_width;      /* 0x16: Destination width (<= 0x3FF) */
+    uint16_t    dst_height;     /* 0x18: Destination height (<= 0x3FF) */
+} __attribute__((packed)) smd_blt_ctl_t;
+
+/* Valid BLT control register values */
+#define SMD_BLT_CTL_VALID_1     0x02020020
+#define SMD_BLT_CTL_VALID_2     0x02020060
+#define SMD_BLT_CTL_VALID_3     0x06060020
+#define SMD_BLT_CTL_VALID_4     0x06060060
+
+/* BLT mode register bit masks */
+#define SMD_BLT_MODE_RESERVED_MASK  0x00C0  /* Bits 6-7 must be clear */
+
+/* Maximum coordinate value for BLT operations */
+#define SMD_BLT_MAX_COORD       0x03FF
+
+/*
+ * ============================================================================
  * BLT and Drawing Functions
  * ============================================================================
  */
@@ -506,6 +547,33 @@ void SMD_$LOC_EVENT(void *params, status_$t *status_ret);
  * Original address: 0x00E6EC6E
  */
 void SMD_$BLT(void *params, void *src, void *dst, status_$t *status_ret);
+
+/*
+ * SMD_$BLT_U - User-mode bit block transfer
+ *
+ * Validates BLT parameters and performs a block transfer.
+ * This is the user-callable wrapper around SMD_$BLT that performs
+ * parameter validation before initiating the transfer.
+ *
+ * Parameters:
+ *   blt_ctl - Pointer to BLT control structure
+ *   status_ret - Status return
+ *
+ * Validation performed:
+ *   - Mode register bits 6 and 7 must be clear
+ *   - Control registers must contain valid values
+ *   - All coordinates must be non-negative
+ *   - Width/height values must be <= 0x3FF (1023)
+ *
+ * Status codes:
+ *   status_$ok - Success
+ *   status_$display_invalid_blt_mode_register - Invalid mode bits
+ *   status_$display_invalid_bIt_control_register - Invalid control register
+ *   status_$display_invalid_screen_coordinates_in_bIt - Invalid coordinates
+ *
+ * Original address: 0x00E6FAE2
+ */
+void SMD_$BLT_U(smd_blt_ctl_t *blt_ctl, status_$t *status_ret);
 
 /*
  * SMD_$SOFT_SCROLL - Software scroll
