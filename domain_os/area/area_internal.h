@@ -71,8 +71,9 @@ int16_t M_OIS_WLW(int32_t value, int16_t modulus);
 /*
  * CAL_$BOOT_VOLX - Boot volume index
  * Used for local areas when not diskless
+ * NOTE: Defined as macro in cal/cal.h: CAL_$TIMEZONE.boot_volx
  */
-extern int16_t CAL_$BOOT_VOLX;
+/* CAL_$BOOT_VOLX is defined in cal/cal.h as a macro */
 
 /*
  * AS_$STACK_LOW - Stack low address

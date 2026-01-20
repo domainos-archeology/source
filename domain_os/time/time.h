@@ -352,11 +352,26 @@ uint16_t TIME_$VT_TIMER(void);
 void TIME_$WRT_VT_TIMER(uint16_t value);
 
 /*
- * TIME_$WRT_TIMER - Write real-time timer
+ * TIME_$WRT_TIMER - Write to a hardware timer
+ *
+ * Writes a value to one of the hardware timers (0-3).
+ * Timer indices:
+ *   0 - Control registers (0xFFAC01, 0xFFAC03)
+ *   1 - Real-time event timer (0xFFAC05, 0xFFAC07)
+ *   2 - Virtual timer (0xFFAC09, 0xFFAC0B)
+ *   3 - Auxiliary timer (0xFFAC0D, 0xFFAC0F)
+ *
+ * Also clears interrupt flags:
+ *   - Timer 2: clears IN_VT_INT
+ *   - Timer 3: clears IN_RT_INT
+ *
+ * Parameters:
+ *   timer_index - Pointer to timer index (0-3)
+ *   value       - Pointer to 16-bit value to write
  *
  * Original address: 0x00e2afa0
  */
-void TIME_$WRT_TIMER(uint16_t value);
+void TIME_$WRT_TIMER(uint16_t *timer_index, uint16_t *value);
 
 /*
  * ============================================================================

@@ -45,9 +45,16 @@
  * TIMER_$INIT - Initialize the hardware timer
  *
  * Sets up the hardware timer for use by the TIME subsystem.
- * Configures timer registers and installs interrupt handlers.
+ * - Sets timer interrupt vector via TIME_$SET_VECTOR()
+ * - Initializes Timer 1 (RTE) with initial tick count (0x1046)
+ * - Initializes Timer 2 (VT) and Timer 3 (aux) to max value (disabled)
+ * - Programs timer control registers with initialization sequence
+ *
+ * Returns: 0 on success
+ *
+ * Original address: 0x00e16340
  */
-void TIMER_$INIT(void);
+int32_t TIMER_$INIT(void);
 
 /*
  * TIMER_$READ_RTE - Read real-time timer value
