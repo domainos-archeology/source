@@ -15,6 +15,7 @@
  *
  * TRAP #2 - Extended syscalls (0-132):
  *   - Validates USP and 2 arguments
+ *   - Arguments copied from user stack
  *
  * TRAP #3 - Full syscalls (0-154):
  *   - Validates USP and 3 arguments
@@ -32,6 +33,9 @@
  *   - SVC_$TRAP0: 0x00e7b044 (simple dispatcher, 32 entries)
  *   - SVC_$TRAP0_TABLE: 0x00e7b2de
  *   - SVC_$TRAP1: 0x00e7b05c (1-arg dispatcher, 66 entries)
+ *   - SVC_$TRAP1_TABLE: 0x00e7b360
+ *   - SVC_$TRAP2: 0x00e7b094 (2-arg dispatcher, 133 entries)
+ *   - SVC_$TRAP2_TABLE: 0x00e7b466
  *   - SVC_$TRAP5: 0x00e7b17c (5-arg dispatcher, 99 entries)
  *   - SVC_$TRAP5_TABLE: 0x00e7baf2
  */
@@ -54,6 +58,10 @@
 /* TRAP #1 constants */
 #define SVC_TRAP1_MAX_SYSCALL   0x41    /* 65 decimal */
 #define SVC_TRAP1_TABLE_SIZE    66
+
+/* TRAP #2 constants */
+#define SVC_TRAP2_MAX_SYSCALL   0x84    /* 132 decimal */
+#define SVC_TRAP2_TABLE_SIZE    133
 
 /* TRAP #5 constants */
 #define SVC_TRAP5_MAX_SYSCALL   0x62    /* 98 decimal */
@@ -318,6 +326,16 @@ extern void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE];
 extern void *SVC_$TRAP1_TABLE[SVC_TRAP1_TABLE_SIZE];
 
 /*
+ * SVC_$TRAP2_TABLE - 2-argument syscall handler table (TRAP #2)
+ *
+ * Array of 133 handler addresses for two-argument syscalls.
+ * USP and both argument pointers validated < 0xCC0000.
+ *
+ * Original address: 0x00e7b466
+ */
+extern void *SVC_$TRAP2_TABLE[SVC_TRAP2_TABLE_SIZE];
+
+/*
  * SVC_$TRAP5_TABLE - Complex syscall handler table (TRAP #5)
  *
  * Array of 99 handler addresses indexed by syscall number.
@@ -345,10 +363,20 @@ extern void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE];
  */
 
 /*
+ * SVC_$TRAP2 - TRAP #2 syscall dispatcher
+ *
+ * Entry point for 2-argument system calls. Validates syscall number,
+ * checks user stack pointer and both arguments, then dispatches
+ * to the appropriate handler.
+ *
+ * Original address: 0x00e7b094
+ */
+
+/*
  * SVC_$TRAP5 - Main TRAP #5 syscall dispatcher
  *
- * Entry point for all system calls. Validates syscall number,
- * checks user stack pointer and arguments, then dispatches
+ * Entry point for 5-argument system calls. Validates syscall number,
+ * checks user stack pointer and all five arguments, then dispatches
  * to the appropriate handler.
  *
  * Original address: 0x00e7b17c
