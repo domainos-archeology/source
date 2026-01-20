@@ -407,6 +407,123 @@ void SMD_$WRITE_STR_CLIP(uint32_t *pos, void *font, void *buffer,
 uint8_t smd_$is_valid_blt_ctl(uint32_t ctl_reg);
 
 /*
+ * ============================================================================
+ * Hardware BLT Register Block
+ * ============================================================================
+ * Memory-mapped hardware registers for Apollo display BLT operations.
+ * Writing to offset 0x00 with bit 15 set starts the operation.
+ * Polling offset 0x00 until bit 15 clears indicates completion.
+ * Size: 16 bytes
+ */
+typedef struct smd_hw_blt_regs_t {
+    volatile uint16_t   control;        /* 0x00: Control/status register
+                                         *       bit 15: busy (write 1 to start, poll for 0)
+                                         *       bits 0-3: operation code (0xE = draw)
+                                         */
+    uint16_t            bit_pos;        /* 0x02: Bit position within word (x & 0xF) */
+    uint16_t            mask;           /* 0x04: Pixel mask (0x3FF typical) */
+    uint16_t            pattern;        /* 0x06: Pattern/ROP (0x3C0=draw, 0x380=clear) */
+    uint16_t            y_extent;       /* 0x08: Height - 1 (0xFFFF for single row) */
+    uint16_t            x_extent;       /* 0x0A: Width in words - 1 (0xFFFF for single col) */
+    uint16_t            y_start;        /* 0x0C: Starting Y coordinate */
+    uint16_t            x_start;        /* 0x0E: Starting X coordinate */
+} smd_hw_blt_regs_t;
+
+/* BLT control register command codes */
+#define SMD_BLT_CMD_START           0x8000  /* Bit 15: start operation */
+#define SMD_BLT_CMD_DRAW            0x000E  /* Draw operation code */
+#define SMD_BLT_CMD_START_DRAW      (SMD_BLT_CMD_START | SMD_BLT_CMD_DRAW)
+
+/* BLT pattern values */
+#define SMD_BLT_PATTERN_DRAW        0x03C0  /* Pattern for line drawing */
+#define SMD_BLT_PATTERN_CLEAR       0x0380  /* Pattern for clearing */
+
+/* BLT extent for single line */
+#define SMD_BLT_SINGLE_LINE         0xFFFF  /* Use for single row/column */
+
+/* Default mask value */
+#define SMD_BLT_DEFAULT_MASK        0x03FF
+
+/*
+ * ============================================================================
+ * Utility Init Result Structure
+ * ============================================================================
+ * Result structure populated by SMD_$UTIL_INIT.
+ * Size: 20 bytes (0x14)
+ */
+typedef struct smd_util_ctx_t {
+    uint32_t            reserved;       /* 0x00: Reserved/padding */
+    uint32_t            field_04;       /* 0x04: From display unit +0x14 */
+    uint32_t            field_08;       /* 0x08: From display unit +0x08 */
+    smd_hw_blt_regs_t   *hw_regs;       /* 0x0C: Hardware BLT register pointer */
+    status_$t           status;         /* 0x10: Status code */
+} smd_util_ctx_t;
+
+/*
+ * SMD_$UTIL_INIT - Initialize utility context
+ *
+ * Sets up context for drawing operations. Must be called before
+ * using hardware BLT registers for drawing.
+ *
+ * Parameters:
+ *   ctx - Pointer to utility context structure to fill
+ *
+ * Original address: 0x00E6DED4
+ */
+void SMD_$UTIL_INIT(smd_util_ctx_t *ctx);
+
+/*
+ * SMD_$HORIZ_LINE - Draw horizontal line (internal)
+ *
+ * Low-level hardware-accelerated horizontal line drawing.
+ *
+ * Parameters:
+ *   y       - Y coordinate
+ *   x1      - Starting X coordinate
+ *   x2      - Ending X coordinate
+ *   param4  - Unused
+ *   hw_regs - Hardware BLT register pointer
+ *   control - Pointer to control value from ACQ_DISPLAY
+ *   param7  - Unused
+ *
+ * Original address: 0x00E8496A
+ */
+void SMD_$HORIZ_LINE(int16_t *y, int16_t *x1, int16_t *x2, void *param4,
+                     smd_hw_blt_regs_t *hw_regs, uint16_t *control, void *param7);
+
+/*
+ * SMD_$VERT_LINE - Draw vertical line (internal)
+ *
+ * Low-level hardware-accelerated vertical line drawing.
+ *
+ * Parameters:
+ *   x       - X coordinate
+ *   y1      - Starting Y coordinate
+ *   y2      - Ending Y coordinate
+ *   param4  - Unused
+ *   hw_regs - Hardware BLT register pointer
+ *   control - Pointer to control value from ACQ_DISPLAY
+ *
+ * Original address: 0x00E84974
+ */
+void SMD_$VERT_LINE(int16_t *x, int16_t *y1, int16_t *y2, void *param4,
+                    smd_hw_blt_regs_t *hw_regs, uint16_t *control);
+
+/*
+ * SMD_$INVERT_DISP - Invert display region (internal)
+ *
+ * Low-level function that inverts a fixed region of display memory.
+ * Called by SMD_$INVERT_S after acquiring display lock.
+ *
+ * Parameters:
+ *   display_base - Base address of display memory
+ *   display_info - Pointer to display info (may be offset for hw config)
+ *
+ * Original address: 0x00E70376
+ */
+void SMD_$INVERT_DISP(uint32_t display_base, smd_display_info_t *display_info);
+
+/*
  * Helper to get display unit pointer from unit number
  */
 static inline smd_display_unit_t *smd_get_unit(uint16_t unit_num) {

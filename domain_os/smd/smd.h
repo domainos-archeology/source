@@ -62,6 +62,21 @@ typedef struct smd_track_rect_t {
 
 /*
  * ============================================================================
+ * Drawing Rectangle Structure
+ * ============================================================================
+ * Used by DRAW_BOX, CLEAR_WINDOW, and related drawing functions.
+ * Note: Field order differs from smd_track_rect_t.
+ * Size: 8 bytes
+ */
+typedef struct smd_rect_t {
+    int16_t     x1;                 /* 0x00: Left X coordinate */
+    int16_t     x2;                 /* 0x02: Right X coordinate */
+    int16_t     y1;                 /* 0x04: Top Y coordinate */
+    int16_t     y2;                 /* 0x06: Bottom Y coordinate */
+} smd_rect_t;
+
+/*
+ * ============================================================================
  * Cursor Position Structure
  * ============================================================================
  * Size: 4 bytes
@@ -604,44 +619,43 @@ void SMD_$CLEAR_SCREEN(status_$t *status_ret);
 /*
  * SMD_$CLEAR_WINDOW - Clear window region
  *
+ * Clears a rectangular region of the display using hardware-accelerated
+ * BLT operations.
+ *
+ * Parameters:
+ *   rect       - Rectangle defining the region to clear (x1, x2, y1, y2)
+ *   status_ret - Status return
+ *
  * Original address: 0x00E8495C
  */
-void SMD_$CLEAR_WINDOW(void *region, status_$t *status_ret);
+void SMD_$CLEAR_WINDOW(smd_rect_t *rect, status_$t *status_ret);
 
 /*
- * SMD_$INVERT_S - Invert screen region
+ * SMD_$INVERT_S - Invert display
+ *
+ * Inverts the display associated with the calling process.
+ * Acquires the display lock for exclusive access during the operation.
+ *
+ * Parameters:
+ *   status_ret - Status return
  *
  * Original address: 0x00E6DDA6
  */
-void SMD_$INVERT_S(void *region, status_$t *status_ret);
+void SMD_$INVERT_S(status_$t *status_ret);
 
 /*
- * SMD_$INVERT_DISP - Invert display
+ * SMD_$DRAW_BOX - Draw box outline
  *
- * Original address: 0x00E70376
- */
-void SMD_$INVERT_DISP(status_$t *status_ret);
-
-/*
- * SMD_$DRAW_BOX - Draw box
+ * Draws a rectangular box outline (four lines) using hardware-accelerated
+ * BLT operations.
+ *
+ * Parameters:
+ *   rect       - Rectangle defining the box (x1, x2, y1, y2)
+ *   status_ret - Status return
  *
  * Original address: 0x00E6DF2A
  */
-void SMD_$DRAW_BOX(void *region, status_$t *status_ret);
-
-/*
- * SMD_$HORIZ_LINE - Draw horizontal line
- *
- * Original address: 0x00E8496A
- */
-void SMD_$HORIZ_LINE(int16_t *y, int16_t *x1, int16_t *x2, status_$t *status_ret);
-
-/*
- * SMD_$VERT_LINE - Draw vertical line
- *
- * Original address: 0x00E84974
- */
-void SMD_$VERT_LINE(int16_t *x, int16_t *y1, int16_t *y2, status_$t *status_ret);
+void SMD_$DRAW_BOX(smd_rect_t *rect, status_$t *status_ret);
 
 /*
  * SMD_$SET_CLIP_WINDOW - Set clipping window
