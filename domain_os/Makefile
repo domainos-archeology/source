@@ -10,8 +10,8 @@ CFLAGS := -I. -O2 $(SAU2_FLAGS)
 CC := m68k-elf-gcc
 SAU2_FLAGS := -DM68K -DM68010 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68010 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
 
-LD := m68k-elf-gcc
-LDFLAGS := -nostdlib -ffreestanding
+LD := m68k-elf-ld
+LDFLAGS := -T sau2.ld
 
 AR := m68k-elf-ar
 ARFLAGS := rcs
@@ -56,10 +56,10 @@ $(foreach sub,$(SUBSYSTEMS),$(eval $(call SUBSYSTEM_template,$(sub))))
 # Main target
 domain_os: $(DIST_DIR)/domain_os
 
-$(DIST_DIR)/domain_os: $(SUBSYSTEM_LIBS)
+$(DIST_DIR)/domain_os: $(SUBSYSTEM_LIBS) sau2.ld
 	@mkdir -p $(dir $@)
 	@echo "[LINK] $@"
-	$(LD) $(LDFLAGS) -o $@ -Wl,--whole-archive $(SUBSYSTEM_LIBS) -Wl,--no-whole-archive
+	$(LD) $(LDFLAGS) -o $@ --whole-archive $(SUBSYSTEM_LIBS) --no-whole-archive
 
 # Generic C compilation rule
 $(BUILD_DIR)/%.o: %.c
