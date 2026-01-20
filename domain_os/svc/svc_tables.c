@@ -307,6 +307,81 @@ extern void XNS_IDP_$GET_PORT_INFO(void);
 extern void SMD_$SET_UNIT_CURSOR_POS(void);
 extern void SMD_$CLR_AND_LOAD_TRK_RECT(void);
 
+/* TRAP #4 handlers not yet in headers */
+extern void MST_$SET_GUARD(void);
+extern void MST_$UNMAP_GLOBAL(void);
+extern void MST_$GET_UID(void);
+extern void EC2_$WAIT(void);
+extern void FILE_$READ_LOCK_ENTRY(void);
+extern void MST_$UNMAP(void);
+extern void MST_$GROW_AREA(void);
+extern void TERM_$CONTROL(void);
+extern void TERM_$READ(void);
+extern void TERM_$WRITE(void);
+extern void DISK_$FORMAT(void);
+extern void DISK_$LV_ASSIGN(void);
+extern void FILE_$FW_PARTIAL(void);
+extern void PCHIST_$CNTL(void);
+extern void SMD_$BLT(void);
+extern void SMD_$SIGNAL(void);
+extern void SMD_$SOFT_SCROLL(void);
+extern void TERM_$INQUIRE(void);
+extern void TERM_$GET_EC(void);
+extern void TERM_$READ_COND(void);
+extern void PROC2_$SET_NAME(void);
+extern void PROC2_$SET_PRIORITY(void);
+extern void PROC2_$GET_EC(void);
+extern void PROC2_$LIST_PGROUP(void);
+extern void DIR_$DROP_DIRU(void);
+extern void DIR_$SET_DEFAULT_ACL(void);
+extern void DIR_$GET_DEFAULT_ACL(void);
+extern void NAME_$READ_DIRS_PS(void);
+extern void ACL_$GET_PROJ_LIST(void);
+extern void MST_$CHANGE_RIGHTS(void);
+extern void XPD_$GET_TARGET_INFO(void);
+extern void FILE_$READ_LOCK_ENTRYI(void);
+extern void ROUTE_$INCOMING(void);
+extern void SMD_$INQ_KBD_TYPE(void);
+extern void ROUTE_$GET_EC(void);
+extern void SMD_$DM_COND_EVENT_WAIT(void);
+extern void DISK_$READ_MFG_BADSPOTS(void);
+extern void DISK_$GET_MNT_INFO(void);
+extern void PROC2_$SET_SIG_MASK(void);
+extern void PROC2_$SIGRETURN(void);
+extern void PROC2_$WAIT(void);
+extern void PROC2_$SIGNAL(void);
+extern void PROC2_$SIGNAL_PGROUP(void);
+extern void PROC2_$GET_CR_REC(void);
+extern void TTY_$K_SET_FUNC_CHAR(void);
+extern void TTY_$K_INQ_FUNC_CHAR(void);
+extern void TTY_$K_SET_INPUT_FLAG(void);
+extern void TTY_$K_SET_OUTPUT_FLAG(void);
+extern void TTY_$K_SET_ECHO_FLAG(void);
+extern void TTY_$K_ENABLE_FUNC(void);
+extern void SIO_$K_SET_PARAM(void);
+extern void SIO_$K_INQ_PARAM(void);
+extern void FILE_$SET_MGR_ATTR(void);
+extern void XPD_$GET_REGISTERS(void);
+extern void XPD_$PUT_REGISTERS(void);
+extern void FILE_$RESERVE(void);
+extern void ACL_$GET_RES_SIDS(void);
+extern void FILE_$FW_PAGES(void);
+extern void PROC2_$SET_ACCT_INFO(void);
+extern void FILE_$IMPORT_LK(void);
+extern void FILE_$UNLOCK_D(void);
+extern void FILE_$SET_LEN_D(void);
+extern void FILE_$TRUNCATE_D(void);
+extern void FILE_$SET_DTM_F(void);
+extern void TTY_$K_SET_FLAG(void);
+extern void MST_$UNMAP_AND_FREE_AREA(void);
+extern void PROC2_$NAME_TO_UID(void);
+extern void MSG_$SHARE_SOCKET(void);
+extern void TTY_$K_INQ_DELAY(void);
+extern void TTY_$K_SET_DELAY(void);
+extern void MAC_$SEND(void);
+extern void XNS_IDP_$SEND(void);
+extern void PROC2_$PGROUP_INFO(void);
+
 /* TRAP #5 handlers not yet in headers */
 extern void MST_$MAP_AREA(void);
 extern void TPAD_$INQUIRE(void);
@@ -778,6 +853,151 @@ void *SVC_$TRAP3_TABLE[SVC_TRAP3_TABLE_SIZE] = {
     /* 0x98 */ SVC_$UNIMPLEMENTED,
     /* 0x99 */ SMD_$SET_UNIT_CURSOR_POS,
     /* 0x9A */ SMD_$CLR_AND_LOAD_TRK_RECT,
+};
+
+/*
+ * ============================================================================
+ * SVC_$TRAP4_TABLE - 4-argument syscall handlers (131 entries)
+ * ============================================================================
+ *
+ * TRAP #4 syscalls take 4 arguments via user stack at (USP+0x04), (USP+0x08),
+ * (USP+0x0C), and (USP+0x10). The dispatcher validates USP and all four
+ * argument pointers < 0xCC0000.
+ *
+ * Original address: 0x00e7b8e6
+ */
+void *SVC_$TRAP4_TABLE[SVC_TRAP4_TABLE_SIZE] = {
+    /* 0x00 */ SVC_$INVALID_SYSCALL,
+    /* 0x01 */ MST_$SET_GUARD,
+    /* 0x02 */ MST_$UNMAP_GLOBAL,
+    /* 0x03 */ MST_$GET_UID,
+    /* 0x04 */ EC2_$WAIT,
+    /* 0x05 */ FILE_$READ_LOCK_ENTRY,
+    /* 0x06 */ MST_$UNMAP,
+    /* 0x07 */ MST_$GROW_AREA,
+    /* 0x08 */ SVC_$INVALID_SYSCALL,
+    /* 0x09 */ SVC_$INVALID_SYSCALL,
+    /* 0x0A */ SVC_$INVALID_SYSCALL,
+    /* 0x0B */ SVC_$INVALID_SYSCALL,
+    /* 0x0C */ TERM_$CONTROL,
+    /* 0x0D */ TERM_$READ,
+    /* 0x0E */ TERM_$WRITE,
+    /* 0x0F */ DISK_$FORMAT,
+    /* 0x10 */ DISK_$LV_ASSIGN,
+    /* 0x11 */ FILE_$FW_PARTIAL,
+    /* 0x12 */ SVC_$UNIMPLEMENTED,
+    /* 0x13 */ SVC_$UNIMPLEMENTED,
+    /* 0x14 */ SVC_$UNIMPLEMENTED,
+    /* 0x15 */ SVC_$UNIMPLEMENTED,
+    /* 0x16 */ SVC_$UNIMPLEMENTED,
+    /* 0x17 */ SVC_$INVALID_SYSCALL,
+    /* 0x18 */ SVC_$UNIMPLEMENTED,
+    /* 0x19 */ SVC_$INVALID_SYSCALL,
+    /* 0x1A */ SVC_$INVALID_SYSCALL,
+    /* 0x1B */ SVC_$INVALID_SYSCALL,
+    /* 0x1C */ SVC_$INVALID_SYSCALL,
+    /* 0x1D */ SVC_$INVALID_SYSCALL,
+    /* 0x1E */ SVC_$INVALID_SYSCALL,
+    /* 0x1F */ SVC_$INVALID_SYSCALL,
+    /* 0x20 */ SVC_$INVALID_SYSCALL,
+    /* 0x21 */ SVC_$INVALID_SYSCALL,
+    /* 0x22 */ SVC_$INVALID_SYSCALL,
+    /* 0x23 */ SVC_$UNIMPLEMENTED,
+    /* 0x24 */ SVC_$UNIMPLEMENTED,
+    /* 0x25 */ PCHIST_$CNTL,
+    /* 0x26 */ PROC2_$GET_INFO,
+    /* 0x27 */ SMD_$BLT,
+    /* 0x28 */ SVC_$INVALID_SYSCALL,
+    /* 0x29 */ SVC_$INVALID_SYSCALL,
+    /* 0x2A */ SMD_$SIGNAL,
+    /* 0x2B */ SMD_$SOFT_SCROLL,
+    /* 0x2C */ SVC_$INVALID_SYSCALL,
+    /* 0x2D */ TERM_$INQUIRE,
+    /* 0x2E */ SVC_$INVALID_SYSCALL,
+    /* 0x2F */ SVC_$INVALID_SYSCALL,
+    /* 0x30 */ SVC_$INVALID_SYSCALL,
+    /* 0x31 */ TERM_$GET_EC,
+    /* 0x32 */ SVC_$UNIMPLEMENTED,
+    /* 0x33 */ SVC_$UNIMPLEMENTED,
+    /* 0x34 */ SVC_$UNIMPLEMENTED,
+    /* 0x35 */ SVC_$UNIMPLEMENTED,
+    /* 0x36 */ SVC_$INVALID_SYSCALL,
+    /* 0x37 */ SVC_$INVALID_SYSCALL,
+    /* 0x38 */ TERM_$READ_COND,
+    /* 0x39 */ SVC_$INVALID_SYSCALL,
+    /* 0x3A */ SVC_$INVALID_SYSCALL,
+    /* 0x3B */ SVC_$UNIMPLEMENTED,
+    /* 0x3C */ PROC2_$SET_NAME,
+    /* 0x3D */ PROC2_$SET_PRIORITY,
+    /* 0x3E */ PROC2_$GET_EC,
+    /* 0x3F */ PROC2_$LIST_PGROUP,
+    /* 0x40 */ SVC_$INVALID_SYSCALL,
+    /* 0x41 */ SVC_$INVALID_SYSCALL,
+    /* 0x42 */ SVC_$INVALID_SYSCALL,
+    /* 0x43 */ SVC_$UNIMPLEMENTED,
+    /* 0x44 */ SVC_$UNIMPLEMENTED,
+    /* 0x45 */ DIR_$DROP_DIRU,
+    /* 0x46 */ DIR_$SET_DEFAULT_ACL,
+    /* 0x47 */ DIR_$GET_DEFAULT_ACL,
+    /* 0x48 */ NAME_$READ_DIRS_PS,
+    /* 0x49 */ SVC_$INVALID_SYSCALL,
+    /* 0x4A */ ACL_$GET_PROJ_LIST,
+    /* 0x4B */ MST_$CHANGE_RIGHTS,
+    /* 0x4C */ XPD_$GET_TARGET_INFO,
+    /* 0x4D */ FILE_$READ_LOCK_ENTRYI,
+    /* 0x4E */ ROUTE_$INCOMING,
+    /* 0x4F */ SVC_$UNIMPLEMENTED,
+    /* 0x50 */ SMD_$INQ_KBD_TYPE,
+    /* 0x51 */ ROUTE_$GET_EC,
+    /* 0x52 */ SVC_$INVALID_SYSCALL,
+    /* 0x53 */ SMD_$DM_COND_EVENT_WAIT,
+    /* 0x54 */ DISK_$READ_MFG_BADSPOTS,
+    /* 0x55 */ DISK_$GET_MNT_INFO,
+    /* 0x56 */ PROC2_$SET_SIG_MASK,
+    /* 0x57 */ PROC2_$SIGRETURN,
+    /* 0x58 */ PROC2_$WAIT,
+    /* 0x59 */ PROC2_$SIGNAL,
+    /* 0x5A */ PROC2_$SIGNAL_PGROUP,
+    /* 0x5B */ PROC2_$GET_CR_REC,
+    /* 0x5C */ TTY_$K_SET_FUNC_CHAR,
+    /* 0x5D */ TTY_$K_INQ_FUNC_CHAR,
+    /* 0x5E */ TTY_$K_SET_INPUT_FLAG,
+    /* 0x5F */ TTY_$K_SET_OUTPUT_FLAG,
+    /* 0x60 */ TTY_$K_SET_ECHO_FLAG,
+    /* 0x61 */ TTY_$K_ENABLE_FUNC,
+    /* 0x62 */ SIO_$K_SET_PARAM,
+    /* 0x63 */ SIO_$K_INQ_PARAM,
+    /* 0x64 */ FILE_$SET_MGR_ATTR,
+    /* 0x65 */ XPD_$GET_REGISTERS,
+    /* 0x66 */ XPD_$PUT_REGISTERS,
+    /* 0x67 */ FILE_$RESERVE,
+    /* 0x68 */ SVC_$INVALID_SYSCALL,
+    /* 0x69 */ ACL_$GET_RES_SIDS,
+    /* 0x6A */ FILE_$FW_PAGES,
+    /* 0x6B */ PROC2_$SET_ACCT_INFO,
+    /* 0x6C */ FILE_$IMPORT_LK,
+    /* 0x6D */ FILE_$UNLOCK_D,
+    /* 0x6E */ FILE_$SET_LEN_D,
+    /* 0x6F */ FILE_$TRUNCATE_D,
+    /* 0x70 */ FILE_$SET_DTM_F,
+    /* 0x71 */ TTY_$K_SET_FLAG,
+    /* 0x72 */ SVC_$INVALID_SYSCALL,
+    /* 0x73 */ MST_$UNMAP_AND_FREE_AREA,
+    /* 0x74 */ SVC_$INVALID_SYSCALL,
+    /* 0x75 */ PROC2_$NAME_TO_UID,
+    /* 0x76 */ SVC_$INVALID_SYSCALL,
+    /* 0x77 */ SVC_$INVALID_SYSCALL,
+    /* 0x78 */ SVC_$INVALID_SYSCALL,
+    /* 0x79 */ SVC_$UNIMPLEMENTED,
+    /* 0x7A */ SVC_$UNIMPLEMENTED,
+    /* 0x7B */ SVC_$UNIMPLEMENTED,
+    /* 0x7C */ SVC_$UNIMPLEMENTED,
+    /* 0x7D */ MSG_$SHARE_SOCKET,
+    /* 0x7E */ TTY_$K_INQ_DELAY,
+    /* 0x7F */ TTY_$K_SET_DELAY,
+    /* 0x80 */ MAC_$SEND,
+    /* 0x81 */ XNS_IDP_$SEND,
+    /* 0x82 */ PROC2_$PGROUP_INFO,
 };
 
 /*

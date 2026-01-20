@@ -20,6 +20,9 @@
  * TRAP #3 - Full syscalls (0-154):
  *   - Validates USP and 3 arguments
  *
+ * TRAP #4 - Extended syscalls (0-130):
+ *   - Validates USP and 4 arguments
+ *
  * TRAP #5 - Complex syscalls (0-98):
  *   - Full validation of USP and 5 arguments
  *   - Most comprehensive protection
@@ -38,6 +41,8 @@
  *   - SVC_$TRAP2_TABLE: 0x00e7b466
  *   - SVC_$TRAP3: 0x00e7b0d8 (3-arg dispatcher, 155 entries)
  *   - SVC_$TRAP3_TABLE: 0x00e7b67a
+ *   - SVC_$TRAP4: 0x00e7b120 (4-arg dispatcher, 131 entries)
+ *   - SVC_$TRAP4_TABLE: 0x00e7b8e6
  *   - SVC_$TRAP5: 0x00e7b17c (5-arg dispatcher, 99 entries)
  *   - SVC_$TRAP5_TABLE: 0x00e7baf2
  */
@@ -68,6 +73,10 @@
 /* TRAP #3 constants */
 #define SVC_TRAP3_MAX_SYSCALL   0x9A    /* 154 decimal */
 #define SVC_TRAP3_TABLE_SIZE    155
+
+/* TRAP #4 constants */
+#define SVC_TRAP4_MAX_SYSCALL   0x82    /* 130 decimal */
+#define SVC_TRAP4_TABLE_SIZE    131
 
 /* TRAP #5 constants */
 #define SVC_TRAP5_MAX_SYSCALL   0x62    /* 98 decimal */
@@ -352,6 +361,16 @@ extern void *SVC_$TRAP2_TABLE[SVC_TRAP2_TABLE_SIZE];
 extern void *SVC_$TRAP3_TABLE[SVC_TRAP3_TABLE_SIZE];
 
 /*
+ * SVC_$TRAP4_TABLE - 4-argument syscall handler table (TRAP #4)
+ *
+ * Array of 131 handler addresses for four-argument syscalls.
+ * USP and all four argument pointers validated < 0xCC0000.
+ *
+ * Original address: 0x00e7b8e6
+ */
+extern void *SVC_$TRAP4_TABLE[SVC_TRAP4_TABLE_SIZE];
+
+/*
  * SVC_$TRAP5_TABLE - Complex syscall handler table (TRAP #5)
  *
  * Array of 99 handler addresses indexed by syscall number.
@@ -396,6 +415,16 @@ extern void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE];
  * to the appropriate handler.
  *
  * Original address: 0x00e7b0d8
+ */
+
+/*
+ * SVC_$TRAP4 - TRAP #4 syscall dispatcher
+ *
+ * Entry point for 4-argument system calls. Validates syscall number,
+ * checks user stack pointer and all four arguments, then dispatches
+ * to the appropriate handler.
+ *
+ * Original address: 0x00e7b120
  */
 
 /*
