@@ -30,7 +30,12 @@
  * TRAP #6 - Extended syscalls (0-58):
  *   - Validates USP and 6 arguments
  *
- * Address Space Protection (TRAP 1-6):
+ * TRAP #7 - Variable-argument syscalls (0-55):
+ *   - Uses lookup table for argument count per syscall
+ *   - Validates USP and variable number of arguments (6-17)
+ *   - Creates stack frame with LINK instruction
+ *
+ * Address Space Protection (TRAP 1-7):
  *   - User stack pointer (USP) must be < 0xCC0000
  *   - All argument pointers must be < 0xCC0000
  *   - Violation triggers protection boundary fault
@@ -50,6 +55,9 @@
  *   - SVC_$TRAP5_TABLE: 0x00e7baf2
  *   - SVC_$TRAP6: 0x00e7b1d8 (6-arg dispatcher, 59 entries)
  *   - SVC_$TRAP6_TABLE: 0x00e7bc7e
+ *   - SVC_$TRAP7: 0x00e7b240 (variable-arg dispatcher, 56 entries)
+ *   - SVC_$TRAP7_TABLE: 0x00e7bd6a
+ *   - SVC_$TRAP7_ARGCOUNT: 0x00e7be4a
  */
 
 #ifndef SVC_H
@@ -90,6 +98,10 @@
 /* TRAP #6 constants */
 #define SVC_TRAP6_MAX_SYSCALL   0x3A    /* 58 decimal */
 #define SVC_TRAP6_TABLE_SIZE    59
+
+/* TRAP #7 constants */
+#define SVC_TRAP7_MAX_SYSCALL   0x37    /* 55 decimal */
+#define SVC_TRAP7_TABLE_SIZE    56
 
 /* Legacy aliases */
 #define SVC_MAX_SYSCALL         SVC_TRAP5_MAX_SYSCALL
@@ -400,6 +412,28 @@ extern void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE];
 extern void *SVC_$TRAP6_TABLE[SVC_TRAP6_TABLE_SIZE];
 
 /*
+ * SVC_$TRAP7_TABLE - Variable-argument syscall handler table (TRAP #7)
+ *
+ * Array of 56 handler addresses for variable-argument syscalls.
+ * Unlike TRAP #1-6, TRAP #7 uses a lookup table (SVC_$TRAP7_ARGCOUNT)
+ * to determine how many arguments each syscall expects.
+ *
+ * Original address: 0x00e7bd6a
+ */
+extern void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE];
+
+/*
+ * SVC_$TRAP7_ARGCOUNT - Argument count table for TRAP #7
+ *
+ * Array of 56 bytes, where each byte contains the number of 4-byte
+ * arguments (longwords) that the corresponding syscall expects.
+ * Negative values indicate syscalls that handle their own validation.
+ *
+ * Original address: 0x00e7be4a
+ */
+extern unsigned char SVC_$TRAP7_ARGCOUNT[SVC_TRAP7_TABLE_SIZE];
+
+/*
  * ============================================================================
  * Entry Points (Assembly)
  * ============================================================================
@@ -464,6 +498,23 @@ extern void *SVC_$TRAP6_TABLE[SVC_TRAP6_TABLE_SIZE];
  * to the appropriate handler.
  *
  * Original address: 0x00e7b1d8
+ */
+
+/*
+ * SVC_$TRAP7 - Variable-argument syscall dispatcher
+ *
+ * Entry point for variable-argument system calls. Unlike TRAP #1-6,
+ * TRAP #7 looks up the argument count for each syscall from
+ * SVC_$TRAP7_ARGCOUNT table, then validates and copies that many
+ * arguments from the user stack.
+ *
+ * Features:
+ *   - Variable argument count per syscall (6-17 args observed)
+ *   - Uses LINK to create stack frame
+ *   - Loop-based argument copying and validation
+ *   - Negative argcount values skip validation (special handling)
+ *
+ * Original address: 0x00e7b240
  */
 
 /*

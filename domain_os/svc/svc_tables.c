@@ -454,6 +454,43 @@ extern void FILE_$CREATE_IT(void);
 extern void ACL_$RIGHTS_CHECK(void);
 extern void RIP_$UPDATE_D(void);
 
+/* TRAP #7 handlers not yet in headers */
+extern void MST_$MAP(void);
+extern void MST_$MAP_AT(void);
+extern void MST_$MAP_GLOBAL(void);
+extern void VOLX_$DISMOUNT(void);
+extern void VOLX_$GET_UIDS(void);
+extern void DISK_$PV_ASSIGN(void);
+extern void MSG_$RCV(void);
+extern void MSG_$SAR(void);
+extern void MSG_$SEND(void);
+extern void SMD_$LOAD_CRSR_BITMAP(void);
+extern void SMD_$READ_CRSR_BITMAP(void);
+extern void OSINFO_$GET_MMAP(void);
+extern void ASKNODE_$INTERNET_INFO(void);
+extern void MST_$GET_VA_INFO(void);
+extern void MSG_$SENDI(void);
+extern void MSG_$RCVI(void);
+extern void MSG_$RCV_CONTIGI(void);
+extern void MSG_$SARI(void);
+extern void MSG_$SEND_HW(void);
+extern void MST_$MAP_TOP(void);
+extern void NET_$SEND(void);
+extern void NET_$RCV(void);
+extern void DIR_$DIR_READU(void);
+extern void DIR_$READ_LINKU(void);
+extern void PROC2_$COMPLETE_VFORK(void);
+extern void DIR_$RESOLVE(void);
+extern void VOLX_$MOUNT(void);
+extern void ACL_$IMAGE(void);
+extern void DISK_$PV_ASSIGN_N(void);
+extern void DISK_$AS_XFER_MULTI(void);
+extern void PROC2_$FORK(void);
+extern void PROC2_$CREATE(void);
+extern void TPAD_$SET_UNIT_MODE(void);
+extern void TPAD_$INQUIRE_UNIT(void);
+extern void MSG_$RCV_HW(void);
+
 /*
  * ============================================================================
  * SVC_$TRAP0_TABLE - Simple syscall handlers (32 entries)
@@ -1219,4 +1256,146 @@ void *SVC_$TRAP6_TABLE[SVC_TRAP6_TABLE_SIZE] = {
     /* 0x38 */ FILE_$CREATE_IT,
     /* 0x39 */ ACL_$RIGHTS_CHECK,
     /* 0x3A */ RIP_$UPDATE_D,
+};
+
+/*
+ * ============================================================================
+ * SVC_$TRAP7_TABLE - Variable-argument syscall handlers (56 entries)
+ * ============================================================================
+ *
+ * TRAP #7 syscalls use a variable argument count lookup mechanism.
+ * The argument count for each syscall is stored in SVC_$TRAP7_ARGCOUNT.
+ * This allows syscalls with different argument counts to share one trap.
+ *
+ * Original address: 0x00e7bd6a
+ */
+void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE] = {
+    /* 0x00 */ MST_$MAP,                    /* 7 args */
+    /* 0x01 */ MST_$MAP_AT,                 /* 8 args */
+    /* 0x02 */ MST_$MAP_GLOBAL,             /* 7 args */
+    /* 0x03 */ SVC_$INVALID_SYSCALL,        /* 10 args (invalid) */
+    /* 0x04 */ VOLX_$DISMOUNT,              /* 6 args */
+    /* 0x05 */ VOLX_$GET_UIDS,              /* 6 args */
+    /* 0x06 */ SVC_$INVALID_SYSCALL,        /* 7 args (invalid) */
+    /* 0x07 */ DISK_$PV_ASSIGN,             /* 7 args */
+    /* 0x08 */ MSG_$RCV,                    /* 11 args */
+    /* 0x09 */ MSG_$SAR,                    /* 16 args */
+    /* 0x0A */ MSG_$SEND,                   /* 10 args */
+    /* 0x0B */ SVC_$INVALID_SYSCALL,        /* 6 args (invalid) */
+    /* 0x0C */ SMD_$LOAD_CRSR_BITMAP,       /* 7 args */
+    /* 0x0D */ SMD_$READ_CRSR_BITMAP,       /* 7 args */
+    /* 0x0E */ SVC_$INVALID_SYSCALL,        /* 13 args (invalid) */
+    /* 0x0F */ SVC_$INVALID_SYSCALL,        /* 8 args (invalid) */
+    /* 0x10 */ SVC_$INVALID_SYSCALL,        /* 13 args (invalid) */
+    /* 0x11 */ SVC_$INVALID_SYSCALL,        /* 8 args (invalid) */
+    /* 0x12 */ OSINFO_$GET_MMAP,            /* 6 args */
+    /* 0x13 */ ASKNODE_$INTERNET_INFO,      /* 8 args */
+    /* 0x14 */ MST_$GET_VA_INFO,            /* 6 args */
+    /* 0x15 */ SVC_$INVALID_SYSCALL,        /* 6 args (invalid) */
+    /* 0x16 */ MSG_$SENDI,                  /* 7 args */
+    /* 0x17 */ SVC_$INVALID_SYSCALL,        /* 13 args (invalid) */
+    /* 0x18 */ MSG_$RCVI,                   /* 15 args */
+    /* 0x19 */ MSG_$RCV_CONTIGI,            /* 12 args */
+    /* 0x1A */ MSG_$SARI,                   /* 17 args */
+    /* 0x1B */ MST_$GET_VA_INFO,            /* 6 args (duplicate?) */
+    /* 0x1C */ SVC_$UNIMPLEMENTED,          /* 14 args */
+    /* 0x1D */ MSG_$SEND_HW,                /* 7 args */
+    /* 0x1E */ SVC_$INVALID_SYSCALL,        /* 6 args (invalid) */
+    /* 0x1F */ MST_$MAP_TOP,                /* 8 args */
+    /* 0x20 */ NET_$SEND,                   /* 7 args */
+    /* 0x21 */ NET_$RCV,                    /* 8 args */
+    /* 0x22 */ DIR_$DIR_READU,              /* 8 args */
+    /* 0x23 */ DIR_$READ_LINKU,             /* 8 args */
+    /* 0x24 */ SVC_$UNIMPLEMENTED,          /* 7 args */
+    /* 0x25 */ SVC_$UNIMPLEMENTED,          /* 7 args */
+    /* 0x26 */ PROC2_$COMPLETE_VFORK,       /* 9 args */
+    /* 0x27 */ DIR_$RESOLVE,                /* 9 args */
+    /* 0x28 */ SVC_$INVALID_SYSCALL,        /* 7 args (invalid) */
+    /* 0x29 */ SVC_$UNIMPLEMENTED,          /* 7 args */
+    /* 0x2A */ VOLX_$MOUNT,                 /* 6 args */
+    /* 0x2B */ ACL_$IMAGE,                  /* 10 args */
+    /* 0x2C */ DISK_$PV_ASSIGN_N,           /* 8 args */
+    /* 0x2D */ DISK_$AS_XFER_MULTI,         /* 6 args */
+    /* 0x2E */ SVC_$UNIMPLEMENTED,          /* 9 args */
+    /* 0x2F */ PROC2_$FORK,                 /* 7 args */
+    /* 0x30 */ SVC_$UNIMPLEMENTED,          /* 7 args */
+    /* 0x31 */ PROC2_$CREATE,               /* 6 args */
+    /* 0x32 */ SVC_$UNIMPLEMENTED,          /* 7 args */
+    /* 0x33 */ SVC_$UNIMPLEMENTED,          /* 10 args */
+    /* 0x34 */ TPAD_$SET_UNIT_MODE,         /* 6 args */
+    /* 0x35 */ TPAD_$INQUIRE_UNIT,          /* 6 args */
+    /* 0x36 */ SVC_$UNIMPLEMENTED,          /* 11 args */
+    /* 0x37 */ MSG_$RCV_HW,                 /* 13 args */
+};
+
+/*
+ * ============================================================================
+ * SVC_$TRAP7_ARGCOUNT - Argument count table for TRAP #7 (56 entries)
+ * ============================================================================
+ *
+ * Each byte contains the number of 4-byte arguments (in longwords) that
+ * the corresponding syscall expects. The dispatcher uses this to determine
+ * how many arguments to copy and validate from the user stack.
+ *
+ * Negative values indicate syscalls that handle their own argument validation.
+ *
+ * Original address: 0x00e7be4a
+ */
+unsigned char SVC_$TRAP7_ARGCOUNT[SVC_TRAP7_TABLE_SIZE] = {
+    /* 0x00 */ 0x07,    /* MST_$MAP: 7 args */
+    /* 0x01 */ 0x08,    /* MST_$MAP_AT: 8 args */
+    /* 0x02 */ 0x07,    /* MST_$MAP_GLOBAL: 7 args */
+    /* 0x03 */ 0x0a,    /* Invalid: 10 args */
+    /* 0x04 */ 0x06,    /* VOLX_$DISMOUNT: 6 args */
+    /* 0x05 */ 0x06,    /* VOLX_$GET_UIDS: 6 args */
+    /* 0x06 */ 0x07,    /* Invalid: 7 args */
+    /* 0x07 */ 0x07,    /* DISK_$PV_ASSIGN: 7 args */
+    /* 0x08 */ 0x0b,    /* MSG_$RCV: 11 args */
+    /* 0x09 */ 0x10,    /* MSG_$SAR: 16 args */
+    /* 0x0A */ 0x0a,    /* MSG_$SEND: 10 args */
+    /* 0x0B */ 0x06,    /* Invalid: 6 args */
+    /* 0x0C */ 0x07,    /* SMD_$LOAD_CRSR_BITMAP: 7 args */
+    /* 0x0D */ 0x07,    /* SMD_$READ_CRSR_BITMAP: 7 args */
+    /* 0x0E */ 0x0d,    /* Invalid: 13 args */
+    /* 0x0F */ 0x08,    /* Invalid: 8 args */
+    /* 0x10 */ 0x0d,    /* Invalid: 13 args */
+    /* 0x11 */ 0x08,    /* Invalid: 8 args */
+    /* 0x12 */ 0x06,    /* OSINFO_$GET_MMAP: 6 args */
+    /* 0x13 */ 0x08,    /* ASKNODE_$INTERNET_INFO: 8 args */
+    /* 0x14 */ 0x06,    /* MST_$GET_VA_INFO: 6 args */
+    /* 0x15 */ 0x06,    /* Invalid: 6 args */
+    /* 0x16 */ 0x07,    /* MSG_$SENDI: 7 args */
+    /* 0x17 */ 0x0d,    /* Invalid: 13 args */
+    /* 0x18 */ 0x0f,    /* MSG_$RCVI: 15 args */
+    /* 0x19 */ 0x0c,    /* MSG_$RCV_CONTIGI: 12 args */
+    /* 0x1A */ 0x11,    /* MSG_$SARI: 17 args */
+    /* 0x1B */ 0x06,    /* MST_$GET_VA_INFO: 6 args */
+    /* 0x1C */ 0x0e,    /* Unimplemented: 14 args */
+    /* 0x1D */ 0x07,    /* MSG_$SEND_HW: 7 args */
+    /* 0x1E */ 0x06,    /* Invalid: 6 args */
+    /* 0x1F */ 0x08,    /* MST_$MAP_TOP: 8 args */
+    /* 0x20 */ 0x07,    /* NET_$SEND: 7 args */
+    /* 0x21 */ 0x08,    /* NET_$RCV: 8 args */
+    /* 0x22 */ 0x08,    /* DIR_$DIR_READU: 8 args */
+    /* 0x23 */ 0x08,    /* DIR_$READ_LINKU: 8 args */
+    /* 0x24 */ 0x07,    /* Unimplemented: 7 args */
+    /* 0x25 */ 0x07,    /* Unimplemented: 7 args */
+    /* 0x26 */ 0x09,    /* PROC2_$COMPLETE_VFORK: 9 args */
+    /* 0x27 */ 0x09,    /* DIR_$RESOLVE: 9 args */
+    /* 0x28 */ 0x07,    /* Invalid: 7 args */
+    /* 0x29 */ 0x07,    /* Unimplemented: 7 args */
+    /* 0x2A */ 0x06,    /* VOLX_$MOUNT: 6 args */
+    /* 0x2B */ 0x0a,    /* ACL_$IMAGE: 10 args */
+    /* 0x2C */ 0x08,    /* DISK_$PV_ASSIGN_N: 8 args */
+    /* 0x2D */ 0x06,    /* DISK_$AS_XFER_MULTI: 6 args */
+    /* 0x2E */ 0x09,    /* Unimplemented: 9 args */
+    /* 0x2F */ 0x07,    /* PROC2_$FORK: 7 args */
+    /* 0x30 */ 0x07,    /* Unimplemented: 7 args */
+    /* 0x31 */ 0x06,    /* PROC2_$CREATE: 6 args */
+    /* 0x32 */ 0x07,    /* Unimplemented: 7 args */
+    /* 0x33 */ 0x0a,    /* Unimplemented: 10 args */
+    /* 0x34 */ 0x06,    /* TPAD_$SET_UNIT_MODE: 6 args */
+    /* 0x35 */ 0x06,    /* TPAD_$INQUIRE_UNIT: 6 args */
+    /* 0x36 */ 0x0b,    /* Unimplemented: 11 args */
+    /* 0x37 */ 0x0d,    /* MSG_$RCV_HW: 13 args */
 };
