@@ -418,7 +418,7 @@ extern void XPD_$READ_PROC_ASYNC(void);
 extern void RIP_$TABLE_D(void);
 extern void XNS_ERROR_$SEND(void);
 
-/* TRAP #6 handlers not yet in headers */
+/* TRAP #7 handlers not yet in headers */
 extern void FILE_$LOCK(void);
 extern void MST_$MAP_AREA_AT(void);
 extern void SMD_$WRITE_STRING(void);
@@ -454,7 +454,7 @@ extern void FILE_$CREATE_IT(void);
 extern void ACL_$RIGHTS_CHECK(void);
 extern void RIP_$UPDATE_D(void);
 
-/* TRAP #7 handlers not yet in headers */
+/* TRAP #8 handlers not yet in headers */
 extern void MST_$MAP(void);
 extern void MST_$MAP_AT(void);
 extern void MST_$MAP_GLOBAL(void);
@@ -1187,16 +1187,18 @@ void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE] = {
 
 /*
  * ============================================================================
- * SVC_$TRAP6_TABLE - 6-argument syscall handlers (59 entries)
+ * SVC_$TRAP7_TABLE - 6-argument syscall handlers (59 entries)
  * ============================================================================
  *
- * TRAP #6 syscalls take 6 arguments via user stack at (USP+0x04) through
+ * TRAP #7 syscalls take 6 arguments via user stack at (USP+0x04) through
  * (USP+0x18). The dispatcher validates USP and all six argument pointers
  * < 0xCC0000.
  *
+ * Note: TRAP #6 is not used for SVC calls (points to FIM_$UNDEF_TRAP).
+ *
  * Original address: 0x00e7bc7e
  */
-void *SVC_$TRAP6_TABLE[SVC_TRAP6_TABLE_SIZE] = {
+void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE] = {
     /* 0x00 */ FILE_$LOCK,
     /* 0x01 */ ERROR_$PRINT,
     /* 0x02 */ MST_$MAP_AREA_AT,
@@ -1260,16 +1262,18 @@ void *SVC_$TRAP6_TABLE[SVC_TRAP6_TABLE_SIZE] = {
 
 /*
  * ============================================================================
- * SVC_$TRAP7_TABLE - Variable-argument syscall handlers (56 entries)
+ * SVC_$TRAP8_TABLE - Variable-argument syscall handlers (56 entries)
  * ============================================================================
  *
- * TRAP #7 syscalls use a variable argument count lookup mechanism.
- * The argument count for each syscall is stored in SVC_$TRAP7_ARGCOUNT.
+ * TRAP #8 syscalls use a variable argument count lookup mechanism.
+ * The argument count for each syscall is stored in SVC_$TRAP8_ARGCOUNT.
  * This allows syscalls with different argument counts to share one trap.
+ *
+ * Note: TRAP #6 is not used for SVC calls (points to FIM_$UNDEF_TRAP).
  *
  * Original address: 0x00e7bd6a
  */
-void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE] = {
+void *SVC_$TRAP8_TABLE[SVC_TRAP8_TABLE_SIZE] = {
     /* 0x00 */ MST_$MAP,                    /* 7 args */
     /* 0x01 */ MST_$MAP_AT,                 /* 8 args */
     /* 0x02 */ MST_$MAP_GLOBAL,             /* 7 args */
@@ -1330,7 +1334,7 @@ void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE] = {
 
 /*
  * ============================================================================
- * SVC_$TRAP7_ARGCOUNT - Argument count table for TRAP #7 (56 entries)
+ * SVC_$TRAP8_ARGCOUNT - Argument count table for TRAP #8 (56 entries)
  * ============================================================================
  *
  * Each byte contains the number of 4-byte arguments (in longwords) that
@@ -1341,7 +1345,7 @@ void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE] = {
  *
  * Original address: 0x00e7be4a
  */
-unsigned char SVC_$TRAP7_ARGCOUNT[SVC_TRAP7_TABLE_SIZE] = {
+unsigned char SVC_$TRAP8_ARGCOUNT[SVC_TRAP8_TABLE_SIZE] = {
     /* 0x00 */ 0x07,    /* MST_$MAP: 7 args */
     /* 0x01 */ 0x08,    /* MST_$MAP_AT: 8 args */
     /* 0x02 */ 0x07,    /* MST_$MAP_GLOBAL: 7 args */
