@@ -308,6 +308,16 @@
 extern void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE];
 
 /*
+ * SVC_$TRAP1_TABLE - 1-argument syscall handler table (TRAP #1)
+ *
+ * Array of 66 handler addresses for single-argument syscalls.
+ * USP and argument pointer validated < 0xCC0000.
+ *
+ * Original address: 0x00e7b360
+ */
+extern void *SVC_$TRAP1_TABLE[SVC_TRAP1_TABLE_SIZE];
+
+/*
  * SVC_$TRAP5_TABLE - Complex syscall handler table (TRAP #5)
  *
  * Array of 99 handler addresses indexed by syscall number.
