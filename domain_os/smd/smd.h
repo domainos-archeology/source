@@ -132,6 +132,16 @@ void SMD_$WS_INIT(void);
 void SMD_$UTIL_INIT(void);
 
 /*
+ * SMD_$INSTALL_DISP_MEM - Install display memory
+ *
+ * No-op stub function. Display memory installation is handled
+ * elsewhere during initialization.
+ *
+ * Original address: 0x00E34F02
+ */
+void SMD_$INSTALL_DISP_MEM(void);
+
+/*
  * ============================================================================
  * Display Association Functions
  * ============================================================================
@@ -803,17 +813,62 @@ void SMD_$SHUTDOWN(void);
 void SMD_$DISPLAY_LOGO(status_$t *status_ret);
 
 /*
- * SMD_$MAP_DISPLAY_MEMORY - Map display memory
+ * SMD_$MAP_DISPLAY_MEMORY - Map display memory (kernel level)
+ *
+ * Stub function - returns unsupported status.
  *
  * Original address: 0x00E700AA
  */
-void SMD_$MAP_DISPLAY_MEMORY(void *params, status_$t *status_ret);
+void SMD_$MAP_DISPLAY_MEMORY(uint32_t param_1, uint32_t param_2,
+                              uint32_t param_3, uint32_t param_4,
+                              status_$t *status_ret);
 
 /*
- * SMD_$UNMAP_DISPLAY_MEMORY - Unmap display memory
+ * SMD_$UNMAP_DISPLAY_MEMORY - Unmap display memory (kernel level)
+ *
+ * Stub function - returns unsupported status.
  *
  * Original address: 0x00E700C8
  */
-void SMD_$UNMAP_DISPLAY_MEMORY(void *params, status_$t *status_ret);
+void SMD_$UNMAP_DISPLAY_MEMORY(uint32_t param_1, uint32_t param_2,
+                                uint32_t param_3, uint32_t param_4,
+                                status_$t *status_ret);
+
+/*
+ * SMD_$MAP_DISPLAY_U - Map display memory for user-mode access
+ *
+ * Maps the display framebuffer into the current process's address space.
+ * Returns cached mapping if already mapped for this ASID.
+ *
+ * Parameters:
+ *   mapped_addr - Output: receives the mapped address
+ *   status_ret  - Output: status return
+ *
+ * Original address: 0x00E6F8D0
+ */
+void SMD_$MAP_DISPLAY_U(uint32_t *mapped_addr, status_$t *status_ret);
+
+/*
+ * SMD_$UNMAP_DISPLAY_U - Unmap display memory from user-mode access
+ *
+ * Unmaps the display framebuffer from the current process's address space.
+ *
+ * Parameters:
+ *   status_ret - Output: status return
+ *
+ * Original address: 0x00E6F97C
+ */
+void SMD_$UNMAP_DISPLAY_U(status_$t *status_ret);
+
+/*
+ * SMD_$WIRE_MM - Wire display memory
+ *
+ * Stub function - returns unsupported status.
+ * Was intended for wiring display memory to prevent paging.
+ *
+ * Original address: 0x00E6F4A0
+ */
+void SMD_$WIRE_MM(uint32_t param_1, uint32_t param_2, uint32_t param_3,
+                  status_$t *status_ret);
 
 #endif /* SMD_H */

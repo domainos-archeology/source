@@ -36,6 +36,9 @@
 /* Maximum ASIDs supported */
 #define SMD_MAX_ASIDS               256
 
+/* Maximum HDM free list entries */
+#define SMD_HDM_MAX_ENTRIES         25
+
 /* Tracking rectangle list size */
 #define SMD_MAX_TRACKING_RECTS      16
 
@@ -63,11 +66,15 @@
  */
 #define status_$display_invalid_unit_number                 0x00130001
 #define status_$display_invalid_use_of_driver_procedure     0x00130004
+#define status_$display_error_unloading_internal_table      0x00130006
+#define status_$display_invalid_position_argument           0x00130015
 #define status_$display_invalid_blt_mode_register           0x0013001A
 #define status_$display_invalid_blt_control_register        0x0013001B
 #define status_$display_invalid_screen_coordinates_in_blt   0x0013001E
+#define status_$display_memory_not_mapped                   0x00130021
 #define status_$display_hidden_display_memory_full          0x00130024
 #define status_$display_invalid_blt_op                      0x00130028
+#define status_$display_nonconforming_blts_unsupported      0x00130028  /* Same as invalid_blt_op */
 #define status_$display_tracking_list_full                  0x00130031
 
 /*
@@ -160,17 +167,31 @@ typedef struct smd_hdm_list_t {
  * ============================================================================
  * Per-display unit state. Each unit is 0x10C bytes.
  * Base address: 0x00E2E3FC
+ *
+ * IMPORTANT: The original code uses 1-based unit numbers in API calls.
+ * When accessing data, offsets are computed from (base + unit * 0x10c).
+ * This means some fields are accessed with negative offsets (from the
+ * "previous" slot). The layout below reflects logical organization.
+ *
+ * For unit N (1-based), accessed offsets from (base + N*0x10c):
+ *   -0xf4: hw pointer (in slot N-1)
+ *   -0xe8 + ASID*4: mapped_addresses[ASID] (in slot N-1)
+ *   +0x04: hdm_list_ptr (in slot N)
+ *   +0x0c: UID for MST mapping (in slot N)
  */
 typedef struct smd_display_unit_t {
-    ec_$eventcount_t    event_count_1;  /* 0x00: Event count */
-    uint32_t            hdm_list_ptr;   /* 0x0C: Pointer to HDM free list */
+    ec_$eventcount_t    event_count_1;  /* 0x00: Event count (12 bytes) */
+    smd_hdm_list_t      *hdm_list_ptr;  /* 0x0C: Pointer to HDM free list */
     uint16_t            field_10;       /* 0x10: Unknown */
     uint16_t            asid;           /* 0x12: Associated address space ID */
     uint16_t            field_14;       /* 0x14: Unknown */
     uint16_t            field_16;       /* 0x16: Unknown */
     smd_display_hw_t    *hw;            /* 0x18: Pointer to hardware info */
-    uint8_t             field_1c[0xE4]; /* 0x1C: Unknown fields */
-    /* Total: 0x100 bytes used, plus padding to 0x10C */
+    uint32_t            field_1c;       /* 0x1C: Unknown */
+    uint32_t            field_20;       /* 0x20: Unknown */
+    uint32_t            mapped_addresses[58]; /* 0x24: Per-ASID mapped display addresses */
+                                        /* 58 = MST_MAX_ASIDS from mst.h */
+                                        /* 58 * 4 = 0xe8 bytes, ends at 0x10c */
 } smd_display_unit_t;
 
 /*
