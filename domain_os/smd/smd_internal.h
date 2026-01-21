@@ -78,6 +78,7 @@
 #define status_$display_hidden_display_memory_full          0x00130024
 #define status_$display_invalid_blt_op                      0x00130028
 #define status_$display_nonconforming_blts_unsupported      0x00130028  /* Same as invalid_blt_op */
+#define status_$display_invalid_buffer_size                 0x0013000C
 #define status_$display_bad_tracking_rectangle              0x00130030
 #define status_$display_tracking_list_full                  0x00130031
 #define status_$display_borrow_request_denied_by_screen_manager 0x00130010

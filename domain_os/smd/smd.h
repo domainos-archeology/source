@@ -807,11 +807,21 @@ void SMD_$DM_COND_EVENT_WAIT(void *params, status_$t *status_ret);
 void SMD_$EOF_WAIT(status_$t *status_ret);
 
 /*
- * SMD_$SIGNAL - Signal display event
+ * SMD_$SIGNAL - Send signal to display manager
+ *
+ * Queues a request for the display manager to process. The request
+ * includes the calling process's ASID and a variable number of parameters.
+ *
+ * Parameters:
+ *   unit_ptr    - Pointer to display unit number
+ *   params      - Pointer to parameter array (16-bit words)
+ *   param_count - Pointer to parameter count (1-16)
+ *   status_ret  - Status return pointer
  *
  * Original address: 0x00E6F1DA
  */
-void SMD_$SIGNAL(void *params, status_$t *status_ret);
+void SMD_$SIGNAL(uint16_t *unit_ptr, uint16_t *params, uint16_t *param_count,
+                 status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -829,25 +839,49 @@ void SMD_$SIGNAL(void *params, status_$t *status_ret);
 int16_t SMD_$LOCK_DISPLAY(void *lock_data, void *param2);
 
 /*
- * SMD_$BIT_SET - Set display bit
+ * SMD_$BIT_SET - Atomic test and set bit 7
+ *
+ * Tests bit 7 of the byte at the given address and sets it.
+ * This is an atomic read-modify-write operation.
+ *
+ * Parameters:
+ *   byte_ptr - Pointer to byte to test and set
+ *
+ * Returns:
+ *   0xFF (-1) if bit was previously clear (now set)
+ *   0x00 if bit was previously set
  *
  * Original address: 0x00E15D12
  */
-void SMD_$BIT_SET(void *params);
+int8_t SMD_$BIT_SET(uint8_t *byte_ptr);
 
 /*
- * SMD_$LITES - Control display indicator lights
+ * SMD_$LITES - Display status indicator lights
+ *
+ * Draws 16 small status indicator blocks on the display.
+ * Each bit in the pattern controls whether the corresponding
+ * block is filled (bit set) or hollow (bit clear).
+ *
+ * Parameters:
+ *   pattern - 16-bit pattern controlling which lights are lit
+ *   y_pos   - Y coordinate row offset
  *
  * Original address: 0x00E1D8B8
  */
-void SMD_$LITES(uint16_t pattern);
+void SMD_$LITES(uint16_t pattern, uint16_t y_pos);
 
 /*
- * SMD_$BUSY_WAIT - Busy wait for display operation
+ * SMD_$BUSY_WAIT - Wait function (stub)
+ *
+ * Placeholder function that always returns success immediately.
+ *
+ * Parameters:
+ *   param1     - Unused parameter
+ *   status_ret - Status return pointer
  *
  * Original address: 0x00E1D89E
  */
-void SMD_$BUSY_WAIT(void);
+void SMD_$BUSY_WAIT(uint32_t param1, status_$t *status_ret);
 
 /*
  * SMD_$WIRE_MM - Wire memory for display
@@ -857,11 +891,17 @@ void SMD_$BUSY_WAIT(void);
 void SMD_$WIRE_MM(void *params, status_$t *status_ret);
 
 /*
- * SMD_$SEND_RESPONSE - Send response
+ * SMD_$SEND_RESPONSE - Send borrow response
  *
- * Original address: 0x00E6F584
+ * Sends a response to a process that is waiting for a display borrow
+ * operation to complete.
+ *
+ * Parameters:
+ *   response - Pointer to response byte
+ *
+ * Original address: 0x00E6F4BE
  */
-void SMD_$SEND_RESPONSE(void *params, status_$t *status_ret);
+void SMD_$SEND_RESPONSE(int8_t *response);
 
 /*
  * SMD_$GET_EC - Get event count
@@ -878,11 +918,31 @@ void SMD_$GET_EC(void *ec, status_$t *status_ret);
 void SMD_$SHUTDOWN(void);
 
 /*
- * SMD_$DISPLAY_LOGO - Display startup logo
+ * SMD_$DISPLAY_LOGO - Display system logo
+ *
+ * Copies a bitmap logo to the display at a centered position.
+ *
+ * Parameters:
+ *   unit_ptr   - Pointer to display unit number
+ *   logo_data  - Pointer to logo bitmap data
+ *   status_ret - Status return pointer
  *
  * Original address: 0x00E701EE
  */
-void SMD_$DISPLAY_LOGO(status_$t *status_ret);
+void SMD_$DISPLAY_LOGO(uint16_t *unit_ptr, int32_t **logo_data, status_$t *status_ret);
+
+/*
+ * SMD_$FREE_ASID - Free display resources for an ASID
+ *
+ * Releases any borrowed display and unmaps display memory for the
+ * specified address space ID. Called during process termination.
+ *
+ * Parameters:
+ *   asid - Address space ID to free resources for
+ *
+ * Original address: 0x00E75250
+ */
+void SMD_$FREE_ASID(int16_t asid);
 
 /*
  * SMD_$MAP_DISPLAY_MEMORY - Map display memory (kernel level)
