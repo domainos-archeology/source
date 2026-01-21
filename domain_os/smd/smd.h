@@ -179,21 +179,65 @@ void SMD_$ASSOC(uint16_t *unit, uint16_t *asid, status_$t *status_ret);
 /*
  * SMD_$DISSOC - Dissociate display from process
  *
- * Removes display association from a process.
+ * Stub function that returns unsupported status.
+ * Display dissociation was not implemented in this version.
+ *
+ * Parameters:
+ *   param_1    - Unused (likely intended for unit number)
+ *   status_ret - Status return (always set to unsupported)
  *
  * Original address: 0x00E70106
  */
-void SMD_$DISSOC(void);
+void SMD_$DISSOC(uint32_t param_1, status_$t *status_ret);
+
+/*
+ * SMD_$ASSOC_CSRS - Associate display with cursors
+ *
+ * Stub function that returns unsupported status.
+ * Cursor association was not implemented in this version.
+ *
+ * Parameters:
+ *   param_1    - Unused
+ *   param_2    - Unused
+ *   status_ret - Status return (always set to unsupported)
+ *
+ * Original address: 0x00E700E8
+ */
+void SMD_$ASSOC_CSRS(uint32_t param_1, uint32_t param_2, status_$t *status_ret);
+
+/*
+ * SMD_$SET_DISP_UNIT - Set display unit for current process
+ *
+ * Sets which display unit the current process uses.
+ *
+ * Parameters:
+ *   unit       - Pointer to display unit number
+ *   status_ret - Status return
+ *
+ * Original address: 0x00E6F7D4
+ */
+void SMD_$SET_DISP_UNIT(uint16_t *unit, status_$t *status_ret);
 
 /*
  * SMD_$ACQ_DISPLAY - Acquire display for exclusive access
  *
+ * Acquires a lock on the display for the calling process.
+ * Blocks if another process holds the lock.
+ *
+ * Parameters:
+ *   lock_data - Pointer to lock-specific data
+ *
+ * Returns:
+ *   The video_flags value from the display hardware info
+ *
  * Original address: 0x00E6EB42
  */
-uint16_t SMD_$ACQ_DISPLAY(void *lock_data);
+uint16_t SMD_$ACQ_DISPLAY(int16_t *lock_data);
 
 /*
  * SMD_$REL_DISPLAY - Release display lock
+ *
+ * Releases the display lock acquired by SMD_$ACQ_DISPLAY.
  *
  * Original address: 0x00E6EC10
  */
@@ -202,16 +246,30 @@ void SMD_$REL_DISPLAY(void);
 /*
  * SMD_$BORROW_DISPLAY - Temporarily borrow display
  *
+ * Allows a process to temporarily take control of a display unit
+ * from the screen manager.
+ *
+ * Parameters:
+ *   unit       - Pointer to display unit number
+ *   options    - Pointer to borrow options byte
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6F584
  */
-void SMD_$BORROW_DISPLAY(uint16_t *unit, status_$t *status_ret);
+void SMD_$BORROW_DISPLAY(int16_t *unit, int8_t *options, status_$t *status_ret);
 
 /*
  * SMD_$RETURN_DISPLAY - Return borrowed display
  *
+ * Returns a display that was borrowed via SMD_$BORROW_DISPLAY.
+ *
+ * Parameters:
+ *   unit       - Pointer to display unit number
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6F700
  */
-void SMD_$RETURN_DISPLAY(status_$t *status_ret);
+void SMD_$RETURN_DISPLAY(int16_t *unit, status_$t *status_ret);
 
 /*
  * ============================================================================

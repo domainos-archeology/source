@@ -80,6 +80,9 @@
 #define status_$display_nonconforming_blts_unsupported      0x00130028  /* Same as invalid_blt_op */
 #define status_$display_bad_tracking_rectangle              0x00130030
 #define status_$display_tracking_list_full                  0x00130031
+#define status_$display_borrow_request_denied_by_screen_manager 0x00130010
+#define status_$display_cant_return_not_borrowed            0x00130012
+#define status_$display_already_borrowed_by_this_process    0x00130014
 #define status_$display_invalid_scroll_displacement         0x00130019
 #define status_$display_invalid_cursor_number               0x00130023
 
@@ -986,5 +989,90 @@ static inline smd_display_info_t *smd_get_info(uint16_t unit_num) {
 static inline uint16_t smd_get_current_unit(void) {
     return SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID];
 }
+
+/*
+ * ============================================================================
+ * Display Borrow/Return Auxiliary Data
+ * ============================================================================
+ * These fields are stored in the display unit array at specific offsets
+ * relative to the base address. For unit N (1-based), offsets are computed
+ * from (base + N * 0x10C):
+ *
+ *   -0xF4: hw pointer (smd_display_hw_t *)
+ *   -0xF0: owner_asid (ASID of the display owner, 0 if not owned)
+ *   -0xEE: borrowed_asid (ASID of borrower, 0 if not borrowed)
+ *
+ * Base address: 0x00E2E3FC
+ * Auxiliary base: 0x00E2E308 (base - 0xF4)
+ */
+#define SMD_UNIT_AUX_BASE       0x00E2E308
+
+/* Per-unit auxiliary structure (stored before each unit block) */
+typedef struct smd_unit_aux_t {
+    smd_display_hw_t    *hw;            /* 0x00: Hardware info pointer */
+    uint16_t            owner_asid;     /* 0x04: Owner process ASID */
+    uint16_t            borrowed_asid;  /* 0x06: Borrower process ASID */
+    /* More fields follow, total 0x10C bytes per unit slot */
+} smd_unit_aux_t;
+
+/* Access helper - gets auxiliary data for unit N */
+static inline smd_unit_aux_t *smd_get_unit_aux(uint16_t unit_num) {
+    /* Returns pointer to auxiliary data block for this unit */
+    return (smd_unit_aux_t *)((uint8_t *)SMD_UNIT_AUX_BASE + unit_num * SMD_DISPLAY_UNIT_SIZE);
+}
+
+/* Lock ID for respond/borrow operations */
+#define SMD_RESPOND_LOCK        7
+
+/* Lock for respond/borrow synchronization */
+extern ml_$lock_t smd_$respond_lock;
+
+/* Secondary event count at 0x00E2E408 (used for borrow signaling) */
+extern ec_$eventcount_t SMD_BORROW_EC;
+
+/* Borrow response table at 0x00E84924 */
+extern int8_t SMD_BORROW_RESPONSE[];
+
+/* Error string for borrow failures */
+extern const char SMD_Error_Borrowing_Display_Err[];
+
+/*
+ * smd_$init_display_state - Initialize display state for borrow/associate
+ *
+ * Initializes the display state when borrowing or associating.
+ *
+ * Parameters:
+ *   options    - Init options flag (negative = full init)
+ *   status_ret - Status return
+ *
+ * Original address: 0x00E6F514
+ */
+void smd_$init_display_state(int8_t options, status_$t *status_ret);
+
+/*
+ * smd_$reset_display_state - Reset display hardware and cursor state
+ *
+ * Resets the display hardware state and optionally clears cursor state.
+ *
+ * Parameters:
+ *   unit    - Display unit number
+ *   flag    - Reset flag (negative = full reset including cursor state)
+ *
+ * Original address: 0x00E6D736
+ */
+void smd_$reset_display_state(uint16_t unit, int8_t flag);
+
+/*
+ * smd_$reset_tracking_state - Reset tracking and event state
+ *
+ * Resets the global tracking and event queue state.
+ *
+ * Parameters:
+ *   unit    - Display unit number
+ *   flag    - Reset flag (negative = full reset)
+ *
+ * Original address: 0x00E6D7E2
+ */
+void smd_$reset_tracking_state(uint16_t unit, int8_t flag);
 
 #endif /* SMD_INTERNAL_H */
