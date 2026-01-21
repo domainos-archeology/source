@@ -90,9 +90,35 @@
  */
 #define SMD_LOCK_STATE_UNLOCKED     0
 #define SMD_LOCK_STATE_LOCKED_REG   1   /* Locked by regular caller */
-#define SMD_LOCK_STATE_SCROLL       3   /* Scroll operation in progress */
+#define SMD_LOCK_STATE_SCROLL       2   /* Scroll operation in progress */
+#define SMD_LOCK_STATE_SCROLL_DONE  3   /* Scroll operation complete */
 #define SMD_LOCK_STATE_LOCKED_4     4   /* Post-scroll lock state */
 #define SMD_LOCK_STATE_LOCKED_5     5   /* Initial lock state */
+
+/*
+ * ============================================================================
+ * Scroll Direction Constants
+ * ============================================================================
+ * Values for scroll_dx field indicating scroll direction
+ */
+#define SMD_SCROLL_DIR_DOWN         0   /* Scroll down (content moves up) */
+#define SMD_SCROLL_DIR_UP           1   /* Scroll up (content moves down) */
+#define SMD_SCROLL_DIR_RIGHT        2   /* Scroll right (content moves left) */
+#define SMD_SCROLL_DIR_LEFT         3   /* Scroll left (content moves right) */
+
+/*
+ * ============================================================================
+ * Scroll Rectangle Structure
+ * ============================================================================
+ * Defines the region to scroll for SMD_$SOFT_SCROLL.
+ * Size: 8 bytes
+ */
+typedef struct smd_scroll_rect_t {
+    uint16_t    x1;                 /* 0x00: Left X coordinate */
+    uint16_t    y1;                 /* 0x02: Top Y coordinate */
+    uint16_t    x2;                 /* 0x04: Right X coordinate */
+    uint16_t    y2;                 /* 0x06: Bottom Y coordinate */
+} smd_scroll_rect_t;
 
 /*
  * ============================================================================
@@ -437,6 +463,10 @@ extern smd_blink_func_t SMD_BLINK_FUNC_PTABLE[SMD_MAX_DISPLAY_UNITS];
 /* Request lock ID for cursor operations */
 #define SMD_REQUEST_LOCK    8
 
+/* Lock data used by SMD_$ACQ_DISPLAY for scroll operations
+ * Address: 0x00E6D92C */
+extern uint32_t SMD_ACQ_LOCK_DATA;
+
 /*
  * ============================================================================
  * Internal Function Prototypes
@@ -480,6 +510,21 @@ void SMD_$REL_DISPLAY(void);
  * Original address: 0x00E272A8
  */
 void SMD_$START_SCROLL(smd_display_hw_t *hw, ec_$eventcount_t *ec);
+
+/*
+ * SMD_$CONTINUE_SCROLL - Continue scroll operation
+ *
+ * Continues a hardware scroll operation. If the remaining scroll amount
+ * is zero, marks the scroll as complete. Otherwise, sets up the next
+ * scroll step.
+ *
+ * Parameters:
+ *   hw - Display hardware info
+ *   ec - Event count for completion signaling
+ *
+ * Original address: 0x00E272B2
+ */
+void SMD_$CONTINUE_SCROLL(smd_display_hw_t *hw, ec_$eventcount_t *ec);
 
 /*
  * SMD_$START_BLT - Start BLT operation
