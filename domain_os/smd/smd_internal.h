@@ -79,6 +79,8 @@
 #define status_$display_invalid_blt_op                      0x00130028
 #define status_$display_nonconforming_blts_unsupported      0x00130028  /* Same as invalid_blt_op */
 #define status_$display_tracking_list_full                  0x00130031
+#define status_$display_invalid_scroll_displacement         0x00130019
+#define status_$display_invalid_cursor_number               0x00130023
 
 /*
  * ============================================================================
@@ -120,8 +122,9 @@ typedef struct smd_display_hw_t {
     uint16_t    scroll_dx;          /* 0x30: Scroll delta x */
     uint16_t    field_32;           /* 0x32: Unknown */
     uint16_t    field_34;           /* 0x34: Unknown */
-    uint16_t    field_36;           /* 0x36: Unknown */
-    uint16_t    field_38;           /* 0x38: Unknown */
+    uint16_t    cursor_number;      /* 0x36: Current cursor number (0-3) */
+    uint8_t     cursor_visible;     /* 0x38: Cursor visible flag (negative = visible) */
+    uint8_t     pad_39;             /* 0x39: Padding */
     uint16_t    field_3a;           /* 0x3A: Unknown */
     uint8_t     tracking_enabled;   /* 0x3C: Tracking mouse enabled */
     uint8_t     pad_3d;             /* 0x3D: Padding */
@@ -330,14 +333,28 @@ typedef struct smd_globals_t {
     uint8_t     pad_00[0x48];           /* 0x00-0x47: Unknown */
     uint16_t    asid_to_unit[SMD_MAX_ASIDS]; /* 0x48: ASID to display unit map */
                                         /* Each ASID maps to a display unit number */
-    uint8_t     pad_248[0x80];          /* 0x248-0x2C7: Unknown */
+    uint8_t     pad_248[0x78];          /* 0x248-0xBF: Unknown */
+    smd_track_rect_t kbd_cursor_track_rect; /* 0xC0: Keyboard cursor tracking rect */
     uint32_t    blank_time;             /* 0xC8: Time when blanking occurred */
                                         /*       (TIME_$CLOCKH value) */
-    uint8_t     pad_cc[0x11];           /* 0xCC-0xDC: Unknown */
-    int8_t      blank_enabled;          /* 0xDD: Blanking enabled flag */
-                                        /*       negative = blanked */
-    uint8_t     pad_de[0x1ABA];         /* 0xDE-0x1D97: Unknown */
+    smd_cursor_pos_t saved_cursor_pos;  /* 0xCC: Last saved cursor position */
+    smd_cursor_pos_t default_cursor_pos; /* 0xD0: Default cursor position (A5+0x1D94) */
+    uint16_t    cursor_button_state;    /* 0xD4: Current cursor button state */
+    uint16_t    last_button_state;      /* 0xD6: Last reported button state */
+    uint32_t    blank_timeout;          /* 0xD8: Blank timeout value */
+    int8_t      blank_enabled;          /* 0xDC: Blanking enabled flag */
+    int8_t      blank_pending;          /* 0xDD: Blanking pending flag */
+    uint16_t    cursor_tracking_count;  /* 0xDE: Number of tracking rectangles */
+    int8_t      tp_cursor_active;       /* 0xE0: Trackpad cursor active flag */
+    uint8_t     pad_e1;                 /* 0xE1: Padding */
+    int16_t     tp_cursor_timeout;      /* 0xE2: Trackpad cursor timeout counter */
+    uint8_t     pad_e4[0x1744 - 0xE4];  /* 0xE4-0x1743: Unknown */
+    uint8_t     cursor_pending_flag;    /* 0x1744: Cursor update pending */
+    uint8_t     pad_1745[0x53];         /* 0x1745-0x1D97: Unknown */
     uint16_t    default_unit;           /* 0x1D98: Default display unit */
+    uint16_t    pad_1d9a;               /* 0x1D9A: Padding */
+    uint16_t    previous_unit;          /* 0x1D9C: Previous display unit */
+    uint16_t    unit_change_count;      /* 0x1D9E: Unit change counter */
 } smd_globals_t;
 
 /*
@@ -409,6 +426,16 @@ extern uint16_t SMD_DEFAULT_DISPLAY_UNIT;
 
 /* TIME_$CLOCKH - high word of system clock */
 extern uint32_t TIME_$CLOCKH;
+
+/* Cursor pointer table at 0x00E27366 - 4 pointers to cursor bitmap data */
+extern int16_t *SMD_CURSOR_PTABLE[4];
+
+/* Blink function pointer table at SMD_GLOBALS + 0x1DA0 */
+typedef void (*smd_blink_func_t)(void);
+extern smd_blink_func_t SMD_BLINK_FUNC_PTABLE[SMD_MAX_DISPLAY_UNITS];
+
+/* Request lock ID for cursor operations */
+#define SMD_REQUEST_LOCK    8
 
 /*
  * ============================================================================
@@ -649,6 +676,105 @@ void SMD_$VERT_LINE(int16_t *x, int16_t *y1, int16_t *y2, void *param4,
  * Original address: 0x00E70376
  */
 void SMD_$INVERT_DISP(uint32_t display_base, smd_display_info_t *display_info);
+
+/*
+ * ============================================================================
+ * Cursor Internal Function Prototypes
+ * ============================================================================
+ */
+
+/*
+ * smd_$cursor_op - Internal cursor display/clear operation
+ *
+ * Common implementation for SMD_$DISPLAY_CURSOR and SMD_$CLEAR_CURSOR.
+ *
+ * Parameters:
+ *   unit       - Display unit number
+ *   pos        - Cursor position (packed as uint32_t: x in low 16, y in high 16)
+ *   clear_flag - 0 = display cursor, 0xFF = clear cursor
+ *   status_ret - Status return pointer
+ *
+ * Original address: 0x00E6DFFA
+ */
+void smd_$cursor_op(uint16_t unit, uint32_t pos, uint16_t clear_flag, status_$t *status_ret);
+
+/*
+ * smd_$validate_unit - Validate display unit number
+ *
+ * Checks if the specified unit number is valid (currently only unit 1 is valid).
+ *
+ * Parameters:
+ *   unit - Display unit number
+ *
+ * Returns:
+ *   Negative value (0xFF) if valid, 0 if invalid
+ *
+ * Original address: 0x00E6D700
+ */
+int8_t smd_$validate_unit(uint16_t unit);
+
+/*
+ * SHOW_CURSOR - Internal cursor show/update function
+ *
+ * Updates cursor state and display. Called when cursor position or
+ * visibility changes.
+ *
+ * Parameters:
+ *   pos        - Pointer to cursor position
+ *   lock_data1 - First lock data pointer
+ *   lock_data2 - Second lock data pointer
+ *
+ * Original address: 0x00E6E1CC
+ */
+void SHOW_CURSOR(uint32_t *pos, int16_t *lock_data1, int8_t *lock_data2);
+
+/*
+ * smd_$check_tp_state - Check trackpad state
+ *
+ * Checks if trackpad cursor tracking is currently active.
+ *
+ * Returns:
+ *   Negative value if active, positive if not
+ *
+ * Original address: 0x00E6E84C
+ */
+int8_t smd_$check_tp_state(void);
+
+/*
+ * smd_$send_loc_event - Send location event
+ *
+ * Queues a location event for processing.
+ *
+ * Parameters:
+ *   unit    - Display unit
+ *   type    - Event type
+ *   pos     - Cursor position
+ *   buttons - Button state
+ *
+ * Original address: 0x00E6E8D6
+ */
+void smd_$send_loc_event(uint16_t unit, uint16_t type, smd_cursor_pos_t pos, uint16_t buttons);
+
+/*
+ * smd_$draw_cursor_internal - Low-level cursor drawing
+ *
+ * Called by blink routines to actually draw/erase cursor.
+ *
+ * Original address: 0x00E2720E
+ */
+int8_t smd_$draw_cursor_internal(int16_t *cursor_num, uint32_t *cursor_pos,
+                                  void *hw_offset, void *display_comm,
+                                  int8_t *cursor_flag, uint32_t *ec_1, uint32_t *ec_2);
+
+/*
+ * smd_$reschedule_blink_timer - Reschedule cursor blink timer
+ *
+ * Parameters:
+ *   interval - Timer interval in microseconds
+ *
+ * Original address: 0x00E72690
+ */
+void smd_$reschedule_blink_timer(uint32_t interval);
 
 /*
  * Helper to get display unit pointer from unit number
