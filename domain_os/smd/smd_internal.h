@@ -39,8 +39,8 @@
 /* Maximum HDM free list entries */
 #define SMD_HDM_MAX_ENTRIES         25
 
-/* Tracking rectangle list size */
-#define SMD_MAX_TRACKING_RECTS      16
+/* Tracking rectangle list size (max 200 rectangles) */
+#define SMD_MAX_TRACKING_RECTS      200
 
 /*
  * ============================================================================
@@ -78,6 +78,7 @@
 #define status_$display_hidden_display_memory_full          0x00130024
 #define status_$display_invalid_blt_op                      0x00130028
 #define status_$display_nonconforming_blts_unsupported      0x00130028  /* Same as invalid_blt_op */
+#define status_$display_bad_tracking_rectangle              0x00130030
 #define status_$display_tracking_list_full                  0x00130031
 #define status_$display_invalid_scroll_displacement         0x00130019
 #define status_$display_invalid_cursor_number               0x00130023
@@ -440,11 +441,14 @@ typedef struct smd_globals_t {
     uint32_t    blank_timeout;          /* 0xD8: Blank timeout value */
     int8_t      blank_enabled;          /* 0xDC: Blanking enabled flag */
     int8_t      blank_pending;          /* 0xDD: Blanking pending flag */
-    uint16_t    cursor_tracking_count;  /* 0xDE: Number of tracking rectangles */
-    int8_t      tp_cursor_active;       /* 0xE0: Trackpad cursor active flag */
+    uint16_t    tp_reporting;           /* 0xDE: Trackpad reporting mode */
+    int8_t      tracking_enabled;       /* 0xE0: Tracking enabled flag (0xFF=enabled) */
     uint8_t     pad_e1;                 /* 0xE1: Padding */
-    int16_t     tp_cursor_timeout;      /* 0xE2: Trackpad cursor timeout counter */
-    uint8_t     pad_e4[0x644];          /* 0xE4-0x727: Unknown */
+    uint16_t    pad_e2;                 /* 0xE2: Padding/unused */
+    uint16_t    tracking_window_id;     /* 0xE4: Tracking window ID (from ENABLE_TRACKING param) */
+    uint16_t    tracking_rect_count;    /* 0xE6: Number of tracking rectangles */
+    smd_track_rect_t tracking_rects[SMD_MAX_TRACKING_RECTS]; /* 0xE8: Tracking rect array */
+                                        /* 200 * 8 = 1600 bytes, ends at 0x728 */
     uint16_t    event_queue_head;       /* 0x728: Event queue write index */
     uint16_t    event_queue_tail;       /* 0x72A: Event queue read index */
     smd_event_entry_t event_queue[SMD_EVENT_QUEUE_SIZE]; /* 0x72C: Event queue */
@@ -932,6 +936,24 @@ int8_t smd_$poll_keyboard(void);
  * Original address: 0x00E6E8D6
  */
 void smd_$enqueue_event(uint16_t unit, uint16_t type, uint32_t pos, uint16_t buttons);
+
+/*
+ * smd_$add_trk_rects_internal - Internal function to add tracking rectangles
+ *
+ * Common implementation for SMD_$CLR_AND_LOAD_TRK_RECT and SMD_$ADD_TRK_RECT.
+ * If clear_flag is set (negative), clears existing rectangles first.
+ *
+ * Parameters:
+ *   clear_flag - If negative (0xFF), clear existing rects first
+ *   rects      - Pointer to array of tracking rectangles
+ *   count      - Number of rectangles to add
+ *
+ * Returns:
+ *   Negative value (0xFF) if successful, 0 if list full
+ *
+ * Original address: 0x00E6E4D4
+ */
+int8_t smd_$add_trk_rects_internal(int8_t clear_flag, smd_track_rect_t *rects, uint16_t count);
 
 /* Lock for SMD request/event operations */
 extern ml_$lock_t smd_$request_lock;
