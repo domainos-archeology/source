@@ -350,6 +350,76 @@ typedef struct smd_display_info_t {
 
 /*
  * ============================================================================
+ * Event Queue Entry Structure
+ * ============================================================================
+ * Entry in the SMD event queue. Each entry is 16 bytes.
+ * The queue is a circular buffer with 256 entries.
+ */
+typedef struct smd_event_entry_t {
+    smd_cursor_pos_t pos;               /* 0x00: Cursor position */
+    uint32_t    timestamp;              /* 0x04: TIME_$CLOCK value */
+    uint16_t    field_08;               /* 0x08: Unknown field */
+    uint16_t    unit;                   /* 0x0A: Display unit */
+    uint16_t    event_type;             /* 0x0C: Internal event type code */
+    uint16_t    button_or_char;         /* 0x0E: Button state or character */
+} smd_event_entry_t;
+
+/*
+ * Internal event type codes (in the queue):
+ *   0x00 = key press with meta key (returns as keystroke, char only)
+ *   0x07 = key press with meta key
+ *   0x08 = button down
+ *   0x0B = special event type
+ *   0x0C = key press normal (returns as keystroke, char + modifier)
+ *   0x0D = button down variant
+ *   0x0E = button up
+ *   0x0F = pointer up
+ */
+#define SMD_EVTYPE_INT_KEY_META0        0x00
+#define SMD_EVTYPE_INT_KEY_META         0x07
+#define SMD_EVTYPE_INT_BUTTON_DOWN      0x08
+#define SMD_EVTYPE_INT_SPECIAL          0x0B
+#define SMD_EVTYPE_INT_KEY_NORMAL       0x0C
+#define SMD_EVTYPE_INT_BUTTON_DOWN2     0x0D
+#define SMD_EVTYPE_INT_BUTTON_UP        0x0E
+#define SMD_EVTYPE_INT_POINTER_UP       0x0F
+
+/*
+ * Public event type codes (returned to callers):
+ */
+#define SMD_EVTYPE_NONE                 0
+#define SMD_EVTYPE_BUTTON_DOWN          1
+#define SMD_EVTYPE_BUTTON_UP            2
+#define SMD_EVTYPE_KEYSTROKE            3
+#define SMD_EVTYPE_SPECIAL              4
+#define SMD_EVTYPE_POINTER_UP           5
+#define SMD_EVTYPE_POWER_OFF            6
+#define SMD_EVTYPE_SIGNAL               9
+
+/*
+ * Event queue size (circular buffer)
+ */
+#define SMD_EVENT_QUEUE_SIZE            256
+#define SMD_EVENT_QUEUE_MASK            0xFF
+
+/*
+ * ============================================================================
+ * Request Queue Entry Structure
+ * ============================================================================
+ * Entry in the SMD request queue. Each entry is 0x24 (36) bytes.
+ * The queue is a circular buffer with 40 entries.
+ */
+typedef struct smd_request_entry_t {
+    uint16_t    request_type;           /* 0x00: Request type code */
+    uint16_t    param_count;            /* 0x02: Number of parameters */
+    uint16_t    params[16];             /* 0x04: Parameter array (max 16) */
+} smd_request_entry_t;
+
+#define SMD_REQUEST_QUEUE_SIZE          40
+#define SMD_REQUEST_QUEUE_MAX           0x28  /* 40 entries, 1-based */
+
+/*
+ * ============================================================================
  * SMD Globals Structure
  * ============================================================================
  * Global state for the SMD subsystem.
@@ -374,13 +444,26 @@ typedef struct smd_globals_t {
     int8_t      tp_cursor_active;       /* 0xE0: Trackpad cursor active flag */
     uint8_t     pad_e1;                 /* 0xE1: Padding */
     int16_t     tp_cursor_timeout;      /* 0xE2: Trackpad cursor timeout counter */
-    uint8_t     pad_e4[0x1744 - 0xE4];  /* 0xE4-0x1743: Unknown */
+    uint8_t     pad_e4[0x644];          /* 0xE4-0x727: Unknown */
+    uint16_t    event_queue_head;       /* 0x728: Event queue write index */
+    uint16_t    event_queue_tail;       /* 0x72A: Event queue read index */
+    smd_event_entry_t event_queue[SMD_EVENT_QUEUE_SIZE]; /* 0x72C: Event queue */
+                                        /* 256 * 16 = 4096 bytes, ends at 0x172C */
+    uint8_t     pad_172c[0x18];         /* 0x172C-0x1743: Unknown */
     uint8_t     cursor_pending_flag;    /* 0x1744: Cursor update pending */
-    uint8_t     pad_1745[0x53];         /* 0x1745-0x1D97: Unknown */
+    uint8_t     pad_1745[0x2B];         /* 0x1745-0x176F: Unknown */
+    smd_request_entry_t request_queue[SMD_REQUEST_QUEUE_SIZE]; /* 0x17D0: Request queue */
+                                        /* 40 * 36 = 1440 bytes (0x5A0) */
+    uint16_t    request_queue_tail;     /* 0x17F0: Request queue read index (after queue) */
+    uint16_t    request_queue_head;     /* 0x17F2: Request queue write index */
+    uint8_t     pad_17f4[0x5A4];        /* 0x17F4-0x1D97: Unknown */
     uint16_t    default_unit;           /* 0x1D98: Default display unit */
     uint16_t    pad_1d9a;               /* 0x1D9A: Padding */
     uint16_t    previous_unit;          /* 0x1D9C: Previous display unit */
     uint16_t    unit_change_count;      /* 0x1D9E: Unit change counter */
+    uint16_t    last_idm_button;        /* 0x1DA0: Last IDM button state */
+    int8_t      power_off_reported;     /* 0x1DA2: Power-off event reported flag */
+    uint8_t     pad_1da3;               /* 0x1DA3: Padding */
 } smd_globals_t;
 
 /*
@@ -820,6 +903,45 @@ int8_t smd_$draw_cursor_internal(int16_t *cursor_num, uint32_t *cursor_pos,
  * Original address: 0x00E72690
  */
 void smd_$reschedule_blink_timer(uint32_t interval);
+
+/*
+ * smd_$poll_keyboard - Poll keyboard for input events
+ *
+ * Checks the keyboard for pending input and adds events to the queue.
+ * Called before reading from the event queue to ensure fresh data.
+ *
+ * Returns:
+ *   Negative value (0xFF) if events were added, 0 otherwise
+ *
+ * Original address: 0x00E6E84C
+ */
+int8_t smd_$poll_keyboard(void);
+
+/*
+ * smd_$enqueue_event - Add event to the event queue
+ *
+ * Adds a location/input event to the circular event queue.
+ * Timestamps the event and signals the display event count.
+ *
+ * Parameters:
+ *   unit    - Display unit number
+ *   type    - Internal event type code
+ *   pos     - Cursor position
+ *   buttons - Button state or character value
+ *
+ * Original address: 0x00E6E8D6
+ */
+void smd_$enqueue_event(uint16_t unit, uint16_t type, uint32_t pos, uint16_t buttons);
+
+/* Lock for SMD request/event operations */
+extern ml_$lock_t smd_$request_lock;
+
+/* Display Transfer Table Event count at 0x00E2DC90 */
+extern ec_$eventcount_t DTTE;
+
+/* FIM quit event count and value arrays */
+extern ec_$eventcount_t FIM_$QUIT_EC[];
+extern uint32_t FIM_$QUIT_VALUE[];
 
 /*
  * Helper to get display unit pointer from unit number
