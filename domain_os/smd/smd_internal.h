@@ -65,8 +65,11 @@
  * ============================================================================
  */
 #define status_$display_invalid_unit_number                 0x00130001
+#define status_$display_font_not_loaded                     0x00130002
+#define status_$display_internal_font_table_full            0x00130003
 #define status_$display_invalid_use_of_driver_procedure     0x00130004
 #define status_$display_error_unloading_internal_table      0x00130006
+#define status_$display_unsupported_font_version            0x0013000B
 #define status_$display_invalid_position_argument           0x00130015
 #define status_$display_invalid_blt_mode_register           0x0013001A
 #define status_$display_invalid_blt_control_register        0x0013001B
@@ -160,6 +163,101 @@ typedef struct smd_hdm_list_t {
     uint16_t    pad;                /* 0x02: Padding */
     smd_hdm_block_t blocks[1];      /* 0x04: Variable-length array of blocks */
 } smd_hdm_list_t;
+
+/*
+ * ============================================================================
+ * Font Table Entry
+ * ============================================================================
+ * Per-display font table. Each display unit can have up to 8 loaded fonts.
+ * The font table is accessed via the first pointer in the display unit data.
+ */
+#define SMD_MAX_FONTS_PER_UNIT  8
+
+typedef struct smd_font_entry_t {
+    void        *font_ptr;          /* 0x00: Pointer to original font data */
+    uint16_t    hdm_offset;         /* 0x04: HDM position (encoded) */
+    uint16_t    pad;                /* 0x06: Padding */
+} smd_font_entry_t;
+
+/*
+ * ============================================================================
+ * Font Header - Version 1
+ * ============================================================================
+ * Version 1 font format (simpler, fixed-width assumed).
+ * Indicated by version == 1 at offset 0x00.
+ */
+typedef struct smd_font_v1_t {
+    uint16_t    version;            /* 0x00: Font version (1) */
+    uint16_t    data_offset;        /* 0x02: Offset to glyph data from header start */
+    uint16_t    field_04;           /* 0x04: Unknown */
+    uint16_t    hdm_size;           /* 0x06: Size needed in HDM (scanlines) */
+    uint16_t    char_width;         /* 0x08: Default character width */
+    uint16_t    char_spacing;       /* 0x0A: Character spacing */
+    uint16_t    unknown_char_width; /* 0x0C: Width for unknown characters */
+    uint16_t    field_0e;           /* 0x0E: Unknown */
+    uint16_t    cell_height;        /* 0x10: Character cell height */
+    uint16_t    default_missing;    /* 0x12: Default character for missing glyphs */
+    uint16_t    field_14;           /* 0x14: Unknown */
+    uint16_t    descent;            /* 0x16: Baseline descent */
+    uint16_t    ascent;             /* 0x18: Baseline ascent */
+    uint8_t     char_map[128];      /* 0x1A: Character index map (0x7F chars) */
+                                    /* Maps ASCII to glyph index in bitmap */
+    /* Glyph metrics and bitmap data follow at offset 0x92 */
+} smd_font_v1_t;
+
+/*
+ * ============================================================================
+ * Font Header - Version 3
+ * ============================================================================
+ * Version 3 font format (more flexible, variable-width).
+ * Indicated by version == 3 at offset 0x00.
+ */
+typedef struct smd_font_v3_t {
+    uint16_t    version;            /* 0x00: Font version (3) */
+    uint16_t    field_02;           /* 0x02: Unknown */
+    uint16_t    field_04;           /* 0x04: Unknown */
+    uint16_t    field_06;           /* 0x06: Unknown */
+    uint16_t    field_08;           /* 0x08: Unknown */
+    uint16_t    field_0a;           /* 0x0A: Unknown */
+    uint16_t    field_0c;           /* 0x0C: Unknown */
+    uint16_t    field_0e;           /* 0x0E: Unknown */
+    uint16_t    field_10;           /* 0x10: Unknown */
+    uint16_t    field_12;           /* 0x12: Unknown */
+    uint16_t    field_14;           /* 0x14: Unknown */
+    uint16_t    field_16;           /* 0x16: Unknown */
+    uint16_t    field_18;           /* 0x18: Unknown */
+    uint32_t    char_map_offset;    /* 0x1A: Offset to character map */
+    uint32_t    glyph_data_offset;  /* 0x1E: Offset to glyph data */
+    uint16_t    field_22;           /* 0x22: Unknown */
+    uint16_t    field_24;           /* 0x24: Unknown */
+    uint16_t    field_26;           /* 0x26: Unknown */
+    uint32_t    data_offset;        /* 0x28: Offset to font bitmap data */
+    uint32_t    data_size;          /* 0x2C: Size of font bitmap data */
+    uint16_t    field_30;           /* 0x30: Unknown */
+    uint16_t    field_32;           /* 0x32: Unknown */
+    uint8_t     char_map[256];      /* 0x34: Full 8-bit character map */
+    uint16_t    hdm_size;           /* 0x42 (after map): HDM size needed */
+    /* More fields and glyph data follow */
+} smd_font_v3_t;
+
+/*
+ * ============================================================================
+ * Font Glyph Metrics
+ * ============================================================================
+ * Per-character glyph metrics, 8 bytes per glyph.
+ */
+typedef struct smd_glyph_metrics_t {
+    int8_t      bearing_x;          /* 0x00: X bearing (left offset) */
+    int8_t      width;              /* 0x01: Glyph width in pixels */
+    int8_t      bearing_y;          /* 0x02: Y bearing (top offset) */
+    int8_t      height;             /* 0x03: Glyph height in pixels */
+    int8_t      advance;            /* 0x04: Advance width */
+    uint8_t     bitmap_col;         /* 0x05: Column in bitmap */
+    uint16_t    bitmap_row;         /* 0x06: Row in bitmap */
+} smd_glyph_metrics_t;
+
+#define SMD_FONT_VERSION_1      1
+#define SMD_FONT_VERSION_3      3
 
 /*
  * ============================================================================
@@ -378,6 +476,35 @@ void SMD_$START_BLT(smd_blt_params_t *params, smd_display_hw_t *hw, ec_$eventcou
  * Original address: 0x00E27284
  */
 void SMD_$INTERRUPT_INIT(void);
+
+/*
+ * SMD_$COPY_FONT_TO_HDM - Copy font data to hidden display memory
+ *
+ * Copies font bitmap data from system memory to the hidden display memory.
+ * The copy includes XOR'ing with a mask value for display hardware compatibility.
+ *
+ * Parameters:
+ *   display_base - Base address of display memory
+ *   font         - Pointer to font data
+ *   hdm_pos      - Pointer to HDM position
+ *
+ * Original address: 0x00E84934 (trampoline), 0x00E702F4 (implementation)
+ */
+void SMD_$COPY_FONT_TO_HDM(uint32_t display_base, void *font, smd_hdm_pos_t *hdm_pos);
+
+/*
+ * SMD_$COPY_FONT_TO_MD_HDM - Copy font to main display hidden memory
+ *
+ * Copies font data to a fixed location in the main display's hidden memory.
+ * Used for mono display types (1 and 2) to store a default system font.
+ *
+ * Parameters:
+ *   font       - Pointer to font data
+ *   status_ret - Status return
+ *
+ * Original address: 0x00E1D750
+ */
+void SMD_$COPY_FONT_TO_MD_HDM(void **font, status_$t *status_ret);
 
 /*
  * SMD_$WRITE_STR_CLIP - Write string with clipping
