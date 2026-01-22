@@ -16,17 +16,49 @@
 
 /* Subsystem headers for syscall handlers */
 #include "acl/acl.h"
+#include "as/as.h"
 #include "asknode/asknode.h"
+#include "ast/ast.h"
 #include "audit/audit.h"
 #include "cache/cache.h"
+#include "cal/cal.h"
+#include "dir/dir.h"
 #include "disk/disk.h"
 #include "dtty/dtty.h"
 #include "file/file.h"
+#include "fim/fim.h"
+#include "gpu/gpu.h"
+#include "hint/hint.h"
+#include "log/log.h"
+#include "mac/mac.h"
+#include "misc/misc.h"
+#include "msg/msg.h"
+#include "mst/mst.h"
+#include "name/name.h"
+#include "net/net.h"
 #include "netlog/netlog.h"
+#include "network/network.h"
 #include "os/os.h"
+#include "osinfo/osinfo.h"
+#include "pacct/pacct.h"
+#include "pbu/pbu.h"
+#include "pchist/pchist.h"
+#include "peb/peb.h"
+#include "proc2/proc2.h"
+#include "ring/ring.h"
+#include "ring/ringlog.h"
+#include "rip/rip.h"
+#include "route/route.h"
+#include "sio/sio.h"
 #include "smd/smd.h"
+#include "term/term.h"
+#include "tone/tone.h"
+#include "tpad/tpad.h"
 #include "tty/tty.h"
+#include "volx/volx.h"
 #include "vtoc/vtoc.h"
+#include "xns/xns.h"
+#include "xpd/xpd.h"
 
 /*
  * Forward declarations for syscall handlers not yet in subsystem headers.
@@ -39,457 +71,10 @@ extern void SVC_$INVALID_SYSCALL(void);
 extern void SVC_$UNIMPLEMENTED(void);
 
 /* TRAP #0 handlers not yet in headers */
-extern void PROC2_$DELETE(void);
 extern void FUN_00e0aa04(void);          /* TODO: identify - returns FIM addr */
-extern void FILE_$UNLOCK_ALL(void);
-extern void PEB_$ASSOC(void);
-extern void PEB_$DISSOC(void);
-extern void PROC2_$MY_PID(void);
-extern void SMD_$OP_WAIT_U(void);
-extern void TPAD_$RE_RANGE(void);
-extern void TPAD_$INQ_DTYPE(void);
-extern void RIP_$ANNOUNCE_NS(void);
-extern void PROC2_$DELIVER_PENDING(void);
-extern void PROC2_$COMPLETE_FORK(void);
-extern void PACCT_$STOP(void);
-extern void PACCT_$ON(void);
 
 /* TRAP #1 handlers not yet in headers */
 extern void FUN_00e0a9c2(void);          /* TODO: identify - sets FIM user addr */
-extern void NETWORK_$READ_SERVICE(void);
-extern void PROC1_$GET_CPUT(void);
-extern void SET_LITES_LOC(void);
-extern void TIME_$CLOCK(void);
-extern void ASKNODE_$READ_FAILURE_REC(void);
-extern void CAL_$APPLY_LOCAL_OFFSET(void);
-extern void CAL_$GET_INFO(void);
-extern void CAL_$GET_LOCAL_TIME(void);
-extern void CAL_$REMOVE_LOCAL_OFFSET(void);
-extern void CAL_$SET_DRIFT(void);
-extern void DISK_$GET_ERROR_INFO(void);
-extern void MSG_$CLOSE(void);
-extern void PROC2_$WHO_AM_I(void);
-extern void SMD_$CLEAR_KBD_CURSOR(void);
-extern void SMD_$SEND_RESPONSE(void);
-extern void SMD_$STOP_TP_CURSOR(void);
-extern void SMD_$UNMAP_DISPLAY_U(void);
-extern void UID_$GEN(void);
-extern void TONE_$TIME(void);
-extern void SMD_$INQ_DISP_TYPE(void);
-extern void SMD_$INVERT_S(void);
-extern void SMD_$INQ_MM_BLT(void);
-extern void TPAD_$SET_CURSOR(void);
-extern void SMD_$EOF_WAIT(void);
-extern void NAME_$GET_WDIR_UID(void);
-extern void NAME_$GET_NDIR_UID(void);
-extern void NAME_$GET_ROOT_UID(void);
-extern void NAME_$GET_NODE_UID(void);
-extern void NAME_$GET_NODE_DATA_UID(void);
-extern void NAME_$GET_CANNED_ROOT_UID(void);
-extern void MSG_$GET_MY_NET(void);
-extern void MSG_$GET_MY_NODE(void);
-extern void GPU_$INIT(void);
-extern void SMD_$INIT_STATE(void);
-extern void SMD_$CLR_TRK_RECT(void);
-extern void PROC2_$GET_SIG_MASK(void);
-extern void FIM_$FRESTORE(void);
-extern void TIME_$GET_TIME_OF_DAY(void);
-extern void PROC1_$GET_LOADAV(void);
-extern void PROC2_$GET_BOOT_FLAGS(void);
-extern void PROC2_$SET_TTY(void);
-extern void OS_$SHUTDOWN(void);
-extern void PBU_$FAULTED_UNITS(void);
-extern void PROC2_$GET_CPU_USAGE(void);
-extern void TIME_$GET_ADJUST(void);
-
-/* TRAP #2 handlers not yet in headers */
-extern void FILE_$DELETE(void);
-extern void EC2_$WAKEUP(void);
-extern void FILE_$MK_PERMANENT(void);
-extern void FILE_$UNLOCK_VOL(void);
-extern void CAL_$READ_TIMEZONE(void);
-extern void CAL_$SEC_TO_CLOCK(void);
-extern void CAL_$WRITE_TIMEZONE(void);
-extern void DISK_$UNASSIGN(void);
-extern void FILE_$FORCE_UNLOCK(void);
-extern void FILE_$FW_FILE(void);
-extern void FILE_$MK_IMMUTABLE(void);
-extern void FILE_$PURIFY(void);
-extern void GET_BUILD_TIME(void);
-extern void MSG_$ALLOCATE(void);
-extern void MSG_$OPEN(void);
-extern void MSG_$WAIT(void);
-extern void PROC2_$QUIT(void);
-extern void PROC2_$RESUME(void);
-extern void PROC2_$SUSPEND(void);
-extern void SMD_$BLT_U(void);
-extern void SMD_$CLEAR_WINDOW(void);
-extern void SMD_$DRAW_BOX(void);
-extern void SMD_$LOAD_FONT(void);
-extern void SMD_$MAP_DISPLAY_U(void);
-extern void SMD_$MOVE_KBD_CURSOR(void);
-extern void SMD_$RETURN_DISPLAY(void);
-extern void SMD_$UNLOAD_FONT(void);
-extern void PEB_$GET_INFO(void);
-extern void EC2_$GET_VAL(void);
-extern void AST_$ADD_ASTES(void);
-extern void PROC2_$MAKE_ORPHAN(void);
-extern void FILE_$DELETE_FORCE(void);
-extern void FILE_$DELETE_WHEN_UNLOCKED(void);
-extern void FILE_$MK_TEMPORARY(void);
-extern void SMD_$INQ_KBD_CURSOR(void);
-extern void ACL_$ENTER_SUBS(void);
-extern void FILE_$DELETE_FORCE_WHEN_UNLOCKED(void);
-extern void SMD_$SET_CLIP_WINDOW(void);
-extern void HINT_$ADD(void);
-extern void DIR_$FIX_DIR(void);
-extern void NAME_$SET_WDIRUS(void);
-extern void NAME_$SET_NDIRUS(void);
-extern void MSG_$CLOSEI(void);
-extern void NETWORK_$ADD_PAGE_SERVERS(void);
-extern void NETWORK_$ADD_REQUEST_SERVERS(void);
-extern void ACL_$ADD_PROJ(void);
-extern void ACL_$DELETE_PROJ(void);
-extern void XPD_$GET_FP(void);
-extern void XPD_$PUT_FP(void);
-extern void SMD_$SET_TP_REPORTING(void);
-extern void SMD_$DISABLE_TRACKING(void);
-extern void HINT_$ADDI(void);
-extern void SMD_$SET_DISP_UNIT(void);
-extern void SMD_$VIDEO_CTL(void);
-extern void SMD_$SET_CURSOR_POS(void);
-extern void TERM_$SEND_KBD_STRING(void);
-extern void AUDIT_$CONTROL(void);
-extern void PROC2_$SIGBLOCK(void);
-extern void PROC2_$SIGSETMASK(void);
-extern void PROC2_$SIGPAUSE(void);
-extern void AS_$GET_ADDR(void);
-extern void PROC2_$GET_ASID(void);
-extern void TTY_$K_FLUSH_INPUT(void);
-extern void TTY_$K_FLUSH_OUTPUT(void);
-extern void TTY_$K_DRAIN_OUTPUT(void);
-extern void PROC2_$DEBUG(void);
-extern void PROC2_$UNDEBUG(void);
-extern void ACL_$DEF_ACLDATA(void);
-extern void PROC2_$OVERRIDE_DEBUG(void);
-extern void TIME_$SET_TIME_OF_DAY(void);
-extern void CAL_$DECODE_TIME(void);
-extern void ACL_$INHERIT_SUBSYS(void);
-extern void ACL_$SET_LOCAL_LOCKSMITH(void);
-extern void SMD_$DISSOC(void);
-extern void SMD_$BUSY_WAIT(void);
-extern void TTY_$K_RESET(void);
-extern void TPAD_$RE_RANGE_UNIT(void);
-extern void DISK_$FORMAT_WHOLE(void);
-extern void MAC_$CLOSE(void);
-extern void MAC_$NET_TO_PORT_NUM(void);
-extern void XNS_IDP_$OPEN(void);
-extern void XNS_IDP_$CLOSE(void);
-extern void XNS_IDP_$GET_STATS(void);
-
-/* TRAP #3 handlers not yet in headers */
-extern void FILE_$CREATE(void);
-extern void FILE_$UNLOCK(void);
-extern void FILE_$TRUNCATE(void);
-extern void MST_$UNMAPS(void);
-extern void ERROR_$PRINT(void);
-extern void FILE_$ATTRIBUTES(void);
-extern void FILE_$SET_LEN(void);
-extern void FILE_$SET_TYPE(void);
-extern void NETWORK_$SET_SERVICE(void);
-extern void ASKNODE_$WHO(void);
-extern void FILE_$ACT_ATTRIBUTES(void);
-extern void FILE_$LOCATE(void);
-extern void FILE_$NEIGHBORS(void);
-extern void FILE_$READ_LOCK_ENTRYU(void);
-extern void FILE_$SET_ACL(void);
-extern void FILE_$SET_DIRPTR(void);
-extern void FILE_$SET_TROUBLE(void);
-extern void PROC2_$LIST(void);
-extern void FIM_$SINGLE_STEP(void);
-extern void SMD_$ASSOC(void);
-extern void SMD_$BORROW_DISPLAY(void);
-extern void SMD_$CLEAR_CURSOR(void);
-extern void SMD_$DISPLAY_CURSOR(void);
-extern void SMD_$SET_TP_CURSOR(void);
-extern void TIME_$WAIT(void);
-extern void RINGLOG_$CNTL(void);
-extern void SMD_$ALLOC_HDM(void);
-extern void SMD_$FREE_HDM(void);
-extern void OS_$GET_EC(void);
-extern void TIME_$GET_EC(void);
-extern void PROC2_$UPID_TO_UID(void);
-extern void MSG_$GET_EC(void);
-extern void DISK_$AS_OPTIONS(void);
-extern void SMD_$GET_EC(void);
-extern void NAME_$SET_ACL(void);
-extern void FILE_$SET_REFCNT(void);
-extern void PROC1_$GET_INFO(void);
-extern void AS_$GET_INFO(void);
-extern void FILE_$SET_DTM(void);
-extern void FILE_$SET_DTU(void);
-extern void LOG_$READ(void);
-extern void PROC2_$SET_PGROUP(void);
-extern void SMD_$SET_BLANK_TIMEOUT(void);
-extern void SMD_$INQ_BLANK_TIMEOUT(void);
-extern void FILE_$REMOVE_WHEN_UNLOCKED(void);
-extern void PROC2_$UPGID_TO_UID(void);
-extern void TIME_$GET_ITIMER(void);
-extern void DIR_$SET_DAD(void);
-extern void XPD_$GET_EC(void);
-extern void XPD_$SET_DEBUGGER(void);
-extern void XPD_$POST_EVENT(void);
-extern void XPD_$SET_ENABLE(void);
-extern void XPD_$CONTINUE_PROC(void);
-extern void RIP_$TABLE(void);
-extern void FILE_$LOCATEI(void);
-extern void MSG_$OPENI(void);
-extern void MSG_$ALLOCATEI(void);
-extern void MSG_$WAITI(void);
-extern void ACL_$SET_PROJ_LIST(void);
-extern void ACL_$GET_RE_SIDS(void);
-extern void MSG_$SET_HPIPC(void);
-extern void DIR_$VALIDATE_ROOT_ENTRY(void);
-extern void SMD_$ENABLE_TRACKING(void);
-extern void FILE_$READ_LOCK_ENTRYUI(void);
-extern void ROUTE_$SERVICE(void);
-extern void XPD_$GET_EVENT_AND_DATA(void);
-extern void SMD_$GET_IDM_EVENT(void);
-extern void MSG_$TEST_FOR_MESSAGE(void);
-extern void SMD_$ADD_TRK_RECT(void);
-extern void SMD_$DEL_TRK_RECT(void);
-extern void SMD_$SET_KBD_TYPE(void);
-extern void FILE_$SET_AUDITED(void);
-extern void PROC2_$ACKNOWLEDGE(void);
-extern void PROC2_$GET_MY_UPIDS(void);
-extern void TTY_$K_INQ_INPUT_FLAGS(void);
-extern void TTY_$K_INQ_OUTPUT_FLAGS(void);
-extern void TTY_$K_INQ_ECHO_FLAGS(void);
-extern void TTY_$K_SET_INPUT_BREAK_MODE(void);
-extern void TTY_$K_INQ_INPUT_BREAK_MODE(void);
-extern void TTY_$K_SET_PGROUP(void);
-extern void TTY_$K_INQ_PGROUP(void);
-extern void TTY_$K_SIMULATE_TERMINAL_INPUT(void);
-extern void TTY_$K_INQ_FUNC_ENABLED(void);
-extern void SIO_$K_TIMED_BREAK(void);
-extern void FILE_$SET_DEVNO(void);
-extern void XPD_$SET_PTRACE_OPTS(void);
-extern void XPD_$INQ_PTRACE_OPTS(void);
-extern void FILE_$SET_MAND_LOCK(void);
-extern void TIME_$SET_CPU_LIMIT(void);
-extern void CAL_$WEEKDAY(void);
-extern void SIO_$K_SIGNAL_WAIT(void);
-extern void TERM_$SET_DISCIPLINE(void);
-extern void PROC2_$SET_SERVER(void);
-extern void PACCT_$START(void);
-extern void FILE_$SET_DTU_F(void);
-extern void PROC2_$PGUID_TO_UPGID(void);
-extern void TERM_$INQ_DISCIPLINE(void);
-extern void MST_$UNMAPS_AND_FREE_AREA(void);
-extern void SMD_$ASSOC_CSRS(void);
-extern void SMD_$INQ_DISP_INFO(void);
-extern void SMD_$INQ_DISP_UID(void);
-extern void SMD_$DISPLAY_LOGO(void);
-extern void TERM_$SET_REAL_LINE_DISCIPLINE(void);
-extern void TIME_$ADJUST_TIME_OF_DAY(void);
-extern void PROC2_$UID_TO_UPID(void);
-extern void PROC2_$SET_SESSION_ID(void);
-extern void SMD_$GET_UNIT_EVENT(void);
-extern void TPAD_$SET_UNIT_CURSOR(void);
-extern void TPAD_$SET_PUNCH_IMPACT(void);
-extern void TPAD_$INQ_PUNCH_IMPACT(void);
-extern void TTY_$K_INQ_SESSION_ID(void);
-extern void TTY_$K_SET_SESSION_ID(void);
-extern void MAC_$OPEN(void);
-extern void MAC_$RECEIVE(void);
-extern void XNS_IDP_$RECEIVE(void);
-extern void XNS_IDP_$GET_PORT_INFO(void);
-extern void SMD_$SET_UNIT_CURSOR_POS(void);
-extern void SMD_$CLR_AND_LOAD_TRK_RECT(void);
-
-/* TRAP #4 handlers not yet in headers */
-extern void MST_$SET_GUARD(void);
-extern void MST_$UNMAP_GLOBAL(void);
-extern void MST_$GET_UID(void);
-extern void EC2_$WAIT(void);
-extern void FILE_$READ_LOCK_ENTRY(void);
-extern void MST_$UNMAP(void);
-extern void MST_$GROW_AREA(void);
-extern void TERM_$CONTROL(void);
-extern void TERM_$READ(void);
-extern void TERM_$WRITE(void);
-extern void DISK_$FORMAT(void);
-extern void DISK_$LV_ASSIGN(void);
-extern void FILE_$FW_PARTIAL(void);
-extern void PCHIST_$CNTL(void);
-extern void SMD_$BLT(void);
-extern void SMD_$SIGNAL(void);
-extern void SMD_$SOFT_SCROLL(void);
-extern void TERM_$INQUIRE(void);
-extern void TERM_$GET_EC(void);
-extern void TERM_$READ_COND(void);
-extern void PROC2_$SET_NAME(void);
-extern void PROC2_$SET_PRIORITY(void);
-extern void PROC2_$GET_EC(void);
-extern void PROC2_$LIST_PGROUP(void);
-extern void DIR_$DROP_DIRU(void);
-extern void DIR_$SET_DEFAULT_ACL(void);
-extern void DIR_$GET_DEFAULT_ACL(void);
-extern void NAME_$READ_DIRS_PS(void);
-extern void ACL_$GET_PROJ_LIST(void);
-extern void MST_$CHANGE_RIGHTS(void);
-extern void XPD_$GET_TARGET_INFO(void);
-extern void FILE_$READ_LOCK_ENTRYI(void);
-extern void ROUTE_$INCOMING(void);
-extern void SMD_$INQ_KBD_TYPE(void);
-extern void ROUTE_$GET_EC(void);
-extern void SMD_$DM_COND_EVENT_WAIT(void);
-extern void DISK_$READ_MFG_BADSPOTS(void);
-extern void DISK_$GET_MNT_INFO(void);
-extern void PROC2_$SET_SIG_MASK(void);
-extern void PROC2_$SIGRETURN(void);
-extern void PROC2_$WAIT(void);
-extern void PROC2_$SIGNAL(void);
-extern void PROC2_$SIGNAL_PGROUP(void);
-extern void PROC2_$GET_CR_REC(void);
-extern void TTY_$K_SET_FUNC_CHAR(void);
-extern void TTY_$K_INQ_FUNC_CHAR(void);
-extern void TTY_$K_SET_INPUT_FLAG(void);
-extern void TTY_$K_SET_OUTPUT_FLAG(void);
-extern void TTY_$K_SET_ECHO_FLAG(void);
-extern void TTY_$K_ENABLE_FUNC(void);
-extern void SIO_$K_SET_PARAM(void);
-extern void SIO_$K_INQ_PARAM(void);
-extern void FILE_$SET_MGR_ATTR(void);
-extern void XPD_$GET_REGISTERS(void);
-extern void XPD_$PUT_REGISTERS(void);
-extern void FILE_$RESERVE(void);
-extern void ACL_$GET_RES_SIDS(void);
-extern void FILE_$FW_PAGES(void);
-extern void PROC2_$SET_ACCT_INFO(void);
-extern void FILE_$IMPORT_LK(void);
-extern void FILE_$UNLOCK_D(void);
-extern void FILE_$SET_LEN_D(void);
-extern void FILE_$TRUNCATE_D(void);
-extern void FILE_$SET_DTM_F(void);
-extern void TTY_$K_SET_FLAG(void);
-extern void MST_$UNMAP_AND_FREE_AREA(void);
-extern void PROC2_$NAME_TO_UID(void);
-extern void MSG_$SHARE_SOCKET(void);
-extern void TTY_$K_INQ_DELAY(void);
-extern void TTY_$K_SET_DELAY(void);
-extern void MAC_$SEND(void);
-extern void XNS_IDP_$SEND(void);
-extern void PROC2_$PGROUP_INFO(void);
-
-/* TRAP #5 handlers not yet in headers */
-extern void MST_$MAP_AREA(void);
-extern void TPAD_$INQUIRE(void);
-extern void TPAD_$SET_MODE(void);
-extern void VFMT_$MAIN(void);
-extern void VOLX_$GET_INFO(void);
-extern void PROC2_$GET_UPIDS(void);
-extern void MST_$GET_UID_ASID(void);
-extern void MST_$INVALIDATE(void);
-extern void FILE_$INVALIDATE(void);
-extern void MST_$SET_TOUCH_AHEAD_CNT(void);
-extern void FILE_$GET_SEG_MAP(void);
-extern void DIR_$ADDU(void);
-extern void DIR_$DROPU(void);
-extern void DIR_$CREATE_DIRU(void);
-extern void DIR_$ADD_BAKU(void);
-extern void DIR_$ADD_HARD_LINKU(void);
-extern void RIP_$UPDATE(void);
-extern void DIR_$DROP_LINKU(void);
-extern void DIR_$DROP_HARD_LINKU(void);
-extern void ROUTE_$OUTGOING(void);
-extern void NET_$GET_INFO(void);
-extern void DIR_$GET_ENTRYU(void);
-extern void PROC2_$ALIGN_CTL(void);
-extern void XPD_$READ_PROC(void);
-extern void XPD_$WRITE_PROC(void);
-extern void DIR_$SET_DEF_PROTECTION(void);
-extern void DIR_$GET_DEF_PROTECTION(void);
-extern void ACL_$COPY(void);
-extern void DIR_$SET_PROTECTION(void);
-extern void ACL_$SET_RE_ALL_SIDS(void);
-extern void FILE_$EXPORT_LK(void);
-extern void XPD_$READ_PROC_ASYNC(void);
-extern void RIP_$TABLE_D(void);
-extern void XNS_ERROR_$SEND(void);
-
-/* TRAP #7 handlers not yet in headers */
-extern void FILE_$LOCK(void);
-extern void MST_$MAP_AREA_AT(void);
-extern void SMD_$WRITE_STRING(void);
-extern void VFMT_$FORMATN(void);
-extern void STOP_$WATCH(void);
-extern void ASKNODE_$GET_INFO(void);
-extern void DISK_$DIAG_IO(void);
-extern void SMD_$WRITE_STR_CLIP(void);
-extern void TIME_$SET_ITIMER(void);
-extern void OSINFO_$GET_SEG_TABLE(void);
-extern void DIR_$CNAMEU(void);
-extern void DIR_$DELETE_FILEU(void);
-extern void DIR_$ADD_LINKU(void);
-extern void ASKNODE_$WHO_REMOTE(void);
-extern void MST_$REMAP(void);
-extern void DIR_$ROOT_ADDU(void);
-extern void ASKNODE_$WHO_NOTOPO(void);
-extern void NET_$OPEN(void);
-extern void NET_$CLOSE(void);
-extern void NET_$IOCTL(void);
-extern void DIR_$FIND_UID(void);
-extern void FILE_$GET_ATTRIBUTES(void);
-extern void PCHIST_$UNIX_PROFIL_CNTL(void);
-extern void XPD_$RESTART(void);
-extern void FILE_$GET_ATTR_INFO(void);
-extern void ACL_$PRIM_CREATE(void);
-extern void PROC2_$GET_REGS(void);
-extern void ACL_$CONVERT_TO_9ACL(void);
-extern void ACL_$SET_RES_ALL_SIDS(void);
-extern void ACL_$GET_RES_ALL_SIDS(void);
-extern void FILE_$LOCK_D(void);
-extern void FILE_$CREATE_IT(void);
-extern void ACL_$RIGHTS_CHECK(void);
-extern void RIP_$UPDATE_D(void);
-
-/* TRAP #8 handlers not yet in headers */
-extern void MST_$MAP(void);
-extern void MST_$MAP_AT(void);
-extern void MST_$MAP_GLOBAL(void);
-extern void VOLX_$DISMOUNT(void);
-extern void VOLX_$GET_UIDS(void);
-extern void DISK_$PV_ASSIGN(void);
-extern void MSG_$RCV(void);
-extern void MSG_$SAR(void);
-extern void MSG_$SEND(void);
-extern void SMD_$LOAD_CRSR_BITMAP(void);
-extern void SMD_$READ_CRSR_BITMAP(void);
-extern void OSINFO_$GET_MMAP(void);
-extern void ASKNODE_$INTERNET_INFO(void);
-extern void MST_$GET_VA_INFO(void);
-extern void MSG_$SENDI(void);
-extern void MSG_$RCVI(void);
-extern void MSG_$RCV_CONTIGI(void);
-extern void MSG_$SARI(void);
-extern void MSG_$SEND_HW(void);
-extern void MST_$MAP_TOP(void);
-extern void NET_$SEND(void);
-extern void NET_$RCV(void);
-extern void DIR_$DIR_READU(void);
-extern void DIR_$READ_LINKU(void);
-extern void PROC2_$COMPLETE_VFORK(void);
-extern void DIR_$RESOLVE(void);
-extern void VOLX_$MOUNT(void);
-extern void ACL_$IMAGE(void);
-extern void DISK_$PV_ASSIGN_N(void);
-extern void DISK_$AS_XFER_MULTI(void);
-extern void PROC2_$FORK(void);
-extern void PROC2_$CREATE(void);
-extern void TPAD_$SET_UNIT_MODE(void);
-extern void TPAD_$INQUIRE_UNIT(void);
-extern void MSG_$RCV_HW(void);
 
 /*
  * ============================================================================
