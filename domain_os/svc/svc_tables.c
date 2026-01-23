@@ -26,6 +26,7 @@
 #include "disk/disk.h"
 #include "dtty/dtty.h"
 #include "file/file.h"
+#include "file/file_internal.h" // for FILE_$READ_LOCK_ENTRYI and FILE_$READ_LOCK_ENTRYUI
 #include "fim/fim.h"
 #include "gpu/gpu.h"
 #include "hint/hint.h"
