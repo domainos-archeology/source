@@ -412,6 +412,243 @@ void ACL_$CONVERT_FUNKY_ACL(void *acl_uid, void *acl_data_out,
 
 /*
  * ============================================================================
+ * Project List Management
+ * ============================================================================
+ */
+
+/*
+ * ACL_$ADD_PROJ - Add a project to the current process's project list
+ *
+ * Adds the specified project UID to the project list. Requires superuser.
+ *
+ * Parameters:
+ *   proj_acl   - Project UID to add
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E47EAC
+ */
+void ACL_$ADD_PROJ(uid_t *proj_acl, status_$t *status_ret);
+
+/*
+ * ACL_$DELETE_PROJ - Delete a project from the current process's project list
+ *
+ * Removes the specified project UID from the project list. Requires superuser.
+ *
+ * Parameters:
+ *   proj_acl   - Project UID to remove
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E47F54
+ */
+void ACL_$DELETE_PROJ(uid_t *proj_acl, status_$t *status_ret);
+
+/*
+ * ACL_$GET_PROJ_LIST - Get the project list for the current process
+ *
+ * Parameters:
+ *   proj_acls  - Output buffer for project UIDs
+ *   max_count  - Pointer to max count (clamped to 8)
+ *   count_ret  - Output: actual count
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E48034
+ */
+void ACL_$GET_PROJ_LIST(uid_t *proj_acls, int16_t *max_count, int16_t *count_ret,
+                        status_$t *status_ret);
+
+/*
+ * ACL_$SET_PROJ_LIST - Set the project list for the current process
+ *
+ * Parameters:
+ *   proj_acls  - Array of project UIDs to set
+ *   count      - Pointer to count (max 8)
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E480F4
+ */
+void ACL_$SET_PROJ_LIST(uid_t *proj_acls, int16_t *count, status_$t *status_ret);
+
+/*
+ * ============================================================================
+ * SID Management (Extended)
+ * ============================================================================
+ */
+
+/*
+ * ACL_$GET_RE_SIDS - Get requestor SIDs for the current process
+ *
+ * Parameters:
+ *   original_sids - Output buffer for original SIDs (36 bytes)
+ *   current_sids  - Output buffer for current SIDs (36 bytes)
+ *   status_ret    - Output status code
+ *
+ * Original address: 0x00E488B6
+ */
+void ACL_$GET_RE_SIDS(void *original_sids, void *current_sids, status_$t *status_ret);
+
+/*
+ * ACL_$GET_RES_SIDS - Get resource SIDs for the current process
+ *
+ * Parameters:
+ *   original_sids - Output buffer for original SIDs (36 bytes)
+ *   current_sids  - Output buffer for current SIDs (36 bytes)
+ *   saved_sids    - Output buffer for saved SIDs (36 bytes)
+ *   status_ret    - Output status code
+ *
+ * Original address: 0x00E4890C
+ */
+void ACL_$GET_RES_SIDS(void *original_sids, void *current_sids, void *saved_sids,
+                       status_$t *status_ret);
+
+/*
+ * ACL_$GET_RES_ALL_SIDS - Get all resource SIDs and project lists
+ *
+ * Parameters:
+ *   original_sids  - Output buffer for original SIDs (36 bytes)
+ *   current_sids   - Output buffer for current SIDs (36 bytes)
+ *   saved_sids     - Output buffer for saved SIDs (36 bytes)
+ *   saved_proj     - Output buffer for saved project metadata (12 bytes)
+ *   current_proj   - Output buffer for current project metadata (12 bytes)
+ *   status_ret     - Output status code
+ *
+ * Original address: 0x00E4881C
+ */
+void ACL_$GET_RES_ALL_SIDS(void *original_sids, void *current_sids, void *saved_sids,
+                           void *saved_proj, void *current_proj, status_$t *status_ret);
+
+/*
+ * ACL_$SET_RE_ALL_SIDS - Set all requestor SIDs for the current process
+ *
+ * Parameters:
+ *   new_original_sids - New original SIDs (36 bytes)
+ *   new_current_sids  - New current SIDs (36 bytes)
+ *   new_saved_proj    - New saved project metadata (12 bytes)
+ *   new_current_proj  - New current project metadata (12 bytes)
+ *   status_ret        - Output status code
+ *
+ * Original address: 0x00E481AE
+ */
+void ACL_$SET_RE_ALL_SIDS(void *new_original_sids, void *new_current_sids,
+                          void *new_saved_proj, void *new_current_proj,
+                          status_$t *status_ret);
+
+/*
+ * ACL_$SET_RES_ALL_SIDS - Set all resource SIDs for the current process
+ *
+ * Parameters:
+ *   new_original_sids - New original SIDs (36 bytes)
+ *   new_current_sids  - New current SIDs (36 bytes)
+ *   new_saved_sids    - New saved SIDs (36 bytes)
+ *   new_saved_proj    - New saved project metadata (12 bytes)
+ *   new_current_proj  - New current project metadata (12 bytes)
+ *   status_ret        - Output status code
+ *
+ * Original address: 0x00E4855A
+ */
+void ACL_$SET_RES_ALL_SIDS(void *new_original_sids, void *new_current_sids,
+                           void *new_saved_sids, void *new_saved_proj,
+                           void *new_current_proj, status_$t *status_ret);
+
+/*
+ * ============================================================================
+ * ACL Creation and Conversion
+ * ============================================================================
+ */
+
+/*
+ * ACL_$IMAGE - Create an ACL image
+ *
+ * Parameters:
+ *   source_uid    - Source UID
+ *   buffer_len    - Pointer to buffer length
+ *   unknown_flag  - Pointer to flag byte
+ *   param_4       - Unknown parameter
+ *   param_5       - Unknown parameter
+ *   param_6       - Unknown parameter
+ *   status_ret    - Output status code
+ *
+ * Original address: 0x00E47DF6
+ */
+void ACL_$IMAGE(void *source_uid, int16_t *buffer_len, int8_t *unknown_flag,
+                void *param_4, void *param_5, void *param_6, status_$t *status_ret);
+
+/*
+ * ACL_$PRIM_CREATE - Create a primitive ACL object
+ *
+ * Parameters:
+ *   acl_data      - ACL data buffer
+ *   data_len      - Pointer to length
+ *   dir_uid       - Directory UID
+ *   type          - ACL type code
+ *   file_uid_ret  - Output: created file UID
+ *   status_ret    - Output status code
+ *
+ * Original address: 0x00E47968
+ */
+void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
+                      int16_t type, uid_t *file_uid_ret, status_$t *status_ret);
+
+/*
+ * ACL_$CONVERT_TO_9ACL - Convert ACL to 9-entry format
+ *
+ * Parameters:
+ *   type          - ACL type code
+ *   source_uid    - Source UID
+ *   dir_uid       - Directory UID
+ *   default_prot  - Default protection
+ *   result_uid    - Output: converted ACL UID
+ *   status_ret    - Output status code
+ *
+ * Original address: 0x00E48CE8
+ */
+void ACL_$CONVERT_TO_9ACL(int16_t type, uid_t *source_uid, uid_t *dir_uid,
+                          void *default_prot, uid_t *result_uid, status_$t *status_ret);
+
+/*
+ * ACL_$COPY - Copy ACL from source to destination
+ *
+ * Parameters:
+ *   source_acl_uid - Source ACL UID
+ *   dest_uid       - Destination UID
+ *   source_type    - Source ACL type
+ *   dest_type      - Destination ACL type
+ *   status_ret     - Output status code
+ *
+ * Original address: 0x00E4930A
+ */
+void ACL_$COPY(uid_t *source_acl_uid, uid_t *dest_uid, uid_t *source_type,
+               uid_t *dest_type, status_$t *status_ret);
+
+/*
+ * ============================================================================
+ * Subsystem and Locksmith
+ * ============================================================================
+ */
+
+/*
+ * ACL_$INHERIT_SUBSYS - Inherit subsystem state from parent
+ *
+ * Parameters:
+ *   inherit_flag - Pointer to inheritance flag byte
+ *   status_ret   - Output status code
+ *
+ * Original address: 0x00E49138
+ */
+void ACL_$INHERIT_SUBSYS(uint8_t *inherit_flag, status_$t *status_ret);
+
+/*
+ * ACL_$SET_LOCAL_LOCKSMITH - Set local locksmith mode
+ *
+ * Parameters:
+ *   locksmith_value - Pointer to new locksmith value
+ *   status_ret      - Output status code
+ *
+ * Original address: 0x00E49196
+ */
+void ACL_$SET_LOCAL_LOCKSMITH(int16_t *locksmith_value, status_$t *status_ret);
+
+/*
+ * ============================================================================
  * Global Data
  * ============================================================================
  */

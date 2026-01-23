@@ -19,6 +19,19 @@
  * ============================================================================
  */
 #define status_$no_right_to_perform_operation   0x00230001
+#define status_$project_list_is_full            0x00230011
+#define status_$acl_proj_list_too_big           0x00230012
+#define status_$image_buffer_too_small          0x0023000c
+#define status_$cleanup_handler_set             0x00120035
+
+/*
+ * ============================================================================
+ * Constants
+ * ============================================================================
+ */
+
+/* Maximum number of project UIDs per process */
+#define ACL_MAX_PROJECTS    8
 
 /*
  * ============================================================================
@@ -85,10 +98,19 @@ extern acl_sid_block_t ACL_$SAVED_SIDS[PROC1_MAX_PROCESSES];    /* 0xE91610 */
 extern acl_sid_block_t ACL_$ORIGINAL_SIDS[PROC1_MAX_PROCESSES]; /* 0xE90410 */
 
 /*
- * Project lists (indexed by PID, stride 0x0C = 12 bytes)
+ * Project lists metadata (indexed by PID, stride 0x0C = 12 bytes)
+ * Used by SET/GET_RE_ALL_SIDS for opaque 12-byte project metadata
  */
 extern acl_proj_list_t ACL_$PROJ_LISTS[PROC1_MAX_PROCESSES];    /* 0xE92228 */
 extern acl_proj_list_t ACL_$SAVED_PROJ[PROC1_MAX_PROCESSES];    /* 0xE91F28 */
+
+/*
+ * Per-process project UID array (indexed by PID, 8 UIDs per process)
+ * Used by ADD_PROJ/DELETE_PROJ/GET_PROJ_LIST for managing project UIDs
+ * Stride 0x40 = 64 bytes per process (8 UIDs * 8 bytes)
+ * Original address: 0xE924F4 (computed as 0xE97294 - 0x4DA0)
+ */
+extern uid_t ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS]; /* 0xE924F4 */
 
 /*
  * Per-process subsystem level counter (indexed by PID, stride 2)
@@ -138,6 +160,15 @@ extern ml_$exclusion_t ACL_$EXCLUSION_LOCK; /* 0xE2C014 */
  */
 /* ACL_$DNDCAL - 0xE174DC */
 /* ACL_$FNDWRX - 0xE174C4 */
+
+/*
+ * ACL type UIDs - used to identify ACL operations
+ */
+extern uid_t ACL_$FILEIN_ACL;       /* 0xE17454 */
+extern uid_t ACL_$DIRIN_ACL;        /* 0xE1745C */
+extern uid_t ACL_$DIR_MERGE_ACL;    /* 0xE17464 */
+extern uid_t ACL_$FILE_MERGE_ACL;   /* 0xE1746C */
+extern uid_t ACL_$FILE_SUBS_ACL;    /* 0xE17474 */
 
 /*
  * ============================================================================

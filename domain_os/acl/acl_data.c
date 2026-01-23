@@ -21,10 +21,16 @@ acl_sid_block_t ACL_$SAVED_SIDS[PROC1_MAX_PROCESSES];
 acl_sid_block_t ACL_$ORIGINAL_SIDS[PROC1_MAX_PROCESSES];
 
 /*
- * Project lists (indexed by PID, stride 0x0C = 12 bytes)
+ * Project lists metadata (indexed by PID, stride 0x0C = 12 bytes)
  */
 acl_proj_list_t ACL_$PROJ_LISTS[PROC1_MAX_PROCESSES];   /* 0xE92228 */
 acl_proj_list_t ACL_$SAVED_PROJ[PROC1_MAX_PROCESSES];   /* 0xE91F28 */
+
+/*
+ * Per-process project UID array (indexed by PID, 8 UIDs per process)
+ * Stride 0x40 = 64 bytes per process
+ */
+uid_t ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS]; /* 0xE924F4 */
 
 /*
  * Per-process subsystem level counter (indexed by PID, stride 2)
@@ -66,3 +72,12 @@ ml_$exclusion_t ACL_$EXCLUSION_LOCK; /* 0xE2C014 */
  */
 uid_t ACL_$DNDCAL;  /* 0xE174DC: Default ACL for dirs/links */
 uid_t ACL_$FNDWRX;  /* 0xE174C4: Default ACL for files */
+
+/*
+ * ACL type UIDs - well-known UIDs used to identify ACL operation types
+ */
+uid_t ACL_$FILEIN_ACL;      /* 0xE17454: {0x00000602, 0x00000000} */
+uid_t ACL_$DIRIN_ACL;       /* 0xE1745C: {0x00000603, 0x00000000} */
+uid_t ACL_$DIR_MERGE_ACL;   /* 0xE17464: {0x00000604, 0x00000000} */
+uid_t ACL_$FILE_MERGE_ACL;  /* 0xE1746C: {0x00000605, 0x00000000} */
+uid_t ACL_$FILE_SUBS_ACL;   /* 0xE17474: {0x00000606, 0x00000000} */
