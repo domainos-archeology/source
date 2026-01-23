@@ -4,11 +4,14 @@ TARGET_SAU := sau2
 # List of all subsystems
 SUBSYSTEMS := acl app area as asknode ast audit bat cache cal dbuf di disk dma dtty dxm ec file fim flop fp gpu fm hint iic log mac math mem misc ml mmap mmu msg name net netlog net_io netbuf network os osinfo pacct parity pas pbu pchist peb pkt pmap proc1 proc2 rem_file rgyc ring rip route scsi sio sio2681 smd sock stop term time tone tpad tty uid vfmt volx vtoc vtoce xns
 
+WARNING_FLAGS := -Wno-error=incompatible-pointer-types -Wno-error=int-conversion
+
+SAU2_FLAGS := -DM68K -DM68010 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68010 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
+
 # we assume local #include's will have fully qualified paths
-CFLAGS := -I. -O2 $(SAU2_FLAGS)
+CFLAGS := -I. -O2 $(SAU2_FLAGS) $(WARNING_FLAGS)
 
 CC := m68k-elf-gcc
-SAU2_FLAGS := -DM68K -DM68010 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68010 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
 
 LD := m68k-elf-ld
 LDFLAGS := -T sau2.ld
