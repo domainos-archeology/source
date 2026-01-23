@@ -249,18 +249,31 @@ void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr);
 /*
  * Internal lock info structure (34 bytes)
  * Output format for FILE_$LOCAL_READ_LOCK and FILE_$READ_LOCK_ENTRYI
+ *
+ * Note: This structure has 34 bytes total (8 longs + 1 short when copied).
+ * The holder_node field at offset 0x16 is unaligned for 32-bit access,
+ * so this structure should be packed on non-m68k architectures.
+ *
+ * For local locks (remote_flag=0):
+ *   holder_node/port = NODE_$ME/ROUTE_$PORT (we are the holder)
+ *   owner_node = entry.node_low (who locked it)
+ *   remote_info = entry.node_high
+ *
+ * For remote locks (remote_flag=1):
+ *   holder_node/port = entry.node_low/high (remote holder)
+ *   owner_node = NODE_$ME (we are the owner)
+ *   remote_info = ROUTE_$PORT
  */
 typedef struct {
     uid_t    file_uid;      /* 0x00: File UID (8 bytes) */
     uint32_t context;       /* 0x08: Lock context */
-    uint32_t owner_node;    /* 0x0C: Owner's node address */
-    uint16_t side;          /* 0x10: Lock side */
+    uint32_t owner_node;    /* 0x0C: Owner's node address (who initiated the lock) */
+    uint16_t side;          /* 0x10: Lock side (0=reader, 1=writer) */
     uint16_t mode;          /* 0x12: Lock mode */
     uint16_t sequence;      /* 0x14: Lock sequence number */
-    uint32_t holder_node;   /* 0x16: Lock holder's node */
+    uint32_t holder_node;   /* 0x16: Lock holder's node (who actually holds it) */
     uint32_t holder_port;   /* 0x1A: Lock holder's port */
-    uint32_t remote_node;   /* 0x1E: Remote node info */
-    uint32_t remote_port;   /* 0x22: Remote port info */
+    uint32_t remote_info;   /* 0x1E: Remote node/port info (4 bytes, total=34) */
 } file_lock_info_internal_t;
 
 /*

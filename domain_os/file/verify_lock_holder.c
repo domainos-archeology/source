@@ -73,7 +73,7 @@ void FILE_$VERIFY_LOCK_HOLDER(file_lock_info_internal_t *lock_info, status_$t *s
             uint32_t node;
         } node_info;
 
-        node_info.port = lock_info->remote_port;
+        node_info.port = lock_info->remote_info;
         node_info.node = owner_node_low;
 
         REM_FILE_$LOCAL_VERIFY(&node_info, lock_info, &verify_status);

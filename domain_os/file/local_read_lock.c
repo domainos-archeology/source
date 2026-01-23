@@ -103,21 +103,28 @@ void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out,
             uint8_t remote_flag = flags2 & 0x04;
 
             if (remote_flag) {
-                /* Remote lock: entry has remote holder, local is owner */
+                /*
+                 * Remote lock: entry has remote holder info, local is owner
+                 * holder_node/port = entry.node_low/high (remote holder)
+                 * owner_node = NODE_$ME (we are the owner)
+                 * remote_info = ROUTE_$PORT
+                 */
                 info_out->holder_node = *(uint32_t *)(entry_base - 0x18);
                 info_out->holder_port = *(uint32_t *)(entry_base - 0x14);
                 info_out->owner_node = NODE_$ME;
-                info_out->remote_port = ROUTE_$PORT;
+                info_out->remote_info = ROUTE_$PORT;
             } else {
-                /* Local lock: local node is holder */
+                /*
+                 * Local lock: local node is holder
+                 * holder_node/port = NODE_$ME/ROUTE_$PORT (we are the holder)
+                 * owner_node = entry.node_low (who locked it)
+                 * remote_info = entry.node_high
+                 */
                 info_out->holder_node = NODE_$ME;
                 info_out->holder_port = ROUTE_$PORT;
                 info_out->owner_node = *(uint32_t *)(entry_base - 0x18);
-                info_out->remote_port = *(uint32_t *)(entry_base - 0x14);
+                info_out->remote_info = *(uint32_t *)(entry_base - 0x14);
             }
-
-            /* Remote node info (same as owner_node for compatibility) */
-            info_out->remote_node = info_out->owner_node;
 
             /* Success */
             *status_ret = status_$ok;
