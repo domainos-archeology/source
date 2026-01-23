@@ -138,6 +138,19 @@ void SMD_$INIT_BLINK(void);
 void SMD_$WS_INIT(void);
 
 /*
+ * SMD_$INIT_STATE - Initialize display state
+ *
+ * Initializes the display state for the current process.
+ * Wrapper around smd_$init_display_state with options=0.
+ *
+ * Parameters:
+ *   status_ret - Output: status return
+ *
+ * Original address: 0x00E6F818
+ */
+void SMD_$INIT_STATE(status_$t *status_ret);
+
+/*
  * SMD_$UTIL_INIT - Utility initialization
  *
  * Initialize SMD utility functions.
@@ -423,6 +436,22 @@ void SMD_$CLEAR_CURSOR(uint16_t *unit);
 void SMD_$SET_CURSOR_POS(smd_cursor_pos_t *pos);
 
 /*
+ * SMD_$SET_UNIT_CURSOR_POS - Set cursor position for a specific unit
+ *
+ * Sets the cursor position for the specified display unit. Updates
+ * cursor change tracking and calls the trackpad/touchpad subsystem
+ * to synchronize cursor position.
+ *
+ * Parameters:
+ *   unit       - Pointer to display unit number
+ *   pos        - Pointer to new cursor position (x, y)
+ *   status_ret - Pointer to status return
+ *
+ * Original address: 0x00E6E788
+ */
+void SMD_$SET_UNIT_CURSOR_POS(uint16_t *unit, smd_cursor_pos_t *pos, status_$t *status_ret);
+
+/*
  * SMD_$LOAD_CRSR_BITMAP - Load cursor bitmap
  *
  * Original address: 0x00E6FBC6
@@ -659,6 +688,22 @@ void SMD_$BLT(void *params, void *src, void *dst, status_$t *status_ret);
 void SMD_$BLT_U(smd_blt_ctl_t *blt_ctl, status_$t *status_ret);
 
 /*
+ * SMD_$INQ_MM_BLT - Inquire memory-to-memory BLT capability
+ *
+ * Returns whether memory-to-memory BLT operations are supported.
+ * In this implementation, they are not supported (returns 0).
+ *
+ * Parameters:
+ *   status_ret - Output: status return (always status_$ok)
+ *
+ * Returns:
+ *   0 (false) - memory-to-memory BLT not supported
+ *
+ * Original address: 0x00E6EE0C
+ */
+int8_t SMD_$INQ_MM_BLT(status_$t *status_ret);
+
+/*
  * SMD_$SOFT_SCROLL - Software scroll
  *
  * Performs a scroll operation on a region.
@@ -766,6 +811,30 @@ void SMD_$WRITE_STRING(smd_cursor_pos_t *pos, void *font, void *buffer,
                        uint16_t *length, void *param5, status_$t *status_ret);
 
 /*
+ * SMD_$WRITE_STR_CLIP - Write string with clipping
+ *
+ * Renders a string using the specified font, clipping each character
+ * against the current clip window. Uses hardware BLT operations to
+ * transfer glyph bitmaps from HDM to the visible display.
+ *
+ * Parameters:
+ *   pos        - Pointer to position (packed x,y)
+ *   font       - Font slot or font pointer
+ *   buffer     - Character buffer to render
+ *   length     - Pointer to string length
+ *   flags      - Rendering flags (bit 7: inverted mode)
+ *   status_ret - Status return
+ *
+ * Notes:
+ *   - Supports both font version 1 (7-bit ASCII) and version 3 (8-bit)
+ *   - Characters outside clip window advance position but don't render
+ *
+ * Original address: 0x00E8493E (trampoline), 0x00E70390 (implementation)
+ */
+void SMD_$WRITE_STR_CLIP(uint32_t *pos, void *font, uint8_t *buffer,
+                         uint16_t *length, int8_t *flags, status_$t *status_ret);
+
+/*
  * SMD_$PUTC - Put character
  *
  * Original address: 0x00E1D89C
@@ -805,6 +874,23 @@ void SMD_$DM_COND_EVENT_WAIT(void *params, status_$t *status_ret);
  * Original address: 0x00E6F3AE
  */
 void SMD_$EOF_WAIT(status_$t *status_ret);
+
+/*
+ * SMD_$OP_WAIT_U - Wait for operation completion
+ *
+ * Blocks until any pending display operation completes.
+ * This is achieved by acquiring and releasing the display lock,
+ * since the lock cannot be acquired until pending operations finish.
+ *
+ * If the current process has no associated display unit, returns
+ * immediately without waiting.
+ *
+ * Returns:
+ *   Result from SMD_$REL_DISPLAY, or 0 if no display associated
+ *
+ * Original address: 0x00E6FB96
+ */
+uint16_t SMD_$OP_WAIT_U(void);
 
 /*
  * SMD_$SIGNAL - Send signal to display manager
@@ -882,13 +968,6 @@ void SMD_$LITES(uint16_t pattern, uint16_t y_pos);
  * Original address: 0x00E1D89E
  */
 void SMD_$BUSY_WAIT(uint32_t param1, status_$t *status_ret);
-
-/*
- * SMD_$WIRE_MM - Wire memory for display
- *
- * Original address: 0x00E6F4A0
- */
-void SMD_$WIRE_MM(void *params, status_$t *status_ret);
 
 /*
  * SMD_$SEND_RESPONSE - Send borrow response
