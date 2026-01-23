@@ -2,18 +2,81 @@
  * NETWORK - Network Operations
  *
  * This module provides network operations for remote objects.
+ *
+ * The NETWORK subsystem manages network services including:
+ * - Page servers for remote paging
+ * - Request servers for remote file operations
+ * - Service configuration (allowed services bitmap)
+ *
+ * Key global data area at 0xE248FC contains:
+ *   +0x320: Request server count
+ *   +0x322: Page server count
+ *   +0x342: Allowed service bitmap (32-bit)
+ *   +0x344: Remote pool setting
+ *   +0x346: Activity flag
+ *   +0x348: User socket open flag
+ *   +0x34A: Really diskless flag
+ *   +0x2A4: Spin lock for network data
  */
 
 #ifndef NETWORK_H
 #define NETWORK_H
 
 #include "base/base.h"
+#include "ml/ml.h"
+#include "proc1/proc1.h"
+#include "mmap/mmap.h"
+
+/*
+ * Status codes for NETWORK subsystem (module 0x11)
+ */
+#define status_$network_unknown_request_type            0x0011000D
+#define status_$network_request_denied_by_local_node    0x0011000E
+
+/*
+ * Network service flags (bits in NETWORK_$ALLOWED_SERVICE)
+ *
+ * These flags control which network services are enabled:
+ *   Bit 0 (0x01): Paging service enabled
+ *   Bit 1 (0x02): File service enabled
+ *   Bit 2 (0x04): Network service active
+ *   Bit 3 (0x08): Routing enabled (auto-set if routing ports exist)
+ *   Bit 4 (0x10): Reserved
+ *   Bit 18 (0x40000): Extended service info flag
+ */
+#define NETWORK_SERVICE_PAGING      0x0001
+#define NETWORK_SERVICE_FILE        0x0002
+#define NETWORK_SERVICE_ACTIVE      0x0004
+#define NETWORK_SERVICE_ROUTING     0x0008
+#define NETWORK_SERVICE_EXTENDED    0x40000
+
+/*
+ * Network set_service operation codes
+ */
+#define NETWORK_OP_OR_BITS          0   /* OR bits into allowed service */
+#define NETWORK_OP_AND_NOT_BITS     1   /* AND NOT bits (clear bits) */
+#define NETWORK_OP_SET_VALUE        2   /* Set allowed service directly */
+#define NETWORK_OP_SET_REMOTE_POOL  3   /* Set remote pool size */
 
 /*
  * Network global variables
+ *
+ * These are located in the network data area at 0xE248FC + offset
  */
-extern int8_t NETWORK_$REALLY_DISKLESS;
+extern int16_t NETWORK_$REQUEST_SERVER_CNT;  /* 0xE24C1C (+0x320) */
+extern int16_t NETWORK_$PAGE_SERVER_CNT;     /* 0xE24C1E (+0x322) */
+extern uint32_t NETWORK_$ALLOWED_SERVICE;    /* 0xE24C3E (+0x342) - 32-bit */
+extern int16_t NETWORK_$REMOTE_POOL;         /* 0xE24C40 (+0x344) */
+extern int8_t NETWORK_$ACTIVITY_FLAG;        /* 0xE24C46 (+0x346) */
+extern int8_t NETWORK_$USER_SOCK_OPEN;       /* 0xE24C48 (+0x34C) */
+extern int8_t NETWORK_$REALLY_DISKLESS;      /* 0xE24C4A (+0x34E) */
+extern int8_t NETWORK_$DISKLESS;             /* 0xE24C4C (+0x350) - diskless mode */
 extern uid_t NETWORK_$PAGING_FILE_UID;
+
+/*
+ * External global from ROUTE subsystem
+ */
+extern int16_t ROUTE_$N_ROUTING_PORTS;       /* 0xE26F1C - number of routing ports */
 
 /*
  * NETWORK_$READ_AHEAD - Read pages ahead from network partner
@@ -84,5 +147,115 @@ void NETWORK_$GETHDR(uint32_t *node_ptr, uint32_t *va_out, uint32_t *ppn_out);
  * Original address: 0x00E0F414
  */
 void NETWORK_$RTNHDR(uint32_t *va_ptr);
+
+/*
+ * NETWORK_$SET_SERVICE - Configure network services
+ *
+ * Sets or modifies the network service configuration based on the
+ * operation code. This controls which services (paging, file, routing)
+ * are available on this node.
+ *
+ * Operations:
+ *   0 - OR: Add bits to allowed service
+ *   1 - AND NOT: Clear bits from allowed service
+ *   2 - SET: Replace allowed service value
+ *   3 - SET_REMOTE_POOL: Set the remote pool size
+ *
+ * If the node is diskless (NETWORK_$DISKLESS < 0), certain services
+ * (paging, file) cannot be disabled, and the request will be denied.
+ *
+ * After setting the service, if routing ports exist and any service
+ * is enabled, the routing bit (0x08) is automatically set.
+ *
+ * @param op_ptr      Pointer to operation code (0-3)
+ * @param value_ptr   Pointer to value (service bits or pool size)
+ * @param status_p    Output: status code
+ *
+ * Status codes:
+ *   status_$ok: Success
+ *   status_$network_unknown_request_type: Invalid operation code
+ *   status_$network_request_denied_by_local_node: Cannot disable required service
+ *
+ * Original address: 0x00E0F45E
+ */
+void NETWORK_$SET_SERVICE(int16_t *op_ptr, uint32_t *value_ptr, status_$t *status_p);
+
+/*
+ * NETWORK_$READ_SERVICE - Read network service configuration
+ *
+ * Returns the current network service configuration. If the extended
+ * service info flag (bit 18) is set in NETWORK_$ALLOWED_SERVICE, returns
+ * the full 32-bit allowed service bitmap. Otherwise, returns 0 in the
+ * high word and the remote pool size in the low word.
+ *
+ * @param result_ptr  Output: service configuration (32-bit)
+ *                    If extended flag set: full allowed service bitmap
+ *                    Otherwise: (0 << 16) | remote_pool_size
+ *
+ * Original address: 0x00E71D7C
+ */
+void NETWORK_$READ_SERVICE(uint32_t *result_ptr);
+
+/*
+ * NETWORK_$ADD_PAGE_SERVERS - Create page server processes
+ *
+ * Creates additional network page server processes up to the requested
+ * count. Page servers handle incoming page requests from remote nodes
+ * performing network paging.
+ *
+ * On diskless nodes (NETWORK_$REALLY_DISKLESS < 0), at least one page
+ * server must remain, so the function stops creating servers if count
+ * reaches 1.
+ *
+ * @param count_ptr    Pointer to desired page server count
+ * @param status_ret   Output: status code (set to status_$ok on entry,
+ *                     may contain error from PROC1_$CREATE_P)
+ *
+ * @return Current page server count (may be less than requested on error)
+ *
+ * Original address: 0x00E71DA4
+ */
+int16_t NETWORK_$ADD_PAGE_SERVERS(int16_t *count_ptr, status_$t *status_ret);
+
+/*
+ * NETWORK_$ADD_REQUEST_SERVERS - Create request server processes
+ *
+ * Creates additional network request server processes up to the requested
+ * count (maximum 3). Request servers handle remote file operations and
+ * other network requests.
+ *
+ * On diskless nodes (NETWORK_$REALLY_DISKLESS < 0), at least one request
+ * server must remain, so the function stops creating servers if count
+ * reaches 1.
+ *
+ * @param count_ptr    Pointer to desired request server count (capped at 3)
+ * @param status_ret   Output: status code (set to status_$ok on entry,
+ *                     may contain error from PROC1_$CREATE_P)
+ *
+ * @return Current request server count (may be less than requested on error)
+ *
+ * Original address: 0x00E71E0C
+ */
+int16_t NETWORK_$ADD_REQUEST_SERVERS(int16_t *count_ptr, status_$t *status_ret);
+
+/*
+ * NETWORK_$PAGE_SERVER - Page server main loop
+ *
+ * Entry point for network page server processes. This function runs
+ * as an infinite loop handling page requests.
+ *
+ * Original address: 0x00E11548
+ */
+void NETWORK_$PAGE_SERVER(void);
+
+/*
+ * NETWORK_$REQUEST_SERVER - Request server main loop
+ *
+ * Entry point for network request server processes. This function runs
+ * as an infinite loop handling remote file and other requests.
+ *
+ * Original address: 0x00E118DC
+ */
+void NETWORK_$REQUEST_SERVER(void);
 
 #endif /* NETWORK_H */
