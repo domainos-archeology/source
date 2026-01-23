@@ -11,20 +11,6 @@
 #include "file/file.h"
 #include "mst/mst.h"
 
-/* Forward declarations for functions not yet in headers */
-extern void FILE_$PRIV_LOCK(uid_t *file_uid, uint16_t p1, uint16_t p2,
-                            uint16_t p3, uint32_t p4, uint32_t p5,
-                            uint32_t p6, uint32_t p7, uint32_t p8,
-                            void *unused, uint16_t p10, uint32_t *lock_id,
-                            void *lock_info, status_$t *status_ret);
-extern void FILE_$PRIV_UNLOCK(uid_t *file_uid, int16_t lock_id,
-                              uint32_t flags, uint32_t p4, uint32_t p5, uint32_t p6,
-                              void *lock_info, status_$t *status_ret);
-extern void *MST_$MAPS_RET(int16_t asid, int8_t flags, uid_t *uid,
-                           uint32_t offset, uint32_t size, int16_t prot,
-                           uint32_t unused, int8_t writable,
-                           uint32_t *size_ret, status_$t *status_ret);
-
 /* Path to audit log file */
 static const char log_path[] = "//node_data/audit/audit_log";
 static int16_t log_path_len = 26;

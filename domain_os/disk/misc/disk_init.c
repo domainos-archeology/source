@@ -75,10 +75,6 @@ static const uint8_t ATTR_DRIVE_ID = 0x00;  /* From 0xe19bbe */
 /* Empty data for status commands */
 static const uint8_t ANSI_EMPTY_DATA = 0x0A;  /* From 0xe1940a */
 
-/* External Winchester functions */
-extern status_$t WIN_$ANSI_COMMAND(uint16_t drive, uint16_t command,
-                                    const void *param, void *result);
-extern status_$t WIN_$CHECK_DISK_STATUS(uint16_t drive);
 extern void FUN_00e190bc(uint16_t drive);  /* Drive init helper */
 
 status_$t DISK_INIT(uint16_t drive_num, int16_t unit_num,

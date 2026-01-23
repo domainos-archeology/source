@@ -19,10 +19,6 @@
 #include "acl/acl.h"
 #include "misc/misc.h"
 
-/* External function declarations */
-extern void *GET_WIRED(void);
-extern void ERROR_$PRINT(const char *msg, status_$t *status, void *unused);
-
 /* String constants from original binary */
 static const char msg_warning[] =
     "        Warning: could not start audit event logging...";

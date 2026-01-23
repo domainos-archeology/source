@@ -11,12 +11,6 @@
 #include "file/file.h"
 #include "mst/mst.h"
 
-/* Forward declarations for functions not yet in headers */
-extern void FILE_$TRUNCATE(uid_t *file_uid, int32_t *size, status_$t *status_ret);
-extern void FILE_$PRIV_UNLOCK(uid_t *file_uid, int16_t lock_id,
-                              uint32_t flags, uint32_t p4, uint32_t p5, uint32_t p6,
-                              void *lock_info, status_$t *status_ret);
-
 void audit_$close_log(status_$t *status_ret)
 {
     int32_t final_size;

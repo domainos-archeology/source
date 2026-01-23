@@ -27,20 +27,6 @@
 extern uid_t DISKLESS_$UID;
 
 /*
- * DIR_$FIND_NET - Find network node for a directory entry
- *
- * Original address: 0x00E4E8B4
- *
- * Parameters:
- *   param_1 - Unknown (0x29C = 668, possibly a table offset)
- *   index   - Index value (low 20 bits of UID)
- *
- * Returns:
- *   High part of node address
- */
-extern uint32_t DIR_$FIND_NET(uint32_t param_1, uint32_t *index);
-
-/*
  * FILE_$LOCATEI - Get file location with diskless fallback
  *
  * Extended version of FILE_$LOCATE that handles diskless client UIDs.

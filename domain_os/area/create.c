@@ -12,6 +12,11 @@
 #include "area/area_internal.h"
 #include "misc/crash_system.h"
 
+/* Number of UID hash buckets - must match area_internal.h if defined there */
+#ifndef UID_HASH_BUCKETS
+#define UID_HASH_BUCKETS    11
+#endif
+
 /* Size alignment constants */
 #define VIRT_SIZE_ALIGN     0x8000      /* 32KB alignment for virtual size */
 #define COMMIT_SIZE_ALIGN   0x400       /* 1KB alignment for commit size */
@@ -243,7 +248,7 @@ uint16_t AREA_$CREATE_FROM(uint32_t remote_uid, uint32_t virt_size,
     ML_$LOCK(ML_LOCK_AREA);
 
     /* Hash the remote UID to find bucket */
-    hash_bucket = M_OIU_WLW(remote_uid, UID_HASH_BUCKETS);
+    hash_bucket = M$OIU$WLW(remote_uid, UID_HASH_BUCKETS);
 
     /* Search for existing entry with same UID */
     hash_entry = (area_$uid_hash_t *)((uint32_t *)((char *)globals + 0x454))[hash_bucket];
@@ -327,8 +332,3 @@ uint16_t AREA_$CREATE_FROM(uint32_t remote_uid, uint32_t virt_size,
     ML_$UNLOCK(ML_LOCK_AREA);
     return area_id;
 }
-
-/* Number of UID hash buckets - must match area_internal.h if defined there */
-#ifndef UID_HASH_BUCKETS
-#define UID_HASH_BUCKETS    11
-#endif

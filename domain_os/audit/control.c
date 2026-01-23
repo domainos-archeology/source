@@ -10,9 +10,6 @@
 #include "acl/acl.h"
 #include "rgyc/rgyc.h"
 
-/* Forward declaration for function not yet in acl.h */
-extern void ACL_$GET_RE_SIDS(void *sid_buffer, void *saved_sid, status_$t *status_ret);
-
 void AUDIT_$CONTROL(int16_t *command, status_$t *status_ret)
 {
     int8_t is_admin;

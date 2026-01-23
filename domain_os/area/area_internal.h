@@ -9,71 +9,17 @@
 #define AREA_INTERNAL_H
 
 #include "area/area.h"
-#include "ml/ml.h"
-#include "proc1/proc1.h"
 #include "cal/cal.h"
+#include "ml/ml.h"
+#include "network/network.h"
+#include "proc1/proc1.h"
+#include "rem_file/rem_file.h"
 
 /*
  * External references for network support
  */
 extern int8_t NETWORK_$DISKLESS;
 extern uint32_t NETWORK_$MOTHER_NODE;
-
-/*
- * External references for remote file operations
- */
-int16_t REM_FILE_$CREATE_AREA(void *partner, uint32_t total_size,
-                               uint32_t commit_size, uint32_t caller_id,
-                               int8_t shared, int16_t *volx_out,
-                               status_$t *status);
-void REM_FILE_$DELETE_AREA(void *partner, int16_t remote_volx,
-                            uint32_t caller_id, status_$t *status);
-void REM_FILE_$GROW_AREA(void *partner, int16_t remote_volx,
-                          uint32_t new_size, uint32_t new_commit,
-                          status_$t *status);
-int16_t NETWORK_$GET_PKT_SIZE(void *partner, int16_t volx);
-
-/*
- * External references for WP (Wired Page) operations
- */
-void WP_$CALLOC(void *page_ptr, status_$t *status);
-
-/*
- * External references for MMU operations
- */
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint16_t flags);
-
-/*
- * External references for BAT (Block Allocation Table) operations
- */
-void BAT_$RESERVE(int16_t volx, uint32_t blocks, status_$t *status);
-void BAT_$CANCEL(int16_t volx, uint32_t blocks, status_$t *status);
-
-/*
- * External references for AST operations
- */
-void AST_$ASSOC_AREA(int16_t bste_idx, int16_t seg_idx,
-                      uint32_t param_3, status_$t *status);
-void AST_$TOUCH_AREA(int16_t area_id, int16_t bste_idx,
-                      int16_t seg_idx, uint32_t offset,
-                      uint32_t param_5, status_$t *status);
-void AST_$COPY_AREA(int16_t src_area, int16_t param_2,
-                     void *src_aste, void *dst_aste,
-                     int16_t seg_idx, uint32_t offset,
-                     status_$t *status);
-
-/*
- * External references for M (Math/hash) operations
- */
-uint16_t M_OIU_WLW(uint32_t value, uint16_t modulus);
-int16_t M_OIS_WLW(int32_t value, int16_t modulus);
-
-/*
- * CAL_$BOOT_VOLX - Boot volume index
- * Used for local areas when not diskless
- * NOTE: Defined as macro in cal/cal.h: CAL_$TIMEZONE.boot_volx
- */
-/* CAL_$BOOT_VOLX is defined in cal/cal.h as a macro */
 
 /*
  * AS_$STACK_LOW - Stack low address

@@ -29,12 +29,6 @@
 
 /* External declarations */
 extern int32_t NODE_$ME;
-extern void PROC2_$GET_MY_UPIDS(int16_t *upid_high, int16_t *upid_low, int16_t *pid);
-extern void CRASH_SYSTEM(status_$t *status);
-extern void *MST_$MAPS_RET(int16_t asid, int8_t flags, uid_t *uid,
-                           uint32_t offset, uint32_t size, int16_t prot,
-                           uint32_t unused, int8_t writable,
-                           uint32_t *size_ret, status_$t *status_ret);
 
 void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
                         void *sid, uint32_t *status,

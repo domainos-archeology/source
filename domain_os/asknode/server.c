@@ -17,8 +17,6 @@
 #include "asknode/asknode_internal.h"
 
 /* External references */
-extern uint32_t TIME_$CURRENT_CLOCKH;
-extern int32_t M_OIS_LLL(uint32_t a, uint32_t b);  /* Long subtract */
 
 /* Network failure record globals */
 extern uint8_t DAT_00e24bf6;   /* Failure record flag */

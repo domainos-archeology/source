@@ -13,12 +13,6 @@
 #include "file/file.h"
 #include "mst/mst.h"
 
-/* Forward declaration for MST_$MAPS with proper signature */
-extern void *MST_$MAPS_RET(int16_t asid, int8_t flags, uid_t *uid,
-                           uint32_t offset, uint32_t size, int16_t prot,
-                           uint32_t unused, int8_t writable,
-                           uint32_t *size_ret, status_$t *status_ret);
-
 /* Path to audit list file */
 static const char list_path[] = "//node_data/audit/audit_list";
 static int16_t list_path_len = 28;

@@ -17,44 +17,6 @@
 
 #include "asknode/asknode_internal.h"
 
-/*
- * External function declarations for subsystems not yet implemented
- */
-extern uint32_t GET_BUILD_TIME(char *buf, int16_t *len);
-extern void PEB_$GET_INFO(int16_t info1, int16_t info2);
-extern void IO_$GET_CONFIG(int16_t *p1, int16_t *p2, int16_t *p3, int16_t *p4);
-extern uint32_t LOG_$READ(int16_t p1, uint16_t p2, int16_t p3);
-extern uint32_t LOG_$READ2(uint16_t *p1, int16_t p2, int16_t p3, uint32_t *p4);
-extern uint32_t RINGLOG_$CNTL(uint32_t p1, void *p2, status_$t *status);
-extern uint32_t NETLOG_$CNTL(void *p1, uint32_t *p2, uid_t *p3, void *p4, status_$t *status);
-extern uint32_t VOLX_$GET_INFO(uid_t *uid, uint32_t *p1, uint32_t *p2, uint32_t *p3, status_$t *status);
-extern uint32_t PROC2_$LIST(uint16_t *p1, void *p2, uint32_t *p3);
-extern uint32_t PROC2_$LIST2(uint32_t *p1, uint16_t p2, int16_t p3, uint16_t p4, int16_t p5, int16_t p6);
-extern uint32_t PROC2_$ZOMBIE_LIST(uint32_t *p1, uint16_t p2, int16_t p3, uint16_t p4, int16_t p5, int16_t p6);
-extern uint32_t PROC2_$GET_INFO(uid_t *uid, char *buf, void *p3, status_$t *status);
-extern uint32_t PROC2_$INFO(void *p1, uid_t *uid, uint32_t *buf, void *p4, status_$t *status);
-extern uint32_t PROC2_$SIGNAL_PGROUP_OS(uid_t *uid, void *p2, uid_t *p3, status_$t *status);
-extern uint32_t PROC2_$SIGNAL_OS(uid_t *uid, void *p2, uid_t *p3, status_$t *status);
-extern uint32_t PROC2_$GET_UPIDS(uid_t *uid, uint32_t *p1, uint16_t *p2, uint32_t *p3, status_$t *status);
-extern uint32_t PROC2_$GET_PID(uid_t *uid, status_$t *status);
-extern uint32_t PROC2_$GET_ASID(uid_t *uid, status_$t *status);
-extern uint32_t PROC1_$GET_LIST(uint32_t *p1, uint16_t *p2);
-extern uint32_t PROC1_$GET_LOADAV(void *p1);
-extern uint32_t MST_$GET_PRIVATE_SIZE(uint16_t *asid, uint32_t *p1, uint32_t *p2, status_$t *status);
-extern uint32_t MMAP_$GET_WS_INDEX(uint16_t p1, uint16_t *p2, status_$t *status);
-extern void MMAP_$GET_WS_SIZ(uint16_t p1, uint32_t *p2, uint32_t *p3, uint32_t *p4, status_$t *status);
-extern uint32_t OS_$GET_REV_INFO(uint32_t *buf);
-extern uint32_t SMD_$N_DEVICES(void);
-extern void SMD_$INQ_DISP_UID(int16_t *idx, uid_t *uid, uint32_t *status);
-extern uint32_t SMD_$INQ_DISP_INFO(void *p1, uint16_t *p2, status_$t *status);
-extern uint32_t NETWORK_$RING_INFO(int32_t *p1, uint32_t *p2, status_$t *status);
-extern int16_t ROUTE_$FIND_PORT(uint16_t p1, uint32_t p2);
-extern uint32_t ROUTE_$SHORT_PORT(int16_t p1, int16_t p2);
-extern void NET_IO_$DEVICE_STAT(uint16_t p1, uint16_t p2, uint16_t p3, uid_t *p4, uint16_t *p5, uint16_t *p6, status_$t *status);
-extern void NET_IO_$DEVICE_STAT2(uint16_t p1, uint16_t p2, uint16_t p3, uid_t *p4, uint16_t *p5, uint16_t *p6, status_$t *status);
-extern uint32_t HINT_$ADDI(int16_t p1, uint16_t p2);
-extern void HINT_$GET_HINTS(uid_t *uid, int32_t *hints);
-
 /* Global references */
 extern uint32_t NODE_$ME;                   /* 0x00E245A4 */
 extern uint32_t ROUTE_$PORT;                /* 0x00E2E0A0 */

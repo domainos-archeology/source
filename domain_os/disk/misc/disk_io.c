@@ -113,11 +113,6 @@ extern void FUN_00e3c9fe(int16_t mask, int32_t *counter1, int32_t *counter2);
 extern void FUN_00e3c14c(int16_t vol_idx, void *req, int32_t *info);
 extern uint16_t FUN_00e0a290(void *addr);  /* Checksum calculation */
 
-/* Netlog function */
-extern int8_t NETLOG_$OK_TO_LOG;
-extern void NETLOG_$LOG_IT(uint16_t type, void *header, uint16_t p1, uint16_t p2,
-                           uint16_t p3, uint16_t p4, uint16_t p5, uint16_t p6);
-
 status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t daddr,
                   uint32_t ppn, int32_t *info)
 {

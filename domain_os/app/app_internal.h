@@ -24,8 +24,10 @@
 #include "ml/ml.h"
 #include "sock/sock.h"
 #include "netbuf/netbuf.h"
+#include "os/os.h"
 #include "pkt/pkt.h"
 #include "route/route.h"
+#include "xns/xns.h"
 
 /*
  * ============================================================================
@@ -160,20 +162,5 @@ extern uint32_t NODE_$ME;
 extern uint16_t RING_$FILE_OVERFLOW;
 extern uint16_t RING_$OVERFLOW_OVERFLOW;
 #endif
-
-/*
- * ============================================================================
- * External Function Declarations
- * ============================================================================
- */
-
-/* Route functions */
-void *ROUTE_$FIND_PORTP(uint16_t port_type, uint32_t port_id);
-
-/* XNS IDP functions */
-void XNS_IDP_$OS_OPEN(xns_idp_open_params_t *params, status_$t *status_ret);
-
-/* OS data copy */
-void OS_$DATA_COPY(void *src, void *dst, uint32_t len);
 
 #endif /* APP_INTERNAL_H */

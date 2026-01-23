@@ -118,7 +118,7 @@ typedef struct xns_$channel_t {
 
     uint8_t     _unknown1[0x54];        /* 0x4C-0x9F: Unknown */
 
-    code_ptr_t  demux_callback;         /* 0xA0: Demultiplex callback function */
+    void*       demux_callback;         /* 0xA0: Demultiplex callback function */
 
     /* Connected destination address (for connected mode) */
     uint32_t    dest_network;           /* 0xA4: Destination network */

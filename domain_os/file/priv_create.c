@@ -48,9 +48,6 @@ extern uid_t PPO_$NIL_USER_UID;         /* 0xE174EC: Nil user (owner) UID */
 extern uid_t RGYC_$G_NIL_UID;           /* 0xE17524: Nil group UID */
 extern uid_t PPO_$NIL_ORG_UID;          /* 0xE17574: Nil org UID */
 
-/* VTOC allocation - actual signature differs from vtoc.h declaration */
-extern void VTOC_$ALLOCATE(void *location_info, void *attrs, status_$t *status);
-
 /*
  * Status codes used
  */
