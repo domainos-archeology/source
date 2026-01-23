@@ -12,9 +12,6 @@
 /* Status codes */
 #define status_$file_invalid_arg    0x000F0014
 
-/* External AUDIT_$ENABLED flag */
-extern int8_t AUDIT_$ENABLED;
-
 /*
  * Protection type to attribute ID mapping:
  *   0 -> 0x10 (Set protection mode 0)
@@ -26,56 +23,6 @@ extern int8_t AUDIT_$ENABLED;
  *   6 -> 0x03 (Set protection by ACL UID)
  *   7+ -> Invalid
  */
-static const uint16_t prot_type_to_attr_id[] = {
-    0x10,  /* Type 0 */
-    0x11,  /* Type 1 */
-    0x12,  /* Type 2 */
-    0x15,  /* Type 3 */
-    0x13,  /* Type 4 */
-    0x14,  /* Type 5 */
-    0x03,  /* Type 6 - uses ACL UID directly */
-};
-
-/*
- * FILE_$GET_DEFAULT_PROT - Get default protection for file (nested procedure)
- *
- * This is a Pascal nested procedure that accesses the parent stack frame.
- * It gets the default protection for a file using AST_$GET_COMMON_ATTRIBUTES.
- *
- * Original address: 0x00E5DEF4
- *
- * Parameters (from parent frame):
- *   prot_out - Output for protection value
- *
- * Uses parent frame to access:
- *   - File UID
- *   - Lookup context with remote flags
- */
-static void FILE_$GET_DEFAULT_PROT(uid_t *file_uid, status_$t *status_ret,
-                                    uint16_t *prot_out)
-{
-    struct {
-        uint32_t uid_high;
-        uint32_t uid_low;
-        uint8_t  pad[5];
-        uint8_t  remote_flags;
-    } lookup_context;
-
-    uint8_t attr_buf[24];   /* Common attributes buffer */
-
-    /* Copy file UID */
-    lookup_context.uid_high = file_uid->high;
-    lookup_context.uid_low = file_uid->low;
-
-    /* Clear remote flag */
-    lookup_context.remote_flags &= ~0x40;
-
-    /* Get common attributes (mode 1 = get protection) */
-    AST_$GET_COMMON_ATTRIBUTES(file_uid, 1, attr_buf, status_ret);
-
-    /* Return protection value (first byte of attr_buf) */
-    *prot_out = (uint16_t)attr_buf[0];
-}
 
 /*
  * FILE_$SET_PROT
@@ -86,7 +33,7 @@ static void FILE_$GET_DEFAULT_PROT(uid_t *file_uid, status_$t *status_ret,
  *   file_uid   - UID of file to modify
  *   prot_type  - Pointer to protection type (0-6)
  *   acl_data   - ACL data buffer (44 bytes)
- *   acl_uid    - ACL UID (8 bytes)
+ *   acl_uid    - ACL UID (8 bytes) with flags encoded in low word
  *   status_ret - Output status code
  *
  * The acl_uid parameter encodes special flags in the low word:
@@ -97,38 +44,76 @@ static void FILE_$GET_DEFAULT_PROT(uid_t *file_uid, status_$t *status_ret,
  * 2. If so, get default protection and potentially use type 6
  * 3. Map protection type to attribute ID
  * 4. Call FILE_$SET_PROT_INT to do the actual work
+ *
+ * Stack layout (-0x4C bytes):
+ *   -0x4A: attr_id (2 bytes)
+ *   -0x46: default_prot (2 bytes) - output from nested proc
+ *   -0x44: local_status (4 bytes) - written by nested proc
+ *   -0x40: local_acl[11] (44 bytes) - ACL data buffer
+ *   -0x14: local_uid (8 bytes) - high at -0x14, low at -0x10
+ *   -0x08: extra_data (8 bytes) - for ACL_$DEF_ACLDATA
  */
 void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, uint32_t *acl_data,
-                    uint32_t *acl_uid, status_$t *status_ret)
+                    uid_t *acl_uid, status_$t *status_ret)
 {
-    uint16_t type_val = *prot_type;
+    uint16_t type_val;
     uint16_t attr_id;
     int16_t i;
     uint32_t *src;
     uint32_t *dst;
-    status_$t local_status;
 
-    /* Local copies */
-    uint32_t local_acl[11];     /* 44 bytes for ACL data */
-    uint32_t local_uid[2];      /* 8 bytes for ACL UID */
-    uint16_t default_prot;
+    /* Local copies - matching stack layout */
+    uint32_t local_acl[11];     /* 44 bytes for ACL data at -0x40(A6) */
+    uint8_t extra_data[8];      /* Extra data buffer at -0x8(A6) */
+    uint32_t local_uid_high;    /* Local UID high at -0x14(A6) */
+    uint32_t local_uid_low;     /* Local UID low at -0x10(A6) */
+    int16_t default_prot;       /* Default protection at -0x46(A6) */
+    status_$t local_status;     /* Local status at -0x44(A6) */
+
+    type_val = *prot_type;
 
     /*
      * Check if default protection mode is requested.
-     * Flag is in bits 4-11 of low word of acl_uid[1], bit 4 set indicates default mode.
+     * Flag is in bits 4-11 of low word of acl_uid->low, bit 4 set indicates default mode.
+     * Assembly: and.w (0x4,A2),D0w with #0xff0, then lsr.w #4, then btst #4
      */
-    uint16_t flag_bits = (uint16_t)((acl_uid[1] & 0xFF0) >> 4);
-
-    if (flag_bits & 0x10) {
+    if ((((acl_uid->low & 0xFF0) >> 4) & 0x10) != 0) {
         /*
          * Default protection mode - need to get current protection
          * and potentially switch to type 6 if none exists.
          */
-        local_uid[0] = acl_uid[0];
-        local_uid[1] = acl_uid[1] & 0xF0FFFFFF;  /* Clear type nibble */
+        local_uid_high = acl_uid->high;
+        local_uid_low = acl_uid->low & 0xF0FFFFFF;  /* Clear upper nibble: andi.b #-0x10,(-0x10,A6) */
 
-        /* Get default protection */
-        FILE_$GET_DEFAULT_PROT(file_uid, &local_status, &default_prot);
+        /*
+         * Inlined FILE_$GET_DEFAULT_PROT (originally at 0x00E5DEF4)
+         *
+         * This was a Pascal nested procedure that:
+         * 1. Gets file_uid from parent frame
+         * 2. Calls AST_$GET_COMMON_ATTRIBUTES with mode 1
+         * 3. Writes status to parent's local_status (-0x44)
+         * 4. Returns protection value (first byte of attr buffer)
+         *
+         * We inline it here since C doesn't support nested procedures
+         * that access parent stack frames.
+         */
+        {
+            uint8_t attr_buf[24];   /* Common attributes buffer */
+            uid_t lookup_uid;       /* UID for lookup */
+
+            /* Copy file UID for lookup */
+            lookup_uid.high = file_uid->high;
+            lookup_uid.low = file_uid->low;
+
+            /* Note: Original clears bit 6 of a flags byte at -0xb offset
+             * This is related to remote flag handling in the lookup context */
+
+            /* Get common attributes (mode 1 = get protection info) */
+            AST_$GET_COMMON_ATTRIBUTES(&lookup_uid, 1, attr_buf, &local_status);
+
+            /* Return protection value (first byte of attr_buf) */
+            default_prot = (int16_t)(uint8_t)attr_buf[0];
+        }
 
         *status_ret = local_status;
         if (local_status != status_$ok) {
@@ -140,7 +125,7 @@ void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, uint32_t *acl_data,
             type_val = 6;
 
             /* Get default ACL data */
-            ACL_$DEF_ACLDATA(local_acl, local_uid);
+            ACL_$DEF_ACLDATA(local_acl, extra_data);
             goto set_protection;
         }
 
@@ -148,19 +133,19 @@ void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, uint32_t *acl_data,
         goto invalid_arg;
     }
 
-    /* Copy ACL data (11 uint32_t = 44 bytes) */
+    /* Copy ACL data (11 uint32_t = 44 bytes) using dbf loop */
     src = acl_data;
     dst = local_acl;
     for (i = 10; i >= 0; i--) {
         *dst++ = *src++;
     }
 
-    /* Copy ACL UID (2 uint32_t = 8 bytes) */
-    local_uid[0] = acl_uid[0];
-    local_uid[1] = acl_uid[1];
+    /* Copy ACL UID (8 bytes) */
+    local_uid_high = acl_uid->high;
+    local_uid_low = acl_uid->low;
 
 set_protection:
-    /* Map protection type to attribute ID */
+    /* Map protection type to attribute ID via switch/jump table */
     if (type_val >= 7) {
         goto invalid_arg;
     }
@@ -187,8 +172,8 @@ set_protection:
     case 6:
         /* Type 6: Set ACL by UID - use the UID directly as first ACL entry */
         attr_id = 0x03;
-        local_acl[0] = local_uid[0];
-        local_acl[1] = local_uid[1];
+        local_acl[0] = local_uid_high;
+        local_acl[1] = local_uid_low;
         break;
     default:
         goto invalid_arg;
@@ -201,7 +186,7 @@ set_protection:
 invalid_arg:
     *status_ret = status_$file_invalid_arg;
 
-    /* Log audit event if auditing is enabled */
+    /* Log audit event if auditing is enabled (tst.b checks high bit) */
     if ((int8_t)AUDIT_$ENABLED < 0) {
         FILE_$AUDIT_SET_PROT(file_uid, acl_data, acl_uid, *prot_type, *status_ret);
     }

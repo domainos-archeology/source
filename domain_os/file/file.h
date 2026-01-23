@@ -906,17 +906,20 @@ int16_t FILE_$CHECK_PROT(uid_t *file_uid, uint16_t access_mask, uint32_t slot_nu
  *   file_uid   - UID of file to modify
  *   prot_type  - Pointer to protection type (0-6)
  *   acl_data   - ACL data buffer (44 bytes)
- *   acl_uid    - ACL UID (8 bytes)
+ *   acl_uid    - ACL UID (8 bytes) - flags encoded in low word
  *   status_ret - Output status code
  *
  * Protection types:
  *   0-5: Standard protection modes (mapped to attr IDs 0x10-0x15)
  *   6: Set protection by ACL UID
  *
+ * The acl_uid parameter encodes special flags in the low word:
+ *   Bits 4-11 (masked with 0xFF0 >> 4): If bit 4 is set, use default protection
+ *
  * Original address: 0x00E5DF3A
  */
 void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, uint32_t *acl_data,
-                    uint32_t *acl_uid, status_$t *status_ret);
+                    uid_t *acl_uid, status_$t *status_ret);
 
 /*
  * FILE_$SET_ACL - Set file ACL
