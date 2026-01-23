@@ -59,6 +59,8 @@
 #include "vtoc/vtoc.h"
 #include "xns/xns.h"
 #include "xpd/xpd.h"
+#include "vfmt/vfmt.h"
+#include "stop/stop.h"
 
 /*
  * Forward declarations for syscall handlers not yet in subsystem headers.

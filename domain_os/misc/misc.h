@@ -82,4 +82,43 @@ void ERROR_$PRINT(char *format, void *args);
  */
 uint8_t prompt_for_yes_or_no(void);
 
+/*
+ * SET_LITES_LOC - Set memory-mapped status lights location
+ *
+ * Sets the location where the kernel should display status lights
+ * (memory activity indicators). If the lights were previously disabled
+ * (location was 0) and a valid location is provided, starts the
+ * MEM_LITES process to update the display.
+ *
+ * Parameters:
+ *   loc_p - Pointer to the new lights location (display memory address)
+ *
+ * The lights location is typically a display memory address where
+ * 16 status indicator blocks can be drawn to show system activity.
+ *
+ * Original address: 0x00e0c4dc
+ */
+void SET_LITES_LOC(int32_t *loc_p);
+
+/*
+ * GET_BUILD_TIME - Get kernel build version string
+ *
+ * Formats the kernel version information into a buffer. The output
+ * includes SAU type, revision numbers, and build timestamp.
+ *
+ * Format examples:
+ *   "Domain/OS kernel, revision 10.4.2"           (no SAU)
+ *   "Domain/OS kernel(2), revision 10.4.2,..."    (with SAU type)
+ *
+ * Parameters:
+ *   buf   - Output buffer (minimum 100 bytes recommended)
+ *   len_p - Pointer to receive actual string length
+ *
+ * Returns:
+ *   "?" if OS_$REV is non-zero (invalid/test build)
+ *
+ * Original address: 0x00e38052
+ */
+void GET_BUILD_TIME(char *buf, int16_t *len_p);
+
 #endif /* MISC_H */
