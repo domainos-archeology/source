@@ -98,6 +98,65 @@ void MSG_$RCV(msg_$socket_t *socket, void *buffer, uint32_t *length,
 status_$t MSG_$RCVI(msg_$socket_t *socket, void *buffer, uint32_t *length,
                     msg_$desc_t *desc);
 
+/*
+ * Hardware address info structure for MSG_$RCV_CONTIGI and MSG_$RCV_HW
+ *
+ * Contains extended protocol and address information from received messages.
+ */
+typedef struct msg_$hw_addr_s {
+    uint16_t proto_family;      /* Protocol family */
+    uint16_t flags;             /* Flags from header */
+    uint16_t proto_type;        /* Protocol type */
+    uint16_t proto_subtype;     /* Protocol subtype */
+    uint16_t reserved1;         /* Reserved */
+    uint16_t reserved2;         /* Reserved (0) */
+    uint16_t reserved3;         /* Reserved (0xFFFF) */
+    uint8_t  inet_addr[16];     /* Internet address (if applicable) */
+} msg_$hw_addr_t;
+
+/* Receive contiguous message with hardware address info (internal) */
+void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
+                      uint32_t *dest_proc,
+                      uint32_t *dest_node,
+                      uint16_t *dest_sock,
+                      uint32_t *src_proc,
+                      uint32_t *src_node,
+                      uint16_t *src_sock,
+                      msg_$hw_addr_t *hw_addr,
+                      uint16_t *msg_type,
+                      char *data_buf,
+                      uint16_t *max_len,
+                      uint16_t *data_len,
+                      status_$t *status);
+
+/* Receive contiguous message wrapper */
+void MSG_$RCV_CONTIG(msg_$socket_t *socket,
+                     uint32_t *dest_node,
+                     uint32_t *dest_sock_out,
+                     uint16_t *hw_addr_ret,
+                     uint32_t *src_node,
+                     uint32_t **src_node_ptr,
+                     uint16_t *msg_type,
+                     uint16_t *data_len,
+                     status_$t *status);
+
+/* Receive message with hardware address info */
+void MSG_$RCV_HW(msg_$socket_t *socket,
+                 uint32_t *dest_node,
+                 uint32_t *dest_sock,
+                 uint16_t *hw_addr_ret,
+                 uint32_t *src_node,
+                 uint32_t *src_sock,
+                 uint16_t *msg_type_ptr,
+                 uint16_t *hw_addr_buf,
+                 void *data_buf_ptr,
+                 uint32_t *src_node2,
+                 uint16_t *max_data_len,
+                 void *overflow_buf,
+                 void *overflow_info,
+                 uint16_t *max_overflow,
+                 status_$t *status);
+
 /* Send a message */
 void MSG_$SEND(msg_$socket_t *socket, void *buffer, uint32_t length,
                msg_$desc_t *desc, status_$t *status);
@@ -105,6 +164,23 @@ void MSG_$SEND(msg_$socket_t *socket, void *buffer, uint32_t length,
 /* Send a message (internal, returns status) */
 status_$t MSG_$SENDI(msg_$socket_t *socket, void *buffer, uint32_t length,
                      msg_$desc_t *desc);
+
+/* Send message using hardware address routing */
+void MSG_$SEND_HW(void *hw_addr_info,
+                  uint32_t *dest_proc,
+                  uint32_t *dest_node,
+                  uint16_t *dest_sock,
+                  uint32_t *src_proc,
+                  uint32_t *src_node,
+                  uint16_t *src_sock,
+                  void *msg_desc,
+                  uint16_t *type_val,
+                  void *type_data,
+                  uint16_t *header_len,
+                  void *data_ptr,
+                  uint16_t *data_len,
+                  void *bytes_sent,
+                  status_$t *status);
 
 /* Send and receive (combined operation) */
 void MSG_$SAR(msg_$socket_t *socket, void *send_buf, uint32_t send_len,

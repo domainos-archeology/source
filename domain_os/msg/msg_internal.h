@@ -145,10 +145,40 @@ static inline void msg_$set_depth(msg_$socket_t socket, int16_t depth)
 
 /*
  * Internal send function (the actual implementation)
- * Original address: 0x00E596D2
+ * Original address: 0x00E0D9EC
+ *
+ * Parameters:
+ *   port_num        - Port number (-1 for auto-select based on dest_node)
+ *   routing_key     - Routing key for network lookup
+ *   dest_node       - Destination node ID
+ *   dest_sock       - Destination socket number
+ *   src_node_or     - Source node override (-1 for default)
+ *   src_node        - Source node ID
+ *   src_sock        - Source socket number
+ *   msg_desc        - Message descriptor (30 bytes, copied internally)
+ *   request_id      - Request ID for packet
+ *   template_data   - Template data pointer
+ *   header_len      - Header/template length
+ *   data_buf        - Data buffer pointer
+ *   data_len        - Data length
+ *   result_out      - Output: result info (4 bytes)
+ *   status_ret      - Output: status code
  */
-status_$t MSG_$$SEND(msg_$socket_t *socket, void *buffer, uint32_t length,
-                     msg_$desc_t *desc);
+void MSG_$$SEND(int16_t port_num,
+                uint32_t routing_key,
+                uint32_t dest_node,
+                int16_t dest_sock,
+                uint32_t src_node_or,
+                uint32_t src_node,
+                int16_t src_sock,
+                void *msg_desc,
+                int16_t request_id,
+                void *template_data,
+                uint16_t header_len,
+                char *data_buf,
+                uint16_t data_len,
+                void *result_out,
+                status_$t *status_ret);
 
 /*
  * Internal receive implementation
