@@ -12,6 +12,7 @@
 #include "fim/fim.h"
 #include "sock/sock.h"
 #include "mac/mac.h"
+#include "mac_os/mac_os.h"
 #include "rip/rip.h"
 #include "netbuf/netbuf.h"
 #include "route/route.h"
