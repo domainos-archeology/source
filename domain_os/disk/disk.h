@@ -50,8 +50,14 @@
  * Status codes
  */
 #define status_$disk_write_protected 0x00080007
+#define status_$volume_in_use 0x0008000b
+#define status_$volume_table_full 0x0008000c
 #define status_$volume_not_properly_mounted 0x0008000d
+#define status_$operation_requires_a_physical_volume 0x0008000e
 #define status_$invalid_volume_index 0x0008000f
+#define status_$invalid_logical_volume_index 0x00080014
+#define status_$invalid_unit_number 0x00080018
+#define status_$invalid_physical_volume_label 0x0008001a
 #define status_$disk_illegal_request_for_device 0x0008002a
 
 /*
@@ -202,6 +208,19 @@ void DISK_$REVALIDATE(int16_t vol_idx);
 void DISK_$DISMOUNT(uint16_t vol_idx);
 void DISK_$GET_ERROR_INFO(void *buffer);
 void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status);
+
+/* Volume assignment operations */
+void DISK_$PV_ASSIGN_N(int16_t *unit_type_ptr, int16_t *device_ptr,
+                       int16_t *unit_ptr, uint16_t *flags_ptr,
+                       uint16_t *vol_idx_ptr, uint32_t *num_blocks_ptr,
+                       uint16_t *sec_per_track_ptr, uint16_t *num_heads_ptr,
+                       uint32_t *pvlabel_info, status_$t *status);
+void DISK_$PV_ASSIGN(int16_t *unit_type_ptr, int16_t *device_ptr,
+                     int16_t *unit_ptr, uint16_t *vol_idx_ptr,
+                     int32_t *info_ptr, uint32_t *num_blocks_ptr,
+                     uint16_t *sec_per_track_ptr, status_$t *status);
+uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
+                         int32_t *blocks_avail_ptr, status_$t *status);
 
 /* Async I/O operations */
 void DISK_$AS_READ(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
