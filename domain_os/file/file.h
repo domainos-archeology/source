@@ -1055,4 +1055,168 @@ void FILE_$NEIGHBORS(uid_t *file_uid1, uid_t *file_uid2, status_$t *status_ret);
  */
 void FILE_$PURIFY(uid_t *file_uid, status_$t *status_ret);
 
+/*
+ * ============================================================================
+ * File Truncation/Length Functions
+ * ============================================================================
+ */
+
+/*
+ * FILE_$SET_LEN - Set file length
+ *
+ * Sets the length of a file. Equivalent to truncation if shrinking.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to modify
+ *   new_length - Pointer to new length value
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E73F90
+ */
+void FILE_$SET_LEN(uid_t *file_uid, uint32_t *new_length, status_$t *status_ret);
+
+/*
+ * FILE_$SET_LEN_D - Set file length with domain context
+ *
+ * Sets the length of a file with explicit domain context for
+ * distributed locking.
+ *
+ * Parameters:
+ *   file_uid    - UID of file to modify
+ *   new_length  - Pointer to new length value
+ *   domain_ctx  - Pointer to domain context (lock index)
+ *   status_ret  - Output status code
+ *
+ * Original address: 0x00E73FB0
+ */
+void FILE_$SET_LEN_D(uid_t *file_uid, uint32_t *new_length,
+                     uint32_t *domain_ctx, status_$t *status_ret);
+
+/*
+ * FILE_$TRUNCATE - Truncate a file
+ *
+ * Truncates a file to the specified size.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to truncate
+ *   new_size   - Pointer to new size value
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E73FCA
+ */
+void FILE_$TRUNCATE(uid_t *file_uid, uint32_t *new_size, status_$t *status_ret);
+
+/*
+ * FILE_$TRUNCATE_D - Truncate a file with domain context
+ *
+ * Truncates a file to the specified size with explicit domain context.
+ * This is the core implementation used by FILE_$TRUNCATE and FILE_$SET_LEN.
+ *
+ * Parameters:
+ *   file_uid    - UID of file to truncate
+ *   new_size    - Pointer to new size value
+ *   domain_ctx  - Pointer to domain context (lock index)
+ *   status_ret  - Output status code
+ *
+ * Original address: 0x00E73FE4
+ */
+void FILE_$TRUNCATE_D(uid_t *file_uid, uint32_t *new_size,
+                      uint32_t *domain_ctx, status_$t *status_ret);
+
+/*
+ * ============================================================================
+ * File Space Management Functions
+ * ============================================================================
+ */
+
+/*
+ * FILE_$RESERVE - Reserve disk space for a file
+ *
+ * Pre-allocates disk space for a file to ensure contiguous space
+ * and prevent fragmentation.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to reserve space for
+ *   start_byte - Pointer to starting byte offset
+ *   byte_count - Pointer to number of bytes to reserve
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E74310
+ */
+void FILE_$RESERVE(uid_t *file_uid, uint32_t *start_byte,
+                   uint32_t *byte_count, status_$t *status_ret);
+
+/*
+ * FILE_$INVALIDATE - Invalidate cached pages of a file
+ *
+ * Forces cached pages for a file to be discarded, ensuring that
+ * subsequent reads will fetch fresh data from disk.
+ *
+ * Parameters:
+ *   file_uid    - UID of file to invalidate
+ *   start_page  - Pointer to starting page number
+ *   page_count  - Pointer to number of pages to invalidate
+ *   flags       - Pointer to flags byte
+ *   status_ret  - Output status code
+ *
+ * Original address: 0x00E75158
+ */
+void FILE_$INVALIDATE(uid_t *file_uid, uint32_t *start_page,
+                      uint32_t *page_count, uint8_t *flags,
+                      status_$t *status_ret);
+
+/*
+ * FILE_$GET_SEG_MAP - Get segment map for a file
+ *
+ * Retrieves a bitmap showing which segments of a file are currently
+ * allocated or mapped.
+ *
+ * Parameters:
+ *   file_uid    - UID of file to query
+ *   start_off   - Pointer to starting offset for segment query
+ *   flags_in    - Pointer to flags (negative = set flag bit 0)
+ *   bitmap_out  - Output bitmap (32 bits)
+ *   status_ret  - Output status code
+ *
+ * Original address: 0x00E74044
+ */
+void FILE_$GET_SEG_MAP(uid_t *file_uid, uint32_t *start_off,
+                       int8_t *flags_in, uint32_t *bitmap_out,
+                       status_$t *status_ret);
+
+/*
+ * ============================================================================
+ * Lock Export Functions
+ * ============================================================================
+ */
+
+/*
+ * FILE_$EXPORT_LK - Export a lock to another process
+ *
+ * Exports a file lock held by the current process to another process,
+ * allowing the target process to share the lock.
+ *
+ * Parameters:
+ *   file_uid    - UID of file that must match the locked file
+ *   lock_index  - Pointer to lock index to export
+ *   target_proc - UID of target process to export lock to
+ *   index_out   - Output: lock index assigned in target's table
+ *   status_ret  - Output status code
+ *
+ * Original address: 0x00E74110
+ */
+void FILE_$EXPORT_LK(uid_t *file_uid, uint32_t *lock_index,
+                     uid_t *target_proc, int32_t *index_out,
+                     status_$t *status_ret);
+
+/*
+ * FILE_$UNLOCK_ALL - Unlock all locks for current process
+ *
+ * Releases all file locks held by the current process.
+ * Typically called during process cleanup.
+ *
+ * Original address: 0x00E75138
+ */
+void FILE_$UNLOCK_ALL(void);
+
 #endif /* FILE_H */
