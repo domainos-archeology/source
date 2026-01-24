@@ -60,7 +60,7 @@ void DIR_$SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     status = response.status;
 
     /* Check for fallback conditions */
-    if (status == status_$file_bad_reply_received_from_remote_node ||
+    if (status == file_$bad_reply_received_from_remote_node ||
         status == status_$naming_bad_directory) {
 
         result_acl.high = local_acl.high;

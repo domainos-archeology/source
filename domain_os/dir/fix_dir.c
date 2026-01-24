@@ -46,7 +46,7 @@ void DIR_$FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
     DIR_$DO_OP(&request.op, DAT_00e7fcbe, 0x14, &response, &request);
 
     /* Check for fallback conditions */
-    if (response.status == status_$file_bad_reply_received_from_remote_node ||
+    if (response.status == file_$bad_reply_received_from_remote_node ||
         response.status == status_$naming_bad_directory) {
         /* Fall back to old implementation */
         DIR_$OLD_FIX_DIR(dir_uid, status_ret);

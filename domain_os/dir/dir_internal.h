@@ -235,39 +235,6 @@ void FUN_00e4e786(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
                   int16_t *name_len_ret, uint32_t *net_ret,
                   status_$t *status_ret);
 
-/*
- * ============================================================================
- * External Dependencies
- * ============================================================================
- */
-
-/* From acl module */
-void ACL_$CONVERT_FROM_9ACL(uid_t *acl, uid_t *acl_type, void *prot_buf,
-                            uid_t *prot_uid, status_$t *status_ret);
-void ACL_$CONVERT_TO_9ACL(int16_t prot_buf, uid_t *prot_uid, uid_t *dir_uid,
-                          uid_t *acl_type, uid_t *acl_ret, status_$t *status_ret);
-void ACL_$CONVERT_FUNKY_ACL(uid_t *in_acl, void *buf, uid_t *out_acl,
-                            void *buf2, status_$t *status_ret);
-
-/* From file module */
-void FILE_$SET_DIRPTR(uid_t *file_uid, uid_t *dir_uid, status_$t *status_ret);
-void FILE_$PRIV_LOCK(uid_t *file_uid, uint16_t as_id, int16_t param3,
-                     int16_t param4, int16_t param5, uint32_t param6,
-                     int32_t param7, int32_t param8, int32_t param9,
-                     void *param10, int16_t param11, void *param12,
-                     void *param13, status_$t *status_ret);
-void FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t param2, uint32_t param3,
-                       int32_t param4, int32_t param5, int32_t param6,
-                       void *param7, status_$t *status_ret);
-void FILE_$SET_PROT(uid_t *file_uid, void *param2, void *prot_buf,
-                    void *acl, status_$t *status_ret);
-
-/* From ast module */
-void AST_$COND_FLUSH(uid_t *uid, uint32_t *flags, status_$t *status_ret);
-
-/* From hint module */
-int16_t HINT_$GET_HINTS(uid_t *uid, void *hints_ret);
-
 /* Global data */
 extern uint32_t NODE_$ME;       /* This node's ID */
 extern int16_t *PROC1_$TYPE;    /* Process type table */

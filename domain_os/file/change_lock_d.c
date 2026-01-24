@@ -11,7 +11,7 @@
  * Assembly analysis:
  *   - link.w A6,-0x4          ; 4 bytes local stack
  *   - Checks DAT_00e823f0 (FILE_$LOCK_ILLEGAL_MASK) against lock_mode
- *   - If illegal, returns status_$file_illegal_lock_request (0xF0007)
+ *   - If illegal, returns file_$illegal_lock_request (0xF0007)
  *   - Otherwise calls FILE_$PRIV_LOCK with flags=0x440000 (change+upgrade)
  *   - If AUDIT_$ENABLED < 0, calls FILE_$AUDIT_LOCK
  */
@@ -40,7 +40,7 @@ void FILE_$CHANGE_LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_m
      * The original code: btst.l D0,D1 where D0 = mode, D1 = illegal_mask
      */
     if ((FILE_$LOCK_ILLEGAL_MASK & (1 << (mode & 0x1F))) != 0) {
-        *status_ret = status_$file_illegal_lock_request;
+        *status_ret = file_$illegal_lock_request;
     } else {
         /*
          * Call FILE_$PRIV_LOCK with:

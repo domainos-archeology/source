@@ -120,7 +120,7 @@ uint8_t FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t lock_index,
 
                 if (found_entry == 0) {
                     if (lock_mode == 8) {
-                        local_status = status_$file_object_not_locked_by_this_process;
+                        local_status = file_$object_not_locked_by_this_process;
                     } else {
                         local_status = 0;
                     }
@@ -170,7 +170,7 @@ uint8_t FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t lock_index,
                 }
 
                 if (proc_slot == 0) {
-                    local_status = status_$file_object_not_locked_by_this_process;
+                    local_status = file_$object_not_locked_by_this_process;
                     goto done_unlock;
                 }
             } else if (lock_index <= 0x96) {
@@ -194,11 +194,11 @@ uint8_t FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t lock_index,
                 }
 
                 if (found_entry == 0) {
-                    local_status = status_$file_object_not_locked_by_this_process;
+                    local_status = file_$object_not_locked_by_this_process;
                     goto done_unlock;
                 }
             } else {
-                local_status = status_$file_invalid_arg;
+                local_status = file_$invalid_arg;
                 goto done_unlock;
             }
 
@@ -318,7 +318,7 @@ uint8_t FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t lock_index,
                         REM_FILE_$LOCAL_READ_LOCK((void *)&entry_node_high,
                                                    (void *)&local_uid,
                                                    attr_buf + 32, &local_status);
-                        if (local_status == status_$file_object_not_locked_by_this_process) {
+                        if (local_status == file_$object_not_locked_by_this_process) {
                             truncate_flag = -1;
                         }
                     }
@@ -376,7 +376,7 @@ done_logging:
     /*
      * Map certain error codes to success
      */
-    if (local_status == status_$file_object_not_locked_by_this_process && done_flag < 0) {
+    if (local_status == file_$object_not_locked_by_this_process && done_flag < 0) {
         *status_ret = 0;
         return result_flags & 1;
     }

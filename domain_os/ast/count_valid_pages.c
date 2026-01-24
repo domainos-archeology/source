@@ -48,7 +48,7 @@ int16_t ast_$count_valid_pages(aste_t *aste, int16_t count,
          * TODO: Need to get segmap from aste properly */
         uint32_t *segmap = (uint32_t *)((char *)aste + 0x100); /* Placeholder offset */
         ast_$clear_transition_bits(segmap, count);
-        *status = 0x50008;  /* status_$file_read_only or similar */
+        *status = 0x50008;  /* file_$read_only or similar */
         return count;
     }
 

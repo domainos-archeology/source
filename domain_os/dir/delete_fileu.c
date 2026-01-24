@@ -91,7 +91,7 @@ void DIR_$DELETE_FILEU(uid_t *dir_uid, char *name, uint16_t *name_len,
     }
 
     /* Check for fallback conditions */
-    if (status == status_$file_bad_reply_received_from_remote_node ||
+    if (status == file_$bad_reply_received_from_remote_node ||
         status == status_$naming_bad_directory) {
         /* Fall back to old implementation */
         DIR_$OLD_DELETE_FILEU(dir_uid, name, name_len, param4, param5, status_ret);

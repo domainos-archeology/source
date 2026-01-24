@@ -67,7 +67,7 @@ extern uint32_t ROUTE_$PORT;
  *
  * Status codes:
  *   status_$ok: Entry found and returned
- *   0x000F000C: No more entries (status_$file_no_more_lock_entries)
+ *   0x000F000C: No more entries (file_$no_more_lock_entries)
  *   0x00140002: Query not allowed (boot volume)
  */
 void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
@@ -139,7 +139,7 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
      * Main search loop - may retry if lock holder verification fails
      */
     do {
-        local_status = 0x000F000C;  /* status_$file_no_more_lock_entries */
+        local_status = 0x000F000C;  /* file_$no_more_lock_entries */
         found_entry = 0;
 
         ML_$LOCK(5);
@@ -301,7 +301,7 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
          * If verification returns "not locked by this process",
          * the lock was released - continue searching
          */
-    } while (local_status == status_$file_object_not_locked_by_this_process);
+    } while (local_status == file_$object_not_locked_by_this_process);
 
 done:
     *status_ret = local_status;

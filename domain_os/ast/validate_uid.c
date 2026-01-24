@@ -32,5 +32,5 @@ status_$t ast_$validate_uid(uid_t *uid, uint32_t flags)
     AST_$FAILED_FLAGS = flags;
 
     /* Return "file object not found" status (0x000F0001) */
-    return status_$file_object_not_found;
+    return file_$object_not_found;
 }

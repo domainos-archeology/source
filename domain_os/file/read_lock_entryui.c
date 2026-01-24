@@ -84,7 +84,7 @@ void FILE_$READ_LOCK_ENTRYUI(uid_t *file_uid, void *info_out, status_$t *status_
          * If verification says "not locked by this process",
          * the lock was released - retry
          */
-    } while (local_status == status_$file_object_not_locked_by_this_process);
+    } while (local_status == file_$object_not_locked_by_this_process);
 
     *status_ret = local_status;
 

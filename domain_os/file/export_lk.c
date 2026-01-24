@@ -65,9 +65,9 @@ static const int8_t find_asid_param = 0;
  * Status codes:
  *   status_$ok                              - Export succeeded
  *   status_$proc2_uid_not_found             - Target process not found
- *   status_$file_invalid_arg                - Invalid lock index
- *   status_$file_object_not_locked_by_this_process - Lock not found or UID mismatch
- *   status_$file_local_lock_table_full      - Target's lock table is full
+ *   file_$invalid_arg                - Invalid lock index
+ *   file_$object_not_locked_by_this_process - Lock not found or UID mismatch
+ *   file_$local_lock_table_full      - Target's lock table is full
  */
 void FILE_$EXPORT_LK(uid_t *file_uid, uint32_t *lock_index,
                      uid_t *target_proc, int32_t *index_out,
@@ -96,7 +96,7 @@ void FILE_$EXPORT_LK(uid_t *file_uid, uint32_t *lock_index,
     /* Validate lock index is in range [1, 0x96] */
     idx = *lock_index;
     if (idx == 0 || idx > MAX_PROC_LOCKS) {
-        *status_ret = status_$file_invalid_arg;
+        *status_ret = file_$invalid_arg;
         return;
     }
 
@@ -108,7 +108,7 @@ void FILE_$EXPORT_LK(uid_t *file_uid, uint32_t *lock_index,
     entry_idx = *(int16_t *)(proc_table_base + PROC_LOT_OFFSET + idx * 2);
 
     if (entry_idx == 0) {
-        *status_ret = status_$file_object_not_locked_by_this_process;
+        *status_ret = file_$object_not_locked_by_this_process;
         return;
     }
 
@@ -118,19 +118,19 @@ void FILE_$EXPORT_LK(uid_t *file_uid, uint32_t *lock_index,
 
     /* Check refcount is non-zero */
     if (entry_ptr[0x0C] == 0) {  /* refcount at offset 0x0C from entry base */
-        *status_ret = status_$file_object_not_locked_by_this_process;
+        *status_ret = file_$object_not_locked_by_this_process;
         return;
     }
 
     /* Verify file UID matches */
     uint32_t *entry_uid = (uint32_t *)(entry_ptr);
     if (entry_uid[0] != file_uid->high || entry_uid[1] != file_uid->low) {
-        *status_ret = status_$file_object_not_locked_by_this_process;
+        *status_ret = file_$object_not_locked_by_this_process;
         return;
     }
 
     /* Set initial status - will be cleared if slot found */
-    *status_ret = status_$file_local_lock_table_full;
+    *status_ret = file_$local_lock_table_full;
 
     /* Acquire lock 5 (file locking lock) */
     ML_$LOCK(5);

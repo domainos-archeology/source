@@ -56,19 +56,6 @@
 #define DIR_OP_RESOLVE              0x58    /* Resolve pathname */
 
 /*
- * Status codes specific to directory operations
- */
-#define status_$naming_invalid_pathname     0x000E0004
-#define status_$naming_invalid_leaf         0x000E000B
-#define status_$naming_bad_directory        0x000E000D
-#define status_$naming_invalid_link         0x000E0005
-#define status_$naming_leaf_truncated       0x000E002D
-#define status_$naming_object_is_not_an_acl_object 0x000E002E
-
-#define status_$file_bad_reply_received_from_remote_node 0x000F0003
-#define status_$file_incompatible_request   0x000F0015
-
-/*
  * ============================================================================
  * External References
  * ============================================================================

@@ -10,8 +10,8 @@
 #include "file/file_internal.h"
 
 /* Status codes */
-#define status_$file_object_is_remote               0x000F0002
-#define status_$file_objects_on_different_volumes   0x000F0013
+#define file_$object_is_remote               0x000F0002
+#define file_$objects_on_different_volumes   0x000F0013
 
 /*
  * FILE_$CHECK_SAME_VOLUME
@@ -116,7 +116,7 @@ int8_t FILE_$CHECK_SAME_VOLUME(uid_t *file_uid1, uid_t *file_uid2,
                 for (i = 7; i >= 0; i--) {
                     *location_out++ = *src++;
                 }
-                *status_ret = status_$file_object_is_remote;
+                *status_ret = file_$object_is_remote;
                 return 0;
             }
 

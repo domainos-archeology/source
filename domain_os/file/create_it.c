@@ -10,7 +10,7 @@
 #include "uid/uid.h"
 
 /* Status code for invalid argument */
-#define status_$file_invalid_arg    0x000F0014
+#define file_$invalid_arg    0x000F0014
 
 /*
  * FILE_$CREATE_IT
@@ -55,7 +55,7 @@ uint8_t FILE_$CREATE_IT(int16_t *type_ptr, uid_t *type_uid, uid_t *dir_uid,
         result = (uint8_t)FILE_$PRIV_CREATE(file_type, type_uid, dir_uid,
                                              file_uid_ret, *size_ptr, 0, NULL, status_ret);
     } else {
-        *status_ret = status_$file_invalid_arg;
+        *status_ret = file_$invalid_arg;
         result = 0;
     }
 

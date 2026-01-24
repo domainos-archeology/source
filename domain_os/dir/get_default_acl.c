@@ -58,7 +58,7 @@ void DIR_$GET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_ret,
     DIR_$DO_OP(&request.op, DAT_00e7fcd6, 0x1c, &response, &request);
 
     /* Check for fallback conditions */
-    if (response.status == status_$file_bad_reply_received_from_remote_node ||
+    if (response.status == file_$bad_reply_received_from_remote_node ||
         response.status == status_$naming_bad_directory) {
         /* Fall back to old implementation */
         DIR_$OLD_GET_DEFAULT_ACL(dir_uid, acl_type, acl_ret, status_ret);

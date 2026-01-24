@@ -63,7 +63,7 @@ void DIR_$VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
     status = response.status;
 
     /* Check for fallback conditions */
-    if (status == status_$file_bad_reply_received_from_remote_node ||
+    if (status == file_$bad_reply_received_from_remote_node ||
         status == status_$naming_bad_directory) {
         /* Fall back to old implementation */
         DIR_$OLD_VALIDATE_ROOT_ENTRY(name, name_len, status_ret);

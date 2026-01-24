@@ -148,7 +148,7 @@ uint32_t AREA_$COPY(int16_t gen, uint16_t area_id, int16_t new_asid,
                 CRASH_SYSTEM(&Area_Internal_Error);
             }
 
-            int16_t table_offset = M_OIS_WLW(byte_idx - 2, 0x100) * 4;
+            int16_t table_offset = M$OIS$WLW(byte_idx - 2, 0x100) * 4;
             src_bitmap_ptr = (uint8_t *)src_seg_table->bitmap_ptr + table_offset;
 
             area_$seg_table_t *dst_seg_table = area_$lookup_seg_table(

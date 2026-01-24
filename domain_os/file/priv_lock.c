@@ -120,7 +120,7 @@ void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t lock_index,
      * DAT_00e823f8 is the table full flag at offset 0x2D0
      */
     if ((int8_t)FILE_$LOT_FULL < 0) {
-        *status_ret = status_$file_local_lock_table_full;
+        *status_ret = file_$local_lock_table_full;
         return;
     }
 
@@ -160,7 +160,7 @@ void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t lock_index,
     }
 
     if (req_mode == 0) {
-        *status_ret = status_$file_illegal_lock_request;
+        *status_ret = file_$illegal_lock_request;
         return;
     }
 
@@ -302,7 +302,7 @@ void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t lock_index,
                     if (ctx.attr_buf[1] == 1 || ctx.attr_buf[1] == 2) {
                         *status_ret = status_$naming_vol_mounted_read_only;
                     } else {
-                        *status_ret = status_$file_vol_mounted_read_only;
+                        *status_ret = file_$vol_mounted_read_only;
                     }
                     goto done;
                 }
@@ -314,7 +314,7 @@ void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t lock_index,
 
             if (ctx.local_flags & 0x80) {
                 if (rights < 0) {
-                    *status_ret = status_$file_op_cannot_perform_here;
+                    *status_ret = file_$op_cannot_perform_here;
                     goto done;
                 }
                 /* Retry with remote hint */
@@ -349,7 +349,7 @@ void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t lock_index,
         }
 
         /* No valid hint found */
-        *status_ret = status_$file_object_not_found;
+        *status_ret = file_$object_not_found;
         goto done;
     }
 
@@ -443,7 +443,7 @@ void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t lock_index,
     ctx.proc_slot = proc_slot;
 
     if (existing_entry == 0) {
-        *status_ret = status_$file_illegal_lock_request;
+        *status_ret = file_$illegal_lock_request;
         goto done_unlock;
     }
 
@@ -453,13 +453,13 @@ void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t lock_index,
      * Validate lock change is allowed
      */
     if (((flags & 0x400000) && (entry->flags2 & 4) && !(entry->flags2 & 2))) {
-        *status_ret = status_$file_incompatible_request;
+        *status_ret = file_$incompatible_request;
         goto done_unlock;
     }
 
     if (((entry->flags1 & 0x80) && !(entry->flags2 & 4)) &&
         (FILE_$LOCK_COMPAT_TABLE[lock_mode] & 2)) {
-        *status_ret = status_$file_vol_mounted_read_only;
+        *status_ret = file_$vol_mounted_read_only;
         goto done_unlock;
     }
 
@@ -555,9 +555,9 @@ done_unlock:
     ML_$UNLOCK(5);
 
 done:
-    if (*status_ret == status_$file_object_in_use) {
+    if (*status_ret == file_$object_in_use) {
         FILE_$READ_LOCK_ENTRYUI(file_uid, ctx.attr_buf, &ctx.local_status);
-        if (ctx.local_status != status_$file_object_not_locked_by_this_process) {
+        if (ctx.local_status != file_$object_not_locked_by_this_process) {
             return;
         }
         /* Retry from beginning */
@@ -580,7 +580,7 @@ static status_$t priv_lock_alloc_entry(priv_lock_ctx_t *ctx, uint8_t fill_entry,
     /* Get entry from free list */
     entry_idx = FILE_$LOT_FREE;
     if (entry_idx == 0) {
-        return status_$file_local_lock_table_full;
+        return file_$local_lock_table_full;
     }
 
     ctx->entry_index = entry_idx;
@@ -646,7 +646,7 @@ static status_$t priv_lock_alloc_entry(priv_lock_ctx_t *ctx, uint8_t fill_entry,
         }
     }
 
-    return status_$file_local_lock_table_full;
+    return file_$local_lock_table_full;
 }
 
 /*
@@ -821,13 +821,13 @@ static status_$t priv_lock_check_conflicts(priv_lock_ctx_t *ctx, uint8_t allow_s
                     /* Check if same node or special mode */
                     if ((entry->node_low & 0xFFFFF) != ctx->node_id) {
                         if ((ctx->req_mode == 2) || (entry_compat == 2)) {
-                            return status_$file_object_in_use;
+                            return file_$object_in_use;
                         }
                         if ((ctx->req_mode == 6) && (entry_compat == 6)) {
-                            return status_$file_object_in_use;
+                            return file_$object_in_use;
                         }
                     }
-                    return status_$file_object_in_use;
+                    return file_$object_in_use;
                 }
             }
         }

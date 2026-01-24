@@ -26,7 +26,7 @@
 
 /* External file status codes (module 0x0F) - mapped versions */
 #define status_$no_rights                                   0x000F0010
-#define status_$file_wrong_type                             0x000F0012
+#define file_$wrong_type                             0x000F0012
 
 /* Special status code that should not be modified */
 #define status_$special_passthrough                         0x000F0001
@@ -51,11 +51,11 @@ void OS_PROC_SHUTWIRED(status_$t *status_ret)
     }
     else if (*status_ret == status_$acl_wrong_type) {
         /* wrong_type -> file_wrong_type */
-        *status_ret = status_$file_wrong_type;
+        *status_ret = file_$wrong_type;
     }
     else if (*status_ret == status_$acl_on_different_volume) {
         /* acl_on_different_volume -> file_objects_on_different_volumes */
-        *status_ret = status_$file_objects_on_different_volumes;
+        *status_ret = file_$objects_on_different_volumes;
     }
     else if (*status_ret != status_$special_passthrough) {
         /* For all other codes except 0xF0001, set high bit to mark as internal */

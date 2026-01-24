@@ -24,7 +24,7 @@
 /* UID_$NIL is defined in base/base.h */
 
 /* Status codes */
-#define status_$file_object_is_remote       0x000F0002
+#define file_$object_is_remote       0x000F0002
 #define status_$os_only_local_access_allowed 0x0003000A
 
 void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
@@ -72,7 +72,7 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
         /* Remote object */
         /* Check if attribute type is in the local-only set (bits 6, 7, 11 = 0x8C0) */
         if ((((uint32_t)1 << attr_type) & 0x8C0) != 0) {
-            *status = status_$file_object_is_remote;
+            *status = file_$object_is_remote;
             goto unlock_and_return;
         }
 

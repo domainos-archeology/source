@@ -17,7 +17,7 @@
  *   - Validates that lock is on local node (NODE_$ME)
  *   - Validates that lock was created from different node
  *   - Calls FILE_$PRIV_UNLOCK with remote_flags=-1
- *   - Maps status_$file_object_not_locked_by_this_process to 0
+ *   - Maps file_$object_not_locked_by_this_process to 0
  */
 
 #include "file/file_internal.h"
@@ -85,15 +85,15 @@ void FILE_$FORCE_UNLOCK(uid_t *file_uid, status_$t *status_ret)
              * - Not managed by this node, or
              * - Was created locally (not a remote lock)
              */
-            *status_ret = status_$file_op_cannot_perform_here;
+            *status_ret = file_$op_cannot_perform_here;
         }
     }
 
     /*
      * Map not-locked status to success
-     * status_$file_object_not_locked_by_this_process = 0x0F0005
+     * file_$object_not_locked_by_this_process = 0x0F0005
      */
-    if (*status_ret == status_$file_object_not_locked_by_this_process) {
+    if (*status_ret == file_$object_not_locked_by_this_process) {
         *status_ret = 0;
     }
 }

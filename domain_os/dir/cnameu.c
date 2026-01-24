@@ -74,7 +74,7 @@ void DIR_$CNAMEU(uid_t *dir_uid, char *old_name, uint16_t *old_name_len,
     status = response.status;
 
     /* Check for fallback conditions */
-    if (status == status_$file_bad_reply_received_from_remote_node ||
+    if (status == file_$bad_reply_received_from_remote_node ||
         status == status_$naming_bad_directory) {
         /* Fall back to old implementation */
         DIR_$OLD_CNAMEU(dir_uid, old_name, old_name_len, new_name, new_name_len, status_ret);

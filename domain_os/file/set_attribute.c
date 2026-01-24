@@ -11,7 +11,7 @@
 
 /* Remote file access denied status codes */
 #define status_$no_rights                              0x000F0010
-#define status_$file_bad_reply_received_from_remote    0x000F0003
+#define file_$bad_reply_received_from_remote    0x000F0003
 #define status_$insufficient_rights                    0x000F0011
 
 /*
@@ -122,7 +122,7 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
 
             /* Check if we got a rights error */
             if (*status_ret == status_$no_rights ||
-                *status_ret == status_$file_bad_reply_received_from_remote ||
+                *status_ret == file_$bad_reply_received_from_remote ||
                 *status_ret == status_$insufficient_rights) {
                 /* Fall through to try local operation */
             } else if (*status_ret != status_$ok) {

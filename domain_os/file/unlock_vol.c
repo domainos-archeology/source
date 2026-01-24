@@ -17,7 +17,7 @@
  *   - Calls FILE_$READ_LOCK_ENTRYI to get next lock
  *   - Calls FILE_$PRIV_UNLOCK for each lock found
  *   - Loops until status != status_$ok
- *   - Maps status_$file_obj_not_locked_by_this_process to status_$ok
+ *   - Maps file_$obj_not_locked_by_this_process to status_$ok
  */
 
 #include "file/file_internal.h"
@@ -75,9 +75,9 @@ void FILE_$UNLOCK_VOL(uid_t *vol_uid, status_$t *status_ret)
 
     /*
      * Map not-locked status to success
-     * status_$file_obj_not_locked_by_this_process = 0x0F000C
+     * file_$obj_not_locked_by_this_process = 0x0F000C
      */
-    if (*status_ret == status_$file_obj_not_locked_by_this_process) {
+    if (*status_ret == file_$obj_not_locked_by_this_process) {
         *status_ret = status_$ok;
     }
 }

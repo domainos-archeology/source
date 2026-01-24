@@ -31,7 +31,7 @@
  * Parameters:
  *   lock_info  - Lock information structure (from read operations)
  *   status_ret - Output: status_$ok if still valid,
- *                        status_$file_object_not_locked_by_this_process if released
+ *                        file_$object_not_locked_by_this_process if released
  *
  * Algorithm:
  *   1. Compare owner_node with holder_node
@@ -83,7 +83,7 @@ void FILE_$VERIFY_LOCK_HOLDER(file_lock_info_internal_t *lock_info, status_$t *s
      * If verification returns "not locked by this process",
      * the lock was released - need to clean up
      */
-    if (verify_status == status_$file_object_not_locked_by_this_process) {
+    if (verify_status == file_$object_not_locked_by_this_process) {
         status_$t unlock_status;
         uint32_t holder_node;
 
@@ -145,7 +145,7 @@ void FILE_$VERIFY_LOCK_HOLDER(file_lock_info_internal_t *lock_info, status_$t *s
          * to signal that the caller should retry
          */
         if (unlock_status == status_$ok) {
-            *status_ret = status_$file_object_not_locked_by_this_process;
+            *status_ret = file_$object_not_locked_by_this_process;
             return;
         }
     }

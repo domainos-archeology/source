@@ -31,7 +31,7 @@ void FILE_$SET_MGR_ATTR(uid_t *file_uid, void *mgr_attr, int16_t *version,
 
     /* Version must be 0 */
     if (*version != 0) {
-        *status_ret = status_$file_invalid_arg;
+        *status_ret = file_$invalid_arg;
         return;
     }
 

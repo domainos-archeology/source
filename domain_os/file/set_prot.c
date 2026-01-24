@@ -10,7 +10,7 @@
 #include "file/file_internal.h"
 
 /* Status codes */
-#define status_$file_invalid_arg    0x000F0014
+#define file_$invalid_arg    0x000F0014
 
 /*
  * Protection type to attribute ID mapping:
@@ -184,7 +184,7 @@ set_protection:
     return;
 
 invalid_arg:
-    *status_ret = status_$file_invalid_arg;
+    *status_ret = file_$invalid_arg;
 
     /* Log audit event if auditing is enabled (tst.b checks high bit) */
     if ((int8_t)AUDIT_$ENABLED < 0) {

@@ -195,7 +195,7 @@ relock_and_check:
     }
 
     /* Error - check for specific error code */
-    if (*status == 0x20006) {  /* status_$file_object_not_found variant */
+    if (*status == 0x20006) {  /* file_$object_not_found variant */
         *status = ast_$validate_uid(uid, 0x20006);
     }
 

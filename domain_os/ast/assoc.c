@@ -41,7 +41,7 @@ void AST_$ASSOC(uid_t *uid, uint16_t seg, uint32_t mode, uint16_t page,
     if (*(int8_t *)((char *)aote + 0xB9) < 0) {
         /* Remote object - check process type */
         if (*(int16_t *)((char *)PROC1_$TYPE + (int16_t)(PROC1_$CURRENT * 2)) == 8) {
-            *status = status_$file_object_not_found;
+            *status = file_$object_not_found;
             goto done;
         }
     }

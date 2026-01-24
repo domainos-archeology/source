@@ -52,10 +52,10 @@ extern uid_t PPO_$NIL_ORG_UID;          /* 0xE17574: Nil org UID */
  * Status codes used
  */
 #define status_$vtoc_duplicate_uid                      0x00020007
-#define status_$file_bad_reply_received_from_remote_node 0x000F0003
-#define status_$file_cannot_create_on_remote_with_uid   0x000F000B
-#define status_$file_volume_is_read_only                0x000E0030
-#define status_$file_invalid_type                       0x000F0016
+#define file_$bad_reply_received_from_remote_node 0x000F0003
+#define file_$cannot_create_on_remote_with_uid   0x000F000B
+#define file_$volume_is_read_only                0x000E0030
+#define file_$invalid_type                       0x000F0016
 
 /*
  * File attribute structure for new file creation (144 bytes = 0x90)
@@ -180,7 +180,7 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
                         &parent_info.attrs, &status);
 
     if (status != status_$ok) {
-        if (status != status_$file_object_not_found) {
+        if (status != file_$object_not_found) {
             status |= 0x80000000;  /* Mark as severe */
         }
         *status_ret = status;
@@ -268,7 +268,7 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
 
         /* Cannot specify owner for remote creation */
         if ((flags & 2) != 0) {
-            *status_ret = status_$file_cannot_create_on_remote_with_uid;
+            *status_ret = file_$cannot_create_on_remote_with_uid;
             return 0;
         }
 
@@ -286,10 +286,10 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
             if (status == status_$vtoc_duplicate_uid) {
                 /* Duplicate UID is OK, clear error */
                 status = status_$ok;
-            } else if (status == status_$file_bad_reply_received_from_remote_node) {
+            } else if (status == file_$bad_reply_received_from_remote_node) {
                 /* Try pre-SR10 protocol for types 4 and 5 */
                 if (file_type == 5 || file_type == 4) {
-                    status = status_$file_invalid_arg;
+                    status = file_$invalid_arg;
                 } else {
                     /* Fallback to pre-SR10 creation */
                     REM_FILE_$CREATE_TYPE_PRESR10((uid_t *)&parent_info.location.parent_uid,
@@ -319,10 +319,10 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
         /* Check for read-only volume (bit 1 of vol_flags) */
         if ((parent_info.location.vol_flags & 0x02) != 0) {
             if (file_type == 1 || file_type == 2) {
-                *status_ret = status_$file_volume_is_read_only;
+                *status_ret = file_$volume_is_read_only;
                 return 0;
             }
-            *status_ret = status_$file_invalid_type;
+            *status_ret = file_$invalid_type;
             return 0;
         }
 

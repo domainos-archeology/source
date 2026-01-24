@@ -45,7 +45,7 @@ void AST_$GET_DTV(uid_t *uid, uint32_t unused, uint32_t *dtv, status_$t *status)
 
     /* Check if object is remote */
     if (*(int8_t *)((char *)aote + 0xB9) < 0) {
-        local_status = status_$file_object_not_found;
+        local_status = file_$object_not_found;
     }
 
 done:

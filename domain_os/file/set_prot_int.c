@@ -10,10 +10,10 @@
 #include "file/file_internal.h"
 
 /* Status codes */
-#define status_$file_objects_on_different_volumes   0x000F0013
-#define status_$file_object_is_remote               0x000F0002
-#define status_$file_bad_reply_received_from_remote 0x000F0003
-#define status_$file_incompatible_request           0x000F0015
+#define file_$objects_on_different_volumes   0x000F0013
+#define file_$object_is_remote               0x000F0002
+#define file_$bad_reply_received_from_remote 0x000F0003
+#define file_$incompatible_request           0x000F0015
 #define status_$ast_incompatible_request            0x00030006
 #define status_$no_right_to_perform_operation       0x00230001
 #define status_$acl_no_right_to_set_subsystem_data  0x00230010
@@ -96,10 +96,10 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
         if (same_volume_result >= 0) {
             /* Check returned status */
             if (*status_ret == status_$ok) {
-                *status_ret = status_$file_objects_on_different_volumes;
+                *status_ret = file_$objects_on_different_volumes;
                 goto audit_and_return;
             }
-            if (*status_ret != status_$file_object_is_remote) {
+            if (*status_ret != file_$object_is_remote) {
                 goto audit_and_return;
             }
             same_volume_result = -1;  /* Mark as remote */
@@ -145,7 +145,7 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
                                 &attr_result,
                                 status_ret);
 
-        if (*status_ret == status_$file_bad_reply_received_from_remote) {
+        if (*status_ret == file_$bad_reply_received_from_remote) {
             /* Fall through to local operation */
         } else if (*status_ret == status_$ok) {
             /* Update local AST cache with result */
@@ -210,7 +210,7 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
 
     /* Map AST incompatible request to FILE incompatible request */
     if (*status_ret == status_$ast_incompatible_request) {
-        *status_ret = status_$file_incompatible_request;
+        *status_ret = file_$incompatible_request;
     }
 
 audit_and_return:

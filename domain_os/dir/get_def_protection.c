@@ -59,7 +59,7 @@ void DIR_$GET_DEF_PROTECTION(uid_t *dir_uid, uid_t *acl_type,
     status = *((status_$t *)&response.flags[4]);
 
     /* Check for fallback conditions */
-    if (status == status_$file_bad_reply_received_from_remote_node ||
+    if (status == file_$bad_reply_received_from_remote_node ||
         status == status_$naming_bad_directory) {
         /* Fall back to old implementation, then convert ACL format */
         uid_t temp_acl;

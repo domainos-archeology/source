@@ -24,8 +24,8 @@
 
 /* Status codes */
 #define status_$ok                          0
-#define status_$file_object_in_use          0x000F0006
-#define status_$file_object_is_remote       0x000F0002
+#define file_$object_in_use          0x000F0006
+#define file_$object_is_remote       0x000F0002
 #define status_$ast_refcnt_says_unused      0x00030007
 
 /* File lock ID */
@@ -112,7 +112,7 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
             /* File is locked */
             if (!(flags & 0x2)) {
                 /* Not force mode - return error */
-                *status_ret = status_$file_object_in_use;
+                *status_ret = file_$object_in_use;
             } else if (flags & 0x4) {
                 /* Force mode with delete-on-unlock flag */
                 /* Call FILE_$SET_ATTRIBUTE to set attribute 7 (delete-on-unlock) */
@@ -120,7 +120,7 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
                 FILE_$SET_ATTRIBUTE(file_uid, 7, attr_value, 0xFFFF, status_ret);
 
                 /* These specific status codes are acceptable */
-                if (*status_ret == status_$file_object_is_remote ||
+                if (*status_ret == file_$object_is_remote ||
                     *status_ret == status_$ast_refcnt_says_unused) {
                     *status_ret = status_$ok;
                 }

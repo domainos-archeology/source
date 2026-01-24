@@ -57,7 +57,7 @@ extern uint16_t FILE_$ASID_MAP[];
  * Parameters:
  *   request    - Lock verification request containing file UID and process info
  *   status_ret - Output: status_$ok if locked by process,
- *                        status_$file_object_not_locked_by_this_process otherwise
+ *                        file_$object_not_locked_by_this_process otherwise
  */
 void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_ret)
 {
@@ -71,7 +71,7 @@ void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_r
     hash_index = UID_$HASH(&request->file_uid, NULL);
 
     /* Default status: not locked by this process */
-    *status_ret = status_$file_object_not_locked_by_this_process;
+    *status_ret = file_$object_not_locked_by_this_process;
 
     /* Acquire lock table spinlock */
     ML_$LOCK(5);

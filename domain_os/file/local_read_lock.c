@@ -37,7 +37,7 @@
  *   info_out   - Output buffer for lock info (34 bytes)
  *   status_ret - Output: status code
  *                status_$ok if found,
- *                status_$file_object_not_locked_by_this_process if not found
+ *                file_$object_not_locked_by_this_process if not found
  */
 void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out,
                             status_$t *status_ret)
@@ -51,7 +51,7 @@ void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out,
     hash_index = UID_$HASH(file_uid, NULL);
 
     /* Default status: not found */
-    *status_ret = status_$file_object_not_locked_by_this_process;
+    *status_ret = file_$object_not_locked_by_this_process;
 
     /* Acquire lock table spinlock */
     ML_$LOCK(5);

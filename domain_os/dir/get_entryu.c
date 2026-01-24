@@ -44,7 +44,7 @@ void DIR_$GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
     DIR_$GET_ENTRYU_FUN_00e4d460(status_ret);
 
     /* Check for fallback conditions */
-    if (*status_ret == status_$file_bad_reply_received_from_remote_node ||
+    if (*status_ret == file_$bad_reply_received_from_remote_node ||
         *status_ret == status_$naming_bad_directory) {
         /* Fall back to old implementation */
         DIR_$OLD_GET_ENTRYU(&local_uid, name, name_len, entry_ret, status_ret);

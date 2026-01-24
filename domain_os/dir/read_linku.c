@@ -84,7 +84,7 @@ void DIR_$READ_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     *target_len = response._20_2_;
 
     /* Check for fallback conditions */
-    if (*status_ret == status_$file_bad_reply_received_from_remote_node ||
+    if (*status_ret == file_$bad_reply_received_from_remote_node ||
         *status_ret == status_$naming_bad_directory) {
         /* Fall back to old implementation */
         DIR_$OLD_READ_LINKU((int16_t)(uintptr_t)dir_uid,

@@ -48,7 +48,7 @@ void DIR_$DIR_READU(uid_t *dir_uid, void *entries_ret, void *entries_size,
         FUN_00e4e1fe(status_ret);
 
         /* Check for fallback conditions */
-        if (*status_ret == status_$file_bad_reply_received_from_remote_node ||
+        if (*status_ret == file_$bad_reply_received_from_remote_node ||
             *status_ret == status_$naming_bad_directory) {
             /* Fall back to canned root handler for compatibility */
             DIR_$DIR_READU_FUN_00e4e1a8(status_ret);

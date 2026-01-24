@@ -9,14 +9,17 @@
 #define ASKNODE_INTERNAL_H
 
 #include "asknode/asknode.h"
+#include "hint/hint.h"
 #include "pkt/pkt.h"
 #include "sock/sock.h"
 #include "ec/ec.h"
 #include "rip/rip.h"
 #include "app/app.h"
+#include "log/log.h"
 #include "network/network.h"
 #include "netbuf/netbuf.h"
 #include "os/os.h"
+#include "misc/misc.h"
 #include "time/time.h"
 #include "proc1/proc1.h"
 #include "fim/fim.h"

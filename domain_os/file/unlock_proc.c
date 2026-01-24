@@ -105,7 +105,7 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
                               dtv_out,               /* dtv_out */
                               status_ret);
 
-            if (*status_ret != status_$file_object_not_locked_by_this_process) {
+            if (*status_ret != file_$object_not_locked_by_this_process) {
                 return;
             }
         }
@@ -147,7 +147,7 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
                                           dtv_out,               /* dtv_out */
                                           status_ret);
 
-                        if (*status_ret == status_$file_object_not_locked_by_this_process) {
+                        if (*status_ret == file_$object_not_locked_by_this_process) {
                             *status_ret = status_$ok;
                         }
                     }
@@ -158,7 +158,7 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
         /*
          * Map "not locked" to success (finished iteration)
          */
-        if (*status_ret == status_$file_obj_not_locked_by_this_process) {
+        if (*status_ret == file_$obj_not_locked_by_this_process) {
             *status_ret = status_$ok;
             return;
         }

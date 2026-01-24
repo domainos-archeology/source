@@ -53,7 +53,7 @@
  *   index_out  - Output: validated lock index (same as input if valid)
  *   status_ret - Output: status code
  *                status_$ok if valid,
- *                status_$file_invalid_arg if invalid
+ *                file_$invalid_arg if invalid
  *
  * Note: This function checks that the lock exists in the current
  * process's lock table (PROC1_$AS_ID) and that the file UID matches.
@@ -70,7 +70,7 @@ void FILE_$IMPORT_LK(uid_t *file_uid, uint32_t *index_in, uint32_t *index_out,
      * Validate lock index range: must be non-zero and <= 150 (0x96)
      */
     if (lock_index == 0 || lock_index > MAX_LOCK_INDEX) {
-        *status_ret = status_$file_invalid_arg;
+        *status_ret = file_$invalid_arg;
         return;
     }
 
@@ -86,7 +86,7 @@ void FILE_$IMPORT_LK(uid_t *file_uid, uint32_t *index_in, uint32_t *index_out,
 
     if (entry_idx == 0) {
         /* No lock at this index */
-        *status_ret = status_$file_invalid_arg;
+        *status_ret = file_$invalid_arg;
         return;
     }
 
@@ -103,7 +103,7 @@ void FILE_$IMPORT_LK(uid_t *file_uid, uint32_t *index_in, uint32_t *index_out,
     /* Compare with requested UID */
     if (entry_uid_high != file_uid->high || entry_uid_low != file_uid->low) {
         /* UID mismatch */
-        *status_ret = status_$file_invalid_arg;
+        *status_ret = file_$invalid_arg;
         return;
     }
 

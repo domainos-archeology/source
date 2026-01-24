@@ -72,13 +72,13 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
     status = *((status_$t *)&response.flags[4]);
 
     /* Check for fallback conditions */
-    if (status == status_$file_bad_reply_received_from_remote_node ||
+    if (status == file_$bad_reply_received_from_remote_node ||
         status == status_$naming_bad_directory) {
         type = *prot_type;
 
         /* Only handle types 4, 5, 6 */
         if (type != 4 && type != 5 && type != 6) {
-            *status_ret = status_$file_incompatible_request;
+            *status_ret = file_$incompatible_request;
             return;
         }
 

@@ -103,7 +103,7 @@ void FILE_$GET_ATTR_INFO(uid_t *file_uid, void *param_2, int16_t *size_ptr,
             flags = 0x21;
         }
     } else {
-        *status_ret = status_$file_invalid_arg;
+        *status_ret = file_$invalid_arg;
         return;
     }
 
@@ -126,7 +126,7 @@ void FILE_$GET_ATTR_INFO(uid_t *file_uid, void *param_2, int16_t *size_ptr,
 
     /* Check size - must be 0x7A (122 bytes) */
     if (*size_ptr != FILE_ATTR_INFO_SIZE) {
-        *status_ret = status_$file_invalid_arg;
+        *status_ret = file_$invalid_arg;
         return;
     }
 

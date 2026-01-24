@@ -61,7 +61,7 @@ retry_loop:
         aote = NULL;  /* TODO: Get from ast_$force_activate_segment return in A0 */
         if (aote == NULL) {
             ML_$UNLOCK(AST_LOCK_ID);
-            if (retry < 0 && local_status == status_$file_object_not_found) {
+            if (retry < 0 && local_status == file_$object_not_found) {
                 local_status = status_$ok;
             }
             goto done;

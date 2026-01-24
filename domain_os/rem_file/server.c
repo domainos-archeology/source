@@ -323,7 +323,7 @@ static void server_set_attribute(uint8_t *stack_frame)
         if (*(uint32_t *)attr_value == SLINK_$UID.high &&
             *(uint32_t *)(attr_value + 4) == SLINK_$UID.low) {
             /* Cannot set type to symbolic link */
-            status = 0x000F0015;  /* status_$file_incompatible_request */
+            status = 0x000F0015;  /* file_$incompatible_request */
             goto done;
         }
     }
@@ -1102,7 +1102,7 @@ void REM_FILE_$SERVER(void)
     default:
         /* Unknown opcode */
         frame.resp_opcode = 0x03;
-        frame.resp_status = 0x000F0003;  /* status_$file_bad_reply */
+        frame.resp_status = 0x000F0003;  /* file_$bad_reply */
         break;
     }
 
