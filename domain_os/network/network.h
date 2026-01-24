@@ -259,6 +259,35 @@ void NETWORK_$PAGE_SERVER(void);
 void NETWORK_$REQUEST_SERVER(void);
 
 /*
+ * ring_info_t - Token Ring network status information
+ *
+ * Structure returned by NETWORK_$RING_INFO containing status about
+ * the token ring network. Total size is 122 bytes (30 longs + 1 word).
+ *
+ * TODO: Determine the exact layout of this structure from network
+ * protocol analysis.
+ */
+typedef struct ring_info_t {
+    uint8_t     data[122];      /* Raw ring info data */
+} ring_info_t;
+
+/*
+ * NETWORK_$RING_INFO - Get token ring network information
+ *
+ * Queries the network partner for token ring status information.
+ * Sends command 0x0E to the specified network handle and returns
+ * 122 bytes of ring information on success.
+ *
+ * @param net_handle     Network handle/connection to query
+ * @param ring_info      Output: ring information buffer (122 bytes)
+ * @param status_ret     Output: status code
+ *
+ * Original address: 0x00E1039A
+ */
+void NETWORK_$RING_INFO(void *net_handle, ring_info_t *ring_info,
+                        status_$t *status_ret);
+
+/*
  * NETWORK_$GET_PKT_SIZE - Get maximum packet size for destination
  *
  * Determines the appropriate packet size to use when communicating with

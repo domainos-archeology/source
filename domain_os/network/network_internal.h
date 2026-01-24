@@ -38,4 +38,32 @@ extern uint32_t NODE_$ME;
 extern int8_t NETWORK_$LOOPBACK_FLAG;
 #endif
 
+/*
+ * Network command codes
+ */
+#define NETWORK_CMD_RING_INFO   0x0E    /* Get ring information */
+
+/*
+ * network_$do_request - Send a network command and receive response
+ *
+ * Internal helper function that sends a command to a network partner
+ * and waits for a response. Handles packet allocation, transmission,
+ * and response collection.
+ *
+ * @param net_handle     Network handle/connection
+ * @param cmd_buf        Command buffer to send
+ * @param cmd_len        Command length (in bytes)
+ * @param param4         Reserved (pass 0)
+ * @param param5         Reserved (pass 0)
+ * @param param6         Reserved (pass 0)
+ * @param resp_buf       Response buffer
+ * @param resp_info      Response info output
+ * @param status_ret     Output: status code
+ *
+ * Original address: 0x00E0F86C
+ */
+void network_$do_request(void *net_handle, void *cmd_buf, int16_t cmd_len,
+                         uint32_t param4, uint16_t param5, int16_t param6,
+                         void *resp_buf, void *resp_info, status_$t *status_ret);
+
 #endif /* NETWORK_INTERNAL_H */
