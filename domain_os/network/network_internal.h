@@ -44,6 +44,72 @@ extern int8_t NETWORK_$LOOPBACK_FLAG;
 #define NETWORK_CMD_RING_INFO   0x0E    /* Get ring information */
 
 /*
+ * Network status codes (module 0x11)
+ */
+#define status_$network_no_available_sockets            0x00110005
+#define status_$network_unexpected_reply_type           0x0011000B
+#define status_$network_too_many_transmit_retries       0x00110011
+
+/*
+ * Network globals
+ */
+extern uint32_t NETWORK_$MOTHER_NODE;       /* 0xE24C0C - mother node ID */
+extern int16_t  NETWORK_$RETRY_TIMEOUT;     /* 0xE24C18 - timeout for retries */
+
+/*
+ * Socket pointer array (for event count access)
+ */
+extern void *SOCK_$SOCKET_PTR[];            /* 0xE28DB4 */
+
+/*
+ * network_$send_request - Send a network request packet
+ *
+ * Internal helper that builds and sends a network request packet.
+ * Handles retries on transmission failure.
+ *
+ * @param net_handle       Network handle
+ * @param sock_num         Socket number
+ * @param pkt_id           Packet ID
+ * @param cmd_buf          Command buffer
+ * @param cmd_len          Command length
+ * @param param_hi         High word of param4
+ * @param param_lo         Combined param4_lo and param5
+ * @param retry_count_out  Output: max retry count
+ * @param timeout_out      Output: timeout value
+ * @param status_ret       Output: status code
+ *
+ * Original address: 0x00E0F5F4
+ */
+void network_$send_request(void *net_handle, int16_t sock_num, int16_t pkt_id,
+                           int16_t *cmd_buf, int16_t cmd_len, int16_t param_hi,
+                           uint32_t param_lo, uint16_t *retry_count_out,
+                           int16_t *timeout_out, status_$t *status_ret);
+
+/*
+ * network_$wait_response - Wait for network response
+ *
+ * Internal helper that waits for a response packet matching the given
+ * packet ID. Uses event count waiting for efficient blocking.
+ *
+ * @param sock_num         Socket number
+ * @param pkt_id           Packet ID to match
+ * @param timeout          Timeout in clock ticks
+ * @param event_count      Event count pointer (updated on each iteration)
+ * @param resp_buf         Response buffer output
+ * @param resp_len_out     Output: response length
+ * @param data_bufs        Output: data buffer pointers
+ * @param data_len_out     Output: data length
+ *
+ * @return Negative (0xFF) on success, 0 on timeout
+ *
+ * Original address: 0x00E0F746
+ */
+int8_t network_$wait_response(int16_t sock_num, int16_t pkt_id, uint16_t timeout,
+                              int32_t *event_count, int16_t *resp_buf,
+                              int16_t *resp_len_out, uint32_t *data_bufs,
+                              uint16_t *data_len_out);
+
+/*
  * network_$do_request - Send a network command and receive response
  *
  * Internal helper function that sends a command to a network partner
