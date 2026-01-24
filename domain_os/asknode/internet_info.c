@@ -309,7 +309,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
 
         /* Try NETWORK_$RING_INFO with retry on failure */
         do {
-            ret_val = NETWORK_$RING_INFO(&routing, result + 2, status);
+            NETWORK_$RING_INFO(&routing, (ring_info_t *)(result + 2), status);
             if (*status != status_$network_transmit_failed || *req_len != -1 || retry_flag < 0) {
                 break;
             }
