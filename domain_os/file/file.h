@@ -89,8 +89,8 @@
 #define file_$invalid_type                       0x000F0016  /* Invalid type */
 #define file_$op_cannot_perform_here             0x000F0018  /* Cannot perform operation here */
 #define file_$vol_mounted_read_only              0x000E0030  /* Volume is read-only */
-#define status_$naming_vol_mounted_read_only            0x00040014  /* Volume mounted read-only (naming) */
-#define status_$insufficient_rights                     0x000F0011  /* Insufficient rights */
+#define status_$naming_vol_mounted_read_only     0x00040014  /* Volume mounted read-only (naming) */
+#define status_$insufficient_rights              0x000F0011  /* Insufficient rights */
 
 /*
  * ============================================================================
