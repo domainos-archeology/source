@@ -9,8 +9,10 @@
 #define AREA_INTERNAL_H
 
 #include "area/area.h"
+#include "ast/ast.h"
 #include "cal/cal.h"
 #include "ml/ml.h"
+#include "mmu/mmu.h"
 #include "network/network.h"
 #include "proc1/proc1.h"
 #include "rem_file/rem_file.h"

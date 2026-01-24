@@ -361,17 +361,29 @@ void AREA_$GROW_TO(int16_t gen, uint16_t area_id, uint32_t virt_size,
 /*
  * AREA_$INVALIDATE - Invalidate area pages
  *
- * Invalidates pages within the specified area range.
+ * Invalidates pages within the specified range of an area.
+ * This is used to discard pages that are no longer needed.
  *
- * @param handle        Area handle
- * @param offset        Start offset
- * @param length        Length to invalidate
- * @param status_ret    Output: status code
+ * For normal (non-reversed) areas, pages are invalidated from
+ * the specified offset forward.
+ *
+ * For reversed areas (stack-like), the invalidation logic is
+ * adjusted to handle the reversed page ordering.
+ *
+ * Parameters:
+ *   gen         - Area generation
+ *   area_id     - Area ID
+ *   seg_idx     - Segment index
+ *   page_offset - Page offset within segment
+ *   count       - Number of pages to invalidate
+ *   param_6     - Unknown parameter (unused?)
+ *   status_ret  - Output: status code
  *
  * Original address: 0x00E08DD0
  */
-void AREA_$INVALIDATE(area_$handle_t handle, uint32_t offset,
-                      uint32_t length, status_$t *status_ret);
+void AREA_$INVALIDATE(int16_t gen, uint16_t area_id, uint16_t seg_idx,
+                      uint16_t page_offset, uint32_t count,
+                      int16_t param_6, status_$t *status_ret);
 
 /*
  * AREA_$COPY - Copy an area (copy-on-write)
