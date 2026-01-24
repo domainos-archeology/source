@@ -473,8 +473,11 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
         /* Handle hint updates for certain request types */
         if (result[1] == 0) {
             if (request == 0x0A || request == 0x04 || request == 0x18) {
-                /* Update hints based on response */
-                ret_val = HINT_$ADDI((int16_t)&port, (uint16_t)port);
+                /* Update hints based on response - extract UID from result */
+                uid_t response_uid;
+                response_uid.high = result[2];
+                response_uid.low = result[3];
+                HINT_$ADDI(&response_uid, (uint32_t *)&port);
             }
         }
 
