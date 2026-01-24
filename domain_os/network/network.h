@@ -258,4 +258,24 @@ void NETWORK_$PAGE_SERVER(void);
  */
 void NETWORK_$REQUEST_SERVER(void);
 
+/*
+ * NETWORK_$GET_PKT_SIZE - Get maximum packet size for destination
+ *
+ * Determines the appropriate packet size to use when communicating with
+ * a network destination. For local nodes or local port connections, the
+ * caller's requested max_size may be used. For routing through non-local
+ * ports, the size is capped at 0x400 (1024 bytes) to ensure compatibility
+ * across network segments.
+ *
+ * @param dest_addr     Pointer to destination address structure:
+ *                        +0x00: network port/type (4 bytes)
+ *                        +0x04: node ID (4 bytes - low 20 bits used)
+ * @param max_size      Caller's requested maximum packet size
+ *
+ * @return Packet size to use (between 0x400 and max_size)
+ *
+ * Original address: 0x00E0FA00
+ */
+uint16_t NETWORK_$GET_PKT_SIZE(uint32_t *dest_addr, uint16_t max_size);
+
 #endif /* NETWORK_H */
