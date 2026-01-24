@@ -106,9 +106,9 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         {
             uid_t temp_uid;
             if (req_type == ASKNODE_REQ_NODE_UID) {
-                ret_val = NAME_$GET_NODE_UID(&temp_uid);
+                NAME_$GET_NODE_UID(&temp_uid);
             } else {
-                ret_val = NAME_$GET_ROOT_UID(&temp_uid);
+                NAME_$GET_ROOT_UID(&temp_uid);
             }
             result[2] = temp_uid.high;
             result[3] = temp_uid.low;
@@ -196,36 +196,37 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         break;
 
     case ASKNODE_REQ_PROC_LIST:   /* 0x12 */
-        ret_val = PROC2_$LIST((uint16_t *)((char *)result + 10),
-                              (void *)0x00E658AE, /* constant buffer */
-                              result + 2);
+        PROC2_$LIST((uid_t *)((char *)result + 10),
+                    (uint16_t *)0x00E658AE, /* constant buffer */
+                    (uint16_t *)(result + 2));
         if ((*(uint16_t *)result < 3) && ((int16_t)*(uint16_t *)(result + 2) > 0x19)) {
             *(uint16_t *)(result + 2) = 0x19;
         }
         break;
 
     case ASKNODE_REQ_PROC_INFO:   /* 0x14 */
-        ret_val = PROC2_$GET_INFO(param, (char *)(result + 2),
-                                  (void *)0x00E658C6, local_status);
+        PROC2_$GET_INFO(param, (void *)(result + 2),
+                        (uint16_t *)0x00E658C6, local_status);
         break;
 
     case ASKNODE_REQ_SIGNAL:      /* 0x16 */
-        ret_val = PROC2_$SIGNAL_PGROUP_OS(param, (void *)0x00E658C8,
-                                          param + 1, local_status);
+        PROC2_$SIGNAL_PGROUP_OS(param, (int16_t *)0x00E658C8,
+                                (uint32_t *)(param + 1), local_status);
         break;
 
     case ASKNODE_REQ_BUILD_TIME:  /* 0x1A */
-        ret_val = GET_BUILD_TIME((char *)((char *)result + 10), (int16_t *)(result + 2));
+        GET_BUILD_TIME((char *)result + 10, (int16_t *)(result + 2));
         break;
 
     case ASKNODE_REQ_LOG_READ:    /* 0x31 */
         if ((param->high & 0x10000) == 0) {
-            /* Read by line number */
-            ret_val = LOG_$READ((int16_t)result + 10, (uint16_t)param->high, (int16_t)result + 8);
+            /* Read by line number - param points to max_len */
+            LOG_$READ((void *)((char *)result + 10), (uint16_t *)param,
+                      (uint16_t *)((char *)result + 8));
         } else {
             /* Read by entry index */
-            ret_val = LOG_$READ2((uint16_t *)((char *)result + 10), (int16_t)param->high,
-                                 0x400, result + 2);
+            LOG_$READ2((void *)((char *)result + 10), (uint16_t)(param->high),
+                       0x400, (uint16_t *)((char *)result + 8));
             *local_status = (*local_status & 0xFFFF0000) | 0xFFFF;
         }
         break;
