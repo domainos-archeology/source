@@ -21,13 +21,6 @@
 #include "misc/misc.h"
 #include "vtoc/vtoc.h"
 
-/* Restore AST's PMAPE_BASE after mmap.h (mmap.h uses a different value) */
-#ifdef PMAPE_BASE
-#undef PMAPE_BASE
-#endif
-#define PMAPE_BASE 0xEB2800  /* M68K physical address */
-
-
 /* NETWORK functions */
 extern void NETWORK_$GET_NET(uint32_t node, void *net_info, status_$t *status);
 /* Note: NETWORK_$AST_GET_INFO declared in ast.h */

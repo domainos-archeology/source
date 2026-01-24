@@ -75,7 +75,7 @@ void ast_$setup_page_read(aste_t *aste, uint32_t *segmap, uint16_t start_page,
         } else {
             /* Previous entry is installed - get address from PMAPE */
             uint16_t ppn = (uint16_t)(*(segmap - 1));
-            hint = *(uint32_t *)(PMAPE_BASE + (uint32_t)ppn * 16 + 0x0C) & 0x3FFFFF;
+            hint = *(uint32_t *)((uintptr_t)MMAPE_BASE + (uint32_t)ppn * 16 + 0x0C) & 0x3FFFFF;
         }
 
         ML_$UNLOCK(PMAP_LOCK_ID);

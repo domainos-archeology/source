@@ -132,9 +132,9 @@ int8_t PARITY_$CHK(void)
      * Get the PMAPE entry for this physical page to save protection info.
      * PMAPE is at base + (ppn * 4), with protection in bits 1-8 and ASID in bits 4-8.
      */
-    pmape_ptr = (uint32_t*)((char*)MMU_PMAPE_BASE + (PARITY_$ERR_PPN << 2));
+    pmape_ptr = (uint32_t*)((char*)PFT_BASE + (PARITY_$ERR_PPN << 2));
     saved_prot = (*(uint8_t*)pmape_ptr >> 1) & 0x7F;
-    saved_asid = (*pmape_ptr & PMAPE_PROT_MASK) >> PMAPE_PROT_SHIFT;
+    saved_asid = (*pmape_ptr & PFT_PROT_MASK) >> PFT_PROT_SHIFT;
 
     /*
      * Install the error page at scratch location to read it safely.

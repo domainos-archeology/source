@@ -22,25 +22,16 @@
  */
 
 #include "pmap/pmap_internal.h"
+#include "mmap/mmap.h"
+#include "mmu/mmu.h"
 #include "misc/misc.h"
 
-/* PMAPE base addresses */
-#if defined(M68K)
-    #define PMAPE_BASE          0xEB2800
-    #define MMU_PTE_BASE        0xFFB800
-#else
-    extern uint8_t pmape_base[];
-    extern uint8_t mmu_pte_base[];
-    #define PMAPE_BASE          ((uintptr_t)pmape_base)
-    #define MMU_PTE_BASE        ((uintptr_t)mmu_pte_base)
-#endif
-
-/* PMAPE structure offsets within 16-byte entries */
-#define PMAPE_LOCK_OFFSET       0x00
-#define PMAPE_PAGE_IDX_OFFSET   0x01
-#define PMAPE_SEG_IDX_OFFSET    0x02
-#define PMAPE_STATE_OFFSET      0x04
-#define PMAPE_FLAGS_OFFSET      0x09
+/* MMAPE structure offsets within 16-byte entries (at 0xEB2800) */
+#define MMAPE_LOCK_OFFSET       0x00    /* wire_count */
+#define MMAPE_PAGE_IDX_OFFSET   0x01    /* seg_offset */
+#define MMAPE_SEG_IDX_OFFSET    0x02    /* segment */
+#define MMAPE_STATE_OFFSET      0x04    /* wsl_index */
+#define MMAPE_FLAGS_OFFSET      0x09    /* flags2 */
 
 int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                     int16_t count, uint16_t flags, status_$t *status)
@@ -94,7 +85,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
                     /* Validate page is in valid range and locked */
                     if (vpn < 0x200 || vpn > 0xFFF ||
-                        *(char *)(PMAPE_BASE + pmape_offset) != '\0') {
+                        *(char *)((uintptr_t)MMAPE_BASE + pmape_offset) != '\0') {
                         /* Flush any pending batch */
                         if (batch_count > 0) {
                             FUN_00e1360c();
@@ -104,7 +95,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                     }
 
                     /* Verify page index matches */
-                    if (*(uint8_t *)(PMAPE_BASE + pmape_offset + PMAPE_PAGE_IDX_OFFSET) != page_idx) {
+                    if (*(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + MMAPE_PAGE_IDX_OFFSET) != page_idx) {
                         CRASH_SYSTEM(&status_$t_00e13a14);
                     }
 
@@ -119,19 +110,19 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
                     /* Check MMU dirty bit */
                     int pte_offset = vpn * 4;
-                    if ((*(uint16_t *)(MMU_PTE_BASE + pte_offset + 2) & 0x4000) == 0 &&
-                        (*(uint8_t *)(PMAPE_BASE + pmape_offset + PMAPE_FLAGS_OFFSET) & 0x40) == 0) {
+                    if ((*(uint16_t *)((uintptr_t)PFT_BASE + pte_offset + 2) & 0x4000) == 0 &&
+                        (*(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + MMAPE_FLAGS_OFFSET) & 0x40) == 0) {
                         modified_bit = 0;
                     } else {
                         /* Page was modified */
-                        if ((*(uint16_t *)(MMU_PTE_BASE + pte_offset + 2) & 0x4000) != 0) {
+                        if ((*(uint16_t *)((uintptr_t)PFT_BASE + pte_offset + 2) & 0x4000) != 0) {
                             any_dirty = -1;
                         }
                         /* Clear MMU dirty bit */
-                        *(uint16_t *)(MMU_PTE_BASE + pte_offset + 2) &= 0xBFFF;
+                        *(uint16_t *)((uintptr_t)PFT_BASE + pte_offset + 2) &= 0xBFFF;
                         modified_bit = -1;
-                        /* Clear PMAPE modified flag */
-                        *(uint8_t *)(PMAPE_BASE + pmape_offset + PMAPE_FLAGS_OFFSET) &= 0xBF;
+                        /* Clear MMAPE modified flag */
+                        *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + MMAPE_FLAGS_OFFSET) &= 0xBF;
 
                         /* If not skipping writes */
                         if ((flags & 2) == 0) {

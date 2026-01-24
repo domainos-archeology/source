@@ -17,20 +17,20 @@ uint16_t MMU_$SET_PROT(uint32_t ppn, uint16_t prot)
     uint16_t new_prot;
 
     /* Get pointer to PMAPE low word (where protection bits are stored) */
-    pmape_word = (uint16_t*)((char*)MMU_PMAPE_BASE + ((ppn & 0xFFFF) << 2));
+    pmape_word = (uint16_t*)((char*)PFT_BASE + ((ppn & 0xFFFF) << 2));
 
     /* Disable interrupts for atomic update */
     DISABLE_INTERRUPTS(saved_sr);
 
     /* Read current protection bits */
-    old_prot = *pmape_word & PMAPE_PROT_MASK;
+    old_prot = *pmape_word & PFT_PROT_MASK;
 
     /* XOR to update - (old ^ new) clears old and sets new */
-    new_prot = prot << PMAPE_PROT_SHIFT;
+    new_prot = prot << PFT_PROT_SHIFT;
     *pmape_word ^= (old_prot ^ new_prot);
 
     ENABLE_INTERRUPTS(saved_sr);
 
     /* Return previous protection value (unshifted) */
-    return old_prot >> PMAPE_PROT_SHIFT;
+    return old_prot >> PFT_PROT_SHIFT;
 }

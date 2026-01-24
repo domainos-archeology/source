@@ -225,23 +225,23 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
                 }
 
                 int pmape_offset = ppn * 0x10;
-                if (*(int8_t *)(PMAPE_BASE + pmape_offset + 5) < 0) {
+                if (*(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 5) < 0) {
                     CRASH_SYSTEM(&OS_MMAP_bad_install);
                 }
 
                 /* Set up PMAPE entry */
-                *(uint8_t *)(PMAPE_BASE + pmape_offset) = 0;
-                *(uint8_t *)(PMAPE_BASE + pmape_offset + 9) &= 0xBF;
-                *(uint8_t *)(PMAPE_BASE + pmape_offset + 5) &= 0xBF;
+                *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset) = 0;
+                *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 9) &= 0xBF;
+                *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 5) &= 0xBF;
 
                 if ((flags & 0x08) != 0) {
-                    *(uint8_t *)(PMAPE_BASE + pmape_offset + 5) |= 0x40;
+                    *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 5) |= 0x40;
                 }
 
-                *(uint8_t *)(PMAPE_BASE + pmape_offset + 9) &= 0x7F;
-                *(uint8_t *)(PMAPE_BASE + pmape_offset + 1) = (uint8_t)page + i;
-                *(uint16_t *)(PMAPE_BASE + pmape_offset + 2) = aste->seg_index;
-                *(uint32_t *)(PMAPE_BASE + pmape_offset + 0x0C) = *segmap_ptr & 0x7FFFFF;
+                *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 9) &= 0x7F;
+                *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 1) = (uint8_t)page + i;
+                *(uint16_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 2) = aste->seg_index;
+                *(uint32_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 0x0C) = *segmap_ptr & 0x7FFFFF;
 
                 /* Update segment map entry */
                 *(uint16_t *)(segmap_ptr + 2) = (uint16_t)ppn;

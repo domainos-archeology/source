@@ -13,10 +13,10 @@
 
 void AST_$INVALIDATE_PAGE(aste_t *aste, uint32_t *segmap_entry, uint32_t ppn)
 {
-    pmape_t *pmape;
+    mmape_t *pmape;
 
-    /* Calculate PMAPE address: 0xEB4800 + ppn * 16 */
-    pmape = (pmape_t *)(PMAPE_BASE + 0x2000 + ppn * sizeof(pmape_t));
+    /* Calculate MMAPE address: 0xEB4800 + ppn * 16 */
+    pmape = (mmape_t *)((uintptr_t)MMAPE_BASE + 0x2000 + ppn * sizeof(mmape_t));
 
     /* If page was installed in MMU, remove it */
     if ((*segmap_entry & SEGMAP_FLAG_INSTALLED) != 0) {
@@ -31,7 +31,7 @@ void AST_$INVALIDATE_PAGE(aste_t *aste, uint32_t *segmap_entry, uint32_t ppn)
     *segmap_entry = (*segmap_entry & 0xFF800000) | pmape->disk_addr;
 
     /* Free the page and remove from MMAP (0xEB2800 + ppn * 16) */
-    MMAP_$FREE_REMOVE((mmape_t *)(PMAPE_BASE + ppn * sizeof(mmape_t)), ppn);
+    MMAP_$FREE_REMOVE((mmape_t *)((uintptr_t)MMAPE_BASE + ppn * sizeof(mmape_t)), ppn);
 
     /* Decrement page count */
     aste->page_count--;

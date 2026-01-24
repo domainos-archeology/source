@@ -38,12 +38,12 @@ uint8_t AST_$REMOVE_CORRUPTED_PAGE(uint32_t ppn)
         pmape_offset = ppn * 0x10;
 
         /* Get segment index from PMAPE */
-        seg_index = *(uint16_t *)(PMAPE_BASE + pmape_offset + 2);
+        seg_index = *(uint16_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 2);
 
         /* Check if page is installed and has a valid segment */
-        if (*(int8_t *)(PMAPE_BASE + pmape_offset + 5) < 0 && seg_index != 0) {
+        if (*(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 5) < 0 && seg_index != 0) {
             /* Calculate segment map offset */
-            uint8_t page_offset = *(uint8_t *)(PMAPE_BASE + pmape_offset + 1);
+            uint8_t page_offset = *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 1);
             segmap_offset = (int)(int16_t)(page_offset << 2) + (uint32_t)seg_index * 0x80;
 
             /* Check segment map entry */
@@ -53,7 +53,7 @@ uint8_t AST_$REMOVE_CORRUPTED_PAGE(uint32_t ppn)
                 if ((segmap_entry & 0x4000) != 0) {
                     /* Page is installed - check if it can be cleanly removed */
                     uint16_t hw_entry = *(uint16_t *)(0xFFB802 + ppn * 4);
-                    uint8_t pmape_flags = *(uint8_t *)(PMAPE_BASE + pmape_offset + 9);
+                    uint8_t pmape_flags = *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 9);
 
                     if ((hw_entry & 0x4000) == 0 && (pmape_flags & 0x40) == 0) {
                         /* Page can be safely invalidated */

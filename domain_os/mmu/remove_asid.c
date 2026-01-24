@@ -25,7 +25,7 @@ void MMU_$REMOVE_ASID(uint16_t asid)
     asid_match = ((uint32_t)(int16_t)asid << 25) | ((uint32_t)(int16_t)asid >> 7);
 
     /* Start at lowest pageable page */
-    pmape = PMAPE_FOR_PPN((uint16_t)MMAP_$LPPN);
+    pmape = PFT_FOR_PPN((uint16_t)MMAP_$LPPN);
 
     do {
         /* Check if this entry matches the ASID (compare high bits) */
@@ -47,7 +47,7 @@ void MMU_$REMOVE_ASID(uint16_t asid)
         /* Double-check the match (may have changed) */
         if ((*pmape & 0xFE000000) == asid_match) {
             /* Calculate PPN from PMAPE pointer */
-            uint16_t ppn = (uint16_t)(((char*)pmape - (char*)MMU_PMAPE_BASE) >> 2);
+            uint16_t ppn = (uint16_t)(((char*)pmape - (char*)PFT_BASE) >> 2);
             mmu_$remove_pmape(ppn);
         }
 

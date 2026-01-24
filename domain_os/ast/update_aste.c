@@ -67,10 +67,10 @@ void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, uint16_t flags,
             uint32_t pmape_offset = (uint32_t)ppn * 16;
 
             /* Get disk address from PMAPE (offset 0x0C) */
-            *dst = *(uint32_t *)(PMAPE_BASE + pmape_offset + 0x0C) & SEGMAP_DISK_ADDR_MASK;
+            *dst = *(uint32_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 0x0C) & SEGMAP_DISK_ADDR_MASK;
 
             /* Check PMAPE modified flag (bit 6 at offset 0x0C) */
-            if (*(uint16_t *)(PMAPE_BASE + pmape_offset + 0x0C) & 0x40) {
+            if (*(uint16_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 0x0C) & 0x40) {
                 *dst |= 0x80000000;
             }
         }

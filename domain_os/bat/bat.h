@@ -31,10 +31,6 @@
 #define bat_$not_mounted            0x10004
 #define bat_$invalid_block          0x80010003
 #define bat_$error                  0x80010001
-#define status_$disk_is_full        0x10002
-#define status_$disk_needs_salvaging    0x10005
-#define status_$disk_write_protected    0x80007
-#define status_$storage_module_stopped  0x8001b
 
 /*
  * BAT_$ALLOCATE - Allocate disk blocks

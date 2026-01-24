@@ -13,18 +13,16 @@
 #include "pmap/pmap_internal.h"
 #include "math/math.h"
 
-/* PMAPE base addresses */
+/* Include mmap.h and mmu.h for MMAPE_BASE and PFT_BASE */
+#include "mmap/mmap.h"
+#include "mmu/mmu.h"
+
+/* Additional base addresses */
 #if defined(M68K)
-    #define PMAPE_BASE          0xEB2800
-    #define SEGMAP_BASE         0xED5000
-    #define MMU_PTE_BASE        0xFFB800
+    #define SEGMAP_BASE_ADDR    0xED5000
 #else
-    extern uint8_t pmape_base[];
     extern uint8_t segmap_base[];
-    extern uint8_t mmu_pte_base[];
-    #define PMAPE_BASE          ((uintptr_t)pmape_base)
-    #define SEGMAP_BASE         ((uintptr_t)segmap_base)
-    #define MMU_PTE_BASE        ((uintptr_t)mmu_pte_base)
+    #define SEGMAP_BASE_ADDR    ((uintptr_t)segmap_base)
 #endif
 
 /* Additional data defined in pmap_internal.h */
@@ -101,20 +99,20 @@ void PMAP_$PURIFIER_R(void)
                     pmape_offset = vpn * 0x10;
 
                     /* Mark segment map entry as being written */
-                    uint16_t seg_idx = *(uint16_t *)(PMAPE_BASE + pmape_offset + 2);
-                    uint8_t page_idx = *(uint8_t *)(PMAPE_BASE + pmape_offset + 1);
-                    uint8_t *segmap_entry = (uint8_t *)(SEGMAP_BASE +
+                    uint16_t seg_idx = *(uint16_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 2);
+                    uint8_t page_idx = *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 1);
+                    uint8_t *segmap_entry = (uint8_t *)(SEGMAP_BASE_ADDR +
                                                         seg_idx * 0x80 +
                                                         (page_idx << 2));
                     segmap_entry[0] |= 0x80;
 
                     /* Clear MMU modified bit */
-                    *(uint16_t *)(MMU_PTE_BASE + vpn * 4 + 2) &= 0xBFFF;
+                    *(uint16_t *)((uintptr_t)PFT_BASE + vpn * 4 + 2) &= 0xBFFF;
 
                     /* Copy transition state if priority > 5 */
-                    uint8_t trans_state = *(uint8_t *)(PMAPE_BASE + pmape_offset + 8);
+                    uint8_t trans_state = *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 8);
                     if (trans_state > 5) {
-                        *(uint8_t *)(PMAPE_BASE + pmape_offset + 4) = trans_state;
+                        *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 4) = trans_state;
                     }
 
                     /* Write page to remote storage */
@@ -124,13 +122,13 @@ void PMAP_$PURIFIER_R(void)
                         /* Write succeeded */
                         EC_$ADVANCE(&PMAP_$PAGES_EC);
                         MMAP_$AVAIL(vpn);
-                    } else if (*(uint8_t *)(PMAPE_BASE + pmape_offset + 4) == 0x04 &&
+                    } else if (*(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 4) == 0x04 &&
                               status[0] != 0x30001 &&
                               status[0] != 0x30005 &&
                               status[0] != 0xF0001) {
                         /* Recoverable error - retry later */
                         MMAP_$UNAVAIL_REMOV(vpn);
-                        *(uint8_t *)(PMAPE_BASE + pmape_offset + 4) = 5;
+                        *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 4) = 5;
                         MMAP_$AVAIL(vpn);
                     }
                     /* Note: other errors leave page in current state for retry */

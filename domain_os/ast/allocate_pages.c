@@ -77,10 +77,10 @@ int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
                 pmape_offset = ppn * 16;  /* PMAPE entries are 16 bytes */
 
                 /* Get segment index from PMAPE (offset 2) */
-                seg_index = *(uint16_t *)(PMAPE_BASE + pmape_offset + 2);
+                seg_index = *(uint16_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 2);
 
                 /* Calculate segment map position */
-                uint32_t segmap_offset = ((uint32_t)(*(uint8_t *)(PMAPE_BASE + pmape_offset + 1) << 2) +
+                uint32_t segmap_offset = ((uint32_t)(*(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 1) << 2) +
                                          (uint32_t)seg_index * 0x80);
                 uint16_t *segmap_entry = (uint16_t *)(0xED5000 + segmap_offset - 0x80);
 
@@ -100,7 +100,7 @@ int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
                 *(uint32_t *)segmap_entry &= 0xFF800000;
 
                 /* Copy disk address from PMAPE (offset 0x0C) */
-                *(uint32_t *)segmap_entry |= *(uint32_t *)(PMAPE_BASE + pmape_offset + 0x0C);
+                *(uint32_t *)segmap_entry |= *(uint32_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 0x0C);
 
                 /* Decrement ASTE page count */
                 /* ASTE table at 0xEC5400, entry size 0x14 (20 bytes) */
@@ -109,7 +109,7 @@ int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
 
                 /* Log if enabled */
                 if (NETLOG_$OK_TO_LOG < 0) {
-                    FUN_00e00cac((void *)(PMAPE_BASE + pmape_offset), (int16_t)(ppn >> 16));
+                    FUN_00e00cac((void *)((uintptr_t)MMAPE_BASE + pmape_offset), (int16_t)(ppn >> 16));
                 }
 
                 allocated++;

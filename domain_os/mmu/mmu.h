@@ -8,8 +8,11 @@
  *
  * Key data structures:
  * - PTT (Page Translation Table) at 0x700000 - indexed by virtual address
- * - PMAPE (Physical Memory Attribute Page Entry) at 0xFFB800 - 4 bytes per physical page
+ * - PFT (Page Frame Table) at 0xFFB800 - 4 bytes per physical page
  * - ASID table at 0xEC2800 - Address Space Identifier per physical page
+ *
+ * Note: The MMAPE (Memory Map Page Entry) at 0xEB2800 is a separate 16-byte
+ * per-page structure managed by the MMAP layer (see mmap/mmap.h).
  *
  * MMU Control Registers (0xFFB400-0xFFB409):
  * - 0xFFB400: PID/Privilege/Power register (CSR)
@@ -32,27 +35,27 @@
 #define status_$mmu_miss        0x00070001
 
 /*
- * PMAPE (Physical Memory Attribute Page Entry)
+ * PFT (Page Frame Table)
  *
  * Located at 0xFFB800, 4 bytes per physical page.
  * Format:
  *   Bytes 0-1: Hash chain link (bits 0-11) + flags (bits 12-15)
  *   Bytes 2-3: Virtual address info for this physical page
  *
- * The PMAPE implements a hash table for reverse translation.
+ * The PFT implements a hash table for reverse translation (physical to virtual).
  * Multiple physical pages can map to the same PTT slot via hash chaining.
  */
 
-/* PMAPE flags in low word at offset +2 */
-#define PMAPE_LINK_MASK         0x0FFF  /* Hash chain next link (PPN) */
-#define PMAPE_FLAG_GLOBAL       0x1000  /* Global/shared mapping */
-#define PMAPE_FLAG_REFERENCED   0x2000  /* Page has been accessed */
-#define PMAPE_FLAG_MODIFIED     0x4000  /* Page has been modified */
-#define PMAPE_FLAG_HEAD         0x8000  /* Head of hash chain */
+/* PFT flags in low word at offset +2 */
+#define PFT_LINK_MASK           0x0FFF  /* Hash chain next link (PPN) */
+#define PFT_FLAG_GLOBAL         0x1000  /* Global/shared mapping */
+#define PFT_FLAG_REFERENCED     0x2000  /* Page has been accessed */
+#define PFT_FLAG_MODIFIED       0x4000  /* Page has been modified */
+#define PFT_FLAG_HEAD           0x8000  /* Head of hash chain */
 
-/* PMAPE protection/flags in high word */
-#define PMAPE_PROT_MASK         0x01F0  /* Protection bits */
-#define PMAPE_PROT_SHIFT        4
+/* PFT protection/flags in high word */
+#define PFT_PROT_MASK           0x01F0  /* Protection bits */
+#define PFT_PROT_SHIFT          4
 
 /*
  * PTT (Page Translation Table) Entry
@@ -91,8 +94,8 @@ typedef struct mmu_globals_t {
     /* PTT - Page Translation Table (indexed by virtual address) */
     #define PTT_BASE                ((uint16_t*)0x700000)
 
-    /* PMAPE - Physical Memory Attribute Page Entry (4 bytes per physical page) */
-    #define MMU_PMAPE_BASE          ((uint32_t*)0xFFB800)
+    /* PFT - Page Frame Table (4 bytes per physical page) */
+    #define PFT_BASE                ((uint32_t*)0xFFB800)
 
     /* ASID table - 2 bytes per physical page */
     #define ASID_TABLE_BASE         ((uint16_t*)0xEC2800)
@@ -122,7 +125,7 @@ typedef struct mmu_globals_t {
 #else
     /* For non-m68k platforms, these will be provided by platform init */
     extern uint16_t*        mmu_ptt_base;
-    extern uint32_t*        mmu_pmape_base;
+    extern uint32_t*        mmu_pft_base;
     extern uint16_t*        mmu_asid_table_base;
     extern volatile uint16_t* mmu_csr;
     extern volatile uint16_t* mmu_power_reg;
@@ -140,7 +143,7 @@ typedef struct mmu_globals_t {
     extern uint8_t          mmu_mcr_shadow;
 
     #define PTT_BASE                mmu_ptt_base
-    #define MMU_PMAPE_BASE          mmu_pmape_base
+    #define PFT_BASE                mmu_pft_base
     #define ASID_TABLE_BASE         mmu_asid_table_base
     #define MMU_CSR                 (*mmu_csr)
     #define MMU_POWER_REG           (*mmu_power_reg)
@@ -161,8 +164,8 @@ typedef struct mmu_globals_t {
 /* Get PTT entry for a virtual address */
 #define PTT_FOR_VA(va)          ((uint16_t*)((uint32_t)PTT_BASE + ((va) & VA_TO_PTT_OFFSET_MASK)))
 
-/* Get PMAPE entry for a physical page number */
-#define PMAPE_FOR_PPN(ppn)      ((uint32_t*)((char*)MMU_PMAPE_BASE + ((ppn) << 2)))
+/* Get PFT entry for a physical page number */
+#define PFT_FOR_PPN(ppn)        ((uint32_t*)((char*)PFT_BASE + ((ppn) << 2)))
 
 /* Get ASID entry for a physical page number */
 #define ASID_FOR_PPN(ppn)       (ASID_TABLE_BASE[(ppn)])

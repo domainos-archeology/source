@@ -286,29 +286,11 @@ extern void NETLOG_$LOG_IT(uint16_t type, void *uid, uint16_t seg,
 #define SEGMAP_DISK_ADDR_MASK 0x007FFFFF /* Disk address / PPN mask */
 
 /*
- * PMAPE (Physical Memory Attribute Page Entry)
- * Structure for tracking physical page attributes.
- * Located at PMAPE_BASE (0xEB2800) + ppn * 16
+ * Note: Physical page attributes are tracked using mmape_t from mmap/mmap.h.
+ * The MMAPE array is located at 0xEB2800, with 16 bytes per physical page.
+ * AST uses mmape_t fields like seg_offset (page index), segment (seg_index),
+ * and disk_addr for page mapping.
  */
-typedef struct pmape_t {
-  uint8_t ref_count;   /* 0x00: Reference count */
-  uint8_t page_offset; /* 0x01: Page offset in segment */
-  uint16_t seg_index;  /* 0x02: Segment index */
-  uint32_t unknown_04; /* 0x04: Unknown */
-  uint32_t unknown_08; /* 0x08: Unknown */
-  uint32_t disk_addr;  /* 0x0C: Disk address / physical info */
-} pmape_t;
-
-/* PMAPE base addresses */
-#if defined(M68K)
-#define PMAPE_BASE 0xEB2800
-#define MMAP_BASE 0xEB2800 /* Same as PMAPE_BASE */
-#else
-extern uint8_t *pmape_base;
-extern uint8_t *mmap_base;
-#define PMAPE_BASE pmape_base
-#define MMAP_BASE mmap_base
-#endif
 
 /*
  * Function prototypes - Initialization

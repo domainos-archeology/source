@@ -50,8 +50,8 @@ void AST_$FREE_PAGES(aste_t *aste, int16_t start_page, int16_t end_page, int16_t
             }
         } else {
             /* Page is installed - get disk address from PMAPE */
-            pmape_t *pmape = (pmape_t *)(PMAPE_BASE + 0x2000 +
-                              (uint32_t)(uint16_t)*segmap_ptr * sizeof(pmape_t));
+            mmape_t *pmape = (mmape_t *)((uintptr_t)MMAPE_BASE + 0x2000 +
+                              (uint32_t)(uint16_t)*segmap_ptr * sizeof(mmape_t));
             disk_addr = pmape->disk_addr & SEGMAP_DISK_ADDR_MASK;
 
             /* Track installed page for later removal */

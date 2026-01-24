@@ -56,16 +56,16 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn, status_$t *
         *(uint8_t *)segmap_ptr &= 0xBF;
 
         /* Save reference count */
-        old_ref_count = *(int8_t *)(PMAPE_BASE + pmape_offset);
+        old_ref_count = *(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset);
 
         /* Clear PPN in segment map */
         *segmap_ptr &= 0xFF800000;
 
         /* Copy disk address from PMAPE */
-        *segmap_ptr |= *(uint32_t *)(PMAPE_BASE + pmape_offset + 0x0C);
+        *segmap_ptr |= *(uint32_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 0x0C);
 
         /* Free the old page */
-        MMAP_$FREE_REMOVE((mmape_t *)(PMAPE_BASE + pmape_offset), old_ppn);
+        MMAP_$FREE_REMOVE((mmape_t *)((uintptr_t)MMAPE_BASE + pmape_offset), old_ppn);
 
         /* Decrement page count in ASTE area */
         (*(int8_t *)(seg_index * 0x14 + 0xEC53FC))--;
@@ -81,19 +81,19 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn, status_$t *
         pmape_offset = ppn * 0x10;
 
         /* Check that page is not already installed */
-        if (*(int8_t *)(PMAPE_BASE + pmape_offset + 5) < 0) {
+        if (*(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 5) < 0) {
             CRASH_SYSTEM(&OS_MMAP_bad_install);
         }
 
         /* Set up PMAPE entry */
-        *(int8_t *)(PMAPE_BASE + pmape_offset) = old_ref_count;
-        *(uint16_t *)(PMAPE_BASE + pmape_offset + 2) = seg_index;
-        *(uint8_t *)(PMAPE_BASE + pmape_offset + 5) |= 0x40;
-        *(uint8_t *)(PMAPE_BASE + pmape_offset + 1) = (uint8_t)page;
-        *(uint16_t *)(PMAPE_BASE + pmape_offset + 8) |= 0xC0;
+        *(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset) = old_ref_count;
+        *(uint16_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 2) = seg_index;
+        *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 5) |= 0x40;
+        *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 1) = (uint8_t)page;
+        *(uint16_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 8) |= 0xC0;
 
         /* Store disk address from segment map */
-        *(uint32_t *)(PMAPE_BASE + pmape_offset + 0x0C) = *segmap_ptr & 0x7FFFFF;
+        *(uint32_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 0x0C) = *segmap_ptr & 0x7FFFFF;
 
         /* Install page if not referenced */
         if (old_ref_count == 0) {

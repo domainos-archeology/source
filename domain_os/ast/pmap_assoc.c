@@ -59,7 +59,7 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
         }
 
         /* Check if page has references */
-        if (*(int8_t *)(PMAPE_BASE + pmape_offset) != 0) {
+        if (*(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset) != 0) {
             *status = 0x50007;  /* Page has references */
             return;
         }
@@ -71,10 +71,10 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
         *segmap_ptr &= 0xFF800000;
 
         /* Copy disk address from PMAPE */
-        *segmap_ptr |= *(uint32_t *)(PMAPE_BASE + pmape_offset + 0x0C);
+        *segmap_ptr |= *(uint32_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 0x0C);
 
         /* Free the old page */
-        MMAP_$FREE_REMOVE((mmape_t *)(PMAPE_BASE + pmape_offset), old_ppn);
+        MMAP_$FREE_REMOVE((mmape_t *)((uintptr_t)MMAPE_BASE + pmape_offset), old_ppn);
 
         aste->page_count--;
     } else {
@@ -100,22 +100,22 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
         pmape_offset = ppn * 0x10;
 
         /* Check that page is not already installed */
-        if (*(int8_t *)(PMAPE_BASE + pmape_offset + 5) < 0) {
+        if (*(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 5) < 0) {
             CRASH_SYSTEM(&OS_MMAP_bad_install);
         }
 
         /* Set up PMAPE entry */
-        *(uint16_t *)(PMAPE_BASE + pmape_offset + 2) = aste->seg_index;
-        *(uint8_t *)(PMAPE_BASE + pmape_offset + 5) |= 0x40;
-        *(uint8_t *)(PMAPE_BASE + pmape_offset + 1) = (uint8_t)page;
-        *(uint8_t *)(PMAPE_BASE + pmape_offset + 9) |= 0x40;
-        *(uint8_t *)(PMAPE_BASE + pmape_offset + 9) &= 0x7F;
+        *(uint16_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 2) = aste->seg_index;
+        *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 5) |= 0x40;
+        *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 1) = (uint8_t)page;
+        *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 9) |= 0x40;
+        *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 9) &= 0x7F;
 
         /* Store disk address from segment map */
-        *(uint32_t *)(PMAPE_BASE + pmape_offset + 0x0C) = *segmap_ptr & SEGMAP_DISK_ADDR_MASK;
+        *(uint32_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 0x0C) = *segmap_ptr & SEGMAP_DISK_ADDR_MASK;
 
         /* Install page if not already referenced */
-        if (*(int8_t *)(PMAPE_BASE + pmape_offset) == 0) {
+        if (*(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset) == 0) {
             MMAP_$INSTALL_LIST(&ppn, 1, 0);
         }
     }

@@ -25,10 +25,10 @@
  */
 void mmu_$remove_pmape(uint16_t ppn)
 {
-    uint32_t *pmape = PMAPE_FOR_PPN(ppn);
+    uint32_t *pmape = PFT_FOR_PPN(ppn);
     uint16_t asid_entry = ASID_FOR_PPN(ppn);
     uint32_t pmape_val = *pmape;
-    uint16_t link = pmape_val & PMAPE_LINK_MASK;
+    uint16_t link = pmape_val & PFT_LINK_MASK;
 
     if (link == 0) {
         /* Not in any hash chain */
@@ -46,15 +46,15 @@ void mmu_$remove_pmape(uint16_t ppn)
         uint16_t curr = link;
         do {
             prev_offset = curr << 2;
-            uint16_t next = *(uint16_t*)((char*)MMU_PMAPE_BASE + prev_offset + 2) & PMAPE_LINK_MASK;
+            uint16_t next = *(uint16_t*)((char*)PFT_BASE + prev_offset + 2) & PFT_LINK_MASK;
             curr = next;
         } while (curr != ppn);
 
         /* Update predecessor's link to skip us */
-        uint16_t *prev_link = (uint16_t*)((char*)MMU_PMAPE_BASE + prev_offset + 2);
+        uint16_t *prev_link = (uint16_t*)((char*)PFT_BASE + prev_offset + 2);
         uint16_t prev_val = *prev_link;
         /* Copy our link to predecessor, clear head bit, preserve other flags */
-        prev_val &= ~PMAPE_FLAG_HEAD;
+        prev_val &= ~PFT_FLAG_HEAD;
         *prev_link = ((pmape_val ^ prev_val) & 0x8FFF) ^ prev_val;
     }
 
@@ -77,7 +77,7 @@ void mmu_$unlink_from_hash(uint16_t ppn, uint16_t prev_offset,
                            uint32_t pmape_val, uint16_t *ptt_entry,
                            uint32_t *pmape)
 {
-    uint16_t link = pmape_val & PMAPE_LINK_MASK;
+    uint16_t link = pmape_val & PFT_LINK_MASK;
 
     if (link == 0) {
         /* Entry not in chain */
@@ -91,16 +91,16 @@ void mmu_$unlink_from_hash(uint16_t ppn, uint16_t prev_offset,
             uint16_t curr = link;
             do {
                 prev_offset = curr << 2;
-                uint16_t next = *(uint16_t*)((char*)MMU_PMAPE_BASE + prev_offset + 2) & PMAPE_LINK_MASK;
+                uint16_t next = *(uint16_t*)((char*)PFT_BASE + prev_offset + 2) & PFT_LINK_MASK;
                 curr = next;
             } while (curr != ppn);
         }
 
         /* Update predecessor's link */
-        uint16_t *prev_link = (uint16_t*)((char*)MMU_PMAPE_BASE + prev_offset + 2);
+        uint16_t *prev_link = (uint16_t*)((char*)PFT_BASE + prev_offset + 2);
         uint16_t prev_val = *prev_link;
         /* Clear head bit, copy link from removed entry */
-        prev_val &= ~PMAPE_FLAG_HEAD;
+        prev_val &= ~PFT_FLAG_HEAD;
         *prev_link = (((pmape_val & 0xFFFF) ^ prev_val) & 0x8FFF) ^ prev_val;
     }
 

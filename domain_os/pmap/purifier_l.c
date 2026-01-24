@@ -28,25 +28,23 @@ extern int8_t NETWORK_$DISKLESS;
 /* Disk checksum control flag */
 extern int8_t DISK_$DO_CHKSUM;
 
-/* WSL base */
+/* Include mmap.h and mmu.h for MMAPE_BASE and PFT_BASE */
+#include "mmap/mmap.h"
+#include "mmu/mmu.h"
+
+/* Additional base addresses */
 #if defined(M68K)
     #define WSL_BASE            0xE232B0
-    #define PMAPE_BASE          0xEB2800
-    #define SEGMAP_BASE         0xED5000
-    #define MMU_PTE_BASE        0xFFB800
+    #define SEGMAP_BASE_ADDR    0xED5000
     #define AOTE_TABLE_BASE     0xEC53F0
     #define PUR_STATS_BASE      0xE25D18
 #else
     extern uint8_t wsl_base[];
-    extern uint8_t pmape_base[];
     extern uint8_t segmap_base[];
-    extern uint8_t mmu_pte_base[];
     extern uint8_t aote_table[];
     extern uint8_t pur_stats[];
     #define WSL_BASE            ((uintptr_t)wsl_base)
-    #define PMAPE_BASE          ((uintptr_t)pmape_base)
-    #define SEGMAP_BASE         ((uintptr_t)segmap_base)
-    #define MMU_PTE_BASE        ((uintptr_t)mmu_pte_base)
+    #define SEGMAP_BASE_ADDR    ((uintptr_t)segmap_base)
     #define AOTE_TABLE_BASE     ((uintptr_t)aote_table)
     #define PUR_STATS_BASE      ((uintptr_t)pur_stats)
 #endif
@@ -141,20 +139,20 @@ void PMAP_$PURIFIER_L(void)
                     pmape_offset = vpn * 0x10;
 
                     /* Update segment map to mark page as being written */
-                    uint16_t seg_idx = *(uint16_t *)(PMAPE_BASE + pmape_offset + 2);
-                    uint8_t page_idx = *(uint8_t *)(PMAPE_BASE + pmape_offset + 1);
-                    uint8_t *segmap_entry = (uint8_t *)(SEGMAP_BASE +
+                    uint16_t seg_idx = *(uint16_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 2);
+                    uint8_t page_idx = *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 1);
+                    uint8_t *segmap_entry = (uint8_t *)(SEGMAP_BASE_ADDR +
                                                         seg_idx * 0x80 +
                                                         (page_idx << 2));
                     segmap_entry[0] |= 0x80;
 
                     /* Clear MMU modified bit and update AOTE timestamp */
                     int pte_offset = vpn * 4;
-                    if ((*(uint16_t *)(MMU_PTE_BASE + pte_offset + 2) & 0x4000) != 0) {
-                        *(uint16_t *)(MMU_PTE_BASE + pte_offset + 2) &= 0xBFFF;
+                    if ((*(uint16_t *)((uintptr_t)PFT_BASE + pte_offset + 2) & 0x4000) != 0) {
+                        *(uint16_t *)((uintptr_t)PFT_BASE + pte_offset + 2) &= 0xBFFF;
 
                         /* Update AOTE timestamps if not remote */
-                        if (*(int8_t *)(PMAPE_BASE + pmape_offset + 9) >= 0) {
+                        if (*(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 9) >= 0) {
                             int aote_offset = (int16_t)(seg_idx * 0x14);
                             struct aote_t *aote = *(struct aote_t **)(AOTE_TABLE_BASE + aote_offset);
                             TIME_$ABS_CLOCK((clock_t *)((char *)aote + 0x38));
@@ -166,9 +164,9 @@ void PMAP_$PURIFIER_L(void)
                     }
 
                     /* Copy transition state if needed */
-                    if (*(uint8_t *)(PMAPE_BASE + pmape_offset + 8) != 0) {
-                        *(uint8_t *)(PMAPE_BASE + pmape_offset + 4) =
-                            *(uint8_t *)(PMAPE_BASE + pmape_offset + 8);
+                    if (*(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 8) != 0) {
+                        *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 4) =
+                            *(uint8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 8);
                     }
                 }
 
@@ -205,10 +203,10 @@ void PMAP_$PURIFIER_L(void)
                             /* Write succeeded */
                             did_advance = -1;
                             MMAP_$AVAIL(vpn);
-                        } else if (*(uint8_t *)(vpn * 0x10 + PMAPE_BASE + 4) == 0x03) {
+                        } else if (*(uint8_t *)(vpn * 0x10 + (uintptr_t)MMAPE_BASE + 4) == 0x03) {
                             /* Page was modified during write */
                             MMAP_$UNAVAIL_REMOV(vpn);
-                            *(uint8_t *)(vpn * 0x10 + PMAPE_BASE + 4) = 5;
+                            *(uint8_t *)(vpn * 0x10 + (uintptr_t)MMAPE_BASE + 4) = 5;
                             MMAP_$AVAIL(vpn);
                         }
 

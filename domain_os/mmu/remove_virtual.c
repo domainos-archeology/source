@@ -52,7 +52,7 @@ void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
 
                 /* Search hash chain for matching ASID */
                 do {
-                    uint32_t *pmape = PMAPE_FOR_PPN(ppn);
+                    uint32_t *pmape = PFT_FOR_PPN(ppn);
                     uint32_t pmape_val = *pmape;
                     uint16_t pmape_high = (uint16_t)(pmape_val >> 16);
 
@@ -60,17 +60,17 @@ void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
                     if (((pmape_high ^ (uint16_t)match_key) & 0xFE0F) == 0) {
                         /* Match found - remove this entry */
                         /* Update hash chain */
-                        uint16_t next_ppn = pmape_val & PMAPE_LINK_MASK;
+                        uint16_t next_ppn = pmape_val & PFT_LINK_MASK;
 
                         if (ppn == first_ppn) {
                             /* Removing head of chain */
                             *ptt_entry = next_ppn;
                         } else {
                             /* Removing from middle/end of chain */
-                            uint16_t *prev_link = (uint16_t*)((char*)MMU_PMAPE_BASE + prev_offset + 2);
+                            uint16_t *prev_link = (uint16_t*)((char*)PFT_BASE + prev_offset + 2);
                             uint16_t prev_val = *prev_link;
                             /* Copy link from removed entry, clear head bit */
-                            prev_val &= ~PMAPE_FLAG_HEAD;
+                            prev_val &= ~PFT_FLAG_HEAD;
                             *prev_link = ((pmape_val ^ prev_val) & 0x8FFF) ^ prev_val;
                         }
 
@@ -83,7 +83,7 @@ void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
                     }
 
                     prev_offset = ppn << 2;
-                    ppn = pmape_val & PMAPE_LINK_MASK;
+                    ppn = pmape_val & PFT_LINK_MASK;
                 } while (ppn != first_ppn);
             }
 

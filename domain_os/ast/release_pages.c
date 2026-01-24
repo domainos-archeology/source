@@ -38,7 +38,7 @@ void AST_$RELEASE_PAGES(aste_t *aste, int8_t return_to_pool)
             ppn = entry_lo;
 
             /* Check if page has no references */
-            if (*(int8_t *)(ppn * 0x10 + PMAPE_BASE) == 0) {
+            if (*(int8_t *)(ppn * 0x10 + (uintptr_t)MMAPE_BASE) == 0) {
                 /* Clear wired bit */
                 *(uint8_t *)segmap_ptr &= 0xDF;
 

@@ -43,15 +43,15 @@ struct ws_hdr_t;
  */
 typedef struct mmape_t {
     uint8_t     wire_count;         /* 0x00: Wire count (prevents paging when > 0) */
-    uint8_t     seg_offset;         /* 0x01: Segment offset for PTE calculation (<<2) */
-    uint16_t    segment;            /* 0x02: Segment number (<<7 for segment base) */
+    uint8_t     seg_offset;         /* 0x01: Segment offset / page offset in segment */
+    uint16_t    segment;            /* 0x02: Segment index (<<7 for segment base) */
     uint8_t     wsl_index;          /* 0x04: Working set list index this page belongs to */
     uint8_t     flags1;             /* 0x05: Flags - see MMAPE_FLAG1_* below */
     uint16_t    prev_vpn;           /* 0x06: Previous page in WSL doubly-linked list */
     uint8_t     priority;           /* 0x08: Page priority for replacement */
     uint8_t     flags2;             /* 0x09: Flags - see MMAPE_FLAG2_* below */
     uint16_t    next_vpn;           /* 0x0A: Next page in WSL doubly-linked list */
-    uint8_t     reserved[4];        /* 0x0C: Padding to 16 bytes */
+    uint32_t    disk_addr;          /* 0x0C: Disk address (used by AST layer for paging) */
 } mmape_t;
 
 /* mmape_t flags1 bit definitions */
@@ -131,7 +131,6 @@ typedef struct mmap_globals_t {
     #define MMAP_WSL_HI_MARK    (*(uint16_t*)0xE23CA6)
     #define MMAP_PID_TO_WSL     ((uint16_t*)0xE23CA6)
     #define PTE_BASE            ((uint16_t*)0xED5000)
-    #define PMAPE_BASE          ((uint16_t*)0xFFB800)
 #else
     /* For non-m68k platforms, these will be provided by platform init */
     extern mmape_t*         mmap_mmape_base;
@@ -140,7 +139,6 @@ typedef struct mmap_globals_t {
     extern uint16_t         mmap_wsl_hi_mark;
     extern uint16_t*        mmap_pid_to_wsl;
     extern uint16_t*        mmap_pte_base;
-    extern uint16_t*        mmap_pmape_base;
 
     #define MMAPE_BASE          mmap_mmape_base
     #define MMAP_GLOBALS        mmap_globals
@@ -148,7 +146,6 @@ typedef struct mmap_globals_t {
     #define MMAP_WSL_HI_MARK    mmap_wsl_hi_mark
     #define MMAP_PID_TO_WSL     mmap_pid_to_wsl
     #define PTE_BASE            mmap_pte_base
-    #define PMAPE_BASE          mmap_pmape_base
 #endif
 
 /* Get mmape entry for a virtual page number */
@@ -159,16 +156,6 @@ typedef struct mmap_globals_t {
 
 /* Get WSL index for a process ID */
 #define WSL_FOR_PID(pid)        (MMAP_PID_TO_WSL[(pid)])
-
-/*
- * PMAPE (Physical Memory Attribute Page Entry) access
- * Located at 0xFFB800, 4 bytes per entry
- */
-#define PMAPE_FOR_VPN(vpn)      ((uint16_t*)((char*)PMAPE_BASE + (vpn) * 4))
-
-/* PMAPE bit definitions (in the word at offset +2) */
-#define PMAPE_FLAG_MODIFIED     0x4000  /* Page modified */
-#define PMAPE_FLAG_REFERENCED   0x2000  /* Page referenced */
 
 /*
  * MMAP global data
