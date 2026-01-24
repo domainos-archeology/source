@@ -44,9 +44,6 @@
 /* OS status codes (module 0x03) */
 #define status_$os_only_local_access_allowed 0x0003000A
 
-/* File status codes (module 0x0F) */
-#define file_$object_not_found 0x000F0001
-
 /*
  * Forward declarations
  */

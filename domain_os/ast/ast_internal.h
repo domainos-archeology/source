@@ -16,6 +16,7 @@
 /* Note: pmap/pmap.h excluded due to NETLOG_$LOG_IT signature conflict */
 #include "bat/bat.h"
 #include "disk/disk.h"
+#include "file/file.h"
 #include "fm/fm.h"
 #include "misc/misc.h"
 #include "vtoc/vtoc.h"
