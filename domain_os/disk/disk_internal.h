@@ -67,7 +67,10 @@
 #define VOL_TABLE_SCAN_COUNT  6
 
 /* PV Label UID constant at 0xe1738c */
-extern uint32_t PV_LABEL__UID[];
+extern uid_t PV_LABEL_$UID;
+
+/* LV Label UID constant at 0xe17394 */
+extern uid_t LV_LABEL_$UID;
 
 /*
  * Internal data structures

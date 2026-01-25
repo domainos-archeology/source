@@ -212,6 +212,7 @@ void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status);
 /* Volume assignment operations */
 int16_t DISK_$PV_MOUNT(int16_t dev, int16_t bus, int16_t ctlr,
                        status_$t *status);
+int16_t DISK_$LV_MOUNT(uid_t *lv_uid, status_$t *status_ret);
 void DISK_$LV_UID(int16_t vol_idx, int16_t lv_num, uid_t *uid_ret,
                   status_$t *status);
 void DISK_$PV_ASSIGN_N(int16_t *unit_type_ptr, int16_t *device_ptr,
