@@ -43,8 +43,9 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
     status_$t status;
     uint32_t *src, *dst;
     int16_t i, type;
-    uint16_t lock_handle;
-    uint8_t lock_buf[8];
+    uint32_t lock_handle;
+    uint16_t lock_result;
+    uint32_t dtv_buf[2];
     status_$t lock_status;
 
     /* Build the request */
@@ -98,7 +99,7 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
 
         /* Lock the file for protection update */
         FILE_$PRIV_LOCK(file_uid, PROC1_$AS_ID, 0, 4, 0, 0x80000, 0, 0, 0,
-                        NULL, 1, &lock_handle, lock_buf, status_ret);
+                        NULL, 1, &lock_handle, &lock_result, status_ret);
         if (*status_ret != status_$ok) {
             return;
         }
@@ -107,8 +108,8 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
         FILE_$SET_PROT(file_uid, NULL, prot_buf, &response.temp_acl, status_ret);
 
         /* Unlock the file */
-        FILE_$PRIV_UNLOCK(file_uid, lock_handle, ((uint32_t)4 << 16) | PROC1_$AS_ID,
-                          0, 0, 0, lock_buf, &lock_status);
+        FILE_$PRIV_UNLOCK(file_uid, (uint16_t)lock_handle, ((uint32_t)4 << 16) | PROC1_$AS_ID,
+                          0, 0, 0, dtv_buf, &lock_status);
     } else {
         *status_ret = status;
     }

@@ -14,7 +14,6 @@
 #include "acl/acl.h"
 #include "time/time.h"
 #include "hint/hint.h"
-#include "vtoce/vtoce.h"
 #include "rem_file/rem_file.h"
 #include "audit/audit.h"
 #include "route/route.h"

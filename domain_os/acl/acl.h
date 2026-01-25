@@ -605,6 +605,25 @@ void ACL_$CONVERT_TO_9ACL(int16_t type, uid_t *source_uid, uid_t *dir_uid,
                           void *default_prot, uid_t *result_uid, status_$t *status_ret);
 
 /*
+ * ACL_$CONVERT_FROM_9ACL - Convert from 9-entry ACL format to new format
+ *
+ * Inverse of ACL_$CONVERT_TO_9ACL. Converts old 9-entry ACL format
+ * to the new protection format.
+ *
+ * Parameters:
+ *   source_acl   - Source ACL UID in 9-entry format
+ *   acl_type     - ACL type UID
+ *   prot_buf_out - Output: protection data buffer (44 bytes)
+ *   prot_uid_out - Output: protection UID
+ *   status_ret   - Output status code
+ *
+ * TODO: Locate and analyze actual implementation in Ghidra
+ */
+void ACL_$CONVERT_FROM_9ACL(uid_t *source_acl, uid_t *acl_type,
+                             void *prot_buf_out, uid_t *prot_uid_out,
+                             status_$t *status_ret);
+
+/*
  * ACL_$COPY - Copy ACL from source to destination
  *
  * Parameters:
@@ -656,5 +675,6 @@ void ACL_$SET_LOCAL_LOCKSMITH(int16_t *locksmith_value, status_$t *status_ret);
 /* Default ACL UIDs for different object types */
 extern uid_t ACL_$DNDCAL;   /* 0xE174DC: Default ACL for dirs/links */
 extern uid_t ACL_$FNDWRX;   /* 0xE174C4: Default ACL for files */
+extern uid_t ACL_$DIR_ACL;  /* Well-known ACL UID for directories */
 
 #endif /* ACL_H */

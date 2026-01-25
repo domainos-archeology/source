@@ -81,3 +81,4 @@ uid_t ACL_$DIRIN_ACL;       /* 0xE1745C: {0x00000603, 0x00000000} */
 uid_t ACL_$DIR_MERGE_ACL;   /* 0xE17464: {0x00000604, 0x00000000} */
 uid_t ACL_$FILE_MERGE_ACL;  /* 0xE1746C: {0x00000605, 0x00000000} */
 uid_t ACL_$FILE_SUBS_ACL;   /* 0xE17474: {0x00000606, 0x00000000} */
+uid_t ACL_$DIR_ACL;         /* Well-known ACL UID for directories (TODO: find actual address) */
