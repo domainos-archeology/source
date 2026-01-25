@@ -125,7 +125,7 @@ int16_t PROC2_$WAIT(uint16_t *options, int16_t *pid, uint32_t *result,
     } else {
         /* Wait for children in specific pgroup (pid_val is negative) */
         wait_pgroup = -1;
-        target_pgroup = FUN_00e42224(pid_val < 0 ? -pid_val : pid_val);
+        target_pgroup = PGROUP_FIND_BY_UPGID(pid_val < 0 ? -pid_val : pid_val);
     }
 
     /* Validate specific pid range (65-30000) */

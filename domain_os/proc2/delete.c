@@ -43,7 +43,7 @@ static void PROC2_$DELETE_CLEANUP(void)
      * - FUN_00e0a454()
      * - SCSI_$FREE_ASID()
      * - ML_$LOCK/UNLOCK for pgroup operations
-     * - FUN_00e420b8() for pgroup cleanup
+     * - PGROUP_CLEANUP_INTERNAL() for pgroup cleanup
      * - DIR_$DROPU() for directory cleanup
      * - EC_$ADVANCE() for eventcount notification
      * - PROC1_$GET_CPU_USAGE() for accounting

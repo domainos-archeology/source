@@ -67,7 +67,7 @@ void PROC2_$SET_SESSION_ID(int8_t *flags, int16_t *session_id, status_$t *status
     if (new_session == P2_SS_UPID(cur_idx)) {
         /* Same session - check if we're the group leader */
         if (new_session != 0) {
-            pgroup_idx = FUN_00e42224(new_session);
+            pgroup_idx = PGROUP_FIND_BY_UPGID(new_session);
 
             if (P2_SS_PGROUP(cur_idx) != 0 &&
                 P2_SS_PGROUP(cur_idx) == pgroup_idx) {
@@ -99,13 +99,13 @@ void PROC2_$SET_SESSION_ID(int8_t *flags, int16_t *session_id, status_$t *status
 
     if (can_set && status == 0) {
         /* Call helper to prepare for session change */
-        FUN_00e420b8(P2_SS_ENTRY(cur_idx), 2);
+        PGROUP_CLEANUP_INTERNAL(P2_SS_ENTRY(cur_idx), 2);
 
         /* Set the new session ID */
         P2_SS_SESSION(cur_idx) = new_session;
 
         /* Call helper to complete session setup */
-        FUN_00e41e86(P2_SS_ENTRY(cur_idx), new_session, &status);
+        PGROUP_SET_INTERNAL(P2_SS_ENTRY(cur_idx), new_session, &status);
     }
 
     ML_$UNLOCK(PROC2_LOCK_ID);

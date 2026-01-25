@@ -147,7 +147,7 @@ static void detach_from_parent(int16_t child_idx, int16_t prev_sibling_idx)
     } else {
         /* Zombie - move to free/zombie list */
         /* TODO: Implement zombie list management */
-        /* FUN_00e420b8(info, 1); */
+        /* PGROUP_CLEANUP_INTERNAL(info, 1); */
 
         /* Remove from allocation list, add to free list */
         /* This is complex linked list manipulation - simplified here */
