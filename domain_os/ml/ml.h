@@ -36,6 +36,10 @@ typedef struct ml_$exclusion_t {
     int16_t     f5;         /* 0x10: State: -1 = unlocked, >= 0 = locked + waiter count */
 } ml_$exclusion_t;
 
+typedef struct ml_$spinlock_t {
+    int32_t     f1;
+} ml_$spinlock_t;
+
 /*
  * Spin lock token type
  *

@@ -10,6 +10,7 @@
 
 #include "volx/volx.h"
 #include "ast/ast.h"
+#include "bat/bat.h"
 #include "network/network.h"
 #include "disk/disk.h"
 #include "dbuf/dbuf.h"

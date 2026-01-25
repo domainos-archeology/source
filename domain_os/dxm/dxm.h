@@ -41,7 +41,7 @@ typedef struct dxm_queue_t {
     uint16_t        tail;           /* 0x02: Tail index (next to enqueue) */
     uint16_t        mask;           /* 0x04: Index mask for circular wrap */
     uint16_t        pad_06;         /* 0x06: Padding/alignment */
-    ml_spinlock_t   lock;           /* 0x08: Spin lock for queue access */
+    ml_$spinlock_t  lock;           /* 0x08: Spin lock for queue access */
     ec_$eventcount_t ec;            /* 0x0C: Event count for signaling */
     void            *entries;       /* 0x18: Pointer to entry array */
 } dxm_queue_t;

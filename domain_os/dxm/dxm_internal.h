@@ -10,6 +10,8 @@
 #include "dxm/dxm.h"
 #include "proc1/proc1.h"
 #include "misc/misc.h"
+#include "misc/crash_system.h"
+#include "ml/ml.h"
 
 /*
  * Error message for datum too large
