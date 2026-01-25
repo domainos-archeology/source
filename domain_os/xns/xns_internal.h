@@ -197,38 +197,6 @@ int8_t xns_$is_local_addr(void *addr);
 uint8_t xns_$copy_header(void *packet_info);
 
 /*
- * xns_$setup_error_header - Set up error packet header fields
- *
- * Initializes the error packet header with appropriate values
- * for an XNS Error Protocol packet.
- *
- * Original address: 0x00E17960
- */
-void xns_$setup_error_header(void);
-
-/*
- * xns_$maybe_open_error_socket - Open error socket if not already open
- *
- * Opens the XNS Error Protocol socket channel if it's not already
- * open. This is used by XNS_ERROR_$SEND.
- *
- * @param status_ret    Output: status code
- *
- * Original address: 0x00E178AA
- */
-void xns_$maybe_open_error_socket(status_$t *status_ret);
-
-/*
- * xns_$maybe_close_error_socket - Close error socket if open
- *
- * Closes the XNS Error Protocol socket channel if it was opened
- * by xns_$maybe_open_error_socket.
- *
- * Original address: 0x00E17910
- */
-void xns_$maybe_close_error_socket(void);
-
-/*
  * xns_$copy_packet_data - Copy packet data to user buffer
  *
  * Copies received packet data to the user's receive buffer(s).
