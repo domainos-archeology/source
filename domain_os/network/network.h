@@ -116,11 +116,46 @@ int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,
 /*
  * NETWORK_$INSTALL_NET - Install network node
  *
- * @param node    Node ID to install
- * @param info    Node information
+ * Registers a network node in the network table. If the node already exists,
+ * increments the reference count. Otherwise, allocates a new slot and stores
+ * the network ID.
+ *
+ * The network index (1-63) is encoded into bits 4-9 of the info parameter.
+ *
+ * @param node    Network ID to install
+ * @param info    Pointer to network info (bits 4-9 receive network index)
  * @param status  Output status code
+ *
+ * Original address: 0x00E0F1E0
  */
-void NETWORK_$INSTALL_NET(uint32_t node, void *info, status_$t *status);
+void NETWORK_$INSTALL_NET(uint32_t node, uint16_t *info, status_$t *status);
+
+/*
+ * NETWORK_$REMOVE_NET - Remove network node
+ *
+ * Decrements the reference count for a network. If the reference count
+ * reaches zero, the network slot is freed.
+ *
+ * @param net_addr Network address (bits 4-9 contain network index)
+ * @param status   Output status code
+ *
+ * Original address: 0x00E0F27C
+ */
+void NETWORK_$REMOVE_NET(uint32_t net_addr, status_$t *status);
+
+/*
+ * NETWORK_$GET_NET - Get network ID for a network address
+ *
+ * Looks up the network ID from the network table using the network index
+ * encoded in bits 4-9 of the network address.
+ *
+ * @param net_addr   Network address (bits 4-9 contain network index)
+ * @param net_id_out Output: network ID (0 if index is 0 or not found)
+ * @param status     Output status code
+ *
+ * Original address: 0x00E0F2CC
+ */
+void NETWORK_$GET_NET(uint32_t net_addr, uint32_t *net_id_out, status_$t *status);
 
 /*
  * NETWORK_$AST_GET_INFO - Get AST info for network object

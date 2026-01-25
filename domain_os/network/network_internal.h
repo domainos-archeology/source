@@ -48,7 +48,39 @@ extern int8_t NETWORK_$LOOPBACK_FLAG;
  */
 #define status_$network_no_available_sockets 0x00110005
 #define status_$network_unexpected_reply_type 0x0011000B
+#define status_$network_unknown_network 0x00110017
+#define status_$network_too_many_networks_in_internet 0x00110018
 #define status_$network_too_many_transmit_retries 0x00110011
+
+/*
+ * Network table - maps network indices to network IDs
+ *
+ * The table has 64 entries (indices 1-63, with 0 being special/unused).
+ * Each entry is 8 bytes:
+ *   - 4 bytes: reference count (number of uses of this network)
+ *   - 4 bytes: network ID (the actual network identifier)
+ *
+ * A network address contains the network index in bits 4-9 (mask 0x3F0).
+ * Extract with: (addr & 0x3F0) >> 4
+ *
+ * Data layout in m68k memory:
+ *   0xE24934: refcount[0], refcount[1], ... (each 8 bytes apart)
+ *   0xE24938: net_id[0], net_id[1], ...     (each 8 bytes apart)
+ */
+typedef struct network_table_entry_t {
+    uint32_t refcount;      /* Number of references to this network */
+    uint32_t net_id;        /* Network identifier */
+} network_table_entry_t;
+
+#define NETWORK_TABLE_SIZE 64
+
+/* Network table - 64 entries indexed by network index */
+extern network_table_entry_t NETWORK_$NET_TABLE[NETWORK_TABLE_SIZE];
+
+/* Extract network index from a network address value */
+#define NETWORK_INDEX_MASK  0x3F0
+#define NETWORK_INDEX_SHIFT 4
+#define NETWORK_GET_INDEX(addr) (((addr) & NETWORK_INDEX_MASK) >> NETWORK_INDEX_SHIFT)
 
 /*
  * Network globals
