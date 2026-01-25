@@ -560,7 +560,7 @@ typedef void (*smd_blink_func_t)(void);
 extern smd_blink_func_t SMD_BLINK_FUNC_PTABLE[SMD_MAX_DISPLAY_UNITS];
 
 /* Request lock ID for cursor operations */
-#define SMD_REQUEST_LOCK 8
+#define smd_$request_lock 8
 
 /* Lock data used by SMD_$ACQ_DISPLAY for scroll operations
  * Address: 0x00E6D92C */
@@ -977,9 +977,6 @@ void smd_$enqueue_event(uint16_t unit, uint16_t type, uint32_t pos,
 int8_t smd_$add_trk_rects_internal(int8_t clear_flag, smd_track_rect_t *rects,
                                    uint16_t count);
 
-/* Lock for SMD request/event operations */
-extern ml_$lock_t smd_$request_lock;
-
 /* Display Transfer Table Event count at 0x00E2DC90 */
 extern ec_$eventcount_t DTTE;
 
@@ -1042,10 +1039,7 @@ static inline smd_unit_aux_t *smd_get_unit_aux(uint16_t unit_num) {
 }
 
 /* Lock ID for respond/borrow operations */
-#define SMD_RESPOND_LOCK 7
-
-/* Lock for respond/borrow synchronization */
-extern ml_$lock_t smd_$respond_lock;
+#define smd_$respond_lock 7
 
 /* Secondary event count at 0x00E2E408 (used for borrow signaling) */
 extern ec_$eventcount_t SMD_BORROW_EC;
