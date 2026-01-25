@@ -81,7 +81,7 @@ uint16_t ast_$process_aote(aote_t *aote, uint8_t flags1, uint16_t flags2,
         }
 
         /* Process/free the ASTE */
-        FUN_00e01950(aste, ((uint32_t)flags1 << 24) | ((uint32_t)flags2 & 0xFF00),
+        AST_$DEACTIVATE_SEGMENT(aste, ((uint32_t)flags1 << 24) | ((uint32_t)flags2 & 0xFF00),
                      status);
 
         if (*status != status_$ok) {

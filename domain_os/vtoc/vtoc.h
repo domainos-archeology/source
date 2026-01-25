@@ -233,6 +233,25 @@ void VTOCE_$NEW_TO_OLD(void *new_vtoce, char *flags, void *old_vtoce);
 
 /*
  * ============================================================================
+ * Volume Search Functions
+ * ============================================================================
+ */
+
+/*
+ * VTOC_$SEARCH_VOLUMES - Search volumes for an object
+ *
+ * Searches volumes 1-5 for an object via VTOC_$LOOKUP.
+ * Used during force-activation path for root objects.
+ *
+ * @param uid_info  Pointer to UID info structure
+ * @param status    Output status code (file_$object_not_found if not found)
+ *
+ * Original address: 0x00E01BEE
+ */
+void VTOC_$SEARCH_VOLUMES(void *uid_info, status_$t *status);
+
+/*
+ * ============================================================================
  * File Map Functions
  * ============================================================================
  */

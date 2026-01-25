@@ -27,5 +27,5 @@ void DIR_$ADDU(uid_t *dir_uid, char *name, int16_t *name_len,
                uid_t *file_uid, status_$t *status_ret)
 {
     /* Call shared implementation with flags=0 (no special root flags) */
-    FUN_00e500b8(dir_uid, name, *name_len, file_uid, 0, status_ret);
+    DIR_$ADD_ENTRY_INTERNAL(dir_uid, name, *name_len, file_uid, 0, status_ret);
 }

@@ -87,7 +87,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
 
     /* Check network capability */
     {
-        int16_t cap_result = FUN_00e65904(routing_port, is_local);
+        int16_t cap_result = ROUTE_$VALIDATE_PORT(routing_port, is_local);
         if (cap_result == 2) {
             *status = status_$network_operation_not_defined_on_hardware;
             return;

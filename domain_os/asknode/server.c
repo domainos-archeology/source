@@ -115,7 +115,7 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
             /* Check network capability */
             response[7] = 0;
             {
-                int16_t cap = FUN_00e65904(*routing_info, -1);
+                int16_t cap = ROUTE_$VALIDATE_PORT(*routing_info, -1);
                 if (cap == 2) {
                     response[7] = status_$network_operation_not_defined_on_hardware;
                 } else if (cap == 0) {
@@ -160,7 +160,7 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
             response[7] = 0;
             {
                 int8_t is_local = (src_node == 0 || src_node == (int32_t)NODE_$ME) ? -1 : 0;
-                int16_t cap = FUN_00e65904(*routing_info, is_local);
+                int16_t cap = ROUTE_$VALIDATE_PORT(*routing_info, is_local);
                 if (cap == 2) {
                     response[7] = status_$network_operation_not_defined_on_hardware;
                 } else if (cap == 0) {

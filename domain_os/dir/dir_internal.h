@@ -223,13 +223,13 @@ void DIR_$DIR_READU_FUN_00e4e1a8(status_$t *status_ret);
 void FUN_00e4e1fe(status_$t *status_ret);
 
 /*
- * FUN_00e500b8 - Internal add entry helper
+ * DIR_$ADD_ENTRY_INTERNAL - Internal add entry helper
  *
  * Shared implementation for DIR_$ADDU and DIR_$ROOT_ADDU.
  *
  * Original address: 0x00E500B8
  */
-void FUN_00e500b8(uid_t *dir_uid, char *name, int16_t name_len,
+void DIR_$ADD_ENTRY_INTERNAL(uid_t *dir_uid, char *name, int16_t name_len,
                   uid_t *file_uid, uint32_t flags, status_$t *status_ret);
 
 /*

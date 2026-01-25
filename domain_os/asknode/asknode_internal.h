@@ -28,6 +28,7 @@
 #include "proc2/proc2.h"
 #include "ring/ring.h"
 #include "rip/rip.h"
+#include "route/route.h"
 #include "sock/sock.h"
 #include "time/time.h"
 #include "volx/volx.h"
@@ -181,28 +182,5 @@ extern ec_$eventcount_t *DAT_00e28dc4; /* Socket 5 EC */
 
 /* Network capability flags at 0x00E24C3F */
 extern uint8_t DAT_00e24c3f;
-
-/*
- * ============================================================================
- * Internal Helper Functions
- * ============================================================================
- */
-
-/*
- * FUN_00e65904 - Check network capability for node
- *
- * Checks if a network operation is supported for the given routing info.
- *
- * @param routing_key   Routing information
- * @param is_local      Non-zero if querying local node
- *
- * Returns:
- *   0: Unknown network
- *   1: Network supports operation
- *   2: Operation not defined on hardware
- *
- * Original address: 0x00E65904
- */
-int16_t FUN_00e65904(int32_t routing_key, int8_t is_local);
 
 #endif /* ASKNODE_INTERNAL_H */

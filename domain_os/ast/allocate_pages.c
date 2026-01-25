@@ -20,7 +20,7 @@
 /* External variables */
 
 /* Local netlog function */
-static void FUN_00e00cac(void *pmape, int16_t ppn_high);
+static void NETLOG_$LOG_PAGE(void *pmape, int16_t ppn_high);
 
 /* Error status */
 
@@ -109,7 +109,7 @@ int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
 
                 /* Log if enabled */
                 if (NETLOG_$OK_TO_LOG < 0) {
-                    FUN_00e00cac((void *)((uintptr_t)MMAPE_BASE + pmape_offset), (int16_t)(ppn >> 16));
+                    NETLOG_$LOG_PAGE((void *)((uintptr_t)MMAPE_BASE + pmape_offset), (int16_t)(ppn >> 16));
                 }
 
                 allocated++;
@@ -141,10 +141,53 @@ done:
     return (int16_t)allocated;
 }
 
-/* Stub for netlog function - to be implemented */
-static void FUN_00e00cac(void *pmape, int16_t ppn_high)
+/*
+ * NETLOG_$LOG_PAGE - Log page allocation for network logging
+ *
+ * Called when a page is allocated from the pure pool to log the event
+ * for network debugging. Gets segment info from PMAPE and calls
+ * NETLOG_$LOG_IT with the appropriate parameters.
+ *
+ * This was originally a nested procedure that accessed the caller's frame.
+ * For portability, we pass the necessary parameters explicitly.
+ *
+ * Original address: 0x00E00CAC
+ */
+static void NETLOG_$LOG_PAGE(void *pmape, int16_t ppn_high)
 {
-    /* TODO: Implement netlog call */
-    (void)pmape;
-    (void)ppn_high;
+    int16_t seg_index;
+    uint32_t aste_offset;
+    uid_t *uid_ptr;
+    uint16_t aste_field;
+
+    /* Get segment index from PMAPE (offset 2) */
+    seg_index = *(int16_t *)((char *)pmape + 2);
+
+    /* Calculate ASTE offset: seg_index * 20 (0x14) */
+    aste_offset = (uint32_t)seg_index * 0x14;
+
+    /* Check if remote flag set in PMAPE (offset 9, bit 7) */
+    if (*(int8_t *)((char *)pmape + 9) < 0) {
+        /* Remote object - use anonymous UID */
+        uid_t anon_uid;
+        anon_uid.high = ANON_$UID.high;
+        anon_uid.low = (uint32_t)*(uint16_t *)(0xEC53F0 + aste_offset - 0x10 + 0x2A);
+
+        /* Get ASTE field at offset -8 from base */
+        aste_field = *(uint16_t *)(0xEC53F8 + aste_offset - 0x08);
+
+        NETLOG_$LOG_IT(4, &anon_uid, aste_field,
+                       *(uint8_t *)((char *)pmape + 1),
+                       ppn_high, 0, 0, 0);
+    } else {
+        /* Local object - use UID from ASTE entry */
+        uid_ptr = (uid_t *)(*(uint32_t *)(0xEC53F0 + aste_offset - 0x10) + 0x10);
+
+        /* Get ASTE field at offset -8 from base */
+        aste_field = *(uint16_t *)(0xEC53F8 + aste_offset - 0x08);
+
+        NETLOG_$LOG_IT(4, uid_ptr, aste_field,
+                       *(uint8_t *)((char *)pmape + 1),
+                       ppn_high, 0, 0, 0);
+    }
 }

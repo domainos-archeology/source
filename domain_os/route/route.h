@@ -268,6 +268,23 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, void *dest_a
                            uint16_t *seq_ret, status_$t *status_ret);
 
 /*
+ * ROUTE_$VALIDATE_PORT - Check network capability for node
+ *
+ * Checks if a network operation is supported for the given routing info.
+ * Iterates through ROUTE_$PORTP array looking for matching port.
+ *
+ * @param routing_key   Routing information
+ * @param is_local      Non-zero if querying local node
+ *
+ * @return 0: Unknown network
+ *         1: Network supports operation
+ *         2: Operation not defined on hardware
+ *
+ * Original address: 0x00E65904
+ */
+int16_t ROUTE_$VALIDATE_PORT(int32_t routing_key, int8_t is_local);
+
+/*
  * Status codes
  */
 #define status_$internet_unknown_network_port   0x2B0003

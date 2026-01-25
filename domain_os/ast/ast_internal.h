@@ -32,11 +32,28 @@ extern uint32_t DAT_00e232b4;       /* Available pages pool 1 */
 extern uint32_t DAT_00e232d8;       /* Available pages pool 2 */
 extern uint32_t DAT_00e232fc;       /* Available pages pool 3 */
 
-/* Internal AST functions not yet identified */
-extern void FUN_00e01bee(void *uid_info, status_$t *status);
-extern void FUN_00e01c52(void *uid_info, uint32_t *vol_ptr, void *attrs, status_$t *status);
-extern void FUN_00e01950(aste_t *aste, uint32_t flags, status_$t *status);
-extern void FUN_00e04b00(void);  /* Attribute setting helper */
+/* Internal AST functions */
+extern void VTOC_$SEARCH_VOLUMES(void *uid_info, status_$t *status);
+extern void AST_$LOOKUP_WITH_HINTS(void *uid_info, uint32_t *vol_ptr, void *attrs, status_$t *status);
+extern void AST_$DEACTIVATE_SEGMENT(aste_t *aste, uint32_t flags, status_$t *status);
+
+/*
+ * AST_$SET_ATTR_DISPATCH - Attribute setting dispatch (flattened from nested Pascal procedure)
+ *
+ * This was originally a nested Pascal procedure that accessed the caller's frame.
+ * For portability, we pass the necessary parameters explicitly:
+ *
+ * @param aote       - AOTE being modified
+ * @param attr_type  - Attribute type code (0-27)
+ * @param value      - Pointer to attribute value
+ * @param wait_flag  - Wait flag from caller
+ * @param clock_info - Clock info from caller's frame
+ * @param status     - Output status code
+ *
+ * Original address: 0x00E04B00
+ */
+void AST_$SET_ATTR_DISPATCH(aote_t *aote, uint16_t attr_type, void *value,
+                            int8_t wait_flag, clock_t *clock_info, status_$t *status);
 
 /*
  * Internal helper functions

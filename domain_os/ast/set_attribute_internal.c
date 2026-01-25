@@ -82,8 +82,8 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
         /* Get AOTE flags */
         aote_flags = *((uint16_t *)((char *)aote + 0x0E));
 
-        /* Call attribute helper */
-        FUN_00e04b00();
+        /* Call attribute helper (flattened from nested Pascal procedure) */
+        AST_$SET_ATTR_DISPATCH(aote, attr_type, value, wait_flag, clock_info, status);
 
         if (*status != status_$ok) {
             return;  /* Note: lock still held - intentional? */
@@ -111,8 +111,8 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
             goto unlock_and_return;
         }
 
-        /* Call attribute helper */
-        FUN_00e04b00();
+        /* Call attribute helper (flattened from nested Pascal procedure) */
+        AST_$SET_ATTR_DISPATCH(aote, attr_type, value, wait_flag, clock_info, status);
         return;
     }
 

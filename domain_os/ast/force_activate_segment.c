@@ -120,9 +120,9 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint16_t segment,
     if ((segment & 0x7FFFFFFF) == 0) {
         /* Root/system object */
         if (force < 0) {
-            FUN_00e01bee((char *)aote + 0x9C, status);
+            VTOC_$SEARCH_VOLUMES((char *)aote + 0x9C, status);
         } else {
-            FUN_00e01c52((char *)aote + 0x9C, (uint32_t *)((char *)aote + 0x0C),
+            AST_$LOOKUP_WITH_HINTS((char *)aote + 0x9C, (uint32_t *)((char *)aote + 0x0C),
                         (char *)aote + 0x0C, status);
             if (*status != status_$ok) {
                 goto relock_and_check;
