@@ -573,22 +573,6 @@ extern uint32_t SMD_ACQ_LOCK_DATA;
  */
 
 /*
- * SMD_$ACQ_DISPLAY - Acquire display lock
- *
- * Acquires exclusive access to the display for the calling process.
- * Blocks if another process holds the lock.
- *
- * Parameters:
- *   lock_data - Pointer to lock-specific data
- *
- * Returns:
- *   Lock acquisition result
- *
- * Original address: 0x00E6EB42
- */
-uint16_t SMD_$ACQ_DISPLAY(void *lock_data);
-
-/*
  * SMD_$REL_DISPLAY - Release display lock
  *
  * Releases the display lock acquired by SMD_$ACQ_DISPLAY.
@@ -679,16 +663,6 @@ void SMD_$COPY_FONT_TO_HDM(uint32_t display_base, void *font,
  * Original address: 0x00E1D750
  */
 void SMD_$COPY_FONT_TO_MD_HDM(void **font, status_$t *status_ret);
-
-/*
- * SMD_$WRITE_STR_CLIP - Write string with clipping
- *
- * Internal string writing function that respects clipping bounds.
- *
- * Original address: 0x00E8493E
- */
-void SMD_$WRITE_STR_CLIP(uint32_t *pos, void *font, void *buffer,
-                         uint16_t *length, void *param5, status_$t *status_ret);
 
 /*
  * smd_$is_valid_blt_ctl - Validate BLT control register value

@@ -151,15 +151,6 @@ void SMD_$WS_INIT(void);
 void SMD_$INIT_STATE(status_$t *status_ret);
 
 /*
- * SMD_$UTIL_INIT - Utility initialization
- *
- * Initialize SMD utility functions.
- *
- * Original address: 0x00E6DED4
- */
-void SMD_$UTIL_INIT(void);
-
-/*
  * SMD_$INSTALL_DISP_MEM - Install display memory
  *
  * No-op stub function. Display memory installation is handled
@@ -786,13 +777,6 @@ void SMD_$LOAD_FONT(void *font, status_$t *status_ret);
  * Original address: 0x00E6DD18
  */
 void SMD_$UNLOAD_FONT(void *font, status_$t *status_ret);
-
-/*
- * SMD_$COPY_FONT_TO_HDM - Copy font to hidden display memory
- *
- * Original address: 0x00E84934
- */
-void SMD_$COPY_FONT_TO_HDM(void *font, smd_hdm_pos_t *pos, status_$t *status_ret);
 
 /*
  * ============================================================================
