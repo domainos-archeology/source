@@ -2,6 +2,7 @@
 #include "dbuf/dbuf.h"
 #include "proc1/proc1.h"
 #include "uid/uid.h"
+#include "network/network.h"
 
 #define CAL_LOCK_ID 0xe
 

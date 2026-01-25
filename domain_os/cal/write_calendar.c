@@ -1,4 +1,5 @@
 #include "cal.h"
+#include "network/network.h"
 
 // Internal helper functions (static, not exported)
 static void cal_$delay(short count);
