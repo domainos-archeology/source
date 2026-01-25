@@ -8,7 +8,7 @@
 
 #include "audit/audit_internal.h"
 #include "name/name.h"
-#include "file/file.h"
+#include "file/file_internal.h" // we use FILE_$PRIV_LOCK/UNLOCK
 #include "mst/mst.h"
 
 /* Path to audit log file */

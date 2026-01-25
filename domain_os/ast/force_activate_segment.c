@@ -101,7 +101,7 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint16_t segment,
         *((uint8_t *)((char *)aote + 0xB9)) = 0x80;  /* Set remote flag */
         *((uint8_t *)((char *)aote + 0xB8)) = 0;     /* Clear vol index */
         *((uint32_t *)((char *)aote + 0xB0)) = segment & 0xFFFFF;  /* Network node */
-        NETWORK_$GET_NET(segment, (char *)aote + 0xAC, status);
+        NETWORK_$GET_NET(segment, (uint32_t *)(aote + 0xAC), status);
     } else {
         /* Local object */
         *((uint8_t *)((char *)aote + 0xB9)) &= 0x7F;  /* Clear remote flag */

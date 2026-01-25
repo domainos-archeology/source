@@ -17,6 +17,7 @@
 #include "network/network.h"
 #include "proc1/proc1.h"
 #include "rem_file/rem_file.h"
+#include "wp/wp.h"
 
 /*
  * Error message for internal crashes

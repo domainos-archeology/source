@@ -25,6 +25,7 @@
 #include "network/network.h"
 #include "rem_file/rem_file.h"
 #include "dbuf/dbuf.h"
+#include "wp/wp.h"
 
 /* PMAP global variables at 0xE232xx */
 extern uint32_t DAT_00e232b4;       /* Available pages pool 1 */

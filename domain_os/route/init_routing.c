@@ -29,6 +29,7 @@
 #include "proc1/proc1.h"
 #include "sock/sock.h"
 #include "time/time.h"
+#include "misc/crash_system.h"
 
 /* Process creation flags */
 #define PROC_FLAG_ROUTING       0x1000000C

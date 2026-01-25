@@ -202,7 +202,7 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
 
         /* Subtract provided time offset */
         {
-            int32_t result = M_OIS_LLL(*(uint32_t *)(response + 0xF) & 0x7FFFFFFF,
+            int32_t result = M$OIS$LLL(*(uint32_t *)(response + 0xF) & 0x7FFFFFFF,
                                        request.param3);
             *(int32_t *)(response + 0xF) = result;
         }
