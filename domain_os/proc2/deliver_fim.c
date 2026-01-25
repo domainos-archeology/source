@@ -105,7 +105,7 @@ int8_t PROC2_$DELIVER_FIM(int16_t *signal_ret, status_$t *status,
     /* Loop while status high byte has bit 7 set */
     while (((uint8_t*)status)[1] < 0) {
         /* Get next pending signal */
-        signal = FUN_00e3ef38(info);
+        signal = PROC2_$GET_NEXT_PENDING_SIGNAL(info);
         *signal_ret = signal;
 
         if (signal == 0) {
@@ -203,7 +203,7 @@ handle_fault:
 
 no_signal:
     result = 0;
-    FUN_00e0a96c();
+    FIM_$ADVANCE_SIGNAL_DELIVERY();
 
 done:
     ML_$UNLOCK(PROC2_LOCK_ID);

@@ -168,8 +168,8 @@ int16_t PROC2_$WAIT(uint16_t *options, int16_t *pid, uint32_t *result,
                     found_matching = -1;
 
                     /* Try to collect status from this child */
-                    FUN_00e3fc5c(child_idx, opt, cur_idx, prev_idx,
-                                 &found, result, &ret_pid);
+                    PROC2_$WAIT_TRY_LIVE_CHILD(child_idx, opt, cur_idx, prev_idx,
+                                               &found, result, &ret_pid);
 
                     if (found < 0) {
                         /* Found a child that changed state */
@@ -201,7 +201,7 @@ int16_t PROC2_$WAIT(uint16_t *options, int16_t *pid, uint32_t *result,
                 found_matching = -1;
 
                 /* Collect status from zombie */
-                FUN_00e3fd06(child_idx, opt, &found, result, &ret_pid);
+                PROC2_$WAIT_TRY_ZOMBIE(child_idx, opt, &found, result, &ret_pid);
 
                 if (found < 0) {
                     /* Collected zombie status */

@@ -156,7 +156,7 @@ void PROC2_$SET_SIG_MASK(int16_t *priority_delta, uint32_t *clear_mask,
             while (child_idx != 0) {
                 if (new_prio < P2_SM_CHILD_PRIO(child_idx)) {
                     int16_t next = P2_SM_CHILD_NEXT(child_idx);
-                    FUN_00e40df4(child_idx, prev_idx);
+                    PROC2_$DETACH_FROM_PARENT(child_idx, prev_idx);
                     child_idx = next;
                 } else {
                     prev_idx = child_idx;
@@ -188,7 +188,7 @@ void PROC2_$SET_SIG_MASK(int16_t *priority_delta, uint32_t *clear_mask,
                     }
 
                     int16_t next = P2_SM_CHILD_NEXT(child_idx);
-                    FUN_00e40df4(child_idx, prev_idx);
+                    PROC2_$DETACH_FROM_PARENT(child_idx, prev_idx);
                     child_idx = next;
                 } else {
                     prev_idx = child_idx;

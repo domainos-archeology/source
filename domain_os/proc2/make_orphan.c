@@ -23,10 +23,6 @@
 
 #include "proc2/proc2_internal.h"
 
-/* Helper function to detach process from parent */
-/* Original address: 0x00e40df4 */
-static void detach_from_parent(int16_t child_idx, int16_t prev_sibling_idx);
-
 /*
  * Raw memory access macros for undocumented structure fields
  * These offsets are relative to the proc2_info_t table base (0xEA551C for M68K)
@@ -95,7 +91,7 @@ void PROC2_$MAKE_ORPHAN(uid_t *proc_uid, status_$t *status_ret)
             }
 
             /* Detach from parent */
-            detach_from_parent(target_idx, sibling_idx);
+            PROC2_$DETACH_FROM_PARENT(target_idx, sibling_idx);
         }
     }
 
@@ -103,53 +99,4 @@ done:
     ML_$UNLOCK(PROC2_LOCK_ID);
 
     *status_ret = status;
-}
-
-/*
- * detach_from_parent - Remove process from parent's child list
- *
- * This is a complex operation that:
- * 1. Unlinks the process from the sibling chain
- * 2. Clears the parent pointer
- * 3. If zombie, moves to the free/zombie list
- *
- * Original address: 0x00e40df4
- */
-static void detach_from_parent(int16_t child_idx, int16_t prev_sibling_idx)
-{
-    proc2_info_t *info;
-
-    info = P2_INFO_ENTRY(child_idx);
-
-    /* Check parent pointer is valid */
-    if (P2_PARENT_IDX(child_idx) == 0) {
-        /* CRASH_SYSTEM - internal error */
-        return;
-    }
-
-    /* Unlink from sibling chain */
-    if (prev_sibling_idx == 0) {
-        /* We're the first child - update parent's first_child pointer */
-        int16_t parent_idx = P2_PARENT_IDX(child_idx);
-        P2_FIRST_CHILD(parent_idx) = P2_NEXT_SIBLING(child_idx);
-    } else {
-        /* Update previous sibling's next pointer */
-        P2_NEXT_SIBLING(prev_sibling_idx) = P2_NEXT_SIBLING(child_idx);
-    }
-
-    /* Clear our parent pointer */
-    P2_PARENT_IDX(child_idx) = 0;
-
-    /* Handle zombie vs non-zombie differently */
-    if ((info->flags & PROC2_FLAG_ZOMBIE) == 0) {
-        /* Not a zombie - just set a flag bit */
-        info->flags |= 0x8000;
-    } else {
-        /* Zombie - move to free/zombie list */
-        /* TODO: Implement zombie list management */
-        /* PGROUP_CLEANUP_INTERNAL(info, 1); */
-
-        /* Remove from allocation list, add to free list */
-        /* This is complex linked list manipulation - simplified here */
-    }
 }

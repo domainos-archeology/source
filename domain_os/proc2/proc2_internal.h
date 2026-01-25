@@ -103,27 +103,70 @@ void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,
 
 /*
  * ============================================================================
- * Internal Helper Functions (FUN_*)
+ * Wait Subsystem Internal Functions
  * ============================================================================
  */
 
-/* Get next pending signal from process */
-int16_t FUN_00e3ef38(proc2_info_t *info);
+/*
+ * PROC2_$WAIT_REAP_CHILD - Reap child and collect exit status
+ *
+ * Called when a child process has exited. Collects exit status,
+ * resource usage, cleans up process group, and frees the process entry.
+ * Original address: 0x00e3fb34
+ */
+void PROC2_$WAIT_REAP_CHILD(int16_t child_idx, int16_t parent_idx,
+                            int16_t prev_sibling, uint32_t *result,
+                            int16_t *pid_ret);
 
-/* Unknown - called during acknowledge and signal operations */
-void FUN_00e0a96c(void);
+/*
+ * PROC2_$WAIT_TRY_LIVE_CHILD - Try to collect status from live child
+ *
+ * Checks if a live child has stopped or exited and can be waited on.
+ * Original address: 0x00e3fc5c
+ */
+void PROC2_$WAIT_TRY_LIVE_CHILD(int16_t child_idx, uint16_t options,
+                                 int16_t parent_idx, int16_t prev_idx,
+                                 int8_t *found, uint32_t *result,
+                                 int16_t *pid_ret);
 
-/* Wait helper - collect child status */
-void FUN_00e3fc5c(int16_t child_idx, uint16_t options, int16_t parent_idx,
-                  int16_t prev_idx, int8_t *found, uint32_t *result,
-                  int16_t *pid_ret);
+/*
+ * PROC2_$WAIT_TRY_ZOMBIE - Try to collect status from zombie child
+ *
+ * Checks if a zombie can be reaped and collects its status.
+ * Original address: 0x00e3fd06
+ */
+void PROC2_$WAIT_TRY_ZOMBIE(int16_t zombie_idx, uint16_t options,
+                             int8_t *found, uint32_t *result,
+                             int16_t *pid_ret);
 
-/* Wait helper - process zombie */
-void FUN_00e3fd06(int16_t zombie_idx, uint16_t options,
-                  int8_t *found, uint32_t *result, int16_t *pid_ret);
+/*
+ * ============================================================================
+ * Process Hierarchy Internal Functions
+ * ============================================================================
+ */
 
-/* Child list manipulation */
-void FUN_00e40df4(int16_t child_idx, int16_t prev_sibling_idx);
+/*
+ * PROC2_$DETACH_FROM_PARENT - Detach process from parent's child list
+ *
+ * Unlinks a process from its parent's child list. For zombies,
+ * also cleans up pgroup and adds to free list.
+ * Original address: 0x00e40df4
+ */
+void PROC2_$DETACH_FROM_PARENT(int16_t child_idx, int16_t prev_sibling_idx);
+
+/*
+ * ============================================================================
+ * Signal Subsystem Internal Functions
+ * ============================================================================
+ */
+
+/*
+ * PROC2_$GET_NEXT_PENDING_SIGNAL - Get next pending signal
+ *
+ * Scans the pending signal mask to find the next unblocked signal.
+ * Original address: 0x00e3ef38
+ */
+int16_t PROC2_$GET_NEXT_PENDING_SIGNAL(proc2_info_t *info);
 
 
 #endif /* PROC2_INTERNAL_H */

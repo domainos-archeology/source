@@ -130,8 +130,8 @@ void PROC2_$ACKNOWLEDGE(uint32_t *handler_addr, int16_t *signal, uint32_t *resul
         P2_ACK_FLAGS_B(cur_idx) |= 0x04;
     }
 
-    /* Call unknown function (possibly signal mask update) */
-    FUN_00e0a96c();
+    /* Advance signal delivery mechanism */
+    FIM_$ADVANCE_SIGNAL_DELIVERY();
 
     /* Check for job control signals that require special handling */
     /* Mask 0xFE67FFFF excludes SIGSTOP, SIGTSTP, SIGCONT, SIGTTIN, SIGTTOU */

@@ -177,6 +177,19 @@ extern uint8_t FIM_FRAME_SIZE_TABLE[];
  */
 
 /*
+ * FIM_$ADVANCE_SIGNAL_DELIVERY - Advance signal delivery mechanism
+ *
+ * Updates the quit value for the current address space from the quit
+ * event counter, clears the quit inhibit flag, and advances the
+ * delivery event counter to signal that signal delivery can proceed.
+ *
+ * Called during signal acknowledge and signal delivery operations.
+ *
+ * Address: 0x00e0a96c
+ */
+void FIM_$ADVANCE_SIGNAL_DELIVERY(void);
+
+/*
  * FIM_$BUILD_DF - Build a delivery frame for fault delivery
  *
  * This is the main fault handling function that:
