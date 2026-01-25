@@ -17,7 +17,6 @@
 #include "asknode/asknode_internal.h"
 
 /* External references */
-extern ec_$eventcount_t *DAT_00e28db0;  /* Socket EC array base - 4 */
 extern ec_$eventcount_t TIME_$CLOCKH;
 extern int16_t PROC1_$AS_ID;
 extern uint32_t FIM_$QUIT_VALUE;
@@ -101,7 +100,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
     }
 
     /* Get the event count for this socket */
-    socket_ec = *(ec_$eventcount_t **)((char *)&DAT_00e28db0 + sock_num * 4);
+    socket_ec = *(ec_$eventcount_t **)((char *)&sock_spinlock + sock_num * 4);
     wait_val = EC_$READ(socket_ec) + 1;
 
     /* Build WHO request packet */
@@ -120,7 +119,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
 
         /* Copy packet info block */
         {
-            uint32_t *src = &DAT_00e82408;
+            uint32_t *src = PKT_$DEFAULT_INFO;
             uint32_t *dst = pkt_info;
             int i;
             for (i = 0; i < 7; i++) *dst++ = *src++;

@@ -272,7 +272,7 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
     } else {
         /* Copy packet info block */
         {
-            uint32_t *src = &DAT_00e82408;
+            uint32_t *src = PKT_$DEFAULT_INFO;
             uint32_t *dst = pkt_info;
             int i;
             for (i = 0; i < 7; i++) *dst++ = *src++;

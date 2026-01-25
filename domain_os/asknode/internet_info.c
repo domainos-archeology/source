@@ -57,14 +57,8 @@ extern uint32_t MMAP_$REAL_PAGES;           /* 0x00E23CA0 */
 /* Boot device */
 extern uint32_t OS_$BOOT_DEVICE;
 
-/* DAT_00e24c3f - Network capability flags */
-extern uint8_t DAT_00e24c3f;
-
 /* Protocol version at offset 0x1E in packet info block */
 extern uint16_t DAT_00e82426;
-
-/* Packet info block at 0x00E82408 */
-extern uint32_t DAT_00e82408;
 
 /* Empty data constant at 0x00E658CC (zero-filled buffer) */
 extern uint32_t DAT_00e658cc;
@@ -275,7 +269,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
     /*
      * Remote node query - check if network requests are enabled
      */
-    if ((DAT_00e24c3f & 1) == 0) {
+    if ((NETWORK_$CAPABLE_FLAGS & 1) == 0) {
         *status = status_$network_request_denied_by_local_node;
         return ret_val;
     }
@@ -408,7 +402,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
 
         /* Copy packet info block */
         {
-            uint32_t *src = &DAT_00e82408;
+            uint32_t *src = PKT_$DEFAULT_INFO;
             uint32_t *dst = pkt_info;
             int i;
             for (i = 0; i < 7; i++) *dst++ = *src++;

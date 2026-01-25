@@ -173,14 +173,21 @@ extern uint32_t MMU_$SYSTEM_REV;
 /* GPU data */
 extern int8_t GPU_$PRESENT;
 
-/* Packet info data block at 0x00E82408 */
-extern uint32_t DAT_00e82408;
+/* Packet info template at 0x00E82408 - default values for PKT_$SEND_INTERNET */
+extern uint32_t PKT_$DEFAULT_INFO[8];
 
-/* Socket event counts */
-extern ec_$eventcount_t *DAT_00e28db0; /* Socket EC array base - 4 */
-extern ec_$eventcount_t *DAT_00e28dc4; /* Socket 5 EC */
+/*
+ * sock_spinlock at 0x00E28DB0
+ * NOTE: Despite the name, this appears to be used as a socket event count
+ * array base in some code paths (indexed as &sock_spinlock + sock_num * 4).
+ * The naming/purpose confusion needs further investigation.
+ */
+extern ec_$eventcount_t *sock_spinlock;
 
-/* Network capability flags at 0x00E24C3F */
-extern uint8_t DAT_00e24c3f;
+/* Socket 5 event count at 0x00E28DC4 */
+extern ec_$eventcount_t *SOCK_$EC_5;
+
+/* Network capability flags at 0x00E24C3F - bit 0 = network capable */
+extern uint8_t NETWORK_$CAPABLE_FLAGS;
 
 #endif /* ASKNODE_INTERNAL_H */

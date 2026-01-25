@@ -18,7 +18,6 @@
 #include "asknode/asknode_internal.h"
 
 /* External references */
-extern ec_$eventcount_t *DAT_00e28dc4;  /* Socket 5 EC */
 
 void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
                          int32_t *node_list, int16_t *max_count,
@@ -58,7 +57,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     initial_count = *count;
 
     /* Check if we should continue (need more nodes and network enabled) */
-    if (initial_count >= max_nodes || (DAT_00e24c3f & 1) == 0) {
+    if (initial_count >= max_nodes || (NETWORK_$CAPABLE_FLAGS & 1) == 0) {
         return;
     }
 
@@ -101,7 +100,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     }
 
     /* Get the event count for socket 5 */
-    ec_$eventcount_t *socket_ec = DAT_00e28dc4;
+    ec_$eventcount_t *socket_ec = SOCK_$EC_5;
     int32_t wait_val;
 
     /* Build request based on local/remote */
@@ -138,7 +137,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     /* Copy packet info block */
     uint32_t pkt_info[8];
     {
-        uint32_t *src = &DAT_00e82408;
+        uint32_t *src = PKT_$DEFAULT_INFO;
         uint32_t *dst = pkt_info;
         int i;
         for (i = 0; i < 7; i++) *dst++ = *src++;

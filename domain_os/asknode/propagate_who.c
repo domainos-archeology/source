@@ -35,7 +35,7 @@ void ASKNODE_$PROPAGATE_WHO(int16_t *response, uint32_t *routing_info)
 
     /* Copy packet info block from global template */
     {
-        uint32_t *src = &DAT_00e82408;
+        uint32_t *src = PKT_$DEFAULT_INFO;
         uint32_t *dst = pkt_info;
         int i;
         for (i = 0; i < 7; i++) *dst++ = *src++;
