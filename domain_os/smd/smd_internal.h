@@ -314,7 +314,14 @@ typedef struct smd_glyph_metrics_t {
  *   +0x0c: UID for MST mapping (in slot N)
  */
 typedef struct smd_display_unit_t {
-  ec_$eventcount_t event_count_1; /* 0x00: Event count (12 bytes) */
+  union {
+    ec_$eventcount_t event_count_1; /* 0x00: Event count (12 bytes) */
+    struct {
+      uint32_t ec_value;              /* 0x00: EC value */
+      uint32_t ec_head;               /* 0x04: EC waiter list head */
+      uint32_t field_08;              /* 0x08: EC waiter list tail / scroll_ec ptr */
+    };
+  };
   smd_hdm_list_t *hdm_list_ptr;   /* 0x0C: Pointer to HDM free list */
   uint16_t field_10;              /* 0x10: Unknown */
   uint16_t asid;                  /* 0x12: Associated address space ID */
@@ -411,6 +418,56 @@ typedef struct smd_event_entry_t {
 
 /*
  * ============================================================================
+ * Event Data Structures (returned by GET_*_EVENT functions)
+ * ============================================================================
+ */
+
+/*
+ * IDM event data structure (12 bytes)
+ * Returned by SMD_$GET_IDM_EVENT
+ */
+typedef struct smd_idm_event_t {
+  uint32_t timestamp; /* 0x00: Event timestamp */
+  uint32_t field_04;  /* 0x04: Unknown */
+  uint16_t field_08;  /* 0x08: Unknown */
+  union {
+    uint16_t data;    /* 0x0A: Event-specific data (button/char) */
+    struct {
+      uint8_t char_code; /* 0x0A: Character code */
+      uint8_t modifier;  /* 0x0B: Modifier flags */
+    };
+  };
+} smd_idm_event_t;
+
+/*
+ * Unit event data structure (14 bytes)
+ * Returned by SMD_$GET_UNIT_EVENT
+ */
+typedef struct smd_unit_event_t {
+  uint32_t timestamp;      /* 0x00: Event timestamp */
+  uint32_t field_04;       /* 0x04: Unknown */
+  uint16_t field_08;       /* 0x08: Unknown */
+  uint16_t unit;           /* 0x0A: Display unit */
+  uint16_t button_or_char; /* 0x0C: Button state or character */
+} smd_unit_event_t;
+
+/* Alias for compatibility */
+typedef smd_unit_event_t smd_event_data_t;
+
+/*
+ * Cursor bitmap structure (40 bytes)
+ * Used by SMD_$LOAD_CRSR_BITMAP and SMD_$READ_CRSR_BITMAP
+ */
+typedef struct smd_crsr_bitmap_t {
+  int16_t width;        /* 0x00: Cursor width (1-16) */
+  int16_t height;       /* 0x02: Cursor height (1-16) */
+  int16_t hot_x;        /* 0x04: Hot spot X */
+  int16_t hot_y_offset; /* 0x06: height-1-hot_y */
+  int16_t bitmap[16];   /* 0x08: Bitmap data */
+} smd_crsr_bitmap_t;
+
+/*
+ * ============================================================================
  * Request Queue Entry Structure
  * ============================================================================
  * Entry in the SMD request queue. Each entry is 0x24 (36) bytes.
@@ -451,11 +508,11 @@ typedef struct smd_globals_t {
   int8_t blank_pending;         /* 0xDD: Blanking pending flag */
   uint16_t tp_reporting;        /* 0xDE: Trackpad reporting mode */
   int8_t tracking_enabled;      /* 0xE0: Tracking enabled flag (0xFF=enabled) */
-  uint8_t pad_e1;               /* 0xE1: Padding */
-  uint16_t pad_e2;              /* 0xE2: Padding/unused */
-  uint16_t tracking_window_id; /* 0xE4: Tracking window ID (from ENABLE_TRACKING
-                                  param) */
-  uint16_t tracking_rect_count; /* 0xE6: Number of tracking rectangles */
+  int8_t tp_cursor_active;      /* 0xE1: TP cursor active flag */
+  int16_t tp_cursor_timeout;    /* 0xE2: TP cursor timeout counter */
+  uint16_t cursor_tracking_count; /* 0xE4: Cursor tracking count for event coalescing */
+  uint16_t tracking_window_id; /* 0xE6: Tracking window ID (from ENABLE_TRACKING param) */
+  uint16_t tracking_rect_count; /* 0xE8: Number of tracking rectangles */
   smd_track_rect_t
       tracking_rects[SMD_MAX_TRACKING_RECTS]; /* 0xE8: Tracking rect array */
   /* 200 * 8 = 1600 bytes, ends at 0x728 */
@@ -615,14 +672,13 @@ void SMD_$CONTINUE_SCROLL(smd_display_hw_t *hw, ec_$eventcount_t *ec);
  * Initiates a hardware BLT operation.
  *
  * Parameters:
- *   params - BLT parameters
- *   hw - Display hardware info
- *   ec - Event count for completion signaling
+ *   params  - BLT parameters (16-bit words)
+ *   hw      - Display hardware info
+ *   hw_regs - Hardware BLT register block
  *
  * Original address: 0x00E272BC
  */
-void SMD_$START_BLT(smd_blt_params_t *params, smd_display_hw_t *hw,
-                    ec_$eventcount_t *ec);
+void SMD_$START_BLT(uint16_t *params, smd_display_hw_t *hw, uint16_t *hw_regs);
 
 /*
  * SMD_$INTERRUPT_INIT - Initialize SMD interrupt handling
@@ -848,9 +904,12 @@ int8_t smd_$validate_unit(uint16_t unit);
  *   lock_data1 - First lock data pointer
  *   lock_data2 - Second lock data pointer
  *
+ * Returns:
+ *   Result code (negative if cursor was updated)
+ *
  * Original address: 0x00E6E1CC
  */
-void SHOW_CURSOR(uint32_t *pos, int16_t *lock_data1, int8_t *lock_data2);
+int8_t SHOW_CURSOR(uint32_t *pos, int16_t *lock_data1, int8_t *lock_data2);
 
 /*
  * smd_$check_tp_state - Check trackpad state
@@ -1014,6 +1073,10 @@ static inline smd_unit_aux_t *smd_get_unit_aux(uint16_t unit_num) {
 
 /* Lock ID for respond/borrow operations */
 #define smd_$respond_lock 7
+
+/* Uppercase aliases for lock constants (used in some code) */
+#define SMD_REQUEST_LOCK smd_$request_lock
+#define SMD_RESPOND_LOCK smd_$respond_lock
 
 /* Secondary event count at 0x00E2E408 (used for borrow signaling) */
 extern ec_$eventcount_t SMD_BORROW_EC;

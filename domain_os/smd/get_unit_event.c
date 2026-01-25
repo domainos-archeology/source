@@ -11,18 +11,7 @@
 #include "ml/ml.h"
 #include "time/time.h"
 
-/*
- * Event data structure returned to caller.
- * Contains timestamp, position, and event-specific data.
- * Size: 14 bytes
- */
-typedef struct smd_event_data_t {
-    uint32_t    timestamp;              /* 0x00: Event timestamp (clock_t) */
-    uint32_t    field_04;               /* 0x04: Unknown field */
-    uint16_t    field_08;               /* 0x08: Unknown field */
-    uint16_t    unit;                   /* 0x0A: Display unit */
-    uint16_t    button_or_char;         /* 0x0C: Button state or character */
-} smd_event_data_t;
+/* smd_event_data_t is now defined in smd_internal.h (alias for smd_unit_event_t) */
 
 /*
  * SMD_$GET_UNIT_EVENT - Get next event from queue

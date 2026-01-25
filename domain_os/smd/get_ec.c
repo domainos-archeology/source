@@ -17,7 +17,7 @@
  */
 
 #include "smd/smd_internal.h"
-#include "ec2/ec2.h"
+/* EC2 functions are in ec/ec.h, which is included via smd_internal.h */
 #include "os/os.h"
 
 /*

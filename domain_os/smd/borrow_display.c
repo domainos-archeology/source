@@ -32,6 +32,7 @@
 
 #include "smd/smd_internal.h"
 #include "ml/ml.h"
+#include "misc/crash_system.h"
 
 /*
  * SMD_$BORROW_DISPLAY - Temporarily borrow display

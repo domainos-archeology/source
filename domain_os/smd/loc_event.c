@@ -10,6 +10,8 @@
 #include "smd/smd_internal.h"
 #include "ml/ml.h"
 #include "math/math.h"
+#include "kbd/kbd.h"
+#include "time/time.h"
 
 /*
  * SMD_$LOC_EVENT - Process location event
@@ -64,7 +66,7 @@ int8_t SMD_$LOC_EVENT(int8_t button_state, int16_t unit, uint32_t pos, int16_t b
         }
 
         /* Calculate previous queue entry index */
-        prev_idx = M_$OIS_WLW(SMD_GLOBALS.event_queue_head + 0xFF, 0x100);
+        prev_idx = M$OIS$WLW(SMD_GLOBALS.event_queue_head + 0xFF, 0x100);
 
         /* Check if we can coalesce with previous event */
         coalesced = 0;

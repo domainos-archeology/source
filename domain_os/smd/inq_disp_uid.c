@@ -49,7 +49,7 @@
  *   status_$ok if unit is valid
  *   status_$display_invalid_unit_number if unit is invalid
  */
-void SMD_$INQ_DISP_UID(uint16_t *unit, uid_$t *uid, status_$t *status_ret)
+void SMD_$INQ_DISP_UID(uint16_t *unit, uid_t *uid, status_$t *status_ret)
 {
     int8_t valid;
 

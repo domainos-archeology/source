@@ -133,9 +133,13 @@ void SMD_$INIT_BLINK(void);
  *
  * Per-workstation SMD initialization.
  *
+ * Parameters:
+ *   ctx - Pointer to workstation context structure
+ *
  * Original address: 0x00E6DE58
  */
-void SMD_$WS_INIT(void);
+struct smd_ws_ctx_t; /* Forward declaration */
+void SMD_$WS_INIT(struct smd_ws_ctx_t *ctx);
 
 /*
  * SMD_$INIT_STATE - Initialize display state
@@ -347,9 +351,14 @@ void SMD_$ALLOC_HDM(uint16_t *size, smd_hdm_pos_t *pos, status_$t *status_ret);
 /*
  * SMD_$FREE_HDM - Free hidden display memory
  *
+ * Parameters:
+ *   pos        - Position of memory to free
+ *   size       - Size of memory to free
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6DA3A
  */
-void SMD_$FREE_HDM(smd_hdm_pos_t *pos, status_$t *status_ret);
+void SMD_$FREE_HDM(smd_hdm_pos_t *pos, uint16_t *size, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -384,16 +393,26 @@ void SMD_$UNBLANK(void);
  *
  * Sets the timeout before display blanking occurs.
  *
+ * Parameters:
+ *   unit       - Display unit
+ *   timeout    - Timeout value
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6F192
  */
-void SMD_$SET_BLANK_TIMEOUT(uint32_t *timeout, status_$t *status_ret);
+void SMD_$SET_BLANK_TIMEOUT(uint32_t unit, uint32_t *timeout, status_$t *status_ret);
 
 /*
  * SMD_$INQ_BLANK_TIMEOUT - Inquire blank timeout
  *
+ * Parameters:
+ *   unit       - Display unit
+ *   timeout    - Output: timeout value
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6F1B4
  */
-void SMD_$INQ_BLANK_TIMEOUT(uint32_t *timeout, status_$t *status_ret);
+void SMD_$INQ_BLANK_TIMEOUT(uint32_t unit, uint32_t *timeout, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -406,25 +425,39 @@ void SMD_$INQ_BLANK_TIMEOUT(uint32_t *timeout, status_$t *status_ret);
  *
  * Makes the cursor visible at the specified position.
  *
+ * Parameters:
+ *   unit       - Display unit number
+ *   pos        - Cursor position
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6E080
  */
-void SMD_$DISPLAY_CURSOR(uint16_t *unit, smd_cursor_pos_t *pos, void *param3);
+void SMD_$DISPLAY_CURSOR(uint16_t *unit, smd_cursor_pos_t *pos, status_$t *status_ret);
 
 /*
  * SMD_$CLEAR_CURSOR - Clear cursor
  *
  * Hides the cursor.
  *
+ * Parameters:
+ *   unit       - Display unit number
+ *   pos        - Cursor position
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6E0AA
  */
-void SMD_$CLEAR_CURSOR(uint16_t *unit);
+void SMD_$CLEAR_CURSOR(uint16_t *unit, smd_cursor_pos_t *pos, status_$t *status_ret);
 
 /*
  * SMD_$SET_CURSOR_POS - Set cursor position
  *
+ * Parameters:
+ *   pos        - Cursor position
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6E766
  */
-void SMD_$SET_CURSOR_POS(smd_cursor_pos_t *pos);
+void SMD_$SET_CURSOR_POS(smd_cursor_pos_t *pos, status_$t *status_ret);
 
 /*
  * SMD_$SET_UNIT_CURSOR_POS - Set cursor position for a specific unit
@@ -445,16 +478,40 @@ void SMD_$SET_UNIT_CURSOR_POS(uint16_t *unit, smd_cursor_pos_t *pos, status_$t *
 /*
  * SMD_$LOAD_CRSR_BITMAP - Load cursor bitmap
  *
+ * Parameters:
+ *   bitmap      - Bitmap data
+ *   cursor_num  - Cursor number
+ *   width       - Width
+ *   height      - Height
+ *   hot_x       - Hot spot X
+ *   hot_y       - Hot spot Y
+ *   operation   - Operation code
+ *   status_ret  - Status return
+ *
  * Original address: 0x00E6FBC6
  */
-void SMD_$LOAD_CRSR_BITMAP(void *bitmap, status_$t *status_ret);
+void SMD_$LOAD_CRSR_BITMAP(void *bitmap, int16_t *cursor_num, int16_t *width,
+                           int16_t *height, int16_t *hot_x, int16_t *hot_y,
+                           int16_t *operation, status_$t *status_ret);
 
 /*
  * SMD_$READ_CRSR_BITMAP - Read cursor bitmap
  *
+ * Parameters:
+ *   bitmap      - Output: bitmap data
+ *   cursor_num  - Cursor number
+ *   width       - Output: width
+ *   height      - Output: height
+ *   hot_x       - Output: hot spot X
+ *   hot_y       - Output: hot spot Y
+ *   operation   - Output: operation code
+ *   status_ret  - Status return
+ *
  * Original address: 0x00E6FD16
  */
-void SMD_$READ_CRSR_BITMAP(void *bitmap, status_$t *status_ret);
+void SMD_$READ_CRSR_BITMAP(void *bitmap, int16_t *cursor_num, uint16_t *width,
+                           uint16_t *height, uint16_t *hot_x, int16_t *hot_y,
+                           uint32_t *operation, status_$t *status_ret);
 
 /*
  * SMD_$BLINK_CURSOR_1 - Blink cursor (variant 1)
@@ -481,9 +538,16 @@ void SMD_$BLINK_CURSOR_CALLBACK(void);
 /*
  * SMD_$INQ_KBD_CURSOR - Inquire keyboard cursor position
  *
+ * Parameters:
+ *   pos        - Output: cursor position
+ *   status_ret - Status return
+ *
+ * Returns:
+ *   Non-zero if cursor is active
+ *
  * Original address: 0x00E6E0D4
  */
-void SMD_$INQ_KBD_CURSOR(smd_cursor_pos_t *pos, status_$t *status_ret);
+uint8_t SMD_$INQ_KBD_CURSOR(smd_cursor_pos_t *pos, status_$t *status_ret);
 
 /*
  * SMD_$MOVE_KBD_CURSOR - Move keyboard cursor
@@ -502,16 +566,27 @@ void SMD_$CLEAR_KBD_CURSOR(status_$t *status_ret);
 /*
  * SMD_$INQ_KBD_TYPE - Inquire keyboard type
  *
+ * Parameters:
+ *   unit       - Display unit
+ *   kbd_type   - Output: keyboard type
+ *   layout     - Output: keyboard layout
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6E122
  */
-void SMD_$INQ_KBD_TYPE(uint16_t *kbd_type, status_$t *status_ret);
+void SMD_$INQ_KBD_TYPE(uint16_t *unit, uint8_t *kbd_type, uint16_t *layout, status_$t *status_ret);
 
 /*
  * SMD_$SET_KBD_TYPE - Set keyboard type
  *
+ * Parameters:
+ *   kbd_type   - Keyboard type
+ *   layout     - Keyboard layout
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6E1AE
  */
-void SMD_$SET_KBD_TYPE(uint16_t *kbd_type, status_$t *status_ret);
+void SMD_$SET_KBD_TYPE(uint8_t *kbd_type, uint16_t *layout, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -522,37 +597,58 @@ void SMD_$SET_KBD_TYPE(uint16_t *kbd_type, status_$t *status_ret);
 /*
  * SMD_$ENABLE_TRACKING - Enable mouse tracking
  *
+ * Parameters:
+ *   unit       - Display unit
+ *   window_id  - Tracking window ID
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6E45C
  */
-void SMD_$ENABLE_TRACKING(status_$t *status_ret);
+void SMD_$ENABLE_TRACKING(uint16_t *unit, uint32_t window_id, status_$t *status_ret);
 
 /*
  * SMD_$DISABLE_TRACKING - Disable mouse tracking
  *
+ * Parameters:
+ *   window_id  - Tracking window ID
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6E482
  */
-void SMD_$DISABLE_TRACKING(status_$t *status_ret);
+void SMD_$DISABLE_TRACKING(uint32_t window_id, status_$t *status_ret);
 
 /*
  * SMD_$SET_TP_REPORTING - Set trackpad reporting mode
  *
+ * Parameters:
+ *   mode       - Reporting mode
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6E4B0
  */
-void SMD_$SET_TP_REPORTING(void *params, status_$t *status_ret);
+void SMD_$SET_TP_REPORTING(uint16_t *mode, status_$t *status_ret);
 
 /*
  * SMD_$SET_TP_CURSOR - Set trackpad cursor
  *
+ * Parameters:
+ *   unit       - Display unit
+ *   pos        - Cursor position
+ *   timeout    - Timeout value
+ *
  * Original address: 0x00E6E964
  */
-void SMD_$SET_TP_CURSOR(void *params, status_$t *status_ret);
+void SMD_$SET_TP_CURSOR(uint16_t *unit, smd_cursor_pos_t *pos, uint16_t *timeout);
 
 /*
  * SMD_$STOP_TP_CURSOR - Stop trackpad cursor
  *
+ * Parameters:
+ *   unit - Display unit
+ *
  * Original address: 0x00E6EACE
  */
-void SMD_$STOP_TP_CURSOR(status_$t *status_ret);
+void SMD_$STOP_TP_CURSOR(uint16_t *unit);
 
 /*
  * SMD_$CLR_AND_LOAD_TRK_RECT - Clear and load tracking rectangles
@@ -571,9 +667,14 @@ void SMD_$ADD_TRK_RECT(smd_track_rect_t *rect, uint16_t *id, status_$t *status_r
 /*
  * SMD_$DEL_TRK_RECT - Delete tracking rectangle
  *
+ * Parameters:
+ *   rect       - Rectangle to delete
+ *   id         - Rectangle ID
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6E614
  */
-void SMD_$DEL_TRK_RECT(uint16_t *id, status_$t *status_ret);
+void SMD_$DEL_TRK_RECT(smd_track_rect_t *rect, uint16_t *id, status_$t *status_ret);
 
 /*
  * SMD_$CLR_TRK_RECT - Clear all tracking rectangles
@@ -585,9 +686,20 @@ void SMD_$CLR_TRK_RECT(status_$t *status_ret);
 /*
  * SMD_$LOC_EVENT - Location event
  *
+ * Processes a location event (cursor movement, button, etc.).
+ *
+ * Parameters:
+ *   event_type - Event type code
+ *   unit       - Display unit
+ *   pos        - Cursor position (packed as uint32_t)
+ *   buttons    - Button state
+ *
+ * Returns:
+ *   Result code
+ *
  * Original address: 0x00E6E9A0
  */
-void SMD_$LOC_EVENT(void *params, status_$t *status_ret);
+int8_t SMD_$LOC_EVENT(int8_t event_type, int16_t unit, uint32_t pos, int16_t buttons);
 
 /*
  * ============================================================================
@@ -642,14 +754,14 @@ typedef struct smd_blt_ctl_t {
  * Performs a hardware-accelerated bit block transfer.
  *
  * Parameters:
- *   params - BLT operation parameters
- *   src - Source coordinates
- *   dst - Destination coordinates
+ *   params     - BLT operation parameters
+ *   param2     - Parameter 2
+ *   param3     - Parameter 3
  *   status_ret - Status return
  *
  * Original address: 0x00E6EC6E
  */
-void SMD_$BLT(void *params, void *src, void *dst, status_$t *status_ret);
+void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *status_ret);
 
 /*
  * SMD_$BLT_U - User-mode bit block transfer
@@ -699,9 +811,16 @@ int8_t SMD_$INQ_MM_BLT(status_$t *status_ret);
  *
  * Performs a scroll operation on a region.
  *
+ * Parameters:
+ *   rect       - Scroll rectangle (x1, y1, x2, y2)
+ *   dx         - X displacement
+ *   dy         - Y displacement
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6F326
  */
-void SMD_$SOFT_SCROLL(void *region, uint16_t *dx, uint16_t *dy, status_$t *status_ret);
+struct smd_scroll_rect_t; /* Forward declaration */
+void SMD_$SOFT_SCROLL(struct smd_scroll_rect_t *rect, int16_t *dx, int16_t *dy, status_$t *status_ret);
 
 /*
  * SMD_$CLEAR_SCREEN - Clear screen
@@ -754,9 +873,13 @@ void SMD_$DRAW_BOX(smd_rect_t *rect, status_$t *status_ret);
 /*
  * SMD_$SET_CLIP_WINDOW - Set clipping window
  *
+ * Parameters:
+ *   coords     - Clipping coordinates (4 x int16_t: x1, y1, x2, y2)
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6FE30
  */
-void SMD_$SET_CLIP_WINDOW(void *region, status_$t *status_ret);
+void SMD_$SET_CLIP_WINDOW(int16_t *coords, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -767,16 +890,27 @@ void SMD_$SET_CLIP_WINDOW(void *region, status_$t *status_ret);
 /*
  * SMD_$LOAD_FONT - Load font
  *
+ * Parameters:
+ *   font       - Pointer to font pointer
+ *   status_ret - Status return
+ *
+ * Returns:
+ *   Font slot number
+ *
  * Original address: 0x00E6DC1C
  */
-void SMD_$LOAD_FONT(void *font, status_$t *status_ret);
+uint16_t SMD_$LOAD_FONT(void **font, status_$t *status_ret);
 
 /*
  * SMD_$UNLOAD_FONT - Unload font
  *
+ * Parameters:
+ *   slot_ptr   - Font slot number
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6DD18
  */
-void SMD_$UNLOAD_FONT(void *font, status_$t *status_ret);
+void SMD_$UNLOAD_FONT(uint16_t *slot_ptr, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -789,10 +923,18 @@ void SMD_$UNLOAD_FONT(void *font, status_$t *status_ret);
  *
  * Renders text at the specified position.
  *
+ * Parameters:
+ *   pos        - Cursor position (packed as uint32_t)
+ *   font       - Font pointer
+ *   buffer     - Character buffer
+ *   length     - String length
+ *   flags      - Rendering flags
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6FEBE
  */
-void SMD_$WRITE_STRING(smd_cursor_pos_t *pos, void *font, void *buffer,
-                       uint16_t *length, void *param5, status_$t *status_ret);
+void SMD_$WRITE_STRING(uint32_t *pos, void *font, void *buffer,
+                       uint16_t *length, void *flags, status_$t *status_ret);
 
 /*
  * SMD_$WRITE_STR_CLIP - Write string with clipping
@@ -834,23 +976,41 @@ void SMD_$PUTC(uint16_t c);
 /*
  * SMD_$GET_IDM_EVENT - Get IDM event
  *
+ * Parameters:
+ *   event_type - Output: event type
+ *   event_data - Output: event data
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6EE28
  */
-void SMD_$GET_IDM_EVENT(void *event, status_$t *status_ret);
+struct smd_idm_event_t; /* Forward declaration */
+void SMD_$GET_IDM_EVENT(uint16_t *event_type, struct smd_idm_event_t *event_data, status_$t *status_ret);
 
 /*
  * SMD_$GET_UNIT_EVENT - Get unit event
  *
+ * Parameters:
+ *   event_type - Output: event type
+ *   event_data - Output: event data
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6EEA8
  */
-void SMD_$GET_UNIT_EVENT(uint16_t *unit, void *event, status_$t *status_ret);
+struct smd_unit_event_t; /* Forward declaration */
+void SMD_$GET_UNIT_EVENT(uint16_t *event_type, struct smd_unit_event_t *event_data, status_$t *status_ret);
 
 /*
  * SMD_$DM_COND_EVENT_WAIT - Conditional event wait
  *
+ * Parameters:
+ *   unit       - Display unit
+ *   timeout    - Timeout value
+ *   result     - Output: result
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6EFF0
  */
-void SMD_$DM_COND_EVENT_WAIT(void *params, status_$t *status_ret);
+void SMD_$DM_COND_EVENT_WAIT(uint16_t *unit, int16_t *timeout, int16_t *result, status_$t *status_ret);
 
 /*
  * SMD_$EOF_WAIT - Wait for end-of-frame
@@ -904,9 +1064,17 @@ void SMD_$SIGNAL(uint16_t *unit_ptr, uint16_t *params, uint16_t *param_count,
  *
  * Low-level display locking with interrupt disable.
  *
+ * Parameters:
+ *   hw         - Display hardware info
+ *   lock_data  - Lock data pointer
+ *
+ * Returns:
+ *   Lock result code
+ *
  * Original address: 0x00E15CCE
  */
-int16_t SMD_$LOCK_DISPLAY(void *lock_data, void *param2);
+struct smd_display_hw_t; /* Forward declaration */
+int16_t SMD_$LOCK_DISPLAY(struct smd_display_hw_t *hw, int16_t *lock_data);
 
 /*
  * SMD_$BIT_SET - Atomic test and set bit 7
@@ -969,9 +1137,14 @@ void SMD_$SEND_RESPONSE(int8_t *response);
 /*
  * SMD_$GET_EC - Get event count
  *
+ * Parameters:
+ *   key        - Event count key (0-3)
+ *   ec2_ret    - Output: receives the EC2 handle
+ *   status_ret - Status return
+ *
  * Original address: 0x00E6FD90
  */
-void SMD_$GET_EC(void *ec, status_$t *status_ret);
+void SMD_$GET_EC(uint16_t *key, void **ec2_ret, status_$t *status_ret);
 
 /*
  * SMD_$SHUTDOWN - Shutdown display

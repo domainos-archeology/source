@@ -10,16 +10,7 @@
 #include "smd/smd_internal.h"
 #include "term/term.h"
 
-/*
- * IDM event data structure for SMD_$GET_IDM_EVENT
- */
-typedef struct smd_idm_event_t {
-    uint32_t    timestamp;              /* 0x00: Event timestamp */
-    uint32_t    field_04;               /* 0x04: Unknown */
-    uint16_t    field_08;               /* 0x08: Unknown */
-    uint8_t     char_code;              /* 0x0A: Character code */
-    uint8_t     modifier;               /* 0x0B: Modifier flags */
-} smd_idm_event_t;
+/* smd_idm_event_t is now defined in smd_internal.h */
 
 /*
  * SMD_$COND_INPUT_U - Conditional input check

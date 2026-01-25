@@ -54,5 +54,6 @@ extern char CAL_$VERIFY(int *max_allowed_delta, void *param_2, char *param_3,
 extern void CAL_$WRITE_CALENDAR(short *year, short *month, short *day,
                                 short *weekday, short *hour, short *minute,
                                 short *second);
+extern void CAL_$SETUP_CALLBACK(void *callback_queue);
 
 #endif /* CAL_H */

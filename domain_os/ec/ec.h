@@ -43,7 +43,10 @@ typedef struct ec_$eventcount_waiter_t {
  * Size: 12 bytes (0x0C)
  */
 typedef struct ec_$eventcount_t {
-    int32_t     value;              /* 0x00: Current value */
+    union {
+        int32_t value;              /* 0x00: Current value */
+        int32_t count;              /* Alias for code compatibility */
+    };
     ec_$eventcount_waiter_t *waiter_list_head;  /* 0x04: Head of waiter list */
     ec_$eventcount_waiter_t *waiter_list_tail;  /* 0x08: Tail of waiter list */
 } ec_$eventcount_t;
@@ -224,6 +227,26 @@ void ADVANCE_INT(ec_$eventcount_t *ec);
  * Original address: 0x00e207c6
  */
 void ADVANCE_ALL_INT(ec_$eventcount_t *ec);
+
+/*
+ * EC_$WAIT_1 - Wait for a single eventcount with optional timeout
+ *
+ * Waits on a single eventcount until it reaches the specified value,
+ * or until a timeout occurs.
+ *
+ * Parameters:
+ *   ec            - Pointer to eventcount structure
+ *   wait_value    - Value to wait for
+ *   timeout_clock - Pointer to timeout clock (NULL for no timeout)
+ *   timeout_value - Timeout value (0 for no timeout)
+ *
+ * Returns:
+ *   0 if eventcount was satisfied, non-zero on timeout or error
+ *
+ * Original address: TBD (needs Ghidra analysis)
+ */
+int32_t EC_$WAIT_1(ec_$eventcount_t *ec, int32_t wait_value,
+                   uint32_t *timeout_clock, int32_t timeout_value);
 
 /*
  * ============================================================================

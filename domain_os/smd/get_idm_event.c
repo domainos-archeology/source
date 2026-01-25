@@ -9,26 +9,7 @@
 
 #include "smd/smd_internal.h"
 
-/*
- * Event data returned by SMD_$GET_UNIT_EVENT (14 bytes)
- */
-typedef struct smd_unit_event_t {
-    uint32_t    timestamp;              /* 0x00: Event timestamp */
-    uint32_t    field_04;               /* 0x04: Unknown */
-    uint16_t    field_08;               /* 0x08: Unknown */
-    uint16_t    unit;                   /* 0x0A: Display unit */
-    uint16_t    button_or_char;         /* 0x0C: Button state or character */
-} smd_unit_event_t;
-
-/*
- * IDM event data structure (12 bytes)
- */
-typedef struct smd_idm_event_t {
-    uint32_t    timestamp;              /* 0x00: Event timestamp */
-    uint32_t    field_04;               /* 0x04: Unknown */
-    uint16_t    field_08;               /* 0x08: Unknown */
-    uint16_t    data;                   /* 0x0A: Event-specific data */
-} smd_idm_event_t;
+/* smd_unit_event_t and smd_idm_event_t are now defined in smd_internal.h */
 
 /*
  * SMD_$GET_IDM_EVENT - Get next IDM event

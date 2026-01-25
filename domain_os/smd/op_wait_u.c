@@ -20,20 +20,18 @@
  * immediately without waiting.
  *
  * Returns:
- *   Result from SMD_$REL_DISPLAY, or 0 if no display associated
+ *   0 always (for compatibility)
  */
 uint16_t SMD_$OP_WAIT_U(void)
 {
-    uint16_t result = 0;
-
     /* Check if current process has an associated display unit */
     if (SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID] != 0) {
         /* Acquire display lock (blocks until operations complete) */
-        SMD_$ACQ_DISPLAY(&SMD_ACQ_LOCK_DATA);
+        SMD_$ACQ_DISPLAY((int16_t *)&SMD_ACQ_LOCK_DATA);
 
         /* Immediately release */
-        result = SMD_$REL_DISPLAY();
+        SMD_$REL_DISPLAY();
     }
 
-    return result;
+    return 0;
 }
