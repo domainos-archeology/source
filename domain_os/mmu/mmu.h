@@ -115,11 +115,6 @@ typedef struct mmu_globals_t {
     #define VA_TO_PTT_OFFSET_MASK   (*(uint32_t*)0xE23D2E)
     #define MMU_SYSREV              (*(uint8_t*)0xE2426F)
 
-    /* Current address space ID (from PROC1 module) */
-    #ifndef PROC1_$AS_ID
-    #define PROC1_$AS_ID            (*(uint16_t*)0xE2060A)
-    #endif
-
     /* Cache control MCR shadow (for 68010) */
     #define MCR_SHADOW              (*(uint8_t*)0xE242D2)
 #else
@@ -157,7 +152,6 @@ typedef struct mmu_globals_t {
     #define MMU_$PID_PRIV           mmu_pid_priv
     #define VA_TO_PTT_OFFSET_MASK   mmu_va_to_ptt_mask
     #define MMU_SYSREV              mmu_sysrev
-    #define PROC1_$AS_ID            mmu_current_asid
     #define MCR_SHADOW              mmu_mcr_shadow
 #endif
 
