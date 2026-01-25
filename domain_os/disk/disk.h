@@ -210,6 +210,10 @@ void DISK_$GET_ERROR_INFO(void *buffer);
 void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status);
 
 /* Volume assignment operations */
+int16_t DISK_$PV_MOUNT(int16_t dev, int16_t bus, int16_t ctlr,
+                       status_$t *status);
+void DISK_$LV_UID(int16_t vol_idx, int16_t lv_num, uid_t *uid_ret,
+                  status_$t *status);
 void DISK_$PV_ASSIGN_N(int16_t *unit_type_ptr, int16_t *device_ptr,
                        int16_t *unit_ptr, uint16_t *flags_ptr,
                        uint16_t *vol_idx_ptr, uint32_t *num_blocks_ptr,

@@ -263,7 +263,6 @@ extern void WP_$CALLOC(uint32_t *ppn, status_$t *status);
 extern void NETWORK_$INSTALL_NET(uint32_t node, void *info, status_$t *status);
 extern void NETWORK_$AST_GET_INFO(void *uid_info, uint16_t *flags, void *attrs,
                                   status_$t *status);
-extern void DBUF_$UPDATE_VOL(uint16_t flags, uid_t *uid);
 extern void NETLOG_$LOG_IT(uint16_t type, void *uid, uint16_t seg,
                            uint16_t page, uint16_t ppn, uint16_t count,
                            uint16_t remote, uint16_t unused);
