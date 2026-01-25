@@ -34,10 +34,10 @@ uint8_t OS_DISK_DATA[0x300];
  */
 
 /* VTOC block UID - Address: 0xE1739C */
-uid_t VTOC_$UID = { 0x00000202, 0 };
+uid_t VTOC_$UID = UID_CONST(0x00000202, 0);
 
 /* VTOC bucket UID - Address: 0xE173AC */
-uid_t VTOC_BKT_$UID = { 0x00000204, 0 };
+uid_t VTOC_BKT_$UID = UID_CONST(0x00000204, 0);
 
 /* Note: UID_$NIL is defined in uid/uid_data.c */
 
@@ -46,13 +46,13 @@ uid_t VTOC_BKT_$UID = { 0x00000204, 0 };
  */
 
 /* Nil user UID - Address: 0xE174EC */
-uid_t PPO_$NIL_USER_UID = { 0x00800000, 0 };
+uid_t PPO_$NIL_USER_UID = UID_CONST(0x00800000, 0);
 
 /* Nil group UID - Address: 0xE17524 */
-uid_t RGYC_$G_NIL_UID = { 0x00800040, 0 };
+uid_t RGYC_$G_NIL_UID = UID_CONST(0x00800040, 0);
 
 /* Nil organization UID - Address: 0xE17574 */
-uid_t PPO_$NIL_ORG_UID = { 0x00800080, 0 };
+uid_t PPO_$NIL_ORG_UID = UID_CONST(0x00800080, 0);
 
 /*
  * UID cache for quick VTOCE lookup

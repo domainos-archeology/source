@@ -65,15 +65,42 @@ typedef long status_$t;
 // =============================================================================
 typedef uint32_t m68k_ptr_t;
 
-// ============================================================================= 
+// =============================================================================
+// Endian support for portable code
+//
+// UIDs and other on-disk structures are stored in big-endian format.
+// These macros ensure correct byte order on both big and little endian hosts.
+// =============================================================================
+
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define BE32_CONST(x) (x)
+#define BE16_CONST(x) (x)
+#else
+/* Compile-time byte swap for 32-bit constants */
+#define BE32_CONST(x) \
+    ((uint32_t)((((x) >> 24) & 0x000000FF) | \
+                (((x) >>  8) & 0x0000FF00) | \
+                (((x) <<  8) & 0x00FF0000) | \
+                (((x) << 24) & 0xFF000000)))
+/* Compile-time byte swap for 16-bit constants */
+#define BE16_CONST(x) \
+    ((uint16_t)((((x) >> 8) & 0x00FF) | \
+                (((x) << 8) & 0xFF00)))
+#endif
+
+// =============================================================================
 // UID structure - 8 bytes
 //
 // Memory layout uses high word first (big-endian order).
+// UIDs are stored in big-endian format to match on-disk representation.
 // =============================================================================
 typedef struct uid_t {
     uint32_t high;      /* 0x00: High word (timestamp-based) */
     uint32_t low;       /* 0x04: Low word (node ID + counter) */
 } uid_t;
+
+/* UID constant initializer - stores in big-endian format */
+#define UID_CONST(high, low) { BE32_CONST(high), BE32_CONST(low) }
 
 /*
  * UID_$NIL - The nil/empty UID (all zeros)

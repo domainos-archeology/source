@@ -17,7 +17,7 @@
  * Used to represent "no UID" or an uninitialized UID.
  * This is a constant with all zeros.
  */
-uid_t UID_$NIL = { 0, 0 };
+uid_t UID_$NIL = UID_CONST(0, 0);
 
 /*
  * UID generator state
@@ -27,7 +27,7 @@ uid_t UID_$NIL = { 0, 0 };
  *
  * Original address: 0xE2C008
  */
-uid_t UID_$GENERATOR_STATE = { 0, 0 };
+uid_t UID_$GENERATOR_STATE = UID_CONST(0, 0);
 
 /*
  * UID generator spin lock
@@ -53,7 +53,7 @@ uint32_t NODE_$ME = 0;
  */
 
 /* Physical volume label UID - Address: 0xE1738C */
-uid_t PV_LABEL_$UID = {0x00000200, 0};
+uid_t PV_LABEL_$UID = UID_CONST(0x00000200, 0);
 
 /* Logical volume label UID - Address: 0xE17394 */
-uid_t LV_LABEL_$UID = {0x00000201, 0};
+uid_t LV_LABEL_$UID = UID_CONST(0x00000201, 0);

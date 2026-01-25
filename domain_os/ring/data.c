@@ -31,7 +31,7 @@ uid_t RING_$NETWORK_UID;
  * Located at 0x00E1747C on original platform.
  * Copied to RING_$NETWORK_UID during init.
  */
-uid_t RING_$NETWORK_UID_TEMPLATE = {0x00000700, 0};
+uid_t RING_$NETWORK_UID_TEMPLATE = UID_CONST(0x00000700, 0);
 
 /*
  * Global network UID storage (referenced by RING_$INIT).

@@ -66,4 +66,4 @@ bat_$disk_info_t bat_$disk_info[BAT_MAX_VOLUMES];
  */
 
 /* BAT bitmap UID - Address: 0xE173A4 */
-uid_t BAT_$UID = {0x00000203, 0};
+uid_t BAT_$UID = UID_CONST(0x00000203, 0);
