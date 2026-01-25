@@ -11,8 +11,7 @@
 
 #include "sock_internal.h"
 
-int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret, uint8_t protocol,
-                           uint16_t buffer_pages, uint16_t max_queue)
+int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_queue)
 {
     uint16_t *user_limit;
     sock_ec_view_t *sock_view;
@@ -29,7 +28,7 @@ int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret, uint8_t protocol,
         result = 0;
     } else {
         /* Try to allocate a socket from the free pool */
-        result = SOCK_$ALLOCATE(sock_ret, protocol, buffer_pages, max_queue);
+        result = SOCK_$ALLOCATE(sock_ret, proto_bufpages, max_queue);
 
         if (result < 0) {
             /* Successfully allocated - mark as user socket */

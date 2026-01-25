@@ -49,10 +49,11 @@ void SOCK_$INIT(void);
  * claims a specific socket number in the dynamic range (32-223).
  * The socket must not already be in use.
  *
- * @param sock_num      Socket number to open (1-223)
- * @param protocol      Protocol type identifier
- * @param buffer_pages  Buffer page allocation (high byte = pages, low byte = count)
- * @param max_queue     Maximum receive queue depth
+ * @param sock_num        Socket number to open (1-223)
+ * @param proto_bufpages  Packed value: (protocol << 16) | buffer_pages
+ *                        - High word (bits 16-31): protocol type identifier
+ *                        - Low word (bits 0-15): buffer page allocation
+ * @param max_queue       Maximum receive queue depth
  *
  * @return Negative (0xFF) on success, 0 on failure (socket already in use)
  *
@@ -60,8 +61,7 @@ void SOCK_$INIT(void);
  *
  * Original address: 0x00E15D8C
  */
-int8_t SOCK_$OPEN(uint16_t sock_num, uint8_t protocol, uint16_t buffer_pages,
-                  uint16_t max_queue);
+int8_t SOCK_$OPEN(uint16_t sock_num, uint32_t proto_bufpages, uint32_t max_queue);
 
 /*
  * SOCK_$ALLOCATE - Allocate a socket from the free pool
@@ -69,17 +69,17 @@ int8_t SOCK_$OPEN(uint16_t sock_num, uint8_t protocol, uint16_t buffer_pages,
  * Allocates a socket with an automatically assigned socket number from
  * the dynamic range (32-223). The socket is taken from the free list.
  *
- * @param sock_ret      Output: allocated socket number (0 on failure)
- * @param protocol      Protocol type identifier
- * @param buffer_pages  Buffer page allocation
- * @param max_queue     Maximum receive queue depth
+ * @param sock_ret        Output: allocated socket number (0 on failure)
+ * @param proto_bufpages  Packed value: (protocol << 16) | buffer_pages
+ *                        - High word (bits 16-31): protocol type identifier
+ *                        - Low word (bits 0-15): buffer page allocation
+ * @param max_queue       Maximum receive queue depth
  *
  * @return Negative (0xFF) on success, 0 on failure (no free sockets)
  *
  * Original address: 0x00E15E62
  */
-int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint8_t protocol,
-                      uint16_t buffer_pages, uint16_t max_queue);
+int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_queue);
 
 /*
  * SOCK_$ALLOCATE_USER - Allocate a user-mode socket
@@ -88,17 +88,17 @@ int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint8_t protocol,
  * separately and have a limit on the total number that can be allocated.
  * The socket is marked with the SOCK_FLAG_USER bit.
  *
- * @param sock_ret      Output: allocated socket number (0 on failure)
- * @param protocol      Protocol type identifier
- * @param buffer_pages  Buffer page allocation
- * @param max_queue     Maximum receive queue depth
+ * @param sock_ret        Output: allocated socket number (0 on failure)
+ * @param proto_bufpages  Packed value: (protocol << 16) | buffer_pages
+ *                        - High word (bits 16-31): protocol type identifier
+ *                        - Low word (bits 0-15): buffer page allocation
+ * @param max_queue       Maximum receive queue depth
  *
  * @return Negative (0xFF) on success, 0 on failure (no free user sockets)
  *
  * Original address: 0x00E15F14
  */
-int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret, uint8_t protocol,
-                           uint16_t buffer_pages, uint16_t max_queue);
+int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_queue);
 
 /*
  * SOCK_$CLOSE - Close a socket

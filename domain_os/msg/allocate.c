@@ -52,8 +52,9 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
      * Try to allocate a socket using the lower-level allocator.
      * SOCK_$ALLOCATE_USER finds a free socket and returns it in *socket.
      * Returns negative on success.
+     * Packed format: (protocol << 16) | buffer_pages
      */
-    if (SOCK_$ALLOCATE_USER(socket, sock_depth, sock_depth, sock_depth, 0x0400) >= 0) {
+    if (SOCK_$ALLOCATE_USER(socket, ((uint32_t)sock_depth << 16) | (uint16_t)sock_depth, 0x0400) >= 0) {
         ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
         *status_ret = status_$msg_no_more_sockets;
         return;

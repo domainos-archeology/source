@@ -75,8 +75,9 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
     /*
      * Try to open the underlying socket.
      * SOCK_$OPEN returns negative on success.
+     * Packed format: (protocol << 16) | buffer_pages
      */
-    if (SOCK_$OPEN(sock_num, sock_depth, sock_depth, 0x0400) >= 0) {
+    if (SOCK_$OPEN(sock_num, ((uint32_t)sock_depth << 16) | (uint16_t)sock_depth, 0x0400) >= 0) {
         *status_ret = status_$msg_socket_in_use;
         ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
         return;

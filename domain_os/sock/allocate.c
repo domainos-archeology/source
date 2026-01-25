@@ -10,13 +10,16 @@
 
 #include "sock_internal.h"
 
-int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint8_t protocol,
-                      uint16_t buffer_pages, uint16_t max_queue)
+int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_queue)
 {
     sock_ec_view_t *sock_view;
     sock_ec_view_t **free_list_head;
     ml_$spin_token_t token;
     int8_t result;
+
+    /* Unpack the combined parameter */
+    uint8_t protocol = (uint8_t)((proto_bufpages >> 16) & 0xFF);
+    uint16_t buffer_pages = (uint16_t)(proto_bufpages & 0xFFFF);
 
     /* Get pointer to free list head */
     free_list_head = SOCK_GET_FREE_LIST();
@@ -48,7 +51,7 @@ int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint8_t protocol,
         /* Set socket parameters */
         sock_view->buffer_pages_lo = (uint8_t)((buffer_pages >> 8) & 0xFF);
         sock_view->buffer_pages_hi = (uint8_t)(buffer_pages & 0xFF);
-        sock_view->max_queue = max_queue;
+        sock_view->max_queue = (uint16_t)max_queue;
 
         /* Set protocol */
         sock_view->protocol = protocol;

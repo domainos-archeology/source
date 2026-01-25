@@ -94,8 +94,9 @@ void network_$do_request(void *net_handle, void *cmd_buf, int16_t cmd_len,
     /*
      * Allocate a temporary socket for this request.
      * Protocol 2, buffer_pages 0, max queue 0x400.
+     * Packed format: (protocol << 16) | buffer_pages = (2 << 16) | 0 = 0x20000
      */
-    result = SOCK_$ALLOCATE((uint16_t *)&sock_num, 2, 0, 0x400);
+    result = SOCK_$ALLOCATE((uint16_t *)&sock_num, 0x20000, 0x400);
     if (result >= 0) {
         /* No free sockets available - crash the system */
         CRASH_SYSTEM(&Network_No_Available_Socket_Err);

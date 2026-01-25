@@ -13,12 +13,15 @@
 
 #include "sock_internal.h"
 
-int8_t SOCK_$OPEN(uint16_t sock_num, uint8_t protocol, uint16_t buffer_pages,
-                  uint16_t max_queue)
+int8_t SOCK_$OPEN(uint16_t sock_num, uint32_t proto_bufpages, uint32_t max_queue)
 {
     sock_ec_view_t *sock_view;
     ml_$spin_token_t token;
     int8_t result;
+
+    /* Unpack the combined parameter */
+    uint8_t protocol = (uint8_t)((proto_bufpages >> 16) & 0xFF);
+    uint16_t buffer_pages = (uint16_t)(proto_bufpages & 0xFFFF);
 
     /* Get pointer to socket's EC view from pointer table */
     sock_view = SOCK_GET_VIEW_PTR(sock_num);
@@ -57,7 +60,7 @@ int8_t SOCK_$OPEN(uint16_t sock_num, uint8_t protocol, uint16_t buffer_pages,
         /* Set socket parameters */
         sock_view->buffer_pages_lo = (uint8_t)(buffer_pages & 0xFF);
         sock_view->buffer_pages_hi = (uint8_t)((buffer_pages >> 8) & 0xFF);
-        sock_view->max_queue = max_queue;
+        sock_view->max_queue = (uint16_t)max_queue;
 
         /* Mark socket as open */
         sock_view->flags |= SOCK_FLAG_OPEN;
