@@ -91,7 +91,7 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
     }
 
     /* Get port's packet type table */
-    port_table = &((mac_os_$port_pkt_table_t *)MAC_OS_$DATA_BASE)[port];
+    port_table = &MAC_OS_$PORT_PKT_TABLES[port];
 
     /* Check if adding packet types would exceed table capacity */
     num_pkt_types = *(uint16_t *)((uint8_t *)params + 0x54);
@@ -132,8 +132,7 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
 
     /* Set up channel entry */
     {
-        uint32_t channel_offset = (uint32_t)channel * MAC_OS_CHANNEL_SIZE;
-        mac_os_$channel_t *chan_entry = (mac_os_$channel_t *)(MAC_OS_$DATA_BASE + 0x7A0 + channel_offset);
+        mac_os_$channel_t *chan_entry = &MAC_OS_$CHANNEL_TABLE[channel];
 
         /* Store callback function pointer */
         /* params offset 0x50 contains callback */

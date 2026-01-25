@@ -26,13 +26,10 @@
  */
 void MAC_OS_$CLOSE(int16_t *channel, status_$t *status_ret)
 {
-#if defined(M68K)
     int16_t chan_num;
     mac_os_$channel_t *chan;
     mac_os_$port_pkt_table_t *port_table;
-    int16_t port;
     int16_t entry_idx;
-    uint32_t channel_offset;
 
     *status_ret = status_$ok;
 
@@ -41,9 +38,7 @@ void MAC_OS_$CLOSE(int16_t *channel, status_$t *status_ret)
     /* Enter exclusion region */
     ML_$EXCLUSION_START((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
 
-    /* Calculate channel table offset */
-    channel_offset = (uint32_t)chan_num * MAC_OS_CHANNEL_SIZE;
-    chan = (mac_os_$channel_t *)(MAC_OS_$DATA_BASE + 0x7A0 + channel_offset);
+    chan = &MAC_OS_$CHANNEL_TABLE[chan_num];
 
     /* Check if driver has close callback (offset 0x40) */
     if (chan->driver_info != NULL) {
@@ -59,8 +54,7 @@ void MAC_OS_$CLOSE(int16_t *channel, status_$t *status_ret)
     }
 
     /* Get port's packet type table */
-    port = chan->port_index;
-    port_table = &((mac_os_$port_pkt_table_t *)MAC_OS_$DATA_BASE)[port];
+    port_table = &MAC_OS_$PORT_PKT_TABLES[chan->port_index];
 
     /* Remove all packet type entries that belong to this channel */
     entry_idx = 0;
@@ -90,9 +84,4 @@ void MAC_OS_$CLOSE(int16_t *channel, status_$t *status_ret)
     chan->callback = NULL;
 
     ML_$EXCLUSION_STOP((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
-#else
-    /* Non-M68K implementation stub */
-    (void)channel;
-    *status_ret = status_$mac_port_op_not_implemented;
-#endif
 }

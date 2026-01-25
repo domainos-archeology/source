@@ -64,9 +64,7 @@ void MAC_OS_$SEND(int16_t *channel, mac_os_$send_pkt_t *pkt_desc,
 
     chan_num = *channel;
 
-    /* Calculate channel table offset */
-    channel_offset = (uint32_t)chan_num * MAC_OS_CHANNEL_SIZE;
-    chan = (mac_os_$channel_t *)(MAC_OS_$DATA_BASE + 0x7A0 + channel_offset);
+    chan = &MAC_OS_$CHANNEL_TABLE[chan_num];
 
     /* Check if driver has send callback (offset 0x44) */
     driver_info = chan->driver_info;

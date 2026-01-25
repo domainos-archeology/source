@@ -180,36 +180,11 @@ typedef struct mac_os_$send_pkt_t {
  * ============================================================================
  */
 
-#if defined(M68K)
-/* Base address for MAC_OS data structures */
-#define MAC_OS_$DATA_BASE           0xE22990
-
-/* Port packet type tables (8 ports * 0xF4 bytes) */
-#define MAC_OS_$PORT_PKT_TABLES     ((mac_os_$port_pkt_table_t *)MAC_OS_$DATA_BASE)
-
-/* Channel state table (10 channels * 0x14 bytes) */
-#define MAC_OS_$CHANNEL_TABLE       ((mac_os_$channel_t *)(MAC_OS_$DATA_BASE + 0x7A0))
-
-/* Exclusion lock */
-#define MAC_OS_$EXCLUSION           ((void *)(MAC_OS_$DATA_BASE + 0x868))
-
-/* Port info table (8 ports * 8 bytes) */
-#define MAC_OS_$PORT_INFO_TABLE     ((mac_os_$port_info_t *)(MAC_OS_$DATA_BASE + 0x89C))
-
-/* Route port pointer array */
-#define ROUTE_$PORTP                (*(void ***)(0xE26EE8))
-
-/* Node ME (local node address) */
-#define NODE_$ME                    (*(uint32_t *)0xE245A4)
-#else
-/* Non-M68K: extern declarations */
-extern mac_os_$port_pkt_table_t mac_os_$port_pkt_tables[MAC_OS_MAX_PORTS];
-extern mac_os_$channel_t mac_os_$channel_table[MAC_OS_MAX_CHANNELS];
-extern void *mac_os_$exclusion;
-extern mac_os_$port_info_t mac_os_$port_info_table[MAC_OS_MAX_PORTS];
-extern void **route_$portp[MAC_OS_MAX_PORTS];
+extern mac_os_$port_pkt_table_t MAC_OS_$PORT_PKT_TABLES[MAC_OS_MAX_PORTS];
+extern mac_os_$channel_t MAC_OS_$CHANNEL_TABLE[MAC_OS_MAX_CHANNELS];
+extern void *MAC_OS_$EXCLUSION;
+extern mac_os_$port_info_t MAC_OS_$PORT_INFO_TABLE[MAC_OS_MAX_PORTS];
 extern uint32_t node_$me;
-#endif
 
 /*
  * ============================================================================

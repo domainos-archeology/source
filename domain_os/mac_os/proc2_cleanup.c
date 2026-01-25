@@ -77,7 +77,7 @@ void MAC_OS_$PROC2_CLEANUP(uint16_t as_id)
 
         /* Remove packet type entries for this channel from port's table */
         port = chan->port_index;
-        port_table = &((mac_os_$port_pkt_table_t *)MAC_OS_$DATA_BASE)[port];
+        port_table = &MAC_OS_$PORT_PKT_TABLES[port];
 
         entry_idx = 0;
         while (entry_idx < port_table->entry_count) {

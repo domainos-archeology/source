@@ -51,7 +51,7 @@ void MAC_OS_$DEMUX(void *pkt_info, int16_t *port_num, void *param3, status_$t *s
 
     /* Get port's packet type table */
     port = *port_num;
-    port_table = &((mac_os_$port_pkt_table_t *)MAC_OS_$DATA_BASE)[port];
+    port_table = &MAC_OS_$PORT_PKT_TABLES[port];
 
     /* Get packet type from pkt_info (offset 0x30) */
     pkt_type = *(uint32_t *)((uint8_t *)pkt_info + 0x30);

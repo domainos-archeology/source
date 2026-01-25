@@ -36,7 +36,6 @@ void MAC_OS_$INIT(void)
 {
     int16_t port;
     int16_t channel;
-#if defined(M68K)
     mac_os_$port_pkt_table_t *port_table;
     mac_os_$channel_t *chan;
     void **route_portp;
@@ -53,7 +52,7 @@ void MAC_OS_$INIT(void)
 
     /* Initialize each port's packet type table and channel callback */
     for (port = 0; port < MAC_OS_MAX_PORTS; port++) {
-        port_table = &((mac_os_$port_pkt_table_t *)MAC_OS_$DATA_BASE)[port];
+        port_table = &MAC_OS_$PORT_PKT_TABLES[port];
         chan = &MAC_OS_$CHANNEL_TABLE[port];
 
         /* Set up callback chain pointer (points to next entry's callback area) */
@@ -135,22 +134,4 @@ void MAC_OS_$INIT(void)
         chan->driver_info = NULL;
         chan->callback = NULL;
     }
-#else
-    /* Non-M68K implementation */
-    ML_$EXCLUSION_INIT((ml_$exclusion_t *)&mac_os_$exclusion);
-
-    for (port = 0; port < MAC_OS_MAX_PORTS; port++) {
-        mac_os_$port_pkt_tables[port].entry_count = 0;
-        mac_os_$port_info_table[port].version = 1;
-        mac_os_$port_info_table[port].config = 0;
-    }
-
-    for (channel = 0; channel < MAC_OS_MAX_CHANNELS; channel++) {
-        mac_os_$channel_table[channel].flags &= ~(MAC_OS_FLAG_PROMISCUOUS | MAC_OS_FLAG_OPEN);
-        mac_os_$channel_table[channel].socket = MAC_OS_NO_SOCKET;
-        mac_os_$channel_table[channel].line_number = 0;
-        mac_os_$channel_table[channel].driver_info = NULL;
-        mac_os_$channel_table[channel].callback = NULL;
-    }
-#endif
 }
