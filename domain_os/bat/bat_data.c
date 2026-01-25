@@ -62,10 +62,8 @@ bat_$disk_info_t bat_$disk_info[BAT_MAX_VOLUMES];
  * UID constants for buffer management
  * These are used to identify different block types in the disk cache.
  * Note: LV_LABEL_$UID is defined in uid/uid_data.c
+ * Note: VTOC_$UID is defined in vtoc/vtoc_data.c
  */
 
 /* BAT bitmap UID - Address: 0xE173A4 */
-uid_t BAT_$UID = { 0, 0 };       /* TODO: Determine actual UID values */
-
-/* VTOCE block UID - Address: 0xE1739C */
-uid_t VTOC_$UID = { 0, 0 };      /* TODO: Determine actual UID values */
+uid_t BAT_$UID = {0x00000203, 0};

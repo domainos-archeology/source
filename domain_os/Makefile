@@ -2,7 +2,7 @@
 TARGET_SAU := sau2
 
 # List of all subsystems
-SUBSYSTEMS := acl app area as asknode ast audit bat cache cal dbuf di disk dma dtty dxm ec file fim flop fp gpu fm hint iic log mac mac_os math mem misc ml mmap mmu msg name net netlog net_io netbuf network os osinfo pacct parity pas pbu pchist peb pkt pmap proc1 proc2 rem_file rgyc ring rip route scsi sio sio2681 smd sock stop term time tone tpad tty uid vfmt volx vtoc vtoce xns
+SUBSYSTEMS := acl app area as asknode ast audit bat cache cal dbuf di disk dma dtty dxm ec file fim flop fp gpu fm hint iic log mac mac_os math mem misc ml mmap mmu msg name net netlog net_io netbuf network os osinfo pacct parity pas pbu pchist peb pkt pmap proc1 proc2 rem_file rgyc ring rip route scsi sio sio2681 smd sock stop sysboot term time tone tpad tty uid vfmt volx vtoc vtoce xns
 
 WARNING_FLAGS := -Wno-error=incompatible-pointer-types -Wno-error=int-conversion
 

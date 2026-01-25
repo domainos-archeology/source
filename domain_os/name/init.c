@@ -26,7 +26,7 @@ uid_t NAME_$NODE_UID;           /* +0x30 */
 uid_t NAME_$ROOT_UID;           /* +0x38 */
 
 /* Canned root UID at separate location 0xE173E4 */
-uid_t NAME_$CANNED_ROOT_UID;
+uid_t NAME_$CANNED_ROOT_UID = {0x00000308, 0};
 
 /* Maximum number of ASIDs */
 #define NAME_MAX_ASID  58  /* 0x3A */

@@ -25,4 +25,12 @@ extern uid_t RGYC_$O_SYS_ORG_UID;   /* 0xE1743C: System org UID */
 extern uid_t RGYC_$G_LOCKSMITH_UID; /* 0xE17434: Locksmith UID (superuser) */
 extern uid_t RGYC_$G_LOGIN_UID;     /* 0xE1742C: Login UID */
 
+/*
+ * Additional user/group UIDs
+ */
+extern uid_t RGYC_$P_USER_UID;      /* 0xE174F4: User UID base */
+extern uid_t RGYC_$P_DAEMON_UID;    /* 0xE17514: Daemon UID */
+extern uid_t RGYC_$G_SYS_ADMIN_UID; /* 0xE1752C: System admin group */
+extern uid_t RGYC_$G_NIL_UID;       /* 0xE17524: Nil group UID */
+
 #endif /* RGYC_H */

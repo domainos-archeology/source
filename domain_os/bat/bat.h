@@ -16,6 +16,12 @@
 #include "base/base.h"
 
 /*
+ * BAT UID - Block Allocation Table unique identifier
+ * Address: 0xE173A4
+ */
+extern uid_t BAT_$UID;
+
+/*
  * BAT Lock ID - Used with ML_$LOCK/ML_$UNLOCK
  */
 #define ML_LOCK_BAT     0x11

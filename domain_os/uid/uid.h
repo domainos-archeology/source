@@ -38,7 +38,8 @@ extern uint32_t NODE_$ME;               /* 0xE245A4: This node's ID */
  *
  * These are UIDs for system objects that need to be referenced by name.
  */
-extern uid_t LV_LABEL_$UID;             /* Volume label UID */
+extern uid_t PV_LABEL_$UID;             /* 0xE1738C: Physical volume label UID */
+extern uid_t LV_LABEL_$UID;             /* 0xE17394: Logical volume label UID */
 extern uid_t OS_WIRED_$UID;             /* OS wired/pinned memory UID */
 
 /*

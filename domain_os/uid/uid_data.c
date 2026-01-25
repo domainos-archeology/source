@@ -47,3 +47,13 @@ uint16_t UID_$GENERATOR_LOCK = 0;
  * Original address: 0xE245A4
  */
 uint32_t NODE_$ME = 0;
+
+/*
+ * Well-known system UIDs
+ */
+
+/* Physical volume label UID - Address: 0xE1738C */
+uid_t PV_LABEL_$UID = {0x00000200, 0};
+
+/* Logical volume label UID - Address: 0xE17394 */
+uid_t LV_LABEL_$UID = {0x00000201, 0};
