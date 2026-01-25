@@ -54,6 +54,7 @@
 #define DIR_OP_SET_DEF_PROTECTION   0x54    /* Set default protection */
 #define DIR_OP_GET_DEF_PROTECTION   0x56    /* Get default protection */
 #define DIR_OP_RESOLVE              0x58    /* Resolve pathname */
+#define DIR_OP_ADD_MOUNT            0x5A    /* Add mount point */
 #define DIR_OP_DROP_MOUNT           0x5C    /* Drop mount point */
 
 /*
@@ -544,6 +545,22 @@ void DIR_$DIR_READU(uid_t *dir_uid, void *entries_ret, void *entries_size,
  */
 void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                 void *response, void *resp_buf);
+
+/*
+ * DIR_$ADD_MOUNT - Add a volume mount point to a directory
+ *
+ * Adds a mount point entry when a logical volume is mounted. Called
+ * during volume mount (VOLX_$MOUNT) to create the directory entry
+ * linking to the volume's root directory.
+ *
+ * Parameters:
+ *   dir_uid    - UID of directory to add mount entry to
+ *   mount_uid  - UID of the mounted volume's root directory
+ *   status_ret - Output: status code
+ *
+ * Original address: 0x00E534B8
+ */
+void DIR_$ADD_MOUNT(uid_t *dir_uid, uid_t *mount_uid, status_$t *status_ret);
 
 /*
  * DIR_$DROP_MOUNT - Remove a volume mount point from a directory
