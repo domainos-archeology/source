@@ -9,6 +9,7 @@
 #define VOLX_INTERNAL_H
 
 #include "volx/volx.h"
+#include "ast/ast.h"
 #include "network/network.h"
 #include "disk/disk.h"
 #include "dbuf/dbuf.h"
