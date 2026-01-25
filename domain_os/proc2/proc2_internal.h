@@ -9,12 +9,23 @@
 #define PROC2_INTERNAL_H
 
 #include "proc2/proc2.h"
+#include "proc1/proc1.h"
 #include "ec/ec.h"
 #include "fim/fim.h"
 #include "uid/uid.h"
 #include "acl/acl.h"
 #include "mst/mst.h"
 #include "dtty/dtty.h"
+#include "name/name.h"
+#include "audit/audit.h"
+#include "os/os.h"
+#include "tape/tape.h"
+#include "flop/flop.h"
+#include "mmu/mmu.h"
+#include "xpd/xpd.h"
+#include "file/file_internal.h"
+#include "pchist/pchist.h"
+#include "msg/msg.h"
 
 /*
  * ============================================================================
@@ -114,66 +125,5 @@ void FUN_00e3fd06(int16_t zombie_idx, uint16_t options,
 /* Child list manipulation */
 void FUN_00e40df4(int16_t child_idx, int16_t prev_sibling_idx);
 
-
-/*
- * ============================================================================
- * External Module Functions - FIM (not in fim.h)
- * ============================================================================
- */
-
-void FIM_$FP_INIT(uint16_t asid);
-void FIM_$PROC2_STARTUP(void *context);
-void FIM_$DELIVER_TRACE_FAULT(uint16_t asid);
-void FIM_$FAULT_RETURN(void *context, void *param2, void *param3);
-void FIM_$POP_SIGNAL(void *context);
-
-/*
- * ============================================================================
- * External Module Functions - AUDIT
- * ============================================================================
- */
-
-void AUDIT_$INHERIT_AUDIT(int16_t *pid_ptr, int16_t *status_ptr);
-void AUDIT_$LOG_EVENT(void *event_header, uint16_t *success_flag,
-                       void *success, void *param, void *extra);
-
-/*
- * ============================================================================
- * External Module Functions - XPD (Extended Ptrace/Debug)
- * ============================================================================
- */
-
-int8_t XPD_$INHERIT_PTRACE_OPTIONS(int16_t entry_offset);
-void XPD_$CAPTURE_FAULT(void *param1, void *param2,
-                        void *param3, void *param4);
-void XPD_$RESET_PTRACE_OPTS(void *ptrace_opts);
-void XPD_$WRITE(void *addr, uint32_t offset, const void *data,
-                const void *data2, status_$t *status_ret);
-
-/*
- * ============================================================================
- * External Module Functions - MSG
- * ============================================================================
- */
-
-int8_t MSG_$FORK(uint16_t param1, void *asid_ptr);
-
-/*
- * ============================================================================
- * External Module Functions - PCHIST
- * ============================================================================
- */
-
-void PCHIST_$UNIX_PROFIL_FORK(void *pid_ptr, void *asid_ptr);
-
-/*
- * ============================================================================
- * External Module Functions - Boot
- * ============================================================================
- */
-
-int8_t OS_$BOOT_ERRCHK(char *msg1, char *msg2, uint16_t *param, status_$t *status_ret);
-int8_t TAPE_$BOOT(status_$t *status_ret);
-int8_t FLOP_$BOOT(status_$t *status_ret, status_$t *status_ret2);
 
 #endif /* PROC2_INTERNAL_H */

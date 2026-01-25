@@ -29,7 +29,7 @@
  * Returns index (1-69) if found, 0 if not found.
  * Original address: 0x00e42224
  */
-static int16_t PGROUP_FIND_BY_UPGID(uint16_t upgid)
+int16_t PGROUP_FIND_BY_UPGID(uint16_t upgid)
 {
     int16_t i;
 
@@ -50,7 +50,7 @@ static int16_t PGROUP_FIND_BY_UPGID(uint16_t upgid)
  * Handles pgroup table allocation, reference counting, and leader tracking.
  * Original address: 0x00e41e86
  */
-static void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_$t *status)
+void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_$t *status)
 {
     int16_t new_pgroup_idx;
     int16_t old_pgroup_idx;

@@ -22,7 +22,7 @@
  * Returns index (1-69) if found, 0 if not found.
  * Original address: 0x00e42224
  */
-static int16_t PGROUP_FIND_BY_UPGID(uint16_t upgid)
+int16_t PGROUP_FIND_BY_UPGID(uint16_t upgid)
 {
     int16_t i;
 
