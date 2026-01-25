@@ -13,40 +13,23 @@
 #include "mmu/mmu.h"
 #include "time/time.h"
 #include "uid/uid.h"
-/* Note: pmap/pmap.h excluded due to NETLOG_$LOG_IT signature conflict */
 #include "bat/bat.h"
 #include "disk/disk.h"
 #include "file/file.h"
 #include "fm/fm.h"
 #include "misc/misc.h"
 #include "vtoc/vtoc.h"
+#include "netlog/netlog.h"
+#include "pmap/pmap.h"
+#include "netbuf/netbuf.h"
+#include "network/network.h"
+#include "rem_file/rem_file.h"
+#include "dbuf/dbuf.h"
 
-/* NETWORK functions */
-extern void NETWORK_$GET_NET(uint32_t node, void *net_info, status_$t *status);
-/* Note: NETWORK_$AST_GET_INFO declared in ast.h */
-extern int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,
-                                    uint16_t page_size, int16_t count,
-                                    int8_t no_read_ahead, uint8_t flags,
-                                    int32_t *dtm, clock_t *clock,
-                                    uint32_t *acl_info, status_$t *status);
-
-/* NETBUF functions */
-extern void NETBUF_$RTN_DAT(uint32_t addr);
-extern void NETBUF_$GET_DAT(uint32_t *buffer);
-
-/* Note: NETLOG_$OK_TO_LOG and NETLOG_$LOG_IT declared in ast.h */
-
-/* PMAP functions needed by AST (pmap.h excluded due to NETLOG signature conflict) */
-extern void PMAP_$WAKE_PURIFIER(int8_t wait);
-extern uint16_t PMAP_$LOW_THRESH;
 /* PMAP global variables at 0xE232xx */
 extern uint32_t DAT_00e232b4;       /* Available pages pool 1 */
 extern uint32_t DAT_00e232d8;       /* Available pages pool 2 */
 extern uint32_t DAT_00e232fc;       /* Available pages pool 3 */
-
-/* REM_FILE (Remote File) functions */
-extern void REM_FILE_$SET_ATTRIBUTE(void *net_info, uid_t *uid, uint16_t attr_type,
-                                     void *value, status_$t *status);
 
 /* Internal AST functions not yet identified */
 extern void FUN_00e01bee(void *uid_info, status_$t *status);
