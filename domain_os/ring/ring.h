@@ -114,17 +114,18 @@
  * ============================================================================
  */
 
+ /* Ring network data */
+extern uint32_t RING_$DATA;
+extern uint32_t RING_$SWDIAG_DATA;
+extern uint32_t RING_$SWDIAG_RCVCNT;
+extern uint32_t RING_$SWDIAG_NODEID;
+extern uint16_t RING_$XMIT_BIPHASE;
+extern uint16_t RING_$RCV_BIPHASE;
+extern uint16_t RING_$XMIT_ESB;
+extern uint16_t RING_$RCV_ESB;
+
 /* Network UID for ring interface */
 extern uid_t RING_$NETWORK_UID;
-
-/* Global activity flag */
-extern int8_t NETWORK_$ACTIVITY_FLAG;
-
-/* Checksum control flag */
-extern char NETWORK_$DO_CHKSUM;
-
-/* Current node ID */
-extern uint32_t NODE_$ME;
 
 /*
  * ============================================================================

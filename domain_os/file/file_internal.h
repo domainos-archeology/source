@@ -20,6 +20,7 @@
 #include "route/route.h"
 #include "disk/disk.h"
 #include "proc1/proc1.h"
+#include "vtoc/vtoc.h"
 
 /*
  * ============================================================================

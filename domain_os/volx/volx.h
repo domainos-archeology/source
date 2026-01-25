@@ -28,28 +28,28 @@
 /*
  * VOLX table constants
  */
-#define VOLX_MAX_VOLUMES    6       /* Maximum mounted volumes (1-6) */
-#define VOLX_ENTRY_SIZE     0x20    /* 32 bytes per entry */
+#define VOLX_MAX_VOLUMES 6   /* Maximum mounted volumes (1-6) */
+#define VOLX_ENTRY_SIZE 0x20 /* 32 bytes per entry */
 
 /*
  * Status codes (module 0x14 = volume subsystem)
  */
-#define status_$volume_logical_vol_not_mounted              0x00140003
-#define status_$volume_unable_to_dismount_boot_volume       0x00140002
+#define status_$volume_logical_vol_not_mounted 0x00140003
+#define status_$volume_unable_to_dismount_boot_volume 0x00140002
 #define status_$volume_entry_directory_not_on_logical_volume 0x00140004
-#define status_$volume_physical_vol_replaced_since_mount    0x00140005
-#define status_$volume_cant_stream_this_object_type         0x00140006
-#define status_$volume_no_more_streams                      0x00140007
+#define status_$volume_physical_vol_replaced_since_mount 0x00140005
+#define status_$volume_cant_stream_this_object_type 0x00140006
+#define status_$volume_no_more_streams 0x00140007
 
 /*
  * Additional status codes used by VOLX
  */
-#define status_$disk_already_mounted                        0x0008001e
-#define status_$storage_module_stopped                      0x0008001b
-#define status_$directory_is_full                           0x000e0002
-#define status_$name_already_exists                         0x000e0003
-#define status_$stream_no_more_streams                      0x00140007
-#define status_$stream_cant_stream_this_object_type         0x00140006
+#define status_$disk_already_mounted 0x0008001e
+#define status_$storage_module_stopped 0x0008001b
+#define status_$directory_is_full 0x000e0002
+#define status_$name_already_exists 0x000e0003
+#define status_$stream_no_more_streams 0x00140007
+#define status_$stream_cant_stream_this_object_type 0x00140006
 
 /*
  * VOLX table entry structure
@@ -58,13 +58,13 @@
  * Size: 32 bytes (0x20)
  */
 typedef struct volx_entry_t {
-    uid_t       dir_uid;        /* 0x00: Root directory UID */
-    uid_t       lv_uid;         /* 0x08: Logical volume UID */
-    uid_t       parent_uid;     /* 0x10: Parent directory UID (mount point) */
-    int16_t     dev;            /* 0x18: Device unit number */
-    int16_t     bus;            /* 0x1A: Bus/controller number */
-    int16_t     ctlr;           /* 0x1C: Controller type */
-    int16_t     lv_num;         /* 0x1E: Logical volume number */
+  uid_t dir_uid;    /* 0x00: Root directory UID */
+  uid_t lv_uid;     /* 0x08: Logical volume UID */
+  uid_t parent_uid; /* 0x10: Parent directory UID (mount point) */
+  int16_t dev;      /* 0x18: Device unit number */
+  int16_t bus;      /* 0x1A: Bus/controller number */
+  int16_t ctlr;     /* 0x1C: Controller type */
+  int16_t lv_num;   /* 0x1E: Logical volume number */
 } volx_entry_t;
 
 /*
@@ -73,10 +73,10 @@ typedef struct volx_entry_t {
 
 /* VOLX table base address (0xE82604 on m68k) */
 #if defined(M68K)
-#define VOLX_$TABLE_BASE    ((volx_entry_t *)0xE82604)
+#define VOLX_$TABLE_BASE ((volx_entry_t *)0xE82604)
 #else
 extern volx_entry_t *volx_table_base;
-#define VOLX_$TABLE_BASE    volx_table_base
+#define VOLX_$TABLE_BASE volx_table_base
 #endif
 
 /* Boot volume index (the volume containing the OS) */
@@ -102,9 +102,9 @@ extern int16_t CAL_$BOOT_VOLX;
  *   lv_num      - Pointer to logical volume number
  *   salvage_ok  - Pointer to salvage flag (passed to VTOC_$MOUNT)
  *   write_prot  - Pointer to write protect flag (negative = write protected)
- *   parent_uid  - Pointer to parent directory UID (or UID_$NIL if no mount point)
- *   dir_uid_ret - Output: receives root directory UID
- *   status      - Output: status code
+ *   parent_uid  - Pointer to parent directory UID (or UID_$NIL if no mount
+ * point) dir_uid_ret - Output: receives root directory UID status      -
+ * Output: status code
  *
  * Original address: 0x00E6B118
  */
@@ -160,9 +160,8 @@ status_$t VOLX_$SHUTDOWN(void);
  *
  * Original address: 0x00E6B5C6
  */
-void VOLX_$GET_INFO(int16_t *vol_idx, uid_t *dir_uid_ret,
-                    uint32_t *free_blocks, uint32_t *total_blocks,
-                    status_$t *status);
+void VOLX_$GET_INFO(int16_t *vol_idx, uid_t *dir_uid_ret, uint32_t *free_blocks,
+                    uint32_t *total_blocks, status_$t *status);
 
 /*
  * VOLX_$GET_UIDS - Get volume UIDs by physical location
@@ -222,42 +221,5 @@ void VOLX_$REC_ENTRY(int16_t *vol_idx, uid_t *dir_uid);
  * Original address: 0x00E6B0BC
  */
 int16_t FIND_VOLX(int16_t dev, int16_t bus, int16_t ctlr, int16_t lv_num);
-
-/*
- * ============================================================================
- * External Dependencies
- * ============================================================================
- */
-
-/* DISK subsystem */
-extern int16_t DISK_$PV_MOUNT(int16_t dev, int16_t bus, int16_t ctlr,
-                              status_$t *status);
-extern void DISK_$LV_UID(int16_t pv_idx, int16_t lv_num, uid_t *uid_ret,
-                         status_$t *status);
-extern int16_t DISK_$LV_MOUNT(uid_t *lv_uid, status_$t *status);
-extern void DISK_$DISMOUNT(int16_t vol_idx);
-extern void DISK_$REVALIDATE(int16_t vol_idx);
-
-/* VTOC subsystem */
-extern void VTOC_$MOUNT(int16_t vol_idx, uint16_t param_2, uint8_t salvage_ok,
-                        int8_t write_prot, status_$t *status);
-extern void VTOC_$DISMOUNT(int16_t vol_idx, uint8_t flags, status_$t *status);
-extern void VTOC_$GET_NAME_DIRS(int16_t vol_idx, uid_t *dir1_uid, uid_t *dir2_uid,
-                                status_$t *status);
-
-/* DIR subsystem */
-extern void DIR_$ADD_MOUNT(uid_t *parent_uid, uid_t *child_uid, status_$t *status);
-extern void DIR_$DROP_MOUNT(uid_t *parent_uid, uid_t *child_uid, uint32_t *unused,
-                            status_$t *status);
-
-/* AST subsystem */
-extern void AST_$DISMOUNT(int16_t vol_idx, uint8_t flags, status_$t *status);
-
-/* BAT subsystem */
-extern void BAT_$N_FREE(int16_t *vol_idx, uint32_t *free_out, uint32_t *total_out,
-                        status_$t *status);
-
-/* Network subsystem */
-extern int8_t NETWORK_$REALLY_DISKLESS;
 
 #endif /* VOLX_H */

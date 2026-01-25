@@ -9,6 +9,13 @@
 #define VOLX_INTERNAL_H
 
 #include "volx/volx.h"
+#include "network/network.h"
+#include "disk/disk.h"
+#include "dbuf/dbuf.h"
+#include "audit/audit.h"
+#include "vtoc/vtoc.h"
+#include "dir/dir.h"
+#include "disk/disk.h"
 
 /*
  * Access macros for VOLX table

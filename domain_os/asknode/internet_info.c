@@ -17,16 +17,6 @@
 
 #include "asknode/asknode_internal.h"
 
-/* Global references */
-extern uint32_t NODE_$ME;                   /* 0x00E245A4 */
-extern uint32_t ROUTE_$PORT;                /* 0x00E2E0A0 */
-extern void *ROUTE_$PORTP;                  /* 0x00E26EE8 - array of port pointers */
-extern uint32_t ROUTE_$N_ROUTING_PORTS;
-extern uint32_t ROUTE_$STD_N_ROUTING_PORTS;
-extern uint32_t ROUTE_$START_TIME;
-extern uint32_t RIP_$INFO;                  /* Routing info table */
-extern uid_t UID_$NIL;
-
 /* Network statistics at 0x00E24C28 area */
 extern uint16_t NETWORK_$PAGIN_RQST_CNT;    /* 0x00E24C28 */
 extern uint16_t NETWORK_$BAD_CHKSUM_CNT;    /* 0x00E24C2A */

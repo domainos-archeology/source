@@ -18,6 +18,11 @@
 
 #include "base/base.h"
 
+/* Memory stats */
+extern uint32_t MEM_$MEM_REC;
+extern uint32_t MMAP_$REAL_PAGES;
+
+
 /*
  * MEM_$PARITY_LOG - Log a memory parity error
  *

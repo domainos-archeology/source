@@ -242,17 +242,4 @@ void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *buffer_ptr,
 void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
                         status_$t *status);
 
-/*
- * External functions used by DISK
- */
-/* DBUF functions */
-extern void *DBUF_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *uid,
-                             uint16_t p4, uint16_t p5, status_$t *status);
-extern void DBUF_$SET_BUFF(void *buffer, uint16_t flags, void *param_3);
-extern void DBUF_$INVALIDATE(int32_t param_1, uint16_t vol_idx);
-
-/* Internal I/O function */
-extern status_$t DISK_IO(int16_t op, int16_t vol_idx, void *daddr, void *buffer,
-                         void *count);
-
 #endif /* DISK_H */

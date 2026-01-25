@@ -19,7 +19,7 @@
  * Original address: 0xE245A4
  */
 #if defined(M68K)
-#define NODE_$ME        (*(uint32_t *)0xE245A4)
+#define NODE_$ME (*(uint32_t *)0xE245A4)
 #else
 extern uint32_t NODE_$ME;
 #endif
@@ -33,7 +33,7 @@ extern uint32_t NODE_$ME;
  * Original address: 0xE24C44
  */
 #if defined(M68K)
-#define NETWORK_$LOOPBACK_FLAG  (*(int8_t *)0xE24C44)
+#define NETWORK_$LOOPBACK_FLAG (*(int8_t *)0xE24C44)
 #else
 extern int8_t NETWORK_$LOOPBACK_FLAG;
 #endif
@@ -41,25 +41,24 @@ extern int8_t NETWORK_$LOOPBACK_FLAG;
 /*
  * Network command codes
  */
-#define NETWORK_CMD_RING_INFO   0x0E    /* Get ring information */
+#define NETWORK_CMD_RING_INFO 0x0E /* Get ring information */
 
 /*
  * Network status codes (module 0x11)
  */
-#define status_$network_no_available_sockets            0x00110005
-#define status_$network_unexpected_reply_type           0x0011000B
-#define status_$network_too_many_transmit_retries       0x00110011
+#define status_$network_no_available_sockets 0x00110005
+#define status_$network_unexpected_reply_type 0x0011000B
+#define status_$network_too_many_transmit_retries 0x00110011
 
 /*
  * Network globals
  */
-extern uint32_t NETWORK_$MOTHER_NODE;       /* 0xE24C0C - mother node ID */
-extern int16_t  NETWORK_$RETRY_TIMEOUT;     /* 0xE24C18 - timeout for retries */
+extern int16_t NETWORK_$RETRY_TIMEOUT; /* 0xE24C18 - timeout for retries */
 
 /*
  * Socket pointer array (for event count access)
  */
-extern void *SOCK_$SOCKET_PTR[];            /* 0xE28DB4 */
+extern void *SOCK_$SOCKET_PTR[]; /* 0xE28DB4 */
 
 /*
  * network_$send_request - Send a network request packet
@@ -104,10 +103,10 @@ void network_$send_request(void *net_handle, int16_t sock_num, int16_t pkt_id,
  *
  * Original address: 0x00E0F746
  */
-int8_t network_$wait_response(int16_t sock_num, int16_t pkt_id, uint16_t timeout,
-                              int32_t *event_count, int16_t *resp_buf,
-                              int16_t *resp_len_out, uint32_t *data_bufs,
-                              uint16_t *data_len_out);
+int8_t network_$wait_response(int16_t sock_num, int16_t pkt_id,
+                              uint16_t timeout, int32_t *event_count,
+                              int16_t *resp_buf, int16_t *resp_len_out,
+                              uint32_t *data_bufs, uint16_t *data_len_out);
 
 /*
  * network_$do_request - Send a network command and receive response
@@ -130,6 +129,7 @@ int8_t network_$wait_response(int16_t sock_num, int16_t pkt_id, uint16_t timeout
  */
 void network_$do_request(void *net_handle, void *cmd_buf, int16_t cmd_len,
                          uint32_t param4, uint16_t param5, int16_t param6,
-                         void *resp_buf, void *resp_info, status_$t *status_ret);
+                         void *resp_buf, void *resp_info,
+                         status_$t *status_ret);
 
 #endif /* NETWORK_INTERNAL_H */

@@ -122,4 +122,16 @@ extern void OS_$CHKSUM(void *param_1, void *param_2, void *param_3,
 extern void OS_$GET_EC(void *param_1, ec_$eventcount_t **ec_ret,
                        status_$t *status);
 
+                       /*
+ * OS_DISK_PROC - Clear disk process table entries
+ *
+ * Parameters:
+ *   proc_id - Process ID to clear, or 0 to clear all entries
+ *
+ * When an entry's process ID matches (or proc_id == 0):
+ *   - The process ID field is cleared to 0
+ *   - The status field is set to 0xFFFF (invalid/unused)
+ */
+extern void OS_DISK_PROC(int16_t proc_id);
+
 #endif /* OS_H */

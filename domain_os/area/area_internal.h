@@ -9,6 +9,7 @@
 #define AREA_INTERNAL_H
 
 #include "area/area.h"
+#include "as/as.h"
 #include "ast/ast.h"
 #include "cal/cal.h"
 #include "ml/ml.h"
@@ -16,18 +17,6 @@
 #include "network/network.h"
 #include "proc1/proc1.h"
 #include "rem_file/rem_file.h"
-
-/*
- * External references for network support
- */
-extern int8_t NETWORK_$DISKLESS;
-extern uint32_t NETWORK_$MOTHER_NODE;
-
-/*
- * AS_$STACK_LOW - Stack low address
- * Used for copy operations to avoid copying stack region
- */
-extern uint32_t AS_$STACK_LOW;
 
 /*
  * Error message for internal crashes

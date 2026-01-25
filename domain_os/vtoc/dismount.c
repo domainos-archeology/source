@@ -11,12 +11,7 @@
 #include "vtoc/vtoc_internal.h"
 
 /* External function declarations */
-extern void DISK_$DISMOUNT(int16_t vol_idx);
 extern void OS_DISK_PROC(int16_t vol_idx);
-extern void DBUF_$UPDATE_VOL(int16_t vol_idx, uid_t *uid);
-extern void AUDIT_$LOG_EVENT(uint32_t event_id, int16_t *param1, int16_t *param2,
-                             char *data, uint16_t flags);
-
 /* External variables */
 extern int8_t AUDIT_$ENABLED;    /* 0xE2E09E: Audit enabled flag */
 

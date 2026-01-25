@@ -112,6 +112,8 @@ extern uint16_t DAT_00e7fcf2;   /* GET_DEF_PROTECTION params */
 extern uint16_t DAT_00e7fcf6;
 extern uint16_t DAT_00e7fcfa;   /* RESOLVE params */
 extern uint16_t DAT_00e7fcfe;
+extern uint16_t DAT_00e7fd0a;   /* DROP_MOUNT params - my_host_id word */
+extern uint16_t DAT_00e7fd0e;   /* DROP_MOUNT request size */
 
 /*
  * ============================================================================

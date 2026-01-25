@@ -161,6 +161,9 @@ typedef struct mmu_globals_t {
     #define MCR_SHADOW              mmu_mcr_shadow
 #endif
 
+/* MMU data */
+extern uint32_t MMU_$SYSTEM_REV;
+
 /* Get PTT entry for a virtual address */
 #define PTT_FOR_VA(va)          ((uint16_t*)((uint32_t)PTT_BASE + ((va) & VA_TO_PTT_OFFSET_MASK)))
 

@@ -16,6 +16,9 @@
 /* PROM warm restart entry point - used for clean shutdown */
 extern void *PROM_$QUIET_RET_ADDR;
 
+/* PROM data */
+extern uint32_t PROM_$SAU_AND_AUX;
+
 /*
  * FUN_00e29138 - Hardware probe function
  *

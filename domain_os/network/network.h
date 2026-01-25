@@ -63,6 +63,7 @@
  *
  * These are located in the network data area at 0xE248FC + offset
  */
+extern uint32_t NETWORK_$MOTHER_NODE;       /* 0xE24C0C - mother node ID */
 extern int16_t NETWORK_$REQUEST_SERVER_CNT;  /* 0xE24C1C (+0x320) */
 extern int16_t NETWORK_$PAGE_SERVER_CNT;     /* 0xE24C1E (+0x322) */
 extern uint32_t NETWORK_$ALLOWED_SERVICE;    /* 0xE24C3E (+0x342) - 32-bit */
@@ -72,6 +73,17 @@ extern int8_t NETWORK_$USER_SOCK_OPEN;       /* 0xE24C48 (+0x34C) */
 extern int8_t NETWORK_$REALLY_DISKLESS;      /* 0xE24C4A (+0x34E) */
 extern int8_t NETWORK_$DISKLESS;             /* 0xE24C4C (+0x350) - diskless mode */
 extern uid_t NETWORK_$PAGING_FILE_UID;
+
+/* Network statistics */
+extern uint16_t NETWORK_$INFO_RQST_CNT;
+extern uint16_t NETWORK_$PAGIN_RQST_CNT;
+extern uint16_t NETWORK_$MULT_PAGIN_RQST_CNT;
+extern uint16_t NETWORK_$PAGOUT_RQST_CNT;
+extern uint16_t NETWORK_$READ_CALL_CNT;
+extern uint16_t NETWORK_$WRITE_CALL_CNT;
+extern uint16_t NETWORK_$READ_VIOL_CNT;
+extern uint16_t NETWORK_$WRITE_VIOL_CNT;
+extern uint16_t NETWORK_$BAD_CHKSUM_CNT;
 
 /*
  * External global from ROUTE subsystem

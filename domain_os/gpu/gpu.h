@@ -51,4 +51,8 @@ void GPU_$INIT(status_$t *status_ret);
  */
 void GPU_$TERM(void);
 
+/* GPU data */
+extern int8_t GPU_$PRESENT;
+
+
 #endif /* GPU_H */

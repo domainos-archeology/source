@@ -51,11 +51,7 @@ typedef struct route_$port_t {
  *
  * Original address: 0xE2E0A0
  */
-#if defined(M68K)
-#define ROUTE_$PORT             (*(uint32_t *)0xE2E0A0)
-#else
 extern uint32_t ROUTE_$PORT;
-#endif
 
 /*
  * ROUTE_$PORTP - Array of pointers to port structures
@@ -66,11 +62,7 @@ extern uint32_t ROUTE_$PORT;
  *
  * Original address: 0xE26EE8
  */
-#if defined(M68K)
-#define ROUTE_$PORTP            ((route_$port_t **)0xE26EE8)
-#else
 extern route_$port_t **ROUTE_$PORTP;
-#endif
 
 /* Number of network ports supported */
 #define ROUTE_$MAX_PORTS        8

@@ -19,10 +19,6 @@
 
 /* External references */
 extern ec_$eventcount_t *DAT_00e28dc4;  /* Socket 5 EC */
-extern ec_$eventcount_t TIME_$CLOCKH;
-extern int16_t PROC1_$AS_ID;
-extern uint32_t FIM_$QUIT_VALUE;
-extern ec_$eventcount_t FIM_$QUIT_EC;
 
 void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
                          int32_t *node_list, int16_t *max_count,

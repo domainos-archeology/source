@@ -14,11 +14,14 @@
 #define VTOC_INTERNAL_H
 
 #include "vtoc/vtoc.h"
+#include "audit/audit.h"
 #include "ml/ml.h"
 #include "dbuf/dbuf.h"
+#include "disk/disk.h"
 #include "bat/bat.h"
 #include "uid/uid.h"
 #include "time/time.h"
+#include "os/os.h"
 
 /*
  * Lock ID for disk operations

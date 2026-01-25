@@ -54,25 +54,7 @@
 #define DIR_OP_SET_DEF_PROTECTION   0x54    /* Set default protection */
 #define DIR_OP_GET_DEF_PROTECTION   0x56    /* Get default protection */
 #define DIR_OP_RESOLVE              0x58    /* Resolve pathname */
-
-/*
- * ============================================================================
- * External References
- * ============================================================================
- */
-
-/* Well-known UIDs */
-extern uid_t NAME_$ROOT_UID;            /* Root directory UID */
-extern uid_t NAME_$CANNED_REP_ROOT_UID; /* Canned replicated root UID */
-
-/* Global nil UID (all zeros) */
-extern uid_t UID_$NIL;
-
-/* Process AS (address space) ID */
-extern uint16_t PROC1_$AS_ID;
-
-/* ACL directory ACL type */
-extern uid_t ACL_$DIR_ACL;
+#define DIR_OP_DROP_MOUNT           0x5C    /* Drop mount point */
 
 /*
  * ============================================================================
@@ -562,5 +544,23 @@ void DIR_$DIR_READU(uid_t *dir_uid, void *entries_ret, void *entries_size,
  */
 void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                 void *response, void *resp_buf);
+
+/*
+ * DIR_$DROP_MOUNT - Remove a volume mount point from a directory
+ *
+ * Removes a mount point entry that was created when a logical volume
+ * was mounted. Called during volume dismount to clean up the directory
+ * entry linking to the volume's root.
+ *
+ * Parameters:
+ *   mount_point_uid - UID of the mount point directory
+ *   dir_uid         - UID of directory containing the mount entry
+ *   lv_num          - Pointer to logical volume number (or zero)
+ *   status_ret      - Output: status code
+ *
+ * Original address: 0x00E53518
+ */
+void DIR_$DROP_MOUNT(uid_t *mount_point_uid, uid_t *dir_uid, uint32_t *lv_num,
+                     status_$t *status_ret);
 
 #endif /* DIR_H */

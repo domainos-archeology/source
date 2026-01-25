@@ -338,12 +338,6 @@
 #define SVC_XNS_ERROR_SEND          0x61
 
 /*
- * ============================================================================
- * External References
- * ============================================================================
- */
-
-/*
  * SVC_$TRAP0_TABLE - Simple syscall handler table (TRAP #0)
  *
  * Array of 32 handler addresses for no-argument syscalls.
