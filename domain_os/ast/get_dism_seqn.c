@@ -7,7 +7,7 @@
  * Original address: 0x00e01388
  */
 
-#include "ast.h"
+#include "ast_internal.h"
 
 uint32_t AST_$GET_DISM_SEQN(void)
 {

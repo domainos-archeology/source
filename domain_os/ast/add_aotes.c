@@ -7,7 +7,7 @@
  * Original address: 0x00e01014
  */
 
-#include "ast.h"
+#include "ast_internal.h"
 #include "misc/misc.h"
 #include "mmu/mmu.h"
 

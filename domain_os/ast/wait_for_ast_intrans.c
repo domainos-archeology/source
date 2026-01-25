@@ -8,7 +8,7 @@
  * Original address: 0x00e00c54
  */
 
-#include "ast.h"
+#include "ast_internal.h"
 
 void AST_$WAIT_FOR_AST_INTRANS(void)
 {

@@ -13,7 +13,7 @@
  * Original address: 0x00e04a00
  */
 
-#include "ast.h"
+#include "ast_internal.h"
 
 void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs, status_$t *status)
 {

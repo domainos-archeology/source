@@ -7,7 +7,7 @@
  * Original address: 0x00e00fbc
  */
 
-#include "ast.h"
+#include "ast_internal.h"
 
 void AST_$FREE_ASTE(aste_t *aste)
 {

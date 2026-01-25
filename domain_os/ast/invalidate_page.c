@@ -7,7 +7,7 @@
  * Original address: 0x00e00f16
  */
 
-#include "ast.h"
+#include "ast_internal.h"
 #include "mmu/mmu.h"
 #include "mmap/mmap.h"
 

@@ -7,7 +7,7 @@
  * Original address: 0x00e071ea
  */
 
-#include "ast.h"
+#include "ast_internal.h"
 
 void AST_$SET_TROUBLE(uid_t **uid_ptr)
 {
