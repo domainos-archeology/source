@@ -461,6 +461,22 @@ void PROC1_$GET_CPUT8(void *time_ret);
 void PROC1_$GET_CPU_USAGE(void *time_ret, uint32_t *stat1_ret, uint32_t *stat2_ret);
 
 /*
+ * PROC1_$GET_ANY_CPU_USAGE - Get CPU usage for any process
+ * Original address: 0x00e1543e
+ *
+ * Returns CPU time and additional statistics for a specified process.
+ * Crashes the system if PID is invalid (0 or > 64).
+ *
+ * Parameters:
+ *   pid_ptr - Pointer to process ID
+ *   cpu_time_ret - Pointer to receive CPU time (6 bytes, shifted left by 1)
+ *   stat1_ret - Pointer to receive field_60 from PCB
+ *   stat2_ret - Pointer to receive field_64 from PCB
+ */
+void PROC1_$GET_ANY_CPU_USAGE(uint16_t *pid_ptr, void *cpu_time_ret,
+                               uint32_t *stat1_ret, uint32_t *stat2_ret);
+
+/*
  * PROC1_$GET_LOADAV - Get system load average
  * Original address: 0x00e14bba
  */
