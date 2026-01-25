@@ -88,4 +88,18 @@ void VFMT_$WRITE(const char *format, ...);
  */
 void VFMT_$WRITEN(const char *format, int16_t max_len, ...);
 
+/*
+ * ERROR_$PRINT - Print formatted error message
+ *
+ * This is a procedure variable thunk that wraps VFMT_$WRITE.
+ * Used throughout the kernel to print error messages to the console.
+ *
+ * Parameters:
+ *   format - Format string (Domain/OS VFMT format)
+ *   ...    - Variadic arguments matching format specifiers
+ *
+ * Original address: 0x00e825f4
+ */
+void ERROR_$PRINT(const char *format, ...);
+
 #endif /* VFMT_H */

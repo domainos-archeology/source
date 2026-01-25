@@ -11,6 +11,7 @@
 #include "log/log.h"
 #include "ml/ml.h"
 #include "time/time.h"
+#include "vfmt/vfmt.h"
 
 /* =============================================================================
  * Log Global State Structure
@@ -137,8 +138,7 @@ void log_$read_internal(void *buffer, uint16_t offset, uint16_t max_len, uint16_
 /* From wp/ subsystem - not in wp.h yet */
 extern void WP_$UNWIRE(uint32_t handle);
 
-/* From misc/ subsystem - error reporting */
-extern void ERROR_$PRINT(const char *fmt, ...);
+/* ERROR_$PRINT declared in vfmt/vfmt.h */
 
 /* Path to system error log file */
 #define LOG_FILE_PATH   "//node_data/system_logs/sys_error"

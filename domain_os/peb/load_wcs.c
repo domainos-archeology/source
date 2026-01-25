@@ -16,6 +16,7 @@
 #include "file/file.h"
 #include "mst/mst.h"
 #include "name/name.h"
+#include "vfmt/vfmt.h"
 
 /*
  * Error messages for WCS loading
@@ -57,7 +58,7 @@ extern void MST_$MAPS(int p1, uint16_t flags, const uid_t *uid, int p4, uint32_t
                       uint16_t prot, int p7, uint8_t p8, void *result, status_$t *status);
 extern void MST_$UNMAP(const uid_t *uid, void *p2, void *p3, status_$t *status);
 extern void MST_$WIRE_AREA(void **start_ptr, uint16_t p2, char p3, uint16_t p4, int16_t *result);
-extern void ERROR_$PRINT(const char *fmt, ...);
+/* ERROR_$PRINT declared in vfmt/vfmt.h */
 
 /*
  * PEB_$LOAD_WCS_CHECK_ERR - Check for WCS load errors

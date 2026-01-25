@@ -256,7 +256,7 @@ char prompt_for_yes_or_no(void);
 uint16_t VTOP_OR_CRASH(uint32_t vaddr);
 /* SUB48 declared in cal/cal.h */
 void PRINT_BUILD_TIME(void);
-void ERROR_$PRINT(short code, short *param1, short *param2);
+/* ERROR_$PRINT declared in vfmt/vfmt.h (via misc/misc.h) */
 
 /*
  * ============================================================================

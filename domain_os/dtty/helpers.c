@@ -11,9 +11,7 @@
  */
 
 #include "dtty/dtty_internal.h"
-
-/* Forward declaration for ERROR_$PRINT (in error subsystem) */
-extern void ERROR_$PRINT(const char *format, void *args, const char *newline);
+#include "vfmt/vfmt.h"
 
 /*
  * dtty_$get_disp_type - Get current display type

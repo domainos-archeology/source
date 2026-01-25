@@ -9,6 +9,7 @@
 #define MISC_H
 
 #include "base/base.h"
+#include "vfmt/vfmt.h"
 
 /*
  * CRASH_SYSTEM - Fatal system crash handler
@@ -27,19 +28,7 @@
  */
 void CRASH_SYSTEM(const status_$t *status_p);
 
-/*
- * ERROR_$PRINT - Error message print function
- *
- * Printf-like function for error/console output.
- * The second parameter appears to be optional arguments or NULL.
- *
- * Parameters:
- *   format - Printf-style format string
- *   args   - Additional arguments (can be NULL)
- *
- * Original address: 0x00e825f4
- */
-void ERROR_$PRINT(char *format, void *args);
+/* NOTE: ERROR_$PRINT is declared in vfmt/vfmt.h */
 
 /*
  * Common error codes used with CRASH_SYSTEM
