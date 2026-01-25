@@ -88,17 +88,24 @@ int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_
  * separately and have a limit on the total number that can be allocated.
  * The socket is marked with the SOCK_FLAG_USER bit.
  *
- * @param sock_ret        Output: allocated socket number (0 on failure)
- * @param proto_bufpages  Packed value: (protocol << 16) | buffer_pages
- *                        - High word (bits 16-31): protocol type identifier
- *                        - Low word (bits 0-15): buffer page allocation
- * @param max_queue       Maximum receive queue depth
+ * Note: Parameters are passed as 16-bit pairs due to Pascal's 16-bit integer
+ * limitations on some platforms. The function combines them internally:
+ *   proto_bufpages = (proto_hi << 16) | proto_lo
+ *   max_queue = (queue_hi << 16) | queue_lo
+ *
+ * @param sock_ret   Output: allocated socket number (0 on failure)
+ * @param proto_hi   High word of proto_bufpages (protocol type)
+ * @param proto_lo   Low word of proto_bufpages (buffer pages)
+ * @param queue_hi   High word of max_queue
+ * @param queue_lo   Low word of max_queue
  *
  * @return Negative (0xFF) on success, 0 on failure (no free user sockets)
  *
  * Original address: 0x00E15F14
  */
-int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_queue);
+int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret,
+                           uint16_t proto_hi, uint16_t proto_lo,
+                           uint16_t queue_hi, uint16_t queue_lo);
 
 /*
  * SOCK_$CLOSE - Close a socket

@@ -5,18 +5,30 @@
  * by a counter that limits the total number that can be allocated.
  * The socket is marked with the SOCK_FLAG_USER_MODE bit.
  *
+ * Parameters are passed as 16-bit pairs due to Pascal's 16-bit integer
+ * limitations. They are combined into 32-bit values before calling
+ * SOCK_$ALLOCATE.
+ *
  * Original address: 0x00E15F14
  * Original source: Pascal, converted to C
  */
 
 #include "sock_internal.h"
 
-int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_queue)
+int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret,
+                           uint16_t proto_hi, uint16_t proto_lo,
+                           uint16_t queue_hi, uint16_t queue_lo)
 {
     uint16_t *user_limit;
     sock_ec_view_t *sock_view;
     int8_t result;
     uint16_t sock_num;
+    uint32_t proto_bufpages;
+    uint32_t max_queue;
+
+    /* Combine 16-bit parameters into 32-bit values */
+    proto_bufpages = ((uint32_t)proto_hi << 16) | proto_lo;
+    max_queue = ((uint32_t)queue_hi << 16) | queue_lo;
 
     /* Get pointer to user socket limit counter */
     user_limit = SOCK_GET_USER_LIMIT();
