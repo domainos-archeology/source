@@ -11,6 +11,7 @@
 #include "bat/bat.h"
 #include "ml/ml.h"
 #include "dbuf/dbuf.h"
+#include "disk/disk.h"
 #include "math/math.h"
 #include "time/time.h"
 #include "uid/uid.h"

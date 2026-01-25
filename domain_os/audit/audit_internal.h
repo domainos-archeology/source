@@ -23,6 +23,7 @@
 #include "proc1/proc1.h"
 #include "ml/ml.h"
 #include "ec/ec.h"
+#include "file/file_internal.h"
 
 /*
  * ============================================================================
@@ -347,26 +348,6 @@ void *audit_$alloc(uint16_t size, status_$t *status_ret);
  * Original address: (part of 0x00E7120C with size=0)
  */
 void audit_$free(void *ptr);
-
-/*
- * ============================================================================
- * Hash Function
- * ============================================================================
- */
-
-/*
- * UID_$HASH - Hash a UID to a bucket index
- *
- * Parameters:
- *   uid    - Pointer to UID to hash
- *   modulo - Pointer to modulo value
- *
- * Returns:
- *   Bucket index (0 to modulo-1)
- *
- * Original address: 0x00E17360
- */
-extern int16_t UID_$HASH(uid_t *uid, int16_t *modulo);
 
 /*
  * Hash modulus for audit list (value: 37)

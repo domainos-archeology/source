@@ -178,7 +178,7 @@ static void remap_display(void)
         va += DISPLAY_PAGE_SIZE;
     }
 
-    RESTORE_INTERRUPTS(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
 }
 
 /*

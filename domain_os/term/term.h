@@ -125,4 +125,7 @@ extern void TERM_$PCHIST_ENABLE(unsigned short *enable_ptr,
 extern void TERM_$ENQUEUE_TPAD(void **param1);
 extern void TERM_$P2_CLEANUP(short *param1);
 
+extern status_$t Term_Manual_Stop_err;
+extern void *PTR_TERM_$ENQUEUE_TPAD_00e1ce90;
+
 #endif /* TERM_H */

@@ -15,6 +15,7 @@
 #include "proc2/proc2.h"
 #include "network/network.h"
 #include "route/route.h"
+#include "misc/crash_system.h"
 
 /*
  * MSG data base address

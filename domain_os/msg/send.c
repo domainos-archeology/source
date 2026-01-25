@@ -21,14 +21,6 @@
 #define MSG_MAX_HEADER_SIZE     0x200
 
 /*
- * Status codes for network operations
- */
-#define status_$network_message_header_too_big  0x0011000a
-#define status_$network_unknown_network         0x00110017
-#define status_$network_data_length_too_large   0x0011001c
-#define status_$network_msg_exceeds_max_size    0x0011001e
-
-/*
  * MSG_$$SEND - Internal send implementation
  *
  * Parameters:

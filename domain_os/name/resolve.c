@@ -11,12 +11,6 @@
 
 #include "name/name_internal.h"
 
-/* Forward declarations for DIR subsystem */
-extern void DIR_$GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
-                            int16_t *entry_type, status_$t *status_ret);
-
-/* Additional status codes - defined in name.h */
-
 /*
  * name_$parse_component - Parse next path component
  *

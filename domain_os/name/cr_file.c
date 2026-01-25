@@ -10,20 +10,6 @@
 
 #include "name/name_internal.h"
 
-/* Forward declarations for FILE subsystem */
-extern void FILE_$CREATE(uid_t *dir_uid, uid_t *file_uid_ret, status_$t *status_ret);
-extern void FILE_$DELETE(uid_t *file_uid, status_$t *status_ret);
-
-/* Forward declarations for ACL subsystem */
-extern void ACL_$COPY(uid_t *src_uid, uid_t *dst_uid, void *file_acl, void *filein_acl,
-                      status_$t *status_ret);
-extern void *ACL_$FILE_ACL;    /* 0x00e17444 */
-extern void *ACL_$FILEIN_ACL;  /* 0x00e17454 */
-
-/* Forward declarations for DIR subsystem */
-extern void DIR_$ADDU(uid_t *dir_uid, char *name, int16_t *name_len,
-                      uid_t *file_uid, status_$t *status_ret);
-
 /*
  * NAME_$CR_FILE - Create a file with the given pathname
  *

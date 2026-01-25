@@ -41,7 +41,7 @@ void KBD_$RCV(kbd_state_t *state, uint8_t key)
     case 2:
         /* Check for crash key sequence */
         if (MMU_$NORMAL_MODE() >= 0) {
-            CRASH_SYSTEM(&status_$t_00e1ce8c);
+            CRASH_SYSTEM(&Term_Manual_Stop_err);
             KBD_$CRASH_INIT();
             /* Set state to 0xF */
             *((uint16_t *)state_entry) |= 0x0F;

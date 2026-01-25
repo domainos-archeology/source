@@ -15,7 +15,6 @@
 /*
  * Status codes
  */
-#define status_$internet_unknown_network_port           0x002B0003
 #define status_$network_operation_not_defined_on_hardware 0x0011001D
 
 /*

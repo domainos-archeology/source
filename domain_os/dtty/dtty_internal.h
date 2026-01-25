@@ -8,7 +8,7 @@
 #define DTTY_INTERNAL_H
 
 #include "dtty/dtty.h"
-#include "smd/smd.h"
+#include "smd/smd_internal.h" // SMD_$COPY_FONT_DO_HDM is here... not sure why
 #include "proc1/proc1.h"
 
 /*

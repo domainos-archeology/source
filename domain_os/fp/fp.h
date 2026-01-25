@@ -21,6 +21,7 @@
 #define FP_H
 
 #include "base/base.h"
+#include "ml/ml.h"
 
 /*
  * ============================================================================
@@ -80,7 +81,7 @@ extern uint32_t FP_$SAVEP;
  *
  * Address: 0x00E218D6
  */
-extern void *FP_$EXCLUSION;
+extern ml_$exclusion_t FP_$EXCLUSION;
 
 /*
  * ============================================================================

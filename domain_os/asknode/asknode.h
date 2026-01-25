@@ -222,19 +222,4 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
                          int32_t *node_list, int16_t *max_count,
                          uint16_t *count, status_$t *status);
 
-/*
- * ============================================================================
- * Global Variables (External References)
- * ============================================================================
- */
-
-/* NODE_$ME - Local node ID */
-extern uint32_t NODE_$ME;
-
-/* ROUTE_$PORT - Default routing port */
-extern int32_t ROUTE_$PORT;
-
-/* ROUTE_$PORTP - Port pointer array */
-extern void *ROUTE_$PORTP;
-
 #endif /* ASKNODE_H */

@@ -13,10 +13,6 @@
 
 #include "name/name_internal.h"
 
-/* External references */
-extern int16_t CAL_$BOOT_VOLX;  /* Boot volume index */
-extern uint32_t NODE_$ME;       /* This node's ID */
-
 /* Global NAME data area at 0xE80264 */
 uid_t NAME_$NODE_DATA_UID;      /* +0x00 */
 /* NAME_$COM_MAPPED_INFO at +0x08 (16 bytes) */

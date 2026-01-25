@@ -114,21 +114,6 @@ void MAC_OS_$INIT(void);
 void mac_$copy_to_buffers(void *src_ptr, int16_t length);
 
 /*
- * NETBUF_$RTN_PKT - Return network packet buffers
- *
- * Returns packet header and data buffers to the pool.
- *
- * Parameters:
- *   hdr_buf    - Header buffer
- *   data_buf   - Data buffer
- *   info       - Buffer info
- *   length     - Data length
- *
- * Original address: 0x00E0F0C6
- */
-void NETBUF_$RTN_PKT(void *hdr_buf, void *data_buf, void *info, uint16_t length);
-
-/*
  * ============================================================================
  * Global Data References
  * ============================================================================

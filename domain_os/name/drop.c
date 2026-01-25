@@ -9,10 +9,6 @@
 
 #include "name/name_internal.h"
 
-/* Forward declarations for DIR subsystem */
-extern void DIR_$DROPU(uid_t *dir_uid, char *name, int16_t *name_len,
-                       uid_t *file_uid, status_$t *status_ret);
-
 /*
  * name_$split_path - Split path into directory and filename portions
  *

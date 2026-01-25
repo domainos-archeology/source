@@ -12,11 +12,6 @@
 #include "msg/msg_internal.h"
 
 /*
- * Network service callback
- */
-extern void MSG_$NET_SERVICE(void);
-
-/*
  * MSG_$ALLOCATEI - Allocate socket internal implementation
  *
  * Parameters:

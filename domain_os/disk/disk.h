@@ -58,7 +58,10 @@
 #define status_$invalid_logical_volume_index 0x00080014
 #define status_$invalid_unit_number 0x00080018
 #define status_$invalid_physical_volume_label 0x0008001a
+#define status_$storage_module_stopped 0x0008001b
 #define status_$disk_illegal_request_for_device 0x0008002a
+#define status_$disk_is_full 0x00010002
+#define status_$disk_needs_salvaging 0x00010005
 
 /*
  * Volume entry structure (partial - 72 bytes per entry)

@@ -129,7 +129,7 @@ void MST_$INIT(void)
 
     /* Calculate number of MST pages needed */
     /* Each page covers 64 segments (1024 bytes / 16 bytes per entry) */
-    num_mst_pages = M_MIU_LLW((uint32_t)(MST_$SEG_TN + 0x3f), MST_MAX_ASIDS);
+    num_mst_pages = M$MIU$LLW((uint32_t)(MST_$SEG_TN + 0x3f), MST_MAX_ASIDS);
 
     /* Allocate and initialize MST table pages */
     mst_table_addr = (int32_t)(uintptr_t)MST;  /* 0xee5800 */
@@ -195,10 +195,10 @@ void MST_$INIT(void)
     }
 
     /* Calculate 10% of pages */
-    max_pages = M_DIU_LLW(page_base * 10, 100);
+    max_pages = M$DIU$LLW(page_base * 10, 100);
 
     /* Also limit by segment count */
-    num_mst_pages = M_MIU_LLW((uint32_t)(MST_$SEG_TN >> 6), MST_MAX_ASIDS);
+    num_mst_pages = M$MIU$LLW((uint32_t)(MST_$SEG_TN >> 6), MST_MAX_ASIDS);
     if (max_pages > num_mst_pages) {
         max_pages = num_mst_pages;
     }
@@ -229,7 +229,7 @@ void MST_$INIT(void)
      */
     int32_t limit_plus_one = (int16_t)MST_$MST_PAGES_LIMIT + 1;
     word_index = (limit_plus_one < 0 ? limit_plus_one + 0x1f : limit_plus_one) >> 5;
-    bit_index = M_OIS_WLW(limit_plus_one, 32);
+    bit_index = M$OIS$WLW(limit_plus_one, 32);
 
     /* Clear bits from bit_index to 31 in current word */
     for (i = 31 - bit_index; i >= 0; i--) {

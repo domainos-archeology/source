@@ -10,9 +10,12 @@
 
 #include "kbd/kbd.h"
 #include "ec/ec.h"
-#include "term/term.h"
+#include "term/term_internal.h"
 #include "mmu/mmu.h"
 #include "time/time.h"
+#include "misc/crash_system.h"
+#include "dxm/dxm.h"
+#include "suma/suma.h"
 
 /*
  * ============================================================================
@@ -62,17 +65,6 @@ typedef struct kbd_state_t {
  */
 
 /*
- * TERM_$TPAD_BUFFER - Touchpad buffer structure
- * Located at 0xe2dde4
- *
- * Structure layout:
- *   +0x00 (2 bytes): write index (0-5, wraps)
- *   +0x02 (2 bytes): read index
- *   +0x04 onwards: 6 entries of 16 bytes each (tpad event data)
- */
-extern uint8_t TERM_$TPAD_BUFFER[];
-
-/*
  * TERM_$MAX_DTTE - Maximum DTTE entries
  * Located at 0xe2dd78
  */
@@ -106,10 +98,6 @@ extern int16_t MNK_$KTT_MAX;
  */
 extern uint8_t SMD_$KTT[];
 
-/*
- * Status codes
- */
-extern status_$t status_$t_00e1ce8c;  /* Crash status for keyboard */
 
 /*
  * ============================================================================
@@ -149,27 +137,5 @@ uint8_t kbd_$translate_key(uint8_t key);
  * FUN_00e1ca62 - Get keyboard mode from key
  */
 int16_t kbd_$get_mode(uint8_t key);
-
-/*
- * TERM_$SET_DISCIPLINE - Set terminal discipline
- */
-void TERM_$SET_DISCIPLINE(uint16_t *line, void *discipline, status_$t *status);
-
-/*
- * TERM_$ENQUEUE_TPAD - Enqueue touchpad event (callback target)
- */
-extern void TERM_$ENQUEUE_TPAD(void *param);
-extern void *PTR_TERM_$ENQUEUE_TPAD_00e1ce90;
-
-/*
- * DXM callback queue
- */
-extern void *DXM_$UNWIRED_Q;
-
-/*
- * DXM_$ADD_CALLBACK - Add callback to DXM queue
- */
-void DXM_$ADD_CALLBACK(void *queue, void *callback_ptr, void *param,
-                       uint32_t flags, status_$t *status);
 
 #endif /* KBD_INTERNAL_H */

@@ -12,19 +12,6 @@
 
 #include "name/name_internal.h"
 
-/* External references */
-extern int16_t PROC1_$AS_ID;           /* 0x00e2060a - current address space ID */
-extern boolean AUDIT_$ENABLED;          /* 0x00e2e09e - audit logging enabled */
-
-/* Forward declarations for ACL subsystem */
-extern void ACL_$ENTER_SUPER(void);
-extern void ACL_$EXIT_SUPER(void);
-extern int ACL_$RIGHTS(uid_t *uid, void *param2, void *param3, void *param4, status_$t *status);
-
-/* Forward declarations for AUDIT subsystem */
-extern void AUDIT_$LOG_EVENT(void *event, uint16_t *result, int16_t status,
-                             int16_t uid_param, uint16_t event_type);
-
 /* Internal helper to convert ACL status - defined elsewhere */
 extern void NAME_CONVERT_ACL_STATUS(status_$t *status);
 

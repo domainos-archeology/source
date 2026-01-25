@@ -15,12 +15,9 @@
 #include "misc/string.h"
 #include "name/name.h"
 #include "vtoc/vtoc.h"
-
-/* Forward declarations for external dependencies */
-extern void VFMT_$FORMATN(char *format, char *output, void *param1, int16_t *out_len);
-
-/* Boot volume index - from CAL subsystem */
-extern int16_t CAL_$BOOT_VOLX;
+#include "proc1/proc1.h"
+#include "vfmt/vfmt.h"
+#include "cal/cal.h"
 
 /* Node ID - from UID subsystem */
 extern uint32_t NODE_$ME;
