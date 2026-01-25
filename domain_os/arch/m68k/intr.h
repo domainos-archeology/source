@@ -64,7 +64,7 @@
  * Returns the current SR value without modifying it.
  */
 #define GET_SR(sr_var) \
-    asm volatile ("move.w %%sr, %0" : "=d" (sr_var))
+    __asm__ volatile ("move.w %%sr, %0" : "=d" (sr_var))
 
 /*
  * SET_SR - Write a new value to the status register
@@ -72,6 +72,6 @@
  * Note: This is a privileged operation (supervisor mode only).
  */
 #define SET_SR(sr_val) \
-    asm volatile ("move.w %0, %%sr" : : "d" (sr_val) : "cc")
+    __asm__ volatile ("move.w %0, %%sr" : : "d" (sr_val) : "cc")
 
 #endif /* ARCH_M68K_INTR_H */

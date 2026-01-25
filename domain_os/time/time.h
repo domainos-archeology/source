@@ -20,6 +20,7 @@
 #define TIME_H
 
 #include "base/base.h"
+#include "di/di.h"
 
 /*
  * ============================================================================
@@ -78,18 +79,6 @@ typedef struct time_queue_elem_t {
     uint32_t interval_high; /* 0x14: Repeat interval high word */
     uint16_t interval_low;  /* 0x18: Repeat interval low word */
 } time_queue_elem_t;
-
-/*
- * DI (Deferred Interrupt) queue element - 16 bytes
- *
- * Used for TIME_$DI_VT and TIME_$DI_RTE
- */
-typedef struct di_queue_elem_t {
-    uint32_t next;          /* 0x00: Next element pointer */
-    uint32_t prev;          /* 0x04: Previous element pointer */
-    uint32_t handler;       /* 0x08: Handler function pointer */
-    uint32_t arg;           /* 0x0C: Handler argument */
-} di_queue_elem_t;
 
 /*
  * ============================================================================
