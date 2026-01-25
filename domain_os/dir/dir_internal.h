@@ -10,7 +10,11 @@
 #define DIR_INTERNAL_H
 
 #include "dir/dir.h"
+#include "acl/acl.h"
 #include "ast/ast.h"
+#include "file/file_internal.h" // we call FILE_$PRIV_UNLOCK
+#include "name/name.h"
+#include "proc1/proc1.h"
 
 /*
  * ============================================================================
@@ -242,7 +246,5 @@ void FUN_00e4e786(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
 
 /* Global data */
 extern uint32_t NODE_$ME;       /* This node's ID */
-extern int16_t *PROC1_$TYPE;    /* Process type table */
-extern int16_t PROC1_$CURRENT;  /* Current process index */
 
 #endif /* DIR_INTERNAL_H */

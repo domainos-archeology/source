@@ -74,23 +74,23 @@
 /*
  * File status codes (module 0x0F)
  */
-#define file_$object_not_found                   0x000F0001  /* Object not found */
-#define file_$object_is_remote                   0x000F0002  /* Object is remote */
-#define file_$bad_reply_received_from_remote     0x000F0003  /* Bad reply from remote */
-#define file_$object_not_locked_by_this_process  0x000F0005  /* Not locked by this process */
-#define file_$object_in_use                      0x000F0006  /* Object in use */
-#define file_$illegal_lock_request               0x000F0008  /* Illegal lock request */
-#define file_$local_lock_table_full              0x000F0009  /* Lock table full */
-#define file_$cannot_create_on_remote_with_uid   0x000F000B  /* Cannot create on remote with UID */
-#define file_$obj_not_locked_by_this_process     0x000F000C  /* Not locked by this process (alt) */
-#define file_$objects_on_different_volumes       0x000F0013  /* Objects on different volumes */
-#define file_$invalid_arg                        0x000F0014  /* Invalid argument */
-#define file_$incompatible_request               0x000F0015  /* Incompatible request */
-#define file_$invalid_type                       0x000F0016  /* Invalid type */
-#define file_$op_cannot_perform_here             0x000F0018  /* Cannot perform operation here */
-#define file_$vol_mounted_read_only              0x000E0030  /* Volume is read-only */
-#define status_$naming_vol_mounted_read_only     0x00040014  /* Volume mounted read-only (naming) */
-#define status_$insufficient_rights              0x000F0011  /* Insufficient rights */
+#define file_$object_not_found                     0x000F0001  /* Object not found */
+#define file_$object_is_remote                     0x000F0002  /* Object is remote */
+#define file_$bad_reply_received_from_remote_node  0x000F0003  /* Bad reply from remote */
+#define file_$object_not_locked_by_this_process    0x000F0005  /* Not locked by this process */
+#define file_$object_in_use                        0x000F0006  /* Object in use */
+#define file_$illegal_lock_request                 0x000F0008  /* Illegal lock request */
+#define file_$local_lock_table_full                0x000F0009  /* Lock table full */
+#define file_$cannot_create_on_remote_with_uid     0x000F000B  /* Cannot create on remote with UID */
+#define file_$obj_not_locked_by_this_process       0x000F000C  /* Not locked by this process (alt) */
+#define file_$objects_on_different_volumes         0x000F0013  /* Objects on different volumes */
+#define file_$invalid_arg                          0x000F0014  /* Invalid argument */
+#define file_$incompatible_request                 0x000F0015  /* Incompatible request */
+#define file_$invalid_type                         0x000F0016  /* Invalid type */
+#define file_$op_cannot_perform_here               0x000F0018  /* Cannot perform operation here */
+#define file_$vol_mounted_read_only                0x000E0030  /* Volume is read-only */
+#define status_$naming_vol_mounted_read_only       0x00040014  /* Volume mounted read-only (naming) */
+#define status_$insufficient_rights                0x000F0011  /* Insufficient rights */
 
 /*
  * ============================================================================

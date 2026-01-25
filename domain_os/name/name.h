@@ -38,15 +38,17 @@ typedef enum {
 /*
  * Status codes for naming operations (module 0x0E)
  */
-#define status_$naming_invalid_pathname                     0x000e0004
-#define status_$naming_name_not_found                       0x000e0007
-#define status_$naming_invalid_leaf                         0x000e000b
-#define status_$naming_bad_directory                        0x000e000d
-#define status_$naming_last_entry_in_replicated_root_returned 0x000e0019
-#define status_$naming_name_server_helper_is_shutdown       0x000e001a
-#define status_$naming_helper_sent_packets_with_errors      0x000e001c
-#define status_$naming_directory_must_be_root               0x000e001e
-#define status_$naming_directory_not_found_in_pathname      0x000e0020
+#define status_$naming_invalid_pathname                        0x000e0004
+#define status_$naming_invalid_link                            0x000e0005
+#define status_$naming_name_not_found                          0x000e0007
+#define status_$naming_invalid_leaf                            0x000e000b
+#define status_$naming_bad_directory                           0x000e000d
+#define status_$naming_last_entry_in_replicated_root_returned  0x000e0019
+#define status_$naming_name_server_helper_is_shutdown          0x000e001a
+#define status_$naming_helper_sent_packets_with_errors         0x000e001c
+#define status_$naming_directory_must_be_root                  0x000e001e
+#define status_$naming_directory_not_found_in_pathname         0x000e0020
+#define status_$naming_object_is_not_an_acl_object             0x000e002e
 
 /*
  * Well-known UIDs managed by the NAME subsystem
@@ -55,6 +57,7 @@ extern uid_t NAME_$ROOT_UID;        /* Root directory UID */
 extern uid_t NAME_$NODE_UID;        /* This node's directory UID */
 extern uid_t NAME_$NODE_DATA_UID;   /* Node data directory UID */
 extern uid_t NAME_$COM_UID;         /* /com directory UID */
+extern uid_t NAME_$CANNED_REP_ROOT_UID;
 extern uid_t NAME_$CANNED_ROOT_UID; /* Canned root UID (for fallback) */
 
 /* ============================================================================
