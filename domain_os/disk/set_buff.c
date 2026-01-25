@@ -9,7 +9,7 @@
  * @param param_3  Additional parameter
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 void DISK_$SET_BUFF(void *buffer, uint16_t flags, void *param_3)
 {

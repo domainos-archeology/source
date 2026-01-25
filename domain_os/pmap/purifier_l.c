@@ -15,6 +15,7 @@
 #include "cal/cal.h"
 #include "misc/misc.h"
 #include "math/math.h"
+#include "netlog/netlog.h"
 
 /* External working set list high mark array */
 extern uint16_t MMAP_$WSL_HI_MARK[];

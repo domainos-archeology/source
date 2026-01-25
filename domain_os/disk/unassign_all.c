@@ -4,7 +4,7 @@
  * Iterates through volumes 1-10 and unassigns each one.
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 void DISK_$UNASSIGN_ALL(void)
 {

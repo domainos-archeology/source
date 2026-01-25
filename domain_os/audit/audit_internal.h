@@ -21,6 +21,7 @@
 
 #include "audit/audit.h"
 #include "proc1/proc1.h"
+#include "proc2/proc2.h"
 #include "ml/ml.h"
 #include "ec/ec.h"
 #include "file/file_internal.h"

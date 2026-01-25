@@ -13,7 +13,7 @@
  * @param param_7  Device init parameter 5
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 void DISK_$MNT_DINIT(uint16_t vol_idx, void **dev_ptr, void *param_3,
                      void *param_4, void *param_5, void *param_6, void *param_7)

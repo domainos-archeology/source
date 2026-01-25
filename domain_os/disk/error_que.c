@@ -9,7 +9,7 @@
  * @param param_3  Parameter 3
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 void DISK_$ERROR_QUE(void *req, uint16_t param_2, void *param_3)
 {

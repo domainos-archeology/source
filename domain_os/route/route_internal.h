@@ -10,6 +10,8 @@
 
 #include "route/route.h"
 #include "ec/ec.h"
+#include "rip/rip.h"
+#include "misc/crash_system.h"
 
 /*
  * =============================================================================

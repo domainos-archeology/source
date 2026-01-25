@@ -10,7 +10,7 @@
  * @param status  Output: Status code
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 /* Write protect flag byte offset within volume entry */
 #define DISK_WP_OFFSET  0xa5

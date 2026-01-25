@@ -26,6 +26,7 @@
 #include "os/os.h"
 #include "file/file.h"
 #include "mst/mst.h"
+#include "misc/crash_system.h"
 
 /* External declarations */
 extern int32_t NODE_$ME;

@@ -11,7 +11,7 @@
  * @param stats       Output: Statistics buffer
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 /* Global statistics at 0xe7aedc */
 #define DISK_GLOBAL_STATS  ((uint32_t *)0x00e7aedc)

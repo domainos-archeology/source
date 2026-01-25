@@ -7,7 +7,7 @@
  * @param req  Request block containing device info
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 void DISK_$REVALID(int16_t vol_idx)
 {

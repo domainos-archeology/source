@@ -13,7 +13,7 @@
  * @return Pointer to buffer, or NULL on error
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 void *DISK_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *expected_uid,
                       uint16_t param_4, uint16_t param_5, status_$t *status)

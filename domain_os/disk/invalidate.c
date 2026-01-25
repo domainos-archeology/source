@@ -7,7 +7,7 @@
  * @param vol_idx  Volume index to invalidate
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 void DISK_$INVALIDATE(uint16_t vol_idx)
 {

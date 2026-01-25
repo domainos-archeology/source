@@ -12,6 +12,8 @@
 #include "ml/ml.h"
 #include "proc1/proc1.h"
 #include "proc2/proc2.h"
+#include "dbuf/dbuf.h"
+#include "time/time.h"
 
 /*
  * Volume table layout
@@ -94,11 +96,31 @@ extern ml_$exclusion_t ml_$exclusion_t_00e7a25c;  /* DISK_$DATA +0x90 */
 extern void *Disk_Queued_Drivers_Not_Supported_Err;
 extern void *Disk_Driver_Logic_Err;
 
-/*
- * Internal helper functions (unidentified - FUN_*)
- *
- * These functions need to be identified and renamed.
- */
+/* I/O request structure (used internally) */
+typedef struct disk_io_req_t {
+    uint32_t reserved1;         /* +0x00 */
+    uint32_t daddr;             /* +0x04: Disk address */
+    uint8_t head;               /* +0x06: Head number (for format) */
+    uint8_t sector;             /* +0x07: Sector number (for format) */
+    uint32_t reserved2;         /* +0x08 */
+    status_$t status;           /* +0x0C: Result status */
+    uint32_t reserved3;         /* +0x10 */
+    uint32_t ppn;               /* +0x14: Physical page number */
+    uint16_t reserved4;         /* +0x18 */
+    uint16_t count;             /* +0x1A: Transfer count */
+    uint8_t reserved5;          /* +0x1C */
+    uint8_t reserved6;          /* +0x1D */
+    uint8_t reserved7;          /* +0x1E */
+    uint8_t flags;              /* +0x1F: Request flags */
+    uint32_t header[8];         /* +0x20: Block header data */
+    uint32_t timestamp;         /* +0x2C: Timestamp (for writes) */
+    uint32_t reserved8[2];      /* +0x30, +0x34 */
+    uint16_t checksum;          /* +0x3A: Checksum */
+} disk_io_req_t;
+
+extern status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t daddr,
+                         uint32_t ppn, int32_t *info);
+
 
 /*
  * DISK_$PV_MOUNT_INTERNAL - Internal physical volume mount

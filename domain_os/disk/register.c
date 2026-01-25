@@ -13,7 +13,7 @@
  * @return 0xFF if registered successfully, 0 if failed
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 /* Device registration table at 0xe7ad5c */
 #define DISK_DEVICE_TABLE  ((uint32_t *)0x00e7ad5c)

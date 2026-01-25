@@ -14,7 +14,7 @@
  * @param result     Result output
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 void DISK_$DO_IO(void *dev_entry, void *req, void *param_3, void *result)
 {

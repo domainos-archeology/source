@@ -8,7 +8,7 @@
  * @return Pointer to device entry, or NULL if index invalid
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 /* Device registration table at 0xe7ad5c */
 #define DISK_DEVICE_TABLE  ((uint8_t *)0x00e7ad5c)

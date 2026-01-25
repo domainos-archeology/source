@@ -7,7 +7,7 @@
  * @param buffer  Output buffer (86 bytes: 21 longs + 1 word)
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 /* Global error info at 0xe7ac60 */
 #define DISK_ERROR_INFO  ((uint32_t *)0x00e7ac60)

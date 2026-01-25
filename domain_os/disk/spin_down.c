@@ -6,7 +6,7 @@
  * maximum spin-down time returned by any device.
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 /* Device registration table */
 #define DISK_DEVICE_TABLE  ((uint8_t *)0x00e7ad5c)

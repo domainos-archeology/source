@@ -6,7 +6,7 @@
  * @param vol_idx  Volume index
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 /* Volume entry offset for device info pointer */
 #define DISK_DEV_INFO_OFFSET  0x7c

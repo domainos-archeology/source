@@ -8,7 +8,7 @@
  * @param param_2   Additional parameter
  */
 
-#include "disk.h"
+#include "disk_internal.h"
 
 /*
  * Note: This function takes a device info pointer, not a volume index.
