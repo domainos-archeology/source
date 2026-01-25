@@ -2,6 +2,7 @@
 #include "dbuf/dbuf.h"
 #include "proc1/proc1.h"
 #include "uid/uid.h"
+#include "network/network.h"
 
 // Lock ID for calendar operations
 #define CAL_LOCK_ID 0xe
