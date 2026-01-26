@@ -13,11 +13,8 @@
  */
 
 #include "vtoc/vtoc_internal.h"
-#include "ast/ast.h"
+#include "ast/ast_internal.h"
 #include "network/network.h"
-
-/* External reference - network diskless flag */
-extern int8_t NETWORK_$REALLY_DISKLESS;
 
 /* Status codes */
 #define file_$object_not_found 0x000F0001
