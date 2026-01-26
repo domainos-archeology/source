@@ -47,17 +47,17 @@
  */
         .global FIM_$CLEANUP
 FIM_$CLEANUP:
-        move.w  (PROC1_CURRENT).l,D0    /* D0 = PROC1_$CURRENT */
-        movea.l (0x4,SP),A1             /* A1 = handler context ptr */
-        lsl.w   #2,D0                   /* D0 = process * 4 (index) */
-        lea     (cleanup_stack_table,PC),A0  /* A0 = &cleanup_stack[0] */
-        adda.w  D0,A0                   /* A0 = &cleanup_stack[process] */
-        move.l  (SP),D1                 /* D1 = return address */
-        move.l  (A0),D0                 /* D0 = current handler (link) */
-        movea.l (0x4,SP),A1             /* A1 = handler context ptr */
-        movem.l D0/D1/A5/A6/SP,(A1)     /* Save link, ret, A5, A6, SP */
-        move.l  A1,(A0)                 /* Push handler onto stack */
-        move.l  #0x00120035,D0          /* status_$cleanup_handler_set */
+        move.w  (PROC1_CURRENT).l,%d0   /* D0 = PROC1_$CURRENT */
+        movea.l (0x4,%sp),%a1           /* A1 = handler context ptr */
+        lsl.w   #2,%d0                  /* D0 = process * 4 (index) */
+        lea     (cleanup_stack_table,%pc),%a0 /* A0 = &cleanup_stack[0] */
+        adda.w  %d0,%a0                 /* A0 = &cleanup_stack[process] */
+        move.l  (%sp),%d1               /* D1 = return address */
+        move.l  (%a0),%d0               /* D0 = current handler (link) */
+        movea.l (0x4,%sp),%a1           /* A1 = handler context ptr */
+        movem.l %d0/%d1/%a5/%a6/%sp,(%a1) /* Save link, ret, A5, A6, SP */
+        move.l  %a1,(%a0)               /* Push handler onto stack */
+        move.l  #0x00120035,%d0         /* status_$cleanup_handler_set */
         rts
 
 /*
@@ -73,12 +73,12 @@ FIM_$CLEANUP:
  */
         .global FIM_$RLS_CLEANUP
 FIM_$RLS_CLEANUP:
-        move.w  (PROC1_CURRENT).l,D0    /* D0 = PROC1_$CURRENT */
-        movea.l (0x4,SP),A1             /* A1 = handler context ptr */
-        lsl.w   #2,D0                   /* D0 = process * 4 */
-        lea     (cleanup_stack_table,PC),A0  /* A0 = &cleanup_stack[0] */
-        adda.w  D0,A0                   /* A0 = &cleanup_stack[process] */
-        move.l  (A1),(A0)               /* Pop: stack = handler->link */
+        move.w  (PROC1_CURRENT).l,%d0   /* D0 = PROC1_$CURRENT */
+        movea.l (0x4,%sp),%a1           /* A1 = handler context ptr */
+        lsl.w   #2,%d0                  /* D0 = process * 4 */
+        lea     (cleanup_stack_table,%pc),%a0 /* A0 = &cleanup_stack[0] */
+        adda.w  %d0,%a0                 /* A0 = &cleanup_stack[process] */
+        move.l  (%a1),(%a0)             /* Pop: stack = handler->link */
         rts
 
 /*
@@ -91,11 +91,11 @@ FIM_$RLS_CLEANUP:
  */
         .global FIM_$POP_SIGNAL
 FIM_$POP_SIGNAL:
-        movea.l (SP)+,A0                /* A0 = caller return address */
-        movea.l (SP),A1                 /* A1 = handler context ptr */
-        movea.l (0x10,A1),SP            /* SP = handler->saved_sp */
-        addq.w  #4,SP                   /* Skip over our return addr */
-        jmp     (A0)                    /* Return to caller */
+        movea.l (%sp)+,%a0              /* A0 = caller return address */
+        movea.l (%sp),%a1               /* A1 = handler context ptr */
+        movea.l (0x10,%a1),%sp          /* SP = handler->saved_sp */
+        addq.w  #4,%sp                  /* Skip over our return addr */
+        jmp     (%a0)                   /* Return to caller */
 
 /*
  * FIM_$SIGNAL_FIRST - Signal first handler (entry point)
@@ -109,8 +109,8 @@ FIM_$POP_SIGNAL:
  */
         .global FIM_$SIGNAL_FIRST
 FIM_$SIGNAL_FIRST:
-        move.l  (0x4,SP),D0             /* D0 = status code */
-        movem.l A5/A6,-(SP)             /* Save A5, A6 */
+        move.l  (0x4,%sp),%d0           /* D0 = status code */
+        movem.l %a5/%a6,-(%sp)          /* Save A5, A6 */
         bra.b   signal_common           /* Fall through to FIM_$SIGNAL */
 
 /*
@@ -129,24 +129,24 @@ FIM_$SIGNAL_FIRST:
  */
         .global FIM_$SIGNAL
 FIM_$SIGNAL:
-        addq.l  #4,SP                   /* Pop return address */
-        move.l  (SP)+,D0                /* D0 = status code */
+        addq.l  #4,%sp                  /* Pop return address */
+        move.l  (%sp)+,%d0              /* D0 = status code */
 signal_common:
-        move.w  (PROC1_CURRENT).l,D1    /* D1 = PROC1_$CURRENT */
-        lea     (cleanup_stack_table,PC),A0  /* A0 = &cleanup_stack[0] */
-        lsl.w   #2,D1                   /* D1 = process * 4 */
-        adda.w  D1,A0                   /* A0 = &cleanup_stack[process] */
-        move.l  (A0),D1                 /* D1 = current handler */
+        move.w  (PROC1_CURRENT).l,%d1   /* D1 = PROC1_$CURRENT */
+        lea     (cleanup_stack_table,%pc),%a0 /* A0 = &cleanup_stack[0] */
+        lsl.w   #2,%d1                  /* D1 = process * 4 */
+        adda.w  %d1,%a0                 /* A0 = &cleanup_stack[process] */
+        move.l  (%a0),%d1               /* D1 = current handler */
         beq.b   no_handler              /* If NULL, no handler */
-        movea.l D1,A1                   /* A1 = handler context */
-        move.l  (A1)+,(A0)              /* Pop handler: stack = link */
-        movea.l (A1)+,A0                /* A0 = saved return address */
-        movea.l (A1)+,A5                /* Restore A5 */
-        movea.l (A1)+,A6                /* Restore A6 */
-        subq.l  #4,SP                   /* Make room for return */
-        jmp     (A0)                    /* Jump to saved address */
+        movea.l %d1,%a1                 /* A1 = handler context */
+        move.l  (%a1)+,(%a0)            /* Pop handler: stack = link */
+        movea.l (%a1)+,%a0              /* A0 = saved return address */
+        movea.l (%a1)+,%a5              /* Restore A5 */
+        movea.l (%a1)+,%a6              /* Restore A6 */
+        subq.l  #4,%sp                  /* Make room for return */
+        jmp     (%a0)                   /* Jump to saved address */
 no_handler:
-        movem.l (SP)+,A5/A6             /* Restore A5, A6 */
+        movem.l (%sp)+,%a5/%a6          /* Restore A5, A6 */
         rts
 
 /*
@@ -162,8 +162,8 @@ no_handler:
  */
         .global FIM_$GENERATE
 FIM_$GENERATE:
-        addq.w  #4,SP                   /* Pop return address */
-        move.l  (SP)+,D0                /* D0 = status code */
+        addq.w  #4,%sp                  /* Pop return address */
+        move.l  (%sp)+,%d0              /* D0 = status code */
         bra.b   generate_common         /* Branch to common code */
 
 /*

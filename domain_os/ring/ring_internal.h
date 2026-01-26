@@ -382,7 +382,6 @@ extern int16_t NET_IO_$CREATE_PORT(int16_t param1, uint16_t unit,
 /* Parity checking */
 extern uint32_t PARITY_$CHK_IO(uint32_t addr1, uint32_t addr2);
 
-/* NETBUF extensions */
-extern void NETBUF_$GET_HDR(uint32_t *pa_out, void **va_out);
+/* NETBUF_$GET_HDR is declared in netbuf/netbuf.h (included above) */
 
 #endif /* RING_INTERNAL_H */

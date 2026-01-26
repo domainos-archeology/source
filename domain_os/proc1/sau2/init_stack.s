@@ -65,17 +65,17 @@
  */
         .global INIT_STACK
 INIT_STACK:
-        movea.l (0xc,SP),A0             /* A0 = sp_ptr */
-        movea.l (A0),A0                 /* A0 = *sp_ptr (stack pointer value) */
-        movea.l (0x8,SP),A1             /* A1 = entry_ptr */
-        move.l  (A1),-(A0)              /* Push entry point onto stack */
-        lea     (exit_handler,PC),A1    /* A1 = address of exit_handler */
-        move.l  A1,-(A0)                /* Push exit_handler as return address */
-        movea.l (0x4,SP),A1             /* A1 = pcb */
-        clr.l   (PCB_SAVE_A5,A1)        /* pcb->save_a5 = 0 */
-        clr.l   (PCB_SAVE_A6,A1)        /* pcb->save_a6 = 0 */
-        move.l  A0,(PCB_SAVE_A7,A1)     /* pcb->save_a7 = prepared stack ptr */
-        clr.l   (PCB_SAVE_USP,A1)       /* pcb->save_usp = 0 */
+        movea.l (0xc,%sp),%a0           /* A0 = sp_ptr */
+        movea.l (%a0),%a0               /* A0 = *sp_ptr (stack pointer value) */
+        movea.l (0x8,%sp),%a1           /* A1 = entry_ptr */
+        move.l  (%a1),-(%a0)            /* Push entry point onto stack */
+        lea     (exit_handler,%pc),%a1  /* A1 = address of exit_handler */
+        move.l  %a1,-(%a0)              /* Push exit_handler as return address */
+        movea.l (0x4,%sp),%a1           /* A1 = pcb */
+        clr.l   (PCB_SAVE_A5,%a1)       /* pcb->save_a5 = 0 */
+        clr.l   (PCB_SAVE_A6,%a1)       /* pcb->save_a6 = 0 */
+        move.l  %a0,(PCB_SAVE_A7,%a1)   /* pcb->save_a7 = prepared stack ptr */
+        clr.l   (PCB_SAVE_USP,%a1)      /* pcb->save_usp = 0 */
         rts
 
 /*

@@ -199,8 +199,8 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
     init_entry->cleanup_flags = 0;
 
     /* Clear child/sibling list links */
-    init_entry->pad_20[0] = 0;
-    init_entry->pad_20[1] = 0;
+    init_entry->first_child_idx = 0;
+    init_entry->next_child_sibling = 0;
     init_entry->parent_pgroup_idx = 0;
     init_entry->first_debug_target_idx = 0;
     init_entry->next_debug_target_idx = 0;

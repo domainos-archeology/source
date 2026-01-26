@@ -198,9 +198,10 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
         new_entry->flags &= ~0x04;
     }
 
-    /* Set up child list links */
-    new_entry->pad_20[1] = parent_entry->pad_20[0];
-    new_entry->pad_20[0] = new_entry->pad_20[1];
+    /* Set up child list links
+     * Add new process to parent's child list */
+    new_entry->next_child_sibling = parent_entry->first_child_idx;
+    new_entry->first_child_idx = new_entry->next_child_sibling;
     new_entry->pad_18[1] = parent_entry->pad_18[0];
     parent_entry->pad_18[0] = new_idx;
     new_entry->first_debug_target_idx = parent_idx;

@@ -49,19 +49,19 @@ FIM_$EXIT:
  */
         .global FIM_$UII
 FIM_$UII:
-        btst.b  #5,(SP)                 /* Test supervisor bit in SR */
+        btst.b  #5,(%sp)                /* Test supervisor bit in SR */
         beq.b   uii_fault               /* If user mode, it's a fault */
-        move.l  A0,-(SP)                /* Save A0 */
-        movea.l (0x6,SP),A0             /* A0 = faulting PC */
-        cmpi.b  #0xA0,(A0)              /* Check for 0xA0xx (line-A) */
+        move.l  %a0,-(%sp)              /* Save A0 */
+        movea.l (0x6,%sp),%a0           /* A0 = faulting PC */
+        cmpi.b  #0xA0,(%a0)             /* Check for 0xA0xx (line-A) */
         beq.b   uii_stopwatch           /* If stopwatch instruction */
-        cmpi.b  #0xA1,(A0)              /* Check for 0xA1xx */
+        cmpi.b  #0xA1,(%a0)             /* Check for 0xA1xx */
         bne.b   uii_restore             /* Not stopwatch, fault */
 uii_stopwatch:
-        movea.l (SP)+,A0                /* Restore A0 */
+        movea.l (%sp)+,%a0              /* Restore A0 */
         jmp     (STOP_WATCH_UII).l      /* Dispatch to stopwatch */
 uii_restore:
-        movea.l (SP)+,A0                /* Restore A0 */
+        movea.l (%sp)+,%a0              /* Restore A0 */
 uii_fault:
         bsr.w   (FIM_COMMON_FAULT).l    /* Call common fault handler */
         /* FIM_COMMON_FAULT does not return */
@@ -82,32 +82,32 @@ uii_fault:
  */
         .global FIM_$PRIV_VIOL
 FIM_$PRIV_VIOL:
-        movem.l D0/D1/D2/A0/A1,-(SP)    /* Save registers */
-        movea.l (0x16,SP),A0            /* A0 = faulting PC */
-        move.w  (A0),D0                 /* D0 = faulting instruction */
-        move.w  D0,D1                   /* Copy to D1 */
-        and.w   #0xFFC0,D1              /* Mask off EA bits */
-        cmp.w   #0x40C0,D1              /* Is it "move SR,<ea>"? */
+        movem.l %d0/%d1/%d2/%a0/%a1,-(%sp) /* Save registers */
+        movea.l (0x16,%sp),%a0          /* A0 = faulting PC */
+        move.w  (%a0),%d0               /* D0 = faulting instruction */
+        move.w  %d0,%d1                 /* Copy to D1 */
+        and.w   #0xFFC0,%d1             /* Mask off EA bits */
+        cmp.w   #0x40C0,%d1             /* Is it "move SR,<ea>"? */
         beq.b   priv_viol_move_sr       /* Yes, emulate it */
-        movem.l (SP)+,D0/D1/D2/A0/A1    /* Restore registers */
+        movem.l (%sp)+,%d0/%d1/%d2/%a0/%a1 /* Restore registers */
         bra.b   priv_viol_fault         /* Call fault handler */
 
 priv_viol_move_sr:
         /* Emulate "move SR,<ea>" by skipping past the instruction */
-        move.w  D0,D1                   /* D1 = instruction */
-        lsr.w   #3,D1                   /* Shift to get EA mode */
-        and.w   #0x7,D1                 /* Mask off mode bits */
-        clr.l   D2                      /* Clear D2 */
+        move.w  %d0,%d1                 /* D1 = instruction */
+        lsr.w   #3,%d1                  /* Shift to get EA mode */
+        and.w   #0x7,%d1                /* Mask off mode bits */
+        clr.l   %d2                     /* Clear D2 */
         /* Look up instruction length in table */
-        move.b  (priv_viol_len_table,PC,D1.w),D2
-        cmp.w   #0x7,D1                 /* Is it mode 7? */
+        move.b  (priv_viol_len_table,%pc,%d1:w),%d2
+        cmp.w   #0x7,%d1                /* Is it mode 7? */
         bne.b   priv_viol_adjust        /* No, use table value */
-        btst.l  #0,D0                   /* Test register bit */
+        btst.l  #0,%d0                  /* Test register bit */
         beq.b   priv_viol_adjust        /* If 0, table is correct */
-        addq.l  #2,D2                   /* Mode 7, reg 1: add 2 */
+        addq.l  #2,%d2                  /* Mode 7, reg 1: add 2 */
 priv_viol_adjust:
-        add.l   D2,(0x16,SP)            /* Adjust PC past instruction */
-        movem.l (SP)+,D0/D1/D2/A0/A1    /* Restore registers */
+        add.l   %d2,(0x16,%sp)          /* Adjust PC past instruction */
+        movem.l (%sp)+,%d0/%d1/%d2/%a0/%a1 /* Restore registers */
         jmp     FIM_$EXIT               /* Return from exception */
 
 priv_viol_fault:

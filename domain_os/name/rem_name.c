@@ -22,6 +22,7 @@
 
 #include "name/name_internal.h"
 #include "misc/string.h"
+#include "netbuf/netbuf.h"
 
 /* TIME subsystem reference */
 extern uint32_t TIME_$CLOCKH;  /* 0x00e2b0d4 - high word of system clock */
@@ -32,9 +33,7 @@ extern uint32_t NODE_$ME;  /* 0x00e245a4 - this node's ID */
 /* UID_$NIL reference */
 extern uid_t UID_$NIL;  /* 0x00e1737c */
 
-/* NETBUF functions */
-extern void NETBUF_$GET_HDR(void *out1, void *out2);
-extern void NETBUF_$RTN_HDR(void *param);
+/* NETBUF functions are declared in netbuf/netbuf.h (included above) */
 
 /* OS data copy function */
 extern void OS_$DATA_COPY(void *src, void *dst, uint32_t len);

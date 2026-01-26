@@ -193,9 +193,11 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     /* Clear various flags */
     new_entry->flags &= 0xE3FB;  /* Clear certain bits */
 
-    /* Set up child list links */
-    new_entry->pad_20[0] = 0;
-    new_entry->pad_20[1] = current_entry->pad_20[0];
+    /* Set up child list links
+     * first_child_idx = 0 (no children yet)
+     * next_child_sibling = parent's first_child_idx (insert at head of parent's child list) */
+    new_entry->first_child_idx = 0;
+    new_entry->next_child_sibling = current_entry->first_child_idx;
 
     /* Clear bit 3 of flags byte at 0x2B */
     /* new_entry->flags &= ~0x0008; -- already done above */

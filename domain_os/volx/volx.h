@@ -24,6 +24,7 @@
 
 #include "base/base.h"
 #include "uid/uid.h"
+#include "cal/cal.h"
 
 /*
  * VOLX table constants
@@ -79,8 +80,8 @@ extern volx_entry_t *volx_table_base;
 #define VOLX_$TABLE_BASE volx_table_base
 #endif
 
-/* Boot volume index (the volume containing the OS) */
-extern int16_t CAL_$BOOT_VOLX;
+/* Boot volume index (the volume containing the OS)
+ * Declared in cal/cal.h, included above */
 
 /*
  * ============================================================================

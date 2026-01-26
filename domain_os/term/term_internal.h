@@ -112,8 +112,9 @@ extern status_$t TERM_$STATUS_TRANSLATION_TABLE_36[];  // at 0xe2c9b0
 
 /*
  * SUMA (Screen Update Manager) handler
+ * SUMA_$RCV is a function declared in suma/suma.h
  */
-extern void (*SUMA_$RCV)(void);  // at 0xe1ad18
+#include "suma/suma.h"
 
 /*
  * Keyboard string data for discipline changes

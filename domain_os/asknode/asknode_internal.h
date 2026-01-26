@@ -150,8 +150,9 @@ extern uint16_t NETWORK_$READ_VIOL_CNT;
 extern uint16_t NETWORK_$WRITE_VIOL_CNT;
 extern uint16_t NETWORK_$BAD_CHKSUM_CNT;
 
-/* Ring network data */
-extern uint32_t RING_$DATA;
+/* Ring network data - defined as ring_global_t in ring_internal.h
+ * For raw data access, cast to appropriate type */
+extern char RING_$DATA[];
 extern uint32_t RING_$SWDIAG_DATA;
 extern uint32_t RING_$SWDIAG_RCVCNT;
 extern uint32_t RING_$SWDIAG_NODEID;

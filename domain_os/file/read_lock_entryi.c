@@ -20,6 +20,7 @@
 #include "file/file_internal.h"
 #include "ml/ml.h"
 #include "disk/disk.h"
+#include "cal/cal.h"
 
 /*
  * Lock table base addresses
@@ -37,11 +38,7 @@
 #define PROC_LOT_ENTRY_SIZE     300     /* 0x12C */
 #define PROC_LOT_COUNT_OFFSET   0x1D98
 
-/*
- * Boot volume index (from CAL_$BOOT_VOLX)
- * Queries to the boot volume are rejected
- */
-extern uint16_t CAL_$BOOT_VOLX;
+/* CAL_$BOOT_VOLX is declared in cal/cal.h */
 
 /*
  * ROUTE_$PORT - Current route/port identifier

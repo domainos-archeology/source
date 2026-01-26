@@ -49,12 +49,9 @@
 /* Port state mask for routing-capable states (bits 0 and 1) */
 #define PORT_STATE_ROUTING_MASK     0x03
 
-/* Forward declarations */
+/* Forward declarations
+ * Note: NETBUF_* functions are declared in netbuf/netbuf.h (included above) */
 void OS_$DATA_COPY(const void *src, void *dst, uint32_t length);
-void NETBUF_$GET_DAT(void **buf_ret);
-void NETBUF_$GETVA(void *buf, void **va_ret, status_$t *status);
-void NETBUF_$RTNVA(void **va_ptr);
-void NETBUF_$GET_HDR(void *info, void **hdr_ret);
 void NET_IO_$PUT_IN_SOCK(uint16_t net_type, uint16_t socket, void **hdr_ptr,
                          void **data_ptr, uint16_t hdr_len, uint16_t data_len);
 

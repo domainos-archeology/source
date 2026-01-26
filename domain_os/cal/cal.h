@@ -22,7 +22,10 @@ extern short CAL_$DAYS_PER_MONTH[12];
 
 // Global timezone data at 0x00e7b030
 extern cal_$timezone_rec_t CAL_$TIMEZONE;
-#define CAL_$BOOT_VOLX CAL_$TIMEZONE.boot_volx
+
+// Boot volume index - separate variable that mirrors CAL_$TIMEZONE.boot_volx
+// This exists as a separate variable because many files use it with extern declarations
+extern int16_t CAL_$BOOT_VOLX;
 
 // Last valid time (high word of clock) at 0x00e7b03c
 extern uint CAL_$LAST_VALID_TIME;

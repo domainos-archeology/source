@@ -53,15 +53,15 @@
  */
         .global FIM_$PROC2_STARTUP
 FIM_$PROC2_STARTUP:
-        movea.l (0x4,SP),A5             /* A5 = startup context */
+        movea.l (0x4,%sp),%a5           /* A5 = startup context */
         bsr.w   (FIM_SETUP_RETURN).l    /* Set up return frame */
-        clr.w   (A0)                    /* Clear format word */
-        move.l  (0x4,A5),-(A0)          /* Push PC */
-        clr.w   -(A0)                   /* Push SR = 0 (user mode) */
-        movea.l (A5),A1                 /* A1 = initial USP */
-        move    A1,USP                  /* Set user SP */
-        movea.l A0,SP                   /* Switch to exception frame */
-        suba.l  A6,A6                   /* Clear A6 (frame pointer) */
+        clr.w   (%a0)                   /* Clear format word */
+        move.l  (0x4,%a5),-(%a0)        /* Push PC */
+        clr.w   -(%a0)                  /* Push SR = 0 (user mode) */
+        movea.l (%a5),%a1               /* A1 = initial USP */
+        move    %a1,%usp                /* Set user SP */
+        movea.l %a0,%sp                 /* Switch to exception frame */
+        suba.l  %a6,%a6                 /* Clear A6 (frame pointer) */
         jmp     (FIM_EXIT).l            /* Return to user mode */
 
 /*
@@ -79,25 +79,25 @@ FIM_$PROC2_STARTUP:
  */
         .global FIM_$SINGLE_STEP
 FIM_$SINGLE_STEP:
-        move.w  (PROC1_AS_ID).l,D0      /* D0 = AS ID */
-        lea     (FIM_QUIT_INH).l,A0     /* A0 = quit inhibit table */
-        st      (0,A0,D0.w)             /* Set quit inhibited */
-        lsl.w   #2,D0                   /* D0 = AS * 4 */
-        lea     (FIM_TRACE_STS).l,A0    /* A0 = trace status table */
-        move.l  #0x00120015,(0,A0,D0.w) /* Set trace fault status */
+        move.w  (PROC1_AS_ID).l,%d0     /* D0 = AS ID */
+        lea     (FIM_QUIT_INH).l,%a0    /* A0 = quit inhibit table */
+        st      (0,%a0,%d0:w)           /* Set quit inhibited */
+        lsl.w   #2,%d0                  /* D0 = AS * 4 */
+        lea     (FIM_TRACE_STS).l,%a0   /* A0 = trace status table */
+        move.l  #0x00120015,(0,%a0,%d0:w) /* Set trace fault status */
         bsr.w   (FIM_SETUP_RETURN).l    /* Set up return frame */
-        movea.l (0x4,SP),A1             /* A1 = PC ptr */
-        move.l  (A1),-(A0)              /* Push PC */
-        movea.l (0x8,SP),A1             /* A1 = SR ptr */
-        move.w  (A1),D0                 /* D0 = SR */
-        and.w   #0xC01F,D0              /* Keep only relevant bits */
-        bset.l  #15,D0                  /* Set trace bit */
-        move.w  D0,-(A0)                /* Push modified SR */
-        movea.l (0xC,SP),A1             /* A1 = regs ptr */
-        movea.l (0x3C,A1),A2            /* A2 = saved USP */
-        move    A2,USP                  /* Restore USP */
-        movea.l A0,SP                   /* Switch to exception frame */
-        movem.l (A1),D0-D7/A0-A6        /* Restore registers */
+        movea.l (0x4,%sp),%a1           /* A1 = PC ptr */
+        move.l  (%a1),-(%a0)            /* Push PC */
+        movea.l (0x8,%sp),%a1           /* A1 = SR ptr */
+        move.w  (%a1),%d0               /* D0 = SR */
+        and.w   #0xC01F,%d0             /* Keep only relevant bits */
+        bset.l  #15,%d0                 /* Set trace bit */
+        move.w  %d0,-(%a0)              /* Push modified SR */
+        movea.l (0xC,%sp),%a1           /* A1 = regs ptr */
+        movea.l (0x3C,%a1),%a2          /* A2 = saved USP */
+        move    %a2,%usp                /* Restore USP */
+        movea.l %a0,%sp                 /* Switch to exception frame */
+        movem.l (%a1),%d0-%d7/%a0-%a6   /* Restore registers */
         jmp     (FIM_EXIT).l            /* Return from exception */
 
 /*
@@ -115,33 +115,33 @@ FIM_$SINGLE_STEP:
  */
         .global FIM_$FAULT_RETURN
 FIM_$FAULT_RETURN:
-        movea.l (0x4,SP),A2             /* A2 = context ptr ptr */
-        movea.l (0x8,SP),A3             /* A3 = regs ptr ptr */
-        movea.l (0xC,SP),A0             /* A0 = FP state ptr ptr */
-        tst.l   (A0)                    /* Check if FP state exists */
+        movea.l (0x4,%sp),%a2           /* A2 = context ptr ptr */
+        movea.l (0x8,%sp),%a3           /* A3 = regs ptr ptr */
+        movea.l (0xC,%sp),%a0           /* A0 = FP state ptr ptr */
+        tst.l   (%a0)                   /* Check if FP state exists */
         beq.b   fault_ret_setup         /* No FP state */
-        move.l  A0,-(SP)                /* Push FP state ptr */
+        move.l  %a0,-(%sp)              /* Push FP state ptr */
         jsr     (FIM_FRESTORE).l        /* Restore FP state */
 fault_ret_setup:
         bsr.b   fault_ret_helper        /* Set up return frame */
-        clr.w   (A0)                    /* Clear format word */
-        movea.l (A2),A2                 /* A2 = context ptr */
-        move.l  (0x14,A2),-(A0)         /* Push PC */
-        move.l  (0x18,A2),D0            /* D0 = saved SR */
-        and.w   #0xC01F,D0              /* Keep only relevant bits */
-        move.w  D0,-(A0)                /* Push SR */
-        move.l  (0xC,A2),-(A0)          /* Push additional context */
-        move.l  (0x10,A2),-(A0)         /* Push more context */
-        movea.l (0x8,A2),A1             /* A1 = saved USP */
-        move    A1,USP                  /* Restore USP */
-        movea.l A0,SP                   /* Switch to exception frame */
-        tst.l   (A3)                    /* Check if regs to restore */
+        clr.w   (%a0)                   /* Clear format word */
+        movea.l (%a2),%a2               /* A2 = context ptr */
+        move.l  (0x14,%a2),-(%a0)       /* Push PC */
+        move.l  (0x18,%a2),%d0          /* D0 = saved SR */
+        and.w   #0xC01F,%d0             /* Keep only relevant bits */
+        move.w  %d0,-(%a0)              /* Push SR */
+        move.l  (0xC,%a2),-(%a0)        /* Push additional context */
+        move.l  (0x10,%a2),-(%a0)       /* Push more context */
+        movea.l (0x8,%a2),%a1           /* A1 = saved USP */
+        move    %a1,%usp                /* Restore USP */
+        movea.l %a0,%sp                 /* Switch to exception frame */
+        tst.l   (%a3)                   /* Check if regs to restore */
         beq.b   fault_ret_exit          /* No regs */
-        movea.l (A3),A3                 /* A3 = regs ptr */
-        movem.l (A3),D0-D7/A0-A6        /* Restore all regs */
+        movea.l (%a3),%a3               /* A3 = regs ptr */
+        movem.l (%a3),%d0-%d7/%a0-%a6   /* Restore all regs */
 fault_ret_exit:
-        movea.l (SP)+,A5                /* Restore A5 */
-        movea.l (SP)+,A6                /* Restore A6 */
+        movea.l (%sp)+,%a5              /* Restore A5 */
+        movea.l (%sp)+,%a6              /* Restore A6 */
         jmp     (FIM_EXIT).l            /* Return from exception */
 
 /*
@@ -168,48 +168,48 @@ fault_ret_helper:
  */
         .global FIM_$GET_USER_SR_PTR
 FIM_$GET_USER_SR_PTR:
-        move.w  (0x4,SP),D0             /* D0 = process ID */
-        lsl.w   #2,D0                   /* D0 = process * 4 */
-        lea     (OS_STACK_BASE).l,A0    /* A0 = stack base table */
-        move.l  (0,A0,D0.w),D0          /* D0 = stack base */
-        subq.l  #8,D0                   /* Point to top of frame */
-        movea.l D0,A0                   /* A0 = frame ptr */
-        clr.w   D1                      /* D1 = frame type 0 */
+        move.w  (0x4,%sp),%d0           /* D0 = process ID */
+        lsl.w   #2,%d0                  /* D0 = process * 4 */
+        lea     (OS_STACK_BASE).l,%a0   /* A0 = stack base table */
+        move.l  (0,%a0,%d0:w),%d0       /* D0 = stack base */
+        subq.l  #8,%d0                  /* Point to top of frame */
+        movea.l %d0,%a0                 /* A0 = frame ptr */
+        clr.w   %d1                     /* D1 = frame type 0 */
         bsr.b   check_frame_type
         beq.b   found_user_sr
-        movea.l A0,A1                   /* Save frame ptr */
-        lea     (-0x32,A1),A0           /* Try format A frame */
-        move.w  #0x8008,D1              /* Type A frame */
+        movea.l %a0,%a1                 /* Save frame ptr */
+        lea     (-0x32,%a1),%a0         /* Try format A frame */
+        move.w  #0x8008,%d1             /* Type A frame */
         bsr.b   check_frame_type
         beq.b   found_user_sr
-        move.w  #0x800C,D1              /* Type B frame */
+        move.w  #0x800C,%d1             /* Type B frame */
         bsr.b   check_frame_type
         beq.b   found_user_sr
-        lea     (-0x54,A1),A0           /* Try format B frame */
-        move.w  #0xB008,D1
+        lea     (-0x54,%a1),%a0         /* Try format B frame */
+        move.w  #0xB008,%d1
         bsr.b   check_frame_type
         beq.b   found_user_sr
-        move.w  #0xB00C,D1
+        move.w  #0xB00C,%d1
         bsr.b   check_frame_type
         beq.b   found_user_sr
-        lea     (-0x18,A1),A0           /* Try format 9 frame */
-        move.w  #0xA008,D1
+        lea     (-0x18,%a1),%a0         /* Try format 9 frame */
+        move.w  #0xA008,%d1
         bsr.b   check_frame_type
         beq.b   found_user_sr
-        move.w  #0xA00C,D1
+        move.w  #0xA00C,%d1
         bsr.b   check_frame_type
         beq.b   found_user_sr
-        lea     (-0x4,A1),A0            /* Try short frame */
-        move.w  #0x2000,D1
+        lea     (-0x4,%a1),%a0          /* Try short frame */
+        move.w  #0x2000,%d1
         bsr.b   check_frame_type
         beq.b   found_user_sr
-        lea     (-0xC,A1),A0            /* Try throwaway frame */
-        move.w  #0x9000,D1
+        lea     (-0xC,%a1),%a0          /* Try throwaway frame */
+        move.w  #0x9000,%d1
         bsr.b   check_frame_type
         beq.b   found_user_sr
-        movea.l A1,A0                   /* Return original */
+        movea.l %a1,%a0                 /* Return original */
 found_user_sr:
-        move.l  A0,D0                   /* Return ptr in D0 */
+        move.l  %a0,%d0                 /* Return ptr in D0 */
         rts
 
 /*
@@ -234,18 +234,18 @@ check_frame_type:
  */
         .global FIM_$DELIVER_TRACE_FAULT
 FIM_$DELIVER_TRACE_FAULT:
-        lea     (FIM_TRACE_BIT).l,A1    /* A1 = trace bit table */
-        move.w  (0x4,SP),D0             /* D0 = process ID */
-        move    SR,-(SP)                /* Save SR */
-        ori     #0x0700,SR              /* Disable interrupts */
-        bset.b  #7,(0,A1,D0.w)          /* Set trace bit */
+        lea     (FIM_TRACE_BIT).l,%a1   /* A1 = trace bit table */
+        move.w  (0x4,%sp),%d0           /* D0 = process ID */
+        move    %sr,-(%sp)              /* Save SR */
+        ori     #0x0700,%sr             /* Disable interrupts */
+        bset.b  #7,(0,%a1,%d0:w)        /* Set trace bit */
         bne.b   trace_already_set       /* Already set, skip */
         addq.l  #1,(PENDING_TRACE).l    /* Increment pending count */
         /* Patch FIM_$EXIT to NOP to catch trace */
         move.w  #0x4E71,(FIM_EXIT).l    /* Write NOP instruction */
         jsr     (CACHE_CLEAR).l         /* Clear instruction cache */
 trace_already_set:
-        move    (SP)+,SR                /* Restore SR */
+        move    (%sp)+,%sr              /* Restore SR */
         rts
 
 /*
@@ -261,10 +261,10 @@ trace_already_set:
  */
         .global FIM_$CLEAR_TRACE_FAULT
 FIM_$CLEAR_TRACE_FAULT:
-        lea     (FIM_TRACE_BIT).l,A1    /* A1 = trace bit table */
-        move.w  (0x4,SP),D0             /* D0 = process ID */
-        ori     #0x0700,SR              /* Disable interrupts */
-        bclr.b  #7,(0,A1,D0.w)          /* Clear trace bit */
+        lea     (FIM_TRACE_BIT).l,%a1   /* A1 = trace bit table */
+        move.w  (0x4,%sp),%d0           /* D0 = process ID */
+        ori     #0x0700,%sr             /* Disable interrupts */
+        bclr.b  #7,(0,%a1,%d0:w)        /* Clear trace bit */
         beq.b   trace_not_set           /* Wasn't set, skip */
         subq.l  #1,(PENDING_TRACE).l    /* Decrement pending count */
         bne.b   trace_not_set           /* Still others pending */
@@ -272,7 +272,7 @@ FIM_$CLEAR_TRACE_FAULT:
         move.w  #0x4E73,(FIM_EXIT).l    /* Write RTE instruction */
         jsr     (CACHE_CLEAR).l         /* Clear instruction cache */
 trace_not_set:
-        andi    #0xF8FF,SR              /* Re-enable interrupts */
+        andi    #0xF8FF,%sr             /* Re-enable interrupts */
         rts
 
 /*
@@ -286,30 +286,30 @@ trace_not_set:
  */
         .global FIM_$SPURIOUS_INT
 FIM_$SPURIOUS_INT:
-        movem.l D0/A5,-(SP)             /* Save registers */
-        lea     (spur_data,PC),A5       /* A5 = local data */
-        addq.l  #1,(spur_count,A5)      /* Increment count */
-        move.l  (TIME_CLOCKH).l,D0      /* D0 = current clock */
-        cmp.l   (spur_last_clock,A5),D0 /* Same tick? */
+        movem.l %d0/%a5,-(%sp)          /* Save registers */
+        lea     (spur_data,%pc),%a5     /* A5 = local data */
+        addq.l  #1,(spur_count,%a5)     /* Increment count */
+        move.l  (TIME_CLOCKH).l,%d0     /* D0 = current clock */
+        cmp.l   (spur_last_clock,%a5),%d0 /* Same tick? */
         bne.b   spur_new_tick           /* No, reset counter */
-        subq.w  #1,(spur_tick_cnt,A5)   /* Decrement tick count */
+        subq.w  #1,(spur_tick_cnt,%a5)  /* Decrement tick count */
         bne.b   spur_done               /* Not zero, continue */
         /* Too many spurious interrupts - crash */
-        movem.l (SP)+,D0/A5             /* Restore */
-        movem.l D0-D7/A0-A6/SP,-(SP)    /* Save all for crash */
-        pea     (spur_regs,PC)          /* Push regs ptr */
-        pea     (0x4,SP)                /* Push D0/D1 ptr */
-        pea     (0x48,SP)               /* Push exception frame */
+        movem.l (%sp)+,%d0/%a5          /* Restore */
+        movem.l %d0-%d7/%a0-%a6/%sp,-(%sp) /* Save all for crash */
+        pea     (spur_regs,%pc)         /* Push regs ptr */
+        pea     (0x4,%sp)               /* Push D0/D1 ptr */
+        pea     (0x48,%sp)              /* Push exception frame */
         jsr     (FIM_CRASH).l           /* Crash */
-        adda.w  #12,SP                  /* Clean up */
-        movem.l (SP)+,D0-D7/A0-A6       /* Restore */
-        addq.w  #4,SP                   /* Pop SP save */
+        adda.w  #12,%sp                 /* Clean up */
+        movem.l (%sp)+,%d0-%d7/%a0-%a6  /* Restore */
+        addq.w  #4,%sp                  /* Pop SP save */
         rte                             /* Return */
 spur_new_tick:
-        move.w  #1000,(spur_tick_cnt,A5) /* Reset count to 1000 */
-        move.l  D0,(spur_last_clock,A5) /* Save current clock */
+        move.w  #1000,(spur_tick_cnt,%a5) /* Reset count to 1000 */
+        move.l  %d0,(spur_last_clock,%a5) /* Save current clock */
 spur_done:
-        movem.l (SP)+,D0/A5             /* Restore */
+        movem.l (%sp)+,%d0/%a5          /* Restore */
         jmp     (FIM_EXIT).l            /* Return from exception */
 
 /*
@@ -335,27 +335,27 @@ spur_regs:
  */
         .global FIM_$PARITY_TRAP
 FIM_$PARITY_TRAP:
-        movem.l D0/D1/A0/A1,-(SP)       /* Save registers */
+        movem.l %d0/%d1/%a0/%a1,-(%sp)  /* Save registers */
         jsr     (PARITY_CHK).l          /* Check parity status */
-        lea     (parity_data,PC),A0     /* A0 = local data */
-        clr.w   (A0)                    /* Clear status */
-        tst.b   D0                      /* Check result */
+        lea     (parity_data,%pc),%a0   /* A0 = local data */
+        clr.w   (%a0)                   /* Clear status */
+        tst.b   %d0                     /* Check result */
         bmi.b   parity_error            /* Negative = error */
         jmp     (IO_HANDLER).l          /* Handle as I/O int */
 parity_error:
         /* Parity error - try to deliver as fault */
-        movem.l (SP)+,D0/D1/A0/A1       /* Restore */
-        suba.w  #0x3A,SP                /* Make room for frame */
-        move.w  (0x3A,SP),(SP)          /* Copy SR */
-        move.l  (0x3C,SP),(0x2,SP)      /* Copy PC */
-        move.b  #0x80,(0x6,SP)          /* Set frame type */
+        movem.l (%sp)+,%d0/%d1/%a0/%a1  /* Restore */
+        suba.w  #0x3A,%sp               /* Make room for frame */
+        move.w  (0x3A,%sp),(%sp)        /* Copy SR */
+        move.l  (0x3C,%sp),(0x2,%sp)    /* Copy PC */
+        move.b  #0x80,(0x6,%sp)         /* Set frame type */
         /* Set up parameters and call BUILD_DF */
-        move.w  #0x3000,-(SP)           /* Push flags */
-        move.w  #0x13,-(SP)             /* Push vector */
-        move.l  #0x0012001E,-(SP)       /* Push status */
-        andi    #0xF8FF,SR              /* Enable interrupts */
-        pea     (SP)                    /* Push frame ptr */
-        pea     (0xC,SP)                /* Push regs ptr */
+        move.w  #0x3000,-(%sp)          /* Push flags */
+        move.w  #0x13,-(%sp)            /* Push vector */
+        move.l  #0x0012001E,-(%sp)      /* Push status */
+        andi    #0xF8FF,%sr             /* Enable interrupts */
+        pea     (%sp)                   /* Push frame ptr */
+        pea     (0xC,%sp)               /* Push regs ptr */
         jmp     (FIM_BUILD_DF).l        /* Build delivery frame */
 
 parity_data:

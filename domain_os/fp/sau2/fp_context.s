@@ -48,34 +48,34 @@
         .global fp_$switch_owner
         .global fp_$switch_owner_d2
 fp_$switch_owner:
-        move.w  (PROC1_AS_ID).l,D2      /* D2 = PROC1_$AS_ID */
+        move.w  (PROC1_AS_ID).l,%d2     /* D2 = PROC1_$AS_ID */
         /* Fall through to fp_$switch_owner_d2 */
 fp_$switch_owner_d2:
         /* Alternate entry point: caller has already set D2 to AS ID */
-        move.w  (FP_OWNER).l,D0         /* D0 = current FP owner */
-        lea     (FP_SAVE_AREA_BASE).l,A1 /* A1 = save area base */
-        cmp.w   D0,D2                   /* Same owner? */
+        move.w  (FP_OWNER).l,%d0        /* D0 = current FP owner */
+        lea     (FP_SAVE_AREA_BASE).l,%a1 /* A1 = save area base */
+        cmp.w   %d0,%d2                 /* Same owner? */
         beq.b   switch_done             /* Yes, nothing to do */
         /* New owner - save current and restore new */
-        move.w  D2,(FP_OWNER).l         /* Set new owner */
-        move.b  D2,(FP_HW_OWNER).l      /* Set hardware owner */
+        move.w  %d2,(FP_OWNER).l        /* Set new owner */
+        move.b  %d2,(FP_HW_OWNER).l     /* Set hardware owner */
         bsr.w   fp_$save_state          /* Save current owner's state */
         /* Now restore new owner's state */
-        mulu.w  #FP_SAVE_AREA_SIZE,D2   /* D2 = offset into save area */
+        mulu.w  #FP_SAVE_AREA_SIZE,%d2  /* D2 = offset into save area */
         beq.b   switch_done             /* AS 0 has no FP state */
-        move.l  (-4,A1,D2.l),D0         /* D0 = state pointer */
-        movea.l D0,A0                   /* A0 = state pointer */
+        move.l  (-4,%a1,%d2:l),%d0      /* D0 = state pointer */
+        movea.l %d0,%a0                 /* A0 = state pointer */
         bne.b   restore_fp              /* Has state, restore it */
-        fmove.l #FP_DEFAULT_FPCR,FPCR   /* No state, set default FPCR */
+        fmove.l #FP_DEFAULT_FPCR,%fpcr  /* No state, set default FPCR */
         bra.b   switch_done
 restore_fp:
-        tst.b   (1,A0)                  /* Check flags byte */
+        tst.b   (1,%a0)                 /* Check flags byte */
         beq.b   restore_internal        /* Only internal state */
-        addq.w  #2,A0                   /* Skip flags word */
-        fmovem.l (A0)+,FPCR/FPSR/FPIAR  /* Restore control regs */
-        fmovem.x (A0)+,FP0-FP7          /* Restore FP registers */
+        addq.w  #2,%a0                  /* Skip flags word */
+        fmovem.l (%a0)+,%fpcr/%fpsr/%fpiar /* Restore control regs */
+        fmovem.x (%a0)+,%fp0-%fp7       /* Restore FP registers */
 restore_internal:
-        frestore (A0)+                  /* Restore internal state */
+        frestore (%a0)+                 /* Restore internal state */
 switch_done:
         rts
 
@@ -102,13 +102,13 @@ switch_done:
  */
         .global fp_$check_owner
 fp_$check_owner:
-        move.w  (PROC1_AS_ID).l,D2      /* D2 = PROC1_$AS_ID */
-        move.w  (FP_OWNER).l,D0         /* D0 = current FP owner */
-        lea     (FP_SAVE_AREA_BASE).l,A1 /* A1 = save area base */
-        cmp.w   D0,D2                   /* Same owner? */
+        move.w  (PROC1_AS_ID).l,%d2     /* D2 = PROC1_$AS_ID */
+        move.w  (FP_OWNER).l,%d0        /* D0 = current FP owner */
+        lea     (FP_SAVE_AREA_BASE).l,%a1 /* A1 = save area base */
+        cmp.w   %d0,%d2                 /* Same owner? */
         beq.b   check_done              /* Yes, nothing to do */
-        move.w  D2,(FP_OWNER).l         /* Set new owner */
-        move.b  D2,(FP_HW_OWNER).l      /* Set hardware owner */
+        move.w  %d2,(FP_OWNER).l        /* Set new owner */
+        move.b  %d2,(FP_HW_OWNER).l     /* Set hardware owner */
         bsr.w   fp_$save_state          /* Save current owner's state */
 check_done:
         rts
@@ -147,17 +147,17 @@ check_done:
  */
         .global fp_$save_state
 fp_$save_state:
-        mulu.w  #FP_SAVE_AREA_SIZE,D0   /* D0 = offset into save area */
+        mulu.w  #FP_SAVE_AREA_SIZE,%d0  /* D0 = offset into save area */
         beq.b   save_done               /* AS 0 has no FP state */
-        lea     (-4,A1,D0.l),A0         /* A0 = &save_area[AS].state_ptr */
-        fsave   -(A0)                   /* Save internal state */
-        tst.b   (1,A0)                  /* Check state byte (non-null frame?) */
+        lea     (-4,%a1,%d0:l),%a0      /* A0 = &save_area[AS].state_ptr */
+        fsave   -(%a0)                  /* Save internal state */
+        tst.b   (1,%a0)                 /* Check state byte (non-null frame?) */
         beq.b   save_ptr_only           /* If 0, only internal state */
-        fmovem.x FP7/FP6/FP5/FP4/FP3/FP2/FP1/FP0,-(A0) /* Save FP regs */
-        fmovem.l FPCR/FPSR/FPIAR,-(A0)  /* Save control registers */
-        move.w  #-1,-(A0)               /* Save flags word (0xFFFF = full) */
+        fmovem.x %fp7/%fp6/%fp5/%fp4/%fp3/%fp2/%fp1/%fp0,-(%a0) /* Save FP regs */
+        fmovem.l %fpcr/%fpsr/%fpiar,-(%a0) /* Save control registers */
+        move.w  #-1,-(%a0)              /* Save flags word (0xFFFF = full) */
 save_ptr_only:
-        move.l  A0,(-4,A1,D0.l)         /* Store pointer to saved state */
+        move.l  %a0,(-4,%a1,%d0:l)      /* Store pointer to saved state */
 save_done:
         rts
 
@@ -197,21 +197,21 @@ save_done:
  */
         .global fp_$restore_state
 fp_$restore_state:
-        mulu.w  #FP_SAVE_AREA_SIZE,D2   /* D2 = offset into save area */
+        mulu.w  #FP_SAVE_AREA_SIZE,%d2  /* D2 = offset into save area */
         beq.b   restore_done            /* AS 0 has no FP state */
-        move.l  (-4,A1,D2.l),D0         /* D0 = state pointer */
-        movea.l D0,A0                   /* A0 = state pointer */
+        move.l  (-4,%a1,%d2:l),%d0      /* D0 = state pointer */
+        movea.l %d0,%a0                 /* A0 = state pointer */
         bne.b   has_saved_state         /* Non-NULL, restore it */
-        fmove.l #FP_DEFAULT_FPCR,FPCR   /* NULL = set default FPCR */
+        fmove.l #FP_DEFAULT_FPCR,%fpcr  /* NULL = set default FPCR */
         bra.b   restore_done
 has_saved_state:
-        tst.b   (1,A0)                  /* Check state byte */
+        tst.b   (1,%a0)                 /* Check state byte */
         beq.b   restore_internal_only   /* If 0, internal only */
-        addq.w  #2,A0                   /* Skip flags word */
-        fmovem.l (A0)+,FPCR/FPSR/FPIAR  /* Restore control registers */
-        fmovem.x (A0)+,FP0-FP7          /* Restore FP registers */
+        addq.w  #2,%a0                  /* Skip flags word */
+        fmovem.l (%a0)+,%fpcr/%fpsr/%fpiar /* Restore control registers */
+        fmovem.x (%a0)+,%fp0-%fp7       /* Restore FP registers */
 restore_internal_only:
-        frestore (A0)+                  /* Restore internal state */
+        frestore (%a0)+                 /* Restore internal state */
 restore_done:
         rts
 

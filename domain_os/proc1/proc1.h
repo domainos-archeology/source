@@ -185,7 +185,9 @@ extern int32_t LOADAV_15MIN;            /* 15-minute load average */
 
 extern ec_$eventcount_t PROC1_$SUSPEND_EC; /* 0xE205F6: Suspend event count */
 
-extern void INIT_STACK(proc1_t *pcb, void *params);
+/* INIT_STACK - Initialize process stack for first dispatch
+ * Sets up the stack so when dispatched, process starts at *entry_ptr */
+extern void INIT_STACK(proc1_t *pcb, void **entry_ptr, void **sp_ptr);
 
 /*
  * ============================================================================

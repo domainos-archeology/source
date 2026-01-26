@@ -95,8 +95,10 @@ uint16_t PROC1_$BIND(void *proc_startup, void *stack1, void *stack,
             /* Release lock */
             ML_$UNLOCK(PROC1_CREATE_LOCK_ID);
 
-            /* Initialize stack with startup parameters */
-            INIT_STACK(pcb, &proc_startup);
+            /* Initialize stack with startup parameters
+             * entry_ptr points to proc_startup (entry point)
+             * sp_ptr points to stack (stack pointer value) */
+            INIT_STACK(pcb, &proc_startup, &stack);
 
             /* Initialize timeslice timer */
             PROC1_$INIT_TS_TIMER(pid);
