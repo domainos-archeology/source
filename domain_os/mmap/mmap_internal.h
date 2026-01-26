@@ -9,6 +9,7 @@
 #define MMAP_INTERNAL_H
 
 #include "mmap.h"
+#include "mmu/mmu.h"  /* For PMAPE_FOR_VPN, PMAPE_FLAG_* */
 
 /*
  * ============================================================================

@@ -167,6 +167,23 @@ extern uint32_t MMU_$SYSTEM_REV;
 /* Get ASID entry for a physical page number */
 #define ASID_FOR_PPN(ppn)       (ASID_TABLE_BASE[(ppn)])
 
+/*
+ * PMAPE (Page Map Page Entry) macros
+ * These access the PFT entries but with different pointer types:
+ * - PMAPE_FOR_PPN returns uint32_t* for full 32-bit access
+ * - PMAPE_FOR_VPN returns uint16_t* for accessing individual words
+ * Note: In the mmap layer, "vpn" is actually the physical page index.
+ */
+#define PMAPE_FOR_PPN(ppn)      ((uint32_t*)((char*)PFT_BASE + ((ppn) << 2)))
+#define PMAPE_FOR_VPN(vpn)      ((uint16_t*)((char*)PFT_BASE + ((vpn) << 2)))
+
+/* PMAPE flag definitions (aliases for PFT flags) */
+#define PMAPE_LINK_MASK         0x0FFF  /* Hash chain next link (PPN) */
+#define PMAPE_FLAG_GLOBAL       0x1000  /* Global/shared mapping */
+#define PMAPE_FLAG_REFERENCED   0x2000  /* Page has been accessed */
+#define PMAPE_FLAG_MODIFIED     0x4000  /* Page has been modified */
+#define PMAPE_FLAG_HEAD         0x8000  /* Head of hash chain */
+
 /* CSR (Control/Status Register) bit definitions */
 #define CSR_PID_MASK            0xFF00  /* Address space ID */
 #define CSR_PRIV_BIT            0x0001  /* Privilege mode */

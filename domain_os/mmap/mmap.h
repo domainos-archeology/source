@@ -286,4 +286,15 @@ void MMAP_$INIT(void *param);
 /* Get remote pool (stub - returns input) */
 uint32_t MMAP_$REMOTE_POOL(uint32_t param);
 
+/*
+ * GET_WIRED - Get wired memory buffer
+ *
+ * Returns a pointer to a pre-allocated wired (non-pageable) memory buffer
+ * at address 0xE2E07C. This is used for kernel data structures that must
+ * always be resident in physical memory.
+ *
+ * Original address: 0x00e1d8dc
+ */
+void *GET_WIRED(void);
+
 #endif /* MMAP_H */
