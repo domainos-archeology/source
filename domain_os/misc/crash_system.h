@@ -82,5 +82,6 @@ extern status_$t OS_PMAP_mismatch_err;
 extern status_$t OS_MMAP_bad_install;
 extern status_$t Fault_Memory_Parity_Err;
 extern status_$t Fault_Spurious_Parity_Err;
+extern status_$t OS_Internet_unknown_network_port_err;
 
 #endif /* MISC_CRASH_SYSTEM_H */

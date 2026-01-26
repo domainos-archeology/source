@@ -86,9 +86,9 @@ extern uint16_t NETWORK_$WRITE_VIOL_CNT;
 extern uint16_t NETWORK_$BAD_CHKSUM_CNT;
 
 /*
- * External global from ROUTE subsystem
+ * Note: ROUTE_$N_ROUTING_PORTS is declared in route/route_internal.h
+ * Include that header if you need access to it.
  */
-extern int16_t ROUTE_$N_ROUTING_PORTS;       /* 0xE26F1C - number of routing ports */
 
 /*
  * NETWORK_$READ_AHEAD - Read pages ahead from network partner

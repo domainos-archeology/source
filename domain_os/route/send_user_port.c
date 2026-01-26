@@ -46,9 +46,6 @@
 #define status_$network_data_length_too_large   0x11001C
 #define status_$route_queue_full                0x2B0002
 
-/* Crash error reference */
-extern uint32_t OS_Internet_unknown_network_port_err;
-
 /*
  * ROUTE_$SEND_USER_PORT - Queue packet to user routing port
  *

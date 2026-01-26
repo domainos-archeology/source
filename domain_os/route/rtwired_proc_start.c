@@ -23,16 +23,7 @@
 #include "pkt/pkt.h"
 #include "ec/ec.h"
 #include "net_io/net_io.h"
-
-/*
- * =============================================================================
- * External Function Prototypes
- * =============================================================================
- */
-
-/* Network header management */
-extern void NETWORK_$GETHDR(void *callback, uint32_t *phys_out, uint32_t *va_out);
-extern void NETWORK_$RTNHDR(uint32_t *va_ptr);
+#include "network/network.h"
 
 /*
  * =============================================================================

@@ -36,25 +36,19 @@
 /* Port state check mask for decrement - bits 3 and 5 (states 0x08 and 0x20) */
 #define PORT_STATE_DECREMENT_MASK   0x28
 
-/* User port counter and wired page tracking */
-#if defined(M68K)
-#define ROUTE_$USER_PORT_COUNT_TYPED    (*(int16_t *)0xE87FD4)
-#define ROUTE_$PORT_ARRAY_BASE          ((route_$port_t *)0xE2E0A0)
-#else
-extern int16_t ROUTE_$USER_PORT_COUNT_TYPED;
-extern route_$port_t ROUTE_$PORT_ARRAY_BASE[];
-#endif
+/*
+ * Note: ROUTE_$N_USER_PORTS and ROUTE_$PORT_ARRAY are defined in route_internal.h
+ */
 
 /* RIP update operation codes */
 static const uint16_t RIP_OP_DELETE = 0;    /* From 0xe69fb0 */
 static const uint16_t RIP_OP_FLAGS = 0;     /* From 0xe69fae */
 
-/* Forward declarations */
-void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index, int8_t port_type_flag);
-void ROUTE_$CLEANUP_WIRED(void);
-void RIP_$UPDATE_D(route_$port_t *port, void *network, const uint16_t *op_delete,
-                   route_$short_port_t *short_port, const uint16_t *op_flags,
-                   status_$t *status);
+/*
+ * Note: Function declarations come from headers:
+ *   - ROUTE_$DECREMENT_PORT, ROUTE_$CLEANUP_WIRED from route/route_internal.h
+ *   - RIP_$UPDATE_D from rip/rip.h
+ */
 
 /*
  * ROUTE_$CLOSE_PORT - Close a routing port
@@ -110,7 +104,7 @@ void ROUTE_$CLOSE_PORT(void *port_info, status_$t *status_ret)
     /*
      * Get pointer to the port structure
      */
-    port = &ROUTE_$PORT_ARRAY_BASE[port_index];
+    port = &ROUTE_$PORT_ARRAY[port_index];
 
     /*
      * Check if port is in a state requiring decrement notification
@@ -146,7 +140,7 @@ void ROUTE_$CLOSE_PORT(void *port_info, status_$t *status_ret)
      */
     if (port->port_type == ROUTE_PORT_TYPE_ROUTING) {
         SOCK_$CLOSE(port->socket);
-        ROUTE_$USER_PORT_COUNT_TYPED--;
+        ROUTE_$N_USER_PORTS--;
 
         /*
          * Cleanup wired pages if no more user ports

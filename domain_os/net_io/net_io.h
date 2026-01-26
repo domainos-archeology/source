@@ -40,11 +40,25 @@ void NET_IO_$SEND(int16_t port, uint32_t *hdr_ptr, uint32_t hdr_pa,
 void NET_IO_$PUT_IN_SOCK(void);
 
 /*
- * NET_IO_$COPY_PACKET - Copy a packet
+ * NET_IO_$COPY_PACKET - Copy a packet to network buffers
+ *
+ * Copies packet data from user buffers to network buffers suitable
+ * for transmission.
+ *
+ * @param dest_addr_p   Pointer to destination address pointer
+ * @param header_len    Header length
+ * @param data_ptr      Pointer to packet data
+ * @param flags         Flags (flags1 << 16 | flags2)
+ * @param data_len      Data length
+ * @param hdr_buf       Output header buffer array
+ * @param data_buf      Output data buffer array
+ * @param status_ret    Output status code
  *
  * Original address: 0x00E0E514
  */
-void NET_IO_$COPY_PACKET(void);
+void NET_IO_$COPY_PACKET(void **dest_addr_p, uint16_t header_len, void *data_ptr,
+                         uint32_t flags, uint16_t data_len,
+                         void **hdr_buf, void **data_buf, status_$t *status_ret);
 
 /*
  * NET_IO_$BOOT_DEVICE - Get boot device info

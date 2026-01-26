@@ -26,10 +26,17 @@
 
 #include "route/route_internal.h"
 #include "rip/rip.h"
+#include "rip/rip_internal.h"
 #include "net_io/net_io.h"
 #include "ml/ml.h"
 #include "hint/hint.h"
 #include "xns_idp/xns_idp.h"
+
+/* Forward declaration - NET_IO_$CREATE_PORT is in ring/ring_internal.h but
+ * including that header causes conflicts with RING_$DATA. */
+int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
+                            void *driver, uint16_t queue_length,
+                            status_$t *status_ret);
 
 /*
  * =============================================================================
@@ -134,18 +141,14 @@ typedef struct route_service_request_t {
  * =============================================================================
  * Forward Declarations
  * =============================================================================
+ *
+ * Most functions are declared in the included headers:
+ *   - ROUTE_$ANNOUNCE_NET in route/route_internal.h
+ *   - HINT_$ADD_NET in hint/hint.h
+ *   - NET_IO_$CREATE_PORT in net_io/net_io.h
+ *   - RIP_$UPDATE_D in rip/rip.h
+ *   - RIP_$SEND_UPDATES in rip/rip_internal.h
  */
-
-void ROUTE_$ANNOUNCE_NET(uint32_t network);
-void HINT_$ADD_NET(uint32_t network);
-int16_t NET_IO_$CREATE_PORT(uint16_t port_type, int16_t socket, void *driver,
-                            uint16_t queue_length, status_$t *status_ret);
-void RIP_$UPDATE_D(route_$port_t *port, uint32_t *network, const uint8_t *op_add,
-                   route_$short_port_t *short_port, const uint8_t *op_flags,
-                   status_$t *status_ret);
-void RIP_$SEND_UPDATES(int16_t flags);
-void XNS_IDP_$OS_ADD_PORT(int16_t *channel, int16_t *port_list, status_$t *status_ret);
-void XNS_IDP_$OS_DELETE_PORT(int16_t *channel, int16_t *port_list, status_$t *status_ret);
 
 /*
  * =============================================================================
@@ -175,13 +178,14 @@ static const uint16_t RIP_HOP_COUNT_ZERO = 0x0000;
 /*
  * ROUTE_$SERVICE - Main service entry point
  *
- * @param operation     Pointer to operation flags structure (flags at offset +1)
- * @param request       Pointer to service request structure
+ * @param operation_p   Pointer to operation flags structure (flags at offset +1)
+ * @param request_p     Pointer to service request structure
  * @param status_ret    Output: status code
  */
-void ROUTE_$SERVICE(uint8_t *operation, route_service_request_t *request,
-                    status_$t *status_ret)
+void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
 {
+    uint8_t *operation = (uint8_t *)operation_p;
+    route_service_request_t *request = (route_service_request_t *)request_p;
     int16_t port_index;
     route_$port_t *port;
     route_$short_port_t short_port;

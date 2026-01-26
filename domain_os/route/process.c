@@ -20,13 +20,16 @@
 #include "proc1/proc1.h"
 #include "sock/sock.h"
 #include "rip/rip.h"
+#include "rip/rip_internal.h"
 #include "time/time.h"
 #include "netbuf/netbuf.h"
 #include "pkt/pkt.h"
 #include "net_io/net_io.h"
+#include "network/network.h"
 #include "mac_os/mac_os.h"
 #include "xns_idp/xns_idp.h"
 #include "wp/wp.h"
+#include "ring/ringlog.h"
 
 /* Timer interval for RIP broadcasts (0x72 = 114 ticks) */
 #define RIP_BROADCAST_INTERVAL  0x72
@@ -126,22 +129,20 @@ static const status_$t status_$route_sock_get_failed = 0x2B00C6;
 extern uint16_t RINGLOG_$ROUTE_FORWARD;
 #endif
 
-/* Forward declarations */
-void NETWORK_$SET_SERVICE(void *service_id, void *id_ptr, status_$t *status);
-void WP_$UNWIRE(uint32_t page);
-void PROC1_$UNBIND(uint16_t uid, status_$t *status);
-void RIP_$FIND_NEXTHOP(void *addr, int16_t flags, int16_t *port_ret,
-                       void *next_hop, status_$t *status);
-void NETBUF_$RTN_HDR(void **pkt);
-void PKT_$DUMP_DATA(void *data, uint16_t length);
-void RINGLOG_$LOGIT(void *msg_id, void *data);
-int16_t XNS_IDP_$HOP_AND_SUM(int16_t checksum, int16_t length);
-void MAC_OS_$ARP(void *dest, int16_t port, void *hw_addr, void *info, status_$t *status);
-void MAC_OS_$SEND(void *port_info, void *hw_addr, void *buffer, status_$t *status);
-void NET_IO_$SEND(int16_t port, void **pkt, uint32_t flags, int16_t len1, int32_t zero,
-                  void *data, int16_t len2, uint16_t timeout, void *result, status_$t *status);
-void ML_$LOCK(uint16_t lock_id);
-void ML_$UNLOCK(uint16_t lock_id);
+/*
+ * Note: All external function declarations come from the included headers:
+ *   - NETWORK_$SET_SERVICE from network/network.h
+ *   - WP_$UNWIRE from wp/wp.h
+ *   - PROC1_$UNBIND, PROC1_$SET_LOCK, PROC1_$CLR_LOCK from proc1/proc1.h
+ *   - RIP_$FIND_NEXTHOP from rip/rip.h
+ *   - RIP_$BROADCAST from rip/rip_internal.h
+ *   - NETBUF_$RTN_HDR from netbuf/netbuf.h
+ *   - PKT_$DUMP_DATA from pkt/pkt.h
+ *   - RINGLOG_$LOGIT from ring/ringlog.h
+ *   - MAC_OS_$ARP, MAC_OS_$SEND from mac_os/mac_os.h
+ *   - NET_IO_$SEND from net_io/net_io.h
+ *   - ML_$LOCK, ML_$UNLOCK from ml/ml.h (via xns_idp.h)
+ */
 
 void ROUTE_$PROCESS(void)
 {
