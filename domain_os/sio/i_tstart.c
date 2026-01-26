@@ -19,6 +19,9 @@
 
 #include "sio/sio_internal.h"
 
+/* Zero interval for one-shot timer callbacks */
+static clock_t sio_zero_interval = { 0, 0 };
+
 /* Accessor macros for byte-level access */
 #define SIO_DESC_STATE(desc)       (*(uint16_t *)((char *)(desc) + 0x74))
 #define SIO_DESC_XMIT_STATE(desc)  (*(uint8_t *)((char *)(desc) + 0x75))
@@ -152,16 +155,22 @@ uint16_t SIO_$I_TSTART(sio_desc_t *desc)
 
             /* Schedule callback when delay expires */
             desc_ptr = desc;
-            result = TIME_$Q_ADD_CALLBACK(
+
+            /*
+             * TIME_$Q_ADD_CALLBACK parameters:
+             *   queue, elem_handle, relative, when, callback, callback_arg,
+             *   flags, interval, qelem, status
+             */
+            TIME_$Q_ADD_CALLBACK(
                 &TIME_$RTEQ,
-                &delay_ticks,   /* This should be a delay struct but simplified here */
-                0,              /* relative */
-                &now,
-                (void *)SIO_DELAY_RESTART,
-                desc,
-                8,              /* flags */
-                &SIO_DELAY_RESTART_QUEUE_ELEM,
-                (time_queue_elem_t *)(desc + 2),  /* queue elem storage in desc */
+                NULL,                           /* elem handle (unused) */
+                0,                              /* relative (add current time) */
+                &now,                           /* delay/when value */
+                (void *)SIO_DELAY_RESTART,      /* callback */
+                desc,                           /* callback arg */
+                8,                              /* flags */
+                &sio_zero_interval,             /* interval (one-shot) */
+                &SIO_DELAY_RESTART_QUEUE_ELEM,  /* queue elem storage */
                 &status
             );
 
