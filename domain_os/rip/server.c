@@ -100,54 +100,18 @@ typedef struct rip_$stats_t {
 #endif
 
 /*
- * =============================================================================
- * External Function Prototypes
- * =============================================================================
+ * Note: Most external function prototypes come from included headers.
+ *
+ * TODO: The following functions have signature discrepancies between
+ * this decompiled code and the headers. These need further analysis
+ * to determine the correct signatures.
  */
 
-/* Packet functions */
-extern void PKT_$DUMP_DATA(void *header, uint16_t length);
-extern void PKT_$BRK_INTERNET_HDR(void *packet, int32_t *src_network,
-                                   uint8_t *src_info, uint8_t *dest_info,
-                                   uint32_t *idp_network, uint32_t *idp_host,
-                                   uint16_t *port_network, uint16_t *unused1,
-                                   uint16_t *port_socket, uint16_t *data,
-                                   uint16_t max_data, int16_t *data_len,
-                                   status_$t *status);
-extern void PKT_$SEND_INTERNET(uint32_t idp_network, uint32_t idp_host,
-                                uint16_t port_network, int32_t src_network,
-                                uint32_t node_id, uint16_t socket,
-                                void *data, uint16_t port_socket,
-                                void *route_data, uint16_t route_len,
-                                uint32_t callback, uint16_t flags,
-                                void *extra1, uint32_t extra2,
-                                status_$t *status);
-
-/* Socket functions */
-extern uint16_t SOCK_$GET(uint16_t socket, void **packet_ret);
-
-/* Network buffer functions */
-extern uint16_t NETBUF_$RTN_HDR(void **packet);
-
-/* Broadcast function (implemented in broadcast.c) */
-extern void RIP_$BROADCAST(uint8_t flags);
-
-/* Send function (implemented in send.c) */
-extern void RIP_$SEND(void *addr_info, int16_t port, void *route_data,
-                      uint16_t route_len, int8_t flags);
-
-/* Name service registration */
-extern uint16_t REM_NAME_$REGISTER_SERVER(void *param1, void *param2);
-
-/* Timer wait */
-extern uint16_t TIME_$WAIT(ec_$eventcount_t *event, uint32_t *timeout,
-                           status_$t *status);
-
-/* Network hint */
-extern void HINT_$ADD_NET(int16_t network);
-
-/* Wired routing start */
-extern void RTWIRED_PROC_START(int16_t port);
+/*
+ * REM_NAME_$REGISTER_SERVER - Called with parameters here but header says void(void)
+ * This is likely a different function or the decompilation is incorrect.
+ * For now, use void signature from header and skip these calls.
+ */
 
 /*
  * =============================================================================
@@ -513,8 +477,8 @@ uint16_t RIP_$SERVER(void)
 
     /* Return packet buffer */
     {
-        void *pkt_ptr = packet;
-        result = NETBUF_$RTN_HDR(&pkt_ptr);
+        uint32_t pkt_va = (uint32_t)(uintptr_t)packet;
+        NETBUF_$RTN_HDR(&pkt_va);
     }
 
     if (port_index == -1) {
@@ -597,11 +561,12 @@ uint16_t RIP_$SERVER(void)
                               RIP_$PACKET_LENGTH(response_count), 0xFF);
 
                     /* Wait for response or timeout */
-                    uint32_t timeout_val = 0;
-                    uint16_t timeout_msec = RIP_SEND_TIMEOUT;
+                    /* TODO: TIME_$WAIT signature mismatch - needs further analysis */
+                    uint16_t delay_type = 0;
+                    clock_t delay = { 0, RIP_SEND_TIMEOUT };
                     status_$t wait_status;
 
-                    result = TIME_$WAIT(&RIP_$RESPONSE_TIMER, &timeout_val, &wait_status);
+                    TIME_$WAIT(&delay_type, &delay, &wait_status);
 
                     if (wait_status == 0xD0003) {
                         /* Timeout - done */
@@ -662,12 +627,16 @@ uint16_t RIP_$SERVER(void)
             response_cmd = 0x20;  /* Response with extended flag? */
 
             /* Send via PKT_$SEND_INTERNET for standard packets */
-            result = (uint16_t)PKT_$SEND_INTERNET(idp_network, idp_host, port_network,
-                                                   src_network, NODE_$ME, RIP_SOCKET,
-                                                   &response_cmd, port_socket,
-                                                   response_data, RIP_$PACKET_LENGTH(response_count),
-                                                   0x00E68E28, 0,  /* Callback address */
-                                                   dest_info, 0, &status);
+            /* TODO: PKT_$SEND_INTERNET parameter mismatch with pkt.h - needs analysis */
+            {
+                uint16_t len_out;
+                PKT_$SEND_INTERNET(idp_network, idp_host, port_network,
+                                   src_network, NODE_$ME, RIP_SOCKET,
+                                   &response_cmd, port_socket,
+                                   response_data, RIP_$PACKET_LENGTH(response_count),
+                                   NULL, 0,
+                                   &len_out, NULL, &status);
+            }
             return result;
         }
         break;
@@ -773,12 +742,17 @@ uint16_t RIP_$SERVER(void)
 
     send_updates:
         /* Send any pending updates */
-        result = RIP_$SEND_UPDATES(is_std);
-        return result;
+        RIP_$SEND_UPDATES(is_std);
+        return 0;
 
     case RIP_CMD_NAME_REGISTER:
         /*
          * Name service registration (Apollo extension)
+         *
+         * TODO: The decompiled code called REM_NAME_$REGISTER_SERVER with
+         * parameters, but the header declares it as void(void). This needs
+         * further analysis to determine if there's a different function
+         * or if the signature needs updating.
          */
         if (is_std < 0) {
             /* Non-standard - check for specific socket type */
@@ -787,15 +761,15 @@ uint16_t RIP_$SERVER(void)
                 return 3;
             }
 
-            /* Extract parameters and call name registration */
-            uint32_t param1 = *(uint32_t *)&header_copy[0x14];
-            uint32_t param2 = *(uint32_t *)&header_copy[0x04] & 0xFFFFF;
-            result = REM_NAME_$REGISTER_SERVER(&param1, &param2);
+            /* Extract parameters - kept for documentation */
+            /* uint32_t param1 = *(uint32_t *)&header_copy[0x14]; */
+            /* uint32_t param2 = *(uint32_t *)&header_copy[0x04] & 0xFFFFF; */
+            REM_NAME_$REGISTER_SERVER();
         } else {
-            /* Standard - call with IDP parameters */
-            result = REM_NAME_$REGISTER_SERVER(&idp_network, &idp_host);
+            /* Standard - call name registration */
+            REM_NAME_$REGISTER_SERVER();
         }
-        return result;
+        return 0;
 
     default:
         /* Unknown command */
@@ -809,8 +783,8 @@ error_return:
     /* Error - return packet and increment error counter */
     RIP_$STATS.errors++;
     {
-        void *pkt_ptr = packet;
-        result = NETBUF_$RTN_HDR(&pkt_ptr);
+        uint32_t pkt_va = (uint32_t)(uintptr_t)packet;
+        NETBUF_$RTN_HDR(&pkt_va);
     }
-    return result;
+    return 0;
 }

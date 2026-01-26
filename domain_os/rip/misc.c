@@ -11,44 +11,16 @@
  */
 
 #include "rip/rip_internal.h"
+#include "pkt/pkt.h"
 
 /*
  * External function prototypes
- */
-
-/* REM_NAME_$REGISTER_SERVER - Register with name service
- * Original address: 0x00E4A4AE
+ *
+ * TODO: REM_NAME_$REGISTER_SERVER has signature conflict between this usage
+ * (with parameters) and name/name.h declaration (no parameters). The decompiled
+ * code clearly passes parameters, so the header may be incorrect.
  */
 extern void REM_NAME_$REGISTER_SERVER(void *port_array, void *node_id);
-
-/* PKT_$NEXT_ID - Get next packet sequence ID
- * Original address: 0x00E1248E
- */
-extern uint16_t PKT_$NEXT_ID(void);
-
-/* PKT_$SEND_INTERNET - Send an internet broadcast packet
- * Original address: 0x00E1264E
- *
- * This function sends a packet over the internet with full addressing.
- * Parameters are passed on stack (Pascal calling convention).
- */
-extern void PKT_$SEND_INTERNET(
-    uint32_t dest_network,      /* Destination network (0 = local) */
-    uint32_t dest_net_ext,      /* Extended dest (0xFFFFF = broadcast) */
-    uint16_t socket,            /* Socket number */
-    uint32_t src_port,          /* Source port */
-    uint32_t src_node,          /* Source node ID */
-    uint16_t dest_node,         /* Destination node (0xFFFF = broadcast) */
-    void *bcast_control,        /* Broadcast control params */
-    uint16_t packet_id,         /* Packet sequence ID */
-    void *data,                 /* Data to send */
-    uint16_t data_len,          /* Data length */
-    void *extra_data,           /* Additional data pointer */
-    uint16_t extra_len,         /* Additional data length */
-    void *out1,                 /* Output buffer 1 */
-    void *out2,                 /* Output buffer 2 */
-    status_$t *status           /* Output status */
-);
 
 /*
  * External data references

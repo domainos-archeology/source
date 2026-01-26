@@ -30,16 +30,11 @@
  * =============================================================================
  */
 
-/* XNS/IDP OS-level send function */
-extern void XNS_IDP_$OS_SEND(int16_t *channel, void *send_params, void *recv_params,
-                              status_$t *status);
+/* XNS/IDP functions from xns/xns.h (via xns_idp/xns_idp.h) */
+#include "xns_idp/xns_idp.h"
 
-/* Data copy function */
-extern void OS_$DATA_COPY(char *src, char *dest, int32_t len);
-
-/* Network header functions */
-extern void NETWORK_$GETHDR(void *callback, uint32_t *phys_out, uint32_t *va_out);
-extern void NETWORK_$RTNHDR(uint32_t *va_ptr);
+/* Data copy function from os/os.h */
+#include "os/os.h"
 
 /*
  * =============================================================================
@@ -166,9 +161,7 @@ void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
         uint8_t     _pad1[0x1C];    /* Padding */
     } send_params;
 
-    struct {
-        status_$t   status;         /* Status output */
-    } recv_params;
+    uint16_t checksum_ret;
 
     /* Get a network buffer header */
     NETBUF_$GET_HDR(&hdr_phys, &hdr_va);
@@ -223,7 +216,7 @@ void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
     send_params.hdr_va = hdr_va;
 
     /* Send via XNS_IDP_$OS_SEND */
-    XNS_IDP_$OS_SEND(&RIP_$STD_IDP_CHANNEL, &send_params, &recv_params, &status);
+    XNS_IDP_$OS_SEND(&RIP_$STD_IDP_CHANNEL, &send_params, &checksum_ret, &status);
 
     /* Return the header buffer */
     NETBUF_$RTN_HDR(&hdr_va);

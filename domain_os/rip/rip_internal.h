@@ -13,6 +13,7 @@
 #include "proc1/proc1.h"
 #include "route/route.h"
 #include "network/network.h"
+#include "time/time.h"
 
 /*
  * =============================================================================
@@ -134,9 +135,6 @@ typedef struct rip_$data_t {
     /* Main RIP data structure at 0xE26258 */
     #define RIP_$DATA               (*(rip_$data_t *)0xE26258)
 
-    /* TIME_$CLOCKH - Current clock in ticks */
-    #define TIME_$CLOCKH            (*(uint32_t *)0xE2B0D4)
-
     /* RIP_$INFO - Base of routing table entries (separate from RIP_$DATA.entries) */
     #define RIP_$INFO               ((rip_$entry_t *)0xE263BC)
 
@@ -152,7 +150,6 @@ typedef struct rip_$data_t {
     #define RIP_$RECENT_CHANGES         (*(int8_t *)0xE26EE0)
 #else
     extern rip_$data_t RIP_$DATA;
-    extern uint32_t TIME_$CLOCKH;
     extern rip_$entry_t *RIP_$INFO;
     extern rip_$stats_t RIP_$STATS;
     extern int16_t ROUTE_$STD_N_ROUTING_PORTS;
@@ -435,6 +432,25 @@ void RIP_$BROADCAST(uint8_t flags);
  */
 
 /*
+ * Structure for IDP packet header (used by RIP_$STD_DEMUX)
+ *
+ * This represents the layout of an incoming IDP packet as seen by
+ * the demultiplexer. Offsets are relative to the packet structure base.
+ */
+typedef struct idp_$packet_t {
+    uint8_t     _reserved0[0x1A];   /* 0x00: Unknown header fields */
+    uint16_t    checksum;           /* 0x1A: Packet checksum or length field */
+    uint32_t    src_network;        /* 0x1C: Source network address */
+    uint8_t     _reserved1[0x06];   /* 0x20: Unknown fields */
+    uint32_t    dest_network;       /* 0x26: Destination network address */
+    uint16_t    dest_socket;        /* 0x2A: Destination socket */
+    uint16_t    pkt_length;         /* 0x2C: Packet data length */
+    uint8_t     _reserved2[0x08];   /* 0x2E: Unknown fields */
+    uint16_t    rip_length;         /* 0x36: RIP data length */
+    uint8_t     rip_data[16];       /* 0x38: RIP packet data (variable) */
+} idp_$packet_t;
+
+/*
  * RIP_$STD_OPEN - Open standard RIP IDP channel
  *
  * Opens an XNS/IDP channel for receiving RIP packets on the standard
@@ -462,7 +478,7 @@ void RIP_$STD_OPEN(void);
  *
  * Original address: 0x00E15A2C
  */
-void RIP_$STD_DEMUX(void *pkt, uint16_t *param_2, uint16_t *param_3,
+void RIP_$STD_DEMUX(idp_$packet_t *pkt, uint16_t *param_2, uint16_t *param_3,
                     void *param_4, status_$t *status_ret);
 
 /*

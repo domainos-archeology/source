@@ -17,13 +17,7 @@
 
 #include "rip/rip_internal.h"
 #include "sock/sock.h"
-
-/*
- * Forward declaration for XNS_IDP_$OS_OPEN
- *
- * Note: This should eventually be in an xns_idp.h header.
- */
-extern void XNS_IDP_$OS_OPEN(void *open_params, status_$t *status_ret);
+#include "xns_idp/xns_idp.h"
 
 /*
  * Structure for XNS_IDP_$OS_OPEN parameters (0x10 bytes)
@@ -39,25 +33,6 @@ typedef struct xns_idp_$open_params_t {
     uint32_t    port;           /* 0x04: Port identifier */
     void        (*demux)(void); /* 0x08: Demultiplexer callback function */
 } xns_idp_$open_params_t;
-
-/*
- * Structure for IDP packet header (used by RIP_$STD_DEMUX)
- *
- * This represents the layout of an incoming IDP packet as seen by
- * the demultiplexer. Offsets are relative to the packet structure base.
- */
-typedef struct idp_$packet_t {
-    uint8_t     _reserved0[0x1A];   /* 0x00: Unknown header fields */
-    uint16_t    checksum;           /* 0x1A: Packet checksum or length field */
-    uint32_t    src_network;        /* 0x1C: Source network address */
-    uint8_t     _reserved1[0x06];   /* 0x20: Unknown fields */
-    uint32_t    dest_network;       /* 0x26: Destination network address */
-    uint16_t    dest_socket;        /* 0x2A: Destination socket */
-    uint16_t    pkt_length;         /* 0x2C: Packet data length */
-    uint8_t     _reserved2[0x08];   /* 0x2E: Unknown fields */
-    uint16_t    rip_length;         /* 0x36: RIP data length */
-    uint8_t     rip_data[16];       /* 0x38: RIP packet data (variable) */
-} idp_$packet_t;
 
 /*
  * Structure for SOCK_$PUT data (assembled from IDP packet)
