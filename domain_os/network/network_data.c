@@ -66,6 +66,11 @@ uint16_t NETWORK_$BAD_CHKSUM_CNT;
 int16_t NETWORK_$RETRY_TIMEOUT;       /* 0xE24C18 */
 
 /*
+ * Spin lock for network data protection
+ */
+void *NETWORK_$LOCK;                  /* 0xE24BA0 (+0x2A4) */
+
+/*
  * Loopback flag (non-M68K only - M68K uses direct memory access)
  */
 #if !defined(M68K)

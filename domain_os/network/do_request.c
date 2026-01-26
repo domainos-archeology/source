@@ -35,31 +35,6 @@
 static const status_$t Network_No_Available_Socket_Err = status_$network_no_available_sockets;
 
 /*
- * Network data area globals (accessed via A5 in original code)
- */
-extern uint32_t NETWORK_$MOTHER_NODE;       /* 0xE24C0C (+0x310) - mother node ID */
-extern int16_t  NETWORK_$RETRY_TIMEOUT;     /* 0xE24C18 (+0x31c) - timeout offset for retries */
-
-/*
- * Socket descriptor array
- * Each socket has a pointer to its control structure
- */
-extern void *SOCK_$SOCKET_PTR[];            /* 0xE28DB4 - socket pointer array */
-
-/*
- * Forward declarations for internal helpers
- */
-void network_$send_request(void *net_handle, int16_t sock_num, int16_t pkt_id,
-                           int16_t *cmd_buf, int16_t cmd_len, int16_t param_hi,
-                           uint32_t param_lo, uint16_t *retry_count_out,
-                           int16_t *timeout_out, status_$t *status_ret);
-
-int8_t network_$wait_response(int16_t sock_num, int16_t pkt_id, uint16_t timeout,
-                              int32_t *event_count, int16_t *resp_buf,
-                              int16_t *resp_len_out, uint32_t *data_bufs,
-                              uint16_t *data_len_out);
-
-/*
  * network_$do_request - Send a network command and receive response
  *
  * @param net_handle     Network handle/connection (contains node info at offset 4)

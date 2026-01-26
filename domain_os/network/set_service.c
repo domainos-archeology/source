@@ -15,25 +15,21 @@
  * 6. Updates some additional state if DAT_00e2e0ce == 0
  */
 
-#include "network/network.h"
+#include "network/network_internal.h"
+#include "route/route_internal.h"
 
 /*
- * Spin lock for network data protection
- * Located at network data base + 0x2A4 = 0xE24BA0
+ * Unknown globals for disabled service notification code
+ * These addresses fall within the ROUTE_$PORT_ARRAY range (0xE2E0A0 - 0xE2E380),
+ * but appear to be treated as separate data items. The code using them is
+ * conditionally compiled out (#if 0 below), so we keep them as placeholders.
+ *
+ * TODO: Investigate whether these are actually fields within the route
+ * port structures or separate data items.
  */
-extern void *NETWORK_$LOCK;  /* 0xE24BA0 */
-
-/*
- * External flag checked before additional service updates
- */
-extern int16_t DAT_00e2e0ce;  /* 0xE2E0CE */
-
-/*
- * External callback table pointer for additional service notification
- * The function at offset +0x24 is called when service changes
- */
-extern void *DAT_00e2e0e8;    /* 0xE2E0E8 */
-extern void *DAT_00e2e0d0;    /* 0xE2E0D0 - passed as first arg */
+extern int16_t DAT_00e2e0ce;  /* 0xE2E0CE - flag checked before service notification */
+extern void *DAT_00e2e0e8;    /* 0xE2E0E8 - callback table pointer */
+extern void *DAT_00e2e0d0;    /* 0xE2E0D0 - first arg to callback */
 
 void NETWORK_$SET_SERVICE(int16_t *op_ptr, uint32_t *value_ptr, status_$t *status_p)
 {

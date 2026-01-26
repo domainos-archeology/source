@@ -88,6 +88,13 @@ extern network_table_entry_t NETWORK_$NET_TABLE[NETWORK_TABLE_SIZE];
 extern int16_t NETWORK_$RETRY_TIMEOUT; /* 0xE24C18 - timeout for retries */
 
 /*
+ * NETWORK_$LOCK - Spin lock for network data protection
+ *
+ * Located at network data base + 0x2A4 = 0xE24BA0
+ */
+extern void *NETWORK_$LOCK;
+
+/*
  * Socket pointer array (for event count access)
  */
 extern void *SOCK_$SOCKET_PTR[]; /* 0xE28DB4 */
