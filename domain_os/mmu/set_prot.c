@@ -7,7 +7,7 @@
  * Original address: 0x00e2422a
  */
 
-#include "mmu.h"
+#include "mmu_internal.h"
 
 uint16_t MMU_$SET_PROT(uint32_t ppn, uint16_t prot)
 {

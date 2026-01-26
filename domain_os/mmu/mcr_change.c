@@ -11,7 +11,7 @@
  * Original address: 0x00e242a0
  */
 
-#include "mmu.h"
+#include "mmu_internal.h"
 
 void MMU_$MCR_CHANGE(uint16_t bit)
 {

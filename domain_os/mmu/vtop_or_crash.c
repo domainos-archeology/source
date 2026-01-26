@@ -8,7 +8,7 @@
  * Original address: 0x00e3190c
  */
 
-#include "mmu.h"
+#include "mmu_internal.h"
 #include "misc/misc.h"
 
 uint32_t mmu_$vtop_or_crash(uint32_t va)

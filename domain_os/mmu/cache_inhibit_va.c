@@ -7,7 +7,7 @@
  * Original address: 0x00e2429e
  */
 
-#include "mmu.h"
+#include "mmu_internal.h"
 
 void MMU_$CACHE_INHIBIT_VA(uint32_t va)
 {

@@ -7,7 +7,7 @@
  * Original address: 0x00e241f4
  */
 
-#include "mmu.h"
+#include "mmu_internal.h"
 
 void MMU_$SET_CSR(uint16_t csr_val)
 {

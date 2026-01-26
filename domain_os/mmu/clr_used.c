@@ -8,7 +8,7 @@
  * Original address: 0x00e2425a
  */
 
-#include "mmu.h"
+#include "mmu_internal.h"
 
 void MMU_$CLR_USED(uint32_t ppn)
 {

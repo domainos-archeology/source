@@ -7,10 +7,10 @@
  * Original address: 0x00e23d64
  */
 
-#include "mmu.h"
+#include "mmu_internal.h"
 
-/* Internal helper: remove mapping with interrupts already disabled */
-static void mmu_$remove_internal(uint16_t ppn);
+/* Internal helper: remove mapping with interrupts already disabled
+ * (declared in mmu_internal.h) */
 
 void MMU_$REMOVE(uint32_t ppn)
 {
@@ -39,7 +39,7 @@ void MMU_$REMOVE(uint32_t ppn)
  *
  * Original address: 0x00e23dcc
  */
-static void mmu_$remove_internal(uint16_t ppn)
+void mmu_$remove_internal(uint16_t ppn)
 {
     uint32_t *pmape = PFT_FOR_PPN(ppn);
     uint16_t asid_entry = ASID_FOR_PPN(ppn);

@@ -11,6 +11,7 @@
 #include "mmu.h"
 #include "cache/cache.h"
 #include "mmap/mmap.h"
+#include "proc1/proc1.h"
 
 /*
  * ============================================================================

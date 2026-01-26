@@ -9,7 +9,7 @@
  * - mmu_$unlink_from_hash: 0x00e23df4
  */
 
-#include "mmu.h"
+#include "mmu_internal.h"
 
 /*
  * mmu_$remove_pmape - Remove PMAPE entry and update hash chain
