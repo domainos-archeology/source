@@ -2,6 +2,8 @@
 
 This project's purpose is to analyze and reverse engineer compiled Apollo Workstation code using Ghidra and additional tools. The code that ghidra generates isn't perfect, so we need to do further analysis on it to identify data structures, memory layout, and function purposes.  Ghidra also uses a number of constructs that don't map directly to C/C++ constructs, so we need to identify and convertthose as well.
 
+The generated C code should map as closely to the semantics in the machine code as possible.  The data structures and their layout should be identical.  Do NOT get creative or think of optimizations while doing your work.  Your work is that of an archivist.  You should be as faithful as you can to the original.  Whenever you have a question or think of a way to fix the code, you MUST MAKE SURE the resulting code maps to the same behavior.
+
 ## DOMAIN_OS KERNEL WORKFLOW
 
 The kernel (domain_os) work should proceed as follows:
@@ -23,6 +25,10 @@ The kernel (domain_os) work should proceed as follows:
 3. Then add the function to the appropriate subsystem directory
 
 Do NOT use `#define FUN_XXXXXXXX actual_name` patterns. These are temporary workarounds that should be corrected by renaming in Ghidra directly.
+
+### TODOs in the code
+
+When at all possible, do NOT leave work undone.  The unit of work is the function - finish the function.  If something is unclear or if you need further analysis to clean up the code, leave a TODO: comment to make them easy to see.  Also add a bead task (low priority) to reference the TODO.
 
 ### Decompilation Guidelines
 - The Ghidra decompiler output often needs cleanup - compare against the assembly to verify correctness
