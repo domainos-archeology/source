@@ -8,6 +8,7 @@
 #include "os/os_internal.h"
 
 // Static data for shutdown
+static uint16_t wait_delay_type = 0;  /* 0 = relative wait */
 static clock_t wait_duration = { 0, 0 };
 
 // Shutdown flag
@@ -44,7 +45,7 @@ void OS_$SHUTDOWN(status_$t *status_p)
 
 do_shutdown:
     // Wait briefly before starting
-    TIME_$WAIT(&wait_duration, &local_status);
+    TIME_$WAIT(&wait_delay_type, &wait_duration, &local_status);
 
     CRASH_SHOW_STRING("Beginning shutdown sequence......");
 

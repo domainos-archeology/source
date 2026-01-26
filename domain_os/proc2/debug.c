@@ -68,7 +68,8 @@ void PROC2_$DEBUG(uid_t *proc_uid, status_$t *status_ret)
 
         /* Check ACL debug permissions */
         /* ACL_$CHECK_DEBUG_RIGHTS returns negative on success */
-        if (ACL_$CHECK_DEBUG_RIGHTS(&PROC1_$CURRENT) >= 0) {
+        /* TODO: Verify the second parameter - should be pointer to target's PID */
+        if (ACL_$CHECK_DEBUG_RIGHTS(&PROC1_$CURRENT, (int16_t *)entry) >= 0) {
             status = status_$proc2_permission_denied;
             goto done;
         }

@@ -19,6 +19,9 @@
 
 #include "asknode/asknode_internal.h"
 
+/* Empty data constant at 0x00E658CC (zero-filled buffer) */
+extern uint32_t DAT_00e658cc;
+
 void ASKNODE_$PROPAGATE_WHO(int16_t *response, uint32_t *routing_info)
 {
     uint32_t pkt_info[8];

@@ -19,9 +19,8 @@
 /* Device registration table */
 #define DISK_DEVICE_TABLE  ((uint8_t *)0x00e7ad5c)
 
-void DISK_$GET_STATS(int16_t vol_idx, void *stats, status_$t *status)
+void DISK_$GET_STATS(int16_t dev_type, int16_t controller, uint8_t *has_stats, void *stats)
 {
-    uint8_t *has_stats = (uint8_t *)status;  /* Actually a flag byte */
     uint32_t *stats_buf = (uint32_t *)stats;
     int16_t i;
     uint32_t *entry;
@@ -42,8 +41,8 @@ void DISK_$GET_STATS(int16_t vol_idx, void *stats, status_$t *status)
     for (i = 0x1f; i >= 0; i--) {
         if (*entry != 0) {
             uint16_t *entry_info = (uint16_t *)((uint8_t *)entry + 4);
-            if (entry_info[0] == (uint16_t)vol_idx /* dev_type */ &&
-                entry_info[1] == 0 /* controller */) {
+            if (entry_info[0] == (uint16_t)dev_type &&
+                entry_info[1] == (uint16_t)controller) {
 
                 /* Found matching device - get stats function */
                 jump_table = (void *)(uintptr_t)*entry;
@@ -52,7 +51,7 @@ void DISK_$GET_STATS(int16_t vol_idx, void *stats, status_$t *status)
 
                 if (get_stats_func != NULL) {
                     /* Call device-specific stats function */
-                    get_stats_func(0 /* controller */, stats_buf);
+                    get_stats_func((uint16_t)controller, stats_buf);
 
                     /* Set has_stats if any stats are non-zero */
                     if (stats_buf[0] != 0 || stats_buf[1] != 0) {

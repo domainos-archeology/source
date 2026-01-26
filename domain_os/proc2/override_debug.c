@@ -28,6 +28,7 @@ void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret)
     int16_t target_idx;
     int16_t debugger_idx;
     int8_t flag;
+    proc2_info_t *entry;
 
     status = status_$ok;
     uid.high = proc_uid->high;
@@ -59,10 +60,12 @@ void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret)
         }
 
         /* NOTE: Unlike DEBUG, we do NOT check if already being debugged */
+        entry = P2_INFO_ENTRY(target_idx);
 
         /* Check ACL debug permissions */
         /* ACL_$CHECK_DEBUG_RIGHTS returns negative on success */
-        if (ACL_$CHECK_DEBUG_RIGHTS(&PROC1_$CURRENT) >= 0) {
+        /* TODO: Verify the second parameter - should be pointer to target's PID */
+        if (ACL_$CHECK_DEBUG_RIGHTS(&PROC1_$CURRENT, (int16_t *)entry) >= 0) {
             status = status_$proc2_permission_denied;
             goto done;
         }

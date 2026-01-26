@@ -180,8 +180,7 @@ void DISK_$WRITE(int16_t vol_idx, void *buffer, void *daddr, void *count,
 void DISK_$READ_MULTI(uint16_t vol_idx, int16_t flags1, int16_t flags2,
                       int32_t qblk_head, uint32_t qblk_tail,
                       int16_t *pages_read, status_$t *status);
-void DISK_$WRITE_MULTI(int16_t vol_idx, void *req_list, void *param_3,
-                       status_$t *status);
+void DISK_$WRITE_MULTI(int8_t flags, void *req_list, status_$t *status);
 void DISK_$DO_IO(void *dev_entry, void *req, void *param_3, void *result);
 
 /* Allocation operations */
@@ -204,7 +203,7 @@ void DISK_$SHUTDOWN(int16_t vol_idx, status_$t *status);
 void DISK_$SPIN_DOWN(int16_t vol_idx, status_$t *status);
 void DISK_$REVALID(int16_t vol_idx);
 void DISK_$WRITE_PROTECT(int16_t mode, int16_t vol_idx, status_$t *status);
-void DISK_$GET_STATS(int16_t vol_idx, void *stats, status_$t *status);
+void DISK_$GET_STATS(int16_t dev_type, int16_t controller, uint8_t *has_stats, void *stats);
 void DISK_$UNASSIGN(uint16_t *vol_idx_ptr, status_$t *status);
 void DISK_$UNASSIGN_ALL(void);
 void DISK_$REVALIDATE(int16_t vol_idx);

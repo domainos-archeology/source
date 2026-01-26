@@ -336,9 +336,12 @@ void FIM_$SIGNAL(status_$t status);
  * FIM_$PROC2_STARTUP - Process 2 startup entry point
  *
  * Entry point for new process startup after fork.
- * Address: 0x00e21736 (30 bytes)
+ *
+ * @param context   Startup context containing stack pointer and entry point
+ *
+ * Address: 0x00e217b6 (30 bytes)
  */
-void FIM_$PROC2_STARTUP(void);
+void FIM_$PROC2_STARTUP(void *context);
 
 /*
  * FIM_$SINGLE_STEP - Single step exception handler

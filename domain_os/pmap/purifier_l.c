@@ -23,6 +23,9 @@ extern uint16_t MMAP_$WSL_HI_MARK[];
 /* Short wait delay for working set scanning */
 extern clock_t PMAP_$SHORT_WAIT_DELAY;
 
+/* Delay type for relative waits (0 = relative) */
+static uint16_t pmap_delay_type = 0;
+
 /* Network diskless flag */
 extern int8_t NETWORK_$DISKLESS;
 
@@ -180,7 +183,7 @@ void PMAP_$PURIFIER_L(void)
                 FUN_00e1327e(batch_pages, qblk_main, page_count);
 
                 /* Write pages to disk */
-                DISK_$WRITE_MULTI(0xFF, (void *)(uintptr_t)qblk_main, NULL, &status);
+                DISK_$WRITE_MULTI((int8_t)0xFF, (void *)(uintptr_t)qblk_main, &status);
                 if (status != 0) {
                     CRASH_SYSTEM(&status);
                 }
@@ -308,7 +311,7 @@ void PMAP_$PURIFIER_L(void)
 
 wait_and_continue:
             ML_$UNLOCK(PMAP_LOCK_ID);
-            TIME_$WAIT(&PMAP_$SHORT_WAIT_DELAY, &status);
+            TIME_$WAIT(&pmap_delay_type, &PMAP_$SHORT_WAIT_DELAY, &status);
             ML_$LOCK(PMAP_LOCK_ID);
 
             total_pages = DAT_00e232b4 + DAT_00e232d8 + DAT_00e232fc +

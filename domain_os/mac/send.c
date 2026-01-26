@@ -85,7 +85,7 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
         /* Do ARP lookup */
         MAC_OS_$ARP(MAC_$ARP_TABLE, port_num, pkt_desc, NULL, status_ret);
         if (*status_ret != status_$ok) {
-            FIM_$RLS_CLEANUP();
+            FIM_$RLS_CLEANUP(cleanup_buf);
             return;
         }
     }
@@ -138,7 +138,7 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
     *status_ret = os_status;
 
     /* Release cleanup handler */
-    FIM_$RLS_CLEANUP();
+    FIM_$RLS_CLEANUP(cleanup_buf);
 
 #else
     /* Non-M68K implementation stub */

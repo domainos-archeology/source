@@ -16,11 +16,14 @@
 
 #include "asknode/asknode_internal.h"
 
-/* External references */
-extern ec_$eventcount_t TIME_$CLOCKH;
-extern int16_t PROC1_$AS_ID;
-extern uint32_t FIM_$QUIT_VALUE;
-extern ec_$eventcount_t FIM_$QUIT_EC;
+/* External references - commented out as they conflict with header definitions */
+/* extern ec_$eventcount_t TIME_$CLOCKH; */
+/* extern int16_t PROC1_$AS_ID; */
+/* extern uint32_t FIM_$QUIT_VALUE; */
+/* extern ec_$eventcount_t FIM_$QUIT_EC; */
+
+/* Empty data constant at 0x00E658CC (zero-filled buffer) */
+extern uint32_t DAT_00e658cc;
 
 void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
                          int32_t *node_list, int16_t *max_count,

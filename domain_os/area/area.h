@@ -474,14 +474,12 @@ void AREA_$REMOVE_SEG(uint16_t area_id, uint16_t seg_idx,
 /*
  * AREA_$DEACTIVATE_ASTE - Deactivate AST entry for area
  *
- * @param area_id       Area ID
- * @param param_2       Unknown parameter
+ * @param aste          Pointer to AST entry
  * @param status_ret    Output: status code
  *
  * Original address: 0x00E09EF4
  */
-void AREA_$DEACTIVATE_ASTE(uint16_t area_id, uint32_t param_2,
-                           status_$t *status_ret);
+void AREA_$DEACTIVATE_ASTE(void *aste, status_$t *status_ret);
 
 /*
  * ============================================================================

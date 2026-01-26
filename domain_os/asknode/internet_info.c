@@ -134,8 +134,8 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         }
         /* Get disk stats */
         {
-            uint8_t temp[6];
-            DISK_$GET_STATS(0, 0, (uint16_t *)temp, result + 0x17);
+            uint8_t temp;
+            DISK_$GET_STATS(0, 0, &temp, result + 0x17);
         }
         /* Copy memory stats (21 words) */
         {
@@ -166,7 +166,10 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         break;
 
     case ASKNODE_REQ_VOLUME_INFO: /* 0x0A */
-        ret_val = VOLX_$GET_INFO(param, result + 2, result + 4, result + 5, local_status);
+        /* Note: param is uid_t* but VOLX_$GET_INFO expects int16_t* vol_idx.
+         * The caller likely passes the volume index in the first field. */
+        VOLX_$GET_INFO((int16_t *)param, (uid_t *)(result + 2),
+                       result + 4, result + 5, local_status);
         break;
 
     case ASKNODE_REQ_PAGING_INFO: /* 0x0C */

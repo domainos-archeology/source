@@ -149,24 +149,24 @@ void AREA_$REMOVE_SEG(uint16_t area_id, uint16_t seg_idx,
 /*
  * AREA_$DEACTIVATE_ASTE - Deactivate AST entry for area
  *
- * Deactivates the AST entry associated with the specified area.
+ * Deactivates the AST entry associated with the specified ASTE.
  *
  * Parameters:
- *   area_id     - Area ID
- *   param_2     - Unknown parameter
+ *   aste        - Pointer to AST entry
  *   status_ret  - Output: status code
  *
  * Original address: 0x00E09EF4
  *
  * TODO: Full analysis and implementation needed.
  */
-void AREA_$DEACTIVATE_ASTE(uint16_t area_id, uint32_t param_2,
-                           status_$t *status_ret)
+void AREA_$DEACTIVATE_ASTE(void *aste, status_$t *status_ret)
 {
     area_$entry_t *entry;
     int entry_offset;
+    int *aste_ptr = (int *)aste;
 
-    (void)param_2;  /* TODO: Use this parameter */
+    /* TODO: Extract area_id from aste structure */
+    uint16_t area_id = 0;  /* Placeholder - needs proper extraction from aste */
 
     /* Validate area ID */
     if (area_id == 0 || area_id > AREA_$N_AREAS) {

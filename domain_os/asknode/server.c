@@ -24,6 +24,12 @@ extern uint32_t DAT_00e24bf8;  /* Failure record word 1 */
 extern uint32_t DAT_00e24bfc;  /* Failure record word 2 */
 extern uint32_t DAT_00e24c00;  /* Failure record word 3 */
 
+/* Empty data constant at 0x00E658CC (zero-filled buffer) */
+extern uint32_t DAT_00e658cc;
+
+/* ASKNODE response template at 0x00E65E8C */
+extern uint16_t DAT_00e65e8c;
+
 void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
 {
     status_$t status;

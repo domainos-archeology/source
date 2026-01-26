@@ -51,20 +51,19 @@ void HINT_$INIT(void)
         /* Map the hint file into memory
          * Parameters:
          *   0: ASID (0 = current)
-         *   0xFF00 | flag: Flags (FF = read/write, 00 = flag byte)
+         *   0xFF00: Flags (FF = read/write)
          *   &hintfile_uid: File UID to map
          *   0: Start offset
          *   0x7FFF: Maximum size (32KB)
-         *   0x16: Area ID
-         *   0: Reserved
-         *   0xFF: Access rights
+         *   0x16: Area ID / protection
+         *   0: Hint address
+         *   0xFF: Create flag
          *   map_result: Output buffer
          *   &status: Status return
          */
-        MST_$MAPS();  /* TODO: Full MST_$MAPS signature when available */
-
-        /* The mapped pointer is returned in A0, stored to DAT_00e7db70 */
-        /* For now, simulate: mapped_ptr = (hint_file_t *)mst_result; */
+        mapped_ptr = (hint_file_t *)MST_$MAPS(0, (int16_t)0xFF00, &hintfile_uid, 0,
+                                               0x7FFF, 0x16, 0, (int8_t)0xFF,
+                                               map_result, &status);
 
         if (status != status_$ok) {
             goto handle_failure;

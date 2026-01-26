@@ -266,7 +266,7 @@ cleanup_and_return:
     NETBUF_$RTN_PKT(pkt_buf, &secondary_buf, NULL, data_len);
 
     /* Release cleanup handler */
-    FIM_$RLS_CLEANUP();
+    FIM_$RLS_CLEANUP(cleanup_buf);
 
 #else
     /* Non-M68K implementation stub */
