@@ -162,9 +162,30 @@ void MST_$SET_CLEAR(void *bitmap, uint16_t size, uint16_t bit_index);
 /* Memory mapping */
 uint32_t MST_$TOUCH(uint32_t virtual_addr, status_$t *status_ret,
                     int16_t wire_flag);
-void MST_$MAP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
-              uint16_t *area_id_ptr, uint32_t *area_size_ptr,
-              uint8_t *rights_ptr, int32_t *mapped_len, status_$t *status_ret);
+
+/*
+ * MST_$MAP - Map a file into memory
+ *
+ * Maps a file object into the current address space.
+ *
+ * Parameters:
+ *   uid         - UID of file to map
+ *   start_ptr   - Pointer to starting offset in file (input)
+ *   length_ptr  - Pointer to length to map (input)
+ *   mode_ptr    - Pointer to mapping mode (input, uint16_t)
+ *   extend_ptr  - Pointer to extend value (input)
+ *   concur_ptr  - Pointer to concurrency flags (input, uint8_t)
+ *   map_info    - Output buffer for mapping info (4 bytes)
+ *   status_ret  - Status return
+ *
+ * Returns:
+ *   Pointer to mapped memory (in A0 register)
+ *
+ * Original address: 0x00E4386C
+ */
+void *MST_$MAP(uid_t *uid, uint32_t *start_ptr, uint32_t *length_ptr,
+               uint16_t *mode_ptr, uint32_t *extend_ptr,
+               uint8_t *concur_ptr, void *map_info, status_$t *status_ret);
 void MST_$MAP_AT(void *start, uid_t *uid, void *param1, void *param2, void *param3,
                  void *param4, void *param5, void *result, status_$t *status);
 void MST_$MAP_CANNED_AT(uint32_t va, uid_t *uid, uint32_t param3, uint32_t param4,
@@ -192,7 +213,21 @@ void MST_$REMAP_PRIVI(void);
 void MST_$GROW_AREA(void);
 
 /* Unmapping */
-void MST_$UNMAP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
+
+/*
+ * MST_$UNMAP - Unmap a file from memory
+ *
+ * Unmaps a previously mapped file object from the current address space.
+ *
+ * Parameters:
+ *   uid         - UID of file to unmap
+ *   start_ptr   - Pointer to starting VA to unmap (as returned/saved from MST_$MAP)
+ *   map_info    - Pointer to map_info (as returned from MST_$MAP)
+ *   status_ret  - Status return
+ *
+ * Original address: 0x00E4472E
+ */
+void MST_$UNMAP(uid_t *uid, uint32_t *start_ptr, uint32_t *map_info,
                 status_$t *status_ret);
 void MST_$UNMAP_GLOBAL(void);
 void MST_$UNMAPS(void);

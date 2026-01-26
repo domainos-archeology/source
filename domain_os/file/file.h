@@ -698,16 +698,16 @@ void FILE_$CHANGE_LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_m
  *
  * Parameters:
  *   file_uid     - UID of file to lock
- *   lock_index   - Pointer to lock index
- *   lock_mode    - Pointer to lock mode
- *   rights       - Pointer to rights byte
- *   param_5      - Additional parameter (unused, set to local_8)
+ *   lock_index   - Pointer to lock index (uint16_t)
+ *   lock_mode    - Pointer to lock mode (uint16_t)
+ *   rights       - Pointer to rights byte (uint8_t)
+ *   lock_info    - Output buffer for lock info (8 bytes)
  *   status_ret   - Output status code
  *
  * Original address: 0x00E5EB20
  */
 void FILE_$LOCK(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
-                uint8_t *rights, uint32_t param_5, status_$t *status_ret);
+                uint8_t *rights, void *lock_info, status_$t *status_ret);
 
 /*
  * FILE_$UNLOCK_D - Unlock a file with domain context

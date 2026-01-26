@@ -24,16 +24,19 @@
  *   lock_index   - Pointer to lock index
  *   lock_mode    - Pointer to lock mode
  *   rights       - Pointer to rights byte
- *   param_5      - Additional parameter (unused, output goes to local_8)
+ *   lock_info    - Output buffer for lock info (8 bytes) - UNUSED by this function
+ *                  Note: Callers pass a buffer here, but FILE_$LOCK uses internal
+ *                  local variables instead. This parameter is accepted for API
+ *                  compatibility but its contents are not populated.
  *   status_ret   - Output status code
  */
 void FILE_$LOCK(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
-                uint8_t *rights, uint32_t param_5, status_$t *status_ret)
+                uint8_t *rights, void *lock_info, status_$t *status_ret)
 {
     uint32_t local_8 = 0;   /* Lock context output - cleared at start */
     uint16_t result;
 
-    (void)param_5;  /* Unused parameter */
+    (void)lock_info;  /* Unused parameter - see function comment */
 
     /*
      * Call FILE_$PRIV_LOCK with:

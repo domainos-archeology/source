@@ -80,11 +80,13 @@ status_$t FUN_00e43f40(uint16_t asid, uint16_t flags, void *table_ptr);
 
 /*
  * FUN_00e43182 - Internal mapping helper
+ *
+ * Returns the mapped virtual address in A0 register.
  */
-void FUN_00e43182(uint32_t addr_hint, uid_t *uid, uint32_t start_va, uint32_t length,
-                  uint32_t area_size, int16_t asid, uint16_t area_id, uint16_t touch_count,
-                  uint8_t access_rights, int16_t direction, int32_t *mapped_len,
-                  status_$t *status);
+void *FUN_00e43182(uint32_t addr_hint, uid_t *uid, uint32_t start_va, uint32_t length,
+                   uint32_t area_size, int16_t asid, uint16_t area_id, uint16_t touch_count,
+                   uint8_t access_rights, int16_t direction, void *map_info,
+                   status_$t *status);
 
 /*
  * FUN_00e4411c - Internal get UID helper
