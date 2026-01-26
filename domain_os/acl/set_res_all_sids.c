@@ -20,9 +20,6 @@
 #include "acl/acl_internal.h"
 #include "audit/audit.h"
 
-/* Forward declaration for audit event UID */
-extern uid_t AUDIT_$SET_SID_EU;
-
 void ACL_$SET_RES_ALL_SIDS(void *new_original_sids, void *new_current_sids,
                            void *new_saved_sids, void *new_saved_proj,
                            void *new_current_proj, status_$t *status_ret)

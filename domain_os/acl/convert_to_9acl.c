@@ -16,14 +16,6 @@
 
 #include "acl/acl_internal.h"
 
-/* Forward declaration for internal image helper at 0xe47b78 */
-void acl_$image_internal(void *source_uid, int16_t buffer_len, int8_t flag,
-                         void *output_buf, void *len_out, void *data_out,
-                         void *flag_out, status_$t *status);
-
-/* ACL workspace buffer (A5-relative at offset 0) */
-extern uint8_t ACL_$WORKSPACE[64];  /* 0xE7CF54 */
-
 void ACL_$CONVERT_TO_9ACL(int16_t type, uid_t *source_uid, uid_t *dir_uid,
                           void *default_prot, uid_t *result_uid, status_$t *status_ret)
 {

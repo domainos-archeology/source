@@ -155,6 +155,12 @@ extern int32_t ACL_$SUBS_MAGIC;             /* 0xE7DAC0 */
 extern ml_$exclusion_t ACL_$EXCLUSION_LOCK; /* 0xE2C014 */
 
 /*
+ * ACL workspace buffer (A5-relative at offset 0)
+ * Used by convert/image functions for temporary storage
+ */
+extern uint8_t ACL_$WORKSPACE[64];  /* 0xE7CF54 */
+
+/*
  * Default ACL UIDs (referenced in acl.h, defined here for internal use)
  * These are loaded from RGYC during initialization.
  */
@@ -257,5 +263,26 @@ void ACL_$GET_SID(int16_t asid, uid_t *sid_ret);
  * Original address: 0x00E46498
  */
 int8_t acl_$is_process_type_2(int16_t pid);
+
+/*
+ * acl_$image_internal - Internal image helper function
+ *
+ * Creates an internal image/representation of ACL data.
+ *
+ * Parameters:
+ *   source_uid - Source UID
+ *   buffer_len - Length of output buffer
+ *   flag       - Operation flag
+ *   output_buf - Output buffer
+ *   len_out    - Output: actual length
+ *   data_out   - Output: data buffer
+ *   flag_out   - Output: flag byte
+ *   status     - Output status code
+ *
+ * Original address: 0x00E47B78
+ */
+void acl_$image_internal(void *source_uid, int16_t buffer_len, int8_t flag,
+                         void *output_buf, void *len_out, void *data_out,
+                         void *flag_out, status_$t *status);
 
 #endif /* ACL_INTERNAL_H */

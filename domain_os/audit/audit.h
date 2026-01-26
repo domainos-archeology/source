@@ -237,4 +237,13 @@ void AUDIT_$CONTROL(int16_t *command, status_$t *status_ret);
  */
 void AUDIT_$SERVER(void);
 
+/*
+ * ============================================================================
+ * Global Data - Event UIDs
+ * ============================================================================
+ */
+
+/* Event UID for SID change audit events */
+extern uid_t AUDIT_$SET_SID_EU;
+
 #endif /* AUDIT_H */
