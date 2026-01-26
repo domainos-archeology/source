@@ -162,7 +162,10 @@ void NAME_$INIT(uid_t *vol_root_uid, uid_t *vol_node_uid)
 
     /* Format and resolve node_data path */
     /* The path is formatted using VFMT_$FORMATN with NODE_$ME */
-    VFMT_$FORMATN("`node_data", path_buffer, &NODE_$ME, &path_len);
+    {
+        int16_t max_len = sizeof(path_buffer);
+        VFMT_$FORMATN("`node_data", path_buffer, &max_len, &path_len, &NODE_$ME);
+    }
 
     if (use_provided_uids) {
         /* Convert lowercase to uppercase in the formatted path */

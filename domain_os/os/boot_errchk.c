@@ -45,12 +45,15 @@ char OS_$BOOT_ERRCHK(const char *format_str, const char *arg_str,
     // Format: "      @  @     lh       " (placeholder for actual format)
     // Arguments: format_str, arg_str, percent_pos, line_num, local_status
     err_buf_len = 104;
-    VFMT_$FORMATN("      @  @     lh       ",
-                  err_buf, &err_buf_len,
-                  format_str, percent_pos,
-                  arg_str,
-                  line_num,
-                  local_status);
+    {
+        int16_t out_len;
+        VFMT_$FORMATN("      @  @     lh       ",
+                      err_buf, &err_buf_len, &out_len,
+                      format_str, percent_pos,
+                      arg_str,
+                      line_num,
+                      local_status);
+    }
 
     // Display the error message
     CRASH_SHOW_STRING(err_buf);

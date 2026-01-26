@@ -248,7 +248,7 @@ void PACCT_$SHUTDN(void);
  * ============================================================================
  */
 
-void VFMT_$FORMATN(const char *format, char *buf, short *len_ptr, ...);
+/* VFMT_$FORMATN declared in vfmt/vfmt.h (via misc/misc.h) */
 void CRASH_SHOW_STRING(const char *str);
 /* CRASH_SYSTEM declared in misc/misc.h */
 /* MMU_$NORMAL_MODE declared in mmu/mmu.h */

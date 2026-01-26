@@ -102,9 +102,10 @@ do_shutdown:
         VOLX_$SHUTDOWN();
         status = VOLX_$SHUTDOWN();
         if (status != 0) {
+            int16_t out_len;
             err_len = 104;
             VFMT_$FORMATN("shutdown failed, status =  lh    ",
-                          err_buf, &err_len, status);
+                          err_buf, &err_len, &out_len, status);
             CRASH_SHOW_STRING(err_buf);
         }
     }
