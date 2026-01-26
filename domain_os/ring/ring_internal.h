@@ -67,92 +67,12 @@
 
 /*
  * ============================================================================
- * Channel Entry Structure (8 bytes per entry)
- * ============================================================================
- */
-typedef struct ring_channel_t {
-    int8_t      flags;          /* 0x00: Channel flags (-1 = open) */
-    int8_t      _reserved1;     /* 0x01 */
-    int8_t      _reserved2;     /* 0x02 */
-    int8_t      _reserved3;     /* 0x03 */
-    int16_t     _reserved4;     /* 0x04 */
-    int16_t     socket_id;      /* 0x06: Associated socket ID */
-} ring_channel_t;
-
-/*
- * ============================================================================
- * Per-Unit Data Structure (0x244 bytes)
- *
- * Located at RING_DATA_BASE + (unit * RING_UNIT_SIZE)
- * ============================================================================
- */
-typedef struct ring_unit_t {
-    void                *route_port;        /* 0x000: Pointer to route port */
-    ec_$eventcount_t    rx_wake_ec;         /* 0x004: Receive wake event count */
-    ec_$eventcount_t    tx_ec;              /* 0x010: Transmit event count */
-    void                *hw_regs;           /* 0x01C: Hardware register pointer */
-    void                *device_info;       /* 0x020: Device info (from DCTE) */
-    ec_$eventcount_t    ready_ec;           /* 0x024: Ready event count */
-    uint8_t             _reserved1[0x0D];   /* 0x030 */
-    uint8_t             state_flags;        /* 0x031: State flags */
-    uint16_t            tmask;              /* 0x032: Transmit mask */
-    ml_$exclusion_t     tx_exclusion;       /* 0x034: Transmit exclusion lock */
-    ml_$exclusion_t     rx_exclusion;       /* 0x04C: Receive exclusion lock */
-    uint8_t             _reserved2[0x0A];   /* 0x05E */
-    int8_t              initialized;        /* 0x060: Initialized flag (-1 = yes) */
-    uint8_t             _reserved3[0x4F];   /* 0x061 */
-    ring_channel_t      channels[RING_MAX_CHANNELS]; /* 0x05A-0xA9: Channel array */
-                                            /* Note: actual offset is 0x5A from base */
-    uint8_t             _reserved4[0x54];   /* 0x0B0 */
-    uint8_t             pkt_type_table[0x80]; /* 0x0B4: Packet type table */
-    uint16_t            _reserved5;         /* 0x134 */
-    uint16_t            something;          /* 0x234: Some word value */
-    void                *rx_hdr_buf;        /* 0x238: Receive header buffer */
-    uint32_t            rx_hdr_info;        /* 0x23C: Receive header info */
-    void                *rx_data_buf;       /* 0x240: Receive data buffer */
-} ring_unit_t;
-
-/*
- * ============================================================================
- * Global Ring Data Structure
- *
- * Located at RING_DATA_BASE (0xE86400)
- * ============================================================================
- */
-typedef struct ring_global_t {
-    ring_unit_t     units[RING_MAX_UNITS];  /* 0x000: Per-unit data */
-    uint16_t        _reserved1;             /* 0x488 */
-    uint16_t        max_data_len;           /* 0x51A: Max data length */
-    uint8_t         _reserved2[0x44];       /* 0x51C */
-    uid_t           network_uid;            /* 0x560: Network UID */
-    clock_t         force_start_timeout;    /* 0x568: Force start timeout */
-    uint8_t         _reserved3[0x08];       /* 0x570 */
-    clock_t         xmit_timeout1;          /* 0x578 */
-    clock_t         xmit_timeout2;          /* 0x580 */
-    uint8_t         _reserved4[0x08];       /* 0x588 */
-    clock_t         poll_timeout;           /* 0x590 */
-    clock_t         wait_timeout;           /* 0x598 */
-    int16_t         port_array[RING_MAX_UNITS]; /* 0x5A0: Port numbers */
-    uint8_t         _reserved5[0x0C];       /* 0x5A4 */
-    uint32_t        rcv_int_cnt;            /* 0x5B0: Receive interrupt count */
-    uint32_t        xmit_biphase;           /* 0x5B4: Transmit biphase errors */
-    uint16_t        unexpected_xmit_stat;   /* 0x5B6: Unexpected transmit status */
-    uint32_t        xmit_esb;               /* 0x5B8: Transmit ESB errors */
-    uint16_t        wakeup_cnt;             /* 0x5BA: Wakeup count */
-    uint16_t        abort_cnt;              /* 0x5BC: Abort count */
-    uint16_t        busy_on_rcv_int;        /* 0x5BE: Busy on receive interrupt */
-    uint8_t         _reserved6[0x04];       /* 0x5C0 */
-    uint16_t        xmit_waited;            /* 0x5C4: Transmit waited count */
-} ring_global_t;
-
-/*
- * ============================================================================
  * Global Data Declarations
+ *
+ * Note: ring_global_t, ring_unit_t, and ring_channel_t are defined in ring.h
+ * (public header) since they are part of the public API.
  * ============================================================================
  */
-
-/* Ring global data structure */
-extern ring_global_t RING_$DATA;
 
 /* Per-unit statistics array */
 extern ring_$stats_t RING_$STATS[RING_MAX_UNITS];

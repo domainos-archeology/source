@@ -125,7 +125,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         *(uint16_t *)((char *)result + 0x1E) = NETWORK_$BAD_CHKSUM_CNT;
         /* Copy RING_$DATA (15 words) */
         {
-            uint32_t *src = (uint32_t *)RING_$DATA;
+            uint32_t *src = (uint32_t *)&RING_$DATA;
             uint32_t *dst = result + 8;
             int16_t i;
             for (i = 0; i < 15; i++) {

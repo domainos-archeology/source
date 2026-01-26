@@ -32,8 +32,11 @@
 #include "hint/hint.h"
 #include "xns_idp/xns_idp.h"
 
-/* Forward declaration - NET_IO_$CREATE_PORT is in ring/ring_internal.h but
- * including that header causes conflicts with RING_$DATA. */
+/* NET_IO_$CREATE_PORT - declared in ring/ring_internal.h
+ * Note: Previously couldn't include that header due to RING_$DATA type
+ * conflicts, but that has been resolved by centralizing the declaration
+ * in ring/ring.h. However, we still forward-declare here to avoid
+ * pulling in unnecessary ring subsystem dependencies. */
 int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
                             void *driver, uint16_t queue_length,
                             status_$t *status_ret);
