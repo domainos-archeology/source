@@ -63,7 +63,7 @@ uii_stopwatch:
 uii_restore:
         movea.l (%sp)+,%a0              /* Restore A0 */
 uii_fault:
-        bsr.w   (FIM_COMMON_FAULT).l    /* Call common fault handler */
+        jsr     (FIM_COMMON_FAULT).l    /* Call common fault handler */
         /* FIM_COMMON_FAULT does not return */
 
 /*
@@ -111,7 +111,7 @@ priv_viol_adjust:
         jmp     FIM_$EXIT               /* Return from exception */
 
 priv_viol_fault:
-        bsr.w   (FIM_COMMON_FAULT).l    /* Call common fault handler */
+        jsr     (FIM_COMMON_FAULT).l    /* Call common fault handler */
         /* FIM_COMMON_FAULT does not return */
 
 /*
@@ -139,7 +139,7 @@ priv_viol_len_table:
  */
         .global FIM_$ILLEGAL_USP
 FIM_$ILLEGAL_USP:
-        bsr.w   (FIM_COMMON_FAULT).l    /* Call common fault handler */
+        jsr     (FIM_COMMON_FAULT).l    /* Call common fault handler */
         /* FIM_COMMON_FAULT does not return */
 
         .end

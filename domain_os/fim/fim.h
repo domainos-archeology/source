@@ -140,10 +140,11 @@ extern uint32_t FIM_$QUIT_VALUE[];
 /*
  * FIM_$QUIT_EC - Quit event count array indexed by address space ID
  *
- * Each address space has an event count for quit signaling.
+ * Each address space has an event count for quit signaling (12 bytes each).
  * When a quit is requested, the corresponding EC is advanced.
+ * Access pattern: FIM_$QUIT_EC[as_id] gives the quit EC for that AS.
  */
-extern void *FIM_$QUIT_EC[];
+extern ec_$eventcount_t FIM_$QUIT_EC[];
 
 /*
  * FIM_IN_FIM - Per-AS flag indicating FIM is handling a fault

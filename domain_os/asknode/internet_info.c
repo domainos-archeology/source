@@ -57,11 +57,10 @@ extern uint32_t MMAP_$REAL_PAGES;           /* 0x00E23CA0 */
 /* Boot device */
 extern uint32_t OS_$BOOT_DEVICE;
 
-/* Protocol version at offset 0x1E in packet info block */
-extern uint16_t DAT_00e82426;
-
-/* Empty data constant at 0x00E658CC (zero-filled buffer) */
-extern uint32_t DAT_00e658cc;
+/* Protocol version and empty data are declared in asknode_internal.h:
+ * - ASKNODE_$PROTOCOL_VERSION at 0x00E82426
+ * - ASKNODE_$EMPTY_DATA at 0x00E658CC
+ */
 
 /* Status codes */
 #define status_$network_transmit_failed              0x00110001
@@ -418,7 +417,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
 
             PKT_$SAR_INTERNET(port, *node_id, 4, pkt_info, 6,
                               req_buf, 0x18,
-                              &DAT_00e658cc, 0,  /* No request data */
+                              &ASKNODE_$EMPTY_DATA, 0,  /* No request data */
                               NULL, (char *)result, *resp_len,
                               temp1, (uint16_t *)((char *)result + 10), data_len,
                               &resp_data_len, status);
@@ -448,7 +447,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
         }
 
         /* Validate protocol version */
-        if (*(uint16_t *)result != 3 && *(uint16_t *)result != 2 && DAT_00e82426 != 3) {
+        if (*(uint16_t *)result != 3 && *(uint16_t *)result != 2 && ASKNODE_$PROTOCOL_VERSION != 3) {
             *status = status_$network_bad_asknode_version_number;
             return (uint16_t)*result;
         }

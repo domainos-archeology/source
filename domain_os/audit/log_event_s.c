@@ -28,8 +28,7 @@
 #include "mst/mst.h"
 #include "misc/crash_system.h"
 
-/* External declarations */
-extern int32_t NODE_$ME;
+/* External declarations - NODE_$ME is declared in file/file_internal.h */
 
 void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
                         void *sid, uint32_t *status,
@@ -131,7 +130,7 @@ void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
 
         if (local_status == status_$ok) {
             /* Map new buffer at new offset */
-            AUDIT_$DATA.buffer_base = MST_$MAPS_RET(
+            AUDIT_$DATA.buffer_base = MST_$MAPS(
                 0,              /* asid */
                 (int8_t)-1,     /* flags */
                 &AUDIT_$DATA.log_file_uid,

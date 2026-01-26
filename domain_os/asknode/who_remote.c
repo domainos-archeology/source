@@ -63,7 +63,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
 
     /* Determine protocol version for request */
     uint16_t req_version;
-    if (DAT_00e82426 == 3) {
+    if (ASKNODE_$PROTOCOL_VERSION == 3) {
         req_version = 2;
     } else {
         req_version = 3;
@@ -154,7 +154,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     PKT_$SEND_INTERNET(routing_port, target_node_param, 4, -1, NODE_$ME,
                        ASKNODE_WHO_SOCKET, pkt_info, pkt_id,
                        request, 0x18,
-                       &DAT_00e658cc, 0,  /* No data */
+                       &ASKNODE_$EMPTY_DATA, 0,  /* No data */
                        temp1, temp2, &local_status);
 
     if (local_status != 0) {

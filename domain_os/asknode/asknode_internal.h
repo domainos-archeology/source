@@ -170,6 +170,15 @@ extern int8_t GPU_$PRESENT;
 extern uint32_t PKT_$DEFAULT_INFO[8];
 
 /*
+ * Protocol version at 0x00E82426 - determines WHO request version
+ * When == 3, use protocol version 2; otherwise use version 3
+ */
+extern uint16_t ASKNODE_$PROTOCOL_VERSION;
+
+/* Empty data placeholder at 0x00E658CC - used as "no data" in network sends */
+extern uint8_t ASKNODE_$EMPTY_DATA;
+
+/*
  * sock_spinlock at 0x00E28DB0
  * NOTE: Despite the name, this appears to be used as a socket event count
  * array base in some code paths (indexed as &sock_spinlock + sock_num * 4).

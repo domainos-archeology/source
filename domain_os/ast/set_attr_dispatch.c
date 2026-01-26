@@ -59,7 +59,8 @@
 
 /* Global - attribute timestamp mask at A5+0x48C */
 #if defined(M68K)
-#define AST_$ATTR_TIMESTAMP_MASK (*(uint32_t *)((char *)&__A5 + 0x48C))
+#include "arch/m68k/arch.h"
+#define AST_$ATTR_TIMESTAMP_MASK (*(uint32_t *)((char *)__A5_BASE() + 0x48C))
 #else
 extern uint32_t ast_$attr_timestamp_mask;
 #define AST_$ATTR_TIMESTAMP_MASK ast_$attr_timestamp_mask

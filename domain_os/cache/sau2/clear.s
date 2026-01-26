@@ -34,28 +34,16 @@
 
 CACHE_$CLEAR:
     /*
-     * Read current CACR value into D0.
-     * CACR is control register 0x002.
+     * SAU2 (68010) has no instruction cache - this is a no-op.
+     * On 68020/030, this would read CACR, set bit 3 (CI), and write back.
+     * D0 = 0 to indicate no cache operation performed.
+     *
+     * TODO: For 68020+ SAU types, implement actual cache clear:
+     *   movec %cacr, %d0
+     *   bset  #3, %d0
+     *   movec %d0, %cacr
      */
-    movec   %cacr, %d0
-
-    /*
-     * Set bit 3 (CI - Clear Instruction cache).
-     * This tells the processor to invalidate all instruction cache entries.
-     */
-    bset    #3, %d0
-
-    /*
-     * Write the modified value back to CACR.
-     * The CI bit is write-only and self-clearing; it triggers the
-     * cache clear operation when written as 1.
-     */
-    movec   %d0, %cacr
-
-    /*
-     * Return with D0 containing the value written to CACR.
-     * (The CI bit will read back as 0 since it's self-clearing.)
-     */
+    moveq   #0, %d0
     rts
 
     .size   CACHE_$CLEAR, .-CACHE_$CLEAR

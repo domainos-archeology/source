@@ -25,4 +25,20 @@
 #define ARCH_ALIGN_16      2
 #define ARCH_ALIGN_32      4
 
+/*
+ * M68K Global Register Variables
+ *
+ * The A5 register is used as the global data pointer in Domain/OS.
+ * Many kernel data structures are accessed via fixed offsets from A5.
+ *
+ * __A5_BASE() returns the value of the A5 register as a void pointer.
+ * Use this macro to access A5-relative globals:
+ *   *(uint32_t *)((char *)__A5_BASE() + offset)
+ */
+static inline void *__A5_BASE(void) {
+    void *result;
+    __asm__ ("move.l %%a5, %0" : "=r" (result));
+    return result;
+}
+
 #endif /* ARCH_M68K_ARCH_H */

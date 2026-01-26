@@ -68,9 +68,8 @@ void audit_$open_log(status_$t *status_ret)
         goto error;
     }
 
-    /* Map a buffer for writing
-     * Note: MST_$MAPS_RET is an alias that returns the mapped address */
-    AUDIT_$DATA.buffer_base = MST_$MAPS_RET(
+    /* Map a buffer for writing */
+    AUDIT_$DATA.buffer_base = MST_$MAPS(
         0,                          /* asid (0 = current) */
         (int8_t)-1,                 /* flags */
         &AUDIT_$DATA.log_file_uid,

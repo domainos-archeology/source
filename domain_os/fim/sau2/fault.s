@@ -54,7 +54,7 @@
         .global FIM_$PROC2_STARTUP
 FIM_$PROC2_STARTUP:
         movea.l (0x4,%sp),%a5           /* A5 = startup context */
-        bsr.w   (FIM_SETUP_RETURN).l    /* Set up return frame */
+        jsr     (FIM_SETUP_RETURN).l    /* Set up return frame */
         clr.w   (%a0)                   /* Clear format word */
         move.l  (0x4,%a5),-(%a0)        /* Push PC */
         clr.w   -(%a0)                  /* Push SR = 0 (user mode) */
@@ -85,7 +85,7 @@ FIM_$SINGLE_STEP:
         lsl.w   #2,%d0                  /* D0 = AS * 4 */
         lea     (FIM_TRACE_STS).l,%a0   /* A0 = trace status table */
         move.l  #0x00120015,(0,%a0,%d0:w) /* Set trace fault status */
-        bsr.w   (FIM_SETUP_RETURN).l    /* Set up return frame */
+        jsr     (FIM_SETUP_RETURN).l    /* Set up return frame */
         movea.l (0x4,%sp),%a1           /* A1 = PC ptr */
         move.l  (%a1),-(%a0)            /* Push PC */
         movea.l (0x8,%sp),%a1           /* A1 = SR ptr */

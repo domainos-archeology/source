@@ -50,7 +50,7 @@ int8_t audit_$load_list(status_$t *status_ret)
     }
 
     /* Map the file for reading */
-    header = (audit_list_header_t *)MST_$MAPS_RET(
+    header = (audit_list_header_t *)MST_$MAPS(
         PROC1_$AS_ID,           /* asid */
         (int8_t)-1,             /* flags */
         &list_uid,

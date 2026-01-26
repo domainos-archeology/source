@@ -141,7 +141,7 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
     } else {
         if (op == 0) {
             /* Allocate buffer for read without direct access */
-            wired_addr = WP_$CALLOC(&wired_addr, status);
+            WP_$CALLOC(&wired_addr, status);
         } else {
             /* Write without direct access not allowed */
             *status = status_$volume_in_use;
@@ -166,8 +166,7 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
     }
 
     /* Perform I/O */
-    io_status = DISK_IO(io_op, vol_idx, (void *)(uintptr_t)wired_addr,
-                        (void *)(uintptr_t)daddr, local_info);
+    io_status = DISK_IO(io_op, vol_idx, wired_addr, daddr, local_info);
     *status = io_status;
 
     /* Copy info back for reads */

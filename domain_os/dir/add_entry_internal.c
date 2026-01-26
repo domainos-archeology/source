@@ -19,6 +19,10 @@
 
 #include "dir/dir_internal.h"
 
+#if defined(M68K)
+#include "arch/m68k/arch.h"
+#endif
+
 /* Status codes */
 #define status_$naming_invalid_leaf        0x000E000B
 #define file_$bad_reply_received           0x000F0003
@@ -66,7 +70,7 @@ void DIR_$ADD_ENTRY_INTERNAL(uid_t *dir_uid, char *name, int16_t name_len,
      * This appears to be a node type indicator
      */
 #if defined(M68K)
-    request.type_field = *(uint16_t *)((char *)&__A5 + 0x2042);
+    request.type_field = *(uint16_t *)((char *)__A5_BASE() + 0x2042);
 #else
     extern uint16_t DAT_a5_2042;
     request.type_field = DAT_a5_2042;
@@ -79,7 +83,7 @@ void DIR_$ADD_ENTRY_INTERNAL(uid_t *dir_uid, char *name, int16_t name_len,
 
     /* Calculate request length */
 #if defined(M68K)
-    req_len = name_len + *(int16_t *)((char *)&__A5 + 0x2046);
+    req_len = name_len + *(int16_t *)((char *)__A5_BASE() + 0x2046);
 #else
     extern int16_t DAT_a5_2046;
     req_len = name_len + DAT_a5_2046;

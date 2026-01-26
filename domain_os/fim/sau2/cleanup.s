@@ -164,7 +164,7 @@ no_handler:
 FIM_$GENERATE:
         addq.w  #4,%sp                  /* Pop return address */
         move.l  (%sp)+,%d0              /* D0 = status code */
-        bra.b   generate_common         /* Branch to common code */
+        bra.w   generate_common         /* Branch to common code */
 
 /*
  * Common fault generation code

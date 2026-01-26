@@ -1,18 +1,21 @@
 /*
- * DISK_$GET_QBLKS - Get queue blocks for I/O
+ * DISK_$GET_QBLKS - Get queue blocks for disk I/O
  *
- * Allocates queue blocks for disk I/O operations.
- * This is a wrapper that calls an internal allocation function.
+ * Allocates queue blocks for disk I/O operations. This is a
+ * wrapper that calls FUN_00e3be8a with a 0 second argument.
  *
- * @param vol_idx  Volume index
- * @param count    Number of blocks to allocate
- * @param status   Output: Status code
- * @return Pointer to allocated blocks
+ * @param count      Number of queue blocks to allocate
+ * @param qblk_head  Output: pointer to head of queue block list
+ * @param qblk_tail  Output: pointer to tail of queue block list
+ *
+ * Original address: 0x00E3BFF4
  */
 
 #include "disk/disk_internal.h"
 
-void *DISK_$GET_QBLKS(int16_t vol_idx, int16_t count, status_$t *status)
+void DISK_$GET_QBLKS(int16_t count, int32_t *qblk_head, uint32_t *qblk_tail)
 {
-    return FUN_00e3be8a(vol_idx, 0, (void *)(uintptr_t)count, status);
+    /* FUN_00e3be8a signature in disk_internal.h uses void* for parameters.
+     * Cast to match the declared signature. */
+    FUN_00e3be8a(count, 0, (void *)qblk_head, (status_$t *)qblk_tail);
 }

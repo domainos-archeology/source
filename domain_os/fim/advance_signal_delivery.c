@@ -10,7 +10,7 @@
  * Original address: 0x00e0a96c
  */
 
-#include "fim/fim.h"
+#include "fim/fim_internal.h"
 #include "mmu/mmu.h"
 
 /*

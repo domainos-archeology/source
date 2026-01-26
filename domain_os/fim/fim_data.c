@@ -98,7 +98,11 @@ uint32_t FIM_$QUIT_VALUE[64];
  * Event count that is advanced when a quit is requested.
  * User-mode code waits on this to detect quit requests.
  */
-ec_$eventcount_t *FIM_$QUIT_EC[64];
+/* NOTE: Each ec_$eventcount_t is 12 bytes. This array is accessed with
+ * indices like as_id * 3 (to account for 12-byte stride in 4-byte units).
+ * The actual layout is 64 * 12 = 768 bytes.
+ */
+ec_$eventcount_t FIM_$QUIT_EC[64];
 
 /*
  * FIM_$QUIT_INH - Per-AS quit inhibit flag

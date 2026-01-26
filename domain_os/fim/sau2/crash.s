@@ -99,7 +99,7 @@ crash_no_extra:
 
         /* Display crash message */
         lea     (crash_msg,%pc),%a0     /* A0 = message string */
-        bsr.w   (CRASH_PUTS).l          /* Output to console */
+        jsr     (CRASH_PUTS).l          /* Output to console */
 
         /* Set up for CRASH_SYSTEM call */
         movea.l (0xA,%sp),%a0           /* A0 = register save area */

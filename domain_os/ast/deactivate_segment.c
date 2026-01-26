@@ -18,11 +18,12 @@
 
 #include "ast/ast_internal.h"
 
-/* External references */
-extern int16_t PROC1_$CURRENT;
-extern int16_t *PROC1_$TYPE;
+/* External references - declared in subsystem headers:
+ * PROC1_$CURRENT - proc1/proc1.h
+ * PROC1_$TYPE - proc1/proc1.h
+ * AST_$AST_IN_TRANS_EC - ast/ast.h (macro)
+ */
 extern int8_t NETLOG_$OK_TO_LOG;
-extern ec_$eventcount_t AST_$AST_IN_TRANS_EC;
 
 /* Status codes */
 #define status_$ast_segment_not_deactivatable 0x00030004
@@ -89,7 +90,7 @@ void AST_$DEACTIVATE_SEGMENT(aste_t *aste, uint32_t flags, status_$t *status)
     }
 
     /* Flush segment pages */
-    PMAP_$FLUSH(aste, (void *)(0xED4F80 + segmap_offset), 0, 0x20, flush_mode);
+    PMAP_$FLUSH(aste, (uint32_t *)(0xED4F80 + segmap_offset), 0, 0x20, flush_mode, status);
 
     if (*status != status_$ok) {
         goto error_exit;
