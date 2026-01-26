@@ -58,7 +58,7 @@ static const char cant_map_at_msg[] = "can't map at indicated address.";
  */
 int8_t FLOP_$BOOT(uint32_t *entry_point, status_$t *status_ret)
 {
-    uid_$t boot_shell_uid;
+    uid_t boot_shell_uid;
     uint8_t map_info[4];        /* Mapping info from MST_$MAP */
     uint8_t lock_info[8];       /* Lock info from FILE_$LOCK */
     uint32_t header[6];         /* Executable header (24 bytes) */

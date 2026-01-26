@@ -72,12 +72,9 @@ void flop_$boot_errchk(const char *msg)
      * A proper implementation would need inline assembly.
      */
 
-    /* Placeholder - in real implementation this would traverse stack frames */
-    extern void OS_$BOOT_ERRCHK(const char *msg, const char *fallback,
-                                const int16_t *fallback_len, status_$t *status);
-
-    /* This is a simplified version that doesn't do the stack frame traversal.
-     * The actual assembly implementation should be used. */
+    /* Placeholder - in real implementation this would traverse stack frames.
+     * The actual assembly implementation should be used.
+     * OS_$BOOT_ERRCHK is declared in os/os.h (included via flop_internal.h) */
 }
 
 /*
@@ -110,9 +107,9 @@ void flop_$boot_errchk(const char *msg)
  */
 void flop_$mount_floppy(status_$t *status_ret)
 {
-    uid_$t mount_uid;           /* UID of mounted volume */
-    uid_$t node_uid;            /* UID of current node */
-    uid_$t existing_uid;        /* UID from existing /flp if present */
+    uid_t mount_uid;           /* UID of mounted volume */
+    uid_t node_uid;            /* UID of current node */
+    uid_t existing_uid;        /* UID from existing /flp if present */
     status_$t mount_status;     /* Status from mount operation */
     status_$t local_status;     /* Local status for cleanup operations */
     int8_t added_dir = 0;       /* Flag: did we add the directory? */

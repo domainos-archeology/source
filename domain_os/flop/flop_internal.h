@@ -16,6 +16,7 @@
 #include "dir/dir.h"
 #include "volx/volx.h"
 #include "os/os.h"
+#include "disk/disk.h"
 
 /*
  * ============================================================================
