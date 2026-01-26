@@ -10,8 +10,7 @@
 
 #include "rem_file/rem_file_internal.h"
 
-/* External reference to current process */
-extern int16_t PROC1_$CURRENT;
+/* proc_priv_table is indexed by PROC1_$CURRENT to check process privileges */
 extern int16_t proc_priv_table[];  /* At 0xe7dacc */
 
 /*
@@ -55,11 +54,11 @@ typedef struct {
     uid_t session_uid;          /* Session UID */
 } rem_file_create_presr10_resp_t;
 
-void REM_FILE_$CREATE_TYPE_PRESR10(rem_file_create_type_ctx_t *ctx,
-                                    uint16_t flags, int16_t type_index,
-                                    uid_t *session_uid_out,
+void REM_FILE_$CREATE_TYPE_PRESR10(void *ctx_ptr, uint16_t flags,
+                                    int16_t type_index, uid_t *session_uid_out,
                                     status_$t *status)
 {
+    rem_file_create_type_ctx_t *ctx = (rem_file_create_type_ctx_t *)ctx_ptr;
     rem_file_create_presr10_p1_req_t req1;
     rem_file_create_presr10_p2_req_t req2;
     uint8_t response[REM_FILE_RESPONSE_BUF_SIZE];

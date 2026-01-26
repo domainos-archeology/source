@@ -639,6 +639,51 @@ void ACL_$COPY(uid_t *source_acl_uid, uid_t *dest_uid, uid_t *source_type,
                uid_t *dest_type, status_$t *status_ret);
 
 /*
+ * ACL_$CONVERT_TO_10ACL - Convert ACL to 10-entry format
+ *
+ * Converts an ACL from older format to 10-entry format.
+ *
+ * Parameters:
+ *   source_acl   - Source ACL UID
+ *   file_uid     - File UID for conversion context
+ *   result_uid   - Output: converted ACL UID
+ *   acl_data     - Output: ACL data buffer (44 bytes)
+ *   status_ret   - Output status code
+ *
+ * Returns:
+ *   Non-zero if conversion was performed
+ */
+int8_t ACL_$CONVERT_TO_10ACL(void *source_acl, void *file_uid, uid_t *result_uid,
+                              void *acl_data, status_$t *status_ret);
+
+/*
+ * ACL_$GET_ACL_ATTRIBUTES - Get ACL attributes for a file
+ *
+ * Retrieves ACL attributes (format info, flags) for the specified file.
+ *
+ * Parameters:
+ *   file_uid   - UID of file to query
+ *   flags      - Query flags
+ *   attrs_out  - Output: attribute buffer (12 bytes)
+ *   status_ret - Output status code
+ */
+void ACL_$GET_ACL_ATTRIBUTES(void *file_uid, int16_t flags, void *attrs_out,
+                              status_$t *status_ret);
+
+/*
+ * ACL_$OVERRIDE_LOCAL_LOCKSMITH - Override local locksmith mode
+ *
+ * Temporarily enables or disables locksmith privilege override for the
+ * current process. Used by remote file server to perform privileged
+ * operations on behalf of remote clients.
+ *
+ * Parameters:
+ *   enable     - Non-zero to enable override, 0 to disable
+ *   status_ret - Output status code
+ */
+void ACL_$OVERRIDE_LOCAL_LOCKSMITH(int16_t enable, status_$t *status_ret);
+
+/*
  * ============================================================================
  * Subsystem and Locksmith
  * ============================================================================

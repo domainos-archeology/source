@@ -67,14 +67,14 @@ typedef struct {
     uint32_t data[36];
 } rem_file_create_type_data_out_t;
 
-void REM_FILE_$CREATE_TYPE(rem_file_create_type_ctx_t *ctx,
-                            uint16_t flags, uid_t *type_uid,
+void REM_FILE_$CREATE_TYPE(void *ctx_ptr, uint16_t flags, uid_t *type_uid,
                             uint32_t extra_data, uint16_t flags2,
-                            void *type_header,
-                            rem_file_create_type_data_out_t *data_out,
-                            rem_file_create_type_header_out_t *header_out,
-                            status_$t *status)
+                            void *type_header, void *data_out_ptr,
+                            void *header_out_ptr, status_$t *status)
 {
+    rem_file_create_type_ctx_t *ctx = (rem_file_create_type_ctx_t *)ctx_ptr;
+    rem_file_create_type_data_out_t *data_out = (rem_file_create_type_data_out_t *)data_out_ptr;
+    rem_file_create_type_header_out_t *header_out = (rem_file_create_type_header_out_t *)header_out_ptr;
     rem_file_create_type_p1_req_t req1;
     rem_file_create_type_p2_req_t req2;
     uint8_t response[REM_FILE_RESPONSE_BUF_SIZE];

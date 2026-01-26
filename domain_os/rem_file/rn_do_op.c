@@ -9,14 +9,7 @@
  */
 
 #include "rem_file/rem_file_internal.h"
-
-/* Forward declarations for ACL functions */
-extern void ACL_$GET_RE_ALL_SIDS(void *re_sids, void *sids1, void *out1, void *sids2, status_$t *status);
-extern void ACL_$GET_PROJ_LIST(void *proj_list, void *default_proj, void *proj_out, status_$t *status);
-extern int8_t ACL_$IN_SUBSYS(void);
-
-/* Forward declaration for data copy */
-extern void OS_$DATA_COPY(void *src, void *dst, uint32_t len);
+#include "os/os.h"
 
 /* Default project UID (static data at 0xe61718) */
 static const uid_t default_proj_uid = {0};
@@ -53,10 +46,12 @@ typedef struct {
     status_$t status;           /* Status at offset 4 */
 } rem_file_rn_op_resp_t;
 
-void REM_FILE_$RN_DO_OP(void *addr_info, rem_file_rn_op_buf_t *op_buf,
+void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buffer,
                          int16_t base_len, uint16_t response_size,
-                         rem_file_rn_op_resp_t *response, void *extra_out)
+                         void *response_buf, void *extra_out)
 {
+    rem_file_rn_op_buf_t *op_buf = (rem_file_rn_op_buf_t *)op_buffer;
+    rem_file_rn_op_resp_t *response = (rem_file_rn_op_resp_t *)response_buf;
     uint8_t re_sids[40];
     uint8_t sids_out[16];
     uint16_t bulk_in_len;

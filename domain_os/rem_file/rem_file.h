@@ -61,22 +61,23 @@ void REM_FILE_$INVALIDATE(uid_t *vol_uid, uid_t *uid, uint32_t start,
 /*
  * REM_FILE_$FILE_SET_ATTRIB - Set attribute on remote file
  *
- * @param location_info  Location info from AST_$GET_LOCATION
+ * @param addr_info      Address info for remote node
  * @param file_uid       UID of file to modify
- * @param value          Pointer to attribute value
- * @param attr_id        Attribute ID
- * @param exsid          Extended SID from ACL_$GET_EXSID
- * @param required_rights Required access rights
- * @param option_flags   Option flags
- * @param clock_out      Output clock value
+ * @param attrib_data1   Attribute data block 1
+ * @param flags          Flags
+ * @param attrib_data2   Attribute data block 2
+ * @param extra_flags    Extra flags
+ * @param flags2         Additional flags
+ * @param mtime_out      Output modification time
  * @param status         Output status code
  *
  * Original address: 0x00E62C22
  */
-void REM_FILE_$FILE_SET_ATTRIB(void *location_info, uid_t *file_uid,
-                               void *value, int16_t attr_id, void *exsid,
-                               uint16_t required_rights, int16_t option_flags,
-                               void *clock_out, status_$t *status);
+void REM_FILE_$FILE_SET_ATTRIB(void *addr_info, uid_t *file_uid,
+                               void *attrib_data1, uint16_t flags,
+                               void *attrib_data2, uint16_t extra_flags,
+                               uint16_t flags2, clock_t *mtime_out,
+                               status_$t *status);
 
 /*
  * REM_FILE_$CREATE_TYPE - Create a file on a remote node
@@ -84,23 +85,22 @@ void REM_FILE_$FILE_SET_ATTRIB(void *location_info, uid_t *file_uid,
  * Creates a new file on a remote node with the specified type and attributes.
  *
  * Parameters:
- *   parent_loc   - Location info for parent directory
- *   file_type    - Type of file to create (0-5)
- *   type_uid     - Type UID for typed objects
- *   size         - Initial file size
+ *   ctx          - Create type context (contains parent info and address)
  *   flags        - Creation flags
- *   owner_uid    - Owner UID for the new file
- *   parent_attrs - Parent directory attributes
- *   location_out - Output buffer for new file location (includes file UID)
+ *   type_uid     - Type UID for typed objects
+ *   extra_data   - Extra data for creation
+ *   flags2       - Additional flags
+ *   type_header  - Type header data
+ *   data_out     - Output: created file data
+ *   header_out   - Output: created file header
  *   status       - Output status code
  *
  * Original address: 0x00E6171A
  */
-void REM_FILE_$CREATE_TYPE(uid_t *parent_loc, int16_t file_type,
-                            uid_t *type_uid, uint32_t size,
-                            uint16_t flags, uid_t *owner_uid,
-                            void *parent_attrs, void *location_out,
-                            status_$t *status);
+void REM_FILE_$CREATE_TYPE(void *ctx, uint16_t flags, uid_t *type_uid,
+                            uint32_t extra_data, uint16_t flags2,
+                            void *type_header, void *data_out,
+                            void *header_out, status_$t *status);
 
 /*
  * REM_FILE_$CREATE_TYPE_PRESR10 - Create a file on a pre-SR10 remote node
@@ -109,16 +109,16 @@ void REM_FILE_$CREATE_TYPE(uid_t *parent_loc, int16_t file_type,
  * the full CREATE_TYPE protocol.
  *
  * Parameters:
- *   parent_loc - Location info for parent directory
- *   file_type  - Type of file to create
- *   is_dir     - Non-zero if creating a directory-like object
- *   file_uid   - Output: receives the new file's UID
- *   status     - Output status code
+ *   ctx              - Create type context (contains parent info and address)
+ *   flags            - Creation flags
+ *   type_index       - Type index (type - 1)
+ *   session_uid_out  - Output: session UID from remote node
+ *   status           - Output status code
  *
  * Original address: 0x00E61868
  */
-void REM_FILE_$CREATE_TYPE_PRESR10(uid_t *parent_loc, int16_t file_type,
-                                    int16_t is_dir, uid_t *file_uid,
+void REM_FILE_$CREATE_TYPE_PRESR10(void *ctx, uint16_t flags,
+                                    int16_t type_index, uid_t *session_uid_out,
                                     status_$t *status);
 
 /*
@@ -294,14 +294,14 @@ void REM_FILE_$GROW_AREA(void *addr_info, uint16_t area_handle,
  * REM_FILE_$LOCAL_READ_LOCK - Read lock info from remote server
  *
  * @param addr_info      Address info for remote node
- * @param lock_data      Lock data to query
- * @param result_out     Output result byte
+ * @param file_uid       File UID to query lock for
+ * @param lock_entry_out Output lock entry data
  * @param status         Output status code
  *
  * Original address: 0x00E61E9A
  */
-void REM_FILE_$LOCAL_READ_LOCK(void *addr_info, void *file_uid,
-                                void *lock_info_out, status_$t *status);
+void REM_FILE_$LOCAL_READ_LOCK(void *addr_info, uid_t *file_uid,
+                                void *lock_entry_out, status_$t *status);
 
 /*
  * REM_FILE_$NAME_ADD_HARD_LINKU - Add hard link on remote server

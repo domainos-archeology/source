@@ -30,11 +30,17 @@
 #include "file/file_internal.h"
 #include "name/name.h"
 #include "dir/dir.h"
+#include "dir/dir_internal.h"
 #include "area/area.h"
 #include "ml/ml.h"
 #include "app/app.h"
 #include "netbuf/netbuf.h"
 #include "pkt/pkt.h"
+#include "audit/audit.h"
+#include "misc/crash_system.h"
+#include "os/os.h"
+#include "rgyc/rgyc.h"
+#include "slink/slink.h"
 
 /*
  * Server opcodes (received in local_439)
@@ -74,7 +80,7 @@
 /*
  * External data references
  */
-extern ml_exclusion_t REM_FILE_$SOCK_LOCK;      /* Socket access lock */
+extern ml_$exclusion_t REM_FILE_$SOCK_LOCK;     /* Socket access lock */
 extern int8_t NETLOG_$OK_TO_LOG_SERVER;         /* Server logging flag */
 extern uint32_t NETWORK_$FILE_BACKLOG[];        /* Request backlog counters */
 extern int8_t NETWORK_$DISKLESS;                /* Diskless node flag */
@@ -93,47 +99,12 @@ extern uint8_t DAT_00e61718[];                  /* Project list constant */
 extern uint8_t DAT_00e62d48[];                  /* Case mapping table */
 
 /*
- * External function declarations
+ * External function declarations - only those not in headers
  */
-extern void APP_$RECEIVE(int16_t protocol, void *packet_info, status_$t *status);
-extern void NETBUF_$RTN_HDR(void *buffer);
-extern void NETBUF_$GETVA(int32_t packet, void *va_out, status_$t *status);
-extern void PKT_$DUMP_DATA(void *packet_info, uint16_t len);
-extern void PKT_$DAT_COPY(void *packet_info, int16_t len, void *dest);
-extern void OS_$DATA_COPY(void *src, void *dest, uint32_t len);
 extern void UNMAP_CASE(void *name_in, void *name_len_out, void *name_out,
                        void *table, void *result_len, void *status_bytes);
 extern void MAP_CASE(void *name_in, void *name_len, void *name_out,
                      void *table, void *result_len, void *status_bytes);
-extern void CRASH_SHOW_STRING(const char *msg);
-extern void CRASH_SYSTEM(status_$t *status);
-extern void AREA_$FREE_FROM(int16_t node);
-extern int16_t AREA_$CREATE_FROM(int16_t node, uint16_t param2, uint16_t param3,
-                                  int16_t param4, void *param5);
-extern void AREA_$DELETE_FROM(uint16_t param1, uint32_t node, uint32_t param3, status_$t *status);
-extern void AREA_$GROW_TO(uint16_t param1, uint32_t param2, uint32_t param3, status_$t *status);
-extern void DIR_$DROP_MOUNT(uid_t *dir_uid, uid_t *uid2, void *node, status_$t *status);
-extern void DIR_$OLD_SET_DEFAULT_ACL(void *file_uid, void *acl1, void *acl2, void *status);
-extern void DIR_$OLD_ADD_HARD_LINKU(uid_t *dir_uid, uid_t *entry_uid, void *name,
-                                     void *entry_info, status_$t *status);
-extern void DIR_$OLD_DROP_HARD_LINKU(void *dir_uid, void *name, void *name_len,
-                                      void *entry_info, void *status);
-extern int8_t DIR_$GET_ENTRYU(void *dir_uid, void *name, void *name_len,
-                               void *entry_type, status_$t *status);
-extern void ACL_$GET_RE_ALL_SIDS(void *buf1, void *buf2, void *buf3, void *buf4, status_$t *status);
-extern void ACL_$SET_RE_ALL_SIDS(void *buf1, void *buf2, void *buf3, void *buf4, status_$t *status);
-extern void ACL_$GET_PROJ_LIST(void *proj_list, void *table, void *count, status_$t *status);
-extern void ACL_$SET_PROJ_LIST(void *proj_list, void *count, status_$t *status);
-extern void ACL_$ENTER_SUPER(void);
-extern void ACL_$EXIT_SUPER(void);
-extern void ACL_$OVERRIDE_LOCAL_LOCKSMITH(int16_t enable, status_$t *status);
-extern int8_t ACL_$CONVERT_TO_10ACL(void *acl_uid, void *file_uid, void *result_uid,
-                                     void *acl_data, status_$t *status);
-extern void ACL_$GET_ACL_ATTRIBUTES(void *uid, int16_t flags, void *attrs, status_$t *status);
-extern void AUDIT_$SUSPEND(void);
-extern void AUDIT_$RESUME(void);
-extern uid_t RGYC_$G_LOCKSMITH_UID;
-extern uid_t SLINK_$UID;
 
 /*
  * ============================================================================

@@ -11,11 +11,6 @@
 #include "rem_file/rem_file_internal.h"
 
 /*
- * External function declaration
- */
-extern uint16_t NETWORK_$GET_PKT_SIZE(void *addr_info, uint16_t default_size);
-
-/*
  * Create area request structure
  */
 typedef struct {

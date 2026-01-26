@@ -62,8 +62,9 @@ typedef struct {
 
 /*
  * Response buffer size
+ * Must be at least 0xE4 (228) bytes to accommodate the largest response structures
  */
-#define REM_FILE_RESPONSE_BUF_SIZE  0xBE
+#define REM_FILE_RESPONSE_BUF_SIZE  0xE4
 
 /*
  * External data references

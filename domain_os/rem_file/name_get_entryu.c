@@ -10,12 +10,7 @@
 
 #include "rem_file/rem_file_internal.h"
 
-/* Forward declarations for ACL functions */
-extern void ACL_$GET_RE_SIDS(void *re_sids, void *sids_out, status_$t *status);
-extern void ACL_$GET_PROJ_LIST(void *proj_list, void *default_proj, void *proj_out, status_$t *status);
-
-/* External reference to current process */
-extern int16_t PROC1_$CURRENT;
+/* proc_priv_table is indexed by PROC1_$CURRENT to check process privileges */
 extern int16_t proc_priv_table[];  /* At 0xe7dacc */
 
 /*
@@ -59,9 +54,9 @@ typedef struct {
 
 void REM_FILE_$NAME_GET_ENTRYU(void *addr_info, uid_t *dir_uid,
                                 char *name, uint16_t name_len,
-                                rem_file_entry_result_t *result_out,
-                                status_$t *status)
+                                void *result_ptr, status_$t *status)
 {
+    rem_file_entry_result_t *result_out = (rem_file_entry_result_t *)result_ptr;
     rem_file_name_get_entry_req_t request;
     uint8_t response[REM_FILE_RESPONSE_BUF_SIZE];
     uint16_t received_len;

@@ -268,13 +268,14 @@ void AREA_$DELETE(area_$handle_t handle, status_$t *status_ret);
 /*
  * AREA_$DELETE_FROM - Delete area with specific caller context
  *
- * @param handle        Area handle
- * @param param_2       Unknown parameter
+ * @param handle        Area handle (low byte)
+ * @param node_id       Node ID of the requesting node
+ * @param extra_param   Extra parameter (e.g., frame.uid2.low)
  * @param status_ret    Output: status code
  *
  * Original address: 0x00E07D06
  */
-void AREA_$DELETE_FROM(area_$handle_t handle, uint32_t param_2,
+void AREA_$DELETE_FROM(uint16_t handle, uint32_t node_id, uint32_t extra_param,
                        status_$t *status_ret);
 
 /*
@@ -347,16 +348,15 @@ void AREA_$GROW(int16_t gen, uint16_t area_id, uint32_t virt_size,
 /*
  * AREA_$GROW_TO - Grow area to specified size
  *
- * @param gen           Area generation
- * @param area_id       Area ID
- * @param virt_size     Target virtual size
- * @param commit_size   Target committed size
+ * @param gen           Area generation (low byte)
+ * @param size_param    Size parameter (e.g., frame.uid2.high)
+ * @param combined_id   Combined area_id and flags
  * @param status_ret    Output: status code
  *
  * Original address: 0x00E08CEA
  */
-void AREA_$GROW_TO(int16_t gen, uint16_t area_id, uint32_t virt_size,
-                   uint32_t commit_size, status_$t *status_ret);
+void AREA_$GROW_TO(uint16_t gen, uint32_t size_param, uint32_t combined_id,
+                   status_$t *status_ret);
 
 /*
  * AREA_$INVALIDATE - Invalidate area pages
