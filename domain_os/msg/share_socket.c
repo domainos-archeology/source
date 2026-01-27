@@ -19,7 +19,7 @@
  *   add_remove - Non-zero to add, zero to remove
  *   status_ret - Status return
  */
-void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_$t *uid, int16_t *add_remove,
+void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
                         status_$t *status_ret)
 {
 #if defined(M68K)
@@ -58,7 +58,7 @@ void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_$t *uid, int16_t *add_remove,
     }
 
     /* Get ASID for target UID */
-    target_asid = PROC2_$GET_ASID(uid, status_ret);
+    target_asid = (uint8_t)PROC2_$FIND_ASID(uid, NULL, status_ret);
     if (*status_ret != status_$ok) {
         ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
         return;

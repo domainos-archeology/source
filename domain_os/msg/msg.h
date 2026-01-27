@@ -66,37 +66,64 @@ typedef struct msg_$time_s {
 /* Initialize MSG subsystem */
 void MSG_$INIT(void);
 
-/* Open a message socket */
-void MSG_$OPEN(msg_$socket_t *socket, status_$t *status);
+/* Network service callback */
+extern void MSG_$NET_SERVICE(void);
 
-/* Open a message socket (internal, returns status) */
-status_$t MSG_$OPENI(msg_$socket_t *socket);
+/* Open a message socket */
+void MSG_$OPEN(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
+
+/* Open a message socket (internal) */
+void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
 
 /* Close a message socket */
-void MSG_$CLOSE(msg_$socket_t *socket, status_$t *status);
+void MSG_$CLOSE(msg_$socket_t *socket, status_$t *status_ret);
 
-/* Close a message socket (internal, returns status) */
-status_$t MSG_$CLOSEI(msg_$socket_t *socket);
+/* Close a message socket (internal) */
+void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret);
 
-/* Allocate a specific socket number */
-void MSG_$ALLOCATE(msg_$socket_t *socket, status_$t *status);
+/* Allocate a specific socket number (returns true on success) */
+int8_t MSG_$ALLOCATE(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
 
-/* Allocate a specific socket number (internal, returns status) */
-status_$t MSG_$ALLOCATEI(msg_$socket_t *socket);
+/* Allocate a specific socket number (internal) */
+void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
 
-/* Wait for message on socket */
-void MSG_$WAIT(msg_$socket_t *socket, msg_$time_t *timeout, status_$t *status);
+/* Wait for message on socket (returns true on success) */
+int8_t MSG_$WAIT(msg_$socket_t *socket, msg_$time_t *timeout, status_$t *status_ret);
 
-/* Wait for message on socket (internal, returns status) */
-status_$t MSG_$WAITI(msg_$socket_t *socket, msg_$time_t *timeout);
+/* Wait for message on socket (internal) */
+void MSG_$WAITI(msg_$socket_t *socket, msg_$time_t *timeout, status_$t *status_ret);
 
 /* Receive a message */
-void MSG_$RCV(msg_$socket_t *socket, void *buffer, uint32_t *length,
-              msg_$desc_t *desc, status_$t *status);
+void MSG_$RCV(msg_$socket_t *socket,
+              void *dest_net,
+              void *dest_node,
+              void *dest_sock,
+              int16_t *bytes_received,
+              void *src_net,
+              void *data_buf,
+              uint32_t *data_len,
+              void *type_buf,
+              void *type_len,
+              void *options,
+              status_$t *status_ret);
 
-/* Receive a message (internal, returns status) */
-status_$t MSG_$RCVI(msg_$socket_t *socket, void *buffer, uint32_t *length,
-                    msg_$desc_t *desc);
+/* Receive a message (internal) */
+void MSG_$RCVI(msg_$socket_t *socket,
+               void *dest_net,
+               void *dest_node,
+               void *dest_sock,
+               void *src_net,
+               void *data_buf,
+               uint32_t *data_len,
+               void *type_buf,
+               void *type_len,
+               void *options,
+               int16_t *bytes_received,
+               void *timeout_sec,
+               void *timeout_usec,
+               int16_t *msg_len,
+               void *reserved,
+               status_$t *status_ret);
 
 /*
  * Hardware address info structure for MSG_$RCV_CONTIGI and MSG_$RCV_HW
@@ -157,13 +184,51 @@ void MSG_$RCV_HW(msg_$socket_t *socket,
                  uint16_t *max_overflow,
                  status_$t *status);
 
-/* Send a message */
-void MSG_$SEND(msg_$socket_t *socket, void *buffer, uint32_t length,
-               msg_$desc_t *desc, status_$t *status);
+/* Send a message (internal implementation) */
+status_$t MSG_$$SEND(int16_t port_num,
+                      uint32_t dest_proc,
+                      uint32_t dest_node,
+                      int16_t dest_sock,
+                      uint32_t src_proc,
+                      uint32_t src_node,
+                      int16_t src_sock,
+                      void *msg_desc,
+                      int16_t type_val,
+                      void *data_buf,
+                      uint16_t header_len,
+                      void *data_ptr,
+                      uint16_t data_len,
+                      void *result,
+                      status_$t *status_ret);
 
-/* Send a message (internal, returns status) */
-status_$t MSG_$SENDI(msg_$socket_t *socket, void *buffer, uint32_t length,
-                     msg_$desc_t *desc);
+/* Send a message */
+void MSG_$SEND(void *dest_proc,
+               int16_t *dest_node,
+               int16_t *dest_sock,
+               int16_t *src_sock,
+               int16_t *type_val,
+               void *data_buf,
+               int16_t *header_len,
+               void *data_ptr,
+               int16_t *data_len,
+               int16_t *bytes_sent,
+               status_$t *status_ret);
+
+/* Send a message (internal wrapper) */
+void MSG_$SENDI(void *dest_proc,
+                void *dest_node,
+                int16_t *dest_sock,
+                void *src_proc,
+                void *src_node,
+                int16_t *src_sock,
+                void *data_buf,
+                int16_t *type_val,
+                void *type_data,
+                int16_t *header_len,
+                void *data_ptr,
+                int16_t *data_len,
+                int16_t *bytes_sent,
+                status_$t *status_ret);
 
 /* Send message using hardware address routing */
 void MSG_$SEND_HW(void *hw_addr_info,
@@ -183,30 +248,60 @@ void MSG_$SEND_HW(void *hw_addr_info,
                   status_$t *status);
 
 /* Send and receive (combined operation) */
-void MSG_$SAR(msg_$socket_t *socket, void *send_buf, uint32_t send_len,
-              void *recv_buf, uint32_t *recv_len, msg_$desc_t *desc,
-              msg_$time_t *timeout, status_$t *status);
+void MSG_$SAR(msg_$socket_t *socket,
+              void *send_buf,
+              uint32_t *send_len,
+              int16_t *src_sock,
+              void *dest_net,
+              void *dest_node,
+              void *dest_sock,
+              void *type_val,
+              void *type_data,
+              int16_t *bytes_received,
+              void *recv_buf,
+              uint32_t *recv_len,
+              void *timeout_sec,
+              void *timeout_usec,
+              void *recv_type,
+              void *options,
+              status_$t *status_ret);
 
-/* Send and receive (internal, returns status) */
-status_$t MSG_$SARI(msg_$socket_t *socket, void *send_buf, uint32_t send_len,
-                    void *recv_buf, uint32_t *recv_len, msg_$desc_t *desc,
-                    msg_$time_t *timeout);
+/* Send and receive (internal) */
+void MSG_$SARI(msg_$socket_t *socket,
+               void *callback,
+               void *send_buf,
+               uint32_t *send_len,
+               void *msg_desc,
+               void *dest_net,
+               void *dest_node,
+               void *dest_sock,
+               void *type_val,
+               void *type_data,
+               int16_t *bytes_received,
+               void *recv_buf,
+               uint32_t *recv_len,
+               void *timeout_sec,
+               void *timeout_usec,
+               void *recv_type,
+               void *options,
+               status_$t *status_ret);
 
 /* Get event count for socket */
 void MSG_$GET_EC(msg_$socket_t *socket, uint32_t *ec, status_$t *status);
 
-/* Test if message is available on socket */
-void MSG_$TEST_FOR_MESSAGE(msg_$socket_t *socket, int16_t *available,
-                           status_$t *status);
+/* Test if message is available on socket (returns non-zero if message pending) */
+int16_t MSG_$TEST_FOR_MESSAGE(msg_$socket_t *socket, uint32_t *ec_value,
+                               status_$t *status_ret);
 
 /* Share socket with another address space */
-void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uint8_t asid, status_$t *status);
+void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
+                        status_$t *status_ret);
 
-/* Duplicate socket ownership for fork */
-void MSG_$FORK(uint8_t parent_asid, uint8_t child_asid);
+/* Duplicate socket ownership for fork (returns non-zero if any sockets shared) */
+int8_t MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid);
 
 /* Free ASID resources */
-void MSG_$FREE_ASID(uint8_t asid);
+void MSG_$FREE_ASID(uint16_t *asid_ptr);
 
 /* Get local network ID */
 void MSG_$GET_MY_NET(uint32_t *net_id);
@@ -215,6 +310,6 @@ void MSG_$GET_MY_NET(uint32_t *net_id);
 void MSG_$GET_MY_NODE(uint32_t *node_id);
 
 /* Set HPIPC socket ownership */
-void MSG_$SET_HPIPC(msg_$socket_t *socket, status_$t *status);
+void MSG_$SET_HPIPC(msg_$socket_t *socket, void *param2, status_$t *status_ret);
 
 #endif /* MSG_MSG_H */
