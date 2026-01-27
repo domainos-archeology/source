@@ -10,6 +10,7 @@
 
 #include "ring/ring.h"
 #include "time/time.h"
+#include "network/network.h"
 #include "netbuf/netbuf.h"
 #include "sock/sock.h"
 #include "pkt/pkt.h"

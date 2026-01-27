@@ -69,6 +69,7 @@ extern int16_t NETWORK_$PAGE_SERVER_CNT;     /* 0xE24C1E (+0x322) */
 extern uint32_t NETWORK_$ALLOWED_SERVICE;    /* 0xE24C3E (+0x342) - 32-bit */
 extern int16_t NETWORK_$REMOTE_POOL;         /* 0xE24C40 (+0x344) */
 extern int8_t NETWORK_$ACTIVITY_FLAG;        /* 0xE24C46 (+0x346) */
+extern char NETWORK_$DO_CHKSUM;
 extern int8_t NETWORK_$USER_SOCK_OPEN;       /* 0xE24C48 (+0x34C) */
 extern int8_t NETWORK_$REALLY_DISKLESS;      /* 0xE24C4A (+0x34E) */
 extern int8_t NETWORK_$DISKLESS;             /* 0xE24C4C (+0x350) - diskless mode */
