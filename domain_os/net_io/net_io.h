@@ -37,7 +37,8 @@ void NET_IO_$SEND(int16_t port, uint32_t *hdr_ptr, uint32_t hdr_pa,
  *
  * Original address: 0x00E0E4A0
  */
-void NET_IO_$PUT_IN_SOCK(void);
+void NET_IO_$PUT_IN_SOCK(uint16_t net_type, uint16_t socket, void **hdr_ptr,
+                         void **data_ptr, uint16_t hdr_len, uint16_t data_len);
 
 /*
  * NET_IO_$COPY_PACKET - Copy a packet to network buffers

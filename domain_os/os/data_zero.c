@@ -7,8 +7,9 @@
 
 #include "os/os_internal.h"
 
-void OS_$DATA_ZERO(char *ptr, uint len)
+void OS_$DATA_ZERO(void *ptr_v, uint32_t len)
 {
+    char *ptr = (char *)ptr_v;
     uint remaining;
     ushort word_count;
     char *p;

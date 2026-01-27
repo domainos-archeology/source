@@ -7,8 +7,10 @@
 
 #include "os/os_internal.h"
 
-void OS_$DATA_COPY(const char *src, char *dst, int len)
+void OS_$DATA_COPY(const void *src_v, void *dst_v, uint32_t len)
 {
+    const char *src = (const char *)src_v;
+    char *dst = (char *)dst_v;
     ushort remaining;
     ushort count;
     short i;

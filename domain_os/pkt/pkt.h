@@ -28,6 +28,7 @@
 #define status_$network_message_header_too_big          0x0011000A
 #define status_$network_no_more_free_sockets            0x0011000C
 #define status_$network_remote_node_failed_to_respond   0x00110007
+#define status_$network_buffer_queue_is_empty              0x00110006
 
 /*
  * ============================================================================

@@ -37,13 +37,13 @@ extern ec_$eventcount_t OS_$SHUTDOWN_EC;
 // @param src: Source address
 // @param dst: Destination address
 // @param len: Number of bytes to copy
-extern void OS_$DATA_COPY(const char *src, char *dst, int len);
+extern void OS_$DATA_COPY(const void *src, void *dst, uint32_t len);
 
 // OS_$DATA_ZERO - Zero memory efficiently
 // Optimized zero that handles alignment and uses 4-byte writes when possible
 // @param ptr: Address to zero
 // @param len: Number of bytes to zero
-extern void OS_$DATA_ZERO(char *ptr, uint len);
+extern void OS_$DATA_ZERO(void *ptr, uint32_t len);
 
 // =============================================================================
 // Boot and Initialization Functions

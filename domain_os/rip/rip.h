@@ -243,4 +243,27 @@ void RIP_$ANNOUNCE_NS(void);
  */
 #define RIP_$STATUS_NO_ROUTE    0x3C0001    /* No route to destination */
 
+/*
+ * RIP_$PORT_CLOSE - Invalidate routes through a closing port
+ *
+ * @param port_index    Port index (0-7) being closed
+ * @param flags         If < 0, process non-standard routes; else standard
+ * @param force         If < 0, invalidate all routes on port;
+ *                      If >= 0, only invalidate routes with non-zero metric
+ *
+ * Original address: 0x00E15798
+ */
+void RIP_$PORT_CLOSE(uint16_t port_index, int8_t flags, int8_t force);
+
+/*
+ * RIP_$HALT_ROUTER - Gracefully stop the router
+ *
+ * @param flags  Route type to halt:
+ *                 If < 0: Halt non-standard routes
+ *                 If >= 0: Halt standard routes
+ *
+ * Original address: 0x00E87396
+ */
+void RIP_$HALT_ROUTER(int16_t flags);
+
 #endif /* RIP_H */

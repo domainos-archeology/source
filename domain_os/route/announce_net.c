@@ -80,22 +80,6 @@
 
 /*
  * =============================================================================
- * Forward Declarations
- * =============================================================================
- */
-
-uint16_t PKT_$NEXT_ID(void);
-void PKT_$SEND_INTERNET(uint32_t dest_net, uint32_t dest_node,
-                        uint16_t dest_socket, uint32_t src_net,
-                        uint32_t src_node, uint16_t src_socket,
-                        void *data, uint16_t packet_id,
-                        void *extra1, uint16_t extra2,
-                        void *extra3, uint16_t extra4,
-                        void *extra5, void *extra6,
-                        status_$t *status_ret);
-
-/*
- * =============================================================================
  * Implementation
  * =============================================================================
  */
