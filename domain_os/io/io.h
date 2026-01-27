@@ -122,6 +122,39 @@ extern io_int_ctrl_t IO_$INT_CTRL;
 extern void *IO_$FLIH_TAB[];
 
 /*
+ * IO_$SAVED_OS_SP - Saved OS stack pointer during interrupt processing
+ *
+ * When IO_$USE_INT_STACK switches to the interrupt stack, the previous
+ * (OS) stack pointer is saved here. Non-zero means we are currently on
+ * the interrupt stack. Cleared when switching back to the OS stack.
+ *
+ * Original address: 0x00E2E822
+ */
+extern void *IO_$SAVED_OS_SP;
+
+/*
+ * IO_$SAVED_INT_SR - Saved status register from interrupted context
+ *
+ * Holds the SR from the exception frame at the time of the interrupt
+ * stack switch, used during interrupt exit to determine the interrupted
+ * priority level.
+ *
+ * Original address: 0x00EB2BF8
+ */
+extern uint16_t IO_$SAVED_INT_SR;
+
+#if !defined(M68K)
+/*
+ * IO_$INT_STACK - Dedicated interrupt stack buffer (non-M68K builds)
+ *
+ * On M68K hardware, the interrupt stack is at a fixed address
+ * (top at 0x00EB2BE8). For other architectures, this buffer
+ * provides the interrupt stack storage.
+ */
+extern uint8_t IO_$INT_STACK[];
+#endif
+
+/*
  * ============================================================================
  * Function Prototypes
  * ============================================================================
@@ -141,5 +174,20 @@ extern void *IO_$FLIH_TAB[];
  * Original address: 0x00e2e800
  */
 void IO_$TRAP(int16_t m68k_vector_num, void *handler_addr);
+
+/*
+ * IO_$USE_INT_STACK - Switch from OS stack to interrupt stack
+ *
+ * Saves the current OS stack pointer and switches to the dedicated
+ * interrupt stack. If already on the interrupt stack (IO_$SAVED_OS_SP
+ * is non-zero), the switch is skipped.
+ *
+ * This is an assembly-only routine (cannot be expressed in C because
+ * it directly manipulates the stack pointer). It does not use RTS to
+ * return; instead it pops the return address into A1 and uses JMP (A1).
+ *
+ * Original address: 0x00e2e826
+ */
+void IO_$USE_INT_STACK(void);
 
 #endif /* IO_H */
