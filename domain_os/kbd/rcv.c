@@ -13,12 +13,9 @@
 
 #include "kbd/kbd_internal.h"
 
-/* Touchpad event buffer offsets within TERM_$TPAD_BUFFER */
-#define TPAD_WRITE_IDX   0x00
-#define TPAD_READ_IDX    0x02
-#define TPAD_EVENT_BASE  0x04
-#define TPAD_EVENT_SIZE  0x10
-#define TPAD_MAX_EVENTS  6
+/* Touchpad event buffer constants */
+#define TPAD_EVENT_SIZE  sizeof(suma_sample_t)
+#define TPAD_MAX_EVENTS  SUMA_TPAD_BUFFER_SIZE
 
 void KBD_$RCV(kbd_state_t *state, uint8_t key)
 {
@@ -78,7 +75,7 @@ void KBD_$RCV(kbd_state_t *state, uint8_t key)
         /* Only process if no handler installed */
         if (state->handler == NULL) {
             /* Calculate next write index */
-            write_idx = *(uint16_t *)&TERM_$TPAD_BUFFER[TPAD_WRITE_IDX] + 1;
+            write_idx = TERM_$TPAD_BUFFER.head + 1;
             if (write_idx == TPAD_MAX_EVENTS) {
                 write_idx = 0;
             }
@@ -87,7 +84,7 @@ void KBD_$RCV(kbd_state_t *state, uint8_t key)
             TIME_$CLOCK(&current_time);
 
             /* Check if buffer has space */
-            if ((int16_t)*(uint16_t *)&TERM_$TPAD_BUFFER[TPAD_READ_IDX] != (int)write_idx) {
+            if ((int16_t)TERM_$TPAD_BUFFER.tail != (int)write_idx) {
                 /* Store timing data */
                 state->clock_high = current_time.high;
                 state->clock_low = (uint16_t)current_time.low;
@@ -97,9 +94,9 @@ void KBD_$RCV(kbd_state_t *state, uint8_t key)
 
                 /* Copy event data to buffer */
                 {
-                    int16_t idx = (int16_t)*(uint16_t *)&TERM_$TPAD_BUFFER[TPAD_WRITE_IDX];
+                    int16_t idx = (int16_t)TERM_$TPAD_BUFFER.head;
                     uint8_t *src = (uint8_t *)&state->delta_time;
-                    uint8_t *dst = &TERM_$TPAD_BUFFER[TPAD_EVENT_BASE + idx * TPAD_EVENT_SIZE];
+                    uint8_t *dst = (uint8_t *)&TERM_$TPAD_BUFFER.samples[idx];
                     int i;
                     for (i = 0; i < TPAD_EVENT_SIZE; i++) {
                         dst[i] = src[i];
@@ -107,7 +104,7 @@ void KBD_$RCV(kbd_state_t *state, uint8_t key)
                 }
 
                 /* Update write index */
-                *(uint16_t *)&TERM_$TPAD_BUFFER[TPAD_WRITE_IDX] = write_idx;
+                TERM_$TPAD_BUFFER.head = write_idx;
 
                 /* Queue callback */
                 callback_param = (kbd_state_t *)((uint8_t *)state + 0x30);

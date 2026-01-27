@@ -30,7 +30,7 @@ int8_t KBD_$GET_CHAR_AND_MODE(uint16_t *line_ptr, uint8_t *char_out,
 
     if (*status == status_$ok) {
         result = kbd_$fetch_key(desc, char_out, &mode);
-        *mode_out = TERM_$TPAD_BUFFER[mode];
+        *mode_out = KBD_$MODE_TABLE[mode];
     }
 
     return result;

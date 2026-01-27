@@ -17,8 +17,9 @@ static uint8_t default_kbd_type[] = { 0x00 };
 
 void KBD_$INIT(kbd_state_t *state)
 {
-    /* Clear touchpad buffer write index */
-    *(uint32_t *)&TERM_$TPAD_BUFFER[0] = 0;
+    /* Clear touchpad buffer head and tail indices */
+    TERM_$TPAD_BUFFER.head = 0;
+    TERM_$TPAD_BUFFER.tail = 0;
 
     /* Initialize state fields */
     state->state = 0;
@@ -30,7 +31,7 @@ void KBD_$INIT(kbd_state_t *state)
     kbd_$set_type(state, default_kbd_type, 1);
 
     /* Set touchpad buffer pointer */
-    state->tpad_buffer = &TERM_$TPAD_BUFFER[0];
+    state->tpad_buffer = &TERM_$TPAD_BUFFER;
 
     /* Initialize event counter */
     EC_$INIT(&state->ec);

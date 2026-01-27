@@ -65,6 +65,13 @@ typedef struct kbd_state_t {
  */
 
 /*
+ * KBD_$MODE_TABLE - Keyboard mode translation table
+ * Maps internal mode values to external mode codes.
+ * Located at 0xe2dde4
+ */
+extern uint8_t KBD_$MODE_TABLE[];
+
+/*
  * TERM_$MAX_DTTE - Maximum DTTE entries
  * Located at 0xe2dd78
  */
