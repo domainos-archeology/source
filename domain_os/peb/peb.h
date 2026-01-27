@@ -31,7 +31,7 @@
  * Status Codes (module 0x24 - PEB)
  * ============================================================================
  */
-
+#define status_$peb_fpu_is_hung             0x00240001  /* PEB FPU not responding */
 #define status_$peb_interrupt               0x00240002  /* PEB interrupt (no specific error) */
 #define status_$peb_fp_overflow             0x00240003  /* Floating point overflow */
 #define status_$peb_fp_underflow            0x00240004  /* Floating point underflow */
@@ -39,6 +39,7 @@
 #define status_$peb_fp_loss_of_significance 0x00240006  /* Loss of significance */
 #define status_$peb_fp_hw_error             0x00240007  /* FP hardware error */
 #define status_$peb_unimplemented_opcode    0x00240008  /* Unimplemented opcode */
+#define status_$peb_wcs_verify_failed       0x00240009  /* Failed to verify peb microcode */
 
 /* Error codes for TEST_PARITY_ERR */
 #define status_$peb_no_parity_error         0x0012000F  /* No parity error detected */

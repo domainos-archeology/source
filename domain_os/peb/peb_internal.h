@@ -161,9 +161,9 @@ static inline peb_fp_state_t *peb_get_fp_state(int16_t asid)
  * ============================================================================
  */
 
-extern const char PEB_interrupt[];          /* "PEB_interrupt" */
-extern const char PEB_FPU_Is_Hung_Err[];    /* "PEB FPU Is Hung Err" */
-extern const char PEB_WCS_Verify_Failed_Err[]; /* "PEB WCS Verify Failed Err" */
+extern status_$t PEB_interrupt;
+extern status_$t PEB_FPU_Is_Hung_Err;
+extern status_$t PEB_WCS_Verify_Failed_Err;
 
 /*
  * ============================================================================

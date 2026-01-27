@@ -79,7 +79,7 @@ void PEB_$INT(void)
     /* Check if any exception bits are set */
     if ((exc_status & PEB_EXC_MASK) == 0) {
         /* No exception bits set - this shouldn't happen */
-        CRASH_SYSTEM(PEB_interrupt);
+        CRASH_SYSTEM(&PEB_interrupt);
     }
 
     /* Signal waiting processes via DXM */
