@@ -47,9 +47,6 @@
     #define P2_ACCT_PTR(idx)        ((uint32_t*)(P2_BASE + (idx) * 0xE4 - 0x84))  /* offset 0x60 */
     #define P2_FLAGS_WORD(idx)      (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0x44))  /* offset 0xA0 */
 
-    /* Free list head */
-    extern int16_t P2_INFO_ALLOC_PTR;
-    extern int16_t P2_FREE_LIST_HEAD;  /* at A5+0x1E2 */
 #else
     static int16_t p2_wr_dummy16;
     static uint32_t p2_wr_dummy32;
@@ -66,8 +63,6 @@
     #define P2_UID_PTR(idx)         ((uint32_t*)&p2_wr_dummy32)
     #define P2_ACCT_PTR(idx)        ((uint32_t*)&p2_wr_dummy32)
     #define P2_FLAGS_WORD(idx)      (p2_wr_dummy16)
-    extern int16_t P2_INFO_ALLOC_PTR;
-    extern int16_t P2_FREE_LIST_HEAD;
 #endif
 
 void PROC2_$WAIT_REAP_CHILD(int16_t child_idx, int16_t parent_idx,
