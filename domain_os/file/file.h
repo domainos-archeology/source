@@ -1222,4 +1222,19 @@ void FILE_$EXPORT_LK(uid_t *file_uid, uint32_t *lock_index,
  */
 void FILE_$UNLOCK_ALL(void);
 
+/*
+ * FILE_$FORK_LOCK - Duplicate parent's file lock table to child during fork
+ *
+ * Copies all lock table entries from the current (parent) process to
+ * the child process, incrementing each lock entry's reference count.
+ * Called from PROC2_$FORK for non-vfork, non-init processes.
+ *
+ * Parameters:
+ *   new_asid   - Pointer to child process's ASID
+ *   status_ret - Output status code (always set to status_$ok)
+ *
+ * Original address: 0x00E74244
+ */
+void FILE_$FORK_LOCK(uint16_t *new_asid, status_$t *status_ret);
+
 #endif /* FILE_H */
