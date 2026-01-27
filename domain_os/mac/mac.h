@@ -89,6 +89,11 @@ typedef struct mac_$open_params_t {
     int16_t     num_packet_types;   /* 0x50: Number of packet types (1-10) */
     int16_t     socket_count;       /* 0x52: Number of sockets to allocate */
     uint8_t     flags;              /* 0x54: Flags (bit 7: promiscuous mode) */
+    /* Output fields - populated by MAC_OS_$OPEN and MAC_$OPEN */
+    uint8_t     pad_55[3];          /* 0x55: Padding for alignment */
+    void        *ec2_handle;        /* 0x58: EC2 event count handle */
+    uint32_t    os_handle;          /* 0x5C: OS-level MAC handle */
+    uint16_t    channel_num;        /* 0x60: Channel number (0-9) */
 } mac_$open_params_t;
 
 /*
