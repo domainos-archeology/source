@@ -260,7 +260,7 @@ void FIM_$UII(void);
  * FIM_$GENERATE - Generate a fault
  *
  * Small stub for fault generation.
- * Address: 0x00e216cc (6 bytes)
+ * Address: 0x00e214a8 (6 bytes)
  */
 void FIM_$GENERATE(void *context);
 
