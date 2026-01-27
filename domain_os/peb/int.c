@@ -68,8 +68,7 @@ void PEB_$INT(void)
     }
 
     /* Save registers and switch to interrupt stack */
-    /* Note: In actual implementation, this would be done in assembly */
-    IO_$USE_INT_STACK(0);  /* Parameter is SR value */
+    IO_$USE_INT_STACK();
 
     /* Read and save PEB exception status from hardware register */
     /* Status register is at base + 0xF4 = 0x70F4 */

@@ -153,7 +153,7 @@ static void server_unmap_name(void *stack_frame, int name_offset, int len_offset
  * @param response  Response buffer for result
  * @return Directory entry type
  */
-static int8_t server_get_entry(void *request, void *response)
+static void server_get_entry(void *request, void *response)
 {
     int8_t result;
     uint8_t *req = (uint8_t *)request;
@@ -169,8 +169,8 @@ static int8_t server_get_entry(void *request, void *response)
     server_unmap_name(request, 0x0C, 0x2C);
 
     /* Get directory entry */
-    result = DIR_$GET_ENTRYU(req + 4, req + 0x0C, req + 0x2C, &entry_type,
-                              (status_$t *)(resp + 4));
+    DIR_$GET_ENTRYU(req + 4, req + 0x0C, req + 0x2C, &entry_type,
+                    (status_$t *)(resp + 4));
 
     if (*(status_$t *)(resp + 4) == status_$ok) {
         /* Map name back for response */
@@ -190,8 +190,6 @@ static int8_t server_get_entry(void *request, void *response)
             resp[0x2C + i] = entry_info[i];
         }
     }
-
-    return result;
 }
 
 /*

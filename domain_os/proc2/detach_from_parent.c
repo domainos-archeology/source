@@ -40,10 +40,6 @@
 
     /* Entry pointer calculation */
     #define P2_DP_ENTRY(idx)        ((proc2_info_t*)(P2_BASE + (idx) * 0xE4 - 0xE4))
-
-    /* Global variables */
-    extern int16_t P2_INFO_ALLOC_PTR;   /* at A5+0x1E0 */
-    extern int16_t P2_FREE_LIST_HEAD;   /* at A5+0x1E2 */
 #else
     static int16_t p2_dp_dummy16;
     #define P2_DP_PARENT(idx)       (p2_dp_dummy16)
@@ -53,8 +49,6 @@
     #define P2_DP_ALLOC_PREV(idx)   (p2_dp_dummy16)
     #define P2_DP_ALLOC_NEXT(idx)   (p2_dp_dummy16)
     #define P2_DP_ENTRY(idx)        ((proc2_info_t*)0)
-    extern int16_t P2_INFO_ALLOC_PTR;
-    extern int16_t P2_FREE_LIST_HEAD;
 #endif
 
 /* Flag bit definitions */
