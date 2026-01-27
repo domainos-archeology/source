@@ -221,7 +221,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     PRINT_BUILD_TIME();
 
     // Install parity trap handler
-    *(void **)0x7c = FIM_$PARITY_TRAP;
+    *(void **)0x7c = (void *)FIM_$PARITY_TRAP;
 
     // Initialize security and object management
     ACL_$INIT();

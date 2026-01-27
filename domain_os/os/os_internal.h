@@ -19,6 +19,8 @@
 #include "mmu/mmu.h"
 #include "cal/cal.h"
 #include "misc/misc.h"
+#include "network/network.h"
+#include "file/file.h"
 
 /*
  * ============================================================================
@@ -26,10 +28,7 @@
  * ============================================================================
  */
 
-/* NETWORK_$DISKLESS and NETWORK_$REALLY_DISKLESS declared in cal/cal.h */
 extern char NETWORK_$DO_CHKSUM;
-extern uint32_t NETWORK_$MOTHER_NODE;
-extern uid_t NETWORK_$PAGING_FILE_UID;
 
 /*
  * ============================================================================
@@ -98,7 +97,7 @@ extern void *_NULL_PC;
 extern void *NULLPROC;
 extern void *_PROM_TRAP_BUS_ERROR;
 extern void *FIM_$BUS_ERR;
-extern void *FIM_$PARITY_TRAP;
+void FIM_$PARITY_TRAP(void);
 
 /*
  * ============================================================================
@@ -199,23 +198,16 @@ status_$t VOLX_$SHUTDOWN(void);
 void VOLX_$REC_ENTRY(void *param1, uid_t *uid);
 void VTOCE_$READ(void *param1, void *param2, status_$t *status);
 
-/* Network */
+/* Network - NETWORK_$ADD_REQUEST_SERVERS, NETWORK_$SET_SERVICE declared in network/network.h */
 void SOCK_$INIT(void);
 void NETWORK_$INIT(void);
 void NETWORK_$LOAD(void);
-void NETWORK_$ADD_REQUEST_SERVERS(void *param, status_$t *status);
 void NETWORK_$DISMISS_REQUEST_SERVERS(void);
-void NETWORK_$SET_SERVICE(const void *param1, status_$t *param2, status_$t *status);
 char NET_IO_$BOOT_DEVICE(short boot_device, short param);
 uint32_t RING_$GET_ID(void *param);
 void ROUTE_$SHUTDOWN(void);
 
-/* File System */
-void FILE_$LOCK_INIT(void);
-void FILE_$LOCK(uid_t *uid, void *param2, void *param3,
-                void *param4, void *param5, status_$t *status);
-void FILE_$SET_LEN(uid_t *uid, void *len, status_$t *status);
-void FILE_$SET_REFCNT(uid_t *uid, void *param, status_$t *status);
+/* File System - FILE_$LOCK_INIT, FILE_$LOCK, FILE_$SET_LEN, FILE_$SET_REFCNT declared in file/file.h */
 void FILE_$PRIV_UNLOCK_ALL(const void *param);
 
 /* Hints */
@@ -252,7 +244,7 @@ void PACCT_$SHUTDN(void);
 void CRASH_SHOW_STRING(const char *str);
 /* CRASH_SYSTEM declared in misc/misc.h */
 /* MMU_$NORMAL_MODE declared in mmu/mmu.h */
-char prompt_for_yes_or_no(void);
+/* prompt_for_yes_or_no declared in misc/misc.h */
 uint16_t VTOP_OR_CRASH(uint32_t vaddr);
 /* SUB48 declared in cal/cal.h */
 void PRINT_BUILD_TIME(void);
