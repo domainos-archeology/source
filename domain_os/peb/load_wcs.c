@@ -44,21 +44,7 @@ static const char msg_68881_disabled[] = "68881 savearea   68881 is disab";
 extern void *PTR_PEB_$TOUCH_00e322e4;
 extern void *PTR_PEB_$WIRED_DATA_START_00e322dc;
 
-/*
- * External file/mapping system calls
- */
-extern void FILE_$CREATE(const uid_t *dir_uid, uid_t *file_uid, status_$t *status);
-extern void FILE_$LOCK(const uid_t *file_uid, const char *lock_name, const void *p3,
-                       const void *p4, void *result, status_$t *status);
-extern void FILE_$UNLOCK(const uid_t *file_uid, const void *p2, status_$t *status);
-extern void NAME_$RESOLVE(const char *name, const int16_t *name_len, uid_t *uid, status_$t *status);
-extern void MST_$MAP(const uid_t *uid, const void *p2, const void *p3, const void *p4,
-                     const void *p5, const void *p6, void *result, status_$t *status);
-extern void MST_$MAPS(int p1, uint16_t flags, const uid_t *uid, int p4, uint32_t size,
-                      uint16_t prot, int p7, uint8_t p8, void *result, status_$t *status);
-extern void MST_$UNMAP(const uid_t *uid, void *p2, void *p3, status_$t *status);
-extern void MST_$WIRE_AREA(void **start_ptr, uint16_t p2, char p3, uint16_t p4, int16_t *result);
-/* ERROR_$PRINT declared in vfmt/vfmt.h */
+/* External function prototypes provided by file/file.h, mst/mst.h, name/name.h */
 
 /*
  * PEB_$LOAD_WCS_CHECK_ERR - Check for WCS load errors

@@ -95,7 +95,7 @@ uint8_t PEB_$TOUCH(uint32_t *addr)
 
 peb_ready:
     /* Install private mapping for current process */
-    MMU_$INSTALL_PRIVATE(0x2D, 0x7000, PROC1_$AS_ID, 6);
+    MMU_$INSTALL_PRIVATE(0x2D, 0x7000, MMU_FLAGS(PROC1_$AS_ID, 6));
 
     /* Check if there's a previous owner whose state needs saving */
     if (PEB_$OWNER_PID != 0) {

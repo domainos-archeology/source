@@ -230,9 +230,7 @@ extern uint16_t PROC1_$CURRENT;     /* Current process ID */
 extern uint16_t PROC1_$AS_ID;       /* Current address space ID */
 
 /* From mmu module */
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags);
-void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint16_t asid, uint32_t flags);
-void MMU_$REMOVE(uint32_t ppn);
+#include "mmu/mmu.h"
 
 /* From fim module */
 extern void FIM_$FLINE(void);       /* F-line exception handler */
