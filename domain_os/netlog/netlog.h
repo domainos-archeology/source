@@ -152,7 +152,7 @@ void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
  *
  * Original address: 0x00E71B38
  */
-void NETLOG_$LOG_IT(uint16_t kind, void *uid,
+void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
                     uint16_t param3, uint16_t param4,
                     uint16_t param5, uint16_t param6,
                     uint16_t param7, uint16_t param8);
