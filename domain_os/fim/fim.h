@@ -400,10 +400,13 @@ void FIM_$FP_ABORT(void);
 /*
  * FIM_$FP_INIT - Initialize floating point state
  *
+ * Parameters:
+ *   asid - address space id for the process
+ *
  * Initializes the 68881/68882 FPU for a process.
  * Address: 0x00e21bb0 (84 bytes)
  */
-void FIM_$FP_INIT(void);
+void FIM_$FP_INIT(int16_t asid);
 
 /*
  * FIM_$FSAVE - Save floating point state

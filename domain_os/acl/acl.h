@@ -343,15 +343,18 @@ uint32_t ACL_$GET_RE_ALL_SIDS(void *acl_data, uid_t *owner_uid,
  */
 
 /*
- * ACL_$ALLOC_ASID - Allocate an address space ID
+ * ACL_$ALLOC_ASID - Allocates an address space ID.
+ *
+ * Doesn't _actually_ acllocate it.  It marks the passed address space as being used,
+ * copying settings from the current process's ASID
  *
  * Parameters:
- *   asid_ret   - Output ASID
+ *   asid       - ASID to mark as allocated
  *   status_ret - Output status code
  *
  * Original address: 0x00E73BB8
  */
-void ACL_$ALLOC_ASID(int16_t *asid_ret, status_$t *status_ret);
+void ACL_$ALLOC_ASID(int16_t asid_ret, status_$t *status_ret);
 
 /*
  * ACL_$FREE_ASID - Free an address space ID

@@ -259,7 +259,7 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
     ACL_$ALLOC_ASID(new_pid, &status);
 
     /* Inherit audit settings */
-    AUDIT_$INHERIT_AUDIT((int16_t*)&new_entry->level1_pid, (int16_t*)&status);
+    AUDIT_$INHERIT_AUDIT((int16_t*)&new_entry->level1_pid, &status);
 
     /* Copy FIM user address from parent */
     {
@@ -289,7 +289,7 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
 
     /* Handle message fork if parent has MSG flag */
     if ((int8_t)(*(uint8_t*)((char*)parent_entry + 0x9D)) < 0) {
-        if (MSG_$FORK(0x060A, (void*)&new_entry->asid) < 0) {
+        if (MSG_$FORK(&PROC1_$AS_ID, (void*)&new_entry->asid) < 0) {
             *(uint8_t*)((char*)new_entry + 0x9D) |= 0x80;
         }
     }
@@ -325,7 +325,7 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
 
     /* Handle profiling fork if parent has profiling flag */
     if ((parent_entry->cleanup_flags & 0x0800) != 0) {
-        PCHIST_$UNIX_PROFIL_FORK((void*)&new_entry->level1_pid, (void*)&new_entry->asid);
+        PCHIST_$UNIX_PROFIL_FORK(&new_entry->level1_pid);
         *(uint8_t*)((char*)new_entry + 0x9C) |= 0x08;
     }
 

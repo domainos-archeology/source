@@ -479,13 +479,11 @@ void DIR_$ROOT_ADDU(uid_t *dir_uid, char *name, uint16_t *name_len,
  *   entry_ret  - Output: entry information
  *   status_ret - Output: status code
  *
- * Returns:
- *   Entry type indicator
  *
  * Original address: 0x00E4D500
  */
-int8_t DIR_$GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
-                       void *entry_ret, status_$t *status_ret);
+void DIR_$GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
+                     void *entry_ret, status_$t *status_ret);
 
 /*
  * DIR_$READ_LINKU - Read a symbolic link

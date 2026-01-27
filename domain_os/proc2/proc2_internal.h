@@ -50,6 +50,8 @@ extern uint32_t AS_$STACK_FILE_LOW;
 /* FIM initial stack size */
 extern uint32_t FIM_$INITIAL_STACK_SIZE;
 
+extern status_$t PROC2_Internal_Error;
+
 /*
  * ============================================================================
  * Internal PROC2 Functions

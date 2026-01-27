@@ -267,10 +267,10 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     ACL_$ALLOC_ASID(new_pid, &status);
 
     /* Inherit audit settings */
-    AUDIT_$INHERIT_AUDIT((int16_t*)&new_entry->level1_pid, (int16_t*)&status);
+    AUDIT_$INHERIT_AUDIT((int16_t*)&new_entry->level1_pid, &status);
 
     /* Initialize naming for new ASID */
-    NAME_$INIT_ASID((int16_t*)&new_entry->asid, (int16_t*)&status);
+    NAME_$INIT_ASID((int16_t*)&new_entry->asid, &status);
 
     if ((status & 0xFFFF) != 0) {
         /* Late failure - need to clean up with lock */

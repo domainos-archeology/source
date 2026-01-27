@@ -181,7 +181,7 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
     *(uint32_t*)((char*)current_entry + 0xE0) = UID_$NIL.low;
 
     /* Initialize naming subsystem for new ASID */
-    NAME_$INIT_ASID((int16_t*)&current_entry->asid, (int16_t*)&status);
+    NAME_$INIT_ASID((int16_t*)&current_entry->asid, &status);
 
     if ((status & 0xFFFF) != 0) {
         goto error_cleanup;

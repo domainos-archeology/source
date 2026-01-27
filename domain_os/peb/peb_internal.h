@@ -10,6 +10,13 @@
 
 #include "peb/peb.h"
 #include "ec/ec.h"
+#include "mmu/mmu.h"
+#include "misc/crash_system.h"
+#include "dxm/dxm.h"
+#include "proc1/proc1.h"
+#include "io/io.h"
+#include "fim/fim.h"
+#include "fp/fp.h"
 
 /*
  * ============================================================================
@@ -218,40 +225,5 @@ void peb_$read_wcs(uint16_t addr, peb_wcs_entry_t *data);
  * Original address: 0x00E70954 (148 bytes)
  */
 void peb_$cleanup_internal(void);
-
-/*
- * ============================================================================
- * External Dependencies
- * ============================================================================
- */
-
-/* From proc1 module */
-extern uint16_t PROC1_$CURRENT;     /* Current process ID */
-extern uint16_t PROC1_$AS_ID;       /* Current address space ID */
-
-/* From mmu module */
-#include "mmu/mmu.h"
-
-/* From fim module */
-extern void FIM_$FLINE(void);       /* F-line exception handler */
-extern void FIM_$UII(void);         /* Unimplemented integer instruction */
-extern void FIM_$SPURIOUS_INT(void); /* Spurious interrupt handler */
-extern void FIM_$EXIT(void);        /* Interrupt exit routine */
-
-/* From ec module */
-void EC_$INIT(ec_$eventcount_t *ec);
-
-/* From misc module */
-void CRASH_SYSTEM(const char *msg);
-
-/* From fp module */
-extern uint32_t FP_$SAVEP;          /* FP save pending pointer */
-
-/* From io module */
-void IO_$USE_INT_STACK(uint16_t sr);
-extern void *IO_$SAVED_OS_SP;
-
-/* From dxm module */
-void DXM_$ADD_SIGNAL(uint16_t, uint16_t, uint16_t, uint32_t, uint8_t, status_$t *);
 
 #endif /* PEB_INTERNAL_H */

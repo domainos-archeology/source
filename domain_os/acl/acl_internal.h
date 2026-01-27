@@ -224,19 +224,6 @@ int8_t acl_$check_suser_pid(int16_t pid);
 void ACL_$FREE_ASID(int16_t asid, status_$t *status_ret);
 
 /*
- * ACL_$ALLOC_ASID - Allocate an ASID
- *
- * Finds a free ASID from the bitmap and marks it allocated.
- *
- * Parameters:
- *   asid_ret - Output ASID
- *   status_ret - Output status code
- *
- * Original address: 0x00E73BB8
- */
-void ACL_$ALLOC_ASID(int16_t *asid_ret, status_$t *status_ret);
-
-/*
  * ACL_$GET_SID - Get SID for an ASID
  *
  * Returns the current user SID for the specified ASID.
