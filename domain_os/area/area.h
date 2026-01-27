@@ -268,15 +268,15 @@ void AREA_$DELETE(area_$handle_t handle, status_$t *status_ret);
 /*
  * AREA_$DELETE_FROM - Delete area with specific caller context
  *
- * @param handle        Area handle (low byte)
- * @param node_id       Node ID of the requesting node
- * @param extra_param   Extra parameter (e.g., frame.uid2.low)
+ * @param area_index    Area table index (1-based, uint16_t)
+ * @param remote_uid    Remote UID to match against entry->remote_uid
+ * @param caller_id     Caller ID to match against entry->caller_id
  * @param status_ret    Output: status code
  *
  * Original address: 0x00E07D06
  */
-void AREA_$DELETE_FROM(uint16_t handle, uint32_t node_id, uint32_t extra_param,
-                       status_$t *status_ret);
+void AREA_$DELETE_FROM(uint16_t area_index, uint32_t remote_uid,
+                       uint32_t caller_id, status_$t *status_ret);
 
 /*
  * AREA_$FREE_ASID - Free all areas owned by an address space

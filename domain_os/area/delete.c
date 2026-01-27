@@ -186,27 +186,44 @@ void AREA_$DELETE(area_$handle_t handle, status_$t *status_ret)
 /*
  * AREA_$DELETE_FROM - Delete area with specific caller context
  *
- * Similar to AREA_$DELETE but for use by remote file operations.
+ * Deletes an area identified by index, remote_uid, and caller_id.
+ * Used by remote file operations (rem_file server) to delete areas
+ * on behalf of remote nodes.
+ *
+ * Unlike AREA_$DELETE (which uses handle/generation validation),
+ * this function validates by matching remote_uid and caller_id fields.
+ * If the area is not active or the UID/caller_id don't match, this
+ * is treated as a duplicate/stale delete (not an error).
+ *
+ * After successful deletion, the area entry is removed from the
+ * UID hash table and returned to the free list.
+ *
+ * Parameters:
+ *   area_index  - Area table index (1-based, uint16_t)
+ *   remote_uid  - Remote UID to match against entry->remote_uid (offset 0x20)
+ *   caller_id   - Caller ID to match against entry->caller_id (offset 0x10)
+ *   status_ret  - Output: status code
  *
  * Original address: 0x00E07D06
  */
-void AREA_$DELETE_FROM(area_$handle_t handle, uint32_t param_2,
-                       status_$t *status_ret)
+
+#define UID_HASH_BUCKETS    11
+
+void AREA_$DELETE_FROM(uint16_t area_index, uint32_t remote_uid,
+                       uint32_t caller_id, status_$t *status_ret)
 {
-    uint16_t area_id = AREA_HANDLE_TO_ID(handle);
-    int16_t generation = AREA_HANDLE_TO_GEN(handle);
     area_$entry_t *entry;
     int entry_offset;
-    status_$t status;
+    uint32_t *globals = (uint32_t *)AREA_GLOBALS_BASE;
 
-    /* Validate area ID */
-    if (area_id == 0 || area_id > AREA_$N_AREAS) {
+    /* Validate area index */
+    if (area_index == 0 || area_index > AREA_$N_AREAS) {
         *status_ret = status_$area_not_active;
         return;
     }
 
-    /* Calculate entry offset and get entry pointer */
-    entry_offset = (uint32_t)area_id * AREA_ENTRY_SIZE;
+    /* Calculate entry pointer (1-indexed, each entry 0x30 bytes) */
+    entry_offset = (uint32_t)area_index * AREA_ENTRY_SIZE;
     entry = (area_$entry_t *)(AREA_TABLE_BASE + entry_offset - AREA_ENTRY_SIZE);
 
     ML_$LOCK(ML_LOCK_AREA);
@@ -216,25 +233,81 @@ void AREA_$DELETE_FROM(area_$handle_t handle, uint32_t param_2,
         area_$wait_in_trans();
     }
 
-    /* Validate area is active and generation matches */
+    /* Check active flag, remote_uid match, and caller_id match */
     if ((entry->flags & AREA_FLAG_ACTIVE) == 0 ||
-        entry->generation != generation) {
-        status = status_$area_not_active;
+        remote_uid != entry->remote_uid ||
+        caller_id != entry->caller_id) {
+        /* Duplicate or stale delete — not an error */
+        *status_ret = status_$ok;
+        AREA_$DEL_DUP++;
+    } else {
+        /* Mark in-transition */
+        entry->flags |= AREA_FLAG_IN_TRANS;
+
         ML_$UNLOCK(ML_LOCK_AREA);
-        *status_ret = status;
-        return;
+
+        /* Perform deletion (do_unlink = 0: we handle unlinking here) */
+        area_$internal_delete(entry, area_index, status_ret, 0);
+
+        ML_$LOCK(ML_LOCK_AREA);
+
+        if (*status_ret == status_$ok) {
+            /* Remove from UID hash table */
+            uint16_t hash_bucket = M$OIU$WLW(remote_uid, UID_HASH_BUCKETS);
+            area_$uid_hash_t *prev_hash = NULL;
+            area_$uid_hash_t *hash_entry =
+                (area_$uid_hash_t *)((uint32_t *)((char *)globals + 0x454))[hash_bucket];
+
+            /* Walk hash chain to find entry matching remote_uid */
+            while (hash_entry != NULL &&
+                   hash_entry->first_entry->remote_uid != remote_uid) {
+                prev_hash = hash_entry;
+                hash_entry = hash_entry->next;
+            }
+
+            if (hash_entry == NULL) {
+                CRASH_SYSTEM(&Area_Internal_Error);
+            }
+
+            /* Unlink area entry from doubly-linked list */
+            if (entry->next != NULL) {
+                entry->next->prev = entry->prev;
+            }
+
+            if (entry->prev == NULL) {
+                /* Was head of list — update hash entry's first_entry */
+                hash_entry->first_entry = entry->next;
+            } else {
+                entry->prev->next = entry->next;
+            }
+
+            /* If hash entry has no more areas, remove from hash chain */
+            if (hash_entry->first_entry == NULL) {
+                if (prev_hash == NULL) {
+                    ((uint32_t *)((char *)globals + 0x454))[hash_bucket] =
+                        (uint32_t)hash_entry->next;
+                } else {
+                    prev_hash->next = hash_entry->next;
+                }
+
+                /* Return hash entry to free pool (at offset 0x450) */
+                hash_entry->next = *(area_$uid_hash_t **)((char *)globals + 0x450);
+                *(area_$uid_hash_t **)((char *)globals + 0x450) = hash_entry;
+            }
+
+            /* Add area entry to free list */
+            entry->next = AREA_$FREE_LIST;
+            entry->prev = NULL;
+            AREA_$FREE_LIST = entry;
+            AREA_$N_FREE++;
+        }
+
+        /* Clear in-transition flag */
+        entry->flags &= ~AREA_FLAG_IN_TRANS;
+
+        /* Wake waiters */
+        EC_$ADVANCE(&AREA_$IN_TRANS_EC);
     }
 
-    /* Mark area as in-transition */
-    entry->flags |= AREA_FLAG_IN_TRANS;
-
     ML_$UNLOCK(ML_LOCK_AREA);
-
-    /* Perform deletion (do_unlink = 0 for this variant) */
-    area_$internal_delete(entry, area_id, &status, 0);
-
-    /* Advance in-transition event count */
-    EC_$ADVANCE(&AREA_$IN_TRANS_EC);
-
-    *status_ret = status;
 }
