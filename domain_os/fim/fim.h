@@ -274,6 +274,19 @@ void FIM_$GENERATE(void *context);
 void FIM_$PRIV_VIOL(void);
 
 /*
+ * FIM_$FLINE - F-Line (coprocessor) exception handler
+ *
+ * Handles F-Line traps for lazy FPU context switching.
+ * When a process executes an FPU instruction without owning the FPU,
+ * saves the previous owner's FP state, restores the new owner's,
+ * and retries the instruction. If no FPU is present or the current
+ * process already owns the FPU, forwards to FIM_$UII.
+ *
+ * Address: 0x00e21acc (68 bytes)
+ */
+void FIM_$FLINE(void);
+
+/*
  * FIM_$ILLEGAL_USP - Illegal USP handler
  *
  * Handles invalid user stack pointer situations.
