@@ -124,6 +124,23 @@ typedef struct fim_regs_t {
 } fim_regs_t;
 
 /*
+ * Signal context structure (BSD m68k sigcontext)
+ *
+ * Passed by the signal trampoline to PROC2_$SIGRETURN and then
+ * to FIM_$FAULT_RETURN.  Layout confirmed from assembly offsets
+ * in FIM_$FAULT_RETURN (0x08, 0x0C, 0x10, 0x14, 0x18).
+ */
+typedef struct sigcontext_t {
+    int32_t     sc_onstack;     /* 0x00: Non-zero if on signal stack */
+    uint32_t    sc_mask;        /* 0x04: Signal mask to restore */
+    uint32_t    sc_sp;          /* 0x08: User stack pointer */
+    uint32_t    sc_fp;          /* 0x0C: Frame pointer (A6) */
+    uint32_t    sc_ap;          /* 0x10: Argument pointer (A5) */
+    uint32_t    sc_pc;          /* 0x14: Program counter */
+    uint16_t    sc_ps;          /* 0x18: Status register */
+} sigcontext_t;
+
+/*
  * ============================================================================
  * Global Data
  * ============================================================================
@@ -356,9 +373,21 @@ void FIM_$SINGLE_STEP(void);
  * FIM_$FAULT_RETURN - Return from fault handler
  *
  * Restores state and returns from user fault handler.
- * Address: 0x00e217a4 (80 bytes)
+ * Optionally restores FP state, then rebuilds an exception frame
+ * from the sigcontext and returns to user mode via RTE.
+ *
+ * Parameters:
+ *   context_ptr  - Pointer to pointer to sigcontext_t
+ *   regs_ptr     - Pointer to pointer to register save area (or NULL)
+ *   fp_state_ptr - Pointer to FP state (or NULL)
+ *
+ * Does not return.
+ *
+ * Address: 0x00e21828 (80 bytes)
  */
-void FIM_$FAULT_RETURN(void);
+NORETURN void FIM_$FAULT_RETURN(sigcontext_t **context_ptr,
+                                uint32_t **regs_ptr,
+                                void *fp_state_ptr);
 
 /*
  * FIM_$FP_ABORT - Floating point abort handler

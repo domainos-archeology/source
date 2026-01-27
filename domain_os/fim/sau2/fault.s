@@ -21,6 +21,7 @@
 /*
  * External references
  */
+        .equ    PROC1_CURRENT,      0x00E20608  /* Current process ID (word) */
         .equ    PROC1_AS_ID,        0x00E2060A  /* Current AS ID */
         .equ    OS_STACK_BASE,      0x00E25C18  /* OS stack base table */
         .equ    FIM_QUIT_INH,       0x00E2248A  /* Quit inhibit array */
@@ -34,7 +35,7 @@
         .equ    FIM_CRASH,          0x00E1E864  /* Crash handler */
         .equ    FIM_EXIT,           0x00E228BC  /* Return from exception */
         .equ    FIM_BUILD_DF,       0x00E213A4  /* Build delivery frame */
-        .equ    FIM_SETUP_RETURN,   0x00E21878  /* Set up return frame */
+        /* FIM_$SETUP_RETURN defined locally below */
         .equ    IO_HANDLER,         0x00E208FE  /* I/O interrupt handler */
         .equ    PARITY_CHK,         0x00E0AE68  /* Parity check function */
 
@@ -54,7 +55,7 @@
         .global FIM_$PROC2_STARTUP
 FIM_$PROC2_STARTUP:
         movea.l (0x4,%sp),%a5           /* A5 = startup context */
-        jsr     (FIM_SETUP_RETURN).l    /* Set up return frame */
+        bsr.w   FIM_$SETUP_RETURN       /* Set up return frame */
         clr.w   (%a0)                   /* Clear format word */
         move.l  (0x4,%a5),-(%a0)        /* Push PC */
         clr.w   -(%a0)                  /* Push SR = 0 (user mode) */
@@ -85,7 +86,7 @@ FIM_$SINGLE_STEP:
         lsl.w   #2,%d0                  /* D0 = AS * 4 */
         lea     (FIM_TRACE_STS).l,%a0   /* A0 = trace status table */
         move.l  #0x00120015,(0,%a0,%d0:w) /* Set trace fault status */
-        jsr     (FIM_SETUP_RETURN).l    /* Set up return frame */
+        bsr.w   FIM_$SETUP_RETURN       /* Set up return frame */
         movea.l (0x4,%sp),%a1           /* A1 = PC ptr */
         move.l  (%a1),-(%a0)            /* Push PC */
         movea.l (0x8,%sp),%a1           /* A1 = SR ptr */
@@ -123,7 +124,7 @@ FIM_$FAULT_RETURN:
         move.l  %a0,-(%sp)              /* Push FP state ptr */
         jsr     (FIM_FRESTORE).l        /* Restore FP state */
 fault_ret_setup:
-        bsr.b   fault_ret_helper        /* Set up return frame */
+        bsr.w   FIM_$SETUP_RETURN       /* Set up return frame */
         clr.w   (%a0)                   /* Clear format word */
         movea.l (%a2),%a2               /* A2 = context ptr */
         move.l  (0x14,%a2),-(%a0)       /* Push PC */
@@ -145,12 +146,25 @@ fault_ret_exit:
         jmp     (FIM_EXIT).l            /* Return from exception */
 
 /*
- * Helper for FIM_$FAULT_RETURN
- * Sets up the return frame by getting OS stack
+ * FIM_$SETUP_RETURN - Set up OS stack return frame
+ *
+ * Returns the OS stack pointer for the current process in A0,
+ * adjusted past the format word.  Used by PROC2_STARTUP,
+ * SINGLE_STEP, and FAULT_RETURN before building an exception frame.
+ *
+ * On entry:  (no parameters)
+ * On exit:   A0 = OS stack top - 2  (room for format word already allocated)
+ *
+ * Assembly (0x00E21878, 22 bytes):
  */
-fault_ret_helper:
-        /* This would call FIM_SETUP_RETURN at 0x00E21878 */
-        jmp     (FIM_SETUP_RETURN).l
+        .global FIM_$SETUP_RETURN
+FIM_$SETUP_RETURN:
+        move.w  (PROC1_CURRENT).l,%d0   /* D0 = current process ID */
+        lsl.w   #2,%d0                  /* D0 *= 4 (index into table) */
+        lea     (OS_STACK_BASE).l,%a0   /* A0 = stack base table */
+        movea.l (0,%a0,%d0:w),%a0       /* A0 = this process's stack top */
+        subq.l  #2,%a0                  /* Point past format word */
+        rts
 
 /*
  * FIM_$GET_USER_SR_PTR - Get pointer to user SR

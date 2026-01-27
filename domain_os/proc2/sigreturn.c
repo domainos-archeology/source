@@ -2,14 +2,17 @@
  * PROC2_$SIGRETURN - Return from signal handler
  *
  * Called to return from a signal handler. Restores the signal mask
- * and checks for pending signals that can now be delivered.
- *
- * The context parameter points to saved state from the signal handler:
- * - [0] = onstack flag (non-zero if handler was on signal stack)
- * - [4] = signal mask to restore
+ * from the sigcontext, checks for pending signals that can now be
+ * delivered, populates the result array, and transfers control to
+ * FIM_$FAULT_RETURN which restores user-mode state via RTE.
  *
  * Parameters:
- *   context - Pointer to signal context (contains onstack flag and mask)
+ *   context_ptr  - Pointer to pointer to sigcontext_t
+ *   regs_ptr     - Pointer to pointer to register save area
+ *   fp_state_ptr - Pointer to FP state
+ *   result       - Output: result[0] = blocked mask, result[1] = flag
+ *
+ * Does not return.
  *
  * Original address: 0x00e3f582
  */
@@ -20,17 +23,10 @@
 #define FLAG_ONSTACK    0x0004  /* Bit 2: Signal handler on signal stack */
 #define FLAG_BIT_10     0x0400  /* Bit 10: Some signal flag */
 
-/*
- * Signal context structure passed from signal handler
- */
-typedef struct sigcontext_t {
-    int32_t     onstack;        /* Non-zero if on signal stack */
-    uint32_t    sig_mask;       /* Signal mask to restore */
-} sigcontext_t;
-
-void PROC2_$SIGRETURN(void *context)
+NORETURN void PROC2_$SIGRETURN(void *context_ptr, void *regs_ptr,
+                                void *fp_state_ptr, uint32_t *result)
 {
-    int32_t **context_ptr = (int32_t**)context;
+    sigcontext_t **ctx_pp = (sigcontext_t **)context_ptr;
     sigcontext_t *sigctx;
     int32_t onstack;
     uint32_t new_mask;
@@ -38,9 +34,9 @@ void PROC2_$SIGRETURN(void *context)
     proc2_info_t *entry;
 
     /* Get signal context from the double-indirect context pointer */
-    sigctx = (sigcontext_t*)*context_ptr;
-    onstack = sigctx->onstack;
-    new_mask = sigctx->sig_mask;
+    sigctx = *ctx_pp;
+    onstack = sigctx->sc_onstack;
+    new_mask = sigctx->sc_mask;
 
     /* Get current process entry */
     current_idx = P2_PID_TO_INDEX(PROC1_$CURRENT);
@@ -71,16 +67,15 @@ void PROC2_$SIGRETURN(void *context)
     ML_$UNLOCK(PROC2_LOCK_ID);
 
     /*
-     * The original code also sets output values in param_4:
-     * - param_4[0] = current blocked mask
-     * - param_4[1] = 1 if FLAG_BIT_10 set, else 0
-     *
-     * This appears to be for internal use by FIM_$FAULT_RETURN.
-     * Since our API only has the context parameter, this is handled
-     * internally by the register-based calling convention.
+     * Populate result for the caller (FIM trampoline):
+     *   result[0] = current blocked mask
+     *   result[1] = 1 if FLAG_BIT_10 set, else 0
      */
+    result[0] = entry->sig_blocked_2;
+    result[1] = (entry->flags & FLAG_BIT_10) ? 1 : 0;
 
-    /* Return to interrupted context via FIM */
-    /* Note: FIM_$FAULT_RETURN does not return */
-    FIM_$FAULT_RETURN(context, NULL, NULL);
+    /* Return to interrupted context via FIM (does not return) */
+    FIM_$FAULT_RETURN((sigcontext_t **)context_ptr,
+                      (uint32_t **)regs_ptr,
+                      fp_state_ptr);
 }

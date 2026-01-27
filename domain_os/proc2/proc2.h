@@ -587,9 +587,23 @@ void PROC2_$DELIVER_PENDING(status_$t *status_ret);
 
 /*
  * PROC2_$SIGRETURN - Return from signal handler
+ *
+ * Restores signal mask from the sigcontext, checks for newly
+ * deliverable signals, populates result with current mask/flag,
+ * then calls FIM_$FAULT_RETURN to restore user state.
+ *
+ * Does not return.
+ *
+ * Parameters:
+ *   context_ptr  - Pointer to pointer to sigcontext_t
+ *   regs_ptr     - Pointer to pointer to register save area
+ *   fp_state_ptr - Pointer to FP state
+ *   result       - Output: result[0] = blocked mask, result[1] = flag
+ *
  * Original address: 0x00e3f582
  */
-void PROC2_$SIGRETURN(void *context);
+NORETURN void PROC2_$SIGRETURN(void *context_ptr, void *regs_ptr,
+                                void *fp_state_ptr, uint32_t *result);
 
 /*
  * PROC2_$SIGBLOCK - Block additional signals

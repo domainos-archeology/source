@@ -133,6 +133,17 @@ typedef char boolean;
 #define false ((boolean)0)
 
 // =============================================================================
+// Compiler attributes
+// =============================================================================
+#if defined(__GNUC__) || defined(__clang__)
+#define NORETURN __attribute__((noreturn))
+#elif defined(_MSC_VER)
+#define NORETURN __declspec(noreturn)
+#else
+#define NORETURN
+#endif
+
+// =============================================================================
 // Architecture-specific includes
 // =============================================================================
 // Include architecture-specific definitions. When porting to a new
