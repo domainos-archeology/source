@@ -346,17 +346,17 @@ void AREA_$GROW(int16_t gen, uint16_t area_id, uint32_t virt_size,
                 uint32_t commit_size, status_$t *status_ret);
 
 /*
- * AREA_$GROW_TO - Grow area to specified size
+ * AREA_$GROW_TO - Grow area to specified size (remote variant)
  *
- * @param gen           Area generation (low byte)
- * @param size_param    Size parameter (e.g., frame.uid2.high)
- * @param combined_id   Combined area_id and flags
+ * @param area_index    Area table index (1-based, uint16_t)
+ * @param virt_size     New virtual size in bytes
+ * @param commit_size   New committed size in bytes
  * @param status_ret    Output: status code
  *
  * Original address: 0x00E08CEA
  */
-void AREA_$GROW_TO(uint16_t gen, uint32_t size_param, uint32_t combined_id,
-                   status_$t *status_ret);
+void AREA_$GROW_TO(uint16_t area_index, uint32_t virt_size,
+                   uint32_t commit_size, status_$t *status_ret);
 
 /*
  * AREA_$INVALIDATE - Invalidate area pages
