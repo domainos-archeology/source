@@ -14,6 +14,7 @@
 #include "ast/ast.h"
 #include "file/file_internal.h" // we call FILE_$PRIV_UNLOCK
 #include "name/name.h"
+#include "network/network.h"
 #include "proc1/proc1.h"
 
 /*
@@ -243,8 +244,5 @@ void FUN_00e4e786(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
                   int16_t name_buf_len, char *name_buf,
                   int16_t *name_len_ret, uint32_t *net_ret,
                   status_$t *status_ret);
-
-/* Global data */
-extern uint32_t NODE_$ME;       /* This node's ID */
 
 #endif /* DIR_INTERNAL_H */

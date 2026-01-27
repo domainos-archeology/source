@@ -9,6 +9,7 @@
 #define VFMT_INTERNAL_H
 
 #include "vfmt/vfmt.h"
+#include "math/math.h"
 
 /*
  * Format specifier character codes

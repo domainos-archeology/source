@@ -16,6 +16,7 @@
 #include "hint/hint.h"
 #include "rem_file/rem_file.h"
 #include "audit/audit.h"
+#include "network/network.h"
 #include "route/route.h"
 #include "disk/disk.h"
 #include "proc1/proc1.h"
@@ -166,9 +167,6 @@ extern int8_t AUDIT_$ENABLED;
 
 /* Network log enabled flag */
 extern int8_t NETLOG_$OK_TO_LOG;
-
-/* Current node ID */
-extern uint32_t NODE_$ME;
 
 /* Current process ASID */
 extern uint16_t PROC1_$AS_ID;

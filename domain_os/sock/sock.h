@@ -18,6 +18,7 @@
 #define SOCK_H
 
 #include "base/base.h"
+#include "ec/ec.h"
 
 /*
  * Socket flags for SOCK_$OPEN and SOCK_$ALLOCATE
@@ -153,5 +154,14 @@ int8_t SOCK_$GET(uint16_t sock_num, void *pkt_info);
  */
 int8_t SOCK_$PUT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
                  uint16_t ec_param1, uint16_t ec_param2);
+
+ /*
+  * SOCK_$EVENT_COUNTERS - Socket event counter array
+  *
+  * Array of pointers to event counters, indexed by socket number.
+  *
+  * Original address: 0xE28DB4
+  */
+extern ec_$eventcount_t *SOCK_$EVENT_COUNTERS[];
 
 #endif /* SOCK_H */

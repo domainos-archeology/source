@@ -20,6 +20,11 @@
 /* Forward declaration for opaque entry type */
 struct rip_$entry_t;
 
+/*
+ * RIP_$STATS - RIP protocol statistics
+ *
+ * Located at 0xE262AC, tracks packet processing statistics.
+ */
 typedef struct rip_$stats_t {
     uint16_t    _reserved0;         /* 0x00: Reserved */
     uint32_t    packets_received;   /* 0x02: Total packets received */

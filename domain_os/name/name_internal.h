@@ -18,9 +18,7 @@
 #include "proc1/proc1.h"
 #include "vfmt/vfmt.h"
 #include "cal/cal.h"
-
-/* Node ID - from UID subsystem */
-extern uint32_t NODE_$ME;
+#include "network/network.h"
 
 /*
  * NAME data area

@@ -355,4 +355,14 @@ void NETWORK_$RING_INFO(void *net_handle, ring_info_t *ring_info,
  */
 uint16_t NETWORK_$GET_PKT_SIZE(uint32_t *dest_addr, uint16_t max_size);
 
+/*
+ * NODE_$ME - This node's identifier
+ *
+ * The low 20 bits of the local node's network address. Used to detect
+ * loopback/local destination requests.
+ *
+ * Original address: 0xE245A4
+ */
+extern uint32_t NODE_$ME;
+
 #endif /* NETWORK_H */

@@ -4,7 +4,7 @@
  * Searches through all routing ports to find one matching the given
  * network and socket numbers. Returns the port index if found.
  *
- * The function iterates through the ROUTE_$PORTP_ARRAY (8 port pointers)
+ * The function iterates through the ROUTE_$PORTP (8 port pointers)
  * checking each port's active status, network, and socket fields.
  *
  * Original address: 0x00E15AF8
@@ -50,7 +50,7 @@ int16_t ROUTE_$FIND_PORT(uint16_t network, int32_t socket)
      * The original code uses ROUTE_$SOCK_ECVAL+4 as base for the pointer array.
      */
     for (i = 0; i < ROUTE_MAX_PORTS; i++) {
-        port = ROUTE_$PORTP_ARRAY[i];
+        port = ROUTE_$PORTP[i];
         
         /* Check if port is active */
         if (port->active == 0) {

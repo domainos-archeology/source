@@ -27,10 +27,6 @@
 
 #include "vfmt/vfmt_internal.h"
 
-/* Math helper functions from m68k library */
-extern int32_t M_DIU_LLW(int32_t dividend, int16_t divisor);
-extern int16_t M_OIU_WLW(int32_t dividend, int16_t divisor);
-
 /*
  * Static helper functions (nested Pascal sub-procedures)
  */
@@ -239,13 +235,13 @@ static void format_number(const char *spec, int16_t spec_len, void *value_p,
     /* Convert to string (reverse order) */
     digit_count = 0;
     do {
-        int16_t digit = M_OIU_WLW(value, base);
+        int16_t digit = M$OIU$WLW(value, base);
         if (digit < 10) {
             digits[19 - digit_count] = '0' + digit;
         } else {
             digits[19 - digit_count] = 'A' + digit - 10;
         }
-        value = M_DIU_LLW(value, base);
+        value = M$DIU$LLW(value, base);
         digit_count++;
     } while (value != 0 && digit_count < 20);
 

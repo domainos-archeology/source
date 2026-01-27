@@ -126,8 +126,9 @@ void XNS_IDP_$INIT(void)
     {
         uint32_t node = NODE_$ME;
         uint16_t host_hi = ((node >> 16) & 0x0F) | 0x1E00;
+        uint16_t host_lo = node & 0xFFFF;
         *(uint16_t *)(base + XNS_OFF_LOCAL_HOST_HI) = host_hi;
-        *(uint16_t *)(base + XNS_OFF_LOCAL_HOST_LO) = NODE_$ME_LO;
+        *(uint16_t *)(base + XNS_OFF_LOCAL_HOST_LO) = host_lo;
     }
 
     /* Initialize first channel's broadcast address */

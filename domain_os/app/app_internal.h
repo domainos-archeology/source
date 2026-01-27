@@ -24,6 +24,7 @@
 #include "ml/ml.h"
 #include "sock/sock.h"
 #include "netbuf/netbuf.h"
+#include "network/network.h"
 #include "os/os.h"
 #include "pkt/pkt.h"
 #include "route/route.h"
@@ -145,9 +146,6 @@ typedef struct xns_idp_open_params_t {
 /* Socket table base (at 0xE28DB0) */
 #define SOCK_$TABLE_BASE        (*(void **)0xE28DB0)
 
-/* Current node ID */
-#define NODE_$ME                (*(uint32_t *)0xE245A4)
-
 /* Ring overflow counters */
 #define RING_$FILE_OVERFLOW     (*(uint16_t *)0xE24596)
 #define RING_$OVERFLOW_OVERFLOW (*(uint16_t *)0xE24594)
@@ -158,7 +156,6 @@ extern ml_$exclusion_t APP_$EXCLUSION_LOCK;
 extern uint16_t APP_$STD_IDP_CHANNEL;
 extern uint8_t APP_$TEMP_BUFFER[];
 extern void *SOCK_$TABLE_BASE;
-extern uint32_t NODE_$ME;
 extern uint16_t RING_$FILE_OVERFLOW;
 extern uint16_t RING_$OVERFLOW_OVERFLOW;
 #endif

@@ -21,6 +21,7 @@
  */
 
 #include "uid.h"
+#include "network/network.h"
 
 void UID_$INIT(void)
 {

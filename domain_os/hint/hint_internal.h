@@ -24,6 +24,7 @@
 #include "time/time.h"
 #include "route/route.h"
 #include "name/name.h"
+#include "network/network.h"
 #include "file/file.h"
 #include "mst/mst.h"
 #include "ast/ast.h"
@@ -195,9 +196,6 @@ typedef struct hint_globals_t {
 /* Network port for current node */
 #define ROUTE_$PORT             (*(uint32_t *)0xE2E0A0)
 
-/* Current node ID */
-#define NODE_$ME                (*(uint32_t *)0xE245A4)
-
 #else
 /* Non-m68k: extern declarations */
 extern hint_file_t *HINT_$HINTFILE_PTR;
@@ -208,7 +206,6 @@ extern uint16_t HINT_$CACHE_INDEX;
 extern uint16_t HINT_$BUCKET_INDEX;
 extern uint8_t *ROUTE_$PORTP;
 extern uint32_t ROUTE_$PORT;
-extern uint32_t NODE_$ME;
 #endif
 
 /*

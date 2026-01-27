@@ -106,7 +106,6 @@ typedef struct pkt_$data_t {
 /*
  * External references needed by PKT
  */
-extern uint32_t NODE_$ME;                       /* Local node ID */
 extern int8_t NETWORK_$LOOPBACK_FLAG;           /* Network loopback mode flag */
 extern uint32_t *ROUTE_$PORTP;                  /* Route port pointers */
 

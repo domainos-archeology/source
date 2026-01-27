@@ -309,15 +309,6 @@ typedef struct xns_$idp_send_t {
 extern xns_$idp_state_t *XNS_$IDP_STATE;
 #endif
 
-/* NODE_$ME - local node address (6 bytes at 0xE245A4) */
-#if defined(M68K)
-#define NODE_$ME                (*(uint32_t *)0xE245A4)
-#define NODE_$ME_LO             (*(uint16_t *)0xE245A6)
-#else
-extern uint32_t NODE_$ME;
-extern uint16_t NODE_$ME_LO;
-#endif
-
 /*
  * Public API Functions
  */

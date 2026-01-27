@@ -72,7 +72,6 @@ typedef struct {
 extern uint8_t DAT_00e24c3f;      /* Network flags */
 extern int8_t NETWORK_$DISKLESS;  /* Diskless node flag */
 extern uint32_t NETWORK_$MOTHER_NODE;  /* Mother node ID */
-extern uint32_t NODE_$ME;         /* Our node ID */
 
 /*
  * Process admin check table

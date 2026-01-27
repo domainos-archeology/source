@@ -9,6 +9,7 @@
 #define NETLOG_INTERNAL_H
 
 #include "netlog/netlog.h"
+#include "network/network.h"
 #include "ml/ml.h"
 #include "time/time.h"
 
@@ -115,16 +116,6 @@ typedef struct netlog_data_t {
     /* Include proc1 header for PROC1_$CURRENT */
     #include "proc1/proc1.h"
     #define NETLOG_GET_CURRENT_PID()    ((uint8_t)(PROC1_$CURRENT & 0xFF))
-#endif
-
-/*
- * NODE_$ME - Local node ID
- * On m68k, located at 0xE245A4
- */
-#if defined(M68K)
-    #define NODE_$ME            (*(uint32_t*)0xE245A4)
-#else
-    extern uint32_t NODE_$ME;
 #endif
 
 /*

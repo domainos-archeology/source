@@ -44,4 +44,6 @@ extern uint8_t sock_table_base[] __attribute__((section(".bss.sock")));
 static uint8_t sock_table_storage[SOCK_TABLE_SIZE];
 uint8_t *sock_table_base = sock_table_storage;
 
+ec_$eventcount_t *SOCK_$EVENT_COUNTERS[]; // TODO we need a size here...
+
 #endif /* M68K */

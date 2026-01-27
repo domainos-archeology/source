@@ -245,11 +245,6 @@ extern uint16_t ast_aste_l_cnt;
 #define AST_MIN_ASTE 0x50  /* 80 entries */
 
 /*
- * External references
- */
-extern uint32_t NODE_$ME;
-
-/*
  * Error status codes
  */
 extern status_$t Some_ASTE_Error;

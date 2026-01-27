@@ -221,8 +221,9 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
     {
         uint32_t node = NODE_$ME;
         uint16_t host_hi = ((node >> 16) & 0x0F) | 0x1E00;
+        uint16_t host_lo = node & 0xFFFF;
         error_header[0x0C] = host_hi;
-        error_header[0x0D] = NODE_$ME_LO;
+        error_header[0x0D] = host_lo;
     }
 
     /* Set error code and parameter */

@@ -62,7 +62,7 @@ extern uint32_t ROUTE_$PORT;
  *
  * Original address: 0xE26EE8
  */
-extern route_$port_t **ROUTE_$PORTP;
+extern route_$port_t *ROUTE_$PORTP[];
 
 /* Number of network ports supported */
 #define ROUTE_$MAX_PORTS        8

@@ -57,7 +57,6 @@ extern uid_t RGYC_$G_LOCKSMITH_UID;
  * ============================================================================
  */
 
-extern uint32_t NODE_$ME;
 /* MST_$MST_PAGES_LIMIT declared in mst/mst.h */
 extern uint32_t AS_$STACK_HIGH;
 extern int ROUTE_$PORT;

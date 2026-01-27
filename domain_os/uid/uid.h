@@ -29,11 +29,6 @@ extern uid_t UID_$GENERATOR_STATE;      /* 0xE2C008: Last generated UID */
 extern uint16_t UID_$GENERATOR_LOCK;    /* 0xE2C010: Spin lock for generator */
 
 /*
- * Node identifier
- */
-extern uint32_t NODE_$ME;               /* 0xE245A4: This node's ID */
-
-/*
  * Well-known UIDs
  *
  * These are UIDs for system objects that need to be referenced by name.

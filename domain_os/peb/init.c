@@ -21,11 +21,6 @@ peb_fp_state_t PEB_$WIRED_DATA_START[PEB_MAX_PROCESSES];
 /* PEB status register shadow */
 uint32_t PEB_$STATUS_REG;
 
-/* Error message strings */
-const char PEB_interrupt[] = "PEB_interrupt";
-const char PEB_FPU_Is_Hung_Err[] = "PEB FPU Is Hung Err";
-const char PEB_WCS_Verify_Failed_Err[] = "PEB WCS Verify Failed Err";
-
 /*
  * External function for probing PEB hardware
  * Original address: 0x00E29138

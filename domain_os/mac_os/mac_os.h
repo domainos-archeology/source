@@ -184,7 +184,6 @@ extern mac_os_$port_pkt_table_t MAC_OS_$PORT_PKT_TABLES[MAC_OS_MAX_PORTS];
 extern mac_os_$channel_t MAC_OS_$CHANNEL_TABLE[MAC_OS_MAX_CHANNELS];
 extern void *MAC_OS_$EXCLUSION;
 extern mac_os_$port_info_t MAC_OS_$PORT_INFO_TABLE[MAC_OS_MAX_PORTS];
-extern uint32_t node_$me;
 
 /*
  * ============================================================================

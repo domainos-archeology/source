@@ -11,20 +11,6 @@
 #include "network/network.h"
 
 /*
- * NODE_$ME - This node's identifier
- *
- * The low 20 bits of the local node's network address. Used to detect
- * loopback/local destination requests.
- *
- * Original address: 0xE245A4
- */
-#if defined(M68K)
-#define NODE_$ME (*(uint32_t *)0xE245A4)
-#else
-extern uint32_t NODE_$ME;
-#endif
-
-/*
  * NETWORK_$LOOPBACK_FLAG - Loopback mode indicator
  *
  * If negative (bit 7 set), network operations should use the local node

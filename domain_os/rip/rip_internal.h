@@ -294,12 +294,6 @@ uint16_t RIP_$SERVER(void);
  * =============================================================================
  */
 
-/*
- * RIP_$STATS - RIP protocol statistics
- *
- * Located at 0xE262AC, tracks packet processing statistics.
- */
-
 /* RIP command types */
 #define RIP_CMD_REQUEST         1
 #define RIP_CMD_RESPONSE        2
@@ -454,51 +448,8 @@ void RIP_$STD_OPEN(void);
 void RIP_$STD_DEMUX(idp_$packet_t *pkt, uint16_t *param_2, uint16_t *param_3,
                     void *param_4, status_$t *status_ret);
 
-/*
- * RIP_$PORT_CLOSE and RIP_$HALT_ROUTER are declared in rip.h (public API)
- */
 
-/*
- * =============================================================================
- * Miscellaneous Functions
- * =============================================================================
- */
-
-/*
- * RIP_$ANNOUNCE_NS is declared in rip.h (public API)
- */
-
-/*
- * =============================================================================
- * External Global Variables (m68k addresses)
- * =============================================================================
- */
-
-#if defined(M68K)
-    /* RIP_$STD_IDP_CHANNEL - IDP channel for RIP packets (0xFFFF = no channel) */
-    #define RIP_$STD_IDP_CHANNEL    (*(int16_t *)0xE26EBC)
-
-    /* NETWORK_$DISKLESS - Diskless boot flag (bit 7 set = diskless) */
-    #define NETWORK_$DISKLESS       (*(int8_t *)0xE24C4C)
-
-    /* NETWORK_$MOTHER_NODE - Node ID of boot server */
-    #define NETWORK_$MOTHER_NODE    (*(uint32_t *)0xE24C0C)
-
-    /* NODE_$ME - This node's ID */
-    #define NODE_$ME                (*(uint32_t *)0xE245A4)
-
-    /* ROUTE_$PORT - Primary routing port */
-    #define ROUTE_$PORT             (*(uint32_t *)0xE2E0A0)
-
-    /* Socket event counter array (indexed by socket number) */
-    #define SOCK_$EVENT_COUNTERS    ((ec_$eventcount_t **)0xE28DB4)
-#else
-    extern int16_t RIP_$STD_IDP_CHANNEL;
-    extern int8_t NETWORK_$DISKLESS;
-    extern uint32_t NETWORK_$MOTHER_NODE;
-    extern uint32_t NODE_$ME;
-    extern uint32_t ROUTE_$PORT;
-    extern ec_$eventcount_t **SOCK_$EVENT_COUNTERS;
-#endif
+/* RIP_$STD_IDP_CHANNEL - IDP channel for RIP packets (0xFFFF = no channel) */
+extern int16_t RIP_$STD_IDP_CHANNEL;
 
 #endif /* RIP_INTERNAL_H */

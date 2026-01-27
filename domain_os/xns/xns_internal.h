@@ -15,6 +15,7 @@
 #include "mac_os/mac_os.h"
 #include "rip/rip.h"
 #include "netbuf/netbuf.h"
+#include "network/network.h"
 #include "route/route.h"
 #include "proc1/proc1.h"
 #include "proc2/proc2.h"

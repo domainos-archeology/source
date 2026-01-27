@@ -14,6 +14,7 @@
 #include "disk/disk.h"
 #include "math/math.h"
 #include "time/time.h"
+#include "network/network.h"
 #include "uid/uid.h"
 
 /*

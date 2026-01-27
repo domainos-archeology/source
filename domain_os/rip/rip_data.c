@@ -7,7 +7,7 @@ rip_$data_t RIP_$DATA;
 rip_$entry_t *RIP_$INFO;
 
 /* RIP_$STATS - Protocol statistics at 0xE262AC */
-    extern rip_$stats_t RIP_$STATS;
+rip_$stats_t RIP_$STATS;
 
 /* Routing port counts */
 int16_t ROUTE_$STD_N_ROUTING_PORTS;
