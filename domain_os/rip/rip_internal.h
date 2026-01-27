@@ -131,32 +131,13 @@ typedef struct rip_$data_t {
  * =============================================================================
  */
 
-#if defined(M68K)
-    /* Main RIP data structure at 0xE26258 */
-    #define RIP_$DATA               (*(rip_$data_t *)0xE26258)
-
-    /* RIP_$INFO - Base of routing table entries (separate from RIP_$DATA.entries) */
-    #define RIP_$INFO               ((rip_$entry_t *)0xE263BC)
-
-    /* RIP_$STATS - Protocol statistics at 0xE262AC */
-    #define RIP_$STATS              (*(rip_$stats_t *)0xE262AC)
-
-    /* Routing port counts */
-    #define ROUTE_$STD_N_ROUTING_PORTS  (*(int16_t *)0xE26F1A)
-    #define ROUTE_$N_ROUTING_PORTS      (*(int16_t *)0xE26F1C)
-
-    /* Recent changes flags (signed bytes - negative means changes pending) */
-    #define RIP_$STD_RECENT_CHANGES     (*(int8_t *)0xE26EDE)
-    #define RIP_$RECENT_CHANGES         (*(int8_t *)0xE26EE0)
-#else
-    extern rip_$data_t RIP_$DATA;
-    extern rip_$entry_t *RIP_$INFO;
-    extern rip_$stats_t RIP_$STATS;
-    extern int16_t ROUTE_$STD_N_ROUTING_PORTS;
-    extern int16_t ROUTE_$N_ROUTING_PORTS;
-    extern int8_t RIP_$STD_RECENT_CHANGES;
-    extern int8_t RIP_$RECENT_CHANGES;
-#endif
+extern rip_$data_t RIP_$DATA;
+extern rip_$entry_t *RIP_$INFO;
+extern rip_$stats_t RIP_$STATS;
+extern int16_t ROUTE_$STD_N_ROUTING_PORTS;
+extern int16_t ROUTE_$N_ROUTING_PORTS;
+extern int8_t RIP_$STD_RECENT_CHANGES;
+extern int8_t RIP_$RECENT_CHANGES;
 
 /* Status code for unknown network port */
 #define status_$internet_unknown_network_port   0x2B0003
@@ -318,14 +299,6 @@ uint16_t RIP_$SERVER(void);
  *
  * Located at 0xE262AC, tracks packet processing statistics.
  */
-typedef struct rip_$stats_t {
-    uint16_t    _reserved0;         /* 0x00: Reserved */
-    uint32_t    packets_received;   /* 0x02: Total packets received */
-    uint16_t    _reserved1;         /* 0x06: Reserved */
-    uint32_t    errors;             /* 0x08: Packet errors */
-    uint16_t    unknown_commands;   /* 0x0C: Unknown command types */
-    /* ... more fields follow to ~0x110 bytes */
-} rip_$stats_t;
 
 /* RIP command types */
 #define RIP_CMD_REQUEST         1

@@ -20,6 +20,15 @@
 /* Forward declaration for opaque entry type */
 struct rip_$entry_t;
 
+typedef struct rip_$stats_t {
+    uint16_t    _reserved0;         /* 0x00: Reserved */
+    uint32_t    packets_received;   /* 0x02: Total packets received */
+    uint16_t    _reserved1;         /* 0x06: Reserved */
+    uint32_t    errors;             /* 0x08: Packet errors */
+    uint16_t    unknown_commands;   /* 0x0C: Unknown command types */
+    /* ... more fields follow to ~0x110 bytes */
+} rip_$stats_t;
+
 /*
  * RIP_$NET_LOOKUP - Look up network in routing table
  *
