@@ -18,9 +18,6 @@
 
 #include "name/name_internal.h"
 
-/* External reference to current address space ID */
-extern int16_t PROC1_$AS_ID;   /* 0x00e2060a */
-
 /*
  * NAME data area offsets
  */

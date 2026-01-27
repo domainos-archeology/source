@@ -76,6 +76,7 @@ uid_t ACL_$FNDWRX;  /* 0xE174C4: Default ACL for files */
 /*
  * ACL type UIDs - well-known UIDs used to identify ACL operation types
  */
+uid_t ACL_$FILE_ACL;        /* 0xE1744C: {0x00000601, 0x00000000} */
 uid_t ACL_$FILEIN_ACL;      /* 0xE17454: {0x00000602, 0x00000000} */
 uid_t ACL_$DIRIN_ACL;       /* 0xE1745C: {0x00000603, 0x00000000} */
 uid_t ACL_$DIR_MERGE_ACL;   /* 0xE17464: {0x00000604, 0x00000000} */

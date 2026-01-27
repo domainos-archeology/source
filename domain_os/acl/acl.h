@@ -722,4 +722,8 @@ extern uid_t ACL_$DNDCAL;   /* 0xE174DC: Default ACL for dirs/links */
 extern uid_t ACL_$FNDWRX;   /* 0xE174C4: Default ACL for files */
 extern uid_t ACL_$DIR_ACL;  /* Well-known ACL UID for directories */
 
+/* ACL type UIDs - used to identify ACL operations */
+extern uid_t ACL_$FILE_ACL;    /* 0xE1744C */
+extern uid_t ACL_$FILEIN_ACL;  /* 0xE17454 */
+
 #endif /* ACL_H */

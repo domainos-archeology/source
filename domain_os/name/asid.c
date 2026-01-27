@@ -16,9 +16,6 @@
 
 #include "name/name_internal.h"
 
-/* External references */
-extern int16_t PROC1_$AS_ID;   /* 0x00e2060a - current address space ID */
-
 /* Internal helper to unmap directory */
 extern void FUN_00e58560(int16_t asid, void *mapped_info);
 

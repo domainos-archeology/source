@@ -170,6 +170,7 @@ extern uint8_t ACL_$WORKSPACE[64];  /* 0xE7CF54 */
 /*
  * ACL type UIDs - used to identify ACL operations
  */
+extern uid_t ACL_$FILE_ACL;         /* 0xE1744C */
 extern uid_t ACL_$FILEIN_ACL;       /* 0xE17454 */
 extern uid_t ACL_$DIRIN_ACL;        /* 0xE1745C */
 extern uid_t ACL_$DIR_MERGE_ACL;    /* 0xE17464 */
