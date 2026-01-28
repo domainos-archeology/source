@@ -98,13 +98,7 @@ extern uint8_t DAT_00e61718[];                  /* Project list constant */
  */
 extern uint8_t DAT_00e62d48[];                  /* Case mapping table */
 
-/*
- * External function declarations - only those not in headers
- */
-extern void UNMAP_CASE(void *name_in, void *name_len_out, void *name_out,
-                       void *table, void *result_len, void *status_bytes);
-extern void MAP_CASE(void *name_in, void *name_len, void *name_out,
-                     void *table, void *result_len, void *status_bytes);
+/* MAP_CASE and UNMAP_CASE prototypes are provided by file/file.h (via file_internal.h) */
 
 /*
  * ============================================================================

@@ -1237,4 +1237,55 @@ void FILE_$UNLOCK_ALL(void);
  */
 void FILE_$FORK_LOCK(uint16_t *new_asid, status_$t *status_ret);
 
+/*
+ * ============================================================================
+ * Pathname Case Mapping Functions
+ * ============================================================================
+ */
+
+/*
+ * MAP_CASE - Convert Unix-style pathname to Domain/OS case-mapped representation
+ *
+ * Converts a Unix pathname to Domain/OS case convention:
+ *   - lowercase -> uppercase
+ *   - uppercase -> ':' + char (escaped)
+ *   - special chars (space, backslash, colon, control, high-bit) -> escaped forms
+ *   - '/' passes through and resets component tracking
+ *
+ * Parameters:
+ *   name        - Input pathname buffer
+ *   name_len    - Pointer to input length
+ *   output      - Output buffer for case-mapped result
+ *   max_out_len - Pointer to maximum output buffer size
+ *   out_len     - Pointer to output length (set on return)
+ *   truncated   - Pointer to truncation flag (0xFF=truncated, 0x00=complete)
+ *
+ * Original address: 0x00e53ef8
+ */
+void MAP_CASE(char *name, int16_t *name_len, char *output,
+              int16_t *max_out_len, int16_t *out_len, uint8_t *truncated);
+
+/*
+ * UNMAP_CASE - Convert Domain/OS case-mapped pathname to Unix-style
+ *
+ * Reverses the case mapping performed by MAP_CASE:
+ *   - bare uppercase -> lowercase
+ *   - ':' + uppercase -> keep uppercase
+ *   - '\' -> '../'
+ *   - ':' + digit -> special char
+ *   - ':_' -> space, ':|' -> backslash, ':#XX' -> hex decode
+ *
+ * Parameters:
+ *   name        - Input pathname buffer (Domain/OS case-mapped)
+ *   name_len    - Pointer to input length
+ *   output      - Output buffer for Unix-style result
+ *   max_out_len - Pointer to maximum output buffer size
+ *   out_len     - Pointer to output length (set on return)
+ *   truncated   - Pointer to truncation flag (0xFF=truncated, 0x00=complete)
+ *
+ * Original address: 0x00e540d4
+ */
+void UNMAP_CASE(char *name, int16_t *name_len, char *output,
+                int16_t *max_out_len, int16_t *out_len, uint8_t *truncated);
+
 #endif /* FILE_H */
