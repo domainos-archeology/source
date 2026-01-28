@@ -46,7 +46,7 @@ void WP_$CALLOC_LIST(int16_t count, uint32_t *ppn_arr);
  * Parameters:
  *   wired_addr - Address returned by WP_$CALLOC
  *
- * Original address: TBD
+ * Original address: 0x00e07176
  */
 void WP_$UNWIRE(uint32_t wired_addr);
 

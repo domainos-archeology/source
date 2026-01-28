@@ -88,6 +88,7 @@
 #define status_$display_already_borrowed_by_this_process 0x00130014
 #define status_$display_invalid_scroll_displacement 0x00130019
 #define status_$display_invalid_cursor_number 0x00130023
+#define status_$display_invalid_event_count_key 0x00130026
 
 /*
  * ============================================================================

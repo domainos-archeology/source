@@ -8,10 +8,10 @@
 #ifndef SIO_INTERNAL_H
 #define SIO_INTERNAL_H
 
-#include "sio/sio.h"
 #include "ml/ml.h"
-#include "time/time.h"
+#include "sio/sio.h"
 #include "term/term.h"
+#include "time/time.h"
 
 /*
  * ============================================================================
@@ -73,23 +73,6 @@ uint16_t SIO_DELAY_RESTART(sio_desc_t **args);
 void FUN_00e67e86(sio_desc_t *desc, uint8_t enable);
 
 /*
- * M_MIU_LLW - Multiply and return 32-bit result
- *
- * Used for time calculations. Multiplies two values and returns
- * the result in a format suitable for clock operations.
- *
- * Parameters:
- *   value - Value to multiply
- *   multiplier - Multiplier (typically 0xFA = 250 for ms to ticks)
- *
- * Returns:
- *   32-bit result
- *
- * Original address: 0x00e0ac02
- */
-uint32_t M_MIU_LLW(uint32_t value, uint16_t multiplier);
-
-/*
  * ============================================================================
  * External References from Other Modules
  * ============================================================================
@@ -135,6 +118,7 @@ extern int16_t PROC1_$AS_ID;
  *
  * Original address: 0x00e67292
  */
-extern void TTY_$I_ENABLE_CRASH_FUNC(void *tty_desc, uint16_t key_code, uint8_t flags);
+extern void TTY_$I_ENABLE_CRASH_FUNC(void *tty_desc, uint16_t key_code,
+                                     uint8_t flags);
 
 #endif /* SIO_INTERNAL_H */

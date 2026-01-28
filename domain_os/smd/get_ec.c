@@ -28,9 +28,6 @@
 #define SMD_EC_KEY_SMD_EC2      2   /* SMD secondary event count */
 #define SMD_EC_KEY_SHUTDOWN     3   /* OS shutdown event count */
 
-/* Status code for invalid event count key */
-#define status_$display_invalid_event_count_key     0x00130026
-
 /*
  * SMD_$GET_EC - Get event count
  *
@@ -50,7 +47,7 @@
 void SMD_$GET_EC(uint16_t *key, void **ec2_ret, status_$t *status_ret)
 {
     uint16_t unit;
-    int32_t unit_offset;
+    smd_unit_aux_t *aux;
     ec_$eventcount_t *ec1;
     smd_display_hw_t *hw;
 
@@ -64,9 +61,9 @@ void SMD_$GET_EC(uint16_t *key, void **ec2_ret, status_$t *status_ret)
 
     *status_ret = status_$ok;
 
-    /* Calculate unit offset and get hardware info */
-    unit_offset = (int32_t)unit * SMD_DISPLAY_UNIT_SIZE;
-    hw = (smd_display_hw_t *)((uint8_t *)SMD_UNIT_AUX_BASE + unit_offset);
+    /* Get hardware info via unit auxiliary data */
+    aux = smd_get_unit_aux(unit);
+    hw = aux->hw;
 
     switch (*key) {
     case SMD_EC_KEY_DTTE:

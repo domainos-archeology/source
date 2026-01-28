@@ -45,16 +45,25 @@ void INIT_STACK(proc1_t *pcb, void **entry_ptr, void **sp_ptr);
 void FUN_00e20824(void);
 
 /*
- * proc1_$clr_lock_int - Internal clear lock implementation
+ * proc1_$set_lock_body - Internal set lock implementation (assembly)
  *
- * Called with interrupts disabled to release a resource lock.
+ * Internal entry point for PROC1_$SET_LOCK, called with lock_id in D0.
+ * Increments lock depth (PCB+0x5A), checks ordering, sets lock bit.
  *
- * Parameters:
- *   lock_id - Lock ID (0-31)
- *
- * Original address: 0x00e20b92 (part of PROC1_$CLR_LOCK)
+ * Original address: 0x00e20ae8
  */
-void proc1_$clr_lock_int(uint16_t lock_id);
+void proc1_$set_lock_body(void);
+
+/*
+ * proc1_$clr_lock_body - Internal clear lock implementation (assembly)
+ *
+ * Internal entry point for PROC1_$CLR_LOCK, called with lock_id in D0,
+ * current PCB in A1, and interrupts disabled.
+ * Clears lock bit, decrements lock depth, handles deferred operations.
+ *
+ * Original address: 0x00e20b9e
+ */
+void proc1_$clr_lock_body(void);
 
 /*
  * ============================================================================
