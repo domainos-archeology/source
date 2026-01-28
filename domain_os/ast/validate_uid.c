@@ -14,7 +14,7 @@
  * Global storage for failed UID lookups (for error reporting)
  * At A5+0x478, A5+0x47C, A5+0x480 in original code
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define AST_$FAILED_UID_HIGH (*(uint32_t *)0xE1E0F8)  /* A5+0x478 */
 #define AST_$FAILED_UID_LOW  (*(uint32_t *)0xE1E0FC)  /* A5+0x47C */
 #define AST_$FAILED_FLAGS    (*(uint32_t *)0xE1E100)  /* A5+0x480 */

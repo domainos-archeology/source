@@ -79,7 +79,7 @@ typedef struct rip_$stats_t {
     /* ... more fields follow */
 } rip_$stats_t;
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define RIP_$STATS              (*(rip_$stats_t *)0xE262AC)
     #define ROUTE_$STD_N_ROUTING_PORTS  (*(int16_t *)0xE26F1A)
     #define ROUTE_$N_ROUTING_PORTS      (*(int16_t *)0xE26F1C)

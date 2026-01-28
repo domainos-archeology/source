@@ -23,7 +23,7 @@
  * Note: On m68k, these would be actual linker-defined symbols.
  * For portability, we define placeholder addresses here.
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /* Code boundary addresses for MST_$WIRE_AREA */
     #define NETLOG_CODE_START       ((void*)0xE71914)   /* Start of NETLOG code */
     #define NETLOG_DATA_START       ((void*)0xE85684)   /* Start of NETLOG data */

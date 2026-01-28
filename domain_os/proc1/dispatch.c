@@ -18,7 +18,7 @@
  * a C-callable interface on non-m68k platforms.
  */
 
-#if !defined(M68K)
+#if !defined(ARCH_M68K)
 
 void PROC1_$DISPATCH(void)
 {

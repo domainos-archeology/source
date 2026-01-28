@@ -28,8 +28,8 @@
 #define AST_H
 
 #include "base/base.h"
-#include "ml/ml.h"
 #include "ec/ec.h"
+#include "ml/ml.h"
 
 /* AST status codes (module 0x03) */
 #define status_$ast_incompatible_request 0x00030006
@@ -132,11 +132,10 @@ typedef struct segmap_entry_t {
  * Global variables for the AST subsystem, based at 0xE1DC80.
  */
 
-
 /*
  * Architecture-independent macros for AST access
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 /* AST globals base */
 #define AST_GLOBALS_BASE 0xE1DC80
 

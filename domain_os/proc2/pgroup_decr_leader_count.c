@@ -26,7 +26,7 @@
  * Memory access helpers for iteration.
  * These access fields from proc2_info_t using index-based addressing.
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /* Base: 0xEA5438 is P2_INFO_TABLE_BASE, field addresses are base + offset + idx*0xE4 */
     #define P2_PGROUP_IDX_FIELD(idx)    (*(int16_t*)(0xEA5448 + (idx) * 0xE4))   /* offset 0x10 */
     #define P2_NEXT_ALLOC_IDX(idx)      (*(int16_t*)(0xEA544A + (idx) * 0xE4))   /* offset 0x12 */

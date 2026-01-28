@@ -54,7 +54,7 @@ void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params, status_$t *status_
      * Types 0 and 1 (bits 0-1) indicate port is NOT available.
      * Original: if ((1 << (port_info[port].field_2c & 0x1f)) & 3) != 0) error
      */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     {
         uint16_t port_type = *(uint16_t *)(MAC_$PORT_INFO_BASE + port * MAC_PORT_INFO_SIZE + 0x2C);
         if ((1 << (port_type & 0x1F)) & 3) {
@@ -105,7 +105,7 @@ void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params, status_$t *status_
      * This marks the socket for internal use until fully set up.
      * Original: bclr.b #0x7,(0x16,A3)
      */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     sock_ptr = (uint8_t *)(*(uint32_t *)(0xE28DB0 + sock_num * 4));
     sock_ptr[0x16] &= 0x7F;
 #else
@@ -139,7 +139,7 @@ void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params, status_$t *status_
     PROC2_$SET_CLEANUP(0x0D);
 
     /* Enter exclusion region to update channel table */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     ML_$EXCLUSION_START(&mac_$exclusion_lock);
 
     /*

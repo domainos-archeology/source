@@ -21,7 +21,7 @@ void MAC_$CLOSE(uint16_t *channel, status_$t *status_ret)
     *status_ret = status_$ok;
 
     /* Enter exclusion region for channel table access */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     ML_$EXCLUSION_START(&mac_$exclusion_lock);
 
     chan = *channel;

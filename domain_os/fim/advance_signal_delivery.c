@@ -16,7 +16,7 @@
 /*
  * FIM data structure addresses (M68K specific)
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /* FIM_$QUIT_EC - Quit event counter array, indexed by AS_ID * 12 */
     #define FIM_QUIT_EC_BASE        0xE22002
     #define FIM_QUIT_EC(asid)       ((ec_$eventcount_t*)(FIM_QUIT_EC_BASE + (asid) * 12))

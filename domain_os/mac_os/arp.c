@@ -38,7 +38,7 @@
 void MAC_OS_$ARP(void *addr_info, int16_t port_num, uint16_t *mac_addr,
                  uint8_t *flags, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     void *route_port;
     uint16_t net_type;
     uint16_t ether_type;

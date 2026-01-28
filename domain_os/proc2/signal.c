@@ -32,7 +32,7 @@ static void log_signal_event(int event_type, int16_t target_idx, int16_t signal,
 /*
  * Raw memory access for undocumented parent/session fields
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_SIGNAL_BASE(idx)      ((int16_t*)(0xEA551C + ((idx) * 0xE4)))
     /* offset -0xBE from entry end = field at 0x22 or so - likely parent-related */
     #define P2_PARENT_FIELD(idx)     (*(P2_SIGNAL_BASE(idx) - 0x5F))

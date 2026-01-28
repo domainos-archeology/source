@@ -12,7 +12,7 @@
 
 void MSG_$SET_HPIPC(msg_$socket_t *socket, void *param2, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_offset;
     uint8_t asid;

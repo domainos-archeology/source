@@ -27,7 +27,7 @@
  * Raw memory access for process group index field
  * At offset -0xD4 from entry end = field at 0x10 area - pgroup index
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_PGROUP_BASE(idx)     ((int16_t*)(0xEA551C + ((idx) * 0xE4)))
     #define P2_PGROUP_IDX(idx)      (*(P2_PGROUP_BASE(idx) - 0x6A))
     #define P2_FLAGS_FIELD(idx)     (*(uint16_t*)(0xEA5462 + (idx) * 0xE4))

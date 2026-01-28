@@ -24,7 +24,7 @@
 /*
  * Memory access helpers for child iteration and field access.
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_PGROUP_IDX_FIELD(idx)    (*(int16_t*)(0xEA5448 + (idx) * 0xE4))   /* offset 0x10 */
     #define P2_SESSION_ID_FIELD(idx)    (*(int16_t*)(0xEA5494 + (idx) * 0xE4))   /* offset 0x5C */
     #define P2_CHILD_SIBLING_IDX(idx)   (*(int16_t*)(0xEA545A + (idx) * 0xE4))   /* offset 0x22 */

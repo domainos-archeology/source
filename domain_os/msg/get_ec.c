@@ -14,7 +14,7 @@
 
 void MSG_$GET_EC(msg_$socket_t *socket, uint32_t *ec, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_offset;
     uint8_t asid;

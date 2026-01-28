@@ -33,36 +33,36 @@
  */
 
 /* Maximum number of network ports */
-#define MAC_MAX_PORTS           8
+#define MAC_MAX_PORTS 8
 
 /* Maximum number of channels per port */
-#define MAC_MAX_CHANNELS        10
+#define MAC_MAX_CHANNELS 10
 
 /* Maximum number of packet types per channel */
-#define MAC_MAX_PACKET_TYPES    10
+#define MAC_MAX_PACKET_TYPES 10
 
 /* Special socket value indicating no socket allocated */
-#define MAC_NO_SOCKET           0xE1
+#define MAC_NO_SOCKET 0xE1
 
 /*
  * ============================================================================
  * Status Codes (module 0x3A)
  * ============================================================================
  */
-#define status_$mac_invalid_packet_type         0x3a0004
-#define status_$mac_no_os_sockets_available     0x3a0006
-#define status_$mac_channel_not_open            0x3a0008
-#define status_$mac_no_socket_allocated         0x3a0009
+#define status_$mac_invalid_packet_type 0x3a0004
+#define status_$mac_no_os_sockets_available 0x3a0006
+#define status_$mac_channel_not_open 0x3a0008
+#define status_$mac_no_socket_allocated 0x3a0009
 #define status_$mac_no_packet_available_to_receive 0x3a000a
-#define status_$mac_received_packet_too_big     0x3a000b
-#define status_$mac_illegal_buffer_spec         0x3a000c
-#define status_$mac_XXX_unknown                 0x3a000f
+#define status_$mac_received_packet_too_big 0x3a000b
+#define status_$mac_illegal_buffer_spec 0x3a000c
+#define status_$mac_XXX_unknown 0x3a000f
 #define status_$mac_failed_to_put_packet_into_socket 0x3a0010
-#define status_$mac_invalid_port                0x3a0011
-#define status_$mac_invalid_packet_type_count   0x3a0012
+#define status_$mac_invalid_port 0x3a0011
+#define status_$mac_invalid_packet_type_count 0x3a0012
 
 /* Internet status code used by MAC */
-#define status_$internet_network_port_not_open  0x2b0001
+#define status_$internet_network_port_not_open 0x2b0001
 
 /*
  * ============================================================================
@@ -75,8 +75,8 @@
  * Specifies a range of Ethernet type codes to accept
  */
 typedef struct mac_$packet_type_t {
-    uint32_t    min_type;       /* Minimum type code (inclusive) */
-    uint32_t    max_type;       /* Maximum type code (inclusive) */
+  uint32_t min_type; /* Minimum type code (inclusive) */
+  uint32_t max_type; /* Maximum type code (inclusive) */
 } mac_$packet_type_t;
 
 /*
@@ -85,15 +85,16 @@ typedef struct mac_$packet_type_t {
  * Size: 0x54+ bytes
  */
 typedef struct mac_$open_params_t {
-    mac_$packet_type_t packet_types[MAC_MAX_PACKET_TYPES]; /* 0x00-0x4F: Packet type filters */
-    int16_t     num_packet_types;   /* 0x50: Number of packet types (1-10) */
-    int16_t     socket_count;       /* 0x52: Number of sockets to allocate */
-    uint8_t     flags;              /* 0x54: Flags (bit 7: promiscuous mode) */
-    /* Output fields - populated by MAC_OS_$OPEN and MAC_$OPEN */
-    uint8_t     pad_55[3];          /* 0x55: Padding for alignment */
-    void        *ec2_handle;        /* 0x58: EC2 event count handle */
-    uint32_t    os_handle;          /* 0x5C: OS-level MAC handle */
-    uint16_t    channel_num;        /* 0x60: Channel number (0-9) */
+  mac_$packet_type_t
+      packet_types[MAC_MAX_PACKET_TYPES]; /* 0x00-0x4F: Packet type filters */
+  int16_t num_packet_types; /* 0x50: Number of packet types (1-10) */
+  int16_t socket_count;     /* 0x52: Number of sockets to allocate */
+  uint8_t flags;            /* 0x54: Flags (bit 7: promiscuous mode) */
+  /* Output fields - populated by MAC_OS_$OPEN and MAC_$OPEN */
+  uint8_t pad_55[3];    /* 0x55: Padding for alignment */
+  void *ec2_handle;     /* 0x58: EC2 event count handle */
+  uint32_t os_handle;   /* 0x5C: OS-level MAC handle */
+  uint16_t channel_num; /* 0x60: Channel number (0-9) */
 } mac_$open_params_t;
 
 /*
@@ -101,9 +102,9 @@ typedef struct mac_$open_params_t {
  * Returned by MAC_$OPEN, used for subsequent operations
  */
 typedef struct mac_$channel_t {
-    void        *ec2_handle;    /* 0x00: EC2 event count handle for receive notification */
-    uint32_t    os_handle;      /* 0x04: OS-level MAC handle */
-    uint16_t    channel_num;    /* 0x08: Channel number (0-9) */
+  void *ec2_handle; /* 0x00: EC2 event count handle for receive notification */
+  uint32_t os_handle;   /* 0x04: OS-level MAC handle */
+  uint16_t channel_num; /* 0x08: Channel number (0-9) */
 } mac_$channel_t;
 
 /*
@@ -111,9 +112,9 @@ typedef struct mac_$channel_t {
  * Used in linked list for scatter-gather receive
  */
 typedef struct mac_$buffer_t {
-    int32_t     size;           /* 0x00: Size of this buffer (negative = invalid) */
-    void        *data;          /* 0x04: Pointer to buffer data */
-    struct mac_$buffer_t *next; /* 0x08: Next buffer in chain (NULL = end) */
+  int32_t size; /* 0x00: Size of this buffer (negative = invalid) */
+  void *data;   /* 0x04: Pointer to buffer data */
+  struct mac_$buffer_t *next; /* 0x08: Next buffer in chain (NULL = end) */
 } mac_$buffer_t;
 
 /*
@@ -121,21 +122,21 @@ typedef struct mac_$buffer_t {
  * Describes a packet to send
  */
 typedef struct mac_$send_pkt_t {
-    uint8_t     dest_addr[6];   /* 0x00: Destination MAC address */
-    uint8_t     pad_06[2];      /* 0x06: Padding */
-    uint8_t     src_addr[6];    /* 0x08: Source MAC address */
-    uint8_t     pad_0e[2];      /* 0x0E: Padding */
-    uint8_t     pad_10[4];      /* 0x10: Unknown */
-    uint32_t    type_length;    /* 0x14: Ethernet type/length field */
-    int8_t      arp_flag;       /* 0x18: If negative, ARP lookup needed */
-    uint8_t     pad_19[3];      /* 0x19: Padding */
-    uint32_t    header_data;    /* 0x1C: Header data pointer */
-    uint32_t    header_size;    /* 0x20: Header size */
-    uint32_t    body_chain;     /* 0x24: Pointer to body buffer chain */
-    uint8_t     pad_28[8];      /* 0x28: Unknown */
-    uint32_t    total_length;   /* 0x30: Total packet length */
-    uint8_t     pad_34[8];      /* 0x34: Unknown */
-    /* Additional fields at 0x3A+ for receive path */
+  uint8_t dest_addr[6];  /* 0x00: Destination MAC address */
+  uint8_t pad_06[2];     /* 0x06: Padding */
+  uint8_t src_addr[6];   /* 0x08: Source MAC address */
+  uint8_t pad_0e[2];     /* 0x0E: Padding */
+  uint8_t pad_10[4];     /* 0x10: Unknown */
+  uint32_t type_length;  /* 0x14: Ethernet type/length field */
+  int8_t arp_flag;       /* 0x18: If negative, ARP lookup needed */
+  uint8_t pad_19[3];     /* 0x19: Padding */
+  uint32_t header_data;  /* 0x1C: Header data pointer */
+  uint32_t header_size;  /* 0x20: Header size */
+  uint32_t body_chain;   /* 0x24: Pointer to body buffer chain */
+  uint8_t pad_28[8];     /* 0x28: Unknown */
+  uint32_t total_length; /* 0x30: Total packet length */
+  uint8_t pad_34[8];     /* 0x34: Unknown */
+                         /* Additional fields at 0x3A+ for receive path */
 } mac_$send_pkt_t;
 
 /*
@@ -143,25 +144,25 @@ typedef struct mac_$send_pkt_t {
  * Describes a received packet
  */
 typedef struct mac_$recv_pkt_t {
-    int16_t     num_packet_types; /* 0x00: Number of packet type entries */
-    uint16_t    packet_types[MAC_MAX_PACKET_TYPES]; /* 0x02: Packet type values */
-    uint8_t     pad_16[4];      /* 0x16: Unknown */
-    int8_t      arp_flag;       /* 0x1A: Broadcast flag (negative = multicast/broadcast) */
-    uint8_t     pad_1b[3];      /* 0x1B: Padding */
-    int16_t     field_1e;       /* 0x1E: Unknown */
-    uint32_t    field_20;       /* 0x20: Pointer (header info?) */
-    uint8_t     pad_24[6];      /* 0x24: Unknown */
-    uint32_t    field_2a;       /* 0x2A: Unknown */
-    int16_t     field_2e;       /* 0x2E: Unknown */
-    uint32_t    field_30;       /* 0x30: Unknown */
-    void        *channel_ptr;   /* 0x34: Pointer to channel info */
-    uint8_t     pad_38[2];      /* 0x38: Unknown */
-    int16_t     field_3a;       /* 0x3A: Unknown */
-    uint32_t    field_3c;       /* 0x3C: Unknown */
-    uint32_t    field_40;       /* 0x40: Unknown */
-    uint32_t    field_44;       /* 0x44: Unknown */
-    uint32_t    field_48;       /* 0x48: Unknown */
-    mac_$buffer_t *buffers;     /* 0x1C: Receive buffers (in recv path) */
+  int16_t num_packet_types; /* 0x00: Number of packet type entries */
+  uint16_t packet_types[MAC_MAX_PACKET_TYPES]; /* 0x02: Packet type values */
+  uint8_t pad_16[4];                           /* 0x16: Unknown */
+  int8_t arp_flag;   /* 0x1A: Broadcast flag (negative = multicast/broadcast) */
+  uint8_t pad_1b[3]; /* 0x1B: Padding */
+  int16_t field_1e;  /* 0x1E: Unknown */
+  uint32_t field_20; /* 0x20: Pointer (header info?) */
+  uint8_t pad_24[6]; /* 0x24: Unknown */
+  uint32_t field_2a; /* 0x2A: Unknown */
+  int16_t field_2e;  /* 0x2E: Unknown */
+  uint32_t field_30; /* 0x30: Unknown */
+  void *channel_ptr; /* 0x34: Pointer to channel info */
+  uint8_t pad_38[2]; /* 0x38: Unknown */
+  int16_t field_3a;  /* 0x3A: Unknown */
+  uint32_t field_3c; /* 0x3C: Unknown */
+  uint32_t field_40; /* 0x40: Unknown */
+  uint32_t field_44; /* 0x44: Unknown */
+  uint32_t field_48; /* 0x48: Unknown */
+  mac_$buffer_t *buffers; /* 0x1C: Receive buffers (in recv path) */
 } mac_$recv_pkt_t;
 
 /*
@@ -170,14 +171,14 @@ typedef struct mac_$recv_pkt_t {
  * Base address: 0xE22990 + 0x7A8 = 0xE23138
  */
 typedef struct mac_$channel_entry_t {
-    uint16_t    socket_num;     /* 0x00 (offset 0x7A8): Socket number or 0xE1 */
-    uint16_t    port_num;       /* 0x02 (offset 0x7AA): Port number */
-    uint16_t    pad_04[4];      /* 0x04-0x0B: Unknown */
-    uint16_t    flags;          /* 0x0C (offset 0x7B2): Channel flags */
-                                /*   Bit 9 (0x200): Channel open */
-                                /*   Bit 8 (0x100): Shared access */
-                                /*   Bits 2-7: Owner ASID << 2 */
-                                /*   Bit 0: Promiscuous mode */
+  uint16_t socket_num; /* 0x00 (offset 0x7A8): Socket number or 0xE1 */
+  uint16_t port_num;   /* 0x02 (offset 0x7AA): Port number */
+  uint16_t pad_04[4];  /* 0x04-0x0B: Unknown */
+  uint16_t flags;      /* 0x0C (offset 0x7B2): Channel flags */
+                       /*   Bit 9 (0x200): Channel open */
+                       /*   Bit 8 (0x100): Shared access */
+                       /*   Bits 2-7: Owner ASID << 2 */
+                       /*   Bit 0: Promiscuous mode */
 } mac_$channel_entry_t;
 
 /*
@@ -186,15 +187,15 @@ typedef struct mac_$channel_entry_t {
  * ============================================================================
  */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
 /* Base address for MAC data */
-#define MAC_$DATA_BASE          0xE22990
+#define MAC_$DATA_BASE 0xE22990
 
 /* Channel table (10 entries of 20 bytes each) */
-#define MAC_$CHANNEL_TABLE      ((mac_$channel_entry_t *)(MAC_$DATA_BASE + 0x7A8))
+#define MAC_$CHANNEL_TABLE ((mac_$channel_entry_t *)(MAC_$DATA_BASE + 0x7A8))
 
 /* ARP table */
-#define MAC_$ARP_TABLE          ((void *)(MAC_$DATA_BASE + 0x8E0))
+#define MAC_$ARP_TABLE ((void *)(MAC_$DATA_BASE + 0x8E0))
 #else
 extern mac_$channel_entry_t mac_$channel_table[MAC_MAX_CHANNELS];
 extern void *mac_$arp_table;
@@ -233,7 +234,8 @@ extern void *mac_$arp_table;
  *
  * Original address: 0x00E0B8BE
  */
-void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params, status_$t *status_ret);
+void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params,
+               status_$t *status_ret);
 
 /*
  * MAC_$CLOSE - Close a MAC channel
@@ -288,7 +290,8 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
  *
  * Original address: 0x00E0BC4E
  */
-void MAC_$DEMUX(void *pkt_info, int16_t *port_info, char *flags, status_$t *status_ret);
+void MAC_$DEMUX(void *pkt_info, int16_t *port_info, char *flags,
+                status_$t *status_ret);
 
 /*
  * MAC_$RECEIVE - Receive a packet
@@ -314,7 +317,8 @@ void MAC_$DEMUX(void *pkt_info, int16_t *port_info, char *flags, status_$t *stat
  *
  * Original address: 0x00E0BDB0
  */
-void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *status_ret);
+void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc,
+                  status_$t *status_ret);
 
 /*
  * MAC_$NET_TO_PORT_NUM - Convert network ID to port number

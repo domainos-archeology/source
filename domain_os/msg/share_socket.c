@@ -22,7 +22,7 @@
 void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
                         status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_offset;
     uint8_t asid;

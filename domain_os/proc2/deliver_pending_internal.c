@@ -13,7 +13,7 @@
 #include "proc2/proc2_internal.h"
 
 /* FIM globals for signal delivery */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define FIM_QUIT_INH_TABLE      ((uint8_t*)0xE2248A)
     #define FIM_TRACE_STS_TABLE     ((uint32_t*)0xE223A2)
     #define FIM_QUIT_EC_BASE        0xE22002

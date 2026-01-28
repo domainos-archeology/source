@@ -28,7 +28,7 @@
  * These offsets are relative to the proc2_info_t table base (0xEA551C for M68K)
  * The offsets -0xC6, etc. are from the end of the entry (A2 + index*0xE4)
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_CHILD_BASE(idx)      ((int16_t*)(0xEA551C + ((idx) * 0xE4)))
     #define P2_PARENT_IDX(idx)      (*(P2_CHILD_BASE(idx) - 0x63))
     #define P2_FIRST_CHILD(idx)     (*(P2_CHILD_BASE(idx) - 0x62))

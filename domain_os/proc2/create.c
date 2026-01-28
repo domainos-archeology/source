@@ -28,7 +28,7 @@
 #include "time/time.h"
 
 /* Eventcount arrays - base addresses for process eventcounts */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define EC1_FORK_ARRAY_BASE     0xE2B978
     #define EC1_CR_REC_OFFSET       0x0C     /* Offset from fork EC to creation record EC */
 #else

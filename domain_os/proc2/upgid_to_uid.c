@@ -15,7 +15,7 @@
 #include "proc2/proc2_internal.h"
 
 /* UID_NIL at 0xe1737c - used as base for synthetic UIDs */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define UID_NIL (*(uid_t*)0xE1737C)
 #else
 #define UID_NIL uid_nil

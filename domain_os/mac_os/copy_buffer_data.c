@@ -78,7 +78,7 @@ void MAC_OS_$COPY_BUFFER_DATA(int32_t *dest_ptr, int16_t length)
      * For compilation purposes, we provide a stub that would need
      * to be completed with architecture-specific code.
      */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /*
      * This is a nested Pascal procedure - accessing parent frame.
      * The implementation would require inline assembly to access

@@ -104,7 +104,7 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socketidp,
                       uint16_t *data_len,
                       status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     uint8_t asid;
     uint8_t byte_index;

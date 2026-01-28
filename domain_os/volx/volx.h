@@ -23,8 +23,8 @@
 #define VOLX_H
 
 #include "base/base.h"
-#include "uid/uid.h"
 #include "cal/cal.h"
+#include "uid/uid.h"
 
 /*
  * VOLX table constants
@@ -73,7 +73,7 @@ typedef struct volx_entry_t {
  */
 
 /* VOLX table base address (0xE82604 on m68k) */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define VOLX_$TABLE_BASE ((volx_entry_t *)0xE82604)
 #else
 extern volx_entry_t *volx_table_base;

@@ -67,7 +67,7 @@
 #define VOL_INFO_FLAG_CHECKSUM      0x4000
 
 /* Disk data base offsets */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define DISK_DATA_BASE      ((uint8_t *)0xe7a1cc)
 #define DISK_RAW_PPN        (*(uint32_t *)0xe7acb8)  /* +0xAEC from base */
 #else

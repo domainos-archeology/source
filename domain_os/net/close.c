@@ -18,7 +18,7 @@ typedef void (*net_close_handler_t)(int16_t *port, void *param3,
 void NET_$CLOSE(int16_t *net_id, int16_t *port, void *param3, void *param4,
                 void *param5, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     net_handler_t handler;
 
     (void)param4;

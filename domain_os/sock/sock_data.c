@@ -16,7 +16,7 @@
 
 #include "sock_internal.h"
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
 
 /*
  * On m68k, the socket table is at a fixed address.

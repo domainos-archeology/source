@@ -16,7 +16,7 @@
 #include "proc2/proc2_internal.h"
 
 /* System process UID at table base */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define PROC2_SYSTEM_UID    (*(uid_t*)0xEA551C)
 #else
 #define PROC2_SYSTEM_UID    proc2_system_uid

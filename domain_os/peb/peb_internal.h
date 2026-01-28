@@ -8,15 +8,15 @@
 #ifndef PEB_INTERNAL_H
 #define PEB_INTERNAL_H
 
-#include "peb/peb.h"
-#include "ec/ec.h"
-#include "mmu/mmu.h"
-#include "misc/crash_system.h"
 #include "dxm/dxm.h"
-#include "proc1/proc1.h"
-#include "io/io.h"
+#include "ec/ec.h"
 #include "fim/fim.h"
 #include "fp/fp.h"
+#include "io/io.h"
+#include "misc/crash_system.h"
+#include "mmu/mmu.h"
+#include "peb/peb.h"
+#include "proc1/proc1.h"
 
 /*
  * ============================================================================
@@ -41,56 +41,56 @@
  */
 
 typedef struct peb_globals_t {
-    ec_$eventcount_t    eventcount;         /* +0x00: PEB event counter */
-    uint8_t             reserved1[12];      /* +0x08: Reserved */
-    uint16_t            owner_pid;          /* +0x14: Current owner process ID */
-    uint16_t            owner_asid;         /* +0x16: Current owner AS ID */
-    uint16_t            ctl_shadow;         /* +0x18: PEB_CTL shadow register */
-    uint8_t             installed;          /* +0x1A: PEB hardware installed */
-    uint8_t             wcs_loaded;         /* +0x1B: WCS microcode loaded */
-    uint8_t             savep_flag;         /* +0x1C: Save pending flag */
-    uint8_t             flag_1d;            /* +0x1D: Unknown flag */
-    uint8_t             info_byte;          /* +0x1E: Info byte */
-    uint8_t             mmu_installed;      /* +0x1F: MMU mappings installed */
-    uint8_t             m68881_save_flag;   /* +0x20: MC68881 save flag */
-    uint8_t             flag_21;            /* +0x21: Unknown flag */
+  ec_$eventcount_t eventcount; /* +0x00: PEB event counter */
+  uint8_t reserved1[12];       /* +0x08: Reserved */
+  uint16_t owner_pid;          /* +0x14: Current owner process ID */
+  uint16_t owner_asid;         /* +0x16: Current owner AS ID */
+  uint16_t ctl_shadow;         /* +0x18: PEB_CTL shadow register */
+  uint8_t installed;           /* +0x1A: PEB hardware installed */
+  uint8_t wcs_loaded;          /* +0x1B: WCS microcode loaded */
+  uint8_t savep_flag;          /* +0x1C: Save pending flag */
+  uint8_t flag_1d;             /* +0x1D: Unknown flag */
+  uint8_t info_byte;           /* +0x1E: Info byte */
+  uint8_t mmu_installed;       /* +0x1F: MMU mappings installed */
+  uint8_t m68881_save_flag;    /* +0x20: MC68881 save flag */
+  uint8_t flag_21;             /* +0x21: Unknown flag */
 } peb_globals_t;
 
 /*
  * Global PEB data
  * Address: 0xE24C78
  */
-#if defined(M68K)
-    #define PEB_GLOBALS         (*(peb_globals_t *)0xE24C78)
+#if defined(ARCH_M68K)
+#define PEB_GLOBALS (*(peb_globals_t *)0xE24C78)
 #else
-    extern peb_globals_t peb_globals;
-    #define PEB_GLOBALS         peb_globals
+extern peb_globals_t peb_globals;
+#define PEB_GLOBALS peb_globals
 #endif
 
 /*
  * Convenience macros for global fields
  */
-#define PEB_$OWNER_PID          PEB_GLOBALS.owner_pid
-#define PEB_$OWNER_ASID         PEB_GLOBALS.owner_asid
-#define PEB_$CTL_SHADOW         PEB_GLOBALS.ctl_shadow
-#define PEB_$INSTALLED          PEB_GLOBALS.installed
-#define PEB_$WCS_LOADED         PEB_GLOBALS.wcs_loaded
-#define PEB_$SAVEP_FLAG         PEB_GLOBALS.savep_flag
-#define PEB_$MMU_INSTALLED      PEB_GLOBALS.mmu_installed
-#define PEB_$M68881_SAVE_FLAG   PEB_GLOBALS.m68881_save_flag
-#define PEB_$INFO_BYTE          PEB_GLOBALS.info_byte
-#define PEB_$EVENTCOUNT         PEB_GLOBALS.eventcount
+#define PEB_$OWNER_PID PEB_GLOBALS.owner_pid
+#define PEB_$OWNER_ASID PEB_GLOBALS.owner_asid
+#define PEB_$CTL_SHADOW PEB_GLOBALS.ctl_shadow
+#define PEB_$INSTALLED PEB_GLOBALS.installed
+#define PEB_$WCS_LOADED PEB_GLOBALS.wcs_loaded
+#define PEB_$SAVEP_FLAG PEB_GLOBALS.savep_flag
+#define PEB_$MMU_INSTALLED PEB_GLOBALS.mmu_installed
+#define PEB_$M68881_SAVE_FLAG PEB_GLOBALS.m68881_save_flag
+#define PEB_$INFO_BYTE PEB_GLOBALS.info_byte
+#define PEB_$EVENTCOUNT PEB_GLOBALS.eventcount
 
 /*
  * MC68881 existence flag
  * Set negative (<0) if MC68881 is present instead of PEB
  * Address: 0xE8180C
  */
-#if defined(M68K)
-    #define M68881_EXISTS       (*(volatile int8_t *)0xE8180C)
+#if defined(ARCH_M68K)
+#define M68881_EXISTS (*(volatile int8_t *)0xE8180C)
 #else
-    extern volatile int8_t m68881_exists;
-    #define M68881_EXISTS       m68881_exists
+extern volatile int8_t m68881_exists;
+#define M68881_EXISTS m68881_exists
 #endif
 
 /*
@@ -105,9 +105,9 @@ typedef struct peb_globals_t {
  */
 
 typedef struct peb_wcs_entry_t {
-    uint16_t    word0;          /* +0x00 */
-    uint16_t    word1;          /* +0x02 */
-    uint32_t    word2;          /* +0x04 */
+  uint16_t word0; /* +0x00 */
+  uint16_t word1; /* +0x02 */
+  uint32_t word2; /* +0x04 */
 } peb_wcs_entry_t;
 
 /*
@@ -118,9 +118,9 @@ typedef struct peb_wcs_entry_t {
  */
 
 typedef struct peb_wcs_header_t {
-    uint16_t    start_addr;     /* +0x00: Starting WCS address */
-    uint16_t    entry_count;    /* +0x02: Number of entries */
-    /* peb_wcs_entry_t entries[] follow */
+  uint16_t start_addr;  /* +0x00: Starting WCS address */
+  uint16_t entry_count; /* +0x02: Number of entries */
+                        /* peb_wcs_entry_t entries[] follow */
 } peb_wcs_header_t;
 
 /*
@@ -133,27 +133,26 @@ typedef struct peb_wcs_header_t {
  * Get FP state pointer for address space ID
  * Each AS has 0x1C (28) bytes of state storage
  */
-static inline peb_fp_state_t *peb_get_fp_state(int16_t asid)
-{
-    return &PEB_$WIRED_DATA_START[asid];
+static inline peb_fp_state_t *peb_get_fp_state(int16_t asid) {
+  return &PEB_$WIRED_DATA_START[asid];
 }
 
 /*
  * PEB register offsets (from base 0x7000 or 0xFF7400)
  */
-#define PEB_REG_CTRL        0x00    /* Control register */
-#define PEB_REG_DATA_IN_0   0x8C    /* Data input register 0 */
-#define PEB_REG_DATA_IN_1   0x90    /* Data input register 1 */
-#define PEB_REG_DATA_OUT_0  0x94    /* Data output register 0 */
-#define PEB_REG_DATA_OUT_1  0x98    /* Data output register 1 */
-#define PEB_REG_STAT_IN_0   0x1D0   /* Status input 0 */
-#define PEB_REG_STAT_IN_1   0x1D4   /* Status input 1 */
-#define PEB_REG_STAT_OUT_0  0x1B0   /* Status output 0 */
-#define PEB_REG_STAT_OUT_1  0x1B4   /* Status output 1 */
-#define PEB_REG_STATUS      0xF4    /* Exception status register */
-#define PEB_REG_CTRL_IN     0x84    /* Control input register */
-#define PEB_REG_CTRL_OUT    0x104   /* Control output register */
-#define PEB_REG_MISC        0x1DC   /* Misc register */
+#define PEB_REG_CTRL 0x00        /* Control register */
+#define PEB_REG_DATA_IN_0 0x8C   /* Data input register 0 */
+#define PEB_REG_DATA_IN_1 0x90   /* Data input register 1 */
+#define PEB_REG_DATA_OUT_0 0x94  /* Data output register 0 */
+#define PEB_REG_DATA_OUT_1 0x98  /* Data output register 1 */
+#define PEB_REG_STAT_IN_0 0x1D0  /* Status input 0 */
+#define PEB_REG_STAT_IN_1 0x1D4  /* Status input 1 */
+#define PEB_REG_STAT_OUT_0 0x1B0 /* Status output 0 */
+#define PEB_REG_STAT_OUT_1 0x1B4 /* Status output 1 */
+#define PEB_REG_STATUS 0xF4      /* Exception status register */
+#define PEB_REG_CTRL_IN 0x84     /* Control input register */
+#define PEB_REG_CTRL_OUT 0x104   /* Control output register */
+#define PEB_REG_MISC 0x1DC       /* Misc register */
 
 /*
  * ============================================================================

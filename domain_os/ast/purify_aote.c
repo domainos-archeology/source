@@ -17,7 +17,7 @@
 /* External function prototypes */
 
 /* Network info flags pointer */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define NET_INFO_FLAGS ((void *)0xE01500)
 #else
 #define NET_INFO_FLAGS net_info_flags

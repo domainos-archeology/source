@@ -18,7 +18,7 @@
  * These are defined in the data segment near the routing code and
  * track pages wired for routing operations.
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /*
      * ROUTE_$WIRED_PAGES - Array of wired page addresses
      *

@@ -24,7 +24,7 @@
  */
 void MSG_$WAITI(msg_$socket_t *socket, msg_$time_t *timeout, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_offset;
     uint8_t asid;

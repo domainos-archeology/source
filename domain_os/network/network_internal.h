@@ -18,7 +18,7 @@
  *
  * Original address: 0xE24C44
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define NETWORK_$LOOPBACK_FLAG (*(int8_t *)0xE24C44)
 #else
 extern int8_t NETWORK_$LOOPBACK_FLAG;
@@ -54,8 +54,8 @@ extern int8_t NETWORK_$LOOPBACK_FLAG;
  *   0xE24938: net_id[0], net_id[1], ...     (each 8 bytes apart)
  */
 typedef struct network_table_entry_t {
-    uint32_t refcount;      /* Number of references to this network */
-    uint32_t net_id;        /* Network identifier */
+  uint32_t refcount; /* Number of references to this network */
+  uint32_t net_id;   /* Network identifier */
 } network_table_entry_t;
 
 #define NETWORK_TABLE_SIZE 64
@@ -64,9 +64,10 @@ typedef struct network_table_entry_t {
 extern network_table_entry_t NETWORK_$NET_TABLE[NETWORK_TABLE_SIZE];
 
 /* Extract network index from a network address value */
-#define NETWORK_INDEX_MASK  0x3F0
+#define NETWORK_INDEX_MASK 0x3F0
 #define NETWORK_INDEX_SHIFT 4
-#define NETWORK_GET_INDEX(addr) (((addr) & NETWORK_INDEX_MASK) >> NETWORK_INDEX_SHIFT)
+#define NETWORK_GET_INDEX(addr)                                                \
+  (((addr) & NETWORK_INDEX_MASK) >> NETWORK_INDEX_SHIFT)
 
 /*
  * Network globals

@@ -7,16 +7,16 @@
 #ifndef MAC_INTERNAL_H
 #define MAC_INTERNAL_H
 
-#include "mac/mac.h"
-#include "ml/ml.h"
-#include "sock/sock.h"
 #include "ec/ec.h"
 #include "fim/fim.h"
+#include "mac/mac.h"
+#include "ml/ml.h"
+#include "netbuf/netbuf.h"
+#include "os/os.h"
 #include "proc1/proc1.h"
 #include "proc2/proc2.h"
 #include "route/route.h"
-#include "netbuf/netbuf.h"
-#include "os/os.h"
+#include "sock/sock.h"
 
 /*
  * ============================================================================
@@ -25,7 +25,7 @@
  */
 
 /* Port info table entry size */
-#define MAC_PORT_INFO_SIZE      0x5C
+#define MAC_PORT_INFO_SIZE 0x5C
 
 /*
  * ============================================================================
@@ -49,7 +49,8 @@ void MAC_OS_$CLOSE(uint16_t *channel, status_$t *status_ret);
  * MAC_OS_$SEND - Send packet at OS level
  * Original address: 0x00E0B5A8
  */
-void MAC_OS_$SEND(uint16_t *channel, void *pkt_desc, uint16_t *bytes_sent, status_$t *status_ret);
+void MAC_OS_$SEND(uint16_t *channel, void *pkt_desc, uint16_t *bytes_sent,
+                  status_$t *status_ret);
 
 /*
  * MAC_OS_$DEMUX - Demux at OS level
@@ -119,16 +120,17 @@ void mac_$copy_to_buffers(void *src_ptr, int16_t length);
  * ============================================================================
  */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
 /* MAC exclusion lock (ml_$exclusion_t at base + 0x868) */
-#define mac_$exclusion_lock     (*(ml_$exclusion_t *)(MAC_$DATA_BASE + 0x868))
+#define mac_$exclusion_lock (*(ml_$exclusion_t *)(MAC_$DATA_BASE + 0x868))
 
 /* Port info table (at 0xE2E0A0, entries of 0x5C bytes) */
-#define MAC_$PORT_INFO_BASE     0xE2E0A0
-#define MAC_$PORT_INFO(port)    ((void *)(MAC_$PORT_INFO_BASE + (port) * MAC_PORT_INFO_SIZE))
+#define MAC_$PORT_INFO_BASE 0xE2E0A0
+#define MAC_$PORT_INFO(port)                                                   \
+  ((void *)(MAC_$PORT_INFO_BASE + (port) * MAC_PORT_INFO_SIZE))
 
 /* Socket pointer array */
-#define MAC_$SOCK_PTR_ARRAY     ((void **)0xE28DB0)
+#define MAC_$SOCK_PTR_ARRAY ((void **)0xE28DB0)
 #else
 extern ml_$exclusion_t mac_$exclusion_lock;
 extern void *mac_$port_info_table;

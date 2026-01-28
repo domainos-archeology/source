@@ -19,7 +19,7 @@
 
 #include "dir/dir_internal.h"
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #include "arch/m68k/arch.h"
 #endif
 
@@ -69,7 +69,7 @@ void DIR_$ADD_ENTRY_INTERNAL(uid_t *dir_uid, char *name, int16_t name_len,
      * Type field from global at A5+0x2042
      * This appears to be a node type indicator
      */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     request.type_field = *(uint16_t *)((char *)__A5_BASE() + 0x2042);
 #else
     extern uint16_t DAT_a5_2042;
@@ -82,7 +82,7 @@ void DIR_$ADD_ENTRY_INTERNAL(uid_t *dir_uid, char *name, int16_t name_len,
     *(uint32_t *)&request.name_data[8] = flags;
 
     /* Calculate request length */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     req_len = name_len + *(int16_t *)((char *)__A5_BASE() + 0x2046);
 #else
     extern int16_t DAT_a5_2046;

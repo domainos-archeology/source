@@ -81,7 +81,7 @@ typedef struct disk_dinit_t {
 } disk_dinit_t;
 
 /* Interrupt controller data - at 0xe22904 */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define DISK_INT_CTRL ((disk_int_ctrl_t *)0xe22904)
 #else
 extern disk_int_ctrl_t *disk_int_ctrl_ptr;

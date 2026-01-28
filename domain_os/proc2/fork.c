@@ -27,7 +27,7 @@
 #include "time/time.h"
 
 /* FIM globals for user FIM address */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define FIM_USER_FIM_ADDR_TABLE ((int32_t*)0xE212A8)
     #define FIM_QUIT_INH_TABLE      ((uint8_t*)0xE2248A)
 #else
@@ -38,7 +38,7 @@
 #endif
 
 /* Eventcount arrays */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define EC1_FORK_ARRAY_BASE     0xE2B978
 #else
     extern void *ec1_fork_array;

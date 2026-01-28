@@ -48,7 +48,7 @@
 #define NET_IO_LOCK_ID          0x18
 
 /* Global data references */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define ROUTE_$START_TIME       (*(uint32_t *)0xE825DC)
 #define ROUTE_$PROCESS_UID      (*(uint16_t *)0xE88216)
 #define ROUTE_$USER_PORT_MAX    (*(uint16_t *)0xE87FD0)
@@ -123,7 +123,7 @@ typedef struct {
 static const status_$t status_$route_sock_get_failed = 0x2B00C6;
 
 /* Ring log message identifier */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define RINGLOG_$ROUTE_FORWARD  (*(uint16_t *)0xE878A0)
 #else
 extern uint16_t RINGLOG_$ROUTE_FORWARD;

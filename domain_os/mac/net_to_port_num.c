@@ -33,7 +33,7 @@ void MAC_$NET_TO_PORT_NUM(int32_t *net_id, int16_t *port_ret)
      * ROUTE_$PORTP is an array of pointers to port info structures.
      * The first long (offset 0) of each port info is the network ID.
      */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     for (i = 0; i <= 7; i++) {
         /* Get port info pointer from ROUTE_$PORTP array */
         void *port_info = *(void **)(0xE26EE8 + i * 4);

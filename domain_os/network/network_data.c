@@ -73,7 +73,7 @@ void *NETWORK_$LOCK;                  /* 0xE24BA0 (+0x2A4) */
 /*
  * Loopback flag (non-M68K only - M68K uses direct memory access)
  */
-#if !defined(M68K)
+#if !defined(ARCH_M68K)
 int8_t NETWORK_$LOOPBACK_FLAG;
 uint32_t NODE_$ME;
 #endif

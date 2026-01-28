@@ -11,7 +11,7 @@
 
 void MSG_$GET_MY_NET(uint32_t *net_id)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /* Return ROUTE__PORT (network ID at 0xE2E0A0) */
     *net_id = *(uint32_t *)0xE2E0A0;
 #else

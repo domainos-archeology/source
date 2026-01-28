@@ -24,7 +24,7 @@
 /*
  * Raw memory access macros for parent-child fields
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_CHILD_BASE(idx)      ((int16_t*)(0xEA551C + ((idx) * 0xE4)))
     #define P2_PARENT_IDX(idx)      (*(P2_CHILD_BASE(idx) - 0x63))
     #define P2_PARENT_UPID(idx)     (*(int16_t*)(0xEA944E + (idx) * 8))

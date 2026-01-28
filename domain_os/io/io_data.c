@@ -41,7 +41,7 @@ void *IO_$SAVED_OS_SP = NULL;
  */
 uint16_t IO_$SAVED_INT_SR = 0;
 
-#if !defined(M68K)
+#if !defined(ARCH_M68K)
 /*
  * IO_$INT_STACK - Dedicated interrupt stack buffer
  *

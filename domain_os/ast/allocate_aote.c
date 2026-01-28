@@ -15,7 +15,7 @@
 /*
  * AOTE management globals
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define AST_$FREE_AOTE_HEAD   (*(aote_t **)0xE1E06C)    /* A5+0x3EC */
 #define AST_$AOTE_SCAN_POS    (*(aote_t **)0xE1E070)    /* A5+0x3F0 */
 #define AST_$AOTE_END         (*(aote_t **)0xE1E074)    /* A5+0x3F4 */

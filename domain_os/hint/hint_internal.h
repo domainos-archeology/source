@@ -19,15 +19,15 @@
 #ifndef HINT_INTERNAL_H
 #define HINT_INTERNAL_H
 
+#include "ast/ast.h"
+#include "file/file.h"
 #include "hint/hint.h"
 #include "ml/ml.h"
-#include "time/time.h"
-#include "route/route.h"
+#include "mst/mst.h"
 #include "name/name.h"
 #include "network/network.h"
-#include "file/file.h"
-#include "mst/mst.h"
-#include "ast/ast.h"
+#include "route/route.h"
+#include "time/time.h"
 
 /*
  * ============================================================================
@@ -36,34 +36,34 @@
  */
 
 /* Hint file hash table size (64 buckets) */
-#define HINT_HASH_SIZE          64      /* 0x40 */
-#define HINT_HASH_MASK          0x3F
+#define HINT_HASH_SIZE 64 /* 0x40 */
+#define HINT_HASH_MASK 0x3F
 
 /* Slots per hash bucket */
-#define HINT_SLOTS_PER_BUCKET   3
+#define HINT_SLOTS_PER_BUCKET 3
 
 /* Size of each hash bucket in bytes */
-#define HINT_BUCKET_SIZE        0x54    /* 84 bytes */
+#define HINT_BUCKET_SIZE 0x54 /* 84 bytes */
 
 /* Size of each slot within a bucket */
-#define HINT_SLOT_SIZE          0x1C    /* 28 bytes */
+#define HINT_SLOT_SIZE 0x1C /* 28 bytes */
 
 /* Number of hint addresses per slot */
-#define HINT_ADDRS_PER_SLOT     3
+#define HINT_ADDRS_PER_SLOT 3
 
 /* Mask for extracting the hint key from UID low word */
-#define HINT_UID_MASK           0xFFFFF /* Low 20 bits */
+#define HINT_UID_MASK 0xFFFFF /* Low 20 bits */
 
 /* Local cache constants */
-#define HINT_CACHE_SIZE         2       /* Number of local cache entries */
-#define HINT_CACHE_ENTRY_SIZE   12      /* Bytes per cache entry */
-#define HINT_CACHE_TIMEOUT      0xF0    /* Cache entry timeout (240 clock ticks) */
+#define HINT_CACHE_SIZE 2        /* Number of local cache entries */
+#define HINT_CACHE_ENTRY_SIZE 12 /* Bytes per cache entry */
+#define HINT_CACHE_TIMEOUT 0xF0  /* Cache entry timeout (240 clock ticks) */
 
 /* Hint file version number for newly initialized files */
-#define HINT_FILE_VERSION       7
+#define HINT_FILE_VERSION 7
 
 /* Hint file header magic value indicating uninitialized */
-#define HINT_FILE_UNINIT        1
+#define HINT_FILE_UNINIT 1
 
 /*
  * ============================================================================
@@ -77,8 +77,8 @@
  * Stores a (flags, node_id) pair indicating where a file might be located.
  */
 typedef struct hint_addr_t {
-    uint32_t    flags;      /* 0x00: Flags/status for this hint */
-    uint32_t    node_id;    /* 0x04: Node ID where file might be located */
+  uint32_t flags;   /* 0x00: Flags/status for this hint */
+  uint32_t node_id; /* 0x04: Node ID where file might be located */
 } hint_addr_t;
 
 /*
@@ -90,8 +90,8 @@ typedef struct hint_addr_t {
  * Size: 28 bytes (0x1C)
  */
 typedef struct hint_slot_t {
-    uint32_t    uid_low_masked; /* 0x00: UID low word & 0xFFFFF (key) */
-    hint_addr_t addrs[3];       /* 0x04: Up to 3 hint addresses (24 bytes) */
+  uint32_t uid_low_masked; /* 0x00: UID low word & 0xFFFFF (key) */
+  hint_addr_t addrs[3];    /* 0x04: Up to 3 hint addresses (24 bytes) */
 } hint_slot_t;
 
 /*
@@ -102,7 +102,7 @@ typedef struct hint_slot_t {
  * Size: 84 bytes (0x54)
  */
 typedef struct hint_bucket_t {
-    hint_slot_t slots[HINT_SLOTS_PER_BUCKET];   /* 3 slots x 28 bytes = 84 bytes */
+  hint_slot_t slots[HINT_SLOTS_PER_BUCKET]; /* 3 slots x 28 bytes = 84 bytes */
 } hint_bucket_t;
 
 /*
@@ -115,9 +115,9 @@ typedef struct hint_bucket_t {
  * Offset 0x08: network info (2 shorts from ROUTE_$PORTP + 0x2E)
  */
 typedef struct hint_file_header_t {
-    uint32_t    version;        /* 0x00: File version (7 = initialized) */
-    uint32_t    net_port;       /* 0x04: Network port for this node */
-    uint32_t    net_info;       /* 0x08: Network info (2 shorts packed) */
+  uint32_t version;  /* 0x00: File version (7 = initialized) */
+  uint32_t net_port; /* 0x04: Network port for this node */
+  uint32_t net_info; /* 0x08: Network info (2 shorts packed) */
 } hint_file_header_t;
 
 /*
@@ -127,8 +127,8 @@ typedef struct hint_file_header_t {
  * Total size: 12 + (64 * 84) = 5388 bytes
  */
 typedef struct hint_file_t {
-    hint_file_header_t header;                  /* 12 bytes */
-    hint_bucket_t buckets[HINT_HASH_SIZE];      /* 64 * 84 = 5376 bytes */
+  hint_file_header_t header;             /* 12 bytes */
+  hint_bucket_t buckets[HINT_HASH_SIZE]; /* 64 * 84 = 5376 bytes */
 } hint_file_t;
 
 /*
@@ -140,10 +140,10 @@ typedef struct hint_file_t {
  * Size: 12 bytes (0x0C)
  */
 typedef struct hint_cache_entry_t {
-    uint32_t    timestamp;      /* 0x00: TIME_$CLOCKH when entry was added */
-    uint8_t     result;         /* 0x04: Cached lookup result */
-    uint8_t     pad[3];         /* 0x05: Padding */
-    uint32_t    uid_low_masked; /* 0x08: UID key (low 20 bits) */
+  uint32_t timestamp;      /* 0x00: TIME_$CLOCKH when entry was added */
+  uint8_t result;          /* 0x04: Cached lookup result */
+  uint8_t pad[3];          /* 0x05: Padding */
+  uint32_t uid_low_masked; /* 0x08: UID key (low 20 bits) */
 } hint_cache_entry_t;
 
 /*
@@ -153,12 +153,12 @@ typedef struct hint_cache_entry_t {
  * Located at 0xE7DB50 on m68k.
  */
 typedef struct hint_globals_t {
-    hint_cache_entry_t cache[HINT_CACHE_SIZE];  /* 0x00: Local cache (24 bytes) */
-    uint16_t    cache_index;                    /* 0x18: Next cache slot to use */
-    uint16_t    bucket_index;                   /* 0x1A: Internal round-robin index */
-    /* Additional space for internal state */
-    hint_file_t *hintfile_ptr;                  /* 0x20: Pointer to mapped hint file */
-    uid_t       hintfile_uid;                   /* 0x24: UID of the hint file */
+  hint_cache_entry_t cache[HINT_CACHE_SIZE]; /* 0x00: Local cache (24 bytes) */
+  uint16_t cache_index;                      /* 0x18: Next cache slot to use */
+  uint16_t bucket_index; /* 0x1A: Internal round-robin index */
+  /* Additional space for internal state */
+  hint_file_t *hintfile_ptr; /* 0x20: Pointer to mapped hint file */
+  uid_t hintfile_uid;        /* 0x24: UID of the hint file */
 } hint_globals_t;
 
 /*
@@ -167,34 +167,34 @@ typedef struct hint_globals_t {
  * ============================================================================
  */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
 
 /* Base of HINT globals */
-#define HINT_GLOBALS_BASE       0xE7DB50
+#define HINT_GLOBALS_BASE 0xE7DB50
 
 /* Pointer to mapped hint file (at 0xE2459C) */
-#define HINT_$HINTFILE_PTR      (*(hint_file_t **)0xE2459C)
+#define HINT_$HINTFILE_PTR (*(hint_file_t **)0xE2459C)
 
 /* UID of the hint file (at 0xE7DB68) */
-#define HINT_$HINTFILE_UID      (*(uid_t *)0xE7DB68)
+#define HINT_$HINTFILE_UID (*(uid_t *)0xE7DB68)
 
 /* Exclusion lock for hint operations (at 0xE2C034) */
-#define HINT_$EXCLUSION_LOCK    (*(ml_$exclusion_t *)0xE2C034)
+#define HINT_$EXCLUSION_LOCK (*(ml_$exclusion_t *)0xE2C034)
 
 /* Local cache array (at 0xE7DB50) */
-#define HINT_$CACHE             ((hint_cache_entry_t *)0xE7DB50)
+#define HINT_$CACHE ((hint_cache_entry_t *)0xE7DB50)
 
 /* Cache index (at 0xE7DB74) */
-#define HINT_$CACHE_INDEX       (*(uint16_t *)0xE7DB74)
+#define HINT_$CACHE_INDEX (*(uint16_t *)0xE7DB74)
 
 /* Bucket round-robin index (at 0xE7DB76) */
-#define HINT_$BUCKET_INDEX      (*(uint16_t *)0xE7DB76)
+#define HINT_$BUCKET_INDEX (*(uint16_t *)0xE7DB76)
 
 /* Network routing port pointer (external reference) */
-#define ROUTE_$PORTP            (*(uint8_t **)0xE26EE8)
+#define ROUTE_$PORTP (*(uint8_t **)0xE26EE8)
 
 /* Network port for current node */
-#define ROUTE_$PORT             (*(uint32_t *)0xE2E0A0)
+#define ROUTE_$PORT (*(uint32_t *)0xE2E0A0)
 
 #else
 /* Non-m68k: extern declarations */
@@ -259,7 +259,7 @@ void HINT_$clear_hintfile(void);
  */
 
 /* Path to the hint file (in node_data) */
-#define HINT_FILE_PATH          "`node_data/hint_file"
-#define HINT_FILE_PATH_LEN      20
+#define HINT_FILE_PATH "`node_data/hint_file"
+#define HINT_FILE_PATH_LEN 20
 
 #endif /* HINT_INTERNAL_H */

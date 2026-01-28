@@ -59,7 +59,7 @@ status_$t MSG_$$SEND(int16_t port_num,
                       void *result,
                       status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     status_$t local_status = status_$ok;
     void *header_buf;
     uint32_t header_info;
@@ -218,7 +218,7 @@ void MSG_$SEND(void *dest_proc,
                int16_t *bytes_sent,
                status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     uint8_t msg_desc[30];
     int i;
     int16_t result;

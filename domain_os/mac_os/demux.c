@@ -35,7 +35,7 @@
  */
 void MAC_OS_$DEMUX(void *pkt_info, int16_t *port_num, void *param3, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t port;
     int16_t entry_idx;
     int16_t channel;

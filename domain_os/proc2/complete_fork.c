@@ -22,7 +22,7 @@
  * - Offset 0x00 (EC_TABLE_BASE - 0x18): Fork completion EC
  * - Offset 0x0C: Creation record EC
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define PROC_EC_TABLE_BASE  0xE2B978
     #define PROC_FORK_EC(idx)   ((ec_$eventcount_t*)(PROC_EC_TABLE_BASE + ((idx) - 1) * 24 - 24))
 #else

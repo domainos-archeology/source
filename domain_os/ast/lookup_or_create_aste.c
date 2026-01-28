@@ -18,7 +18,7 @@
 #include "ast/ast_internal.h"
 
 /* Volume reference counts at A5+0x412 */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define VOL_REF_COUNTS    ((int16_t *)0xE1E092)
 #define VOL_DISMOUNT_MASK (*(uint16_t *)0xE1E0A0)
 #define VOL_DISMOUNT_EC   ((ec_$eventcount_t *)0xE1E088)

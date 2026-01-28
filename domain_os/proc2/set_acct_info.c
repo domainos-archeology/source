@@ -19,7 +19,7 @@
  * Raw memory access macros for accounting fields
  * These are within proc2_info_t but not fully documented
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_ACCT_BASE(idx)          ((uint8_t*)(0xEA551C + ((idx) * 0xE4)))
 
     /* Offset 0x2B - flags byte 1 */

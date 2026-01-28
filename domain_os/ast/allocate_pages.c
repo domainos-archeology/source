@@ -27,7 +27,7 @@ static void NETLOG_$LOG_PAGE(void *pmape, int16_t ppn_high);
 /*
  * Allocation stats at A5+0x460 and A5+0x464
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define AST_$ALLOC_FAIL_CNT (*(uint32_t *)0xE1E0E0)  /* A5+0x460 */
 #define AST_$ALLOC_TRY_CNT  (*(uint32_t *)0xE1E0E4)  /* A5+0x464 */
 #else

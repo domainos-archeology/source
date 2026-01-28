@@ -11,7 +11,7 @@
 #include "pmap/pmap_internal.h"
 
 /* Working set list base and offsets */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define WSL_BASE            0xE232B0
 #else
     extern uint8_t wsl_base[];

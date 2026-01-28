@@ -27,7 +27,7 @@
  *
  * TODO: Consolidate with route.h definitions once structure is better understood
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define ROUTE_$PORT_ARRAY       ((uint8_t *)0xE2E0A0)
 #else
     extern uint8_t *ROUTE_$PORT_ARRAY;

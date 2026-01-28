@@ -36,7 +36,7 @@
  * Raw memory access macros for signal-related fields
  * These are within proc2_info_t but not all are documented yet
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_ACK_BASE(idx)           ((uint8_t*)(0xEA551C + ((idx) * 0xE4)))
 
     /* Offset 0x78 (0x44 from table base 0xEA54B0 area) - handler storage */
@@ -179,7 +179,7 @@ void PROC2_$ACKNOWLEDGE(uint32_t *handler_addr, int16_t *signal, uint32_t *resul
                                     (&AS_$CR_REC_FILE_SIZE + dbg_idx * 0x18)); */
 
                         /* If debugger doesn't have flag bit 2, send SIGCHLD (23) */
-#if defined(M68K)
+#if defined(ARCH_M68K)
                         if ((*(uint8_t*)(0xEA5463 + dbg_idx * 0xE4) & 0x04) == 0) {
 #else
                         if (0) { /* TODO: Non-M68K implementation */

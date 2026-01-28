@@ -23,8 +23,8 @@
  * region with its top (highest address, since the stack grows downward)
  * at 0x00EB2BE8.
  */
-#if defined(M68K)
-#define IO_$INT_STACK_BASE  0x00EB2BE8
+#if defined(ARCH_M68K)
+#define IO_$INT_STACK_BASE 0x00EB2BE8
 #endif
 
 /*
@@ -33,8 +33,8 @@
  * 1024 bytes should be sufficient for interrupt handlers, which are
  * expected to be brief and delegate to deferred processing.
  */
-#if !defined(M68K)
-#define IO_$INT_STACK_SIZE  1024
+#if !defined(ARCH_M68K)
+#define IO_$INT_STACK_SIZE 1024
 #endif
 
 #endif /* IO_INTERNAL_H */

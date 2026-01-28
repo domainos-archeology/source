@@ -21,7 +21,7 @@
  *
  * These are embedded in the code segment as PC-relative data.
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /*
      * Maximum number of pages to wire for routing
      * Original at: 0xE69BFC (value = 10)

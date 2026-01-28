@@ -24,7 +24,7 @@
  *
  * Original address: 0xE88218
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define ROUTE_$CHECKSUM_ENABLED (*(int8_t *)0xE88218)
 #else
     extern int8_t ROUTE_$CHECKSUM_ENABLED;

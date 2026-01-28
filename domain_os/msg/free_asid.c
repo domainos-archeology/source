@@ -12,7 +12,7 @@
 
 void MSG_$FREE_ASID(uint16_t *asid_ptr)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     uint8_t asid;
     uint8_t byte_index;

@@ -31,7 +31,7 @@
 #define P2_LAST_ENTRY           69
 
 /* Boot flags storage */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define BOOT_FLAGS          (*(uint16_t*)0xE7C068)
 #else
     extern uint16_t boot_flags_storage;
@@ -39,7 +39,7 @@
 #endif
 
 /* Global UID storage for system UIDs */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define PROC_DIR_UID        (*(uid_t*)0xE7BE84)
     #define SYSTEM_UID_2        (*(uid_t*)0xE7BE9C)
     /* UID table: 8 bytes per entry, indexed by ASID */
@@ -55,7 +55,7 @@
 #endif
 
 /* Eventcount base addresses */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define EC1_FORK_ARRAY      ((void*)0xE2B978)
     #define EC1_CR_REC_ARRAY    ((void*)0xE2B96C)
 #else
@@ -66,7 +66,7 @@
 #endif
 
 /* Address space globals for memory mapping */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define AS_$CR_REC              (*(uint32_t*)0xE2B930)
     #define AS_$CR_REC_FILE_SIZE    (*(uint32_t*)0xE2B96C)
     #define AS_$STACK_FILE_LOW      (*(uint32_t*)0xE2B92C)

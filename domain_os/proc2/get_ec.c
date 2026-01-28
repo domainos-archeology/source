@@ -18,7 +18,7 @@
 #include "proc2/proc2_internal.h"
 
 /* External EC tables and functions */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define FIM_DELIV_EC_BASE   0xE224C4
     #define FIM_DELIV_EC(asid)  ((ec_$eventcount_t*)(FIM_DELIV_EC_BASE + (asid) * 12))
 #else

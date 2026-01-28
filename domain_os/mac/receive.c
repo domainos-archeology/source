@@ -89,7 +89,7 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
     *status_ret = status_$ok;
     secondary_buf = 0;
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     chan = *channel;
 
     /*

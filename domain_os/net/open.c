@@ -19,7 +19,7 @@ typedef void (*net_open_handler_t)(int16_t *port, void *param3, int16_t param4,
 void NET_$OPEN(int16_t *net_id, int16_t *port, void *param3, void *param4,
                void *param5, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     net_handler_t handler;
 
     /*

@@ -13,7 +13,7 @@
 net_handler_t NET_$FIND_HANDLER(int16_t net_id, uint16_t port,
                                  uint16_t handler_off, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     void *port_ptr;
     void *handler_table;
     net_handler_t handler;

@@ -28,41 +28,41 @@
 
 #include "base/base.h"
 #include "ec/ec.h"
+#include "ml/ml.h"
 #include "proc1/proc1.h"
 #include "proc2/proc2.h"
-#include "ml/ml.h"
 
 /*
  * Lock IDs
  */
-#define XPD_LOCK_ID             2       /* xpd_$lock */
+#define XPD_LOCK_ID 2 /* xpd_$lock */
 
 /*
  * Status codes
  */
-#define status_$xpd_not_a_debugger              0x00160005
-#define status_$xpd_debugger_not_found          0x00160006
-#define status_$xpd_debugger_table_full         0x00160007
-#define status_$xpd_already_a_debugger          0x00160009
-#define status_$xpd_target_not_suspended        0x0016000B
-#define status_$xpd_invalid_ec_key              0x0016000C
-#define status_$xpd_state_unavailable_for_this_event  0x0016000E
-#define status_$xpd_invalid_option              0x0016000F
-#define status_$xpd_proc_not_debug_target       0x00190010
-#define status_$xpd_illegal_target_setup        0x00160011
-#define status_$xpd_invalid_state_argument      0x00160003
+#define status_$xpd_not_a_debugger 0x00160005
+#define status_$xpd_debugger_not_found 0x00160006
+#define status_$xpd_debugger_table_full 0x00160007
+#define status_$xpd_already_a_debugger 0x00160009
+#define status_$xpd_target_not_suspended 0x0016000B
+#define status_$xpd_invalid_ec_key 0x0016000C
+#define status_$xpd_state_unavailable_for_this_event 0x0016000E
+#define status_$xpd_invalid_option 0x0016000F
+#define status_$xpd_proc_not_debug_target 0x00190010
+#define status_$xpd_illegal_target_setup 0x00160011
+#define status_$xpd_invalid_state_argument 0x00160003
 
 /*
  * Status codes for debug events/faults
  */
-#define status_$xpd_target_is_forking           0x00160012
-#define status_$xpd_target_is_execing           0x00160013
-#define status_$xpd_target_is_invoking          0x00160014
-#define status_$xpd_target_is_exiting           0x00160015
+#define status_$xpd_target_is_forking 0x00160012
+#define status_$xpd_target_is_execing 0x00160013
+#define status_$xpd_target_is_invoking 0x00160014
+#define status_$xpd_target_is_exiting 0x00160015
 #define status_$xpd_target_is_loading_exec_image 0x00160016
-#define status_$fault_single_step_completed     0x00120015
-#define status_$fault_process_BLAST             0x00120019
-#define status_$mst_guard_fault                 0x0004000a
+#define status_$fault_single_step_completed 0x00120015
+#define status_$fault_process_BLAST 0x00120019
+#define status_$mst_guard_fault 0x0004000a
 
 /*
  * Ptrace options structure
@@ -71,19 +71,19 @@
  * Used by SET_PTRACE_OPTS, INQ_PTRACE_OPTS, RESET_PTRACE_OPTS
  */
 typedef struct xpd_$ptrace_opts_t {
-    uint32_t    signal_mask;    /* 0x00: Bitmask of signals to trap */
-    uint32_t    trace_range_lo; /* 0x04: Low address for trace range */
-    uint32_t    trace_range_hi; /* 0x08: High address for trace range */
-    uint8_t     flags;          /* 0x0C: Trace flags */
-                                /*   Bit 0 (0x01): Trap on signals in mask */
-                                /*   Bit 1 (0x02): Inherit options on fork */
-                                /*   Bit 2 (0x04): Unknown */
-                                /*   Bit 3 (0x08): Inherit ptrace options */
-                                /*   Bit 4 (0x10): Unknown */
-                                /*   Bit 5 (0x20): Unknown */
-                                /*   Bit 6 (0x40): Trace outside range */
-                                /*   Bit 7 (0x80): Trace inside range */
-    uint8_t     flags2;         /* 0x0D: Additional flags */
+  uint32_t signal_mask;    /* 0x00: Bitmask of signals to trap */
+  uint32_t trace_range_lo; /* 0x04: Low address for trace range */
+  uint32_t trace_range_hi; /* 0x08: High address for trace range */
+  uint8_t flags;           /* 0x0C: Trace flags */
+                           /*   Bit 0 (0x01): Trap on signals in mask */
+                           /*   Bit 1 (0x02): Inherit options on fork */
+                           /*   Bit 2 (0x04): Unknown */
+                           /*   Bit 3 (0x08): Inherit ptrace options */
+                           /*   Bit 4 (0x10): Unknown */
+                           /*   Bit 5 (0x20): Unknown */
+                           /*   Bit 6 (0x40): Trace outside range */
+                           /*   Bit 7 (0x80): Trace inside range */
+  uint8_t flags2;          /* 0x0D: Additional flags */
 } xpd_$ptrace_opts_t;
 
 /*
@@ -93,10 +93,10 @@ typedef struct xpd_$ptrace_opts_t {
  * Located at XPD_$DATA + 0x10 * debugger_index
  */
 typedef struct xpd_$debugger_entry_t {
-    ec_$eventcount_t ec;        /* 0x00: Eventcount for this debugger slot */
-    uint16_t    asid;           /* 0x0C: Address space ID of debugger */
-                                /*       (0 = slot is free) */
-    uint16_t    pad;            /* 0x0E: Padding */
+  ec_$eventcount_t ec; /* 0x00: Eventcount for this debugger slot */
+  uint16_t asid;       /* 0x0C: Address space ID of debugger */
+                       /*       (0 = slot is free) */
+  uint16_t pad;        /* 0x0E: Padding */
 } xpd_$debugger_entry_t;
 
 /*
@@ -112,46 +112,46 @@ typedef struct xpd_$debugger_entry_t {
  *   Bit 6 (0x40): Event acknowledged
  *   Bit 7 (0x80): Debug target flag
  */
-#define XPD_FLAG_SUSPENDED          0x10
-#define XPD_FLAG_STATE_SAVED        0x20
-#define XPD_FLAG_EVENT_ACKED        0x40
-#define XPD_FLAG_DEBUG_TARGET       0x80
-#define XPD_FLAG_TRACE_PENDING      0x02
+#define XPD_FLAG_SUSPENDED 0x10
+#define XPD_FLAG_STATE_SAVED 0x20
+#define XPD_FLAG_EVENT_ACKED 0x40
+#define XPD_FLAG_DEBUG_TARGET 0x80
+#define XPD_FLAG_TRACE_PENDING 0x02
 
 /*
  * Restart modes for XPD_$RESTART
  */
-#define XPD_RESTART_MODE_CONTINUE   1   /* Continue execution */
-#define XPD_RESTART_MODE_STEP       2   /* Single step with trace */
+#define XPD_RESTART_MODE_CONTINUE 1      /* Continue execution */
+#define XPD_RESTART_MODE_STEP 2          /* Single step with trace */
 #define XPD_RESTART_MODE_STEP_NO_TRACE 3 /* Single step without trace */
 
 /*
  * Register info modes for XPD_$GET_REGISTERS / XPD_$PUT_REGISTERS
  */
-#define XPD_REG_MODE_GENERAL        0   /* General purpose registers (D0-D7, A0-A7) */
-#define XPD_REG_MODE_EXCEPTION      1   /* Exception frame */
-#define XPD_REG_MODE_FP_STATE       2   /* Floating point state */
-#define XPD_REG_MODE_DEBUG_STATE    3   /* Debug state info */
+#define XPD_REG_MODE_GENERAL 0   /* General purpose registers (D0-D7, A0-A7) */
+#define XPD_REG_MODE_EXCEPTION 1 /* Exception frame */
+#define XPD_REG_MODE_FP_STATE 2  /* Floating point state */
+#define XPD_REG_MODE_DEBUG_STATE 3 /* Debug state info */
 
 /*
  * Maximum number of debugger slots
  */
-#define XPD_MAX_DEBUGGERS           6
+#define XPD_MAX_DEBUGGERS 6
 
 /*
  * Maximum number of debug targets (same as PROC2 max processes)
  */
-#define XPD_MAX_TARGETS             57
+#define XPD_MAX_TARGETS 57
 
 /*
  * Global data
  */
-#if defined(M68K)
-    #define XPD_$DATA               (*(ec_$eventcount_t *)0xEA5034)
-    #define XPD_$DEBUGGER_TABLE     ((xpd_$debugger_entry_t *)(0xEA5034 + 0x10))
+#if defined(ARCH_M68K)
+#define XPD_$DATA (*(ec_$eventcount_t *)0xEA5034)
+#define XPD_$DEBUGGER_TABLE ((xpd_$debugger_entry_t *)(0xEA5034 + 0x10))
 #else
-    extern ec_$eventcount_t XPD_$DATA;
-    extern xpd_$debugger_entry_t XPD_$DEBUGGER_TABLE[XPD_MAX_DEBUGGERS];
+extern ec_$eventcount_t XPD_$DATA;
+extern xpd_$debugger_entry_t XPD_$DEBUGGER_TABLE[XPD_MAX_DEBUGGERS];
 #endif
 
 /*
@@ -200,7 +200,8 @@ void XPD_$CLEANUP(void);
  *
  * Original address: 0x00e5bbd8
  */
-void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status_ret);
+void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid,
+                       status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -221,7 +222,8 @@ void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status
  *
  * Original address: 0x00e5af9e
  */
-void XPD_$SET_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts, status_$t *status_ret);
+void XPD_$SET_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts,
+                          status_$t *status_ret);
 
 /*
  * XPD_$INQ_PTRACE_OPTS - Inquire process trace options
@@ -235,7 +237,8 @@ void XPD_$SET_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts, status_$t *
  *
  * Original address: 0x00e5b076
  */
-void XPD_$INQ_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts, status_$t *status_ret);
+void XPD_$INQ_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts,
+                          status_$t *status_ret);
 
 /*
  * XPD_$RESET_PTRACE_OPTS - Reset ptrace options to defaults
@@ -286,8 +289,8 @@ int8_t XPD_$INHERIT_PTRACE_OPTIONS(xpd_$ptrace_opts_t *opts);
  *
  * Original address: 0x00e5b54a
  */
-void XPD_$RESTART(uid_t *proc_uid, uint16_t *mode, int32_t *pc,
-                  int16_t *signal, int32_t *status, status_$t *status_ret);
+void XPD_$RESTART(uid_t *proc_uid, uint16_t *mode, int32_t *pc, int16_t *signal,
+                  int32_t *status, status_$t *status_ret);
 
 /*
  * XPD_$CONTINUE_PROC - Continue a debug target
@@ -301,7 +304,8 @@ void XPD_$RESTART(uid_t *proc_uid, uint16_t *mode, int32_t *pc,
  *
  * Original address: 0x00e5bed8
  */
-void XPD_$CONTINUE_PROC(uid_t *proc_uid, int32_t response, status_$t *status_ret);
+void XPD_$CONTINUE_PROC(uid_t *proc_uid, int32_t response,
+                        status_$t *status_ret);
 
 /*
  * XPD_$SET_ENABLE - Enable/disable debug events
@@ -337,7 +341,8 @@ void XPD_$SET_ENABLE(uid_t *proc_uid, int8_t *enable, status_$t *status_ret);
  *
  * Original address: 0x00e5b1ee
  */
-void XPD_$CAPTURE_FAULT(void *context, int32_t *frame, uint16_t *signal, status_$t *status_ret);
+void XPD_$CAPTURE_FAULT(void *context, int32_t *frame, uint16_t *signal,
+                        status_$t *status_ret);
 
 /*
  * XPD_$POST_EVENT - Post an event to the debugger
@@ -366,7 +371,8 @@ void XPD_$POST_EVENT(int32_t *event_type, void *event_data, uint16_t *result);
  *
  * Original address: 0x00e5be28
  */
-void XPD_$GET_EVENT_AND_DATA(uid_t *proc_uid, uint16_t *event_type, status_$t *status_ret);
+void XPD_$GET_EVENT_AND_DATA(uid_t *proc_uid, uint16_t *event_type,
+                             status_$t *status_ret);
 
 /*
  * XPD_$GET_EC - Get eventcount for debug notifications
@@ -403,7 +409,8 @@ void XPD_$GET_EC(int16_t *key, void **ec_ret, status_$t *status_ret);
  *
  * Original address: 0x00e5b954
  */
-void XPD_$READ_PROC(uid_t *proc_uid, void *addr, int32_t *len, void *buffer, status_$t *status_ret);
+void XPD_$READ_PROC(uid_t *proc_uid, void *addr, int32_t *len, void *buffer,
+                    status_$t *status_ret);
 
 /*
  * XPD_$READ_PROC_ASYNC - Read target process memory (async check)
@@ -437,7 +444,8 @@ void XPD_$READ_PROC_ASYNC(uid_t *proc_uid, void *addr, int32_t *len,
  *
  * Original address: 0x00e5b9e2
  */
-void XPD_$WRITE_PROC(uid_t *proc_uid, void *addr, int32_t *data, void *buffer, status_$t *status_ret);
+void XPD_$WRITE_PROC(uid_t *proc_uid, void *addr, int32_t *data, void *buffer,
+                     status_$t *status_ret);
 
 /*
  * XPD_$READ - Read from address space by ASID
@@ -453,7 +461,8 @@ void XPD_$WRITE_PROC(uid_t *proc_uid, void *addr, int32_t *data, void *buffer, s
  *
  * Original address: 0x00e5ba70
  */
-void XPD_$READ(uint16_t *asid, void *addr, int32_t *len, void *buffer, status_$t *status_ret);
+void XPD_$READ(uint16_t *asid, void *addr, int32_t *len, void *buffer,
+               status_$t *status_ret);
 
 /*
  * XPD_$WRITE - Write to address space by ASID
@@ -469,7 +478,8 @@ void XPD_$READ(uint16_t *asid, void *addr, int32_t *len, void *buffer, status_$t
  *
  * Original address: 0x00e5baa6
  */
-void XPD_$WRITE(uint16_t *asid, void *addr, int32_t *len, void *buffer, status_$t *status_ret);
+void XPD_$WRITE(uint16_t *asid, void *addr, int32_t *len, void *buffer,
+                status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -490,7 +500,8 @@ void XPD_$WRITE(uint16_t *asid, void *addr, int32_t *len, void *buffer, status_$
  *
  * Original address: 0x00e5c1a4
  */
-void XPD_$GET_REGISTERS(uid_t *proc_uid, int16_t *mode, void *regs, status_$t *status_ret);
+void XPD_$GET_REGISTERS(uid_t *proc_uid, int16_t *mode, void *regs,
+                        status_$t *status_ret);
 
 /*
  * XPD_$PUT_REGISTERS - Set target process registers
@@ -505,7 +516,8 @@ void XPD_$GET_REGISTERS(uid_t *proc_uid, int16_t *mode, void *regs, status_$t *s
  *
  * Original address: 0x00e5c33c
  */
-void XPD_$PUT_REGISTERS(uid_t *proc_uid, int16_t *mode, void *regs, status_$t *status_ret);
+void XPD_$PUT_REGISTERS(uid_t *proc_uid, int16_t *mode, void *regs,
+                        status_$t *status_ret);
 
 /*
  * XPD_$GET_FP - Get floating-point registers for target
@@ -546,8 +558,8 @@ void XPD_$PUT_FP(uid_t *proc_uid, status_$t *status_ret);
  *
  * Original address: 0x00e5c12c
  */
-void XPD_$GET_TARGET_INFO(uid_t *proc_uid, int8_t *is_target, int8_t *is_suspended,
-                          status_$t *status_ret);
+void XPD_$GET_TARGET_INFO(uid_t *proc_uid, int8_t *is_target,
+                          int8_t *is_suspended, status_$t *status_ret);
 
 /*
  * ============================================================================

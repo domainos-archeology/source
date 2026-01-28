@@ -37,7 +37,7 @@
 /*
  * Raw memory access macros for wait-related fields
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_W_BASE(idx)             ((uint8_t*)(0xEA551C + ((idx) * 0xE4)))
 
     /* Child/zombie list fields */
@@ -242,7 +242,7 @@ int16_t PROC2_$WAIT(uint16_t *options, int16_t *pid, uint32_t *result,
 
         if (which == 2) {
             /* Interrupted by signal */
-#if defined(M68K)
+#if defined(ARCH_M68K)
             W_FIM_QUIT_VAL(asid) = *(int32_t*)W_FIM_QUIT_EC(asid);
 #endif
             *status_ret = status_$ec2_async_fault_while_waiting;

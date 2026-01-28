@@ -109,7 +109,7 @@ void CRASH_SYSTEM(const status_$t *status_p)
     }
 
     /* Save USP - requires privileged instruction */
-#if defined(__m68k__) || defined(M68K)
+#if defined(__m68k__) || defined(ARCH_M68K)
     __asm__ volatile ("movec %%usp, %0" : "=d" (CRASH_USP));
 #else
     CRASH_USP = 0;
@@ -133,7 +133,7 @@ void CRASH_SYSTEM(const status_$t *status_p)
      * Crash case - enter debugger via trap #15.
      * The trap handler will display crash info and allow debugging.
      */
-#if defined(__m68k__) || defined(M68K)
+#if defined(__m68k__) || defined(ARCH_M68K)
     __asm__ volatile ("trap #15");
 #endif
 
@@ -216,7 +216,7 @@ static void call_prom_putc(char c)
      * and restores them. In C we rely on the calling convention
      * to handle this, but the PROM routine might clobber registers.
      */
-#if defined(__m68k__) || defined(M68K)
+#if defined(__m68k__) || defined(ARCH_M68K)
     register char ch __asm__("d1") = c;
     void (*putc_func)(void) = *PROM_PUTC_VECTOR;
 
@@ -334,7 +334,7 @@ static void crash_puts_string(const char *str)
  */
 void CRASH_SHOW_STRING(const char *str)
 {
-#if defined(__m68k__) || defined(M68K)
+#if defined(__m68k__) || defined(ARCH_M68K)
     /*
      * We need to save ALL registers, call crash_puts_string,
      * then restore ALL registers. This is tricky in C because

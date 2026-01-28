@@ -19,7 +19,7 @@
 /*
  * Raw memory access macros for parent/child relationships
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_BASE                 0xEA551C
 
     /* Parent index at offset 0x1E */

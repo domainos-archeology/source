@@ -31,7 +31,7 @@
  * =============================================================================
  */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /* This node's ID */
     #define NODE_$ME                (*(uint32_t *)0xE245A4)
 

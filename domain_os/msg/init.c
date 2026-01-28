@@ -15,7 +15,7 @@
 
 void MSG_$INIT(void)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     status_$t status;
 
     /*

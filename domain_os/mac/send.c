@@ -30,7 +30,7 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
     *bytes_sent = 0;
     *status_ret = status_$ok;
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     chan = *channel;
 
     /*

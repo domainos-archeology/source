@@ -42,7 +42,7 @@
  * Routing data area cleared during initialization (0xe87da8)
  * Size: 0x81 longs = 516 bytes
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define ROUTE_$DATA_AREA        ((uint32_t *)0xE87DA8)
 #define ROUTE_$PROCESS_UID      (*(uint16_t *)0xE88216)
 #define ROUTE_$USER_PORT_MAX    (*(uint16_t *)0xE87FD0)

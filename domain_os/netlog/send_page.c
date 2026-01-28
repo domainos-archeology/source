@@ -24,7 +24,7 @@
  * AUDIT data end address for packet info
  * Used in PKT_$BLD_INTERNET_HDR call as the packet template
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define AUDIT_PKT_INFO      ((void*)0xE248FC)
 #else
     extern char AUDIT_PKT_INFO_SYM;

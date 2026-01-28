@@ -25,7 +25,7 @@
 /*
  * Raw memory access macros for wait-related fields
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_BASE                 0xEA551C
 
     /* Flag byte at offset 0x2B (high byte of flags word at 0x2A) */

@@ -8,11 +8,11 @@
 #ifndef ROUTE_INTERNAL_H
 #define ROUTE_INTERNAL_H
 
-#include "route/route.h"
 #include "ec/ec.h"
-#include "rip/rip.h"
-#include "sock/sock.h"
 #include "misc/crash_system.h"
+#include "rip/rip.h"
+#include "route/route.h"
+#include "sock/sock.h"
 
 /*
  * =============================================================================
@@ -21,17 +21,16 @@
  */
 
 /* Maximum number of routing ports */
-#define ROUTE_MAX_PORTS         8
+#define ROUTE_MAX_PORTS 8
 
 /* Port size in bytes */
-#define ROUTE_PORT_SIZE         0x5C
+#define ROUTE_PORT_SIZE 0x5C
 
 /*
  * =============================================================================
  * Global Data (m68k addresses)
  * =============================================================================
  */
-
 
 /*
  * ROUTE_$PORT_ARRAY - Array of routing port structures
@@ -148,7 +147,8 @@ void ROUTE_$CLOSE_PORT(void *port_info, status_$t *status_ret);
  *
  * Original address: 0x00E69E40
  */
-void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index, int8_t port_type_flag);
+void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index,
+                           int8_t port_type_flag);
 
 /*
  * ROUTE_$CLEANUP_WIRED - Cleanup wired pages
@@ -220,31 +220,31 @@ void RTWIRED_PROC_START(int16_t port_index, uint16_t packet_id,
  * =============================================================================
  */
 
-#if defined(M68K)
-    /*
-     * ROUTE_$WIRED_PAGES - Array of wired page addresses
-     *
-     * Original address: 0xE87D80
-     */
-    #define ROUTE_$WIRED_PAGES      ((uint32_t *)0xE87D80)
+#if defined(ARCH_M68K)
+/*
+ * ROUTE_$WIRED_PAGES - Array of wired page addresses
+ *
+ * Original address: 0xE87D80
+ */
+#define ROUTE_$WIRED_PAGES ((uint32_t *)0xE87D80)
 
-    /*
-     * ROUTE_$N_WIRED_PAGES - Count of currently wired pages
-     *
-     * Original address: 0xE87FD2
-     */
-    #define ROUTE_$N_WIRED_PAGES    (*(int16_t *)0xE87FD2)
+/*
+ * ROUTE_$N_WIRED_PAGES - Count of currently wired pages
+ *
+ * Original address: 0xE87FD2
+ */
+#define ROUTE_$N_WIRED_PAGES (*(int16_t *)0xE87FD2)
 
-    /*
-     * ROUTE_$N_USER_PORTS - Count of active user ports
-     *
-     * Original address: 0xE87FD4
-     */
-    #define ROUTE_$N_USER_PORTS     (*(int16_t *)0xE87FD4)
+/*
+ * ROUTE_$N_USER_PORTS - Count of active user ports
+ *
+ * Original address: 0xE87FD4
+ */
+#define ROUTE_$N_USER_PORTS (*(int16_t *)0xE87FD4)
 #else
-    extern uint32_t ROUTE_$WIRED_PAGES[];
-    extern int16_t ROUTE_$N_WIRED_PAGES;
-    extern int16_t ROUTE_$N_USER_PORTS;
+extern uint32_t ROUTE_$WIRED_PAGES[];
+extern int16_t ROUTE_$N_WIRED_PAGES;
+extern int16_t ROUTE_$N_USER_PORTS;
 #endif
 
 #endif /* ROUTE_INTERNAL_H */

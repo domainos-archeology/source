@@ -42,7 +42,7 @@
  * =============================================================================
  */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /* RIP IDP channel - 0xFFFF means no channel open */
     #define RIP_$STD_IDP_CHANNEL    (*(int16_t *)0xE26EBC)
 

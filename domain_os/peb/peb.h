@@ -31,19 +31,22 @@
  * Status Codes (module 0x24 - PEB)
  * ============================================================================
  */
-#define status_$peb_fpu_is_hung             0x00240001  /* PEB FPU not responding */
-#define status_$peb_interrupt               0x00240002  /* PEB interrupt (no specific error) */
-#define status_$peb_fp_overflow             0x00240003  /* Floating point overflow */
-#define status_$peb_fp_underflow            0x00240004  /* Floating point underflow */
-#define status_$peb_div_by_zero             0x00240005  /* Division by zero */
-#define status_$peb_fp_loss_of_significance 0x00240006  /* Loss of significance */
-#define status_$peb_fp_hw_error             0x00240007  /* FP hardware error */
-#define status_$peb_unimplemented_opcode    0x00240008  /* Unimplemented opcode */
-#define status_$peb_wcs_verify_failed       0x00240009  /* Failed to verify peb microcode */
+#define status_$peb_fpu_is_hung 0x00240001 /* PEB FPU not responding */
+#define status_$peb_interrupt 0x00240002 /* PEB interrupt (no specific error)  \
+                                          */
+#define status_$peb_fp_overflow 0x00240003  /* Floating point overflow */
+#define status_$peb_fp_underflow 0x00240004 /* Floating point underflow */
+#define status_$peb_div_by_zero 0x00240005  /* Division by zero */
+#define status_$peb_fp_loss_of_significance                                    \
+  0x00240006                                        /* Loss of significance */
+#define status_$peb_fp_hw_error 0x00240007          /* FP hardware error */
+#define status_$peb_unimplemented_opcode 0x00240008 /* Unimplemented opcode */
+#define status_$peb_wcs_verify_failed                                          \
+  0x00240009 /* Failed to verify peb microcode */
 
 /* Error codes for TEST_PARITY_ERR */
-#define status_$peb_no_parity_error         0x0012000F  /* No parity error detected */
-#define status_$peb_parity_error            0x0012001B  /* Parity error detected */
+#define status_$peb_no_parity_error 0x0012000F /* No parity error detected */
+#define status_$peb_parity_error 0x0012001B    /* Parity error detected */
 
 /*
  * ============================================================================
@@ -51,19 +54,20 @@
  * ============================================================================
  */
 
-#define PEB_INFO_WCS_LOADED     0x80    /* WCS microcode loaded successfully */
-#define PEB_INFO_M68881_MODE    0x40    /* Running in MC68881 emulation mode */
-#define PEB_INFO_SAVEP_FLAG     0x20    /* Save pending flag */
-#define PEB_INFO_UNKNOWN_08     0x08    /* Unknown flag */
-#define PEB_INFO_UNKNOWN_10     0x10    /* Unknown flag */
+#define PEB_INFO_WCS_LOADED 0x80  /* WCS microcode loaded successfully */
+#define PEB_INFO_M68881_MODE 0x40 /* Running in MC68881 emulation mode */
+#define PEB_INFO_SAVEP_FLAG 0x20  /* Save pending flag */
+#define PEB_INFO_UNKNOWN_08 0x08  /* Unknown flag */
+#define PEB_INFO_UNKNOWN_10 0x10  /* Unknown flag */
 
 /*
  * ============================================================================
  * PEB Register State
  * ============================================================================
  *
- * Per-process FP register state stored in wired memory at PEB_$WIRED_DATA_START.
- * Each address space has 28 (0x1C) bytes of state storage.
+ * Per-process FP register state stored in wired memory at
+ * PEB_$WIRED_DATA_START. Each address space has 28 (0x1C) bytes of state
+ * storage.
  *
  * Layout of per-process state (28 bytes):
  *   +0x00: FP data register pair 1 (high, low) - 8 bytes
@@ -74,14 +78,14 @@
  */
 
 typedef struct peb_fp_state_t {
-    uint32_t    data_regs[4];       /* +0x00: FP data registers (2 pairs of 64-bit) */
-    uint32_t    status_reg;         /* +0x10: FP status register */
-    uint32_t    ctrl_reg;           /* +0x14: FP control register */
-    uint32_t    instr_counter;      /* +0x18: FP instruction counter */
+  uint32_t data_regs[4];  /* +0x00: FP data registers (2 pairs of 64-bit) */
+  uint32_t status_reg;    /* +0x10: FP status register */
+  uint32_t ctrl_reg;      /* +0x14: FP control register */
+  uint32_t instr_counter; /* +0x18: FP instruction counter */
 } peb_fp_state_t;
 
-#define PEB_FP_STATE_SIZE       0x1C    /* 28 bytes per process */
-#define PEB_MAX_PROCESSES       58      /* 0x3A processes supported */
+#define PEB_FP_STATE_SIZE 0x1C /* 28 bytes per process */
+#define PEB_MAX_PROCESSES 58   /* 0x3A processes supported */
 
 /*
  * ============================================================================
@@ -89,43 +93,43 @@ typedef struct peb_fp_state_t {
  * ============================================================================
  */
 
-#if defined(M68K)
-    /* PEB control register - main control/status interface */
-    #define PEB_CTL             (*(volatile uint16_t *)0xFF7000)
+#if defined(ARCH_M68K)
+/* PEB control register - main control/status interface */
+#define PEB_CTL (*(volatile uint16_t *)0xFF7000)
 
-    /* PEB status register byte (read status bits) */
-    #define PEB_STATUS_BYTE     (*(volatile uint8_t *)0xFF7001)
+/* PEB status register byte (read status bits) */
+#define PEB_STATUS_BYTE (*(volatile uint8_t *)0xFF7001)
 
-    /* PEB private mirror - per-process mapping for register access */
-    #define PEB_PRIVATE_BASE    ((volatile uint32_t *)0xFF7400)
+/* PEB private mirror - per-process mapping for register access */
+#define PEB_PRIVATE_BASE ((volatile uint32_t *)0xFF7400)
 
-    /* PEB status register offset from base */
-    #define PEB_STATUS_OFFSET   0xF4
+/* PEB status register offset from base */
+#define PEB_STATUS_OFFSET 0xF4
 
-    /* WCS (Writable Control Store) base address */
-    #define PEB_WCS_BASE        ((volatile uint16_t *)0xFF7800)
+/* WCS (Writable Control Store) base address */
+#define PEB_WCS_BASE ((volatile uint16_t *)0xFF7800)
 
-    /* Global PEB data area base (contains flags and state) */
-    #define PEB_GLOBALS_BASE    0xE24C78
+/* Global PEB data area base (contains flags and state) */
+#define PEB_GLOBALS_BASE 0xE24C78
 
-    /* Wired data start - per-process FP state storage */
-    #define PEB_WIRED_DATA_ADDR 0xE84E80
+/* Wired data start - per-process FP state storage */
+#define PEB_WIRED_DATA_ADDR 0xE84E80
 #else
-    /* For non-m68k platforms, these will be provided by platform init */
-    extern volatile uint16_t *peb_ctl_reg;
-    extern volatile uint8_t *peb_status_byte;
-    extern volatile uint32_t *peb_private_base;
-    extern volatile uint16_t *peb_wcs_base;
-    extern uint32_t peb_globals_base;
-    extern uint32_t peb_wired_data_addr;
+/* For non-m68k platforms, these will be provided by platform init */
+extern volatile uint16_t *peb_ctl_reg;
+extern volatile uint8_t *peb_status_byte;
+extern volatile uint32_t *peb_private_base;
+extern volatile uint16_t *peb_wcs_base;
+extern uint32_t peb_globals_base;
+extern uint32_t peb_wired_data_addr;
 
-    #define PEB_CTL             (*peb_ctl_reg)
-    #define PEB_STATUS_BYTE     (*peb_status_byte)
-    #define PEB_PRIVATE_BASE    peb_private_base
-    #define PEB_STATUS_OFFSET   0xF4
-    #define PEB_WCS_BASE        peb_wcs_base
-    #define PEB_GLOBALS_BASE    peb_globals_base
-    #define PEB_WIRED_DATA_ADDR peb_wired_data_addr
+#define PEB_CTL (*peb_ctl_reg)
+#define PEB_STATUS_BYTE (*peb_status_byte)
+#define PEB_PRIVATE_BASE peb_private_base
+#define PEB_STATUS_OFFSET 0xF4
+#define PEB_WCS_BASE peb_wcs_base
+#define PEB_GLOBALS_BASE peb_globals_base
+#define PEB_WIRED_DATA_ADDR peb_wired_data_addr
 #endif
 
 /*
@@ -135,10 +139,10 @@ typedef struct peb_fp_state_t {
  */
 
 /* Control register bit masks */
-#define PEB_CTL_BUSY            0x8000  /* PEB is busy (negative when busy) */
-#define PEB_CTL_WCS_PAGE_MASK   0x03F0  /* WCS page select bits (4-9) */
-#define PEB_CTL_WCS_PAGE_SHIFT  4
-#define PEB_CTL_ENABLE          0x000D  /* PEB enable bits */
+#define PEB_CTL_BUSY 0x8000          /* PEB is busy (negative when busy) */
+#define PEB_CTL_WCS_PAGE_MASK 0x03F0 /* WCS page select bits (4-9) */
+#define PEB_CTL_WCS_PAGE_SHIFT 4
+#define PEB_CTL_ENABLE 0x000D /* PEB enable bits */
 
 /*
  * ============================================================================
@@ -146,17 +150,17 @@ typedef struct peb_fp_state_t {
  * ============================================================================
  */
 
-#define PEB_STATUS_INTERRUPT    0x04    /* Interrupt pending */
-#define PEB_STATUS_PARITY_ERR   0x02    /* Parity error detected */
+#define PEB_STATUS_INTERRUPT 0x04  /* Interrupt pending */
+#define PEB_STATUS_PARITY_ERR 0x02 /* Parity error detected */
 
 /* FP exception status bits (from offset 0xF4) */
-#define PEB_EXC_OVERFLOW        0x01    /* Overflow */
-#define PEB_EXC_UNDERFLOW       0x02    /* Underflow */
-#define PEB_EXC_DIV_BY_ZERO     0x04    /* Division by zero */
-#define PEB_EXC_LOSS_SIG        0x08    /* Loss of significance */
-#define PEB_EXC_HW_ERROR        0x10    /* Hardware error */
-#define PEB_EXC_UNIMP_OPCODE    0x20    /* Unimplemented opcode */
-#define PEB_EXC_MASK            0x3F    /* All exception bits */
+#define PEB_EXC_OVERFLOW 0x01     /* Overflow */
+#define PEB_EXC_UNDERFLOW 0x02    /* Underflow */
+#define PEB_EXC_DIV_BY_ZERO 0x04  /* Division by zero */
+#define PEB_EXC_LOSS_SIG 0x08     /* Loss of significance */
+#define PEB_EXC_HW_ERROR 0x10     /* Hardware error */
+#define PEB_EXC_UNIMP_OPCODE 0x20 /* Unimplemented opcode */
+#define PEB_EXC_MASK 0x3F         /* All exception bits */
 
 /*
  * ============================================================================

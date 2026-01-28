@@ -29,15 +29,15 @@
  * Size: 0x12 bytes (18 bytes)
  */
 typedef struct ml_$exclusion_t {
-    int32_t     f1;         /* 0x00: Unknown field */
-    void        *f2;        /* 0x04: Pointer (self-referential in list) */
-    void        *f3;        /* 0x08: Pointer (self-referential in list) */
-    int32_t     f4;         /* 0x0C: Event count value */
-    int16_t     f5;         /* 0x10: State: -1 = unlocked, >= 0 = locked + waiter count */
+  int32_t f1; /* 0x00: Unknown field */
+  void *f2;   /* 0x04: Pointer (self-referential in list) */
+  void *f3;   /* 0x08: Pointer (self-referential in list) */
+  int32_t f4; /* 0x0C: Event count value */
+  int16_t f5; /* 0x10: State: -1 = unlocked, >= 0 = locked + waiter count */
 } ml_$exclusion_t;
 
 typedef struct ml_$spinlock_t {
-    int32_t     f1;
+  int32_t f1;
 } ml_$spinlock_t;
 
 /*
@@ -52,28 +52,28 @@ typedef uint16_t ml_$spin_token_t;
  * Known lock IDs used throughout the kernel
  * (defined here for reference; actual definitions are in respective modules)
  */
-#define ML_LOCK_PROC2       4       /* PROC2 lock (proc2/proc2.h) */
-#define ML_LOCK_FILE        5       /* File lock (file/file.h) */
-#define ML_LOCK_EC2         6       /* EC2 lock (ec/ec.h) */
-#define ML_LOCK_PROC1       0x0B    /* Process creation lock (proc1/proc1.h) */
-#define ML_LOCK_MST_ASID    0x0C    /* MST ASID allocation lock */
-#define ML_LOCK_CAL         0x0E    /* Calendar lock */
-#define ML_LOCK_DISK        0x0F    /* Disk lock */
-#define ML_LOCK_AST         0x12    /* AST lock */
-#define ML_LOCK_PMAP        0x14    /* PMAP lock */
-#define ML_LOCK_MST_MMU     0x14    /* MST MMU lock */
+#define ML_LOCK_PROC2 4       /* PROC2 lock (proc2/proc2.h) */
+#define ML_LOCK_FILE 5        /* File lock (file/file.h) */
+#define ML_LOCK_EC2 6         /* EC2 lock (ec/ec.h) */
+#define ML_LOCK_PROC1 0x0B    /* Process creation lock (proc1/proc1.h) */
+#define ML_LOCK_MST_ASID 0x0C /* MST ASID allocation lock */
+#define ML_LOCK_CAL 0x0E      /* Calendar lock */
+#define ML_LOCK_DISK 0x0F     /* Disk lock */
+#define ML_LOCK_AST 0x12      /* AST lock */
+#define ML_LOCK_PMAP 0x14     /* PMAP lock */
+#define ML_LOCK_MST_MMU 0x14  /* MST MMU lock */
 
 /*
  * Global variables (m68k-specific addresses)
  */
-#if defined(M68K)
-    /* Lock byte array: bit 0 indicates lock is held */
-    #define ML_$LOCK_BYTES      ((volatile uint8_t *)0xE20BC4)
-    /* Lock event lists: each entry is 16 bytes (ec + wait count) */
-    #define ML_$LOCK_EVENTS     ((ec_$eventcount_t *)0xE20BE4)
+#if defined(ARCH_M68K)
+/* Lock byte array: bit 0 indicates lock is held */
+#define ML_$LOCK_BYTES ((volatile uint8_t *)0xE20BC4)
+/* Lock event lists: each entry is 16 bytes (ec + wait count) */
+#define ML_$LOCK_EVENTS ((ec_$eventcount_t *)0xE20BE4)
 #else
-    extern volatile uint8_t ML_$LOCK_BYTES[];
-    extern ec_$eventcount_t ML_$LOCK_EVENTS[];
+extern volatile uint8_t ML_$LOCK_BYTES[];
+extern ec_$eventcount_t ML_$LOCK_EVENTS[];
 #endif
 
 /*

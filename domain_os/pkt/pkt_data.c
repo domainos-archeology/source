@@ -10,7 +10,7 @@
 
 #include "pkt/pkt_internal.h"
 
-#if !defined(M68K)
+#if !defined(ARCH_M68K)
 
 /*
  * PKT module global data
@@ -71,7 +71,7 @@ pkt_$data_t PKT_$DATA_STRUCT = {
  * These are defined elsewhere in the kernel but needed by PKT functions.
  */
 
-#if !defined(M68K)
+#if !defined(ARCH_M68K)
 
 /* Local node ID - normally defined in network/network_data.c */
 uint32_t NODE_$ME = 0;

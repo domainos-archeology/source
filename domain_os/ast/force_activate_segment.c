@@ -20,7 +20,7 @@
 /* External function prototypes */
 
 /* Network info flags */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define AST_HASH_TABLE_INFO  ((void *)0xE01BEC)
 #define NET_INFO_FLAGS       ((void *)0xE01D64)
 #define AST_AOTH_BASE        ((aote_t **)0xE1DC80)

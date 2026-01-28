@@ -6,7 +6,7 @@ SUBSYSTEMS := acl app area as asknode arch ast audit base bat cache cal dbuf di 
 
 WARNING_FLAGS := -Wno-error=incompatible-pointer-types -Wno-error=int-conversion
 
-SAU2_FLAGS := -DM68K -DM68020 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68020 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
+SAU2_FLAGS := -DARCH_M68K -DCPU_M68020 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68020 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
 
 # we assume local #include's will have fully qualified paths
 CFLAGS := -std=c23 -I. -O2 $(SAU2_FLAGS) $(WARNING_FLAGS)

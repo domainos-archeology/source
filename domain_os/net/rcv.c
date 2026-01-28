@@ -20,7 +20,7 @@ void NET_$RCV(int16_t *net_id, int16_t *port, void *param3, int16_t *param4,
               void *param5, void *param6, int16_t *param7, void *param8,
               status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     net_handler_t handler;
 
     /*

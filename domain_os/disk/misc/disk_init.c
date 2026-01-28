@@ -50,7 +50,7 @@
 #define DRIVE_TYPE_PRIAM_7050       0x05
 
 /* Disk base data at 0xe2b89c */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define DISK_WIN_BASE       ((uint8_t *)0xe2b89c)
 #define DISK_WIN_DATA       ((uint32_t *)0xe2b8a0)  /* Array of 3-word entries */
 #define DISK_WIN_EC         ((uint32_t *)0xe2b0d4)

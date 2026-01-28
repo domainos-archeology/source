@@ -17,7 +17,7 @@
 #include "proc2/proc2_internal.h"
 
 /* Audit enabled flag */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define AUDIT_ENABLED       (*(uint8_t*)0xE2E09E)
 #else
     extern uint8_t audit_enabled;

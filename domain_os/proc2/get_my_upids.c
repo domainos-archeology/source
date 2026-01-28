@@ -19,7 +19,7 @@
  * P2_PARENT_IDX: parent index at offset 0x1E from entry base
  * P2_PARENT_UPID: parent UPID in separate table (8-byte entries)
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_CHILD_BASE(idx)      ((int16_t*)(0xEA551C + ((idx) * 0xE4)))
     #define P2_PARENT_IDX(idx)      (*(P2_CHILD_BASE(idx) - 0x63))
     #define P2_PARENT_UPID(idx)     (*(int16_t*)(0xEA944E + (idx) * 8))

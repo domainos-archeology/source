@@ -46,7 +46,7 @@ static void msg_$rcv_hw_internal(
     uint16_t *hw_extra2,
     status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /* Local variables matching Ghidra decompilation */
     uint32_t local_40[3];      /* Header info for NETBUF_$RTN_HDR */
     int32_t local_34;          /* Packet info pointer */
@@ -197,7 +197,7 @@ void MSG_$RCV_HW(msg_$socket_t *socketidp,
                  uint16_t *max_overflow,
                  status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     uint8_t asid;
     uint8_t byte_index;

@@ -14,7 +14,7 @@
 /* Hash function for UID lookup */
 
 /* Table info for UID hashing - at address 0xE01BEC in original */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define AST_HASH_TABLE_INFO (*(void **)0xE01BEC)
 #else
 #define AST_HASH_TABLE_INFO ast_hash_table_info
@@ -24,7 +24,7 @@
  * AOTE hash table (256 entries)
  * Located at AST globals base (0xE1DC80)
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define AST_AOTH_BASE ((aote_t **)0xE1DC80)
 #else
 #define AST_AOTH_BASE ast_aoth_base

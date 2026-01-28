@@ -105,7 +105,7 @@ int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
  * =============================================================================
  */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define NET_IO_$NIL_DRIVER      ((void *)0xE244F4)
     #define NET_IO_$USER_DRIVER     ((void *)0xE24544)
     #define RIP_$STD_IDP_CHANNEL    (*(int16_t *)0xE26EBC)

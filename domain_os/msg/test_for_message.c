@@ -15,7 +15,7 @@
 int16_t MSG_$TEST_FOR_MESSAGE(msg_$socket_t *socket, uint32_t *ec_value,
                                status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_offset;
     uint8_t asid;

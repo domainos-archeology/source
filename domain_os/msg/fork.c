@@ -22,7 +22,7 @@
  */
 int8_t MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     uint8_t parent;
     uint8_t child;

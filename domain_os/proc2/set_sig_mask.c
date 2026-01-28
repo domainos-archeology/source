@@ -31,7 +31,7 @@
 /*
  * Raw memory access macros for signal mask fields
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_SM_BASE(idx)            ((uint8_t*)(0xEA551C + ((idx) * 0xE4)))
 
     /* Signal mask fields */

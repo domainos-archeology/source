@@ -25,7 +25,7 @@
 #include "proc2/proc2_internal.h"
 
 /* Global storage addresses */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define AS_$STACK_FILE_LOW          (*(uint32_t*)0xE2B92C)
     #define AS_$INIT_STACK_FILE_SIZE    (*(uint32_t*)0xE2B960)
     #define FIM_USER_FIM_ADDR_TABLE     ((int32_t*)0xE212A8)
@@ -45,7 +45,7 @@
 #endif
 
 /* Eventcount array base */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define EC1_FORK_ARRAY_BASE         0xE2B978
 #else
     extern void *ec1_fork_array;

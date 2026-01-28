@@ -21,7 +21,7 @@ extern void MSG_$NET_SERVICE_CLOSE(void);
  */
 void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_offset;
     uint8_t asid;

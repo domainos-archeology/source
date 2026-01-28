@@ -26,7 +26,7 @@ extern void REM_NAME_$REGISTER_SERVER(void *port_array, void *node_id);
  * External data references
  */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /* RIP_$BCAST_CONTROL - Broadcast control parameters (30 bytes) */
     #define RIP_$BCAST_CONTROL      ((void *)0xE26EC0)
 

@@ -14,7 +14,7 @@
 /*
  * Free AOTE list head at A5+0x3EC
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define AST_$FREE_AOTE_HEAD (*(aote_t **)0xE1E06C)  /* A5+0x3EC */
 #define AST_$FREE_AOTES     (*(uint16_t *)0xE1E0EA) /* A5+0x46A */
 #else

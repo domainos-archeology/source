@@ -8,7 +8,7 @@
 
 #include "netbuf/netbuf_internal.h"
 
-#if !defined(M68K)
+#if !defined(ARCH_M68K)
 
 /*
  * Global data structure for non-m68k platforms

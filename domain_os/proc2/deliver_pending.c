@@ -17,7 +17,7 @@
 #include "proc2/proc2_internal.h"
 
 /* FIM quit inhibit table */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define FIM_QUIT_INH_TABLE      ((uint8_t*)0xE2248A)
 #else
     #define FIM_QUIT_INH_TABLE      fim_quit_inh_table

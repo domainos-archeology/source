@@ -8,16 +8,15 @@
 #ifndef VOLX_INTERNAL_H
 #define VOLX_INTERNAL_H
 
-#include "volx/volx.h"
 #include "ast/ast.h"
-#include "bat/bat.h"
-#include "network/network.h"
-#include "disk/disk.h"
-#include "dbuf/dbuf.h"
 #include "audit/audit.h"
-#include "vtoc/vtoc.h"
+#include "bat/bat.h"
+#include "dbuf/dbuf.h"
 #include "dir/dir.h"
 #include "disk/disk.h"
+#include "network/network.h"
+#include "volx/volx.h"
+#include "vtoc/vtoc.h"
 
 /*
  * Access macros for VOLX table
@@ -70,11 +69,15 @@
  * Note: VFMT_$FORMATN and ERROR_$PRINT are misidentified labels in Ghidra
  * that actually point into the VOLX table.
  */
-#if defined(M68K)
-#define VOLX_DIR_UID_FIELD(idx)    (*(uid_t *)((char *)VOLX_$TABLE_BASE + ((idx) << 5)))
-#define VOLX_LV_UID_FIELD(idx)     (*(uid_t *)((char *)VOLX_$TABLE_BASE + ((idx) << 5) + 0x08))
-#define VOLX_PARENT_UID_FIELD(idx) (*(uid_t *)((char *)VOLX_$TABLE_BASE + ((idx) << 5) + 0x10))
-#define VOLX_LV_NUM_FIELD(idx)     (*(int16_t *)((char *)VOLX_$TABLE_BASE + ((idx) << 5) + 0x1E))
+#if defined(ARCH_M68K)
+#define VOLX_DIR_UID_FIELD(idx)                                                \
+  (*(uid_t *)((char *)VOLX_$TABLE_BASE + ((idx) << 5)))
+#define VOLX_LV_UID_FIELD(idx)                                                 \
+  (*(uid_t *)((char *)VOLX_$TABLE_BASE + ((idx) << 5) + 0x08))
+#define VOLX_PARENT_UID_FIELD(idx)                                             \
+  (*(uid_t *)((char *)VOLX_$TABLE_BASE + ((idx) << 5) + 0x10))
+#define VOLX_LV_NUM_FIELD(idx)                                                 \
+  (*(int16_t *)((char *)VOLX_$TABLE_BASE + ((idx) << 5) + 0x1E))
 #endif
 
 #endif /* VOLX_INTERNAL_H */

@@ -18,7 +18,7 @@
 #include "mmu/mmu.h"
 
 /* Additional base addresses */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define SEGMAP_BASE_ADDR    0xED5000
 #else
     extern uint8_t segmap_base[];

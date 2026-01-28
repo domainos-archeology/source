@@ -84,7 +84,7 @@ void MAC_$DEMUX(void *pkt_info, int16_t *port_info, char *flags, status_$t *stat
      * - offset 0x10-0x00 (-0x10 to -0x00): data from pkt+0x3C
      */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /*
      * Get port info from ROUTE_$PORTP array.
      * The port number from port_info is used as index.

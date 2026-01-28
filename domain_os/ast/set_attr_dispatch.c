@@ -58,7 +58,7 @@
 #define ATTR_TYPE_UPDATE_DTM2    27   /* Update DTM from current variant */
 
 /* Global - attribute timestamp mask at A5+0x48C */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #include "arch/m68k/arch.h"
 #define AST_$ATTR_TIMESTAMP_MASK (*(uint32_t *)((char *)__A5_BASE() + 0x48C))
 #else

@@ -23,7 +23,7 @@
  *
  * Original address: 0xE88226
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define ROUTE_$PACKET_SEQ       (*(uint16_t *)0xE88226)
 #else
     extern uint16_t ROUTE_$PACKET_SEQ;
@@ -33,7 +33,7 @@
  * Socket event counter array reference
  * Original address: 0xE28DB4
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define SOCK_$EC_ARRAY          ((void **)0xE28DB4)
 #else
     extern void *SOCK_$EC_ARRAY[];

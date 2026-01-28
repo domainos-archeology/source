@@ -58,13 +58,13 @@ uint16_t NETLOG_$SOCK = 0;
  * On m68k, this is at a fixed address (0xE85684) and accessed
  * via the NETLOG_DATA macro. On other platforms, we allocate it here.
  */
-#if !defined(M68K)
+#if !defined(ARCH_M68K)
 netlog_data_t netlog_data = { 0 };
 #endif
 
 /*
  * Local node ID (for non-m68k platforms)
  */
-#if !defined(M68K)
+#if !defined(ARCH_M68K)
 uint32_t NODE_$ME = 0;
 #endif

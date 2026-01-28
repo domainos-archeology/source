@@ -24,7 +24,7 @@
 #define status_$ast_segment_not_deactivatable 0x00030004
 
 /* Hash table info */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define AST_HASH_TABLE_INFO (*(void **)0xE01BEC)
 #define AST_AOTH_BASE ((aote_t **)0xE1DC80)
 #else

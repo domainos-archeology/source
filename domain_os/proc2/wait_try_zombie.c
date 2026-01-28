@@ -22,7 +22,7 @@
 /*
  * Raw memory access macros for zombie-related fields
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_BASE                 0xEA551C
 
     /* Flags word at offset 0x2A */

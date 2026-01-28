@@ -25,7 +25,7 @@ typedef struct route_$port_entry_t {
 #define ROUTE_PORT_COUNT        8
 #define ROUTE_PORT_ACTIVE_MASK  0x3C    /* Bits 2-5 indicate active port types */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define ROUTE_$PORT_TABLE   ((route_$port_entry_t *)0xE2E0A0)
 #else
     extern route_$port_entry_t ROUTE_$PORT_TABLE[];

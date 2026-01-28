@@ -32,7 +32,7 @@
  */
 void MAC_OS_$PUT_INFO(mac_os_$port_info_t *info, int16_t *port_num, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t port;
     int16_t other_port;
     void **route_portp;

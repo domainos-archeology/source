@@ -44,7 +44,7 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
     int16_t i;
     void *route_port;
     void *driver_info;
-#if defined(M68K)
+#if defined(ARCH_M68K)
     mac_os_$port_pkt_table_t *port_table;
     mac_os_$channel_t *chan;
     uint32_t *pkt_type_ptr;

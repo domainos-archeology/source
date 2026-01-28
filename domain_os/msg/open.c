@@ -27,7 +27,7 @@ extern void MSG_$NET_SERVICE(void);
  */
 void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_depth;
     int16_t sock_offset;

@@ -30,7 +30,7 @@
  */
 void MAC_OS_$PROC2_CLEANUP(uint16_t as_id)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t channel;
     int16_t port;
     int16_t entry_idx;

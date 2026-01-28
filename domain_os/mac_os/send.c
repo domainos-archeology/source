@@ -38,7 +38,7 @@
 void MAC_OS_$SEND(int16_t *channel, mac_os_$send_pkt_t *pkt_desc,
                   int16_t *bytes_sent, status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     int16_t chan_num;
     mac_os_$channel_t *chan;
     uint32_t channel_offset;

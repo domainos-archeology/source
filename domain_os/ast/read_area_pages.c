@@ -22,7 +22,7 @@
 /* PROC1_$CURRENT from proc1.h via ast_internal.h */
 
 /* Process page read statistics at A5+0x4A0 relative to process table */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define PROC_PAGE_STATS    ((int32_t *)0xE25D18)
 #else
 #define PROC_PAGE_STATS    proc_page_stats

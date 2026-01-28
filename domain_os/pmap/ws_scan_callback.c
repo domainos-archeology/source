@@ -23,7 +23,7 @@ extern uint16_t MMAP_$WSL_HI_MARK[];
 #define WSL_PREV_COUNT_OFFSET   0x08    /* At DAT_00e232b8 + slot*0x24 */
 #define WSL_LAST_SCAN_OFFSET    0x18    /* At DAT_00e232cc + slot*0x24 */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define WSL_BASE                0xE232B0
     #define WSL_PAGE_COUNT_BASE     0xE232B4
     #define WSL_PREV_COUNT_BASE     0xE232B8

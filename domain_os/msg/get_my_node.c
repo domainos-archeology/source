@@ -11,7 +11,7 @@
 
 void MSG_$GET_MY_NODE(uint32_t *node_id)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /* Return NODE__ME (node ID at 0xE245A4) */
     *node_id = *(uint32_t *)0xE245A4;
 #else

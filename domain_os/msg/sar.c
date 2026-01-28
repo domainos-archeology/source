@@ -42,7 +42,7 @@ void MSG_$SARI(msg_$socket_t *socket,
                void *options,
                status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /*
      * The send-and-receive operation:
      * 1. Sends a message to the destination
@@ -104,7 +104,7 @@ void MSG_$SAR(msg_$socket_t *socket,
               void *options,
               status_$t *status_ret)
 {
-#if defined(M68K)
+#if defined(ARCH_M68K)
     uint8_t msg_desc[30];
     int i;
     int16_t local_bytes;

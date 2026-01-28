@@ -24,7 +24,7 @@
 static void FUN_00e02c52(int16_t count, int8_t zero_flag);
 
 /* Process page read statistics - PROC1_$CURRENT from proc1.h via ast_internal.h */
-#if defined(M68K)
+#if defined(ARCH_M68K)
 #define PROC_NET_STATS     ((int32_t *)0xE25D1C)
 #else
 #define PROC_NET_STATS     proc_net_stats

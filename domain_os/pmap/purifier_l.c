@@ -37,7 +37,7 @@ extern int8_t DISK_$DO_CHKSUM;
 #include "mmu/mmu.h"
 
 /* Additional base addresses */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define WSL_BASE            0xE232B0
     #define SEGMAP_BASE_ADDR    0xED5000
     #define AOTE_TABLE_BASE     0xEC53F0

@@ -28,7 +28,7 @@
  * =============================================================================
  */
 
-#if defined(M68K)
+#if defined(ARCH_M68K)
     /*
      * NETWORK_$DISKLESS - Diskless mode flag
      *

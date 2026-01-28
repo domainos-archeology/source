@@ -16,7 +16,7 @@
 /*
  * Raw memory access macros for SIGPAUSE fields
  */
-#if defined(M68K)
+#if defined(ARCH_M68K)
     #define P2_SP_MASK2(idx)           (*(uint32_t*)(0xEA54B0 + (idx) * 0xE4))
     #define P2_SP_ALT_MASK(idx)        (*(uint32_t*)(0xEA54C0 + (idx) * 0xE4))
     #define P2_SP_BLOCKED2(idx)        (*(uint32_t*)(0xEA54B8 + (idx) * 0xE4))
@@ -93,7 +93,7 @@ void PROC2_$SIGPAUSE(uint32_t *new_mask, uint32_t *result)
         EC_$WAITN(ec_array, val_array, 1);
 
         /* Update quit value from eventcount */
-#if defined(M68K)
+#if defined(ARCH_M68K)
         FIM_QUIT_VALUE_ENTRY(PROC1_$AS_ID) = *(int32_t*)FIM_QUIT_EC_ENTRY(PROC1_$AS_ID);
 #endif
     }
