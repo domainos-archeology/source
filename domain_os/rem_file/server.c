@@ -785,7 +785,7 @@ void REM_FILE_$SERVER(void)
     lock_held = -1;
 
     /* Check if requests are allowed */
-    if ((DAT_00e24c3f & 2) == 0) {
+    if ((NETWORK_$CAPABLE_FLAGS & 2) == 0) {
         frame.resp_status = 0x000D0008;  /* status_$network_request_denied_by_remote_node */
         goto send_response;
     }

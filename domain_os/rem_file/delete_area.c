@@ -13,6 +13,7 @@
  * Delete area request structure
  */
 typedef struct {
+    uint16_t msg_type;      /* Set to 1 by SEND_REQUEST */
     uint8_t magic;          /* 0x80 */
     uint8_t opcode;         /* 0x88 = delete area */
     uint8_t padding[10];    /* Padding */

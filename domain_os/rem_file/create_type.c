@@ -23,6 +23,7 @@ typedef struct {
  * Create type phase 1 request structure
  */
 typedef struct {
+    uint16_t msg_type;          /* Set to 1 by SEND_REQUEST */
     uint8_t magic;              /* 0x80 */
     uint8_t opcode;             /* 0x24 = Create phase 1 */
     uint8_t padding[14];        /* Padding to 0x10 bytes */
@@ -32,6 +33,7 @@ typedef struct {
  * Create type phase 2 request structure
  */
 typedef struct {
+    uint16_t msg_type;          /* Set to 1 by SEND_REQUEST */
     uint8_t magic;              /* 0x80 */
     uint8_t opcode;             /* 0x7E = Create type phase 2 */
     uid_t parent_uid;           /* Parent UID (8 bytes) */

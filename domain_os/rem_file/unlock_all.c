@@ -22,7 +22,7 @@ extern uid_t UID_$NIL;          /* Nil UID */
  * Unlock all request structure
  */
 typedef struct {
-    uint16_t reserved;      /* Reserved (value 1) */
+    uint16_t msg_type;      /* Set to 1 by SEND_REQUEST (or manually for broadcast) */
     uint8_t magic;          /* 0x80 */
     uint8_t opcode;         /* 0x12 = unlock all */
     uid_t nil_uid;          /* Nil UID (8 bytes) */
@@ -40,7 +40,7 @@ void REM_FILE_$UNLOCK_ALL(void)
     int i;
 
     /* Build request */
-    request.reserved = 1;
+    request.msg_type = 1;
     request.magic = 0x80;
     request.opcode = 0x12;  /* UNLOCK_ALL opcode */
     request.nil_uid = UID_$NIL;

@@ -18,6 +18,7 @@ extern void AST_$SET_DTS(uint16_t flags, void *uid, void *clock, void *data, voi
  * Unlock request structure
  */
 typedef struct {
+    uint16_t msg_type;      /* Set to 1 by SEND_REQUEST */
     uint8_t magic;          /* 0x80 */
     uint8_t opcode;         /* 0x0C = unlock */
     uid_t file_uid;         /* File UID (8 bytes) */

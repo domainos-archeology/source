@@ -14,6 +14,7 @@
  * Purify request structure
  */
 typedef struct {
+    uint16_t msg_type;      /* Set to 1 by SEND_REQUEST */
     uint8_t magic;          /* 0x80 */
     uint8_t opcode;         /* 0x0B = purify */
     uid_t file_uid;         /* File UID (8 bytes) */

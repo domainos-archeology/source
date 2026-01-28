@@ -53,8 +53,17 @@
 
 /*
  * Request header (common to all remote file operations)
+ *
+ * Wire format as sent by REM_FILE_$SEND_REQUEST:
+ *   Offset 0-1: uint16_t msg_type  (set to 1 by SEND_REQUEST)
+ *   Offset 2:   uint8_t  magic     (0x80, set by caller)
+ *   Offset 3:   uint8_t  opcode    (operation code, set by caller)
+ *   Offset 4+:  varies             (operation-specific data)
+ *
+ * Response validation checks response[3] == request[3] + 1.
  */
 typedef struct {
+    uint16_t msg_type;  /* Set to 1 by SEND_REQUEST before sending */
     uint8_t magic;      /* Always 0x80 */
     uint8_t opcode;     /* Operation code */
     /* Operation-specific data follows */
@@ -67,17 +76,42 @@ typedef struct {
 #define REM_FILE_RESPONSE_BUF_SIZE  0xE4
 
 /*
+ * File status code for communication failures
+ */
+#define file_$comms_problem_with_remote_node    0x000F0004
+
+/*
  * External data references
  */
-extern uint8_t DAT_00e24c3f;      /* Network flags */
-extern int8_t NETWORK_$DISKLESS;  /* Diskless node flag */
-extern uint32_t NETWORK_$MOTHER_NODE;  /* Mother node ID */
+extern uint8_t NETWORK_$CAPABLE_FLAGS;  /* 0xE24C3F: Network capability flags (bit 0 = capable) */
+extern int8_t NETWORK_$DISKLESS;        /* Diskless node flag */
+extern uint32_t NETWORK_$MOTHER_NODE;   /* Mother node ID */
 
 /*
  * Process admin check table
  * Indexed by PROC1_$CURRENT to check if process has admin rights
  */
 extern int16_t DAT_00e7daca[];
+
+/*
+ * Socket event counter array (0xE28DB0)
+ * Indexed by socket number to get the EC pointer for that socket.
+ * Despite the name, this is actually an array of EC pointers.
+ */
+extern ec_$eventcount_t *SOCK_$SOCKET_EC[];
+
+/*
+ * PKT info template data at 0xE2E380
+ * Used as a packet info parameter for PKT_$SEND_INTERNET.
+ */
+extern uint8_t DAT_00e2e380[];
+
+/*
+ * Per-address-space retry count (accessed via A5-relative addressing)
+ * On m68k, A5 points to per-process data:
+ *   A5+4: busy retry counter (uint32_t)
+ *   A5+8: timeout base (uint16_t)
+ */
 
 /*
  * REM_FILE_$SEND_REQUEST - Core network request handler

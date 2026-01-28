@@ -13,6 +13,7 @@
  * ACL setids request structure
  */
 typedef struct {
+    uint16_t msg_type;      /* Set to 1 by SEND_REQUEST */
     uint8_t magic;          /* 0x80 */
     uint8_t opcode;         /* 0x6A = ACL setids */
     uid_t acl_uid;          /* ACL UID (8 bytes) */

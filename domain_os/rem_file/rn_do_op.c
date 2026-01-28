@@ -19,8 +19,7 @@ static const uid_t default_proj_uid = {0};
  * The actual layout depends on the operation type (byte at offset 3)
  */
 typedef struct {
-    uint8_t reserved1;          /* Offset 0 */
-    uint8_t reserved2;          /* Offset 1 */
+    uint16_t msg_type;          /* Offset 0: Set to 1 by SEND_REQUEST */
     uint8_t magic;              /* Offset 2: 0x80 */
     uint8_t op_type;            /* Offset 3: 'X', 'B', '<', or '>' */
     uint8_t data[0x10];         /* Offset 4: varies by operation */

@@ -17,6 +17,7 @@ extern int16_t proc_priv_table[];  /* At 0xe7dacc */
  * Name get entry request structure
  */
 typedef struct {
+    uint16_t msg_type;          /* Set to 1 by SEND_REQUEST */
     uint8_t magic;              /* 0x80 */
     uint8_t opcode;             /* 0x1C = Name get entry */
     uid_t dir_uid;              /* Directory UID (8 bytes) */

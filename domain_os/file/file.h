@@ -77,6 +77,7 @@
 #define file_$object_not_found                     0x000F0001  /* Object not found */
 #define file_$object_is_remote                     0x000F0002  /* Object is remote */
 #define file_$bad_reply_received_from_remote_node  0x000F0003  /* Bad reply from remote */
+#define file_$comms_problem_with_remote_node        0x000F0004  /* Communication problem with remote node */
 #define file_$object_not_locked_by_this_process    0x000F0005  /* Not locked by this process */
 #define file_$object_in_use                        0x000F0006  /* Object in use */
 #define file_$illegal_lock_request                 0x000F0008  /* Illegal lock request */
