@@ -384,6 +384,11 @@ void AST_$GET_SEG_MAP(uint32_t *uid_info, uint32_t start_offset,
                       uint16_t flags, uint32_t *output, status_$t *status);
 
 /*
+ * Function prototypes - Page allocation
+ */
+int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array);
+
+/*
  * Function prototypes - Maintenance
  */
 void AST_$UPDATE(void);

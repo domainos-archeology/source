@@ -7,12 +7,8 @@
  * Original address: 0x00e07176
  */
 
-#include "wp/wp.h"
-#include "ml/ml.h"
+#include "wp/wp_internal.h"
 #include "mmap/mmap.h"
-
-/* WP subsystem lock ID (same as ML_LOCK_PMAP) */
-#define WP_LOCK_ID 0x14
 
 /*
  * WP_$UNWIRE - Unwire previously wired memory

@@ -19,7 +19,7 @@
  *   ppn_out  - Pointer to receive physical page number
  *   status   - Receives status code
  *
- * Original address: TBD
+ * Original address: 0x00e070ec
  */
 void WP_$CALLOC(uint32_t *ppn_out, status_$t *status);
 
