@@ -9,14 +9,6 @@
 #include "math/math.h"
 
 /*
- * External references
- */
-extern pchist_control_t PCHIST_$CONTROL;
-extern pchist_histogram_t PCHIST_$HISTOGRAM;
-extern void *PCHIST_$WIRE_CONTEXT;
-extern int16_t PCHIST_$WIRED_COUNT;
-
-/*
  * Alignment flag for command 3
  */
 int8_t PCHIST_$DOALIGN;

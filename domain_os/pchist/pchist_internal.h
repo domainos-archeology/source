@@ -26,6 +26,17 @@
 #define PCHIST_DOALIGN_OFFSET       0x126   /* Alignment flag */
 
 /*
+ * Aliases for PROC_BITMAP and PROC_PC
+ *
+ * In the original binary, PCHIST_$PROC_BITMAP (0xe2c21c) and
+ * PCHIST_$PROC_PC (0xe2c220) are at offsets 0x18 and 0x1C within
+ * PCHIST_$CONTROL (0xe2c204). These macros map the standalone
+ * symbol names to their actual fields within the control structure.
+ */
+#define PCHIST_$PROC_BITMAP (PCHIST_$CONTROL.proc_bitmap)
+#define PCHIST_$PROC_PC     (PCHIST_$CONTROL.proc_pc)
+
+/*
  * Wire area data for histogram buffer
  * Located at 0xe85c14 (array of page pointers)
  */

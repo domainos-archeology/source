@@ -8,13 +8,6 @@
 #include "math/math.h"
 
 /*
- * External references
- */
-extern pchist_control_t PCHIST_$CONTROL;
-extern pchist_proc_t PCHIST_$PROC_DATA[];
-extern uint32_t PCHIST_$PROC_PC[];
-
-/*
  * PCHIST_$UNIX_PROFIL_ADDUPC
  *
  * Called to update the per-process profiling buffer with

@@ -7,12 +7,6 @@
 #include "pchist/pchist_internal.h"
 
 /*
- * External reference to the control structure
- * Located at 0xe2c204
- */
-extern pchist_control_t PCHIST_$CONTROL;
-
-/*
  * PCHIST_$INIT
  *
  * Initializes the PC history subsystem by setting up the

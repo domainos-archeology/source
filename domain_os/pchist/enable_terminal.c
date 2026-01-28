@@ -7,11 +7,6 @@
 #include "pchist/pchist_internal.h"
 
 /*
- * External references
- */
-extern pchist_control_t PCHIST_$CONTROL;
-
-/*
  * PCHIST_$ENABLE_TERMINAL
  *
  * Called when profiling state changes to update the terminal

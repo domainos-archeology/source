@@ -7,16 +7,6 @@
 #include "pchist/pchist_internal.h"
 
 /*
- * External references
- */
-extern pchist_control_t PCHIST_$CONTROL;
-
-/*
- * Flag for alignment mode
- */
-extern int8_t PCHIST_$DOALIGN_FLAG;
-
-/*
  * PCHIST_$STOP_PROFILING
  *
  * Called to stop system-wide profiling. Decrements the
@@ -58,5 +48,5 @@ void PCHIST_$STOP_PROFILING(void)
     PCHIST_$UNWIRE_CLEANUP();
 
     /* Clear the alignment flag */
-    PCHIST_$DOALIGN_FLAG = 0;
+    PCHIST_$DOALIGN = 0;
 }

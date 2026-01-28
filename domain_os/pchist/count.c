@@ -7,24 +7,6 @@
 #include "pchist/pchist_internal.h"
 
 /*
- * External references to control data
- */
-extern pchist_control_t PCHIST_$CONTROL;
-extern pchist_histogram_t PCHIST_$HISTOGRAM;
-
-/*
- * Per-process PC storage - array of last sampled PC values
- * Indexed by process ID
- */
-extern uint32_t PCHIST_$PROC_PC[];
-
-/*
- * Process enable bitmap
- * Each bit indicates if profiling is enabled for that process
- */
-extern uint8_t PCHIST_$PROC_BITMAP[];
-
-/*
  * PCHIST_$COUNT
  *
  * This function is called to record a PC sample. It handles both:

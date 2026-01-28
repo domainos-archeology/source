@@ -7,14 +7,6 @@
 #include "pchist/pchist_internal.h"
 
 /*
- * External references
- */
-extern pchist_control_t PCHIST_$CONTROL;
-extern pchist_proc_t PCHIST_$PROC_DATA[];
-extern uint32_t PCHIST_$PROC_PC[];
-extern uint8_t PCHIST_$PROC_BITMAP[];
-
-/*
  * PCHIST_$UNIX_PROFIL_FORK
  *
  * Called during process fork to copy the parent's profiling

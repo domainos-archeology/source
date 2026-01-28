@@ -8,13 +8,6 @@
 #include "wp/wp.h"
 
 /*
- * External references
- */
-extern pchist_control_t PCHIST_$CONTROL;
-extern uint32_t PCHIST_$WIRE_PAGES[];
-extern int16_t PCHIST_$WIRED_COUNT;
-
-/*
  * PCHIST_$UNWIRE_CLEANUP
  *
  * Called when system-wide histogram profiling is stopped.
