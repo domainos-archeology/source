@@ -144,9 +144,6 @@ typedef char boolean;
 // =============================================================================
 // Include architecture-specific definitions. When porting to a new
 // architecture, create arch/<arch>/arch.h with equivalent functionality.
-#if defined(__m68k__) || defined(ARCH_M68K) || !defined(__x86_64__)
-// Default to m68k for now (Domain/OS target)
-#include "arch/m68k/arch.h"
-#endif
+#include "arch/arch.h"
 
 #endif /* BASE_H */

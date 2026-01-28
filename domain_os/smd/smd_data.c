@@ -56,3 +56,7 @@ smd_blink_state_t SMD_BLINK_STATE;
  * Original address: 0x00E84924
  */
 uint16_t SMD_DEFAULT_DISPLAY_UNIT;
+
+/* Request queue event counts */
+ec_$eventcount_t SMD_REQUEST_EC_WAIT;  /* At 0x00E2E3FC - wait for space */
+ec_$eventcount_t SMD_REQUEST_EC_SIGNAL; /* At 0x00E2E408 - signal new request */

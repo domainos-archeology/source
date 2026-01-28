@@ -14,7 +14,7 @@
  * Original address: 0x00E20DF8
  */
 
-#include "ml.h"
+#include "ml_internal.h"
 #include "proc1/proc1.h"
 
 void ML_$EXCLUSION_START(ml_$exclusion_t *excl)

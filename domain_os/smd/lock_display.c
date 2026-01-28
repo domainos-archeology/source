@@ -49,16 +49,9 @@ int16_t SMD_$LOCK_DISPLAY(smd_display_hw_t *lock_data, int16_t *param2)
 {
     int16_t state;
     uint8_t high_byte;
+    uint16_t sr;
 
-    /*
-     * NOTE: On m68k, this function runs with interrupts disabled:
-     *   ori #0x700,SR   ; disable interrupts
-     *   ...
-     *   andi #-0x701,SR ; re-enable interrupts
-     *
-     * For portability, we would need platform-specific interrupt control.
-     * TODO: Add ARCH_DISABLE_INTERRUPTS() / ARCH_ENABLE_INTERRUPTS() macros
-     */
+    DISABLE_INTERRUPTS(sr);
 
     /* Read current lock state from offset +2 */
     state = lock_data->lock_state;
@@ -74,9 +67,11 @@ int16_t SMD_$LOCK_DISPLAY(smd_display_hw_t *lock_data, int16_t *param2)
         /* State 3: Scroll done and condition met - transition to state 4 */
         lock_data->lock_state = SMD_LOCK_STATE_LOCKED_4;
         param2[0x12] = 0;  /* Clear field at offset 0x24 (0x12 * 2) */
+        ENABLE_INTERRUPTS(sr);
         return (int16_t)((high_byte << 8) | 0xFF);  /* Success */
     }
 
     /* Lock not available */
+    ENABLE_INTERRUPTS(sr);
     return (int16_t)(high_byte << 8);  /* Failure (0x00 in low byte) */
 }

@@ -317,22 +317,22 @@ typedef struct smd_display_unit_t {
   union {
     ec_$eventcount_t event_count_1; /* 0x00: Event count (12 bytes) */
     struct {
-      uint32_t ec_value;              /* 0x00: EC value */
-      uint32_t ec_head;               /* 0x04: EC waiter list head */
-      uint32_t field_08;              /* 0x08: EC waiter list tail / scroll_ec ptr */
+      uint32_t ec_value; /* 0x00: EC value */
+      uint32_t ec_head;  /* 0x04: EC waiter list head */
+      uint32_t field_08; /* 0x08: EC waiter list tail / scroll_ec ptr */
     };
   };
-  smd_hdm_list_t *hdm_list_ptr;   /* 0x0C: Pointer to HDM free list */
-  uint16_t field_10;              /* 0x10: Unknown */
-  uint16_t asid;                  /* 0x12: Associated address space ID */
-  uint16_t field_14;              /* 0x14: Unknown */
-  uint16_t field_16;              /* 0x16: Unknown */
-  smd_display_hw_t *hw;           /* 0x18: Pointer to hardware info */
-  uint32_t field_1c;              /* 0x1C: Unknown */
-  uint32_t field_20;              /* 0x20: Unknown */
-  uint32_t mapped_addresses[58];  /* 0x24: Per-ASID mapped display addresses */
-                                  /* 58 = MST_MAX_ASIDS from mst.h */
-                                  /* 58 * 4 = 0xe8 bytes, ends at 0x10c */
+  smd_hdm_list_t *hdm_list_ptr;  /* 0x0C: Pointer to HDM free list */
+  uint16_t field_10;             /* 0x10: Unknown */
+  uint16_t asid;                 /* 0x12: Associated address space ID */
+  uint16_t field_14;             /* 0x14: Unknown */
+  uint16_t field_16;             /* 0x16: Unknown */
+  smd_display_hw_t *hw;          /* 0x18: Pointer to hardware info */
+  uint32_t field_1c;             /* 0x1C: Unknown */
+  uint32_t field_20;             /* 0x20: Unknown */
+  uint32_t mapped_addresses[58]; /* 0x24: Per-ASID mapped display addresses */
+                                 /* 58 = MST_MAX_ASIDS from mst.h */
+                                 /* 58 * 4 = 0xe8 bytes, ends at 0x10c */
 } smd_display_unit_t;
 
 /*
@@ -431,7 +431,7 @@ typedef struct smd_idm_event_t {
   uint32_t field_04;  /* 0x04: Unknown */
   uint16_t field_08;  /* 0x08: Unknown */
   union {
-    uint16_t data;    /* 0x0A: Event-specific data (button/char) */
+    uint16_t data; /* 0x0A: Event-specific data (button/char) */
     struct {
       uint8_t char_code; /* 0x0A: Character code */
       uint8_t modifier;  /* 0x0B: Modifier flags */
@@ -510,8 +510,10 @@ typedef struct smd_globals_t {
   int8_t tracking_enabled;      /* 0xE0: Tracking enabled flag (0xFF=enabled) */
   int8_t tp_cursor_active;      /* 0xE1: TP cursor active flag */
   int16_t tp_cursor_timeout;    /* 0xE2: TP cursor timeout counter */
-  uint16_t cursor_tracking_count; /* 0xE4: Cursor tracking count for event coalescing */
-  uint16_t tracking_window_id; /* 0xE6: Tracking window ID (from ENABLE_TRACKING param) */
+  uint16_t cursor_tracking_count; /* 0xE4: Cursor tracking count for event
+                                     coalescing */
+  uint16_t tracking_window_id; /* 0xE6: Tracking window ID (from ENABLE_TRACKING
+                                  param) */
   uint16_t tracking_rect_count; /* 0xE8: Number of tracking rectangles */
   smd_track_rect_t
       tracking_rects[SMD_MAX_TRACKING_RECTS]; /* 0xE8: Tracking rect array */
@@ -1125,5 +1127,9 @@ void smd_$reset_display_state(uint16_t unit, int8_t flag);
  * Original address: 0x00E6D7E2
  */
 void smd_$reset_tracking_state(uint16_t unit, int8_t flag);
+
+/* Request queue event counts */
+extern ec_$eventcount_t SMD_REQUEST_EC_WAIT;   /* At 0x00E2E3FC - wait for space */
+extern ec_$eventcount_t SMD_REQUEST_EC_SIGNAL; /* At 0x00E2E408 - signal new request */
 
 #endif /* SMD_INTERNAL_H */
