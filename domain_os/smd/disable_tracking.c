@@ -51,7 +51,7 @@ void SMD_$DISABLE_TRACKING(uint32_t param1, status_$t *status_ret)
     SMD_GLOBALS.tracking_enabled = 0;
 
     /* Update cursor display with synchronization */
-    SHOW_CURSOR((uint32_t *)&SMD_GLOBALS.default_cursor_pos,
+    SHOW_CURSOR(&SMD_GLOBALS.cursor_pos_sentinel,
                 (int16_t *)&cursor_lock_data_1,
                 (int8_t *)&cursor_lock_data_2);
 

@@ -123,7 +123,7 @@ void SMD_$DEL_TRK_RECT(smd_track_rect_t *rects, uint16_t *count, status_$t *stat
     SMD_GLOBALS.cursor_pending_flag = (uint8_t)0xFF;
 
     /* Update cursor display */
-    SHOW_CURSOR((uint32_t *)&SMD_GLOBALS.default_cursor_pos,
+    SHOW_CURSOR(&SMD_GLOBALS.cursor_pos_sentinel,
                 (int16_t *)&cursor_lock_data_1,
                 (int8_t *)&cursor_lock_data_2);
 }

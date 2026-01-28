@@ -500,7 +500,7 @@ typedef struct smd_globals_t {
                                      /*       (TIME_$CLOCKH value) */
   smd_cursor_pos_t saved_cursor_pos; /* 0xCC: Last saved cursor position */
   smd_cursor_pos_t
-      default_cursor_pos;       /* 0xD0: Default cursor position (A5+0x1D94) */
+      default_cursor_pos;       /* 0xD0: Cached/current cursor position */
   uint16_t cursor_button_state; /* 0xD4: Current cursor button state */
   uint16_t last_button_state;   /* 0xD6: Last reported button state */
   uint32_t blank_timeout;       /* 0xD8: Blank timeout value */
@@ -531,7 +531,10 @@ typedef struct smd_globals_t {
   uint16_t
       request_queue_tail; /* 0x17F0: Request queue read index (after queue) */
   uint16_t request_queue_head; /* 0x17F2: Request queue write index */
-  uint8_t pad_17f4[0x5A4];     /* 0x17F4-0x1D97: Unknown */
+  uint8_t pad_17f4[0x5A0];     /* 0x17F4-0x1D93: Unknown */
+  uint32_t cursor_pos_sentinel; /* 0x1D94: Default cursor position sentinel.
+                                 * When SHOW_CURSOR receives this value as pos,
+                                 * it uses the hw-stored cursor position instead. */
   uint16_t default_unit;       /* 0x1D98: Default display unit */
   uint16_t pad_1d9a;           /* 0x1D9A: Padding */
   uint16_t previous_unit;      /* 0x1D9C: Previous display unit */
@@ -912,18 +915,6 @@ int8_t smd_$validate_unit(uint16_t unit);
  * Original address: 0x00E6E1CC
  */
 int8_t SHOW_CURSOR(uint32_t *pos, int16_t *lock_data1, int8_t *lock_data2);
-
-/*
- * smd_$check_tp_state - Check trackpad state
- *
- * Checks if trackpad cursor tracking is currently active.
- *
- * Returns:
- *   Negative value if active, positive if not
- *
- * Original address: 0x00E6E84C
- */
-int8_t smd_$check_tp_state(void);
 
 /*
  * smd_$send_loc_event - Send location event

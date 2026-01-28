@@ -99,7 +99,7 @@ int8_t smd_$add_trk_rects_internal(int8_t clear_flag, smd_track_rect_t *rects, u
     ML_$EXCLUSION_STOP(&ml_$exclusion_t_00e2e520);
 
     /* Update cursor display */
-    SHOW_CURSOR((uint32_t *)&SMD_GLOBALS.default_cursor_pos,
+    SHOW_CURSOR(&SMD_GLOBALS.cursor_pos_sentinel,
                 (int16_t *)&cursor_lock_data_1,
                 (int8_t *)&cursor_lock_data_2);
 

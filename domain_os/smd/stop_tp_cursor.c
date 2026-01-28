@@ -36,7 +36,7 @@ static const uint32_t stop_tp_cursor_lock_data_2 = 0x00E6E458;
  *   00e6eaea    move.w #0x8,-(SP)             ; lock_id = 8
  *   00e6eaee    jsr 0x00e20b12.l              ; ML_$LOCK(smd_$request_lock)
  *   00e6eaf4    addq.w #0x4,SP
- *   00e6eaf6    bsr.w 0x00e6e84c              ; smd_$check_tp_state
+ *   00e6eaf6    bsr.w 0x00e6e84c              ; smd_$poll_keyboard
  *   00e6eafa    tst.b D0b
  *   00e6eafc    bpl.b 0x00e6eb16              ; if not active, skip
  *   00e6eafe    subq.l #0x2,SP
@@ -74,7 +74,7 @@ void SMD_$STOP_TP_CURSOR(uint16_t *unit)
     ML_$LOCK(SMD_REQUEST_LOCK);
 
     /* Check if trackpad cursor is active */
-    active = smd_$check_tp_state();
+    active = smd_$poll_keyboard();
     if (active < 0) {
         /* Send stop event (type 0x0B) */
         smd_$send_loc_event(local_unit, 0x0B, SMD_GLOBALS.saved_cursor_pos, 0);
@@ -85,7 +85,7 @@ void SMD_$STOP_TP_CURSOR(uint16_t *unit)
 
     /* If cursor tracking was active, show cursor at default position */
     if (SMD_GLOBALS.tp_cursor_active < 0) {
-        SHOW_CURSOR(&SMD_GLOBALS.default_cursor_pos,
+        SHOW_CURSOR(&SMD_GLOBALS.cursor_pos_sentinel,
                     (int16_t *)&stop_tp_cursor_lock_data_1,
                     (int8_t *)&stop_tp_cursor_lock_data_2);
     }
