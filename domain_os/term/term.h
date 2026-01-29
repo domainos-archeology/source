@@ -92,6 +92,12 @@ typedef struct term_data {
 // Global TERM data structure (at 0xe2c9f0 in original binary)
 extern term_data_t TERM_$DATA;
 
+// Overlapping symbol aliases - these refer to fields within TERM_$DATA
+// TERM_$MAX_DTTE at 0xe2dd78 = TERM_$DATA base (0xe2c9f0) + offset 0x1388
+#define TERM_$MAX_DTTE (TERM_$DATA.max_dtte)
+// TERM_$KBD_STRING_DATA at 0xe2dd80 = TERM_$DATA base (0xe2c9f0) + offset 0x1390
+#define TERM_$KBD_STRING_DATA (TERM_$DATA.kbd_string_data)
+
 // =============================================================================
 // Function declarations
 // =============================================================================

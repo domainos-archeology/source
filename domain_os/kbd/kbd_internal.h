@@ -72,10 +72,9 @@ typedef struct kbd_state_t {
 extern uint8_t KBD_$MODE_TABLE[];
 
 /*
- * TERM_$MAX_DTTE - Maximum DTTE entries
- * Located at 0xe2dd78
+ * TERM_$MAX_DTTE is provided as a macro in term/term.h (included via term/term_internal.h)
+ * aliasing TERM_$DATA.max_dtte at offset 0x1388.
  */
-extern uint16_t TERM_$MAX_DTTE;
 
 /*
  * DAT_00e2dcbc - Base of DTTE table (offset 0x2C within each 0x38-byte entry)

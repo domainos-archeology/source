@@ -81,8 +81,8 @@ void FUN_00e67e86(sio_desc_t *desc, uint8_t enable);
 
 /*
  * From TERM module
+ * TERM_$MAX_DTTE is provided as a macro in term/term.h aliasing TERM_$DATA.max_dtte.
  */
-extern int16_t TERM_$MAX_DTTE;
 extern dtte_t DTTE[];
 
 /*

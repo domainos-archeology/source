@@ -68,7 +68,7 @@ void TERM_$SET_REAL_LINE_DISCIPLINE(unsigned short *line_ptr, short *discipline_
                 *(m68k_ptr_t *)(uintptr_t)dtte->alt_handler = TERM_$DATA.ptr_tty_i_rcv_alt;
                 ML_$SPIN_UNLOCK((void *)(uintptr_t)TERM_$DATA.tty_spin_lock, token);
                 DTTY_$RELOAD_FONT();
-                TERM_$SEND_KBD_STRING(TERM_$KBD_STRING_DATA, TERM_$KBD_STRING_LEN);
+                TERM_$SEND_KBD_STRING(TERM_$KBD_STRING_DATA, &TERM_$KBD_STRING_LEN);
                 goto store_discipline;
             }
             ML_$SPIN_UNLOCK((void *)(uintptr_t)TERM_$DATA.tty_spin_lock, token);

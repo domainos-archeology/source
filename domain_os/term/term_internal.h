@@ -117,10 +117,13 @@ extern status_$t TERM_$STATUS_TRANSLATION_TABLE_36[];  // at 0xe2c9b0
 #include "suma/suma.h"
 
 /*
- * Keyboard string data for discipline changes
+ * TERM_$KBD_STRING_LEN - Length of keyboard string data
+ * Original address: 0xe1ac9c
+ *
+ * Note: TERM_$KBD_STRING_DATA is a macro defined in term.h that aliases
+ * TERM_$DATA.kbd_string_data (at offset 0x1390 from TERM_$DATA base).
  */
-extern char TERM_$KBD_STRING_DATA[];  // at 0xe2dd80
-extern char TERM_$KBD_STRING_LEN[];   // at 0xe1ac9c
+extern uint16_t TERM_$KBD_STRING_LEN;
 
 /*
  * Font reload function
