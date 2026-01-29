@@ -12,6 +12,7 @@
 #include "sio/sio.h"
 #include "term/term.h"
 #include "time/time.h"
+#include "math/math.h"
 
 /*
  * ============================================================================

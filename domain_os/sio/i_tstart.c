@@ -145,7 +145,7 @@ uint16_t SIO_$I_TSTART(sio_desc_t *desc)
              * Convert delay to clock ticks
              * Multiply by 0xFA (250) to convert ms to 4us ticks
              */
-            delay_ticks = M_MIU_LLW(delay_value, 0xFA);
+            delay_ticks = M$MIU$LLW(delay_value, 0xFA);
 
             /* Set delay-active flag */
             SIO_DESC_STATE(desc) = (SIO_DESC_STATE(desc) & 0xFFFE) | SIO_STATE_DELAY_ACTIVE;
