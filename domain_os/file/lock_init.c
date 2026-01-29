@@ -110,14 +110,25 @@ void FILE_$LOCK_INIT(void)
         FILE_$LOCK_CONTROL.lock_map[i] = 0;
     }
 
+    /*
+     * Clear standalone hash table (mirrors lock_map in struct).
+     * In the m68k binary both the struct field and FILE_$LOT_HASHTAB
+     * point to the same memory; for portability we keep them in sync.
+     */
+    for (i = 0; i < FILE_LOCK_TABLE_ENTRIES; i++) {
+        FILE_$LOT_HASHTAB[i] = 0;
+    }
+
     /* Initialize UID lock eventcount */
     EC_$INIT(&FILE_$UID_LOCK_EC);
 
     /* Set lot_free to 1 (first free entry index, 1-based) */
     FILE_$LOCK_CONTROL.lot_free = 1;
+    FILE_$LOT_FREE = 1;
 
     /* Set flag_2cc to 1 */
     FILE_$LOCK_CONTROL.flag_2cc = 1;
+    FILE_$LOT_HIGH = 1;
 
     /* Generate a new UID for this initialization */
     UID_$GEN(&FILE_$LOCK_CONTROL.generated_uid);
@@ -131,6 +142,7 @@ void FILE_$LOCK_INIT(void)
 
     /* Clear flag_2d0 */
     FILE_$LOCK_CONTROL.flag_2d0 = 0;
+    FILE_$LOT_FULL = 0;
 
     /* Release any stale remote file locks */
     REM_FILE_$UNLOCK_ALL();

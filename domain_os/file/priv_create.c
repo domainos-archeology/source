@@ -37,9 +37,6 @@
  * External references for file creation
  */
 
-/* Default initial file size - at FILE_$LOCK_CONTROL + 0x2C0 */
-extern uint32_t FILE_$DEFAULT_SIZE;     /* 0xE823E8 */
-
 /*
  * Nil UIDs for default ownership (owner, group, org)
  * These are copied as a group (24 bytes) when no SID is available.

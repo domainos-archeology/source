@@ -43,12 +43,6 @@
  */
 
 /*
- * ASID group mapping table (at FILE_$LOCK_CONTROL + 0x40)
- * Maps ASID to group, used for checking if two processes share locks
- */
-extern uint16_t FILE_$ASID_MAP[];
-
-/*
  * FILE_$LOCAL_LOCK_VERIFY - Verify local lock ownership
  *
  * Checks if the specified file is locked by the process identified

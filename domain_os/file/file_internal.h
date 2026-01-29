@@ -155,12 +155,18 @@ extern uint32_t FILE_$LOT_SEQN;
 
 /* Lock mode compatibility tables */
 extern uint16_t FILE_$LOCK_MODE_TABLE[];      /* At offset 0x58 (24 entries) */
-extern uint16_t FILE_$LOCK_COMPAT_TABLE[];    /* At offset 0x28 (21 entries) */
-extern uint16_t FILE_$LOCK_MAP_TABLE[];       /* At offset 0x40 (21 entries) */
-extern uint16_t FILE_$LOCK_REQ_TABLE[];       /* At offset 0x88 (21 entries) */
-extern uint16_t FILE_$LOCK_CVT_TABLE[];       /* At offset 0xA0 (21 entries) */
+extern uint16_t FILE_$LOCK_COMPAT_TABLE[];    /* At offset 0x28 (12 entries) */
+extern uint16_t FILE_$LOCK_MAP_TABLE[];       /* At offset 0x40 (12 entries) */
+extern uint16_t FILE_$LOCK_REQ_TABLE[];       /* At offset 0x88 (12 entries) */
+extern uint16_t FILE_$LOCK_CVT_TABLE[];       /* At offset 0xA0 (12 entries) */
 extern uint16_t FILE_$LOCK_ILLEGAL_MASK;      /* At offset 0x2C8 - illegal modes */
 extern uint8_t  FILE_$LOT_FULL;               /* At offset 0x2D0 - table full flag */
+
+/* ASID group mapping table (12 entries) - same address as LOCK_MAP_TABLE on m68k */
+extern uint16_t FILE_$ASID_MAP[];
+
+/* Default initial file size */
+extern uint32_t FILE_$DEFAULT_SIZE;
 
 /* Audit log enabled flag */
 extern int8_t AUDIT_$ENABLED;
