@@ -163,6 +163,22 @@ void DIR_$GET_DEF_PROTECTION(uid_t *dir_uid, uid_t *acl_type,
                              status_$t *status_ret);
 
 /*
+ * DIR_$SET_ACL - Set ACL on a directory entry
+ *
+ * Sets the ACL on a directory entry. Tries the new protocol first
+ * (DIR_OP_SET_ACL via DO_OP), falling back to FILE_$PRIV_LOCK +
+ * FILE_$SET_ACL + FILE_$PRIV_UNLOCK on older servers.
+ *
+ * Parameters:
+ *   uid        - UID of the object
+ *   acl        - ACL data to apply
+ *   status_ret - Output: status code
+ *
+ * Original address: 0x00E52C86
+ */
+void DIR_$SET_ACL(uid_t *uid, void *acl, status_$t *status_ret);
+
+/*
  * DIR_$SET_DEF_PROTECTION - Set default protection for a directory
  *
  * Sets the default ACL/protection that will be applied to new

@@ -42,7 +42,8 @@ void DIR_$DIR_READU(uid_t *dir_uid, void *entries_ret, void *entries_size,
     if (dir_uid->high == NAME_$CANNED_REP_ROOT_UID.high &&
         dir_uid->low == NAME_$CANNED_REP_ROOT_UID.low) {
         /* Use canned root handler */
-        DIR_$DIR_READU_FUN_00e4e1a8(status_ret);
+        DIR_$DIR_READU_FUN_00e4e1a8(dir_uid, continuation, max_entries,
+                                     count_ret, flags, eof_ret, status_ret);
     } else {
         /* Try new protocol first */
         FUN_00e4e1fe(status_ret);
@@ -51,7 +52,8 @@ void DIR_$DIR_READU(uid_t *dir_uid, void *entries_ret, void *entries_size,
         if (*status_ret == file_$bad_reply_received_from_remote_node ||
             *status_ret == status_$naming_bad_directory) {
             /* Fall back to canned root handler for compatibility */
-            DIR_$DIR_READU_FUN_00e4e1a8(status_ret);
+            DIR_$DIR_READU_FUN_00e4e1a8(dir_uid, continuation, max_entries,
+                                         count_ret, flags, eof_ret, status_ret);
         }
     }
 

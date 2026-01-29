@@ -41,7 +41,7 @@ void DIR_$GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
     }
 
     /* Call internal helper function */
-    DIR_$GET_ENTRYU_FUN_00e4d460(status_ret);
+    DIR_$GET_ENTRYU_FUN_00e4d460(&local_uid, name, len, entry_ret, status_ret);
 
     /* Check for fallback conditions */
     if (*status_ret == file_$bad_reply_received_from_remote_node ||
