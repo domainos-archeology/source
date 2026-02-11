@@ -8,8 +8,10 @@
  *   TERM_$STATUS_TRANSLATION_TABLE_33:   0xe2c9dc
  *   TERM_$STATUS_TRANSLATION_TABLE_35:   0xe2c988
  *   TERM_$STATUS_TRANSLATION_TABLE_36:   0xe2c9b0
- *   TERM_$KBD_STRING_LEN:               0xe1ac9c
- *   PTR_TERM_$ENQUEUE_TPAD_00e1ce90:    0xe1ce90
+ *   TERM_$KBD_STRING_LEN:                0xe1ac9c
+ *   PTR_TERM_$ENQUEUE_TPAD_00e1ce90:     0xe1ce90
+ *   PTR_TTY_$I_RCV_00e2cab0:             0xe2cab0
+ *   PTR_TTY_$I_RCV_00e2ca08:             0xe2ca08
  */
 
 #include "term/term_internal.h"
@@ -71,3 +73,21 @@ uint16_t TERM_$KBD_STRING_LEN = 5;
  * Original address: 0xe1ce90
  */
 void *PTR_TERM_$ENQUEUE_TPAD_00e1ce90 = (void *)TERM_$ENQUEUE_TPAD;
+
+/*
+ * PTR_TTY_$I_RCV_00e2cab0 - Function pointer to TTY_$I_RCV
+ *
+ * Used by TERM_$INIT for console handler setup.
+ *
+ * Original address: 0xe2cab0
+ */
+void *PTR_TTY_$I_RCV_00e2cab0 = (void *)TTY_$I_RCV;
+
+/*
+ * PTR_TTY_$I_RCV_00e2ca08 - Function pointer to TTY_$I_RCV
+ *
+ * Used by TERM_$INIT for serial port handler setup.
+ *
+ * Original address: 0xe2ca08
+ */
+void *PTR_TTY_$I_RCV_00e2ca08 = (void *)TTY_$I_RCV;
