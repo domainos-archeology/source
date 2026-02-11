@@ -72,3 +72,16 @@ vtoc_$uid_cache_bucket_t vtoc_$uid_cache[VTOC_UID_CACHE_BUCKETS];
  * Used to accumulate blocks to free during VTOCE_$TRUNCATE.
  */
 uint32_t vtoc_$free_list[64];
+
+/*
+ * VTOC_CACH_LOOKUPS - Cache lookup counter and per-volume flags
+ *
+ * Address: 0xE78736
+ *
+ * Usage:
+ *   - Low 24 bits (bytes 0-2): lookup counter, incremented by vtoc_$lookup
+ *   - Byte 3 onwards: per-volume cache enable flags (indexed by vol_idx + 3)
+ *     Accessed as ((char *)&VTOC_CACH_LOOKUPS)[vol_idx + 3]
+ *     Value < 0 (0xFF) means caching enabled for that volume
+ */
+uint32_t VTOC_CACH_LOOKUPS = 0;
