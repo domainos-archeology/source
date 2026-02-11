@@ -18,8 +18,8 @@
  * 2. Look up the entry from the naming server via REM_NAME_$GET_ENTRY
  * 3. Compare the two entries
  * 4. If they differ:
- *    a. Fix stale entries via FUN_00e56a04
- *    b. Re-add via FUN_00e56682 if needed
+ *    a. Fix stale entries via name_$old_drop_entry
+ *    b. Re-add via name_$old_add_entry if needed
  *    c. Return status_$naming_entry_repaired or status_$naming_entry_stale
  * 5. If they match, return status_$ok
  *
@@ -64,10 +64,10 @@ void DIR_$OLD_VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
     if (*((uint32_t *)(local_entry + 2)) != *((uint32_t *)(remote_entry + 2)) ||
         *((uint32_t *)(local_entry + 6)) != *((uint32_t *)(remote_entry + 6))) {
         /* Entries differ - fix the local entry */
-        FUN_00e56a04(&root_uid, name, *name_len, remote_entry);
+        name_$old_drop_entry(&root_uid, name, *name_len, remote_entry);
 
         /* Re-add the entry from remote data */
-        FUN_00e56682(&root_uid, 2, name, *name_len,
+        name_$old_add_entry(&root_uid, 2, name, *name_len,
                      (uid_t *)(remote_entry + 2), 0, status_ret);
 
         if ((int16_t)*status_ret == 0) {

@@ -20,7 +20,7 @@
  * 3. Find the old entry by name via dir_$old_find_entry
  * 4. Add the entry with the new name:
  *    - Root directory: FUN_00e55406
- *    - Non-root: FUN_00e55220
+ *    - Non-root: dir_$old_add_entry
  * 5. Update the hash table via FUN_00e555dc
  * 6. Release lock via NAME_$UNLOCK_DIR
  * 7. Exit super mode via ACL_$EXIT_SUPER
@@ -92,7 +92,7 @@ void DIR_$OLD_CNAMEU(uid_t *dir_uid, char *old_name, uint16_t *old_name_len,
                      0, 0xFF, result_buf, status_ret);
     } else {
         /* Non-root directory path */
-        FUN_00e55220(dir_uid, handle, new_parsed, new_parsed_len,
+        dir_$old_add_entry(dir_uid, handle, new_parsed, new_parsed_len,
                      entry_type, (void *)(entry + 0x28),
                      0, result_buf, status_ret);
     }

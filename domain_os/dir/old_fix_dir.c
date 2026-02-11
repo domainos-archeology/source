@@ -22,7 +22,7 @@
  *   2. Lock the temp file and map it
  *   3. Copy all data from the directory to the temp
  *   4. Truncate the original directory
- *   5. Reinitialize the directory buffer via FUN_00e544b0
+ *   5. Reinitialize the directory buffer via dir_$old_init_buf
  *   6. Unlock temp, copy info block, then replay all entries:
  *      - Type 1 entries: add via OLD_ADDU or OLD_ROOT_ADDU
  *      - Type 3 (link) entries: read link, then add via OLD_ADD_LINKU
@@ -132,7 +132,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         }
 
         /* Reinitialize the directory buffer */
-        FUN_00e544b0((void *)handle);
+        dir_$old_init_buf((void *)handle);
 
         /* Release directory lock */
         NAME_$UNLOCK_DIR(status_ret);
@@ -230,7 +230,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         /* Check version */
         if (*((uint16_t *)mapped_ptr) < 2) {
             /* Old version - reinitialize */
-            FUN_00e544b0(mapped_ptr);
+            dir_$old_init_buf(mapped_ptr);
 
             /* Get attributes to restore parent UID */
             {

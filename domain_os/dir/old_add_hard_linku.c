@@ -1,7 +1,7 @@
 /*
  * DIR_$OLD_ADD_HARD_LINKU - Legacy add hard link
  *
- * Thin wrapper around FUN_00e5674c with hard_link_flag=0xFF.
+ * Thin wrapper around name_$old_add_link with hard_link_flag=0xFF.
  *
  * Original address: 0x00E5697A
  * Original size: 48 bytes
@@ -25,5 +25,5 @@
 void DIR_$OLD_ADD_HARD_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
                              uid_t *target_uid, status_$t *status_ret)
 {
-    FUN_00e5674c(dir_uid, name, *name_len, target_uid, 0xFF, status_ret);
+    name_$old_add_link(dir_uid, name, *name_len, target_uid, 0xFF, status_ret);
 }

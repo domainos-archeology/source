@@ -259,12 +259,18 @@ void FUN_00e4e786(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
  * ============================================================================
  */
 
-/* FUN_00e5674c - Shared add entry helper for OLD_ADDU and OLD_ADD_HARD_LINKU
+/* name_$old_add_link - Add link with remote/local handling
+ *
+ * Shared add entry helper for DIR_$OLD_ADDU and DIR_$OLD_ADD_HARD_LINKU.
+ * Checks ACL rights, determines if target is remote or local, then
+ * dispatches to REM_FILE_$NAME_ADD_HARD_LINKU (remote) or local add path.
+ *
  * Original address: 0x00E5674C
+ * Size: 506 bytes
  */
-void FUN_00e5674c(uid_t *dir_uid, char *name, uint16_t name_len,
-                  uid_t *file_uid, uint8_t hard_link_flag,
-                  status_$t *status_ret);
+void name_$old_add_link(uid_t *dir_uid, char *name, uint16_t name_len,
+                        uid_t *file_uid, uint8_t hard_link_flag,
+                        status_$t *status_ret);
 
 /* NAME_$OLD_DELETE_ENTRYU - Shared delete/drop entry helper
  *
@@ -295,12 +301,18 @@ void FUN_00e57f74(uid_t *dir_uid, char *name, uint16_t name_len,
 void name_$old_get_entry_nonroot(uid_t *dir_uid, char *name, uint16_t name_len,
                                  void *entry_ret, status_$t *status_ret);
 
-/* FUN_00e56682 - Root add entry helper
+/* name_$old_add_entry - Name-level add directory entry
+ *
+ * Validates leaf name, locks directory, adds entry via internal helper,
+ * updates hint table, unlocks directory. Used by DIR_$OLD_ROOT_ADDU,
+ * DIR_$OLD_VALIDATE_ROOT_ENTRY, and other add operations.
+ *
  * Original address: 0x00E56682
+ * Size: 202 bytes
  */
-void FUN_00e56682(uid_t *dir_uid, uint16_t type, char *name,
-                  uint16_t name_len, uid_t *file_uid,
-                  uint32_t flags, status_$t *status_ret);
+void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,
+                         uint16_t name_len, uid_t *file_uid,
+                         uint32_t flags, status_$t *status_ret);
 
 /* name_$validate_leaf - Validate and parse leaf name
  * Returns negative (true) on success, non-negative on failure
@@ -358,12 +370,21 @@ uint16_t dir_$old_hash_name(uint8_t *name, uint16_t name_len, uint16_t num_bucke
 void FUN_00e555dc(uint32_t handle, uint16_t param2, uint16_t param3,
                   uint16_t hash);
 
-/* FUN_00e55220 - Add entry to directory (non-root path)
+/* dir_$old_add_entry - Add entry to directory buffer
+ *
+ * Core directory entry addition. Checks for duplicates via dir_$old_find_entry,
+ * then adds to either flat entry area (stride 0x30) or hashed overflow area.
+ * Copies name (up to 32 chars, space-padded), sets type byte and UID,
+ * increments entry count.
+ *
+ * Returns: status_$ok, status_$name_already_exists, or status_$directory_is_full
+ *
  * Original address: 0x00E55220
+ * Size: 486 bytes
  */
-void FUN_00e55220(uid_t *dir_uid, uint32_t handle, uint8_t *name,
-                  uint16_t name_len, uint16_t type, void *uid_data,
-                  uint16_t flags, uint8_t *result, status_$t *status_ret);
+void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
+                        uint16_t name_len, uint16_t type, void *uid_data,
+                        uint16_t flags, uint8_t *result, status_$t *status_ret);
 
 /* FUN_00e55406 - Add entry to directory (root path, with replace)
  * Original address: 0x00E55406
@@ -392,16 +413,31 @@ void FUN_00e55764(uint32_t handle, int32_t entry, uint8_t *buf,
 void FUN_00e54546(uid_t *parent_uid, uint32_t handle, uint16_t type,
                   uid_t *new_dir_uid, status_$t *status_ret);
 
-/* FUN_00e544b0 - Initialize directory buffer
+/* dir_$old_init_buf - Initialize directory buffer
+ *
+ * Initializes a directory buffer structure. Copies 10-byte template from
+ * DAT_00e5453c, sets UID_$NIL, initializes entry arrays (18 entries at
+ * stride 0x30, 43 entries at offset 0x3AA), and clears flag fields.
+ *
  * Original address: 0x00E544B0
+ * Size: 140 bytes
  */
-void FUN_00e544b0(void *buffer);
+void dir_$old_init_buf(void *buffer);
 
-/* FUN_00e56a04 - Fix root entry
+/* name_$old_drop_entry - Name-level drop directory entry
+ *
+ * Validates leaf name, locks directory, removes entry via internal helper,
+ * unlocks directory. Used by DIR_$OLD_DROP_DIRU, NAME_$OLD_DELETE_ENTRYU,
+ * and DIR_$OLD_VALIDATE_ROOT_ENTRY (to fix stale entries).
+ *
+ * TODO: Ghidra shows 6 parameters but existing callers pass 4.
+ * Verify parameter count against assembly at each call site.
+ *
  * Original address: 0x00E56A04
+ * Size: 150 bytes
  */
-void FUN_00e56a04(uid_t *dir_uid, char *name, uint16_t name_len,
-                  void *entry_data);
+void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
+                          void *entry_data);
 
 /* FUN_00e4dffe - Canned root directory read
  * Original address: 0x00E4DFFE
@@ -704,16 +740,33 @@ void REM_FILE_$SET_DEF_ACL(void *location, uid_t *dir_uid,
 void REM_NAME_$GET_ENTRY(uid_t *dir_uid, char *name, uint16_t *name_len,
                          void *entry_ret, status_$t *status_ret);
 
-/* Various internal functions called by DO_OP switch cases */
-void FUN_00e5044a(uid_t *uid, void *name, uint16_t name_len, uid_t *file_uid,
-                  uint16_t flags, status_$t *status_ret);
+/* dir_$do_op_add_link - DO_OP handler for add entry/hard link
+ *
+ * Server-side handler for remote add (op 0x2A) and add hard link (op 0x2C).
+ * Validates ACL rights, checks link count (max 0xFFF5), increments link
+ * count attribute. On failure, calls FUN_00e511da to undo.
+ *
+ * Original address: 0x00E5044A
+ * Size: 378 bytes
+ */
+void dir_$do_op_add_link(uid_t *uid, void *name, uint16_t name_len, uid_t *file_uid,
+                         uint16_t flags, status_$t *status_ret);
 void FUN_00e4fef2(uid_t *uid, uint16_t type, void *name, uint16_t name_len,
                   uint16_t entry_type, uint32_t extra, void *uid_data,
                   uint16_t target_len, uint32_t target_data,
                   void *result, status_$t *status_ret);
-void FUN_00e5125e(uid_t *uid, void *name, uint16_t name_len, uint8_t flag1,
-                  uint16_t flag2, uint16_t flag3, void *buf,
-                  uid_t *result_uid, status_$t *status_ret);
+/* dir_$do_op_delete - DO_OP handler for delete/drop operations
+ *
+ * Server-side handler for delete file (ops 0x2E, 0x36) and drop hard link
+ * (op 0x30). Validates rights, checks entry type (not a file error),
+ * locks file via FILE_$PRIV_LOCK, calls FILE_$DELETE_OBJ, sets attributes.
+ *
+ * Original address: 0x00E5125E
+ * Size: 860 bytes
+ */
+void dir_$do_op_delete(uid_t *uid, void *name, uint16_t name_len, uint8_t flag1,
+                       uint16_t flag2, uint16_t flag3, void *buf,
+                       uid_t *result_uid, status_$t *status_ret);
 void FUN_00e518bc(uid_t *uid, uint32_t type_info, int16_t name_ptr,
                   uint32_t name_info, int16_t new_name_ptr,
                   uint32_t status_info);

@@ -19,7 +19,7 @@
  * 2. Enter super mode / acquire directory lock via NAME_$LOCK_DIR
  * 3. Save per-process state
  * 4. Create directory object via FUN_00e54546
- * 5. Add entry via FUN_00e55220
+ * 5. Add entry via dir_$old_add_entry
  * 6. On failure, clean up with SET_DEFAULT_ACL + TRUNCATE
  * 7. Restore state, release lock, exit super mode
  *
@@ -64,7 +64,7 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
     }
 
     /* Add the directory entry */
-    FUN_00e55220(parent_uid, handle, parsed_name, parsed_len,
+    dir_$old_add_entry(parent_uid, handle, parsed_name, parsed_len,
                  2, &created_uid, 0, result_buf, status_ret);
     if ((int16_t)*status_ret != 0) {
         /* Clean up on failure - set default ACLs and truncate */

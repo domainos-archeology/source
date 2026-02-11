@@ -25,7 +25,7 @@
  *       - Retry on comms failure after re-reading lock entry
  *       - Optionally unlock the file (FILE_$PRIV_UNLOCK)
  *    e. If not mapped: call FILE_$DELETE_OBJ
- * 7. Remove the directory entry via FUN_00e56a04
+ * 7. Remove the directory entry via name_$old_drop_entry
  * 8. On ACL failure: convert via NAME_CONVERT_ACL_STATUS
  *
  * Parameters:

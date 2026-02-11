@@ -1,7 +1,7 @@
 /*
  * DIR_$OLD_ADDU - Legacy add directory entry
  *
- * Thin wrapper around FUN_00e5674c with hard_link_flag=0.
+ * Thin wrapper around name_$old_add_link with hard_link_flag=0.
  *
  * Original address: 0x00E5694A
  * Original size: 48 bytes
@@ -25,5 +25,5 @@
 void DIR_$OLD_ADDU(uid_t *dir_uid, char *name, int16_t *name_len,
                    uid_t *file_uid, status_$t *status_ret)
 {
-    FUN_00e5674c(dir_uid, name, (uint16_t)*name_len, file_uid, 0, status_ret);
+    name_$old_add_link(dir_uid, name, (uint16_t)*name_len, file_uid, 0, status_ret);
 }

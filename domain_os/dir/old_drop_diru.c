@@ -166,7 +166,7 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
         FILE_$DELETE_OBJ(&dir_uid, 0xFF, location_buf, status_ret);
         if (*status_ret == status_$ok) {
             /* Fix root entry */
-            FUN_00e56a04(parent_uid, name, *name_high, 0);
+            name_$old_drop_entry(parent_uid, name, *name_high, 0);
         }
     }
 

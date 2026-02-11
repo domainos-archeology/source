@@ -171,7 +171,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
         case 0x2A: /* Add entry */
             if (*((uint32_t *)(req + 0x98)) == 0) {
                 /* Simple add */
-                FUN_00e5044a(&local_uid, req + 0x9c,
+                dir_$do_op_add_link(&local_uid, req + 0x9c,
                              *((uint16_t *)(req + 0x8e)),
                              (uid_t *)(req + 0x90),
                              0, &resp->status);
@@ -192,7 +192,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x2C: /* Add hard link */
-            FUN_00e5044a(&local_uid, req + 0x98,
+            dir_$do_op_add_link(&local_uid, req + 0x98,
                          *((uint16_t *)(req + 0x8e)),
                          (uid_t *)(req + 0x90),
                          0xFF, &resp->status);
@@ -205,7 +205,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x2E: /* Delete file (with flags) */
-            FUN_00e5125e(&local_uid, req + 0x92,
+            dir_$do_op_delete(&local_uid, req + 0x92,
                          *((uint16_t *)(req + 0x8e)),
                          -((req[0x91] & 1) != 0),
                          0xFF, 0xFF,
@@ -220,7 +220,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x30: /* Drop hard link */
-            FUN_00e5125e(&local_uid, req + 0x90,
+            dir_$do_op_delete(&local_uid, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
                          0xFF, 0xFF, 0xFF,
                          result_buf, (uid_t *)&resp->_22_4_,
@@ -274,7 +274,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x36: /* Delete file (simple) */
-            FUN_00e5125e(&local_uid, req + 0x92,
+            dir_$do_op_delete(&local_uid, req + 0x92,
                          *((uint16_t *)(req + 0x8e)),
                          req[0x90],
                          (uint16_t)req[0x91], 0,
