@@ -60,7 +60,7 @@ ushort TTY_$K_GET(short *line_ptr, void *options, void *buffer,
     }
 
     /* Lock the TTY */
-    FUN_00e1aed0(tty);
+    TTY_$I_LOCK(tty);
 
     /* Extract option flags */
     wait_flag = -((*(uint8_t *)((char *)options + 1) & 0x01) != 0);
@@ -217,7 +217,7 @@ update_read_pos:
     }
 
     /* Unlock TTY */
-    FUN_00e1aee4(tty);
+    TTY_$I_UNLOCK(tty);
 
     return chars_read;
 }

@@ -170,7 +170,7 @@ int16_t DISK_$PV_MOUNT_INTERNAL(int16_t mount_type, int16_t device_num,
 void *FUN_00e3be8a(int16_t vol_idx, int16_t mode, void *count, status_$t *status);
 
 /*
- * FUN_00e3c01a - Return disk queue blocks
+ * disk_$rtn_qblks_internal - Return disk queue blocks
  *
  * Internal function to return previously allocated queue blocks.
  *
@@ -181,7 +181,7 @@ void *FUN_00e3be8a(int16_t vol_idx, int16_t mode, void *count, status_$t *status
  *
  * Original address: 0x00e3c01a
  */
-void FUN_00e3c01a(int16_t vol_idx, void *blocks, void *param_3);
+void disk_$rtn_qblks_internal(int16_t vol_idx, void *blocks, void *param_3);
 
 /*
  * FUN_00e3c9fe - Wait for disk queue completion

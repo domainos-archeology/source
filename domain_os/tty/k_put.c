@@ -58,7 +58,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
     }
 
     /* Lock the TTY */
-    FUN_00e1aed0(tty);
+    TTY_$I_LOCK(tty);
 
     /* Check if this is a "check space only" request */
     if ((*(uint8_t *)((char *)options + 1) & 0x02) != 0) {
@@ -71,7 +71,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
         avail_space -= 0x40;  /* Reserve some space */
 
         /* Unlock TTY before returning */
-        FUN_00e1aee4(tty);
+        TTY_$I_UNLOCK(tty);
 
         /* Check if request is non-blocking */
         if ((*(uint8_t *)((char *)options + 1) & 0x01) == 0) {
@@ -135,7 +135,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
         }
 
         /* Wait for output buffer drain or quit signal */
-        FUN_00e1aee4(tty);
+        TTY_$I_UNLOCK(tty);
 
         {
             ec_$eventcount_t *ecs[2];
@@ -147,7 +147,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
             wait_result = EC_$WAITN(ecs, vals, 2);
         }
 
-        FUN_00e1aed0(tty);
+        TTY_$I_LOCK(tty);
 
         /* Check if quit signaled */
         if (wait_result == 2) {
@@ -160,5 +160,5 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
 
 done:
     *count = chars_written;
-    FUN_00e1aee4(tty);
+    TTY_$I_UNLOCK(tty);
 }

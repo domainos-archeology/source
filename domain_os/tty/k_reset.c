@@ -16,7 +16,7 @@ void TTY_$K_RESET(short *line_ptr, status_$t *status)
     }
 
     // Lock the TTY
-    FUN_00e1aed0(tty);
+    TTY_$I_LOCK(tty);
 
     // Save XON/XOFF mode flag
     boolean xon_xoff = (tty->output_flags & 0x02) != 0 ? true : false;
@@ -65,5 +65,5 @@ void TTY_$K_RESET(short *line_ptr, status_$t *status)
     }
 
     // Unlock the TTY
-    FUN_00e1aee4(tty);
+    TTY_$I_UNLOCK(tty);
 }

@@ -29,8 +29,8 @@ static void tty_reprint_line(tty_desc_t *tty);
 
 /* External helper functions from other TTY modules */
 extern void FUN_00e1af0a(uint8_t ch, void *ptr);
-extern void FUN_00e1b3ce(tty_desc_t *tty, uint8_t ch);
-extern void FUN_00e1b3b4(tty_desc_t *tty, uint16_t val);
+/* TTY_$I_ECHO_CHAR is declared in tty_internal.h */
+/* TTY_$I_XMIT_CHAR is declared in tty_internal.h */
 extern void FUN_00e1b8b0(tty_desc_t *tty, uint8_t ch);
 extern void FUN_00e1b538(tty_desc_t *tty);
 extern void FUN_00e1b6ac(tty_desc_t *tty);
@@ -85,19 +85,19 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
     /* Process character based on class */
     switch (char_class) {
         case TTY_CHAR_CLASS_SIGINT:  /* 0x00 - Interrupt */
-            FUN_00e1b3ce(tty, ch);
+            TTY_$I_ECHO_CHAR(tty, ch);
             TTY_$I_FLUSH_INPUT(tty);
             TTY_$I_SIGNAL(tty, TTY_SIG_INT);
             break;
 
         case TTY_CHAR_CLASS_SIGQUIT:  /* 0x01 - Quit */
-            FUN_00e1b3ce(tty, ch);
+            TTY_$I_ECHO_CHAR(tty, ch);
             TTY_$I_FLUSH_INPUT(tty);
             TTY_$I_SIGNAL(tty, TTY_SIG_QUIT);
             break;
 
         case TTY_CHAR_CLASS_SIGTSTP:  /* 0x02 - Suspend */
-            FUN_00e1b3ce(tty, ch);
+            TTY_$I_ECHO_CHAR(tty, ch);
             TTY_$I_FLUSH_INPUT(tty);
             TTY_$I_SIGNAL(tty, TTY_SIG_TSTP);
             break;
@@ -111,8 +111,8 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
             /* Set EOF pending flag */
             *(uint8_t *)((char *)tty + 0x09) |= TTY_STATUS_EOF_PEND;
             if ((*(uint8_t *)((char *)tty + 0x17) & 0x01) != 0) {
-                FUN_00e1b3ce(tty, ch);
-                FUN_00e1b3b4(tty, 0x0800);
+                TTY_$I_ECHO_CHAR(tty, ch);
+                TTY_$I_XMIT_CHAR(tty, 0x0800);
             }
             break;
 
@@ -130,7 +130,7 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
             if (tty->xon_xoff_handler != 0) {
                 ((void (*)(short))tty->xon_xoff_handler)((short)tty->line_id);
             }
-            FUN_00e1aef8(tty->output_ec);
+            TTY_$I_ADVANCE_EC(tty->output_ec);
             break;
 
         case TTY_CHAR_CLASS_DEL:  /* 0x07 - Delete character */
@@ -151,11 +151,11 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
         case TTY_CHAR_CLASS_REPRINT:  /* 0x0A - Reprint line */
             if ((*(uint8_t *)((char *)tty + 0x17) & 0x01) != 0) {
                 int16_t pos;
-                FUN_00e1b3ce(tty, ch);
+                TTY_$I_ECHO_CHAR(tty, ch);
                 FUN_00e1b456(tty);
                 pos = tty->input_head;
                 while (pos != tty->input_tail) {
-                    FUN_00e1b3ce(tty, tty->input_buffer[pos]);
+                    TTY_$I_ECHO_CHAR(tty, tty->input_buffer[pos]);
                     if (pos == 0x100) {
                         pos = 1;
                     } else {
@@ -166,9 +166,9 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
             break;
 
         case TTY_CHAR_CLASS_DISCARD:  /* 0x0C - Discard output */
-            FUN_00e1b3ce(tty, ch);
-            FUN_00e1b3b4(tty, 0x0800);
-            FUN_00e1b3b4(tty, 0x0800);
+            TTY_$I_ECHO_CHAR(tty, ch);
+            TTY_$I_XMIT_CHAR(tty, 0x0800);
+            TTY_$I_XMIT_CHAR(tty, 0x0800);
             FUN_00e1b8b0(tty, ch);
             break;
 
@@ -177,7 +177,7 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
                 TTY_$I_FLUSH_OUTPUT(tty);
                 *(uint8_t *)((char *)tty + 0x09) |= TTY_STATUS_OUTPUT_FLUSH;
             } else if ((*(uint8_t *)((char *)tty + 0x17) & 0x01) != 0) {
-                FUN_00e1b3ce(tty, ch);
+                TTY_$I_ECHO_CHAR(tty, ch);
             }
             break;
 
@@ -235,19 +235,19 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
 
                 /* Echo if parity error flag set */
                 if ((int8_t)state_flags < 0) {
-                    FUN_00e1b3b4(tty, 0x2f00);
+                    TTY_$I_XMIT_CHAR(tty, 0x2f00);
                 }
 
                 /* Echo character if echo enabled */
                 if ((*(uint8_t *)((char *)tty + 0x17) & 0x01) != 0) {
-                    FUN_00e1b3ce(tty, ch);
+                    TTY_$I_ECHO_CHAR(tty, ch);
                 }
             }
 
             /* Handle break mode signaling */
             if (tty->break_mode != 0) {
                 tty->input_head = next_tail;
-                FUN_00e1aef8(tty->input_ec);
+                TTY_$I_ADVANCE_EC(tty->input_ec);
 
                 /* Send signal if pending */
                 if ((*(uint8_t *)((char *)tty + 0x09) & TTY_STATUS_SIG_PEND) != 0) {
@@ -268,7 +268,7 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
             }
             FUN_00e1af0a(ch, &tty->input_read);
             if ((*(uint8_t *)((char *)tty + 0x17) & 0x01) != 0) {
-                FUN_00e1b3b4(tty, (ch << 8) | (uint8_t)(uintptr_t)&tty->input_read);
+                TTY_$I_XMIT_CHAR(tty, (ch << 8) | (uint8_t)(uintptr_t)&tty->input_read);
             }
             break;
 

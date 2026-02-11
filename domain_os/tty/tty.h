@@ -11,6 +11,9 @@
 // TTY Constants
 // =============================================================================
 
+// TTY subsystem lock ID (used with ML_$LOCK/ML_$UNLOCK)
+#define TTY_LOCK_ID 3
+
 // Input/output buffer size (circular buffer with 256 entries, indices 1-256)
 #define TTY_BUFFER_SIZE 0x100
 

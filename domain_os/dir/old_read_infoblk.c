@@ -14,7 +14,7 @@
 /*
  * DIR_$OLD_READ_INFOBLK - Read directory info block
  *
- * Acquires the directory lock via FUN_00e54854 with read access
+ * Acquires the directory lock via NAME_$LOCK_DIR with read access
  * (0x10000), then copies the info block data. Checks the directory
  * version (must be < 0x13) before reading.
  *
@@ -35,7 +35,7 @@ void DIR_$OLD_READ_INFOBLK(uid_t *dir_uid, void *info_data,
     int16_t i;
 
     /* Acquire directory lock for reading */
-    FUN_00e54854(dir_uid, (uint32_t *)&handle, 0x10000, status_ret);
+    NAME_$LOCK_DIR(dir_uid, (uint32_t *)&handle, 0x10000, status_ret);
     if (*status_ret == status_$ok) {
         /* Check directory version - must be < 0x13 */
         if (*(uint16_t *)(handle + 4) < 0x13) {
@@ -65,7 +65,7 @@ void DIR_$OLD_READ_INFOBLK(uid_t *dir_uid, void *info_data,
     }
 
     /* Release directory lock */
-    FUN_00e54734(&local_status);
+    NAME_$UNLOCK_DIR(&local_status);
 
     /* Exit super mode */
     ACL_$EXIT_SUPER();

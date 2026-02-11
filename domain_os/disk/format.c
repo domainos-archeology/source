@@ -108,7 +108,7 @@ void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
     if (partition_idx > 8 ||
         (((uint32_t)1 << (partition_vol & 0x1f)) & VALID_VOL_MASK) == 0) {
         *status = status_$invalid_volume_index;
-        FUN_00e3c01a(1, buffer, buffer_param);
+        disk_$rtn_qblks_internal(1, buffer, buffer_param);
         return;
     }
 
@@ -136,5 +136,5 @@ void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
     *status = *(status_$t *)((uintptr_t)buffer + 0x0c);
 
     /* Free I/O request buffer */
-    FUN_00e3c01a(1, buffer, buffer_param);
+    disk_$rtn_qblks_internal(1, buffer, buffer_param);
 }

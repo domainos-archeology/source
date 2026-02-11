@@ -133,7 +133,7 @@ void NAME_$INIT(uid_t *vol_root_uid, uid_t *vol_node_uid)
     *(base + 0x08) = 0;  /* COM_MAPPED_INFO flag */
 
     /* Map the node directory */
-    FUN_00e58488(&NAME_$NODE_UID, 0, base + 0x20, &status);
+    name_$map_dir(&NAME_$NODE_UID, 0, base + 0x20, &status);
     name_$init_check_status("map    ", NULL, 0, &status);
 
     /* Build and resolve "/com" path */
@@ -144,7 +144,7 @@ void NAME_$INIT(uid_t *vol_root_uid, uid_t *vol_node_uid)
     NAME_$RESOLVE(path_buffer, &path_len, &NAME_$COM_UID, &status);
 
     /* If /com resolution fails, use node UID as fallback */
-    if (status != status_$ok || FUN_00e58488(&NAME_$COM_UID, 0, base + 0x08, &status) >= 0) {
+    if (status != status_$ok || name_$map_dir(&NAME_$COM_UID, 0, base + 0x08, &status) >= 0) {
         NAME_$COM_UID.high = NAME_$NODE_UID.high;
         NAME_$COM_UID.low = NAME_$NODE_UID.low;
         /* Copy node mapped info to com mapped info */

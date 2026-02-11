@@ -2,7 +2,7 @@
  * DIR_$OLD_CLEANUP - Legacy directory cleanup
  *
  * Checks if the current process has an active directory handle
- * and calls FUN_00e54734 to release it.
+ * and calls NAME_$UNLOCK_DIR to release it.
  *
  * Original address: 0x00E54B2A
  * Original size: 46 bytes
@@ -20,7 +20,7 @@
  *   tst.l (0x2b8, A0)            ; test handle pointer
  *   beq skip                     ; skip if no handle
  *   pea (-4, A6)                 ; push address for status
- *   bsr FUN_00e54734             ; release handle
+ *   bsr NAME_$UNLOCK_DIR             ; release handle
  *
  * The handle pointer is at DAT_00e7ffdc + current * 8
  * (0xe7ffdc = 0xe7fd24 + 0x2b8)
@@ -31,6 +31,6 @@ void DIR_$OLD_CLEANUP(void)
 
     /* Check if current process has an active handle */
     if (*((uint32_t *)(&DAT_00e7ffdc + (int16_t)(PROC1_$CURRENT << 3))) != 0) {
-        FUN_00e54734(&status);
+        NAME_$UNLOCK_DIR(&status);
     }
 }

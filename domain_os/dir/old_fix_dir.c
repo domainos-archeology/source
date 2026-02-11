@@ -17,7 +17,7 @@
  * Based on the Ghidra decompilation at 0x00E55C66.
  * Two major paths:
  *
- * Path 1 (directory is OK): status from FUN_00e54854 is OK
+ * Path 1 (directory is OK): status from NAME_$LOCK_DIR is OK
  *   1. Create a temporary file via FILE_$PRIV_CREATE
  *   2. Lock the temp file and map it
  *   3. Copy all data from the directory to the temp
@@ -80,7 +80,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
     need_unlock = -1;  /* true = need to unlock on exit */
 
     /* Try to acquire directory lock */
-    FUN_00e54854(&local_dir, &handle, 0x40002, status_ret);
+    NAME_$LOCK_DIR(&local_dir, &handle, 0x40002, status_ret);
     mapped_ptr = (void *)handle;
 
     if (*status_ret == status_$ok) {
@@ -135,7 +135,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         FUN_00e544b0((void *)handle);
 
         /* Release directory lock */
-        FUN_00e54734(status_ret);
+        NAME_$UNLOCK_DIR(status_ret);
         if (*status_ret != status_$ok) {
             goto cleanup;
         }
@@ -278,7 +278,7 @@ cleanup:
         FILE_$SET_REFCNT(&temp_uid, &DAT_00e54730, &status);
     }
     if (need_unlock < 0) {
-        FUN_00e54734(&status);
+        NAME_$UNLOCK_DIR(&status);
     }
 
 done:

@@ -184,7 +184,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                              result_buf, &resp->status);
             }
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4be16(0x12, resp->status, &local_uid,
+                AUDIT_$LOG_DIR_OP(0x12, resp->status, &local_uid,
                              (uid_t *)(req + 0x90),
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x9c);
@@ -197,7 +197,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          (uid_t *)(req + 0x90),
                          0xFF, &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4be16(0x1F, resp->status, &local_uid,
+                AUDIT_$LOG_DIR_OP(0x1F, resp->status, &local_uid,
                              (uid_t *)(req + 0x90),
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x98);
@@ -212,7 +212,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          result_buf, (uid_t *)&resp->_22_4_,
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4be16(0x20, resp->status, &local_uid,
+                AUDIT_$LOG_DIR_OP(0x20, resp->status, &local_uid,
                              (uid_t *)&resp->_22_4_,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x92);
@@ -226,7 +226,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          result_buf, (uid_t *)&resp->_22_4_,
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4be16(0x13, resp->status, &local_uid,
+                AUDIT_$LOG_DIR_OP(0x13, resp->status, &local_uid,
                              (uid_t *)&resp->_22_4_,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x90);
@@ -266,7 +266,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          (uid_t *)&resp->_22_4_,
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4be16(0x19, resp->status, &local_uid,
+                AUDIT_$LOG_DIR_OP(0x19, resp->status, &local_uid,
                              (uid_t *)(req + 0x90),
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x98);
@@ -281,7 +281,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          result_buf, (uid_t *)&resp->_22_4_,
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4be16(0x13, resp->status, &local_uid,
+                AUDIT_$LOG_DIR_OP(0x13, resp->status, &local_uid,
                              (uid_t *)&resp->_22_4_,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x92);
@@ -293,7 +293,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          *((uint16_t *)(req + 0x8e)),
                          &resp->_22_4_, &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4be16(0x16, resp->status, &local_uid,
+                AUDIT_$LOG_DIR_OP(0x16, resp->status, &local_uid,
                              (uid_t *)&resp->_22_4_,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x90);
@@ -305,7 +305,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          *((uint16_t *)(req + 0x8e)),
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4be16(0x17, resp->status, &local_uid,
+                AUDIT_$LOG_DIR_OP(0x17, resp->status, &local_uid,
                              &local_uid,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x90);
@@ -343,7 +343,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          4, (void *)&resp->_22_4_,
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4be16(0x1B, resp->status, &local_uid,
+                AUDIT_$LOG_DIR_OP(0x1B, resp->status, &local_uid,
                              (uid_t *)&resp->_22_4_,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x90);

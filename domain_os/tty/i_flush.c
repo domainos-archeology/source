@@ -18,7 +18,7 @@ void TTY_$I_OUTPUT_BUFFER_DRAINED(tty_desc_t *tty)
     tty->status_flags &= ~TTY_STATUS_OUTPUT_WAIT;
 
     // Signal that output is complete via eventcount
-    FUN_00e1aef8(tty->output_ec);
+    TTY_$I_ADVANCE_EC(tty->output_ec);
 }
 
 void TTY_$I_FLUSH_INPUT(tty_desc_t *tty)
@@ -33,7 +33,7 @@ void TTY_$I_FLUSH_INPUT(tty_desc_t *tty)
     // If waiting for input, signal completion
     if ((tty->status_flags & TTY_STATUS_INPUT_WAIT) != 0) {
         tty->status_flags &= ~TTY_STATUS_INPUT_WAIT;
-        FUN_00e1aef8(tty->output_ec);
+        TTY_$I_ADVANCE_EC(tty->output_ec);
     }
 
     // Call flow control handler if set

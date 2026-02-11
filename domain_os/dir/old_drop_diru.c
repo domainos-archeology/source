@@ -97,7 +97,7 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
     }
 
     /* Step 5: Enter super mode / acquire directory lock */
-    FUN_00e54854(&dir_uid, &handle, 0x40000, status_ret);
+    NAME_$LOCK_DIR(&dir_uid, &handle, 0x40000, status_ret);
     if (*status_ret != status_$ok) {
         ACL_$EXIT_SUPER();
         return;
@@ -112,7 +112,7 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
     }
 
     /* Release directory lock */
-    FUN_00e54734(status_ret);
+    NAME_$UNLOCK_DIR(status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;
@@ -154,7 +154,7 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
     attr_byte = location_buf[0x0d]; /* local_2f maps to byte in location data */
     if ((int8_t)attr_byte < 0) {
         /* Remote directory - use REM_FILE to drop */
-        valid = FUN_00e54414(name, *name_high, parsed_name, parsed_len);
+        valid = name_$validate_leaf(name, *name_high, parsed_name, parsed_len);
         if (valid < 0) {
             REM_FILE_$DROP_HARD_LINKU(location_buf + 0x10, parent_uid,
                                       parsed_name, parsed_len[0], 0, status_ret);

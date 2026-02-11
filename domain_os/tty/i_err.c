@@ -56,6 +56,6 @@ signal_error:
     tty->status_flags |= TTY_ERR_CALLBACK;
 
     // Signal both input and output eventcounts
-    FUN_00e1aef8(tty->input_ec);
-    FUN_00e1aef8(tty->output_ec);
+    TTY_$I_ADVANCE_EC(tty->input_ec);
+    TTY_$I_ADVANCE_EC(tty->output_ec);
 }

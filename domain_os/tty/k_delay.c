@@ -77,7 +77,7 @@ void TTY_$K_DRAIN_OUTPUT(short *line_ptr, status_$t *status)
     }
 
     // Lock the TTY
-    FUN_00e1aed0(tty);
+    TTY_$I_LOCK(tty);
 
     // Loop until output buffer is drained or quit is signaled
     while (1) {
@@ -96,13 +96,13 @@ void TTY_$K_DRAIN_OUTPUT(short *line_ptr, status_$t *status)
         }
 
         // Unlock TTY while waiting
-        FUN_00e1aee4(tty);
+        TTY_$I_UNLOCK(tty);
 
         // Wait for either eventcount
         wait_result = EC_$WAITN(ec_array, value_array, 2);
 
         // Re-lock TTY
-        FUN_00e1aed0(tty);
+        TTY_$I_LOCK(tty);
 
         // Check if quit was signaled
         if ((short)wait_result == 2) {
@@ -116,5 +116,5 @@ void TTY_$K_DRAIN_OUTPUT(short *line_ptr, status_$t *status)
     }
 
     // Unlock the TTY
-    FUN_00e1aee4(tty);
+    TTY_$I_UNLOCK(tty);
 }

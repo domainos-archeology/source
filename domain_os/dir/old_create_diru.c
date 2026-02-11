@@ -15,8 +15,8 @@
  * DIR_$OLD_CREATE_DIRU - Legacy create subdirectory
  *
  * The process is:
- * 1. Validate the leaf name via FUN_00e54414
- * 2. Enter super mode / acquire directory lock via FUN_00e54854
+ * 1. Validate the leaf name via name_$validate_leaf
+ * 2. Enter super mode / acquire directory lock via NAME_$LOCK_DIR
  * 3. Save per-process state
  * 4. Create directory object via FUN_00e54546
  * 5. Add entry via FUN_00e55220
@@ -42,14 +42,14 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
     status_$t cleanup_status;
 
     /* Validate and parse the leaf name */
-    valid = FUN_00e54414(name, (uint16_t)*name_len, parsed_name, &parsed_len);
+    valid = name_$validate_leaf(name, (uint16_t)*name_len, parsed_name, &parsed_len);
     if (valid >= 0) {
         *status_ret = status_$naming_invalid_leaf;
         return;
     }
 
     /* Enter super mode / acquire directory lock */
-    FUN_00e54854(parent_uid, &handle, 0x40002, status_ret);
+    NAME_$LOCK_DIR(parent_uid, &handle, 0x40002, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;
@@ -58,7 +58,7 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
     /* Create the directory object */
     FUN_00e54546(parent_uid, handle, 2, &created_uid, status_ret);
     if ((int16_t)*status_ret != 0) {
-        FUN_00e54734(&cleanup_status);
+        NAME_$UNLOCK_DIR(&cleanup_status);
         ACL_$EXIT_SUPER();
         return;
     }
@@ -75,7 +75,7 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
                                      &ACL_$NIL, &cleanup_status);
         }
         /* TODO: Additional cleanup - truncate and delete the created dir */
-        FUN_00e54734(&cleanup_status);
+        NAME_$UNLOCK_DIR(&cleanup_status);
         ACL_$EXIT_SUPER();
         return;
     }
@@ -85,7 +85,7 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
     new_dir_uid->low = created_uid.low;
 
     /* Release directory lock */
-    FUN_00e54734(status_ret);
+    NAME_$UNLOCK_DIR(status_ret);
 
     ACL_$EXIT_SUPER();
 }

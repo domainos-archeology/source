@@ -107,7 +107,7 @@ typedef struct disk_io_req_t {
 
 /* External helper functions */
 extern void FUN_00e3be8a(int16_t count, int8_t mode, int32_t *req_out, uint32_t *param2);
-extern void FUN_00e3c01a(int16_t count, void *req, uint32_t param);
+extern void disk_$rtn_qblks_internal(int16_t count, void *req, uint32_t param);
 extern void FUN_00e3cae0(void *req, uint16_t vol_idx, int16_t op, void *param1, status_$t *status);
 extern void FUN_00e3c9fe(int16_t mask, int32_t *counter1, int32_t *counter2);
 extern void FUN_00e3c14c(int16_t vol_idx, void *req, int32_t *info);
@@ -362,7 +362,7 @@ cleanup:
 
     /* Save status and free request */
     result_status = req->status;
-    FUN_00e3c01a(1, req, req_param);
+    disk_$rtn_qblks_internal(1, req, req_param);
 
     return result_status;
 }

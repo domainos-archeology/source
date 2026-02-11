@@ -86,5 +86,5 @@ void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
     *status = *(status_$t *)((uintptr_t)buffer + 0x0c);
 
     /* Free I/O request buffer */
-    FUN_00e3c01a(1, buffer, buffer_param);
+    disk_$rtn_qblks_internal(1, buffer, buffer_param);
 }

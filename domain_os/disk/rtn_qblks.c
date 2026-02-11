@@ -15,7 +15,7 @@
 
 void DISK_$RTN_QBLKS(int16_t count, int32_t qblk_head, uint32_t qblk_tail)
 {
-    /* FUN_00e3c01a is declared in disk_internal.h with void* parameters.
+    /* disk_$rtn_qblks_internal is declared in disk_internal.h with void* parameters.
      * Cast to match the declared signature. */
-    FUN_00e3c01a(count, (void *)(uintptr_t)qblk_head, (void *)(uintptr_t)qblk_tail);
+    disk_$rtn_qblks_internal(count, (void *)(uintptr_t)qblk_head, (void *)(uintptr_t)qblk_tail);
 }

@@ -13,10 +13,10 @@
 /*
  * DIR_$OLD_DROP_LINKU - Legacy drop soft link
  *
- * Validates the leaf name via FUN_00e54414. If valid,
- * acquires the directory lock via FUN_00e54854 with flags=0x40002,
+ * Validates the leaf name via name_$validate_leaf. If valid,
+ * acquires the directory lock via NAME_$LOCK_DIR with flags=0x40002,
  * then calls FUN_00e5569c with op_type=3 to drop the link entry.
- * Finally releases the lock via FUN_00e54734 and exits super mode.
+ * Finally releases the lock via NAME_$UNLOCK_DIR and exits super mode.
  *
  * Parameters:
  *   dir_uid    - UID of parent directory
@@ -34,14 +34,14 @@ void DIR_$OLD_DROP_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     int8_t valid;
 
     /* Validate and parse the leaf name */
-    valid = FUN_00e54414(name, *name_len, parsed_name, &parsed_len);
+    valid = name_$validate_leaf(name, *name_len, parsed_name, &parsed_len);
     if (valid >= 0) {
         *status_ret = status_$naming_invalid_leaf;
         return;
     }
 
     /* Acquire directory lock */
-    FUN_00e54854(dir_uid, &handle, 0x40002, status_ret);
+    NAME_$LOCK_DIR(dir_uid, &handle, 0x40002, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;
@@ -52,7 +52,7 @@ void DIR_$OLD_DROP_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
                  3, NULL, status_ret);
 
     /* Release directory lock */
-    FUN_00e54734(status_ret);
+    NAME_$UNLOCK_DIR(status_ret);
 
     ACL_$EXIT_SUPER();
 }

@@ -14,13 +14,13 @@
  * DIR_$OLD_ADD_LINKU - Legacy add soft/symbolic link
  *
  * Creates a symbolic link entry in a directory. The process is:
- * 1. Validate the leaf name via FUN_00e54414
+ * 1. Validate the leaf name via name_$validate_leaf
  * 2. Map the name to uppercase via MAP_CASE
  * 3. Validate the path via NAME_$VALIDATE
  * 4. Check if this is the root directory (reject if so)
- * 5. Enter super mode via FUN_00e54854
+ * 5. Enter super mode via NAME_$LOCK_DIR
  * 6. Add the link via FUN_00e5545c
- * 7. Release lock via FUN_00e54734
+ * 7. Release lock via NAME_$UNLOCK_DIR
  * 8. Exit super mode via ACL_$EXIT_SUPER
  *
  * Parameters:
@@ -48,7 +48,7 @@ void DIR_$OLD_ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
     uint16_t mapped_len;
 
     /* Validate and parse the leaf name */
-    valid = FUN_00e54414(name, (uint16_t)*name_len, parsed_name, &parsed_len);
+    valid = name_$validate_leaf(name, (uint16_t)*name_len, parsed_name, &parsed_len);
     if (valid >= 0) {
         *status_ret = status_$naming_invalid_leaf;
         return;
@@ -79,7 +79,7 @@ void DIR_$OLD_ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
     }
 
     /* Enter super mode / acquire directory lock */
-    FUN_00e54854(dir_uid, &handle, 0x40002, status_ret);
+    NAME_$LOCK_DIR(dir_uid, &handle, 0x40002, status_ret);
     if (*status_ret != status_$ok) {
         ACL_$EXIT_SUPER();
         return;
@@ -90,7 +90,7 @@ void DIR_$OLD_ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
                  mapped_target, mapped_len, 0, result_buf, status_ret);
 
     /* Release directory lock */
-    FUN_00e54734(&local_status);
+    NAME_$UNLOCK_DIR(&local_status);
     if (local_status != status_$ok) {
         *status_ret = local_status;
     }
