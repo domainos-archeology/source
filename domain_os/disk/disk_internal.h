@@ -152,22 +152,23 @@ int16_t DISK_$PV_MOUNT_INTERNAL(int16_t mount_type, int16_t device_num,
                                  void *pvlabel_info, status_$t *status);
 
 /*
- * FUN_00e3be8a - Get disk queue blocks
+ * disk_$get_qblks_internal - Internal queue block allocation body
  *
- * Internal function for allocating queue blocks for I/O operations.
+ * Pascal module body for DISK_$GET_QBLKS. Allocates queue blocks
+ * from the disk pool using ML_$EXCLUSION for synchronization.
+ * Waits via EC_$WAIT if blocks are unavailable.
+ *
+ * Uses A5 register as Pascal module data pointer (disk module data).
  *
  * Parameters:
- *   vol_idx - Volume index
- *   mode    - Allocation mode
- *   count   - Pointer to count (input/output)
- *   status  - Receives status code
- *
- * Returns:
- *   Pointer to allocated blocks
+ *   count     - Number of queue blocks to allocate
+ *   mode      - Negative for write mode, non-negative for read
+ *   first_out - Output: pointer to head of allocated block list
+ *   last_out  - Output: pointer to tail of allocated block list
  *
  * Original address: 0x00e3be8a
  */
-void *FUN_00e3be8a(int16_t vol_idx, int16_t mode, void *count, status_$t *status);
+void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void *last_out);
 
 /*
  * disk_$rtn_qblks_internal - Return disk queue blocks

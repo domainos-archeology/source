@@ -106,7 +106,7 @@ typedef struct disk_io_req_t {
 } disk_io_req_t;
 
 /* External helper functions */
-extern void FUN_00e3be8a(int16_t count, int8_t mode, int32_t *req_out, uint32_t *param2);
+/* disk_$get_qblks_internal declared in disk/disk_internal.h */
 extern void disk_$rtn_qblks_internal(int16_t count, void *req, uint32_t param);
 extern void FUN_00e3cae0(void *req, uint16_t vol_idx, int16_t op, void *param1, status_$t *status);
 extern void FUN_00e3c9fe(int16_t mask, int32_t *counter1, int32_t *counter2);
@@ -173,7 +173,7 @@ status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t daddr,
                    (*(uint16_t *)((uint8_t *)vol_info + 8) & VOL_INFO_FLAG_CHECKSUM) != 0) ? 0xFF : 0;
 
     /* Allocate I/O request structure */
-    FUN_00e3be8a(1, 0xFF, &req_ptr, &req_param);
+    disk_$get_qblks_internal(1, 0xFF, &req_ptr, &req_param);
     req = (disk_io_req_t *)req_ptr;
 
     /* Copy block header info to request */

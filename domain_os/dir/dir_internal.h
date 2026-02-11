@@ -284,11 +284,16 @@ void NAME_$OLD_DELETE_ENTRYU(uid_t *dir_uid, char *name, uint16_t name_len,
 void FUN_00e57f74(uid_t *dir_uid, char *name, uint16_t name_len,
                   void *entry_ret, status_$t *status_ret);
 
-/* FUN_00e57ce0 - Non-root directory entry lookup
+/* name_$old_get_entry_nonroot - Non-root directory entry lookup
+ *
+ * Resolves a directory entry by name for non-root directories.
+ * Tries remote nodes via hint table first, falls back to local
+ * directory search using dir_$old_find_entry.
+ *
  * Original address: 0x00E57CE0
  */
-void FUN_00e57ce0(uid_t *dir_uid, char *name, uint16_t name_len,
-                  void *entry_ret, status_$t *status_ret);
+void name_$old_get_entry_nonroot(uid_t *dir_uid, char *name, uint16_t name_len,
+                                 void *entry_ret, status_$t *status_ret);
 
 /* FUN_00e56682 - Root add entry helper
  * Original address: 0x00E56682
@@ -520,13 +525,18 @@ void DIR_$OLD_INIT(void);
  */
 void DIR_$OLD_CLEANUP(void);
 
-/* FUN_00e579c0 - Internal directory read implementation
+/* dir_$old_read_entries - Internal directory read implementation
+ *
+ * Reads directory entries into a caller-provided buffer.
+ * Iterates through inline entries and overflow chain entries,
+ * unmaps case on names, and copies entry data (type, UID, name).
  * Called by DIR_$OLD_DIR_READU after root UID check.
+ *
  * Original address: 0x00E579C0
  */
-void FUN_00e579c0(uid_t *uid, void *param_2, uint32_t param_3,
-                  uint32_t param_4, void *param_5, void *param_6,
-                  status_$t *status_ret);
+void dir_$old_read_entries(uid_t *uid, void *param_2, uint32_t param_3,
+                           uint32_t param_4, void *param_5, void *param_6,
+                           status_$t *status_ret);
 
 /*
  * ============================================================================

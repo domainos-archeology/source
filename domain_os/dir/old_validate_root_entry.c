@@ -14,7 +14,7 @@
  * DIR_$OLD_VALIDATE_ROOT_ENTRY - Legacy validate root directory entry
  *
  * The process is:
- * 1. Look up the entry locally via FUN_00e57ce0
+ * 1. Look up the entry locally via name_$old_get_entry_nonroot
  * 2. Look up the entry from the naming server via REM_NAME_$GET_ENTRY
  * 3. Compare the two entries
  * 4. If they differ:
@@ -41,7 +41,7 @@ void DIR_$OLD_VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
     root_uid.low = NAME_$ROOT_UID.low;
 
     /* Look up entry locally */
-    FUN_00e57ce0(&root_uid, name, *name_len, local_entry, status_ret);
+    name_$old_get_entry_nonroot(&root_uid, name, *name_len, local_entry, status_ret);
     if ((int16_t)*status_ret != 0) {
         return;
     }

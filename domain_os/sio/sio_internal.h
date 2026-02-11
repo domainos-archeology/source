@@ -11,6 +11,7 @@
 #include "ml/ml.h"
 #include "sio/sio.h"
 #include "term/term.h"
+#include "tty/tty.h"
 #include "time/time.h"
 #include "math/math.h"
 
@@ -61,17 +62,20 @@ extern time_queue_elem_t SIO_DELAY_RESTART_QUEUE_ELEM;
 uint16_t SIO_DELAY_RESTART(sio_desc_t **args);
 
 /*
- * FUN_00e67e86 - Set break state
+ * sio_$set_break - Set or clear break state on serial line
  *
- * Internal function to set or clear break state on the serial line.
+ * Under spin lock, modifies the line status flags at offset 0x75:
+ *   enable < 0: clear bit 0, set bit 3 (break active)
+ *   enable >= 0: clear bit 3 (break inactive)
+ * Then calls through the output_start vtable entry (offset 0x48).
  *
  * Parameters:
- *   desc - SIO descriptor
- *   enable - Enable break (non-zero) or disable (zero)
+ *   desc   - SIO descriptor
+ *   enable - Negative to enable break, non-negative to disable
  *
  * Original address: 0x00e67e86
  */
-void FUN_00e67e86(sio_desc_t *desc, uint8_t enable);
+void sio_$set_break(sio_desc_t *desc, uint8_t enable);
 
 /*
  * ============================================================================
@@ -107,19 +111,6 @@ extern int16_t PROC1_$AS_ID;
  * From TTY module
  */
 
-/*
- * TTY_$I_ENABLE_CRASH_FUNC - Enable crash handler on TTY
- *
- * Enables special key handling for crash/break on console.
- *
- * Parameters:
- *   tty_desc - TTY descriptor
- *   key_code - Key code for crash (0x1B = ESC typically)
- *   flags - Flags (0xFF typically)
- *
- * Original address: 0x00e67292
- */
-extern void TTY_$I_ENABLE_CRASH_FUNC(void *tty_desc, uint16_t key_code,
-                                     uint8_t flags);
+/* TTY_$I_ENABLE_CRASH_FUNC - declared in tty/tty.h */
 
 #endif /* SIO_INTERNAL_H */

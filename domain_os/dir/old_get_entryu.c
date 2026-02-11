@@ -15,7 +15,7 @@
  *
  * Makes a local copy of dir_uid, then compares against NAME_$ROOT_UID.
  * If the directory is root, calls FUN_00e57f74 (root lookup).
- * Otherwise calls FUN_00e57ce0 (non-root lookup).
+ * Otherwise calls name_$old_get_entry_nonroot (non-root lookup).
  *
  * Parameters:
  *   dir_uid    - UID of directory to search
@@ -40,6 +40,6 @@ void DIR_$OLD_GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
         FUN_00e57f74(&local_uid, name, *name_len, entry_ret, status_ret);
     } else {
         /* Non-root directory - use standard lookup */
-        FUN_00e57ce0(&local_uid, name, *name_len, entry_ret, status_ret);
+        name_$old_get_entry_nonroot(&local_uid, name, *name_len, entry_ret, status_ret);
     }
 }

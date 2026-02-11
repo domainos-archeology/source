@@ -88,7 +88,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                         *(char *)((uintptr_t)MMAPE_BASE + pmape_offset) != '\0') {
                         /* Flush any pending batch */
                         if (batch_count > 0) {
-                            FUN_00e1360c();
+                            pmap_$flush_write_batch();
                         }
                         *status = 0x50007;  /* Error: invalid page */
                         goto done;
@@ -131,7 +131,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
                             if (is_remote < 0) {
                                 /* Remote write - synchronous */
-                                FUN_00e12e5e(vpn, status, -((flags & 4) == 0));
+                                pmap_$write_page(vpn, status, -((flags & 4) == 0));
                                 if (*status != 0) goto done;
                                 FUN_00e1359c(segmap_ptr, vpn, page_idx);
                             } else {
@@ -142,7 +142,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
                                 /* Flush batch if full (16 pages) */
                                 if (batch_count == 0x10) {
-                                    FUN_00e1360c();
+                                    pmap_$flush_write_batch();
                                     if (*status != 0) goto done;
                                 }
                             }
@@ -163,7 +163,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
         /* Flush any remaining batch */
         if (batch_count > 0) {
-            FUN_00e1360c();
+            pmap_$flush_write_batch();
             if (*status != 0) break;
         }
 

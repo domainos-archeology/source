@@ -21,6 +21,7 @@
 #include "misc/misc.h"
 #include "network/network.h"
 #include "file/file.h"
+#include "acl/acl.h"
 
 /*
  * ============================================================================
@@ -165,10 +166,9 @@ void TPAD_$INIT(void);
 void EC2_$INIT_S(void);
 void *EC2_$REGISTER_EC1(ec_$eventcount_t *ec, status_$t *status);
 
-/* Security */
+/* Security - ACL functions declared in acl/acl.h */
 void ACL_$INIT(void);
 void ACL_$ENTER_SUPER(void);
-void ACL_$GET_RE_SIDS(void *buf, uid_t *uid, status_$t *status);
 
 /* AST - AST_$INIT, AST_$ACTIVATE_AOTE_CANNED, AST_$PMAP_ASSOC declared in ast/ast.h */
 
@@ -247,11 +247,11 @@ void PRINT_BUILD_TIME(void);
  * ============================================================================
  */
 
-int8_t FUN_00e29138(void *type, void *addr, void *result);
+int8_t io_$probe(void *type, void *addr, void *result);
 void FUN_00e2f1d4(uint16_t param);
 void FUN_00e3366c(short cmd, uint32_t param);  /* Diskless helper */
 void OS_$PRINT_INIT_ERROR(const char *msg);            /* Display message */
 void os_$free_va_page(uint32_t vaddr);          /* Free page at virtual address */
-void FUN_00e6d254(void *param);                /* Final init */
+void os_$start_proc2(void *param);             /* Free init pages and start proc2 */
 
 #endif /* OS_INTERNAL_H */

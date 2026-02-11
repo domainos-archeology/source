@@ -116,7 +116,7 @@ void PMAP_$PURIFIER_R(void)
                     }
 
                     /* Write page to remote storage */
-                    FUN_00e12e5e(vpn, status, 0xFF);
+                    pmap_$write_page(vpn, status, 0xFF);
 
                     if (status[0] == 0) {
                         /* Write succeeded */

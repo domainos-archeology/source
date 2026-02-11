@@ -35,7 +35,7 @@ status_$t FLP_$CINIT(void *ctlr_info)
     void *jump_table_ptr[2];
 
     /* Probe for controller hardware */
-    found = FUN_00e29138(DAT_00e3e10e,
+    found = io_$probe(DAT_00e3e10e,
                          (uint8_t *)ctlr_info + 0x34,
                          probe_buffer);
 

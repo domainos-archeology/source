@@ -2,7 +2,7 @@
  * DIR_$OLD_DIR_READU - Legacy directory read
  *
  * Validates that the directory is not the canned replicated root
- * (which would be a protocol error), then delegates to FUN_00e579c0
+ * (which would be a protocol error), then delegates to dir_$old_read_entries
  * for the actual read operation.
  *
  * Original address: 0x00E57C80
@@ -17,7 +17,7 @@
  * If the target directory is the canned replicated root, crashes
  * the system (this should never happen in the OLD protocol path).
  * Otherwise, dereferences param_3 and param_4 and passes all
- * parameters to FUN_00e579c0.
+ * parameters to dir_$old_read_entries.
  *
  * Assembly analysis:
  *   param_1 (0x08,A6): uid_t* uid
@@ -49,6 +49,6 @@ void DIR_$OLD_DIR_READU(uid_t *uid, void *param_2, void *param_3,
 
     /* Delegate to internal read implementation
      * Note: param_3 and param_4 are dereferenced before passing */
-    FUN_00e579c0(uid, param_2, *(uint32_t *)param_3, *(uint32_t *)param_4,
+    dir_$old_read_entries(uid, param_2, *(uint32_t *)param_3, *(uint32_t *)param_4,
                  param_5, param_6, status_ret);
 }

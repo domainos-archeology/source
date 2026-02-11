@@ -141,7 +141,7 @@ extern void *PTR_TTY_$I_RCV_00e2ca08;
  * External initialization functions (for TERM_$INIT)
  */
 extern void OS_TERM_INIT(void *, void *, void **, void *, void **, void *);
-extern void FUN_00e32b26(void *, void *, void **, void *);
+extern void SIO_$INIT_LINE(void *, void *, void **, void *);
 extern void FUN_00e32bb8(void *, void *, void **, void **);
 extern void FUN_00e32ab2(void *, void *, void *, void **, void **, void *, void **);
 extern void FUN_00e32b76(void *, short);

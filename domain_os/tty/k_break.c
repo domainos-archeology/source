@@ -35,7 +35,7 @@ void TTY_$K_SET_INPUT_BREAK_MODE(short *line_ptr, void *mode_ptr, status_$t *sta
 
     if (mode->mode == 0) {
         // Raw mode: enable break character processing
-        FUN_00e6720e(tty, DAT_00e82454, true);
+        tty_$i_set_funcs(tty, DAT_00e82454, true);
 
         // If crash char is set, make it trigger crash
         if (tty->crash_char != 0) {
@@ -43,7 +43,7 @@ void TTY_$K_SET_INPUT_BREAK_MODE(short *line_ptr, void *mode_ptr, status_$t *sta
         }
     } else {
         // Line mode: disable break character processing
-        FUN_00e6720e(tty, DAT_00e82454, false);
+        tty_$i_set_funcs(tty, DAT_00e82454, false);
 
         // If crash char is set, make it a normal character
         if (tty->crash_char != 0) {

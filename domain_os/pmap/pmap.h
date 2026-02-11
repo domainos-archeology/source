@@ -75,9 +75,9 @@ extern int32_t LOG_$UPDATE(void);
 /*
  * Internal helper functions
  */
-extern void FUN_00e12e5e(uint32_t ppn, status_$t *status, int8_t flags);
+extern void pmap_$write_page(uint32_t ppn, status_$t *status, int8_t flags);
 extern void FUN_00e1359c(uint16_t *segmap, uint32_t ppn, uint16_t page);
-extern void FUN_00e1360c(void);
+extern void pmap_$flush_write_batch(void);
 
 /*
  * Error strings

@@ -369,7 +369,7 @@ wait_and_continue:
                     DISK_$DO_CHKSUM = 0;
                 }
 
-                FUN_00e12e5e(log_vpn, &status, 0);
+                pmap_$write_page(log_vpn, &status, 0);
 
                 if (NETWORK_$DISKLESS >= 0) {
                     DISK_$DO_CHKSUM = saved_chksum;

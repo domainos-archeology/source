@@ -68,10 +68,16 @@ extern uint32_t DAT_00e1416a;   /* Short wait time */
  */
 
 /*
- * FUN_00e1360c - Batch write helper
+ * pmap_$flush_write_batch - Batch write dirty pages to disk
+ *
+ * Nested Pascal procedure that accesses parent frame.
+ * Unlocks lock 14, allocates disk queue blocks, fills them
+ * with write requests, calls DISK_$WRITE_MULTI, processes
+ * results, and advances AST_$PMAP_IN_TRANS_EC.
+ *
  * Original address: 0x00e1360c
  */
-void FUN_00e1360c(void);
+void pmap_$flush_write_batch(void);
 
 /*
  * FUN_00e1359c - Segment map helper
@@ -80,10 +86,16 @@ void FUN_00e1360c(void);
 void FUN_00e1359c(uint16_t *segmap_entry, uint32_t vpn, uint16_t page_idx);
 
 /*
- * FUN_00e12e5e - Page flush helper
+ * pmap_$write_page - Write a single page to disk or network
+ *
+ * Handles writing a page to either local disk or remote network
+ * node depending on whether the page belongs to a network-mapped
+ * object. Manages checksums, logging, error handling, and
+ * page map invalidation on failure.
+ *
  * Original address: 0x00e12e5e
  */
-void FUN_00e12e5e(uint32_t vpn, status_$t *status, int8_t sync_flag);
+void pmap_$write_page(uint32_t vpn, status_$t *status, int8_t sync_flag);
 
 /*
  * FUN_00e12d38 - Cleanup helper

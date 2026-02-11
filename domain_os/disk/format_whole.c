@@ -64,7 +64,7 @@ void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
     }
 
     /* Allocate I/O request buffer */
-    FUN_00e3be8a(1, 0, &buffer, &buffer_param);
+    disk_$get_qblks_internal(1, 0, &buffer, &buffer_param);
 
     /* Get event counters from process table */
     ec1 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1_$CURRENT * 0x1c)) + 1;

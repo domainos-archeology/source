@@ -26,7 +26,7 @@
  *
  * Helper functions called:
  *   - OS_TERM_INIT (0x00e32a60) - Initialize OS terminal
- *   - FUN_00e32b26 - Unknown init function
+ *   - SIO_$INIT_LINE - Unknown init function
  *   - FUN_00e32bb8 - Unknown init function
  *   - FUN_00e32ab2 - Unknown init function
  *   - FUN_00e32b76 - Unknown init function (sets port type?)
@@ -60,7 +60,7 @@
 /* External helper function declarations - these need further analysis */
 extern void OS_TERM_INIT(void *param1, void *param2, void **param3,
                          void *param4, void **param5, void *param6);
-extern void FUN_00e32b26(void *param1, void *param2, void **param3, void *param4);
+extern void SIO_$INIT_LINE(void *param1, void *param2, void **param3, void *param4);
 extern void FUN_00e32bb8(void *param1, void *param2, void **param3, void **param4);
 extern void FUN_00e32ab2(void *param1, void *param2, void *param3, void **param4,
                          void **param5, void *param6, uint32_t param7);
@@ -101,7 +101,7 @@ void SIO_$INIT(int16_t port_num, uint32_t param2, uint32_t param3,
         /* TODO: Console-specific initialization
          * The decompiled code shows calls to:
          * - OS_TERM_INIT with console-specific parameters
-         * - FUN_00e32b26 for additional setup
+         * - SIO_$INIT_LINE for additional setup
          * - FUN_00e32bb8 for more configuration
          * - FUN_00e32ab2 for handler registration
          * - FUN_00e32b76 with port type 2 (console)
@@ -116,7 +116,7 @@ void SIO_$INIT(int16_t port_num, uint32_t param2, uint32_t param3,
          */
 
         /* TODO: Generic port initialization
-         * - FUN_00e32b26 setup
+         * - SIO_$INIT_LINE setup
          * - FUN_00e32ab2 handler registration
          * - FUN_00e32b76 with port type 0 (serial)
          */

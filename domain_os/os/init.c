@@ -329,7 +329,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     // Install display ASTE if needed
     {
         short result;
-        if (FUN_00e29138((void *)0xd2, (void *)0x4aa0, &result) < 0) {
+        if (io_$probe((void *)0xd2, (void *)0x4aa0, &result) < 0) {
             OS_$INSTALL_DISPLAY_ASTE((void *)&DISPLAY1_$UID, NULL, NULL, NULL);
         }
     }
@@ -499,5 +499,5 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     PROC1_$INHIBIT_END();
 
     // Call final init function
-    FUN_00e6d254(&AS_$STACK_HIGH);
+    os_$start_proc2(&AS_$STACK_HIGH);
 }

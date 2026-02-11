@@ -13,7 +13,7 @@
 #include "win.h"
 
 /* Controller type identifier */
-static uint16_t WIN_TYPE = 0;  /* Set by FUN_00e29138 */
+static uint16_t WIN_TYPE = 0;  /* Set by io_$probe */
 
 status_$t WIN_$CINIT(void *controller)
 {
@@ -24,7 +24,7 @@ status_$t WIN_$CINIT(void *controller)
     void *jump_table_ptr;
 
     /* Probe for controller presence */
-    probe_result = FUN_00e29138(&WIN_TYPE, ctrl + 0x34, probe_data);
+    probe_result = io_$probe(&WIN_TYPE, ctrl + 0x34, probe_data);
 
     if (probe_result < 0) {
         /* Controller found - initialize data area */

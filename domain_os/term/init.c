@@ -35,7 +35,7 @@ void TERM_$INIT(short *param1, short *param2) {
     OS_TERM_INIT(DAT_00e2db58, DTTE, (void **)&local_vars[3],
                  &PTR_TTY_$I_RCV_00e2cab0, (void **)&local_vars[0], DAT_00e2caa0);
 
-    FUN_00e32b26(DAT_00e2cb48, local_vars[2], (void **)&local_vars[1], DAT_00e2ca60);
+    SIO_$INIT_LINE(DAT_00e2cb48, local_vars[2], (void **)&local_vars[1], DAT_00e2ca60);
 
     local_vars[3] = DAT_00e2cb48;
     local_vars[4] = DAT_00e2cf1a;
@@ -57,7 +57,7 @@ void TERM_$INIT(short *param1, short *param2) {
     // Initialize serial line 1
     local_vars[2] = DAT_00e2dcc8;
     local_vars[0] = DAT_00e2da58;
-    FUN_00e32b26(DAT_00e2d024, DAT_00e2dcc8, (void **)&local_vars[0], DAT_00e2ca30);
+    SIO_$INIT_LINE(DAT_00e2d024, DAT_00e2dcc8, (void **)&local_vars[0], DAT_00e2ca30);
 
     local_vars[3] = DAT_00e2d024;
     local_vars[6] = DAT_00e2dc58;
@@ -71,7 +71,7 @@ void TERM_$INIT(short *param1, short *param2) {
     // Initialize serial line 2
     local_vars[2] = DAT_00e2dd00;
     local_vars[0] = DAT_00e2dad0;
-    FUN_00e32b26(DAT_00e2d500, DAT_00e2dd00, (void **)&local_vars[0], DAT_00e2ca30);
+    SIO_$INIT_LINE(DAT_00e2d500, DAT_00e2dd00, (void **)&local_vars[0], DAT_00e2ca30);
 
     local_vars[3] = DAT_00e2d500;
     local_vars[4] = DAT_00e2dc74;

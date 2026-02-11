@@ -21,12 +21,8 @@ peb_fp_state_t PEB_$WIRED_DATA_START[PEB_MAX_PROCESSES];
 /* PEB status register shadow */
 uint32_t PEB_$STATUS_REG;
 
-/*
- * External function for probing PEB hardware
- * Original address: 0x00E29138
- * Returns < 0 if hardware found, >= 0 if not found
- */
-extern int8_t FUN_00e29138(const void *probe_data, const void **hw_addr, void *result);
+/* io_$probe declared in prom/prom.h */
+#include "prom/prom.h"
 
 /*
  * Probe data and hardware address pointer for PEB detection
@@ -104,7 +100,7 @@ void PEB_$INIT(void)
 
         /* Note: The probe function checks if hardware responds at the given address */
         /* Parameters appear to be: probe data, hw address pointer, result buffer */
-        found = FUN_00e29138((const void *)0xE31DCE, &PTR_PEB_CTL_00e31dd0, probe_result);
+        found = io_$probe((const void *)0xE31DCE, &PTR_PEB_CTL_00e31dd0, probe_result);
 
         if (found < 0) {
             /* PEB hardware found - install interrupt handler and WCS mapping */

@@ -111,6 +111,6 @@ extern uint32_t DAT_00e2b0d4;   /* Secondary event counter */
  */
 
 /* Hardware probe function */
-int8_t FUN_00e29138(void *signature, void *hw_addr, void *buffer);
+int8_t io_$probe(void *signature, void *hw_addr, void *buffer);
 
 #endif /* FLP_INTERNAL_H */

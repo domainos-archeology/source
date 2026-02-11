@@ -20,9 +20,11 @@ extern void *PROM_$QUIET_RET_ADDR;
 extern uint32_t PROM_$SAU_AND_AUX;
 
 /*
- * FUN_00e29138 - Hardware probe function
+ * io_$probe - Hardware probe function
  *
  * Probes for hardware controller presence at a given address.
+ * Sets bus error handler, disables interrupts, clears MMU status,
+ * and dispatches through a jump table based on controller type.
  *
  * Parameters:
  *   type   - Pointer to controller type variable
@@ -34,6 +36,6 @@ extern uint32_t PROM_$SAU_AND_AUX;
  *
  * Original address: 0x00e29138
  */
-int8_t FUN_00e29138(void *type, void *addr, void *result);
+int8_t io_$probe(void *type, void *addr, void *result);
 
 #endif /* PROM_H */

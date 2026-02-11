@@ -24,14 +24,7 @@ extern ec_$eventcount_t FIM_$QUIT_EC[];   /* At 0xe22002 */
 extern int32_t FIM_$QUIT_VALUE[];         /* At 0xe222ba */
 extern int16_t PROC1_$AS_ID;              /* At 0xe2060a */
 
-/*
- * FUN_00e67e86 - Set break state (internal)
- *
- * Enables or disables break on the serial line.
- * When enable is 0xFF, break is enabled.
- * When enable is 0x00, break is disabled.
- */
-extern void FUN_00e67e86(sio_desc_t *desc, uint8_t enable);
+/* sio_$set_break declared in sio/sio_internal.h */
 
 void SIO_$K_TIMED_BREAK(int16_t *line_ptr, uint16_t *duration_ptr,
                         status_$t *status_ret)
@@ -49,7 +42,7 @@ void SIO_$K_TIMED_BREAK(int16_t *line_ptr, uint16_t *duration_ptr,
     }
 
     /* Enable break (0xFF) */
-    FUN_00e67e86(desc, 0xFF);
+    sio_$set_break(desc, 0xFF);
     if (*status_ret != status_$ok) {
         return;
     }
@@ -92,5 +85,5 @@ void SIO_$K_TIMED_BREAK(int16_t *line_ptr, uint16_t *duration_ptr,
     }
 
     /* Disable break (0x00) */
-    FUN_00e67e86(desc, 0x00);
+    sio_$set_break(desc, 0x00);
 }
