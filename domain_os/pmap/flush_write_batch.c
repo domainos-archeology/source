@@ -11,11 +11,11 @@
  * 5. If write fails: CRASH_SYSTEM
  * 6. Re-lock lock 14
  * 7. Process results for each written page:
- *    a. Call FUN_00e12d84 to update page map state
+ *    a. Call pmap_$write_complete to update page map state
  *    b. If write succeeded (status == 0):
  *       - Increment write counter for current process
  *       - Log via NETLOG if enabled
- *       - Call FUN_00e1359c to update segment map
+ *       - Call pmap_$update_seg_map to update segment map
  *    c. If write returned error (!= 0 and != -1):
  *       - Store error in parent frame's error output
  * 8. Advance AST_$PMAP_IN_TRANS_EC

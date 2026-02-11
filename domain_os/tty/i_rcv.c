@@ -28,7 +28,7 @@ static void tty_kill_line(tty_desc_t *tty);
 static void tty_reprint_line(tty_desc_t *tty);
 
 /* External helper functions from other TTY modules */
-extern void FUN_00e1af0a(uint8_t ch, void *ptr);
+/* tty_$i_buf_insert is declared in tty_internal.h */
 /* TTY_$I_ECHO_CHAR is declared in tty_internal.h */
 /* TTY_$I_XMIT_CHAR is declared in tty_internal.h */
 extern void FUN_00e1b8b0(tty_desc_t *tty, uint8_t ch);
@@ -67,7 +67,7 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
     } else {
         /* Check for 0xFF with mark parity enabled */
         if (ch == 0xff && (*(uint16_t *)((char *)tty + 0x16) & 0x1000) != 0) {
-            FUN_00e1af0a(0xff, &tty->input_read);
+            tty_$i_buf_insert(0xff, &tty->input_read);
         }
     }
 
@@ -266,7 +266,7 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
             if (tty->input_tail == tty->input_head) {
                 *(uint16_t *)((char *)tty + 0x56) = *(uint16_t *)((char *)tty + 0x58);
             }
-            FUN_00e1af0a(ch, &tty->input_read);
+            tty_$i_buf_insert(ch, &tty->input_read);
             if ((*(uint8_t *)((char *)tty + 0x17) & 0x01) != 0) {
                 TTY_$I_XMIT_CHAR(tty, (ch << 8) | (uint8_t)(uintptr_t)&tty->input_read);
             }

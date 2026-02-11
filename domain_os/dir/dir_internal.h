@@ -286,11 +286,18 @@ void NAME_$OLD_DELETE_ENTRYU(uid_t *dir_uid, char *name, uint16_t name_len,
                              uint8_t flag1, uint8_t flag2, uint8_t flag3,
                              uint8_t *result_buf, status_$t *status_ret);
 
-/* FUN_00e57f74 - Root directory entry lookup
+/* name_$old_get_root_entry - Root directory entry lookup
+ *
+ * Resolves a name in the root directory. First tries local lookup
+ * via name_$old_get_entry_nonroot. If that fails and the directory
+ * is NAME_$ROOT_UID, queries remote nodes via REM_NAME_$GET_ENTRY,
+ * then caches the result via name_$old_add_entry.
+ *
  * Original address: 0x00E57F74
+ * Size: 226 bytes
  */
-void FUN_00e57f74(uid_t *dir_uid, char *name, uint16_t name_len,
-                  void *entry_ret, status_$t *status_ret);
+void name_$old_get_root_entry(uid_t *dir_uid, char *name, uint16_t name_len,
+                              void *entry_ret, status_$t *status_ret);
 
 /* name_$old_get_entry_nonroot - Non-root directory entry lookup
  *
@@ -334,12 +341,20 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
  */
 void NAME_$UNLOCK_DIR(status_$t *status_ret);
 
-/* FUN_00e5569c - Perform directory entry operation (drop link, etc.)
+/* dir_$old_unlink_entry - Find and remove directory entry by name
+ *
+ * Finds the named entry via dir_$old_find_entry, checks its type
+ * (0=file, 1=hard link, 3=soft link), copies UID to result (or
+ * UID_$NIL for type 0/3), then removes via dir_$old_delete_entry.
+ * Type 3 with op_type=1 returns invalid_link_operation error.
+ * Type 1 with op_type=3 sets naming_not_a_link but still proceeds.
+ *
  * Original address: 0x00E5569C
+ * Size: 200 bytes
  */
-void FUN_00e5569c(uid_t *dir_uid, uint32_t handle, uint8_t *name,
-                  uint16_t name_len, uint16_t op_type,
-                  void *result, status_$t *status_ret);
+void dir_$old_unlink_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
+                           uint16_t name_len, uint16_t op_type,
+                           void *result, status_$t *status_ret);
 
 /* dir_$old_find_entry - Find entry in directory by name
  *
@@ -366,11 +381,19 @@ int8_t dir_$old_find_entry(uint32_t handle, uint8_t *name, uint16_t name_len,
  */
 uint16_t dir_$old_hash_name(uint8_t *name, uint16_t name_len, uint16_t num_buckets);
 
-/* FUN_00e555dc - Update directory entry after rename
+/* dir_$old_delete_entry - Delete/clear a directory entry
+ *
+ * Removes an entry from the directory buffer. Handles both inline
+ * entries (stride 0x30, chain_level=0) and overflow entries
+ * (bucket stride 0x96, chain_level>0). Clears the entry type and
+ * active flag, decrements the total entry count, and frees any
+ * overflow link data blocks (for type 3/soft link entries).
+ *
  * Original address: 0x00E555DC
+ * Size: 192 bytes
  */
-void FUN_00e555dc(uint32_t handle, uint16_t param2, uint16_t param3,
-                  uint16_t hash);
+void dir_$old_delete_entry(uint32_t handle, uint16_t slot_idx,
+                           uint16_t chain_level, uint16_t hash);
 
 /* dir_$old_add_entry - Add entry to directory buffer
  *
@@ -402,24 +425,71 @@ void dir_$old_add_entry_ext(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                             uint32_t extra, uint8_t replace_flag,
                             uint8_t *result, status_$t *status_ret);
 
-/* FUN_00e5545c - Add link entry helper
+/* dir_$old_add_link_entry - Add symbolic link entry to directory
+ *
+ * Allocates overflow blocks for the link target data (up to 0x90
+ * bytes per block, 2 blocks max for targets > 0x90 bytes), copies
+ * the target text into the overflow blocks, then adds the entry
+ * via dir_$old_add_entry with type 3. On failure, frees allocated blocks.
+ *
  * Original address: 0x00E5545C
+ * Size: 384 bytes
  */
-void FUN_00e5545c(uid_t *dir_uid, uint32_t handle, uint8_t *name,
-                  uint16_t name_len, void *target, uint16_t target_len,
-                  uint8_t flags, uint8_t *result, status_$t *status_ret);
+void dir_$old_add_link_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
+                             uint16_t name_len, void *target, uint16_t target_len,
+                             uint8_t flags, uint8_t *result, status_$t *status_ret);
 
-/* FUN_00e55764 - Read link data from entry
+/* dir_$old_read_link_data - Read link target data from overflow blocks
+ *
+ * Reads symbolic link target data from overflow blocks referenced
+ * by the link descriptor. The descriptor contains:
+ *   - uint16_t total_len (total link data length)
+ *   - uint16_t block_idx[3] (overflow block indices)
+ * Copies up to 0x90 bytes per block into the output buffer.
+ * The 5th parameter (status_ret) is passed by callers but unused.
+ *
  * Original address: 0x00E55764
+ * Size: 112 bytes
  */
-void FUN_00e55764(uint32_t handle, int32_t entry, uint8_t *buf,
-                  uint16_t *buf_len, status_$t *status_ret);
+void dir_$old_read_link_data(uint32_t handle, void *link_desc,
+                             uint8_t *buf, uint16_t *buf_len);
 
-/* FUN_00e54546 - Create directory object
+/* dir_$old_create_obj - Create directory storage object
+ *
+ * Creates the underlying file for a new directory:
+ * 1. FILE_$PRIV_CREATE - create the file
+ * 2. FILE_$PRIV_LOCK - lock the new file
+ * 3. MST_$MAPS - map the file into memory
+ * 4. dir_$old_init_buf - initialize the directory buffer
+ * 5. Set up default ACLs (from parent or global defaults)
+ * 6. AST_$COND_FLUSH - flush changes
+ * On failure: truncates/deletes the created file, sets error bit.
+ *
  * Original address: 0x00E54546
+ * Size: 488 bytes
  */
-void FUN_00e54546(uid_t *parent_uid, uint32_t handle, uint16_t type,
-                  uid_t *new_dir_uid, status_$t *status_ret);
+void dir_$old_create_obj(uid_t *parent_uid, uint32_t handle, uint16_t type,
+                         uid_t *new_dir_uid, status_$t *status_ret);
+
+/* FUN_00e5518c - Release/free overflow slot in directory buffer
+ *
+ * Manages overflow slot lifecycle. Called to:
+ * - Remove entries from hash chains (with hash param)
+ * - Free overflow data blocks (with param2=0)
+ *
+ * Original address: 0x00E5518C
+ */
+void FUN_00e5518c(uint32_t handle, uint16_t param2, uint16_t slot_idx);
+
+/* FUN_00e54e10 - Allocate overflow slot from free list
+ * Original address: 0x00E54E10
+ */
+uint16_t FUN_00e54e10(uint32_t handle);
+
+/* FUN_00e54e62 - Allocate overflow slot with hash hint
+ * Original address: 0x00E54E62
+ */
+uint16_t FUN_00e54e62(uint32_t handle, uint16_t hash_hint);
 
 /* dir_$old_init_buf - Initialize directory buffer
  *
@@ -674,6 +744,9 @@ extern uint32_t DAT_00e7ffdc; /* First handle slot (0xe7fd24 + 0x2b8) */
 #endif
 #ifndef status_$naming_entry_stale
 #define status_$naming_entry_stale                  0x000E0022
+#endif
+#ifndef status_$naming_not_a_link
+#define status_$naming_not_a_link                    0x000E0006
 #endif
 #ifndef status_$naming_invalid_link_operation
 #define status_$naming_invalid_link_operation        0x000E000A

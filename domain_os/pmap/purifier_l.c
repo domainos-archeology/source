@@ -201,7 +201,7 @@ void PMAP_$PURIFIER_L(void)
                     for (i = 0; i < page_count; i++) {
                         uint32_t vpn = *(uint32_t *)(qblk_ptr + 0x14);
 
-                        FUN_00e12d84((int16_t)vpn, (int16_t)(qblk_ptr + 0x0C));
+                        pmap_$write_complete((int32_t)vpn, (void *)(uintptr_t)(qblk_ptr + 0x0C));
 
                         if (*(int32_t *)(qblk_ptr + 0x0C) == 0) {
                             /* Write succeeded */

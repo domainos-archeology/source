@@ -79,11 +79,20 @@ extern uint32_t DAT_00e1416a;   /* Short wait time */
  */
 void pmap_$flush_write_batch(void);
 
-/*
- * FUN_00e1359c - Segment map helper
+/* pmap_$update_seg_map - Update segment map after page write
+ *
+ * Checks ASTE flag at offset 0x15 bit 0. If not set, calls
+ * MMAP_$AVAIL. If set, calls AST_$INVALIDATE_PAGE and optionally
+ * logs via NETLOG_$LOG_IT.
+ *
+ * NOTE: Uses hidden A1 register parameter (ASTE pointer) from
+ * the m68k calling convention. On m68k, A1 is set by the caller
+ * and read via movea.l A1,A2 at function entry.
+ *
  * Original address: 0x00e1359c
+ * Size: 112 bytes
  */
-void FUN_00e1359c(uint16_t *segmap_entry, uint32_t vpn, uint16_t page_idx);
+void pmap_$update_seg_map(uint16_t *segmap_entry, uint32_t vpn, uint16_t page_idx);
 
 /*
  * pmap_$write_page - Write a single page to disk or network
@@ -109,11 +118,19 @@ void FUN_00e12d38(void);
  */
 void FUN_00e1327e(int *pages, int qblk, uint16_t count);
 
-/*
- * FUN_00e12d84 - VPN/offset helper
+/* pmap_$write_complete - Page write I/O completion handler
+ *
+ * Handles completion of a page write operation. Indexes into the
+ * page frame table at 0xEB4800 (offset = vpn * 0x10). On success
+ * (status 0 or write-protected): clears status, updates dirty flags,
+ * clears physical map in-transit bit, updates page state. On error:
+ * sets error bit, marks page, updates hardware PTE, calls MMAP_$AVAIL,
+ * advances AST_$PMAP_IN_TRANS_EC.
+ *
  * Original address: 0x00e12d84
+ * Size: 218 bytes
  */
-void FUN_00e12d84(int16_t vpn, int16_t offset);
+void pmap_$write_complete(int32_t vpn, void *status_ptr);
 
 /*
  * FUN_00e2f880 - Unknown helper

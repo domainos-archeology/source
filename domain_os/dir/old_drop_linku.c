@@ -15,7 +15,7 @@
  *
  * Validates the leaf name via name_$validate_leaf. If valid,
  * acquires the directory lock via NAME_$LOCK_DIR with flags=0x40002,
- * then calls FUN_00e5569c with op_type=3 to drop the link entry.
+ * then calls dir_$old_unlink_entry with op_type=3 to drop the link entry.
  * Finally releases the lock via NAME_$UNLOCK_DIR and exits super mode.
  *
  * Parameters:
@@ -48,7 +48,7 @@ void DIR_$OLD_DROP_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     }
 
     /* Perform the drop link operation (op_type=3) */
-    FUN_00e5569c(dir_uid, handle, parsed_name, parsed_len,
+    dir_$old_unlink_entry(dir_uid, handle, parsed_name, parsed_len,
                  3, NULL, status_ret);
 
     /* Release directory lock */

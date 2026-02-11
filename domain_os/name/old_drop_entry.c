@@ -9,7 +9,7 @@
  * 1. Validate leaf name via name_$validate_leaf
  *    - On failure: return status_$naming_invalid_leaf
  * 2. Lock directory via NAME_$LOCK_DIR (with flags from type param)
- * 3. Call FUN_00e5569c to perform entry removal
+ * 3. Call dir_$old_unlink_entry to perform entry removal
  * 4. Unlock directory via NAME_$UNLOCK_DIR
  *    - Propagate unlock errors if no prior error
  * 5. Exit super mode via ACL_$EXIT_SUPER

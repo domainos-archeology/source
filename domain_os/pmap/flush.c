@@ -133,7 +133,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                                 /* Remote write - synchronous */
                                 pmap_$write_page(vpn, status, -((flags & 4) == 0));
                                 if (*status != 0) goto done;
-                                FUN_00e1359c(segmap_ptr, vpn, page_idx);
+                                pmap_$update_seg_map(segmap_ptr, vpn, page_idx);
                             } else {
                                 /* Local write - batch it */
                                 *(uint8_t *)segmap_ptr |= 0x80;
@@ -151,7 +151,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
                     /* Release page if not modified or skipping writes */
                     if (modified_bit >= 0 || (flags & 2) != 0) {
-                        FUN_00e1359c(segmap_ptr, vpn, page_idx);
+                        pmap_$update_seg_map(segmap_ptr, vpn, page_idx);
                     }
                 }
 

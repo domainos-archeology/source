@@ -18,7 +18,7 @@
  * 1. Validate the leaf name via name_$validate_leaf
  * 2. Enter super mode / acquire directory lock via NAME_$LOCK_DIR
  * 3. Save per-process state
- * 4. Create directory object via FUN_00e54546
+ * 4. Create directory object via dir_$old_create_obj
  * 5. Add entry via dir_$old_add_entry
  * 6. On failure, clean up with SET_DEFAULT_ACL + TRUNCATE
  * 7. Restore state, release lock, exit super mode
@@ -56,7 +56,7 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
     }
 
     /* Create the directory object */
-    FUN_00e54546(parent_uid, handle, 2, &created_uid, status_ret);
+    dir_$old_create_obj(parent_uid, handle, 2, &created_uid, status_ret);
     if ((int16_t)*status_ret != 0) {
         NAME_$UNLOCK_DIR(&cleanup_status);
         ACL_$EXIT_SUPER();

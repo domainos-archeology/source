@@ -14,7 +14,7 @@
  * DIR_$OLD_GET_ENTRYU - Legacy get directory entry by name
  *
  * Makes a local copy of dir_uid, then compares against NAME_$ROOT_UID.
- * If the directory is root, calls FUN_00e57f74 (root lookup).
+ * If the directory is root, calls name_$old_get_root_entry (root lookup).
  * Otherwise calls name_$old_get_entry_nonroot (non-root lookup).
  *
  * Parameters:
@@ -37,7 +37,7 @@ void DIR_$OLD_GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
     if (local_uid.high == NAME_$ROOT_UID.high &&
         local_uid.low == NAME_$ROOT_UID.low) {
         /* Root directory - use root lookup */
-        FUN_00e57f74(&local_uid, name, *name_len, entry_ret, status_ret);
+        name_$old_get_root_entry(&local_uid, name, *name_len, entry_ret, status_ret);
     } else {
         /* Non-root directory - use standard lookup */
         name_$old_get_entry_nonroot(&local_uid, name, *name_len, entry_ret, status_ret);

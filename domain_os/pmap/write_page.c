@@ -17,7 +17,7 @@
  *    - Extract disk address (masked to 22 bits)
  *    - Call DISK_$WRITE
  *    - Ignore write-protected errors
- * 5. On success: call FUN_00e12d84 to update page state, advance PMAP EC
+ * 5. On success: call pmap_$write_complete to update page state, advance PMAP EC
  * 6. On failure: handle various error cases (invalidate, crash, etc.)
  *
  * Uses lock 14 (PMAP lock) - unlocks before I/O, re-locks after.

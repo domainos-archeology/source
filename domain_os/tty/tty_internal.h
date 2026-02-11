@@ -155,6 +155,27 @@ void TTY_$I_SET_DFL_FUNCS(tty_desc_t *tty, char use_dfl);
 uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags);
 
 /*
+ * tty_$i_buf_insert - Insert byte into circular buffer (no lock)
+ *
+ * Low-level circular buffer insert without acquiring the spin lock.
+ * Stores the byte at the current tail position and advances tail.
+ * Wraps tail from 0x100 back to 1. Drops the byte if buffer is full
+ * (tail+1 == head). Called by tty_$i_buf_put (which wraps with lock)
+ * and directly by TTY_$I_RCV for certain character classes.
+ *
+ * Buffer layout: head at offset 0, tail at offset 2, data at offset 5.
+ * Valid positions: 1..0x100 (256 entries).
+ *
+ * Parameters:
+ *   ch  - Character to insert
+ *   buf - Pointer to circular buffer header
+ *
+ * Original address: 0x00E1AF0A
+ * Size: 56 bytes
+ */
+void tty_$i_buf_insert(uint8_t ch, void *buf);
+
+/*
  * tty_$i_buf_put - Put a single byte into a TTY circular buffer
  *
  * Acquires the spin lock, inserts the byte into the circular buffer,

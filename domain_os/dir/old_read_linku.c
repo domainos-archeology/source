@@ -21,7 +21,7 @@
  * 4. Find the entry by name
  * 5. Read the link type from the entry
  *    - Type 1: direct UID (copy from entry)
- *    - Type 3: text link (read via FUN_00e55764 into local buf,
+ *    - Type 3: text link (read via dir_$old_read_link_data into local buf,
  *              then UNMAP_CASE to caller's buffer)
  * 6. Release lock and exit super mode
  *
@@ -94,9 +94,9 @@ void DIR_$OLD_READ_LINKU(int16_t dir_uid_low, int16_t name_low, uint16_t *name_l
             /* TODO: Ghidra shows status 0xe0006, verify this status code */
             *status_ret = 0x000E0006;
         } else if (link_type == 3) {
-            /* Type 3: text link - read via FUN_00e55764 into local buffer */
-            FUN_00e55764(handle, entry + 0x28, (uint8_t *)local_buf,
-                         &local_buf_len, status_ret);
+            /* Type 3: text link - read via dir_$old_read_link_data into local buffer */
+            dir_$old_read_link_data(handle, (void *)(uintptr_t)(entry + 0x28),
+                         (uint8_t *)local_buf, &local_buf_len);
             /* Unmap case from local buffer to caller's target buffer */
             max_out_len = 0x0100;  /* 256 */
             UNMAP_CASE(local_buf, (int16_t *)&local_buf_len,

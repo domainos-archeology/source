@@ -19,7 +19,7 @@
  * 3. Validate the path via NAME_$VALIDATE
  * 4. Check if this is the root directory (reject if so)
  * 5. Enter super mode via NAME_$LOCK_DIR
- * 6. Add the link via FUN_00e5545c
+ * 6. Add the link via dir_$old_add_link_entry
  * 7. Release lock via NAME_$UNLOCK_DIR
  * 8. Exit super mode via ACL_$EXIT_SUPER
  *
@@ -86,7 +86,7 @@ void DIR_$OLD_ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
     }
 
     /* Add the link entry */
-    FUN_00e5545c(dir_uid, handle, parsed_name, parsed_len,
+    dir_$old_add_link_entry(dir_uid, handle, parsed_name, parsed_len,
                  mapped_target, mapped_len, 0, result_buf, status_ret);
 
     /* Release directory lock */
