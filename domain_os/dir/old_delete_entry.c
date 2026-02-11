@@ -71,7 +71,7 @@ void dir_$old_delete_entry(uint32_t handle, uint16_t slot_idx,
         /* Decrement chain entry count */
         *(uint8_t *)(bucket + 0x36e) -= 1;
         /* Release/cleanup the overflow slot */
-        FUN_00e5518c(handle, hash, slot_idx);
+        dir_$old_free_slot(handle, hash, slot_idx);
     }
 
     /* Decrement total entry count at handle + 0x16 */
@@ -79,9 +79,9 @@ void dir_$old_delete_entry(uint32_t handle, uint16_t slot_idx,
 
     /* If entry was a link (type 3), free associated data blocks */
     if (entry_type == 3) {
-        FUN_00e5518c(handle, 0, link_block1);
+        dir_$old_free_slot(handle, 0, link_block1);
         if (link_block2 != 0) {
-            FUN_00e5518c(handle, 0, link_block2);
+            dir_$old_free_slot(handle, 0, link_block2);
         }
     }
 }

@@ -16,7 +16,7 @@
  * Called during process shutdown to release any directory resources
  * held by the current process. Iterates through 32 slots:
  * 1. Check if slot is owned by current process (via PROC1_$CURRENT)
- * 2. If owned, call FUN_00e53728 to clean up the handle entry
+ * 2. If owned, call DIR_$VALIDATE_PAGES to clean up the handle entry
  * 3. Call FUN_00e4b838 to release request buffers
  * 4. Call FUN_00e4b9d6 to release handle slots
  * 5. Finally stop the exclusion mutex
@@ -44,7 +44,7 @@ void DIR_$CLEANUP(void)
 
             /* Clean up the handle entry */
             handle_entry = (void *)(&DAT_00e7f280 + i * 0x30);
-            FUN_00e53728(handle_entry, 0, &status);
+            DIR_$VALIDATE_PAGES(handle_entry, 0, &status);
 
             /* Release request buffer */
             FUN_00e4b838(handle_entry);

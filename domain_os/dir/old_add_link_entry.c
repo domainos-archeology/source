@@ -14,7 +14,7 @@
  *    c. On allocation failure: free first block, return error
  * 4. Build link descriptor: {target_len, block1_idx, block2_idx, 0}
  * 5. Call dir_$old_add_entry with type=3 and link descriptor as uid_data
- * 6. On add failure: free allocated blocks via FUN_00e5518c
+ * 6. On add failure: free allocated blocks via dir_$old_free_slot
  * On allocation failure: returns status 0xE0002 (directory full)
  *
  * Parameters:

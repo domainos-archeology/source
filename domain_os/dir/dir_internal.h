@@ -471,15 +471,17 @@ void dir_$old_read_link_data(uint32_t handle, void *link_desc,
 void dir_$old_create_obj(uid_t *parent_uid, uint32_t handle, uint16_t type,
                          uid_t *new_dir_uid, status_$t *status_ret);
 
-/* FUN_00e5518c - Release/free overflow slot in directory buffer
+/* dir_$old_free_slot - Release/free overflow slot in directory buffer
  *
  * Manages overflow slot lifecycle. Called to:
  * - Remove entries from hash chains (with hash param)
  * - Free overflow data blocks (with param2=0)
+ * Unlinks slot from its chain if active with zero chain count,
+ * then prepends it to the free list at handle+0x0C.
  *
  * Original address: 0x00E5518C
  */
-void FUN_00e5518c(uint32_t handle, uint16_t param2, uint16_t slot_idx);
+void dir_$old_free_slot(uint32_t handle, uint16_t hash, uint16_t slot_idx);
 
 /* FUN_00e54e10 - Allocate overflow slot from free list
  * Original address: 0x00E54E10
@@ -580,25 +582,94 @@ void audit_$log_mount_op(uint16_t audit_type, status_$t status, uid_t *uid,
 void audit_$log_prot_op(status_$t status, uid_t *uid, void *prot_data,
                         uid_t *acl_type, void *acl_data, uint16_t param6);
 
-/* FUN_00e53728 - Cleanup directory handle entry
+/* DIR_$VALIDATE_PAGES - Validate and compact directory pages
+ *
+ * Validates structural integrity of directory pages by walking them
+ * backward from the last page. Checks UID consistency, removes orphan
+ * pages, and truncates the directory to the correct size.
+ *
+ * Called from FUN_00e4ba02 (directory open) and DIR_$CLEANUP.
+ *
  * Original address: 0x00E53728
+ * Size: 752 bytes
  */
-void FUN_00e53728(void *handle_entry, uint8_t flag, status_$t *status_ret);
+uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag, status_$t *status_ret);
 
-/* FUN_00e4b340 - Get request header by version
+/* FUN_00e4ba02 - Open/lock directory handle
+ *
+ * Opens a directory by UID and returns a handle. The mode and rights
+ * parameters control the access level.
+ *   mode 0: read-only
+ *   mode 1: read with ACL check
+ *   mode 2: write access
+ *   rights: access rights bitmask (e.g., 8 = write ACL)
+ *
+ * Original address: 0x00E4BA02
+ * Size: 546 bytes
+ */
+void FUN_00e4ba02(void *uid, int16_t mode, int16_t rights,
+                  void *handle_ret, status_$t *status_ret);
+
+/* FUN_00e4b340 - Get page data by page index
+ * Returns pointer to page data in register A0.
  * Original address: 0x00E4B340
  */
-void *FUN_00e4b340(void *handle_entry, int16_t version);
+void *FUN_00e4b340(void *handle, int16_t page_idx);
 
-/* FUN_00e4b838 - Release request buffer
+/* FUN_00e4b7b6 - Mark page as dirty
+ * Original address: 0x00E4B7B6
+ */
+void FUN_00e4b7b6(void *handle, void *page_data);
+
+/* FUN_00e4b838 - Release request buffer / flush page
  * Original address: 0x00E4B838
  */
-void FUN_00e4b838(void *handle_entry);
+void FUN_00e4b838(void *handle);
 
 /* FUN_00e4b9d6 - Release directory handle slot
  * Original address: 0x00E4B9D6
  */
-void FUN_00e4b9d6(void **handle_ptr);
+void FUN_00e4b9d6(void *handle_ptr);
+
+/* FUN_00e52d70 - Set ACL on directory entry
+ *
+ * Performs ACL conversion and storage. Called by dir_$do_op_set_default_acl.
+ * Handles both funky ACL formats and 10ACL/9ACL conversions.
+ *
+ * Original address: 0x00E52D70
+ * Size: 566 bytes
+ */
+void FUN_00e52d70(uint32_t handle, void *acl_data, void *acl_param,
+                  char all_entries, status_$t *status_ret);
+
+/* FUN_00e52394 - Create new directory file (for fix_dir rebuild)
+ *
+ * Creates a new directory file using FILE_$PRIV_CREATE, initializes
+ * its structure, and returns the new directory's UID.
+ *
+ * Original address: 0x00E52394
+ * Size: 482 bytes
+ */
+void FUN_00e52394(uid_t *parent_uid, void *page0_data, uid_t *param3,
+                  uid_t *param4, uid_t *new_uid_ret, status_$t *status_ret);
+
+/* FUN_00e4fe0a - Add entry to directory (internal)
+ *
+ * Adds a directory entry with the given name, type, and data.
+ *
+ * Original address: 0x00E4FE0A
+ * Size: 232 bytes
+ */
+void FUN_00e4fe0a(uint32_t handle, void *name, uint16_t name_len,
+                  uint16_t entry_type, uint32_t extra, uid_t *uid,
+                  uint16_t link_len, void *link_data, status_$t *status_ret);
+
+/* FUN_00e4e90a - Truncate/resize directory pages
+ * Original address: 0x00E4E90A
+ * Size: 86 bytes
+ */
+uint32_t FUN_00e4e90a(void *handle, uint16_t new_page_count,
+                      status_$t *status_ret);
 
 /* FUN_00e4c9e4 - Callback for add entry with root flag
  * Original address: 0x00E4C9E4
@@ -738,6 +809,20 @@ extern uint32_t DAT_00e7ffdc; /* First handle slot (0xe7fd24 + 0x2b8) */
 #endif
 #ifndef status_$naming_ran_out_of_address_space
 #define status_$naming_ran_out_of_address_space     0x000E0016
+#endif
+/* Note: status_$naming_directory_locked shares code 0x000E0016 with
+ * status_$naming_ran_out_of_address_space per Apollo naming conventions */
+#ifndef status_$naming_directory_locked
+#define status_$naming_directory_locked              0x000E0016
+#endif
+#ifndef status_$directory_is_full
+#define status_$directory_is_full                    0x000E0002
+#endif
+#ifndef status_$name_already_exists
+#define status_$name_already_exists                  0x000E0003
+#endif
+#ifndef status_$naming_internal_error
+#define status_$naming_internal_error                0x000E0025
 #endif
 #ifndef status_$naming_entry_repaired
 #define status_$naming_entry_repaired               0x000E0023
@@ -889,10 +974,10 @@ void FUN_00e4cffa(uid_t *uid, void *name, uint16_t name_len,
 void FUN_00e4e41a(uid_t *uid, void *params, uint8_t flag,
                   void *name_ret, void *len_ret, void *uid_ret,
                   status_$t *status_ret);
-void FUN_00e53a18(uid_t *uid, status_$t *status_ret);
+void dir_$do_op_fix_dir(uid_t *uid, status_$t *status_ret);
 /* FUN_00e52bc2 is DIR_$SET_ACL - declared in dir.h */
-void FUN_00e52fa6(uid_t *uid, void *type, void *acl, status_$t *status_ret);
-void FUN_00e53128(uid_t *uid, uid_t *type, uid_t *acl_ret, status_$t *status_ret);
+void dir_$do_op_set_default_acl(uid_t *uid, void *type, void *acl, status_$t *status_ret);
+void dir_$do_op_get_default_acl(uid_t *uid, uid_t *type, uid_t *acl_ret, status_$t *status_ret);
 void FUN_00e501d2(void *name, uint16_t name_len, status_$t *status_ret);
 void FUN_00e5216a(void *uid, void *prot, int16_t type);
 void FUN_00e52044(uid_t *uid, void *type, void *prot, void *acl, status_$t *status_ret);
@@ -901,8 +986,8 @@ void FUN_00e4d0e2(uint32_t path_data, uint16_t path_len, void *result,
                   void *uid_ret, void *extra, void *flags1, void *flags2,
                   void *cont, void *size, void *eof, void *count,
                   uint32_t max, void *link_count, status_$t *status_ret);
-void FUN_00e5325e(uid_t *uid, void *mount_uid, uint32_t lv_num, status_$t *status_ret);
-void FUN_00e533e6(void *mount_uid, uint32_t lv_num, status_$t *status_ret);
+void dir_$do_op_add_mount(uid_t *uid, uid_t *mount_uid, uint32_t node_id, status_$t *status_ret);
+void dir_$do_op_drop_mount(uid_t *mount_uid, uint32_t node_id, status_$t *status_ret);
 
 /* DAT_00e56096 - Info block parameter table entries */
 extern uint8_t DAT_00e56096;

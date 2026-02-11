@@ -409,7 +409,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x48: /* Fix directory */
-            FUN_00e53a18(&local_uid, &resp->status);
+            dir_$do_op_fix_dir(&local_uid, &resp->status);
             break;
 
         case 0x4A: /* Set ACL */
@@ -417,12 +417,12 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x4C: /* Set default ACL */
-            FUN_00e52fa6(&local_uid, req + 0x96,
+            dir_$do_op_set_default_acl(&local_uid, req + 0x96,
                          req + 0x8e, &resp->status);
             break;
 
         case 0x4E: /* Get default ACL */
-            FUN_00e53128(&local_uid, (uid_t *)(req + 0x8e),
+            dir_$do_op_get_default_acl(&local_uid, (uid_t *)(req + 0x8e),
                          (uid_t *)&resp->_22_4_, &resp->status);
             break;
 
@@ -500,7 +500,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x5A: /* Mount */
-            FUN_00e5325e(&local_uid, req + 0x8e,
+            dir_$do_op_add_mount(&local_uid, (uid_t *)(req + 0x8e),
                          *((uint32_t *)(req + 0x96)),
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
@@ -511,7 +511,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x5C: /* Drop mount */
-            FUN_00e533e6(req + 0x8e,
+            dir_$do_op_drop_mount((uid_t *)(req + 0x8e),
                          *((uint32_t *)(req + 0x96)),
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
