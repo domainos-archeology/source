@@ -185,18 +185,22 @@ void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void 
 void disk_$rtn_qblks_internal(int16_t vol_idx, void *blocks, void *param_3);
 
 /*
- * FUN_00e3c9fe - Wait for disk queue completion
+ * disk_$wait_io - Wait for disk I/O completion
  *
- * Internal function to wait for queued I/O operations to complete.
+ * Waits on eventcounts for queued I/O operations to complete.
+ * Uses EC_$WAIT with 3 eventcounts (two per-process disk ECs plus
+ * TIME_$CLOCKH). Iterates 10 disk entries (0x48 spacing) checking
+ * DISK_$ERROR_QUE for matching bits in the wait mask.
  *
  * Parameters:
- *   mask     - Wait mask
- *   counter1 - Event counter 1
- *   counter2 - Event counter 2
+ *   mask     - Bitmask of volumes to wait on
+ *   counter1 - Event counter pointer 1
+ *   counter2 - Event counter pointer 2
  *
- * Original address: 0x00e3c9fe
+ * Original address: 0x00E3C9FE
+ * Size: 188 bytes
  */
-void FUN_00e3c9fe(uint16_t mask, void *counter1, void *counter2);
+void disk_$wait_io(uint16_t mask, void *counter1, void *counter2);
 
 /*
  * AS_IO_SETUP - Setup for async I/O operations

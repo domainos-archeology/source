@@ -372,7 +372,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
 
     // Initialize time from network if diskless
     if (has_calendar >= 0) {
-        FUN_00e3366c(2, NETWORK_$MOTHER_NODE);
+        network_$fetch_diskless_info(2, NETWORK_$MOTHER_NODE);
         TIME_$CURRENT_CLOCKH = TIME_$CLOCKH;
         TIME_$BOOT_TIME = TIME_$CLOCKH;
         // Time conversion and setup...
@@ -462,10 +462,10 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
 
     // Diskless-specific time zone setup
     if (NETWORK_$DISKLESS < 0) {
-        FUN_00e3366c(8, diskless_buf[0]);
+        network_$fetch_diskless_info(8, diskless_buf[0]);
         CAL_$TIMEZONE.drift.high = 0;
         CAL_$TIMEZONE.drift.low = 0;
-        FUN_00e3366c(0x37, diskless_buf[0]);
+        network_$fetch_diskless_info(0x37, diskless_buf[0]);
     }
 
     // Initialize remaining subsystems

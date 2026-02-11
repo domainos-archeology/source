@@ -79,7 +79,7 @@ void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
 
     /* Check for error and signal event counters */
     if (result[0] < 0) {
-        FUN_00e3c9fe((int16_t)(1 << (vol_idx & 0x1f)), &ec1, &ec2);
+        disk_$wait_io((int16_t)(1 << (vol_idx & 0x1f)), &ec1, &ec2);
     }
 
     /* Return status from I/O result */

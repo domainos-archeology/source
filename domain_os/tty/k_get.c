@@ -32,9 +32,7 @@
 #define status_$tty_quit           0x350007
 #define status_$tty_overflow       0x350009
 
-/* External helper functions */
-extern void FUN_00e1c204(tty_desc_t *tty, char wait_flag, char *done_flag,
-                         uint16_t count, status_$t *status);
+/* tty_$i_wait declared in tty/tty_internal.h */
 
 ushort TTY_$K_GET(short *line_ptr, void *options, void *buffer,
                   ushort *count, status_$t *status_ret)
@@ -190,7 +188,7 @@ update_read_pos:
                 done = -1;
             } else {
                 /* Wait for more data */
-                FUN_00e1c204(tty, wait_flag, &eof_flag, chars_read, status_ret);
+                tty_$i_wait(tty, wait_flag, &eof_flag, chars_read, status_ret);
             }
         } else {
             /* Buffer full */

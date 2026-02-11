@@ -17,6 +17,6 @@ void DISK_$WAIT_QUE(void *queue, status_$t *status)
     (void)status;
     /* Note: Actual signature is different - takes mask and two counter pointers.
      * The header signature needs updating to match.
-     * FUN_00e3c9fe(mask, counter1, counter2);
+     * disk_$wait_io(mask, counter1, counter2);
      */
 }

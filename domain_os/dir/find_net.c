@@ -14,7 +14,7 @@
  *
  * Creates a local UID with the low word masked to include only
  * the top 12 bits OR'd with the index value (low 20 bits).
- * Then calls FUN_00e4e786 with flag=0xFF for network search mode.
+ * Then calls dir_$find_uid_internal with flag=0xFF for network search mode.
  *
  * Parameters:
  *   dir_uid - UID of directory
@@ -36,7 +36,7 @@ uint32_t DIR_$FIND_NET(uid_t *dir_uid, uint32_t *index)
     local_uid.low = (dir_uid->low & 0xFFF00000) | (*index & 0x000FFFFF);
 
     /* Call internal helper with flag=0xFF for network search mode */
-    FUN_00e4e786(dir_uid, &local_uid, (int8_t)0xFF, 0, name_buf,
+    dir_$find_uid_internal(dir_uid, &local_uid, (int8_t)0xFF, 0, name_buf,
                  &name_len, &net_ret, &status);
 
     /* Return network address if successful, 0 otherwise */

@@ -8,7 +8,7 @@
  * 1. Validate leaf name via name_$validate_leaf
  *    - On failure: return status_$naming_invalid_leaf
  * 2. Lock directory via NAME_$LOCK_DIR (with flags from type param)
- * 3. Call FUN_00e55406 to add entry to directory buffer
+ * 3. Call dir_$old_add_entry_ext to add entry to directory buffer
  *    (with UID, type, location data, replace flag 0xFF)
  * 4. On success:
  *    - Extract location info from target UID
@@ -50,7 +50,7 @@ void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,
         /* Valid leaf name */
         NAME_$LOCK_DIR(dir_uid, &handle, ((uint32_t)4 << 16) | type, status_ret);
         if (*status_ret == status_$ok) {
-            FUN_00e55406(dir_uid, handle, parsed_name, parsed_len,
+            dir_$old_add_entry_ext(dir_uid, handle, parsed_name, parsed_len,
                          1, file_uid, flags, 0xFF, result, status_ret);
             if (*status_ret == status_$ok) {
                 location = flags;

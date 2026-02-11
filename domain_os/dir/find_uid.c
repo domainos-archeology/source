@@ -13,7 +13,7 @@
 /*
  * DIR_$FIND_UID - Find a UID in a directory
  *
- * This function is a wrapper around the internal find function (FUN_00e4e786)
+ * This function is a wrapper around the internal find function (dir_$find_uid_internal)
  * with flag=0 to indicate a UID search rather than a network search.
  *
  * Parameters:
@@ -30,6 +30,6 @@ void DIR_$FIND_UID(uid_t *dir_uid, uid_t *target_uid, uint16_t *name_buf_len,
     uint32_t dummy_net;  /* Not used for UID search */
 
     /* Call internal helper with flag=0 for UID search mode */
-    FUN_00e4e786(dir_uid, target_uid, 0, (int16_t)*name_buf_len, name_buf,
+    dir_$find_uid_internal(dir_uid, target_uid, 0, (int16_t)*name_buf_len, name_buf,
                  (int16_t *)name_buf_len, &dummy_net, status_ret);
 }

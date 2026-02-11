@@ -177,7 +177,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                              0, &resp->status);
             } else {
                 /* Root add (with replace) */
-                FUN_00e4fef2(&local_uid, 2, req + 0x9c,
+                dir_$do_op_add_entry(&local_uid, 2, req + 0x9c,
                              *((uint16_t *)(req + 0x8e)),
                              3, *((uint32_t *)(req + 0x98)),
                              req + 0x90, 0, (uint32_t)(uintptr_t)FUN_00e4c9e4,
@@ -313,7 +313,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x3C: /* Add link */
-            FUN_00e4fef2(&local_uid, 2, req + 0x96,
+            dir_$do_op_add_entry(&local_uid, 2, req + 0x96,
                          *((uint16_t *)(req + 0x8e)),
                          4, 0, &DAT_00e4b33c,
                          *((uint16_t *)(req + 0x90)),
@@ -436,7 +436,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             FUN_00e5216a(&local_uid, req + 0xba,
                          *((int16_t *)(req + 0xc2)));
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4af28(resp->status, &local_uid,
+                audit_$log_prot_op(resp->status, &local_uid,
                              req + 0x8e, (uid_t *)(req + 0xba),
                              req + 0xc2, 4);
             }
@@ -447,7 +447,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          req + 0x8e, req + 0xc2,
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4af28(resp->status, &local_uid,
+                audit_$log_prot_op(resp->status, &local_uid,
                              req + 0x96, (uid_t *)(req + 0x8e),
                              req + 0xc2, 4);
             }
@@ -504,7 +504,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          *((uint32_t *)(req + 0x96)),
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4bce0(0x1C, resp->status, &local_uid,
+                audit_$log_mount_op(0x1C, resp->status, &local_uid,
                              req + 0x8e,
                              *((uint32_t *)(req + 0x96)));
             }
@@ -515,7 +515,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          *((uint32_t *)(req + 0x96)),
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4bce0(0x1D, resp->status, &local_uid,
+                audit_$log_mount_op(0x1D, resp->status, &local_uid,
                              req + 0x8e,
                              *((uint32_t *)(req + 0x96)));
             }

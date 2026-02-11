@@ -249,7 +249,7 @@ void PRINT_BUILD_TIME(void);
 
 int8_t io_$probe(void *type, void *addr, void *result);
 void FUN_00e2f1d4(uint16_t param);
-void FUN_00e3366c(short cmd, uint32_t param);  /* Diskless helper */
+void network_$fetch_diskless_info(short cmd, uint32_t param);  /* Diskless helper: 2=time, 8=tz, 0x37=route */
 void OS_$PRINT_INIT_ERROR(const char *msg);            /* Display message */
 void os_$free_va_page(uint32_t vaddr);          /* Free page at virtual address */
 void os_$start_proc2(void *param);             /* Free init pages and start proc2 */

@@ -5,7 +5,7 @@
  * operations dispatched by DIR_$DO_OP.
  *
  * Process:
- * 1. Call FUN_00e4fef2 with FUN_00e4c9e4 as callback for name resolution
+ * 1. Call dir_$do_op_add_entry with FUN_00e4c9e4 as callback for name resolution
  * 2. Copy target UID, clear bit 6 of local flags byte
  * 3. Call AST_$GET_COMMON_ATTRIBUTES (type 0x90) for the target object
  * 4. If object not found and flags (param_5) >= 0: set bit 7, continue
@@ -29,7 +29,7 @@
  * Original address: 0x00E5044A
  * Size: 378 bytes
  *
- * TODO: Full implementation requires understanding FUN_00e4fef2 (name
+ * TODO: Full implementation requires understanding dir_$do_op_add_entry (name
  * resolution helper) and FUN_00e511da (undo/cleanup helper).
  */
 

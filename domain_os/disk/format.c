@@ -129,7 +129,7 @@ void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
 
     /* Check for error and signal event counters */
     if (result[0] < 0) {
-        FUN_00e3c9fe((int16_t)(1 << (partition_vol & 0x1f)), &ec1, &ec2);
+        disk_$wait_io((int16_t)(1 << (partition_vol & 0x1f)), &ec1, &ec2);
     }
 
     /* Return status from I/O result */

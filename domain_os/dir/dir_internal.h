@@ -241,17 +241,19 @@ void FUN_00e4e1fe(status_$t *status_ret);
 void DIR_$ADD_ENTRY_INTERNAL(uid_t *dir_uid, char *name, int16_t name_len,
                   uid_t *file_uid, uint32_t flags, status_$t *status_ret);
 
-/*
- * FUN_00e4e786 - Internal find UID helper
+/* dir_$find_uid_internal - Internal find UID helper
  *
  * Shared implementation for DIR_$FIND_UID and DIR_$FIND_NET.
+ * Sends DO_OP request 0x46 (opcode 0x11a), falls back to
+ * DIR_$OLD_FIND_NET (flag<0) or DIR_$OLD_FIND_UID on error.
  *
  * Original address: 0x00E4E786
+ * Size: 246 bytes
  */
-void FUN_00e4e786(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
-                  int16_t name_buf_len, char *name_buf,
-                  int16_t *name_len_ret, uint32_t *net_ret,
-                  status_$t *status_ret);
+void dir_$find_uid_internal(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
+                            int16_t name_buf_len, char *name_buf,
+                            int16_t *name_len_ret, uint32_t *net_ret,
+                            status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -386,13 +388,19 @@ void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                         uint16_t name_len, uint16_t type, void *uid_data,
                         uint16_t flags, uint8_t *result, status_$t *status_ret);
 
-/* FUN_00e55406 - Add entry to directory (root path, with replace)
+/* dir_$old_add_entry_ext - Add entry to directory with extra field
+ *
+ * Thin wrapper around dir_$old_add_entry. After successful add, stores
+ * the 'extra' value at offset 0x20 of the new entry structure.
+ * Used for root directory entries and entries needing location info.
+ *
  * Original address: 0x00E55406
+ * Size: 86 bytes
  */
-void FUN_00e55406(uid_t *dir_uid, uint32_t handle, uint8_t *name,
-                  uint16_t name_len, uint16_t type, void *uid_data,
-                  uint32_t extra, uint8_t replace_flag,
-                  uint8_t *result, status_$t *status_ret);
+void dir_$old_add_entry_ext(uid_t *dir_uid, uint32_t handle, uint8_t *name,
+                            uint16_t name_len, uint16_t type, void *uid_data,
+                            uint32_t extra, uint8_t replace_flag,
+                            uint8_t *result, status_$t *status_ret);
 
 /* FUN_00e5545c - Add link entry helper
  * Original address: 0x00E5545C
@@ -480,17 +488,27 @@ void AUDIT_$LOG_DIR_OP(uint16_t audit_type, status_$t status, uid_t *uid,
 void FUN_00e4bf92(uint32_t pname_data, uint16_t path_len,
                   void *result, status_$t status);
 
-/* FUN_00e4bce0 - Audit mount/drop mount operation
+/* audit_$log_mount_op - Audit mount/drop mount operation
+ *
+ * Formats event record (type 4) with two UIDs and logs via
+ * AUDIT_$LOG_EVENT. Used for ops 0x1C (add mount) and 0x1D (drop mount).
+ *
  * Original address: 0x00E4BCE0
+ * Size: 102 bytes
  */
-void FUN_00e4bce0(uint16_t audit_type, status_$t status, uid_t *uid,
-                  void *mount_uid, uint32_t extra);
+void audit_$log_mount_op(uint16_t audit_type, status_$t status, uid_t *uid,
+                         void *mount_uid, uint32_t extra);
 
-/* FUN_00e4af28 - Audit protection operation
+/* audit_$log_prot_op - Audit protection operation
+ *
+ * Formats event record (code 0x40014) with protection data and
+ * logs via AUDIT_$LOG_EVENT. Copies 44 bytes of protection info.
+ *
  * Original address: 0x00E4AF28
+ * Size: 126 bytes
  */
-void FUN_00e4af28(status_$t status, uid_t *uid, void *prot_data,
-                  uid_t *acl_type, void *acl_data, uint16_t param6);
+void audit_$log_prot_op(status_$t status, uid_t *uid, void *prot_data,
+                        uid_t *acl_type, void *acl_data, uint16_t param6);
 
 /* FUN_00e53728 - Cleanup directory handle entry
  * Original address: 0x00E53728
@@ -723,7 +741,7 @@ void NAME_CONVERT_ACL_STATUS(status_$t *status_ret);
 /*
  * ACL_$RIGHTS, REM_FILE_$DROP_HARD_LINKU, etc. are already
  * declared in acl/acl.h, rem_file/rem_file.h (included via
- * file/file_internal.h). FUN_00e4e786 is declared earlier
+ * file/file_internal.h). dir_$find_uid_internal is declared earlier
  * in this file. No need to re-declare.
  */
 
@@ -751,10 +769,20 @@ void REM_NAME_$GET_ENTRY(uid_t *dir_uid, char *name, uint16_t *name_len,
  */
 void dir_$do_op_add_link(uid_t *uid, void *name, uint16_t name_len, uid_t *file_uid,
                          uint16_t flags, status_$t *status_ret);
-void FUN_00e4fef2(uid_t *uid, uint16_t type, void *name, uint16_t name_len,
-                  uint16_t entry_type, uint32_t extra, void *uid_data,
-                  uint16_t target_len, uint32_t target_data,
-                  void *result, status_$t *status_ret);
+/* dir_$do_op_add_entry - DO_OP add entry with idempotent handling
+ *
+ * General add entry handler for remote directory operations. Enters super
+ * mode, looks up directory, attempts to add entry. If name already exists
+ * and current process type is 9, compares existing entry to verify match
+ * (idempotent add). Updates root hints when adding to NAME_$ROOT_UID.
+ *
+ * Original address: 0x00E4FEF2
+ * Size: 454 bytes
+ */
+void dir_$do_op_add_entry(uid_t *uid, uint16_t type, void *name, uint16_t name_len,
+                          uint16_t entry_type, uint32_t extra, void *uid_data,
+                          uint16_t target_len, uint32_t target_data,
+                          void *result, status_$t *status_ret);
 /* dir_$do_op_delete - DO_OP handler for delete/drop operations
  *
  * Server-side handler for delete file (ops 0x2E, 0x36) and drop hard link

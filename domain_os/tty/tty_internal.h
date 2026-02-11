@@ -183,6 +183,30 @@ void tty_$i_buf_put(uint8_t ch, void *buf);
 void tty_$i_buf_put_delay(uint16_t delay_val);
 
 /*
+ * tty_$i_wait - Wait for TTY input with timeout
+ *
+ * Eventcount-based wait for TTY input data or timeout.
+ * Sets up EC_$WAITN with 2-3 eventcounts (TTY data, quit signal,
+ * and optionally a timeout via TIME_$ADVANCE). Handles:
+ *   - Quit signal: status 0x350007
+ *   - Timeout with no data: status 0x350008
+ *   - Data available: sets *done_flag = 0xFF
+ * Releases/re-acquires TTY lock around the wait.
+ *
+ * Parameters:
+ *   tty       - TTY descriptor
+ *   wait_flag - Negative to require data (error on timeout)
+ *   done_flag - Output: set to 0xFF when data ready
+ *   count     - Characters to wait for
+ *   status    - Output: status code
+ *
+ * Original address: 0x00E1C204
+ * Size: 460 bytes
+ */
+void tty_$i_wait(tty_desc_t *tty, char wait_flag, char *done_flag,
+                 uint16_t count, status_$t *status);
+
+/*
  * ============================================================================
  * Internal Data Declarations
  * ============================================================================

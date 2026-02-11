@@ -109,7 +109,7 @@ typedef struct disk_io_req_t {
 /* disk_$get_qblks_internal declared in disk/disk_internal.h */
 extern void disk_$rtn_qblks_internal(int16_t count, void *req, uint32_t param);
 extern void FUN_00e3cae0(void *req, uint16_t vol_idx, int16_t op, void *param1, status_$t *status);
-extern void FUN_00e3c9fe(int16_t mask, int32_t *counter1, int32_t *counter2);
+/* disk_$wait_io declared in disk/disk_internal.h */
 extern void FUN_00e3c14c(int16_t vol_idx, void *req, int32_t *info);
 extern uint16_t FUN_00e0a290(void *addr);  /* Checksum calculation */
 
@@ -254,7 +254,7 @@ status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t daddr,
 
     /* If async I/O, wait for completion */
     if ((int8_t)io_result < 0) {
-        FUN_00e3c9fe((int16_t)(1 << vol_idx), &local_counters[0], &local_counters[1]);
+        disk_$wait_io((int16_t)(1 << vol_idx), &local_counters[0], &local_counters[1]);
     }
 
     /* Handle I/O errors */
