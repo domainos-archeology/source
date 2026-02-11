@@ -47,7 +47,7 @@ void MST_$GET_VA_INFO(uint16_t *asid_p,
 
     /* Lock and look up the entry */
     ML_$LOCK(MST_LOCK_ASID);
-    FUN_00e4411c(asid, va, param_5, &entry, &status);
+    mst_$va_to_pte(asid, va, param_5, &entry, &status);
 
     if (status == status_$ok) {
         /* Copy entry data while locked */

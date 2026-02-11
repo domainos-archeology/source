@@ -34,7 +34,7 @@
         .extern PROC1_$CURRENT_PCB
         .extern proc1_$reorder_if_needed
         .extern proc1_$remove_from_ready_list
-        .extern FUN_00e20824
+        .extern proc1_$add_ready_body
         .extern PROC1_$TRY_TO_SUSPEND
         .extern PROC1_$DISPATCH_INT2
         .extern CRASH_SYSTEM
@@ -89,9 +89,9 @@ proc1_$clr_lock_body:
         bclr.b  #4, (0x55,%a1)
         beq.s   .Lcheck_suspend         /* bit wasn't set, skip */
 
-        /* Deferred removal: remove from ready list and call FUN_00e20824 */
+        /* Deferred removal: remove from ready list and call proc1_$add_ready_body */
         bsr.w   proc1_$remove_from_ready_list
-        bsr.w   FUN_00e20824
+        bsr.w   proc1_$add_ready_body
 
 .Lcheck_suspend:
         /* Check bit 2 of pri_max (deferred suspend) */

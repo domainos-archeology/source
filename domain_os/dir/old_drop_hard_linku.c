@@ -1,7 +1,7 @@
 /*
  * DIR_$OLD_DROP_HARD_LINKU - Legacy drop hard link
  *
- * Thin wrapper around FUN_00e56b08 for hard link removal.
+ * Thin wrapper around NAME_$OLD_DELETE_ENTRYU for hard link removal.
  *
  * Original address: 0x00E56ACA
  * Original size: 62 bytes
@@ -35,6 +35,6 @@ void DIR_$OLD_DROP_HARD_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
      * sne sets D0 to 0xFF if bit was set, 0x00 if clear. */
     negated_bit = ((*flags & 0x0001) != 0) ? 0xFF : 0x00;
 
-    FUN_00e56b08(dir_uid, name, *name_len, negated_bit, 0xFF, 0xFF,
+    NAME_$OLD_DELETE_ENTRYU(dir_uid, name, *name_len, negated_bit, 0xFF, 0xFF,
                  buf, status_ret);
 }

@@ -8,11 +8,11 @@
  * - MST_$MAP_TOP: Map at top of address space (same as MAP for now)
  * - MST_$MAP_GLOBAL: Map in global (shared) address space
  *
- * All functions call the internal FUN_00e43182 with appropriate parameters.
+ * All functions call the internal mst_$alloc_segs with appropriate parameters.
  *
  * Original analysis from 0x00E4386C assembly:
  *   - Returns mapped address in A0 register
- *   - Parameters are dereferenced and passed to FUN_00e43182
+ *   - Parameters are dereferenced and passed to mst_$alloc_segs
  *   - param_7 (map_info) is passed through as output buffer
  */
 
@@ -30,7 +30,7 @@
  * @param mode_ptr      Pointer to mapping mode/area identifier
  * @param extend_ptr    Pointer to extend value/area size
  * @param concur_ptr    Pointer to concurrency flags/access rights byte
- * @param map_info      Output: mapping info (passed through to FUN_00e43182,
+ * @param map_info      Output: mapping info (passed through to mst_$alloc_segs,
  *                      also used as input to MST_$UNMAP)
  * @param status_ret    Output: status code
  *
@@ -48,7 +48,7 @@ void *MST_$MAP(uid_t *uid,
                void *map_info,
                status_$t *status_ret)
 {
-    return FUN_00e43182(0x7fffffff,       /* addr_hint = search from top */
+    return mst_$alloc_segs(0x7fffffff,       /* addr_hint = search from top */
                         uid,
                         *start_ptr,
                         *length_ptr,
@@ -78,7 +78,7 @@ void MST_$MAP_TOP(uid_t *uid,
                   int32_t *mapped_len,
                   status_$t *status_ret)
 {
-    FUN_00e43182(0x7fffffff,       /* addr_hint = search from top */
+    mst_$alloc_segs(0x7fffffff,       /* addr_hint = search from top */
                  uid,
                  *start_va_ptr,
                  *length_ptr,
@@ -108,7 +108,7 @@ void MST_$MAP_GLOBAL(uid_t *uid,
                      int32_t *mapped_len,
                      status_$t *status_ret)
 {
-    FUN_00e43182(0,                /* addr_hint = 0 for global */
+    mst_$alloc_segs(0,                /* addr_hint = 0 for global */
                  uid,
                  *start_va_ptr,
                  *length_ptr,

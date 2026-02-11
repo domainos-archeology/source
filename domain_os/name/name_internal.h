@@ -76,7 +76,7 @@ void FUN_00e4a060(char *path, int16_t path_len, uid_t *dir_uid, uid_t *file_uid,
                   status_$t *status_ret);
 
 /*
- * FUN_00e58488 - Map a directory for fast access
+ * name_$map_dir - Map a directory for fast access
  *
  * Sets up mapped info structure for a directory.
  *
@@ -91,7 +91,7 @@ void FUN_00e4a060(char *path, int16_t path_len, uid_t *dir_uid, uid_t *file_uid,
  *
  * Original address: 0x00e58488
  */
-boolean FUN_00e58488(uid_t *dir_uid, int16_t flags, void *mapped_info, status_$t *status_ret);
+boolean name_$map_dir(uid_t *dir_uid, int16_t flags, void *mapped_info, status_$t *status_ret);
 
 /*
  * name_$split_path - Split path into directory and filename portions
@@ -152,5 +152,21 @@ void name_$resolve_internal(char *path, int16_t path_len, uid_t *dir_uid_ret,
 boolean name_$resolve_dir_and_leaf(char *path, int16_t path_len,
                                    uint16_t *filename_idx_ret, int16_t *filename_len_ret,
                                    uid_t *dir_uid_ret, status_$t *status_ret);
+
+/*
+ * name_$unmap_dir_buffers - Unmap directory memory-mapped buffers
+ *
+ * Unmaps the memory regions used by a directory's mapped info structure.
+ * If the two buffer halves are contiguous (base + 0x8000 == second_base),
+ * unmaps a single 0x10000 region; otherwise unmaps two 0x8000 regions.
+ * Clears the active flag in the mapped info structure.
+ *
+ * Parameters:
+ *   asid        - Address space ID for the unmap operation
+ *   mapped_info - Pointer to the directory mapped info structure
+ *
+ * Original address: 0x00E58560
+ */
+void name_$unmap_dir_buffers(int16_t asid, void *mapped_info);
 
 #endif /* NAME_INTERNAL_H */

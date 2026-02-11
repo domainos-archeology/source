@@ -250,8 +250,8 @@ void PRINT_BUILD_TIME(void);
 int8_t FUN_00e29138(void *type, void *addr, void *result);
 void FUN_00e2f1d4(uint16_t param);
 void FUN_00e3366c(short cmd, uint32_t param);  /* Diskless helper */
-void FUN_00e6d1cc(const char *msg);            /* Display message */
-void FUN_00e6d240(uint32_t addr);              /* Initialize page */
+void OS_$PRINT_INIT_ERROR(const char *msg);            /* Display message */
+void os_$free_va_page(uint32_t vaddr);          /* Free page at virtual address */
 void FUN_00e6d254(void *param);                /* Final init */
 
 #endif /* OS_INTERNAL_H */

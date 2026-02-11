@@ -266,12 +266,17 @@ void FUN_00e5674c(uid_t *dir_uid, char *name, uint16_t name_len,
                   uid_t *file_uid, uint8_t hard_link_flag,
                   status_$t *status_ret);
 
-/* FUN_00e56b08 - Shared delete/drop helper
+/* NAME_$OLD_DELETE_ENTRYU - Shared delete/drop entry helper
+ *
+ * Handles deletion of directory entries. Checks entry type (file/link),
+ * verifies ACL rights, deletes the underlying object (file or hard link),
+ * and removes the directory entry.
+ *
  * Original address: 0x00E56B08
  */
-void FUN_00e56b08(uid_t *dir_uid, char *name, uint16_t name_len,
-                  uint8_t flag1, uint8_t flag2, uint8_t flag3,
-                  uint8_t *result_buf, status_$t *status_ret);
+void NAME_$OLD_DELETE_ENTRYU(uid_t *dir_uid, char *name, uint16_t name_len,
+                             uint8_t flag1, uint8_t flag2, uint8_t flag3,
+                             uint8_t *result_buf, status_$t *status_ret);
 
 /* FUN_00e57f74 - Root directory entry lookup
  * Original address: 0x00E57F74
@@ -292,23 +297,23 @@ void FUN_00e56682(uid_t *dir_uid, uint16_t type, char *name,
                   uint16_t name_len, uid_t *file_uid,
                   uint32_t flags, status_$t *status_ret);
 
-/* FUN_00e54414 - Validate and parse leaf name
+/* name_$validate_leaf - Validate and parse leaf name
  * Returns negative (true) on success, non-negative on failure
  * Original address: 0x00E54414
  */
-int8_t FUN_00e54414(char *name, uint16_t name_len,
+int8_t name_$validate_leaf(char *name, uint16_t name_len,
                     uint8_t *parsed_name, uint16_t *parsed_len);
 
-/* FUN_00e54854 - Enter super mode / acquire directory lock
+/* NAME_$LOCK_DIR - Enter super mode / acquire directory lock
  * Original address: 0x00E54854
  */
-void FUN_00e54854(uid_t *dir_uid, uint32_t *handle_ret,
-                  uint32_t flags, status_$t *status_ret);
+void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
+                    uint32_t flags, status_$t *status_ret);
 
-/* FUN_00e54734 - Release directory lock / exit super mode
+/* NAME_$UNLOCK_DIR - Release directory lock / exit super mode
  * Original address: 0x00E54734
  */
-void FUN_00e54734(status_$t *status_ret);
+void NAME_$UNLOCK_DIR(status_$t *status_ret);
 
 /* FUN_00e5569c - Perform directory entry operation (drop link, etc.)
  * Original address: 0x00E5569C
@@ -317,17 +322,30 @@ void FUN_00e5569c(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                   uint16_t name_len, uint16_t op_type,
                   void *result, status_$t *status_ret);
 
-/* FUN_00e54b9e - Find entry in directory by name
+/* dir_$old_find_entry - Find entry in directory by name
+ *
+ * Searches a directory for a named entry. First checks inline entries
+ * (slots 1..N at 0x30-byte intervals), then uses a hash lookup to
+ * search overflow chains. Returns the entry pointer, slot index,
+ * and chain level.
+ *
+ * Returns: 0xFF (true) if found, 0 if not found
+ *
  * Original address: 0x00E54B9E
  */
-int8_t FUN_00e54b9e(uint32_t handle, uint8_t *name, uint16_t name_len,
-                    int32_t *entry_ret, uint16_t *param5,
-                    uint16_t *param6);
+int8_t dir_$old_find_entry(uint32_t handle, uint8_t *name, uint16_t name_len,
+                           int32_t *entry_ret, uint16_t *slot_idx,
+                           uint16_t *chain_level);
 
-/* FUN_00e54b58 - Compute hash for directory entry
+/* dir_$old_hash_name - Compute hash for directory entry name
+ *
+ * Computes a hash value for a directory entry name. Returns
+ * the hash modulo the number of hash buckets in the low 16 bits,
+ * and the quotient in the high 16 bits.
+ *
  * Original address: 0x00E54B58
  */
-uint16_t FUN_00e54b58(uint8_t *name, uint16_t name_len, uint16_t param3);
+uint16_t dir_$old_hash_name(uint8_t *name, uint16_t name_len, uint16_t num_buckets);
 
 /* FUN_00e555dc - Update directory entry after rename
  * Original address: 0x00E555DC
@@ -409,11 +427,11 @@ void FUN_00e4bd48(uint16_t audit_type, status_$t status, uid_t *uid,
                   uint16_t name_len, void *name, uint16_t target_len,
                   uint32_t target_data);
 
-/* FUN_00e4be16 - Audit add/drop entry operation
+/* AUDIT_$LOG_DIR_OP - Audit add/drop entry operation
  * Original address: 0x00E4BE16
  */
-void FUN_00e4be16(uint16_t audit_type, status_$t status, uid_t *uid,
-                  uid_t *file_uid, uint16_t name_len, void *name);
+void AUDIT_$LOG_DIR_OP(uint16_t audit_type, status_$t status, uid_t *uid,
+                       uid_t *file_uid, uint16_t name_len, void *name);
 
 /* FUN_00e4bf92 - Audit resolve operation
  * Original address: 0x00E4BF92

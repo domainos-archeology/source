@@ -14,13 +14,15 @@
 #include "misc/misc.h"
 
 /*
- * Internal scheduling helper
+ * proc1_$add_ready_body - Priority-ordered ready list insertion
  *
- * Called after lock release to handle rescheduling.
+ * Re-inserts a PCB into the ready list in priority order after
+ * lock release or exclusion stop. Uses register calling convention
+ * (A1 = PCB pointer).
  *
  * Original address: 0x00e20824
  */
-void FUN_00e20824(void);
+void proc1_$add_ready_body(void);
 
 /*
  * Error status codes (defined in misc/crash_system.c)

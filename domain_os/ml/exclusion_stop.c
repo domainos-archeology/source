@@ -70,7 +70,7 @@ void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
         if (pri_flags & 0x10) {
             /* Was priority boosted - remove from ready list and reschedule */
             proc1_$remove_from_ready_list(pcb);
-            FUN_00e20824();
+            proc1_$add_ready_body();
         }
 
         /* Check for deferred suspend (bit 2 at offset 0x55) */

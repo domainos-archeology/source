@@ -16,8 +16,7 @@
 
 #include "name/name_internal.h"
 
-/* Internal helper to unmap directory */
-extern void FUN_00e58560(int16_t asid, void *mapped_info);
+/* name_$unmap_dir_buffers declared in name/name_internal.h */
 
 /*
  * Per-ASID data offsets (relative to name_$data_base at 0xE80264)
@@ -63,7 +62,7 @@ void NAME_$INIT_ASID(int16_t *new_asid, status_$t *status_ret)
     /* Check ACL access for working directory */
     if (ACL_$RIGHTS(&current_uid, NULL, NULL, NULL, status_ret) != 0) {
         /* Has access - map the directory for the new ASID */
-        FUN_00e58488(&current_uid, *new_asid,
+        name_$map_dir(&current_uid, *new_asid,
                      base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + dst_mapped_off,
                      status_ret);
 
@@ -81,7 +80,7 @@ do_ndir:
 
         /* Check ACL access for naming directory */
         if (ACL_$RIGHTS(&current_uid, NULL, NULL, NULL, status_ret) != 0) {
-            FUN_00e58488(&current_uid, *new_asid,
+            name_$map_dir(&current_uid, *new_asid,
                          base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + dst_mapped_off,
                          status_ret);
 
@@ -181,10 +180,10 @@ void NAME_$FREE_ASID(int16_t *asid)
     ACL_$ENTER_SUPER();
 
     /* Unmap working directory */
-    FUN_00e58560(*asid, base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + mapped_off);
+    name_$unmap_dir_buffers(*asid, base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + mapped_off);
 
     /* Unmap naming directory */
-    FUN_00e58560(*asid, base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + mapped_off);
+    name_$unmap_dir_buffers(*asid, base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + mapped_off);
 
     /* Reset both UIDs to node directory */
     wdir->high = NAME_$NODE_UID.high;

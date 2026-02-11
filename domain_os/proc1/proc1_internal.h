@@ -33,16 +33,22 @@
 void INIT_STACK(proc1_t *pcb, void **entry_ptr, void **sp_ptr);
 
 /*
- * FUN_00e20824 - Unknown internal function
+ * proc1_$add_ready_body - Priority-ordered ready list insertion (register convention)
  *
- * Called after removing a process from the ready list during
- * deferred operation handling. Purpose unknown.
+ * Body of PROC1_$ADD_READY that uses register calling convention:
+ * A1 = pointer to PCB to insert. Walks the ready list comparing
+ * resource_locks_held and priority, inserts the PCB in FIFO order
+ * within the same priority level (after equal-priority entries).
  *
- * TODO: Identify and rename this function.
+ * Contrast with proc1_$insert_into_ready_list which inserts BEFORE
+ * equal-priority entries (LIFO within same priority).
+ *
+ * Called directly from assembly code (clr_lock.s, etc.) where A1
+ * is already set to the target PCB.
  *
  * Original address: 0x00e20824
  */
-void FUN_00e20824(void);
+void proc1_$add_ready_body(void);
 
 /*
  * proc1_$set_lock_body - Internal set lock implementation (assembly)

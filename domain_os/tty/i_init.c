@@ -92,7 +92,7 @@ void TTY_$I_INIT(tty_desc_t *tty)
     tty->pending_signal = 0;
 
     // Apply function character mappings to character class table
-    // FUN_00e6726e(param_1, 0xff)
+    // TTY_$I_SET_DFL_FUNCS(tty, 0xff)
     // This function updates char_class[] based on func_chars[] and func_enabled
 
     // Clear raw mode flag

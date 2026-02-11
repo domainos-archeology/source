@@ -64,21 +64,21 @@ void DIR_$OLD_READ_LINKU(int16_t dir_uid_low, int16_t name_low, uint16_t *name_l
     target_uid->low = UID_$NIL.low;
 
     /* Validate and parse the leaf name */
-    valid = FUN_00e54414(name, *name_len, parsed_name, &parsed_len);
+    valid = name_$validate_leaf(name, *name_len, parsed_name, &parsed_len);
     if (valid >= 0) {
         *status_ret = status_$naming_invalid_leaf;
         return;
     }
 
     /* Enter super mode / acquire directory lock */
-    FUN_00e54854(dir_uid, &handle, 0x10004, status_ret);
+    NAME_$LOCK_DIR(dir_uid, &handle, 0x10004, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;
     }
 
     /* Find the entry by name */
-    found = FUN_00e54b9e(handle, parsed_name, parsed_len,
+    found = dir_$old_find_entry(handle, parsed_name, parsed_len,
                          &entry, &param5, &param6);
     if (found >= 0) {
         /* Entry not found */
@@ -110,7 +110,7 @@ void DIR_$OLD_READ_LINKU(int16_t dir_uid_low, int16_t name_low, uint16_t *name_l
     }
 
     /* Release directory lock */
-    FUN_00e54734(&local_status);
+    NAME_$UNLOCK_DIR(&local_status);
     if ((int16_t)*status_ret == 0) {
         *status_ret = local_status;
     }

@@ -79,19 +79,30 @@ extern status_$t MST_Ref_OutOfBounds_Err;
 status_$t FUN_00e43f40(uint16_t asid, uint16_t flags, void *table_ptr);
 
 /*
- * FUN_00e43182 - Internal mapping helper
+ * mst_$alloc_segs - Internal segment allocation and mapping
+ *
+ * Core internal function called by all MST_$MAP* variants.
+ * Finds free segments in the address space, allocates page table
+ * pages as needed, and sets up the MST entries for the mapping.
  *
  * Returns the mapped virtual address in A0 register.
+ *
+ * Original address: 0x00E43182
  */
-void *FUN_00e43182(uint32_t addr_hint, uid_t *uid, uint32_t start_va, uint32_t length,
-                   uint32_t area_size, int16_t asid, uint16_t area_id, uint16_t touch_count,
-                   uint8_t access_rights, int16_t direction, void *map_info,
-                   status_$t *status);
+void *mst_$alloc_segs(uint32_t addr_hint, uid_t *uid, uint32_t start_va, uint32_t length,
+                      uint32_t area_size, int16_t asid, uint16_t area_id, uint16_t touch_count,
+                      uint8_t access_rights, int16_t direction, void *map_info,
+                      status_$t *status);
 
 /*
- * FUN_00e4411c - Internal get UID helper
+ * mst_$va_to_pte - Look up page table entry for a virtual address
+ *
+ * Translates an ASID and virtual address into a pointer to the
+ * corresponding page table entry. Also returns protection bits.
+ *
+ * Original address: 0x00E4411C
  */
-void FUN_00e4411c(uint16_t asid, uint32_t va, void *param, void **entry_out,
-                  status_$t *status);
+void mst_$va_to_pte(uint16_t asid, uint32_t va, uint16_t *prot_out, void **entry_out,
+                    status_$t *status);
 
 #endif /* MST_INTERNAL_H */

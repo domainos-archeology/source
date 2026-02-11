@@ -249,11 +249,11 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
                     &UID_$NIL, (uid_t *)local_buf, &status);
 
         if (status == status_$disk_needs_salvaging) {
-            FUN_00e6d1cc("    BOOT VOLUME NEEDS SALVAGING");
+            OS_$PRINT_INIT_ERROR("    BOOT VOLUME NEEDS SALVAGING");
             if (MMU_$NORMAL_MODE() < 0) {
                 CRASH_SYSTEM(&status);
             }
-            FUN_00e6d1cc("Proceed to bring up OS, and risk data?");
+            OS_$PRINT_INIT_ERROR("Proceed to bring up OS, and risk data?");
             if (prompt_for_yes_or_no() >= 0) {
                 CRASH_SYSTEM(&OS_BAT_disk_needs_salvaging_err);
             }
@@ -286,11 +286,11 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
 
             if ((paging_info >> 4) == 0) {
                 // No paging file on boot volume
-                FUN_00e6d1cc("Boot device has no OS paging file");
-                FUN_00e6d1cc("see the Installation Procedures chapter");
-                FUN_00e6d1cc("for information on how to correct this");
-                FUN_00e6d1cc("For now, the OS will NOT page, with performance");
-                FUN_00e6d1cc("degradation");
+                OS_$PRINT_INIT_ERROR("Boot device has no OS paging file");
+                OS_$PRINT_INIT_ERROR("see the Installation Procedures chapter");
+                OS_$PRINT_INIT_ERROR("for information on how to correct this");
+                OS_$PRINT_INIT_ERROR("For now, the OS will NOT page, with performance");
+                OS_$PRINT_INIT_ERROR("degradation");
                 NETWORK_$PAGING_FILE_UID.high = OS_WIRED_$UID.high;
                 NETWORK_$PAGING_FILE_UID.low = OS_WIRED_$UID.low;
             } else {
@@ -303,9 +303,9 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     NETWORK_$REALLY_DISKLESS = NETWORK_$DISKLESS;
 
     // Initialize additional memory pages
-    FUN_00e6d240(0xeb0000);
-    FUN_00e6d240(0xeb0800);
-    FUN_00e6d240(0xeb2000);
+    os_$free_va_page(0xeb0000);
+    os_$free_va_page(0xeb0800);
+    os_$free_va_page(0xeb2000);
 
     // Clear interrupt stack
     {
@@ -426,9 +426,9 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     // Verify node number matches stored value
     if (NETWORK_$DISKLESS >= 0) {
         if ((NAME_$NODE_UID.low & 0xfffff) != NODE_$ME) {
-            FUN_00e6d1cc("The node number of this node differs");
-            FUN_00e6d1cc("from that stored on disk");
-            FUN_00e6d1cc("Do you want to proceed?");
+            OS_$PRINT_INIT_ERROR("The node number of this node differs");
+            OS_$PRINT_INIT_ERROR("from that stored on disk");
+            OS_$PRINT_INIT_ERROR("Do you want to proceed?");
             if (prompt_for_yes_or_no() >= 0) {
                 status = status_$ok;
                 OS_$SHUTDOWN(&status);

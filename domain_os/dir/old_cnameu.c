@@ -15,14 +15,14 @@
  * DIR_$OLD_CNAMEU - Legacy change name (rename) entry
  *
  * The process is:
- * 1. Validate both old and new leaf names via FUN_00e54414
- * 2. Enter super mode / acquire directory lock via FUN_00e54854
- * 3. Find the old entry by name via FUN_00e54b9e
+ * 1. Validate both old and new leaf names via name_$validate_leaf
+ * 2. Enter super mode / acquire directory lock via NAME_$LOCK_DIR
+ * 3. Find the old entry by name via dir_$old_find_entry
  * 4. Add the entry with the new name:
  *    - Root directory: FUN_00e55406
  *    - Non-root: FUN_00e55220
  * 5. Update the hash table via FUN_00e555dc
- * 6. Release lock via FUN_00e54734
+ * 6. Release lock via NAME_$UNLOCK_DIR
  * 7. Exit super mode via ACL_$EXIT_SUPER
  *
  * Parameters:
@@ -50,32 +50,32 @@ void DIR_$OLD_CNAMEU(uid_t *dir_uid, char *old_name, uint16_t *old_name_len,
     uint8_t entry_type;
 
     /* Validate old leaf name */
-    valid = FUN_00e54414(old_name, *old_name_len, old_parsed, &old_parsed_len);
+    valid = name_$validate_leaf(old_name, *old_name_len, old_parsed, &old_parsed_len);
     if (valid >= 0) {
         *status_ret = status_$naming_invalid_leaf;
         return;
     }
 
     /* Validate new leaf name */
-    valid = FUN_00e54414(new_name, *new_name_len, new_parsed, &new_parsed_len);
+    valid = name_$validate_leaf(new_name, *new_name_len, new_parsed, &new_parsed_len);
     if (valid >= 0) {
         *status_ret = status_$naming_invalid_leaf;
         return;
     }
 
     /* Enter super mode / acquire directory lock */
-    FUN_00e54854(dir_uid, &handle, 0x40002, status_ret);
+    NAME_$LOCK_DIR(dir_uid, &handle, 0x40002, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;
     }
 
     /* Find the old entry by name */
-    found = FUN_00e54b9e(handle, old_parsed, old_parsed_len,
+    found = dir_$old_find_entry(handle, old_parsed, old_parsed_len,
                          &entry, &param5, &param6);
     if (found >= 0) {
         *status_ret = status_$naming_name_not_found;
-        FUN_00e54734(status_ret);
+        NAME_$UNLOCK_DIR(status_ret);
         ACL_$EXIT_SUPER();
         return;
     }
@@ -99,12 +99,12 @@ void DIR_$OLD_CNAMEU(uid_t *dir_uid, char *old_name, uint16_t *old_name_len,
 
     if ((int16_t)*status_ret == 0) {
         /* Compute new hash and update */
-        hash = FUN_00e54b58(new_parsed, new_parsed_len, 0);
+        hash = dir_$old_hash_name(new_parsed, new_parsed_len, 0);
         FUN_00e555dc(handle, param5, param6, hash);
     }
 
     /* Release directory lock */
-    FUN_00e54734(status_ret);
+    NAME_$UNLOCK_DIR(status_ret);
 
     ACL_$EXIT_SUPER();
 }

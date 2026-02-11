@@ -15,8 +15,7 @@
 /* Internal helper to convert ACL status - defined elsewhere */
 extern void NAME_CONVERT_ACL_STATUS(status_$t *status);
 
-/* Internal helper to unmap directory */
-extern void FUN_00e58560(int16_t asid, void *mapped_info);
+/* name_$unmap_dir_buffers declared in name/name_internal.h */
 
 /*
  * Per-ASID data offsets (relative to name_$data_base at 0xE80264)
@@ -91,10 +90,10 @@ void NAME_$SET_WDIRUS(uid_t *uidp, status_$t *status_ret)
     } else {
         /* Unmap old directory */
         mapped_offset = PROC1_$AS_ID << 4;  /* 16 bytes per mapped info */
-        FUN_00e58560(PROC1_$AS_ID, base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + mapped_offset);
+        name_$unmap_dir_buffers(PROC1_$AS_ID, base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + mapped_offset);
 
         /* Map new directory */
-        FUN_00e58488(uidp, PROC1_$AS_ID,
+        name_$map_dir(uidp, PROC1_$AS_ID,
                      base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + mapped_offset, status_ret);
 
         if (*status_ret == status_$ok) {
@@ -152,10 +151,10 @@ void NAME_$SET_NDIRUS(uid_t *uidp, status_$t *status_ret)
     } else {
         /* Unmap old directory */
         mapped_offset = PROC1_$AS_ID << 4;  /* 16 bytes per mapped info */
-        FUN_00e58560(PROC1_$AS_ID, base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + mapped_offset);
+        name_$unmap_dir_buffers(PROC1_$AS_ID, base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + mapped_offset);
 
         /* Map new directory */
-        FUN_00e58488(uidp, PROC1_$AS_ID,
+        name_$map_dir(uidp, PROC1_$AS_ID,
                      base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + mapped_offset, status_ret);
 
         if (*status_ret == status_$ok) {

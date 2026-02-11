@@ -1,7 +1,7 @@
 /*
  * DIR_$OLD_DELETE_FILEU - Legacy delete file from directory
  *
- * Thin wrapper around FUN_00e56b08 for file deletion.
+ * Thin wrapper around NAME_$OLD_DELETE_ENTRYU for file deletion.
  *
  * Original address: 0x00E5716E
  * Original size: 64 bytes
@@ -31,7 +31,7 @@ void DIR_$OLD_DELETE_FILEU(uid_t *dir_uid, char *name, uint16_t *name_len,
     /* Extract flag bytes from params and call shared helper.
      * Assembly reads byte from param5 (0x1c(A6)) and byte from param4 (0x18(A6)).
      * flag3 = 0 for delete file operation. */
-    FUN_00e56b08(dir_uid, name, *name_len,
+    NAME_$OLD_DELETE_ENTRYU(dir_uid, name, *name_len,
                  *((uint8_t *)param5), *((uint8_t *)param4), 0,
                  buf, status_ret);
 }

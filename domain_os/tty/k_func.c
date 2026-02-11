@@ -45,7 +45,7 @@ void TTY_$K_SET_FUNC_CHAR(short *line_ptr, ushort *func_ptr, char *ch_ptr,
 
     // Rebuild character class table if not in raw mode
     if (tty->raw_mode >= 0) {  // Not in raw mode
-        FUN_00e6726e(tty, true);
+        TTY_$I_SET_DFL_FUNCS(tty, true);
     }
 }
 
@@ -94,7 +94,7 @@ void TTY_$K_ENABLE_FUNC(short *line_ptr, ushort *func_ptr, char *enable_ptr,
 
     // Rebuild character class table if not in raw mode
     if (tty->raw_mode >= 0) {  // Not in raw mode
-        FUN_00e6726e(tty, true);
+        TTY_$I_SET_DFL_FUNCS(tty, true);
     }
 }
 

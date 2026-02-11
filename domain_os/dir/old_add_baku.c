@@ -14,10 +14,10 @@
  * DIR_$OLD_ADD_BAKU - Legacy add backup entry
  *
  * Based on the Ghidra decompilation at 0x00E56E3E:
- * 1. Validate leaf name via FUN_00e54414
+ * 1. Validate leaf name via name_$validate_leaf
  * 2. Compute backup name (name + ".bak", max 32 chars)
  * 3. Enter super mode / acquire directory lock
- * 4. Look up existing entry via FUN_00e54b9e
+ * 4. Look up existing entry via dir_$old_find_entry
  * 5. If not found:
  *    a. Unlock, exit super
  *    b. Get default ACL, set protection on new file
@@ -67,7 +67,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     int16_t i;
 
     /* Step 1: Validate leaf name */
-    valid = FUN_00e54414(name, *name_len, parsed_name, &parsed_len);
+    valid = name_$validate_leaf(name, *name_len, parsed_name, &parsed_len);
     if (valid >= 0 || ((int16_t)parsed_len > 0x1c && parsed_len != *name_len)) {
         *status_ret = status_$naming_invalid_leaf;
         return;
@@ -93,19 +93,19 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     name_buf[bak_name_len + 3] = 'k';
 
     /* Step 3: Enter super mode / acquire directory lock */
-    FUN_00e54854(dir_uid, &handle, 0x40000, status_ret);
+    NAME_$LOCK_DIR(dir_uid, &handle, 0x40000, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;
     }
 
     /* Step 4: Look up existing entry */
-    found = FUN_00e54b9e(handle, parsed_name, parsed_len,
+    found = dir_$old_find_entry(handle, parsed_name, parsed_len,
                          &entry, &param5, &param6);
 
     if (found >= 0) {
         /* Step 5: Entry not found - simple add path */
-        FUN_00e54734(status_ret);
+        NAME_$UNLOCK_DIR(status_ret);
         ACL_$EXIT_SUPER();
         if ((int16_t)*status_ret != 0) {
             return;
@@ -139,7 +139,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     if (*((uint8_t *)(entry + 0x27)) != 0x01) {
         /* Not a regular file entry */
         *status_ret = status_$naming_invalid_link_operation;
-        FUN_00e54734(&local_status);
+        NAME_$UNLOCK_DIR(&local_status);
         if ((int16_t)*status_ret == 0) {
             *status_ret = local_status;
         }
@@ -160,7 +160,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
         } else {
             NAME_CONVERT_ACL_STATUS(status_ret);
         }
-        FUN_00e54734(&local_status);
+        NAME_$UNLOCK_DIR(&local_status);
         if ((int16_t)*status_ret == 0) {
             *status_ret = local_status;
         }
@@ -181,13 +181,13 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     parsed_name[name_offset - 1] = 0x4B; /* 'K' */
 
     /* Check if .BAK entry already exists */
-    bak_found = FUN_00e54b9e(handle, parsed_name, name_offset,
+    bak_found = dir_$old_find_entry(handle, parsed_name, name_offset,
                              &bak_entry, &param5, &param6);
     if (bak_found < 0) {
         /* .BAK exists - check type */
         if (*((uint8_t *)(bak_entry + 0x27)) != 0x01) {
             *status_ret = status_$naming_invalid_link_operation;
-            FUN_00e54734(&local_status);
+            NAME_$UNLOCK_DIR(&local_status);
             if ((int16_t)*status_ret == 0) {
                 *status_ret = local_status;
             }
@@ -203,7 +203,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
             } else {
                 NAME_CONVERT_ACL_STATUS(status_ret);
             }
-            FUN_00e54734(&local_status);
+            NAME_$UNLOCK_DIR(&local_status);
             if ((int16_t)*status_ret == 0) {
                 *status_ret = local_status;
             }
@@ -213,7 +213,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     }
 
     /* Release directory lock */
-    FUN_00e54734(status_ret);
+    NAME_$UNLOCK_DIR(status_ret);
     if (*status_ret != status_$ok) {
         ACL_$EXIT_SUPER();
         return;
@@ -237,7 +237,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     /* If .BAK existed, drop it first */
     if (bak_found < 0) {
         /* Drop old .BAK entry */
-        FUN_00e56b08(dir_uid, name_buf + 4, bak_name_len,
+        NAME_$OLD_DELETE_ENTRYU(dir_uid, name_buf + 4, bak_name_len,
                      0xFF, 0xFF, 0, result_buf, status_ret);
         if (*status_ret != status_$ok) {
             ACL_$EXIT_SUPER();

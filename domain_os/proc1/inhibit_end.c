@@ -44,7 +44,7 @@ void PROC1_$INHIBIT_END(void)
         /* If bit 4 was set, do deferred ready list manipulation */
         if ((flags & 0x10) != 0) {
             proc1_$remove_from_ready_list(pcb);
-            FUN_00e20824();
+            proc1_$add_ready_body();
             /* pcb pointer may have changed - need to re-fetch */
         }
 
