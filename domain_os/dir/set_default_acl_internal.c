@@ -28,22 +28,8 @@
 
 #include "dir/dir_internal.h"
 
-/* DAT_00e4b33c - parameter for FILE_$FW_PARTIAL */
-extern uint8_t DAT_00e4b33c;
-
-/* DAT_00e52040 - parameter for FILE_$FW_PARTIAL (0x00000400) */
-extern uint8_t DAT_00e52040;
-
-/* ACL conversion functions */
-extern uint32_t ACL_$CONVERT_TO_10ACL(void *acl_param, uint32_t handle,
-                                       uid_t *acl_uid_ret,
-                                       uint32_t *acl_data_ret,
-                                       status_$t *status_ret);
-extern uint32_t ACL_$CONVERT_FUNKY_ACL(void *acl_param,
-                                        uint32_t *acl_data_ret,
-                                        uid_t *acl_uid_ret,
-                                        void *extra_ret,
-                                        status_$t *status_ret);
+/* DAT_00e52040 - 0x00000400 constant used as FILE_$FW_PARTIAL byte count */
+extern int32_t DAT_00e52040;
 
 void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
                                    void *acl_param, char all_entries,
@@ -56,13 +42,22 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
     uint8_t extra_buf[8];
     uid_t old_acl_uid;
     status_$t local_status;
-    uint8_t loc_buf[2];
-    int16_t vol_id;
-    uint8_t get_loc_buf1[4];
-    uint8_t get_loc_buf2[4];
     uint16_t attr_val;
     uint8_t trunc_buf[4];
     uint8_t acl_high_byte;
+
+    /*
+     * AST location descriptor struct (30+ bytes)
+     * Same layout as in do_op_drop_dir:
+     *   +0x00: location result (2 bytes)
+     *   +0x02: vol_id (2 bytes, int16_t)
+     *   +0x08: uid.high (4 bytes, input)
+     *   +0x0C: uid.low (4 bytes, input)
+     *   +0x1D: flags byte (bit 6 cleared before call)
+     */
+    uint32_t loc_desc[8];  /* 32 bytes to cover full struct */
+    uint32_t get_loc_buf1;
+    uint32_t get_loc_buf2;
 
     *status_ret = status_$ok;
 
@@ -76,8 +71,8 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
 
         if (format_check == 0) {
             /* Standard format - convert to 10ACL */
-            ACL_$CONVERT_TO_10ACL(acl_param, handle, &acl_uid,
-                                  acl_data, status_ret);
+            ACL_$CONVERT_TO_10ACL(acl_param, (void *)(uintptr_t)handle,
+                                  &acl_uid, acl_data, status_ret);
             if (*status_ret != status_$ok) {
                 goto audit;
             }
@@ -88,7 +83,7 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
             if (*status_ret != status_$ok) {
                 goto audit;
             }
-            /* Clear bit 0 of acl_uid.low */
+            /* Clear bit 0 of acl_uid.low (byte 0 of low word on big-endian) */
             acl_uid.low &= 0xFEFFFFFF;
         }
     }
@@ -98,20 +93,19 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
 
     /* If ACL UID is non-nil, verify it's on the same volume */
     if (acl_high_byte != 0) {
-        uid_t check_uid;
-        check_uid.high = acl_uid.high;
-        check_uid.low = acl_uid.low;
+        /* Set up location descriptor with ACL UID */
+        ((uint32_t *)((uint8_t *)loc_desc + 0x08))[0] = acl_uid.high;
+        ((uint32_t *)((uint8_t *)loc_desc + 0x0C))[0] = acl_uid.low;
+        /* Clear bit 6 of flags byte at offset 0x1D */
+        ((uint8_t *)loc_desc)[0x1D] &= 0xBF;
 
-        /* Clear bit 6 of flags byte for AST_$GET_LOCATION */
-
-        AST_$GET_LOCATION(loc_buf, 1, get_loc_buf1, get_loc_buf2,
-                          &local_status);
-
-        vol_id = *(int16_t *)loc_buf;
+        AST_$GET_LOCATION(loc_desc, 1, (uint32_t)(uintptr_t)&get_loc_buf1,
+                          &get_loc_buf2, &local_status);
 
         if (local_status != status_$ok ||
-            *(int16_t *)((char *)(uintptr_t)handle + 0x3A) != vol_id ||
-            (int8_t)0 /* flags byte bit 7 check */ < 0) {
+            *(int16_t *)((char *)(uintptr_t)handle + 0x3A) !=
+                *(int16_t *)((uint8_t *)loc_desc + 0x02) ||
+            (int8_t)((uint8_t *)loc_desc)[0x1D] < 0) {
             *status_ret = local_status;
             if (*status_ret == file_$object_not_found ||
                 *status_ret == status_$ok) {
@@ -193,7 +187,8 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
 
     /* If all_entries flag is set, write partial */
     if ((int8_t)all_entries < 0) {
-        FILE_$FW_PARTIAL((void *)handle, &DAT_00e4b33c,
+        FILE_$FW_PARTIAL((uid_t *)(uintptr_t)handle,
+                         (uint32_t *)&DAT_00e4b33c,
                          &DAT_00e52040, status_ret);
         if (*status_ret != status_$ok) {
             goto audit;

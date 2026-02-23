@@ -209,7 +209,29 @@ void *MST_$MAPS(int16_t mode, int16_t flags, uid_t *uid, uint32_t offset,
                 void *out, status_$t *status);
 void MST_$MAPS_AT(void);
 void MST_$REMAP(void);
-void MST_$REMAP_PRIVI(void);
+/*
+ * MST_$REMAP_PRIVI - Remap a privileged memory segment
+ *
+ * Remaps a segment in the current address space. Returns the
+ * mapped base address in A0 (m68k calling convention).
+ *
+ * Parameters:
+ *   config1     - Configuration data pointer
+ *   va_ptr      - Pointer to current virtual address (in/out)
+ *   config2     - Configuration data pointer
+ *   offset_ptr  - Pointer to file offset to map
+ *   config3     - Configuration data pointer
+ *   result_ptr  - Output: size of mapped region
+ *   status_ret  - Status return
+ *
+ * Returns: mapped base address (via A0 register)
+ *
+ * Original address: 0x00E43A0C
+ * Size: 302 bytes
+ */
+void *MST_$REMAP_PRIVI(void *config1, uint32_t *va_ptr, void *config2,
+                        uint32_t *offset_ptr, void *config3,
+                        uint32_t *result_ptr, status_$t *status_ret);
 void MST_$GROW_AREA(void);
 
 /* Unmapping */
