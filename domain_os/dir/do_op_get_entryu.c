@@ -2,8 +2,8 @@
  * dir_$do_op_get_entryu - DO_OP handler for get directory entry
  *
  * Local handler for the GET_ENTRYU operation (opcode 0x44). This function
- * is a wrapper that calls FUN_00e4cd90 to perform the actual entry lookup
- * (which includes a per-UID cache for fast lookups). After the lookup,
+ * is a wrapper that calls dir_$get_entry_cached to perform the actual entry
+ * lookup (which includes a per-UID cache for fast lookups). After the lookup,
  * if the entry was found on a different node than NODE_$ME and the entry
  * type is 1 (simple file), it updates the hint table to record the
  * redirect.
@@ -26,21 +26,13 @@
 /* ROUTE_$PORT - Network routing port reference */
 extern uint32_t ROUTE_$PORT;
 
-/* FUN_00e4cd90 - Cached get_entryu implementation (nested Pascal procedure)
- * Accesses parameters from parent stack frame.
- * Original address: 0x00E4CD90
- */
-extern void FUN_00e4cd90(status_$t *status_ret);
-
 void dir_$do_op_get_entryu(uid_t *uid, void *name, uint16_t name_len,
                            short *type_ret, char *uid_ret,
                            uint32_t *extra_ret, status_$t *status_ret)
 {
-    /* FUN_00e4cd90 performs the actual get_entryu operation, including
-     * a per-UID hash cache for accelerating repeated lookups.
-     * It accesses its parameters via the parent stack frame (Pascal
-     * nested procedure convention). */
-    FUN_00e4cd90(status_ret);
+    /* Perform cached directory entry lookup */
+    dir_$get_entry_cached(uid, name, name_len, type_ret, uid_ret,
+                          extra_ret, status_ret);
 
     /* Check if the result UID points to a different node */
     if ((*(uint32_t *)(uid_ret + 4) & 0xFFFFF) != NODE_$ME) {

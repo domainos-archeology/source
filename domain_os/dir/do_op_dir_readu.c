@@ -56,9 +56,6 @@ extern uint8_t DAT_00e4dffc;
 /* dir_$next_page - Advance to the next page in B-tree traversal */
 void dir_$next_page(void *handle, int16_t depth, void *extra, uint16_t *page_ret);
 
-/* FUN_00e4d8aa - Re-find current position after page navigation (nested proc) */
-void FUN_00e4d8aa(void);
-
 /* Name offset table */
 extern int16_t DIR_$NAME_OFFSET_TABLE[];
 
@@ -447,9 +444,17 @@ start_named_search:
             idx_ptr += 2;
         }
 
-        /* Move to next page */
+        /* Move to next page. When depth==0, re-find the last entry
+         * in the B-tree to establish position for dir_$next_page. */
         if (depth == 0) {
-            FUN_00e4d8aa();
+            int8_t refind_eof = 0;
+            dir_$refind_entry(local_handle, page_data, base_ptr,
+                             &find_entry_ret, (void **)&entry_name,
+                             extra_array + 2, &depth,
+                             num_entries, &refind_eof);
+            if ((int8_t)refind_eof < 0) {
+                break;
+            }
         }
         dir_$next_page((void *)local_handle, depth, extra_array + 2, &page_idx);
         if (page_idx == 0xFFFF) break;  /* No more pages */

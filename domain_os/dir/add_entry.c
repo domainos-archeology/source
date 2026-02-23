@@ -3,7 +3,7 @@
  *
  * Validates the entry name (no NUL bytes, no '/' characters, not "."
  * or ".."), checks for duplicates via dir_$find_entry, handles soft
- * link overflow page allocation if needed, then calls FUN_00e4f3ba
+ * link overflow page allocation if needed, then calls dir_$insert_entry
  * to actually insert the entry into the directory page.
  *
  * If the insertion fails and the directory's overflow flag (offset
@@ -26,27 +26,6 @@
 
 #include "dir/dir_internal.h"
 
-/* dir_$insert_entry - Actually insert the entry into directory pages
- *
- * This is the low-level insertion function that manages page allocation,
- * entry table updates, and data copying. Called after validation.
- *
- * Takes a pointer to the caller's frame (A1=A6) to access the full
- * parameter set at their stack offsets.
- *
- * Original address: 0x00E4F3BA
- * Size: 2640 bytes
- *
- * TODO: Analyze and emit FUN_00e4f3ba as a separate function.
- */
-extern void FUN_00e4f3ba(uint16_t slot_idx, uint32_t param2,
-                         uint16_t name_len, status_$t *status_ret);
-
-/* DIR_$CLEANUP - Directory cleanup/recovery
- * Original address: 0x00E53578
- */
-extern void DIR_$CLEANUP(void);
-
 #ifndef status_$naming_invalid_leaf
 #define status_$naming_invalid_leaf 0x000E000B
 #endif
@@ -61,8 +40,7 @@ void dir_$add_entry(uint32_t handle, void *name, uint16_t name_len,
     char found;
     uint8_t lookup_buf[28];
     uint8_t lookup_buf2[112];
-    uint16_t slot_info[2];  /* slot_info[0] = slot index */
-    int16_t overflow_page;  /* offset -0xAA: overflow page index or -1 */
+    uint16_t slot_info[2];  /* slot_info[0] = slot index / depth */
 
     /* Validate name: reject NUL bytes and '/' characters */
     remaining = name_len - 1;
@@ -99,28 +77,61 @@ invalid_leaf:
     }
 
     /* For soft links: check if total size exceeds page capacity */
+    dir_insert_ctx_t ctx;
+
     if (entry_type == 4 && ((int32_t)name_len + (int32_t)link_len) > 0x1B1) {
         /* Need overflow page for link data */
         dir_$alloc_overflow_page(status_ret);
         if (*status_ret != status_$ok) {
             return;
         }
+        /* TODO: overflow_page is set by alloc_overflow_page in the
+         * original code via a parent frame variable. Need to verify
+         * how the overflow page index is communicated. */
     } else {
-        overflow_page = -1;
+        ctx.overflow_page = -1;
     }
 
-    /* Insert the entry into the directory pages.
+    /* Populate the insertion context from our parameters and find_entry output.
      *
-     * In the original m68k code, FUN_00e4f3ba receives a pointer
-     * to the caller's frame (A1=A6) to access the full parameter
-     * set (entry_type, extra, uid, link_len, link_data) at their
-     * stack offsets. The slot_idx from dir_$find_entry is passed
-     * explicitly along with name_len and status_ret.
-     *
-     * TODO: Once FUN_00e4f3ba is fully analyzed, convert this call
-     * to pass all parameters explicitly.
+     * In the original M68K code, dir_$insert_entry was a nested Pascal
+     * subprocedure that accessed all of this data directly via the parent
+     * frame pointer (A1 = A6). Here we explicitly populate the context struct.
      */
-    FUN_00e4f3ba(slot_info[0], 0, name_len, status_ret);
+    ctx.handle = handle;
+    ctx.name = name;
+    ctx.name_len = name_len;
+    ctx.entry_type = entry_type;
+    ctx.extra_val = extra;
+    ctx.uid = uid;
+    ctx.link_len = link_len;
+    ctx.link_data = link_data;
+    ctx.max_depth = slot_info[0];
+    ctx.page_count = 0;
+
+    /* Extract B-tree path from find_entry output.
+     *
+     * In the original M68K frame layout:
+     *   Level 0 path entry: at A6-0x74 (= lookup_buf bytes 24-27)
+     *   Level N (N>=1) path entry: at lookup_buf2[(N-1)*4]
+     * Each level has 4 bytes: page_num (int16_t) + entry_idx (int16_t).
+     *
+     * The directory UID is stored in lookup_buf2 at offset 0x20 (high)
+     * and 0x24 (low). Split page numbers start at offset 0x26.
+     */
+    ctx.path_page[0] = *(int16_t *)(lookup_buf + 24);
+    ctx.path_entry[0] = *(int16_t *)(lookup_buf + 26);
+    for (int16_t lvl = 1; lvl <= ctx.max_depth && lvl < DIR_MAX_BTREE_DEPTH; lvl++) {
+        ctx.path_page[lvl] = *(int16_t *)(lookup_buf2 + (lvl - 1) * 4);
+        ctx.path_entry[lvl] = *(int16_t *)(lookup_buf2 + (lvl - 1) * 4 + 2);
+    }
+
+    /* Extract directory UID from find_entry traversal state */
+    ctx.dir_uid_high = *(uint32_t *)(lookup_buf2 + 0x20);
+    ctx.dir_uid_low = *(uint32_t *)(lookup_buf2 + 0x24);
+
+    /* Insert the entry into the directory pages */
+    dir_$insert_entry(&ctx, slot_info[0], 0, name_len, status_ret);
 
     /* If insertion failed and overflow flag is set, try cleanup */
     if (*status_ret != status_$ok) {

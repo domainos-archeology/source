@@ -13,6 +13,7 @@
 #include "acl/acl.h"
 #include "ast/ast.h"
 #include "file/file_internal.h" // we call FILE_$PRIV_UNLOCK
+#include "fim/fim.h"
 #include "name/name.h"
 #include "mst/mst.h"
 #include "network/network.h"
@@ -70,6 +71,77 @@ typedef struct Dir_$OpAddHardLinkuRequest {
     uid_t    uid2;              /* Target file UID */
     uint16_t path_len;          /* Name length */
 } Dir_$OpAddHardLinkuRequest;
+
+/*
+ * Maximum B-tree depth for directory pages.
+ * Directories can have up to 8 levels of B-tree nesting.
+ */
+#define DIR_MAX_BTREE_DEPTH 9
+
+/*
+ * dir_insert_ctx_t - Shared context for dir_$insert_entry and helper functions
+ *
+ * In the original M68K code, this data lived in dir_$add_entry's stack frame
+ * (link.w A6,-0xB0) and was accessed by nested Pascal subprocedures via the
+ * parent frame pointer (A1 = parent A6). For the C flattening, all shared
+ * state is bundled into this struct and passed explicitly.
+ *
+ * Frame offset mappings (A1 = parent A6):
+ *   Parameters: handle(+0x08), name(+0x0C), entry_type(+0x12),
+ *     extra(+0x14), uid(+0x18), link_len(+0x1C), link_data(+0x1E)
+ *   Locals: max_depth(-0xAE), overflow_page(-0xAA), page_count(-0xA6),
+ *     free_space(-0x9E), page_data(-0x94), idx_base(-0x90),
+ *     temp_entry(-0x8C), inter_page(-0x78), new_page(-0x74),
+ *     dir_uid(-0x50/-0x4C), fim_data(-0x18), remove_uid(-0x20)
+ *   B-tree path: page_num at -0x74+N*4, entry_idx at -0x72+N*4
+ *   Split pages: at -0x4A+i*2 (find_extra offset 0x26)
+ */
+typedef struct dir_insert_ctx {
+    /* === Parameters from dir_$add_entry === */
+    uint32_t    handle;             /* Directory handle (A1+0x08) */
+    void       *name;              /* Entry name (A1+0x0C) */
+    uint16_t    name_len;          /* Entry name length (A1+0x10) */
+    uint16_t    entry_type;        /* Entry type 2/3/4 (A1+0x12) */
+    uint32_t    extra_val;         /* Extra data (A1+0x14) */
+    uid_t      *uid;               /* Target UID pointer (A1+0x18) */
+    uint16_t    link_len;          /* Link data length, type 4 (A1+0x1C) */
+    void       *link_data;         /* Link data pointer, type 4 (A1+0x1E) */
+    int16_t     overflow_page;     /* Overflow page or -1 (A1-0xAA) */
+    int16_t     max_depth;         /* B-tree depth / initial slot_idx (A1-0xAE) */
+
+    /* === B-tree traversal path from dir_$find_entry === */
+    /* Level N: path_page[N] = page number, path_entry[N] = entry index.
+     * Level 0 = root, level max_depth = leaf. In the original M68K frame,
+     * these were interleaved as (page_num, entry_idx) pairs at A6-0x74+N*4.
+     * Level 0 was stored just below find_entry's extra buffer, and levels 1+
+     * were within the extra buffer. */
+    int16_t     path_page[DIR_MAX_BTREE_DEPTH];
+    int16_t     path_entry[DIR_MAX_BTREE_DEPTH];
+
+    /* === Directory UID from root page header === */
+    /* Stored in find_entry's extra buffer at offset 0x20/0x24. */
+    uint32_t    dir_uid_high;      /* (A1-0x50) */
+    uint32_t    dir_uid_low;       /* (A1-0x4C as uint32) */
+
+    /* === Split page tracking === */
+    /* Page numbers allocated during B-tree splits. In the original code,
+     * stored in find_entry's extra buffer at offset 0x26+i*2 (A6-0x4A+i*2).
+     * Populated by dir_$alloc_split_page. */
+    int16_t     split_pages[16];
+    int16_t     page_count;        /* Count of allocated split pages (A1-0xA6) */
+
+    /* === Working state === */
+    uint8_t    *page_data;         /* Current mapped page (A1-0x94) */
+    uint8_t    *idx_base;          /* Index table base in page (A1-0x90) */
+    uint8_t    *new_page;          /* New page during splits (A1-0x74) */
+    uint8_t    *inter_page;        /* Root/internal page ptr (A1-0x78) */
+    uint8_t    *temp_entry;        /* Temporary entry pointer (A1-0x8C) */
+    int16_t     free_space;        /* Free space on current page (A1-0x9E) */
+
+    /* === FIM cleanup data (for type 4 soft link entries) === */
+    uint8_t     fim_data[16];      /* FIM cleanup structure (A1-0x18) */
+    uint8_t     remove_uid[8];     /* UID buffer for FIM error recovery (A1-0x20) */
+} dir_insert_ctx_t;
 
 /*
  * ============================================================================
@@ -1189,5 +1261,154 @@ extern uint8_t DAT_00e54b28;
 
 /* ACL_$NIL extern */
 extern uid_t ACL_$NIL;
+
+/*
+ * ============================================================================
+ * B-tree Directory Entry Functions
+ * ============================================================================
+ */
+
+/* DIR_$NAME_OFFSET_TABLE - Name offset by entry type (indexed by type & 7)
+ * Located at A5+0x2000 on M68K. Gives the byte offset from entry start
+ * to the name field for each directory entry type.
+ */
+extern int16_t DIR_$NAME_OFFSET_TABLE[];
+
+/* DIR_$CLEANUP - Directory cleanup/recovery
+ * Called when a directory operation fails and the overflow flag is set.
+ * Original address: 0x00E53578
+ */
+extern void DIR_$CLEANUP(void);
+
+/* dir_$get_entry_cached - Cached directory entry lookup
+ *
+ * Per-UID hash cache (modulo 111, 40-byte entries) for accelerating
+ * repeated directory entry lookups. On cache miss, calls dir_$lookup_entry.
+ *
+ * Originally a nested Pascal subprocedure of dir_$do_op_get_entryu.
+ *
+ * Original address: 0x00E4CD90
+ * Size: 612 bytes
+ */
+void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
+                           short *type_ret, char *uid_ret, uint32_t *extra_ret,
+                           status_$t *status_ret);
+
+/* dir_$lookup_entry - Uncached directory entry lookup
+ *
+ * Opens the directory, calls dir_$find_entry, interprets the result by
+ * entry type (2=file, 3=hard link, 4=soft link). For root directory,
+ * queries remote nodes on miss.
+ *
+ * Originally a nested Pascal subprocedure of dir_$do_op_get_entryu.
+ *
+ * Original address: 0x00E4CB6A
+ * Size: 538 bytes
+ */
+void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
+                       short *type_ret, char *uid_ret, uint32_t *extra_ret,
+                       uint8_t *found_ret, status_$t *status_ret);
+
+/* dir_$refind_entry - Re-find current B-tree position after page navigation
+ *
+ * After processing entries on a page, re-establishes the cursor position
+ * in the B-tree by calling dir_$find_entry with the last-seen entry name.
+ *
+ * Originally a nested Pascal subprocedure of dir_$do_op_dir_readu.
+ *
+ * Original address: 0x00E4D8AA
+ * Size: 170 bytes
+ */
+void dir_$refind_entry(uint32_t local_handle, uint8_t *page_data,
+                       uint8_t *idx_base, void **entry_ptr_ret,
+                       void **entry_name_ret, void *extra_array,
+                       int16_t *depth_ret, int16_t num_entries,
+                       int8_t *eof_ret);
+
+/* dir_$insert_entry - Core B-tree entry insertion
+ *
+ * Inserts a new entry into a directory's B-tree page structure. Handles:
+ *   - Finding space, compacting dead entries, page splitting
+ *   - Recursive insertion when splits propagate up the B-tree
+ *   - Root page split (creating internal nodes)
+ *
+ * Originally a nested Pascal subprocedure of dir_$add_entry.
+ *
+ * Parameters:
+ *   ctx        - Shared insertion context (parent frame state)
+ *   slot_idx   - Current B-tree level for insertion
+ *   param_2    - Recursive parameter (link data offset or 0)
+ *   name_len   - Entry name length
+ *   status_ret - Output: status code
+ *
+ * Original address: 0x00E4F3BA
+ * Size: 2640 bytes
+ */
+void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
+                       uint32_t param_2, int16_t name_len,
+                       status_$t *status_ret);
+
+/* dir_$add_bak_default_prot - Add backup entry with default file protection
+ *
+ * Reads default FILE ACL, sets protection on the backup file,
+ * then adds a type-3 entry and writes the file.
+ *
+ * Originally a nested Pascal subprocedure of dir_$do_op_add_bak.
+ *
+ * Original address: 0x00E50790
+ * Size: 160 bytes
+ */
+void dir_$add_bak_default_prot(uint32_t local_handle, uid_t *uid,
+                               void *name_ptr, uint16_t name_len,
+                               uid_t *backup_uid, status_$t *status_ret,
+                               char *rollback_flag);
+
+/*
+ * ============================================================================
+ * B-tree Helper Functions (nested procedures of dir_$add_entry)
+ *
+ * These are nested Pascal subprocedures that access the shared insertion
+ * context via the parent frame pointer. In the C flattening, they take
+ * a dir_insert_ctx_t pointer as their first parameter.
+ *
+ * TODO: These are declared but not yet emitted as C code. They will
+ * appear as undefined references until analyzed and implemented.
+ * ============================================================================
+ */
+
+/* dir_$calc_entry_size - Compute aligned size of a directory entry
+ * Original address: 0x00E4EF42, 58 bytes
+ */
+uint16_t dir_$calc_entry_size(uint8_t *entry);
+
+/* dir_$move_entries_to_page - Move entries between pages during split
+ * Original address: 0x00E4EF7C, 184 bytes
+ */
+void dir_$move_entries_to_page(dir_insert_ctx_t *ctx,
+                               int16_t from_idx, int16_t to_idx);
+
+/* dir_$write_entry_to_page - Write/insert entry data into a page
+ * The page_ptr_ref is a pointer to either ctx->new_page or ctx->page_data;
+ * the function may update it.
+ * Original address: 0x00E4F100, 384 bytes
+ */
+void dir_$write_entry_to_page(dir_insert_ctx_t *ctx, uint8_t flag,
+                              uint8_t **page_ptr_ref, int16_t count);
+
+/* dir_$compact_page_entries - Compact/reclaim dead entry space on a page
+ * Original address: 0x00E4F2DA, 224 bytes
+ */
+void dir_$compact_page_entries(dir_insert_ctx_t *ctx);
+
+/* dir_$alloc_split_page - Allocate new page for B-tree splitting
+ * Original address: 0x00E4EB40, 906 bytes
+ */
+void dir_$alloc_split_page(dir_insert_ctx_t *ctx, uint8_t flag,
+                           status_$t *status_ret);
+
+/* dir_$finalize_split - Finalize page split, update parent arrays
+ * Original address: 0x00E4EECA, 120 bytes
+ */
+void dir_$finalize_split(dir_insert_ctx_t *ctx, status_$t *status_ret);
 
 #endif /* DIR_INTERNAL_H */

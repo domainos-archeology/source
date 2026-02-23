@@ -14,9 +14,9 @@
  * 4. Verify backup UID is on the same volume via AST_$GET_LOCATION
  * 5. Set attribute 6 (link count increment) on the backup UID
  * 6. Look up original entry by name:
- *    a. If not found: call FUN_00e50790 (nested subprocedure that reads
- *       default FILE ACL protection, sets protection on backup UID, adds
- *       entry, and writes file)
+ *    a. If not found: call dir_$add_bak_default_prot to read default
+ *       FILE ACL protection, set protection on backup UID, add entry,
+ *       and write file
  *    b. If found as type 4 (link): return invalid_link_operation
  *    c. If found: extract original UID, check ACL rights, copy ACL from
  *       original to backup, then look up the backup name:
@@ -50,18 +50,6 @@ extern uint16_t DAT_00e50c5a;
 
 /* DAT_00e50830 - Protection type parameter for FILE_$SET_PROT */
 extern uint16_t DAT_00e50830;
-
-/* FUN_00e50790 - Nested subprocedure: read default prot, set prot, add entry
- *
- * This is a nested Pascal subprocedure of dir_$do_op_add_bak. It accesses
- * variables from the parent's stack frame via the frame pointer chain.
- * It reads the default FILE ACL protection from the directory, applies it
- * to the backup UID, adds the entry, clears the rollback flag, and writes
- * the file.
- *
- * Original address: 0x00E50790
- */
-extern void FUN_00e50790(void);
 
 void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name_len,
                          void *uid_data, uid_t *result_uid, status_$t *status_ret)
@@ -182,7 +170,8 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
         if (found >= 0) {
             /* Original not found - use nested helper to set default
              * protection and add the backup entry directly */
-            FUN_00e50790();
+            dir_$add_bak_default_prot(local_handle, uid, name_ptr, name_len,
+                                       backup_uid, status_ret, &rollback_flag);
             goto done;
         }
     }
