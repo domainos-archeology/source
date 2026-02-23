@@ -129,7 +129,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                 }
 
                 /* Update hint after redirect */
-                FUN_00e4bc76(&local_uid, &hints[next_idx * 2 - 1],
+                DIR_$UPDATE_HINT(&local_uid, &hints[next_idx * 2 - 1],
                              (int16_t)hints[next_idx * 2],
                              (uint8_t *)resp + 0x16, 0);
                 return;
@@ -146,7 +146,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             }
 
             /* Check if error is retryable */
-            if (FUN_00e4bc26((int16_t)resp->status) >= 0) {
+            if (DIR_$IS_RETRYABLE_STATUS((int16_t)resp->status) >= 0) {
                 /* Not retryable */
                 return;
             }
@@ -180,7 +180,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                 dir_$do_op_add_entry(&local_uid, 2, req + 0x9c,
                              *((uint16_t *)(req + 0x8e)),
                              3, *((uint32_t *)(req + 0x98)),
-                             req + 0x90, 0, (uint32_t)(uintptr_t)FUN_00e4c9e4,
+                             req + 0x90, 0, (uint32_t)(uintptr_t)dir_$find_entry,
                              result_buf, &resp->status);
             }
             if ((int8_t)AUDIT_$ENABLED < 0) {
@@ -239,7 +239,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                 int16_t new_name_offset = old_name_len + DAT_00e7fc66;
                 uint8_t *new_name = req + 0x8e + new_name_offset;
 
-                FUN_00e518bc(&local_uid,
+                dir_$do_op_cname(&local_uid,
                              (uint32_t)*((uint16_t *)(req + 0x0e)) << 16,
                              (int16_t)(uintptr_t)(req + 0x92),
                              ((uint32_t)old_name_len << 16) | (uint16_t)(uintptr_t)new_name,
@@ -249,7 +249,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 uint16_t old_name_len2 = *((uint16_t *)(req + 0x8e));
                 int16_t new_name_offset2 = old_name_len2 + DAT_00e7fc66;
-                FUN_00e4bec2(0x18, resp->status, &local_uid,
+                AUDIT_$LOG_CNAME_OP(0x18, resp->status, &local_uid,
                              old_name_len2,
                              *((uint16_t *)(req + 0x90)),
                              req + 0x92,
@@ -258,7 +258,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x34: /* Create directory */
-            FUN_00e50832(&local_uid,
+            dir_$do_op_add_bak(&local_uid,
                          *((uint16_t *)(req + 0x0e)),
                          req + 0x98,
                          *((uint16_t *)(req + 0x8e)),
@@ -320,7 +320,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          *((uint32_t *)(req + 0x92)),
                          result_buf, &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
-                FUN_00e4bd48(0x1A, resp->status, &local_uid,
+                AUDIT_$LOG_LINK_OP(0x1A, resp->status, &local_uid,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x96,
                              *((uint16_t *)(req + 0x90)),
@@ -329,7 +329,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x3E: /* Read link (extended) */
-            FUN_00e4d5b4(&local_uid, req + 0x96,
+            dir_$do_op_read_linku(&local_uid, req + 0x96,
                          *((uint16_t *)(req + 0x8e)),
                          *((uint16_t *)(req + 0x90)),
                          *((uint32_t *)(req + 0x92)),
@@ -338,7 +338,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x40: /* Create directory (extended) */
-            FUN_00e511da(&local_uid, 2, req + 0x90,
+            dir_$do_op_drop_entry(&local_uid, 2, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
                          4, (void *)&resp->_22_4_,
                          &resp->status);
@@ -377,7 +377,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                 /* Copy continuation */
                 resp->_22_4_ = *((uint32_t *)(req + 0x8e));
 
-                FUN_00e4d954(&local_uid,
+                dir_$do_op_dir_readu(&local_uid,
                              *((int16_t *)&resp->f18[2]),
                              req + 0xa0,
                              *((uint16_t *)(req + 0x9e)),
@@ -393,7 +393,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x44: /* Get entry */
-            FUN_00e4cffa(&local_uid, req + 0x90,
+            dir_$do_op_get_entryu(&local_uid, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
                          &resp->_22_4_, &resp->f1a,
                          (uint8_t *)resp + 0x1e,
@@ -401,7 +401,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x46: /* Get next entry */
-            FUN_00e4e41a(&local_uid, req + 0x8e,
+            dir_$do_op_find_uid(&local_uid, req + 0x8e,
                          req[0x96],
                          &resp->_22_4_, &resp->f1a,
                          (uint8_t *)resp + 0x1a,
@@ -427,13 +427,13 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x50: /* Validate name */
-            FUN_00e501d2(req + 0x90,
+            dir_$do_op_validate_root_entry(req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
                          &resp->status);
             break;
 
         case 0x52: /* Set protection */
-            FUN_00e5216a(&local_uid, req + 0xba,
+            dir_$do_op_set_prot(&local_uid, req + 0xba,
                          *((int16_t *)(req + 0xc2)));
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 audit_$log_prot_op(resp->status, &local_uid,
@@ -443,7 +443,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x54: /* Set protection (extended) */
-            FUN_00e52044(&local_uid, req + 0x96,
+            dir_$do_op_set_def_prot(&local_uid, req + 0x96,
                          req + 0x8e, req + 0xc2,
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
@@ -454,7 +454,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x56: /* Get protection */
-            FUN_00e51cf6(&local_uid, req + 0x8e,
+            dir_$do_op_get_def_prot(&local_uid, req + 0x8e,
                          &resp->_22_4_, (uint8_t *)resp + 0x40,
                          &resp->status);
             break;
@@ -468,7 +468,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                     resp_bytes[0x16 + j] = req[0x94 + j];
                 }
 
-                FUN_00e4d0e2(*((uint32_t *)(req + 0x8e)),
+                dir_$do_op_resolve(*((uint32_t *)(req + 0x8e)),
                              *((uint16_t *)(req + 0x92)),
                              resp_bytes + 0x16,
                              &resp->_22_4_,
@@ -490,7 +490,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                     if ((~loop_byte & flags_byte) != 0 &&
                         resp->status == status_$ok &&
                         *((uint16_t *)(resp_bytes + 0x2e)) == 0) {
-                        FUN_00e4bf92(*((uint32_t *)(req + 0x8e)),
+                        audit_$log_resolve_op(*((uint32_t *)(req + 0x8e)),
                                     *((uint16_t *)(req + 0x92)),
                                     resp_bytes + 0x16,
                                     resp->status);

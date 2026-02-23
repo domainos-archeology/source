@@ -17,7 +17,7 @@
  * stack frame. Flattened to take explicit parameters from the parent
  * DIR_$DIR_READU function.
  *
- * If the directory is the canned replicated root, calls FUN_00e4dffe
+ * If the directory is the canned replicated root, calls dir_$read_canned_root
  * for the special root read. Otherwise delegates to DIR_$OLD_DIR_READU.
  *
  * Parameters:
@@ -41,7 +41,7 @@ void DIR_$DIR_READU_FUN_00e4e1a8(uid_t *dir_uid, int32_t *continuation,
     if (dir_uid->high == NAME_$CANNED_REP_ROOT_UID.high &&
         dir_uid->low == NAME_$CANNED_REP_ROOT_UID.low) {
         /* Use canned root read handler */
-        FUN_00e4dffe();
+        dir_$read_canned_root();
     } else {
         /* Delegate to legacy directory read */
         DIR_$OLD_DIR_READU(dir_uid, continuation, max_entries,

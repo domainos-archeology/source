@@ -46,7 +46,7 @@ void DIR_$DIR_READU(uid_t *dir_uid, void *entries_ret, void *entries_size,
                                      count_ret, flags, eof_ret, status_ret);
     } else {
         /* Try new protocol first */
-        FUN_00e4e1fe(status_ret);
+        dir_$dir_readu_via_do_op(status_ret);
 
         /* Check for fallback conditions */
         if (*status_ret == file_$bad_reply_received_from_remote_node ||

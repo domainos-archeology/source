@@ -4,8 +4,8 @@
  * Creates a new subdirectory within a parent directory. Opens the parent
  * for write access with ACL right 2 (create), reads its default ACL UIDs
  * from page 0 (offset 0x46 for DIR ACL, 0x7A for FILE ACL), calls
- * FUN_00e52394 to create and initialize the new directory, then adds
- * the entry via FUN_00e4fe0a.
+ * dir_$create_dir_obj to create and initialize the new directory, then adds
+ * the entry via dir_$add_entry.
  *
  * On failure to add the entry (name collision), cleans up the created
  * directory by resetting ACL attributes and setting refcount to zero.
@@ -59,15 +59,15 @@ void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
     file_acl_uid.low  = *(uint32_t *)(page_data + 0x7E);
 
     /* Create new directory object */
-    FUN_00e52394(uid, page_data, &dir_acl_uid, &file_acl_uid,
-                 new_uid, status_ret);
+    dir_$create_dir_obj(uid, page_data, &dir_acl_uid, &file_acl_uid,
+                        new_uid, status_ret);
     if (*status_ret != status_$ok) {
         goto cleanup;
     }
 
     /* Add entry to parent directory */
-    FUN_00e4fe0a(local_handle, name, name_len, 2, 0, new_uid,
-                 0, FUN_00e4c9e4, status_ret);
+    dir_$add_entry(local_handle, name, name_len, 2, 0, new_uid,
+                   0, dir_$find_entry, status_ret);
     if (*status_ret != status_$ok) {
         /* Add failed - clean up the created directory */
 
@@ -97,7 +97,7 @@ void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
                 uint8_t extra2[2];
                 char found;
 
-                found = FUN_00e4c9e4((void *)local_handle, name,
+                found = dir_$find_entry((void *)local_handle, name,
                                      name_len, 0, &entry_ptr,
                                      extra1, extra2);
                 if (found < 0) {

@@ -84,7 +84,7 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
     }
 
     /* Look up the entry by name */
-    found = FUN_00e4c9e4(parent_h, name, name_len, 0,
+    found = dir_$find_entry(parent_h, name, name_len, 0,
                          &entry_ret, extra1, extra2);
     entry_ptr = (uint8_t *)entry_ret;
     if (found >= 0) {
@@ -205,7 +205,7 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
             }
 
             /* Unmap the child directory pages */
-            FUN_00e4b6ba((void *)child_handle);
+            DIR_$UNMAP_PAGES((void *)child_handle);
 
             /* Delete the directory object */
             FILE_$DELETE_OBJ(&target_uid, 0xFF, delete_buf, status_ret);
@@ -225,7 +225,7 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
 
 remove_entry:
         /* Remove the name entry from the parent directory */
-        FUN_00e50fc8(parent_h, name, name_len, 2, remove_buf, status_ret);
+        dir_$remove_entry(parent_h, name, name_len, 2, remove_buf, status_ret);
     }
 
 done:

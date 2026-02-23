@@ -27,7 +27,7 @@
  *   status_ret  - Output: status code
  *
  * Returns:
- *   Result from FUN_00e4e90a (truncate operation) or error
+ *   Result from dir_$truncate_pages (truncate operation) or error
  *
  * Original address: 0x00E53728
  * Original size: 752 bytes
@@ -267,7 +267,7 @@ phase3:
         if (PAGE_UID_HIGH(dst_data) == tracking_uid_high &&
             PAGE_UID_LOW(dst_data) == tracking_uid_low) {
             /* Mark destination page as dirty */
-            FUN_00e4b7b6(handle, dst_data);
+            DIR_$WIRE_PAGE(handle, dst_data);
 
             /* Copy 256 uint32_t (1024 bytes = one full page) from src to dst */
             {
@@ -301,7 +301,7 @@ phase3:
 
 do_truncate:
     /* Truncate the directory to the validated page count */
-    return FUN_00e4e90a(handle, cur_page + 1, status_ret);
+    return dir_$truncate_pages(handle, cur_page + 1, status_ret);
 
 error_internal:
     if (crash_flag < 0) {
