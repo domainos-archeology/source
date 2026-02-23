@@ -24,7 +24,7 @@ void TTY_$I_ERR(tty_desc_t *tty, char fatal)
             // Not ignoring framing errors - set error flag and signal
             goto signal_error;
         }
-        // Fall through to handle via FUN_00e1bcfc
+        // Fall through to handle via TTY_$I_STORE_PARITY
     } else {
         // Check if this is a break condition we care about
         char is_break_we_ignore = (((tty->input_flags & 0x400) != 0) &&
@@ -48,7 +48,12 @@ void TTY_$I_ERR(tty_desc_t *tty, char fatal)
 
 handle_error:
     // Handle via error helper
-    FUN_00e1bcfc();
+    /* TTY_$I_STORE_PARITY was originally a Pascal nested procedure
+     * that accessed the parent frame directly. It reads the tty descriptor
+     * from parent_frame+0x08 and the byte at parent_frame+0x0C (which is
+     * the 'fatal' parameter). This stores a parity/error marker into the
+     * input buffer stream. */
+    TTY_$I_STORE_PARITY(tty, (uint8_t)fatal);
     return;
 
 signal_error:

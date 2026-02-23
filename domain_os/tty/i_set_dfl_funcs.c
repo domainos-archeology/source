@@ -24,14 +24,7 @@
 
 #include "tty/tty_internal.h"
 
-/*
- * DAT_00e82450 - Default enabled function character mask
- *
- * Located at offset 0x24 from the TTY global data base (0xE8242C).
- * This is a bitmask indicating which function characters should be
- * active by default.
- */
-extern uint32_t DAT_00e82450;
+/* DAT_00e82450 declared in tty_internal.h */
 
 void TTY_$I_SET_DFL_FUNCS(tty_desc_t *tty, char use_dfl)
 {

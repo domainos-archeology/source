@@ -30,26 +30,140 @@
 void TTY_$I_ADVANCE_EC(m68k_ptr_t ec);
 
 /*
- * FUN_00e1bcfc - Error handling helper
+ * TTY_$I_STORE_PARITY - Store a character with optional parity marking
  *
- * Internal error handling for TTY operations.
+ * Pascal nested procedure from TTY_$I_ERR. Stores either a 3-byte
+ * parity error sequence (0xFF, 0x00, ch) or just 0x00, then checks
+ * break mode for signaling.
+ *
+ * NOTE: In the original code this is a Pascal nested procedure that
+ * accesses the parent frame (TTY_$I_ERR) directly. We flatten it
+ * to take explicit parameters.
+ *
+ * Parameters:
+ *   tty - TTY descriptor (from parent frame offset 0x08)
+ *   ch  - Character received (from parent frame offset 0x0C)
  *
  * Original address: 0x00e1bcfc
  */
-void FUN_00e1bcfc(void);
+void TTY_$I_STORE_PARITY(tty_desc_t *tty, uint8_t ch);
 
 /*
- * FUN_00e1bf70 - Set raw mode helper
+ * TTY_$I_SET_RAW_MODE - Switch TTY between raw and cooked modes
  *
- * Internal helper for setting TTY raw mode.
+ * Saves/restores flag bits and reconfigures the TTY for raw or
+ * cooked (canonical) mode operation.
  *
  * Parameters:
  *   tty - TTY descriptor
- *   raw - Raw mode flag (0 = cooked, non-zero = raw)
+ *   raw - Raw mode flag (negative = enter raw, non-negative = leave raw)
  *
  * Original address: 0x00e1bf70
  */
-void FUN_00e1bf70(tty_desc_t *tty, char raw);
+void TTY_$I_SET_RAW_MODE(tty_desc_t *tty, char raw);
+
+/*
+ * TTY_$I_NEWLINE - Output a newline sequence
+ *
+ * Outputs CR/LF or LF depending on output flags.
+ *
+ * Parameters:
+ *   tty - TTY descriptor
+ *
+ * Original address: 0x00e1b456
+ */
+void TTY_$I_NEWLINE(tty_desc_t *tty);
+
+/*
+ * TTY_$I_CALC_COLUMN - Calculate display column position
+ *
+ * Walks the input buffer tracking the display column, handling
+ * TAB, BS, CR, control chars, and normal characters.
+ *
+ * Parameters:
+ *   buf        - Pointer to circular buffer read position (&tty->input_read)
+ *   start      - Starting position index (1-256)
+ *   column     - Initial column value
+ *   echo_flags - Echo flags (bit 4 = echo control chars as ^X)
+ *
+ * Returns:
+ *   Calculated column position
+ *
+ * Original address: 0x00e1b4b6
+ */
+uint16_t TTY_$I_CALC_COLUMN(void *buf, int16_t start, uint16_t column, uint32_t echo_flags);
+
+/*
+ * TTY_$I_DELETE_CHAR - Delete the last character from input buffer
+ *
+ * Removes the most recently typed character and provides visual
+ * feedback depending on the echo mode (CRT erase, echo erase, etc.).
+ *
+ * Parameters:
+ *   tty - TTY descriptor
+ *
+ * Original address: 0x00e1b538
+ */
+void TTY_$I_DELETE_CHAR(tty_desc_t *tty);
+
+/*
+ * TTY_$I_KILL_LINE - Erase the entire input line
+ *
+ * Erases all pending input either by repeated delete-char (CRT mode)
+ * or by echoing kill character and resetting buffer pointers.
+ *
+ * Parameters:
+ *   tty - TTY descriptor
+ *
+ * Original address: 0x00e1b6ac
+ */
+void TTY_$I_KILL_LINE(tty_desc_t *tty);
+
+/*
+ * TTY_$I_WORD_ERASE - Erase the previous word from input
+ *
+ * Deletes backward: first skips word separators, then deletes
+ * through the previous word. Uses a bitmap for classification.
+ *
+ * Parameters:
+ *   tty - TTY descriptor
+ *
+ * Original address: 0x00e1b716
+ */
+void TTY_$I_WORD_ERASE(tty_desc_t *tty);
+
+/*
+ * TTY_$I_BREAK_CHAR - Process a break/newline character
+ *
+ * Handles line-terminating characters: stores in buffer, echoes,
+ * advances head pointer, and wakes readers.
+ *
+ * Parameters:
+ *   tty - TTY descriptor
+ *   ch  - The break/newline character
+ *
+ * Original address: 0x00e1b8b0
+ */
+void TTY_$I_BREAK_CHAR(tty_desc_t *tty, uint8_t ch);
+
+/*
+ * TTY_$I_PUT_OUTPUT - Write to output with input-pending check
+ *
+ * Wrapper around tty_$i_put_chars that defers output when
+ * input is pending and the defer flag is set.
+ *
+ * Parameters:
+ *   tty   - TTY descriptor
+ *   buf   - Character buffer to output
+ *   count - Number of characters
+ *   max   - Maximum to process
+ *
+ * Returns:
+ *   Number of characters written, or 0 if deferred
+ *
+ * Original address: 0x00e1bf0e
+ */
+int16_t TTY_$I_PUT_OUTPUT(tty_desc_t *tty, void *buf, uint16_t count, uint16_t max);
 
 /*
  * TTY_$I_LOCK - Lock TTY
@@ -240,6 +354,51 @@ void tty_$i_wait(tty_desc_t *tty, char wait_flag, char *done_flag,
  * Original address: 0x00e82454
  */
 extern uint8_t DAT_00e82454;
+
+/*
+ * DAT_00e82450 - Default enabled function character mask
+ *
+ * Bitmask of default-enabled function characters.
+ * Used by TTY_$I_SET_DFL_FUNCS.
+ * Original address: 0x00e82450
+ */
+extern uint32_t DAT_00e82450;
+
+/*
+ * DAT_00e2ddd4 - Output flags mask for raw mode save/restore
+ *
+ * Bitmask of output flag bits that are cleared when entering raw mode
+ * and restored when leaving raw mode. Value: 0x0000001F.
+ * Original address: 0x00e2ddd4
+ */
+extern uint32_t DAT_00e2ddd4;
+
+/*
+ * DAT_00e2ddd8 - Input flags mask for raw mode save/restore
+ *
+ * Bitmask of input flag bits that are cleared when entering raw mode
+ * and restored when leaving raw mode. Value: 0x0000003C.
+ * Original address: 0x00e2ddd8
+ */
+extern uint32_t DAT_00e2ddd8;
+
+/*
+ * tty_$word_sep_bitmap - Word separator character bitmap
+ *
+ * Used by TTY_$I_WORD_ERASE to classify characters as word separators.
+ * Indexed as: byte[(0xFF - ch) >> 3], bit[ch & 7].
+ * Initialized at runtime during TTY setup.
+ * Original address: 0x00e2ddb4 (A5 base for TTY module)
+ */
+extern uint8_t tty_$word_sep_bitmap[];
+
+/*
+ * status_$t_00e1bcf8 - Error status for crash handling
+ *
+ * Status code passed to CRASH_SYSTEM when crash char received.
+ * Original address: 0x00e1bcf8
+ */
+extern status_$t status_$t_00e1bcf8;
 
 /*
  * PTR_TTY_$I_DXM_SIGNAL - Pointer to TTY_$I_DXM_SIGNAL function

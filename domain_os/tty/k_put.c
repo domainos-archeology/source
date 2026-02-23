@@ -29,8 +29,7 @@
 #define status_$tty_overflow       0x350009
 #define status_$tty_would_block    0x35000a
 
-/* External helper functions */
-extern int16_t FUN_00e1bf0e(tty_desc_t *tty, void *buffer, uint16_t count, uint16_t max);
+/* TTY_$I_PUT_OUTPUT declared in tty_internal.h */
 
 void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
                 ushort *count, status_$t *status_ret)
@@ -92,7 +91,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
     /* Write data in chunks */
     while (chars_written < *count) {
         /* Write up to 64 bytes at a time */
-        written = FUN_00e1bf0e(tty, (char *)buffer + chars_written,
+        written = TTY_$I_PUT_OUTPUT(tty, (char *)buffer + chars_written,
                                *count - chars_written, 0x40);
         chars_written += written;
 

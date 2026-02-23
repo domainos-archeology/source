@@ -22,7 +22,7 @@ void TTY_$I_SET_RAW(short line, char raw, status_$t *status)
     }
 
     // Call internal raw mode setter
-    FUN_00e1bf70(tty, raw);
+    TTY_$I_SET_RAW_MODE(tty, raw);
 }
 
 void TTY_$I_INQ_RAW(short line, char *raw, status_$t *status)

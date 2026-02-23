@@ -2,7 +2,7 @@
  * TTY_$I_XMIT_CHAR - Transmit a single character
  *
  * Outputs a single character to the TTY output buffer.
- * This is a wrapper around FUN_00e1b00a (TTY output string function).
+ * This is a wrapper around tty_$i_put_chars (TTY output string function).
  *
  * Parameters:
  *   tty - TTY descriptor

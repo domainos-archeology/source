@@ -28,17 +28,13 @@ static void tty_kill_line(tty_desc_t *tty);
 static void tty_reprint_line(tty_desc_t *tty);
 
 /* External helper functions from other TTY modules */
-/* tty_$i_buf_insert is declared in tty_internal.h */
-/* TTY_$I_ECHO_CHAR is declared in tty_internal.h */
-/* TTY_$I_XMIT_CHAR is declared in tty_internal.h */
-extern void FUN_00e1b8b0(tty_desc_t *tty, uint8_t ch);
-extern void FUN_00e1b538(tty_desc_t *tty);
-extern void FUN_00e1b6ac(tty_desc_t *tty);
-extern void FUN_00e1b716(tty_desc_t *tty);
-extern void FUN_00e1b456(tty_desc_t *tty);
+/* All declared in tty_internal.h:
+ * tty_$i_buf_insert, TTY_$I_ECHO_CHAR, TTY_$I_XMIT_CHAR,
+ * TTY_$I_BREAK_CHAR, TTY_$I_DELETE_CHAR, TTY_$I_KILL_LINE,
+ * TTY_$I_WORD_ERASE, TTY_$I_NEWLINE
+ */
 
-/* Error status for crash */
-extern status_$t status_$t_00e1bcf8;
+/* status_$t_00e1bcf8 declared in tty_internal.h */
 
 void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
 {
@@ -104,7 +100,7 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
 
         case TTY_CHAR_CLASS_BREAK:  /* 0x03 - Break */
         case TTY_CHAR_CLASS_NL:     /* 0x0B - Newline */
-            FUN_00e1b8b0(tty, ch);
+            TTY_$I_BREAK_CHAR(tty, ch);
             break;
 
         case TTY_CHAR_CLASS_EOF:  /* 0x04 - End of file */
@@ -135,24 +131,24 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
 
         case TTY_CHAR_CLASS_DEL:  /* 0x07 - Delete character */
             tty->state_flags = (state_flags & 0x80) | tty->state_flags;
-            FUN_00e1b538(tty);
+            TTY_$I_DELETE_CHAR(tty);
             break;
 
         case TTY_CHAR_CLASS_WERASE:  /* 0x08 - Word erase */
             tty->state_flags = (state_flags & 0x80) | tty->state_flags;
-            FUN_00e1b6ac(tty);
+            TTY_$I_KILL_LINE(tty);
             break;
 
         case TTY_CHAR_CLASS_KILL:  /* 0x09 - Kill line */
             tty->state_flags = (state_flags & 0x80) | tty->state_flags;
-            FUN_00e1b716(tty);
+            TTY_$I_WORD_ERASE(tty);
             break;
 
         case TTY_CHAR_CLASS_REPRINT:  /* 0x0A - Reprint line */
             if ((*(uint8_t *)((char *)tty + 0x17) & 0x01) != 0) {
                 int16_t pos;
                 TTY_$I_ECHO_CHAR(tty, ch);
-                FUN_00e1b456(tty);
+                TTY_$I_NEWLINE(tty);
                 pos = tty->input_head;
                 while (pos != tty->input_tail) {
                     TTY_$I_ECHO_CHAR(tty, tty->input_buffer[pos]);
@@ -169,7 +165,7 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
             TTY_$I_ECHO_CHAR(tty, ch);
             TTY_$I_XMIT_CHAR(tty, 0x0800);
             TTY_$I_XMIT_CHAR(tty, 0x0800);
-            FUN_00e1b8b0(tty, ch);
+            TTY_$I_BREAK_CHAR(tty, ch);
             break;
 
         case TTY_CHAR_CLASS_FLUSHOUT:  /* 0x0D - Flush output */
@@ -190,7 +186,7 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
                 TTY_$I_RCV(tty, 0x0d);
                 return;
             }
-            FUN_00e1b8b0(tty, ch);
+            TTY_$I_BREAK_CHAR(tty, ch);
             break;
 
         case TTY_CHAR_CLASS_CRLF:  /* 0x0F - CR/LF handling */
