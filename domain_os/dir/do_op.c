@@ -434,7 +434,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
 
         case 0x52: /* Set protection */
             dir_$do_op_set_prot(&local_uid, req + 0xba,
-                         *((int16_t *)(req + 0xc2)));
+                         req + 0xc2, &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 audit_$log_prot_op(resp->status, &local_uid,
                              req + 0x8e, (uid_t *)(req + 0xba),

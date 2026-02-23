@@ -39,16 +39,17 @@ void TERM_$INIT(short *param1, short *param2) {
 
     local_vars[3] = DAT_00e2cb48;
     local_vars[4] = DAT_00e2cf1a;
-    FUN_00e32bb8(DAT_00e2db48, local_vars[2], (void **)&local_vars[4], (void **)&local_vars[3]);
+    SIO_$INIT_DRAIN_HANDLER(DAT_00e2db48, local_vars[2], (void **)&local_vars[4], (void **)&local_vars[3]);
 
     local_vars[5] = DAT_00e2db58;
     local_vars[4] = DAT_00e2dc40;
     local_vars[6] = DAT_00e2dbf6;
-    FUN_00e32ab2(local_vars[0], DAT_00e2ca48, local_vars[2],
-                 (void **)&local_vars[5], (void **)&local_vars[6],
-                 &PTR_KBD_$RCV_00e2ca78, (void **)&local_vars[4]);
+    SIO_$INIT_DESC(local_vars[0], DAT_00e2ca48, local_vars[2],
+                   (void **)&local_vars[5], (void **)&local_vars[6],
+                   &PTR_KBD_$RCV_00e2ca78, (void **)&local_vars[4],
+                   DAT_00e35154);
 
-    FUN_00e32b76(local_vars[2], 2);
+    SIO_$INIT_DTTE(local_vars[2], 2);
 
     // Initialize SIO 6509 (keyboard/display controller)
     SIO6509_$INIT(&DAT_00e33220, &DAT_00e3321e, DAT_00e2dc40,
@@ -62,11 +63,12 @@ void TERM_$INIT(short *param1, short *param2) {
     local_vars[3] = DAT_00e2d024;
     local_vars[6] = DAT_00e2dc58;
     local_vars[4] = DAT_00e2d3f6;  // Note: address not in extern list
-    FUN_00e32ab2(DAT_00e2da58, DAT_00e2c9f0, local_vars[2],
-                 (void **)&local_vars[3], (void **)&local_vars[4],
-                 &PTR_TTY_$I_RCV_00e2ca08, (void **)&local_vars[6]);
+    SIO_$INIT_DESC(DAT_00e2da58, DAT_00e2c9f0, local_vars[2],
+                   (void **)&local_vars[3], (void **)&local_vars[4],
+                   &PTR_TTY_$I_RCV_00e2ca08, (void **)&local_vars[6],
+                   DAT_00e3517c);
 
-    FUN_00e32b76(local_vars[2], 0);
+    SIO_$INIT_DTTE(local_vars[2], 0);
 
     // Initialize serial line 2
     local_vars[2] = DAT_00e2dd00;
@@ -76,11 +78,12 @@ void TERM_$INIT(short *param1, short *param2) {
     local_vars[3] = DAT_00e2d500;
     local_vars[4] = DAT_00e2dc74;
     local_vars[6] = DAT_00e2d8d2;
-    FUN_00e32ab2(DAT_00e2dad0, DAT_00e2c9f0, local_vars[2],
-                 (void **)&local_vars[3], (void **)&local_vars[6],
-                 &PTR_TTY_$I_RCV_00e2ca08, (void **)&local_vars[4]);
+    SIO_$INIT_DESC(DAT_00e2dad0, DAT_00e2c9f0, local_vars[2],
+                   (void **)&local_vars[3], (void **)&local_vars[6],
+                   &PTR_TTY_$I_RCV_00e2ca08, (void **)&local_vars[4],
+                   DAT_00e3517c);
 
-    FUN_00e32b76(local_vars[2], 0);
+    SIO_$INIT_DTTE(local_vars[2], 0);
 
     // Special initialization for process 1
     if (*param1 == 1) {

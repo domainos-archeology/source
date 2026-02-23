@@ -107,16 +107,28 @@ void pmap_$update_seg_map(uint16_t *segmap_entry, uint32_t vpn, uint16_t page_id
 void pmap_$write_page(uint32_t vpn, status_$t *status, int8_t sync_flag);
 
 /*
- * FUN_00e12d38 - Cleanup helper
+ * pmap_$wait_in_transit - Wait for PMAP in-transit event count
+ *
+ * Waits for the AST_$PMAP_IN_TRANS_EC event count to advance past
+ * its current value. Unlocks PMAP lock while waiting, re-acquires
+ * it before returning. Used when pages are in transit to disk.
+ *
  * Original address: 0x00e12d38
+ * Size: 70 bytes
  */
-void FUN_00e12d38(void);
+void pmap_$wait_in_transit(void);
 
 /*
- * FUN_00e1327e - Page selection helper
+ * pmap_$fill_write_qblks - Fill disk queue blocks with write descriptors
+ *
+ * Populates a linked list of disk queue blocks with the information
+ * needed to write dirty pages to disk. Handles disk address allocation
+ * via BAT_$ALLOCATE for pages without existing disk addresses.
+ *
  * Original address: 0x00e1327e
+ * Size: 798 bytes
  */
-void FUN_00e1327e(int *pages, int qblk, uint16_t count);
+void pmap_$fill_write_qblks(int32_t *pages, uint32_t *qblk, int16_t count);
 
 /* pmap_$write_complete - Page write I/O completion handler
  *
@@ -133,10 +145,16 @@ void FUN_00e1327e(int *pages, int qblk, uint16_t count);
 void pmap_$write_complete(int32_t vpn, void *status_ptr);
 
 /*
- * FUN_00e2f880 - Unknown helper
+ * PMAP_$INIT_TIMERS - Initialize PMAP purifier and update timers
+ *
+ * Sets up two periodic timer callbacks in the real-time event queue:
+ * - Purifier timer (PMAP_$T_PURIF_CALLBACK): fires every ~29 seconds
+ * - Update timer (PMAP_$UPDATE_CALLBACK): fires every ~0.9ms
+ *
  * Original address: 0x00e2f880
+ * Size: 216 bytes
  */
-void FUN_00e2f880(void);
+void PMAP_$INIT_TIMERS(void);
 
 /*
  * ============================================================================
@@ -156,5 +174,8 @@ void FUN_00e2f880(void);
 extern int8_t NETLOG_$OK_TO_LOG;
 extern uint32_t *LOG_$LOGFILE_PTR;
 int32_t LOG_$UPDATE(void);
+
+/* Disk checksum control flag */
+extern int8_t DISK_$DO_CHKSUM;
 
 #endif /* PMAP_INTERNAL_H */

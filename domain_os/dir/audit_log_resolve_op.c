@@ -22,9 +22,11 @@
 /* OS_$DATA_COPY - System memory copy */
 extern void OS_$DATA_COPY(void *src, void *dst, uint32_t len);
 
-/* AUDIT_$LOG_EVENT - Core audit event logging */
-extern void AUDIT_$LOG_EVENT(void *event_code, void *flags, void *status,
-                             void *data, void *data_len);
+/* AUDIT_$LOG_EVENT - Core audit event logging
+ * Note: The canonical declaration is in audit/audit.h with typed parameters
+ * (uid_t*, uint16_t*, uint32_t*, char*, uint16_t*). This function is called
+ * here with pointer-to-local-stack variables that match those types. */
+#include "audit/audit.h"
 
 void audit_$log_resolve_op(uint32_t pname_data, uint16_t path_len,
                            void *result, status_$t status)
@@ -64,6 +66,9 @@ void audit_$log_resolve_op(uint32_t pname_data, uint16_t path_len,
     /* Set flags: 1 if status is non-zero (failure), 0 if success */
     flags = (uint16_t)(status != 0);
 
-    /* Log the event */
-    AUDIT_$LOG_EVENT(&event_code, &flags, &status, &result_uid_high, data_len);
+    /* Log the event
+     * event_code + event_extra form an 8-byte uid_t on the stack.
+     * result_uid_high..path_buf form the contiguous data region. */
+    AUDIT_$LOG_EVENT((uid_t *)&event_code, &flags, (uint32_t *)&status,
+                     (char *)&result_uid_high, (uint16_t *)data_len);
 }

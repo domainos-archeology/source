@@ -58,7 +58,7 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
     }
 
     /* Allocate handle slot */
-    handle = (uint8_t *)FUN_00e4b86e();
+    handle = (uint8_t *)DIR_$ALLOC_HANDLE();
     *hp = (uint32_t *)handle;
     if (handle == NULL) {
         *status_ret = status_$naming_directory_locked;
@@ -70,13 +70,13 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
     *(uint32_t *)(handle + 0x04) = uid_ptr->low;
 
     /* Lock the directory object */
-    FUN_00e4afa8(handle, effective_mode, status_ret);
+    DIR_$LOCK_OBJ(handle, effective_mode, status_ret);
     if (*status_ret != status_$ok) {
         goto error_release;
     }
 
     /* Validate the handle */
-    FUN_00e4b44c(handle, effective_mode, status_ret);
+    DIR_$VALIDATE_HANDLE(handle, effective_mode, status_ret);
     if (*status_ret != status_$ok) {
         goto error_release;
     }
@@ -143,15 +143,15 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
 
         /* If currently in read mode (1), upgrade to write mode (2) for recovery */
         if (*(int16_t *)(handle + 0x0A) == 1) {
-            FUN_00e4b234(handle);
-            FUN_00e4b6ba(handle);
+            DIR_$UNLOCK_OBJ(handle);
+            DIR_$UNMAP_PAGES(handle);
 
-            FUN_00e4afa8(handle, 2, status_ret);
+            DIR_$LOCK_OBJ(handle, 2, status_ret);
             if (*status_ret != status_$ok) {
                 goto error_release;
             }
 
-            FUN_00e4b44c(handle, 2, status_ret);
+            DIR_$VALIDATE_HANDLE(handle, 2, status_ret);
             if (*status_ret != status_$ok) {
                 if (*status_ret == status_$naming_vol_mounted_read_only) {
                     *status_ret = status_$naming_cant_recovery_dir_on_ro_vol;
@@ -174,15 +174,15 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
 
         /* If original mode was read (1), downgrade back from write */
         if (effective_mode == 1) {
-            FUN_00e4b234(handle);
-            FUN_00e4b6ba(handle);
+            DIR_$UNLOCK_OBJ(handle);
+            DIR_$UNMAP_PAGES(handle);
 
-            FUN_00e4afa8(handle, 1, status_ret);
+            DIR_$LOCK_OBJ(handle, 1, status_ret);
             if (*status_ret != status_$ok) {
                 goto error_release;
             }
 
-            FUN_00e4b44c(handle, 1, status_ret);
+            DIR_$VALIDATE_HANDLE(handle, 1, status_ret);
             if (*status_ret != status_$ok) {
                 goto error_release;
             }

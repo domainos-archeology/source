@@ -64,7 +64,7 @@ void dir_$create_dir_obj(uid_t *parent_uid, void *page0_data, uid_t *dir_acl_uid
     }
 
     /* Allocate a directory handle */
-    handle = FUN_00e4b86e();
+    handle = DIR_$ALLOC_HANDLE();
     if (handle == NULL) {
         *status_ret = status_$naming_directory_locked;
         return;
@@ -75,7 +75,7 @@ void dir_$create_dir_obj(uid_t *parent_uid, void *page0_data, uid_t *dir_acl_uid
     *((uint32_t *)handle + 1) = new_uid_ret->low;
 
     /* Validate the handle (mode 2 = write) */
-    FUN_00e4b44c(handle, 2, status_ret);
+    DIR_$VALIDATE_HANDLE(handle, 2, status_ret);
     if (*status_ret != status_$ok) {
         goto release_handle;
     }

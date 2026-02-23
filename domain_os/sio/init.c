@@ -20,16 +20,16 @@
  *   - Large per-line data at offset + port * 0x4dc
  *   - DTTE at offset 0x12a0 + TERM_$MAX_DTTE * 0x38
  *
- * TODO: This function is complex and calls several unidentified helper
- * functions. More analysis needed to fully understand the initialization
- * sequence.
+ * TODO: This function is complex and needs further analysis for a
+ * fully faithful implementation. The current code is a simplified
+ * placeholder.
  *
  * Helper functions called:
  *   - OS_TERM_INIT (0x00e32a60) - Initialize OS terminal
- *   - SIO_$INIT_LINE - Unknown init function
- *   - FUN_00e32bb8 - Unknown init function
- *   - FUN_00e32ab2 - Unknown init function
- *   - FUN_00e32b76 - Unknown init function (sets port type?)
+ *   - SIO_$INIT_LINE - Initialize SIO TTY line descriptor
+ *   - SIO_$INIT_DRAIN_HANDLER - Initialize output buffer drain handler
+ *   - SIO_$INIT_DESC - Initialize SIO descriptor
+ *   - SIO_$INIT_DTTE - Initialize DTTE entry
  *   - TTY_$I_ENABLE_CRASH_FUNC - Enable crash key handler
  *
  * Original address: 0x00e32be0
@@ -61,10 +61,6 @@
 extern void OS_TERM_INIT(void *param1, void *param2, void **param3,
                          void *param4, void **param5, void *param6);
 extern void SIO_$INIT_LINE(void *param1, void *param2, void **param3, void *param4);
-extern void FUN_00e32bb8(void *param1, void *param2, void **param3, void **param4);
-extern void FUN_00e32ab2(void *param1, void *param2, void *param3, void **param4,
-                         void **param5, void *param6, uint32_t param7);
-extern void FUN_00e32b76(void *param1, int16_t param2);
 
 void SIO_$INIT(int16_t port_num, uint32_t param2, uint32_t param3,
                sio_desc_t **desc_ret, int8_t flags, status_$t *status_ret)
@@ -102,9 +98,9 @@ void SIO_$INIT(int16_t port_num, uint32_t param2, uint32_t param3,
          * The decompiled code shows calls to:
          * - OS_TERM_INIT with console-specific parameters
          * - SIO_$INIT_LINE for additional setup
-         * - FUN_00e32bb8 for more configuration
-         * - FUN_00e32ab2 for handler registration
-         * - FUN_00e32b76 with port type 2 (console)
+         * - SIO_$INIT_DRAIN_HANDLER for drain notification
+         * - SIO_$INIT_DESC for SIO descriptor population
+         * - SIO_$INIT_DTTE with discipline 2 (console)
          */
 
         /* Placeholder - actual implementation needs helper functions */
@@ -117,8 +113,8 @@ void SIO_$INIT(int16_t port_num, uint32_t param2, uint32_t param3,
 
         /* TODO: Generic port initialization
          * - SIO_$INIT_LINE setup
-         * - FUN_00e32ab2 handler registration
-         * - FUN_00e32b76 with port type 0 (serial)
+         * - SIO_$INIT_DESC handler registration
+         * - SIO_$INIT_DTTE with discipline 0 (serial)
          */
 
         desc = (sio_desc_t *)(base + OFFSET_SIO_DESC_BASE + sio_offset);

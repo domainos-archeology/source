@@ -64,8 +64,9 @@ extern uint16_t DAT_00e50830;
 extern void FUN_00e50790(void);
 
 void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name_len,
-                         uid_t *backup_uid, uid_t *result_uid, status_$t *status_ret)
+                         void *uid_data, uid_t *result_uid, status_$t *status_ret)
 {
+    uid_t *backup_uid = (uid_t *)uid_data;
     char *a5 = (char *)__A5_BASE();
     int32_t bak_name_len;
     char rollback_flag;

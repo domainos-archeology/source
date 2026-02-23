@@ -40,14 +40,14 @@
 
 #include "dir/dir_internal.h"
 
-/* TIME_$CLOCKH - High-resolution clock (seconds) */
-extern int32_t TIME_$CLOCKH;
+/* TIME_$CLOCKH is declared in time/time.h (included via dir_internal.h -> base.h chain)
+ * as uint32_t. The dir_internal.h includes time/time.h indirectly. */
+#include "time/time.h"
 
 /* dir_$get_parent_uid - Resolve parent UID of a directory */
 void dir_$get_parent_uid(uid_t *uid, status_$t *status_ret);
 
-/* DIR_$IS_RETRYABLE_STATUS - Check if status code is retryable */
-int8_t DIR_$IS_RETRYABLE_STATUS(int16_t status);
+/* DIR_$IS_RETRYABLE_STATUS - declared in dir_internal.h with status_$t parameter */
 
 void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
                         uint32_t *extra_ret, uint32_t *parent_uid_ret,
@@ -63,7 +63,7 @@ void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
     uint16_t comp_len;
     uint16_t depth;
     int8_t is_server_proc;
-    int32_t start_time;
+    uint32_t start_time;
     int16_t entry_type;
     uid_t entry_uid;
     uint32_t entry_extra;
@@ -206,7 +206,7 @@ void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
 check_exit:
     /* On retryable error (not from first component), clear status and set loop flag */
     if (*status_ret != status_$ok) {
-        int8_t retryable = DIR_$IS_RETRYABLE_STATUS((int16_t)*status_ret);
+        int8_t retryable = DIR_$IS_RETRYABLE_STATUS(*status_ret);
         if (retryable < 0 && depth != 1) {
             *status_ret = status_$ok;
             *flags2 = 0xFF;

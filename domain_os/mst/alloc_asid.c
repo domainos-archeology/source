@@ -53,7 +53,7 @@ uint16_t MST_$ALLOC_ASID(status_$t *status_ret)
             table_index = MST_ASID_BASE[asid] * 2;
 
             /* Initialize the segment table page for this ASID */
-            status = FUN_00e43f40(asid, 0, &MST[table_index / 2]);
+            status = MST_$ALLOC_TABLE_PAGE(asid, 0, &MST[table_index / 2]);
             if (status != status_$ok) {
                 goto done;
             }

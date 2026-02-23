@@ -60,6 +60,36 @@ extern uid_t NAME_$COM_UID;         /* /com directory UID */
 extern uid_t NAME_$CANNED_REP_ROOT_UID;
 extern uid_t NAME_$CANNED_ROOT_UID; /* Canned root UID (for fallback) */
 
+/*
+ * Per-address-space working/naming directory UIDs
+ *
+ * These are arrays indexed by PROC1_$AS_ID (scaled by 8 for uid_t size).
+ * Each address space can have its own wdir and ndir.
+ */
+extern uid_t NAME_$WDIR_UID;       /* Working directory UID array base */
+extern uid_t NAME_$NDIR_UID;       /* Naming directory UID array base */
+
+/*
+ * Cached mapping info for well-known directories
+ *
+ * Each mapping info block is 16 bytes containing the current
+ * MST mapping state for the directory. This allows re-opening
+ * well-known directories without re-mapping.
+ *
+ * NODE and COM have a single global mapping.
+ * WDIR and NDIR are per-address-space (indexed by PROC1_$AS_ID << 4).
+ *
+ * Original m68k addresses:
+ *   NAME_$NODE_MAPPED_INFO: 0xE80284
+ *   NAME_$COM_MAPPED_INFO:  0xE8026C
+ *   NAME_$WDIR_MAPPED_INFO: 0xE80814
+ *   NAME_$NDIR_MAPPED_INFO: 0xE802A4
+ */
+extern uint8_t NAME_$NODE_MAPPED_INFO;
+extern uint8_t NAME_$COM_MAPPED_INFO;
+extern uint8_t NAME_$WDIR_MAPPED_INFO;
+extern uint8_t NAME_$NDIR_MAPPED_INFO;
+
 /* ============================================================================
  * Public Function Prototypes
  * ============================================================================ */

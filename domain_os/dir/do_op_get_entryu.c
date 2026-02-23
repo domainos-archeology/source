@@ -26,6 +26,12 @@
 /* ROUTE_$PORT - Network routing port reference */
 extern uint32_t ROUTE_$PORT;
 
+/* FUN_00e4cd90 - Cached get_entryu implementation (nested Pascal procedure)
+ * Accesses parameters from parent stack frame.
+ * Original address: 0x00E4CD90
+ */
+extern void FUN_00e4cd90(status_$t *status_ret);
+
 void dir_$do_op_get_entryu(uid_t *uid, void *name, uint16_t name_len,
                            short *type_ret, char *uid_ret,
                            uint32_t *extra_ret, status_$t *status_ret)

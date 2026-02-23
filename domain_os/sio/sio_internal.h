@@ -78,6 +78,61 @@ uint16_t SIO_DELAY_RESTART(sio_desc_t **args);
 void sio_$set_break(sio_desc_t *desc, uint8_t enable);
 
 /*
+ * SIO_$INIT_DESC - Initialize an SIO descriptor
+ *
+ * Populates a full sio_desc_t structure with context, owner, parameter
+ * block, handler function pointers, vtable entries, and transmit buffer
+ * pointer. Stores a back-pointer into the DTTE, then calls SIO_$I_INIT.
+ *
+ * Parameters:
+ *   desc         - SIO descriptor to initialize
+ *   param_block  - Source parameter block (22 bytes)
+ *   dtte         - DTTE entry pointer (receives back-pointer at offset 0x28)
+ *   owner_ptr    - Pointer to owner handle (dereferenced)
+ *   txbuf_ptr    - Pointer to transmit buffer pointer (dereferenced)
+ *   handlers     - Array of 4 handler function pointers
+ *   context_ptr  - Pointer to context handle (dereferenced)
+ *   vtable       - Vtable structure (entries copied from offset 0x14)
+ *
+ * Original address: 0x00e32ab2
+ */
+void SIO_$INIT_DESC(sio_desc_t *desc, void *param_block, void *dtte,
+                    m68k_ptr_t *owner_ptr, m68k_ptr_t *txbuf_ptr,
+                    m68k_ptr_t *handlers, m68k_ptr_t *context_ptr,
+                    char *vtable);
+
+/*
+ * SIO_$INIT_DTTE - Initialize a DTTE (Display Terminal Table Entry)
+ *
+ * Initializes three inline event counts at offsets 0x00, 0x0C, and 0x18,
+ * sets the discipline field, and clears the flags byte.
+ *
+ * Parameters:
+ *   dtte       - Pointer to DTTE entry to initialize
+ *   discipline - Terminal discipline value (0=TTY, 2=console, etc.)
+ *
+ * Original address: 0x00e32b76
+ */
+void SIO_$INIT_DTTE(dtte_t *dtte, int16_t discipline);
+
+/*
+ * SIO_$INIT_DRAIN_HANDLER - Initialize output buffer drain handler
+ *
+ * Sets up a 3-word handler record: function pointer, context, and data.
+ * The function pointer is set to TTY_$I_OUTPUT_BUFFER_DRAINED.
+ *
+ * Parameters:
+ *   handler     - Pointer to 3-word handler record
+ *   dtte        - DTTE pointer (unused, part of calling convention)
+ *   data_ptr    - Pointer to data pointer value (stored at handler[2])
+ *   context_ptr - Pointer to context pointer value (stored at handler[1])
+ *
+ * Original address: 0x00e32bb8
+ */
+void SIO_$INIT_DRAIN_HANDLER(m68k_ptr_t *handler, void *dtte,
+                              m68k_ptr_t *data_ptr, m68k_ptr_t *context_ptr);
+
+/*
  * ============================================================================
  * External References from Other Modules
  * ============================================================================

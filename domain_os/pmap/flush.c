@@ -172,7 +172,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
         /* Call cleanup if no writes performed */
         if (did_write >= 0) {
-            FUN_00e12d38();
+            pmap_$wait_in_transit();
         }
     }
 

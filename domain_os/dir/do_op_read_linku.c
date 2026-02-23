@@ -39,10 +39,13 @@ void *dir_$map_link_page(void *handle, uint16_t page_idx);
 #endif
 
 void dir_$do_op_read_linku(uid_t *uid, void *name, uint16_t name_len,
-                           int16_t buf_len, uint32_t extra,
-                           int16_t *link_len_ret, uid_t *uid_ret,
+                           uint16_t buf_len, uint32_t extra,
+                           void *link_type_ret, uid_t *uid_ret,
                            status_$t *status_ret)
 {
+    /* Cast void* parameter to typed pointer for internal use */
+    int16_t *link_len_ret = (int16_t *)link_type_ret;
+
     uint32_t local_handle;
     char found;
     uint8_t *entry;

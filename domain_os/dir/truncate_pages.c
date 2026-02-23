@@ -22,17 +22,16 @@
 
 #include "dir/dir_internal.h"
 
-/* AST_$INVALIDATE - Invalidate (truncate) pages from an object */
-extern void AST_$INVALIDATE(uid_t *uid, uint32_t start_page,
-                            int32_t num_pages, int8_t flag,
-                            void *result);
+/* AST_$INVALIDATE - declared in ast/ast.h (included via dir_internal.h)
+ * Canonical signature: AST_$INVALIDATE(uid_t *uid, uint32_t start_page,
+ *                      uint32_t count, int16_t flags, status_$t *status) */
 
 uint32_t dir_$truncate_pages(void *handle, uint16_t new_page_count,
                              status_$t *status_ret)
 {
     uint32_t *h = (uint32_t *)handle;
     uid_t local_uid;
-    uint8_t result_buf[4];
+    status_$t local_status;
     uint32_t total_pages;
     int32_t pages_to_remove;
 
@@ -48,7 +47,7 @@ uint32_t dir_$truncate_pages(void *handle, uint16_t new_page_count,
 
     /* Invalidate the excess pages */
     AST_$INVALIDATE(&local_uid, (uint32_t)new_page_count,
-                    pages_to_remove, (int8_t)-1, result_buf);
+                    (uint32_t)pages_to_remove, (int16_t)-1, &local_status);
 
     /* Clear dirty flag at handle+0x0E */
     *((uint8_t *)handle + 0x0E) = 0;

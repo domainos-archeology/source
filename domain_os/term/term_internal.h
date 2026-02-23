@@ -71,6 +71,8 @@ extern char DAT_00e2db1c[];
 extern char DAT_00e2dc48[];
 extern char DAT_00e2dcb4[];
 extern char DAT_00e351ae[];
+extern char DAT_00e35154[];  /* SIO vtable for console/keyboard line */
+extern char DAT_00e3517c[];  /* SIO vtable for serial lines */
 extern char DAT_00e33220[];
 extern char DAT_00e3321e[];
 
@@ -142,9 +144,10 @@ extern void *PTR_TTY_$I_RCV_00e2ca08;
  */
 extern void OS_TERM_INIT(void *, void *, void **, void *, void **, void *);
 extern void SIO_$INIT_LINE(void *, void *, void **, void *);
-extern void FUN_00e32bb8(void *, void *, void **, void **);
-extern void FUN_00e32ab2(void *, void *, void *, void **, void **, void *, void **);
-extern void FUN_00e32b76(void *, short);
+extern void SIO_$INIT_DRAIN_HANDLER(void *, void *, void **, void **);
+extern void SIO_$INIT_DESC(void *, void *, void *, void **, void **, void *,
+                           void **, void *);
+extern void SIO_$INIT_DTTE(void *, short);
 extern void SIO6509_$INIT(void *, void *, void *, void **, void *);
 extern void SIO2681_$INIT(void *, void *, void *, void **, void *, void *, void **, void *, void *);
 /* TTY_$I_ENABLE_CRASH_FUNC is declared in tty/tty.h */

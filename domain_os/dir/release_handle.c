@@ -20,13 +20,13 @@ void dir_$release_handle(void *handle_ptr)
 
     if (*hp != 0) {
         /* Step 1: Unlock - release read/write lock */
-        FUN_00e4b234((void *)(uintptr_t)*hp);
+        DIR_$UNLOCK_OBJ((void *)(uintptr_t)*hp);
 
         /* Step 2: Unmap - release mapped pages */
-        FUN_00e4b6ba((void *)(uintptr_t)*hp);
+        DIR_$UNMAP_PAGES((void *)(uintptr_t)*hp);
 
         /* Step 3: Free - return handle slot to free list */
-        FUN_00e4b980((void *)(uintptr_t)*hp);
+        DIR_$FREE_HANDLE((void *)(uintptr_t)*hp);
 
         /* Clear the handle pointer */
         *hp = 0;

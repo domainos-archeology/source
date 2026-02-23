@@ -46,10 +46,14 @@ extern uint32_t DAT_00e24388;           /* Second part of ASID bitmap */
 /*
  * MST page availability bitmap
  * Tracks which MST table pages are available for allocation.
+ * 12 words (384 bits), set bit = page available.
  * Located at 0xE7CF0C (m68k).
  */
-extern uint32_t DAT_00e7cf0c[];         /* Bitmap of available MST pages */
-extern uint8_t DAT_00e7cf0f;            /* Flags byte in page bitmap */
+extern uint32_t MST_$PAGE_AVAIL_BITMAP[];
+extern uint16_t MST_$PAGE_ALLOC_HINT;    /* Search hint for next free word */
+extern uint16_t MST_$MST_PAGES_WIRED;    /* Count of wired MST pages */
+
+#define status_$pmap_vm_resources_exhausted 0x0004000e
 
 /*
  * ============================================================================
@@ -74,9 +78,14 @@ extern status_$t MST_Ref_OutOfBounds_Err;
  */
 
 /*
- * FUN_00e43f40 - Initialize segment table page for an ASID
+ * MST_$ALLOC_TABLE_PAGE - Allocate a page table page for a segment
+ *
+ * Searches the MST page availability bitmap for a free page, marks it
+ * as used, initializes it, and increments the wired page count.
+ *
+ * Original address: 0x00E43F40
  */
-status_$t FUN_00e43f40(uint16_t asid, uint16_t flags, void *table_ptr);
+status_$t MST_$ALLOC_TABLE_PAGE(uint16_t asid, uint16_t flags, uint16_t *table_ptr);
 
 /*
  * mst_$alloc_segs - Internal segment allocation and mapping

@@ -6,7 +6,7 @@
  *
  * 1. Unlock lock 14 (PMAP lock)
  * 2. Allocate disk queue blocks via DISK_$GET_QBLKS
- * 3. Fill queue blocks with write requests via FUN_00e1327e
+ * 3. Fill queue blocks with write requests via pmap_$fill_write_qblks
  * 4. Execute batch write via DISK_$WRITE_MULTI
  * 5. If write fails: CRASH_SYSTEM
  * 6. Re-lock lock 14

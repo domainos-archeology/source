@@ -37,13 +37,14 @@
 
 #include "dir/dir_internal.h"
 
-/* REM_NAME_$FIND_UID - Remote find UID */
-extern void REM_NAME_$FIND_UID(uid_t *dir_uid, uid_t *target_uid,
-                                void *result_buf, status_$t *status_ret);
-
-/* REM_NAME_$FIND_NETWORK - Remote find network node */
-extern void REM_NAME_$FIND_NETWORK(uid_t *dir_uid, void *net_id,
-                                    void *result_buf, status_$t *status_ret);
+/* REM_NAME_$FIND_UID and REM_NAME_$FIND_NETWORK are declared in
+ * name/name.h (included via dir_internal.h -> name/name.h).
+ * Canonical signatures:
+ *   void REM_NAME_$FIND_UID(uid_t *dir_uid, uid_t *target_uid,
+ *                           void *entry_ret, status_$t *status_ret);
+ *   void REM_NAME_$FIND_NETWORK(uid_t *dir_uid, uint32_t *target_node,
+ *                               void *entry_ret, status_$t *status_ret);
+ */
 
 /* Name offset table */
 extern int16_t DIR_$NAME_OFFSET_TABLE[];
@@ -55,9 +56,14 @@ extern uint8_t PTR_DAT_00e4cd84;
 extern uint8_t DAT_00e4dffc;
 
 void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
-                         int32_t name_buf, uint16_t *name_len_ret,
-                         uint32_t *extra_ret, status_$t *status_ret)
+                         void *name_ret, void *len_ret, void *uid_ret,
+                         status_$t *status_ret)
 {
+    /* Cast void* parameters to typed pointers for internal use */
+    int32_t name_buf = (int32_t)(uintptr_t)name_ret;
+    uint16_t *name_len_ret = (uint16_t *)len_ret;
+    uint32_t *extra_ret = (uint32_t *)uid_ret;
+
     char *a5 = (char *)__A5_BASE();
     uint32_t local_handle[4];
     uint32_t search_uid_high;

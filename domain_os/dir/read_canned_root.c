@@ -32,10 +32,12 @@
 
 #include "dir/dir_internal.h"
 
-/* REM_NAME_$DIR_READU - Remote directory read for canned root */
-extern void REM_NAME_$DIR_READU(uint32_t uid_data, void *entries_buf,
-                                void *continuation, uint16_t *count,
-                                uint16_t *actual_count, status_$t *status_ret);
+/* REM_NAME_$DIR_READU - declared in name/name.h (included via dir_internal.h).
+ * Canonical signature:
+ *   void REM_NAME_$DIR_READU(uid_t *dir_uid, void *entries_ret,
+ *                            int32_t *continuation, uint16_t *max_entries,
+ *                            uint16_t *count_ret, status_$t *status_ret);
+ */
 
 /* M_DIU_LLW - Unsigned long division returning quotient */
 extern uint32_t M_DIU_LLW(uint32_t dividend, uint16_t divisor);

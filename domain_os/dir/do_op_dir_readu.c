@@ -63,12 +63,18 @@ void FUN_00e4d8aa(void);
 extern int16_t DIR_$NAME_OFFSET_TABLE[];
 
 void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
-                          int16_t name_flags, uint16_t *cont,
-                          int32_t max_entries, uint32_t max_size,
-                          int32_t buf_size, int32_t *size_ret,
-                          int32_t *offset_ret, int32_t *count_ret,
+                          uint16_t name_flags, void *cont_ptr,
+                          uint16_t max_entries, uint32_t max_size,
+                          uint32_t buf_size, void *size_ret_ptr,
+                          void *offset_ret_ptr, void *count_ret_ptr,
                           status_$t *status_ret)
 {
+    /* Cast void* parameters to typed pointers for internal use */
+    uint16_t *cont = (uint16_t *)cont_ptr;
+    int32_t *size_ret = (int32_t *)size_ret_ptr;
+    int32_t *offset_ret = (int32_t *)offset_ret_ptr;
+    int32_t *count_ret = (int32_t *)count_ret_ptr;
+
     char *a5 = (char *)__A5_BASE();
     int16_t local_name_len;
     int32_t word_idx;       /* Running output word index */

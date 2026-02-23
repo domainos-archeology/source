@@ -110,7 +110,7 @@ void PMAP_$PURIFIER_L(void)
     shutdown_time = scan_time;
 
     /* Initialize hardware */
-    FUN_00e2f880();
+    PMAP_$INIT_TIMERS();
 
     /* Main purifier loop - runs forever */
     for (;;) {
@@ -180,7 +180,7 @@ void PMAP_$PURIFIER_L(void)
                 DISK_$GET_QBLKS(page_count, &qblk_main, qblk_alt);
 
                 /* Set up page descriptors for write */
-                FUN_00e1327e(batch_pages, qblk_main, page_count);
+                pmap_$fill_write_qblks(batch_pages, (uint32_t *)(uintptr_t)qblk_main, page_count);
 
                 /* Write pages to disk */
                 DISK_$WRITE_MULTI((int8_t)0xFF, (void *)(uintptr_t)qblk_main, &status);

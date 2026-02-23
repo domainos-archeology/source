@@ -223,13 +223,13 @@ void DIR_$DIR_READU_FUN_00e4e1a8(uid_t *dir_uid, int32_t *continuation,
                                   status_$t *status_ret);
 
 /*
- * FUN_00e4e1fe - Internal directory read helper
+ * dir_$dir_readu_via_do_op - Internal directory read helper
  *
  * Called by DIR_$DIR_READU for normal directory reads.
  *
  * Original address: 0x00E4E1FE
  */
-void FUN_00e4e1fe(status_$t *status_ret);
+void dir_$dir_readu_via_do_op(status_$t *status_ret);
 
 /*
  * DIR_$ADD_ENTRY_INTERNAL - Internal add entry helper
@@ -519,34 +519,35 @@ void dir_$old_init_buf(void *buffer);
 void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
                           void *entry_data);
 
-/* FUN_00e4dffe - Canned root directory read
+/* dir_$read_canned_root - Read entries from canned root directory
  * Original address: 0x00E4DFFE
  */
-void FUN_00e4dffe(void);
+void dir_$read_canned_root(void);
 
-/* FUN_00e4bc26 - Check if status code is retryable
+/* DIR_$IS_RETRYABLE_STATUS - Check if status code is retryable
  * Original address: 0x00E4BC26
  */
-int8_t FUN_00e4bc26(int16_t status);
+int8_t DIR_$IS_RETRYABLE_STATUS(status_$t status);
 
-/* FUN_00e4bc76 - Update hint after redirect
+/* DIR_$UPDATE_HINT - Update hint after redirect
  * Original address: 0x00E4BC76
  */
-void FUN_00e4bc76(void *uid, void *hint1, int16_t hint2, void *redirect, uint16_t param5);
+void DIR_$UPDATE_HINT(uid_t *uid, uint32_t hint1, uint32_t hint2,
+                      void *redirect, uint16_t param5);
 
-/* FUN_00e4bec2 - Audit CNAMEU operation
+/* AUDIT_$LOG_CNAME_OP - Audit CNAMEU operation
  * Original address: 0x00E4BEC2
  */
-void FUN_00e4bec2(uint16_t audit_type, status_$t status, uid_t *uid,
-                  uint16_t name_len, uint16_t new_name_len,
-                  void *name, void *new_name);
+void AUDIT_$LOG_CNAME_OP(uint16_t audit_type, status_$t status, uid_t *uid,
+                          uint16_t name_len, uint16_t new_name_len,
+                          void *name, void *new_name);
 
-/* FUN_00e4bd48 - Audit link operation
+/* AUDIT_$LOG_LINK_OP - Audit link operation
  * Original address: 0x00E4BD48
  */
-void FUN_00e4bd48(uint16_t audit_type, status_$t status, uid_t *uid,
-                  uint16_t name_len, void *name, uint16_t target_len,
-                  uint32_t target_data);
+void AUDIT_$LOG_LINK_OP(uint16_t audit_type, status_$t status, uid_t *uid,
+                        uint16_t name_len, void *name, uint16_t target_len,
+                        uint32_t target_data);
 
 /* AUDIT_$LOG_DIR_OP - Audit add/drop entry operation
  * Original address: 0x00E4BE16
@@ -554,11 +555,11 @@ void FUN_00e4bd48(uint16_t audit_type, status_$t status, uid_t *uid,
 void AUDIT_$LOG_DIR_OP(uint16_t audit_type, status_$t status, uid_t *uid,
                        uid_t *file_uid, uint16_t name_len, void *name);
 
-/* FUN_00e4bf92 - Audit resolve operation
+/* audit_$log_resolve_op - Audit resolve operation
  * Original address: 0x00E4BF92
  */
-void FUN_00e4bf92(uint32_t pname_data, uint16_t path_len,
-                  void *result, status_$t status);
+void audit_$log_resolve_op(uint32_t pname_data, uint16_t path_len,
+                           void *result, status_$t status);
 
 /* audit_$log_mount_op - Audit mount/drop mount operation
  *
@@ -630,90 +631,46 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
  */
 void *dir_$map_page(void *handle, int16_t page_idx);
 
-/* FUN_00e4b234 - Unlock/release lock on directory handle
- *
- * Releases the read or write lock on a directory. Decrements reader
- * count (mode 1) or clears writer flag (mode 2). If the lock holder
- * queue is empty and count reaches 0, returns the handle to the free
- * list. Otherwise advances the wait event counter.
- *
+/* DIR_$UNLOCK_OBJ - Unlock/release lock on directory handle
  * Original address: 0x00E4B234
- * Size: 264 bytes
  */
-void FUN_00e4b234(void *handle);
+void DIR_$UNLOCK_OBJ(void *handle);
 
-/* FUN_00e4b6ba - Unmap directory pages from memory
- *
- * Unmaps the cached directory page groups. For mode 0, calls
- * MST_$UNMAP_PRIVI to unmap the mapped regions. For modes 1-4,
- * saves mapping info to NAME_$NODE/COM/WDIR/NDIR_MAPPED_INFO.
- * Clears the "mapped" flag at offset 0x20.
- *
+/* DIR_$UNMAP_PAGES - Unmap directory pages from memory
  * Original address: 0x00E4B6BA
- * Size: 252 bytes
  */
-void FUN_00e4b6ba(void *handle);
+void DIR_$UNMAP_PAGES(void *handle);
 
-/* FUN_00e4b7b6 - Mark page as dirty
+/* DIR_$WIRE_PAGE - Wire (pin) a directory page in memory
  * Original address: 0x00E4B7B6
  */
-void FUN_00e4b7b6(void *handle, void *page_data);
+void DIR_$WIRE_PAGE(void *handle, void *page_data);
 
-/* FUN_00e4b86e - Allocate directory handle slot
- *
- * Allocates a handle from the free list. If no handles are
- * available, waits on DIR_$WT_FOR_HDNL_EC. For server processes
- * (type 9), returns NULL if no handle is available. Initializes
- * the handle fields: owner, lock mode, flags, max_slots=2.
- *
- * Returns: handle pointer in A0 (NULL if unavailable)
- *
+/* DIR_$ALLOC_HANDLE - Allocate directory handle slot
  * Original address: 0x00E4B86E
- * Size: 274 bytes
  */
-void *FUN_00e4b86e(void);
+void *DIR_$ALLOC_HANDLE(void);
 
-/* FUN_00e4b980 - Free directory handle slot
- *
- * Returns a handle slot to the free list. Clears the active bit
- * in the bitmap, adds to free chain, and advances the wait event
- * counter.
- *
+/* DIR_$FREE_HANDLE - Free directory handle slot
  * Original address: 0x00E4B980
- * Size: 86 bytes
  */
-void FUN_00e4b980(void *handle);
+void DIR_$FREE_HANDLE(void *handle);
 
-/* FUN_00e4afa8 - Lock/open directory object
- *
- * Opens the directory object for the specified access mode.
- * Called by dir_$open_dir after handle allocation.
- *
+/* DIR_$LOCK_OBJ - Lock/open directory object
  * Original address: 0x00E4AFA8
  */
-void FUN_00e4afa8(void *handle, int16_t mode, status_$t *status_ret);
+void DIR_$LOCK_OBJ(void *handle, int16_t mode, status_$t *status_ret);
 
-/* FUN_00e4b44c - Validate directory handle
- *
- * Validates that the opened directory handle is consistent.
- * Called by dir_$open_dir after locking.
- *
+/* DIR_$VALIDATE_HANDLE - Validate directory handle
  * Original address: 0x00E4B44C
  */
-void FUN_00e4b44c(void *handle, int16_t mode, status_$t *status_ret);
+void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret);
 
-/* FUN_00e50fc8 - Remove entry from directory
- *
- * Looks up an entry by name, extracts its UID (for types 2/3),
- * validates the entry type against the requested operation type,
- * removes the entry from the directory page, and optionally
- * truncates the directory.
- *
+/* dir_$remove_entry - Remove entry from directory by name
  * Original address: 0x00E50FC8
- * Size: 530 bytes
  */
-void FUN_00e50fc8(void *handle, void *name, int16_t name_len,
-                  int16_t op_type, void *uid_ret, status_$t *status_ret);
+void dir_$remove_entry(void *handle, void *name, int16_t name_len,
+                       int16_t op_type, void *uid_ret, status_$t *status_ret);
 
 /* dir_$release_wire - Release wired page and reset cache state
  *
@@ -728,8 +685,8 @@ void dir_$release_wire(void *handle);
 
 /* dir_$release_handle - Release directory handle completely
  *
- * Full cleanup of a directory handle: unlocks (FUN_00e4b234),
- * unmaps pages (FUN_00e4b6ba), frees the handle slot (FUN_00e4b980),
+ * Full cleanup of a directory handle: unlocks (DIR_$UNLOCK_OBJ),
+ * unmaps pages (DIR_$UNMAP_PAGES), frees the handle slot (DIR_$FREE_HANDLE),
  * and clears the handle pointer to NULL. No-op if handle is already NULL.
  *
  * Takes a pointer to the handle variable (not the handle itself),
@@ -739,6 +696,43 @@ void dir_$release_wire(void *handle);
  * Size: 44 bytes
  */
 void dir_$release_handle(void *handle_ptr);
+
+/* dir_$alloc_overflow_page - Allocate overflow page for link data
+ * Original address: 0x00E4E960
+ */
+void dir_$alloc_overflow_page(status_$t *status_ret);
+
+/* dir_$next_page - Advance to the next page in B-tree traversal
+ * Original address: 0x00E4D7B0
+ */
+void dir_$next_page(void *handle, int16_t depth, void *extra, uint16_t *page_ret);
+
+/* dir_$map_link_page - Map a link overflow page
+ * Original address: 0x00E4D572
+ */
+void *dir_$map_link_page(void *handle, uint16_t page_idx);
+
+/* dir_$get_parent_uid - Resolve parent UID of a directory
+ * Original address: 0x00E4D060
+ */
+void dir_$get_parent_uid(uid_t *uid, status_$t *status_ret);
+
+/* dir_$read_def_prot - Read default protection from directory page
+ * Original address: 0x00E51C6A
+ */
+void dir_$read_def_prot(uint32_t handle, void *acl_type,
+                        void *prot_buf, void *acl_uid, status_$t *status_ret);
+
+/* dir_$write_def_prot - Write default protection to directory page
+ * Original address: 0x00E51E18
+ */
+void dir_$write_def_prot(uint32_t handle, void *acl_type,
+                         void *prot_buf, void *acl_uid, status_$t *status_ret);
+
+/* dir_$remove_entry_from_page - Remove entry from its directory page
+ * Original address: 0x00E50D5E
+ */
+void dir_$remove_entry_from_page(int16_t slot_idx, status_$t *status_ret);
 
 /* dir_$set_default_acl_internal - Set default ACL on directory page
  *
@@ -758,7 +752,7 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_data,
                                    void *acl_param, char all_entries,
                                    status_$t *status_ret);
 
-/* FUN_00e52394 - Create new directory file (for fix_dir rebuild)
+/* dir_$create_dir_obj - Create new directory file
  *
  * Creates a new directory file using FILE_$PRIV_CREATE, initializes
  * its structure, and returns the new directory's UID.
@@ -766,57 +760,46 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_data,
  * Original address: 0x00E52394
  * Size: 482 bytes
  */
-void FUN_00e52394(uid_t *parent_uid, void *page0_data, uid_t *param3,
-                  uid_t *param4, uid_t *new_uid_ret, status_$t *status_ret);
+void dir_$create_dir_obj(uid_t *parent_uid, void *page0_data, uid_t *dir_acl_uid,
+                         uid_t *file_acl_uid, uid_t *new_uid_ret, status_$t *status_ret);
 
-/* FUN_00e4fe0a - Add entry to directory (internal)
+/* dir_$add_entry - Core internal add entry to directory
  *
- * Adds a directory entry with the given name, type, and data.
+ * Validates entry name, checks for duplicates, handles overflow pages,
+ * and inserts the entry into the directory pages.
  *
  * Original address: 0x00E4FE0A
  * Size: 232 bytes
  */
-void FUN_00e4fe0a(uint32_t handle, void *name, uint16_t name_len,
-                  uint16_t entry_type, uint32_t extra, uid_t *uid,
-                  uint16_t link_len, void *link_data, status_$t *status_ret);
+void dir_$add_entry(uint32_t handle, void *name, uint16_t name_len,
+                    uint16_t entry_type, uint32_t extra, uid_t *uid,
+                    uint16_t link_len, void *link_data, status_$t *status_ret);
 
-/* FUN_00e4e90a - Truncate/resize directory pages
+/* dir_$truncate_pages - Truncate/resize directory pages
  * Original address: 0x00E4E90A
  * Size: 86 bytes
  */
-uint32_t FUN_00e4e90a(void *handle, uint16_t new_page_count,
-                      status_$t *status_ret);
+uint32_t dir_$truncate_pages(void *handle, uint16_t new_page_count,
+                             status_$t *status_ret);
 
-/* FUN_00e4c9e4 - Directory entry lookup / add-entry callback
+/* dir_$find_entry - Directory entry lookup
  *
- * Looks up a directory entry by name. Returns negative (char < 0)
- * if found, non-negative if not found. Also used as a callback
- * function pointer passed to FUN_00e4fe0a (add entry).
- *
- * Parameters:
- *   handle    - Directory handle
- *   name      - Entry name to search for
- *   name_len  - Length of name
- *   flags     - Lookup flags (0=normal, 8=for add)
- *   entry_ret - Output: pointer to found entry data
- *   extra1    - Output: additional data (2 bytes)
- *   extra2    - Output: additional data (2 bytes)
- *
- * Returns: negative if found, non-negative if not found
+ * Looks up a directory entry by name using B-tree binary search.
+ * Returns negative (char < 0) if found, non-negative if not found.
  *
  * Original address: 0x00E4C9E4
  * Size: 390 bytes
  */
-char FUN_00e4c9e4(void *handle, void *name, int16_t name_len,
-                  int16_t flags, void **entry_ret,
-                  void *extra1, void *extra2);
+char dir_$find_entry(void *handle, void *name, int16_t name_len,
+                     int16_t flags, void **entry_ret,
+                     void *extra, int16_t *depth_ret);
 
-/* FUN_00e4d5b4 - Read link helper used by DO_OP case 0x3e
+/* dir_$do_op_read_linku - DO_OP handler for read link
  * Original address: 0x00E4D5B4
  */
-void FUN_00e4d5b4(uid_t *uid, void *name, uint16_t name_len,
-                  uint16_t buf_len, uint32_t extra, void *link_type_ret,
-                  uid_t *uid_ret, status_$t *status_ret);
+void dir_$do_op_read_linku(uid_t *uid, void *name, uint16_t name_len,
+                           uint16_t buf_len, uint32_t extra, void *link_type_ret,
+                           uid_t *uid_ret, status_$t *status_ret);
 
 /* DIR_$OLD_DIR_READU - Legacy directory read
  * Original address: 0x00E57C80
@@ -902,6 +885,12 @@ extern uint8_t DAT_00e7fba0;    /* Hint size table base */
 
 /* DAT_00e4b33c - UID_$NIL reference used as lock callback */
 extern uint8_t DAT_00e4b33c;
+
+/* DAT_00e4bc24 - ACL rights mask (value: 0xFF = all rights) */
+extern uint8_t DAT_00e4bc24;
+
+/* DAT_00e4b444 - MST remap / ACL check parameter table */
+extern uint8_t DAT_00e4b444;
 
 /* Naming error string for crash */
 extern char *PTR_Naming_bad_request_header_ver_err_00e7dbfc;
@@ -1079,7 +1068,7 @@ void REM_NAME_$GET_ENTRY(uid_t *dir_uid, char *name, uint16_t *name_len,
  *
  * Server-side handler for remote add (op 0x2A) and add hard link (op 0x2C).
  * Validates ACL rights, checks link count (max 0xFFF5), increments link
- * count attribute. On failure, calls FUN_00e511da to undo.
+ * count attribute. On failure, calls dir_$do_op_drop_entry to undo.
  *
  * Original address: 0x00E5044A
  * Size: 378 bytes
@@ -1112,15 +1101,15 @@ void dir_$do_op_add_entry(uid_t *uid, uint16_t type, void *name, uint16_t name_l
 void dir_$do_op_delete(uid_t *uid, void *name, uint16_t name_len, uint8_t flag1,
                        uint16_t flag2, uint16_t flag3, void *buf,
                        uid_t *result_uid, status_$t *status_ret);
-void FUN_00e518bc(uid_t *uid, uint32_t type_info, int16_t name_ptr,
-                  uint32_t name_info, int16_t new_name_ptr,
-                  uint32_t status_info);
-void FUN_00e50832(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name_len,
-                  void *uid_data, uid_t *result_uid, status_$t *status_ret);
+void dir_$do_op_cname(uid_t *uid, void *old_name, uint16_t old_name_len,
+                      void *new_name, uint16_t new_name_len,
+                      status_$t *status_ret);
+void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name_len,
+                        void *uid_data, uid_t *result_uid, status_$t *status_ret);
 /* dir_$do_op_create_dir - DO_OP handler: create subdirectory
  *
  * Creates a new subdirectory within a parent directory. Opens the
- * parent, reads its ACL UIDs, calls FUN_00e52394 to create and
+ * parent, reads its ACL UIDs, calls dir_$create_dir_obj to create and
  * initialize the new directory object, then adds the name entry.
  * On name_already_exists for server processes (type 9), performs
  * idempotent lookup of the existing entry.
@@ -1149,30 +1138,37 @@ void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
  */
 void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
                          status_$t *status_ret);
-void FUN_00e511da(uid_t *uid, uint16_t type, void *name, uint16_t name_len,
-                  uint16_t entry_type, void *result_uid, status_$t *status_ret);
-void FUN_00e4d954(uid_t *uid, int16_t count, void *entries, uint16_t flags,
-                  void *params, uint32_t cont, uint32_t max,
-                  uint32_t size, void *count_ret, void *eof_ret,
-                  void *result, status_$t *status_ret);
-void FUN_00e4cffa(uid_t *uid, void *name, uint16_t name_len,
-                  void *type_ret, void *uid_ret, void *extra_ret,
-                  status_$t *status_ret);
-void FUN_00e4e41a(uid_t *uid, void *params, uint8_t flag,
-                  void *name_ret, void *len_ret, void *uid_ret,
-                  status_$t *status_ret);
+void dir_$do_op_drop_entry(uid_t *uid, uint16_t rights, void *name,
+                           uint16_t name_len, uint16_t entry_type,
+                           void *result_uid, status_$t *status_ret);
+void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
+                          uint16_t name_flags, void *cont, uint16_t max_entries,
+                          uint32_t max_size, uint32_t buf_size,
+                          void *size_ret, void *offset_ret,
+                          void *count_ret, status_$t *status_ret);
+void dir_$do_op_get_entryu(uid_t *uid, void *name, uint16_t name_len,
+                           short *type_ret, char *uid_ret, uint32_t *extra_ret,
+                           status_$t *status_ret);
+void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
+                         void *name_ret, void *len_ret, void *uid_ret,
+                         status_$t *status_ret);
 void dir_$do_op_fix_dir(uid_t *uid, status_$t *status_ret);
 /* FUN_00e52bc2 is DIR_$SET_ACL - declared in dir.h */
 void dir_$do_op_set_default_acl(uid_t *uid, void *type, void *acl, status_$t *status_ret);
 void dir_$do_op_get_default_acl(uid_t *uid, uid_t *type, uid_t *acl_ret, status_$t *status_ret);
-void FUN_00e501d2(void *name, uint16_t name_len, status_$t *status_ret);
-void FUN_00e5216a(void *uid, void *prot, int16_t type);
-void FUN_00e52044(uid_t *uid, void *type, void *prot, void *acl, status_$t *status_ret);
-void FUN_00e51cf6(uid_t *uid, void *type, void *prot_ret, void *acl_ret, status_$t *status_ret);
-void FUN_00e4d0e2(uint32_t path_data, uint16_t path_len, void *result,
-                  void *uid_ret, void *extra, void *flags1, void *flags2,
-                  void *cont, void *size, void *eof, void *count,
-                  uint32_t max, void *link_count, status_$t *status_ret);
+void dir_$do_op_validate_root_entry(void *name, uint16_t name_len, status_$t *status_ret);
+void dir_$do_op_set_prot(uid_t *uid, void *prot_data, void *acl_uid, status_$t *status_ret);
+void dir_$do_op_set_def_prot(uid_t *uid, void *acl_type, void *prot_buf,
+                             void *acl_uid, status_$t *status_ret);
+void dir_$do_op_get_def_prot(uid_t *uid, void *acl_type, void *prot_buf,
+                             void *acl_ret, status_$t *status_ret);
+void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
+                        uint32_t *extra_ret, uint32_t *parent_uid_ret,
+                        uint8_t *flags1, uint8_t *flags2,
+                        uint16_t *cont, uint16_t *size,
+                        uint16_t *last_start, uint16_t *last_size,
+                        uint32_t max, uint16_t *link_count,
+                        status_$t *status_ret);
 void dir_$do_op_add_mount(uid_t *uid, uid_t *mount_uid, uint32_t node_id, status_$t *status_ret);
 void dir_$do_op_drop_mount(uid_t *mount_uid, uint32_t node_id, status_$t *status_ret);
 
