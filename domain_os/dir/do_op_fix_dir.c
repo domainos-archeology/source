@@ -11,13 +11,13 @@
  * 1. Enter supervisor mode
  * 2. Open original directory (mode=0, rights=2 - read)
  * 3. Read page 0 header, save ACL UIDs from offsets 0x46 and 0x7A
- * 4. Create a new temporary directory via FUN_00e52394
+ * 4. Create a new temporary directory via dir_$create_dir_obj
  * 5. Open the new directory for writing
  * 6. For each page in the original:
  *    a. Check page is valid (entry type 0, matching self-index, entry count 5)
  *    b. Parse the entry table and directory entries
  *    c. For each entry: extract name, type, UID, link data
- *    d. Add to new directory via FUN_00e4fe0a
+ *    d. Add to new directory via dir_$add_entry
  * 7. Truncate original to zero, copy new directory pages over
  * 8. Restore saved ACL UIDs in page 0
  * 9. Truncate to new size, write file, restore entry type
@@ -108,8 +108,8 @@ void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
         saved_acl2_low = *(uint32_t *)(page0 + 0x7E);
 
         /* Create new temporary directory */
-        FUN_00e52394(&UID_$NIL, page0, &UID_$NIL, &UID_$NIL,
-                     &new_dir_uid, status_ret);
+        dir_$create_dir_obj(&UID_$NIL, page0, &UID_$NIL, &UID_$NIL,
+                            &new_dir_uid, status_ret);
     }
 
     if (*status_ret != status_$ok) {
@@ -242,7 +242,7 @@ void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
                                     }
                                 }
 
-                                /* Build parameters for FUN_00e4fe0a (add entry) */
+                                /* Build parameters for dir_$add_entry */
                                 {
                                     uint32_t extra = 0;
                                     uint16_t link_len = 0;
@@ -299,7 +299,7 @@ void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
                                         entry_uid.high = entry_uid_high;
                                         entry_uid.low = entry_uid_low;
 
-                                        FUN_00e4fe0a(new_handle, name_buf,
+                                        dir_$add_entry(new_handle, name_buf,
                                                      name_len, etype, extra,
                                                      &entry_uid, link_len,
                                                      link_data, status_ret);

@@ -5,7 +5,7 @@
  * operations dispatched by DIR_$DO_OP.
  *
  * Process:
- * 1. Call dir_$do_op_add_entry with FUN_00e4c9e4 as callback for name resolution
+ * 1. Call dir_$do_op_add_entry with dir_$find_entry as callback for name resolution
  * 2. Copy target UID, clear bit 6 of local flags byte
  * 3. Call AST_$GET_COMMON_ATTRIBUTES (type 0x90) for the target object
  * 4. If object not found and flags (param_5) >= 0: set bit 7, continue
@@ -16,7 +16,7 @@
  *    - status_$naming_insufficient_rights (if rights mask & 0x48 == 0x40)
  * 7. If link count >= 0xFFF5: return status_$naming_too_many_hard_links
  * 8. Call AST_$SET_ATTRIBUTE(type 6, value 1) to increment link count
- * 9. On failure: call FUN_00e511da to undo
+ * 9. On failure: call dir_$do_op_drop_entry to undo
  *
  * Parameters:
  *   uid        - UID of the directory
@@ -30,7 +30,7 @@
  * Size: 378 bytes
  *
  * TODO: Full implementation requires understanding dir_$do_op_add_entry (name
- * resolution helper) and FUN_00e511da (undo/cleanup helper).
+ * resolution helper) and dir_$do_op_drop_entry (undo/cleanup helper).
  */
 
 #include "dir/dir_internal.h"

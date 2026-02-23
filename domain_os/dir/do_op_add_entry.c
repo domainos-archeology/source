@@ -9,9 +9,9 @@
  * Process:
  * 1. ACL_$ENTER_SUPER()
  * 2. Call dir_$open_dir for directory lookup (mode 2)
- * 3. Call FUN_00e4fe0a to attempt the add
+ * 3. Call dir_$add_entry to attempt the add
  * 4. If status_$name_already_exists AND process type == 9:
- *    a. Call FUN_00e4c9e4 to read existing entry
+ *    a. Call dir_$find_entry to read existing entry
  *    b. Compare based on entry type:
  *       - Type 2: compare UID high/low
  *       - Type 3: compare UID high/low + extra uint32_t
@@ -41,7 +41,7 @@
  * Size: 454 bytes
  *
  * TODO: Full implementation requires understanding dir_$open_dir
- * (directory lookup), FUN_00e4fe0a (add attempt), FUN_00e4c9e4
+ * (directory lookup), dir_$add_entry (add attempt), dir_$find_entry
  * (read existing entry), FUN_00e4d572 (name indirection), and
  * dir_$release_handle (cleanup).
  */
