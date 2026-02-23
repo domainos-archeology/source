@@ -8,10 +8,10 @@
  * the directory to the correct size.
  *
  * This function is called:
- * 1. From FUN_00e4ba02 (directory open) when integrity issues are detected
+ * 1. From dir_$open_dir (directory open) when integrity issues are detected
  * 2. From DIR_$CLEANUP during process shutdown
  *
- * Page structure (offsets from page base returned by FUN_00e4b340):
+ * Page structure (offsets from page base returned by dir_$map_page):
  *   +0x00: flags byte (bits 7-6: entry type: 0=normal, 1=continuation, 2=overflow)
  *   +0x01: entry count (bits 5-0: count of active entries)
  *   +0x02: UID high (4 bytes)
@@ -21,7 +21,7 @@
  *   +0x14: offset to name table / B-tree root pointer
  *
  * Parameters:
- *   handle      - Directory handle (passed to FUN_00e4b340 for page access)
+ *   handle      - Directory handle (passed to dir_$map_page for page access)
  *   crash_flag  - If negative (bit 7 set), crash on errors instead of
  *                 returning status_$naming_internal_error
  *   status_ret  - Output: status code
@@ -33,7 +33,7 @@
  * Original size: 752 bytes
  *
  * TODO: This is a complex function with many Ghidra decompiler artifacts
- * (extraout_A0 return values from FUN_00e4b340). The page structure needs
+ * (extraout_A0 return values from dir_$map_page). The page structure needs
  * further analysis. The validation logic has three phases:
  *   Phase 1: Walk backward finding the first valid page range
  *   Phase 2: Walk forward checking page cross-references
@@ -45,7 +45,7 @@
 /*
  * Page header field access macros
  *
- * FUN_00e4b340 returns a pointer to the page data in A0 (extraout_A0).
+ * dir_$map_page returns a pointer to the page data in A0 (extraout_A0).
  * These macros extract fields from the page header.
  */
 #define PAGE_ENTRY_TYPE(p)      ((*(uint8_t *)(p)) >> 6)
@@ -87,7 +87,7 @@ uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag,
      * of valid contiguous pages with matching UIDs.
      */
     for (;;) {
-        page_data = FUN_00e4b340(handle, cur_page);
+        page_data = dir_$map_page(handle, cur_page);
 
         /* If tracking UID is NIL, adopt this page's UID */
         if (tracking_uid_high == UID_$NIL.high &&
@@ -136,7 +136,7 @@ uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag,
      * Find the last page with actual entries.
      */
     for (;;) {
-        page_data = FUN_00e4b340(handle, cur_page);
+        page_data = dir_$map_page(handle, cur_page);
         if (PAGE_ENTRY_COUNT(page_data) != 0) {
             break;
         }
@@ -167,7 +167,7 @@ phase2:
         void *ref_data;
 
         last_page = (uint32_t)fwd_page;
-        fwd_data = FUN_00e4b340(handle, fwd_page);
+        fwd_data = dir_$map_page(handle, fwd_page);
 
         /* Check if the back-reference page is within range */
         if (cur_page < ((uint16_t *)fwd_data)[5]) {
@@ -175,7 +175,7 @@ phase2:
         }
 
         /* Read the referenced page */
-        ref_data = FUN_00e4b340(handle, ((uint16_t *)fwd_data)[5]);
+        ref_data = dir_$map_page(handle, ((uint16_t *)fwd_data)[5]);
 
         /* Check if referenced page's UID matches tracking UID */
         if (tracking_uid_high != PAGE_UID_HIGH(ref_data) ||
@@ -203,7 +203,7 @@ phase2:
             if (cur_page < *(uint16_t *)((char *)ref_data + 0x0C)) {
                 goto cleanup_start;
             }
-            void *next_data = FUN_00e4b340(handle,
+            void *next_data = dir_$map_page(handle,
                 *(uint16_t *)((char *)ref_data + 0x0C));
             if (tracking_uid_high != PAGE_UID_HIGH(next_data) ||
                 tracking_uid_low != PAGE_UID_LOW(next_data)) {
@@ -227,14 +227,14 @@ phase2:
             }
 
             /* Verify left subtree page UID */
-            void *left_data = FUN_00e4b340(handle, left_idx);
+            void *left_data = dir_$map_page(handle, left_idx);
             if (tracking_uid_high != PAGE_UID_HIGH(left_data) ||
                 tracking_uid_low != PAGE_UID_LOW(left_data)) {
                 goto cleanup_start;
             }
 
             /* Verify right subtree page UID */
-            void *right_data = FUN_00e4b340(handle, right_idx);
+            void *right_data = dir_$map_page(handle, right_idx);
             if (tracking_uid_high != PAGE_UID_HIGH(right_data) ||
                 tracking_uid_low != PAGE_UID_LOW(right_data)) {
                 goto cleanup_start;
@@ -259,9 +259,9 @@ phase3:
         uint16_t ref_idx;
 
         start_page++;
-        src_data = FUN_00e4b340(handle, start_page);
+        src_data = dir_$map_page(handle, start_page);
         ref_idx = *(uint16_t *)((char *)src_data + 10);
-        dst_data = FUN_00e4b340(handle, ref_idx);
+        dst_data = dir_$map_page(handle, ref_idx);
 
         /* Check if referenced page's UID matches tracking UID */
         if (PAGE_UID_HIGH(dst_data) == tracking_uid_high &&
@@ -286,7 +286,7 @@ phase3:
             *(uint8_t *)dst_data &= 0xEF;
 
             /* Release/flush the page */
-            FUN_00e4b838(handle);
+            dir_$release_wire(handle);
         }
     }
 

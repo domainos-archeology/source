@@ -17,8 +17,8 @@
  * held by the current process. Iterates through 32 slots:
  * 1. Check if slot is owned by current process (via PROC1_$CURRENT)
  * 2. If owned, call DIR_$VALIDATE_PAGES to clean up the handle entry
- * 3. Call FUN_00e4b838 to release request buffers
- * 4. Call FUN_00e4b9d6 to release handle slots
+ * 3. Call dir_$release_wire to release request buffers
+ * 4. Call dir_$release_handle to release handle slots
  * 5. Finally stop the exclusion mutex
  *
  * Also calls DIR_$OLD_CLEANUP for legacy cleanup.
@@ -47,11 +47,11 @@ void DIR_$CLEANUP(void)
             DIR_$VALIDATE_PAGES(handle_entry, 0, &status);
 
             /* Release request buffer */
-            FUN_00e4b838(handle_entry);
+            dir_$release_wire(handle_entry);
 
             /* Release handle slot */
             handle_ptr = (void **)(&DAT_00e7f280 + i * 0x30);
-            FUN_00e4b9d6(handle_ptr);
+            dir_$release_handle(handle_ptr);
         }
     }
 

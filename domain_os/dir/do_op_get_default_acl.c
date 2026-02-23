@@ -32,7 +32,7 @@ void dir_$do_op_get_default_acl(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_ret,
     ACL_$ENTER_SUPER();
 
     /* Open directory with read access (mode=1), no special rights */
-    FUN_00e4ba02(dir_uid, 1, 0, &handle, status_ret);
+    dir_$open_dir(dir_uid, 1, 0, &handle, status_ret);
 
     if (*status_ret == status_$ok) {
         *status_ret = status_$ok;
@@ -68,7 +68,7 @@ void dir_$do_op_get_default_acl(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_ret,
     }
 
     /* Release directory handle */
-    FUN_00e4b9d6(&handle);
+    dir_$release_handle(&handle);
 
     ACL_$EXIT_SUPER();
 }

@@ -289,7 +289,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x38: /* Read link */
-            FUN_00e52576(&local_uid, req + 0x90,
+            dir_$do_op_create_dir(&local_uid, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
                          &resp->_22_4_, &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
@@ -301,7 +301,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x3A: /* Drop link */
-            FUN_00e52744(&local_uid, req + 0x90,
+            dir_$do_op_drop_dir(&local_uid, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {

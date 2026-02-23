@@ -90,14 +90,14 @@ void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
     ACL_$ENTER_SUPER();
 
     /* Open original directory (mode=0 read-only, rights=2) */
-    FUN_00e4ba02(dir_uid, 0, 2, &orig_handle, status_ret);
+    dir_$open_dir(dir_uid, 0, 2, &orig_handle, status_ret);
     if (*status_ret != status_$ok) {
         goto done;
     }
 
     /* Read page 0 header and save ACL UIDs */
     {
-        uint8_t *page0 = (uint8_t *)FUN_00e4b340((void *)(uintptr_t)orig_handle, 0);
+        uint8_t *page0 = (uint8_t *)dir_$map_page((void *)(uintptr_t)orig_handle, 0);
 
         /* Save directory ACL UID (offset 0x46) */
         saved_acl1_high = *(uint32_t *)(page0 + 0x46);
@@ -117,7 +117,7 @@ void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
     }
 
     /* Open new directory for writing */
-    FUN_00e4ba02(&new_dir_uid, 2, 0, &new_handle, status_ret);
+    dir_$open_dir(&new_dir_uid, 2, 0, &new_handle, status_ret);
     if (*status_ret != status_$ok) {
         goto done;
     }
@@ -133,7 +133,7 @@ void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
         uint16_t pages_remaining = total_pages;
 
         do {
-            uint8_t *page = (uint8_t *)FUN_00e4b340((void *)(uintptr_t)orig_handle, page_idx);
+            uint8_t *page = (uint8_t *)dir_$map_page((void *)(uintptr_t)orig_handle, page_idx);
             uint8_t entry_type_field = page[0] >> 6;
 
             /* Only process valid normal pages (type 0) */
@@ -281,7 +281,7 @@ void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
                                                 goto next_entry;
                                             }
                                             uint8_t *ovf =
-                                                (uint8_t *)FUN_00e4b340(
+                                                (uint8_t *)dir_$map_page(
                                                     (void *)(uintptr_t)orig_handle, ovf_page);
                                             if (ovf[0] >> 6 != 2) {
                                                 goto next_entry;
@@ -344,8 +344,8 @@ next_page:
 
         do {
             /* Read corresponding pages from both directories */
-            uint16_t *orig_page = (uint16_t *)FUN_00e4b340((void *)(uintptr_t)orig_handle, copy_page);
-            uint32_t *new_page = (uint32_t *)FUN_00e4b340((void *)(uintptr_t)new_handle, copy_page);
+            uint16_t *orig_page = (uint16_t *)dir_$map_page((void *)(uintptr_t)orig_handle, copy_page);
+            uint32_t *new_page = (uint32_t *)dir_$map_page((void *)(uintptr_t)new_handle, copy_page);
 
             /* Copy 256 uint32_t (1024 bytes = one page) from new to original */
             {
@@ -396,7 +396,7 @@ next_page:
 
         /* Restore entry type to 5 (directory) in page 0 */
         {
-            uint8_t *page0 = (uint8_t *)FUN_00e4b340((void *)(uintptr_t)orig_handle, 0);
+            uint8_t *page0 = (uint8_t *)dir_$map_page((void *)(uintptr_t)orig_handle, 0);
             page0[1] = (page0[1] & 0xC0) | 5;
             FILE_$FW_FILE((uid_t *)(uintptr_t)orig_handle, status_ret);
         }
@@ -404,8 +404,8 @@ next_page:
 
 done:
     /* Release both handles */
-    FUN_00e4b9d6(&orig_handle);
-    FUN_00e4b9d6(&new_handle);
+    dir_$release_handle(&orig_handle);
+    dir_$release_handle(&new_handle);
 
     /* If we created a temporary directory, decrement its reference count */
     if (new_dir_uid.high != UID_$NIL.high ||

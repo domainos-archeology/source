@@ -8,7 +8,7 @@
  *
  * Process:
  * 1. ACL_$ENTER_SUPER()
- * 2. Call FUN_00e4ba02 for directory lookup (mode 2)
+ * 2. Call dir_$open_dir for directory lookup (mode 2)
  * 3. Call FUN_00e4fe0a to attempt the add
  * 4. If status_$name_already_exists AND process type == 9:
  *    a. Call FUN_00e4c9e4 to read existing entry
@@ -21,7 +21,7 @@
  * 5. If entry_type == 3 and dir matches NAME_$ROOT_UID:
  *    call HINT_$ADDI with the UID
  * 6. Copy 2-byte value from offset 0x3A of result
- * 7. Call FUN_00e4b9d6 for cleanup
+ * 7. Call dir_$release_handle for cleanup
  * 8. ACL_$EXIT_SUPER()
  *
  * Parameters:
@@ -40,10 +40,10 @@
  * Original address: 0x00E4FEF2
  * Size: 454 bytes
  *
- * TODO: Full implementation requires understanding FUN_00e4ba02
+ * TODO: Full implementation requires understanding dir_$open_dir
  * (directory lookup), FUN_00e4fe0a (add attempt), FUN_00e4c9e4
  * (read existing entry), FUN_00e4d572 (name indirection), and
- * FUN_00e4b9d6 (cleanup).
+ * dir_$release_handle (cleanup).
  */
 
 #include "dir/dir_internal.h"

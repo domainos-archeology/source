@@ -588,59 +588,175 @@ void audit_$log_prot_op(status_$t status, uid_t *uid, void *prot_data,
  * backward from the last page. Checks UID consistency, removes orphan
  * pages, and truncates the directory to the correct size.
  *
- * Called from FUN_00e4ba02 (directory open) and DIR_$CLEANUP.
+ * Called from dir_$open_dir (directory open) and DIR_$CLEANUP.
  *
  * Original address: 0x00E53728
  * Size: 752 bytes
  */
 uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag, status_$t *status_ret);
 
-/* FUN_00e4ba02 - Open/lock directory handle
+/* dir_$open_dir - Open/lock directory handle
  *
  * Opens a directory by UID and returns a handle. The mode and rights
- * parameters control the access level.
- *   mode 0: read-only
+ * parameters control the access level. Allocates a handle slot, copies
+ * the UID, locks the object, validates directory format (type 5),
+ * checks ACL rights, and validates pages.
+ *
+ *   mode 0: read-only (auto-promoted to 2 internally, with recovery)
  *   mode 1: read with ACL check
  *   mode 2: write access
- *   rights: access rights bitmask (e.g., 8 = write ACL)
+ *   rights: access rights bitmask (e.g., 3 = create, 8 = write ACL)
+ *
+ * On failure, the handle is automatically released via dir_$release_handle.
  *
  * Original address: 0x00E4BA02
  * Size: 546 bytes
  */
-void FUN_00e4ba02(void *uid, int16_t mode, int16_t rights,
-                  void *handle_ret, status_$t *status_ret);
+void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
+                   void *handle_ret, status_$t *status_ret);
 
-/* FUN_00e4b340 - Get page data by page index
- * Returns pointer to page data in register A0.
+/* dir_$map_page - Map directory data page with 2-slot LRU cache
+ *
+ * Maps a specific page of a directory's data into memory. Uses a
+ * 2-slot cache keyed by page group (page_idx >> 5). Each group
+ * contains 32 pages of 1024 bytes each (32KB). On cache miss,
+ * calls MST_$REMAP_PRIVI to map the group.
+ *
+ * Returns pointer to page data (page_idx & 0x1F) * 1024 bytes
+ * into the mapped group.
+ *
  * Original address: 0x00E4B340
+ * Size: 260 bytes
  */
-void *FUN_00e4b340(void *handle, int16_t page_idx);
+void *dir_$map_page(void *handle, int16_t page_idx);
+
+/* FUN_00e4b234 - Unlock/release lock on directory handle
+ *
+ * Releases the read or write lock on a directory. Decrements reader
+ * count (mode 1) or clears writer flag (mode 2). If the lock holder
+ * queue is empty and count reaches 0, returns the handle to the free
+ * list. Otherwise advances the wait event counter.
+ *
+ * Original address: 0x00E4B234
+ * Size: 264 bytes
+ */
+void FUN_00e4b234(void *handle);
+
+/* FUN_00e4b6ba - Unmap directory pages from memory
+ *
+ * Unmaps the cached directory page groups. For mode 0, calls
+ * MST_$UNMAP_PRIVI to unmap the mapped regions. For modes 1-4,
+ * saves mapping info to NAME_$NODE/COM/WDIR/NDIR_MAPPED_INFO.
+ * Clears the "mapped" flag at offset 0x20.
+ *
+ * Original address: 0x00E4B6BA
+ * Size: 252 bytes
+ */
+void FUN_00e4b6ba(void *handle);
 
 /* FUN_00e4b7b6 - Mark page as dirty
  * Original address: 0x00E4B7B6
  */
 void FUN_00e4b7b6(void *handle, void *page_data);
 
-/* FUN_00e4b838 - Release request buffer / flush page
- * Original address: 0x00E4B838
- */
-void FUN_00e4b838(void *handle);
-
-/* FUN_00e4b9d6 - Release directory handle slot
- * Original address: 0x00E4B9D6
- */
-void FUN_00e4b9d6(void *handle_ptr);
-
-/* FUN_00e52d70 - Set ACL on directory entry
+/* FUN_00e4b86e - Allocate directory handle slot
  *
- * Performs ACL conversion and storage. Called by dir_$do_op_set_default_acl.
- * Handles both funky ACL formats and 10ACL/9ACL conversions.
+ * Allocates a handle from the free list. If no handles are
+ * available, waits on DIR_$WT_FOR_HDNL_EC. For server processes
+ * (type 9), returns NULL if no handle is available. Initializes
+ * the handle fields: owner, lock mode, flags, max_slots=2.
+ *
+ * Returns: handle pointer in A0 (NULL if unavailable)
+ *
+ * Original address: 0x00E4B86E
+ * Size: 274 bytes
+ */
+void *FUN_00e4b86e(void);
+
+/* FUN_00e4b980 - Free directory handle slot
+ *
+ * Returns a handle slot to the free list. Clears the active bit
+ * in the bitmap, adds to free chain, and advances the wait event
+ * counter.
+ *
+ * Original address: 0x00E4B980
+ * Size: 86 bytes
+ */
+void FUN_00e4b980(void *handle);
+
+/* FUN_00e4afa8 - Lock/open directory object
+ *
+ * Opens the directory object for the specified access mode.
+ * Called by dir_$open_dir after handle allocation.
+ *
+ * Original address: 0x00E4AFA8
+ */
+void FUN_00e4afa8(void *handle, int16_t mode, status_$t *status_ret);
+
+/* FUN_00e4b44c - Validate directory handle
+ *
+ * Validates that the opened directory handle is consistent.
+ * Called by dir_$open_dir after locking.
+ *
+ * Original address: 0x00E4B44C
+ */
+void FUN_00e4b44c(void *handle, int16_t mode, status_$t *status_ret);
+
+/* FUN_00e50fc8 - Remove entry from directory
+ *
+ * Looks up an entry by name, extracts its UID (for types 2/3),
+ * validates the entry type against the requested operation type,
+ * removes the entry from the directory page, and optionally
+ * truncates the directory.
+ *
+ * Original address: 0x00E50FC8
+ * Size: 530 bytes
+ */
+void FUN_00e50fc8(void *handle, void *name, int16_t name_len,
+                  int16_t op_type, void *uid_ret, status_$t *status_ret);
+
+/* dir_$release_wire - Release wired page and reset cache state
+ *
+ * Releases a wired directory page (offset 0x14 in handle) via
+ * WP_$UNWIRE and resets the max_slots field (offset 0x1C) to 2.
+ * Crashes if max_slots is already 2 (double-release).
+ *
+ * Original address: 0x00E4B838
+ * Size: 54 bytes
+ */
+void dir_$release_wire(void *handle);
+
+/* dir_$release_handle - Release directory handle completely
+ *
+ * Full cleanup of a directory handle: unlocks (FUN_00e4b234),
+ * unmaps pages (FUN_00e4b6ba), frees the handle slot (FUN_00e4b980),
+ * and clears the handle pointer to NULL. No-op if handle is already NULL.
+ *
+ * Takes a pointer to the handle variable (not the handle itself),
+ * so it can clear it after release.
+ *
+ * Original address: 0x00E4B9D6
+ * Size: 44 bytes
+ */
+void dir_$release_handle(void *handle_ptr);
+
+/* dir_$set_default_acl_internal - Set default ACL on directory page
+ *
+ * Performs ACL conversion and storage on a directory's page data.
+ * Called by dir_$do_op_set_default_acl. Converts the incoming ACL
+ * to internal 10-ACL or funky-ACL format, validates that the ACL
+ * object resides on the same volume, then copies ACL data into the
+ * directory page at the appropriate offset (0x1A for DIR_ACL,
+ * 0x4E for FILE_ACL). Updates the ACL UID at offset 0x46 or 0x7A.
+ *
+ * Handles both ACL_$DIR_ACL and ACL_$FILE_ACL types.
  *
  * Original address: 0x00E52D70
  * Size: 566 bytes
  */
-void FUN_00e52d70(uint32_t handle, void *acl_data, void *acl_param,
-                  char all_entries, status_$t *status_ret);
+void dir_$set_default_acl_internal(uint32_t handle, void *acl_data,
+                                   void *acl_param, char all_entries,
+                                   status_$t *status_ret);
 
 /* FUN_00e52394 - Create new directory file (for fix_dir rebuild)
  *
@@ -671,10 +787,29 @@ void FUN_00e4fe0a(uint32_t handle, void *name, uint16_t name_len,
 uint32_t FUN_00e4e90a(void *handle, uint16_t new_page_count,
                       status_$t *status_ret);
 
-/* FUN_00e4c9e4 - Callback for add entry with root flag
+/* FUN_00e4c9e4 - Directory entry lookup / add-entry callback
+ *
+ * Looks up a directory entry by name. Returns negative (char < 0)
+ * if found, non-negative if not found. Also used as a callback
+ * function pointer passed to FUN_00e4fe0a (add entry).
+ *
+ * Parameters:
+ *   handle    - Directory handle
+ *   name      - Entry name to search for
+ *   name_len  - Length of name
+ *   flags     - Lookup flags (0=normal, 8=for add)
+ *   entry_ret - Output: pointer to found entry data
+ *   extra1    - Output: additional data (2 bytes)
+ *   extra2    - Output: additional data (2 bytes)
+ *
+ * Returns: negative if found, non-negative if not found
+ *
  * Original address: 0x00E4C9E4
+ * Size: 390 bytes
  */
-void FUN_00e4c9e4(void);
+char FUN_00e4c9e4(void *handle, void *name, int16_t name_len,
+                  int16_t flags, void **entry_ret,
+                  void *extra1, void *extra2);
 
 /* FUN_00e4d5b4 - Read link helper used by DO_OP case 0x3e
  * Original address: 0x00E4D5B4
@@ -837,7 +972,7 @@ extern uint32_t DAT_00e7ffdc; /* First handle slot (0xe7fd24 + 0x2b8) */
 #define status_$naming_invalid_link_operation        0x000E000A
 #endif
 #ifndef status_$naming_directory_not_empty
-#define status_$naming_directory_not_empty           0x000E000C
+#define status_$naming_directory_not_empty           0x000E000F
 #endif
 #ifndef status_$naming_name_is_not_a_file
 #define status_$naming_name_is_not_a_file            0x000E000E
@@ -850,6 +985,30 @@ extern uint32_t DAT_00e7ffdc; /* First handle slot (0xe7fd24 + 0x2b8) */
 #endif
 #ifndef status_$insufficient_rights_to_perform_operation
 #define status_$insufficient_rights_to_perform_operation 0x00230002
+#endif
+#ifndef status_$naming_name_not_found
+#define status_$naming_name_not_found               0x000E0007
+#endif
+#ifndef status_$naming_bad_directory
+#define status_$naming_bad_directory                 0x000E000D
+#endif
+#ifndef status_$naming_insufficient_rights
+#define status_$naming_insufficient_rights           0x000E0014
+#endif
+#ifndef file_$objects_on_different_volumes
+#define file_$objects_on_different_volumes           0x000F0013
+#endif
+#ifndef status_$naming_vol_mounted_read_only
+#define status_$naming_vol_mounted_read_only         0x000E0030
+#endif
+#ifndef status_$naming_cant_recovery_dir_on_ro_vol
+#define status_$naming_cant_recovery_dir_on_ro_vol   0x000E0031
+#endif
+/* TODO: Verify this error name. Used in dir_$open_dir when ACL check
+ * fails with file_$object_not_found. Possibly "naming_no_acl_object"
+ * or "naming_acl_not_accessible". */
+#ifndef status_$naming_acl_not_found
+#define status_$naming_acl_not_found                 0x000E0033
 #endif
 
 /* DIR_OP_SET_ACL and DIR_OP_GET_ENTRYU operation codes */
@@ -958,10 +1117,38 @@ void FUN_00e518bc(uid_t *uid, uint32_t type_info, int16_t name_ptr,
                   uint32_t status_info);
 void FUN_00e50832(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name_len,
                   void *uid_data, uid_t *result_uid, status_$t *status_ret);
-void FUN_00e52576(uid_t *uid, void *name, uint16_t name_len,
-                  void *result_uid, status_$t *status_ret);
-void FUN_00e52744(uid_t *uid, void *name, uint16_t name_len,
-                  status_$t *status_ret);
+/* dir_$do_op_create_dir - DO_OP handler: create subdirectory
+ *
+ * Creates a new subdirectory within a parent directory. Opens the
+ * parent, reads its ACL UIDs, calls FUN_00e52394 to create and
+ * initialize the new directory object, then adds the name entry.
+ * On name_already_exists for server processes (type 9), performs
+ * idempotent lookup of the existing entry.
+ *
+ * Called by DIR_$DO_OP case 0x38. Audit code 0x16.
+ *
+ * Original address: 0x00E52576
+ * Size: 462 bytes
+ */
+void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
+                           void *result_uid, status_$t *status_ret);
+
+/* dir_$do_op_drop_dir - DO_OP handler: drop/delete directory entry
+ *
+ * Removes a directory entry. Looks up the entry by name, rejects
+ * link entries (type 4), checks the directory lock list, verifies
+ * ACL rights. If the target is a directory on the same volume,
+ * checks it's empty (1 entry only), truncates ACL objects, and
+ * deletes the directory object. Falls back to DIR_$OLD_DROP_DIRU
+ * on bad_directory errors.
+ *
+ * Called by DIR_$DO_OP case 0x3A. Audit code 0x17.
+ *
+ * Original address: 0x00E52744
+ * Size: 682 bytes
+ */
+void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
+                         status_$t *status_ret);
 void FUN_00e511da(uid_t *uid, uint16_t type, void *name, uint16_t name_len,
                   uint16_t entry_type, void *result_uid, status_$t *status_ret);
 void FUN_00e4d954(uid_t *uid, int16_t count, void *entries, uint16_t flags,

@@ -3,7 +3,7 @@
  *
  * Server-side handler for opcode 0x4C in DIR_$DO_OP. Sets the default
  * ACL for a directory. Enters supervisor mode, opens the directory with
- * write access, delegates to FUN_00e52d70 for the actual ACL conversion
+ * write access, delegates to dir_$set_default_acl_internal for the actual ACL conversion
  * and storage, then cleans up.
  *
  * Called by DIR_$DO_OP case 0x4C.
@@ -29,15 +29,15 @@ void dir_$do_op_set_default_acl(uid_t *dir_uid, void *acl_data, void *acl_param,
     ACL_$ENTER_SUPER();
 
     /* Open directory with write access (mode=2) and rights=8 */
-    FUN_00e4ba02(dir_uid, 2, 8, &handle, status_ret);
+    dir_$open_dir(dir_uid, 2, 8, &handle, status_ret);
 
     if (*status_ret == status_$ok) {
         /* Delegate to the ACL-setting helper with all_entries flag (0xFF) */
-        FUN_00e52d70(handle, acl_data, acl_param, (char)0xFF, status_ret);
+        dir_$set_default_acl_internal(handle, acl_data, acl_param, (char)0xFF, status_ret);
     }
 
     /* Release directory handle */
-    FUN_00e4b9d6(&handle);
+    dir_$release_handle(&handle);
 
     ACL_$EXIT_SUPER();
 }

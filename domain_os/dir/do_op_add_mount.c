@@ -68,7 +68,7 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
     ACL_$ENTER_SUPER();
 
     /* Open directory with write access (mode=2, rights=8) */
-    FUN_00e4ba02(dir_uid, 2, 8, &handle, status_ret);
+    dir_$open_dir(dir_uid, 2, 8, &handle, status_ret);
 
     ACL_$EXIT_SUPER();
 
@@ -170,5 +170,5 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
     ML_$EXCLUSION_STOP(&DIR_$MUTEX);
 
 cleanup:
-    FUN_00e4b9d6(&handle);
+    dir_$release_handle(&handle);
 }
