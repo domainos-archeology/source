@@ -42,14 +42,17 @@ static int tests_failed = 0;
 
 /*
  * Mock DIR_$NAME_OFFSET_TABLE
- *   type 0: 4  (B-tree interior ref)
- *   type 1: 4  (B-tree interior ref)
- *   type 2: 18 (file entry)
- *   type 3: 18 (hard link entry)
- *   type 4: 6  (soft link entry)
+ *
+ * Actual binary values from A5(0xE7DC00)+0x2000 = 0xE7FC00:
+ *   type 0: 0   (unused)
+ *   type 1: 4   (internal B-tree pointer: 2 header + 2 child page)
+ *   type 2: 16  (file entry: 2 header + 2 reserved + 8 UID + 4 reserved)
+ *   type 3: 20  (hard link: 2 header + 2 reserved + 8 UID + 4 extra + 4 reserved)
+ *   type 4: 12  (soft link: 2 header + 2 link_len + 2 overflow + 6 reserved)
+ *   types 5-7: 0 (unused)
  */
 int16_t DIR_$NAME_OFFSET_TABLE[8] = {
-    4, 4, 18, 18, 6, 0, 0, 0,
+    0, 4, 16, 20, 12, 0, 0, 0,
 };
 
 /* Prevent real headers from being included */
@@ -97,8 +100,8 @@ typedef struct dir_insert_ctx {
  *   [0x12] index table starts here (each entry = int16_t offset to entry data)
  *   Entry data grows downward from offset 0x400
  *
- * Each type-2 file entry: 18-byte header + name_len, aligned to 4 bytes.
- * For name_len=6: 18 + 6 = 24 bytes (already 4-byte aligned).
+ * Each type-2 file entry: 16-byte header + name_len, aligned to 4 bytes.
+ * For name_len=6: 16 + 6 = 22 bytes, aligned to 24.
  */
 #define PAGE_SIZE 0x400
 
@@ -112,7 +115,7 @@ static void build_test_page(uint8_t *page, int num_entries, const char *names[],
 
     for (int i = 0; i < num_entries; i++) {
         /* Compute aligned entry size for type 2 */
-        int16_t entry_size = (18 + name_lens[i] + 3) & ~3;
+        int16_t entry_size = (16 + name_lens[i] + 3) & ~3;
         free_off -= entry_size;
 
         /* Write index entry (offset to entry data) */
@@ -122,9 +125,9 @@ static void build_test_page(uint8_t *page, int num_entries, const char *names[],
         uint8_t *entry = page + free_off;
         entry[0] = 2;              /* type 2 = file */
         entry[1] = name_lens[i];   /* name length */
-        /* Bytes 2-17: header padding (zeroed) */
-        /* Name starts at offset 18 */
-        memcpy(entry + 18, names[i], name_lens[i]);
+        /* Bytes 2-15: header padding (zeroed) */
+        /* Name starts at offset 16 */
+        memcpy(entry + 16, names[i], name_lens[i]);
     }
 
     *(int16_t *)(page + 0x0E) = idx_end;
@@ -207,7 +210,7 @@ TEST(move_single_entry)
     ASSERT_EQ(2, dst_page[dst_entry_off] & 7);        /* type 2 */
     ASSERT_EQ(6, dst_page[dst_entry_off + 1]);          /* name len */
     /* Name content */
-    ASSERT_MEM_EQ("hello!", dst_page + dst_entry_off + 18, 6);
+    ASSERT_MEM_EQ("hello!", dst_page + dst_entry_off + 16, 6);
 }
 
 /* Test: Move multiple consecutive entries */
@@ -217,7 +220,7 @@ TEST(move_multiple_entries)
     uint8_t dst_page[PAGE_SIZE];
     const char *names[] = { "aaa", "bbb", "ccc", "ddd" };
     uint8_t lens[] = { 3, 3, 3, 3 };
-    /* type 2, name_len 3: 18 + 3 = 21, aligned = 24 bytes each */
+    /* type 2, name_len 3: 16 + 3 = 19, aligned = 20 bytes each */
 
     build_test_page(src_page, 4, names, lens);
     build_empty_page(dst_page);
@@ -246,14 +249,14 @@ TEST(move_multiple_entries)
     /* Destination should have 2 entries */
     ASSERT_EQ(0x16, *(int16_t *)(dst_page + 0x0E));  /* 0x12 + 4 */
 
-    /* Free space should have decreased by 2 * 24 = 48 bytes */
-    ASSERT_EQ(PAGE_SIZE - 48, *(int16_t *)(dst_page + 0x10));
+    /* Free space should have decreased by 2 * 20 = 40 bytes */
+    ASSERT_EQ(PAGE_SIZE - 40, *(int16_t *)(dst_page + 0x10));
 
     /* Verify destination entry names */
     int16_t dst_off1 = *(int16_t *)(dst_page + 0x12);
     int16_t dst_off2 = *(int16_t *)(dst_page + 0x14);
-    ASSERT_MEM_EQ("bbb", dst_page + dst_off1 + 18, 3);
-    ASSERT_MEM_EQ("ccc", dst_page + dst_off2 + 18, 3);
+    ASSERT_MEM_EQ("bbb", dst_page + dst_off1 + 16, 3);
+    ASSERT_MEM_EQ("ccc", dst_page + dst_off2 + 16, 3);
 }
 
 /* Test: Reclaimable bit set on source page */
@@ -314,7 +317,7 @@ TEST(move_all_entries)
     uint8_t dst_page[PAGE_SIZE];
     const char *names[] = { "aa", "bb", "cc" };
     uint8_t lens[] = { 2, 2, 2 };
-    /* type 2, name_len 2: 18 + 2 = 20, already 4-byte aligned */
+    /* type 2, name_len 2: 16 + 2 = 18, aligned = 20 */
 
     build_test_page(src_page, 3, names, lens);
     build_empty_page(dst_page);
@@ -343,9 +346,9 @@ TEST(move_all_entries)
     int16_t d1 = *(int16_t *)(dst_page + 0x12);
     int16_t d2 = *(int16_t *)(dst_page + 0x14);
     int16_t d3 = *(int16_t *)(dst_page + 0x16);
-    ASSERT_MEM_EQ("aa", dst_page + d1 + 18, 2);
-    ASSERT_MEM_EQ("bb", dst_page + d2 + 18, 2);
-    ASSERT_MEM_EQ("cc", dst_page + d3 + 18, 2);
+    ASSERT_MEM_EQ("aa", dst_page + d1 + 16, 2);
+    ASSERT_MEM_EQ("bb", dst_page + d2 + 16, 2);
+    ASSERT_MEM_EQ("cc", dst_page + d3 + 16, 2);
 }
 
 /* Test: Destination page free space tracking is correct */
@@ -356,8 +359,8 @@ TEST(dst_free_space_tracking)
     /* Use different name lengths to get different entry sizes */
     const char *names[] = { "short", "longernam" };
     uint8_t lens[] = { 5, 9 };
-    /* type 2, name 5: 18+5=23, aligned=24 */
-    /* type 2, name 9: 18+9=27, aligned=28 */
+    /* type 2, name 5: 16+5=21, aligned=24 */
+    /* type 2, name 9: 16+9=25, aligned=28 */
 
     build_test_page(src_page, 2, names, lens);
     build_empty_page(dst_page);

@@ -37,16 +37,16 @@ static int tests_failed = 0;
  * Indexed by entry type & 7, gives the byte offset from entry start
  * to where the name begins (i.e., the fixed header size for that type).
  *
- * Representative values based on analysis of the directory code:
- *   type 0: 4  (B-tree interior ref)
- *   type 1: 4  (B-tree interior ref)
- *   type 2: 18 (file entry)
- *   type 3: 18 (hard link entry)
- *   type 4: 6  (soft link entry)
+ * Actual binary values from A5(0xE7DC00)+0x2000 = 0xE7FC00:
+ *   type 0: 0   (unused)
+ *   type 1: 4   (internal B-tree pointer: 2 header + 2 child page)
+ *   type 2: 16  (file entry: 2 header + 2 reserved + 8 UID + 4 reserved)
+ *   type 3: 20  (hard link: 2 header + 2 reserved + 8 UID + 4 extra + 4 reserved)
+ *   type 4: 12  (soft link: 2 header + 2 link_len + 2 overflow + 6 reserved)
  *   types 5-7: 0 (unused)
  */
 int16_t DIR_$NAME_OFFSET_TABLE[8] = {
-    4, 4, 18, 18, 6, 0, 0, 0,
+    0, 4, 16, 20, 12, 0, 0, 0,
 };
 
 /* Prevent the real dir_internal.h from being pulled in;
@@ -56,7 +56,7 @@ int16_t DIR_$NAME_OFFSET_TABLE[8] = {
 /* Pull in the implementation directly */
 #include "../calc_entry_size.c"
 
-/* Test: type 2 (file) entry, name length 10 => 18 + 10 = 28, already aligned */
+/* Test: type 2 (file) entry, name length 10 => 16 + 10 = 26, rounds to 28 */
 TEST(file_entry_aligned)
 {
     uint8_t entry[32];
@@ -65,10 +65,10 @@ TEST(file_entry_aligned)
     entry[1] = 10;  /* name length */
 
     uint16_t result = dir_$calc_entry_size(entry);
-    ASSERT_EQ(28, result);  /* 18 + 10 = 28, already 4-byte aligned */
+    ASSERT_EQ(28, result);  /* (26 + 3) & ~3 = 28 */
 }
 
-/* Test: type 2 (file) entry, name length 7 => 18 + 7 = 25, rounds to 28 */
+/* Test: type 2 (file) entry, name length 7 => 16 + 7 = 23, rounds to 24 */
 TEST(file_entry_unaligned)
 {
     uint8_t entry[32];
@@ -77,10 +77,10 @@ TEST(file_entry_unaligned)
     entry[1] = 7;  /* name length */
 
     uint16_t result = dir_$calc_entry_size(entry);
-    ASSERT_EQ(28, result);  /* (25 + 3) & ~3 = 28 */
+    ASSERT_EQ(24, result);  /* (23 + 3) & ~3 = 24 */
 }
 
-/* Test: type 3 (hard link) entry, name length 5 => 18 + 5 = 23, rounds to 24 */
+/* Test: type 3 (hard link) entry, name length 5 => 20 + 5 = 25, rounds to 28 */
 TEST(hard_link_entry)
 {
     uint8_t entry[32];
@@ -89,7 +89,7 @@ TEST(hard_link_entry)
     entry[1] = 5;  /* name length */
 
     uint16_t result = dir_$calc_entry_size(entry);
-    ASSERT_EQ(24, result);  /* (23 + 3) & ~3 = 24 */
+    ASSERT_EQ(28, result);  /* (25 + 3) & ~3 = 28 */
 }
 
 /* Test: type 4 (soft link) with overflow page (not -1), no inline data */
@@ -105,7 +105,7 @@ TEST(soft_link_no_inline)
     entry[4] = 0; entry[5] = 5;
 
     uint16_t result = dir_$calc_entry_size(entry);
-    ASSERT_EQ(16, result);  /* (6 + 8 + 3) & ~3 = 16, no inline data added */
+    ASSERT_EQ(20, result);  /* (12 + 8 + 3) & ~3 = 20, no inline data added */
 }
 
 /* Test: type 4 (soft link) with inline data (overflow_page == -1) */
@@ -121,7 +121,7 @@ TEST(soft_link_inline)
     *(int16_t *)(entry + 4) = -1;
 
     uint16_t result = dir_$calc_entry_size(entry);
-    ASSERT_EQ(36, result);  /* (6 + 8 + 20 + 3) & ~3 = 36 */
+    ASSERT_EQ(40, result);  /* (12 + 8 + 20 + 3) & ~3 = 40 */
 }
 
 /* Test: type field masked correctly (upper bits in byte 0 ignored) */
@@ -133,7 +133,7 @@ TEST(type_mask)
     entry[1] = 6;     /* name length */
 
     uint16_t result = dir_$calc_entry_size(entry);
-    ASSERT_EQ(24, result);  /* type=2: (18 + 6 + 3) & ~3 = 24 */
+    ASSERT_EQ(24, result);  /* type=2: (16 + 6 + 3) & ~3 = 24 */
 }
 
 /* Test: name length 0 => just header, still aligned */
@@ -145,7 +145,7 @@ TEST(zero_name_length)
     entry[1] = 0;  /* name length = 0 */
 
     uint16_t result = dir_$calc_entry_size(entry);
-    ASSERT_EQ(20, result);  /* (18 + 0 + 3) & ~3 = 20 */
+    ASSERT_EQ(16, result);  /* (16 + 0 + 3) & ~3 = 16 */
 }
 
 /* Test: type 4 inline with zero-length link data */
@@ -161,7 +161,7 @@ TEST(soft_link_inline_zero_link)
     *(int16_t *)(entry + 4) = -1;
 
     uint16_t result = dir_$calc_entry_size(entry);
-    ASSERT_EQ(12, result);  /* (6 + 5 + 0 + 3) & ~3 = 12 */
+    ASSERT_EQ(20, result);  /* (12 + 5 + 0 + 3) & ~3 = 20 */
 }
 
 /* Test: type 1 (B-tree interior), name length 12 => 4 + 12 = 16, aligned */
