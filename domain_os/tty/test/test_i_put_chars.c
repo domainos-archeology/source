@@ -150,7 +150,7 @@ typedef struct tty_desc {
     m68k_ptr_t output_ec;
     m68k_ptr_t reserved_2AC;
     m68k_ptr_t err_handler;
-    m68k_ptr_t reserved_2B4;  /* Transmit callback */
+    m68k_ptr_t xmit_callback;  /* Transmit callback */
     m68k_ptr_t xon_xoff_handler;
     m68k_ptr_t flow_ctrl_handler;
     m68k_ptr_t status_handler;
@@ -402,7 +402,7 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
         }
     }
 
-    ((void (*)(uint32_t))(uintptr_t)tty->reserved_2B4)(tty->line_id);
+    ((void (*)(uint32_t))(uintptr_t)tty->xmit_callback)(tty->line_id);
 
     ML_$SPIN_UNLOCK(&TTY_$SPIN_LOCK, token);
 
@@ -458,7 +458,7 @@ static void init_test_tty(tty_desc_t *tty)
     tty->current_input_flags = 0;  /* column = 0 */
 
     /* Set transmit callback to our mock */
-    tty->reserved_2B4 = (m68k_ptr_t)(uintptr_t)mock_xmit_callback;
+    tty->xmit_callback = (m68k_ptr_t)(uintptr_t)mock_xmit_callback;
 
     /* Reset test counters */
     xmit_callback_count = 0;

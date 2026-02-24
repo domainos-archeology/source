@@ -138,7 +138,7 @@ typedef struct tty_desc {
   m68k_ptr_t output_ec;         // 0x2A8: Output eventcount pointer
   m68k_ptr_t reserved_2AC;      // 0x2AC: Reserved
   m68k_ptr_t err_handler;       // 0x2B0: Error handler function
-  m68k_ptr_t reserved_2B4;      // 0x2B4: Reserved
+  m68k_ptr_t xmit_callback;     // 0x2B4: Transmit callback function
   m68k_ptr_t xon_xoff_handler;  // 0x2B8: XON/XOFF handler
   m68k_ptr_t flow_ctrl_handler; // 0x2BC: Flow control handler
   m68k_ptr_t status_handler;    // 0x2C0: Status change handler

@@ -347,10 +347,10 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
      * Call transmit callback to start actual I/O.
      * Assembly: move.l (A0),-(SP); movea.l (0x2B4,A0),A1; jsr (A1)
      *
-     * reserved_2B4 is the transmit callback function pointer.
+     * xmit_callback is the transmit callback function pointer.
      * line_id (first 4 bytes of tty) is passed as the argument.
      */
-    ((void (*)(uint32_t))(uintptr_t)tty->reserved_2B4)(tty->line_id);
+    ((void (*)(uint32_t))(uintptr_t)tty->xmit_callback)(tty->line_id);
 
     ML_$SPIN_UNLOCK(&TTY_$SPIN_LOCK, token);
 
