@@ -56,7 +56,8 @@
 #define TTY_FLAG_RAW_MODE 0x0040   // Raw mode (no char class processing)
 
 // =============================================================================
-// TTY Status Flags (offset 0x09 in tty_desc_t)
+// TTY Status Flags (low byte of state_flags at offset 0x08)
+// Assembly accesses byte 0x09 (LSB of state_flags on big-endian)
 // =============================================================================
 #define TTY_STATUS_OUTPUT_WAIT 0x01  // Waiting for output buffer drain
 #define TTY_STATUS_INPUT_WAIT 0x02   // Waiting for input
@@ -66,7 +67,8 @@
 #define TTY_STATUS_EOF_PEND 0x40     // EOF pending
 
 // =============================================================================
-// TTY Error Flags (offset 0x0B in tty_desc_t)
+// TTY Error Flags (low byte of pending_signal at offset 0x0A)
+// Assembly accesses byte 0x0B (LSB of pending_signal on big-endian)
 // =============================================================================
 #define TTY_ERR_CALLBACK 0x01 // Error callback set
 #define TTY_ERR_OVERFLOW 0x02 // Input buffer overflow
@@ -93,11 +95,9 @@ typedef struct tty_desc {
   // Basic identification and state (0x00-0x0F)
   uint32_t line_id;        // 0x00: Terminal line identifier
   m68k_ptr_t handler_ptr;  // 0x04: Handler structure pointer
-  uint16_t state_flags;    // 0x08: State flags (raw mode, parity, etc.)
-  uint16_t pending_signal; // 0x0A: Pending signal number
-  uint8_t output_flags;    // 0x0C: Output control flags (TTY_FLAG_*)
-  uint8_t status_flags;    // 0x0D: Status flags (wait states)
-  uint16_t reserved_0E;    // 0x0E: Reserved
+  uint16_t state_flags;    // 0x08: State/status flags (TTY_STATUS_* in low byte)
+  uint16_t pending_signal; // 0x0A: Pending signal number (TTY_ERR_* in low byte)
+  uint32_t output_flags;   // 0x0C: Output control flags (32-bit word, assembly: move.l (0xC,A0))
 
   // Mode flags (0x10-0x1F)
   uint32_t reserved_10; // 0x10: Reserved

@@ -15,7 +15,7 @@
 void TTY_$I_OUTPUT_BUFFER_DRAINED(tty_desc_t *tty)
 {
     // Clear output wait flag
-    tty->status_flags &= ~TTY_STATUS_OUTPUT_WAIT;
+    tty->state_flags &= ~TTY_STATUS_OUTPUT_WAIT;
 
     // Signal that output is complete via eventcount
     TTY_$I_ADVANCE_EC(tty->output_ec);
@@ -31,14 +31,14 @@ void TTY_$I_FLUSH_INPUT(tty_desc_t *tty)
     tty->saved_input_flags = tty->column;
 
     // If waiting for input, signal completion
-    if ((tty->status_flags & TTY_STATUS_INPUT_WAIT) != 0) {
-        tty->status_flags &= ~TTY_STATUS_INPUT_WAIT;
+    if ((tty->state_flags & TTY_STATUS_INPUT_WAIT) != 0) {
+        tty->state_flags &= ~TTY_STATUS_INPUT_WAIT;
         TTY_$I_ADVANCE_EC(tty->output_ec);
     }
 
     // Call flow control handler if set
     if (tty->flow_ctrl_handler != 0) {
-        boolean xon_xoff = (tty->output_flags & 0x02) != 0 ? true : false;
+        boolean xon_xoff = (tty->input_flags & 0x02) != 0 ? true : false;
         // Call handler: handler(line_id, false, xon_xoff)
         // This tells the handler that flow control is being cleared
         void (*handler)(short, short, char) = (void (*)(short, short, char))(uintptr_t)tty->flow_ctrl_handler;

@@ -123,9 +123,7 @@ typedef struct tty_desc {
     m68k_ptr_t handler_ptr;
     uint16_t state_flags;
     uint16_t pending_signal;
-    uint8_t output_flags;
-    uint8_t status_flags;
-    uint16_t reserved_0E;
+    uint32_t output_flags;
     uint32_t reserved_10;
     uint32_t input_flags;
     uint16_t reserved_18;
@@ -241,7 +239,6 @@ void tty_$i_buf_put(uint8_t ch, void *buf)
 #define TTY_OFLAG_DISCARD      0x08
 #define TTY_OFLAG_EXPAND_TABS  0x10
 
-#define TTY_GET_OUTPUT_FLAGS(tty) (*(const uint32_t *)&(tty)->output_flags)
 #define TTY_COLUMN(tty) ((tty)->column)
 
 #define TTY_DELAY_LF  0
@@ -304,12 +301,12 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
                 TTY_COLUMN(tty)--;
             }
         } else if (ch == 0x0D) {
-            oflags = TTY_GET_OUTPUT_FLAGS(tty);
+            oflags = tty->output_flags;
             if ((oflags & TTY_OFLAG_DISCARD) != 0 &&
                 TTY_COLUMN(tty) == 0) {
                 /* Discard */
             } else {
-                oflags = TTY_GET_OUTPUT_FLAGS(tty);
+                oflags = tty->output_flags;
                 if (oflags & TTY_OFLAG_CR_TO_LF) {
                     local_max--;
                     tty_$i_buf_put(0x0A, &tty->output_head);
@@ -327,7 +324,7 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
             }
             TTY_COLUMN(tty) = 0;
         } else if (ch == 0x0A) {
-            oflags = TTY_GET_OUTPUT_FLAGS(tty);
+            oflags = tty->output_flags;
             if (oflags & TTY_OFLAG_LF_TO_CRLF) {
                 local_max--;
                 tty_$i_buf_put(0x0D, &tty->output_head);
@@ -344,7 +341,7 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
         } else if (ch == 0x09) {
             int16_t col_mod = TTY_COLUMN(tty) & 7;
             int16_t spaces = 8 - col_mod;
-            oflags = TTY_GET_OUTPUT_FLAGS(tty);
+            oflags = tty->output_flags;
             if (oflags & TTY_OFLAG_EXPAND_TABS) {
                 int16_t extra = spaces - 1;
                 local_max -= extra;
@@ -475,14 +472,11 @@ static uint32_t make_flags(uint16_t count, uint16_t avail)
 }
 
 /*
- * Helper to set output flags as a 32-bit value at offset 0x0C.
- * On big-endian (M68K), this sets the flag bits in the low byte.
- * In the test (native endian), we set it directly since the code
- * and tests use the same access pattern.
+ * Helper to set output flags (now a proper uint32_t field).
  */
 static void set_output_flags(tty_desc_t *tty, uint32_t flags)
 {
-    *(uint32_t *)&tty->output_flags = flags;
+    tty->output_flags = flags;
 }
 
 /* ================================================================

@@ -44,7 +44,7 @@ void TTY_$K_SET_FLAG(short *line_ptr, short *flag_ptr, char *value_ptr,
 
     if (*value_ptr < 0) {  // true in Domain/OS convention
         // Enable signal on input available
-        tty->status_flags |= TTY_STATUS_SIG_PEND;
+        tty->state_flags |= TTY_STATUS_SIG_PEND;
 
         // If there's already input, signal immediately
         if (tty->input_read != tty->input_head) {
@@ -52,7 +52,7 @@ void TTY_$K_SET_FLAG(short *line_ptr, short *flag_ptr, char *value_ptr,
         }
     } else {
         // Disable signal on input available
-        tty->status_flags &= ~TTY_STATUS_SIG_PEND;
+        tty->state_flags &= ~TTY_STATUS_SIG_PEND;
     }
 }
 
@@ -70,7 +70,7 @@ void TTY_$K_INQ_FLAGS(short *line_ptr, uint16_t *flags_ptr, status_$t *status)
     *flags_ptr = 0;
 
     // Check if signal on input available is enabled
-    if ((tty->status_flags & TTY_STATUS_SIG_PEND) != 0) {
+    if ((tty->state_flags & TTY_STATUS_SIG_PEND) != 0) {
         *flags_ptr |= 0x0001;
     }
 }
@@ -119,11 +119,10 @@ void TTY_$K_SET_OUTPUT_FLAG(short *line_ptr, ushort *flag_ptr, char *value_ptr,
     }
 
     // Set or clear the specified bit in output control flags (at offset 0x0C)
-    uint32_t *output_flags_ptr = (uint32_t *)&tty->output_flags;
     if (*value_ptr < 0) {  // true
-        *output_flags_ptr |= (1U << (*flag_ptr & 0x1F));
+        tty->output_flags |= (1U << (*flag_ptr & 0x1F));
     } else {
-        *output_flags_ptr &= ~(1U << (*flag_ptr & 0x1F));
+        tty->output_flags &= ~(1U << (*flag_ptr & 0x1F));
     }
 }
 
@@ -137,7 +136,7 @@ void TTY_$K_INQ_OUTPUT_FLAGS(short *line_ptr, uint32_t *flags_ptr, status_$t *st
         return;
     }
 
-    *flags_ptr = *(uint32_t *)&tty->output_flags;
+    *flags_ptr = tty->output_flags;
 }
 
 void TTY_$K_SET_ECHO_FLAG(short *line_ptr, ushort *flag_ptr, char *value_ptr,

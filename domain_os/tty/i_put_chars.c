@@ -39,30 +39,12 @@
 
 /*
  * Output flag bits (from 32-bit word at tty descriptor offset 0x0C).
- *
- * The tty_desc_t struct currently defines output_flags as uint8_t at
- * offset 0x0C, but the M68K assembly loads a full 32-bit word with
- * move.l (0x0C,A0) and tests bits in the low byte (offset 0x0F on
- * big-endian). We access the 32-bit value via cast, matching the
- * pattern used in k_flags.c.
- *
- * TODO: Fix tty_desc_t to use uint32_t for output_flags at offset 0x0C,
- * eliminating status_flags and reserved_0E.
+ * Assembly: move.l (0xC,A0),D1 then tests individual bits.
  */
 #define TTY_OFLAG_CR_TO_LF    0x01  /* Bit 0: Convert CR to LF */
 #define TTY_OFLAG_LF_TO_CRLF  0x02  /* Bit 1: Prepend CR before LF */
 #define TTY_OFLAG_DISCARD      0x08  /* Bit 3: Discard CR when column == 0 */
 #define TTY_OFLAG_EXPAND_TABS  0x10  /* Bit 4: Expand TABs to spaces */
-
-/*
- * Access output flags as 32-bit value.
- * Matches assembly: move.l (0xc,A0),D1
- *
- * NOTE: This cast gives correct results on big-endian (M68K) only.
- * For little-endian portability, the struct field must be changed
- * to uint32_t.
- */
-#define TTY_GET_OUTPUT_FLAGS(tty) (*(const uint32_t *)&(tty)->output_flags)
 
 /*
  * The field column at offset 0x58 in tty_desc_t is the display column
@@ -187,7 +169,7 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
 
         } else if (ch == 0x0D) {
             /* CR (Carriage Return) */
-            oflags = TTY_GET_OUTPUT_FLAGS(tty);
+            oflags = tty->output_flags;
 
             /*
              * If discard mode (bit 3) and column == 0, skip output
@@ -197,7 +179,7 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
                 TTY_COLUMN(tty) == 0) {
                 /* Discard: just reset column below */
             } else {
-                oflags = TTY_GET_OUTPUT_FLAGS(tty);
+                oflags = tty->output_flags;
 
                 if (oflags & TTY_OFLAG_CR_TO_LF) {
                     /* Convert CR to LF */
@@ -221,7 +203,7 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
 
         } else if (ch == 0x0A) {
             /* LF (Line Feed) */
-            oflags = TTY_GET_OUTPUT_FLAGS(tty);
+            oflags = tty->output_flags;
 
             if (oflags & TTY_OFLAG_LF_TO_CRLF) {
                 /* Prepend CR before LF */
@@ -245,7 +227,7 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
             int16_t col_mod = TTY_COLUMN(tty) & 7;
             int16_t spaces = 8 - col_mod;
 
-            oflags = TTY_GET_OUTPUT_FLAGS(tty);
+            oflags = tty->output_flags;
 
             if (oflags & TTY_OFLAG_EXPAND_TABS) {
                 /* Expand TAB to spaces */

@@ -53,10 +53,9 @@ void TTY_$I_SET_RAW_MODE(tty_desc_t *tty, char raw)
         *(uint32_t *)((char *)tty + 0x18) = tty->input_flags & DAT_00e2ddd8;
         tty->input_flags = ~DAT_00e2ddd8 & tty->input_flags;
 
-        /* Save and clear output_flags bits specified by mask
-         * Note: reads/writes uint32_t at offset 0x0C, writes to offset 0x10 */
-        tty->reserved_10 = *(uint32_t *)((char *)tty + 0x0C) & DAT_00e2ddd4;
-        *(uint32_t *)((char *)tty + 0x0C) = ~DAT_00e2ddd4 & *(uint32_t *)((char *)tty + 0x0C);
+        /* Save and clear output_flags bits specified by mask */
+        tty->reserved_10 = tty->output_flags & DAT_00e2ddd4;
+        tty->output_flags &= ~DAT_00e2ddd4;
 
         /* Reset all function char classes to NORMAL (not using defaults) */
         TTY_$I_SET_DFL_FUNCS(tty, 0);
@@ -92,7 +91,7 @@ void TTY_$I_SET_RAW_MODE(tty_desc_t *tty, char raw)
         tty->input_flags = *(uint32_t *)((char *)tty + 0x18) | tty->input_flags;
 
         /* Restore saved output_flags */
-        *(uint32_t *)((char *)tty + 0x0C) = tty->reserved_10 | *(uint32_t *)((char *)tty + 0x0C);
+        tty->output_flags |= tty->reserved_10;
 
         /* Clear saved copies */
         *(uint32_t *)((char *)tty + 0x18) = 0;

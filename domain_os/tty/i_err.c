@@ -58,7 +58,8 @@ handle_error:
 
 signal_error:
     // Set error callback flag
-    tty->status_flags |= TTY_ERR_CALLBACK;
+    // Assembly: bset.b #0x0,(0xb,A0) - sets bit 0 in LSB of pending_signal
+    tty->pending_signal |= TTY_ERR_CALLBACK;
 
     // Signal both input and output eventcounts
     TTY_$I_ADVANCE_EC(tty->input_ec);

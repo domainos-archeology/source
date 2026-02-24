@@ -30,7 +30,9 @@ static const uint8_t newline_cr[] = { 0x0D };
 
 void TTY_$I_NEWLINE(tty_desc_t *tty)
 {
-    uint8_t output_flags = *(uint8_t *)((char *)tty + 0x0F);
+    /* Assembly loads byte at offset 0x0F (LSB of 32-bit output_flags on
+     * big-endian).  Now that output_flags is uint32_t, access directly. */
+    uint32_t output_flags = tty->output_flags;
     char do_cr = -1;  /* true: output CR */
 
     if ((output_flags & 0x01) != 0) {

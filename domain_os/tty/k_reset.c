@@ -19,7 +19,8 @@ void TTY_$K_RESET(short *line_ptr, status_$t *status)
     TTY_$I_LOCK(tty);
 
     // Save XON/XOFF mode flag
-    boolean xon_xoff = (tty->output_flags & 0x02) != 0 ? true : false;
+    // Assembly: btst.b #0x1,(0x17,A2) - tests bit 1 of LSB of input_flags
+    boolean xon_xoff = (tty->input_flags & 0x02) != 0 ? true : false;
 
     // Reset input buffer pointers
     tty->input_head = 1;
