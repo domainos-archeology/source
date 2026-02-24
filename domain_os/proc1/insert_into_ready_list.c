@@ -1,14 +1,17 @@
 /*
- * proc1_$insert_into_ready_list - Insert process into ready list
+ * proc1_$insert_into_ready_list - LIFO priority-ordered ready list insertion
  *
  * Inserts a PCB into the ready list in the correct position.
  * The ready list is ordered by:
  *   1. resource_locks_held (descending - higher values first)
- *   2. state (ascending - lower values first)
+ *   2. state (descending - higher values first)
  *
- * This ordering ensures that:
- *   - Processes holding more locks run first (to release them quickly)
- *   - Among processes with equal locks, lower state runs first
+ * Uses LIFO ordering within the same priority level: inserts BEFORE
+ * entries with equal resource_locks_held and state, giving the newly
+ * inserted process higher precedence.
+ *
+ * Contrast with proc1_$add_ready_body which inserts AFTER equal-priority
+ * entries (FIFO/round-robin fairness).
  *
  * Parameters:
  *   pcb - Process to insert (passed in A1 on m68k)
@@ -33,8 +36,13 @@ void proc1_$insert_into_ready_list(proc1_t *pcb)
      *   - pcb's locks <= current position's locks AND
      *   - (locks are different OR pcb's state < current's state)
      *
-     * This finds the first position where pcb should be inserted
-     * before the current node.
+     * List is ordered by locks descending, then state descending.
+     * We skip past higher-priority entries (more locks or higher state)
+     * and insert before the first entry with equal or lower priority.
+     *
+     * LIFO: bcs in assembly means "branch if unsigned lower" - we
+     * continue past entries with strictly higher state, but STOP at
+     * entries with equal state (inserting before them).
      */
     while (locks <= pos->resource_locks_held) {
         if (locks != pos->resource_locks_held) {
@@ -42,7 +50,7 @@ void proc1_$insert_into_ready_list(proc1_t *pcb)
             pos = pos->nextp;
             continue;
         }
-        /* Equal locks - compare state */
+        /* Equal locks - compare state (LIFO: stop at equal) */
         if (state >= pos->state) {
             /* pcb has equal or higher state, insert here */
             break;

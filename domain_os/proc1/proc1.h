@@ -29,8 +29,15 @@
  * Process Control Block (PCB) structure
  * Size: ~0x68 bytes (104 bytes)
  *
- * The ready list is a doubly-linked circular list ordered by
- * resource_locks_held (descending) then state (ascending).
+ * The ready list is a doubly-linked circular list ordered by:
+ *   1. resource_locks_held (descending - more locks = higher priority)
+ *   2. state (descending - higher state = higher priority)
+ *
+ * A sentinel PCB (PID 2 on SAU2) serves as the list anchor.
+ * PROC1_$READY_PCB physically overlaps the sentinel's nextp field,
+ * so loading PROC1_$READY_PCB gives the first real process in the list.
+ * The sentinel has state=0x08, lower than any real process (>= 0x10),
+ * ensuring insertion loops always terminate.
  */
 typedef struct proc1_t {
     struct proc1_t *nextp;          /* 0x00: Next process in ready list */
@@ -330,7 +337,15 @@ void PROC1_$REORDER_READY(void);
 void proc1_$remove_from_ready_list(proc1_t *pcb);
 
 /*
- * proc1_$insert_into_ready_list - Internal insert helper
+ * proc1_$add_ready_body - FIFO priority-ordered ready list insertion
+ * Inserts AFTER equal-priority entries (round-robin fairness).
+ * Original address: 0x00e20824
+ */
+void proc1_$add_ready_body(proc1_t *pcb);
+
+/*
+ * proc1_$insert_into_ready_list - LIFO priority-ordered ready list insertion
+ * Inserts BEFORE equal-priority entries (prioritize newly inserted).
  * Original address: 0x00e20844
  */
 void proc1_$insert_into_ready_list(proc1_t *pcb);

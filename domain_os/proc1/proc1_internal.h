@@ -33,22 +33,23 @@
 void INIT_STACK(proc1_t *pcb, void **entry_ptr, void **sp_ptr);
 
 /*
- * proc1_$add_ready_body - Priority-ordered ready list insertion (register convention)
+ * proc1_$add_ready_body - FIFO priority-ordered ready list insertion
  *
- * Body of PROC1_$ADD_READY that uses register calling convention:
- * A1 = pointer to PCB to insert. Walks the ready list comparing
- * resource_locks_held and priority, inserts the PCB in FIFO order
- * within the same priority level (after equal-priority entries).
+ * Inserts a PCB into the ready list ordered by resource_locks_held
+ * (descending) then state (descending), with FIFO ordering within
+ * the same priority level (inserts AFTER equal-priority entries for
+ * round-robin fairness).
  *
  * Contrast with proc1_$insert_into_ready_list which inserts BEFORE
  * equal-priority entries (LIFO within same priority).
  *
- * Called directly from assembly code (clr_lock.s, etc.) where A1
- * is already set to the target PCB.
+ * On m68k, the assembly version (sau2/add_ready_body.s) uses register
+ * calling convention with A1 = PCB pointer. The C version takes a
+ * standard parameter.
  *
  * Original address: 0x00e20824
  */
-void proc1_$add_ready_body(void);
+void proc1_$add_ready_body(proc1_t *pcb);
 
 /*
  * proc1_$set_lock_body - Internal set lock implementation (assembly)
