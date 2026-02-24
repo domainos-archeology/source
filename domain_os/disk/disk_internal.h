@@ -75,6 +75,42 @@ extern uid_t PV_LABEL_$UID;
 extern uid_t LV_LABEL_$UID;
 
 /*
+ * Disk module data layout (A5-relative offsets)
+ *
+ * The disk subsystem uses a Pascal module data area at DISK_$DATA (0xe7a1cc).
+ * Internal functions access fields through byte offsets from this base.
+ * In the original m68k code, A5 holds the base pointer.
+ */
+#define DMOD_EVENTCOUNT       0x000  /* ec_$eventcount_t - module eventcount */
+#define DMOD_REQ_QUEUE        0x00E  /* int16_t[64] - circular request buffer (1-indexed) */
+#define DMOD_EXCLUSION        0x090  /* ml_$exclusion_t - module exclusion lock */
+#define DMOD_RESERVE_BLOCK    0x0BC  /* void* - reserve block for write-mode allocation */
+#define DMOD_FREE_HEAD        0x0C0  /* void* - free list head */
+#define DMOD_PAGES_ALLOC      0xAF0  /* int16_t - pool pages allocated */
+#define DMOD_REQ_READ_IDX     0xAF2  /* int16_t - request queue read index */
+#define DMOD_REQ_WRITE_IDX    0xAF4  /* int16_t - request queue write index */
+#define DMOD_PENDING_COUNT    0xAF6  /* int16_t - pending request count */
+#define DMOD_AVAIL_COUNT      0xAF8  /* int16_t - available block count */
+#define DMOD_ALLOC_DISABLED   0xAFA  /* int8_t - pool growth disabled (0xFF=disabled) */
+#define DMOD_RESERVE_AVAIL    0xAFC  /* int8_t - reserve block available (0xFF=available) */
+
+/* Request queue size (entries 1..64, circular) */
+#define DMOD_REQ_QUEUE_SIZE   0x40
+
+/*
+ * Queue block field offsets
+ *
+ * Queue blocks (disk I/O request blocks) are linked in free and allocated
+ * chains. These offsets are used for initialization during allocation.
+ */
+#define DISK_QBLK_FORWARD     0x00  /* void* - next in allocated chain */
+#define DISK_QBLK_FREE_NEXT   0x08  /* void* - next in free list */
+#define DISK_QBLK_STATUS      0x0C  /* uint32_t - I/O status */
+#define DISK_QBLK_FLAGS       0x1C  /* uint16_t - I/O flags */
+#define DISK_QBLK_OWNER       0x1E  /* uint8_t - owning process ID */
+#define DISK_QBLK_RESERVED    0x1F  /* uint8_t - reserved */
+
+/*
  * Internal data structures
  */
 
@@ -150,6 +186,21 @@ int16_t DISK_$PV_MOUNT_INTERNAL(int16_t mount_type, int16_t device_num,
                                  uint16_t *vol_idx_ptr, uint32_t *num_blocks_ptr,
                                  uint16_t *sec_per_track_ptr, uint16_t *num_heads_ptr,
                                  void *pvlabel_info, status_$t *status);
+
+/*
+ * disk_$grow_qblk_pool - Grow the disk queue block pool
+ *
+ * Allocates physical pages and initializes new queue blocks in the
+ * disk module's free pool. Called under the module exclusion lock
+ * when allocation requests cannot be satisfied from the current pool.
+ *
+ * Parameters:
+ *   count - Requested number of blocks (used to calculate pages needed)
+ *
+ * Original address: 0x00e3bc40
+ * Size: 586 bytes
+ */
+void disk_$grow_qblk_pool(int16_t count);
 
 /*
  * disk_$get_qblks_internal - Internal queue block allocation body

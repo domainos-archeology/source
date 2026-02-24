@@ -15,7 +15,5 @@
 
 void DISK_$GET_QBLKS(int16_t count, int32_t *qblk_head, uint32_t *qblk_tail)
 {
-    /* disk_$get_qblks_internal signature in disk_internal.h uses void* for parameters.
-     * Cast to match the declared signature. */
-    disk_$get_qblks_internal(count, 0, (void *)qblk_head, (status_$t *)qblk_tail);
+    disk_$get_qblks_internal(count, 0, (void *)qblk_head, (void *)qblk_tail);
 }
