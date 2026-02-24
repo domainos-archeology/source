@@ -1390,12 +1390,53 @@ void dir_$move_entries_to_page(dir_insert_ctx_t *ctx,
                                int16_t from_idx, int16_t to_idx);
 
 /* dir_$write_entry_to_page - Write/insert entry data into a page
+ *
+ * Writes a new directory entry to a page including type-specific header,
+ * UID/link data, and entry name. For internal pages, sets the child page
+ * pointer from the split_pages array. For leaf pages, initializes the
+ * header fields based on entry type (2=file, 3=hard link, 4=soft link).
+ *
  * The page_ptr_ref is a pointer to either ctx->new_page or ctx->page_data;
- * the function may update it.
+ * the function re-reads it after operations that may invalidate page mappings.
+ *
+ * In the original M68K code, name_len, aligned_size, and src_name_loc were
+ * accessed from the parent frame (insert_entry's stack). In the C flattening,
+ * they are passed explicitly.
+ *
+ * Parameters:
+ *   ctx          - Shared insertion context
+ *   flag         - If negative (0xFF), use split_pages[page_count+2] for
+ *                  internal child pointer; if >= 0, use [page_count+1]
+ *   page_ptr_ref - Pointer to page data pointer (e.g., &ctx->new_page)
+ *   count        - 1-based entry position in the index table
+ *   name_len     - Entry name length (from insert_entry's parameter)
+ *   aligned_size - Aligned total entry size (from insert_entry's computation)
+ *   src_name_loc - Source page/offset for name copy (0 = use ctx->name,
+ *                  non-zero = (page_num << 10) | offset_within_page)
+ *
  * Original address: 0x00E4F100, 384 bytes
  */
 void dir_$write_entry_to_page(dir_insert_ctx_t *ctx, uint8_t flag,
-                              uint8_t **page_ptr_ref, int16_t count);
+                              uint8_t **page_ptr_ref, int16_t count,
+                              int16_t name_len, uint16_t aligned_size,
+                              uint32_t src_name_loc);
+
+/* dir_$copy_name_cross_page - Copy entry name between mapped pages
+ *
+ * Copies byte_count bytes from a source page at src_offset to a destination
+ * page at dest_offset. Uses a 32-byte intermediate buffer to handle the case
+ * where mapping one page invalidates the other (shared map slots). Maps source
+ * and destination pages via dir_$map_page in 32-byte chunks.
+ *
+ * In the original M68K code, this was a nested procedure that accessed
+ * ctx->handle via the grandparent frame pointer chain. In the C flattening,
+ * handle is passed explicitly.
+ *
+ * Original address: 0x00E4F034, 204 bytes
+ */
+void dir_$copy_name_cross_page(uint32_t handle, int16_t src_page,
+                               int16_t src_offset, int16_t dest_page,
+                               int16_t dest_offset, int16_t byte_count);
 
 /* dir_$compact_page_entries - Compact/reclaim dead entry space on a page
  * Original address: 0x00E4F2DA, 224 bytes

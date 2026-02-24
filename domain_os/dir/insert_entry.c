@@ -187,7 +187,8 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
                 } else {
                     copy_start = target_entry_idx + 1;
                 }
-                dir_$write_entry_to_page(ctx, 0xFF, &ctx->new_page, copy_start);
+                dir_$write_entry_to_page(ctx, 0xFF, &ctx->new_page, copy_start,
+                                         name_len, aligned_size, param_2);
                 move_from = target_entry_idx + 1;
             } else {
                 move_from = copy_start;
@@ -219,7 +220,8 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
                 dir_$move_entries_to_page(ctx, split_entry + 1, target_entry_idx);
                 move_from = target_entry_idx + 1;
                 dir_$write_entry_to_page(ctx, 0, &ctx->new_page,
-                                         move_from - split_entry);
+                                         move_from - split_entry,
+                                         name_len, aligned_size, param_2);
             }
             dir_$move_entries_to_page(ctx, move_from, num_entries);
 
@@ -341,7 +343,8 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
                 dir_$move_entries_to_page(ctx, split_entry + 1, target_entry_idx);
                 move_from = target_entry_idx + 1;
                 dir_$write_entry_to_page(ctx, 0, &ctx->new_page,
-                                         move_from - split_entry);
+                                         move_from - split_entry,
+                                         name_len, aligned_size, param_2);
             } else {
                 move_from = split_entry + 1;
             }
@@ -371,7 +374,8 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
                     } while (shift_count != 0xFFFF);
                 }
                 dir_$write_entry_to_page(ctx, 0, &ctx->page_data,
-                                         target_entry_idx + 1);
+                                         target_entry_idx + 1,
+                                         name_len, aligned_size, param_2);
             }
 
             /* Update page's next-page pointer */
@@ -428,7 +432,8 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
 
         if (fim_status == 0 || fim_status == 0x120035) {
             dir_$write_entry_to_page(ctx, 0, &ctx->page_data,
-                                     target_entry_idx + 1);
+                                     target_entry_idx + 1,
+                                     name_len, aligned_size, param_2);
             if (fim_status == 0x120035) {
                 FIM_$RLS_CLEANUP(ctx->fim_data);
             }
