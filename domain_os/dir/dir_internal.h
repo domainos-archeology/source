@@ -557,6 +557,35 @@ void dir_$old_create_obj(uid_t *parent_uid, uint32_t handle, uint16_t type,
  */
 void dir_$old_free_slot(uint32_t handle, uint16_t hash, uint16_t slot_idx);
 
+/* dir_$old_find_free_inline_slot - Find empty inline slot in directory buffer
+ *
+ * Scans inline entry slots (1..inline_count) looking for one with a zero
+ * type byte (entry + 0x11 == 0), indicating an empty slot. Returns the
+ * slot index via *slot_out.
+ *
+ * Returns: 0xFF (true/negative) if free slot found, 0 if all slots occupied
+ *
+ * Original address: 0x00E54DCC
+ * Size: 68 bytes
+ */
+int8_t dir_$old_find_free_inline_slot(uint32_t handle, uint16_t inline_count,
+                                       uint16_t *slot_out);
+
+/* dir_$old_find_overflow_slot - Find or allocate overflow slot for entry
+ *
+ * Searches hash chain for an overflow bucket with a free sub-entry slot.
+ * If no existing bucket has space, allocates a new one from the free list.
+ * In replace mode (flags < 0), may evict single-ref entries to make room.
+ *
+ * Returns: 0xFF (true/negative) if slot found, 0 if directory full
+ *
+ * Original address: 0x00E54F8A
+ * Size: 512 bytes
+ */
+int8_t dir_$old_find_overflow_slot(uint32_t handle, uint16_t hash,
+                                    int8_t flags, uint16_t *bucket_out,
+                                    uint16_t *sub_slot_out);
+
 /* FUN_00e54e10 - Allocate overflow slot from free list
  * Original address: 0x00E54E10
  */
