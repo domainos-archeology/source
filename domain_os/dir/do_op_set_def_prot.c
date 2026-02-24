@@ -19,22 +19,8 @@
 
 #include "dir/dir_internal.h"
 
-/* dir_$write_def_prot - Write default protection to directory page 0
- *
- * Converts funky ACL format if needed, validates the ACL UID is on the
- * same volume, checks set-ACL permissions, copies protection data to
- * the appropriate offset in page 0, updates the ACL UID, increments
- * the new ACL's refcount, truncates the old ACL, and optionally writes
- * the page via FILE_$FW_PARTIAL.
- *
- * Original address: 0x00E51E18
- */
-extern void dir_$write_def_prot(uint32_t handle, void *acl_type,
-                                void *prot_buf, void *prot_uid,
-                                char flush_flag, status_$t *status_ret);
-
 void dir_$do_op_set_def_prot(uid_t *uid, void *acl_type, void *prot_buf,
-                             void *prot_uid, status_$t *status_ret)
+                             void *acl_uid, status_$t *status_ret)
 {
     uint32_t local_handle;
 
@@ -45,7 +31,7 @@ void dir_$do_op_set_def_prot(uid_t *uid, void *acl_type, void *prot_buf,
 
     if (*status_ret == status_$ok) {
         /* Write default protection; flush_flag = 0xFF (true) */
-        dir_$write_def_prot(local_handle, acl_type, prot_buf, prot_uid,
+        dir_$write_def_prot(local_handle, acl_type, prot_buf, acl_uid,
                             (char)0xFF, status_ret);
     }
 

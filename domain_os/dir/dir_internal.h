@@ -605,7 +605,7 @@ int8_t DIR_$IS_RETRYABLE_STATUS(status_$t status);
  * Original address: 0x00E4BC76
  */
 void DIR_$UPDATE_HINT(uid_t *uid, uint32_t hint1, uint32_t hint2,
-                      void *redirect, uint16_t param5);
+                      uid_t *redirect, uint32_t param5);
 
 /* AUDIT_$LOG_CNAME_OP - Audit CNAMEU operation
  * Original address: 0x00E4BEC2
@@ -799,7 +799,8 @@ void dir_$read_def_prot(uint32_t handle, void *acl_type,
  * Original address: 0x00E51E18
  */
 void dir_$write_def_prot(uint32_t handle, void *acl_type,
-                         void *prot_buf, void *acl_uid, status_$t *status_ret);
+                         void *prot_buf, void *acl_uid, char flush_flag,
+                         status_$t *status_ret);
 
 /* dir_$remove_entry_from_page - Remove entry from its directory page
  * Original address: 0x00E50D5E
@@ -1229,7 +1230,8 @@ void dir_$do_op_fix_dir(uid_t *uid, status_$t *status_ret);
 void dir_$do_op_set_default_acl(uid_t *uid, void *type, void *acl, status_$t *status_ret);
 void dir_$do_op_get_default_acl(uid_t *uid, uid_t *type, uid_t *acl_ret, status_$t *status_ret);
 void dir_$do_op_validate_root_entry(void *name, uint16_t name_len, status_$t *status_ret);
-void dir_$do_op_set_prot(uid_t *uid, void *prot_data, void *acl_uid, status_$t *status_ret);
+void dir_$do_op_set_prot(uid_t *uid, void *prot_data, void *acl_uid,
+                         int16_t prot_type, status_$t *status_ret);
 void dir_$do_op_set_def_prot(uid_t *uid, void *acl_type, void *prot_buf,
                              void *acl_uid, status_$t *status_ret);
 void dir_$do_op_get_def_prot(uid_t *uid, void *acl_type, void *prot_buf,

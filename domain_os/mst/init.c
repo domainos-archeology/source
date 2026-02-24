@@ -89,10 +89,10 @@ static void mst_init_global_page(int16_t seg_index)
     MST[seg_index] = page_num;
 
     /* Clear bit in availability bitmap to mark page as used */
-    DAT_00e7cf0c[init_word_index] &= ~(1 << (init_bit_index & 0x1f));
+    MST_$PAGE_AVAIL_BITMAP[init_word_index] &= ~(1 << (init_bit_index & 0x1f));
 
     /* Advance to next page */
-    if (DAT_00e7cf0c[init_word_index] == 0) {
+    if (MST_$PAGE_AVAIL_BITMAP[init_word_index] == 0) {
         /* All bits in this word are used, move to next word */
         init_word_index++;
         init_bit_index = 0;
@@ -145,8 +145,9 @@ void MST_$INIT(void)
         MST[i] = 0;
     }
 
-    /* Clear flags in page bitmap */
-    DAT_00e7cf0f &= 0xfe;
+    /* Clear bit 0 of page availability bitmap word 0
+     * (Original code accessed byte offset 3 of the bitmap = low byte on M68K big-endian) */
+    MST_$PAGE_AVAIL_BITMAP[0] &= ~1U;
 
     /* Initialize page table base address */
     page_table_addr = MST_PAGE_TABLE_BASE;
@@ -220,8 +221,8 @@ void MST_$INIT(void)
     }
     MST_$MST_PAGES_LIMIT = (limit >> 5) << 5;
 
-    /* Clear DAT_00e7cf3c (offset 0x30 from DAT_00e7cf0c) */
-    DAT_00e7cf0c[12] = 0;  /* word index 12 = offset 0x30 */
+    /* Clear DAT_00e7cf3c (offset 0x30 from MST_$PAGE_AVAIL_BITMAP) */
+    MST_$PAGE_AVAIL_BITMAP[12] = 0;  /* word index 12 = offset 0x30 */
 
     /*
      * Initialize remaining bits in page availability bitmap.
@@ -233,14 +234,14 @@ void MST_$INIT(void)
 
     /* Clear bits from bit_index to 31 in current word */
     for (i = 31 - bit_index; i >= 0; i--) {
-        DAT_00e7cf0c[word_index] &= ~(1 << (bit_index & 0x1f));
+        MST_$PAGE_AVAIL_BITMAP[word_index] &= ~(1 << (bit_index & 0x1f));
         bit_index++;
     }
 
     /* Clear remaining words in bitmap */
     word_index++;
     for (i = 11 - word_index; i >= 0; i--) {
-        DAT_00e7cf0c[word_index] = 0;
+        MST_$PAGE_AVAIL_BITMAP[word_index] = 0;
         word_index++;
     }
 }
