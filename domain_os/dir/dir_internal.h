@@ -108,6 +108,8 @@ typedef struct dir_insert_ctx {
     void       *link_data;         /* Link data pointer, type 4 (A1+0x1E) */
     int16_t     overflow_page;     /* Overflow page or -1 (A1-0xAA) */
     int16_t     max_depth;         /* B-tree depth / initial slot_idx (A1-0xAE) */
+    int16_t     current_slot;      /* Current B-tree level being processed (A1-0xA8),
+                                    * set by alloc_split_page, read by finalize_split */
 
     /* === B-tree traversal path from dir_$find_entry === */
     /* Level N: path_page[N] = page number, path_entry[N] = entry index.
@@ -1443,11 +1445,32 @@ void dir_$copy_name_cross_page(uint32_t handle, int16_t src_page,
  */
 void dir_$compact_page_entries(dir_insert_ctx_t *ctx);
 
-/* dir_$alloc_split_page - Allocate new page for B-tree splitting
+/* dir_$alloc_split_page - Allocate pages for B-tree splitting
+ *
+ * Allocates page numbers for B-tree page splitting during directory entry
+ * insertion. Scans for free pages in the gap at end of directory, then in
+ * the segment map bitmap, extending the directory if needed. Copies B-tree
+ * path pages to the newly allocated pages and generates a new directory UID.
+ *
+ * flag=0xFF for root split (allocates 2 extra pages), 0x00 for non-root.
+ * slot_idx and base_offset come from insert_entry's scope (originally
+ * accessed via the parent Pascal frame pointer).
+ *
  * Original address: 0x00E4EB40, 906 bytes
  */
 void dir_$alloc_split_page(dir_insert_ctx_t *ctx, uint8_t flag,
+                           int16_t slot_idx, int16_t base_offset,
                            status_$t *status_ret);
+
+/* dir_$purify_split_pages - Sort and purify allocated split pages
+ *
+ * Sorts split_pages[1..page_count] in descending order, then calls
+ * AST_$PURIFY to flush the pages. Called by both alloc_split_page
+ * and finalize_split.
+ *
+ * Original address: 0x00E4EA9C, 164 bytes
+ */
+void dir_$purify_split_pages(dir_insert_ctx_t *ctx, status_$t *status_ret);
 
 /* dir_$finalize_split - Finalize page split, update parent arrays
  * Original address: 0x00E4EECA, 120 bytes

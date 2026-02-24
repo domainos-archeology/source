@@ -142,7 +142,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
              * Root page split - allocate two new pages and make root an
              * internal node. This is the most complex code path.
              */
-            dir_$alloc_split_page(ctx, 0xFF, status_ret);
+            dir_$alloc_split_page(ctx, 0xFF, slot_idx, local_base_offset, status_ret);
             if (*status_ret != status_$ok) return;
 
             /* Allocate first new child page */
@@ -400,7 +400,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
          */
         if ((*ctx->page_data >> 6) == 1) {
             /* Internal page - may need to allocate split page first */
-            dir_$alloc_split_page(ctx, 0, status_ret);
+            dir_$alloc_split_page(ctx, 0, slot_idx, local_base_offset, status_ret);
             if (*status_ret != status_$ok) return;
         }
 
