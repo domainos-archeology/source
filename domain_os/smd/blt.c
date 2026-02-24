@@ -69,6 +69,7 @@ void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *sta
     int32_t unit_offset;
     smd_display_hw_t *hw;
     smd_display_unit_t *display_unit;
+    smd_unit_aux_t *aux;
     uint16_t mode;
     int16_t *lock_data;
     smd_hw_blt_t hw_params;
@@ -90,7 +91,8 @@ void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *sta
     /* Calculate unit offset */
     unit_offset = (int32_t)unit * SMD_DISPLAY_UNIT_SIZE;
     display_unit = (smd_display_unit_t *)((uint8_t *)&SMD_EC_1 + unit_offset);
-    hw = (smd_display_hw_t *)((uint8_t *)SMD_UNIT_AUX_BASE + unit_offset);
+    aux = smd_get_unit_aux(unit);
+    hw = aux->hw;
 
     /* Select lock data based on async mode */
     if ((mode & 0x10) != 0) {
