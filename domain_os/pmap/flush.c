@@ -88,7 +88,8 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                         *(char *)((uintptr_t)MMAPE_BASE + pmape_offset) != '\0') {
                         /* Flush any pending batch */
                         if (batch_count > 0) {
-                            pmap_$flush_write_batch();
+                            pmap_$flush_write_batch(&batch_count, batch_vpns,
+                                                    segmap, status);
                         }
                         *status = 0x50007;  /* Error: invalid page */
                         goto done;
@@ -142,7 +143,8 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
                                 /* Flush batch if full (16 pages) */
                                 if (batch_count == 0x10) {
-                                    pmap_$flush_write_batch();
+                                    pmap_$flush_write_batch(&batch_count, batch_vpns,
+                                                            segmap, status);
                                     if (*status != 0) goto done;
                                 }
                             }
@@ -163,7 +165,8 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
         /* Flush any remaining batch */
         if (batch_count > 0) {
-            pmap_$flush_write_batch();
+            pmap_$flush_write_batch(&batch_count, batch_vpns,
+                                    segmap, status);
             if (*status != 0) break;
         }
 

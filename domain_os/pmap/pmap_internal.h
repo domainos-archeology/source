@@ -70,14 +70,22 @@ extern uint32_t DAT_00e1416a;   /* Short wait time */
 /*
  * pmap_$flush_write_batch - Batch write dirty pages to disk
  *
- * Nested Pascal procedure that accesses parent frame.
+ * Nested Pascal procedure from PMAP_$FLUSH, flattened with explicit
+ * parameters (originally accessed parent frame via A6 chain).
  * Unlocks lock 14, allocates disk queue blocks, fills them
  * with write requests, calls DISK_$WRITE_MULTI, processes
  * results, and advances AST_$PMAP_IN_TRANS_EC.
  *
+ * Parameters:
+ *   batch_count_p - Pointer to batch count (cleared to 0 on return)
+ *   batch_vpns    - Array of VPNs to write
+ *   segmap        - Segment map base pointer
+ *   status        - Pointer to caller's status output
+ *
  * Original address: 0x00e1360c
  */
-void pmap_$flush_write_batch(void);
+void pmap_$flush_write_batch(int16_t *batch_count_p, uint32_t *batch_vpns,
+                              uint32_t *segmap, status_$t *status);
 
 /* pmap_$update_seg_map - Update segment map after page write
  *

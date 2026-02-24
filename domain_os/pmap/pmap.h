@@ -77,7 +77,8 @@ extern int32_t LOG_$UPDATE(void);
  */
 extern void pmap_$write_page(uint32_t ppn, status_$t *status, int8_t flags);
 extern void pmap_$update_seg_map(uint16_t *segmap, uint32_t ppn, uint16_t page);
-extern void pmap_$flush_write_batch(void);
+extern void pmap_$flush_write_batch(int16_t *batch_count_p, uint32_t *batch_vpns,
+                                     uint32_t *segmap, status_$t *status);
 
 /*
  * Error strings
