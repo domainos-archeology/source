@@ -1068,6 +1068,9 @@ extern uint32_t DAT_00e7ffdc; /* First handle slot (0xe7fd24 + 0x2b8) */
 #ifndef status_$naming_cant_recovery_dir_on_ro_vol
 #define status_$naming_cant_recovery_dir_on_ro_vol   0x000E0031
 #endif
+#ifndef status_$naming_too_many_hard_links
+#define status_$naming_too_many_hard_links            0x000E0032
+#endif
 /* TODO: Verify this error name. Used in dir_$open_dir when ACL check
  * fails with file_$object_not_found. Possibly "naming_no_acl_object"
  * or "naming_acl_not_accessible". */
