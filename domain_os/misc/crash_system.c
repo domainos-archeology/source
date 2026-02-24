@@ -367,29 +367,63 @@ void CRASH_SHOW_STRING(const char *str)
 
 /*
  * Error codes used with CRASH_SYSTEM throughout the kernel
+ *
+ * Subsystem codes (high 16 bits):
+ *   0x0001 = OS/BAT (disk salvaging)
+ *   0x0004 = MST (segment table)
+ *   0x0005 = PMAP (physical map)
+ *   0x0006 = MMAP/WSL (virtual memory map)
+ *   0x0008 = Disk drivers
+ *   0x000A = PROC1 (process management/locks)
+ *   0x0012 = Fault handling
+ *   0x001B = Calendar/time
+ *   0x8003 = ASTE (address space table, high bit = fatal?)
+ *
+ * Values verified against binary data via Ghidra.
  */
-status_$t Lock_ordering_violation = 0x00010001;
-status_$t Illegal_lock_err = 0x00010002;
-status_$t Lock_order_violation_err = 0x00010003;
-status_$t No_calendar_on_system_err = 0x00010004;
-status_$t OS_BAT_disk_needs_salvaging_err = 0x00010005;
-status_$t No_err = status_$ok;
-status_$t PMAP_VM_Resources_exhausted_err = 0x00010006;
-status_$t MST_Ref_OutOfBounds_Err = 0x00040004;
-status_$t Disk_Queued_Drivers_Not_Supported_Err = 0x00080030;
-status_$t Disk_Driver_Logic_Err = 0x00080031;
-status_$t Disk_controller_err = 0x00080004;
-status_$t Disk_driver_logic_err = 0x00080031;
 
-/* Error status codes for crash conditions */
-status_$t Illegal_PID_Err = 0x00030001;
-status_$t Illegal_WSL_Index_Err = 0x00030002;
-status_$t WSL_Exhausted_Err = 0x00030003;
-status_$t Inconsistent_MMAPE_Err = 0x00030004;
-status_$t MMAP_Bad_Unavail_err = 0x00030005;
-status_$t mmap_bad_avail = 0x00030006;
-status_$t MMAP_Bad_Reclaim_Err = 0x00030007;
-status_$t MMAP_Error_Examined_Max = 0x00030008;
-status_$t Some_ASTE_Error = 0x00030009;
-status_$t OS_PMAP_mismatch_err = 0x0003000A;
-status_$t OS_MMAP_bad_install = 0x0003000B;
+/* PROC1 subsystem (0x000A) - process/lock errors */
+/* TODO: Lock_ordering_violation not found as labeled data in binary;
+ * value inferred from proc1 subsystem prefix */
+status_$t Lock_ordering_violation = 0x000a0001;
+status_$t Illegal_lock_err = 0x000a0002;         /* verified: 0x00e20de4 */
+/* TODO: Lock_order_violation_err not found as labeled data in binary;
+ * value inferred from proc1 subsystem prefix */
+status_$t Lock_order_violation_err = 0x000a0003;
+
+/* Calendar subsystem (0x001B) */
+status_$t No_calendar_on_system_err = 0x001b0004; /* verified: 0x00e34b10 */
+
+/* OS/BAT subsystem (0x0001) */
+status_$t OS_BAT_disk_needs_salvaging_err = 0x00010005; /* verified: 0x00e34ae0 */
+
+status_$t No_err = status_$ok;                    /* verified: 0x00e33774 */
+
+/* MST/PMAP subsystem (0x0004) */
+status_$t PMAP_VM_Resources_exhausted_err = 0x0004000e; /* verified: 0x00e30b0c */
+status_$t MST_Ref_OutOfBounds_Err = 0x00040005;  /* verified: 0x00e0e1b8 */
+
+/* Disk subsystem (0x0008) */
+status_$t Disk_Queued_Drivers_Not_Supported_Err = 0x0008002e; /* verified: 0x00e3c9fa */
+status_$t Disk_Driver_Logic_Err = 0x00080022;     /* same as Disk_driver_logic_err */
+status_$t Disk_controller_err = 0x00080004;       /* verified: 0x00e1940c */
+status_$t Disk_driver_logic_err = 0x00080022;     /* verified: 0x00e19410 */
+
+/* MMAP/WSL subsystem (0x0006) - virtual memory errors */
+status_$t Illegal_PID_Err = 0x0006000a;           /* verified: 0x00e0d1c4 */
+status_$t Illegal_WSL_Index_Err = 0x00060009;     /* verified: 0x00e0c9e0 */
+status_$t WSL_Exhausted_Err = 0x0006000b;         /* verified: 0x00e0d270 */
+status_$t Inconsistent_MMAPE_Err = 0x00060008;    /* verified: 0x00e0cff4 */
+status_$t MMAP_Bad_Unavail_err = 0x00060006;      /* verified: 0x00e0cd18 */
+status_$t mmap_bad_avail = 0x00060004;            /* verified: 0x00e0ccb8 */
+status_$t MMAP_Bad_Reclaim_Err = 0x0006000d;      /* verified: 0x00e0d9e6 */
+status_$t MMAP_Error_Examined_Max = 0x00060007;   /* verified: 0x00e31b80 */
+
+/* ASTE subsystem (0x8003) */
+status_$t Some_ASTE_Error = 0x80030003;           /* verified: 0x00e01f18 */
+
+/* PMAP subsystem (0x0005) */
+status_$t OS_PMAP_mismatch_err = 0x00050003;      /* verified: 0x00e00eac */
+
+/* MMAP subsystem (0x0006) */
+status_$t OS_MMAP_bad_install = 0x0006000c;       /* verified: 0x00e03544 */

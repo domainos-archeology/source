@@ -49,9 +49,9 @@ void ML_$UNLOCK(int16_t resource_id)
     pcb->resource_locks_held &= ~lock_mask;
 
     /* Decrement inhibit count */
-    pcb->pad_5a--;
+    pcb->nesting_depth--;
 
-    if (pcb->pad_5a == 0) {
+    if (pcb->nesting_depth == 0) {
         /* Clear bit 0 of resource_locks_held byte at offset 0x43 */
         /* This is the low byte of the high word - indicates "has any locks" */
         *((uint8_t *)&pcb->resource_locks_held + 3) &= ~0x01;

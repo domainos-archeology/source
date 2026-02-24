@@ -18,10 +18,10 @@ void PROC1_$INHIBIT_END(void)
 {
     proc1_t *pcb = PROC1_$CURRENT_PCB;
 
-    /* Decrement inhibit counter */
-    pcb->inh_count--;
+    /* Decrement nesting depth counter (offset 0x5A) */
+    pcb->nesting_depth--;
 
-    if (pcb->inh_count != 0) {
+    if (pcb->nesting_depth != 0) {
         /* Still inhibited, nothing more to do */
         return;
     }

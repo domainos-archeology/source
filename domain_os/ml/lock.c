@@ -24,7 +24,7 @@ static void ml_$prepare_lock(int16_t resource_id)
     uint32_t lock_mask;
 
     /* Increment inhibit count (offset 0x5A in PCB) */
-    pcb->pad_5a++;
+    pcb->nesting_depth++;
 
     /* Calculate lock mask for this resource */
     lock_mask = 1U << (resource_id & 0x1F);

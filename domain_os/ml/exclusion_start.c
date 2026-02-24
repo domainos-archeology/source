@@ -26,7 +26,7 @@ void ML_$EXCLUSION_START(ml_$exclusion_t *excl)
     pcb = PROC1_$CURRENT_PCB;
 
     /* Increment inhibit count - prevent preemption while in exclusion */
-    pcb->pad_5a++;
+    pcb->nesting_depth++;
 
     /* Set "has locks" flag in PCB (bit 0 at offset 0x43) */
     *((uint8_t *)&pcb->resource_locks_held + 3) |= 0x01;

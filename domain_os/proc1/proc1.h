@@ -69,9 +69,9 @@ typedef struct proc1_t {
                                     /*   Bit 2 (0x04): Deferred suspend? */
                                     /*   Bit 3 (0x08): Bound (in use) */
 
-    uint16_t    inh_count;          /* 0x56: Inhibit count? */
-    uint16_t    sw_bsr;             /* 0x58: Software base/something */
-    uint16_t    pad_5a;             /* 0x5A: Padding */
+    uint16_t    inh_count;          /* 0x56: Min priority/state (initialized to 1 by BIND) */
+    uint16_t    sw_bsr;             /* 0x58: Software base/something (initialized to 0x10 by BIND) */
+    uint16_t    nesting_depth;      /* 0x5A: Lock/inhibit nesting depth counter */
 
     uint32_t    field_5c;           /* 0x5C: Unknown */
     uint32_t    field_60;           /* 0x60: Unknown */
@@ -406,7 +406,7 @@ void PROC1_$INHIBIT_END(void);
  * Parameters:
  *   pcb - Process to check
  * Returns:
- *   -1 if process is inhibited (inh_count != 0)
+ *   -1 if process is inhibited (nesting_depth != 0)
  *   0 if not inhibited
  * Original address: 0x00e20ef0
  */

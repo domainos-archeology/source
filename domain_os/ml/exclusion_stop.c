@@ -34,17 +34,17 @@ void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
         ADVANCE_INT((ec_$eventcount_t *)excl);
 
         /* Decrement inhibit count */
-        pcb->pad_5a--;
+        pcb->nesting_depth--;
 
-        if (pcb->pad_5a != 0) {
+        if (pcb->nesting_depth != 0) {
             ENABLE_INTERRUPTS(sr);
             return;
         }
     } else {
         /* No waiters - just decrement inhibit count */
-        pcb->pad_5a--;
+        pcb->nesting_depth--;
 
-        if (pcb->pad_5a != 0) {
+        if (pcb->nesting_depth != 0) {
             return;
         }
     }

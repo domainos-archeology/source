@@ -13,24 +13,22 @@
 #include "proc1.h"
 
 /*
- * Note: The assembly accesses offset 0x5A as the inhibit counter
- * and sets bit 0 of byte at offset 0x43 (lowest byte of
+ * The assembly accesses offset 0x5A (nesting_depth) as the inhibit/lock
+ * nesting counter and sets bit 0 of byte at offset 0x43 (lowest byte of
  * resource_locks_held on big-endian m68k).
  *
- * The field at 0x5A was originally labeled pad_5a but is actually
- * the inhibit counter. We use inh_count at 0x56 in our struct
- * which may need adjustment.
- *
- * TODO: Verify PCB layout - the inhibit counter might be at 0x5A
- * not 0x56 as originally thought.
+ * Assembly (0x00e20efc):
+ *   movea.l PROC1_$CURRENT_PCB, A1
+ *   addq.w  #1, (0x5a,A1)          ; increment nesting_depth
+ *   bset.b  #0, (0x43,A1)          ; set inhibit flag in resource_locks_held LSB
  */
 
 void PROC1_$INHIBIT_BEGIN(void)
 {
     proc1_t *pcb = PROC1_$CURRENT_PCB;
 
-    /* Increment inhibit counter */
-    pcb->inh_count++;
+    /* Increment nesting depth counter (offset 0x5A) */
+    pcb->nesting_depth++;
 
     /*
      * Set bit 0 of the low byte of resource_locks_held.
