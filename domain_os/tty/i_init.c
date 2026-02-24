@@ -85,9 +85,9 @@ void TTY_$I_INIT(tty_desc_t *tty)
     tty->pgroup_uid.high = UID_$NIL.high;
     tty->pgroup_uid.low = UID_$NIL.low;
 
-    // Clear session and input flags
+    // Clear session and column position
     tty->session_id = 0;
-    tty->current_input_flags = 0;
+    tty->column = 0;
     tty->saved_input_flags = 0;
     tty->pending_signal = 0;
 

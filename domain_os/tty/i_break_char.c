@@ -34,8 +34,8 @@ void TTY_$I_BREAK_CHAR(tty_desc_t *tty, uint8_t ch)
     /* Mark the line as complete: advance head to tail */
     tty->input_head = tty->input_tail;
 
-    /* Update saved input flags from current */
-    tty->saved_input_flags = tty->current_input_flags;
+    /* Save current column position */
+    tty->saved_input_flags = tty->column;
 
     /* Advance the input eventcount to wake readers */
     TTY_$I_ADVANCE_EC(tty->input_ec);

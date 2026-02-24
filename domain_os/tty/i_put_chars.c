@@ -65,14 +65,11 @@
 #define TTY_GET_OUTPUT_FLAGS(tty) (*(const uint32_t *)&(tty)->output_flags)
 
 /*
- * The field current_input_flags at offset 0x58 in tty_desc_t is
- * actually the display column position. The assembly increments it
- * for printable chars, decrements for BS, resets for CR, and uses
- * (column & 7) for TAB expansion.
- *
- * TODO: Rename field in tty_desc_t from current_input_flags to column.
+ * The field column at offset 0x58 in tty_desc_t is the display column
+ * position. The assembly increments it for printable chars, decrements
+ * for BS, resets for CR, and uses (column & 7) for TAB expansion.
  */
-#define TTY_COLUMN(tty) ((tty)->current_input_flags)
+#define TTY_COLUMN(tty) ((tty)->column)
 
 /*
  * Delay type indices in tty->delay[] array:

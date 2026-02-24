@@ -27,8 +27,8 @@ void TTY_$I_FLUSH_INPUT(tty_desc_t *tty)
     tty->input_tail = tty->input_read;
     tty->input_head = tty->input_tail;
 
-    // Save current input flags
-    tty->saved_input_flags = tty->current_input_flags;
+    // Save current column position
+    tty->saved_input_flags = tty->column;
 
     // If waiting for input, signal completion
     if ((tty->status_flags & TTY_STATUS_INPUT_WAIT) != 0) {

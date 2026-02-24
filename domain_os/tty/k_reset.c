@@ -32,9 +32,9 @@ void TTY_$K_RESET(short *line_ptr, status_$t *status)
     tty->output_read = 1;
     tty->output_tail = 0x100;
 
-    // Clear saved input flags and signal pending
+    // Clear saved column and current column position
     tty->saved_input_flags = 0;
-    tty->current_input_flags = 0;
+    tty->column = 0;
     tty->pending_signal = 0;
 
     // Reset process group UID to nil

@@ -142,7 +142,7 @@ typedef struct tty_desc {
     domain_uid_t pgroup_uid;
     uint16_t session_id;
     uint16_t saved_input_flags;
-    uint16_t current_input_flags;  /* Actually column position */
+    uint16_t column;               /* Display column position */
     uint16_t reserved_5A;
     tty_signal_entry_t signals[6];
     uint16_t char_class[256];
@@ -242,7 +242,7 @@ void tty_$i_buf_put(uint8_t ch, void *buf)
 #define TTY_OFLAG_EXPAND_TABS  0x10
 
 #define TTY_GET_OUTPUT_FLAGS(tty) (*(const uint32_t *)&(tty)->output_flags)
-#define TTY_COLUMN(tty) ((tty)->current_input_flags)
+#define TTY_COLUMN(tty) ((tty)->column)
 
 #define TTY_DELAY_LF  0
 #define TTY_DELAY_CR  1
@@ -455,7 +455,7 @@ static void init_test_tty(tty_desc_t *tty)
     tty->output_head = 1;
     tty->output_read = 1;
     tty->output_tail = TTY_BUFFER_SIZE;
-    tty->current_input_flags = 0;  /* column = 0 */
+    tty->column = 0;
 
     /* Set transmit callback to our mock */
     tty->xmit_callback = (m68k_ptr_t)(uintptr_t)mock_xmit_callback;

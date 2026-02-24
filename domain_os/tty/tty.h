@@ -124,7 +124,7 @@ typedef struct tty_desc {
   uid_t pgroup_uid;             // 0x4C: Process group UID (8 bytes)
   uint16_t session_id;          // 0x54: Session ID
   uint16_t saved_input_flags;   // 0x56: Saved input flags state
-  uint16_t current_input_flags; // 0x58: Current input flags
+  uint16_t column;              // 0x58: Display column position
   uint16_t reserved_5A;         // 0x5A: Reserved
 
   // Signal callback entries (0x5C-0xA3) - 6 entries of 12 bytes each
