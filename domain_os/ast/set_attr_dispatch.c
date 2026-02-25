@@ -292,7 +292,7 @@ void AST_$SET_ATTR_DISPATCH(aote_t *aote, uint16_t attr_type, void *value,
     case ATTR_TYPE_SPECIAL_FLAG:
     case ATTR_TYPE_UPDATE_DTM:
     case ATTR_TYPE_UPDATE_DTM2:
-        /* TODO: Implement extended attribute cases */
+        /* TODO(source-mpj): Implement extended attribute cases */
         /* These are complex and involve UID copying, timestamp updates, etc. */
         break;
 

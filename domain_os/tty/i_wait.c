@@ -25,7 +25,7 @@
  * Original address: 0x00E1C204
  * Size: 460 bytes
  *
- * TODO: Full implementation requires modeling the TTY descriptor
+ * TODO(source-9lj): Full implementation requires modeling the TTY descriptor
  * offsets (+0x2A4, +0x38, +0x3C, +0x2C4) and the eventcount
  * wait/signal interaction with EC_$WAITN.
  */

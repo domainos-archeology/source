@@ -230,10 +230,10 @@ sort_again:
 
     if (queue_pos_flag < 0) {
         /* Queue is draining - merge ahead requests to front */
-        /* TODO: Complex merge logic */
+        /* TODO(source-pxn): Complex merge logic */
     } else {
         /* Queue is filling - merge to back */
-        /* TODO: Complex merge logic */
+        /* TODO(source-pxn): Complex merge logic */
     }
 
     /* Release spin lock */

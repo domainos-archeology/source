@@ -40,7 +40,7 @@ uint32_t PROC2_$SIGSETMASK(uint32_t *mask_ptr, uint32_t *result)
     pending_unblocked = entry->sig_mask_2 & ~entry->sig_blocked_2;
     if (pending_unblocked != 0) {
         /* Deliver pending signals - offset 0x1C contains delivery index */
-        /* TODO: Implement signal delivery */
+        /* TODO(source-ld0): Implement signal delivery */
         /* PROC2_$DELIVER_PENDING_INTERNAL(entry->pad_18[2]); */
     }
 

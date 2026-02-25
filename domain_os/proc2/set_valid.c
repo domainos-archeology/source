@@ -110,7 +110,7 @@ void PROC2_$SET_VALID(void)
         cr_rec->field_b8 = entry->upid;
 
         /* Copy parent UID from entry */
-        /* TODO: entry offset for parent_uid needs verification */
+        /* TODO(source-ld0): entry offset for parent_uid needs verification */
 
         /* Copy stack UID */
         cr_rec->stack_uid.high = stack_uid_ptr->high;

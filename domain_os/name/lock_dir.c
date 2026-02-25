@@ -14,7 +14,7 @@
  * Original address: 0x00e54854
  * Size: 722 bytes
  *
- * TODO: This is a complex function with A5-relative data access.
+ * TODO(source-0i3): This is a complex function with A5-relative data access.
  * The full implementation requires understanding of the per-process
  * handle table, mapped info structures, and the MST_$MAPS function.
  */
@@ -76,9 +76,9 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
     start_time = TIME_$CLOCKH;
 
     while (1) {
-        /* TODO: Store mode in per-process data at A5+PROC1_$CURRENT*2+0x13e */
+        /* TODO(source-0i3): Store mode in per-process data at A5+PROC1_$CURRENT*2+0x13e */
 
-        /* TODO: Clear handle pointer at A5+PROC1_$CURRENT*4+0x1bc */
+        /* TODO(source-0i3): Clear handle pointer at A5+PROC1_$CURRENT*4+0x1bc */
 
         /* Attempt to acquire lock via FILE_$PRIV_LOCK */
         FILE_$PRIV_LOCK(&local_uid, PROC1_$AS_ID, 0, mode, 0,
@@ -92,7 +92,7 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
 
         if (*status_ret == status_$ok) {
             /* Lock acquired successfully */
-            /* TODO: Store UID in per-process data at A5+PROC1_$CURRENT*8+0x2b8 */
+            /* TODO(source-0i3): Store UID in per-process data at A5+PROC1_$CURRENT*8+0x2b8 */
             break;
         }
 
@@ -113,7 +113,7 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
         /* Wait 0x4000 units before retry */
         wait_time = 0x4000;
         local_status = 0;
-        /* TODO: TIME_$WAIT(&ACL_TYPE_FILE, &local_status, (status_$t *)&wait_time); */
+        /* TODO(source-0i3): TIME_$WAIT(&ACL_TYPE_FILE, &local_status, (status_$t *)&wait_time); */
 
         /* Continue retry loop */
     }
@@ -156,10 +156,10 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
     }
 
     /* Check WDIR_UID for current ASID */
-    /* TODO: Check NAME_$WDIR_UID[PROC1_$AS_ID] and NAME_$WDIR_MAPPED_INFO */
+    /* TODO(source-0i3): Check NAME_$WDIR_UID[PROC1_$AS_ID] and NAME_$WDIR_MAPPED_INFO */
 
     /* Check NDIR_UID for current ASID */
-    /* TODO: Check NAME_$NDIR_UID[PROC1_$AS_ID] and NAME_$NDIR_MAPPED_INFO */
+    /* TODO(source-0i3): Check NAME_$NDIR_UID[PROC1_$AS_ID] and NAME_$NDIR_MAPPED_INFO */
 
     /* Not a cached directory - map it */
     {
@@ -175,7 +175,7 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
     }
 
 check_directory_type:
-    /* TODO: Store handle in per-process data at A5+PROC1_$CURRENT*4+0x1bc */
+    /* TODO(source-0i3): Store handle in per-process data at A5+PROC1_$CURRENT*4+0x1bc */
 
     /* Verify this is actually a directory (type == 1) */
     if (*(int16_t *)(uintptr_t)*handle_ret != 1) {

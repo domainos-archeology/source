@@ -178,7 +178,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
             /* Get entry type from read data */
             entry_type = *((int16_t *)(read_entries + 2));
             entry_name_len = *((int16_t *)(read_entries + 4));
-            /* TODO: Verify exact entry field offsets from Ghidra */
+            /* TODO(source-qgq): Verify exact entry field offsets from Ghidra */
 
             if (entry_type == 1) {
                 /* Regular entry - re-add */

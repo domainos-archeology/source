@@ -29,7 +29,7 @@ void PROC1_$INHIBIT_END(void)
     /* Inhibit count reached zero - clear inhibited flag */
     pcb->resource_locks_held &= ~0x01;
 
-    /* TODO: Need to disable interrupts here (ori #0x700,SR) */
+    /* TODO(source-22m): Need to disable interrupts here (ori #0x700,SR) */
 
     /* Reorder in ready list since our state changed */
     proc1_$reorder_if_needed(pcb);

@@ -182,7 +182,7 @@ void PROC2_$ACKNOWLEDGE(uint32_t *handler_addr, int16_t *signal, uint32_t *resul
 #if defined(ARCH_M68K)
                         if ((*(uint8_t*)(0xEA5463 + dbg_idx * 0xE4) & 0x04) == 0) {
 #else
-                        if (0) { /* TODO: Non-M68K implementation */
+                        if (0) { /* TODO(source-92v): Non-M68K implementation */
 #endif
                             PROC2_$DELIVER_SIGNAL_INTERNAL(P2_ACK_IDX2(cur_idx),
                                                            0x17 /* SIGCHLD */,

@@ -42,7 +42,7 @@ void PROC1_$RESUME(uint16_t pid, status_$t *status_p)
 
     *status_p = status_$ok;
 
-    /* TODO: Need to disable interrupts here (ori #0x700,SR) */
+    /* TODO(source-22m): Need to disable interrupts here (ori #0x700,SR) */
 
     /* Check if actually suspended */
     if ((flags & PROC1_FLAG_SUSPENDED) != 0) {
@@ -62,11 +62,11 @@ void PROC1_$RESUME(uint16_t pid, status_$t *status_p)
     if ((flags & PROC1_FLAG_DEFER_SUSP) != 0) {
         /* Clear deferred suspend flag */
         pcb->pri_max &= ~PROC1_FLAG_DEFER_SUSP;
-        /* TODO: Need to clear interrupts here (andi #-0x701,SR) */
+        /* TODO(source-22m): Need to clear interrupts here (andi #-0x701,SR) */
         return;
     }
 
     /* Process wasn't suspended */
     *status_p = status_$process_not_suspended;
-    /* TODO: Need to clear interrupts here (andi #-0x701,SR) */
+    /* TODO(source-22m): Need to clear interrupts here (andi #-0x701,SR) */
 }

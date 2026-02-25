@@ -8,7 +8,7 @@
  *
  * Original address: 0xE2E0A0
  */
-route_$port_t ROUTE_$PORT_ARRAY[]; // TODO we need a size here...
+route_$port_t ROUTE_$PORT_ARRAY[]; // TODO(source-j33): we need a size here...
 
 /*
  * ROUTE_$SOCK_ECVAL - Socket event count value

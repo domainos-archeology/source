@@ -141,7 +141,7 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
     }
 
     /* Step 8: Get location info */
-    /* TODO: The following is simplified from the Ghidra output.
+    /* TODO(source-qgq): The following is simplified from the Ghidra output.
      * The original code uses AST_$GET_LOCATION and checks attr_byte
      * to determine if the directory is remote or local. */
     AST_$GET_LOCATION(location_buf, 1, loc_buf1, loc_buf2, status_ret);

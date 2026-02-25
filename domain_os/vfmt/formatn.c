@@ -112,7 +112,7 @@ void VFMT_$WRITE(const char *format, ...)
     va_end(ap);
 
     /*
-     * TODO: Output buf[0..out_len] to console
+     * TODO(source-bu8): Output buf[0..out_len] to console
      * This would typically call TERM_$WRITE or similar.
      */
 }
@@ -138,7 +138,7 @@ void VFMT_$WRITEN(const char *format, int16_t max_len, ...)
     va_end(ap);
 
     /*
-     * TODO: Output buf[0..out_len] to console
+     * TODO(source-bu8): Output buf[0..out_len] to console
      * This would typically call TERM_$WRITE or similar.
      */
 }

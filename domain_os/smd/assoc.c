@@ -123,7 +123,7 @@ void SMD_$ASSOC(uint16_t *unit, uint16_t *asid, status_$t *status_ret)
 static void smd_update_display_flags(uint16_t unit, uint8_t flag)
 {
     /*
-     * TODO: Full implementation requires understanding FUN_00e6d736
+     * TODO(source-h4x): Full implementation requires understanding FUN_00e6d736
      * and FUN_00e6d7e2. These appear to update hardware state and
      * possibly refresh the display or cursor state.
      */

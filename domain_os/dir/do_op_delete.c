@@ -31,7 +31,7 @@
  * Original address: 0x00E5125E
  * Size: 860 bytes
  *
- * TODO: Full implementation requires understanding the complex interaction
+ * TODO(source-4n0): Full implementation requires understanding the complex interaction
  * between FILE_$PRIV_LOCK/UNLOCK, FILE_$DELETE_OBJ, and the various
  * error recovery paths.
  */

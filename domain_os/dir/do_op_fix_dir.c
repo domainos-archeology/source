@@ -37,7 +37,7 @@
  * Original address: 0x00E53A18
  * Original size: 1132 bytes
  *
- * TODO: The entry parsing logic is complex. The entry table starts at
+ * TODO(source-qgq): The entry parsing logic is complex. The entry table starts at
  * offset 0x12 (or 0x12 + page_header_offset for page 0). Each entry
  * index is a 2-byte offset from the page base. Entry format:
  *   +0: type (bits 2-0) | flags (bits 7-3)

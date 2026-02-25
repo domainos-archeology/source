@@ -23,7 +23,7 @@
  * Original address: 0x00e3c01a
  * Size: 170 bytes
  *
- * TODO: This function uses complex A5-relative data structures.
+ * TODO(source-0i3): This function uses complex A5-relative data structures.
  * The full implementation requires understanding the disk queue layout.
  */
 
@@ -36,7 +36,7 @@
 
 void disk_$rtn_qblks_internal(int16_t count, void *waiter, void *param)
 {
-    /* TODO: This function requires A5-relative data access
+    /* TODO(source-0i3): This function requires A5-relative data access
      *
      * The algorithm is:
      * 1. Acquire exclusion lock at A5+0x90

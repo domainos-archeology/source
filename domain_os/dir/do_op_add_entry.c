@@ -40,7 +40,7 @@
  * Original address: 0x00E4FEF2
  * Size: 454 bytes
  *
- * TODO: Full implementation requires understanding dir_$open_dir
+ * TODO(source-g5r): Full implementation requires understanding dir_$open_dir
  * (directory lookup), dir_$add_entry (add attempt), dir_$find_entry
  * (read existing entry), FUN_00e4d572 (name indirection), and
  * dir_$release_handle (cleanup).

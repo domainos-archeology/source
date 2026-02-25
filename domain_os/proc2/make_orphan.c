@@ -12,7 +12,7 @@
  *   - offset 0x22: next sibling index
  *   - offset 0x1C: child count or related field
  *
- * TODO: Update proc2_info_t to include child list fields
+ * TODO(source-92v): Update proc2_info_t to include child list fields
  *
  * Parameters:
  *   proc_uid   - Pointer to process UID to orphan
@@ -35,7 +35,7 @@
     #define P2_NEXT_SIBLING(idx)    (*(P2_CHILD_BASE(idx) - 0x61))
     #define P2_CHILD_FIELD(idx)     (*(P2_CHILD_BASE(idx) - 0x64))
 #else
-    /* TODO: Non-M68K implementation needs structure field access */
+    /* TODO(source-92v): Non-M68K implementation needs structure field access */
     static int16_t p2_dummy_field;
     #define P2_PARENT_IDX(idx)      (p2_dummy_field)
     #define P2_FIRST_CHILD(idx)     (p2_dummy_field)

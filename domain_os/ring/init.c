@@ -189,7 +189,7 @@ status_$t RING_$INIT(void *device_info)
 static status_$t ring_$init_internal(ring_unit_t *unit_data, void *device_info)
 {
     /*
-     * TODO: This function needs further analysis.
+     * TODO(source-6co): This function needs further analysis.
      * It appears to set up IIC (Inter-IC Communication) related data
      * structures for the ring controller.
      *

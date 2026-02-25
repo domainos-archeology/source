@@ -76,7 +76,7 @@ void MAC_$CLOSE(uint16_t *channel, status_$t *status_ret)
     ML_$EXCLUSION_STOP(&mac_$exclusion_lock);
 #else
     ML_$EXCLUSION_START(&mac_$exclusion_lock);
-    /* TODO: Non-M68K channel table access */
+    /* TODO(source-92v): Non-M68K channel table access */
     chan = *channel;
     ML_$EXCLUSION_STOP(&mac_$exclusion_lock);
 #endif

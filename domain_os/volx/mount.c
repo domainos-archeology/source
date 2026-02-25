@@ -107,7 +107,7 @@ void VOLX_$MOUNT(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
             vtoc_status = status_$ok;
         } else {
             /* Return a different status for write-protected volume */
-            vtoc_status = 0x14ffff;  /* TODO: Identify this status code */
+            vtoc_status = 0x14ffff;  /* TODO(source-qvt): Identify this status code */
         }
     }
 

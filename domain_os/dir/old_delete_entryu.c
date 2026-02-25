@@ -41,7 +41,7 @@
  * Original address: 0x00E56B08
  * Size: 812 bytes
  *
- * TODO: Full faithful C translation requires careful handling of the
+ * TODO(source-hc6): Full faithful C translation requires careful handling of the
  * complex control flow, nested ACL checks, and error recovery paths.
  * The assembly has been verified against Ghidra output.
  */

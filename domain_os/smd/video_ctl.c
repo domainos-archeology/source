@@ -64,11 +64,11 @@ void SMD_$VIDEO_CTL(uint8_t *flags, status_$t *status_ret)
 
     /* Acquire display lock for synchronization */
     /* Note: The original uses a static lock data address */
-    acq_result = SMD_$ACQ_DISPLAY(NULL);  /* TODO: proper lock data */
+    acq_result = SMD_$ACQ_DISPLAY(NULL);  /* TODO(source-h4x): proper lock data */
 
     /* Write the new video flags to hardware event count */
     /* The event count at offset 0x8 from unit stores video state */
-    /* TODO: This needs proper hardware register access */
+    /* TODO(source-h4x): This needs proper hardware register access */
 
     /* Release display lock */
     SMD_$REL_DISPLAY();

@@ -57,7 +57,7 @@ void DIR_$GET_ENTRYU_FUN_00e4d460(uid_t *local_uid, char *name,
     request.reserved = DAT_00e7fc42;
 
     /* Send the request */
-    /* TODO: Verify exact parameter table entries for GET_ENTRYU */
+    /* TODO(source-qgq): Verify exact parameter table entries for GET_ENTRYU */
     DIR_$DO_OP(&request.op, name_len + DAT_00e7fc42, 0x1c, &response, &request);
 
     *status_ret = response.status;

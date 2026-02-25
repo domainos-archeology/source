@@ -107,7 +107,7 @@ void RING_$SET_TMASK(uint16_t unit, uint16_t mask)
 void RING_$KICK_DRIVER(void)
 {
     /*
-     * TODO: Implement driver kick logic.
+     * TODO(source-6co): Implement driver kick logic.
      * This typically involves advancing an event count
      * or setting a flag to wake the driver process.
      */

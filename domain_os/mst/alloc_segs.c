@@ -53,7 +53,7 @@
  * Original address: 0x00E43182
  * Size: 1162 bytes
  *
- * TODO: Full C decompilation of this function is complex due to:
+ * TODO(source-n1i): Full C decompilation of this function is complex due to:
  * - Multiple segment search strategies (top-down, bottom-up, fixed)
  * - Page table page allocation during search
  * - MST/page table data structure access patterns

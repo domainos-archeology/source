@@ -14,7 +14,7 @@
  * @param status_array  Output: Array of status codes per transfer
  * @param status        Output: Overall status code
  *
- * TODO: This is a complex function that:
+ * TODO(source-pxn): This is a complex function that:
  * 1. Validates all buffer alignments (must be page-aligned)
  * 2. Wires all buffers for DMA access
  * 3. Allocates queue blocks via DISK_$GET_QBLKS
@@ -98,7 +98,7 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
     /* Allocate queue blocks */
     DISK_$GET_QBLKS(count, &queue_ptr, &queue_param);
 
-    /* TODO: Set up queue blocks with addresses and info */
+    /* TODO(source-pxn): Set up queue blocks with addresses and info */
     /* This requires understanding the queue block structure */
 
     /* Perform I/O */

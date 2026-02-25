@@ -95,7 +95,7 @@ void SMD_$ALLOC_HDM(uint16_t *size_ptr, smd_hdm_pos_t *pos, status_$t *status_re
                 pos->y = div_result * 0xe0;
                 pos->x = (block_offset % 0xe0) + 800;
             }
-            /* TODO: Handle other display types if needed */
+            /* TODO(source-h4x): Handle other display types if needed */
 
             if (size == block_size) {
                 /*

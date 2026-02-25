@@ -383,11 +383,11 @@ void CRASH_SHOW_STRING(const char *str)
  */
 
 /* PROC1 subsystem (0x000A) - process/lock errors */
-/* TODO: Lock_ordering_violation not found as labeled data in binary;
+/* TODO(source-qvt): Lock_ordering_violation not found as labeled data in binary;
  * value inferred from proc1 subsystem prefix */
 status_$t Lock_ordering_violation = 0x000a0001;
 status_$t Illegal_lock_err = 0x000a0002;         /* verified: 0x00e20de4 */
-/* TODO: Lock_order_violation_err not found as labeled data in binary;
+/* TODO(source-qvt): Lock_order_violation_err not found as labeled data in binary;
  * value inferred from proc1 subsystem prefix */
 status_$t Lock_order_violation_err = 0x000a0003;
 

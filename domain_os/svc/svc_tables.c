@@ -74,10 +74,10 @@ extern void SVC_$INVALID_SYSCALL(void);
 extern void SVC_$UNIMPLEMENTED(void);
 
 /* TRAP #0 handlers not yet in headers */
-extern void FUN_00e0aa04(void);          /* TODO: identify - returns FIM addr */
+extern void FUN_00e0aa04(void);          /* TODO(source-cry): identify - returns FIM addr */
 
 /* TRAP #1 handlers not yet in headers */
-extern void FUN_00e0a9c2(void);          /* TODO: identify - sets FIM user addr */
+extern void FUN_00e0a9c2(void);          /* TODO(source-cry): identify - sets FIM user addr */
 
 /*
  * ============================================================================
@@ -90,7 +90,7 @@ extern void FUN_00e0a9c2(void);          /* TODO: identify - sets FIM user addr 
  */
 void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE] = {
     /* 0x00 */ PROC2_$DELETE,
-    /* 0x01 */ FUN_00e0aa04,              /* TODO: returns FIM addr for AS */
+    /* 0x01 */ FUN_00e0aa04,              /* TODO(source-cry): returns FIM addr for AS */
     /* 0x02 */ SVC_$INVALID_SYSCALL,
     /* 0x03 */ DTTY_$RELOAD_FONT,
     /* 0x04 */ FILE_$UNLOCK_ALL,
@@ -136,7 +136,7 @@ void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE] = {
 void *SVC_$TRAP1_TABLE[SVC_TRAP1_TABLE_SIZE] = {
     /* 0x00 */ SVC_$INVALID_SYSCALL,
     /* 0x01 */ SVC_$INVALID_SYSCALL,
-    /* 0x02 */ FUN_00e0a9c2,              /* TODO: sets FIM user address */
+    /* 0x02 */ FUN_00e0a9c2,              /* TODO(source-cry): sets FIM user address */
     /* 0x03 */ NETWORK_$READ_SERVICE,
     /* 0x04 */ PROC1_$GET_CPUT,
     /* 0x05 */ SET_LITES_LOC,

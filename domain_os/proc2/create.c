@@ -330,7 +330,7 @@ cleanup_asid:
     MST_$FREE_ASID(new_entry->asid, &temp_status);
 
     /* Clear UID in global table */
-    /* TODO: UID table cleanup */
+    /* TODO(source-ld0): UID table cleanup */
 
     /* Call cleanup handlers if any were registered */
     if (new_entry->level1_pid != 0) {

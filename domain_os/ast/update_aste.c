@@ -109,5 +109,5 @@ void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, uint16_t flags,
 /* Stub for netlog function - to be implemented */
 static void FUN_00e01502(void)
 {
-    /* TODO: Implement netlog call */
+    /* TODO(source-qvt): Implement netlog call */
 }

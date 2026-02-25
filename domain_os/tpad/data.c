@@ -33,7 +33,7 @@
  */
 static void smd_$loc_event_internal(uint8_t edge_hit, int16_t unit, int32_t pos, int16_t button_state)
 {
-    /* TODO: This should call the actual smd_$loc_event_internal implementation.
+    /* TODO(source-qvt): This should call the actual smd_$loc_event_internal implementation.
      * For now, we stub it out. The actual implementation handles:
      * - Locking the SMD request lock
      * - Queueing locator events

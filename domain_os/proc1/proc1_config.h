@@ -17,7 +17,7 @@
  * These values apply to the SAU2 (System Architecture Unit type 2)
  * which is the Apollo DN3000/DN4000/DN4500 series.
  *
- * TODO: Add #if blocks for other SAU types when they are analyzed:
+ * TODO(source-qvt): Add #if blocks for other SAU types when they are analyzed:
  *   - SAU3: DN10000
  *   - SAU5: DSP series
  *   - SAU7: DN5500/DN10000VS

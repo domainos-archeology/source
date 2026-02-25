@@ -27,6 +27,6 @@ void PROC2_$GET_TTY_DATA(uid_t *tty_uid, uint16_t *tty_flags)
     tty_uid->low = entry->tty_uid.low;
 
     /* Copy TTY flags (session_id field used for TTY flags) */
-    /* TODO: Verify this is the correct field for tty_flags */
+    /* TODO(source-ld0): Verify this is the correct field for tty_flags */
     *tty_flags = entry->session_id;
 }

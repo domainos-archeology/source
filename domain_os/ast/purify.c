@@ -51,7 +51,7 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
 
     /* Look up AOTE by UID */
     ast_$lookup_aote_by_uid(&local_uid);
-    aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
+    aote = NULL;  /* TODO(source-mpj): Get from ast_$lookup_aote_by_uid return in A0 */
 
     if (aote == NULL) {
         goto done;
@@ -83,7 +83,7 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
 
         if (match) {
             /* Process this ASTE */
-            /* TODO: Implement full purification logic */
+            /* TODO(source-22c): Implement full purification logic */
             update_time = -1;
         }
 

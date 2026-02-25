@@ -154,7 +154,7 @@ void DISK_$SORT(void *dev_entry, void **queue_ptr)
                         }
 
                         if ((int16_t)(check_sector - start_sector) >= coalesce_limit) {
-                            /* TODO: Coalesce by calling FUN_00e3c370 */
+                            /* TODO(source-pxn): Coalesce by calling FUN_00e3c370 */
                             break;
                         }
 

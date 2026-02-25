@@ -312,7 +312,7 @@ void NETWORK_$REQUEST_SERVER(void);
  * Structure returned by NETWORK_$RING_INFO containing status about
  * the token ring network. Total size is 122 bytes (30 longs + 1 word).
  *
- * TODO: Determine the exact layout of this structure from network
+ * TODO(source-qvt): Determine the exact layout of this structure from network
  * protocol analysis.
  */
 typedef struct ring_info_t {

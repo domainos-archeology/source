@@ -55,7 +55,7 @@ void TIME_$Q_REENTER_ELEM(time_queue_t *queue, clock_t *when, int16_t qflags,
     /* Re-insert element in sorted order */
     time_$q_insert_sorted(queue, elem);
 
-    /* TODO: Check queue head and potentially trigger timer hardware */
+    /* TODO(source-752): Check queue head and potentially trigger timer hardware */
 
     /* Release spin lock */
     ML_$SPIN_UNLOCK((uint16_t *)&queue->tail, token);

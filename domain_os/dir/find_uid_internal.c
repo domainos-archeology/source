@@ -29,7 +29,7 @@
  * Original address: 0x00E4E786
  * Size: 246 bytes
  *
- * TODO: Full implementation requires DIR_$DO_OP request/response
+ * TODO(source-7hm): Full implementation requires DIR_$DO_OP request/response
  * buffer format for opcode 0x11A.
  */
 

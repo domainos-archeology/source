@@ -69,7 +69,7 @@ void ACL_$FREE_ASID(int16_t asid, status_$t *status_ret)
      * These are at a separate location indexed by ASID << 6
      * (64 bytes per ASID, 8 UIDs)
      */
-    /* TODO: Implement extended project UID clearing if needed */
+    /* TODO(source-yii): Implement extended project UID clearing if needed */
 
     /*
      * Clear subsystem level

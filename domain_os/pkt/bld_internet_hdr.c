@@ -110,7 +110,7 @@ void PKT_$BLD_INTERNET_HDR(uint32_t routing_key, uint32_t dest_node, uint16_t de
         }
     } else if (route_result == 0) {
         /* Direct route - check port's MTU */
-        /* TODO: Access ROUTE_$PORTP[*port_out] to get port info */
+        /* TODO(source-j33): Access ROUTE_$PORTP[*port_out] to get port info */
         /* For now, use simplified check */
         /* Port type check at offset 0x2C */
         /* MTU at offset 0x48->0x02 */
@@ -162,7 +162,7 @@ set_internet_fields:
     /* Set source node - from parameter or from port */
     if (src_node_or == -1) {
         /* Use source from routing port */
-        /* TODO: *(uint32_t *)((char *)hdr_buf + 0x3A) = ROUTE_$PORT[*port_out * 0x5C]; */
+        /* TODO(source-j33): *(uint32_t *)((char *)hdr_buf + 0x3A) = ROUTE_$PORT[*port_out * 0x5C]; */
         *(uint32_t *)((char *)hdr_buf + 0x3A) = NODE_$ME;  /* Simplified */
     } else {
         *(uint32_t *)((char *)hdr_buf + 0x3A) = (uint32_t)src_node_or;

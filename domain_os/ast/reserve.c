@@ -35,12 +35,12 @@ void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count, status_$
 
     /* Look up AOTE by UID */
     ast_$lookup_aote_by_uid(uid);
-    aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
+    aote = NULL;  /* TODO(source-mpj): Get from ast_$lookup_aote_by_uid return in A0 */
 
     if (aote == NULL) {
         /* AOTE not cached - try to load it */
         ast_$force_activate_segment(uid, 0, status, 0);
-        aote = NULL;  /* TODO: Get from ast_$force_activate_segment return in A0 */
+        aote = NULL;  /* TODO(source-mpj): Get from ast_$force_activate_segment return in A0 */
         if (aote == NULL) {
             goto done;
         }
@@ -137,7 +137,7 @@ void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count, status_$
             }
 
             /* Check if we've processed all pages in range */
-            /* TODO: Complete bounds checking logic */
+            /* TODO(source-22c): Complete bounds checking logic */
             break;
         }
 

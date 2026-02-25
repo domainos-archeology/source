@@ -84,7 +84,7 @@ void NAME_$SET_WDIRUS(uid_t *uidp, status_$t *status_ret)
     ACL_$ENTER_SUPER();
 
     /* Check access rights */
-    /* TODO: The exact ACL parameters need more analysis */
+    /* TODO(source-0bo): The exact ACL parameters need more analysis */
     if (ACL_$RIGHTS(uidp, NULL, NULL, NULL, status_ret) == 0) {
         NAME_CONVERT_ACL_STATUS(status_ret);
     } else {
@@ -110,7 +110,7 @@ void NAME_$SET_WDIRUS(uid_t *uidp, status_$t *status_ret)
     ACL_$EXIT_SUPER();
 
     /* Audit logging if enabled */
-    /* TODO: Implement audit logging when AUDIT subsystem is available */
+    /* TODO(source-0bo): Implement audit logging when AUDIT subsystem is available */
 }
 
 /*
@@ -171,5 +171,5 @@ void NAME_$SET_NDIRUS(uid_t *uidp, status_$t *status_ret)
     ACL_$EXIT_SUPER();
 
     /* Audit logging if enabled */
-    /* TODO: Implement audit logging when AUDIT subsystem is available */
+    /* TODO(source-0bo): Implement audit logging when AUDIT subsystem is available */
 }

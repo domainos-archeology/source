@@ -279,5 +279,5 @@ void xns_$copy_packet_data(void *iov_chain, uint16_t length)
     (void)iov_chain;
     (void)length;
 
-    /* TODO: Implement proper scatter-gather copy */
+    /* TODO(source-0rv): Implement proper scatter-gather copy */
 }

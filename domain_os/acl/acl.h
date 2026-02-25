@@ -620,7 +620,7 @@ void ACL_$CONVERT_TO_9ACL(int16_t type, uid_t *source_uid, uid_t *dir_uid,
  *   prot_uid_out - Output: protection UID
  *   status_ret   - Output status code
  *
- * TODO: Locate and analyze actual implementation in Ghidra
+ * TODO(source-yii): Locate and analyze actual implementation in Ghidra
  */
 void ACL_$CONVERT_FROM_9ACL(uid_t *source_acl, uid_t *acl_type,
                              void *prot_buf_out, uid_t *prot_uid_out,

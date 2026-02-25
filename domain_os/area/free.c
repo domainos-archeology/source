@@ -152,11 +152,11 @@ void AREA_$SHUTDOWN(void)
  *
  * Original address: 0x00E07FC6
  *
- * TODO: Full analysis needed - the decompilation for this function
+ * TODO(source-u4b): Full analysis needed - the decompilation for this function
  * was not provided. This is a stub based on the signature.
  */
 void AREA_$FREE_FROM(uint32_t param_1)
 {
-    /* TODO: Implement based on Ghidra analysis */
+    /* TODO(source-u4b): Implement based on Ghidra analysis */
     (void)param_1;
 }

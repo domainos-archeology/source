@@ -249,7 +249,7 @@ done_scanning:
                         MMAP_PAGE_TYPE_PURE : MMAP_PAGE_TYPE_IMPURE;
         } else {
             /* Dirty page - determine if needs flush */
-            /* TODO: Check segment info for flush requirement */
+            /* TODO(source-4in): Check segment info for flush requirement */
             page_type = MMAP_PAGE_TYPE_DIRTY_NF;
         }
 
@@ -288,7 +288,7 @@ void mmap_$move_pages_to_wsl_type(uint32_t vpn_head, uint16_t page_type)
         count++;
         mmape_t *page = MMAPE_FOR_VPN(current);
         page->prev_vpn = (uint16_t)last;
-        page->priority = 0;  /* TODO: May need special handling */
+        page->priority = 0;  /* TODO(source-4in): May need special handling */
         page->wsl_index = (uint8_t)page_type;
 
         last = current;

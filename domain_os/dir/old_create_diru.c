@@ -74,7 +74,7 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
             DIR_$OLD_SET_DEFAULT_ACL(&created_uid, &ACL_$FILE_ACL,
                                      &ACL_$NIL, &cleanup_status);
         }
-        /* TODO: Additional cleanup - truncate and delete the created dir */
+        /* TODO(source-qgq): Additional cleanup - truncate and delete the created dir */
         NAME_$UNLOCK_DIR(&cleanup_status);
         ACL_$EXIT_SUPER();
         return;

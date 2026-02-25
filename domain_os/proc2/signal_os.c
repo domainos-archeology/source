@@ -19,7 +19,7 @@
 static void log_signal_event(int event_type, int16_t target_idx, int16_t signal,
                             uint32_t param, status_$t status)
 {
-    /* TODO: Implement signal event logging if needed */
+    /* TODO(source-ld0): Implement signal event logging if needed */
     (void)event_type;
     (void)target_idx;
     (void)signal;

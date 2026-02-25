@@ -53,7 +53,7 @@ void MSG_$SARI(msg_$socket_t *socket,
      * with synchronization handling.
      */
 
-    /* TODO: Full implementation requires understanding the callback mechanism
+    /* TODO(source-894): Full implementation requires understanding the callback mechanism
      * and the interaction between send and receive paths.
      */
     *status_ret = status_$ok;

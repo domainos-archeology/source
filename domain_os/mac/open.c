@@ -63,7 +63,7 @@ void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params, status_$t *status_
         }
     }
 #else
-    /* TODO: Non-M68K port info access */
+    /* TODO(source-92v): Non-M68K port info access */
 #endif
 
     /* Validate packet type count (1-10) */
@@ -109,7 +109,7 @@ void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params, status_$t *status_
     sock_ptr = (uint8_t *)(*(uint32_t *)(0xE28DB0 + sock_num * 4));
     sock_ptr[0x16] &= 0x7F;
 #else
-    /* TODO: Non-M68K socket access */
+    /* TODO(source-92v): Non-M68K socket access */
 #endif
 
     /*
@@ -176,7 +176,7 @@ void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params, status_$t *status_
     params->ec2_handle = EC2_$REGISTER_EC1((ec_$eventcount_t *)sock_ptr, status_ret);
 #else
     ML_$EXCLUSION_START(&mac_$exclusion_lock);
-    /* TODO: Non-M68K channel table access */
+    /* TODO(source-92v): Non-M68K channel table access */
     ML_$EXCLUSION_STOP(&mac_$exclusion_lock);
 #endif
 

@@ -64,7 +64,7 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
     }
 
     /* Get socket's event count */
-    /* TODO: Get proper socket event count from socket table */
+    /* TODO(source-j33): Get proper socket event count from socket table */
     /* sock_ec = *(ec_$eventcount_t **)(&SOCK_EC_ARRAY + sock_num * 4); */
     sock_ec = NULL;  /* Placeholder */
 

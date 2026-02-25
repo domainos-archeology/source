@@ -27,7 +27,7 @@
  * Original address: 0x00E4E1FE
  * Original size: 424 bytes
  *
- * TODO: This function accesses parent stack frames (Pascal nested proc).
+ * TODO(source-qgq): This function accesses parent stack frames (Pascal nested proc).
  * The A5-relative data at offsets 0x20A2 and 0x20A6 are protocol version
  * and request size parameters for DIR_OP_DIR_READU. The loop termination
  * conditions and buffer management need verification.
@@ -41,7 +41,7 @@
 
 void dir_$dir_readu_via_do_op(status_$t *status_ret)
 {
-    /* TODO: This function is a nested Pascal subprocedure that accesses
+    /* TODO(source-qgq): This function is a nested Pascal subprocedure that accesses
      * its parent's stack frame (via A6 chain) to reach all the
      * DIR_$DIR_READU parameters. The Ghidra decompilation shows
      * unaff_A6-relative accesses for all parameters.

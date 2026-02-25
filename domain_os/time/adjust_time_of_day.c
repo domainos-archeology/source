@@ -139,7 +139,7 @@ void TIME_$ADJUST_TIME_OF_DAY(int32_t *delta, int32_t *old_delta, status_$t *sta
     usec_ticks.low = (uint16_t)(tv[1] / 4);
     ADD48(&new_clock, &usec_ticks);
 
-    /* TODO: Update hardware RTC with CAL_$DECODE_TIME and CAL_$WRITE_CALENDAR */
+    /* TODO(source-752): Update hardware RTC with CAL_$DECODE_TIME and CAL_$WRITE_CALENDAR */
 
     /* Return old delta in seconds and microseconds */
     if (old_delta != NULL) {

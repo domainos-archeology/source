@@ -171,7 +171,7 @@ done:
 /* Stub for logging function */
 static void FUN_00e02c52(int16_t count, int8_t zero_flag)
 {
-    /* TODO: Implement network logging */
+    /* TODO(source-qvt): Implement network logging */
     (void)count;
     (void)zero_flag;
 }

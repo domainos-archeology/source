@@ -114,7 +114,7 @@ void MAC_OS_$COPY_BUFFER_DATA(int32_t *dest_ptr, int16_t length)
 }
 
 /*
- * TODO: Implement proper buffer chain copying.
+ * TODO(source-qvt): Implement proper buffer chain copying.
  *
  * The correct implementation requires either:
  * 1. Inline assembly to access parent stack frame

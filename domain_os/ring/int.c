@@ -156,7 +156,7 @@ int8_t RING_$INT(void *device_info)
 ec_$eventcount_t *ring_$process_rx_packet(ring_unit_t *unit_data)
 {
     /*
-     * TODO: Implement full packet processing logic.
+     * TODO(source-6co): Implement full packet processing logic.
      *
      * The original function:
      *   1. Validates the received packet

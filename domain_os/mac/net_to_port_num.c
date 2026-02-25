@@ -49,7 +49,7 @@ void MAC_$NET_TO_PORT_NUM(int32_t *net_id, int16_t *port_ret)
 #else
     /* Non-M68K stub */
     for (i = 0; i <= 7; i++) {
-        /* TODO: Implement port table access for non-M68K */
+        /* TODO(source-92v): Implement port table access for non-M68K */
     }
 #endif
 

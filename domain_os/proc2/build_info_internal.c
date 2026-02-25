@@ -132,7 +132,7 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
         }
 
         /* Get CPU times from global table (indexed by PID * 16) */
-        /* TODO: Copy from DAT_00e25d10 + pid * 16 */
+        /* TODO(source-ld0): Copy from DAT_00e25d10 + pid * 16 */
 
         /* Get CPU usage */
         PROC1_$GET_ANY_CPU_USAGE(&proc1_pid, &out->cpu_usage[0],
@@ -186,7 +186,7 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
         out->acct_uid = UID_$NIL;
 
         /* Copy CPU usage from zombie data */
-        /* TODO: Copy from entry zombie fields */
+        /* TODO(source-ld0): Copy from entry zombie fields */
 
         out->name_len = 0;
         *status_ret = status_$proc2_zombie;
@@ -243,7 +243,7 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
     if (entry->session_id == 0) {
         out->session_upid = 0;
     } else {
-        /* TODO: Look up session process's UPID */
+        /* TODO(source-ld0): Look up session process's UPID */
         out->session_upid = 0;
     }
 
@@ -259,7 +259,7 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
  */
 static void get_pgroup_uid(proc2_info_t *entry, uid_t *uid_ret)
 {
-    /* TODO: Implement using FUN_00e421de logic */
+    /* TODO(source-ld0): Implement using FUN_00e421de logic */
     *uid_ret = entry->pgroup_uid;
 }
 
@@ -268,6 +268,6 @@ static void get_pgroup_uid(proc2_info_t *entry, uid_t *uid_ret)
  */
 static void get_pgroup_info(proc2_info_t *entry, uint16_t *info_ret)
 {
-    /* TODO: Implement using FUN_00e421aa logic */
+    /* TODO(source-ld0): Implement using FUN_00e421aa logic */
     *info_ret = entry->pgroup_table_idx;
 }

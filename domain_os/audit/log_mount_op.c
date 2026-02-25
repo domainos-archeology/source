@@ -22,7 +22,7 @@
  * Original address: 0x00E4BCE0
  * Size: 102 bytes
  *
- * TODO: Identify the format descriptor at DAT_00e4bd46.
+ * TODO(source-3gf): Identify the format descriptor at DAT_00e4bd46.
  */
 
 #include "dir/dir_internal.h"

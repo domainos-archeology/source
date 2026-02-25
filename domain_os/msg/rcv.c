@@ -77,7 +77,7 @@ void MSG_$RCVI(msg_$socket_t *socket,
      * - Copying data to user buffers
      * - Returning sender information
      */
-    /* TODO: Implement MSG_$$RCV_INTERNAL call with proper parameter passing */
+    /* TODO(source-894): Implement MSG_$$RCV_INTERNAL call with proper parameter passing */
     *status_ret = status_$ok;
     *bytes_received = 0;
 

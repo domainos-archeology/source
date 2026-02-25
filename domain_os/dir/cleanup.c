@@ -40,7 +40,7 @@ void DIR_$CLEANUP(void)
             /* Slot is active - check ownership */
             /* The handle entry pool starts at DAT_00e7f280, each entry is
              * a fixed size. Check if the owner matches current process. */
-            /* TODO: Verify exact slot entry size and owner field offset from Ghidra */
+            /* TODO(source-qgq): Verify exact slot entry size and owner field offset from Ghidra */
 
             /* Clean up the handle entry */
             handle_entry = (void *)(&DAT_00e7f280 + i * 0x30);

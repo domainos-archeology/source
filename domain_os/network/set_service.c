@@ -24,7 +24,7 @@
  * but appear to be treated as separate data items. The code using them is
  * conditionally compiled out (#if 0 below), so we keep them as placeholders.
  *
- * TODO: Investigate whether these are actually fields within the route
+ * TODO(source-fw2): Investigate whether these are actually fields within the route
  * port structures or separate data items.
  */
 extern int16_t DAT_00e2e0ce;  /* 0xE2E0CE - flag checked before service notification */
@@ -125,7 +125,7 @@ update_service:
      * This converts internal service flags to an external format and
      * calls through a callback table.
      *
-     * TODO: Implement the additional service notification path.
+     * TODO(source-fw2): Implement the additional service notification path.
      * The original code builds a service bitmap with different bit positions
      * and calls through DAT_00e2e0e8 + 0x24 with various parameters.
      */

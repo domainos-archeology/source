@@ -40,7 +40,7 @@ void PCHIST_$ENABLE_TERMINAL(int16_t disabling)
      */
     if (disabling == 0 && total_count == 1) {
         /*
-         * TODO: Original code calls TERM_$WRITE here with
+         * TODO(source-qvt): Original code calls TERM_$WRITE here with
          * a message - message content unknown
          */
     }

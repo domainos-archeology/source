@@ -16,7 +16,7 @@
 /*
  * External function prototypes
  *
- * TODO: REM_NAME_$REGISTER_SERVER has signature conflict between this usage
+ * TODO(source-6sz): REM_NAME_$REGISTER_SERVER has signature conflict between this usage
  * (with parameters) and name/name.h declaration (no parameters). The decompiled
  * code clearly passes parameters, so the header may be incorrect.
  */

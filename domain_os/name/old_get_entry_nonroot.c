@@ -27,7 +27,7 @@
  * Original address: 0x00E57CE0
  * Size: 656 bytes
  *
- * TODO: Full implementation requires careful handling of hint table,
+ * TODO(source-ctt): Full implementation requires careful handling of hint table,
  * remote/local fallback logic, and UID location comparison.
  * The assembly has been verified against Ghidra output.
  */

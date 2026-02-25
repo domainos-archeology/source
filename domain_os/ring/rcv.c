@@ -328,7 +328,7 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
 int8_t ring_$validate_receive(void)
 {
     /*
-     * TODO: Implement full validation logic.
+     * TODO(source-6co): Implement full validation logic.
      *
      * The original checks:
      *   - DMA status registers
@@ -358,7 +358,7 @@ void ring_$receive_packet(uint16_t unit, void *hdr_info, void *data_ptr,
                           void *param4, void *param5)
 {
     /*
-     * TODO: Implement packet dispatch logic.
+     * TODO(source-6co): Implement packet dispatch logic.
      *
      * The original function:
      *   1. Parses the packet header

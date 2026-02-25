@@ -31,7 +31,7 @@
  * Original address: 0x00E5545C
  * Size: 384 bytes
  *
- * TODO: Implement fully - requires FUN_00e54e10 (allocate overflow slot
+ * TODO(source-5xg): Implement fully - requires FUN_00e54e10 (allocate overflow slot
  * from free list) and FUN_00e54e62 (allocate with hash hint).
  */
 

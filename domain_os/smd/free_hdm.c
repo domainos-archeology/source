@@ -91,7 +91,7 @@ void SMD_$FREE_HDM(smd_hdm_pos_t *pos, uint16_t *size_ptr, status_$t *status_ret
         }
     } else {
         /* Unknown display type - use raw x as offset for now */
-        /* TODO: Handle other display types */
+        /* TODO(source-h4x): Handle other display types */
         offset = pos->x;
     }
 

@@ -30,7 +30,7 @@
  * Original address: 0x00E12E5E
  * Size: 1044 bytes
  *
- * TODO: Full implementation requires understanding of:
+ * TODO(source-bab): Full implementation requires understanding of:
  * - Page frame table layout at 0xEB4800
  * - MMAPE structure at 0xEC5400
  * - Physical map entry structure at 0xED5000

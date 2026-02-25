@@ -75,7 +75,7 @@ uint16_t SMD_$INQ_DISP_TYPE(uint16_t *unit)
 static int8_t smd_validate_unit(uint16_t unit)
 {
     /*
-     * TODO: Full implementation requires understanding FUN_00e6d700.
+     * TODO(source-h4x): Full implementation requires understanding FUN_00e6d700.
      * For now, assume units 0-3 are potentially valid.
      * The original likely checks:
      * 1. Unit < max_units

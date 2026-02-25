@@ -32,7 +32,7 @@
  * Original address: 0x00E53728
  * Original size: 752 bytes
  *
- * TODO: This is a complex function with many Ghidra decompiler artifacts
+ * TODO(source-qgq): This is a complex function with many Ghidra decompiler artifacts
  * (extraout_A0 return values from dir_$map_page). The page structure needs
  * further analysis. The validation logic has three phases:
  *   Phase 1: Walk backward finding the first valid page range

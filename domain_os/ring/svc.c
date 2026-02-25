@@ -413,7 +413,7 @@ void RING_$SVC_WRITE(uint16_t *unit_ptr, void *hdr, void *param3,
     }
 
     /*
-     * TODO: Complete implementation
+     * TODO(source-6co): Complete implementation
      *
      * The full implementation would:
      * 1. Allocate header buffer via NETBUF_$GET_HDR

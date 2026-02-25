@@ -28,7 +28,7 @@
  * Original address: 0x00E57F74
  * Size: 226 bytes
  *
- * TODO: Implement fully - requires REM_NAME_$GET_ENTRY integration
+ * TODO(source-xm9): Implement fully - requires REM_NAME_$GET_ENTRY integration
  * and understanding of the entry result buffer format.
  */
 

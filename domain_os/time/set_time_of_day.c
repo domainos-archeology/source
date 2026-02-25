@@ -91,5 +91,5 @@ void TIME_$SET_TIME_OF_DAY(uint32_t *tv, status_$t *status)
     SET_SR(saved_sr);
 
     /* Update hardware RTC */
-    /* TODO: Implement CAL_$DECODE_TIME and CAL_$WRITE_CALENDAR calls */
+    /* TODO(source-752): Implement CAL_$DECODE_TIME and CAL_$WRITE_CALENDAR calls */
 }

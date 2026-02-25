@@ -21,7 +21,7 @@
  * Original address: 0x00E3366C
  * Size: 262 bytes
  *
- * TODO: Full implementation requires ASKNODE_$INTERNET_INFO response
+ * TODO(source-wqm): Full implementation requires ASKNODE_$INTERNET_INFO response
  * structure layout and CAL_$TIMEZONE field offsets.
  */
 

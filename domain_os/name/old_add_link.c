@@ -33,7 +33,7 @@
  * Original address: 0x00E5674C
  * Size: 506 bytes
  *
- * TODO: Full implementation requires understanding AST_$GET_LOCATION,
+ * TODO(source-szw): Full implementation requires understanding AST_$GET_LOCATION,
  * REM_FILE_$NAME_ADD_HARD_LINKU remote protocol, FILE_$READ_LOCK_ENTRYUI
  * retry logic, and FUN_00e565b8 local link addition.
  */

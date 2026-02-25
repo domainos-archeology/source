@@ -66,6 +66,6 @@ uint32_t DAT_00e2ddd8 = 0x0000003C;
  *
  * Status code passed to CRASH_SYSTEM when a crash character is received.
  * Original address: 0xe1bcf8
- * TODO: Determine the actual status code value.
+ * TODO(source-qvt): Determine the actual status code value.
  */
 status_$t status_$t_00e1bcf8 = 0x000B0008;

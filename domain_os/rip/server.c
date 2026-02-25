@@ -102,7 +102,7 @@ typedef struct rip_$stats_t {
 /*
  * Note: Most external function prototypes come from included headers.
  *
- * TODO: The following functions have signature discrepancies between
+ * TODO(source-6sz): The following functions have signature discrepancies between
  * this decompiled code and the headers. These need further analysis
  * to determine the correct signatures.
  */
@@ -561,7 +561,7 @@ uint16_t RIP_$SERVER(void)
                               RIP_$PACKET_LENGTH(response_count), 0xFF);
 
                     /* Wait for response or timeout */
-                    /* TODO: TIME_$WAIT signature mismatch - needs further analysis */
+                    /* TODO(source-6sz): TIME_$WAIT signature mismatch - needs further analysis */
                     uint16_t delay_type = 0;
                     clock_t delay = { 0, RIP_SEND_TIMEOUT };
                     status_$t wait_status;
@@ -627,7 +627,7 @@ uint16_t RIP_$SERVER(void)
             response_cmd = 0x20;  /* Response with extended flag? */
 
             /* Send via PKT_$SEND_INTERNET for standard packets */
-            /* TODO: PKT_$SEND_INTERNET parameter mismatch with pkt.h - needs analysis */
+            /* TODO(source-6sz): PKT_$SEND_INTERNET parameter mismatch with pkt.h - needs analysis */
             {
                 uint16_t len_out;
                 PKT_$SEND_INTERNET(idp_network, idp_host, port_network,
@@ -749,7 +749,7 @@ uint16_t RIP_$SERVER(void)
         /*
          * Name service registration (Apollo extension)
          *
-         * TODO: The decompiled code called REM_NAME_$REGISTER_SERVER with
+         * TODO(source-6sz): The decompiled code called REM_NAME_$REGISTER_SERVER with
          * parameters, but the header declares it as void(void). This needs
          * further analysis to determine if there's a different function
          * or if the signature needs updating.

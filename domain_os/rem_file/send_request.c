@@ -207,7 +207,7 @@ retry_send:
         /* Compute timeout deadline:
          * TIME_$CLOCKH + per-process timeout base (A5+8) + send overhead (local_c6)
          *
-         * TODO: The per-process timeout base is accessed via A5+8. This is an
+         * TODO(source-0i3): The per-process timeout base is accessed via A5+8. This is an
          * A5-relative global in the original Pascal runtime. For now we use 0
          * as a placeholder - the actual value would come from the process-specific
          * data area. This needs arch-specific abstraction.
@@ -420,7 +420,7 @@ retry_send:
             /* Server is busy - increment per-process busy counter (A5+4)
              * and wait 2 ticks before retrying.
              *
-             * TODO: The assembly does addq.l #1,(0x4,A5) which increments
+             * TODO(source-0i3): The assembly does addq.l #1,(0x4,A5) which increments
              * a per-process counter. This needs arch-specific abstraction.
              */
             {

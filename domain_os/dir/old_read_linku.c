@@ -91,7 +91,7 @@ void DIR_$OLD_READ_LINKU(int16_t dir_uid_low, int16_t name_low, uint16_t *name_l
             /* Type 1: direct UID - copy from entry at offset 0x28 */
             target_uid->high = *((uint32_t *)(entry + 0x28));
             target_uid->low = *((uint32_t *)(entry + 0x2c));
-            /* TODO: Ghidra shows status 0xe0006, verify this status code */
+            /* TODO(source-qgq): Ghidra shows status 0xe0006, verify this status code */
             *status_ret = 0x000E0006;
         } else if (link_type == 3) {
             /* Type 3: text link - read via dir_$old_read_link_data into local buffer */

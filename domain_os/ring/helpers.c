@@ -241,7 +241,7 @@ void ring_$set_hw_mask(uint16_t unit, uint16_t mask)
     unit_data->tmask = mask;
 
     /*
-     * TODO: Write mask to hardware register.
+     * TODO(source-6co): Write mask to hardware register.
      * The actual hardware write depends on the controller type.
      */
 }
@@ -266,7 +266,7 @@ void ring_$do_start(uint16_t unit, ring_unit_t *unit_data, status_$t *status_ret
     unit_data->state_flags |= RING_UNIT_STARTED;
 
     /*
-     * TODO: Additional startup logic including:
+     * TODO(source-6co): Additional startup logic including:
      *   - Create receive process
      *   - Initialize hardware
      *   - Setup initial DMA buffers
@@ -285,7 +285,7 @@ void ring_$do_start(uint16_t unit, ring_unit_t *unit_data, status_$t *status_ret
 void ring_$disable_interrupts(void)
 {
     /*
-     * TODO: Disable ring interrupts.
+     * TODO(source-6co): Disable ring interrupts.
      * This is architecture-specific (uses SR on m68k).
      */
 }
@@ -305,7 +305,7 @@ void ring_$disable_interrupts(void)
 uint8_t HDR_CHKSUM(void *hdr, void *data)
 {
     /*
-     * TODO: Implement checksum algorithm.
+     * TODO(source-6co): Implement checksum algorithm.
      * For now return a placeholder value.
      */
     (void)hdr;

@@ -80,7 +80,7 @@ extern uint32_t DAT_00e7cefc;
 /*
  * Address space protection boundary
  * Addresses >= this value are protected from direct EC2 access.
- * TODO: Move to proc/as.h when that subsystem is cleaned up.
+ * TODO(source-qvt): Move to proc/as.h when that subsystem is cleaned up.
  */
 extern void *AS_$PROTECTION;
 

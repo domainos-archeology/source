@@ -68,7 +68,7 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
     /* Get common attributes */
     AST_$GET_COMMON_ATTRIBUTES(&local_uid, 0x80, &attr_valid, &local_status);
 
-    /* TODO: The exact layout of AST_$GET_COMMON_ATTRIBUTES output
+    /* TODO(source-qgq): The exact layout of AST_$GET_COMMON_ATTRIBUTES output
      * needs verification. The decompiler shows various field accesses
      * into the output buffer. The key fields extracted are:
      *   - attr_valid (byte): non-zero if attributes are present
@@ -207,7 +207,7 @@ generic_map:
 
         MST_$MAPS(PROC1_$AS_ID, 0xFFFF, handle, 0, 0x10000, 0x16, 0,
                   0xFF, &map_size, status_ret);
-        /* TODO: MST_$MAPS returns address in A0 on m68k; assigned to handle+0x24 */
+        /* TODO(source-qgq): MST_$MAPS returns address in A0 on m68k; assigned to handle+0x24 */
         mapped_addr = *(uint32_t *)(h + 0x24);
 
         if (*status_ret != status_$ok) {

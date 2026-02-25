@@ -25,7 +25,7 @@
 void TIME_$READ_CAL(clock_t *clock, uint32_t *time)
 {
     /*
-     * TODO: Implement actual RTC hardware access.
+     * TODO(source-752): Implement actual RTC hardware access.
      * For now, return a default value representing system boot time.
      */
     clock->high = 0;

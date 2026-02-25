@@ -82,7 +82,7 @@ int8_t PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
     if (route_result == 0) {
         /* Get port info and check type */
         /* Port type 4 indicates we should ping */
-        /* TODO: Access ROUTE_$PORTP[port] to get port info and check type at offset 0x2E */
+        /* TODO(source-j33): Access ROUTE_$PORTP[port] to get port info and check type at offset 0x2E */
         need_ping = 1;  /* Simplified: assume ping needed for direct routes */
     }
 
@@ -107,7 +107,7 @@ int8_t PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
     retry_count = 2;
 
     /* Get the socket's event count for waiting */
-    /* TODO: Access socket event count array */
+    /* TODO(source-j33): Access socket event count array */
     /* sock_ec = *(uint32_t **)(&SOCK_EC_ARRAY + sock_num * 4); */
     /* wait_val = *sock_ec + 1; */
 
@@ -137,7 +137,7 @@ int8_t PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
              * - Socket receive event count
              * - Time event count for timeout
              */
-            /* TODO: Set up proper EC wait */
+            /* TODO(source-j33): Set up proper EC wait */
             /* wait_result = EC_$WAIT(ecs, wait_vals); */
             wait_result = 1;  /* Simulate timeout for now */
 

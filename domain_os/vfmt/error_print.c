@@ -56,7 +56,7 @@ void ERROR_$PRINT(const char *format, ...)
      * In the original code, this calls through the procedure variable
      * mechanism to VFMT_$WRITE. We call VFMT_$WRITE directly here.
      *
-     * TODO: The original may have passed args differently - verify
+     * TODO(source-bu8): The original may have passed args differently - verify
      * by checking actual call sites in the assembly.
      */
     VFMT_$WRITE(format, args);

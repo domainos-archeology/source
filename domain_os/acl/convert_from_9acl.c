@@ -4,7 +4,7 @@
  * This is the inverse operation of ACL_$CONVERT_TO_9ACL. It converts
  * the old 9-entry ACL format to the new protection format.
  *
- * TODO: Locate and analyze the actual implementation in Ghidra.
+ * TODO(source-yii): Locate and analyze the actual implementation in Ghidra.
  * This is currently a stub that sets status_$ok.
  *
  * Original address: Unknown - needs Ghidra analysis
@@ -29,7 +29,7 @@ void ACL_$CONVERT_FROM_9ACL(uid_t *source_acl, uid_t *acl_type,
     uint32_t *prot = (uint32_t *)prot_buf_out;
     int i;
 
-    /* TODO: Implement actual conversion logic from Ghidra analysis.
+    /* TODO(source-yii): Implement actual conversion logic from Ghidra analysis.
      *
      * For now, initialize protection buffer to zeros and copy
      * the source ACL as the protection UID. This is a placeholder

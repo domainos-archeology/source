@@ -134,7 +134,7 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
     if (num_parts >= 0) {
         for (i = 0; i <= num_parts; i++) {
             /* This fills partition details - complex bit manipulation */
-            /* TODO: Full implementation requires more reverse engineering */
+            /* TODO(source-pxn): Full implementation requires more reverse engineering */
         }
     }
 

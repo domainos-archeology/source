@@ -20,7 +20,7 @@
 // index would return whatever data happens to be in memory at that offset,
 // resulting in a bogus status code rather than a crash.
 //
-// TODO: Add bounds checking once table sizes are determined.
+// TODO(source-qvt): Add bounds checking once table sizes are determined.
 void TERM_$STATUS_CONVERT(status_$t *status) {
     unsigned char subsystem;
     unsigned short index;

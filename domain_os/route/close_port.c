@@ -151,7 +151,7 @@ void ROUTE_$CLOSE_PORT(void *port_info, status_$t *status_ret)
          * Clear the driver/callback pointer at offset 0x44
          * Original: *(port+0x44) = NULL via indirect pointer
          */
-        /* TODO: Identify this field - appears to be a callback pointer */
+        /* TODO(source-qvt): Identify this field - appears to be a callback pointer */
     }
 
     /*

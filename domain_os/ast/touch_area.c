@@ -86,7 +86,7 @@ void AST_$TOUCH_AREA(aste_t *aste, uint32_t mode, uint16_t start_page,
                 uint32_t qblk_tail;
                 DISK_$GET_QBLKS(alloc_count, &qblk_head, &qblk_tail);
 
-                /* TODO: Set up read descriptors */
+                /* TODO(source-mpj): Set up read descriptors */
                 /* This is complex - involves setting up qblk chain */
 
                 int16_t result_count[1];
@@ -104,6 +104,6 @@ void AST_$TOUCH_AREA(aste_t *aste, uint32_t mode, uint16_t start_page,
         }
     }
 
-    /* TODO: Complete implementation for installed pages case */
+    /* TODO(source-22c): Complete implementation for installed pages case */
     /* The full implementation handles already-installed pages differently */
 }

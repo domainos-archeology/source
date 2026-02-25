@@ -8,7 +8,7 @@
  * Original address: 0x00e388ac
  * Size: 1746 bytes
  *
- * TODO: This is a stub implementation. The full implementation requires
+ * TODO(source-hg1): This is a stub implementation. The full implementation requires
  * understanding of VTOC block allocation, bucket management, and the
  * interaction with DBUF, BAT, and other subsystems.
  */
@@ -66,7 +66,7 @@ void VTOC_$ALLOCATE(void *req, vtoce_$result_t *result, status_$t *status)
             goto done;
         }
 
-        /* TODO: Implement old format allocation
+        /* TODO(source-hg1): Implement old format allocation
          * - Search for free entry in block (entry_count in header)
          * - If full, follow next_block chain
          * - If no free entry, allocate new block via BAT_$ALLOCATE
@@ -85,7 +85,7 @@ void VTOC_$ALLOCATE(void *req, vtoce_$result_t *result, status_$t *status)
             goto done;
         }
 
-        /* TODO: Implement new format allocation
+        /* TODO(source-hg1): Implement new format allocation
          * - Search bucket for free slot (20 slots per bucket)
          * - If found, allocate VTOCE block via BAT_$ALLOC_VTOCE
          * - Initialize new VTOCE in result buffer

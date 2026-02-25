@@ -25,7 +25,7 @@
  * Note: This overlaps with ROUTE_$PORT at 0xE2E0A0, but is used as
  * an array base rather than a single value.
  *
- * TODO: Consolidate with route.h definitions once structure is better understood
+ * TODO(source-6sz): Consolidate with route.h definitions once structure is better understood
  */
 #if defined(ARCH_M68K)
     #define ROUTE_$PORT_ARRAY       ((uint8_t *)0xE2E0A0)

@@ -33,7 +33,7 @@ pchist_proc_t PCHIST_$PROC_DATA[PCHIST_MAX_PROCESSES];
  * during active profiling.
  * Located at 0xe85c14
  */
-uint32_t PCHIST_$WIRE_PAGES[4]; /* TODO: verify array size */
+uint32_t PCHIST_$WIRE_PAGES[4]; /* TODO(source-qvt): verify array size */
 
 /*
  * MST wire area context pointer

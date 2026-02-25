@@ -113,7 +113,7 @@ void STOP_$WATCH(int16_t *operation_p, uint16_t *slot_p, int16_t *parent_p,
         /*
          * Higher operation codes are dispatched through a jump table.
          * This appears to be used for extended operations like trace mode.
-         * TODO: Implement jump table dispatch for operations 2+
+         * TODO(source-3u5): Implement jump table dispatch for operations 2+
          */
         FIM_$RLS_CLEANUP(cleanup_ctx);
         *status_ret = status_$ok;
@@ -142,7 +142,7 @@ void STOP_$WATCH(int16_t *operation_p, uint16_t *slot_p, int16_t *parent_p,
         /* Calculate cycles per unit (divide by 2048) */
         stopwatch_globals.cycles_per_unit = (int16_t)((time_end - time_start) / 0x800);
 
-        /* TODO: Get additional timing info from system */
+        /* TODO(source-3u5): Get additional timing info from system */
         /* stopwatch_globals.time_scale = ... */
 
         release_timing();
@@ -232,7 +232,7 @@ cleanup:
 static int32_t read_time_counter(void)
 {
     /*
-     * TODO: Implement actual timer read.
+     * TODO(source-3u5): Implement actual timer read.
      * On m68k, this typically reads from a hardware timer register
      * or the system's microsecond clock.
      */
@@ -250,7 +250,7 @@ static int32_t read_time_counter(void)
 static void release_timing(void)
 {
     /*
-     * TODO: Implement resource release.
+     * TODO(source-3u5): Implement resource release.
      * May involve releasing hardware timer access or
      * decrementing reference counts.
      */
@@ -288,7 +288,7 @@ static void start_timing(stopwatch_slot_t *slot, stopwatch_slot_t *parent)
     }
 
     /*
-     * TODO: Set up hardware timer if needed.
+     * TODO(source-3u5): Set up hardware timer if needed.
      * May involve acquiring exclusive access to a timer channel.
      */
 }

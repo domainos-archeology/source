@@ -105,7 +105,7 @@ void AREA_$THREAD_BSTES(area_$handle_t *handle_ptr, int16_t bste_idx,
  *
  * Original address: 0x00E09822
  *
- * TODO: Full analysis and implementation needed.
+ * TODO(source-u4b): Full analysis and implementation needed.
  */
 void AREA_$REMOVE_SEG(uint16_t area_id, uint16_t seg_idx,
                       status_$t *status_ret)
@@ -141,7 +141,7 @@ void AREA_$REMOVE_SEG(uint16_t area_id, uint16_t seg_idx,
         entry->seg_bitmap[word] &= ~(1 << bit);
     }
 
-    /* TODO: Handle extended segment tables for areas with > 64 segments */
+    /* TODO(source-u4b): Handle extended segment tables for areas with > 64 segments */
 
     ML_$UNLOCK(ML_LOCK_AREA);
 }
@@ -157,7 +157,7 @@ void AREA_$REMOVE_SEG(uint16_t area_id, uint16_t seg_idx,
  *
  * Original address: 0x00E09EF4
  *
- * TODO: Full analysis and implementation needed.
+ * TODO(source-u4b): Full analysis and implementation needed.
  */
 void AREA_$DEACTIVATE_ASTE(void *aste, status_$t *status_ret)
 {
@@ -165,7 +165,7 @@ void AREA_$DEACTIVATE_ASTE(void *aste, status_$t *status_ret)
     int entry_offset;
     int *aste_ptr = (int *)aste;
 
-    /* TODO: Extract area_id from aste structure */
+    /* TODO(source-u4b): Extract area_id from aste structure */
     uint16_t area_id = 0;  /* Placeholder - needs proper extraction from aste */
 
     /* Validate area ID */

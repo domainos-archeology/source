@@ -164,7 +164,7 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
  * This function likely adds a reference count or marks the file
  * as being operated on.
  *
- * TODO: Implement when FUN_00e5d0a8 is analyzed
+ * TODO(source-uav): Implement when FUN_00e5d0a8 is analyzed
  */
 static void file_$lock_add_ref(uid_t *uid)
 {
@@ -179,7 +179,7 @@ static void file_$lock_add_ref(uid_t *uid)
  * This function likely removes a reference count or clears the
  * operation marker.
  *
- * TODO: Implement when FUN_00e5d134 is analyzed
+ * TODO(source-uav): Implement when FUN_00e5d134 is analyzed
  */
 static void file_$lock_remove_ref(uid_t *uid)
 {

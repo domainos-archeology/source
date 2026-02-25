@@ -21,7 +21,7 @@
  * Original address: 0x00E3C9FE
  * Size: 188 bytes
  *
- * TODO: Full implementation requires A5-based module data pointer
+ * TODO(source-52t): Full implementation requires A5-based module data pointer
  * and understanding of per-process disk eventcount layout.
  */
 

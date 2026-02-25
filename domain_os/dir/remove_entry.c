@@ -30,7 +30,7 @@
  * Original address: 0x00E50FC8
  * Original size: 530 bytes
  *
- * TODO: Ghidra marks several code blocks as unreachable (the directory
+ * TODO(source-qgq): Ghidra marks several code blocks as unreachable (the directory
  * truncation logic at 0x00E51112..0x00E511A4). These blocks handle
  * truncating trailing empty pages after entry removal. They are likely
  * reached via a conditional that Ghidra's decompiler couldn't resolve.
@@ -138,7 +138,7 @@ check_proceed:
         }
     }
 
-    /* TODO: The assembly contains additional truncation logic at
+    /* TODO(source-qgq): The assembly contains additional truncation logic at
      * 0x00E51112-0x00E511A4 that handles shrinking the directory
      * when trailing pages become empty. Ghidra marks these as
      * unreachable blocks, but they are reached via the did_truncate

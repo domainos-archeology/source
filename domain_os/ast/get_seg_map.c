@@ -61,12 +61,12 @@ void AST_$GET_SEG_MAP(uint32_t *uid_info, uint32_t start_offset, uint32_t unused
 
         /* Look up AOTE */
         ast_$lookup_aote_by_uid((uid_t *)uid_info);
-        aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
+        aote = NULL;  /* TODO(source-mpj): Get from ast_$lookup_aote_by_uid return in A0 */
 
         if (aote == NULL) {
             /* Try to load the AOTE */
             ast_$force_activate_segment((uid_t *)uid_info, 0, status, 0);
-            aote = NULL;  /* TODO: Get from ast_$force_activate_segment return in A0 */
+            aote = NULL;  /* TODO(source-mpj): Get from ast_$force_activate_segment return in A0 */
 
             if (aote == NULL) {
                 ML_$UNLOCK(AST_LOCK_ID);

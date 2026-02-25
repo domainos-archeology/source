@@ -10,7 +10,7 @@
  * Original address: 0x00e54734
  * Size: 288 bytes
  *
- * TODO: This function uses A5-relative data for per-process state.
+ * TODO(source-0i3): This function uses A5-relative data for per-process state.
  * Full implementation requires understanding of the handle table layout.
  */
 
@@ -38,7 +38,7 @@ void NAME_$UNLOCK_DIR(status_$t *status_ret)
 
     /* Get stored UID from per-process data */
     /* A5 + PROC1_$CURRENT*8 + 0x2b8 */
-    /* TODO: Implement proper A5-relative data access */
+    /* TODO(source-0i3): Implement proper A5-relative data access */
     local_uid.high = 0;  /* Placeholder - should read from per-process data */
     local_uid.low = 0;
 
@@ -91,7 +91,7 @@ void NAME_$UNLOCK_DIR(status_$t *status_ret)
         int32_t lock_handle;  /* From A5 + PROC1_$CURRENT*4 + 0x3c */
         uint16_t mode;        /* From A5 + PROC1_$CURRENT*2 + 0x13e */
 
-        /* TODO: Read actual values from per-process data */
+        /* TODO(source-0i3): Read actual values from per-process data */
         lock_handle = 0;  /* Placeholder */
         mode = 0;         /* Placeholder */
 
@@ -102,7 +102,7 @@ void NAME_$UNLOCK_DIR(status_$t *status_ret)
 
     /* Clear the stored UID to indicate no longer locked */
     /* A5 + PROC1_$CURRENT*8 + 0x2b8 = 0 */
-    /* TODO: Implement proper write to per-process data */
+    /* TODO(source-0i3): Implement proper write to per-process data */
 
     /* Use unlock status if primary status was OK */
     if ((*status_ret >> 16) == 0) {

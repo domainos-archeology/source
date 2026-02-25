@@ -33,7 +33,7 @@
  * Original address: 0x00E579C0
  * Size: 704 bytes
  *
- * TODO: Full implementation requires UNMAP_CASE helper and careful
+ * TODO(source-11g): Full implementation requires UNMAP_CASE helper and careful
  * handling of inline vs overflow entry layout differences.
  * The assembly has been verified against Ghidra output.
  */

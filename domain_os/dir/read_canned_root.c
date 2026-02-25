@@ -23,7 +23,7 @@
  * Original address: 0x00E4DFFE
  * Original size: 426 bytes
  *
- * TODO: This function uses deeply nested Pascal frame accesses that are
+ * TODO(source-qgq): This function uses deeply nested Pascal frame accesses that are
  * difficult to fully flatten. The entry reformatting loop (0x30-byte
  * input records to variable-size output records) needs verification
  * against the assembly. The case-folding bitmap at PTR_DAT_00e4cd84
@@ -61,7 +61,7 @@ extern uint8_t PTR_DAT_00e4cd84;
  */
 void dir_$read_canned_root(void)
 {
-    /* TODO: This function's implementation requires Pascal frame chain
+    /* TODO(source-qgq): This function's implementation requires Pascal frame chain
      * access which cannot be cleanly represented in C. The Ghidra
      * decompilation accesses unaff_A6 (the parent's frame pointer)
      * to reach parameters passed to the grandparent DIR_$DIR_READU.

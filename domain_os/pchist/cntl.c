@@ -186,7 +186,7 @@ void PCHIST_$CNTL(
      * Wire the histogram buffer pages
      * This ensures the buffer stays in memory during profiling
      */
-    /* TODO: MST_$WIRE_AREA call */
+    /* TODO(source-qvt): MST_$WIRE_AREA call */
 
     /* Enable histogram collection */
     PCHIST_$CONTROL.histogram_enabled = -1;  /* 0xFF = enabled */

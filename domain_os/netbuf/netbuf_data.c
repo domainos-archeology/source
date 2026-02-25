@@ -39,7 +39,7 @@ uint16_t NETBUF_$DELAY_TYPE = 0;
 
 /*
  * Default delay time for waiting on buffers
- * TODO: Determine actual value from disassembly context
+ * TODO(source-qvt): Determine actual value from disassembly context
  */
 clock_t NETBUF_$DELAY_TIME = { 0, 0x100 };
 

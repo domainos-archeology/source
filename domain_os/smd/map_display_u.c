@@ -99,7 +99,7 @@ void SMD_$MAP_DISPLAY_U(uint32_t *mapped_addr, status_$t *status_ret)
          * These are from static tables in the original binary at addresses
          * 0xe6f976, 0xe6f978, etc. For now, use placeholder values.
          *
-         * TODO: Extract actual mapping parameter tables from binary.
+         * TODO(source-h4x): Extract actual mapping parameter tables from binary.
          */
         start_va = 0;       /* Let MST choose address */
         length = 0;         /* Map entire object */

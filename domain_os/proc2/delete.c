@@ -30,13 +30,13 @@
  * - Frees various subsystem resources (FILE, NAME, PEB, TERM, ACL, MST)
  * Original address: 0x00e743ce
  *
- * TODO: Full implementation of PROC2_$DELETE_CLEANUP is complex.
+ * TODO(source-ld0): Full implementation of PROC2_$DELETE_CLEANUP is complex.
  * For now, stub it out as it requires many subsystem dependencies.
  */
 static void PROC2_$DELETE_CLEANUP(void)
 {
     /*
-     * TODO: Implement full cleanup.
+     * TODO(source-ld0): Implement full cleanup.
      * This involves calling:
      * - XPD_$CLEANUP()
      * - SMD_$FREE_ASID(asid)

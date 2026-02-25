@@ -92,7 +92,7 @@ void PROC2_$SUSPEND(uid_t *proc_uid, status_$t *status_ret)
                 ML_$UNLOCK(PROC2_LOCK_ID);
 
                 /* Wait on suspend EC with timeout (0x78 = 120 ticks) */
-                /* TODO: EC_$WAIT signature needs verification */
+                /* TODO(source-ld0): EC_$WAIT signature needs verification */
                 int16_t wait_result = 0;  /* Simplified - actual impl uses EC_$WAIT */
 
                 ML_$LOCK(PROC2_LOCK_ID);

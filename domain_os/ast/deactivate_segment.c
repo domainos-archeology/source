@@ -152,6 +152,6 @@ error_exit:
 /* Stub for internal logging function */
 static void FUN_00e01872(int16_t seg_addr)
 {
-    /* TODO: Implement segment deactivation logging */
+    /* TODO(source-mpj): Implement segment deactivation logging */
     (void)seg_addr;
 }

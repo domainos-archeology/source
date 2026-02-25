@@ -77,7 +77,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
     }
 
     /* Store in per-process slot */
-    /* TODO: Verify per-process slot addressing */
+    /* TODO(source-qgq): Verify per-process slot addressing */
 
     retry_count = 0;
     hint_idx = 0;

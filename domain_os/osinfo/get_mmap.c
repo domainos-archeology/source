@@ -12,7 +12,7 @@
 #include "ast/ast.h"
 #include "proc2/proc2.h"
 
-/* TODO: These should be moved to proper headers */
+/* TODO(source-qvt): These should be moved to proper headers */
 extern uint8_t PMAP_$PAGE_TABLE[];  /* Page table entries */
 extern uint8_t AST_$ENTRY_TABLE[];  /* AST entry table base */
 

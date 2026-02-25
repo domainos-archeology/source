@@ -69,7 +69,7 @@ uint16_t AST_$ADD_AOTES(uint16_t *count, status_$t *status)
         ML_$LOCK(AST_LOCK_ID);
 
         /* Add to free list (ast_$release_aote) */
-        /* TODO: Call internal free function */
+        /* TODO(source-mpj): Call internal free function */
     }
 
     AST_$SIZE_AOT += add_count;

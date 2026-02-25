@@ -119,7 +119,7 @@ void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
 
         /* Clear the "in use" flag on the socket */
         /* sock_spinlock[user_socket]->flags &= 0x7F */
-        /* TODO: This needs the sock structure definition */
+        /* TODO(source-0rv): This needs the sock structure definition */
     } else {
         user_socket = XNS_NO_SOCKET;
     }
@@ -173,7 +173,7 @@ void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
 
     /* Register event count */
     if (user_socket != XNS_NO_SOCKET) {
-        /* TODO: EC2_$REGISTER_EC1 call */
+        /* TODO(source-0rv): EC2_$REGISTER_EC1 call */
         options->user_data = EC2_$REGISTER_EC1(NULL /* sock_spinlock[user_socket] */, status_ret);
     }
 }

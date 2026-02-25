@@ -53,7 +53,7 @@ int8_t PROC1_$SUSPEND(uint16_t process_id, status_$t *status_ret)
     }
 
     /* Try to suspend the process */
-    /* TODO: Need to disable interrupts here (ori #0x700,SR) */
+    /* TODO(source-22m): Need to disable interrupts here (ori #0x700,SR) */
     PROC1_$TRY_TO_SUSPEND(pcb);
     PROC1_$DISPATCH();
 

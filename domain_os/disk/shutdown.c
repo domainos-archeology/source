@@ -18,5 +18,5 @@ void DISK_$SHUTDOWN(int16_t vol_idx, status_$t *status)
 {
     (void)vol_idx;
     *status = status_$ok;
-    /* TODO: Look up device info for volume and call shutdown */
+    /* TODO(source-pxn): Look up device info for volume and call shutdown */
 }

@@ -226,7 +226,7 @@ void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
  * tracking. Called during initialization and when ports are
  * added/removed.
  *
- * TODO: Implement fully after analyzing 0xe69bce
+ * TODO(source-qvt): Implement fully after analyzing 0xe69bce
  */
 static void route_$update_port_count(void)
 {

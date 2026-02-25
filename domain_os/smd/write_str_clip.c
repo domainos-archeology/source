@@ -94,7 +94,7 @@ void SMD_$WRITE_STR_CLIP(uint32_t *pos, void *font, uint8_t *buffer,
      * font/hardware pointers.
      */
 
-    /* TODO: Call actual init callback - for now simulate the result */
+    /* TODO(source-h4x): Call actual init callback - for now simulate the result */
     init_result.status = status_$ok;
     *status_ret = init_result.status;
 
@@ -263,7 +263,7 @@ advance_position:
     }
 
     /* Call cleanup callback */
-    /* TODO: actual cleanup call */
+    /* TODO(source-h4x): actual cleanup call */
 
     return;
 

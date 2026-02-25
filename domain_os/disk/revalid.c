@@ -17,5 +17,5 @@ void DISK_$REVALID(int16_t vol_idx)
      * This stub implements the simpler signature from the header.
      */
     (void)vol_idx;
-    /* TODO: Implement full revalidation logic */
+    /* TODO(source-pxn): Implement full revalidation logic */
 }

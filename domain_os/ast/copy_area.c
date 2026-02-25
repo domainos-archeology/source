@@ -104,13 +104,13 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused,
                             /* Error - get buffer back */
                             uint32_t temp_addr;
                             NETBUF_$GET_DAT(&temp_addr);
-                            /* TODO: Handle error properly */
+                            /* TODO(source-mpj): Handle error properly */
                             break;
                         }
                     }
                 } else {
                     /* Local disk read */
-                    /* TODO: Implement local disk read */
+                    /* TODO(source-mpj): Implement local disk read */
                 }
 
                 ML_$LOCK(PMAP_LOCK_ID);
@@ -130,7 +130,7 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused,
         }
 
         /* Source page is installed - copy to destination */
-        /* TODO: Implement installed page copy logic */
+        /* TODO(source-22c): Implement installed page copy logic */
 
         dst_segmap += 4;
         src_segmap++;

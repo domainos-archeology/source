@@ -20,7 +20,7 @@
  *   - Large per-line data at offset + port * 0x4dc
  *   - DTTE at offset 0x12a0 + TERM_$MAX_DTTE * 0x38
  *
- * TODO: This function is complex and needs further analysis for a
+ * TODO(source-6v5): This function is complex and needs further analysis for a
  * fully faithful implementation. The current code is a simplified
  * placeholder.
  *
@@ -94,7 +94,7 @@ void SIO_$INIT(int16_t port_num, uint32_t param2, uint32_t param3,
          * Sets up keyboard and display handlers
          */
 
-        /* TODO: Console-specific initialization
+        /* TODO(source-6v5): Console-specific initialization
          * The decompiled code shows calls to:
          * - OS_TERM_INIT with console-specific parameters
          * - SIO_$INIT_LINE for additional setup
@@ -111,7 +111,7 @@ void SIO_$INIT(int16_t port_num, uint32_t param2, uint32_t param3,
          * Generic serial port initialization
          */
 
-        /* TODO: Generic port initialization
+        /* TODO(source-6v5): Generic port initialization
          * - SIO_$INIT_LINE setup
          * - SIO_$INIT_DESC handler registration
          * - SIO_$INIT_DTTE with discipline 0 (serial)

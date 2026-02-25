@@ -1105,7 +1105,7 @@ extern uint32_t DAT_00e7ffdc; /* First handle slot (0xe7fd24 + 0x2b8) */
 #ifndef status_$naming_too_many_hard_links
 #define status_$naming_too_many_hard_links            0x000E0032
 #endif
-/* TODO: Verify this error name. Used in dir_$open_dir when ACL check
+/* TODO(source-qvt): Verify this error name. Used in dir_$open_dir when ACL check
  * fails with file_$object_not_found. Possibly "naming_no_acl_object"
  * or "naming_acl_not_accessible". */
 #ifndef status_$naming_acl_not_found
@@ -1412,7 +1412,7 @@ void dir_$add_bak_default_prot(uint32_t local_handle, uid_t *uid,
  * context via the parent frame pointer. In the C flattening, they take
  * a dir_insert_ctx_t pointer as their first parameter.
  *
- * TODO: These are declared but not yet emitted as C code. They will
+ * TODO(source-qvt): These are declared but not yet emitted as C code. They will
  * appear as undefined references until analyzed and implemented.
  * ============================================================================
  */

@@ -37,7 +37,7 @@
  * Original address: 0x00E4D954
  * Original size: 1414 bytes
  *
- * TODO: This is one of the most complex functions in the directory subsystem.
+ * TODO(source-qgq): This is one of the most complex functions in the directory subsystem.
  * The decompilation has many artifacts from the M68K register usage and
  * Pascal nested procedure conventions. The entry formatting logic for
  * both version 0 and version > 0 needs careful verification against

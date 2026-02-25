@@ -53,12 +53,12 @@ retry_loop:
 
     /* Look up AOTE by UID */
     ast_$lookup_aote_by_uid(&local_uid);
-    aote = NULL;  /* TODO: Get from ast_$lookup_aote_by_uid return in A0 */
+    aote = NULL;  /* TODO(source-mpj): Get from ast_$lookup_aote_by_uid return in A0 */
 
     if (aote == NULL) {
         /* AOTE not cached - try to load it */
         ast_$force_activate_segment(&local_uid, 0, &local_status, 0);
-        aote = NULL;  /* TODO: Get from ast_$force_activate_segment return in A0 */
+        aote = NULL;  /* TODO(source-mpj): Get from ast_$force_activate_segment return in A0 */
         if (aote == NULL) {
             ML_$UNLOCK(AST_LOCK_ID);
             if (retry < 0 && local_status == file_$object_not_found) {
@@ -89,11 +89,11 @@ retry_loop:
 
     if (new_size < current_size) {
         /* Truncating - free pages beyond new size */
-        /* TODO: Implement page freeing logic */
+        /* TODO(source-22c): Implement page freeing logic */
         /* This involves iterating through segments and freeing pages */
     } else if (new_size > current_size && extend < 0) {
         /* Extending - may need to allocate disk blocks */
-        /* TODO: Implement extension logic */
+        /* TODO(source-22c): Implement extension logic */
     }
 
     /* Update file size */

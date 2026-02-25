@@ -74,7 +74,7 @@ int8_t name_$validate_leaf(char *name, uint16_t name_len,
     bit_idx = (0xFF - ch) & 0x07;
     byte_idx = (0xFF - ch) >> 3;
 
-    /* TODO: Access A5+0x20+byte_idx bitmap
+    /* TODO(source-0i3): Access A5+0x20+byte_idx bitmap
      * For now, assume valid ASCII alphanumeric and common chars */
     /* if ((valid_first_char_bitmap[byte_idx] & (1 << bit_idx)) == 0) return 0; */
 
@@ -84,7 +84,7 @@ int8_t name_$validate_leaf(char *name, uint16_t name_len,
         bit_idx = ch & 0x07;
         byte_idx = (0xFF - ch) >> 3;
 
-        /* TODO: Access A5+byte_idx bitmap
+        /* TODO(source-0i3): Access A5+byte_idx bitmap
          * For now, assume valid */
         /* if ((valid_char_bitmap[byte_idx] & (1 << bit_idx)) == 0) return 0; */
     }

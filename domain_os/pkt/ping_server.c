@@ -61,7 +61,7 @@ void PKT_$PING_SERVER(void)
     PROC1_$SET_LOCK(0x13);
 
     /* Get socket's event count */
-    /* TODO: Get proper socket event count from socket table */
+    /* TODO(source-j33): Get proper socket event count from socket table */
     /* sock_ec = *(ec_$eventcount_t **)(&SOCK_EC_ARRAY[PKT_PING_SOCKET]); */
     sock_ec = NULL;  /* Placeholder */
 

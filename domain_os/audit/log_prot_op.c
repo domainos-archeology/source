@@ -23,7 +23,7 @@
  * Original address: 0x00E4AF28
  * Size: 126 bytes
  *
- * TODO: Identify the protection data structure (44 bytes) and
+ * TODO(source-cpg): Identify the protection data structure (44 bytes) and
  * the format descriptor at DAT_00e4afa6.
  */
 
