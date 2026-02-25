@@ -36,7 +36,6 @@
  */
 
 #include "time/time_internal.h"
-#include "arch/m68k/arch.h"
 
 void TIME_$ABS_CLOCK(clock_t *clock)
 {
@@ -47,8 +46,7 @@ void TIME_$ABS_CLOCK(clock_t *clock)
     uint16_t timer_val;
 
     /* Disable interrupts */
-    GET_SR(saved_sr);
-    SET_SR(saved_sr | SR_IPL_DISABLE_ALL);
+    DISABLE_INTERRUPTS(saved_sr);
 
     high = TIME_$CLOCKH;
 
@@ -82,7 +80,7 @@ void TIME_$ABS_CLOCK(clock_t *clock)
     ticks += TIME_$CLOCKL;
 
     /* Restore interrupts */
-    SET_SR(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
 
     /* Return result */
     clock->high = high;

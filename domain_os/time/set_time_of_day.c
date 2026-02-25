@@ -17,7 +17,6 @@
 
 #include "time/time_internal.h"
 #include "cal/cal.h"
-#include "arch/m68k/arch.h"
 
 /* Apollo epoch offset (seconds from 1970 to 1980) */
 #define APOLLO_EPOCH_OFFSET 0x12CEA600
@@ -58,8 +57,7 @@ void TIME_$SET_TIME_OF_DAY(uint32_t *tv, status_$t *status)
     ADD48(&new_clock, &usec_ticks);
 
     /* Disable interrupts for atomic update */
-    GET_SR(saved_sr);
-    SET_SR(saved_sr | SR_IPL_DISABLE_ALL);
+    DISABLE_INTERRUPTS(saved_sr);
 
     /* Adjust boot time if we have a valid current clock */
     if (TIME_$CURRENT_CLOCKH != 0) {
@@ -87,8 +85,8 @@ void TIME_$SET_TIME_OF_DAY(uint32_t *tv, status_$t *status)
         TIME_$CURRENT_TIME--;
     }
 
-    /* Enable interrupts */
-    SET_SR(saved_sr);
+    /* Restore interrupts */
+    ENABLE_INTERRUPTS(saved_sr);
 
     /* Update hardware RTC */
     /* TODO(source-752): Implement CAL_$DECODE_TIME and CAL_$WRITE_CALENDAR calls */

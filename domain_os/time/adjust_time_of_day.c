@@ -19,7 +19,6 @@
  */
 
 #include "time/time_internal.h"
-#include "arch/m68k/arch.h"
 
 /* Maximum adjustment allowed (8000 seconds) */
 #define MAX_ADJUST_SECONDS 8000
@@ -106,16 +105,15 @@ void TIME_$ADJUST_TIME_OF_DAY(int32_t *delta, int32_t *old_delta, status_$t *sta
     /* Get current time of day */
     TIME_$GET_TIME_OF_DAY(tv);
 
-    /* Save old delta and set new one */
-    GET_SR(saved_sr);
-    SET_SR(saved_sr | SR_IPL_DISABLE_ALL);
+    /* Save old delta and set new one (disable interrupts for atomicity) */
+    DISABLE_INTERRUPTS(saved_sr);
 
     old_delta_ticks = (int32_t)TIME_$CURRENT_DELTA;
     TIME_$CURRENT_SKEW = (uint16_t)skew;
     TIME_$CURRENT_TICK = TIME_INITIAL_TICK + skew;
     TIME_$CURRENT_DELTA = (uint32_t)delta_ticks;
 
-    SET_SR(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
 
     /* If delta is non-zero, adjust current time */
     if (delta_ticks != 0) {

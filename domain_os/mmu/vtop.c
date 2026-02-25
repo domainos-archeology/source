@@ -50,7 +50,7 @@ uint32_t MMU_$VTOP(uint32_t va, status_$t *status)
     if (head_ppn == 0) {
         /* No mapping exists */
         MMU_CSR = old_csr;
-        SET_SR(saved_sr);
+        ENABLE_INTERRUPTS(saved_sr);
         *status = status_$mmu_miss;
         return 0;
     }
@@ -71,7 +71,7 @@ uint32_t MMU_$VTOP(uint32_t va, status_$t *status)
         if ((diff & 0xFE0F) == 0) {
             /* Match found */
             MMU_CSR = old_csr;
-            SET_SR(saved_sr);
+            ENABLE_INTERRUPTS(saved_sr);
             *status = status_$ok;
             return ppn;
         }
@@ -79,7 +79,7 @@ uint32_t MMU_$VTOP(uint32_t va, status_$t *status)
         if ((diff & 0x0F) == 0 && (pmape_val & PMAPE_FLAG_GLOBAL)) {
             /* Global match (ASID doesn't matter) */
             MMU_CSR = old_csr;
-            SET_SR(saved_sr);
+            ENABLE_INTERRUPTS(saved_sr);
             *status = status_$ok;
             return ppn;
         }

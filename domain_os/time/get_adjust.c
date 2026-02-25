@@ -32,7 +32,6 @@
  */
 
 #include "time/time_internal.h"
-#include "arch/m68k/arch.h"
 
 /* Ticks per second */
 #define TICKS_PER_SECOND 250000
@@ -43,10 +42,9 @@ void TIME_$GET_ADJUST(int32_t *delta)
     int32_t current_delta;
 
     /* Read delta with interrupts disabled for consistency */
-    GET_SR(saved_sr);
-    SET_SR(saved_sr | SR_IPL_DISABLE_ALL);
+    DISABLE_INTERRUPTS(saved_sr);
     current_delta = (int32_t)TIME_$CURRENT_DELTA;
-    SET_SR(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
 
     /* Convert to seconds and microseconds */
     delta[0] = current_delta / TICKS_PER_SECOND;

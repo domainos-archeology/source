@@ -19,9 +19,7 @@
 
 #include "dir/dir_internal.h"
 
-#if defined(ARCH_M68K)
-#include "arch/m68k/arch.h"
-#endif
+/* arch/arch.h included transitively via dir/dir_internal.h -> base/base.h */
 
 /* Status codes */
 #define status_$naming_invalid_leaf        0x000E000B

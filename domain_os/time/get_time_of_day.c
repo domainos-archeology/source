@@ -14,7 +14,6 @@
  */
 
 #include "time/time_internal.h"
-#include "arch/m68k/arch.h"
 
 void TIME_$GET_TIME_OF_DAY(uint32_t *tv)
 {
@@ -26,8 +25,7 @@ void TIME_$GET_TIME_OF_DAY(uint32_t *tv)
     uint16_t timer_val;
 
     /* Disable interrupts */
-    GET_SR(saved_sr);
-    SET_SR(saved_sr | SR_IPL_DISABLE_ALL);
+    DISABLE_INTERRUPTS(saved_sr);
 
     seconds = TIME_$CURRENT_TIME;
 
@@ -71,7 +69,7 @@ void TIME_$GET_TIME_OF_DAY(uint32_t *tv)
     }
 
     /* Restore interrupts */
-    SET_SR(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
 
     /* Return result */
     tv[0] = seconds;

@@ -43,7 +43,6 @@
  */
 
 #include "time/time_internal.h"
-#include "arch/m68k/arch.h"
 
 void TIME_$CLOCK(clock_t *clock)
 {
@@ -54,8 +53,7 @@ void TIME_$CLOCK(clock_t *clock)
     uint16_t timer_val;
 
     /* Disable interrupts */
-    GET_SR(saved_sr);
-    SET_SR(saved_sr | SR_IPL_DISABLE_ALL);
+    DISABLE_INTERRUPTS(saved_sr);
 
     high = TIME_$CURRENT_CLOCKH;
 
@@ -94,7 +92,7 @@ void TIME_$CLOCK(clock_t *clock)
     ticks += TIME_$CURRENT_CLOCKL;
 
     /* Restore interrupts */
-    SET_SR(saved_sr);
+    ENABLE_INTERRUPTS(saved_sr);
 
     /* Return result */
     clock->high = high;

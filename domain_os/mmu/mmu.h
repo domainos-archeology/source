@@ -192,9 +192,11 @@ extern uint32_t MMU_$SYSTEM_REV;
 #define CSR_PRIV_BIT 0x0001       /* Privilege mode */
 #define CSR_PTT_ACCESS_BIT 0x0002 /* Enable PTT access */
 
-/* Interrupt priority level mask */
-#define SR_IPL_MASK 0x0700        /* Interrupt priority level bits */
-#define SR_IPL_DISABLE_ALL 0x0700 /* Disable all interrupts */
+/*
+ * Interrupt control macros (DISABLE_INTERRUPTS, ENABLE_INTERRUPTS,
+ * GET_SR, SET_SR, SR_IPL_MASK, SR_IPL_DISABLE_ALL) are provided by
+ * arch/arch.h via base/base.h. Do NOT redefine them here.
+ */
 
 /*
  * Note: Internal helper functions (mmu_$installi, mmu_$remove_internal, etc.)
