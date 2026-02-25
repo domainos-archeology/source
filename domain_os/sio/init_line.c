@@ -32,14 +32,23 @@
 #include "sio/sio_internal.h"
 #include "tty/tty.h"
 
-void SIO_$INIT_LINE(void *desc, void *port_data, void **config, void *hw_info)
+void SIO_$INIT_LINE(void *desc, void *port_data, m68k_ptr_t *config, void *hw_info)
 {
     uint32_t *d = (uint32_t *)desc;
     char *port = (char *)port_data;
     char *hw = (char *)hw_info;
 
-    /* Copy line ID from config */
-    d[0] = **(uint32_t **)config;
+    /*
+     * Copy line ID from config (single dereference).
+     * config points to a local m68k_ptr_t variable holding a 32-bit address value.
+     *
+     * Assembly at 0xe32b36-0xe32b3a:
+     *   movea.l (0x10,A6),A0   ; A0 = config (pointer to m68k_ptr_t)
+     *   move.l (A0),(A2)       ; *desc = *config (single dereference)
+     *
+     * Previously this was incorrectly **(uint32_t **)config (double dereference).
+     */
+    d[0] = *config;
 
     /* Copy 16 bytes of hardware register addresses from hw_info+8 to desc+0x2B4 */
     uint32_t *dst = (uint32_t *)((char *)desc + 0x2B4);

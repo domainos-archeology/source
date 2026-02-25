@@ -177,19 +177,34 @@ _Static_assert(sizeof(sio_desc_t) == 0x78, "sio_desc_t must be 120 bytes");
  * SIO_$INIT - Initialize a serial I/O port
  *
  * Initializes an SIO descriptor for the specified port.
- * Port 1 is the console, other ports are generic serial.
+ * Port 1 is the console (KBD/display handlers), other ports are
+ * generic serial (TTY handlers).
+ *
+ * For console (port 1):
+ *   - Calls OS_TERM_INIT to set up keyboard/display terminal structure
+ *   - Calls SIO_$INIT_LINE with console hardware info
+ *   - Calls SIO_$INIT_DRAIN_HANDLER for drain notification
+ *   - Calls SIO_$INIT_DESC with KBD handler array and console params
+ *   - Calls SIO_$INIT_DTTE with discipline=2 (console)
+ *
+ * For generic serial:
+ *   - Calls SIO_$INIT_LINE with generic hardware info
+ *   - Calls SIO_$INIT_DESC with TTY handler array and generic params
+ *   - Calls SIO_$INIT_DTTE with discipline=0 (serial)
+ *   - If flags < 0: enables crash handler (ESC key = 0x1B)
+ *   - If flags >= 0: calls driver's set_params to apply initial config
  *
  * Parameters:
- *   port_num - Port number (1 = console, others = generic)
- *   param2 - Unknown parameter
- *   param3 - Unknown parameter
- *   desc_ret - Pointer to receive SIO descriptor address
- *   flags - Initialization flags (bit 7 = enable crash handler)
- *   status_ret - Status return
+ *   port_num    - Port number (1 = console, others = generic serial)
+ *   context_ptr - Pointer to context handle for SIO descriptor (passed to INIT_DESC)
+ *   vtable_ptr  - Pointer to vtable structure with function ptrs at +0x14 (passed to INIT_DESC)
+ *   desc_ret    - Pointer to receive SIO descriptor address
+ *   flags       - Initialization flags (bit 7 set = enable crash handler on generic port)
+ *   status_ret  - Status return
  *
  * Original address: 0x00e32be0
  */
-void SIO_$INIT(int16_t port_num, uint32_t param2, uint32_t param3,
+void SIO_$INIT(int16_t port_num, void *context_ptr, void *vtable_ptr,
                sio_desc_t **desc_ret, int8_t flags, status_$t *status_ret);
 
 /*
