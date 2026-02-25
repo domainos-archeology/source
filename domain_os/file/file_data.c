@@ -40,6 +40,18 @@ uint16_t FILE_$LOCK_TABLE2[FILE_LOCK_TABLE_ENTRIES];
 ec_$eventcount_t FILE_$UID_LOCK_EC;
 
 /*
+ * Per-UID hash-bucket lock holder array (17 bytes)
+ *
+ * Each byte holds the low byte of the PID of the process that owns
+ * the corresponding UID hash bucket lock. Zero means free.
+ *
+ * On m68k, this array is accessed at (A5 + index), where A5 points
+ * to the process data area. For portability, we define it as a
+ * regular global array.
+ */
+uint8_t FILE_$UID_LOCK_HOLDERS[FILE_UID_LOCK_BUCKETS];
+
+/*
  * ============================================================================
  * Lock Compatibility / Mapping Tables (constant data)
  *

@@ -34,9 +34,9 @@
 /* Hash table size for lock table - at 0xe5ea28, value is 58 */
 static const uint16_t FILE_LOCK_HASH_SIZE = 58;
 
-/* Forward declarations of internal functions that need to be implemented */
-static void file_$lock_add_ref(uid_t *uid);     /* FUN_00e5d0a8 */
-static void file_$lock_remove_ref(uid_t *uid);  /* FUN_00e5d134 */
+/* Internal helper functions for per-UID locking during delete */
+/* FILE_$UID_LOCK_ACQUIRE at 0x00E5D0A8 - declared in file_internal.h */
+/* FILE_$UID_LOCK_RELEASE at 0x00E5D134 - declared in file_internal.h */
 
 /*
  * FILE_$DELETE_INT
@@ -128,10 +128,10 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
         } else {
             /* File is not locked - proceed with delete */
 
-            /* Call internal function to add reference */
-            file_$lock_add_ref(file_uid);
+            /* Acquire per-UID lock to protect against concurrent ops */
+            FILE_$UID_LOCK_ACQUIRE(file_uid);
 
-            /* Release lock while calling AST_$TRUNCATE */
+            /* Release ML lock 5 while calling AST_$TRUNCATE */
             ML_$UNLOCK(FILE_LOCK_ID);
 
             /* Determine truncate flags */
@@ -143,11 +143,11 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
             /* Call AST_$TRUNCATE to actually delete the file */
             AST_$TRUNCATE(file_uid, 0, truncate_flags, result, status_ret);
 
-            /* Re-acquire lock */
+            /* Re-acquire ML lock 5 */
             ML_$LOCK(FILE_LOCK_ID);
 
-            /* Call internal function to remove reference */
-            file_$lock_remove_ref(file_uid);
+            /* Release per-UID lock and wake any waiters */
+            FILE_$UID_LOCK_RELEASE(file_uid);
         }
     }
 
@@ -157,32 +157,3 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
     return found_locked;
 }
 
-/*
- * Internal stub: file_$lock_add_ref
- * Original: FUN_00e5d0a8
- *
- * This function likely adds a reference count or marks the file
- * as being operated on.
- *
- * TODO(source-uav): Implement when FUN_00e5d0a8 is analyzed
- */
-static void file_$lock_add_ref(uid_t *uid)
-{
-    /* Stub - needs implementation */
-    (void)uid;
-}
-
-/*
- * Internal stub: file_$lock_remove_ref
- * Original: FUN_00e5d134
- *
- * This function likely removes a reference count or clears the
- * operation marker.
- *
- * TODO(source-uav): Implement when FUN_00e5d134 is analyzed
- */
-static void file_$lock_remove_ref(uid_t *uid)
-{
-    /* Stub - needs implementation */
-    (void)uid;
-}

@@ -55,6 +55,25 @@
 extern uint16_t FILE_$LOCK_TABLE2[];
 
 /*
+ * Per-UID hash-bucket lock holder array
+ *
+ * A 17-byte array where each byte holds the low byte of the PID
+ * of the process that owns the corresponding UID hash bucket lock.
+ * A zero byte means the bucket is free.
+ *
+ * On m68k, this array is accessed relative to A5 (the process data
+ * area pointer) at offset 0. For portability, we expose it as a
+ * global array.
+ *
+ * Used by FILE_$UID_LOCK_ACQUIRE and FILE_$UID_LOCK_RELEASE to
+ * implement fine-grained per-UID locking during file delete operations.
+ *
+ * Hash function: ((uid.high ^ uid.low) folded to 16 bits via XOR) % 17
+ */
+#define FILE_UID_LOCK_BUCKETS  17
+extern uint8_t FILE_$UID_LOCK_HOLDERS[FILE_UID_LOCK_BUCKETS];
+
+/*
  * ============================================================================
  * Internal Helper Functions
  * ============================================================================
@@ -78,6 +97,40 @@ extern void OS_PROC_SHUTWIRED(status_$t *status);
  *
  * Declared in file.h, used internally for refcount operations.
  */
+
+/*
+ * FILE_$UID_LOCK_ACQUIRE - Acquire per-UID hash-bucket lock
+ *
+ * Hashes the UID to one of 17 buckets and busy-waits (with EC_$WAITN)
+ * until the bucket is free. Stores the low byte of the current PID
+ * as the lock holder.
+ *
+ * The caller MUST hold ML lock 5 when calling this function.
+ * While waiting, this function temporarily releases and re-acquires
+ * ML lock 5.
+ *
+ * Parameters:
+ *   uid - UID to lock (used for hash computation only)
+ *
+ * Original address: 0x00E5D0A8
+ */
+void FILE_$UID_LOCK_ACQUIRE(uid_t *uid);
+
+/*
+ * FILE_$UID_LOCK_RELEASE - Release per-UID hash-bucket lock
+ *
+ * Releases a per-UID hash-bucket lock previously acquired by
+ * FILE_$UID_LOCK_ACQUIRE. Clears the lock holder byte and advances
+ * the FILE_$UID_LOCK_EC eventcount to wake any waiters.
+ *
+ * The caller MUST hold ML lock 5 when calling this function.
+ *
+ * Parameters:
+ *   uid - UID whose lock to release (must match the UID passed to acquire)
+ *
+ * Original address: 0x00E5D134
+ */
+void FILE_$UID_LOCK_RELEASE(uid_t *uid);
 
 /*
  * ============================================================================
