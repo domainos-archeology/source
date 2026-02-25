@@ -34,6 +34,7 @@ void DIR_$OLD_VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
     uid_t root_uid;
     uint8_t local_entry[64];    /* Local entry data */
     uint8_t remote_entry[64];   /* Remote entry data */
+    uint8_t drop_result[8];     /* Result buffer for name_$old_drop_entry */
     status_$t remote_status;
 
     /* Get root UID */
@@ -64,7 +65,11 @@ void DIR_$OLD_VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
     if (*((uint32_t *)(local_entry + 2)) != *((uint32_t *)(remote_entry + 2)) ||
         *((uint32_t *)(local_entry + 6)) != *((uint32_t *)(remote_entry + 6))) {
         /* Entries differ - fix the local entry */
-        name_$old_drop_entry(&root_uid, name, *name_len, remote_entry);
+        name_$old_drop_entry(&root_uid, name, *name_len, 0, drop_result, status_ret);
+        if ((*status_ret & 0xFFFF) != 0) {
+            *status_ret = 0xe0022;  /* status_$naming_entry_stale */
+            return;
+        }
 
         /* Re-add the entry from remote data */
         name_$old_add_entry(&root_uid, 2, name, *name_len,

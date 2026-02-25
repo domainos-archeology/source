@@ -609,18 +609,23 @@ void dir_$old_init_buf(void *buffer);
 
 /* name_$old_drop_entry - Name-level drop directory entry
  *
- * Validates leaf name, locks directory, removes entry via internal helper,
- * unlocks directory. Used by DIR_$OLD_DROP_DIRU, NAME_$OLD_DELETE_ENTRYU,
- * and DIR_$OLD_VALIDATE_ROOT_ENTRY (to fix stale entries).
+ * Validates leaf name, locks directory, removes entry via
+ * dir_$old_unlink_entry, unlocks directory. Used by DIR_$OLD_DROP_DIRU,
+ * NAME_$OLD_DELETE_ENTRYU, and DIR_$OLD_VALIDATE_ROOT_ENTRY.
  *
- * TODO: Ghidra shows 6 parameters but existing callers pass 4.
- * Verify parameter count against assembly at each call site.
+ * Assembly-verified 6 parameters (all 3 callers push 20 bytes):
+ *   dir_uid    - UID of directory containing the entry
+ *   name       - Entry name to remove
+ *   name_len   - Length of name
+ *   type       - Lock mode (low word of NAME_$LOCK_DIR flags; callers pass 0)
+ *   result     - Output buffer for unlinked entry UID
+ *   status_ret - Output: status code
  *
  * Original address: 0x00E56A04
  * Size: 150 bytes
  */
 void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
-                          void *entry_data);
+                          uint16_t type, void *result, status_$t *status_ret);
 
 /* dir_$read_canned_root - Read entries from canned root directory
  * Original address: 0x00E4DFFE
