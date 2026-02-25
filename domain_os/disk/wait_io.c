@@ -3,28 +3,117 @@
  *
  * Waits on eventcounts for queued disk I/O operations to complete.
  * Uses EC_$WAIT with 3 eventcounts:
- *   1. Per-process disk EC at A5 + PROC1_$CURRENT*0x1C + 0x378
- *   2. Per-process disk EC at A5 + PROC1_$CURRENT*0x1C + 0x384
- *   3. TIME_$CLOCKH (global time clock)
+ *   1. Per-process I/O completion EC at data + PID*0x1c + 0x378
+ *   2. Per-process error EC at data + PID*0x1c + 0x384
+ *   3. TIME_$CLOCKH (global time clock for timeout)
  *
- * After each wait, iterates 10 disk entries (A5-relative, 0x48 spacing)
- * and calls DISK_$ERROR_QUE for each matching bit in the wait mask.
- * Increments *counter2 when errors are detected with specific conditions.
+ * After each wait, iterates 10 disk volume entries (0x48 spacing)
+ * and calls DISK_$ERROR_QUE for each matching bit in the disk mask.
+ * Increments *error_wait_val when errors are detected (not timeouts).
  *
- * Loop continues until EC_$WAIT returns 0 (all events satisfied).
+ * Loop continues until EC_$WAIT returns 0 (I/O completion EC satisfied).
  *
  * Parameters:
- *   mask     - Bitmask of volumes to wait on (bit per volume)
- *   counter1 - Pointer to first event counter
- *   counter2 - Pointer to second counter (incremented on error)
+ *   disk_mask      - Bitmask of volumes to check for errors (bits 1-10)
+ *   io_wait_val    - Pointer to I/O completion EC wait value
+ *   error_wait_val - Pointer to error EC wait value (incremented on error)
  *
  * Original address: 0x00E3C9FE
  * Size: 188 bytes
- *
- * TODO(source-52t): Full implementation requires A5-based module data pointer
- * and understanding of per-process disk eventcount layout.
  */
 
 #include "disk/disk_internal.h"
 
-/* Stub - 188-byte disk I/O wait with error queue polling */
+void disk_$wait_io(uint16_t disk_mask, int32_t *io_wait_val, int32_t *error_wait_val)
+{
+    uint8_t *data = DISK_$DATA;
+    int16_t result;
+
+    /*
+     * Compute per-process base within disk module data.
+     * Original m68k: A5 + sign_extend(PROC1_$CURRENT * 0x1c)
+     * The multiplication is done in 16-bit word arithmetic.
+     */
+    uint8_t *per_proc_base = data + (int16_t)(PROC1_$CURRENT * DMOD_PER_PROC_SIZE);
+
+    /* Outer loop: wait on eventcounts until I/O completion fires */
+    do {
+        /*
+         * Set up 3 eventcounts to wait on:
+         *   [0] = per-process I/O completion EC
+         *   [1] = per-process error EC
+         *   [2] = TIME_$CLOCKH (timeout after 0xf0 ticks)
+         */
+        ec_$eventcount_t *ecs[3];
+        int32_t wait_vals[3];
+
+        ecs[0] = (ec_$eventcount_t *)(per_proc_base + DMOD_PER_PROC_IO_EC);
+        ecs[1] = (ec_$eventcount_t *)(per_proc_base + DMOD_PER_PROC_ERR_EC);
+        ecs[2] = (ec_$eventcount_t *)&TIME_$CLOCKH;
+
+        wait_vals[0] = *io_wait_val;
+        wait_vals[1] = *error_wait_val;
+        wait_vals[2] = (int32_t)(TIME_$CLOCKH + DMOD_WAIT_TIMEOUT);
+
+        result = EC_$WAIT(ecs, wait_vals);
+
+        if (result == 0) {
+            break;  /* I/O completion EC satisfied - done */
+        }
+
+        /*
+         * Determine which EC fired:
+         *   result == 1: error EC fired -> is_timeout = 0
+         *   result == 2: timeout (clock) -> is_timeout = 1
+         *
+         * Original m68k:
+         *   cmpi.w #1,D0
+         *   bne -> D3=1 (timeout)
+         *   clr.w D3    (error)
+         */
+        int16_t is_timeout = (result != 1) ? 1 : 0;
+
+        /*
+         * Inner loop: check each of 10 disk volumes (indices 1-10).
+         * For each volume whose bit is set in disk_mask, call
+         * DISK_$ERROR_QUE to poll/dequeue error information.
+         *
+         * Original m68k: D4=9 (dbf counter), D5=1 (starting index),
+         * A3 = data + 0x48 (volume 1 base), advancing by 0x48 each iteration.
+         */
+        int16_t count = 9;  /* dbf counter: 9 means 10 iterations */
+        uint16_t disk_idx = 1;
+        uint8_t *disk_desc = data + DISK_VOLUME_SIZE;  /* Volume 1 base */
+
+        do {
+            if (disk_mask & (1 << disk_idx)) {
+                uint8_t err_result[12];  /* Result buffer from error handler */
+
+                DISK_$ERROR_QUE(disk_desc + DMOD_VOL_ERROR_QUE,
+                                (uint16_t)is_timeout, err_result);
+
+                /*
+                 * If error result byte 0 has bit 7 set (negative/error present)
+                 * AND this was an actual error (not a timeout poll),
+                 * increment the error wait value so the next EC_$WAIT
+                 * waits for yet another error event.
+                 *
+                 * Original m68k:
+                 *   move.b (-0xc,A6),D0b
+                 *   bpl skip          ; bit 7 clear -> no error
+                 *   tst.w D3w
+                 *   bne skip          ; D3 != 0 -> timeout, skip
+                 *   addq.l #1,(A4)    ; *error_wait_val++
+                 */
+                if ((int8_t)err_result[0] < 0 && is_timeout == 0) {
+                    *error_wait_val = *error_wait_val + 1;
+                }
+            }
+
+            disk_idx++;
+            disk_desc += DISK_VOLUME_SIZE;
+            count--;
+        } while (count != -1);  /* dbf loop semantics: decrement then test for -1 */
+
+    } while (1);
+}

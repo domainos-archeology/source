@@ -98,6 +98,32 @@ extern uid_t LV_LABEL_$UID;
 #define DMOD_REQ_QUEUE_SIZE   0x40
 
 /*
+ * Per-process disk data (A5-relative)
+ *
+ * Each process has a 0x1c-byte slot in the disk module data area.
+ * The slot base is at: data + PROC1_$CURRENT * DMOD_PER_PROC_SIZE.
+ * Within each slot, eventcounts for I/O completion and error
+ * notification are at fixed offsets from the slot base.
+ */
+#define DMOD_PER_PROC_SIZE    0x1c  /* Per-process slot size (28 bytes) */
+#define DMOD_PER_PROC_IO_EC   0x378 /* ec_$eventcount_t: I/O completion EC (offset from slot base) */
+#define DMOD_PER_PROC_ERR_EC  0x384 /* ec_$eventcount_t: error EC (offset from slot base) */
+
+/*
+ * Volume descriptor field offsets (relative to volume entry start)
+ *
+ * Volume N starts at: data + N * DISK_VOLUME_SIZE (0x48).
+ * Disk indices 1-10 are used; index 0 is reserved.
+ */
+#define DMOD_VOL_ERROR_QUE    0x7c  /* Error queue pointer (passed to DISK_$ERROR_QUE) */
+
+/* Number of disk volumes to check in wait/error loops */
+#define DMOD_NUM_VOLUMES      10
+
+/* Timeout for disk I/O wait (in TIME_$CLOCKH ticks, ~240 ticks) */
+#define DMOD_WAIT_TIMEOUT     0xf0
+
+/*
  * Queue block field offsets
  *
  * Queue blocks (disk I/O request blocks) are linked in free and allocated
@@ -244,14 +270,14 @@ void disk_$rtn_qblks_internal(int16_t vol_idx, void *blocks, void *param_3);
  * DISK_$ERROR_QUE for matching bits in the wait mask.
  *
  * Parameters:
- *   mask     - Bitmask of volumes to wait on
- *   counter1 - Event counter pointer 1
- *   counter2 - Event counter pointer 2
+ *   disk_mask      - Bitmask of volumes to check (bits 1-10)
+ *   io_wait_val    - Pointer to I/O completion wait value
+ *   error_wait_val - Pointer to error wait value (incremented on error detection)
  *
  * Original address: 0x00E3C9FE
  * Size: 188 bytes
  */
-void disk_$wait_io(uint16_t mask, void *counter1, void *counter2);
+void disk_$wait_io(uint16_t disk_mask, int32_t *io_wait_val, int32_t *error_wait_val);
 
 /*
  * AS_IO_SETUP - Setup for async I/O operations
