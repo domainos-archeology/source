@@ -365,4 +365,24 @@ uint16_t NETWORK_$GET_PKT_SIZE(uint32_t *dest_addr, uint16_t max_size);
  */
 extern uint32_t NODE_$ME;
 
+/*
+ * network_$fetch_diskless_info - Fetch info from network for diskless boot
+ *
+ * Queries ASKNODE_$INTERNET_INFO for node-specific data and processes
+ * the result based on the command type:
+ *
+ *   cmd=2  (BOOT_TIME):  Update TIME_$CLOCKH from remote node's clock
+ *   cmd=8  (TIMEZONE):   Update CAL_$TIMEZONE (timezone record)
+ *   cmd=0x37 (ROUTING):  Update routing table if route port changed
+ *
+ * On error for cmd != 0x37: calls CRASH_SYSTEM (fatal).
+ * cmd=0x37 tolerates errors gracefully.
+ *
+ * @param cmd   Command type (2=time, 8=timezone, 0x37=routing)
+ * @param node  Network node address (typically NETWORK_$MOTHER_NODE)
+ *
+ * Original address: 0x00E3366C
+ */
+void network_$fetch_diskless_info(int16_t cmd, uint32_t node);
+
 #endif /* NETWORK_H */
