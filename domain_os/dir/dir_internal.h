@@ -1057,6 +1057,9 @@ extern uint32_t DAT_00e7ffdc; /* First handle slot (0xe7fd24 + 0x2b8) */
 #ifndef status_$naming_internal_error
 #define status_$naming_internal_error                0x000E0025
 #endif
+#ifndef status_$naming_leaf_truncated
+#define status_$naming_leaf_truncated                0x000E002D
+#endif
 #ifndef status_$naming_entry_repaired
 #define status_$naming_entry_repaired               0x000E0023
 #endif

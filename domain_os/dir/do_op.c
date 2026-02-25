@@ -400,11 +400,17 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          &resp->status);
             break;
 
-        case 0x46: /* Get next entry */
-            dir_$do_op_find_uid(&local_uid, req + 0x8e,
+        case 0x46: /* Find UID (opcode 'F')
+                    * Handler params: (uid, target_uid, flag, name_ret, len_ret, uid_ret, status)
+                    * Response layout (from assembly): name_len@0x14, net_val@0x16, name@0x1A
+                    * TODO(source-dir-opresponse): Dir_$OpResponse field offsets are wrong
+                    * for host compilation; f18 should be 12 bytes not 8. These struct
+                    * field names produce correct offsets only on m68k (2-byte alignment). */
+            dir_$do_op_find_uid(&local_uid, (uid_t *)(req + 0x8e),
                          req[0x96],
-                         &resp->_22_4_, &resp->f1a,
-                         (uint8_t *)resp + 0x1a,
+                         (uint8_t *)resp + 0x1a,   /* name_ret */
+                         (uint8_t *)resp + 0x14,   /* len_ret */
+                         (uint8_t *)resp + 0x16,   /* uid_ret/net_ret */
                          &resp->status);
             break;
 
