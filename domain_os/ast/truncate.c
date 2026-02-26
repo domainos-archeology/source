@@ -52,13 +52,11 @@ retry_loop:
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    ast_$lookup_aote_by_uid(&local_uid);
-    aote = NULL;  /* TODO(source-mpj): Get from ast_$lookup_aote_by_uid return in A0 */
+    aote = ast_$lookup_aote_by_uid(&local_uid);
 
     if (aote == NULL) {
         /* AOTE not cached - try to load it */
-        ast_$force_activate_segment(&local_uid, 0, &local_status, 0);
-        aote = NULL;  /* TODO(source-mpj): Get from ast_$force_activate_segment return in A0 */
+        aote = ast_$force_activate_segment(&local_uid, 0, &local_status, 0);
         if (aote == NULL) {
             ML_$UNLOCK(AST_LOCK_ID);
             if (retry < 0 && local_status == file_$object_not_found) {

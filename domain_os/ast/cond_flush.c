@@ -32,8 +32,7 @@ void AST_$COND_FLUSH(uid_t *uid, uint32_t *timestamp, status_$t *status)
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    ast_$lookup_aote_by_uid(&local_uid);
-    aote = NULL;  /* TODO(source-mpj): Get from ast_$lookup_aote_by_uid return in A0 */
+    aote = ast_$lookup_aote_by_uid(&local_uid);
 
     if (aote != NULL) {
         /* Compare timestamps */

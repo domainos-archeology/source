@@ -50,8 +50,7 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    ast_$lookup_aote_by_uid(&local_uid);
-    aote = NULL;  /* TODO(source-mpj): Get from ast_$lookup_aote_by_uid return in A0 */
+    aote = ast_$lookup_aote_by_uid(&local_uid);
 
     if (aote == NULL) {
         goto done;

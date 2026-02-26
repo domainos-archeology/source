@@ -40,14 +40,12 @@ void AST_$GET_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs, status_$t *sta
     ML_$LOCK(AST_LOCK_ID);
 
     /* Look up AOTE by UID */
-    ast_$lookup_aote_by_uid(uid);
-    aote = NULL;  /* TODO(source-mpj): Get from ast_$lookup_aote_by_uid return in A0 */
+    aote = ast_$lookup_aote_by_uid(uid);
 
     if (aote == NULL) {
         /* AOTE not cached - try to load it */
-        ast_$force_activate_segment(uid, 0, local_status, -((int8_t)flags < 0));
+        aote = ast_$force_activate_segment(uid, 0, local_status, -((int8_t)flags < 0));
         *status = local_status[0];
-        aote = NULL;  /* TODO(source-mpj): Get from ast_$force_activate_segment return in A0 */
         if (aote == NULL) {
             goto done;
         }
