@@ -23,4 +23,5 @@ short CAL_$DAYS_PER_MONTH[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 #ifndef M68K
 volatile char CAL_$CONTROL_VIRTUAL_ADDR;
 volatile char CAL_$WRITE_DATA_VIRTUAL_ADDR;
+volatile char CAL_$READ_DATA_VIRTUAL_ADDR;
 #endif

@@ -30,9 +30,10 @@ extern int16_t CAL_$BOOT_VOLX;
 // Last valid time (high word of clock) at 0x00e7b03c
 extern uint CAL_$LAST_VALID_TIME;
 
-// Hardware clock registers
-extern volatile char CAL_$CONTROL_VIRTUAL_ADDR;    // 0x00ffa820
-extern volatile char CAL_$WRITE_DATA_VIRTUAL_ADDR; // 0x00ffa822
+// Hardware clock registers (base address 0x00FFA800)
+extern volatile char CAL_$CONTROL_VIRTUAL_ADDR;    // 0x00ffa820 (base + 0x20)
+extern volatile char CAL_$WRITE_DATA_VIRTUAL_ADDR; // 0x00ffa822 (base + 0x22)
+extern volatile char CAL_$READ_DATA_VIRTUAL_ADDR;  // 0x00ffa824 (base + 0x24)
 
 // 48-bit arithmetic
 extern void ADD48(clock_t *dst, clock_t *src);
