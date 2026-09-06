@@ -78,10 +78,14 @@ static uint32_t mock_lock_handle;
 static int mock_lock_called;
 
 void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
-                    uint32_t flags, status_$t *status_ret)
+                    int16_t lock_mode, int16_t acl_rights,
+                    status_$t *status_ret)
 {
     mock_lock_called = 1;
-    mock_lock_flags_received = flags;
+    /* Recombine the two words the way the original caller pushed them
+     * (`move.l #imm,-(SP)`) so the existing assertions still read. */
+    mock_lock_flags_received = ((uint32_t)(uint16_t)lock_mode << 16) |
+                               (uint32_t)(uint16_t)acl_rights;
     *handle_ret = mock_lock_handle;
     *status_ret = mock_lock_status;
     (void)dir_uid;
@@ -155,7 +159,7 @@ static void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
 
     valid = name_$validate_leaf(name, name_len, parsed_name, &parsed_len);
     if (valid < 0) {
-        NAME_$LOCK_DIR(dir_uid, &handle, ((uint32_t)4 << 16) | type, status_ret);
+        NAME_$LOCK_DIR(dir_uid, &handle, 4, (int16_t)type, status_ret);
         if (*status_ret == status_$ok) {
             dir_$old_unlink_entry(dir_uid, handle, parsed_name, parsed_len,
                                   1, result, status_ret);

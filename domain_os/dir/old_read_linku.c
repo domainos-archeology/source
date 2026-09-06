@@ -71,7 +71,7 @@ void DIR_$OLD_READ_LINKU(int16_t dir_uid_low, int16_t name_low, uint16_t *name_l
     }
 
     /* Enter super mode / acquire directory lock */
-    NAME_$LOCK_DIR(dir_uid, &handle, 0x10004, status_ret);
+    NAME_$LOCK_DIR(dir_uid, &handle, 1, 4, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;

@@ -91,7 +91,7 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     if (info_len < 0x10) {
         if (acl_type->high == ACL_$DIR_ACL.high &&
             acl_type->low == ACL_$DIR_ACL.low) {
-            ACL_$DEFAULT_ACL(&default_acl, &ACL_TYPE_FILE);
+            ACL_$DEFAULT_ACL(&default_acl, &NAME_$CONST_ZERO_W);
             info_buf[2] = default_acl.high; /* file ACL */
             info_buf[3] = default_acl.low;
         } else {

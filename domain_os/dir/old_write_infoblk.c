@@ -35,7 +35,7 @@ void DIR_$OLD_WRITE_INFOBLK(uid_t *dir_uid, void *info_data,
     int16_t i;
 
     /* Acquire directory lock for writing */
-    NAME_$LOCK_DIR(dir_uid, (uint32_t *)&handle, 0x40000, status_ret);
+    NAME_$LOCK_DIR(dir_uid, (uint32_t *)&handle, 4, 0, status_ret);
     if (*status_ret == status_$ok) {
         /* Check directory version and data length */
         if (*(uint16_t *)(handle + 4) < 0x13 && (data_len = *len, data_len <= 0x28)) {

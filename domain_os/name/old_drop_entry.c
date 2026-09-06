@@ -52,7 +52,7 @@ void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
     valid = name_$validate_leaf(name, name_len, parsed_name, &parsed_len);
     if (valid < 0) {
         /* Valid leaf name - lock directory and remove entry */
-        NAME_$LOCK_DIR(dir_uid, &handle, ((uint32_t)4 << 16) | type, status_ret);
+        NAME_$LOCK_DIR(dir_uid, &handle, 4, (int16_t)type, status_ret);
         if (*status_ret == status_$ok) {
             dir_$old_unlink_entry(dir_uid, handle, parsed_name, parsed_len,
                                   1, result, status_ret);

@@ -97,7 +97,7 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
     }
 
     /* Step 5: Enter super mode / acquire directory lock */
-    NAME_$LOCK_DIR(&dir_uid, &handle, 0x40000, status_ret);
+    NAME_$LOCK_DIR(&dir_uid, &handle, 4, 0, status_ret);
     if (*status_ret != status_$ok) {
         ACL_$EXIT_SUPER();
         return;

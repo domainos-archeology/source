@@ -1,110 +1,100 @@
 /*
- * NAME_$UNLOCK_DIR - Release directory lock
+ * NAME_$UNLOCK_DIR - Release the directory lock taken by NAME_$LOCK_DIR
  *
- * Releases a directory lock previously acquired with NAME_$LOCK_DIR.
- * Unmaps the directory if it was mapped, and releases the file lock.
+ * Unmaps the directory (unless it is one of the four cached mappings, or was
+ * never mapped), releases the FILE_$PRIV_LOCK lock, and forgets the
+ * per-process lock state.
+ *
+ * Original address: 0x00E54734
+ * Size: 288 bytes
+ *
+ * Module context: runs with A5 = 0xE7FD24; the per-process tables it reads
+ * are the ones NAME_$LOCK_DIR wrote (see name/name_data.c).
  *
  * Parameters:
  *   status_ret - Output: status code
- *
- * Original address: 0x00e54734
- * Size: 288 bytes
- *
- * TODO(source-0i3): This function uses A5-relative data for per-process state.
- * Full implementation requires understanding of the handle table layout.
  */
 
 #include "name/name_internal.h"
 #include "file/file_internal.h"
-#include "mst/mst.h"
-
-/*
- * Mapped info blocks are declared in name/name.h (NAME_$DATA).  The
- * historical labels DAT_00e80288 / DAT_00e80270 / DAT_00e80818 / DAT_00e802a8
- * are the .first_base field of the NODE / COM / WDIR[0] / NDIR[0] mapped
- * info blocks respectively.
- */
 
 void NAME_$UNLOCK_DIR(status_$t *status_ret)
 {
-    uid_t local_uid;
-    int32_t handle;
-    status_$t unlock_status;
-    uint8_t result_buf[12];
+    uid_t     local_uid;        /* (-0x10,A6) */
+    status_$t unlock_status;    /* (-0x20,A6) */
+    uint32_t  dtv_out[3];       /* (-0x1c,A6): FILE_$PRIV_UNLOCK output, 12 bytes */
+    uint32_t  handle;           /* D2 */
+    int16_t   asid;
 
-    /* Get stored UID from per-process data */
-    /* A5 + PROC1_$CURRENT*8 + 0x2b8 */
-    /* TODO(source-0i3): Implement proper A5-relative data access */
-    local_uid.high = 0;  /* Placeholder - should read from per-process data */
-    local_uid.low = 0;
+    /* 0xE5473C: copy the locked directory's UID out of the per-process table. */
+    local_uid = NAME_$LOCK_UID[PROC1_$CURRENT];
 
-    /* Get stored handle from per-process data */
-    /* A5 + PROC1_$CURRENT*4 + 0x1bc */
-    handle = 0;  /* Placeholder - should read from per-process data */
+    /* 0xE54758 */
+    handle = NAME_$LOCK_HANDLE[PROC1_$CURRENT];
 
-    if (local_uid.high == 0 && local_uid.low == 0) {
-        /* No directory was locked */
-        *status_ret = status_$ok;
-        return;
+    /*
+     * 0xE54768: `tst.l (-0x10,A6)` looks at the HIGH longword of the UID only.
+     * A zero high half means this process holds no directory lock.
+     */
+    if (local_uid.high == 0) {
+        *status_ret = status_$ok;   /* 0xE5476E */
+        return;                     /* 0xE54770 -> 0xE5484A */
     }
 
-    /* Check if handle matches a cached directory - don't unmap cached dirs */
-    /* Check WDIR (per-ASID slot, 16 bytes each) */
-    if (NAME_$DATA.wdir_mapped_info[PROC1_$AS_ID].active < 0 &&
-        handle == (int32_t)NAME_$DATA.wdir_mapped_info[PROC1_$AS_ID].first_base) {
+    /* 0xE54774: D0 = PROC1_$AS_ID * 16 indexes the per-ASID mapped-info blocks. */
+    asid = (int16_t)PROC1_$AS_ID;
+
+    if ((NAME_$DATA.wdir_mapped_info[asid].active < 0 &&
+         NAME_$DATA.wdir_mapped_info[asid].first_base == handle) ||     /* 0xE54782 */
+        (NAME_$DATA.ndir_mapped_info[asid].active < 0 &&
+         NAME_$DATA.ndir_mapped_info[asid].first_base == handle) ||     /* 0xE54794 */
+        (NAME_$NODE_MAPPED_INFO.active < 0 &&
+         NAME_$NODE_MAPPED_INFO.first_base == handle) ||                /* 0xE547A0 */
+        (NAME_$COM_MAPPED_INFO.active < 0 &&
+         NAME_$COM_MAPPED_INFO.first_base == handle) ||                 /* 0xE547B0 */
+        handle == 0) {                                                  /* 0xE547C0 */
+        /* 0xE547C4: a cached (or absent) mapping - leave it mapped. */
         *status_ret = status_$ok;
-    }
-    /* Check NDIR */
-    else if (NAME_$DATA.ndir_mapped_info[PROC1_$AS_ID].active < 0 &&
-             handle == (int32_t)NAME_$DATA.ndir_mapped_info[PROC1_$AS_ID].first_base) {
-        *status_ret = status_$ok;
-    }
-    /* Check NODE */
-    else if (NAME_$NODE_MAPPED_INFO.active < 0 &&
-             handle == (int32_t)NAME_$NODE_MAPPED_INFO.first_base) {
-        *status_ret = status_$ok;
-    }
-    /* Check COM */
-    else if (NAME_$COM_MAPPED_INFO.active < 0 &&
-             handle == (int32_t)NAME_$COM_MAPPED_INFO.first_base) {
-        *status_ret = status_$ok;
-    }
-    /* Handle is null */
-    else if (handle == 0) {
-        *status_ret = status_$ok;
-    }
-    /* Not a cached directory - unmap it */
-    else {
-        MST_$UNMAP_PRIVI(3, (uint64_t *)&local_uid, handle, 0x10000,
+    } else {
+        /* 0xE547C8 */
+        MST_$UNMAP_PRIVI(3, &local_uid, handle, 0x10000,
                          PROC1_$AS_ID, status_ret);
     }
 
-    /* Release the file lock via FILE_$PRIV_UNLOCK */
-    /* Parameters come from per-process data at various A5 offsets */
-    {
-        int32_t lock_handle;  /* From A5 + PROC1_$CURRENT*4 + 0x3c */
-        uint16_t mode;        /* From A5 + PROC1_$CURRENT*2 + 0x13e */
+    /*
+     * 0xE547EA.  The original pushes nine arguments: the UID, the longword
+     * NAME_$LOCK_SLOT[cur] at (0x0C,A6), then two separate words
+     * NAME_$LOCK_MODE[cur] at (0x10,A6) and PROC1_$AS_ID at (0x12,A6), three
+     * zero longwords, the 12-byte output buffer and the status.
+     *
+     * TODO(source-fi9u): file/file_internal.h declares FILE_$PRIV_UNLOCK with
+     * `uint16_t lock_index` where the original takes a full longword, and it
+     * merges the lock-mode and ASID words into a single `mode_asid` longword.
+     * That header belongs to the file subsystem, so the call below is written
+     * against the declaration as it stands; the slot value is truncated to 16
+     * bits, which is wrong whenever the slot does not fit in a word.
+     */
+    FILE_$PRIV_UNLOCK(&local_uid,
+                      (uint16_t)NAME_$LOCK_SLOT[PROC1_$CURRENT],
+                      ((uint32_t)(uint16_t)NAME_$LOCK_MODE[PROC1_$CURRENT] << 16) |
+                          (uint32_t)PROC1_$AS_ID,
+                      0, 0, 0,
+                      dtv_out, &unlock_status);
 
-        /* TODO(source-0i3): Read actual values from per-process data */
-        lock_handle = 0;  /* Placeholder */
-        mode = 0;         /* Placeholder */
+    /*
+     * 0xE54828: `clr.l (0x2b8,A0)` clears only the HIGH longword of the
+     * per-process UID - that is the half tested on entry, so this is what
+     * marks the process as holding no directory lock.
+     */
+    NAME_$LOCK_UID[PROC1_$CURRENT].high = 0;
 
-        FILE_$PRIV_UNLOCK(&local_uid, (int16_t)lock_handle,
-                          PROC1_$AS_ID | (mode << 16),
-                          0, 0, 0, result_buf, &unlock_status);
+    /* 0xE54838: `tst.w (0x2,A2)` - the LOW word of the status longword. */
+    if ((*status_ret & 0xFFFFu) == 0) {
+        *status_ret = unlock_status;    /* 0xE5483E */
     }
 
-    /* Clear the stored UID to indicate no longer locked */
-    /* A5 + PROC1_$CURRENT*8 + 0x2b8 = 0 */
-    /* TODO(source-0i3): Implement proper write to per-process data */
-
-    /* Use unlock status if primary status was OK */
-    if ((*status_ret >> 16) == 0) {
-        *status_ret = unlock_status;
-    }
-
-    /* Set error bit if not OK */
+    /* 0xE54842 */
     if (*status_ret != status_$ok) {
-        *status_ret |= 0x80000000;
+        *status_ret |= 0x80000000u;     /* 0xE54846: bset.b #7,(A2) */
     }
 }

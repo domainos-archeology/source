@@ -53,8 +53,6 @@ rem_name_data_t rem_name_$data = {
     .heard_from_server = 0,
 };
 
-/* ec2_$eventcount (0x00e28dd8) is declared in name/name_internal.h */
-
 /* Status codes for remote naming are in name/name.h */
 
 /*
@@ -102,9 +100,15 @@ static void LOCATE_SERVER(uint32_t *node_ret, uint32_t *net_ret, status_$t *stat
  */
 boolean REM_NAME_SERVER_LOCAL(void)
 {
-    /* Check bit 13 (0x2000) of the value at offset 0x16 in the event count */
-    uint16_t *ptr = (uint16_t *)(uintptr_t)(ec2_$eventcount.value + 0x16);
-    return ((*ptr & 0x2000) != 0) ? true : false;
+    /*
+     * 0x00E4A40C: movea.l (0x00e28dd8).l,A0 loads slot 10 of the SOCK socket
+     * pointer table; (0x16,A0) is sock_$sock_t.flags and btst #13 / sne gives
+     * the 0xFF/0x00 Domain boolean.
+     */
+    sock_$sock_t *sock =
+        (sock_$sock_t *)SOCK_$EVENT_COUNTERS[REM_NAME_$SOCK - 1];
+
+    return ((sock->flags & SOCK_FLAG_SERVER_LOCAL) != 0) ? true : false;
 }
 
 /*

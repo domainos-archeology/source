@@ -113,11 +113,13 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                     HINT_$ADDI(&local_uid, &hints[next_idx * 2 - 1]);
                 }
 
-                /* Set the "remote" flag */
-                resp->f13 |= 1;
+                /* 0xE4C1B6: bset.b #0,(0x13,A3) - the flag byte is response
+                 * offset 0x13, i.e. the last byte of f18, not f13. */
+                resp->f18[DIR_RESP_REMOTE_FLAG_BYTE] |= DIR_RESP_REMOTE_FLAG;
 
-                /* Check redirect flag (f14 in original naming = offset 0x16 from resp base) */
-                if (resp->_22_4_ == 0) {
+                /* 0xE4C1BE: move.b (0x16,A3),D0b - only the TOP byte of the
+                 * returned UID's high half is tested (the usual UID-nil test). */
+                if ((resp->_22_4_ >> 24) == 0) {
                     return;
                 }
 
@@ -209,11 +211,11 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          *((uint16_t *)(req + 0x8e)),
                          -((req[0x91] & 1) != 0),
                          0xFF, 0xFF,
-                         result_buf, (uid_t *)&resp->_22_4_,
+                         result_buf, &resp->uid,     /* pea (0x14,A3) */
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 AUDIT_$LOG_DIR_OP(0x20, resp->status, &local_uid,
-                             (uid_t *)&resp->_22_4_,
+                             &resp->uid,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x92);
             }
@@ -223,11 +225,11 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             dir_$do_op_delete(&local_uid, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
                          0xFF, 0xFF, 0xFF,
-                         result_buf, (uid_t *)&resp->_22_4_,
+                         result_buf, &resp->uid,     /* pea (0x14,A3) */
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 AUDIT_$LOG_DIR_OP(0x13, resp->status, &local_uid,
-                             (uid_t *)&resp->_22_4_,
+                             &resp->uid,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x90);
             }
@@ -263,7 +265,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          req + 0x98,
                          *((uint16_t *)(req + 0x8e)),
                          req + 0x90,
-                         (uid_t *)&resp->_22_4_,
+                         &resp->uid,                 /* pea (0x14,A3) */
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 AUDIT_$LOG_DIR_OP(0x19, resp->status, &local_uid,
@@ -278,11 +280,11 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          *((uint16_t *)(req + 0x8e)),
                          req[0x90],
                          (uint16_t)req[0x91], 0,
-                         result_buf, (uid_t *)&resp->_22_4_,
+                         result_buf, &resp->uid,     /* pea (0x14,A3) */
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 AUDIT_$LOG_DIR_OP(0x13, resp->status, &local_uid,
-                             (uid_t *)&resp->_22_4_,
+                             &resp->uid,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x92);
             }
@@ -291,10 +293,10 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
         case 0x38: /* Read link */
             dir_$do_op_create_dir(&local_uid, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
-                         &resp->_22_4_, &resp->status);
+                         &resp->uid.high, &resp->status);   /* pea (0x14,A3) */
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 AUDIT_$LOG_DIR_OP(0x16, resp->status, &local_uid,
-                             (uid_t *)&resp->_22_4_,
+                             &resp->uid,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x90);
             }
@@ -335,18 +337,19 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          *((uint16_t *)(req + 0x8e)),
                          *((uint16_t *)(req + 0x90)),
                          *((uint32_t *)(req + 0x92)),
-                         &resp->_22_4_, (uid_t *)&resp->f1a,
+                         &resp->_20_2_,               /* pea (0x14,A3): length */
+                         (uid_t *)&resp->_22_4_,      /* pea (0x16,A3): UID */
                          &resp->status);
             break;
 
         case 0x40: /* Create directory (extended) */
             dir_$do_op_drop_entry(&local_uid, 2, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
-                         4, (void *)&resp->_22_4_,
+                         4, (void *)&resp->uid,      /* pea (0x14,A3) */
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 AUDIT_$LOG_DIR_OP(0x1B, resp->status, &local_uid,
-                             (uid_t *)&resp->_22_4_,
+                             &resp->uid,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x90);
             }
@@ -376,14 +379,14 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                         *((uint16_t *)(req + 0x12));
                 }
 
-                /* Copy continuation */
-                resp->_22_4_ = *((uint32_t *)(req + 0x8e));
+                /* 0xE4C6CA: move.l (0x8e,A2),(0x14,A3) */
+                resp->cookie = *((uint32_t *)(req + 0x8e));
 
                 dir_$do_op_dir_readu(&local_uid,
                              *((int16_t *)&resp->f18[2]),
                              req + 0xa0,
                              *((uint16_t *)(req + 0x9e)),
-                             &resp->_22_4_,
+                             &resp->cookie,          /* pea (0x14,A3) */
                              *((uint32_t *)(req + 0x92)),
                              max_size,
                              *((uint32_t *)(req + 0x9a)),
@@ -397,17 +400,16 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
         case 0x44: /* Get entry */
             dir_$do_op_get_entryu(&local_uid, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
-                         &resp->_22_4_, &resp->f1a,
+                         &resp->cookie,               /* pea (0x14,A3) */
+                         &resp->_22_4_,               /* pea (0x16,A3) */
                          (uint8_t *)resp + 0x1e,
                          &resp->status);
             break;
 
         case 0x46: /* Find UID (opcode 'F')
                     * Handler params: (uid, target_uid, flag, name_ret, len_ret, uid_ret, status)
-                    * Response layout (from assembly): name_len@0x14, net_val@0x16, name@0x1A
-                    * TODO(source-dir-opresponse): Dir_$OpResponse field offsets are wrong
-                    * for host compilation; f18 should be 12 bytes not 8. These struct
-                    * field names produce correct offsets only on m68k (2-byte alignment). */
+                    * Response layout (from assembly, 0xE4C6D4-0xE4C6EA):
+                    * name_len@0x14, net_val@0x16, name@0x1A */
             dir_$do_op_find_uid(&local_uid, (uid_t *)(req + 0x8e),
                          req[0x96],
                          (uint8_t *)resp + 0x1a,   /* name_ret */
@@ -431,7 +433,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
 
         case 0x4E: /* Get default ACL */
             dir_$do_op_get_default_acl(&local_uid, (uid_t *)(req + 0x8e),
-                         (uid_t *)&resp->_22_4_, &resp->status);
+                         &resp->uid, &resp->status);    /* pea (0x14,A3) */
             break;
 
         case 0x50: /* Validate name */
@@ -464,7 +466,8 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
 
         case 0x56: /* Get protection */
             dir_$do_op_get_def_prot(&local_uid, req + 0x8e,
-                         &resp->_22_4_, (uint8_t *)resp + 0x40,
+                         &resp->cookie,                 /* pea (0x14,A3) */
+                         (uint8_t *)resp + 0x40,        /* pea (0x40,A3) */
                          &resp->status);
             break;
 
@@ -480,7 +483,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                 dir_$do_op_resolve(*((uint32_t *)(req + 0x8e)),
                              *((uint16_t *)(req + 0x92)),
                              resp_bytes + 0x16,
-                             &resp->_22_4_,
+                             &resp->cookie,          /* pea (0x14,A3) */
                              resp_bytes + 0x15,
                              resp_bytes + 0x26,
                              resp_bytes + 0x28,

@@ -27,9 +27,9 @@ void DIR_$OLD_INIT(void)
 {
     int16_t i;
 
-    /* Clear handle pointer for all 58 slots
-     * Each slot is 8 bytes, handle at offset 0x2B8 from slot base */
+    /* Clear the high longword of NAME_$LOCK_UID[i] (A5+0x2B8 + i*8) for all
+     * 58 entries, marking every process as holding no directory lock. */
     for (i = 0; i < DIR_OLD_NUM_SLOTS; i++) {
-        *((uint32_t *)(&DAT_00e7fd24 + i * 8 + DIR_OLD_HANDLE_OFFSET)) = 0;
+        NAME_$LOCK_UID[i].high = 0;
     }
 }

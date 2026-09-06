@@ -25,6 +25,7 @@
 #include "os/os.h"
 #include "ec/ec.h"
 #include "pkt/pkt.h"
+#include "sock/sock.h"
 
 /*
  * NAME data area
@@ -76,13 +77,40 @@ typedef struct rem_name_data_t {
 extern rem_name_data_t rem_name_$data;  /* 0xE7DBB8 - defined in rem_name.c */
 
 /*
- * Event count consulted by REM_NAME_SERVER_LOCAL (0x00E28DD8).
- * Ghidra labels it ec2_$eventcount_t_00e28dd8; its .value is used as a
- * pointer to a block whose word at +0x16 carries the "server is local" bit.
- * TODO: identify the real owner/name of this object (only xref is
- * REM_NAME_SERVER_LOCAL at 0x00E4A40C).
+ * Socket used by the remote naming service.
+ *
+ * REM_NAME_SERVER_LOCAL (0x00E4A408) does
+ *     movea.l (0x00e28dd8).l,A0 ; move.w (0x16,A0),D0w ; btst.l #0xd,D0
+ * 0xE28DD8 is not an eventcount of its own: it is slot 10 of the SOCK socket
+ * pointer table (sock_table_base + 0x18A4 + 9*4, that is
+ * SOCK_$EVENT_COUNTERS[REM_NAME_$SOCK - 1]), and the word at +0x16 of the
+ * socket descriptor it points at is sock_$sock_t.flags.  Bit 13 of that word
+ * means "the name server runs on this node".  The declaration therefore lives
+ * in sock/sock.h; only the socket number belongs to NAME.
  */
-extern ec2_$eventcount_t ec2_$eventcount;  /* 0x00E28DD8 */
+/*
+ * Directory handles
+ *
+ * NAME_$LOCK_DIR hands back the virtual address at which the directory is
+ * mapped and stores it in a 32-bit word, because m68k pointers are 32 bits
+ * wide.  Turning that word back into a pointer (0xE54B06:
+ * `movea.l (A0),A1 ; cmpi.w #0x1,(A1)`) is the one architecture-specific step
+ * in the routine.  On m68k it is the identity cast the original performs; a
+ * host whose pointers are wider supplies a translation instead, so the code
+ * can be exercised without a 32-bit address space.
+ */
+#if defined(ARCH_M68K)
+#define NAME_$HANDLE_TO_PTR(h)   ((void *)(uintptr_t)(h))
+#define NAME_$PTR_TO_HANDLE(p)   ((uint32_t)(uintptr_t)(p))
+#else
+void    *name_$handle_to_ptr(uint32_t handle);
+uint32_t name_$ptr_to_handle(const void *ptr);
+#define NAME_$HANDLE_TO_PTR(h)   name_$handle_to_ptr(h)
+#define NAME_$PTR_TO_HANDLE(p)   name_$ptr_to_handle(p)
+#endif
+
+#define REM_NAME_$SOCK          10      /* well-known naming-service socket */
+#define SOCK_FLAG_SERVER_LOCAL  0x2000  /* sock_$sock_t.flags bit 13 */
 
 /*
  * NAME_$INIT_FUN_00e31578 - Debug/logging helper for NAME_$INIT

@@ -37,16 +37,18 @@
 void DIR_$LOCK_OBJ(void *handle, int16_t mode, status_$t *status_ret)
 {
     uint32_t *h = (uint32_t *)handle;
-    int8_t is_server;
+    boolean is_server;
     uint32_t *lock_entry;
     int16_t retry_limit;
     int16_t retry_count;
     uint32_t i;
     int32_t timeout;
 
-    /* Check if current process is server type (type 9) */
-    is_server = (((int16_t *)PROC1_$TYPE)[(int16_t)(PROC1_$CURRENT * 2)] == 9)
-                ? (int8_t)-1 : 0;
+    /* Check if current process is server type (type 9).
+     * 0xE4AFBC: `cmpi.w #0x9,(-0x2,A0,D0w*1)` with A0 = 0xE2612C and
+     * D0 = PROC1_$CURRENT*2, i.e. PROC1_$TYPE[PROC1_$CURRENT] against the
+     * 0xE2612A base declared in proc1.h; `seq D3b` yields 0xFF / 0x00. */
+    is_server = (PROC1_$TYPE[PROC1_$CURRENT] == 9) ? true : false;
 
     /* Clear lock entry pointer and set mode in handle */
     h[0x0D] = 0;                                /* handle+0x34: lock entry */
@@ -196,24 +198,36 @@ found:
             timeout = 0x1E0;
         }
 
-        ML_$EXCLUSION_STOP(&DIR_$MUTEX);
-
         /* Wait for lock to become available */
         {
             int16_t ec_idx = *(int16_t *)((char *)h + 0x38);
-            ec_$eventcount_t *wait_ecs[3];
-            int32_t wait_val;
-
-            wait_ecs[0] = NULL;
-            wait_ecs[1] = (ec_$eventcount_t *)&TIME_$CLOCKH;
-            wait_ecs[2] = (ec_$eventcount_t *)
+            ec_$eventcount_t *slot_ec = (ec_$eventcount_t *)
                           ((char *)&DIR_$WAIT_ECS + (int16_t)(ec_idx * 0xC));
+            /* 0xE4B14E: the slot eventcount's current value + 1, read while
+             * the mutex is still held. */
+            int32_t slot_wait_val = (int32_t)slot_ec->value + 1;
+            int16_t wake_idx;
 
-            /* Compute wait value: current time + timeout */
-            wait_val = (int32_t)(TIME_$CLOCKH + timeout);
+            ML_$EXCLUSION_STOP(&DIR_$MUTEX);        /* 0xE4B158 */
 
-            int16_t wake_idx = EC_$WAIT(wait_ecs, &wait_val);
-            ML_$EXCLUSION_START(&DIR_$MUTEX);
+            /*
+             * 0xE4B166-0xE4B19E.  EC_$WAIT takes two 3-element arrays BY
+             * VALUE (24 bytes, popped with `lea (0x18,SP),SP`):
+             *   ecs  = { &TIME_$CLOCKH, &DIR_$WAIT_ECS[ec_idx], NULL }
+             *   vals = { TIME_$CLOCKH + timeout, slot_wait_val, 0 }
+             * TIME_$CLOCKH doubles as an eventcount here: waiting for it to
+             * reach now+timeout is how the timeout is expressed.  It is
+             * re-read at 0xE4B16E, after the mutex has been released.
+             * The result is the 0-based index of the eventcount that fired:
+             * 0 means the clock (timeout), 1 means the lock slot.
+             */
+            wake_idx = EC_$WAIT(
+                (ec_$wait_ecs_t){{ (ec_$eventcount_t *)&TIME_$CLOCKH,
+                                   slot_ec, NULL }},
+                (ec_$wait_vals_t){{ (int32_t)(TIME_$CLOCKH + timeout),
+                                    slot_wait_val, 0 }});
+
+            ML_$EXCLUSION_START(&DIR_$MUTEX);       /* 0xE4B1A4 */
 
             /* Remove ourselves from wait queue */
             if (h == (uint32_t *)lock_entry[2]) {
@@ -227,7 +241,8 @@ found:
             }
 
             if (wake_idx == 0) {
-                /* Timed out */
+                /* 0xE4B1D8: index 0 == the TIME_$CLOCKH eventcount, i.e. the
+                 * wait timed out. */
                 char *base = (char *)__A5_BASE();
                 *(uint32_t *)(base + 0x2024) += 1;
                 break;

@@ -64,7 +64,7 @@ void DIR_$OLD_CNAMEU(uid_t *dir_uid, char *old_name, uint16_t *old_name_len,
     }
 
     /* Enter super mode / acquire directory lock */
-    NAME_$LOCK_DIR(dir_uid, &handle, 0x40002, status_ret);
+    NAME_$LOCK_DIR(dir_uid, &handle, 4, 2, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;

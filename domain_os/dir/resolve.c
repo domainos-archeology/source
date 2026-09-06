@@ -98,8 +98,9 @@ void DIR_$RESOLVE(void *pathname, uint16_t *path_len, uid_t *start_uid,
         request.p7 = *param7;
         request.p8 = *param8;
 
-        /* Clear response flags */
-        response.f14 = 0;
+        /* 0xE4D3F2: clr.b (-0x2c,A6) - response offset 0x14, the
+         * "resolution incomplete" byte, not the header byte at 0x02. */
+        response.resolve.more = 0;
 
         /* Send the request */
         DIR_$DO_OP(&request.op, DAT_00e7fcfe, 0x34, &response, &request);
@@ -107,22 +108,24 @@ void DIR_$RESOLVE(void *pathname, uint16_t *path_len, uid_t *start_uid,
         /* Store status */
         *status_ret = response.status;
 
-        /* Check if resolution is complete (no continuation) */
-        if ((int8_t)response.f14 >= 0) {
+        /* 0xE4D418: tst.b (-0x2c,A6) / bpl - response offset 0x14. */
+        if (response.resolve.more >= 0) {
             return;
         }
 
-        /* Update output parameters from response */
-        start_uid->high = response._22_4_;
-        start_uid->low = response.f1a;
-        resolved_uid->high = response._24_4_;
-        resolved_uid->low = *((uint32_t *)&response + 9);  /* Next field */
-        /* Extract parameters from response */
-        *param5 = *((uint16_t *)((uint8_t *)&response + 0x1a));
-        *param6 = *((uint16_t *)((uint8_t *)&response + 0x18));
-        *param7 = *((uint16_t *)((uint8_t *)&response + 0x16));
-        *param8 = *((uint16_t *)((uint8_t *)&response + 0x14));
-        *link_count = *((uint16_t *)((uint8_t *)&response + 0x12));
+        /* 0xE4D41E-0xE4D44A: every output comes out of the resolve variant of
+         * the reply record; the offsets are 0x16, 0x1E, 0x26, 0x28, 0x2A, 0x2C
+         * and 0x2E respectively. */
+        start_uid->high = response.resolve.start_uid.high;
+        start_uid->low = response.resolve.start_uid.low;
+        resolved_uid->high = response.resolve.resolved_uid.high;
+        resolved_uid->low = response.resolve.resolved_uid.low;
+        *param5 = response.resolve.param5;
+        *param6 = response.resolve.param6;
+        *param7 = response.resolve.param7;
+        *param8 = response.resolve.param8;
+        *link_count = response.resolve.link_count;
 
-    } while ((int8_t)response.f15 < 0);  /* Continue while loop flag is set */
+        /* 0xE4D44E: tst.b (-0x2b,A6) / bmi - response offset 0x15. */
+    } while (response.resolve.loop < 0);
 }

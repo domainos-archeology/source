@@ -49,7 +49,7 @@ void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,
     valid = name_$validate_leaf(name, name_len, parsed_name, &parsed_len);
     if (valid < 0) {
         /* Valid leaf name */
-        NAME_$LOCK_DIR(dir_uid, &handle, ((uint32_t)4 << 16) | type, status_ret);
+        NAME_$LOCK_DIR(dir_uid, &handle, 4, (int16_t)type, status_ret);
         if (*status_ret == status_$ok) {
             dir_$old_add_entry_ext(dir_uid, handle, parsed_name, parsed_len,
                          1, file_uid, flags, 0xFF, result, status_ret);

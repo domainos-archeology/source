@@ -51,8 +51,11 @@ void *DIR_$ALLOC_HANDLE(void)
 
         /* No free handle */
 
-        /* Server processes (type 9) don't wait */
-        if (((int16_t *)PROC1_$TYPE)[(int16_t)(PROC1_$CURRENT * 2)] == 9) {
+        /* Server processes (type 9) don't wait.
+         * 0xE4B898: `cmpi.w #0x9,(-0x2,A0,D0w*1)` with A0 = 0xE2612C and
+         * D0 = PROC1_$CURRENT*2, i.e. PROC1_$TYPE[PROC1_$CURRENT] with the
+         * 0xE2612A base that proc1.h declares. */
+        if (PROC1_$TYPE[PROC1_$CURRENT] == 9) {
             goto done;
         }
 
@@ -60,14 +63,15 @@ void *DIR_$ALLOC_HANDLE(void)
         {
             int16_t count = 0x1F;
             uint16_t idx = 0;
-            uint32_t bitmap = *(uint32_t *)(base + 0x203C);
             char *scan = base;
-            int8_t found = 0;
+            boolean found = false;
 
             do {
-                if ((bitmap & (1u << idx)) != 0) {
-                    if (*(int16_t *)(scan + 0x1888) == PROC1_$CURRENT) {
-                        found = -1;
+                /* 0xE4B8B8: the bitmap is re-read on every iteration. */
+                uint32_t bitmap = *(uint32_t *)(base + 0x203C);
+                if ((bitmap & (1u << (idx & 0x1F))) != 0) {
+                    if (*(int16_t *)(scan + 0x1888) == (int16_t)PROC1_$CURRENT) {
+                        found = true;   /* 0xE4B8C8: st D0b */
                         break;
                     }
                 }
@@ -76,7 +80,7 @@ void *DIR_$ALLOC_HANDLE(void)
                 count--;
             } while (count != -1);
 
-            if (found < 0) {
+            if (found < 0) {    /* 0xE4B8D6: tst.b D0b / bpl */
                 /* We own a handle - try emergency slot if not already used */
                 if ((*(uint8_t *)(base + 0x203F) & 1) == 0) {
                     handle = (uint8_t *)(base + 0x1880);
@@ -88,21 +92,23 @@ void *DIR_$ALLOC_HANDLE(void)
 
         /* Wait for a handle to become available */
         {
-            ulong wait_val = DIR_$WT_FOR_HDNL_EC.value + 1;
-            *(uint32_t *)(base + 0x2020) += 1;
+            /* 0xE4B8EE */
+            int32_t wait_val = (int32_t)DIR_$WT_FOR_HDNL_EC.value + 1;
+            *(uint32_t *)(base + 0x2020) += 1;      /* 0xE4B8FA */
 
-            ML_$EXCLUSION_STOP(&DIR_$MUTEX);
+            ML_$EXCLUSION_STOP(&DIR_$MUTEX);        /* 0xE4B8FE */
 
-            {
-                ec_$eventcount_t *wait_ecs[3];
-                wait_ecs[0] = NULL;
-                wait_ecs[1] = NULL;
-                wait_ecs[2] = &DIR_$WT_FOR_HDNL_EC;
-
-                EC_$WAIT(wait_ecs, &wait_val);
-            }
+            /*
+             * 0xE4B90C-0xE4B926: EC_$WAIT takes two 3-element arrays BY
+             * VALUE (24 bytes on the stack, popped with `lea (0x18,SP),SP`).
+             * Only slot 0 is used here: ecs = { &DIR_$WT_FOR_HDNL_EC, NULL,
+             * NULL }, vals = { wait_val, 0, 0 }.  The returned index is
+             * discarded.
+             */
+            EC_$WAIT((ec_$wait_ecs_t){{ &DIR_$WT_FOR_HDNL_EC, NULL, NULL }},
+                     (ec_$wait_vals_t){{ wait_val, 0, 0 }});
         }
-        /* Loop back to try again */
+        /* 0xE4B92A: loop back to the ML_$EXCLUSION_START at 0xE4B878 */
     }
 
 done:

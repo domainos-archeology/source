@@ -37,18 +37,76 @@
  * This structure holds the response from directory operations.
  * The exact fields used depend on the operation type.
  */
-typedef struct Dir_$OpResponse {
+/*
+ * Layout recovered from DIR_$DO_OP (0xE4C02C), which addresses the reply
+ * through A3 (its 4th parameter), and from the three callers that read it
+ * back: DIR_$READ_LINKU (0xE4D6C0), DIR_$DROP_LINKU (0xE517F6) and
+ * DIR_$RESOLVE (0xE4D356).
+ *
+ *   0x00  f12/f13/f14/f15   reply header bytes
+ *   0x04  status            tst.l (0x4,A3) / move.l ...,(0x4,A3)
+ *   0x08  f18[0..1]         reply version word   (tst.w (0x8,A3))
+ *   0x0A  f18[2..3]         accepted version     (move.w ...,(0xa,A3))
+ *   0x13  f18[11]           bit 0 = "reply came from a remote node"
+ *                           (bset.b #0x0,(0x13,A3) at 0xE4C1B6)
+ *   0x14  payload           Pascal variant record, see the union below
+ *
+ * The payload is a genuine variant record: the delete/create family returns a
+ * bare UID at 0x14, READ_LINKU/FIND_UID return a length word at 0x14 followed
+ * by a UID at 0x16, and RESOLVE uses the whole 0x14..0x30 range.  DIR_$DO_OP
+ * addresses as far as (0x40,A3) for the get-default-protection operation, so
+ * the raw view spans 0x14..0x43.
+ */
+typedef struct __attribute__((packed, aligned(2))) Dir_$OpResponse {
     uint8_t  f12;           /* 0x00: Response flags byte 1 */
-    uint8_t  f13;           /* 0x01: Response flags byte 2 (continuation flag) */
+    uint8_t  f13;           /* 0x01: Response flags byte 2 */
     uint8_t  f14;           /* 0x02: Response flags byte 3 */
-    uint8_t  f15;           /* 0x03: Response flags byte 4 (loop flag) */
+    uint8_t  f15;           /* 0x03: Response flags byte 4 */
     status_$t status;       /* 0x04: Operation status */
-    uint8_t  f18[8];        /* 0x08: Operation-specific data */
-    uint16_t _20_2_;        /* 0x10: Length field for some operations */
-    uint32_t _22_4_;        /* 0x12: UID high for some operations */
-    uint32_t f1a;           /* 0x16: UID low for some operations */
-    uint32_t _24_4_;        /* 0x1A: Additional data */
+    uint8_t  f18[12];       /* 0x08..0x13: reply header (versions + flag byte) */
+    union {
+        uid_t    uid;       /* 0x14: UID result (delete / create_dir / add_bak / ...) */
+        uint32_t cookie;    /* 0x14: continuation cookie (DIR_READU) */
+        struct __attribute__((packed, aligned(2))) {
+            uint16_t _20_2_;    /* 0x14: length word (READ_LINKU, FIND_UID) */
+            uint32_t _22_4_;    /* 0x16: UID high */
+            uint32_t f1a;       /* 0x1A: UID low */
+            uint32_t _24_4_;    /* 0x1E */
+        };
+        struct __attribute__((packed, aligned(2))) {    /* DIR_$RESOLVE (0xE4D356 epilogue) */
+            int8_t   more;          /* 0x14: negative => resolution incomplete */
+            int8_t   loop;          /* 0x15: negative => repeat the request */
+            uid_t    start_uid;     /* 0x16 */
+            uid_t    resolved_uid;  /* 0x1E */
+            uint16_t param5;        /* 0x26 */
+            uint16_t param6;        /* 0x28 */
+            uint16_t param7;        /* 0x2A */
+            uint16_t param8;        /* 0x2C */
+            uint16_t link_count;    /* 0x2E */
+        } resolve;
+        uint8_t  raw[0x30];     /* 0x14..0x43 raw view */
+    };
 } Dir_$OpResponse;
+
+/* f18[11] (response offset 0x13), bit 0: the reply came from a remote node. */
+#define DIR_RESP_REMOTE_FLAG_BYTE   11
+#define DIR_RESP_REMOTE_FLAG        0x01
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, status) == 0x04, "Dir_$OpResponse.status");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, f18) == 0x08, "Dir_$OpResponse.f18");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, uid) == 0x14, "Dir_$OpResponse.uid");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, cookie) == 0x14, "Dir_$OpResponse.cookie");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, _20_2_) == 0x14, "Dir_$OpResponse._20_2_");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, _22_4_) == 0x16, "Dir_$OpResponse._22_4_");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, f1a) == 0x1A, "Dir_$OpResponse.f1a");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, _24_4_) == 0x1E, "Dir_$OpResponse._24_4_");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, resolve.start_uid) == 0x16, "resolve.start_uid");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, resolve.resolved_uid) == 0x1E, "resolve.resolved_uid");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, resolve.param5) == 0x26, "resolve.param5");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, resolve.link_count) == 0x2E, "resolve.link_count");
+_Static_assert(sizeof(Dir_$OpResponse) == 0x44, "Dir_$OpResponse spans 0x14..0x43 of payload");
+#endif
 
 /*
  * Dir_$OpRequest - Base request structure for directory operations
@@ -82,6 +140,62 @@ typedef struct Dir_$OpAddHardLinkuRequest {
  * Directories can have up to 8 levels of B-tree nesting.
  */
 #define DIR_MAX_BTREE_DEPTH 9
+
+/*
+ * dir_page_hdr_t - On-disk header of a directory B-tree page
+ *
+ * Every directory page (0x400 bytes) starts with this 0x12-byte header; the
+ * two-byte index table follows at +0x12 on an interior/leaf page, and on the
+ * ROOT page a variable-length root area whose length is the word at +0x14
+ * sits between the header and the index table (dir_$insert_entry computes
+ * base_offset = 0x12 + root_area_len at 0xE4F416).
+ *
+ * Offsets recovered from dir_$insert_entry (0xE4F3BA):
+ *   +0x00 tst.b (A3) / btst #13     flags word
+ *   +0x02 move.l (A3)+,(0x2,A4)     directory UID high
+ *   +0x06                           directory UID low
+ *   +0x0A tst.w (0xa,A3)            page number; 0 marks the root page
+ *   +0x0C move.w ...,(0xc,A3)       next-page link (0xFFFF = last)
+ *   +0x0E move.w (0xe,A3)           end offset of the index table
+ *   +0x10 move.w (0x10,A3)          base of the entry heap (grows downwards)
+ *
+ * The flags word is written as a word and then patched with byte operations,
+ * so its two halves are named separately:
+ *   flags high byte: 0xC0 = page kind (0 = leaf, 1 = interior)
+ *   flags word bit 13 (0x2000) = page has reclaimable dead entries
+ *   flags low byte low 6 bits = page format version
+ */
+typedef struct __attribute__((packed, aligned(2))) dir_page_hdr_t {
+    uint8_t     kind;           /* +0x00: high byte of the flags word */
+    uint8_t     version;        /* +0x01: low byte of the flags word */
+    uint32_t    dir_uid_high;   /* +0x02 */
+    uint32_t    dir_uid_low;    /* +0x06 */
+    uint16_t    page_no;        /* +0x0A: 0 == root page */
+    uint16_t    next_page;      /* +0x0C */
+    uint16_t    index_end;      /* +0x0E */
+    uint16_t    heap_base;      /* +0x10 */
+} dir_page_hdr_t;
+
+/* Byte 0 and byte 1 together form the flags word tested with btst #13. */
+#define DIR_PAGE_KIND_MASK      0xC0    /* in dir_page_hdr_t.kind */
+#define DIR_PAGE_KIND_SHIFT     6
+#define DIR_PAGE_VERSION_MASK   0x3F    /* in dir_page_hdr_t.version */
+#define DIR_PAGE_RECLAIMABLE    0x2000  /* bit 13 of the flags word */
+#define DIR_PAGE_HDR_SIZE       0x12
+#define DIR_PAGE_SIZE           0x400
+#define DIR_PAGE_ROOT_AREA_LEN  0x14    /* root pages only: word holding the root area length */
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(dir_page_hdr_t) == DIR_PAGE_HDR_SIZE, "dir_page_hdr_t must be 0x12 bytes");
+_Static_assert(__builtin_offsetof(dir_page_hdr_t, kind) == 0x00, "dir_page_hdr_t.kind");
+_Static_assert(__builtin_offsetof(dir_page_hdr_t, version) == 0x01, "dir_page_hdr_t.version");
+_Static_assert(__builtin_offsetof(dir_page_hdr_t, dir_uid_high) == 0x02, "dir_page_hdr_t.dir_uid_high");
+_Static_assert(__builtin_offsetof(dir_page_hdr_t, dir_uid_low) == 0x06, "dir_page_hdr_t.dir_uid_low");
+_Static_assert(__builtin_offsetof(dir_page_hdr_t, page_no) == 0x0A, "dir_page_hdr_t.page_no");
+_Static_assert(__builtin_offsetof(dir_page_hdr_t, next_page) == 0x0C, "dir_page_hdr_t.next_page");
+_Static_assert(__builtin_offsetof(dir_page_hdr_t, index_end) == 0x0E, "dir_page_hdr_t.index_end");
+_Static_assert(__builtin_offsetof(dir_page_hdr_t, heap_base) == 0x10, "dir_page_hdr_t.heap_base");
+#endif
 
 /*
  * dir_insert_ctx_t - Shared context for dir_$insert_entry and helper functions
@@ -906,19 +1020,16 @@ extern char Bad_request_header_version_err;
 /*
  * OLD directory subsystem data area
  *
- * Base address: 0xE7FD24 (runtime, A5-relative in OLD functions)
- * The OLD functions use a flat data area with various arrays at
- * known offsets. The handle slot array starts at offset 0x2B8
- * with 8-byte entries indexed by process current index.
- *
- * Layout (relative to base 0xE7FD24):
- *   0x2B8 + i*8 : slot handle pointer for slot i (uint32_t)
+ * Base address: 0xE7FD24 (runtime, A5-relative in OLD functions).  The
+ * DIR_$OLD_* entry points share this module data area with NAME_$LOCK_DIR /
+ * NAME_$UNLOCK_DIR, so the per-process lock tables are declared once in
+ * name/name.h (NAME_$LOCK_SLOT / _MODE / _HANDLE / _UID) and defined in
+ * name/name_data.c.  What the OLD directory code calls "the slot handle
+ * pointer" at 0x2B8 + i*8 is the high longword of NAME_$LOCK_UID[i]: a
+ * non-zero value means process i holds a directory lock.
  */
-#define DIR_OLD_NUM_SLOTS 58  /* dbf 0x39 = 58 iterations */
+#define DIR_OLD_NUM_SLOTS NAME_$MAX_LOCK_PROCS  /* dbf 0x39 = 58 iterations */
 #define DIR_OLD_HANDLE_OFFSET 0x2B8
-
-extern uint8_t DAT_00e7fd24;  /* OLD directory data base */
-extern uint32_t DAT_00e7ffdc; /* First handle slot (0xe7fd24 + 0x2b8) */
 
 /*
  * Status codes used by OLD functions
@@ -944,9 +1055,7 @@ extern uint32_t DAT_00e7ffdc; /* First handle slot (0xe7fd24 + 0x2b8) */
 #ifndef status_$naming_directory_locked
 #define status_$naming_directory_locked              0x000E0016
 #endif
-#ifndef status_$directory_is_full
-#define status_$directory_is_full                    0x000E0002
-#endif
+/* status_$directory_is_full now lives in dir/dir.h */
 #ifndef status_$name_already_exists
 #define status_$name_already_exists                  0x000E0003
 #endif

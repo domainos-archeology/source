@@ -49,7 +49,7 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
     }
 
     /* Enter super mode / acquire directory lock */
-    NAME_$LOCK_DIR(parent_uid, &handle, 0x40002, status_ret);
+    NAME_$LOCK_DIR(parent_uid, &handle, 4, 2, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;

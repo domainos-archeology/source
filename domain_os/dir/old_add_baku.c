@@ -93,7 +93,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     name_buf[bak_name_len + 3] = 'k';
 
     /* Step 3: Enter super mode / acquire directory lock */
-    NAME_$LOCK_DIR(dir_uid, &handle, 0x40000, status_ret);
+    NAME_$LOCK_DIR(dir_uid, &handle, 4, 0, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;
@@ -153,7 +153,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
 
     /* Check rights on existing file */
     ACL_$RIGHTS(&old_file_uid, &DAT_00e5716c, &DAT_00e56946,
-                &ACL_TYPE_FILE, status_ret);
+                &NAME_$CONST_ZERO_W, status_ret);
     if (*status_ret != status_$ok) {
         if (*status_ret == status_$wrong_type) {
             *status_ret = status_$naming_name_is_not_a_file;
@@ -196,7 +196,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
         }
         /* Check rights on .BAK file */
         ACL_$RIGHTS((uid_t *)(bak_entry + 0x28), &DAT_00e5716c,
-                    &DAT_00e56946, &ACL_TYPE_FILE, status_ret);
+                    &DAT_00e56946, &NAME_$CONST_ZERO_W, status_ret);
         if (*status_ret != status_$ok) {
             if (*status_ret == status_$wrong_type) {
                 *status_ret = status_$naming_name_is_not_a_file;

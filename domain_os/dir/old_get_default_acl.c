@@ -42,7 +42,7 @@ void DIR_$OLD_GET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_ret,
         /* If read fails, use system default */
         if (acl_type->high == ACL_$DIR_ACL.high &&
             acl_type->low == ACL_$DIR_ACL.low) {
-            ACL_$DEFAULT_ACL(&default_acl, &ACL_TYPE_FILE);
+            ACL_$DEFAULT_ACL(&default_acl, &NAME_$CONST_ZERO_W);
         } else {
             ACL_$DEFAULT_ACL(&default_acl, &ACL_TYPE_DIR);
         }
@@ -56,7 +56,7 @@ void DIR_$OLD_GET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_ret,
     if (info_len < 0x10) {
         if (acl_type->high == ACL_$DIR_ACL.high &&
             acl_type->low == ACL_$DIR_ACL.low) {
-            ACL_$DEFAULT_ACL(&default_acl, &ACL_TYPE_FILE);
+            ACL_$DEFAULT_ACL(&default_acl, &NAME_$CONST_ZERO_W);
             /* Also set a default for file ACL side */
         } else {
             ACL_$DEFAULT_ACL(&default_acl, &ACL_TYPE_DIR);

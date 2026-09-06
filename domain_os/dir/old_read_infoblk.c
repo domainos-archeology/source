@@ -35,7 +35,7 @@ void DIR_$OLD_READ_INFOBLK(uid_t *dir_uid, void *info_data,
     int16_t i;
 
     /* Acquire directory lock for reading */
-    NAME_$LOCK_DIR(dir_uid, (uint32_t *)&handle, 0x10000, status_ret);
+    NAME_$LOCK_DIR(dir_uid, (uint32_t *)&handle, 1, 0, status_ret);
     if (*status_ret == status_$ok) {
         /* Check directory version - must be < 0x13 */
         if (*(uint16_t *)(handle + 4) < 0x13) {

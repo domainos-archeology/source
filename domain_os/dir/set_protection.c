@@ -98,8 +98,8 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
         }
 
         /* Lock the file for protection update */
-        FILE_$PRIV_LOCK(file_uid, PROC1_$AS_ID, 0, 4, 0, 0x80000, 0, 0, 0,
-                        NULL, 1, &lock_handle, &lock_result, status_ret);
+        FILE_$PRIV_LOCK(file_uid, PROC1_$AS_ID, 0, 4, 0, 0x0008, 0x0000, 0, 0, 0,
+                        NULL, 1, (uint32_t *)&lock_handle, &lock_result, status_ret);
         if (*status_ret != status_$ok) {
             return;
         }

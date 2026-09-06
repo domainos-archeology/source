@@ -26,6 +26,18 @@
  * ============================================================================
  */
 
+/*
+ * Status codes owned by the directory code
+ *
+ * Naming module (0x0E) error 2: the directory has reached the maximum
+ * B-tree depth (dir_$insert_entry, 0xE4F55A) or has no room for a new
+ * mount entry.  volx/volx.h also spells this out for VOLX_$MOUNT; the
+ * guard keeps the two from clashing.
+ */
+#ifndef status_$directory_is_full
+#define status_$directory_is_full 0x000e0002
+#endif
+
 /* Maximum pathname/leaf name lengths */
 #define DIR_MAX_LEAF_LEN    255     /* Maximum leaf (filename) length */
 #define DIR_MAX_PATH_LEN    1023    /* Maximum pathname length (0x3FF) */
@@ -606,5 +618,17 @@ void DIR_$ADD_MOUNT(uid_t *dir_uid, uid_t *mount_uid, status_$t *status_ret);
  */
 void DIR_$DROP_MOUNT(uid_t *mount_point_uid, uid_t *dir_uid, uint32_t *lv_num,
                      status_$t *status_ret);
+
+
+/*
+ * DIR_$SERVER - directory half of the remote-file server
+ *
+ * REM_FILE_$SERVER delegates opcodes 0x2A..0x5C to this routine
+ * (0x00E63936).  It reads the request record, fills in the response record
+ * and reports how many bytes of response it produced.
+ *
+ * Original address: 0x00E58200
+ */
+void DIR_$SERVER(void *request, void *response, uint16_t *reply_len);
 
 #endif /* DIR_H */

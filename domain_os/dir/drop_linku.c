@@ -70,9 +70,10 @@ void DIR_$DROP_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
         /* Fall back to old implementation */
         DIR_$OLD_DROP_LINKU(dir_uid, name, name_len, target_uid, status_ret);
     } else {
-        /* Extract target UID from response */
-        target_uid->high = response._22_4_;
-        target_uid->low = response._24_4_;
+        /* 0xE518A4: lea (-0xc,A6),A0 - the returned UID is the 8 bytes at
+         * response offset 0x14, not the 0x16 variant READ_LINKU uses. */
+        target_uid->high = response.uid.high;
+        target_uid->low = response.uid.low;
         *status_ret = status;
     }
 }

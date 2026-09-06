@@ -55,8 +55,9 @@ void DIR_$SET_ACL(uid_t *uid, void *acl, status_$t *status_ret)
     if (status == file_$bad_reply_received_from_remote_node ||
         status == status_$naming_bad_directory) {
         /* Fall back to old FILE_$PRIV_LOCK / SET_ACL / PRIV_UNLOCK sequence */
-        FILE_$PRIV_LOCK(uid, PROC1_$AS_ID, 0, 4, 0, 0x880000, 0, 0, 0,
-                        &DAT_00e54730, 1, &lock_handle, &lock_result, status_ret);
+        FILE_$PRIV_LOCK(uid, PROC1_$AS_ID, 0, 4, 0, 0x0088, 0x0000, 0, 0, 0,
+                        (void **)&DAT_00e54730, 1,
+                        (uint32_t *)&lock_handle, &lock_result, status_ret);
         if (*status_ret == status_$ok) {
             FILE_$SET_ACL(uid, (uid_t *)acl, status_ret);
             FILE_$PRIV_UNLOCK(uid, (uint16_t)lock_handle, 0x00040000 | PROC1_$AS_ID,

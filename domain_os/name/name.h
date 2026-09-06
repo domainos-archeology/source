@@ -42,7 +42,17 @@ typedef enum {
 #define status_$naming_invalid_link                            0x000e0005
 #define status_$naming_name_not_found                          0x000e0007
 #define status_$naming_invalid_leaf                            0x000e000b
+/* Also spelled (with different case, so not a benign redefinition) in
+ * file/file.h; guarded until that duplicate is removed - see source-pp31. */
+#ifndef status_$naming_bad_directory
 #define status_$naming_bad_directory                           0x000e000d
+#endif
+/* 0x000E0016: the directory entry a remote request named is gone.  The
+ * remote-file server answers these with a flagged reply and bumps
+ * REM_FILE_$STALE_LINK_COUNT (0x00E63E8C, 0x00E63FBA, 0x00E63182). */
+#ifndef status_$naming_object_not_found_in_dir
+#define status_$naming_object_not_found_in_dir                 0x000e0016
+#endif
 #define status_$naming_last_entry_in_replicated_root_returned  0x000e0019
 #define status_$naming_name_server_helper_is_shutdown          0x000e001a
 #define status_$naming_helper_sent_packets_with_errors         0x000e001c
@@ -91,7 +101,7 @@ typedef struct name_$mapped_info_t {
  *   NAME_$NDIR_MAPPED_INFO: 0xE802A4 (+0x040) [58 x 16 bytes]
  *   NAME_$NDIR_UID:         0xE80644 (+0x3E0) [58 x 8 bytes]
  *   NAME_$WDIR_MAPPED_INFO: 0xE80814 (+0x5B0) [58 x 16 bytes]
- *   NAME_$WDIR_UID:         0xE80B54 (+0x950) [58 x 8 bytes]
+ *   NAME_$WDIR_UID:         0xE80BB4 (+0x950) [58 x 8 bytes]
  */
 typedef struct name_$data_t {
     uid_t               node_data_uid;                      /* +0x000 */
@@ -147,10 +157,34 @@ extern uid_t NAME_$CANNED_ROOT_UID; /* Canned root UID (for fallback), 0xE173E4 
  * (Pascal VAR parameters) by NAME and DIR routines.
  */
 extern uint8_t DAT_00e54730;    /* 0xE54730: 4 zero bytes just before NAME_$UNLOCK_DIR;
-                                   FILE_$PRIV_LOCK callback / FILE_$TRUNCATE length arg */
-extern uint8_t DAT_00e54b28;    /* 0xE54B28: ACL_$RIGHTS parameter just after NAME_$LOCK_DIR */
-extern int16_t ACL_TYPE_FILE;   /* 0xE5472E: object type word (file) passed by reference */
-extern int16_t ACL_TYPE_DIR;    /* 0xE54B26: object type word (directory) passed by reference */
+                                   FILE_$PRIV_LOCK param_10 / FILE_$TRUNCATE length arg.
+                                   Ghidra label: NAME_$CONST_ZERO_L */
+extern uint8_t DAT_00e54b28;    /* 0xE54B28: ACL_$RIGHTS parameter just after NAME_$LOCK_DIR.
+                                   Ghidra label: NAME_$CONST_ZERO_L2 */
+extern int16_t NAME_$CONST_ZERO_W; /* 0xE5472E: shared literal zero word.  Roles seen in the
+                                   code: TIME_$WAIT delay type 0 (relative) at 0xE54940 and
+                                   ACL_$RIGHTS option_flags 0 at 0xE56FC2/0xE5704A.  It was
+                                   previously mislabelled ACL_TYPE_FILE. */
+extern int16_t ACL_TYPE_DIR;    /* 0xE54B26: literal word 1 - ACL object type (directory) */
+
+/*
+ * ============================================================================
+ * Per-process directory-lock state (NAME/DIR module A5 data area)
+ * ============================================================================
+ *
+ * NAME_$LOCK_DIR, NAME_$UNLOCK_DIR and the DIR_$OLD_* entry points all run
+ * with A5 = 0xE7FD24 (`lea (0xe7fd24).l,A5` in every gate) and address this
+ * state as (offset,A5).  All four tables are indexed *directly* by
+ * PROC1_$CURRENT - the code applies no 1-based adjustment - and each holds
+ * NAME_$MAX_LOCK_PROCS entries; DIR_$OLD_INIT (0xE314F4) clears 0x3A == 58
+ * NAME_$LOCK_UID entries with `moveq #0x39` + `dbf`.
+ */
+#define NAME_$MAX_LOCK_PROCS    58
+
+extern uint32_t NAME_$LOCK_SLOT[NAME_$MAX_LOCK_PROCS];   /* A5+0x03C = 0xE7FD60: FILE_$PRIV_LOCK slot */
+extern int16_t  NAME_$LOCK_MODE[NAME_$MAX_LOCK_PROCS];   /* A5+0x13E = 0xE7FE62: lock mode in effect */
+extern uint32_t NAME_$LOCK_HANDLE[NAME_$MAX_LOCK_PROCS]; /* A5+0x1BC = 0xE7FEE0: mapped directory base */
+extern uid_t    NAME_$LOCK_UID[NAME_$MAX_LOCK_PROCS];    /* A5+0x2B8 = 0xE7FFDC: UID of the locked dir */
 
 /* ============================================================================
  * Public Function Prototypes
@@ -350,10 +384,21 @@ int8_t name_$validate_leaf(char *name, uint16_t name_len,
 /*
  * NAME_$LOCK_DIR - Enter super mode / acquire directory lock
  *
+ * Parameters (5, not 4: the two words at (0x10,A6) and (0x12,A6) are separate
+ * Pascal parameters even though every caller pushes them with a single
+ * `move.l #imm,-(SP)`, e.g. 0x00040002 => lock_mode = 4, acl_rights = 2):
+ *   dir_uid    - UID of the directory to lock
+ *   handle_ret - Output: mapped base address of the directory
+ *   lock_mode  - FILE_$PRIV_LOCK lock mode (high word of the pushed longword)
+ *   acl_rights - required ACL rights; 0 skips the ACL_$RIGHTS check
+ *                (low word of the pushed longword)
+ *   status_ret - Output: status code
+ *
  * Original address: 0x00E54854
  */
 void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
-                    uint32_t flags, status_$t *status_ret);
+                    int16_t lock_mode, int16_t acl_rights,
+                    status_$t *status_ret);
 
 /*
  * NAME_$UNLOCK_DIR - Release directory lock / exit super mode

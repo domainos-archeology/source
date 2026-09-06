@@ -80,7 +80,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
     need_unlock = -1;  /* true = need to unlock on exit */
 
     /* Try to acquire directory lock */
-    NAME_$LOCK_DIR(&local_dir, &handle, 0x40002, status_ret);
+    NAME_$LOCK_DIR(&local_dir, &handle, 4, 2, status_ret);
     mapped_ptr = (void *)handle;    /* replaced by the MST_$MAPS result below */
 
     if (*status_ret == status_$ok) {
@@ -95,9 +95,12 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         }
 
         /* Lock the temp file */
+        /* flags/key are two Pascal words; the compiler merges them into the
+         * single `move.l #0x880000` the listing shows. */
         FILE_$PRIV_LOCK(&temp_uid, PROC1_$AS_ID, 0, 4, 0,
-                        0x880000, 0, 0, 0,
-                        &DAT_00e54730, 1, &lock_handle, &lock_result,
+                        0x0088, 0x0000, 0, 0, 0,
+                        (void **)&DAT_00e54730, 1,
+                        (uint32_t *)&lock_handle, &lock_result,
                         status_ret);
         did_lock = -1;
         if (*status_ret != status_$ok) {
@@ -219,8 +222,9 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
 
         /* Lock the directory */
         FILE_$PRIV_LOCK(&local_dir, PROC1_$AS_ID, 0, 4, 0,
-                        0x880000, 0, 0, 0,
-                        &DAT_00e54730, 1, &lock_handle, &lock_result,
+                        0x0088, 0x0000, 0, 0, 0,
+                        (void **)&DAT_00e54730, 1,
+                        (uint32_t *)&lock_handle, &lock_result,
                         status_ret);
         if (*status_ret != status_$ok) {
             goto unmap_and_done;
