@@ -143,7 +143,7 @@ void RIP_$ANNOUNCE_NS(void)
  *   00e873c6-00e873dc: Call RIP_$SEND with route_len=8, flags=0 (wired send)
  *   00e873dc: clr.b RIP_$RECENT_CHANGES
  */
-void RIP_$HALT_ROUTER(int16_t flags)
+void RIP_$HALT_ROUTER(boolean flags)
 {
     /*
      * The halt packet at RIP_$HALT_PACKET (0xE87D68) contains:

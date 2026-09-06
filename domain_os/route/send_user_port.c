@@ -73,7 +73,7 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, void *dest_a
     /* Find the port - using network type 2 (routing) */
     port_index = ROUTE_$FIND_PORT(2, (uint32_t)*socket_ptr);
     if (port_index == -1) {
-        CRASH_SYSTEM(&OS_Internet_unknown_network_port_err);
+        CRASH_SYSTEM(&ROUTE_$UNKNOWN_PORT_STATUS);
     }
 
     /*

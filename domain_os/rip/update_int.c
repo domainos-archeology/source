@@ -55,9 +55,9 @@
  *
  * Original address: 0x00E15830
  */
-static int8_t rip_$compare_source(rip_$xns_addr_t *route_nexthop,
+static boolean rip_$compare_source(rip_$xns_addr_t *route_nexthop,
                                    rip_$xns_addr_t *source,
-                                   int8_t flags)
+                                   boolean flags)
 {
     if (flags < 0) {
         /*
@@ -76,7 +76,7 @@ static int8_t rip_$compare_source(rip_$xns_addr_t *route_nexthop,
             route_nexthop->host[5] != source->host[5]) {
             return 0;
         }
-        return (int8_t)0xFF;  /* Match */
+        return true;  /* Match */
     } else {
         /*
          * Standard route: compare only lower 20 bits of host ID.
@@ -96,7 +96,7 @@ static int8_t rip_$compare_source(rip_$xns_addr_t *route_nexthop,
                              ((uint32_t)source->host[5]);
 
         if ((route_id & 0xFFFFF) == (source_id & 0xFFFFF)) {
-            return (int8_t)0xFF;  /* Match */
+            return true;  /* Match */
         }
         return 0;
     }
@@ -127,8 +127,8 @@ static int8_t rip_$compare_source(rip_$xns_addr_t *route_nexthop,
 static void rip_$apply_update(rip_$route_t *route,
                                rip_$xns_addr_t *source,
                                uint8_t hop_count,
-                               uint8_t port_index,
-                               int8_t flags)
+                               uint16_t port_index,
+                               boolean flags)
 {
     uint8_t state;
     uint8_t old_metric = route->metric;
@@ -179,7 +179,7 @@ static void rip_$apply_update(rip_$route_t *route,
     route->nexthop.host[5] = source->host[5];
 
     /* Copy port and metric */
-    route->port = port_index;
+    route->port = (uint8_t)port_index;   /* move.b (0x13,A1),(0xE,A0) at 0x00E158F2: the low byte of the caller's port word */
     route->metric = hop_count;
 
     /* Set state to VALID */
@@ -211,14 +211,14 @@ static void rip_$apply_update(rip_$route_t *route,
  *   - Entry is not VALID and new metric is not infinity
  */
 void RIP_$UPDATE_INT(uint32_t network, rip_$xns_addr_t *source,
-                     uint16_t hop_count, uint8_t port_index,
-                     int8_t flags, status_$t *status_ret)
+                     uint16_t hop_count, uint16_t port_index,
+                     boolean flags, status_$t *status_ret)
 {
     int i;
     rip_$entry_t *entry;
     rip_$route_t *route;
     uint8_t state;
-    int8_t same_source;
+    boolean same_source;
     uint8_t clamped_hop_count;
 
     /* Initialize status */
@@ -272,7 +272,7 @@ void RIP_$UPDATE_INT(uint32_t network, rip_$xns_addr_t *source,
          * Single network update mode:
          * Look up the specific network and update if conditions are met.
          */
-        entry = RIP_$NET_LOOKUP(network, 0, (int16_t)0xFF54);
+        entry = RIP_$NET_LOOKUP(network, false, true);
 
         if (entry == NULL) {
             /* Could not find or create entry - table is full */

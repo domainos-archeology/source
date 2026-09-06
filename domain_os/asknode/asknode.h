@@ -135,6 +135,9 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
  */
 void ASKNODE_$READ_FAILURE_REC(uint32_t *record);
 
+/* Forward declaration; the full layout lives in asknode_internal.h */
+struct asknode_$server_ctx_t;
+
 /*
  * ASKNODE_$SERVER - Handle incoming node query requests
  *
@@ -146,7 +149,7 @@ void ASKNODE_$READ_FAILURE_REC(uint32_t *record);
  *
  * Original address: 0x00E6597A
  */
-void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info);
+void ASKNODE_$SERVER(struct asknode_$server_ctx_t *ctx, int32_t *routing_info);
 
 /*
  * ASKNODE_$PROPAGATE_WHO - Propagate WHO response to network

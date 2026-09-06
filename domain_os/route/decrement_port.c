@@ -41,7 +41,7 @@ void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index, int8_t port_t
              * Only one STD port left - halt the router.
              * Pass 0xFFFF to indicate STD port halt.
              */
-            RIP_$HALT_ROUTER(0xFFFF);
+            RIP_$HALT_ROUTER(true);
         }
     } else {
         /* Normal port - decrement normal counter */
@@ -52,20 +52,20 @@ void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index, int8_t port_t
              * Only one normal port left - halt the router.
              * Pass 0 to indicate normal port halt.
              */
-            RIP_$HALT_ROUTER(0);
+            RIP_$HALT_ROUTER(false);
         }
     }
 
     /*
      * Check if routing should signal completion.
      *
-     * If ROUTE_$ROUTING has the high bit of its high byte set (routing was active)
-     * and both port counters are now < 2 (meaning at most 1 port each),
-     * advance the control EC to signal the routing process.
+     * If ROUTE_$ROUTING is true (routing was active) and both port counters
+     * are now < 2 (meaning at most 1 port each), advance the control EC to
+     * signal the routing process.
      *
-     * Note: Original tests just the high byte (big-endian), checking bit 7.
+     * 0x00E69E94: tst.b (0x00E26F1E).l / bpl - ROUTE_$ROUTING is a byte.
      */
-    if ((int8_t)(ROUTE_$ROUTING >> 8) < 0 &&
+    if (ROUTE_$ROUTING < 0 &&
         ROUTE_$N_ROUTING_PORTS < 2 &&
         ROUTE_$STD_N_ROUTING_PORTS < 2) {
         EC_$ADVANCE((ec_$eventcount_t *)&ROUTE_$CONTROL_EC);

@@ -25,14 +25,15 @@
 /*
  * Status codes
  */
-/* status_$network_no_available_sockets, status_$network_unexpected_reply_type:
+/* status_$network_receive_process_failed_to_start,
+ * status_$network_unexpected_reply_type:
  * network/network.h */
 #define status_$network_remote_node_failed_to_respond   0x00110007
 
 /*
  * Error constant for crash on socket allocation failure
  */
-static const status_$t Network_No_Available_Socket_Err = status_$network_no_available_sockets;
+static const status_$t Network_No_Available_Socket_Err = status_$network_receive_process_failed_to_start;
 
 /*
  * network_$do_request - Send a network command and receive response

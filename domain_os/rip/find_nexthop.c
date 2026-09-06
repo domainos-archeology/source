@@ -53,16 +53,16 @@ static void copy_xns_addr(void *dst, const void *src)
  *    - Release exclusion lock
  * 5. Return metric (0 for direct, >0 for indirect, 0 with error for no route)
  */
-uint8_t RIP_$FIND_NEXTHOP(void *addr_info, int8_t flags, uint16_t *port_ret,
+int16_t RIP_$FIND_NEXTHOP(void *addr_info, boolean flags, int16_t *port_ret,
                           void *nexthop_ret, status_$t *status_ret)
 {
     uint32_t *src_addr = (uint32_t *)addr_info;
     uint32_t dest_network;
-    uint16_t port_idx;
+    int16_t port_idx;
     route_$port_t *port_entry;
     rip_$entry_t *rip_entry;
     rip_$route_t *route;
-    uint8_t metric;
+    int16_t metric;
     uint8_t state;
 
     /* Initialize outputs */
@@ -105,7 +105,7 @@ uint8_t RIP_$FIND_NEXTHOP(void *addr_info, int8_t flags, uint16_t *port_ret,
     ML_$EXCLUSION_START(&RIP_$DATA.exclusion);
 
     /* Look up network (don't create, don't increment ref count) */
-    rip_entry = RIP_$NET_LOOKUP(dest_network, 0xFF, 0);
+    rip_entry = RIP_$NET_LOOKUP(dest_network, true, false);
 
     if (rip_entry != NULL) {
         /* Select route based on flags parameter */

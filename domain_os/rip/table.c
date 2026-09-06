@@ -35,7 +35,7 @@
  *   port_network/port_socket, then writes the entry.
  *   Returns status_$internet_unknown_network_port if port not found.
  */
-void RIP_$TABLE_D(int8_t *op_flag, int8_t *route_type, uint16_t *index,
+void RIP_$TABLE_D(boolean *op_flag, boolean *route_type, uint16_t *index,
                   rip_$table_d_buf_t *buffer, status_$t *status_ret)
 {
     rip_$entry_t local_entry;
@@ -181,7 +181,7 @@ void RIP_$TABLE_D(int8_t *op_flag, int8_t *route_type, uint16_t *index,
  *   Only accepts port_index < 8. Uses port_index to look up the port
  *   structure and get network/socket, then calls TABLE_D.
  */
-void RIP_$TABLE(int8_t *op_flag, uint16_t *index, rip_$table_buf_t *buffer)
+void RIP_$TABLE(boolean *op_flag, uint16_t *index, rip_$table_buf_t *buffer)
 {
     rip_$table_d_buf_t table_d_buf;
     route_$port_t *port_info;

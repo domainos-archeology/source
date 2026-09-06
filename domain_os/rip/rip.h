@@ -21,6 +21,40 @@
 struct rip_$entry_t;
 
 /*
+ * rip_$dest_addr_t - the 12-byte XNS destination RIP_$FIND_NEXTHOP is asked
+ * about (network, 6-byte host, socket).  ROUTE_$PROCESS copies it straight
+ * out of the IDP header at idp+6 (0x00E87564) and PKT_$BLD_INTERNET_HDR
+ * builds one on its stack (0x00E12098).
+ */
+typedef struct rip_$dest_addr_t {
+    uint32_t    network;        /* 0x00 */
+    uint16_t    host_hi;        /* 0x04 */
+    uint32_t    host_lo;        /* 0x06 */
+    uint16_t    socket;         /* 0x0A */
+} __attribute__((packed)) rip_$dest_addr_t;
+
+/*
+ * rip_$nexthop_t - the 10-byte answer RIP_$FIND_NEXTHOP writes back
+ * (network plus the 6-byte host address); the socket is not part of it.
+ * The three moves at 0x00E156BC / 0x00E1577C copy exactly 4 + 4 + 2 bytes.
+ *
+ * Callers that need the Apollo node id take the low longword of the host
+ * address and mask it to 20 bits: (0x00E875EE) and (0x00E120CA) both do
+ * "move.l #0xFFFFF,Dn; and.l (nexthop+6),Dn".
+ */
+typedef struct rip_$nexthop_t {
+    uint32_t    network;        /* 0x00 */
+    uint16_t    host_hi;        /* 0x04 */
+    uint32_t    host_lo;        /* 0x06: low 20 bits are the node id */
+} __attribute__((packed)) rip_$nexthop_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(rip_$dest_addr_t) == 12, "rip_$dest_addr_t must be 12 bytes");
+_Static_assert(sizeof(rip_$nexthop_t) == 10, "rip_$nexthop_t must be 10 bytes");
+_Static_assert(offsetof(rip_$nexthop_t, host_lo) == 6, "rip_$nexthop_t.host_lo");
+#endif
+
+/*
  * RIP_$STATS - RIP protocol statistics
  *
  * Located at 0xE262AC, tracks packet processing statistics.
@@ -54,8 +88,8 @@ typedef struct rip_$stats_t {
  *
  * Original address: 0x00E154E4
  */
-struct rip_$entry_t *RIP_$NET_LOOKUP(uint32_t network, int8_t inc_refcount,
-                                      int16_t create_if_missing);
+struct rip_$entry_t *RIP_$NET_LOOKUP(uint32_t network, boolean inc_refcount,
+                                      boolean create_if_missing);
 
 /*
  * RIP_$FIND_NEXTHOP - Find next hop for destination
@@ -63,17 +97,22 @@ struct rip_$entry_t *RIP_$NET_LOOKUP(uint32_t network, int8_t inc_refcount,
  * Looks up the routing table to find the next hop for a given destination.
  * First checks local ports (direct connections), then queries the routing table.
  *
- * @param addr_info     Source address information (10 bytes: 4 byte net + 6 byte host)
- * @param flags         If < 0, use non-standard routes; else use standard routes
- * @param port_ret      Output: port number for routing
- * @param nexthop_ret   Output: next hop address (10 bytes, may be modified if indirect)
+ * @param addr_info     Destination address; the first 10 bytes (network plus
+ *                      the 6-byte host) are read - see rip_$dest_addr_t
+ * @param flags         If < 0, use non-standard routes; else use standard routes.
+ *                      Read as a byte at (0xC,A6) at 0x00E156A8, i.e. a Pascal
+ *                      boolean in the high half of its word slot.
+ * @param port_ret      Output: port number for routing (a word: "move.w D2w,(A0)"
+ *                      at 0x00E156B4; callers compare it against -1)
+ * @param nexthop_ret   Output: rip_$nexthop_t, 10 bytes
  * @param status_ret    Output: status code (status_$ok or 0x3C0001 for no route)
  *
- * @return 0 on direct route (same network), non-zero metric on indirect route
+ * @return 0 on direct route (same network), non-zero metric on indirect route.
+ *         The result is a word ("move.w D2w,D0w" at 0x00E1578C), not a byte.
  *
  * Original address: 0x00E15696
  */
-uint8_t RIP_$FIND_NEXTHOP(void *addr_info, int8_t flags, uint16_t *port_ret,
+int16_t RIP_$FIND_NEXTHOP(void *addr_info, boolean flags, int16_t *port_ret,
                           void *nexthop_ret, status_$t *status_ret);
 
 /*
@@ -143,7 +182,7 @@ void RIP_$UPDATE(uint32_t *network_ptr, uint32_t *host_id_ptr,
  */
 void RIP_$UPDATE_D(const uint32_t *network_ptr, void *source,
                    const uint16_t *hop_count_ptr, const uint8_t *port_info,
-                   const int8_t *flags_ptr, status_$t *status_ret);
+                   const boolean *flags_ptr, status_$t *status_ret);
 
 /*
  * =============================================================================
@@ -213,7 +252,7 @@ typedef struct rip_$table_buf_t {
  *
  * Original address: 0x00E68E2C
  */
-void RIP_$TABLE_D(int8_t *op_flag, int8_t *route_type, uint16_t *index,
+void RIP_$TABLE_D(boolean *op_flag, boolean *route_type, uint16_t *index,
                   rip_$table_d_buf_t *buffer, status_$t *status_ret);
 
 /*
@@ -235,7 +274,7 @@ void RIP_$TABLE_D(int8_t *op_flag, int8_t *route_type, uint16_t *index,
  *
  * Original address: 0x00E68F90
  */
-void RIP_$TABLE(int8_t *op_flag, uint16_t *index, rip_$table_buf_t *buffer);
+void RIP_$TABLE(boolean *op_flag, uint16_t *index, rip_$table_buf_t *buffer);
 
 /*
  * RIP_$ANNOUNCE_NS - Announce name service availability via RIP
@@ -288,17 +327,18 @@ extern uint8_t RIP_$BCAST_CONTROL[30];
  *
  * Original address: 0x00E15798
  */
-void RIP_$PORT_CLOSE(uint16_t port_index, int8_t flags, int8_t force);
+void RIP_$PORT_CLOSE(uint16_t port_index, boolean flags, boolean force);
 
 /*
  * RIP_$HALT_ROUTER - Gracefully stop the router
  *
- * @param flags  Route type to halt:
+ * @param flags  Route type to halt (a Pascal boolean read as a byte at
+ *               (0x8,A6) by "move.b (0x8,A6),D0b" at 0x00E873A2):
  *                 If < 0: Halt non-standard routes
  *                 If >= 0: Halt standard routes
  *
  * Original address: 0x00E87396
  */
-void RIP_$HALT_ROUTER(int16_t flags);
+void RIP_$HALT_ROUTER(boolean flags);
 
 #endif /* RIP_H */

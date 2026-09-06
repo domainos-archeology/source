@@ -32,6 +32,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
     int16_t pkt_id;
     int32_t timeout_end;
     int32_t quit_val;
+    uint16_t resp_timeout;      /* A6-0x2B8: PKT_$SEND_INTERNET's timeout out */
     status_$t local_status[5];
     ec_$eventcount_t *ecs[3];
     int32_t local_node;
@@ -111,7 +112,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
     {
         uint32_t request[6];
         uint32_t pkt_info[8];
-        uint8_t temp1[2], temp2[4];
+        uint8_t temp1[2];
 
         request[0] = 0x00030045;  /* Version 3, request type 0x45 (WHO) */
         request[1] = NODE_$ME;
@@ -137,7 +138,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
                            sock_num, pkt_info, pkt_id,
                            request, 0x18,
                            &ASKNODE_$EMPTY_DATA, 0,  /* No data */
-                           temp1, temp2, local_status);
+                           temp1, &resp_timeout, local_status);
     }
 
     if (local_status[0] != 0) {
@@ -146,8 +147,13 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         return;
     }
 
-    /* Calculate timeout */
-    timeout_end = EC_$READ(&TIME_$CLOCKH) + port_idx + 6;
+    /*
+     * 0x00E661B8 - 0x00E661E8: the deadline is built from the timeout word
+     * PKT_$SEND_INTERNET returned (A6-0x2B8), zero-extended:
+     *   andi.l #0xFFFF,D5 / add.l EC_$READ(&TIME_$CLOCKH),D5 / addq.l #6,D5
+     */
+    timeout_end = EC_$READ((ec_$eventcount_t *)&TIME_$CLOCKH) +
+                  (int32_t)resp_timeout + 6;
     quit_val = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
 
     /* Wait for responses */
@@ -156,14 +162,27 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         int32_t pkt_ptr;
         char *pkt_data;
 
+        /*
+         * 0x00E661EC - 0x00E6621A.  Both arrays are pushed by value:
+         *   ecs  = { socket EC (A3), &TIME_$CLOCKH, &FIM_$QUIT_EC[as_id] }
+         *   vals = { D4 (socket value), A6-0x28C (deadline),
+         *            A6-0x290 (FIM_$QUIT_VALUE[as_id] + 1) }
+         * Only D4 is advanced by the loop ("addq.l #1,D4" at 0x00E662E8).
+         */
         ecs[0] = socket_ec;
-        ecs[1] = &TIME_$CLOCKH;
+        ecs[1] = (ec_$eventcount_t *)&TIME_$CLOCKH;
         ecs[2] = &FIM_$QUIT_EC[PROC1_$AS_ID];
 
-        wait_result = EC_$WAIT(ecs, (uint32_t *)&wait_val);
+        wait_result = EC_$WAIT((ec_$wait_ecs_t){{ ecs[0], ecs[1], ecs[2] }},
+                               (ec_$wait_vals_t){{ wait_val, timeout_end,
+                                                   quit_val }});
 
         if (wait_result == 1) {
             /* Timeout */
+            break;
+        }
+        if (wait_result != 0 && wait_result != 2) {
+            /* 0x00E66238: any other index leaves the loop as well */
             break;
         }
         if (wait_result == 2) {
@@ -195,7 +214,14 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
             OS_$DATA_COPY(pkt_data + 0x10, (char *)&response, pkt_len);
             NETBUF_$RTN_HDR((void **)&pkt_data);
 
-            /* Get node ID from response */
+            /*
+           * TODO(source-d24h): the original reads the responding node id out
+           * of the packet BEFORE returning the header buffer
+           * ("move.l (0xE,A0),(0x0,A1,D7w)" at 0x00E6626A, with the
+           * NETBUF_$RTN_HDR at 0x00E6629E), and hands PKT_$DUMP_DATA the
+           * APP_$RECEIVE record's own page vector at A6-0x28 rather than an
+           * offset into the buffer it has just given back.
+           */
             node_list[*count] = *(int32_t *)(pkt_data + 0x0E);
 
             PKT_$DUMP_DATA((uint32_t *)(pkt_data + 0x1C), *(uint16_t *)(pkt_data + 4));

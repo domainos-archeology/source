@@ -63,10 +63,11 @@ void ROUTE_$OUTGOING(void *port_info, uint32_t *nexthop_ret, uint8_t *packet_buf
     uint16_t network;
     int16_t socket;
     route_$port_t *port;
-    void *sock_buf[12];       /* Socket buffer structure */
-    void *pkt_chain[4];       /* Packet chain for additional data */
-    uint8_t nexthop_info[6];  /* Next hop info from RIP */
-    uint32_t dest_addr[2];    /* Destination address for nexthop lookup */
+    sock_$pkt_info_t rcv;     /* A6-0x50: SOCK_$GET's packet record */
+    route_$internet_hdr_t *pkt;  /* A2: the dequeued header buffer */
+    rip_$nexthop_t next_hop;  /* A6-0x60: RIP_$FIND_NEXTHOP's answer */
+    int16_t nexthop_port;     /* A6-0x82: RIP_$FIND_NEXTHOP's port */
+    uint32_t dest_addr[3];    /* A6-0x10: 12-byte destination for the lookup */
     int8_t sock_result;
     uint16_t hdr_len;         /* Header data length */
     uint16_t data_len;        /* Additional data length */
@@ -104,53 +105,56 @@ void ROUTE_$OUTGOING(void *port_info, uint32_t *nexthop_ret, uint8_t *packet_buf
         return;
     }
 
-    /* Get the socket buffer - returns negative on success */
-    sock_result = SOCK_$GET(socket, sock_buf);
+    /* Get the socket buffer - returns negative on success (0x00E87ABC) */
+    sock_result = SOCK_$GET(socket, &rcv);
     if (sock_result >= 0) {
         *status_ret = status_$network_buffer_queue_is_empty;
         return;
     }
 
-    /* Extract packet info from socket buffer */
-    hdr_len = *(uint16_t *)((uint8_t *)sock_buf[0] + 0x10);
-    data_len = *(uint16_t *)((uint8_t *)sock_buf[0] + 0x14);
+    /* 0x00E87ADC - 0x00E87AE4: both lengths come out of the header buffer */
+    pkt = (route_$internet_hdr_t *)rcv.hdr;
+    hdr_len = pkt->hdr_len;
+    data_len = pkt->data_len;
 
-    /* Set up destination address for nexthop lookup */
-    dest_addr[0] = *(uint32_t *)((uint8_t *)sock_buf[0] + 0x2E);
+    /* 0x00E87AEA - 0x00E87B02: destination for the nexthop lookup */
+    dest_addr[0] = *(uint32_t *)((uint8_t *)pkt + 0x2E);
     /* Extract 24-bit field and preserve upper bits */
     dest_addr[1] = (dest_addr[1] & 0xFFF00000) |
-                   (*(uint32_t *)((uint8_t *)sock_buf[0] + 0x34) & 0x00FFFFFF);
+                   (*(uint32_t *)((uint8_t *)pkt + 0x34) & 0x00FFFFFF);
 
-    /* Find the routing next hop */
-    RIP_$FIND_NEXTHOP(dest_addr, 0, nexthop_info, pkt_chain, status_ret);
+    /*
+     * 0x00E87B06 - 0x00E87B1E.  The port goes to A6-0x82 and the 10-byte
+     * next hop to A6-0x60; the data page vector (A6-0x20 = rcv.data_pages)
+     * is a different buffer entirely.
+     */
+    RIP_$FIND_NEXTHOP(dest_addr, false, &nexthop_port, &next_hop, status_ret);
 
     if (*status_ret != status_$ok) {
-        /* Cleanup on failure */
-        void *hdr_ptr[3];
-        hdr_ptr[0] = sock_buf[0];
-        NETBUF_$RTN_HDR(hdr_ptr);
-        PKT_$DUMP_DATA(pkt_chain, data_len);
+        /* Cleanup on failure (0x00E87B26 - 0x00E87B44) */
+        uint32_t hdr_va = (uint32_t)(uintptr_t)pkt;
+        NETBUF_$RTN_HDR(&hdr_va);
+        PKT_$DUMP_DATA(rcv.data_pages, (int16_t)data_len);
         return;
     }
 
-    /* Extract 20-bit network address from nexthop result */
-    *nexthop_ret = *(uint32_t *)((uint8_t *)pkt_chain - 0x5A + 0x60) & 0xFFFFF;
+    /* 0x00E87B48 - 0x00E87B54: the node id is nexthop+6 masked to 20 bits */
+    *nexthop_ret = next_hop.host_lo & 0xFFFFF;
 
-    /* Set flag byte based on socket buffer flags */
-    *(uint8_t *)(nexthop_ret + 1) = (*(int8_t *)((uint8_t *)sock_buf[0] + 4) < 0) ? 0xFF : 0x00;
+    /* 0x00E87B56 - 0x00E87B5C: flag byte from the header's byte 4 */
+    *(uint8_t *)(nexthop_ret + 1) = (*(int8_t *)((uint8_t *)pkt + 4) < 0) ? 0xFF : 0x00;
 
     /* Copy header data to output packet (after 4-byte checksum header) */
-    OS_$DATA_COPY(sock_buf[0], packet_buf + 4, (uint32_t)hdr_len);
+    OS_$DATA_COPY(pkt, packet_buf + 4, (uint32_t)hdr_len);
 
     /* Return the header buffer */
     {
-        void *hdr_ptr[3];
-        hdr_ptr[0] = sock_buf[0];
-        NETBUF_$RTN_HDR(hdr_ptr);
+        uint32_t hdr_va = (uint32_t)(uintptr_t)pkt;
+        NETBUF_$RTN_HDR(&hdr_va);
     }
 
     /* Check if there's additional data in the packet chain */
-    if (pkt_chain[0] == NULL) {
+    if (rcv.data_pages[0] == 0) {
         data_len = 0;
     }
 
@@ -166,10 +170,10 @@ void ROUTE_$OUTGOING(void *port_info, uint32_t *nexthop_ret, uint8_t *packet_buf
         }
 
         /* Copy additional packet data */
-        PKT_$DAT_COPY(pkt_chain, copy_len, packet_buf + hdr_len + 4);
+        PKT_$DAT_COPY(rcv.data_pages, copy_len, packet_buf + hdr_len + 4);
 
         /* Release the packet data buffers */
-        PKT_$DUMP_DATA(pkt_chain, data_len);
+        PKT_$DUMP_DATA(rcv.data_pages, (int16_t)data_len);
     }
 
     /* Set total output length: checksum(4) + header + copied data */

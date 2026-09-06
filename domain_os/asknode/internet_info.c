@@ -409,13 +409,17 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
             return *status;
         }
 
-        /* Validate response type */
+        /*
+         * Validate response type (0x00E65798 - 0x00E657AA).  The constant the
+         * original stores is 0x11000B, "unexpected reply type"; the response
+         * type is the word at +0x02 of the reply record.
+         */
         if ((uint16_t)*result != request + 1) {
-            *status = status_$network_bad_asknode_reply_type;
+            *status = status_$network_unexpected_reply_type;
             return (uint16_t)*result;
         }
 
-        /* Validate protocol version */
+        /* Validate protocol version (0x00E657AE - 0x00E657CA): 0x110015 */
         if (*(uint16_t *)result != 3 && *(uint16_t *)result != 2 && ASKNODE_$PROTOCOL_VERSION != 3) {
             *status = status_$network_bad_asknode_version_number;
             return (uint16_t)*result;

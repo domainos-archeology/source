@@ -180,4 +180,84 @@ extern uint8_t sock_table_base[SOCK_TABLE_SIZE];
  */
 #define SOCK_$EVENT_COUNTERS    ((ec_$eventcount_t **)(sock_table_base + 0x18A4))
 
+/*
+ * =============================================================================
+ * Recovered record layouts (verified against the SOCK_$GET disassembly)
+ * =============================================================================
+ */
+
+/*
+ * sock_$sock_t - a socket descriptor as seen through SOCK_$EVENT_COUNTERS
+ *
+ * SOCK_$EVENT_COUNTERS[n] points at the event count that begins the socket
+ * descriptor, so the pointer may be treated either as an ec_$eventcount_t *
+ * (EC_$WAIT, EC_$ADVANCE) or as a sock_$sock_t *.  SOCK_$GET reads the
+ * queue depth as a byte at +0x15 (0x00E160A6) and ROUTE_$PROCESS uses the
+ * same byte to bucket its packet statistics (0x00E874D2, 0x00E87644).
+ *
+ * This is the public spelling of sock_ec_view_t in sock/sock_internal.h.
+ * TODO(source-s8k4): fold the internal copy onto this one.
+ */
+typedef struct sock_$sock_t {
+    ec_$eventcount_t    ec;             /* 0x00: event count (12 bytes) */
+    uint32_t            queue_head;     /* 0x0C: head of the receive queue */
+    uint32_t            queue_tail;     /* 0x10: tail of the receive queue */
+    uint8_t             protocol;       /* 0x14: protocol type */
+    uint8_t             queue_count;    /* 0x15: packets currently queued */
+    uint16_t            flags;          /* 0x16: flags and socket number */
+    uint16_t            max_queue;      /* 0x18: maximum queue depth */
+    uint16_t            buffer_pages;   /* 0x1A: buffer pages */
+} sock_$sock_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(sock_$sock_t, queue_head)  == 0x0C, "sock_$sock_t.queue_head");
+_Static_assert(offsetof(sock_$sock_t, queue_tail)  == 0x10, "sock_$sock_t.queue_tail");
+_Static_assert(offsetof(sock_$sock_t, protocol)    == 0x14, "sock_$sock_t.protocol");
+_Static_assert(offsetof(sock_$sock_t, queue_count) == 0x15, "sock_$sock_t.queue_count");
+_Static_assert(offsetof(sock_$sock_t, flags)       == 0x16, "sock_$sock_t.flags");
+_Static_assert(sizeof(sock_$sock_t) == 0x1C, "sock_$sock_t must be 0x1C bytes");
+#endif
+
+/*
+ * sock_$pkt_info_t - the record SOCK_$GET fills in for its caller (0x40 bytes)
+ *
+ * Every field is copied out of the netbuf header of the dequeued packet
+ * (0x00E160EC - 0x00E1613E); the source offset inside the netbuf page is
+ * given in each comment.  The 0x0A and 0x2E holes are never written.
+ *
+ * The hop array holds n_hops words; the field after it starts at 0x2A, so
+ * at most 11 hops fit.
+ *
+ * TODO(source-s8k4): sock/sock_internal.h's sock_pkt_info_t declares
+ * hops[12] and so misplaces every field from +0x2A on; replace it with
+ * this record.
+ */
+typedef struct sock_$pkt_info_t {
+    void       *hdr;            /* 0x00 <- netbuf+0x3B8: header buffer VA */
+    uint32_t    src_addr;       /* 0x04 <- netbuf+0x3BC */
+    uint16_t    src_port;       /* 0x08 <- netbuf+0x3C0 */
+    uint16_t    _hole_0a;       /* 0x0A: not written by SOCK_$GET */
+    uint32_t    dst_addr;       /* 0x0C <- netbuf+0x3C4 */
+    uint16_t    flags;          /* 0x10 <- netbuf+0x3C8; bit 1 = XNS ("standard")
+                                 *       routing, tested by ROUTE_$PROCESS as
+                                 *       btst.b #1,(0x11,rec) at 0x00E874EA */
+    uint16_t    n_hops;         /* 0x12 <- netbuf+0x3CA */
+    uint16_t    hops[11];       /* 0x14 <- netbuf+0x3CC.. (n_hops entries) */
+    uint16_t    data_len;       /* 0x2A <- netbuf+0x3E8: payload byte count */
+    uint16_t    hdr_len;        /* 0x2C <- netbuf+0x3EA: header byte count */
+    uint16_t    _hole_2e;       /* 0x2E: not written by SOCK_$GET */
+    uint32_t    data_pages[4];  /* 0x30 <- netbuf+0x3EC: payload page VAs */
+} sock_$pkt_info_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(sock_$pkt_info_t, dst_addr)   == 0x0C, "sock_$pkt_info_t.dst_addr");
+_Static_assert(offsetof(sock_$pkt_info_t, flags)      == 0x10, "sock_$pkt_info_t.flags");
+_Static_assert(offsetof(sock_$pkt_info_t, n_hops)     == 0x12, "sock_$pkt_info_t.n_hops");
+_Static_assert(offsetof(sock_$pkt_info_t, hops)       == 0x14, "sock_$pkt_info_t.hops");
+_Static_assert(offsetof(sock_$pkt_info_t, data_len)   == 0x2A, "sock_$pkt_info_t.data_len");
+_Static_assert(offsetof(sock_$pkt_info_t, hdr_len)    == 0x2C, "sock_$pkt_info_t.hdr_len");
+_Static_assert(offsetof(sock_$pkt_info_t, data_pages) == 0x30, "sock_$pkt_info_t.data_pages");
+_Static_assert(sizeof(sock_$pkt_info_t) == 0x40, "sock_$pkt_info_t must be 0x40 bytes");
+#endif
+
 #endif /* SOCK_H */

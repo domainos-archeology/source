@@ -6,6 +6,13 @@
  *
  * The routing subsystem uses bitmasks to check valid port types and
  * status transitions. These tests ensure the mask logic is correct.
+ *
+ * NOTE: these are a simulation - they re-state the masks rather than driving
+ * ROUTE_$SERVICE itself, so they cannot catch a mask that drifts in
+ * route/service.c.  route/test/test_process.c is the model to follow: it
+ * #includes route/process.c and drives the real ROUTE_$PROCESS (including the
+ * 0x30 / 0x28 port-active masks) through mocked callees.  ROUTE_$SERVICE
+ * deserves the same treatment.
  */
 
 #include <stdio.h>

@@ -28,8 +28,8 @@
  *
  * Note: The function does NOT acquire locks - callers must hold the RIP lock.
  */
-rip_$entry_t *RIP_$NET_LOOKUP(uint32_t network, int8_t inc_refcount,
-                               int16_t create_if_missing)
+rip_$entry_t *RIP_$NET_LOOKUP(uint32_t network, boolean inc_refcount,
+                               boolean create_if_missing)
 {
     uint16_t start_idx;     /* Starting hash index */
     uint16_t idx;           /* Current probe index */

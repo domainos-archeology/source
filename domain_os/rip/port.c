@@ -230,7 +230,7 @@ void RIP_$STD_DEMUX(idp_$packet_t *pkt, uint16_t *param_2, uint16_t *param_3,
  *
  * Original address: 0x00E15798
  */
-void RIP_$PORT_CLOSE(uint16_t port_index, int8_t flags, int8_t force)
+void RIP_$PORT_CLOSE(uint16_t port_index, boolean flags, boolean force)
 {
     int i;
     rip_$route_t *route;

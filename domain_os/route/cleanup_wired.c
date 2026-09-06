@@ -34,13 +34,14 @@ void ROUTE_$CLEANUP_WIRED(void)
     /*
      * Only cleanup if:
      *   - No user ports are active
-     *   - Routing is not running (high byte bit 7 not set)
+     *   - Routing is not running
      */
     if (ROUTE_$N_USER_PORTS != 0) {
         return;
     }
 
-    if ((int8_t)(ROUTE_$ROUTING >> 8) < 0) {
+    /* 0x00E69B8C: tst.b (0x00E26F1E).l / bmi - ROUTE_$ROUTING is a byte */
+    if (ROUTE_$ROUTING < 0) {
         return;
     }
 

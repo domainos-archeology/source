@@ -59,6 +59,7 @@ void RIP_$INIT(void)
     uint16_t        resp_len;               /* Response length */
     uint32_t        route_port;             /* Received route port value */
     int16_t         wait_result;            /* EC_$WAIT result */
+    ec_$eventcount_t *sock_ec;              /* Socket event count (A3/(A2-4)) */
     int             i;
 
     /*
@@ -114,7 +115,13 @@ void RIP_$INIT(void)
      * Get the current event counter value so we can detect when
      * a response arrives.
      */
-    ec_val = EC_$READ(SOCK_$EVENT_COUNTERS[sock_num]);
+    /*
+     * 0x00E2FC64 - 0x00E2FC82: the socket table is indexed from 0xE28DB4
+     * with a -4 displacement, so the entry for socket n is
+     * SOCK_$EVENT_COUNTERS[n - 1].
+     */
+    sock_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
+    ec_val = EC_$READ(sock_ec);
     wait_vals[0] = ec_val + 1;  /* Wait for next event */
 
     /*
@@ -156,24 +163,40 @@ void RIP_$INIT(void)
      * Set up a timeout based on the returned timeout value and wait
      * for either a response or timeout.
      */
-    deadline = TIME_$CLOCKH + (uint32_t)timeout + 1;
+    /*
+     * 0x00E2FCDA - 0x00E2FCF2: deadline = EC_$READ(&TIME_$CLOCKH) + timeout + 1.
+     * Only the low 16 bits of the returned timeout are used ("andi.l
+     * #0xFFFF,D3" at 0x00E2FCDA).
+     */
+    deadline = EC_$READ((ec_$eventcount_t *)&TIME_$CLOCKH) +
+               (int32_t)(uint16_t)timeout + 1;
     wait_vals[1] = deadline;
 
     /*
-     * Loop waiting for the response packet with matching ID
+     * 0x00E2FCF6: A3 is set to NULL before the wait, so the third slot of
+     * both arrays is the terminator; its value slot still carries the 1
+     * that "pea (0x1).w" pushes at 0x00E2FDA8.
      */
-    wait_ecs[0] = SOCK_$EVENT_COUNTERS[sock_num];
+    wait_ecs[0] = sock_ec;
     wait_ecs[1] = (ec_$eventcount_t *)&TIME_$CLOCKH;
     wait_ecs[2] = NULL;  /* Terminate list */
+    wait_vals[2] = 1;
 
     for (;;) {
         /*
-         * Wait for socket event or timeout
+         * 0x00E2FDA8 - 0x00E2FDD2.  Both arrays go by value; the result is
+         * the 0-based index of the satisfied event count, so 0 means the
+         * socket fired and anything else means the deadline passed
+         * ("tst.w D0w / seq D3b / tst.b D3b / bmi" - receive only when the
+         * result is zero).
          */
-        wait_result = EC_$WAIT(wait_ecs, wait_vals);
+        wait_result = EC_$WAIT((ec_$wait_ecs_t){{ wait_ecs[0], wait_ecs[1],
+                                                  wait_ecs[2] }},
+                               (ec_$wait_vals_t){{ wait_vals[0], wait_vals[1],
+                                                   wait_vals[2] }});
 
-        if (wait_result == 0) {
-            /* Timeout occurred (second EC satisfied) */
+        if (wait_result != 0) {
+            /* Deadline reached before a response arrived */
             goto cleanup;
         }
 

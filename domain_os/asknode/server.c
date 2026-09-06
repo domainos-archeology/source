@@ -25,16 +25,37 @@
 static const uint16_t asknode_$server_resp_len = 0x200;
 
 /*
- * TODO: the original stores the 32-bit status code with move.l into a
- * local reply buffer (e.g. move.l #0x11001d,(-0x24c,A6)); this
- * translation's int16_t response layout cannot hold it, so the low word
- * is stored here.  The response buffer layout of ASKNODE_$SERVER needs to
- * be re-derived from the assembly.
+ * The reply ASKNODE_$SERVER transmits is a local record at A6-0x250 with
+ * asknode_response_t as its fixed head followed by up to 0x200 bytes of
+ * request-specific body:
+ *
+ *   -0x250 +0x00 word  version           (0x00E65A30 / 0x00E65A36)
+ *   -0x24E +0x02 word  response type     (0x00E65A24)
+ *   -0x24C +0x04 long  status            (0x00E65B50, 0x00E65B6E, ...)
+ *   -0x248 +0x08 long  responding node   (0x00E65B20)
+ *   -0x244 +0x0C word  flags 0xB1FF      (0x00E65B3E)
+ *   -0x242 +0x0E word  count remaining   (0x00E65B28)
+ *
+ * The `ctx` parameter (A2) is a different record entirely - see
+ * asknode_$server_ctx_t.
+ *
+ * TODO(source-ai1l): the two records are now right, but the request dispatch
+ * (the 0x5C-entry jump table at 0x00E65A60), the several "pkt_data + n" reads
+ * that should come from the APP_$RECEIVE record at A6-0x30 or from locals,
+ * and the argument shape of the PKT_$SEND_INTERNET call at 0x00E65E26 still
+ * need re-deriving.
  */
-#define ASKNODE_$STATUS_LOW_WORD(code)  ((int16_t)((code) & 0xFFFF))
+#define ASKNODE_$REPLY_BODY_MAX     0x200
+#define ASKNODE_$REPLY_FLAGS        0xB1FF
 
-void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
+typedef struct asknode_$reply_t {
+    asknode_response_t  hdr;                            /* 0x00 */
+    uint8_t             body[ASKNODE_$REPLY_BODY_MAX];  /* 0x10 */
+} asknode_$reply_t;
+
+void ASKNODE_$SERVER(asknode_$server_ctx_t *ctx, int32_t *routing_info)
 {
+    asknode_$reply_t reply;
     status_$t status;
     int32_t pkt_ptr;
     char *pkt_data;
@@ -82,17 +103,16 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
     /* Return header buffer */
     NETBUF_$RTN_HDR((void **)&pkt_data);
 
-    /* Set response type */
-    response[1] = request.request_type + 1;
+    /* 0x00E65A1E - 0x00E65A36 */
+    reply.hdr.response_type = request.request_type + 1;
     if (request.version == 2) {
-        response[0] = 2;
+        reply.hdr.version = 2;
     } else {
-        response[0] = 3;
+        reply.hdr.version = 3;
     }
 
-    /* Initialize response status */
-    response[6] = 0;  /* Clear status high */
-    response[7] = 0;  /* Clear status low */
+    /* 0x00E65A3C: D7 is the zero register the cases below store as status */
+    reply.hdr.status = status_$ok;
 
     /*
      * Handle request based on type
@@ -107,12 +127,11 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
                 return;
             }
 
-            response[8] = NODE_$ME;
-            response[10] = request.count;
-            request.count--;
-            response[0xF] = 0;
-            response[0x10] = 0x1000;
-            response[9] = 0xB1FF;  /* Response flags */
+            reply.hdr.node_id = NODE_$ME;                   /* 0x00E65B20 */
+            reply.hdr.count = request.count;                /* 0x00E65B28 */
+            request.count--;                                /* 0x00E65B32 */
+            ctx->clock_lo = 0x1000;                         /* 0x00E65B36 */
+            reply.hdr.flags = ASKNODE_$REPLY_FLAGS;         /* 0x00E65B3E */
 
             /* Determine routing */
             if (src_node == 0) {
@@ -121,24 +140,23 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
                 *routing_info = src_node;
             }
 
-            /* Check network capability */
-            response[7] = 0;
+            /* Check network capability (0x00E65B50 - 0x00E65B7E) */
+            reply.hdr.status = status_$ok;
             {
-                int16_t cap = ROUTE_$VALIDATE_PORT(*routing_info, -1);
+                int16_t cap = ROUTE_$VALIDATE_PORT(*routing_info, true);
                 if (cap == 2) {
-                    response[7] = ASKNODE_$STATUS_LOW_WORD(status_$network_operation_not_defined_on_hardware);
+                    reply.hdr.status = status_$network_operation_not_defined_on_hardware;
                 } else if (cap == 0) {
-                    response[7] = ASKNODE_$STATUS_LOW_WORD(status_$network_unknown_network);
+                    reply.hdr.status = status_$network_unknown_network;
                 }
             }
 
-            /* Set propagation flag */
-            should_propagate = (response[7] == 0) &&
+            /* Set propagation flag (0x00E65B80 - 0x00E65B9E) */
+            should_propagate = (reply.hdr.status == status_$ok) &&
                                (request.count > 0) &&
                                (request.node_id != NODE_$ME) &&
                                ((flags & 4) == 0) ? -1 : 0;
-            response[1] = 0;
-            request.node_id = request.node_id;  /* dest for propagate */
+            ctx->request_type = 0;                          /* 0x00E65BA0 */
         }
         break;
 
@@ -153,52 +171,51 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
             /* Check if we're the target or should forward */
             /* High byte of the count word (tst.b on the first byte of +0x10) */
             if ((int8_t)(request.count >> 8) < 0 || request.node_id != NODE_$ME) {
-                response[1] = 0x2E;  /* Forward response type */
-                response[8] = NODE_$ME;
+                reply.hdr.response_type = 0x2E;             /* 0x00E65BD0 */
+                reply.hdr.node_id = NODE_$ME;               /* 0x00E65BD6 */
             } else {
-                response[8] = request.param1;
-                response[1] = 1;  /* Final response type */
+                reply.hdr.node_id = request.param1;         /* 0x00E65BC2 */
+                reply.hdr.response_type = 1;                /* 0x00E65BC8 */
             }
 
-            response[9] = 0xB1FF;
+            reply.hdr.flags = ASKNODE_$REPLY_FLAGS;         /* 0x00E65BDE */
             if (src_node == 0) {
                 *routing_info = *(int32_t *)(pkt_data + 0x14);
             } else {
                 *routing_info = src_node;
             }
 
-            response[7] = 0;
+            reply.hdr.status = status_$ok;                  /* 0x00E65C02 */
             {
                 int8_t is_local = (src_node == 0 || src_node == (int32_t)NODE_$ME) ? -1 : 0;
                 int16_t cap = ROUTE_$VALIDATE_PORT(*routing_info, is_local);
                 if (cap == 2) {
-                    response[7] = ASKNODE_$STATUS_LOW_WORD(status_$network_operation_not_defined_on_hardware);
+                    reply.hdr.status = status_$network_operation_not_defined_on_hardware;
                 } else if (cap == 0) {
-                    response[7] = ASKNODE_$STATUS_LOW_WORD(status_$network_unknown_network);
+                    reply.hdr.status = status_$network_unknown_network;
                 }
             }
 
-            response[10] = request.count - 1;
-            *(int32_t *)(pkt_data + 0x14) = request.param2;  /* Update routing */
-            response[0xF] = (int16_t)(request.param3 >> 16);      /* high word of param3 */
-            response[0x10] = (int16_t)(request.param3 & 0xFFFF);  /* low word of param3 */
+            reply.hdr.count = request.count;                /* 0x00E65C32 */
+            *(int32_t *)(pkt_data + 0x14) = request.param2;  /* 0x00E65C3C */
+            request.count--;                                /* 0x00E65C42 */
+            ctx->clock_lo = request.param3;                 /* 0x00E65C46 */
 
-            /* Set propagation flag */
-            should_propagate = (response[7] == 0) &&
-                               (request.count - 1 > 0) &&
+            /* Set propagation flag (0x00E65C4C - 0x00E65C72) */
+            should_propagate = (reply.hdr.status == status_$ok) &&
+                               (request.count > 0) &&
                                ((int8_t)(request.count >> 8) || request.node_id != NODE_$ME) &&
                                ((flags & 4) == 0) ? -1 : 0;
-            response[1] = 0x2D;
-            request.node_id = request.param1;
+            ctx->request_type = 0x2D;                       /* 0x00E65C74 */
         }
         break;
 
     case 0x45:
-        /* Time sync WHO query */
-        response[1] = 0x46;
-        response[8] = NODE_$ME;
-        response[7] = 0;
-        response[9] = 0xB1FF;
+        /* Time sync WHO query (0x00E65C7E - 0x00E65CD6) */
+        reply.hdr.response_type = 0x46;
+        reply.hdr.node_id = NODE_$ME;
+        reply.hdr.status = status_$ok;
+        reply.hdr.flags = ASKNODE_$REPLY_FLAGS;
 
         if (src_node == 0) {
             *routing_info = *(int32_t *)(pkt_data + 0x14);
@@ -206,19 +223,22 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
             *routing_info = src_node;
         }
 
-        /* Get current time */
-        TIME_$CLOCK((clock_t *)(response + 0xE));
-        response[0xE] = 0;  /* Clear high word */
+        /*
+         * The clock lands in the caller's context record, not in the reply:
+         *   00e65ca2  pea (0x1c,A2) / jsr TIME_$CLOCK
+         *   00e65cae  clr.w (0x1c,A2)
+         *   00e65cb2  move.l (0x1e,A2),D0 / andi.l #0x7fffffff,D0
+         *   00e65cbc  M$OIS$LLL(D0, request.param3) -> (0x1e,A2)
+         */
+        /* &ctx->clock_hi, spelled without taking the address of a packed
+         * member (the field is at ctx+0x1C, which is longword aligned). */
+        TIME_$CLOCK((clock_t *)((uint8_t *)ctx + 0x1C));
+        ctx->clock_hi = 0;
+        ctx->clock_lo = (uint32_t)M$OIS$LLL(ctx->clock_lo & 0x7FFFFFFF,
+                                            request.param3);
 
-        /* Subtract provided time offset */
-        {
-            int32_t result = M$OIS$LLL(*(uint32_t *)(response + 0xF) & 0x7FFFFFFF,
-                                       request.param3);
-            *(int32_t *)(response + 0xF) = result;
-        }
-
-        should_propagate = -1;
-        response[1] = 0x46;
+        should_propagate = -1;                              /* 0x00E65CCE */
+        ctx->request_type = 0x46;                           /* 0x00E65CD0 */
         break;
 
     case 0x0E:
@@ -233,7 +253,7 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
         /* Log read request */
         NETBUF_$GET_DAT(&netbuf_handle);
         NETBUF_$GETVA(netbuf_handle, &netbuf_va, &status);
-        response[7] = status;
+        reply.hdr.status = status;                          /* 0x00E65D50 */
 
         if (status == 0) {
             if ((request.node_id & 0x10000) == 0) {
@@ -244,7 +264,7 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
                  *   00e65d90    pea (-0x292,A6)      ; &log_len
                  *   00e65d94    pea (A3)             ; netbuf_va
                  */
-                LOG_$READ(netbuf_va, &log_len, (uint16_t *)&response[8]);
+                LOG_$READ(netbuf_va, &log_len, (uint16_t *)&reply.hdr.node_id);
             } else {
                 /*
                  *   00e65d5e    pea (-0x248,A6)      ; &actual_len
@@ -253,11 +273,20 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
                  *   00e65d6a    pea (A3)             ; netbuf_va
                  */
                 LOG_$READ2(netbuf_va, (uint16_t)(request.node_id >> 16),
-                           0x400, (uint16_t *)&response[8]);
-                response[7] = 0xFFFF;
+                           0x400, (uint16_t *)&reply.hdr.node_id);
+                /*
+                 * 0x00E65D76: "move.w #-1,(-0x24a,A6)" only writes the low
+                 * half of the status longword.
+                 */
+                reply.hdr.status = (reply.hdr.status & 0xFFFF0000u) | 0xFFFFu;
             }
-            response_len = (char *)&response[8] - (char *)&response[0] + 0x256;
-            data_len = response[8];
+            /*
+             * 0x00E65DA0 - 0x00E65DB0: the template is the reply head up to
+             * (but not including) +0x0A, and the payload length is the word
+             * LOG_$READ left at +0x08.
+             */
+            response_len = (uint16_t)(offsetof(asknode_response_t, flags) - 2);
+            data_len = *(uint16_t *)&reply.hdr.node_id;
         }
         netbuf_handle = netbuf_handle;  /* Mark for cleanup */
         break;
@@ -275,12 +304,12 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
                                    (int32_t *)&ASKNODE_$EMPTY_DATA,
                                    (uid_t *)&request.node_id,
                                    (uint16_t *)&asknode_$server_resp_len,
-                                   (uint32_t *)&response[0],
+                                   (uint32_t *)&reply,
                                    &status);
         } else {
-            /* Unknown request type */
-            response[1] = 0;
-            response[7] = ASKNODE_$STATUS_LOW_WORD(status_$network_unknown_request_type);
+            /* Unknown request type (0x00E65DB8 - 0x00E65DBC) */
+            reply.hdr.response_type = 0;
+            reply.hdr.status = status_$network_unknown_request_type;
         }
         break;
     }
@@ -311,7 +340,7 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
             4,                               /* src sock */
             pkt_info,
             src_port,                        /* request ID */
-            &response[0],                    /* response data */
+            &reply,                          /* response template */
             response_len,
             netbuf_va,                       /* data buffer */
             data_len,
@@ -334,19 +363,23 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
         if (request.request_type == 0x2D) {
             request.count &= 0x00FF;  /* Clear propagation flag (high byte of the count word) */
         }
-        response[0] = request.version;
-
-        /* Copy response data */
+        /*
+         * 0x00E65E60 - 0x00E65E7C: hand the caller the request's version,
+         * its 20 bytes from +0x04, and the source port / request id so that
+         * it can re-issue the query.
+         */
+        ctx->version = request.version;
         {
-            uint32_t *src = (uint32_t *)&request.node_id;
-            int16_t *dst = response + 2;
+            const uint32_t *src = (const uint32_t *)&request.node_id;
+            /* &ctx->node_id, spelled without taking the address of a packed
+             * member (the field is at ctx+0x04, longword aligned). */
+            uint32_t *dst = (uint32_t *)((uint8_t *)ctx + 0x04);
             int i;
             for (i = 0; i < 5; i++) {
-                *(uint32_t *)dst = *src++;
-                dst += 2;
+                dst[i] = src[i];
             }
         }
-        response[0xC] = src_port;
-        response[0xD] = request_id;
+        ctx->src_port = src_port;
+        ctx->request_id = request_id;
     }
 }

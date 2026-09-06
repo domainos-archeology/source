@@ -225,7 +225,7 @@ void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
  * Original address: 0x00E871B6
  */
 void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
-               uint16_t route_len, int8_t flags)
+               uint16_t route_len, boolean flags)
 {
     uint8_t *addr_buf = (uint8_t *)addr_info;
     int16_t pkt_id;
@@ -323,7 +323,7 @@ void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
  *
  * Original address: 0x00E87298
  */
-void RIP_$BROADCAST(uint8_t flags)
+void RIP_$BROADCAST(boolean flags)
 {
     /* Response buffer - command + up to 90 entries (6 bytes each) */
     uint8_t response_buf[2 + RIP_MAX_ENTRIES * RIP_ENTRY_SIZE];

@@ -87,12 +87,63 @@ typedef struct asknode_request_t {
 typedef struct asknode_response_t {
   uint16_t version;       /* 0x00: Protocol version */
   uint16_t response_type; /* 0x02: Response type */
-  uint32_t node_id;       /* 0x04: Responding node ID */
-  status_$t status;       /* 0x08: Status code */
-  uint16_t flags;         /* 0x0C: Response flags */
-  int16_t count;          /* 0x0E: Count remaining */
+  status_$t status;       /* 0x04: Status code - stored with a single move.l
+                           *       (ASKNODE_$SERVER 0x00E65B6E / 0x00E65B78,
+                           *       tested by ASKNODE_$WHO_NOTOPO at
+                           *       0x00E662CA as tst.l (rec+0x04)) */
+  uint32_t node_id;       /* 0x08: Responding node ID (move.l NODE_$ME at
+                           *       0x00E65B20) */
+  uint16_t flags;         /* 0x0C: Response flags (0xB1FF at 0x00E65B3E) */
+  int16_t count;          /* 0x0E: Count remaining (0x00E65B28) */
                           /* Response data follows */
 } asknode_response_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(asknode_response_t, status)  == 0x04, "asknode_response_t.status");
+_Static_assert(offsetof(asknode_response_t, node_id) == 0x08, "asknode_response_t.node_id");
+_Static_assert(offsetof(asknode_response_t, flags)   == 0x0C, "asknode_response_t.flags");
+_Static_assert(offsetof(asknode_response_t, count)   == 0x0E, "asknode_response_t.count");
+_Static_assert(sizeof(asknode_response_t) == 0x10, "asknode_response_t must be 16 bytes");
+#endif
+
+/*
+ * asknode_$server_ctx_t - the record ASKNODE_$SERVER's caller passes as its
+ * first argument (A2), 0x22 bytes.
+ *
+ * This is NOT the reply buffer: the reply ASKNODE_$SERVER transmits is an
+ * asknode_response_t built on its own stack at A6-0x250.  The context record
+ * is what the server hands back to its caller so that a WHO query can be
+ * propagated: on the way out ASKNODE_$SERVER copies the request's version
+ * and its 20 bytes from +0x04 into it (0x00E65E60 - 0x00E65E72) and appends
+ * the source port and request id (0x00E65E76 / 0x00E65E7C).  Fields +0x1C
+ * and +0x1E are scratch that individual request types use: request 0x45
+ * reads TIME_$CLOCK into +0x1C, zeroes the top word and leaves the
+ * time-difference longword at +0x1E (0x00E65CA2 - 0x00E65CCA).
+ */
+typedef struct asknode_$server_ctx_t {
+  uint16_t version;       /* 0x00 */
+  uint16_t request_type;  /* 0x02 */
+  uint32_t node_id;       /* 0x04 */
+  uint32_t param1;        /* 0x08 */
+  uint32_t param2;        /* 0x0C */
+  int16_t  count;         /* 0x10 */
+  int8_t   flags;         /* 0x12 */
+  int8_t   pad;           /* 0x13 */
+  uint32_t param3;        /* 0x14 */
+  uint16_t src_port;      /* 0x18 */
+  int16_t  request_id;    /* 0x1A */
+  uint16_t clock_hi;      /* 0x1C */
+  uint32_t clock_lo;      /* 0x1E */
+} __attribute__((packed)) asknode_$server_ctx_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(asknode_$server_ctx_t, param3)     == 0x14, "server_ctx.param3");
+_Static_assert(offsetof(asknode_$server_ctx_t, src_port)   == 0x18, "server_ctx.src_port");
+_Static_assert(offsetof(asknode_$server_ctx_t, request_id) == 0x1A, "server_ctx.request_id");
+_Static_assert(offsetof(asknode_$server_ctx_t, clock_hi)   == 0x1C, "server_ctx.clock_hi");
+_Static_assert(offsetof(asknode_$server_ctx_t, clock_lo)   == 0x1E, "server_ctx.clock_lo");
+_Static_assert(sizeof(asknode_$server_ctx_t) == 0x22, "asknode_$server_ctx_t must be 0x22 bytes");
+#endif
 
 /*
  * asknode_who_response_t - WHO response structure
@@ -102,13 +153,18 @@ typedef struct asknode_response_t {
 typedef struct asknode_who_response_t {
   uint16_t version;       /* 0x00: Protocol version (3) */
   uint16_t response_type; /* 0x02: Response type (0x2E or 1) */
-  uint32_t node_id;       /* 0x04: Responding node ID */
-  status_$t status;       /* 0x08: Status code */
+  status_$t status;       /* 0x04: Status code (see asknode_response_t) */
+  uint32_t node_id;       /* 0x08: Responding node ID */
   uint16_t flags;         /* 0x0C: Response flags (0xB1FF) */
   int16_t count;          /* 0x0E: Count remaining */
   uint32_t time_high;     /* 0x10: Time high word */
   uint32_t time_low;      /* 0x14: Time low word */
 } asknode_who_response_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(asknode_who_response_t, status)  == 0x04, "who_response.status");
+_Static_assert(offsetof(asknode_who_response_t, node_id) == 0x08, "who_response.node_id");
+#endif
 
 /*
  * ============================================================================

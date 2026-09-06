@@ -1,18 +1,20 @@
 /*
- * ROUTE_$PROCESS - Main routing process entry point
+ * ROUTE_$PROCESS - the routing server process
  *
- * This is the routing server process created by ROUTE_$INIT_ROUTING.
- * It runs as a separate process, handling:
- *   - Periodic RIP broadcasts (every ~114 ticks)
- *   - Forwarding incoming packets to appropriate destinations
- *   - Shutdown coordination
+ * ROUTE_$INIT_ROUTING binds this procedure as a process (the pointer to it
+ * lives at 0x00E69D50) and advances ROUTE_$CONTROL_EC when the rest of the
+ * routing state is ready.  ROUTE_$PROCESS then multiplexes three event
+ * counts with EC_$WAIT:
  *
- * The process uses EC_$WAIT to multiplex between:
- *   - TIME_$CLOCKH: Timer for periodic broadcasts
- *   - Socket EC: Incoming packets on routing socket
- *   - Control EC: Shutdown signal
+ *   index 0  TIME_$CLOCKH        periodic RIP broadcast, every 0x72 ticks
+ *   index 1  the routing socket  a packet needs forwarding
+ *   index 2  ROUTE_$CONTROL_EC   shut the router down and unbind
  *
- * Original address: 0x00E873EC
+ * A5 in the original is 0x00E87D80, the base of the wired routing data; the
+ * A5-relative operands in the comments below are resolved to their absolute
+ * addresses, which route/route_internal.h names.
+ *
+ * Original address: 0x00E873EC (1200 bytes)
  */
 
 #include "route/route_internal.h"
@@ -27,409 +29,421 @@
 #include "net_io/net_io.h"
 #include "network/network.h"
 #include "mac_os/mac_os.h"
-#include "xns_idp/xns_idp.h"
+#include "xns/xns.h"
 #include "wp/wp.h"
+#include "uid/uid.h"
+#include "ml/ml.h"
+#include "ring/ringlog.h"
+/*
+ * RING_$LOGGING_NOW has no public declaration; ring/ringlog.h only mentions
+ * it in prose.  TODO(source-nudm): export it from ring/ringlog.h so that this
+ * file does not have to reach into another subsystem's internal header.
+ */
 #include "ring/ringlog_internal.h"
 
-/* Timer interval for RIP broadcasts (0x72 = 114 ticks) */
-#define RIP_BROADCAST_INTERVAL  0x72
-
-/* Maximum packet size for forwarding (1024 bytes) */
-#define MAX_FORWARD_SIZE        0x400
-
-/* Maximum hop count (from XNS IDP spec) */
-#define MAX_HOP_COUNT           0x10
-
-/* Ethernet type for IP (0x600) */
-#define ETHER_TYPE_IP           0x600
-
-/* Lock ID for routing operations */
-#define ROUTE_LOCK_ID           0x0D
-#define NET_IO_LOCK_ID          0x18
-
 /*
- * Global data references: the wired-area globals (ROUTE_$PACKET_STATS,
- * ROUTE_$STAT_*, ROUTE_$PROCESS_UID, ...) come from route/route_internal.h,
- * NODE_$ME from network/network.h and RING_$LOGGING_NOW from
- * ring/ringlog_internal.h.
- */
-
-/* IDP packet header structure (XNS Internet Datagram Protocol) */
-typedef struct {
-    uint16_t    checksum;       /* 0x00: Checksum (0xFFFF = no checksum) */
-    uint16_t    length;         /* 0x02: Total packet length */
-    uint8_t     transport_ctl;  /* 0x04: Transport control (hop count in low 4 bits) */
-    uint8_t     packet_type;    /* 0x05: Packet type */
-    /* Destination address */
-    uint32_t    dst_network;    /* 0x06: Destination network */
-    uint16_t    dst_host_hi;    /* 0x0A: Destination host (high) */
-    uint32_t    dst_host_lo;    /* 0x0C: Destination host (low) */
-    uint16_t    dst_socket;     /* 0x10: Destination socket */
-    /* Source address */
-    uint32_t    src_network;    /* 0x12: Source network */
-    uint16_t    src_host_hi;    /* 0x16: Source host (high) */
-    uint32_t    src_host_lo;    /* 0x18: Source host (low) */
-    uint16_t    src_socket;     /* 0x1C: Source socket */
-    /* Data follows */
-} idp_header_t;
-
-/* Error status for SOCK_$GET failure */
-static const status_$t status_$route_sock_get_failed = 0x2B00C6;
-
-/*
- * Note: All external function declarations come from the included headers:
- *   - NETWORK_$SET_SERVICE from network/network.h
- *   - WP_$UNWIRE from wp/wp.h
- *   - PROC1_$UNBIND, PROC1_$SET_LOCK, PROC1_$CLR_LOCK from proc1/proc1.h
- *   - RIP_$FIND_NEXTHOP from rip/rip.h
- *   - RIP_$BROADCAST from rip/rip_internal.h
- *   - NETBUF_$RTN_HDR from netbuf/netbuf.h
- *   - PKT_$DUMP_DATA from pkt/pkt.h
- *   - RINGLOG_$LOGIT from ring/ringlog.h
- *   - MAC_OS_$ARP, MAC_OS_$SEND from mac_os/mac_os.h
- *   - NET_IO_$SEND from net_io/net_io.h
- *   - ML_$LOCK, ML_$UNLOCK from ml/ml.h (via xns_idp.h)
+ * Every global this function touches comes from a header:
+ *   ROUTE_$*                      route/route_internal.h, route/route.h
+ *   SOCK_$EVENT_COUNTERS, SOCK_$* sock/sock.h
+ *   TIME_$CLOCKH                  time/time.h
+ *   NODE_$ME                      uid/uid.h
+ *   RING_$LOGGING_NOW             ring/ringlog_internal.h
+ *   XNS_$IDP_STATE                xns/xns.h
  */
 
 void ROUTE_$PROCESS(void)
 {
-    ec_$eventcount_t *ecs[3];
-    uint32_t ec_vals[3];
-    int16_t wait_result;
-    ec_$eventcount_t *socket_ec;
-    uint32_t *next_broadcast_time;
-    status_$t status;
-    uint32_t *packet_buffer;
-    void *packet_ptr;
-    idp_header_t *idp_hdr;
-    int16_t next_hop_port;
-    uint8_t next_hop_addr[6];
-    uint8_t is_std_routing;     /* 0xFF if standard routing, 0 if normal */
-    uint8_t should_forward;     /* 0xFF if packet should be forwarded */
-    uint8_t was_forwarded;      /* 0xFF if successfully forwarded */
-    uint8_t hop_count;
-    int16_t i;
-    route_$port_t *dest_port;
-    int32_t port_index;
-    uint16_t packet_size;
-    uint32_t packet_network;
+    ec_$wait_ecs_t          ecs;
+    ec_$wait_vals_t         vals;
+    int16_t                 wait_result;
+    sock_$sock_t           *route_sock;      /* A6-0xE8 */
+    uint32_t                next_broadcast;  /* A6-0xD8 */
+    status_$t               status;          /* A6-0xD0 */
+    uint32_t                net_io_extra;    /* A6-0xD4 */
+    uint32_t                hdr_pa;          /* A6-0xE4 */
+    uint32_t                hdr_ptr_cell[1]; /* A6-0xE0 */
+    sock_$pkt_info_t        rcv;             /* A6-0xB0, 0x40 bytes */
+    route_$internet_hdr_t  *pkt;             /* A4 */
+    xns_$idp_header_t      *idp;             /* A2 */
+    boolean                 is_std_routing;  /* D2 */
+    boolean                 should_forward;  /* D3 */
+    boolean                 was_forwarded;   /* D5 */
+    int16_t                 hop_count;       /* D5, before it becomes the flag */
+    int16_t                 stat_index;      /* D0 */
+    int16_t                 queue_depth;     /* D0 */
+    int16_t                 next_hop_port;   /* A6-0xEE */
+    rip_$dest_addr_t        dest_addr;       /* A6-0x70, 12 bytes */
+    rip_$nexthop_t          next_hop;        /* A6-0x60, 10 bytes */
+    route_$mac_send_rec_t   mac_send;        /* A6-0x50, 0x4C bytes */
+    int16_t                 mac_bytes_sent;  /* A6-0xEA */
+    uint16_t                closing_sock;    /* A6-0xF6 */
+    route_$port_t          *port;            /* A3 */
+    route_$port_stats_t    *port_stats;      /* A2 */
+    int16_t                 i;
+    int                     j;
 
     /*
-     * Wait for initialization to complete
-     * ROUTE_$INIT_ROUTING advances CONTROL_EC when ready
+     * 0x00E873FA - 0x00E87410: wait for ROUTE_$INIT_ROUTING to advance the
+     * control event count, then consume that advance.
      */
-    EC_$WAITN(&PTR_ROUTE_$CONTROL_EC, &ROUTE_$CONTROL_ECVAL, 1);
-    ROUTE_$CONTROL_ECVAL++;
+    EC_$WAITN(&PTR_ROUTE_$CONTROL_EC, (int32_t *)&ROUTE_$CONTROL_ECVAL, 1);
+    ROUTE_$CONTROL_ECVAL++;                                 /* 0x00E87414 */
 
     /*
-     * Get socket event counter for our routing socket
+     * 0x00E8741A - 0x00E87428: the socket table is indexed from 0xE28DB4
+     * with a -4 displacement, i.e. SOCK_$EVENT_COUNTERS[sock - 1].  The
+     * pointer is the socket descriptor, whose first field is its event
+     * count.
      */
-    socket_ec = SOCK_$EVENT_COUNTERS[ROUTE_$SOCK];
+    route_sock = (sock_$sock_t *)SOCK_$EVENT_COUNTERS[ROUTE_$SOCK - 1];
 
-    /*
-     * Mark routing as active
-     */
-    ROUTE_$ROUTING = 0xFF;
+    /* 0x00E8742E: "st (0x00E26F1E).l" - ROUTE_$ROUTING is a byte */
+    ROUTE_$ROUTING = true;
 
-    /*
-     * Register network service (enables routing in network stack)
-     */
+    /* 0x00E87434 - 0x00E87446 */
     NETWORK_$SET_SERVICE(&ROUTE_$NET_SERVICE_ON, &ROUTE_$SERVICE_ID, &status);
 
-    /*
-     * Initialize broadcast timer
-     */
-    next_broadcast_time = (uint32_t *)TIME_$CLOCKH;
+    /* 0x00E8744A: the value of TIME_$CLOCKH, not its address */
+    next_broadcast = TIME_$CLOCKH;
 
-    /*
-     * Lock routing operations
-     */
-    PROC1_$SET_LOCK(ROUTE_LOCK_ID);
+    /* 0x00E87452 - 0x00E8745E */
+    PROC1_$SET_LOCK(ROUTE_$PROC_LOCK_ID);
 
-    /*
-     * Main routing loop
-     */
     for (;;) {
         /*
-         * Set up event counters for multiplexed wait:
-         *   [0] = TIME_$CLOCKH (for periodic broadcasts)
-         *   [1] = Socket EC (for incoming packets)
-         *   [2] = Control EC (for shutdown)
+         * 0x00E87460 - 0x00E87488: both arrays go on the stack by value,
+         * ecs at the lower address.  24 bytes, no result slot; the index of
+         * the satisfied event count comes back in D0.
          */
-        ecs[0] = (ec_$eventcount_t *)&TIME_$CLOCKH;
-        ecs[1] = socket_ec;
-        ecs[2] = (ec_$eventcount_t *)&ROUTE_$CONTROL_EC;
+        ecs.ec[0] = (ec_$eventcount_t *)&TIME_$CLOCKH;
+        ecs.ec[1] = &route_sock->ec;
+        ecs.ec[2] = (ec_$eventcount_t *)&ROUTE_$CONTROL_EC;
 
-        ec_vals[0] = (uint32_t)next_broadcast_time;
-        ec_vals[1] = ROUTE_$SOCK_ECVAL;
-        ec_vals[2] = ROUTE_$CONTROL_ECVAL;
+        vals.val[0] = (int32_t)next_broadcast;
+        vals.val[1] = (int32_t)ROUTE_$SOCK_ECVAL;
+        vals.val[2] = (int32_t)ROUTE_$CONTROL_ECVAL;
+
+        wait_result = EC_$WAIT(ecs, vals);
 
         /*
-         * Wait for any event
+         * 0x00E8748C - 0x00E874A2: the dispatch tests 1, then 0, then 2 and
+         * falls back to the top of the loop for anything else.
          */
-        wait_result = EC_$WAIT(ecs, ec_vals);
+        if (wait_result == 1) {
+            goto packet_received;
+        }
+        if (wait_result == 0) {
+            goto broadcast_timer;
+        }
+        if (wait_result == 2) {
+            goto shutdown;
+        }
+        continue;
 
-        switch (wait_result) {
-        case 0:
-            /*
-             * Timer expired - broadcast RIP updates
-             */
-            if (ROUTE_$N_ROUTING_PORTS > 1) {
-                RIP_$BROADCAST(0x00);   /* Normal routing */
-            }
-            if (ROUTE_$STD_N_ROUTING_PORTS > 1) {
-                RIP_$BROADCAST(0xFF);   /* Standard routing */
-            }
+    broadcast_timer:                                        /* 0x00E877C2 */
+        if (ROUTE_$N_ROUTING_PORTS > 1) {
+            RIP_$BROADCAST(false);                          /* 0x00E877CE: clr.w */
+        }
+        if (ROUTE_$STD_N_ROUTING_PORTS > 1) {
+            RIP_$BROADCAST(true);                           /* 0x00E877E4: st */
+        }
+        /* 0x00E877EE: moveq #0x72,D1 / add.l TIME_$CLOCKH,D1 */
+        next_broadcast = TIME_$CLOCKH + ROUTE_$BROADCAST_INTERVAL;
+        continue;
 
-            /* Schedule next broadcast */
-            next_broadcast_time = (uint32_t *)((uint32_t)TIME_$CLOCKH + RIP_BROADCAST_INTERVAL);
-            break;
+    packet_received:                                        /* 0x00E874A4 */
+        /*
+         * SOCK_$GET returns true when it dequeued a packet.  A false return
+         * on an event-count wakeup is a kernel inconsistency; the original
+         * hands CRASH_SYSTEM the constant cell at 0xE878A4
+         * (status_$network_buffer_queue_is_empty).
+         */
+        if (SOCK_$GET(ROUTE_$SOCK, &rcv) >= 0) {            /* 0x00E874B8: bmi */
+            CRASH_SYSTEM(&ROUTE_$SOCK_EMPTY_STATUS);        /* 0x00E874BC */
+        }
 
-        case 1:
-            /*
-             * Packet received on routing socket
-             */
-            if (SOCK_$GET(ROUTE_$SOCK, &packet_ptr) >= 0) {
-                /* SOCK_$GET should return negative on success */
-                CRASH_SYSTEM(&status_$route_sock_get_failed);
-            }
+        pkt = (route_$internet_hdr_t *)rcv.hdr;             /* 0x00E874C8 */
 
-            packet_buffer = (uint32_t *)packet_ptr;
+        /*
+         * 0x00E874CC - 0x00E874E6: bucket this packet by the routing
+         * socket's queue depth, capped at 0x80.
+         */
+        stat_index = (int16_t)route_sock->queue_count;
+        if (stat_index > 0x80) {
+            stat_index = 0x80;
+        }
+        ROUTE_$PACKET_STATS[stat_index]++;
 
-            /*
-             * Update packet size statistics
-             * Index is capped at 0x80 (128)
-             */
-            {
-                uint8_t size_index = ((uint8_t *)socket_ec)[0x15];
-                if (size_index > 0x80) {
-                    size_index = 0x80;
-                }
-                ROUTE_$PACKET_STATS[size_index]++;
-            }
+        /*
+         * 0x00E874EA - 0x00E874FE: bit 1 of the flags byte at rcv+0x11
+         * selects "standard" (pure XNS) routing.  A packet is a forwarding
+         * candidate when it is a standard-routing packet or when the Domain
+         * internet header says routing type >= 2.
+         */
+        is_std_routing = (rcv.flags & 0x0002) ? true : false;
+        should_forward = (boolean)(((pkt->routing_type >= 2) ? true : false) |
+                                   is_std_routing);
 
-            /*
-             * Determine routing type from packet flags
-             * Bit 1 of flags at offset -0x9F indicates standard routing
-             */
-            is_std_routing = 0;  /* Will be set based on packet flags */
+        /* 0x00E87500 - 0x00E8750A */
+        if (is_std_routing < 0) {
+            idp = (xns_$idp_header_t *)pkt;
+        } else {
+            idp = &pkt->idp;
+        }
 
-            /*
-             * Get IDP header pointer
-             * If standard routing, header is at packet start
-             * Otherwise, header is at packet + 0x28 (after MAC header)
-             */
-            if (is_std_routing) {
-                idp_hdr = (idp_header_t *)packet_buffer;
-            } else {
-                idp_hdr = (idp_header_t *)((uint8_t *)packet_buffer + 0x28);
-            }
+        /*
+         * 0x00E8750C - 0x00E87524: an internet packet that claims a payload
+         * but carries no data pages cannot be forwarded.
+         */
+        if (should_forward < 0 && is_std_routing >= 0 &&
+            rcv.data_pages[0] == 0 && pkt->data_len != 0) {
+            ROUTE_$STAT_OVERSIZED_N++;                      /* 0xE87FBC */
+            should_forward = false;
+        }
 
-            should_forward = 0xFF;
+        /* 0x00E87526 - 0x00E8753E */
+        idp->transport_ctl++;
+        if (idp->checksum != 0xFFFF) {
+            idp->checksum = (uint16_t)XNS_IDP_$HOP_AND_SUM(idp->checksum,
+                                                           (int16_t)idp->length);
+        }
 
-            /*
-             * Check for broadcast with non-zero source socket
-             * (should not be forwarded)
-             */
-            /* Complex condition from original - simplified */
-
-            /*
-             * Increment transport control (hop count)
-             */
-            idp_hdr->transport_ctl++;
-
-            /*
-             * Recalculate checksum if not disabled
-             */
-            if (idp_hdr->checksum != 0xFFFF) {
-                idp_hdr->checksum = XNS_IDP_$HOP_AND_SUM(idp_hdr->checksum, idp_hdr->length);
-            }
-
-            /*
-             * Check hop count limit
-             */
-            if (should_forward && idp_hdr->transport_ctl > MAX_HOP_COUNT) {
-                if (is_std_routing) {
+        if (should_forward < 0) {                           /* 0x00E87540 */
+            /* 0x00E87544 - 0x00E8755E: cmpi.w #0x10 / bcs - drop at >= 0x10 */
+            hop_count = (int16_t)idp->transport_ctl;
+            if (hop_count >= ROUTE_$MAX_HOP_COUNT) {
+                if (is_std_routing < 0) {
                     ROUTE_$STAT_DROPPED_STD_HOP++;
                 } else {
                     ROUTE_$STAT_DROPPED_N_HOP++;
                 }
-                should_forward = 0;
+                should_forward = false;
             }
 
-            /*
-             * Find next hop for destination
-             */
-            if (should_forward) {
-                RIP_$FIND_NEXTHOP(&idp_hdr->dst_network, 0, &next_hop_port,
-                                  next_hop_addr, &status);
+            if (should_forward < 0) {                       /* 0x00E87560 */
+                /*
+                 * 0x00E87564 - 0x00E87570: the 12-byte destination address
+                 * is copied out of the IDP header before the lookup, which
+                 * overwrites the copy with the next hop.
+                 */
+                {
+                    const uint32_t *src = (const uint32_t *)&idp->dest_network;
+                    uint32_t *dst = (uint32_t *)&dest_addr;
+                    dst[0] = src[0];
+                    dst[1] = src[1];
+                    dst[2] = src[2];
+                }
 
-                if (status != status_$ok) {
-                    if (is_std_routing) {
+                /* 0x00E87572 - 0x00E87590 */
+                RIP_$FIND_NEXTHOP(&dest_addr, false, &next_hop_port,
+                                  &next_hop, &status);
+
+                if (status != status_$ok) {                 /* 0x00E87594 */
+                    if (is_std_routing < 0) {
                         ROUTE_$STAT_DROPPED_STD_ROUTE++;
                     } else {
                         ROUTE_$STAT_DROPPED_N_ROUTE++;
                     }
-                    should_forward = 0;
+                    should_forward = false;
                 }
             }
-
-            was_forwarded = 0;
-
-            if (should_forward) {
-                port_index = (int32_t)next_hop_port;
-                dest_port = &ROUTE_$PORT_ARRAY[port_index];
-
-                /*
-                 * Validate destination port is in appropriate routing mode
-                 */
-                if (is_std_routing) {
-                    if (((1 << (dest_port->active & 0x1f)) & 0x30) == 0) {
-                        ROUTE_$STAT_DROPPED_STD_ROUTE++;
-                        should_forward = 0;
-                    }
-                } else {
-                    if (((1 << (dest_port->active & 0x1f)) & 0x28) == 0) {
-                        ROUTE_$STAT_DROPPED_N_ROUTE++;
-                        should_forward = 0;
-                    }
-
-                    /* Set source node and network for outgoing */
-                    *(uint32_t *)((uint8_t *)packet_buffer + 8) = NODE_$ME;
-                    *packet_buffer = packet_network & 0xFFFFF;
-                }
-
-                /*
-                 * Forward based on destination port type
-                 */
-                if (dest_port->port_type == ROUTE_PORT_TYPE_ROUTING) {
-                    /*
-                     * Type 2: User/routing port - send via socket
-                     */
-                    if (RING_$LOGGING_NOW < 0) {
-                        RINGLOG_$LOGIT(&RINGLOG_$ROUTE_FORWARD, packet_buffer);
-                    }
-
-                    if (SOCK_$PUT(dest_port->socket, &packet_ptr, 0, 2,
-                                  dest_port->socket) < 0) {
-                        was_forwarded = 0xFF;
-                        /* Update port-specific statistics */
-                    } else {
-                        /* Update error statistics */
-                    }
-
-                    /* Update port forward counter */
-                    dest_port->forward_count += 1;
-
-                } else if (packet_size <= MAX_FORWARD_SIZE) {
-                    /*
-                     * Type 1: Local network port
-                     */
-                    if (is_std_routing) {
-                        /*
-                         * Standard routing - use MAC_OS_$SEND
-                         */
-                        uint8_t hw_addr[6];
-                        uint8_t arp_info[4];
-
-                        MAC_OS_$ARP(next_hop_addr, next_hop_port, hw_addr, arp_info, &status);
-
-                        if (status == status_$ok) {
-                            /* Build and send ethernet frame */
-                            /* ... complex packet construction ... */
-                            MAC_OS_$SEND(NULL, hw_addr, NULL, &status);
-                        }
-                    } else {
-                        /*
-                         * Normal routing - use NET_IO_$SEND
-                         */
-                        void *pkt_array[1];
-                        uint32_t flags;
-
-                        /* Get flags from packet buffer page */
-                        flags = *(uint32_t *)(((uint32_t)packet_buffer & ~0x3FF) + 0x3FC);
-
-                        ML_$LOCK(NET_IO_LOCK_ID);
-
-                        pkt_array[0] = packet_buffer;
-                        NET_IO_$SEND(next_hop_port, pkt_array, flags,
-                                     *(int16_t *)((uint8_t *)packet_buffer + 0x10), 0,
-                                     NULL,
-                                     *(int16_t *)((uint8_t *)packet_buffer + 0x14),
-                                     ROUTE_$FWD_TIMEOUT, NULL, &status);
-
-                        ML_$UNLOCK(NET_IO_LOCK_ID);
-                    }
-                } else {
-                    /* Packet too large to forward */
-                    if (is_std_routing) {
-                        ROUTE_$STAT_OVERSIZED_STD++;
-                    } else {
-                        ROUTE_$STAT_OVERSIZED_N++;
-                    }
-                }
-
-                /* Update forwarding statistics */
-                if (should_forward) {
-                    if (is_std_routing) {
-                        ROUTE_$STAT_FORWARDED_STD++;
-                    } else {
-                        ROUTE_$STAT_FORWARDED_N++;
-                    }
-                }
-            }
-
-            /*
-             * Return packet buffer if not successfully forwarded
-             */
-            if (!was_forwarded) {
-                NETBUF_$RTN_HDR(&packet_ptr);
-                PKT_$DUMP_DATA(NULL, packet_size);
-            }
-
-            /* Advance socket EC for next packet */
-            ROUTE_$SOCK_ECVAL++;
-            break;
-
-        case 2:
-            /*
-             * Shutdown requested via control EC
-             */
-            ROUTE_$CONTROL_ECVAL++;
-
-            /* Release routing lock */
-            PROC1_$CLR_LOCK(ROUTE_LOCK_ID);
-
-            /* Mark routing as inactive */
-            ROUTE_$ROUTING = 0;
-            ROUTE_$LAST_UPDATE_TIME = 0;
-
-            /* Unregister network service */
-            NETWORK_$SET_SERVICE(&ROUTE_$NET_SERVICE_OFF, &ROUTE_$SERVICE_ID, &status);
-
-            /* Close routing socket */
-            {
-                int16_t sock = ROUTE_$SOCK;
-                ROUTE_$SOCK = 0xFFFF;
-                SOCK_$CLOSE(sock);
-            }
-
-            ROUTE_$USER_PORT_MAX = 0;
-
-            /*
-             * Unwire wired pages if no user ports remain
-             */
-            if (ROUTE_$N_USER_PORTS == 0) {
-                for (i = ROUTE_$N_WIRED_PAGES - 1; i >= 0; i--) {
-                    WP_$UNWIRE(ROUTE_$WIRED_PAGES[i]);
-                }
-                ROUTE_$N_WIRED_PAGES = 0;
-            }
-
-            /* Unbind this process */
-            PROC1_$UNBIND(ROUTE_$PROCESS_UID, &status);
-
-            return;
         }
+
+        was_forwarded = false;                              /* 0x00E875AA */
+
+        if (should_forward < 0) {                           /* 0x00E875AC */
+            /* 0x00E875B2: 0-based, muls.w port,#0x5C */
+            port = &ROUTE_$PORT_ARRAY[next_hop_port];
+
+            if (is_std_routing < 0) {
+                /*
+                 * 0x00E875C4: btst.l D0,#0x30 - the port's "active" word
+                 * must select bit 4 or 5 for standard routing.
+                 */
+                if (((1u << (port->active & 0x1F)) & 0x30) == 0) {
+                    ROUTE_$STAT_DROPPED_STD_ROUTE++;
+                    should_forward = was_forwarded;         /* move.b D5b,D3b */
+                }
+            } else {
+                /* 0x00E875D6: btst.l D0,#0x28 - bit 3 or 5 */
+                if (((1u << (port->active & 0x1F)) & 0x28) == 0) {
+                    ROUTE_$STAT_DROPPED_N_ROUTE++;
+                    should_forward = was_forwarded;
+                }
+                /*
+                 * 0x00E875E6 - 0x00E875F8: rewrite the internet header so
+                 * that the packet leaves this node addressed to the next
+                 * hop.  These two stores happen whether or not the port
+                 * check above cleared should_forward.
+                 */
+                pkt->src_node = NODE_$ME;
+                pkt->dest_node = next_hop.host_lo & 0xFFFFF;
+            }
+
+            if (port->port_type == ROUTE_PORT_TYPE_ROUTING) {   /* 0x00E875FA */
+                /*
+                 * A user routing port: hand the packet to its socket.
+                 */
+                if (RING_$LOGGING_NOW < 0) {                /* 0x00E87602 */
+                    RINGLOG_$LOGIT(RINGLOG_$ROUTE_FORWARD, pkt);
+                }
+
+                port_stats = ROUTE_$PORT_STATS(port);
+
+                /*
+                 * 0x00E8761C - 0x00E87634.  The third argument is D5b, the
+                 * was_forwarded flag, which is still false here.
+                 */
+                if (SOCK_$PUT(port->socket, &rcv.hdr, (uint8_t)was_forwarded,
+                              2, port->socket) < 0) {
+                    was_forwarded = true;                   /* 0x00E8763C */
+
+                    /* 0x00E8763E - 0x00E8765E */
+                    queue_depth = (int16_t)route_sock->queue_count;
+                    if (queue_depth > 0x20) {
+                        port_stats->deep_queue_puts++;
+                    } else {
+                        port_stats->queue_depth[queue_depth]++;
+                    }
+                } else {
+                    port_stats->failed_puts++;              /* 0x00E87660 */
+                }
+
+                port->forward_count++;                      /* 0x00E87664 */
+                goto forward_stats;                         /* 0x00E87668 */
+            }
+
+            if (rcv.data_len <= ROUTE_$MAX_FORWARD_SIZE) {  /* 0x00E8766C */
+                if (is_std_routing < 0) {                   /* 0x00E87676 */
+                    /*
+                     * 0x00E8767C - 0x00E87698.  MAC_OS_$ARP fills the link
+                     * header at the front of the send record and sets the
+                     * broadcast flag at its +0x18.
+                     */
+                    MAC_OS_$ARP(&next_hop, next_hop_port,
+                                (uint16_t *)&mac_send,
+                                (uint8_t *)&mac_send.is_broadcast, &status);
+
+                    if (status != status_$ok) {             /* 0x00E8769C */
+                        should_forward = was_forwarded;     /* 0x00E87776 */
+                        goto forward_stats;
+                    }
+
+                    /*
+                     * 0x00E876A4 - 0x00E876DA: finish the 0x4C-byte send
+                     * record.  The one-entry descriptor chain at +0x1C
+                     * describes the header buffer; the payload pages are
+                     * copied straight out of the SOCK_$GET record.
+                     */
+                    mac_send.hdr_length   = rcv.hdr_len;
+                    mac_send.hdr_address  = (uint32_t)(uintptr_t)pkt;
+                    mac_send.hdr_next     = 0;
+                    mac_send.hdr_prebuilt = true;
+                    mac_send.frame_type   = ROUTE_$MAC_FRAME_TYPE;
+                    mac_send.data_length  = rcv.data_len;
+                    for (j = 0; j < 4; j++) {
+                        mac_send.data_pages[j] = rcv.data_pages[j];
+                    }
+
+                    /* 0x00E876DC - 0x00E87704 */
+                    MAC_OS_$SEND(XNS_IDP_$PORT_MAC_CHANNEL(next_hop_port),
+                                 (mac_os_$send_pkt_t *)&mac_send,
+                                 &mac_bytes_sent, &status);
+                    goto forward_stats;                     /* 0x00E87708 */
+                }
+
+                /*
+                 * 0x00E8770A - 0x00E87766: normal (Domain internet) routing.
+                 * The physical address of the header page is kept in the
+                 * last longword of the 1KB page the header lives in.
+                 */
+                hdr_pa = *(uint32_t *)(((uintptr_t)pkt & ~(uintptr_t)0x3FF) + 0x3FC);
+
+                ML_$LOCK(ROUTE_$NET_IO_LOCK_ID);
+
+                hdr_ptr_cell[0] = (uint32_t)(uintptr_t)pkt;
+                NET_IO_$SEND(next_hop_port,             /* port                 */
+                             hdr_ptr_cell,              /* &header VA           */
+                             hdr_pa,                    /* header PA            */
+                             pkt->hdr_len,              /* header length        */
+                             0,                         /* data VA              */
+                             rcv.data_pages,            /* payload page vector  */
+                             pkt->data_len,             /* payload length       */
+                             ROUTE_$FWD_TIMEOUT,        /* send flags/timeout   */
+                             &net_io_extra,             /* out                  */
+                             &status);
+
+                ML_$UNLOCK(ROUTE_$NET_IO_LOCK_ID);
+                goto forward_stats;                         /* 0x00E87766 */
+            }
+
+            /* 0x00E87768 - 0x00E87776: too big to put on a real port */
+            if (is_std_routing < 0) {
+                ROUTE_$STAT_OVERSIZED_STD++;
+            } else {
+                ROUTE_$STAT_OVERSIZED_N++;
+            }
+            should_forward = was_forwarded;
+        }
+
+    forward_stats:                                          /* 0x00E87778 */
+        /*
+         * 0x00E87778 - 0x00E8778E.  The second "tst.b D2b" at 0x00E87786 is
+         * unreachable-as-taken (D2 was already known negative), so this is
+         * simply: count a forward against the matching bucket.
+         */
+        if (is_std_routing < 0 && should_forward < 0) {
+            ROUTE_$STAT_FORWARDED_STD++;
+        } else if (should_forward < 0) {
+            ROUTE_$STAT_FORWARDED_N++;
+        }
+
+        /*
+         * 0x00E87792 - 0x00E877B6: nothing took ownership of the buffers,
+         * so give them back.  NETBUF_$RTN_HDR is handed a copy of the
+         * header pointer, not the SOCK_$GET record.
+         */
+        if (was_forwarded >= 0) {
+            hdr_ptr_cell[0] = (uint32_t)(uintptr_t)pkt;
+            NETBUF_$RTN_HDR(hdr_ptr_cell);
+            PKT_$DUMP_DATA(rcv.data_pages, (int16_t)rcv.data_len);
+        }
+
+        ROUTE_$SOCK_ECVAL++;                                /* 0x00E877B8 */
+        continue;
+
+    shutdown:                                               /* 0x00E877FE */
+        ROUTE_$CONTROL_ECVAL++;
+        PROC1_$CLR_LOCK(ROUTE_$PROC_LOCK_ID);
+
+        ROUTE_$ROUTING = false;                             /* clr.b, 0x00E87812 */
+        ROUTE_$LAST_UPDATE_TIME = 0;                        /* 0x00E87818 */
+
+        NETWORK_$SET_SERVICE(&ROUTE_$NET_SERVICE_OFF, &ROUTE_$SERVICE_ID,
+                             &status);
+
+        /* 0x00E87834 - 0x00E87850 */
+        closing_sock = ROUTE_$SOCK;
+        ROUTE_$SOCK = 0xFFFF;
+        SOCK_$CLOSE(closing_sock);
+
+        ROUTE_$USER_PORT_MAX = 0;                           /* 0x00E87852 */
+
+        /*
+         * 0x00E87856 - 0x00E8787E: with no user ports left, release the
+         * wired pages.  "moveq D0 = n-1; bmi skip; lea (0x4,A5),A2;
+         * ... move.l (-0x4,A2) ... addq.l #4,A2; dbf" walks the array
+         * upwards from index 0.
+         */
+        if (ROUTE_$N_USER_PORTS == 0) {
+            for (i = 0; i < ROUTE_$N_WIRED_PAGES; i++) {
+                WP_$UNWIRE(ROUTE_$WIRED_PAGES[i]);
+            }
+            ROUTE_$N_WIRED_PAGES = 0;
+        }
+
+        /* 0x00E87882 - 0x00E8788C: the process does not return from here */
+        PROC1_$UNBIND(ROUTE_$PROCESS_UID, &status);
+        return;
     }
 }

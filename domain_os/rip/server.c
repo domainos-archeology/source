@@ -114,7 +114,7 @@ int16_t RIP_$PACKET_LENGTH(int16_t entry_count)
  *
  * Original address: 0x00E6887A
  */
-void RIP_$SEND_UPDATES(int16_t is_std)
+void RIP_$SEND_UPDATES(boolean is_std)
 {
     uint8_t flags;
 
@@ -304,7 +304,7 @@ static void RIP_$PROCESS_REQUEST_INTERNAL(int8_t flags, uint8_t *frame_ptr)
  * Public wrapper - this is what gets called
  * In the original code, this accesses the caller's stack frame via A6
  */
-void RIP_$PROCESS_REQUEST(int8_t flags)
+void RIP_$PROCESS_REQUEST(boolean flags)
 {
     /*
      * Note: In the original m68k code, this function accesses the caller's
@@ -337,7 +337,7 @@ void RIP_$PROCESS_REQUEST(int8_t flags)
  *
  * Original address: 0x00E68A08
  */
-uint16_t RIP_$SERVER(void)
+void RIP_$SERVER(void)
 {
     void *packet;
     uint16_t result;
@@ -379,7 +379,7 @@ uint16_t RIP_$SERVER(void)
     result = SOCK_$GET(RIP_SOCKET, &packet);
     if ((int8_t)result >= 0) {
         /* No packet available */
-        return result;
+        return;
     }
 
     /* Check packet flags for standard vs non-standard */
@@ -450,7 +450,7 @@ uint16_t RIP_$SERVER(void)
 
     if (port_index == -1) {
         /* Unknown port - ignore packet */
-        return result;
+        return;
     }
 
     /* Dispatch based on command type */
@@ -467,7 +467,7 @@ uint16_t RIP_$SERVER(void)
                 /* Check if this is a broadcast request (all FFs in address) */
                 uint16_t *addr = (uint16_t *)&header_copy[0x14];
                 if (addr[0] == 0xFFFF && addr[1] == 0xFFFF && addr[2] == 0xFFFF) {
-                    return 0xFF;
+                    return;
                 }
             }
 
@@ -537,17 +537,17 @@ uint16_t RIP_$SERVER(void)
 
                     if (wait_status == 0xD0003) {
                         /* Timeout - done */
-                        return result;
+                        return;
                     }
                 }
             }
-            return result;
+            return;
         } else {
             /* Standard request */
             if (ROUTE_$N_ROUTING_PORTS < 2) {
                 uint8_t *response_flags = (uint8_t *)&packet_data[0x155];
                 if ((int8_t)*response_flags < 0) {
-                    return 0xFF;
+                    return;
                 }
             }
 
@@ -604,7 +604,7 @@ uint16_t RIP_$SERVER(void)
                                    NULL, 0,
                                    &len_out, NULL, &status);
             }
-            return result;
+            return;
         }
         break;
 
@@ -710,7 +710,7 @@ uint16_t RIP_$SERVER(void)
     send_updates:
         /* Send any pending updates */
         RIP_$SEND_UPDATES(is_std);
-        return 0;
+        return;
 
     case RIP_CMD_NAME_REGISTER:
         /*
@@ -723,7 +723,7 @@ uint16_t RIP_$SERVER(void)
             /* Non-standard - check for specific socket type */
             if ((uint8_t)header_copy[0x1B] != 0xBE) {
                 RIP_$STATS.unknown_commands++;
-                return 3;
+                return;
             }
 
             /* Extract parameters - kept for documentation */
@@ -734,15 +734,15 @@ uint16_t RIP_$SERVER(void)
             /* Standard - call name registration */
             REM_NAME_$REGISTER_SERVER();
         }
-        return 0;
+        return;
 
     default:
         /* Unknown command */
         RIP_$STATS.unknown_commands++;
-        return command;
+        return;
     }
 
-    return result;
+    return;
 
 error_return:
     /* Error - return packet and increment error counter */
@@ -751,5 +751,5 @@ error_return:
         uint32_t pkt_va = (uint32_t)(uintptr_t)packet;
         NETBUF_$RTN_HDR(&pkt_va);
     }
-    return 0;
+    return;
 }

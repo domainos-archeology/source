@@ -123,6 +123,16 @@ extern uid_t NETWORK_$PAGING_FILE_UID;
 /* Network statistics */
 extern uint32_t NETWORK_$PAGING_BACKLOG;      /* 0xE24BAC */
 extern uint32_t NETWORK_$FILE_BACKLOG;        /* 0xE24BD0 */
+
+/*
+ * 0xE24BD0 is the base of a nine-entry histogram of the file-server request
+ * backlog; REM_FILE_$SERVER indexes it with the depth byte at +0x15 of the
+ * record NETWORK_$SERVICE_INFO_PTR points at, and counts everything deeper
+ * than eight in the overflow cell (0x00E63628-0x00E6364E).
+ */
+#define NETWORK_FILE_BACKLOG_BUCKETS    9
+extern uint32_t NETWORK_$FILE_BACKLOG_OVERFLOW;  /* 0xE24BF0 */
+extern uint8_t *NETWORK_$SERVICE_INFO_PTR;       /* 0xE28DB8 */
 extern uint16_t NETWORK_$RCV_READ_AHEAD;      /* 0xE24C26 */
 extern uint16_t NETWORK_$MULT_PAGIN_RQST_CNT; /* 0xE24C28 */
 extern uint16_t NETWORK_$BAD_CHKSUM_CNT;      /* 0xE24C2A */

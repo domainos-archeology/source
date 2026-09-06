@@ -50,7 +50,7 @@
  */
 void RIP_$UPDATE_D(const uint32_t *network_ptr, void *source_ptr,
                    const uint16_t *hop_count_ptr, const uint8_t *port_info,
-                   const int8_t *flags_ptr, status_$t *status_ret)
+                   const boolean *flags_ptr, status_$t *status_ret)
 {
     rip_$xns_addr_t *source = (rip_$xns_addr_t *)source_ptr;
     int16_t port_index;
@@ -81,7 +81,7 @@ void RIP_$UPDATE_D(const uint32_t *network_ptr, void *source_ptr,
     } else {
         /* Delegate to RIP_$UPDATE_INT */
         RIP_$UPDATE_INT(*network_ptr, source, *hop_count_ptr,
-                        (uint8_t)port_index, *flags_ptr, &status);
+                        (uint16_t)port_index, *flags_ptr, &status);
     }
 
     *status_ret = status;

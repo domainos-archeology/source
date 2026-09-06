@@ -14,6 +14,7 @@
 #include "network/network.h"
 #include "rip/rip.h"
 #include "sock/sock.h"
+#include "xns/xns.h"
 
 /*
  * =============================================================================
@@ -72,11 +73,17 @@ extern uint32_t ROUTE_$CONTROL_EC;
 /* ROUTE_$SOCK, ROUTE_$STD_N_ROUTING_PORTS, ROUTE_$N_ROUTING_PORTS: see route/route.h */
 
 /*
- * ROUTE_$ROUTING - Routing table/flag
+ * ROUTE_$ROUTING - "the router is running" flag
+ *
+ * A one-BYTE Domain boolean, not a word: ROUTE_$PROCESS sets it with
+ * "st (0x00E26F1E).l" (0x00E8742E) and clears it with "clr.b (0x00E26F1E).l"
+ * (0x00E87812), and the SMD readers test it with "tst.b" (0x00E69B8C,
+ * 0x00E69E94).  SMD_$DISP1_INT is the *code* at 0x00E26F20, immediately
+ * after this byte - the two are distinct symbols (bead source-8xb).
  *
  * Original address: 0xE26F1E
  */
-extern uint16_t ROUTE_$ROUTING;
+extern boolean ROUTE_$ROUTING;
 
 /*
  * =============================================================================
@@ -212,6 +219,12 @@ void RTWIRED_PROC_START(int16_t port_index, uint16_t packet_id,
 #define ROUTE_$WIRED_AREA_START ((void *)0x00E87000)
 #define ROUTE_$WIRED_AREA_END   ((void *)0x00E88228)
 
+/*
+ * status_$internet_unknown_network_port constant cell, passed by reference to
+ * CRASH_SYSTEM by ROUTE_$SEND_USER_PORT ("pea (0xD4,PC)" at 0x00E87C8E).
+ */
+#define ROUTE_$UNKNOWN_PORT_STATUS  (*(const status_$t *)0xE87D64)
+
 /* RIP halt ("poison") packet: 16 byte header + 8 bytes of RIP data */
 #define RIP_$HALT_PACKET        ((uint8_t *)0xE87D68)   /* 0xE87D68 */
 #define RIP_$HALT_PACKET_DATA   ((uint8_t *)0xE87D78)   /* 0xE87D78 */
@@ -245,10 +258,20 @@ void RTWIRED_PROC_START(int16_t port_index, uint16_t packet_id,
 /* Count of active user ports */
 #define ROUTE_$N_USER_PORTS     (*(int16_t *)0xE87FD4)
 
-/* Network service on/off operation codes and ring log id (in code segment) */
+/*
+ * Constant cells in the routing code segment, all passed by reference
+ * (pea (d,PC)) by ROUTE_$PROCESS:
+ *   0xE8789C  NETWORK_$SET_SERVICE opcode 0 "or bits"   (pea (0x45E,PC) @0xE8743C)
+ *   0xE8789E  NETWORK_$SET_SERVICE opcode 1 "and not"   (pea (0x76,PC)  @0xE87826)
+ *   0xE878A0  RINGLOG_$LOGIT header info; only byte 0 is read, and only its
+ *             bit 7 (the "inbound" flag), at 0x00E1A2F6  (pea (0x292,PC) @0xE8760C)
+ *   0xE878A4  status_$network_buffer_queue_is_empty, handed to CRASH_SYSTEM
+ *             when SOCK_$GET returns false             (pea (0x3E6,PC) @0xE874BC)
+ */
 #define ROUTE_$NET_SERVICE_ON   (*(int16_t *)0xE8789C)
 #define ROUTE_$NET_SERVICE_OFF  (*(int16_t *)0xE8789E)
-#define RINGLOG_$ROUTE_FORWARD  (*(uint16_t *)0xE878A0)
+#define RINGLOG_$ROUTE_FORWARD  ((uint8_t *)0xE878A0)
+#define ROUTE_$SOCK_EMPTY_STATUS (*(const status_$t *)0xE878A4)
 
 /* Send callback/data pointer (4 bytes of zeros at 0xE870D8) */
 #define RTWIRED_$CALLBACK       ((uint32_t *)0xE870D8)
@@ -268,6 +291,7 @@ extern char ROUTE_$WIRED_AREA_END_SYM[];
 #define ROUTE_$WIRED_AREA_START ((void *)RTWIRED_PROC_START)
 #define ROUTE_$WIRED_AREA_END   ((void *)ROUTE_$WIRED_AREA_END_SYM)
 
+extern const status_$t ROUTE_$UNKNOWN_PORT_STATUS;
 extern uint8_t RIP_$HALT_PACKET[24];
 #define RIP_$HALT_PACKET_DATA   (&RIP_$HALT_PACKET[0x10])
 extern uint16_t RTWIRED_$SEND_FLAGS;
@@ -287,7 +311,8 @@ extern int16_t ROUTE_$N_WIRED_PAGES;
 extern int16_t ROUTE_$N_USER_PORTS;
 extern int16_t ROUTE_$NET_SERVICE_ON;
 extern int16_t ROUTE_$NET_SERVICE_OFF;
-extern uint16_t RINGLOG_$ROUTE_FORWARD;
+extern uint8_t RINGLOG_$ROUTE_FORWARD[4];
+extern const status_$t ROUTE_$SOCK_EMPTY_STATUS;
 extern uint32_t RTWIRED_$CALLBACK_DATA;
 #define RTWIRED_$CALLBACK       (&RTWIRED_$CALLBACK_DATA)
 extern uint16_t ROUTE_$PROCESS_UID;
@@ -298,5 +323,132 @@ extern uint16_t ROUTE_$FWD_TIMEOUT;
 extern uint16_t ROUTE_$PACKET_SEQ;
 extern uint32_t ROUTE_$LAST_UPDATE_TIME;
 #endif
+
+/*
+ * =============================================================================
+ * Packet record layouts used by the forwarding path (ROUTE_$PROCESS)
+ * =============================================================================
+ */
+
+/*
+ * route_$internet_hdr_t - the Domain internet header that PKT_$BLD_INTERNET_HDR
+ * builds and that SOCK_$GET hands back in sock_$pkt_info_t.hdr.
+ *
+ * Field offsets were taken from the stores in PKT_$BLD_INTERNET_HDR
+ * (0x00E1206A - 0x00E122BA, A2 = header buffer); only the fields
+ * ROUTE_$PROCESS touches are named.  For "standard" (pure XNS) routing the
+ * buffer holds the IDP header at offset 0 instead and none of these fields
+ * apply; ROUTE_$PROCESS picks the IDP base with the branch at 0x00E87500.
+ */
+typedef struct route_$internet_hdr_t {
+    uint32_t    dest_node;      /* 0x00: 20-bit destination node id
+                                 *       (move.l D1,(A2) at 0xE1217C); rewritten
+                                 *       with the next hop at 0xE875F8 */
+    uint32_t    route_info;     /* 0x04: masked to 0xFF0000FF at 0xE12070 */
+    uint32_t    src_node;       /* 0x08: NODE_$ME (0xE1207C); rewritten at
+                                 *       0xE875E6 when this node forwards */
+    uint8_t     routing_type;   /* 0x0C: low byte of the caller's routing type
+                                 *       word (1 = local, 2 = internet;
+                                 *       move.b (0x3,A3),(0xC,A2) at 0xE1228A) */
+    uint8_t     _pad_0d;        /* 0x0D: cleared at 0xE12290 */
+    uint8_t     _f0e;           /* 0x0E: move.b (0x1,A3),(0xE,A2) at 0xE12298 */
+    uint8_t     _pad_0f;        /* 0x0F: cleared at 0xE12294 */
+    uint16_t    hdr_len;        /* 0x10: total header length (0xE122BA) */
+    uint16_t    template_len;   /* 0x12: caller template length (0xE1229E) */
+    uint16_t    data_len;       /* 0x14: payload byte count (0xE122A2) */
+    uint16_t    _f16;           /* 0x16: 0xE122A6 */
+    uint8_t     hdr_size;       /* 0x18: header size byte (0x28 or 4) */
+    uint8_t     pkt_type;       /* 0x19: 4 = internet, 1 = local */
+    uint16_t    _f1a;           /* 0x1A */
+    uint16_t    _f1c;           /* 0x1C */
+    uint16_t    _f1e;           /* 0x1E */
+    uint8_t     _f20[0x08];     /* 0x20 */
+    xns_$idp_header_t idp;      /* 0x28: the encapsulated IDP header
+                                 *       (lea (0x28,A4),A2 at 0xE87508) */
+} route_$internet_hdr_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(route_$internet_hdr_t, src_node)     == 0x08, "internet_hdr.src_node");
+_Static_assert(offsetof(route_$internet_hdr_t, routing_type) == 0x0C, "internet_hdr.routing_type");
+_Static_assert(offsetof(route_$internet_hdr_t, hdr_len)      == 0x10, "internet_hdr.hdr_len");
+_Static_assert(offsetof(route_$internet_hdr_t, data_len)     == 0x14, "internet_hdr.data_len");
+_Static_assert(offsetof(route_$internet_hdr_t, hdr_size)     == 0x18, "internet_hdr.hdr_size");
+_Static_assert(offsetof(route_$internet_hdr_t, idp)          == 0x28, "internet_hdr.idp");
+#endif
+
+/*
+ * route_$mac_send_rec_t - the descriptor MAC_OS_$ARP fills in and MAC_OS_$SEND
+ * hands to the port driver (0x4C bytes).
+ *
+ * The first 0x1C bytes are written by MAC_OS_$ARP (link-level addresses and
+ * the frame type), the broadcast flag at +0x18 is its fourth argument, and
+ * the caller fills in the rest.  MAC_OS_$SEND walks the {length, address,
+ * next} descriptor at +0x1C (0x00E0B62C, 0x00E0B640-0x00E0B660), skips its
+ * own buffer setup when the byte at +0x28 is true (not.b/bpl at 0x00E0B616)
+ * and stores the accumulated length at +0x38 (0x00E0B786).  Everything from
+ * +0x30 up is consumed by the driver entry it calls at 0x00E0B7AA.
+ *
+ * This is the same object as mac_os/mac_os.h's mac_os_$send_pkt_t, which
+ * stops at 0x40 and so cannot describe the 16 payload page addresses at
+ * +0x3C; see bead source-5lqz.  The record is built identically by
+ * XNS_IDP_$SEND at 0x00E183FC - 0x00E1842A.
+ */
+typedef struct route_$mac_send_rec_t {
+    uint8_t     link_hdr[0x18]; /* 0x00: dest/src link addresses and frame type,
+                                 *       written by MAC_OS_$ARP */
+    int8_t      is_broadcast;   /* 0x18: MAC_OS_$ARP's fourth argument
+                                 *       (clr.b/st (A3) at 0xE0C112/0xE0C12A) */
+    uint8_t     _pad_19[3];     /* 0x19 */
+    uint32_t    hdr_length;     /* 0x1C: descriptor length */
+    uint32_t    hdr_address;    /* 0x20: descriptor address */
+    uint32_t    hdr_next;       /* 0x24: next descriptor (0 = end of chain) */
+    int8_t      hdr_prebuilt;   /* 0x28: true = the header buffers are already
+                                 *       set up, MAC_OS_$SEND must not build
+                                 *       any of its own */
+    uint8_t     _pad_29[7];     /* 0x29 */
+    uint32_t    frame_type;     /* 0x30: 0x600 for both ROUTE and XNS IDP */
+    uint32_t    _pad_34;        /* 0x34 */
+    uint32_t    data_length;    /* 0x38: payload byte count */
+    uint32_t    data_pages[4];  /* 0x3C: payload page addresses */
+} route_$mac_send_rec_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(route_$mac_send_rec_t, is_broadcast) == 0x18, "mac_send.is_broadcast");
+_Static_assert(offsetof(route_$mac_send_rec_t, hdr_length)   == 0x1C, "mac_send.hdr_length");
+_Static_assert(offsetof(route_$mac_send_rec_t, hdr_address)  == 0x20, "mac_send.hdr_address");
+_Static_assert(offsetof(route_$mac_send_rec_t, hdr_next)     == 0x24, "mac_send.hdr_next");
+_Static_assert(offsetof(route_$mac_send_rec_t, hdr_prebuilt) == 0x28, "mac_send.hdr_prebuilt");
+_Static_assert(offsetof(route_$mac_send_rec_t, frame_type)   == 0x30, "mac_send.frame_type");
+_Static_assert(offsetof(route_$mac_send_rec_t, data_length)  == 0x38, "mac_send.data_length");
+_Static_assert(offsetof(route_$mac_send_rec_t, data_pages)   == 0x3C, "mac_send.data_pages");
+_Static_assert(sizeof(route_$mac_send_rec_t) == 0x4C, "route_$mac_send_rec_t must be 0x4C bytes");
+#endif
+
+/*
+ * ROUTE_$PORT_STATS - the statistics block a port's driver_stats field names.
+ *
+ * On the target this is simply the 32-bit address stored in the port entry
+ * ("movea.l (0x44,A3),A2" at 0x00E87618).  It is spelled as a macro so that a
+ * host unit test, where a real pointer does not fit in the 32-bit field, can
+ * rebind the dereference without changing the record layout.
+ */
+#define ROUTE_$PORT_STATS(port) \
+    ((route_$port_stats_t *)(uintptr_t)(port)->driver_stats)
+
+/* Frame type ROUTE_$PROCESS and XNS_IDP_$SEND put in route_$mac_send_rec_t */
+#define ROUTE_$MAC_FRAME_TYPE   0x600
+
+/* Lock ids ROUTE_$PROCESS takes: PROC1_$SET_LOCK(0xD), ML_$LOCK(0x18) */
+#define ROUTE_$PROC_LOCK_ID     0x0D
+#define ROUTE_$NET_IO_LOCK_ID   0x18
+
+/* Ticks between periodic RIP broadcasts (moveq #0x72 at 0x00E877EE) */
+#define ROUTE_$BROADCAST_INTERVAL   0x72
+
+/* Largest packet ROUTE_$PROCESS will forward onto a real port (0x00E8766C) */
+#define ROUTE_$MAX_FORWARD_SIZE     0x400
+
+/* IDP transport-control value at which a packet is discarded (0x00E8754A) */
+#define ROUTE_$MAX_HOP_COUNT        0x10
 
 #endif /* ROUTE_INTERNAL_H */

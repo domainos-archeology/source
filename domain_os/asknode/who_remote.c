@@ -154,13 +154,14 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     request[0] = (req_version << 16) | req_type;
 
     /* Send WHO query */
-    uint8_t temp1[2], temp2[4];
+    uint8_t temp1[2];
+    uint16_t resp_timeout;      /* A6-0x288, read into D7 at 0x00E6652C */
     status_$t send_status;
     PKT_$SEND_INTERNET(routing_port, target_node_param, 4, -1, NODE_$ME,
                        ASKNODE_WHO_SOCKET, pkt_info, pkt_id,
                        request, 0x18,
                        &ASKNODE_$EMPTY_DATA, 0,  /* No data */
-                       temp1, temp2, &local_status);
+                       temp1, &resp_timeout, &local_status);
 
     if (local_status != 0) {
         *status = local_status;
@@ -188,14 +189,27 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
 
         wait_val++;
 
+        /*
+         * 0x00E6657E - 0x00E665C0.  Both arrays go by value:
+         *   ecs  = { A6-0x26C (socket EC), A3 (= &TIME_$CLOCKH, loaded at
+         *            0x00E66572), &FIM_$QUIT_EC[as_id] }
+         *   vals = { D5 (socket value, bumped at 0x00E6657E),
+         *            TIME_$CLOCKH + D7 + 0x14, A6-0x274 (quit value + 1) }
+         * D7 carries PKT_$SEND_INTERNET's timeout on the first pass only; it
+         * is cleared right after the wait ("clr.w D7w" at 0x00E665C0), so
+         * later passes get a flat 0x14-tick deadline.
+         */
         ecs[0] = socket_ec;
-        ecs[1] = &TIME_$CLOCKH;
+        ecs[1] = (ec_$eventcount_t *)&TIME_$CLOCKH;
         ecs[2] = &FIM_$QUIT_EC[PROC1_$AS_ID];
 
-        /* Calculate dynamic timeout based on CLOCKH plus port delay */
-        timeout_val = *(int32_t *)&TIME_$CLOCKH + temp2[0] + 0x14;
+        timeout_val = (int32_t)TIME_$CLOCKH + (int32_t)resp_timeout + 0x14;
 
-        wait_result = EC_$WAIT(ecs, (uint32_t *)&wait_val);
+        wait_result = EC_$WAIT((ec_$wait_ecs_t){{ ecs[0], ecs[1], ecs[2] }},
+                               (ec_$wait_vals_t){{ wait_val, timeout_val,
+                                                   quit_val }});
+
+        resp_timeout = 0;                       /* 0x00E665C0: clr.w D7w */
 
         if (wait_result == 1) {
             /* Timeout */

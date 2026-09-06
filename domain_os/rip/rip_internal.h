@@ -199,11 +199,13 @@ void RIP_$AGE(void);
  *
  * Sends routing update packets if there are recent changes.
  *
- * @param is_std    Non-zero for standard routes, zero for non-standard
+ * @param is_std    Pascal boolean read as a byte at (0x8,A6)
+ *                  ("move.b (0x8,A6),D0b / bpl" at 0x00E6887E):
+ *                  < 0 = non-standard routes, >= 0 = standard routes
  *
  * Original address: 0x00E6887A
  */
-void RIP_$SEND_UPDATES(int16_t is_std);
+void RIP_$SEND_UPDATES(boolean is_std);
 
 /*
  * RIP_$UPDATE_INT - Internal route update function
@@ -230,8 +232,8 @@ void RIP_$SEND_UPDATES(int16_t is_std);
  * Original address: 0x00E15922
  */
 void RIP_$UPDATE_INT(uint32_t network, rip_$xns_addr_t *source,
-                     uint16_t hop_count, uint8_t port_index,
-                     int8_t flags, status_$t *status_ret);
+                     uint16_t hop_count, uint16_t port_index,
+                     boolean flags, status_$t *status_ret);
 
 /*
  * Helper functions (nested Pascal procedures in original):
@@ -282,7 +284,7 @@ int16_t RIP_$PACKET_LENGTH(int16_t entry_count);
  *
  * Original address: 0x00E688C8
  */
-void RIP_$PROCESS_REQUEST(int8_t flags);
+void RIP_$PROCESS_REQUEST(boolean flags);
 
 /*
  * RIP_$SERVER - Main RIP protocol server
@@ -294,9 +296,12 @@ void RIP_$PROCESS_REQUEST(int8_t flags);
  *
  * Called from socket receive processing when RIP packets arrive.
  *
+ * The original is a procedure: it leaves nothing in D0 and its only caller
+ * (0x00E11BA8) neither reserves a result slot nor reads one.
+ *
  * Original address: 0x00E68A08
  */
-uint16_t RIP_$SERVER(void);
+void RIP_$SERVER(void);
 
 /*
  * =============================================================================
@@ -339,10 +344,19 @@ uint16_t RIP_$SERVER(void);
  * using the XNS/IDP protocol. Builds an IDP header with broadcast
  * destination, copies route data, and sends via XNS_IDP_$OS_SEND.
  *
- * @param port_index    Port index (0-7)
- * @param addr_info     Source address info (12 bytes)
- * @param route_data    Route data buffer (cmd + entries)
- * @param route_len     Route data length
+ * TODO(source-uk92): in the original this is a nested Pascal procedure of
+ * RIP_$SEND with a single word parameter.  RIP_$SEND calls it with
+ * "subq.l #2,SP / move.w D4w,-(SP) / bsr.w 0x00E870DC" (0x00E87262 and
+ * 0x00E8727C) and the callee reaches the rest of its inputs through the
+ * static link ("movea.l (A6),A2" at 0x00E870E8, then (-0x64,A2), (-0x60,A2),
+ * ...).  The extra parameters below are this C translation's flattening of
+ * those uplevel references; per CLAUDE.md it should instead become a static
+ * function inside rip/send.c.
+ *
+ * @param port_index    Port index (0-7) - the only real parameter
+ * @param addr_info     RIP_$SEND's addr_info (uplevel)
+ * @param route_data    RIP_$SEND's route data buffer (uplevel)
+ * @param route_len     RIP_$SEND's route data length (uplevel)
  *
  * Original address: 0x00E870DC
  */
@@ -355,14 +369,17 @@ void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
  * Sends a RIP packet to a directly connected (wired) network using
  * NET_IO_$SEND instead of IDP routing.
  *
- * In the original Pascal implementation, this was a nested procedure
- * that accessed the caller's stack frame. In C, all parameters are
- * passed explicitly.
+ * TODO(source-uk92): like RIP_$SEND_TO_PORT this is a nested Pascal procedure
+ * of RIP_$SEND taking one word parameter; RIP_$SEND calls it with
+ * "subq.l #2,SP / move.w D4w,-(SP) / bsr.w 0x00E87000" (0x00E8724A and
+ * 0x00E8728A) and everything else comes from the static link.  The extra
+ * parameters below are this translation's flattening of those uplevel
+ * references.
  *
- * @param port_index    Port index (0-7)
- * @param packet_id     Packet identifier (from PKT_$NEXT_ID)
- * @param route_data    Route data buffer (cmd + entries)
- * @param route_len     Route data length in bytes
+ * @param port_index    Port index (0-7) - the only real parameter
+ * @param packet_id     RIP_$SEND's packet id (uplevel, from PKT_$NEXT_ID)
+ * @param route_data    RIP_$SEND's route data buffer (uplevel)
+ * @param route_len     RIP_$SEND's route data length (uplevel)
  *
  * Original address: 0x00E87000
  * Implemented in: route/rtwired_proc_start.c
@@ -381,13 +398,15 @@ void RTWIRED_PROC_START(int16_t port_index, uint16_t packet_id,
  * @param port_index    Port index (0-7), or -1 for all ports (broadcast)
  * @param route_data    Route data buffer (cmd + entries)
  * @param route_len     Route data length
- * @param flags         If < 0: non-standard routes, send via IDP only
+ * @param flags         Pascal boolean read as a byte at (0x14,A6)
+ *                      ("move.b (0x14,A6),D3b" at 0x00E871C8):
+ *                      If < 0: non-standard routes, send via IDP only
  *                      If >= 0: standard routes, get new packet ID first
  *
  * Original address: 0x00E871B6
  */
 void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
-               uint16_t route_len, int8_t flags);
+               uint16_t route_len, boolean flags);
 
 /*
  * RIP_$BROADCAST - Build and broadcast full routing table
@@ -395,12 +414,14 @@ void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
  * Iterates through all routing table entries, builds a RIP response
  * packet containing all valid routes, and sends it to all ports.
  *
- * @param flags     If < 0: broadcast non-standard routes (cap metric at 16)
+ * @param flags     Pascal boolean read as a byte at (0x8,A6)
+ *                  ("move.b (0x8,A6),D2b" at 0x00E872A6):
+ *                  If < 0: broadcast non-standard routes (cap metric at 16)
  *                  If >= 0: broadcast standard routes
  *
  * Original address: 0x00E87298
  */
-void RIP_$BROADCAST(uint8_t flags);
+void RIP_$BROADCAST(boolean flags);
 
 /*
  * =============================================================================

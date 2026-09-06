@@ -46,7 +46,51 @@ typedef struct route_$port_t {
 
 /* Port entry size must match the original 0x5C-byte stride */
 #if defined(ARCH_M68K)
+_Static_assert(offsetof(route_$port_t, network)       == 0x00, "route_$port_t.network");
+_Static_assert(offsetof(route_$port_t, active)        == 0x2C, "route_$port_t.active");
+_Static_assert(offsetof(route_$port_t, port_type)     == 0x2E, "route_$port_t.port_type");
+_Static_assert(offsetof(route_$port_t, socket)        == 0x30, "route_$port_t.socket");
+_Static_assert(offsetof(route_$port_t, socket2)       == 0x36, "route_$port_t.socket2");
+_Static_assert(offsetof(route_$port_t, port_ec)       == 0x38, "route_$port_t.port_ec");
+_Static_assert(offsetof(route_$port_t, driver_stats)  == 0x44, "route_$port_t.driver_stats");
+_Static_assert(offsetof(route_$port_t, forward_count) == 0x58, "route_$port_t.forward_count");
 _Static_assert(sizeof(route_$port_t) == 0x5C, "route_$port_t must be 0x5C bytes");
+#endif
+
+/*
+ * route_$port_stats_t - the statistics block a routing port points at
+ *
+ * route_$port_t.driver_stats (+0x44) holds the address of this block.
+ * ROUTE_$PROCESS updates it after handing a forwarded packet to a user
+ * routing port (0x00E87618 - 0x00E87664) and ROUTE_$READ_USER_STATS copies
+ * the first ten bytes plus a port-dependent number of queue-depth buckets
+ * out to the caller (0x00E6A6xx).
+ *
+ * The longwords sit on odd-numbered word boundaries (0x02, 0x06, 0x0A+n*4),
+ * so the record has to be packed to lay out the same way off m68k.
+ */
+typedef struct route_$port_stats_t {
+    uint16_t    flags;              /* 0x00: byte 0 is copied out by
+                                     *       ROUTE_$READ_USER_STATS */
+    uint32_t    deep_queue_puts;    /* 0x02: SOCK_$PUT succeeded with a socket
+                                     *       queue depth above 0x20
+                                     *       (addq.l #1,(0x2,A2) at 0xE8764E) */
+    uint32_t    failed_puts;        /* 0x06: SOCK_$PUT failed
+                                     *       (addq.l #1,(0x6,A2) at 0xE87660) */
+    uint32_t    queue_depth[0x21];  /* 0x0A: SOCK_$PUT succeeded, bucketed by
+                                     *       the socket queue depth 0..0x20
+                                     *       (addq.l #1,(0xA,A2,D1) at 0xE8765A) */
+} __attribute__((packed)) route_$port_stats_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(route_$port_stats_t, deep_queue_puts) == 0x02,
+               "route_$port_stats_t.deep_queue_puts");
+_Static_assert(offsetof(route_$port_stats_t, failed_puts) == 0x06,
+               "route_$port_stats_t.failed_puts");
+_Static_assert(offsetof(route_$port_stats_t, queue_depth) == 0x0A,
+               "route_$port_stats_t.queue_depth");
+_Static_assert(sizeof(route_$port_stats_t) == 0x8E,
+               "route_$port_stats_t must be 0x8E bytes");
 #endif
 
 /* Number of network ports supported */
@@ -336,5 +380,27 @@ extern int16_t ROUTE_$N_ROUTING_PORTS;
  * Original address: 0xE26F18
  */
 extern uint16_t ROUTE_$SOCK;
+
+/*
+ * Routing drop counters shared with the XNS IDP demux.
+ *
+ * XNS_IDP_$OS_DEMUX increments these directly:
+ *   0x00E18678  addq.l #0x1,(0x00E87FB4).l   no standard routing ports
+ *   0x00E1869A  addq.l #0x1,(0x00E87FB0).l   IDP hop count exhausted
+ *
+ * The ROUTE subsystem's own definitions live in route/route_internal.h and
+ * are textually identical on the m68k build; the declarations here exist so
+ * that code outside ROUTE (and the host unit tests) can reach them without
+ * including a foreign internal header.
+ *
+ * Original addresses: 0xE87FB0, 0xE87FB4
+ */
+#if defined(ARCH_M68K)
+#define ROUTE_$STAT_DROPPED_STD_HOP (*(uint32_t *)0xE87FB0)
+#define ROUTE_$STAT_DROPPED_STD_ROUTE (*(uint32_t *)0xE87FB4)
+#else
+extern uint32_t ROUTE_$STAT_DROPPED_STD_HOP;
+extern uint32_t ROUTE_$STAT_DROPPED_STD_ROUTE;
+#endif
 
 #endif /* ROUTE_H */
