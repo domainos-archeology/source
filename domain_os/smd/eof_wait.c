@@ -30,65 +30,74 @@
  */
 void SMD_$EOF_WAIT(status_$t *status_ret)
 {
-    uint16_t unit_idx;
-    uint16_t saved_state;
-    smd_display_unit_t *unit_ptr;
-    smd_display_hw_t *hw;
-    uint32_t target_count;
-    ec_$eventcount_t *wait_ecs[3];
-    uint32_t wait_values[3];
-    int16_t wait_result;
+    int16_t unit_idx;             /* D2 */
+    uint16_t saved_state;         /* D3 */
+    smd_display_unit_t *rec;      /* A3 - 0xF4 */
+    smd_display_hw_t *hw;         /* A4 */
+    uint32_t target_count;        /* (-0x4,A6) / D0 */
+    int16_t wait_result;          /* D0 */
+    uint16_t asid;
 
-    /* Get display unit for current process */
-    unit_idx = SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID];
+    asid = PROC1_$AS_ID;
 
+    /* 00e6f3bc move.w PROC1_$AS_ID,D0w / add.w D0w,D0w
+     * 00e6f3c8 move.w (0x48,A5,D0w*1),D2w / bne */
+    unit_idx = (int16_t)SMD_GLOBALS.asid_to_unit[asid];
     if (unit_idx == 0) {
-        /* No display associated with this process */
         *status_ret = status_$display_invalid_use_of_driver_procedure;
         return;
     }
 
-    /* Acquire display lock for the operation */
+    /* 00e6f3d8 pea (-0x1aae,PC) -> 0x00E6D92C / bsr SMD_$ACQ_DISPLAY
+     * 00e6f3e2 move.w D0w,D3w */
     saved_state = SMD_$ACQ_DISPLAY(&SMD_ACQ_LOCK_DATA);
 
-    /* Get unit and hardware pointers */
-    unit_ptr = &SMD_DISPLAY_UNITS[unit_idx];
-    hw = unit_ptr->hw;
+    /* 00e6f3e4-00e6f3f4: mulu.w #0x10c (unsigned here; the unit number is
+     * never negative on this path) then the usual -0xF4 bias. */
+    rec = smd_$unit_rec(unit_idx);
+    hw = rec->hw;
 
-    /* Calculate target event count (current + 1) */
-    target_count = hw->lock_ec.count + 1;
+    /* 00e6f3f8 move.l (0x4,A4),D0 / addq.l #1,D0 */
+    target_count = (uint32_t)hw->lock_ec.count + 1;
 
-    /* Set lock state to indicate waiting for EOF */
-    hw->lock_state = 7;  /* EOF wait state */
+    /* 00e6f402 move.w #7,(0x2,A4) */
+    hw->lock_state = 7;
 
-    /* Set up wait on: lock EC, quit EC, and null */
-    /* The display hardware advances lock_ec on each frame */
-    wait_ecs[0] = &hw->lock_ec;
-    wait_ecs[1] = &FIM_$QUIT_EC[PROC1_$AS_ID];
-    wait_ecs[2] = NULL;
+    /* 00e6f408 movea.l (0x8,A3),A1 / move.w #0x21,(A1):
+     * arm the controller's end-of-frame interrupt. */
+    *rec->ctrl_regs = 0x21;
 
-    wait_values[0] = target_count;
-    wait_values[1] = FIM_$QUIT_EC[PROC1_$AS_ID].count + 1;
-    wait_values[2] = 0;
+    /*
+     * 00e6f410-00e6f44c: EC_$WAIT with two 3-element arrays pushed by value.
+     *   ec[0] = &hw->lock_ec        (pea (0x4,A4))
+     *   ec[1] = &FIM_$QUIT_EC[asid] (0x00E22002 + asid*12)
+     *   ec[2] = NULL                (move.l #0,-(SP))
+     *   val[0] = target_count
+     *   val[1] = FIM_$QUIT_VALUE[asid] + 1   (0x00E222BA + asid*4)
+     *   val[2] = 0
+     */
+    wait_result = EC_$WAIT(
+        (ec_$wait_ecs_t){ { &hw->lock_ec, &FIM_$QUIT_EC[asid], NULL } },
+        (ec_$wait_vals_t){ { (int32_t)target_count,
+                             (int32_t)(FIM_$QUIT_VALUE[asid] + 1),
+                             0 } });
 
-    /* Wait for either frame complete or quit signal */
-    wait_result = EC_$WAIT(wait_ecs, wait_values);
-
+    /* 00e6f456 tst.w D0w / seq D2b / tst.b D2b / bpl */
     if (wait_result == 0) {
-        /* Woke up on lock_ec - frame complete */
+        /* 00e6f45e clr.l (A2) */
         *status_ret = status_$ok;
     } else {
-        /* Woke up on quit_ec - quit signal received */
+        /* 00e6f462 move.l #0x130022,(A2)
+         * 00e6f486 move.l (0,A0,D2w),(0,A1,D0w) with A0 = FIM_$QUIT_EC base
+         *          scaled by 12 and A1 = FIM_$QUIT_VALUE base scaled by 4:
+         *          remember the quit eventcount value that woke us. */
         *status_ret = status_$display_quit_while_waiting;
-
-        /* Save quit value for later retrieval */
-        FIM_$QUIT_VALUE[PROC1_$AS_ID] = FIM_$QUIT_EC[PROC1_$AS_ID].count;
+        FIM_$QUIT_VALUE[asid] = (uint32_t)FIM_$QUIT_EC[asid].count;
     }
 
-    /* Restore video state (from saved_state) */
-    /* The second byte of hw+8 is the video state register address */
-    *(uint16_t *)((uint8_t *)unit_ptr + 8) = saved_state;
+    /* 00e6f48c movea.l (0x8,A3),A1 / move.w D3w,(A1) */
+    *rec->ctrl_regs = saved_state;
 
-    /* Release display lock */
+    /* 00e6f492 bsr SMD_$REL_DISPLAY */
     SMD_$REL_DISPLAY();
 }

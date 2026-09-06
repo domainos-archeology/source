@@ -56,7 +56,7 @@ void SMD_$ASSOC(uint16_t *unit, uint16_t *asid, status_$t *status_ret)
 {
     uint16_t disp_type;
     uint16_t use_asid;
-    smd_display_unit_t *disp_unit;
+    smd_display_slot_t *disp_unit;
     smd_display_hw_t *hw;
 
     /* Validate display unit by checking its type */

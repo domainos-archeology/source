@@ -55,10 +55,26 @@ typedef struct smd_hdm_pos_t {
  */
 typedef struct smd_track_rect_t {
     int16_t     x1;                 /* 0x00: Left X */
-    int16_t     y1;                 /* 0x02: Top Y */
-    int16_t     x2;                 /* 0x04: Right X */
+    int16_t     x2;                 /* 0x02: Right X */
+    int16_t     y1;                 /* 0x04: Top Y */
     int16_t     y2;                 /* 0x06: Bottom Y */
 } smd_track_rect_t;
+
+/*
+ * Field order recovered from the overlap test SMD_$SHOW_CURSOR runs over the
+ * global tracking-rectangle array (0x00E6E2EE .. 0x00E6E304, with A0 pointing
+ * 0xE0 below the rectangle):
+ *      cmp.w (0xe6,A0),D1w ; bge  -> continue while  y_top    <  field[3]
+ *      cmp.w (0xe4,A0),D3w ; blt  -> continue while  y_bottom >= field[2]
+ *      cmp.w (0xe0,A0),D2w ; ble  -> continue while  x_right  >  field[0]
+ *      cmp.w (0xe2,A0),D4w ; bgt  -> continue while  x_left   <= field[1]
+ * D1/D3 are Y coordinates (they are derived from the high half of the packed
+ * position and clipped against the display's max Y) and D2/D4 are X, so the
+ * first two words are the X pair and the last two are the Y pair -- the same
+ * order as smd_rect_t below, not x1/y1/x2/y2.
+ * smd_$add_trk_rects_internal (0x00E6E55C) copies the caller's rectangle into
+ * the array as two raw longwords, so the caller's layout is this layout.
+ */
 
 /*
  * ============================================================================
@@ -240,6 +256,8 @@ void SMD_$SET_DISP_UNIT(uint16_t *unit, status_$t *status_ret);
  *
  * Original address: 0x00E6EB42
  */
+/* Not read-only: SMD_$ACQ_DISPLAY hands `lock_data` straight to
+ * SMD_$LOCK_DISPLAY (0x00E6EBF2 pea (A2)), which may write to it. */
 uint16_t SMD_$ACQ_DISPLAY(int16_t *lock_data);
 
 /*
@@ -1074,6 +1092,8 @@ void SMD_$SIGNAL(uint16_t *unit_ptr, uint16_t *params, uint16_t *param_count,
  * Original address: 0x00E15CCE
  */
 struct smd_display_hw_t; /* Forward declaration */
+/* `lock_data` is not read-only: on the scroll-done path SMD_$LOCK_DISPLAY
+ * clears lock_data[0x12] (0x00E15D06 clr.w (0x24,A1)). */
 int16_t SMD_$LOCK_DISPLAY(struct smd_display_hw_t *hw, int16_t *lock_data);
 
 /*

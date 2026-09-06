@@ -45,6 +45,12 @@
  *   State 3 (scroll done): If param2[0] == 1, transitions to state 4, returns success
  *   Other states: Returns failure (lock busy)
  */
+/*
+ * TODO(source-c3ap): this routine is hand-written assembly (no link/unlk,
+ * arguments read straight off the stack at (0x4,SP)/(0x8,SP), and
+ * ori #0x700,SR / andi #0xf8ff,SR - a forced IPL 0, not an SR restore).
+ * Per CLAUDE.md it belongs in smd/sau2/lock_display.s.
+ */
 int16_t SMD_$LOCK_DISPLAY(smd_display_hw_t *lock_data, int16_t *param2)
 {
     int16_t state;
@@ -60,6 +66,9 @@ int16_t SMD_$LOCK_DISPLAY(smd_display_hw_t *lock_data, int16_t *param2)
     if (state == SMD_LOCK_STATE_UNLOCKED) {
         /* State 0: Unlocked - acquire lock, transition to state 5 */
         lock_data->lock_state = SMD_LOCK_STATE_LOCKED_5;
+        /* 0x00E15CE6 bra 0x00E15D0A: this path also falls through the
+         * `andi #0xf8ff,SR` before returning. */
+        ENABLE_INTERRUPTS(sr);
         return (int16_t)((high_byte << 8) | 0xFF);  /* Success */
     }
 

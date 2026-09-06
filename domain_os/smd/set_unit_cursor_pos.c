@@ -87,6 +87,6 @@ void SMD_$SET_UNIT_CURSOR_POS(uint16_t *unit, smd_cursor_pos_t *pos, status_$t *
     /* Synchronize with trackpad subsystem */
     TPAD_$SET_UNIT_CURSOR(unit, pos, status_ret);
 
-    /* Save current cursor position */
-    SMD_GLOBALS.saved_cursor_pos = *pos;
+    /* 00e6e7ec move.l (A3),(0xcc,A5): the whole packed longword. */
+    __builtin_memcpy(&SMD_GLOBALS.saved_cursor_pos, pos, sizeof(uint32_t));
 }

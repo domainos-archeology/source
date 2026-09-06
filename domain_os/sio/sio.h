@@ -497,7 +497,7 @@ uint32_t SIO_$K_SIGNAL_WAIT(int16_t *line_ptr, uint32_t *signals_ptr,
  * Original address: 0x00e680ac
  */
 void SIO_$K_SET_PARAM(int16_t *line_ptr, sio_params_t *params,
-                      uint32_t *change_mask_ptr, status_$t *status_ret);
+                      const uint32_t *change_mask_ptr, status_$t *status_ret);
 
 /*
  * SIO_$K_INQ_PARAM - Inquire serial port parameters
@@ -513,6 +513,6 @@ void SIO_$K_SET_PARAM(int16_t *line_ptr, sio_params_t *params,
  * Original address: 0x00e6832a
  */
 void SIO_$K_INQ_PARAM(int16_t *line_ptr, sio_params_t *params_ret,
-                      uint32_t *mask_ptr, status_$t *status_ret);
+                      const uint32_t *mask_ptr, status_$t *status_ret);
 
 #endif /* SIO_H */

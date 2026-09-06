@@ -14,7 +14,7 @@
 #ifndef SMD_INTERNAL_H
 #define SMD_INTERNAL_H
 
-#include "smd/smd.h"
+#include "smd/smd.h" /* base.h (via smd.h) supplies offsetof and boolean */
 #include "ec/ec.h"
 #include "fim/fim.h"
 #include "ml/ml.h"
@@ -26,6 +26,15 @@
  * ============================================================================
  */
 
+/*
+ * Pointer to the display controller's memory-mapped registers.
+ * Isolated behind a macro because the width/volatility of an MMIO pointer is
+ * architecture policy; the m68k image stores a plain 32-bit address here
+ * (0x00FF9800 on a SAU2) and pokes 16-bit registers through it, e.g.
+ * SMD_$EOF_WAIT 0x00E6F408 movea.l (0x8,A3),A1 / move.w #0x21,(A1).
+ */
+#define SMD_HW_REG_PTR volatile uint16_t *
+
 /* Maximum number of display units */
 #define SMD_MAX_DISPLAY_UNITS 4
 
@@ -36,7 +45,11 @@
 #define SMD_DISPLAY_INFO_SIZE 0x60 /* 96 bytes */
 
 /* Maximum ASIDs supported */
-#define SMD_MAX_ASIDS 256
+/*
+ * ASID -> unit table length.  smd_globals_t.asid_to_unit runs from 0x48 up to
+ * kbd_cursor_track_rect at 0xC0, i.e. 0x78 bytes = 60 word entries.
+ */
+#define SMD_MAX_ASIDS 60
 
 /* Maximum HDM free list entries */
 #define SMD_HDM_MAX_ENTRIES 25
@@ -50,8 +63,13 @@
  * ============================================================================
  * Display type codes returned by SMD_$INQ_DISP_TYPE
  */
-#define SMD_DISP_TYPE_MONO_LANDSCAPE 1     /* 1024x800 landscape */
-#define SMD_DISP_TYPE_MONO_PORTRAIT 2      /* 800x1024 portrait */
+/* TODO(source-06qh): these two names are the wrong way round.  SMD_$INIT
+ * (0x00E34E00 / 0x00E34E0E) gives type 1 max_x = 0x31F / max_y = 0x3FF
+ * (800x1024, portrait) and type 2 max_x = 0x3FF / max_y = 0x31F (1024x800,
+ * landscape).  The *values* are load-bearing in several comparisons, so only
+ * the names may be swapped. */
+#define SMD_DISP_TYPE_MONO_LANDSCAPE 1     /* actually 800x1024 portrait */
+#define SMD_DISP_TYPE_MONO_PORTRAIT 2      /* actually 1024x800 landscape */
 #define SMD_DISP_TYPE_COLOR_1024x2048 3    /* Color 1024x2048 */
 #define SMD_DISP_TYPE_COLOR_1024x2048_B 4  /* Color 1024x2048 variant */
 #define SMD_DISP_TYPE_HI_RES_2048x1024 5   /* Hi-res 2048x1024 */
@@ -155,10 +173,12 @@ typedef struct smd_display_hw_t {
   uint16_t scroll_y2;       /* 0x2C: Scroll region y2 */
   uint16_t scroll_dy;       /* 0x2E: Scroll delta y */
   uint16_t scroll_dx;       /* 0x30: Scroll delta x */
-  uint16_t field_32;        /* 0x32: Unknown */
-  uint16_t field_34;        /* 0x34: Unknown */
-  uint16_t cursor_number;   /* 0x36: Current cursor number (0-3) */
-  uint8_t cursor_visible;   /* 0x38: Cursor visible flag (negative = visible) */
+  /* 0x32: last cursor position shown on this display, packed as
+   * (y << 16) | x -- see SMD_POS_X()/SMD_POS_Y().  SHOW_CURSOR reads and
+   * writes it as one longword (0x00E6E250 move.l (0x32,A2),...). */
+  uint32_t cursor_pos;
+  int16_t cursor_number;    /* 0x36: Current cursor number (0-3) */
+  boolean cursor_visible;   /* 0x38: Cursor visible flag (0xFF = visible) */
   uint8_t pad_39;           /* 0x39: Padding */
   uint16_t field_3a;        /* 0x3A: Unknown */
   uint8_t tracking_enabled; /* 0x3C: Tracking mouse enabled */
@@ -167,16 +187,62 @@ typedef struct smd_display_hw_t {
   uint8_t pad_3f;           /* 0x3F: Padding */
   ec_$eventcount_t cursor_ec; /* 0x40: Cursor event count */
   uint16_t field_4c;          /* 0x4C: Unknown */
-  uint16_t field_4e;          /* 0x4E: Unknown (cleared in init) */
-  uint16_t height;            /* 0x50: Display height - 1 */
-  uint16_t field_52;          /* 0x52: Unknown (cleared in init) */
-  uint16_t width;             /* 0x54: Display width - 1 */
-  uint16_t field_56;          /* 0x56: Unknown */
-  uint16_t field_58;          /* 0x58: Unknown */
-  uint16_t field_5a;          /* 0x5A: Unknown */
-  uint16_t field_5c;          /* 0x5C: Unknown */
+  /*
+   * Screen bounds and clip window.  Verified from SMD_$SET_CLIP_WINDOW
+   * (0x00E6FE7E-0x00E6FEB0: +0x56/+0x58 are clamped against +0x4E/+0x50,
+   * +0x5A/+0x5C against +0x52/+0x54) and from smd_$write_str_clip_impl
+   * (0x00E70402/0x00E7040E), which tests the X coordinate against +0x56/+0x58
+   * and the Y coordinate against +0x5A/+0x5C.  SMD_$INIT loads +0x50 with
+   * 0x31F and +0x54 with 0x3FF for display type 1 (800x1024 portrait) and the
+   * other way round for type 2 (1024x800 landscape).
+   */
+  int16_t min_x;              /* 0x4E: Minimum X (cleared in init) */
+  int16_t max_x;              /* 0x50: Maximum X (display width - 1) */
+  int16_t min_y;              /* 0x52: Minimum Y (cleared in init) */
+  int16_t max_y;              /* 0x54: Maximum Y (display height - 1) */
+  int16_t clip_x1;            /* 0x56: Clip window left */
+  int16_t clip_x2;            /* 0x58: Clip window right */
+  int16_t clip_y1;            /* 0x5A: Clip window top */
+  int16_t clip_y2;            /* 0x5C: Clip window bottom */
   uint16_t field_5e;          /* 0x5E: Unknown (cleared in init) */
 } smd_display_hw_t;
+
+/*
+ * Packed cursor position helpers.
+ *
+ * The kernel carries a cursor position as a single 32-bit value whose LOW
+ * half is the X coordinate and whose HIGH half is the Y coordinate.  This was
+ * verified in smd_$write_str_clip_impl (0x00E703F6):
+ *   move.l (A0),D5 / move.w D5w,D4w   -> D4 = low half, tested against the
+ *                                        clip X bounds (+0x56/+0x58) and
+ *                                        shifted right by 4 to index words
+ *                                        within a scan line
+ *   swap D5                           -> D5 = high half, tested against the
+ *                                        clip Y bounds (+0x5A/+0x5C)
+ * Expressed with shifts so the code is correct on little-endian hosts too.
+ */
+#define SMD_POS_X(p) ((int16_t)((uint32_t)(p) & 0xFFFFu))
+#define SMD_POS_Y(p) ((int16_t)(((uint32_t)(p) >> 16) & 0xFFFFu))
+#define SMD_POS_MAKE(x, y)                                                     \
+  ((uint32_t)((((uint32_t)(uint16_t)(y)) << 16) | (uint32_t)(uint16_t)(x)))
+
+/* TODO(source-1god): smd.h's smd_cursor_pos_t declares {x at 0x00, y at 0x02},
+ * which is the wrong way round for the packed value above.  It is still
+ * exported to other subsystems, so the hot paths here use uint32_t plus the
+ * macros instead. */
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(smd_display_hw_t, cursor_pos) == 0x32, "hw cursor_pos");
+_Static_assert(offsetof(smd_display_hw_t, cursor_number) == 0x36, "hw cursor#");
+_Static_assert(offsetof(smd_display_hw_t, cursor_visible) == 0x38, "hw vis");
+_Static_assert(offsetof(smd_display_hw_t, min_x) == 0x4E, "hw min_x");
+_Static_assert(offsetof(smd_display_hw_t, max_x) == 0x50, "hw max_x");
+_Static_assert(offsetof(smd_display_hw_t, min_y) == 0x52, "hw min_y");
+_Static_assert(offsetof(smd_display_hw_t, max_y) == 0x54, "hw max_y");
+_Static_assert(offsetof(smd_display_hw_t, clip_x1) == 0x56, "hw clip_x1");
+_Static_assert(offsetof(smd_display_hw_t, clip_y2) == 0x5C, "hw clip_y2");
+_Static_assert(sizeof(smd_display_hw_t) == 0x60, "smd_display_hw_t size");
+#endif
 
 /*
  * ============================================================================
@@ -315,7 +381,7 @@ typedef struct smd_glyph_metrics_t {
  *   +0x04: hdm_list_ptr (in slot N)
  *   +0x0c: UID for MST mapping (in slot N)
  */
-typedef struct smd_display_unit_t {
+typedef struct smd_display_slot_t {
   union {
     ec_$eventcount_t event_count_1; /* 0x00: Event count (12 bytes) */
     struct {
@@ -335,7 +401,86 @@ typedef struct smd_display_unit_t {
   uint32_t mapped_addresses[58]; /* 0x24: Per-ASID mapped display addresses */
                                  /* 58 = MST_MAX_ASIDS from mst.h */
                                  /* 58 * 4 = 0xe8 bytes, ends at 0x10c */
+} smd_display_slot_t;
+
+/* TODO(source-nhzy): this A3-relative "slot" view is a modelling artefact -
+ * the real per-unit record is smd_display_unit_t below.  The files still
+ * using raw -0xF4/-0xE8 offsets against this type need migrating (and
+ * re-checking against their assembly) one at a time. */
+
+/*
+ * ============================================================================
+ * Display Unit Record (the real per-unit record)
+ * ============================================================================
+ * The compiler keeps a *biased* pointer to this record: everywhere in the
+ * kernel the address is computed as
+ *
+ *     A3 = 0x00E2E3FC + unit * 0x10C
+ *
+ * and the record's fields are then reached at displacements -0xF4 .. +0x17.
+ * The record therefore *starts* at (A3 - 0xF4) and is 0x10C bytes long, which
+ * means it straddles two `smd_display_slot_t` entries of the SMD_DISPLAY_UNITS
+ * view above.  For the only unit that exists (unit 1) the record lives at
+ * 0x00E2E414 .. 0x00E2E51F, immediately after the two standalone eventcounts
+ * SMD_EC_1 (0x00E2E3FC) and SMD_EC_2 (0x00E2E408) and immediately before
+ * ml_$exclusion_t_00e2e520.
+ *
+ * Field evidence (all offsets below are from the record base, i.e. A3-0xF4):
+ *   0x00  SMD_$INIT 0x00E34DC2 movea.l (-0xf4,A3),A4       -> hw pointer
+ *   0x04  SMD_$INIT 0x00E34DC6 clr.l   (-0xf0,A3)          -> one longword
+ *         clear covering owner_asid (0x04) and borrowed_asid (0x06)
+ *   0x06  SMD_$FREE_ASID 0x00E75272 cmp.w (-0xee,A0),D2w   -> borrowed_asid
+ *   0x04  SMD_$DM_COND_EVENT_WAIT 0x00E6F02E cmp.w (-0xf0,A0),D2w
+ *   0x08  SMD_$DM_COND_EVENT_WAIT 0x00E6F15E cmp.w (-0xec,A1),D2w
+ *   0x0A  SMD_$INIT 0x00E34E1A clr.w   (-0xea,A3)
+ *   0x10  SMD_$INIT 0x00E34E6C-76: 57 longs cleared from (-0xe4,A3) to (-4,A3)
+ *         and SMD_$MAP_DISPLAY_U indexes them as (-0xe8 + asid*4), i.e. the
+ *         array is 1-based on the ASID
+ *   0xF4  SMD_$INIT case 0 (0x00E34D6E) move.l A2,(0x10c,A0) = &globals+0x1748
+ *   0xF8  SMD_$INIT case 0 (0x00E34D7E) move.l A2,(0x110,A0) = &globals+0x1788
+ *   0xFC  SMD_$INIT case 0 (0x00E34D8A) move.l #0x00FF9800,(0x114,A0)
+ *         -> the display controller register base,
+ *         later overwritten by io_$probe (0x00E34DCE pea (0x8,A3)) and read
+ *         back by SMD_$EOF_WAIT (0x00E6F408 movea.l (0x8,A3),A1)
+ *   0x100 SMD_$INIT case 0 (0x00E34D96) move.l (A2)+,(0x118,A0)
+ *   0x104 SMD_$INIT case 0 (0x00E34D9A) move.l (A2)+,(0x11C,A0)
+ *   0x108 SMD_$INIT case 0 (0x00E34D8A) move.l #0x00FC0000,(0x120,A0)
+ *         -> display memory base; read by SMD_$DISPLAY_LOGO (0x00E70290
+ *         movea.l (0x14,A0),A4) and SMD_$INVERT_S (0x00E6DE02)
+ */
+typedef struct smd_display_unit_t {
+  smd_display_hw_t *hw;          /* 0x00  (A3-0xF4) */
+  uint16_t owner_asid;           /* 0x04  (A3-0xF0) */
+  uint16_t borrowed_asid;        /* 0x06  (A3-0xEE) */
+  uint16_t field_08;             /* 0x08  (A3-0xEC) an ASID as well */
+  uint16_t field_0a;             /* 0x0A  (A3-0xEA) cleared by SMD_$INIT */
+  uint32_t field_0c;             /* 0x0C  (A3-0xE8) not touched by SMD_$INIT */
+  /* 0x10 (A3-0xE4): per-ASID mapped display addresses, 1-based on the ASID
+   * (the compiler indexes them as (-0xE8,A3) + asid*4). */
+  uint32_t mapped_addresses[57];
+  uint8_t *buf_ptr_a;            /* 0xF4  (A3+0x00) = &SMD_GLOBALS + 0x1748 */
+  uint8_t *buf_ptr_b;            /* 0xF8  (A3+0x04) = &SMD_GLOBALS + 0x1788 */
+  /* 0xFC (A3+0x08): display controller register base (0x00FF9800). */
+  SMD_HW_REG_PTR ctrl_regs;
+  uint32_t field_100;            /* 0x100 (A3+0x0C) from 0x00E173D4 */
+  uint32_t field_104;            /* 0x104 (A3+0x10) from 0x00E173D8 */
+  uint32_t display_base;         /* 0x108 (A3+0x14) = 0x00FC0000 */
 } smd_display_unit_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(smd_display_unit_t, hw) == 0x00, "unit hw");
+_Static_assert(offsetof(smd_display_unit_t, owner_asid) == 0x04, "unit owner");
+_Static_assert(offsetof(smd_display_unit_t, borrowed_asid) == 0x06, "unit brw");
+_Static_assert(offsetof(smd_display_unit_t, field_0a) == 0x0A, "unit 0x0a");
+_Static_assert(offsetof(smd_display_unit_t, mapped_addresses) == 0x10,
+               "unit mapped_addresses");
+_Static_assert(offsetof(smd_display_unit_t, buf_ptr_a) == 0xF4, "unit buf_a");
+_Static_assert(offsetof(smd_display_unit_t, ctrl_regs) == 0xFC, "unit ctrl");
+_Static_assert(offsetof(smd_display_unit_t, display_base) == 0x108,
+               "unit display_base");
+_Static_assert(sizeof(smd_display_unit_t) == SMD_DISPLAY_UNIT_SIZE,
+               "smd_display_unit_t size");
+#endif
 
 /*
  * ============================================================================
@@ -372,7 +517,9 @@ typedef struct smd_display_info_t {
  * The queue is a circular buffer with 256 entries.
  */
 typedef struct smd_event_entry_t {
-  smd_cursor_pos_t pos;    /* 0x00: Cursor position */
+  uint32_t pos;            /* 0x00: packed cursor position (y<<16 | x);
+                            *       smd_$enqueue_event 0x00E6E91A stores it
+                            *       with a single move.l */
   uint32_t timestamp;      /* 0x04: TIME_$CLOCK value */
   uint16_t field_08;       /* 0x08: Unknown field */
   uint16_t unit;           /* 0x0A: Display unit */
@@ -493,58 +640,129 @@ typedef struct smd_request_entry_t {
  */
 typedef struct smd_globals_t {
   uint8_t pad_00[0x48];                 /* 0x00-0x47: Unknown */
-  uint16_t asid_to_unit[SMD_MAX_ASIDS]; /* 0x48: ASID to display unit map */
-  /* Each ASID maps to a display unit number */
-  uint8_t pad_248[0x78]; /* 0x248-0xBF: Unknown */
-  smd_track_rect_t
-      kbd_cursor_track_rect;         /* 0xC0: Keyboard cursor tracking rect */
-  uint32_t blank_time;               /* 0xC8: Time when blanking occurred */
-                                     /*       (TIME_$CLOCKH value) */
-  smd_cursor_pos_t saved_cursor_pos; /* 0xCC: Last saved cursor position */
-  smd_cursor_pos_t
-      default_cursor_pos;       /* 0xD0: Cached/current cursor position */
-  uint16_t cursor_button_state; /* 0xD4: Current cursor button state */
-  uint16_t last_button_state;   /* 0xD6: Last reported button state */
-  uint32_t blank_timeout;       /* 0xD8: Blank timeout value */
-  int8_t blank_enabled;         /* 0xDC: Blanking enabled flag */
-  int8_t blank_pending;         /* 0xDD: Blanking pending flag */
-  uint16_t tp_reporting;        /* 0xDE: Trackpad reporting mode */
-  int8_t tracking_enabled;      /* 0xE0: Tracking enabled flag (0xFF=enabled) */
-  int8_t tp_cursor_active;      /* 0xE1: TP cursor active flag */
-  int16_t tp_cursor_timeout;    /* 0xE2: TP cursor timeout counter */
-  uint16_t cursor_tracking_count; /* 0xE4: Cursor tracking count for event
-                                     coalescing */
-  uint16_t tracking_window_id; /* 0xE6: Tracking window ID (from ENABLE_TRACKING
-                                  param) */
-  uint16_t tracking_rect_count; /* 0xE8: Number of tracking rectangles */
-  smd_track_rect_t
-      tracking_rects[SMD_MAX_TRACKING_RECTS]; /* 0xE8: Tracking rect array */
-  /* 200 * 8 = 1600 bytes, ends at 0x728 */
-  uint16_t event_queue_head; /* 0x728: Event queue write index */
-  uint16_t event_queue_tail; /* 0x72A: Event queue read index */
-  smd_event_entry_t event_queue[SMD_EVENT_QUEUE_SIZE]; /* 0x72C: Event queue */
-  /* 256 * 16 = 4096 bytes, ends at 0x172C */
+  /*
+   * 0x48: ASID -> display unit map, indexed by PROC1_$AS_ID with a *word*
+   * scale (SMD_$SEND_RESPONSE 0x00E6F4CC: move.w PROC1_$AS_ID,D0 / add.w
+   * D0w,D0w / move.w (0x48,A5,D0w*1),D0w).  The region ends where
+   * kbd_cursor_track_rect starts (0xC0, proven by SMD_$CLEAR_KBD_CURSOR
+   * 0x00E6E83C pea (0xc0,A5)), so it holds (0xC0-0x48)/2 = 60 entries.
+   */
+  uint16_t asid_to_unit[SMD_MAX_ASIDS]; /* 0x48 .. 0xBF */
+  /* 0xC0: tracking rectangle used to hide the cursor behind the keyboard
+   * cursor bitmap.  SMD_$CLEAR_KBD_CURSOR / SMD_$LOAD_CRSR_BITMAP pass its
+   * address to SMD_$ADD_TRK_RECT / SMD_$DEL_TRK_RECT. */
+  smd_track_rect_t kbd_cursor_track_rect;
+  uint32_t blank_time;               /* 0xC8: TIME_$CLOCKH at blanking.
+                                      *       SMD_$INIT 0x00E34E8E clr.l */
+  uint32_t saved_cursor_pos;         /* 0xCC: last locator position reported
+                                      *       (SMD_$LOC_EVENT 0x00E6E9D2 /
+                                      *       0x00E6EA70 move.l) */
+  uint32_t default_cursor_pos;       /* 0xD0: position of the cursor that is
+                                      *       currently drawn on the screen
+                                      *       (SHOW_CURSOR 0x00E6E342/0x00E6E41E) */
+  int16_t cursor_button_state;       /* 0xD4: number of the cursor that is
+                                      *       currently drawn (0x00E6E348) */
+  int16_t last_button_state;         /* 0xD6: last mouse button state reported
+                                      *       (SMD_$LOC_EVENT 0x00E6EA7A) */
+  uint32_t blank_timeout;            /* 0xD8: SMD_$SET_BLANK_TIMEOUT
+                                      *       0x00E6F1A2 move.l (A0),(0xd8,A5) */
+  boolean blank_enabled;             /* 0xDC: blink callback 0x00E6FFB2 */
+  boolean blank_pending;             /* 0xDD: blink callback 0x00E6FFAC/0x00E6FFF0 */
+  int16_t tp_reporting;              /* 0xDE: SMD_$SET_TP_REPORTING 0x00E6E4C2 */
+  boolean tracking_enabled;          /* 0xE0: SMD_$ENABLE_TRACKING 0x00E6E468 st,
+                                      *       SMD_$DISABLE_TRACKING 0x00E6E48E clr.b */
+  uint8_t pad_e1;                    /* 0xE1: Padding (never referenced) */
+  int16_t tp_cursor_timeout;         /* 0xE2: SMD_$STOP_TP_CURSOR 0x00E6EAE2
+                                      *       move.w #-1; SMD_$LOC_EVENT
+                                      *       0x00E6EA6C clr.w */
+  int16_t tracking_cursor_num;       /* 0xE4: cursor number used while tracking.
+                                      *       SMD_$ENABLE_TRACKING 0x00E6E470
+                                      *       stores it, SMD_$LOC_EVENT
+                                      *       0x00E6EAB8 passes its address to
+                                      *       SHOW_CURSOR as the cursor number */
+  int16_t tracking_rect_count;       /* 0xE6: number of live tracking rects
+                                      *       (SHOW_CURSOR 0x00E6E2DA,
+                                      *       smd_$add_trk_rects_internal
+                                      *       0x00E6E524/0x00E6E56C) */
+  /* 0xE8: tracking rectangle array, stride 8.  smd_$add_trk_rects_internal
+   * writes element k at A5 + 0xE0 + (k+1)*8 = A5 + 0xE8 + k*8 (0x00E6E55C). */
+  smd_track_rect_t tracking_rects[SMD_MAX_TRACKING_RECTS];
+  /* 200 * 8 = 0x640 bytes, ends at 0x728 */
+  uint16_t event_queue_head; /* 0x728: write index (smd_$enqueue_event 0x00E6E8EA) */
+  uint16_t event_queue_tail; /* 0x72A: read index  (smd_$enqueue_event 0x00E6E8F4) */
+  smd_event_entry_t event_queue[SMD_EVENT_QUEUE_SIZE]; /* 0x72C: 256 * 16 */
+  /* ends at 0x172C */
   uint8_t pad_172c[0x18];      /* 0x172C-0x1743: Unknown */
-  uint8_t cursor_pending_flag; /* 0x1744: Cursor update pending */
-  uint8_t pad_1745[0x2B];      /* 0x1745-0x176F: Unknown */
-  smd_request_entry_t
-      request_queue[SMD_REQUEST_QUEUE_SIZE]; /* 0x17D0: Request queue */
-                                             /* 40 * 36 = 1440 bytes (0x5A0) */
-  uint16_t
-      request_queue_tail; /* 0x17F0: Request queue read index (after queue) */
-  uint16_t request_queue_head; /* 0x17F2: Request queue write index */
-  uint8_t pad_17f4[0x5A0];     /* 0x17F4-0x1D93: Unknown */
-  uint32_t cursor_pos_sentinel; /* 0x1D94: Default cursor position sentinel.
-                                 * When SHOW_CURSOR receives this value as pos,
-                                 * it uses the hw-stored cursor position instead. */
-  uint16_t default_unit;       /* 0x1D98: Default display unit */
-  uint16_t pad_1d9a;           /* 0x1D9A: Padding */
-  uint16_t previous_unit;      /* 0x1D9C: Previous display unit */
-  uint16_t unit_change_count;  /* 0x1D9E: Unit change counter */
-  uint16_t last_idm_button;    /* 0x1DA0: Last IDM button state */
-  int8_t power_off_reported;   /* 0x1DA2: Power-off event reported flag */
+  boolean cursor_pending_flag; /* 0x1744: cursor redraw pending
+                                *         (SHOW_CURSOR 0x00E6E3D4/0x00E6E41A/
+                                *          0x00E6E440) */
+  uint8_t pad_1745[0x17F0 - 0x1745]; /* 0x1745-0x17EF: Unknown.  Holds the two
+                                      * buffers whose addresses SMD_$INIT case 0
+                                      * stores in the unit record (+0x1748 and
+                                      * +0x1788). */
+  int16_t request_queue_tail;  /* 0x17F0: read index  (0x00E6F248) */
+  int16_t request_queue_head;  /* 0x17F2: write index (0x00E6F244) */
+  /*
+   * 0x17F4: request queue.  The original addresses an entry as
+   *   A5 + 0x17D0 + index*36   with index in 1..40 (SMD_$SIGNAL 0x00E6F2A0,
+   *   SMD_$DM_COND_EVENT_WAIT 0x00E6F0BA),
+   * so entry `index` is request_queue[index - 1] here.
+   */
+  smd_request_entry_t request_queue[SMD_REQUEST_QUEUE_SIZE]; /* 40 * 36 = 0x5A0 */
+  /* ends at 0x1D94 */
+  uint32_t cursor_pos_sentinel; /* 0x1D94: "use the display's own position"
+                                 * sentinel.  SHOW_CURSOR (0x00E6E24A) compares
+                                 * its pos argument against it; every internal
+                                 * caller passes its address as that argument
+                                 * (e.g. 0x00E6E49A, 0x00E6E586, 0x00E6EB32). */
+  int16_t default_unit;        /* 0x1D98: unit SHOW_CURSOR validates (0x00E6E1F0) */
+  /* 0x1D9A: per-unit "response pending" bytes.  SMD_$SEND_RESPONSE addresses
+   * them as (0x1D99,A5 + unit) with unit 1-based (0x00E6F4FC), so unit N is
+   * response_pending[N - 1]. */
+  int8_t response_pending[2];
+  int16_t previous_unit;       /* 0x1D9C: unit the cursor was last shown on
+                                *         (SHOW_CURSOR 0x00E6E200/0x00E6E444) */
+  uint16_t unit_change_count;  /* 0x1D9E: SMD_$SET_UNIT_CURSOR_POS 0x00E6E7C6 */
+  uint16_t last_idm_button;    /* 0x1DA0: SMD_$GET_IDM_EVENT 0x00E6EE7C/0x00E6EE88 */
+  boolean power_off_reported;  /* 0x1DA2: SMD_$DM_COND_EVENT_WAIT 0x00E6F078 */
   uint8_t pad_1da3;            /* 0x1DA3: Padding */
 } smd_globals_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(smd_globals_t, asid_to_unit) == 0x48, "g asid_to_unit");
+_Static_assert(offsetof(smd_globals_t, kbd_cursor_track_rect) == 0xC0, "g kbd");
+_Static_assert(offsetof(smd_globals_t, blank_time) == 0xC8, "g blank_time");
+_Static_assert(offsetof(smd_globals_t, saved_cursor_pos) == 0xCC, "g saved_pos");
+_Static_assert(offsetof(smd_globals_t, default_cursor_pos) == 0xD0, "g def_pos");
+_Static_assert(offsetof(smd_globals_t, cursor_button_state) == 0xD4, "g cbs");
+_Static_assert(offsetof(smd_globals_t, last_button_state) == 0xD6, "g lbs");
+_Static_assert(offsetof(smd_globals_t, blank_timeout) == 0xD8, "g blank_to");
+_Static_assert(offsetof(smd_globals_t, blank_enabled) == 0xDC, "g blank_en");
+_Static_assert(offsetof(smd_globals_t, blank_pending) == 0xDD, "g blank_pend");
+_Static_assert(offsetof(smd_globals_t, tp_reporting) == 0xDE, "g tp_rep");
+_Static_assert(offsetof(smd_globals_t, tracking_enabled) == 0xE0, "g trk_en");
+_Static_assert(offsetof(smd_globals_t, tp_cursor_timeout) == 0xE2, "g tp_to");
+_Static_assert(offsetof(smd_globals_t, tracking_cursor_num) == 0xE4, "g trk_csr");
+_Static_assert(offsetof(smd_globals_t, tracking_rect_count) == 0xE6, "g trk_cnt");
+_Static_assert(offsetof(smd_globals_t, tracking_rects) == 0xE8, "g trk_rects");
+_Static_assert(sizeof(smd_track_rect_t) == 8, "smd_track_rect_t size");
+_Static_assert(offsetof(smd_globals_t, event_queue_head) == 0x728, "g eq_head");
+_Static_assert(offsetof(smd_globals_t, event_queue_tail) == 0x72A, "g eq_tail");
+_Static_assert(offsetof(smd_globals_t, event_queue) == 0x72C, "g eq");
+_Static_assert(offsetof(smd_globals_t, cursor_pending_flag) == 0x1744, "g cpf");
+_Static_assert(offsetof(smd_globals_t, request_queue_tail) == 0x17F0, "g rq_tail");
+_Static_assert(offsetof(smd_globals_t, request_queue_head) == 0x17F2, "g rq_head");
+_Static_assert(offsetof(smd_globals_t, request_queue) == 0x17F4, "g rq");
+_Static_assert(sizeof(smd_request_entry_t) == 36, "smd_request_entry_t size");
+_Static_assert(offsetof(smd_globals_t, cursor_pos_sentinel) == 0x1D94, "g sent");
+_Static_assert(offsetof(smd_globals_t, default_unit) == 0x1D98, "g def_unit");
+_Static_assert(offsetof(smd_globals_t, response_pending) == 0x1D9A, "g resp");
+_Static_assert(offsetof(smd_globals_t, previous_unit) == 0x1D9C, "g prev_unit");
+_Static_assert(offsetof(smd_globals_t, unit_change_count) == 0x1D9E, "g ucc");
+_Static_assert(offsetof(smd_globals_t, last_idm_button) == 0x1DA0, "g idm");
+_Static_assert(offsetof(smd_globals_t, power_off_reported) == 0x1DA2, "g poff");
+_Static_assert(sizeof(smd_globals_t) == 0x1DA4, "smd_globals_t size");
+#endif
 
 /*
  * ============================================================================
@@ -581,9 +799,12 @@ typedef struct smd_blt_params_t {
  * Base address: 0x00E273D6
  */
 typedef struct smd_blink_state_t {
-  uint8_t smd_time_com;   /* 0x00: Time communication flag */
+  /* Domain booleans: written with clr.b / st / seq and tested with
+   * tst.b + bpl/bmi (SMD_$BLINK_CURSOR_CALLBACK 0x00E6FF72 / 0x00E6FF8E,
+   * SHOW_CURSOR 0x00E6E390), so they must be signed. */
+  boolean smd_time_com;   /* 0x00: Time communication flag */
   uint8_t pad_01;         /* 0x01: Padding */
-  uint8_t blink_flag;     /* 0x02: Blink state (0xFF = enabled) */
+  boolean blink_flag;     /* 0x02: Blink state (0xFF = enabled) */
   uint8_t pad_03;         /* 0x03: Padding */
   uint16_t blink_counter; /* 0x04: Blink counter */
 } smd_blink_state_t;
@@ -598,7 +819,7 @@ typedef struct smd_blink_state_t {
 extern smd_globals_t SMD_GLOBALS;
 
 /* Display unit array at 0x00E2E3FC */
-extern smd_display_unit_t SMD_DISPLAY_UNITS[];
+extern smd_display_slot_t SMD_DISPLAY_UNITS[];
 
 /* Display info table at 0x00E27376 */
 extern smd_display_info_t SMD_DISPLAY_INFO[];
@@ -610,14 +831,59 @@ extern ec_$eventcount_t SMD_EC_2;
 /* Blink state at 0x00E273D6 */
 extern smd_blink_state_t SMD_BLINK_STATE;
 
+/*
+ * Two initialiser longwords at 0x00E173D4 (0x00000400 and 0x00000000) that
+ * SMD_$INIT's case-0 prologue copies into the display unit record's +0x100 and
+ * +0x104 fields (0x00E34D92 movea.l #0xe173d4,A2 / move.l (A2)+,(0x118,A0) /
+ * move.l (A2)+,(0x11c,A0)).
+ */
+extern const uint32_t smd_$unit_init_params[2];
+
 /* Default display unit at 0x00E84924 */
 extern uint16_t SMD_DEFAULT_DISPLAY_UNIT;
 
 /* TIME_$CLOCKH - high word of system clock */
 extern uint32_t TIME_$CLOCKH;
 
-/* Cursor pointer table at 0x00E27366 - 4 pointers to cursor bitmap data */
-extern int16_t *SMD_CURSOR_PTABLE[4];
+/*
+ * ============================================================================
+ * Cursor Pattern
+ * ============================================================================
+ * One per cursor number; SMD_CURSOR_PTABLE[n] points at it.
+ *
+ * Layout recovered from SMD_$LOAD_CRSR_BITMAP (0x00E6FCA0-0x00E6FCD0), which
+ * validates each argument to 1..16 (width, height) or 0..16 (the hot spots)
+ * and then stores:
+ *     move.w D4w,(A2)            -> width
+ *     move.w D2w,(0x2,A2)        -> height
+ *     move.w D5w,(0x4,A2)        -> hot_x
+ *     neg.w D6w / add.w (0x2,A2),D6w / subq.w #1,D6w / move.w D6w,(0x6,A2)
+ *                                -> hot_y_adj = height - hot_y - 1
+ * followed by `height` bitmap words starting at (0x8,A2) and a clear of the
+ * remaining words up to index 16.  Each word is one raster line, which is why
+ * the word count is the height.
+ *
+ * SMD_$SHOW_CURSOR uses them as
+ *     x_left   = pos.x - hot_x                     (clamped to >= 0)
+ *     x_right  = x_left + width                    (clamped to hw->max_x + 1)
+ *     y_bottom = pos.y + hot_y_adj                 (clamped to hw->max_y)
+ *     y_top    = y_bottom - height                 (clamped to -1)
+ */
+typedef struct smd_cursor_pattern_t {
+  int16_t width;        /* 0x00: cursor width in pixels, 1..16 */
+  int16_t height;       /* 0x02: cursor height in raster lines, 1..16 */
+  int16_t hot_x;        /* 0x04: hot spot X offset */
+  int16_t hot_y_adj;    /* 0x06: height - hot spot Y - 1 */
+  uint16_t bitmap[16];  /* 0x08: one word per raster line */
+} smd_cursor_pattern_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(smd_cursor_pattern_t, hot_y_adj) == 0x06, "pat hot_y");
+_Static_assert(offsetof(smd_cursor_pattern_t, bitmap) == 0x08, "pat bitmap");
+#endif
+
+/* Cursor pointer table at 0x00E27366 - 4 pointers to cursor patterns */
+extern smd_cursor_pattern_t *SMD_CURSOR_PTABLE[4];
 
 /* Blink function pointer table at SMD_GLOBALS + 0x1DA0 */
 typedef void (*smd_blink_func_t)(void);
@@ -642,9 +908,13 @@ extern int16_t SMD_SYNC_LOCK_DATA;
 extern ml_$exclusion_t ml_$exclusion_t_00e2e520;
 
 /* SMD_$DISP1_INT - display interrupt handler (assembly, not yet emitted).
- * Original address: 0x00E26F1E.
- * TODO: Ghidra currently labels 0x00E26F1E as ROUTE_$ROUTING; verify the
- * handler address used by SMD_$INTERRUPT_INIT. */
+ * Original address: 0x00E26F20.
+ *
+ * Resolved (bead source-8xb): the label conflict was an off-by-two.
+ * SMD_$INTERRUPT_INIT loads it with "lea (-0x366,PC),A0" at 0x00E27284, and
+ * 0x00E27286 - 0x366 = 0x00E26F20, which is where the handler's
+ * "movem.l {...},-(SP)" starts.  0x00E26F1E is the byte immediately before
+ * it and really is ROUTE_$ROUTING (see route/route_internal.h). */
 void SMD_$DISP1_INT(void);
 
 /* smd_$setup_scroll_blt - SAU-specific scroll BLT register setup.
@@ -937,7 +1207,8 @@ int8_t smd_$validate_unit(uint16_t unit);
  *
  * Original address: 0x00E6E1CC
  */
-int8_t SHOW_CURSOR(uint32_t *pos, int16_t *lock_data1, int8_t *lock_data2);
+void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
+                 const boolean *blocking);
 
 /*
  * smd_$send_loc_event - Send location event
@@ -952,20 +1223,28 @@ int8_t SHOW_CURSOR(uint32_t *pos, int16_t *lock_data1, int8_t *lock_data2);
  *
  * Original address: 0x00E6E8D6
  */
-void smd_$send_loc_event(uint16_t unit, uint16_t type, smd_cursor_pos_t pos,
+void smd_$send_loc_event(uint16_t unit, uint16_t type, uint32_t pos,
                          uint16_t buttons);
 
 /*
- * smd_$draw_cursor_internal - Low-level cursor drawing
+ * SMD_$XOR_CURSOR - Low-level cursor drawing
  *
  * Called by blink routines to actually draw/erase cursor.
  *
  * Original address: 0x00E2720E
  */
-int8_t smd_$draw_cursor_internal(int16_t *cursor_num, uint32_t *cursor_pos,
-                                 void *hw_offset, void *display_comm,
-                                 int8_t *cursor_flag, uint32_t *ec_1,
-                                 uint32_t *ec_2);
+/*
+ * The last two arguments are pushed as *values* by every caller
+ * (SHOW_CURSOR 0x00E6E396/0x00E6E39A and 0x00E6E3F2/0x00E6E3F6:
+ * `move.l (0x8,A3),-(SP)` / `move.l (0x14,A3),-(SP)`), not by reference.
+ * They are the display unit record's controller register base (+0xFC) and
+ * display memory base (+0x108).
+ */
+boolean SMD_$XOR_CURSOR(int16_t *cursor_num, uint32_t *cursor_pos,
+                                  int16_t *bounds, smd_display_hw_t *hw,
+                                  const boolean *erase_flag,
+                                  uint32_t display_base,
+                                  SMD_HW_REG_PTR ctrl_regs);
 
 /*
  * smd_$reschedule_blink_timer - Reschedule cursor blink timer
@@ -1034,9 +1313,24 @@ extern ec_$eventcount_t DTTE;
 /*
  * Helper to get display unit pointer from unit number
  */
-static inline smd_display_unit_t *smd_get_unit(uint16_t unit_num) {
+static inline smd_display_slot_t *smd_get_unit(uint16_t unit_num) {
   /* Base address + unit_num * unit_size */
   return &SMD_DISPLAY_UNITS[unit_num];
+}
+
+/*
+ * smd_$unit_rec - the real per-unit display record for `unit_num`.
+ *
+ * Mirrors the address computation every SMD function performs:
+ *     movea.l #0xe2e3fc,A0 ; muls.w #0x10c,D0 ; lea (0,A0,D0*1),A3
+ * and then reaches the record through displacements starting at -0xF4.
+ * `unit_num` is signed because the original uses a *signed* multiply
+ * (muls.w #0x10c, e.g. 0x00E6E218 in SMD_$SHOW_CURSOR).
+ */
+static inline smd_display_unit_t *smd_$unit_rec(int16_t unit_num) {
+  return (smd_display_unit_t *)((uint8_t *)SMD_DISPLAY_UNITS +
+                                (int32_t)unit_num * SMD_DISPLAY_UNIT_SIZE -
+                                0xF4);
 }
 
 /*
@@ -1070,19 +1364,15 @@ static inline uint16_t smd_get_current_unit(void) {
  */
 #define SMD_UNIT_AUX_BASE 0x00E2E308
 
-/* Per-unit auxiliary structure (stored before each unit block) */
-typedef struct smd_unit_aux_t {
-  smd_display_hw_t *hw;   /* 0x00: Hardware info pointer */
-  uint16_t owner_asid;    /* 0x04: Owner process ASID */
-  uint16_t borrowed_asid; /* 0x06: Borrower process ASID */
-  /* More fields follow, total 0x10C bytes per unit slot */
-} smd_unit_aux_t;
+/* The "auxiliary" block *is* the display unit record; see
+ * smd_display_unit_t above, which now describes all 0x10C bytes of it. */
+typedef smd_display_unit_t smd_unit_aux_t;
 
-/* Access helper - gets auxiliary data for unit N */
-static inline smd_unit_aux_t *smd_get_unit_aux(uint16_t unit_num) {
-  /* Returns pointer to auxiliary data block for this unit */
-  return (smd_unit_aux_t *)((uint8_t *)SMD_UNIT_AUX_BASE +
-                            unit_num * SMD_DISPLAY_UNIT_SIZE);
+/* Access helper - gets the display unit record for unit N.
+ * Derived from the SMD_DISPLAY_UNITS symbol rather than from the literal
+ * 0x00E2E308 so that hosted builds work too. */
+static inline smd_unit_aux_t *smd_get_unit_aux(int16_t unit_num) {
+  return smd_$unit_rec(unit_num);
 }
 
 /* Lock ID for respond/borrow operations */

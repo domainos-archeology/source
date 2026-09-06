@@ -45,7 +45,7 @@ static void copy_params(sio_params_t *dst, sio_params_t *src)
 }
 
 void SIO_$K_SET_PARAM(int16_t *line_ptr, sio_params_t *params,
-                      uint32_t *change_mask_ptr, status_$t *status_ret)
+                      const uint32_t *change_mask_ptr, status_$t *status_ret)
 {
     sio_desc_t *desc;
     uint32_t change_mask;

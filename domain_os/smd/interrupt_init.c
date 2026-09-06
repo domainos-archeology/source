@@ -6,7 +6,7 @@
  * Original address: 0x00E27284
  *
  * Assembly:
- *   lea (-0x366,PC),A0          ; A0 = &SMD_$DISP1_INT (0x00E26F1E)
+ *   lea (-0x366,PC),A0          ; A0 = &SMD_$DISP1_INT (0x00E26F20)
  *   lea (0xe24c78).l,A1         ; A1 = PEB base
  *   tst.b (0x1a,A1)             ; Check PEB flag at offset 0x1A
  *   beq.w use_vector            ; If zero, use interrupt vector

@@ -23,7 +23,7 @@ static void copy_params(sio_params_t *dst, sio_params_t *src)
 }
 
 void SIO_$K_INQ_PARAM(int16_t *line_ptr, sio_params_t *params_ret,
-                      uint32_t *mask_ptr, status_$t *status_ret)
+                      const uint32_t *mask_ptr, status_$t *status_ret)
 {
     sio_desc_t *desc;
 

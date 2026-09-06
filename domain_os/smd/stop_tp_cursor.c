@@ -50,7 +50,7 @@ static const uint32_t stop_tp_cursor_lock_data_2 = 0x00E6E458;
  *   00e6eb18    move.w #0x8,-(SP)             ; lock_id = 8
  *   00e6eb1c    jsr 0x00e20b62.l              ; ML_$UNLOCK(smd_$request_lock)
  *   00e6eb22    addq.w #0x4,SP
- *   00e6eb24    tst.b (0xe0,A5)               ; tp_cursor_active
+ *   00e6eb24    tst.b (0xe0,A5)               ; tracking_enabled
  *   00e6eb28    bpl.b 0x00e6eb3a              ; if not active, exit
  *   00e6eb2a    pea (-0x6d4,PC)               ; lock_data_2
  *   00e6eb2e    pea (-0x1204,PC)              ; lock_data_1
@@ -84,7 +84,7 @@ void SMD_$STOP_TP_CURSOR(uint16_t *unit)
     ML_$UNLOCK(SMD_REQUEST_LOCK);
 
     /* If cursor tracking was active, show cursor at default position */
-    if (SMD_GLOBALS.tp_cursor_active < 0) {
+    if (SMD_GLOBALS.tracking_enabled < 0) {
         SHOW_CURSOR(&SMD_GLOBALS.cursor_pos_sentinel,
                     (int16_t *)&stop_tp_cursor_lock_data_1,
                     (int8_t *)&stop_tp_cursor_lock_data_2);

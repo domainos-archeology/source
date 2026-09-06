@@ -11,25 +11,25 @@ static char func_id_cond;       // 0xe66896
 static char func_id_dsusp;      // 0xe66d8c
 static char func_id_status;     // 0xe66d8a
 
-// SIO parameter structure for SIO_$K_SET_PARAM
-// TODO: this is TERM_$CONTROL's local (byte-level) view of the 0x16-byte
-// sio_params_t defined in sio/sio.h; the field names differ from sio.h's
-// and the two should be unified once SIO_$K_SET_PARAM's use is confirmed.
-// The block is passed to SIO_$K_SET_PARAM by address with an explicit cast.
-typedef struct {
-    unsigned char unused[3];
-    unsigned char flags1;       // offset 3 (-0x15 from end)
-    unsigned char padding[3];   // offsets 4-6
-    unsigned char flags2;       // offset 7 (-0x11 from end)
-    uint32_t param_bits;        // offset 8 (-0x10 from end)
-    unsigned short speed_in;    // offset 12 (-0xc from end)
-    unsigned short speed_out;   // offset 14 (-0xa from end)
-    unsigned short parity;      // offset 16 (-0x8 from end)
-    unsigned short stop_bits;   // offset 18 (-0x6 from end)
-    unsigned short data_bits;   // offset 20 (-0x4 from end)
-} term_$sio_params_t;
-_Static_assert(sizeof(term_$sio_params_t) == sizeof(sio_params_t),
-               "term_$sio_params_t must match sio_params_t (0x16 bytes)");
+/*
+ * SIO parameter block: TERM_$CONTROL keeps a 0x16-byte local at (-0x18,A6) and
+ * a 32-bit change mask at (-0x1c,A6); both addresses go to SIO_$K_SET_PARAM
+ * (0x00E66D3C-0x00E66D48).  The block is sio/sio.h's sio_params_t, so this
+ * file now uses that type directly.  Offsets the assembly touches:
+ *   (-0x15,A6) = block + 0x03 -> low byte of flags1
+ *   (-0x11,A6) = block + 0x07 -> low byte of flags2
+ *   (-0x10,A6) = block + 0x08 -> break_mask
+ *   (-0x0c,A6) = block + 0x0C -> high half of baud_rate
+ *   (-0x0a,A6) = block + 0x0E -> low half of baud_rate
+ *   (-0x08,A6) = block + 0x10 -> char_size
+ *   (-0x06,A6) = block + 0x12 -> stop_bits
+ *   (-0x04,A6) = block + 0x14 -> parity
+ *
+ * Note the original never initialises the whole block: each case writes only
+ * the field its change mask selects, and SIO_$K_SET_PARAM (0x00E680F0 onward)
+ * only consults the fields named by the mask.  The uninitialised local below
+ * is therefore faithful, not an oversight.
+ */
 
 // Terminal control options (option codes for TERM_$CONTROL)
 #define CTRL_SET_FUNC_CHAR_DEFAULT    0
@@ -74,7 +74,7 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
     unsigned short option;
     unsigned char inverted;
     short real_line;
-    term_$sio_params_t params;
+    sio_params_t params;
     uint32_t param_mask;        /* 32-bit change mask (SIO_$K_SET_PARAM) */
     void *pgroup_ptr;
 
@@ -109,8 +109,9 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             break;
 
         case CTRL_SET_SPEED:
-            params.speed_in = *value_ptr;
-            params.speed_out = *value_ptr;
+            /* 00e66c00: move.w (A0),(-0xa,A6) / move.w (A0),(-0xc,A6):
+             * both halves of baud_rate get the same value. */
+            params.baud_rate = ((uint32_t)*value_ptr << 16) | (uint32_t)*value_ptr;
             param_mask = 1;
             goto set_sio_param;
 
@@ -141,28 +142,31 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             break;
 
         case CTRL_SET_ECHO:
+            /* 00e66c28: bset.b/bclr.b #0,(-0x15,A6) -> flags1 bit 0 */
             if (*(char *)value_ptr < 0) {
-                params.flags2 |= 1;
+                params.flags1 |= 0x00000001u;
             } else {
-                params.flags2 &= ~1;
+                params.flags1 &= ~0x00000001u;
             }
             param_mask = 0x20;
             goto set_sio_param;
 
         case CTRL_SET_SOMETHING_13:
+            /* 00e66c42: bset.b/bclr.b #3,(-0x15,A6) -> flags1 bit 3 */
             if (*(char *)value_ptr < 0) {
-                params.flags2 |= 8;
+                params.flags1 |= 0x00000008u;
             } else {
-                params.flags2 &= ~8;
+                params.flags1 &= ~0x00000008u;
             }
             param_mask = 0x40;
             goto set_sio_param;
 
         case CTRL_ENABLE_PGROUP:
+            /* 00e66bbe: bset.b/bclr.b #2,(-0x11,A6) -> flags2 bit 2 */
             if (*(char *)value_ptr < 0) {
-                params.flags1 |= 4;
+                params.flags2 |= 0x00000004u;
             } else {
-                params.flags1 &= ~4;
+                params.flags2 &= ~0x00000004u;
             }
             pgroup_ptr = (void *)((char *)&PROC2_UID + (short)(PROC1_$AS_ID << 3));
             TTY_$K_SET_PGROUP(line_ptr, pgroup_ptr, status_ret);
@@ -170,15 +174,17 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             goto set_sio_param;
 
         case CTRL_SET_FLAG_17:
+            /* 00e66b9c: bset.b/bclr.b #1,(-0x11,A6) -> flags2 bit 1 */
             if (*(char *)value_ptr < 0) {
-                params.flags1 |= 2;
+                params.flags2 |= 0x00000002u;
             } else {
-                params.flags1 &= ~2;
+                params.flags2 &= ~0x00000002u;
             }
             param_mask = 0x400;
             goto set_sio_param;
 
         case CTRL_SET_PARITY:
+            /* 00e66c5c..00e66c8c: move.w D0w,(-0x4,A6) -> parity */
             switch (*value_ptr) {
                 case 0: params.parity = 0; break;
                 case 1: params.parity = 1; break;
@@ -190,12 +196,17 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             param_mask = 4;
             goto set_sio_param;
 
-        case CTRL_SET_STOP_BITS:
+        case CTRL_SET_DATA_BITS:
+            /*
+             * 00e66c90: cmpi.w #4,D0w / bcc -> invalid, then a 4-entry jump
+             * table at 0x00E66CA6 (0x0008, 0x0010, 0x000C, 0x0014) that maps
+             * 0->0, 1->1, 2->2, 3->3 into (-0x8,A6) = char_size.
+             */
             switch (*value_ptr) {
-                case 0: params.stop_bits = 0; break;
-                case 1: params.stop_bits = 1; break;
-                case 2: params.stop_bits = 2; break;
-                case 3: params.stop_bits = 3; break;
+                case 0: params.char_size = 0; break;
+                case 1: params.char_size = 1; break;
+                case 2: params.char_size = 2; break;
+                case 3: params.char_size = 3; break;
                 default:
                     *status_ret = status_$term_invalid_option;
                     return;
@@ -203,11 +214,12 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             param_mask = 0x10;
             goto set_sio_param;
 
-        case CTRL_SET_DATA_BITS:
+        case CTRL_SET_STOP_BITS:
+            /* 00e66cc4..00e66cfa: 1/2/3 only, into (-0x6,A6) = stop_bits */
             switch (*value_ptr) {
-                case 1: params.data_bits = 1; break;
-                case 2: params.data_bits = 2; break;
-                case 3: params.data_bits = 3; break;
+                case 1: params.stop_bits = 1; break;
+                case 2: params.stop_bits = 2; break;
+                case 3: params.stop_bits = 3; break;
                 default:
                     *status_ret = status_$term_invalid_option;
                     return;
@@ -218,11 +230,13 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
         case CTRL_SET_FLOW_CTRL: {
             unsigned short flow = *value_ptr;
             unsigned long bits = 0;
+            /* 00e66cfc..00e66d30: btst bits 0..3 of the caller's word into
+             * bits 0,1,3,4 of (-0x10,A6) = break_mask. */
             if (flow & 1) bits |= 1;
             if (flow & 2) bits |= 2;
             if (flow & 4) bits |= 8;
             if (flow & 8) bits |= 0x10;
-            params.param_bits = bits;
+            params.break_mask = bits;
             param_mask = 0x2000;
             goto set_sio_param;
         }
@@ -265,20 +279,21 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             goto done;
 
         case CTRL_SET_FLAG_31:
+            /* 00e66b7a: bset.b/bclr.b #0,(-0x11,A6) -> flags2 bit 0 */
             if (*(char *)value_ptr < 0) {
-                params.flags1 |= 1;
+                params.flags2 |= 0x00000001u;
             } else {
-                params.flags1 &= ~1;
+                params.flags2 &= ~0x00000001u;
             }
             param_mask = 0x200;
             goto set_sio_param;
 
         case CTRL_SET_SPEED_32:
-            params.speed_in = *value_ptr;
-            params.speed_out = *value_ptr;
+            /* 00e66c18: same two halves as CTRL_SET_SPEED, mask 2 */
+            params.baud_rate = ((uint32_t)*value_ptr << 16) | (uint32_t)*value_ptr;
             param_mask = 2;
         set_sio_param:
-            SIO_$K_SET_PARAM(line_ptr, (sio_params_t *)&params, &param_mask, status_ret);
+            SIO_$K_SET_PARAM(line_ptr, &params, &param_mask, status_ret);
             break;
 
         case CTRL_FLUSH_INPUT:

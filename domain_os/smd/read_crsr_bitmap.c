@@ -74,7 +74,7 @@ void SMD_$READ_CRSR_BITMAP(void *param1,
                            status_$t *status_ret)
 {
     int16_t cursor_idx;
-    int16_t *cursor_data;
+    smd_cursor_pattern_t *cursor_data;
     int16_t i;
     uint32_t *src;
 
@@ -92,14 +92,14 @@ void SMD_$READ_CRSR_BITMAP(void *param1,
     cursor_data = SMD_CURSOR_PTABLE[cursor_idx];
 
     /* Return dimensions and hotspot */
-    *width_ret = cursor_data[0];
-    *height_ret = cursor_data[1];
-    *hot_x_ret = cursor_data[2];
+    *width_ret = (uint16_t)cursor_data->width;
+    *height_ret = (uint16_t)cursor_data->height;
+    *hot_x_ret = (uint16_t)cursor_data->hot_x;
     /* Hot Y is computed as (height-1) - stored_offset */
-    *hot_y_ret = (cursor_data[1] - 1) - cursor_data[3];
+    *hot_y_ret = (int16_t)((cursor_data->height - 1) - cursor_data->hot_y_adj);
 
-    /* Copy bitmap data (8 uint32_t = 32 bytes = 16 int16_t of bitmap) */
-    src = (uint32_t *)&cursor_data[4];
+    /* Copy bitmap data (8 uint32_t = 32 bytes = 16 words of bitmap) */
+    src = (uint32_t *)&cursor_data->bitmap[0];
     for (i = 0; i < 8; i++) {
         bitmap_ret[i] = src[i];
     }

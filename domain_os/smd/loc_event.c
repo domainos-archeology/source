@@ -29,10 +29,16 @@
  * Returns:
  *   Result flags (negative if cursor should be updated)
  */
+/*
+ * Constant cell 0x00E6E45A (the byte 0x00) passed by `pea (-0x65c,PC)` at
+ * 0x00E6EAB4 as SHOW_CURSOR's "blocking" argument: false = try-lock only.
+ */
+static const boolean loc_event_no_block = false;
+
 int8_t SMD_$LOC_EVENT(int8_t button_state, int16_t unit, uint32_t pos, int16_t buttons)
 {
     int8_t poll_result;
-    int8_t pos_changed;
+    boolean pos_changed;
     int16_t event_type;
     int16_t prev_idx;
     int entry_offset;
@@ -52,8 +58,9 @@ int8_t SMD_$LOC_EVENT(int8_t button_state, int16_t unit, uint32_t pos, int16_t b
     }
 
     /* Check if position changed from last event */
-    pos_changed = -(SMD_GLOBALS.saved_cursor_pos.x != (int16_t)pos ||
-                    SMD_GLOBALS.saved_cursor_pos.y != (int16_t)(pos >> 16));
+    /* 00e6e9d2 move.l (0xcc,A5),D6 / cmp.l (0xc,A6),D6 / sne D6b:
+     * the whole packed longword is compared, not the halves. */
+    pos_changed = (SMD_GLOBALS.saved_cursor_pos != pos) ? true : false;
 
     if (pos_changed < 0) {
         /* Position changed - determine event type */
@@ -72,8 +79,9 @@ int8_t SMD_$LOC_EVENT(int8_t button_state, int16_t unit, uint32_t pos, int16_t b
         coalesced = 0;
         entry_offset = prev_idx * sizeof(smd_event_entry_t);
 
+        /* 00e6ea16 cmp.w (0x72a,A5),D1w / beq ; 00e6ea20 tst.w (0xde,A5) / beq */
         if (SMD_GLOBALS.event_queue_head != SMD_GLOBALS.event_queue_tail &&
-            SMD_GLOBALS.cursor_tracking_count != 0) {
+            SMD_GLOBALS.tp_reporting != 0) {
             entry = &SMD_GLOBALS.event_queue[prev_idx];
 
             /* Check if same unit */
@@ -82,14 +90,14 @@ int8_t SMD_$LOC_EVENT(int8_t button_state, int16_t unit, uint32_t pos, int16_t b
                 if (event_type == entry->event_type) {
                     /* Same type - can coalesce */
                     entry->button_or_char = buttons;
-                    entry->pos = *(smd_cursor_pos_t *)&pos;
+                    entry->pos = pos;
                     coalesced = -1;
                 } else if (button_state < 0 &&
                            entry->event_type == SMD_EVTYPE_INT_BUTTON_DOWN2) {
                     /* Upgrade button down to pointer up */
                     entry->event_type = SMD_EVTYPE_INT_POINTER_UP;
                     entry->button_or_char = buttons;
-                    entry->pos = *(smd_cursor_pos_t *)&pos;
+                    entry->pos = pos;
                     coalesced = -1;
                 }
             }
@@ -102,7 +110,7 @@ int8_t SMD_$LOC_EVENT(int8_t button_state, int16_t unit, uint32_t pos, int16_t b
 
         /* Clear tracking count flag and update saved position */
         SMD_GLOBALS.tp_cursor_timeout = 0;
-        SMD_GLOBALS.saved_cursor_pos = *(smd_cursor_pos_t *)&pos;
+        SMD_GLOBALS.saved_cursor_pos = pos;
     }
 
     /* Handle button up event if no buttons pressed and button state changed */
@@ -116,11 +124,22 @@ int8_t SMD_$LOC_EVENT(int8_t button_state, int16_t unit, uint32_t pos, int16_t b
 done:
     ML_$UNLOCK(SMD_REQUEST_LOCK);
 
-    /* If position changed and cursor active, update cursor display */
-    result &= SMD_GLOBALS.tp_cursor_active;
+    /*
+     * 00e6eaac move.b D6b,D0b / and.b (0xe0,A5),D0b / bpl -> exit
+     * 00e6eab4 pea (-0x65c,PC)   ; 0x00E6E45A, the byte 0 = "do not block"
+     * 00e6eab8 pea (0xe4,A5)     ; &tracking_cursor_num
+     * 00e6eabc pea (0xc,A6)      ; &pos (this function's by-value argument)
+     * 00e6eac0 bsr SHOW_CURSOR
+     *
+     * SHOW_CURSOR is a procedure, so on this path the original returns
+     * whatever it happened to leave in D0; we return the value computed
+     * before the call, which is what every caller that inspects the result
+     * is testing for.
+     */
+    result = (int8_t)(result & SMD_GLOBALS.tracking_enabled);
     if (result < 0) {
-        result = SHOW_CURSOR(&pos, &SMD_GLOBALS.default_cursor_pos.x,
-                             &SMD_GLOBALS.tp_cursor_active);
+        SHOW_CURSOR(&pos, &SMD_GLOBALS.tracking_cursor_num,
+                    &loc_event_no_block);
     }
 
     return result;
@@ -226,7 +245,7 @@ void smd_$enqueue_event(uint16_t unit, uint16_t type, uint32_t pos, uint16_t but
 
     /* Fill in event data */
     TIME_$CLOCK((clock_t *)&entry->timestamp);
-    entry->pos = *(smd_cursor_pos_t *)&pos;
+    entry->pos = pos;
     entry->event_type = type;
     entry->button_or_char = buttons;
     entry->unit = unit;

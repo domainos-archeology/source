@@ -41,7 +41,7 @@ void SMD_$DM_COND_EVENT_WAIT(uint16_t *event_type, int16_t *param2,
     uint16_t asid;
     int16_t counter;
     uint16_t unit_num;
-    smd_display_unit_t *unit_ptr;
+    smd_display_slot_t *unit_ptr;
     smd_display_hw_t *hw;
     uint16_t hw_flags;
     int8_t power_status;
@@ -158,7 +158,7 @@ void SMD_$DM_COND_EVENT_WAIT(uint16_t *event_type, int16_t *param2,
     /* Check display buffer event count */
     {
         uint16_t unit_idx = SMD_GLOBALS.asid_to_unit[asid];
-        smd_display_unit_t *disp_unit = &SMD_DISPLAY_UNITS[unit_idx];
+        smd_display_slot_t *disp_unit = &SMD_DISPLAY_UNITS[unit_idx];
         smd_display_hw_t *disp_hw = disp_unit->hw;
 
         if (asid == disp_unit->asid &&

@@ -51,7 +51,7 @@ void SMD_$WS_INIT(smd_ws_ctx_t *ctx)
 {
     uint16_t unit;
     int32_t unit_offset;
-    smd_display_unit_t *display_unit;
+    smd_display_slot_t *display_unit;
     smd_font_entry_t *font_table;
     uint16_t font_index;
 
@@ -66,7 +66,7 @@ void SMD_$WS_INIT(smd_ws_ctx_t *ctx)
 
     /* Calculate unit offset: unit * 0x10C */
     unit_offset = (int32_t)unit * SMD_DISPLAY_UNIT_SIZE;
-    display_unit = (smd_display_unit_t *)((uint8_t *)&SMD_EC_1 + unit_offset);
+    display_unit = (smd_display_slot_t *)((uint8_t *)&SMD_EC_1 + unit_offset);
 
     /* Get font index from context (caller provides this at offset 0x18) */
     font_index = ctx->font_index;

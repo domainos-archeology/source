@@ -85,7 +85,7 @@ void SMD_$LOAD_CRSR_BITMAP(void *param1,
 {
     int16_t cursor_idx;
     int16_t width, height, hot_x, hot_y;
-    int16_t *cursor_data;
+    smd_cursor_pattern_t *cursor_data;
     int8_t need_tracking_update;
     int16_t i;
     int32_t unit_offset;
@@ -138,20 +138,20 @@ void SMD_$LOAD_CRSR_BITMAP(void *param1,
     /* Acquire display for exclusive access */
     SMD_$ACQ_DISPLAY((void *)&load_crsr_lock_data_2);
 
-    /* Store cursor dimensions and hotspot */
-    cursor_data[0] = width;      /* width */
-    cursor_data[1] = height;     /* height */
-    cursor_data[2] = hot_x;      /* hot_x */
-    cursor_data[3] = (height - 1) - hot_y;  /* hot_y offset */
+    /* 00e6fca0-00e6fcb2: width, height, hot_x, then height - hot_y - 1 */
+    cursor_data->width = width;
+    cursor_data->height = height;
+    cursor_data->hot_x = hot_x;
+    cursor_data->hot_y_adj = (int16_t)((height - 1) - hot_y);
 
-    /* Copy bitmap data */
+    /* 00e6fcb6-00e6fcd0: `height` raster words from the caller's array */
     for (i = 0; i < height; i++) {
-        cursor_data[4 + i] = bitmap[i];
+        cursor_data->bitmap[i] = (uint16_t)bitmap[i];
     }
 
-    /* Clear remaining bitmap slots (16 - height) */
-    for (i = height + 1; i <= 16; i++) {
-        cursor_data[3 + i] = 0;
+    /* 00e6fcd4-00e6fcf2: clear bitmap[height .. 15] */
+    for (i = height; i < 16; i++) {
+        cursor_data->bitmap[i] = 0;
     }
 
     /* Release display lock */

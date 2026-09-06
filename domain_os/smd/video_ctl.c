@@ -37,7 +37,7 @@
 void SMD_$VIDEO_CTL(uint8_t *flags, status_$t *status_ret)
 {
     uint16_t unit;
-    smd_display_unit_t *disp_unit;
+    smd_display_slot_t *disp_unit;
     smd_display_hw_t *hw;
     uint16_t video_flags;
     uint16_t acq_result;

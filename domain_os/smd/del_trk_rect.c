@@ -86,9 +86,13 @@ void SMD_$DEL_TRK_RECT(smd_track_rect_t *rects, uint16_t *count, status_$t *stat
             search_ptr = &SMD_GLOBALS.tracking_rects[j];
             dest_ptr = &SMD_GLOBALS.tracking_rects[j];
 
-            /* Compare both 32-bit halves of the rectangle (x1,y1 and x2,y2) */
+            /*
+             * 00e6e68e / 00e6e692: two `cmpm.l (A4)+,(A3)+` compare the two
+             * consecutive longwords of the 8-byte rectangle, i.e. bytes 0..3
+             * (x1,x2) and bytes 4..7 (y1,y2).
+             */
             matched = (*(uint32_t *)&rects[i].x1 == *(uint32_t *)&search_ptr->x1) &&
-                      (*(uint32_t *)&rects[i].x2 == *(uint32_t *)&search_ptr->x2);
+                      (*(uint32_t *)&rects[i].y1 == *(uint32_t *)&search_ptr->y1);
 
             if (matched) {
                 /* Found - swap with last rect and decrement count */

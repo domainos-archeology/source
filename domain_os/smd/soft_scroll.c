@@ -55,7 +55,7 @@ void SMD_$SOFT_SCROLL(smd_scroll_rect_t *scroll_rect, int16_t *scroll_dx,
     uint16_t unit;
     uint16_t as_id;
     smd_display_hw_t *hw;
-    smd_display_unit_t *unit_ptr;
+    smd_display_slot_t *unit_ptr;
 
     /* Get current address space ID */
     as_id = PROC1_$AS_ID;

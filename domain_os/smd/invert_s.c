@@ -70,7 +70,7 @@ void SMD_$INVERT_S(status_$t *status_ret)
 {
     uint16_t asid;
     uint16_t unit_num;
-    smd_display_unit_t *unit;
+    smd_display_slot_t *unit;
     smd_display_info_t *info;
 
     /* Default to error status */
@@ -99,7 +99,8 @@ void SMD_$INVERT_S(status_$t *status_ret)
 
     /*
      * Call INVERT_DISP with:
-     *   - display_base from unit.field_14
+     *   - display_base: 00e6de02 move.l (0x14,A1),-(SP), i.e. the unit
+     *     record's display memory base (record +0x108)
      *   - display_info offset by -0x60 from computed address
      *
      * The -0x60 offset in the original code adjusts for the
@@ -109,7 +110,7 @@ void SMD_$INVERT_S(status_$t *status_ret)
      * data from the "previous" entry, likely for some hardware
      * configuration purpose.
      */
-    SMD_$INVERT_DISP(unit->field_14, info - 1);
+    SMD_$INVERT_DISP(smd_$unit_rec((int16_t)unit_num)->display_base, info - 1);
 
     /* Release display lock */
     SMD_$REL_DISPLAY();

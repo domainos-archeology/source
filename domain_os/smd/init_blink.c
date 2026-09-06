@@ -51,7 +51,7 @@ void SMD_$INIT_BLINK(void)
 
     /* Initialize blink state */
     SMD_BLINK_STATE.smd_time_com = 0;      /* Time communication flag = 0 */
-    SMD_BLINK_STATE.blink_flag = 0xFF;     /* Blink enabled */
+    SMD_BLINK_STATE.blink_flag = true;     /* Blink enabled */
     SMD_BLINK_STATE.blink_counter = 0;     /* Counter = 0 */
 
     /* Check if default display exists */

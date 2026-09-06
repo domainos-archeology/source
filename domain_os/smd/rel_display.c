@@ -51,7 +51,7 @@
 void SMD_$REL_DISPLAY(void)
 {
     smd_display_hw_t *hw;
-    smd_display_unit_t *unit_ptr;
+    smd_display_slot_t *unit_ptr;
     ec_$eventcount_t *ec;
     uint16_t asid;
     uint16_t unit_num;
@@ -69,7 +69,7 @@ void SMD_$REL_DISPLAY(void)
         /* Continue the scroll operation */
         /* The ec is at unit_ptr->field_08 in the original, which maps to
          * an eventcount used for scroll completion signaling */
-        ec = (ec_$eventcount_t *)unit_ptr->field_08;
+        ec = (ec_$eventcount_t *)(uintptr_t)unit_ptr->field_08;
         SMD_$CONTINUE_SCROLL(hw, ec);
     } else {
         /* Clear the lock state */

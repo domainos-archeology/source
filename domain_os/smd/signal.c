@@ -51,7 +51,6 @@ void SMD_$SIGNAL(uint16_t *unit_ptr, uint16_t *params, uint16_t *param_count,
     int8_t valid;
     int32_t ec_value;
     int16_t queue_head, queue_tail;
-    int16_t entry_offset;
     int16_t count;
     int16_t i;
     smd_request_entry_t *entry;
@@ -69,7 +68,11 @@ void SMD_$SIGNAL(uint16_t *unit_ptr, uint16_t *params, uint16_t *param_count,
         return;
     }
 
-    /* Wait for space in the request queue */
+    /*
+     * Wait for space in the request queue.
+     * 00e6f232 lea (A3),A4 / move.l (A4),D2 : re-read the eventcount value at
+     * the top of every attempt, before taking the lock.
+     */
     for (;;) {
         ec_value = SMD_REQUEST_EC_WAIT.value;
         ML_$LOCK(SMD_REQUEST_LOCK);
@@ -77,60 +80,77 @@ void SMD_$SIGNAL(uint16_t *unit_ptr, uint16_t *params, uint16_t *param_count,
         queue_head = SMD_GLOBALS.request_queue_head;
         queue_tail = SMD_GLOBALS.request_queue_tail;
 
-        /* Check if queue has space */
+        /* 00e6f24c cmp.w D1w,D0w / beq -> have space */
         if (queue_head == queue_tail) {
-            /* Queue is empty - has space */
             break;
         }
 
+        /* 00e6f250 cmp.w D1w,D0w / ble -> 0x00e6f262 */
         if (queue_head > queue_tail) {
-            /* Head is ahead of tail: space = max - (head - tail) */
-            if (-(queue_head - queue_tail) != -(SMD_REQUEST_QUEUE_SIZE - 1) &&
-                -(queue_head - queue_tail) + (SMD_REQUEST_QUEUE_SIZE - 1) >= 0) {
-                /* Queue has space */
-                break;
-            }
-        } else {
-            /* Tail is ahead of head: space = tail - head - 1 */
-            if ((queue_tail - queue_head) - 1 > 0) {
-                /* Queue has space */
+            /* 00e6f254 ext.l/ext.l/sub.l -> D0 = head - tail
+             * 00e6f25a moveq #0x27,D1 / sub.l D0,D1 / tst.l D1 / bgt */
+            if ((int32_t)(SMD_REQUEST_QUEUE_MAX - 1) -
+                    ((int32_t)queue_head - (int32_t)queue_tail) > 0) {
                 break;
             }
         }
+        /*
+         * 00e6f262: reached both when head <= tail and when the test above
+         * failed - the original falls through, it does not `else`.
+         */
+        if ((int32_t)queue_tail - (int32_t)queue_head - 1 > 0) {
+            break;
+        }
 
-        /* Queue is full - wait for space */
+        /*
+         * Queue full: drop the lock and block on SMD_EC_1.
+         * 00e6f284-00e6f29a: EC_$WAIT with two 3-element arrays by value,
+         * only slot 0 in use.
+         */
         ML_$UNLOCK(SMD_REQUEST_LOCK);
-        EC_$WAIT(&SMD_REQUEST_EC_WAIT, ec_value + 1);
+        (void)EC_$WAIT(
+            (ec_$wait_ecs_t){ { &SMD_REQUEST_EC_WAIT, NULL, NULL } },
+            (ec_$wait_vals_t){ { ec_value + 1, 0, 0 } });
     }
 
-    /* Calculate entry offset: head * 0x24 */
-    entry_offset = SMD_GLOBALS.request_queue_head * sizeof(smd_request_entry_t);
-    entry = (smd_request_entry_t *)((uint8_t *)SMD_GLOBALS.request_queue + entry_offset);
+    /*
+     * 00e6f2a0 move.w (0x17f2,A5),D1w / lsl.w #2 / lsl.w #3 / add
+     *          lea (0,A5,D1w*1),A0 ... (0x17d0,A0)
+     * i.e. the entry lives at SMD_GLOBALS + 0x17D0 + head*36, and the array
+     * itself starts at 0x17F4, so this is request_queue[head - 1].
+     */
+    entry = &SMD_GLOBALS.request_queue[SMD_GLOBALS.request_queue_head - 1];
 
-    /* Store requester's process ID (ASID from PROC1) */
+    /* 00e6f2b0 move.w (0x00e20608).l,(0x17d0,A0) */
     entry->request_type = PROC1_$CURRENT;
 
-    /* Store parameter count */
+    /* 00e6f2b8 movea.l D3,A1 / move.w (A1),(0x17d2,A0) */
     entry->param_count = *param_count;
 
-    /* Copy parameters */
-    count = *param_count;
-    if (count >= 2) {
+    /*
+     * 00e6f2be move.w (A1),D0w / addq.w #1,D0w / cmpi.w #2,D0w / bcs -> skip
+     * With param_count validated to 1..16 above, (count + 1) is never below 2,
+     * so the copy always runs; the loop is `dbf` on count-1, i.e. `count`
+     * words from the caller's array into entry->params[0..count-1].
+     */
+    count = (int16_t)*param_count;
+    if ((uint16_t)(count + 1) >= 2) {
         for (i = 0; i < count; i++) {
             entry->params[i] = params[i];
         }
     }
 
-    /* Advance queue head (circular, 1-based indices 1-40) */
+    /* 00e6f2ea cmpi.w #0x28,(0x17f2,A5) / blt / move.w #1 / addq.w #1 */
     if (SMD_GLOBALS.request_queue_head >= SMD_REQUEST_QUEUE_MAX) {
         SMD_GLOBALS.request_queue_head = 1;
     } else {
         SMD_GLOBALS.request_queue_head++;
     }
 
+    /* 00e6f2fe */
     ML_$UNLOCK(SMD_REQUEST_LOCK);
 
-    /* Signal that a new request is available */
+    /* 00e6f30c pea (0xe2e408).l / jsr EC_$ADVANCE */
     EC_$ADVANCE(&SMD_REQUEST_EC_SIGNAL);
 
     *status_ret = status_$ok;

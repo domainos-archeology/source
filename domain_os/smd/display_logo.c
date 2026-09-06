@@ -93,8 +93,9 @@ void SMD_$DISPLAY_LOGO(uint16_t *unit_ptr, int32_t **logo_data, status_$t *statu
         }
     }
 
-    /* Get display base address from display unit structure */
-    display_base = SMD_DISPLAY_UNITS[unit_slot].mapped_addresses[0];
+    /* 00e70290 movea.l (0x14,A0),A4 with A0 = 0x00E2E3FC + unit*0x10C, i.e.
+     * the unit record's display memory base (record +0x108). */
+    display_base = smd_$unit_rec((int16_t)unit_slot)->display_base;
 
     /* Copy logo to display memory row by row */
     for (row = 0; row <= LOGO_HEIGHT - 1; row++) {

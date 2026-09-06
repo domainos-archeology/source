@@ -46,7 +46,7 @@ static int8_t smd_validate_unit(uint16_t unit);
  */
 void SMD_$INQ_DISP_INFO(uint16_t *unit, smd_disp_info_result_t *info, status_$t *status_ret)
 {
-    smd_display_unit_t *disp_unit;
+    smd_display_slot_t *disp_unit;
     smd_display_hw_t *hw;
     uint16_t disp_type;
 
@@ -73,8 +73,20 @@ void SMD_$INQ_DISP_INFO(uint16_t *unit, smd_disp_info_result_t *info, status_$t 
     /* Get hardware info for dimensions */
     disp_unit = smd_get_unit(*unit);
     hw = disp_unit->hw;
-    info->height = hw->height + 1;
-    info->width = hw->width + 1;
+    /*
+     * 00e7018a move.w (0x50,A1),D1w / addq.w #1 / move.w D1w,(0x6,A2)
+     * 00e70194 move.w (0x54,A1),D1w / addq.w #1 / move.w D1w,(0x8,A2)
+     *
+     * hw->max_x lands at +0x06 of the result record and hw->max_y at +0x08.
+     * The `height`/`width` names in smd_disp_info_result_t are the wrong way
+     * round for those offsets, but the byte layout below is what the original
+     * produces, so it is kept as-is.
+     * TODO(source-5nq5): rename smd_disp_info_result_t's +0x06/+0x08 fields
+     * (and TPAD_$INIT's use of them) once TPAD_$INIT has been checked against
+     * its assembly.
+     */
+    info->height = (uint16_t)(hw->max_x + 1);
+    info->width = (uint16_t)(hw->max_y + 1);
 
     /*
      * Set bits_per_pixel and num_planes based on display type.

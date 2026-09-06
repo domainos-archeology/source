@@ -25,7 +25,7 @@ smd_globals_t SMD_GLOBALS;
  * Display unit array - one entry per possible display
  * Original address: 0x00E2E3FC
  */
-smd_display_unit_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS];
+smd_display_slot_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS];
 
 /*
  * Display info table - configuration for each display
@@ -50,6 +50,12 @@ ec_$eventcount_t SMD_EC_2;
  * Original address: 0x00E273D6
  */
 smd_blink_state_t SMD_BLINK_STATE;
+
+/*
+ * Display unit record initialisers, original address 0x00E173D4.
+ * Contents (read with gsk): 00 00 04 00 00 00 00 00.
+ */
+const uint32_t smd_$unit_init_params[2] = { 0x00000400u, 0x00000000u };
 
 /*
  * Default display unit number (stored separately from globals)

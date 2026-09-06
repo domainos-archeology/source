@@ -28,7 +28,7 @@
  *   00e6e462    lea (0xe82b8c).l,A5
  *   00e6e468    st (0xe0,A5)                  ; tracking_enabled = 0xFF
  *   00e6e46c    movea.l (0x8,A6),A0           ; A0 = window_id ptr
- *   00e6e470    move.w (A0),(0xe4,A5)         ; tracking_window_id = *window_id
+ *   00e6e470    move.w (A0),(0xe4,A5)         ; tracking_cursor_num = *window_id
  *   00e6e474    movea.l (0x10,A6),A1          ; A1 = status_ret
  *   00e6e478    clr.l (A1)                    ; *status_ret = 0 (status_$ok)
  *   00e6e47a    movea.l (-0x4,A6),A5
@@ -43,7 +43,7 @@ void SMD_$ENABLE_TRACKING(uint16_t *window_id, uint32_t param2, status_$t *statu
     SMD_GLOBALS.tracking_enabled = (int8_t)0xFF;
 
     /* Store the window ID for tracking events */
-    SMD_GLOBALS.tracking_window_id = *window_id;
+    SMD_GLOBALS.tracking_cursor_num = *window_id;
 
     *status_ret = status_$ok;
 }

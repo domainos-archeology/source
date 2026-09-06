@@ -55,7 +55,7 @@ void SMD_$UTIL_INIT(smd_util_ctx_t *ctx)
 {
     uint16_t asid;
     uint16_t unit_num;
-    smd_display_unit_t *unit_base;
+    smd_display_slot_t *unit_base;
 
     /* Get current process's address space ID */
     asid = PROC1_$AS_ID;

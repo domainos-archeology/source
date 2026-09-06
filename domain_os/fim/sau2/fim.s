@@ -651,26 +651,49 @@ FIM_$SETUP_RETURN:
  * FP module data (PC-relative from FIM_$FLINE)
  *
  * In the original ROM, these were located at:
- *   FP_$SAVEP    0x00E218D0 - uint32: non-zero if FPU hardware is present
- *   FP_$OWNER    0x00E218D4 - uint16: AS ID of current FPU owner
+ *   FP_$SAVEP     0x00E218D0 - uint32: non-zero if FPU hardware is present
+ *   FP_$OWNER     0x00E218D4 - uint16: AS ID of current FPU owner
  *   FP_$EXCLUSION 0x00E218D6 - ml_$exclusion_t: FP exclusion lock
  *
  * Accessed PC-relative by FIM_$FLINE.  Also accessed by other FP
  * routines (fp_$switch_owner, FIM_$FP_INIT, etc.) via global labels.
+ *
+ * The image bytes at 0x00E218D0 (read with `gsk read 0x00e218d0`) are:
+ *   00e218d0  00 00 00 00                  FP_$SAVEP     = 0
+ *   00e218d4  00 00                        FP_$OWNER     = 0
+ *   00e218d6  00 00 00 00                  excl.f1       = 0
+ *   00e218da  00 e2 18 d6                  excl.f2       = &FP_$EXCLUSION
+ *   00e218de  00 e2 18 d6                  excl.f3       = &FP_$EXCLUSION
+ *   00e218e2  00 00 00 00                  excl.f4       = 0
+ *   00e218e6  ff ff                        excl.f5       = -1 (unlocked)
+ * i.e. the lock ships pre-initialised to the empty/unlocked state that
+ * ML_$EXCLUSION_INIT produces, with both queue links pointing at itself.
+ *
+ * The data region ends at 0x00E218E8; everything from there to
+ * FIM_$FLINE (0x00E21ACC) is FIM_$BUS_ERR, a 484-byte hand-written bus
+ * error handler installed in the vector table from 0x00E342E8.  It has
+ * three internal entry points already labelled in Ghidra:
+ *   0x00E218E8  FIM_$BUS_ERR
+ *   0x00E2190A  fim_bus_error_stingray_68020
+ *   0x00E2194A  fim_bus_error_68010
+ * TODO: FIM_$BUS_ERR (0x00E218E8..0x00E21ACB) is not yet translated; see
+ * bead source-z2ja.
  * ==================================================================== */
         .global FP_$SAVEP
 FP_$SAVEP:
-        .long   0                       /* Non-zero if FPU present */
+        .long   0                       /* 0x00E218D0: non-zero if FPU present */
 
         .global FP_$OWNER
 FP_$OWNER:
-        .word   0                       /* AS ID of current FPU owner */
+        .word   0                       /* 0x00E218D4: AS ID of FPU owner */
 
         .global FP_$EXCLUSION
-FP_$EXCLUSION:
-        .space  18                      /* ml_$exclusion_t (sizeof == 0x12) */
-        /* TODO: verify the size/contents of the 0xE218D6..0xE21ACC data
-         * region in Ghidra; only the exclusion is reproduced here. */
+FP_$EXCLUSION:                          /* 0x00E218D6: ml_$exclusion_t, 18 bytes */
+        .long   0                       /* +0x00 f1 */
+        .long   FP_$EXCLUSION           /* +0x04 f2: waiter queue head (self) */
+        .long   FP_$EXCLUSION           /* +0x08 f3: waiter queue tail (self) */
+        .long   0                       /* +0x0C f4: eventcount value */
+        .word   -1                      /* +0x10 f5: -1 = unlocked */
 
 
 /* ====================================================================

@@ -23,8 +23,11 @@
 #define SMD_UNIT1_CURSOR_NUM     ((int16_t *)0x00E273AC)
 #define SMD_UNIT1_CURSOR_POS     ((uint32_t *)0x00E273A8)
 #define SMD_UNIT1_DISPLAY_HW     ((void *)0x00E273C4)
-#define SMD_UNIT1_EC_1           ((uint32_t *)0x00FC0000)
-#define SMD_UNIT1_EC_2           ((uint32_t *)0x00FF9800)
+/* The last two arguments of SMD_$XOR_CURSOR are passed by value:
+ * the display memory base and the controller register base of unit 1
+ * (0x00E27308 pushes the same longwords SMD_$INIT plants in the unit record). */
+#define SMD_UNIT1_DISPLAY_BASE   0x00FC0000u
+#define SMD_UNIT1_CTRL_REGS      ((SMD_HW_REG_PTR)0x00FF9800u)
 
 /*
  * SMD_$BLINK_CURSOR_1 - Blink cursor for unit 1
@@ -83,16 +86,16 @@ void SMD_$BLINK_CURSOR_1(void)
          *   - display_hw+0x4E: 0x00E273C4
          *   - display_comm: 0x00E27376
          *   - cursor_flag: 0x00E273D8
-         *   - ec_1: 0x00FC0000
-         *   - ec_2: 0x00FF9800
+         *   - display_base (by value): 0x00FC0000
+         *   - ctrl_regs (by value):    0x00FF9800
          */
-        smd_$draw_cursor_internal(SMD_UNIT1_CURSOR_NUM,
+        SMD_$XOR_CURSOR(SMD_UNIT1_CURSOR_NUM,
                                    SMD_UNIT1_CURSOR_POS,
                                    (void *)((uintptr_t)SMD_UNIT1_DISPLAY_COM + 0x4E),
                                    SMD_UNIT1_DISPLAY_COM,
-                                   SMD_UNIT1_CURSOR_STATE,
-                                   SMD_UNIT1_EC_1,
-                                   SMD_UNIT1_EC_2);
+                                   (const boolean *)SMD_UNIT1_CURSOR_STATE,
+                                   SMD_UNIT1_DISPLAY_BASE,
+                                   SMD_UNIT1_CTRL_REGS);
 
         /* Toggle blink flag */
         *SMD_UNIT1_CURSOR_STATE = ~(*SMD_UNIT1_CURSOR_STATE);
