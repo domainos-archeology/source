@@ -10,20 +10,14 @@
 
 #include "disk/disk_internal.h"
 
-/* Volume table offsets (mount state/proc come from disk_internal.h) */
-#define DISK_AS_OPTIONS_OFFSET   0xa4  /* Async options offset */
-
-/* Valid volume index mask (volumes 1-10) */
-#define VALID_VOL_MASK  0x7fe
-
-/* Mount state 2 = assigned */
-#define DISK_MOUNT_ASSIGNED  2
+/* VALID_VOL_MASK, DISK_MOUNT_ASSIGNED and disk_$volume_t come from
+ * disk/disk_internal.h */
 
 void DISK_$AS_OPTIONS(uint16_t *vol_idx_ptr, uint16_t *options_ptr, status_$t *status)
 {
     uint16_t vol_idx;
     uint16_t options;
-    int32_t offset;
+    disk_$volume_t *vol;
     uint16_t mount_state;
     int16_t mount_proc;
 
@@ -38,17 +32,18 @@ void DISK_$AS_OPTIONS(uint16_t *vol_idx_ptr, uint16_t *options_ptr, status_$t *s
 
     *status = status_$ok;
 
-    offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
+    vol = DISK_VOL(vol_idx);
 
-    /* Check mount state and ownership */
-    mount_state = *(uint16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_STATE_OFFSET);
-    mount_proc = *(int16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_PROC_OFFSET);
+    /* Check mount state and ownership (0xe6c0ec / 0xe6c0f4) */
+    mount_state = vol->mount_state;
+    mount_proc = vol->mount_proc;
 
     if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1_$CURRENT) {
         *status = status_$volume_not_properly_mounted;
         return;
     }
 
-    /* Set the async options */
-    *(uint16_t *)(DISK_VOLUME_BASE + offset + DISK_AS_OPTIONS_OFFSET) = options;
+    /* Set the async options (0xe6c108 move.w D0w,(-0x20,A0)).  This is a
+     * whole-word store, so it also overwrites the DISK_VOL_FLAG_* byte. */
+    vol->as_options = options;
 }

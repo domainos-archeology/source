@@ -4,17 +4,17 @@
  * Returns detailed mount information for an assigned or mounted volume,
  * including disk UIDs, partition info, and device flags.
  *
- * The info structure (44 bytes) contains:
- *   +0x00: Disk UID high (4 bytes)
- *   +0x04: Disk UID low (4 bytes)
- *   +0x08: Device type (2 bytes)
- *   +0x0a: Unit number (2 bytes)
- *   +0x0c: Something (2 bytes)
- *   +0x0e: Something (4 bytes)
+ * The info structure (44 bytes) contains (0xe6bed0-0xe6bf52):
+ *   +0x00: Volume address range start (4 bytes, descriptor +0x88)
+ *   +0x04: Volume address range end (4 bytes, descriptor +0x8c)
+ *   +0x08: Device type (2 bytes, dev_info +4)
+ *   +0x0a: Unit id (2 bytes, descriptor +0x9a)
+ *   +0x0c: descriptor +0xa2 (2 bytes)
+ *   +0x0e: Sectors per track and head count (4 bytes, descriptor +0x9c)
  *   +0x12: Sector size encoding (2 bytes: 1=256, 2=512, 4=1024)
  *   +0x14: Number of partitions (2 bytes)
  *   +0x16-0x25: Partition info array (16 bytes)
- *   +0x26: Something (2 bytes)
+ *   +0x26: descriptor +0xb2 (2 bytes)
  *   +0x28: Flags byte
  *
  * @param vol_idx_ptr  Pointer to volume index
@@ -25,31 +25,16 @@
 
 #include "disk/disk_internal.h"
 
-/* Volume table offsets (mount state/LV data/dev info come from disk_internal.h) */
-#define DISK_LV_VOLX_OFFSET       0xb4
-#define DISK_UID_HI_OFFSET        0x88
-#define DISK_UID_LO_OFFSET        0x8c
-#define DISK_UNIT_OFFSET          0x9a
-#define DISK_SOMETHING_OFFSET     0xa2
-#define DISK_SECTORS_OFFSET       0x9c
-#define DISK_SECTOR_SIZE_OFFSET   0xa6
-#define DISK_NUM_PARTS_OFFSET     0xa8
-#define DISK_PART_TABLE_OFFSET    0x26
-#define DISK_FLAGS_OFFSET         0xa5
-
-/* Valid volume index mask (volumes 1-10) */
-#define VALID_VOL_MASK  0x7fe
-
-/* Mount states */
-#define DISK_MOUNT_ASSIGNED  2
-#define DISK_MOUNT_MOUNTED   3
+/* disk_$volume_t, DISK_VOL(), VALID_VOL_MASK, DISK_MOUNT_ASSIGNED and
+ * DISK_VOL_FLAG_WRITE_PROTECT come from disk/disk_internal.h.  The "unit"
+ * this function reports is unit_id (+0x9a), not the dev_unit (+0x98) that
+ * DISK_$DISMOUNT and DISK_$LV_ASSIGN match on. */
 
 void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
                          status_$t *status)
 {
     uint16_t vol_idx;
-    int32_t offset;
-    uint8_t *vol_entry;
+    disk_$volume_t *vol;
     uint8_t *info_bytes = (uint8_t *)info;
     uint16_t mount_state;
     void *dev_info;
@@ -68,10 +53,9 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
 
     ML_$EXCLUSION_START(&MOUNT_LOCK);
 
-    offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
-    vol_entry = DISK_VOLUME_BASE + offset;
+    vol = DISK_VOL(vol_idx);
 
-    mount_state = *(uint16_t *)(vol_entry + DISK_MOUNT_STATE_OFFSET);
+    mount_state = vol->mount_state;
 
     if (mount_state != DISK_MOUNT_MOUNTED && mount_state != DISK_MOUNT_ASSIGNED) {
         *status = status_$volume_not_properly_mounted;
@@ -79,33 +63,35 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
         return;
     }
 
-    /* Check for LV data and update vol_idx if needed */
-    if (*(uint32_t *)(vol_entry + DISK_LV_DATA_OFFSET) == 0) {
+    /* Check for LV data and update vol_idx if needed (0xe6beb4) */
+    if (vol->lv_start == 0) {
         info_bytes[0x28] &= 0xbf;  /* Clear bit 6 */
     } else {
         info_bytes[0x28] |= 0x40;  /* Set bit 6 */
-        vol_idx = *(uint16_t *)(vol_entry + DISK_LV_VOLX_OFFSET);
+        /* 0xe6bec2: entry 1 of the partition table is the backing PV */
+        vol_idx = vol->part_volx[1];
     }
 
-    /* Recalculate offset with potentially new vol_idx */
-    offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
-    vol_entry = DISK_VOLUME_BASE + offset;
+    /* Re-fetch the descriptor with the potentially new vol_idx */
+    vol = DISK_VOL(vol_idx);
 
     *status = status_$ok;
 
-    /* Copy UID */
-    *(uint32_t *)info_bytes = *(uint32_t *)(vol_entry + DISK_UID_HI_OFFSET);
-    *(uint32_t *)(info_bytes + 4) = *(uint32_t *)(vol_entry + DISK_UID_LO_OFFSET);
+    /* Address range (0xe6bed0 / 0xe6beee) */
+    *(uint32_t *)info_bytes = vol->addr_start;
+    *(uint32_t *)(info_bytes + 4) = vol->addr_end;
 
     /* Get device info and copy type */
-    dev_info = *(void **)(vol_entry + DISK_DEV_INFO_OFFSET);
+    dev_info = vol->dev_info;
     *(uint16_t *)(info_bytes + 8) = *(uint16_t *)((uint8_t *)dev_info + 4);
-    *(uint16_t *)(info_bytes + 0x0a) = *(uint16_t *)(vol_entry + DISK_UNIT_OFFSET);
-    *(uint16_t *)(info_bytes + 0x0c) = *(uint16_t *)(vol_entry + DISK_SOMETHING_OFFSET);
-    *(uint32_t *)(info_bytes + 0x0e) = *(uint32_t *)(vol_entry + DISK_SECTORS_OFFSET);
+    *(uint16_t *)(info_bytes + 0x0a) = vol->unit_id;
+    *(uint16_t *)(info_bytes + 0x0c) = vol->field_26;
+    /* 0xe6bf0a copies sec_per_track and num_heads together as one longword */
+    *(uint32_t *)(info_bytes + 0x0e) =
+        ((uint32_t)vol->sec_per_track << 16) | vol->num_heads;
 
     /* Encode sector size */
-    sector_size_type = *(int16_t *)(vol_entry + DISK_SECTOR_SIZE_OFFSET);
+    sector_size_type = (int16_t)vol->sector_size_code;
     if (sector_size_type == 0) {
         *(uint16_t *)(info_bytes + 0x12) = 1;  /* 256 bytes */
     } else if (sector_size_type == 1) {
@@ -114,9 +100,9 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
         *(uint16_t *)(info_bytes + 0x12) = 4;  /* 1024 bytes */
     }
 
-    /* Copy partition count and misc info */
-    *(uint16_t *)(info_bytes + 0x14) = *(uint16_t *)(vol_entry + DISK_NUM_PARTS_OFFSET);
-    *(uint16_t *)(info_bytes + 0x26) = *(uint16_t *)(vol_entry + DISK_PART_TABLE_OFFSET + 0xb2);
+    /* Copy partition count and misc info (0xe6bf3a / 0xe6bf40) */
+    *(uint16_t *)(info_bytes + 0x14) = vol->num_parts;
+    *(uint16_t *)(info_bytes + 0x26) = vol->part_volx[0];
 
     /* Clear partition info array */
     for (i = 0; i < 8; i++) {
@@ -124,7 +110,7 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
     }
 
     /* Fill partition info */
-    num_parts = *(int16_t *)(vol_entry + DISK_NUM_PARTS_OFFSET) - 1;
+    num_parts = (int16_t)vol->num_parts - 1;
     if (num_parts >= 0) {
         for (i = 0; i <= num_parts; i++) {
             /* This fills partition details - complex bit manipulation */
@@ -134,14 +120,14 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
 
     /* Set flags in byte at +0x28 */
     /* Bit 7: mounted flag (mount_state == 3) */
-    mount_state = *(uint16_t *)(vol_entry + DISK_MOUNT_STATE_OFFSET);
+    mount_state = vol->mount_state;
     info_bytes[0x28] &= 0x7f;
     if (mount_state == DISK_MOUNT_MOUNTED) {
         info_bytes[0x28] |= 0x80;
     }
 
     /* Get device flags and set remaining bits */
-    dev_info = *(void **)(vol_entry + DISK_DEV_INFO_OFFSET);
+    dev_info = vol->dev_info;
     dev_flags = *(uint16_t *)((uint8_t *)dev_info + 8);
 
     /* Bit 5: not negative flag */
@@ -152,7 +138,7 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
 
     /* Bit 4: write protect flag */
     info_bytes[0x28] &= 0xef;
-    if ((vol_entry[DISK_FLAGS_OFFSET] & 1) != 0) {
+    if ((vol->as_options & DISK_VOL_FLAG_WRITE_PROTECT) != 0) {
         info_bytes[0x28] |= 0x10;
     }
 

@@ -32,9 +32,12 @@
  *   - Otherwise allocates new VTOCE block
  *   - Initializes new VTOCE block with magic number and entry count
  *   - Updates partition VTOCE chain
+ *   - Returns the still-locked VTOCE block buffer in A0 (0xE3B0C8); the
+ *     result cell (-0x14,A6) is cleared at entry (0xE3AEDA) so every
+ *     failure path returns NULL.
  */
-void BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
-                      status_$t *status, int8_t *new_vtoce)
+void *BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
+                       status_$t *status, int8_t *new_vtoce)
 {
     bat_$volume_t *vol;
     bat_$partition_t *part;
@@ -48,6 +51,7 @@ void BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
     int16_t search_idx;
     int16_t direction;
     int32_t best_free;
+    void *result = NULL;        /* (-0x14,A6), cleared at 0xE3AEDA */
 
     *new_vtoce = 0;
 
@@ -177,6 +181,10 @@ void BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
         BAT_SET_VTOCE_BLOCK(part, vtoce->next_vtoce);
     }
 
+    /* 0xE3B0B8: move.l A0,(-0x14,A6) - the buffer stays locked for the caller */
+    result = vtoce;
+
 done:
     ML_$UNLOCK(ML_LOCK_BAT);
+    return result;
 }

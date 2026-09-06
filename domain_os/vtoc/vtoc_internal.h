@@ -77,7 +77,12 @@
 #define status_$VTOC_not_mounted    0x20001     /* VTOC not mounted */
 #define status_$VTOC_not_found      0x20005     /* VTOCE not found in chain */
 #define status_$VTOC_invalid_vtoce  0x20006     /* Invalid VTOCE */
-#define status_$VTOC_uid_mismatch   0x80020002  /* UID mismatch */
+#define status_$VTOC_uid_mismatch   0x80020002  /* UID mismatch; also returned by
+                                                   VTOC_$ALLOCATE (0xE38BF6) when the
+                                                   freshly allocated VTOCE block has no
+                                                   free entry */
+#define status_$vtoc_duplicate_uid  0x20007     /* A VTOCE with this UID already exists
+                                                   (VTOC_$ALLOCATE 0xE389E0 / 0xE38D44) */
 #define status_$no_UID              0x20004     /* No UID found */
 #define status_$end_of_file         0x20003     /* End of file */
 #define status_$out_of_space        0xF0016     /* Out of disk space */
@@ -157,57 +162,189 @@ typedef struct vtoc_$block_header_t {
 } vtoc_$block_header_t;
 
 /*
- * VTOC bucket entry (new format)
+ * VTOC bucket slot (new format), 12 bytes
  *
- * Used for hash-based lookup in new format volumes.
- * Each bucket entry contains 20 UID slots pointing to VTOCEs.
+ * Verified against VTOC_$ALLOCATE (0x00E388AC): the slot scan starts at
+ * bucket+0x08 with a 12-byte stride, tests the block_info long at
+ * bucket+0x10+i*12 (0xE389B0 tst.l (0x10,A0)) and compares the UID at
+ * bucket+0x08+i*12 with two cmpm.l (0xE389C2/0xE389C6).
  */
-typedef struct vtoc_$bucket_entry_t {
-    uint32_t    next_bucket;        /* 0x00: Next bucket in chain */
-    uint16_t    slot_index;         /* 0x04: Current slot index */
-    uint16_t    reserved;           /* 0x06: Reserved */
-    /* 20 entries of 12 bytes each follow:
-     * - uid_t uid (8 bytes)
-     * - uint32_t block_info (4 bytes)
-     */
-    struct {
-        uid_t       uid;            /* UID of the object */
-        uint32_t    block_info;     /* Block location info */
-    } slots[VTOCE_BUCKET_SLOTS];    /* 0x08: UID slots */
-} vtoc_$bucket_entry_t;
+typedef struct vtoc_$bucket_slot_t {
+    uid_t       uid;                /* 0x00: UID of the object */
+    uint32_t    block_info;         /* 0x08: VTOCE location (block << 4 | entry) */
+} vtoc_$bucket_slot_t;
 
 /*
- * Per-volume VTOC data structure
+ * VTOC bucket entry (new format), 0xF8 bytes
  *
- * Located at vtoc_$data + (vol_idx * 100)
- * Base address: 0xE784D0 (OS_DISK_DATA)
- *
- * Note: Offsets shown are relative to the per-volume base.
- * Negative offsets are at lower addresses.
+ * Used for hash-based lookup on new format volumes.
+ * Bucket n of a block lives at block + n*0xF8 (the compiler emits the
+ * multiply as (n<<8) - (n<<3); see 0xE38996-0xE389A0).
  */
-typedef struct vtoc_$volume_t {
-    /* Partition entry table (negative offsets from base) */
-    /* -0x54: Hash type (0=UID_$HASH, 2=shift-XOR, 3=simple-XOR) */
-    int16_t     hash_type;
+typedef struct vtoc_$bucket_entry_t {
+    uint32_t                next_bucket;    /* 0x00: Next bucket block in chain (0 = end) */
+    uint16_t                next_bkt_idx;   /* 0x04: Bucket index within next_bucket */
+    uint16_t                reserved_06;    /* 0x06 */
+    vtoc_$bucket_slot_t     slots[VTOCE_BUCKET_SLOTS];  /* 0x08: 20 UID slots */
+} vtoc_$bucket_entry_t;
 
-    /* -0x52: Hash table size divisor */
-    uint16_t    hash_size;
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(vtoc_$bucket_slot_t) == 12,
+               "vtoc_$bucket_slot_t must be 12 bytes");
+_Static_assert(__builtin_offsetof(vtoc_$bucket_slot_t, block_info) == 0x08,
+               "vtoc_$bucket_slot_t.block_info must be at 0x08");
+_Static_assert(sizeof(vtoc_$bucket_entry_t) == VTOC_BUCKET_ENTRY_SIZE,
+               "vtoc_$bucket_entry_t must be 0xF8 bytes");
+_Static_assert(__builtin_offsetof(vtoc_$bucket_entry_t, next_bkt_idx) == 0x04,
+               "vtoc_$bucket_entry_t.next_bkt_idx must be at 0x04");
+_Static_assert(__builtin_offsetof(vtoc_$bucket_entry_t, slots) == 0x08,
+               "vtoc_$bucket_entry_t.slots must be at 0x08");
+#endif
 
-    /* -0x4c: Name directory block 1 */
-    uint32_t    name_dir1;
+/*
+ * VTOC bucket block (new format), one 1024-byte disk block
+ *
+ * VTOC_$ALLOCATE initialises a freshly allocated bucket block by zeroing
+ * 254 longwords (0xE38B70-0xE38B78) and then storing a magic number and the
+ * block's own number in the last two longwords (0xE38B7E/0xE38B86).
+ */
+#define VTOC_BKT_BLOCK_MAGIC    0xFEDCA985u     /* 0xE38B7E: move.l #-0x123567b */
+#define VTOC_BKTS_PER_BLOCK     4               /* wrap at 4: 0xE38AEE cmpi.w #0x4 */
 
-    /* -0x48: Name directory block 2 */
-    uint32_t    name_dir2;
+typedef struct vtoc_$bkt_block_t {
+    vtoc_$bucket_entry_t    buckets[VTOC_BKTS_PER_BLOCK];   /* 0x000: 4 * 0xF8 */
+    uint8_t                 reserved_3e0[0x18];             /* 0x3E0 */
+    uint32_t                magic;                          /* 0x3F8 */
+    uint32_t                self_block;                     /* 0x3FC */
+} vtoc_$bkt_block_t;
 
-    /* -0x44: Current VTOCE location (block << 4 | entry) */
-    uint32_t    current_vtoce;
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(vtoc_$bkt_block_t) == 0x400,
+               "vtoc_$bkt_block_t must be one 1024-byte block");
+_Static_assert(__builtin_offsetof(vtoc_$bkt_block_t, magic) == 0x3F8,
+               "vtoc_$bkt_block_t.magic must be at 0x3F8");
+_Static_assert(__builtin_offsetof(vtoc_$bkt_block_t, self_block) == 0x3FC,
+               "vtoc_$bkt_block_t.self_block must be at 0x3FC");
+#endif
 
-    /* Partition info follows... */
-    /* Each partition entry is 6 bytes:
-     *   - uint16_t entry_count
-     *   - uint32_t start_block
-     */
-} vtoc_$volume_t;
+/*
+ * On-disk VTOCE header, common to both formats
+ *
+ * Verified against VTOC_$ALLOCATE (0x00E388AC):
+ *   +0x00  byte, set to 1 for a newly allocated entry (0xE38C1E)
+ *   +0x02  word, bit 15 = "entry in use".  Set on the caller's VTOCE with
+ *          bset.b #0x7,(0x2,A1) at 0xE388CE and tested with tst.w/bmi at
+ *          0xE38BD4 (new format, offset 0xA from the block) and 0xE38D22
+ *          (old format, offset 0x6 from the block).
+ *   +0x04  the object UID; compared with two cmpm.l at 0xE389C2 / 0xE38D38
+ *          against the caller's VTOCE+4.
+ */
+typedef struct vtoce_$hdr_t {
+    uint8_t     type_mode;          /* 0x00 */
+    uint8_t     flags;              /* 0x01 */
+    int16_t     status;             /* 0x02: bit 15 (0x8000) = entry in use */
+    uid_t       uid;                /* 0x04: object UID */
+} vtoce_$hdr_t;
+
+#define VTOCE_STATUS_IN_USE     ((int16_t)0x8000)
+
+typedef struct vtoce_$old_disk_t {
+    vtoce_$hdr_t    hdr;                            /* 0x00 */
+    uint8_t         rest[VTOCE_OLD_SIZE - 0x0C];    /* 0x0C */
+} vtoce_$old_disk_t;
+
+typedef struct vtoce_$new_disk_t {
+    vtoce_$hdr_t    hdr;                            /* 0x00 */
+    uint8_t         rest[VTOCE_NEW_SIZE - 0x0C];    /* 0x0C */
+} vtoce_$new_disk_t;
+
+/*
+ * Old-format VTOC block: a 4-byte chain header followed by 5 VTOCEs.
+ * The chain long is read at 0xE38D64 and written at 0xE38D94; VTOCE i is
+ * addressed as block + 4 + i*0xCC (see the pea (0x4,A2) at 0xE38E5A).
+ */
+typedef struct vtoc_$old_block_t {
+    uint32_t            next_block;                             /* 0x000 */
+    vtoce_$old_disk_t   entries[VTOCE_OLD_ENTRIES_PER_BLOCK];   /* 0x004 */
+} vtoc_$old_block_t;
+
+/*
+ * New-format VTOCE block: an 8-byte header followed by 3 VTOCEs.
+ * The entry_count word at +4 is maintained by BAT_$ALLOC_VTOCE
+ * (0xE3B09C addq.w #0x1,(0x4,A0) / 0xE3B0A0 cmpi.w #0x3).
+ */
+#define VTOCE_NEW_ENTRIES_PER_BLOCK     3
+
+typedef struct vtoc_$vtoce_block_t {
+    uint32_t            next_block;                             /* 0x000 */
+    uint16_t            entry_count;                            /* 0x004 */
+    uint16_t            reserved_06;                            /* 0x006 */
+    vtoce_$new_disk_t   entries[VTOCE_NEW_ENTRIES_PER_BLOCK];   /* 0x008 */
+} vtoc_$vtoce_block_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(vtoce_$hdr_t, status) == 0x02,
+               "vtoce_$hdr_t.status must be at 0x02");
+_Static_assert(__builtin_offsetof(vtoce_$hdr_t, uid) == 0x04,
+               "vtoce_$hdr_t.uid must be at 0x04");
+_Static_assert(sizeof(vtoce_$old_disk_t) == VTOCE_OLD_SIZE,
+               "vtoce_$old_disk_t must be 0xCC bytes");
+_Static_assert(sizeof(vtoce_$new_disk_t) == VTOCE_NEW_SIZE,
+               "vtoce_$new_disk_t must be 0x150 bytes");
+_Static_assert(__builtin_offsetof(vtoc_$old_block_t, entries) == 0x04,
+               "vtoc_$old_block_t.entries must be at 0x04");
+_Static_assert(sizeof(vtoc_$old_block_t) == 0x400,
+               "vtoc_$old_block_t must be one 1024-byte block");
+_Static_assert(__builtin_offsetof(vtoc_$vtoce_block_t, entry_count) == 0x04,
+               "vtoc_$vtoce_block_t.entry_count must be at 0x04");
+_Static_assert(__builtin_offsetof(vtoc_$vtoce_block_t, entries) == 0x08,
+               "vtoc_$vtoce_block_t.entries must be at 0x08");
+_Static_assert(sizeof(vtoc_$vtoce_block_t) == 0x3F8,
+               "vtoc_$vtoce_block_t must be 0x3F8 bytes");
+#endif
+
+/*
+ * Per-volume VTOC record (100 bytes)
+ *
+ * The kernel keeps A5 = OS_DISK_DATA and addresses this record with signed
+ * displacements from OS_DISK_DATA + vol_idx*100 (0xE3893A:
+ * moveq #0x64,D5 / mulu.w D4w,D5 / lea (0x0,A5,D5w),A3).  The lowest
+ * displacement in use is -0x54, so this struct starts there and
+ * VTOC_VOL(vol_idx) == OS_DISK_DATA + vol_idx*100 - 0x54.  Volume indices
+ * are 1-based, so volume 1 occupies bytes 0x10..0x73 of vtoc_$data.
+ */
+typedef struct vtoc_$vol_t {
+    uint16_t    hash_type;          /* 0x00 (-0x54): 0=UID_$HASH, 2=shift-XOR, 3=XOR */
+    uint16_t    hash_size;          /* 0x02 (-0x52): hash table size divisor */
+    uint32_t    blocks_added;       /* 0x04 (-0x50): VTOC/bucket blocks allocated
+                                     *   (0xE38ADC and 0xE38DCC addq.l #0x1) */
+    uint32_t    name_dir1;          /* 0x08 (-0x4C) */
+    uint32_t    name_dir2;          /* 0x0C (-0x48) */
+    uint32_t    current_vtoce;      /* 0x10 (-0x44) */
+    uint8_t     reserved_14[4];     /* 0x14 (-0x40) */
+    uint16_t    part_count;         /* 0x18 (-0x3C) */
+    uint8_t     partitions[0x3A];   /* 0x1A (-0x3A): 6-byte entries */
+    uint32_t    cur_bkt_block;      /* 0x54 (+0x00): bucket block being filled
+                                     *   (0xE38A9E tst.l (A3)) */
+    uint16_t    cur_bkt_idx;        /* 0x58 (+0x04): next bucket in that block,
+                                     *   wraps at 4 (0xE38AE0-0xE38AF6) */
+    uint8_t     reserved_5a[10];    /* 0x5A (+0x06) */
+} vtoc_$vol_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(vtoc_$vol_t) == 100,
+               "vtoc_$vol_t must be 100 bytes (the per-volume stride)");
+_Static_assert(__builtin_offsetof(vtoc_$vol_t, blocks_added) == 0x04,
+               "vtoc_$vol_t.blocks_added must be at -0x50");
+_Static_assert(__builtin_offsetof(vtoc_$vol_t, current_vtoce) == 0x10,
+               "vtoc_$vol_t.current_vtoce must be at -0x44");
+_Static_assert(__builtin_offsetof(vtoc_$vol_t, part_count) == 0x18,
+               "vtoc_$vol_t.part_count must be at -0x3C");
+_Static_assert(__builtin_offsetof(vtoc_$vol_t, cur_bkt_block) == 0x54,
+               "vtoc_$vol_t.cur_bkt_block must be at +0x00");
+_Static_assert(__builtin_offsetof(vtoc_$vol_t, cur_bkt_idx) == 0x58,
+               "vtoc_$vol_t.cur_bkt_idx must be at +0x04");
+#endif
 
 /*
  * VTOC global data structure
@@ -297,9 +434,10 @@ extern vtoc_$uid_cache_bucket_t vtoc_$uid_cache[VTOC_UID_CACHE_BUCKETS];
 #define VTOC_IS_NEW_FORMAT(vol_idx) \
     (vtoc_$data.format[vol_idx] < 0)
 
-/* Get per-volume data pointer */
-#define VTOC_VOLUME_DATA(vol_idx) \
-    ((vtoc_$volume_t *)(OS_DISK_DATA + (vol_idx) * 100))
+/* Get per-volume data pointer (see vtoc_$vol_t: the record starts 0x54
+ * bytes below the address the kernel computes as OS_DISK_DATA + n*100) */
+#define VTOC_VOL(vol_idx) \
+    ((vtoc_$vol_t *)(OS_DISK_DATA + (vol_idx) * 100 - 0x54))
 
 /* Extract block number from vtoce location */
 #define VTOCE_LOC_BLOCK(loc) \

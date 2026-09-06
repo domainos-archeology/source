@@ -15,53 +15,143 @@
 #include "proc2/proc2.h"
 #include "dbuf/dbuf.h"
 #include "time/time.h"
+#include "misc/crash_system.h"
 
 /*
- * Volume table layout
+ * Per-volume disk descriptor (0x48 bytes)
  *
  * The disk module data area starts at DISK_$DATA (0xe7a1cc, DISK_VOLUME_BASE);
- * the m68k code loads A5 with this address.  Each volume descriptor is
- * DISK_VOLUME_SIZE (0x48) bytes.  The machine code addresses the descriptor
- * for volume N in one of two equivalent ways:
+ * the m68k code loads A5 with this address.  Each descriptor is
+ * DISK_VOLUME_SIZE (0x48) bytes and the machine code reaches the one for
+ * volume N in one of two equivalent ways:
  *
  *   (0xe7a1cc + N*0x48) + positive offset      e.g. DISK_$READ, DISK_$DIAG_IO
  *   (0xe7a290 + N*0x48) - negative offset      e.g. DISK_$LV_ASSIGN, DISK_$DISMOUNT
  *
- * Since 0xe7a290 - 0xe7a1cc == 0xc4 both forms name the same bytes.  All of
- * the offsets below use the first form (relative to
- * DISK_VOLUME_BASE + N * DISK_VOLUME_SIZE); the second form's offset is
- * shown in parentheses.
+ * 0xe7a290 - 0xe7a1cc == 0xc4, so both name the same bytes.  The descriptor
+ * proper runs from -0x48 to 0 in the second form, i.e. from +0x7c to +0xc4 in
+ * the first: DISK_$PV_MOUNT_INTERNAL copies a whole 0x48-byte template into it
+ * with `lea (-0x48,A4),A3` + 18 `move.l` (0xe6c332-0xe6c33e), and
+ * disk_$wait_io hands the same address to DISK_$ERROR_QUE as `pea (0x7c,A2)`
+ * (0xe3ca8a).  Volume index 0 is reserved: its descriptor would overlap the
+ * module's exclusion lock and free-list pointers.
  *
- * Verified against DISK_$READ (0xe3cf64), DISK_$LV_ASSIGN (0xe6cdb2),
- * DISK_$DIAG_IO (0xe6bc18), DISK_$GET_MNT_INFO (0xe6be4a),
+ * Both offset forms are given for every field below.  Verified against
+ * DISK_$READ (0xe3cf64), DISK_IO (0xe3d50e), DISK_$WRITE_PROTECT (0xe3d956),
+ * DISK_$AS_OPTIONS (0xe6c0a8), DISK_$PV_MOUNT_INTERNAL (0xe6c2bc),
+ * DISK_$GET_MNT_INFO (0xe6be4a), DISK_$LV_ASSIGN (0xe6cdb2),
  * DISK_$DISMOUNT (0xe6cfea) and DISK_$LVUID_TO_VOLX (0xe6d134).
  *
- *   +0x7c (-0x48): first byte of the 0x48-byte block that LV_ASSIGN copies
- *                  when cloning a PV descriptor into an LV slot
- *   +0x84 (-0x40): LV data / LV start block (uint32_t) - 0 for a physical volume
- *   +0x88 (-0x3c): disk address range start (uint32_t); DIAG_IO requires
- *                  daddr >= this; LV_ASSIGN stores the LV size here
- *   +0x8c (-0x38): disk address range end (uint32_t); DIAG_IO requires daddr <= this
- *   +0x90 (-0x34): mount state (uint16_t)
- *   +0x92 (-0x32): mount process (int16_t, compared with PROC1_$CURRENT)
- *   +0x94 (-0x30): device info pointer (void *)
- *   +0x98 (-0x2c): device unit (uint16_t)
- *   +0xa4 (-0x20): async I/O options word (uint16_t); cleared by LV_ASSIGN
- *   +0xa5        : write-protect flag byte
- *
- * TODO: the remaining descriptor fields (per-file names such as
- * DISK_UNIT_OFFSET 0x9a in get_mnt_info.c vs 0x98 in dismount.c) still need a
- * single verified struct definition.
+ * NOTE: the two "unit" fields the old macros disagreed about are distinct.
+ *   dev_unit (+0x98, -0x2c) is the device unit number passed to
+ *     DISK_$PV_MOUNT_INTERNAL as `unit_lo` (stored at 0xe6c346) and used by
+ *     DISK_$DISMOUNT (0xe6d084) and DISK_$LV_ASSIGN (0xe6cf32) to recognise
+ *     descriptors that share one physical drive.
+ *   unit_id (+0x9a, -0x2a) is stored from *vol_idx_ptr (0xe6c39c) or from the
+ *     PV label word at +0x32 (0xe6c438) and is what DISK_$GET_MNT_INFO reports
+ *     at info+0x0a (0xe6befe).
  */
 #define DISK_VOLUME_BASE          ((uint8_t *)0x00e7a1cc)
 
-/* Volume descriptor field offsets (see layout comment above) */
-#define DISK_LV_DATA_OFFSET       0x84
-#define DISK_ADDR_START_OFFSET    0x88
-#define DISK_ADDR_END_OFFSET      0x8c
-#define DISK_MOUNT_STATE_OFFSET   0x90
-#define DISK_MOUNT_PROC_OFFSET    0x92
-#define DISK_DEV_INFO_OFFSET      0x94
+/* Byte offset of the descriptor within DISK_VOLUME_BASE + N * 0x48 */
+#define DISK_VOL_DESC_OFFSET      0x7c
+
+typedef struct disk_$volume_t {
+    uid_t       lv_uid;             /* 0x00 (-0x48 / +0x7c): logical volume UID
+                                     *   (DISK_$LVUID_TO_VOLX 0xe6d17c) */
+    uint32_t    lv_start;           /* 0x08 (-0x40 / +0x84): LV start block;
+                                     *   0 for a physical volume descriptor */
+    uint32_t    addr_start;         /* 0x0c (-0x3c / +0x88): lowest legal disk
+                                     *   address (DISK_$DIAG_IO); LV_ASSIGN
+                                     *   stores the LV size here (0xe6cf9a) */
+    uint32_t    addr_end;           /* 0x10 (-0x38 / +0x8c): highest legal
+                                     *   disk address */
+    uint16_t    mount_state;        /* 0x14 (-0x34 / +0x90) */
+    int16_t     mount_proc;         /* 0x16 (-0x32 / +0x92): owning PID */
+    void       *dev_info;           /* 0x18 (-0x30 / +0x94): device descriptor */
+    uint16_t    dev_unit;           /* 0x1c (-0x2c / +0x98): device unit number */
+    uint16_t    unit_id;            /* 0x1e (-0x2a / +0x9a): unit id reported by
+                                     *   DISK_$GET_MNT_INFO */
+    uint16_t    sec_per_track;      /* 0x20 (-0x28 / +0x9c) */
+    uint16_t    num_heads;          /* 0x22 (-0x26 / +0x9e) */
+    uint16_t    field_24;           /* 0x24 (-0x24 / +0xa0)  TODO: verify */
+    uint16_t    field_26;           /* 0x26 (-0x22 / +0xa2): copied to
+                                     *   info+0x0c by GET_MNT_INFO  TODO: verify */
+    uint16_t    as_options;         /* 0x28 (-0x20 / +0xa4): async I/O options.
+                                     *   Written as a whole word by
+                                     *   DISK_$AS_OPTIONS (0xe6c108) and cleared
+                                     *   by LV_ASSIGN (0xe6cfa8); its low byte
+                                     *   (+0xa5) holds the DISK_VOL_FLAG_* bits
+                                     *   that DISK_$WRITE_PROTECT (0xe3d98c) and
+                                     *   DISK_IO (0xe3d584) poke with bset.b /
+                                     *   btst.b.  On big-endian m68k bit n of
+                                     *   that byte is bit n of this word. */
+    uint16_t    sector_size_code;   /* 0x2a (-0x1e / +0xa6): 0/1/2 -> 256/512/1024 */
+    uint16_t    num_parts;          /* 0x2c (-0x1c / +0xa8): partition count;
+                                     *   DISK_$DISMOUNT reads it as a unit count */
+    uint16_t    field_2e;           /* 0x2e (-0x1a / +0xaa)  TODO: verify */
+    uint16_t    field_30;           /* 0x30 (-0x18 / +0xac)  TODO: verify */
+    uint16_t    field_32;           /* 0x32 (-0x16 / +0xae)  TODO: verify */
+    uint16_t    field_34;           /* 0x34 (-0x14 / +0xb0)  TODO: verify */
+    uint16_t    part_volx[9];       /* 0x36 (-0x12 / +0xb2): partition -> volume
+                                     *   index table.  DISK_$FORMAT indexes it
+                                     *   as (+0xb2)[part] for part 1..8
+                                     *   (0xe3d46c) and DISK_$GET_MNT_INFO reads
+                                     *   entry 1 (+0xb4) as the physical volume
+                                     *   backing an LV (0xe6bec2).  Entry 0
+                                     *   (+0xb2) is copied to info+0x26
+                                     *   (0xe6bf40). */
+} disk_$volume_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(disk_$volume_t) == DISK_VOLUME_SIZE,
+               "disk_$volume_t must be 0x48 bytes");
+_Static_assert(__builtin_offsetof(disk_$volume_t, lv_start) == 0x08,
+               "disk_$volume_t.lv_start must be at -0x40 (+0x84)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, addr_start) == 0x0c,
+               "disk_$volume_t.addr_start must be at -0x3c (+0x88)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, addr_end) == 0x10,
+               "disk_$volume_t.addr_end must be at -0x38 (+0x8c)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, mount_state) == 0x14,
+               "disk_$volume_t.mount_state must be at -0x34 (+0x90)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, mount_proc) == 0x16,
+               "disk_$volume_t.mount_proc must be at -0x32 (+0x92)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, dev_info) == 0x18,
+               "disk_$volume_t.dev_info must be at -0x30 (+0x94)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, dev_unit) == 0x1c,
+               "disk_$volume_t.dev_unit must be at -0x2c (+0x98)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, unit_id) == 0x1e,
+               "disk_$volume_t.unit_id must be at -0x2a (+0x9a)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, sec_per_track) == 0x20,
+               "disk_$volume_t.sec_per_track must be at -0x28 (+0x9c)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, as_options) == 0x28,
+               "disk_$volume_t.as_options must be at -0x20 (+0xa4)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, sector_size_code) == 0x2a,
+               "disk_$volume_t.sector_size_code must be at -0x1e (+0xa6)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, num_parts) == 0x2c,
+               "disk_$volume_t.num_parts must be at -0x1c (+0xa8)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, num_heads) == 0x22,
+               "disk_$volume_t.num_heads must be at -0x26 (+0x9e)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, part_volx) == 0x36,
+               "disk_$volume_t.part_volx must be at -0x12 (+0xb2)");
+#endif
+
+/*
+ * Bits of the low byte of disk_$volume_t.as_options (+0xa5, -0x1f).
+ * These are addressed with byte bit instructions in the original; on
+ * big-endian m68k the low byte's bit n is bit n of the containing word.
+ */
+#define DISK_VOL_FLAG_WRITE_PROTECT  0x0001  /* 0xe3d98c bset.b #0,(0xa5,A1) */
+#define DISK_VOL_FLAG_NO_HDR_CHECK   0x0004  /* 0xe3d5a0 btst.b #2,(0xa5,A4) */
+
+/*
+ * Descriptor for volume `idx`.  The index multiply is done in 16-bit word
+ * arithmetic (lsl.w/add.w), matching the original.
+ */
+#define DISK_VOL(idx) \
+    ((disk_$volume_t *)(DISK_VOLUME_BASE + \
+                        (int16_t)((idx) * DISK_VOLUME_SIZE) + \
+                        DISK_VOL_DESC_OFFSET))
 
 /* Mount states */
 #define DISK_MOUNT_FREE      0
@@ -158,37 +248,108 @@ extern ml_$exclusion_t ml_$exclusion_t_00e7a274;  /* DISK_$DATA +0xa8 */
 extern ml_$exclusion_t ml_$exclusion_t_00e7a25c;  /* DISK_$DATA +0x90 */
 
 /*
- * Error status variables
- *
- * These are pre-defined status codes used for CRASH_SYSTEM calls.
+ * Error status variables used for CRASH_SYSTEM calls
+ * (declared as status_$t in misc/crash_system.h, which this header includes).
  */
-extern void *Disk_Queued_Drivers_Not_Supported_Err;
-extern void *Disk_Driver_Logic_Err;
 
-/* I/O request structure (used internally) */
+/*
+ * Disk I/O request (queue block), 0x40 bytes
+ *
+ * Allocated by disk_$get_qblks_internal and handed to DISK_$DO_IO.  Field
+ * offsets verified against DISK_IO (0xe3d50e), disk_$get_qblks_internal
+ * (0xe3be8a) and disk_$map_request (0xe3cae0).
+ *
+ * Two regions are addressed at sub-field granularity by the original:
+ *   - the longword at +0x04 is the disk address, but a format request
+ *     overwrites its bytes at +0x06 (head) and +0x07 (sector) and clears the
+ *     word at +0x04 (0xe3d630-0xe3d63a); disk_$map_request writes the same
+ *     bytes for a CHS device.
+ *   - the block header at +0x20 is copied to and from the caller's 8-longword
+ *     info array, but DISK_IO also plants a timestamp at +0x2c (header[3]),
+ *     clears +0x32..+0x39 and stores a 16-bit checksum at +0x3a.
+ * The disk_req_* helpers in disk/io.c express those accesses with shifts and
+ * masks so they are byte-order independent.
+ */
 typedef struct disk_io_req_t {
-    uint32_t reserved1;         /* +0x00 */
-    uint32_t daddr;             /* +0x04: Disk address */
-    uint8_t head;               /* +0x06: Head number (for format) */
-    uint8_t sector;             /* +0x07: Sector number (for format) */
-    uint32_t reserved2;         /* +0x08 */
-    status_$t status;           /* +0x0C: Result status */
-    uint32_t reserved3;         /* +0x10 */
-    uint32_t ppn;               /* +0x14: Physical page number */
-    uint16_t reserved4;         /* +0x18 */
-    uint16_t count;             /* +0x1A: Transfer count */
-    uint8_t reserved5;          /* +0x1C */
-    uint8_t reserved6;          /* +0x1D */
-    uint8_t reserved7;          /* +0x1E */
-    uint8_t flags;              /* +0x1F: Request flags */
-    uint32_t header[8];         /* +0x20: Block header data */
-    uint32_t timestamp;         /* +0x2C: Timestamp (for writes) */
-    uint32_t reserved8[2];      /* +0x30, +0x34 */
-    uint16_t checksum;          /* +0x3A: Checksum */
+    uint32_t    next;               /* 0x00: next block in the allocated chain */
+    uint32_t    daddr;              /* 0x04: disk address / (head, sector) */
+    uint32_t    free_next;          /* 0x08: next block in the free list */
+    status_$t   status;             /* 0x0c: result status */
+    uint32_t    reserved_10;        /* 0x10 */
+    uint32_t    ppn;                /* 0x14: physical page number; its low word
+                                     *   (+0x16) is what NETLOG logs */
+    uint32_t    reserved_18;        /* 0x18 */
+    uint16_t    flags;              /* 0x1c */
+    uint8_t     owner;              /* 0x1e: owning process id */
+    uint8_t     op_flags;           /* 0x1f: low nibble = operation code,
+                                     *   bit 7 = "checksum this transfer" */
+    uint32_t    header[8];          /* 0x20: on-disk block header */
 } disk_io_req_t;
 
-extern status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t daddr,
-                         uint32_t ppn, int32_t *info);
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(disk_io_req_t) == 0x40,
+               "disk_io_req_t must be 0x40 bytes");
+_Static_assert(__builtin_offsetof(disk_io_req_t, status) == 0x0c,
+               "disk_io_req_t.status must be at 0x0c");
+_Static_assert(__builtin_offsetof(disk_io_req_t, ppn) == 0x14,
+               "disk_io_req_t.ppn must be at 0x14");
+_Static_assert(__builtin_offsetof(disk_io_req_t, op_flags) == 0x1f,
+               "disk_io_req_t.op_flags must be at 0x1f");
+_Static_assert(__builtin_offsetof(disk_io_req_t, header) == 0x20,
+               "disk_io_req_t.header must be at 0x20");
+#endif
+
+/*
+ * DISK_IO - the disk subsystem's read/write/format entry point
+ *
+ * Original address: 0x00e3d50e
+ *
+ * @param op       0 = read, 1 = write, 2 = read without header check,
+ *                 3 = raw write, 4 = format (jump table at 0xe3d574)
+ * @param vol_idx  Volume index (0-10)
+ * @param ppn      Physical page number of the transfer buffer (arg 3 at
+ *                 (0xc,A6), stored to req+0x14 at 0xe3d658)
+ * @param daddr    Disk address (arg 4 at (0x10,A6), stored to req+0x04 at
+ *                 0xe3d606)
+ * @param info     8-longword block header, copied in before the transfer and
+ *                 back out afterwards for reads
+ */
+status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t ppn, uint32_t daddr,
+                  uint32_t *info);
+
+/*
+ * disk_$map_request - resolve a request's disk address to a physical volume
+ *
+ * Walks the request chain, adds the logical volume's start block, checks the
+ * address against the volume's range and fills in the cylinder/head/sector
+ * fields.  Entry i of the 10-entry map (8 bytes each) is left non-zero for
+ * each physical volume the request touches; DISK_IO uses the first such entry
+ * as the volume to issue the transfer against (0xe3d63e).
+ *
+ * Original address: 0x00e3cae0 (was FUN_00e3cae0)
+ * TODO(source-cm2w): not yet emitted as C.
+ */
+void disk_$map_request(disk_io_req_t *req, int16_t vol_idx, int16_t internal_op,
+                       void *volume_map, status_$t *status);
+
+/*
+ * disk_$io_error - post-process a failed disk request
+ *
+ * Original address: 0x00e3c14c (was FUN_00e3c14c)
+ * TODO(source-cm2w): not yet emitted as C.
+ */
+void disk_$io_error(int16_t vol_idx, disk_io_req_t *req, uint32_t *info);
+
+/*
+ * disk_$chksum_page - checksum one physical page
+ *
+ * Temporarily maps the page at the scratch virtual address 0xff8400, runs
+ * CHKSUM_$GET_CHKSUM over it and restores the previous mapping.
+ *
+ * Original address: 0x00e0a290 (was FUN_00e0a290)
+ * TODO(source-cm2w): not yet emitted as C.
+ */
+uint16_t disk_$chksum_page(uint32_t *ppn);
 
 
 /*

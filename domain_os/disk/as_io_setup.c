@@ -17,7 +17,7 @@
 /* Status code for buffer alignment */
 #define status_$disk_buffer_not_page_aligned  0x00080013
 
-/* DISK_VOLUME_BASE and the mount state/proc offsets come from disk_internal.h */
+/* disk_$volume_t and DISK_VOL() come from disk_internal.h */
 
 /* Page alignment mask */
 #define PAGE_ALIGN_MASK  0x3ff
@@ -31,7 +31,7 @@
 uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status)
 {
     uint16_t vol_idx;
-    int32_t offset;
+    disk_$volume_t *vol;
     uint32_t wired_addr = 0;
     uint16_t mount_state;
     int16_t mount_proc;
@@ -44,7 +44,7 @@ uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status)
         return wired_addr;
     }
 
-    offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
+    vol = DISK_VOL(vol_idx);
 
     /* Check buffer page alignment */
     if ((buffer & PAGE_ALIGN_MASK) != 0) {
@@ -53,8 +53,8 @@ uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status)
     }
 
     /* Check mount state and ownership */
-    mount_state = *(uint16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_STATE_OFFSET);
-    mount_proc = *(int16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_PROC_OFFSET);
+    mount_state = vol->mount_state;
+    mount_proc = vol->mount_proc;
 
     if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1_$CURRENT) {
         *status = status_$volume_not_properly_mounted;

@@ -136,8 +136,11 @@ void WIN_$GET_STATS(int16_t param_1, int16_t param_2, void *stats);
  * and DISK_$SORT from disk/disk.h, PARITY_$CHK_IO from parity/parity.h,
  * CRASH_SYSTEM and the Disk_*_err messages from misc/crash_system.h.
  *
- * DISK_INIT (disk/misc/disk_init.c, not yet built) has no header of its own.
- * TODO: move this prototype to disk/disk.h when disk/misc is integrated.
+ * DISK_INIT (0x00e19986) is WIN-internal, not a disk-subsystem entry point:
+ * it sits inside the WIN code region and its only callers are WIN_$DINIT
+ * (0x00e19d32) and FUN_00e194b4 (0x00e194e0), so this prototype belongs here
+ * and not in disk/disk.h.  It has no C file yet.
+ * TODO(source-1nob): emit DISK_INIT under win/.
  */
 uint32_t DISK_INIT(uint16_t unit, uint16_t vol_idx, void *p3, void *p4,
                    void *p5, void *p6, void *p7);

@@ -14,20 +14,14 @@
 /* Status code */
 #define status_$logical_volume_not_found  0x00080010
 
-/*
- * UID offset in volume entry.  The machine code addresses the table as
- * (0xe7a290 + vol*0x48) with negative offsets; expressed here relative to
- * DISK_VOLUME_BASE (0xe7a1cc) + vol*0x48 (add 0xc4).  The mount state
- * (-0x34) and LV data (-0x40) offsets come from disk/disk_internal.h.
- */
-#define DISK_UID_OFFSET          0x7c   /* (-0x48) UID high/low (2 x uint32_t) */
+/* disk_$volume_t and DISK_VOL() come from disk/disk_internal.h */
 
 void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status)
 {
     uint32_t uid_hi, uid_lo;
     int16_t i;
     int16_t result_idx = 1;  /* Default if not found */
-    uint8_t *entry;
+    disk_$volume_t *entry;
     status_$t local_status;
 
     /* Get UID to search for */
@@ -39,21 +33,20 @@ void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status)
     local_status = status_$logical_volume_not_found;
 
     /* Search volumes 1-6 */
-    entry = DISK_VOLUME_BASE + DISK_VOLUME_SIZE;  /* Start at volume 1 */
+    entry = DISK_VOL(1);  /* Start at volume 1 */
     for (i = 5; i >= 0; i--) {
         /* Check if volume is mounted (state == 3) and has LV data */
-        if (*(int16_t *)(entry + DISK_MOUNT_STATE_OFFSET) == DISK_MOUNT_MOUNTED &&
-            *(uint32_t *)(entry + DISK_LV_DATA_OFFSET) != 0) {
+        if ((int16_t)entry->mount_state == DISK_MOUNT_MOUNTED &&
+            entry->lv_start != 0) {
 
             /* Compare UIDs */
-            if (*(uint32_t *)(entry + DISK_UID_OFFSET) == uid_hi &&
-                *(uint32_t *)(entry + DISK_UID_OFFSET + 4) == uid_lo) {
+            if (entry->lv_uid.high == uid_hi && entry->lv_uid.low == uid_lo) {
                 local_status = status_$ok;
                 result_idx = 6 - i;  /* Convert loop counter to 1-based index */
                 break;
             }
         }
-        entry += DISK_VOLUME_SIZE;
+        entry++;
     }
 
     ML_$EXCLUSION_STOP(&MOUNT_LOCK);

@@ -79,8 +79,8 @@ void DBUF_$SET_BUFF(void *buffer, uint16_t flags, status_$t *status)
         entry->flags &= ~DBUF_ENTRY_DIRTY;
 
         /* Write buffer to disk */
-        DISK_$WRITE(DBUF_GET_VOL(entry), (void *)(uintptr_t)entry->block,
-                    (void *)(uintptr_t)entry->ppn, &write_params, status);
+        DISK_$WRITE(DBUF_GET_VOL(entry), entry->block, entry->ppn,
+                    (uint32_t *)&write_params, status);
 
         if (*status != status_$ok) {
             /* Mark volume as having trouble */

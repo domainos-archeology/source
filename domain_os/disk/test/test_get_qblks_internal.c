@@ -78,6 +78,16 @@ typedef struct {
 /* Minimal ml_$exclusion_t */
 typedef struct { uint32_t data[4]; } ml_$exclusion_t;
 
+/* EC_$WAIT argument records: two 3-element arrays passed BY VALUE
+ * (0x00E20610); mirrors ec/ec.h, which this test does not include. */
+typedef struct ec_$wait_ecs_t {
+    ec_$eventcount_t *ec[3];
+} ec_$wait_ecs_t;
+
+typedef struct ec_$wait_vals_t {
+    int32_t val[3];
+} ec_$wait_vals_t;
+
 /* ================================================================
  * Mock state
  * ================================================================ */
@@ -110,9 +120,13 @@ void ML_$EXCLUSION_STOP(ml_$exclusion_t *lock) {
     mock_exclusion_stop_count++;
 }
 
-int16_t EC_$WAIT(ec_$eventcount_t *ecs[3], int32_t *wait_vals) {
-    (void)ecs;
-    (void)wait_vals;
+/* Both 3-element arrays arrive BY VALUE (0xE20610); see ec/ec.h. */
+static ec_$wait_ecs_t mock_ec_wait_last_ecs;
+static ec_$wait_vals_t mock_ec_wait_last_vals;
+
+int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals) {
+    mock_ec_wait_last_ecs = ecs;
+    mock_ec_wait_last_vals = vals;
     mock_ec_wait_count++;
     return 0;
 }

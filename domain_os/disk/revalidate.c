@@ -8,21 +8,11 @@
 
 #include "disk/disk_internal.h"
 
-/* Volume entry offset of the per-volume device data block (not the +0x94 device info pointer) */
-#define DISK_DEV_DATA_OFFSET  0x7c
-
-/* Volume entry table base (0xe7a248 = 0xe7a1cc + 0x7c) */
-#define DISK_VOLUME_DEV_BASE  ((uint8_t *)0x00e7a248)
+/* disk_$volume_t and DISK_VOL() come from disk/disk_internal.h */
 
 void DISK_$REVALIDATE(int16_t vol_idx)
 {
-    int32_t offset;
-    void *dev_info;
-
-    /* Calculate offset to device info in volume entry */
-    offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
-
-    /* Get device info pointer and call DISK_$REVALID */
-    dev_info = (void *)(DISK_VOLUME_DEV_BASE + offset - DISK_VOLUME_SIZE);
-    DISK_$REVALID((int16_t)(uintptr_t)dev_info);
+    /* The original passes the descriptor of volume vol_idx - 1:
+     * 0xe7a248 + vol*0x48 - 0x48 == DISK_VOL(vol_idx - 1). */
+    DISK_$REVALID((int16_t)(uintptr_t)DISK_VOL(vol_idx - 1));
 }

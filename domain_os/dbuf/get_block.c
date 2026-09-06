@@ -154,10 +154,10 @@ retry:
         victim->flags &= ~DBUF_ENTRY_DIRTY;
 
         /* Write dirty buffer to disk
-         * DISK_$WRITE params: vol_idx, block_num (as void*), ppn (as void*), uid_params, status
+         * DISK_$WRITE params: vol_idx, daddr, ppn, block header, status
          */
-        DISK_$WRITE(DBUF_GET_VOL(victim), (void *)(uintptr_t)victim->block,
-                    (void *)(uintptr_t)victim->ppn, &write_params, status);
+        DISK_$WRITE(DBUF_GET_VOL(victim), victim->block, victim->ppn,
+                    (uint32_t *)&write_params, status);
 
         if (*status != status_$ok) {
             /* Mark volume as having trouble but continue */
@@ -218,10 +218,9 @@ retry:
     local_hint = block_hint;
 
     /* Read block from disk
-     * DISK_$READ params: vol_idx, block_num (as void*), ppn (as void*), uid_params, status
+     * DISK_$READ params: vol_idx, daddr, ppn, block header, status
      */
-    DISK_$READ(vol_idx, (void *)(uintptr_t)block, (void *)(uintptr_t)victim->ppn,
-               &local_uid, status);
+    DISK_$READ(vol_idx, block, victim->ppn, (uint32_t *)&local_uid, status);
 
     if (*status != status_$ok) {
         /* Check if error can be ignored (flag 0x20 and stopped status) */
@@ -275,17 +274,11 @@ wait_for_buffer:
     /* Wait for a buffer to become available
      * EC_$WAIT takes array of 3 EC pointers and pointer to wait value
      */
-    {
-        ec_$eventcount_t *ec_array[3];
-        int32_t wait_val;
-
-        ec_array[0] = &dbuf_$eventcount;
-        ec_array[1] = NULL;
-        ec_array[2] = NULL;
-        wait_val = (int32_t)wait_value;
-
-        EC_$WAIT(ec_array, &wait_val);
-    }
+    /* 0xE3A886-0xE3A898: both 3-element arrays are pushed by value.
+     * ecs = { &dbuf_$eventcount, NULL, NULL }, vals = { wait_value, 0, 0 }.
+     * (The second NULL comes from `move.l (SP),-(SP)` duplicating the first.) */
+    EC_$WAIT((ec_$wait_ecs_t){ { &dbuf_$eventcount, NULL, NULL } },
+             (ec_$wait_vals_t){ { (int32_t)wait_value, 0, 0 } });
 
     /* Decrement waiter count */
     dbuf_$waiters--;

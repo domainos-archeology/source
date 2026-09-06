@@ -97,9 +97,11 @@ void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void 
         /* Release lock, wait on eventcount, re-acquire lock */
         ML_$EXCLUSION_STOP((ml_$exclusion_t *)(data + DMOD_EXCLUSION));
 
-        ec_$eventcount_t *ecs[3] = { (ec_$eventcount_t *)data, NULL, NULL };
-        int32_t wait_vals[3] = { wait_val, 0, 0 };
-        EC_$WAIT(ecs, wait_vals);
+        /* 0xE3BF50-0xE3BF5E: both 3-element arrays go on the stack by
+         * value.  ecs = { &DISK_$DATA[0], NULL, NULL } (A2 was loaded with
+         * 0 at 0xE3BEA6), vals = { wait_val, 0, 0 }. */
+        EC_$WAIT((ec_$wait_ecs_t){ { (ec_$eventcount_t *)data, NULL, NULL } },
+                 (ec_$wait_vals_t){ { wait_val, 0, 0 } });
 
         ML_$EXCLUSION_START((ml_$exclusion_t *)(data + DMOD_EXCLUSION));
     } while (mode < 0);  /* Write mode loops; read mode falls through */

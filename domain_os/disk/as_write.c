@@ -39,8 +39,7 @@ void DISK_$AS_WRITE(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr, uint32_t buffer,
     }
 
     /* Perform the write (op=1 for write) */
-    io_status = DISK_IO(1, vol_idx, (void *)(uintptr_t)wired_addr,
-                        (void *)(uintptr_t)daddr, local_info);
+    io_status = DISK_IO(1, vol_idx, wired_addr, daddr, local_info);
     *status = io_status;
 
     /* Unwire the buffer */

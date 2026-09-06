@@ -10,17 +10,11 @@
 
 #include "disk/disk_internal.h"
 
-/* Volume table offsets (mount state/proc come from disk_internal.h) */
-#define DISK_DEV_DATA_OFFSET     0x7c   /* start of the per-volume device data block */
+/* disk_$volume_t, DISK_VOL(), VALID_VOL_MASK and DISK_MOUNT_ASSIGNED come
+ * from disk/disk_internal.h */
 /* Event counter offsets in process table */
 #define PROC_EC1_OFFSET  0x378
 #define PROC_EC2_OFFSET  0x384
-
-/* Valid volume index mask (volumes 1-10) */
-#define VALID_VOL_MASK  0x7fe
-
-/* Mount state 2 = assigned */
-#define DISK_MOUNT_ASSIGNED  2
 
 /* Process table base */
 #define PROC_TABLE_BASE  ((uint8_t *)0x00e7a544)
@@ -28,13 +22,12 @@
 void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
 {
     uint16_t vol_idx;
-    int32_t offset;
     uint16_t mount_state;
     int16_t mount_proc;
     void *buffer;
     void *buffer_param;
     int32_t ec1, ec2;
-    uint8_t *vol_entry;
+    disk_$volume_t *vol;
     char result[4];
 
     vol_idx = *vol_idx_ptr;
@@ -45,12 +38,11 @@ void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
         return;
     }
 
-    offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
-    vol_entry = DISK_VOLUME_BASE + offset;
+    vol = DISK_VOL(vol_idx);
 
     /* Check mount state and ownership */
-    mount_state = *(uint16_t *)(vol_entry + DISK_MOUNT_STATE_OFFSET);
-    mount_proc = *(int16_t *)(vol_entry + DISK_MOUNT_PROC_OFFSET);
+    mount_state = vol->mount_state;
+    mount_proc = vol->mount_proc;
 
     if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1_$CURRENT) {
         *status = status_$volume_not_properly_mounted;
@@ -69,7 +61,8 @@ void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
     *(uint8_t *)((uintptr_t)buffer + 0x1f) |= 0x0a;
 
     /* Perform the format I/O */
-    DISK_$DO_IO(vol_entry + DISK_DEV_DATA_OFFSET, buffer, buffer, (void *)result);
+    /* DISK_$DO_IO receives the descriptor base (pea (0x7c,A2)) */
+    DISK_$DO_IO(vol, buffer, buffer, (void *)result);
 
     /* Check for error and signal event counters */
     if (result[0] < 0) {

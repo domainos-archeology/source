@@ -10,18 +10,13 @@
 #include "disk/disk_internal.h"
 #include "network/network.h"
 
-/* DISK_VOLUME_BASE and the mount state/proc offsets come from disk_internal.h */
-
-/* Valid volume index mask (volumes 1-10) */
-#define VALID_VOL_MASK  0x7fe
-
-/* Mount state 2 = assigned */
-#define DISK_MOUNT_ASSIGNED  2
+/* disk_$volume_t, DISK_VOL(), VALID_VOL_MASK and DISK_MOUNT_ASSIGNED come
+ * from disk/disk_internal.h */
 
 void DISK_$UNASSIGN(uint16_t *vol_idx_ptr, status_$t *status)
 {
     uint16_t vol_idx;
-    int32_t offset;
+    disk_$volume_t *vol;
     uint16_t mount_state;
     int16_t mount_proc;
 
@@ -36,9 +31,9 @@ void DISK_$UNASSIGN(uint16_t *vol_idx_ptr, status_$t *status)
         }
 
         /* Check mount state and ownership */
-        offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
-        mount_state = *(uint16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_STATE_OFFSET);
-        mount_proc = *(int16_t *)(DISK_VOLUME_BASE + offset + DISK_MOUNT_PROC_OFFSET);
+        vol = DISK_VOL(vol_idx);
+        mount_state = vol->mount_state;
+        mount_proc = vol->mount_proc;
 
         if (mount_state == DISK_MOUNT_ASSIGNED && mount_proc == PROC1_$CURRENT) {
             /* Dismount the volume */

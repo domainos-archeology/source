@@ -43,8 +43,7 @@ void DISK_$AS_READ(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr, uint16_t *count_p
     local_info[0] = 0;
 
     /* Perform the read (op=2 for read) */
-    io_status = DISK_IO(2, vol_idx, (void *)(uintptr_t)wired_addr,
-                        (void *)(uintptr_t)daddr, local_info);
+    io_status = DISK_IO(2, vol_idx, wired_addr, daddr, local_info);
     *status = io_status;
 
     /* Copy extended info to caller */

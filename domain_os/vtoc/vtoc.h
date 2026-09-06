@@ -98,16 +98,23 @@ void VTOC_$DISMOUNT(uint16_t vol_idx, uint8_t flags, status_$t *status);
 /*
  * VTOC_$ALLOCATE - Allocate a new VTOCE
  *
- * Allocates a new VTOC entry for a file or directory.
- * Finds free space in existing VTOC blocks or allocates new blocks.
+ * Allocates a new VTOC entry for the object described by new_vtoce and
+ * writes it into the volume named by loc->vol_idx.  Finds free space in the
+ * existing VTOC/bucket chain or allocates new blocks.
  *
- * @param req       Allocation request (includes UID, parent UID, vol_idx)
- * @param result    Receives the new VTOCE data
+ * @param loc       In: loc->vol_idx selects the volume and loc->block_hint
+ *                  supplies the VTOCE-location hint.  Out: the whole 0x20-byte
+ *                  object-location descriptor is rewritten on EVERY exit path
+ *                  (0xE38F24-0xE38F72), whether or not the allocation
+ *                  succeeded; loc->uid is left untouched.
+ * @param new_vtoce In: the new-format VTOCE image to install (0x150 bytes; the
+ *                  object UID is at +4 and the first 0x90 bytes are copied to
+ *                  disk).  VTOC_$ALLOCATE sets its in-use bit and type byte.
  * @param status    Output status code
  *
  * Original address: 0x00e388ac
  */
-void VTOC_$ALLOCATE(void *req, vtoce_$result_t *result, status_$t *status);
+void VTOC_$ALLOCATE(vtoc_$lookup_req_t *loc, void *new_vtoce, status_$t *status);
 
 /*
  * VTOC_$LOOKUP - Look up a VTOCE by UID

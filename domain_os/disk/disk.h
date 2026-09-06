@@ -64,23 +64,10 @@
 #define status_$disk_needs_salvaging 0x00010005
 
 /*
- * Volume entry structure (partial - 72 bytes per entry)
- * Base address: 0xe7a1cc
- *
- * Layout relative to base + (vol_idx * 0x48):
- *   +0x00: Event counter (disk EC)
- *   +0x90: Mount state (word)
- *   +0xa5: Write protect flags (byte)
+ * The per-volume descriptor is internal to the disk subsystem: see
+ * disk_$volume_t in disk/disk_internal.h, which carries the layout verified
+ * against the machine code (0x48 bytes at DISK_$DATA + N*0x48 + 0x7c).
  */
-typedef struct {
-  uint8_t ec_data[16];      /* +0x00: Event counter data */
-  uint8_t _reserved1[0x80]; /* +0x10: Reserved */
-  uint16_t mount_state;     /* +0x90: Mount state */
-  uint8_t _reserved2[0x13]; /* +0x92: Reserved */
-  uint8_t write_protect;    /* +0xa5: Write protect flags */
-  uint8_t _reserved3[0x02]; /* +0xa6: Padding to 0x48 boundary */
-  /* Note: actual structure extends through event counters at +0x378, +0x384 */
-} disk_volume_entry_t;
 
 /*
  * Device registration entry structure (12 bytes per entry)
@@ -113,7 +100,8 @@ typedef struct {
  */
 typedef struct {
   void *_reserved1; /* +0x00 */
-  void *_reserved2; /* +0x04 */
+  /* +0x04: shutdown(controller, unit); called by DISK_$SHUTDOWN (0xe3dc36) */
+  void (*shutdown)(uint16_t controller, uint16_t unit);
   void *dinit;      /* +0x08: Device init function */
   void *_reserved3; /* +0x0c */
   void *do_io;      /* +0x10: I/O function */
@@ -125,9 +113,6 @@ typedef struct {
 
 /* Disk subsystem base at 0xe7a1cc */
 extern uint8_t DISK_$DATA[];
-
-/* Volume table (64 entries, 72 bytes each) */
-extern disk_volume_entry_t DISK_$VOLUMES[];
 
 /* Device registration table at 0xe7ad5c (32 entries, 12 bytes each) */
 extern disk_device_entry_t DISK_$DEVICES[];
@@ -167,10 +152,24 @@ void DISK_$SORT(void *dev_entry, void **queue_ptr);
 void DISK_$GET_QBLKS(int16_t count, int32_t *qblk_head, uint32_t *qblk_tail);
 void DISK_$RTN_QBLKS(int16_t count, int32_t qblk_head, uint32_t qblk_tail);
 
-/* I/O operations */
-void DISK_$READ(int16_t vol_idx, void *buffer, void *daddr, void *count,
+/*
+ * DISK_INTERRUPT - disk interrupt dispatcher (m68k vector IO_VECTOR_DISK)
+ *
+ * Original address: 0x00e0aabc
+ */
+void DISK_INTERRUPT(void);
+
+/*
+ * I/O operations
+ *
+ * Argument order verified against DISK_$READ (0xe3cf64) and DISK_$WRITE
+ * (0xe3cc78): the disk address is argument 2 ((0xa,A6)) and the physical
+ * page number argument 3 ((0xe,A6)); DISK_IO receives them the other way
+ * round (0xe3cfac / 0xe3ccac).
+ */
+void DISK_$READ(int16_t vol_idx, uint32_t daddr, uint32_t ppn, uint32_t *info,
                 status_$t *status);
-void DISK_$WRITE(int16_t vol_idx, void *buffer, void *daddr, void *count,
+void DISK_$WRITE(int16_t vol_idx, uint32_t daddr, uint32_t ppn, uint32_t *info,
                  status_$t *status);
 
 /*
@@ -199,7 +198,16 @@ void *DISK_$GET_DRTE(int16_t index);
 void DISK_$MNT_DINIT(uint16_t vol_idx, void **dev_ptr, void *param_3,
                      void *param_4, void *param_5, void *param_6,
                      void *param_7);
-void DISK_$SHUTDOWN(int16_t vol_idx, status_$t *status);
+/*
+ * DISK_$SHUTDOWN - Shut a disk device down through its driver
+ *
+ * @param dev_info Device registration entry (jump table at +0x00,
+ *                 controller number at +0x06)
+ * @param unit     Device unit number
+ *
+ * Original address: 0x00e3dc28
+ */
+void DISK_$SHUTDOWN(disk_device_entry_t *dev_info, uint16_t unit);
 void DISK_$SPIN_DOWN(int16_t vol_idx, status_$t *status);
 void DISK_$REVALID(int16_t vol_idx);
 void DISK_$WRITE_PROTECT(int16_t mode, int16_t vol_idx, status_$t *status);
@@ -256,5 +264,17 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
  * Original address: 0xE7ACCC (1 byte)
  */
 extern int8_t DISK_$DO_CHKSUM;
+
+/*
+ * DISK_$DIAG - Diagnostic mode flag
+ *
+ * Enables the privileged diagnostic paths: DISK_$DIAG_IO tests it as a
+ * Domain boolean (`< 0`), while STOP_$WATCH's peek/poke branch table gates
+ * the three poke operations on it being merely non-zero
+ * (0x00E8186A: `tst.b (0x00e7acca).l / bne`).
+ *
+ * Original address: 0xE7ACCA (1 byte)
+ */
+extern int8_t DISK_$DIAG;
 
 #endif /* DISK_H */

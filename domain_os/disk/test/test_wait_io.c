@@ -77,6 +77,16 @@ typedef struct ec_$eventcount_t {
     void *waiter_list_tail;
 } ec_$eventcount_t;
 
+/* EC_$WAIT argument records: two 3-element arrays passed BY VALUE
+ * (0x00E20610); mirrors ec/ec.h, which this test does not include. */
+typedef struct ec_$wait_ecs_t {
+    ec_$eventcount_t *ec[3];
+} ec_$wait_ecs_t;
+
+typedef struct ec_$wait_vals_t {
+    int32_t val[3];
+} ec_$wait_vals_t;
+
 /* ML exclusion mock */
 typedef struct { int32_t f1; int32_t f2; } ml_$exclusion_t;
 
@@ -116,15 +126,16 @@ static int ec_wait_max_calls = 0;
 static ec_$eventcount_t *last_ecs[3];
 static int32_t last_wait_vals[3];
 
-int16_t EC_$WAIT(ec_$eventcount_t *ecs[3], int32_t *wait_val)
+/* Both 3-element arrays arrive BY VALUE (0xE20610); see ec/ec.h. */
+int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
 {
     /* Record args */
-    last_ecs[0] = ecs[0];
-    last_ecs[1] = ecs[1];
-    last_ecs[2] = ecs[2];
-    last_wait_vals[0] = wait_val[0];
-    last_wait_vals[1] = wait_val[1];
-    last_wait_vals[2] = wait_val[2];
+    last_ecs[0] = ecs.ec[0];
+    last_ecs[1] = ecs.ec[1];
+    last_ecs[2] = ecs.ec[2];
+    last_wait_vals[0] = vals.val[0];
+    last_wait_vals[1] = vals.val[1];
+    last_wait_vals[2] = vals.val[2];
 
     if (ec_wait_call_count < ec_wait_max_calls) {
         return ec_wait_returns[ec_wait_call_count++];

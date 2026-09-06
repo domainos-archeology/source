@@ -91,10 +91,14 @@ uint32_t BAT_$ALLOC_FM(int16_t vol_idx, status_$t *status);
  * @param hint         Hint block for locality (or 0 for any)
  * @param block_out    Output receiving allocated VTOCE block number
  * @param status       Output status code
- * @param new_vtoce    Output: non-zero if a new VTOCE block was allocated
+ * @param new_vtoce    Output: 0xFF if a new VTOCE block was allocated
+ *
+ * @return             The locked DBUF buffer holding the VTOCE block
+ *                     (returned in A0 at 0xE3B0C8), or NULL on failure.
+ *                     The caller must release it with DBUF_$SET_BUFF.
  */
-void BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
-                      status_$t *status, int8_t *new_vtoce);
+void *BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
+                       status_$t *status, int8_t *new_vtoce);
 
 /*
  * BAT_$ADD_PART_VTOCE - Add VTOCE to partition chain

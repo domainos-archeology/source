@@ -39,8 +39,8 @@
 /* Page alignment mask */
 #define PAGE_ALIGN_MASK  0x3ff
 
-/* Mount state 2 = assigned */
-#define DISK_MOUNT_ASSIGNED  2
+/* disk_$volume_t, DISK_VOL() and DISK_MOUNT_ASSIGNED come from
+ * disk/disk_internal.h */
 
 void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
                    void *buffer, uint32_t *info, status_$t *status)
@@ -48,8 +48,7 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
     int16_t op;
     uint16_t vol_idx;
     uint32_t daddr;
-    int32_t offset;
-    uint8_t *vol_entry;
+    disk_$volume_t *vol;
     uint16_t mount_state;
     int16_t mount_proc;
     uint32_t addr_start, addr_end;
@@ -70,11 +69,10 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
         return;
     }
 
-    offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
-    vol_entry = DISK_VOLUME_BASE + offset;
+    vol = DISK_VOL(vol_idx);
 
     /* Must be a physical volume (no LV data) */
-    if (*(uint32_t *)(vol_entry + DISK_LV_DATA_OFFSET) != 0) {
+    if (vol->lv_start != 0) {
         *status = status_$operation_requires_physical_vol;
         return;
     }
@@ -83,8 +81,8 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
     access_granted = 0;
     direct_access = 0;
 
-    mount_state = *(uint16_t *)(vol_entry + DISK_MOUNT_STATE_OFFSET);
-    mount_proc = *(int16_t *)(vol_entry + DISK_MOUNT_PROC_OFFSET);
+    mount_state = vol->mount_state;
+    mount_proc = vol->mount_proc;
 
     /* Check if assigned to current process */
     if (mount_state == DISK_MOUNT_ASSIGNED && mount_proc == PROC1_$CURRENT) {
@@ -96,8 +94,8 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
     }
     /* Check if address within volume bounds */
     else {
-        addr_start = *(uint32_t *)(vol_entry + DISK_ADDR_START_OFFSET);
-        addr_end = *(uint32_t *)(vol_entry + DISK_ADDR_END_OFFSET);
+        addr_start = vol->addr_start;
+        addr_end = vol->addr_end;
         if (daddr >= addr_start && daddr <= addr_end) {
             access_granted = -1;
         }

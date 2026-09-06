@@ -12,32 +12,24 @@
 
 #include "disk/disk_internal.h"
 
-/* Write protect flag byte offset within volume entry */
-#define DISK_WP_OFFSET  0xa5
-
-/* DISK_VOLUME_BASE comes from disk_internal.h */
+/* disk_$volume_t, DISK_VOL() and DISK_VOL_FLAG_WRITE_PROTECT come from
+ * disk/disk_internal.h */
 
 void DISK_$WRITE_PROTECT(int16_t mode, int16_t vol_idx, status_$t *status)
 {
-    uint8_t *wp_flag;
-    int32_t offset;
+    disk_$volume_t *vol;
 
     *status = status_$ok;
 
-    /* Calculate offset to write protect flag
-     * Each volume entry is 0x48 (72) bytes
-     * Offset = base + (vol_idx * 0x48) + 0xa5
-     */
-    offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
-    wp_flag = DISK_VOLUME_BASE + offset + DISK_WP_OFFSET;
+    vol = DISK_VOL(vol_idx);
 
     if (mode == 0) {
-        /* Enable write protection */
-        *wp_flag |= 0x01;
+        /* 0xe3d98c bset.b #0x0,(0xa5,A1) */
+        vol->as_options |= DISK_VOL_FLAG_WRITE_PROTECT;
     }
     else if (mode == 1) {
-        /* Check if write protected */
-        if ((*wp_flag & 0x01) != 0) {
+        /* 0xe3d994 btst.b #0x0,(0xa5,A1) */
+        if ((vol->as_options & DISK_VOL_FLAG_WRITE_PROTECT) != 0) {
             *status = status_$disk_write_protected;
         }
     }

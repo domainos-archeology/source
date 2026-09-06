@@ -44,16 +44,19 @@ void disk_$wait_io(uint16_t disk_mask, int32_t *io_wait_val, int32_t *error_wait
          *   [1] = per-process error EC
          *   [2] = TIME_$CLOCKH (timeout after 0xf0 ticks)
          */
-        ec_$eventcount_t *ecs[3];
-        int32_t wait_vals[3];
+        /* 0xE3CA40-0xE3CA5A: both 3-element arrays are pushed by value.
+         * ecs   = { A0+0x378, A0+0x384, &TIME_$CLOCKH }
+         * vals  = { *io_wait_val, *error_wait_val, TIME_$CLOCKH + 0xF0 } */
+        ec_$wait_ecs_t ecs;
+        ec_$wait_vals_t wait_vals;
 
-        ecs[0] = (ec_$eventcount_t *)(per_proc_base + DMOD_PER_PROC_IO_EC);
-        ecs[1] = (ec_$eventcount_t *)(per_proc_base + DMOD_PER_PROC_ERR_EC);
-        ecs[2] = (ec_$eventcount_t *)&TIME_$CLOCKH;
+        ecs.ec[0] = (ec_$eventcount_t *)(per_proc_base + DMOD_PER_PROC_IO_EC);
+        ecs.ec[1] = (ec_$eventcount_t *)(per_proc_base + DMOD_PER_PROC_ERR_EC);
+        ecs.ec[2] = (ec_$eventcount_t *)&TIME_$CLOCKH;
 
-        wait_vals[0] = *io_wait_val;
-        wait_vals[1] = *error_wait_val;
-        wait_vals[2] = (int32_t)(TIME_$CLOCKH + DMOD_WAIT_TIMEOUT);
+        wait_vals.val[0] = *io_wait_val;
+        wait_vals.val[1] = *error_wait_val;
+        wait_vals.val[2] = (int32_t)(TIME_$CLOCKH + DMOD_WAIT_TIMEOUT);
 
         result = EC_$WAIT(ecs, wait_vals);
 

@@ -39,8 +39,7 @@ void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *buffer_ptr,
     local_info[0] = 0;
 
     /* Perform the read (op=4 for manufacturing bad spots) */
-    io_status = DISK_IO(4, vol_idx, (void *)(uintptr_t)wired_addr,
-                        (void *)(uintptr_t)buffer, local_info);
+    io_status = DISK_IO(4, vol_idx, wired_addr, buffer, local_info);
     *status = io_status;
 
     /* Block header error is OK for this operation */

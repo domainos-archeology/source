@@ -12,20 +12,14 @@
 
 #include "disk/disk_internal.h"
 
-/* Volume table offsets (mount state/proc/dev info come from disk_internal.h) */
-#define DISK_DEV_DATA_OFFSET     0x7c
-#define DISK_SECTORS_PER_TRACK   0x9e
-#define DISK_PARTITION_TABLE     0xb2
+/* disk_$volume_t, DISK_VOL(), VALID_VOL_MASK and DISK_MOUNT_ASSIGNED come
+ * from disk/disk_internal.h.  The head divisor is the volume's head count at
+ * +0x9e (0xe3d45c divu.w (0x9e,A2)) and the partition table is part_volx
+ * (+0xb2). */
 
 /* Event counter offsets in process table */
 #define PROC_EC1_OFFSET  0x378
 #define PROC_EC2_OFFSET  0x384
-
-/* Valid volume index mask (volumes 1-10) */
-#define VALID_VOL_MASK  0x7fe
-
-/* Mount state 2 = assigned */
-#define DISK_MOUNT_ASSIGNED  2
 
 /* Device flags */
 #define DEV_FLAG_NO_TRACK_FORMAT  0x200
@@ -39,16 +33,15 @@ void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
     uint16_t vol_idx;
     uint16_t cylinder;
     uint16_t head;
-    int32_t offset;
     uint16_t mount_state;
     int16_t mount_proc;
     void *buffer;
     void *buffer_param;
     int32_t ec1, ec2;
-    uint8_t *vol_entry;
+    disk_$volume_t *vol;
     void *dev_info;
     uint16_t dev_flags;
-    uint16_t sectors_per_track;
+    uint16_t heads_per_part;
     uint16_t partition_idx;
     uint16_t partition_vol;
     char result[14];
@@ -63,12 +56,11 @@ void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
         return;
     }
 
-    offset = (int16_t)(vol_idx * DISK_VOLUME_SIZE);
-    vol_entry = DISK_VOLUME_BASE + offset;
+    vol = DISK_VOL(vol_idx);
 
     /* Check mount state and ownership */
-    mount_state = *(uint16_t *)(vol_entry + DISK_MOUNT_STATE_OFFSET);
-    mount_proc = *(int16_t *)(vol_entry + DISK_MOUNT_PROC_OFFSET);
+    mount_state = vol->mount_state;
+    mount_proc = vol->mount_proc;
 
     if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1_$CURRENT) {
         *status = status_$volume_not_properly_mounted;
@@ -76,7 +68,7 @@ void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
     }
 
     /* Get device info and check for track format support */
-    dev_info = *(void **)(vol_entry + DISK_DEV_INFO_OFFSET);
+    dev_info = vol->dev_info;
     dev_flags = *(uint16_t *)((uintptr_t)dev_info + 8);
 
     if ((dev_flags & DEV_FLAG_NO_TRACK_FORMAT) != 0) {
@@ -91,12 +83,12 @@ void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
     ec1 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1_$CURRENT * 0x1c)) + 1;
     ec2 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1_$CURRENT * 0x1c) + 0xc) + 1;
 
-    /* Calculate partition index from head number */
-    sectors_per_track = *(uint16_t *)(vol_entry + DISK_SECTORS_PER_TRACK);
-    partition_idx = (head / sectors_per_track) + 1;
+    /* Calculate partition index from head number (0xe3d45c) */
+    heads_per_part = vol->num_heads;
+    partition_idx = (head / heads_per_part) + 1;
 
-    /* Get the partition volume from the partition table */
-    partition_vol = *(uint16_t *)(vol_entry + DISK_PARTITION_TABLE + partition_idx * 2);
+    /* Get the partition volume from the partition table (0xe3d46c) */
+    partition_vol = vol->part_volx[partition_idx];
 
     /* Validate partition index and volume */
     if (partition_idx > 8 ||
@@ -108,18 +100,16 @@ void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
 
     /* Set up I/O request buffer for format */
     *(uint16_t *)((uintptr_t)buffer + 4) = cylinder;
-    *(uint8_t *)((uintptr_t)buffer + 6) = (uint8_t)(head % sectors_per_track);
+    *(uint8_t *)((uintptr_t)buffer + 6) = (uint8_t)(head % heads_per_part);
     *(uint8_t *)((uintptr_t)buffer + 7) = 1;
 
     /* Set format track operation (type 0x03) */
     *(uint8_t *)((uintptr_t)buffer + 0x1f) &= 0xf0;
     *(uint8_t *)((uintptr_t)buffer + 0x1f) |= 0x03;
 
-    /* Get partition volume entry and perform format I/O */
-    offset = (int16_t)(partition_vol * DISK_VOLUME_SIZE);
-    vol_entry = DISK_VOLUME_BASE + offset;
-
-    DISK_$DO_IO(vol_entry + DISK_DEV_DATA_OFFSET, buffer, buffer, (void *)result);
+    /* Get partition volume descriptor and perform format I/O.  DISK_$DO_IO
+     * receives the descriptor base (pea (0x7c,A2) in the original). */
+    DISK_$DO_IO(DISK_VOL(partition_vol), buffer, buffer, (void *)result);
 
     /* Check for error and signal event counters */
     if (result[0] < 0) {

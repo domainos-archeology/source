@@ -85,8 +85,8 @@ void DBUF_$UPDATE_VOL(uint16_t vol_idx, void *uid_p)
             entry->flags &= ~DBUF_ENTRY_DIRTY;
 
             /* Write buffer to disk */
-            DISK_$WRITE(DBUF_GET_VOL(entry), (void *)(uintptr_t)entry->block,
-                        (void *)(uintptr_t)entry->ppn, &write_params, &local_status);
+            DISK_$WRITE(DBUF_GET_VOL(entry), entry->block, entry->ppn,
+                        (uint32_t *)&write_params, &local_status);
 
             if (local_status != status_$ok) {
                 /* Mark volume as having trouble */
