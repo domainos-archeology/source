@@ -188,9 +188,30 @@ void *MST_$MAP(uid_t *uid, uint32_t *start_ptr, uint32_t *length_ptr,
                uint8_t *concur_ptr, void *map_info, status_$t *status_ret);
 void MST_$MAP_AT(void *start, uid_t *uid, void *param1, void *param2, void *param3,
                  void *param4, void *param5, void *result, status_$t *status);
-void MST_$MAP_CANNED_AT(uint32_t va, uid_t *uid, uint32_t param3, uint32_t param4,
-                        uint32_t flags, uint32_t param6, uint32_t param7,
-                        status_$t *status);
+/*
+ * MST_$MAP_CANNED_AT (0x00E30FAA) - map a canned object at a fixed address.
+ *
+ * Parameter shape recovered from the callee's own frame (A6 displacements at
+ * 0x00E30FB2 onwards) and from OS_$INIT's six call sites:
+ *
+ *   +0x08 va      longword  where to map it
+ *   +0x0C uid     longword  pointer to the object's UID
+ *   +0x10 offset  longword  byte offset within the object
+ *   +0x14 size    longword  number of bytes
+ *   +0x18 flags   longword  0x00170001 read/write, 0x00130001 read-only
+ *   +0x1C wire    word      Domain boolean, pushed with `st`/`clr.w`
+ *   +0x1E touch   word      Domain boolean, read by the callee as
+ *                           `move.b (0x1e,A6),D3b` (the slot's high byte)
+ *   +0x20 desc    longword  location descriptor
+ *   +0x24 status  longword  status return
+ *
+ * The two booleans were previously merged into a single longword parameter,
+ * which lost the distinction between `clr.l` (both false) and
+ * `clr.w`/`st` (one of each).
+ */
+void MST_$MAP_CANNED_AT(uint32_t va, uid_t *uid, uint32_t offset,
+                        uint32_t size, uint32_t flags, boolean wire,
+                        boolean touch, uint32_t desc, status_$t *status);
 void MST_$MAP_AREA(void);
 void MST_$MAP_AREA_AT(void *addr_ptr, void *size_ptr, void *param1, void *param2,
                       void *param3, status_$t *status);

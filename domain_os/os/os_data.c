@@ -6,7 +6,7 @@
  * Original M68K addresses:
  *   OS_$REV:                 0xE78400 (204 bytes) - OS revision info
  *   OS_$SHUTDOWN_EC:         0xE1DC00 (12 bytes)  - Shutdown eventcount
- *   OS_$BOOT_DEVICE:         0xE82728 (2 bytes)   - Boot device ID
+ *   OS_$BOOT_DEVICE:         0xE82728 (8 bytes)   - Boot device record
  *   OS_$SHUTTING_DOWN_FLAG:  0xE82734 (1 byte)    - Shutdown in progress
  *   OS_$SHUTDOWN_WAIT_TIME:  0xE82738 (4 bytes)   - Shutdown wait time
  */
@@ -46,13 +46,13 @@ uint32_t OS_$REV[51] = { 0 };
 ec_$eventcount_t OS_$SHUTDOWN_EC = { 0 };
 
 /*
- * Boot device identifier
+ * Boot device record
  *
- * Identifies the device from which the system was booted.
+ * Identifies the device, controller and unit the system was booted from.
  *
  * Original address: 0xE82728
  */
-uint16_t OS_$BOOT_DEVICE = 0;
+os_$boot_device_t OS_$BOOT_DEVICE = {0, 0, 0, 0};
 
 /*
  * Shutdown in progress flag

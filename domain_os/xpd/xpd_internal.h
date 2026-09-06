@@ -11,6 +11,7 @@
 #include "xpd/xpd.h"
 #include "fim/fim.h"
 #include "os/os.h"
+#include "peb/peb.h"
 
 /*
  * Pointer to the XPD data area (0x00E32390), passed to MST_$WIRE_AREA
@@ -19,15 +20,12 @@
 extern void *PTR_XPD_$DATA;
 
 /*
- * FPU configuration flags tested by XPD_$GET_REGISTERS / XPD_$SET_REGISTERS.
- *   DAT_00e24c98: MC68881/68882 present (M68881_$SAVE_FLAG, set by PEB_$INIT)
- *   DAT_00e24c92: peripheral board FPU present (PEB_$INSTALLED)
- * TODO: these live in the PEB globals block (peb/peb_internal.h names them
- * as fields of PEB_GLOBALS); declare them through peb/peb.h once that
- * header exports the block.
+ * FPU configuration flags tested by XPD_$GET_REGISTERS / XPD_$SET_REGISTERS
+ * come from peb/peb.h (source-xoq):
+ *   0x00E24C98  M68881_$SAVE_FLAG   - MC68881/68882 present (set by PEB_$INIT)
+ *   0x00E24C92  PEB_$INSTALLED_FLAG - peripheral board FPU present
+ * Both are Domain booleans: 0xFF is true, tested with `< 0`.
  */
-extern char DAT_00e24c98;
-extern char DAT_00e24c92;
 
 /*
  * Constants in code space that the XPD functions pass by reference:

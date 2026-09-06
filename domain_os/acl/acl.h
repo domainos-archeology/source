@@ -182,7 +182,7 @@ int16_t ACL_$RIGHTS(uid_t *uid, void *unused, uint32_t *required_mask,
  * ACL_$RIGHTS_CHECK - Check access rights for an object (variant)
  *
  * Parameters:
- *   check_uid     - UID to check against (passed by value)
+ *   acl_ctx       - pointer to the ACL context record (0x00E46AFA)
  *   file_uid      - UID of object to check
  *   required_mask - Pointer to required access rights mask (or NULL)
  *   option_flags  - Pointer to option flags (or NULL)
@@ -194,7 +194,12 @@ int16_t ACL_$RIGHTS(uid_t *uid, void *unused, uint32_t *required_mask,
  *
  * Original address: 0x00E46AEC
  */
-int16_t ACL_$RIGHTS_CHECK(uid_t check_uid, uid_t *file_uid,
+/*
+ * The first argument is a POINTER to an ACL context record, not a UID by
+ * value: 0x00E46AFA does `movea.l (0x8,A6),A2` and then passes `A2` and
+ * `A2+0x24` on to 0x00E464B8.
+ */
+int16_t ACL_$RIGHTS_CHECK(void *acl_ctx, uid_t *file_uid,
                           void *required_mask, void *option_flags,
                           int8_t *check_flag, status_$t *status);
 
@@ -744,10 +749,22 @@ extern uid_t ACL_$FILE_ACL;    /* 0xE1744C */
 extern uid_t ACL_$FILEIN_ACL;  /* 0xE17454 */
 extern uid_t ACL_$DIRIN_ACL;   /* 0xE1745C: {0x00000603, 0} (used by dir/) */
 
-/* Nil ACL UID (0xE17384).  TODO: no definition in acl/acl_data.c yet. */
+/* Nil ACL UID (0xE17384): {0x00000100, 0}.  Defined in acl/acl_data.c. */
 extern uid_t ACL_$NIL;
 
 /* Per-process super-user nesting counts, indexed by PROC1_$CURRENT (0xE7DACA) */
 extern int16_t ACL_$SUPER_COUNT[];
+
+
+/*
+ * ACL_$SERVER - ACL half of the remote-file server
+ *
+ * REM_FILE_$SERVER delegates opcodes 0x64..0x77 to this routine
+ * (0x00E639C4), with the same request/response/reply-length contract as
+ * DIR_$SERVER.
+ *
+ * Original address: 0x00E49594
+ */
+void ACL_$SERVER(void *request, void *response, uint16_t *reply_len);
 
 #endif /* ACL_H */

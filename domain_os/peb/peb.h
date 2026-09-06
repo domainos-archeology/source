@@ -378,4 +378,33 @@ void PEB_$GET_INFO(uint8_t *info_flags, uint8_t *info_byte);
  */
 void PEB_$PROC_CLEANUP(void);
 
+/*
+ * ============================================================================
+ * Exported PEB feature flags
+ * ============================================================================
+ *
+ * Two Domain booleans (0xFF = true; test with `< 0`) inside the PEB global
+ * block at 0x00E24C78 (full layout: peb/peb_internal.h, peb_globals_t):
+ *
+ *   0x00E24C92  PEB_$INSTALLED_FLAG  = PEB_GLOBALS.installed        (+0x1A)
+ *               peripheral (PEB) floating-point board present
+ *   0x00E24C98  M68881_$SAVE_FLAG    = PEB_GLOBALS.m68881_save_flag (+0x20)
+ *               MC68881/68882 present, its context must be saved
+ *
+ * Both are set by PEB_$INIT and read by subsystems that only see this public
+ * header (xpd/registers.c tests them when saving/restoring FP state).  On
+ * ARCH_M68K the macros below are the very same storage the peb_globals_t
+ * fields name; on a host build they are stand-alone objects defined in
+ * peb/peb_data.c.
+ */
+#if defined(ARCH_M68K)
+#define PEB_$INSTALLED_FLAG (*(volatile int8_t *)0x00E24C92)
+#define M68881_$SAVE_FLAG (*(volatile int8_t *)0x00E24C98)
+#else
+extern int8_t peb_$installed_flag;
+extern int8_t m68881_$save_flag;
+#define PEB_$INSTALLED_FLAG peb_$installed_flag
+#define M68881_$SAVE_FLAG m68881_$save_flag
+#endif
+
 #endif /* PEB_H */

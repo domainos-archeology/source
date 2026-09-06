@@ -43,7 +43,8 @@
 /* Debugger table offsets */
 #define DEBUGGER_ASID_OFFSET 0x484
 
-/* FPU detection flags DAT_00e24c98 / DAT_00e24c92 are declared in xpd_internal.h */
+/* FPU detection flags M68881_$SAVE_FLAG (0x00E24C98) and
+ * PEB_$INSTALLED_FLAG (0x00E24C92) come from peb/peb.h. */
 
 /*
  * XPD_$GET_REGISTERS - Get target process registers
@@ -325,12 +326,12 @@ void XPD_$FP_GET_STATE(void *fp_buf, void *fp_format)
 
     *fmt = 0;
 
-    if (DAT_00e24c98 < 0) {
+    if (M68881_$SAVE_FLAG < 0) {
         /* MC68881/68882 present */
         FIM_$FP_GET_STATE(fp_buf, fp_format);
-    } else if (DAT_00e24c92 < 0) {
+    } else if (PEB_$INSTALLED_FLAG < 0) {
         /* Peripheral board FPU */
-        PEB_$UNLOAD_REGS((uint32_t *)fp_buf + 1);
+        PEB_$UNLOAD_REGS((peb_fp_state_t *)((uint32_t *)fp_buf + 1));
         *buf = 0x20;
         *fmt = 4;
     }
@@ -343,12 +344,12 @@ void XPD_$FP_GET_STATE(void *fp_buf, void *fp_format)
  */
 void XPD_$FP_PUT_STATE(void *fp_buf, void *fp_format)
 {
-    if (DAT_00e24c98 < 0) {
+    if (M68881_$SAVE_FLAG < 0) {
         /* MC68881/68882 present */
         FIM_$FP_PUT_STATE(fp_buf, fp_format);
-    } else if (DAT_00e24c92 < 0) {
+    } else if (PEB_$INSTALLED_FLAG < 0) {
         /* Peripheral board FPU */
-        PEB_$LOAD_REGS((uint32_t *)fp_buf + 1);
+        PEB_$LOAD_REGS((peb_fp_state_t *)((uint32_t *)fp_buf + 1));
     }
 }
 
@@ -359,7 +360,7 @@ void XPD_$GET_FP_INT(int16_t *asid, status_$t *status_ret)
 {
     *status_ret = status_$ok;
 
-    if (DAT_00e24c98 < 0) {
+    if (M68881_$SAVE_FLAG < 0) {
         FP_$GET_FP(*asid);
     } else {
         PEB_$GET_FP(asid);
@@ -373,7 +374,7 @@ void XPD_$PUT_FP_INT(int16_t *asid, status_$t *status_ret)
 {
     *status_ret = status_$ok;
 
-    if (DAT_00e24c98 < 0) {
+    if (M68881_$SAVE_FLAG < 0) {
         FP_$PUT_FP(*asid);
     } else {
         PEB_$PUT_FP(asid);

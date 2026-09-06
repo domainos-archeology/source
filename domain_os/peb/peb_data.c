@@ -11,3 +11,13 @@ status_$t PEB_WCS_Verify_Failed_Err = status_$peb_wcs_verify_failed;
 void *PTR_PEB_CTL_00e31dd0 = (void *)0x00FF7000;               /* 0x00E31DD0 */
 void *PTR_PEB_$WIRED_DATA_START_00e322dc = (void *)0x00E84E80; /* 0x00E322DC */
 void *PTR_PEB_$TOUCH_00e322e4 = (void *)0x00E70810;            /* 0x00E322E4 */
+
+/*
+ * Host-build storage for the two exported PEB feature flags declared in
+ * peb/peb.h.  On ARCH_M68K those are absolute-address macros over the PEB
+ * global block (0x00E24C92 / 0x00E24C98) and no object is needed.
+ */
+#if !defined(ARCH_M68K)
+int8_t peb_$installed_flag = 0;
+int8_t m68881_$save_flag = 0;
+#endif

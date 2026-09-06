@@ -82,4 +82,13 @@ uid_t ACL_$DIRIN_ACL;       /* 0xE1745C: {0x00000603, 0x00000000} */
 uid_t ACL_$DIR_MERGE_ACL;   /* 0xE17464: {0x00000604, 0x00000000} */
 uid_t ACL_$FILE_MERGE_ACL;  /* 0xE1746C: {0x00000605, 0x00000000} */
 uid_t ACL_$FILE_SUBS_ACL;   /* 0xE17474: {0x00000606, 0x00000000} */
+
+/*
+ * ACL_$NIL - the "no ACL" UID (0x00E17384).
+ *
+ * Raw bytes in the image: 00 00 01 00 00 00 00 00, i.e. high = 0x00000100,
+ * low = 0.  Passed by address by dir/ when creating or dropping an object
+ * that carries no ACL of its own.
+ */
+uid_t ACL_$NIL = UID_CONST(0x00000100, 0);
 uid_t ACL_$DIR_ACL;         /* Well-known ACL UID for directories (TODO(source-yii): find actual address) */

@@ -41,6 +41,6 @@ void os_$free_va_page(uint32_t vaddr)
      * In the original assembly: pea (0x8,A6) pushes the address
      * of the stack parameter.
      */
-    ppn = VTOP_OR_CRASH(vaddr);
+    ppn = VTOP_OR_CRASH(&vaddr);
     os_$free_ppn(ppn);
 }

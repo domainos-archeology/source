@@ -81,6 +81,24 @@ extern char *INT_STACK_BASE;
 
 /*
  * ============================================================================
+ * The m68k exception vector table
+ * ============================================================================
+ *
+ * OS_$INIT writes exception vectors three ways: through the boot info table
+ * walk at 0x00E33876 (`move.l (0xdc,A1),(A4)` with A4 = vector * 4), and by
+ * two absolute stores, `move.l #0xe21f84,(0x7c).l` (vector 31, the parity
+ * trap) and `move.l #0xe218e8,(0x8).l` (vector 2, bus error).  All three go
+ * through the array below so the addressing is in one place.
+ */
+#if defined(ARCH_M68K)
+#define OS_$VECTOR_TABLE ((volatile uint32_t *)0)
+#else
+extern uint32_t os_$vector_table[256];
+#define OS_$VECTOR_TABLE os_$vector_table
+#endif
+
+/*
+ * ============================================================================
  * Global Data - Trap Handlers
  * ============================================================================
  */
@@ -182,7 +200,14 @@ void CRASH_SHOW_STRING(const char *str);
 /* CRASH_SYSTEM declared in misc/misc.h */
 /* MMU_$NORMAL_MODE declared in mmu/mmu.h */
 /* prompt_for_yes_or_no declared in misc/misc.h */
-uint16_t VTOP_OR_CRASH(uint32_t vaddr);
+/*
+ * VTOP_OR_CRASH (0x00E6D1E8) - translate a virtual address, or crash.
+ *
+ * Pascal `var` parameter: the caller pushes the ADDRESS of a longword
+ * holding the virtual address (`pea (-0x1c4,A6)` in OS_$INIT, `pea (0x8,A6)`
+ * in os_$free_va_page).  The physical page number comes back in D0.
+ */
+uint32_t VTOP_OR_CRASH(uint32_t *va_p);
 /* SUB48 declared in cal/cal.h */
 void PRINT_BUILD_TIME(void);
 /* ERROR_$PRINT declared in vfmt/vfmt.h (via misc/misc.h) */
@@ -194,7 +219,7 @@ void PRINT_BUILD_TIME(void);
  */
 
 /* io_$probe: see prom/prom.h */
-void FUN_00e2f1d4(uint16_t param);
+/* AST_$ACTIVATE_CANNED_SEG (0x00E2F1D4): see ast/ast.h */
 /* network_$fetch_diskless_info: see network/network.h (2=time, 8=tz, 0x37=route) */
 void OS_$PRINT_INIT_ERROR(const char *msg);            /* Display message */
 void os_$free_va_page(uint32_t vaddr);          /* Free page at virtual address */

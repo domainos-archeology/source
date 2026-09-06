@@ -1,14 +1,20 @@
 /*
  * stop/stop.h - Stopwatch Profiling Subsystem
  *
- * This module provides stopwatch-based profiling functionality for
- * measuring execution times and collecting performance metrics.
- * It supports multiple simultaneous stopwatch contexts.
+ * STOP_$WATCH instruments an arbitrary pair of code addresses by patching
+ * A-line (0xAxxx) trap words over the instructions found there.  The
+ * resulting unimplemented-instruction traps are taken by STOP_$WATCH_UII
+ * (0x00E81A56), which hands off to STOP_$WATCH_TRACE (0x00E81AB2); the
+ * trace handler accumulates CPU time (PROC1_$GET_CPUT) and wall time
+ * (TIME_$CLOCK) into one of 16 stopwatch slots.
  *
- * Up to 16 stopwatch slots are available, each tracking:
- *   - Elapsed time
- *   - Count of start/stop cycles
- *   - Optional trace mode logging
+ * The same entry point also implements a privileged physical peek/poke
+ * (operations 2..7), reached through a branch table at 0x00E81854 and
+ * gated for the poke operations by DISK_$DIAG.
+ *
+ * Module base (A5) is the entry point itself: A5 = 0x00E81814.
+ *
+ * Original address: 0x00E81814 (352 bytes)
  */
 
 #ifndef STOP_H
@@ -18,72 +24,106 @@
 
 /*
  * Maximum number of stopwatch slots.
+ *
+ * The bound is enforced at 0x00E81908 as `cmp.w #0xf,D0w / bls`, i.e. an
+ * unsigned compare against 15.
  */
-#define STOP_MAX_SLOTS  16
+#define STOP_MAX_SLOTS 16
 
 /*
- * Stopwatch data structure returned by STOP_$WATCH
+ * Operation codes (first parameter, a word passed by reference).
  *
- * Contains the accumulated timing data when a stopwatch is stopped.
+ * 0 and 1 are handled inline; everything greater than 1 is dispatched
+ * through the two-byte branch table at 0x00E81854
+ * (`jmp (0xe81854,PC,D3.w)` with D3 = 2 * operation).
  */
-typedef struct {
-    int32_t time_high;           /* High 32 bits of elapsed time */
-    int32_t time_low;            /* Low 32 bits of elapsed time */
-    int32_t count_high;          /* High 32 bits of iteration count */
-    int32_t count_low;           /* Low 32 bits of iteration count */
+#define STOP_OP_STOP 0      /* stop the slot and return its totals */
+#define STOP_OP_START 1     /* start the slot */
+#define STOP_OP_PEEK_BYTE 2 /* 0x00E8187E */
+#define STOP_OP_POKE_BYTE 3 /* 0x00E81882 (DISK_$DIAG gated) */
+#define STOP_OP_PEEK_WORD 4 /* 0x00E81888 */
+#define STOP_OP_POKE_WORD 5 /* 0x00E8188C (DISK_$DIAG gated) */
+#define STOP_OP_PEEK_LONG 6 /* 0x00E81892 */
+#define STOP_OP_POKE_LONG 7 /* 0x00E81862 (DISK_$DIAG gated) */
+
+/*
+ * Status codes returned by STOP_$WATCH (subsystem byte 0x30).
+ *
+ * Note: audit/ also claims subsystem 0x30; these three codes are the ones
+ * the STOP_$WATCH code itself loads into D2.
+ */
+#define status_$stop_bad_slot 0x00300001    /* 0x00E8190E: slot > 15, or */
+                                            /* stop of a slot not running */
+#define status_$stop_already_running 0x00300002 /* 0x00E81956 */
+#define status_$stop_not_diag 0x00300004     /* 0x00E81874: poke refused */
+
+/*
+ * Accumulated stopwatch data returned by operation 0.
+ *
+ * The stop path copies four longwords out of the slot starting at slot+0x14
+ * (0x00E819CA-0x00E819D4: `lea (0x14,A1),A2 / moveq #3,D1 / move.l (A2),(A3)+
+ * / clr.l (A2)+ / dbf`), zeroing each as it goes.
+ */
+typedef struct stop_$data_t {
+    int32_t completions;   /* slot+0x14: measured intervals completed */
+    int32_t reentries;     /* slot+0x18: traps taken while already running */
+    int32_t cpu_time;      /* slot+0x1C: accumulated PROC1_$GET_CPUT delta */
+    int32_t elapsed_time;  /* slot+0x20: accumulated TIME_$CLOCK delta */
 } stop_$data_t;
 
 /*
- * STOP_$WATCH - Start or stop a stopwatch
- *
- * This function controls stopwatch timers for profiling purposes.
- * It can start a new timing session or stop an existing one and
- * retrieve the accumulated data.
- *
- * Parameters:
- *   operation - Operation code:
- *               0 = Stop the stopwatch and return data
- *               1 = Start the stopwatch
- *               2+ = Jump table for other operations
- *   slot      - Stopwatch slot number (0-15)
- *   parent    - Parent stopwatch slot (-1 for none)
- *   param4    - Additional parameter (operation-specific)
- *   data_out  - Pointer to receive stopwatch data (for stop operation)
- *   status    - Pointer to receive status code
- *
- * Status codes:
- *   status_$ok - Operation completed successfully
- *   status_$audit_invalid_data_size (0x300001) - Invalid slot number
- *   status_$audit_file_already_open (0x300002) - Stopwatch already in use
- *
- * The timing resolution depends on the system timer, typically
- * around 2KB (2048) cycles per unit for the main timer.
- *
- * Original address: 0x00e81814
+ * A patch record: the two code addresses whose instruction words
+ * STOP_$WATCH replaces with A-line traps.  Read by the hook helper with
+ * `movem.l (A0),{A3,A4}` at 0x00E81A18; a NULL second address means the
+ * slot has only an entry point (flag bit 6 stays clear).
  */
-void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent,
-                 void *param4, stop_$data_t *data_out, status_$t *status);
+typedef struct stop_$patch_rec_t {
+    uint16_t *entry_addr; /* +0x00: patched with 0xA000 + slot */
+    uint16_t *exit_addr;  /* +0x04: patched with 0xA100 + slot, or NULL */
+} stop_$patch_rec_t;
 
 /*
- * STOP_$WATCH_UII - Stopwatch with UID parameter
+ * STOP_$WATCH - stopwatch control and privileged peek/poke
  *
- * Extended version of STOP_$WATCH that accepts a UID parameter
- * for additional context.
+ * Parameters (all by reference; Pascal `var`):
+ *   operation - word operation code, see STOP_OP_* above
+ *   slot      - word slot number, 0..15 (operations 0 and 1 only)
+ *   parent    - word parent slot number, negative for none (operation 1)
+ *   p4        - operation 0/1: stop_$patch_rec_t * describing what to patch
+ *               operation 2..7: uint32_t * holding the address to access
+ *   p5        - operation 0: stop_$data_t * receiving the slot totals
+ *               operation 2..7: uint32_t * holding the value (in for poke,
+ *               out for peek)
+ *   status    - returned status
  *
- * Original address: 0x00e81a56
+ * The two "p" parameters are overloaded by operation exactly as the
+ * original code overloads (0x14,A6) and (0x18,A6), so they are untyped
+ * here.
+ *
+ * Original address: 0x00E81814
  */
-void STOP_$WATCH_UII(int16_t *operation, uint16_t *slot, int16_t *parent,
-                     void *param4, stop_$data_t *data_out, status_$t *status);
+void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
+                 void *p5, status_$t *status);
 
 /*
- * STOP_$WATCH_TRACE - Stopwatch with trace mode
- *
- * Extended version of STOP_$WATCH that enables trace logging
- * of all start/stop events.
- *
- * Original address: 0x00e81ab2
+ * STOP_$WATCH_UII (0x00E81A56) and STOP_$WATCH_TRACE (0x00E81AB2) are
+ * exception handlers: they save registers with `movem.l`, run at the
+ * interrupt level the trap established, and end in `rte`.  They are not
+ * callable from C and are emitted in stop/sau2/watch.s; no prototypes are
+ * declared here.
  */
-void STOP_$WATCH_TRACE(int16_t *operation, uint16_t *slot, int16_t *parent,
-                       void *param4, stop_$data_t *data_out, status_$t *status);
+
+/*
+ * STOP_$WATCH_TRACE_FLAG (0x00E21596)
+ *
+ * Set (`st`) by STOP_$WATCH_UII at 0x00E81AA6 and cleared (`sf`) by
+ * STOP_$WATCH_TRACE at 0x00E81ABC.  The FIM trace-exception dispatcher reads
+ * it at 0x00E215A6 to decide whether the trace trap it is handling belongs to
+ * the stopwatch.  A Domain boolean: 0xFF true, tested with `< 0`.
+ *
+ * The cell physically sits inside the FIM data region, but it is named and
+ * owned by the stopwatch; it is defined in stop/stop_data.c.
+ */
+extern boolean STOP_$WATCH_TRACE_FLAG;
 
 #endif /* STOP_H */

@@ -99,8 +99,6 @@ void XPD_$POST_EVENT(xpd_$event_type_t *event_type, status_$t *status_val,
     ec_$eventcount_t *debugger_ec;
     int16_t debugger_idx;
     uint8_t event_code;
-    ec_$eventcount_t *ecs[3];
-    int32_t wait_val;
 
     /* Calculate our target state location */
     target_offset = PROC1_$AS_ID * TARGET_STATE_SIZE;
@@ -141,13 +139,16 @@ void XPD_$POST_EVENT(xpd_$event_type_t *event_type, status_$t *status_val,
     debugger_ec = (ec_$eventcount_t *)(XPD_DATA_BASE + (debugger_idx << 4) + 0x478);
     EC_$ADVANCE(debugger_ec);
 
-    /* Wait on our own EC for debugger response */
-    ecs[0] = target_ec;
-    ecs[1] = NULL;
-    ecs[2] = NULL;
-    wait_val = 1;
-
-    EC_$WAIT(ecs, &wait_val);
+    /*
+     * Wait on our own EC for the debugger's response.
+     *
+     * 0x00E7510A-0x00E7511C pushes six longwords: the three wait values
+     * (0, 0, 1 -- pushed last-to-first, so vals = {1, 0, 0}) and then the
+     * three eventcount pointers (NULL, NULL, A2 -- ecs = {target_ec, NULL,
+     * NULL}).  Both arrays go by value; the result in D0 is discarded.
+     */
+    (void)EC_$WAIT((ec_$wait_ecs_t){{target_ec, NULL, NULL}},
+                   (ec_$wait_vals_t){{1, 0, 0}});
 
     /* Return the debugger's response (bits 4-5 of state byte) */
     *response_ret = ((*target_state_word >> 8) & RESPONSE_MASK) >> 4;

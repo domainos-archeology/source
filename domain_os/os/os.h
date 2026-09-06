@@ -25,8 +25,20 @@ extern uint32_t OS_$REV[];
 // Flag indicating shutdown is in progress
 extern char OS_$SHUTTING_DOWN_FLAG;
 
-/* Boot device identifier (0xE82728), set by OS_$INIT */
-extern uint16_t OS_$BOOT_DEVICE;
+/*
+ * Boot device record (0xE82728), filled in by OS_$INIT at 0x00E338F2:
+ *   +0x00  move.w (-0x28,A6),(A3)       the boot device number
+ *   +0x02  clr.w  (0x2,A3)
+ *   +0x04  move.l (-0x26,A6),(0x4,A3)   the {controller, unit} longword
+ */
+typedef struct os_$boot_device_t {
+    int16_t device;   /* +0x00 */
+    int16_t reserved; /* +0x02, always cleared */
+    int16_t ctlr;     /* +0x04 */
+    int16_t unit;     /* +0x06 */
+} os_$boot_device_t;
+
+extern os_$boot_device_t OS_$BOOT_DEVICE;
 
 // Shutdown eventcount
 extern ec_$eventcount_t OS_$SHUTDOWN_EC;
@@ -110,15 +122,22 @@ extern void OS_$SHUTDOWN(status_$t *status);
 // Checksum Functions
 // =============================================================================
 
-// OS_$CHKSUM - Calculate checksum (stub implementation)
-// Currently returns 0 for both outputs
-// @param param_1: First parameter
-// @param param_2: Second parameter
-// @param param_3: Third parameter
-// @param result_byte: Pointer to receive byte result (set to 0)
-// @param result_long: Pointer to receive long result (set to 0)
+/*
+ * OS_$CHKSUM (0x00E6D698) - a stub in this build.
+ *
+ * The body is only `clr.l (A0)` on the argument at (0x18,A6) and `clr.b (A1)`
+ * on the one at (0x14,A6): the enable flag is cleared and the status is set
+ * to status_$ok.  The first three arguments are never read.  OS_$INIT calls
+ * it twice, at 0x00E340E0 and 0x00E34112.
+ *
+ * @param param_1    unused (by reference)
+ * @param param_2    unused (by reference)
+ * @param param_3    unused (by reference)
+ * @param enable     enable flag, cleared on return
+ * @param status_ret set to status_$ok
+ */
 extern void OS_$CHKSUM(void *param_1, void *param_2, void *param_3,
-                       char *result_byte, uint32_t *result_long);
+                       char *enable, status_$t *status_ret);
 
 // =============================================================================
 // Eventcount Functions
