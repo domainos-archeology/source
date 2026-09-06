@@ -10,6 +10,7 @@
 #define MISC_INTERNAL_H
 
 #include "misc/misc.h"
+#include "misc/crash_system.h"
 
 /*
  * LITES_LOC - Display-memory address of the status lights (0 = disabled).

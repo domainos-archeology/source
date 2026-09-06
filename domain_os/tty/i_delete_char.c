@@ -69,7 +69,7 @@ void TTY_$I_DELETE_CHAR(tty_desc_t *tty)
     }
 
     /* Get the character we just deleted */
-    ch = tty->input_buffer[tty->input_tail];
+    ch = tty->input_buffer[tty->input_tail - 1];
 
     if (ch == 0x09) {
         /* TAB: calculate how many columns it occupied */

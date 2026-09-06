@@ -59,6 +59,29 @@
     )
 
 /*
+ * SET_IPL7 - Raise the interrupt priority to 7 WITHOUT saving the old SR
+ *
+ * Models a bare `ori #0x700,SR` in the original code.  Unlike
+ * DISABLE_INTERRUPTS there is no saved value, because the corresponding
+ * exit is a forced `andi #-0x701,SR` (SET_IPL0) rather than a restore.
+ * See ML_$EXCLUSION_STOP (0x00E20E8A, 0x00E20EAC) and ML_$UNLOCK
+ * (0x00E20B6A).
+ */
+#define SET_IPL7() \
+    __asm__ volatile ("ori.w #0x0700, %%sr" : : : "cc", "memory")
+
+/*
+ * SET_IPL0 - Force the interrupt priority level to 0
+ *
+ * Models `andi #-0x701,SR` (i.e. andi.w #0xF8FF,SR), which clears the IPL
+ * field outright.  This is NOT a restore of a previously saved SR: the
+ * Domain kernel's lock-release paths deliberately drop to IPL 0 on exit.
+ * See ML_$UNLOCK 0x00E20EEA and ML_$EXCLUSION_STOP 0x00E20E9C.
+ */
+#define SET_IPL0() \
+    __asm__ volatile ("andi.w #0xF8FF, %%sr" : : : "cc", "memory")
+
+/*
  * GET_SR - Read the current status register
  *
  * Returns the current SR value without modifying it.

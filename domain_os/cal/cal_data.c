@@ -18,10 +18,8 @@ uint CAL_$LAST_VALID_TIME;
 /* Days per month lookup table */
 short CAL_$DAYS_PER_MONTH[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
-/* Hardware clock registers - these are memory-mapped, so we can't really define them here */
-/* On non-M68K platforms, these would need to be handled differently */
-#ifndef M68K
-volatile char CAL_$CONTROL_VIRTUAL_ADDR;
-volatile char CAL_$WRITE_DATA_VIRTUAL_ADDR;
-volatile char CAL_$READ_DATA_VIRTUAL_ADDR;
-#endif
+/*
+ * The MSM5832 RTC registers are memory-mapped at fixed addresses and are
+ * reached through the CAL_$RTC_* macros in cal/cal.h, so there is nothing
+ * to define here.
+ */

@@ -256,7 +256,13 @@ void TIME_$ADVANCE(uint16_t *delay_type, clock_t *delay, void *ec,
  *
  * Original address: 0x00e164a4
  */
-void TIME_$CANCEL(uint32_t *ec, void *elem, status_$t *status);
+/*
+ * The first argument is a by-value longword (0x00E164DC reads it with
+ * `move.l (0x8,A6),-(SP)` and passes it as the wait value to EC_$WAIT), not a
+ * pointer.  Callers push it with `pea (0x1).w`.
+ */
+void TIME_$CANCEL(int32_t wait_value, time_queue_elem_t *elem,
+                  status_$t *status);
 
 /*
  * TIME_$WAIT - Wait for a specified time

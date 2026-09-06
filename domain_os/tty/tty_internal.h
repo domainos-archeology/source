@@ -393,14 +393,6 @@ extern uint32_t DAT_00e2ddd8;
 extern uint8_t tty_$word_sep_bitmap[];
 
 /*
- * status_$t_00e1bcf8 - Error status for crash handling
- *
- * Status code passed to CRASH_SYSTEM when crash char received.
- * Original address: 0x00e1bcf8
- */
-extern status_$t status_$t_00e1bcf8;
-
-/*
  * PTR_TTY_$I_DXM_SIGNAL - Pointer to TTY_$I_DXM_SIGNAL function
  *
  * Used for DXM callback registration.

@@ -1,19 +1,21 @@
 /*
- * time/test/test_read_cal.c - Unit tests for TIME_$READ_CAL
+ * time/test/test_read_cal.c - Unit tests for TIME_$READ_CAL (0x00E2ADFC)
  *
- * Tests the RTC reading and calendar-to-ticks/seconds conversion.
- * We mock the hardware RTC registers and exercise the full function
- * to verify:
- *   1. BCD digit reading from the chip
- *   2. March-based calendar day count formula
- *   3. Time-of-day to seconds conversion
- *   4. Seconds to 48-bit clock tick conversion
- *   5. Leap year detection and flag write-back
+ * The real time/read_cal.c is #included below and driven through a mock
+ * OKI MSM5832: the host implementations of cal_$rtc_write_reg /
+ * cal_$rtc_read_reg (declared in cal/cal.h for ARCH_HOST) decode the control
+ * byte exactly as the chip would, so the function walks the real read
+ * protocol - assert HOLD, select each register with READ+HOLD, complement the
+ * inverted data - and the tests assert on what it actually returns.
+ *
+ * Cross-checks use an independent Gregorian seconds-since-1980 computation
+ * and a 64-bit multiply, not a copy of the assembly's formulas.
  */
+
+#include "time/time_internal.h"
 
 #include <stdio.h>
 #include <string.h>
-#include <stdint.h>
 
 /* ============================================================================
  * Test framework
@@ -24,11 +26,12 @@ static int tests_failed = 0;
 
 #define TEST(name) static void test_##name(void)
 #define RUN_TEST(name) do { \
+    int _before = tests_failed; \
     printf("  Running %s... ", #name); \
+    fflush(stdout); \
     test_##name(); \
-    tests_passed++; \
-    printf("PASSED\n"); \
-} while(0)
+    if (tests_failed == _before) { tests_passed++; printf("PASSED\n"); } \
+} while (0)
 
 #define ASSERT_EQ(expected, actual) do { \
     unsigned long _e = (unsigned long)(expected); \
@@ -39,201 +42,174 @@ static int tests_failed = 0;
         tests_failed++; \
         return; \
     } \
-} while(0)
-
-#define ASSERT_NE(not_expected, actual) do { \
-    unsigned long _ne = (unsigned long)(not_expected); \
-    unsigned long _a = (unsigned long)(actual); \
-    if (_ne == _a) { \
-        printf("FAILED\n    Did not expect: 0x%lx at line %d\n", _ne, __LINE__); \
-        tests_failed++; \
-        return; \
-    } \
-} while(0)
+} while (0)
 
 /* ============================================================================
- * Minimal type stubs
+ * Mock OKI MSM5832
+ *
+ * regs[] is indexed by the MSM5832 register address (0 = S1 .. 12 = Y10) and
+ * holds the true 4-bit digit; the Apollo interface inverts the data lines, so
+ * the read port hands back the complement.
  * ============================================================================ */
 
-typedef unsigned int uint;
-typedef unsigned short ushort;
-typedef unsigned char uchar;
-typedef long status_$t;
+static uint8_t rtc_regs[MSM5832_NUM_REGS];
+static int rtc_selected;          /* register latched by the last READ+HOLD */
+static uint8_t rtc_pending_data;  /* last value put on the write-data port */
 
-typedef struct {
-    uint high;
-    ushort low;
-} clock_t;
+/* Log of every control byte written, in order */
+#define MAX_CTRL 64
+static uint8_t rtc_control_log[MAX_CTRL];
+static int rtc_control_count;
 
-/* ============================================================================
- * Mock RTC hardware registers
- *
- * In the real system, these are memory-mapped at:
- *   CAL_$CONTROL_VIRTUAL_ADDR    = 0xFFA820 (base + 0x20)
- *   CAL_$WRITE_DATA_VIRTUAL_ADDR = 0xFFA822 (base + 0x22)
- *   CAL_$READ_DATA_VIRTUAL_ADDR  = 0xFFA824 (base + 0x24)
- * ============================================================================ */
+/* Write-back bookkeeping (the leap-year flag update) */
+static int rtc_writeback_count;
+static int rtc_writeback_reg;
+static uint8_t rtc_writeback_value;
 
-volatile char CAL_$CONTROL_VIRTUAL_ADDR;
-volatile char CAL_$WRITE_DATA_VIRTUAL_ADDR;
-volatile char CAL_$READ_DATA_VIRTUAL_ADDR;
-
-/*
- * Tracking for leap year write-back verification.
- * The function writes back to the RTC when it detects a leap year.
- */
-static int leap_writeback_count = 0;
-static char last_writeback_data = 0;
-static char last_writeback_control = 0;
-
-/*
- * RTC digit values for the mock.
- * 13 BCD digits stored as the ones-complement value
- * that the chip would return (matching write_calendar convention).
- *
- * Index maps to control values: 0xC5, 0xB5, ..., 0x05
- */
-static uint8_t mock_rtc_digits[13];
-
-/* Current digit being read (advanced by control writes) */
-static int mock_digit_index;
-static int mock_read_phase;  /* 0 = waiting for start, 1 = reading */
-
-/*
- * Set mock RTC to represent a specific date/time.
- *
- * The RTC stores digits in ones-complement (~digit on chip).
- * Additional flags:
- *   - day_tens: bit 2 = leap year flag (from write_calendar)
- *   - hour_tens: bit 2 = 24-hour mode flag
- *
- * Parameters match CAL_$WRITE_CALENDAR convention.
- */
-static void set_mock_rtc(int year_2digit, int month, int day,
-                          int weekday, int hour, int minute, int second,
-                          int is_leap_year)
+void cal_$rtc_write_reg(uint16_t offset, uint8_t value)
 {
-    /* Store as ones-complement BCD digits (matching chip format) */
-    mock_rtc_digits[0]  = ~(uint8_t)(year_2digit / 10);     /* year tens */
-    mock_rtc_digits[1]  = ~(uint8_t)(year_2digit % 10);     /* year ones */
-    mock_rtc_digits[2]  = ~(uint8_t)(month / 10);           /* month tens */
-    mock_rtc_digits[3]  = ~(uint8_t)(month % 10);           /* month ones */
-
-    /* Day tens: value | (leap_flag << 2) in BCD, then ones-complement */
-    {
-        uint8_t day_tens = (uint8_t)(day / 10);
-        if (is_leap_year) {
-            day_tens |= 0x04;  /* Set leap year flag bit */
-        }
-        mock_rtc_digits[4] = ~day_tens;
+    if (offset == CAL_$RTC_WRITE_DATA_OFFSET) {
+        rtc_pending_data = value;
+        return;
     }
-    mock_rtc_digits[5]  = ~(uint8_t)(day % 10);             /* day ones */
-    mock_rtc_digits[6]  = ~(uint8_t)(weekday);              /* weekday */
-
-    /* Hour tens: value | 0x04 for 24-hour mode flag */
-    {
-        uint8_t hour_tens = (uint8_t)(hour / 10);
-        hour_tens |= 0x04;  /* 24-hour mode flag */
-        mock_rtc_digits[7] = ~hour_tens;
+    if (offset != CAL_$RTC_CONTROL_OFFSET) {
+        printf("FAILED\n    write to unexpected RTC offset 0x%02x\n", offset);
+        tests_failed++;
+        return;
     }
-    mock_rtc_digits[8]  = ~(uint8_t)(hour % 10);            /* hour ones */
-    mock_rtc_digits[9]  = ~(uint8_t)(minute / 10);          /* minute tens */
-    mock_rtc_digits[10] = ~(uint8_t)(minute % 10);          /* minute ones */
-    mock_rtc_digits[11] = ~(uint8_t)(second / 10);          /* second tens */
-    mock_rtc_digits[12] = ~(uint8_t)(second % 10);          /* second ones */
 
-    /* Reset mock state */
-    mock_digit_index = 0;
-    mock_read_phase = 0;
-    leap_writeback_count = 0;
-    last_writeback_data = 0;
-    last_writeback_control = 0;
+    if (rtc_control_count < MAX_CTRL) {
+        rtc_control_log[rtc_control_count] = value;
+    }
+    rtc_control_count++;
+
+    if ((value & CAL_$RTC_CTL_READ) != 0) {
+        rtc_selected = value >> CAL_$RTC_CTL_ADDR_SHIFT;
+    }
+    if ((value & CAL_$RTC_CTL_WRITE) != 0) {
+        rtc_writeback_reg = value >> CAL_$RTC_CTL_ADDR_SHIFT;
+        rtc_writeback_value = (uint8_t)(~rtc_pending_data & 0x0F);
+        rtc_regs[rtc_writeback_reg] = rtc_writeback_value;
+        rtc_writeback_count++;
+    }
 }
 
-/*
- * Hook to intercept control register writes.
- * Tracks which digit the function is requesting.
- */
-static void mock_control_write(char value)
+uint8_t cal_$rtc_read_reg(uint16_t offset)
 {
-    (void)value;  /* Used for tracking in the real mock */
+    if (offset != CAL_$RTC_READ_DATA_OFFSET) {
+        printf("FAILED\n    read from unexpected RTC offset 0x%02x\n", offset);
+        tests_failed++;
+        return 0;
+    }
+    if (rtc_selected < 0 || rtc_selected >= MSM5832_NUM_REGS) {
+        return 0xFF;
+    }
+    return (uint8_t)~rtc_regs[rtc_selected];
 }
 
 /* ============================================================================
- * We include the source file directly to test the static helpers too.
- * But first, we need to prevent the real headers from being included.
+ * Code under test
  * ============================================================================ */
 
-/* Prevent time_internal.h and its chain of includes */
-#define TIME_INTERNAL_H
-#define TIME_H
-#define BASE_H
-#define CAL_H
-#define ML_H
-#define EC_H
-#define DI_H
-#define PROC1_H
-#define PROC2_H
-#define TIMER_H
-#define FIM_H
-
-/*
- * Instead of the complex include chain, we directly provide what read_cal.c
- * needs: the clock_t type (defined above) and the hardware register externs
- * (defined above). Include the source file to get access to static helpers.
- */
 #include "../read_cal.c"
 
 /* ============================================================================
- * Helper: compute expected seconds since Apollo epoch
- *
- * Apollo epoch = January 1, 1980 00:00:00
- *
- * This is an independent computation (not using the March-based formula)
- * to serve as a cross-check.
+ * Fixture
  * ============================================================================ */
 
-static int is_leap_year_check(int year) {
+/*
+ * Load the mock chip with a date/time.  leap_flag sets D10 bit 2 and
+ * hour_24 sets H10 bit 3, exactly the two flag bits the hardware carries.
+ */
+static void set_rtc(int year_2digit, int month, int day, int weekday,
+                    int hour, int minute, int second, int leap_flag)
+{
+    memset(rtc_regs, 0, sizeof(rtc_regs));
+    rtc_regs[MSM5832_REG_Y10]  = (uint8_t)(year_2digit / 10);
+    rtc_regs[MSM5832_REG_Y1]   = (uint8_t)(year_2digit % 10);
+    rtc_regs[MSM5832_REG_MO10] = (uint8_t)(month / 10);
+    rtc_regs[MSM5832_REG_MO1]  = (uint8_t)(month % 10);
+    rtc_regs[MSM5832_REG_D10]  = (uint8_t)((day / 10)
+                                 | (leap_flag ? MSM5832_D10_LEAP_FLAG : 0));
+    rtc_regs[MSM5832_REG_D1]   = (uint8_t)(day % 10);
+    rtc_regs[MSM5832_REG_W]    = (uint8_t)weekday;
+    rtc_regs[MSM5832_REG_H10]  = (uint8_t)((hour / 10) | MSM5832_H10_24H_FLAG);
+    rtc_regs[MSM5832_REG_H1]   = (uint8_t)(hour % 10);
+    rtc_regs[MSM5832_REG_MI10] = (uint8_t)(minute / 10);
+    rtc_regs[MSM5832_REG_MI1]  = (uint8_t)(minute % 10);
+    rtc_regs[MSM5832_REG_S10]  = (uint8_t)(second / 10);
+    rtc_regs[MSM5832_REG_S1]   = (uint8_t)(second % 10);
+
+    rtc_selected = -1;
+    rtc_pending_data = 0;
+    rtc_control_count = 0;
+    rtc_writeback_count = 0;
+    rtc_writeback_reg = -1;
+    rtc_writeback_value = 0;
+}
+
+/* Run the real function against the currently loaded chip state. */
+static uint32_t read_cal(clock_t *clock_out)
+{
+    clock_t clock;
+    uint32_t seconds = 0;
+
+    clock.high = 0xDEADBEEFu;
+    clock.low = 0xBEEF;
+    TIME_$READ_CAL(&clock, &seconds);
+    if (clock_out != NULL) {
+        *clock_out = clock;
+    }
+    return seconds;
+}
+
+/* Convenience: load a date and read it back in one step. */
+static uint32_t read_date(int year_2digit, int month, int day,
+                          int hour, int minute, int second)
+{
+    set_rtc(year_2digit, month, day, 0, hour, minute, second, 0);
+    return read_cal(NULL);
+}
+
+/* ============================================================================
+ * Independent reference computations (deliberately NOT the assembly formulas)
+ * ============================================================================ */
+
+static int ref_is_leap(int year)
+{
     return (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
 }
 
-static int days_in_month_check(int month, int year) {
+static int ref_days_in_month(int month, int year)
+{
     static const int dim[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-    if (month == 2 && is_leap_year_check(year)) return 29;
+    if (month == 2 && ref_is_leap(year)) {
+        return 29;
+    }
     return dim[month - 1];
 }
 
-/*
- * Compute expected seconds from Jan 1, 1980 00:00:00 to the given date/time.
- */
-static uint32_t expected_seconds(int year, int month, int day,
-                                  int hour, int minute, int second)
+/* Seconds from 1980-01-01 00:00:00 to the given Gregorian date/time. */
+static uint32_t ref_seconds(int year, int month, int day,
+                            int hour, int minute, int second)
 {
     uint32_t days = 0;
+    int y, m;
 
-    /* Count full years from 1980 */
-    for (int y = 1980; y < year; y++) {
-        days += is_leap_year_check(y) ? 366 : 365;
+    for (y = 1980; y < year; y++) {
+        days += (uint32_t)(ref_is_leap(y) ? 366 : 365);
     }
-
-    /* Count full months in the target year */
-    for (int m = 1; m < month; m++) {
-        days += days_in_month_check(m, year);
+    for (m = 1; m < month; m++) {
+        days += (uint32_t)ref_days_in_month(m, year);
     }
+    days += (uint32_t)(day - 1);
 
-    /* Add days (1-based, so subtract 1) */
-    days += (day - 1);
-
-    return days * 86400u + hour * 3600u + minute * 60u + second;
+    return days * 86400u + (uint32_t)hour * 3600u
+         + (uint32_t)minute * 60u + (uint32_t)second;
 }
 
-/*
- * Compute expected 48-bit clock ticks from seconds.
- * ticks = seconds * 250000 (0x3D090)
- *
- * Returns via pointers to match clock_t layout.
- */
-static void expected_ticks(uint32_t seconds, uint32_t *high_out, uint16_t *low_out)
+/* ticks = seconds * 250000, split the way clock_t stores it. */
+static void ref_ticks(uint32_t seconds, uint32_t *high_out, uint16_t *low_out)
 {
     uint64_t ticks = (uint64_t)seconds * 250000ULL;
     *high_out = (uint32_t)(ticks >> 16);
@@ -241,524 +217,221 @@ static void expected_ticks(uint32_t seconds, uint32_t *high_out, uint16_t *low_o
 }
 
 /* ============================================================================
- * Helper: set up RTC and call TIME_$READ_CAL, return results
+ * Tests: the hardware protocol
  * ============================================================================ */
 
 /*
- * Simulate reading the RTC.
- *
- * Since we can't easily intercept the volatile register reads in the
- * do-while loop (the function reads CAL_$READ_DATA_VIRTUAL_ADDR which
- * is just a variable in our mock), we set CAL_$READ_DATA_VIRTUAL_ADDR
- * based on what control value was last written.
- *
- * For a simpler approach: we test the calendar math separately and
- * test the full function with a simplified mock.
+ * 0x00E2AE06..0x00E2AE32: assert HOLD, then walk the 13 register addresses
+ * from Y10 (0xC5) down to S1 (0x05) with READ + HOLD, then re-assert plain
+ * HOLD, and finally (0x00E2AE98) release it.
  */
-
-/* ============================================================================
- * Tests: March-based day count formula (isolated)
- *
- * The formula from the assembly:
- *   total_days = year_from_epoch * 365 + year_from_epoch / 4
- *              + march_month * 30
- *              + (march_month / 5) * 3
- *              + ((march_month % 5) + 1) / 2
- *              + day_of_month
- *              + 59
- *
- * Where:
- *   march_month: 0=March .. 11=February
- *   year_from_epoch: years since March 1981 in March-based calendar
- * ============================================================================ */
-
-/* Replicate the day count formula from the assembly */
-static uint16_t march_day_formula(uint16_t year_from_epoch,
-                                   uint16_t march_month,
-                                   uint16_t day_of_month)
+TEST(control_sequence)
 {
-    uint16_t total;
-    total  = (uint16_t)(year_from_epoch * 365) + (year_from_epoch >> 2);
-    total += (uint16_t)((uint16_t)march_month * 30);
-    total += (uint16_t)((uint16_t)(march_month / 5) * 3);
-    total += (uint16_t)(((uint16_t)(march_month % 5) + 1) >> 1);
-    total += day_of_month;
-    total += 59;
-    return total;
-}
-
-/*
- * Convert a calendar date to the march-based parameters and compute days.
- * Returns total_days matching the assembly formula.
- */
-static uint16_t date_to_days(int year_2digit, int month, int day)
-{
-    short march_month;
-    short march_flag;
-    short year_adj;
-    uint16_t year_from_epoch;
-
-    /* March-based month conversion */
-    march_flag = 1;
-    march_month = month - 3;
-    if (march_month < 0) {
-        march_flag = 0;
-        march_month += 12;
-    }
-
-    /* Year adjustment */
-    year_adj = year_2digit + march_flag;
-    year_from_epoch = (uint16_t)(year_adj - 81);
-    if ((int16_t)year_from_epoch < 0) {
-        year_from_epoch += 100;
-    }
-
-    return march_day_formula(year_from_epoch, (uint16_t)march_month, (uint16_t)day);
-}
-
-/* ============================================================================
- * Tests: Day count formula verification
- * ============================================================================ */
-
-/*
- * Test: January 1, 1980 (Apollo epoch)
- * Expected: 0 days from epoch
- */
-TEST(days_epoch) {
-    uint16_t days = date_to_days(80, 1, 1);
-    /* Day 1 of 1980 = 0 days elapsed since Jan 1 */
-    /* The formula gives total_days for the START of the day */
-    /* For Jan 1, 1980: march_month=10 (Jan), year from epoch...
-     * Let's compute manually:
-     * month=1 < 3, so march_flag=0, march_month=10
-     * year_adj = 80+0 = 80, year_from_epoch = 80-81 = -1 -> +100 = 99
-     * days = 99*365 + 99/4 + 10*30 + (10/5)*3 + ((10%5)+1)/2 + 1 + 59
-     *      = 36135 + 24 + 300 + 6 + 0 + 1 + 59
-     *      = 36525
-     * But 36525 = 100 * 365.25, which is the number of days in 100 years.
-     * Actually 36525 = 100 * 365 + 25 = 36525.
-     * This is correct for the epoch (wraps around the 100-year cycle).
-     */
-    /* The function produces seconds = total_days * 86400 using 16-bit intermediate.
-     * But 36525 * 2 = 73050, which truncated to 16-bit = 73050 (fits!).
-     * Then 73050 * 43200 = 3,155,760,000.
-     * Plus time-of-day = 0.
-     * So total_seconds = 3,155,760,000.
-     * But the real epoch is 0 seconds...
-     *
-     * The formula is designed to work modulo 100 years (the 2-digit year range).
-     * For year=80, month=Jan: year_from_epoch=99 represents "-1 year" in the
-     * March-based system, which wraps correctly because:
-     * 99 * 365 + 24 = 36159 days for the year component
-     * + month 10 (Jan) offset + day 1 + 59 adjustment
-     * = 36525 total days
-     * 36525 * 86400 = 3,155,760,000 seconds
-     * But this wraps: (uint16_t)(36525 * 2) * 43200 computed in assembly
-     * = 73050 * 43200 = 3,155,760,000
-     * 3,155,760,000 mod 2^32 = 3,155,760,000 (fits in 32 bits)
-     *
-     * The KEY insight: the formula gives absolute day count that
-     * wraps such that epoch maps to 0 seconds.
-     * Check: 100 years * 365.25 days/year * 86400 sec/day = 3,155,760,000
-     * And 2^32 = 4,294,967,296.
-     * So it doesn't wrap modulo 2^32.
-     *
-     * Hmm, we need to verify this differently. Let me test relative dates.
-     */
-    (void)days;
-}
-
-/*
- * Test: Verify relative day counts between known dates.
- * March 1, 1980 vs March 2, 1980 should differ by 1.
- */
-TEST(days_march_consecutive) {
-    uint16_t d1 = date_to_days(80, 3, 1);
-    uint16_t d2 = date_to_days(80, 3, 2);
-    ASSERT_EQ(1, (uint16_t)(d2 - d1));
-}
-
-/*
- * Test: January vs February 1981 (31 days apart)
- */
-TEST(days_jan_to_feb) {
-    uint16_t d1 = date_to_days(81, 1, 1);
-    uint16_t d2 = date_to_days(81, 2, 1);
-    ASSERT_EQ(31, (uint16_t)(d2 - d1));
-}
-
-/*
- * Test: Full year from March 1980 to March 1981 = 365 days.
- * In the March-based calendar, the leap day (Feb 29) falls at the END
- * of the year cycle. The March 1980 - Feb 1981 cycle does NOT include
- * a Feb 29 (1981 is not a leap year), so it's 365 days.
- */
-TEST(days_full_year_no_leap_in_cycle) {
-    uint16_t d1 = date_to_days(80, 3, 1);
-    uint16_t d2 = date_to_days(81, 3, 1);
-    ASSERT_EQ(365, (uint16_t)(d2 - d1));
-}
-
-/*
- * Test: Full year from March 1983 to March 1984 = 366 days.
- * This cycle includes Feb 29, 1984 (1984 is a leap year).
- */
-TEST(days_full_year_leap) {
-    uint16_t d1 = date_to_days(83, 3, 1);
-    uint16_t d2 = date_to_days(84, 3, 1);
-    ASSERT_EQ(366, (uint16_t)(d2 - d1));
-}
-
-/*
- * Test: Full year from March 1981 to March 1982 = 365 days (1981 not leap)
- */
-TEST(days_full_year_non_leap) {
-    uint16_t d1 = date_to_days(81, 3, 1);
-    uint16_t d2 = date_to_days(82, 3, 1);
-    ASSERT_EQ(365, (uint16_t)(d2 - d1));
-}
-
-/*
- * Test: Month lengths in the March-based formula.
- * Verify that consecutive month starts have the right gaps.
- */
-TEST(days_month_lengths) {
-    /* Test all month gaps for year 1985 (non-leap) */
-    static const int expected_lengths[] = {
-        /* Jan->Feb */ 31, /* Feb->Mar */ 28, /* Mar->Apr */ 31,
-        /* Apr->May */ 30, /* May->Jun */ 31, /* Jun->Jul */ 30,
-        /* Jul->Aug */ 31, /* Aug->Sep */ 31, /* Sep->Oct */ 30,
-        /* Oct->Nov */ 31, /* Nov->Dec */ 30
+    int i;
+    static const uint8_t expected_read_controls[MSM5832_NUM_REGS] = {
+        0xC5, 0xB5, 0xA5, 0x95, 0x85, 0x75, 0x65,
+        0x55, 0x45, 0x35, 0x25, 0x15, 0x05
     };
 
-    for (int m = 1; m <= 11; m++) {
-        uint16_t d1 = date_to_days(85, m, 1);
-        uint16_t d2 = date_to_days(85, m + 1, 1);
-        uint16_t gap = (uint16_t)(d2 - d1);
-        if (gap != (uint16_t)expected_lengths[m - 1]) {
-            printf("FAILED\n    Month %d->%d: expected %d days, got %d\n",
-                   m, m + 1, expected_lengths[m - 1], gap);
+    set_rtc(85, 6, 17, 1, 14, 35, 9, 0);
+    (void)read_cal(NULL);
+
+    /* HOLD + 13 register selects + HOLD + release, no leap write-back */
+    ASSERT_EQ(0, rtc_writeback_count);
+    ASSERT_EQ(1 + MSM5832_NUM_REGS + 2, rtc_control_count);
+
+    ASSERT_EQ(CAL_$RTC_CTL_HOLD, rtc_control_log[0]);
+    for (i = 0; i < MSM5832_NUM_REGS; i++) {
+        if (rtc_control_log[1 + i] != expected_read_controls[i]) {
+            printf("FAILED\n    control %d = 0x%02x, expected 0x%02x\n",
+                   i, rtc_control_log[1 + i], expected_read_controls[i]);
             tests_failed++;
             return;
         }
     }
-    /* Dec->Jan (next year): 31 days */
-    {
-        uint16_t d1 = date_to_days(85, 12, 1);
-        uint16_t d2 = date_to_days(86, 1, 1);
-        ASSERT_EQ(31, (uint16_t)(d2 - d1));
-    }
+    ASSERT_EQ(CAL_$RTC_CTL_HOLD, rtc_control_log[1 + MSM5832_NUM_REGS]);
+    ASSERT_EQ(0x00, rtc_control_log[2 + MSM5832_NUM_REGS]);
 }
 
 /*
- * Test: Leap year month lengths (1984 is a leap year).
- * February should have 29 days.
+ * 0x00E2AE72..0x00E2AE92: when the March-based year contains a February 29,
+ * the D10 register is rewritten with bit 2 set (0x81 select, 0x83 strobe,
+ * 0x81 release).
  */
-TEST(days_month_lengths_leap) {
-    uint16_t d1 = date_to_days(84, 2, 1);
-    uint16_t d2 = date_to_days(84, 3, 1);
-    ASSERT_EQ(29, (uint16_t)(d2 - d1));
+TEST(leap_write_back)
+{
+    /* December 1983 sits in the March 1983 - February 1984 window. */
+    set_rtc(83, 12, 25, 0, 12, 0, 0, 0);
+    (void)read_cal(NULL);
+    ASSERT_EQ(1, rtc_writeback_count);
+    ASSERT_EQ(MSM5832_REG_D10, rtc_writeback_reg);
+    /* day 25 -> tens 2, plus the leap bit */
+    ASSERT_EQ(2 | MSM5832_D10_LEAP_FLAG, rtc_writeback_value);
+
+    /* The three control bytes of the write-back handshake */
+    ASSERT_EQ(CAL_$RTC_CTL_ADDR_HOLD(MSM5832_REG_D10),
+              rtc_control_log[1 + MSM5832_NUM_REGS + 1]);
+    ASSERT_EQ(CAL_$RTC_CTL_WRITE_HOLD(MSM5832_REG_D10),
+              rtc_control_log[1 + MSM5832_NUM_REGS + 2]);
+    ASSERT_EQ(CAL_$RTC_CTL_ADDR_HOLD(MSM5832_REG_D10),
+              rtc_control_log[1 + MSM5832_NUM_REGS + 3]);
+}
+
+TEST(no_leap_write_back)
+{
+    /* March 1984 - February 1985 contains no leap day. */
+    set_rtc(84, 6, 1, 0, 0, 0, 0, 0);
+    (void)read_cal(NULL);
+    ASSERT_EQ(0, rtc_writeback_count);
 }
 
 /*
- * Test: January 1, 1980 to January 2, 1980 = 1 day
+ * 0x00E2AEC8 / 0x00E2AEDE: the day-tens and hour-tens digits are masked with
+ * 3, so an already-set leap or 24-hour flag never leaks into the arithmetic.
  */
-TEST(days_jan1_to_jan2_1980) {
-    uint16_t d1 = date_to_days(80, 1, 1);
-    uint16_t d2 = date_to_days(80, 1, 2);
-    ASSERT_EQ(1, (uint16_t)(d2 - d1));
-}
+TEST(flag_bits_are_masked_off)
+{
+    uint32_t with_flag, without_flag;
 
-/*
- * Test: 5 years from Mar 1981 to Mar 1986.
- * Avoids the 100-year cycle boundary (Jan/Feb 1980 wraps year_from_epoch).
- * 1981: 365, 1982: 365, 1983: 365, 1984: 366 (leap), 1985: 365 = 1826 days
- */
-TEST(days_five_years) {
-    uint16_t d1 = date_to_days(81, 3, 1);
-    uint16_t d2 = date_to_days(86, 3, 1);
-    ASSERT_EQ(1826, (uint16_t)(d2 - d1));
-}
+    set_rtc(85, 6, 17, 0, 14, 35, 9, 1);   /* D10 bit 2 already set */
+    with_flag = read_cal(NULL);
 
-/*
- * Test: 4 years including two leap year cycles.
- * Mar 1980 to Mar 1984: includes Feb 1984 (leap).
- * 365 + 365 + 365 + 366 = 1461 days.
- */
-TEST(days_four_years_with_leap) {
-    uint16_t d1 = date_to_days(80, 3, 1);
-    uint16_t d2 = date_to_days(84, 3, 1);
-    ASSERT_EQ(1461, (uint16_t)(d2 - d1));
+    set_rtc(85, 6, 17, 0, 14, 35, 9, 0);
+    without_flag = read_cal(NULL);
+
+    ASSERT_EQ(without_flag, with_flag);
+    ASSERT_EQ(ref_seconds(1985, 6, 17, 14, 35, 9), with_flag);
 }
 
 /* ============================================================================
- * Tests: Seconds-to-ticks conversion (the * 250000 part)
- *
- * This tests the partial-product multiplication used in the function.
- * We can verify against a simple 64-bit multiply.
+ * Tests: the value the function actually returns
  * ============================================================================ */
 
-/*
- * Helper: perform the same multiplication as the assembly code.
- * seconds * 0x3D090 using 16-bit partial products.
- */
-static void sec_to_ticks_asm_style(uint32_t seconds,
-                                    uint32_t *high_out, uint16_t *low_out)
+TEST(seconds_match_gregorian)
 {
-    uint16_t sec_low = (uint16_t)(seconds & 0xFFFF);
-    uint16_t sec_high = (uint16_t)(seconds >> 16);
+    struct { int y2, mo, d, h, mi, s; int year; } cases[] = {
+        { 80,  3,  1,  0,  0,  0, 1980 },
+        { 80, 12, 31, 23, 59, 59, 1980 },
+        { 81,  1,  1,  0,  0,  0, 1981 },
+        { 84,  2, 29,  6, 15, 30, 1984 },
+        { 85,  6, 17, 14, 35,  9, 1985 },
+        { 85,  7,  4, 12, 30, 45, 1985 },
+        { 89, 12, 31, 23, 59, 59, 1989 },
+        { 99,  9,  9,  9,  9,  9, 1999 },
+    };
+    unsigned n;
 
-    uint32_t product_low = (uint32_t)sec_low * 0xD090u;
-    *low_out = (uint16_t)product_low;
-
-    uint32_t product_high = (product_low >> 16)
-                           + (uint32_t)sec_low * 3u
-                           + (uint32_t)sec_high * 0xD090u;
-
-    /* Add sec_high * 3 to upper 16 bits */
-    uint32_t result_high = ((uint32_t)((uint16_t)(product_high >> 16) + sec_high * 3) << 16)
-                          | (product_high & 0xFFFF);
-
-    *high_out = result_high;
-}
-
-TEST(ticks_zero) {
-    uint32_t high;
-    uint16_t low;
-    sec_to_ticks_asm_style(0, &high, &low);
-    ASSERT_EQ(0, high);
-    ASSERT_EQ(0, low);
-}
-
-TEST(ticks_one_second) {
-    uint32_t high, exp_high;
-    uint16_t low, exp_low;
-
-    sec_to_ticks_asm_style(1, &high, &low);
-    expected_ticks(1, &exp_high, &exp_low);
-
-    ASSERT_EQ(exp_high, high);
-    ASSERT_EQ(exp_low, low);
-}
-
-TEST(ticks_one_day) {
-    uint32_t high, exp_high;
-    uint16_t low, exp_low;
-
-    sec_to_ticks_asm_style(86400, &high, &low);
-    expected_ticks(86400, &exp_high, &exp_low);
-
-    ASSERT_EQ(exp_high, high);
-    ASSERT_EQ(exp_low, low);
-}
-
-TEST(ticks_one_year) {
-    uint32_t high, exp_high;
-    uint16_t low, exp_low;
-    uint32_t sec = 365 * 86400;
-
-    sec_to_ticks_asm_style(sec, &high, &low);
-    expected_ticks(sec, &exp_high, &exp_low);
-
-    ASSERT_EQ(exp_high, high);
-    ASSERT_EQ(exp_low, low);
-}
-
-TEST(ticks_large_value) {
-    uint32_t high, exp_high;
-    uint16_t low, exp_low;
-    /* 5 years of seconds (approximately) */
-    uint32_t sec = 5 * 365 * 86400;
-
-    sec_to_ticks_asm_style(sec, &high, &low);
-    expected_ticks(sec, &exp_high, &exp_low);
-
-    ASSERT_EQ(exp_high, high);
-    ASSERT_EQ(exp_low, low);
-}
-
-/* ============================================================================
- * Tests: Leap year detection
- *
- * The function checks: (year_from_epoch + 1) & 3 == 0
- * In the March-based system where year_from_epoch counts from March 1981:
- *   - year_from_epoch = 3 -> (3+1)&3=0 -> leap (March 1984 - Feb 1985, Feb 1984 has 29 days? No!)
- *
- * Actually, let me think about this more carefully:
- *   - 2-digit year = 84, month = March: march_flag = 1, year_adj = 85, year_from_epoch = 4
- *     (4+1)&3 = 1, NOT leap. But 1984 IS a leap year.
- *     However, in the March-based system, 1984's leap day (Feb 29) is in the
- *     March 1983 - Feb 1984 year, which has year_from_epoch = 3.
- *     (3+1)&3 = 0 -> leap. Correct!
- *   - 2-digit year = 80, month = Jan: march_flag = 0, year_adj = 80, year_from_epoch = 99
- *     (99+1)&3 = 100&3 = 0 -> leap. Jan 1980 is in the Feb 1980 window. Correct!
- * ============================================================================ */
-
-/*
- * Helper to check if the function considers a given date a leap year.
- */
-static int check_leap(int year_2digit, int month)
-{
-    short march_month, march_flag, year_adj;
-    uint16_t year_from_epoch;
-
-    march_flag = 1;
-    march_month = month - 3;
-    if (march_month < 0) {
-        march_flag = 0;
-        march_month += 12;
+    for (n = 0; n < sizeof(cases) / sizeof(cases[0]); n++) {
+        uint32_t got = read_date(cases[n].y2, cases[n].mo, cases[n].d,
+                                 cases[n].h, cases[n].mi, cases[n].s);
+        uint32_t want = ref_seconds(cases[n].year, cases[n].mo, cases[n].d,
+                                    cases[n].h, cases[n].mi, cases[n].s);
+        if (got != want) {
+            printf("FAILED\n    %04d-%02d-%02d %02d:%02d:%02d -> %u, "
+                   "expected %u\n",
+                   cases[n].year, cases[n].mo, cases[n].d, cases[n].h,
+                   cases[n].mi, cases[n].s, got, want);
+            tests_failed++;
+            return;
+        }
     }
-    (void)march_month;
-
-    year_adj = year_2digit + march_flag;
-    year_from_epoch = (uint16_t)(year_adj - 81);
-    if ((int16_t)year_from_epoch < 0) {
-        year_from_epoch += 100;
-    }
-
-    return ((year_from_epoch + 1) & 3) == 0;
 }
 
-TEST(leap_1980_jan) {
-    /* Jan 1980: 1980 is a leap year, Jan is before Feb so leap day hasn't passed */
-    ASSERT_EQ(1, check_leap(80, 1));
-}
-
-TEST(leap_1980_feb) {
-    /* Feb 1980: still in the leap year window */
-    ASSERT_EQ(1, check_leap(80, 2));
-}
-
-TEST(leap_1980_mar) {
-    /* Mar 1980: now past the leap day, in the March 1980-Feb 1981 window */
-    /* 1981 is NOT a leap year */
-    ASSERT_EQ(0, check_leap(80, 3));
-}
-
-TEST(leap_1983_dec) {
-    /* Dec 1983: in March 1983 - Feb 1984 window. 1984 IS a leap year. */
-    ASSERT_EQ(1, check_leap(83, 12));
-}
-
-TEST(leap_1984_feb) {
-    /* Feb 1984: the actual leap day month */
-    ASSERT_EQ(1, check_leap(84, 2));
-}
-
-TEST(leap_1984_mar) {
-    /* Mar 1984: past the leap day. March 1984 - Feb 1985. 1985 not leap. */
-    ASSERT_EQ(0, check_leap(84, 3));
-}
-
-TEST(leap_1985_all) {
-    /* 1985: not a leap year in any month-window from March on */
-    ASSERT_EQ(0, check_leap(85, 3));
-    ASSERT_EQ(0, check_leap(85, 6));
-    ASSERT_EQ(0, check_leap(85, 12));
-}
-
-/* ============================================================================
- * Tests: Full date-to-seconds conversion
- *
- * These test the complete formula: days * 86400 + hours * 3600 + min * 60 + sec
- * using the March-based day count.
- *
- * We compare against our independent expected_seconds() helper.
- * ============================================================================ */
-
-/*
- * Helper: compute total_seconds using the assembly formula.
- * This replicates the full computation from read_cal.c.
- */
-static uint32_t assembly_date_to_seconds(int year_2digit, int month, int day,
-                                          int hour, int minute, int second)
+TEST(clock_is_seconds_times_250000)
 {
-    uint16_t total_days = date_to_days(year_2digit, month, day);
-    uint32_t total_seconds;
+    clock_t clock;
+    uint32_t seconds, want_high;
+    uint16_t want_low;
 
-    /* Time of day computation (matching assembly's 16-bit intermediate) */
-    total_seconds = (uint32_t)(uint16_t)(
-        ((hour / 10 & 0x3) * 10 + hour % 10) * 60);
-    total_seconds += (uint16_t)((minute / 10) * 10 + minute % 10);
-    total_seconds = (uint32_t)(uint16_t)total_seconds * 60;
-    total_seconds += (uint32_t)(uint16_t)((second / 10) * 10)
-                     + (uint16_t)(second % 10);
+    set_rtc(85, 6, 17, 0, 14, 35, 9, 0);
+    seconds = read_cal(&clock);
+    ref_ticks(seconds, &want_high, &want_low);
+    ASSERT_EQ(want_high, clock.high);
+    ASSERT_EQ(want_low, clock.low);
 
-    /* Day conversion with 16-bit truncation */
-    total_seconds += (uint32_t)(uint16_t)(total_days * 2) * 43200u;
+    /* Again at a much larger value, to exercise the high partial product */
+    set_rtc(99, 12, 31, 0, 23, 59, 59, 0);
+    seconds = read_cal(&clock);
+    ref_ticks(seconds, &want_high, &want_low);
+    ASSERT_EQ(want_high, clock.high);
+    ASSERT_EQ(want_low, clock.low);
+}
 
-    return total_seconds;
+TEST(time_of_day_components)
+{
+    uint32_t base = read_date(85, 6, 15, 0, 0, 0);
+    ASSERT_EQ(base + 3600, read_date(85, 6, 15, 1, 0, 0));
+    ASSERT_EQ(base + 60,   read_date(85, 6, 15, 0, 1, 0));
+    ASSERT_EQ(base + 1,    read_date(85, 6, 15, 0, 0, 1));
+    ASSERT_EQ(base + 23u * 3600u + 59u * 60u + 59u,
+              read_date(85, 6, 15, 23, 59, 59));
+}
+
+TEST(consecutive_days_differ_by_86400)
+{
+    ASSERT_EQ(86400, read_date(85, 3, 2, 0, 0, 0) - read_date(85, 3, 1, 0, 0, 0));
+    /* across a month boundary */
+    ASSERT_EQ(86400, read_date(85, 4, 1, 0, 0, 0) - read_date(85, 3, 31, 0, 0, 0));
+    /* across a year boundary */
+    ASSERT_EQ(86400, read_date(86, 1, 1, 0, 0, 0) - read_date(85, 12, 31, 0, 0, 0));
+}
+
+TEST(month_lengths)
+{
+    static const int lengths_1985[] = {
+        31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30
+    };
+    int m;
+
+    for (m = 1; m <= 11; m++) {
+        uint32_t d1 = read_date(85, m, 1, 0, 0, 0);
+        uint32_t d2 = read_date(85, m + 1, 1, 0, 0, 0);
+        uint32_t gap = (d2 - d1) / 86400u;
+        if (gap != (uint32_t)lengths_1985[m - 1]) {
+            printf("FAILED\n    1985-%02d -> %02d: %u days, expected %d\n",
+                   m, m + 1, gap, lengths_1985[m - 1]);
+            tests_failed++;
+            return;
+        }
+    }
+    /* February 1984 has 29 days */
+    ASSERT_EQ(29, (read_date(84, 3, 1, 0, 0, 0)
+                   - read_date(84, 2, 1, 0, 0, 0)) / 86400u);
+}
+
+TEST(full_years)
+{
+    /* March 1980 - March 1981: no February 29 in that window */
+    ASSERT_EQ(365, (read_date(81, 3, 1, 0, 0, 0)
+                    - read_date(80, 3, 1, 0, 0, 0)) / 86400u);
+    /* March 1983 - March 1984 does contain February 29, 1984 */
+    ASSERT_EQ(366, (read_date(84, 3, 1, 0, 0, 0)
+                    - read_date(83, 3, 1, 0, 0, 0)) / 86400u);
+    /* Five years, one of them leap */
+    ASSERT_EQ(1826, (read_date(86, 3, 1, 0, 0, 0)
+                     - read_date(81, 3, 1, 0, 0, 0)) / 86400u);
 }
 
 /*
- * Test: Verify several known dates produce matching seconds.
- * We compare the assembly formula against our independent calculation.
- * Note: both formulas should agree modulo the 100-year cycle.
+ * The March-based year counter is normalised into 0..99 (0x00E2AE60), so
+ * January and February 1980 - the only dates before the first complete
+ * March-based year - wrap to the far end of the 100-year window instead of
+ * producing a small number.  This is the original's behaviour, not a defect
+ * in the translation; TIME_$INIT only ever sees a chip that has been set by
+ * CAL_$WRITE_CALENDAR.
+ *
+ * 1980-01-01 gives year_from_epoch = 99, total_days = 36525, and
+ * (uint16_t)(36525 * 2) * 43200 = 324,604,800.
  */
-TEST(seconds_jan1_1981) {
-    uint32_t asm_sec = assembly_date_to_seconds(81, 1, 1, 0, 0, 0);
-    uint32_t exp_sec = expected_seconds(1981, 1, 1, 0, 0, 0);
-    ASSERT_EQ(exp_sec, asm_sec);
-}
-
-TEST(seconds_jul4_1985) {
-    uint32_t asm_sec = assembly_date_to_seconds(85, 7, 4, 12, 30, 45);
-    uint32_t exp_sec = expected_seconds(1985, 7, 4, 12, 30, 45);
-    ASSERT_EQ(exp_sec, asm_sec);
-}
-
-TEST(seconds_dec31_1989) {
-    uint32_t asm_sec = assembly_date_to_seconds(89, 12, 31, 23, 59, 59);
-    uint32_t exp_sec = expected_seconds(1989, 12, 31, 23, 59, 59);
-    ASSERT_EQ(exp_sec, asm_sec);
-}
-
-TEST(seconds_mar1_1980) {
-    uint32_t asm_sec = assembly_date_to_seconds(80, 3, 1, 0, 0, 0);
-    uint32_t exp_sec = expected_seconds(1980, 3, 1, 0, 0, 0);
-    ASSERT_EQ(exp_sec, asm_sec);
-}
-
-TEST(seconds_feb29_1984) {
-    /* Leap day */
-    uint32_t asm_sec = assembly_date_to_seconds(84, 2, 29, 6, 15, 30);
-    uint32_t exp_sec = expected_seconds(1984, 2, 29, 6, 15, 30);
-    ASSERT_EQ(exp_sec, asm_sec);
-}
-
-TEST(seconds_jan1_1980_epoch) {
-    /*
-     * Jan 1, 1980 00:00:00 is the Apollo epoch (0 seconds).
-     * However, the March-based formula with 100-year cycle produces
-     * year_from_epoch = 99, giving a large day count (36525) that
-     * wraps when multiplied: (uint16_t)(36525*2) = 7514.
-     * 7514 * 43200 = 324,604,800.
-     *
-     * This is correct behavior - the function is designed for the
-     * normal operating range (years 1981-2079) where year_from_epoch
-     * is small. The TIME_$INIT caller interprets the result appropriately.
-     *
-     * We verify this matches our independent calculation.
-     */
-    uint32_t asm_sec = assembly_date_to_seconds(80, 1, 1, 0, 0, 0);
-    uint32_t exp_sec = expected_seconds(1980, 1, 1, 0, 0, 0);
-    /* expected_seconds gives 0 (correct epoch), but assembly formula wraps */
-    /* Verify the assembly gives a specific known value */
-    ASSERT_EQ(324604800, asm_sec);
-    /* And that our independent function gives the real answer */
-    ASSERT_EQ(0, exp_sec);
-}
-
-TEST(seconds_time_only) {
-    /* Same date, different times - verify time-of-day component */
-    uint32_t s1 = assembly_date_to_seconds(85, 6, 15, 0, 0, 0);
-    uint32_t s2 = assembly_date_to_seconds(85, 6, 15, 1, 0, 0);
-    uint32_t s3 = assembly_date_to_seconds(85, 6, 15, 0, 1, 0);
-    uint32_t s4 = assembly_date_to_seconds(85, 6, 15, 0, 0, 1);
-
-    ASSERT_EQ(3600, s2 - s1);  /* 1 hour */
-    ASSERT_EQ(60, s3 - s1);    /* 1 minute */
-    ASSERT_EQ(1, s4 - s1);     /* 1 second */
+TEST(days_epoch_wraps_at_the_century)
+{
+    ASSERT_EQ(324604800u, read_date(80, 1, 1, 0, 0, 0));
+    /* An honest Gregorian epoch would be 0 */
+    ASSERT_EQ(0u, ref_seconds(1980, 1, 1, 0, 0, 0));
+    /* The wrap is uniform: the next day is still exactly 86400 later */
+    ASSERT_EQ(86400, read_date(80, 1, 2, 0, 0, 0) - read_date(80, 1, 1, 0, 0, 0));
+    /* March 1980 is back in range and agrees with the Gregorian answer */
+    ASSERT_EQ(ref_seconds(1980, 3, 1, 0, 0, 0), read_date(80, 3, 1, 0, 0, 0));
 }
 
 /* ============================================================================
@@ -769,43 +442,20 @@ int main(void)
 {
     printf("=== TIME_$READ_CAL tests ===\n\n");
 
-    printf("Day count formula tests:\n");
-    RUN_TEST(days_epoch);
-    RUN_TEST(days_march_consecutive);
-    RUN_TEST(days_jan_to_feb);
-    RUN_TEST(days_full_year_no_leap_in_cycle);
-    RUN_TEST(days_full_year_leap);
-    RUN_TEST(days_full_year_non_leap);
-    RUN_TEST(days_month_lengths);
-    RUN_TEST(days_month_lengths_leap);
-    RUN_TEST(days_jan1_to_jan2_1980);
-    RUN_TEST(days_five_years);
-    RUN_TEST(days_four_years_with_leap);
+    printf("Hardware protocol:\n");
+    RUN_TEST(control_sequence);
+    RUN_TEST(leap_write_back);
+    RUN_TEST(no_leap_write_back);
+    RUN_TEST(flag_bits_are_masked_off);
 
-    printf("\nSeconds-to-ticks conversion tests:\n");
-    RUN_TEST(ticks_zero);
-    RUN_TEST(ticks_one_second);
-    RUN_TEST(ticks_one_day);
-    RUN_TEST(ticks_one_year);
-    RUN_TEST(ticks_large_value);
-
-    printf("\nLeap year detection tests:\n");
-    RUN_TEST(leap_1980_jan);
-    RUN_TEST(leap_1980_feb);
-    RUN_TEST(leap_1980_mar);
-    RUN_TEST(leap_1983_dec);
-    RUN_TEST(leap_1984_feb);
-    RUN_TEST(leap_1984_mar);
-    RUN_TEST(leap_1985_all);
-
-    printf("\nFull date-to-seconds tests:\n");
-    RUN_TEST(seconds_jan1_1981);
-    RUN_TEST(seconds_jul4_1985);
-    RUN_TEST(seconds_dec31_1989);
-    RUN_TEST(seconds_mar1_1980);
-    RUN_TEST(seconds_feb29_1984);
-    RUN_TEST(seconds_jan1_1980_epoch);
-    RUN_TEST(seconds_time_only);
+    printf("\nConversion:\n");
+    RUN_TEST(seconds_match_gregorian);
+    RUN_TEST(clock_is_seconds_times_250000);
+    RUN_TEST(time_of_day_components);
+    RUN_TEST(consecutive_days_differ_by_86400);
+    RUN_TEST(month_lengths);
+    RUN_TEST(full_years);
+    RUN_TEST(days_epoch_wraps_at_the_century);
 
     printf("\n=== Results: %d passed, %d failed ===\n",
            tests_passed, tests_failed);

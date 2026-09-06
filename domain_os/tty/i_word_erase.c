@@ -62,7 +62,7 @@ void TTY_$I_WORD_ERASE(tty_desc_t *tty)
         } else {
             prev = tty->input_tail - 1;
         }
-        ch = tty->input_buffer[prev];
+        ch = tty->input_buffer[prev - 1];
 
         if (!tty_is_word_separator(ch)) {
             break;
@@ -79,7 +79,7 @@ void TTY_$I_WORD_ERASE(tty_desc_t *tty)
         } else {
             prev = tty->input_tail - 1;
         }
-        ch = tty->input_buffer[prev];
+        ch = tty->input_buffer[prev - 1];
 
         if (tty_is_word_separator(ch)) {
             break;

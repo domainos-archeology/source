@@ -39,10 +39,9 @@ void TTY_$I_FLUSH_INPUT(tty_desc_t *tty)
     // Call flow control handler if set
     if (tty->flow_ctrl_handler != 0) {
         boolean xon_xoff = (tty->input_flags & 0x02) != 0 ? true : false;
-        // Call handler: handler(line_id, false, xon_xoff)
-        // This tells the handler that flow control is being cleared
-        void (*handler)(short, short, char) = (void (*)(short, short, char))(uintptr_t)tty->flow_ctrl_handler;
-        handler((short)tty->line_id, 0, xon_xoff);
+        // 0xE1B7EA: sne on btst.b #1,(0x17,A2), clr.w for the 2nd argument and
+        // move.l (A2) for the full 32-bit line_id.
+        tty->flow_ctrl_handler(tty->line_id, false, xon_xoff);
     }
 }
 

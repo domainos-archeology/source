@@ -26,7 +26,7 @@ void TTY_$K_RESET(short *line_ptr, status_$t *status)
     tty->input_head = 1;
     tty->input_read = 1;
     tty->input_tail = 1;
-    tty->reserved_2C8 = 0x100;
+    tty->input_size = 0x100;
 
     // Reset output buffer pointers
     tty->output_head = 1;
@@ -55,14 +55,14 @@ void TTY_$K_RESET(short *line_ptr, status_$t *status)
 
     // Call XON/XOFF handler if set
     if (tty->xon_xoff_handler != 0) {
-        void (*handler)(short, short, char) = (void (*)(short, short, char))(uintptr_t)tty->xon_xoff_handler;
-        handler((short)tty->line_id, 0, false);
+        // 0xE67374: clr.w (false) + move.l (A2) (full 32-bit line_id)
+        tty->xon_xoff_handler(tty->line_id, false);
     }
 
     // Call flow control handler if set
     if (tty->flow_ctrl_handler != 0) {
-        void (*handler)(short, short, char) = (void (*)(short, short, char))(uintptr_t)tty->flow_ctrl_handler;
-        handler((short)tty->line_id, 0, xon_xoff);
+        // 0xE67388: move.b (-0x8,A6) + clr.w + move.l (A2)
+        tty->flow_ctrl_handler(tty->line_id, false, xon_xoff);
     }
 
     // Unlock the TTY

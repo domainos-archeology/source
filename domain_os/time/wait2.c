@@ -65,7 +65,7 @@ int8_t TIME_$WAIT2(uint16_t *delay_type, clock_t *delay, void *extra_ec,
 
     /* If timer EC didn't fire, cancel the timer */
     if (wait_result != 1) {
-        TIME_$CANCEL((uint32_t *)1, elem_storage, &local_status);
+        TIME_$CANCEL(1, (time_queue_elem_t *)elem_storage, &local_status);
     }
 
     /* Check for queue element error */

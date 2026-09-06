@@ -1,38 +1,18 @@
 /*
- * misc/crash.h - Crash handling utilities
+ * misc/crash.h - Crash console helpers
  *
- * This header provides crash-related functions used by the FIM subsystem.
+ * Kept as a compatibility shim: everything now lives in
+ * misc/crash_system.h (CRASH_SYSTEM, CRASH_SHOW_STRING, crash_puts_string,
+ * crash_putc and the crash report block).
+ *
+ * NOTE: this header used to declare crash_putchar() and crash_puthex(),
+ * neither of which exists in the image or in this tree - the formatter at
+ * 0x00E1E7C8 does the hex conversion inline.  Both declarations were removed.
  */
 
 #ifndef MISC_CRASH_H
 #define MISC_CRASH_H
 
 #include "misc/crash_system.h"
-
-/*
- * crash_puts_string - Output string to crash console
- *
- * Low-level console output function used during crash handling.
- * Unlike CRASH_SHOW_STRING, this outputs raw strings without
- * format interpretation.
- *
- * @param str: Null-terminated string to output
- */
-extern void crash_puts_string(const char *str);
-
-/*
- * crash_putchar - Output single character to crash console
- *
- * @param c: Character to output
- */
-extern void crash_putchar(char c);
-
-/*
- * crash_puthex - Output hex value to crash console
- *
- * @param val: Value to output
- * @param digits: Number of hex digits (1-8)
- */
-extern void crash_puthex(uint32_t val, int digits);
 
 #endif /* MISC_CRASH_H */

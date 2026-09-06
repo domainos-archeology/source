@@ -65,6 +65,28 @@ extern int __host_intr_disable_count;
     } while (0)
 
 /*
+ * SET_IPL7 - Raise interrupt priority without saving the old state
+ *
+ * Models a bare `ori #0x700,SR`.  On host: increments the nesting counter
+ * with nothing to restore later; the matching exit is SET_IPL0().
+ */
+#define SET_IPL7() \
+    do { \
+        __host_intr_disable_count++; \
+    } while (0)
+
+/*
+ * SET_IPL0 - Force interrupts fully enabled (IPL 0)
+ *
+ * Models `andi #-0x701,SR`.  This is a forced enable, not a restore, so on
+ * the host it resets the nesting counter to zero.
+ */
+#define SET_IPL0() \
+    do { \
+        __host_intr_disable_count = 0; \
+    } while (0)
+
+/*
  * GET_SR - Read the current (simulated) status register
  *
  * On host: returns SR_IPL_DISABLE_ALL if interrupts are logically

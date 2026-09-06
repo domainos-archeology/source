@@ -1,396 +1,185 @@
 /*
- * CRASH_SYSTEM - Fatal system crash handler
+ * misc/crash_system.c - Crash report data block (and the host model)
  *
- * Called when the kernel encounters an unrecoverable error.
- * Saves system state, displays error info, and either reboots
- * or enters the crash debugger.
+ * CRASH_SYSTEM (0x00E1E700) and the crash console it drives are hand-written
+ * assembly; the m68k build gets them from misc/sau2/crash_system.s.  What
+ * lives here is:
  *
- * Original address: 0x00E1E700
- *
- * The function:
- * 1. Disables interrupts and saves all registers
- * 2. Stores crash status and related info
- * 3. Prints crash message if not a clean reboot
- * 4. Saves crash dump info at 0xE00000
- * 5. Resets keyboard
- * 6. Either returns to PROM or enters crash debugger
+ *   - CRASH_REPORT, the message template with the live crash fields embedded
+ *     in it (0x00E1E97E), and CRASH_SAVED_SR (0x00E1E7B6).  Both builds share
+ *     these; the assembly writes into them by name.
+ *   - Under !ARCH_M68K, a portable C model of crash_puts_string,
+ *     CRASH_SHOW_STRING and CRASH_SYSTEM so the formatter can be unit tested
+ *     against the real template bytes on the host.
+ *   - The status constants callers hand to CRASH_SYSTEM (see the caveat in
+ *     misc/crash_system.h and bead source-tzmw).
  */
 
 #include "misc/misc_internal.h"
 #include "base/base.h"
-#include "kbd/kbd.h"
-#include "mmu/mmu.h"
 #include "proc1/proc1.h"
-#include "prom/prom.h"
 #include "time/time.h"
 
-/* Status codes for special handling */
-#define status_$system_reboot  0x001b0008
+/*
+ * ===========================================================================
+ * The crash report block, 0x00E1E97E .. 0x00E1E9ED
+ *
+ * The bytes below are the template exactly as it appears in the image; the
+ * status/pc/pid/regs/usp members are the live fields CRASH_SYSTEM stores into
+ * before handing &CRASH_REPORT to crash_puts_string.  See crash_report_t in
+ * misc/crash_system.h for the offset-by-offset mapping.
+ * ===========================================================================
+ */
+crash_report_t CRASH_REPORT = {
+    .lead         = { 0x0d, 0x0a },
+    .status_label = { 'C', 'r', 'a', 's', 'h', '_',
+                      'S', 't', 'a', 't', 'u', 's', ' ' },
+    .status_fmt   = 0xff,
+    .status       = 0,
+    .pc_label     = { ' ', ' ', 'P', 'C', ' ' },
+    .pc_fmt       = 0xff,
+    .pc           = 0,
+    .pid_label    = { ' ', 'p', 'i', 'd', ' ' },
+    .pid_fmt      = 0x00,
+    .pid          = 0,
+    .terminator   = '%',
+    .pad          = 0x00,
+    .regs         = { 0 },
+    .reserved_0x68 = 0,
+    .usp          = 0,
+};
 
-/* Crash data area - stored near CRASH_SYSTEM code at 0xE1E98E */
-status_$t CRASH_STATUS;                    /* +0x28e from base */
-void *DAT_00e1e9a2;                         /* +0x298: PROC1 current at crash */
-void *CRASH_ECB;                            /* Return address at crash */
-uint32_t CRASH_REGS[16];                    /* Saved registers D0-D7/A0-A7 */
-uint32_t CRASH_USP;                         /* User stack pointer */
+/* 0x00E1E7B6: the SR CRASH_SYSTEM pushed at entry, reloaded after trap #15 */
+uint16_t CRASH_SAVED_SR;
 
-/* Crash dump area at 0xE00000 */
-#define CRASH_DUMP_BASE  ((volatile uint32_t *)0x00e00000)
-#define CRASH_MAGIC      0xabcdef01
-
-/* PROM vector addresses for crash console output */
-#define PROM_PUTC_VECTOR        ((void (**)(void))0x00000108)
-#define PROM_RELOAD_FONT_VECTOR ((void (**)(void))0x00000114)
-
-/* Display memory mapping constants */
-#define DISPLAY_VA_START    0x00FC0000
-#define DISPLAY_PPN_START   0x80
-#define DISPLAY_PPN_END     0x100
-#define DISPLAY_PAGE_SIZE   0x400
-
-/* MMU flags for display mapping */
-#define MMU_DISPLAY_FLAGS   0x26
-
-/* ASCII characters */
-#define ASCII_CR    0x0D
-#define ASCII_LF    0x0A
-#define ASCII_PERCENT 0x25
-
-/* MMU_$INSTALL is declared in mmu/mmu.h */
-
-/* Internal helper functions for crash output */
-static void remap_display(void);
-static void call_prom_reload_font(void);
-static void call_prom_putc(char c);
-static void crash_puts_string(const char *str);
+#if !defined(ARCH_M68K)
 
 /*
- * CRASH_SYSTEM - Main crash handler
+ * ===========================================================================
+ * Portable model of the crash console (host build / unit tests only)
  *
- * @param status_p  Pointer to status code that caused the crash
+ * On the target these are the register-convention routines in
+ * misc/sau2/crash_system.s.  The logic below is a faithful C rendering of
+ * crash_puts_string at 0x00E1E7C8; the display remap and the PROM calls have
+ * no host equivalent, so the model emits through crash_putc(), which the
+ * caller (the unit test) supplies.
+ * ===========================================================================
  */
-void CRASH_SYSTEM(const status_$t *status_p)
-{
-    uint16_t saved_sr;
-    uint32_t *reg_src;
-    uint32_t *reg_dst;
-    int16_t i;
 
-    /* Disable interrupts - we're crashing */
-    DISABLE_INTERRUPTS(saved_sr);
-    (void)saved_sr;
+/* 0x00E1E7E0 / 0x00E1E7E4 */
+#define CRASH_ASCII_CR 0x0d
+#define CRASH_ASCII_LF 0x0a
 
-    /* Save crash status */
-    CRASH_STATUS = *status_p;
+/* 0x00E1E7D6: the '%' that terminates a crash string */
+#define CRASH_STRING_TERMINATOR 0x25
 
-    /* If not ok and not clean reboot, save debug info */
-    if (CRASH_STATUS != status_$ok && CRASH_STATUS != status_$system_reboot) {
-        DAT_00e1e9a2 = (void *)(uintptr_t)PROC1_$CURRENT;
-        /* CRASH_ECB would be set from stack - return address */
-        crash_puts_string("Crash Status");
-    }
-
-    /* Clear or set crash dump area */
-    CRASH_DUMP_BASE[0] = 0;
-
-    if (CRASH_STATUS != status_$ok && CRASH_STATUS != status_$system_reboot) {
-        CRASH_DUMP_BASE[0] = CRASH_MAGIC;
-        CRASH_DUMP_BASE[1] = TIME_$CLOCKH;
-        CRASH_DUMP_BASE[2] = CRASH_STATUS;
-    }
-
-    /*
-     * Save registers to CRASH_REGS
-     * In the original, this copies from stack where movem.l saved them.
-     * We can't easily replicate this in C - would need inline asm.
-     */
-    reg_dst = CRASH_REGS;
-    for (i = 0; i < 16; i++) {
-        *reg_dst++ = 0;  /* Placeholder - real impl saves actual regs */
-    }
-
-    /* Save USP - requires privileged instruction */
-#if defined(__m68k__) || defined(ARCH_M68K)
-    __asm__ volatile ("movec %%usp, %0" : "=d" (CRASH_USP));
-#else
-    CRASH_USP = 0;
-#endif
-
-    /* Reset keyboard controller */
-    KBD_$RESET();
-
-    if (CRASH_STATUS == status_$ok) {
-        /*
-         * Clean shutdown - jump to PROM warm restart.
-         * In original: movea.l (0x11c).w,A0; jmp (A0)
-         * 0x11c is the PROM quiet return vector.
-         */
-        void (*prom_ret)(void) = (void (*)(void))PROM_$QUIET_RET_ADDR;
-        prom_ret();
-        /* Should not return */
-    }
-
-    /*
-     * Crash case - enter debugger via trap #15.
-     * The trap handler will display crash info and allow debugging.
-     */
-#if defined(__m68k__) || defined(ARCH_M68K)
-    __asm__ volatile ("trap #15");
-#endif
-
-    /* Initialize keyboard for crash console */
-    KBD_$CRASH_INIT();
-
-    /* Clear saved registers (original does this after trap returns) */
-    reg_dst = CRASH_REGS;
-    for (i = 0; i < 16; i++) {
-        *reg_dst++ = 0;
-    }
-
-    /*
-     * Original restores SR and returns here, but that seems wrong
-     * for a crash handler. The trap #15 handler likely doesn't return
-     * in normal operation.
-     */
-}
-
-/*
- * remap_display - Remap display memory for crash output
- *
- * Maps display memory (0xFC0000-0xFFFFF) to physical pages 0x80-0xFF.
- * This ensures the display is accessible during a crash even if the
- * normal mappings have been corrupted.
- *
- * Original address: 0x00E1E82A
- * Size: 58 bytes
- */
-static void remap_display(void)
-{
-    uint32_t ppn;
-    uint32_t va;
-    uint16_t saved_sr;
-
-    /* Disable interrupts during MMU manipulation */
-    DISABLE_INTERRUPTS(saved_sr);
-
-    va = DISPLAY_VA_START;
-    for (ppn = DISPLAY_PPN_START; ppn < DISPLAY_PPN_END; ppn++) {
-        MMU_$INSTALL(ppn, va, MMU_DISPLAY_FLAGS);
-        va += DISPLAY_PAGE_SIZE;
-    }
-
-    ENABLE_INTERRUPTS(saved_sr);
-}
-
-/*
- * call_prom_reload_font - Reload display font from PROM
- *
- * Tail-calls the PROM font reload routine via vector at 0x114.
- * This ensures the font is available for crash message display.
- *
- * Original address: 0x00E1E822
- * Size: 6 bytes
- */
-static void call_prom_reload_font(void)
-{
-    void (*reload_font)(void) = *PROM_RELOAD_FONT_VECTOR;
-    reload_font();
-}
-
-/*
- * call_prom_putc - Output a character via PROM
- *
- * Calls the PROM putc routine via vector at 0x108 to output
- * a single character to the crash console.
- *
- * This function preserves D0-D2 and A0 as the original does.
- *
- * Original address: 0x00E1E812
- * Size: 16 bytes
- *
- * @param c: Character to output
- */
-static void call_prom_putc(char c)
-{
-    /*
-     * The original saves D0-D2 and A0, calls PROM via vector,
-     * and restores them. In C we rely on the calling convention
-     * to handle this, but the PROM routine might clobber registers.
-     */
-#if defined(__m68k__) || defined(ARCH_M68K)
-    register char ch __asm__("d1") = c;
-    void (*putc_func)(void) = *PROM_PUTC_VECTOR;
-
-    __asm__ volatile (
-        "movem.l %%d0-%%d2/%%a0, -(%%sp)\n\t"
-        "jsr (%0)\n\t"
-        "movem.l (%%sp)+, %%d0-%%d2/%%a0"
-        :
-        : "a" (putc_func), "d" (ch)
-        : "memory"
-    );
-#else
-    /* Non-m68k stub for compilation testing */
-    (void)c;
-#endif
-}
-
-/*
- * crash_puts_string - Print formatted string to crash console
- *
- * Outputs a formatted string to the crash console. The string format
- * supports embedded hex values:
- *   - Normal chars (> 0): printed as-is
- *   - '%' (0x25): terminates string, prints CR/LF
- *   - NUL (0x00) followed by 2 bytes: prints as 4-digit hex
- *   - Negative byte (< 0) followed by 4 bytes: prints as 8-digit hex
- *
- * Original address: 0x00E1E7C8
- * Size: 74 bytes
- *
- * @param str: Pointer to format string
- */
-static void crash_puts_string(const char *str)
+void crash_puts_string(const char *str)
 {
     const uint8_t *p = (const uint8_t *)str;
-    int8_t c;
-    uint32_t hex_val;
-    int nibbles;
-    int i;
-    uint8_t nibble;
 
-    /* Ensure display is mapped and font is loaded */
-    remap_display();
-    call_prom_reload_font();
-
-    while (1) {
-        c = (int8_t)*p++;
+    for (;;) {
+        /* 0xE1E7D2: move.b (A0)+,D1b - the byte is tested SIGNED */
+        int8_t c = (int8_t)*p++;
+        uint32_t value;
+        int nibbles;
+        int i;
 
         if (c > 0) {
-            /* Normal printable character */
-            if (c == ASCII_PERCENT) {
-                /* '%' terminates string - print newline */
-                call_prom_putc(ASCII_CR);
-                call_prom_putc(ASCII_LF);
+            if (c == CRASH_STRING_TERMINATOR) {
+                /* 0xE1E7E0: '%' ends the string with CR LF */
+                crash_putc(CRASH_ASCII_CR);
+                crash_putc(CRASH_ASCII_LF);
                 return;
             }
-            call_prom_putc(c);
-        } else if (c < 0) {
-            /* Negative byte: next 4 bytes are hex long */
-            hex_val = ((uint32_t)p[0] << 24) |
-                      ((uint32_t)p[1] << 16) |
-                      ((uint32_t)p[2] << 8) |
-                      (uint32_t)p[3];
+            crash_putc((char)c);
+            continue;
+        }
+
+        if (c < 0) {
+            /* 0xE1E7F4: a negative byte introduces a 32-bit hex field */
+            value = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16)
+                  | ((uint32_t)p[2] << 8)  | (uint32_t)p[3];
             p += 4;
-            nibbles = 8;  /* 8 hex digits */
-
-            /* Print hex digits */
-            for (i = 0; i < nibbles; i++) {
-                /* Rotate left 4 bits to get next nibble */
-                hex_val = (hex_val << 4) | (hex_val >> 28);
-                nibble = hex_val & 0x0F;
-                if (nibble >= 10) {
-                    nibble += 7;  /* 'A' - '0' - 10 = 7 */
-                }
-                call_prom_putc('0' + nibble);
-            }
+            nibbles = 8;
         } else {
-            /* NUL byte: next 2 bytes are hex word */
-            hex_val = ((uint32_t)p[0] << 24) |
-                      ((uint32_t)p[1] << 16);
+            /*
+             * 0xE1E7EC: a 0x00 byte introduces a 16-bit hex field, loaded
+             * into the low word and swapped into the high half so that the
+             * same rol.l #4 loop prints it.
+             */
+            value = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16);
             p += 2;
-            nibbles = 4;  /* 4 hex digits */
+            nibbles = 4;
+        }
 
-            /* Print hex digits */
-            for (i = 0; i < nibbles; i++) {
-                hex_val = (hex_val << 4) | (hex_val >> 28);
-                nibble = hex_val & 0x0F;
-                if (nibble >= 10) {
-                    nibble += 7;
-                }
-                call_prom_putc('0' + nibble);
+        /* 0xE1E7F8: rol.l #4 then take the low nibble, MSB first */
+        for (i = 0; i < nibbles; i++) {
+            uint8_t nibble;
+            value = (value << 4) | (value >> 28);
+            nibble = (uint8_t)(value & 0x0f);
+            if (nibble >= 10) {
+                nibble = (uint8_t)(nibble + 7);   /* 0xE1E804: addq.b #7 */
             }
+            crash_putc((char)(nibble + 0x30));    /* 0xE1E806 */
         }
     }
 }
 
-/*
- * CRASH_SHOW_STRING - Display a string during crash handling
- *
- * This function preserves ALL registers before calling crash_puts_string.
- * This is critical during crash handling to preserve the crash state
- * for debugging.
- *
- * Original address: 0x00E1E7B8
- * Size: 16 bytes
- *
- * Assembly:
- *   movem.l D0-D7/A0-A7,-(SP)   ; Save all registers
- *   movea.l (0x44,SP),A0        ; Get string pointer from original stack
- *   bsr     crash_puts_string   ; Call internal routine
- *   movem.l (SP)+,D0-D7/A0-A7   ; Restore all registers
- *   rts
- *
- * @param str: Pointer to format string
- */
 void CRASH_SHOW_STRING(const char *str)
 {
-#if defined(__m68k__) || defined(ARCH_M68K)
-    /*
-     * We need to save ALL registers, call crash_puts_string,
-     * then restore ALL registers. This is tricky in C because
-     * the compiler may use registers before we can save them.
-     *
-     * The safest approach is inline assembly for the entire function,
-     * but we can approximate by saving/restoring around the call.
-     */
-    __asm__ volatile (
-        "movem.l %%d0-%%d7/%%a0-%%a6, -(%%sp)\n\t"
-        "movea.l %0, %%a0\n\t"
-        :
-        : "g" (str)
-        : "memory"
-    );
-
+    /* 0xE1E7B8: the register save/restore has no host counterpart */
     crash_puts_string(str);
-
-    __asm__ volatile (
-        "movem.l (%%sp)+, %%d0-%%d7/%%a0-%%a6"
-        :
-        :
-        : "memory"
-    );
-#else
-    /* Non-m68k: just call directly */
-    crash_puts_string(str);
-#endif
 }
 
+void CRASH_SYSTEM(const status_$t *status_p)
+{
+    uint32_t status = (uint32_t)*status_p;
+
+    /* 0xE1E712 */
+    CRASH_REPORT.status = BE32_CONST(status);
+
+    if (status != (uint32_t)status_$ok && status != status_$system_reboot) {
+        /*
+         * 0xE1E722 / 0xE1E728.  On the target `pc` is the caller's return
+         * address read straight off the stack at 0x42(SP); the host model
+         * uses the builtin, which is the same value.
+         */
+        CRASH_REPORT.pc =
+            BE32_CONST((uint32_t)(uintptr_t)__builtin_return_address(0));
+        CRASH_REPORT.pid = BE16_CONST(PROC1_$CURRENT);
+        crash_puts_string((const char *)&CRASH_REPORT);
+    }
+
+    /*
+     * 0xE1E738..0xE1E75C writes the crash record at 0x00E00000 and
+     * 0xE1E760..0xE1E776 dumps the register block and the USP; neither has a
+     * host equivalent, and 0xE1E77C onwards either jumps to the PROM or takes
+     * trap #15.  The target behaviour is in misc/sau2/crash_system.s.
+     */
+}
+
+#endif /* !ARCH_M68K */
+
 /*
- * Error codes used with CRASH_SYSTEM throughout the kernel
+ * ===========================================================================
+ * Status constants passed to CRASH_SYSTEM
  *
- * Subsystem codes (high 16 bits):
- *   0x0001 = OS/BAT (disk salvaging)
- *   0x0004 = MST (segment table)
- *   0x0005 = PMAP (physical map)
- *   0x0006 = MMAP/WSL (virtual memory map)
- *   0x0008 = Disk drivers
- *   0x000A = PROC1 (process management/locks)
- *   0x0012 = Fault handling
- *   0x001B = Calendar/time
- *   0x8003 = ASTE (address space table, high bit = fatal?)
+ * These do not exist as objects in the image: every caller passes
+ * `pea (d,PC)` to a constant cell in its own module.  They are kept here as
+ * a single definition point until each one is pushed down to a file-static
+ * next to its caller - see bead source-tzmw.
  *
- * Values verified against binary data via Ghidra.
+ * "verified" means the value was read out of the cell the caller points at.
+ * ===========================================================================
  */
 
 /* PROC1 subsystem (0x000A) - process/lock errors */
-/* TODO(source-qvt): Lock_ordering_violation not found as labeled data in binary;
- * value inferred from proc1 subsystem prefix */
+/*
+ * TODO(source-tzmw): ml/lock.c's cell was never read; 0x000A0001 is inferred
+ * from the subsystem prefix only.
+ */
 status_$t Lock_ordering_violation = 0x000a0001;
 status_$t Illegal_lock_err = 0x000a0002;         /* verified: 0x00e20de4 */
-/* TODO(source-qvt): Lock_order_violation_err not found as labeled data in binary;
- * value inferred from proc1 subsystem prefix */
-status_$t Lock_order_violation_err = 0x000a0003;
 
 /* Calendar subsystem (0x001B) */
 status_$t No_calendar_on_system_err = 0x001b0004; /* verified: 0x00e34b10 */
@@ -406,7 +195,9 @@ status_$t MST_Ref_OutOfBounds_Err = 0x00040005;  /* verified: 0x00e0e1b8 */
 
 /* Disk subsystem (0x0008) */
 status_$t Disk_Queued_Drivers_Not_Supported_Err = 0x0008002e; /* verified: 0x00e3c9fa */
-status_$t Disk_Driver_Logic_Err = 0x00080022;     /* same as Disk_driver_logic_err */
+/* TODO(source-tzmw): a duplicate spelling of Disk_driver_logic_err used by
+ * disk/dismount.c, which additionally declares it as `void *`. */
+status_$t Disk_Driver_Logic_Err = 0x00080022;
 status_$t Disk_controller_err = 0x00080004;       /* verified: 0x00e1940c */
 status_$t Disk_driver_logic_err = 0x00080022;     /* verified: 0x00e19410 */
 

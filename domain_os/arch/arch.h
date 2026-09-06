@@ -17,6 +17,9 @@
  *       ARCH_BIG_ENDIAN (if applicable), ARCH_PTR_SIZE,
  *       ARCH_ALIGN_16, ARCH_ALIGN_32
  *
+ *   - Busy-wait primitive:
+ *       ARCH_SPIN_TICK()        - one non-elidable delay-loop iteration
+ *
  *   - Global data pointer:
  *       __A5_BASE()  (or a stub for non-M68K)
  *

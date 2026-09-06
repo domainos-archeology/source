@@ -17,7 +17,7 @@
  *    8    D10   Day tens (0-3)        D0-D1, D2=leap year flag
  *    7    D1    Day ones (0-9)        D0-D3
  *    6    W     Weekday (0-6)         D0-D2
- *    5    H10   Hours tens (0-2)      D0-D1, D2=PM/24H mode
+ *    5    H10   Hours tens (0-2)      D0-D1, D2=PM, D3=24-hour select
  *    4    H1    Hours ones (0-9)      D0-D3
  *    3    MI10  Minutes tens (0-5)    D0-D2
  *    2    MI1   Minutes ones (0-9)    D0-D3
@@ -62,6 +62,13 @@
  *
  * Original address: 0x00e2af5e (gate entry), 0x00e2adfc (body)
  *
+ * The gate is
+ *     0x00E2AF5E  lea (-0x2,PC),A0     ; A0 = 0x00E2AF5E, the module base
+ *     0x00E2AF62  jmp 0x00E2ADFC
+ * and the body's first act is `movea.l A0,A5`.  A5 is then never used: the
+ * body makes no (d,A5) reference at all, so the module-base setup is dead
+ * here and has no C counterpart.
+ *
  * Nested procedures (Pascal-style, now static helpers):
  *   time_$read_cal_delay      at 0x00e2af58 (generic delay loop)
  *   time_$read_cal_delay_20   at 0x00e2af54 (delay of 20 iterations)
@@ -70,42 +77,20 @@
 #include "time/time_internal.h"
 
 /*
- * MSM5832 register addresses (directly encoded in control byte bits 7-4).
- * Registers are read in descending order: Y10 (12) down to S1 (0).
+ * The MSM5832 register addresses, the Apollo control-byte bit assignments and
+ * the three interface ports all live in cal/cal.h (CAL_$RTC_*, MSM5832_*),
+ * shared with CAL_$WRITE_CALENDAR.
+ *
+ * The body loads the port base from the constant long at 0x00E2AF66
+ * (0x00FFA800) into A0 and addresses the ports as (0x20,A0), (0x22,A0) and
+ * (0x24,A0); CAL_$RTC_WRITE/CAL_$RTC_READ reproduce exactly that.
  */
-#define MSM5832_REG_S1      0   /* Seconds ones (0-9) */
-#define MSM5832_REG_S10     1   /* Seconds tens (0-5) */
-#define MSM5832_REG_MI1     2   /* Minutes ones (0-9) */
-#define MSM5832_REG_MI10    3   /* Minutes tens (0-5) */
-#define MSM5832_REG_H1      4   /* Hours ones (0-9) */
-#define MSM5832_REG_H10     5   /* Hours tens (0-2), D2=PM/24H */
-#define MSM5832_REG_W       6   /* Weekday (0-6) */
-#define MSM5832_REG_D1      7   /* Day ones (0-9) */
-#define MSM5832_REG_D10     8   /* Day tens (0-3), D2=leap year */
-#define MSM5832_REG_MO1     9   /* Month ones (0-9) */
-#define MSM5832_REG_MO10   10   /* Month tens (0-1) */
-#define MSM5832_REG_Y1     11   /* Year ones (0-9) */
-#define MSM5832_REG_Y10    12   /* Year tens (0-9) */
-#define MSM5832_NUM_REGS   13
-
-/*
- * Apollo control register bit definitions.
- * The control byte at base+0x20 encodes MSM5832 address and signals.
- */
-#define RTC_CTL_HOLD        0x01    /* HOLD pin - freeze counters */
-#define RTC_CTL_WRITE       0x02    /* WRITE pin - latch data */
-#define RTC_CTL_READ        0x04    /* READ pin - output data */
-#define RTC_CTL_ADDR_SHIFT  4       /* Bits 7-4 = A3-A0 register address */
-
-/* Composite control values */
-#define RTC_CTL_READ_HOLD(addr)  (((addr) << RTC_CTL_ADDR_SHIFT) | RTC_CTL_READ | RTC_CTL_HOLD)
-#define RTC_CTL_WRITE_HOLD(addr) (((addr) << RTC_CTL_ADDR_SHIFT) | RTC_CTL_WRITE | RTC_CTL_HOLD)
-#define RTC_CTL_ADDR_HOLD(addr)  (((addr) << RTC_CTL_ADDR_SHIFT) | RTC_CTL_HOLD)
 
 /* First read control value: Y10 (addr 12) with READ + HOLD */
-#define RTC_READ_START_CONTROL  RTC_CTL_READ_HOLD(MSM5832_REG_Y10)  /* 0xC5 */
-#define RTC_CONTROL_STEP        (1 << RTC_CTL_ADDR_SHIFT)           /* 0x10 */
-#define RTC_INITIAL_DELAY       0xC8    /* Initial delay count (200 iterations) */
+#define RTC_READ_START_CONTROL  CAL_$RTC_CTL_READ_HOLD(MSM5832_REG_Y10) /* 0xC5 */
+#define RTC_CONTROL_STEP        CAL_$RTC_CTL_ADDR_STEP                  /* 0x10 */
+#define RTC_INITIAL_DELAY       0xC8  /* 0x00E2AE10: move.w #0xC8,D1w   */
+#define RTC_ACCESS_DELAY        0x14  /* 0x00E2AF54: move.w #0x14,D1w   */
 
 /*
  * Digit array indices (order of reading: Y10 first, S1 last).
@@ -125,20 +110,23 @@
 #define DIGIT_SECOND_TENS   11  /* MSM5832 addr  1 (S10) */
 #define DIGIT_SECOND_ONES   12  /* MSM5832 addr  0 (S1)  */
 
-/* MSM5832 flag bits within specific registers */
-#define MSM5832_D10_LEAP_FLAG   0x04    /* D10 register D2: leap year indicator */
-#define MSM5832_H10_24H_FLAG    0x04    /* H10 register D2: 24-hour mode */
-#define MSM5832_TENS_MASK       0x03    /* Mask for D0-D1 (tens digit value) */
-
 /*
  * Delay loop: counts down from 'count' to 0.
  * Provides timing margin for MSM5832 access (READ/WRITE setup/hold times).
  * Corresponds to time_$read_cal_delay at 0x00e2af58.
  */
-static void time_$read_cal_delay(short count)
+static void time_$read_cal_delay(int16_t count)
 {
+    /*
+     *   subq.w #0x1,D1w
+     *   bne.b  time_$read_cal_delay
+     * i.e. exactly `count` iterations (and 0x10000 for count == 0).
+     * ARCH_SPIN_TICK() keeps the loop from being optimised away; the original
+     * is pure CPU time used to meet the MSM5832 setup/hold times.
+     */
     do {
-        count -= 1;
+        ARCH_SPIN_TICK();
+        count = (int16_t)(count - 1);
     } while (count != 0);
 }
 
@@ -149,13 +137,13 @@ static void time_$read_cal_delay(short count)
  */
 static void time_$read_cal_delay_20(void)
 {
-    time_$read_cal_delay(0x14);
+    time_$read_cal_delay(RTC_ACCESS_DELAY);
 }
 
 void TIME_$READ_CAL(clock_t *clock, uint32_t *time)
 {
-    short digits[MSM5832_NUM_REGS];
-    short control;
+    int16_t digits[MSM5832_NUM_REGS];
+    int16_t control;
     int i;
     short month;
     short march_month;     /* Month in March-based calendar (0=March, 11=February) */
@@ -174,7 +162,7 @@ void TIME_$READ_CAL(clock_t *clock, uint32_t *time)
      * This prevents the clock from ticking while we read registers,
      * ensuring a consistent snapshot of the date/time.
      */
-    CAL_$CONTROL_VIRTUAL_ADDR = RTC_CTL_HOLD;
+    CAL_$RTC_WRITE_CONTROL(CAL_$RTC_CTL_HOLD);
 
     /* Initial delay (0xC8 = 200 iterations) for HOLD setup time */
     control = RTC_READ_START_CONTROL;
@@ -196,15 +184,16 @@ void TIME_$READ_CAL(clock_t *clock, uint32_t *time)
      */
     i = 0;
     do {
-        CAL_$CONTROL_VIRTUAL_ADDR = (char)control;
+        CAL_$RTC_WRITE_CONTROL((uint8_t)control);
         time_$read_cal_delay_20();
-        digits[i] = (~(short)(uint8_t)CAL_$READ_DATA_VIRTUAL_ADDR) & 0xF;
+        /* 0x00E2AE20: move.b (0x24,A0),D1b / not.w D1w / and.w #0xF,D1w */
+        digits[i] = (int16_t)((~(int16_t)CAL_$RTC_READ_DATA()) & 0xF);
         control -= RTC_CONTROL_STEP;
         i++;
     } while (control >= 0);
 
     /* Keep HOLD asserted (prepare for potential write-back) */
-    CAL_$CONTROL_VIRTUAL_ADDR = RTC_CTL_HOLD;
+    CAL_$RTC_WRITE_CONTROL(CAL_$RTC_CTL_HOLD);
 
     /*
      * Reconstruct month value (1-12) from BCD digits.
@@ -255,19 +244,23 @@ void TIME_$READ_CAL(clock_t *clock, uint32_t *time)
      * indicator for its internal day-counting logic.
      */
     if (((year_from_epoch + 1) & 3) == 0) {
-        short day_tens_with_flag = digits[DIGIT_DAY_TENS] | MSM5832_D10_LEAP_FLAG;
-        CAL_$WRITE_DATA_VIRTUAL_ADDR = (char)~day_tens_with_flag;
+        /* 0x00E2AE74: bset.l #2 -- the leap-year bit is D10 bit 2 here.
+         * CAL_$WRITE_CALENDAR instead sets bit 3 of the same register; see
+         * bead source-tcxm. */
+        int16_t day_tens_with_flag =
+            (int16_t)(digits[DIGIT_DAY_TENS] | MSM5832_D10_LEAP_FLAG);
+        CAL_$RTC_WRITE_DATA((uint8_t)~(uint8_t)day_tens_with_flag);
         /* Write to D10 register (addr 8): set address + HOLD */
-        CAL_$CONTROL_VIRTUAL_ADDR = (char)RTC_CTL_ADDR_HOLD(MSM5832_REG_D10);  /* 0x81 */
+        CAL_$RTC_WRITE_CONTROL(CAL_$RTC_CTL_ADDR_HOLD(MSM5832_REG_D10));  /* 0x81 */
         /* Assert WRITE strobe */
-        CAL_$CONTROL_VIRTUAL_ADDR = (char)RTC_CTL_WRITE_HOLD(MSM5832_REG_D10); /* 0x83 */
+        CAL_$RTC_WRITE_CONTROL(CAL_$RTC_CTL_WRITE_HOLD(MSM5832_REG_D10)); /* 0x83 */
         time_$read_cal_delay_20();
         /* Deassert WRITE, keep HOLD */
-        CAL_$CONTROL_VIRTUAL_ADDR = (char)RTC_CTL_ADDR_HOLD(MSM5832_REG_D10);  /* 0x81 */
+        CAL_$RTC_WRITE_CONTROL(CAL_$RTC_CTL_ADDR_HOLD(MSM5832_REG_D10));  /* 0x81 */
     }
 
-    /* Release HOLD - MSM5832 counters resume ticking */
-    CAL_$CONTROL_VIRTUAL_ADDR = 0;
+    /* 0x00E2AE98: release HOLD - MSM5832 counters resume ticking */
+    CAL_$RTC_WRITE_CONTROL(0);
 
     /*
      * ================================================================

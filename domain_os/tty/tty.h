@@ -26,11 +26,15 @@
 #define TTY_CHAR_CLASS_SIGTSTP 0x02  // Suspend (^Z)
 #define TTY_CHAR_CLASS_BREAK 0x03    // Break character (end of line)
 #define TTY_CHAR_CLASS_EOF 0x04      // End of file (^D)
-#define TTY_CHAR_CLASS_XON 0x05      // Resume output (^Q)
-#define TTY_CHAR_CLASS_XOFF 0x06     // Stop output (^S)
+// NOTE: class 0x05 SETS state bit 0x04 and calls the xon/xoff handler with
+// TRUE; class 0x06 CLEARS it, calls the handler with FALSE and advances the
+// output eventcount (0xE1BA42 / 0xE1BA60).  i.e. 0x05 stops output and 0x06
+// resumes it.  TODO: verify the historical names (source-2qng).
+#define TTY_CHAR_CLASS_XON 0x05      // Output stop  (^S) - sets TTY_STATUS_XON_XOFF
+#define TTY_CHAR_CLASS_XOFF 0x06     // Output resume (^Q) - clears TTY_STATUS_XON_XOFF
 #define TTY_CHAR_CLASS_DEL 0x07      // Delete character
-#define TTY_CHAR_CLASS_WERASE 0x08   // Word erase
-#define TTY_CHAR_CLASS_KILL 0x09     // Kill line
+#define TTY_CHAR_CLASS_KILL 0x08     // Kill line   (dispatches TTY_$I_KILL_LINE, 0xE1BAF6)
+#define TTY_CHAR_CLASS_WERASE 0x09   // Word erase  (dispatches TTY_$I_WORD_ERASE, 0xE1BAE2)
 #define TTY_CHAR_CLASS_REPRINT 0x0A  // Reprint line
 #define TTY_CHAR_CLASS_NL 0x0B       // Newline
 #define TTY_CHAR_CLASS_DISCARD 0x0C  // Discard output (^O)
@@ -72,6 +76,22 @@
 // =============================================================================
 #define TTY_ERR_CALLBACK 0x01 // Error callback set
 #define TTY_ERR_OVERFLOW 0x02 // Input buffer overflow
+
+// =============================================================================
+// Callback signatures stored in tty_desc_t
+//
+// Both are called with the full 32-bit line_id (move.l (A2),-(SP)) and one or
+// two Domain booleans (0xFF / 0x00) pushed in 2-byte slots.
+// =============================================================================
+
+// xon_xoff_handler (0x2B8): 0xE1BA50..0xE1BA5A, 0xE1BA6C..0xE1BA76,
+// TTY_$K_RESET 0xE67374
+typedef void (*tty_xon_xoff_handler_t)(uint32_t line_id, boolean stop);
+
+// flow_ctrl_handler (0x2BC): 0xE1BC76..0xE1BC88, TTY_$I_FLUSH_INPUT 0xE1B7EA,
+// TTY_$K_RESET 0xE67388, TTY_$K_GET 0xE1C54E
+typedef void (*tty_flow_ctrl_handler_t)(uint32_t line_id, boolean assert_flow,
+                                        boolean use_hw_flow);
 
 // =============================================================================
 // TTY Callback Descriptor
@@ -139,28 +159,45 @@ typedef struct tty_desc {
   m68k_ptr_t reserved_2AC;      // 0x2AC: Reserved
   m68k_ptr_t err_handler;       // 0x2B0: Error handler function
   m68k_ptr_t xmit_callback;     // 0x2B4: Transmit callback function
-  m68k_ptr_t xon_xoff_handler;  // 0x2B8: XON/XOFF handler
-  m68k_ptr_t flow_ctrl_handler; // 0x2BC: Flow control handler
+  tty_xon_xoff_handler_t xon_xoff_handler;   // 0x2B8: XON/XOFF handler
+  tty_flow_ctrl_handler_t flow_ctrl_handler; // 0x2BC: Flow control handler
   m68k_ptr_t status_handler;    // 0x2C0: Status change handler
-  m68k_ptr_t reserved_2C4;      // 0x2C4: Reserved
 
-  // Input buffer control (0x2C8-0x2D0)
-  uint16_t reserved_2C8; // 0x2C8: Reserved
-  uint16_t input_head;   // 0x2CA: Input buffer head index (1-256)
-  uint16_t input_read;   // 0x2CC: Input buffer read position
-  uint16_t input_tail;   // 0x2CE: Input buffer tail index (1-256)
+  // Timestamp of the last completed input line.  TIME_$CLOCK writes a 48-bit
+  // clock_t here (0x2C4..0x2C9); see TTY_$I_RCV 0xE1BCE4 and
+  // TTY_$I_STORE_PARITY 0xE1BD8C.  Split into two scalars rather than an
+  // embedded clock_t so the layout is identical on m68k (2-byte alignment)
+  // and on the host test build (4-byte alignment).
+  uint32_t last_input_clock_high; // 0x2C4: clock_t.high
+  uint16_t last_input_clock_low;  // 0x2C8: clock_t.low
 
-  // Input buffer (0x2D1-0x3D0) - 256 bytes starting at index 1
-  uint8_t input_buffer[TTY_BUFFER_SIZE]; // 0x2D0: Circular input buffer
+  // ---------------------------------------------------------------------
+  // Input circular buffer (0x2CA..0x3D1).
+  //
+  // tty_$i_buf_insert (0x00E1AF0A) is handed &input_read, i.e. the record
+  //   { head: word; tail: word; size: word; data: array[1..256] of char }
+  // and stores at (0x5,A0,tail.w) == data[tail-1].  In TTY_$I_RCV the same
+  // element is reached as (0x2d1,A2,tail.w), so input_buffer[] itself starts
+  // at 0x2D2 and the assembly's 0x2D1 displacement is &input_buffer[-1].
+  // ---------------------------------------------------------------------
+  uint16_t input_head; // 0x2CA: end of committed input (consumer limit), 1..256
+  uint16_t input_read; // 0x2CC: buffer header word 0 ("head" seen by buf_insert)
+  uint16_t input_tail; // 0x2CE: buffer header word 1 (write position), 1..256
+  uint16_t input_size; // 0x2D0: buffer size, always TTY_BUFFER_SIZE (0xE33340)
 
-  // Output buffer control (0x3D0-0x3D8)
-  uint16_t reserved_3D0; // 0x3D0: Reserved
-  uint16_t output_head;  // 0x3D2: Output buffer head index
-  uint16_t output_read;  // 0x3D4: Output buffer read position
-  uint16_t output_tail;  // 0x3D6: Output buffer tail index
+  uint8_t input_buffer[TTY_BUFFER_SIZE]; // 0x2D2: data, indexed [pos - 1]
+
+  // ---------------------------------------------------------------------
+  // Output circular buffer (0x3D2..0x4D7), same record shape: the header
+  // handed to tty_$i_buf_put is &output_head, so output_read is the write
+  // position and output_tail is really the size word (0xE33352).
+  // ---------------------------------------------------------------------
+  uint16_t output_head;  // 0x3D2: buffer header word 0 (consumer position)
+  uint16_t output_read;  // 0x3D4: buffer header word 1 (write position)
+  uint16_t output_tail;  // 0x3D6: buffer size word, always TTY_BUFFER_SIZE
 
   // Output buffer (0x3D8-0x4D7) - 256 bytes
-  uint8_t output_buffer[TTY_BUFFER_SIZE]; // 0x3D8: Circular output buffer
+  uint8_t output_buffer[TTY_BUFFER_SIZE]; // 0x3D8: data, indexed [pos - 1]
 
   // Crash/debug settings (0x4D8-0x4DB)
   uint8_t crash_char;    // 0x4D8: Crash character (if enabled)
@@ -168,6 +205,35 @@ typedef struct tty_desc {
   uint16_t reserved_4DA; // 0x4DA: Reserved
 
 } tty_desc_t;
+
+// Layout recovered from the SAU2 image; see the addresses cited above.
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(tty_desc_t, state_flags) == 0x08, "tty_desc_t.state_flags");
+_Static_assert(__builtin_offsetof(tty_desc_t, pending_signal) == 0x0A, "tty_desc_t.pending_signal");
+_Static_assert(__builtin_offsetof(tty_desc_t, input_flags) == 0x14, "tty_desc_t.input_flags");
+_Static_assert(__builtin_offsetof(tty_desc_t, break_mode) == 0x38, "tty_desc_t.break_mode");
+_Static_assert(__builtin_offsetof(tty_desc_t, saved_input_flags) == 0x56, "tty_desc_t.saved_input_flags");
+_Static_assert(__builtin_offsetof(tty_desc_t, column) == 0x58, "tty_desc_t.column");
+_Static_assert(__builtin_offsetof(tty_desc_t, signals) == 0x5C, "tty_desc_t.signals");
+_Static_assert(__builtin_offsetof(tty_desc_t, char_class) == 0xA4, "tty_desc_t.char_class");
+_Static_assert(__builtin_offsetof(tty_desc_t, input_ec) == 0x2A4, "tty_desc_t.input_ec");
+_Static_assert(__builtin_offsetof(tty_desc_t, output_ec) == 0x2A8, "tty_desc_t.output_ec");
+_Static_assert(__builtin_offsetof(tty_desc_t, xon_xoff_handler) == 0x2B8, "tty_desc_t.xon_xoff_handler");
+_Static_assert(__builtin_offsetof(tty_desc_t, flow_ctrl_handler) == 0x2BC, "tty_desc_t.flow_ctrl_handler");
+_Static_assert(__builtin_offsetof(tty_desc_t, last_input_clock_high) == 0x2C4, "tty_desc_t.last_input_clock_high");
+_Static_assert(__builtin_offsetof(tty_desc_t, input_head) == 0x2CA, "tty_desc_t.input_head");
+_Static_assert(__builtin_offsetof(tty_desc_t, input_read) == 0x2CC, "tty_desc_t.input_read");
+_Static_assert(__builtin_offsetof(tty_desc_t, input_tail) == 0x2CE, "tty_desc_t.input_tail");
+_Static_assert(__builtin_offsetof(tty_desc_t, input_size) == 0x2D0, "tty_desc_t.input_size");
+_Static_assert(__builtin_offsetof(tty_desc_t, input_buffer) == 0x2D2, "tty_desc_t.input_buffer");
+_Static_assert(__builtin_offsetof(tty_desc_t, output_head) == 0x3D2, "tty_desc_t.output_head");
+_Static_assert(__builtin_offsetof(tty_desc_t, output_read) == 0x3D4, "tty_desc_t.output_read");
+_Static_assert(__builtin_offsetof(tty_desc_t, output_tail) == 0x3D6, "tty_desc_t.output_tail");
+_Static_assert(__builtin_offsetof(tty_desc_t, output_buffer) == 0x3D8, "tty_desc_t.output_buffer");
+_Static_assert(__builtin_offsetof(tty_desc_t, crash_char) == 0x4D8, "tty_desc_t.crash_char");
+_Static_assert(__builtin_offsetof(tty_desc_t, raw_mode) == 0x4D9, "tty_desc_t.raw_mode");
+_Static_assert(sizeof(tty_desc_t) == 0x4DC, "tty_desc_t size");
+#endif
 
 // =============================================================================
 // Global TTY data

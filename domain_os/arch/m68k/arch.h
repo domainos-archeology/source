@@ -26,6 +26,18 @@
 #define ARCH_ALIGN_32      4
 
 /*
+ * ARCH_SPIN_TICK() - one iteration of a hardware-timing busy-wait loop.
+ *
+ * Domain/OS meets device setup/hold times by counting down a register in a
+ * tight loop (cal_$delay at 0x00E81756, time_$read_cal_delay at 0x00E2AF58).
+ * Those loop bodies have no other side effect, so a C compiler is free to
+ * delete them entirely.  This macro expands to an empty volatile asm with a
+ * memory clobber: the compiler must keep the loop and run it exactly the
+ * requested number of times, and it emits no instructions of its own.
+ */
+#define ARCH_SPIN_TICK() __asm__ __volatile__("" ::: "memory")
+
+/*
  * M68K Global Register Variables
  *
  * The A5 register is used as the global data pointer in Domain/OS.

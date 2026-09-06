@@ -109,7 +109,7 @@ void TTY_$I_INIT(tty_desc_t *tty)
     tty->input_head = 1;
     tty->input_read = 1;
     tty->input_tail = 1;
-    tty->reserved_2C8 = 0x100;
+    tty->input_size = 0x100;
 
     // Initialize output buffer
     tty->output_head = 1;

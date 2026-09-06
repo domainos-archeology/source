@@ -58,7 +58,7 @@ void TTY_$I_STORE_PARITY(tty_desc_t *tty, uint8_t ch)
             /* Not enough characters yet */
             if (tty->break_mode == 3) {
                 /* Mode 3: record time for timeout handling */
-                TIME_$CLOCK((clock_t *)&tty->reserved_2C4);
+                TIME_$CLOCK((clock_t *)&tty->last_input_clock_high);
             }
         } else {
             /* Enough characters: advance head pointer */

@@ -79,11 +79,11 @@ ushort TTY_$K_GET(short *line_ptr, void *options, void *buffer,
                 /* Read characters until buffer empty or count reached */
                 while (read_pos != tty->input_tail && chars_read < *count) {
                     /* Get character from buffer */
-                    ch = tty->input_buffer[read_pos];
+                    ch = tty->input_buffer[read_pos - 1];
 
                     /* Clear buffer position if requested */
                     if (clear_flag >= 0) {
-                        tty->input_buffer[read_pos] = 0;
+                        tty->input_buffer[read_pos - 1] = 0;
                     }
 
                     /* Advance read position (circular buffer 1-256) */
@@ -128,11 +128,11 @@ ushort TTY_$K_GET(short *line_ptr, void *options, void *buffer,
             /* Line mode - read until break or buffer full */
             while (read_pos != tty->input_tail && chars_read < *count) {
                 /* Get character from buffer */
-                *buf_ptr = tty->input_buffer[read_pos];
+                *buf_ptr = tty->input_buffer[read_pos - 1];
 
                 /* Clear buffer position if requested */
                 if (clear_flag >= 0) {
-                    tty->input_buffer[read_pos] = 0;
+                    tty->input_buffer[read_pos - 1] = 0;
                 }
 
                 buf_ptr++;
@@ -164,9 +164,9 @@ update_read_pos:
                 buffer_count >= 0x40 &&
                 tty->flow_ctrl_handler != 0) {
                 token = ML_$SPIN_LOCK(&TTY_$SPIN_LOCK);
-                int8_t hw_flow = -((*(uint8_t *)((char *)tty + 0x17) & 0x02) != 0);
-                ((void (*)(short, int8_t, int8_t))tty->flow_ctrl_handler)(
-                    (short)tty->line_id, 0, hw_flow);
+                /* 0xE1C54E: sne on btst.b #1,(0x17,A2) == bit 1 of the long */
+                boolean hw_flow = (tty->input_flags & 0x02) != 0 ? true : false;
+                tty->flow_ctrl_handler(tty->line_id, false, hw_flow);
                 ML_$SPIN_UNLOCK(&TTY_$SPIN_LOCK, token);
             }
 

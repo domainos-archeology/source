@@ -152,13 +152,13 @@ typedef struct tty_desc {
     m68k_ptr_t xon_xoff_handler;
     m68k_ptr_t flow_ctrl_handler;
     m68k_ptr_t status_handler;
-    m68k_ptr_t reserved_2C4;
-    uint16_t reserved_2C8;
+    uint32_t last_input_clock_high;
+    uint16_t last_input_clock_low;
     uint16_t input_head;
     uint16_t input_read;
     uint16_t input_tail;
+    uint16_t input_size;
     uint8_t input_buffer[TTY_BUFFER_SIZE];
-    uint16_t reserved_3D0;
     uint16_t output_head;
     uint16_t output_read;
     uint16_t output_tail;
