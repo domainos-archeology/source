@@ -403,8 +403,8 @@ void RING_$SVC_WRITE(uint16_t *unit_ptr, void *hdr, void *param3,
 
     /* Find packet type in table */
     pkt_type_idx = ring_$find_pkt_type(hdr_ptr[0],
-                                       unit_data->pkt_type_table,
-                                       unit_data->something);
+                                       unit_data->pkt_types,
+                                       unit_data->pkt_type_cnt);
 
     if (pkt_type_idx == 0) {
         FIM_$RLS_CLEANUP(fim_cleanup);

@@ -8,317 +8,431 @@
  *   XNS_IDP_$DEMUX:             0x00E18B8A
  *   XNS_IDP_$OS_ADD_PORT:       0x00E1872C
  *   XNS_IDP_$OS_DELETE_PORT:    0x00E1876C
+ *
+ * All four routines use A5 = 0xE2B314 (the IDP module data base,
+ * `lea (0xE2B314).l,A5'), reached here through XNS_IDP_BASE.
  */
 
 #include "xns/xns_internal.h"
 
 /*
- * XNS_IDP_$OS_DEMUX - Demultiplex incoming packet (OS-level)
+ * Constant cells in the code region, passed to XNS_ERROR_$SEND by reference.
  *
- * Called by the MAC layer when an IDP packet is received. This function:
- *   1. Validates the packet checksum
- *   2. Determines if packet is for us or needs forwarding
- *   3. Finds the target channel based on socket number
- *   4. Delivers to the channel's demux callback
+ * Apollo Pascal passes literal `const' arguments by address: the compiler
+ * places the literal in the code stream and emits `pea (d,PC)'.  The three
+ * cells used by XNS_IDP_$OS_DEMUX are:
  *
- * @param packet_info   Packet information structure
- * @param port_ptr      Pointer to receiving port number
- * @param param3        Additional parameter
- * @param status_ret    Output: status code
+ *   0x00E18726  word 0x0000  error parameter (both branches)
+ *   0x00E18728  word 0x0201  bad checksum detected in transit
+ *   0x00E1872A  word 0x0001  bad checksum detected at the destination
  *
- * Original address: 0x00E184A8
+ * `pea (0x1DC,PC)' at 0x00E1854C resolves to 0x00E1854C + 2 + 0x1DC =
+ * 0x00E1872A; `pea (0x1C8,PC)' at 0x00E1855E resolves to 0x00E18728; both
+ * `pea (0x1DC,PC)' at 0x00E18548 and `pea (0x1CA,PC)' at 0x00E1855A resolve
+ * to 0x00E18726.  The cells are read-only, hence `const'; the explicit cast
+ * at the call site only drops the qualifier to match the callee prototype.
  */
-void XNS_IDP_$OS_DEMUX(void *packet_info, int16_t *port_ptr, void *param3, status_$t *status_ret)
+static const uint16_t xns_idp_c_error_param_none = XNS_ERROR_PARAM_NONE;
+static const uint16_t xns_idp_c_bad_checksum_transit =
+    XNS_ERROR_BAD_CHECKSUM_TRANSIT;
+static const uint16_t xns_idp_c_bad_checksum_at_dest = XNS_ERROR_BAD_CHECKSUM;
+
+#define XNS_IDP_CONST_REF(c) ((uint16_t *)&(c))
+
+/*
+ * Is a six-byte XNS host id the all-ones (broadcast) host?
+ *
+ * The original compares the three constituent words against -1 with
+ * `cmp.w' (XNS_IDP_$OS_DEMUX 0x00E184D0..0x00E184E0 on the source host,
+ * XNS_IDP_$DEMUX 0x00E18BB2..0x00E18BC2 on the destination host).  Testing
+ * the six bytes is equivalent and independent of host byte order.
+ */
+static int xns_idp_host_is_all_ones(const uint8_t host[6])
 {
-    uint8_t *base = XNS_IDP_BASE;
-    uint8_t *pkt = (uint8_t *)packet_info;
-    int16_t *header;
-    int8_t is_local;
-    int16_t dest_socket;
-    uint16_t channel;
-    route_$port_t *rport;
-    status_$t local_status;
-
-    *status_ret = status_$ok;
-
-    /* Increment received counter */
-    *(uint32_t *)(base + XNS_OFF_PACKETS_RECV) += 1;
-
-    /* Get packet header pointer */
-    header = *(int16_t **)(pkt + 0x20);
-
-    /* Check if destination is broadcast or not for us */
-    if (header[0x0D] == -1 && header[0x0B] == -1 && header[0x0C] == -1) {
-        /* Broadcast - drop if no local socket */
-        *(uint32_t *)(base + XNS_OFF_PACKETS_DROP) += 1;
-        *status_ret = status_$xns_no_route;
-        return;
-    }
-
-    /* Validate checksum */
-    if (header[0] != -1) {
-        int16_t computed = xns_$get_checksum(packet_info);
-        if (computed != header[0]) {
-            /* Checksum mismatch - send error */
-            uint8_t local_params[0x88];
-            uint16_t error_code;
-            uint16_t error_param;
-            uint8_t dummy[10];
-
-            /* Set up error params */
-            *(uint32_t *)(local_params + 0x62) = *(uint32_t *)(pkt + 0x2A);
-            *(uint16_t *)(local_params + 0x5E) = *(uint16_t *)(pkt + 0x2E);
-            *(uint32_t *)(local_params + 0x70) = *(uint32_t *)(pkt + 0x1C);
-            *(uint32_t *)(local_params + 0x74) = *(uint32_t *)(pkt + 0x20);
-            *(uint32_t *)(local_params + 0x78) = *(uint32_t *)(pkt + 0x24);
-            local_params[0x64] = 0xFF;
-
-            /* Copy extra info */
-            {
-                int16_t i;
-                for (i = 0; i < 20; i++) {
-                    local_params[0x54 + i] = pkt[0x38 + i];
-                }
-            }
-
-            /* Check if destination is local or broadcast */
-            is_local = xns_$is_broadcast_addr((uint8_t *)(header + 3));
-            if (is_local < 0) {
-                error_code = XNS_ERROR_BAD_CHECKSUM;
-            } else {
-                error_code = XNS_ERROR_BAD_CHECKSUM;  /* Same code */
-            }
-            error_param = 0;
-
-            XNS_ERROR_$SEND(local_params, &error_code, &error_param, dummy, &local_status);
-            *(uint32_t *)(base + XNS_OFF_PACKETS_DROP) += 1;
-            *status_ret = status_$xns_bad_checksum;
-            return;
-        }
-    }
-
-    /* Get port info */
-    rport = ROUTE_$PORTP[*port_ptr];
-
-    /* Check if destination is local */
-    is_local = xns_$is_broadcast_addr((uint8_t *)(header + 3));
-
-    if (is_local < 0) {
-        /* Destination is local - find channel by socket */
-        dest_socket = header[8];
-
-        if (dest_socket != -1 && dest_socket != 0) {
-            /* Look up channel by socket number */
-            uint16_t found_channel = XNS_MAX_CHANNELS;
-            int16_t i;
-
-            for (i = 0; i < XNS_MAX_CHANNELS; i++) {
-                uint8_t *chan = base + i * XNS_CHANNEL_SIZE;
-                if (*(uint16_t *)(chan + XNS_CHAN_OFF_XNS_SOCKET) == dest_socket) {
-                    found_channel = i;
-                    break;
-                }
-            }
-
-            if (found_channel == XNS_MAX_CHANNELS ||
-                *(uint32_t *)(base + found_channel * XNS_CHANNEL_SIZE + XNS_CHAN_OFF_DEMUX) == 0) {
-                *(uint32_t *)(base + XNS_OFF_PACKETS_DROP) += 1;
-                *status_ret = status_$xns_no_route;
-                return;
-            }
-
-            /* Set up callback parameters */
-            {
-                uint8_t callback_params[0x88];
-                code_ptr_t callback;
-                uint8_t *chan = base + found_channel * XNS_CHANNEL_SIZE;
-
-                *(uint32_t *)(callback_params + 0x62) = *(uint32_t *)(pkt + 0x2A);
-                *(uint16_t *)(callback_params + 0x5E) = *(uint16_t *)(pkt + 0x2E);
-                *(void **)(callback_params + 0x58) = (void *)(base + found_channel * XNS_CHANNEL_SIZE + XNS_CHAN_OFF_DEMUX);
-                *(uint32_t *)(callback_params + 0x70) = *(uint32_t *)(pkt + 0x1C);
-                *(uint32_t *)(callback_params + 0x74) = *(uint32_t *)(pkt + 0x20);
-                *(uint32_t *)(callback_params + 0x78) = *(uint32_t *)(pkt + 0x24);
-                callback_params[0x64] = 0xFF;
-
-                /* Copy extra info */
-                {
-                    int16_t j;
-                    for (j = 0; j < 20; j++) {
-                        callback_params[0x54 + j] = pkt[0x38 + j];
-                    }
-                }
-
-                /* Call channel's demux callback */
-                callback = (code_ptr_t)*(uint32_t *)(chan + XNS_CHAN_OFF_DEMUX);
-                ((void (*)(void *, void *, void *, void *, status_$t *))callback)
-                    (callback_params,
-                     (void *)((uint8_t *)rport + 0x2E),
-                     (void *)((uint8_t *)rport + 0x30),
-                     param3,
-                     status_ret);
-
-                if (*status_ret == status_$ok) {
-                    return;
-                }
-                *(uint32_t *)(base + XNS_OFF_PACKETS_DROP) += 1;
-            }
-        }
-    } else {
-        /* Destination not local - need to forward (routing) */
-        /* ROUTE_$STD_N_ROUTING_PORTS, ROUTE_$SOCK: route/route.h */
-
-        if (ROUTE_$STD_N_ROUTING_PORTS < 2) {
-            /* No routing configured */
-            *(uint32_t *)(base + XNS_OFF_PACKETS_DROP) += 1;
-            *status_ret = status_$xns_no_route;
-            return;
-        }
-
-        /* Check hop count */
-        if (*(uint8_t *)((uint8_t *)header + 4) >= 15) {
-            /* Too many hops */
-            *(uint32_t *)(base + XNS_OFF_PACKETS_DROP) += 1;
-            *status_ret = status_$xns_hop_count_exceeded;
-            return;
-        }
-
-        /* Forward packet via routing socket */
-        {
-            struct {
-                int16_t flags;
-                uint32_t mac_info1;
-                uint16_t mac_info2;
-                uint32_t mac_info3;
-                uint16_t header_len;
-                uint16_t port_info;
-                int16_t *header_ptr;
-                uint16_t extra[16];
-            } forward_params;
-
-            forward_params.flags = 2;
-            forward_params.mac_info1 = *(uint32_t *)(pkt + 0x2A);
-            forward_params.mac_info2 = *(uint16_t *)(pkt + 0x2E);
-            forward_params.mac_info3 = *(uint32_t *)(pkt + 0x30);
-            forward_params.header_ptr = header;
-            forward_params.header_len = *(uint16_t *)(pkt + 0x1E);
-            forward_params.port_info = *(uint16_t *)(pkt + 0x3A);
-
-            /* Copy MAC info */
-            {
-                int16_t k;
-                for (k = 0; k < 16; k++) {
-                    forward_params.extra[k] = *(uint16_t *)(pkt + 0x3C + k * 2);
-                }
-            }
-
-            /* Put to routing socket */
-            {
-                int8_t result = SOCK_$PUT(ROUTE_$SOCK, &forward_params, 0,
-                                          *(uint16_t *)((uint8_t *)rport + 0x2E),
-                                          *(uint16_t *)((uint8_t *)rport + 0x30));
-                if (result >= 0) {
-                    *(uint32_t *)(base + XNS_OFF_PACKETS_DROP) += 1;
-                    *status_ret = status_$xns_packet_dropped;
-                    return;
-                }
-            }
-        }
-    }
-
-    *(uint32_t *)(base + XNS_OFF_PACKETS_DROP) += 1;
-    *status_ret = status_$xns_no_route;
+    return host[0] == 0xFF && host[1] == 0xFF && host[2] == 0xFF &&
+           host[3] == 0xFF && host[4] == 0xFF && host[5] == 0xFF;
 }
 
 /*
- * XNS_IDP_$DEMUX - Demultiplex incoming packet (user-level callback)
+ * XNS_IDP_$OS_DEMUX - Demultiplex an incoming IDP packet (OS level)
  *
- * Default demux callback for user channels. Queues the packet to
- * the channel's user socket.
+ * Installed as the MAC-layer receive callback by xns_$add_port
+ * (`move.l #0xE184A8,(-0x10,A6)' at 0x00E17C40).  The routine:
  *
- * @param packet_info   Packet information
- * @param port_hi       Port high word pointer
- * @param port_lo       Port low word pointer
- * @param flags         Flags pointer
- * @param status_ret    Output: status code
+ *   1. counts the packet and rejects frames with a broadcast source host;
+ *   2. verifies the IDP checksum, replying with an XNS Error Protocol
+ *      packet when it is wrong;
+ *   3. if the IDP destination address is one of ours (or broadcast),
+ *      finds the channel bound to the destination socket and calls its
+ *      demux vector;
+ *   4. otherwise, if this node routes standard IDP traffic and the packet
+ *      still has hops left, queues it on the routing socket.
+ *
+ * Domain Pascal single-exit: every path leaves through `done', which maps
+ * to the shared epilogue at 0x00E1871C.
+ *
+ * @param pkt            MAC receive descriptor (A6+0x08)
+ * @param port_ptr       ROUTE port index the frame arrived on (A6+0x0C)
+ * @param mac_broadcast  Domain boolean, passed straight through to the
+ *                       channel demux vector (A6+0x10)
+ * @param status_ret     Output status (A6+0x14)
+ *
+ * Original address: 0x00E184A8
+ */
+void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
+                       boolean *mac_broadcast, status_$t *status_ret)
+{
+    xns_$idp_header_t *header;      /* A2 */
+    route_$port_t *rport;           /* D2 */
+    xns_$channel_t *chan;           /* A2, reloaded at 0x00E185EE */
+    uint16_t chan_idx;              /* A6-0x98 */
+    int16_t i;
+    int8_t checksum_bad;            /* D2b, set by `sne' at 0x00E184FC */
+    int8_t put_ok;                  /* D0b */
+    uint16_t *error_code;           /* the code cell chosen at 0x00E1853E */
+
+    /*
+     * Argument record for the channel demux vector and for
+     * XNS_ERROR_$SEND, built at A6-0x88 and passed by `pea (-0x88,A6)'.
+     */
+    xns_$pkt_desc_t rec;
+
+    /* Argument record for SOCK_$PUT, built at A6-0x40. */
+    xns_$sock_pkt_t fwd;
+
+    /* XNS_ERROR_$SEND out-parameters: A6-0x96 (word) and A6-0x8C (status) */
+    uint16_t err_result;
+    status_$t err_status;
+
+    *status_ret = status_$ok;               /* 0x00E184C0 clr.l (A0) */
+    XNS_PACKETS_RECV() += 1;                /* 0x00E184C2 addq.l #1,(0x4,A5) */
+
+    header = pkt->d.header;                 /* 0x00E184CC movea.l (0x20,A1),A2 */
+
+    /*
+     * 0x00E184D0..0x00E184E0: a frame whose IDP source host is the
+     * all-ones broadcast id is not deliverable and not answerable.
+     */
+    if (xns_idp_host_is_all_ones(header->src_host)) {
+        XNS_PACKETS_DROP() += 1;            /* 0x00E184E2 addq.l #1,(0x8,A5) */
+        goto no_route;                      /* 0x00E184E6 bra.w 0x00E18684 */
+    }
+
+    /* 0x00E184EA: 0xFFFF in the checksum field means "not checksummed". */
+    if (header->checksum != 0xFFFF) {
+        /* 0x00E184F2..0x00E184FC: bsr xns_$get_checksum; cmp.w (A2); sne */
+        checksum_bad =
+            (xns_$get_checksum(pkt) != (int16_t)header->checksum) ? -1 : 0;
+
+        /* 0x00E184FE tst.b D2b / bpl: Domain booleans are tested signed. */
+        if (checksum_bad < 0) {
+            /*
+             * 0x00E18502..0x00E1852E: build the error-report record.  The
+             * dbf loop is `moveq #0x4' + `dbf', i.e. five longwords = 20
+             * bytes from pkt+0x38 into rec+0x34.
+             */
+            rec.mac_src_hi = pkt->d.mac_src_hi;   /* 0x00E18504 */
+            rec.mac_src_lo = pkt->d.mac_src_lo;   /* 0x00E1850A */
+            rec.data_len = pkt->d.data_len;       /* 0x00E18518 */
+            rec.header = pkt->d.header;           /* 0x00E1851A */
+            rec.iov = pkt->d.iov;                 /* 0x00E1851C */
+            rec.from_net = true;                  /* 0x00E1851E st (-0x64,A6) */
+
+            rec._unknown_34[0] = pkt->d._unknown_34[0];   /* 0x00E1852C, */
+            rec._unknown_34[1] = pkt->d._unknown_34[1];   /* five longwords */
+            rec.port_info = pkt->d.port_info;
+            for (i = 0; i < 16; i++) {
+                rec.mac_info[i] = pkt->d.mac_info[i];
+            }
+
+            /*
+             * 0x00E18532..0x00E1855E: two DISTINCT error numbers.  If the
+             * IDP destination address is ours (or broadcast) the checksum
+             * failed at the destination (0x0001); otherwise the packet was
+             * only passing through and the error is reported as detected in
+             * transit (0x0201).
+             */
+            if (xns_$is_broadcast_addr(&header->dest_network) < 0) {
+                error_code = XNS_IDP_CONST_REF(xns_idp_c_bad_checksum_at_dest);
+            } else {
+                error_code = XNS_IDP_CONST_REF(xns_idp_c_bad_checksum_transit);
+            }
+
+            /* 0x00E18562 pea (-0x88,A6); 0x00E18566 jsr XNS_ERROR_$SEND */
+            XNS_ERROR_$SEND(&rec, error_code,
+                            XNS_IDP_CONST_REF(xns_idp_c_error_param_none),
+                            &err_result, &err_status);
+
+            XNS_PACKETS_DROP() += 1;                    /* 0x00E1856C */
+            *status_ret = status_$xns_bad_checksum;     /* 0x00E18572 */
+            goto done;                                  /* 0x00E18578 */
+        }
+    }
+
+    /* 0x00E1857C..0x00E1858A: rport = ROUTE_$PORTP[*port_ptr] */
+    rport = ROUTE_$PORTP[*port_ptr];
+
+    /* 0x00E1858E..0x00E1859A: is the IDP destination ours (or broadcast)? */
+    if (xns_$is_broadcast_addr(&header->dest_network) < 0) {
+        /*
+         * Local delivery.
+         * 0x00E1859E..0x00E185AC: socket 0xFFFF and socket 0 are not
+         * deliverable.
+         */
+        if (header->dest_socket == 0xFFFF || header->dest_socket == 0) {
+            goto drop_no_route;             /* beq.w 0x00E1867E */
+        }
+
+        /*
+         * 0x00E185B0..0x00E185D4: linear scan of the 16 channels for one
+         * bound to this socket.  `moveq #0xF' + `dbf' is 16 iterations and
+         * the stride is `lea (0x48,A1),A1'.  chan_idx stays at 0x10 when
+         * nothing matches.
+         */
+        chan_idx = XNS_MAX_CHANNELS;        /* 0x00E185B0 move.w #0x10 */
+        for (i = 0; i < XNS_MAX_CHANNELS; i++) {
+            if (XNS_CHANNEL_PTR(i)->xns_socket == (int16_t)header->dest_socket) {
+                chan_idx = (uint16_t)i;     /* 0x00E185C8 */
+                break;                      /* 0x00E185CC bra.b */
+            }
+        }
+
+        /*
+         * 0x00E185D8..0x00E185F6: no channel, or the channel has no demux
+         * vector installed.  Same drop epilogue as 0x00E1867E.
+         */
+        if (chan_idx == XNS_MAX_CHANNELS ||
+            XNS_CHANNEL_PTR(chan_idx)->demux == NULL) {
+            goto drop_no_route;             /* 0x00E185F8 */
+        }
+
+        chan = XNS_CHANNEL_PTR(chan_idx);   /* 0x00E185EE lea (0,A5,D5),A2 */
+
+        /*
+         * 0x00E18608..0x00E1863C: build the callback record.  Same shape as
+         * the error record above, plus the channel back-pointer at +0x30
+         * (`lea (0xA0,A2),A4'), and again five longwords = 20 bytes.
+         */
+        rec.mac_src_hi = pkt->d.mac_src_hi;     /* 0x00E1860A */
+        rec.mac_src_lo = pkt->d.mac_src_lo;     /* 0x00E18610 */
+        rec.channel = chan;                     /* 0x00E1861A */
+        rec.data_len = pkt->d.data_len;         /* 0x00E18626 */
+        rec.header = pkt->d.header;             /* 0x00E18628 */
+        rec.iov = pkt->d.iov;                   /* 0x00E1862A */
+        rec.from_net = true;                    /* 0x00E1862C st (-0x64,A6) */
+
+        rec._unknown_34[0] = pkt->d._unknown_34[0];
+        rec._unknown_34[1] = pkt->d._unknown_34[1];
+        rec.port_info = pkt->d.port_info;
+        for (i = 0; i < 16; i++) {
+            rec.mac_info[i] = pkt->d.mac_info[i];
+        }
+
+        /*
+         * 0x00E18640..0x00E18658: five longword arguments, then
+         * `movea.l (0xA0,A2),A4' / `jsr (A4)'.  mac_broadcast is passed on
+         * as the caller's pointer (`move.l (0x10,A6),-(SP)').
+         */
+        ((xns_$demux_fn_t)chan->demux)(&rec, &rport->port_type,
+                                       &rport->socket, mac_broadcast,
+                                       status_ret);
+
+        /*
+         * 0x00E1865E..0x00E1866A: on failure count one drop and keep the
+         * status the callback produced - it is NOT overwritten.
+         */
+        if (*status_ret == status_$ok) {
+            goto done;                      /* 0x00E18662 beq.w */
+        }
+        XNS_PACKETS_DROP() += 1;            /* 0x00E18666 */
+        goto done;                          /* 0x00E1866A bra.w */
+    } else {
+        /*
+         * Forwarding.
+         * 0x00E1866E: this node must be configured for standard IDP
+         * routing (at least two routing ports).
+         */
+        if (ROUTE_$STD_N_ROUTING_PORTS < 2) {
+            ROUTE_$STAT_DROPPED_STD_ROUTE += 1;     /* 0x00E18678 */
+            goto drop_no_route;                     /* falls into 0x00E1867E */
+        }
+
+        /*
+         * 0x00E1868E..0x00E18698: transport control byte compared
+         * *unsigned* against 15 (`bcs' = branch if lower).
+         */
+        if (header->transport_ctl >= 15) {
+            ROUTE_$STAT_DROPPED_STD_HOP += 1;               /* 0x00E1869A */
+            XNS_PACKETS_DROP() += 1;                        /* 0x00E186A0 */
+            *status_ret = status_$xns_hop_count_exceeded;   /* 0x00E186A6 */
+            goto done;                                      /* 0x00E186AC */
+        }
+
+        /* 0x00E186AE..0x00E186E8: build the SOCK_$PUT record at A6-0x40. */
+        fwd.flags = XNS_SOCK_PKT_F_IDP;         /* 0x00E186AE move.w #2 */
+        fwd.mac_src_hi = pkt->d.mac_src_hi;     /* 0x00E186B6 */
+        fwd.mac_src_lo = pkt->d.mac_src_lo;     /* 0x00E186BC */
+
+        /*
+         * 0x00E186C2 `move.l (0x30,A0),(-0x34,A6)': one longword read that
+         * spans the two words at descriptor +0x2C and +0x2E.  Expressed
+         * with shifts so it does not depend on host byte order.
+         */
+        fwd.data_len = ((uint32_t)pkt->d.pkt_len << 16) |
+                       (uint32_t)pkt->d._unknown_2e;
+
+        fwd.header = header;                    /* 0x00E186C8 move.l A2 */
+
+        /* 0x00E186CC `move.w (0x1E,A0)': low word of the length at +0x1C. */
+        fwd.header_len = (uint16_t)pkt->d.data_len;
+
+        fwd.port_info = pkt->d.port_info;       /* 0x00E186D2 */
+
+        /* 0x00E186E0..0x00E186E6: four `move.l' = 16 bytes, not 32. */
+        for (i = 0; i < 16; i++) {
+            fwd.mac_info[i] = pkt->d.mac_info[i];
+        }
+
+        fwd.reserved_12 = 0;                    /* 0x00E186E8 clr.w (-0x2E,A6) */
+
+        /*
+         * 0x00E186EC..0x00E18708: SOCK_$PUT(ROUTE_$SOCK, &fwd, 0,
+         * rport->port_type, rport->socket) - the two event-count words are
+         * pushed from (0x30,A1) then (0x2E,A1), so port_type is the first
+         * of them.
+         */
+        put_ok = SOCK_$PUT(ROUTE_$SOCK, (void **)&fwd, 0,
+                           rport->port_type, rport->socket);
+
+        /*
+         * 0x00E1870C `tst.b D0b' / `bmi': SOCK_$PUT returns the Domain
+         * boolean 0xFF when the packet was queued.  Success leaves
+         * *status_ret at status_$ok.
+         */
+        if (put_ok < 0) {
+            goto done;                          /* 0x00E1870E bmi.b */
+        }
+
+        XNS_PACKETS_DROP() += 1;                        /* 0x00E18710 */
+        *status_ret = status_$xns_packet_dropped;       /* 0x00E18716 */
+        goto done;
+    }
+
+drop_no_route:
+    XNS_PACKETS_DROP() += 1;                    /* 0x00E1867E addq.l #1,(0x8,A5) */
+no_route:
+    *status_ret = status_$xns_no_route;         /* 0x00E18684 move.l #0x3B0010 */
+done:
+    /* 0x00E1871C: shared movem/unlk/rts epilogue. */
+    return;
+}
+
+/*
+ * XNS_IDP_$DEMUX - Channel demux vector for user-mode channels
+ *
+ * Installed into xns_$channel_t.demux by XNS_IDP_$OPEN, and therefore
+ * called from XNS_IDP_$OS_DEMUX at 0x00E18658 with the record that routine
+ * built at A6-0x88.  It repackages the packet into the 0x40-byte socket
+ * record and queues it on the channel's user socket.
+ *
+ * @param rec            Packet descriptor from XNS_IDP_$OS_DEMUX (A6+0x08)
+ * @param port_type      &route_$port_t.port_type of the receiving port (A6+0x0C)
+ * @param port_socket    &route_$port_t.socket of the receiving port (A6+0x10)
+ * @param mac_broadcast  Domain boolean from the MAC layer (A6+0x14)
+ * @param status_ret     Output status (A6+0x18)
  *
  * Original address: 0x00E18B8A
  */
-void XNS_IDP_$DEMUX(void *packet_info, uint16_t *port_hi, uint16_t *port_lo,
-                    char *flags, status_$t *status_ret)
+void XNS_IDP_$DEMUX(xns_$pkt_desc_t *rec, uint16_t *port_type,
+                    uint16_t *port_socket, boolean *mac_broadcast,
+                    status_$t *status_ret)
 {
-    uint8_t *base = XNS_IDP_BASE;
-    uint8_t *pkt = (uint8_t *)packet_info;
-    int16_t *header;
-    uint16_t channel_flags = 2;
-    void *channel_demux_ptr;
-    uint16_t user_socket;
+    xns_$idp_header_t *header;      /* D0 / A1 */
+    xns_$channel_t *chan;           /* A3 */
+    xns_$sock_pkt_t out;            /* A6-0x40 */
+    int16_t i;
+    int8_t put_ok;                  /* D0b */
 
-    *status_ret = status_$ok;
+    *status_ret = status_$ok;               /* 0x00E18BA0 clr.l (A2) */
 
-    /* Get header pointer */
-    header = *(int16_t **)(pkt + 0x1C);
+    /* 0x00E18BA2: the flags word at record +0x10 starts out as "IDP". */
+    out.flags = XNS_SOCK_PKT_F_IDP;
 
-    /* Check if destination is broadcast */
-    if (header[0x0E / 2] == -1 && header[0x0A / 2] == -1 && header[0x0C / 2] == -1) {
-        channel_flags |= 1;  /* Broadcast flag */
+    header = rec->header;                   /* 0x00E18BA8 move.l (0x1C,A0),D0 */
+
+    /*
+     * 0x00E18BB2..0x00E18BC4: destination host is the all-ones broadcast
+     * id.  `bset.b #0,(-0x2F,A6)' addresses the LOW byte of the word at
+     * A6-0x30, so this is bit 0 of the flags word.
+     */
+    if (xns_idp_host_is_all_ones(header->dest_host)) {
+        out.flags |= XNS_SOCK_PKT_F_BROADCAST;
     }
 
-    if (*flags < 0) {
-        channel_flags |= 4;  /* Additional flag from caller */
+    /*
+     * 0x00E18BCA..0x00E18BD2: the MAC-level broadcast boolean, again the
+     * low byte of the flags word (`bset.b #2,(-0x2F,A6)').
+     */
+    if (*mac_broadcast < 0) {
+        out.flags |= XNS_SOCK_PKT_F_MAC_BCAST;
     }
 
-    /* Build socket put parameters */
-    {
-        struct {
-            uint32_t mac_info1;
-            uint16_t mac_info2;
-            uint32_t length;
-            int16_t *header_ptr;
-            uint16_t header_len;
-            uint16_t port_info;
-            uint16_t extra[16];
-            uint16_t flags;
-        } sock_params;
+    out.mac_src_hi = rec->mac_src_hi;       /* 0x00E18BD8 */
+    out.mac_src_lo = rec->mac_src_lo;       /* 0x00E18BDE */
 
-        sock_params.mac_info1 = *(uint32_t *)(pkt + 0x26);
-        sock_params.mac_info2 = *(uint16_t *)(pkt + 0x2A);
-        sock_params.length = *(uint32_t *)(pkt + 0x2C);
-        sock_params.header_ptr = header;
-        sock_params.header_len = *(uint16_t *)(pkt + 0x1A);
-        sock_params.port_info = *(uint16_t *)(pkt + 0x36);
+    /*
+     * 0x00E18BE4..0x00E18BEA: `clr.l D1; move.w (0x2C,A0),D1w; move.l D1'
+     * - a zero-extended WORD read, not a longword read.
+     */
+    out.data_len = (uint32_t)rec->pkt_len;
 
-        /* Copy extra fields */
-        {
-            int16_t i;
-            for (i = 0; i < 16; i++) {
-                sock_params.extra[i] = *(uint16_t *)(pkt + 0x38 + i * 2);
-            }
-        }
-        sock_params.flags = 0;
+    out.header = header;                    /* 0x00E18BEE */
 
-        /* Get channel's user socket */
-        channel_demux_ptr = *(void **)(pkt + 0x30);
-        user_socket = *(uint16_t *)((uint8_t *)channel_demux_ptr + 0x36);
+    /* 0x00E18BF2 `move.w (0x1A,A0)': low word of the length at +0x18. */
+    out.header_len = (uint16_t)rec->data_len;
 
-        if (user_socket == XNS_NO_SOCKET) {
-            *status_ret = status_$xns_no_route;
-            return;
-        }
+    out.port_info = rec->port_info;         /* 0x00E18BF8 */
 
-        /* Queue to user socket */
-        {
-            int8_t result = SOCK_$PUT(user_socket, &sock_params, 0, *port_hi, *port_lo);
-            if (result >= 0) {
-                *(uint32_t *)(base + XNS_OFF_PACKETS_DROP) += 1;
-                *status_ret = status_$xns_packet_dropped;
-            }
-        }
+    /* 0x00E18C06..0x00E18C0C: four `move.l' = 16 bytes, not 32. */
+    for (i = 0; i < 16; i++) {
+        out.mac_info[i] = rec->mac_info[i];
     }
+
+    out.reserved_12 = 0;                    /* 0x00E18C0E clr.w (-0x2E,A6) */
+
+    chan = rec->channel;                    /* 0x00E18C12 movea.l (0x30,A0),A3 */
+
+    /* 0x00E18C16: no user socket bound to this channel. */
+    if (chan->user_socket == XNS_NO_SOCKET) {
+        *status_ret = status_$xns_no_route; /* 0x00E18C1E; no drop counted */
+        goto done;                          /* 0x00E18C24 */
+    }
+
+    /*
+     * 0x00E18C26..0x00E18C3C: SOCK_$PUT(chan->user_socket, &out, 0,
+     * *port_type, *port_socket).
+     */
+    put_ok = SOCK_$PUT(chan->user_socket, (void **)&out, 0,
+                       *port_type, *port_socket);
+
+    /* 0x00E18C46 `tst.b D0b' / `bmi': queued, leave *status_ret ok. */
+    if (put_ok < 0) {
+        goto done;
+    }
+
+    XNS_PACKETS_DROP() += 1;                    /* 0x00E18C4A */
+    *status_ret = status_$xns_packet_dropped;   /* 0x00E18C4E */
+
+done:
+    /* 0x00E18C54: shared movem/unlk/rts epilogue. */
+    return;
 }
 
 /*
  * XNS_IDP_$OS_ADD_PORT - Add a port to a channel (OS-level)
+ *
+ * Thin locked wrapper around xns_$add_port; the arguments are pushed as
+ * (*channel, *port, status_ret) at 0x00E18744..0x00E18754.
  *
  * @param channel_ptr   Pointer to channel number
  * @param port_ptr      Pointer to port number
@@ -326,13 +440,12 @@ void XNS_IDP_$DEMUX(void *packet_info, uint16_t *port_hi, uint16_t *port_lo,
  *
  * Original address: 0x00E1872C
  */
-void XNS_IDP_$OS_ADD_PORT(uint16_t *channel_ptr, uint16_t *port_ptr, status_$t *status_ret)
+void XNS_IDP_$OS_ADD_PORT(uint16_t *channel_ptr, uint16_t *port_ptr,
+                          status_$t *status_ret)
 {
-    uint8_t *base = XNS_IDP_BASE;
-
-    ML_$EXCLUSION_START((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
-    xns_$add_port(*channel_ptr, *port_ptr, status_ret);
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
+    ML_$EXCLUSION_START(XNS_LOCK_PTR());     /* 0x00E1873C */
+    xns_$add_port(*channel_ptr, (int16_t)*port_ptr, status_ret);
+    ML_$EXCLUSION_STOP(XNS_LOCK_PTR());      /* 0x00E1875E */
 }
 
 /*
@@ -344,11 +457,10 @@ void XNS_IDP_$OS_ADD_PORT(uint16_t *channel_ptr, uint16_t *port_ptr, status_$t *
  *
  * Original address: 0x00E1876C
  */
-void XNS_IDP_$OS_DELETE_PORT(uint16_t *channel_ptr, uint16_t *port_ptr, status_$t *status_ret)
+void XNS_IDP_$OS_DELETE_PORT(uint16_t *channel_ptr, uint16_t *port_ptr,
+                             status_$t *status_ret)
 {
-    uint8_t *base = XNS_IDP_BASE;
-
-    ML_$EXCLUSION_START((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
-    xns_$delete_port(*channel_ptr, *port_ptr, status_ret);
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
+    ML_$EXCLUSION_START(XNS_LOCK_PTR());     /* 0x00E1877C */
+    xns_$delete_port(*channel_ptr, (int16_t)*port_ptr, status_ret);
+    ML_$EXCLUSION_STOP(XNS_LOCK_PTR());      /* 0x00E1879E */
 }

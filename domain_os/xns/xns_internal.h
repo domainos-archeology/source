@@ -44,14 +44,30 @@ extern uint8_t *XNS_IDP_BASE;
 #define XNS_OFF_LOCAL_HOST_HI 0x022
 #define XNS_OFF_LOCAL_HOST_LO 0x024
 #define XNS_OFF_REG_ADDR_BASE 0x026 /* First registered address entry */
-#define XNS_OFF_CHANNELS 0x000      /* Channel 0 starts at base */
+#define XNS_OFF_PORTS 0x040         /* xns_$port_state_t ports[8], stride 0x0C */
+/*
+ * The channel array starts at state +0xA0 with a 0x48 stride.  Verified in
+ * XNS_IDP_$OS_DEMUX: the socket scan walks `movea.l A5,A1' /
+ * `lea (0x48,A1),A1' reading (0xD8,A0), and the demux vector is (0xA0,A2)
+ * with A2 = A5 + index * 0x48.  0xA0 + 16 * 0x48 == 0x520 == XNS_OFF_LOCK.
+ */
+#define XNS_OFF_CHANNELS 0x0A0
 #define XNS_OFF_LOCK 0x520
 #define XNS_OFF_OPEN_COUNT 0x534
 #define XNS_OFF_NEXT_SOCKET 0x536
 #define XNS_OFF_REG_COUNT 0x538
 
 /*
- * Channel structure offsets (relative to channel base)
+ * Channel field offsets.
+ *
+ * NOTE: these are A5-relative offsets for CHANNEL 0, i.e. they already
+ * include the 0xA0 channel-array base.  Code that uses them must index as
+ * `XNS_IDP_BASE + idx * XNS_CHANNEL_SIZE + XNS_CHAN_OFF_xxx'.  Prefer
+ * XNS_CHANNEL_PTR() and the xns_$channel_t fields, whose offsets are
+ * channel-relative.
+ *
+ * The first four entries are in fact xns_$port_state_t fields (the port
+ * array at +0x40), kept here under their historical names.
  */
 #define XNS_CHAN_OFF_PORT_REF 0x40
 #define XNS_CHAN_OFF_PORT_INFO 0x44
@@ -214,7 +230,13 @@ void xns_$copy_packet_data(void *iov_chain, uint16_t length);
  * Inline accessor macros for channel state
  */
 #define XNS_CHANNEL_PTR(idx)                                                   \
-  ((xns_$channel_t *)(XNS_IDP_BASE + (idx) * XNS_CHANNEL_SIZE))
+  ((xns_$channel_t *)(XNS_IDP_BASE + XNS_OFF_CHANNELS +                        \
+                      (idx) * XNS_CHANNEL_SIZE))
+#define XNS_PORT_PTR(idx)                                                      \
+  ((xns_$port_state_t *)(XNS_IDP_BASE + XNS_OFF_PORTS +                        \
+                         (idx) * XNS_PORT_STATE_SIZE))
+#define XNS_PACKETS_RECV() (*(uint32_t *)(XNS_IDP_BASE + XNS_OFF_PACKETS_RECV))
+#define XNS_PACKETS_DROP() (*(uint32_t *)(XNS_IDP_BASE + XNS_OFF_PACKETS_DROP))
 #define XNS_LOCK_PTR() ((ml_$exclusion_t *)(XNS_IDP_BASE + XNS_OFF_LOCK))
 #define XNS_OPEN_COUNT() (*(uint16_t *)(XNS_IDP_BASE + XNS_OFF_OPEN_COUNT))
 #define XNS_NEXT_SOCKET() (*(uint16_t *)(XNS_IDP_BASE + XNS_OFF_NEXT_SOCKET))

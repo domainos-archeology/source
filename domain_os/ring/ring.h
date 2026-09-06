@@ -111,19 +111,103 @@
 #define RING_UNIT_RUNNING       0x02    /* Unit is actively running */
 #define RING_UNIT_BUSY          0x04    /* Unit is busy with I/O */
 
+/* Maximum number of packet-type table entries per unit (0x00E76C8A) */
+#define RING_MAX_PKT_TYPES      0x20
+
+/* Socket id stored in a channel that was opened by the OS (0x00E76D20) */
+#define RING_OS_SOCKET_ID       0x00E1
+
+/*
+ * ============================================================================
+ * Token ring controller register block
+ *
+ * The DCTE holds the pointer at +0x34; RING_$INIT caches it in the unit
+ * structure at +0x1C.  The registers are addressed as two words, one byte and
+ * one word (byte offsets 0, 2, 4, 6) - see ring_$clear_dma_channel
+ * (0x00E75812), RING_$INT (0x00E7576C/0x00E7577A) and
+ * RING_$RCV_FROM_UNIT_PRIV (0x00E760F4/0x00E7610A/0x00E76114).
+ *
+ * All accesses are memory mapped I/O and must not be reordered or elided,
+ * hence the volatile qualifiers.
+ * ============================================================================
+ */
+typedef struct ring_hw_regs_t {
+    volatile uint16_t   xmit_csr;   /* 0x00: transmit status/control */
+    volatile uint16_t   rcv_csr;    /* 0x02: receive status/control */
+    volatile uint8_t    tmask;      /* 0x04: transmit mask (low byte of unit->tmask) */
+    volatile uint8_t    _pad05;     /* 0x05 */
+    volatile uint16_t   mode;       /* 0x06: receiver mode */
+} ring_hw_regs_t;
+
+/* Bits of ring_hw_regs_t.rcv_csr tested by the driver */
+#define RING_RCV_CSR_BUSY       0x2000  /* btst #13 - receiver still active */
+
+/* Values written to ring_hw_regs_t */
+#define RING_RCV_CSR_ARM        0x6000  /* 0x00E7610A */
+#define RING_MODE_ENABLE        0x2400  /* 0x00E76114 - tmask nonzero */
+#define RING_MODE_IDLE          0x1000  /* 0x00E76134 - tmask zero */
+
+/*
+ * ============================================================================
+ * Received packet header (the buffer handed out by NETBUF_$GET_HDR)
+ *
+ * Only the fields touched by the receive path are named.  Offsets are taken
+ * from ring_$validate_receive (0x00E75E48-0x00E75E6C), ring_$receive_packet
+ * (0x00E764BE-0x00E76542) and ring_$process_rx_packet (0x00E7541C onward).
+ * ============================================================================
+ */
+typedef struct ring_$pkt_hdr_t {
+    uint32_t    msg_type;       /* 0x00: message type (1 and 3 are diagnostics) */
+    uint8_t     flags;          /* 0x04: bit0 route, bit1/bit4 swdiag, bit7 local */
+    uint8_t     _r05[2];        /* 0x05 */
+    uint8_t     flags7;         /* 0x07: bit3 tested by ring_$receive_packet */
+    uint32_t    src_id;         /* 0x08: source node id */
+    uint8_t     _r0c;           /* 0x0C */
+    uint8_t     chksum;         /* 0x0D: header checksum */
+    uint8_t     pkt_class;      /* 0x0E */
+    uint8_t     _r0f;           /* 0x0F */
+    uint16_t    hdr_len;        /* 0x10: header byte count */
+    uint16_t    _r12;           /* 0x12 */
+    uint16_t    data_len;       /* 0x14: data byte count */
+    uint16_t    _r16;           /* 0x16 */
+    uint32_t    route_info;     /* 0x18: passed to the socket/route layer */
+} ring_$pkt_hdr_t;
+
 /*
  * ============================================================================
  * Channel Entry Structure (8 bytes per entry)
+ *
+ * The Pascal array is 1-based: entry i lives at unit + 0x5A + 8*i, so entry 1
+ * is at unit + 0x62 (RING_$INIT 0x00E2FB56, RING_$SVC_CLOSE 0x00E76E72,
+ * ring_$open_internal 0x00E76D72).  The C array below starts at 0x62 and is
+ * therefore indexed with [i - 1].
  * ============================================================================
  */
 typedef struct ring_channel_t {
-    int8_t      flags;          /* 0x00: Channel flags (-1 = open) */
-    int8_t      _reserved1;     /* 0x01 */
-    int8_t      _reserved2;     /* 0x02 */
-    int8_t      _reserved3;     /* 0x03 */
-    int16_t     _reserved4;     /* 0x04 */
-    int16_t     socket_id;      /* 0x06: Associated socket ID */
+    boolean     flags;          /* 0x00: -1 (0xFF) = channel open */
+    int8_t      _pad01;         /* 0x01 */
+    int16_t     asid;           /* 0x02: PROC1_$AS_ID of the opener (0x00E76D76) */
+    int16_t     socket_id;      /* 0x04: socket, or RING_OS_SOCKET_ID (0x00E76D7E) */
+    int16_t     open_word;      /* 0x06: first word of the open argument record
+                                 *       (0x00E76D84).
+                                 *       TODO(source-1a5o): meaning unknown */
 } ring_channel_t;
+
+/*
+ * ============================================================================
+ * Packet type table entry (12 bytes per entry)
+ *
+ * Also a 1-based Pascal array: entry i is at unit + 0xA8 + 12*i, so entry 1 is
+ * at unit + 0xB4, which is the base ring_$open_internal (0x00E76CD0) and
+ * ring_$receive_packet (0x00E764D2) hand to ring_$find_pkt_type.
+ * ============================================================================
+ */
+typedef struct ring_pkt_type_t {
+    uint32_t    low;            /* 0x00: inclusive low bound of the type range */
+    uint32_t    high;           /* 0x04: inclusive high bound of the type range */
+    int16_t     channel;        /* 0x08: owning channel (1-based) */
+    int16_t     _pad0a;         /* 0x0A */
+} ring_pkt_type_t;
 
 /*
  * ============================================================================
@@ -133,63 +217,123 @@ typedef struct ring_channel_t {
  * ============================================================================
  */
 typedef struct ring_unit_t {
-    void                *route_port;        /* 0x000: Pointer to route port */
-    ec_$eventcount_t    rx_wake_ec;         /* 0x004: Receive wake event count */
-    ec_$eventcount_t    tx_ec;              /* 0x010: Transmit event count */
-    void                *hw_regs;           /* 0x01C: Hardware register pointer */
-    void                *device_info;       /* 0x020: Device info (from DCTE) */
-    ec_$eventcount_t    ready_ec;           /* 0x024: Ready event count */
-    uint8_t             _reserved1[0x0D];   /* 0x030 */
-    uint8_t             state_flags;        /* 0x031: State flags */
-    uint16_t            tmask;              /* 0x032: Transmit mask */
-    ml_$exclusion_t     tx_exclusion;       /* 0x034: Transmit exclusion lock */
-    ml_$exclusion_t     rx_exclusion;       /* 0x04C: Receive exclusion lock */
-    uint8_t             _reserved2[0x0A];   /* 0x05E */
-    int8_t              initialized;        /* 0x060: Initialized flag (-1 = yes) */
-    uint8_t             _reserved3[0x4F];   /* 0x061 */
-    ring_channel_t      channels[RING_MAX_CHANNELS]; /* 0x05A-0xA9: Channel array */
-                                            /* Note: actual offset is 0x5A from base */
-    uint8_t             _reserved4[0x54];   /* 0x0B0 */
-    uint8_t             pkt_type_table[0x80]; /* 0x0B4: Packet type table */
-    uint16_t            _reserved5;         /* 0x134 */
-    uint16_t            something;          /* 0x234: Some word value */
-    void                *rx_hdr_buf;        /* 0x238: Receive header buffer */
-    uint32_t            rx_hdr_info;        /* 0x23C: Receive header info */
-    void                *rx_data_buf;       /* 0x240: Receive data buffer */
+    void               *route_port;         /* 0x000: ROUTE_$PORT_ARRAY entry (0x00E2FBBA) */
+    ec_$eventcount_t    rx_wake_ec;         /* 0x004: receive wake eventcount */
+    ec_$eventcount_t    tx_ec;              /* 0x010: transmit-done eventcount */
+    ring_hw_regs_t     *hw_regs;            /* 0x01C: cached DCTE+0x34 register pointer */
+    void               *device_info;        /* 0x020: DCTE (0x00E2FB14) */
+    ec_$eventcount_t    ready_ec;           /* 0x024: receive daemon ready eventcount */
+    uint8_t             _r030;              /* 0x030 */
+    uint8_t             state_flags;        /* 0x031: RING_UNIT_* bits */
+    uint16_t            tmask;              /* 0x032: transmit mask */
+    ml_$exclusion_t     tx_exclusion;       /* 0x034: transmit exclusion (18 bytes) */
+    uint8_t             _r046[2];           /* 0x046 */
+    int16_t             open_count;         /* 0x048: outstanding opens (0x00E76BEC) */
+    uint8_t             _r04a[2];           /* 0x04A */
+    ml_$exclusion_t     rx_exclusion;       /* 0x04C: channel table exclusion (18 bytes) */
+    uint8_t             _r05e[2];           /* 0x05E */
+    boolean             initialized;        /* 0x060: -1 once RING_$INIT succeeded */
+    uint8_t             _r061;              /* 0x061 */
+    ring_channel_t      channels[RING_MAX_CHANNELS];    /* 0x062..0x0B1 (1-based: [i-1]) */
+    uint8_t             _r0b2[2];           /* 0x0B2 */
+    ring_pkt_type_t     pkt_types[RING_MAX_PKT_TYPES];  /* 0x0B4..0x233 (1-based: [i-1]) */
+    uint16_t            pkt_type_cnt;       /* 0x234: entries in use */
+    uint16_t            _r236;              /* 0x236 */
+    uint32_t            rx_hdr_pa;          /* 0x238: header buffer DMA address */
+    ring_$pkt_hdr_t    *rx_hdr;             /* 0x23C: header buffer virtual address */
+    uint32_t            rx_data_pa;         /* 0x240: data buffer DMA address */
 } ring_unit_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(ring_unit_t, rx_wake_ec)   == 0x004, "ring_unit_t.rx_wake_ec");
+_Static_assert(offsetof(ring_unit_t, tx_ec)        == 0x010, "ring_unit_t.tx_ec");
+_Static_assert(offsetof(ring_unit_t, hw_regs)      == 0x01C, "ring_unit_t.hw_regs");
+_Static_assert(offsetof(ring_unit_t, device_info)  == 0x020, "ring_unit_t.device_info");
+_Static_assert(offsetof(ring_unit_t, ready_ec)     == 0x024, "ring_unit_t.ready_ec");
+_Static_assert(offsetof(ring_unit_t, state_flags)  == 0x031, "ring_unit_t.state_flags");
+_Static_assert(offsetof(ring_unit_t, tmask)        == 0x032, "ring_unit_t.tmask");
+_Static_assert(offsetof(ring_unit_t, tx_exclusion) == 0x034, "ring_unit_t.tx_exclusion");
+_Static_assert(offsetof(ring_unit_t, open_count)   == 0x048, "ring_unit_t.open_count");
+_Static_assert(offsetof(ring_unit_t, rx_exclusion) == 0x04C, "ring_unit_t.rx_exclusion");
+_Static_assert(offsetof(ring_unit_t, initialized)  == 0x060, "ring_unit_t.initialized");
+_Static_assert(offsetof(ring_unit_t, channels)     == 0x062, "ring_unit_t.channels");
+_Static_assert(offsetof(ring_unit_t, pkt_types)    == 0x0B4, "ring_unit_t.pkt_types");
+_Static_assert(offsetof(ring_unit_t, pkt_type_cnt) == 0x234, "ring_unit_t.pkt_type_cnt");
+_Static_assert(offsetof(ring_unit_t, rx_hdr_pa)    == 0x238, "ring_unit_t.rx_hdr_pa");
+_Static_assert(offsetof(ring_unit_t, rx_hdr)       == 0x23C, "ring_unit_t.rx_hdr");
+_Static_assert(offsetof(ring_unit_t, rx_data_pa)   == 0x240, "ring_unit_t.rx_data_pa");
+_Static_assert(sizeof(ring_unit_t)                 == RING_UNIT_SIZE, "sizeof ring_unit_t");
+_Static_assert(sizeof(ring_channel_t)              == 8, "sizeof ring_channel_t");
+_Static_assert(sizeof(ring_pkt_type_t)             == 12, "sizeof ring_pkt_type_t");
+#endif /* ARCH_M68K */
 
 /*
  * ============================================================================
  * Global Ring Data Structure
  *
- * Located at RING_DATA_BASE (0xE86400)
+ * Located at RING_DATA_BASE (0xE86400).  This is the A5 module base every
+ * ring routine loads with "lea (0xe86400).l,A5".
  * ============================================================================
  */
 typedef struct ring_global_t {
-    ring_unit_t     units[RING_MAX_UNITS];  /* 0x000: Per-unit data */
-    uint16_t        _reserved1;             /* 0x488 */
-    uint16_t        max_data_len;           /* 0x51A: Max data length */
-    uint8_t         _reserved2[0x44];       /* 0x51C */
-    uid_t           network_uid;            /* 0x560: Network UID */
-    clock_t         force_start_timeout;    /* 0x568: Force start timeout */
-    uint8_t         _reserved3[0x08];       /* 0x570 */
+    ring_unit_t     units[RING_MAX_UNITS];  /* 0x000: per-unit data */
+    uint8_t         scrub[0x10];            /* 0x488: RING_$SCRUB */
+    uint32_t        wire_list[0x20];        /* 0x498: wired page list (0x00E766A4) */
+    uint16_t        _r518;                  /* 0x518: passed to NET_IO_$CREATE_PORT */
+    uint16_t        max_data_len;           /* 0x51A: max data length (0x00E75974) */
+    uint8_t         _r51c[0x44];            /* 0x51C */
+    uid_t           network_uid;            /* 0x560: network UID (0x00E2FB0C) */
+    clock_t         force_start_timeout;    /* 0x568: RING_$FORCE_START (6 bytes) */
+    uint8_t         _r56e[0x0A];            /* 0x56E */
     clock_t         xmit_timeout1;          /* 0x578 */
+    uint8_t         _r57e[0x02];            /* 0x57E */
     clock_t         xmit_timeout2;          /* 0x580 */
-    uint8_t         _reserved4[0x08];       /* 0x588 */
+    uint8_t         _r586[0x0A];            /* 0x586 */
     clock_t         poll_timeout;           /* 0x590 */
+    uint8_t         _r596[0x02];            /* 0x596 */
     clock_t         wait_timeout;           /* 0x598 */
-    int16_t         port_array[RING_MAX_UNITS]; /* 0x5A0: Port numbers */
-    uint8_t         _reserved5[0x0C];       /* 0x5A4 */
-    uint32_t        rcv_int_cnt;            /* 0x5B0: Receive interrupt count */
-    uint32_t        xmit_biphase;           /* 0x5B4: Transmit biphase errors */
-    uint16_t        unexpected_xmit_stat;   /* 0x5B6: Unexpected transmit status */
-    uint32_t        xmit_esb;               /* 0x5B8: Transmit ESB errors */
-    uint16_t        wakeup_cnt;             /* 0x5BA: Wakeup count */
-    uint16_t        abort_cnt;              /* 0x5BC: Abort count */
-    uint16_t        busy_on_rcv_int;        /* 0x5BE: Busy on receive interrupt */
-    uint8_t         _reserved6[0x04];       /* 0x5C0 */
-    uint16_t        xmit_waited;            /* 0x5C4: Transmit waited count */
+    uint8_t         _r59e[0x02];            /* 0x59E */
+    int16_t         port_array[RING_MAX_UNITS]; /* 0x5A0: NET_IO port per unit */
+    uint32_t        set_tmask_chg_cnt;      /* 0x5A4: RING_$SET_TMASK_CHG_CNT */
+    uint32_t        unit_tmask_chg_cnt;     /* 0x5A8: RING_$UNIT_TMASK_CHG_CNT */
+    uint32_t        tmask_chg_and_busy_cnt; /* 0x5AC: RING_$TMASK_CHG_AND_BUSY_CNT */
+    uint32_t        rcv_int_cnt;            /* 0x5B0: RING_$RCV_INT_CNT */
+    uint16_t        wire_cnt;               /* 0x5B4: entries used in wire_list */
+    uint16_t        unexpected_xmit_stat;   /* 0x5B6: RING_$UNEXPECTED_XMIT_STAT */
+    uint16_t        bad_data_cnt;           /* 0x5B8: RING_$BAD_DATA_CNT */
+    uint16_t        wakeup_cnt;             /* 0x5BA: RING_$WAKEUP_CNT */
+    uint16_t        abort_cnt;              /* 0x5BC: RING_$ABORT_CNT */
+    uint16_t        busy_on_rcv_int;        /* 0x5BE: RING_$BUSY_ON_RCV_INT */
+    uint32_t        send_null_cnt;          /* 0x5C0: RING_$SEND_NULL_CNT */
+    uint16_t        xmit_waited;            /* 0x5C4: RING_$XMIT_WAITED */
+    uint16_t        _r5c6;                  /* 0x5C6 */
+    void          (*rcv_proc[RING_MAX_UNITS])(void); /* 0x5C8: RING_$RCV0 / RING_$RCV1 */
 } ring_global_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(ring_global_t, scrub)               == 0x488, "ring_global_t.scrub");
+_Static_assert(offsetof(ring_global_t, wire_list)           == 0x498, "ring_global_t.wire_list");
+_Static_assert(offsetof(ring_global_t, max_data_len)        == 0x51A, "ring_global_t.max_data_len");
+_Static_assert(offsetof(ring_global_t, network_uid)         == 0x560, "ring_global_t.network_uid");
+_Static_assert(offsetof(ring_global_t, force_start_timeout) == 0x568, "ring_global_t.force_start_timeout");
+_Static_assert(offsetof(ring_global_t, xmit_timeout1)       == 0x578, "ring_global_t.xmit_timeout1");
+_Static_assert(offsetof(ring_global_t, xmit_timeout2)       == 0x580, "ring_global_t.xmit_timeout2");
+_Static_assert(offsetof(ring_global_t, poll_timeout)        == 0x590, "ring_global_t.poll_timeout");
+_Static_assert(offsetof(ring_global_t, wait_timeout)        == 0x598, "ring_global_t.wait_timeout");
+_Static_assert(offsetof(ring_global_t, port_array)          == 0x5A0, "ring_global_t.port_array");
+_Static_assert(offsetof(ring_global_t, set_tmask_chg_cnt)   == 0x5A4, "ring_global_t.set_tmask_chg_cnt");
+_Static_assert(offsetof(ring_global_t, unit_tmask_chg_cnt)  == 0x5A8, "ring_global_t.unit_tmask_chg_cnt");
+_Static_assert(offsetof(ring_global_t, rcv_int_cnt)         == 0x5B0, "ring_global_t.rcv_int_cnt");
+_Static_assert(offsetof(ring_global_t, wire_cnt)            == 0x5B4, "ring_global_t.wire_cnt");
+_Static_assert(offsetof(ring_global_t, unexpected_xmit_stat)== 0x5B6, "ring_global_t.unexpected_xmit_stat");
+_Static_assert(offsetof(ring_global_t, bad_data_cnt)        == 0x5B8, "ring_global_t.bad_data_cnt");
+_Static_assert(offsetof(ring_global_t, wakeup_cnt)          == 0x5BA, "ring_global_t.wakeup_cnt");
+_Static_assert(offsetof(ring_global_t, abort_cnt)           == 0x5BC, "ring_global_t.abort_cnt");
+_Static_assert(offsetof(ring_global_t, busy_on_rcv_int)     == 0x5BE, "ring_global_t.busy_on_rcv_int");
+_Static_assert(offsetof(ring_global_t, send_null_cnt)       == 0x5C0, "ring_global_t.send_null_cnt");
+_Static_assert(offsetof(ring_global_t, xmit_waited)         == 0x5C4, "ring_global_t.xmit_waited");
+_Static_assert(offsetof(ring_global_t, rcv_proc)            == 0x5C8, "ring_global_t.rcv_proc");
+#endif /* ARCH_M68K */
 
 /*
  * ============================================================================
@@ -199,13 +343,42 @@ typedef struct ring_global_t {
 
 /* Ring global data structure */
 extern ring_global_t RING_$DATA;
-extern uint32_t RING_$SWDIAG_DATA;
-extern uint32_t RING_$SWDIAG_RCVCNT;
-extern uint32_t RING_$SWDIAG_NODEID;
-extern uint16_t RING_$XMIT_BIPHASE;
-extern uint16_t RING_$RCV_BIPHASE;
-extern uint16_t RING_$XMIT_ESB;
-extern uint16_t RING_$RCV_ESB;
+
+/*
+ * Software-diagnostic counters.  These live just below the per-unit statistics
+ * array, at 0x00E261AC..0x00E261DF; they are NOT part of RING_$DATA.
+ */
+extern uint32_t RING_$SWDIAG_NODEID;    /* 0x00E261AC */
+extern uint32_t RING_$SWDIAG_GOODRCV_CNT; /* 0x00E261B0 */
+extern uint32_t RING_$SWDIAG_RCVCNT;    /* 0x00E261B4 */
+extern uint16_t RING_$RCV_BIPHASE;      /* 0x00E261B8 */
+extern uint16_t RING_$RCV_ESB;          /* 0x00E261BA */
+extern uint16_t RING_$XMIT_BIPHASE;     /* 0x00E261BC */
+extern uint16_t RING_$XMIT_ESB;         /* 0x00E261BE */
+extern uint16_t RING_$PAGING_OVERFLOW;  /* 0x00E261C0 */
+
+/*
+ * RING_$SWDIAG_DATA (0x00E261C2) - software diagnostic error counters,
+ * bumped alongside the per-unit statistics by ring_$validate_receive when
+ * the packet came from the software diagnostic (flags bit1 and bit4 set).
+ * Only the words the receive path touches are named.
+ */
+typedef struct ring_$swdiag_t {
+    uint16_t    _r00;                   /* 0x00 (0x00E261C2) */
+    uint16_t    _r02;                   /* 0x02 */
+    uint16_t    _r04;                   /* 0x04 */
+    uint16_t    rcv_stat_20_cnt;        /* 0x06: rcv_csr bit 5  (0x00E75FD6) */
+    uint16_t    rcv_stat_100_cnt;       /* 0x08: rcv_csr bit 8  (0x00E76004) */
+    uint16_t    rcv_stat_200_cnt;       /* 0x0A: rcv_csr bit 9  (0x00E75FA2) */
+    uint16_t    _r0c;                   /* 0x0C */
+    uint16_t    rcv_stat_08_cnt;        /* 0x0E: rcv_csr bit 3  (0x00E7602E) */
+    uint16_t    rcv_stat_esb_cnt;       /* 0x10: rcv_csr bit 10/11 (0x00E75F86) */
+    uint16_t    _r12;                   /* 0x12 */
+    uint16_t    rcv_stat_01_cnt;        /* 0x14: rcv_csr bit 0  (0x00E75FEC) */
+    uint16_t    rcv_stat_80_cnt;        /* 0x16: rcv_csr bit 7  (0x00E76016) */
+} ring_$swdiag_t;
+
+extern ring_$swdiag_t RING_$SWDIAG_DATA;
 
 /* Network UID for ring interface */
 extern uid_t RING_$NETWORK_UID;
@@ -218,7 +391,10 @@ extern uid_t RING_$NETWORK_UID;
 
 /*
  * Per-unit statistics (0x3C bytes)
- * Located at 0xE261E0 + (unit * 0x3C)
+ * Located at 0xE261E0 + (unit * 0x3C), indexed with a 0-based unit number.
+ *
+ * TODO(source-1a5o): the receive error counters at 0x20..0x32 are named after
+ * the rcv_csr bit that drives them; their Domain/OS names are not yet known.
  */
 typedef struct ring_$stats_t {
     uint16_t    _reserved0;         /* 0x00 */
@@ -233,7 +409,17 @@ typedef struct ring_$stats_t {
     uint16_t    biphase_count;      /* 0x16: Biphase errors */
     uint16_t    unexpected_count;   /* 0x18: Unexpected status */
     uint16_t    retry_count;        /* 0x1A: Retry attempts */
-    uint8_t     _reserved1[0x18];   /* 0x1C-0x33 */
+    uint32_t    good_rcv_count;     /* 0x1C: packets accepted (0x00E75EEC) */
+    uint16_t    rcv_stat_20_cnt;    /* 0x20: rcv_csr bit 5  (0x00E75FCE) */
+    uint16_t    rcv_stat_100_cnt;   /* 0x22: rcv_csr bit 8  (0x00E75FFC) */
+    uint16_t    rcv_stat_200_cnt;   /* 0x24: rcv_csr bit 9  (0x00E75F98) */
+    uint16_t    rcv_stat_40_cnt;    /* 0x26: rcv_csr bit 6  (0x00E75FBE) */
+    uint16_t    rcv_stat_08_cnt;    /* 0x28: rcv_csr bit 3  (0x00E76026) */
+    uint16_t    rcv_stat_esb_cnt;   /* 0x2A: rcv_csr bit 10/11 (0x00E75F7C) */
+    uint16_t    _reserved1;         /* 0x2C */
+    uint16_t    rcv_stat_01_cnt;    /* 0x2E: rcv_csr bit 0  (0x00E75FE4) */
+    uint16_t    rcv_stat_80_cnt;    /* 0x30: rcv_csr bit 7  (0x00E7600E) */
+    uint16_t    rcv_chksum_err_cnt; /* 0x32: header checksum mismatch (0x00E75EE2) */
     int8_t      last_success;       /* 0x34: Last transmission succeeded */
     int8_t      _reserved2;         /* 0x35 */
     int8_t      congestion_flag;    /* 0x36: Network congestion */
@@ -243,6 +429,16 @@ typedef struct ring_$stats_t {
     int8_t      retry_pending;      /* 0x3A: Retry is pending */
     int8_t      _reserved5;         /* 0x3B */
 } ring_$stats_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(ring_$stats_t, good_rcv_count)     == 0x1C, "ring_$stats_t.good_rcv_count");
+_Static_assert(offsetof(ring_$stats_t, rcv_stat_20_cnt)    == 0x20, "ring_$stats_t.rcv_stat_20_cnt");
+_Static_assert(offsetof(ring_$stats_t, rcv_stat_esb_cnt)   == 0x2A, "ring_$stats_t.rcv_stat_esb_cnt");
+_Static_assert(offsetof(ring_$stats_t, rcv_chksum_err_cnt) == 0x32, "ring_$stats_t.rcv_chksum_err_cnt");
+_Static_assert(offsetof(ring_$stats_t, congestion_flag)    == 0x36, "ring_$stats_t.congestion_flag");
+_Static_assert(sizeof(ring_$stats_t)                       == RING_STATS_SIZE, "sizeof ring_$stats_t");
+_Static_assert(offsetof(ring_$swdiag_t, rcv_stat_80_cnt)   == 0x16, "ring_$swdiag_t.rcv_stat_80_cnt");
+#endif /* ARCH_M68K */
 
 /*
  * ============================================================================

@@ -45,18 +45,16 @@ uid_t ring_$network_uid_storage;
  * Device type constant for ring network controller.
  * Used by IO_$GET_DCTE to locate the device.
  */
-uint16_t ring_dcte_ctype_net = 0x0001;  /* Network controller type */
+uint16_t ring_dcte_ctype_net = 0x0002;  /* 0x00E7628A: the literal cell the
+                                         * receive daemon passes by reference
+                                         * to IO_$GET_DCTE ("pea (0x21c,PC)"
+                                         * at 0x00E7606C) */
 
 /*
  * ============================================================================
  * Error Status Constants
  * ============================================================================
  */
-
-/*
- * Error returned when no socket is available.
- */
-status_$t No_available_socket_err = 0x0011000C;
 
 /*
  * Error returned on hardware failure.

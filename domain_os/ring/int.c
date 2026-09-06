@@ -123,7 +123,12 @@ int8_t RING_$INT(void *device_info)
              * This calculates: unit_num * (-4 + 64) = unit_num * 60 = unit_num * 0x3C
              * Then adds 0x1C to get the discard counter offset.
              */
-            RING_$STATS[unit_num]._reserved0++;  /* Actually a counter */
+            /*
+             * 0x00E757C6: "addq.l #0x1,(0x1c,A0,D0w*0x1)" - the longword
+             * accepted-packet counter at stats+0x1C, the same one
+             * ring_$validate_receive bumps at 0x00E75EEC.
+             */
+            RING_$STATS[unit_num].good_rcv_count++;
 
             return (int8_t)-1;  /* 0xFF */
         }

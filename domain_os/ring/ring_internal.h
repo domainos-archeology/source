@@ -56,6 +56,30 @@
 #define RING_RX_BUF_SIZE        0x200   /* 512 bytes */
 
 /*
+ * DMA byte-count registers, read by ring_$validate_receive (0x00E75E24 and
+ * 0x00E75E36) to work out how much of each buffer the controller filled.
+ * Channel 0 carries the header, channel 1 the data; both are programmed for
+ * RING_DMA_RX_WORDS bytes, so the transferred length is
+ * RING_DMA_RX_WORDS - count*2.
+ *
+ * The host unit tests substitute plain memory cells for the memory mapped
+ * registers; this is the only arch-specific hook the receive path needs.
+ */
+#define RING_DMA_RX_WORDS       0x400
+
+#if defined(ARCH_HOST)
+extern volatile uint16_t ring_$dma_chan0_count_cell;
+extern volatile uint16_t ring_$dma_chan1_count_cell;
+#define RING_DMA_CHAN0_COUNT    (&ring_$dma_chan0_count_cell)
+#define RING_DMA_CHAN1_COUNT    (&ring_$dma_chan1_count_cell)
+#else
+#define RING_DMA_CHAN0_COUNT \
+    ((volatile uint16_t *)(RING_DMA_BASE + RING_DMA_CHAN0 + RING_DMA_BYTECOUNT))
+#define RING_DMA_CHAN1_COUNT \
+    ((volatile uint16_t *)(RING_DMA_BASE + RING_DMA_CHAN1 + RING_DMA_BYTECOUNT))
+#endif
+
+/*
  * ============================================================================
  * Data Structure Addresses (m68k)
  * ============================================================================
@@ -91,8 +115,14 @@ extern uid_t ring_$network_uid_storage;
 /* Device type for ring controller */
 extern uint16_t ring_dcte_ctype_net;
 
-/* Error status constants */
-extern status_$t No_available_socket_err;
+/*
+ * Error status constants.
+ *
+ * The receive path no longer uses "No_available_socket_err": the value it held
+ * (0x0011000C) was a guess.  The status RING_$RCV_FROM_UNIT_PRIV actually
+ * passes to CRASH_SYSTEM is the constant cell at 0x00E7628C (0x00110005), and
+ * it lives with the code that uses it in ring/rcv.c.
+ */
 extern status_$t Network_hardware_error;
 
 /* Internal counters */
@@ -101,9 +131,15 @@ extern status_$t Network_hardware_error;
 #define RING_$ABORT_CNT         (RING_$DATA.abort_cnt)
 #define RING_$BUSY_ON_RCV_INT   (RING_$DATA.busy_on_rcv_int)
 #define RING_$XMIT_WAITED       (RING_$DATA.xmit_waited)
-#define RING_$XMIT_BIPHASE      (RING_$DATA.xmit_biphase)
-#define RING_$XMIT_ESB          (RING_$DATA.xmit_esb)
+#define RING_$BAD_DATA_CNT      (RING_$DATA.bad_data_cnt)
 #define RING_$UNEXPECTED_XMIT_STAT (RING_$DATA.unexpected_xmit_stat)
+
+/*
+ * RING_$XMIT_BIPHASE (0x00E261BC), RING_$XMIT_ESB (0x00E261BE),
+ * RING_$RCV_BIPHASE (0x00E261B8) and RING_$RCV_ESB (0x00E261BA) are standalone
+ * words below the statistics array, not fields of RING_$DATA; they are
+ * declared in ring/ring.h.
+ */
 
 /*
  * ============================================================================
@@ -171,16 +207,24 @@ ec_$eventcount_t *ring_$process_rx_packet(ring_unit_t *unit_data);
  * Processes a received packet and dispatches it to the appropriate
  * socket.
  *
+ * All four record parameters are Pascal var parameters - the caller passes the
+ * ADDRESSES of its own locals (0x00E76250-0x00E7625C) and the routine reads
+ * them back through those pointers.
+ *
  * @param unit          Unit number
- * @param hdr_info      Header info pointer
- * @param data_ptr      Data buffer pointer
- * @param param4        Additional parameter
- * @param param5        Additional parameter
+ * @param hdr_p         Address of the received header pointer
+ * @param data_pa_p     Address of the data buffer DMA address (0 if no data)
+ * @param hdr_len_p     Address of the received header byte count
+ * @param data_len_p    Address of the received data byte count
+ *
+ * @return A word result slot the caller reserves but never reads; the routine
+ *         itself never stores into it.
  *
  * Original address: 0x00E7649E
  */
-void ring_$receive_packet(uint16_t unit, void *hdr_info, void *data_ptr,
-                          void *param4, void *param5);
+int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
+                             uint32_t *data_pa_p, int16_t *hdr_len_p,
+                             int16_t *data_len_p);
 
 /*
  * ring_$do_start - Internal start implementation
@@ -241,7 +285,8 @@ void ring_$copy_data(void *iovecs, int16_t iovec_cnt, uint16_t *offset_ptr,
  *
  * Original address: 0x00E7630C
  */
-int16_t ring_$find_pkt_type(uint32_t pkt_type, void *table, uint16_t table_size);
+int16_t ring_$find_pkt_type(uint32_t pkt_type, ring_pkt_type_t *table,
+                            uint16_t table_size);
 
 /*
  * ring_$copy_to_user - Copy data to user buffer
@@ -260,15 +305,11 @@ void ring_$copy_to_user(void **src_ptr, int16_t src_len, void *dest,
                         uint16_t *count_ptr);
 
 /*
- * ring_$validate_receive - Validate received packet
- *
- * Checks if a received packet is valid and should be processed.
- *
- * @return true if packet is valid, false otherwise
- *
- * Original address: 0x00E75DE4
+ * ring_$validate_receive (0x00E75DE4) is a nested Pascal procedure of
+ * RING_$RCV_FROM_UNIT_PRIV - it reaches into the caller's frame through the
+ * static link ("movea.l (A6),A2" at 0x00E75DEC).  It is therefore emitted as a
+ * static function inside ring/rcv.c, not as a subsystem-wide entry point.
  */
-int8_t ring_$validate_receive(void);
 
 /*
  * ring_$disable_interrupts - Disable for receive loop
