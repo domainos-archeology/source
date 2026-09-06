@@ -14,7 +14,7 @@
  *   0 (false) if process is not suspended
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 int8_t PROC1_$SUSPENDP(uint16_t pid, status_$t *status_ret)
 {

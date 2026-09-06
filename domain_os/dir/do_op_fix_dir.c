@@ -69,7 +69,7 @@
 /* DAT_00e52040 - truncation size parameter (value = 0x00000400, one page)
  * In the original binary, this is a 32-bit constant at address 0x00E52040.
  */
-static const uint32_t DAT_00e52040 = 0x00000400;
+/* DAT_00e52040 is declared in dir_internal.h and defined in dir_data.c */
 
 void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
 {

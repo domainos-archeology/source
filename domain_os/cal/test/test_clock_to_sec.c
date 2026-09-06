@@ -1,4 +1,16 @@
-#include "cal.h"
+/*
+ * cal/test/test_clock_to_sec.c - Unit tests for CAL_$CLOCK_TO_SEC
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "../clock_to_sec.c"
+#include "../sec_to_clock.c"
+
 
 // Clock ticks are 4 microseconds each = 250,000 ticks per second
 // So to convert ticks to seconds, divide by 250,000
@@ -44,8 +56,8 @@ void test_clock_to_sec_one_hour(void) {
 
 // Test: Convert 21,600,000,000 ticks (86400 seconds / 1 day)
 void test_clock_to_sec_one_day(void) {
-    // 21,600,000,000 = 0x050007B580
-    clock_t clock = { .high = 0x0507, .low = 0xB580 };
+    // 21,600,000,000 = 0x5_0775_D800 (48-bit: high = 0x50775, low = 0xD800)
+    clock_t clock = { .high = 0x50775, .low = 0xD800 };
 
     ulong result = CAL_$CLOCK_TO_SEC(&clock);
 
@@ -94,4 +106,19 @@ void test_clock_to_sec_just_under_two(void) {
     ulong result = CAL_$CLOCK_TO_SEC(&clock);
 
     ASSERT_EQ(result, 1);
+}
+
+int main(void) {
+    printf("CAL_$CLOCK_TO_SEC tests\n");
+    RUN_TEST(clock_to_sec_zero);
+    RUN_TEST(clock_to_sec_one_second);
+    RUN_TEST(clock_to_sec_one_minute);
+    RUN_TEST(clock_to_sec_one_hour);
+    RUN_TEST(clock_to_sec_one_day);
+    RUN_TEST(clock_to_sec_round_trip);
+    RUN_TEST(clock_to_sec_round_trip_large);
+    RUN_TEST(clock_to_sec_partial_truncates);
+    RUN_TEST(clock_to_sec_just_under_two);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

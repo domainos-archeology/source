@@ -74,6 +74,15 @@ void proc1_$set_lock_body(void);
 void proc1_$clr_lock_body(void);
 
 /*
+ * PROC1_$LOADAV_CALLBACK - Periodic load average update callback
+ *
+ * Installed on TIME_$RTEQ by PROC1_$INIT_LOADAV (timer table entry 0).
+ *
+ * Original address: 0x00e14bda
+ */
+void PROC1_$LOADAV_CALLBACK(void);
+
+/*
  * ============================================================================
  * Internal Data Declarations
  * ============================================================================

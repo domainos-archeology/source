@@ -1,4 +1,29 @@
-#include "cal.h"
+/*
+ * cal/test/test_get_local_time.c - Unit tests for CAL_$GET_LOCAL_TIME
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "../cal_data.c"
+#include "../add48.c"
+#include "../sec_to_clock.c"
+#include "../get_local_time.c"
+
+/*
+ * Mock TIME_$CLOCK - returns whatever the test last stored with
+ * MOCK_TIME_CLOCK().
+ */
+static clock_t mock_time_clock;
+#define MOCK_TIME_CLOCK(value) (mock_time_clock = (value))
+
+void TIME_$CLOCK(clock_t *clock) {
+    *clock = mock_time_clock;
+}
+
 
 // These tests require mocking the global state:
 // - CAL_$TIMEZONE.utc_delta (timezone offset in minutes)
@@ -135,4 +160,15 @@ void test_get_local_time_offset_and_drift(void) {
 
     ASSERT_EQ(result.high, expected.high);
     ASSERT_EQ(result.low, expected.low);
+}
+
+int main(void) {
+    printf("CAL_$GET_LOCAL_TIME tests\n");
+    RUN_TEST(get_local_time_utc);
+    RUN_TEST(get_local_time_est);
+    RUN_TEST(get_local_time_jst);
+    RUN_TEST(get_local_time_with_drift);
+    RUN_TEST(get_local_time_offset_and_drift);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

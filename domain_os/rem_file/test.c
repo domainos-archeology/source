@@ -11,11 +11,6 @@
 #include "rem_file/rem_file_internal.h"
 
 /*
- * External data references
- */
-extern uid_t UID_$NIL;  /* Nil UID */
-
-/*
  * Test request structure
  */
 typedef struct {

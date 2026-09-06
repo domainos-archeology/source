@@ -12,7 +12,7 @@
 // TTY_$K_INQ_SESSION_ID - Inquire session ID
 // Address: 0x00e679c4
 
-#include "tty.h"
+#include "tty/tty_internal.h"
 
 void TTY_$K_SET_PGROUP(short *line_ptr, uid_t *uid_ptr, status_$t *status)
 {

@@ -20,7 +20,7 @@
  * - 0x3a: Invalid segment (falls in gap between regions)
  */
 
-#include "mst.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$VA_TO_SEGNO - Convert virtual address to segment number

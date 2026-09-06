@@ -9,7 +9,7 @@
  * @return       0xff (always)
  */
 
-#include "win.h"
+#include "win/win_internal.h"
 
 uint32_t WIN_$INT(void *param)
 {

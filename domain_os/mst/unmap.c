@@ -6,7 +6,7 @@
  * with mode=2 and the current process's ASID.
  */
 
-#include "mst_internal.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$UNMAP - Unmap memory from current process

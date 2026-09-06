@@ -12,8 +12,7 @@
 #include <string.h>
 
 /* Minimal type stubs for building outside the kernel */
-typedef long status_$t;
-#define status_$ok 0
+#include "base/base.h"
 
 /* Test result tracking */
 static int tests_passed = 0;
@@ -50,12 +49,15 @@ static int tests_failed = 0;
 } while(0)
 
 /* Include the implementation directly for testing */
-#ifndef FILE_H
-#define FILE_H
-#include <stdint.h>
-#endif
-
 /* Pull in the implementation */
+/*
+ * route/route.h (pulled in by file/file_internal.h) asserts that
+ * sizeof(route_$port_t) == 0x5C, which only holds with 32-bit pointers.
+ * Nothing under test here touches ROUTE data, so skip that header on the
+ * host (the same approach test_uid_lock.c takes for headers it stubs).
+ */
+#define ROUTE_H
+
 #include "../unmap_case.c"
 
 /* Helper to run UNMAP_CASE with string inputs */

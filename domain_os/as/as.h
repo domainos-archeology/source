@@ -100,6 +100,8 @@ extern int16_t AS_$PROTECTION;      /* Protection flags at 0xE2B972 */
 #define AS_$STACK_LOW       AS_$INFO.stack_low
 #define AS_$STACK_HIGH      AS_$INFO.stack_high
 #define AS_$STACK_OFFSET    AS_$INFO.stack_offset
+#define AS_$INIT_STACK_FILE_SIZE AS_$INFO.init_stack_file_size  /* 0xE2B960 */
+#define AS_$CR_REC_FILE_SIZE     AS_$INFO.cr_rec_file_size      /* 0xE2B96C */
 
 /*
  * Function prototypes

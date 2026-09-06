@@ -44,6 +44,13 @@ extern uint16_t         PMAP_$LOW_THRESH;
 extern uint16_t         PMAP_$MID_THRESH;
 extern uint16_t         PMAP_$WS_INTERVAL;
 extern uint32_t         PMAP_$T_PUR_SCANS;
+/* Working-set tuning / statistics read and written by OSINFO_$GET_MMAP */
+extern uint16_t         PMAP_$MAX_WS_INTERVAL;  /* 0xE254D6 */
+extern uint16_t         PMAP_$MIN_WS_INTERVAL;  /* 0xE254D4 */
+extern uint32_t         PMAP_$IDLE_INTERVAL;    /* 0xE25484 */
+extern uint32_t         PMAP_$PUR_L_CNT;        /* 0xE25490 */
+extern uint32_t         PMAP_$PUR_R_CNT;        /* 0xE2548C */
+extern uint16_t         PMAP_$SCAN_FRACT;       /* 0xE254CC */
 extern int8_t           PMAP_$SHUTTING_DOWN_FLAG;
 extern uint16_t         PMAP_$CURRENT_SLOT;
 
@@ -62,10 +69,7 @@ extern uint32_t DAT_00e23320;            /* Impure pages flag */
 #define PMAP_LOCK_ID                    0x14    /* PMAP lock */
 #define PROC_LOCK_ID                    0x0D    /* Process lock */
 
-/*
- * LOG functions
- */
-extern int32_t LOG_$UPDATE(void);
+/* LOG_$UPDATE, LOG_$LOGFILE_PTR - declared in log/log.h */
 
 /*
  * NETLOG functions - declared in ast/ast.h

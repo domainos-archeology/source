@@ -8,8 +8,7 @@
  * Original address: 0x00e0d1c8
  */
 
-#include "mmap.h"
-#include "mmap_internal.h"
+#include "mmap/mmap_internal.h"
 #include "misc/misc.h"
 
 void MMAP_$SET_WS_INDEX(uint16_t pid, uint16_t *wsl_index)

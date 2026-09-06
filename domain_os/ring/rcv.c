@@ -9,7 +9,7 @@
 #include "ring/ring_internal.h"
 #include "misc/crash_system.h"
 #include "proc1/proc1.h"
-#include "os/os_internal.h"
+/* IO_$GET_DCTE: io/io.h (via ring/ring_internal.h) */
 
 /*
  * RING_$RCV0 - Receive daemon for unit 0

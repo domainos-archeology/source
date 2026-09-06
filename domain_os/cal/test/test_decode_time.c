@@ -1,4 +1,19 @@
-#include "cal.h"
+/*
+ * cal/test/test_decode_time.c - Unit tests for CAL_$DECODE_TIME
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "math/mod.c"
+#include "math/div.c"
+#include "../sec_to_clock.c"
+#include "../clock_to_sec.c"
+#include "../decode_time.c"
+
 
 // CAL_$DECODE_TIME converts a 48-bit clock to:
 // time_rec[0] = year, [1] = month, [2] = day, [3] = hour, [4] = minute, [5] = second
@@ -178,10 +193,10 @@ void test_decode_time_specific_datetime(void) {
     // 1983: 365 days
     // 1984: 366 days (leap)
     // 1985: Jan(31) + Feb(28) + Mar(31) + Apr(30) + May(31) + Jun(30) + 3 days = 184 days
-    // Total: 366 + 365 + 365 + 365 + 366 + 184 = 2011 days
-    // But Jan 1 1980 is day 1, so July 4 1985 is day 2011, meaning 2010 days after
+    // Total: 366 + 365 + 365 + 365 + 366 + 184 = 2011 days after 1980-01-01
+    // (same convention as the non-leap test above: 1980-01-01 is 0 days after)
     // Plus 12:30:45 = 12*3600 + 30*60 + 45 = 45045 seconds
-    uint sec = 2010 * 86400 + 45045;
+    uint sec = 2011 * 86400 + 45045;
 
     seconds_to_clock(sec, &clock);
     CAL_$DECODE_TIME(&clock, time_rec);
@@ -210,4 +225,22 @@ void test_decode_time_end_of_day(void) {
     ASSERT_EQ(time_rec[3], 23);
     ASSERT_EQ(time_rec[4], 59);
     ASSERT_EQ(time_rec[5], 59);
+}
+
+int main(void) {
+    printf("CAL_$DECODE_TIME tests\n");
+    RUN_TEST(decode_time_epoch);
+    RUN_TEST(decode_time_one_second);
+    RUN_TEST(decode_time_one_minute);
+    RUN_TEST(decode_time_one_hour);
+    RUN_TEST(decode_time_one_day);
+    RUN_TEST(decode_time_end_of_january);
+    RUN_TEST(decode_time_leap_day_1980);
+    RUN_TEST(decode_time_march_first_1980);
+    RUN_TEST(decode_time_new_year_1981);
+    RUN_TEST(decode_time_non_leap_year);
+    RUN_TEST(decode_time_specific_datetime);
+    RUN_TEST(decode_time_end_of_day);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

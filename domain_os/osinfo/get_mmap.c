@@ -5,16 +5,12 @@
 // Complex function to get and set various memory management parameters.
 // Flags in byte 1 of param_1 control which operations are performed.
 
-#include "osinfo/osinfo.h"
+#include "osinfo/osinfo_internal.h"
 #include "mmap/mmap.h"
 #include "mmap/mmap_internal.h"
 #include "pmap/pmap.h"
 #include "ast/ast.h"
 #include "proc2/proc2.h"
-
-/* TODO(source-qvt): These should be moved to proper headers */
-extern uint8_t PMAP_$PAGE_TABLE[];  /* Page table entries */
-extern uint8_t AST_$ENTRY_TABLE[];  /* AST entry table base */
 
 void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
                       void *ws_data, void *ws_list, void *uid_out,
@@ -103,8 +99,10 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
             return;
         }
 
-        // Search through page table
-        page_entry = &PMAP_$PAGE_TABLE[ppn * 0x10];
+        // Search through the MMAPE array (0xEB2800, 16 bytes per physical
+        // page).  Original: movea.l #0xeb4800,A0 with -0x2000-relative
+        // offsets (-0x1ffb = +5, -0x1ffc = +4, -0x1ff7 = +9, -0x1ffe = +2).
+        page_entry = (uint8_t *)MMAPE_BASE + ppn * 0x10;
         while (ppn <= MMAP_$HPPN) {
             // Check if page is valid and belongs to this ASID
             // page_entry[-0x1ffb] = offset 5 in 0x10 byte entry (flags)
@@ -118,14 +116,18 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
                 } else {
                     *status = status_$os_info_page_found;
 
-                    // Get UID from AST entry
-                    // AST entry index from page_entry offset 2
+                    // Get UID via the ASTE -> AOTE link.
+                    // Original: move.w (-0x1ffe,A0),D0 (ASTE index at entry+2);
+                    //   A4 = 0xEC5400 + idx*0x14; movea.l (-0x10,A4),A1
+                    //   i.e. the aote pointer (+0x04) of ASTE_BASE[idx-1];
+                    //   then 2 longs copied from (A1)+0x10.
                     short ast_index = *(short *)(page_entry + 2);
-                    uint32_t *ast_entry = (uint32_t *)((char *)AST_$ENTRY_TABLE +
-                                                       ast_index * AST_ENTRY_SIZE);
-                    // Copy UID (2 longs at offset 0x10)
-                    ((uint32_t *)uid_out)[0] = ast_entry[4];  // offset 0x10
-                    ((uint32_t *)uid_out)[1] = ast_entry[5];  // offset 0x14
+                    aste_t *aste = &ASTE_BASE[ast_index - 1];
+                    uint32_t *aote_words = (uint32_t *)aste->aote;
+                    // TODO: identify the aote_t field at +0x10 (inside
+                    // attributes[]); the original copies 8 bytes from there.
+                    ((uint32_t *)uid_out)[0] = aote_words[4];  // aote + 0x10
+                    ((uint32_t *)uid_out)[1] = aote_words[5];  // aote + 0x14
                 }
 
                 ppn++;
@@ -147,7 +149,7 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
         global_info->real_pages = MMAP_$REAL_PAGES;
         global_info->pageable_lower_limit = MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
         global_info->remote_pages = MMAP_$REMOTE_PAGES;
-        global_info->wsl_hi_mark = MMAP_$WSL_HI_MARK;
+        global_info->wsl_hi_mark = MMAP_WSL_HI_MARK;   /* move.w (0xE23CA6) */
 
         // Copy working set data (5 entries)
         global_info->ws_data[0] = MMAP_$WS_DATA[0];    // 0xe232b4
@@ -198,8 +200,8 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
     }
 
     // Handle GET_WS_INFO operation
-    if ((flag_byte & MMAP_FLAG_GET_WS_INFO) && MMAP_$WSL_HI_MARK > 4) {
-        count = MMAP_$WSL_HI_MARK - 5;
+    if ((flag_byte & MMAP_FLAG_GET_WS_INFO) && MMAP_WSL_HI_MARK > 4) {   /* cmpi.w #5,(0xE23CA6) */
+        count = MMAP_WSL_HI_MARK - 5;
         // Copy working set info (0xc bytes per entry from 0x24 byte structures)
         for (i = 0; i <= count; i++) {
             uint32_t *src = (uint32_t *)((char *)MMAP_$WS_LIMIT_DATA + 0xb4 + i * 0x24);

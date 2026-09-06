@@ -31,6 +31,13 @@ extern uint16_t OS_$BOOT_DEVICE;
 // Shutdown eventcount
 extern ec_$eventcount_t OS_$SHUTDOWN_EC;
 
+/*
+ * PTR_OS_DATA_SHUTWIRED - pointer cell (0x00E81D20) naming the start of the
+ * OS_DATA_SHUTWIRED region.  Passed by address to MST_$WIRE_AREA by both
+ * OS_$SHUTDOWN and STOP_$WATCH (as the end of the stopwatch wire area).
+ */
+extern m68k_ptr_t PTR_OS_DATA_SHUTWIRED;
+
 // =============================================================================
 // Memory Copy/Zero Functions
 // =============================================================================

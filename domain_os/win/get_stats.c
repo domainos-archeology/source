@@ -10,7 +10,7 @@
  * @param stats    Output: statistics structure (22 bytes)
  */
 
-#include "win.h"
+#include "win/win_internal.h"
 
 void WIN_$GET_STATS(int16_t param_1, int16_t param_2, void *stats)
 {

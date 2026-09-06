@@ -27,9 +27,6 @@
 #include "mst/mst.h"
 #include "ast/ast.h"
 
-/* Error message for internal failure */
-extern char Naming_Internal_Err[];
-
 boolean name_$map_dir(uid_t *dir_uid, int16_t asid, void *mapped_info,
                       status_$t *status_ret)
 {

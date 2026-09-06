@@ -14,7 +14,7 @@
  * Original address: 0x00e24048
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
 {

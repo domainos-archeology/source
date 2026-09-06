@@ -16,14 +16,7 @@
 
 #include "asknode/asknode_internal.h"
 
-/* External references - commented out as they conflict with header definitions */
-/* extern ec_$eventcount_t TIME_$CLOCKH; */
-/* extern int16_t PROC1_$AS_ID; */
-/* extern uint32_t FIM_$QUIT_VALUE; */
-/* extern ec_$eventcount_t FIM_$QUIT_EC; */
-
-/* Empty data constant at 0x00E658CC (zero-filled buffer) */
-extern uint32_t DAT_00e658cc;
+/* ASKNODE_$EMPTY_DATA (0xE658CC) is declared in asknode_internal.h */
 
 void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
                          int32_t *node_list, int16_t *max_count,
@@ -66,7 +59,11 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         if (is_local < 0) {
             routing_port = ROUTE_$PORT;
         } else {
-            routing_port = DIR_$FIND_NET(0x29C, (int16_t)node_id);
+            /*
+             *   00e66044    pea (A3)                 ; node_id (pointer)
+             *   00e66046    move.l #0xe8029c,-(SP)   ; &NAME_$ROOT_UID
+             */
+            routing_port = DIR_$FIND_NET(&NAME_$ROOT_UID, (uint32_t *)node_id);
         }
     }
 
@@ -102,8 +99,12 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         return;
     }
 
-    /* Get the event count for this socket */
-    socket_ec = *(ec_$eventcount_t **)((char *)&sock_spinlock + sock_num * 4);
+    /*
+     * Get the event count for this socket: entry sock_num of the socket
+     * pointer table at 0xE28DB0 (slot 0 = spinlock), i.e.
+     * SOCK_$EVENT_COUNTERS[sock_num - 1] (SOCK_$EVENT_COUNTERS is 0xE28DB4).
+     */
+    socket_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
     wait_val = EC_$READ(socket_ec) + 1;
 
     /* Build WHO request packet */
@@ -135,7 +136,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         PKT_$SEND_INTERNET(routing_port, local_node, 4, -1, NODE_$ME,
                            sock_num, pkt_info, pkt_id,
                            request, 0x18,
-                           &DAT_00e658cc, 0,  /* No data */
+                           &ASKNODE_$EMPTY_DATA, 0,  /* No data */
                            temp1, temp2, local_status);
     }
 
@@ -147,7 +148,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
 
     /* Calculate timeout */
     timeout_end = EC_$READ(&TIME_$CLOCKH) + port_idx + 6;
-    quit_val = *(int32_t *)((char *)&FIM_$QUIT_VALUE + PROC1_$AS_ID * 4) + 1;
+    quit_val = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
 
     /* Wait for responses */
     while (1) {
@@ -157,7 +158,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
 
         ecs[0] = socket_ec;
         ecs[1] = &TIME_$CLOCKH;
-        ecs[2] = (ec_$eventcount_t *)((char *)&FIM_$QUIT_EC + PROC1_$AS_ID * 12);
+        ecs[2] = &FIM_$QUIT_EC[PROC1_$AS_ID];
 
         wait_result = EC_$WAIT(ecs, (uint32_t *)&wait_val);
 
@@ -167,8 +168,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         }
         if (wait_result == 2) {
             /* Quit signal */
-            *(int32_t *)((char *)&FIM_$QUIT_VALUE + PROC1_$AS_ID * 4) =
-                *(int32_t *)((char *)&FIM_$QUIT_EC + PROC1_$AS_ID * 12);
+            FIM_$QUIT_VALUE[PROC1_$AS_ID] = (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
             *status = status_$network_quit_fault_during_node_listing;
             break;
         }

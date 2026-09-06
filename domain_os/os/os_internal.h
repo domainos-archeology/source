@@ -22,6 +22,9 @@
 #include "network/network.h"
 #include "file/file.h"
 #include "acl/acl.h"
+#include "name/name.h"
+#include "route/route.h"
+#include "io/io.h"
 
 /*
  * ============================================================================
@@ -47,7 +50,7 @@ extern char PMAP_$SHUTTING_DOWN_FLAG;
 
 extern uid_t OS_WIRED_$UID;
 extern uid_t DISPLAY1_$UID;
-extern uid_t NAME_$NODE_UID;
+/* NAME_$NODE_UID: see name/name.h (included above) */
 extern uid_t ACL_$FNDWRX;
 extern uid_t LV_LABEL_$UID;
 extern uid_t RGYC_$G_LOCKSMITH_UID;
@@ -60,7 +63,7 @@ extern uid_t RGYC_$G_LOCKSMITH_UID;
 
 /* MST_$MST_PAGES_LIMIT declared in mst/mst.h */
 extern uint32_t AS_$STACK_HIGH;
-extern int ROUTE_$PORT;
+/* ROUTE_$PORT: see route/route.h */
 /* CAL_$BOOT_VOLX is a macro in cal/cal.h */
 
 /*
@@ -111,7 +114,7 @@ extern void *DXM_$HELPER_WIRED;
 extern m68k_ptr_t FP_$SAVEP;
 extern m68k_ptr_t PTR_OS_PROC_SHUTWIRED;
 extern m68k_ptr_t PTR_OS_PROC_SHUTWIRED_END;
-extern m68k_ptr_t PTR_OS_DATA_SHUTWIRED;
+/* PTR_OS_DATA_SHUTWIRED is declared in os/os.h (shared with stop/) */
 extern m68k_ptr_t PTR_OS_DATA_SHUTWIRED_END;
 
 /*
@@ -146,7 +149,7 @@ void PEB_$LOAD_WCS(void);
 /* I/O and DMA */
 void DXM_$INIT(void);
 void IO_$INIT(void *param1, void *param2, status_$t *status);
-void IO_$GET_DCTE(void *param1, void *param2, status_$t *status);
+/* IO_$GET_DCTE: see io/io.h */
 
 /* Terminal/Display */
 void TERM_$INIT(short *param1, short *param2);
@@ -209,7 +212,7 @@ void HINT_$SHUTDN(void);
 
 /* Naming */
 void NAME_$INIT(uid_t *uid1, uid_t *uid2);
-void NAME_$SET_WDIR(const char *path, void *param, status_$t *status);
+/* NAME_$SET_WDIR: see name/name.h */
 
 /* Logging/Auditing */
 void LOG_$INIT(void);

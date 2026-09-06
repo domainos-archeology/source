@@ -6,14 +6,14 @@
  * and WSL doubly-linked lists.
  *
  * Original addresses:
- * - mmap_$add_to_wsl (FUN_00e0c514): 0x00e0c514
- * - mmap_$add_pages_to_wsl (FUN_00e0c5ae): 0x00e0c5ae
- * - mmap_$remove_from_wsl (FUN_00e0c6e2): 0x00e0c6e2
- * - mmap_$trim_wsl (FUN_00e0c760): 0x00e0c760
- * - mmap_$move_pages_to_wsl_type (FUN_00e0d274): 0x00e0d274
+ * - mmap_$add_to_wsl: 0x00e0c514
+ * - mmap_$add_pages_to_wsl: 0x00e0c5ae
+ * - mmap_$remove_from_wsl: 0x00e0c6e2
+ * - mmap_$trim_wsl: 0x00e0c760
+ * - mmap_$move_pages_to_wsl_type: 0x00e0d274
  */
 
-#include "mmap_internal.h"
+#include "mmap/mmap_internal.h"
 #include "mmu/mmu.h"
 #include "time/time.h"
 

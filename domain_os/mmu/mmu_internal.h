@@ -8,7 +8,7 @@
 #ifndef MMU_INTERNAL_H
 #define MMU_INTERNAL_H
 
-#include "mmu.h"
+#include "mmu/mmu.h"
 #include "cache/cache.h"
 #include "mmap/mmap.h"
 #include "proc1/proc1.h"

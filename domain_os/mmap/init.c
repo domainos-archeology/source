@@ -8,7 +8,7 @@
  * Original address: 0x00e3193e
  */
 
-#include "mmap_internal.h"
+#include "mmap/mmap_internal.h"
 #include "mmu/mmu.h"
 #include "misc/misc.h"
 

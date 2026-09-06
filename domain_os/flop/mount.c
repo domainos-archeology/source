@@ -137,14 +137,16 @@ void flop_$mount_floppy(status_$t *status_ret)
     NAME_$GET_NODE_UID(&node_uid);
 
     /* Step 3: Add /flp directory entry */
-    DIR_$ADDU(&node_uid, flp_name, (int16_t *)&flp_name_len, &mount_uid, status_ret);
+    /* DIR_$ADDU only reads the name; its prototype lacks const */
+    DIR_$ADDU(&node_uid, (char *)flp_name, (int16_t *)&flp_name_len, &mount_uid, status_ret);
 
     if (*status_ret == status_$ok) {
         added_dir = -1;  /* We added the directory */
     } else if (*status_ret == status_$name_already_exists) {
         /* /flp already exists - verify it points to same volume */
         added_dir = 0;
-        NAME_$RESOLVE(flp_path, (int16_t *)&flp_path_len, &existing_uid, &local_status);
+        /* NAME_$RESOLVE only reads the path; its prototype lacks const */
+        NAME_$RESOLVE((char *)flp_path, (int16_t *)&flp_path_len, &existing_uid, &local_status);
 
         if (local_status == status_$ok &&
             mount_uid.high == existing_uid.high &&
@@ -183,6 +185,7 @@ cleanup:
 
     if (added_dir < 0) {
         /* We added the directory, so remove it */
-        DIR_$DROPU(&node_uid, flp_name, (int16_t *)&flp_name_len, &mount_uid, &local_status);
+        /* DIR_$DROPU only reads the name; its prototype lacks const */
+        DIR_$DROPU(&node_uid, (char *)flp_name, (uint16_t *)&flp_name_len, &mount_uid, &local_status);
     }
 }

@@ -90,6 +90,8 @@ void SMD_$UNMAP_DISPLAY_U(status_$t *status_ret)
 
     if (*status_ret != status_$ok) {
         /* Set high bit to indicate error from nested call */
-        *(uint8_t *)status_ret |= 0x80;
+        /* Original: bset.b #7,(A2) on the first (most significant) byte of the
+         * 32-bit status_$t (big-endian) */
+        *status_ret |= 0x80000000;
     }
 }

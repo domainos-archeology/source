@@ -11,7 +11,7 @@
  * Original address: 0x00e5af38
  */
 
-#include "xpd/xpd.h"
+#include "xpd/xpd_internal.h"
 
 /*
  * Process table base address for index calculations

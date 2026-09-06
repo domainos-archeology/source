@@ -8,7 +8,7 @@
  * Original source: Pascal, converted to C
  */
 
-#include "sock_internal.h"
+#include "sock/sock_internal.h"
 
 int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_queue)
 {

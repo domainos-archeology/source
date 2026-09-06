@@ -59,14 +59,14 @@ void mst_$va_to_pte(uint16_t asid, uint32_t va, uint16_t *prot_out,
         return;
     }
 
-    /* Look up ASID base from the ASID base table */
-    asid_base = *(int16_t *)((char *)&MST_ASID_BASE + (int16_t)(result * 2));
+    /* Look up ASID base from the ASID base table (16-bit entries) */
+    asid_base = (int16_t)MST_ASID_BASE[result];
 
-    /* Compute page directory index */
+    /* Compute page directory index (byte offset into the 16-bit MST table) */
     dir_index = (asid_base + (local_seg >> 6)) * 2;
 
     /* Check if page table page exists */
-    page_entry = *(uint16_t *)((char *)&MST + dir_index);
+    page_entry = MST[dir_index / 2];
     if (page_entry == 0) {
         *status = status_$reference_to_illegal_address;
         return;

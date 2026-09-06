@@ -44,7 +44,7 @@
  *   - Low byte 0x08: Stack type (network stack)
  */
 
-#include "network/network.h"
+#include "network/network_internal.h"
 
 /*
  * Process type for page server:

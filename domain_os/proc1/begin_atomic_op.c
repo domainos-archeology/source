@@ -8,7 +8,7 @@
  * Original address: 0x00e209e6
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 void PROC1_$BEGIN_ATOMIC_OP(void)
 {

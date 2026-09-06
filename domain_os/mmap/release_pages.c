@@ -8,7 +8,7 @@
  * Original address: 0x00e0cff8
  */
 
-#include "mmap_internal.h"
+#include "mmap/mmap_internal.h"
 
 void MMAP_$RELEASE_PAGES(uint16_t pid, uint32_t *vpn_array, uint16_t count)
 {

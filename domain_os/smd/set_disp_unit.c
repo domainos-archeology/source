@@ -33,8 +33,7 @@
 
 #include "smd/smd_internal.h"
 
-/* Forward declaration for validation helper */
-extern int8_t smd_$validate_unit(uint16_t unit);
+/* smd_$validate_unit is declared in smd/smd_internal.h */
 
 /*
  * SMD_$SET_DISP_UNIT - Set display unit for current process

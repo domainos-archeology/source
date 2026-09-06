@@ -124,8 +124,8 @@
 /* Invalid syscall number */
 #define status_$fault_invalid_SVC_code              0x00120007
 
-/* Protection boundary violation (user pointer in kernel space) */
-#define status_$fault_protection_boundary_violation 0x0012000b
+/* status_$fault_protection_boundary_violation (0x0012000B) - protection
+ * boundary violation (user pointer in kernel space) - is defined in ec/ec.h */
 
 /* Unimplemented syscall */
 #define status_$fault_unimplemented_SVC             0x0012001c

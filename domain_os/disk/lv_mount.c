@@ -82,9 +82,7 @@
 #define LV_LABEL_DATA_START_OFFSET  0x38
 #define LV_LABEL_SHIFT_OFFSET       0x40
 
-/* External UID constants */
-extern uid_t PV_LABEL_$UID;
-extern uid_t LV_LABEL_$UID;
+/* PV_LABEL_$UID / LV_LABEL_$UID come from uid/uid.h via disk_internal.h */
 
 /*
  * DISK_$LV_MOUNT - Mount a logical volume

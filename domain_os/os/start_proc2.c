@@ -13,8 +13,7 @@
  */
 
 #include "os/os_internal.h"
-
-extern void FIM_$PROC2_STARTUP(void *param);
+#include "fim/fim.h"   /* FIM_$PROC2_STARTUP */
 
 void os_$start_proc2(void *param)
 {

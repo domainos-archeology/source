@@ -11,7 +11,7 @@
  * Size: 134 bytes
  */
 
-#include "pacct_internal.h"
+#include "pacct/pacct_internal.h"
 
 void PACCT_$SHUTDN(void)
 {

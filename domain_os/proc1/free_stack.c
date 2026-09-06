@@ -12,7 +12,7 @@
  *   stack - Pointer to top of stack to free
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 void PROC1_$FREE_STACK(void *stack)
 {

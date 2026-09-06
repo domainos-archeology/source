@@ -9,7 +9,7 @@
  * Original address: 0x00e30970
  */
 
-#include "ec_internal.h"
+#include "ec/ec_internal.h"
 
 void EC2_$INIT_S(void)
 {

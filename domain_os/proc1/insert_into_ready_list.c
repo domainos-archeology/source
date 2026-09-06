@@ -19,7 +19,7 @@
  * Original address: 0x00e20844
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 void proc1_$insert_into_ready_list(proc1_t *pcb)
 {

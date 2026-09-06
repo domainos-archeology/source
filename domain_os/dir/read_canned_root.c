@@ -40,13 +40,11 @@
  */
 
 /* M_DIU_LLW - Unsigned long division returning quotient */
-extern uint32_t M_DIU_LLW(uint32_t dividend, uint16_t divisor);
 
 /* PTR_DAT_00e4cd84 - Case folding bitmap
  * Each bit position corresponds to a character code.
  * If the bit is set, the character at (0x5F - char_code) should be lowercased.
  */
-extern uint8_t PTR_DAT_00e4cd84;
 
 /*
  * NOTE: This function is a nested Pascal subprocedure that accesses its

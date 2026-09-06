@@ -45,11 +45,8 @@
 #include "dir/dir_internal.h"
 
 /* DAT_00e50c5c / DAT_00e50c5a - ACL rights parameters for add_bak */
-extern uint32_t DAT_00e50c5c;
-extern uint16_t DAT_00e50c5a;
 
 /* DAT_00e50830 - Protection type parameter for FILE_$SET_PROT */
-extern uint16_t DAT_00e50830;
 
 void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name_len,
                          void *uid_data, uid_t *result_uid, status_$t *status_ret)

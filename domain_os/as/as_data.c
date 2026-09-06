@@ -11,7 +11,7 @@
  * AS_$INIT adjusts these values for M68020 systems.
  */
 
-#include "as/as.h"
+#include "as/as_internal.h"
 
 /*
  * AS_$INFO - Main address space info structure

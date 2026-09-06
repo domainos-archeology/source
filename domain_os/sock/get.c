@@ -11,7 +11,7 @@
  * Original source: Pascal, converted to C
  */
 
-#include "sock_internal.h"
+#include "sock/sock_internal.h"
 
 int8_t SOCK_$GET(uint16_t sock_num, void *pkt_info)
 {

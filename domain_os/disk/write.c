@@ -13,11 +13,7 @@
 
 #include "disk/disk_internal.h"
 
-/* Mount state offset within volume entry */
-#define DISK_MOUNT_STATE_OFFSET  0x90
-
-/* Volume entry table base */
-#define DISK_VOLUME_BASE  ((uint8_t *)0x00e7a1cc)
+/* DISK_VOLUME_BASE and DISK_MOUNT_STATE_OFFSET come from disk_internal.h */
 
 /* I/O operation codes */
 #define DISK_OP_WRITE  1

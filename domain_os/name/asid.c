@@ -19,15 +19,12 @@
 /* name_$unmap_dir_buffers declared in name/name_internal.h */
 
 /*
- * Per-ASID data offsets (relative to name_$data_base at 0xE80264)
+ * Per-ASID data lives in NAME_$DATA (0xE80264), see name/name.h:
+ *   ndir_uid[]         at +0x3E0 (8 bytes per ASID)
+ *   wdir_uid[]         at +0x950 (8 bytes per ASID)
+ *   ndir_mapped_info[] at +0x040 (16 bytes per ASID)
+ *   wdir_mapped_info[] at +0x5B0 (16 bytes per ASID)
  */
-#define NAME_DATA_NDIR_UID_BASE_OFF         0x3E0
-#define NAME_DATA_WDIR_UID_BASE_OFF         0x950
-#define NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF 0x040
-#define NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF 0x5B0
-
-/* Mapped info structure size is 16 bytes */
-#define MAPPED_INFO_SIZE  16
 
 /*
  * NAME_$INIT_ASID - Initialize naming state for a new address space
@@ -43,15 +40,11 @@
  */
 void NAME_$INIT_ASID(int16_t *new_asid, status_$t *status_ret)
 {
-    char *base = (char *)&NAME_$NODE_DATA_UID;
-    int16_t src_uid_off = PROC1_$AS_ID << 3;
-    int16_t dst_uid_off = *new_asid << 3;
-    int16_t dst_mapped_off = *new_asid << 4;
     uid_t current_uid;
-    uid_t *src_wdir = (uid_t *)(base + NAME_DATA_WDIR_UID_BASE_OFF + src_uid_off);
-    uid_t *dst_wdir = (uid_t *)(base + NAME_DATA_WDIR_UID_BASE_OFF + dst_uid_off);
-    uid_t *src_ndir = (uid_t *)(base + NAME_DATA_NDIR_UID_BASE_OFF + src_uid_off);
-    uid_t *dst_ndir = (uid_t *)(base + NAME_DATA_NDIR_UID_BASE_OFF + dst_uid_off);
+    uid_t *src_wdir = &NAME_$DATA.wdir_uid[PROC1_$AS_ID];
+    uid_t *dst_wdir = &NAME_$DATA.wdir_uid[*new_asid];
+    uid_t *src_ndir = &NAME_$DATA.ndir_uid[PROC1_$AS_ID];
+    uid_t *dst_ndir = &NAME_$DATA.ndir_uid[*new_asid];
 
     ACL_$ENTER_SUPER();
 
@@ -63,7 +56,7 @@ void NAME_$INIT_ASID(int16_t *new_asid, status_$t *status_ret)
     if (ACL_$RIGHTS(&current_uid, NULL, NULL, NULL, status_ret) != 0) {
         /* Has access - map the directory for the new ASID */
         name_$map_dir(&current_uid, *new_asid,
-                     base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + dst_mapped_off,
+                     &NAME_$DATA.wdir_mapped_info[*new_asid],
                      status_ret);
 
         if (*status_ret == status_$ok) {
@@ -81,7 +74,7 @@ do_ndir:
         /* Check ACL access for naming directory */
         if (ACL_$RIGHTS(&current_uid, NULL, NULL, NULL, status_ret) != 0) {
             name_$map_dir(&current_uid, *new_asid,
-                         base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + dst_mapped_off,
+                         &NAME_$DATA.ndir_mapped_info[*new_asid],
                          status_ret);
 
             if (*status_ret == status_$ok) {
@@ -96,7 +89,7 @@ do_ndir:
     }
 
     /* Set high bit to indicate error */
-    *(uint8_t *)status_ret |= 0x80;
+    *status_ret |= 0x80000000;  /* high bit of the first byte (m68k big-endian) */
 
 done:
     ACL_$EXIT_SUPER();
@@ -116,16 +109,10 @@ done:
  */
 void NAME_$FORK(int16_t *parent_asid, int16_t *child_asid)
 {
-    char *base = (char *)&NAME_$NODE_DATA_UID;
-    int16_t parent_uid_off = *parent_asid << 3;
-    int16_t child_uid_off = *child_asid << 3;
-    int16_t parent_mapped_off = *parent_asid << 4;
-    int16_t child_mapped_off = *child_asid << 4;
-
-    uid_t *parent_wdir = (uid_t *)(base + NAME_DATA_WDIR_UID_BASE_OFF + parent_uid_off);
-    uid_t *child_wdir = (uid_t *)(base + NAME_DATA_WDIR_UID_BASE_OFF + child_uid_off);
-    uid_t *parent_ndir = (uid_t *)(base + NAME_DATA_NDIR_UID_BASE_OFF + parent_uid_off);
-    uid_t *child_ndir = (uid_t *)(base + NAME_DATA_NDIR_UID_BASE_OFF + child_uid_off);
+    uid_t *parent_wdir = &NAME_$DATA.wdir_uid[*parent_asid];
+    uid_t *child_wdir = &NAME_$DATA.wdir_uid[*child_asid];
+    uid_t *parent_ndir = &NAME_$DATA.ndir_uid[*parent_asid];
+    uid_t *child_ndir = &NAME_$DATA.ndir_uid[*child_asid];
 
     /* Copy working directory UID */
     child_wdir->high = parent_wdir->high;
@@ -136,25 +123,17 @@ void NAME_$FORK(int16_t *parent_asid, int16_t *child_asid)
     child_ndir->low = parent_ndir->low;
 
     /* Copy working directory mapped info (16 bytes) */
-    memcpy(base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + child_mapped_off,
-           base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + parent_mapped_off,
-           MAPPED_INFO_SIZE);
+    NAME_$DATA.wdir_mapped_info[*child_asid] = NAME_$DATA.wdir_mapped_info[*parent_asid];
 
     /* Copy naming directory mapped info (16 bytes) */
-    memcpy(base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + child_mapped_off,
-           base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + parent_mapped_off,
-           MAPPED_INFO_SIZE);
+    NAME_$DATA.ndir_mapped_info[*child_asid] = NAME_$DATA.ndir_mapped_info[*parent_asid];
 
     /* The decompiled code shows it copies twice - this appears to be
      * for redundancy or there may be two separate mapped info structures.
      * Replicating the behavior here. */
-    memcpy(base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + child_mapped_off,
-           base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + parent_mapped_off,
-           MAPPED_INFO_SIZE);
+    NAME_$DATA.wdir_mapped_info[*child_asid] = NAME_$DATA.wdir_mapped_info[*parent_asid];
 
-    memcpy(base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + child_mapped_off,
-           base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + parent_mapped_off,
-           MAPPED_INFO_SIZE);
+    NAME_$DATA.ndir_mapped_info[*child_asid] = NAME_$DATA.ndir_mapped_info[*parent_asid];
 }
 
 /*
@@ -170,20 +149,16 @@ void NAME_$FORK(int16_t *parent_asid, int16_t *child_asid)
  */
 void NAME_$FREE_ASID(int16_t *asid)
 {
-    char *base = (char *)&NAME_$NODE_DATA_UID;
-    int16_t uid_off = *asid << 3;
-    int16_t mapped_off = *asid << 4;
-
-    uid_t *wdir = (uid_t *)(base + NAME_DATA_WDIR_UID_BASE_OFF + uid_off);
-    uid_t *ndir = (uid_t *)(base + NAME_DATA_NDIR_UID_BASE_OFF + uid_off);
+    uid_t *wdir = &NAME_$DATA.wdir_uid[*asid];
+    uid_t *ndir = &NAME_$DATA.ndir_uid[*asid];
 
     ACL_$ENTER_SUPER();
 
     /* Unmap working directory */
-    name_$unmap_dir_buffers(*asid, base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + mapped_off);
+    name_$unmap_dir_buffers(*asid, &NAME_$DATA.wdir_mapped_info[*asid]);
 
     /* Unmap naming directory */
-    name_$unmap_dir_buffers(*asid, base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + mapped_off);
+    name_$unmap_dir_buffers(*asid, &NAME_$DATA.ndir_mapped_info[*asid]);
 
     /* Reset both UIDs to node directory */
     wdir->high = NAME_$NODE_UID.high;

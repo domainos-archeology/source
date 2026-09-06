@@ -51,42 +51,9 @@
 // =============================================================================
 // External Memory Management Variables
 // =============================================================================
-
-// AST (Address Segment Table) variables
-extern short AST_$SIZE_AST;             // Number of AST entries
-extern uint32_t AST_$PAGE_FLT_CNT;      // Page fault count
-extern uint32_t AST_$WS_FLT_CNT;        // Working set fault count
-extern uint32_t AST_$ALLOC_CNT;         // Allocation count
-extern uint32_t AST_$ALLOC_TOO_FEW_CNT; // Allocation failed count
-
-// PMAP (Physical Map) variables
-extern uint16_t PMAP_$MAX_WS_INTERVAL; // Max working set interval
-extern uint16_t PMAP_$MIN_WS_INTERVAL; // Min working set interval
-extern uint16_t PMAP_$WS_INTERVAL;     // Current working set interval
-extern uint32_t PMAP_$IDLE_INTERVAL;   // Idle interval
-extern uint32_t PMAP_$PUR_L_CNT;       // Local purge count
-extern uint32_t PMAP_$PUR_R_CNT;       // Remote purge count
-extern uint32_t PMAP_$T_PUR_SCANS;     // Total purge scans
-extern uint16_t PMAP_$SCAN_FRACT;      // Scan fraction
-
-// MMAP (Memory Map) variables
-extern uint32_t MMAP_$REAL_PAGES;                 // Total real pages
-extern uint32_t MMAP_$PAGEABLE_PAGES_LOWER_LIMIT; // Lower limit for pageable
-extern uint32_t MMAP_$REMOTE_PAGES;               // Remote pages count
-extern uint32_t MMAP_$ALLOC_CNT;                  // Memory allocation count
-extern uint32_t MMAP_$ALLOC_PAGES;                // Allocated pages count
-extern uint32_t MMAP_$STEAL_CNT;                  // Page steal count
-extern uint32_t MMAP_$WS_OVERFLOW;                // Working set overflow count
-extern uint32_t MMAP_$WS_SCAN_CNT;                // Working set scan count
-extern uint32_t MMAP_$RECLAIM_SHAR_CNT;           // Shared reclaim count
-extern uint32_t MMAP_$RECLAIM_PUR_CNT;            // Purge reclaim count
-extern uint32_t MMAP_$WS_REMOVE;                  // Working set remove count
-extern uint16_t MMAP_$WSL_HI_MARK[];              // Working set list high mark (per-pid)
-extern uint32_t MMAP_$LPPN;                       // Lowest physical page number
-extern uint32_t MMAP_$HPPN; // Highest physical page number
-
-// Process variables
-/* PROC1_$CURRENT declared in proc1/proc1.h */
+// The AST_$*, PMAP_$* and MMAP_$* globals reported by OSINFO_$GET_MMAP are
+// declared in ast/ast.h, pmap/pmap.h and mmap/mmap.h respectively
+// (PROC1_$CURRENT in proc1/proc1.h).
 
 // =============================================================================
 // Paging Counters Structure (returned by MMAP_FLAG_GET_COUNTERS)

@@ -11,10 +11,7 @@
 
 #include "msg/msg_internal.h"
 
-/*
- * Network service callback for unregistration
- */
-extern void MSG_$NET_SERVICE_CLOSE(void);
+/* MSG_$NET_SERVICE_CLOSE (op code word at 0x00E594F2) is in msg/msg_internal.h */
 
 /*
  * MSG_$CLOSEI - Close socket internal implementation
@@ -100,7 +97,7 @@ void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
 
             /* Unregister network service */
             service_type = 0x80000;
-            NETWORK_$SET_SERVICE(MSG_$NET_SERVICE_CLOSE, &service_type, &net_status);
+            NETWORK_$SET_SERVICE((int16_t *)&MSG_$NET_SERVICE_CLOSE, &service_type, &net_status);
         }
     }
 

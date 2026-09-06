@@ -8,7 +8,7 @@
  * and the actual info size (AS_$INFO_SIZE).
  */
 
-#include "as/as.h"
+#include "as/as_internal.h"
 
 void AS_$GET_INFO(void *buffer, int16_t *req_size, int16_t *actual_size)
 {

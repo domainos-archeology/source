@@ -1,4 +1,4 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 #include "misc/misc.h"
 #include "term/term.h"
 #include "vfmt/vfmt.h"

@@ -118,8 +118,8 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
     ((uint32_t *)&local_pkt)[8] = ((uint32_t *)pkt_desc)[8];  /* 0x20 */
     ((uint32_t *)&local_pkt)[9] = ((uint32_t *)pkt_desc)[9];  /* 0x24 */
 
-    /* Clear a byte (offset 0x28) */
-    ((uint8_t *)&local_pkt)[0x28] = 0;
+    /* Clear the flag byte at offset 0x28 (clr.b (-0x28,A6)) */
+    local_pkt.flags_28 = 0;
 
     /*
      * Walk the buffer chain and clear flags in each buffer entry.

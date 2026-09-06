@@ -70,7 +70,7 @@ void DIR_$SET_DEF_PROTECTION(uid_t *dir_uid, uid_t *acl_type,
         status == status_$naming_bad_directory) {
         /* Convert to old 9ACL format and use old implementation */
         uid_t temp_acl;
-        ACL_$CONVERT_TO_9ACL((int16_t)(uintptr_t)prot_buf, prot_uid, dir_uid,
+        ACL_$CONVERT_TO_9ACL(prot_buf, prot_uid, dir_uid,
                              acl_type, &temp_acl, status_ret);
         if (*status_ret == status_$ok) {
             DIR_$OLD_SET_DEFAULT_ACL(dir_uid, acl_type, &temp_acl, status_ret);

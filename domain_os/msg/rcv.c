@@ -16,10 +16,7 @@
 
 #include "msg/msg_internal.h"
 
-/*
- * Internal receive implementation at 0x00E59548
- */
-extern void MSG_$$RCV_INTERNAL(int16_t socket, void *params, status_$t *status_ret);
+/* MSG_$$RCV_INTERNAL (0x00E59548) is declared in msg/msg_internal.h */
 
 /*
  * MSG_$RCVI - Receive message internal implementation

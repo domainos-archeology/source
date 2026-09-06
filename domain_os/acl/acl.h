@@ -589,13 +589,15 @@ void ACL_$IMAGE(void *source_uid, int16_t *buffer_len, int8_t *unknown_flag,
  * Original address: 0x00E47968
  */
 void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
-                      int16_t type, uid_t *file_uid_ret, status_$t *status_ret);
+                      void *type, uid_t *file_uid_ret, status_$t *status_ret);
 
 /*
  * ACL_$CONVERT_TO_9ACL - Convert ACL to 9-entry format
  *
  * Parameters:
- *   type          - ACL type code
+ *   type          - ACL type / protection buffer, passed by reference
+ *                   (callers push a pointer: pea; passed through unchanged
+ *                   as the 4th argument of ACL_$PRIM_CREATE)
  *   source_uid    - Source UID
  *   dir_uid       - Directory UID
  *   default_prot  - Default protection
@@ -604,7 +606,7 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
  *
  * Original address: 0x00E48CE8
  */
-void ACL_$CONVERT_TO_9ACL(int16_t type, uid_t *source_uid, uid_t *dir_uid,
+void ACL_$CONVERT_TO_9ACL(void *type, uid_t *source_uid, uid_t *dir_uid,
                           void *default_prot, uid_t *result_uid, status_$t *status_ret);
 
 /*
@@ -728,5 +730,8 @@ extern uid_t ACL_$DIR_ACL;  /* Well-known ACL UID for directories */
 /* ACL type UIDs - used to identify ACL operations */
 extern uid_t ACL_$FILE_ACL;    /* 0xE1744C */
 extern uid_t ACL_$FILEIN_ACL;  /* 0xE17454 */
+
+/* Per-process super-user nesting counts, indexed by PROC1_$CURRENT (0xE7DACA) */
+extern int16_t ACL_$SUPER_COUNT[];
 
 #endif /* ACL_H */

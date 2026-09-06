@@ -38,7 +38,7 @@
  * Size: 734 bytes
  */
 
-#include "file/file.h"
+#include "file/file_internal.h"
 
 /*
  * Helper: check if character is uppercase A-Z

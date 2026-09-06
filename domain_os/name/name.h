@@ -51,44 +51,106 @@ typedef enum {
 #define status_$naming_object_is_not_an_acl_object             0x000e002e
 
 /*
- * Well-known UIDs managed by the NAME subsystem
+ * Cached directory mapping info (16 bytes)
+ *
+ * Holds the MST mapping state of a directory that is kept mapped for fast
+ * access (see name_$map_dir / name_$unmap_dir_buffers).  The directory is
+ * mapped as two 0x8000-byte halves; when they are contiguous, second_base
+ * == first_base + 0x8000.
  */
-extern uid_t NAME_$ROOT_UID;        /* Root directory UID */
-extern uid_t NAME_$NODE_UID;        /* This node's directory UID */
-extern uid_t NAME_$NODE_DATA_UID;   /* Node data directory UID */
-extern uid_t NAME_$COM_UID;         /* /com directory UID */
+typedef struct name_$mapped_info_t {
+    int8_t      active;         /* +0x00: negative (0xFF) when the mapping is active */
+    uint8_t     pad_01;         /* +0x01 */
+    uint16_t    reserved_02;    /* +0x02: set to 0 by name_$map_dir; must be 0 to reuse */
+    uint32_t    first_base;     /* +0x04: mapped base address (MST_$MAPS A0 result) */
+    uint16_t    reserved_08;    /* +0x08 */
+    uint16_t    entry_count;    /* +0x0A: set to 1 by name_$map_dir; must be 1 to reuse */
+    uint32_t    second_base;    /* +0x0C: first_base + 0x8000 */
+} name_$mapped_info_t;
+
+/*
+ * Number of per-address-space slots in the NAME data area.
+ * NAME_$INIT initialises 0x3A (58) slots (moveq #0x39 / dbf).
+ */
+#define NAME_$MAX_ASIDS     58
+
+/*
+ * NAME data area (0xE80264, 0xB20 bytes)
+ *
+ * All the well-known UIDs, the per-ASID working/naming directory UIDs and
+ * the cached mapping info blocks live in one contiguous block; the original
+ * code addresses everything relative to 0xE80264.
+ *
+ * Original m68k addresses:
+ *   NAME_$NODE_DATA_UID:    0xE80264 (+0x000)
+ *   NAME_$COM_MAPPED_INFO:  0xE8026C (+0x008)
+ *   NAME_$COM_UID:          0xE8027C (+0x018)
+ *   NAME_$NODE_MAPPED_INFO: 0xE80284 (+0x020)
+ *   NAME_$NODE_UID:         0xE80294 (+0x030)
+ *   NAME_$ROOT_UID:         0xE8029C (+0x038)
+ *   NAME_$NDIR_MAPPED_INFO: 0xE802A4 (+0x040) [58 x 16 bytes]
+ *   NAME_$NDIR_UID:         0xE80644 (+0x3E0) [58 x 8 bytes]
+ *   NAME_$WDIR_MAPPED_INFO: 0xE80814 (+0x5B0) [58 x 16 bytes]
+ *   NAME_$WDIR_UID:         0xE80B54 (+0x950) [58 x 8 bytes]
+ */
+typedef struct name_$data_t {
+    uid_t               node_data_uid;                      /* +0x000 */
+    name_$mapped_info_t com_mapped_info;                    /* +0x008 */
+    uid_t               com_uid;                            /* +0x018 */
+    name_$mapped_info_t node_mapped_info;                   /* +0x020 */
+    uid_t               node_uid;                           /* +0x030 */
+    uid_t               root_uid;                           /* +0x038 */
+    name_$mapped_info_t ndir_mapped_info[NAME_$MAX_ASIDS];  /* +0x040 */
+    uid_t               ndir_uid[NAME_$MAX_ASIDS];          /* +0x3E0 */
+    name_$mapped_info_t wdir_mapped_info[NAME_$MAX_ASIDS];  /* +0x5B0 */
+    uid_t               wdir_uid[NAME_$MAX_ASIDS];          /* +0x950 */
+} name_$data_t;
+
+extern name_$data_t NAME_$DATA;     /* 0xE80264 */
+
+/*
+ * Well-known UIDs managed by the NAME subsystem
+ *
+ * These are the historical symbol names; they resolve to the fields of
+ * NAME_$DATA so that the data layout stays identical to the original.
+ */
+#define NAME_$NODE_DATA_UID     (NAME_$DATA.node_data_uid)  /* Node data directory UID */
+#define NAME_$COM_UID           (NAME_$DATA.com_uid)        /* /com directory UID */
+#define NAME_$NODE_UID          (NAME_$DATA.node_uid)       /* This node's directory UID */
+#define NAME_$ROOT_UID          (NAME_$DATA.root_uid)       /* Root directory UID */
+
 extern uid_t NAME_$CANNED_REP_ROOT_UID;
-extern uid_t NAME_$CANNED_ROOT_UID; /* Canned root UID (for fallback) */
+extern uid_t NAME_$CANNED_ROOT_UID; /* Canned root UID (for fallback), 0xE173E4 */
 
 /*
  * Per-address-space working/naming directory UIDs
  *
- * These are arrays indexed by PROC1_$AS_ID (scaled by 8 for uid_t size).
- * Each address space can have its own wdir and ndir.
+ * These are arrays indexed by PROC1_$AS_ID.  The historical names refer to
+ * element 0 (the array base), matching the original byte-offset addressing.
  */
-extern uid_t NAME_$WDIR_UID;       /* Working directory UID array base */
-extern uid_t NAME_$NDIR_UID;       /* Naming directory UID array base */
+#define NAME_$WDIR_UID          (NAME_$DATA.wdir_uid[0])    /* Working directory UID array base */
+#define NAME_$NDIR_UID          (NAME_$DATA.ndir_uid[0])    /* Naming directory UID array base */
 
 /*
  * Cached mapping info for well-known directories
  *
- * Each mapping info block is 16 bytes containing the current
- * MST mapping state for the directory. This allows re-opening
- * well-known directories without re-mapping.
- *
  * NODE and COM have a single global mapping.
- * WDIR and NDIR are per-address-space (indexed by PROC1_$AS_ID << 4).
- *
- * Original m68k addresses:
- *   NAME_$NODE_MAPPED_INFO: 0xE80284
- *   NAME_$COM_MAPPED_INFO:  0xE8026C
- *   NAME_$WDIR_MAPPED_INFO: 0xE80814
- *   NAME_$NDIR_MAPPED_INFO: 0xE802A4
+ * WDIR and NDIR are per-address-space (indexed by PROC1_$AS_ID).
  */
-extern uint8_t NAME_$NODE_MAPPED_INFO;
-extern uint8_t NAME_$COM_MAPPED_INFO;
-extern uint8_t NAME_$WDIR_MAPPED_INFO;
-extern uint8_t NAME_$NDIR_MAPPED_INFO;
+#define NAME_$NODE_MAPPED_INFO  (NAME_$DATA.node_mapped_info)
+#define NAME_$COM_MAPPED_INFO   (NAME_$DATA.com_mapped_info)
+#define NAME_$WDIR_MAPPED_INFO  (NAME_$DATA.wdir_mapped_info[0])
+#define NAME_$NDIR_MAPPED_INFO  (NAME_$DATA.ndir_mapped_info[0])
+
+/*
+ * Constants living in the NAME code region that are passed by reference
+ * (Pascal VAR parameters) by NAME and DIR routines.
+ */
+extern uint8_t DAT_00e54730;    /* 0xE54730: 4 zero bytes just before NAME_$UNLOCK_DIR;
+                                   FILE_$PRIV_LOCK callback / FILE_$TRUNCATE length arg */
+extern uint8_t DAT_00e54b28;    /* 0xE54B28: ACL_$RIGHTS parameter just after NAME_$LOCK_DIR */
+extern int16_t ACL_TYPE_FILE;   /* 0xE5472E: object type word (file) passed by reference */
+extern int16_t ACL_TYPE_DIR;    /* 0xE54B26: object type word (directory) passed by reference */
 
 /* ============================================================================
  * Public Function Prototypes
@@ -237,6 +299,28 @@ void NAME_$GET_NODE_DATA_UID(uid_t *node_data_uid);
  * Original address: 0x00e58a20
  */
 void NAME_$GET_CANNED_ROOT_UID(uid_t *canned_root_uid);
+
+/*
+ * NAME_$LOCK_DIR - Enter super mode / acquire directory lock
+ *
+ * Original address: 0x00E54854
+ */
+void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
+                    uint32_t flags, status_$t *status_ret);
+
+/*
+ * NAME_$UNLOCK_DIR - Release directory lock / exit super mode
+ *
+ * Original address: 0x00E54734
+ */
+void NAME_$UNLOCK_DIR(status_$t *status_ret);
+
+/*
+ * NAME_CONVERT_ACL_STATUS - Convert an ACL status code to a naming status
+ *
+ * Original address: 0x00E5861C
+ */
+void NAME_CONVERT_ACL_STATUS(status_$t *status_ret);
 
 /*
  * NAME_$SET_ACL - Set ACL on a named object

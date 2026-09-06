@@ -61,11 +61,10 @@ void DIR_$UNMAP_PAGES(void *handle)
         } else if (*(int16_t *)(h + 0x0C) == 2) {
             dest = (uint32_t *)&NAME_$COM_MAPPED_INFO;
         } else if (*(int16_t *)(h + 0x0C) == 3) {
-            int16_t offset = PROC1_$AS_ID << 4;
-            dest = (uint32_t *)((uint8_t *)&NAME_$WDIR_MAPPED_INFO + offset);
+            /* per-ASID slot: base + (PROC1_$AS_ID << 4) */
+            dest = (uint32_t *)&NAME_$DATA.wdir_mapped_info[PROC1_$AS_ID];
         } else if (*(int16_t *)(h + 0x0C) == 4) {
-            int16_t offset = PROC1_$AS_ID << 4;
-            dest = (uint32_t *)((uint8_t *)&NAME_$NDIR_MAPPED_INFO + offset);
+            dest = (uint32_t *)&NAME_$DATA.ndir_mapped_info[PROC1_$AS_ID];
         } else {
             goto clear_flag;
         }

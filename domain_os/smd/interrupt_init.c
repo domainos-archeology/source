@@ -25,8 +25,7 @@
 #include "smd/smd_internal.h"
 #include "peb/peb.h"
 
-/* Display interrupt handler address */
-extern void SMD_$DISP1_INT(void);
+/* SMD_$DISP1_INT is declared in smd/smd_internal.h */
 
 /* PEB base address */
 #define PEB_BASE            0x00E24C78
@@ -34,8 +33,7 @@ extern void SMD_$DISP1_INT(void);
 /* PEB flag that determines interrupt setup method */
 #define PEB_USE_VECTOR_FLAG 0x1A
 
-/* PEB display interrupt address field */
-extern void **PEB_$DISP_INT_ADDR;  /* at 0x00E24478 */
+/* PEB_$DISP_INT_ADDR (0x00E24478) is declared in peb/peb.h */
 
 /* Interrupt vector for display (vector 0x1C, address 0x70) */
 #define DISP_INT_VECTOR_ADDR    ((void **)0x00000070)

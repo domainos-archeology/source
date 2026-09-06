@@ -1,4 +1,4 @@
-#include "math.h"
+#include "math/math_internal.h"
 
 // Signed multiplication: long * long -> int
 // Handles signs by converting to unsigned multiply, then adjusts result sign

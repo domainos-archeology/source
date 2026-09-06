@@ -136,6 +136,32 @@ extern netlog_data_t netlog_data;
 #define NETLOG_SWITCH_BUFFER(idx) (3 - (idx))
 
 /*
+ * Code/data boundaries used for wiring (NETLOG_$CNTL) and the packet info
+ * template used by NETLOG_$SEND_PAGE.
+ *
+ * On m68k these are absolute addresses of the NETLOG/AUDIT code and data
+ * areas; on other architectures they are link-time symbols.
+ */
+#if defined(ARCH_M68K)
+    #define NETLOG_CODE_START       ((void*)0xE71914)   /* Start of NETLOG code (NETLOG_$CNTL) */
+    #define NETLOG_DATA_START       ((void*)0xE85684)   /* Start of NETLOG data */
+    #define NETLOG_DATA_END_ADDR    ((void*)0xE85800)   /* End of NETLOG data */
+    #define AUDIT_DATA_END_ADDR     ((void*)0xE248FC)   /* End of AUDIT data */
+    #define AUDIT_PKT_INFO          ((void*)0xE248FC)   /* Packet info template */
+#else
+    extern char NETLOG_CODE_START_SYM;
+    extern char NETLOG_DATA_START_SYM;
+    extern char NETLOG_DATA_END_SYM;
+    extern char AUDIT_DATA_END_SYM;
+    extern char AUDIT_PKT_INFO_SYM;
+    #define NETLOG_CODE_START       (&NETLOG_CODE_START_SYM)
+    #define NETLOG_DATA_START       (&NETLOG_DATA_START_SYM)
+    #define NETLOG_DATA_END_ADDR    (&NETLOG_DATA_END_SYM)
+    #define AUDIT_DATA_END_ADDR     (&AUDIT_DATA_END_SYM)
+    #define AUDIT_PKT_INFO          (&AUDIT_PKT_INFO_SYM)
+#endif
+
+/*
  * Internal function prototypes
  */
 

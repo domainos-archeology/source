@@ -26,7 +26,9 @@ int8_t AUDIT_$ADMINISTRATOR(status_$t *status_ret)
     int rights;
 
     /* Resolve the audit directory path */
-    NAME_$RESOLVE(audit_path, &audit_path_len, &audit_uid, status_ret);
+    /* NAME_$RESOLVE does not modify the path; cast away const of the
+     * static string to match its char* prototype. */
+    NAME_$RESOLVE((char *)audit_path, &audit_path_len, &audit_uid, status_ret);
 
     if (*status_ret == status_$ok) {
         /* Check if caller has administrative rights */

@@ -16,7 +16,7 @@
  *   - param_7 (map_info) is passed through as output buffer
  */
 
-#include "mst_internal.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$MAP - Map memory at any available private address

@@ -9,7 +9,7 @@
  * Original source: Pascal, converted to C
  */
 
-#include "sock_internal.h"
+#include "sock/sock_internal.h"
 
 void SOCK_$INIT(void)
 {

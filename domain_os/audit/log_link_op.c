@@ -24,6 +24,7 @@
  * Original size: 206 bytes
  */
 
+#include "audit/audit_internal.h"
 #include "audit/audit.h"
 #include "os/os.h"
 

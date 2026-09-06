@@ -10,9 +10,6 @@
 
 #include "rem_file/rem_file_internal.h"
 
-/* proc_priv_table is indexed by PROC1_$CURRENT to check process privileges */
-extern int16_t proc_priv_table[];  /* At 0xe7dacc */
-
 /*
  * Create type context structure (passed as param_1)
  */
@@ -94,7 +91,7 @@ void REM_FILE_$CREATE_TYPE_PRESR10(void *ctx_ptr, uint16_t flags,
     req2.flags2 = 3;
 
     /* Set privilege flag based on process privilege level */
-    req2.priv_flag = (proc_priv_table[PROC1_$CURRENT] > 0) ? -1 : 0;
+    req2.priv_flag = REM_FILE_PROCESS_HAS_ADMIN() ? -1 : 0;
     req2.type_index = type_index - 1;
 
     /* Copy session UID to output before phase 2 request */

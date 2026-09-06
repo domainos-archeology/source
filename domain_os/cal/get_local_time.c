@@ -1,4 +1,4 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 
 // Gets the current local time by:
 // 1. Computing the timezone offset in clock ticks

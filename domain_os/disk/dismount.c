@@ -15,15 +15,15 @@
 /* Valid volume index mask (volumes 1-10) */
 #define VALID_VOL_MASK  0x7fe
 
-/* Volume table base */
-#define DISK_VOLUME_BASE  ((uint8_t *)0x00e7a290)
-
-/* Offsets in volume entry */
-#define DISK_MOUNT_STATE_OFFSET  (-0x34)
-#define DISK_DEV_INFO_OFFSET     (-0x30)
-#define DISK_UNIT_OFFSET         (-0x2c)
-#define DISK_LV_DATA_OFFSET      (-0x40)
-#define DISK_UNIT_COUNT_OFFSET   (-0x1c)
+/*
+ * Volume entry offsets.  The machine code addresses the table as
+ * (0xe7a290 + vol*0x48) with negative offsets; expressed here relative to
+ * DISK_VOLUME_BASE (0xe7a1cc) + vol*0x48 (add 0xc4).  The common offsets
+ * (mount state -0x34, device info -0x30, LV data -0x40) come from
+ * disk/disk_internal.h.
+ */
+#define DISK_UNIT_OFFSET         0x98   /* (-0x2c) device unit (uint16_t) */
+#define DISK_UNIT_COUNT_OFFSET   0xa8   /* (-0x1c) unit count (int16_t) */
 
 void DISK_$DISMOUNT(uint16_t vol_idx)
 {

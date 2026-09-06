@@ -7,7 +7,7 @@
  * Original address: 0x00e0d8f0
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 void MMAP_$ALLOC_CONTIG(uint16_t count, uint32_t *pages_alloced, status_$t *status)
 {

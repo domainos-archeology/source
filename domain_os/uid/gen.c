@@ -21,7 +21,7 @@
  * Original address: 0x00e1a018
  */
 
-#include "uid.h"
+#include "uid/uid_internal.h"
 #include "time/time.h"
 #include "ml/ml.h"
 

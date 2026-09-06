@@ -9,6 +9,7 @@
 #define DISK_INTERNAL_H
 
 #include "disk/disk.h"
+#include "uid/uid.h"
 #include "ml/ml.h"
 #include "proc1/proc1.h"
 #include "proc2/proc2.h"
@@ -18,39 +19,49 @@
 /*
  * Volume table layout
  *
- * Volume table base: 0xe7a1cc (DISK_VOLUME_BASE)
- * Each entry is 0x48 (72) bytes (see DISK_VOLUME_SIZE in disk.h).
+ * The disk module data area starts at DISK_$DATA (0xe7a1cc, DISK_VOLUME_BASE);
+ * the m68k code loads A5 with this address.  Each volume descriptor is
+ * DISK_VOLUME_SIZE (0x48) bytes.  The machine code addresses the descriptor
+ * for volume N in one of two equivalent ways:
  *
- * Offsets relative to entry start (vol_idx * 0x48):
- *   +0x00: UID high (uint32_t)
- *   +0x04: UID low (uint32_t)
- *   +0x08: LV data pointer (uint32_t) - 0 for physical volumes
- *   +0x0c: Disk address start (uint32_t)
- *   +0x10: Disk address end (uint32_t)
- *   +0x14: Mount state (uint16_t)
- *   +0x16: Mount process (int16_t)
- *   +0x18: Device unit (uint16_t)
- *   +0x1a: Reserved
- *   +0x1c: Volume info 1 (uint16_t)
- *   +0x1e: Volume info 2 (uint16_t)
- *   +0x20: PV label info (16 bytes)
- *   +0x30: Reserved
+ *   (0xe7a1cc + N*0x48) + positive offset      e.g. DISK_$READ, DISK_$DIAG_IO
+ *   (0xe7a290 + N*0x48) - negative offset      e.g. DISK_$LV_ASSIGN, DISK_$DISMOUNT
+ *
+ * Since 0xe7a290 - 0xe7a1cc == 0xc4 both forms name the same bytes.  All of
+ * the offsets below use the first form (relative to
+ * DISK_VOLUME_BASE + N * DISK_VOLUME_SIZE); the second form's offset is
+ * shown in parentheses.
+ *
+ * Verified against DISK_$READ (0xe3cf64), DISK_$LV_ASSIGN (0xe6cdb2),
+ * DISK_$DIAG_IO (0xe6bc18), DISK_$GET_MNT_INFO (0xe6be4a),
+ * DISK_$DISMOUNT (0xe6cfea) and DISK_$LVUID_TO_VOLX (0xe6d134).
+ *
+ *   +0x7c (-0x48): first byte of the 0x48-byte block that LV_ASSIGN copies
+ *                  when cloning a PV descriptor into an LV slot
+ *   +0x84 (-0x40): LV data / LV start block (uint32_t) - 0 for a physical volume
+ *   +0x88 (-0x3c): disk address range start (uint32_t); DIAG_IO requires
+ *                  daddr >= this; LV_ASSIGN stores the LV size here
+ *   +0x8c (-0x38): disk address range end (uint32_t); DIAG_IO requires daddr <= this
+ *   +0x90 (-0x34): mount state (uint16_t)
+ *   +0x92 (-0x32): mount process (int16_t, compared with PROC1_$CURRENT)
+ *   +0x94 (-0x30): device info pointer (void *)
+ *   +0x98 (-0x2c): device unit (uint16_t)
+ *   +0xa4 (-0x20): async I/O options word (uint16_t); cleared by LV_ASSIGN
+ *   +0xa5        : write-protect flag byte
+ *
+ * TODO: the remaining descriptor fields (per-file names such as
+ * DISK_UNIT_OFFSET 0x9a in get_mnt_info.c vs 0x98 in dismount.c) still need a
+ * single verified struct definition.
  */
-#define DISK_VOLUME_BASE      ((uint8_t *)0x00e7a1cc)
+#define DISK_VOLUME_BASE          ((uint8_t *)0x00e7a1cc)
 
-/* Volume entry field offsets */
-#define DISK_UID_HIGH_OFFSET      0x00
-#define DISK_UID_LOW_OFFSET       0x04
-#define DISK_LV_DATA_OFFSET       0x08
-#define DISK_ADDR_START_OFFSET    0x0c
-#define DISK_ADDR_END_OFFSET      0x10
-#define DISK_MOUNT_STATE_OFFSET   0x14
-#define DISK_MOUNT_PROC_OFFSET    0x16
-#define DISK_DEVICE_UNIT_OFFSET   0x18
-#define DISK_VOL_INFO1_OFFSET     0x1c
-#define DISK_VOL_INFO2_OFFSET     0x1e
-#define DISK_PVLABEL_OFFSET       0x20
-#define DISK_SHIFT_LOG2_OFFSET    0x22
+/* Volume descriptor field offsets (see layout comment above) */
+#define DISK_LV_DATA_OFFSET       0x84
+#define DISK_ADDR_START_OFFSET    0x88
+#define DISK_ADDR_END_OFFSET      0x8c
+#define DISK_MOUNT_STATE_OFFSET   0x90
+#define DISK_MOUNT_PROC_OFFSET    0x92
+#define DISK_DEV_INFO_OFFSET      0x94
 
 /* Mount states */
 #define DISK_MOUNT_FREE      0
@@ -68,11 +79,7 @@
 /* Number of volume table entries to scan (indices 1-6) */
 #define VOL_TABLE_SCAN_COUNT  6
 
-/* PV Label UID constant at 0xe1738c */
-extern uid_t PV_LABEL_$UID;
-
-/* LV Label UID constant at 0xe17394 */
-extern uid_t LV_LABEL_$UID;
+/* PV_LABEL_$UID (0xe1738c) and LV_LABEL_$UID (0xe17394) come from uid/uid.h */
 
 /*
  * Disk module data layout (A5-relative offsets)

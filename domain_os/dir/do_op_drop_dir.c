@@ -32,13 +32,10 @@
 #include "dir/dir_internal.h"
 
 /* DAT_00e4bc24 - ACL rights mask (0xFF = all rights) */
-extern uint8_t DAT_00e4bc24;
 
 /* DAT_00e4b444 - ACL check parameter */
-extern uint8_t DAT_00e4b444;
 
 /* DAT_00e51b64 - ACL rights value for directory delete (0x00000040) */
-extern uint32_t DAT_00e51b64;
 
 void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
                          status_$t *status_ret)

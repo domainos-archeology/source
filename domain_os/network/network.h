@@ -29,9 +29,28 @@
 
 /*
  * Status codes for NETWORK subsystem (module 0x11)
+ *
+ * This is the single home of the status_$network_* codes; other
+ * subsystems (asknode, ring, rip, route, ...) include this header.
  */
+#define status_$network_transmit_failed                 0x00110004
+#define status_$network_no_available_sockets            0x00110005
+#define status_$network_unexpected_reply_type           0x0011000B
 #define status_$network_unknown_request_type            0x0011000D
 #define status_$network_request_denied_by_local_node    0x0011000E
+#define status_$network_too_many_transmit_retries       0x00110011
+#define status_$network_memory_parity_error_during_transmit 0x00110016
+#define status_$network_unknown_network                 0x00110017
+#define status_$network_too_many_networks_in_internet   0x00110018
+#define status_$network_conflict_with_another_node_listing 0x00110019
+#define status_$network_quit_fault_during_node_listing  0x0011001A
+#define status_$network_waited_too_long_for_more_node_responses 0x0011001B
+#define status_$network_data_length_too_large           0x0011001C
+#define status_$network_operation_not_defined_on_hardware 0x0011001D
+/* TODO: the original names of codes 0x110020/0x110021 (ASKNODE_$INTERNET_INFO
+ * reply validation) are not known; the names below are descriptive only. */
+#define status_$network_bad_asknode_reply_type          0x00110020
+#define status_$network_bad_asknode_version_number      0x00110021
 
 /*
  * Network service flags (bits in NETWORK_$ALLOWED_SERVICE)
@@ -68,7 +87,7 @@ extern int16_t NETWORK_$REQUEST_SERVER_CNT;  /* 0xE24C1C (+0x320) */
 extern int16_t NETWORK_$PAGE_SERVER_CNT;     /* 0xE24C1E (+0x322) */
 extern uint32_t NETWORK_$ALLOWED_SERVICE;    /* 0xE24C3E (+0x342) - 32-bit */
 extern int16_t NETWORK_$REMOTE_POOL;         /* 0xE24C40 (+0x344) */
-extern int8_t NETWORK_$ACTIVITY_FLAG;        /* 0xE24C46 (+0x346) */
+extern int8_t NETWORK_$ACTIVITY_FLAG;        /* 0xE24C42 (+0x346) */
 extern char NETWORK_$DO_CHKSUM;
 extern int8_t NETWORK_$USER_SOCK_OPEN;       /* 0xE24C48 (+0x34C) */
 extern int8_t NETWORK_$REALLY_DISKLESS;      /* 0xE24C4A (+0x34E) */
@@ -76,15 +95,49 @@ extern int8_t NETWORK_$DISKLESS;             /* 0xE24C4C (+0x350) - diskless mod
 extern uid_t NETWORK_$PAGING_FILE_UID;
 
 /* Network statistics */
-extern uint16_t NETWORK_$INFO_RQST_CNT;
-extern uint16_t NETWORK_$PAGIN_RQST_CNT;
-extern uint16_t NETWORK_$MULT_PAGIN_RQST_CNT;
-extern uint16_t NETWORK_$PAGOUT_RQST_CNT;
-extern uint16_t NETWORK_$READ_CALL_CNT;
-extern uint16_t NETWORK_$WRITE_CALL_CNT;
-extern uint16_t NETWORK_$READ_VIOL_CNT;
-extern uint16_t NETWORK_$WRITE_VIOL_CNT;
-extern uint16_t NETWORK_$BAD_CHKSUM_CNT;
+extern uint32_t NETWORK_$PAGING_BACKLOG;      /* 0xE24BAC */
+extern uint32_t NETWORK_$FILE_BACKLOG;        /* 0xE24BD0 */
+extern uint16_t NETWORK_$RCV_READ_AHEAD;      /* 0xE24C26 */
+extern uint16_t NETWORK_$MULT_PAGIN_RQST_CNT; /* 0xE24C28 */
+extern uint16_t NETWORK_$BAD_CHKSUM_CNT;      /* 0xE24C2A */
+extern uint16_t NETWORK_$READ_VIOL_CNT;       /* 0xE24C2C */
+extern uint16_t NETWORK_$WRITE_VIOL_CNT;      /* 0xE24C2E */
+extern uint16_t NETWORK_$READ_CALL_CNT;       /* 0xE24C30 */
+extern uint16_t NETWORK_$WRITE_CALL_CNT;      /* 0xE24C32 */
+extern uint16_t NETWORK_$SET_ATTRIB_CALL_CNT; /* 0xE24C34 */
+extern uint16_t NETWORK_$ATTRIB_RQST_CNT;     /* 0xE24C36 */
+extern uint16_t NETWORK_$INFO_RQST_CNT;       /* 0xE24C38 */
+extern uint16_t NETWORK_$PAGIN_RQST_CNT;      /* 0xE24C3A */
+extern uint16_t NETWORK_$PAGOUT_RQST_CNT;     /* 0xE24C3C */
+
+/*
+ * NETWORK_$CAPABLE_FLAGS - Network capability flags (bit 0 = network capable)
+ *
+ * Original address: 0xE24C3F.  TODO: this byte is byte 1 of the
+ * NETWORK_$ALLOWED_SERVICE longword (0xE24C3E); it should share storage
+ * with it (bit 0 of this byte == bit 16 of NETWORK_$ALLOWED_SERVICE).
+ */
+extern uint8_t NETWORK_$CAPABLE_FLAGS;
+
+/*
+ * NETWORK_$FAILURE_REC - Network failure record (16 bytes)
+ *
+ * Written by ASKNODE_$SERVER (request 0x0E) and read by
+ * ASKNODE_$READ_FAILURE_REC.
+ *
+ * Original address: 0xE24BF4
+ */
+typedef struct network_$failure_rec_t {
+    uint16_t    word0;          /* 0x00 */
+    uint8_t     flag;           /* 0x02: 0xFF once a failure has been recorded;
+                                 *       cleared when NETWORK_$ACTIVITY_FLAG < 0 */
+    uint8_t     byte3;          /* 0x03 */
+    uint32_t    error_info;     /* 0x04: Failure information (request param2) */
+    uint32_t    timestamp;      /* 0x08: TIME_$CURRENT_CLOCKH at failure */
+    uint32_t    node_id;        /* 0x0C: Node involved */
+} network_$failure_rec_t;
+
+extern network_$failure_rec_t NETWORK_$FAILURE_REC;
 
 /*
  * Note: ROUTE_$N_ROUTING_PORTS is declared in route/route_internal.h
@@ -363,7 +416,8 @@ uint16_t NETWORK_$GET_PKT_SIZE(uint32_t *dest_addr, uint16_t max_size);
  *
  * Original address: 0xE245A4
  */
-extern uint32_t NODE_$ME;
+/* NODE_$ME (0xE245A4): defined in uid/uid_data.c, declared in uid/uid.h */
+#include "uid/uid.h"
 
 /*
  * network_$fetch_diskless_info - Fetch info from network for diskless boot

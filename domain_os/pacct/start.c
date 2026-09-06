@@ -11,7 +11,7 @@
  * Size: 370 bytes
  */
 
-#include "pacct_internal.h"
+#include "pacct/pacct_internal.h"
 
 /*
  * Extended SID structure returned by ACL_$GET_EXSID

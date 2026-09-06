@@ -38,3 +38,10 @@ ml_$exclusion_t DIR_$MUTEX;
  * during directory link operations.
  */
 ml_$exclusion_t DIR_$LINK_BUF_MUTEX;
+
+/*
+ * DAT_00e52040 - one-page length constant (0x00000400) embedded in the
+ * code segment at 0xE52040 and passed by reference to FILE_$FW_PARTIAL and
+ * FILE_$TRUNCATE.
+ */
+const int32_t DAT_00e52040 = 0x00000400;

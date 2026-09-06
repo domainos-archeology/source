@@ -24,7 +24,7 @@
  *   Offset 0x06: Reserved (12 bytes)
  */
 
-#include "mem/mem.h"
+#include "mem/mem_internal.h"
 
 /*
  * ============================================================================
@@ -77,11 +77,7 @@ uint16_t MEM_$BOARD_ERRORS[2] = { 0 };
  *   - 12 bytes: Reserved/padding
  *
  * Original address: 0xE22942
+ *
+ * (mem_$page_error_t is defined in mem/mem_internal.h)
  */
-typedef struct {
-    uint32_t    phys_addr;      /* Physical address of failing page */
-    uint16_t    error_count;    /* Number of errors at this address */
-    uint8_t     reserved[12];   /* Padding to 18 bytes */
-} mem_$page_error_t;
-
 mem_$page_error_t MEM_$PAGE_ERRORS[4] = { { 0 } };

@@ -10,9 +10,6 @@
 
 #include "rem_file/rem_file_internal.h"
 
-/* proc_priv_table is indexed by PROC1_$CURRENT to check process privileges */
-extern int16_t proc_priv_table[];  /* At 0xe7dacc */
-
 /*
  * Name get entry request structure
  */
@@ -91,7 +88,7 @@ void REM_FILE_$NAME_GET_ENTRYU(void *addr_info, uid_t *dir_uid,
     request.flags = 3;
 
     /* Set privilege flag based on process privilege level */
-    request.priv_flag = (proc_priv_table[PROC1_$CURRENT] > 0) ? -1 : 0;
+    request.priv_flag = REM_FILE_PROCESS_HAS_ADMIN() ? -1 : 0;
 
     /* Get RE SIDs */
     ACL_$GET_RE_SIDS(re_sids, sids_out, status);

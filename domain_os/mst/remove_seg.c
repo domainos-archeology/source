@@ -11,7 +11,7 @@
  * 4. Unlocks the AST
  */
 
-#include "mst_internal.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$REMOVE_SEG - Remove segment from AST

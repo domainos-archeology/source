@@ -11,7 +11,7 @@
  * @return                Status code
  */
 
-#include "win.h"
+#include "win/win_internal.h"
 
 /* Uses declaration from win.h */
 

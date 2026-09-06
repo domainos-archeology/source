@@ -137,7 +137,8 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     }
 
     /* Check if new ACL is on same volume as directory */
-    if (*(char *)&acl_uid->high == '\0') {
+    /* First (most significant) byte of the UID high word - tst.b on m68k */
+    if ((char)(acl_uid->high >> 24) == '\0') {
         /* Same volume or null - just write info block */
         goto write_infoblk;
     }
@@ -162,7 +163,7 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     }
     if (*status_ret != status_$wrong_type) {
         /* Error - set high bit */
-        *(uint8_t *)status_ret = *(uint8_t *)status_ret | 0x80;
+        *status_ret |= 0x80000000;  /* or.b #0x80 into the first (MSB) byte on m68k */
         return;
     }
     *status_ret = file_$objects_on_different_volumes;
@@ -179,7 +180,7 @@ write_infoblk:
     FILE_$FW_PARTIAL(dir_uid, &DAT_00e54730, &DAT_00e564e2, status_ret);
     if (*status_ret != status_$ok) {
         /* Error - set high bit */
-        *(uint8_t *)status_ret = *(uint8_t *)status_ret | 0x80;
+        *status_ret |= 0x80000000;  /* or.b #0x80 into the first (MSB) byte on m68k */
         return;
     }
 

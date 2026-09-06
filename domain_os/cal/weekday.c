@@ -1,4 +1,4 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 
 // Calculates the day of the week for a given date using a variant
 // of Zeller's congruence or similar algorithm.

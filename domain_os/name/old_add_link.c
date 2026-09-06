@@ -38,6 +38,7 @@
  * retry logic, and FUN_00e565b8 local link addition.
  */
 
+#include "name/name_internal.h"
 #include "dir/dir_internal.h"
 
 /* Stub - 506-byte add link with remote/local dispatch */

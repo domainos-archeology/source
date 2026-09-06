@@ -4,7 +4,7 @@
  * Global data definitions for the system boot subsystem.
  */
 
-#include "sysboot/sysboot.h"
+#include "sysboot/sysboot_internal.h"
 
 /*
  * SYSBOOT UID - System boot unique identifier

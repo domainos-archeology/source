@@ -177,6 +177,21 @@ extern int8_t FIM_IN_FIM[];
 extern void *FIM_$USER_FIM_ADDR[];
 
 /*
+ * FIM_$QUIT_INH - Per-AS quit inhibit flag (non-zero = inhibited)
+ * Indexed by AS id.  Cleared by PROC2_$FORK / PROC2_$COMPLETE_VFORK
+ * when a user FIM handler is inherited.
+ * Address: 0x00E2248A
+ */
+extern int8_t FIM_$QUIT_INH[];
+
+/*
+ * FIM_$INITIAL_STACK_SIZE - Bytes reserved above a new process's startup
+ * context on its initial stack (used by PROC2_$CREATE / PROC2_$FORK).
+ * Address: 0x00E21824 (4 bytes, value 8)
+ */
+extern uint32_t FIM_$INITIAL_STACK_SIZE;
+
+/*
  * FIM_$COLD_BUS_ERR - Bus error handler for cold boot
  * Address 0x00e35004
  */
@@ -524,7 +539,7 @@ void FIM_$DELIVER_TRACE_FAULT(int16_t as_id);
  *
  * Address: 0x00e2281c (44 bytes)
  */
-void FIM_$CLEAR_TRACE_FAULT(void);
+void FIM_$CLEAR_TRACE_FAULT(int16_t as_id);   /* move.w (0x4,SP),D0: one word argument */
 
 /*
  * FIM_$CRASH - System crash handler

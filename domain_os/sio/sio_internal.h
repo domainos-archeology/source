@@ -8,8 +8,10 @@
 #ifndef SIO_INTERNAL_H
 #define SIO_INTERNAL_H
 
-#include "ml/ml.h"
 #include "sio/sio.h"
+#include "fim/fim.h"
+#include "ml/ml.h"
+#include "proc1/proc1.h"
 #include "term/term.h"
 #include "tty/tty.h"
 #include "time/time.h"
@@ -239,15 +241,9 @@ extern dtte_t DTTE[];
 extern int16_t TERM_$GET_REAL_LINE(int16_t line_num, status_$t *status_ret);
 
 /*
- * From FIM module
+ * FIM_$QUIT_EC / FIM_$QUIT_VALUE come from fim/fim.h,
+ * PROC1_$AS_ID comes from proc1/proc1.h.
  */
-extern ec_$eventcount_t FIM_$QUIT_EC[];
-extern int32_t FIM_$QUIT_VALUE[];
-
-/*
- * From PROC1 module
- */
-extern int16_t PROC1_$AS_ID;
 
 /*
  * From TTY module

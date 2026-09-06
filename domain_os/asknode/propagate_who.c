@@ -19,8 +19,7 @@
 
 #include "asknode/asknode_internal.h"
 
-/* Empty data constant at 0x00E658CC (zero-filled buffer) */
-extern uint32_t DAT_00e658cc;
+/* ASKNODE_$EMPTY_DATA (0xE658CC) is declared in asknode_internal.h */
 
 void ASKNODE_$PROPAGATE_WHO(int16_t *response, uint32_t *routing_info)
 {
@@ -74,7 +73,7 @@ void ASKNODE_$PROPAGATE_WHO(int16_t *response, uint32_t *routing_info)
             response[0xC],                  /* request ID */
             simple_response,
             8,                              /* response length */
-            &DAT_00e658cc,                  /* no data */
+            &ASKNODE_$EMPTY_DATA,                  /* no data */
             0,
             temp1,
             temp2,
@@ -98,7 +97,7 @@ void ASKNODE_$PROPAGATE_WHO(int16_t *response, uint32_t *routing_info)
             response[0xC],                  /* request ID */
             response,                       /* forward full response */
             0x22,                           /* response length */
-            &DAT_00e658cc,                  /* no data */
+            &ASKNODE_$EMPTY_DATA,                  /* no data */
             0,
             temp1,
             temp2,

@@ -14,7 +14,7 @@
  *   00e88800    rts
  */
 
-#include "scsi/scsi.h"
+#include "scsi/scsi_internal.h"
 
 void SCSI_$FREE_ASID(void)
 {

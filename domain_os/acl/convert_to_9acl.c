@@ -16,7 +16,7 @@
 
 #include "acl/acl_internal.h"
 
-void ACL_$CONVERT_TO_9ACL(int16_t type, uid_t *source_uid, uid_t *dir_uid,
+void ACL_$CONVERT_TO_9ACL(void *type, uid_t *source_uid, uid_t *dir_uid,
                           void *default_prot, uid_t *result_uid, status_$t *status_ret)
 {
     int16_t pid = PROC1_$CURRENT;

@@ -24,11 +24,7 @@
  *
  * Original address: 0xE88218
  */
-#if defined(ARCH_M68K)
-    #define ROUTE_$CHECKSUM_ENABLED (*(int8_t *)0xE88218)
-#else
-    extern int8_t ROUTE_$CHECKSUM_ENABLED;
-#endif
+/* Declared in route/route_internal.h */
 
 /* Maximum packet data length (0x7FC = 2044 bytes) */
 #define ROUTE_$MAX_PACKET_DATA  0x7FC

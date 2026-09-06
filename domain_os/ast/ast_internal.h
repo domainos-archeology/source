@@ -162,6 +162,14 @@ extern uid_t ast_$clobbered_uid;
 /* Dismount failed AOTE pointer */
 extern aote_t* AST_$DISMOUNT_FAILED_PTR;
 
+/* Attribute timestamp mask at A5+0x48C (0xE1E10C), used by AST_$SET_ATTR_DISPATCH */
+#if defined(ARCH_M68K)
+#define AST_$ATTR_TIMESTAMP_MASK (*(uint32_t *)((char *)__A5_BASE() + 0x48C))
+#else
+extern uint32_t ast_$attr_timestamp_mask;
+#define AST_$ATTR_TIMESTAMP_MASK ast_$attr_timestamp_mask
+#endif
+
 /* Set trouble callback pointer */
 extern void *PTR_AST_$SET_TROUBLE_00e07272;
 

@@ -19,10 +19,8 @@
 
 #include "sio/sio_internal.h"
 
-/* External references for FIM quit handling */
-extern ec_$eventcount_t FIM_$QUIT_EC[];   /* At 0xe22002 */
-extern int32_t FIM_$QUIT_VALUE[];         /* At 0xe222ba */
-extern int16_t PROC1_$AS_ID;              /* At 0xe2060a */
+/* FIM_$QUIT_EC (0xE22002) / FIM_$QUIT_VALUE (0xE222BA) come from fim/fim.h,
+ * PROC1_$AS_ID (0xE2060A) from proc1/proc1.h (both via sio_internal.h). */
 
 /* sio_$set_break declared in sio/sio_internal.h */
 
@@ -70,7 +68,7 @@ void SIO_$K_TIMED_BREAK(int16_t *line_ptr, uint16_t *duration_ptr,
     wait_result = TIME_$WAIT2(
         (uint16_t *)&(uint16_t){0},  /* delay type = relative */
         &delay,
-        &FIM_$QUIT_EC[as_id * 3],    /* EC array has 12-byte stride, index = as_id * 3 */
+        &FIM_$QUIT_EC[as_id],
         &quit_wait_value,
         status_ret
     );
@@ -81,7 +79,7 @@ void SIO_$K_TIMED_BREAK(int16_t *line_ptr, uint16_t *duration_ptr,
          * restore quit value to avoid re-triggering
          */
         *status_ret = status_$tty_quit_signalled;
-        FIM_$QUIT_VALUE[as_id] = FIM_$QUIT_EC[as_id * 3].value;
+        FIM_$QUIT_VALUE[as_id] = FIM_$QUIT_EC[as_id].value;
     }
 
     /* Disable break (0x00) */

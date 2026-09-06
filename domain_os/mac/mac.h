@@ -133,7 +133,8 @@ typedef struct mac_$send_pkt_t {
   uint32_t header_data;  /* 0x1C: Header data pointer */
   uint32_t header_size;  /* 0x20: Header size */
   uint32_t body_chain;   /* 0x24: Pointer to body buffer chain */
-  uint8_t pad_28[8];     /* 0x28: Unknown */
+  uint8_t flags_28;      /* 0x28: Unknown flag byte (cleared by MAC_$SEND) */
+  uint8_t pad_29[7];     /* 0x29: Unknown */
   uint32_t total_length; /* 0x30: Total packet length */
   uint8_t pad_34[8];     /* 0x34: Unknown */
                          /* Additional fields at 0x3A+ for receive path */

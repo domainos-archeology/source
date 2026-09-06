@@ -155,13 +155,29 @@ int8_t SOCK_$GET(uint16_t sock_num, void *pkt_info);
 int8_t SOCK_$PUT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
                  uint16_t ec_param1, uint16_t ec_param2);
 
- /*
-  * SOCK_$EVENT_COUNTERS - Socket event counter array
-  *
-  * Array of pointers to event counters, indexed by socket number.
-  *
-  * Original address: 0xE28DB4
-  */
-extern ec_$eventcount_t *SOCK_$EVENT_COUNTERS[];
+/*
+ * sock_table_base - The socket table (0xE27510, see sock_internal.h)
+ *
+ * Layout:
+ *   +0x0000: header (free list head at +0x0C)
+ *   +0x001C: 224 socket descriptors, 0x1C bytes each
+ *   +0x18A0: socket pointer table (slot 0 = spinlock, slot n = socket n)
+ *   +0x1C24: user socket limit counter
+ */
+#define SOCK_TABLE_SIZE         0x1C28  /* Rounded up for alignment */
+extern uint8_t sock_table_base[SOCK_TABLE_SIZE];
+
+/*
+ * SOCK_$EVENT_COUNTERS - Socket event counter array
+ *
+ * Array of pointers to socket event counters.  This is the socket pointer
+ * table starting at its slot 1 (0xE28DB4 = sock_table_base + 0x18A4);
+ * slot 0 of the table (0xE28DB0) holds the socket spinlock.  Note that
+ * several users index this from 0xE28DB4 with an offset of -4, i.e.
+ * SOCK_$EVENT_COUNTERS[sock - 1] is the entry for socket "sock".
+ *
+ * Original address: 0xE28DB4
+ */
+#define SOCK_$EVENT_COUNTERS    ((ec_$eventcount_t **)(sock_table_base + 0x18A4))
 
 #endif /* SOCK_H */

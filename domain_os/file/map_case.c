@@ -31,7 +31,7 @@
  * Size: 476 bytes
  */
 
-#include "file/file.h"
+#include "file/file_internal.h"
 
 void MAP_CASE(char *name, int16_t *name_len, char *output,
               int16_t *max_out_len, int16_t *out_len, uint8_t *truncated)

@@ -6,7 +6,7 @@
  * Reverse engineered from Domain/OS at address 0x00e590f8
  */
 
-#include "pbu/pbu.h"
+#include "pbu/pbu_internal.h"
 
 /*
  * PBU_$FREE_ASID

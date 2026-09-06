@@ -22,8 +22,8 @@
  * PROC1_$CURRENT - proc1/proc1.h
  * PROC1_$TYPE - proc1/proc1.h
  * AST_$AST_IN_TRANS_EC - ast/ast.h (macro)
+ * NETLOG_$OK_TO_LOG - netlog/netlog.h
  */
-extern int8_t NETLOG_$OK_TO_LOG;
 
 /* Status codes */
 #define status_$ast_segment_not_deactivatable 0x00030004

@@ -1,4 +1,4 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 
 // 48-bit subtraction: dst -= src
 // Subtracts two 48-bit clock values, propagating borrow from low to high.

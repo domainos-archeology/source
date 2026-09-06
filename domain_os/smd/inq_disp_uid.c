@@ -17,7 +17,7 @@
  *   subq.l #0x2,SP
  *   movea.l (0x8,A6),A0      ; unit ptr
  *   move.w (A0),-(SP)        ; push *unit
- *   bsr.w FUN_00e6d700       ; validate unit
+ *   bsr.w smd_$validate_unit ; validate unit (0x00e6d700)
  *   addq.w #0x4,SP
  *   tst.b D0b
  *   bmi.b valid              ; if negative, unit is valid

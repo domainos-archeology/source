@@ -16,29 +16,10 @@
 #include "wp/wp.h"
 
 /*
- * External references to code/data boundaries for wiring
- * These are defined in the linker script and point to the NETLOG/AUDIT
- * code and data sections that need to be wired in memory.
- *
- * Note: On m68k, these would be actual linker-defined symbols.
- * For portability, we define placeholder addresses here.
+ * NETLOG_CODE_START, NETLOG_DATA_START, NETLOG_DATA_END_ADDR and
+ * AUDIT_DATA_END_ADDR (code/data boundaries for MST_$WIRE_AREA) are
+ * defined in netlog/netlog_internal.h.
  */
-#if defined(ARCH_M68K)
-    /* Code boundary addresses for MST_$WIRE_AREA */
-    #define NETLOG_CODE_START       ((void*)0xE71914)   /* Start of NETLOG code */
-    #define NETLOG_DATA_START       ((void*)0xE85684)   /* Start of NETLOG data */
-    #define NETLOG_DATA_END_ADDR    ((void*)0xE85800)   /* End of NETLOG data */
-    #define AUDIT_DATA_END_ADDR     ((void*)0xE248FC)   /* End of AUDIT data */
-#else
-    extern char NETLOG_CODE_START_SYM;
-    extern char NETLOG_DATA_START_SYM;
-    extern char NETLOG_DATA_END_SYM;
-    extern char AUDIT_DATA_END_SYM;
-    #define NETLOG_CODE_START       (&NETLOG_CODE_START_SYM)
-    #define NETLOG_DATA_START       (&NETLOG_DATA_START_SYM)
-    #define NETLOG_DATA_END_ADDR    (&NETLOG_DATA_END_SYM)
-    #define AUDIT_DATA_END_ADDR     (&AUDIT_DATA_END_SYM)
-#endif
 
 void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
                   uint32_t *kinds, status_$t *status_ret)

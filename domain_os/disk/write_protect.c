@@ -10,13 +10,12 @@
  * @param status  Output: Status code
  */
 
-#include "disk_internal.h"
+#include "disk/disk_internal.h"
 
 /* Write protect flag byte offset within volume entry */
 #define DISK_WP_OFFSET  0xa5
 
-/* Volume entry table base */
-#define DISK_VOLUME_BASE  ((uint8_t *)0x00e7a1cc)
+/* DISK_VOLUME_BASE comes from disk_internal.h */
 
 void DISK_$WRITE_PROTECT(int16_t mode, int16_t vol_idx, status_$t *status)
 {

@@ -14,7 +14,7 @@
  * @return          Result from DISK_INIT
  */
 
-#include "win.h"
+#include "win/win_internal.h"
 
 uint32_t WIN_$DINIT(uint16_t vol_idx, uint16_t unit, void *param_3,
                     void *param_4, void *param_5, void *param_6, void *param_7)

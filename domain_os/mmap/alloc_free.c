@@ -7,7 +7,7 @@
  * Original address: 0x00e0d870
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 uint16_t MMAP_$ALLOC_FREE(uint32_t *vpn_array, uint16_t count)
 {

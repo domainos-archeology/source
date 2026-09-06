@@ -66,5 +66,5 @@ netlog_data_t netlog_data = { 0 };
  * Local node ID (for non-m68k platforms)
  */
 #if !defined(ARCH_M68K)
-uint32_t NODE_$ME = 0;
+/* NODE_$ME (0xE245A4) is defined in uid/uid_data.c */
 #endif

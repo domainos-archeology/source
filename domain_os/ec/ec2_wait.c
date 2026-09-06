@@ -17,7 +17,7 @@
  * Original address: 0x00e42358
  */
 
-#include "ec_internal.h"
+#include "ec/ec_internal.h"
 #include "fim/fim.h"
 #include "proc1/proc1.h"
 #include "ml/ml.h"

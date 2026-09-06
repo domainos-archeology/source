@@ -6,7 +6,7 @@
 // Address: 0x00e1c0e6
 // Size: 98 bytes
 
-#include "tty.h"
+#include "tty/tty_internal.h"
 
 /* ML_$SPIN_LOCK, ML_$SPIN_UNLOCK declared in ml/ml.h via tty.h */
 

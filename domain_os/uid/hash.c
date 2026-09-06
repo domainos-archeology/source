@@ -19,7 +19,7 @@
  * Original address: 0x00e17360
  */
 
-#include "uid.h"
+#include "uid/uid_internal.h"
 
 uint32_t UID_$HASH(uid_t *uid, uint16_t *table_size)
 {

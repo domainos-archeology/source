@@ -16,7 +16,6 @@
 #include "dir/dir_internal.h"
 
 /* WP_$UNWIRE - Unwire a previously wired page */
-extern void WP_$UNWIRE(uint32_t page_addr);
 
 void dir_$release_wire(void *handle)
 {

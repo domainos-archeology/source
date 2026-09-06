@@ -8,7 +8,7 @@
  * Original address: 0x00e0d78e
  */
 
-#include "mmap_internal.h"
+#include "mmap/mmap_internal.h"
 #include "proc1/proc1.h"
 
 uint16_t MMAP_$ALLOC_PURE(uint32_t *vpn_array, uint16_t count)

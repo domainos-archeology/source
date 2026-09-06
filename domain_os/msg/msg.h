@@ -66,9 +66,6 @@ typedef struct msg_$time_s {
 /* Initialize MSG subsystem */
 void MSG_$INIT(void);
 
-/* Network service callback */
-extern void MSG_$NET_SERVICE(void);
-
 /* Open a message socket */
 void MSG_$OPEN(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
 

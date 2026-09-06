@@ -12,11 +12,10 @@
  *   XPD_$SET_ENABLE:           0x00e5bf50
  */
 
-#include "xpd/xpd.h"
+#include "xpd/xpd_internal.h"
 #include "proc1/proc1.h"
 #include "proc2/proc2.h"
 #include "ec/ec.h"
-#include "ec2/ec2.h"
 #include "fim/fim.h"
 #include "ml/ml.h"
 
@@ -97,7 +96,8 @@ static int8_t XPD_$CHECK_FORK_EXEC_OPTS(int32_t proc_offset)
  *   signal       - Signal/event type (modified on return)
  *   status_ret   - Input: event status, Output: debugger response status
  */
-void XPD_$CAPTURE_FAULT(int32_t **saved_state, int16_t *signal, status_$t *status_ret)
+void XPD_$CAPTURE_FAULT(void *context, int32_t *frame, uint16_t *signal,
+                        status_$t *status_ret)
 {
     int16_t index;
     int32_t proc_offset;
@@ -108,14 +108,17 @@ void XPD_$CAPTURE_FAULT(int32_t **saved_state, int16_t *signal, status_$t *statu
     uint8_t fp_state[256];
     uint8_t fp_regs[240];
     int32_t *local_state;
-    int32_t local_saved;
+    int32_t local_saved;     /* -0x18: *frame, the saved-state pointer used below */
+    int32_t local_context;   /* -0x14: *context, copied by the prologue but not used */
     int8_t fp_modified;
     int16_t proc1_pid;
     int16_t debugger_idx;
     ec_$eventcount_t *ec;
 
     /* Copy parameters to locals */
-    local_saved = (int32_t)*saved_state;
+    local_saved = *frame;                    /* movea.l (0xc,A6),A0; move.l (A0),(-0x18,A6) */
+    local_context = *(int32_t *)context;     /* movea.l (0x8,A6),A1; move.l (A1),(-0x14,A6) */
+    (void)local_context;
     local_state = (int32_t *)local_saved;
     fp_modified = 0;
     input_status = *status_ret;
@@ -249,7 +252,7 @@ void XPD_$CAPTURE_FAULT(int32_t **saved_state, int16_t *signal, status_$t *statu
 
 do_capture:
     /* Save FP state */
-    XPD_$FP_GET_STATE((int16_t)(intptr_t)fp_state, (int16_t)(intptr_t)fp_regs);
+    XPD_$FP_GET_STATE(fp_state, fp_regs);   /* pushes (-0xc,A6) then (-0x10,A6) */
 
     /* Store state pointer in process entry */
     *(int32_t **)(PROC_TABLE_BASE + proc_offset + STATE_PTR_OFFSET) = &local_state;
@@ -293,7 +296,7 @@ do_capture:
 
     /* Restore FP state if it was modified */
     if (fp_modified < 0) {
-        XPD_$FP_PUT_STATE((int16_t)(intptr_t)fp_state, (int16_t)(intptr_t)fp_regs);
+        XPD_$FP_PUT_STATE(fp_state, fp_regs);
     }
 
     /* Return updated status and signal */
@@ -439,7 +442,7 @@ not_found:
  * Returns a registered eventcount that can be used to wait for
  * events from debug targets. Only valid key is 0.
  */
-void XPD_$GET_EC(int16_t *key, ec_$eventcount_t **ec_ret, status_$t *status_ret)
+void XPD_$GET_EC(int16_t *key, void **ec_ret, status_$t *status_ret)
 {
     int16_t debugger_idx;
     int32_t ec_addr;
@@ -463,8 +466,8 @@ void XPD_$GET_EC(int16_t *key, ec_$eventcount_t **ec_ret, status_$t *status_ret)
     *ec_ret = EC2_$REGISTER_EC1((ec_$eventcount_t *)ec_addr, status_ret);
 
     if (*status_ret != status_$ok) {
-        /* Set high bit to indicate registration issue */
-        *(uint8_t *)status_ret |= 0x80;
+        /* ori.b #0x80 on the first (big-endian high) byte: set bit 31 */
+        *status_ret = (status_$t)((uint32_t)*status_ret | 0x80000000u);
     }
 }
 
@@ -482,7 +485,7 @@ void XPD_$CONTINUE_PROC(uid_t *proc_uid, xpd_$response_t *response, status_$t *s
     uint16_t state_word;
 
     /* Find target's ASID */
-    asid = PROC2_$FIND_ASID(proc_uid, NULL, status_ret);
+    asid = PROC2_$FIND_ASID(proc_uid, (int8_t *)&xpd_find_asid_flag, status_ret);
 
     if (asid == 0) {
         return;  /* Not found - status already set */
@@ -500,8 +503,12 @@ void XPD_$CONTINUE_PROC(uid_t *proc_uid, xpd_$response_t *response, status_$t *s
     }
 
     /* Clear current response bits (4-5) and set new response */
-    *(uint8_t *)target_state &= 0xCF;  /* Clear bits 4-5 */
-    *(uint8_t *)target_state |= (((uint8_t *)response)[1] << 4);  /* Set response bits */
+    /*
+     * Byte operations on the first (big-endian high) byte of the state word,
+     * expressed as word operations; the response's low byte is used.
+     */
+    *target_state &= 0xCFFF;  /* Clear bits 4-5 of the high byte */
+    *target_state |= (uint16_t)(((*response & 0xFF) << 4) << 8);  /* Set response bits */
 
     /* Clear event code (bits 5-8) */
     *target_state &= ~EVENT_CODE_MASK;
@@ -516,15 +523,15 @@ void XPD_$CONTINUE_PROC(uid_t *proc_uid, xpd_$response_t *response, status_$t *s
  * When disabled, the target will not generate debug events.
  * When enabled, if there are pending events the target is continued.
  */
-void XPD_$SET_ENABLE(uid_t *proc_uid, uint8_t *enable_flag, status_$t *status_ret)
+void XPD_$SET_ENABLE(uid_t *proc_uid, int8_t *enable_flag, status_$t *status_ret)
 {
     int16_t asid;
     int32_t target_offset;
-    uint8_t *target_state;
+    uint16_t *target_state;
     uint16_t state_word;
 
     /* Find target's ASID */
-    asid = PROC2_$FIND_ASID(proc_uid, NULL, status_ret);
+    asid = PROC2_$FIND_ASID(proc_uid, (int8_t *)&xpd_find_asid_flag, status_ret);
 
     ML_$LOCK(XPD_LOCK_ID);
 
@@ -534,23 +541,26 @@ void XPD_$SET_ENABLE(uid_t *proc_uid, uint8_t *enable_flag, status_$t *status_re
 
     /* Calculate target state offset */
     target_offset = asid * TARGET_STATE_SIZE;
-    target_state = (uint8_t *)(TARGET_STATE_BASE + target_offset);
+    target_state = (uint16_t *)(TARGET_STATE_BASE + target_offset);
 
-    /* Clear current enable bit and set new value */
-    target_state[0] &= 0x7F;  /* Clear bit 7 */
-    target_state[0] |= (*enable_flag & 0x80);  /* Set if requested */
+    /*
+     * Clear current enable bit and set new value.  The m68k code does byte
+     * operations on the first (big-endian high) byte of the state word;
+     * they are expressed here on the high byte of the word.
+     */
+    target_state[0] &= 0x7FFF;  /* Clear bit 7 of the high byte */
+    target_state[0] |= (uint16_t)((*enable_flag & 0x80) << 8);  /* Set if requested */
 
-    if ((int8_t)*enable_flag < 0) {
+    if (*enable_flag < 0) {
         /* Disabling - clear event code */
-        *(uint16_t *)target_state &= ~EVENT_CODE_MASK;
+        *target_state &= ~EVENT_CODE_MASK;
     } else {
         /* Enabling - check if there are pending events */
-        state_word = *(uint16_t *)target_state;
+        state_word = *target_state;
         if ((state_word & EVENT_CODE_MASK) != 0) {
-            /* Continue the process */
+            /* Continue the process with the constant response word 2 (0x00E5BDC0) */
             uid_t *target_uid = (uid_t *)(PROC2_UID_BASE + (asid << 3));
-            xpd_$response_t dummy_response = {0};
-            XPD_$CONTINUE_PROC(target_uid, &dummy_response, status_ret);
+            XPD_$CONTINUE_PROC(target_uid, (xpd_$response_t *)&xpd_continue_response, status_ret);
         }
     }
 

@@ -31,6 +31,7 @@
 #include "ml/ml.h"
 #include "hint/hint.h"
 #include "xns_idp/xns_idp.h"
+#include "app/app.h"
 
 /* NET_IO_$CREATE_PORT - declared in ring/ring_internal.h
  * Note: Previously couldn't include that header due to RING_$DATA type
@@ -105,17 +106,11 @@ int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
  * =============================================================================
  */
 
-#if defined(ARCH_M68K)
-    #define NET_IO_$NIL_DRIVER      ((void *)0xE244F4)
-    #define NET_IO_$USER_DRIVER     ((void *)0xE24544)
-    #define RIP_$STD_IDP_CHANNEL    (*(int16_t *)0xE26EBC)
-    #define APP_$STD_IDP_CHANNEL    (*(int16_t *)0xE1DC20)
-#else
-    extern void *NET_IO_$NIL_DRIVER;
-    extern void *NET_IO_$USER_DRIVER;
-    extern int16_t RIP_$STD_IDP_CHANNEL;
-    extern int16_t APP_$STD_IDP_CHANNEL;
-#endif
+/*
+ * NET_IO_$NIL_DRIVER / NET_IO_$USER_DRIVER: net_io/net_io.h
+ * RIP_$STD_IDP_CHANNEL: rip/rip.h
+ * APP_$STD_IDP_CHANNEL: app/app.h
+ */
 
 /*
  * =============================================================================
@@ -168,8 +163,8 @@ typedef struct route_service_request_t {
  *   - DAT_00e69fb0 = 0x00 (add, alternate location)
  *   - DAT_00e6a5d8 = 0x0000 (hop count of 0)
  */
-static const uint8_t RIP_OP_ADD = 0x00;
-static const uint8_t RIP_OP_DELETE = 0xFF;
+static const int8_t RIP_OP_ADD = 0x00;
+static const int8_t RIP_OP_DELETE = (int8_t)0xFF;
 static const uint16_t RIP_HOP_COUNT_ZERO = 0x0000;
 
 /*
@@ -191,13 +186,14 @@ void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
     route_service_request_t *request = (route_service_request_t *)request_p;
     int16_t port_index;
     route_$port_t *port;
-    route_$short_port_t short_port;
-    uint32_t network_copy;
+    route_$short_port_t short_port;     /* -0x48 */
+    rip_$xns_addr_t source;             /* -0x10: source XNS address for RIP_$UPDATE_D */
     uint16_t old_status;
     int16_t port_list[2];
     status_$t local_status;
     void *driver;
     uint16_t queue_length;
+    int i;
     uint8_t op_flags;
 
     /* Get operation flags from offset +1 */
@@ -244,18 +240,18 @@ void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
      */
     if (((1 << (ROUTE_$PORT_ARRAY[0].active & 0x1f)) & 0x3C) != 0) {
         ROUTE_$SHORT_PORT(&ROUTE_$PORT_ARRAY[0], &short_port);
-        network_copy = ROUTE_$PORT_ARRAY[0].network;
+        source.network = ROUTE_$PORT_ARRAY[0].network;
 
-        /* Clear the short_port network fields for RIP update */
-        short_port.host_id = 0;
-        short_port.network2 = 0;
-        short_port.socket = 0;
+        /* Clear the 6 host bytes of the source address (3 clr.w at -0xC..-0x8) */
+        for (i = 0; i < 6; i++) {
+            source.host[i] = 0;
+        }
 
         /* Announce route additions to RIP */
-        RIP_$UPDATE_D(&ROUTE_$PORT_ARRAY[0], &network_copy, &RIP_HOP_COUNT_ZERO,
-                      &short_port, &RIP_OP_ADD, status_ret);
-        RIP_$UPDATE_D(&ROUTE_$PORT_ARRAY[0], &network_copy, &RIP_HOP_COUNT_ZERO,
-                      &short_port, &RIP_OP_DELETE, status_ret);
+        RIP_$UPDATE_D(&ROUTE_$PORT_ARRAY[0].network, &source, &RIP_HOP_COUNT_ZERO,
+                      (uint8_t *)&short_port, &RIP_OP_ADD, status_ret);
+        RIP_$UPDATE_D(&ROUTE_$PORT_ARRAY[0].network, &source, &RIP_HOP_COUNT_ZERO,
+                      (uint8_t *)&short_port, &RIP_OP_DELETE, status_ret);
     }
 
     /*
@@ -356,18 +352,18 @@ void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
         /* If port had a network address, remove old routes */
         if (port->network != 0) {
             ROUTE_$SHORT_PORT(port, &short_port);
-            network_copy = port->network;
+            source.network = port->network;
 
-            /* Clear short_port network fields */
-            short_port.host_id = 0;
-            short_port.network2 = 0;
-            short_port.socket = 0;
+            /* Clear the 6 host bytes of the source address */
+            for (i = 0; i < 6; i++) {
+                source.host[i] = 0;
+            }
 
             /* Notify RIP of old route deletion */
-            RIP_$UPDATE_D(port, &network_copy, (const uint8_t *)&RIP_HOP_COUNT_ZERO,
-                          &short_port, &RIP_OP_ADD, &local_status);
-            RIP_$UPDATE_D(port, &network_copy, (const uint8_t *)&RIP_HOP_COUNT_ZERO,
-                          &short_port, &RIP_OP_DELETE, &local_status);
+            RIP_$UPDATE_D(&port->network, &source, &RIP_HOP_COUNT_ZERO,
+                          (uint8_t *)&short_port, &RIP_OP_ADD, &local_status);
+            RIP_$UPDATE_D(&port->network, &source, &RIP_HOP_COUNT_ZERO,
+                          (uint8_t *)&short_port, &RIP_OP_DELETE, &local_status);
         }
 
         /* For port 0, announce network to mother and add hint */
@@ -384,20 +380,22 @@ void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
         /* If new network is non-zero, announce new routes */
         if (request->network != 0) {
             ROUTE_$SHORT_PORT(port, &short_port);
-            network_copy = request->network;
+            source.network = request->network;
 
-            /* Clear short_port network fields */
-            short_port.host_id = 0;
-            short_port.network2 = 0;
-            short_port.socket = 0;
+            /* Clear the 6 host bytes of the source address */
+            for (i = 0; i < 6; i++) {
+                source.host[i] = 0;
+            }
 
-            /* Notify RIP of new route addition */
-            RIP_$UPDATE_D((route_$port_t *)request, &network_copy,
-                          (const uint8_t *)&RIP_HOP_COUNT_ZERO,
-                          &short_port, &RIP_OP_ADD, &local_status);
-            RIP_$UPDATE_D((route_$port_t *)request, &network_copy,
-                          (const uint8_t *)&RIP_HOP_COUNT_ZERO,
-                          &short_port, &RIP_OP_DELETE, &local_status);
+            /*
+             * Notify RIP of new route addition.  The original passes the
+             * request structure itself (move.l (0xc,A6)) whose first
+             * longword is the network address.
+             */
+            RIP_$UPDATE_D(&request->network, &source, &RIP_HOP_COUNT_ZERO,
+                          (uint8_t *)&short_port, &RIP_OP_ADD, &local_status);
+            RIP_$UPDATE_D(&request->network, &source, &RIP_HOP_COUNT_ZERO,
+                          (uint8_t *)&short_port, &RIP_OP_DELETE, &local_status);
         }
     }
 
@@ -464,7 +462,8 @@ void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
                     port_list[0] = port_index;
                     XNS_IDP_$OS_ADD_PORT(&RIP_$STD_IDP_CHANNEL, port_list, &local_status);
                 }
-                if (APP_$STD_IDP_CHANNEL != -1) {
+                /* cmpi.w #-1 on the 16-bit channel word (declared uint16_t in app/app.h) */
+                if ((int16_t)APP_$STD_IDP_CHANNEL != -1) {
                     port_list[0] = port_index;
                     XNS_IDP_$OS_ADD_PORT(&APP_$STD_IDP_CHANNEL, port_list, &local_status);
                 }

@@ -32,7 +32,6 @@
 
 /* Name offset table: for each entry type (0-7), gives offset from entry
  * base to where the name starts. Located at A5+0x2000 on M68K. */
-extern int16_t DIR_$NAME_OFFSET_TABLE[];  /* A5-relative: *(A5 + type*2 + 0x2000) */
 
 char dir_$find_entry(void *handle, void *name, int16_t name_len,
                      int16_t flags, void **entry_ret,

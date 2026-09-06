@@ -39,43 +39,10 @@
 #define SOCK_ALLOC_SIZE         0x400400
 
 /*
- * Routing data area cleared during initialization (0xe87da8)
- * Size: 0x81 longs = 516 bytes
+ * The routing data area (ROUTE_$PACKET_STATS, 0x81 longs at 0xE87DA8), the
+ * statistics counters and the process state all live in the wired routing
+ * area; see route/route_internal.h.  SOCK_$EVENT_COUNTERS is from sock/sock.h.
  */
-#if defined(ARCH_M68K)
-#define ROUTE_$DATA_AREA        ((uint32_t *)0xE87DA8)
-#define ROUTE_$PROCESS_UID      (*(uint16_t *)0xE88216)
-#define ROUTE_$USER_PORT_MAX    (*(uint16_t *)0xE87FD0)
-#define ROUTE_$USER_PORT_COUNT  (*(uint32_t *)0xE87FCC)
-#define ROUTE_$STAT0            (*(uint32_t *)0xE87FC0)
-#define ROUTE_$STAT1            (*(uint32_t *)0xE87FC4)
-#define ROUTE_$STAT2            (*(uint32_t *)0xE87FC8)
-#define ROUTE_$STAT3            (*(uint32_t *)0xE87FBC)
-#define ROUTE_$STAT4            (*(uint32_t *)0xE87FB0)
-#define ROUTE_$STAT5            (*(uint32_t *)0xE87FB4)
-#define ROUTE_$STAT6            (*(uint32_t *)0xE87FB8)
-#define ROUTE_$STAT7            (*(uint32_t *)0xE87FAC)
-#define ROUTE_$LAST_UPDATE_TIME (*(uint32_t *)0xE825DC)
-#define SOCK_$EVENT_COUNTERS    ((ec_$eventcount_t **)0xE28DB4)
-#else
-extern uint32_t ROUTE_$DATA_AREA[];
-extern uint16_t ROUTE_$PROCESS_UID;
-extern uint16_t ROUTE_$USER_PORT_MAX;
-extern uint32_t ROUTE_$USER_PORT_COUNT;
-extern uint32_t ROUTE_$STAT0;
-extern uint32_t ROUTE_$STAT1;
-extern uint32_t ROUTE_$STAT2;
-extern uint32_t ROUTE_$STAT3;
-extern uint32_t ROUTE_$STAT4;
-extern uint32_t ROUTE_$STAT5;
-extern uint32_t ROUTE_$STAT6;
-extern uint32_t ROUTE_$STAT7;
-extern uint32_t ROUTE_$LAST_UPDATE_TIME;
-extern ec_$eventcount_t *SOCK_$EVENT_COUNTERS[];
-#endif
-
-/* Forward declaration of routing process entry point */
-void ROUTE_$PROCESS(void);
 
 /* Forward declaration of helper function at 0xe69bce */
 static void route_$update_port_count(void);
@@ -129,7 +96,7 @@ void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
      * Clear routing data area (0x81 longs = 516 bytes)
      * This area contains routing tables and working data.
      */
-    data_ptr = ROUTE_$DATA_AREA;
+    data_ptr = ROUTE_$PACKET_STATS;
     for (i = 0x80; i >= 0; i--) {
         *data_ptr++ = 0;
     }
@@ -203,15 +170,15 @@ void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
     /*
      * Clear all statistics counters
      */
-    ROUTE_$USER_PORT_COUNT = 0;
-    ROUTE_$STAT0 = 0;
-    ROUTE_$STAT1 = 0;
-    ROUTE_$STAT2 = 0;
-    ROUTE_$STAT3 = 0;
-    ROUTE_$STAT4 = 0;
-    ROUTE_$STAT5 = 0;
-    ROUTE_$STAT6 = 0;
-    ROUTE_$STAT7 = 0;
+    ROUTE_$USER_PORT_COUNT = 0;             /* 0xE87FCC */
+    ROUTE_$STAT_DROPPED_N_HOP = 0;          /* 0xE87FC0 */
+    ROUTE_$STAT_DROPPED_N_ROUTE = 0;        /* 0xE87FC4 */
+    ROUTE_$STAT_FORWARDED_N = 0;            /* 0xE87FC8 */
+    ROUTE_$STAT_OVERSIZED_N = 0;            /* 0xE87FBC */
+    ROUTE_$STAT_DROPPED_STD_HOP = 0;        /* 0xE87FB0 */
+    ROUTE_$STAT_DROPPED_STD_ROUTE = 0;      /* 0xE87FB4 */
+    ROUTE_$STAT_FORWARDED_STD = 0;          /* 0xE87FB8 */
+    ROUTE_$STAT_OVERSIZED_STD = 0;          /* 0xE87FAC */
 
     /*
      * Advance control EC to signal process startup complete

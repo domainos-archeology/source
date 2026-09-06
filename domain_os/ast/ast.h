@@ -167,6 +167,8 @@ typedef struct segmap_entry_t {
 #define AST_$ALLOC_TOTAL_AST (*(uint32_t *)0xE1E0C8) /* 0x448 */
 #define AST_$WS_FLT_CNT (*(uint32_t *)0xE1E0D8)      /* 0x458 */
 #define AST_$PAGE_FLT_CNT (*(uint32_t *)0xE1E0DC)    /* 0x45C */
+#define AST_$ALLOC_TOO_FEW_CNT (*(uint32_t *)0xE1E0E0) /* 0x460 (used by osinfo) */
+#define AST_$ALLOC_CNT (*(uint32_t *)0xE1E0E4)       /* 0x464 (used by osinfo) */
 #define AST_$FREE_ASTES (*(uint16_t *)0xE1E0E8)      /* 0x468 */
 #define AST_$GROW_AHEAD_CNT (*(uint16_t *)0xE1E0EC)  /* 0x46C */
 #define AST_$SIZE_AOT (*(uint16_t *)0xE1E0EE)        /* 0x46E */
@@ -196,6 +198,8 @@ extern uint32_t ast_alloc_worst;
 extern uint32_t ast_alloc_total;
 extern uint32_t ast_ws_flt_cnt;
 extern uint32_t ast_page_flt_cnt;
+extern uint32_t ast_alloc_too_few_cnt;
+extern uint32_t ast_alloc_cnt;
 extern uint16_t ast_free_astes;
 extern uint16_t ast_grow_ahead_cnt;
 extern uint16_t ast_size_aot;
@@ -221,6 +225,8 @@ extern uint16_t ast_aste_l_cnt;
 #define AST_$ALLOC_TOTAL_AST ast_alloc_total
 #define AST_$WS_FLT_CNT ast_ws_flt_cnt
 #define AST_$PAGE_FLT_CNT ast_page_flt_cnt
+#define AST_$ALLOC_TOO_FEW_CNT ast_alloc_too_few_cnt
+#define AST_$ALLOC_CNT ast_alloc_cnt
 #define AST_$FREE_ASTES ast_free_astes
 #define AST_$GROW_AHEAD_CNT ast_grow_ahead_cnt
 #define AST_$SIZE_AOT ast_size_aot

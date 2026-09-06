@@ -30,13 +30,8 @@ extern int8_t NETWORK_$LOOPBACK_FLAG;
 #define NETWORK_CMD_RING_INFO 0x0E /* Get ring information */
 
 /*
- * Network status codes (module 0x11)
+ * Network status codes (module 0x11): see network/network.h
  */
-#define status_$network_no_available_sockets 0x00110005
-#define status_$network_unexpected_reply_type 0x0011000B
-#define status_$network_unknown_network 0x00110017
-#define status_$network_too_many_networks_in_internet 0x00110018
-#define status_$network_too_many_transmit_retries 0x00110011
 
 /*
  * Network table - maps network indices to network IDs

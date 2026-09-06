@@ -7,7 +7,7 @@
  * Original address: 0x00e24272
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 void MMU_$SET_SYSREV(void)
 {

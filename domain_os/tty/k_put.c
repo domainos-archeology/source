@@ -27,7 +27,7 @@
 #define status_$tty_bad_count      0x350006
 #define status_$tty_quit           0x350007
 #define status_$tty_overflow       0x350009
-#define status_$tty_would_block    0x35000a
+/* status_$tty_would_block comes from base/base.h */
 
 /* TTY_$I_PUT_OUTPUT declared in tty_internal.h */
 
@@ -59,8 +59,10 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
     /* Lock the TTY */
     TTY_$I_LOCK(tty);
 
-    /* Check if this is a "check space only" request */
-    if ((*(uint8_t *)((char *)options + 1) & 0x02) != 0) {
+    /* Check if this is a "check space only" request.
+     * Original: btst.b #1,(0x1,A0) - bit 1 of the low byte of the 2-byte
+     * big-endian option word (likewise bit 0 below). */
+    if ((*(uint16_t *)options & 0x0002) != 0) {
         /* Calculate available output buffer space */
         /* Space = head - tail - 1 (circular buffer) */
         avail_space = tty->output_head - tty->output_read - 1;
@@ -73,7 +75,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
         TTY_$I_UNLOCK(tty);
 
         /* Check if request is non-blocking */
-        if ((*(uint8_t *)((char *)options + 1) & 0x01) == 0) {
+        if ((*(uint16_t *)options & 0x0001) == 0) {
             *status_ret = status_$tty_no_space;
             return;
         }
@@ -128,7 +130,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
         }
 
         /* Check if non-blocking */
-        if ((*(uint8_t *)((char *)options + 1) & 0x01) != 0) {
+        if ((*(uint16_t *)options & 0x0001) != 0) {
             *status_ret = status_$tty_would_block;
             goto done;
         }

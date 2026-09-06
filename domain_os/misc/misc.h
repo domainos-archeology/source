@@ -90,6 +90,19 @@ uint8_t prompt_for_yes_or_no(void);
 void SET_LITES_LOC(int32_t *loc_p);
 
 /*
+ * DISP_LITES - Draw the row of 16 status-light blocks on the display
+ *
+ * Low-level display routine (not yet decompiled) wrapped by SMD_$LITES.
+ *
+ * Parameters:
+ *   pattern - 16-bit light pattern
+ *   y_pos   - Display row
+ *
+ * Original address: 0x00E1E9F4
+ */
+void DISP_LITES(uint16_t pattern, uint16_t y_pos);
+
+/*
  * GET_BUILD_TIME - Get kernel build version string
  *
  * Formats the kernel version information into a buffer. The output

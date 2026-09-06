@@ -15,7 +15,7 @@
  *    b. Compare based on entry type:
  *       - Type 2: compare UID high/low
  *       - Type 3: compare UID high/low + extra uint32_t
- *       - Type 4: compare name length and chars (via FUN_00e4d572)
+ *       - Type 4: compare name length and chars (via dir_$map_link_page, 0x00e4d572)
  *       - Other: CRASH_SYSTEM (bad_request_header_ver_err)
  *    c. If match: clear status to status_$ok
  * 5. If entry_type == 3 and dir matches NAME_$ROOT_UID:
@@ -42,7 +42,7 @@
  *
  * TODO(source-g5r): Full implementation requires understanding dir_$open_dir
  * (directory lookup), dir_$add_entry (add attempt), dir_$find_entry
- * (read existing entry), FUN_00e4d572 (name indirection), and
+ * (read existing entry), dir_$map_link_page (0x00e4d572, name indirection), and
  * dir_$release_handle (cleanup).
  */
 

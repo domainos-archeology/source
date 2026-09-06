@@ -47,7 +47,7 @@
  *   - Low byte 0x09: Stack type (request server stack)
  */
 
-#include "network/network.h"
+#include "network/network_internal.h"
 
 /*
  * Maximum number of request servers

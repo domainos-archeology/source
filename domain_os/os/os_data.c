@@ -11,7 +11,7 @@
  *   OS_$SHUTDOWN_WAIT_TIME:  0xE82738 (4 bytes)   - Shutdown wait time
  */
 
-#include "os/os.h"
+#include "os/os_internal.h"
 
 /*
  * ============================================================================

@@ -14,7 +14,7 @@
  * Original address: 0x00e23fde
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va, uint32_t flags)
 {

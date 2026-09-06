@@ -71,6 +71,7 @@
  * Located at base + 0x26f + vol_idx
  * When bit 7 is set, the volume has cached lookup data
  */
-extern int8_t VTOC_CACH_LOOKUPS[];  /* 0xE7873F: Cache lookup flags */
+/* Per-volume write-protect/cache flag: vtoc_$data.cach_wp_flag[vol_idx - 1]
+ * (0xE7873F + vol_idx; see vtoc/vtoc_internal.h). */
 
 #endif /* FM_INTERNAL_H */

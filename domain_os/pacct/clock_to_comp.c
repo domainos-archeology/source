@@ -17,7 +17,7 @@
  * We emulate this behavior here for portability.
  */
 
-#include "pacct_internal.h"
+#include "pacct/pacct_internal.h"
 
 /* Timer tick constant - same as TIME_INITIAL_TICK */
 #define PACCT_TICK_DIVISOR  0x1047

@@ -40,9 +40,9 @@ static const char msg_68881_disabled[] = "68881 savearea   68881 is disab";
 /*
  * Pointers for wiring PEB code and data areas
  * Original addresses: 0x00E322E4 (code), 0x00E322DC (data)
+ * (PTR_PEB_$TOUCH_00e322e4 / PTR_PEB_$WIRED_DATA_START_00e322dc are declared
+ * in peb/peb_internal.h)
  */
-extern void *PTR_PEB_$TOUCH_00e322e4;
-extern void *PTR_PEB_$WIRED_DATA_START_00e322dc;
 
 /* External function prototypes provided by file/file.h, mst/mst.h, name/name.h */
 
@@ -251,7 +251,9 @@ void PEB_$LOAD_WCS(void)
     if (PEB_$INSTALLED < 0) {
         /* Resolve the microcode file name */
         int16_t name_len = sizeof(peb_microcode_path) - 1;
-        NAME_$RESOLVE(peb_microcode_path, &name_len, &file_uid, &status);
+        /* NAME_$RESOLVE does not modify the path; cast away const of the
+         * static string to match its char* prototype. */
+        NAME_$RESOLVE((char *)peb_microcode_path, &name_len, &file_uid, &status);
         if (PEB_$LOAD_WCS_CHECK_ERR(msg_resolve + 6) < 0) {
             return;
         }

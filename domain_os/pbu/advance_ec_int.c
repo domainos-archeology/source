@@ -6,13 +6,9 @@
  * Reverse engineered from Domain/OS at address 0x00e88400
  */
 
-#include "pbu/pbu.h"
+#include "pbu/pbu_internal.h"
 
-/*
- * External reference to PBU eventcount array
- * This is the EC2_$PBU_ECS array at 0xE88460
- */
-extern pbu_ec_entry_t PBU_$EC_ARRAY[];
+/* PBU_$EC_ARRAY (the EC2_$PBU_ECS array at 0xE88460) is declared in pbu/pbu.h */
 
 /*
  * PBU_$ADVANCE_EC_INT

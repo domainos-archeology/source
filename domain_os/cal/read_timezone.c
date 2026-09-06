@@ -1,11 +1,8 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 #include "dbuf/dbuf.h"
 #include "proc1/proc1.h"
 #include "uid/uid.h"
 #include "network/network.h"
-
-// Lock ID for calendar operations
-#define CAL_LOCK_ID 0xe
 
 // Reads the timezone information from the boot volume's label block.
 // If diskless, just copies the in-memory timezone data.

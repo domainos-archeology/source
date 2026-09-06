@@ -13,47 +13,17 @@
 #include "rip/rip_internal.h"
 #include "pkt/pkt.h"
 
-/*
- * External function prototypes
- *
- * TODO(source-6sz): REM_NAME_$REGISTER_SERVER has signature conflict between this usage
- * (with parameters) and name/name.h declaration (no parameters). The decompiled
- * code clearly passes parameters, so the header may be incorrect.
- */
-extern void REM_NAME_$REGISTER_SERVER(void *port_array, void *node_id);
+#include "name/name.h"
+#include "route/route_internal.h"
 
 /*
- * External data references
+ * External data references:
+ *   RIP_$BCAST_CONTROL (0xE26EC0), RIP_$NS_ANNOUNCEMENT (0xE26EBE) - rip/rip.h
+ *   RIP_$ANNOUNCE_EXTRA (0xE68E28)                                - rip/rip_internal.h
+ *   RIP_$HALT_PACKET (0xE87D68), RIP_$HALT_PACKET_DATA (0xE87D78) - route/route_internal.h
+ *   ROUTE_$PORT_ARRAY (0xE2E0A0)                                  - route/route.h
+ *   NODE_$ME (0xE245A4)                                           - network/network.h
  */
-
-#if defined(ARCH_M68K)
-    /* RIP_$BCAST_CONTROL - Broadcast control parameters (30 bytes) */
-    #define RIP_$BCAST_CONTROL      ((void *)0xE26EC0)
-
-    /* RIP_$NS_ANNOUNCEMENT - Name service announcement data (2+ bytes) */
-    #define RIP_$NS_ANNOUNCEMENT    ((void *)0xE26EBE)
-
-    /* ROUTE_$PORT_ARRAY - Array of port information (first entry = ROUTE_$PORT) */
-    #define ROUTE_$PORT_ARRAY       ((void *)0xE2E0A0)
-
-    /* NODE_$ME_PTR - Pointer to this node's ID */
-    #define NODE_$ME_PTR            ((void *)0xE245A4)
-
-    /* Extra data reference for PKT_$SEND_INTERNET (likely empty/zero) */
-    #define RIP_$ANNOUNCE_EXTRA     ((void *)0xE68E28)
-
-    /* RIP halt packet data buffer (16 bytes header + 8 bytes RIP data) */
-    #define RIP_$HALT_PACKET        ((void *)0xE87D68)
-    #define RIP_$HALT_PACKET_DATA   ((void *)0xE87D78)
-#else
-    extern uint8_t RIP_$BCAST_CONTROL[30];
-    extern uint8_t RIP_$NS_ANNOUNCEMENT[2];
-    extern uint8_t ROUTE_$PORT_ARRAY[];
-    extern uint32_t NODE_$ME_PTR;
-    extern uint8_t RIP_$ANNOUNCE_EXTRA[4];
-    extern uint8_t RIP_$HALT_PACKET[24];
-    extern uint8_t RIP_$HALT_PACKET_DATA[8];
-#endif
 
 /*
  * RIP_$ANNOUNCE_NS - Announce name service availability via RIP
@@ -90,11 +60,12 @@ void RIP_$ANNOUNCE_NS(void)
     /*
      * Step 1: Register the routing port with the name service
      *
-     * REM_NAME_$REGISTER_SERVER takes:
-     * - ROUTE_$PORT_ARRAY: Array of routing port information
-     * - NODE_$ME_PTR: Pointer to this node's identifier
+     * The original pushes &ROUTE_$PORT_ARRAY (0xE2E0A0) and &NODE_$ME
+     * (0xE245A4) before the call, but REM_NAME_$REGISTER_SERVER (0xE4A4AE)
+     * never reads its arguments (it only stamps TIME_$CLOCKH and sets the
+     * server-contacted flag), so the call takes no parameters in C.
      */
-    REM_NAME_$REGISTER_SERVER(ROUTE_$PORT_ARRAY, NODE_$ME_PTR);
+    REM_NAME_$REGISTER_SERVER();
 
     /*
      * Step 2: Get a unique packet ID for the announcement
@@ -150,10 +121,10 @@ void RIP_$ANNOUNCE_NS(void)
  * Parameters:
  *   @param flags  Route type to halt:
  *                   If < 0: Halt non-standard routes, send via IDP (-1 = 0xFF flags)
- *                   If >= 0: Halt standard routes, send via wired (0x80000 flags)
+ *                   If >= 0: Halt standard routes, send via wired (flags = 0)
  *
  * Called from:
- * - FUN_00E69E40 (port close handler) when port count drops to 1
+ * - ROUTE_$DECREMENT_PORT (0x00E69E40, port close handler) when port count drops to 1
  *
  * Original address: 0x00E87396
  *
@@ -169,7 +140,7 @@ void RIP_$ANNOUNCE_NS(void)
  *   00e873be: clr.b RIP_$STD_RECENT_CHANGES
  *
  * Standard branch (flags >= 0):
- *   00e873c6-00e873dc: Call RIP_$SEND with flags=0x80000 (positive, wired send)
+ *   00e873c6-00e873dc: Call RIP_$SEND with route_len=8, flags=0 (wired send)
  *   00e873dc: clr.b RIP_$RECENT_CHANGES
  */
 void RIP_$HALT_ROUTER(int16_t flags)
@@ -194,18 +165,20 @@ void RIP_$HALT_ROUTER(int16_t flags)
          * Note: The assembly uses 'st -(SP)' which sets a byte to -1 (0xFF),
          * then RIP_$SEND interprets flags < 0 as "use IDP send method"
          */
-        RIP_$SEND(RIP_$HALT_PACKET, -1, RIP_$HALT_PACKET_DATA, RIP_SOCKET, 0xFF);
+        RIP_$SEND(RIP_$HALT_PACKET, -1, RIP_$HALT_PACKET_DATA, 8, (int8_t)0xFF);
         RIP_$STD_RECENT_CHANGES = 0;
     } else {
         /*
          * Halt standard routing:
-         * - Send via wired method (flags = 0x80000, positive)
+         * - Send via wired method (flags >= 0)
          * - Clear the standard recent changes flag
          *
-         * The 0x80000 value is chosen because it's positive (uses wired send)
-         * but still has bit 19 set which may have other significance
+         * The original pushes a single longword 0x00080000 for the last two
+         * parameters (move.l #0x80000,-(SP)): its high word (8) is the
+         * route_len parameter at (0x12,A6) and the high byte of its low word
+         * (0x00) is the flags byte read at (0x14,A6).
          */
-        RIP_$SEND(RIP_$HALT_PACKET, -1, RIP_$HALT_PACKET_DATA, RIP_SOCKET, 0x80000);
+        RIP_$SEND(RIP_$HALT_PACKET, -1, RIP_$HALT_PACKET_DATA, 8, 0);
         RIP_$RECENT_CHANGES = 0;
     }
 }

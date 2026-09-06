@@ -1,4 +1,4 @@
-#include "route_internal.h"
+#include "route/route_internal.h"
 
 /*
  * ROUTE_$PORT_ARRAY - Array of routing port structures
@@ -8,7 +8,27 @@
  *
  * Original address: 0xE2E0A0
  */
-route_$port_t ROUTE_$PORT_ARRAY[]; // TODO(source-j33): we need a size here...
+route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
+
+/*
+ * ROUTE_$PORT - This node's network port
+ *
+ * In the original binary this is the very same longword as the network
+ * field of the first port entry (0xE2E0A0 == ROUTE_$PORT_ARRAY[0].network).
+ * On m68k we make the symbol an alias of the array so both names refer to
+ * the same storage.
+ *
+ * Original address: 0xE2E0A0
+ */
+#if defined(ARCH_M68K)
+/* This is the definition of ROUTE_$PORT (an alias of ROUTE_$PORT_ARRAY);
+ * GCC requires the 'extern' spelling for a variable alias. */
+extern uint32_t ROUTE_$PORT __attribute__((alias("ROUTE_$PORT_ARRAY")));
+#else
+/* TODO: ROUTE_$PORT must alias ROUTE_$PORT_ARRAY[0].network on hosts without
+ * GCC symbol aliases; a separate variable is used here only so the code links. */
+uint32_t ROUTE_$PORT;
+#endif
 
 /*
  * ROUTE_$SOCK_ECVAL - Socket event count value
@@ -86,3 +106,44 @@ uint16_t ROUTE_$ROUTING;
  * Original address: 0xE26EE8
  */
 route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+
+/*
+ * Wired routing area data (0xE87D68 - 0xE88228).
+ *
+ * On m68k these are accessed at their absolute addresses (see
+ * route_internal.h); on other architectures they are plain variables.
+ */
+#if !defined(ARCH_M68K)
+char ROUTE_$WIRED_AREA_END_SYM[1];
+/* RIP halt packet: 16 byte header (zeros) + RIP response {cmd=2, net=-1, metric=16} */
+uint8_t RIP_$HALT_PACKET[24] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0x00, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x10
+};
+uint16_t RTWIRED_$SEND_FLAGS;
+uint32_t ROUTE_$WIRED_PAGES[ROUTE_$MAX_WIRED_PAGES];
+uint32_t ROUTE_$PACKET_STATS[0x81];
+uint32_t ROUTE_$STAT_OVERSIZED_STD;
+uint32_t ROUTE_$STAT_DROPPED_STD_HOP;
+uint32_t ROUTE_$STAT_DROPPED_STD_ROUTE;
+uint32_t ROUTE_$STAT_FORWARDED_STD;
+uint32_t ROUTE_$STAT_OVERSIZED_N;
+uint32_t ROUTE_$STAT_DROPPED_N_HOP;
+uint32_t ROUTE_$STAT_DROPPED_N_ROUTE;
+uint32_t ROUTE_$STAT_FORWARDED_N;
+uint32_t ROUTE_$USER_PORT_COUNT;
+uint16_t ROUTE_$USER_PORT_MAX;
+int16_t ROUTE_$N_WIRED_PAGES;
+int16_t ROUTE_$N_USER_PORTS;
+int16_t ROUTE_$NET_SERVICE_ON = 0;      /* NETWORK_OP_OR_BITS */
+int16_t ROUTE_$NET_SERVICE_OFF = 1;     /* NETWORK_OP_AND_NOT_BITS */
+uint16_t RINGLOG_$ROUTE_FORWARD = 0x2048;
+uint32_t RTWIRED_$CALLBACK_DATA = 0;
+uint16_t ROUTE_$PROCESS_UID;
+int8_t ROUTE_$CHECKSUM_ENABLED;
+uint32_t ROUTE_$SERVICE_ID;
+ec_$eventcount_t *PTR_ROUTE_$CONTROL_EC = (ec_$eventcount_t *)&ROUTE_$CONTROL_EC;
+uint16_t ROUTE_$FWD_TIMEOUT = 1;
+uint16_t ROUTE_$PACKET_SEQ = 0x8000;
+uint32_t ROUTE_$LAST_UPDATE_TIME;
+#endif

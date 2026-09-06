@@ -8,7 +8,7 @@
  * Original address: 0x00e23d92
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count)
 {

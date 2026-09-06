@@ -1,4 +1,16 @@
-#include "cal.h"
+/*
+ * cal/test/test_set_drift.c - Unit tests for CAL_$SET_DRIFT
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "../cal_data.c"
+#include "../set_drift.c"
+
 
 // CAL_$SET_DRIFT copies a clock_t value to CAL_$TIMEZONE.drift
 
@@ -68,4 +80,16 @@ void test_set_drift_max_value(void) {
 
     ASSERT_EQ(CAL_$TIMEZONE.drift.high, 0xFFFFFFFF);
     ASSERT_EQ(CAL_$TIMEZONE.drift.low, 0xFFFF);
+}
+
+int main(void) {
+    printf("CAL_$SET_DRIFT tests\n");
+    RUN_TEST(set_drift_zero);
+    RUN_TEST(set_drift_positive);
+    RUN_TEST(set_drift_one_second);
+    RUN_TEST(set_drift_overwrites);
+    RUN_TEST(set_drift_source_unchanged);
+    RUN_TEST(set_drift_max_value);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

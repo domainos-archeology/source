@@ -31,15 +31,7 @@
 #define status_$volume_in_use                    0x0008000b
 #define status_$operation_requires_physical_vol  0x0008000e
 
-/* Volume table offsets */
-#define DISK_LV_DATA_OFFSET       0x84
-#define DISK_MOUNT_STATE_OFFSET   0x90
-#define DISK_MOUNT_PROC_OFFSET    0x92
-#define DISK_ADDR_START_OFFSET    0x88
-#define DISK_ADDR_END_OFFSET      0x8c
-
-/* Volume table base */
-#define DISK_VOLUME_BASE  ((uint8_t *)0x00e7a1cc)
+/* Volume table base and offsets come from disk_internal.h */
 
 /* Valid volume index mask (volumes 1-10) */
 #define VALID_VOL_MASK  0x7fe

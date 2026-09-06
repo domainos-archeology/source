@@ -16,7 +16,7 @@
  *   Process ID on success, undefined on failure
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 /*
  * Process types and their working set parameters:

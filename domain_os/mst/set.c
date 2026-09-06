@@ -17,7 +17,7 @@
  * indicates an ASID is in use.
  */
 
-#include "mst.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$SET - Set a bit in a bitmap

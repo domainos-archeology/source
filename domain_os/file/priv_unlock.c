@@ -282,7 +282,7 @@ uint8_t FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t lock_index,
              * If was exclusive lock and no other exclusive locks remain,
              * purify the file
              */
-            if ((is_exclusive & ~has_exclusive) && (*(uint8_t *)&file_uid->high != 0)) {
+            if ((is_exclusive & ~has_exclusive) && (((file_uid->high >> 24) & 0xFF) != 0)) {
                 AST_$PURIFY(file_uid, 0x8000, 0, NULL, 0, &local_status);
 
                 if ((has_other_locks >= 0) && ((entry_flags & 0x80) == 0)) {
@@ -294,7 +294,7 @@ uint8_t FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t lock_index,
             /*
              * Get data-time-valid if requested
              */
-            if ((remote_flags & is_exclusive) && (*(uint8_t *)&file_uid->high != 0)) {
+            if ((remote_flags & is_exclusive) && (((file_uid->high >> 24) & 0xFF) != 0)) {
                 AST_$GET_DTV(file_uid, 0, dtv_out, &local_status);
                 if (local_status != 0) {
                     *dtv_out = 0;
@@ -346,7 +346,7 @@ uint8_t FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t lock_index,
                 }
             } else {
                 /* Local lock - truncate if file was modified and no other locks */
-                if ((has_other_locks >= 0) && (*(uint8_t *)&file_uid->high != 0)) {
+                if ((has_other_locks >= 0) && (((file_uid->high >> 24) & 0xFF) != 0)) {
                     AST_$TRUNCATE(file_uid, 0, 1, &result_flags, &local_status);
                 }
             }

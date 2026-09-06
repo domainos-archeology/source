@@ -7,7 +7,7 @@
  * Reverse engineered from Domain/OS at address 0x00e590fa
  */
 
-#include "pbu/pbu.h"
+#include "pbu/pbu_internal.h"
 
 /*
  * PBU_$FAULTED_UNITS

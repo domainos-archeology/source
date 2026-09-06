@@ -12,10 +12,10 @@
 #include "msg/msg_internal.h"
 
 /*
- * Internal SARI callback address (at PC+0x18 from MSG_$SAR)
- * This is the return address or callback for the send-and-receive operation.
+ * The second argument of MSG_$SARI is the address of the longword constant
+ * 0xFFFFFFFF at 0x00E59DD0 (pea (0x18,PC)); see MSG_$SAR_TIMEOUT in
+ * msg/msg_internal.h.
  */
-extern void MSG_$SAR_CALLBACK(void);
 
 /*
  * MSG_$SARI - Send and receive internal implementation
@@ -119,7 +119,7 @@ void MSG_$SAR(msg_$socket_t *socket,
 
     /* Call SARI with callback address */
     MSG_$SARI(socket,
-              MSG_$SAR_CALLBACK,
+              (void *)&MSG_$SAR_TIMEOUT,
               send_buf,
               send_len,
               msg_desc,

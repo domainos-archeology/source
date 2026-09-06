@@ -17,6 +17,10 @@
 
 #include "base/base.h"
 #include "ml/ml.h"
+#include "ec/ec.h"
+#include "disk/disk.h"
+#include "parity/parity.h"
+#include "misc/crash_system.h"
 
 /*
  * WIN data area base at 0xe2b89c
@@ -128,33 +132,14 @@ void WIN_$ERROR_QUE(uint8_t param_1, uint8_t *param_2);
 void WIN_$GET_STATS(int16_t param_1, int16_t param_2, void *stats);
 
 /*
- * Internal functions
+ * External functions used by WIN: EC_$* come from ec/ec.h, DISK_$REGISTER
+ * and DISK_$SORT from disk/disk.h, PARITY_$CHK_IO from parity/parity.h,
+ * CRASH_SYSTEM and the Disk_*_err messages from misc/crash_system.h.
+ *
+ * DISK_INIT (disk/misc/disk_init.c, not yet built) has no header of its own.
+ * TODO: move this prototype to disk/disk.h when disk/misc is integrated.
  */
-extern status_$t SEEK(uint16_t unit, uint16_t cylinder, void *req,
-                      uint8_t flags);
-extern status_$t read_or_write_disk_record(uint16_t unit);
-extern status_$t check_dma_error(uint16_t param);
-extern status_$t FUN_00e190bc(uint16_t unit);
-extern status_$t FUN_00e194b4(uint16_t param_1, uint16_t cylinder);
-extern void FUN_00e196aa(void *dev_entry);
-extern void FUN_00e19186(uint16_t unit, char status, uint16_t *out);
-
-/*
- * External functions used by WIN
- */
-/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
-extern void EC_$INIT(void *ec);
-extern int16_t EC_$WAIT(void *ec_array, void *wait_val);
-extern void EC_$ADVANCE_WITHOUT_DISPATCH(void *ec);
-extern void DISK_$REGISTER(void *type, void *ctrl, void *flags, void *dev_type,
-                           void **jump_table);
-extern void DISK_$SORT(void *dev_entry, void **queue_ptr);
-extern uint32_t DISK_INIT(uint16_t unit, uint16_t vol_idx, void *p3, void *p4,
-                          void *p5, void *p6, void *p7);
-extern int16_t PARITY_$CHK_IO(uint32_t addr, uint32_t size);
-
-/* Error messages */
-extern void *Disk_controller_err;
-extern void *Disk_driver_logic_err;
+uint32_t DISK_INIT(uint16_t unit, uint16_t vol_idx, void *p3, void *p4,
+                   void *p5, void *p6, void *p7);
 
 #endif /* WIN_H */

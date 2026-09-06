@@ -24,29 +24,14 @@
 
 /*
  * Device type constant for ring network controller.
- * Located at 0x00E2FA84 (2 bytes after the SHORT_00e2fa84 label).
+ * PC-relative word at 0x00E2FA84 (pea (0x4a,PC) at 0x00E2FA38); value 2.
  */
-static uint16_t ring_dcte_ctype = 0; /* Initialized elsewhere */
+static uint16_t ring_dcte_ctype = 2;
 
 /*
- * DCTE structure offsets (partial - for ring use).
- * The full structure is defined in disk.h but we only need
- * the disk_dinit field here.
+ * IO_$GET_DCTE (io/io.h) returns the dcte_t pointer in register A0; only
+ * the disk_dinit field (+0x34) is used here.
  */
-typedef struct local_dcte_t {
-    uint8_t     _reserved[0x34];
-    void        *disk_dinit;        /* 0x34: Pointer to device init data */
-} local_dcte_t;
-
-/*
- * IO_$GET_DCTE - Get device control table entry.
- *
- * On m68k, this function returns the DCTE pointer in register A0.
- * The status is returned via the status pointer parameter.
- *
- * This is declared locally since the signature varies by usage context.
- */
-extern local_dcte_t *IO_$GET_DCTE(void *type, void *addr, status_$t *status);
 
 /*
  * RING_$GET_ID - Get network ID from device hardware
@@ -56,7 +41,7 @@ extern local_dcte_t *IO_$GET_DCTE(void *type, void *addr, status_$t *status);
  */
 uint32_t RING_$GET_ID(void *param)
 {
-    local_dcte_t *dcte;
+    dcte_t *dcte;
     status_$t status;
     uint32_t net_id = 1;  /* Default return if controller not in system */
     uint8_t *dinit;
@@ -65,7 +50,7 @@ uint32_t RING_$GET_ID(void *param)
      * Get the Device Control Table Entry for this ring unit.
      * The ring_dcte_ctype identifies the network controller type.
      */
-    dcte = IO_$GET_DCTE(&ring_dcte_ctype, param, &status);
+    dcte = IO_$GET_DCTE(&ring_dcte_ctype, (uint16_t *)param, &status);
 
     /*
      * If the controller is in the system, extract the network ID

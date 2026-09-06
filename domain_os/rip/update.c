@@ -16,25 +16,10 @@
 #include "rip/rip_internal.h"
 
 /*
- * ROUTE_$PORT_ARRAY - Array of network port structures
- *
- * This is the base address for the array of route_$port_t structures.
- * Each entry is 0x5C (92) bytes. The first 4 bytes of each entry
- * contain the network number associated with that port.
- *
- * Note: This overlaps with ROUTE_$PORT at 0xE2E0A0, but is used as
- * an array base rather than a single value.
- *
- * TODO(source-6sz): Consolidate with route.h definitions once structure is better understood
+ * ROUTE_$PORT_ARRAY (0xE2E0A0) - array of route_$port_t, see route/route.h.
+ * Each entry is 0x5C (92) bytes; the first 4 bytes of each entry contain
+ * the network number associated with that port (it overlaps ROUTE_$PORT).
  */
-#if defined(ARCH_M68K)
-    #define ROUTE_$PORT_ARRAY       ((uint8_t *)0xE2E0A0)
-#else
-    extern uint8_t *ROUTE_$PORT_ARRAY;
-#endif
-
-/* Size of each route_$port_t entry */
-#define ROUTE_$PORT_ENTRY_SIZE  0x5C
 
 /*
  * RIP_$UPDATE_D - Update routing table with full port identification
@@ -63,9 +48,9 @@
  *
  * Original address: 0x00E69084
  */
-void RIP_$UPDATE_D(uint32_t *network_ptr, void *source_ptr,
-                   uint16_t *hop_count_ptr, uint8_t *port_info,
-                   int8_t *flags_ptr, status_$t *status_ret)
+void RIP_$UPDATE_D(const uint32_t *network_ptr, void *source_ptr,
+                   const uint16_t *hop_count_ptr, const uint8_t *port_info,
+                   const int8_t *flags_ptr, status_$t *status_ret)
 {
     rip_$xns_addr_t *source = (rip_$xns_addr_t *)source_ptr;
     int16_t port_index;
@@ -132,7 +117,6 @@ void RIP_$UPDATE(uint32_t *network_ptr, uint32_t *host_id_ptr,
     status_$t status;
     int16_t port_index;
     uint32_t host_id;
-    uint8_t *port_entry;
 
     port_index = *port_index_ptr;
     host_id = *host_id_ptr;
@@ -148,8 +132,7 @@ void RIP_$UPDATE(uint32_t *network_ptr, uint32_t *host_id_ptr,
      *   00e69102    mulu.w (A2),D0           ; D0 = port_index * 0x5C
      *   00e69104    move.l (0x0,A0,D0w*0x1),(-0x10,A6)
      */
-    port_entry = ROUTE_$PORT_ARRAY + (port_index * ROUTE_$PORT_ENTRY_SIZE);
-    source.network = *(uint32_t *)port_entry;
+    source.network = ROUTE_$PORT_ARRAY[port_index].network;
 
     /*
      * Construct the host portion of the source address.

@@ -24,65 +24,38 @@
 #include "misc/string.h"
 #include "netbuf/netbuf.h"
 
-/* TIME subsystem reference */
-extern uint32_t TIME_$CLOCKH;  /* 0x00e2b0d4 - high word of system clock */
-
-/* NODE subsystem reference */
-extern uint32_t NODE_$ME;  /* 0x00e245a4 - this node's ID */
-
-/* UID_$NIL reference */
-extern uid_t UID_$NIL;  /* 0x00e1737c */
-
-/* NETBUF functions are declared in netbuf/netbuf.h (included above) */
-
-/* OS data copy function */
-extern void OS_$DATA_COPY(void *src, void *dst, uint32_t len);
-
-/* PKT SAR Internet function - sends/receives network packets */
-extern void PKT_$SAR_INTERNET(uint32_t net, uint32_t node, int16_t protocol,
-                               void *config, uint16_t seq_num,
-                               void *request, uint16_t req_size,
-                               void *callback, int16_t callback_param,
-                               void *out_buf, void *response, uint16_t resp_size,
-                               int16_t *resp_len_ret, void *out1, int16_t out2,
-                               void *out3, status_$t *status_ret);
+/* TIME_$CLOCKH, NODE_$ME, UID_$NIL, OS_$DATA_COPY and PKT_$SAR_INTERNET are
+ * declared by the headers pulled in through name/name_internal.h. */
 
 /* Callback data for PKT_$SAR_INTERNET - at 0x00e4a584 */
 static const uint8_t pkt_callback_data[] = { 0 };
 
 /*
- * REM_NAME data area - complete structure at 0xE7DBB8
+ * REM_NAME data area - complete structure at 0xE7DBB8 (rem_name_data_t is
+ * declared in name/name_internal.h).  Initial contents from the image:
+ *   00 10 00 02 00 02 80 31 ff ff 00 00 ff ff 00 00   config[0..7]
+ *   00 .. 00                                          config[8..14], reserved1
+ *   00 00 09 60  00 00 04 b0  00 00 00 00  80 00 00 00
+ *   00 00 00 00  00 00 00 00  00 10  00 00  00
  */
-typedef struct {
-    uint16_t config[15];             /* +0x00: Config copied to request packets */
-    uint16_t reserved1;              /* +0x1E: Reserved */
-    uint32_t server_timeout;         /* +0x20: Timeout for server contact */
-    uint32_t reserved2;              /* +0x24: Reserved */
-    uint32_t time_heard_from_server; /* +0x28: TIME_$CLOCKH when last heard */
-    status_$t last_status;           /* +0x2C: Last status code */
-    uint32_t curr_node;              /* +0x30: Current name server node */
-    uint32_t curr_net;               /* +0x34: Current name server network */
-    uint16_t pkt_seq_num;            /* +0x38: Packet sequence number */
-    uint16_t retry_count;            /* +0x3A: Server locate retry counter */
-    int8_t   heard_from_server;      /* +0x3C: True if contacted server */
-} rem_name_data_t;
+rem_name_data_t rem_name_$data = {
+    .config = { 0x0010, 0x0002, 0x0002, 0x8031, 0xFFFF, 0x0000, 0xFFFF, 0x0000,
+                0, 0, 0, 0, 0, 0, 0 },
+    .reserved1 = 0,
+    .server_timeout = 0x00000960,
+    .reserved2 = 0x000004B0,
+    .time_heard_from_server = 0,
+    .last_status = 0x80000000,
+    .curr_node = 0,
+    .curr_net = 0,
+    .pkt_seq_num = 0x0010,
+    .retry_count = 0,
+    .heard_from_server = 0,
+};
 
-extern rem_name_data_t rem_name_$data;  /* 0xE7DBB8 */
+/* ec2_$eventcount (0x00e28dd8) is declared in name/name_internal.h */
 
-/* Event count for server local check - 0x00e28dd8 */
-typedef struct {
-    uint32_t value;  /* Pointer to event count data */
-} ec2_eventcount_t;
-
-extern ec2_eventcount_t ec2_$eventcount;  /* 0x00e28dd8 */
-
-/*
- * Additional status codes for remote naming
- */
-#define status_$naming_helper_sent_packets_with_errors      0x000e001c
-#define status_$naming_directory_must_be_root               0x000e001e
-#define status_$naming_last_entry_in_replicated_root_returned 0x000e0019
-#define status_$naming_name_server_helper_is_shutdown       0x000e001a
+/* Status codes for remote naming are in name/name.h */
 
 /*
  * Request opcodes for remote naming operations
@@ -130,7 +103,7 @@ static void LOCATE_SERVER(uint32_t *node_ret, uint32_t *net_ret, status_$t *stat
 boolean REM_NAME_SERVER_LOCAL(void)
 {
     /* Check bit 13 (0x2000) of the value at offset 0x16 in the event count */
-    uint16_t *ptr = (uint16_t *)(ec2_$eventcount.value + 0x16);
+    uint16_t *ptr = (uint16_t *)(uintptr_t)(ec2_$eventcount.value + 0x16);
     return ((*ptr & 0x2000) != 0) ? true : false;
 }
 

@@ -4,7 +4,7 @@
  * This file contains the global data definitions for the CAL subsystem.
  */
 
-#include "cal/cal.h"
+#include "cal/cal_internal.h"
 
 /* Timezone record at 0x00e7b030 */
 cal_$timezone_rec_t CAL_$TIMEZONE;

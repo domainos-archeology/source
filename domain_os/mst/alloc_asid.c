@@ -16,7 +16,7 @@
  * segments that should never be paged out.
  */
 
-#include "mst_internal.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$ALLOC_ASID - Allocate a new Address Space ID

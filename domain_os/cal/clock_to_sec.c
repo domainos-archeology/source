@@ -1,4 +1,4 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 
 // Converts a 48-bit clock value to seconds.
 // Clock ticks are 4 microseconds each, so divide by 250,000 (0x3D09 after >>4).
@@ -24,8 +24,10 @@ ulong CAL_$CLOCK_TO_SEC(clock_t *clock) {
     high_quotient = high_shifted / 0x3D09;
     high_remainder = high_shifted % 0x3D09;
 
-    // Get lower 32 bits (high.low16 : low) shifted right by 4
-    low32_shifted = *(uint *)((char *)&clock->high + 2) >> 4;
+    // Get lower 32 bits (high.low16 : low) shifted right by 4.
+    // The original reads a longword at struct offset +2 of the big-endian
+    // clock_t; build the same value with shifts so it is host-endian safe.
+    low32_shifted = (((clock->high & 0xFFFF) << 16) | clock->low) >> 4;
 
     // Combine remainder with low part and divide
     // CONCAT22(remainder, low_shifted.low) / 0x3D09

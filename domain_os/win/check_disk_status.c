@@ -8,7 +8,7 @@
  * @return      Status code indicating disk state
  */
 
-#include "win.h"
+#include "win/win_internal.h"
 
 status_$t WIN_$CHECK_DISK_STATUS(uint16_t unit)
 {

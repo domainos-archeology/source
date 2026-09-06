@@ -9,7 +9,7 @@
  *   XPD_$POST_EVENT:   0x00e75090
  */
 
-#include "xpd/xpd.h"
+#include "xpd/xpd_internal.h"
 #include "proc1/proc1.h"
 #include "ec/ec.h"
 
@@ -94,7 +94,6 @@ void XPD_$POST_EVENT(xpd_$event_type_t *event_type, status_$t *status_val,
                      xpd_$response_t *response_ret)
 {
     int32_t target_offset;
-    uint8_t *target_state_byte;
     uint16_t *target_state_word;
     ec_$eventcount_t *target_ec;
     ec_$eventcount_t *debugger_ec;
@@ -105,12 +104,16 @@ void XPD_$POST_EVENT(xpd_$event_type_t *event_type, status_$t *status_val,
 
     /* Calculate our target state location */
     target_offset = PROC1_$AS_ID * TARGET_STATE_SIZE;
-    target_state_byte = (uint8_t *)(TARGET_STATE_BASE + target_offset);
+    /*
+     * The m68k code mixes byte accesses to the first (big-endian high) byte
+     * of the state word with word accesses; the byte operations are
+     * expressed here as operations on the high byte of the word.
+     */
     target_state_word = (uint16_t *)(TARGET_STATE_BASE + target_offset);
     target_ec = (ec_$eventcount_t *)(XPD_DATA_BASE + target_offset);
 
     /* Check if we have a debugger and are in debug mode */
-    debugger_idx = (target_state_byte[0] & TARGET_DEBUGGER_MASK) >> 1;
+    debugger_idx = ((*target_state_word >> 8) & TARGET_DEBUGGER_MASK) >> 1;
 
     if (debugger_idx == 0 || (int16_t)*target_state_word >= 0) {
         /* No debugger or not enabled - return error response */
@@ -121,8 +124,8 @@ void XPD_$POST_EVENT(xpd_$event_type_t *event_type, status_$t *status_val,
     /* Clear target EC value (reset to 0) */
     *(int32_t *)target_ec = 0;
 
-    /* Get event code from event_type parameter (byte at offset 1) */
-    event_code = ((uint8_t *)event_type)[1];
+    /* Get event code from event_type parameter (low byte of the big-endian word) */
+    event_code = (uint8_t)(*event_type & 0xFF);
 
     /* Clear current event code and set new one */
     *target_state_word &= ~EVENT_CODE_MASK;
@@ -132,7 +135,7 @@ void XPD_$POST_EVENT(xpd_$event_type_t *event_type, status_$t *status_val,
     *(status_$t *)(TARGET_STATE_BASE + target_offset - 0x10 + TARGET_STATUS_OFFSET) = *status_val;
 
     /* Clear the "processed" flag so debugger can see it */
-    target_state_byte[0] &= ~TARGET_FLAG_PROCESSED;
+    *target_state_word &= (uint16_t)~((uint16_t)TARGET_FLAG_PROCESSED << 8);
 
     /* Advance debugger's EC to notify it */
     debugger_ec = (ec_$eventcount_t *)(XPD_DATA_BASE + (debugger_idx << 4) + 0x478);
@@ -147,5 +150,5 @@ void XPD_$POST_EVENT(xpd_$event_type_t *event_type, status_$t *status_val,
     EC_$WAIT(ecs, &wait_val);
 
     /* Return the debugger's response (bits 4-5 of state byte) */
-    *response_ret = (target_state_byte[0] & RESPONSE_MASK) >> 4;
+    *response_ret = ((*target_state_word >> 8) & RESPONSE_MASK) >> 4;
 }

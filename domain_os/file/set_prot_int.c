@@ -21,9 +21,6 @@
 /* PROC1 type for server process */
 #define PROC1_TYPE_SERVER                           9
 
-/* External AUDIT_$ENABLED flag */
-extern int8_t AUDIT_$ENABLED;
-
 /*
  * FILE_$SET_PROT_INT
  *

@@ -1,4 +1,15 @@
-#include "cal.h"
+/*
+ * cal/test/test_sub48.c - Unit tests for SUB48
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "../sub48.c"
+
 
 // Test: Simple subtraction with no borrow
 // 0x00000002:0x0000 - 0x00000001:0x0000 = 0x00000001:0x0000
@@ -81,4 +92,17 @@ void test_sub48_underflow_wraps(void) {
     // Underflow wraps to max value
     ASSERT_EQ(a.high, 0xFFFFFFFF);
     ASSERT_EQ(a.low, 0xFFFF);
+}
+
+int main(void) {
+    printf("SUB48 tests\n");
+    RUN_TEST(sub48_simple_no_borrow);
+    RUN_TEST(sub48_low_only);
+    RUN_TEST(sub48_borrow_from_high);
+    RUN_TEST(sub48_borrow_with_high_values);
+    RUN_TEST(sub48_subtract_zero);
+    RUN_TEST(sub48_equal_gives_zero);
+    RUN_TEST(sub48_underflow_wraps);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

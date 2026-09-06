@@ -46,8 +46,7 @@
  *       clearly shows 4 writes in a specific sequence.
  */
 
-#include "timer/timer.h"
-#include "time/time.h"
+#include "timer/timer_internal.h"
 
 /* Timer control register values */
 #define TIMER_CTRL_VAL_E0   0xE0

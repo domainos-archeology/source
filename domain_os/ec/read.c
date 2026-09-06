@@ -10,7 +10,7 @@
  * Original address: 0x00e15214
  */
 
-#include "ec.h"
+#include "ec/ec_internal.h"
 
 int32_t EC_$READ(ec_$eventcount_t *ec)
 {

@@ -18,22 +18,18 @@
 #include "file/file_internal.h"
 #include "mst/mst.h"
 
-/* Extern references for mapped info */
-extern uint8_t NAME_$WDIR_MAPPED_INFO;
-extern uint8_t NAME_$NDIR_MAPPED_INFO;
-extern uint8_t NAME_$NODE_MAPPED_INFO;
-extern uint8_t NAME_$COM_MAPPED_INFO;
-extern uint8_t DAT_00e80288;  /* NODE mapped handle */
-extern uint8_t DAT_00e80270;  /* COM mapped handle */
-extern uint8_t DAT_00e80818;  /* WDIR mapped handle offset */
-extern uint8_t DAT_00e802a8;  /* NDIR mapped handle offset */
+/*
+ * Mapped info blocks are declared in name/name.h (NAME_$DATA).  The
+ * historical labels DAT_00e80288 / DAT_00e80270 / DAT_00e80818 / DAT_00e802a8
+ * are the .first_base field of the NODE / COM / WDIR[0] / NDIR[0] mapped
+ * info blocks respectively.
+ */
 
 void NAME_$UNLOCK_DIR(status_$t *status_ret)
 {
     uid_t local_uid;
     int32_t handle;
     status_$t unlock_status;
-    int16_t asid_shift;
     uint8_t result_buf[12];
 
     /* Get stored UID from per-process data */
@@ -52,27 +48,25 @@ void NAME_$UNLOCK_DIR(status_$t *status_ret)
         return;
     }
 
-    asid_shift = PROC1_$AS_ID << 4;
-
     /* Check if handle matches a cached directory - don't unmap cached dirs */
-    /* Check WDIR */
-    if ((int8_t)(&NAME_$WDIR_MAPPED_INFO)[asid_shift] < 0 &&
-        handle == (int32_t)*(uint32_t *)(&DAT_00e80818 + asid_shift)) {
+    /* Check WDIR (per-ASID slot, 16 bytes each) */
+    if (NAME_$DATA.wdir_mapped_info[PROC1_$AS_ID].active < 0 &&
+        handle == (int32_t)NAME_$DATA.wdir_mapped_info[PROC1_$AS_ID].first_base) {
         *status_ret = status_$ok;
     }
     /* Check NDIR */
-    else if ((int8_t)(&NAME_$NDIR_MAPPED_INFO)[asid_shift] < 0 &&
-             handle == (int32_t)*(uint32_t *)(&DAT_00e802a8 + asid_shift)) {
+    else if (NAME_$DATA.ndir_mapped_info[PROC1_$AS_ID].active < 0 &&
+             handle == (int32_t)NAME_$DATA.ndir_mapped_info[PROC1_$AS_ID].first_base) {
         *status_ret = status_$ok;
     }
     /* Check NODE */
-    else if ((int8_t)NAME_$NODE_MAPPED_INFO < 0 &&
-             handle == (int32_t)*(uint32_t *)&DAT_00e80288) {
+    else if (NAME_$NODE_MAPPED_INFO.active < 0 &&
+             handle == (int32_t)NAME_$NODE_MAPPED_INFO.first_base) {
         *status_ret = status_$ok;
     }
     /* Check COM */
-    else if ((int8_t)NAME_$COM_MAPPED_INFO < 0 &&
-             handle == (int32_t)*(uint32_t *)&DAT_00e80270) {
+    else if (NAME_$COM_MAPPED_INFO.active < 0 &&
+             handle == (int32_t)NAME_$COM_MAPPED_INFO.first_base) {
         *status_ret = status_$ok;
     }
     /* Handle is null */

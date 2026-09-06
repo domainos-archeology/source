@@ -90,7 +90,8 @@ void ACL_$COPY(uid_t *source_acl_uid, uid_t *dest_uid, uid_t *source_type,
             owner_uid.low = UID_$NIL.low;
 
             /* Convert to 9-entry ACL */
-            ACL_$CONVERT_TO_9ACL((int16_t)acl_data, &owner_uid, source_acl_uid,
+            /* Original: pea (-0xa4,A6) - the address of acl_data is passed */
+            ACL_$CONVERT_TO_9ACL(acl_data, &owner_uid, source_acl_uid,
                                  source_type, &owner_uid, status_ret);
             prot_type = 6;
         }

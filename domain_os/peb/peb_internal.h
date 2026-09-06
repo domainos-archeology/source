@@ -8,6 +8,7 @@
 #ifndef PEB_INTERNAL_H
 #define PEB_INTERNAL_H
 
+#include "peb/peb.h"
 #include "dxm/dxm.h"
 #include "ec/ec.h"
 #include "fim/fim.h"
@@ -15,8 +16,21 @@
 #include "io/io.h"
 #include "misc/crash_system.h"
 #include "mmu/mmu.h"
-#include "peb/peb.h"
 #include "proc1/proc1.h"
+#include "prom/prom.h"
+
+/*
+ * ============================================================================
+ * Constant pointer cells in the code segment
+ * ============================================================================
+ * These 32-bit cells are passed by address to io_$probe / MST_$WIRE_AREA.
+ *   0x00E31DD0: PTR_PEB_CTL_00e31dd0               = 0x00FF7000 (PEB_CTL)
+ *   0x00E322DC: PTR_PEB_$WIRED_DATA_START_00e322dc = 0x00E84E80
+ *   0x00E322E4: PTR_PEB_$TOUCH_00e322e4            = 0x00E70810
+ */
+extern void *PTR_PEB_CTL_00e31dd0;
+extern void *PTR_PEB_$WIRED_DATA_START_00e322dc;
+extern void *PTR_PEB_$TOUCH_00e322e4;
 
 /*
  * ============================================================================

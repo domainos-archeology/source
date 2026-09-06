@@ -30,60 +30,15 @@
 #define P2_FIRST_FREE_ENTRY     2
 #define P2_LAST_ENTRY           69
 
-/* Boot flags storage */
-#if defined(ARCH_M68K)
-    #define BOOT_FLAGS          (*(uint16_t*)0xE7C068)
-#else
-    extern uint16_t boot_flags_storage;
-    #define BOOT_FLAGS          boot_flags_storage
-#endif
-
-/* Global UID storage for system UIDs */
-#if defined(ARCH_M68K)
-    #define PROC_DIR_UID        (*(uid_t*)0xE7BE84)
-    #define SYSTEM_UID_2        (*(uid_t*)0xE7BE9C)
-    /* UID table: 8 bytes per entry, indexed by ASID */
-    #define UID_TABLE_BASE      0xE7BE94
-    #define UID_TABLE_ENTRY(n)  (*(uid_t*)(UID_TABLE_BASE + (n) * 8))
-#else
-    extern uid_t proc_dir_uid;
-    extern uid_t system_uid_2;
-    extern uid_t uid_table[];
-    #define PROC_DIR_UID        proc_dir_uid
-    #define SYSTEM_UID_2        system_uid_2
-    #define UID_TABLE_ENTRY(n)  uid_table[n]
-#endif
-
-/* Eventcount base addresses */
-#if defined(ARCH_M68K)
-    #define EC1_FORK_ARRAY      ((void*)0xE2B978)
-    #define EC1_CR_REC_ARRAY    ((void*)0xE2B96C)
-#else
-    extern void *ec1_fork_array;
-    extern void *ec1_cr_rec_array;
-    #define EC1_FORK_ARRAY      ec1_fork_array
-    #define EC1_CR_REC_ARRAY    ec1_cr_rec_array
-#endif
-
-/* Address space globals for memory mapping */
-#if defined(ARCH_M68K)
-    #define AS_$CR_REC              (*(uint32_t*)0xE2B930)
-    #define AS_$CR_REC_FILE_SIZE    (*(uint32_t*)0xE2B96C)
-    #define AS_$STACK_FILE_LOW      (*(uint32_t*)0xE2B92C)
-    #define AS_$INIT_STACK_FILE_SIZE (*(uint32_t*)0xE2B960)
-    #define AS_$STACK_HIGH          (*(uint32_t*)0xE2B950)
-#else
-    extern uint32_t as_cr_rec;
-    extern uint32_t as_cr_rec_file_size;
-    extern uint32_t as_stack_file_low;
-    extern uint32_t as_init_stack_file_size;
-    extern uint32_t as_stack_high;
-    #define AS_$CR_REC              as_cr_rec
-    #define AS_$CR_REC_FILE_SIZE    as_cr_rec_file_size
-    #define AS_$STACK_FILE_LOW      as_stack_file_low
-    #define AS_$INIT_STACK_FILE_SIZE as_init_stack_file_size
-    #define AS_$STACK_HIGH          as_stack_high
-#endif
+/*
+ * Globals used here (declared in subsystem headers):
+ *   proc2_boot_flags (0xE7C068), proc2_proc_dir_uid (0xE7BE84),
+ *   proc2_system_uid (0xE7BE8C), PROC2_UID table (0xE7BE94),
+ *   PROC2_$EC / PROC_FORK_EC / PROC_CR_REC_EC (0xE2B978)  - proc2 headers
+ *   AS_$CR_REC (0xE2B930), AS_$CR_REC_FILE_SIZE (0xE2B96C),
+ *   AS_$STACK_FILE_LOW (0xE2B92C), AS_$INIT_STACK_FILE_SIZE (0xE2B960),
+ *   AS_$STACK_HIGH (0xE2B950)                              - as/as.h
+ */
 
 /* Boot file parameters - these would be in read-only data */
 static const char boot_shell_path[] = "/sys/boot_shell";
@@ -97,11 +52,12 @@ static const char msg_unable_to_unmap[] = "unable to unmap ";
 static const char msg_creation_record_area[] = "creation record area";
 static const char msg_initial_area[] = "initial area";
 
-/* Forward declaration of PROC_FORK_EC macro from create.c */
-#define PROC_FORK_EC(idx)       ((void*)((uintptr_t)EC1_FORK_ARRAY + ((idx) - 1) * 0x18))
-#define PROC_CR_REC_EC(idx)     ((void*)((uintptr_t)EC1_FORK_ARRAY + ((idx) - 1) * 0x18 + 0x0C))
-
-status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
+/*
+ * boot_flags points at the caller's 16-bit boot option word (OS_$INIT pushes
+ * the address of its local ws_mode: pea (-0x1ca,A6)).  Bits 0 and 1 of the
+ * low byte select tape / floppy boot (btst.b #0/#1,(0x1,A1)).
+ */
+status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
 {
     status_$t status;
     int16_t i;
@@ -114,9 +70,11 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
 
     /*
      * Step 1: Generate system UIDs
+     *   DAT_00e7be8c - system process UID (proc2_system_uid)
+     *   DAT_00e7be9c - PROC2_UID[1]
      */
-    UID_$GEN(&PROC2_UID);
-    UID_$GEN(&SYSTEM_UID_2);
+    UID_$GEN(&proc2_system_uid);
+    UID_$GEN(&PROC2_UID[1]);
 
     /*
      * Step 2: Set priority for init process
@@ -126,11 +84,13 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
     PROC1_$SET_PRIORITY(PROC1_$CURRENT, 0xFF00, &min_pri, &max_pri);
 
     /*
-     * Step 3: Initialize UID table with generated UID
-     * (56 entries, indices 0-55)
+     * Step 3: Initialize UID table with the system UID.
+     * Entry 0 is stored directly, then the loop (dbf with count 0x37)
+     * fills entries 2..57, skipping entry 1 generated above.
      */
-    for (i = 0; i < 56; i++) {
-        UID_TABLE_ENTRY(i) = PROC2_UID;
+    PROC2_UID[0] = proc2_system_uid;
+    for (i = 2; i <= 57; i++) {
+        PROC2_UID[i] = proc2_system_uid;
     }
 
     /*
@@ -162,9 +122,9 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
         /* Link to next entry (or 0 for last) */
         entry->next_index = (i < P2_LAST_ENTRY) ? (i + 1) : 0;
 
-        /* Set UID to nil */
-        *(uint32_t*)((char*)entry + 0x08) = UID_$NIL.high;
-        *(uint32_t*)((char*)entry + 0x0C) = UID_$NIL.low;
+        /* Set parent UID to nil */
+        entry->parent_uid.high = UID_$NIL.high;
+        entry->parent_uid.low = UID_$NIL.low;
 
         /* Clear valid/bound flags */
         entry->flags &= ~(PROC2_FLAG_VALID | 0x01);
@@ -189,8 +149,8 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
     /* Set owner_session = 1 */
     init_entry->owner_session = 1;
 
-    /* Copy system UID to entry */
-    init_entry->uid = SYSTEM_UID_2;
+    /* Copy the UID generated for table entry 1 (DAT_00e7be9c) to the entry */
+    init_entry->uid = PROC2_UID[1];
 
     /* Set PROC1 PID */
     init_entry->level1_pid = PROC1_$CURRENT;
@@ -266,7 +226,7 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
         uint32_t map_mode = 0x00000001;   /* Normal mode */
 
         MST_$MAP_AREA_AT(&cr_rec_addr, &cr_rec_size, &map_flags, &map_mode,
-                         (void*)((char*)init_entry + 0x08), status_ret);
+                         &init_entry->parent_uid, status_ret);
 
         status = OS_$BOOT_ERRCHK((char*)msg_unable_to_map, (char*)msg_creation_record_area,
                                   &path_len, status_ret);
@@ -288,7 +248,7 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
         uint32_t map_mode = 0x00000002;   /* Stack mode */
 
         MST_$MAP_AREA_AT(&stack_low, &stack_size, &map_flags, &map_mode,
-                         (void*)((char*)init_entry + 0xDC), status_ret);
+                         &init_entry->stack_uid, status_ret);
 
         status = OS_$BOOT_ERRCHK((char*)msg_unable_to_map, (char*)msg_initial_area,
                                   &path_len, status_ret);
@@ -311,25 +271,28 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
     {
         uint32_t stack_top = init_entry->cr_rec_2;
         *(uint32_t*)(stack_top - 4) = 0;
-        *(uint16_t*)(stack_top - 6) = BOOT_FLAGS;
+        *(uint16_t*)(stack_top - 6) = (uint16_t)proc2_boot_flags;
     }
 
     /*
      * Step 11: Initialize boot flags
      */
-    BOOT_FLAGS &= 0xC000;  /* Clear all but top 2 bits */
+    proc2_boot_flags &= 0xC000;  /* Clear all but top 2 bits */
 
     mmu_mode = MMU_$NORMAL_MODE();
-    BOOT_FLAGS &= 0x7FFF;  /* Clear bit 15 */
-    BOOT_FLAGS |= (mmu_mode & 0x80) << 8;  /* Set bit 15 from MMU mode */
+    proc2_boot_flags &= 0x7FFF;  /* Clear bit 15 */
+    proc2_boot_flags |= (mmu_mode & 0x80) << 8;  /* Set bit 15 from MMU mode */
 
-    BOOT_FLAGS &= 0xBFFF;  /* Clear bit 14 */
-    BOOT_FLAGS |= ((~DTTY_$USE_DTTY >> 7) & 1) << 14;  /* Set bit 14 from DTTY flag */
+    proc2_boot_flags &= 0xBFFF;  /* Clear bit 14 */
+    proc2_boot_flags |= ((~DTTY_$USE_DTTY >> 7) & 1) << 14;  /* Set bit 14 from DTTY flag */
 
     /*
-     * Step 12: Handle tape/floppy boot if requested
+     * Step 12: Handle tape/floppy boot if requested.
+     * The original tests bits 0/1 of the byte at offset 1 of the caller's
+     * 16-bit boot flags word, i.e. the low-order byte of the big-endian
+     * word (bits 0 and 1 of the 16-bit value).
      */
-    if (((uint8_t*)&boot_flags_param)[1] & 0x01) {
+    if ((*boot_flags & 0x0001) != 0) {
         /* Tape boot requested */
         if (TAPE_$BOOT(&status) >= 0) {
             *status_ret = status;
@@ -337,7 +300,7 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
         }
     }
 
-    if (((uint8_t*)&boot_flags_param)[1] & 0x02) {
+    if ((*boot_flags & 0x0002) != 0) {
         /* Floppy boot requested */
         if (FLOP_$BOOT(&status, status_ret) >= 0) {
             return status;
@@ -348,9 +311,9 @@ status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret)
      * Step 13: Resolve /node_data/proc_dir
      */
     path_len = sizeof(proc_dir_path) - 1;
-    NAME_$RESOLVE((char*)proc_dir_path, &path_len, &PROC_DIR_UID, status_ret);
+    NAME_$RESOLVE((char*)proc_dir_path, &path_len, &proc2_proc_dir_uid, status_ret);
     if (*status_ret != status_$ok) {
-        PROC_DIR_UID = UID_$NIL;
+        proc2_proc_dir_uid = UID_$NIL;
     }
 
     /*

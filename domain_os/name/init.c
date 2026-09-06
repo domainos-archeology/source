@@ -13,19 +13,12 @@
 
 #include "name/name_internal.h"
 
-/* Global NAME data area at 0xE80264 */
-uid_t NAME_$NODE_DATA_UID;      /* +0x00 */
-/* NAME_$COM_MAPPED_INFO at +0x08 (16 bytes) */
-uid_t NAME_$COM_UID;            /* +0x18 */
-/* NAME_$NODE_MAPPED_INFO at +0x20 (16 bytes) */
-uid_t NAME_$NODE_UID;           /* +0x30 */
-uid_t NAME_$ROOT_UID;           /* +0x38 */
+/* Global NAME data area at 0xE80264 (layout: name_$data_t in name/name.h) */
+name_$data_t NAME_$DATA;
 
 /* Canned root UID at separate location 0xE173E4 */
 uid_t NAME_$CANNED_ROOT_UID = UID_CONST(0x00000308, 0);
 
-/* Maximum number of ASIDs */
-#define NAME_MAX_ASID  58  /* 0x3A */
 
 /*
  * name_$init_check_status - Check initialization status and crash on error
@@ -73,7 +66,6 @@ void NAME_$INIT(uid_t *vol_root_uid, uid_t *vol_node_uid)
     status_$t status;
     int16_t path_len;
     char path_buffer[256];
-    char *base = (char *)&NAME_$NODE_DATA_UID;
     int i;
     boolean use_provided_uids;
 
@@ -110,30 +102,27 @@ void NAME_$INIT(uid_t *vol_root_uid, uid_t *vol_node_uid)
      *   - Naming directory UID at +0x3E0 + ASID*8
      *   - Working dir mapped info at +0x5B0 + ASID*16
      *   - Naming dir mapped info at +0x040 + ASID*16
+     * The original loop is "moveq #0x39,D0 ... dbf D0", i.e. 0x3A (58)
+     * iterations.
      */
-    for (i = 0; i <= NAME_MAX_ASID; i++) {
-        uid_t *wdir_uid = (uid_t *)(base + 0x950 + i * 8);
-        uid_t *ndir_uid = (uid_t *)(base + 0x3E0 + i * 8);
-        uint8_t *wdir_mapped = (uint8_t *)(base + 0x5B0 + i * 16);
-        uint8_t *ndir_mapped = (uint8_t *)(base + 0x040 + i * 16);
-
+    for (i = 0; i < NAME_$MAX_ASIDS; i++) {
         /* Initialize UIDs to node UID */
-        wdir_uid->high = NAME_$NODE_UID.high;
-        wdir_uid->low = NAME_$NODE_UID.low;
-        ndir_uid->high = NAME_$NODE_UID.high;
-        ndir_uid->low = NAME_$NODE_UID.low;
+        NAME_$DATA.wdir_uid[i].high = NAME_$NODE_UID.high;
+        NAME_$DATA.wdir_uid[i].low = NAME_$NODE_UID.low;
+        NAME_$DATA.ndir_uid[i].high = NAME_$NODE_UID.high;
+        NAME_$DATA.ndir_uid[i].low = NAME_$NODE_UID.low;
 
         /* Clear mapped info flags */
-        wdir_mapped[0] = 0;
-        ndir_mapped[0] = 0;
+        NAME_$DATA.wdir_mapped_info[i].active = 0;
+        NAME_$DATA.ndir_mapped_info[i].active = 0;
     }
 
     /* Clear global mapped info flags */
-    *(base + 0x20) = 0;  /* NODE_MAPPED_INFO flag */
-    *(base + 0x08) = 0;  /* COM_MAPPED_INFO flag */
+    NAME_$NODE_MAPPED_INFO.active = 0;
+    NAME_$COM_MAPPED_INFO.active = 0;
 
     /* Map the node directory */
-    name_$map_dir(&NAME_$NODE_UID, 0, base + 0x20, &status);
+    name_$map_dir(&NAME_$NODE_UID, 0, &NAME_$NODE_MAPPED_INFO, &status);
     name_$init_check_status("map    ", NULL, 0, &status);
 
     /* Build and resolve "/com" path */
@@ -144,11 +133,11 @@ void NAME_$INIT(uid_t *vol_root_uid, uid_t *vol_node_uid)
     NAME_$RESOLVE(path_buffer, &path_len, &NAME_$COM_UID, &status);
 
     /* If /com resolution fails, use node UID as fallback */
-    if (status != status_$ok || name_$map_dir(&NAME_$COM_UID, 0, base + 0x08, &status) >= 0) {
+    if (status != status_$ok || name_$map_dir(&NAME_$COM_UID, 0, &NAME_$COM_MAPPED_INFO, &status) >= 0) {
         NAME_$COM_UID.high = NAME_$NODE_UID.high;
         NAME_$COM_UID.low = NAME_$NODE_UID.low;
-        /* Copy node mapped info to com mapped info */
-        memcpy(base + 0x08, base + 0x20, 16);
+        /* Copy node mapped info to com mapped info (16 bytes) */
+        NAME_$COM_MAPPED_INFO = NAME_$NODE_MAPPED_INFO;
     }
 
     /* Set canned root if not using provided UIDs */

@@ -11,7 +11,7 @@
  *   XPD_$INHERIT_PTRACE_OPTIONS: 0x00e5b174
  */
 
-#include "xpd/xpd.h"
+#include "xpd/xpd_internal.h"
 
 /*
  * Process table addresses and offsets

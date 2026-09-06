@@ -25,13 +25,10 @@
 
 #include "disk/disk_internal.h"
 
-/* Volume table offsets */
-#define DISK_MOUNT_STATE_OFFSET   0x90
-#define DISK_LV_DATA_OFFSET       0x84
+/* Volume table offsets (mount state/LV data/dev info come from disk_internal.h) */
 #define DISK_LV_VOLX_OFFSET       0xb4
 #define DISK_UID_HI_OFFSET        0x88
 #define DISK_UID_LO_OFFSET        0x8c
-#define DISK_DEV_INFO_OFFSET      0x94
 #define DISK_UNIT_OFFSET          0x9a
 #define DISK_SOMETHING_OFFSET     0xa2
 #define DISK_SECTORS_OFFSET       0x9c
@@ -39,9 +36,6 @@
 #define DISK_NUM_PARTS_OFFSET     0xa8
 #define DISK_PART_TABLE_OFFSET    0x26
 #define DISK_FLAGS_OFFSET         0xa5
-
-/* Volume table base */
-#define DISK_VOLUME_BASE  ((uint8_t *)0x00e7a1cc)
 
 /* Valid volume index mask (volumes 1-10) */
 #define VALID_VOL_MASK  0x7fe

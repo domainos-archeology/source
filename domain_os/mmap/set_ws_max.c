@@ -7,7 +7,7 @@
  * Original address: 0x00e0ca7a
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 void MMAP_$SET_WS_MAX(uint16_t wsl_index, uint32_t max_pages, status_$t *status)
 {

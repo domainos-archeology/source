@@ -10,11 +10,6 @@
 
 #include "vtoc/vtoc_internal.h"
 
-/* External function declarations */
-extern void OS_DISK_PROC(int16_t vol_idx);
-/* External variables */
-extern int8_t AUDIT_$ENABLED;    /* 0xE2E09E: Audit enabled flag */
-
 void VTOC_$DISMOUNT(uint16_t vol_idx, uint8_t flags, status_$t *status_ret)
 {
     int16_t i;
@@ -23,7 +18,7 @@ void VTOC_$DISMOUNT(uint16_t vol_idx, uint8_t flags, status_$t *status_ret)
     uint32_t *src;
     uint32_t *dst;
     uid_t vol_uid;
-    char name_buf[36];
+    char name_buf[37];      /* Pascal array indexed 1..0x24; [0] unused */
     int16_t audit_param;
 
     *status_ret = status_$ok;

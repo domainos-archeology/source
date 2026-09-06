@@ -10,7 +10,7 @@
  * Original address: 0x00e151fe
  */
 
-#include "ec.h"
+#include "ec/ec_internal.h"
 
 void EC_$INIT(ec_$eventcount_t *ec)
 {

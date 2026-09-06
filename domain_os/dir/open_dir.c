@@ -29,10 +29,8 @@
 #include "dir/dir_internal.h"
 
 /* DAT_00e4b444 - MST remap parameters (also used as ACL check params) */
-extern uint8_t DAT_00e4b444;
 
 /* DAT_00e4bc24 - ACL rights mask (value: 0xFF = all rights) */
-extern uint8_t DAT_00e4bc24;
 
 void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
                    void *handle_ret, status_$t *status_ret)

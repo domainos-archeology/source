@@ -19,7 +19,7 @@
  *   rts
  */
 
-#include "pacct_internal.h"
+#include "pacct/pacct_internal.h"
 
 /* Global accounting state - located at 0xE817EC on m68k */
 pacct_state_t pacct_state;

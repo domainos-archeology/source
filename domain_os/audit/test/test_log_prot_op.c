@@ -51,6 +51,7 @@ static int tests_failed = 0;
 /* Prevent inclusion of kernel headers */
 #define BASE_H
 #define AUDIT_H
+#define AUDIT_INTERNAL_H
 #define OS_H
 
 /* Types needed */

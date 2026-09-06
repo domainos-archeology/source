@@ -10,7 +10,7 @@
  * Original address: 0x00e20a18
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 /*
  * Note: The actual implementation is in sau2/dispatch.s

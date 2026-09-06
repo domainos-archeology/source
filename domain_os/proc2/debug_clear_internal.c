@@ -78,9 +78,11 @@ void DEBUG_CLEAR_INTERNAL(int16_t proc_idx, int8_t flag)
     if (flag < 0) {
         uint32_t offset = entry->cr_rec_2 + 0x90;
 
-        /* Write debug data to clear debug state */
+        /* Write debug data to clear debug state.  XPD_$WRITE only reads
+         * through its length/buffer arguments (it copies from the buffer
+         * into the target address space), so the const data is safe. */
         XPD_$WRITE(ENTRY_DEBUG_ADDR(entry), offset,
-                   &debug_clear_data1, &debug_clear_data2, status);
+                   (int32_t *)&debug_clear_data1, (void *)&debug_clear_data2, status);
 
         /* Clear awaken flag again after XPD write */
         ENTRY_FLAGS_BYTE(entry) &= ~DEBUG_FLAG_AWAKEN_GUARDIAN;

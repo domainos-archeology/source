@@ -36,9 +36,8 @@ typedef struct smd_hw_blt_t {
     uint16_t    x_start;        /* 0x0E: X start coordinate */
 } smd_hw_blt_t;
 
-/* Lock data for async vs sync BLT */
-extern int16_t SMD_BLT_ASYNC_LOCK_DATA;  /* at 0x00E6D92C */
-extern int16_t SMD_BLT_SYNC_LOCK_DATA;   /* at 0x00E6DFF8 */
+/* Lock data for async (0x00E6D92C = SMD_ACQ_LOCK_DATA, value 0) vs sync
+ * (0x00E6DFF8 = SMD_SYNC_LOCK_DATA, value 1) BLT; declared in smd_internal.h */
 
 /*
  * SMD_$BLT - Bit block transfer
@@ -90,15 +89,16 @@ void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *sta
 
     /* Calculate unit offset */
     unit_offset = (int32_t)unit * SMD_DISPLAY_UNIT_SIZE;
-    display_unit = (smd_display_unit_t *)((uint8_t *)&SMD_EC_1 + unit_offset);
+    /* Original: base 0x00E2E3FC (== SMD_DISPLAY_UNITS / SMD_EC_1) + unit*0x10C */
+    display_unit = (smd_display_unit_t *)((uint8_t *)SMD_DISPLAY_UNITS + unit_offset);
     aux = smd_get_unit_aux(unit);
     hw = aux->hw;
 
     /* Select lock data based on async mode */
     if ((mode & 0x10) != 0) {
-        lock_data = &SMD_BLT_ASYNC_LOCK_DATA;
+        lock_data = (int16_t *)&SMD_ACQ_LOCK_DATA;   /* 0x00E6D92C */
     } else {
-        lock_data = &SMD_BLT_SYNC_LOCK_DATA;
+        lock_data = &SMD_SYNC_LOCK_DATA;             /* 0x00E6DFF8 */
     }
 
     /* Acquire display lock */
@@ -117,8 +117,12 @@ void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *sta
     hw_params.control = ((mode & 0x8000) ? 0x80 : 0) |      /* Direction */
                         ((mode & 0x20) ? 0x20 : 0) |        /* Alt ROP */
                         ((mode & 0x10) ? 0x10 : 0) |        /* Async */
-                        ((((uint8_t *)&params[1])[3] == 0x02) ? 0x08 : 0) |  /* Pattern type */
-                        ((((uint8_t *)&params[1])[0] == 0x20) ? 0x04 : 0) |  /* Mask type */
+                        /* Original: move.l (0x2,A2),tmp; cmpi.b #0x2,tmp+0 -> byte at
+                         * params+2 = high byte of params[1] (big-endian);
+                         * cmpi.b #0x20,tmp+3 -> byte at params+5 = low byte of params[2].
+                         * Expressed as shift/mask so it is endian-independent. */
+                        ((((params[1] >> 8) & 0xFF) == 0x02) ? 0x08 : 0) |  /* Pattern type */
+                        (((params[2] & 0xFF) == 0x20) ? 0x04 : 0) |         /* Mask type */
                         ((mode & 0x02) ? 0x02 : 0) |        /* Src enable */
                         ((mode & 0x01) ? 0x01 : 0);         /* Dest enable */
 
@@ -144,7 +148,7 @@ void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *sta
 
     /* Start the BLT operation */
     SMD_$START_BLT((uint16_t *)&hw_params, hw,
-                   (uint16_t *)((uint8_t *)&SMD_EC_1 + unit_offset + 8));
+                   (uint16_t *)((uint8_t *)SMD_DISPLAY_UNITS + unit_offset + 8));
 
     if ((mode & 0x10) == 0) {
         /* Sync mode - release display lock now */

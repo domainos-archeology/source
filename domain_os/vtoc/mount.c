@@ -10,11 +10,6 @@
 
 #include "vtoc/vtoc_internal.h"
 
-/* External variables */
-extern int8_t AUDIT_$ENABLED;    /* 0xE2E09E: Audit enabled flag */
-extern int8_t DAT_00e78756;      /* VTOC dirty flag */
-extern uint32_t VTOC_CACH_LOOKUPS;  /* Cache lookup count / flags */
-
 void VTOC_$MOUNT(int16_t vol_idx, uint16_t param_2, uint8_t param_3, char param_4,
                  status_$t *status_ret)
 {
@@ -89,8 +84,8 @@ void VTOC_$MOUNT(int16_t vol_idx, uint16_t param_2, uint8_t param_3, char param_
             vtoc_$data.format[vol_idx] = 0;
         }
 
-        /* Store flags */
-        ((char *)&VTOC_CACH_LOOKUPS)[vol_idx + 3] = param_4;
+        /* Store write-protect flag (1-based per-volume array at base+0x270) */
+        vtoc_$data.cach_wp_flag[vol_idx - 1] = param_4;
 
         /* Store param_2 */
         *(uint16_t *)(OS_DISK_DATA + vol_idx * 2 - 2) = param_2;
@@ -105,25 +100,25 @@ void VTOC_$MOUNT(int16_t vol_idx, uint16_t param_2, uint8_t param_3, char param_
                 name_buf[i] = ((char *)label_block)[i + 4];
             }
 
-            /* Clear trailing bytes */
+            /* Clear trailing bytes (Pascal indices 0x21..0x24 => C 0x20..0x23) */
             for (i = 0; i < 4; i++) {
-                name_buf[0x21 + i] = 0;
+                name_buf[0x20 + i] = 0;
             }
         }
 
         /* Release the label block with dirty flag (10 = write if modified) */
         DBUF_$SET_BUFF(label_block, 10, &local_status);
 
-        /* If write protected, set cache flag */
+        /* If write protected, set the write-protect flag */
         if (local_status == 0x80007 /* status_$disk_write_protected */) {
-            ((uint8_t *)&VTOC_CACH_LOOKUPS)[vol_idx + 3] = 0xFF;
+            vtoc_$data.cach_wp_flag[vol_idx - 1] = (int8_t)0xFF;
         }
 
         /* Process any pending disk operations */
-        if (DAT_00e78756 < 0) {
+        if (vtoc_$data.dirty < 0) {
             OS_DISK_PROC(0);
         }
-        DAT_00e78756 = 0;
+        vtoc_$data.dirty = 0;
     }
 
     ML_$UNLOCK(VTOC_LOCK_ID);

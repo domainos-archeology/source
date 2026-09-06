@@ -13,10 +13,8 @@
 
 #include "sio/sio_internal.h"
 
-/* External references for FIM quit handling */
-extern ec_$eventcount_t FIM_$QUIT_EC[];   /* At 0xe22002 */
-extern int32_t FIM_$QUIT_VALUE[];         /* At 0xe222ba */
-extern int16_t PROC1_$AS_ID;              /* At 0xe2060a */
+/* FIM_$QUIT_EC (0xE22002) / FIM_$QUIT_VALUE (0xE222BA) come from fim/fim.h,
+ * PROC1_$AS_ID (0xE2060A) from proc1/proc1.h (both via sio_internal.h). */
 
 uint32_t SIO_$K_SIGNAL_WAIT(int16_t *line_ptr, uint32_t *signals_ptr,
                             status_$t *status_ret)
@@ -46,7 +44,7 @@ uint32_t SIO_$K_SIGNAL_WAIT(int16_t *line_ptr, uint32_t *signals_ptr,
         wait_values[0] = desc->ec.value + 1;
 
         /* Set up wait on quit event count */
-        wait_ecs[1] = (ec_$eventcount_t *)&FIM_$QUIT_EC[as_id * 3];
+        wait_ecs[1] = (ec_$eventcount_t *)&FIM_$QUIT_EC[as_id];
         wait_values[1] = FIM_$QUIT_VALUE[as_id] + 1;
 
         /*
@@ -84,7 +82,7 @@ uint32_t SIO_$K_SIGNAL_WAIT(int16_t *line_ptr, uint32_t *signals_ptr,
              * restore quit value
              */
             *status_ret = status_$sio_quit_signalled;
-            FIM_$QUIT_VALUE[as_id] = FIM_$QUIT_EC[as_id * 3].value;
+            FIM_$QUIT_VALUE[as_id] = FIM_$QUIT_EC[as_id].value;
             return 0;
         }
 

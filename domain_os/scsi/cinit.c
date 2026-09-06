@@ -14,7 +14,7 @@
  *   00e34f10    rts
  */
 
-#include "scsi/scsi.h"
+#include "scsi/scsi_internal.h"
 
 status_$t SCSI_$CINIT(void)
 {

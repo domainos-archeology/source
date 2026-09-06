@@ -15,7 +15,7 @@
  * @param result     Output: result byte
  */
 
-#include "win.h"
+#include "win/win_internal.h"
 
 /* Maximum retry counts */
 #define MAX_DMA_RETRIES      500
@@ -113,7 +113,7 @@ retry_loop:
         if (status == status_$memory_parity_error_during_disk_write) {
             /* Check if parity error is real */
             int32_t *cur_req = *(int32_t **)(win_data + WIN_REQ_PTR_OFFSET);
-            int16_t parity_result = PARITY_$CHK_IO(
+            int16_t parity_result = (int16_t)PARITY_$CHK_IO(
                 (uint32_t)cur_req[4] >> 10,
                 cur_req[5]);
             if (-parity_result < 0) {

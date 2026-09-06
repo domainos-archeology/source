@@ -68,7 +68,7 @@ void DIR_$DELETE_FILEU(uid_t *dir_uid, char *name, uint16_t *name_len,
     request.uid.low = dir_uid->low;
     request.reserved = DAT_00e7fc72;
     request.flags1 = *((uint8_t *)param5);
-    request.flags2 = *((uint8_t *)status_ret);
+    request.flags2 = (uint8_t)(*status_ret >> 24);   /* first (MSB) byte on m68k */
 
     /* Send the request - size includes name length */
     DIR_$DO_OP(&request.op, len + DAT_00e7fc76, 0x1c,

@@ -95,7 +95,7 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
 
     /* Register network service */
     service_type = 0x80000;
-    NETWORK_$SET_SERVICE(MSG_$NET_SERVICE, &service_type, &net_status);
+    NETWORK_$SET_SERVICE((int16_t *)&MSG_$NET_SERVICE, &service_type, &net_status);
 
     /* Mark that user sockets are open */
     *(uint8_t *)0xE24C48 = 0xFF;  /* NETWORK_$USER_SOCK_OPEN */

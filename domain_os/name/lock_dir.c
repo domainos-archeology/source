@@ -24,32 +24,18 @@
 #include "acl/acl.h"
 #include "file/file_internal.h"
 #include "mst/mst.h"
-#include "dir/dir_internal.h"  /* For DAT_00e54b28 */
 
 /* Status codes */
 #define file_$object_in_use              0x000F0006
 #define status_$naming_directory_locked  0x000E0016
 
-/* Forward declaration */
-void NAME_$UNLOCK_DIR(status_$t *status_ret);
-
-/* Extern references for mapped info and lock callback */
-extern uint8_t NAME_$WDIR_MAPPED_INFO;
-extern uint8_t NAME_$NDIR_MAPPED_INFO;
-extern uint8_t NAME_$NODE_MAPPED_INFO;
-extern uint8_t NAME_$COM_MAPPED_INFO;
-extern uint8_t DAT_00e80288;  /* NODE mapped handle */
-extern uint8_t DAT_00e8028e;  /* NODE entry count */
-extern uint8_t DAT_00e80270;  /* COM mapped handle */
-extern uint8_t DAT_00e80276;  /* COM entry count */
-extern uid_t NAME_$WDIR_UID;
-extern uid_t NAME_$NDIR_UID;
-
-/* Lock callback data - passed to FILE_$PRIV_LOCK */
-extern uint8_t DAT_00e54730;
-
-/* Forward declaration for ACL status conversion */
-void NAME_CONVERT_ACL_STATUS(status_$t *status_ret);
+/*
+ * Mapped info blocks, lock callback (DAT_00e54730) and ACL parameter
+ * (DAT_00e54b28) are declared in name/name.h.  The historical labels
+ * DAT_00e80288 / DAT_00e8028e are NAME_$NODE_MAPPED_INFO.first_base /
+ * .entry_count, and DAT_00e80270 / DAT_00e80276 are the same fields of
+ * NAME_$COM_MAPPED_INFO.
+ */
 
 void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
                     uint32_t flags, status_$t *status_ret)
@@ -136,10 +122,10 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
     /* Check NODE_UID */
     if (local_uid.high == NAME_$NODE_UID.high &&
         local_uid.low == NAME_$NODE_UID.low) {
-        if ((int8_t)NAME_$NODE_MAPPED_INFO < 0 &&
-            *(uint16_t *)(&NAME_$NODE_MAPPED_INFO + 2) == 0 &&
-            *(uint16_t *)(&DAT_00e8028e) == 1) {
-            *handle_ret = *(uint32_t *)&DAT_00e80288;
+        if (NAME_$NODE_MAPPED_INFO.active < 0 &&
+            NAME_$NODE_MAPPED_INFO.reserved_02 == 0 &&
+            NAME_$NODE_MAPPED_INFO.entry_count == 1) {
+            *handle_ret = NAME_$NODE_MAPPED_INFO.first_base;
             goto check_directory_type;
         }
     }
@@ -147,10 +133,10 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
     /* Check COM_UID */
     if (local_uid.high == NAME_$COM_UID.high &&
         local_uid.low == NAME_$COM_UID.low) {
-        if ((int8_t)NAME_$COM_MAPPED_INFO < 0 &&
-            *(uint16_t *)(&NAME_$COM_MAPPED_INFO + 2) == 0 &&
-            *(uint16_t *)(&DAT_00e80276) == 1) {
-            *handle_ret = *(uint32_t *)&DAT_00e80270;
+        if (NAME_$COM_MAPPED_INFO.active < 0 &&
+            NAME_$COM_MAPPED_INFO.reserved_02 == 0 &&
+            NAME_$COM_MAPPED_INFO.entry_count == 1) {
+            *handle_ret = NAME_$COM_MAPPED_INFO.first_base;
             goto check_directory_type;
         }
     }

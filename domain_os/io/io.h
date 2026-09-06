@@ -190,4 +190,21 @@ void IO_$TRAP(int16_t m68k_vector_num, void *handler_addr);
  */
 void IO_$USE_INT_STACK(void);
 
+/*
+ * IO_$GET_DCTE - Find the DCTE for a controller type/number
+ *
+ * Walks IO_$DCTE_LIST looking for an entry whose ctype and cnum match
+ * *ctypep / *cnump.  On a match *status_ret receives the controller's
+ * cstatus and the DCTE pointer is returned (in A0); if no entry matches,
+ * *status_ret is set to 0x00100001 and NULL is returned.
+ *
+ *   00e1a462    move.w (A0),D0w          ; *ctypep
+ *   00e1a464    move.w (A2),D1w          ; *cnump
+ *   00e1a480    move.l (0x10,A0),(A1)    ; *status_ret = dcte->cstatus
+ *   00e1a48c    movea.l D2,A0            ; return dcte
+ *
+ * Original address: 0x00E1A448
+ */
+dcte_t *IO_$GET_DCTE(uint16_t *ctypep, uint16_t *cnump, status_$t *status_ret);
+
 #endif /* IO_H */

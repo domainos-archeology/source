@@ -18,7 +18,7 @@
  * Original address: 0x00e42be0
  */
 
-#include "ec_internal.h"
+#include "ec/ec_internal.h"
 
 int32_t EC2_$GET_VAL(ec2_$eventcount_t *ec, status_$t *status_ret)
 {

@@ -23,55 +23,11 @@
 #include "pkt/pkt.h"
 
 /*
- * =============================================================================
- * External Data
- * =============================================================================
+ * External data:
+ *   NETWORK_$DISKLESS (0xE24C4C), NETWORK_$MOTHER_NODE (0xE24C0C) and
+ *   NODE_$ME (0xE245A4) come from network/network.h;
+ *   RIP_$BCAST_CONTROL (30 byte template at 0xE26EC0) from rip/rip.h.
  */
-
-#if defined(ARCH_M68K)
-    /*
-     * NETWORK_$DISKLESS - Diskless mode flag
-     *
-     * Negative value indicates running in diskless mode.
-     *
-     * Original address: 0xE24C4C
-     */
-    #define NETWORK_$DISKLESS       (*(int8_t *)0xE24C4C)
-
-    /*
-     * NETWORK_$MOTHER_NODE - Mother node address
-     *
-     * Address of the boot server (mother) node.
-     *
-     * Original address: 0xE24C0C
-     */
-    #define NETWORK_$MOTHER_NODE    (*(uint32_t *)0xE24C0C)
-
-    /*
-     * NODE_$ME - This node's address
-     *
-     * The local node's network address.
-     *
-     * Original address: 0xE245A4
-     */
-    #define NODE_$ME                (*(uint32_t *)0xE245A4)
-
-    /*
-     * RIP_$BCAST_CONTROL - RIP broadcast control template
-     *
-     * Template packet structure for broadcast control messages.
-     * Size: 0x1E (30) bytes
-     *
-     * Original address: 0xE26EC0
-     */
-    #define RIP_$BCAST_CONTROL      ((uint8_t *)0xE26EC0)
-
-#else
-    extern int8_t NETWORK_$DISKLESS;
-    extern uint32_t NETWORK_$MOTHER_NODE;
-    extern uint32_t NODE_$ME;
-    extern uint8_t RIP_$BCAST_CONTROL[];
-#endif
 
 /*
  * Size of broadcast control packet

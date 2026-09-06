@@ -17,20 +17,14 @@
 #include "math/math.h"
 #include "netlog/netlog.h"
 
-/* External working set list high mark array */
-extern uint16_t MMAP_$WSL_HI_MARK[];
+/* MMAP_$WSL_HI_MARK (0xE23CA6) is indexed as an array here; the same
+ * array is exported by mmap/mmap.h as MMAP_PID_TO_WSL.
+ * PMAP_$SHORT_WAIT_DELAY - pmap_internal.h (0xE254DC)
+ * NETWORK_$DISKLESS      - network/network.h
+ * DISK_$DO_CHKSUM        - disk/disk.h (0xE7ACCC) */
 
-/* Short wait delay for working set scanning */
-extern clock_t PMAP_$SHORT_WAIT_DELAY;
-
-/* Delay type for relative waits (0 = relative) */
+/* Delay type for relative waits (0 = relative); constant at 0xE1416A (DAT_00e1416a) */
 static uint16_t pmap_delay_type = 0;
-
-/* Network diskless flag */
-extern int8_t NETWORK_$DISKLESS;
-
-/* Disk checksum control flag */
-extern int8_t DISK_$DO_CHKSUM;
 
 /* Include mmap.h and mmu.h for MMAPE_BASE and PFT_BASE */
 #include "mmap/mmap.h"
@@ -43,10 +37,7 @@ extern int8_t DISK_$DO_CHKSUM;
     #define AOTE_TABLE_BASE     0xEC53F0
     #define PUR_STATS_BASE      0xE25D18
 #else
-    extern uint8_t wsl_base[];
-    extern uint8_t segmap_base[];
-    extern uint8_t aote_table[];
-    extern uint8_t pur_stats[];
+    /* wsl_base, segmap_base, aote_table, pur_stats: pmap_internal.h */
     #define WSL_BASE            ((uintptr_t)wsl_base)
     #define SEGMAP_BASE_ADDR    ((uintptr_t)segmap_base)
     #define AOTE_TABLE_BASE     ((uintptr_t)aote_table)
@@ -258,8 +249,8 @@ void PMAP_$PURIFIER_L(void)
 
             /* Scan all working sets */
             slot_pages = 0;
-            if (MMAP_$WSL_HI_MARK[0] > 4) {
-                for (uint16_t slot = MMAP_$WSL_HI_MARK[0]; slot > 4; slot--) {
+            if (MMAP_PID_TO_WSL[0] > 4) {
+                for (uint16_t slot = MMAP_PID_TO_WSL[0]; slot > 4; slot--) {
                     wsl_offset = slot * 0x24;
                     uint32_t *wsl_entry = (uint32_t *)(WSL_BASE + wsl_offset);
 
@@ -293,8 +284,8 @@ void PMAP_$PURIFIER_L(void)
             uint32_t target = ((uint32_t)slot_pages * (uint32_t)DAT_00e254e2) >> 10;
             uint32_t accumulator = 0;
 
-            if (MMAP_$WSL_HI_MARK[0] > 4) {
-                for (uint16_t slot = MMAP_$WSL_HI_MARK[0]; slot > 4; slot--) {
+            if (MMAP_PID_TO_WSL[0] > 4) {
+                for (uint16_t slot = MMAP_PID_TO_WSL[0]; slot > 4; slot--) {
                     wsl_offset = slot * 0x24;
                     uint32_t *wsl_entry = (uint32_t *)(WSL_BASE + wsl_offset);
 

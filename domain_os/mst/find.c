@@ -14,7 +14,7 @@
  * should not be called with those flags.
  */
 
-#include "mst_internal.h"
+#include "mst/mst_internal.h"
 #include "misc/misc.h"
 
 /*

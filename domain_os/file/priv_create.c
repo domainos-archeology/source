@@ -40,10 +40,10 @@
 /*
  * Nil UIDs for default ownership (owner, group, org)
  * These are copied as a group (24 bytes) when no SID is available.
+ * PPO_$NIL_USER_UID / PPO_$NIL_ORG_UID come from vtoc/vtoc.h,
+ * RGYC_$G_NIL_UID from rgyc/rgyc.h.
  */
-extern uid_t PPO_$NIL_USER_UID;         /* 0xE174EC: Nil user (owner) UID */
-extern uid_t RGYC_$G_NIL_UID;           /* 0xE17524: Nil group UID */
-extern uid_t PPO_$NIL_ORG_UID;          /* 0xE17574: Nil org UID */
+#include "rgyc/rgyc.h"
 
 /*
  * Status codes used

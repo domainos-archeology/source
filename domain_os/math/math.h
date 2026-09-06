@@ -1,3 +1,5 @@
+#ifndef MATH_H
+#define MATH_H
 
 #define HIGH16(x32) ((x32) >> 16)
 #define LOW16(x32) ((x32) & 0xffff)
@@ -20,3 +22,5 @@ extern long M$OIS$LLL(long dividend,long divisor);
 extern short M$OIS$WLW(long dividend,short divisor);
 extern short M$OIS$WWL(short dividend,long divisor);
 extern short M$OIU$WLW(long dividend,short divisor);
+
+#endif /* MATH_H */

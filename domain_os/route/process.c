@@ -29,7 +29,7 @@
 #include "mac_os/mac_os.h"
 #include "xns_idp/xns_idp.h"
 #include "wp/wp.h"
-#include "ring/ringlog.h"
+#include "ring/ringlog_internal.h"
 
 /* Timer interval for RIP broadcasts (0x72 = 114 ticks) */
 #define RIP_BROADCAST_INTERVAL  0x72
@@ -47,58 +47,12 @@
 #define ROUTE_LOCK_ID           0x0D
 #define NET_IO_LOCK_ID          0x18
 
-/* Global data references */
-#if defined(ARCH_M68K)
-#define ROUTE_$START_TIME       (*(uint32_t *)0xE825DC)
-#define ROUTE_$PROCESS_UID      (*(uint16_t *)0xE88216)
-#define ROUTE_$USER_PORT_MAX    (*(uint16_t *)0xE87FD0)
-#define ROUTE_$WIRED_COUNT      (*(int16_t *)0xE87FD2)
-#define ROUTE_$USER_PORT_COUNT_W (*(int16_t *)0xE87FD4)
-#define ROUTE_$WIRED_PAGES      ((uint32_t *)0xE87D80)
-#define ROUTE_$PACKET_STATS     ((uint32_t *)0xE87DA8)
-#define ROUTE_$SERVICE_ID       (*(uint16_t *)0xE8821C)
-#define ROUTE_$NET_SERVICE_ON   (*(uint16_t *)0xE8789C)
-#define ROUTE_$NET_SERVICE_OFF  (*(uint16_t *)0xE8789E)
-#define ROUTE_$FWD_TIMEOUT      (*(uint16_t *)0xE88224)
-#define NODE_$ME                (*(uint32_t *)0xE245A4)
-#define RING_$LOGGING_NOW       (*(int8_t *)0xE2C364)
-#define PTR_ROUTE_$CONTROL_EC   (*(ec_$eventcount_t **)0xE88220)
-
-/* Statistics counters */
-#define STAT_OVERSIZED_STD      (*(uint32_t *)0xE87FAC)
-#define STAT_OVERSIZED_N        (*(uint32_t *)0xE87FBC)
-#define STAT_DROPPED_STD_HOP    (*(uint32_t *)0xE87FB0)
-#define STAT_DROPPED_N_HOP      (*(uint32_t *)0xE87FC0)
-#define STAT_DROPPED_STD_ROUTE  (*(uint32_t *)0xE87FB4)
-#define STAT_DROPPED_N_ROUTE    (*(uint32_t *)0xE87FC4)
-#define STAT_FORWARDED_STD      (*(uint32_t *)0xE87FB8)
-#define STAT_FORWARDED_N        (*(uint32_t *)0xE87FC8)
-
-#else
-extern uint32_t ROUTE_$START_TIME;
-extern uint16_t ROUTE_$PROCESS_UID;
-extern uint16_t ROUTE_$USER_PORT_MAX;
-extern int16_t ROUTE_$WIRED_COUNT;
-extern int16_t ROUTE_$USER_PORT_COUNT_W;
-extern uint32_t ROUTE_$WIRED_PAGES[];
-extern uint32_t ROUTE_$PACKET_STATS[];
-extern uint16_t ROUTE_$SERVICE_ID;
-extern uint16_t ROUTE_$NET_SERVICE_ON;
-extern uint16_t ROUTE_$NET_SERVICE_OFF;
-extern uint16_t ROUTE_$FWD_TIMEOUT;
-extern uint32_t NODE_$ME;
-extern int8_t RING_$LOGGING_NOW;
-extern ec_$eventcount_t *PTR_ROUTE_$CONTROL_EC;
-
-extern uint32_t STAT_OVERSIZED_STD;
-extern uint32_t STAT_OVERSIZED_N;
-extern uint32_t STAT_DROPPED_STD_HOP;
-extern uint32_t STAT_DROPPED_N_HOP;
-extern uint32_t STAT_DROPPED_STD_ROUTE;
-extern uint32_t STAT_DROPPED_N_ROUTE;
-extern uint32_t STAT_FORWARDED_STD;
-extern uint32_t STAT_FORWARDED_N;
-#endif
+/*
+ * Global data references: the wired-area globals (ROUTE_$PACKET_STATS,
+ * ROUTE_$STAT_*, ROUTE_$PROCESS_UID, ...) come from route/route_internal.h,
+ * NODE_$ME from network/network.h and RING_$LOGGING_NOW from
+ * ring/ringlog_internal.h.
+ */
 
 /* IDP packet header structure (XNS Internet Datagram Protocol) */
 typedef struct {
@@ -121,13 +75,6 @@ typedef struct {
 
 /* Error status for SOCK_$GET failure */
 static const status_$t status_$route_sock_get_failed = 0x2B00C6;
-
-/* Ring log message identifier */
-#if defined(ARCH_M68K)
-#define RINGLOG_$ROUTE_FORWARD  (*(uint16_t *)0xE878A0)
-#else
-extern uint16_t RINGLOG_$ROUTE_FORWARD;
-#endif
 
 /*
  * Note: All external function declarations come from the included headers:
@@ -303,9 +250,9 @@ void ROUTE_$PROCESS(void)
              */
             if (should_forward && idp_hdr->transport_ctl > MAX_HOP_COUNT) {
                 if (is_std_routing) {
-                    STAT_DROPPED_STD_HOP++;
+                    ROUTE_$STAT_DROPPED_STD_HOP++;
                 } else {
-                    STAT_DROPPED_N_HOP++;
+                    ROUTE_$STAT_DROPPED_N_HOP++;
                 }
                 should_forward = 0;
             }
@@ -319,9 +266,9 @@ void ROUTE_$PROCESS(void)
 
                 if (status != status_$ok) {
                     if (is_std_routing) {
-                        STAT_DROPPED_STD_ROUTE++;
+                        ROUTE_$STAT_DROPPED_STD_ROUTE++;
                     } else {
-                        STAT_DROPPED_N_ROUTE++;
+                        ROUTE_$STAT_DROPPED_N_ROUTE++;
                     }
                     should_forward = 0;
                 }
@@ -338,12 +285,12 @@ void ROUTE_$PROCESS(void)
                  */
                 if (is_std_routing) {
                     if (((1 << (dest_port->active & 0x1f)) & 0x30) == 0) {
-                        STAT_DROPPED_STD_ROUTE++;
+                        ROUTE_$STAT_DROPPED_STD_ROUTE++;
                         should_forward = 0;
                     }
                 } else {
                     if (((1 << (dest_port->active & 0x1f)) & 0x28) == 0) {
-                        STAT_DROPPED_N_ROUTE++;
+                        ROUTE_$STAT_DROPPED_N_ROUTE++;
                         should_forward = 0;
                     }
 
@@ -372,7 +319,7 @@ void ROUTE_$PROCESS(void)
                     }
 
                     /* Update port forward counter */
-                    *(uint32_t *)((uint8_t *)dest_port + 0x58) += 1;
+                    dest_port->forward_count += 1;
 
                 } else if (packet_size <= MAX_FORWARD_SIZE) {
                     /*
@@ -416,18 +363,18 @@ void ROUTE_$PROCESS(void)
                 } else {
                     /* Packet too large to forward */
                     if (is_std_routing) {
-                        STAT_OVERSIZED_STD++;
+                        ROUTE_$STAT_OVERSIZED_STD++;
                     } else {
-                        STAT_OVERSIZED_N++;
+                        ROUTE_$STAT_OVERSIZED_N++;
                     }
                 }
 
                 /* Update forwarding statistics */
                 if (should_forward) {
                     if (is_std_routing) {
-                        STAT_FORWARDED_STD++;
+                        ROUTE_$STAT_FORWARDED_STD++;
                     } else {
-                        STAT_FORWARDED_N++;
+                        ROUTE_$STAT_FORWARDED_N++;
                     }
                 }
             }
@@ -455,7 +402,7 @@ void ROUTE_$PROCESS(void)
 
             /* Mark routing as inactive */
             ROUTE_$ROUTING = 0;
-            ROUTE_$START_TIME = 0;
+            ROUTE_$LAST_UPDATE_TIME = 0;
 
             /* Unregister network service */
             NETWORK_$SET_SERVICE(&ROUTE_$NET_SERVICE_OFF, &ROUTE_$SERVICE_ID, &status);
@@ -472,11 +419,11 @@ void ROUTE_$PROCESS(void)
             /*
              * Unwire wired pages if no user ports remain
              */
-            if (ROUTE_$USER_PORT_COUNT_W == 0) {
-                for (i = ROUTE_$WIRED_COUNT - 1; i >= 0; i--) {
+            if (ROUTE_$N_USER_PORTS == 0) {
+                for (i = ROUTE_$N_WIRED_PAGES - 1; i >= 0; i--) {
                     WP_$UNWIRE(ROUTE_$WIRED_PAGES[i]);
                 }
-                ROUTE_$WIRED_COUNT = 0;
+                ROUTE_$N_WIRED_PAGES = 0;
             }
 
             /* Unbind this process */

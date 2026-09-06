@@ -10,18 +10,6 @@
 
 #include "vtoc/vtoc_internal.h"
 
-/* External variables */
-extern int8_t NETWORK_$REALLY_DISKLESS;  /* 0xE24C4A */
-extern int8_t NETLOG_$OK_TO_LOG;         /* 0xE248E0 */
-extern uint32_t ROUTE_$PORT;             /* 0xE2E0A0 */
-extern uint32_t NODE_$ME;                /* 0xE245A4 */
-extern uint32_t VTOC_CACH_LOOKUPS;       /* 0xE78736 */
-
-/* Internal function prototypes */
-extern void NETLOG_$LOG_IT(int16_t type, uid_t *uid, int a, int b,
-                           int16_t vol, int c, int d, int e);
-extern void vtoc_$uid_cache_insert(uid_t *uid, int16_t vol_idx, uint32_t block_info);
-
 void VTOCE_$READ(vtoc_$lookup_req_t *req, vtoce_$result_t *result, status_$t *status_ret)
 {
     uint8_t vol_idx_byte;
@@ -36,7 +24,7 @@ void VTOCE_$READ(vtoc_$lookup_req_t *req, vtoce_$result_t *result, status_$t *st
     uint8_t entry_num;
 
     /* Get volume index from request (at offset 0x1C) */
-    vol_idx_byte = *(uint8_t *)((uint8_t *)req + 0x1C);
+    vol_idx_byte = req->vol_idx;
 
     /* Check if diskless */
     if (NETWORK_$REALLY_DISKLESS < 0) {
@@ -46,7 +34,7 @@ void VTOCE_$READ(vtoc_$lookup_req_t *req, vtoce_$result_t *result, status_$t *st
 
     /* Extract block and entry from request */
     block = req->block_hint >> 4;
-    entry_idx = *(uint8_t *)((uint8_t *)req + 7) & 0x0F;
+    entry_idx = req->block_hint & 0x0F;     /* low nibble (byte +7 on m68k) */
 
     ML_$LOCK(VTOC_LOCK_ID);
 
@@ -60,7 +48,7 @@ void VTOCE_$READ(vtoc_$lookup_req_t *req, vtoce_$result_t *result, status_$t *st
 
     /* Log if enabled */
     if (NETLOG_$OK_TO_LOG < 0) {
-        NETLOG_$LOG_IT(0x11, &req->uid, 0, 0, vol_idx, 0, 0, 0);
+        NETLOG_$LOG_IT(0x11, (uint32_t *)&req->uid, 0, 0, vol_idx, 0, 0, 0);
     }
 
     /* Get the VTOC block */
@@ -83,24 +71,29 @@ void VTOCE_$READ(vtoc_$lookup_req_t *req, vtoce_$result_t *result, status_$t *st
         VTOCE_$OLD_TO_NEW((uint8_t *)buf + entry_idx * VTOCE_OLD_SIZE + 4, result);
     }
 
-    /* Set write-protect flag in result based on cache flag */
+    /* Set write-protect flag in result based on the per-volume flag */
     {
-        char cache_flag = ((char *)&VTOC_CACH_LOOKUPS)[vol_idx + 3];
-        uint8_t *result_byte = (uint8_t *)result + 3;
-        *result_byte = (*result_byte & 0xFD) | ((cache_flag >> 7) * 2);
+        int8_t wp_flag = vtoc_$data.cach_wp_flag[vol_idx - 1];
+        uint8_t *result_byte = &result->data[3];
+        *result_byte = (*result_byte & 0xFD) | ((wp_flag < 0) ? 2 : 0);
     }
 
     /* Fill in request fields */
-    *(uint32_t *)req = 0;
-    *(uint16_t *)((uint8_t *)req + 2) = *(uint16_t *)(OS_DISK_DATA + vol_idx * 2 - 2);
-    ((uint32_t *)req)[4] = ROUTE_$PORT;
-    ((uint32_t *)req)[5] = NODE_$ME;
-    ((uint32_t *)req)[6] = 0;
-    ((uint32_t *)req)[7] = 0;
-    *(uint8_t *)((uint8_t *)req + 0x1D) |= 0x40;
-    *(uint8_t *)((uint8_t *)req + 0x1C) = vol_idx_byte;
-    *(uint8_t *)((uint8_t *)req + 0x1D) = (*(uint8_t *)((uint8_t *)req + 0x1D) & 0xF0) | 1;
-    *(uint8_t *)((uint8_t *)req + 1) = (*(uint8_t *)((uint8_t *)req + 1) & 0xF0) | 1;
+    req->flags = 0;
+    /* bytes 2-3 of the flags word (low 16 bits on m68k) */
+    req->flags = (req->flags & 0xFFFF0000u) |
+                 *(uint16_t *)(OS_DISK_DATA + vol_idx * 2 - 2);
+    req->port = ROUTE_$PORT;
+    req->node = NODE_$ME;
+    req->reserved_18 = 0;
+    req->vol_idx = 0;
+    req->flags_1d = 0;
+    req->reserved_1e = 0;
+    req->flags_1d |= 0x40;
+    req->vol_idx = vol_idx_byte;
+    req->flags_1d = (req->flags_1d & 0xF0) | 1;
+    /* Byte +1 of the flags word (bits 16..23 on m68k): low nibble := 1 */
+    req->flags = (req->flags & ~0x000F0000u) | 0x00010000u;
 
     /* For new format, update UID cache for all valid entries in block */
     if (vtoc_$data.format[vol_idx] < 0) {
@@ -125,11 +118,10 @@ void VTOCE_$READ(vtoc_$lookup_req_t *req, vtoce_$result_t *result, status_$t *st
 
     /* Verify UID matches (unless request UID is nil) */
     {
-        uint32_t *result_uid = (uint32_t *)result + 1;
-        uint32_t *req_uid = (uint32_t *)req + 2;
+        uint32_t *result_uid = (uint32_t *)&result->data[4];
 
-        if ((result_uid[0] != req_uid[0] || result_uid[1] != req_uid[1]) &&
-            (req_uid[0] != UID_$NIL.high || req_uid[1] != UID_$NIL.low)) {
+        if ((result_uid[0] != req->uid.high || result_uid[1] != req->uid.low) &&
+            (req->uid.high != UID_$NIL.high || req->uid.low != UID_$NIL.low)) {
             *status_ret = 0x20008;  /* status_$uid_mismatch */
         }
     }

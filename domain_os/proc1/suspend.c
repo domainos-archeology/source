@@ -20,7 +20,7 @@
  * Original address: 0x00e147fa
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 int8_t PROC1_$SUSPEND(uint16_t process_id, status_$t *status_ret)
 {

@@ -20,7 +20,6 @@
 #include "dir/dir_internal.h"
 
 /* OS_$DATA_COPY - System memory copy */
-extern void OS_$DATA_COPY(void *src, void *dst, uint32_t len);
 
 /* AUDIT_$LOG_EVENT - Core audit event logging
  * Note: The canonical declaration is in audit/audit.h with typed parameters

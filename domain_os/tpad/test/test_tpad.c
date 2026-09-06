@@ -4,13 +4,15 @@
  * Tests the pointing device coordinate calculations and mode handling.
  */
 
+/*
+ * The kernel headers are included before any host header so that the
+ * Domain/OS definitions of clock_t, uid_t, true/false, etc. win.
+ */
+#include "tpad/tpad_internal.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-
-/* Mock includes for testing */
-#include "base/base.h"
-#include "tpad/tpad.h"
 
 /* Test result tracking */
 static int tests_passed = 0;
@@ -33,46 +35,11 @@ static int tests_failed = 0;
     } \
 } while(0)
 
-/* Mock globals for testing */
-static int16_t mock_ndevices = 2;
-static smd_disp_info_result_t mock_disp_info = {
-    .display_type = 1,
-    .bits_per_pixel = 1,
-    .num_planes = 1,
-    .height = 1024,
-    .width = 1280
-};
-
-/* Mock external functions */
-int16_t SMD_$N_DEVICES(void) {
-    return mock_ndevices;
-}
-
-void SMD_$INQ_DISP_INFO(int16_t *unit, smd_disp_info_result_t *info, status_$t *status) {
-    *info = mock_disp_info;
-    *status = status_$ok;
-}
-
-void SMD_$LOC_EVENT(uint8_t edge_hit, int16_t unit, int32_t pos, int16_t button_state) {
-    /* Mock - do nothing */
-    (void)edge_hit;
-    (void)unit;
-    (void)pos;
-    (void)button_state;
-}
-
-void TIME_$CLOCK(clock_t *clk) {
-    *clk = 0;
-}
-
-/* Mock math functions */
-long M$MIS$LLW(long a, short b) {
-    return a * b;
-}
-
-long M$MIS$LLL(long a, long b) {
-    return a * b;
-}
+/*
+ * These tests only exercise the TPAD type definitions and constants; no
+ * tpad/*.c implementation is included, so no SMD/TIME/math mocks are
+ * needed here.
+ */
 
 /*
  * Test: smd_$pos_t union layout
@@ -82,10 +49,22 @@ TEST(pos_layout) {
     pos.y = 100;
     pos.x = 200;
 
-    /* Verify y is in high word, x in low word */
+    /* y occupies bytes 0-1, x occupies bytes 2-3 (matches the m68k layout) */
+    int16_t halves[2];
+    memcpy(halves, &pos, sizeof(halves));
     ASSERT_EQ(100, pos.y);
     ASSERT_EQ(200, pos.x);
+    ASSERT_EQ(100, halves[0]);
+    ASSERT_EQ(200, halves[1]);
+    ASSERT_EQ(4, sizeof(smd_$pos_t));
+
+    /*
+     * The packed 32-bit view is (y << 16) | x only where the host stores
+     * the high-order half first, i.e. on big-endian (m68k) hosts.
+     */
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
     ASSERT_EQ((100 << 16) | 200, pos.raw);
+#endif
 }
 
 /*

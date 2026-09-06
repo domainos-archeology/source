@@ -32,6 +32,7 @@
  * and understanding of the entry result buffer format.
  */
 
+#include "name/name_internal.h"
 #include "dir/dir_internal.h"
 
 /* Stub - 226-byte root directory entry lookup with remote fallback */

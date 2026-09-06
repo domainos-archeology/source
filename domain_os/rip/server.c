@@ -60,44 +60,10 @@
 #define RIP_SEND_TIMEOUT        25000
 
 /*
- * =============================================================================
- * RIP Statistics Structure
- * =============================================================================
+ * RIP_$STATS (0xE262AC), RIP_$STD_RECENT_CHANGES (0xE26EDE),
+ * RIP_$RECENT_CHANGES (0xE26EE0) and RIP_$INFO come from rip/rip_internal.h;
+ * ROUTE_$STD_N_ROUTING_PORTS / ROUTE_$N_ROUTING_PORTS from route/route.h.
  */
-
-/*
- * RIP_$STATS - RIP protocol statistics
- *
- * Located at 0xE262AC, tracks packet processing statistics.
- */
-typedef struct rip_$stats_t {
-    uint16_t    _reserved0;         /* 0x00: Reserved */
-    uint32_t    packets_received;   /* 0x02: Total packets received */
-    uint16_t    _reserved1;         /* 0x06: Reserved */
-    uint32_t    errors;             /* 0x08: Packet errors */
-    uint16_t    unknown_commands;   /* 0x0C: Unknown command types */
-    /* ... more fields follow */
-} rip_$stats_t;
-
-#if defined(ARCH_M68K)
-    #define RIP_$STATS              (*(rip_$stats_t *)0xE262AC)
-    #define ROUTE_$STD_N_ROUTING_PORTS  (*(int16_t *)0xE26F1A)
-    #define ROUTE_$N_ROUTING_PORTS      (*(int16_t *)0xE26F1C)
-
-    /* Recent changes flags (signed bytes - negative means changes pending) */
-    #define RIP_$STD_RECENT_CHANGES     (*(int8_t *)0xE26EDE)
-    #define RIP_$RECENT_CHANGES         (*(int8_t *)0xE26EE0)
-
-    /* Response timer eventcount (embedded in code at 0xE68E26) */
-    #define RIP_$RESPONSE_TIMER         (*(ec_$eventcount_t *)0xE68E26)
-#else
-    extern rip_$stats_t RIP_$STATS;
-    extern int16_t ROUTE_$STD_N_ROUTING_PORTS;
-    extern int16_t ROUTE_$N_ROUTING_PORTS;
-    extern int8_t RIP_$STD_RECENT_CHANGES;
-    extern int8_t RIP_$RECENT_CHANGES;
-    extern ec_$eventcount_t RIP_$RESPONSE_TIMER;
-#endif
 
 /*
  * Note: Most external function prototypes come from included headers.
@@ -108,9 +74,10 @@ typedef struct rip_$stats_t {
  */
 
 /*
- * REM_NAME_$REGISTER_SERVER - Called with parameters here but header says void(void)
- * This is likely a different function or the decompilation is incorrect.
- * For now, use void signature from header and skip these calls.
+ * REM_NAME_$REGISTER_SERVER (0xE4A4AE) takes no parameters: the routine only
+ * stamps TIME_$CLOCKH into the name server record and sets the "server
+ * contacted" flag; it never reads its stack arguments.  The callers push
+ * two (ignored) arguments, which is why the decompiler showed parameters.
  */
 
 /*
@@ -749,10 +716,8 @@ uint16_t RIP_$SERVER(void)
         /*
          * Name service registration (Apollo extension)
          *
-         * TODO(source-6sz): The decompiled code called REM_NAME_$REGISTER_SERVER with
-         * parameters, but the header declares it as void(void). This needs
-         * further analysis to determine if there's a different function
-         * or if the signature needs updating.
+         * The original pushes two arguments to REM_NAME_$REGISTER_SERVER,
+         * but the routine (0xE4A4AE) ignores them; see name/name.h.
          */
         if (is_std < 0) {
             /* Non-standard - check for specific socket type */

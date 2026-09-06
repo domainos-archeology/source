@@ -10,7 +10,7 @@
  * Original address: 0x00e148ca
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 int16_t PROC1_$TST_LOCK(uint16_t lock_id)
 {

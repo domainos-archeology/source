@@ -7,7 +7,7 @@
  * Original address: 0x00e0cb20
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 void MMAP_$FREE_LIST(uint32_t vpn_head)
 {

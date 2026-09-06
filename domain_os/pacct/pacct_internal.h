@@ -9,7 +9,7 @@
 #ifndef PACCT_INTERNAL_H
 #define PACCT_INTERNAL_H
 
-#include "pacct.h"
+#include "pacct/pacct.h"
 #include "uid/uid.h"
 #include "time/time.h"
 #include "cal/cal.h"

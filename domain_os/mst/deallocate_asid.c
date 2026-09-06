@@ -6,7 +6,7 @@
  * calling conventions or future expansion.
  */
 
-#include "mst.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$DEALLOCATE_ASID - Deallocate an Address Space ID

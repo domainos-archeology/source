@@ -7,7 +7,7 @@
  * Original address: 0x00e23d64
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 /* Internal helper: remove mapping with interrupts already disabled
  * (declared in mmu_internal.h) */

@@ -38,15 +38,9 @@
 #include "asknode/asknode_internal.h"
 
 /*
- * Global failure record located at 0x00E24BF4
- * This is a 16-byte structure tracking network failures.
+ * Global failure record located at 0x00E24BF4 (NETWORK_$FAILURE_REC, 16
+ * bytes) and NETWORK_$ACTIVITY_FLAG (0x00E24C42) come from network/network.h.
  */
-extern uint32_t NETWORK_$FAILURE_REC;       /* 0x00E24BF4 */
-extern uint8_t  NETWORK_$FAILURE_REC_BYTE2; /* 0x00E24BF6 - byte within record */
-extern uint32_t NETWORK_$FAILURE_REC_W1;    /* 0x00E24BF8 */
-extern uint32_t NETWORK_$FAILURE_REC_W2;    /* 0x00E24BFC */
-extern uint32_t NETWORK_$FAILURE_REC_W3;    /* 0x00E24C00 */
-extern int8_t   NETWORK_$ACTIVITY_FLAG;     /* 0x00E24C42 */
 
 void ASKNODE_$READ_FAILURE_REC(uint32_t *record)
 {
@@ -55,15 +49,17 @@ void ASKNODE_$READ_FAILURE_REC(uint32_t *record)
      * clear the second byte of the failure record.
      */
     if (NETWORK_$ACTIVITY_FLAG < 0) {
-        NETWORK_$FAILURE_REC_BYTE2 = 0;
+        NETWORK_$FAILURE_REC.flag = 0;      /* clr.b (0x00e24bf6).l */
     }
 
     /*
      * Copy the 16-byte failure record to the output buffer.
      * The record consists of 4 32-bit words.
      */
-    record[0] = NETWORK_$FAILURE_REC;
-    record[1] = NETWORK_$FAILURE_REC_W1;
-    record[2] = NETWORK_$FAILURE_REC_W2;
-    record[3] = NETWORK_$FAILURE_REC_W3;
+    record[0] = ((uint32_t)NETWORK_$FAILURE_REC.word0 << 16) |
+                ((uint32_t)NETWORK_$FAILURE_REC.flag << 8) |
+                (uint32_t)NETWORK_$FAILURE_REC.byte3;
+    record[1] = NETWORK_$FAILURE_REC.error_info;
+    record[2] = NETWORK_$FAILURE_REC.timestamp;
+    record[3] = NETWORK_$FAILURE_REC.node_id;
 }

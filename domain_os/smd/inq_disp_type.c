@@ -12,7 +12,7 @@
  *   00e6de2a    movea.l (0x8,A6),A2               ; A2 = param unit
  *   00e6de2e    subq.l #0x2,SP
  *   00e6de30    move.w (A2),-(SP)                  ; push *unit
- *   00e6de32    bsr.w 0x00e6d700                   ; FUN_00e6d700 - validate unit
+ *   00e6de32    bsr.w 0x00e6d700                   ; smd_$validate_unit - validate unit
  *   00e6de36    addq.w #0x4,SP
  *   00e6de38    tst.b D0b
  *   00e6de3a    bpl.b 0x00e6de4e                   ; if invalid, return 0
@@ -70,12 +70,12 @@ uint16_t SMD_$INQ_DISP_TYPE(uint16_t *unit)
  * convention where the validation function sets D0 negative on success.
  * This is likely because it returns -1 (0xFF) for true in Domain/OS style.
  *
- * Original address: 0x00E6D700 (FUN_00e6d700)
+ * Original address: 0x00E6D700 (smd_$validate_unit)
  */
 static int8_t smd_validate_unit(uint16_t unit)
 {
     /*
-     * TODO(source-h4x): Full implementation requires understanding FUN_00e6d700.
+     * TODO(source-h4x): Full implementation requires understanding smd_$validate_unit (0x00e6d700).
      * For now, assume units 0-3 are potentially valid.
      * The original likely checks:
      * 1. Unit < max_units

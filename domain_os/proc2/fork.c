@@ -26,27 +26,12 @@
 #include "misc/misc.h"
 #include "time/time.h"
 
-/* FIM globals for user FIM address */
-#if defined(ARCH_M68K)
-    #define FIM_USER_FIM_ADDR_TABLE ((int32_t*)0xE212A8)
-    #define FIM_QUIT_INH_TABLE      ((uint8_t*)0xE2248A)
-#else
-    extern int32_t *fim_user_fim_addr_table;
-    extern uint8_t *fim_quit_inh_table;
-    #define FIM_USER_FIM_ADDR_TABLE fim_user_fim_addr_table
-    #define FIM_QUIT_INH_TABLE      fim_quit_inh_table
-#endif
-
-/* Eventcount arrays */
-#if defined(ARCH_M68K)
-    #define EC1_FORK_ARRAY_BASE     0xE2B978
-#else
-    extern void *ec1_fork_array;
-    #define EC1_FORK_ARRAY_BASE     ((uintptr_t)ec1_fork_array)
-#endif
-
-#define PROC_FORK_EC(idx)       ((void*)(EC1_FORK_ARRAY_BASE + ((idx) - 1) * 0x18))
-#define PROC_CR_REC_EC(idx)     ((void*)(EC1_FORK_ARRAY_BASE + ((idx) - 1) * 0x18 + 0x0C))
+/*
+ * Globals used here (declared in subsystem headers):
+ *   FIM_$USER_FIM_ADDR (0xE212A8), FIM_$QUIT_INH (0xE2248A)   - fim/fim.h
+ *   PROC2_$EC / PROC_FORK_EC / PROC_CR_REC_EC (0xE2B978),
+ *   PROC2_UID table (0xE7BE94), proc2_system_uid (0xE7BE8C)  - proc2 headers
+ */
 
 /* Startup context structure placed on new process stack */
 typedef struct startup_context_t {
@@ -265,10 +250,10 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
     {
         int16_t parent_asid_idx = PROC1_$AS_ID << 2;
         int16_t child_asid_idx = new_entry->asid << 2;
-        int32_t fim_addr = FIM_USER_FIM_ADDR_TABLE[parent_asid_idx / 4];
-        FIM_USER_FIM_ADDR_TABLE[child_asid_idx / 4] = fim_addr;
-        if (fim_addr != 0) {
-            FIM_QUIT_INH_TABLE[new_entry->asid] = 0;
+        void *fim_addr = FIM_$USER_FIM_ADDR[parent_asid_idx / 4];
+        FIM_$USER_FIM_ADDR[child_asid_idx / 4] = fim_addr;
+        if (fim_addr != NULL) {
+            FIM_$QUIT_INH[new_entry->asid] = 0;
         }
     }
 
@@ -421,19 +406,13 @@ cleanup_asid:
     if ((new_entry->flags & PROC2_FLAG_ALT_ASID) != 0) {
         /* vfork - free alternate ASID, restore parent UID */
         MST_$FREE_ASID(new_entry->asid_alt, &temp_status);
-        {
-            uintptr_t uid_addr = (uintptr_t)0xE7BE94 + (new_entry->asid << 3);
-            *(uint32_t*)uid_addr = parent_entry->uid.high;
-            *(uint32_t*)(uid_addr + 4) = parent_entry->uid.low;
-        }
+        PROC2_UID[new_entry->asid].high = parent_entry->uid.high;
+        PROC2_UID[new_entry->asid].low = parent_entry->uid.low;
     } else {
         /* Normal fork - free ASID, restore system UID */
         MST_$FREE_ASID(new_entry->asid, &temp_status);
-        {
-            uintptr_t uid_addr = (uintptr_t)0xE7BE94 + (new_entry->asid << 3);
-            *(uint32_t*)uid_addr = PROC2_UID.high;
-            *(uint32_t*)(uid_addr + 4) = PROC2_UID.low;
-        }
+        PROC2_UID[new_entry->asid].high = proc2_system_uid.high;
+        PROC2_UID[new_entry->asid].low = proc2_system_uid.low;
     }
 
     /* Call cleanup handlers if any */
@@ -462,13 +441,13 @@ cleanup_entry:
     new_entry->next_index = P2_FREE_LIST_HEAD;
     P2_FREE_LIST_HEAD = new_idx;
 
-    /* Clear UID and bound flag */
-    *(uint32_t*)((char*)new_entry + 0x08) = UID_$NIL.high;
-    *(uint32_t*)((char*)new_entry + 0x0C) = UID_$NIL.low;
+    /* Clear parent UID and bound flag */
+    new_entry->parent_uid.high = UID_$NIL.high;
+    new_entry->parent_uid.low = UID_$NIL.low;
     new_entry->flags &= ~0x01;
 
-    /* Set UID from global */
-    new_entry->uid = PROC2_UID;
+    /* Set UID from global system UID (DAT_00e7be8c) */
+    new_entry->uid = proc2_system_uid;
 
     ML_$UNLOCK(PROC2_LOCK_ID);
     *status_ret = status;

@@ -1,4 +1,16 @@
-#include "cal.h"
+/*
+ * cal/test/test_get_info.c - Unit tests for CAL_$GET_INFO
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "../cal_data.c"
+#include "../get_info.c"
+
 
 // CAL_$GET_INFO copies the global timezone record to a caller-provided buffer
 
@@ -108,4 +120,15 @@ void test_get_info_special_chars(void) {
     ASSERT_EQ((unsigned char)info.tz_name[1], 0xB2);
     ASSERT_EQ((unsigned char)info.tz_name[2], 0xC3);
     ASSERT_EQ((unsigned char)info.tz_name[3], 0xD4);
+}
+
+int main(void) {
+    printf("CAL_$GET_INFO tests\n");
+    RUN_TEST(get_info_zero_values);
+    RUN_TEST(get_info_est);
+    RUN_TEST(get_info_is_copy);
+    RUN_TEST(get_info_jst);
+    RUN_TEST(get_info_special_chars);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

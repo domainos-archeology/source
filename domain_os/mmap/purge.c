@@ -7,8 +7,7 @@
  * Original address: 0x00e0d11c
  */
 
-#include "mmap.h"
-#include "mmap_internal.h"
+#include "mmap/mmap_internal.h"
 #include "misc/misc.h"
 
 #define PURGE_ALL_MAGIC  0x3FFFFF

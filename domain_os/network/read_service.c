@@ -25,7 +25,7 @@
  * - If not set: returns (0 << 16) | NETWORK_$REMOTE_POOL
  */
 
-#include "network/network.h"
+#include "network/network_internal.h"
 
 void NETWORK_$READ_SERVICE(uint32_t *result_ptr)
 {

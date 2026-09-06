@@ -26,34 +26,13 @@
 #include "network/network.h"
 
 /*
- * =============================================================================
- * Global Data References
- * =============================================================================
+ * Global data references:
+ *   NODE_$ME              - network/network.h
+ *   RIP_$BCAST_CONTROL    - rip/rip.h (30 byte template at 0xE26EC0)
+ *   ROUTE_$PORT_ARRAY     - route/route.h (port entries at 0xE2E0A0)
+ *   RTWIRED_$CALLBACK     - route/route_internal.h (4 zero bytes at 0xE870D8)
+ *   RTWIRED_$SEND_FLAGS   - route/route_internal.h (word at 0xE87D74)
  */
-
-#if defined(ARCH_M68K)
-    /* This node's ID */
-    #define NODE_$ME                (*(uint32_t *)0xE245A4)
-
-    /* RIP broadcast control parameters (30 bytes) */
-    #define RIP_$BCAST_CONTROL      ((void *)0xE26EC0)
-
-    /* Port array base - each entry is 0x5C (92) bytes */
-    #define ROUTE_$PORT_BASE        ((uint8_t *)0xE2E0A0)
-
-    /* Send callback/data pointer (4 bytes of zeros) */
-    #define RTWIRED_$CALLBACK       ((void *)0xE870D8)
-
-    /* Global flags at 0xE87D74 (accessed as word at A5+0xC where A5=0xE87D68) */
-    #define RTWIRED_$SEND_FLAGS     (*(uint16_t *)0xE87D74)
-#else
-    extern uint32_t NODE_$ME;
-    extern uint8_t RIP_$BCAST_CONTROL[30];
-    extern uint8_t *ROUTE_$PORT_BASE;
-    extern uint32_t RTWIRED_$CALLBACK_DATA;
-    #define RTWIRED_$CALLBACK       (&RTWIRED_$CALLBACK_DATA)
-    extern uint16_t RTWIRED_$SEND_FLAGS;
-#endif
 
 /* Port structure offsets */
 #define PORT_ENTRY_SIZE         0x5C    /* 92 bytes per port */
@@ -117,7 +96,7 @@ void RTWIRED_PROC_START(int16_t port_index, uint16_t packet_id,
     uint32_t send_extra;        /* Extra send parameter */
 
     /* Get port entry pointer */
-    port_entry = ROUTE_$PORT_BASE + (port_index * PORT_ENTRY_SIZE);
+    port_entry = (uint8_t *)ROUTE_$PORT_ARRAY + (port_index * PORT_ENTRY_SIZE);
     port_network = *(uint32_t *)(port_entry + PORT_NETWORK_OFF);
 
     /*
@@ -192,7 +171,7 @@ void RTWIRED_PROC_START(int16_t port_index, uint16_t packet_id,
             hdr_va,                 /* hdr_pa */
             hdr_len,                /* hdr_len */
             0,                      /* data_va - no extra data */
-            (uint32_t *)RTWIRED_$CALLBACK,  /* data_len ptr (zeros) */
+            RTWIRED_$CALLBACK,      /* data_len ptr (zeros) */
             0,                      /* protocol */
             RTWIRED_$SEND_FLAGS,    /* flags */
             &send_extra,            /* extra */

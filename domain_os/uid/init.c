@@ -20,7 +20,7 @@
  *   00e3096e    rts
  */
 
-#include "uid.h"
+#include "uid/uid_internal.h"
 #include "network/network.h"
 
 void UID_$INIT(void)

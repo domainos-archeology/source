@@ -39,12 +39,7 @@ uid_t RING_$NETWORK_UID_TEMPLATE = UID_CONST(0x00000700, 0);
  */
 uid_t ring_$network_uid_storage;
 
-/*
- * Route port array base.
- * Located at 0x00E2E0A0 on original platform.
- * Each entry is 0x5C (92) bytes.
- */
-uint8_t ROUTE_$PORT_BASE[RING_MAX_UNITS * 0x5C];
+/* The route port array (0x00E2E0A0) is ROUTE_$PORT_ARRAY in route/route_data.c */
 
 /*
  * Device type constant for ring network controller.
@@ -78,9 +73,7 @@ status_$t Network_hardware_error = 0x00110001;
  */
 
 /*
- * NETWORK_$ACTIVITY_FLAG is defined in network/network_data.c.
- * TODO: ring code documented it at 0x00E24C42 while network_data.c has
- * 0xE24C46 - verify the address in Ghidra (source-activity-flag-addr).
+ * NETWORK_$ACTIVITY_FLAG (0x00E24C42) is defined in network/network_data.c.
  */
 
 /*

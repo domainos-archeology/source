@@ -116,7 +116,8 @@ int8_t FLOP_$BOOT(uint32_t *entry_point, status_$t *status_ret)
     {
         static const char boot_shell_path[] = "/flp/sys/boot_shell";
         int16_t path_len = sizeof(boot_shell_path) - 1;
-        NAME_$RESOLVE(boot_shell_path, &path_len, &boot_shell_uid, status_ret);
+        /* NAME_$RESOLVE only reads the path; its prototype lacks const */
+        NAME_$RESOLVE((char *)boot_shell_path, &path_len, &boot_shell_uid, status_ret);
     }
     if (*status_ret != status_$ok) {
         return 0;

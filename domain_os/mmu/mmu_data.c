@@ -20,7 +20,7 @@
  *   MMU Control Registers:          0xFFB400-0xFFB409
  */
 
-#include "mmu/mmu.h"
+#include "mmu/mmu_internal.h"
 
 #if !defined(ARCH_M68K)
 

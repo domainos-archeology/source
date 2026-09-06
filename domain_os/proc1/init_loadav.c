@@ -10,9 +10,6 @@
 #include "time/time.h"
 #include "cal/cal.h"
 
-/* Forward declaration for callback */
-extern void PROC1_$LOADAV_CALLBACK(void *arg);
-
 /*
  * Callback interval: 0x0013:12d0 = 5 seconds in clock ticks
  * (assuming 250 ticks per second: 5 * 250 * 256 = 0x13:12d0 in 48-bit format)

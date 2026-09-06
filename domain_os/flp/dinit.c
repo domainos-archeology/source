@@ -12,6 +12,7 @@
  */
 
 #include "flp/flp_internal.h"
+#include "mmu/mmu.h"
 
 /*
  * FLP_$DINIT - Initialize floppy device

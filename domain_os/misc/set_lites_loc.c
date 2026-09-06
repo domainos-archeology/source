@@ -26,23 +26,10 @@
  *   00e0c510    rts
  */
 
-#include "misc/misc.h"
+#include "misc/misc_internal.h"
 
-/*
- * Global variable for the lights display location.
- * Address 0xe2327c in the original binary.
- */
-extern int32_t LITES_LOC;
-
-/*
- * START_MEM_LITES - Start the memory lights update process
- *
- * Creates a process that periodically updates the status lights
- * to reflect memory and system activity.
- *
- * Original address: 0x00e0c43c
- */
-extern void START_MEM_LITES(void);
+/* LITES_LOC (0x00E2327C) and START_MEM_LITES (0x00E0C43C) are declared in
+ * misc/misc_internal.h */
 
 /*
  * SET_LITES_LOC - Set the status lights location

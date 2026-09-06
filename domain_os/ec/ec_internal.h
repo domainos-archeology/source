@@ -8,7 +8,7 @@
 #ifndef EC_INTERNAL_H
 #define EC_INTERNAL_H
 
-#include "ec.h"
+#include "ec/ec.h"
 
 /*
  * ============================================================================

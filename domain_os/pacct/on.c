@@ -25,7 +25,7 @@
  *   rts
  */
 
-#include "pacct_internal.h"
+#include "pacct/pacct_internal.h"
 
 boolean PACCT_$ON(void)
 {

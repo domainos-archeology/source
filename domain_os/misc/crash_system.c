@@ -16,8 +16,10 @@
  * 6. Either returns to PROM or enters crash debugger
  */
 
+#include "misc/misc_internal.h"
 #include "base/base.h"
 #include "kbd/kbd.h"
+#include "mmu/mmu.h"
 #include "proc1/proc1.h"
 #include "prom/prom.h"
 #include "time/time.h"
@@ -54,8 +56,7 @@ uint32_t CRASH_USP;                         /* User stack pointer */
 #define ASCII_LF    0x0A
 #define ASCII_PERCENT 0x25
 
-/* External MMU function */
-extern void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint16_t flags);
+/* MMU_$INSTALL is declared in mmu/mmu.h */
 
 /* Internal helper functions for crash output */
 static void remap_display(void);

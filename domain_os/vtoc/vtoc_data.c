@@ -11,23 +11,21 @@
  * VTOC data area
  *
  * This is the main storage for per-volume VTOC information.
- * Base address: 0xE784D0
+ * Base address: 0xE784D0 (Ghidra label OS_DISK_DATA)
  *
- * The structure contains:
+ * The structure contains (see vtoc_$data_t in vtoc_internal.h):
  *   - Per-volume data at offsets from base
+ *   - Cache hit / lookup counters at base + 0x268 / 0x26C
+ *   - Per-volume write-protect flags at base + 0x270 (1-based)
  *   - Mount status array at base + 0x277
  *   - Format flag array at base + 0x27F
- */
-vtoc_$data_t vtoc_$data;
-
-/*
- * Disk data base reference
- * Address: 0xE784D0
+ *   - Dirty flag at base + 0x286 (initially 0xFF in the image)
  *
- * This is the same as vtoc_$data but used as a byte array for
- * offset calculations.
+ * OS_DISK_DATA (vtoc_internal.h) is this same object viewed as bytes.
  */
-uint8_t OS_DISK_DATA[0x300];
+vtoc_$data_t vtoc_$data = {
+    .dirty = (int8_t)0xFF,
+};
 
 /*
  * UID constants for VTOC block types
@@ -60,7 +58,7 @@ uid_t PPO_$NIL_ORG_UID = UID_CONST(0x00800080, 0);
  * Base address: 0xEB2C00
  * 101 buckets, 4 entries per bucket (0x40 bytes per bucket)
  *
- * Used by vtoc_$uid_cache_lookup (FUN_00e38324) to cache recent
+ * Used by vtoc_$uid_cache_lookup (0x00e38324) to cache recent
  * UID-to-block mappings and avoid disk lookups.
  */
 vtoc_$uid_cache_bucket_t vtoc_$uid_cache[VTOC_UID_CACHE_BUCKETS];
@@ -74,14 +72,8 @@ vtoc_$uid_cache_bucket_t vtoc_$uid_cache[VTOC_UID_CACHE_BUCKETS];
 uint32_t vtoc_$free_list[64];
 
 /*
- * VTOC_CACH_LOOKUPS - Cache lookup counter and per-volume flags
- *
- * Address: 0xE78736
- *
- * Usage:
- *   - Low 24 bits (bytes 0-2): lookup counter, incremented by vtoc_$lookup
- *   - Byte 3 onwards: per-volume cache enable flags (indexed by vol_idx + 3)
- *     Accessed as ((char *)&VTOC_CACH_LOOKUPS)[vol_idx + 3]
- *     Value < 0 (0xFF) means caching enabled for that volume
+ * VTOC_CACH_LOOKUPS (0xE7873C) and VTOC_CACH_HITS (0xE78738) live inside
+ * vtoc_$data (fields cach_lookups / cach_hits).  The per-volume
+ * write-protect flags that the original code addressed as
+ * (&VTOC_CACH_LOOKUPS)[vol_idx + 3] are vtoc_$data.cach_wp_flag[vol_idx - 1].
  */
-uint32_t VTOC_CACH_LOOKUPS = 0;

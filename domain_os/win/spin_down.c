@@ -7,7 +7,7 @@
  * @return          0x14 on success, high word of status on error
  */
 
-#include "win.h"
+#include "win/win_internal.h"
 
 uint32_t WIN_$SPIN_DOWN(uint16_t *unit_ptr)
 {

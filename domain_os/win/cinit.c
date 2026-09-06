@@ -9,8 +9,8 @@
  * @return            status_$ok on success, error code on failure
  */
 
+#include "win/win_internal.h"
 #include "prom/prom.h"
-#include "win.h"
 
 /* Controller type identifier */
 static uint16_t WIN_TYPE = 0;  /* Set by io_$probe */

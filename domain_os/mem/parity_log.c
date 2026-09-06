@@ -7,7 +7,7 @@
  * Size: 182 bytes
  */
 
-#include "mem/mem.h"
+#include "mem/mem_internal.h"
 #include "parity/parity_internal.h"
 
 /*

@@ -15,12 +15,8 @@
 
 #include "proc2/proc2_internal.h"
 
-/* System process UID at table base */
-#if defined(ARCH_M68K)
-#define PROC2_SYSTEM_UID    (*(uid_t*)0xEA551C)
-#else
-#define PROC2_SYSTEM_UID    proc2_system_uid
-#endif
+/* The first UID returned is that of process table entry 1 (the system
+ * process): movea.l #0xea551c,A0 = P2_INFO_ENTRY(1)->uid */
 
 void PROC2_$LIST(uid_t *uid_list, uint16_t *max_ull, uint16_t *ull)
 {
@@ -48,8 +44,8 @@ void PROC2_$LIST(uid_t *uid_list, uint16_t *max_ull, uint16_t *ull)
 
         /* First entry is always the system process UID */
         if (max_count != 0) {
-            uid_list[0].high = PROC2_SYSTEM_UID.high;
-            uid_list[0].low = PROC2_SYSTEM_UID.low;
+            uid_list[0].high = P2_INFO_ENTRY(1)->uid.high;
+            uid_list[0].low = P2_INFO_ENTRY(1)->uid.low;
         }
 
         out_ptr = &uid_list[1];

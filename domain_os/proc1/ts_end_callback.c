@@ -9,7 +9,7 @@
  *   timer_info - Pointer to timer callback info structure
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 /*
  * Timer callback info structure

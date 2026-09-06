@@ -17,7 +17,7 @@
  * Original address: 0x00e1476e
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 void PROC1_$RESUME(uint16_t pid, status_$t *status_p)
 {

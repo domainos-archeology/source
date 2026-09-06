@@ -31,7 +31,7 @@
  *   ERROR_$PRINT("File not found: %a%$", &filename_len, filename);
  */
 
-#include "vfmt/vfmt.h"
+#include "vfmt/vfmt_internal.h"
 #include <stdarg.h>
 
 /*

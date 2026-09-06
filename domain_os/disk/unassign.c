@@ -10,12 +10,7 @@
 #include "disk/disk_internal.h"
 #include "network/network.h"
 
-/* Mount state and process at offset 0x90 and 0x92 in volume entry */
-#define DISK_MOUNT_STATE_OFFSET  0x90
-#define DISK_MOUNT_PROC_OFFSET   0x92
-
-/* Volume entry table base */
-#define DISK_VOLUME_BASE  ((uint8_t *)0x00e7a1cc)
+/* DISK_VOLUME_BASE and the mount state/proc offsets come from disk_internal.h */
 
 /* Valid volume index mask (volumes 1-10) */
 #define VALID_VOL_MASK  0x7fe

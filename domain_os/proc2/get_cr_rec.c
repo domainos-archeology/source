@@ -38,9 +38,9 @@ void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_t *parent_uid, uid_t *proc_uid,
     ec1_addr = EC2_$GET_EC1_ADDR(&ec2, &status);
 
     /* Calculate process index from EC1 address:
-     * index = ((ec1_addr - EC1_ARRAY_BASE) / EC1_ENTRY_SIZE) + 1
+     * index = ((ec1_addr - PROC2_$EC) / EC1_ENTRY_SIZE) + 1   (0xE2B978)
      */
-    proc_idx = (int16_t)(((uintptr_t)ec1_addr - (uintptr_t)EC1_ARRAY_BASE) / EC1_ENTRY_SIZE) + 1;
+    proc_idx = (int16_t)(((uintptr_t)ec1_addr - (uintptr_t)PROC2_$EC) / EC1_ENTRY_SIZE) + 1;
 
     if (status != status_$ok) {
         *status_ret = status_$proc2_uid_not_found;
@@ -56,10 +56,9 @@ void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_t *parent_uid, uid_t *proc_uid,
         return;
     }
 
-    /* Return parent UID from offset 0x40 relative to entry (offset -0xDC from table pointer) */
-    /* This is the parent_uid field at offset 0x08 in entry */
-    parent_uid->high = *(uint32_t *)((char *)entry + 0x08);
-    parent_uid->low = *(uint32_t *)((char *)entry + 0x0C);
+    /* Return parent UID (entry offset 0x08; 0xEA5440 + index * 0xE4) */
+    parent_uid->high = entry->parent_uid.high;
+    parent_uid->low = entry->parent_uid.low;
 
     /* Return process UID */
     proc_uid->high = entry->uid.high;

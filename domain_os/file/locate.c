@@ -37,7 +37,6 @@
 void FILE_$LOCATE(uid_t *file_uid, uint32_t *location_out, status_$t *status_ret)
 {
     status_$t status;
-    uint8_t *flags_ptr;
 
     /* Volume UID output from AST_$GET_LOCATION */
     uint32_t vol_uid_out;
@@ -65,8 +64,8 @@ void FILE_$LOCATE(uid_t *file_uid, uint32_t *location_out, status_$t *status_ret
      *
      * The flags byte is at offset 5 within the UID
      */
-    flags_ptr = (uint8_t *)&query_buf.uid + 5;
-    *flags_ptr &= ~0x40;  /* Clear bit 6 */
+    /* Byte 5 of the big-endian UID is bits 16-23 of uid.low */
+    query_buf.uid.low &= ~((uint32_t)0x40 << 16);  /* Clear bit 6 of byte 5 */
 
     /* Call AST_$GET_LOCATION to get the file's location */
     AST_$GET_LOCATION((uint32_t *)&query_buf, 0, 0, &vol_uid_out, &status);

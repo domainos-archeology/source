@@ -4,7 +4,7 @@
  * Reverse engineered from Domain/OS at address 0x00e11fa8
  */
 
-#include "pas/pas.h"
+#include "pas/pas_internal.h"
 
 /*
  * PAS_$SET_BUILD

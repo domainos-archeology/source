@@ -35,8 +35,7 @@
 #include "misc/misc.h"
 #include "netlog/netlog.h"
 
-/* Anonymous UID - used for pages with no owning object */
-extern uid_t ANON_$UID;
+/* ANON_$UID (anon/anon.h) is used for pages with no owning object */
 
 /* AOTE table - array of pointers to AOTE structures, indexed by segment * 0x14 */
 #if defined(ARCH_M68K)
@@ -44,8 +43,7 @@ extern uid_t ANON_$UID;
     /* Segment map base for indexed access */
     #define SEGMAP_INDEXED_BASE  0xED4F80
 #else
-    extern uint8_t *aote_table_ptr_base;
-    extern uint8_t *segmap_indexed_base;
+    /* aote_table_ptr_base, segmap_indexed_base: pmap_internal.h */
     #define AOTE_TABLE_PTR_BASE  ((uintptr_t)aote_table_ptr_base)
     #define SEGMAP_INDEXED_BASE  ((uintptr_t)segmap_indexed_base)
 #endif
@@ -54,7 +52,7 @@ extern uid_t ANON_$UID;
 #if defined(ARCH_M68K)
     #define MMAPE_RAW_BASE  0xEB2800
 #else
-    extern uint8_t *mmape_raw_base;
+    /* mmape_raw_base: pmap_internal.h */
     #define MMAPE_RAW_BASE  ((uintptr_t)mmape_raw_base)
 #endif
 

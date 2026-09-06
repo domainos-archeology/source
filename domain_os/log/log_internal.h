@@ -12,24 +12,7 @@
 #include "ml/ml.h"
 #include "time/time.h"
 #include "vfmt/vfmt.h"
-
-/* =============================================================================
- * Log Global State Structure
- *
- * Located at address 0x00e2b280 in the original binary.
- * This structure contains all global state for the logging subsystem.
- * =============================================================================
- */
-typedef struct log_state_t {
-    uid_t       logfile_uid;        /* 0x00: UID of the log file */
-    int16_t    *current_entry_ptr;  /* 0x08: Pointer to current entry in buffer */
-    uint16_t    spin_lock;          /* 0x0c: Spin lock for concurrent access */
-    uint16_t    pad_0e;             /* 0x0e: Padding */
-    uint32_t    wired_handle;       /* 0x10: Handle from MST_$WIRE */
-    int16_t    *logfile_ptr;        /* 0x14: Pointer to mapped log buffer */
-    int8_t      dirty_flag;         /* 0x18: Log has been modified */
-    int8_t      pad_19[3];          /* 0x19: Padding to word boundary */
-} log_state_t;
+#include "wp/wp.h"
 
 /*
  * Log buffer header structure
@@ -84,12 +67,33 @@ typedef struct early_log_extended_t {
  * =============================================================================
  */
 
-/* Global log state - address 0x00e2b280 */
-extern log_state_t LOG_$STATE;
+/* LOG_$STATE, LOG_$LOGFILE_PTR are declared in log/log.h (pmap pokes
+ * LOG_$LOGFILE_PTR directly) */
 
-/* Convenience macros for accessing state fields */
+/* Convenience macro for accessing the log file UID */
 #define LOG_$LOGFILE_UID        (LOG_$STATE.logfile_uid)
-#define LOG_$LOGFILE_PTR        (LOG_$STATE.logfile_ptr)
+
+/* Early log buffers - fixed addresses in the original for crash recovery */
+extern early_log_t          EARLY_LOG;          /* 0x00e00000 (DAT_00e00000) */
+extern early_log_extended_t EARLY_LOG_EXTENDED; /* 0x00e0000c (DAT_00e0000c) */
+
+/*
+ * Zero-length data sentinel passed to LOG_$ADD for the init entry and
+ * to ERROR_$PRINT by log_$check_op_status.  In the original this is the
+ * byte at 0x00e2fffc (DAT_00e2fffc), just after the vfmt strings.
+ */
+extern uint32_t DAT_00e2fffc;
+
+/*
+ * log_$last_status - status shared with log_$check_op_status
+ *
+ * The original log_$check_op_status was a nested Pascal procedure that
+ * read the status variable from LOG_$INIT's frame.  The flattened C
+ * version reads this global instead; callers must store their status
+ * here before calling log_$check_op_status.
+ * TODO: pass the status explicitly once all callers are converted.
+ */
+extern status_$t log_$last_status;
 
 /* =============================================================================
  * Internal Functions
@@ -135,10 +139,7 @@ void log_$read_internal(void *buffer, uint16_t offset, uint16_t max_len, uint16_
  * =============================================================================
  */
 
-/* From wp/ subsystem - not in wp.h yet */
-extern void WP_$UNWIRE(uint32_t handle);
-
-/* ERROR_$PRINT declared in vfmt/vfmt.h */
+/* WP_$UNWIRE declared in wp/wp.h; ERROR_$PRINT declared in vfmt/vfmt.h */
 
 /* Path to system error log file */
 #define LOG_FILE_PATH   "//node_data/system_logs/sys_error"

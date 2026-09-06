@@ -18,7 +18,7 @@
  * Size: 94 bytes
  */
 
-#include "pacct_internal.h"
+#include "pacct/pacct_internal.h"
 
 comp_t pacct_$compress(uint32_t value)
 {

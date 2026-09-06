@@ -11,7 +11,7 @@
  *   XPD_$UNREGISTER_DEBUGGER:   0x00e74f7c
  */
 
-#include "xpd/xpd.h"
+#include "xpd/xpd_internal.h"
 
 /*
  * Debugger table layout:
@@ -128,7 +128,7 @@ void XPD_$UNREGISTER_DEBUGGER(int16_t asid, status_$t *status_ret)
     int16_t j;
     int16_t debugger_idx;
     int32_t addr;
-    uint8_t *target_state;
+    uint16_t *target_state;
     status_$t status;
     uid_t *proc_uid;
 
@@ -144,19 +144,19 @@ void XPD_$UNREGISTER_DEBUGGER(int16_t asid, status_$t *status_ret)
 
             /* Now iterate through all 57 target processes and release them */
             for (j = 1; j <= 57; j++) {
-                target_state = (uint8_t *)(XPD_DATA_BASE + 0x14 + (j - 1) * 0x14 + TARGET_STATE_OFFSET);
+                target_state = (uint16_t *)(XPD_DATA_BASE + 0x14 + (j - 1) * 0x14 + TARGET_STATE_OFFSET);
 
                 /* Check if this target is being debugged by us */
-                debugger_idx = ((*target_state) & 0x0E) >> 1;
+                debugger_idx = ((*target_state >> 8) & 0x0E) >> 1;  /* byte 0 (big-endian high byte) */
 
                 if (debugger_idx == i) {
                     /* Clear the debugger bits (bits 1-3) */
-                    *target_state = (*target_state) & 0xF1;
+                    *target_state &= 0xF1FF;  /* andi.b #0xf1 on the high byte */
 
                     /* If target is suspended by debugger, continue it */
-                    if ((*(uint16_t *)target_state & 0x1E0) != 0) {
+                    if ((*target_state & 0x1E0) != 0) {
                         proc_uid = (uid_t *)(PROC2_UID_BASE + j * 8);
-                        XPD_$CONTINUE_PROC(proc_uid, 0, &status);
+                        XPD_$CONTINUE_PROC(proc_uid, (xpd_$response_t *)&xpd_continue_response, &status);
                     }
                 }
             }
@@ -193,7 +193,7 @@ void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status
     int16_t debugger_idx;
     int32_t target_offset;
     status_$t status;
-    uint8_t *target_state;
+    uint16_t *target_state;
 
     /* Copy UIDs to locals */
     local_debugger = *debugger_uid;
@@ -208,7 +208,7 @@ void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status
         }
 
         /* Target is NIL, debugger is set - register/unregister as debugger */
-        debugger_asid = PROC2_$FIND_ASID(&local_debugger, NULL, status_ret);
+        debugger_asid = PROC2_$FIND_ASID(&local_debugger, (int8_t *)&xpd_find_asid_flag, status_ret);
         if (*status_ret != status_$ok) {
             return;
         }
@@ -219,7 +219,7 @@ void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status
     }
 
     /* Target is not NIL - find its ASID */
-    target_asid = PROC2_$FIND_ASID(&local_target, NULL, &status);
+    target_asid = PROC2_$FIND_ASID(&local_target, (int8_t *)&xpd_find_asid_flag, &status);
     if (status != status_$ok) {
         *status_ret = status;
         return;
@@ -231,17 +231,17 @@ void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status
 
         ML_$LOCK(XPD_LOCK_ID);
 
-        target_state = (uint8_t *)(XPD_DATA_BASE + 0x10 + target_offset);
+        target_state = (uint16_t *)(XPD_DATA_BASE + 0x10 + target_offset);
 
         /* Check if target has a debugger */
-        if (((*target_state) & 0x0E) != 0) {
+        if (((*target_state >> 8) & 0x0E) != 0) {  /* byte 0 (big-endian high byte) */
             /* Clear debugger bits */
-            *target_state = (*target_state) & 0xF1;
+            *target_state &= 0xF1FF;  /* andi.b #0xf1 on the high byte */
 
             /* If target is suspended, continue it */
-            if ((*(uint16_t *)target_state & 0x1E0) != 0) {
+            if ((*target_state & 0x1E0) != 0) {
                 ML_$UNLOCK(XPD_LOCK_ID);
-                XPD_$CONTINUE_PROC(&local_target, 0, status_ret);
+                XPD_$CONTINUE_PROC(&local_target, (xpd_$response_t *)&xpd_continue_response, status_ret);
                 goto done_ok;
             }
         }
@@ -253,7 +253,7 @@ void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status
     /* Both debugger and target are specified */
 
     /* Find debugger's ASID */
-    debugger_asid = PROC2_$FIND_ASID(&local_debugger, NULL, &status);
+    debugger_asid = PROC2_$FIND_ASID(&local_debugger, (int8_t *)&xpd_find_asid_flag, &status);
     if (status != status_$ok) {
         *status_ret = status_$xpd_debugger_not_found;
         return;
@@ -261,7 +261,7 @@ void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status
 
     /* Check if self-debugging (debugger == target) */
     if (local_debugger.high == local_target.high && local_debugger.low == local_target.low) {
-        /* Self-debug - special handling via FUN_00e74f7c */
+        /* Self-debug - special handling via XPD_$UNREGISTER_DEBUGGER (0x00e74f7c) */
         XPD_$UNREGISTER_DEBUGGER(debugger_asid, status_ret);
         return;
     }
@@ -276,12 +276,12 @@ void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status
     ML_$LOCK(XPD_LOCK_ID);
 
     target_offset = target_asid * 0x14;
-    target_state = (uint8_t *)(XPD_DATA_BASE + 0x10 + target_offset);
+    target_state = (uint16_t *)(XPD_DATA_BASE + 0x10 + target_offset);
 
     /* Check if target already has a different debugger */
-    if (((*target_state) & 0x0E) != 0) {
+    if (((*target_state >> 8) & 0x0E) != 0) {  /* byte 0 (big-endian high byte) */
         /* Clear old debugger */
-        *target_state = (*target_state) & 0xF1;
+        *target_state &= 0xF1FF;  /* andi.b #0xf1 on the high byte */
 
         /* Set new debugger index */
         *target_state = (debugger_idx << 1) | (*target_state);
@@ -292,7 +292,7 @@ void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status
     }
 
     /* Set debugger index on target (bits 1-3) */
-    *target_state = (*target_state) & 0xF1;
+    *target_state &= 0xF1FF;  /* andi.b #0xf1 on the high byte */
     *target_state = (debugger_idx << 1) | (*target_state);
 
     ML_$UNLOCK(XPD_LOCK_ID);

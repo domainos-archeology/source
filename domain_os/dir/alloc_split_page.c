@@ -336,7 +336,7 @@ done_seg_scan:
     ctx->page_count = base_count;
 
     /* Sort split pages and call AST_$PURIFY to flush them.
-     * Original: bsr FUN_00e4ea9c at 0x00E4EE98 */
+     * Original: bsr dir_$purify_split_pages (0x00e4ea9c) at 0x00E4EE98 */
     dir_$purify_split_pages(ctx, status_ret);
 
     if (*status_ret == status_$ok) {

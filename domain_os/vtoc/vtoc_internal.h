@@ -22,6 +22,9 @@
 #include "uid/uid.h"
 #include "time/time.h"
 #include "os/os.h"
+#include "route/route.h"
+#include "network/network.h"
+#include "netlog/netlog.h"
 
 /*
  * Lock ID for disk operations
@@ -209,20 +212,43 @@ typedef struct vtoc_$volume_t {
 /*
  * VTOC global data structure
  *
- * Base address: 0xE784D0
- * Mount status at: base + 0x277 + vol_idx
- * Format flag at: base + 0x27f + vol_idx
+ * Base address: 0xE784D0 (Ghidra label OS_DISK_DATA; the VTOC code loads it
+ * into A5).  Volume indices are 1-based (1..7).
+ *
+ *   base + vol_idx*100 - 0x54 : per-volume VTOC configuration (100 bytes,
+ *                               copied from label block offset 0x4C)
+ *   base + vol_idx*2 - 2      : per-volume word stored by VTOC_$MOUNT
+ *   base + 0x268              : VTOC_CACH_HITS    (0xE78738)
+ *   base + 0x26C              : VTOC_CACH_LOOKUPS (0xE7873C)
+ *   base + 0x26F + vol_idx    : per-volume write-protect flag (0xE7873F + vol_idx),
+ *                               i.e. a 1-based array starting at 0xE78740
+ *   base + 0x277 + vol_idx    : mount status (DAT_00e78747)
+ *   base + 0x27F + vol_idx    : format flag (DAT_00e7874f)
+ *   base + 0x286              : dirty flag (DAT_00e78756, initially 0xFF)
+ *   base + 0x288              : vtoc_$free_list (0xE78758, 64 longs)
  */
 typedef struct vtoc_$data_t {
-    uint8_t     reserved[0x277];    /* 0x000: Per-volume data array */
+    uint8_t     reserved[0x268];    /* 0x000: Per-volume data array */
+    uint32_t    cach_hits;          /* 0x268: VTOC_CACH_HITS - UID cache hit counter */
+    uint32_t    cach_lookups;       /* 0x26C: VTOC_CACH_LOOKUPS - lookup counter */
+    int8_t      cach_wp_flag[7];    /* 0x270: Write-protect flag per volume, 1-based:
+                                             index with [vol_idx - 1] (0xFF = read-only) */
     int8_t      mounted[8];         /* 0x277: Mount status per volume (0xFF = mounted) */
-    int8_t      format[8];          /* 0x27F: Format flag per volume (bit 7 = new format) */
+    int8_t      format[7];          /* 0x27F: Format flag per volume (bit 7 = new format) */
+    int8_t      dirty;              /* 0x286: DAT_00e78756 - pending disk-proc work flag */
+    uint8_t     pad_287;            /* 0x287 */
 } vtoc_$data_t;
 
 /*
  * External references to VTOC global data
  */
 extern vtoc_$data_t vtoc_$data;     /* Base: 0xE784D0 */
+
+/*
+ * Disk data base address - the same object as vtoc_$data, viewed as a byte
+ * array for the per-volume offset arithmetic (vol_idx * 100 - 0x54 etc.).
+ */
+#define OS_DISK_DATA    ((uint8_t *)&vtoc_$data)    /* 0xE784D0 */
 
 /*
  * UID constants for VTOC block types
@@ -237,11 +263,6 @@ extern uid_t VTOC_BKT_$UID;         /* 0xE173AC: VTOC bucket UID */
 extern uid_t PPO_$NIL_USER_UID;     /* 0xE174EC: Nil user UID */
 extern uid_t RGYC_$G_NIL_UID;       /* 0xE17524: Nil group UID */
 extern uid_t PPO_$NIL_ORG_UID;      /* 0xE17574: Nil org UID */
-
-/*
- * Disk data base address
- */
-extern uint8_t OS_DISK_DATA[];      /* 0xE784D0: Disk data area base */
 
 /*
  * UID cache structure for quick VTOCE lookup
@@ -297,12 +318,15 @@ extern vtoc_$uid_cache_bucket_t vtoc_$uid_cache[VTOC_UID_CACHE_BUCKETS];
  * Internal function prototypes
  */
 
-/* Hash UID to bucket for lookup (FUN_00e383b0) */
+/* Hash UID to bucket for lookup (vtoc_$hash_uid, 0x00e383b0) */
 void vtoc_$hash_uid(uid_t *uid, short vol_idx, uint16_t *bucket_idx,
                     uint32_t *block, status_$t *status);
 
-/* UID cache lookup/update (FUN_00e38324) */
+/* UID cache lookup/update (vtoc_$uid_cache_lookup, 0x00e38324) */
 uint8_t vtoc_$uid_cache_lookup(uid_t *uid, uint16_t *flags, uint32_t *block_info, char update);
+
+/* UID cache insert (uid_cache.c) */
+void vtoc_$uid_cache_insert(uid_t *uid, int16_t vol_idx, uint32_t block_info);
 
 /* File map block allocation/traversal (FUN_00e397d0) */
 uint16_t vtoc_$fm_traverse(uint32_t *block_ptr, uint16_t level, uint32_t hint);

@@ -144,9 +144,27 @@ static inline void msg_$set_depth(msg_$socket_t socket, int16_t depth) {
 }
 
 /*
- * Internal receive implementation
+ * Internal receive implementation (0x00E59548)
  */
-extern void MSG_$$RCV_INTERNAL(int16_t socket, void *params,
-                               status_$t *status_ret);
+void MSG_$$RCV_INTERNAL(int16_t socket, void *params, status_$t *status_ret);
+
+/*
+ * NETWORK_$SET_SERVICE operation codes used by MSG.
+ *
+ * In the original these are PC-relative words in the code segment whose
+ * addresses are pushed as the op_ptr argument:
+ *   MSG_$NET_SERVICE       0x00E592C8 = 0 (NETWORK_OP_OR_BITS)     - MSG_$OPENI,
+ *                                                                    MSG_$ALLOCATE
+ *   MSG_$NET_SERVICE_CLOSE 0x00E594F2 = 1 (NETWORK_OP_AND_NOT_BITS) - MSG_$CLOSEI
+ */
+static const int16_t MSG_$NET_SERVICE = 0;
+static const int16_t MSG_$NET_SERVICE_CLOSE = 1;
+
+/*
+ * MSG_$SAR_TIMEOUT - Longword constant (0xFFFFFFFF) at 0x00E59DD0 whose
+ * address MSG_$SAR passes as the second argument of MSG_$SARI
+ * (pea (0x18,PC) at 0x00E59DB6).
+ */
+static const int32_t MSG_$SAR_TIMEOUT = -1;
 
 #endif /* MSG_MSG_INTERNAL_H */

@@ -11,7 +11,7 @@
  * Original address: 0x00e4293c
  */
 
-#include "ec_internal.h"
+#include "ec/ec_internal.h"
 #include "ml/ml.h"
 
 #define MAX_REGISTERED_EC1  0x100

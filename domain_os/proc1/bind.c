@@ -24,7 +24,12 @@
  * Initial CPU time value (8 bytes at 0xe14e1c)
  * This appears to be zeros - initial CPU time
  */
-static const uint8_t INIT_CPU_TIME[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+/*
+ * 8-byte big-endian image copied into the PCB at offset 0x4C..0x53
+ * (cpu_total, cpu_usage, state) by a byte loop in the original
+ * (lea (0x6c,PC),A0 -> 0x00E14E1C: 00 00 00 00 00 00 00 10).
+ */
+static const uint8_t INIT_CPU_TIME[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10 };
 
 uint16_t PROC1_$BIND(void *proc_startup, void *stack1, void *stack,
                       uint16_t ws_param, status_$t *status_p)
@@ -32,7 +37,6 @@ uint16_t PROC1_$BIND(void *proc_startup, void *stack1, void *stack,
     uint16_t pid;
     proc1_t *pcb;
     uint32_t *stats;
-    int i;
 
     /* Acquire process creation lock */
     ML_$LOCK(PROC1_CREATE_LOCK_ID);
@@ -68,10 +72,18 @@ uint16_t PROC1_$BIND(void *proc_startup, void *stack1, void *stack,
             pcb->inh_count = 0x0001;
             pcb->sw_bsr = 0x0010;
 
-            /* Initialize CPU time from template (copy 8 bytes) */
-            for (i = 0; i < 8; i++) {
-                ((uint8_t*)&pcb->cpu_total)[i] = INIT_CPU_TIME[i];
-            }
+            /*
+             * Initialize CPU time from template (byte copy of 8 bytes into
+             * offsets 0x4C..0x53).  The big-endian byte image is assembled
+             * into the three fields it covers so the result is identical
+             * on any host byte order.
+             */
+            pcb->cpu_total = ((uint32_t)INIT_CPU_TIME[0] << 24) |
+                             ((uint32_t)INIT_CPU_TIME[1] << 16) |
+                             ((uint32_t)INIT_CPU_TIME[2] << 8) |
+                             (uint32_t)INIT_CPU_TIME[3];
+            pcb->cpu_usage = (uint16_t)(((uint16_t)INIT_CPU_TIME[4] << 8) | INIT_CPU_TIME[5]);
+            pcb->state     = (uint16_t)(((uint16_t)INIT_CPU_TIME[6] << 8) | INIT_CPU_TIME[7]);
 
             /* Clear ASID */
             pcb->asid = 0;

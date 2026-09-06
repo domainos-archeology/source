@@ -48,16 +48,13 @@
 #include "dir/dir_internal.h"
 
 /* DAT_00e4dffa - Attribute parameter for FILE_$GET_ATTRIBUTES (0x0090) */
-extern uint8_t DAT_00e4dffa;
 
 /* DAT_00e4dffc - NUL byte used as 1-char name for dir_$find_entry("\0", 1) */
-extern uint8_t DAT_00e4dffc;
 
 /* dir_$next_page - Advance to the next page in B-tree traversal */
 void dir_$next_page(void *handle, int16_t depth, void *extra, uint16_t *page_ret);
 
 /* Name offset table */
-extern int16_t DIR_$NAME_OFFSET_TABLE[];
 
 void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                           uint16_t name_flags, void *cont_ptr,

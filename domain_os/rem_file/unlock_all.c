@@ -13,12 +13,6 @@
 #include "pkt/pkt.h"
 
 /*
- * External data references
- */
-extern uint8_t DAT_00e2e380[];  /* PKT info template */
-extern uid_t UID_$NIL;          /* Nil UID */
-
-/*
  * Unlock all request structure
  */
 typedef struct {

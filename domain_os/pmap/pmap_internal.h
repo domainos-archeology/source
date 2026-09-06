@@ -15,6 +15,9 @@
 #include "proc1/proc1.h"
 #include "network/network.h"
 #include "disk/disk.h"
+#include "log/log.h"
+#include "netlog/netlog.h"
+#include "anon/anon.h"
 
 /*
  * ============================================================================
@@ -58,8 +61,54 @@ extern uint32_t DAT_00e23368;   /* Global scan source */
 /* Timer purifier data */
 extern uint16_t DAT_00e254e4;   /* Current scan slot (5-69) */
 extern uint16_t DAT_00e254e2;   /* Random seed for page selection */
-extern uint32_t DAT_00e254dc;   /* Wait eventcount */
-extern uint32_t DAT_00e1416a;   /* Short wait time */
+
+/*
+ * PMAP_$SHORT_WAIT_DELAY - relative delay used by PMAP_$PURIFIER_L
+ * between working-set scans (TIME_$WAIT with a relative delay type).
+ *
+ * Original address: 0xE254DC (DAT_00e254dc), value 0x00000000:0005
+ */
+extern clock_t PMAP_$SHORT_WAIT_DELAY;
+
+/*
+ * Per-working-set timer queues and queue elements used by
+ * PMAP_$INIT_WS_SCAN.  One slot per working set (0..69; slot 5 is
+ * special and never gets a timer).
+ *
+ * Original addresses:
+ *   PMAP_$WS_TIMER_QUEUES:   0xE2A494 (70 * 0x0C bytes)
+ *   PMAP_$WS_TIMER_ELEMENTS: 0xE24D68 (70 * 0x1A bytes, DAT_00e24d68,
+ *                            ends at PMAP_$IDLE_INTERVAL 0xE25484)
+ */
+#define PMAP_WS_SLOTS   70
+extern time_queue_t      PMAP_$WS_TIMER_QUEUES[PMAP_WS_SLOTS];
+extern time_queue_elem_t PMAP_$WS_TIMER_ELEMENTS[PMAP_WS_SLOTS];
+
+/*
+ * Timer queue elements for the update and purifier timers
+ * (PMAP_$INIT_TIMERS).  On m68k these are at fixed addresses
+ * (DAT_00e24d44 update, DAT_00e24d64 purifier).
+ */
+#if !defined(ARCH_M68K)
+extern time_queue_elem_t pmap_update_timer_elem;    /* 0xE24D44 */
+extern time_queue_elem_t pmap_purifier_timer_elem;  /* 0xE24D64 */
+#endif
+
+/*
+ * Raw table base addresses used via pointer arithmetic by the purifier
+ * and page-write code.  On m68k these are fixed addresses (see the
+ * #define blocks in the .c files); other targets get them from platform
+ * init.
+ */
+#if !defined(ARCH_M68K)
+extern uint8_t wsl_base[];              /* 0xE232B0: working set list */
+extern uint8_t segmap_base[];           /* 0xED5000: segment map */
+extern uint8_t aote_table[];            /* 0xEC53F0: AOTE table */
+extern uint8_t pur_stats[];             /* 0xE25D18: purifier statistics */
+extern uint8_t *aote_table_ptr_base;    /* 0xEC53F0: AOTE pointer table */
+extern uint8_t *segmap_indexed_base;    /* 0xED4F80: indexed segment map */
+extern uint8_t *mmape_raw_base;         /* 0xEB2800: MMAPE array */
+#endif
 
 /*
  * ============================================================================
@@ -176,14 +225,13 @@ void PMAP_$INIT_TIMERS(void);
  * ============================================================================
  * External Module Dependencies
  * ============================================================================
+ *
+ * NETLOG_$OK_TO_LOG   - netlog/netlog.h
+ * LOG_$LOGFILE_PTR,
+ * LOG_$UPDATE         - log/log.h
+ * DISK_$DO_CHKSUM     - disk/disk.h
+ * NETWORK_$DISKLESS   - network/network.h
+ * ANON_$UID           - anon/anon.h
  */
-
-/* Network/logging flags */
-extern int8_t NETLOG_$OK_TO_LOG;
-extern uint32_t *LOG_$LOGFILE_PTR;
-int32_t LOG_$UPDATE(void);
-
-/* Disk checksum control flag */
-extern int8_t DISK_$DO_CHKSUM;
 
 #endif /* PMAP_INTERNAL_H */

@@ -10,7 +10,7 @@
  * Original address: 0x00e42cae
  */
 
-#include "ec.h"
+#include "ec/ec_internal.h"
 
 void EC2_$ADVANCE(ec2_$eventcount_t *ec, status_$t *status_ret)
 {

@@ -28,9 +28,6 @@
 /* Shutdown message data at 0x00e17608 */
 static const char shutdown_msg[] = "";  /* Empty message for shutdown entry */
 
-/* Reference to early log extended magic at 0x00e0000c */
-extern early_log_extended_t EARLY_LOG_EXTENDED;
-
 void LOG_$SHUTDN(void)
 {
     status_$t status;

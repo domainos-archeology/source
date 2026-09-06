@@ -37,6 +37,7 @@
  *           handle at -0x30, parsed_len at -0x32
  */
 
+#include "name/name_internal.h"
 #include "dir/dir_internal.h"
 
 void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,

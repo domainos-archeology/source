@@ -13,7 +13,7 @@
  * Original source: Pascal, converted to C
  */
 
-#include "sock_internal.h"
+#include "sock/sock_internal.h"
 
 int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret,
                            uint16_t proto_hi, uint16_t proto_lo,

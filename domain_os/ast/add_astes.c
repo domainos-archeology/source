@@ -8,7 +8,7 @@
  * Original address: 0x00e0118c
  */
 
-#include "ast_internal.h"
+#include "ast/ast_internal.h"
 #include "misc/misc.h"
 #include "mmu/mmu.h"
 

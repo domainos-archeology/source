@@ -106,8 +106,11 @@ void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag)
      */
     if (flag < 0) {
         uint32_t offset = target_entry->cr_rec_2 + 0x90;
+        /* XPD_$WRITE only reads through its length/buffer arguments (it
+         * copies from the buffer into the target address space), so the
+         * const data is safe. */
         XPD_$WRITE(ENTRY_DEBUG_ADDR(target_entry), offset,
-                   &debug_write_data1, &debug_write_data2, &status);
+                   (int32_t *)&debug_write_data1, (void *)&debug_write_data2, &status);
     }
 
     /*

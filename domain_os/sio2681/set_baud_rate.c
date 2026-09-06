@@ -19,7 +19,7 @@
  * This function looks up the baud rate codes in the global tables
  * and programs the hardware registers.
  *
- * Assembly analysis (FUN_00e1d1da):
+ * Assembly analysis (sio2681_set_baud_rate, 0x00e1d1da):
  *   - Gets chip structure from channel[+4]
  *   - Updates ACR shadow bit 7 based on 'extended' parameter
  *   - Looks up CSR codes for tx_rate and rx_rate

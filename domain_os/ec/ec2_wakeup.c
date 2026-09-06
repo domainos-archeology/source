@@ -11,7 +11,7 @@
  * Original address: 0x00e4285a
  */
 
-#include "ec.h"
+#include "ec/ec_internal.h"
 #include "fim/fim.h"
 #include "ml/ml.h"
 

@@ -11,14 +11,7 @@
  * is shifted left by 15 bits (0x8000 = 2^15) to get the address.
  */
 
-#include "as/as.h"
-#include "mst/mst.h"
-
-/*
- * Segment size shift value
- * Each segment is 32KB = 0x8000 = 2^15 bytes
- */
-#define SEGMENT_SHIFT  15
+#include "as/as_internal.h"
 
 void AS_$GET_ADDR(as_$addr_range_t *addr_range, int16_t *region)
 {

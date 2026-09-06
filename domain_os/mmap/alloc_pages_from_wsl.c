@@ -7,7 +7,7 @@
  * Original address: 0x00e0d6f8
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 void mmap_$alloc_pages_from_wsl(ws_hdr_t *wsl, uint32_t *vpn_array, uint16_t count)
 {

@@ -12,18 +12,13 @@
  * Original address: 0x00e145f0
  */
 
-#include "pmap_internal.h"
+#include "pmap/pmap_internal.h"
 
 /*
- * Timer queue and element arrays for working set scanning.
+ * Timer queue and element arrays for working set scanning
+ * (PMAP_$WS_TIMER_QUEUES / PMAP_$WS_TIMER_ELEMENTS, pmap_internal.h).
  * Each working set slot has its own timer queue and element.
- *
- * Original locations (M68K):
- *   PMAP_$WS_TIMER_QUEUES:   0xE2A494
- *   PMAP_$WS_TIMER_ELEMENTS: 0xE24D68
  */
-extern time_queue_t PMAP_$WS_TIMER_QUEUES[];
-extern time_queue_elem_t PMAP_$WS_TIMER_ELEMENTS[];
 
 /* Verify structure sizes match original layout */
 _Static_assert(sizeof(time_queue_t) == 0x0C,
@@ -31,8 +26,7 @@ _Static_assert(sizeof(time_queue_t) == 0x0C,
 _Static_assert(sizeof(time_queue_elem_t) == 0x1A,
                "time_queue_elem_t size must be 0x1A bytes");
 
-/* Working set scan callback - declared in pmap_internal.h */
-extern void PMAP_$WS_SCAN_CALLBACK(int *arg);
+/* Working set scan callback PMAP_$WS_SCAN_CALLBACK - declared in pmap.h */
 
 void PMAP_$INIT_WS_SCAN(uint16_t index, int16_t param)
 {

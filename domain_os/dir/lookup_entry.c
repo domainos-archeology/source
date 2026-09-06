@@ -36,7 +36,6 @@
 
 /* Character classification bitmap for case unmapping at 0x00e4cd84
  * TODO(source-qgq): Replace with proper reference */
-extern uint8_t PTR_DAT_00e4cd84;
 
 void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
                        short *type_ret, char *uid_ret, uint32_t *extra_ret,

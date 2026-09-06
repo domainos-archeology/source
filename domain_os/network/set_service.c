@@ -27,9 +27,12 @@
  * TODO(source-fw2): Investigate whether these are actually fields within the route
  * port structures or separate data items.
  */
-extern int16_t DAT_00e2e0ce;  /* 0xE2E0CE - flag checked before service notification */
-extern void *DAT_00e2e0e8;    /* 0xE2E0E8 - callback table pointer */
-extern void *DAT_00e2e0d0;    /* 0xE2E0D0 - first arg to callback */
+/*
+ * In terms of route_$port_t these are fields of ROUTE_$PORT_ARRAY[0]:
+ *   0xE2E0CE = ROUTE_$PORT_ARRAY[0].port_type   (+0x2E)
+ *   0xE2E0D0 = ROUTE_$PORT_ARRAY[0].socket      (+0x30)
+ *   0xE2E0E8 = ROUTE_$PORT_ARRAY[0]._unknown2   (+0x48)
+ */
 
 void NETWORK_$SET_SERVICE(int16_t *op_ptr, uint32_t *value_ptr, status_$t *status_p)
 {
@@ -127,10 +130,11 @@ update_service:
      *
      * TODO(source-fw2): Implement the additional service notification path.
      * The original code builds a service bitmap with different bit positions
-     * and calls through DAT_00e2e0e8 + 0x24 with various parameters.
+     * and calls through (ROUTE_$PORT_ARRAY[0] + 0x48) + 0x24 (0xE2E0E8) with
+     * various parameters (first argument at 0xE2E0D0).
      */
 #if 0
-    if (DAT_00e2e0ce == 0) {
+    if (ROUTE_$PORT_ARRAY[0].port_type == 0) {   /* 0xE2E0CE */
         uint16_t external_service = 0;
 
         if ((NETWORK_$ALLOWED_SERVICE & NETWORK_SERVICE_ACTIVE) != 0) {

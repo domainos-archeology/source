@@ -86,7 +86,7 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
         /* Check if ACL has the "funky" bit set (bit 4 of byte 5) */
         if (((acl_uid->low >> 4) & 0x10) == 0) {
             /* Convert to 9ACL format */
-            ACL_$CONVERT_TO_9ACL((int16_t)(uintptr_t)prot_buf, acl_uid, file_uid,
+            ACL_$CONVERT_TO_9ACL(prot_buf, acl_uid, file_uid,
                                  &ACL_$DIR_ACL, &response.temp_acl, status_ret);
             if (*status_ret != status_$ok) {
                 return;

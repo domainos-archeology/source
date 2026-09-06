@@ -1,4 +1,4 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 #include "network/network.h"
 
 // Internal helper functions (static, not exported)

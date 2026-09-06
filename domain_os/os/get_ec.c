@@ -21,9 +21,12 @@ void OS_$GET_EC(void *param_1, ec_$eventcount_t **ec_ret, status_$t *status)
     *ec_ret = (ec_$eventcount_t *)registered_ec;
 
     // Adjust status - set high bit if non-zero status
+    // Original: tst.l (A2); sne D0; andi.b #0x7f,(A2); andi.b #0x80,D0; or.b D0,(A2)
+    // The byte operations act on the first (most significant) byte of the
+    // big-endian 32-bit status, i.e. bit 31 of the status_$t.
     local_status = *status;
-    *(uint8_t *)status &= 0x7F;  // Clear high bit
+    *status &= ~0x80000000;  // Clear high bit
     if (local_status != 0) {
-        *(uint8_t *)status |= 0x80;  // Set high bit if error
+        *status |= 0x80000000;  // Set high bit if error
     }
 }

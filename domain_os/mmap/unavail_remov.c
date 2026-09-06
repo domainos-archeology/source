@@ -6,7 +6,7 @@
  * Original address: 0x00e0cc30
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 void MMAP_$UNAVAIL_REMOV(uint32_t vpn)
 {

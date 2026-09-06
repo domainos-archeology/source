@@ -1,9 +1,7 @@
 /*
  * SOCK - Global Data
  *
- * This file contains global data declarations for the SOCK subsystem.
- * On m68k, these are at fixed addresses. On other platforms, they are
- * allocated here.
+ * This file contains global data definitions for the SOCK subsystem.
  *
  * Original addresses (m68k):
  *   - Socket table base:     0xE27510
@@ -14,17 +12,7 @@
  *   - User socket limit:     0xE29134 (base + 0x1C24)
  */
 
-#include "sock_internal.h"
-
-#if defined(ARCH_M68K)
-
-/*
- * On m68k, the socket table is at a fixed address.
- * Define as an external symbol that the linker will resolve.
- */
-extern uint8_t sock_table_base[] __attribute__((section(".bss.sock")));
-
-#else /* !M68K */
+#include "sock/sock_internal.h"
 
 /*
  * Socket Table Memory Layout:
@@ -37,13 +25,8 @@ extern uint8_t sock_table_base[] __attribute__((section(".bss.sock")));
  *   +0x18A4: Pointer array (224 * 4 = 896 bytes)
  *   +0x1C24: User socket limit counter (2 bytes)
  *
- * Total size: approximately 0x1C26 bytes
+ * Total size: approximately 0x1C26 bytes (SOCK_TABLE_SIZE rounds up).
+ *
+ * SOCK_$EVENT_COUNTERS (0xE28DB4) is an alias into this table; see sock.h.
  */
-#define SOCK_TABLE_SIZE     0x1C28  /* Round up for alignment */
-
-static uint8_t sock_table_storage[SOCK_TABLE_SIZE];
-uint8_t *sock_table_base = sock_table_storage;
-
-ec_$eventcount_t *SOCK_$EVENT_COUNTERS[]; // TODO(source-j33): we need a size here...
-
-#endif /* M68K */
+uint8_t sock_table_base[SOCK_TABLE_SIZE];

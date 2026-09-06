@@ -4,7 +4,7 @@
  * Global data definitions for the IIC subsystem.
  */
 
-#include "iic/iic.h"
+#include "iic/iic_internal.h"
 
 /*
  * IIC Network UIDs

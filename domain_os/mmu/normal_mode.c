@@ -7,7 +7,7 @@
  * Original address: 0x00e24280
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 int8_t MMU_$NORMAL_MODE(void)
 {

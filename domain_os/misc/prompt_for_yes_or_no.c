@@ -7,7 +7,7 @@
  * response is given.
  */
 
-#include "misc/misc.h"
+#include "misc/misc_internal.h"
 #include "term/term.h"
 
 /*

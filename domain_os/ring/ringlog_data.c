@@ -6,6 +6,7 @@
  * original m68k platform.
  */
 
+#include "ring/ring_internal.h"
 #include "ring/ringlog_internal.h"
 
 /*

@@ -17,18 +17,11 @@
 #define ASKNODE_H
 
 #include "base/base.h"
+#include "network/network.h"
 
 /*
- * ============================================================================
- * Status Codes (module 0x11 = NETWORK)
- * ============================================================================
+ * Status codes (module 0x11 = NETWORK) are defined in network/network.h.
  */
-#define status_$network_unknown_network                           0x00110017
-#define status_$network_operation_not_defined_on_hardware         0x0011001D
-#define status_$network_unknown_request_type                      0x0011000D
-#define status_$network_conflict_with_another_node_listing        0x00110019
-#define status_$network_quit_fault_during_node_listing            0x0011001A
-#define status_$network_waited_too_long_for_more_node_responses   0x0011001B
 
 /*
  * ============================================================================

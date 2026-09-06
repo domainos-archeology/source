@@ -1,10 +1,8 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 #include "dbuf/dbuf.h"
 #include "proc1/proc1.h"
 #include "uid/uid.h"
 #include "network/network.h"
-
-#define CAL_LOCK_ID 0xe
 
 // Writes timezone information to the boot volume's label block.
 // Validates that the timezone name contains only printable characters.

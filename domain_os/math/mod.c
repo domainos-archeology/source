@@ -1,4 +1,4 @@
-#include "math.h"
+#include "math/math_internal.h"
 
 /* Signed modulo: long % long -> long
    Computes remainder using shift-and-subtract algorithm

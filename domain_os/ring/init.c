@@ -23,18 +23,11 @@
 #include "ring/ring_internal.h"
 
 /*
- * External data referenced by this function
+ * External data referenced by this function:
+ *   RING_$NETWORK_UID_TEMPLATE (0x00E1747C), ring_$network_uid_storage
+ *   (0x00E86960) - ring/ring_internal.h
+ *   ROUTE_$PORT_ARRAY (0x00E2E0A0, 0x5C bytes per entry) - route/route.h
  */
-
-/* Template UID for ring network - copied to global on init */
-extern uid_t RING_$NETWORK_UID_TEMPLATE;  /* at 0x00E1747C */
-
-/* Global network UID storage */
-extern uid_t ring_$network_uid_storage;   /* at 0x00E86960 */
-
-/* Route port array base */
-extern uint8_t ROUTE_$PORT_BASE[];        /* at 0x00E2E0A0 */
-#define ROUTE_PORT_SIZE 0x5C              /* Size of each route port entry */
 
 /*
  * Forward declaration for internal initialization helper
@@ -159,7 +152,7 @@ status_$t RING_$INIT(void *device_info)
          *
          * Assembly: lea (0x0,A1,D1*0x1),A1 where D1 = port_num * 0x5C
          */
-        unit_data->route_port = (void *)(ROUTE_$PORT_BASE + port_num * ROUTE_PORT_SIZE);
+        unit_data->route_port = (void *)&ROUTE_$PORT_ARRAY[port_num];
 
         if (status == status_$ok) {
             /*

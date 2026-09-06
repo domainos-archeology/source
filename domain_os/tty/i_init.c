@@ -2,7 +2,7 @@
 // Address: 0x00e3324c
 // Size: 278 bytes
 
-#include "tty.h"
+#include "tty/tty_internal.h"
 
 // Default function character bindings (at 0xe351d8 in original binary)
 // These define which characters map to which function classes

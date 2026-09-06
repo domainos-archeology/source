@@ -166,7 +166,7 @@ void XNS_IDP_$OS_DEMUX(void *packet_info, int16_t *port_ptr, void *param3, statu
         }
     } else {
         /* Destination not local - need to forward (routing) */
-        extern uint16_t ROUTE_$STD_N_ROUTING_PORTS;
+        /* ROUTE_$STD_N_ROUTING_PORTS, ROUTE_$SOCK: route/route.h */
 
         if (ROUTE_$STD_N_ROUTING_PORTS < 2) {
             /* No routing configured */
@@ -214,7 +214,6 @@ void XNS_IDP_$OS_DEMUX(void *packet_info, int16_t *port_ptr, void *param3, statu
 
             /* Put to routing socket */
             {
-                extern uint16_t ROUTE_$SOCK;
                 int8_t result = SOCK_$PUT(ROUTE_$SOCK, &forward_params, 0,
                                           *(uint16_t *)((uint8_t *)rport + 0x2E),
                                           *(uint16_t *)((uint8_t *)rport + 0x30));

@@ -26,26 +26,20 @@ uint32_t PKT_$DEFAULT_INFO[8] = {
 };
 
 /*
- * sock_spinlock - Socket spinlock/EC array base (0x00E28DB0)
- *
- * NOTE: Despite the name, this is also used as a socket event count
- * array base in asknode code paths (indexed as &sock_spinlock + sock_num * 4).
- * The naming/purpose confusion needs further investigation.
- *
- * Runtime-initialized by SOCK_$INIT.
+ * The socket event count pointers (0x00E28DB0 + n * 4) are entries of the
+ * socket pointer table in sock/sock_data.c (SOCK_$EVENT_COUNTERS).
  */
-ec_$eventcount_t *sock_spinlock = NULL;
 
 /*
- * SOCK_$EC_5 - Socket 5 event count (0x00E28DC4)
+ * ASKNODE_$PROTOCOL_VERSION - Protocol version word (0x00E82426, value 3)
  *
- * Runtime-initialized by SOCK_$INIT.
+ * When == 3, WHO requests use protocol version 2; otherwise version 3.
  */
-ec_$eventcount_t *SOCK_$EC_5 = NULL;
+uint16_t ASKNODE_$PROTOCOL_VERSION = 3;
 
 /*
- * NETWORK_$CAPABLE_FLAGS - Network capability flags (0x00E24C3F)
- *
- * Bit 0: Network is capable/enabled
+ * ASKNODE_$EMPTY_DATA - Zero longword used as "no data" (0x00E658CC)
  */
-uint8_t NETWORK_$CAPABLE_FLAGS = 0;
+uint32_t ASKNODE_$EMPTY_DATA = 0;
+
+/* NETWORK_$CAPABLE_FLAGS (0xE24C3F) is defined in network/network_data.c */

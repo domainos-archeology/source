@@ -12,9 +12,6 @@
 /* Status codes */
 #define status_$acl_unimplemented_call  0x0023001C
 
-/* External AUDIT_$ENABLED flag */
-extern int8_t AUDIT_$ENABLED;
-
 /*
  * Constant data for protection type 4
  * Original address: 0x00E5E0FE (2 bytes of value 0x0004)

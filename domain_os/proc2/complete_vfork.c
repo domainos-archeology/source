@@ -24,35 +24,12 @@
 
 #include "proc2/proc2_internal.h"
 
-/* Global storage addresses */
-#if defined(ARCH_M68K)
-    #define AS_$STACK_FILE_LOW          (*(uint32_t*)0xE2B92C)
-    #define AS_$INIT_STACK_FILE_SIZE    (*(uint32_t*)0xE2B960)
-    #define FIM_USER_FIM_ADDR_TABLE     ((int32_t*)0xE212A8)
-    #define FIM_QUIT_INH_TABLE          ((uint8_t*)0xE2248A)
-    #define UID_TABLE_BASE              0xE7BE94
-#else
-    extern uint32_t as_stack_file_low;
-    extern uint32_t as_init_stack_file_size;
-    extern int32_t *fim_user_fim_addr_table;
-    extern uint8_t *fim_quit_inh_table;
-    extern uid_t uid_table[];
-    #define AS_$STACK_FILE_LOW          as_stack_file_low
-    #define AS_$INIT_STACK_FILE_SIZE    as_init_stack_file_size
-    #define FIM_USER_FIM_ADDR_TABLE     fim_user_fim_addr_table
-    #define FIM_QUIT_INH_TABLE          fim_quit_inh_table
-    #define UID_TABLE_BASE              ((uintptr_t)uid_table)
-#endif
-
-/* Eventcount array base */
-#if defined(ARCH_M68K)
-    #define EC1_FORK_ARRAY_BASE         0xE2B978
-#else
-    extern void *ec1_fork_array;
-    #define EC1_FORK_ARRAY_BASE         ((uintptr_t)ec1_fork_array)
-#endif
-
-#define PROC_FORK_EC(idx)       ((ec_$eventcount_t*)(EC1_FORK_ARRAY_BASE + ((idx) - 1) * 0x18))
+/*
+ * Globals used here (declared in subsystem headers):
+ *   AS_$STACK_FILE_LOW (0xE2B92C), AS_$INIT_STACK_FILE_SIZE (0xE2B960) - as/as.h
+ *   FIM_$USER_FIM_ADDR (0xE212A8), FIM_$QUIT_INH (0xE2248A)          - fim/fim.h
+ *   PROC2_UID table (0xE7BE94), PROC2_$EC / PROC_FORK_EC (0xE2B978)  - proc2 headers
+ */
 
 /*
  * Creation record structure for startup
@@ -85,7 +62,7 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
     uint16_t new_asid;
     int16_t parent_idx;
     proc2_info_t *parent_entry;
-    int32_t user_fim_addr;
+    void *user_fim_addr;
     cr_rec_t *cr_rec;
 
     /* Copy input parameters to locals */
@@ -136,11 +113,8 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
      * Update UID table for child's new ASID.
      * Copy child's UID to the UID table slot for new_asid.
      */
-    {
-        uintptr_t uid_addr = UID_TABLE_BASE + (new_asid << 3);
-        *(uint32_t*)uid_addr = current_entry->uid.high;
-        *(uint32_t*)(uid_addr + 4) = current_entry->uid.low;
-    }
+    PROC2_UID[new_asid].high = current_entry->uid.high;
+    PROC2_UID[new_asid].low = current_entry->uid.low;
 
     /*
      * Update UID table for parent's ASID.
@@ -148,11 +122,8 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
      */
     parent_idx = current_entry->parent_pgroup_idx;
     parent_entry = P2_INFO_ENTRY(parent_idx);
-    {
-        uintptr_t uid_addr = UID_TABLE_BASE + (old_asid << 3);
-        *(uint32_t*)uid_addr = parent_entry->uid.high;
-        *(uint32_t*)(uid_addr + 4) = parent_entry->uid.low;
-    }
+    PROC2_UID[old_asid].high = parent_entry->uid.high;
+    PROC2_UID[old_asid].low = parent_entry->uid.low;
 
     /* Initialize floating point state for new ASID */
     FIM_$FP_INIT(new_asid);
@@ -161,10 +132,10 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
      * Copy user FIM address from old ASID slot to new ASID slot.
      * This preserves any user-defined FIM handler.
      */
-    user_fim_addr = FIM_USER_FIM_ADDR_TABLE[old_asid];
-    FIM_USER_FIM_ADDR_TABLE[new_asid] = user_fim_addr;
-    if (user_fim_addr != 0) {
-        FIM_QUIT_INH_TABLE[new_asid] = 0;
+    user_fim_addr = FIM_$USER_FIM_ADDR[old_asid];
+    FIM_$USER_FIM_ADDR[new_asid] = user_fim_addr;
+    if (user_fim_addr != NULL) {
+        FIM_$QUIT_INH[new_asid] = 0;
     }
 
     /* Map initial memory area for child's new address space */

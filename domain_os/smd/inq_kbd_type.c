@@ -19,8 +19,8 @@
 #include "smd/smd_internal.h"
 #include "kbd/kbd.h"
 
-/* Internal KBD device reference */
-extern uint32_t SMD_KBD_DEVICE;  /* at 0x00E6D92C */
+/* The "line" argument passed to KBD_$* is the constant word at 0x00E6D92C,
+ * SMD_ACQ_LOCK_DATA (declared in smd/smd_internal.h). */
 
 /*
  * SMD_$INQ_KBD_TYPE - Inquire keyboard type
@@ -47,7 +47,7 @@ void SMD_$INQ_KBD_TYPE(uint16_t *buf_size, uint8_t *buffer, uint16_t *length,
     int16_t i;
 
     /* Call KBD_$INQ_KBD_TYPE to get the keyboard type */
-    KBD_$INQ_KBD_TYPE(&SMD_KBD_DEVICE, local_buf, length, status_ret);
+    KBD_$INQ_KBD_TYPE(&SMD_ACQ_LOCK_DATA, local_buf, length, status_ret);
 
     if (*status_ret != status_$ok) {
         return;

@@ -49,10 +49,8 @@
 #include "dir/dir_internal.h"
 
 /* DAT_00e505c4 - ACL option flags for cname rights check */
-extern uint16_t DAT_00e505c4;
 
 /* DAT_00e51b64 - ACL rights mask (0x00000040 = rename right) */
-extern uint32_t DAT_00e51b64;
 
 void dir_$do_op_cname(uid_t *uid, void *old_name, uint16_t old_name_len,
                       void *new_name, uint16_t new_name_len,

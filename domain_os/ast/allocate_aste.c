@@ -10,7 +10,7 @@
  * Original address: 0x00e01f1c
  */
 
-#include "ast_internal.h"
+#include "ast/ast_internal.h"
 #include "misc/misc.h"
 
 /* Internal function prototypes */

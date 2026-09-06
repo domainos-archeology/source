@@ -7,7 +7,7 @@
  * Original address: 0x00e429da
  */
 
-#include "ec_internal.h"
+#include "ec/ec_internal.h"
 #include "ml/ml.h"
 
 void *EC2_$ALLOCATE_EC1(status_$t *status_ret)

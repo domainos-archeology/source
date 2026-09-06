@@ -27,19 +27,8 @@
 #include "proc2/proc2_internal.h"
 #include "time/time.h"
 
-/* Eventcount arrays - base addresses for process eventcounts */
-#if defined(ARCH_M68K)
-    #define EC1_FORK_ARRAY_BASE     0xE2B978
-    #define EC1_CR_REC_OFFSET       0x0C     /* Offset from fork EC to creation record EC */
-#else
-    extern void *ec1_fork_array;
-    #define EC1_FORK_ARRAY_BASE     ((uintptr_t)ec1_fork_array)
-    #define EC1_CR_REC_OFFSET       0x0C
-#endif
-
-/* Process fork EC: index * 0x18 + base - 0x18 */
-#define PROC_FORK_EC(idx)       ((void*)(EC1_FORK_ARRAY_BASE + ((idx) - 1) * 0x18))
-#define PROC_CR_REC_EC(idx)     ((void*)(EC1_FORK_ARRAY_BASE + ((idx) - 1) * 0x18 + EC1_CR_REC_OFFSET))
+/* Process fork / creation record ECs: PROC2_$EC (0xE2B978), index * 0x18 +
+ * base - 0x18; PROC_FORK_EC / PROC_CR_REC_EC are in proc2_internal.h */
 
 /* Startup context structure placed on new process stack */
 typedef struct startup_context_t {
@@ -246,7 +235,7 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     /* Initialize eventcounts for the new process */
     fork_ec = PROC_FORK_EC(new_entry->first_debug_target_idx);
     EC_$INIT(fork_ec);
-    EC_$INIT((void*)((char*)fork_ec + EC1_CR_REC_OFFSET));
+    EC_$INIT(PROC_CR_REC_EC(new_entry->first_debug_target_idx));
 
     /* Register the fork EC */
     registered_ec = EC2_$REGISTER_EC1(fork_ec, &status);
@@ -366,8 +355,8 @@ cleanup_entry:
     /* Clear bound flag */
     new_entry->flags &= ~0x01;
 
-    /* Set UID from global */
-    new_entry->uid = PROC2_UID;
+    /* Set UID from global system UID (DAT_00e7be8c) */
+    new_entry->uid = proc2_system_uid;
 
     ML_$UNLOCK(PROC2_LOCK_ID);
     *status_ret = status;

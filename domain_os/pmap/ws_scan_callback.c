@@ -13,8 +13,8 @@
 #include "pmap/pmap_internal.h"
 #include "misc/misc.h"
 
-/* External working set list high mark array */
-extern uint16_t MMAP_$WSL_HI_MARK[];
+/* MMAP_$WSL_HI_MARK (0xE23CA6) is indexed as an array here; the same
+ * array is exported by mmap/mmap.h as MMAP_PID_TO_WSL. */
 
 /* Working set list entry structure offsets */
 #define WSL_FLAGS_OFFSET        0x00
@@ -29,7 +29,7 @@ extern uint16_t MMAP_$WSL_HI_MARK[];
     #define WSL_PREV_COUNT_BASE     0xE232B8
     #define WSL_LAST_SCAN_BASE      0xE232CC
 #else
-    extern uint8_t wsl_base[];
+    /* wsl_base: pmap_internal.h */
     #define WSL_BASE                ((uintptr_t)wsl_base)
     #define WSL_PAGE_COUNT_BASE     (WSL_BASE + 4)
     #define WSL_PREV_COUNT_BASE     (WSL_BASE + 8)
@@ -53,7 +53,7 @@ void PMAP_$WS_SCAN_CALLBACK(int *param)
     ML_$LOCK(PMAP_LOCK_ID);
 
     /* Get actual slot from high mark table */
-    slot = (int16_t)MMAP_$WSL_HI_MARK[slot_index];
+    slot = (int16_t)MMAP_PID_TO_WSL[slot_index];
 
     if (slot != 0) {
         wsl_offset = (int16_t)(slot * 0x24);

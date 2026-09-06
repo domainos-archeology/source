@@ -11,7 +11,6 @@
 #include "dir/dir_internal.h"
 
 /* Reference to constant data at 0x00E50C5A - appears to be a flags value */
-extern uint16_t DAT_00e50c5a;
 
 /*
  * DIR_$DROPU - Drop a directory entry

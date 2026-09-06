@@ -9,7 +9,7 @@
  * function.
  */
 
-#include "flp.h"
+#include "flp/flp_internal.h"
 
 /*
  * FLP_$DO_IO - Perform I/O operation

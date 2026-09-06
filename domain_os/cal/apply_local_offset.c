@@ -1,4 +1,4 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 
 // Applies the local timezone offset to a clock value.
 // Converts the timezone's UTC delta (in minutes) to seconds,

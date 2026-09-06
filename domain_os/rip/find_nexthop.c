@@ -11,25 +11,12 @@
 #include "rip/rip_internal.h"
 
 /*
- * Port table structure (for checking direct connectivity)
- *
- * Each port entry is 0x5c (92) bytes. The table has 8 entries.
+ * Port table (for checking direct connectivity): ROUTE_$PORT_ARRAY from
+ * route/route.h.  Each port entry is 0x5c (92) bytes; the table has 8
+ * entries.  The port "active" word at +0x2C holds the port status.
  */
-typedef struct route_$port_entry_t {
-    uint32_t    network;        /* 0x00: Network address */
-    uint8_t     _pad0[0x28];    /* 0x04: Unknown fields */
-    uint16_t    flags;          /* 0x2C: Port flags (bits 2-5 indicate active) */
-    uint8_t     _pad1[0x2E];    /* 0x2E: Remaining fields */
-} route_$port_entry_t;
-
-#define ROUTE_PORT_COUNT        8
+#define ROUTE_PORT_COUNT        ROUTE_$MAX_PORTS
 #define ROUTE_PORT_ACTIVE_MASK  0x3C    /* Bits 2-5 indicate active port types */
-
-#if defined(ARCH_M68K)
-    #define ROUTE_$PORT_TABLE   ((route_$port_entry_t *)0xE2E0A0)
-#else
-    extern route_$port_entry_t ROUTE_$PORT_TABLE[];
-#endif
 
 /*
  * XNS address helper: copy 10 bytes (4 byte network + 6 byte host)
@@ -72,7 +59,7 @@ uint8_t RIP_$FIND_NEXTHOP(void *addr_info, int8_t flags, uint16_t *port_ret,
     uint32_t *src_addr = (uint32_t *)addr_info;
     uint32_t dest_network;
     uint16_t port_idx;
-    route_$port_entry_t *port_entry;
+    route_$port_t *port_entry;
     rip_$entry_t *rip_entry;
     rip_$route_t *route;
     uint8_t metric;
@@ -96,10 +83,10 @@ uint8_t RIP_$FIND_NEXTHOP(void *addr_info, int8_t flags, uint16_t *port_ret,
      * Check local port table for direct connectivity.
      * Port flags bits 2-5 (mask 0x3C) indicate active port types.
      */
-    port_entry = &ROUTE_$PORT_TABLE[0];
+    port_entry = &ROUTE_$PORT_ARRAY[0];
     for (port_idx = 0; port_idx < ROUTE_PORT_COUNT; port_idx++) {
         /* Check if port is active (any of bits 2-5 set) */
-        if ((port_entry->flags & ROUTE_PORT_ACTIVE_MASK) != 0) {
+        if ((port_entry->active & ROUTE_PORT_ACTIVE_MASK) != 0) {
             /* Check for network match */
             if (port_entry->network == dest_network) {
                 /* Direct connectivity via this port */

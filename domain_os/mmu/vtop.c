@@ -8,7 +8,7 @@
  * Original address: 0x00e2410e
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 uint32_t MMU_$VTOP(uint32_t va, status_$t *status)
 {

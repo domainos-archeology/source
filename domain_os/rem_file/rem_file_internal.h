@@ -16,6 +16,10 @@
 #include "sock/sock.h"
 #include "pkt/pkt.h"
 #include "network/network.h"
+#include "uid/uid.h"
+#include "ast/ast.h"
+#include "ml/ml.h"
+#include "netlog/netlog.h"
 
 /*
  * Remote file operation codes (sent in request byte 1)
@@ -82,16 +86,21 @@ typedef struct {
 
 /*
  * External data references
+ * (NETWORK_$DISKLESS, NETWORK_$REALLY_DISKLESS, NETWORK_$MOTHER_NODE and
+ * NODE_$ME come from network/network.h; NETLOG_$OK_TO_LOG_SERVER from
+ * netlog/netlog.h; UID_$NIL from uid/uid.h; ACL_$SUPER_COUNT from acl/acl.h.)
  */
 extern uint8_t NETWORK_$CAPABLE_FLAGS;  /* 0xE24C3F: Network capability flags (bit 0 = capable) */
-extern int8_t NETWORK_$DISKLESS;        /* Diskless node flag */
-extern uint32_t NETWORK_$MOTHER_NODE;   /* Mother node ID */
 
 /*
- * Process admin check table
- * Indexed by PROC1_$CURRENT to check if process has admin rights
+ * REM_FILE module data
  */
-extern int16_t DAT_00e7daca[];
+extern ml_$exclusion_t REM_FILE_$SOCK_LOCK;   /* 0xE24B3C: socket access lock */
+extern uint32_t DAT_00e823fc;                 /* 0xE823FC: REM_FILE module data base (A5); server request counter */
+extern status_$t File_Comms_Problem_With_Remote_Node_Err;  /* 0xE64592: crash message */
+extern uint8_t DAT_00e61d18[];                /* 0xE61D18: nil/empty data constant */
+extern uint8_t DAT_00e61718[];                /* 0xE61718: project list constant */
+extern uint8_t DAT_00e62d48[];                /* 0xE62D48: case mapping table (UNMAP_CASE/MAP_CASE) */
 
 /*
  * Socket event counter array (0xE28DB0)
@@ -162,8 +171,9 @@ void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buffer, int16_t fixed_len,
 
 /*
  * Helper macro to check if current process has admin privileges
+ * (tst.w (-0x2,A0,D1w*2) with A0 = 0xe7dacc, i.e. ACL_$SUPER_COUNT[PROC1_$CURRENT])
  */
 #define REM_FILE_PROCESS_HAS_ADMIN() \
-    (DAT_00e7daca[PROC1_$CURRENT] > 0)
+    (ACL_$SUPER_COUNT[PROC1_$CURRENT] > 0)
 
 #endif /* REM_FILE_INTERNAL_H */

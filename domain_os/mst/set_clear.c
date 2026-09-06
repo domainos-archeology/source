@@ -14,7 +14,7 @@
  * indicates an ASID is free for reuse.
  */
 
-#include "mst.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$SET_CLEAR - Clear a bit in a bitmap

@@ -24,7 +24,6 @@
 #include "dir/dir_internal.h"
 
 /* ROUTE_$PORT - Network routing port reference */
-extern uint32_t ROUTE_$PORT;
 
 void dir_$do_op_get_entryu(uid_t *uid, void *name, uint16_t name_len,
                            short *type_ret, char *uid_ret,

@@ -40,10 +40,7 @@
 
 /* CAL_$BOOT_VOLX is declared in cal/cal.h */
 
-/*
- * ROUTE_$PORT - Current route/port identifier
- */
-extern uint32_t ROUTE_$PORT;
+/* ROUTE_$PORT is declared in route/route.h */
 
 /* DISK_$LVUID_TO_VOLX and file_lock_info_internal_t are declared in headers */
 

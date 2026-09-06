@@ -156,16 +156,15 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
         goto success;
     }
 
-    /* Check WDIR_UID (per-address-space) */
+    /* Check WDIR_UID (per-address-space: base + (PROC1_$AS_ID << 3)) */
     {
-        uint16_t offset = PROC1_$AS_ID << 3;
-        uint32_t *wdir_uid = (uint32_t *)((char *)&NAME_$WDIR_UID + (int16_t)offset);
+        uid_t *wdir_uid = &NAME_$DATA.wdir_uid[PROC1_$AS_ID];
 
-        if (*(uint32_t *)(h + 0x00) == wdir_uid[0] &&
-            *(uint32_t *)(h + 0x04) == wdir_uid[1]) {
-            int16_t info_offset = PROC1_$AS_ID << 4;
-            uint8_t *wdir_info = (uint8_t *)&NAME_$WDIR_MAPPED_INFO + info_offset;
-            if ((int8_t)wdir_info[0] < 0) {
+        if (*(uint32_t *)(h + 0x00) == wdir_uid->high &&
+            *(uint32_t *)(h + 0x04) == wdir_uid->low) {
+            /* mapped info slot: base + (PROC1_$AS_ID << 4) */
+            name_$mapped_info_t *wdir_info = &NAME_$DATA.wdir_mapped_info[PROC1_$AS_ID];
+            if (wdir_info->active < 0) {
                 *(int16_t *)(h + 0x0C) = 3;
                 uint32_t *info = (uint32_t *)wdir_info;
                 *(uint32_t *)(h + 0x20) = info[0];
@@ -177,16 +176,15 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
         }
     }
 
-    /* Check NDIR_UID (per-address-space) */
+    /* Check NDIR_UID (per-address-space: base + (PROC1_$AS_ID << 3)) */
     {
-        uint16_t offset = PROC1_$AS_ID << 3;
-        uint32_t *ndir_uid = (uint32_t *)((char *)&NAME_$NDIR_UID + (int16_t)offset);
+        uid_t *ndir_uid = &NAME_$DATA.ndir_uid[PROC1_$AS_ID];
 
-        if (*(uint32_t *)(h + 0x00) == ndir_uid[0] &&
-            *(uint32_t *)(h + 0x04) == ndir_uid[1]) {
-            uint16_t info_offset = PROC1_$AS_ID << 4;
-            uint8_t *ndir_info = (uint8_t *)&NAME_$NDIR_MAPPED_INFO + (int16_t)info_offset;
-            if ((int8_t)ndir_info[0] >= 0) {
+        if (*(uint32_t *)(h + 0x00) == ndir_uid->high &&
+            *(uint32_t *)(h + 0x04) == ndir_uid->low) {
+            /* mapped info slot: base + (PROC1_$AS_ID << 4) */
+            name_$mapped_info_t *ndir_info = &NAME_$DATA.ndir_mapped_info[PROC1_$AS_ID];
+            if (ndir_info->active >= 0) {
                 goto generic_map;
             }
             *(int16_t *)(h + 0x0C) = 4;

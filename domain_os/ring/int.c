@@ -18,7 +18,7 @@
  *   - Checks psVar2[1] for transmit interrupt (negative = pending)
  *   - On receive: clears status, advances tx_ec (+0x10)
  *   - On transmit: clears status, increments RCV_INT_CNT, calls MCR_CHANGE,
- *     processes packet, advances ec from FUN_00e75400 or ready_ec
+ *     processes packet, advances ec from ring_$process_rx_packet (0x00e75400) or ready_ec
  */
 
 #include "ring/ring_internal.h"
@@ -101,7 +101,7 @@ int8_t RING_$INT(void *device_info)
 
         /*
          * Process the received packet.
-         * FUN_00e75400 (ring_$process_rx_packet) returns the event count
+         * ring_$process_rx_packet (0x00e75400) returns the event count
          * to advance, or NULL if the packet should be discarded.
          */
         ec = ring_$process_rx_packet(unit_data);

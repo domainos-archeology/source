@@ -79,7 +79,7 @@ void DIR_$SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
         /* Check if ACL has the "9ACL" bit set (bit 4 of byte 5) */
         if (((result_acl.low >> 4) & 0x10) == 0) {
             /* Convert to 9ACL format */
-            ACL_$CONVERT_TO_9ACL((int16_t)(uintptr_t)&response.f18, &result_acl,
+            ACL_$CONVERT_TO_9ACL(&response.f18, &result_acl,
                                  &local_dir, acl_type, &result_acl, status_ret);
             if (*status_ret != status_$ok) {
                 return;

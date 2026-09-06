@@ -14,17 +14,13 @@
 /* Status code */
 #define status_$logical_volume_not_found  0x00080010
 
-/* Volume table base for mounted state check */
-#define DISK_VOLUME_BASE  ((uint8_t *)0x00e7a290)
-
-/* Mount state offset */
-#define DISK_MOUNT_STATE_OFFSET  (-0x34)  /* -0x34 from +0x48 = 0x14 offset */
-
-/* UID offset in volume entry */
-#define DISK_UID_OFFSET          (-0x48)
-
-/* LV data offset */
-#define DISK_LV_DATA_OFFSET      (-0x40)
+/*
+ * UID offset in volume entry.  The machine code addresses the table as
+ * (0xe7a290 + vol*0x48) with negative offsets; expressed here relative to
+ * DISK_VOLUME_BASE (0xe7a1cc) + vol*0x48 (add 0xc4).  The mount state
+ * (-0x34) and LV data (-0x40) offsets come from disk/disk_internal.h.
+ */
+#define DISK_UID_OFFSET          0x7c   /* (-0x48) UID high/low (2 x uint32_t) */
 
 void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status)
 {

@@ -10,7 +10,7 @@
  *   asid - Address space ID to set
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 #include "mmu/mmu.h"
 
 void PROC1_$SET_ASID(uint16_t asid)

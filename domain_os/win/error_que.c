@@ -8,7 +8,7 @@
  * @param param_2  Output: result byte (cleared to 0)
  */
 
-#include "win.h"
+#include "win/win_internal.h"
 
 void WIN_$ERROR_QUE(uint8_t param_1, uint8_t *param_2)
 {

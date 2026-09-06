@@ -31,11 +31,10 @@
 #define APOLLO_EPOCH_OFFSET 0x12CEA600
 
 /*
- * Base address of VT queue array
- *
- * Original: 0xE29198 + 0xC = 0xE291A4
+ * The VT queue walk starts at VT_QUEUE_ARRAY_BASE + 0xC (0xE29198 + 0xC =
+ * 0xE291A4; original: movea.l #0xe29198,A2; lea (0xc,A2),A2).
+ * VT_QUEUE_ARRAY_BASE itself is defined in time/time_internal.h.
  */
-#define VT_QUEUE_ARRAY_BASE 0xE291A4
 
 /*
  * Offset from queue array to actual queue structure
@@ -63,7 +62,7 @@ void TIME_$INIT(uint8_t *flags)
      * Each queue is 12 bytes apart in the queue table
      * Queue flags = 0xFF (all-queues marker), ID = 1..64
      */
-    vt_queue_ptr = (time_queue_t *)VT_QUEUE_ARRAY_BASE;
+    vt_queue_ptr = (time_queue_t *)(VT_QUEUE_ARRAY_BASE + 0xC);
     for (i = 1; i <= 64; i++) {
         TIME_$Q_INIT_QUEUE(0xFF, (uint16_t)i,
                           (time_queue_t *)((char *)vt_queue_ptr + VT_QUEUE_OFFSET));

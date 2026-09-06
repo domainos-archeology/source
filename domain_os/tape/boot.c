@@ -9,7 +9,7 @@
  * including tape drives. This stub remains for API compatibility.
  */
 
-#include "tape.h"
+#include "tape/tape_internal.h"
 
 /*
  * TAPE_$BOOT - Check if system booted from tape

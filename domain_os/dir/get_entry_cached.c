@@ -33,8 +33,6 @@
 #include "dir/dir_internal.h"
 
 /* ACL rights parameters for cache hit path */
-extern uint8_t DAT_00e4cff4;
-extern uint8_t DAT_00e4cff6;
 
 void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
                            short *type_ret, char *uid_ret, uint32_t *extra_ret,

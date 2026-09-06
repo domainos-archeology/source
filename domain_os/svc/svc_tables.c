@@ -12,7 +12,7 @@
  *   SVC_$TRAP5_TABLE: 0x00e7baf2 (99 entries)
  */
 
-#include "svc/svc.h"
+#include "svc/svc_internal.h"
 
 /* Subsystem headers for syscall handlers */
 #include "acl/acl.h"
@@ -64,20 +64,9 @@
 #include "stop/stop.h"
 
 /*
- * Forward declarations for syscall handlers not yet in subsystem headers.
- * As headers are created for these subsystems, move includes above and
- * remove the corresponding extern declarations here.
+ * SVC_$INVALID_SYSCALL, SVC_$UNIMPLEMENTED and the not-yet-identified
+ * handlers FUN_00e0aa04 / FUN_00e0a9c2 are declared in svc/svc_internal.h.
  */
-
-/* Error handlers (in svc/sau2/*.s) */
-extern void SVC_$INVALID_SYSCALL(void);
-extern void SVC_$UNIMPLEMENTED(void);
-
-/* TRAP #0 handlers not yet in headers */
-extern void FUN_00e0aa04(void);          /* TODO(source-cry): identify - returns FIM addr */
-
-/* TRAP #1 handlers not yet in headers */
-extern void FUN_00e0a9c2(void);          /* TODO(source-cry): identify - sets FIM user addr */
 
 /*
  * ============================================================================

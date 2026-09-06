@@ -26,9 +26,7 @@
 #include "fim/fim.h"
 #include "ec/ec.h"
 
-/* Status codes */
-#define status_$tty_buffer_full    0x350004
-#define status_$tty_eof            0x350005
+/* Status codes (status_$tty_buffer_full / status_$tty_eof come from base/base.h) */
 #define status_$tty_quit           0x350007
 #define status_$tty_overflow       0x350009
 
@@ -61,8 +59,10 @@ ushort TTY_$K_GET(short *line_ptr, void *options, void *buffer,
     TTY_$I_LOCK(tty);
 
     /* Extract option flags */
-    wait_flag = -((*(uint8_t *)((char *)options + 1) & 0x01) != 0);
-    clear_flag = -((*(uint8_t *)((char *)options + 1) & 0x02) != 0);
+    /* Original: btst.b #0,(0x1,A4) / btst.b #1,(0x1,A4) - bits 0 and 1 of the
+     * low byte of the 2-byte big-endian option word. */
+    wait_flag = -((*(uint16_t *)options & 0x0001) != 0);
+    clear_flag = -((*(uint16_t *)options & 0x0002) != 0);
     done = 0;
     eof_flag = 0;
 

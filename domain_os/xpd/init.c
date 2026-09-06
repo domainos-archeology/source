@@ -10,7 +10,7 @@
  * Original address: 0x00e32304
  */
 
-#include "xpd/xpd.h"
+#include "xpd/xpd_internal.h"
 #include "mst/mst.h"
 #include "os/os.h"
 
@@ -20,9 +20,10 @@
  * XPD_$DATA starts at 0xEA5034 and contains:
  *   - 57 eventcounts at 0x14 byte intervals (for target processes)
  *   - 6 debugger eventcounts at offset 0x478 (for debugger slots)
+ *
+ * PTR_XPD_$DATA (0x00e32390) is declared in xpd_internal.h and
+ * PTR_PROC2_$DATA (0x00e3238c) in proc2/proc2.h.
  */
-extern void *PTR_XPD_$DATA;     /* 0x00e32390: Pointer to XPD data area */
-extern void *PTR_PROC2_$DATA;   /* 0x00e3238c: Pointer to PROC2 data area */
 
 void XPD_$INIT(void)
 {

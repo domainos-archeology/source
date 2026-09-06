@@ -9,10 +9,7 @@
 
 #include "dbuf/dbuf_internal.h"
 
-/* Forward declaration for NETLOG (if logging is enabled) */
-extern char NETLOG_$OK_TO_LOG;
-extern void NETLOG_$LOG_IT(uint16_t type, uid_t *uid, int16_t p1, uint16_t p2,
-                           uint16_t p3, uint16_t p4, uint16_t p5, uint16_t p6);
+/* NETLOG_$OK_TO_LOG / NETLOG_$LOG_IT come from netlog/netlog.h */
 
 /*
  * DBUF_$GET_BLOCK
@@ -55,7 +52,8 @@ void *DBUF_$GET_BLOCK(uint16_t vol_idx, int32_t block, uid_t *uid,
 
     /* Optional logging */
     if (NETLOG_$OK_TO_LOG < 0) {
-        NETLOG_$LOG_IT(0x10, uid, (int16_t)(block_hint >> 5),
+        /* NETLOG_$LOG_IT takes the UID as a uint32_t pair */
+        NETLOG_$LOG_IT(0x10, (uint32_t *)uid, (int16_t)(block_hint >> 5),
                        (uint16_t)(block_hint & 0x1F),
                        (uint16_t)flags, vol_idx, 0, 0);
     }
@@ -246,8 +244,10 @@ retry:
             ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
         }
 
-        /* Set error bit 7 and return NULL */
-        *(uint8_t *)status |= 0x80;
+        /* Set error bit and return NULL.
+         * Original: bset.b #7,(A3) on the most significant byte of the
+         * big-endian 32-bit status */
+        *status |= 0x80000000;
         return NULL;
     }
 

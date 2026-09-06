@@ -77,6 +77,7 @@ int16_t FILE_$CHECK_PROT(uid_t *file_uid, uint16_t access_mask, uint32_t slot_nu
                          void *unused, uint16_t *rights_out, status_$t *status_ret)
 {
     int16_t lock_index;
+    int16_t option_flags_lo;
     int32_t entry_offset;
     uint8_t entry_flags;
     uint32_t *entry_ptr;
@@ -161,8 +162,15 @@ int16_t FILE_$CHECK_PROT(uid_t *file_uid, uint16_t access_mask, uint32_t slot_nu
      *   - status_ret
      */
     rights_mask = (uint32_t)access_mask;
+    /*
+     * The original passes the address of the low word of the 'unused'
+     * parameter slot (bytes 2-3 of the 32-bit slot on big-endian m68k) as
+     * the option flags pointer.  'unused' is dead after this call, so a
+     * local holding that low word is equivalent.
+     */
+    option_flags_lo = (int16_t)((uintptr_t)unused & 0xFFFF);
     *rights_out = ACL_$RIGHTS(file_uid, unused, &rights_mask,
-                              (int16_t *)((uint8_t *)&unused + 2), status_ret);
+                              &option_flags_lo, status_ret);
 
     return (int16_t)*rights_out;
 }

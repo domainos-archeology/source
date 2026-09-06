@@ -21,7 +21,7 @@
 #if defined(ARCH_M68K)
     #define SEGMAP_BASE_ADDR    0xED5000
 #else
-    extern uint8_t segmap_base[];
+    /* segmap_base: pmap_internal.h */
     #define SEGMAP_BASE_ADDR    ((uintptr_t)segmap_base)
 #endif
 

@@ -34,8 +34,7 @@
     #define PMAP_UPDATE_TIMER_ELEM   ((time_queue_elem_t *)0xE24D44)
     #define PMAP_PURIFIER_TIMER_ELEM ((time_queue_elem_t *)0xE24D64)
 #else
-    extern time_queue_elem_t pmap_update_timer_elem;
-    extern time_queue_elem_t pmap_purifier_timer_elem;
+    /* pmap_update_timer_elem, pmap_purifier_timer_elem: pmap_internal.h */
     #define PMAP_UPDATE_TIMER_ELEM   (&pmap_update_timer_elem)
     #define PMAP_PURIFIER_TIMER_ELEM (&pmap_purifier_timer_elem)
 #endif

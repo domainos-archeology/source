@@ -11,7 +11,7 @@
  * Original source: Pascal, converted to C
  */
 
-#include "sock_internal.h"
+#include "sock/sock_internal.h"
 #include "pkt/pkt.h"
 
 void SOCK_$CLOSE(uint16_t sock_num)

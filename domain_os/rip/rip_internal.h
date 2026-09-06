@@ -132,17 +132,28 @@ typedef struct rip_$data_t {
  */
 
 extern rip_$data_t RIP_$DATA;
-extern rip_$entry_t *RIP_$INFO;
 extern rip_$stats_t RIP_$STATS;
 /* ROUTE_$STD_N_ROUTING_PORTS / ROUTE_$N_ROUTING_PORTS: see route/route.h */
 extern int8_t RIP_$STD_RECENT_CHANGES;
 extern int8_t RIP_$RECENT_CHANGES;
 
-/* Status code for unknown network port */
-#define status_$internet_unknown_network_port   0x2B0003
+/*
+ * RIP_$INFO - Base of the routing table entries (0xE263BC).
+ * This is RIP_$DATA.entries (offset 0x164 of the RIP data block).
+ */
+#define RIP_$INFO               (RIP_$DATA.entries)
 
-/* Status code for too many networks in internet (routing table full) */
-#define status_$network_too_many_networks_in_internet   0x00110018
+#if defined(ARCH_M68K)
+/* Extra data reference for PKT_$SEND_INTERNET in RIP_$ANNOUNCE_NS (0xE68E28) */
+#define RIP_$ANNOUNCE_EXTRA     ((uint8_t *)0xE68E28)
+#else
+extern uint8_t RIP_$ANNOUNCE_EXTRA[4];
+#endif
+
+/*
+ * status_$internet_unknown_network_port: route/route.h
+ * status_$network_too_many_networks_in_internet: network/network.h
+ */
 
 /*
  * =============================================================================
@@ -447,8 +458,6 @@ void RIP_$STD_OPEN(void);
 void RIP_$STD_DEMUX(idp_$packet_t *pkt, uint16_t *param_2, uint16_t *param_3,
                     void *param_4, status_$t *status_ret);
 
-
-/* RIP_$STD_IDP_CHANNEL - IDP channel for RIP packets (0xFFFF = no channel) */
-extern int16_t RIP_$STD_IDP_CHANNEL;
+/* RIP_$STD_IDP_CHANNEL: see rip/rip.h */
 
 #endif /* RIP_INTERNAL_H */

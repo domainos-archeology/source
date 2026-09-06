@@ -24,7 +24,7 @@
 // TTY_$K_INQ_ECHO_FLAGS - Inquire echo flags
 // Address: 0x00e677e0
 
-#include "tty.h"
+#include "tty/tty_internal.h"
 
 void TTY_$K_SET_FLAG(short *line_ptr, short *flag_ptr, char *value_ptr,
                      status_$t *status)

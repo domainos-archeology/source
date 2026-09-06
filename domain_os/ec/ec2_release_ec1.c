@@ -8,7 +8,7 @@
  * Original address: 0x00e42b32
  */
 
-#include "ec_internal.h"
+#include "ec/ec_internal.h"
 #include "ml/ml.h"
 
 void EC2_$RELEASE_EC1(ec2_$eventcount_t *ec, status_$t *status_ret)

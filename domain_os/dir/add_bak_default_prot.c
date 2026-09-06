@@ -23,7 +23,6 @@
 #include "dir/dir_internal.h"
 
 /* DAT_00e50830 - Protection type parameter for FILE_$SET_PROT */
-extern uint16_t DAT_00e50830;
 
 void dir_$add_bak_default_prot(uint32_t local_handle, uid_t *uid,
                                 void *name_ptr, uint16_t name_len,

@@ -1,4 +1,4 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 
 // Copies the current timezone information to the caller's buffer.
 // Copies 12 bytes (utc_delta, tz_name, drift).

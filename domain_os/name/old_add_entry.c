@@ -30,6 +30,7 @@
  * Size: 202 bytes
  */
 
+#include "name/name_internal.h"
 #include "dir/dir_internal.h"
 
 void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,

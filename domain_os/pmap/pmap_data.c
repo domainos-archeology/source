@@ -200,3 +200,38 @@ int8_t PMAP_$SHUTTING_DOWN_FLAG = 0;
  * Original address: 0xE254E4
  */
 uint16_t PMAP_$CURRENT_SLOT = 5;
+
+/*
+ * ============================================================================
+ * Purifier Wait Delay
+ * ============================================================================
+ */
+
+/*
+ * Short wait delay
+ *
+ * Relative delay (5 ticks) used by PMAP_$PURIFIER_L between passes.
+ *
+ * Original address: 0xE254DC (DAT_00e254dc)
+ */
+clock_t PMAP_$SHORT_WAIT_DELAY = { 0, 5 };
+
+/*
+ * ============================================================================
+ * Working Set Scan Timers
+ * ============================================================================
+ */
+
+/*
+ * Per-working-set timer queues
+ *
+ * Original address: 0xE2A494
+ */
+time_queue_t PMAP_$WS_TIMER_QUEUES[PMAP_WS_SLOTS];
+
+/*
+ * Per-working-set timer queue elements
+ *
+ * Original address: 0xE24D68 (DAT_00e24d68)
+ */
+time_queue_elem_t PMAP_$WS_TIMER_ELEMENTS[PMAP_WS_SLOTS];

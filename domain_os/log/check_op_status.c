@@ -29,10 +29,9 @@
 
 /*
  * The original code accessed status through the caller's frame pointer.
- * This global variable should be set by the caller before calling this
+ * The caller sets log_$last_status (log_internal.h) before calling this
  * function. This is a workaround for the Pascal calling convention.
  */
-extern status_$t log_$last_status;
 
 /* Error message format strings from original binary */
 static const char msg_warning[] = "\n   Warning: Status %lh  Unable to ";
@@ -49,7 +48,7 @@ int8_t log_$check_op_status(const char *op)
     }
 
     /* Print error message */
-    ERROR_$PRINT(msg_warning, &log_$last_status, (void *)0x00e2fffc);
+    ERROR_$PRINT(msg_warning, &log_$last_status, &DAT_00e2fffc);
     ERROR_$PRINT(op, (void *)0x00e2fffc);
     ERROR_$PRINT(msg_suffix, log_path, (void *)0x00e30044);
 

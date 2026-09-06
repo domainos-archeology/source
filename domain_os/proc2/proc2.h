@@ -131,7 +131,8 @@ typedef struct proc2_sig_mask_t {
 typedef struct proc2_info_t {
   uid_t uid; /* 0x00: Process UID */
 
-  uint8_t pad_08[0x08];      /* 0x08: Unknown */
+  uid_t parent_uid; /* 0x08: Parent UID (PROC2_$GET_CR_REC); PROC2_$INIT stores
+                       the creation-record area UID here for the init process */
   uint16_t pgroup_table_idx; /* 0x10: Index into pgroup table (also used in
                                 LIST_PGROUP) */
 
@@ -195,7 +196,8 @@ typedef struct proc2_info_t {
   uint8_t
       name_len; /* 0xBE: Process name length (0x21='!', 0x22='"' for no name) */
 
-  uint8_t pad_bf[0x25]; /* 0xBF: Padding to 0xE4 */
+  uint8_t pad_bf[0x1D]; /* 0xBF: Unknown */
+  uid_t stack_uid;      /* 0xDC: Stack area UID (from MST_$MAP_AREA_AT) */
 } proc2_info_t;
 
 /*
@@ -226,8 +228,16 @@ extern uint16_t *P2_PID_TO_INDEX_TABLE;
 /* Process group table (8-byte entries at 0xEA551C + 0x3F30) */
 extern pgroup_entry_t *PGROUP_TABLE;
 
-/* Process UID storage */
-extern uid_t PROC2_UID;
+/*
+ * Per-ASID process UID table (8 bytes per entry, indexed by ASID).
+ * PROC2_$INIT fills entries 0 and 2..57 with proc2_system_uid and
+ * generates a separate UID for entry 1.  The table runs from 0xE7BE94
+ * up to P2_INFO_ALLOC_PTR (0xE7C064).
+ *
+ * Original address: 0xE7BE94 (Ghidra label PROC2_UID)
+ */
+#define PROC2_UID_TABLE_SIZE 58
+extern uid_t PROC2_UID[PROC2_UID_TABLE_SIZE];
 
 #define P2_INFO_ENTRY(idx) (&P2_INFO_TABLE[(idx) - 1])
 #define P2_PID_TO_INDEX(pid) (P2_PID_TO_INDEX_TABLE[(pid)])
@@ -248,7 +258,7 @@ extern uid_t PROC2_UID;
  * PROC2_$INIT - Initialize PROC2 subsystem
  * Original address: 0x00e303d8
  */
-status_$t PROC2_$INIT(int32_t boot_flags_param, status_$t *status_ret);
+status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -890,5 +900,8 @@ void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid, uint16_t *upgid,
  * Original address: 0x00e73968
  */
 void PROC2_$GET_MY_UPIDS(uint16_t *upid, uint16_t *upgid, uint16_t *uppid);
+
+/* Pointer to the PROC2 data area (0x00E3238C), used by XPD_$INIT for MST_$WIRE_AREA */
+extern void *PTR_PROC2_$DATA;
 
 #endif /* PROC2_H */

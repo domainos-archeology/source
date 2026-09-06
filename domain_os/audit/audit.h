@@ -246,4 +246,7 @@ void AUDIT_$SERVER(void);
 /* Event UID for SID change audit events */
 extern uid_t AUDIT_$SET_SID_EU;
 
+/* Master enable flag (0xE2E09E, defined in audit/audit_data.c) */
+extern int8_t AUDIT_$ENABLED;
+
 #endif /* AUDIT_H */

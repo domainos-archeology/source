@@ -7,7 +7,7 @@
  * Original address: 0x00e0cd80
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 #include "proc1/proc1.h"
 
 void MMAP_$INSTALL_LIST(uint32_t *vpn_array, uint16_t count, int8_t use_wired)

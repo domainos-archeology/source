@@ -13,7 +13,7 @@
 /*
  * DIR_$ADDU - Add a directory entry
  *
- * This function is a thin wrapper around FUN_00e500b8 that adds
+ * This function is a thin wrapper around DIR_$ADD_ENTRY_INTERNAL (0x00e500b8) that adds
  * a simple directory entry (not a root entry with special flags).
  *
  * Parameters:

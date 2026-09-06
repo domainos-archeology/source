@@ -21,11 +21,11 @@
  * Size: 154 bytes
  */
 
+#include "name/name_internal.h"
 #include "dir/dir_internal.h"
 #include "misc/string.h"
 
-/* Character validation data at DAT_00e544ae */
-extern uint8_t DAT_00e544ae;
+/* DAT_00e544ae (MAP_CASE max output length, 0x0020) is declared in name_internal.h */
 
 /* Valid character bitmap - accessed via A5+0x00 (full charset) and A5+0x20 (first char) */
 /* These bitmaps are 32 bytes each, with bit N set if char (0xFF - N) is valid */
@@ -46,7 +46,8 @@ int8_t name_$validate_leaf(char *name, uint16_t name_len,
     }
 
     /* Apply case mapping */
-    MAP_CASE(name, &name_len, parsed, &DAT_00e544ae, parsed_len, result);
+    MAP_CASE(name, (int16_t *)&name_len, (char *)parsed, &DAT_00e544ae,
+             (int16_t *)parsed_len, (uint8_t *)result);
 
     /* Check if case mapping succeeded */
     if (result[0] < 0) {

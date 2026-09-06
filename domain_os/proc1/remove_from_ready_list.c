@@ -10,7 +10,7 @@
  * Original address: 0x00e206d6
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 void proc1_$remove_from_ready_list(proc1_t *pcb)
 {

@@ -8,9 +8,9 @@
  *
  * Assembly analysis:
  *   - Validates unit number < 2 and unit is initialized
- *   - Calls ring_$disable_interrupts (FUN_00e7667c)
+ *   - Calls ring_$disable_interrupts (0x00e7667c)
  *   - Sets RING_UNIT_RUNNING flag (bit 1) in state_flags
- *   - If RING_UNIT_STARTED flag not set, calls ring_$do_start (FUN_00e7671c)
+ *   - If RING_UNIT_STARTED flag not set, calls ring_$do_start (0x00e7671c)
  *   - Calls ring_$set_hw_mask with tmask | 0xBF
  */
 

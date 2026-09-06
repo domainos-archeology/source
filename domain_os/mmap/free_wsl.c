@@ -7,8 +7,7 @@
  * Original address: 0x00e0d158
  */
 
-#include "mmap.h"
-#include "mmap_internal.h"
+#include "mmap/mmap_internal.h"
 #include "misc/misc.h"
 
 void MMAP_$FREE_WSL(uint16_t pid)

@@ -21,10 +21,8 @@
 
 /* arch/arch.h included transitively via dir/dir_internal.h -> base/base.h */
 
-/* Status codes */
-#define status_$naming_invalid_leaf        0x000E000B
+/* Status codes (status_$naming_* come from name/name.h) */
 #define file_$bad_reply_received           0x000F0003
-#define status_$naming_bad_directory       0x000E000D
 
 /* Directory operation codes */
 #define DIR_OP_ADDU  0x2A
@@ -70,8 +68,7 @@ void DIR_$ADD_ENTRY_INTERNAL(uid_t *dir_uid, char *name, int16_t name_len,
 #if defined(ARCH_M68K)
     request.type_field = *(uint16_t *)((char *)__A5_BASE() + 0x2042);
 #else
-    extern uint16_t DAT_a5_2042;
-    request.type_field = DAT_a5_2042;
+    request.type_field = DAT_a5_2042;   /* declared in dir_internal.h */
 #endif
 
     /* Copy file UID and flags into name_data area */
@@ -83,8 +80,7 @@ void DIR_$ADD_ENTRY_INTERNAL(uid_t *dir_uid, char *name, int16_t name_len,
 #if defined(ARCH_M68K)
     req_len = name_len + *(int16_t *)((char *)__A5_BASE() + 0x2046);
 #else
-    extern int16_t DAT_a5_2046;
-    req_len = name_len + DAT_a5_2046;
+    req_len = name_len + DAT_a5_2046;   /* declared in dir_internal.h */
 #endif
 
     /* Perform directory operation */

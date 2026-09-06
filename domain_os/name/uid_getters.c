@@ -42,9 +42,8 @@
  */
 void NAME_$GET_WDIR_UID(uid_t *uidp)
 {
-    int16_t offset = PROC1_$AS_ID << 3;  /* Each UID is 8 bytes */
-    uid_t *wdir_ptr = (uid_t *)((char *)&NAME_$NODE_DATA_UID +
-                                NAME_DATA_WDIR_UID_BASE_OFF + offset);
+    /* Each UID is 8 bytes: NAME_$DATA + 0x950 + ASID*8 */
+    uid_t *wdir_ptr = &NAME_$DATA.wdir_uid[PROC1_$AS_ID];
 
     uidp->high = wdir_ptr->high;
     uidp->low = wdir_ptr->low;
@@ -64,9 +63,8 @@ void NAME_$GET_WDIR_UID(uid_t *uidp)
  */
 void NAME_$GET_NDIR_UID(uid_t *uidp)
 {
-    int16_t offset = PROC1_$AS_ID << 3;  /* Each UID is 8 bytes */
-    uid_t *ndir_ptr = (uid_t *)((char *)&NAME_$NODE_DATA_UID +
-                                NAME_DATA_NDIR_UID_BASE_OFF + offset);
+    /* Each UID is 8 bytes: NAME_$DATA + 0x3E0 + ASID*8 */
+    uid_t *ndir_ptr = &NAME_$DATA.ndir_uid[PROC1_$AS_ID];
 
     uidp->high = ndir_ptr->high;
     uidp->low = ndir_ptr->low;

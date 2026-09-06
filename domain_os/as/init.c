@@ -14,20 +14,7 @@
  * (i.e., the signed byte value is negative).
  */
 
-#include "as/as.h"
-#include "mmu/mmu.h"
-
-/*
- * M68020 address space adjustment offset
- * Applied to stack and CR record addresses on M68020 systems
- */
-#define M68020_AS_OFFSET  0x2A00000
-
-/*
- * M68020 Global A configuration
- */
-#define M68020_GLOBAL_A_BASE  0x33C0000
-#define M68020_GLOBAL_A_SIZE  0x700000
+#include "as/as_internal.h"
 
 void AS_$INIT(void)
 {

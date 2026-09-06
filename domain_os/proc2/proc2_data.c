@@ -7,7 +7,7 @@
  *
  */
 
-#include "proc2_internal.h"
+#include "proc2/proc2_internal.h"
 
 status_$t PROC2_Internal_Error = status_$proc2_internal_error;
 
@@ -26,5 +26,17 @@ uint16_t *P2_PID_TO_INDEX_TABLE;
 /* Process group table (8-byte entries at 0xEA551C + 0x3F30) */
 pgroup_entry_t *PGROUP_TABLE;
 
-/* Process UID storage */
-uid_t PROC2_UID;
+/* Per-ASID process UID table (0xE7BE94) */
+uid_t PROC2_UID[PROC2_UID_TABLE_SIZE];
+
+/* UID of /node_data/proc_dir (0xE7BE84, DAT_00e7be84) */
+uid_t proc2_proc_dir_uid;
+
+/* System process UID (0xE7BE8C, DAT_00e7be8c) */
+uid_t proc2_system_uid;
+
+/* Boot flags word (0xE7C068, DAT_00e7c068) */
+int16_t proc2_boot_flags;
+
+/* Per-process fork / creation record eventcounts (0xE2B978, PROC2_$EC) */
+proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];

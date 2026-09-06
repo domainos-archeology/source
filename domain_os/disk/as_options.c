@@ -10,13 +10,8 @@
 
 #include "disk/disk_internal.h"
 
-/* Volume table offsets */
-#define DISK_MOUNT_STATE_OFFSET  0x90
-#define DISK_MOUNT_PROC_OFFSET   0x92
+/* Volume table offsets (mount state/proc come from disk_internal.h) */
 #define DISK_AS_OPTIONS_OFFSET   0xa4  /* Async options offset */
-
-/* Volume table base */
-#define DISK_VOLUME_BASE  ((uint8_t *)0x00e7a1cc)
 
 /* Valid volume index mask (volumes 1-10) */
 #define VALID_VOL_MASK  0x7fe

@@ -11,7 +11,7 @@
  * Original address: 0x00e42a8a
  */
 
-#include "ec_internal.h"
+#include "ec/ec_internal.h"
 #include "ml/ml.h"
 
 ec_$eventcount_t *EC2_$GET_EC1_ADDR(ec2_$eventcount_t *ec, status_$t *status_ret)

@@ -1,4 +1,16 @@
-#include "cal.h"
+/*
+ * cal/test/test_weekday.c - Unit tests for CAL_$WEEKDAY
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "math/mod.c"
+#include "../weekday.c"
+
 
 // CAL_$WEEKDAY returns: 0=Sunday, 1=Monday, ..., 6=Saturday
 
@@ -133,4 +145,20 @@ void test_weekday_consecutive_days(void) {
 
     day = 7;
     ASSERT_EQ(CAL_$WEEKDAY(&year, &month, &day), 6);  // Saturday
+}
+
+int main(void) {
+    printf("CAL_$WEEKDAY tests\n");
+    RUN_TEST(weekday_epoch);
+    RUN_TEST(weekday_moon_landing);
+    RUN_TEST(weekday_christmas_1985);
+    RUN_TEST(weekday_january);
+    RUN_TEST(weekday_february_leap_year);
+    RUN_TEST(weekday_march_first);
+    RUN_TEST(weekday_century_leap_year);
+    RUN_TEST(weekday_century_non_leap_year);
+    RUN_TEST(weekday_end_of_year);
+    RUN_TEST(weekday_consecutive_days);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

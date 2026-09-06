@@ -24,9 +24,6 @@
 
 #include "log/log_internal.h"
 
-/* Reference to early log extended magic at 0x00e0000c */
-extern early_log_extended_t EARLY_LOG_EXTENDED;
-
 uint32_t LOG_$UPDATE(void)
 {
     uint32_t result;

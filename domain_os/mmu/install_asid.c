@@ -7,7 +7,7 @@
  * Original address: 0x00e24204
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 void MMU_$INSTALL_ASID(uint16_t asid)
 {

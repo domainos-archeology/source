@@ -14,7 +14,7 @@
  * @param queue_ptr   Pointer to queue head pointer
  */
 
-#include "disk_internal.h"
+#include "disk/disk_internal.h"
 
 /* Request block offsets */
 #define REQ_NEXT_OFFSET     0x00   /* Pointer to next request */

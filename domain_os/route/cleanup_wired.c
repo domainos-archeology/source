@@ -13,39 +13,9 @@
 #include "wp/wp.h"
 
 /*
- * Additional globals for wired page tracking
- *
- * These are defined in the data segment near the routing code and
- * track pages wired for routing operations.
+ * ROUTE_$WIRED_PAGES, ROUTE_$N_WIRED_PAGES and ROUTE_$N_USER_PORTS are
+ * declared in route/route_internal.h.
  */
-#if defined(ARCH_M68K)
-    /*
-     * ROUTE_$WIRED_PAGES - Array of wired page addresses
-     *
-     * Holds up to N page addresses that have been wired for routing.
-     *
-     * Original address: 0xE87D80
-     */
-    #define ROUTE_$WIRED_PAGES      ((uint32_t *)0xE87D80)
-
-    /*
-     * ROUTE_$N_WIRED_PAGES - Count of currently wired pages
-     *
-     * Original address: 0xE87FD2
-     */
-    #define ROUTE_$N_WIRED_PAGES    (*(int16_t *)0xE87FD2)
-
-    /*
-     * ROUTE_$N_USER_PORTS - Count of active user ports
-     *
-     * Original address: 0xE87FD4
-     */
-    #define ROUTE_$N_USER_PORTS     (*(int16_t *)0xE87FD4)
-#else
-    extern uint32_t ROUTE_$WIRED_PAGES[];
-    extern int16_t ROUTE_$N_WIRED_PAGES;
-    extern int16_t ROUTE_$N_USER_PORTS;
-#endif
 
 /*
  * ROUTE_$CLEANUP_WIRED - Unwire pages when no longer needed

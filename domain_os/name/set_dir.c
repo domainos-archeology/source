@@ -12,21 +12,10 @@
 
 #include "name/name_internal.h"
 
-/* Internal helper to convert ACL status - defined elsewhere */
-extern void NAME_CONVERT_ACL_STATUS(status_$t *status);
-
-/* name_$unmap_dir_buffers declared in name/name_internal.h */
-
-/*
- * Per-ASID data offsets (relative to name_$data_base at 0xE80264)
- */
-#define NAME_DATA_NDIR_UID_BASE_OFF         0x3E0
-#define NAME_DATA_WDIR_UID_BASE_OFF         0x950
-#define NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF 0x040
-#define NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF 0x5B0
-
-/* Base pointer for NAME data area */
-extern uid_t NAME_$NODE_DATA_UID;  /* At 0xE80264 - base of name data */
+/* NAME_CONVERT_ACL_STATUS and name_$unmap_dir_buffers are declared in
+ * name/name.h and name/name_internal.h.  Per-ASID data lives in NAME_$DATA
+ * (0xE80264): ndir_uid[] +0x3E0, wdir_uid[] +0x950, ndir_mapped_info[] +0x040,
+ * wdir_mapped_info[] +0x5B0. */
 
 /*
  * NAME_$SET_WDIR - Set working directory by pathname
@@ -65,14 +54,10 @@ void NAME_$SET_WDIR(char *path, int16_t *path_len, status_$t *status_ret)
  */
 void NAME_$SET_WDIRUS(uid_t *uidp, status_$t *status_ret)
 {
-    int16_t uid_offset;
-    int16_t mapped_offset;
-    char *base = (char *)&NAME_$NODE_DATA_UID;
     uid_t *current_wdir;
 
-    /* Calculate offset for current ASID */
-    uid_offset = PROC1_$AS_ID << 3;      /* 8 bytes per UID */
-    current_wdir = (uid_t *)(base + NAME_DATA_WDIR_UID_BASE_OFF + uid_offset);
+    /* Slot for current ASID (8 bytes per UID) */
+    current_wdir = &NAME_$DATA.wdir_uid[PROC1_$AS_ID];
 
     /* If already set to this UID, nothing to do */
     if (uidp->high == current_wdir->high && uidp->low == current_wdir->low) {
@@ -88,13 +73,12 @@ void NAME_$SET_WDIRUS(uid_t *uidp, status_$t *status_ret)
     if (ACL_$RIGHTS(uidp, NULL, NULL, NULL, status_ret) == 0) {
         NAME_CONVERT_ACL_STATUS(status_ret);
     } else {
-        /* Unmap old directory */
-        mapped_offset = PROC1_$AS_ID << 4;  /* 16 bytes per mapped info */
-        name_$unmap_dir_buffers(PROC1_$AS_ID, base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + mapped_offset);
+        /* Unmap old directory (16 bytes per mapped info) */
+        name_$unmap_dir_buffers(PROC1_$AS_ID, &NAME_$DATA.wdir_mapped_info[PROC1_$AS_ID]);
 
         /* Map new directory */
         name_$map_dir(uidp, PROC1_$AS_ID,
-                     base + NAME_DATA_WDIR_MAPPED_INFO_BASE_OFF + mapped_offset, status_ret);
+                     &NAME_$DATA.wdir_mapped_info[PROC1_$AS_ID], status_ret);
 
         if (*status_ret == status_$ok) {
             /* Update the working directory UID */
@@ -103,7 +87,7 @@ void NAME_$SET_WDIRUS(uid_t *uidp, status_$t *status_ret)
             *status_ret = status_$ok;
         } else {
             /* Set high bit to indicate error during mapping */
-            *(uint8_t *)status_ret |= 0x80;
+            *status_ret |= 0x80000000;  /* high bit of the first byte (m68k big-endian) */
         }
     }
 
@@ -127,14 +111,10 @@ void NAME_$SET_WDIRUS(uid_t *uidp, status_$t *status_ret)
  */
 void NAME_$SET_NDIRUS(uid_t *uidp, status_$t *status_ret)
 {
-    int16_t uid_offset;
-    int16_t mapped_offset;
-    char *base = (char *)&NAME_$NODE_DATA_UID;
     uid_t *current_ndir;
 
-    /* Calculate offset for current ASID */
-    uid_offset = PROC1_$AS_ID << 3;      /* 8 bytes per UID */
-    current_ndir = (uid_t *)(base + NAME_DATA_NDIR_UID_BASE_OFF + uid_offset);
+    /* Slot for current ASID (8 bytes per UID) */
+    current_ndir = &NAME_$DATA.ndir_uid[PROC1_$AS_ID];
 
     /* If already set to this UID, nothing to do */
     if (uidp->high == current_ndir->high && uidp->low == current_ndir->low) {
@@ -149,13 +129,12 @@ void NAME_$SET_NDIRUS(uid_t *uidp, status_$t *status_ret)
     if (ACL_$RIGHTS(uidp, NULL, NULL, NULL, status_ret) == 0) {
         NAME_CONVERT_ACL_STATUS(status_ret);
     } else {
-        /* Unmap old directory */
-        mapped_offset = PROC1_$AS_ID << 4;  /* 16 bytes per mapped info */
-        name_$unmap_dir_buffers(PROC1_$AS_ID, base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + mapped_offset);
+        /* Unmap old directory (16 bytes per mapped info) */
+        name_$unmap_dir_buffers(PROC1_$AS_ID, &NAME_$DATA.ndir_mapped_info[PROC1_$AS_ID]);
 
         /* Map new directory */
         name_$map_dir(uidp, PROC1_$AS_ID,
-                     base + NAME_DATA_NDIR_MAPPED_INFO_BASE_OFF + mapped_offset, status_ret);
+                     &NAME_$DATA.ndir_mapped_info[PROC1_$AS_ID], status_ret);
 
         if (*status_ret == status_$ok) {
             /* Update the naming directory UID */
@@ -164,7 +143,7 @@ void NAME_$SET_NDIRUS(uid_t *uidp, status_$t *status_ret)
             *status_ret = status_$ok;
         } else {
             /* Set high bit to indicate error during mapping */
-            *(uint8_t *)status_ret |= 0x80;
+            *status_ret |= 0x80000000;  /* high bit of the first byte (m68k big-endian) */
         }
     }
 

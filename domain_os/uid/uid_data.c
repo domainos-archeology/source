@@ -9,7 +9,7 @@
  *   NODE_$ME:             0xE245A4 (4 bytes)
  */
 
-#include "uid.h"
+#include "uid/uid_internal.h"
 
 /*
  * UID_$NIL - The nil/empty UID

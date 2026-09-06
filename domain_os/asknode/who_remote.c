@@ -80,7 +80,11 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
         if (is_local < 0) {
             routing_port = ROUTE_$PORT;
         } else {
-            routing_port = DIR_$FIND_NET(0x29C, (int16_t)node_id);
+            /*
+             *   00e663fa    pea (A3)                 ; node_id (pointer)
+             *   00e663fc    move.l #0xe8029c,-(SP)   ; &NAME_$ROOT_UID
+             */
+            routing_port = DIR_$FIND_NET(&NAME_$ROOT_UID, (uint32_t *)node_id);
         }
     }
 
@@ -100,7 +104,8 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     }
 
     /* Get the event count for socket 5 */
-    ec_$eventcount_t *socket_ec = SOCK_$EC_5;
+    /* Socket 5 event count: table slot 5 (0xE28DC4) = SOCK_$EVENT_COUNTERS[4] */
+    ec_$eventcount_t *socket_ec = SOCK_$EVENT_COUNTERS[ASKNODE_WHO_SOCKET - 1];
     int32_t wait_val;
 
     /* Build request based on local/remote */
@@ -164,7 +169,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     }
 
     /* Calculate quit check value */
-    int32_t quit_val = *(int32_t *)((char *)&FIM_$QUIT_VALUE + PROC1_$AS_ID * 4) + 1;
+    int32_t quit_val = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
 
     /* Pre-clear remaining slots in node list */
     {
@@ -185,7 +190,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
 
         ecs[0] = socket_ec;
         ecs[1] = &TIME_$CLOCKH;
-        ecs[2] = (ec_$eventcount_t *)((char *)&FIM_$QUIT_EC + PROC1_$AS_ID * 12);
+        ecs[2] = &FIM_$QUIT_EC[PROC1_$AS_ID];
 
         /* Calculate dynamic timeout based on CLOCKH plus port delay */
         timeout_val = *(int32_t *)&TIME_$CLOCKH + temp2[0] + 0x14;
@@ -199,8 +204,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
         }
         if (wait_result == 2) {
             /* Quit signal */
-            *(int32_t *)((char *)&FIM_$QUIT_VALUE + PROC1_$AS_ID * 4) =
-                *(int32_t *)((char *)&FIM_$QUIT_EC + PROC1_$AS_ID * 12);
+            FIM_$QUIT_VALUE[PROC1_$AS_ID] = (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
             local_status = status_$network_quit_fault_during_node_listing;
             break;
         }

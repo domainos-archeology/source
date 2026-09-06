@@ -8,8 +8,7 @@
  * Original address: 0x00e0cd1c
  */
 
-#include "mmap.h"
-#include "mmap_internal.h"
+#include "mmap/mmap_internal.h"
 #include "misc/misc.h"
 #include "proc1/proc1.h"
 

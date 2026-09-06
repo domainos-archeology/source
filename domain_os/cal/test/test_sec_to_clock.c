@@ -1,4 +1,15 @@
-#include "cal.h"
+/*
+ * cal/test/test_sec_to_clock.c - Unit tests for CAL_$SEC_TO_CLOCK
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "../sec_to_clock.c"
+
 
 // Clock ticks are 4 microseconds each = 250,000 ticks per second
 // So 1 second = 0x0003D090 ticks
@@ -60,11 +71,11 @@ void test_sec_to_clock_one_day(void) {
 
     CAL_$SEC_TO_CLOCK(&sec, &result);
 
-    // 86400 * 250,000 = 21,600,000,000 = 0x507B5800
-    // This exceeds 32 bits, so it uses the 48-bit representation
-    // 0x0005:07B58000 in 48-bit format
-    ASSERT_EQ(result.high, 0x0507);
-    ASSERT_EQ(result.low, 0xB580);
+    // 86400 * 250,000 = 21,600,000,000 = 0x5_0775_D800
+    // This exceeds 32 bits, so it uses the 48-bit representation:
+    // high = upper 32 bits = 0x00050775, low = lower 16 bits = 0xD800
+    ASSERT_EQ(result.high, 0x50775);
+    ASSERT_EQ(result.low, 0xD800);
 }
 
 // Test: Large value near max 32-bit seconds
@@ -92,4 +103,17 @@ void test_sec_to_clock_mixed_bits(void) {
     // In 48-bit: high = 0x0003D093, low = 0xD090
     ASSERT_EQ(result.high, 0x0003D093);
     ASSERT_EQ(result.low, 0xD090);
+}
+
+int main(void) {
+    printf("CAL_$SEC_TO_CLOCK tests\n");
+    RUN_TEST(sec_to_clock_zero);
+    RUN_TEST(sec_to_clock_one_second);
+    RUN_TEST(sec_to_clock_one_minute);
+    RUN_TEST(sec_to_clock_one_hour);
+    RUN_TEST(sec_to_clock_one_day);
+    RUN_TEST(sec_to_clock_large_value);
+    RUN_TEST(sec_to_clock_mixed_bits);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

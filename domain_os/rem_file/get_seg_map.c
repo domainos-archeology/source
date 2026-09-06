@@ -112,12 +112,13 @@ void REM_FILE_$GET_SEG_MAP(void *addr_info, uid_t *file_uid,
             if (resp->seg_bitmap != 0) {
                 for (j = 31; j >= 0; j--) {
                     if (j < 32 && (resp->seg_bitmap & (1 << j)) != 0) {
-                        uint32_t bit_mask = 0;
-                        uint16_t bit_pos = 31 - j;
-                        if (bit_pos < 32) {
-                            /* Set bit in temporary mask */
-                            ((uint8_t *)&bit_mask)[bit_pos >> 3] |= (1 << (j & 7));
-                        }
+                        /*
+                         * The original sets bit (j & 7) of byte ((31 - j) >> 3)
+                         * of a big-endian 32-bit mask.  Byte b of a big-endian
+                         * word holds bits 31-8b .. 24-8b, so that byte/bit pair
+                         * is word bit 24 - 8*(3 - (j >> 3)) + (j & 7) == j.
+                         */
+                        uint32_t bit_mask = (uint32_t)1 << j;
                         seg_map_out[seg_offset] |= bit_mask;
                     }
                 }

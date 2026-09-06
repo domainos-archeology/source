@@ -2,14 +2,23 @@
  * BAT Subsystem Tests
  *
  * These tests validate the BAT (Block Allocation Table) subsystem.
- * Note: Many functions require a mounted volume and disk I/O, so
+* Note: Many functions require a mounted volume and disk I/O, so
  * we can only test basic data structure manipulation here.
+ *
+ * The kernel headers are included before any host header so that the
+ * Domain/OS definitions of clock_t, uid_t, true/false, etc. win.
  */
 
 #include "bat/bat_internal.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+
+/* Implementation and data under test (included directly) */
+#include "../bat_data.c"
+#include "../cancel.c"
+#include "../get_bat_step.c"
 
 /* Mock implementations for testing */
 static int ml_lock_count = 0;

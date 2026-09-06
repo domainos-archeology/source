@@ -1,4 +1,18 @@
-#include "cal.h"
+/*
+ * cal/test/test_apply_local_offset.c - Unit tests for CAL_$APPLY_LOCAL_OFFSET
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "../cal_data.c"
+#include "../add48.c"
+#include "../sec_to_clock.c"
+#include "../apply_local_offset.c"
+
 
 // CAL_$APPLY_LOCAL_OFFSET adds the timezone offset to a clock value.
 // It converts utc_delta (minutes) to seconds, then to clock ticks, and adds.
@@ -114,4 +128,16 @@ void test_apply_local_offset_to_existing_value(void) {
 
     ASSERT_EQ(clock.high, expected.high);
     ASSERT_EQ(clock.low, expected.low);
+}
+
+int main(void) {
+    printf("CAL_$APPLY_LOCAL_OFFSET tests\n");
+    RUN_TEST(apply_local_offset_utc);
+    RUN_TEST(apply_local_offset_positive_one_hour);
+    RUN_TEST(apply_local_offset_negative_est);
+    RUN_TEST(apply_local_offset_positive_jst);
+    RUN_TEST(apply_local_offset_half_hour);
+    RUN_TEST(apply_local_offset_to_existing_value);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

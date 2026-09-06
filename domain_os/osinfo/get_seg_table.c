@@ -6,7 +6,7 @@
 // Table type 1 = AOTE (0x80 bytes per entry)
 // Table type 2 = AST (0x14 bytes per entry)
 
-#include "osinfo/osinfo.h"
+#include "osinfo/osinfo_internal.h"
 #include "ast/ast.h"
 
 /* Map symbolic names to actual AST globals */

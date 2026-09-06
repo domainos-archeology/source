@@ -11,7 +11,7 @@
  * Original address: 0x00e207d8
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 void proc1_$reorder_if_needed(proc1_t *pcb)
 {

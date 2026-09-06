@@ -11,23 +11,12 @@
 #include <assert.h>
 #include <stdint.h>
 
-/* Include the register definitions directly for testing */
-#define M68450_REG_CSR      0x00
-#define M68450_REG_CCR      0x07
-#define M68450_REG_DCR      0x04
-#define M68450_REG_SCR      0x06
-#define M68450_REG_CPR      0x2D
-
-#define M68450_CCR_SAB      0x10
+/* Function under test (brings in the M68450 register definitions) */
+#include "../init_m68450_channel.c"
 
 /* Mock DMA channel buffer - large enough for one channel */
 #define CHANNEL_SIZE        0x40
 static uint8_t mock_channel[CHANNEL_SIZE];
-
-/*
- * Prototype for the function under test (matches dma.h)
- */
-void DMA_$INIT_M68450_CHANNEL(uint8_t *chan_virtual_address, int16_t channel_number);
 
 
 /*

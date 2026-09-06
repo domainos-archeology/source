@@ -19,6 +19,12 @@
 #include "vfmt/vfmt.h"
 #include "cal/cal.h"
 #include "network/network.h"
+#include "time/time.h"
+#include "mst/mst.h"
+#include "ast/ast.h"
+#include "os/os.h"
+#include "ec/ec.h"
+#include "pkt/pkt.h"
 
 /*
  * NAME data area
@@ -43,7 +49,44 @@
 /* Internal path strings for validation - defined in validate.c */
 
 /*
+ * Constants in the NAME code region passed by reference (Pascal VAR args)
+ */
+extern int16_t DAT_00e544ae;    /* 0xE544AE: 0x0020 - MAP_CASE max output length (32) */
+
+/* Crash message string at 0x00E5855C used by name_$map_dir */
+extern char Naming_Internal_Err[];
+
+/*
+ * REM_NAME data area - complete structure at 0xE7DBB8
+ */
+typedef struct rem_name_data_t {
+    uint16_t config[15];             /* +0x00: Config copied to request packets */
+    uint16_t reserved1;              /* +0x1E: Reserved */
+    uint32_t server_timeout;         /* +0x20: Timeout for server contact */
+    uint32_t reserved2;              /* +0x24: Reserved */
+    uint32_t time_heard_from_server; /* +0x28: TIME_$CLOCKH when last heard */
+    status_$t last_status;           /* +0x2C: Last status code */
+    uint32_t curr_node;              /* +0x30: Current name server node */
+    uint32_t curr_net;               /* +0x34: Current name server network */
+    uint16_t pkt_seq_num;            /* +0x38: Packet sequence number */
+    uint16_t retry_count;            /* +0x3A: Server locate retry counter */
+    int8_t   heard_from_server;      /* +0x3C: True if contacted server */
+} rem_name_data_t;
+
+extern rem_name_data_t rem_name_$data;  /* 0xE7DBB8 - defined in rem_name.c */
+
+/*
+ * Event count consulted by REM_NAME_SERVER_LOCAL (0x00E28DD8).
+ * Ghidra labels it ec2_$eventcount_t_00e28dd8; its .value is used as a
+ * pointer to a block whose word at +0x16 carries the "server is local" bit.
+ * TODO: identify the real owner/name of this object (only xref is
+ * REM_NAME_SERVER_LOCAL at 0x00E4A40C).
+ */
+extern ec2_$eventcount_t ec2_$eventcount;  /* 0x00E28DD8 */
+
+/*
  * NAME_$INIT_FUN_00e31578 - Debug/logging helper for NAME_$INIT
+ *   (Ghidra name: name_$init_check_status at 0x00e31578)
  *
  * Called during NAME_$INIT to log progress. Parameters suggest it takes
  * a format string and optional data.
@@ -58,7 +101,7 @@
 void NAME_$INIT_FUN_00e31578(char *msg, void *param1, int param2);
 
 /*
- * FUN_00e4a060 - Internal pathname resolution helper
+ * name_$resolve_internal (0x00e4a060; declared below as FUN_00e4a060) - Internal pathname resolution helper
  *
  * Called by NAME_$RESOLVE to do the actual resolution work.
  * Returns both directory UID and file UID.

@@ -8,11 +8,8 @@
 
 #include "smd/smd_internal.h"
 
-/*
- * smd_$setup_scroll_blt - SAU-specific scroll BLT setup
- * (Declared in start_scroll.c, defined in SAU-specific code)
- */
-extern uint16_t smd_$setup_scroll_blt(uint16_t *blt_regs, smd_display_hw_t *hw);
+/* smd_$setup_scroll_blt - SAU-specific scroll BLT setup
+ * (declared in smd/smd_internal.h, defined in smd/sau2/scroll_blt_setup.s) */
 
 /*
  * SMD_$CONTINUE_SCROLL - Continue scroll operation

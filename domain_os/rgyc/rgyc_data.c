@@ -7,7 +7,7 @@
  * These are data constants loaded at system boot.
  */
 
-#include "rgyc/rgyc.h"
+#include "rgyc/rgyc_internal.h"
 
 /*
  * System user/project/org UIDs - defaults for new processes

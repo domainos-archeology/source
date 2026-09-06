@@ -34,7 +34,7 @@
  *
  * Original address: 0x00E27070
  */
-extern uint16_t smd_$setup_scroll_blt(uint16_t *blt_regs, smd_display_hw_t *hw);
+/* smd_$setup_scroll_blt is declared in smd/smd_internal.h */
 
 /*
  * SMD_$START_SCROLL - Start scroll operation

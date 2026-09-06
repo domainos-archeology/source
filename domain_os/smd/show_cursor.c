@@ -23,9 +23,8 @@ static inline void write_u32(void *p, uint32_t v) {
     __builtin_memcpy(p, &v, sizeof(v));
 }
 
-/* Exclusion lock for tracking rectangle access.
- * Original address: 0x00E2E520 */
-extern ml_$exclusion_t ml_$exclusion_t_00e2e520;
+/* Exclusion lock for tracking rectangle access: ml_$exclusion_t_00e2e520
+ * (0x00E2E520, declared in smd/smd_internal.h) */
 
 /* Fixed lock data for ACQ_DISPLAY / LOCK_DISPLAY calls.
  * Original address: 0x00E6DFF8 (contains 0x0001 as big-endian int16_t) */

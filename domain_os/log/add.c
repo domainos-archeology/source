@@ -27,12 +27,6 @@
 
 #include "log/log_internal.h"
 
-/* Reference to current time */
-extern uint32_t TIME_$CURRENT_CLOCKH;
-
-/* Early log extended for copying entry data */
-extern early_log_extended_t EARLY_LOG_EXTENDED;
-
 void LOG_$ADD(int16_t type, void *data, int16_t data_len)
 {
     int16_t *buf;

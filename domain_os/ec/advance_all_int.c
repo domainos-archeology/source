@@ -13,7 +13,7 @@
  * Original address: 0x00e207c6
  */
 
-#include "ec.h"
+#include "ec/ec_internal.h"
 #include "proc1/proc1.h"
 #include "time/time.h"
 

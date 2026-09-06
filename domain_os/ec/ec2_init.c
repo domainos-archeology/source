@@ -11,7 +11,7 @@
  * Original address: 0x00e42c60
  */
 
-#include "ec.h"
+#include "ec/ec_internal.h"
 
 void EC2_$INIT(ec2_$eventcount_t *ec)
 {

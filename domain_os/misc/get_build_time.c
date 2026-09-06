@@ -13,7 +13,9 @@
  *   - Additional version components based on build flags
  */
 
-#include "misc/misc.h"
+#include "misc/misc_internal.h"
+#include "os/os.h"
+#include "prom/prom.h"
 #include "vfmt/vfmt.h"
 
 /*
@@ -39,11 +41,11 @@
  * 0xac    N     Build time string
  */
 
-/* Global version info structure base */
-extern int32_t OS_$REV;          /* 0xe78400 - must be 0 for production */
-
-/* PROM-provided SAU and auxiliary type */
-extern int16_t PROM_$SAU_AND_AUX; /* 0x00000100 - SAU type from PROM */
+/*
+ * The version block is the OS_$REV array (os/os.h, 0x00E78400, 204 bytes);
+ * its first longword is the "OS revision flag" that must be 0 for a
+ * production build.  PROM_$SAU_AND_AUX (0x00000100) comes from prom/prom.h.
+ */
 
 /*
  * Version data offsets from version_base (0xe78400)
@@ -66,7 +68,7 @@ typedef struct {
     char    build_time[0x20];    /* +0xac: Build time string */
 } os_version_t;
 
-extern os_version_t OS_VERSION_DATA;  /* At 0xe78400 */
+/* os_version_t is an overlay of OS_$REV (same address, same 204-byte size) */
 
 /* Format strings from the binary */
 static const char fmt_no_sau[] = "%a, revision %$";
@@ -97,13 +99,13 @@ void GET_BUILD_TIME(char *buf, int16_t *len_p)
     int16_t written = 0;
     int16_t segment_len;
     int16_t remaining;
-    os_version_t *ver = &OS_VERSION_DATA;
+    os_version_t *ver = (os_version_t *)OS_$REV;   /* 0x00E78400 */
 
     /*
      * If OS_$REV is non-zero, this is a test or invalid build.
      * Just return "?" to indicate unknown version.
      */
-    if (OS_$REV != 0) {
+    if (OS_$REV[0] != 0) {   /* tst.l (0x00E78400) */
         *len_p = 1;
         *buf = '?';
         return;
@@ -113,13 +115,19 @@ void GET_BUILD_TIME(char *buf, int16_t *len_p)
      * Format the kernel name with optional SAU type.
      * SAU (System Architecture Unit) type indicates the CPU variant.
      */
-    if (PROM_$SAU_AND_AUX == 0) {
+    /*
+     * Original: move.w (0x00000100).l,D2w - a 16-bit read at 0x100.
+     * prom/prom.h declares PROM_$SAU_AND_AUX as a 32-bit word at that
+     * address, so on big-endian m68k the word read is the high half.
+     */
+    int16_t sau_and_aux = (int16_t)(PROM_$SAU_AND_AUX >> 16);
+    if (sau_and_aux == 0) {
         /* No SAU type - simple format */
         VFMT_$FORMATN(fmt_no_sau, buf, &max_len, len_p,
                       ver->name, ver->name_len);
     } else {
         /* Include SAU type in parentheses */
-        int16_t sau_type = PROM_$SAU_AND_AUX;
+        int16_t sau_type = sau_and_aux;
         VFMT_$FORMATN(fmt_with_sau, buf, &max_len, len_p,
                       ver->name, ver->name_len, &sau_type);
     }

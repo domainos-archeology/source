@@ -42,9 +42,6 @@
 
 #include "dir/dir_internal.h"
 
-/* DAT_00e52040 - Truncation constant (0x00000400 = one page) */
-static const uint32_t DAT_00e52040_val = 0x00000400;
-
 void dir_$create_dir_obj(uid_t *parent_uid, void *page0_data, uid_t *dir_acl_uid,
                          uid_t *file_acl_uid, uid_t *new_uid_ret,
                          status_$t *status_ret)
@@ -185,7 +182,10 @@ void dir_$create_dir_obj(uid_t *parent_uid, void *page0_data, uid_t *dir_acl_uid
         }
     } else {
         /* FILE ACL is NIL - just write the page */
-        FILE_$FW_PARTIAL(new_uid_ret, &DAT_00e4b33c, &DAT_00e52040_val, &local_status);
+        /* DAT_00e52040 is a const (0x400, one page); FILE_$FW_PARTIAL only reads
+         * *byte_count, so casting away const is safe here. */
+        FILE_$FW_PARTIAL(new_uid_ret, (uint32_t *)&DAT_00e4b33c,
+                         (int32_t *)&DAT_00e52040, &local_status);
     }
 
 release_handle:

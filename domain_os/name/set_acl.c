@@ -9,9 +9,6 @@
 
 #include "name/name_internal.h"
 
-/* Forward declaration for DIR subsystem */
-extern void DIR_$SET_ACL(uid_t *uid, void *acl, status_$t *status_ret);
-
 /*
  * NAME_$SET_ACL - Set ACL on a named object
  *

@@ -21,7 +21,7 @@
 #ifndef SOCK_INTERNAL_H
 #define SOCK_INTERNAL_H
 
-#include "sock.h"
+#include "sock/sock.h"
 #include "ec/ec.h"
 #include "ml/ml.h"
 #include "netbuf/netbuf.h"
@@ -156,12 +156,11 @@ typedef struct sock_pkt_info {
 } sock_pkt_info_t;
 
 /*
- * Socket Table Base
+ * Socket Table Base: sock_table_base, declared in sock/sock.h.
  *
- * The socket table is located at a fixed address in the kernel.
+ * The socket table is located at a fixed address in the kernel (0xE27510).
  * All socket operations reference this base address.
  */
-extern uint8_t sock_table_base[];
 
 /*
  * Internal Helper Macros

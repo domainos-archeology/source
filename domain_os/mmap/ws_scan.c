@@ -8,7 +8,7 @@
  * Original address: 0x00e0d364
  */
 
-#include "mmap_internal.h"
+#include "mmap/mmap_internal.h"
 #include "misc/misc.h"
 #include "mmu/mmu.h"
 

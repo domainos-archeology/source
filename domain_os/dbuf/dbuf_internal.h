@@ -28,6 +28,7 @@
 #include "wp/wp.h"
 #include "mmap/mmap.h"
 #include "misc/crash_system.h"
+#include "netlog/netlog.h"
 
 /* Forward declare DISK functions to avoid circular include */
 void DISK_$READ(int16_t vol_idx, void *buffer, void *daddr, void *count,

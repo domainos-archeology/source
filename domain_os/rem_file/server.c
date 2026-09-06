@@ -77,26 +77,8 @@
  */
 #define RESPONSE_MAGIC  0x80
 
-/*
- * External data references
- */
-extern ml_$exclusion_t REM_FILE_$SOCK_LOCK;     /* Socket access lock */
-extern int8_t NETLOG_$OK_TO_LOG_SERVER;         /* Server logging flag */
-extern uint32_t NETWORK_$FILE_BACKLOG[];        /* Request backlog counters */
-extern int8_t NETWORK_$DISKLESS;                /* Diskless node flag */
-extern int8_t NETWORK_$REALLY_DISKLESS;         /* Really diskless flag */
-extern uint32_t NETWORK_$MOTHER_NODE;           /* Mother node ID */
-extern uint32_t DAT_00e823fc;                   /* Something counter */
-extern status_$t File_Comms_Problem_With_Remote_Node_Err;
-
-/* Reference for nil constant */
-extern uint8_t DAT_00e61d18[];                  /* Nil/empty data constant */
-extern uint8_t DAT_00e61718[];                  /* Project list constant */
-
-/*
- * Case conversion table reference (for UNMAP_CASE/MAP_CASE)
- */
-extern uint8_t DAT_00e62d48[];                  /* Case mapping table */
+/* External data references are declared in rem_file_internal.h and the
+ * network/netlog headers it includes. */
 
 /* MAP_CASE and UNMAP_CASE prototypes are provided by file/file.h (via file_internal.h) */
 
@@ -768,7 +750,12 @@ void REM_FILE_$SERVER(void)
     {
         uint8_t backlog_index = frame.opcode;  /* Simplified */
         if (backlog_index < 9) {
-            NETWORK_$FILE_BACKLOG[backlog_index]++;
+            /*
+             * NETWORK_$FILE_BACKLOG (0xE24BD0) is declared as a scalar in
+             * network/network.h; the server treats it as the base of nine
+             * 32-bit counters (addq.l to 0xE24BD0 + index*4).
+             */
+            ((uint32_t *)&NETWORK_$FILE_BACKLOG)[backlog_index]++;
         }
     }
 

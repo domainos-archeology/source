@@ -59,6 +59,8 @@ void OS_PROC_SHUTWIRED(status_$t *status_ret)
     }
     else if (*status_ret != status_$special_passthrough) {
         /* For all other codes except 0xF0001, set high bit to mark as internal */
-        *(uint8_t *)status_ret |= 0x80;
+        /* Original: bset.b #7,(A0) on the most significant byte of the
+         * big-endian 32-bit status */
+        *status_ret |= 0x80000000;
     }
 }

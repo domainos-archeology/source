@@ -10,18 +10,6 @@
 
 #include "vtoc/vtoc_internal.h"
 
-/* External variables */
-extern uint32_t VTOC_CACH_LOOKUPS;   /* Cache lookup counter at 0xE78736 */
-extern uint32_t VTOC_CACH_HITS;      /* Cache hit counter at 0xE78732 */
-extern uint32_t ROUTE_$PORT;         /* Network route port at 0xE2E0A0 */
-extern uint32_t NODE_$ME;            /* This node's ID at 0xE245A4 */
-
-/* Internal function prototypes */
-extern uint8_t vtoc_$uid_cache_lookup(uid_t *uid, uint16_t *flags, uint32_t *block_info, char update);
-extern void vtoc_$hash_uid(uid_t *uid, int16_t vol_idx, uint16_t *bucket_idx,
-                           uint32_t *block, status_$t *status);
-extern void vtoc_$uid_cache_insert(uid_t *uid, int16_t vol_idx, uint32_t block_info);
-
 void VTOC_$LOOKUP(vtoc_$lookup_req_t *req, status_$t *status_ret)
 {
     uint16_t vol_idx;
@@ -39,20 +27,20 @@ void VTOC_$LOOKUP(vtoc_$lookup_req_t *req, status_$t *status_ret)
 
     ML_$LOCK(VTOC_LOCK_ID);
 
-    /* Increment lookup counter */
-    VTOC_CACH_LOOKUPS++;
+    /* Increment lookup counter (VTOC_CACH_LOOKUPS, 0xE7873C) */
+    vtoc_$data.cach_lookups++;
 
     /* First check UID cache */
     cache_result = vtoc_$uid_cache_lookup(&req->uid, &flags, &req->block_hint, 0);
 
     if (cache_result < 0) {
-        /* Cache hit */
-        VTOC_CACH_HITS++;
+        /* Cache hit (VTOC_CACH_HITS, 0xE78738) */
+        vtoc_$data.cach_hits++;
         *status_ret = status_$ok;
         entry_idx = (uint8_t)(flags & 0xFF);
     } else {
         /* Cache miss - do disk lookup */
-        vol_idx = *(uint8_t *)((uint8_t *)req + 0x1C);  /* vol_idx at offset 0x1C */
+        vol_idx = req->vol_idx;  /* vol_idx at offset 0x1C */
 
         if (vtoc_$data.mounted[vol_idx] < 0) {
             /* Volume is mounted, hash the UID to find starting block */
@@ -126,8 +114,8 @@ void VTOC_$LOOKUP(vtoc_$lookup_req_t *req, status_$t *status_ret)
                                 entry_ptr[3] == req->uid.low) {
                                 /* Found! Build block_hint */
                                 req->block_hint = (req->block_hint & 0xF) | (block << 4);
-                                *(uint8_t *)((uint8_t *)req + 7) =
-                                    (*(uint8_t *)((uint8_t *)req + 7) & 0xF0) | entry_idx;
+                                /* Low nibble of block_hint (byte +7 on m68k) := entry index */
+                                req->block_hint = (req->block_hint & 0xFFFFFFF0u) | entry_idx;
                                 found = 0xFF;
                                 break;
                             }
@@ -162,23 +150,28 @@ check_status:
     /* On success, fill in additional request fields */
     if (*status_ret == status_$ok) {
         /* Clear first long */
-        *(uint32_t *)req = 0;
+        req->flags = 0;
 
-        /* Set word at offset 2 from per-volume data */
-        vol_idx = *(uint8_t *)((uint8_t *)req + 0x1C);
-        *(uint16_t *)((uint8_t *)req + 2) = *(uint16_t *)(OS_DISK_DATA + vol_idx * 2 - 2);
+        /* Set word at offset 2 (low 16 bits of the flags word on m68k) from
+         * per-volume data */
+        vol_idx = req->vol_idx;
+        req->flags = (req->flags & 0xFFFF0000u) |
+                     *(uint16_t *)(OS_DISK_DATA + vol_idx * 2 - 2);
 
         /* Set network info */
-        ((uint32_t *)req)[4] = ROUTE_$PORT;
-        ((uint32_t *)req)[5] = NODE_$ME;
-        ((uint32_t *)req)[6] = 0;
-        ((uint32_t *)req)[7] = 0;
+        req->port = ROUTE_$PORT;
+        req->node = NODE_$ME;
+        req->reserved_18 = 0;
+        req->vol_idx = 0;
+        req->flags_1d = 0;
+        req->reserved_1e = 0;
 
         /* Set flags at offset 0x1D */
-        *(uint8_t *)((uint8_t *)req + 0x1D) |= 0x40;
-        *(uint8_t *)((uint8_t *)req + 0x1C) = entry_idx;
-        *(uint8_t *)((uint8_t *)req + 0x1D) = (*(uint8_t *)((uint8_t *)req + 0x1D) & 0xF0) | 1;
-        *(uint8_t *)((uint8_t *)req + 1) = (*(uint8_t *)((uint8_t *)req + 1) & 0xF0) | 1;
+        req->flags_1d |= 0x40;
+        req->vol_idx = entry_idx;
+        req->flags_1d = (req->flags_1d & 0xF0) | 1;
+        /* Byte +1 of the flags word (bits 16..23 on m68k): low nibble := 1 */
+        req->flags = (req->flags & ~0x000F0000u) | 0x00010000u;
     }
 
 done:

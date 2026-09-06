@@ -115,6 +115,13 @@ ec_$eventcount_t FIM_$QUIT_EC[64];
 int8_t FIM_$QUIT_INH[64];
 
 /*
+ * FIM_$INITIAL_STACK_SIZE - Bytes reserved above a new process's startup
+ * context on its initial stack (used by PROC2_$CREATE / PROC2_$FORK).
+ * Original address: 0x00E21824 (4 bytes; image value 0x00000008)
+ */
+uint32_t FIM_$INITIAL_STACK_SIZE = 8;
+
+/*
  * FIM_$TRACE_STS - Per-AS trace fault status
  *
  * Contains the status code for a pending trace fault.

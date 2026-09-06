@@ -19,12 +19,7 @@
 #include "file/file_internal.h"
 #include "dir/dir.h"
 
-/*
- * External reference to diskless UID pattern
- * Located at 0x00E173F4 (DISKLESS_$UID)
- * The second byte (offset 1) contains the diskless node identifier
- */
-extern uid_t DISKLESS_$UID;
+/* DISKLESS_$UID (0x00E173F4) is declared in uid/uid.h */
 
 /*
  * FILE_$LOCATEI - Get file location with diskless fallback
@@ -47,7 +42,6 @@ void FILE_$LOCATEI(uid_t *file_uid, uid_t *location_out, status_$t *status_ret)
 {
     status_$t status;
     uid_t local_uid;
-    uint8_t *flags_ptr;
 
     /* Volume UID output from AST_$GET_LOCATION */
     uint32_t vol_uid_out;
@@ -76,8 +70,8 @@ void FILE_$LOCATEI(uid_t *file_uid, uid_t *location_out, status_$t *status_ret)
      * Clear bit 6 of the flags byte in the UID
      * This removes the "local only" constraint
      */
-    flags_ptr = (uint8_t *)&query_buf.uid + 5;
-    *flags_ptr &= ~0x40;  /* Clear bit 6 */
+    /* Byte 5 of the big-endian UID is bits 16-23 of uid.low */
+    query_buf.uid.low &= ~((uint32_t)0x40 << 16);  /* Clear bit 6 of byte 5 */
 
     /* Call AST_$GET_LOCATION to get the file's location */
     AST_$GET_LOCATION((uint32_t *)&query_buf, 0, 0, &vol_uid_out, &status);

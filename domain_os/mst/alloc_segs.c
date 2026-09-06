@@ -20,7 +20,7 @@
  *    - From top (addr_hint == 0x7FFFFFFF): scans downward
  *    - From bottom (addr_hint == 0): scans upward
  *    - At specific address: checks that range is free
- * 8. Allocates page table pages as needed (via FUN_00e43f40)
+ * 8. Allocates page table pages as needed (via MST_$ALLOC_TABLE_PAGE, 0x00e43f40)
  * 9. For anonymous UIDs, calls AREA_$THREAD_BSTES
  * 10. Sets up MST entries (via FUN_00e43e10)
  * 11. Releases lock 12
@@ -73,7 +73,7 @@
  * FUN_00e43cbe - Get area info for non-anonymous UID
  *   Parameters: uid, area_id, area_size, &local_14, local_20, &local_10
  *
- * FUN_00e43f40 - Allocate page table page for segment
+* MST_$ALLOC_TABLE_PAGE (0x00e43f40) - Allocate page table page for segment
  *   Parameters: asid, segno, &mst_entry_ptr
  *   Returns: status_$t
  *

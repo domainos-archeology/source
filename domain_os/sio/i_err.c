@@ -18,8 +18,7 @@
 
 #include "sio/sio_internal.h"
 
-/* SIO spin lock for error handling - external */
-extern uint32_t SIO_$SPIN_LOCK;
+/* SIO_$SPIN_LOCK is declared in sio/sio_internal.h */
 
 status_$t SIO_$I_ERR(sio_desc_t *desc, int8_t check_all)
 {

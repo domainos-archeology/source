@@ -10,14 +10,15 @@
 #include "dxm/dxm_internal.h"
 
 /*
- * External references for signal dispatch tables
+ * Signal dispatch table / process UID data base addresses.
  * These are set up by the signal/process subsystems.
  *
  * NETLOG_$DATA_END (0x00E85708) - Base address for signal handler table
  * PROC2_UID base (0x00E7BE94) - Base address for process UID data
+ *
+ * TODO: replace the absolute addresses below with the proper symbols once
+ * the netlog/proc2 data layouts are declared in their headers.
  */
-extern void (*SIGNAL_HANDLER_TABLE[])(void *, void *, void *, void *);
-extern uint8_t PROC2_UID_DATA[];
 
 #define SIGNAL_HANDLER_TABLE_BASE   0x00E85708
 #define PROC2_UID_BASE              0x00E7BE94

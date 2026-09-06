@@ -11,29 +11,11 @@
  * ensure consistent state even if exceptions occur during timing.
  */
 
-#include "stop/stop.h"
+#include "stop/stop_internal.h"
 #include "fim/fim.h"
 #include "mst/mst.h"
 
-/*
- * Stopwatch slot structure (64 bytes per slot)
- *
- * Each slot tracks timing data for one profiling context.
- */
-typedef struct {
-    int32_t reserved1[4];        /* +0x00: Reserved */
-    uint8_t flags;               /* +0x10: Flags (bit 7 = active) */
-    uint8_t pad1[3];             /* Padding */
-    int32_t time1_high;          /* +0x14: Time accumulator 1 high */
-    int32_t time1_low;           /* +0x18: Time accumulator 1 low */
-    int32_t time2_high;          /* +0x1c: Time accumulator 2 high */
-    int32_t time2_low;           /* +0x20: Time accumulator 2 low */
-    int16_t count1;              /* +0x24: Count 1 */
-    int16_t count2;              /* +0x26: Count 2 */
-    int16_t count3;              /* +0x28: Count 3 */
-    int16_t count4;              /* +0x2a: Count 4 */
-    int32_t reserved2[5];        /* +0x2c: Reserved to 0x40 */
-} stopwatch_slot_t;
+/* stopwatch_slot_t is defined in stop/stop_internal.h */
 
 /*
  * Global stopwatch data (at 0xe81c00 region)
@@ -46,14 +28,9 @@ static struct {
     int16_t  pad;                /* +0x3fc */
 } stopwatch_globals;
 
-/* Stopwatch slot array (16 slots at 0xe81d28+) */
-extern stopwatch_slot_t STOPWATCH_SLOTS[STOP_MAX_SLOTS];
-
-/* Wire pointers for the stopwatch area */
-extern void *PTR_STOP_$WATCH;         /* 0xe81d1c */
-extern void *PTR_OS_DATA_SHUTWIRED;   /* 0xe81d20 */
-extern int16_t STOPWATCH_WIRED;       /* 0xe81d24 */
-extern int16_t STOPWATCH_WIRE_COUNT;  /* 0xe81d26 */
+/* STOPWATCH_SLOTS (0xE81D28), PTR_STOP_$WATCH (0xE81D1C), STOPWATCH_WIRED
+ * (0xE81D24) and STOPWATCH_WIRE_COUNT (0xE81D26) are declared in
+ * stop/stop_internal.h; PTR_OS_DATA_SHUTWIRED (0xE81D20) in os/os.h. */
 
 /*
  * Internal helper functions (nested Pascal sub-procedures)

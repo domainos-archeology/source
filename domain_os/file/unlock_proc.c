@@ -27,8 +27,7 @@
 #include "proc/proc.h"
 #include "acl/acl.h"
 
-/* External reference not in headers */
-extern uint32_t NODE_$ME;
+/* NODE_$ME is declared in network/network.h */
 
 /* Per-process lock count table */
 #define PROC_LOT_COUNT(asid) \

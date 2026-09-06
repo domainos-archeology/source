@@ -6,10 +6,10 @@
  * @param vol_idx  Volume index
  */
 
-#include "disk_internal.h"
+#include "disk/disk_internal.h"
 
-/* Volume entry offset for device info pointer */
-#define DISK_DEV_INFO_OFFSET  0x7c
+/* Volume entry offset of the per-volume device data block (not the +0x94 device info pointer) */
+#define DISK_DEV_DATA_OFFSET  0x7c
 
 /* Volume entry table base (0xe7a248 = 0xe7a1cc + 0x7c) */
 #define DISK_VOLUME_DEV_BASE  ((uint8_t *)0x00e7a248)

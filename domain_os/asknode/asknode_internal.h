@@ -15,10 +15,13 @@
 #include "disk/disk.h"
 #include "ec/ec.h"
 #include "fim/fim.h"
+#include "gpu/gpu.h"
 #include "hint/hint.h"
 #include "log/log.h"
+#include "mem/mem.h"
 #include "misc/misc.h"
 #include "mmap/mmap.h"
+#include "mmu/mmu.h"
 #include "name/name.h"
 #include "netbuf/netbuf.h"
 #include "network/network.h"
@@ -26,6 +29,7 @@
 #include "pkt/pkt.h"
 #include "proc1/proc1.h"
 #include "proc2/proc2.h"
+#include "prom/prom.h"
 #include "ring/ring.h"
 #include "rip/rip.h"
 #include "route/route.h"
@@ -108,63 +112,16 @@ typedef struct asknode_who_response_t {
 
 /*
  * ============================================================================
- * Network Failure Record
- * ============================================================================
- */
-
-/*
- * Network failure record structure (16 bytes)
- * Located at 0x00E24BF4
- */
-typedef struct network_failure_rec_t {
-  uint32_t reserved;   /* 0x00: Reserved (first word) */
-  uint8_t flags;       /* 0x02 in high: first byte (activity flag) */
-  uint8_t pad;         /* 0x03: Padding */
-  uint32_t error_info; /* 0x04: Error information */
-  uint32_t timestamp;  /* 0x08: Time of failure */
-  uint32_t node_id;    /* 0x0C: Node ID involved */
-} network_failure_rec_t;
-
-/*
- * ============================================================================
  * External References
  * ============================================================================
+ *
+ * Network globals (NETWORK_$FAILURE_REC, NETWORK_$ACTIVITY_FLAG,
+ * NETWORK_$DISKLESS, NETWORK_$MOTHER_NODE, the NETWORK_$*_CNT statistics,
+ * NETWORK_$CAPABLE_FLAGS) come from network/network.h; MEM_$MEM_REC from
+ * mem/mem.h; MMAP_$REAL_PAGES from mmap/mmap.h; PROM_$SAU_AND_AUX from
+ * prom/prom.h; MMU_$SYSTEM_REV from mmu/mmu.h; GPU_$PRESENT from gpu/gpu.h;
+ * RING_$DATA from ring/ring.h.
  */
-
-/* Network global data */
-extern int8_t NETWORK_$ACTIVITY_FLAG; /* 0x00E24C42 */
-extern uint8_t
-    NETWORK_$FAILURE_REC_2;           /* 0x00E24BF6 - byte within failure rec */
-extern uint32_t NETWORK_$FAILURE_REC; /* 0x00E24BF4 - failure record start */
-extern int8_t NETWORK_$DISKLESS;      /* Diskless boot flag */
-extern uint32_t NETWORK_$MOTHER_NODE; /* Mother node for diskless boot */
-
-/* Network statistics */
-extern uint16_t NETWORK_$INFO_RQST_CNT;
-extern uint16_t NETWORK_$PAGIN_RQST_CNT;
-extern uint16_t NETWORK_$MULT_PAGIN_RQST_CNT;
-extern uint16_t NETWORK_$PAGOUT_RQST_CNT;
-extern uint16_t NETWORK_$READ_CALL_CNT;
-extern uint16_t NETWORK_$WRITE_CALL_CNT;
-extern uint16_t NETWORK_$READ_VIOL_CNT;
-extern uint16_t NETWORK_$WRITE_VIOL_CNT;
-extern uint16_t NETWORK_$BAD_CHKSUM_CNT;
-
-/* Ring network data - ring_global_t RING_$DATA and related externs
- * are declared in ring/ring.h (included above) */
-
-/* Memory stats */
-extern uint32_t MEM_$MEM_REC;
-extern uint32_t MMAP_$REAL_PAGES;
-
-/* PROM data */
-extern uint32_t PROM_$SAU_AND_AUX;
-
-/* MMU data */
-extern uint32_t MMU_$SYSTEM_REV;
-
-/* GPU data */
-extern int8_t GPU_$PRESENT;
 
 /* Packet info template at 0x00E82408 - default values for PKT_$SEND_INTERNET */
 extern uint32_t PKT_$DEFAULT_INFO[8];
@@ -175,21 +132,16 @@ extern uint32_t PKT_$DEFAULT_INFO[8];
  */
 extern uint16_t ASKNODE_$PROTOCOL_VERSION;
 
-/* Empty data placeholder at 0x00E658CC - used as "no data" in network sends */
-extern uint8_t ASKNODE_$EMPTY_DATA;
+/*
+ * Empty data placeholder at 0x00E658CC (a zero longword in the code segment)
+ * - used as "no data" in network sends and as a -1/0 request length.
+ */
+extern uint32_t ASKNODE_$EMPTY_DATA;
 
 /*
- * sock_spinlock at 0x00E28DB0
- * NOTE: Despite the name, this appears to be used as a socket event count
- * array base in some code paths (indexed as &sock_spinlock + sock_num * 4).
- * The naming/purpose confusion needs further investigation.
+ * The socket event counts used by WHO_NOTOPO / WHO_REMOTE (sock_spinlock at
+ * 0x00E28DB0 + sock_num * 4, SOCK_$EC_5 at 0x00E28DC4) are entries of the
+ * socket pointer table: SOCK_$EVENT_COUNTERS[sock_num - 1] (sock/sock.h).
  */
-extern ec_$eventcount_t *sock_spinlock;
-
-/* Socket 5 event count at 0x00E28DC4 */
-extern ec_$eventcount_t *SOCK_$EC_5;
-
-/* Network capability flags at 0x00E24C3F - bit 0 = network capable */
-extern uint8_t NETWORK_$CAPABLE_FLAGS;
 
 #endif /* ASKNODE_INTERNAL_H */

@@ -60,8 +60,8 @@ void PROC2_$SET_VALID(void)
     /* Get creation record pointer */
     cr_rec = (cr_rec_t *)entry->cr_rec;
 
-    /* Get stack UID pointer (at offset in proc2 table after cr_rec_2) */
-    stack_uid_ptr = (uid_t *)((char *)entry + 0xDC);  /* Approximate offset */
+    /* Get stack UID pointer (entry offset 0xDC) */
+    stack_uid_ptr = &entry->stack_uid;
 
     /*
      * If stack UID is nil, need to map the stack area
@@ -69,7 +69,7 @@ void PROC2_$SET_VALID(void)
     if (stack_uid_ptr->high == UID_$NIL.high && stack_uid_ptr->low == UID_$NIL.low) {
         /* Initialize stack mapping parameters in creation record */
         cr_rec->addr_lo = AS_$STACK_FILE_LOW;
-        cr_rec->size = AS_$INIT_STACK_FILE_SIZE.value;
+        cr_rec->size = AS_$INIT_STACK_FILE_SIZE;
 
         /* Map the stack area */
         MST_$MAP_AREA_AT(&cr_rec->addr_lo, &cr_rec->size,
@@ -101,10 +101,8 @@ void PROC2_$SET_VALID(void)
         (entry->flags & PROC2_FLAG_ALT_ASID) == 0) {
 
         /* Set process UID from PROC2_UID table using PROC1_$AS_ID */
-        uid_t *uid_table = &PROC2_UID;
-        int uid_offset = PROC1_$AS_ID * 8;
-        cr_rec->proc_uid.high = *(uint32_t *)((char *)uid_table + uid_offset);
-        cr_rec->proc_uid.low = *(uint32_t *)((char *)uid_table + uid_offset + 4);
+        cr_rec->proc_uid.high = PROC2_UID[PROC1_$AS_ID].high;
+        cr_rec->proc_uid.low = PROC2_UID[PROC1_$AS_ID].low;
 
         /* Set parent upid */
         cr_rec->field_b8 = entry->upid;
@@ -128,9 +126,9 @@ void PROC2_$SET_VALID(void)
 
         /* Set debugger UID if debug flag set */
         if ((cr_rec->flags_c5 & 0x08) != 0) {
-            int debugger_offset = entry->debugger_idx * 8;
-            cr_rec->debugger_uid.high = *(uint32_t *)((char *)uid_table + debugger_offset);
-            cr_rec->debugger_uid.low = *(uint32_t *)((char *)uid_table + debugger_offset + 4);
+            /* PROC2_UID table indexed by debugger_idx (0xE7BE94 + idx * 8) */
+            cr_rec->debugger_uid.high = PROC2_UID[entry->debugger_idx].high;
+            cr_rec->debugger_uid.low = PROC2_UID[entry->debugger_idx].low;
         }
 
         /* Set flag based on session_id being non-zero */

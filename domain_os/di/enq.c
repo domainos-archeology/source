@@ -22,7 +22,7 @@
  * DI_$Q_HEAD is at address 0x00e20602.
  */
 
-#include "di/di.h"
+#include "di/di_internal.h"
 #include "misc/crash_system.h"
 
 /* Global queue head - points to first element in queue */

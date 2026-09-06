@@ -6,7 +6,7 @@
  * Original address: 0x00e148e6
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 uint32_t PROC1_$GET_LOCKS(void)
 {

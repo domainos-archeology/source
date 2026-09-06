@@ -1,107 +1,219 @@
 /*
- * Unit tests for FILE_$FW_PARTIAL
+ * file/test/test_fw_partial.c - Unit tests for FILE_$FW_PARTIAL
  *
- * Tests the partial file force-write functionality which flushes
- * dirty pages within a byte range to disk.
+ * FILE_$FW_PARTIAL purifies every 32KB page that overlaps a byte range,
+ * stopping at the first error.  FILE_$DELETE_INT and AST_$PURIFY are mocked.
  */
 
-#include "base/base.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+
+/* ============================================================================
+ * Test framework
+ * ============================================================================ */
+
+static int tests_passed = 0;
+static int tests_failed = 0;
+
+#define TEST(name) static void test_##name(void)
+#define RUN_TEST(name) do { \
+    printf("  Running %s... ", #name); \
+    test_##name(); \
+    tests_passed++; \
+    printf("PASSED\n"); \
+} while(0)
+
+#define ASSERT_EQ(expected, actual) do { \
+    unsigned long _e = (unsigned long)(expected); \
+    unsigned long _a = (unsigned long)(actual); \
+    if (_e != _a) { \
+        printf("FAILED\n    Expected: 0x%lx (%lu), Got: 0x%lx (%lu) at line %d\n", \
+               _e, _e, _a, _a, __LINE__); \
+        tests_failed++; \
+        return; \
+    } \
+} while(0)
 
 /*
- * Test: Page calculation from byte offset
- *
- * Verifies the page number calculation:
- *   page_num = offset >> 15 (divide by 32KB)
+ * route/route.h (pulled in by file/file_internal.h) asserts that
+ * sizeof(route_$port_t) == 0x5C, which only holds with 32-bit pointers.
+ * Nothing under test here touches ROUTE data, so skip that header on the
+ * host (the same approach test_uid_lock.c takes for headers it stubs).
  */
-void test_fw_partial_page_calculation(void) {
-    /* Offset 0 -> page 0 */
-    ASSERT_EQ(0 >> 15, 0);
+#define ROUTE_H
 
-    /* Offset 32767 (0x7FFF, last byte of page 0) -> page 0 */
-    ASSERT_EQ(0x7FFF >> 15, 0);
+#include "../fw_partial.c"
 
-    /* Offset 32768 (0x8000, first byte of page 1) -> page 1 */
-    ASSERT_EQ(0x8000 >> 15, 1);
+/* ============================================================================
+ * Mocks
+ * ============================================================================ */
 
-    /* Offset 65535 (0xFFFF, last byte of page 1) -> page 1 */
-    ASSERT_EQ(0xFFFF >> 15, 1);
+#define MAX_PURIFY_CALLS 16
 
-    /* Offset 65536 (0x10000, first byte of page 2) -> page 2 */
-    ASSERT_EQ(0x10000 >> 15, 2);
+static int mock_delete_int_called;
+static int8_t mock_delete_int_return;
 
-    /* Large offset: 1MB (0x100000) -> page 32 */
-    ASSERT_EQ(0x100000 >> 15, 32);
+static int mock_purify_called;
+static uint16_t mock_purify_flags[MAX_PURIFY_CALLS];
+static int16_t mock_purify_segment[MAX_PURIFY_CALLS];
+static status_$t mock_purify_status[MAX_PURIFY_CALLS];
+
+static void reset_mocks(void)
+{
+    int i;
+    mock_delete_int_called = 0;
+    mock_delete_int_return = 0;
+    mock_purify_called = 0;
+    for (i = 0; i < MAX_PURIFY_CALLS; i++) {
+        mock_purify_flags[i] = 0;
+        mock_purify_segment[i] = -1;
+        mock_purify_status[i] = status_$ok;
+    }
 }
 
-/*
- * Test: Bytes remaining in first page calculation
- *
- * Verifies: bytes_to_page_end = 0x8000 - (offset & 0x7FFF)
- */
-void test_fw_partial_bytes_to_page_end(void) {
-    uint32_t offset;
-    uint32_t bytes_to_end;
-
-    /* Offset 0 -> 32KB remaining */
-    offset = 0;
-    bytes_to_end = 0x8000 - (offset & 0x7FFF);
-    ASSERT_EQ(bytes_to_end, 0x8000);
-
-    /* Offset 0x1000 -> 0x7000 remaining */
-    offset = 0x1000;
-    bytes_to_end = 0x8000 - (offset & 0x7FFF);
-    ASSERT_EQ(bytes_to_end, 0x7000);
-
-    /* Offset 0x7FFE -> 2 bytes remaining */
-    offset = 0x7FFE;
-    bytes_to_end = 0x8000 - (offset & 0x7FFF);
-    ASSERT_EQ(bytes_to_end, 2);
-
-    /* Offset 0x7FFF -> 1 byte remaining */
-    offset = 0x7FFF;
-    bytes_to_end = 0x8000 - (offset & 0x7FFF);
-    ASSERT_EQ(bytes_to_end, 1);
-
-    /* Offset 0x8000 (start of page 1) -> 32KB remaining */
-    offset = 0x8000;
-    bytes_to_end = 0x8000 - (offset & 0x7FFF);
-    ASSERT_EQ(bytes_to_end, 0x8000);
+int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result,
+                        status_$t *status_ret)
+{
+    (void)file_uid; (void)flags;
+    mock_delete_int_called++;
+    *result = 0;
+    *status_ret = status_$ok;
+    return mock_delete_int_return;
 }
 
-/*
- * Test: Number of pages to iterate
- *
- * Verifies loop count calculation for various ranges.
- */
-void test_fw_partial_page_count(void) {
-    /* Single page: offset 0, length 100 -> 1 page */
-    /* offset=0, len=100: pages 0 only */
-    ASSERT_EQ(1, 1);
-
-    /* Cross page boundary: offset 0x7F00, length 0x200 -> 2 pages */
-    /* offset=0x7F00, len=0x200: pages 0 and 1 */
-    ASSERT_EQ(2, 2);
-
-    /* Full page plus partial: offset 0, length 0x10000 -> 2 pages */
-    /* offset=0, len=0x10000: pages 0 and 1 */
-    ASSERT_EQ(2, 2);
+uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
+                     uint32_t *segment_list, uint16_t unused,
+                     status_$t *status)
+{
+    (void)uid; (void)segment_list; (void)unused;
+    if (mock_purify_called < MAX_PURIFY_CALLS) {
+        mock_purify_flags[mock_purify_called] = flags;
+        mock_purify_segment[mock_purify_called] = segment;
+        *status = mock_purify_status[mock_purify_called];
+    } else {
+        *status = status_$ok;
+    }
+    mock_purify_called++;
+    return 0;
 }
 
-/*
- * Test: Purify flag values for partial write
- */
-void test_fw_partial_purify_flags(void) {
-    /* Local-only partial purify */
-    ASSERT_EQ(0x0003, 0x0003);  /* FW_PARTIAL_LOCAL */
+/* ============================================================================
+ * Tests
+ * ============================================================================ */
 
-    /* Remote-sync partial purify */
-    ASSERT_EQ(0x8003, 0x8003);  /* FW_PARTIAL_REMOTE */
+TEST(single_page_range)
+{
+    uid_t uid = { 1, 2 };
+    uint32_t offset = 0;
+    int32_t count = 100;
+    status_$t status = 0xFFFFFFFF;
+
+    reset_mocks();
+    FILE_$FW_PARTIAL(&uid, &offset, &count, &status);
+
+    ASSERT_EQ(1, mock_delete_int_called);
+    ASSERT_EQ(1, mock_purify_called);
+    ASSERT_EQ(0, mock_purify_segment[0]);
+    ASSERT_EQ(FW_PARTIAL_REMOTE, mock_purify_flags[0]);
+    ASSERT_EQ(status_$ok, status);
 }
 
-/*
- * Test: Page size constant
- */
-void test_fw_partial_page_size(void) {
-    ASSERT_EQ(0x8000, 32768);   /* FILE_PAGE_SIZE = 32KB */
-    ASSERT_EQ(0x7FFF, 32767);   /* FILE_PAGE_MASK */
+TEST(range_crossing_page_boundary)
+{
+    uid_t uid = { 1, 2 };
+    uint32_t offset = 0x7F00;
+    int32_t count = 0x200;
+    status_$t status;
+
+    reset_mocks();
+    FILE_$FW_PARTIAL(&uid, &offset, &count, &status);
+
+    /* 0x100 bytes remain in page 0, the rest spills into page 1 */
+    ASSERT_EQ(2, mock_purify_called);
+    ASSERT_EQ(0, mock_purify_segment[0]);
+    ASSERT_EQ(1, mock_purify_segment[1]);
 }
+
+TEST(full_page_plus_partial)
+{
+    uid_t uid = { 1, 2 };
+    uint32_t offset = 0x10000;   /* page 2 */
+    int32_t count = 0x8001;      /* page 2 entirely plus 1 byte of page 3 */
+    status_$t status;
+
+    reset_mocks();
+    FILE_$FW_PARTIAL(&uid, &offset, &count, &status);
+
+    ASSERT_EQ(2, mock_purify_called);
+    ASSERT_EQ(2, mock_purify_segment[0]);
+    ASSERT_EQ(3, mock_purify_segment[1]);
+}
+
+TEST(locked_file_uses_local_flags)
+{
+    uid_t uid = { 1, 2 };
+    uint32_t offset = 0x1000;
+    int32_t count = 1;
+    status_$t status;
+
+    reset_mocks();
+    mock_delete_int_return = -1;
+    FILE_$FW_PARTIAL(&uid, &offset, &count, &status);
+
+    ASSERT_EQ(1, mock_purify_called);
+    ASSERT_EQ(FW_PARTIAL_LOCAL, mock_purify_flags[0]);
+}
+
+TEST(error_stops_iteration)
+{
+    uid_t uid = { 1, 2 };
+    uint32_t offset = 0;
+    int32_t count = 0x30000;     /* pages 0..5 */
+    status_$t status;
+
+    reset_mocks();
+    mock_purify_status[1] = 0x00050001;
+    FILE_$FW_PARTIAL(&uid, &offset, &count, &status);
+
+    ASSERT_EQ(2, mock_purify_called);
+    ASSERT_EQ(0x00050001, status);
+}
+
+TEST(zero_length_range_purifies_nothing)
+{
+    uid_t uid = { 1, 2 };
+    uint32_t offset = 0x1234;
+    int32_t count = 0;
+    status_$t status = 0xFFFFFFFF;
+
+    reset_mocks();
+    FILE_$FW_PARTIAL(&uid, &offset, &count, &status);
+
+    ASSERT_EQ(1, mock_delete_int_called);
+    ASSERT_EQ(0, mock_purify_called);
+    ASSERT_EQ(status_$ok, status);
+}
+
+TEST(constants)
+{
+    ASSERT_EQ(0x8000, FILE_PAGE_SIZE);
+    ASSERT_EQ(0x7FFF, FILE_PAGE_MASK);
+    ASSERT_EQ(0x0003, FW_PARTIAL_LOCAL);
+    ASSERT_EQ(0x8003, FW_PARTIAL_REMOTE);
+}
+
+int main(void)
+{
+    printf("FILE_$FW_PARTIAL tests\n");
+    RUN_TEST(single_page_range);
+    RUN_TEST(range_crossing_page_boundary);
+    RUN_TEST(full_page_plus_partial);
+    RUN_TEST(locked_file_uses_local_flags);
+    RUN_TEST(error_stops_iteration);
+    RUN_TEST(zero_length_range_purifies_nothing);
+    RUN_TEST(constants);
+    printf("\n%d passed, %d failed\n", tests_passed, tests_failed);
+    return tests_failed != 0;
+}
+

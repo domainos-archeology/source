@@ -6,7 +6,7 @@
  * Original address: 0x00e0ca3a
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 void MMAP_$GET_WS_INDEX(uint16_t pid, uint16_t *wsl_index, status_$t *status)
 {

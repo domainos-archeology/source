@@ -36,7 +36,9 @@ extern uint16_t UID_$GENERATOR_LOCK;    /* 0xE2C010: Spin lock for generator */
 extern uid_t UID_$NIL;                  /* 0xE1737C: NIL UID (all zeros) */
 extern uid_t PV_LABEL_$UID;             /* 0xE1738C: Physical volume label UID */
 extern uid_t LV_LABEL_$UID;             /* 0xE17394: Logical volume label UID */
+extern uid_t DISKLESS_$UID;             /* 0xE173F4: Diskless node UID pattern */
 extern uid_t OS_WIRED_$UID;             /* OS wired/pinned memory UID */
+extern uid_t UNSTRUCT_$UID;             /* 0xE173C4: Unstructured file type UID */
 
 /*
  * ============================================================================
@@ -84,5 +86,11 @@ void UID_$GEN(uid_t *uid_ret);
  * Original address: 0x00e17360
  */
 uint32_t UID_$HASH(uid_t *uid, uint16_t *table_size);
+
+/*
+ * NODE_$ME - This node's ID (low 20 bits of UIDs generated here).
+ * Original address: 0xE245A4 (uid/uid_data.c)
+ */
+extern uint32_t NODE_$ME;
 
 #endif /* UID_H */

@@ -19,9 +19,6 @@
 #define MST_PAGE_SIZE          0x400
 #define MST_PAGE_BITMAP_COUNT  12
 
-/* Internal helper: init a page table page (allocate physical, install MMU, zero) */
-extern void mst_$init_table_page(uint32_t page_addr);
-
 status_$t MST_$ALLOC_TABLE_PAGE(uint16_t asid, uint16_t flags, uint16_t *table_ptr)
 {
     uint16_t word_index;

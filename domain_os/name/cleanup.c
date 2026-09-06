@@ -9,9 +9,6 @@
 
 #include "name/name_internal.h"
 
-/* Forward declaration for DIR subsystem */
-extern void DIR_$CLEANUP(void);
-
 /*
  * NAME_$CLEANUP - Clean up naming resources
  *

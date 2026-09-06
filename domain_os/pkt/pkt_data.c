@@ -73,8 +73,7 @@ pkt_$data_t PKT_$DATA_STRUCT = {
 
 #if !defined(ARCH_M68K)
 
-/* Local node ID - normally defined in network/network_data.c */
-uint32_t NODE_$ME = 0;
+/* NODE_$ME (0xE245A4) is defined in uid/uid_data.c */
 
 /* Network loopback flag - normally defined in network/network_data.c */
 int8_t NETWORK_$LOOPBACK_FLAG = 0;

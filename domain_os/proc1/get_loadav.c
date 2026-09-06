@@ -9,7 +9,7 @@
  *   loadav - Pointer to receive 3 uint32_t load averages
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 void PROC1_$GET_LOADAV(uint32_t *loadav)
 {

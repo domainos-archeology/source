@@ -10,13 +10,13 @@
 #include "name/name.h"
 #include "file/file_internal.h" // we use FILE_$PRIV_LOCK/UNLOCK
 #include "mst/mst.h"
+#include "uid/uid.h"
 
 /* Path to audit log file */
 static const char log_path[] = "//node_data/audit/audit_log";
 static int16_t log_path_len = 26;
 
-/* File type UID for unstructured files */
-extern uid_t UNSTRUCT_$UID;
+/* UNSTRUCT_$UID (file type UID for unstructured files) comes from uid/uid.h */
 
 void audit_$open_log(status_$t *status_ret)
 {

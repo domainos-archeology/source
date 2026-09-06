@@ -15,7 +15,7 @@
  * Original address: 0x00e20ef0
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 int8_t PROC1_$INHIBIT_CHECK(proc1_t *pcb)
 {

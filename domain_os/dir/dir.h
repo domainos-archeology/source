@@ -179,6 +179,16 @@ void DIR_$GET_DEF_PROTECTION(uid_t *dir_uid, uid_t *acl_type,
 void DIR_$SET_ACL(uid_t *uid, void *acl, status_$t *status_ret);
 
 /*
+ * DIR_$CLEANUP - Directory cleanup/recovery
+ *
+ * Called when a directory operation fails and the overflow flag is set.
+ * Also called by NAME_$CLEANUP.
+ *
+ * Original address: 0x00E53578
+ */
+void DIR_$CLEANUP(void);
+
+/*
  * DIR_$SET_DEF_PROTECTION - Set default protection for a directory
  *
  * Sets the default ACL/protection that will be applied to new

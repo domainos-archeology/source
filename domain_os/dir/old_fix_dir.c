@@ -81,7 +81,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
 
     /* Try to acquire directory lock */
     NAME_$LOCK_DIR(&local_dir, &handle, 0x40002, status_ret);
-    mapped_ptr = (void *)handle;
+    mapped_ptr = (void *)handle;    /* replaced by the MST_$MAPS result below */
 
     if (*status_ret == status_$ok) {
         /* Path 1: Directory structure is accessible */
@@ -104,9 +104,9 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
             goto cleanup;
         }
 
-        /* Map the temp file */
-        MST_$MAPS(PROC1_$AS_ID, 0xFF00, &temp_uid, 0, 0x10000,
-                  0x16, 0, 0xFF, map_result, status_ret);
+        /* Map the temp file (mapped address is returned in A0) */
+        mapped_ptr = MST_$MAPS(PROC1_$AS_ID, 0xFF00, &temp_uid, 0, 0x10000,
+                               0x16, 0, 0xFF, map_result, status_ret);
         if (*status_ret != status_$ok) {
             goto cleanup;
         }
@@ -210,10 +210,9 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
     } else if (*status_ret == status_$naming_bad_directory) {
         /* Path 2: Directory structure is corrupted */
 
-        /* Map the directory directly */
-        MST_$MAPS(PROC1_$AS_ID, 0xFF00, &local_dir, 0, 0x10000,
-                  0x16, 0, 0xFF, map_result, status_ret);
-        mapped_ptr = (void *)map_result;
+        /* Map the directory directly (mapped address is returned in A0) */
+        mapped_ptr = MST_$MAPS(PROC1_$AS_ID, 0xFF00, &local_dir, 0, 0x10000,
+                               0x16, 0, 0xFF, map_result, status_ret);
         if (*status_ret != status_$ok) {
             goto done;
         }

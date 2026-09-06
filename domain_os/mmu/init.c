@@ -10,7 +10,7 @@
  * Original address: 0x00e23d38
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 void MMU_$INIT(void)
 {

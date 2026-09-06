@@ -17,33 +17,15 @@
 #include "misc/crash_system.h"
 
 /*
- * ROUTE_$PACKET_SEQ - Packet sequence number
- *
- * Returned to caller to identify the packet.
- *
- * Original address: 0xE88226
+ * ROUTE_$PACKET_SEQ (0xE88226) is declared in route/route_internal.h,
+ * SOCK_$EVENT_COUNTERS (0xE28DB4) in sock/sock.h and
+ * status_$network_data_length_too_large in network/network.h.
  */
-#if defined(ARCH_M68K)
-    #define ROUTE_$PACKET_SEQ       (*(uint16_t *)0xE88226)
-#else
-    extern uint16_t ROUTE_$PACKET_SEQ;
-#endif
-
-/*
- * Socket event counter array reference
- * Original address: 0xE28DB4
- */
-#if defined(ARCH_M68K)
-    #define SOCK_$EC_ARRAY          ((void **)0xE28DB4)
-#else
-    extern void *SOCK_$EC_ARRAY[];
-#endif
 
 /* Maximum packet length */
 #define ROUTE_$MAX_SEND_LENGTH      0x400   /* 1024 bytes */
 
 /* Status codes */
-#define status_$network_data_length_too_large   0x11001C
 #define status_$route_queue_full                0x2B0002
 
 /*
@@ -96,9 +78,10 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, void *dest_a
 
     /*
      * Get the driver statistics pointer from the port structure.
-     * Located at offset 0x44 in the port structure.
+     * Located at offset 0x44 in the port structure:
+     *   00e87ca4    movea.l (0x44,A0,D0*0x1),A2
      */
-    driver_stats = (uint32_t *)ROUTE_$PORT_ARRAY[port_index]._unknown0[0x40];
+    driver_stats = (uint32_t *)(uintptr_t)ROUTE_$PORT_ARRAY[port_index].driver_stats;
 
     /* Copy packet data to network buffers */
     NET_IO_$COPY_PACKET(&dest_addr, header_len, data_ptr,
@@ -137,8 +120,17 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, void *dest_a
         /*
          * Update statistics based on socket type.
          * Socket event counter has type at offset 0x15.
+         *
+         * The original indexes the socket pointer table from 0xE28DB4
+         * with an offset of -4, i.e. entry (socket - 1) of
+         * SOCK_$EVENT_COUNTERS (= entry [socket] of the table based at
+         * 0xE28DB0, whose slot 0 is the spinlock):
+         *   00e87d08    movea.l #0xe28db4,A1
+         *   00e87d0e    lsl.w #0x2,D0w
+         *   00e87d10    lea (0x0,A1,D0w*0x1),A1
+         *   00e87d16    movea.l (-0x4,A1),A3
          */
-        void *sock_ec = SOCK_$EC_ARRAY[*socket_ptr];
+        void *sock_ec = SOCK_$EVENT_COUNTERS[*socket_ptr - 1];
         sock_type = *(uint8_t *)((uint8_t *)sock_ec + 0x15);
 
         if (sock_type > 0x20) {

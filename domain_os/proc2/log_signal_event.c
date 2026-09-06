@@ -16,13 +16,7 @@
 
 #include "proc2/proc2_internal.h"
 
-/* Audit enabled flag */
-#if defined(ARCH_M68K)
-    #define AUDIT_ENABLED       (*(uint8_t*)0xE2E09E)
-#else
-    extern uint8_t audit_enabled;
-    #define AUDIT_ENABLED       audit_enabled
-#endif
+/* AUDIT_$ENABLED (0xE2E09E) - audit/audit.h */
 
 /* Static data for audit event (from 0x00e3e806) */
 static const uint8_t audit_event_extra[] = { 0 };
@@ -48,7 +42,7 @@ void PROC2_$LOG_SIGNAL_EVENT(uint16_t event_type, int16_t target_idx,
     proc2_info_t *entry;
 
     /* Only log if auditing is enabled (high bit set) */
-    if ((int8_t)AUDIT_ENABLED >= 0) {
+    if (AUDIT_$ENABLED >= 0) {
         return;
     }
 

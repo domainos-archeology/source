@@ -7,7 +7,7 @@
  * - MST_$GET_VA_INFO: Get full segment information
  */
 
-#include "mst_internal.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$GET_VA_INFO - Get full information about a virtual address

@@ -27,13 +27,6 @@
 #include "mst/mst.h"
 #include "file/file.h"
 
-/* Early log buffers - these exist at fixed addresses for crash recovery */
-extern early_log_t          EARLY_LOG;          /* 0x00e00000 */
-extern early_log_extended_t EARLY_LOG_EXTENDED; /* 0x00e0000c */
-
-/* Timestamp constant - referenced but not used in init message */
-extern uint32_t DAT_00e2fffc;
-
 /* Status code for name not found */
 #define status_$naming_name_not_found 0x000e0007
 
@@ -56,10 +49,13 @@ void LOG_$INIT(void)
     if (status == status_$naming_name_not_found) {
         /* File doesn't exist, create it */
         NAME_$CR_FILE((char *)LOG_FILE_PATH, &LOG_FILE_PATH_LEN, &LOG_$LOGFILE_UID, &status);
+        log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
         if (log_$check_op_status("create  ") < 0) {
             return;
         }
     }
+
+    log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
 
     if (log_$check_op_status("resolve ") < 0) {
         return;
@@ -71,6 +67,7 @@ void LOG_$INIT(void)
 
     /* Get file attributes to check size */
     AST_$GET_COMMON_ATTRIBUTES(&LOG_$LOGFILE_UID, 2, out_attrs, &status);
+    log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
     if (log_$check_op_status("get_attributes  ") < 0) {
         return;
     }
@@ -85,6 +82,7 @@ void LOG_$INIT(void)
     vpn = (int16_t *)MST_$MAPS(0, (int16_t)0xff00, &LOG_$LOGFILE_UID, 0,
                                 LOG_BUFFER_SIZE, 0x16, 0, is_new_file,
                                 out_attrs, &status);
+    log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
     if (log_$check_op_status("map     ") < 0) {
         return;
     }
@@ -96,6 +94,7 @@ void LOG_$INIT(void)
     lock_mode = 0;
     lock_rights = 0;
     FILE_$LOCK(&LOG_$LOGFILE_UID, &lock_index, &lock_mode, &lock_rights, 0, &status);
+    log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
     if (log_$check_op_status("lock    ") < 0) {
         return;
     }
@@ -109,6 +108,7 @@ void LOG_$INIT(void)
 
     /* Wire the log buffer page for reliable access */
     LOG_$STATE.wired_handle = MST_$WIRE((uint32_t)vpn, &status);
+    log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
     if (log_$check_op_status("wire    ") < 0) {
         return;
     }

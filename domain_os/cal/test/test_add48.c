@@ -1,4 +1,15 @@
-#include "cal.h"
+/*
+ * cal/test/test_add48.c - Unit tests for ADD48
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "../add48.c"
+
 
 // Test: Adding two small values with no carry
 // 0x00000001:0x0000 + 0x00000001:0x0000 = 0x00000002:0x0000
@@ -70,4 +81,16 @@ void test_add48_overflow_wraps(void) {
     // Overflow wraps to zero
     ASSERT_EQ(a.high, 0);
     ASSERT_EQ(a.low, 0);
+}
+
+int main(void) {
+    printf("ADD48 tests\n");
+    RUN_TEST(add48_simple_no_carry);
+    RUN_TEST(add48_low_no_overflow);
+    RUN_TEST(add48_carry_from_low_to_high);
+    RUN_TEST(add48_carry_with_high_values);
+    RUN_TEST(add48_add_zero);
+    RUN_TEST(add48_overflow_wraps);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

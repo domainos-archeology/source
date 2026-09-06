@@ -46,9 +46,16 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
     int8_t zero_flag;
     uid_t uid;
     int32_t page_num;
-    int32_t dtm;
+    /*
+     * dtm (-0x38) and acl_info (-0x30) are each 6-byte {high, low}
+     * timestamps filled in by NETWORK_$READ_AHEAD; the original copies
+     * their high longword and low word into the AOTE separately, so they
+     * are declared as clock_t here rather than accessed through byte casts.
+     * TODO: NETWORK_$READ_AHEAD's dtm/acl_info parameters should be clock_t *.
+     */
+    clock_t dtm;
     clock_t clock;
-    uint32_t acl_info;
+    clock_t acl_info;
     uint32_t buffer[2];
     int16_t i;
 
@@ -81,7 +88,8 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
     /* Perform network read-ahead */
     pages_read = NETWORK_$READ_AHEAD((char *)aote + 0xAC, &uid, ppn_array,
                                       page_size, allocated, no_read_ahead,
-                                      flags, &dtm, &clock, &acl_info, status);
+                                      flags, (int32_t *)&dtm, &clock,
+                                      (uint32_t *)&acl_info, status);
 
     /* Free excess pages that weren't used */
     for (i = allocated - pages_read - 1; i >= 0; i--) {
@@ -122,13 +130,13 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
     }
 
     /* Update timestamps */
-    if (dtm == 0) {
+    if (dtm.high == 0) {   /* tst.l (-0x38,A6) */
         TIME_$CLOCK(&clock);
     } else {
-        *((int32_t *)((char *)aote + 0x30)) = dtm;
-        *((uint16_t *)((char *)aote + 0x34)) = *((uint16_t *)&acl_info);
-        *((uint32_t *)((char *)aote + 0x28)) = *((uint32_t *)&acl_info + 1);
-        *((uint16_t *)((char *)aote + 0x2C)) = *((uint16_t *)((char *)&acl_info + 2));
+        *((uint32_t *)((char *)aote + 0x30)) = dtm.high;       /* move.l (-0x38,A6),(0x30,A3) */
+        *((uint16_t *)((char *)aote + 0x34)) = dtm.low;        /* move.w (-0x34,A6),(0x34,A3) */
+        *((uint32_t *)((char *)aote + 0x28)) = acl_info.high;  /* move.l (-0x30,A6),(0x28,A3) */
+        *((uint16_t *)((char *)aote + 0x2C)) = acl_info.low;   /* move.w (-0x2c,A6),(0x2c,A3) */
         *((uint32_t *)((char *)aote + 0x40)) = clock.high;
         *((uint16_t *)((char *)aote + 0x44)) = clock.low;
     }
@@ -141,7 +149,7 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
         if (end_offset >= *((int32_t *)((char *)aote + 0x20))) {
             /* Extending file */
             *((int32_t *)((char *)aote + 0x20)) = end_offset + 0x400;
-            if (dtm == 0) {
+            if (dtm.high == 0) {
                 *((uint32_t *)((char *)aote + 0x40)) = clock.high;
                 *((uint16_t *)((char *)aote + 0x44)) = clock.low;
                 *((uint32_t *)((char *)aote + 0x28)) = clock.high;
@@ -149,7 +157,7 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
             }
         } else {
             /* Not extending */
-            if (dtm == 0) {
+            if (dtm.high == 0) {
                 *((uint32_t *)((char *)aote + 0x30)) = clock.high;
                 *((uint16_t *)((char *)aote + 0x34)) = clock.low;
             }

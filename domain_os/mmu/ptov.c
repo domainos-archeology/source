@@ -7,7 +7,7 @@
  * Original address: 0x00e241b8
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 uint32_t MMU_$PTOV(uint32_t ppn)
 {

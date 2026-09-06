@@ -37,39 +37,12 @@
 #include "os/os.h"
 
 /*
- * =============================================================================
- * Global Data References
- * =============================================================================
+ * Global data references:
+ *   RIP_$STD_IDP_CHANNEL (0xE26EBC) - rip/rip.h
+ *   RIP_$INFO (0xE263BC)            - rip/rip_internal.h
+ *   ROUTE_$PORT_ARRAY (0xE2E0A0)    - route/route.h; the port entries are
+ *                                     accessed here by byte offset.
  */
-
-#if defined(ARCH_M68K)
-    /* RIP IDP channel - 0xFFFF means no channel open */
-    #define RIP_$STD_IDP_CHANNEL    (*(int16_t *)0xE26EBC)
-
-    /* Broadcast control parameters (30 bytes) */
-    #define RIP_$BCAST_CONTROL      ((void *)0xE26EC0)
-
-    /* Port array base as uint8_t* for byte-level access to fields.
-     * Note: ROUTE_$PORT_ARRAY is defined in route_internal.h as route_$port_t*,
-     * so we use a different name here for byte-offset calculations. */
-    #define ROUTE_$PORT_ARRAY_BYTES ((uint8_t *)0xE2E0A0)
-
-    /* This node's ID */
-    #define NODE_$ME                (*(uint32_t *)0xE245A4)
-
-    /* RIP_$INFO - Base of routing table entries */
-    #define RIP_$INFO               ((rip_$entry_t *)0xE263BC)
-
-    /* Send callback address (static code, not a function pointer per se) */
-    #define RIP_$SEND_CALLBACK      ((void *)0xE870D8)
-#else
-    extern int16_t RIP_$STD_IDP_CHANNEL;
-    extern uint8_t RIP_$BCAST_CONTROL[30];
-    extern uint8_t ROUTE_$PORT_ARRAY_BYTES[];
-    extern uint32_t NODE_$ME;
-    extern rip_$entry_t *RIP_$INFO;
-    extern void *RIP_$SEND_CALLBACK;
-#endif
 
 /*
  * Port entry structure (partial, at ROUTE_$PORT_ARRAY)
@@ -167,7 +140,7 @@ void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
     NETBUF_$GET_HDR(&hdr_phys, &hdr_va);
 
     /* Get port entry pointer */
-    port_entry = ROUTE_$PORT_ARRAY_BYTES + (port_index * PORT_ENTRY_SIZE);
+    port_entry = (uint8_t *)ROUTE_$PORT_ARRAY + (port_index * PORT_ENTRY_SIZE);
 
     /* Build IDP packet header */
     hdr = (rip_$send_hdr_t *)hdr_va;
@@ -285,7 +258,7 @@ void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
 
         /* Iterate through all 8 ports */
         for (i = 0; i < 8; i++) {
-            port_entry = ROUTE_$PORT_ARRAY_BYTES + (i * PORT_ENTRY_SIZE);
+            port_entry = (uint8_t *)ROUTE_$PORT_ARRAY + (i * PORT_ENTRY_SIZE);
 
             /* Copy port's network address to destination */
             *(uint32_t *)addr_buf = *(uint32_t *)port_entry;
@@ -394,7 +367,7 @@ void RIP_$BROADCAST(uint8_t flags)
         }
 
         /* Get the port this route uses */
-        port_entry = ROUTE_$PORT_ARRAY_BYTES + (route->port * PORT_ENTRY_SIZE);
+        port_entry = (uint8_t *)ROUTE_$PORT_ARRAY + (route->port * PORT_ENTRY_SIZE);
         port_flags = *(uint16_t *)(port_entry + PORT_FLAGS_OFF);
 
         /* Check if this port should be included based on flags */

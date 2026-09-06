@@ -76,9 +76,13 @@ void xns_$add_port(uint16_t channel, int16_t port, status_$t *status_ret)
         /* Check if port type supports opening */
         /* Access ROUTE port state to check type */
         {
-            extern uint8_t DAT_00e2e0cc[];  /* Port type array */
-            uint8_t port_type = DAT_00e2e0cc[port * 0x5C + 0x2C];
-            if ((1 << (port_type & 0x1F)) & 0x3) {
+            /*
+             * Port status word at +0x2C of ROUTE_$PORT_ARRAY[port] (0xE2E0A0):
+             *   00e17c30    move.w (0x2c,A0,D1*0x1),D0w
+             *   00e17c34    btst.l D0,D4             ; D4 = 3
+             */
+            uint16_t port_status = ROUTE_$PORT_ARRAY[port].active;
+            if ((1 << (port_status & 0x1F)) & 0x3) {
                 *status_ret = status_$internet_network_port_not_open;
                 return;
             }

@@ -106,10 +106,13 @@ void FILE_$GET_SEG_MAP(uid_t *file_uid, uint32_t *start_off,
 
                     /* Set corresponding bit in output */
                     if (out_bit < 32) {
-                        uint32_t temp = 0;
-                        uint16_t byte_offset = (31 - out_bit) >> 3;
-                        uint8_t *temp_ptr = ((uint8_t *)&temp) + byte_offset;
-                        *temp_ptr |= (1 << (out_bit & 7));
+                        /*
+                         * The original sets bit (out_bit & 7) of byte
+                         * ((31 - out_bit) >> 3) of a big-endian 32-bit word,
+                         * which is word bit 8*(out_bit >> 3) + (out_bit & 7)
+                         * == out_bit.
+                         */
+                        uint32_t temp = (uint32_t)1 << out_bit;
                         *bitmap_out |= temp;
                     }
                 }

@@ -8,7 +8,7 @@
  * Original address: 0x00e23f0c
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 void MMU_$REMOVE_ASID(uint16_t asid)
 {

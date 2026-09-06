@@ -8,7 +8,7 @@
  * Original address: 0x00e143b2
  */
 
-#include "pmap/pmap.h"
+#include "pmap/pmap_internal.h"
 #include "ast/ast.h"
 
 void PMAP_$UPDATE_CALLBACK(void)

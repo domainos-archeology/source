@@ -14,7 +14,7 @@
  *   00e209e4    rts
  */
 
-#include "di/di.h"
+#include "di/di_internal.h"
 
 void DI_$INIT_Q_ELEM(di_queue_elem_t *elem)
 {

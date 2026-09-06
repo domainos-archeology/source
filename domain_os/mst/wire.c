@@ -9,7 +9,7 @@
  * it calls MST_$TOUCH to fault in the page and wire it.
  */
 
-#include "mst_internal.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$WIRE - Wire a virtual page into physical memory

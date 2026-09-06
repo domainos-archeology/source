@@ -14,7 +14,7 @@
  * Original address: 0x00e2063e
  */
 
-#include "ec.h"
+#include "ec/ec_internal.h"
 #include "proc1/proc1.h"
 
 uint16_t EC_$WAITN(ec_$eventcount_t **ecs, int32_t *wait_val, int16_t num_ecs)

@@ -19,6 +19,9 @@
 #include "network/network.h"
 #include "proc1/proc1.h"
 #include "misc/crash_system.h"
+#include "wp/wp.h"
+#include "os/os.h"
+#include "route/route.h"
 
 /*
  * ============================================================================
@@ -914,7 +917,7 @@ void dir_$do_op_read_linku(uid_t *uid, void *name, uint16_t name_len,
  * Original address: 0x00E57C80
  */
 /* DIR_$OLD_DIR_READU - Legacy directory read
- * Checks for canned root, crashes if so, then calls FUN_00e579c0.
+ * Checks for canned root, crashes if so, then calls dir_$old_read_entries (0x00e579c0).
  * Dereferences param_3 and param_4 before passing to helper.
  * Original address: 0x00E57C80
  */
@@ -1295,13 +1298,12 @@ extern uint8_t DAT_00e56094;
 extern uint8_t DAT_00e5609e;
 extern uint8_t DAT_00e560a2;
 extern uint8_t DAT_00e5609a;
-extern uint8_t DAT_00e54730;
 extern uint8_t DAT_00e5716c;
 extern uint8_t DAT_00e56946;
 extern uint8_t DAT_00e564de;
 extern uint8_t DAT_00e564e2;
 extern uint8_t DAT_00e5716a;
-extern uint8_t DAT_00e54b28;
+/* DAT_00e54730 and DAT_00e54b28 (NAME code region) are declared in name/name.h */
 
 /* ACL_$NIL extern */
 extern uid_t ACL_$NIL;
@@ -1318,11 +1320,7 @@ extern uid_t ACL_$NIL;
  */
 extern int16_t DIR_$NAME_OFFSET_TABLE[];
 
-/* DIR_$CLEANUP - Directory cleanup/recovery
- * Called when a directory operation fails and the overflow flag is set.
- * Original address: 0x00E53578
- */
-extern void DIR_$CLEANUP(void);
+/* DIR_$CLEANUP is declared in dir/dir.h (also used by NAME_$CLEANUP) */
 
 /* dir_$get_entry_cached - Cached directory entry lookup
  *
@@ -1516,5 +1514,35 @@ void dir_$purify_split_pages(dir_insert_ctx_t *ctx, status_$t *status_ret);
  * Original address: 0x00E4EECA, 120 bytes
  */
 void dir_$finalize_split(dir_insert_ctx_t *ctx, status_$t *status_ret);
+
+/*
+ * ============================================================================
+ * Constants in the DIR code region passed by reference (Pascal VAR args)
+ * ============================================================================
+ *
+ * These are literal values embedded in the code segment next to the routines
+ * that use them; Ghidra labels them DAT_<address>.  They are declared with
+ * the access width used by the code.
+ */
+extern uint16_t DAT_00e50830;   /* 0xE50830: 0x0005 - FILE_$SET_PROT protection type (add_bak) */
+extern uint16_t DAT_00e50c5a;   /* 0xE50C5A: 0x0000 - ACL option flags / DROP_HARD_LINKU flags */
+extern uint32_t DAT_00e50c5c;   /* 0xE50C5C: 0x00000002 - ACL_$RIGHTS rights mask (add_bak) */
+extern uint16_t DAT_00e505c4;   /* 0xE505C4: 0xFFFF - ACL option flags for cname rights check */
+extern uint32_t DAT_00e51b64;   /* 0xE51B64: 0x00000040 - ACL rights mask (rename / delete) */
+extern uint8_t  DAT_00e4dffa;   /* 0xE4DFFA: 0x0090 - FILE_$GET_ATTRIBUTES attribute parameter */
+extern uint8_t  DAT_00e4dffc;   /* 0xE4DFFC: NUL byte used as the 1-char name "\0" */
+extern uint8_t  PTR_DAT_00e4cd84; /* 0xE4CD84: case-folding character bitmap (07 ff ff fe ...) */
+extern uint8_t  DAT_00e4cff4;   /* 0xE4CFF4: ACL_$RIGHTS parameter (get_entry_cached) */
+extern uint8_t  DAT_00e4cff6;   /* 0xE4CFF6: ACL_$RIGHTS rights mask (get_entry_cached) */
+extern uint8_t  DAT_00e4b448;   /* 0xE4B448: 0x00008000 - MST_$REMAP_PRIVI length parameter */
+extern const int32_t DAT_00e52040; /* 0xE52040: 0x00000400 - one page; FILE_$FW_PARTIAL byte
+                                      count / FILE_$TRUNCATE length (defined in dir_data.c) */
+
+/*
+ * A5-relative globals (A5 = 0xE35040 in the DIR/NAME code) used when not
+ * compiled for the m68k, where they are read through __A5_BASE().
+ */
+extern uint16_t DAT_a5_2042;    /* A5+0x2042: request type field for DIR_$ADD_ENTRY_INTERNAL */
+extern int16_t  DAT_a5_2046;    /* A5+0x2046: base request length for DIR_$ADD_ENTRY_INTERNAL */
 
 #endif /* DIR_INTERNAL_H */

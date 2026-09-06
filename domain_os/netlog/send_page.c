@@ -21,15 +21,9 @@
 #include "net_io/net_io.h"
 
 /*
- * AUDIT data end address for packet info
- * Used in PKT_$BLD_INTERNET_HDR call as the packet template
+ * AUDIT_PKT_INFO (0xE248FC), the packet template passed to
+ * PKT_$BLD_INTERNET_HDR, is defined in netlog/netlog_internal.h.
  */
-#if defined(ARCH_M68K)
-    #define AUDIT_PKT_INFO      ((void*)0xE248FC)
-#else
-    extern char AUDIT_PKT_INFO_SYM;
-    #define AUDIT_PKT_INFO      (&AUDIT_PKT_INFO_SYM)
-#endif
 
 void NETLOG_$SEND_PAGE(void)
 {

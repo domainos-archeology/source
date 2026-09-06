@@ -14,7 +14,7 @@
  * Original address: 0x00e20610
  */
 
-#include "ec.h"
+#include "ec/ec_internal.h"
 #include "proc1/proc1.h"
 
 int16_t EC_$WAIT(ec_$eventcount_t *ecs[3], int32_t *wait_val)

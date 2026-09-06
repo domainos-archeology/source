@@ -31,12 +31,26 @@ typedef struct vtoce_$result_t {
 } vtoce_$result_t;
 
 /*
- * VTOC lookup request structure
+ * VTOC lookup request structure (0x20 bytes)
+ *
+ * This is the object location descriptor also embedded in AST entries
+ * (aote + 0x9C).  Layout verified against VTOC_$LOOKUP / VTOC_$SET_NAME_DIRS
+ * / VTOC_$SEARCH_VOLUMES: the UID is at +0x08, the block hint at +0x04 and
+ * the volume index byte at +0x1C.
  */
 typedef struct vtoc_$lookup_req_t {
-    uid_t       uid;                /* 0x00: UID to look up */
-    uint32_t    block_hint;         /* 0x08: Block hint (0 for hash lookup) */
-    uint8_t     vol_idx;            /* 0x0C: Volume index */
+    uint32_t    flags;              /* 0x00: type/flags word; cleared on success, then
+                                             byte 1 low nibble := 1 and bytes 2-3 := the
+                                             per-volume word at OS_DISK_DATA[vol_idx*2-2] */
+    uint32_t    block_hint;         /* 0x04: VTOC block << 4 | entry index (0 for hash lookup) */
+    uid_t       uid;                /* 0x08: UID to look up */
+    uint32_t    port;               /* 0x10: ROUTE_$PORT (filled on success) */
+    uint32_t    node;               /* 0x14: NODE_$ME (filled on success) */
+    uint32_t    reserved_18;        /* 0x18: cleared on success */
+    uint8_t     vol_idx;            /* 0x1C: Volume index (1-based); on success rewritten
+                                             with the cache entry index */
+    uint8_t     flags_1d;           /* 0x1D: bit 6 set on success, low nibble := 1 */
+    uint16_t    reserved_1e;        /* 0x1E */
 } vtoc_$lookup_req_t;
 
 /*
@@ -293,5 +307,9 @@ void VTOCE_$LOOKUP_FM(void *vtoce_loc, uint16_t block_num, uint16_t flags,
 void VTOCE_$TRUNCATE(void *vtoce_loc, uint32_t flags, int32_t new_length,
                      int32_t param_4, uint32_t *blocks_freed,
                      status_$t *status);
+
+/* Nil owner/org UIDs (defined in vtoc/vtoc_data.c) */
+extern uid_t PPO_$NIL_USER_UID;     /* 0xE174EC: Nil user UID */
+extern uid_t PPO_$NIL_ORG_UID;      /* 0xE17574: Nil org UID */
 
 #endif /* VTOC_H */

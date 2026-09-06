@@ -31,7 +31,6 @@
 #include "dir/dir_internal.h"
 
 /* Name offset table at A5+0x2000, indexed by entry type & 7 */
-extern int16_t DIR_$NAME_OFFSET_TABLE[];
 
 void dir_$refind_entry(uint32_t local_handle, uint8_t *page_data,
                        uint8_t *idx_base, void **entry_ptr_ret,

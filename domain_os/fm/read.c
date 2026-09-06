@@ -55,7 +55,7 @@ void FM_$READ(fm_$file_ref_t *file_ref, uint32_t block_addr, uint16_t level,
      * and requesting block 1, entry 15 (unused allocation bitmap area),
      * return a zeroed entry.
      */
-    if (VTOC_CACH_LOOKUPS[vol_idx] < 0 && block_num == 1 && entry_idx == 0x0F) {
+    if (vtoc_$data.cach_wp_flag[vol_idx - 1] < 0 && block_num == 1 && entry_idx == 0x0F) {
         *status = status_$ok;
         /* Zero out the output entry */
         dst_ptr = entry_out->blocks;

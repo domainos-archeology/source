@@ -38,6 +38,20 @@
 #define XPD_LOCK_ID 2 /* xpd_$lock */
 
 /*
+ * Event type word passed (by reference) to XPD_$POST_EVENT.  Only the low
+ * byte (byte 1 of the big-endian word) is used: it is the event code that
+ * is stored in bits 5-8 of the target state word.
+ */
+typedef uint16_t xpd_$event_type_t;
+
+/*
+ * Debugger response word.  XPD_$POST_EVENT returns the response in it
+ * (2 = no debugger); XPD_$CONTINUE_PROC reads its low byte and stores it in
+ * bits 4-5 of the target state byte.
+ */
+typedef uint16_t xpd_$response_t;
+
+/*
  * Status codes
  */
 #define status_$xpd_not_a_debugger 0x00160005
@@ -304,7 +318,7 @@ void XPD_$RESTART(uid_t *proc_uid, uint16_t *mode, int32_t *pc, int16_t *signal,
  *
  * Original address: 0x00e5bed8
  */
-void XPD_$CONTINUE_PROC(uid_t *proc_uid, int32_t response,
+void XPD_$CONTINUE_PROC(uid_t *proc_uid, xpd_$response_t *response,
                         status_$t *status_ret);
 
 /*
@@ -356,7 +370,8 @@ void XPD_$CAPTURE_FAULT(void *context, int32_t *frame, uint16_t *signal,
  *
  * Original address: 0x00e75090
  */
-void XPD_$POST_EVENT(int32_t *event_type, void *event_data, uint16_t *result);
+void XPD_$POST_EVENT(xpd_$event_type_t *event_type, status_$t *status_val,
+                     xpd_$response_t *response_ret);
 
 /*
  * XPD_$GET_EVENT_AND_DATA - Get pending event from target

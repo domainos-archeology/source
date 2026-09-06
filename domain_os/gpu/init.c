@@ -6,7 +6,7 @@
  * Original address: 0x00E707FC (18 bytes)
  */
 
-#include "gpu/gpu.h"
+#include "gpu/gpu_internal.h"
 
 /*
  * GPU_$INIT - Initialize GPU subsystem

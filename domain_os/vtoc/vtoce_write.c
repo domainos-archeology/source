@@ -10,9 +10,6 @@
 
 #include "vtoc/vtoc_internal.h"
 
-/* External variables */
-extern uint32_t VTOC_CACH_LOOKUPS;  /* 0xE78736 */
-
 /* Flags byte for old-to-new conversion at 0x00e38f7e (relative to PC) */
 static char old_format_flags = 0;
 
@@ -30,7 +27,7 @@ void VTOCE_$WRITE(vtoc_$lookup_req_t *req, vtoce_$result_t *data, char flags,
     uint16_t dirty_flag;
 
     /* Get volume index from request (at offset 0x1C) */
-    vol_idx_byte = *(uint8_t *)((uint8_t *)req + 0x1C);
+    vol_idx_byte = req->vol_idx;
 
     /* Set dirty flag based on flags parameter */
     if (flags < 0) {
@@ -41,7 +38,7 @@ void VTOCE_$WRITE(vtoc_$lookup_req_t *req, vtoce_$result_t *data, char flags,
 
     /* Extract block and entry from request */
     block = req->block_hint >> 4;
-    entry_idx = *(uint8_t *)((uint8_t *)req + 7) & 0x0F;
+    entry_idx = req->block_hint & 0x0F;     /* low nibble (byte +7 on m68k) */
 
     ML_$LOCK(VTOC_LOCK_ID);
 
@@ -53,8 +50,8 @@ void VTOCE_$WRITE(vtoc_$lookup_req_t *req, vtoce_$result_t *data, char flags,
         goto done;
     }
 
-    /* Check if read-only (cache flag bit 7 set) */
-    if (((char *)&VTOC_CACH_LOOKUPS)[vol_idx + 3] < 0) {
+    /* Check if read-only (per-volume write-protect flag bit 7 set) */
+    if (vtoc_$data.cach_wp_flag[vol_idx - 1] < 0) {
         /* Volume is read-only, silently succeed */
         *status_ret = status_$ok;
         goto done;

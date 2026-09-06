@@ -48,6 +48,32 @@
 #define LOG_TYPE_CRASH          5   /* System crash info */
 
 /* =============================================================================
+ * Log Global State Structure
+ *
+ * Located at address 0x00e2b280 in the original binary.
+ * This structure contains all global state for the logging subsystem.
+ * It is public because PMAP_$PURIFIER_L clears LOG_$LOGFILE_PTR
+ * (0x00e2b294) directly when the log page cannot be written.
+ * =============================================================================
+ */
+typedef struct log_state_t {
+    uid_t       logfile_uid;        /* 0x00: UID of the log file */
+    int16_t    *current_entry_ptr;  /* 0x08: Pointer to current entry in buffer */
+    uint16_t    spin_lock;          /* 0x0c: Spin lock for concurrent access */
+    uint16_t    pad_0e;             /* 0x0e: Padding */
+    uint32_t    wired_handle;       /* 0x10: Handle from MST_$WIRE */
+    int16_t    *logfile_ptr;        /* 0x14: Pointer to mapped log buffer */
+    int8_t      dirty_flag;         /* 0x18: Log has been modified */
+    int8_t      pad_19[3];          /* 0x19: Padding to word boundary */
+} log_state_t;
+
+/* Global log state - address 0x00e2b280 */
+extern log_state_t LOG_$STATE;
+
+/* Pointer to the mapped log buffer (0x00e2b294) */
+#define LOG_$LOGFILE_PTR        (LOG_$STATE.logfile_ptr)
+
+/* =============================================================================
  * Log Function Prototypes
  * =============================================================================
  */

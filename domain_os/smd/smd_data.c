@@ -60,3 +60,13 @@ uint16_t SMD_DEFAULT_DISPLAY_UNIT;
 /* Request queue event counts */
 ec_$eventcount_t SMD_REQUEST_EC_WAIT;  /* At 0x00E2E3FC - wait for space */
 ec_$eventcount_t SMD_REQUEST_EC_SIGNAL; /* At 0x00E2E408 - signal new request */
+
+/*
+ * Constant lock/line words that live in the code segment of the original
+ * binary.  Their addresses are passed to SMD_$ACQ_DISPLAY, KBD_$*, and
+ * TERM_$CONTROL as by-reference arguments.
+ *   0x00E6D92C: 0x0000
+ *   0x00E6DFF8: 0x0001
+ */
+uint16_t SMD_ACQ_LOCK_DATA = 0;
+int16_t SMD_SYNC_LOCK_DATA = 1;

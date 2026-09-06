@@ -15,7 +15,7 @@
  * 7. Initialize MST page availability bitmap
  */
 
-#include "mst_internal.h"
+#include "mst/mst_internal.h"
 #include "math/math.h"
 #include "misc/misc.h"
 #include "pmap/pmap.h"
@@ -189,7 +189,7 @@ void MST_$INIT(void)
      * Use 10% of real pages, capped between 125 (0x7d) and 358 (0x166) pages.
      */
     int32_t page_base;
-    if (M68020 >= 0) {
+    if (!MST_M68020_IS_020()) {  /* tst.b M68020 / bmi: not a 68020+ */
         page_base = MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
     } else {
         page_base = MMAP_$REAL_PAGES;

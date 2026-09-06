@@ -47,13 +47,10 @@
  */
 
 /* Name offset table */
-extern int16_t DIR_$NAME_OFFSET_TABLE[];
 
 /* Case folding bitmap */
-extern uint8_t PTR_DAT_00e4cd84;
 
 /* DAT_00e4dffc - NUL byte name for dir_$find_entry */
-extern uint8_t DAT_00e4dffc;
 
 void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
                          void *name_ret, void *len_ret, void *uid_ret,

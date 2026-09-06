@@ -10,7 +10,7 @@
  * Original address: 0x00e20efc
  */
 
-#include "proc1.h"
+#include "proc1/proc1_internal.h"
 
 /*
  * The assembly accesses offset 0x5A (nesting_depth) as the inhibit/lock

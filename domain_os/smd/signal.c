@@ -23,9 +23,8 @@
 /* Status code for invalid buffer size */
 #define status_$display_invalid_buffer_size     0x0013000C
 
-/* Request queue event counts */
-extern ec_$eventcount_t SMD_REQUEST_EC_WAIT;  /* At 0x00E2E3FC - wait for space */
-extern ec_$eventcount_t SMD_REQUEST_EC_SIGNAL; /* At 0x00E2E408 - signal new request */
+/* Request queue event counts SMD_REQUEST_EC_WAIT / SMD_REQUEST_EC_SIGNAL are
+ * declared in smd/smd_internal.h */
 
 /*
  * SMD_$SIGNAL - Send signal to display manager

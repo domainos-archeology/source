@@ -6,7 +6,7 @@
  * Original address: 0x00E7080E (2 bytes)
  */
 
-#include "gpu/gpu.h"
+#include "gpu/gpu_internal.h"
 
 /*
  * GPU_$TERM - Terminate GPU subsystem

@@ -12,7 +12,7 @@
  * a serious memory management error that cannot be recovered from.
  */
 
-#include "mst_internal.h"
+#include "mst/mst_internal.h"
 #include "misc/misc.h"
 
 /*

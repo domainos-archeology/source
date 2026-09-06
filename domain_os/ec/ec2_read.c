@@ -13,7 +13,7 @@
  * Original address: 0x00e42c7c
  */
 
-#include "ec.h"
+#include "ec/ec_internal.h"
 
 int32_t EC2_$READ(ec2_$eventcount_t *ec)
 {

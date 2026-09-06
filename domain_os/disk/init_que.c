@@ -13,7 +13,7 @@
  * @param queue  Queue structure to initialize
  */
 
-#include "disk_internal.h"
+#include "disk/disk_internal.h"
 
 void DISK_$INIT_QUE(void *queue)
 {

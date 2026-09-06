@@ -65,7 +65,7 @@ void FM_$WRITE(fm_$file_ref_t *file_ref, uint32_t block_addr, uint16_t level,
      * If volume has cached lookups (write-protected/read-only optimization),
      * silently succeed without actually writing.
      */
-    if (VTOC_CACH_LOOKUPS[vol_idx] < 0) {
+    if (vtoc_$data.cach_wp_flag[vol_idx - 1] < 0) {
         *status = status_$ok;
         goto done;
     }

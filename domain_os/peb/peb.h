@@ -175,6 +175,13 @@ extern peb_fp_state_t PEB_$WIRED_DATA_START[];
 extern uint32_t PEB_$STATUS_REG;
 
 /*
+ * PEB_$DISP_INT_ADDR - display interrupt handler address cell (0x00E24478).
+ * SMD_$INTERRUPT_INIT stores the address of SMD_$DISP1_INT here when the PEB
+ * is routing the display interrupt instead of the direct vector at 0x70.
+ */
+extern void **PEB_$DISP_INT_ADDR;
+
+/*
  * ============================================================================
  * Function Prototypes - Public API
  * ============================================================================

@@ -96,7 +96,7 @@ typedef struct ws_hdr_t {
 /* Maximum PID for pid-to-wsl mapping */
 #define MMAP_MAX_PID 64 /* 0x40 */
 
-/* Page type codes for FUN_00e0c514 (add page to WSL) */
+/* Page type codes for mmap_$add_to_wsl (0x00e0c514, add page to WSL) */
 #define MMAP_PAGE_TYPE_FREE 0     /* Free/available page */
 #define MMAP_PAGE_TYPE_PURE 1     /* Pure (code) page */
 #define MMAP_PAGE_TYPE_IMPURE 2   /* Impure (data) page - not modified */
@@ -171,6 +171,10 @@ extern uint32_t MMAP_$STEAL_CNT;
 extern uint32_t MMAP_$REAL_PAGES;
 extern uint32_t MMAP_$LPPN; /* Lowest pageable page number */
 extern uint32_t MMAP_$HPPN; /* Highest pageable page number */
+/* Statistics read by OSINFO_$GET_MMAP */
+extern uint32_t MMAP_$REMOTE_PAGES;      /* 0xE23C9C */
+extern uint32_t MMAP_$RECLAIM_SHAR_CNT;  /* 0xE23298 */
+extern uint32_t MMAP_$RECLAIM_PUR_CNT;   /* 0xE23294 */
 
 /*
  * Note: Internal error status arrays and other internal globals

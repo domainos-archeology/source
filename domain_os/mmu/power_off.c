@@ -7,7 +7,7 @@
  * Original address: 0x00e2428c
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 int8_t MMU_$POWER_OFF(void)
 {

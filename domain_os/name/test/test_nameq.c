@@ -7,15 +7,16 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
-/* Minimal type definitions for testing */
-typedef unsigned short uint16_t;
+/* Minimal type definitions for testing (Domain/OS boolean convention) */
 typedef char boolean;
 #define true  ((boolean)-1)
 #define false ((boolean)0)
 
-/* Function under test */
-boolean NAMEQ(char *str1, uint16_t *len1, char *str2, uint16_t *len2);
+/* Function under test - include directly, bypassing the header chain */
+#define NAME_INTERNAL_H
+#include "../nameq.c"
 
 /* Test helper */
 static int test_count = 0;

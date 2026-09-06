@@ -8,10 +8,11 @@
 #ifndef ROUTE_INTERNAL_H
 #define ROUTE_INTERNAL_H
 
+#include "route/route.h"
 #include "ec/ec.h"
 #include "misc/crash_system.h"
+#include "network/network.h"
 #include "rip/rip.h"
-#include "route/route.h"
 #include "sock/sock.h"
 
 /*
@@ -32,15 +33,8 @@
  * =============================================================================
  */
 
-/*
- * ROUTE_$PORT_ARRAY - Array of routing port structures
- *
- * Array of 8 port structures, each 0x5C (92) bytes.
- * Total size: 8 * 92 = 736 bytes (0x2E0)
- *
- * Original address: 0xE2E0A0
- */
-extern route_$port_t ROUTE_$PORT_ARRAY[];
+/* ROUTE_$PORT_ARRAY / ROUTE_$PORT: see route/route.h */
+
 /*
  * ROUTE_$SOCK_ECVAL - Socket event count value
  *
@@ -75,24 +69,8 @@ extern uint32_t ROUTE_$CONTROL_ECVAL;
  * Original address: 0xE26F0C
  */
 extern uint32_t ROUTE_$CONTROL_EC;
-/*
- * ROUTE_$SOCK - Socket reference
- *
- * Original address: 0xE26F18
- */
-extern uint16_t ROUTE_$SOCK;
-/*
- * ROUTE_$STD_N_ROUTING_PORTS - Standard number of routing ports
- *
- * Original address: 0xE26F1A
- */
-extern int16_t ROUTE_$STD_N_ROUTING_PORTS;
-/*
- * ROUTE_$N_ROUTING_PORTS - Current number of routing ports
- *
- * Original address: 0xE26F1C
- */
-extern int16_t ROUTE_$N_ROUTING_PORTS;
+/* ROUTE_$SOCK, ROUTE_$STD_N_ROUTING_PORTS, ROUTE_$N_ROUTING_PORTS: see route/route.h */
+
 /*
  * ROUTE_$ROUTING - Routing table/flag
  *
@@ -216,35 +194,109 @@ void RTWIRED_PROC_START(int16_t port_index, uint16_t packet_id,
 
 /*
  * =============================================================================
- * Additional Global Data for Wired Pages
+ * Global Data in the Wired Routing Area (0xE87000 - 0xE88228)
  * =============================================================================
+ *
+ * The routing process code and its data live in a contiguous area that
+ * route_$wire_routing_area() wires into physical memory.  On m68k these
+ * are accessed at their absolute addresses (the A5-relative data of the
+ * original Pascal module); on other architectures they are ordinary
+ * variables defined in route_data.c.
  */
+
+/* Maximum number of pages to wire for routing (constant at 0xE69BFC) */
+#define ROUTE_$MAX_WIRED_PAGES  10
 
 #if defined(ARCH_M68K)
-/*
- * ROUTE_$WIRED_PAGES - Array of wired page addresses
- *
- * Original address: 0xE87D80
- */
-#define ROUTE_$WIRED_PAGES ((uint32_t *)0xE87D80)
+/* Start/end of the wired routing area (pointers at 0xE69C04 / 0xE69C00) */
+#define ROUTE_$WIRED_AREA_START ((void *)0x00E87000)
+#define ROUTE_$WIRED_AREA_END   ((void *)0x00E88228)
+
+/* RIP halt ("poison") packet: 16 byte header + 8 bytes of RIP data */
+#define RIP_$HALT_PACKET        ((uint8_t *)0xE87D68)   /* 0xE87D68 */
+#define RIP_$HALT_PACKET_DATA   ((uint8_t *)0xE87D78)   /* 0xE87D78 */
+
+/* Global send flags word (A5+0xC where A5=0xE87D68), used by RTWIRED_PROC_START */
+#define RTWIRED_$SEND_FLAGS     (*(uint16_t *)0xE87D74)
+
+/* Array of wired page addresses */
+#define ROUTE_$WIRED_PAGES      ((uint32_t *)0xE87D80)
 
 /*
- * ROUTE_$N_WIRED_PAGES - Count of currently wired pages
- *
- * Original address: 0xE87FD2
+ * Routing statistics area (0x81 longwords, cleared by ROUTE_$INIT_ROUTING).
+ * Entries 0..0x80 are per-packet-size counters; the named counters that
+ * follow (0xE87FAC..) are cleared individually.
  */
-#define ROUTE_$N_WIRED_PAGES (*(int16_t *)0xE87FD2)
+#define ROUTE_$PACKET_STATS         ((uint32_t *)0xE87DA8)
+#define ROUTE_$STAT_OVERSIZED_STD   (*(uint32_t *)0xE87FAC)
+#define ROUTE_$STAT_DROPPED_STD_HOP (*(uint32_t *)0xE87FB0)
+#define ROUTE_$STAT_DROPPED_STD_ROUTE (*(uint32_t *)0xE87FB4)
+#define ROUTE_$STAT_FORWARDED_STD   (*(uint32_t *)0xE87FB8)
+#define ROUTE_$STAT_OVERSIZED_N     (*(uint32_t *)0xE87FBC)
+#define ROUTE_$STAT_DROPPED_N_HOP   (*(uint32_t *)0xE87FC0)
+#define ROUTE_$STAT_DROPPED_N_ROUTE (*(uint32_t *)0xE87FC4)
+#define ROUTE_$STAT_FORWARDED_N     (*(uint32_t *)0xE87FC8)
+#define ROUTE_$USER_PORT_COUNT      (*(uint32_t *)0xE87FCC)
+#define ROUTE_$USER_PORT_MAX        (*(uint16_t *)0xE87FD0)
 
-/*
- * ROUTE_$N_USER_PORTS - Count of active user ports
- *
- * Original address: 0xE87FD4
- */
-#define ROUTE_$N_USER_PORTS (*(int16_t *)0xE87FD4)
+/* Count of currently wired pages */
+#define ROUTE_$N_WIRED_PAGES    (*(int16_t *)0xE87FD2)
+
+/* Count of active user ports */
+#define ROUTE_$N_USER_PORTS     (*(int16_t *)0xE87FD4)
+
+/* Network service on/off operation codes and ring log id (in code segment) */
+#define ROUTE_$NET_SERVICE_ON   (*(int16_t *)0xE8789C)
+#define ROUTE_$NET_SERVICE_OFF  (*(int16_t *)0xE8789E)
+#define RINGLOG_$ROUTE_FORWARD  (*(uint16_t *)0xE878A0)
+
+/* Send callback/data pointer (4 bytes of zeros at 0xE870D8) */
+#define RTWIRED_$CALLBACK       ((uint32_t *)0xE870D8)
+
+/* Routing process state */
+#define ROUTE_$PROCESS_UID      (*(uint16_t *)0xE88216)
+#define ROUTE_$CHECKSUM_ENABLED (*(int8_t *)0xE88218)
+#define ROUTE_$SERVICE_ID       (*(uint32_t *)0xE8821C)
+#define PTR_ROUTE_$CONTROL_EC   (*(ec_$eventcount_t **)0xE88220)
+#define ROUTE_$FWD_TIMEOUT      (*(uint16_t *)0xE88224)
+#define ROUTE_$PACKET_SEQ       (*(uint16_t *)0xE88226)
+
+/* Time of the last routing update (A5 base of the wired data) */
+#define ROUTE_$LAST_UPDATE_TIME (*(uint32_t *)0xE825DC)
 #else
-extern uint32_t ROUTE_$WIRED_PAGES[];
+extern char ROUTE_$WIRED_AREA_END_SYM[];
+#define ROUTE_$WIRED_AREA_START ((void *)RTWIRED_PROC_START)
+#define ROUTE_$WIRED_AREA_END   ((void *)ROUTE_$WIRED_AREA_END_SYM)
+
+extern uint8_t RIP_$HALT_PACKET[24];
+#define RIP_$HALT_PACKET_DATA   (&RIP_$HALT_PACKET[0x10])
+extern uint16_t RTWIRED_$SEND_FLAGS;
+extern uint32_t ROUTE_$WIRED_PAGES[ROUTE_$MAX_WIRED_PAGES];
+extern uint32_t ROUTE_$PACKET_STATS[0x81];
+extern uint32_t ROUTE_$STAT_OVERSIZED_STD;
+extern uint32_t ROUTE_$STAT_DROPPED_STD_HOP;
+extern uint32_t ROUTE_$STAT_DROPPED_STD_ROUTE;
+extern uint32_t ROUTE_$STAT_FORWARDED_STD;
+extern uint32_t ROUTE_$STAT_OVERSIZED_N;
+extern uint32_t ROUTE_$STAT_DROPPED_N_HOP;
+extern uint32_t ROUTE_$STAT_DROPPED_N_ROUTE;
+extern uint32_t ROUTE_$STAT_FORWARDED_N;
+extern uint32_t ROUTE_$USER_PORT_COUNT;
+extern uint16_t ROUTE_$USER_PORT_MAX;
 extern int16_t ROUTE_$N_WIRED_PAGES;
 extern int16_t ROUTE_$N_USER_PORTS;
+extern int16_t ROUTE_$NET_SERVICE_ON;
+extern int16_t ROUTE_$NET_SERVICE_OFF;
+extern uint16_t RINGLOG_$ROUTE_FORWARD;
+extern uint32_t RTWIRED_$CALLBACK_DATA;
+#define RTWIRED_$CALLBACK       (&RTWIRED_$CALLBACK_DATA)
+extern uint16_t ROUTE_$PROCESS_UID;
+extern int8_t ROUTE_$CHECKSUM_ENABLED;
+extern uint32_t ROUTE_$SERVICE_ID;
+extern ec_$eventcount_t *PTR_ROUTE_$CONTROL_EC;
+extern uint16_t ROUTE_$FWD_TIMEOUT;
+extern uint16_t ROUTE_$PACKET_SEQ;
+extern uint32_t ROUTE_$LAST_UPDATE_TIME;
 #endif
 
 #endif /* ROUTE_INTERNAL_H */

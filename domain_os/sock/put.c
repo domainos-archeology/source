@@ -14,7 +14,7 @@
  * Original source: Pascal, converted to C
  */
 
-#include "sock_internal.h"
+#include "sock/sock_internal.h"
 
 /*
  * SOCK_$PUT_INT_INT - Low-level packet queue insertion

@@ -1,4 +1,4 @@
-#include "math.h"
+#include "math/math_internal.h"
 
 // Signed division: long / long -> long
 // Handles signs by converting to unsigned division, then adjusts result sign

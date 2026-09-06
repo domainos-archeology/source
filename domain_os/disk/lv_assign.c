@@ -46,6 +46,14 @@
 #define PVLABEL_LV_START_OFFSET    0x38
 #define PVLABEL_LV_END_OFFSET      0x60
 
+/*
+ * Volume entry fields used here that are not in disk/disk_internal.h.
+ * The machine code addresses the table as (0xe7a290 + vol*0x48) with the
+ * negative offsets shown; expressed here relative to DISK_VOLUME_BASE.
+ */
+#define DISK_UNIT_OFFSET           0x98   /* (-0x2c) device unit (uint16_t) */
+#define DISK_AS_OPTIONS_OFFSET     0xa4   /* (-0x20) async options word, cleared here */
+
 uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
                          int32_t *blocks_avail_ptr, status_$t *status)
 {
@@ -162,8 +170,8 @@ uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
         lv_size = *(int32_t *)((uint8_t *)pv_block + PVLABEL_LV_START_OFFSET +
                                (lv_idx + 1) * sizeof(uint32_t)) - lv_start_addr;
     } else {
-        /* Use PV's end address */
-        lv_size = *(int32_t *)(vol_entry + DISK_ADDR_END_OFFSET) - lv_start_addr;
+        /* Use PV's block count (entry +0x88, -0x3c from 0xe7a290) */
+        lv_size = *(int32_t *)(vol_entry + DISK_ADDR_START_OFFSET) - lv_start_addr;
     }
 
     /* Release PV label block */
@@ -171,7 +179,7 @@ uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
 
     /* Validate LV start address */
     if (lv_start_addr == 0 ||
-        lv_start_addr > *(uint32_t *)(vol_entry + DISK_ADDR_END_OFFSET)) {
+        lv_start_addr > *(uint32_t *)(vol_entry + DISK_ADDR_START_OFFSET)) {
         local_status = status_$invalid_logical_volume_index;
         goto done;
     }
@@ -186,12 +194,15 @@ uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
             /* Found a free slot */
             free_slot = scan_idx;
         } else {
-            /* Check for duplicate: same PV UID and same LV start address */
-            if (*(uint16_t *)(scan_entry + DISK_DEVICE_UNIT_OFFSET) ==
-                *(uint16_t *)(vol_entry + DISK_DEVICE_UNIT_OFFSET) &&
+            /*
+             * Check for duplicate: same device unit (-0x2c), same LV start
+             * address (-0x40) and same device info pointer (-0x30, cmpa.l).
+             */
+            if (*(uint16_t *)(scan_entry + DISK_UNIT_OFFSET) ==
+                *(uint16_t *)(vol_entry + DISK_UNIT_OFFSET) &&
                 *(uint32_t *)(scan_entry + DISK_LV_DATA_OFFSET) == lv_start_addr &&
-                *(int32_t *)(scan_entry + DISK_UID_LOW_OFFSET) ==
-                *(int32_t *)(vol_entry + DISK_UID_LOW_OFFSET)) {
+                *(int32_t *)(scan_entry + DISK_DEV_INFO_OFFSET) ==
+                *(int32_t *)(vol_entry + DISK_DEV_INFO_OFFSET)) {
                 local_status = status_$volume_in_use;
                 goto done;
             }
@@ -216,9 +227,9 @@ uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
 
     /* Set LV-specific fields in new entry */
     *(uint32_t *)(dest_entry + DISK_LV_DATA_OFFSET) = lv_start_addr;
-    *(int32_t *)(dest_entry + DISK_ADDR_END_OFFSET) = lv_size;
+    *(int32_t *)(dest_entry + DISK_ADDR_START_OFFSET) = lv_size;   /* (-0x3c) */
     *(int16_t *)(dest_entry + DISK_MOUNT_PROC_OFFSET) = PROC1_$CURRENT;
-    *(uint16_t *)(dest_entry + DISK_VOL_INFO2_OFFSET) = 0;  /* Clear reserved field */
+    *(uint16_t *)(dest_entry + DISK_AS_OPTIONS_OFFSET) = 0;  /* clr.w (-0x20,A0) */
     *(uint16_t *)(dest_entry + DISK_MOUNT_STATE_OFFSET) = DISK_MOUNT_ASSIGNED;
 
     result_vol_idx = free_slot;

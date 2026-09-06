@@ -75,4 +75,16 @@ void NET_IO_$BOOT_DEVICE(void);
  */
 void NET_IO_$INIT(void);
 
+/*
+ * NET_IO_$NIL_DRIVER / NET_IO_$USER_DRIVER - Driver descriptor blocks
+ *
+ * Passed (by address) to NET_IO_$CREATE_PORT by ROUTE_$SERVICE: the NIL
+ * driver for port type 1 (local network ports) and the USER driver for
+ * user routing ports.  Layout not yet decoded.
+ *
+ * Original addresses: 0xE244F4 (NIL), 0xE24544 (USER)
+ */
+extern uint8_t NET_IO_$NIL_DRIVER[];
+extern uint8_t NET_IO_$USER_DRIVER[];
+
 #endif /* NET_IO_H */

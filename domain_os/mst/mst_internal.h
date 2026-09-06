@@ -8,7 +8,7 @@
 #ifndef MST_INTERNAL_H
 #define MST_INTERNAL_H
 
-#include "mst.h"
+#include "mst/mst.h"
 #include "uid/uid.h"
 #include "mmu/mmu.h"
 #include "mmap/mmap.h"
@@ -23,12 +23,17 @@
  */
 
 /*
- * M68020 - CPU type flag
- * High bit set (negative value) indicates M68020 or later processor.
- * This is a 16-bit value in mmu.h.
+ * M68020 - CPU type flag (16-bit word, declared by mmu/mmu.h).
+ * The MST code tests only the first (most significant, big-endian) byte
+ * of this word for its sign: "tst.b M68020 / bmi".  Testing the sign of
+ * the whole 16-bit word is equivalent on any byte order, so MST code
+ * uses MST_M68020_IS_020() rather than reading a byte through a pointer.
+ *
+ * TODO: mmu/mmu.h places M68020 at 0xE23D2A, but Ghidra labels M68020 at
+ * 0xE23D2E (2 bytes); 0xE23D2A lies inside MMAP_$RMT_LIMIT.  The mmu
+ * subsystem should confirm the address.
  */
-#define M68020 mmu_m68020_flag
-extern int8_t mmu_m68020_flag;
+#define MST_M68020_IS_020()  ((int16_t)M68020 < 0)
 
 /*
  * ============================================================================
@@ -76,6 +81,17 @@ extern status_$t MST_Ref_OutOfBounds_Err;
  * Internal Helper Functions
  * ============================================================================
  */
+
+/*
+ * mst_$init_table_page - Initialize a freshly allocated page table page
+ *
+ * Allocates a physical page, installs it in the MMU at page_addr and
+ * zeroes it.  Called by MST_$ALLOC_TABLE_PAGE.
+ *
+ * Original address: 0x00E42CEC
+ * TODO: not yet decompiled.
+ */
+void mst_$init_table_page(uint32_t page_addr);
 
 /*
  * MST_$ALLOC_TABLE_PAGE - Allocate a page table page for a segment

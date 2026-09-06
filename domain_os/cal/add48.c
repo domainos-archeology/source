@@ -1,4 +1,4 @@
-#include "cal.h"
+#include "cal/cal_internal.h"
 
 // 48-bit addition: dst += src
 // Adds two 48-bit clock values, propagating carry from low to high.

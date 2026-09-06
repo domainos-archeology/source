@@ -21,7 +21,7 @@
 
 #include "base/base.h"
 #include "ec/ec.h"
-#include "ml/ml.h"
+#include "ml/ml_internal.h"
 
 #if !defined(ARCH_M68K)
 

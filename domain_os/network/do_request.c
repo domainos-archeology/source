@@ -25,8 +25,8 @@
 /*
  * Status codes
  */
-#define status_$network_no_available_sockets            0x00110005
-#define status_$network_unexpected_reply_type           0x0011000B
+/* status_$network_no_available_sockets, status_$network_unexpected_reply_type:
+ * network/network.h */
 #define status_$network_remote_node_failed_to_respond   0x00110007
 
 /*

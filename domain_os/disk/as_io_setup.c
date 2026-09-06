@@ -17,12 +17,7 @@
 /* Status code for buffer alignment */
 #define status_$disk_buffer_not_page_aligned  0x00080013
 
-/* Mount state offset from volume table */
-#define DISK_MOUNT_STATE_OFFSET  0x90
-#define DISK_MOUNT_PROC_OFFSET   0x92
-
-/* Volume table base */
-#define DISK_VOLUME_BASE  ((uint8_t *)0x00e7a1cc)
+/* DISK_VOLUME_BASE and the mount state/proc offsets come from disk_internal.h */
 
 /* Page alignment mask */
 #define PAGE_ALIGN_MASK  0x3ff

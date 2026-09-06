@@ -23,7 +23,7 @@ void VTOC_$GET_NAME_DIRS(int16_t vol_idx, uid_t *dir1_uid, uid_t *dir2_uid,
         /* Set up lookup request for name_dir2 */
         req.uid = UID_$NIL;
         req.block_hint = *(uint32_t *)(OS_DISK_DATA + vol_offset - 0x48);
-        *(uint8_t *)((uint8_t *)&req + 0x1C) = (uint8_t)vol_idx;
+        req.vol_idx = (uint8_t)vol_idx;
 
         /* Read the VTOCE */
         VTOCE_$READ(&req, &result, status_ret);

@@ -11,10 +11,10 @@
  * Original address: 0x00e146b4
  */
 
-#include "pmap_internal.h"
+#include "pmap/pmap_internal.h"
 
-/* MMAP_$WSL_HI_MARK - per-process working set high mark */
-extern uint16_t MMAP_$WSL_HI_MARK[];
+/* MMAP_$WSL_HI_MARK (0xE23CA6) is indexed here by process id; the same
+ * array is exported by mmap/mmap.h as MMAP_PID_TO_WSL. */
 
 void PMAP_$PURGE_WS(int16_t index, int16_t flags)
 {
@@ -22,7 +22,7 @@ void PMAP_$PURGE_WS(int16_t index, int16_t flags)
 
     if (flags < 0) {
         /* Purge using the working set list high mark */
-        uint16_t slot = MMAP_$WSL_HI_MARK[index];
+        uint16_t slot = MMAP_PID_TO_WSL[index];
         MMAP_$PURGE(slot);
     } else {
         /* Free the working set list entry */

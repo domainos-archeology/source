@@ -10,7 +10,9 @@
 
 #include "ring/ring.h"
 #include "time/time.h"
+#include "io/io.h"
 #include "network/network.h"
+#include "route/route.h"
 #include "netbuf/netbuf.h"
 #include "sock/sock.h"
 #include "pkt/pkt.h"
@@ -78,8 +80,11 @@
 /* Per-unit statistics array */
 extern ring_$stats_t RING_$STATS[RING_MAX_UNITS];
 
-/* Ring network UID (copy for initialization) */
+/* Ring network UID (copy for initialization), at 0x00E1747C */
 extern uid_t RING_$NETWORK_UID_TEMPLATE;
+
+/* Global network UID storage written by RING_$INIT, at 0x00E86960 */
+extern uid_t ring_$network_uid_storage;
 
 /* Device type for ring controller */
 extern uint16_t ring_dcte_ctype_net;
@@ -288,7 +293,7 @@ uint8_t HDR_CHKSUM(void *hdr, void *data);
  *
  * Note: These declarations are provided for reference. The actual
  * declarations should come from the proper header files:
- *   - os/os_internal.h for IO_$GET_DCTE
+ *   - io/io.h for IO_$GET_DCTE
  *   - mmu/mmu.h for MMU_$MCR_CHANGE
  *   - proc1/proc1.h for PROC1_$SET_LOCK
  *   - misc/crash_system.h for CRASH_SYSTEM

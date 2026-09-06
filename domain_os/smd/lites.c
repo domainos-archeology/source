@@ -24,8 +24,8 @@
 
 #include "smd/smd_internal.h"
 
-/* Forward declaration of low-level display function */
-extern void DISP_LITES(uint16_t pattern, uint16_t y_pos);
+/* DISP_LITES is declared in misc/misc.h */
+#include "misc/misc.h"
 
 /*
  * SMD_$LITES - Display status lights

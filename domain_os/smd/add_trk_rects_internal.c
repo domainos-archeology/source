@@ -10,8 +10,8 @@
 #include "smd/smd_internal.h"
 #include "ml/ml.h"
 
-/* Exclusion lock for tracking rectangle operations */
-extern ml_$exclusion_t ml_$exclusion_t_00e2e520;
+/* Exclusion lock for tracking rectangle operations: ml_$exclusion_t_00e2e520
+ * (declared in smd/smd_internal.h) */
 
 /*
  * Lock data addresses from original code:

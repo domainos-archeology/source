@@ -16,19 +16,22 @@
 
 #include "asknode/asknode_internal.h"
 
-/* External references */
+/*
+ * External references: NETWORK_$FAILURE_REC (0xE24BF4) from network/network.h,
+ * ASKNODE_$EMPTY_DATA (0xE658CC) from asknode_internal.h.
+ */
 
-/* Network failure record globals */
-extern uint8_t DAT_00e24bf6;   /* Failure record flag */
-extern uint32_t DAT_00e24bf8;  /* Failure record word 1 */
-extern uint32_t DAT_00e24bfc;  /* Failure record word 2 */
-extern uint32_t DAT_00e24c00;  /* Failure record word 3 */
+/* Response length word at 0x00E65E8C (PC-relative constant, value 0x200) */
+static const uint16_t asknode_$server_resp_len = 0x200;
 
-/* Empty data constant at 0x00E658CC (zero-filled buffer) */
-extern uint32_t DAT_00e658cc;
-
-/* ASKNODE response template at 0x00E65E8C */
-extern uint16_t DAT_00e65e8c;
+/*
+ * TODO: the original stores the 32-bit status code with move.l into a
+ * local reply buffer (e.g. move.l #0x11001d,(-0x24c,A6)); this
+ * translation's int16_t response layout cannot hold it, so the low word
+ * is stored here.  The response buffer layout of ASKNODE_$SERVER needs to
+ * be re-derived from the assembly.
+ */
+#define ASKNODE_$STATUS_LOW_WORD(code)  ((int16_t)((code) & 0xFFFF))
 
 void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
 {
@@ -123,9 +126,9 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
             {
                 int16_t cap = ROUTE_$VALIDATE_PORT(*routing_info, -1);
                 if (cap == 2) {
-                    response[7] = status_$network_operation_not_defined_on_hardware;
+                    response[7] = ASKNODE_$STATUS_LOW_WORD(status_$network_operation_not_defined_on_hardware);
                 } else if (cap == 0) {
-                    response[7] = status_$network_unknown_network;
+                    response[7] = ASKNODE_$STATUS_LOW_WORD(status_$network_unknown_network);
                 }
             }
 
@@ -148,7 +151,8 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
             }
 
             /* Check if we're the target or should forward */
-            if (*(int8_t *)&request.count < 0 || request.node_id != NODE_$ME) {
+            /* High byte of the count word (tst.b on the first byte of +0x10) */
+            if ((int8_t)(request.count >> 8) < 0 || request.node_id != NODE_$ME) {
                 response[1] = 0x2E;  /* Forward response type */
                 response[8] = NODE_$ME;
             } else {
@@ -168,21 +172,21 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
                 int8_t is_local = (src_node == 0 || src_node == (int32_t)NODE_$ME) ? -1 : 0;
                 int16_t cap = ROUTE_$VALIDATE_PORT(*routing_info, is_local);
                 if (cap == 2) {
-                    response[7] = status_$network_operation_not_defined_on_hardware;
+                    response[7] = ASKNODE_$STATUS_LOW_WORD(status_$network_operation_not_defined_on_hardware);
                 } else if (cap == 0) {
-                    response[7] = status_$network_unknown_network;
+                    response[7] = ASKNODE_$STATUS_LOW_WORD(status_$network_unknown_network);
                 }
             }
 
             response[10] = request.count - 1;
             *(int32_t *)(pkt_data + 0x14) = request.param2;  /* Update routing */
-            response[0xF] = *(int16_t *)&request.param3;
-            response[0x10] = *(int16_t *)((char *)&request.param3 + 2);
+            response[0xF] = (int16_t)(request.param3 >> 16);      /* high word of param3 */
+            response[0x10] = (int16_t)(request.param3 & 0xFFFF);  /* low word of param3 */
 
             /* Set propagation flag */
             should_propagate = (response[7] == 0) &&
                                (request.count - 1 > 0) &&
-                               (*(int8_t *)&request.count || request.node_id != NODE_$ME) &&
+                               ((int8_t)(request.count >> 8) || request.node_id != NODE_$ME) &&
                                ((flags & 4) == 0) ? -1 : 0;
             response[1] = 0x2D;
             request.node_id = request.param1;
@@ -219,10 +223,10 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
 
     case 0x0E:
         /* Record network failure */
-        DAT_00e24bf6 = 0xFF;
-        DAT_00e24bf8 = request.param2;
-        DAT_00e24bfc = TIME_$CURRENT_CLOCKH;
-        DAT_00e24c00 = request.node_id;
+        NETWORK_$FAILURE_REC.flag = 0xFF;
+        NETWORK_$FAILURE_REC.error_info = request.param2;
+        NETWORK_$FAILURE_REC.timestamp = TIME_$CURRENT_CLOCKH;
+        NETWORK_$FAILURE_REC.node_id = request.node_id;
         return;  /* No response needed */
 
     case 0x31:
@@ -235,10 +239,21 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
             if ((request.node_id & 0x10000) == 0) {
                 uint16_t log_len = request.node_id;
                 if (log_len > 0x400) log_len = 0x400;
-                LOG_$READ((int16_t)netbuf_va, log_len, (int16_t)&response[8]);
+                /*
+                 *   00e65d8c    pea (-0x248,A6)      ; &actual_len
+                 *   00e65d90    pea (-0x292,A6)      ; &log_len
+                 *   00e65d94    pea (A3)             ; netbuf_va
+                 */
+                LOG_$READ(netbuf_va, &log_len, (uint16_t *)&response[8]);
             } else {
-                LOG_$READ2((uint16_t *)netbuf_va, (int16_t)request.node_id >> 16,
-                           0x400, (uint32_t *)&response[8]);
+                /*
+                 *   00e65d5e    pea (-0x248,A6)      ; &actual_len
+                 *   00e65d62    move.w #0x400,-(SP)  ; max_len
+                 *   00e65d66    move.w (-0x262,A6)   ; offset (high word of node_id)
+                 *   00e65d6a    pea (A3)             ; netbuf_va
+                 */
+                LOG_$READ2(netbuf_va, (uint16_t)(request.node_id >> 16),
+                           0x400, (uint16_t *)&response[8]);
                 response[7] = 0xFFFF;
             }
             response_len = (char *)&response[8] - (char *)&response[0] + 0x256;
@@ -257,15 +272,15 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
             request.request_type == 0x5B) {
             ASKNODE_$INTERNET_INFO((uint16_t *)&request.request_type,
                                    &NODE_$ME,
-                                   (int32_t *)&DAT_00e658cc,
+                                   (int32_t *)&ASKNODE_$EMPTY_DATA,
                                    (uid_t *)&request.node_id,
-                                   (uint16_t *)&DAT_00e65e8c,
+                                   (uint16_t *)&asknode_$server_resp_len,
                                    (uint32_t *)&response[0],
                                    &status);
         } else {
             /* Unknown request type */
             response[1] = 0;
-            response[7] = status_$network_unknown_request_type;
+            response[7] = ASKNODE_$STATUS_LOW_WORD(status_$network_unknown_request_type);
         }
         break;
     }
@@ -317,7 +332,7 @@ void ASKNODE_$SERVER(int16_t *response, int32_t *routing_info)
      */
     if (should_propagate < 0 && status == 0) {
         if (request.request_type == 0x2D) {
-            *(int8_t *)&request.count = 0;  /* Clear propagation flag */
+            request.count &= 0x00FF;  /* Clear propagation flag (high byte of the count word) */
         }
         response[0] = request.version;
 

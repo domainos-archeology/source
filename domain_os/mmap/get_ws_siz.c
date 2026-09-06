@@ -7,7 +7,7 @@
  * Original address: 0x00e0c9e4
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 void MMAP_$GET_WS_SIZ(uint16_t wsl_index, uint32_t *page_count,
                        uint32_t *field_40, uint32_t *max_pages,

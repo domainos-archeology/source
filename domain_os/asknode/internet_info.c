@@ -17,56 +17,12 @@
 
 #include "asknode/asknode_internal.h"
 
-/* Network statistics at 0x00E24C28 area */
-extern uint16_t NETWORK_$PAGIN_RQST_CNT;    /* 0x00E24C28 */
-extern uint16_t NETWORK_$BAD_CHKSUM_CNT;    /* 0x00E24C2A */
-extern uint16_t NETWORK_$READ_VIOL_CNT;     /* 0x00E24C2C */
-extern uint16_t NETWORK_$WRITE_VIOL_CNT;    /* 0x00E24C2E */
-extern uint16_t NETWORK_$READ_CALL_CNT;     /* 0x00E24C30 */
-extern uint16_t NETWORK_$WRITE_CALL_CNT;    /* 0x00E24C32 */
-extern uint16_t NETWORK_$INFO_RQST_CNT;     /* 0x00E24C38 */
-extern uint16_t NETWORK_$MULT_PAGIN_RQST_CNT; /* 0x00E24C3A */
-extern uint16_t NETWORK_$PAGOUT_RQST_CNT;   /* 0x00E24C3C */
-extern uint16_t NETWORK_$ATTRIB_RQST_CNT;
-extern uint16_t NETWORK_$SET_ATTRIB_CALL_CNT;
-extern uint16_t NETWORK_$RCV_READ_AHEAD;
-extern uint16_t NETWORK_$2LONG1;
-
-extern uint32_t NETWORK_$PAGING_BACKLOG;
-extern uint32_t NETWORK_$FILE_BACKLOG;
-
-/* Ring network globals */
-extern uint16_t RING_$PAGING_OVERFLOW;
-extern uint16_t RING_$FILE_OVERFLOW;
-extern uint16_t RING_$OVERFLOW_OVERFLOW;
-extern uint16_t RING_$DELIVERY_FAILED;
-extern uint16_t RING_$XMIT_WAITED;
-extern uint16_t RING_$SEND_NULL_CNT;
-extern uint16_t RING_$CLOBBERED_HDR;
-extern uint32_t RING_$RCV_INT_CNT;
-extern uint16_t RING_$BUSY_ON_RCV_INT;
-extern uint16_t RING_$ABORT_CNT;
-extern uint16_t RING_$WAKEUP_CNT;
-extern uint16_t RING_$BAD_DATA_CNT;
-extern uint16_t REM_FILE_$2LONG1;
-
-/* Memory subsystem */
-extern uint32_t MEM_$MEM_REC;               /* 0x00E22934 */
-extern uint32_t MMAP_$REAL_PAGES;           /* 0x00E23CA0 */
-
-/* Boot device */
-extern uint32_t OS_$BOOT_DEVICE;
-
-/* Protocol version and empty data are declared in asknode_internal.h:
- * - ASKNODE_$PROTOCOL_VERSION at 0x00E82426
- * - ASKNODE_$EMPTY_DATA at 0x00E658CC
+/*
+ * Globals: NETWORK_$*_CNT statistics and NETWORK_$CAPABLE_FLAGS come from
+ * network/network.h, MEM_$MEM_REC from mem/mem.h, MMAP_$REAL_PAGES from
+ * mmap/mmap.h, RING_$DATA from ring/ring.h and the status_$network_* codes
+ * from network/network.h (all via asknode_internal.h).
  */
-
-/* Status codes */
-#define status_$network_transmit_failed              0x00110001
-#define status_$network_request_denied_by_local_node 0x0011000E
-#define status_$network_unexpected_reply_type        0x00110020
-#define status_$network_bad_asknode_version_number   0x00110021
 
 /*
  * Handle local node query for request type
@@ -156,11 +112,16 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
     case ASKNODE_REQ_TIMEZONE:    /* 0x08 */
         /* Return timezone information */
         {
-            uint32_t *dst = result + 2;
-            cal_$timezone_rec_t *src = &CAL_$TIMEZONE;
-            dst[0] = *(uint32_t *)src;
-            dst[1] = *(uint32_t *)(src->tz_name + 2);
-            dst[2] = *(uint32_t *)((char *)&src->drift.high + 2);
+            /*
+             * Raw 12-byte copy of the timezone record (bytes 0..11 of
+             * CAL_$TIMEZONE, done as three longword moves in the original).
+             */
+            uint8_t *dst = (uint8_t *)(result + 2);
+            const uint8_t *src = (const uint8_t *)&CAL_$TIMEZONE;
+            int i;
+            for (i = 0; i < 12; i++) {
+                dst[i] = src[i];
+            }
         }
         break;
 
@@ -300,7 +261,11 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
             if (*status != status_$network_transmit_failed || *req_len != -1 || retry_flag < 0) {
                 break;
             }
-            routing = DIR_$FIND_NET(0x29C, (int16_t)node_id);
+            /*
+             *   00e655a6    move.l D4,-(SP)          ; node_id (pointer)
+             *   00e655a8    pea (A2)                 ; A2 = &NAME_$ROOT_UID (0xE8029C)
+             */
+            routing = DIR_$FIND_NET(&NAME_$ROOT_UID, node_id);
             ret_val = 0;
             if (routing == 0) break;
             retry_flag = -1;
@@ -428,7 +393,11 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
                 break;
             }
 
-            port = DIR_$FIND_NET(0x29C, (int16_t)node_id);
+            /*
+             *   00e6576a    move.l D4,-(SP)          ; node_id (pointer)
+             *   00e6576c    pea (A3)                 ; A3 = &NAME_$ROOT_UID (0xE8029C)
+             */
+            port = DIR_$FIND_NET(&NAME_$ROOT_UID, node_id);
             if (port == 0) break;
             retry_flag = -1;
         } while (1);
@@ -442,7 +411,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
 
         /* Validate response type */
         if ((uint16_t)*result != request + 1) {
-            *status = status_$network_unexpected_reply_type;
+            *status = status_$network_bad_asknode_reply_type;
             return (uint16_t)*result;
         }
 

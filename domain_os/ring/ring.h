@@ -26,6 +26,8 @@
 #include "base/base.h"
 #include "ec/ec.h"
 #include "ml/ml.h"
+#include "network/network.h"    /* status_$network_* */
+#include "route/route.h"        /* status_$internet_* */
 
 /*
  * ============================================================================
@@ -68,11 +70,12 @@
 #define status_$ring_invalid_ioctl                  0x00310001
 
 #define status_$io_controller_not_in_system         0x00100002
-#define status_$internet_unknown_network_port       0x002B0003
 
-#define status_$network_transmit_failed             0x00110004
-#define status_$network_data_length_too_large       0x0011001C
-#define status_$network_memory_parity_error_during_transmit 0x00110016
+/*
+ * status_$internet_unknown_network_port: route/route.h
+ * status_$network_transmit_failed, status_$network_data_length_too_large,
+ * status_$network_memory_parity_error_during_transmit: network/network.h
+ */
 
 /*
  * ============================================================================

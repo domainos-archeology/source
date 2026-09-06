@@ -38,7 +38,7 @@ void acl_$prim_create_internal(int32_t type, void *acl_data, int16_t data_len,
 #define ACL_MAGIC_VALUE 0xFEDCA983
 
 void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
-                      int16_t type, uid_t *file_uid_ret, status_$t *status_ret)
+                      void *type, uid_t *file_uid_ret, status_$t *status_ret)
 {
     int16_t pid = PROC1_$CURRENT;
     uid_t local_uid;
@@ -71,7 +71,9 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
     /* Check if remote operation needed */
     if ((local_flags[1] & 0x01) == 0 && (local_data[13] & 0x80)) {
         /* Remote creation */
-        REM_FILE_$ACL_CREATE(local_data, acl_data, type, dir_uid, file_uid_ret, status_ret);
+        /* The 32-bit "type" argument is passed through unchanged (it is a
+         * pointer on the m68k; uintptr_t preserves the full value). */
+        REM_FILE_$ACL_CREATE(local_data, acl_data, (int32_t)(uintptr_t)type, dir_uid, file_uid_ret, status_ret);
         return;
     }
 
@@ -111,7 +113,7 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
 
     if (local_flags[0] == '\0') {
         /* Call internal creation helper */
-        acl_$prim_create_internal(type, acl_data, *data_len, (uint8_t *)acl_data + 2,
+        acl_$prim_create_internal((int32_t)(uintptr_t)type, acl_data, *data_len, (uint8_t *)acl_data + 2,
                                   0, mapped_addr, NULL, status_ret);
     } else {
         /* Direct copy of ACL data */

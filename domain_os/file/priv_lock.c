@@ -189,7 +189,7 @@ void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t lock_index,
     /*
      * Check if this is a null/zero UID (indicates pseudo-lock)
      */
-    ctx.is_null_uid = (*(uint8_t *)&file_uid->high == 0) ? -1 : 0;
+    ctx.is_null_uid = (((file_uid->high >> 24) & 0xFF) == 0) ? -1 : 0;  /* tst.b of the first (big-endian high) byte */
 
     ctx.local_flags &= 0xBF;  /* Clear bit 6 */
 

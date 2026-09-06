@@ -7,7 +7,7 @@
  * Original address: 0x00e0cbe8
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 void MMAP_$IMPURE_TRANSFER(mmape_t *page, uint32_t vpn)
 {

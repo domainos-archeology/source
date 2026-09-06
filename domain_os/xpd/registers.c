@@ -17,7 +17,7 @@
  *   XPD_$GET_TARGET_INFO: 0x00e5c12c
  */
 
-#include "xpd/xpd.h"
+#include "xpd/xpd_internal.h"
 #include "fim/fim.h"
 #include "fp/fp.h"
 #include "peb/peb.h"
@@ -43,9 +43,7 @@
 /* Debugger table offsets */
 #define DEBUGGER_ASID_OFFSET 0x484
 
-/* FPU detection flags */
-extern char DAT_00e24c98;  /* MC68881/68882 presence flag */
-extern char DAT_00e24c92;  /* Peripheral board FPU flag */
+/* FPU detection flags DAT_00e24c98 / DAT_00e24c92 are declared in xpd_internal.h */
 
 /*
  * XPD_$GET_REGISTERS - Get target process registers
@@ -397,7 +395,7 @@ void XPD_$GET_FP(uid_t *proc_uid, status_$t *status_ret)
     int16_t debugger_asid;
     status_$t status;
 
-    asid = PROC2_$FIND_ASID(proc_uid, NULL, status_ret);
+    asid = PROC2_$FIND_ASID(proc_uid, (int8_t *)&xpd_find_asid_flag, status_ret);
     if (asid == 0) {
         return;
     }
@@ -439,7 +437,7 @@ void XPD_$PUT_FP(uid_t *proc_uid, status_$t *status_ret)
     int16_t debugger_asid;
     status_$t status;
 
-    asid = PROC2_$FIND_ASID(proc_uid, NULL, status_ret);
+    asid = PROC2_$FIND_ASID(proc_uid, (int8_t *)&xpd_find_asid_flag, status_ret);
     if (asid == 0) {
         return;
     }
@@ -481,7 +479,7 @@ void XPD_$GET_TARGET_INFO(uid_t *proc_uid, int8_t *is_target, int8_t *is_suspend
     uint8_t target_flag;
     uint8_t suspended_flag;
 
-    asid = PROC2_$FIND_ASID(proc_uid, NULL, status_ret);
+    asid = PROC2_$FIND_ASID(proc_uid, (int8_t *)&xpd_find_asid_flag, status_ret);
     if (asid == 0) {
         return;
     }

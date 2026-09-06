@@ -48,7 +48,6 @@
  *
  * Original address: 0x00E50D5E
  */
-extern void dir_$remove_entry_from_page(int16_t slot_idx, status_$t *status_ret);
 
 void dir_$remove_entry(void *handle, void *name, int16_t name_len,
                        int16_t op_type, void *uid_ret, status_$t *status_ret)

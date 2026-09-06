@@ -32,6 +32,7 @@
  * The assembly has been verified against Ghidra output.
  */
 
+#include "name/name_internal.h"
 #include "dir/dir_internal.h"
 
 /* Stub - complex 656-byte function with remote/local/hint fallback */

@@ -21,6 +21,7 @@
  * Size: 102 bytes
  */
 
+#include "audit/audit_internal.h"
 #include "audit/audit.h"
 
 void audit_$log_mount_op(uint16_t audit_type, status_$t status, uid_t *uid,

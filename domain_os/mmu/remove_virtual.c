@@ -8,7 +8,7 @@
  * Original address: 0x00e23e38
  */
 
-#include "mmu_internal.h"
+#include "mmu/mmu_internal.h"
 
 void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
                          uint32_t *ppn_array, uint16_t *removed_count)

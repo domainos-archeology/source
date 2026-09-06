@@ -17,7 +17,7 @@
  * - Memory top: 0x800 (segment numbers >= this are invalid)
  */
 
-#include "mst_internal.h"
+#include "mst/mst_internal.h"
 
 /*
  * MST_$PRE_INIT - Initialize segment table configuration
@@ -34,7 +34,7 @@ void MST_$PRE_INIT(void)
      * On M68020 systems, override the default segment layout.
      * The high bit of M68020 flag indicates M68020 or later processor.
      */
-    if (M68020 < 0) {  /* High bit set = M68020+ */
+    if (MST_M68020_IS_020()) {  /* tst.b M68020 / bpl: high bit set = M68020+ */
         MST_$SEG_TN = 0x680;             /* Total segments: 1664 */
         MST_$GLOBAL_A_SIZE = 0xe0;       /* Global A: 224 segments */
         MST_$SEG_GLOBAL_A = 0x678;       /* Global A starts here */

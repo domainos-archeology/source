@@ -21,6 +21,7 @@
 #include "disk/disk.h"
 #include "proc1/proc1.h"
 #include "vtoc/vtoc.h"
+#include "netlog/netlog.h"
 
 /*
  * ============================================================================
@@ -221,11 +222,7 @@ extern uint16_t FILE_$ASID_MAP[];
 /* Default initial file size */
 extern uint32_t FILE_$DEFAULT_SIZE;
 
-/* Audit log enabled flag */
-extern int8_t AUDIT_$ENABLED;
-
-/* Network log enabled flag */
-extern int8_t NETLOG_$OK_TO_LOG;
+/* AUDIT_$ENABLED comes from audit/audit.h, NETLOG_$OK_TO_LOG from netlog/netlog.h */
 
 /* Current process ASID */
 extern uint16_t PROC1_$AS_ID;

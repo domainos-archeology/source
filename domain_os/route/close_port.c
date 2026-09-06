@@ -25,10 +25,8 @@
 
 #include "route/route_internal.h"
 #include "rip/rip.h"
+#include "rip/rip_internal.h"
 #include "sock/sock.h"
-
-/* Status code for illegal port type */
-#define status_$internet_illegal_port_type  0x2B0004
 
 /* Port type check mask - bits 1 and 2 (port types 1 and 2) */
 #define PORT_TYPE_VALID_MASK    0x06
@@ -40,9 +38,9 @@
  * Note: ROUTE_$N_USER_PORTS and ROUTE_$PORT_ARRAY are defined in route_internal.h
  */
 
-/* RIP update operation codes */
-static const uint16_t RIP_OP_DELETE = 0;    /* From 0xe69fb0 */
-static const uint16_t RIP_OP_FLAGS = 0;     /* From 0xe69fae */
+/* RIP update constants (PC-relative data in the original) */
+static const uint16_t RIP_HOP_COUNT_ZERO = 0;   /* From 0xe69fb0 (pea (0x48,PC)) */
+static const int8_t RIP_OP_FLAGS = 0;           /* From 0xe69fae (pea (0x4e,PC)) */
 
 /*
  * Note: Function declarations come from headers:
@@ -68,7 +66,7 @@ void ROUTE_$CLOSE_PORT(void *port_info, status_$t *status_ret)
     int16_t port_index;
     route_$port_t *port;
     route_$short_port_t short_port;
-    uint32_t network_copy;
+    rip_$xns_addr_t source;         /* -0x10: source XNS address for RIP_$UPDATE_D */
     uint16_t port_network;
     int16_t port_socket;
     uint16_t port_state;
@@ -123,17 +121,39 @@ void ROUTE_$CLOSE_PORT(void *port_info, status_$t *status_ret)
     ROUTE_$SHORT_PORT(port, &short_port);
 
     /*
-     * Save network address and clear low 20 bits of short_port data
-     * This masks off the node ID portion, keeping only the network
+     * Build the source XNS address in the local frame: the network comes
+     * from the port and the low 20 bits of the last longword of the host
+     * part are cleared (the remaining host bytes are uninitialized stack
+     * data in the original).
+     *
+     *   00e69f4e    move.l (A3),(-0x10,A6)
+     *   00e69f52    andi.l #-0x100000,(-0xa,A6)
      */
-    network_copy = port->network;
-    *(uint32_t *)((uint8_t *)&short_port + 6) &= 0xFFF00000;
+    source.network = port->network;
+    {
+        uint32_t host_tail = ((uint32_t)source.host[2] << 24) |
+                             ((uint32_t)source.host[3] << 16) |
+                             ((uint32_t)source.host[4] << 8) |
+                             (uint32_t)source.host[5];
+        host_tail &= 0xFFF00000;
+        source.host[2] = (uint8_t)(host_tail >> 24);
+        source.host[3] = (uint8_t)(host_tail >> 16);
+        source.host[4] = (uint8_t)(host_tail >> 8);
+        source.host[5] = (uint8_t)host_tail;
+    }
 
     /*
      * Notify RIP of port deletion
+     *
+     *   00e69f5a    move.l (0x10,A2),-(SP)    ; status_ret
+     *   00e69f5e    pea (0x4e,PC)             ; &RIP_OP_FLAGS
+     *   00e69f62    pea (-0x48,A2)            ; &short_port
+     *   00e69f66    pea (0x48,PC)             ; &RIP_HOP_COUNT_ZERO
+     *   00e69f6a    pea (-0x10,A6)            ; &source
+     *   00e69f6e    pea (A3)                  ; &port->network (port entry)
      */
-    RIP_$UPDATE_D(port, &network_copy, &RIP_OP_DELETE, &short_port,
-                  &RIP_OP_FLAGS, status_ret);
+    RIP_$UPDATE_D(&port->network, &source, &RIP_HOP_COUNT_ZERO,
+                  (uint8_t *)&short_port, &RIP_OP_FLAGS, status_ret);
 
     /*
      * For type 2 (routing) ports, close the socket and cleanup

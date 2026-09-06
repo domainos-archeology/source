@@ -96,4 +96,20 @@ void APP_$DEMUX(void *pkt_info, uint16_t *ec_ptr1, uint16_t *ec_ptr2,
  */
 void APP_$STD_OPEN(void);
 
+/*
+ * APP_$STD_IDP_CHANNEL - Standard application IDP channel number
+ *
+ * 0xFFFF when no channel is open.  Also consulted by ROUTE_$SERVICE when
+ * registering a new port with the IDP channels.
+ *
+ * Original address: 0xE1DC20
+ */
+#ifndef APP_$STD_IDP_CHANNEL
+#if defined(ARCH_M68K)
+#define APP_$STD_IDP_CHANNEL (*(uint16_t *)0xE1DC20)
+#else
+extern uint16_t APP_$STD_IDP_CHANNEL;
+#endif
+#endif
+
 #endif /* APP_H */

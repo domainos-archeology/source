@@ -13,7 +13,7 @@
  *   XPD_$WRITE:            0x00e5baa6
  */
 
-#include "xpd/xpd.h"
+#include "xpd/xpd_internal.h"
 #include "fim/fim.h"
 #include "acl/acl.h"
 

@@ -36,8 +36,31 @@ typedef struct route_$port_t {
     uint16_t    socket;             /* 0x30: Socket identifier */
     uint8_t     _unknown1[0x04];    /* 0x32: Unknown fields */
     uint16_t    socket2;            /* 0x36: Secondary socket */
-    uint8_t     port_ec[0x24];      /* 0x38: Port event count structure */
+    uint8_t     port_ec[0x0C];      /* 0x38: Port event count (ec_$eventcount_t, 12 bytes) */
+    uint32_t    driver_stats;       /* 0x44: Driver statistics block pointer (32-bit
+                                     *       address; ROUTE_$SEND_USER_PORT:
+                                     *       movea.l (0x44,A0,D0),A2) */
+    uint8_t     _unknown2[0x10];    /* 0x48: Unknown fields */
+    uint32_t    forward_count;      /* 0x58: Packets forwarded to this port (ROUTE_$PROCESS) */
 } route_$port_t;
+
+/* Port entry size must match the original 0x5C-byte stride */
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(route_$port_t) == 0x5C, "route_$port_t must be 0x5C bytes");
+#endif
+
+/* Number of network ports supported */
+#define ROUTE_$MAX_PORTS        8
+
+/*
+ * ROUTE_$PORT_ARRAY - Array of routing port structures
+ *
+ * Array of 8 port structures, each 0x5C (92) bytes.
+ * Total size: 8 * 92 = 736 bytes (0x2E0)
+ *
+ * Original address: 0xE2E0A0
+ */
+extern route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 
 /* Port type constants */
 #define ROUTE_PORT_TYPE_LOCAL       1
@@ -48,6 +71,9 @@ typedef struct route_$port_t {
  *
  * Contains the network port identifier for this node.
  * Set by HINT_$INIT from the hint file, or 0 if not available.
+ *
+ * This is the same storage as ROUTE_$PORT_ARRAY[0].network (the first
+ * longword of the first port entry); see route_data.c.
  *
  * Original address: 0xE2E0A0
  */
@@ -63,9 +89,6 @@ extern uint32_t ROUTE_$PORT;
  * Original address: 0xE26EE8
  */
 extern route_$port_t *ROUTE_$PORTP[];
-
-/* Number of network ports supported */
-#define ROUTE_$MAX_PORTS        8
 
 /*
  * Short port info structure (12 bytes)
@@ -285,17 +308,33 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, void *dest_a
 int16_t ROUTE_$VALIDATE_PORT(int32_t routing_key, int8_t is_local);
 
 /*
- * Status codes
+ * Status codes (module 0x2B = INTERNET / ROUTE)
+ *
+ * These are the single definitions of the status_$internet_* codes; other
+ * subsystems (ring, rip, xns, ...) include this header rather than
+ * redefining them.
  */
 #define status_$internet_unknown_network_port   0x2B0003
+#define status_$internet_illegal_port_type      0x2B0004
 #define status_$route_not_routing_mode          0x2B0009
 #define status_$route_invalid_ec_type           0x2B0012
 
 
 /*
  * Routing port counts (route_data.c).  Shared with the RIP subsystem.
+ *
+ * Original addresses: 0xE26F1A, 0xE26F1C
  */
 extern int16_t ROUTE_$STD_N_ROUTING_PORTS;
 extern int16_t ROUTE_$N_ROUTING_PORTS;
+
+/*
+ * ROUTE_$SOCK - Routing process socket number (0xFFFF when closed)
+ *
+ * Used by XNS_IDP_$DEMUX to queue packets that must be forwarded.
+ *
+ * Original address: 0xE26F18
+ */
+extern uint16_t ROUTE_$SOCK;
 
 #endif /* ROUTE_H */

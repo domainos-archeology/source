@@ -1,4 +1,20 @@
-#include "cal.h"
+/*
+ * cal/test/test_remove_local_offset.c - Unit tests for CAL_$REMOVE_LOCAL_OFFSET
+ *
+ * Self-contained host program: includes the implementation under test
+ * directly (see cal/test/cal_test.h for the framework).
+ */
+
+#include "cal_test.h"
+
+/* Implementation(s) under test */
+#include "../cal_data.c"
+#include "../add48.c"
+#include "../sub48.c"
+#include "../sec_to_clock.c"
+#include "../apply_local_offset.c"
+#include "../remove_local_offset.c"
+
 
 // CAL_$REMOVE_LOCAL_OFFSET subtracts the timezone offset from a clock value.
 // It converts utc_delta (minutes) to seconds, then to clock ticks, and subtracts.
@@ -106,4 +122,16 @@ void test_remove_local_offset_from_zero(void) {
     // The 48-bit value should wrap around
     // 0 - 3600 seconds worth of ticks = large positive number
     ASSERT_TRUE(clock.high > 0 || clock.low > 0);  // Not zero anymore
+}
+
+int main(void) {
+    printf("CAL_$REMOVE_LOCAL_OFFSET tests\n");
+    RUN_TEST(remove_local_offset_utc);
+    RUN_TEST(remove_local_offset_positive_one_hour);
+    RUN_TEST(remove_local_offset_negative_est);
+    RUN_TEST(remove_local_offset_round_trip);
+    RUN_TEST(remove_local_offset_reverse_round_trip);
+    RUN_TEST(remove_local_offset_from_zero);
+    TEST_SUMMARY();
+    return tests_failed > 0 ? 1 : 0;
 }

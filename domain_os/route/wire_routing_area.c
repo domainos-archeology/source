@@ -17,33 +17,10 @@
 #include "mst/mst.h"
 
 /*
- * Constants for routing memory wiring
- *
- * These are embedded in the code segment as PC-relative data.
+ * Constants for routing memory wiring (ROUTE_$MAX_WIRED_PAGES,
+ * ROUTE_$WIRED_AREA_START/END) are embedded in the code segment as
+ * PC-relative data in the original; see route/route_internal.h.
  */
-#if defined(ARCH_M68K)
-    /*
-     * Maximum number of pages to wire for routing
-     * Original at: 0xE69BFC (value = 10)
-     */
-    #define ROUTE_$MAX_WIRED_PAGES  10
-
-    /*
-     * Start address of routing code to wire
-     * Original pointer at: 0xE69C04 (value = 0xE87000)
-     */
-    #define RTWIRED_PROC_START      0x00E87000
-
-    /*
-     * End address of routing code to wire
-     * Original pointer at: 0xE69C00 (value = 0xE88228)
-     */
-    #define RTWIRED_PROC_END        0x00E88228
-#else
-    #define ROUTE_$MAX_WIRED_PAGES  10
-    extern void *RTWIRED_PROC_START;
-    extern void *RTWIRED_PROC_END;
-#endif
 
 /*
  * route_$wire_routing_area - Wire routing memory area if not already wired
@@ -54,6 +31,17 @@
  *
  * Original address: 0x00E69BCE
  */
+/*
+ * PC-relative constants of the original (pointers to these are passed to
+ * MST_$WIRE_AREA):
+ *   0xE69BFC: word 10          (maximum pages to wire)
+ *   0xE69C00: long 0x00E88228  (end of the wired routing area)
+ *   0xE69C04: long 0x00E87000  (start of the wired routing area)
+ */
+static const uint16_t route_$max_wired_pages = ROUTE_$MAX_WIRED_PAGES;
+static void *const route_$wired_area_end = ROUTE_$WIRED_AREA_END;
+static void *const route_$wired_area_start = ROUTE_$WIRED_AREA_START;
+
 void route_$wire_routing_area(void)
 {
     /*
@@ -69,11 +57,11 @@ void route_$wire_routing_area(void)
          *   5. Output: actual number of pages wired
          */
         MST_$WIRE_AREA(
-            (void *)RTWIRED_PROC_START,
-            (void *)RTWIRED_PROC_END,
-            ROUTE_$WIRED_PAGES,
-            ROUTE_$MAX_WIRED_PAGES,
-            &ROUTE_$N_WIRED_PAGES
+            (void *)&route_$wired_area_start,   /* pea (0x14,PC) -> 0xE69C04 */
+            (void *)&route_$wired_area_end,     /* pea (0x14,PC) -> 0xE69C00 */
+            ROUTE_$WIRED_PAGES,                 /* 0xE87D80 */
+            (void *)&route_$max_wired_pages,    /* pea (0x1a,PC) -> 0xE69BFC */
+            &ROUTE_$N_WIRED_PAGES               /* 0xE87FD2 */
         );
     }
 }

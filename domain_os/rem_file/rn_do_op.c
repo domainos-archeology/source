@@ -78,7 +78,8 @@ void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buffer,
 
     /* Check if running in subsystem - set flag if so */
     if (ACL_$IN_SUBSYS() < 0) {
-        op_buf->data[0x1D] |= 0x04;
+        /* bset.b #2,(0x21,A1): byte 0x21 of the op buffer = re_sids[0x0d] */
+        op_buf->re_sids[0x0D] |= 0x04;
     }
 
     /* Set magic byte */

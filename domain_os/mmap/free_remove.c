@@ -7,7 +7,7 @@
  * Original address: 0x00e0cb86
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 void MMAP_$FREE_REMOVE(mmape_t *page, uint32_t vpn)
 {

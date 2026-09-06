@@ -6,6 +6,7 @@
  * Original address: 0x00E721CC
  */
 
+#include "ring/ring_internal.h"
 #include "ring/ringlog_internal.h"
 
 /*

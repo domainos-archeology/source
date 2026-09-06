@@ -5,9 +5,41 @@
  * file lock table entries to a child process and increments reference
  * counts on each shared lock entry.
  *
- * Since we can't run actual kernel functions, we simulate the memory
- * layout with static arrays and verify the behavior.
+ * FILE_$FORK_LOCK works on absolute kernel addresses, so the algorithm is
+ * re-implemented here (fork_lock_sim) over static arrays and exercised
+ * directly.  TODO: include ../fork_lock.c once its table bases are
+ * parameterised for the host.
  */
+
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+
+/* ============================================================================
+ * Test framework
+ * ============================================================================ */
+
+static int tests_passed = 0;
+static int tests_failed = 0;
+
+#define TEST(name) static void test_##name(void)
+#define RUN_TEST(name) do { \
+    printf("  Running %s... ", #name); \
+    test_##name(); \
+    tests_passed++; \
+    printf("PASSED\n"); \
+} while(0)
+
+#define ASSERT_EQ(expected, actual) do { \
+    unsigned long _e = (unsigned long)(expected); \
+    unsigned long _a = (unsigned long)(actual); \
+    if (_e != _a) { \
+        printf("FAILED\n    Expected: 0x%lx (%lu), Got: 0x%lx (%lu) at line %d\n", \
+               _e, _e, _a, _a, __LINE__); \
+        tests_failed++; \
+        return; \
+    } \
+} while(0)
 
 #include "base/base.h"
 
@@ -107,7 +139,7 @@ static void fork_lock_sim(uint16_t *new_asid, status_$t *status_ret) {
  * Test: Fork with no locks (slot count = 0)
  * Expected: Child gets slot count 0, no entries copied, status OK
  */
-void test_fork_lock_no_locks(void) {
+TEST(no_locks) {
     uint16_t child_asid = 1;
     status_$t status = 0xFFFFFFFF;
 
@@ -129,7 +161,7 @@ void test_fork_lock_no_locks(void) {
  * Test: Fork with one lock entry
  * Expected: Child gets same entry at same slot, refcount incremented
  */
-void test_fork_lock_one_entry(void) {
+TEST(one_entry) {
     uint16_t child_asid = 2;
     status_$t status;
 
@@ -153,7 +185,7 @@ void test_fork_lock_one_entry(void) {
  * Test: Fork with multiple entries, some slots empty
  * Expected: Only non-zero slots are copied, refcounts incremented
  */
-void test_fork_lock_sparse_entries(void) {
+TEST(sparse_entries) {
     uint16_t child_asid = 3;
     status_$t status;
 
@@ -196,7 +228,7 @@ void test_fork_lock_sparse_entries(void) {
  * Test: Fork copies slot count even when all slots are empty
  * Expected: Slot count is copied, no entries modified
  */
-void test_fork_lock_all_empty_slots(void) {
+TEST(all_empty_slots) {
     uint16_t child_asid = 2;
     status_$t status;
 
@@ -224,7 +256,7 @@ void test_fork_lock_all_empty_slots(void) {
  * Test: Multiple entries sharing the same lock entry
  * Expected: Shared entry's refcount incremented once per reference
  */
-void test_fork_lock_shared_entry(void) {
+TEST(shared_entry) {
     uint16_t child_asid = 2;
     status_$t status;
 
@@ -251,4 +283,16 @@ void test_fork_lock_shared_entry(void) {
 
     /* Refcount incremented 3 times (once per slot reference) */
     ASSERT_EQ(entry_data[4][0x0C], 6);
+}
+
+int main(void)
+{
+    printf("FILE_$FORK_LOCK tests\n");
+    RUN_TEST(no_locks);
+    RUN_TEST(one_entry);
+    RUN_TEST(sparse_entries);
+    RUN_TEST(all_empty_slots);
+    RUN_TEST(shared_entry);
+    printf("\n%d passed, %d failed\n", tests_passed, tests_failed);
+    return tests_failed != 0;
 }

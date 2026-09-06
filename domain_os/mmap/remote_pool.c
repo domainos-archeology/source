@@ -7,7 +7,7 @@
  * Original address: 0x00e59110
  */
 
-#include "mmap.h"
+#include "mmap/mmap_internal.h"
 
 uint32_t MMAP_$REMOTE_POOL(uint32_t param)
 {

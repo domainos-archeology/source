@@ -57,13 +57,8 @@
 #define ATTR_TYPE_UPDATE_DTM     26   /* Update DTM from current */
 #define ATTR_TYPE_UPDATE_DTM2    27   /* Update DTM from current variant */
 
-/* Global - attribute timestamp mask at A5+0x48C */
-#if defined(ARCH_M68K)
-#define AST_$ATTR_TIMESTAMP_MASK (*(uint32_t *)((char *)__A5_BASE() + 0x48C))
-#else
-extern uint32_t ast_$attr_timestamp_mask;
-#define AST_$ATTR_TIMESTAMP_MASK ast_$attr_timestamp_mask
-#endif
+/* AST_$ATTR_TIMESTAMP_MASK - attribute timestamp mask at A5+0x48C
+ * (declared in ast/ast_internal.h) */
 
 void AST_$SET_ATTR_DISPATCH(aote_t *aote, uint16_t attr_type, void *value,
                             int8_t wait_flag, clock_t *clock_info, status_$t *status)

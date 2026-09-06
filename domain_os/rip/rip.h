@@ -141,9 +141,9 @@ void RIP_$UPDATE(uint32_t *network_ptr, uint32_t *host_id_ptr,
  *
  * Original address: 0x00E69084
  */
-void RIP_$UPDATE_D(uint32_t *network_ptr, void *source,
-                   uint16_t *hop_count_ptr, uint8_t *port_info,
-                   int8_t *flags_ptr, status_$t *status_ret);
+void RIP_$UPDATE_D(const uint32_t *network_ptr, void *source,
+                   const uint16_t *hop_count_ptr, const uint8_t *port_info,
+                   const int8_t *flags_ptr, status_$t *status_ret);
 
 /*
  * =============================================================================
@@ -256,6 +256,27 @@ void RIP_$ANNOUNCE_NS(void);
  * Status codes
  */
 #define RIP_$STATUS_NO_ROUTE    0x3C0001    /* No route to destination */
+
+/*
+ * =============================================================================
+ * Global Data shared with the ROUTE / XNS subsystems
+ * =============================================================================
+ *
+ * These live in the RIP data block (0xE26258 ..).  On m68k they are accessed
+ * at their absolute addresses; elsewhere they are variables in rip_data.c.
+ */
+#if defined(ARCH_M68K)
+/* RIP_$STD_IDP_CHANNEL - IDP channel for RIP packets (0xFFFF = no channel) */
+#define RIP_$STD_IDP_CHANNEL    (*(int16_t *)0xE26EBC)
+/* RIP_$NS_ANNOUNCEMENT - Name service announcement data (2 bytes: 00 03) */
+#define RIP_$NS_ANNOUNCEMENT    ((uint8_t *)0xE26EBE)
+/* RIP_$BCAST_CONTROL - Broadcast control packet template (30 bytes) */
+#define RIP_$BCAST_CONTROL      ((uint8_t *)0xE26EC0)
+#else
+extern int16_t RIP_$STD_IDP_CHANNEL;
+extern uint8_t RIP_$NS_ANNOUNCEMENT[2];
+extern uint8_t RIP_$BCAST_CONTROL[30];
+#endif
 
 /*
  * RIP_$PORT_CLOSE - Invalidate routes through a closing port

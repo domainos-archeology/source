@@ -27,7 +27,7 @@
  *   MST_$GOT_COLOR:              0xE24466 (2 bytes)   - Color support flag
  */
 
-#include "mst/mst.h"
+#include "mst/mst_internal.h"
 
 /*
  * ============================================================================

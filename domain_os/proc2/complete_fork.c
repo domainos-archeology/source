@@ -13,22 +13,12 @@
 #include "proc2/proc2_internal.h"
 
 /*
- * Per-process eventcount table.
- * Each process has an entry with multiple eventcounts (24 bytes per entry).
- * Indexed by process table index (1-based).
- * The fork completion eventcount is the first one in each entry.
- *
- * Layout: Base + (index - 1) * 24
- * - Offset 0x00 (EC_TABLE_BASE - 0x18): Fork completion EC
- * - Offset 0x0C: Creation record EC
+ * Per-process eventcount table PROC2_$EC (proc2_internal.h).
+ * Each process has an entry with two eventcounts (24 bytes per entry),
+ * indexed by process table index (1-based).  The fork completion
+ * eventcount is the first one in each entry:
+ *   pea (-0x18,A1,D0*1) with A1 = 0xE2B978, D0 = index * 0x18
  */
-#if defined(ARCH_M68K)
-    #define PROC_EC_TABLE_BASE  0xE2B978
-    #define PROC_FORK_EC(idx)   ((ec_$eventcount_t*)(PROC_EC_TABLE_BASE + ((idx) - 1) * 24 - 24))
-#else
-    extern ec_$eventcount_t *proc_ec_table;
-    #define PROC_FORK_EC(idx)   ((ec_$eventcount_t*)((char*)proc_ec_table + ((idx) - 1) * 24 - 24))
-#endif
 
 void PROC2_$COMPLETE_FORK(status_$t *status_ret)
 {
@@ -39,8 +29,8 @@ void PROC2_$COMPLETE_FORK(status_$t *status_ret)
     current_idx = P2_PID_TO_INDEX(PROC1_$CURRENT);
 
     /* Calculate eventcount address:
-     * EC table has 24-byte entries indexed by process table index.
-     * The fork completion eventcount is at offset -24 (before entry start).
+     * EC table has 24-byte entries indexed by process table index;
+     * entry (index - 1) holds this process's fork completion EC.
      */
     ec = PROC_FORK_EC(current_idx);
 

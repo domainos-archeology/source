@@ -10,11 +10,6 @@
 #include "rem_file/rem_file_internal.h"
 
 /*
- * External function declarations
- */
-extern void AST_$SET_DTS(uint16_t flags, void *uid, void *clock, void *data, void *out);
-
-/*
  * Unlock request structure
  */
 typedef struct {
@@ -98,8 +93,10 @@ uint8_t REM_FILE_$UNLOCK(void *location_block, uint16_t unlock_mode,
 
     /* Update AST DTS if needed */
     if (dts_flags != 0) {
-        AST_$SET_DTS(dts_flags, (uint8_t *)location_block + 8,
-                     &resp->clock_val, resp->dts_data, &response[4]);
+        /* Location block +8 holds the file UID; response +4 receives the status */
+        AST_$SET_DTS(dts_flags, (uid_t *)((uint8_t *)location_block + 8),
+                     &resp->clock_val, (uint32_t *)resp->dts_data,
+                     (status_$t *)&response[4]);
     }
 
     return resp->result;

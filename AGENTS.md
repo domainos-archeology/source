@@ -1,6 +1,6 @@
 # Agent Instructions
 
-This project's purpose is to analyze and reverse engineer compiled Apollo Workstation code using Ghidra and additional tools. The code that ghidra generates isn't perfect, so we need to do further analysis on it to identify data structures, memory layout, and function purposes.  Ghidra also uses a number of constructs that don't map directly to C/C++ constructs, so we need to identify and convertthose as well.
+This project's purpose is to analyze and reverse engineer obsolete compiled Apollo Workstation code, for purposes of digital preservation and education, using Ghidra and additional tools. The code that ghidra generates isn't perfect, so we need to do further analysis on it to identify data structures, memory layout, and function purposes.  Ghidra also uses a number of constructs that don't map directly to C/C++ constructs, so we need to identify and convertthose as well.
 
 The generated C code should map as closely to the semantics in the machine code as possible.  The data structures and their layout should be identical.  Do NOT get creative or think of optimizations while doing your work.  Your work is that of an archivist.  You should be as faithful as you can to the original.  Whenever you have a question or think of a way to fix the code, you MUST MAKE SURE the resulting code maps to the same behavior.
 
@@ -15,7 +15,7 @@ The kernel (domain_os) work should proceed as follows:
 - Source files are named after the function, **without** the `<NAMESPACE>_$` prefix, in lowercase: `CAL_$APPLY_LOCAL_OFFSET` → `cal/apply_local_offset.c`.  for functions that don't have a `$` in their name, put them in a subdirectory named `misc`.  so `CRASH_SYSTEM` would go in `misc/crash_system.c`.
 - Keep `$` in function names in the C code (e.g., `M$OIU$WLW`, not `M_OIU_WLW`)
 - Use relative includes to reference other modules, rooted at the domain_os/ dir: `#include "math/math.h"`
-- Unit tests go in `<module>/test/test_<function_name>.c`
+- Unit tests go in `<module>/test/test_<function_name>.c`.  Each test is a self-contained host program: it `#include`s the `.c` under test directly (e.g. `#include "../read_cal.c"`), carries its own tiny TEST/RUN_TEST/ASSERT_EQ helpers, and is built and run by `make test` with `-DARCH_HOST`.
 - Add files and include paths to the Makefile as needed.
 
 ### Ghidra Synchronization
@@ -123,7 +123,7 @@ bd sync               # Sync with git
 **MANDATORY WORKFLOW:**
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
+2. **Run quality gates** (if code changed) - in `domain_os/`: `make` (m68k build, `-Werror`; only unresolved-symbol link errors are expected) and `make test` (host build + run of every `<subsystem>/test/test_*.c`)
 3. **Update issue status** - Close finished work, update in-progress items
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash

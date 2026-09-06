@@ -11,14 +11,10 @@
 
 #include "proc2/proc2_internal.h"
 
-/* Global boot flags at 0xe7c068 (= 0xe7be84 + 0x1e4) */
-#if defined(ARCH_M68K)
-#define PROC2_BOOT_FLAGS (*(int16_t*)0xE7C068)
-#else
-#define PROC2_BOOT_FLAGS proc2_boot_flags
-#endif
+/* Global boot flags proc2_boot_flags at 0xe7c068 (= 0xe7be84 + 0x1e4),
+ * declared in proc2_internal.h */
 
 void PROC2_$GET_BOOT_FLAGS(int16_t *flags_ret)
 {
-    *flags_ret = PROC2_BOOT_FLAGS;
+    *flags_ret = proc2_boot_flags;
 }

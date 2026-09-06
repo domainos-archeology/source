@@ -12,10 +12,7 @@
 
 #include "disk/disk_internal.h"
 
-/* Volume table offsets */
-#define DISK_MOUNT_STATE_OFFSET  0x90
-#define DISK_MOUNT_PROC_OFFSET   0x92
-#define DISK_DEV_INFO_OFFSET     0x94
+/* Volume table offsets (mount state/proc/dev info come from disk_internal.h) */
 #define DISK_DEV_DATA_OFFSET     0x7c
 #define DISK_SECTORS_PER_TRACK   0x9e
 #define DISK_PARTITION_TABLE     0xb2
@@ -23,9 +20,6 @@
 /* Event counter offsets in process table */
 #define PROC_EC1_OFFSET  0x378
 #define PROC_EC2_OFFSET  0x384
-
-/* Volume table base */
-#define DISK_VOLUME_BASE  ((uint8_t *)0x00e7a1cc)
 
 /* Valid volume index mask (volumes 1-10) */
 #define VALID_VOL_MASK  0x7fe

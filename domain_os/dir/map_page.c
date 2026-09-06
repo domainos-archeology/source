@@ -22,8 +22,6 @@
 #include "dir/dir_internal.h"
 
 /* DAT_00e4b444 and DAT_00e4b448 - MST remap parameters */
-extern uint8_t DAT_00e4b444;
-extern uint8_t DAT_00e4b448;
 
 void *dir_$map_page(void *handle, int16_t page_idx)
 {

@@ -7,6 +7,10 @@
 
 #include "os/os_internal.h"
 
+/* Constant words in the OS_$INIT code region passed by reference */
+static uint16_t os_$init_zero_word = 0;        /* 0xE347CA */
+static int16_t os_$init_root_path_len = 1;     /* 0xE337D2 */
+
 // Boot device: OS_$BOOT_DEVICE is defined in os_data.c (0xE82728)
 
 // Boot parameter structure (passed from bootstrap)
@@ -190,7 +194,9 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     TERM_$INIT(&term_param1, &term_param2);
 
     // Check for calendar hardware
-    IO_$GET_DCTE(NULL, NULL, &status);
+    /* Original passes the address of the constant word 0 at 0xE347CA for
+     * both the ctype and cnum arguments. */
+    IO_$GET_DCTE(&os_$init_zero_word, &os_$init_zero_word, &status);
     has_calendar = (status == status_$ok) ? -1 : 0;
 
     // Non-diskless systems require calendar hardware
@@ -437,10 +443,11 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     }
 
     // Set working directory to root
-    NAME_$SET_WDIR("/", NULL, &status);
+    /* Path "/" (0xE347CC) with its length in the constant word 1 at 0xE337D2 */
+    NAME_$SET_WDIR("/", &os_$init_root_path_len, &status);
 
     // Initialize process manager phase 2
-    PROC2_$INIT((int32_t)ws_mode, &status);
+    PROC2_$INIT(&ws_mode, &status);   /* pea (-0x1ca,A6): boot flags passed by reference */
     if (status != status_$ok) {
         CRASH_SYSTEM(&status);
     }

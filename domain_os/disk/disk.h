@@ -249,4 +249,12 @@ void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *buffer_ptr,
 void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
                         status_$t *status);
 
+/*
+ * DISK_$DO_CHKSUM - Disk checksum enable flag (negative = checksums on)
+ *
+ * Read/temporarily cleared by PMAP_$PURIFIER_L and pmap_$fill_write_qblks.
+ * Original address: 0xE7ACCC (1 byte)
+ */
+extern int8_t DISK_$DO_CHKSUM;
+
 #endif /* DISK_H */

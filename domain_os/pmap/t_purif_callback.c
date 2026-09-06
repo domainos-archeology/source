@@ -14,7 +14,7 @@
 #if defined(ARCH_M68K)
     #define WSL_BASE            0xE232B0
 #else
-    extern uint8_t wsl_base[];
+    /* wsl_base: pmap_internal.h */
     #define WSL_BASE            ((uintptr_t)wsl_base)
 #endif
 

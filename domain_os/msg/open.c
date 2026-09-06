@@ -11,11 +11,7 @@
 
 #include "msg/msg_internal.h"
 
-/*
- * Network service callback address for MSG.
- * Original: DAT_00e592c8 (points to network service handler)
- */
-extern void MSG_$NET_SERVICE(void);
+/* MSG_$NET_SERVICE (op code word at 0x00E592C8) is in msg/msg_internal.h */
 
 /*
  * MSG_$OPENI - Open socket internal implementation
@@ -116,7 +112,7 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
 
     /* Register network service for message handling */
     service_type = 0x80000;  /* Service type identifier */
-    NETWORK_$SET_SERVICE(MSG_$NET_SERVICE, &service_type, &net_status);
+    NETWORK_$SET_SERVICE((int16_t *)&MSG_$NET_SERVICE, &service_type, &net_status);
 
     /* Mark that user sockets are open */
     *(uint8_t *)0xE24C48 = 0xFF;  /* NETWORK_$USER_SOCK_OPEN */

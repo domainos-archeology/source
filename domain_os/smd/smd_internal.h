@@ -14,10 +14,11 @@
 #ifndef SMD_INTERNAL_H
 #define SMD_INTERNAL_H
 
+#include "smd/smd.h"
 #include "ec/ec.h"
+#include "fim/fim.h"
 #include "ml/ml.h"
 #include "proc1/proc1.h"
-#include "smd/smd.h"
 
 /*
  * ============================================================================
@@ -625,9 +626,30 @@ extern smd_blink_func_t SMD_BLINK_FUNC_PTABLE[SMD_MAX_DISPLAY_UNITS];
 /* Request lock ID for cursor operations */
 #define smd_$request_lock 8
 
-/* Lock data used by SMD_$ACQ_DISPLAY for scroll operations
- * Address: 0x00E6D92C */
-extern uint32_t SMD_ACQ_LOCK_DATA;
+/* Lock data used by SMD_$ACQ_DISPLAY / KBD_$* / TERM_$CONTROL calls.
+ * Address: 0x00E6D92C - a 16-bit word containing 0x0000, located in the
+ * code segment (read-only in the original).  Several call sites pass its
+ * address as an int16_t or uint16_t pointer ("line"/"lock" argument). */
+extern uint16_t SMD_ACQ_LOCK_DATA;
+
+/* Lock data for synchronous BLT / cursor operations.
+ * Address: 0x00E6DFF8 - a 16-bit word containing 0x0001 (code segment). */
+extern int16_t SMD_SYNC_LOCK_DATA;
+
+/* Exclusion lock protecting the tracking-rectangle list and cursor state.
+ * Address: 0x00E2E520 (ml_$exclusion_t, 18 bytes).  Initialised by
+ * SMD_$INIT via ML_$EXCLUSION_INIT. */
+extern ml_$exclusion_t ml_$exclusion_t_00e2e520;
+
+/* SMD_$DISP1_INT - display interrupt handler (assembly, not yet emitted).
+ * Original address: 0x00E26F1E.
+ * TODO: Ghidra currently labels 0x00E26F1E as ROUTE_$ROUTING; verify the
+ * handler address used by SMD_$INTERRUPT_INIT. */
+void SMD_$DISP1_INT(void);
+
+/* smd_$setup_scroll_blt - SAU-specific scroll BLT register setup.
+ * Implemented in smd/sau2/scroll_blt_setup.s.  Original address: 0x00E27070 */
+uint16_t smd_$setup_scroll_blt(uint16_t *blt_regs, smd_display_hw_t *hw);
 
 /*
  * ============================================================================
@@ -1007,9 +1029,7 @@ int8_t smd_$add_trk_rects_internal(int8_t clear_flag, smd_track_rect_t *rects,
 /* Display Transfer Table Event count at 0x00E2DC90 */
 extern ec_$eventcount_t DTTE;
 
-/* FIM quit event count and value arrays */
-extern ec_$eventcount_t FIM_$QUIT_EC[];
-extern uint32_t FIM_$QUIT_VALUE[];
+/* FIM_$QUIT_EC / FIM_$QUIT_VALUE come from fim/fim.h */
 
 /*
  * Helper to get display unit pointer from unit number

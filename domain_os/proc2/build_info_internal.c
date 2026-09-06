@@ -193,10 +193,9 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
     } else {
         /* Valid process - full info */
 
-        /* Copy parent UID from offset -0xDC (relative to table pointer arithmetic) */
-        /* This maps to fields at offset 0x08 in entry */
-        out->parent_uid.high = *(uint32_t *)((char *)entry + 0x08);
-        out->parent_uid.low = *(uint32_t *)((char *)entry + 0x0C);
+        /* Copy parent UID (entry offset 0x08; 0xEA5440 + index * 0xE4) */
+        out->parent_uid.high = entry->parent_uid.high;
+        out->parent_uid.low = entry->parent_uid.low;
 
         /* Copy cr_rec */
         out->cr_rec = entry->cr_rec;
@@ -211,9 +210,15 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
         /* Get pgroup info */
         get_pgroup_info(entry, &out->pgroup_flags);
 
-        /* Copy accounting UID from entry */
-        out->acct_uid.high = *(uint32_t *)((char *)entry + 0x78);
-        out->acct_uid.low = *(uint32_t *)((char *)entry + 0x7C);
+        /*
+         * Copy accounting UID from entry.  The original reads the two
+         * longwords at 0xEA5498/0xEA549C + index * 0xE4, i.e. entry
+         * offset 0x60/0x64, which proc2_info_t currently names tty_uid.
+         * TODO: confirm whether the field at 0x60 is the TTY UID or the
+         * accounting UID and rename it in proc2_info_t accordingly.
+         */
+        out->acct_uid.high = entry->tty_uid.high;
+        out->acct_uid.low = entry->tty_uid.low;
 
         /* Copy name */
         if (entry->name_len == 0x21) {  /* '!' = no name */
