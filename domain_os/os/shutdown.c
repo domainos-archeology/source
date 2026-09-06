@@ -11,8 +11,7 @@
 static uint16_t wait_delay_type = 0;  /* 0 = relative wait */
 static clock_t wait_duration = { 0, 0 };
 
-// Shutdown flag
-char OS_$SHUTTING_DOWN_FLAG;
+// Shutdown flag: OS_$SHUTTING_DOWN_FLAG is defined in os_data.c (0xE82734)
 
 void OS_$SHUTDOWN(status_$t *status_p)
 {

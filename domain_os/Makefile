@@ -2,9 +2,9 @@
 TARGET_SAU := sau2
 
 # List of all subsystems
-SUBSYSTEMS := acl app area as asknode arch ast audit base bat cache cal dbuf di dir disk dma dtty dxm ec file fim flop fp gpu fm hint iic io kbd log mac mac_os math mem misc ml mmap mmu msg mst name net netlog net_io netbuf network os osinfo pacct parity pas pbu pchist peb pkt pmap proc1 proc2 rem_file rgyc ring rip route scsi sio sio2681 smd sock stop sysboot term time tone tpad tty uid vfmt volx vtoc wp xns
+SUBSYSTEMS := acl app area as asknode arch ast audit base bat cache cal dbuf di dir disk dma dtty dxm ec file fim flop flp fp gpu fm hint iic io kbd log mac mac_os math mem misc ml mmap mmu msg mst name net netlog net_io netbuf network os osinfo pacct parity pas pbu pchist peb pkt pmap proc1 proc2 rem_file rgyc ring rip route scsi sio sio2681 smd sock stop suma svc sysboot sysbus tape term time timer tone tpad tty uid vfmt volx vtoc win wp xns xpd
 
-WARNING_FLAGS := -Wno-error=incompatible-pointer-types -Wno-error=int-conversion
+WARNING_FLAGS := -Werror -Wno-error=incompatible-pointer-types -Wno-error=int-conversion
 
 SAU2_FLAGS := -DARCH_M68K -DCPU_M68020 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68020 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
 
@@ -22,12 +22,21 @@ ARFLAGS := rcs
 BUILD_DIR := build/$(TARGET_SAU)
 DIST_DIR := dist/$(TARGET_SAU)
 
+# Host-side unit tests.  Each <subsystem>/test/test_<function>.c is a
+# self-contained program (it #includes the .c under test directly) built
+# with the host compiler and run natively.
+HOST_CC := cc
+HOST_CFLAGS := -std=gnu2x -DARCH_HOST -I. -g -O0 -Wall -Wno-unused-function -Wno-unused-variable
+TEST_BUILD_DIR := build/host/test
+TEST_SRCS := $(wildcard $(addsuffix /test/test_*.c,$(SUBSYSTEMS)))
+TEST_BINS := $(patsubst %.c,$(TEST_BUILD_DIR)/%,$(TEST_SRCS))
+
 # Generate library paths for all subsystems
 SUBSYSTEM_LIBS := $(foreach sub,$(SUBSYSTEMS),$(BUILD_DIR)/lib$(sub).a)
 
 ALL_SUBSYSTEM_OBJS :=
 
-.PHONY: all clean domain_os
+.PHONY: all clean domain_os test test-build clean-test
 
 all:: domain_os
 
@@ -73,5 +82,26 @@ $(BUILD_DIR)/%.o: %.s
 	@echo "[AS] $<"
 	@$(CC) $(SAU2_FLAGS) -c -o $@ $<
 
+# Unit tests (host build)
+$(TEST_BUILD_DIR)/%: %.c
+	@mkdir -p $(dir $@)
+	@echo "[HOSTCC] $<"
+	@$(HOST_CC) $(HOST_CFLAGS) -I$(dir $<) -o $@ $<
+
+test-build: $(TEST_BINS)
+
+test: $(TEST_BINS)
+	@fail=0; for t in $(TEST_BINS); do \
+	  echo "[TEST] $$t"; \
+	  if ! (cd $$(dirname $$t) && ./$$(basename $$t)) > $$t.log 2>&1; then \
+	    echo "  FAILED: $$t (see $$t.log)"; fail=$$((fail+1)); \
+	  fi; \
+	done; \
+	echo "$$(echo $(TEST_BINS) | wc -w | tr -d ' ') tests, $$fail failed"; \
+	[ $$fail -eq 0 ]
+
+clean-test:
+	rm -rf $(TEST_BUILD_DIR)
+
 clean:
-	rm -rf $(BUILD_DIR) $(DIST_DIR)
+	rm -rf $(BUILD_DIR) $(DIST_DIR) $(TEST_BUILD_DIR)

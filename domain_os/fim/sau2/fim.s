@@ -24,7 +24,7 @@
  *   FIM_$SETUP_RETURN:         0x00E21878 (22 bytes)
  *   FP_$SAVEP:                 0x00E218D0 (4 bytes, data)
  *   FP_$OWNER:                 0x00E218D4 (2 bytes, data)
- *   fp_exclusion:              0x00E218D6 (4 bytes, data)
+ *   FP_$EXCLUSION:              0x00E218D6 (4 bytes, data)
  *   FIM_$FLINE:                0x00E21ACC (68 bytes)
  *   FIM_$FP_ABORT:             0x00E21B80 (48 bytes; stub: 2 bytes)
  *   FIM_$FP_INIT:              0x00E21BB0 (84 bytes; stub: 2 bytes)
@@ -653,7 +653,7 @@ FIM_$SETUP_RETURN:
  * In the original ROM, these were located at:
  *   FP_$SAVEP    0x00E218D0 - uint32: non-zero if FPU hardware is present
  *   FP_$OWNER    0x00E218D4 - uint16: AS ID of current FPU owner
- *   fp_exclusion 0x00E218D6 - ml_$exclusion_t: FP exclusion lock
+ *   FP_$EXCLUSION 0x00E218D6 - ml_$exclusion_t: FP exclusion lock
  *
  * Accessed PC-relative by FIM_$FLINE.  Also accessed by other FP
  * routines (fp_$switch_owner, FIM_$FP_INIT, etc.) via global labels.
@@ -666,9 +666,11 @@ FP_$SAVEP:
 FP_$OWNER:
         .word   0                       /* AS ID of current FPU owner */
 
-        .global fp_exclusion
-fp_exclusion:
-        .long   0                       /* ml_$exclusion_t */
+        .global FP_$EXCLUSION
+FP_$EXCLUSION:
+        .space  18                      /* ml_$exclusion_t (sizeof == 0x12) */
+        /* TODO: verify the size/contents of the 0xE218D6..0xE21ACC data
+         * region in Ghidra; only the exclusion is reproduced here. */
 
 
 /* ====================================================================
@@ -685,7 +687,7 @@ fp_exclusion:
  * Registers saved/restored: D0-D3, A0-A1
  *
  * Original encoding notes:
- *   - FP_$SAVEP, FP_$OWNER, fp_exclusion accessed PC-relative (above).
+ *   - FP_$SAVEP, FP_$OWNER, FP_$EXCLUSION accessed PC-relative (above).
  *   - fp_$switch_owner+6 was called via bsr.b in ROM; here we use jsr
  *     to the external symbol since fp_$switch_owner is in fp/sau2/.
  *   - FIM_$EXIT reached via jmp PC-relative (now a local label).
@@ -702,11 +704,11 @@ FIM_$FLINE:
         beq.b   .fline_no_fpu                   /* AS 0 -> UII */
         cmp.w   (FP_$OWNER,%pc),%d2             /* Compare with FP owner */
         beq.b   .fline_no_fpu                   /* Same owner -> UII */
-        pea     (fp_exclusion,%pc)              /* Push exclusion lock ptr */
+        pea     (FP_$EXCLUSION,%pc)              /* Push exclusion lock ptr */
         jsr     (ML_EXCLUSION_START).l          /* Acquire exclusion */
         addq.l  #4,%sp
         jsr     (FP_SWITCH_OWNER_D2).l          /* Switch FP context (d2 has AS ID) */
-        pea     (fp_exclusion,%pc)              /* Push exclusion lock ptr */
+        pea     (FP_$EXCLUSION,%pc)              /* Push exclusion lock ptr */
         jsr     (ML_EXCLUSION_STOP).l           /* Release exclusion */
         addq.l  #4,%sp
         movem.l (%sp)+,%d0-%d3/%a0-%a1          /* Restore registers */

@@ -32,6 +32,17 @@
         .extern PROC1_$READY_PCB
         .extern PROC1_$READY_COUNT
 
+/*
+ * PROC1_$ADD_READY - C-callable wrapper (0x00e20820, 4 bytes)
+ *
+ * Loads the PCB pointer from the stack into A1 and falls through into
+ * proc1_$add_ready_body.  This is the entry point C code must use.
+ */
+        .global PROC1_$ADD_READY
+PROC1_$ADD_READY:
+        movea.l (0x4,%sp), %a1          /* A1 = pcb (stack argument) */
+        /* fall through */
+
         .global proc1_$add_ready_body
 proc1_$add_ready_body:
         /* Load comparison values from input PCB */

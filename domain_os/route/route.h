@@ -291,4 +291,11 @@ int16_t ROUTE_$VALIDATE_PORT(int32_t routing_key, int8_t is_local);
 #define status_$route_not_routing_mode          0x2B0009
 #define status_$route_invalid_ec_type           0x2B0012
 
+
+/*
+ * Routing port counts (route_data.c).  Shared with the RIP subsystem.
+ */
+extern int16_t ROUTE_$STD_N_ROUTING_PORTS;
+extern int16_t ROUTE_$N_ROUTING_PORTS;
+
 #endif /* ROUTE_H */

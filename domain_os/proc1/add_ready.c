@@ -18,7 +18,17 @@
 
 #include "proc1/proc1_internal.h"
 
+/*
+ * On m68k (SAU2) the wrapper is the 4-byte assembly stub in
+ * sau2/add_ready_body.s that loads A1 from the stack and falls through
+ * into proc1_$add_ready_body.  This C version is only used on other
+ * architectures.
+ */
+#if !defined(ARCH_M68K)
+
 void PROC1_$ADD_READY(proc1_t *pcb)
 {
     proc1_$add_ready_body(pcb);
 }
+
+#endif /* !ARCH_M68K */

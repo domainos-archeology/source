@@ -7,8 +7,7 @@
 
 #include "os/os_internal.h"
 
-// Boot device (local to this module)
-short OS_$BOOT_DEVICE;
+// Boot device: OS_$BOOT_DEVICE is defined in os_data.c (0xE82728)
 
 // Boot parameter structure (passed from bootstrap)
 typedef struct {

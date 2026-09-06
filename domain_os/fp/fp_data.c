@@ -14,6 +14,14 @@
  *
  * Address: 0x00E218D0
  */
+/*
+ * On m68k (SAU2) FP_$SAVEP, FP_$OWNER and FP_$EXCLUSION are defined in
+ * fim/sau2/fim.s: FIM_$FLINE addresses them PC-relative, so they must be
+ * assembled alongside it to preserve the original layout.  The C
+ * definitions below are used for other architectures.
+ */
+#if !defined(ARCH_M68K)
+
 uint32_t FP_$SAVEP;
 
 /*
@@ -37,3 +45,5 @@ uint16_t FP_$OWNER;
  * Size: Depends on ml_$exclusion_t structure
  */
 ml_$exclusion_t FP_$EXCLUSION;
+
+#endif /* !ARCH_M68K */

@@ -7,8 +7,7 @@
 
 #include "os/os_internal.h"
 
-// The shutdown eventcount (at 0xe1dc00)
-ec_$eventcount_t OS_$SHUTDOWN_EC;
+// The shutdown eventcount (at 0xe1dc00) is defined in os_data.c
 
 void OS_$GET_EC(void *param_1, ec_$eventcount_t **ec_ret, status_$t *status)
 {

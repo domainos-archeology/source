@@ -337,13 +337,6 @@ void PROC1_$REORDER_READY(void);
 void proc1_$remove_from_ready_list(proc1_t *pcb);
 
 /*
- * proc1_$add_ready_body - FIFO priority-ordered ready list insertion
- * Inserts AFTER equal-priority entries (round-robin fairness).
- * Original address: 0x00e20824
- */
-void proc1_$add_ready_body(proc1_t *pcb);
-
-/*
  * proc1_$insert_into_ready_list - LIFO priority-ordered ready list insertion
  * Inserts BEFORE equal-priority entries (prioritize newly inserted).
  * Original address: 0x00e20844

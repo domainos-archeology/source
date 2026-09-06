@@ -134,8 +134,7 @@ typedef struct rip_$data_t {
 extern rip_$data_t RIP_$DATA;
 extern rip_$entry_t *RIP_$INFO;
 extern rip_$stats_t RIP_$STATS;
-extern int16_t ROUTE_$STD_N_ROUTING_PORTS;
-extern int16_t ROUTE_$N_ROUTING_PORTS;
+/* ROUTE_$STD_N_ROUTING_PORTS / ROUTE_$N_ROUTING_PORTS: see route/route.h */
 extern int8_t RIP_$STD_RECENT_CHANGES;
 extern int8_t RIP_$RECENT_CHANGES;
 

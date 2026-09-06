@@ -44,8 +44,9 @@ void INIT_STACK(proc1_t *pcb, void **entry_ptr, void **sp_ptr);
  * equal-priority entries (LIFO within same priority).
  *
  * On m68k, the assembly version (sau2/add_ready_body.s) uses register
- * calling convention with A1 = PCB pointer. The C version takes a
- * standard parameter.
+ * calling convention with A1 = PCB pointer and cannot be called from C;
+ * C code must call PROC1_$ADD_READY (the stack-argument wrapper).  The
+ * C version below is only built for non-m68k targets.
  *
  * Original address: 0x00e20824
  */

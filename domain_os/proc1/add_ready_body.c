@@ -25,6 +25,16 @@
 
 #include "proc1/proc1_internal.h"
 
+/*
+ * On m68k (SAU2) this routine is provided by sau2/add_ready_body.s, which
+ * preserves the original register calling convention (A1 = PCB) so that
+ * the assembly callers (proc1_$clr_lock_body etc.) keep working.  C code
+ * must go through PROC1_$ADD_READY, the stack-argument wrapper that exists
+ * on both builds.  This portable C version is only compiled for non-m68k
+ * targets.
+ */
+#if !defined(ARCH_M68K)
+
 void proc1_$add_ready_body(proc1_t *pcb)
 {
     proc1_t *pos;
@@ -74,3 +84,5 @@ void proc1_$add_ready_body(proc1_t *pcb)
 
     PROC1_$READY_COUNT++;
 }
+
+#endif /* !ARCH_M68K */

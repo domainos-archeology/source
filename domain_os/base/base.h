@@ -6,7 +6,16 @@
 // =============================================================================
 // Fixed-width integer types (normally from stdint.h)
 // m68k: char=8, short=16, int=32, long=32, ptr=32
+//
+// The kernel is built freestanding (-nostdlib -ffreestanding) so these are
+// spelled out for the m68k target.  Host builds (ARCH_HOST, used for the
+// unit tests) get them from the host's <stdint.h>/<stddef.h> so they don't
+// conflict with the host C library's definitions (e.g. 64-bit uintptr_t).
 // =============================================================================
+#if defined(ARCH_HOST)
+#include <stdint.h>
+#include <stddef.h>
+#else
 typedef signed char int8_t;
 typedef short int16_t;
 typedef int int32_t;
@@ -24,6 +33,7 @@ typedef unsigned int uintptr_t;
 // =============================================================================
 typedef unsigned int size_t;
 typedef int ptrdiff_t;
+#endif
 
 #ifndef NULL
 #define NULL ((void *)0)

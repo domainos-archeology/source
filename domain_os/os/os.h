@@ -25,6 +25,9 @@ extern uint32_t OS_$REV[];
 // Flag indicating shutdown is in progress
 extern char OS_$SHUTTING_DOWN_FLAG;
 
+/* Boot device identifier (0xE82728), set by OS_$INIT */
+extern uint16_t OS_$BOOT_DEVICE;
+
 // Shutdown eventcount
 extern ec_$eventcount_t OS_$SHUTDOWN_EC;
 

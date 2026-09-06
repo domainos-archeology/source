@@ -78,11 +78,10 @@ status_$t Network_hardware_error = 0x00110001;
  */
 
 /*
- * Network activity flag.
- * Set when network traffic is detected.
- * Located at 0x00E24C42 on original platform.
+ * NETWORK_$ACTIVITY_FLAG is defined in network/network_data.c.
+ * TODO: ring code documented it at 0x00E24C42 while network_data.c has
+ * 0xE24C46 - verify the address in Ghidra (source-activity-flag-addr).
  */
-int8_t NETWORK_$ACTIVITY_FLAG;
 
 /*
  * ============================================================================
