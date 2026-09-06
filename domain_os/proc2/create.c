@@ -191,17 +191,15 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     /* Clear bit 3 of flags byte at 0x2B */
     /* new_entry->flags &= ~0x0008; -- already done above */
 
-    /* Copy parent UID to another location */
-    *(uint32_t*)((char*)new_entry + 0x4C) = local_parent_uid.high;
-    *(uint32_t*)((char*)new_entry + 0x50) = local_parent_uid.low;
+    /* Copy parent UID into the accounting UID slot (entry+0x4C) */
+    new_entry->acct_uid = local_parent_uid;
 
-    /* Set creation timestamp */
-    new_entry->pgroup_uid_idx = 0;
-    *(uint32_t*)((char*)new_entry + 0x56) = creation_time.high;
+    /* Clear the accounting-info length (entry+0x54) */
+    new_entry->acct_info_len = 0;
+    new_entry->creation_time_high = creation_time.high;
 
-    /* Copy accounting info from parent */
-    *(uint32_t*)((char*)new_entry + 0x60) = *(uint32_t*)((char*)current_entry + 0x60);
-    *(uint32_t*)((char*)new_entry + 0x64) = *(uint32_t*)((char*)current_entry + 0x64);
+    /* Copy the TTY UID from the current process (entry+0x60) */
+    new_entry->tty_uid = current_entry->tty_uid;
 
     /* Set up process group relationship */
     if ((int8_t)local_flags < 0) {

@@ -53,7 +53,7 @@ void ML_$LOCK(int16_t resource_id)
     ec_$eventcount_t *ec_list[1];
     int32_t wait_vals[1];
     uint8_t old_lock_byte;
-    int16_t ec_offset;
+    ml_$lock_event_t *evp;
 
     /* Set up lock ordering and PCB state */
     ml_$prepare_lock(resource_id);
@@ -83,12 +83,12 @@ void ML_$LOCK(int16_t resource_id)
          *   +0x00: Event count structure
          *   +0x0C: Wait counter
          */
-        ec_offset = resource_id << 4;
+        evp = &ML_$LOCK_EVENTS[resource_id];
 
         /* Increment the wait count and use it as our wait value */
-        ((int32_t *)((char *)ML_$LOCK_EVENTS + ec_offset + 0x0C))[0]++;
-        wait_vals[0] = ((int32_t *)((char *)ML_$LOCK_EVENTS + ec_offset + 0x0C))[0];
-        ec_list[0] = (ec_$eventcount_t *)((char *)ML_$LOCK_EVENTS + ec_offset);
+        evp->wait_count++;
+        wait_vals[0] = evp->wait_count;
+        ec_list[0] = &evp->ec;
 
         PROC1_$EC_WAITN(pcb, ec_list, wait_vals, 1);
 

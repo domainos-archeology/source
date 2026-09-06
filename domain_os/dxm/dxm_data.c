@@ -45,6 +45,19 @@ const char DXM_Datum_too_large_err[] = "DXM: Datum too large";
 const char DXM_No_room_err[] = " DXM: No room %H";
 
 /*
+ * Deferred signal-delivery routine table
+ *
+ * Original address: 0x00E85708 (Ghidra label DXM_$SIGNAL_ROUTINES;
+ * NETLOG_$DATA_END sits at the same address).
+ */
+#if !defined(ARCH_M68K)
+dxm_$signal_routine_t DXM_$SIGNAL_ROUTINES[DXM_SIGNAL_ROUTINE_COUNT] = {
+    PROC2_$SIGNAL_OS,           /* 0xE85708: 0x00E3F0A6 */
+    PROC2_$SIGNAL_PGROUP_OS,    /* 0xE8570C: 0x00E3F2C2 */
+};
+#endif
+
+/*
  * Pointer to signal callback function
  * Original address: 0x00E172CC
  */

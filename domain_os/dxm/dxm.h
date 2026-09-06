@@ -222,17 +222,79 @@ void DXM_$HELPER_UNWIRED(void);
  * Adds a signal delivery callback to the unwired queue.
  *
  * Parameters:
- *   signal_num - Signal number
- *   param2 - Signal parameter 2
- *   param3 - Signal parameter 3
- *   param4 - Signal parameter 4 (4 bytes)
- *   param5 - Additional flag
+ *   routine    - index into DXM_$SIGNAL_ROUTINES
+ *   proc_index - index into PROC2_UID identifying the target
+ *   signal     - signal number
+ *   param      - signal parameter (4 bytes)
+ *   check_dup  - Domain boolean (0xFF) -> DXM_$ADD_CALLBACK dedupes
  *   status_ret - Status return
  *
  * Original address: 0x00E17270
  */
-void DXM_$ADD_SIGNAL(uint16_t signal_num, uint16_t param2, uint16_t param3,
-                     uint32_t param4, uint8_t param5, status_$t *status_ret);
+void DXM_$ADD_SIGNAL(uint16_t routine, uint16_t proc_index, uint16_t signal,
+                     uint32_t param, uint8_t check_dup, status_$t *status_ret);
+
+/*
+ * Deferred signal record
+ *
+ * Built on the stack by DXM_$ADD_SIGNAL (0x00E17270) at (-0x10,A6) and
+ * copied into the queue entry as ten bytes (`move.w #0xa,-(SP)` at
+ * 0x00E172A6):
+ *   00e1728e  move.w D0w,(-0x10,A6)   ; +0x00 <- arg at (0x8,A6)
+ *   00e17292  move.w D1w,(-0x8,A6)    ; +0x08 <- arg at (0xa,A6)
+ *   00e17296  move.w D2w,(-0xe,A6)    ; +0x02 <- arg at (0xc,A6)
+ *   00e1729a  move.l D3,(-0xc,A6)     ; +0x04 <- arg at (0xe,A6)
+ *
+ * Size: 10 bytes (0x0A)
+ */
+typedef struct dxm_signal_data_t {
+    int16_t     routine;        /* 0x00: index into DXM_$SIGNAL_ROUTINES */
+    int16_t     signal;         /* 0x02: signal number (passed by reference) */
+    uint32_t    param;          /* 0x04: signal parameter (by reference) */
+    int16_t     proc_index;     /* 0x08: index into PROC2_UID */
+} dxm_signal_data_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(dxm_signal_data_t, routine) == 0x00,
+               "dxm_signal_data_t.routine must be at 0x00");
+_Static_assert(__builtin_offsetof(dxm_signal_data_t, signal) == 0x02,
+               "dxm_signal_data_t.signal must be at 0x02");
+_Static_assert(__builtin_offsetof(dxm_signal_data_t, param) == 0x04,
+               "dxm_signal_data_t.param must be at 0x04");
+_Static_assert(__builtin_offsetof(dxm_signal_data_t, proc_index) == 0x08,
+               "dxm_signal_data_t.proc_index must be at 0x08");
+_Static_assert(sizeof(dxm_signal_data_t) == 0x0A,
+               "dxm_signal_data_t must be 10 bytes");
+#endif
+
+/*
+ * Deferred signal-delivery routine table
+ *
+ * DXM_$ADD_SIGNAL_CALLBACK indexes this with routine*4
+ * (`lsl.w #0x2,D1w` / `lea (0x0,A5,D1w),A1` at 0x00E721B6) after loading
+ * A5 with 0xE85708 (`lea (0xe85708).l,A5` at 0x00E7218C).  The image
+ * holds two entries there:
+ *   0xE85708: 0x00E3F0A6 = PROC2_$SIGNAL_OS
+ *   0xE8570C: 0x00E3F2C2 = PROC2_$SIGNAL_PGROUP_OS
+ * and both take (uid_t *, int16_t *, uint32_t *, status_$t *).
+ *
+ * The Ghidra label NETLOG_$DATA_END also sits at 0xE85708; it marks the
+ * end of the NETLOG data block (NETLOG_$CNTL's A5 base 0xE85684 reaches
+ * only as far as (0x7e,A5) = 0xE85702) and is unrelated to this table.
+ * The Ghidra label DXM_$SIGNAL_ROUTINES was added at 0xE85708.
+ */
+typedef void (*dxm_$signal_routine_t)(uid_t *uid, int16_t *signal,
+                                      uint32_t *param, status_$t *status_ret);
+
+#define DXM_SIGNAL_ROUTINE_COUNT    2
+#define DXM_SIGNAL_ROUTINE_PROC     0   /* PROC2_$SIGNAL_OS */
+#define DXM_SIGNAL_ROUTINE_PGROUP   1   /* PROC2_$SIGNAL_PGROUP_OS */
+
+#if defined(ARCH_M68K)
+#define DXM_$SIGNAL_ROUTINES ((dxm_$signal_routine_t *)0xE85708)
+#else
+extern dxm_$signal_routine_t DXM_$SIGNAL_ROUTINES[DXM_SIGNAL_ROUTINE_COUNT];
+#endif
 
 /*
  * DXM_$ADD_SIGNAL_CALLBACK - Signal delivery callback
@@ -241,7 +303,7 @@ void DXM_$ADD_SIGNAL(uint16_t signal_num, uint16_t param2, uint16_t param3,
  * Looks up the signal handler and invokes it.
  *
  * Parameters:
- *   data - Pointer to signal data structure
+ *   data - Pointer to a pointer to the queued dxm_signal_data_t
  *
  * Original address: 0x00E72184
  */

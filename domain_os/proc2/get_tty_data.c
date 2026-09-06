@@ -26,7 +26,9 @@ void PROC2_$GET_TTY_DATA(uid_t *tty_uid, uint16_t *tty_flags)
     tty_uid->high = entry->tty_uid.high;
     tty_uid->low = entry->tty_uid.low;
 
-    /* Copy TTY flags (session_id field used for TTY flags) */
-    /* TODO(source-ld0): Verify this is the correct field for tty_flags */
+    /*
+     * Verified: 0x00E41BF6 reads (-0x88,A0) with A0 = entry + 0xE4, i.e.
+     * entry+0x5C -- the session_id word.
+     */
     *tty_flags = entry->session_id;
 }

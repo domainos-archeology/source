@@ -28,8 +28,13 @@ void ML_$EXCLUSION_START(ml_$exclusion_t *excl)
     /* Increment inhibit count - prevent preemption while in exclusion */
     pcb->nesting_depth++;
 
-    /* Set "has locks" flag in PCB (bit 0 at offset 0x43) */
-    *((uint8_t *)&pcb->resource_locks_held + 3) |= 0x01;
+    /*
+     * 0x00E20E04: bset.b #0x0,(0x43,A1).  0x43 is the least significant
+     * byte of the longword at 0x40 (big-endian), so this sets bit 0 of
+     * resource_locks_held -- the "holding an exclusion" marker that
+     * ML_$EXCLUSION_STOP clears at 0x00E20EB0.
+     */
+    pcb->resource_locks_held |= 1u;
 
     /* Try to enter the exclusion region */
     excl->f5++;

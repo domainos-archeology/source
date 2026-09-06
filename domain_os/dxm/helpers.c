@@ -34,37 +34,34 @@
  *   movea.l #0,A2                ; A2 = NULL (unused)
  *   lea     (0xc,A3),A4          ; A4 = &queue->ec
  * loop:
- *   clr.l   -(SP)                ; Push 0 (ec5)
- *   clr.l   -(SP)                ; Push 0 (ec4)
- *   move.l  D2,-(SP)             ; Push wait_val
- *   pea     (A2)                 ; Push NULL (ec2)
- *   pea     (A2)                 ; Push NULL (ec1)
- *   pea     (A4)                 ; Push &queue->ec
- *   jsr     EC_$WAIT
- *   lea     (0x18,SP),SP
- *   pea     (A3)                 ; Push queue
- *   bsr.w   DXM_$SCAN_QUEUE
- *   addq.w  #4,SP
- *   addq.l  #1,D2                ; wait_val++
- *   bra.b   loop
+ *   00e171fc  clr.l   -(SP)      ; vals[2] = 0
+ *   00e171fe  clr.l   -(SP)      ; vals[1] = 0
+ *   00e17200  move.l  D2,-(SP)   ; vals[0] = wait_val
+ *   00e17202  pea     (A2)       ; ecs[2] = NULL
+ *   00e17204  pea     (A2)       ; ecs[1] = NULL
+ *   00e17206  pea     (A4)       ; ecs[0] = &queue->ec
+ *   00e17208  jsr     EC_$WAIT   ; 0x00E20610
+ *   00e1720e  lea     (0x18,SP),SP   ; caller pops all 24 bytes
+ *   00e17212  pea     (A3)       ; queue
+ *   00e17214  bsr.w   DXM_$SCAN_QUEUE
+ *   00e17218  addq.w  #4,SP
+ *   00e1721a  addq.l  #1,D2      ; wait_val++
+ *   00e1721c  bra.b   loop
+ *
+ * EC_$WAIT takes two three-element arrays BY VALUE (24 bytes in all; see
+ * 0x00E20610, which finds ecs at (0xC,SP) and vals at (0x18,SP)).  The
+ * unused slots are NULL / 0, which is what terminates the scan at
+ * 0x00E2061A.  The return value is discarded here.
  */
 void DXM_$HELPER_COMMON(dxm_queue_t *queue)
 {
     int32_t wait_val = 1;
-    ec_$eventcount_t *ecs[6];
-
-    /* Set up event count array - only first entry is used */
-    ecs[0] = &queue->ec;
-    ecs[1] = NULL;
-    ecs[2] = NULL;
-    ecs[3] = NULL;
-    ecs[4] = NULL;
-    ecs[5] = NULL;
 
     /* Infinite loop processing callbacks */
     for (;;) {
         /* Wait for event count to reach wait_val */
-        EC_$WAIT(ecs, &wait_val);
+        EC_$WAIT((ec_$wait_ecs_t){ { &queue->ec, NULL, NULL } },
+                 (ec_$wait_vals_t){ { wait_val, 0, 0 } });
 
         /* Process all pending callbacks */
         DXM_$SCAN_QUEUE(queue);

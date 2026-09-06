@@ -9,16 +9,9 @@
 #include "dxm/dxm_internal.h"
 
 /*
- * Signal data structure used by ADD_SIGNAL
- * This structure is passed to DXM_$ADD_SIGNAL_CALLBACK
- * Size: 10 bytes
+ * The 10-byte signal record (dxm_signal_data_t) is declared in dxm/dxm.h
+ * because DXM_$ADD_SIGNAL_CALLBACK reads it back out of the queue.
  */
-typedef struct dxm_signal_data_t {
-    uint16_t    signal_num;     /* 0x00: Signal number */
-    uint16_t    param3;         /* 0x02: Signal parameter 3 */
-    uint32_t    param4;         /* 0x04: Signal parameter 4 */
-    uint16_t    param2;         /* 0x08: Signal parameter 2 */
-} dxm_signal_data_t;
 
 /*
  * DXM_$ADD_SIGNAL - Queue a signal for deferred delivery
@@ -27,11 +20,12 @@ typedef struct dxm_signal_data_t {
  * The signal will be delivered later by the unwired helper process.
  *
  * Parameters:
- *   signal_num - Signal number
- *   param2 - Signal parameter 2
- *   param3 - Signal parameter 3
- *   param4 - Signal parameter 4 (4 bytes)
- *   param5 - Additional flag (passed as high byte of flags)
+ *   routine    - index into DXM_$SIGNAL_ROUTINES (0 = PROC2_$SIGNAL_OS,
+ *                1 = PROC2_$SIGNAL_PGROUP_OS)
+ *   proc_index - index into PROC2_UID identifying the target
+ *   signal     - signal number
+ *   param      - signal parameter (4 bytes)
+ *   check_dup  - Domain boolean (0xFF) -> DXM_$ADD_CALLBACK dedupes
  *   status_ret - Status return
  *
  * The function packages the signal parameters into a dxm_signal_data_t
@@ -41,16 +35,16 @@ typedef struct dxm_signal_data_t {
  *   link.w  A6,#-0x14
  *   movem.l {A5 D3 D2},-(SP)
  *   lea     (0xe2a7c0).l,A5      ; A5 = base data address
- *   move.w  (0x8,A6),D0w         ; D0 = signal_num
- *   move.w  (0xa,A6),D1w         ; D1 = param2
- *   move.w  (0xc,A6),D2w         ; D2 = param3
- *   move.l  (0xe,A6),D3          ; D3 = param4
- *   move.w  D0w,(-0x10,A6)       ; local.signal_num = D0
- *   move.w  D1w,(-0x8,A6)        ; local.param2 = D1
- *   move.w  D2w,(-0xe,A6)        ; local.param3 = D2
- *   move.l  D3,(-0xc,A6)         ; local.param4 = D3
+ *   move.w  (0x8,A6),D0w         ; D0 = routine
+ *   move.w  (0xa,A6),D1w         ; D1 = proc_index
+ *   move.w  (0xc,A6),D2w         ; D2 = signal
+ *   move.l  (0xe,A6),D3          ; D3 = param
+ *   move.w  D0w,(-0x10,A6)       ; rec.routine = D0
+ *   move.w  D1w,(-0x8,A6)        ; rec.proc_index = D1
+ *   move.w  D2w,(-0xe,A6)        ; rec.signal = D2
+ *   move.l  D3,(-0xc,A6)         ; rec.param = D3
  *   move.l  (0x14,A6),-(SP)      ; Push status_ret
- *   move.b  (0x12,A6),-(SP)      ; Push param5 (as byte)
+ *   move.b  (0x12,A6),-(SP)      ; Push check_dup (as byte)
  *   move.w  #0xa,-(SP)           ; Push data_size = 10
  *   lea     (-0x10,A6),A0        ; A0 = &local
  *   move.l  A0,(-0x14,A6)        ; local_ptr = &local
@@ -62,24 +56,41 @@ typedef struct dxm_signal_data_t {
  *   unlk    A6
  *   rts
  */
-void DXM_$ADD_SIGNAL(uint16_t signal_num, uint16_t param2, uint16_t param3,
-                     uint32_t param4, uint8_t param5, status_$t *status_ret)
+void DXM_$ADD_SIGNAL(uint16_t routine, uint16_t proc_index, uint16_t signal,
+                     uint32_t param, uint8_t check_dup, status_$t *status_ret)
 {
     dxm_signal_data_t signal_data;
     dxm_signal_data_t *data_ptr;
     uint32_t flags;
 
-    /* Package signal parameters */
-    signal_data.signal_num = signal_num;
-    signal_data.param2 = param2;
-    signal_data.param3 = param3;
-    signal_data.param4 = param4;
+    /*
+     * Package the signal parameters.  Note the argument order on the stack
+     * is (routine, proc_index, signal, param, check_dup, status_ret) but
+     * the record order is routine, signal, param, proc_index:
+     *   (0x8,A6)  -> rec+0x00 (routine)
+     *   (0xa,A6)  -> rec+0x08 (proc_index)
+     *   (0xc,A6)  -> rec+0x02 (signal)
+     *   (0xe,A6)  -> rec+0x04 (param)
+     */
+    signal_data.routine = (int16_t)routine;
+    signal_data.proc_index = (int16_t)proc_index;
+    signal_data.signal = (int16_t)signal;
+    signal_data.param = param;
 
     /* Set up pointer for ADD_CALLBACK */
     data_ptr = &signal_data;
 
-    /* Flags: data size = 10 (0x0A), plus param5 in high byte */
-    flags = 10 | ((uint32_t)param5 << 16);
+    /*
+     * Flags: data size = 10 (`move.w #0xa,-(SP)` at 0x00E172A6) plus the
+     * check-duplicates boolean (`move.b (0x12,A6),-(SP)` at 0x00E172A2).
+     *
+     * TODO(source-w0bp): in the binary these are two separate Pascal
+     * parameters -- a word at (0x14,A6) and a byte at (0x16,A6) as read by
+     * DXM_$ADD_CALLBACK (0x00E16FF6/0x00E16FFA) -- not one packed longword.
+     * DXM_$ADD_CALLBACK's C signature merges them; unpicking it touches
+     * callers in kbd/, tty/, ast/ and suma/.
+     */
+    flags = 10 | ((uint32_t)check_dup << 16);
 
     /* Queue the signal callback */
     DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q,

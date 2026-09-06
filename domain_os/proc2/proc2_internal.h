@@ -68,7 +68,9 @@ typedef struct proc2_ec_entry_t {
     ec_$eventcount_t cr_rec_ec;  /* 0x0C: Creation record EC */
 } proc2_ec_entry_t;
 
+#if defined(ARCH_M68K)
 _Static_assert(sizeof(proc2_ec_entry_t) == 0x18, "proc2_ec_entry_t must be 0x18 bytes");
+#endif
 
 #define PROC2_EC_ENTRIES 69
 extern proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];

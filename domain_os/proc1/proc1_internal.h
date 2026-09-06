@@ -49,8 +49,9 @@ void INIT_STACK(proc1_t *pcb, void **entry_ptr, void **sp_ptr);
  * C version below is only built for non-m68k targets.
  *
  * Original address: 0x00e20824
+ *
+ * (The prototype itself now lives in proc1/proc1.h so that ML can use it.)
  */
-void proc1_$add_ready_body(proc1_t *pcb);
 
 /*
  * proc1_$set_lock_body - Internal set lock implementation (assembly)

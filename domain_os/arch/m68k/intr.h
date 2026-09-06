@@ -42,7 +42,7 @@
         "ori.w #0x0700, %%sr" \
         : "=d" (sr) \
         : \
-        : "cc" \
+        : "cc", "memory" \
     )
 
 /*
@@ -55,7 +55,7 @@
         "move.w %0, %%sr" \
         : \
         : "d" (sr) \
-        : "cc" \
+        : "cc", "memory" \
     )
 
 /*
@@ -95,6 +95,6 @@
  * Note: This is a privileged operation (supervisor mode only).
  */
 #define SET_SR(sr_val) \
-    __asm__ volatile ("move.w %0, %%sr" : : "d" (sr_val) : "cc")
+    __asm__ volatile ("move.w %0, %%sr" : : "d" (sr_val) : "cc", "memory")
 
 #endif /* ARCH_M68K_INTR_H */

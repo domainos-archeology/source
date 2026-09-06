@@ -15,8 +15,12 @@
  * If the parent has profiling enabled, the child inherits
  * the same profiling configuration.
  */
-void PCHIST_$UNIX_PROFIL_FORK(int16_t *child_pid_ptr)
+void PCHIST_$UNIX_PROFIL_FORK(int16_t *child_pid_ptr, uint16_t *child_asid_p)
 {
+    /* The second argument is pushed by PROC2_$FORK but never read by the
+     * original (nothing references (0xC,A6) in 0x00E5CC32..0x00E5CD00). */
+    (void)child_asid_p;
+
     int16_t parent_pid;
     int16_t child_pid;
     int16_t byte_index, bit_index;

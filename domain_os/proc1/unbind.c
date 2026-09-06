@@ -24,9 +24,8 @@ void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret)
 {
     proc1_t *pcb;
     int8_t suspend_result;
-    uint32_t suspend_ec_val;
-    uint32_t wait_val;
-    ec_$eventcount_t *ec_list[3];
+    int32_t suspend_ec_val;
+    int32_t wait_val;
     uint16_t saved_sr;
     char *queue_elem;
 
@@ -66,22 +65,28 @@ void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret)
          * Need to wait for it to become suspended
          */
         if ((pcb->pri_max & PROC1_FLAG_SUSPENDED) == 0) {
-            /* Get current suspend event count value */
+            /* 0x00E14EAA: read PROC1_$SUSPEND_EC.value (0xE205F6) */
             suspend_ec_val = PROC1_$SUSPEND_EC.value;
 
-            /* Try to suspend */
+            /* 0x00E14EB6: try to suspend */
             suspend_result = PROC1_$SUSPEND(pid, status_ret);
 
-            /* Wait loop until process is suspended */
-            while (suspend_result >= 0) {
-                /* Wait for suspend event count to change */
-                wait_val = suspend_ec_val + 1;
-                ec_list[0] = &PROC1_$SUSPEND_EC;
-                ec_list[1] = NULL;
-                ec_list[2] = NULL;
-                EC_$WAIT(ec_list, (int32_t *)&wait_val);
+            /* 0x00E14EC6: D5 = D4 + 1, computed once outside the loop */
+            wait_val = suspend_ec_val + 1;
 
-                /* Check if now suspended */
+            /* 0x00E14EF0: tst.b D0b / bpl -- loop while the boolean is
+             * false (a Domain boolean is 0xFF when true) */
+            while (suspend_result >= 0) {
+                /*
+                 * 0x00E14ECA-0x00E14EE0: EC_$WAIT takes two 3-element
+                 * arrays by value; the caller pops all 24 bytes.
+                 *   ecs  = { &PROC1_$SUSPEND_EC, NULL, NULL }
+                 *   vals = { suspend_ec_val + 1, 0, 0 }
+                 */
+                EC_$WAIT((ec_$wait_ecs_t){ { &PROC1_$SUSPEND_EC, NULL, NULL } },
+                         (ec_$wait_vals_t){ { wait_val, 0, 0 } });
+
+                /* 0x00E14EEA: check if now suspended */
                 suspend_result = PROC1_$SUSPENDP(pid, status_ret);
             }
         }

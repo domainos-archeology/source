@@ -8,6 +8,7 @@
 #define DXM_INTERNAL_H
 
 #include "dxm/dxm.h"
+#include "proc2/proc2.h"
 #include "proc1/proc1.h"
 #include "misc/misc.h"
 #include "misc/crash_system.h"

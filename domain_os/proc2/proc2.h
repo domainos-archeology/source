@@ -64,6 +64,12 @@
   0x1000 /* Process is orphaned (no controlling parent) */
 #define PROC2_FLAG_ALT_ASID 0x0800 /* Has alternate ASID */
 #define PROC2_FLAG_VALID 0x0180    /* Process is valid */
+#define PROC2_FLAG_BOUND 0x0100    /* PROC1 process bound (PROC2_$FORK
+                                    * 0x00E72D6C `bset.b D4,(-0xba,A2)`
+                                    * with D4 == 0, i.e. bit 8 of the word;
+                                    * cleared at 0x00E732B4) */
+#define PROC2_FLAG_VFORK 0x0800    /* Same bit as PROC2_FLAG_ALT_ASID: set by
+                                    * PROC2_$FORK when *fork_flags == 0 */
 #define PROC2_FLAG_DEBUG 0x0008    /* Process is being debugged */
 #define PROC2_FLAG_SERVER 0x0002   /* Process is a server */
 #define PROC2_FLAG_INIT 0x8000     /* Initial flags value */
@@ -160,16 +166,38 @@ typedef struct proc2_info_t {
                   /*   Bit 8-7 (0x0180): Valid */
                   /*   Bit 15 (0x8000): Init flag */
 
-  uint8_t pad_2c[0x20]; /* 0x2C: Unknown */
+  /*
+   * Accounting information, written by PROC2_$SET_ACCT_INFO (0x00E41AC0).
+   * That routine indexes the entry through A0 = 0xEA551C + index*0xE4,
+   * i.e. entry_base + 0xE4, so its negative displacements map as:
+   *   0x00E41B18  move.b (-0x1,A2,D1w),(-0xb9,A3)  -> entry+0x2B+D1 (D1=1..n)
+   *   0x00E41B24  move.w D2w,(-0x90,A0)            -> entry+0x54
+   *   0x00E41B2C  move.l (A3)+,(-0x98,A0)          -> entry+0x4C
+   *   0x00E41B30  move.l (A3)+,(-0x94,A0)          -> entry+0x50
+   */
+  char acct_info[0x20];    /* 0x2C: Accounting info string (max 32 bytes) */
+  uid_t acct_uid;          /* 0x4C: Accounting UID */
+  uint16_t acct_info_len;  /* 0x54: Length of acct_info (clamped to 0x20) */
 
-  uid_t pgroup_uid;        /* 0x4C: Process group UID */
-  uint16_t pgroup_uid_idx; /* 0x54: Process group UID index */
-  uint8_t pad_56[0x06];    /* 0x56: Unknown */
+  /*
+   * 0x56: the 48-bit TIME_$CLOCK value captured when the entry was
+   * allocated.  PROC2_$FORK stores the high longword at 0x00E72DEC and
+   * the low word at 0x00E72DF2.
+   */
+  uint32_t creation_time_high; /* 0x56 */
+  uint16_t creation_time_low;  /* 0x5A */
   uint16_t session_id; /* 0x5C: Session ID (also returned by GET_TTY_DATA as 2nd
-                          param) */
+                          param; PROC2_$GET_TTY_DATA 0x00E41BF6 reads
+                          (-0x88,A0) = entry+0x5C) */
   uint16_t pad_5e;     /* 0x5E: Unknown */
 
-  uid_t tty_uid;     /* 0x60: TTY UID (8 bytes, returned by GET_TTY_DATA) */
+  /*
+   * 0x60: TTY UID.  Confirmed: PROC2_$GET_TTY_DATA (0x00E41BEC) copies the
+   * eight bytes at (-0x84,A0) = entry+0x60 to its first out-parameter, and
+   * PROC2_$SET_TTY (0x00E41C32) writes them back.  These are the eight
+   * bytes PROC2_$BUILD_INFO_INTERNAL copies to info+0xC6 (0x00E40AF0).
+   */
+  uid_t tty_uid;
   uint32_t cr_rec;   /* 0x68: Creation record pointer */
   uint32_t cr_rec_2; /* 0x6C: Creation record data */
 
@@ -192,13 +220,141 @@ typedef struct proc2_info_t {
   uint16_t level1_pid;    /* 0x9A: PROC1 process ID */
   uint16_t cleanup_flags; /* 0x9C: Cleanup handler flags (bit per handler) */
 
-  char name[32]; /* 0x9E: Process name (32 chars max) */
-  uint8_t
-      name_len; /* 0xBE: Process name length (0x21='!', 0x22='"' for no name) */
+  /*
+   * 0x9E: process name.  For a zombie the same storage carries the exit
+   * status and resource usage: PROC2_$BUILD_INFO_INTERNAL's zombie path
+   * copies five longwords from (-0x40,A4) = entry+0xA4 (0x00E40B8A) and
+   * separately reads entry+0xA4 / entry+0xA8 (0x00E40B7E/0x00E40B84).
+   */
+  union {
+    struct {
+      char name[32]; /* 0x9E: Process name (32 chars max) */
+      uint8_t name_len; /* 0xBE: name length (0x21='!', 0x22='"' = no name) */
+    };
+    struct {
+      uint8_t zombie_pad[6];    /* 0x9E */
+      /*
+       * 0xA4..0xB7: five big-endian longwords.  Kept as bytes on purpose:
+       * a uint32_t member here would give the union 2-byte alignment on
+       * m68k (where int alignment is 2), rounding the 33-byte name variant
+       * up to 34 and pushing every field from 0xBF on out by one.  Read
+       * them with PROC2_ZOMBIE_USAGE().
+       */
+      uint8_t zombie_usage[20];
+    };
+  };
 
-  uint8_t pad_bf[0x1D]; /* 0xBF: Unknown */
+  uint8_t pad_bf[0x0F]; /* 0xBF..0xCD: Unknown */
+
+  /*
+   * 0xCE: the 14-byte XPD ptrace option record.  PROC2_$FORK passes
+   * &parent[0xCE] to XPD_$INHERIT_PTRACE_OPTIONS (0x00E73046) and, when
+   * that returns true, copies 4+4+4+2 = 14 bytes from parent+0xCE to
+   * child+0xCE (0x00E73078-0x00E73086) -- exactly sizeof(xpd_$ptrace_opts_t).
+   *
+   * Declared as raw bytes rather than xpd_$ptrace_opts_t because xpd/xpd.h
+   * includes this header; callers cast (see proc2/fork.c, which asserts the
+   * size).
+   */
+  uint8_t ptrace_opts[14];
+
   uid_t stack_uid;      /* 0xDC: Stack area UID (from MST_$MAP_AREA_AT) */
 } proc2_info_t;
+
+/*
+ * Read one of the five big-endian longwords a zombie keeps at entry+0xA4
+ * (index 0..4).  Spelled out with shifts so it behaves identically on a
+ * little-endian host.
+ */
+#define PROC2_ZOMBIE_USAGE(entry, i)                                           \
+  (((uint32_t)(entry)->zombie_usage[(i) * 4 + 0] << 24) |                      \
+   ((uint32_t)(entry)->zombie_usage[(i) * 4 + 1] << 16) |                      \
+   ((uint32_t)(entry)->zombie_usage[(i) * 4 + 2] << 8) |                       \
+   ((uint32_t)(entry)->zombie_usage[(i) * 4 + 3]))
+
+/*
+ * Layout recovered from the disassembly.  Every PROC2 routine addresses an
+ * entry through A_n = 0xEA551C + index * 0xE4 == entry_base + 0xE4, so the
+ * cited (-d,An) displacements are entry offset 0xE4 - d.
+ */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(proc2_info_t, uid) == 0x00,
+               "proc2_info_t.uid must be at 0x00");         /* 0xE72E88 */
+_Static_assert(__builtin_offsetof(proc2_info_t, parent_uid) == 0x08,
+               "proc2_info_t.parent_uid must be at 0x08");  /* 0xE72F82 */
+_Static_assert(__builtin_offsetof(proc2_info_t, pgroup_table_idx) == 0x10,
+               "proc2_info_t.pgroup_table_idx must be at 0x10"); /* 0xE421EC */
+_Static_assert(__builtin_offsetof(proc2_info_t, next_index) == 0x12,
+               "proc2_info_t.next_index must be at 0x12");  /* 0xE72C52 */
+_Static_assert(__builtin_offsetof(proc2_info_t, pad_14) == 0x14,
+               "proc2_info_t.pad_14 must be at 0x14");      /* 0xE72C74 */
+_Static_assert(__builtin_offsetof(proc2_info_t, upid) == 0x16,
+               "proc2_info_t.upid must be at 0x16");        /* 0xE40BB2 */
+_Static_assert(__builtin_offsetof(proc2_info_t, pad_18) == 0x18,
+               "proc2_info_t.pad_18 must be at 0x18");      /* 0xE72DD2 */
+_Static_assert(__builtin_offsetof(proc2_info_t, owner_session) == 0x1C,
+               "proc2_info_t.owner_session must be at 0x1C"); /* 0xE72E2C */
+_Static_assert(__builtin_offsetof(proc2_info_t, parent_pgroup_idx) == 0x1E,
+               "proc2_info_t.parent_pgroup_idx must be at 0x1E"); /* 0xE72C7C */
+_Static_assert(__builtin_offsetof(proc2_info_t, first_child_idx) == 0x20,
+               "proc2_info_t.first_child_idx must be at 0x20"); /* 0xE72DE4 */
+_Static_assert(__builtin_offsetof(proc2_info_t, next_child_sibling) == 0x22,
+               "proc2_info_t.next_child_sibling must be at 0x22"); /* 0xE72DDE */
+_Static_assert(__builtin_offsetof(proc2_info_t, first_debug_target_idx) == 0x24,
+               "proc2_info_t.first_debug_target_idx must be at 0x24");
+_Static_assert(__builtin_offsetof(proc2_info_t, debugger_idx) == 0x26,
+               "proc2_info_t.debugger_idx must be at 0x26"); /* 0xE73040 */
+_Static_assert(__builtin_offsetof(proc2_info_t, next_debug_target_idx) == 0x28,
+               "proc2_info_t.next_debug_target_idx must be at 0x28");
+_Static_assert(__builtin_offsetof(proc2_info_t, flags) == 0x2A,
+               "proc2_info_t.flags must be at 0x2A");        /* 0xE72C8A */
+_Static_assert(__builtin_offsetof(proc2_info_t, acct_info) == 0x2C,
+               "proc2_info_t.acct_info must be at 0x2C");    /* 0xE41B18 */
+_Static_assert(__builtin_offsetof(proc2_info_t, acct_uid) == 0x4C,
+               "proc2_info_t.acct_uid must be at 0x4C");     /* 0xE41B2C */
+_Static_assert(__builtin_offsetof(proc2_info_t, acct_info_len) == 0x54,
+               "proc2_info_t.acct_info_len must be at 0x54"); /* 0xE41B24 */
+_Static_assert(__builtin_offsetof(proc2_info_t, creation_time_high) == 0x56,
+               "proc2_info_t.creation_time_high must be at 0x56"); /* 0xE72DEC */
+_Static_assert(__builtin_offsetof(proc2_info_t, creation_time_low) == 0x5A,
+               "proc2_info_t.creation_time_low must be at 0x5A"); /* 0xE72DF2 */
+_Static_assert(__builtin_offsetof(proc2_info_t, session_id) == 0x5C,
+               "proc2_info_t.session_id must be at 0x5C");   /* 0xE41BF6 */
+_Static_assert(__builtin_offsetof(proc2_info_t, tty_uid) == 0x60,
+               "proc2_info_t.tty_uid must be at 0x60");      /* 0xE41BEC */
+_Static_assert(__builtin_offsetof(proc2_info_t, cr_rec) == 0x68,
+               "proc2_info_t.cr_rec must be at 0x68");       /* 0xE72CAA */
+_Static_assert(__builtin_offsetof(proc2_info_t, cr_rec_2) == 0x6C,
+               "proc2_info_t.cr_rec_2 must be at 0x6C");     /* 0xE72CA2 */
+_Static_assert(__builtin_offsetof(proc2_info_t, sig_pending) == 0x70,
+               "proc2_info_t.sig_pending must be at 0x70");  /* 0xE72D80 */
+_Static_assert(__builtin_offsetof(proc2_info_t, sig_mask_2) == 0x80,
+               "proc2_info_t.sig_mask_2 must be at 0x80");
+_Static_assert(__builtin_offsetof(proc2_info_t, sig_mask_1) == 0x84,
+               "proc2_info_t.sig_mask_1 must be at 0x84");   /* 0xE72D98 */
+_Static_assert(__builtin_offsetof(proc2_info_t, sig_mask_4) == 0x8C,
+               "proc2_info_t.sig_mask_4 must be at 0x8C");   /* 0xE72D9E */
+_Static_assert(__builtin_offsetof(proc2_info_t, asid) == 0x96,
+               "proc2_info_t.asid must be at 0x96");         /* 0xE72CBA */
+_Static_assert(__builtin_offsetof(proc2_info_t, asid_alt) == 0x98,
+               "proc2_info_t.asid_alt must be at 0x98");     /* 0xE72CDA */
+_Static_assert(__builtin_offsetof(proc2_info_t, level1_pid) == 0x9A,
+               "proc2_info_t.level1_pid must be at 0x9A");   /* 0xE72D60 */
+_Static_assert(__builtin_offsetof(proc2_info_t, cleanup_flags) == 0x9C,
+               "proc2_info_t.cleanup_flags must be at 0x9C"); /* 0xE72FEE */
+_Static_assert(__builtin_offsetof(proc2_info_t, name) == 0x9E,
+               "proc2_info_t.name must be at 0x9E");         /* 0xE40B24 */
+_Static_assert(__builtin_offsetof(proc2_info_t, name_len) == 0xBE,
+               "proc2_info_t.name_len must be at 0xBE");     /* 0xE40AFC */
+_Static_assert(__builtin_offsetof(proc2_info_t, zombie_usage) == 0xA4,
+               "proc2_info_t.zombie_usage must be at 0xA4"); /* 0xE40B8A */
+_Static_assert(__builtin_offsetof(proc2_info_t, ptrace_opts) == 0xCE,
+               "proc2_info_t.ptrace_opts must be at 0xCE");  /* 0xE73046 */
+_Static_assert(__builtin_offsetof(proc2_info_t, stack_uid) == 0xDC,
+               "proc2_info_t.stack_uid must be at 0xDC");    /* 0xE72CE4 */
+_Static_assert(sizeof(proc2_info_t) == 0xE4,
+               "proc2_info_t must be 0xE4 bytes (the table stride)");
+#endif
 
 /*
  * Process group table entry structure (8 bytes)

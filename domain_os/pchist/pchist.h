@@ -201,10 +201,14 @@ void PCHIST_$UNIX_PROFIL_CNTL(
  *
  * Parameters:
  *   child_pid_ptr - Pointer to child process ID
+ *   child_asid_p  - Pointer to the child ASID.  PROC2_$FORK pushes this
+ *                   second argument (0x00E72FF8) and pops 8 bytes, but
+ *                   the callee never reads (0xC,A6); it is accepted and
+ *                   ignored so the call site matches the binary.
  *
  * Original address: 0x00e5cc32
  */
-void PCHIST_$UNIX_PROFIL_FORK(int16_t *child_pid_ptr);
+void PCHIST_$UNIX_PROFIL_FORK(int16_t *child_pid_ptr, uint16_t *child_asid_p);
 
 /*
  * PCHIST_$UNIX_PROFIL_ADDUPC - Update profiling buffer

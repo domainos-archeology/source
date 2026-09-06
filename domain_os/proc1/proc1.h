@@ -346,8 +346,24 @@ void proc1_$insert_into_ready_list(proc1_t *pcb);
 /*
  * proc1_$reorder_if_needed - Reorder if priority changed
  * Original address: 0x00e207d8
+ *
+ * Register convention on m68k: reached with `bsr.w` and A1 = pcb.
  */
 void proc1_$reorder_if_needed(proc1_t *pcb);
+
+/*
+ * proc1_$add_ready_body - FIFO priority-ordered ready list insertion
+ *
+ * The body of PROC1_$ADD_READY.  PROC1_$ADD_READY (0x00e20820) is a
+ * four-byte wrapper (`movea.l (0x4,SP),A1`) that falls through into this
+ * code, so on m68k the body takes its PCB in A1 and is reached with
+ * `bsr.w` (e.g. from the ML_$UNLOCK / ML_$EXCLUSION_STOP epilogue at
+ * 0x00E20ECC).  Declared here so the ML subsystem can express that call
+ * without reaching into proc1_internal.h.
+ *
+ * Original address: 0x00e20824
+ */
+void proc1_$add_ready_body(proc1_t *pcb);
 
 /*
  * ============================================================================

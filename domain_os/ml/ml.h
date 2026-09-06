@@ -64,16 +64,50 @@ typedef uint16_t ml_$spin_token_t;
 #define ML_LOCK_MST_MMU 0x14  /* MST MMU lock */
 
 /*
+ * Resource-lock event entry
+ *
+ * ML_$LOCK indexes this table with `lsl.w #4,D0` (ML_$UNLOCK 0x00E20B74),
+ * so the stride is 16 bytes.  The event count itself sits at +0x00
+ * (0x00E20B76 reads (0x20,A0,D0w) with A0 = 0xE20BC4) and the wait counter
+ * at +0x0C (0x00E20B7A compares against (0x2C,A0,D0w)).
+ *
+ * The static initialiser in the image confirms the shape, e.g. the first
+ * entry at 0xE20BE4:
+ *     00000000 00E20BE4 00E20BE4 00000000
+ *     value    head     tail     wait_count
+ *
+ * Size: 16 bytes (0x10)
+ */
+typedef struct ml_$lock_event_t {
+    ec_$eventcount_t ec;          /* 0x00: event count (value, head, tail) */
+    int32_t          wait_count;  /* 0x0C: number of waits issued so far */
+} ml_$lock_event_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(ml_$lock_event_t, ec) == 0x00,
+               "ml_$lock_event_t.ec must be at 0x00");
+_Static_assert(__builtin_offsetof(ml_$lock_event_t, wait_count) == 0x0C,
+               "ml_$lock_event_t.wait_count must be at 0x0C");
+_Static_assert(sizeof(ml_$lock_event_t) == 0x10,
+               "ml_$lock_event_t must be 0x10 bytes");
+#endif
+
+/* Number of resource locks (lock ids are masked with 0x1F by ML_$LOCK /
+ * ML_$UNLOCK: `bclr.l D0,D1` on the 32-bit resource_locks_held word). */
+#define ML_NUM_LOCKS 32
+
+/*
  * Global variables (m68k-specific addresses)
  */
 #if defined(ARCH_M68K)
-/* Lock byte array: bit 0 indicates lock is held */
+/* Lock byte array: bit 0 indicates lock is held (0xE20BC4, from
+ * `lea (0x60,PC),A0` at ML_$UNLOCK 0x00E20B62). */
 #define ML_$LOCK_BYTES ((volatile uint8_t *)0xE20BC4)
-/* Lock event lists: each entry is 16 bytes (ec + wait count) */
-#define ML_$LOCK_EVENTS ((ec_$eventcount_t *)0xE20BE4)
+/* Lock event table: 32 entries of 16 bytes (0xE20BE4 = 0xE20BC4 + 0x20). */
+#define ML_$LOCK_EVENTS ((ml_$lock_event_t *)0xE20BE4)
 #else
 extern volatile uint8_t ML_$LOCK_BYTES[];
-extern ec_$eventcount_t ML_$LOCK_EVENTS[];
+extern ml_$lock_event_t ML_$LOCK_EVENTS[];
 #endif
 
 /*

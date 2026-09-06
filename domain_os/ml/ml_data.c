@@ -42,7 +42,7 @@
  *
  * Original address: 0xE20BC4
  */
-volatile uint8_t ML_$LOCK_BYTES[32] = { 0 };
+volatile uint8_t ML_$LOCK_BYTES[ML_NUM_LOCKS] = { 0 };
 
 /*
  * Lock event structures
@@ -52,6 +52,6 @@ volatile uint8_t ML_$LOCK_BYTES[32] = { 0 };
  *
  * Original address: 0xE20BE4
  */
-ec_$eventcount_t ML_$LOCK_EVENTS[32] = { { 0 } };
+ml_$lock_event_t ML_$LOCK_EVENTS[ML_NUM_LOCKS] = { { { { 0 } }, 0 } };
 
 #endif /* !M68K */

@@ -189,7 +189,7 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     /* Clear padding/reserved */
     init_entry->pad_18[0] = 0;
     init_entry->pad_18[1] = 0;
-    init_entry->pgroup_uid_idx = 0;
+    init_entry->acct_info_len = 0;
 
     /* Set name_len to 0x21 (indicates no name) */
     init_entry->name_len = 0x21;
@@ -200,11 +200,11 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     /* Set TTY UID to nil */
     init_entry->tty_uid = UID_$NIL;
 
-    /* Set pgroup UID to nil */
-    init_entry->pgroup_uid = UID_$NIL;
+    /* Set accounting UID to nil (entry+0x4C) */
+    init_entry->acct_uid = UID_$NIL;
 
-    /* Clear pgroup_uid_idx */
-    init_entry->pgroup_uid_idx = 0;
+    /* Clear the accounting-info length (entry+0x54) */
+    init_entry->acct_info_len = 0;
 
     /*
      * Step 8: Initialize eventcounts for init process
