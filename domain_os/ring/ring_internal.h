@@ -17,6 +17,8 @@
 #include "sock/sock.h"
 #include "pkt/pkt.h"
 #include "fim/fim.h"
+#include "net_io/net_io.h"
+#include "parity/parity.h"
 
 /*
  * ============================================================================
@@ -300,13 +302,9 @@ uint8_t HDR_CHKSUM(void *hdr, void *data);
  * ============================================================================
  */
 
-/* Network I/O */
-extern int16_t NET_IO_$CREATE_PORT(int16_t param1, uint16_t unit,
-                                   void *param3, int16_t param4,
-                                   status_$t *status_ret);
+/* NET_IO_$CREATE_PORT is declared in net_io/net_io.h (included above) */
 
-/* Parity checking */
-extern uint32_t PARITY_$CHK_IO(uint32_t addr1, uint32_t addr2);
+/* PARITY_$CHK_IO is declared in parity/parity.h (included above) */
 
 /* NETBUF_$GET_HDR is declared in netbuf/netbuf.h (included above) */
 

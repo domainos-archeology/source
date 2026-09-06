@@ -144,4 +144,23 @@ extern void OS_$GET_EC(void *param_1, ec_$eventcount_t **ec_ret,
  */
 extern void OS_DISK_PROC(int16_t proc_id);
 
+/*
+ * OS_TERM_INIT - Initialize a console terminal structure (0x00E32A60)
+ *
+ * Called by TERM_$INIT (term/init.c) and SIO_$INIT (sio/init.c).
+ * Signature follows the definition in os/term_init.c: six pointers to
+ * 32-bit cells.
+ *
+ * Parameters:
+ *   term_state    - Terminal state structure to initialize
+ *   parent_desc   - Parent descriptor (DTTE; receives back-pointer at +0x2C)
+ *   src_field_14  - Pointer to the value stored at term_state+0x14 (line data)
+ *   src_field_00  - Pointer to the value stored at term_state+0x00 (rcv handler)
+ *   src_field_10  - Pointer to the value stored at term_state+0x10 (SIO desc)
+ *   src_fields    - Vtable; entries +4..+0xC copied to term_state+0x04..0x0C
+ */
+extern void OS_TERM_INIT(uint32_t *term_state, uint32_t *parent_desc,
+                         uint32_t *src_field_14, uint32_t *src_field_00,
+                         uint32_t *src_field_10, uint32_t *src_fields);
+
 #endif /* OS_H */

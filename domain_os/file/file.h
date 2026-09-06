@@ -1289,4 +1289,16 @@ void MAP_CASE(char *name, int16_t *name_len, char *output,
 void UNMAP_CASE(char *name, int16_t *name_len, char *output,
                 int16_t *max_out_len, int16_t *out_len, uint8_t *truncated);
 
+/*
+ * FILE_$PRIV_UNLOCK_ALL - Unlock all locks held by a process
+ *
+ * Parameters:
+ *   asid_ptr - pointer to the ASID whose locks are released; OS_$SHUTDOWN
+ *              passes the address of a constant word 0 (0xE6D628), meaning
+ *              all processes.
+ *
+ * Original address: 0x00E60BD0 (file/priv_unlock_all.c)
+ */
+void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr);
+
 #endif /* FILE_H */

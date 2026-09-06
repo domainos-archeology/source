@@ -82,6 +82,8 @@ void MAC_$CLOSE(uint16_t *channel, status_$t *status_ret)
 #endif
 
     /* Call MAC_OS_$CLOSE to release OS-level resources */
-    MAC_OS_$CLOSE(channel, &status);
+    /* MAC_OS_$CLOSE takes int16_t *; MAC_$CLOSE receives the channel as
+     * uint16_t *.  Same 16-bit word is passed by address in the original. */
+    MAC_OS_$CLOSE((int16_t *)channel, &status);
     *status_ret = status;
 }

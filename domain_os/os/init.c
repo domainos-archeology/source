@@ -10,6 +10,7 @@
 /* Constant words in the OS_$INIT code region passed by reference */
 static uint16_t os_$init_zero_word = 0;        /* 0xE347CA */
 static int16_t os_$init_root_path_len = 1;     /* 0xE337D2 */
+static uint16_t os_$init_two_word = 2;         /* 0xE348E4 */
 
 // Boot device: OS_$BOOT_DEVICE is defined in os_data.c (0xE82728)
 
@@ -167,7 +168,9 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
 
     // Initialize I/O subsystem
     flags_buf[0] = (boot_flags & 0x8000) ? 0xFF : 0;
-    IO_$INIT(&No_err, flags_buf, &status);
+    /* flags_buf is a byte cell (-0x1f8,A6) passed by address; IO_$INIT
+     * tests it as a signed byte. */
+    IO_$INIT(&No_err, (char *)flags_buf, &status);
     if (status != status_$ok) {
         CRASH_SYSTEM(&status);
     }
@@ -219,7 +222,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     // Initialize additional subsystems
     SMD_$INIT();
     TPAD_$INIT();
-    DTTY_$INIT(&term_param1, &term_param2);
+    DTTY_$INIT(&term_param1, (uint16_t *)&term_param2);  /* same cells as TERM_$INIT above */
     EC2_$INIT_S();
 
     // Print build time banner
@@ -250,7 +253,10 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
         short vol_unit = (short)(boot_info >> 16);
         if (vol_unit == 0) vol_unit = 1;
 
-        VOLX_$MOUNT(&boot_device, NULL, &boot_info, &vol_unit, NULL, NULL,
+        /* TODO: original passes PC-relative constant cells for bus,
+         * salvage_ok and write_prot (pea (0xa30,PC) / pea (0xc4e,PC)),
+         * not NULL; ctlr is the boot_info word cell at (-0x26,A6). */
+        VOLX_$MOUNT(&boot_device, NULL, (int16_t *)&boot_info, &vol_unit, NULL, NULL,
                     &UID_$NIL, (uid_t *)local_buf, &status);
 
         if (status == status_$disk_needs_salvaging) {
@@ -262,7 +268,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
             if (prompt_for_yes_or_no() >= 0) {
                 CRASH_SYSTEM(&OS_BAT_disk_needs_salvaging_err);
             }
-            VOLX_$MOUNT(&boot_device, NULL, &boot_info, &vol_unit, NULL, NULL,
+            VOLX_$MOUNT(&boot_device, NULL, (int16_t *)&boot_info, &vol_unit, NULL, NULL,
                         &UID_$NIL, (uid_t *)local_buf, &status);
         }
 
@@ -334,6 +340,9 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     // Install display ASTE if needed
     {
         short result;
+        /* TODO: original pushes pea (-0x964,PC) = &word 1 at 0xE337D2 and
+         * pea (0x96e,PC) = 0xE34AA0 (a constant cell), not the raw values
+         * 0xd2 / 0x4aa0 shown by the decompiler. */
         if (io_$probe((void *)0xd2, (void *)0x4aa0, &result) < 0) {
             OS_$INSTALL_DISPLAY_ASTE((void *)&DISPLAY1_$UID, NULL, NULL, NULL);
         }
@@ -345,17 +354,17 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     }
 
     // Create system processes
-    PROC1_$CREATE_P(PMAP_$PURIFIER_L, 0xc000005, &status);
+    PROC1_$CREATE_P((void *)PMAP_$PURIFIER_L, 0xc000005, &status);
     if (status != status_$ok) {
         CRASH_SYSTEM(&status);
     }
 
-    PROC1_$CREATE_P(PMAP_$PURIFIER_R, 0xc000005, &status);
+    PROC1_$CREATE_P((void *)PMAP_$PURIFIER_R, 0xc000005, &status);
     if (status != status_$ok) {
         CRASH_SYSTEM(&status);
     }
 
-    PROC1_$CREATE_P(DXM_$HELPER_UNWIRED, 0xc000006, &status);
+    PROC1_$CREATE_P((void *)DXM_$HELPER_UNWIRED, 0xc000006, &status);
     if (status != status_$ok) {
         CRASH_SYSTEM(&status);
     }
@@ -392,10 +401,10 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     FILE_$LOCK_INIT();
 
     // Install bus error handler
-    _PROM_TRAP_BUS_ERROR = &FIM_$BUS_ERR;
+    _PROM_TRAP_BUS_ERROR = (void *)FIM_$BUS_ERR;   /* move.l #0xe218e8,(0x8).l */
 
     // Create wired DXM helper
-    PROC1_$CREATE_P(DXM_$HELPER_WIRED, 0x8000004, &status);
+    PROC1_$CREATE_P((void *)DXM_$HELPER_WIRED, 0x8000004, &status);
     if (status != status_$ok) {
         CRASH_SYSTEM(&status);
     }
@@ -459,7 +468,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
             HINT_$INIT();
             if (ROUTE_$PORT == 0) {
                 ROUTE_$PORT = route_port;
-                HINT_$ADD_NET((short)route_port);
+                HINT_$ADD_NET(route_port);   /* move.l D2,-(SP): full longword */
             }
         } else {
             HINT_$INIT();
@@ -489,9 +498,12 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
 
     // Check display type for diskless init
     {
-        short disp_type = SMD_$INQ_DISP_TYPE(0x37d2);
+        /* Unit numbers are passed by address: pea (-0xf90,PC) = the constant
+         * word 1 at 0xE337D2 (same cell as os_$init_root_path_len), then
+         * pea (0x172,PC) = the constant word 2 at 0xE348E4. */
+        short disp_type = SMD_$INQ_DISP_TYPE((uint16_t *)&os_$init_root_path_len);
         if (disp_type == 0) {
-            disp_type = SMD_$INQ_DISP_TYPE(0x48e4);
+            disp_type = SMD_$INQ_DISP_TYPE(&os_$init_two_word);
         }
         MST_$DISKLESS_INIT(-(disp_type == 3), NETWORK_$MOTHER_NODE, NODE_$ME);
     }

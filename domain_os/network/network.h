@@ -439,4 +439,29 @@ uint16_t NETWORK_$GET_PKT_SIZE(uint32_t *dest_addr, uint16_t max_size);
  */
 void network_$fetch_diskless_info(int16_t cmd, uint32_t node);
 
+/*
+ * NETWORK_$INIT - Initialize the network subsystem
+ *
+ * Original address: 0x00E2F684
+ * TODO: no C implementation yet (declared for OS_$INIT).
+ */
+void NETWORK_$INIT(void);
+
+/*
+ * NETWORK_$LOAD - Late network initialization (after PROC2_$INIT)
+ *
+ * Original address: 0x00E2F7F2
+ * TODO: no C implementation yet (declared for OS_$INIT).
+ */
+void NETWORK_$LOAD(void);
+
+/*
+ * NETWORK_$DISMISS_REQUEST_SERVERS - Dismiss the network request server
+ * processes during OS_$SHUTDOWN.
+ *
+ * Original address: 0x00E71E78
+ * TODO: no C implementation yet (declared for OS_$SHUTDOWN).
+ */
+void NETWORK_$DISMISS_REQUEST_SERVERS(void);
+
 #endif /* NETWORK_H */

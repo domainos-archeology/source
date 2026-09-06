@@ -38,6 +38,7 @@ extern uid_t PV_LABEL_$UID;             /* 0xE1738C: Physical volume label UID *
 extern uid_t LV_LABEL_$UID;             /* 0xE17394: Logical volume label UID */
 extern uid_t DISKLESS_$UID;             /* 0xE173F4: Diskless node UID pattern */
 extern uid_t OS_WIRED_$UID;             /* OS wired/pinned memory UID */
+extern uid_t DISPLAY1_$UID;             /* 0xE173D4: Display 1 object UID (OS_$INSTALL_DISPLAY_ASTE) */
 extern uid_t UNSTRUCT_$UID;             /* 0xE173C4: Unstructured file type UID */
 
 /*

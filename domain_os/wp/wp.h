@@ -50,4 +50,18 @@ void WP_$CALLOC_LIST(int16_t count, uint32_t *ppn_arr);
  */
 void WP_$UNWIRE(uint32_t wired_addr);
 
+/*
+ * WP_$WIRE - Wire a physical page
+ *
+ * Takes the WP lock (ML_$LOCK 0x14), calls MMAP_$WIRE(ppn), releases
+ * the lock.  Single 32-bit argument at 8(A6).
+ *
+ * Parameters:
+ *   ppn - Physical page number to wire
+ *
+ * Original address: 0x00E071B0
+ * TODO: no C implementation yet (called from FLP_$DINIT).
+ */
+void WP_$WIRE(uint32_t ppn);
+
 #endif /* WP_H */

@@ -119,7 +119,9 @@ void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params, status_$t *status_
      * - num_packet_types at local_8
      * - Copies packet type min/max pairs to stack
      */
-    MAC_OS_$OPEN(port_num, params, &os_status);
+    /* The user-level mac_$open_params_t is passed straight through to
+     * MAC_OS_$OPEN (declared with mac_os_$open_params_t *). */
+    MAC_OS_$OPEN(port_num, (mac_os_$open_params_t *)params, &os_status);
     *status_ret = os_status;
 
     if (os_status != status_$ok) {

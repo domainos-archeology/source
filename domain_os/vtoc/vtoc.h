@@ -308,7 +308,7 @@ void VTOCE_$TRUNCATE(void *vtoce_loc, uint32_t flags, int32_t new_length,
                      int32_t param_4, uint32_t *blocks_freed,
                      status_$t *status);
 
-/* Nil owner/org UIDs (defined in vtoc/vtoc_data.c) */
+/* Nil owner/org UIDs (defined in vtoc/vtoc_data.c; also used by file/) */
 extern uid_t PPO_$NIL_USER_UID;     /* 0xE174EC: Nil user UID */
 extern uid_t PPO_$NIL_ORG_UID;      /* 0xE17574: Nil org UID */
 

@@ -29,12 +29,7 @@
 #include "mmap/mmap.h"
 #include "misc/crash_system.h"
 #include "netlog/netlog.h"
-
-/* Forward declare DISK functions to avoid circular include */
-void DISK_$READ(int16_t vol_idx, void *buffer, void *daddr, void *count,
-                status_$t *status);
-void DISK_$WRITE(int16_t vol_idx, void *buffer, void *daddr, void *count,
-                 status_$t *status);
+#include "disk/disk.h"      /* DISK_$READ, DISK_$WRITE */
 
 /*
  * Buffer pool limits
@@ -136,15 +131,11 @@ extern ec_$eventcount_t dbuf_$eventcount; /* 0xE78B58 */
 /* First buffer entry */
 extern dbuf_$entry_t DBUF;          /* 0xE78B68 (base + 0x10) */
 
-/* Number of real memory pages (from MMAP) */
-extern uint32_t MMAP_$REAL_PAGES;   /* 0xE23CA0 */
+/* MMAP_$REAL_PAGES (0xE23CA0) comes from mmap/mmap.h */
 
 /* NIL UID constant (declared in base/base.h) */
 
-/*
- * Status codes
- */
-#define status_$storage_module_stopped  0x8001B
+/* status_$storage_module_stopped (0x0008001b) comes from disk/disk.h */
 
 /*
  * Helper macros

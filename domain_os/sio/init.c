@@ -104,13 +104,15 @@ void SIO_$INIT(int16_t port_num, void *context_ptr, void *vtable_ptr,
 
         dtte = &TERM_$DATA.dtte[TERM_$MAX_DTTE];
 
+        /* OS_TERM_INIT (os/os.h) takes six uint32_t* cell pointers; the byte
+         * offsets into TERM_$DATA are cast to match. */
         OS_TERM_INIT(
-            base + console_offset + SIO_CONSOLE_TERM_OFFSET,    /* console term data */
-            (void *)dtte,                                       /* DTTE entry */
+            (uint32_t *)(base + console_offset + SIO_CONSOLE_TERM_OFFSET), /* console term data */
+            (uint32_t *)dtte,                                   /* DTTE entry */
             &local_c,                                           /* &(line data addr) */
             (m68k_ptr_t *)(base + SIO_CONSOLE_I_RCV_OFFSET),   /* &PTR_TTY_$I_RCV */
             &local_8,                                           /* &(SIO desc addr) */
-            base + SIO_CONSOLE_VTABLE_OFFSET                    /* console vtable */
+            (uint32_t *)(base + SIO_CONSOLE_VTABLE_OFFSET)      /* console vtable */
         );
 
         /*

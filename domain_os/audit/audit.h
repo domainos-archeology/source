@@ -239,6 +239,47 @@ void AUDIT_$SERVER(void);
 
 /*
  * ============================================================================
+ * Naming/Directory Operation Loggers
+ * ============================================================================
+ * These live in the audit subsystem (audit/log_*_op.c) and are called from
+ * dir/ (DIR_$DO_OP, set_default_acl_internal.c).
+ */
+
+/* AUDIT_$LOG_CNAME_OP - Audit CNAMEU operation
+ * Original address: 0x00E4BEC2
+ */
+void AUDIT_$LOG_CNAME_OP(uint16_t audit_type, status_$t status, uid_t *uid,
+                         uint16_t name_len, uint16_t new_name_len,
+                         void *name, void *new_name);
+
+/* AUDIT_$LOG_LINK_OP - Audit link operation
+ * target_data is a pointer (the routine copies from it with OS_$DATA_COPY).
+ * Original address: 0x00E4BD48
+ */
+void AUDIT_$LOG_LINK_OP(uint16_t audit_type, status_$t status, uid_t *uid,
+                        uint16_t name_len, void *name, uint16_t target_len,
+                        void *target_data);
+
+/* AUDIT_$LOG_DIR_OP - Audit add/drop entry operation
+ * Original address: 0x00E4BE16
+ */
+void AUDIT_$LOG_DIR_OP(uint16_t audit_type, status_$t status, uid_t *dir_uid,
+                       uid_t *file_uid, uint16_t name_len, void *name);
+
+/* audit_$log_mount_op - Audit mount/drop mount operation
+ * Original address: 0x00E4BCE0
+ */
+void audit_$log_mount_op(uint16_t audit_type, status_$t status, uid_t *uid,
+                         uid_t *mount_uid, uint32_t extra);
+
+/* audit_$log_prot_op - Audit protection operation
+ * Original address: 0x00E4AF28
+ */
+void audit_$log_prot_op(status_$t status, uid_t *uid, void *prot_data,
+                        uid_t *acl_uid, uid_t *subject_uid, uint16_t prot_flags);
+
+/*
+ * ============================================================================
  * Global Data - Event UIDs
  * ============================================================================
  */

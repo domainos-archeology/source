@@ -13,6 +13,14 @@
 #include "proc1/proc1.h"
 #include "proc2/proc2.h"
 #include "kbd/kbd.h"
+#include "dtty/dtty.h"          /* DTTY_$CTRL, DTTY_$RELOAD_FONT, DTTY_$INIT */
+#include "sio/sio.h"            /* SIO_$K_*, SIO_$INIT_* */
+#include "sio2681/sio2681.h"    /* SIO2681_$INIT */
+#include "sio6509/sio6509.h"    /* SIO6509_$INIT */
+#include "tpad/tpad.h"          /* TPAD_$DATA */
+#include "suma/suma.h"          /* SUMA_$INIT, SUMA_$RCV */
+#include "math/math.h"          /* M$OIS$WLW */
+#include "os/os.h"              /* OS_TERM_INIT */
 
 /*
  * ============================================================================
@@ -20,11 +28,7 @@
  * ============================================================================
  */
 
-/*
- * DTTY_$CTRL - Default TTY control line
- * Original address: 0xe2e00e
- */
-extern short DTTY_$CTRL;
+/* DTTY_$CTRL (0xe2e00e) is declared in dtty/dtty.h */
 
 /*
  * TERM_$DATA - Main terminal data structure
@@ -77,27 +81,12 @@ extern char DAT_00e33220[];
 extern char DAT_00e3321e[];
 
 /*
- * ============================================================================
- * External Module Functions
- * ============================================================================
+ * External module functions used by term/ come from the owning subsystems'
+ * public headers (included above):
+ *   SIO_$K_SET_PARAM / SIO_$K_TIMED_BREAK / SIO_$K_INQ_PARAM - sio/sio.h
+ *   TPAD_$DATA                                               - tpad/tpad.h
+ *   M$OIS$WLW (16-bit modulus helper)                        - math/math.h
  */
-
-/*
- * SIO module - Serial I/O
- */
-void SIO_$K_SET_PARAM(short *line_ptr, void *params, void *mask, status_$t *status);
-void SIO_$K_TIMED_BREAK(short *line_ptr, uint16_t *duration, status_$t *status);
-void SIO_$K_INQ_PARAM(short *line_ptr, void *params, void *mask, status_$t *status);
-
-/*
- * TPAD module - Touchpad/tablet input
- */
-void TPAD_$DATA(void);
-
-/*
- * Math helper
- */
-short M_$OIS_WLW(long value, short modulus);
 
 /*
  * ============================================================================
@@ -113,12 +102,6 @@ extern status_$t TERM_$STATUS_TRANSLATION_TABLE_35[];  // at 0xe2c988
 extern status_$t TERM_$STATUS_TRANSLATION_TABLE_36[];  // at 0xe2c9b0
 
 /*
- * SUMA (Screen Update Manager) handler
- * SUMA_$RCV is a function declared in suma/suma.h
- */
-#include "suma/suma.h"
-
-/*
  * TERM_$KBD_STRING_LEN - Length of keyboard string data
  * Original address: 0xe1ac9c
  *
@@ -127,31 +110,34 @@ extern status_$t TERM_$STATUS_TRANSLATION_TABLE_36[];  // at 0xe2c9b0
  */
 extern uint16_t TERM_$KBD_STRING_LEN;
 
-/*
- * Font reload function
- */
-extern void DTTY_$RELOAD_FONT(void);
+/* DTTY_$RELOAD_FONT is declared in dtty/dtty.h */
 
 /*
- * Handler function pointer tables (for TERM_$INIT)
+ * Handler function pointer cells inside the TERM_$DATA region (for TERM_$INIT).
+ * These are term-owned data (defined in term/term_data.c); the names carry the
+ * TTY_/KBD_ prefix only because Ghidra labels them by the routine they point
+ * to.  PTR_KBD_$RCV_00e2ca78 is the start of the console handler array at
+ * TERM_$DATA + 0x88.
  */
 extern void *PTR_TTY_$I_RCV_00e2cab0;
 extern void *PTR_KBD_$RCV_00e2ca78;
 extern void *PTR_TTY_$I_RCV_00e2ca08;
 
 /*
- * External initialization functions (for TERM_$INIT)
+ * SIO2681 configuration block passed as the 10th argument of SIO2681_$INIT
+ * by TERM_$INIT (0xe35154 + 0x4c; see sio2681/sio2681.h).
  */
-extern void OS_TERM_INIT(void *, void *, void **, void *, void **, void *);
-extern void SIO_$INIT_LINE(void *, void *, void **, void *);
-extern void SIO_$INIT_DRAIN_HANDLER(void *, void *, void **, void **);
-extern void SIO_$INIT_DESC(void *, void *, void *, void **, void **, void *,
-                           void **, void *);
-extern void SIO_$INIT_DTTE(void *, short);
-extern void SIO6509_$INIT(void *, void *, void *, void **, void *);
-extern void SIO2681_$INIT(void *, void *, void *, void **, void *, void *, void **, void *, void *);
-/* TTY_$I_ENABLE_CRASH_FUNC is declared in tty/tty.h */
-extern void SUMA_$INIT(void);
+extern char DAT_00e351a0[];
+
+/*
+ * External initialization functions used by TERM_$INIT come from:
+ *   OS_TERM_INIT                                   - os/os.h
+ *   SIO_$INIT_LINE / _DRAIN_HANDLER / _DESC / _DTTE - sio/sio.h
+ *   SIO6509_$INIT                                  - sio6509/sio6509.h
+ *   SIO2681_$INIT                                  - sio2681/sio2681.h
+ *   TTY_$I_ENABLE_CRASH_FUNC                       - tty/tty.h
+ *   SUMA_$INIT                                     - suma/suma.h
+ */
 
 /* UID_$NIL is declared in base/base.h */
 

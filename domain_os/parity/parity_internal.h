@@ -173,20 +173,7 @@ extern mem_parity_log_t mem_parity_log;
 /* Memory board boundary (3MB mark) */
 #define MEM_BOARD_BOUNDARY 0x300000
 
-/*
- * MEM_$PARITY_LOG - Log a parity error
- *
- * Called to record a parity error in the memory parity tracking table.
- * Tracks errors by memory board and by page, replacing lowest-count
- * entries when the table is full.
- *
- * Parameters:
- *   phys_addr - Physical address where parity error occurred
- *
- * Original address: 0x00E0ADB0
- * Size: 182 bytes
- */
-void MEM_$PARITY_LOG(uint32_t phys_addr);
+/* MEM_$PARITY_LOG is declared in mem/mem.h (included above) */
 
 /*
  * Scratch page for parity error recovery

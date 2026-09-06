@@ -25,10 +25,12 @@ void TERM_$ENQUEUE_TPAD(void **param1) {
 
     while (head != tail) {
         // Call TPAD_$DATA with pointer to entry at (base + 4 + tail * 16)
-        TPAD_$DATA();
+        // 0xe7248c: move.w (A2),D0 ; lsl.w #4,D0 ; pea (0x4,A3,D0.w) ; jsr TPAD_$DATA
+        TPAD_$DATA((uint32_t *)((char *)queue + 4 + (tail << 4)));
 
         // Advance tail with wrap-around at 6 entries
-        tail = M_$OIS_WLW((long)(tail + 1), 6);
+        // 0xe7249c: ext.l D0 ; addq.l #1,D0 ; jsr M$OIS$WLW(D0, 6)
+        tail = M$OIS$WLW((long)tail + 1, 6);
         queue->tail = tail;
     }
 }

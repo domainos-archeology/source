@@ -12,14 +12,9 @@
 #include "name/name.h"
 
 /*
- * Note: REM_NAME_$* functions are declared in name/name.h
- *
- * There appears to be a signature conflict between:
- *   - name/name.h: void REM_NAME_$REGISTER_SERVER(void)
- *   - rip/server.c: uint16_t REM_NAME_$REGISTER_SERVER(void *, void *)
- *
- * This needs to be resolved by examining the Ghidra disassembly
- * to determine the correct signature.
+ * Note: REM_NAME_$* functions are defined in name/rem_name.c and declared
+ * in name/name.h.  REM_NAME_$REGISTER_SERVER (0xE4A4AE) takes no
+ * parameters; its callers in rip/server.c push two ignored arguments.
  */
 
 #endif /* REM_NAME_H */

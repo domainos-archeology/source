@@ -387,6 +387,18 @@ void ACL_$GET_SID(int16_t asid, uid_t *sid_ret);
  */
 
 /*
+ * ACL_$DEFAULT_ACL - Get default ACL UID for an object type
+ *
+ * Parameters:
+ *   acl_ret  - Output ACL UID
+ *   acl_type - Pointer to object type word: 0/4/5 -> ACL_$FNDWRX,
+ *              1/2 -> ACL_$DNDCAL, 3 -> UID_$NIL, otherwise unchanged
+ *
+ * Original address: 0x00E4787E
+ */
+void ACL_$DEFAULT_ACL(uid_t *acl_ret, int16_t *acl_type);
+
+/*
  * ACL_$DEF_ACLDATA - Get default ACL data
  *
  * Parameters:
@@ -730,6 +742,10 @@ extern uid_t ACL_$DIR_ACL;  /* Well-known ACL UID for directories */
 /* ACL type UIDs - used to identify ACL operations */
 extern uid_t ACL_$FILE_ACL;    /* 0xE1744C */
 extern uid_t ACL_$FILEIN_ACL;  /* 0xE17454 */
+extern uid_t ACL_$DIRIN_ACL;   /* 0xE1745C: {0x00000603, 0} (used by dir/) */
+
+/* Nil ACL UID (0xE17384).  TODO: no definition in acl/acl_data.c yet. */
+extern uid_t ACL_$NIL;
 
 /* Per-process super-user nesting counts, indexed by PROC1_$CURRENT (0xE7DACA) */
 extern int16_t ACL_$SUPER_COUNT[];

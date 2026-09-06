@@ -62,11 +62,33 @@ void NET_IO_$COPY_PACKET(void **dest_addr_p, uint16_t header_len, void *data_ptr
                          void **hdr_buf, void **data_buf, status_$t *status_ret);
 
 /*
- * NET_IO_$BOOT_DEVICE - Get boot device info
+ * NET_IO_$BOOT_DEVICE - Record the network boot device
+ *
+ * Parameters (two words at 8(A6) and 0xA(A6)):
+ *   boot_device - boot device code (2/3, 6 and 8 are network devices)
+ *   param       - low word of the boot info, stored when diskless
+ *
+ * Returns: -1 (0xFF) if booting over the network (diskless), 0 otherwise.
+ * OS_$INIT stores the result in NETWORK_$DISKLESS.
  *
  * Original address: 0x00E31C14
+ * TODO: no C implementation yet.
  */
-void NET_IO_$BOOT_DEVICE(void);
+char NET_IO_$BOOT_DEVICE(short boot_device, short param);
+
+/*
+ * NET_IO_$CREATE_PORT - Create a network I/O port
+ *
+ * Stack frame (0x00E5A4A4): port_type word at 8(A6), unit word at 0xA(A6),
+ * driver long at 0xC(A6), queue_length word at 0x10(A6), status_ret long
+ * at 0x12(A6); result returned in D0.w.
+ *
+ * Original address: 0x00E5A4A4
+ * TODO: no C implementation yet; called from RING_$INIT and ROUTE_$SERVICE.
+ */
+int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
+                            void *driver, uint16_t queue_length,
+                            status_$t *status_ret);
 
 /*
  * NET_IO_$INIT - Initialize network I/O

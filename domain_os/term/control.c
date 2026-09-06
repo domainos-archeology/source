@@ -12,17 +12,24 @@ static char func_id_dsusp;      // 0xe66d8c
 static char func_id_status;     // 0xe66d8a
 
 // SIO parameter structure for SIO_$K_SET_PARAM
+// TODO: this is TERM_$CONTROL's local (byte-level) view of the 0x16-byte
+// sio_params_t defined in sio/sio.h; the field names differ from sio.h's
+// and the two should be unified once SIO_$K_SET_PARAM's use is confirmed.
+// The block is passed to SIO_$K_SET_PARAM by address with an explicit cast.
 typedef struct {
     unsigned char unused[3];
     unsigned char flags1;       // offset 3 (-0x15 from end)
+    unsigned char padding[3];   // offsets 4-6
     unsigned char flags2;       // offset 7 (-0x11 from end)
-    unsigned long param_bits;   // offset 8 (-0x10 from end)
+    uint32_t param_bits;        // offset 8 (-0x10 from end)
     unsigned short speed_in;    // offset 12 (-0xc from end)
     unsigned short speed_out;   // offset 14 (-0xa from end)
     unsigned short parity;      // offset 16 (-0x8 from end)
     unsigned short stop_bits;   // offset 18 (-0x6 from end)
     unsigned short data_bits;   // offset 20 (-0x4 from end)
-} sio_params_t;
+} term_$sio_params_t;
+_Static_assert(sizeof(term_$sio_params_t) == sizeof(sio_params_t),
+               "term_$sio_params_t must match sio_params_t (0x16 bytes)");
 
 // Terminal control options (option codes for TERM_$CONTROL)
 #define CTRL_SET_FUNC_CHAR_DEFAULT    0
@@ -67,8 +74,8 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
     unsigned short option;
     unsigned char inverted;
     short real_line;
-    sio_params_t params;
-    unsigned long param_mask;
+    term_$sio_params_t params;
+    uint32_t param_mask;        /* 32-bit change mask (SIO_$K_SET_PARAM) */
     void *pgroup_ptr;
 
     option = *option_ptr;
@@ -271,7 +278,7 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             params.speed_out = *value_ptr;
             param_mask = 2;
         set_sio_param:
-            SIO_$K_SET_PARAM(line_ptr, &params, &param_mask, status_ret);
+            SIO_$K_SET_PARAM(line_ptr, (sio_params_t *)&params, &param_mask, status_ret);
             break;
 
         case CTRL_FLUSH_INPUT:

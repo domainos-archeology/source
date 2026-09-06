@@ -301,6 +301,53 @@ void NAME_$GET_NODE_DATA_UID(uid_t *node_data_uid);
 void NAME_$GET_CANNED_ROOT_UID(uid_t *canned_root_uid);
 
 /*
+ * ============================================================================
+ * Old-style (pre-B-tree) name helpers used by the dir subsystem
+ * ============================================================================
+ */
+
+/* name_$old_add_link - Add link with remote/local handling
+ * Shared add entry helper for DIR_$OLD_ADDU and DIR_$OLD_ADD_HARD_LINKU.
+ * Original address: 0x00E5674C (name/old_add_link.c)
+ */
+void name_$old_add_link(uid_t *dir_uid, char *name, uint16_t name_len,
+                        uid_t *file_uid, uint8_t hard_link_flag,
+                        status_$t *status_ret);
+
+/* name_$old_get_root_entry - Root directory entry lookup
+ * Original address: 0x00E57F74 (name/old_get_root_entry.c)
+ */
+void name_$old_get_root_entry(uid_t *dir_uid, char *name, uint16_t name_len,
+                              void *entry_ret, status_$t *status_ret);
+
+/* name_$old_get_entry_nonroot - Non-root directory entry lookup
+ * Original address: 0x00E57CE0 (name/old_get_entry_nonroot.c)
+ */
+void name_$old_get_entry_nonroot(uid_t *dir_uid, char *name, uint16_t name_len,
+                                 void *entry_ret, status_$t *status_ret);
+
+/* name_$old_add_entry - Name-level add directory entry
+ * Original address: 0x00E56682 (name/old_add_entry.c)
+ */
+void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,
+                         uint16_t name_len, uid_t *file_uid,
+                         uint32_t flags, status_$t *status_ret);
+
+/* name_$old_drop_entry - Find and remove directory entry by name
+ * type is the lock mode (low word of NAME_$LOCK_DIR flags; callers pass 0).
+ * Original address: 0x00E56A04 (name/old_drop_entry.c)
+ */
+void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
+                          uint16_t type, void *result, status_$t *status_ret);
+
+/* name_$validate_leaf - Validate and parse leaf name
+ * Returns negative (true) on success, non-negative on failure.
+ * Original address: 0x00E54414 (name/validate_leaf.c)
+ */
+int8_t name_$validate_leaf(char *name, uint16_t name_len,
+                           uint8_t *parsed, uint16_t *parsed_len);
+
+/*
  * NAME_$LOCK_DIR - Enter super mode / acquire directory lock
  *
  * Original address: 0x00E54854

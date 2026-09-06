@@ -259,10 +259,9 @@ extern uid_t VTOC_BKT_$UID;         /* 0xE173AC: VTOC bucket UID */
 
 /*
  * Special UIDs for ACL defaults
+ * (PPO_$NIL_USER_UID / PPO_$NIL_ORG_UID are declared in vtoc/vtoc.h)
  */
-extern uid_t PPO_$NIL_USER_UID;     /* 0xE174EC: Nil user UID */
 extern uid_t RGYC_$G_NIL_UID;       /* 0xE17524: Nil group UID */
-extern uid_t PPO_$NIL_ORG_UID;      /* 0xE17574: Nil org UID */
 
 /*
  * UID cache structure for quick VTOCE lookup

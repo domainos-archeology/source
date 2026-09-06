@@ -207,4 +207,21 @@ void IO_$USE_INT_STACK(void);
  */
 dcte_t *IO_$GET_DCTE(uint16_t *ctypep, uint16_t *cnump, status_$t *status_ret);
 
+/*
+ * IO_$INIT - Initialize the I/O subsystem
+ *
+ * Initializes the I/O exclusion locks and DMA, runs the per-controller
+ * init routines, then walks IO_$DCTE_LIST calling each DCTE's csrsytr
+ * entry.  When *verbose_flag is negative, prints a line per device.
+ *
+ * Parameters (all passed by address, pea'd by OS_$INIT):
+ *   param1       - unused by the routine (OS_$INIT passes &No_err)
+ *   verbose_flag - pointer to a byte; negative => print device init status
+ *   status_ret   - status (set to status_$ok on entry)
+ *
+ * Original address: 0x00E328E0
+ * TODO: no C implementation yet (only declared here for OS_$INIT).
+ */
+void IO_$INIT(void *param1, char *verbose_flag, status_$t *status_ret);
+
 #endif /* IO_H */

@@ -83,7 +83,10 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
      */
     if (pkt_desc->arp_flag < 0) {
         /* Do ARP lookup */
-        MAC_OS_$ARP(MAC_$ARP_TABLE, port_num, pkt_desc, NULL, status_ret);
+        /* The original pushes the caller's packet descriptor address as the
+         * mac_addr argument of MAC_OS_$ARP (the descriptor starts with the
+         * 6-byte destination address). */
+        MAC_OS_$ARP(MAC_$ARP_TABLE, port_num, (uint16_t *)pkt_desc, NULL, status_ret);
         if (*status_ret != status_$ok) {
             FIM_$RLS_CLEANUP(cleanup_buf);
             return;
@@ -132,7 +135,10 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
     }
 
     /* Call MAC_OS_$SEND to actually transmit the packet */
-    MAC_OS_$SEND(channel, &local_pkt, &local_bytes_sent, &os_status);
+    /* MAC_OS_$SEND is declared with int16_t * channel/bytes_sent and a
+     * mac_os_$send_pkt_t * descriptor; the same addresses are pushed here. */
+    MAC_OS_$SEND((int16_t *)channel, (mac_os_$send_pkt_t *)&local_pkt,
+                 (int16_t *)&local_bytes_sent, &os_status);
 
     *bytes_sent = local_bytes_sent;
     *status_ret = os_status;

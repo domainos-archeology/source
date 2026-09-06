@@ -17,10 +17,10 @@
 #define MEM_H
 
 #include "base/base.h"
+#include "mmap/mmap.h"   /* MMAP_$REAL_PAGES */
 
 /* Memory stats */
 extern uint32_t MEM_$MEM_REC;
-extern uint32_t MMAP_$REAL_PAGES;
 
 
 /*

@@ -555,4 +555,15 @@ void FIM_$CLEAR_TRACE_FAULT(int16_t as_id);   /* move.w (0x4,SP),D0: one word ar
  */
 void FIM_$CRASH(void *exception_frame, fim_regs_t *regs);
 
+/*
+ * FIM_$BUS_ERR - Bus error trap handler (assembly entry point)
+ *
+ * OS_$INIT installs this as the PROM bus-error trap vector
+ * (_PROM_TRAP_BUS_ERROR = &FIM_$BUS_ERR) once initialization is
+ * far enough along to handle bus errors itself.
+ *
+ * Address: 0x00E218E8
+ */
+extern void FIM_$BUS_ERR(void);
+
 #endif /* FIM_H */

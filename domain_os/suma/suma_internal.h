@@ -11,12 +11,7 @@
 #include "dxm/dxm.h"
 #include "term/term.h"
 
-/*
- * Callback function for enqueueing tablet pad events
- *
- * Original address: 0x00e72472
- */
-extern void TERM_$ENQUEUE_TPAD(void **param1);
+/* TERM_$ENQUEUE_TPAD (0x00e72472) is declared in term/term.h */
 
 /*
  * Pointer to TERM_$ENQUEUE_TPAD callback

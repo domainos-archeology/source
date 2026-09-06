@@ -10,6 +10,7 @@
 #include "ec/ec.h"
 #include "fim/fim.h"
 #include "mac/mac.h"
+#include "mac_os/mac_os.h"   /* MAC_OS_$* lower-level operations */
 #include "ml/ml.h"
 #include "netbuf/netbuf.h"
 #include "os/os.h"
@@ -26,70 +27,6 @@
 
 /* Port info table entry size */
 #define MAC_PORT_INFO_SIZE 0x5C
-
-/*
- * ============================================================================
- * MAC_OS Functions (Lower-level MAC operations)
- * ============================================================================
- */
-
-/*
- * MAC_OS_$OPEN - Open MAC at OS level
- * Original address: 0x00E0B246
- */
-void MAC_OS_$OPEN(int16_t *port_num, void *params, status_$t *status_ret);
-
-/*
- * MAC_OS_$CLOSE - Close MAC at OS level
- * Original address: 0x00E0B45C
- */
-void MAC_OS_$CLOSE(uint16_t *channel, status_$t *status_ret);
-
-/*
- * MAC_OS_$SEND - Send packet at OS level
- * Original address: 0x00E0B5A8
- */
-void MAC_OS_$SEND(uint16_t *channel, void *pkt_desc, uint16_t *bytes_sent,
-                  status_$t *status_ret);
-
-/*
- * MAC_OS_$DEMUX - Demux at OS level
- * Original address: 0x00E0B816
- */
-void MAC_OS_$DEMUX(void *pkt_info, void *port_info, status_$t *status_ret);
-
-/*
- * MAC_OS_$PROC2_CLEANUP - Process cleanup handler for MAC
- * Original address: 0x00E0BFDE
- */
-void MAC_OS_$PROC2_CLEANUP(void);
-
-/*
- * MAC_OS_$ARP - Perform ARP lookup
- *
- * Parameters:
- *   arp_table  - ARP table pointer
- *   port_num   - Port number
- *   pkt_desc   - Packet descriptor with destination address
- *   result     - Result buffer
- *   status_ret - Status return
- *
- * Original address: 0x00E0C0CE
- */
-void MAC_OS_$ARP(void *arp_table, uint16_t port_num, void *pkt_desc,
-                 void *result, status_$t *status_ret);
-
-/*
- * MAC_OS_$PUT_INFO - Put MAC info
- * Original address: 0x00E0C228
- */
-void MAC_OS_$PUT_INFO(void *info);
-
-/*
- * MAC_OS_$INIT - Initialize MAC_OS subsystem
- * Original address: 0x00E2F4FC
- */
-void MAC_OS_$INIT(void);
 
 /*
  * ============================================================================

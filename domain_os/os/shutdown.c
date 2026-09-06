@@ -86,8 +86,9 @@ do_shutdown:
     MST_$WIRE_AREA(&PTR_OS_DATA_SHUTWIRED, &PTR_OS_DATA_SHUTWIRED_END,
                    wire_buf, &wait_duration, wire_buf);
 
-    // Unlock all files
-    FILE_$PRIV_UNLOCK_ALL(&wait_duration);
+    // Unlock all files (pea (0xb6,PC) = the constant word 0 at 0xE6D628,
+    // the same cell passed to TIME_$WAIT as the delay type above)
+    FILE_$PRIV_UNLOCK_ALL(&wait_delay_type);
 
     // Set paging shutting down flag
     PMAP_$SHUTTING_DOWN_FLAG = (char)0xFF;

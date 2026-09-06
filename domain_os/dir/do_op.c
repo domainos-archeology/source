@@ -320,11 +320,13 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          *((uint32_t *)(req + 0x92)),
                          result_buf, &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
+                /* The longword at req+0x92 is pushed as-is (move.l (0x92,A2),-(SP))
+                 * and used by AUDIT_$LOG_LINK_OP as the target-data pointer. */
                 AUDIT_$LOG_LINK_OP(0x1A, resp->status, &local_uid,
                              *((uint16_t *)(req + 0x8e)),
                              req + 0x96,
                              *((uint16_t *)(req + 0x90)),
-                             *((uint32_t *)(req + 0x92)));
+                             (void *)(uintptr_t)*((uint32_t *)(req + 0x92)));
             }
             break;
 
@@ -445,7 +447,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 audit_$log_prot_op(resp->status, &local_uid,
                              req + 0x8e, (uid_t *)(req + 0xba),
-                             req + 0xc2, 4);
+                             (uid_t *)(req + 0xc2), 4);  /* pea (0xc2,A2) */
             }
             break;
 
@@ -456,7 +458,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 audit_$log_prot_op(resp->status, &local_uid,
                              req + 0x96, (uid_t *)(req + 0x8e),
-                             req + 0xc2, 4);
+                             (uid_t *)(req + 0xc2), 4);  /* pea (0xc2,A2) */
             }
             break;
 
@@ -512,7 +514,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 audit_$log_mount_op(0x1C, resp->status, &local_uid,
-                             req + 0x8e,
+                             (uid_t *)(req + 0x8e),  /* pea (0x8e,A2) */
                              *((uint32_t *)(req + 0x96)));
             }
             break;
@@ -523,7 +525,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 audit_$log_mount_op(0x1D, resp->status, &local_uid,
-                             req + 0x8e,
+                             (uid_t *)(req + 0x8e),  /* pea (0x8e,A2) */
                              *((uint32_t *)(req + 0x96)));
             }
             break;

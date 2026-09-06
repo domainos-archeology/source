@@ -9,6 +9,10 @@ static char func_id_dsusp;      // 0xe66d8c
 static char func_id_status;     // 0xe66d8a
 
 // SIO parameter structure
+// TODO: this is TERM_$INQUIRE's local (byte-level) view of the 0x16-byte
+// sio_params_t defined in sio/sio.h; the field names differ from sio.h's
+// and the two should be unified.  The block is passed to SIO_$K_INQ_PARAM
+// by address with an explicit cast.
 typedef struct {
     unsigned char unused[3];
     unsigned char flags1;
@@ -20,7 +24,9 @@ typedef struct {
     unsigned short parity;
     unsigned short stop_bits;
     unsigned short data_bits;
-} sio_params_t;
+} term_$sio_params_t;
+_Static_assert(sizeof(term_$sio_params_t) == sizeof(sio_params_t),
+               "term_$sio_params_t must match sio_params_t (0x16 bytes)");
 
 // Inquire option codes
 #define INQ_FUNC_CHAR_DEFAULT    0
@@ -63,7 +69,7 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
     short real_line;
     uint32_t flags;
     uint32_t func_enabled;
-    sio_params_t params;
+    term_$sio_params_t params;
     uid_t pgroup;
     char raw_mode_temp;
 
@@ -100,7 +106,7 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
 
         case INQ_SPEED:
         case INQ_SPEED_32:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             *value_ret = params.speed_in;
             break;
 
@@ -133,37 +139,37 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
             break;
 
         case INQ_ECHO:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             *(char *)value_ret = (params.flags2 & 1) ? 0xFF : 0;
             break;
 
         case INQ_SOMETHING_13:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             *(char *)value_ret = (params.flags2 & 8) ? 0xFF : 0;
             break;
 
         case INQ_SOMETHING_14:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             *(char *)value_ret = (params.flags2 & 4) ? 0xFF : 0;
             break;
 
         case INQ_PGROUP_ENABLED:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             *(char *)value_ret = (params.flags1 & 4) ? 0xFF : 0;
             break;
 
         case INQ_SOMETHING_16:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             *(char *)value_ret = (params.flags2 & 2) ? 0xFF : 0;
             break;
 
         case INQ_FLAG_17:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             *(char *)value_ret = (params.flags1 & 2) ? 0xFF : 0;
             break;
 
         case INQ_PARITY:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             if (params.parity == 3) {
                 *value_ret = 3;
             } else if (params.parity == 1) {
@@ -174,18 +180,18 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
             break;
 
         case INQ_STOP_BITS:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             *value_ret = params.stop_bits;
             break;
 
         case INQ_DATA_BITS:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             *value_ret = params.data_bits;
             break;
 
         case INQ_FLOW_CTRL: {
             unsigned short flow = 0;
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             if (params.param_bits & 1) flow |= 1;
             if (params.param_bits & 2) flow |= 2;
             if (params.param_bits & 8) flow |= 4;
@@ -227,7 +233,7 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
             break;
 
         case INQ_FLAG_31:
-            SIO_$K_INQ_PARAM(line_ptr, &params, NULL, status_ret);
+            SIO_$K_INQ_PARAM(line_ptr, (sio_params_t *)&params, NULL, status_ret);
             *(char *)value_ret = (params.flags1 & 1) ? 0xFF : 0;
             break;
 

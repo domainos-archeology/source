@@ -188,8 +188,8 @@ static void reset_tracker(void) {
  * Mock function implementations
  * ======================================================================== */
 
-void OS_TERM_INIT(void *term_data, void *dtte, m68k_ptr_t *line_data_pp,
-                  m68k_ptr_t *i_rcv_ptr, m68k_ptr_t *sio_desc_pp, void *vtable)
+void OS_TERM_INIT(uint32_t *term_data, uint32_t *dtte, uint32_t *line_data_pp,
+                  uint32_t *i_rcv_ptr, uint32_t *sio_desc_pp, uint32_t *vtable)
 {
     tracker.os_term_init_called = 1;
     tracker.os_term_init_param1 = term_data;

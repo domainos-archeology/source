@@ -224,8 +224,7 @@ extern uint32_t FILE_$DEFAULT_SIZE;
 
 /* AUDIT_$ENABLED comes from audit/audit.h, NETLOG_$OK_TO_LOG from netlog/netlog.h */
 
-/* Current process ASID */
-extern uint16_t PROC1_$AS_ID;
+/* PROC1_$AS_ID (current process ASID) comes from proc1/proc1.h */
 
 /*
  * ============================================================================
@@ -495,46 +494,9 @@ void FILE_$AUDIT_SET_PROT(uid_t *file_uid, void *acl_data, void *prot_info,
  */
 
 /*
- * ACL_$SET_ACL_CHECK - Check ACL permissions for set operation
- *
- * Verifies the caller has permission to modify ACL.
- *
- * Original address: 0x00E470C4
+ * ACL_$SET_ACL_CHECK, ACL_$GET_LOCAL_LOCKSMITH, ACL_$CONVERT_FUNKY_ACL and
+ * ACL_$DEF_ACLDATA are declared in acl/acl.h (included above).
  */
-int8_t ACL_$SET_ACL_CHECK(uid_t *file_uid, void *acl_data, uid_t *source_uid,
-                          int16_t *prot_type, int8_t *permission_flags,
-                          status_$t *status_ret);
-
-/*
- * ACL_$GET_LOCAL_LOCKSMITH - Check if local locksmith mode is enabled
- *
- * Returns:
- *   0 if locksmith mode is enabled (has privileges)
- *   Non-zero otherwise
- *
- * Original address: 0x00E4923C
- */
-int16_t ACL_$GET_LOCAL_LOCKSMITH(void);
-
-/*
- * ACL_$CONVERT_FUNKY_ACL - Convert "funky" ACL format
- *
- * Converts an ACL UID in the "funky" format to standard ACL components.
- *
- * Original address: 0x00E4900C
- */
-void ACL_$CONVERT_FUNKY_ACL(void *acl_uid, void *acl_data_out,
-                             void *prot_info_out, void *target_uid_out,
-                             status_$t *status_ret);
-
-/*
- * ACL_$DEF_ACLDATA - Get default ACL data
- *
- * Fills in default ACL data using nil user/group/org UIDs.
- *
- * Original address: 0x00E478DC
- */
-void ACL_$DEF_ACLDATA(void *acl_data_out, void *uid_out);
 
 /*
  * NOTE: AST functions (AST_$GET_DISM_SEQN, AST_$GET_COMMON_ATTRIBUTES, etc.)

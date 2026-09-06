@@ -24,6 +24,7 @@
 
 #include "base/base.h"
 #include "ec/ec.h"
+#include "term/term.h"   /* dtte_t (SIO_$INIT_DTTE, SIO_$INIT_DESC) */
 
 /*
  * ============================================================================
@@ -172,6 +173,83 @@ _Static_assert(sizeof(sio_desc_t) == 0x78, "sio_desc_t must be 120 bytes");
  * SIO Public Function Declarations
  * ============================================================================
  */
+
+/*
+ * Descriptor initialization helpers.  These are called from TERM_$INIT
+ * (term/init.c) as well as SIO_$INIT, so they are public.
+ */
+/*
+ * SIO_$INIT_DESC - Initialize an SIO descriptor
+ *
+ * Populates a full sio_desc_t structure with context, owner, parameter
+ * block, handler function pointers, vtable entries, and transmit buffer
+ * pointer. Stores a back-pointer into the DTTE, then calls SIO_$I_INIT.
+ *
+ * Parameters:
+ *   desc         - SIO descriptor to initialize
+ *   param_block  - Source parameter block (22 bytes)
+ *   dtte         - DTTE entry pointer (receives back-pointer at offset 0x28)
+ *   owner_ptr    - Pointer to owner handle (dereferenced)
+ *   txbuf_ptr    - Pointer to transmit buffer pointer (dereferenced)
+ *   handlers     - Array of 4 handler function pointers
+ *   context_ptr  - Pointer to context handle (dereferenced)
+ *   vtable       - Vtable structure (entries copied from offset 0x14)
+ *
+ * Original address: 0x00e32ab2
+ */
+void SIO_$INIT_DESC(sio_desc_t *desc, void *param_block, void *dtte,
+                    m68k_ptr_t *owner_ptr, m68k_ptr_t *txbuf_ptr,
+                    m68k_ptr_t *handlers, m68k_ptr_t *context_ptr,
+                    char *vtable);
+
+/*
+ * SIO_$INIT_DTTE - Initialize a DTTE (Display Terminal Table Entry)
+ *
+ * Initializes three inline event counts at offsets 0x00, 0x0C, and 0x18,
+ * sets the discipline field, and clears the flags byte.
+ *
+ * Parameters:
+ *   dtte       - Pointer to DTTE entry to initialize
+ *   discipline - Terminal discipline value (0=TTY, 2=console, etc.)
+ *
+ * Original address: 0x00e32b76
+ */
+void SIO_$INIT_DTTE(dtte_t *dtte, int16_t discipline);
+
+/*
+ * SIO_$INIT_DRAIN_HANDLER - Initialize output buffer drain handler
+ *
+ * Sets up a 3-word handler record: function pointer, context, and data.
+ * The function pointer is set to TTY_$I_OUTPUT_BUFFER_DRAINED.
+ *
+ * Parameters:
+ *   handler     - Pointer to 3-word handler record
+ *   dtte        - DTTE pointer (unused, part of calling convention)
+ *   data_ptr    - Pointer to data pointer value (stored at handler[2])
+ *   context_ptr - Pointer to context pointer value (stored at handler[1])
+ *
+ * Original address: 0x00e32bb8
+ */
+void SIO_$INIT_DRAIN_HANDLER(m68k_ptr_t *handler, void *dtte,
+                              m68k_ptr_t *data_ptr, m68k_ptr_t *context_ptr);
+
+/*
+ * SIO_$INIT_LINE - Initialize SIO TTY line descriptor
+ *
+ * Sets up a TTY descriptor from SIO port configuration data. Copies the
+ * line identifier (from *config), hardware register addresses (from hw_info),
+ * I/O buffer pointers (from port_data), then calls TTY_$I_INIT.
+ *
+ * Parameters:
+ *   desc      - TTY descriptor to initialize
+ *   port_data - SIO port data structure (DTTE)
+ *   config    - Pointer to m68k_ptr_t value used as line ID (dereferenced once)
+ *   hw_info   - Hardware info block (register addresses at +0x08)
+ *
+ * Original address: 0x00e32b26
+ */
+void SIO_$INIT_LINE(void *desc, void *port_data, m68k_ptr_t *config, void *hw_info);
+
 
 /*
  * SIO_$INIT - Initialize a serial I/O port

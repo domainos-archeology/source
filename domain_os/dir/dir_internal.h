@@ -12,6 +12,8 @@
 #include "dir/dir.h"
 #include "acl/acl.h"
 #include "ast/ast.h"
+#include "audit/audit.h"
+#include "rem_file/rem_file.h"
 #include "file/file_internal.h" // we call FILE_$PRIV_UNLOCK
 #include "fim/fim.h"
 #include "name/name.h"
@@ -338,18 +340,12 @@ void dir_$find_uid_internal(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
  * ============================================================================
  */
 
-/* name_$old_add_link - Add link with remote/local handling
- *
- * Shared add entry helper for DIR_$OLD_ADDU and DIR_$OLD_ADD_HARD_LINKU.
- * Checks ACL rights, determines if target is remote or local, then
- * dispatches to REM_FILE_$NAME_ADD_HARD_LINKU (remote) or local add path.
- *
- * Original address: 0x00E5674C
- * Size: 506 bytes
+/*
+ * name_$old_add_link, name_$old_get_root_entry, name_$old_get_entry_nonroot,
+ * name_$old_add_entry, name_$old_drop_entry, name_$validate_leaf,
+ * NAME_$LOCK_DIR and NAME_$UNLOCK_DIR are name-subsystem routines; they are
+ * declared in name/name.h (included above).
  */
-void name_$old_add_link(uid_t *dir_uid, char *name, uint16_t name_len,
-                        uid_t *file_uid, uint8_t hard_link_flag,
-                        status_$t *status_ret);
 
 /* NAME_$OLD_DELETE_ENTRYU - Shared delete/drop entry helper
  *
@@ -357,66 +353,14 @@ void name_$old_add_link(uid_t *dir_uid, char *name, uint16_t name_len,
  * verifies ACL rights, deletes the underlying object (file or hard link),
  * and removes the directory entry.
  *
+ * Although it carries the NAME_$ prefix, this routine is implemented in
+ * dir/old_delete_entryu.c and is only called from dir/, so it stays here.
+ *
  * Original address: 0x00E56B08
  */
 void NAME_$OLD_DELETE_ENTRYU(uid_t *dir_uid, char *name, uint16_t name_len,
                              uint8_t flag1, uint8_t flag2, uint8_t flag3,
                              uint8_t *result_buf, status_$t *status_ret);
-
-/* name_$old_get_root_entry - Root directory entry lookup
- *
- * Resolves a name in the root directory. First tries local lookup
- * via name_$old_get_entry_nonroot. If that fails and the directory
- * is NAME_$ROOT_UID, queries remote nodes via REM_NAME_$GET_ENTRY,
- * then caches the result via name_$old_add_entry.
- *
- * Original address: 0x00E57F74
- * Size: 226 bytes
- */
-void name_$old_get_root_entry(uid_t *dir_uid, char *name, uint16_t name_len,
-                              void *entry_ret, status_$t *status_ret);
-
-/* name_$old_get_entry_nonroot - Non-root directory entry lookup
- *
- * Resolves a directory entry by name for non-root directories.
- * Tries remote nodes via hint table first, falls back to local
- * directory search using dir_$old_find_entry.
- *
- * Original address: 0x00E57CE0
- */
-void name_$old_get_entry_nonroot(uid_t *dir_uid, char *name, uint16_t name_len,
-                                 void *entry_ret, status_$t *status_ret);
-
-/* name_$old_add_entry - Name-level add directory entry
- *
- * Validates leaf name, locks directory, adds entry via internal helper,
- * updates hint table, unlocks directory. Used by DIR_$OLD_ROOT_ADDU,
- * DIR_$OLD_VALIDATE_ROOT_ENTRY, and other add operations.
- *
- * Original address: 0x00E56682
- * Size: 202 bytes
- */
-void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,
-                         uint16_t name_len, uid_t *file_uid,
-                         uint32_t flags, status_$t *status_ret);
-
-/* name_$validate_leaf - Validate and parse leaf name
- * Returns negative (true) on success, non-negative on failure
- * Original address: 0x00E54414
- */
-int8_t name_$validate_leaf(char *name, uint16_t name_len,
-                    uint8_t *parsed_name, uint16_t *parsed_len);
-
-/* NAME_$LOCK_DIR - Enter super mode / acquire directory lock
- * Original address: 0x00E54854
- */
-void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
-                    uint32_t flags, status_$t *status_ret);
-
-/* NAME_$UNLOCK_DIR - Release directory lock / exit super mode
- * Original address: 0x00E54734
- */
-void NAME_$UNLOCK_DIR(status_$t *status_ret);
 
 /* dir_$old_unlink_entry - Find and remove directory entry by name
  *
@@ -610,26 +554,6 @@ uint16_t FUN_00e54e62(uint32_t handle, uint16_t hash_hint);
  */
 void dir_$old_init_buf(void *buffer);
 
-/* name_$old_drop_entry - Name-level drop directory entry
- *
- * Validates leaf name, locks directory, removes entry via
- * dir_$old_unlink_entry, unlocks directory. Used by DIR_$OLD_DROP_DIRU,
- * NAME_$OLD_DELETE_ENTRYU, and DIR_$OLD_VALIDATE_ROOT_ENTRY.
- *
- * Assembly-verified 6 parameters (all 3 callers push 20 bytes):
- *   dir_uid    - UID of directory containing the entry
- *   name       - Entry name to remove
- *   name_len   - Length of name
- *   type       - Lock mode (low word of NAME_$LOCK_DIR flags; callers pass 0)
- *   result     - Output buffer for unlinked entry UID
- *   status_ret - Output: status code
- *
- * Original address: 0x00E56A04
- * Size: 150 bytes
- */
-void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
-                          uint16_t type, void *result, status_$t *status_ret);
-
 /* dir_$read_canned_root - Read entries from canned root directory
  * Original address: 0x00E4DFFE
  */
@@ -646,53 +570,22 @@ int8_t DIR_$IS_RETRYABLE_STATUS(status_$t status);
 void DIR_$UPDATE_HINT(uid_t *uid, uint32_t hint1, uint32_t hint2,
                       uid_t *redirect, uint32_t param5);
 
-/* AUDIT_$LOG_CNAME_OP - Audit CNAMEU operation
- * Original address: 0x00E4BEC2
+/*
+ * AUDIT_$LOG_CNAME_OP, AUDIT_$LOG_LINK_OP, AUDIT_$LOG_DIR_OP,
+ * audit_$log_mount_op and audit_$log_prot_op are audit-subsystem routines
+ * (audit/log_*_op.c); they are declared in audit/audit.h (included above).
  */
-void AUDIT_$LOG_CNAME_OP(uint16_t audit_type, status_$t status, uid_t *uid,
-                          uint16_t name_len, uint16_t new_name_len,
-                          void *name, void *new_name);
-
-/* AUDIT_$LOG_LINK_OP - Audit link operation
- * Original address: 0x00E4BD48
- */
-void AUDIT_$LOG_LINK_OP(uint16_t audit_type, status_$t status, uid_t *uid,
-                        uint16_t name_len, void *name, uint16_t target_len,
-                        uint32_t target_data);
-
-/* AUDIT_$LOG_DIR_OP - Audit add/drop entry operation
- * Original address: 0x00E4BE16
- */
-void AUDIT_$LOG_DIR_OP(uint16_t audit_type, status_$t status, uid_t *uid,
-                       uid_t *file_uid, uint16_t name_len, void *name);
 
 /* audit_$log_resolve_op - Audit resolve operation
+ *
+ * Despite the audit_$ prefix this helper is implemented in
+ * dir/audit_log_resolve_op.c and only used by DIR_$DO_OP, so it is
+ * declared here rather than in audit/audit.h.
+ *
  * Original address: 0x00E4BF92
  */
 void audit_$log_resolve_op(uint32_t pname_data, uint16_t path_len,
                            void *result, status_$t status);
-
-/* audit_$log_mount_op - Audit mount/drop mount operation
- *
- * Formats event record (type 4) with two UIDs and logs via
- * AUDIT_$LOG_EVENT. Used for ops 0x1C (add mount) and 0x1D (drop mount).
- *
- * Original address: 0x00E4BCE0
- * Size: 102 bytes
- */
-void audit_$log_mount_op(uint16_t audit_type, status_$t status, uid_t *uid,
-                         void *mount_uid, uint32_t extra);
-
-/* audit_$log_prot_op - Audit protection operation
- *
- * Formats event record (code 0x40014) with protection data and
- * logs via AUDIT_$LOG_EVENT. Copies 44 bytes of protection info.
- *
- * Original address: 0x00E4AF28
- * Size: 126 bytes
- */
-void audit_$log_prot_op(status_$t status, uid_t *uid, void *prot_data,
-                        uid_t *acl_type, void *acl_data, uint16_t param6);
 
 /* DIR_$VALIDATE_PAGES - Validate and compact directory pages
  *
@@ -1126,20 +1019,11 @@ extern uint32_t DAT_00e7ffdc; /* First handle slot (0xe7fd24 + 0x2b8) */
 #define DIR_OP_GET_ENTRYU_OP 0x44
 #endif
 
-/* ACL subsystem externs (not already in acl.h) */
-extern uid_t ACL_$DIRIN_ACL;
-extern int16_t ACL_TYPE_DIR;
-extern int16_t ACL_TYPE_FILE;
-
-/* ACL_$DEFAULT_ACL - Get default ACL for a type */
-void ACL_$DEFAULT_ACL(uid_t *acl_ret, int16_t *type);
-
-/* ACL_$DNDCAL and ACL_$FNDWRX - default ACL UIDs */
-extern uid_t ACL_$DNDCAL;
-extern uid_t ACL_$FNDWRX;
-
-/* ACL_$DEF_ACLDATA - Fill default ACL data */
-void ACL_$DEF_ACLDATA(void *acl_data_out, void *uid_out);
+/*
+ * ACL_$DIRIN_ACL, ACL_$DEFAULT_ACL, ACL_$DNDCAL, ACL_$FNDWRX and
+ * ACL_$DEF_ACLDATA come from acl/acl.h; ACL_TYPE_DIR / ACL_TYPE_FILE (object
+ * type words in the NAME code region) come from name/name.h.
+ */
 
 /*
  * Externs for functions/data already declared in included headers
@@ -1169,18 +1053,8 @@ void NAME_CONVERT_ACL_STATUS(status_$t *status_ret);
  * in this file. No need to re-declare.
  */
 
-/* REM_FILE_$SET_DEF_ACL - Remote set default ACL
- * (Not declared in rem_file.h)
- */
-void REM_FILE_$SET_DEF_ACL(void *location, uid_t *dir_uid,
-                           uid_t *acl_type, uid_t *acl_uid,
-                           status_$t *status_ret);
-
-/* REM_NAME_$GET_ENTRY - Remote name get entry
- * (Not declared in rem_file.h)
- */
-void REM_NAME_$GET_ENTRY(uid_t *dir_uid, char *name, uint16_t *name_len,
-                         void *entry_ret, status_$t *status_ret);
+/* REM_FILE_$SET_DEF_ACL is declared in rem_file/rem_file.h and
+ * REM_NAME_$GET_ENTRY in name/name.h (both included above). */
 
 /* dir_$do_op_add_link - DO_OP handler for add entry/hard link
  *
@@ -1305,8 +1179,7 @@ extern uint8_t DAT_00e564e2;
 extern uint8_t DAT_00e5716a;
 /* DAT_00e54730 and DAT_00e54b28 (NAME code region) are declared in name/name.h */
 
-/* ACL_$NIL extern */
-extern uid_t ACL_$NIL;
+/* ACL_$NIL (0xE17384) is declared in acl/acl.h */
 
 /*
  * ============================================================================

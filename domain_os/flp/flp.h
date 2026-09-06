@@ -14,6 +14,8 @@
 
 #include "base/base.h"
 #include "ml/ml.h"
+#include "parity/parity.h"
+#include "wp/wp.h"
 
 /*
  * Maximum number of floppy units supported
@@ -165,9 +167,9 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_sig, void *req);
 void FLP_FORMAT_TRACK(void *req, void *buf);
 
 /* External functions used by FLP */
-extern void WP_$WIRE(uint32_t phys);
+/* WP_$WIRE declared in wp/wp.h */
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
-extern int16_t PARITY_$CHK_IO(int16_t mode, uint32_t addr);
+/* PARITY_$CHK_IO declared in parity/parity.h */
 extern status_$t check_dma_error(int16_t channel);
 
 #endif /* FLP_H */

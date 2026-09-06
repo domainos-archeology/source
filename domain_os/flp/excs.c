@@ -103,7 +103,9 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
 
         /* Check for parity errors on write operations */
         if ((regs->control & 2) != 0) {
-            parity_result = PARITY_$CHK_IO(1, DAT_00e7b01c);
+            /* Original: pea (1).w / move.l phys; tst.w D0w -- only the low
+             * word of the uint32_t result is tested. */
+            parity_result = (int16_t)PARITY_$CHK_IO(1, DAT_00e7b01c);
             if ((int8_t)(-(parity_result != 0)) < 0) {
                 return status_$memory_parity_error_during_disk_write;
             }
