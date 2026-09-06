@@ -49,9 +49,9 @@ void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
      */
     packed_info = va;
 
-    /* Shift VA by the PTT shift value */
-    uint8_t shift = *((uint8_t*)&VA_TO_PTT_OFFSET_MASK + 4);  /* PTT shift at offset +4 */
-    packed_info <<= (shift & 0x3F);
+    /* Shift VA by the PTT shift value.
+     * 0xE24056: move.w MMU_$PTT_SHIFT,D1w / 0xE2405A: lsl.l D1,D4 */
+    packed_info <<= (MMU_$PTT_SHIFT & 0x3F);
 
     /* Insert protection in low byte, then rotate right 5 */
     packed_info = (packed_info & 0xFFFFFF00) | prot;
@@ -62,7 +62,8 @@ void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
     packed_info = (packed_info >> 7) | (packed_info << 25);
 
     /* For 68010, need additional shift of low word */
-    if (M68020 == 0) {
+    /* 0xE24068: tst.w M68020 / bne - whole-word test */
+    if (!M68020_IS_020_W()) {
         packed_info = (packed_info & 0xFFFF0000) | ((packed_info & 0xFFFF) >> 2);
     }
 

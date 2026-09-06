@@ -44,14 +44,19 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
     uint16_t page_size;
     int8_t no_read_ahead;
     int8_t zero_flag;
-    uid_t uid;
-    int32_t page_num;
     /*
-     * dtm (-0x38) and acl_info (-0x30) are each 6-byte {high, low}
-     * timestamps filled in by NETWORK_$READ_AHEAD; the original copies
-     * their high longword and low word into the AOTE separately, so they
-     * are declared as clock_t here rather than accessed through byte casts.
-     * TODO: NETWORK_$READ_AHEAD's dtm/acl_info parameters should be clock_t *.
+     * The frame slot at A6-0x28 is a 32-byte request record, not a bare UID:
+     * the caller fills only the UID (0xE02D20) and the page number
+     * (0xE02D3C) and NETWORK_$READ_AHEAD copies all eight longwords into
+     * its own frame at 0xE0FC8A and copies eight back at 0xE0FF72.  The
+     * remaining 20 bytes are left uninitialised by the original; leaving
+     * this local uninitialised reproduces that.
+     */
+    network_$page_request_t request;
+    /*
+     * dtm (-0x38), clock (-0x40) and acl_info (-0x30) are each 6-byte
+     * {high, low} timestamps filled in by NETWORK_$READ_AHEAD, which writes
+     * a longword at +0 and a word at +4 to all three (0xE0FF48-0xE0FF6C).
      */
     clock_t dtm;
     clock_t clock;
@@ -76,20 +81,20 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
         NETBUF_$RTN_DAT(ppn_array[i] << 10);
     }
 
-    /* Set up UID and page number */
-    uid.high = *((uint32_t *)((char *)aote + 0x10));
-    uid.low = *((uint32_t *)((char *)aote + 0x14));
-    page_num = start_page + (uint32_t)*((uint16_t *)((char *)aste + 0x0C)) * 32;
+    /* Set up the request record: UID (0xE02D20) and page number (0xE02D3C) */
+    request.uid.high = *((uint32_t *)((char *)aote + 0x10));
+    request.uid.low = *((uint32_t *)((char *)aote + 0x14));
+    request.page_num =
+        start_page + (uint32_t)*((uint16_t *)((char *)aste + 0x0C)) * 32;
 
     /* Calculate page size from AOTE (2^(9 + (byte at 0x9D & 0xF))) */
     page_size_shift = *((uint8_t *)((char *)aote + 0x9D)) & 0x0F;
     page_size = 1 << (page_size_shift + 9);
 
     /* Perform network read-ahead */
-    pages_read = NETWORK_$READ_AHEAD((char *)aote + 0xAC, &uid, ppn_array,
+    pages_read = NETWORK_$READ_AHEAD((char *)aote + 0xAC, &request, ppn_array,
                                       page_size, allocated, no_read_ahead,
-                                      flags, (int32_t *)&dtm, &clock,
-                                      (uint32_t *)&acl_info, status);
+                                      flags, &dtm, &clock, &acl_info, status);
 
     /* Free excess pages that weren't used */
     for (i = allocated - pages_read - 1; i >= 0; i--) {

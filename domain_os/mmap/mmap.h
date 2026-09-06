@@ -81,8 +81,43 @@ typedef struct ws_hdr_t {
   uint32_t field_14;      /* 0x14: Unknown field */
   uint32_t pri_timestamp; /* 0x18: Priority update timestamp */
   uint32_t ws_timestamp;  /* 0x1C: Working set timestamp */
-  uint32_t reserved2[2];  /* 0x20: Padding to 36 bytes (0x24) */
+  /*
+   * 0x20: working-set floor.  PMAP_$PURIFIER_L only considers a working
+   * set as a steal candidate while page_count > ws_floor
+   * (0x00E13EB0-0x00E13EBE and 0x00E13F1A-0x00E13F28).
+   */
+  uint32_t ws_floor;
 } ws_hdr_t;
+
+/*
+ * The WSL array stride is 0x24 (36) bytes, not 0x28: PMAP_$PURIFIER_L walks
+ * it with `lea (-0x24,A1),A1` (0x00E13EC2) and the per-pool page counts are
+ * 0x24 apart (0xE232B4, 0xE232D8, 0xE232FC, 0xE23320, 0xE23344, 0xE23368).
+ */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(ws_hdr_t, owner) == 0x02, "ws_hdr_t.owner");
+_Static_assert(__builtin_offsetof(ws_hdr_t, page_count) == 0x04,
+               "ws_hdr_t.page_count (0xE232B4 for WSL[0])");
+_Static_assert(__builtin_offsetof(ws_hdr_t, scan_pos) == 0x08, "ws_hdr_t.scan_pos");
+_Static_assert(__builtin_offsetof(ws_hdr_t, head_vpn) == 0x0C, "ws_hdr_t.head_vpn");
+_Static_assert(__builtin_offsetof(ws_hdr_t, max_pages) == 0x10, "ws_hdr_t.max_pages");
+_Static_assert(__builtin_offsetof(ws_hdr_t, field_14) == 0x14, "ws_hdr_t.field_14");
+_Static_assert(__builtin_offsetof(ws_hdr_t, pri_timestamp) == 0x18,
+               "ws_hdr_t.pri_timestamp");
+_Static_assert(__builtin_offsetof(ws_hdr_t, ws_timestamp) == 0x1C,
+               "ws_hdr_t.ws_timestamp");
+_Static_assert(__builtin_offsetof(ws_hdr_t, ws_floor) == 0x20, "ws_hdr_t.ws_floor");
+_Static_assert(sizeof(ws_hdr_t) == 0x24, "ws_hdr_t stride must be 0x24 bytes");
+
+_Static_assert(__builtin_offsetof(mmape_t, seg_offset) == 0x01, "mmape_t.seg_offset");
+_Static_assert(__builtin_offsetof(mmape_t, segment) == 0x02, "mmape_t.segment");
+_Static_assert(__builtin_offsetof(mmape_t, wsl_index) == 0x04, "mmape_t.wsl_index");
+_Static_assert(__builtin_offsetof(mmape_t, flags1) == 0x05, "mmape_t.flags1");
+_Static_assert(__builtin_offsetof(mmape_t, priority) == 0x08, "mmape_t.priority");
+_Static_assert(__builtin_offsetof(mmape_t, flags2) == 0x09, "mmape_t.flags2");
+_Static_assert(__builtin_offsetof(mmape_t, disk_addr) == 0x0C, "mmape_t.disk_addr");
+_Static_assert(sizeof(mmape_t) == 0x10, "mmape_t stride must be 0x10 bytes");
+#endif
 
 /* WSL flags bit definitions */
 #define WSL_FLAG_IN_USE 0x80 /* Working set list is in use */
@@ -90,6 +125,20 @@ typedef struct ws_hdr_t {
 /* WSL special indices */
 #define WSL_INDEX_FREE_POOL 0 /* Free page pool */
 #define WSL_INDEX_WIRED 5     /* Wired/locked pages */
+
+/*
+ * Working-set list indices 0..5 are the six global page pools.  The index
+ * is the same value that is stored in mmape_t.wsl_index (the
+ * MMAP_PAGE_TYPE_* codes).  MMAP_$WSL[n].page_count is the per-pool page
+ * count that the purifiers and AST_$ALLOCATE_PAGES test; the addresses are
+ * the ones Ghidra used to call DAT_00e232b4 .. DAT_00e23368.
+ */
+#define MMAP_WSL_POOL_FREE 0        /* 0xE232B4: free pages */
+#define MMAP_WSL_POOL_PURE 1        /* 0xE232D8: clean read-only pages */
+#define MMAP_WSL_POOL_IMPURE 2      /* 0xE232FC: clean writable pages */
+#define MMAP_WSL_POOL_DIRTY_LOCAL 3 /* 0xE23320: dirty, PMAP_$PURIFIER_L */
+#define MMAP_WSL_POOL_DIRTY_RMT 4   /* 0xE23344: dirty, PMAP_$PURIFIER_R */
+#define MMAP_WSL_POOL_WIRED 5       /* 0xE23368: wired pages */
 #define WSL_INDEX_MIN_USER 5  /* Minimum user WSL index */
 #define WSL_INDEX_MAX 69      /* Maximum WSL index (0x45) */
 
@@ -235,7 +284,14 @@ void MMAP_$FREE_REMOVE(mmape_t *page, uint32_t vpn);
 void MMAP_$IMPURE_TRANSFER(mmape_t *page, uint32_t vpn);
 
 /* Remove unavailable page */
-void MMAP_$UNAVAIL_REMOV(uint32_t vpn);
+/*
+ * MMAP_$UNAVAIL_REMOV - Remove a page from its current working set list.
+ *
+ * Two parameters: the VPN (long, at (0x8,A6) in the callee) and a boolean
+ * that all three call sites push as TRUE (0xFF) and that the callee at
+ * 0x00E0CC30 never reads.  Call sites: 0x00E13884, 0x00E13D60, 0x00E14358.
+ */
+void MMAP_$UNAVAIL_REMOV(uint32_t vpn, boolean unused_flag);
 
 /* Make a page available */
 void MMAP_$AVAIL(uint32_t vpn);

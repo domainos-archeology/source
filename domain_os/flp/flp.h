@@ -13,6 +13,7 @@
 #define FLP_H
 
 #include "base/base.h"
+#include "ec/ec.h"
 #include "ml/ml.h"
 #include "parity/parity.h"
 #include "wp/wp.h"
@@ -69,8 +70,8 @@ typedef struct {
  *   +0x138: DAT_00e7b02c (initialized flag)
  */
 
-/* Event counter for floppy operations */
-extern void *FLP_$EC;
+/* Event counter for floppy operations (FLP_$DATA + 0x60 = 0xe7af54) */
+extern ec_$eventcount_t FLP_$EC;
 
 /* Saved registers from interrupt */
 extern uint16_t FLP_$SREGS;

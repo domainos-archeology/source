@@ -39,22 +39,12 @@ extern void AST_$LOOKUP_WITH_HINTS(void *uid_info, uint32_t *vol_ptr, void *attr
 extern void AST_$DEACTIVATE_SEGMENT(aste_t *aste, uint32_t flags, status_$t *status);
 
 /*
- * AST_$SET_ATTR_DISPATCH - Attribute setting dispatch (flattened from nested Pascal procedure)
- *
- * This was originally a nested Pascal procedure that accessed the caller's frame.
- * For portability, we pass the necessary parameters explicitly:
- *
- * @param aote       - AOTE being modified
- * @param attr_type  - Attribute type code (0-27)
- * @param value      - Pointer to attribute value
- * @param wait_flag  - Wait flag from caller
- * @param clock_info - Clock info from caller's frame
- * @param status     - Output status code
- *
- * Original address: 0x00E04B00
+ * AST_$SET_ATTR_DISPATCH (0x00E04B00) is a Pascal procedure nested inside
+ * ast_$set_attribute_internal: it declares no parameters and reads the
+ * parent's frame through the static link in D4.  It is therefore emitted as a
+ * static procedure in ast/set_attribute_internal.c and is deliberately not
+ * declared here - it has no callable global ABI.
  */
-void AST_$SET_ATTR_DISPATCH(aote_t *aote, uint16_t attr_type, void *value,
-                            int8_t wait_flag, clock_t *clock_info, status_$t *status);
 
 /*
  * Internal helper functions
@@ -130,9 +120,16 @@ void ast_$invalidate_no_wait(uint16_t end_page);
 /* Flush installed pages */
 void ast_$flush_installed_pages(void);
 
-/* Set attribute on object */
+/*
+ * Set attribute on object (0x00E05214).
+ *
+ * The fifth argument is the caller's subject record: AST_$SET_ATTR_DISPATCH
+ * reads it uplevel at (0x14,A6) for attribute type 0x14.  Callers that use
+ * neither 0x14 nor the ACL merge pass NULL, as the recursive ADD_REFCOUNT call
+ * at 0xE051A4 does.
+ */
 void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
-                                 int8_t wait_flag, void *exsid_info,
+                                 boolean wait_flag, ast_$subject_t *subject,
                                  clock_t *clock_info, status_$t *status);
 
 /* Validate UID and return status */
@@ -146,9 +143,11 @@ status_$t ast_$validate_uid(uid_t *uid, uint32_t flags);
 extern uint16_t ast_$vol_info_count;
 #define DAT_00e1e0a0 ast_$vol_info_count
 
-/* Unknown at 0xE1E088 (offset 0x408) */
-extern uint32_t ast_$unknown_e1e088;
-#define DAT_00e1e088 ast_$unknown_e1e088
+/*
+ * Dismount eventcount at 0xE1E088 (offset 0x408).  AST_$DISMOUNT waits on it
+ * (0xE06A36) and reads its value field for the wait target (0xE06A12), so it is
+ * a 12-byte ec_$eventcount_t, not a bare longword.  See AST_$DISM_EC in ast.h.
+ */
 
 /* Volume index array at 0xE1E092 */
 extern int16_t ast_$vol_indices[];

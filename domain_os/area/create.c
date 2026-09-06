@@ -1,324 +1,379 @@
 /*
- * AREA_$CREATE - Create a new area in current address space
- * AREA_$CREATE_FROM - Create area from remote UID (deduplicating)
+ * AREA_$CREATE - Create a new area in the current address space
+ * AREA_$CREATE_FROM - Create area from a remote UID (deduplicating)
  * area_$internal_create - Internal area creation helper
  *
  * Original addresses:
- *   AREA_$CREATE: 0x00E079C0
- *   AREA_$CREATE_FROM: 0x00E07A02
  *   area_$internal_create: 0x00E077DA
+ *   AREA_$CREATE:          0x00E079C0
+ *   AREA_$CREATE_FROM:     0x00E07A02
+ *
+ * A5 (the Pascal module data base) is 0xE1E118 = AREA_GLOBALS_BASE for all
+ * three entry points; module globals appear below under their recovered
+ * names rather than as (offset,A5) arithmetic.
  */
 
 #include "area/area_internal.h"
+#include "math/math.h"
 #include "misc/crash_system.h"
 
-/* Number of UID hash buckets - must match area_internal.h if defined there */
-#ifndef UID_HASH_BUCKETS
-#define UID_HASH_BUCKETS    11
-#endif
+/* Virtual size is rounded up to 32KB: addi.l #0x7fff / andi.l #-0x8000
+ * at 0x00E077FE. */
+#define VIRT_SIZE_ALIGN     0x8000
 
-/* Size alignment constants */
-#define VIRT_SIZE_ALIGN     0x8000      /* 32KB alignment for virtual size */
-#define COMMIT_SIZE_ALIGN   0x400       /* 1KB alignment for commit size */
+/* Backing-store overhead is charged in 1KB units: the lsl.l #0x8 + lsl.l #0x2
+ * pair at 0x00E0790C. */
+#define COMMIT_SIZE_ALIGN   0x400
+
+/* Number of entries area_$internal_create asks for when the free list runs
+ * dry (move.w #0x60,-(SP) at 0x00E07824). */
+#define AREA_ALLOC_BATCH    0x60
 
 /*
  * area_$internal_create - Internal area creation
  *
- * This is the core area creation routine called by AREA_$CREATE and
- * AREA_$CREATE_FROM. It allocates an area entry from the free list,
- * initializes it, and optionally sets up remote backing store.
+ * Takes an entry off the free list, initializes it, optionally allocates
+ * remote backing store on the diskless partner, and sizes the area.
  *
- * Parameters:
- *   virt_size     - Virtual size (will be rounded up to 32KB)
- *   commit_size   - Committed size (will be rounded up to 1KB)
- *   remote_uid    - Remote UID (0 for local areas)
- *   owner_asid    - Owner address space ID
- *   alloc_remote  - If non-zero, allocate remote backing
- *   shared        - If negative, area is shared
- *   status_p      - Output: status code
+ * Parameters (stack offsets in the original frame):
+ *   virt_size    (0x08) Virtual size, rounded up to 32KB here
+ *   commit_size  (0x0C) Committed size
+ *   remote_uid   (0x10) Remote UID; 0 means "local create, take the lock"
+ *   owner_asid   (0x14) Owner address space ID
+ *   alloc_remote (0x16) Non-zero: allocate remote backing store
+ *   shared       (0x18) Domain boolean; true (0xFF) sets AREA_FLAG_REVERSED
+ *   status_p     (0x1A) Output: status code
  *
- * Returns: Area handle (generation << 16 | area_id), or 0 on failure
+ * Returns: area handle (generation << 16 | area_id), or 0 on failure.
  *
  * Original address: 0x00E077DA
  */
 uint32_t area_$internal_create(uint32_t virt_size, uint32_t commit_size,
                                uint32_t remote_uid, int16_t owner_asid,
-                               int16_t alloc_remote, int8_t shared,
+                               int16_t alloc_remote, boolean shared,
                                status_$t *status_p)
 {
     area_$entry_t *entry;
-    uint32_t handle = 0;
+    area_$handle_t handle;              /* (-0x8,A6) */
+    area_$handle_t result = 0;          /* (-0x20,A6), cleared at 0x00E077FA */
     int16_t area_id;
-    int16_t remote_volx = 0;
-    int16_t local_volx;
-    uint32_t *globals = (uint32_t *)AREA_GLOBALS_BASE;
-    status_$t temp_status[2];
-    uint32_t total_size;
+    int16_t remote_volx = 0;            /* D6, cleared at 0x00E07886 */
+    uint16_t local_volx = 0;            /* (-0x22,A6) */
+    status_$t temp_status[2];           /* (-0x14,A6) */
+    uint32_t total_size;                /* D4 */
+    uint32_t total_commit;              /* D1 / (-0xc,A6) */
 
-    /* Round up sizes to alignment boundaries */
-    virt_size = (virt_size + VIRT_SIZE_ALIGN - 1) & ~(VIRT_SIZE_ALIGN - 1);
+    /* 0x00E077FE: virt_size := (virt_size + 0x7FFF) and not 0x7FFF */
+    virt_size = (virt_size + (VIRT_SIZE_ALIGN - 1)) & ~(uint32_t)(VIRT_SIZE_ALIGN - 1);
 
-    /* Lock if this is not a remote-created area */
+    /* 0x00E0780A: only a local create takes the area lock. */
     if (remote_uid == 0) {
         ML_$LOCK(ML_LOCK_AREA);
     }
 
     /*
-     * Check if we have free area entries.
-     * If free list is empty, try to allocate more resources.
+     * 0x00E0781C: if the free list is empty, try to extend the area table.
+     * area_$alloc_resources returns a Domain boolean: true (0xFF, i.e. < 0)
+     * means the table grew.  `tst.b D0b / bmi` at 0x00E0782E.
      */
     if (AREA_$FREE_LIST == NULL) {
-        int8_t result = area_$alloc_resources(0x60);
-        if (result >= 0) {
-            /* Allocation failed */
+        boolean grew = area_$alloc_resources(AREA_ALLOC_BATCH);
+        if (grew >= 0) {
             *status_p = status_$area_none_free;
+            /*
+             * 0x00E07838: the remote path returns while still holding
+             * nothing; only the local path unlocks.
+             */
             if (remote_uid == 0) {
                 ML_$UNLOCK(ML_LOCK_AREA);
             }
-            return 0;
+            return result;
         }
     }
 
-    /* Take entry from free list */
+    /* 0x00E0784E: unlink the head of the free list. */
     entry = AREA_$FREE_LIST;
     AREA_$FREE_LIST = entry->next;
 
-    /* If this is a local creation, link into per-ASID list */
+    /*
+     * 0x00E07856: a local create is threaded onto the owning ASID's list.
+     * The original indexes with a *word* shift (`move.w D4w,D0w /
+     * lsl.w #0x2,D0w / lea (0x0,A5,D0w*0x1),A0`), so the index is the
+     * sign-extended word owner_asid * 4.
+     */
     if (remote_uid == 0) {
-        int asid_offset = owner_asid * sizeof(uint32_t);
-        area_$entry_t **asid_list = (area_$entry_t **)((char *)globals + 0x4D8 + asid_offset);
+        area_$entry_t **asid_head = &AREA_$ASID_LIST[(int16_t)(owner_asid)];
 
-        entry->next = *asid_list;
+        entry->next = *asid_head;
         if (entry->next != NULL) {
-            entry->next->prev = entry;
+            entry->next->prev = entry;      /* 0x00E07868 */
         }
-        entry->prev = NULL;
-        *asid_list = entry;
+        entry->prev = NULL;                 /* 0x00E0786E */
+        *asid_head = entry;                 /* 0x00E07872 */
     }
 
-    /* Initialize entry fields */
+    /* 0x00E07876 onward: initialize the entry. */
     entry->virt_size = 0;
     entry->commit_size = 0;
     entry->remote_uid = remote_uid;
     entry->remote_volx = 0;
     entry->owner_asid = owner_asid;
+    entry->generation++;                    /* addq.w #0x1,(0x2c,A3) */
 
-    /* Increment generation number */
-    entry->generation++;
-
-    /* Set initial flags: ACTIVE | SHARED (0x09) */
+    /* 0x00E07890: the whole flags word is stored, not or-ed. */
     entry->flags = AREA_FLAG_ACTIVE | AREA_FLAG_SHARED;
     if (shared < 0) {
+        /*
+         * 0x00E0789A `bset.b #0x1,(0x2f,A3)`: 0x2F is the *low* byte of the
+         * flags word at 0x2E, so this is bit 1 of the word.
+         */
         entry->flags |= AREA_FLAG_REVERSED;
     }
 
-    /* Set first BSTE to unset */
-    entry->first_bste = -1;
+    entry->first_bste = -1;                 /* 0x00E078A0 */
 
-    /* Assign unique caller ID from global counter */
-    entry->caller_id = *(uint32_t *)((char *)globals + 0x5C4);
-    (*(uint32_t *)((char *)globals + 0x5C4))++;
+    /* 0x00E078A6: hand out and bump the module-wide caller id. */
+    entry->caller_id = AREA_$NEXT_CALLER_ID;
+    AREA_$NEXT_CALLER_ID++;
 
-    /* Decrement free count */
-    AREA_$N_FREE--;
+    AREA_$N_FREE--;                         /* 0x00E078B0 */
 
-    /* Unlock if local creation */
     if (remote_uid == 0) {
-        ML_$UNLOCK(ML_LOCK_AREA);
+        ML_$UNLOCK(ML_LOCK_AREA);           /* 0x00E078B8 */
     }
 
-    /* Calculate area ID and build handle */
+    /*
+     * 0x00E078C6-0x00E078DA: build the handle.  The generation is read
+     * *after* the increment above and lands in the high word; the area id
+     * is (entry - 0xD94C00) / 0x30 + 1 (divu.w, so a 1-based index).
+     */
     area_id = AREA_ENTRY_TO_ID(entry);
     handle = AREA_MAKE_HANDLE(entry->generation, area_id);
 
-    /* Initialize local volume index */
-    entry->volx = 0;
+    entry->volx = 0;                        /* 0x00E078DE (D6 is still 0) */
 
-    /* Determine volume index */
-    uint32_t *mother_node = (uint32_t *)((char *)globals + 0x5D0);
-    if (*mother_node == 0) {
-        /* Local node - use boot volume */
+    if (AREA_$PARTNER.low == 0) {
+        /*
+         * 0x00E078E2: no diskless partner, so this node backs the area on
+         * its own boot volume.
+         */
         entry->volx = CAL_$BOOT_VOLX;
-    } else if (alloc_remote != 0) {
-        /* Remote/diskless node - allocate remote backing */
+    } else if (alloc_remote != 0) {         /* 0x00E078F2 tst.w (0x16,A6) */
+        int32_t overhead;                   /* D4 */
 
-        /* Calculate total size including overhead */
-        int overhead_pages = (virt_size - 1) >> 16;
-        if (overhead_pages < 0) {
-            overhead_pages = ((virt_size + 0x3FFFE) >> 16);
+        /*
+         * 0x00E078F8-0x00E07910.  The sign test is on the *signed 32-bit*
+         * value virt_size-1 and happens BEFORE the shift, so virt_size == 0
+         * wraps to -1, gets biased by 0x3FFFF and yields one 1KB unit:
+         *
+         *   D4 := virt_size - 1
+         *   if D4 < 0 then D4 := D4 + 0x3FFFF          ; bpl / addi.l
+         *   D4 := sign_extend_word(high_word(D4))      ; swap / ext.l
+         *   D4 := D4 asr 2                             ; asr.l #0x2
+         *   D4 := (D4 + 1) shl 10                      ; addq / lsl #8 / lsl #2
+         *   D4 := virt_size + D4
+         *
+         * For virt_size == 0 this is 0x400, not 0x1000000.
+         */
+        overhead = (int32_t)virt_size - 1;
+        if (overhead < 0) {
+            overhead += 0x3FFFF;
         }
-        total_size = virt_size + ((overhead_pages >> 2) + 1) * COMMIT_SIZE_ALIGN;
+        overhead = (int32_t)(int16_t)((uint32_t)overhead >> 16);
+        overhead >>= 2;
+        total_size = virt_size + (uint32_t)(overhead + 1) * COMMIT_SIZE_ALIGN;
 
-        /* Create remote area */
-        remote_volx = REM_FILE_$CREATE_AREA(
-            AREA_$PARTNER,
+        /* 0x00E07912: the extra backing store is charged to the commit. */
+        total_commit = commit_size + (total_size - virt_size);
+
+        /*
+         * 0x00E0791C: AREA_$PARTNER is passed BY ADDRESS (`pea (0x5cc,A5)`).
+         * It is an 8-byte node address, not a scalar.
+         */
+        remote_volx = (int16_t)REM_FILE_$CREATE_AREA(
+            &AREA_$PARTNER,
             total_size,
-            commit_size + (total_size - virt_size),
+            total_commit,
             entry->caller_id,
             shared,
             &local_volx,
-            status_p
-        );
+            status_p);
 
         if (*status_p != status_$ok) {
-            /* Remote creation failed - delete the local entry */
+            /* 0x00E07942: throw the half-built area away. */
             AREA_$DELETE(handle, temp_status);
-            return 0;
+            return result;
         }
 
-        /* Get packet size if not yet set */
-        if (AREA_$PARTNER_PKT_SIZE == 0) {
-            AREA_$PARTNER_PKT_SIZE = NETWORK_$GET_PKT_SIZE(AREA_$PARTNER, local_volx);
+        if (AREA_$PARTNER_PKT_SIZE == 0) {  /* 0x00E07950 */
+            /* network.h types the node address as uint32_t*; the callee
+             * reads (A0) and (0x4,A0), i.e. the same 8-byte record. */
+            AREA_$PARTNER_PKT_SIZE =
+                (int16_t)NETWORK_$GET_PKT_SIZE((uint32_t *)&AREA_$PARTNER,
+                                               local_volx);
         }
     }
 
-    /* Store remote volume index */
-    entry->remote_volx = remote_volx;
+    entry->remote_volx = remote_volx;       /* 0x00E0796C */
 
-    /* Resize the area to requested size */
-    if (virt_size == 0) {
-        *status_p = status_$ok;
-    } else {
+    if (virt_size != 0) {                   /* 0x00E07970 tst.l D2 */
         area_$resize(area_id, entry, virt_size, commit_size, 0, status_p);
+    } else {
+        *status_p = status_$ok;             /* 0x00E0798C clr.l (A2) */
     }
 
-    /* Check for resize failure */
     if (*status_p == status_$ok) {
-        return handle;
+        result = handle;                    /* 0x00E07992 */
     } else {
-        /* Resize failed - delete the area */
-        int8_t do_unlink = (remote_uid == 0) ? (int8_t)-1 : 0;
+        /*
+         * 0x00E0799A: `st -(SP)` (true) for a local create, `clr.w -(SP)`
+         * (false) for a remote one - only a local create is threaded onto
+         * an ASID list and therefore needs unlinking.
+         */
+        boolean do_unlink = (remote_uid == 0) ? true : false;
         area_$internal_delete(entry, area_id, temp_status, do_unlink);
-        return 0;
     }
+
+    return result;
 }
 
 /*
- * AREA_$CREATE - Create a new area in current address space
+ * AREA_$CREATE - Create a new area in the current address space
  *
- * This is the public API for creating a new local area. It delegates
- * to area_$internal_create with the current process's ASID.
+ * A thin wrapper: always a local create (remote_uid 0) for the running
+ * process's ASID, with remote backing allowed.
+ *
+ * The handle returned by area_$internal_create is stored into a dead local
+ * at 0x00E079EE and never read, so this is a Pascal *procedure*: it reports
+ * only the status.
  *
  * Original address: 0x00E079C0
  */
 void AREA_$CREATE(uint32_t virt_size, uint32_t commit_size,
-                  int8_t shared, status_$t *status_p)
+                  boolean shared, status_$t *status_p)
 {
-    status_$t local_status;
-    area_$handle_t handle;
+    status_$t local_status;             /* (-0x4,A6) */
 
-    handle = area_$internal_create(
-        virt_size,
-        commit_size,
-        0,              /* remote_uid = 0 for local */
-        PROC1_$AS_ID,   /* current ASID */
-        1,              /* alloc_remote = 1 */
-        shared,
-        &local_status
-    );
+    (void)area_$internal_create(virt_size,
+                                commit_size,
+                                0,              /* remote_uid: local create */
+                                PROC1_$AS_ID,   /* 0x00E079DA */
+                                1,              /* alloc_remote */
+                                shared,
+                                &local_status);
 
-    *status_p = local_status;
-
-    /* Note: The handle is returned via register D0 in the original code.
-     * In C, the caller would need to retrieve it separately or we'd need
-     * to change the function signature. For now, we match the original
-     * signature which only returns status.
-     */
+    *status_p = local_status;           /* 0x00E079F2 */
 }
 
 /*
- * AREA_$CREATE_FROM - Create area from remote UID (deduplicating)
+ * AREA_$CREATE_FROM - Create an area from a remote UID (deduplicating)
  *
- * Creates an area backed by a remote UID. If an area already exists
- * with the same UID and caller_id, returns a reference to that area
- * instead of creating a new one (deduplication).
+ * Looks the remote UID up in the module hash table.  If an area already
+ * exists for the same UID *and* caller id, that area's id is returned and
+ * AREA_$CR_DUP is bumped; otherwise a new area is created and threaded onto
+ * the hash chain.
+ *
+ * Returns: an area id (word).
  *
  * Original address: 0x00E07A02
  */
 uint16_t AREA_$CREATE_FROM(uint32_t remote_uid, uint32_t virt_size,
                            uint32_t commit_size, int32_t caller_id,
-                           int32_t *status_p)
+                           status_$t *status_p)
 {
-    uint16_t area_id;
-    area_$uid_hash_t *hash_entry;
-    area_$entry_t *entry;
+    /*
+     * D2 holds remote_uid on entry (0x00E07A10) and is the value moved to
+     * D0w by the common exit at 0x00E07B44.  Both success paths overwrite
+     * it with the area id first; the "hash pool exhausted" path at
+     * 0x00E07AC4 does not.  See the comment there.
+     */
+    uint32_t d2_result = remote_uid;
+    area_$uid_hash_t *hash_entry;       /* A2 */
+    area_$entry_t *entry;               /* A1 / A0 */
+    area_$handle_t handle;              /* D0 */
+    uint16_t area_id;                   /* D0w */
     uint16_t hash_bucket;
-    uint32_t *globals = (uint32_t *)AREA_GLOBALS_BASE;
 
     ML_$LOCK(ML_LOCK_AREA);
 
-    /* Hash the remote UID to find bucket */
-    hash_bucket = M$OIU$WLW(remote_uid, UID_HASH_BUCKETS);
+    /* 0x00E07A2A: bucket := remote_uid mod 11 */
+    hash_bucket = (uint16_t)M$OIU$WLW((long)remote_uid, AREA_UID_HASH_BUCKETS);
 
-    /* Search for existing entry with same UID */
-    hash_entry = (area_$uid_hash_t *)((uint32_t *)((char *)globals + 0x454))[hash_bucket];
-
+    /*
+     * 0x00E07A4C-0x00E07A5C.  Note there is no null check on first_entry:
+     * the original loads (0x4,A2) into A0 and immediately reads (0x20,A0).
+     * An empty bucket record would fault; AREA_$INIT and the unlink paths
+     * never leave one on a chain.
+     */
+    hash_entry = AREA_$UID_HASH[hash_bucket];
     while (hash_entry != NULL) {
-        entry = hash_entry->first_entry;
-        if (entry != NULL && entry->remote_uid == remote_uid) {
+        if (hash_entry->first_entry->remote_uid == remote_uid) {
             break;
         }
         hash_entry = hash_entry->next;
     }
 
-    /* If found, check for matching caller_id (deduplication) */
-    if (hash_entry != NULL) {
+    if (hash_entry != NULL) {           /* 0x00E07A5E */
+        /* 0x00E07A64-0x00E07A8E: match on caller id within the chain. */
         for (entry = hash_entry->first_entry; entry != NULL; entry = entry->next) {
             if ((int32_t)entry->caller_id == caller_id) {
-                /* Found existing area - return it */
-                area_id = AREA_ENTRY_TO_ID(entry);
-                AREA_$CR_DUP++;
+                d2_result = (uint32_t)(uint16_t)AREA_ENTRY_TO_ID(entry);
+                AREA_$CR_DUP++;         /* 0x00E07A7E */
                 *status_p = status_$ok;
                 ML_$UNLOCK(ML_LOCK_AREA);
-                return area_id;
+                return (uint16_t)d2_result;
             }
         }
     }
 
-    /* No existing area found - create a new one */
-    area_$handle_t handle = area_$internal_create(
-        virt_size,
-        commit_size,
-        remote_uid,
-        0,              /* owner_asid = 0 for remote */
-        0,              /* alloc_remote = 0 */
-        0,              /* shared = 0 */
-        status_p
-    );
+    /* 0x00E07A90: no match - create the area. */
+    handle = area_$internal_create(virt_size,
+                                   commit_size,
+                                   remote_uid,
+                                   0,       /* owner_asid */
+                                   0,       /* alloc_remote */
+                                   false,   /* shared */
+                                   status_p);
+    /* 0x00E07AAA stores the handle into a dead local; D0 stays live and only
+     * its low word (the area id) is used from here on. */
+    area_id = (uint16_t)AREA_HANDLE_TO_ID(handle);
 
-    area_$uid_hash_t *pool_entry = *(area_$uid_hash_t **)((char *)globals + 0x450);
+    if (*status_p == status_$ok) {      /* 0x00E07AAE */
+        if (hash_entry == NULL) {       /* 0x00E07AB4 */
+            /* 0x00E07ABA: take a chain record off the pool free list. */
+            hash_entry = AREA_$UID_HASH_FREE;
 
-    if (*status_p == status_$ok) {
-        area_id = AREA_HANDLE_TO_ID(handle);
-
-        /* If no existing hash entry, allocate one from pool */
-        if (hash_entry == NULL) {
-            if (pool_entry == NULL) {
-                /* No pool entries - delete the area and fail */
-                int entry_offset = (area_id & 0xFFFF) * AREA_ENTRY_SIZE;
-                area_$internal_delete((area_$entry_t *)(AREA_TABLE_BASE + entry_offset - AREA_ENTRY_SIZE),
-                                      area_id, status_p, 0);
+            if (hash_entry == NULL) {
+                /*
+                 * 0x00E07AC4: the pool is exhausted.  The area just created
+                 * is deleted (do_unlink false, `clr.w -(SP)`) and
+                 * status_$area_no_uid is reported.
+                 *
+                 * ORIGINAL BUG (0x00E07AEC -> 0x00E07B38 -> 0x00E07B44):
+                 * this path branches straight to the epilogue without doing
+                 * the `move.w D0w,D2w` at 0x00E07B36, so D2 still holds the
+                 * remote UID loaded at 0x00E07A10 and the function returns
+                 * the LOW WORD OF remote_uid instead of the area id.  The
+                 * caller therefore gets a garbage area id alongside a
+                 * non-zero status.  Reproduced here deliberately.
+                 */
+                area_$internal_delete(AREA_ID_TO_ENTRY(area_id), (int16_t)area_id,
+                                      status_p, false);
                 *status_p = status_$area_no_uid;
                 ML_$UNLOCK(ML_LOCK_AREA);
-                return area_id;
+                return (uint16_t)d2_result;
             }
 
-            /* Take entry from pool */
-            *(area_$uid_hash_t **)((char *)globals + 0x450) = pool_entry->next;
-
-            /* Link into hash bucket */
-            pool_entry->next = (area_$uid_hash_t *)((uint32_t *)((char *)globals + 0x454))[hash_bucket];
-            ((uint32_t *)((char *)globals + 0x454))[hash_bucket] = (uint32_t)pool_entry;
-            pool_entry->first_entry = NULL;
-
-            hash_entry = pool_entry;
+            /* 0x00E07AEE: pop it and push it onto this bucket. */
+            AREA_$UID_HASH_FREE = hash_entry->next;
+            hash_entry->next = AREA_$UID_HASH[hash_bucket];
+            AREA_$UID_HASH[hash_bucket] = hash_entry;
+            hash_entry->first_entry = NULL;
         }
 
-        /* Link area entry into hash chain */
-        int entry_offset = (area_id & 0xFFFF) * AREA_ENTRY_SIZE;
-        entry = (area_$entry_t *)(AREA_TABLE_BASE + entry_offset - AREA_ENTRY_SIZE);
-
-        entry->caller_id = caller_id;
+        /* 0x00E07B00: thread the new entry onto the head of the chain. */
+        entry = AREA_ID_TO_ENTRY(area_id);
+        entry->caller_id = (uint32_t)caller_id;
 
         if (hash_entry->first_entry != NULL) {
             hash_entry->first_entry->prev = entry;
@@ -328,7 +383,8 @@ uint16_t AREA_$CREATE_FROM(uint32_t remote_uid, uint32_t virt_size,
         entry->prev = NULL;
     }
 
-    area_id = AREA_HANDLE_TO_ID(handle);
+    d2_result = area_id;                /* 0x00E07B36 move.w D0w,D2w */
+
     ML_$UNLOCK(ML_LOCK_AREA);
-    return area_id;
+    return (uint16_t)d2_result;
 }

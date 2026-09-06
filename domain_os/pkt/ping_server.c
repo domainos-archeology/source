@@ -60,27 +60,38 @@ void PKT_$PING_SERVER(void)
     /* Set lock to prevent preemption during receive processing */
     PROC1_$SET_LOCK(0x13);
 
-    /* Get socket's event count */
-    /* TODO(source-j33): Get proper socket event count from socket table */
-    /* sock_ec = *(ec_$eventcount_t **)(&SOCK_EC_ARRAY[PKT_PING_SOCKET]); */
-    sock_ec = NULL;  /* Placeholder */
+    /*
+     * Get socket's event count.  The original hard-codes the table slot
+     * for socket 0xD:
+     * 00e12bfe  movea.l (0x00e28de4).l,A0
+     * 00e12c04  move.l (A0),D2
+     * 00e12c0c  addq.l #0x1,D2
+     * 0xE28DE4 == 0xE28DB4 + 0xD-1 entries, i.e.
+     * SOCK_$EVENT_COUNTERS[PKT_PING_SOCKET - 1].
+     */
+    sock_ec = SOCK_$EVENT_COUNTERS[PKT_PING_SOCKET - 1];
 
-    wait_val = 1;  /* Initial wait value */
+    wait_val = sock_ec->value + 1;  /* Initial wait value */
 
     /* Main server loop - runs forever */
     for (;;) {
-        /* Wait for packet to arrive */
-        if (sock_ec != NULL) {
-            ec_$eventcount_t *ecs[3];
-            int32_t wait_vals[3];
-
-            ecs[0] = sock_ec;
-            ecs[1] = NULL;
-            ecs[2] = NULL;
-            wait_vals[0] = wait_val;
-
-            EC_$WAIT(ecs, wait_vals);
-        }
+        /*
+         * Wait for a packet to arrive.  Only one eventcount is used;
+         * ecs[1] terminates the list, so vals[1]/vals[2] are ignored - but
+         * the original still pushes 1 into both of them:
+         *   00e12c28  pea (0x1).w              vals[2] = 1
+         *   00e12c2c  move.l (SP),-(SP)        vals[1] = 1 (copy of vals[2])
+         *   00e12c2e  move.l D2,-(SP)          vals[0] = wait_val
+         *   00e12c30  pea (A2)   A2 = 0        ecs[2] = NULL
+         *   00e12c32  pea (A2)                 ecs[1] = NULL
+         *   00e12c34  movea.l (0x00e28de4).l,A0
+         *   00e12c3a  pea (A0)                 ecs[0] = sock_ec
+         *   00e12c3c  jsr EC_$WAIT
+         * The result is discarded.
+         */
+        EC_$WAIT((ec_$wait_ecs_t){{ SOCK_$EVENT_COUNTERS[PKT_PING_SOCKET - 1],
+                                    NULL, NULL }},
+                 (ec_$wait_vals_t){{ wait_val, 1, 1 }});
 
         /* Receive the packet */
         APP_$RECEIVE(PKT_PING_SOCKET, &recv_pkt, &status);

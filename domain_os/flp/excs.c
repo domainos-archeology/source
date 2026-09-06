@@ -19,6 +19,7 @@
  */
 
 #include "flp/flp_internal.h"
+#include "time/time.h"
 
 /* Status codes for floppy operations */
 #define status_$memory_parity_error_during_disk_write  0x00080025
@@ -72,13 +73,16 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
     int16_t wait_result;
     int16_t parity_result;
     uint16_t local_regs[3];  /* Local status register buffer */
-    uint32_t *ec_value_ptr;
     volatile flp_regs_t *regs;
-    uint32_t ec_list[6];     /* Event counter wait list */
+    int32_t wait_value;      /* Target value for FLP_$EC */
 
-    /* Get event counter value + 1 for wait comparison */
-    ec_value_ptr = (uint32_t *)((uintptr_t)&FLP_$EC + sizeof(uint32_t));
-    uint32_t wait_value = *ec_value_ptr + 1;
+    /*
+     * Get event counter value + 1 for wait comparison
+     * 00e3e27e  move.l (0x60,A5),D0   ; A5 = 0xe7aef4, so (0x60,A5) = FLP_$EC
+     * 00e3e282  addq.l #0x1,D0
+     * 00e3e284  move.l D0,(-0x8,A6)
+     */
+    wait_value = FLP_$EC.value + 1;
 
     /* Send command to controller via SHAKE */
     status = SHAKE(cmd_buf, (int16_t *)cmd_size, &DAT_00e3e110);
@@ -87,15 +91,24 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
     }
 
     /*
-     * Wait for command completion.
-     * EC_$WAIT takes an event counter list and a value to wait for.
-     * The list format is complex - contains pointers to EC structures.
+     * Wait for command completion, with an 8-tick timeout on the system
+     * clock.  Arguments are pushed right-to-left (values first, then the
+     * pointers, which end up at the lower addresses):
+     *   00e3e2a0  clr.l -(SP)                  vals[2] = 0
+     *   00e3e2a2  move.l (0x00e2b0d4).l,D1
+     *   00e3e2a8  addq.l #0x8,D1
+     *   00e3e2aa  move.l D1,-(SP)              vals[1] = TIME_$CLOCKH + 8
+     *   00e3e2ac  move.l (-0x8,A6),-(SP)       vals[0] = FLP_$EC.value + 1
+     *   00e3e2b0  move.l #0x0,-(SP)            ecs[2] = NULL
+     *   00e3e2b6  move.l #0xe2b0d4,-(SP)       ecs[1] = &TIME_$CLOCKH
+     *   00e3e2bc  pea (0x60,A5)                ecs[0] = &FLP_$EC
+     *   00e3e2c0  jsr EC_$WAIT
+     *   00e3e2ca  move.w D0w,D3w               ; 0-based index
+     * wait_result != 0 therefore means the clock EC fired (timeout).
      */
-    /* Build event counter wait list */
-    ec_list[0] = (uint32_t)(uintptr_t)&FLP_$EC;
-    ec_list[1] = DAT_00e2b0d4 + 8;  /* Secondary EC address */
-
-    wait_result = EC_$WAIT((void *)ec_list, &wait_value);
+    wait_result = EC_$WAIT(
+        (ec_$wait_ecs_t){{ &FLP_$EC, (ec_$eventcount_t *)&TIME_$CLOCKH, NULL }},
+        (ec_$wait_vals_t){{ wait_value, (int32_t)(TIME_$CLOCKH + 8), 0 }});
 
     /* Check for DMA and parity errors (unless command was interrupt sense) */
     if ((cmd_buf[0] & 7) != 7) {  /* Not sense interrupt command */
@@ -201,7 +214,7 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
             uint16_t unit = cmd_buf[1] & 3;
             DAT_00e7b00a = unit;
 
-            status = EXCS(&DAT_00e7b008, &DAT_00e3e21c, req);
+            status = EXCS((uint16_t *)DAT_00e7b008, &DAT_00e3e21c, req);
 
             /* Clear unit status */
             DAT_00e7af6c[unit * 2] = 0;

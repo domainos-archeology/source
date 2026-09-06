@@ -23,6 +23,7 @@ void AST_$SET_ATTRIBUTE(uid_t *uid, uint16_t attr_id, void *value, status_$t *st
 {
     uid_t local_uid;
     clock_t clock_val;
+    /* ACL_$GET_EXSID fills this with an ast_$subject_t (see ast/ast.h). */
     uint8_t exsid_buf[104];
     status_$t local_status;
 
@@ -44,7 +45,9 @@ void AST_$SET_ATTRIBUTE(uid_t *uid, uint16_t attr_id, void *value, status_$t *st
     PROC1_$INHIBIT_BEGIN();
 
     /* Call internal attribute setter */
-    ast_$set_attribute_internal(&local_uid, attr_id, value, -1, exsid_buf, &clock_val, &local_status);
+    ast_$set_attribute_internal(&local_uid, attr_id, value, -1,
+                                (ast_$subject_t *)exsid_buf, &clock_val,
+                                &local_status);
 
     PROC1_$INHIBIT_END();
 

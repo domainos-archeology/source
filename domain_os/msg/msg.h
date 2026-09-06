@@ -84,11 +84,16 @@ int8_t MSG_$ALLOCATE(msg_$socket_t *socket, int16_t *depth, status_$t *status_re
 /* Allocate a specific socket number (internal) */
 void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
 
-/* Wait for message on socket (returns true on success) */
-int8_t MSG_$WAIT(msg_$socket_t *socket, msg_$time_t *timeout, status_$t *status_ret);
+/*
+ * Wait for message on socket (returns true on success)
+ *
+ * timeout points at a 16-bit tick count added to TIME_$CLOCKH to form the
+ * timeout deadline (only a word is read: 0x00e59c4e move.w (A4),D1w).
+ */
+int8_t MSG_$WAIT(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret);
 
 /* Wait for message on socket (internal) */
-void MSG_$WAITI(msg_$socket_t *socket, msg_$time_t *timeout, status_$t *status_ret);
+void MSG_$WAITI(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret);
 
 /* Receive a message */
 void MSG_$RCV(msg_$socket_t *socket,

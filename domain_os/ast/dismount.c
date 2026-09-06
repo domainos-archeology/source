@@ -17,8 +17,7 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
     status_$t local_status;
     uint16_t vol_mask;
     aote_t *aote;
-    ec_$eventcount_t *ec_array[3];
-    uint32_t ec_values[3];
+    int32_t wait_value;
 
     local_status = status_$ok;
 
@@ -34,10 +33,17 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
 
     /* Wait for any in-progress operations on this volume to complete */
     while (DAT_00e1e092[vol_index] != 0) {
-        ec_values[0] = DAT_00e1e088 + 1;
+        wait_value = (int32_t)(AST_$DISM_EC.value + 1);     /* 0xE06A12 */
 
         ML_$UNLOCK(AST_LOCK_ID);
-        EC_$WAIT(ec_array, ec_values);
+        /*
+         * 0xE06A2A-0xE06A3A pushes both three-element arrays by value, 24
+         * bytes: the eventcount list is { &AST_$DISM_EC, NULL, NULL } (A2 is
+         * zero from 0xE06A02) and the value list is { wait_value, 0, 0 }.
+         * The returned index is discarded.
+         */
+        EC_$WAIT((ec_$wait_ecs_t){{ &AST_$DISM_EC, NULL, NULL }},
+                 (ec_$wait_vals_t){{ wait_value, 0, 0 }});
         ML_$LOCK(AST_LOCK_ID);
     }
 

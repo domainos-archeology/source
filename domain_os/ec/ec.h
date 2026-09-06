@@ -143,19 +143,34 @@ int32_t EC_$READ(ec_$eventcount_t *ec);
 /*
  * EC_$WAIT - Wait for eventcount(s) to reach value(s)
  *
- * Waits on up to 3 eventcounts. Array is NULL-terminated if
- * fewer than 3.
+ * Pascal signature (from the code at 0x00E20610):
+ *   function ec_$wait(ecs: array[1..3] of ^eventcount;
+ *                     vals: array[1..3] of integer): integer;
+ * Both arrays are passed BY VALUE: the caller pushes 3 longword values
+ * (vals) and then 3 longword pointers (ecs), 24 bytes in all, and the
+ * callee finds them at (0xC,SP) and (0x18,SP) after saving A3/A4.
+ * The list is terminated by the first NULL pointer in ecs[1..2].
  *
- * Parameters:
- *   ecs - Array of up to 3 eventcount pointers
- *   wait_val - Array of wait values
+ * In C the two arrays are wrapped in structs so that they are passed by
+ * value in the same 24-byte stack layout.  Call as:
+ *   EC_$WAIT((ec_$wait_ecs_t){{ &ec1, &ec2, NULL }},
+ *            (ec_$wait_vals_t){{ v1, v2, 0 }});
+ * Unused slots must be NULL / 0.
  *
  * Returns:
- *   Index of satisfied eventcount minus 1
+ *   0-based index of the eventcount that was satisfied (D0 - 1).
  *
  * Original address: 0x00e20610
  */
-int16_t EC_$WAIT(ec_$eventcount_t *ecs[3], int32_t *wait_val);
+typedef struct ec_$wait_ecs_t {
+    ec_$eventcount_t *ec[3];
+} ec_$wait_ecs_t;
+
+typedef struct ec_$wait_vals_t {
+    int32_t val[3];
+} ec_$wait_vals_t;
+
+int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals);
 
 /*
  * EC_$WAITN - Wait for N eventcounts

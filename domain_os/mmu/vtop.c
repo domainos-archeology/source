@@ -25,8 +25,8 @@ uint32_t MMU_$VTOP(uint32_t va, status_$t *status)
     /* Build the match key from the VA
      * The key encodes VA bits and current ASID for matching */
     va_key = va;
-    uint8_t shift = *(uint8_t*)((char*)&VA_TO_PTT_OFFSET_MASK + 4);
-    va_key <<= (shift & 0x3F);
+    /* 0xE24124: move.w MMU_$VA_SHIFT,D0w / 0xE24128: lsl.l D0,D5 */
+    va_key <<= (MMU_$VA_SHIFT & 0x3F);
 
     /* Insert current ASID */
     va_key = (va_key & 0xFFFF0000) | PROC1_$AS_ID;

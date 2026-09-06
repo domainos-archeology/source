@@ -15,7 +15,8 @@
 
 void MMU_$MCR_CHANGE(uint16_t bit)
 {
-    if (M68020 != 0) {
+    /* 0xE242A4: move.b M68020,D0b / 0xE242A8: beq - HIGH byte only */
+    if (M68020_IS_020_B()) {
         /* 68020+: Bit position is inverted (0xB - bit) */
         uint8_t hw_bit = (0x0B - bit) & 7;
         MMU_MCR_M68020 ^= (1 << hw_bit);

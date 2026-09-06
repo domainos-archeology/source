@@ -93,6 +93,25 @@ typedef struct area_$entry_t {
     uint16_t flags;                 /* 0x2E-0x2F: Flags (see AREA_FLAG_*) */
 } area_$entry_t;
 
+#if defined(ARCH_M68K)
+/* Offsets recovered from area_$internal_create (0x00E077DA) and
+ * area_$alloc_resources (0x00E075CA); entry stride is the divu.w #0x30 at
+ * 0x00E078D4. */
+_Static_assert(sizeof(area_$entry_t) == AREA_ENTRY_SIZE, "area_$entry_t size");
+_Static_assert(offsetof(area_$entry_t, next)        == 0x00, "next");
+_Static_assert(offsetof(area_$entry_t, prev)        == 0x04, "prev");
+_Static_assert(offsetof(area_$entry_t, virt_size)   == 0x08, "virt_size");
+_Static_assert(offsetof(area_$entry_t, commit_size) == 0x0C, "commit_size");
+_Static_assert(offsetof(area_$entry_t, caller_id)   == 0x10, "caller_id");
+_Static_assert(offsetof(area_$entry_t, first_bste)  == 0x14, "first_bste");
+_Static_assert(offsetof(area_$entry_t, remote_uid)  == 0x20, "remote_uid");
+_Static_assert(offsetof(area_$entry_t, volx)        == 0x24, "volx");
+_Static_assert(offsetof(area_$entry_t, owner_asid)  == 0x26, "owner_asid");
+_Static_assert(offsetof(area_$entry_t, remote_volx) == 0x28, "remote_volx");
+_Static_assert(offsetof(area_$entry_t, generation)  == 0x2C, "generation");
+_Static_assert(offsetof(area_$entry_t, flags)       == 0x2E, "flags");
+#endif
+
 /*
  * Area handle type
  * High word: generation number
@@ -134,6 +153,21 @@ typedef struct area_$uid_hash_t {
     area_$entry_t *first_entry;     /* 0x04: First area entry with this UID */
 } area_$uid_hash_t;
 
+#if defined(ARCH_M68K)
+/* AREA_$INIT (0x00E2F3FC-0x00E2F40A) walks the pool with `addq.l #0x8` and the
+ * chain field is (A2) with the entry list at (0x4,A2) (0x00E07AEE-0x00E07B32). */
+_Static_assert(sizeof(area_$uid_hash_t) == 8, "area_$uid_hash_t size");
+_Static_assert(offsetof(area_$uid_hash_t, next)        == 0x00, "hash next");
+_Static_assert(offsetof(area_$uid_hash_t, first_entry) == 0x04, "hash first_entry");
+#endif
+
+/*
+ * Number of UID hash buckets.
+ * AREA_$CREATE_FROM hashes with M$OIU$WLW(uid, 11) at 0x00E07A2C, and
+ * AREA_$INIT clears 11 buckets (moveq #0xa + dbf at 0x00E2F3EC).
+ */
+#define AREA_UID_HASH_BUCKETS   11
+
 /*
  * ============================================================================
  * Module Global Variables (at AREA_GLOBALS_BASE + offset)
@@ -165,10 +199,56 @@ extern int16_t AREA_$N_AREAS;
 extern int16_t AREA_$PARTNER_PKT_SIZE;
 
 /*
- * AREA_$PARTNER - Current area partner for network operations
- * Offset: +0x5CC from AREA_GLOBALS_BASE
+ * AREA_$PARTNER - Node address of the diskless partner ("mother node")
+ * Offset: +0x5CC from AREA_GLOBALS_BASE (0xE1E6E4), 8 bytes.
+ *
+ * AREA_$INIT (0x00E2F426-0x00E2F43C) clears the high longword and stores
+ * NETWORK_$MOTHER_NODE into the low longword when NETWORK_$DISKLESS is set,
+ * otherwise clears both.  It is always passed BY ADDRESS: `pea (0x5cc,A5)`
+ * at 0x00E0792E (REM_FILE_$CREATE_AREA) and 0x00E0795C
+ * (NETWORK_$GET_PKT_SIZE), and pmap_$write_page copies both longwords with
+ * `move.l (A0)+` at 0x00E13008/0x00E1300C.
+ *
+ * area_$internal_create tests only the low half (`tst.l (0x5d0,A5)` at
+ * 0x00E078E2): a zero low half means "no partner, this node has its own
+ * disk".
  */
-extern void *AREA_$PARTNER;
+extern uid_t AREA_$PARTNER;
+
+#if defined(ARCH_M68K)
+/* The record spans globals+0x5CC..+0x5D3; area_$internal_create tests the
+ * second longword at +0x5D0. */
+_Static_assert(sizeof(AREA_$PARTNER) == 8, "AREA_$PARTNER is an 8-byte record");
+_Static_assert(offsetof(uid_t, low) == 4, "AREA_$PARTNER low half at +0x5D0");
+#endif
+
+/*
+ * AREA_$NEXT_CALLER_ID - Monotonic counter handed out as area_$entry_t.caller_id
+ * Offset: +0x5C4 from AREA_GLOBALS_BASE (0xE1E6DC)
+ * Cleared by AREA_$INIT at 0x00E2F3C8; read and post-incremented by
+ * area_$internal_create at 0x00E078A6/0x00E078AC.
+ */
+extern uint32_t AREA_$NEXT_CALLER_ID;
+
+/*
+ * AREA_$UID_HASH_FREE - Head of the free list of UID hash-chain records
+ * Offset: +0x450 from AREA_GLOBALS_BASE (0xE1E568)
+ * AREA_$INIT threads the 11 pool records at +0x480 onto it (0x00E2F422).
+ */
+extern area_$uid_hash_t *AREA_$UID_HASH_FREE;
+
+/*
+ * AREA_$UID_HASH - Remote-UID hash table used by AREA_$CREATE_FROM
+ * Offset: +0x454 from AREA_GLOBALS_BASE (0xE1E56C), 11 buckets
+ * Indexed by M$OIU$WLW(remote_uid, AREA_UID_HASH_BUCKETS).
+ */
+extern area_$uid_hash_t *AREA_$UID_HASH[AREA_UID_HASH_BUCKETS];
+
+/*
+ * AREA_$UID_HASH_POOL - Storage for the 11 hash-chain records
+ * Offset: +0x480 from AREA_GLOBALS_BASE (0xE1E598)
+ */
+extern area_$uid_hash_t AREA_$UID_HASH_POOL[AREA_UID_HASH_BUCKETS];
 
 /*
  * AREA_$IN_TRANS_EC - Event count for area-in-transition waits
@@ -189,11 +269,15 @@ extern int16_t AREA_$CR_DUP;
 extern int16_t AREA_$DEL_DUP;
 
 /*
- * Per-ASID area list heads
- * Array at AREA_GLOBALS_BASE + 0x4D8, indexed by ASID
- * Each entry points to first area owned by that ASID
+ * AREA_$ASID_LIST - Per-ASID area list heads
+ * Offset: +0x4D8 from AREA_GLOBALS_BASE (0xE1E5F0), AREA_MAX_ENTRIES entries
+ *
+ * AREA_$INIT clears 58 longwords here (moveq #0x39 + dbf at 0x00E2F3CE).
+ * area_$internal_create indexes it with `lsl.w #0x2` on the ASID and
+ * `lea (0x0,A5,D0w*0x1)` at 0x00E0785A-0x00E07862, i.e. a *word* scale.
  */
 #define AREA_ASID_LIST_BASE     (AREA_GLOBALS_BASE + 0x4D8)
+extern area_$entry_t *AREA_$ASID_LIST[AREA_MAX_ENTRIES];
 
 /*
  * ============================================================================
@@ -221,7 +305,7 @@ void AREA_$INIT(void);
  *
  * @param virt_size     Virtual size in bytes (rounded up to 32KB)
  * @param commit_size   Initial committed size in bytes (rounded up to 1KB)
- * @param shared        If negative (bit 7 set), area is shared
+ * @param shared        Domain boolean; true (0xFF) sets AREA_FLAG_REVERSED
  * @param status_p      Output: status code
  *
  * Returns: Area handle (generation << 16 | area_id)
@@ -229,7 +313,7 @@ void AREA_$INIT(void);
  * Original address: 0x00E079C0
  */
 void AREA_$CREATE(uint32_t virt_size, uint32_t commit_size,
-                  int8_t shared, status_$t *status_p);
+                  boolean shared, status_$t *status_p);
 
 /*
  * AREA_$CREATE_FROM - Create area from remote UID (deduplicating)
@@ -250,7 +334,7 @@ void AREA_$CREATE(uint32_t virt_size, uint32_t commit_size,
  */
 uint16_t AREA_$CREATE_FROM(uint32_t remote_uid, uint32_t virt_size,
                            uint32_t commit_size, int32_t caller_id,
-                           int32_t *status_p);
+                           status_$t *status_p);
 
 /*
  * AREA_$DELETE - Delete an area
@@ -510,7 +594,7 @@ void area_$wait_in_trans(void);
  * Original address: 0x00E07B50
  */
 void area_$internal_delete(area_$entry_t *entry, int16_t area_id,
-                           status_$t *status_p, int8_t do_unlink);
+                           status_$t *status_p, boolean do_unlink);
 
 /*
  * area_$internal_create - Internal area creation
@@ -531,7 +615,7 @@ void area_$internal_delete(area_$entry_t *entry, int16_t area_id,
  */
 uint32_t area_$internal_create(uint32_t virt_size, uint32_t commit_size,
                                uint32_t remote_uid, int16_t owner_asid,
-                               int16_t alloc_remote, int8_t shared,
+                               int16_t alloc_remote, boolean shared,
                                status_$t *status_p);
 
 /*

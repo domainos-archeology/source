@@ -2,7 +2,7 @@
  * AREA Internal Header
  *
  * Internal declarations for the AREA subsystem.
- * This header should only be included by area/*.c files.
+ * This header should only be included by the .c files under area/.
  */
 
 #ifndef AREA_INTERNAL_H
@@ -43,17 +43,22 @@ typedef struct area_$seg_table_t {
 #define AREA_SEG_TABLE_LIST_BASE    (AREA_GLOBALS_BASE + 0x68)
 
 /*
- * area_$alloc_resources - Allocate area resources
+ * area_$alloc_resources - Extend the area table
  *
- * Attempts to allocate backing store resources for an area.
+ * Wires and maps storage for up to `count` further area_$entry_t records,
+ * threads them onto AREA_$FREE_LIST, and updates AREA_$N_AREAS /
+ * AREA_$N_FREE.  The request is clamped to the module maximum held at
+ * globals + 0x5D6.
  *
- * @param timeout       Timeout value (0x60 = normal)
+ * @param count         Number of entries requested (0x60 from
+ *                      area_$internal_create)
  *
- * Returns: negative if failed, non-negative if successful
+ * Returns: a Domain boolean - true (0xFF, i.e. < 0) if the table grew,
+ *          false (0) if it was already at its maximum.
  *
  * Original address: 0x00E075CA
  */
-int8_t area_$alloc_resources(int16_t timeout);
+boolean area_$alloc_resources(int16_t count);
 
 /*
  * area_$remote_sync - Sync with remote partner

@@ -16,6 +16,7 @@
  */
 
 #include "win/win_internal.h"
+#include "time/time.h"
 
 /* Maximum retry counts */
 #define MAX_DMA_RETRIES      500
@@ -30,7 +31,8 @@ void WIN_$DO_IO(void *dev_entry, int32_t *req, void *param_3, uint8_t *result)
     int16_t dma_retries;
     int16_t other_retries;
     uint16_t *cylinder_ptr;
-    void *wait_val;
+    ec_$eventcount_t *win_ec;
+    int32_t wait_val;
     int16_t wait_result;
     int32_t *local_req;
 
@@ -72,10 +74,18 @@ void WIN_$DO_IO(void *dev_entry, int32_t *req, void *param_3, uint8_t *result)
     /* Get cylinder pointer from device entry */
     cylinder_ptr = (uint16_t *)((uint8_t *)dev_entry + 0x1c);
 
+    /* Unit 0's completion eventcount (00e19888 pea (0x30,A5)) */
+    win_ec = (ec_$eventcount_t *)(win_data + WIN_EC_ARRAY_OFFSET);
+
     /* Main I/O loop with retries */
 retry_loop:
-    /* Get wait value for event counter */
-    wait_val = (void *)(*(uint32_t *)(win_data + WIN_EC_ARRAY_OFFSET) + 1);
+    /*
+     * Get wait value for event counter
+     * 00e1981a  move.l (0x30,A5),D0
+     * 00e1981e  addq.l #0x1,D0
+     * 00e19820  move.l D0,(-0x10,A6)
+     */
+    wait_val = win_ec->value + 1;
 
     /* Seek to cylinder */
     status = SEEK(0, *cylinder_ptr, *(void **)(win_data + WIN_REQ_PTR_OFFSET), 0);
@@ -86,8 +96,33 @@ retry_loop:
 
     wait_for_completion:
         if ((int32_t)status < 1) {
-            /* Wait for I/O completion */
-            wait_result = EC_$WAIT((void *)(win_data + WIN_EC_ARRAY_OFFSET), wait_val);
+            /*
+             * Wait for I/O completion, with an 8-tick clock timeout.
+             * The original builds the two by-value arrays on the stack; the
+             * three pointers are pushed last so they land at the lower
+             * addresses (00e19872 - 00e1988c):
+             *   00e19872  clr.l D2
+             *   00e19874  move.l D2,-(SP)           vals[2] = 0
+             *   00e19876  move.l (0x00e2b0d4).l,D0
+             *   00e1987c  addq.l #0x8,D0
+             *   00e1987e  move.l D0,-(SP)           vals[1] = TIME_$CLOCKH + 8
+             *   00e19880  move.l (-0x10,A6),-(SP)   vals[0] = win_ec->value + 1
+             *   00e19884  pea (A4)   A4 = 0         ecs[2] = NULL
+             *   00e19886  pea (A3)   A3 = 0xe2b0d4  ecs[1] = &TIME_$CLOCKH
+             *   00e19888  pea (0x30,A5)             ecs[0] = win_ec
+             *   00e1988c  jsr EC_$WAIT
+             *   00e19896  tst.w D0w                 ; 0-based index
+             * D2 (status) is cleared by the clr.l at 00e19872 that also
+             * supplies vals[2].
+             */
+            status = status_$ok;
+            wait_result = EC_$WAIT(
+                (ec_$wait_ecs_t){{ win_ec,
+                                   (ec_$eventcount_t *)&TIME_$CLOCKH,
+                                   NULL }},
+                (ec_$wait_vals_t){{ wait_val,
+                                    (int32_t)(TIME_$CLOCKH + 8),
+                                    0 }});
 
             if (wait_result != 0) {
                 /* Timeout - clear flag and set error */

@@ -100,8 +100,10 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                         CRASH_SYSTEM(&status_$t_00e13a14);
                     }
 
-                    /* Remove page from available pool */
-                    MMAP_$UNAVAIL_REMOV(vpn);
+                    /* Remove page from available pool.
+                     * 0x00E13880: "st -(SP)" pushes the second (unused)
+                     * boolean argument as TRUE. */
+                    MMAP_$UNAVAIL_REMOV(vpn, true);
 
                     /* Optionally remove from MMU */
                     if ((flags & 1) != 0 && (*segmap_ptr & 0x2000) != 0) {

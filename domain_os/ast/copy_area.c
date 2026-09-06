@@ -92,9 +92,9 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused,
                 /* Read data (local or network) */
                 if (vol_index != 0) {
                     /* Network read */
-                    int32_t dummy_dtm;
+                    clock_t dummy_dtm;
                     clock_t dummy_clock;
-                    uint32_t dummy_acl;
+                    clock_t dummy_acl;
                     for (int i = 0; i < count; i++) {
                         NETBUF_$RTN_DAT(ppn_array[i] << 10);
                         NETWORK_$READ_AHEAD(&AREA_$PARTNER, &ANON_$UID, &ppn_array[i],

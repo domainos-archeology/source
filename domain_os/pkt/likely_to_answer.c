@@ -51,11 +51,10 @@ int8_t PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
     uint16_t sock_num;
     int16_t request_id;
     int16_t retry_count;
-    uint32_t *sock_ec;
+    ec_$eventcount_t *sock_ec;
     int32_t wait_val;
     int32_t timeout_val;
     uint16_t len_out[5];
-    status_$t local_status;
     void *recv_pkt;
     uint16_t recv_len;
     int16_t recv_id;
@@ -106,45 +105,80 @@ int8_t PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
     request_id = PKT_$NEXT_ID();
     retry_count = 2;
 
-    /* Get the socket's event count for waiting */
-    /* TODO(source-j33): Access socket event count array */
-    /* sock_ec = *(uint32_t **)(&SOCK_EC_ARRAY + sock_num * 4); */
-    /* wait_val = *sock_ec + 1; */
+    /*
+     * Get the socket's event count for waiting
+     * 00e12a64  movea.l #0xe28db4,A3
+     * 00e12a6a  lsl.l #0x2,D5            ; D5 = sock_num * 4
+     * 00e12a6c  lea (0x0,A3,D5*0x1),A0
+     * 00e12a74  movea.l (-0x4,A0),A1
+     * 00e12a78  move.l (A1),D2
+     * 00e12a7c  addq.l #0x1,D2
+     * i.e. *(0xe28db0 + sock_num*4) == SOCK_$EVENT_COUNTERS[sock_num - 1].
+     */
+    sock_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
+    wait_val = sock_ec->value + 1;
 
     while (retry_count >= 0) {
-        /* Send ping request */
+        /*
+         * Send ping request
+         * TODO(source-hny4): this argument list does not match the 14
+         * longwords/words pushed at 00e12a84 - 00e12abe.
+         */
         PKT_$SEND_INTERNET(routing_key, dest_node, PKT_PING_SOCKET,
                            (int32_t)-1, NODE_$ME, sock_num,
                            &ping_request_info, request_id,
                            ping_template, 2,
                            NULL, 0,
-                           len_out, NULL, &local_status);
+                           len_out, NULL, status_ret);
 
-        if (local_status != status_$ok) {
+        /* 00e12aca tst.l (A2) / bne - the send reports through status_ret */
+        if (*status_ret != status_$ok) {
             break;
         }
 
-        /* Calculate timeout */
-        timeout_val = TIME_$CLOCKH + (uint32_t)len_out[0] + 1;
+        /*
+         * Calculate timeout
+         * 00e12ad0  andi.l #0xffff,D0
+         * 00e12ad6  add.l (0x00e2b0d4).l,D0
+         * 00e12adc  addq.l #0x1,D0
+         */
+        timeout_val = (int32_t)(TIME_$CLOCKH + (uint32_t)len_out[0] + 1);
 
         /* Wait for response or timeout */
         while (1) {
-            ec_$eventcount_t *ecs[3];
-            int32_t wait_vals[3];
             int16_t wait_result;
 
-            /* Set up event counts to wait on:
-             * - Socket receive event count
-             * - Time event count for timeout
+            /*
+             * Wait on the socket EC and the clock.  Arguments are pushed
+             * right-to-left, so the pointers land at the lower addresses
+             * (00e12b42 - 00e12b5e):
+             *   00e12b42  pea (0x1).w                 vals[2] = 1
+             *   00e12b46  move.l (-0x5c,A6),-(SP)     vals[1] = timeout_val
+             *   00e12b4a  move.l D2,-(SP)             vals[0] = wait_val
+             *   00e12b4c  pea (A3)   A3 = 0           ecs[2] = NULL
+             *   00e12b4e  move.l #0xe2b0d4,-(SP)      ecs[1] = &TIME_$CLOCKH
+             *   00e12b54  movea.l (-0x88,A6),A0       ; &SOCK_EC_TABLE[sock]
+             *   00e12b58  movea.l (-0x4,A0),A1
+             *   00e12b5c  pea (A1)                    ecs[0] = sock_ec
+             *   00e12b5e  jsr EC_$WAIT
+             *   00e12b68  tst.w D0w / seq D7b / bmi   ; loop while index == 0
+             * ecs[2] is NULL, so vals[2] (1) is never looked at; it is kept
+             * here for fidelity.  The socket EC entry is re-read from the
+             * table on every pass.
              */
-            /* TODO(source-j33): Set up proper EC wait */
-            /* wait_result = EC_$WAIT(ecs, wait_vals); */
-            wait_result = 1;  /* Simulate timeout for now */
+            wait_result = EC_$WAIT(
+                (ec_$wait_ecs_t){{ SOCK_$EVENT_COUNTERS[sock_num - 1],
+                                   (ec_$eventcount_t *)&TIME_$CLOCKH,
+                                   NULL }},
+                (ec_$wait_vals_t){{ wait_val, timeout_val, 1 }});
 
             if (wait_result != 0) {
                 /* Timeout or other event */
                 break;
             }
+
+            /* Next expected socket EC value (00e12ae4 addq.l #0x1,D2) */
+            wait_val++;
 
             /* Receive the response */
             APP_$RECEIVE(sock_num, &recv_pkt, status_ret);

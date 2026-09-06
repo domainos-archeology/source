@@ -33,7 +33,8 @@ uint32_t MMU_$PTOV(uint32_t ppn)
      * The format differs between 68010 and 68020+ */
     result = (pmape_val & 0x000F0000) | asid_val;
 
-    if (M68020 != 0) {
+    /* 0xE241E0: move.b M68020,D1b / 0xE241E4: beq - HIGH byte only */
+    if (M68020_IS_020_B()) {
         /* 68020+: shift left by 6 */
         result <<= 6;
     } else {

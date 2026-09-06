@@ -32,15 +32,16 @@ void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint32_t flags)
     /* Pack ASID and protection (same as MMU_$INSTALL) */
     packed_info = va;
 
-    uint8_t shift = *(uint8_t*)((char*)&VA_TO_PTT_OFFSET_MASK + 4);
-    packed_info <<= (shift & 0x3F);
+    /* 0xE23F90: move.w MMU_$PTT_SHIFT,D1w / 0xE23F94: lsl.l D1,D4 */
+    packed_info <<= (MMU_$PTT_SHIFT & 0x3F);
 
     packed_info = (packed_info & 0xFFFFFF00) | prot;
     packed_info = (packed_info >> 5) | (packed_info << 27);
     packed_info = (packed_info & 0xFFFFFF00) | asid;
     packed_info = (packed_info >> 7) | (packed_info << 25);
 
-    if (M68020 == 0) {
+    /* 0xE23FA2: tst.w M68020 / bne - whole-word test */
+    if (!M68020_IS_020_W()) {
         packed_info = (packed_info & 0xFFFF0000) | ((packed_info & 0xFFFF) >> 2);
     }
 

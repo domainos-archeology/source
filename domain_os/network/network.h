@@ -33,12 +33,33 @@
  * This is the single home of the status_$network_* codes; other
  * subsystems (asknode, ring, rip, route, ...) include this header.
  */
+/*
+ * The texts below are the ones the SR10.4 status-code database ships for
+ * module 0x11 ("OS / network"), so these names are the original meanings and
+ * not guesses.  Codes the kernel sources here do not (yet) reference are
+ * listed as well so that the block reads as the original table did.
+ */
+#define status_$network_buffer_error                    0x00110001
+#define status_$network_out_of_pages                    0x00110002
+#define status_$network_out_of_blocks                   0x00110003
 #define status_$network_transmit_failed                 0x00110004
-#define status_$network_no_available_sockets            0x00110005
+#define status_$network_receive_process_failed_to_start 0x00110005
+#define status_$network_buffer_queue_is_empty           0x00110006
+#define status_$network_remote_node_failed_to_respond   0x00110007
+#define status_$network_unable_to_route                 0x00110008
+#define status_$network_hardware_error                  0x00110009
+#define status_$network_msg_header_too_big              0x0011000A
 #define status_$network_unexpected_reply_type           0x0011000B
+#define status_$network_no_more_free_sockets            0x0011000C
 #define status_$network_unknown_request_type            0x0011000D
 #define status_$network_request_denied_by_local_node    0x0011000E
+#define status_$network_request_denied_by_remote_node   0x0011000F
+#define status_$network_bad_checksum                    0x00110010
 #define status_$network_too_many_transmit_retries       0x00110011
+#define status_$network_socket_not_open                 0x00110012
+#define status_$network_receive_bus_error               0x00110013
+#define status_$network_transmit_bus_error              0x00110014
+#define status_$network_bad_asknode_version_number      0x00110015
 #define status_$network_memory_parity_error_during_transmit 0x00110016
 #define status_$network_unknown_network                 0x00110017
 #define status_$network_too_many_networks_in_internet   0x00110018
@@ -47,10 +68,15 @@
 #define status_$network_waited_too_long_for_more_node_responses 0x0011001B
 #define status_$network_data_length_too_large           0x0011001C
 #define status_$network_operation_not_defined_on_hardware 0x0011001D
-/* TODO: the original names of codes 0x110020/0x110021 (ASKNODE_$INTERNET_INFO
- * reply validation) are not known; the names below are descriptive only. */
-#define status_$network_bad_asknode_reply_type          0x00110020
-#define status_$network_bad_asknode_version_number      0x00110021
+#define status_$network_msg_exceeds_max_size            0x0011001E
+#define status_$network_no_nodeid_prom_on_this_system   0x0011001F
+#define status_$network_device_stat_block_not_valid     0x00110020
+#define status_$network_device_stat_index_out_of_range  0x00110021
+#define status_$network_foreign_node_missing_features   0x00110022
+#define status_$network_transmit_with_invalid_from_id   0x00110023
+#define status_$network_header_data_length_exceeds_max  0x00110024
+#define status_$network_extended_service_delay          0x00110025
+#define status_$network_server_out_of_queued_buffers    0x00110026
 
 /*
  * Network service flags (bits in NETWORK_$ALLOWED_SERVICE)
@@ -113,11 +139,16 @@ extern uint16_t NETWORK_$PAGOUT_RQST_CNT;     /* 0xE24C3C */
 /*
  * NETWORK_$CAPABLE_FLAGS - Network capability flags (bit 0 = network capable)
  *
- * Original address: 0xE24C3F.  TODO: this byte is byte 1 of the
- * NETWORK_$ALLOWED_SERVICE longword (0xE24C3E); it should share storage
- * with it (bit 0 of this byte == bit 16 of NETWORK_$ALLOWED_SERVICE).
+ * Original address: 0xE24C3F, which is byte 1 of the NETWORK_$ALLOWED_SERVICE
+ * longword at 0xE24C3E: bit n here is bit (16 + n) there.  network_data.c
+ * makes the two names share storage wherever the toolchain allows it; see the
+ * comment beside its definition.
  */
 extern uint8_t NETWORK_$CAPABLE_FLAGS;
+
+/* Bit 16 of NETWORK_$ALLOWED_SERVICE == bit 0 of NETWORK_$CAPABLE_FLAGS */
+#define NETWORK_SERVICE_CAPABLE     0x00010000
+#define NETWORK_SERVICE_FILE_CAPABLE 0x00020000
 
 /*
  * NETWORK_$FAILURE_REC - Network failure record (16 bytes)
@@ -145,6 +176,29 @@ extern network_$failure_rec_t NETWORK_$FAILURE_REC;
  */
 
 /*
+ * network_$page_request_t - the 32-byte IN/OUT record NETWORK_$READ_AHEAD
+ * takes as its second argument.
+ *
+ * Recovered from the two 8-longword copies in NETWORK_$READ_AHEAD
+ * (0xE0FC8A "moveq #0x7 / move.l (A0)+,(A1)+ / dbf" and the matching copy
+ * back at 0xE0FF72) plus the read of +8 at 0xE0FC9E.  Only the first twelve
+ * bytes are initialised by ast_$read_area_pages_network (0xE02D20 and
+ * 0xE02D3C); the remaining 20 are whatever was on its stack.
+ */
+typedef struct network_$page_request_t {
+    uid_t    uid;           /* 0x00: object UID */
+    uint32_t page_num;      /* 0x08: first page requested (0xE0FC9E) */
+    uint32_t reserved[5];   /* 0x0C: uninitialised by the caller */
+} network_$page_request_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(network_$page_request_t, page_num) == 0x08,
+               "network_$page_request_t.page_num");
+_Static_assert(sizeof(network_$page_request_t) == 0x20,
+               "network_$page_request_t must be 32 bytes (8 longwords)");
+#endif
+
+/*
  * NETWORK_$READ_AHEAD - Read pages ahead from network partner
  *
  * @param net_info       Network partner info
@@ -154,18 +208,27 @@ extern network_$failure_rec_t NETWORK_$FAILURE_REC;
  * @param count          Number of pages
  * @param no_read_ahead  Disable read-ahead flag
  * @param flags          Operation flags
- * @param dtm            Data timestamp output
- * @param clock          Clock output
- * @param acl_info       ACL info output
+ * @param dtm            DTM output   (0xE0FF64: long at +0, word at +4)
+ * @param clock          Clock output (0xE0FF48: long at +0, word at +4)
+ * @param acl_info       ACL/DTA output (0xE0FF56: long at +0, word at +4)
  * @param status         Output status code
+ *
+ * All three timestamp outputs are 48-bit clock_t records: the callee writes
+ * "move.l Dn,(A0) / move.w Dn,(0x4,A0)" to each of (0x1c,A6), (0x20,A6) and
+ * (0x24,A6) at 0xE0FF48-0xE0FF6C.  (bead source-hz1)
+ *
+ * "uid" is a 32-byte IN/OUT request record, not an 8-byte UID: 0xE0FC8A
+ * copies eight longwords out of it into the callee's frame and 0xE0FF72
+ * copies eight longwords back.  Its first eight bytes are the object UID
+ * and the longword at +8 is the starting page number (read at 0xE0FC9E).
  *
  * @return Number of pages successfully read
  */
 int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,
                             uint16_t page_size, int16_t count,
                             int8_t no_read_ahead, uint8_t flags,
-                            int32_t *dtm, clock_t *clock,
-                            uint32_t *acl_info, status_$t *status);
+                            clock_t *dtm, clock_t *clock,
+                            clock_t *acl_info, status_$t *status);
 
 /*
  * NETWORK_$INSTALL_NET - Install network node

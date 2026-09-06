@@ -81,14 +81,15 @@ int16_t AREA_$N_AREAS = 0;
  */
 
 /*
- * Current area partner for network operations
+ * Node address of the diskless partner ("mother node")
  *
- * Points to the partner node structure for remote area operations
- * (e.g., diskless node support).
+ * Eight bytes: the high longword is always zero, the low longword holds
+ * NETWORK_$MOTHER_NODE when NETWORK_$DISKLESS is set (AREA_$INIT,
+ * 0x00E2F426-0x00E2F43C).  Always passed by address.
  *
- * Original address: 0xE1E6E4
+ * Original address: 0xE1E6E4 (globals + 0x5CC)
  */
-void *AREA_$PARTNER = NULL;
+uid_t AREA_$PARTNER = { 0, 0 };
 
 /*
  * Packet size for area partner operations
@@ -124,3 +125,52 @@ int16_t AREA_$CR_DUP = 0;
  * Original address: 0xE1E6F4
  */
 int16_t AREA_$DEL_DUP = 0;
+
+/*
+ * ============================================================================
+ * UID deduplication hash table
+ * ============================================================================
+ */
+
+/*
+ * Remote-UID hash table used by AREA_$CREATE_FROM.
+ *
+ * Original address: 0xE1E56C (globals + 0x454), 11 buckets
+ */
+area_$uid_hash_t *AREA_$UID_HASH[AREA_UID_HASH_BUCKETS] = { NULL };
+
+/*
+ * Storage for the 11 hash-chain records threaded onto AREA_$UID_HASH_FREE
+ * by AREA_$INIT (0x00E2F3FC-0x00E2F40A).
+ *
+ * Original address: 0xE1E598 (globals + 0x480)
+ */
+area_$uid_hash_t AREA_$UID_HASH_POOL[AREA_UID_HASH_BUCKETS] = { { NULL, NULL } };
+
+/*
+ * Head of the free list of UID hash-chain records.
+ *
+ * Original address: 0xE1E568 (globals + 0x450)
+ */
+area_$uid_hash_t *AREA_$UID_HASH_FREE = NULL;
+
+/*
+ * ============================================================================
+ * Per-ASID area lists and identifier counter
+ * ============================================================================
+ */
+
+/*
+ * Per-ASID area list heads.  AREA_$INIT clears all 58 entries.
+ *
+ * Original address: 0xE1E5F0 (globals + 0x4D8)
+ */
+area_$entry_t *AREA_$ASID_LIST[AREA_MAX_ENTRIES] = { NULL };
+
+/*
+ * Monotonic counter handed out as area_$entry_t.caller_id by
+ * area_$internal_create (0x00E078A6).  Cleared by AREA_$INIT.
+ *
+ * Original address: 0xE1E6DC (globals + 0x5C4)
+ */
+uint32_t AREA_$NEXT_CALLER_ID = 0;

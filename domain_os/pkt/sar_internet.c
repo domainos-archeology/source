@@ -63,23 +63,29 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
         CRASH_SYSTEM(&sock_alloc_error);
     }
 
-    /* Get socket's event count */
-    /* TODO(source-j33): Get proper socket event count from socket table */
-    /* sock_ec = *(ec_$eventcount_t **)(&SOCK_EC_ARRAY + sock_num * 4); */
-    sock_ec = NULL;  /* Placeholder */
+    /*
+     * Get socket's event count
+     * 00e71f04  movea.l #0xe28db4,A0
+     * 00e71f0c  lsl.l #0x2,D0            ; D0 = sock_num * 4
+     * 00e71f0e  lea (0x0,A0,D0*0x1),A1
+     * 00e71f12  move.l (-0x4,A1),(-0x3c,A6)
+     * i.e. *(0xe28db0 + sock_num*4) == SOCK_$EVENT_COUNTERS[sock_num - 1].
+     */
+    sock_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
 
     /* Generate request ID */
     request_id = PKT_$NEXT_ID();
 
-    /* Get initial wait value */
-    if (sock_ec != NULL) {
-        wait_val = *(int32_t *)sock_ec + 1;
-    } else {
-        wait_val = 1;
-    }
+    /* Get initial wait value (00e71f24 move.l (A1),D6 / 00e71f2c addq.l #1,D6) */
+    wait_val = sock_ec->value + 1;
 
-    /* Get quit check value for current address space */
-    quit_check_val = FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
+    /*
+     * Get quit check value for current address space
+     * 00e71f30  movea.l #0xe222ba,A4     ; FIM_$QUIT_VALUE
+     * 00e71f36  move.l (0x0,A4,D7w*0x1),D7   ; D7 = PROC1_$AS_ID * 4
+     * 00e71f3a  addq.l #0x1,D7
+     */
+    quit_check_val = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
 
     /* Set up address info for visibility tracking */
     addr_info[0] = routing_key;
@@ -115,32 +121,49 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
             max_retries = len_out[1];
         }
 
-        /* Calculate timeout */
-        timeout_val = TIME_$CLOCKH + (uint32_t)(timeout + len_out[0]);
+        /*
+         * Calculate timeout.  The sum is formed in a word and then zero
+         * extended before being added to the clock:
+         * 00e71fac  move.w (-0x56,A6),D0w    ; len_out[0]
+         * 00e71fba  add.w (0x16,A6),D0w      ; + timeout
+         * 00e71fca  andi.l #0xffff,D0
+         * 00e71fd0  add.l (0x00e2b0d4).l,D0  ; + TIME_$CLOCKH
+         */
+        timeout_val = (int32_t)(TIME_$CLOCKH +
+                                (uint32_t)(uint16_t)(timeout + len_out[0]));
 
         /* Wait for response or timeout */
         for (;;) {
-            ec_$eventcount_t *ecs[3];
-            int32_t wait_vals[3];
-
-            /* Set up event counts to wait on */
-            ecs[0] = sock_ec;
-            ecs[1] = (ec_$eventcount_t *)&TIME_$CLOCKH;
-            ecs[2] = (ec_$eventcount_t *)(FIM_$QUIT_EC + PROC1_$AS_ID * 3);
-            wait_vals[0] = wait_val;
-            wait_vals[1] = timeout_val;
-            wait_vals[2] = quit_check_val;
-
-            wait_result = EC_$WAIT(ecs, wait_vals);
+            /*
+             * Both arrays go on the stack by value; arguments are pushed
+             * right-to-left so the pointers end up at the lower addresses
+             * (00e71fe8 - 00e72010):
+             *   00e71fe8  move.l (-0x44,A6),-(SP)   vals[2] = quit_check_val
+             *   00e71ff0  move.l D0,-(SP)           vals[1] = timeout_val
+             *   00e71ff2  move.l D6,-(SP)           vals[0] = wait_val
+             *   00e72002  pea (0x0,A4,D2w)  A4 = 0xe22002, D2 = AS_ID*4*3
+             *                                       ecs[2] = &FIM_$QUIT_EC[AS_ID]
+             *   00e72006  move.l #0xe2b0d4,-(SP)    ecs[1] = &TIME_$CLOCKH
+             *   00e7200c  move.l (-0x3c,A6),-(SP)   ecs[0] = sock_ec
+             *   00e72010  jsr EC_$WAIT              ; 0-based index in D0
+             * The AS_ID scaling is x4 then x3 = x12, i.e. one 12-byte
+             * ec_$eventcount_t per address space.
+             */
+            wait_result = EC_$WAIT(
+                (ec_$wait_ecs_t){{ sock_ec,
+                                   (ec_$eventcount_t *)&TIME_$CLOCKH,
+                                   &FIM_$QUIT_EC[PROC1_$AS_ID] }},
+                (ec_$wait_vals_t){{ wait_val, timeout_val, quit_check_val }});
 
             if (wait_result == 1) {
-                /* Timeout */
+                /* Timeout (00e7201a cmpi.w #0x1,D0w) */
                 break;
             }
 
             if (wait_result == 2) {
-                /* Quit requested */
-                FIM_$QUIT_VALUE[PROC1_$AS_ID] = *(uint32_t *)(FIM_$QUIT_EC + PROC1_$AS_ID * 3);
+                /* Quit requested (00e72076 cmpi.w #0x2,D0w) */
+                FIM_$QUIT_VALUE[PROC1_$AS_ID] =
+                    (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
                 *status_ret = 0x120010;  /* Quit status */
                 goto cleanup_no_visibility;
             }

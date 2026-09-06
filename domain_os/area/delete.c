@@ -17,24 +17,32 @@
 /*
  * area_$wait_in_trans - Wait for area in-transition to complete
  *
- * Called when AREA_FLAG_IN_TRANS is set. Waits on the in-transition
- * event count until the flag is cleared.
+ * Called with the area lock held when AREA_FLAG_IN_TRANS is set.  Releases
+ * the lock, waits for AREA_$IN_TRANS_EC to advance once, and re-acquires
+ * the lock before returning.
+ *
+ * The original calls EC_$WAITN (0x00E2063E) at 0x00E07774, NOT EC_$WAIT
+ * (0x00E20610): it pushes the count 1, the address of the one-element value
+ * array, and the address of the one-element eventcount array.  It also
+ * reads the eventcount value straight out of the module global at
+ * (0x48,A5) rather than going through EC_$READ.
  *
  * Original address: 0x00E07742
  */
 void area_$wait_in_trans(void)
 {
-    int32_t wait_val;
-    ec_$eventcount_t *ecs[3];
+    int32_t wait_val;                   /* (-0x8,A6) */
+    ec_$eventcount_t *ecs[1];           /* (-0xc,A6) */
 
-    /* Read current value and wait for advance */
-    wait_val = EC_$READ(&AREA_$IN_TRANS_EC) + 1;
+    /* 0x00E07746: move.l (0x48,A5),D0 / addq.l #0x1,D0 */
+    wait_val = AREA_$IN_TRANS_EC.value + 1;
 
-    ecs[0] = &AREA_$IN_TRANS_EC;
-    ecs[1] = NULL;
-    ecs[2] = NULL;
+    ML_$UNLOCK(ML_LOCK_AREA);           /* 0x00E07750 */
 
-    EC_$WAIT(ecs, &wait_val);
+    ecs[0] = &AREA_$IN_TRANS_EC;        /* 0x00E07768 lea (0x48,A5),A0 */
+    (void)EC_$WAITN(ecs, &wait_val, 1); /* 0x00E07774 */
+
+    ML_$LOCK(ML_LOCK_AREA);             /* 0x00E0777E */
 }
 
 /*
@@ -52,10 +60,8 @@ void area_$wait_in_trans(void)
  * Original address: 0x00E07B50
  */
 void area_$internal_delete(area_$entry_t *entry, int16_t area_id,
-                           status_$t *status_p, int8_t do_unlink)
+                           status_$t *status_p, boolean do_unlink)
 {
-    uint32_t *globals = (uint32_t *)AREA_GLOBALS_BASE;
-
     *status_p = status_$ok;
 
     /* Check if area is active */
@@ -73,7 +79,9 @@ void area_$internal_delete(area_$entry_t *entry, int16_t area_id,
 
     /* If area has remote backing, delete it */
     if (entry->remote_volx != 0) {
-        REM_FILE_$DELETE_AREA(AREA_$PARTNER, entry->remote_volx,
+        /* 0x00E07BA4 `pea (0x5cc,A5)`: the partner node address is passed
+         * BY ADDRESS, not by value. */
+        REM_FILE_$DELETE_AREA(&AREA_$PARTNER, entry->remote_volx,
                                entry->caller_id, status_p);
         if (*status_p != status_$ok) {
             return;
@@ -96,10 +104,11 @@ void area_$internal_delete(area_$entry_t *entry, int16_t area_id,
         }
 
         if (entry->prev == NULL) {
-            /* This was head of ASID list */
-            int asid_offset = entry->owner_asid * sizeof(uint32_t);
-            area_$entry_t **asid_list = (area_$entry_t **)((char *)globals + 0x4D8 + asid_offset);
-            *asid_list = entry->next;
+            /* This was head of the owning ASID's list.
+             * 0x00E07BEE: `move.w (0x26,A2),D0w / lsl.w #0x2,D0w /
+             * lea (0x0,A5,D0w*0x1),A0 / move.l (A2),(0x4d8,A0)` - a word
+             * scale on the ASID. */
+            AREA_$ASID_LIST[(int16_t)entry->owner_asid] = entry->next;
         } else {
             entry->prev->next = entry->next;
         }
@@ -130,7 +139,6 @@ void AREA_$DELETE(area_$handle_t handle, status_$t *status_ret)
     uint16_t area_id = AREA_HANDLE_TO_ID(handle);
     int16_t generation = AREA_HANDLE_TO_GEN(handle);
     area_$entry_t *entry;
-    int entry_offset;
     status_$t status;
 
     /* Validate area ID */
@@ -139,9 +147,8 @@ void AREA_$DELETE(area_$handle_t handle, status_$t *status_ret)
         return;
     }
 
-    /* Calculate entry offset and get entry pointer */
-    entry_offset = (uint32_t)area_id * AREA_ENTRY_SIZE;
-    entry = (area_$entry_t *)(AREA_TABLE_BASE + entry_offset - AREA_ENTRY_SIZE);
+    /* Entry pointer from the 1-based area id. */
+    entry = AREA_ID_TO_ENTRY(area_id);
 
     ML_$LOCK(ML_LOCK_AREA);
 
@@ -207,14 +214,11 @@ void AREA_$DELETE(area_$handle_t handle, status_$t *status_ret)
  * Original address: 0x00E07D06
  */
 
-#define UID_HASH_BUCKETS    11
 
 void AREA_$DELETE_FROM(uint16_t area_index, uint32_t remote_uid,
                        uint32_t caller_id, status_$t *status_ret)
 {
     area_$entry_t *entry;
-    int entry_offset;
-    uint32_t *globals = (uint32_t *)AREA_GLOBALS_BASE;
 
     /* Validate area index */
     if (area_index == 0 || area_index > AREA_$N_AREAS) {
@@ -222,9 +226,8 @@ void AREA_$DELETE_FROM(uint16_t area_index, uint32_t remote_uid,
         return;
     }
 
-    /* Calculate entry pointer (1-indexed, each entry 0x30 bytes) */
-    entry_offset = (uint32_t)area_index * AREA_ENTRY_SIZE;
-    entry = (area_$entry_t *)(AREA_TABLE_BASE + entry_offset - AREA_ENTRY_SIZE);
+    /* Entry pointer from the 1-based area id. */
+    entry = AREA_ID_TO_ENTRY(area_index);
 
     ML_$LOCK(ML_LOCK_AREA);
 
@@ -253,10 +256,11 @@ void AREA_$DELETE_FROM(uint16_t area_index, uint32_t remote_uid,
 
         if (*status_ret == status_$ok) {
             /* Remove from UID hash table */
-            uint16_t hash_bucket = M$OIU$WLW(remote_uid, UID_HASH_BUCKETS);
+            uint16_t hash_bucket =
+                (uint16_t)M$OIU$WLW((long)remote_uid, AREA_UID_HASH_BUCKETS);
             area_$uid_hash_t *prev_hash = NULL;
             area_$uid_hash_t *hash_entry =
-                (area_$uid_hash_t *)((uint32_t *)((char *)globals + 0x454))[hash_bucket];
+                AREA_$UID_HASH[hash_bucket];
 
             /* Walk hash chain to find entry matching remote_uid */
             while (hash_entry != NULL &&
@@ -284,15 +288,14 @@ void AREA_$DELETE_FROM(uint16_t area_index, uint32_t remote_uid,
             /* If hash entry has no more areas, remove from hash chain */
             if (hash_entry->first_entry == NULL) {
                 if (prev_hash == NULL) {
-                    ((uint32_t *)((char *)globals + 0x454))[hash_bucket] =
-                        (uint32_t)hash_entry->next;
+                    AREA_$UID_HASH[hash_bucket] = hash_entry->next;
                 } else {
                     prev_hash->next = hash_entry->next;
                 }
 
                 /* Return hash entry to free pool (at offset 0x450) */
-                hash_entry->next = *(area_$uid_hash_t **)((char *)globals + 0x450);
-                *(area_$uid_hash_t **)((char *)globals + 0x450) = hash_entry;
+                hash_entry->next = AREA_$UID_HASH_FREE;
+                AREA_$UID_HASH_FREE = hash_entry;
             }
 
             /* Add area entry to free list */

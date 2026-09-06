@@ -29,9 +29,10 @@
  * the whole 16-bit word is equivalent on any byte order, so MST code
  * uses MST_M68020_IS_020() rather than reading a byte through a pointer.
  *
- * TODO: mmu/mmu.h places M68020 at 0xE23D2A, but Ghidra labels M68020 at
- * 0xE23D2E (2 bytes); 0xE23D2A lies inside MMAP_$RMT_LIMIT.  The mmu
- * subsystem should confirm the address.
+ * Address confirmed as 0xE23D2E (source-llz): MMU_$INIT at 0xE23D3A does
+ * "lea (-0xe,PC),A5" giving A5 = 0xE23D2E and then tests (A5) as the CPU
+ * flag.  0xE23D2A lies inside MMAP_$RMT_LIMIT (0xE23D28, 4 bytes) and was
+ * never the flag.
  */
 #define MST_M68020_IS_020()  ((int16_t)M68020 < 0)
 
@@ -85,13 +86,15 @@ extern status_$t MST_Ref_OutOfBounds_Err;
 /*
  * mst_$init_table_page - Initialize a freshly allocated page table page
  *
- * Allocates a physical page, installs it in the MMU at page_addr and
- * zeroes it.  Called by MST_$ALLOC_TABLE_PAGE.
+ * Allocates a physical page with WP_$CALLOC, installs it in the MMU at
+ * page_addr & 0xFFFFFC00 with flags 0x16, and zeroes the 0x400-byte page.
+ * Called by MST_$ALLOC_TABLE_PAGE (0xE43FBE), which ignores the result.
+ *
+ * Returns: the physical page number returned by WP_$CALLOC (D0).
  *
  * Original address: 0x00E42CEC
- * TODO: not yet decompiled.
  */
-void mst_$init_table_page(uint32_t page_addr);
+uint32_t mst_$init_table_page(uintptr_t page_addr);
 
 /*
  * MST_$ALLOC_TABLE_PAGE - Allocate a page table page for a segment

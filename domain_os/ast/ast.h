@@ -89,16 +89,166 @@ typedef struct aote_t {
   struct aote_t *hash_next; /* 0x00: Next in hash chain */
   struct aste_t *aste_list; /* 0x04: List of ASTEs for this object */
   uint32_t vol_uid;         /* 0x08: Volume UID or network info */
-  /* 0x0C - 0x9B: Object attributes (144 bytes = 0x90) */
-  uint8_t attributes[144];
-  /* 0x9C - 0xBB: Object UID and related info (32 bytes) */
-  uid_t obj_uid;          /* 0x9C: Object UID (8 bytes) */
-  uint32_t unknown_a4[6]; /* 0xA4: Additional UID/info */
+
+  /*
+   * 0x0C - 0x9B: object attributes.  Layout recovered instruction by
+   * instruction from AST_$SET_ATTR_DISPATCH (0x00E04B00); the case that
+   * touches each field is named in the comment.
+   */
+  uint8_t obj_type;      /* 0x0C: object type; 0 selects the 0x3FFF attr set */
+  uint8_t sub_type;      /* 0x0D: sub type; 1 or 2 block the last unref */
+  uint8_t attr_flags_hi; /* 0x0E: high byte of the 16-bit attribute flags */
+  uint8_t attr_flags_lo; /* 0x0F: low byte of the same word */
+
+  uid_t uid;             /* 0x10: object UID (hashed by ast_$lookup_aote_by_uid) */
+  uid_t dtc;             /* 0x18: creation time (attr 4) */
+  uint32_t unknown_20;   /* 0x20 */
+  uint32_t unknown_24;   /* 0x24 */
+
+  uint32_t len_high;     /* 0x28: current length, high 32 bits (attr 9/0x17/0x1A) */
+  uint16_t len_low;      /* 0x2C: current length, low 16 bits */
+  uint16_t unknown_2e;   /* 0x2E */
+
+  uint32_t dtm_high;     /* 0x30: DTM, high 32 bits (attr 10/0x18/0x1A/0x1B) */
+  uint16_t dtm_low;      /* 0x34: DTM, low 16 bits */
+  uint16_t unknown_36;   /* 0x36 */
+
+  uint32_t dtu_high;     /* 0x38: DTU; TIME_$ABS_CLOCK writes 6 bytes here */
+  uint16_t dtu_low;      /* 0x3C */
+  uint16_t unknown_3e;   /* 0x3E */
+
+  uint32_t dta_high;     /* 0x40: attribute-modified clock (common tail 0xE05100) */
+  uint16_t dta_low;      /* 0x44 */
+  uint16_t unknown_46;   /* 0x46 */
+
+  uid_t mod_time;        /* 0x48: modification time (attr 5) */
+  uint32_t blocks;       /* 0x50: block count (attr 0x0B) */
+
+  /*
+   * 0x54 - 0x7F: the 44-byte ACL image.  Attr 0x13 copies it verbatim from
+   * the low 44 bytes of an ast_$attr_rec_t (0xE04F1C, 11 longword moves),
+   * so the two layouts must stay in step.
+   */
+  uid_t owner1;          /* 0x54 (attr 0x10) */
+  uid_t owner2;          /* 0x5C (attr 0x11) */
+  uid_t owner3;          /* 0x64 (attr 0x12) */
+  uint8_t rights1;       /* 0x6C */
+  uint8_t rights2;       /* 0x6D */
+  uint8_t rights3;       /* 0x6E */
+  uint8_t rights4;       /* 0x6F */
+  uint8_t rights5;       /* 0x70 */
+  int8_t access_flags;   /* 0x71: bit 7 = OS-only access; bits 4-6 = mode bits */
+  uint16_t unknown_72;   /* 0x72 */
+  uint32_t owner1_ext;   /* 0x74 */
+  uint32_t owner2_ext;   /* 0x78 */
+  uint32_t owner3_ext;   /* 0x7C */
+
+  uint16_t refcount;     /* 0x80: reference count (attrs 6, 7, 8) */
+  uint16_t linkcount;    /* 0x82: link count (attr 0x16) */
+  uid_t uid_84;          /* 0x84 (attr 0x0E) */
+  uid_t uid_8c;          /* 0x8C (attr 0x0F) */
+  uid_t acl_uid;         /* 0x94 (attrs 3, 0x13, 0x14) */
+
+  /* 0x9C - 0xBB: object UID and related info */
+  uid_t obj_uid;          /* 0x9C: secondary object UID */
+  uint32_t unknown_a4[5]; /* 0xA4 */
+  uint8_t vol_index;      /* 0xB8: volume index (AST_$DISMOUNT) */
+  int8_t remote_flag;     /* 0xB9: negative when the object is remote */
+  uint16_t unknown_ba;    /* 0xBA */
+
   /* 0xBC - 0xBF: Flags and status */
   uint16_t status_flags; /* 0xBC: Status flags */
   uint8_t ref_count;     /* 0xBE: Reference count */
   uint8_t flags;         /* 0xBF: Flags - see AOTE_FLAG_* below */
 } aote_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(aote_t, obj_type) == 0x0C, "aote_t.obj_type");
+_Static_assert(offsetof(aote_t, attr_flags_hi) == 0x0E, "aote_t.attr_flags_hi");
+_Static_assert(offsetof(aote_t, uid) == 0x10, "aote_t.uid");
+_Static_assert(offsetof(aote_t, dtc) == 0x18, "aote_t.dtc");
+_Static_assert(offsetof(aote_t, len_high) == 0x28, "aote_t.len_high");
+_Static_assert(offsetof(aote_t, dtm_high) == 0x30, "aote_t.dtm_high");
+_Static_assert(offsetof(aote_t, dtu_high) == 0x38, "aote_t.dtu_high");
+_Static_assert(offsetof(aote_t, dta_high) == 0x40, "aote_t.dta_high");
+_Static_assert(offsetof(aote_t, mod_time) == 0x48, "aote_t.mod_time");
+_Static_assert(offsetof(aote_t, blocks) == 0x50, "aote_t.blocks");
+_Static_assert(offsetof(aote_t, owner1) == 0x54, "aote_t.owner1");
+_Static_assert(offsetof(aote_t, owner2) == 0x5C, "aote_t.owner2");
+_Static_assert(offsetof(aote_t, owner3) == 0x64, "aote_t.owner3");
+_Static_assert(offsetof(aote_t, rights1) == 0x6C, "aote_t.rights1");
+_Static_assert(offsetof(aote_t, access_flags) == 0x71, "aote_t.access_flags");
+_Static_assert(offsetof(aote_t, owner1_ext) == 0x74, "aote_t.owner1_ext");
+_Static_assert(offsetof(aote_t, refcount) == 0x80, "aote_t.refcount");
+_Static_assert(offsetof(aote_t, linkcount) == 0x82, "aote_t.linkcount");
+_Static_assert(offsetof(aote_t, uid_84) == 0x84, "aote_t.uid_84");
+_Static_assert(offsetof(aote_t, uid_8c) == 0x8C, "aote_t.uid_8c");
+_Static_assert(offsetof(aote_t, acl_uid) == 0x94, "aote_t.acl_uid");
+_Static_assert(offsetof(aote_t, obj_uid) == 0x9C, "aote_t.obj_uid");
+_Static_assert(offsetof(aote_t, vol_index) == 0xB8, "aote_t.vol_index");
+_Static_assert(offsetof(aote_t, remote_flag) == 0xB9, "aote_t.remote_flag");
+_Static_assert(offsetof(aote_t, status_flags) == 0xBC, "aote_t.status_flags");
+_Static_assert(offsetof(aote_t, flags) == 0xBF, "aote_t.flags");
+_Static_assert(sizeof(aote_t) == 0xC0, "sizeof aote_t");
+#endif
+
+/*
+ * ast_$attr_rec_t - the record AST_$SET_ATTRIBUTE passes for the
+ * "set several owners at once" attribute types (0x13, 0x14) and, for its
+ * rights bytes only, type 0x15.
+ *
+ * Bytes 0x00..0x2B are a byte-for-byte image of aote_t 0x54..0x7F: attr 0x13
+ * copies them with eleven longword moves at 0xE04F1C.
+ */
+typedef struct ast_$attr_rec_t {
+  uid_t owner1;         /* 0x00 -> aote_t.owner1 */
+  uid_t owner2;         /* 0x08 -> aote_t.owner2 */
+  uid_t owner3;         /* 0x10 -> aote_t.owner3 */
+  uint8_t rights1;      /* 0x18 -> aote_t.rights1 */
+  uint8_t rights2;      /* 0x19 -> aote_t.rights2 */
+  uint8_t rights3;      /* 0x1A -> aote_t.rights3 */
+  uint8_t rights4;      /* 0x1B -> aote_t.rights4 */
+  uint8_t rights5;      /* 0x1C -> aote_t.rights5 */
+  int8_t access_flags;  /* 0x1D -> aote_t.access_flags bit 7 */
+  uint16_t unknown_1e;  /* 0x1E */
+  uint32_t owner1_ext;  /* 0x20 -> aote_t.owner1_ext */
+  uint32_t owner2_ext;  /* 0x24 -> aote_t.owner2_ext */
+  uint32_t owner3_ext;  /* 0x28 -> aote_t.owner3_ext */
+  uid_t acl_uid;        /* 0x2C -> aote_t.acl_uid */
+} ast_$attr_rec_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(ast_$attr_rec_t, owner2) == 0x08, "attr_rec.owner2");
+_Static_assert(offsetof(ast_$attr_rec_t, owner3) == 0x10, "attr_rec.owner3");
+_Static_assert(offsetof(ast_$attr_rec_t, rights1) == 0x18, "attr_rec.rights1");
+_Static_assert(offsetof(ast_$attr_rec_t, access_flags) == 0x1D, "attr_rec.access_flags");
+_Static_assert(offsetof(ast_$attr_rec_t, owner1_ext) == 0x20, "attr_rec.owner1_ext");
+_Static_assert(offsetof(ast_$attr_rec_t, acl_uid) == 0x2C, "attr_rec.acl_uid");
+_Static_assert(sizeof(ast_$attr_rec_t) == 0x34, "sizeof ast_$attr_rec_t");
+/* The two layouts must agree: attr 0x13 copies one onto the other. */
+_Static_assert(offsetof(aote_t, owner1_ext) - offsetof(aote_t, owner1) ==
+                   offsetof(ast_$attr_rec_t, owner1_ext),
+               "attr_rec image does not match aote_t 0x54..0x7F");
+#endif
+
+/*
+ * ast_$subject_t - the caller-supplied subject (the parent's 0x14 parameter,
+ * uplevel-referenced by AST_$SET_ATTR_DISPATCH case 0x14).  Holds the
+ * requesting principal's owner UIDs plus a supplementary group list that the
+ * dispatcher searches at 0xE05028.
+ */
+typedef struct ast_$subject_t {
+  uid_t owner1;        /* 0x00 */
+  uid_t owner2;        /* 0x08 */
+  uid_t owner3;        /* 0x10 */
+  uint32_t unknown_18; /* 0x18 */
+  uid_t groups[9];     /* 0x1C: entries 1..8 are searched at 0xE05028 */
+} ast_$subject_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(ast_$subject_t, owner3) == 0x10, "subject.owner3");
+_Static_assert(offsetof(ast_$subject_t, groups) == 0x1C, "subject.groups");
+#endif
 
 /* AOTE flags (at offset 0xBF) */
 #define AOTE_FLAG_IN_TRANS 0x80 /* In transition */
@@ -154,6 +304,7 @@ typedef struct segmap_entry_t {
 #define AST_$ASTE_SCAN_POS (*(aste_t **)0xE1E07C)     /* 0x3FC */
 #define AST_$ASTE_LIMIT (*(aste_t **)0xE1E080)        /* 0x400 */
 #define AST_$DISM_SEQN (*(uint32_t *)0xE1E084)        /* 0x404 */
+#define AST_$DISM_EC (*(ec_$eventcount_t *)0xE1E088)  /* 0x408 */
 #define AST_$UPDATE_SCAN (*(aote_t **)0xE1E104)       /* 0x484 */
 #define AST_$UPDATE_TIMESTAMP (*(uint16_t *)0xE1E108) /* 0x488 */
 #define AST_$AOTE_SEQN (*(uint32_t *)0xE1E0B4)        /* 0x434 */
@@ -189,6 +340,7 @@ extern aste_t *ast_free_aste_head;
 extern aste_t *ast_aste_scan_pos;
 extern aste_t *ast_aste_limit;
 extern uint32_t ast_dism_seqn;
+extern ec_$eventcount_t ast_dism_ec;
 extern aote_t *ast_update_scan;
 extern uint16_t ast_update_timestamp;
 extern uint32_t ast_aote_seqn;
@@ -216,6 +368,7 @@ extern uint16_t ast_aste_l_cnt;
 #define AST_$ASTE_SCAN_POS ast_aste_scan_pos
 #define AST_$ASTE_LIMIT ast_aste_limit
 #define AST_$DISM_SEQN ast_dism_seqn
+#define AST_$DISM_EC ast_dism_ec
 #define AST_$UPDATE_SCAN ast_update_scan
 #define AST_$UPDATE_TIMESTAMP ast_update_timestamp
 #define AST_$AOTE_SEQN ast_aote_seqn

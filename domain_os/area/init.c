@@ -121,18 +121,18 @@ void AREA_$INIT(void)
     /* Set free list head to first pool entry */
     *(uint32_t *)((char *)globals + 0x450) = (uint32_t)((char *)globals + 0x480);
 
-    /* Clear partner pointer */
-    AREA_$PARTNER = NULL;       /* +0x5CC */
+    /* Clear the high half of the 8-byte partner node address (0x00E2F426). */
+    AREA_$PARTNER.high = 0;     /* +0x5CC */
 
     /*
-     * Set mother node ID for diskless nodes
+     * Set mother node ID for diskless nodes (0x00E2F42A-0x00E2F43C).
      * If NETWORK_$DISKLESS < 0, we're a diskless node - use mother node
      * Otherwise, set to 0 (local node)
      */
     if (NETWORK_$DISKLESS < 0) {
-        *(uint32_t *)((char *)globals + 0x5D0) = NETWORK_$MOTHER_NODE;
+        AREA_$PARTNER.low = NETWORK_$MOTHER_NODE;   /* +0x5D0 */
     } else {
-        *(uint32_t *)((char *)globals + 0x5D0) = 0;
+        AREA_$PARTNER.low = 0;
     }
 
     /*

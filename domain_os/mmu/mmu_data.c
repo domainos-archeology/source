@@ -95,6 +95,15 @@ uint16_t mmu_pid_priv = 0;
 uint32_t mmu_va_to_ptt_mask = 0x0FFC00;
 
 /*
+ * VA shift count (0xE23D34) and PTT shift count (0xE23D36).
+ *
+ * MMU_$INIT sets them to 1 and 6 on a 68020+; the image ships the 68010
+ * defaults 3 and 8.
+ */
+uint16_t mmu_va_shift = 3;
+uint16_t mmu_ptt_shift = 8;
+
+/*
  * MMU hardware revision
  *
  * Read from hardware during MMU_$SET_SYSREV.

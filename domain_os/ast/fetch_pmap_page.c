@@ -25,9 +25,9 @@ void AST_$FETCH_PMAP_PAGE(void *uid_info, uint32_t *output_buf,
                           uint16_t flags, status_$t *status)
 {
     uint32_t ppn_array[32];
-    int32_t dummy_dtm;
+    clock_t dummy_dtm;
     clock_t dummy_clock;
-    uint32_t dummy_acl;
+    clock_t dummy_acl;
     uint32_t temp_addr;
     int i;
 

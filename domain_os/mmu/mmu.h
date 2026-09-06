@@ -77,15 +77,29 @@
 /*
  * MMU Global Variables
  */
+/*
+ * Layout of the MMU module data block reached through A5 in MMU_$INIT
+ * (A5 = 0xE23D2E).  Recovered from MMU_$INIT (0xE23D38) and the PC-relative
+ * reads in MMU_$VTOP / MMU_$INSTALL* / MMU_$REMOVE_VIRTUAL.
+ */
 typedef struct mmu_globals_t {
-  uint16_t m68020;      /* 0x00: Non-zero if 68020+ */
-  uint16_t pid_priv;    /* 0x02: PID and privilege bits */
-  uint32_t va_ptt_mask; /* 0x04: VA to PTT offset mask */
-  uint8_t ptt_shift;    /* 0x08: PTT shift value */
-  uint8_t asid_shift;   /* 0x09: ASID shift value */
-  uint8_t mmu_sysrev;   /* 0x0A: MMU hardware revision */
-  uint8_t reserved;     /* 0x0B: Padding */
-} mmu_globals_t;
+  uint16_t m68020;      /* 0x00 (0xE23D2E): 68020+ boolean, in the HIGH byte */
+  uint32_t va_ptt_mask; /* 0x02 (0xE23D30): VA to PTT offset mask */
+  uint16_t va_shift;    /* 0x06 (0xE23D34): VA shift count (MMU_$VA_SHIFT) */
+  uint16_t ptt_shift;   /* 0x08 (0xE23D36): PTT shift count (MMU_$PTT_SHIFT) */
+} __attribute__((packed)) mmu_globals_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(mmu_globals_t, m68020) == 0x00,
+               "mmu_globals_t.m68020 must be at 0x00 (0xE23D2E)");
+_Static_assert(__builtin_offsetof(mmu_globals_t, va_ptt_mask) == 0x02,
+               "mmu_globals_t.va_ptt_mask must be at 0x02 (0xE23D30)");
+_Static_assert(__builtin_offsetof(mmu_globals_t, va_shift) == 0x06,
+               "mmu_globals_t.va_shift must be at 0x06 (0xE23D34)");
+_Static_assert(__builtin_offsetof(mmu_globals_t, ptt_shift) == 0x08,
+               "mmu_globals_t.ptt_shift must be at 0x08 (0xE23D36)");
+_Static_assert(sizeof(mmu_globals_t) == 0x0A, "mmu_globals_t must be 10 bytes");
+#endif
 
 /*
  * Architecture-independent macros for MMU access
@@ -111,10 +125,27 @@ typedef struct mmu_globals_t {
 #define DN330_MMU_HARDWARE_REV (*(volatile uint8_t *)0xFFB409) /* HW revision  \
                                                                 */
 
-/* MMU global state (at 0xE23D2A and nearby) */
-#define M68020 (*(uint16_t *)0xE23D2A)
-#define MMU_$PID_PRIV (*(uint16_t *)0xE23D2A) /* Note: overlaps M68020 */
-#define VA_TO_PTT_OFFSET_MASK (*(uint32_t *)0xE23D2E)
+/*
+ * MMU module globals.
+ *
+ * MMU_$INIT (0xE23D38) establishes its module base with
+ * "lea (-0xe,PC),A5" at 0xE23D3A, giving A5 = 0xE23D2E; it then writes
+ * (0x2,A5), (0x6,A5) and (0x8,A5).  Combined with the PC-relative reads in
+ * MMU_$VTOP (0xE24118 -> 0xE23D30, 0xE24124 -> 0xE23D34, 0xE2413A ->
+ * 0xE23D2C) this fixes the layout as:
+ *
+ *   0xE23D28  MMAP_$RMT_LIMIT (4 bytes, owned by mmap)
+ *   0xE23D2C  MMU_$PID_PRIV          (word)
+ *   0xE23D2E  M68020                 (word)
+ *   0xE23D30  VA_TO_PTT_OFFSET_MASK  (long)
+ *   0xE23D34  MMU_$VA_SHIFT          (word)
+ *   0xE23D36  MMU_$PTT_SHIFT         (word)
+ */
+#define MMU_$PID_PRIV (*(uint16_t *)0xE23D2C)
+#define M68020 (*(uint16_t *)0xE23D2E)
+#define VA_TO_PTT_OFFSET_MASK (*(uint32_t *)0xE23D30)
+#define MMU_$VA_SHIFT (*(uint16_t *)0xE23D34)
+#define MMU_$PTT_SHIFT (*(uint16_t *)0xE23D36)
 #define MMU_SYSREV (*(uint8_t *)0xE2426F)
 
 /* Cache control MCR shadow (for 68010) */
@@ -135,6 +166,8 @@ extern volatile uint8_t *mmu_hw_rev;
 extern uint16_t mmu_m68020;
 extern uint16_t mmu_pid_priv;
 extern uint32_t mmu_va_to_ptt_mask;
+extern uint16_t mmu_va_shift;
+extern uint16_t mmu_ptt_shift;
 extern uint8_t mmu_sysrev;
 extern uint16_t mmu_current_asid;
 extern uint8_t mmu_mcr_shadow;
@@ -153,12 +186,30 @@ extern uint8_t mmu_mcr_shadow;
 #define M68020 mmu_m68020
 #define MMU_$PID_PRIV mmu_pid_priv
 #define VA_TO_PTT_OFFSET_MASK mmu_va_to_ptt_mask
+#define MMU_$VA_SHIFT mmu_va_shift
+#define MMU_$PTT_SHIFT mmu_ptt_shift
 #define MMU_SYSREV mmu_sysrev
 #define MCR_SHADOW mmu_mcr_shadow
 #endif
 
 /* MMU data */
 extern uint32_t MMU_$SYSTEM_REV;
+
+/*
+ * The M68020 flag word is read two different ways by the original code:
+ *
+ *   - "tst.w M68020" (MMU_$INIT 0xE23D3E, MMU_$INSTALL 0xE24068,
+ *     MMU_$INSTALL_LIST 0xE24004, MMU_$INSTALL_PRIVATE 0xE23FA2)
+ *     tests the whole word;
+ *   - "move.b (d,PC),Dn" (MMU_$PTOV 0xE241E0, MMU_$MCR_CHANGE 0xE242A4)
+ *     and "tst.b M68020" (MST_$INIT) read only the HIGH byte of the word,
+ *     which is where the Domain boolean actually lives.
+ *
+ * Both forms are provided so each call site can mirror its own instruction
+ * without casting a pointer to a byte.
+ */
+#define M68020_IS_020_W() (M68020 != 0)
+#define M68020_IS_020_B() (((M68020 >> 8) & 0xFF) != 0)
 
 /* Get PTT entry for a virtual address */
 #define PTT_FOR_VA(va)                                                         \

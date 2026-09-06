@@ -44,23 +44,91 @@ extern int8_t PMAP_$SHUTTING_DOWN_FLAG;
  * ============================================================================
  */
 
-/* Working set page counts (0xE232B4 region) */
-extern uint32_t DAT_00e232b4;   /* Working set 0 page count */
-extern uint32_t DAT_00e232d8;   /* Working set 1 page count */
-extern uint32_t DAT_00e232fc;   /* Working set 2 page count */
-extern uint32_t DAT_00e23320;   /* Free page count */
-extern uint32_t DAT_00e23344;   /* Remote page count */
+/*
+ * Global page-pool page counts.  These are not standalone variables: each
+ * one is MMAP_$WSL[pool].page_count, i.e. 0xE232B0 + pool*0x24 + 4.  New
+ * code should use MMAP_WSL[MMAP_WSL_POOL_*].page_count (mmap/mmap.h); the
+ * DAT_ names below remain for the pmap/ast files that have not been
+ * re-emitted yet.  Ghidra labels renamed to MMAP_$WSL_*_CNT.
+ */
+extern uint32_t DAT_00e232b4;   /* MMAP_$WSL[0].page_count - free pages */
+extern uint32_t DAT_00e232d8;   /* MMAP_$WSL[1].page_count - pure pages */
+extern uint32_t DAT_00e232fc;   /* MMAP_$WSL[2].page_count - clean impure */
+extern uint32_t DAT_00e23320;   /* MMAP_$WSL[3].page_count - dirty, local */
+extern uint32_t DAT_00e23344;   /* MMAP_$WSL[4].page_count - dirty, remote */
 
 /* Global scan data */
 extern uint32_t DAT_00e23380;   /* Last global scan time */
 extern uint32_t DAT_00e2337c;   /* Previous global scan time */
 extern uint16_t DAT_00e23366;   /* Global scan counter */
 extern uint32_t DAT_00e2336c;   /* Global scan data */
-extern uint32_t DAT_00e23368;   /* Global scan source */
+extern uint32_t DAT_00e23368;   /* MMAP_$WSL[5].page_count - wired pages */
 
 /* Timer purifier data */
 extern uint16_t DAT_00e254e4;   /* Current scan slot (5-69) */
-extern uint16_t DAT_00e254e2;   /* Random seed for page selection */
+extern uint16_t DAT_00e254e2;   /* Random seed for page selection
+                                 * (Ghidra: PMAP_$WS_RANDOM_SEED) */
+
+/*
+ * ============================================================================
+ * Segment map (0xED4F80)
+ * ============================================================================
+ *
+ * One 4-byte entry per page of a segment, 32 pages (0x80 bytes) per
+ * segment.  PMAP_$PURIFIER_L reaches an entry with
+ *   lea 0xED5000 + seg*0x80 + page*4, A0 ; bset.b #7,(-0x80,A0)
+ * (0x00E13BEA-0x00E13C32), i.e. the array base is 0xED4F80 and the segment
+ * index is 1-based, exactly as in pmap_$fill_write_qblks.
+ */
+typedef struct pmap_segmap_entry_t {
+    uint8_t  flags;         /* 0x00: bit 7 = write in progress */
+    uint8_t  reserved[3];   /* 0x01: rest of the 4-byte entry */
+} pmap_segmap_entry_t;
+
+#define PMAP_SEGMAP_WRITING     0x80    /* bset.b #7 at 0x00E13C32 */
+#define PMAP_SEGMAP_PAGES_PER_SEG 32    /* 0x80 bytes / 4 bytes per entry */
+
+typedef pmap_segmap_entry_t pmap_segmap_row_t[PMAP_SEGMAP_PAGES_PER_SEG];
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(pmap_segmap_entry_t) == 4, "segmap entry is 4 bytes");
+_Static_assert(sizeof(pmap_segmap_row_t) == 0x80, "segmap row is 0x80 bytes");
+#endif
+
+#if defined(ARCH_M68K)
+/* 1-based: PMAP_SEGMAP[seg][page] == 0xED4F80 + seg*0x80 + page*4 */
+#define PMAP_SEGMAP ((pmap_segmap_row_t *)0xED4F80)
+#else
+extern pmap_segmap_row_t *pmap_segmap;
+#define PMAP_SEGMAP pmap_segmap
+#endif
+
+/*
+ * ============================================================================
+ * Disk queue block, as used by the purifier write path
+ * ============================================================================
+ *
+ * DISK_$GET_QBLKS hands back a chain of these; DISK_$WRITE_MULTI fills in
+ * the per-page status.  Only the fields PMAP_$PURIFIER_L touches are named
+ * (0x00E13D28-0x00E13D78 and 0x00E13D96-0x00E13DA0).
+ */
+typedef struct pmap_qblk_t {
+    uint8_t  reserved_00[0x08]; /* 0x00: allocation chain + DISK private */
+    struct pmap_qblk_t *next;   /* 0x08: next block of the result chain */
+    status_$t status;           /* 0x0C: per-page write status */
+    uint8_t  reserved_10[0x04]; /* 0x10 */
+    uint32_t vpn;               /* 0x14: page that was written */
+    uint8_t  reserved_18[0x24]; /* 0x18 */
+    uint32_t log_info;          /* 0x3C: word pair logged by NETLOG_$LOG_IT */
+} pmap_qblk_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(pmap_qblk_t, next) == 0x08, "pmap_qblk_t.next");
+_Static_assert(__builtin_offsetof(pmap_qblk_t, status) == 0x0C, "pmap_qblk_t.status");
+_Static_assert(__builtin_offsetof(pmap_qblk_t, vpn) == 0x14, "pmap_qblk_t.vpn");
+_Static_assert(__builtin_offsetof(pmap_qblk_t, log_info) == 0x3C,
+               "pmap_qblk_t.log_info");
+#endif
 
 /*
  * PMAP_$SHORT_WAIT_DELAY - relative delay used by PMAP_$PURIFIER_L

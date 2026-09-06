@@ -35,15 +35,16 @@ void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va, uint32_
     /* Pack ASID and protection for the base address */
     packed_base = va;
 
-    uint8_t shift = *(uint8_t*)((char*)&VA_TO_PTT_OFFSET_MASK + 4);
-    packed_base <<= (shift & 0x3F);
+    /* 0xE23FF2: move.w MMU_$PTT_SHIFT,D1w / 0xE23FF6: lsl.l D1,D5 */
+    packed_base <<= (MMU_$PTT_SHIFT & 0x3F);
 
     packed_base = (packed_base & 0xFFFFFF00) | prot;
     packed_base = (packed_base >> 5) | (packed_base << 27);
     packed_base = (packed_base & 0xFFFFFF00) | asid;
     packed_base = (packed_base >> 7) | (packed_base << 25);
 
-    if (M68020 == 0) {
+    /* 0xE24004: tst.w M68020 / bne - whole-word test */
+    if (!M68020_IS_020_W()) {
         packed_base = (packed_base & 0xFFFF0000) | ((packed_base & 0xFFFF) >> 2);
     }
 

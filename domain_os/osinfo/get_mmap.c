@@ -107,11 +107,13 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
             // Check if page is valid and belongs to this ASID
             // page_entry[-0x1ffb] = offset 5 in 0x10 byte entry (flags)
             // page_entry[-0x1ffc] = offset 4 in 0x10 byte entry (asid)
-            if ((page_entry[5] & 0x80) &&    // Page valid
-                (page_entry[4] == asid)) {   // Matches ASID
+            // 0xE5C7F2 / 0xE5C802 are "tst.b ... / bpl": Domain booleans
+            // tested for their sign, not masked.
+            if (((int8_t)page_entry[5] < 0) &&   // Page valid
+                (page_entry[4] == asid)) {       // Matches ASID
 
                 // Check if page is wired
-                if (page_entry[9] & 0x80) {  // page_entry[-0x1ff7]
+                if ((int8_t)page_entry[9] < 0) {  // page_entry[-0x1ff7]
                     *status = status_$os_info_page_wired;
                 } else {
                     *status = status_$os_info_page_found;
@@ -120,14 +122,14 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
                     // Original: move.w (-0x1ffe,A0),D0 (ASTE index at entry+2);
                     //   A4 = 0xEC5400 + idx*0x14; movea.l (-0x10,A4),A1
                     //   i.e. the aote pointer (+0x04) of ASTE_BASE[idx-1];
-                    //   then 2 longs copied from (A1)+0x10.
+                    //   0xE5C836 "lea (0x10,A1),A1" then two longword moves.
+                    //
+                    // The eight bytes at aote + 0x10 are aote_t.uid, the
+                    // object UID that ast_$lookup_aote_by_uid hashes on
+                    // (bead source-d2b).
                     short ast_index = *(short *)(page_entry + 2);
                     aste_t *aste = &ASTE_BASE[ast_index - 1];
-                    uint32_t *aote_words = (uint32_t *)aste->aote;
-                    // TODO: identify the aote_t field at +0x10 (inside
-                    // attributes[]); the original copies 8 bytes from there.
-                    ((uint32_t *)uid_out)[0] = aote_words[4];  // aote + 0x10
-                    ((uint32_t *)uid_out)[1] = aote_words[5];  // aote + 0x14
+                    *(uid_t *)uid_out = aste->aote->uid;
                 }
 
                 ppn++;

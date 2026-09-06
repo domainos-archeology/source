@@ -49,15 +49,12 @@ void LOG_$INIT(void)
     if (status == status_$naming_name_not_found) {
         /* File doesn't exist, create it */
         NAME_$CR_FILE((char *)LOG_FILE_PATH, &LOG_FILE_PATH_LEN, &LOG_$LOGFILE_UID, &status);
-        log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
-        if (log_$check_op_status("create  ") < 0) {
+        if (log_$check_op_status("create%$", &status) < 0) {
             return;
         }
     }
 
-    log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
-
-    if (log_$check_op_status("resolve ") < 0) {
+    if (log_$check_op_status("resolve%$", &status) < 0) {
         return;
     }
 
@@ -67,8 +64,7 @@ void LOG_$INIT(void)
 
     /* Get file attributes to check size */
     AST_$GET_COMMON_ATTRIBUTES(&LOG_$LOGFILE_UID, 2, out_attrs, &status);
-    log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
-    if (log_$check_op_status("get_attributes  ") < 0) {
+    if (log_$check_op_status("get_attributes%$", &status) < 0) {
         return;
     }
 
@@ -82,8 +78,7 @@ void LOG_$INIT(void)
     vpn = (int16_t *)MST_$MAPS(0, (int16_t)0xff00, &LOG_$LOGFILE_UID, 0,
                                 LOG_BUFFER_SIZE, 0x16, 0, is_new_file,
                                 out_attrs, &status);
-    log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
-    if (log_$check_op_status("map     ") < 0) {
+    if (log_$check_op_status("map%$", &status) < 0) {
         return;
     }
 
@@ -94,8 +89,7 @@ void LOG_$INIT(void)
     lock_mode = 0;
     lock_rights = 0;
     FILE_$LOCK(&LOG_$LOGFILE_UID, &lock_index, &lock_mode, &lock_rights, 0, &status);
-    log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
-    if (log_$check_op_status("lock    ") < 0) {
+    if (log_$check_op_status("lock%$", &status) < 0) {
         return;
     }
 
@@ -108,8 +102,7 @@ void LOG_$INIT(void)
 
     /* Wire the log buffer page for reliable access */
     LOG_$STATE.wired_handle = MST_$WIRE((uint32_t)vpn, &status);
-    log_$last_status = status;  /* nested procedure read LOG_$INIT\'s status */
-    if (log_$check_op_status("wire    ") < 0) {
+    if (log_$check_op_status("wire%$", &status) < 0) {
         return;
     }
 
@@ -135,5 +128,5 @@ void LOG_$INIT(void)
     }
 
     /* Add initialization log entry */
-    LOG_$ADD(LOG_TYPE_INIT, &DAT_00e2fffc, 0);
+    LOG_$ADD(LOG_TYPE_INIT, &LOG_$VFMT_NO_ARG, 0);
 }

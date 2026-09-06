@@ -30,7 +30,8 @@ void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
 
     /* Build the match key from ASID and VA bits */
     /* The key format encodes the ASID and high VA bits for comparison */
-    uint32_t va_shifted = va << (*(uint8_t*)((char*)&VA_TO_PTT_OFFSET_MASK + 4) & 0x3F);
+    /* 0xE23E54: move.w MMU_$VA_SHIFT,D0w / 0xE23E58: lsl.l D0,D4 */
+    uint32_t va_shifted = va << (MMU_$VA_SHIFT & 0x3F);
     match_key = ((uint32_t)(asid << 9) | ((uint32_t)asid >> 7)) >> 16;
 
     remaining = count - 1;
