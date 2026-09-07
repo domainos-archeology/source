@@ -54,7 +54,7 @@ static int current_failed = 0;
 #include "dir/dir_internal.h"
 
 uint16_t   PROC1_$AS_ID;
-uint32_t   DAT_00e54730;
+uint32_t   NAME_$CONST_ZERO_L;
 name_$data_t NAME_$DATA;
 
 /* ------------------------------------------------------------------ */
@@ -584,7 +584,7 @@ TEST(remote_path_locks_drops_and_unlocks)
     ASSERT_EQ(4, pl_lock_mode);         /* 0x00E56D30 `move.l #0x40000` */
     ASSERT_EQ(0x00, (unsigned char)pl_local_only);
     ASSERT_EQ(0, pl_flags);
-    ASSERT_TRUE(pl_acl_ctx == (void **)&DAT_00e54730);
+    ASSERT_TRUE(pl_acl_ctx == (void **)&NAME_$CONST_ZERO_L);
     ASSERT_EQ(1, dh_calls);
     ASSERT_EQ(0, dh_flags[0]);          /* check_del_right FALSE -> 0 */
     ASSERT_EQ(3, dh_name_len);

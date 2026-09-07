@@ -64,7 +64,7 @@ extern char DAT_00e2dcc8[];
 extern char DAT_00e2da58[];
 extern char DAT_00e2ca30[];
 extern char DAT_00e2c9f0[];
-extern char DAT_00e2dc58[];
+extern char TONE_$CHANNEL[];
 extern char DAT_00e2d3f6[];
 extern char DAT_00e2d500[];
 extern char DAT_00e2dd00[];

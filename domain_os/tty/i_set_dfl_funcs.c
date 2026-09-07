@@ -24,9 +24,9 @@
 
 #include "tty/tty_internal.h"
 
-/* DAT_00e82450 declared in tty_internal.h */
+/* tty_$i_dfl_func_enable_mask declared in tty_internal.h */
 
 void TTY_$I_SET_DFL_FUNCS(tty_desc_t *tty, char use_dfl)
 {
-    tty_$i_set_funcs(tty, DAT_00e82450, use_dfl);
+    tty_$i_set_funcs(tty, tty_$i_dfl_func_enable_mask, use_dfl);
 }

@@ -291,7 +291,12 @@ typedef struct dir_insert_ctx {
  * These tables contain operation-specific parameters indexed by operation type.
  * Located at 0xE7FC42 on M68K.
  */
-extern uint16_t DAT_00e7fc42;   /* Base address of parameter tables */
+/* DIR_$OP_TAB is the Ghidra label at 0xE7FC42.  DIR_$SERVER indexes the
+ * table with an 8-byte stride and a -0xA8 bias
+ * (`movea.l #0xe7fc42,A1` / `lsl.l #0x3,D1` / `move.w (-0xa8,A0),D1w`
+ * at 0x00E5824A..0x00E58258), so the real table base is 0xE7FB9A; the
+ * cells below are the individual words the DIR request builders read. */
+extern uint16_t DIR_$OP_TAB;    /* word at 0xE7FC42 */
 extern uint16_t DAT_00e7fc4a;   /* ADD_HARD_LINKU params */
 extern uint16_t DAT_00e7fc4e;
 extern uint16_t DAT_00e7fc52;   /* DROP_HARD_LINKU params */
@@ -1293,7 +1298,7 @@ extern uint32_t DAT_00e564e2;
 /* 0x00E5716A, word 0x0006: FILE_$SET_PROT prot_type
  * (`move.w (A4),D2w` at 0x00E5DF56). */
 extern uint16_t DAT_00e5716a;
-/* DAT_00e54730 (NAME code region) is declared in name/name.h.
+/* NAME_$CONST_ZERO_L (NAME code region) is declared in name/name.h.
  *
  * The ACL_$RIGHTS constant cells 0xE4BC24, 0xE4CFF4, 0xE4CFF6, 0xE50C5C,
  * 0xE505C4, 0xE51B64, 0xE54B28, 0xE56946, 0xE564DE, 0xE5716C and 0xE5755E

@@ -263,7 +263,7 @@ void NAME_$OLD_DELETE_ENTRYU(uid_t *dir_uid, char *name, uint16_t name_len,
                         false,                      /* local_only */
                         0, 0,                       /* flags, key */
                         0, 0, 0,                    /* rem_key/node/extra */
-                        (void **)&DAT_00e54730,     /* 0x00E54730, NIL */
+                        (void **)&NAME_$CONST_ZERO_L,     /* 0x00E54730, NIL */
                         0,                          /* rem_wait */
                         &lock_slot, &lock_rights, status_ret);
         if (*status_ret != status_$ok) {

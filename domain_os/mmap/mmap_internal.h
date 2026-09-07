@@ -83,8 +83,8 @@ extern aste_t MMAP_$SEG_ASTE[];
  * Internal statistics counters
  * Located in MMAP global data area.
  */
-extern uint32_t DAT_00e23344;  /* Page count statistic */
-extern uint32_t DAT_00e23320;  /* Page count statistic */
+extern uint32_t MMAP_$WSL_DIRTY_RMT_CNT;    /* 0xE23344: MMAP_$WSL[4].page_count */
+extern uint32_t MMAP_$WSL_DIRTY_LOCAL_CNT;  /* 0xE23320: MMAP_$WSL[3].page_count */
 
 /*
  * Working set list index table - maps ASID to WSL index

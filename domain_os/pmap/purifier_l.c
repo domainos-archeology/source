@@ -162,10 +162,10 @@ static boolean pmap_$purifier_ws_scan_pass(uint32_t total_pages,
     }
 
     /* 0x00E13ED0-0x00E13EE6: pick a page index in [0, slot_pages) */
-    DAT_00e254e2 = (uint16_t)((uint16_t)(DAT_00e254e2 * PMAP_L_RAND_MULT)
+    PMAP_$WS_RANDOM_SEED = (uint16_t)((uint16_t)(PMAP_$WS_RANDOM_SEED * PMAP_L_RAND_MULT)
                               & PMAP_L_RAND_MASK);
     /* `move.w D4w,D5w` into a cleared D5: the quotient is kept 16-bit. */
-    target = (uint16_t)(((uint32_t)slot_pages * (uint32_t)DAT_00e254e2) >> 10);
+    target = (uint16_t)(((uint32_t)slot_pages * (uint32_t)PMAP_$WS_RANDOM_SEED) >> 10);
 
     accumulator = 0;
 

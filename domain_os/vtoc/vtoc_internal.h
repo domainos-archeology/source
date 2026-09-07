@@ -463,10 +463,10 @@ uint8_t vtoc_$uid_cache_lookup(uid_t *uid, uint16_t *flags, uint32_t *block_info
 /* UID cache insert (uid_cache.c) */
 void vtoc_$uid_cache_insert(uid_t *uid, int16_t vol_idx, uint32_t block_info);
 
-/* File map block allocation/traversal (FUN_00e397d0) */
+/* File map block allocation/traversal (vtoc_$fm_traverse, 0x00e397d0) */
 uint16_t vtoc_$fm_traverse(uint32_t *block_ptr, uint16_t level, uint32_t hint);
 
-/* Indirect block freeing helper (FUN_00e39bc2) */
+/* Indirect block freeing helper (vtoc_$free_indirect, 0x00e39bc2) */
 void vtoc_$free_indirect(uint32_t block, uint16_t level, uint32_t limit,
                          uint32_t step, char do_free);
 

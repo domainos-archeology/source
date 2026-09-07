@@ -81,7 +81,7 @@ uint16_t mmap_wsl_hi_mark;      /* MMAP_WSL_HI_MARK on ARCH_HOST */
 uint16_t PMAP_$WS_INTERVAL;
 uint32_t PMAP_$IDLE_INTERVAL;
 uint32_t TIME_$CLOCKH;
-uint16_t DAT_00e254e2;
+uint16_t PMAP_$WS_RANDOM_SEED;
 
 /*
  * ========================================================================
@@ -189,7 +189,7 @@ static void reset_mocks(void)
     PMAP_$WS_INTERVAL = 10;
     PMAP_$IDLE_INTERVAL = 100;
     TIME_$CLOCKH = 1000;
-    DAT_00e254e2 = 1;
+    PMAP_$WS_RANDOM_SEED = 1;
 }
 
 /*
@@ -306,7 +306,7 @@ static void test_selection_takes_the_first_slot_crossed(void)
     wsl_store[7].ws_floor = 0;
     wsl_store[7].pri_timestamp = 1000;
 
-    DAT_00e254e2 = 0;      /* the draw stays 0, so target == 0 */
+    PMAP_$WS_RANDOM_SEED = 0;      /* the draw stays 0, so target == 0 */
 
     ASSERT_TRUE(pmap_$purifier_ws_scan_pass(50, &prev_steal) < 0);
     ASSERT_EQ(1, scan_calls);

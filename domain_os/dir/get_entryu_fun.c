@@ -58,11 +58,11 @@ void DIR_$GET_ENTRYU_FUN_00e4d460(uid_t *local_uid, char *name,
     request.op = DIR_OP_GET_ENTRYU_OP;
     request.uid.high = local_uid->high;
     request.uid.low = local_uid->low;
-    request.reserved = DAT_00e7fc42;
+    request.reserved = DIR_$OP_TAB;
 
     /* Send the request */
     /* TODO(source-qgq): Verify exact parameter table entries for GET_ENTRYU */
-    DIR_$DO_OP(&request.op, name_len + DAT_00e7fc42, 0x1c, &response, &do_op_rcvd_len);
+    DIR_$DO_OP(&request.op, name_len + DIR_$OP_TAB, 0x1c, &response, &do_op_rcvd_len);
 
     *status_ret = response.status;
 }

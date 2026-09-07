@@ -57,11 +57,11 @@ extern uint16_t         PMAP_$CURRENT_SLOT;
 /*
  * External references to other modules
  */
-extern uint32_t DAT_00e23344;            /* Remote purifier flag */
-extern uint32_t DAT_00e232d8;            /* Page count 1 */
-extern uint32_t DAT_00e232fc;            /* Page count 2 */
-extern uint32_t DAT_00e232b4;            /* Page count 3 */
-extern uint32_t DAT_00e23320;            /* Impure pages flag */
+extern uint32_t MMAP_$WSL_DIRTY_RMT_CNT;    /* 0xE23344: MMAP_$WSL[4].page_count */
+extern uint32_t MMAP_$WSL_PURE_CNT;         /* 0xE232D8: MMAP_$WSL[1].page_count */
+extern uint32_t MMAP_$WSL_IMPURE_CNT;       /* 0xE232FC: MMAP_$WSL[2].page_count */
+extern uint32_t MMAP_$WSL_FREE_CNT;         /* 0xE232B4: MMAP_$WSL[0].page_count */
+extern uint32_t MMAP_$WSL_DIRTY_LOCAL_CNT;  /* 0xE23320: MMAP_$WSL[3].page_count */
 
 /*
  * Lock IDs

@@ -24,3 +24,10 @@ P2 referencing it), `_Static_assert`s on every recovered struct layout under
 `pea (d,PC)` constants turned into named file-statics with the address in a comment, and unit
 tests that `#include` the real .c and call the real function through mocks. Do not `git commit`
 or `git push` unless explicitly asked. Related: [[project-audit-2026-09-06]].
+
+**Gate 2 false positives:** the `grep -E 'error|warning'` form of the error scan also matches
+benign lines — `[CC] build/sau2/disk/io_error.o` and friends (files/symbols whose *name*
+contains "error", e.g. `Area_Internal_Error`, `atomic_op_error`, `xns/error_send.c`) and the
+final `make: Target 'all' not remade because of errors.` from the expected link failure.
+Re-run with `grep -E 'error:|warning:'` to see whether any *compile* diagnostic actually
+fired; the m68k link stage always fails on unresolved kernel symbols.

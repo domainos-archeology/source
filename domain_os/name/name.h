@@ -193,7 +193,7 @@ extern uid_t NAME_$CANNED_ROOT_UID; /* Canned root UID (for fallback), 0xE173E4 
  * Constants living in the NAME code region that are passed by reference
  * (Pascal VAR parameters) by NAME and DIR routines.
  */
-extern uint32_t DAT_00e54730;   /* 0xE54730: longword 0 just before NAME_$UNLOCK_DIR.
+extern uint32_t NAME_$CONST_ZERO_L;   /* 0xE54730: longword 0 just before NAME_$UNLOCK_DIR.
                                    Read as a longword by every consumer:
                                    FILE_$TRUNCATE new_size, FILE_$SET_REFCNT refcnt
                                    (`move.l (A0),D0` at 0x00E5E40E) and

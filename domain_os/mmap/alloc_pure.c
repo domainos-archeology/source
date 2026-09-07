@@ -43,7 +43,7 @@ uint16_t MMAP_$ALLOC_PURE(uint32_t *vpn_array, uint16_t count)
         if (tried_steal) break;
 
         /* Check if stealing is worthwhile */
-        if (DAT_00e23344 + DAT_00e23320 > 8) break;
+        if (MMAP_$WSL_DIRTY_RMT_CNT + MMAP_$WSL_DIRTY_LOCAL_CNT > 8) break;
 
         uint16_t wsl_index = MMAP_PID_TO_WSL[PROC1_$CURRENT];
         ws_hdr_t *wsl = WSL_FOR_INDEX(wsl_index);

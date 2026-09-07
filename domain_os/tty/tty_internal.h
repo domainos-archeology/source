@@ -240,7 +240,7 @@ void tty_$i_set_funcs(tty_desc_t *tty, uint32_t func_mask, char use_dfl);
  * TTY_$I_SET_DFL_FUNCS - Set default function character classes
  *
  * Wrapper around tty_$i_set_funcs that passes the default
- * enabled function mask (DAT_00e82450) from the TTY global data.
+ * enabled function mask (tty_$i_dfl_func_enable_mask) from the TTY global data.
  *
  * Parameters:
  *   tty       - TTY descriptor
@@ -358,13 +358,13 @@ void tty_$i_wait(tty_desc_t *tty, char wait_flag, char *done_flag,
 extern uint8_t DAT_00e82454;
 
 /*
- * DAT_00e82450 - Default enabled function character mask
+ * tty_$i_dfl_func_enable_mask - Default enabled function character mask
  *
  * Bitmask of default-enabled function characters.
  * Used by TTY_$I_SET_DFL_FUNCS.
  * Original address: 0x00e82450
  */
-extern uint32_t DAT_00e82450;
+extern uint32_t tty_$i_dfl_func_enable_mask;
 
 /*
  * DAT_00e2ddd4 - Output flags mask for raw mode save/restore

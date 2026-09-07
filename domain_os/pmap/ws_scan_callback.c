@@ -87,7 +87,7 @@ void PMAP_$WS_SCAN_CALLBACK(int *param)
         DAT_00e23366++;
         if (PMAP_$WS_INTERVAL <= DAT_00e23366) {
             DAT_00e23366 = 0;
-            DAT_00e2336c = DAT_00e23368;
+            DAT_00e2336c = MMAP_$WSL_WIRED_CNT;
 
             /* Perform global working set scan on slot 5 */
             MMAP_$WS_SCAN(5, 0, 0x3FFFFF, 0x3FFFFF);

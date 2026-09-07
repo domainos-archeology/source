@@ -110,38 +110,10 @@ extern rem_name_data_t rem_name_$data;  /* 0xE7DBB8 - defined in rem_name.c */
 #define SOCK_FLAG_SERVER_LOCAL  0x2000  /* sock_$sock_t.flags bit 13 */
 
 /*
- * NAME_$INIT_FUN_00e31578 - Debug/logging helper for NAME_$INIT
- *   (Ghidra name: name_$init_check_status at 0x00e31578)
- *
- * Called during NAME_$INIT to log progress. Parameters suggest it takes
- * a format string and optional data.
- *
- * Parameters:
- *   msg     - Message/format string
- *   param1  - First parameter (often a pointer to data)
- *   param2  - Second parameter (often a length or flags)
- *
- * Original address: 0x00e31578
+ * name_$init_check_status (0x00e31578) - Status check / crash helper for
+ * NAME_$INIT.  Not declared here: it is a nested Pascal subprocedure of
+ * NAME_$INIT and is emitted as a static function in name/init.c.
  */
-void NAME_$INIT_FUN_00e31578(char *msg, void *param1, int param2);
-
-/*
- * name_$resolve_internal (0x00e4a060; declared below as FUN_00e4a060) - Internal pathname resolution helper
- *
- * Called by NAME_$RESOLVE to do the actual resolution work.
- * Returns both directory UID and file UID.
- *
- * Parameters:
- *   path       - Pathname to resolve
- *   path_len   - Length of pathname (value, not pointer)
- *   dir_uid    - Output: UID of containing directory
- *   file_uid   - Output: UID of the named object
- *   status_ret - Output: status code
- *
- * Original address: 0x00e4a060
- */
-void FUN_00e4a060(char *path, int16_t path_len, uid_t *dir_uid, uid_t *file_uid,
-                  status_$t *status_ret);
 
 /*
  * name_$map_dir - Map a directory for fast access

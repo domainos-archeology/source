@@ -151,7 +151,7 @@ int16_t ast_$allocate_pages(int16_t count_arg, int16_t min_count,
 
 done:
     /* Check if memory is low and wake purifier if needed */
-    if ((DAT_00e232b4 + DAT_00e232d8 + DAT_00e232fc) < (uint32_t)PMAP_$LOW_THRESH) {
+    if ((MMAP_$WSL_FREE_CNT + MMAP_$WSL_PURE_CNT + MMAP_$WSL_IMPURE_CNT) < (uint32_t)PMAP_$LOW_THRESH) {
         PMAP_$WAKE_PURIFIER(0);
     }
 

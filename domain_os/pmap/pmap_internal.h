@@ -49,26 +49,26 @@ extern int8_t PMAP_$SHUTTING_DOWN_FLAG;
  * Global page-pool page counts.  These are not standalone variables: each
  * one is MMAP_$WSL[pool].page_count, i.e. 0xE232B0 + pool*0x24 + 4.  New
  * code should use MMAP_WSL[MMAP_WSL_POOL_*].page_count (mmap/mmap.h); the
- * DAT_ names below remain for the pmap/ast files that have not been
- * re-emitted yet.  Ghidra labels renamed to MMAP_$WSL_*_CNT.
+ * flat MMAP_$WSL_*_CNT names below (the Ghidra labels for those addresses)
+ * remain for the pmap/ast files that have not been re-emitted yet.
  */
-extern uint32_t DAT_00e232b4;   /* MMAP_$WSL[0].page_count - free pages */
-extern uint32_t DAT_00e232d8;   /* MMAP_$WSL[1].page_count - pure pages */
-extern uint32_t DAT_00e232fc;   /* MMAP_$WSL[2].page_count - clean impure */
-extern uint32_t DAT_00e23320;   /* MMAP_$WSL[3].page_count - dirty, local */
-extern uint32_t DAT_00e23344;   /* MMAP_$WSL[4].page_count - dirty, remote */
+extern uint32_t MMAP_$WSL_FREE_CNT;         /* MMAP_$WSL[0].page_count - free pages */
+extern uint32_t MMAP_$WSL_PURE_CNT;         /* MMAP_$WSL[1].page_count - pure pages */
+extern uint32_t MMAP_$WSL_IMPURE_CNT;       /* MMAP_$WSL[2].page_count - clean impure */
+extern uint32_t MMAP_$WSL_DIRTY_LOCAL_CNT;  /* MMAP_$WSL[3].page_count - dirty, local */
+extern uint32_t MMAP_$WSL_DIRTY_RMT_CNT;    /* MMAP_$WSL[4].page_count - dirty, remote */
 
 /* Global scan data */
 extern uint32_t DAT_00e23380;   /* Last global scan time */
 extern uint32_t DAT_00e2337c;   /* Previous global scan time */
 extern uint16_t DAT_00e23366;   /* Global scan counter */
 extern uint32_t DAT_00e2336c;   /* Global scan data */
-extern uint32_t DAT_00e23368;   /* MMAP_$WSL[5].page_count - wired pages */
+extern uint32_t MMAP_$WSL_WIRED_CNT;        /* MMAP_$WSL[5].page_count - wired pages */
 
 /* Timer purifier data */
 extern uint16_t DAT_00e254e4;   /* Current scan slot (5-69) */
-extern uint16_t DAT_00e254e2;   /* Random seed for page selection
-                                 * (Ghidra: PMAP_$WS_RANDOM_SEED) */
+extern uint16_t PMAP_$WS_RANDOM_SEED;   /* 0xE254E2: random seed for page
+                                         * selection (word; initial value 0x004D) */
 
 /*
  * ============================================================================

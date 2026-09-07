@@ -206,7 +206,7 @@ write_infoblk:
     }
 
     /* Flush partial */
-    FILE_$FW_PARTIAL(dir_uid, &DAT_00e54730, &DAT_00e564e2, status_ret);
+    FILE_$FW_PARTIAL(dir_uid, &NAME_$CONST_ZERO_L, &DAT_00e564e2, status_ret);
     if (*status_ret != status_$ok) {
         /* Error - set high bit */
         *status_ret |= 0x80000000;  /* or.b #0x80 into the first (MSB) byte on m68k */

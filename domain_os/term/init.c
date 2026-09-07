@@ -68,7 +68,7 @@ void TERM_$INIT(short *param1, short *param2) {
     SIO_$INIT_LINE(DAT_00e2d024, DAT_00e2dcc8, (m68k_ptr_t *)&local_vars[0], DAT_00e2ca30);
 
     local_vars[3] = DAT_00e2d024;
-    local_vars[6] = DAT_00e2dc58;
+    local_vars[6] = TONE_$CHANNEL;
     local_vars[4] = DAT_00e2d3f6;  // Note: address not in extern list
     SIO_$INIT_DESC((sio_desc_t *)DAT_00e2da58, DAT_00e2c9f0, local_vars[2],
                    (m68k_ptr_t *)&local_vars[3], (m68k_ptr_t *)&local_vars[4],
@@ -106,7 +106,7 @@ void TERM_$INIT(short *param1, short *param2) {
     local_vars[7] = DAT_00e2dad0;
     local_vars[8] = DAT_00e2da58;
     SIO2681_$INIT((int16_t *)DAT_00e33220, (int16_t *)DAT_00e33220,
-                  (sio2681_channel_t *)DAT_00e2dc58, (sio_desc_t **)&local_vars[8],
+                  (sio2681_channel_t *)TONE_$CHANNEL, (sio_desc_t **)&local_vars[8],
                   (sio_params_t *)DAT_00e2daa4,
                   (sio2681_channel_t *)DAT_00e2dc74, (sio_desc_t **)&local_vars[7],
                   (sio_params_t *)DAT_00e2db1c,

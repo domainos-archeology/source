@@ -30,10 +30,10 @@
 #include "anon/anon.h"
 #include "area/area.h"
 
-/* PMAP global variables at 0xE232xx */
-extern uint32_t DAT_00e232b4;       /* Available pages pool 1 */
-extern uint32_t DAT_00e232d8;       /* Available pages pool 2 */
-extern uint32_t DAT_00e232fc;       /* Available pages pool 3 */
+/* MMAP working-set-list page counts at 0xE232xx (see mmap/mmap.h) */
+extern uint32_t MMAP_$WSL_FREE_CNT;    /* 0xE232B4: MMAP_$WSL[0].page_count */
+extern uint32_t MMAP_$WSL_PURE_CNT;    /* 0xE232D8: MMAP_$WSL[1].page_count */
+extern uint32_t MMAP_$WSL_IMPURE_CNT;  /* 0xE232FC: MMAP_$WSL[2].page_count */
 
 /* Internal AST functions (VTOC_$SEARCH_VOLUMES comes from vtoc/vtoc.h) */
 extern void AST_$LOOKUP_WITH_HINTS(void *uid_info, uint32_t *vol_ptr, void *attrs, status_$t *status);

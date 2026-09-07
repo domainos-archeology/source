@@ -157,35 +157,35 @@ extern int16_t MNK_$KTT_MAX;
  */
 
 /*
- * FUN_00e1c9fc - Keyboard state machine lookup
+ * kbd_$state_lookup (0x00e1c9fc) - Keyboard state machine lookup
  * Returns pointer to state entry in A0
  */
 void *kbd_$state_lookup(uint16_t state, uint8_t key);
 
 /*
- * FUN_00e1ca8c - Set keyboard type
+ * kbd_$set_type (0x00e1ca8c) - Set keyboard type
  * Copies type string and looks up translation table
  */
 void kbd_$set_type(kbd_state_t *state, uint8_t *type_str, uint16_t type_len);
 
 /*
- * FUN_00e1cafe - Fetch key from ring buffer
+ * kbd_$fetch_key (0x00e1cafe) - Fetch key from ring buffer
  * Returns -1 if key available, 0 if buffer empty
  */
 int8_t kbd_$fetch_key(kbd_state_t *state, uint8_t *key_out, int16_t *mode_out);
 
 /*
- * FUN_00e1cc10 - Process normal key
+ * kbd_$process_key (0x00e1cc10) - Process normal key
  */
 void kbd_$process_key(uint8_t key, kbd_state_t *state);
 
 /*
- * FUN_00e1cc64 - Translate key code
+ * kbd_$translate_key (0x00e1cc64) - Translate key code
  */
 uint8_t kbd_$translate_key(uint8_t key);
 
 /*
- * FUN_00e1ca62 - Get keyboard mode from key
+ * kbd_$get_mode (0x00e1ca62) - Get keyboard mode from key
  */
 int16_t kbd_$get_mode(uint8_t key);
 

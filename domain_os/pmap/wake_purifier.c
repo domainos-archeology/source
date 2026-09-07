@@ -24,7 +24,7 @@ void PMAP_$WAKE_PURIFIER(int8_t wait)
     EC_$ADVANCE(&PMAP_$L_PURIFIER_EC);
 
     /* Wake remote purifier if enabled */
-    if (DAT_00e23344 != 0) {
+    if (MMAP_$WSL_DIRTY_RMT_CNT != 0) {
         EC_$ADVANCE(&PMAP_$R_PURIFIER_EC);
     }
 

@@ -144,7 +144,7 @@ _Static_assert(sizeof(mmape_t) == 0x10, "mmape_t stride must be 0x10 bytes");
  * is the same value that is stored in mmape_t.wsl_index (the
  * MMAP_PAGE_TYPE_* codes).  MMAP_$WSL[n].page_count is the per-pool page
  * count that the purifiers and AST_$ALLOCATE_PAGES test; the addresses are
- * the ones Ghidra used to call DAT_00e232b4 .. DAT_00e23368.
+ * the ones Ghidra labels MMAP_$WSL_FREE_CNT .. MMAP_$WSL_WIRED_CNT.
  */
 #define MMAP_WSL_POOL_FREE 0        /* 0xE232B4: free pages */
 #define MMAP_WSL_POOL_PURE 1        /* 0xE232D8: clean read-only pages */

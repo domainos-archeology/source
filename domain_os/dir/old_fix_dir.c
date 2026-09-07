@@ -110,7 +110,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
          * single `move.l #0x880000` the listing shows. */
         FILE_$PRIV_LOCK(&temp_uid, PROC1_$AS_ID, 0, 4, 0,
                         0x0088, 0x0000, 0, 0, 0,
-                        (void **)&DAT_00e54730, 1,
+                        (void **)&NAME_$CONST_ZERO_L, 1,
                         (uint32_t *)&lock_handle, &lock_result,
                         status_ret);
         did_lock = -1;
@@ -140,7 +140,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         }
 
         /* Truncate the original directory */
-        FILE_$TRUNCATE(&local_dir, &DAT_00e54730, status_ret);
+        FILE_$TRUNCATE(&local_dir, &NAME_$CONST_ZERO_L, status_ret);
         if (*status_ret != status_$ok) {
             goto cleanup;
         }
@@ -241,7 +241,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         /* Lock the directory */
         FILE_$PRIV_LOCK(&local_dir, PROC1_$AS_ID, 0, 4, 0,
                         0x0088, 0x0000, 0, 0, 0,
-                        (void **)&DAT_00e54730, 1,
+                        (void **)&NAME_$CONST_ZERO_L, 1,
                         (uint32_t *)&lock_handle, &lock_result,
                         status_ret);
         if (*status_ret != status_$ok) {
@@ -308,7 +308,7 @@ cleanup:
         MST_$UNMAP(&temp_uid, &unmap_addr, &DAT_00e5609e, &status);
     }
     if (did_lock < 0) {
-        FILE_$SET_REFCNT(&temp_uid, &DAT_00e54730, &status);
+        FILE_$SET_REFCNT(&temp_uid, &NAME_$CONST_ZERO_L, &status);
     }
     if (need_unlock < 0) {
         NAME_$UNLOCK_DIR(&status);
