@@ -163,20 +163,37 @@ int8_t ACL_$ENTER_SUBS(uid_t *uid, status_$t *status_ret);
  *
  * Verifies the caller has the specified access rights to an object.
  *
- * Parameters:
- *   uid           - UID of object to check
- *   unused        - Unused parameter (pass 0)
- *   required_mask - Pointer to required access rights mask
- *   option_flags  - Pointer to option flags
- *   status        - Output status code
+ * The body (0x00E46A00) copies the UID into its own frame and hands nine
+ * arguments to acl_$eval_rights (0x00E464B8); every one of the four caller
+ * arguments below is dereferenced there, so none of them may be NULL:
+ *
+ *   uid           A6+0x08  UID of the object.  Copied to a local
+ *                          (`move.l (A0)+,(-0x8,A6)` at 0x00E46A12).
+ *   ignore_super  A6+0x0C  Pointer to a Domain boolean.  0x00E46A50
+ *                          `movea.l (0xc,A6),A3` / 0x00E46A54
+ *                          `move.b (A3),-(SP)`: the BYTE at that address is
+ *                          passed by value.  TRUE (0xFF) suppresses the
+ *                          super-user bypass that acl_$eval_rights would
+ *                          otherwise take at 0x00E464DC
+ *                          (`tst.b D4b` / `bpl` on in_super, then
+ *                          `tst.b D5b` / `bpl` on this flag).
+ *                          Callers pass the address of a byte-sized literal
+ *                          pooled in their own code region.
+ *   required_mask A6+0x10  Pointer to the required rights mask, read as a
+ *                          LONGWORD (`move.l (A2),-(SP)` at 0x00E46A4E).
+ *   option_flags  A6+0x14  Pointer to the object-type / option word, read as
+ *                          a WORD (`move.w (A1),-(SP)` at 0x00E46A48).
+ *   status        A6+0x18  Output status code.
  *
  * Returns:
- *   Non-zero if access granted, 0 if denied
+ *   The granted rights, as the full longword acl_$eval_rights leaves in D0
+ *   (callers test it with `tst.l D0` at 0x00E73D4C and `cmpi.l #0x2,D0` at
+ *   0x00E71504).  Zero means access denied.
  *
  * Original address: 0x00E46A00
  */
-int16_t ACL_$RIGHTS(uid_t *uid, void *unused, uint32_t *required_mask,
-                    int16_t *option_flags, status_$t *status);
+uint32_t ACL_$RIGHTS(uid_t *uid, boolean *ignore_super, uint32_t *required_mask,
+                     int16_t *option_flags, status_$t *status);
 
 /*
  * ACL_$RIGHTS_CHECK - Check access rights for an object (variant)

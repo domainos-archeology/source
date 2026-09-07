@@ -15,6 +15,23 @@
 #define DIR_CATTR_SET_DEF_ACL   0x0008
 
 /*
+ * Constant cells for the ACL_$RIGHTS call at 0x00E561FA, addressed with
+ * `pea (d,PC)` (PC = instruction address + 2).
+ */
+
+/* 0x00E54B28, byte 0x00: ACL_$RIGHTS' ignore_super argument (FALSE - the
+ * super-user bypass applies).  `pea (-0x16ce,PC)` at 0x00E561F4. */
+static const boolean dir_$set_def_acl_ignore_super_00e54b28 = false;
+
+/* 0x00E564DE, longword 0x00000008: the required rights mask.
+ * `pea (0x2ec,PC)` at 0x00E561F0. */
+static const uint32_t dir_$set_def_acl_rights_00e564de = 0x00000008;
+
+/* 0x00E54B26, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
+ * directory).  `pea (-0x16c8,PC)` at 0x00E561EC. */
+static const int16_t dir_$set_def_acl_acl_opts_00e54b26 = 1;
+
+/*
  * DIR_$OLD_SET_DEFAULT_ACL - Legacy set default ACL
  *
  * Based on the Ghidra decompilation at 0x00E561CC:
@@ -60,8 +77,10 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     uint16_t attr_val[2];     /* local_54 */
 
     /* Check ACL rights on the directory */
-    ACL_$RIGHTS(dir_uid, &DAT_00e54b28, &DAT_00e564de,
-                &ACL_TYPE_DIR, status_ret);
+    ACL_$RIGHTS(dir_uid,
+                (boolean *)&dir_$set_def_acl_ignore_super_00e54b28,
+                (uint32_t *)&dir_$set_def_acl_rights_00e564de,
+                (int16_t *)&dir_$set_def_acl_acl_opts_00e54b26, status_ret);
     if (*status_ret != status_$ok) {
         NAME_CONVERT_ACL_STATUS(status_ret);
         return;

@@ -194,11 +194,10 @@ extern uid_t NAME_$CANNED_ROOT_UID; /* Canned root UID (for fallback), 0xE173E4 
 extern uint8_t DAT_00e54730;    /* 0xE54730: 4 zero bytes just before NAME_$UNLOCK_DIR;
                                    FILE_$PRIV_LOCK param_10 / FILE_$TRUNCATE length arg.
                                    Ghidra label: NAME_$CONST_ZERO_L */
-extern uint8_t DAT_00e54b28;    /* 0xE54B28: ACL_$RIGHTS parameter just after NAME_$LOCK_DIR.
-                                   Ghidra label: NAME_$CONST_ZERO_L2 */
 extern int16_t NAME_$CONST_ZERO_W; /* 0xE5472E: shared literal zero word.  Roles seen in the
                                    code: TIME_$WAIT delay type 0 (relative) at 0xE54940 and
-                                   ACL_$RIGHTS option_flags 0 at 0xE56FC2/0xE5704A.  It was
+                                   ACL_$RIGHTS option_flags 0 at 0xE56FC2/0xE5704A (that role is
+                                   modelled as a file static in dir/old_add_baku.c).  It was
                                    previously mislabelled ACL_TYPE_FILE. */
 extern int16_t ACL_TYPE_DIR;    /* 0xE54B26: literal word 1 - ACL object type (directory) */
 

@@ -46,8 +46,10 @@ static uint16_t name_$lock_dir_delay_type = 0;
 static void *name_$lock_dir_acl_ctx = NULL;
 
 /* 0xE54B28, pushed by `pea (0x1a4,PC)` at 0xE54982: ACL_$RIGHTS' second
- * (acl-data) argument, a zero longword.  Ghidra: NAME_$CONST_ZERO_L2. */
-static uint32_t name_$lock_dir_acl_data = 0;
+ * argument, `ignore_super`.  Only the BYTE at this address is read
+ * (`move.b (A3),-(SP)` at 0xE46A54) and it is zero, so the super-user bypass
+ * applies here.  Ghidra: NAME_$CONST_ZERO_L2. */
+static const boolean name_$lock_dir_ignore_super = false;
 
 /* 0xE54B26, pushed by `pea (0x1b2,PC)` at 0xE54972: ACL_$RIGHTS' object-type
  * word.  1 == directory.  Ghidra: ACL_TYPE_DIR. */
@@ -149,8 +151,9 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
     /* 0xE5496C */
     if (acl_rights != 0) {
         required_rights = (uint32_t)(uint16_t)acl_rights;   /* 0xE54976: zero-extended */
-        ACL_$RIGHTS(&local_uid, &name_$lock_dir_acl_data, &required_rights,
-                    &name_$lock_dir_acl_obj_type, status_ret);  /* 0xE5498A */
+        ACL_$RIGHTS(&local_uid, (boolean *)&name_$lock_dir_ignore_super,
+                    &required_rights, &name_$lock_dir_acl_obj_type,
+                    status_ret);                                /* 0xE5498A */
         ACL_$ENTER_SUPER();                                     /* 0xE54994 */
         if (*status_ret != status_$ok) {                        /* 0xE5499A */
             NAME_CONVERT_ACL_STATUS(status_ret);                /* 0xE549A0 */

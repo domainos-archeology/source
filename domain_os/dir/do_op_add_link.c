@@ -42,12 +42,22 @@
 #define DIR_CATTR_ADD_LINK      0x0090
 
 /*
- * Constants for the ACL_$RIGHTS call.
- * In the original binary, these are inline data at 0x00E505C4-0x00E505C9
- * (embedded after the function's RTS instruction).
+ * Constant cells for the ACL_$RIGHTS call at 0x00E5051A, addressed with
+ * `pea (d,PC)` (PC = instruction address + 2).
  */
-static const uint32_t add_link_rights_mask = 0x00000048;  /* modify (0x40) + link (0x08) */
-static const int16_t add_link_option_flags = -1;           /* all options */
+
+/* 0x00E4CFF4, byte 0x00: ACL_$RIGHTS' ignore_super argument (FALSE - the
+ * super-user bypass applies).  `pea (-0x3522,PC)` at 0x00E50514.  The site
+ * previously passed the address of the rights mask here. */
+static const boolean dir_$add_link_ignore_super_00e4cff4 = false;
+
+/* 0x00E505C6, longword 0x00000048: the required rights mask - modify (0x40)
+ * plus link (0x08).  `pea (0xb4,PC)` at 0x00E50510. */
+static const uint32_t dir_$add_link_rights_00e505c6 = 0x00000048;
+
+/* 0x00E505C4, word 0xFFFF: ACL_$RIGHTS' option flags.
+ * `pea (0xb6,PC)` at 0x00E5050C. */
+static const int16_t dir_$add_link_acl_opts_00e505c4 = -1;
 
 /*
  * Offsets within the add_entry result buffer.
@@ -181,11 +191,11 @@ check_entry:
          * Rights mask 0x48 checks for modify (0x40) and link (0x08) rights.
          */
         {
-            int16_t rights = ACL_$RIGHTS(
+            int16_t rights = (int16_t)ACL_$RIGHTS(
                 file_uid,
-                (void *)&add_link_rights_mask,  /* unused param; valid pointer */
-                (uint32_t *)&add_link_rights_mask,
-                (int16_t *)&add_link_option_flags,
+                (boolean *)&dir_$add_link_ignore_super_00e4cff4,
+                (uint32_t *)&dir_$add_link_rights_00e505c6,
+                (int16_t *)&dir_$add_link_acl_opts_00e505c4,
                 &status);
 
             if (status == status_$insufficient_rights_to_perform_operation ||

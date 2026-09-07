@@ -184,6 +184,35 @@ extern uid_t ACL_$FILE_SUBS_ACL;    /* 0xE17474 */
  */
 
 /*
+ * acl_$eval_rights - Core access-rights evaluator (0x00E464B8)
+ *
+ * Shared by ACL_$RIGHTS (0x00E46A00) and ACL_$RIGHTS_CHECK (0x00E46AEC).
+ * Both push exactly nine arguments; the callee frame is
+ *
+ *   A6+0x08  sids           (long)  -> the caller's SID block
+ *   A6+0x0C  proj_uids      (long)  -> the caller's project-UID list
+ *   A6+0x10  uid            (long)  -> the object UID
+ *   A6+0x14  ignore_super   (byte)  0x00E464C4 `move.b (0x14,A6),D5b`
+ *   A6+0x16  required_mask  (long)  0x00E464C8 `move.l (0x16,A6),D3`
+ *   A6+0x1A  option_flags   (word)  0x00E464CC `move.w (0x1a,A6),D2w`
+ *   A6+0x1C  in_super       (byte)  0x00E464D0 `move.b (0x1c,A6),D4b`
+ *   A6+0x1E  in_subsys      (byte)  0x00E464D4 `move.b (0x1e,A6),D6b`
+ *   A6+0x20  status_ret     (long)
+ *
+ * 0x00E464DC-0x00E464E2: `tst.b D4b / bpl` then `tst.b D5b / bpl` - when the
+ * process is in super mode AND ignore_super is FALSE the evaluator short
+ * circuits to "all rights" (0xF) at 0x00E4668A.
+ *
+ * Returns the granted rights in D0 (a full longword).
+ *
+ * TODO(source-0qxe): the body of acl_$eval_rights has not been emitted yet.
+ */
+uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
+                          boolean ignore_super, uint32_t required_mask,
+                          int16_t option_flags, boolean in_super,
+                          boolean in_subsys, status_$t *status_ret);
+
+/*
  * acl_$check_suser_pid - Check if a process has superuser privileges
  *
  * Checks if the specified process is:

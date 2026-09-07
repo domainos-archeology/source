@@ -74,8 +74,9 @@ static uint32_t file_$acl_rights_all = 0xFFFFFFFFu;
  * (0x00E5EDF8 / 0x00E5EE14). */
 static int16_t file_$acl_zero_word = 0;
 
-/* 0x00E5D380: byte 0, ACL_$RIGHTS' second argument (0x00E5EE1C). */
-static int8_t file_$acl_zero_byte = 0;
+/* 0x00E5D380: byte 0, ACL_$RIGHTS' `ignore_super` argument (0x00E5EE1C).
+ * FALSE, so the super-user bypass applies. */
+static const boolean file_$acl_ignore_super = false;
 
 /* Attribute id 0x0B, the "lock holder node" attribute CHECK_CONFLICTS writes
  * through AST_$SET_ATTRIBUTE at 0x00E5F0CA. */
@@ -901,7 +902,7 @@ static void priv_lock_check_rights(priv_lock_frame_t *f,
                                     &check_flag, status);
     } else {
         /* 0x00E5EE12 */
-        granted = ACL_$RIGHTS(f->file_uid, &file_$acl_zero_byte,
+        granted = ACL_$RIGHTS(f->file_uid, (boolean *)&file_$acl_ignore_super,
                               &file_$acl_rights_all,
                               &file_$acl_zero_word, status);
     }

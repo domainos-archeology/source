@@ -29,6 +29,24 @@
 
 /* NODE_$ME is declared in network/network.h */
 
+/*
+ * Constant cells for the ACL_$RIGHTS call, pooled just past
+ * FILE_$UNLOCK_PROC and addressed with `pea (d,PC)`
+ * (PC = instruction address + 2).
+ */
+
+/* 0x00E60FD0, byte 0x00: ACL_$RIGHTS' ignore_super argument (FALSE - the
+ * super-user bypass applies).  `pea (0x116,PC)` at 0x00E60EB8. */
+static const boolean file_$unlock_proc_ignore_super_00e60fd0 = false;
+
+/* 0x00E60FD4, longword 0x00000008: the required rights mask.
+ * `pea (0x11e,PC)` at 0x00E60EB4. */
+static const uint32_t file_$unlock_proc_rights_00e60fd4 = 0x00000008;
+
+/* 0x00E60FD2, word 0x0000: ACL_$RIGHTS' option flags.
+ * `pea (0x120,PC)` at 0x00E60EB0. */
+static const int16_t file_$unlock_proc_acl_opts_00e60fd2 = 0;
+
 /* Per-process lock count table */
 #define PROC_LOT_COUNT(asid) \
     (*(uint16_t *)((uint8_t *)0xEA3DC4 + (asid) * 2))
@@ -75,7 +93,13 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
      * If unlocking for different process, check ACL rights
      */
     if (asid != PROC1_$AS_ID) {
-        ACL_$RIGHTS(file_uid, NULL, NULL, NULL, status_ret);
+        /* 0x00E60EAE-0x00E60EBE.  None of these four arguments may be NULL:
+         * ACL_$RIGHTS dereferences all of them. */
+        ACL_$RIGHTS(file_uid,
+                    (boolean *)&file_$unlock_proc_ignore_super_00e60fd0,
+                    (uint32_t *)&file_$unlock_proc_rights_00e60fd4,
+                    (int16_t *)&file_$unlock_proc_acl_opts_00e60fd2,
+                    status_ret);
         if (*status_ret != status_$ok) {
             OS_PROC_SHUTWIRED(status_ret);
             return;

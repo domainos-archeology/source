@@ -27,6 +27,31 @@
  */
 
 /*
+ * ============================================================================
+ * Constant cells
+ * ============================================================================
+ *
+ * The compiler pooled these three literals just past NAME_$INIT_ASID; both
+ * of its ACL_$RIGHTS calls address them with `pea (d,PC)` (PC = instruction
+ * address + 2) and both pass the same three cells.
+ */
+
+/* 0x00E73E3C, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
+ * super-user bypass is suppressed even though NAME_$INIT_ASID has just
+ * called ACL_$ENTER_SUPER).  `pea (0x100,PC)` at 0x00E73D3A and
+ * `pea (0x74,PC)` at 0x00E73DC6. */
+static const boolean name_$init_asid_ignore_super_00e73e3c = true;
+
+/* 0x00E73E40, longword 0xFFFFFFFF: the required rights mask.
+ * `pea (0x108,PC)` at 0x00E73D36 and `pea (0x7c,PC)` at 0x00E73DC2. */
+static const uint32_t name_$init_asid_rights_00e73e40 = 0xFFFFFFFFu;
+
+/* 0x00E73E3A, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
+ * directory).  `pea (0x106,PC)` at 0x00E73D32 and `pea (0x7a,PC)` at
+ * 0x00E73DBE. */
+static const int16_t name_$init_asid_acl_opts_00e73e3a = 1;
+
+/*
  * NAME_$INIT_ASID - Initialize naming state for a new address space
  *
  * Called when creating a new process. Copies the current process's
@@ -52,8 +77,13 @@ void NAME_$INIT_ASID(int16_t *new_asid, status_$t *status_ret)
     current_uid.high = src_wdir->high;
     current_uid.low = src_wdir->low;
 
-    /* Check ACL access for working directory */
-    if (ACL_$RIGHTS(&current_uid, NULL, NULL, NULL, status_ret) != 0) {
+    /* Check ACL access for working directory.
+     * 0x00E73D4C `tst.l D0` + `sne` + `bpl`: the whole longword result. */
+    if (ACL_$RIGHTS(&current_uid,
+                    (boolean *)&name_$init_asid_ignore_super_00e73e3c,
+                    (uint32_t *)&name_$init_asid_rights_00e73e40,
+                    (int16_t *)&name_$init_asid_acl_opts_00e73e3a,
+                    status_ret) != 0) {
         /* Has access - map the directory for the new ASID */
         name_$map_dir(&current_uid, *new_asid,
                      &NAME_$DATA.wdir_mapped_info[*new_asid],
@@ -71,8 +101,13 @@ do_ndir:
         current_uid.high = src_ndir->high;
         current_uid.low = src_ndir->low;
 
-        /* Check ACL access for naming directory */
-        if (ACL_$RIGHTS(&current_uid, NULL, NULL, NULL, status_ret) != 0) {
+        /* Check ACL access for naming directory.
+         * 0x00E73DD8 `tst.l D0` + `sne` + `bpl`. */
+        if (ACL_$RIGHTS(&current_uid,
+                        (boolean *)&name_$init_asid_ignore_super_00e73e3c,
+                        (uint32_t *)&name_$init_asid_rights_00e73e40,
+                        (int16_t *)&name_$init_asid_acl_opts_00e73e3a,
+                        status_ret) != 0) {
             name_$map_dir(&current_uid, *new_asid,
                          &NAME_$DATA.ndir_mapped_info[*new_asid],
                          status_ret);

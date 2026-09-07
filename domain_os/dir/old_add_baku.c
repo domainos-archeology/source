@@ -39,6 +39,26 @@
  *   backup_uid - UID of the new backup file
  *   status_ret - Output: status code
  */
+/*
+ * Constant cells for the two ACL_$RIGHTS calls (0x00E56FD2 and 0x00E5705A),
+ * addressed with `pea (d,PC)` (PC = instruction address + 2).  Both calls
+ * pass the same three cells.
+ */
+
+/* 0x00E5716C, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
+ * super-user bypass is suppressed).  `pea (0x1a0,PC)` at 0x00E56FCA and
+ * `pea (0x118,PC)` at 0x00E57052. */
+static const boolean dir_$old_add_baku_ignore_super_00e5716c = true;
+
+/* 0x00E56946, longword 0x00000002: the required rights mask.
+ * `pea (-0x682,PC)` at 0x00E56FC6 and `pea (-0x70a,PC)` at 0x00E5704E. */
+static const uint32_t dir_$old_add_baku_rights_00e56946 = 0x00000002;
+
+/* 0x00E5472E, word 0x0000: ACL_$RIGHTS' option flags.  This is the shared
+ * literal zero word NAME_$CONST_ZERO_W.  `pea (-0x2896,PC)` at 0x00E56FC2
+ * and `pea (-0x291e,PC)` at 0x00E5704A. */
+static const int16_t dir_$old_add_baku_acl_opts_00e5472e = 0;
+
 void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
                        uid_t *backup_uid, status_$t *status_ret)
 {
@@ -152,8 +172,10 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     old_file_uid.low = *((uint32_t *)(entry + 0x2c));
 
     /* Check rights on existing file */
-    ACL_$RIGHTS(&old_file_uid, &DAT_00e5716c, &DAT_00e56946,
-                &NAME_$CONST_ZERO_W, status_ret);
+    ACL_$RIGHTS(&old_file_uid,
+                (boolean *)&dir_$old_add_baku_ignore_super_00e5716c,
+                (uint32_t *)&dir_$old_add_baku_rights_00e56946,
+                (int16_t *)&dir_$old_add_baku_acl_opts_00e5472e, status_ret);
     if (*status_ret != status_$ok) {
         if (*status_ret == status_$wrong_type) {
             *status_ret = status_$naming_branch_is_not_a_directory;
@@ -195,8 +217,11 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
             return;
         }
         /* Check rights on .BAK file */
-        ACL_$RIGHTS((uid_t *)(bak_entry + 0x28), &DAT_00e5716c,
-                    &DAT_00e56946, &NAME_$CONST_ZERO_W, status_ret);
+        ACL_$RIGHTS((uid_t *)(bak_entry + 0x28),
+                    (boolean *)&dir_$old_add_baku_ignore_super_00e5716c,
+                    (uint32_t *)&dir_$old_add_baku_rights_00e56946,
+                    (int16_t *)&dir_$old_add_baku_acl_opts_00e5472e,
+                    status_ret);
         if (*status_ret != status_$ok) {
             if (*status_ret == status_$wrong_type) {
                 *status_ret = status_$naming_branch_is_not_a_directory;

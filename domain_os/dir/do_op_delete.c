@@ -10,6 +10,10 @@
  * 3. Verify target is a file (not directory): status_$naming_branch_is_not_a_directory
  * 4. Check if directory is locked: status_$naming_directory_locked
  * 5. Check ACL rights via ACL_$RIGHTS:
+ *    TODO(source-6dil): the call at 0x00E51462 is not emitted below.  Its
+ *    arguments are, right to left: status (A6-relative), option flags
+ *    0x00E505C4 (word 0xFFFF), required mask 0x00E505C6 (longword 0x48),
+ *    ignore_super 0x00E4CFF4 (byte 0x00) and the UID at A6-0x58.
  *    - status_$naming_insufficient_rights
  *    - status_$naming_no_right_to_perform_operation
  * 6. Lock file via FILE_$PRIV_LOCK

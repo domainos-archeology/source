@@ -967,12 +967,21 @@ void FILE_$IMPORT_LK(uid_t *file_uid, uint32_t *index_in, uint32_t *index_out,
  * First checks a per-process lock cache, then falls back to ACL_$RIGHTS.
  *
  * Parameters:
- *   file_uid    - UID of file to check
- *   access_mask - Required access rights mask
- *   slot_num    - Lock table slot number (0-149)
- *   unused      - Unused parameter
- *   rights_out  - Output: actual rights available
- *   status_ret  - Output: status code
+ *   file_uid     A6+0x08  UID of file to check
+ *   access_mask  A6+0x0C  Required access rights mask (word)
+ *   slot_num     A6+0x0E  Lock table slot number (0-149, longword)
+ *   ignore_super A6+0x12  ACL_$RIGHTS' ignore_super boolean.  0x00E5D226
+ *                         `pea (0x12,A6)` passes the ADDRESS of this slot,
+ *                         and ACL_$RIGHTS reads the byte there.
+ *   option_flags A6+0x14  ACL_$RIGHTS' option-flags word.  0x00E5D216
+ *                         `pea (0x14,A6)` passes the address of this slot.
+ *   rights_out   A6+0x16  Output: actual rights available
+ *   status_ret   A6+0x1A  Output: status code
+ *
+ * A6+0x12 and A6+0x14 were previously modelled as one 4-byte `void *unused`;
+ * they are two distinct 2-byte parameters, each passed on to ACL_$RIGHTS by
+ * reference.  Both known callers push them together with a single
+ * `clr.l -(SP)` (0x00E73FFC, 0x00E43DAC), i.e. FALSE and 0.
  *
  * Returns:
  *   1 if rights check completed (check status for success/failure)
@@ -981,7 +990,8 @@ void FILE_$IMPORT_LK(uid_t *file_uid, uint32_t *index_in, uint32_t *index_out,
  * Original address: 0x00E5D172
  */
 int16_t FILE_$CHECK_PROT(uid_t *file_uid, uint16_t access_mask, uint32_t slot_num,
-                         void *unused, uint16_t *rights_out, status_$t *status_ret);
+                         boolean ignore_super, int16_t option_flags,
+                         uint16_t *rights_out, status_$t *status_ret);
 
 /*
  * FILE_$SET_PROT - Set file protection

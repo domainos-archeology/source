@@ -173,10 +173,10 @@ void AST_$SET_ATTRIBUTE(uid_t *uid, uint16_t attr_id, void *value, status_$t *st
     *status = 0;
 }
 
-int16_t ACL_$RIGHTS(uid_t *uid, void *unused, uint32_t *required_mask,
-                    int16_t *option_flags, status_$t *status)
+uint32_t ACL_$RIGHTS(uid_t *uid, boolean *ignore_super, uint32_t *required_mask,
+                     int16_t *option_flags, status_$t *status)
 {
-    (void)uid; (void)unused; (void)required_mask; (void)option_flags;
+    (void)uid; (void)ignore_super; (void)required_mask; (void)option_flags;
     *status = mock_acl_status;
     return mock_acl_rights;
 }

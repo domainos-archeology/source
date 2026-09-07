@@ -125,15 +125,17 @@ void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status)
 static int       mock_rights_calls;
 static uint32_t  mock_rights_mask;
 static int16_t   mock_rights_obj_type;
+static boolean   mock_rights_ignore_super;
 static status_$t mock_rights_status;
 static int       mock_enter_super_calls;
 static int       mock_convert_acl_calls;
 
-int16_t ACL_$RIGHTS(uid_t *uid, void *unused, uint32_t *required_mask,
-                    int16_t *option_flags, status_$t *status)
+uint32_t ACL_$RIGHTS(uid_t *uid, boolean *ignore_super, uint32_t *required_mask,
+                     int16_t *option_flags, status_$t *status)
 {
-    (void)uid; (void)unused;
+    (void)uid;
     mock_rights_calls++;
+    mock_rights_ignore_super = *ignore_super;
     mock_rights_mask = *required_mask;
     mock_rights_obj_type = *option_flags;
     *status = mock_rights_status;
@@ -259,6 +261,8 @@ TEST(signature_splits_mode_and_rights)
     ASSERT_EQ(1, mock_rights_calls);
     ASSERT_EQ(2, mock_rights_mask);                     /* not 4 */
     ASSERT_EQ(1, mock_rights_obj_type);                 /* ACL object type = directory */
+    /* 0xE54B28 holds a zero byte: the super-user bypass is NOT suppressed. */
+    ASSERT_EQ(0, (unsigned char)mock_rights_ignore_super);
     ASSERT_EQ(status_$ok, status);
 }
 

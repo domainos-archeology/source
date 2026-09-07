@@ -50,9 +50,13 @@ void FILE_$TRUNCATE_D(uid_t *file_uid, uint32_t *new_size,
     /*
      * Check write permission (mode 2)
      * FILE_$CHECK_PROT signature:
-     *   FILE_$CHECK_PROT(uid, access_mask, slot_num, unused, rights_out, status)
+     *   FILE_$CHECK_PROT(uid, access_mask, slot_num, ignore_super,
+     *                    option_flags, rights_out, status)
+     *
+     * 0x00E73FFC `clr.l -(SP)` fills the ignore_super and option_flags slots
+     * together, i.e. FALSE and 0.
      */
-    FILE_$CHECK_PROT(file_uid, 2, *domain_ctx, 0, &rights_out, status_ret);
+    FILE_$CHECK_PROT(file_uid, 2, *domain_ctx, false, 0, &rights_out, status_ret);
 
     if (*status_ret == status_$ok) {
         /*

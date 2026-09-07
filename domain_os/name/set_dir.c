@@ -35,14 +35,12 @@
  * the address of the extension word, i.e. the instruction address + 2.
  */
 
-/* 0x00E5879A, byte 0xFF.  ACL_$RIGHTS' second argument is a pointer to a
- * Domain boolean, not the unused `void *` acl/acl.h still declares:
- * `movea.l (0xc,A6),A3` + `move.b (A3),-(SP)` at 0x00E46A50-0x00E46A54.
+/* 0x00E5879A, byte 0xFF.  ACL_$RIGHTS' second argument, `ignore_super`, is a
+ * pointer to a Domain boolean: `movea.l (0xc,A6),A3` + `move.b (A3),-(SP)` at
+ * 0x00E46A50-0x00E46A54.  TRUE here, so the super-user bypass is suppressed.
  * Reached by `pea (0xe0,PC)` at 0x00E586B8 and `pea (-0x50,PC)` at
- * 0x00E587E8.
- * TODO(source-6vl5): retype ACL_$RIGHTS' second parameter and drop the cast
- * below. */
-static const boolean name_$set_dir_acl_bool_00e5879a = true;
+ * 0x00E587E8. */
+static const boolean name_$set_dir_ignore_super_00e5879a = true;
 
 /* 0x00E5879C, longword 1: the rights mask ACL_$RIGHTS must find.
  * `pea (0xe6,PC)` at 0x00E586B4, `pea (-0x4a,PC)` at 0x00E587E4. */
@@ -117,7 +115,7 @@ static void name_$set_dir(uid_t *uidp, uid_t *dir_uid_slot,
      * access denied, and only then is the ACL status translated.
      */
     if (ACL_$RIGHTS(uidp,
-                    (void *)&name_$set_dir_acl_bool_00e5879a,
+                    (boolean *)&name_$set_dir_ignore_super_00e5879a,
                     (uint32_t *)&name_$set_dir_rights_00e5879c,
                     (int16_t *)&name_$set_dir_acl_opts_00e58796,
                     status_ret) == 0) {

@@ -28,9 +28,19 @@
 
 #include "dir/dir_internal.h"
 
-/* DAT_00e4b444 - MST remap parameters (also used as ACL check params) */
+/*
+ * Constant cells for the ACL_$RIGHTS call at 0x00E4BA8E, addressed with
+ * `pea (d,PC)` (PC = instruction address + 2).
+ */
 
-/* DAT_00e4bc24 - ACL rights mask (value: 0xFF = all rights) */
+/* 0x00E4BC24, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
+ * super-user bypass is suppressed).  `pea (0x19a,PC)` at 0x00E4BA88.
+ * The word at 0x00E4BC24 reads 0xFF00; only the first byte is used. */
+static const boolean dir_$open_dir_ignore_super_00e4bc24 = true;
+
+/* 0x00E4B444, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
+ * directory).  `pea (-0x636,PC)` at 0x00E4BA78. */
+static const int16_t dir_$open_dir_acl_opts_00e4b444 = 1;
 
 void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
                    void *handle_ret, status_$t *status_ret)
@@ -82,8 +92,11 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
     /* Check ACL rights if requested */
     if (rights != 0) {
         uint32_t rights32 = (uint32_t)(uint16_t)rights;
-        ACL_$RIGHTS(uid_ptr, &DAT_00e4bc24, &rights32,
-                    &DAT_00e4b444, status_ret);
+        ACL_$RIGHTS(uid_ptr,
+                    (boolean *)&dir_$open_dir_ignore_super_00e4bc24,
+                    &rights32,
+                    (int16_t *)&dir_$open_dir_acl_opts_00e4b444,
+                    status_ret);
         if (*status_ret != status_$ok) {
             NAME_CONVERT_ACL_STATUS(status_ret);
             /* Clear high bit of status */

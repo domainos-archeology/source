@@ -1024,9 +1024,6 @@ extern uint16_t DIR_$OP_PARAMS[];
 /* DAT_00e4b33c - UID_$NIL reference used as lock callback */
 extern uint8_t DAT_00e4b33c;
 
-/* DAT_00e4bc24 - ACL rights mask (value: 0xFF = all rights) */
-extern uint8_t DAT_00e4bc24;
-
 /* DAT_00e4b444 - MST remap / ACL check parameter table */
 extern uint8_t DAT_00e4b444;
 
@@ -1240,12 +1237,15 @@ extern uint8_t DAT_00e56094;
 extern uint8_t DAT_00e5609e;
 extern uint8_t DAT_00e560a2;
 extern uint8_t DAT_00e5609a;
-extern uint8_t DAT_00e5716c;
-extern uint8_t DAT_00e56946;
-extern uint8_t DAT_00e564de;
 extern uint8_t DAT_00e564e2;
 extern uint8_t DAT_00e5716a;
-/* DAT_00e54730 and DAT_00e54b28 (NAME code region) are declared in name/name.h */
+/* DAT_00e54730 (NAME code region) is declared in name/name.h.
+ *
+ * The ACL_$RIGHTS constant cells 0xE4BC24, 0xE4CFF4, 0xE4CFF6, 0xE50C5C,
+ * 0xE505C4, 0xE51B64, 0xE54B28, 0xE56946, 0xE564DE, 0xE5716C and 0xE5755E
+ * are now modelled as typed file statics next to the call site that reads
+ * them; 0xE4BC24, 0xE4CFF4, 0xE54B28 and 0xE5716C are Domain BOOLEANS
+ * (ACL_$RIGHTS' ignore_super argument), not rights masks. */
 
 /* ACL_$NIL (0xE17384) is declared in acl/acl.h */
 
@@ -1467,14 +1467,9 @@ void dir_$finalize_split(dir_insert_ctx_t *ctx, status_$t *status_ret);
  */
 extern uint16_t DAT_00e50830;   /* 0xE50830: 0x0005 - FILE_$SET_PROT protection type (add_bak) */
 extern uint16_t DAT_00e50c5a;   /* 0xE50C5A: 0x0000 - ACL option flags / DROP_HARD_LINKU flags */
-extern uint32_t DAT_00e50c5c;   /* 0xE50C5C: 0x00000002 - ACL_$RIGHTS rights mask (add_bak) */
-extern uint16_t DAT_00e505c4;   /* 0xE505C4: 0xFFFF - ACL option flags for cname rights check */
-extern uint32_t DAT_00e51b64;   /* 0xE51B64: 0x00000040 - ACL rights mask (rename / delete) */
 extern uint8_t  DAT_00e4dffa;   /* 0xE4DFFA: 0x0090 - FILE_$GET_ATTRIBUTES attribute parameter */
 extern uint8_t  DAT_00e4dffc;   /* 0xE4DFFC: NUL byte used as the 1-char name "\0" */
 extern uint8_t  PTR_DAT_00e4cd84; /* 0xE4CD84: case-folding character bitmap (07 ff ff fe ...) */
-extern uint8_t  DAT_00e4cff4;   /* 0xE4CFF4: ACL_$RIGHTS parameter (get_entry_cached) */
-extern uint8_t  DAT_00e4cff6;   /* 0xE4CFF6: ACL_$RIGHTS rights mask (get_entry_cached) */
 extern uint8_t  DAT_00e4b448;   /* 0xE4B448: 0x00008000 - MST_$REMAP_PRIVI length parameter */
 extern const int32_t DAT_00e52040; /* 0xE52040: 0x00000400 - one page; FILE_$FW_PARTIAL byte
                                       count / FILE_$TRUNCATE length (defined in dir_data.c) */

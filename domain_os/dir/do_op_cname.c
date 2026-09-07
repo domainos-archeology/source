@@ -48,9 +48,26 @@
 
 #include "dir/dir_internal.h"
 
-/* DAT_00e505c4 - ACL option flags for cname rights check */
+/*
+ * Constant cells for the ACL_$RIGHTS call at 0x00E51A1E, addressed with
+ * `pea (d,PC)` (PC = instruction address + 2).  That call lives in the
+ * jump-table arm at 0x00E51A0C-0x00E51A24, which Ghidra has not turned into
+ * instructions, so it does not appear in ACL_$RIGHTS' xref list; the encoding
+ * there is `48 54 / 48 7a eb b4 / 48 7a 01 50 / 48 7a a2 0c / 48 6e ff a8 /
+ * 4e b9 00 e4 6a 00`.
+ */
 
-/* DAT_00e51b64 - ACL rights mask (0x00000040 = rename right) */
+/* 0x00E4BC24, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
+ * super-user bypass is suppressed).  `pea (-0x5df4,PC)` at 0x00E51A16. */
+static const boolean dir_$cname_ignore_super_00e4bc24 = true;
+
+/* 0x00E51B64, longword 0x00000040: the required rights mask (rename).
+ * `pea (0x150,PC)` at 0x00E51A12. */
+static const uint32_t dir_$cname_rights_00e51b64 = 0x00000040;
+
+/* 0x00E505C4, word 0xFFFF: ACL_$RIGHTS' option flags.
+ * `pea (-0x144c,PC)` at 0x00E51A0E. */
+static const int16_t dir_$cname_acl_opts_00e505c4 = -1;
 
 void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
                       void *old_name, uint16_t old_name_len,
@@ -154,8 +171,11 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
             /* Check ACL rights for rename */
             {
                 uint32_t rights_result;
-                rights_result = ACL_$RIGHTS(&entry_uid, &DAT_00e4bc24,
-                                            &DAT_00e51b64, &DAT_00e505c4, status_ret);
+                rights_result = ACL_$RIGHTS(&entry_uid,
+                                            (boolean *)&dir_$cname_ignore_super_00e4bc24,
+                                            (uint32_t *)&dir_$cname_rights_00e51b64,
+                                            (int16_t *)&dir_$cname_acl_opts_00e505c4,
+                                            status_ret);
                 {
                     status_$t acl_status = *status_ret;
                     if (acl_status == status_$no_right_to_perform_operation ||

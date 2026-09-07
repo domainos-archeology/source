@@ -10,6 +10,10 @@
  * 2. Call AST_$GET_LOCATION to determine target's location
  *    - On failure (unless file_$object_not_found with flags): return error
  * 3. Call ACL_$RIGHTS to check directory ACL permissions
+ *    TODO(source-ns3b): the call at 0x00E567C0 is not emitted below.  Its
+ *    arguments are, right to left: status at A6-0xD0, option flags
+ *    0x00E54B26 (word 1), required mask 0x00E56946 (longword 2),
+ *    ignore_super 0x00E54B28 (byte 0x00) and the UID in A2.
  * 4. Copy directory UID, call AST_$GET_LOCATION for directory
  * 5. If both objects are remote (both have bit 7 set):
  *    a. Validate leaf name via name_$validate_leaf

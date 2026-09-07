@@ -48,7 +48,24 @@
  * selector this site uses. */
 #define DIR_CATTR_ADD_BAK       0x0081
 
-/* DAT_00e50c5c / DAT_00e50c5a - ACL rights parameters for add_bak */
+/*
+ * Constant cells for the two ACL_$RIGHTS calls (0x00E509EA and 0x00E50AA6),
+ * addressed with `pea (d,PC)` (PC = instruction address + 2).  Both calls
+ * pass the same three cells.
+ */
+
+/* 0x00E4BC24, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
+ * super-user bypass is suppressed).  `pea (-0x4dc0,PC)` at 0x00E509E2 and
+ * `pea (-0x4e7c,PC)` at 0x00E50A9E. */
+static const boolean dir_$add_bak_ignore_super_00e4bc24 = true;
+
+/* 0x00E50C5C, longword 0x00000002: the required rights mask.
+ * `pea (0x27c,PC)` at 0x00E509DE and `pea (0x1c0,PC)` at 0x00E50A9A. */
+static const uint32_t dir_$add_bak_rights_00e50c5c = 0x00000002;
+
+/* 0x00E50C5A, word 0x0000: ACL_$RIGHTS' option flags.
+ * `pea (0x27e,PC)` at 0x00E509DA and `pea (0x1c2,PC)` at 0x00E50A96. */
+static const int16_t dir_$add_bak_acl_opts_00e50c5a = 0;
 
 /* DAT_00e50830 - Protection type parameter for FILE_$SET_PROT */
 
@@ -197,7 +214,10 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
         uint32_t orig_extra = *(uint32_t *)(ep + 0x0C);
 
         /* Check ACL rights on original */
-        ACL_$RIGHTS(&orig_uid, &DAT_00e4bc24, &DAT_00e50c5c, &DAT_00e50c5a, status_ret);
+        ACL_$RIGHTS(&orig_uid,
+                    (boolean *)&dir_$add_bak_ignore_super_00e4bc24,
+                    (uint32_t *)&dir_$add_bak_rights_00e50c5c,
+                    (int16_t *)&dir_$add_bak_acl_opts_00e50c5a, status_ret);
         if (*status_ret != status_$ok) {
             if (*status_ret == status_$wrong_type) {
                 goto not_a_file;
@@ -238,7 +258,11 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
                 old_bak_uid.low = *(uint32_t *)(bak_ep + 8);
 
                 /* Check ACL rights on old backup */
-                ACL_$RIGHTS(&old_bak_uid, &DAT_00e4bc24, &DAT_00e50c5c, &DAT_00e50c5a, status_ret);
+                ACL_$RIGHTS(&old_bak_uid,
+                            (boolean *)&dir_$add_bak_ignore_super_00e4bc24,
+                            (uint32_t *)&dir_$add_bak_rights_00e50c5c,
+                            (int16_t *)&dir_$add_bak_acl_opts_00e50c5a,
+                            status_ret);
                 if (*status_ret != status_$ok) {
                     /* Clear high bit and check for wrong_type */
                     *status_ret &= 0x7FFFFFFF;

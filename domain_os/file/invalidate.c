@@ -18,17 +18,25 @@
  *   - If status_$ok, calls AST_$INVALIDATE
  *   - Otherwise calls OS_PROC_SHUTWIRED
  *
- * Data constants (from PC-relative addressing):
- *   DAT_00e751e8: 0x0000       (option flags = 0)
- *   DAT_00e751ea: 0x0000       (additional flags = 0)
- *   DAT_00e751ec: 0x00000006   (rights mask)
+ * Data constants (from PC-relative addressing; PC = instruction address + 2):
+ *   0x00E751E8: word 0x0000       ACL_$RIGHTS option_flags  (pea (0x58,PC) at 0x00E7518E)
+ *   0x00E751EA: byte 0x00         ACL_$RIGHTS ignore_super  (pea (0x52,PC) at 0x00E75196)
+ *   0x00E751EC: longword 0x06     ACL_$RIGHTS required_mask (pea (0x58,PC) at 0x00E75192)
  */
 
 #include "file/file_internal.h"
 
-/* Constants for ACL_$RIGHTS call */
-static const uint32_t invalidate_rights_mask = 0x00000006;  /* Read + write rights */
-static const int16_t invalidate_option_flags = 0;
+/* Constant cells for the ACL_$RIGHTS call, pooled just past FILE_$INVALIDATE */
+
+/* 0x00E751EC: required rights mask (read 0x02 + write 0x04) */
+static const uint32_t file_$invalidate_rights_00e751ec = 0x00000006;
+
+/* 0x00E751EA: ACL_$RIGHTS' ignore_super argument, FALSE - the super-user
+ * bypass applies. */
+static const boolean file_$invalidate_ignore_super_00e751ea = false;
+
+/* 0x00E751E8: ACL_$RIGHTS' option-flags word */
+static const int16_t file_$invalidate_acl_opts_00e751e8 = 0;
 
 /*
  * FILE_$INVALIDATE - Invalidate cached pages of a file
@@ -76,8 +84,10 @@ void FILE_$INVALIDATE(uid_t *file_uid, uint32_t *start_page,
      * Check permission using ACL_$RIGHTS
      * Rights mask 0x06 = read (0x02) + write (0x04)
      */
-    ACL_$RIGHTS(&local_uid, (void *)&invalidate_rights_mask,
-                (uint32_t *)&invalidate_rights_mask, (int16_t *)&invalidate_option_flags,
+    ACL_$RIGHTS(&local_uid,
+                (boolean *)&file_$invalidate_ignore_super_00e751ea,
+                (uint32_t *)&file_$invalidate_rights_00e751ec,
+                (int16_t *)&file_$invalidate_acl_opts_00e751e8,
                 &status);
 
     if (status == status_$ok) {

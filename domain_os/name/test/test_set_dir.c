@@ -77,19 +77,19 @@ void ACL_$ENTER_SUPER(void) { enter_super_calls++; }
 void ACL_$EXIT_SUPER(void)  { exit_super_calls++; }
 
 static int         acl_calls;
-static int16_t     acl_result;
+static uint32_t    acl_result;
 static status_$t   acl_status;
-static const void *acl_arg2;
+static const boolean *acl_arg2;
 static uint32_t    acl_rights_seen;
 static int16_t     acl_opts_seen;
 static uid_t       acl_uid_seen;
 
-int16_t ACL_$RIGHTS(uid_t *uid, void *unused, uint32_t *required_mask,
-                    int16_t *option_flags, status_$t *status)
+uint32_t ACL_$RIGHTS(uid_t *uid, boolean *ignore_super, uint32_t *required_mask,
+                     int16_t *option_flags, status_$t *status)
 {
     acl_calls++;
     acl_uid_seen    = *uid;
-    acl_arg2        = unused;
+    acl_arg2        = ignore_super;
     acl_rights_seen = *required_mask;
     acl_opts_seen   = *option_flags;
     *status = acl_status;
@@ -234,7 +234,7 @@ TEST(acl_rights_gets_the_pooled_constants)
     ASSERT_EQ(new_uid.high, acl_uid_seen.high);
     ASSERT_EQ(new_uid.low,  acl_uid_seen.low);
     /* 0x00E5879A holds a byte 0xFF - a Domain TRUE. */
-    ASSERT_EQ(0xFF, (unsigned char)*(const boolean *)acl_arg2);
+    ASSERT_EQ(0xFF, (unsigned char)*acl_arg2);
     /* 0x00E5879C holds the longword 1. */
     ASSERT_EQ(1, acl_rights_seen);
     /* 0x00E58796 holds the word 1. */

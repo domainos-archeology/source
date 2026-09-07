@@ -90,7 +90,10 @@ static status_$t mock_set_attr_status;
 
 /* ACL_$RIGHTS mock state */
 static int mock_acl_rights_called;
-static int16_t mock_acl_rights_return;
+static uint32_t mock_acl_rights_return;
+static boolean mock_acl_ignore_super;
+static uint32_t mock_acl_rights_mask;
+static int16_t mock_acl_option_flags;
 static status_$t mock_acl_rights_status;
 
 /* NAME_CONVERT_ACL_STATUS mock state */
@@ -198,11 +201,15 @@ void AST_$SET_ATTRIBUTE(uid_t *uid_arg, uint16_t attr_id,
     *status = mock_set_attr_status;
 }
 
-int16_t ACL_$RIGHTS(uid_t *uid_arg, void *unused,
-                    uint32_t *required_mask, int16_t *option_flags,
-                    status_$t *status)
+uint32_t ACL_$RIGHTS(uid_t *uid_arg, boolean *ignore_super,
+                     uint32_t *required_mask, int16_t *option_flags,
+                     status_$t *status)
 {
+    (void)uid_arg;
     mock_acl_rights_called = 1;
+    mock_acl_ignore_super = *ignore_super;
+    mock_acl_rights_mask  = *required_mask;
+    mock_acl_option_flags = *option_flags;
     *status = mock_acl_rights_status;
     return mock_acl_rights_return;
 }

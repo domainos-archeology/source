@@ -32,6 +32,23 @@
 
 #include "dir/dir_internal.h"
 
+/*
+ * Constant cells for the ACL_$RIGHTS call at 0x00E4CF06, addressed with
+ * `pea (d,PC)` (PC = instruction address + 2).
+ */
+
+/* 0x00E4CFF4, byte 0x00: ACL_$RIGHTS' ignore_super argument (FALSE - the
+ * super-user bypass applies).  `pea (0xf4,PC)` at 0x00E4CEFE. */
+static const boolean dir_$get_entry_ignore_super_00e4cff4 = false;
+
+/* 0x00E4CFF6, longword 0x00000001: the required rights mask.
+ * `pea (0xfa,PC)` at 0x00E4CEFA. */
+static const uint32_t dir_$get_entry_rights_00e4cff6 = 0x00000001;
+
+/* 0x00E4B444, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
+ * directory).  `pea (-0x1ab4,PC)` at 0x00E4CEF6. */
+static const int16_t dir_$get_entry_acl_opts_00e4b444 = 1;
+
 /* ACL rights parameters for cache hit path */
 
 void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
@@ -142,7 +159,10 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
 
     /* Need to check ACL rights */
     ML_$EXCLUSION_STOP(&DIR_$MUTEX);
-    ACL_$RIGHTS(uid, &DAT_00e4cff4, &DAT_00e4cff6, &DAT_00e4b444, status_ret);
+    ACL_$RIGHTS(uid,
+                (boolean *)&dir_$get_entry_ignore_super_00e4cff4,
+                (uint32_t *)&dir_$get_entry_rights_00e4cff6,
+                (int16_t *)&dir_$get_entry_acl_opts_00e4b444, status_ret);
     if (*status_ret == status_$ok) {
         return;
     }

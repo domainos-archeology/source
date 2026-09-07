@@ -38,10 +38,10 @@
  * 4. Finally call AST_$SET_ATTRIBUTE to set the attribute
  */
 /*
- * 0x00E5D380: byte 0, ACL_$RIGHTS' second argument
- * (`pea (0x36,PC)` at 0x00E5D348).
+ * 0x00E5D380: byte 0, ACL_$RIGHTS' `ignore_super` argument
+ * (`pea (0x36,PC)` at 0x00E5D348).  FALSE, so the super-user bypass applies.
  */
-static int8_t file_$set_attr_acl_zero_byte = 0;
+static const boolean file_$set_attr_ignore_super = false;
 
 void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
                          uint16_t rights, int16_t options,
@@ -144,8 +144,12 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
     /* Check ACL if rights are required */
     if (required_rights != 0) {
         rights_mask = (uint32_t)required_rights;
-        rights_result = ACL_$RIGHTS(file_uid, &file_$set_attr_acl_zero_byte,
-                                    &rights_mask, &option_flags, status_ret);
+        /* 0x00E5D358 `tst.w D0w`: only the low word of the longword result
+         * is examined, so rights_result stays 16 bits wide. */
+        rights_result = (int16_t)ACL_$RIGHTS(file_uid,
+                                             (boolean *)&file_$set_attr_ignore_super,
+                                             &rights_mask, &option_flags,
+                                             status_ret);
         if (rights_result == 0) {
             /* Access denied - shut down wired pages */
             OS_PROC_SHUTWIRED(status_ret);

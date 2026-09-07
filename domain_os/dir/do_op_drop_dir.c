@@ -31,11 +31,22 @@
 
 #include "dir/dir_internal.h"
 
-/* DAT_00e4bc24 - ACL rights mask (0xFF = all rights) */
+/*
+ * Constant cells for the ACL_$RIGHTS call at 0x00E52872, addressed with
+ * `pea (d,PC)` (PC = instruction address + 2).
+ */
 
-/* DAT_00e4b444 - ACL check parameter */
+/* 0x00E4BC24, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
+ * super-user bypass is suppressed).  `pea (-0x6c48,PC)` at 0x00E5286A. */
+static const boolean dir_$drop_dir_ignore_super_00e4bc24 = true;
 
-/* DAT_00e51b64 - ACL rights value for directory delete (0x00000040) */
+/* 0x00E51B64, longword 0x00000040: the required rights mask (delete).
+ * `pea (-0xd04,PC)` at 0x00E52866. */
+static const uint32_t dir_$drop_dir_rights_00e51b64 = 0x00000040;
+
+/* 0x00E4B444, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
+ * directory).  `pea (-0x7420,PC)` at 0x00E52862. */
+static const int16_t dir_$drop_dir_acl_opts_00e4b444 = 1;
 
 void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
                          status_$t *status_ret)
@@ -134,8 +145,11 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
 
         /* Same volume, local object - check ACL rights */
         int16_t acl_result;
-        acl_result = ACL_$RIGHTS(&target_uid, &DAT_00e4bc24,
-                                 &DAT_00e51b64, &DAT_00e4b444, status_ret);
+        acl_result = ACL_$RIGHTS(&target_uid,
+                                 (boolean *)&dir_$drop_dir_ignore_super_00e4bc24,
+                                 (uint32_t *)&dir_$drop_dir_rights_00e51b64,
+                                 (int16_t *)&dir_$drop_dir_acl_opts_00e4b444,
+                                 status_ret);
 
         if (acl_result == 0x40) {
             *status_ret = status_$naming_insufficient_rights;

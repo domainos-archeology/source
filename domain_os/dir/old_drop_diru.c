@@ -32,6 +32,31 @@
  *   name_low   - Low part of name length (legacy calling convention)
  *   status_ret - Output: status code
  */
+/*
+ * Constant cells for the two ACL_$RIGHTS calls (0x00E573A6 and 0x00E573D2),
+ * addressed with `pea (d,PC)` (PC = instruction address + 2).  The two calls
+ * share the boolean and the option word but use DIFFERENT rights masks.
+ */
+
+/* 0x00E5716C, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
+ * super-user bypass is suppressed).  `pea (-0x236,PC)` at 0x00E573A0 and
+ * `pea (-0x260,PC)` at 0x00E573CA. */
+static const boolean dir_$old_drop_diru_ignore_super_00e5716c = true;
+
+/* 0x00E56946, longword 0x00000002: the rights mask required on the PARENT
+ * directory.  `pea (-0xa58,PC)` at 0x00E5739C. */
+static const uint32_t dir_$old_drop_diru_parent_rights_00e56946 = 0x00000002;
+
+/* 0x00E5755E, longword 0x00000040: the rights mask required on the directory
+ * being dropped.  `pea (0x196,PC)` at 0x00E573C6.  This site previously used
+ * the parent's 0x00E56946 cell. */
+static const uint32_t dir_$old_drop_diru_dir_rights_00e5755e = 0x00000040;
+
+/* 0x00E54B26, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
+ * directory).  `pea (-0x2874,PC)` at 0x00E57398 and `pea (-0x289e,PC)` at
+ * 0x00E573C2. */
+static const int16_t dir_$old_drop_diru_acl_opts_00e54b26 = 1;
+
 void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
                         uint16_t *name_low, status_$t *status_ret)
 {
@@ -67,8 +92,10 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
     }
 
     /* Step 3: Check ACL rights on parent directory */
-    ACL_$RIGHTS(parent_uid, &DAT_00e5716c, &DAT_00e56946,
-                &ACL_TYPE_DIR, status_ret);
+    ACL_$RIGHTS(parent_uid,
+                (boolean *)&dir_$old_drop_diru_ignore_super_00e5716c,
+                (uint32_t *)&dir_$old_drop_diru_parent_rights_00e56946,
+                (int16_t *)&dir_$old_drop_diru_acl_opts_00e54b26, status_ret);
     if (*status_ret != status_$ok) {
         NAME_CONVERT_ACL_STATUS(status_ret);
         return;
@@ -80,8 +107,11 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
     dir_uid.low = entry_uid_low;
 
     /* Step 4: Check ACL rights on the directory to be dropped */
-    rights_result = ACL_$RIGHTS(&dir_uid, &DAT_00e5716c, &DAT_00e56946,
-                                &ACL_TYPE_DIR, status_ret);
+    rights_result = ACL_$RIGHTS(&dir_uid,
+                                (boolean *)&dir_$old_drop_diru_ignore_super_00e5716c,
+                                (uint32_t *)&dir_$old_drop_diru_dir_rights_00e5755e,
+                                (int16_t *)&dir_$old_drop_diru_acl_opts_00e54b26,
+                                status_ret);
     if (rights_result == 0x40) {
         *status_ret = status_$insufficient_rights_to_perform_operation;
         return;

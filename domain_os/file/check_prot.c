@@ -55,12 +55,17 @@
  * full ACL checking via ACL_$RIGHTS.
  *
  * Parameters:
- *   file_uid     - UID of file to check (8 bytes)
- *   access_mask  - Required access rights mask
- *   slot_num     - Lock table slot number (0-149)
- *   unused       - Unused parameter
- *   rights_out   - Output: actual rights available
- *   status_ret   - Output: status code
+ *   file_uid     A6+0x08  UID of file to check (8 bytes)
+ *   access_mask  A6+0x0C  Required access rights mask (word)
+ *   slot_num     A6+0x0E  Lock table slot number (0-149, longword)
+ *   ignore_super A6+0x12  ACL_$RIGHTS' ignore_super boolean; its ADDRESS is
+ *                         handed to ACL_$RIGHTS (`pea (0x12,A6)` at
+ *                         0x00E5D226)
+ *   option_flags A6+0x14  ACL_$RIGHTS' option-flags word; its ADDRESS is
+ *                         handed to ACL_$RIGHTS (`pea (0x14,A6)` at
+ *                         0x00E5D216)
+ *   rights_out   A6+0x16  Output: actual rights available
+ *   status_ret   A6+0x1A  Output: status code
  *
  * Returns:
  *   1 if rights check completed (check status for success/failure)
@@ -74,10 +79,10 @@
  * 2. Otherwise call ACL_$RIGHTS for full access check
  */
 int16_t FILE_$CHECK_PROT(uid_t *file_uid, uint16_t access_mask, uint32_t slot_num,
-                         void *unused, uint16_t *rights_out, status_$t *status_ret)
+                         boolean ignore_super, int16_t option_flags,
+                         uint16_t *rights_out, status_$t *status_ret)
 {
     int16_t lock_index;
-    int16_t option_flags_lo;
     int32_t entry_offset;
     uint8_t entry_flags;
     uint32_t *entry_ptr;
@@ -154,23 +159,23 @@ int16_t FILE_$CHECK_PROT(uid_t *file_uid, uint16_t access_mask, uint32_t slot_nu
 
     /*
      * Cache miss or invalid slot - perform full ACL check.
-     * ACL_$RIGHTS takes:
-     *   - file_uid
-     *   - unused parameter (we pass &unused to match signature)
-     *   - pointer to access mask
-     *   - pointer to option flags (we use the high word of unused)
-     *   - status_ret
+     *
+     * 0x00E5D214-0x00E5D22C, pushed right to left:
+     *   pea (A2)          status_ret
+     *   pea (0x14,A6)     &option_flags
+     *   pea (-0xc,A6)     &rights_mask   (access_mask, zero-extended to a long
+     *                                     by `clr.l D0` / `move.w D2w,D0w`)
+     *   pea (0x12,A6)     &ignore_super
+     *   pea (A3)          file_uid
+     *
+     * The two parameter slots are passed by reference, so they are taken as
+     * addresses of this function's own parameters here.
      */
     rights_mask = (uint32_t)access_mask;
-    /*
-     * The original passes the address of the low word of the 'unused'
-     * parameter slot (bytes 2-3 of the 32-bit slot on big-endian m68k) as
-     * the option flags pointer.  'unused' is dead after this call, so a
-     * local holding that low word is equivalent.
-     */
-    option_flags_lo = (int16_t)((uintptr_t)unused & 0xFFFF);
-    *rights_out = ACL_$RIGHTS(file_uid, unused, &rights_mask,
-                              &option_flags_lo, status_ret);
+    *rights_out = (uint16_t)ACL_$RIGHTS(file_uid, &ignore_super, &rights_mask,
+                                        &option_flags, status_ret);
 
+    /* 0x00E5D236 `move.w D0w,(A1)`: only the low word reaches *rights_out,
+     * and ACL_$RIGHTS' D0 is also this function's own result. */
     return (int16_t)*rights_out;
 }
