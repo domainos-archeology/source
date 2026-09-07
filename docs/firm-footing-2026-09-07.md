@@ -67,7 +67,7 @@ Figures at the last commit:
 | host tests, failures | 182, 0 |
 | undefined link references (all functions now) | 366, from 1212 |
 | relocation overflows | 0, from 19 |
-| hand-written assembly files under `*/sau2/` | 44 |
+| hand-written assembly files under `*/sau2/` | 42 |
 | beads closed in this pass | about 50 |
 
 ## What is left
