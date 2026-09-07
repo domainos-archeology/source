@@ -141,8 +141,16 @@ _Static_assert(sizeof(route_$port_t) == 0x5C, "route_$port_t must be 0x5C bytes"
  * so the record has to be packed to lay out the same way off m68k.
  */
 typedef struct route_$port_stats_t {
-    uint16_t    flags;              /* 0x00: byte 0 is copied out by
-                                     *       ROUTE_$READ_USER_STATS */
+    uint16_t    flags;              /* 0x00: byte 0 is the record's "in use"
+                                     *       boolean - NET_IO_$CREATE_PORT
+                                     *       tests it with "tst.b"/"bmi"
+                                     *       (0x00E5A5D0) and sets it with
+                                     *       "st (A1)" (0x00E5A682),
+                                     *       ROUTE_$CLOSE_PORT clears it with
+                                     *       "clr.b (A0)" (0x00E69F9E), and
+                                     *       ROUTE_$READ_USER_STATS copies it
+                                     *       out (0x00E6A6B4).  Byte 1 has no
+                                     *       accessor. */
     uint32_t    deep_queue_puts;    /* 0x02: SOCK_$PUT succeeded with a socket
                                      *       queue depth above 0x20
                                      *       (addq.l #1,(0x2,A2) at 0xE8764E) */
@@ -152,6 +160,12 @@ typedef struct route_$port_stats_t {
                                      *       the socket queue depth 0..0x20
                                      *       (addq.l #1,(0xA,A2,D1) at 0xE8765A) */
 } __attribute__((packed)) route_$port_stats_t;
+
+/*
+ * The blocks these pointers refer to are the four records of ROUTE_$USER_STAT
+ * (0xE87FD6, SAU2 map); route/route_internal.h models the array and explains
+ * why the record stride there is 0x90 rather than this 0x8E.
+ */
 
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(route_$port_stats_t, deep_queue_puts) == 0x02,

@@ -17,7 +17,7 @@
 #include "disk/disk_internal.h"
 
 /* Request block offsets */
-#define REQ_NEXT_OFFSET     0x00   /* Pointer to next request */
+#define REQ_NEXT_OFFSET     0x00   /* VA of the next request (disk_io_req_t.next) */
 #define REQ_ADDR_OFFSET     0x04   /* Address (for SCSI sorting) */
 #define REQ_CYL_OFFSET      0x04   /* Cylinder (word) */
 #define REQ_HEAD_OFFSET     0x06   /* Head (byte) */
@@ -26,6 +26,25 @@
 
 /* Device flags */
 #define DEV_FLAG_SCSI       0x200  /* Use address instead of LBA for sort */
+
+/*
+ * The request chain link at +0x00 is a four-byte cell holding a target
+ * virtual address, not a host pointer: the original moves it with `move.l`
+ * and disk_io_req_t.daddr (+0x04) sits immediately above it.  Read and write
+ * it through these two accessors so a 64-bit host build does not overrun
+ * daddr (bead source-wyn9; cells cited at 0x00E3BE8A / 0x00E3D50E).
+ * ARCH_VA_TO_PTR / ARCH_PTR_TO_VA are identity casts on m68k.
+ */
+static inline void *req_next(const void *req)
+{
+    return ARCH_VA_TO_PTR(*(const uint32_t *)((const uint8_t *)req +
+                                              REQ_NEXT_OFFSET));
+}
+
+static inline void req_set_next(void *req, void *val)
+{
+    *(uint32_t *)((uint8_t *)req + REQ_NEXT_OFFSET) = ARCH_PTR_TO_VA(val);
+}
 
 /* Forward declaration for swap helper */
 static void swap_requests(void);
@@ -52,24 +71,24 @@ void DISK_$SORT(void *dev_entry, void **queue_ptr)
     /* Sort the queue using bubble sort */
     if ((dev_flags & DEV_FLAG_SCSI) == 0) {
         /* Sort by LBA (at offset +0x3c) */
-        for (curr = head; curr != NULL; curr = *(void **)curr) {
+        for (curr = head; curr != NULL; curr = req_next(curr)) {
             prev = curr;
-            for (next = *(void **)curr; next != NULL; next = *(void **)prev) {
+            for (next = req_next(curr); next != NULL; next = req_next(prev)) {
                 next_key = *(uint32_t *)((uint8_t *)next + REQ_LBA_OFFSET);
                 curr_key = *(uint32_t *)((uint8_t *)curr + REQ_LBA_OFFSET);
 
                 if (next_key < curr_key) {
                     /* Swap curr and next */
-                    void *tmp = *(void **)curr;
+                    void *tmp = req_next(curr);
                     if (prev_sorted != NULL) {
-                        *(void **)prev_sorted = next;
+                        req_set_next(prev_sorted, next);
                     }
-                    *(void **)curr = *(void **)next;
+                    req_set_next(curr, req_next(next));
                     if (next == tmp) {
-                        *(void **)next = curr;
+                        req_set_next(next, curr);
                     } else {
-                        *(void **)head = curr;
-                        *(void **)next = tmp;
+                        req_set_next(head, curr);
+                        req_set_next(next, tmp);
                     }
 
                     if (curr == head) {
@@ -86,24 +105,24 @@ void DISK_$SORT(void *dev_entry, void **queue_ptr)
         }
     } else {
         /* Sort by address (at offset +4) for SCSI */
-        for (curr = head; curr != NULL; curr = *(void **)curr) {
+        for (curr = head; curr != NULL; curr = req_next(curr)) {
             prev = curr;
-            for (next = *(void **)curr; next != NULL; next = *(void **)prev) {
+            for (next = req_next(curr); next != NULL; next = req_next(prev)) {
                 next_key = *(uint32_t *)((uint8_t *)next + REQ_ADDR_OFFSET);
                 curr_key = *(uint32_t *)((uint8_t *)curr + REQ_ADDR_OFFSET);
 
                 if (next_key < curr_key) {
                     /* Swap curr and next */
-                    void *tmp = *(void **)curr;
+                    void *tmp = req_next(curr);
                     if (prev_sorted != NULL) {
-                        *(void **)prev_sorted = next;
+                        req_set_next(prev_sorted, next);
                     }
-                    *(void **)curr = *(void **)next;
+                    req_set_next(curr, req_next(next));
                     if (next == tmp) {
-                        *(void **)next = curr;
+                        req_set_next(next, curr);
                     } else {
-                        *(void **)head = curr;
-                        *(void **)next = tmp;
+                        req_set_next(head, curr);
+                        req_set_next(next, tmp);
                     }
 
                     if (curr == head) {
@@ -126,7 +145,7 @@ void DISK_$SORT(void *dev_entry, void **queue_ptr)
         void *run_start = head;
 
         while (run_start != NULL) {
-            next = *(void **)run_start;
+            next = req_next(run_start);
             if (next != NULL) {
                 int16_t start_cyl = *(int16_t *)((uint8_t *)run_start + REQ_CYL_OFFSET);
                 uint8_t start_head = *(uint8_t *)((uint8_t *)run_start + REQ_HEAD_OFFSET);
@@ -142,7 +161,7 @@ void DISK_$SORT(void *dev_entry, void **queue_ptr)
                     (int16_t)(next_sector - start_sector) < coalesce_limit) {
 
                     /* Continue checking subsequent requests */
-                    void *check = *(void **)next;
+                    void *check = req_next(next);
                     while (check != NULL) {
                         int16_t check_cyl = *(int16_t *)((uint8_t *)check + REQ_CYL_OFFSET);
                         uint8_t check_head = *(uint8_t *)((uint8_t *)check + REQ_HEAD_OFFSET);
@@ -173,7 +192,7 @@ void DISK_$SORT(void *dev_entry, void **queue_ptr)
                             break;
                         }
 
-                        check = *(void **)check;
+                        check = req_next(check);
                     }
                 }
             }

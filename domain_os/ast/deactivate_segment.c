@@ -215,11 +215,11 @@ static void ast_$deactivate_segment_log(const aste_t *aste,
         /* 0x00E018E6: only the FIRST longword of ANON_$UID is copied */
         log_uid[0] = ANON_$UID.high;
         /* 0x00E018F8: a zero-extended word from aote+0x2A */
-        log_uid[1] = (uint32_t)(uint16_t)((aote->len_high) & 0xFFFF);
+        log_uid[1] = (uint32_t)(uint16_t)((aote->dtm_high) & 0xFFFF);
     } else {
-        /* 0x00E0190E: the eight bytes at aote+0xA4 */
-        log_uid[0] = aote->unknown_a4[0];
-        log_uid[1] = aote->unknown_a4[1];
+        /* 0x00E0190A-0x00E01912: the eight bytes at aote+0xA4 */
+        log_uid[0] = aote->obj_loc_uid.high;
+        log_uid[1] = aote->obj_loc_uid.low;
     }
 
     /* 0x00E01940 */

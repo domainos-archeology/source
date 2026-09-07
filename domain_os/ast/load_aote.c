@@ -108,17 +108,17 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
     if (*(int8_t *)remote_flag < 0) {
         /* Remote object - set up network info */
         status_$t status;
-        NETWORK_$INSTALL_NET(obj_info[4], &aote->vol_uid, &status);
+        NETWORK_$INSTALL_NET(obj_info[4], &aote->location, &status);
         if (status != status_$ok) {
             ast_$release_aote(aote);
             goto done;
         }
         /* Set up volume UID with network info */
-        aote->vol_uid = (aote->vol_uid & 0xFFF00000) | node_id;
+        aote->location = (aote->location & 0xFFF00000) | node_id;
         *(uint8_t *)((char *)aote + 0x08) |= 0x80;
     } else {
         /* Local object - copy volume UID */
-        aote->vol_uid = obj_info[1];
+        aote->location = obj_info[1];
     }
 
     /* Copy attributes */

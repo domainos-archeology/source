@@ -6,17 +6,17 @@
  * mounting/dismounting operations between the DISK, VTOC, DIR, and AST
  * subsystems.
  *
- * The VOLX table contains up to 6 mounted volumes (indices 1-6).
+ * The VOLX table holds up to 6 mounted volumes, indexed 1..6.
  * Each entry stores:
  *   - Root directory UID of the volume
  *   - Logical volume UID
  *   - Parent directory UID (mount point)
  *   - Physical device location (dev, bus, controller, lv_num)
  *
- * Memory layout (m68k):
- *   - VOLX table base: 0xE82604
- *   - Entry size: 32 bytes (0x20)
- *   - Max entries: 6 (indices 1-6, index 0 unused)
+ * Memory layout (m68k) - `D    E82604  VOLX_    size = C0` in the SR10.2 SAU2
+ * link map, i.e. exactly six 0x20-byte entries at 0xE82604..0xE826C3.  The
+ * table object and the 1-based accessor live in volx_internal.h; see the
+ * instruction-by-instruction derivation there.
  */
 
 #ifndef VOLX_H
@@ -68,7 +68,7 @@
  * Represents a mounted volume with its UIDs and device location.
  * Size: 32 bytes (0x20)
  */
-typedef struct volx_entry_t {
+typedef struct volx_$entry_t {
   uid_t dir_uid;    /* 0x00: Root directory UID */
   uid_t lv_uid;     /* 0x08: Logical volume UID */
   uid_t parent_uid; /* 0x10: Parent directory UID (mount point) */
@@ -76,32 +76,28 @@ typedef struct volx_entry_t {
   int16_t bus;      /* 0x1A: Bus/controller number */
   int16_t ctlr;     /* 0x1C: Controller type */
   int16_t lv_num;   /* 0x1E: Logical volume number */
-} volx_entry_t;
+} volx_$entry_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
-_Static_assert(__builtin_offsetof(volx_entry_t, dir_uid) == 0x00, "volx_entry_t.dir_uid");
-_Static_assert(__builtin_offsetof(volx_entry_t, lv_uid) == 0x08, "volx_entry_t.lv_uid");
-_Static_assert(__builtin_offsetof(volx_entry_t, parent_uid) == 0x10, "volx_entry_t.parent_uid");
-_Static_assert(__builtin_offsetof(volx_entry_t, dev) == 0x18, "volx_entry_t.dev");
-_Static_assert(__builtin_offsetof(volx_entry_t, bus) == 0x1A, "volx_entry_t.bus");
-_Static_assert(__builtin_offsetof(volx_entry_t, ctlr) == 0x1C, "volx_entry_t.ctlr");
-_Static_assert(__builtin_offsetof(volx_entry_t, lv_num) == 0x1E, "volx_entry_t.lv_num");
-_Static_assert(sizeof(volx_entry_t) == 0x20, "volx_entry_t size");
+_Static_assert(__builtin_offsetof(volx_$entry_t, dir_uid) == 0x00, "volx_$entry_t.dir_uid");
+_Static_assert(__builtin_offsetof(volx_$entry_t, lv_uid) == 0x08, "volx_$entry_t.lv_uid");
+_Static_assert(__builtin_offsetof(volx_$entry_t, parent_uid) == 0x10, "volx_$entry_t.parent_uid");
+_Static_assert(__builtin_offsetof(volx_$entry_t, dev) == 0x18, "volx_$entry_t.dev");
+_Static_assert(__builtin_offsetof(volx_$entry_t, bus) == 0x1A, "volx_$entry_t.bus");
+_Static_assert(__builtin_offsetof(volx_$entry_t, ctlr) == 0x1C, "volx_$entry_t.ctlr");
+_Static_assert(__builtin_offsetof(volx_$entry_t, lv_num) == 0x1E, "volx_$entry_t.lv_num");
+_Static_assert(sizeof(volx_$entry_t) == 0x20, "volx_$entry_t size");
 
 /*
  * Global data
+ *
+ * The table itself (VOLX_$TABLE) and the VOLX_$ENTRY() accessor are private
+ * to this subsystem - the map segment `D  E82604  VOLX_  size = C0` exports
+ * no symbols - so they live in volx_internal.h.
+ *
+ * Boot volume index (the volume containing the OS) is CAL_$BOOT_VOLX,
+ * declared in cal/cal.h, included above.
  */
-
-/* VOLX table base address (0xE82604 on m68k) */
-#if defined(ARCH_M68K)
-#define VOLX_$TABLE_BASE ((volx_entry_t *)0xE82604)
-#else
-extern volx_entry_t *volx_table_base;
-#define VOLX_$TABLE_BASE volx_table_base
-#endif
-
-/* Boot volume index (the volume containing the OS)
- * Declared in cal/cal.h, included above */
 
 /*
  * ============================================================================

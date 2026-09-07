@@ -52,8 +52,8 @@
 #define ATTR_TYPE_ADD_REFCOUNT   0x06
 #define ATTR_TYPE_SUB_REFCOUNT   0x07
 #define ATTR_TYPE_SET_REFCOUNT   0x08
-#define ATTR_TYPE_LEN            0x09
-#define ATTR_TYPE_DTM            0x0A
+#define ATTR_TYPE_DTM            0x09
+#define ATTR_TYPE_DTU            0x0A
 #define ATTR_TYPE_BLOCKS         0x0B
 #define ATTR_TYPE_OS_ONLY        0x0C  /* bit 7 of aote_t.access_flags */
 #define ATTR_TYPE_ACCESS_MODE    0x0D  /* bits 5 and 4 of aote_t.access_flags */
@@ -66,11 +66,11 @@
 #define ATTR_TYPE_MERGE_ACL      0x14
 #define ATTR_TYPE_SET_RIGHTS     0x15
 #define ATTR_TYPE_LINKCOUNT      0x16
-#define ATTR_TYPE_LEN_ROUNDED    0x17
-#define ATTR_TYPE_DTM_ROUNDED    0x18
+#define ATTR_TYPE_DTM_ROUNDED    0x17
+#define ATTR_TYPE_DTU_ROUNDED    0x18
 #define ATTR_TYPE_SPECIAL_FLAG   0x19  /* bit 2 of aote_t.attr_flags_lo */
-#define ATTR_TYPE_LEN_FROM_CLOCK 0x1A
-#define ATTR_TYPE_DTM_FROM_CLOCK 0x1B
+#define ATTR_TYPE_DTM_FROM_CLOCK 0x1A
+#define ATTR_TYPE_DTU_FROM_CLOCK 0x1B
 #define ATTR_TYPE_COUNT          0x1C  /* 0xE04B90: cmpi.w #0x1c / bcc invalid */
 
 /*
@@ -97,7 +97,7 @@
 
 /*
  * Frame slot at parent A6-0x40, six bytes.  Cases 0x17/0x18 use it as the
- * (long, word) length/DTM pair; the recursive ADD_REFCOUNT call at 0xE05196
+ * (long, word) DTM/DTU pair; the recursive ADD_REFCOUNT call at 0xE05196
  * writes only a word 1 into its first two bytes, which case 6 never reads.
  */
 typedef union attr_tmp_t {
@@ -284,14 +284,14 @@ static void ast_$set_attr_dispatch(uint16_t attr_type, void *value,
         break;
     }
 
-    case ATTR_TYPE_LEN:                                     /* 0xE04D88 */
-        aote->len_high = *(uint32_t *)value;
-        aote->len_low = 0;
-        break;
-
-    case ATTR_TYPE_DTM:                                     /* 0xE04D98 */
+    case ATTR_TYPE_DTM:                                     /* 0xE04D88 */
         aote->dtm_high = *(uint32_t *)value;
         aote->dtm_low = 0;
+        break;
+
+    case ATTR_TYPE_DTU:                                     /* 0xE04D98 */
+        aote->dtu_high = *(uint32_t *)value;
+        aote->dtu_low = 0;
         /* 0xE04DF8: bclr.b #4 through the re-read aote pointer. */
         (*aote_slot)->flags &= (uint8_t)~AOTE_FLAG_TOUCHED;
         break;
@@ -474,8 +474,8 @@ static void ast_$set_attr_dispatch(uint16_t attr_type, void *value,
         aote->linkcount = *(uint16_t *)value;
         break;
 
-    case ATTR_TYPE_LEN_ROUNDED:                             /* 0xE04DA6 */
-    case ATTR_TYPE_DTM_ROUNDED: {
+    case ATTR_TYPE_DTM_ROUNDED:                             /* 0xE04DA6 */
+    case ATTR_TYPE_DTU_ROUNDED: {
         struct {
             uint32_t high;
             uint16_t low;
@@ -494,12 +494,12 @@ static void ast_$set_attr_dispatch(uint16_t attr_type, void *value,
             tmp.pair.high = (int32_t)v->high;               /* 0xE04DCA */
             tmp.pair.low = (int16_t)v->low;
         }
-        if (attr_type == ATTR_TYPE_LEN_ROUNDED) {           /* 0xE04DD4 */
-            aote->len_high = (uint32_t)tmp.pair.high;
-            aote->len_low = (uint16_t)tmp.pair.low;
-        } else {
-            aote->dtm_high = (uint32_t)tmp.pair.high;       /* 0xE04DEC */
+        if (attr_type == ATTR_TYPE_DTM_ROUNDED) {           /* 0xE04DD4 */
+            aote->dtm_high = (uint32_t)tmp.pair.high;
             aote->dtm_low = (uint16_t)tmp.pair.low;
+        } else {
+            aote->dtu_high = (uint32_t)tmp.pair.high;       /* 0xE04DEC */
+            aote->dtu_low = (uint16_t)tmp.pair.low;
             (*aote_slot)->flags &= (uint8_t)~AOTE_FLAG_TOUCHED; /* 0xE04DF8 */
         }
         break;
@@ -511,18 +511,18 @@ static void ast_$set_attr_dispatch(uint16_t attr_type, void *value,
                       (uint8_t)(((*(uint8_t *)value) >> 7) << 2));
         break;
 
-    case ATTR_TYPE_LEN_FROM_CLOCK:                          /* 0xE04E06 */
-    case ATTR_TYPE_DTM_FROM_CLOCK:
-        aote->dtm_high = clock->high;                       /* 0xE04E06 */
-        aote->dtm_low = clock->low;
+    case ATTR_TYPE_DTM_FROM_CLOCK:                          /* 0xE04E06 */
+    case ATTR_TYPE_DTU_FROM_CLOCK:
+        aote->dtu_high = clock->high;                       /* 0xE04E06 */
+        aote->dtu_low = clock->low;
         if (obj_type == 0 && clock->low != 0) {             /* 0xE04E12 */
-            aote->dtm_high += 1;                            /* 0xE04E1C */
-            aote->dtm_low = 0;
+            aote->dtu_high += 1;                            /* 0xE04E1C */
+            aote->dtu_low = 0;
             (*aote_slot)->flags &= (uint8_t)~AOTE_FLAG_TOUCHED; /* 0xE04E24 */
         }
-        if (attr_type == ATTR_TYPE_LEN_FROM_CLOCK) {        /* 0xE04E2E */
-            aote->len_high = aote->dtm_high;                /* 0xE04E38 */
-            aote->len_low = aote->dtm_low;
+        if (attr_type == ATTR_TYPE_DTM_FROM_CLOCK) {        /* 0xE04E2E */
+            aote->dtm_high = aote->dtu_high;                /* 0xE04E38 */
+            aote->dtm_low = aote->dtu_low;
         }
         break;
 
@@ -541,7 +541,7 @@ set_dirty_flag:
     /* 0xE0511A: some attribute types also refresh the absolute clock. */
     if ((AST_$ATTR_TIMESTAMP_MASK & ((uint32_t)1 << attr_type)) != 0) {
         if ((*aote_slot)->remote_flag >= 0) {               /* 0xE0512A: bmi skips */
-            TIME_$ABS_CLOCK((clock_t *)&aote->dtu_high);    /* 0xE05132 */
+            TIME_$ABS_CLOCK((clock_t *)&aote->dtv_high);    /* 0xE05132 */
         }
     }
     goto unlock_and_return;
@@ -603,7 +603,7 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
     uint16_t aote_flags;
     boolean len_adjust;      /* D2b, reused after the dispatch call */
     int16_t local_value;     /* A6-0x38 */
-    uint32_t net_info[2];    /* A6-0x40, an 8-byte copy of aote+0xAC */
+    uint32_t net_info[2];    /* A6-0x40, an 8-byte copy of aote+0xAC/0xB0 */
 
     /* 0xE05220: the caller's clock record is copied into the frame. */
     clock = *clock_info;
@@ -642,8 +642,8 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
          * 0xE052EA: eight bytes are copied out of the AOTE *before* the
          * dispatch runs; the remote call is made from that copy.
          */
-        net_info[0] = ((const uint32_t *)&aote->unknown_a4[0])[0];
-        net_info[1] = ((const uint32_t *)&aote->unknown_a4[0])[1];
+        net_info[0] = aote->obj_loc_net;
+        net_info[1] = aote->obj_loc_node;
 
         /* 0xE052FA: bit 0 of the 16-bit attribute flags word. */
         aote_flags = (uint16_t)(((uint16_t)aote->attr_flags_hi << 8) |

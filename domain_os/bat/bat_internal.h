@@ -70,50 +70,10 @@ typedef struct bat_$volume_t {
 } bat_$volume_t;
 
 /*
- * Volume label disk layout (block 0)
- *
- * The volume label is stored in the first block of each volume.
- * This structure maps to offsets used in BAT_$MOUNT/DISMOUNT.
+ * The logical-volume label record (bat_$label_t) is defined in
+ * bat/bat.h: DISK_$LV_MOUNT (0x00E6CA3A) reads the same block, and
+ * disk/ is outside this subsystem (bead source-f5j9).
  */
-typedef struct bat_$label_t {
-    int16_t     version;            /* 0x00: Version (0 = old format, non-0 = new) */
-    uint8_t     reserved_02[0x2a];  /* 0x02: Reserved */
-
-    /* Fields at offset 0x2c correspond to bat_$volume_t at 0x00 */
-    uint32_t    total_blocks;       /* 0x2C: Total blocks */
-    uint32_t    free_blocks;        /* 0x30: Free blocks */
-    uint32_t    bat_block_start;    /* 0x34: BAT block start */
-    uint32_t    first_data_block;   /* 0x38: First data block */
-    uint16_t    unknown_3c;         /* 0x3C: Flags/status field */
-    uint16_t    step_blocks;        /* 0x3E: Step blocks */
-    uint16_t    bat_step;           /* 0x40: BAT step */
-    uint16_t    reserved_42;        /* 0x42: Reserved */
-    uint32_t    reserved_blocks;    /* 0x44: Reserved blocks */
-
-    /* Reserved area */
-    uint8_t     reserved_48[0x50];  /* 0x48: Reserved */
-
-    /* Timestamp fields */
-    uint32_t    mount_time_high;    /* 0xB0: Mount time (high word) */
-    uint32_t    mount_time_low;     /* 0xB4: Mount node info */
-    uint32_t    boot_time;          /* 0xB8: Boot time */
-    uint32_t    dismount_time;      /* 0xBC: Last dismount time */
-    uint32_t    current_time;       /* 0xC0: Current time at dismount */
-
-    /* More reserved area */
-    uint8_t     reserved_c4[0xa];   /* 0xC4: Reserved */
-
-    int16_t     salvage_flag;       /* 0xCE: Salvage flag (1 = needs salvage) */
-
-    /* Reserved area before partition table */
-    uint8_t     reserved_d0[0x2c];  /* 0xD0: Reserved */
-
-    /* Partition info at offset 0xFC - copied to bat_$volume_t.partitions */
-    uint16_t    num_partitions;     /* 0xFC: Number of partitions */
-    uint16_t    partition_start_offset; /* 0xFE: Partition start offset */
-    uint32_t    partition_size;     /* 0x100: Partition size */
-    /* ... partition array follows ... */
-} bat_$label_t;
 
 /*
  * VTOCE block layout

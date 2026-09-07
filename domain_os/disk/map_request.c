@@ -59,7 +59,8 @@ void disk_$map_request(disk_io_req_t *req, int16_t vol_idx, int16_t internal_op,
 
     /* 0x00E3CB0E branches straight to the loop test at 0x00E3CC66 */
     while (req != NULL) {
-        next = req->next; /* 0x00E3CB12 */
+        /* 0x00E3CB12: `move.l (A2),D3` -- the link is a 32-bit VA. */
+        next = (disk_io_req_t *)ARCH_VA_TO_PTR(req->next);
         daddr = req->daddr;                           /* 0x00E3CB14 */
 
         /*
@@ -187,12 +188,12 @@ void disk_$map_request(disk_io_req_t *req, int16_t vol_idx, int16_t internal_op,
         if (volume_map[volx - 1].head == NULL) {
             volume_map[volx - 1].head = req;
         } else {
-            volume_map[volx - 1].tail->next = req;
+            volume_map[volx - 1].tail->next = ARCH_PTR_TO_VA(req);
         }
         volume_map[volx - 1].tail = req;
 
         /* 0x00E3CC52-0x00E3CC60 */
-        req->next = NULL;
+        req->next = 0;
         req->op_flags = 0;
         req->op_flags &= 0xF0;
         req->op_flags |= (uint8_t)internal_op;

@@ -14,6 +14,7 @@
 
 #include "base/base.h"
 #include "ec/ec.h"
+#include "proc1/proc1_config.h"   /* PROC1_MAX_PROCESSES, for FIM_$CLEANUP_STACK */
 
 /*
  * ============================================================================
@@ -404,6 +405,9 @@ uint32_t FIM_$GET_USER_PC(void);
  *
  * Returns:
  *   0xFF if fault delivered to user, 0 if handled locally
+ *
+ * Address: 0x00E0A458 (1296 bytes) -- first entry of the FIM_ code segment
+ * in the SAU2 link map.
  */
 uint8_t FIM_$BUILD_DF(void *exception_frame, uint32_t return_pc,
                       fim_regs_t *regs, uint16_t flags,
@@ -428,7 +432,8 @@ void FIM_$EXIT(void);
  * FIM_$UII - Unimplemented Instruction Interrupt handler
  *
  * Handles illegal/unimplemented instruction traps.
- * Address: 0x00e21326 (38 bytes)
+ * Address: 0x00E2146C (38 bytes) -- SAU2 link map and Ghidra agree; this
+ * file previously carried 0x00e21326, which is not an entry point at all.
  */
 void FIM_$UII(void);
 
@@ -445,7 +450,8 @@ void FIM_$GENERATE(void *context);
  *
  * Handles privilege violation exceptions (user mode trying
  * to execute supervisor-only instructions).
- * Address: 0x00e212d8 (74 bytes)
+ * Address: 0x00E21530 (74 bytes) -- SAU2 link map and Ghidra agree; this
+ * file previously carried 0x00e212d8, which lies inside FIM_$USER_FIM_ADDR.
  */
 void FIM_$PRIV_VIOL(void);
 
@@ -467,7 +473,7 @@ void FIM_$FLINE(void);
  *
  * Handles invalid user stack pointer situations.
  * Address: 0x00E2158A (4 bytes) -- see fim/sau2/fim.s.  (This file used to
- * give 0x00E216D2, which is inside the FIM_CLEANUP_STACK zero fill.)
+ * give 0x00E216D2, which is inside the FIM_$CLEANUP_STACK zero fill.)
  */
 void FIM_$ILLEGAL_USP(void);
 
@@ -556,7 +562,7 @@ void FIM_$PROC2_STARTUP(void *context);
  *
  * Handles trace exceptions for single-step debugging.
  * Address: 0x00E217D4 (80 bytes) -- see fim/sau2/fim.s.  (This file used to
- * give 0x00E21754, which is inside the FIM_CLEANUP_STACK zero fill.)
+ * give 0x00E21754, which is inside the FIM_$CLEANUP_STACK zero fill.)
  */
 void FIM_$SINGLE_STEP(void);
 
@@ -635,7 +641,8 @@ void FIM_$FRESTORE(void *state_ptr);
  *   state - Output buffer for FP state
  *   status - Status return
  *
- * Address: 0x00e21d48 (196 bytes)
+ * Address: 0x00E21DC2 (196 bytes) -- SAU2 link map and Ghidra agree; this
+ * file previously carried 0x00e21d48, which the map names FP_$GET_FP.
  */
 void FIM_$FP_GET_STATE(void *state, status_$t *status);
 
@@ -648,7 +655,8 @@ void FIM_$FP_GET_STATE(void *state, status_$t *status);
  *   state - FP state to restore
  *   status - Status return
  *
- * Address: 0x00e21e0c (152 bytes)
+ * Address: 0x00E21E86 (152 bytes) -- SAU2 link map and Ghidra agree; this
+ * file previously carried 0x00e21e0c, which is inside FIM_$FP_GET_STATE.
  */
 void FIM_$FP_PUT_STATE(void *state, status_$t *status);
 
@@ -656,7 +664,9 @@ void FIM_$FP_PUT_STATE(void *state, status_$t *status);
  * FIM_$SPURIOUS_INT - Spurious interrupt handler
  *
  * Handles spurious interrupts (no device acknowledged).
- * Address: 0x00e21ea4 (86 bytes)
+ * Address: 0x00E21F20 (86 bytes) -- SAU2 link map and Ghidra agree; this
+ * file previously carried 0x00e21ea4, which is inside FIM_$FP_PUT_STATE.
+ * The spurious-interrupt counter FIM_$SPUR_CNT follows at 0x00E21F7E.
  */
 void FIM_$SPURIOUS_INT(void);
 
@@ -664,7 +674,9 @@ void FIM_$SPURIOUS_INT(void);
  * FIM_$PARITY_TRAP - Parity error trap handler
  *
  * Handles memory parity errors.
- * Address: 0x00e21efa (98 bytes)
+ * Address: 0x00E21F84 (98 bytes) -- SAU2 link map and Ghidra agree; this
+ * file previously carried 0x00e21efa, which is inside FIM_$SPURIOUS_INT.
+ * PARITY_$INFO follows at 0x00E21FE6.
  */
 void FIM_$PARITY_TRAP(void);
 
@@ -770,6 +782,41 @@ extern void JMP_TO_BUS_ERR(void);
  * as an .extern of this symbol rather than through an absolute .equ.
  */
 extern status_$t FIM_$TRACE_STS[];
+
+/*
+ * FIM_$CLEANUP_STACK - cleanup handler stack heads, one longword per process
+ *
+ * Each entry is the head of that process's cleanup-handler chain (a
+ * fim_cleanup_entry_t built on the process's own stack by FIM_$CLEANUP), or
+ * NULL when no handler is established.  The original performs no bounds
+ * check on the index.
+ *
+ * Element size and index: every instruction that reaches this table loads
+ * PROC1_$CURRENT (the word at 0x00E20608), scales it by four with "lsl.w #2"
+ * and adds it to the table base as a signed word index, then moves a
+ * longword.  All three sites are in the cleanup/signal group and all three
+ * materialise the same base PC-relatively:
+ *
+ *   FIM_$CLEANUP     0x00E21640  lea (0x70,PC),A0   ; 0x00E21642 + 0x70
+ *   FIM_$RLS_CLEANUP 0x00E21668  lea (0x48,PC),A0   ; 0x00E2166A + 0x48
+ *   FIM_$SIGNAL      0x00E21692  lea (0x1e,PC),A0   ; 0x00E21694 + 0x1e
+ *
+ * All three resolve to 0x00E216B2, so the element size is 4.
+ *
+ * Element count: the object runs from 0x00E216B2 to the next object in the
+ * image, FIM_$PROC2_STARTUP at 0x00E217B6 (everything in between reads back
+ * as zero with "gsk read 0x00E216B2 260").  That is 0x104 = 260 bytes = 65
+ * longwords, which is exactly PROC1_MAX_PROCESSES -- the same count as
+ * PCBS[], PROC1_$TYPE[] and OS_STACK_BASE[], the other tables indexed by a
+ * PROC1 process id.
+ *
+ * Address: 0x00E216B2.  The SAU2 link map exports no symbol here (the table
+ * is module-local in the original), so this is a tree name.  Because the
+ * image places it inside the FIM_ code region between FIM_$SIGNAL and
+ * FIM_$PROC2_STARTUP, it is defined -- as 260 zero bytes, which is what the
+ * image holds -- in fim/sau2/fim.s, and not in fim/fim_data.c.
+ */
+extern void *FIM_$CLEANUP_STACK[PROC1_MAX_PROCESSES];
 
 /*
  * FIM_$TRACE_BIT - per-address-space pending trace fault bit, 1 byte per AS

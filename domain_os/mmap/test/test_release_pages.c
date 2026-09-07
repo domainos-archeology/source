@@ -11,7 +11,7 @@
  * A4 holds 0xEC5400 for the whole loop (0x00E0D034) and both arms index it
  * by seg * 0x14 and read the longword at -0x10, i.e.
  * MMAP_$SEG_ASTE_FOR(seg)->aote:
- *   0x00E0D0C4  tst.w (0x28,A0) / sne   -> high word of aote->len_high
+ *   0x00E0D0C4  tst.w (0x28,A0) / sne   -> high word of aote->dtm_high
  *   0x00E0D0E0  tst.b (0xb9,A0) / smi   -> aote->remote_flag < 0
  *
  * The seg-table arena is a plain host array: aste_t.aote is a real pointer
@@ -177,11 +177,11 @@ TEST(dirty_local_object_goes_to_dirty_nf)
     ASSERT_EQ(MMAP_PAGE_TYPE_DIRTY_NF, add_type[0]);
 }
 
-/* 0x00E0D0C4: ON_DISK -> the high word of aote->len_high. */
-TEST(dirty_on_disk_uses_aote_len_high)
+/* 0x00E0D0C4: ON_DISK -> the high word of aote->dtm_high. */
+TEST(dirty_on_disk_uses_aote_dtm_high)
 {
     reset_module(0, (uint8_t)(MMAPE_FLAG2_ON_DISK | MMAPE_FLAG2_MODIFIED));
-    aote->len_high = 0x00010000u;
+    aote->dtm_high = 0x00010000u;
     aote->remote_flag = 0;              /* not consulted on this arm */
 
     uint32_t vpns[1] = { TEST_VPN };
@@ -192,10 +192,10 @@ TEST(dirty_on_disk_uses_aote_len_high)
 }
 
 /* Only the low half is set, so `tst.w (0x28,A0)` reads zero. */
-TEST(dirty_on_disk_ignores_low_half_of_len_high)
+TEST(dirty_on_disk_ignores_low_half_of_dtm_high)
 {
     reset_module(0, (uint8_t)(MMAPE_FLAG2_ON_DISK | MMAPE_FLAG2_MODIFIED));
-    aote->len_high = 0x0000FFFFu;
+    aote->dtm_high = 0x0000FFFFu;
     aote->remote_flag = -1;             /* not consulted on this arm */
 
     uint32_t vpns[1] = { TEST_VPN };
@@ -239,8 +239,8 @@ int main(void)
     printf("MMAP_$RELEASE_PAGES tests\n");
     RUN_TEST(dirty_remote_object_goes_to_dirty_fl);
     RUN_TEST(dirty_local_object_goes_to_dirty_nf);
-    RUN_TEST(dirty_on_disk_uses_aote_len_high);
-    RUN_TEST(dirty_on_disk_ignores_low_half_of_len_high);
+    RUN_TEST(dirty_on_disk_uses_aote_dtm_high);
+    RUN_TEST(dirty_on_disk_ignores_low_half_of_dtm_high);
     RUN_TEST(clean_impure_page_never_reads_the_segment_table);
     RUN_TEST(wired_page_is_skipped);
     printf("%d passed, %d failed\n", tests_passed - tests_failed, tests_failed);

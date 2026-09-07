@@ -199,8 +199,70 @@ _Static_assert(offsetof(mac_os_$open_params_t, num_pkt_types) == 0x54,
 #endif
 
 /*
+ * mac_os_$link_addr_t - the variable-length link-level address that heads
+ * every MAC packet descriptor.  24 bytes: a word count followed by up to 11
+ * address words (source-txfx).
+ *
+ * SHAPE.  Two count-driven copy loops give the {count, words} shape directly:
+ *   MAC_$DEMUX   0x00E0BC82  move.w (A2),(-0x2e,A6)        ; copy the count
+ *                0x00E0BC86  move.w (A2),D0w / subq.w #0x1,D0w / bmi
+ *                0x00E0BC90  move.w (0x2,A1),(-0x2c,A0)    ; count words
+ *                0x00E0BC96  addq.l #0x2,A0 / addq.l #0x2,A1 / dbf
+ *   MAC_$RECEIVE 0x00E0BE52  the same loop the other way round
+ *                0x00E0BE60  move.w (-0x2c,A0),(0x2,A1)
+ * The word at +0x00 is the number of address words; the words follow at
+ * +0x02.  Neither loop bounds the count, so a count above 11 runs off the
+ * end of the record - that is the original behaviour, not a transcription
+ * error.
+ *
+ * EXTENT = 24 bytes, hence 11 words:
+ *   - in the driver record the next field is the boolean at +0x18
+ *     (0x00E0BC68 tst.b (0x18,A2) in MAC_$DEMUX, 0x00E0BE4E
+ *     move.b D1b,(0x18,A3) in MAC_$RECEIVE), and MAC_$SEND copies exactly
+ *     0x00..0x17 as one record assignment (0x00E0BBC2 moveq #0x5 +
+ *     move.l (A0)+,(A1)+ / dbf = 6 longwords) before filling +0x18, +0x1C,
+ *     +0x28, +0x30, +0x38 and +0x3C field by field (0x00E0BBCE-0x00E0BBF0);
+ *   - in MAC_$DEMUX's staging record the count is at A6-0x2E, the words
+ *     start at A6-0x2C, and the next field written is the word at A6-0x16
+ *     (0x00E0BCBC move.w (0x3a,A2),(-0x16,A6)), leaving 0x16 bytes = 11
+ *     words for the address.
+ *
+ * COUNTS this image actually stores:
+ *   2  MAC_OS_$ARP for route_port_t.net_type 0 and 3 - the 20-bit Apollo
+ *      ring node id taken out of the IP address as (ip >> 16) & 0x000F and
+ *      ip & 0xFFFF (0x00E0C1A4 move.w #0x2,(A2) .. 0x00E0C1B2); the
+ *      broadcast arm writes the count alone (0x00E0C14E move.w #0x2,(A2)).
+ *   3  MAC_OS_$ARP for net_type 4 and 5 - a 6-byte IEEE 802 address, copied
+ *      word by word from the caller's address record (0x00E0C1FC
+ *      move.w #0x3,(A2) .. 0x00E0C210 dbf) or set to FF-FF-FF-FF-FF-FF for
+ *      broadcast (0x00E0C156 move.w #0x3,(A2) .. 0x00E0C164 dbf).
+ *   2  ring_$receive_packet, followed by the two words of the ring source
+ *      node id (0x00E76528 move.w #0x2,(-0x50,A6); 0x00E7652E-0x00E7653E).
+ *
+ * The only length check in the image is RING_$SEND_OS's, which refuses
+ * anything but 2 (0x00E77D7E move.w (A0),D0w / cmpi.w #0x2,D0w / bne ->
+ * status 0x00310012) and then copies two words from +0x02 into the ring
+ * header (0x00E77D86-0x00E77D96).
+ *
+ * What the remaining eight words are for is UNATTESTED in this image: no
+ * count above 3 is ever stored, the only other MAC port driver present is
+ * ETHERNET_$INIT (0x00E78004), a stub that returns
+ * status_$io_controller_not_in_system, and the SR10.4 user-space /sys/ins
+ * tree ships no mac.ins.pas to name the record.
+ */
+#define MAC_OS_MAX_ADDR_WORDS   11      /* 0x18 bytes - 1 count word */
+
+typedef struct mac_os_$link_addr_t {
+    uint16_t    n_words;                        /* 0x00: 2 or 3 in this image */
+    uint16_t    addr[MAC_OS_MAX_ADDR_WORDS];    /* 0x02: n_words are meaningful */
+} mac_os_$link_addr_t;
+
+/*
  * mac_os_$rcv_pkt_t - the 0x40-byte record a port driver builds for
- * MAC_OS_$DEMUX
+ * MAC_OS_$DEMUX.  It is the same Pascal record as mac_os_$send_pkt_t: the
+ * link address at 0x00..0x17, a boolean at 0x18, a buffer chain at 0x1C,
+ * the frame type at 0x30, the payload length at 0x38 and the payload pages
+ * at 0x3C all sit at the same offsets in both.
  *
  * The driver fills in everything up to +0x30 and MAC_OS_$DEMUX (0x00E0B816)
  * adds the arrival time and the channel it resolved:
@@ -220,9 +282,21 @@ _Static_assert(offsetof(mac_os_$open_params_t, num_pkt_types) == 0x54,
  * touches.
  */
 typedef struct mac_os_$rcv_pkt_t {
-    uint16_t    net_type;       /* 0x00: network type; the ring driver stores 2 */
-    uint32_t    src_id;         /* 0x02: source node id (UNALIGNED longword) */
-    uint8_t     _r06[0x12];     /* 0x06 */
+    /*
+     * 0x00..0x17 is the same mac_os_$link_addr_t that heads the send record:
+     * MAC_$DEMUX copies it out of here with the count-driven word loop at
+     * 0x00E0BC82-0x00E0BC9A (source-txfx).  The second arm names the only
+     * case this image builds - ring_$receive_packet's n_words == 2 followed
+     * by the two words of the source node id (0x00E76528, 0x00E7652E).
+     */
+    union {
+        mac_os_$link_addr_t link_addr;  /* 0x00 */
+        struct {
+            uint16_t    net_type;       /* 0x00: == link_addr.n_words */
+            uint32_t    src_id;         /* 0x02: UNALIGNED longword */
+            uint8_t     _r06[0x12];     /* 0x06: == link_addr.addr[2..10] */
+        } __attribute__((packed));
+    };
     boolean     is_local;       /* 0x18: the packet came from this node */
     uint8_t     _r19[0x03];     /* 0x19 */
     int32_t     body_len;       /* 0x1C: bytes of header body after the MAC header */
@@ -238,6 +312,8 @@ typedef struct mac_os_$rcv_pkt_t {
 } __attribute__((packed)) mac_os_$rcv_pkt_t;
 
 #if defined(ARCH_M68K)
+_Static_assert(offsetof(mac_os_$rcv_pkt_t, link_addr)  == 0x00, "rcv_pkt.link_addr");
+_Static_assert(offsetof(mac_os_$rcv_pkt_t, net_type)   == 0x00, "rcv_pkt.net_type");
 _Static_assert(offsetof(mac_os_$rcv_pkt_t, src_id)     == 0x02, "rcv_pkt.src_id");
 _Static_assert(offsetof(mac_os_$rcv_pkt_t, is_local)   == 0x18, "rcv_pkt.is_local");
 _Static_assert(offsetof(mac_os_$rcv_pkt_t, body_len)   == 0x1C, "rcv_pkt.body_len");
@@ -252,20 +328,6 @@ _Static_assert(offsetof(mac_os_$rcv_pkt_t, data_pa)    == 0x3C, "rcv_pkt.data_pa
 _Static_assert(sizeof(mac_os_$rcv_pkt_t) == 0x40, "mac_os_$rcv_pkt_t must be 0x40 bytes");
 #endif
 
-/*
- * mac_os_$link_addr_t - the link-level address MAC_OS_$ARP resolves
- *
- * MAC_OS_$ARP's third argument (0x00E0C0DE movea.l (0xe,A6),A2) is written as
- * a word count followed by up to three address words: 2 words for Ethernet
- * and network type 3, 3 words for token ring and FDDI.  RING_$SEND_OS refuses
- * anything but a count of 2 ("move.w (A0),D0w / cmpi.w #0x2,D0w / bne" at
- * 0x00E77D7E, status 0x00310012) and then copies two words from +0x02
- * (0x00E77D86-0x00E77D96).
- */
-typedef struct mac_os_$link_addr_t {
-    uint16_t    n_words;        /* 0x00: 2 or 3 */
-    uint16_t    addr[3];        /* 0x02: only n_words entries are meaningful */
-} mac_os_$link_addr_t;
 
 /*
  * mac_os_$buf_desc_t - one {length, address, next} buffer descriptor
@@ -313,15 +375,14 @@ typedef struct mac_os_$buf_desc_t {
  *         them all before setting hdr_prebuilt.
  *
  * xns/idp_send.c builds one of these at A6-0x88 (source-tvrs, closed).
- * TODO(source-txfx): 0x08..0x17 is copied verbatim by MAC_$SEND
- * (0x00E0BBC2 "moveq #0x5" + dbf = 6 longwords from the user's record, so
- * bytes 0x00..0x17 move as one block) but no code found so far reads it.
- * The bead records the hypothesis that the whole 24 bytes are one
- * variable-length link address rather than an 8-byte one plus 16 spare.
+ *
+ * Bytes 0x00..0x17 are ONE mac_os_$link_addr_t, not an 8-byte address plus
+ * 16 spare bytes: MAC_$SEND's 0x00E0BBC2 block copy moves them as a single
+ * record assignment, and MAC_$DEMUX / MAC_$RECEIVE walk them with a
+ * count-driven word loop.  See mac_os_$link_addr_t above (source-txfx).
  */
 typedef struct mac_os_$send_pkt_t {
-    mac_os_$link_addr_t link_addr;      /* 0x00: filled in by MAC_OS_$ARP */
-    uint8_t     _unknown_08[0x10];      /* 0x08: see the TODO(source-txfx) above */
+    mac_os_$link_addr_t link_addr;      /* 0x00..0x17: filled in by MAC_OS_$ARP */
     int8_t      is_broadcast;           /* 0x18: Pascal boolean, 0xFF = true */
     uint8_t     _pad_19[3];             /* 0x19 */
     mac_os_$buf_desc_t hdr_desc;        /* 0x1C: header buffer chain */
@@ -334,8 +395,10 @@ typedef struct mac_os_$send_pkt_t {
 } mac_os_$send_pkt_t;
 
 #if defined(ARCH_M68K)
-_Static_assert(sizeof(mac_os_$link_addr_t) == 0x08, "mac_os_$link_addr_t must be 8 bytes");
+_Static_assert(offsetof(mac_os_$link_addr_t, addr) == 0x02, "link_addr.addr");
+_Static_assert(sizeof(mac_os_$link_addr_t) == 0x18, "mac_os_$link_addr_t must be 0x18 bytes");
 _Static_assert(sizeof(mac_os_$buf_desc_t)  == 0x0C, "mac_os_$buf_desc_t must be 12 bytes");
+_Static_assert(offsetof(mac_os_$send_pkt_t, link_addr)    == 0x00, "send_pkt.link_addr");
 _Static_assert(offsetof(mac_os_$send_pkt_t, is_broadcast) == 0x18, "send_pkt.is_broadcast");
 _Static_assert(offsetof(mac_os_$send_pkt_t, hdr_desc)     == 0x1C, "send_pkt.hdr_desc");
 _Static_assert(offsetof(mac_os_$send_pkt_t, hdr_prebuilt) == 0x28, "send_pkt.hdr_prebuilt");

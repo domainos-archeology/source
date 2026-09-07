@@ -19,8 +19,8 @@
  *   A6-0x14  long  zero        cleared at 0x00E04822, passed by value as
  *                              ast_$force_activate_segment's segment number
  *   A6-0x10  long  lstatus     inner status
- *   A6-0x08  long  saved_dtu_high
- *   A6-0x04  word  saved_dtu_low
+ *   A6-0x08  long  saved_dtv_high
+ *   A6-0x04  word  saved_dtv_low
  *
  * ARGUMENT 1 IS THE OBJECT-LOCATION RECORD, NOT A UID.  The object UID lives
  * at loc_rec+0x08 (`lea (0x8,A4),A0` at 0x00E047D2 and the three
@@ -63,8 +63,8 @@ void AST_$GET_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags, void *attrs,
     status_$t lstatus;          /* A6-0x10 */
     uint32_t zero;              /* A6-0x14 */
     uint16_t net_flags;         /* A6-0x1A */
-    uint32_t saved_dtu_high;    /* A6-0x08 */
-    uint16_t saved_dtu_low;     /* A6-0x04 */
+    uint32_t saved_dtv_high;    /* A6-0x08 */
+    uint16_t saved_dtv_low;     /* A6-0x04 */
     uint32_t length;
     const uint32_t *src;
     uint32_t *dst;
@@ -149,9 +149,9 @@ void AST_$GET_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags, void *attrs,
             length = attr_buf[0x14 / 4];
         }
 
-        /* 0x00E048FE-0x00E04904: DTU survives the wholesale overwrite. */
-        saved_dtu_high = aote->dtu_high;
-        saved_dtu_low = aote->dtu_low;
+        /* 0x00E048FE-0x00E04904: DTV survives the wholesale overwrite. */
+        saved_dtv_high = aote->dtv_high;
+        saved_dtv_low = aote->dtv_low;
 
         /* 0x00E0490A-0x00E04916: 36 longwords, attrs -> aote+0x0C. */
         src = attr_buf;
@@ -162,8 +162,8 @@ void AST_$GET_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags, void *attrs,
 
         /* 0x00E04918-0x00E04922 */
         aote->length = length;
-        aote->dtu_high = saved_dtu_high;
-        aote->dtu_low = saved_dtu_low;
+        aote->dtv_high = saved_dtv_high;
+        aote->dtv_low = saved_dtv_low;
 
         /* 0x00E04928-0x00E04934: 8 longwords, aote+0x9C -> the caller's
          * location record. */
@@ -192,7 +192,7 @@ maybe_touch:
     if ((flags & AST_GET_ATTR_FULL) != 0 ||
         (aote->flags & AOTE_FLAG_TOUCHED) != 0) {
         ML_$LOCK(PMAP_LOCK_ID);
-        TIME_$CLOCK((clock_t *)(void *)&aote->dtm_high);
+        TIME_$CLOCK((clock_t *)(void *)&aote->dtu_high);
         aote->flags |= AOTE_FLAG_DIRTY;                 /* bset #5 */
         aote->flags &= (uint8_t)~AOTE_FLAG_TOUCHED;     /* bclr #4 */
         ML_$UNLOCK(PMAP_LOCK_ID);

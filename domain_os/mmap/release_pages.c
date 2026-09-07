@@ -41,7 +41,7 @@ void MMAP_$RELEASE_PAGES(uint16_t pid, uint32_t *vpn_array, uint16_t count)
              *   00e0d0b0-00e0d0ba  seg * 0x14 (ON_DISK arm)
              *   00e0d0bc  lea (0x0,A4,D0w),A1
              *   00e0d0c0  movea.l (-0x10,A1),A0
-             *   00e0d0c4  tst.w (0x28,A0) / sne  ; high word of aote->len_high
+             *   00e0d0c4  tst.w (0x28,A0) / sne  ; high word of aote->dtm_high
              *   00e0d0cc-00e0d0d6  seg * 0x14 (not-ON_DISK arm)
              *   00e0d0d8  lea (0x0,A4,D0w),A1
              *   00e0d0dc  movea.l (-0x10,A1),A0
@@ -51,7 +51,7 @@ void MMAP_$RELEASE_PAGES(uint16_t pid, uint32_t *vpn_array, uint16_t count)
 
             boolean needs_flush;
             if (page->flags2 & MMAPE_FLAG2_ON_DISK) {
-                needs_flush = (aote->len_high >> 16) != 0;
+                needs_flush = (aote->dtm_high >> 16) != 0;
             } else {
                 needs_flush = aote->remote_flag < 0;
             }

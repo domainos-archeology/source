@@ -31,12 +31,13 @@
 static const status_$t disk_$queued_drivers_not_supported_00e3c9fa = 0x0008002E;
 
 /* Request block offsets */
-#define REQ_NEXT_OFFSET     0x00   /* Pointer to next request */
+#define REQ_NEXT_OFFSET     0x00   /* VA of the next request (disk_io_req_t.next) */
 #define REQ_CYL_OFFSET      0x04   /* Cylinder (word) */
 #define REQ_HEAD_OFFSET     0x06   /* Head (byte) */
 #define REQ_SECTOR_OFFSET   0x07   /* Sector (byte) */
 #define REQ_COUNT_OFFSET    0x1c   /* Count/group size */
-#define REQ_GROUP_END       0x18   /* Pointer to last in group */
+#define REQ_GROUP_END       0x18   /* VA of the last request in the group
+                                    *   (disk_io_req_t.reserved_18) */
 #define REQ_LBA_OFFSET      0x3c   /* Logical block address */
 
 /* Device flags */
@@ -51,6 +52,24 @@ static const status_$t disk_$queued_drivers_not_supported_00e3c9fa = 0x0008002E;
 /* Queue data at 0xe7a1cc */
 #define QUEUE_DATA_BASE  ((uint8_t *)0x00e7a1cc)
 #define QUEUE_POSITION_ARRAY  (QUEUE_DATA_BASE + 0xb08)
+
+/*
+ * The two request-block link cells this function writes -- the chain link at
+ * +0x00 and the group-end link at +0x18 -- are four-byte cells holding target
+ * virtual addresses, not host pointers.  disk_io_req_t.daddr (+0x04) and
+ * .ppn (+0x14) sit next to them, so a host pointer stored here would overrun
+ * a live field on a 64-bit build (bead source-wyn9, 0x00E3BE8A / 0x00E3D50E).
+ * ARCH_VA_TO_PTR / ARCH_PTR_TO_VA are identity casts on m68k.
+ */
+static inline void *req_link(const void *req, int off)
+{
+    return ARCH_VA_TO_PTR(*(const uint32_t *)((const uint8_t *)req + off));
+}
+
+static inline void req_set_link(void *req, int off, void *val)
+{
+    *(uint32_t *)((uint8_t *)req + off) = ARCH_PTR_TO_VA(val);
+}
 
 /* Internal queue merge functions */
 static void merge_to_front(void *queue, int16_t count, uint8_t flag);
@@ -93,24 +112,24 @@ sort_again:
         void *sorted_prev = NULL;
         head = req_list;
 
-        for (req = head; req != NULL; req = *(void **)req) {
+        for (req = head; req != NULL; req = req_link(req, REQ_NEXT_OFFSET)) {
             prev = req;
-            for (next = *(void **)req; next != NULL; next = *(void **)prev) {
+            for (next = req_link(req, REQ_NEXT_OFFSET); next != NULL; next = req_link(prev, REQ_NEXT_OFFSET)) {
                 uint32_t next_lba = *(uint32_t *)((uint8_t *)next + REQ_LBA_OFFSET);
                 uint32_t req_lba = *(uint32_t *)((uint8_t *)req + REQ_LBA_OFFSET);
 
                 if (next_lba < req_lba) {
                     /* Swap */
-                    void *tmp = *(void **)req;
+                    void *tmp = req_link(req, REQ_NEXT_OFFSET);
                     if (sorted_prev != NULL) {
-                        *(void **)sorted_prev = next;
+                        req_set_link(sorted_prev, REQ_NEXT_OFFSET, next);
                     }
-                    *(void **)req = *(void **)next;
+                    req_set_link(req, REQ_NEXT_OFFSET, req_link(next, REQ_NEXT_OFFSET));
                     if (next == tmp) {
-                        *(void **)next = req;
+                        req_set_link(next, REQ_NEXT_OFFSET, req);
                     } else {
-                        *(void **)head = req;
-                        *(void **)next = tmp;
+                        req_set_link(head, REQ_NEXT_OFFSET, req);
+                        req_set_link(next, REQ_NEXT_OFFSET, tmp);
                     }
 
                     if (req == req_list) {
@@ -143,13 +162,13 @@ sort_again:
     position_array = (uint32_t *)QUEUE_DATA_BASE;
 
     /* Walk request list to count and group requests */
-    for (req = req_list; req != NULL; req = *(void **)req) {
+    for (req = req_list; req != NULL; req = req_link(req, REQ_NEXT_OFFSET)) {
         group_start = req;
         group_end = req;
 
         total_count++;
         position_array++;
-        *position_array = (uint32_t)(uintptr_t)req;
+        *position_array = ARCH_PTR_TO_VA(req);
 
         /* Track first request past current position */
         if (ahead_count == 0) {
@@ -163,7 +182,7 @@ sort_again:
         *(int16_t *)((uint8_t *)req + REQ_COUNT_OFFSET) = 1;
 
         /* Group consecutive sectors on same cylinder/head */
-        for (next = *(void **)req; next != NULL; next = *(void **)group_end) {
+        for (next = req_link(req, REQ_NEXT_OFFSET); next != NULL; next = req_link(group_end, REQ_NEXT_OFFSET)) {
             /* Check if sort order violated - need to re-sort */
             if (needs_sort < 0) {
                 uint32_t end_lba = *(uint32_t *)((uint8_t *)group_end + REQ_LBA_OFFSET);
@@ -181,7 +200,7 @@ sort_again:
             if (req_cyl != next_cyl) {
                 /* Store group end pointer if group > 1 */
                 if (*(int16_t *)((uint8_t *)group_start + REQ_COUNT_OFFSET) != 1) {
-                    *(void **)((uint8_t *)group_start + REQ_GROUP_END) = group_end;
+                    req_set_link(group_start, REQ_GROUP_END, group_end);
                 }
                 break;
             }
@@ -198,7 +217,7 @@ sort_again:
             } else {
                 /* Store group end pointer if group > 1 */
                 if (*(int16_t *)((uint8_t *)group_start + REQ_COUNT_OFFSET) != 1) {
-                    *(void **)((uint8_t *)group_start + REQ_GROUP_END) = group_end;
+                    req_set_link(group_start, REQ_GROUP_END, group_end);
                 }
                 /* Start new group */
                 *(int16_t *)((uint8_t *)next + REQ_COUNT_OFFSET) = 1;
@@ -208,12 +227,12 @@ sort_again:
         }
 
         /* Store final group end pointer */
-        *(void **)((uint8_t *)req + REQ_GROUP_END) = group_end;
+        req_set_link(req, REQ_GROUP_END, group_end);
     }
 
     /* Store final group end pointer for last request */
     if (*(int16_t *)((uint8_t *)group_start + REQ_COUNT_OFFSET) != 1) {
-        *(void **)((uint8_t *)group_start + REQ_GROUP_END) = group_end;
+        req_set_link(group_start, REQ_GROUP_END, group_end);
     }
 
     /* Determine merge position based on ahead_count */

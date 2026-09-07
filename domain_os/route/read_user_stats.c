@@ -33,6 +33,11 @@
  *   +0x02: 4 bytes data 1
  *   +0x06: 4 bytes data 2
  *   +0x0A: variable length data (4 bytes each)
+ *
+ * That block is route_$port_stats_t (route/route.h), the body of one of the
+ * four ROUTE_$USER_STAT records at 0xE87FD6 that NET_IO_$CREATE_PORT hands
+ * out (see route/route_internal.h).  The offsets are kept literal here
+ * because the assembly copies bytes, not fields.
  */
 
 /* Base statistics structure size (flags + 2 longs) */

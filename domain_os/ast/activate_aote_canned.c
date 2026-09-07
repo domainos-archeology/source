@@ -44,11 +44,11 @@ void AST_$ACTIVATE_AOTE_CANNED(uint32_t *attrs, uint32_t *obj_info)
         /* Remote object */
         *(uint8_t *)((char *)aote + 0x08) |= 0x80;
         *(uint16_t *)((char *)aote + 0x08) &= 0xFC0F;
-        aote->vol_uid = aote->vol_uid & 0xFFF00000;
-        aote->vol_uid |= obj_info[5];
+        aote->location = aote->location & 0xFFF00000;
+        aote->location |= obj_info[5];
     } else {
         /* Local object */
-        aote->vol_uid = obj_info[1];
+        aote->location = obj_info[1];
     }
 
     /* Copy attributes (144 bytes = 36 uint32_t) */

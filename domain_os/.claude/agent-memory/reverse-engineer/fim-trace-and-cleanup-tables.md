@@ -50,4 +50,48 @@ The SR10.4 maps (all six sau*/domain_os.map) list **FIM_$FAULT_RETURN** and no
 FIM_$FAULT; Ghidra agrees. `svc/sau2/trap8.s` still calls a nonexistent
 `FIM_$FAULT` (bead source-si1j) — that is the SVC side's bug, not fim's.
 
+
+## FIM_$CLEANUP_STACK is emitted in fim.s, not fim_data.c (bead source-z5bf)
+
+Same reasoning as FIM_$TRACE_BIT: the table sits inside the FIM_ code region
+fim/sau2/fim.s reproduces byte for byte (between FIM_$SIGNAL 0x00E21688 and
+FIM_$PROC2_STARTUP 0x00E217B6), so the **single** definition is
+`.globl FIM_$CLEANUP_STACK` + `.space 260, 0` there, with an `.if/.error`
+extent check; fim/fim.h only declares it (`extern void
+*FIM_$CLEANUP_STACK[PROC1_MAX_PROCESSES];`, needing
+`#include "proc1/proc1_config.h"`).  The SAU2 map exports **no** symbol at
+0x00E216B2, so the `$` name is a tree name, not a map name.
+
+**Making a gas label `.globl` can silently widen a PC-relative `lea`.**
+`lea (cleanup_stack_table,%pc),%a0` assembled to the brief `41fa dddd` while
+the label was local; write `lea (FIM_$CLEANUP_STACK:w,%pc),%a0` so it stays
+4 bytes.  Verified: the three sites keep displacements 0x70 / 0x48 / 0x1e and
+`m68k-elf-objdump -t` shows every offset in fim.o unchanged (only the symbol
+name and its `l`->`g` binding differ).
+
+## fim/fim.h address comments were stale for six entries (bead source-afed)
+
+Map + Ghidra agreed in every case; only the header was wrong, and each stale
+value pointed *into* another object:
+
+    FIM_$UII          0x00e21326 -> 0x00E2146C
+    FIM_$PRIV_VIOL    0x00e212d8 -> 0x00E21530   (was inside FIM_$USER_FIM_ADDR)
+    FIM_$FP_GET_STATE 0x00e21d48 -> 0x00E21DC2   (0xE21D48 is FP_$GET_FP)
+    FIM_$FP_PUT_STATE 0x00e21e0c -> 0x00E21E86
+    FIM_$SPURIOUS_INT 0x00e21ea4 -> 0x00E21F20
+    FIM_$PARITY_TRAP  0x00e21efa -> 0x00E21F84
+
+fim/sau2/fim.s carried the same two wrong FP_GET/PUT_STATE addresses in its
+ROM-order table.  Other SAU2 map names worth knowing in this window:
+`FP_$GET_FP` E21D48, `FP_$PUT_FP` E21D94, `FIM_$SPUR_CNT` E21F7E,
+`PARITY_$INFO` E21FE6, `MISS_STATUS` E21FFA, `BUS_ERROR_SWITCH` E218CC,
+`FIM_$COM` E213A4 (Ghidra's FIM_$COMMON_FAULT at E213A0 is the 4-byte
+`pea (4,%sp)` pre-entry, module-local, no map symbol).
+
+**Recipe for auditing a whole header's Address: comments:** pair each
+`Address: 0x...` with the identifier on the *declaration line after the
+closing `*/`*, not with the nearest identifier in the prose - the prose in
+these headers names other symbols and a naive nearest-match reports seven
+false mismatches.
+
 See also [[fim-per-as-tables]].

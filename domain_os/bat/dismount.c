@@ -80,7 +80,13 @@ void BAT_$DISMOUNT(int16_t vol_idx, int16_t flags, status_$t *status)
     label->bat_step = vol->bat_step;
     label->reserved_blocks = vol->reserved_blocks;
 
-    /* For new format volumes, copy partition table back */
+    /*
+     * For new format volumes, copy partition table back.
+     *
+     * TODO(source-ffrk, 0x00E3B980): the original moves 0x83 LONGWORDS here
+     * (move.w #0x82,D0w / move.l (A4)+,(A1)+ / dbf), 0x20C bytes; this loop
+     * moves two longwords per iteration and so copies twice as much.
+     */
     if ((bat_$volume_flags[vol_idx] >> 24) & 0x80) {
         uint32_t *src = (uint32_t *)&vol->num_partitions;
         uint32_t *dst = (uint32_t *)&label->num_partitions;

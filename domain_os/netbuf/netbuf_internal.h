@@ -64,15 +64,23 @@ typedef struct netbuf_globals_t {
 
   /* Header buffer allocation count */
   int16_t hdr_alloc; /* 0x334: Total header buffers allocated */
-} netbuf_globals_t;
 
-/*
- * The SR10.2 SAU2 link map sizes the whole data segment as
- * "D    E245A8  NETBUF_   size = 338", i.e. E245A8..E248E0.  The last field
- * modelled above ends at 0x336, so the final two bytes of the segment are
- * not yet accounted for; no _Static_assert on sizeof() is made here.
- * TODO(source-v7nn): identify netbuf_globals_t+0x336.
- */
+  /*
+   * 0x336: two bytes of segment tail with no accessor.
+   *
+   * The SR10.2 SAU2 link map sizes the whole data segment as
+   * "D    E245A8  NETBUF_   size = 338" (E245A8..E248E0) and its last
+   * interior symbol is "E248DC  NETBUF_HDR_ALLOC", i.e. the hdr_alloc field
+   * above at 0x334.  Every reference to that cell is a word
+   * ("cmpi.w #0xb0,(0x334,A5)" at 0x00E0E94E, "move.w (0x334,A5),D4w" at
+   * 0x00E0E95C, "add.w D5w,(0x334,A5)" at 0x00E0E99A), so the named data ends
+   * at 0x336, and `gsk xrefs to 0x00E248DE` reports no references at all -
+   * neither absolute nor A5-biased, even though Ghidra does resolve the
+   * A5-biased accesses to 0xE248DC.  The remaining two bytes are the
+   * longword round-up of the module's data segment: 0x336 -> 0x338.
+   */
+  uint8_t pad_336[2]; /* 0x336 */
+} netbuf_globals_t;
 
 /* Remaining documented offsets (bead source-pewa). */
 #if defined(ARCH_M68K)
@@ -107,6 +115,14 @@ _Static_assert(offsetof(netbuf_globals_t, hdr_top) == 0x328, "netbuf.hdr_top");
 _Static_assert(offsetof(netbuf_globals_t, va_top) == 0x32C, "netbuf.va_top");
 _Static_assert(offsetof(netbuf_globals_t, va_base) == 0x330, "netbuf.va_base");
 _Static_assert(offsetof(netbuf_globals_t, hdr_alloc) == 0x334, "netbuf.hdr_alloc");
+_Static_assert(offsetof(netbuf_globals_t, pad_336) == 0x336, "netbuf.pad_336");
+/*
+ * Whole-segment size from the SAU2 map ("NETBUF_ size = 338").  Guarded with
+ * the offset asserts because the record is not packed and clock_t
+ * ({uint32,uint16}, base/base.h) is padded out to 8 bytes by a host ABI that
+ * aligns 32-bit scalars to 4, which shifts everything from 0x306 on.
+ */
+_Static_assert(sizeof(netbuf_globals_t) == 0x338, "netbuf_globals_t must be 0x338 bytes");
 #endif
 
 /* Convenience macros for global access */

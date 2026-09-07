@@ -17,7 +17,7 @@
  *   FIM_$POP_SIGNAL:           0x00E21672 (12 bytes)
  *   FIM_$SIGNAL_FIRST:         0x00E2167E (10 bytes)
  *   FIM_$SIGNAL:               0x00E21688 (42 bytes)
- *   cleanup_stack_table:       0x00E216B2 (260 bytes, data)
+ *   FIM_$CLEANUP_STACK:        0x00E216B2 (260 bytes, data)
  *   FIM_$PROC2_STARTUP:        0x00E217B6 (30 bytes)
  *   FIM_$SINGLE_STEP:          0x00E217D4 (80 bytes)
  *   FIM_$FAULT_RETURN:         0x00E21828 (80 bytes)
@@ -34,8 +34,8 @@
  *   FIM_$FP_INIT:              0x00E21BB0 (84 bytes; stub: 2 bytes)
  *   FIM_$FSAVE:                0x00E21C34 (160 bytes; stub: 2 bytes)
  *   FIM_$FRESTORE:             0x00E21CD4 (116 bytes; stub: 2 bytes)
- *   FIM_$FP_GET_STATE:         0x00E21D48 (196 bytes; stub: 4 bytes)
- *   FIM_$FP_PUT_STATE:         0x00E21E0C (152 bytes; stub: 2 bytes)
+ *   FIM_$FP_GET_STATE:         0x00E21DC2 (196 bytes; stub: 4 bytes)
+ *   FIM_$FP_PUT_STATE:         0x00E21E86 (152 bytes; stub: 2 bytes)
  *   FIM_$SPURIOUS_INT:         0x00E21F20 (86 bytes)
  *   FIM_$PARITY_TRAP:          0x00E21F84 (98 bytes)
  *   FIM_$GET_USER_SR_PTR:      0x00E2277C (118 bytes)
@@ -413,7 +413,7 @@ FIM_$CLEANUP:
         move.w  (PROC1_CURRENT).l,%d0   /* D0 = PROC1_$CURRENT */
         movea.l (0x4,%sp),%a1           /* A1 = handler context ptr */
         lsl.w   #2,%d0                  /* D0 = process * 4 (index) */
-        lea     (cleanup_stack_table,%pc),%a0 /* A0 = &cleanup_stack[0] */
+        lea     (FIM_$CLEANUP_STACK:w,%pc),%a0 /* A0 = &cleanup_stack[0] */
         adda.w  %d0,%a0                 /* A0 = &cleanup_stack[process] */
         move.l  (%sp),%d1               /* D1 = return address */
         move.l  (%a0),%d0               /* D0 = current handler (link) */
@@ -440,7 +440,7 @@ FIM_$RLS_CLEANUP:
         move.w  (PROC1_CURRENT).l,%d0   /* D0 = PROC1_$CURRENT */
         movea.l (0x4,%sp),%a1           /* A1 = handler context ptr */
         lsl.w   #2,%d0                  /* D0 = process * 4 */
-        lea     (cleanup_stack_table,%pc),%a0 /* A0 = &cleanup_stack[0] */
+        lea     (FIM_$CLEANUP_STACK:w,%pc),%a0 /* A0 = &cleanup_stack[0] */
         adda.w  %d0,%a0                 /* A0 = &cleanup_stack[process] */
         move.l  (%a1),(%a0)             /* Pop: stack = handler->link */
         rts
@@ -500,7 +500,7 @@ FIM_$SIGNAL:
         move.l  (%sp)+,%d0              /* D0 = status code */
 signal_common:
         move.w  (PROC1_CURRENT).l,%d1   /* D1 = PROC1_$CURRENT */
-        lea     (cleanup_stack_table,%pc),%a0 /* A0 = &cleanup_stack[0] */
+        lea     (FIM_$CLEANUP_STACK:w,%pc),%a0 /* A0 = &cleanup_stack[0] */
         lsl.w   #2,%d1                  /* D1 = process * 4 */
         adda.w  %d1,%a0                 /* A0 = &cleanup_stack[process] */
         move.l  (%a0),%d1               /* D1 = current handler */
@@ -516,25 +516,40 @@ no_handler:
         movem.l (%sp)+,%a5/%a6          /* Restore A5, A6 */
         rts
 
-/*
- * Cleanup handler stack table
- * One entry per process (indexed by PROC1_$CURRENT << 2)
- * Each entry is a pointer to the head of the cleanup handler list
+/* ====================================================================
+ * FIM_$CLEANUP_STACK - cleanup handler stack heads, one per process
+ *
+ * One longword per PROC1 process, indexed by PROC1_$CURRENT scaled by 4.
+ * Each entry is the head of that process's cleanup-handler chain (a
+ * fim_cleanup_entry_t built on the process's own stack by FIM_$CLEANUP),
+ * or NULL when no handler is established.  The original performs no bounds
+ * check on the index.
  *
  * Address: 0x00E216B2 .. 0x00E217B5, i.e. 0x104 = 260 bytes = 65 longwords,
- * one per PROC1 process (PROC1_MAX_PROCESSES); the extent is pinned by
- * FIM_$PROC2_STARTUP at 0x00E217B6, and the whole range reads back as zero.
+ * one per PROC1 process (PROC1_MAX_PROCESSES).  All three index sites --
+ * 0x00E21640 (FIM_$CLEANUP), 0x00E21668 (FIM_$RLS_CLEANUP) and 0x00E21692
+ * (FIM_$SIGNAL) -- materialise this base PC-relatively and scale
+ * PROC1_$CURRENT by 4; the extent is pinned by FIM_$PROC2_STARTUP at
+ * 0x00E217B6, and the whole range reads back as zero.
  *
- * This reservation exists so that the objects around it keep their image
- * spacing.  The C-visible definition of the same table is FIM_CLEANUP_STACK
- * in fim/fim_data.c, which carries the extent _Static_assert.
- *
- * TODO(source-z5bf, 0x00E216B2): one image object, two definitions.  This
- * label and FIM_CLEANUP_STACK in fim/fim_data.c are now the same size but
- * are still separate storage; the three lea sites below use this one.
- */
-cleanup_stack_table:
+ * This is the ONE definition of the object.  It lives here rather than in
+ * fim/fim_data.c because the image places it inside the FIM_ code region
+ * that this file reproduces byte for byte, between FIM_$SIGNAL and
+ * FIM_$PROC2_STARTUP; fim/fim.h only declares it.  (The SAU2 link map
+ * exports no symbol at 0x00E216B2 -- the table is module-local in the
+ * original -- so the tree name FIM_$CLEANUP_STACK is used.)
+ * ==================================================================== */
+
+        .global FIM_$CLEANUP_STACK
+FIM_$CLEANUP_STACK:
         .space  260, 0                  /* 65 processes * 4 bytes each */
+.Lfim_cleanup_stack_end:
+
+        /* Assembly-side equivalent of the extent _Static_asserts that
+         * fim/fim_data.c carries for the tables it defines. */
+        .if (.Lfim_cleanup_stack_end - FIM_$CLEANUP_STACK) != (0x00E217B6 - 0x00E216B2)
+        .error "FIM_$CLEANUP_STACK must span 0x00E216B2..0x00E217B5"
+        .endif
 
 
 /* ====================================================================
@@ -870,7 +885,7 @@ FIM_$FRESTORE:
  * FIM_$FP_GET_STATE - Get FPU state (stub)
  *
  * On 68010 without FPU, returns -1 (not available).
- * Full implementation: 0x00E21D48 (196 bytes)
+ * Full implementation: 0x00E21DC2 (196 bytes)
  * ==================================================================== */
         .global FIM_$FP_GET_STATE
 FIM_$FP_GET_STATE:
@@ -882,7 +897,7 @@ FIM_$FP_GET_STATE:
  * FIM_$FP_PUT_STATE - Put FPU state (stub)
  *
  * On 68010 without FPU, this is a no-op.
- * Full implementation: 0x00E21E0C (152 bytes)
+ * Full implementation: 0x00E21E86 (152 bytes)
  * ==================================================================== */
         .global FIM_$FP_PUT_STATE
 FIM_$FP_PUT_STATE:

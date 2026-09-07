@@ -103,7 +103,7 @@ typedef struct aste_t {
 typedef struct aote_t {
     struct aote_t *hash_next;   /* 0x00 */
     struct aste_t *aste_list;   /* 0x04 */
-    uint32_t vol_uid;           /* 0x08 */
+    uint32_t location;          /* 0x08 */
     uint8_t attributes[144];    /* 0x0C - 0x9B */
     uid_t obj_uid;              /* 0x9C */
     uint32_t unknown_a4[6];     /* 0xA4 */

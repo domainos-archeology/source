@@ -57,9 +57,6 @@ SVC_$BAD_PTR_JUMP:
 |----------------------------------------------------------------------
 
         .global SVC_$TRAP5
-        .global SVC_$INVALID_SYSCALL
-        .global SVC_$BAD_USER_PTR
-        .global SVC_$UNIMPLEMENTED
 
 SVC_$TRAP5:
         cmp.w   #0x63,%d0               | Check syscall number limit
@@ -113,62 +110,14 @@ SVC_$TRAP5:
         jmp     FIM_$EXIT               | Return via RTE
 
 |----------------------------------------------------------------------
-| SVC_$INVALID_SYSCALL - Invalid syscall number handler
-|
-| Called when syscall number >= 99.
-| Generates a fault with status_$fault_invalid_SVC_code (0x00120007).
-|
-| From: 0x00e7b28e
+| The fault tail (0x00E7B298 SVC_$INVALID_SYSCALL, 0x00E7B2A0
+| SVC_$BAD_USER_PTR, 0x00E7B2A6 SVC_$GENERATE_FAULT, 0x00E7B2C4
+| SVC_$ILLEGAL_USP_UNLK, 0x00E7B2CC SVC_$UNIMPLEMENTED) that these stubs
+| branch into is emitted by svc/sau2/trap8.s - it is the block that follows
+| SVC_$TRAP8 in the image, and SVC_$TRAP8 reaches it with 8-bit branches that
+| cannot relocate across object files.  TRAP #5 gets there through the bra.w
+| stubs above.
 |----------------------------------------------------------------------
-
-SVC_$INVALID_SYSCALL:
-        move.l  #0x00120007,%d0         | status_$fault_invalid_SVC_code
-        bra.b   SVC_$GENERATE_FAULT
-
-|----------------------------------------------------------------------
-| SVC_$BAD_USER_PTR - Bad user pointer handler
-|
-| Called when a syscall argument pointer >= 0xCC0000.
-| Generates a fault with status_$fault_protection_boundary_violation.
-|
-| From: 0x00e7b2a0
-|----------------------------------------------------------------------
-
-SVC_$BAD_USER_PTR:
-        move.l  #0x0012000B,%d0         | status_$fault_protection_boundary_violation
-        | Fall through to SVC_$GENERATE_FAULT
-
-|----------------------------------------------------------------------
-| SVC_$GENERATE_FAULT - Common fault generation code
-|
-| Input:
-|   D0 = fault status code
-|
-| Sets up fault frame and calls FIM_$GENERATE to deliver the fault.
-|----------------------------------------------------------------------
-
-SVC_$GENERATE_FAULT:
-        move.w  PROC1_$CURRENT,%d1      | Get current process index
-        lsl.w   #2,%d1                  | D1 = index * 4
-        lea     OS_STACK_BASE,%a0       | A0 = stack base array
-        movea.l (0,%a0,%d1:w),%a1       | A1 = current process stack
-        lea     (-0x08,%a1),%sp         | Set SP for fault frame
-        move.l  %d0,-(%sp)              | Push status code
-        jsr     FIM_$GENERATE           | Generate the fault
-        jmp     FIM_$ILLEGAL_USP        | Final handler (not reached normally)
-
-|----------------------------------------------------------------------
-| SVC_$UNIMPLEMENTED - Unimplemented syscall handler
-|
-| Called for syscalls that are not yet implemented.
-| Generates a fault with status_$fault_unimplemented_SVC (0x0012001c).
-|
-| From: 0x00e7b2cc
-|----------------------------------------------------------------------
-
-SVC_$UNIMPLEMENTED:
-        move.l  #0x0012001C,%d0         | status_$fault_unimplemented_SVC
-        bra.b   SVC_$GENERATE_FAULT
 
 |----------------------------------------------------------------------
 | External references
@@ -176,9 +125,8 @@ SVC_$UNIMPLEMENTED:
 
         .extern FIM_$EXIT               | Return from exception (RTE)
         .extern FIM_$ILLEGAL_USP        | Illegal USP handler
-        .extern FIM_$GENERATE           | Fault generation
-        .extern PROC1_$CURRENT          | Current process index
-        .extern OS_STACK_BASE           | Process stack base array
+        .extern SVC_$INVALID_SYSCALL    | 0xE7B298: invalid syscall (trap8.s)
+        .extern SVC_$BAD_USER_PTR       | 0xE7B2A0: bad user pointer (trap8.s)
         .extern SVC_$TRAP5_TABLE        | Syscall table (defined in svc_tables.c)
 
         .end

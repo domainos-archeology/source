@@ -60,7 +60,7 @@ aote_t *ast_$lookup_aote_by_uid(uid_t *uid);
  * the earlier note here claiming A6+0x0C was dead was wrong, and closing
  * bead source-sy5u meant reading the disassembly rather than the decompiler:
  *
- *   0x00E02194  move.l (0xc,A6),(0x8,A3)      aote->vol_uid := location
+ *   0x00E02194  move.l (0xc,A6),(0x8,A3)      aote->location := location
  *   0x00E021B2  tst.w  (0xc,A6) / smi         bit 31 -> aote+0xB9 remote flag
  *   0x00E021CC  tst.w  (0xc,A6) / bmi         local vs remote branch
  *   0x00E021D8  and.l  #0x7fffffff            low byte -> aote+0xB8 vol index
@@ -72,7 +72,7 @@ aote_t *ast_$lookup_aote_by_uid(uid_t *uid);
  *                                             network/node back through it
  *   0x00E02260  move.l (0xc,A6),(0x8,A3)      re-store after that resolution
  *
- * The encoding is documented on aote_t.vol_uid in ast/ast.h -- it is the
+ * The encoding is documented on aote_t.location in ast/ast.h -- it is the
  * same word AST_$GET_LOCATION returns (0x00E04766).  Of the thirteen
  * callers, AST_$MSTE_ACTIVATE_AND_WIRE passes mste->location (0x00E02F64)
  * and AST_$GET_DTV forwards its own second argument (0x00E054C6); the other

@@ -70,9 +70,9 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
 
     /* Check salvage flag */
     if (is_new_format) {
-        needs_salvage = ((label->unknown_3c & 0x1000) != 0);
+        needs_salvage = ((label->volume_trouble & 0x1000) != 0);
     } else {
-        needs_salvage = (label->unknown_3c < 0);
+        needs_salvage = ((int16_t)label->volume_trouble < 0);
     }
 
     /* Also check if salvage_flag field indicates salvage needed */
@@ -93,10 +93,15 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
     /* Update label timestamps */
     label->mount_time_high = current_time;
 
-    /* Clear dirty bit in flags, set salvage flag based on needs_salvage */
-    label->unknown_3c &= 0xFFEF;  /* Clear bit 4 */
+    /*
+     * 0x00E3B79C-0x00E3B7A6: `andi.b #-0x11,(0x3c,A0)` then `or.b D6b` with
+     * D6b = needs_salvage << 4 address the HIGH byte of the volume_trouble
+     * word on big-endian m68k, so the bit rewritten is bit 12 of the word --
+     * the same bit the new-format test reads with `btst.l #0xc`.
+     */
+    label->volume_trouble &= 0xEFFF;
     if (needs_salvage) {
-        label->unknown_3c |= 0x10;  /* Set bit 4 */
+        label->volume_trouble |= 0x1000;
     }
 
     /* Initialize step_blocks if zero */
@@ -121,13 +126,17 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
     vol->free_blocks = label->free_blocks;
     vol->bat_block_start = label->bat_block_start;
     vol->first_data_block = label->first_data_block;
-    vol->unknown_10 = (uint16_t)(label->unknown_3c & 0xFFFF);
+    vol->unknown_10 = (uint16_t)(label->volume_trouble & 0xFFFF);
     vol->step_blocks = label->step_blocks;
     vol->bat_step = label->bat_step;
     vol->reserved_blocks = label->reserved_blocks;
 
     /* Copy partition table (0x83 entries starting at offset 0xFC) */
-    /* Each entry is 8 bytes, total 0x418 bytes */
+    /*
+     * TODO(source-ffrk, 0x00E3B7EA): the original moves 0x83 LONGWORDS here
+     * (move.w #0x82,D6w / move.l (A2)+,(A4)+ / dbf), 0x20C bytes; this loop
+     * moves two longwords per iteration and so copies twice as much.
+     */
     {
         uint32_t *src = (uint32_t *)&label->num_partitions;
         uint32_t *dst = (uint32_t *)&vol->num_partitions;

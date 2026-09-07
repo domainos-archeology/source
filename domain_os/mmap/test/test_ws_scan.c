@@ -11,9 +11,9 @@
  *     MMAP_$SEG_ASTE_FOR(seg)->aote, and bit 12 of the aote's attribute
  *     flags word (aote+0x0E) decides whether the page may be taken
  *   - the dirty-page flush test, both arms:
- *       0x00E0D4DA-0x00E0D4F8  ON_DISK     -> high word of aote->len_high
+ *       0x00E0D4DA-0x00E0D4F8  ON_DISK     -> high word of aote->dtm_high
  *       0x00E0D4FC-0x00E0D51A  not ON_DISK -> sign of the high word of
- *                                            aote->vol_uid
+ *                                            aote->location
  *
  * The seg-table arena is a plain host array: aste_t.aote is a real pointer
  * (movea.l (-0x10,A1),A4 loads a 32-bit target VA into an address register),
@@ -172,14 +172,14 @@ static void reset_module(uint8_t flags2)
 
 /*
  * 0x00E0D43E/0x00E0D442: aote+0x0E bit 12 set, so the dirty page is taken.
- * flags2 has no ON_DISK bit, so the flush test reads aote->vol_uid, whose
+ * flags2 has no ON_DISK bit, so the flush test reads aote->location, whose
  * high word is negative here -> the DIRTY_FL pool (0x00E0D51A).
  */
 TEST(aggressive_mode_takes_page_when_aote_bit12_set)
 {
     reset_module(MMAPE_FLAG2_MODIFIED);
     aote->attr_flags_hi = 0x10;         /* bit 12 of the flags word */
-    aote->vol_uid = 0x80000000u;
+    aote->location = 0x80000000u;
 
     uint32_t scanned = MMAP_$WS_SCAN(TEST_WSL, -1, 4, 0);
 
@@ -192,12 +192,12 @@ TEST(aggressive_mode_takes_page_when_aote_bit12_set)
     ASSERT_EQ(0u, wsl_store[TEST_WSL].page_count);
 }
 
-/* Same page, positive vol_uid high word -> the DIRTY_NF pool. */
+/* Same page, positive location high word -> the DIRTY_NF pool. */
 TEST(aggressive_mode_local_object_goes_to_dirty_nf)
 {
     reset_module(MMAPE_FLAG2_MODIFIED);
     aote->attr_flags_hi = 0x10;
-    aote->vol_uid = 0x7FFFFFFFu;
+    aote->location = 0x7FFFFFFFu;
 
     uint32_t scanned = MMAP_$WS_SCAN(TEST_WSL, -1, 4, 0);
 
@@ -214,7 +214,7 @@ TEST(aggressive_mode_leaves_page_when_aote_bit12_clear)
 {
     reset_module(MMAPE_FLAG2_MODIFIED);
     aote->attr_flags_hi = 0x00;
-    aote->vol_uid = 0x80000000u;
+    aote->location = 0x80000000u;
 
     uint32_t scanned = MMAP_$WS_SCAN(TEST_WSL, -1, 4, 0);
 
@@ -227,12 +227,12 @@ TEST(aggressive_mode_leaves_page_when_aote_bit12_clear)
 /*
  * Normal mode with the referenced bit clear reaches the categorisation with
  * ON_DISK set, which takes the 0x00E0D4F4 arm: the high word of
- * aote->len_high.
+ * aote->dtm_high.
  */
-TEST(normal_mode_on_disk_uses_aote_len_high)
+TEST(normal_mode_on_disk_uses_aote_dtm_high)
 {
     reset_module((uint8_t)(MMAPE_FLAG2_ON_DISK | MMAPE_FLAG2_MODIFIED));
-    aote->len_high = 0x00010000u;       /* non-zero high word */
+    aote->dtm_high = 0x00010000u;       /* non-zero high word */
 
     uint32_t scanned = MMAP_$WS_SCAN(TEST_WSL, 0, 4, 0);
 
@@ -241,11 +241,11 @@ TEST(normal_mode_on_disk_uses_aote_len_high)
     ASSERT_EQ(MMAP_PAGE_TYPE_DIRTY_FL, move_type[0]);
 }
 
-/* Only the LOW half of len_high is set, so `tst.w (0x28,A1)` reads zero. */
-TEST(normal_mode_on_disk_ignores_low_half_of_len_high)
+/* Only the LOW half of dtm_high is set, so `tst.w (0x28,A1)` reads zero. */
+TEST(normal_mode_on_disk_ignores_low_half_of_dtm_high)
 {
     reset_module((uint8_t)(MMAPE_FLAG2_ON_DISK | MMAPE_FLAG2_MODIFIED));
-    aote->len_high = 0x0000FFFFu;
+    aote->dtm_high = 0x0000FFFFu;
 
     uint32_t scanned = MMAP_$WS_SCAN(TEST_WSL, 0, 4, 0);
 
@@ -260,8 +260,8 @@ int main(void)
     RUN_TEST(aggressive_mode_takes_page_when_aote_bit12_set);
     RUN_TEST(aggressive_mode_local_object_goes_to_dirty_nf);
     RUN_TEST(aggressive_mode_leaves_page_when_aote_bit12_clear);
-    RUN_TEST(normal_mode_on_disk_uses_aote_len_high);
-    RUN_TEST(normal_mode_on_disk_ignores_low_half_of_len_high);
+    RUN_TEST(normal_mode_on_disk_uses_aote_dtm_high);
+    RUN_TEST(normal_mode_on_disk_ignores_low_half_of_dtm_high);
     printf("%d passed, %d failed\n", tests_passed - tests_failed, tests_failed);
     return tests_failed != 0;
 }

@@ -532,10 +532,10 @@ TEST(special_object_rejects_other_attrs)
     test_aote.obj_type = 4;
     test_aote.attr_flags_lo = AOTE_ATTR_SPECIAL;
 
-    call_dispatch(ATTR_TYPE_LEN, &v, &status);
+    call_dispatch(ATTR_TYPE_DTM, &v, &status);
 
     ASSERT_EQ(status_$ast_object_special_attribute, status);
-    ASSERT_EQ(0, test_aote.len_high);
+    ASSERT_EQ(0, test_aote.dtm_high);
 }
 
 TEST(special_object_accepts_blocks)
@@ -771,14 +771,14 @@ TEST(len_rounded_on_basic_object_is_rejected)
 
     setup_aote();
     test_aote.obj_type = 0;
-    test_aote.len_high = 0;
-    test_aote.len_low = 0;
+    test_aote.dtm_high = 0;
+    test_aote.dtm_low = 0;
 
-    call_dispatch(ATTR_TYPE_LEN_ROUNDED, &v, &status);
+    call_dispatch(ATTR_TYPE_DTM_ROUNDED, &v, &status);
 
     ASSERT_EQ(status_$ast_invalid_attribute_type, status);
-    ASSERT_EQ(0, test_aote.len_high);           /* never reached the store */
-    ASSERT_EQ(0, test_aote.len_low);
+    ASSERT_EQ(0, test_aote.dtm_high);           /* never reached the store */
+    ASSERT_EQ(0, test_aote.dtm_low);
 }
 
 TEST(len_rounded_is_verbatim_on_other_objects)
@@ -791,10 +791,10 @@ TEST(len_rounded_is_verbatim_on_other_objects)
     setup_aote();
     test_aote.obj_type = 4;
 
-    call_dispatch(ATTR_TYPE_LEN_ROUNDED, &v, &status);
+    call_dispatch(ATTR_TYPE_DTM_ROUNDED, &v, &status);
 
-    ASSERT_EQ(0x100, test_aote.len_high);
-    ASSERT_EQ(0x40, test_aote.len_low);
+    ASSERT_EQ(0x100, test_aote.dtm_high);
+    ASSERT_EQ(0x40, test_aote.dtm_low);
 }
 
 /*
@@ -813,10 +813,10 @@ TEST(dtm_rounded_clears_touched_bit)
     test_aote.obj_type = 4;
     test_aote.flags = AOTE_FLAG_TOUCHED;
 
-    call_dispatch(ATTR_TYPE_DTM_ROUNDED, &v, &status);
+    call_dispatch(ATTR_TYPE_DTU_ROUNDED, &v, &status);
 
-    ASSERT_EQ(0x200, test_aote.dtm_high);
-    ASSERT_EQ(0x40, test_aote.dtm_low);
+    ASSERT_EQ(0x200, test_aote.dtu_high);
+    ASSERT_EQ(0x40, test_aote.dtu_low);
     ASSERT_TRUE((test_aote.flags & AOTE_FLAG_TOUCHED) == 0);
     ASSERT_TRUE((test_aote.flags & AOTE_FLAG_DIRTY) != 0);
 }
@@ -832,12 +832,12 @@ TEST(len_from_clock_copies_dtm_into_len)
     setup_aote();
     test_aote.obj_type = 4;         /* no rounding */
 
-    call_dispatch(ATTR_TYPE_LEN_FROM_CLOCK, NULL, &status);
+    call_dispatch(ATTR_TYPE_DTM_FROM_CLOCK, NULL, &status);
 
+    ASSERT_EQ(0x0A0B0C0D, test_aote.dtu_high);
+    ASSERT_EQ(0x0E0F, test_aote.dtu_low);
     ASSERT_EQ(0x0A0B0C0D, test_aote.dtm_high);
     ASSERT_EQ(0x0E0F, test_aote.dtm_low);
-    ASSERT_EQ(0x0A0B0C0D, test_aote.len_high);
-    ASSERT_EQ(0x0E0F, test_aote.len_low);
 }
 
 TEST(dtm_from_clock_leaves_len_alone)
@@ -846,12 +846,12 @@ TEST(dtm_from_clock_leaves_len_alone)
 
     setup_aote();
     test_aote.obj_type = 4;
-    test_aote.len_high = 0x5555;
+    test_aote.dtm_high = 0x5555;
 
-    call_dispatch(ATTR_TYPE_DTM_FROM_CLOCK, NULL, &status);
+    call_dispatch(ATTR_TYPE_DTU_FROM_CLOCK, NULL, &status);
 
-    ASSERT_EQ(0x0A0B0C0D, test_aote.dtm_high);
-    ASSERT_EQ(0x5555, test_aote.len_high);
+    ASSERT_EQ(0x0A0B0C0D, test_aote.dtu_high);
+    ASSERT_EQ(0x5555, test_aote.dtm_high);
 }
 
 /* 0xE0511A: the timestamp mask selects which types refresh the DTU. */
@@ -864,18 +864,18 @@ TEST(timestamp_mask_gates_abs_clock)
     test_aote.obj_type = 4;
     ast_$attr_timestamp_mask = 0;
 
-    call_dispatch(ATTR_TYPE_LEN, &v, &status);
+    call_dispatch(ATTR_TYPE_DTM, &v, &status);
     ASSERT_EQ(0, mock_abs_clock_calls);
 
     setup_aote();
     test_aote.obj_type = 4;
-    ast_$attr_timestamp_mask = 1u << ATTR_TYPE_LEN;
+    ast_$attr_timestamp_mask = 1u << ATTR_TYPE_DTM;
 
-    call_dispatch(ATTR_TYPE_LEN, &v, &status);
+    call_dispatch(ATTR_TYPE_DTM, &v, &status);
     ASSERT_EQ(1, mock_abs_clock_calls);
-    ASSERT_TRUE(mock_abs_clock_arg == (void *)&test_aote.dtu_high);
-    ASSERT_EQ(0x11112222, test_aote.dtu_high);
-    ASSERT_EQ(0x3333, test_aote.dtu_low);
+    ASSERT_TRUE(mock_abs_clock_arg == (void *)&test_aote.dtv_high);
+    ASSERT_EQ(0x11112222, test_aote.dtv_high);
+    ASSERT_EQ(0x3333, test_aote.dtv_low);
 
     ast_$attr_timestamp_mask = 0;
 }
@@ -889,9 +889,9 @@ TEST(remote_aote_skips_abs_clock)
     setup_aote();
     test_aote.obj_type = 4;
     test_aote.remote_flag = -1;
-    ast_$attr_timestamp_mask = 1u << ATTR_TYPE_LEN;
+    ast_$attr_timestamp_mask = 1u << ATTR_TYPE_DTM;
 
-    call_dispatch(ATTR_TYPE_LEN, &v, &status);
+    call_dispatch(ATTR_TYPE_DTM, &v, &status);
 
     ASSERT_EQ(0, mock_abs_clock_calls);
     ast_$attr_timestamp_mask = 0;
@@ -907,7 +907,7 @@ TEST(parent_nil_uid_goes_to_validate)
     uid_t nil = { 0, 0 };
     clock_t clk = { 0, 0 };
 
-    ast_$set_attribute_internal(&nil, ATTR_TYPE_LEN, NULL, false, NULL,
+    ast_$set_attribute_internal(&nil, ATTR_TYPE_DTM, NULL, false, NULL,
                                 &clk, &status);
 
     ASSERT_EQ(0x00030001, status);
@@ -921,7 +921,7 @@ TEST(parent_activation_failure_unlocks)
     uid_t uid = { 0x1234, 0x5678 };
     clock_t clk = { 0, 0 };
 
-    ast_$set_attribute_internal(&uid, ATTR_TYPE_LEN, NULL, false, NULL,
+    ast_$set_attribute_internal(&uid, ATTR_TYPE_DTM, NULL, false, NULL,
                                 &clk, &status);
 
     ASSERT_EQ(0x000F0003, status);

@@ -44,7 +44,7 @@ void VOLX_$DISMOUNT(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
     status_$t local_status;
     status_$t dummy_status;
     uid_t lv_uid;
-    volx_entry_t *entry;
+    volx_$entry_t *entry;
 
     /* Read input parameters */
     dev_val = *dev;
@@ -54,8 +54,13 @@ void VOLX_$DISMOUNT(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
     entry_uid_val = *entry_uid;
     force_val = *force;
 
-    /* Check if really diskless */
-    if (NETWORK_$REALLY_DISKLESS >= 0) {
+    /*
+     * Check if really diskless.  0x00E6B386 `tst.b (0x00e24c4a).l` /
+     * 0x00E6B38C `bmi.b 0x00e6b3d8` takes the not-mounted exit when the flag
+     * is NEGATIVE (the Domain boolean 0xFF = true): a diskless node has no
+     * local logical volume to dismount.
+     */
+    if (NETWORK_$REALLY_DISKLESS < 0) {
         *status = status_$volume_logical_vol_not_mounted;
         return;
     }
@@ -85,7 +90,7 @@ void VOLX_$DISMOUNT(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
     /* Get current logical volume UID */
     DISK_$LV_UID(pv_idx, lv_num_val, &lv_uid, &local_status);
 
-    entry = &VOLX_$TABLE_BASE[vol_idx];
+    entry = VOLX_$ENTRY(vol_idx);
 
     if (local_status == status_$storage_module_stopped) {
         /* Check if LV UID still matches */

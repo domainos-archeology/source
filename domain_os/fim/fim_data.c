@@ -7,14 +7,15 @@
  *   0x000-0x039: FIM_IN_FIM[] - Per-AS "in FIM" flags
  *   0x03C-0x123: FIM_$USER_FIM_ADDR[] - Per-AS user FIM handlers
  *   0x124-0x133: FIM_FRAME_SIZE_TABLE[] - Exception frame sizes
- *   0x446-0x549: FIM_CLEANUP_STACK[] - Per-process cleanup handler stack heads
+ *   0x446-0x549: FIM_$CLEANUP_STACK[] - Per-process cleanup handler stack heads
+ *                                   (defined in fim/sau2/fim.s, not here)
  *   0x624-0x65D: FIM_$TRACE_BIT[] - Per-AS pending trace fault bit
  *                                   (defined in fim/sau2/fim.s, not here)
  *   0x6EE-0x6F1: FIM_$SPUR_CNT - Spurious interrupt count
  *
  * Every per-AS table here holds FIM_AS_COUNT (58) elements; see the
  * derivation of that count beside its definition in fim/fim.h.
- * FIM_CLEANUP_STACK is the one table here that is not per-AS: it is indexed
+ * FIM_$CLEANUP_STACK is the one FIM table that is not per-AS: it is indexed
  * by PROC1_$CURRENT and holds PROC1_MAX_PROCESSES (65) elements.
  */
 
@@ -83,50 +84,15 @@ uint8_t FIM_FRAME_SIZE_TABLE[16] = {
 };
 
 /*
- * FIM_CLEANUP_STACK - Cleanup handler stack heads, one per process
+ * FIM_$CLEANUP_STACK - Cleanup handler stack heads, one per process
  *
- * Each entry is the head of that process's cleanup-handler chain (a
- * fim_cleanup_entry_t built on the process's own stack by FIM_$CLEANUP), or
- * NULL when no handler is established.
- *
- * Element size and index: every instruction that reaches this table does the
- * same three things -- load the current process id, scale it by four, and
- * add it to the table base as a signed word index.  All three sites are in
- * the cleanup/signal group and all three materialise the same base:
- *
- *   FIM_$CLEANUP     0x00E21634  move.w (0x00E20608).l,D0w  ; PROC1_$CURRENT
- *                    0x00E2163E  lsl.w  #0x2,D0w
- *                    0x00E21640  lea    (0x70,PC),A0        ; 0x00E21642+0x70
- *                    0x00E21644  adda.w D0w,A0
- *                    0x00E21648  move.l (A0),D0             ; read head
- *                    0x00E21652  move.l A1,(A0)             ; push new entry
- *   FIM_$RLS_CLEANUP 0x00E21668  lea    (0x48,PC),A0        ; 0x00E2166A+0x48
- *                    0x00E2166E  move.l (A1),(A0)           ; pop
- *   FIM_$SIGNAL      0x00E21692  lea    (0x1e,PC),A0        ; 0x00E21694+0x1e
- *                    0x00E2169A  move.l (A0),D1             ; read head
- *                    0x00E216A0  move.l (A1)+,(A0)          ; pop
- *
- * All three PC-relative displacements resolve to 0x00E216B2, and every
- * access is a longword at that base plus PROC1_$CURRENT * 4, so the element
- * size is 4.
- *
- * Element count: the object runs from 0x00E216B2 to the next object in the
- * image, FIM_$PROC2_STARTUP at 0x00E217B6 (everything in between reads back
- * as zero with "gsk read 0x00E216B2 260").  That is 0x104 = 260 bytes = 65
- * longwords, which is exactly PROC1_MAX_PROCESSES -- the same count as
- * PCBS[], PROC1_$TYPE[] and OS_STACK_BASE[], the other tables indexed by a
- * PROC1 process id.  (This file previously carried a guessed 64.)
- *
- * The original performs no bounds check on the index.
- *
- * Address: 0x00E216B2
- *
- * TODO(source-z5bf, 0x00E216B2): fim/sau2/fim.s reserves the same 260 bytes
- * under the private label cleanup_stack_table so that the objects around it
- * keep their image spacing, and FIM_$CLEANUP / FIM_$RLS_CLEANUP /
- * FIM_$SIGNAL push and pop that copy rather than this symbol.
+ * NOT DEFINED HERE.  The image places this table inside the FIM_ code
+ * region between FIM_$SIGNAL (0x00E21688) and FIM_$PROC2_STARTUP
+ * (0x00E217B6), which fim/sau2/fim.s reproduces byte for byte, so the one
+ * definition of the object is the .globl FIM_$CLEANUP_STACK there and the
+ * extent assertion lives beside it.  fim/fim.h declares it; see the
+ * derivation of its 65-longword element count there.
  */
-void *FIM_CLEANUP_STACK[PROC1_MAX_PROCESSES];
 
 /*
  * FIM_$QUIT_VALUE - Per-AS quit value
@@ -247,11 +213,6 @@ _Static_assert(sizeof(FIM_IN_FIM) == 0x00E212A6 - 0x00E2126C,
                "FIM_IN_FIM spans 0x00E2126C..0x00E212A5");
 _Static_assert(sizeof(FIM_$USER_FIM_ADDR) == 0x00E21390 - 0x00E212A8,
                "FIM_$USER_FIM_ADDR ends where FIM_FRAME_SIZE_TABLE begins");
-_Static_assert(sizeof(FIM_CLEANUP_STACK) == 0x00E217B6 - 0x00E216B2,
-               "FIM_CLEANUP_STACK ends where FIM_$PROC2_STARTUP begins");
-_Static_assert(sizeof(FIM_CLEANUP_STACK) / sizeof(FIM_CLEANUP_STACK[0])
-               == PROC1_MAX_PROCESSES,
-               "FIM_CLEANUP_STACK holds one longword per PROC1 process");
 _Static_assert(sizeof(FIM_$QUIT_EC) == 0x00E222BA - 0x00E22002,
                "FIM_$QUIT_EC ends where FIM_$QUIT_VALUE begins");
 _Static_assert(sizeof(FIM_$QUIT_VALUE) == 0x00E223A2 - 0x00E222BA,

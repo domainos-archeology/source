@@ -144,7 +144,7 @@ void VOLX_$MOUNT(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
 
     /* Store volume info in VOLX table */
     {
-        volx_entry_t *entry = &VOLX_$TABLE_BASE[vol_idx];
+        volx_$entry_t *entry = VOLX_$ENTRY(vol_idx);
 
         entry->dir_uid = dir_uid;
         entry->lv_uid = lv_uid;

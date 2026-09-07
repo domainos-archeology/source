@@ -24,10 +24,10 @@
 void VOLX_$REC_ENTRY(int16_t *vol_idx, uid_t *dir_uid)
 {
     int16_t vol_idx_val;
-    volx_entry_t *entry;
+    volx_$entry_t *entry;
 
     vol_idx_val = *vol_idx;
-    entry = &VOLX_$TABLE_BASE[vol_idx_val];
+    entry = VOLX_$ENTRY(vol_idx_val);
 
     /* Update the directory UID */
     entry->dir_uid = *dir_uid;

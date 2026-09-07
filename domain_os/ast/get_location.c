@@ -11,7 +11,7 @@
  *   flags - Lookup flags (bit 0: force load if not cached)
  *   unused - 4-byte cell the routine never reads or writes
  *   location_out - Output: the object's location word (aote+0x08; see
- *             aote_t.vol_uid in ast/ast.h for the encoding).  `move.l
+ *             aote_t.location in ast/ast.h for the encoding).  `move.l
  *             (0x8,A0),(A1)` at 0x00E04766.
  *   status - Status return
  *
@@ -55,7 +55,7 @@ void AST_$GET_LOCATION(file_$obj_loc_t *loc_rec, uint16_t flags,
     }
 
     /* 0x00E04766: return the object's location word. */
-    *location_out = aote->vol_uid;
+    *location_out = aote->location;
 
     /* Copy object UID info (8 uint32_t = 32 bytes) */
     uint32_t *src = (uint32_t *)((char *)aote + 0x9C);

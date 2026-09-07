@@ -28,18 +28,20 @@ void VOLX_$GET_INFO(int16_t *vol_idx, uid_t *dir_uid_ret,
                     status_$t *status)
 {
     int16_t vol_idx_val;
-    int16_t vol_idx_copy;
-    volx_entry_t *entry;
+    /* 0x00E6B5E6 `move.w D2w,(-0x2,A6)` copies the index word into a local
+     * and passes the local's address to BAT_$N_FREE, which takes uint16_t*. */
+    uint16_t vol_idx_copy;
+    volx_$entry_t *entry;
 
     vol_idx_val = *vol_idx;
-    vol_idx_copy = vol_idx_val;
+    vol_idx_copy = (uint16_t)vol_idx_val;
 
     /* Get free/total block counts (also validates volume is mounted) */
     BAT_$N_FREE(&vol_idx_copy, free_blocks, total_blocks, status);
 
     if (*status == status_$ok) {
         /* Return the directory UID from the VOLX table */
-        entry = &VOLX_$TABLE_BASE[vol_idx_val];
+        entry = VOLX_$ENTRY(vol_idx_val);
         *dir_uid_ret = entry->dir_uid;
     }
 

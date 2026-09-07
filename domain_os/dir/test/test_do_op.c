@@ -63,6 +63,7 @@ int8_t   AUDIT_$ENABLED = 0;            /* >= 0: auditing off */
 uint16_t DIR_$OP_PARAMS[0x100];
 uint16_t DAT_00e7fc66;
 uint32_t DAT_00e4b33c;   /* 0x00E4B33C is a longword (dir_internal.h) */
+uid_t    ACL_$DIRIN_ACL = { 0x00000603u, 0x00000000u };  /* 0xE1745C */
 status_$t Naming_bad_request_header_ver_err;
 status_$t *PTR_Naming_bad_request_header_ver_err_00e7dbfc;
 
@@ -123,6 +124,27 @@ static void     *mock_resolve_link_count;
 static void     *mock_resolve_status;
 
 static int       mock_local_op_calls;
+
+/* case 0x4A/0x4C/0x52/0x54 argument capture (source-wesf) */
+static int       mock_set_acl_calls;
+static void     *mock_set_acl_uid;
+static void     *mock_set_acl_acl;
+static void     *mock_set_acl_status;
+
+static int       mock_set_default_acl_calls;
+static void     *mock_set_default_acl_p2;
+static void     *mock_set_default_acl_p3;
+
+static int       mock_set_def_prot_calls;
+static void     *mock_set_def_prot_p2;
+static void     *mock_set_def_prot_p3;
+static void     *mock_set_def_prot_p4;
+
+static int       mock_prot_audit_calls;
+static void     *mock_prot_audit_c;
+static void     *mock_prot_audit_d;
+static void     *mock_prot_audit_e;
+static uint16_t  mock_prot_audit_f;
 
 /* ============================================================================
  * Mocks
@@ -304,10 +326,23 @@ void dir_$do_op_read_linku(uid_t *uid, void *name, uint16_t name_len,
 
 void dir_$do_op_set_def_prot(uid_t *uid, void *acl_type, void *prot_buf,
                              void *acl_uid, status_$t *st)
-{ (void)uid;(void)acl_type;(void)prot_buf;(void)acl_uid; OK(st); }
+{
+    (void)uid;
+    mock_set_def_prot_calls++;
+    mock_set_def_prot_p2 = acl_type;
+    mock_set_def_prot_p3 = prot_buf;
+    mock_set_def_prot_p4 = acl_uid;
+    OK(st);
+}
 
 void dir_$do_op_set_default_acl(uid_t *uid, void *type, void *acl, status_$t *st)
-{ (void)uid;(void)type;(void)acl; OK(st); }
+{
+    (void)uid;
+    mock_set_default_acl_calls++;
+    mock_set_default_acl_p2 = type;
+    mock_set_default_acl_p3 = acl;
+    OK(st);
+}
 
 void dir_$do_op_set_prot(uid_t *uid, void *prot_data, void *acl_uid,
                          int16_t prot_type, status_$t *st)
@@ -316,8 +351,18 @@ void dir_$do_op_set_prot(uid_t *uid, void *prot_data, void *acl_uid,
 void dir_$do_op_validate_root_entry(void *name, uint16_t name_len, status_$t *st)
 { (void)name;(void)name_len; OK(st); }
 
-void DIR_$SET_ACL(uid_t *uid, void *acl, status_$t *st)
-{ (void)uid;(void)acl; OK(st); }
+/*
+ * 0x00E4C78E calls dir_$do_op_set_acl (0x00E52BC2), the server handler - not
+ * DIR_$SET_ACL (0x00E52C86), which is the client-side request builder.
+ */
+void dir_$do_op_set_acl(uid_t *uid, uid_t *acl_uid, status_$t *st)
+{
+    mock_set_acl_calls++;
+    mock_set_acl_uid    = uid;
+    mock_set_acl_acl    = acl_uid;
+    mock_set_acl_status = st;
+    OK(st);
+}
 
 char dir_$find_entry(void *handle, void *name, int16_t name_len,
                      int16_t flags, void **entry_ret, void *extra,
@@ -338,7 +383,14 @@ void audit_$log_mount_op(uint16_t a, status_$t b, uid_t *c, uid_t *d, uint32_t e
 { (void)a;(void)b;(void)c;(void)d;(void)e; }
 void audit_$log_prot_op(status_$t a, uid_t *b, void *c, uid_t *d, uid_t *e,
                         uint16_t f)
-{ (void)a;(void)b;(void)c;(void)d;(void)e;(void)f; }
+{
+    (void)a;(void)b;
+    mock_prot_audit_calls++;
+    mock_prot_audit_c = c;
+    mock_prot_audit_d = d;
+    mock_prot_audit_e = e;
+    mock_prot_audit_f = f;
+}
 void audit_$log_resolve_op(uint32_t a, uint16_t b, void *c, status_$t d)
 { (void)a;(void)b;(void)c;(void)d; }
 
@@ -410,6 +462,23 @@ static void reset(uint8_t op_code)
 
     mock_resolve_calls = 0;
     mock_local_op_calls = 0;
+
+    mock_set_acl_calls = 0;
+    mock_set_acl_uid = NULL;
+    mock_set_acl_acl = NULL;
+    mock_set_acl_status = NULL;
+    mock_set_default_acl_calls = 0;
+    mock_set_default_acl_p2 = NULL;
+    mock_set_default_acl_p3 = NULL;
+    mock_set_def_prot_calls = 0;
+    mock_set_def_prot_p2 = NULL;
+    mock_set_def_prot_p3 = NULL;
+    mock_set_def_prot_p4 = NULL;
+    mock_prot_audit_calls = 0;
+    mock_prot_audit_c = NULL;
+    mock_prot_audit_d = NULL;
+    mock_prot_audit_e = NULL;
+    mock_prot_audit_f = 0;
 }
 
 static void run(void)
@@ -666,6 +735,83 @@ TEST(resolve_handler_arguments_follow_the_push_order)
     ASSERT_EQ(0xC0 + 23, resp_buf[0x16 + 23]);
 }
 
+/* ============================================================================
+ * cases 0x4A / 0x4C / 0x52 / 0x54: the ACL and protection handlers
+ * (source-wesf).  Every argument here is a pea of req+off or reply+off, so
+ * the assertions compare pointers against the buffers the test owns.
+ * ============================================================================ */
+
+/* 0x00E4C782-0x00E4C78E: pea (0x4,A3) / pea (0x8e,A2) / pea (-0x10,A6) then
+   bsr.w 0x00E52BC2 = dir_$do_op_set_acl, the SERVER handler. */
+TEST(set_acl_calls_the_server_handler_with_req_0x8e)
+{
+    reset(0x4A);
+    mock_hint_node[0] = NODE_$ME;
+    run();
+    ASSERT_EQ(1, mock_set_acl_calls);
+    ASSERT_EQ(1, mock_set_acl_acl    == (void *)(req_buf + 0x8e));
+    ASSERT_EQ(1, mock_set_acl_status == (void *)(resp_buf + 0x04));
+}
+
+/* 0x00E4C794-0x00E4C7A4: pea (0x4,A3) / pea (0x96,A2) / pea (0x8e,A2) /
+   pea (-0x10,A6), so param_2 = req+0x8E and param_3 = req+0x96. */
+TEST(set_default_acl_takes_req_0x8e_then_req_0x96)
+{
+    reset(0x4C);
+    mock_hint_node[0] = NODE_$ME;
+    run();
+    ASSERT_EQ(1, mock_set_default_acl_calls);
+    ASSERT_EQ(1, mock_set_default_acl_p2 == (void *)(req_buf + 0x8e));
+    ASSERT_EQ(1, mock_set_default_acl_p3 == (void *)(req_buf + 0x96));
+}
+
+/* 0x00E4C81C-0x00E4C830: pea (0x4,A3) / pea (0xc2,A2) / pea (0x96,A2) /
+   pea (0x8e,A2) / pea (-0x10,A6). */
+TEST(set_def_prot_takes_req_0x8e_0x96_0xc2_in_that_order)
+{
+    reset(0x54);
+    mock_hint_node[0] = NODE_$ME;
+    run();
+    ASSERT_EQ(1, mock_set_def_prot_calls);
+    ASSERT_EQ(1, mock_set_def_prot_p2 == (void *)(req_buf + 0x8e));
+    ASSERT_EQ(1, mock_set_def_prot_p3 == (void *)(req_buf + 0x96));
+    ASSERT_EQ(1, mock_set_def_prot_p4 == (void *)(req_buf + 0xc2));
+}
+
+/* 0x00E4C842-0x00E4C85C, the case 0x54 audit tail:
+   move.w #0x4 / pea (0xc2,A2) / pea (0x8e,A2) / pea (0x96,A2). */
+TEST(set_def_prot_audit_uses_req_0x96_0x8e_0xc2_and_flags_4)
+{
+    reset(0x54);
+    mock_hint_node[0] = NODE_$ME;
+    AUDIT_$ENABLED = -1;                /* bmi at 0x00E4C83E */
+    run();
+    AUDIT_$ENABLED = 0;
+    ASSERT_EQ(1, mock_prot_audit_calls);
+    ASSERT_EQ(1, mock_prot_audit_c == (void *)(req_buf + 0x96));
+    ASSERT_EQ(1, mock_prot_audit_d == (void *)(req_buf + 0x8e));
+    ASSERT_EQ(1, mock_prot_audit_e == (void *)(req_buf + 0xc2));
+    ASSERT_EQ(4, mock_prot_audit_f);
+}
+
+/* 0x00E4C806-0x00E4C81A, the case 0x52 audit tail: the third argument is the
+   canned uid ACL_$DIRIN_ACL (move.l #0xe1745c), the fifth is req+0xBA and the
+   sixth is the WORD at req+0xC2 - not the constant 4. */
+TEST(set_prot_audit_passes_dirin_acl_and_the_word_at_req_0xc2)
+{
+    reset(0x52);
+    mock_hint_node[0] = NODE_$ME;
+    *(uint16_t *)(void *)(req_buf + 0xc2) = 0x0037;
+    AUDIT_$ENABLED = -1;                /* bmi at 0x00E4C802 */
+    run();
+    AUDIT_$ENABLED = 0;
+    ASSERT_EQ(1, mock_prot_audit_calls);
+    ASSERT_EQ(1, mock_prot_audit_c == (void *)(req_buf + 0x8e));
+    ASSERT_EQ(1, mock_prot_audit_d == (void *)&ACL_$DIRIN_ACL);
+    ASSERT_EQ(1, mock_prot_audit_e == (void *)(req_buf + 0xba));
+    ASSERT_EQ(0x0037, mock_prot_audit_f);
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -692,6 +838,12 @@ int main(void)
     RUN_TEST(a_server_process_does_not_fall_back_after_a_stale_object);
 
     RUN_TEST(resolve_handler_arguments_follow_the_push_order);
+
+    RUN_TEST(set_acl_calls_the_server_handler_with_req_0x8e);
+    RUN_TEST(set_default_acl_takes_req_0x8e_then_req_0x96);
+    RUN_TEST(set_def_prot_takes_req_0x8e_0x96_0xc2_in_that_order);
+    RUN_TEST(set_def_prot_audit_uses_req_0x96_0x8e_0xc2_and_flags_4);
+    RUN_TEST(set_prot_audit_passes_dirin_acl_and_the_word_at_req_0xc2);
 
     printf("%d tests, %d failed\n", tests_run, tests_failed);
     return tests_failed == 0 ? 0 : 1;

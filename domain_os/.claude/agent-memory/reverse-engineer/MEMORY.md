@@ -37,3 +37,9 @@
 - [ring_info_t (ASKNODE 0x1F) and the NETWORK_ reply-record shape](ring-info-record.md) — recovered from the responder; swdiag is 0x1E, failure_rec names are swapped.
 - [FIM cleanup-stack / trace-bit tables](fim-trace-and-cleanup-tables.md) — FIM_CLEANUP_STACK is 65 (PROC1), FIM_$TRACE_BIT lives in fim.s, how to byte-verify a gap.
 - [Apollo PDF internals manual and the disk images](reference_apollo_pdf_docs.md) — AEGIS Internals names on-disk record fields; how to extract its text with stdlib only.
+- [AOTE clocks, location word and the embedded obj_loc](aote-clocks-and-obj-loc.md) — 0x28 is DTM not a length; aote 0x9C..0xBB is a file_$obj_loc_t.
+- [LV label record and disk_io_req_t VA links](lv-label-and-disk-req-va.md) — AEGIS fig. 4-4/4-5 names, the 0x3C high-byte trap, the DVTBL 0x48 bias, and the request arena pattern.
+- [The MAC link-address record](mac-link-addr-record.md) — send and receive share one record; its head is a word count plus up to 11 address words.
+- [REM_FILE_$NAME_GET_ENTRYU frame map](rem-file-name-get-entryu.md) — the in-place request pattern, the unclipped 32-byte name copy, and the 0x9A/0x9E alignment trap.
+- [SVC_CATCHER fault tail and byte-exact .s verification](svc-catcher-tail.md) — there is no FIM_$FAULT; the tail must live in trap8.s; objcopy/gsk-read diff recipe.
+- [DIR_$DO_OP case argument order](do_op-case-argument-order.md) — first pea is the LAST parameter, and the DIR_$X vs dir_$do_op_x client/server twin trap.

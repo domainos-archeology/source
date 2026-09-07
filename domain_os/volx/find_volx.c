@@ -25,23 +25,29 @@
  *   Iterates through entries 1-6 of the VOLX table, comparing
  *   the device location fields. Returns the first match.
  *
- * Assembly notes:
- *   - Uses A5 as base register pointing to VOLX table (0xE82604)
- *   - Iterates with counter in D3 (5 downto -1, so 6 iterations)
- *   - Index in D4 starts at 1 and increments
- *   - Entry offset is 0x20 bytes per entry
- *   - Compares at offsets -2, -4, -6, -8 from entry pointer + 0x20
- *     (i.e., offsets 0x1E, 0x1C, 0x1A, 0x18 within entry)
+ * Assembly notes (0x00E6B0BC):
+ *   - 0x00E6B0C4  lea (0xe82604).l,A5    - A5 = entry 1 of the VOLX table
+ *   - 0x00E6B0DA  moveq #0x5,D3          - counter, 5 downto -1: 6 iterations
+ *   - 0x00E6B0DC  moveq #0x1,D4          - index starts at 1
+ *   - 0x00E6B0DE  lea (0x20,A5),A0       - A0 is BIASED: it points one entry
+ *                                          past entry 1, i.e. A5 + idx * 0x20
+ *   - 0x00E6B104  lea (0x20,A0),A0       - advance one entry
+ *   - fields are read at negative displacements off that biased pointer:
+ *       0x00E6B0E6  cmp.w (-0x2,A1),D2w  lv_num  (entry offset 0x1E)
+ *       0x00E6B0EC  cmp.w (-0x4,A1),D1w  ctlr    (entry offset 0x1C)
+ *       0x00E6B0F2  cmp.w (-0x8,A1),D5w  dev     (entry offset 0x18)
+ *       0x00E6B0F8  cmp.w (-0x6,A1),D0w  bus     (entry offset 0x1A)
+ *     so the scan covers indices 1..6 = the whole 0xC0-byte VOLX_ segment.
  */
 int16_t FIND_VOLX(int16_t dev, int16_t bus, int16_t ctlr, int16_t lv_num)
 {
     int16_t count;
     int16_t vol_idx;
-    volx_entry_t *entry;
+    volx_$entry_t *entry;
 
     count = 5;          /* Loop counter (5 downto -1 = 6 iterations) */
     vol_idx = 1;        /* Volume index (1-6) */
-    entry = &VOLX_$TABLE_BASE[1];  /* Start at entry 1 */
+    entry = VOLX_$ENTRY(1);  /* Start at entry 1 */
 
     while (count >= 0) {
         if (entry->lv_num == lv_num &&

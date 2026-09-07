@@ -23,6 +23,15 @@
  *      c. If successful, clear the lv_num field
  *   3. Return first error encountered
  *
+ * Assembly notes (0x00E6B508):
+ *   - 0x00E6B510  lea (0xe82604).l,A5    - A5 = entry 1
+ *   - 0x00E6B51A  moveq #0x5,D2          - counter: 6 iterations
+ *   - 0x00E6B51C  moveq #0x1,D3          - index starts at 1
+ *   - 0x00E6B524  lea (0x20,A5),A3       - biased pointer, A5 + idx * 0x20
+ *   - 0x00E6B5AA  lea (0x20,A3),A3       - advance one entry
+ *   - fields off the biased pointer: lv_num (-0x2), parent_uid (-0x10),
+ *     dir_uid (-0x20)
+ *
  * Notes:
  *   - Continues with remaining volumes even if one fails
  *   - Only returns the first error status
@@ -33,7 +42,7 @@ status_$t VOLX_$SHUTDOWN(void)
 {
     int16_t count;
     int16_t vol_idx;
-    volx_entry_t *entry;
+    volx_$entry_t *entry;
     status_$t overall_status;
     status_$t local_status;
     status_$t drop_status;
@@ -41,7 +50,7 @@ status_$t VOLX_$SHUTDOWN(void)
     overall_status = status_$ok;
     count = 5;          /* Loop counter (5 downto -1 = 6 iterations) */
     vol_idx = 1;        /* Volume index (1-6) */
-    entry = &VOLX_$TABLE_BASE[1];  /* Start at entry 1 */
+    entry = VOLX_$ENTRY(1);  /* Start at entry 1 */
 
     do {
         /* Check if entry is in use (lv_num != 0) */

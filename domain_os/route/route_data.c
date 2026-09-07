@@ -154,6 +154,8 @@ uint32_t ROUTE_$Q_OFLO;
 uint16_t ROUTE_$NETBUF_ALLOC;
 int16_t ROUTE_$N_WIRED_PAGES;
 int16_t ROUTE_$N_USER_PORTS;
+/* Four 0x90-byte records at 0xE87FD6..0xE88216; see route_internal.h. */
+route_$user_stat_t ROUTE_$USER_STAT[ROUTE_$MAX_USER_STATS];
 int16_t ROUTE_$NET_SERVICE_ON = 0;      /* NETWORK_OP_OR_BITS */
 int16_t ROUTE_$NET_SERVICE_OFF = 1;     /* NETWORK_OP_AND_NOT_BITS */
 /* Contents of 0xE878A0: 00 00 20 48.  RINGLOG_$LOGIT reads only byte 0

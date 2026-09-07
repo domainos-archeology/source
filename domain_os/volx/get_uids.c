@@ -30,7 +30,7 @@ void VOLX_$GET_UIDS(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
                     uid_t *lv_uid_ret, uid_t *dir_uid_ret, status_$t *status)
 {
     int16_t vol_idx;
-    volx_entry_t *entry;
+    volx_$entry_t *entry;
 
     vol_idx = FIND_VOLX(*dev, *bus, *ctlr, *lv_num);
 
@@ -39,7 +39,7 @@ void VOLX_$GET_UIDS(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
         return;
     }
 
-    entry = &VOLX_$TABLE_BASE[vol_idx];
+    entry = VOLX_$ENTRY(vol_idx);
 
     /* Return the logical volume UID */
     *lv_uid_ret = entry->lv_uid;

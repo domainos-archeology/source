@@ -16,6 +16,7 @@
 #include "dbuf/dbuf.h"
 #include "time/time.h"
 #include "misc/crash_system.h"
+#include "arch/arch.h"   /* ARCH_VA_TO_PTR / ARCH_PTR_TO_VA */
 
 /*
  * Per-volume disk descriptor (0x48 bytes)
@@ -436,9 +437,25 @@ extern ml_$exclusion_t ml_$exclusion_t_00e7a25c;  /* DISK_$DATA +0x90 */
  * masks so they are byte-order independent.
  */
 typedef struct disk_io_req_t {
-    struct disk_io_req_t *next;     /* 0x00: next block in the allocated chain */
+    uint32_t    next;               /* 0x00: VA of the next block in the
+                                     *   allocated chain.  A 32-bit target
+                                     *   address, not a host pointer: the
+                                     *   original moves it with `move.l`
+                                     *   (disk_$get_qblks_internal 0x00E3BE8A
+                                     *   builds the chain with
+                                     *   `move.l (0x8,A2),(A2)`, DISK_IO
+                                     *   0x00E3D50E hands the cell around as
+                                     *   four bytes) and the live daddr field
+                                     *   sits immediately above it.  Convert
+                                     *   with ARCH_VA_TO_PTR / ARCH_PTR_TO_VA,
+                                     *   which are identity casts on m68k. */
     uint32_t    daddr;              /* 0x04: disk address / (head, sector) */
-    struct disk_io_req_t *free_next;/* 0x08: next block in the free list */
+    uint32_t    free_next;          /* 0x08: VA of the next block in the free
+                                     *   list.  Same four-byte cell:
+                                     *   disk_$rtn_qblks_internal writes it
+                                     *   with `move.l (0xc0,A5),(0x8,A2)`
+                                     *   (0x00E3C056) and status at +0x0c sits
+                                     *   immediately above it. */
     status_$t   status;             /* 0x0c: result status */
     uint32_t    reserved_10;        /* 0x10 */
     uint32_t    ppn;                /* 0x14: physical page number; its low word
@@ -464,23 +481,17 @@ typedef struct disk_io_req_t {
 } disk_io_req_t;
 
 /*
- * TODO(source-wyn9, 0x00E3BE8A): next (0x00) and free_next (0x08) are
- * declared as host pointers, so on a 64-bit host build every field from
- * daddr (0x04) onwards slides and these asserts have to stay guarded.  Hold
- * both links as uint32_t VA cells, as disk_$get_qblks_internal and
- * disk_$rtn_qblks_internal already do for DMOD_FREE_HEAD, and drop the guard.
+ * Every field is a fixed-width cell, so the whole 0x40-byte layout is checked
+ * on the host build too (bead source-wyn9; documented offsets, bead
+ * source-pewa).
  */
-/* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(disk_io_req_t, next) == 0x00, "disk_io_req_t.next");
 _Static_assert(__builtin_offsetof(disk_io_req_t, daddr) == 0x04, "disk_io_req_t.daddr");
 _Static_assert(__builtin_offsetof(disk_io_req_t, free_next) == 0x08, "disk_io_req_t.free_next");
 _Static_assert(__builtin_offsetof(disk_io_req_t, reserved_10) == 0x10, "disk_io_req_t.reserved_10");
 _Static_assert(__builtin_offsetof(disk_io_req_t, reserved_18) == 0x18, "disk_io_req_t.reserved_18");
 _Static_assert(__builtin_offsetof(disk_io_req_t, owner) == 0x1E, "disk_io_req_t.owner");
-#endif
 
-#if defined(ARCH_M68K)
 _Static_assert(sizeof(disk_io_req_t) == 0x40,
                "disk_io_req_t must be 0x40 bytes");
 _Static_assert(__builtin_offsetof(disk_io_req_t, status) == 0x0c,
@@ -491,7 +502,6 @@ _Static_assert(__builtin_offsetof(disk_io_req_t, op_flags) == 0x1f,
                "disk_io_req_t.op_flags must be at 0x1f");
 _Static_assert(__builtin_offsetof(disk_io_req_t, header) == 0x20,
                "disk_io_req_t.header must be at 0x20");
-#endif
 
 /*
  * DISK_IO - the disk subsystem's read/write/format entry point
@@ -532,6 +542,13 @@ typedef struct disk_$vol_map_entry_t {
     struct disk_io_req_t *head; /* (-0x8,A3,volx*8) */
     struct disk_io_req_t *tail; /* (-0x4,A3,volx*8) */
 } disk_$vol_map_entry_t;
+
+/*
+ * These two stay host pointers: the map is a caller stack array that never
+ * reaches the hardware or another record, so only the target build has to
+ * match the 8-byte stride the original's (volx*8) indexing assumes.  The
+ * request chain the map points into is a VA chain -- see disk_io_req_t.next.
+ */
 
 #if defined(ARCH_M68K)
 _Static_assert(sizeof(disk_$vol_map_entry_t) == 8,

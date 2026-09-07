@@ -18,6 +18,10 @@
  *     once at 0x00E0B536 and never stored
  *   - the loop stops on a short chain, leaving the request partly done
  *   - a zero-length request copies nothing
+ *
+ * Plus the recovered layout of the link-address record that heads both MAC
+ * packet descriptors (source-txfx); the _Static_asserts in mac_os/mac_os.h
+ * are guarded by ARCH_M68K, so they are re-checked here for the host build.
  */
 
 #include <stdio.h>
@@ -256,6 +260,64 @@ TEST(resumes_from_a_non_zero_offset)
     ASSERT_EQ((uintptr_t)entry_b, (uintptr_t)chain);
 }
 
+/* ============================================================================
+ * mac_os_$link_addr_t layout (source-txfx)
+ *
+ * 24 bytes: the count word MAC_$DEMUX copies at 0x00E0BC82 followed by the
+ * 11 words its loop at 0x00E0BC90 walks.  The extent is pinned by the
+ * boolean at descriptor +0x18 (0x00E0BC68 / 0x00E0BE4E) and by MAC_$SEND's
+ * single 6-longword record assignment at 0x00E0BBC2.
+ * ============================================================================ */
+
+TEST(link_addr_is_a_24_byte_count_plus_11_words)
+{
+    ASSERT_EQ(0x18, (int)sizeof(mac_os_$link_addr_t));
+    ASSERT_EQ(0x00, (int)offsetof(mac_os_$link_addr_t, n_words));
+    ASSERT_EQ(0x02, (int)offsetof(mac_os_$link_addr_t, addr));
+    ASSERT_EQ(11,   (int)MAC_OS_MAX_ADDR_WORDS);
+    ASSERT_EQ(0x18, (int)(sizeof(uint16_t) + sizeof(uint16_t) * MAC_OS_MAX_ADDR_WORDS));
+}
+
+TEST(both_packet_descriptors_start_with_the_link_address)
+{
+    ASSERT_EQ(0x00, (int)offsetof(mac_os_$send_pkt_t, link_addr));
+    ASSERT_EQ(0x18, (int)offsetof(mac_os_$send_pkt_t, is_broadcast));
+    ASSERT_EQ(0x4C, (int)sizeof(mac_os_$send_pkt_t));
+
+    ASSERT_EQ(0x00, (int)offsetof(mac_os_$rcv_pkt_t, link_addr));
+    ASSERT_EQ(0x00, (int)offsetof(mac_os_$rcv_pkt_t, net_type));
+    ASSERT_EQ(0x02, (int)offsetof(mac_os_$rcv_pkt_t, src_id));
+    ASSERT_EQ(0x18, (int)offsetof(mac_os_$rcv_pkt_t, is_local));
+    ASSERT_EQ(0x40, (int)sizeof(mac_os_$rcv_pkt_t));
+}
+
+/*
+ * The ring driver's case: n_words == 2 (0x00E76528) and the two words of the
+ * source node id at +0x02 (0x00E7652E-0x00E7653E), which the legacy
+ * net_type/src_id view reaches as one unaligned longword.
+ */
+TEST(ring_two_word_address_aliases_net_type_and_src_id)
+{
+    mac_os_$rcv_pkt_t rec;
+
+    memset(&rec, 0, sizeof(rec));
+    rec.link_addr.n_words = 2;
+    rec.link_addr.addr[0] = 0x1234;
+    rec.link_addr.addr[1] = 0x5678;
+
+    /* The two views share storage; no byte-order claim is made here,
+     * because the host is little-endian and the m68k is not. */
+    ASSERT_EQ(2, rec.net_type);
+    ASSERT_EQ(0x1234, rec.link_addr.addr[0]);
+    ASSERT_EQ(0x5678, rec.link_addr.addr[1]);
+    ASSERT_EQ(2, (int)((const uint8_t *)&rec.link_addr.addr[0] - (const uint8_t *)&rec));
+    ASSERT_EQ(2, (int)((const uint8_t *)&rec.src_id - (const uint8_t *)&rec));
+
+    /* addr[2..10] is what the old model called _r06[0x12] */
+    ASSERT_EQ(0x06, (int)offsetof(mac_os_$rcv_pkt_t, _r06));
+    ASSERT_EQ(0x12, (int)sizeof(rec._r06));
+}
+
 int main(void)
 {
     printf("test_copy_buffer_data:\n");
@@ -267,6 +329,9 @@ int main(void)
     RUN_TEST(short_chain_stops_early);
     RUN_TEST(zero_length_copies_nothing);
     RUN_TEST(resumes_from_a_non_zero_offset);
+    RUN_TEST(link_addr_is_a_24_byte_count_plus_11_words);
+    RUN_TEST(both_packet_descriptors_start_with_the_link_address);
+    RUN_TEST(ring_two_word_address_aliases_net_type_and_src_id);
 
     printf("\n  Results: %d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed > 0 ? 1 : 0;

@@ -483,12 +483,29 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x4A: /* Set ACL */
-            DIR_$SET_ACL(&local_uid, req + 0x8e, &resp->status);
+            /*
+             * 0xE4C782-0xE4C78E, pushed right to left:
+             *   pea (0x4,A3) / pea (0x8e,A2) / pea (-0x10,A6)
+             *   bsr.w 0x00E52BC2 = dir_$do_op_set_acl
+             * The callee is the SERVER handler, not the client-side request
+             * builder DIR_$SET_ACL (0x00E52C86).  The 0xE4C792 branch lands on
+             * the shared `lea (0xc,SP),SP` at 0xE4C7D6, i.e. 3 longword args.
+             */
+            dir_$do_op_set_acl(&local_uid, (uid_t *)(req + 0x8e),
+                         &resp->status);
             break;
 
         case 0x4C: /* Set default ACL */
-            dir_$do_op_set_default_acl(&local_uid, req + 0x96,
-                         req + 0x8e, &resp->status);
+            /*
+             * 0xE4C794-0xE4C7A4, pushed right to left:
+             *   pea (0x4,A3) / pea (0x96,A2) / pea (0x8e,A2) / pea (-0x10,A6)
+             *   bsr.w 0x00E52FA6 = dir_$do_op_set_default_acl
+             * so param_2 (0xc,A6) = req+0x8e and param_3 (0x10,A6) = req+0x96;
+             * dir_$do_op_set_default_acl forwards them in that order to
+             * dir_$set_default_acl_internal at 0xE52FDC/0xE52FD8.
+             */
+            dir_$do_op_set_default_acl(&local_uid, req + 0x8e,
+                         req + 0x96, &resp->status);
             break;
 
         case 0x4E: /* Get default ACL */
@@ -507,20 +524,39 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          req + 0xba, *(int16_t *)(req + 0xc2),
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
+                /*
+                 * 0xE4C806-0xE4C81A, then the tail shared with case 0x54 at
+                 * 0xE4C854: move.w (0xc2,A2) / pea (0xba,A2) /
+                 * move.l #0xe1745c (= ACL_$DIRIN_ACL) / pea (0x8e,A2) //
+                 * pea (-0x10,A6) / move.l (0x4,A3) / bsr.w 0x00E4AF28.
+                 */
                 audit_$log_prot_op(resp->status, &local_uid,
-                             req + 0x8e, (uid_t *)(req + 0xba),
-                             (uid_t *)(req + 0xc2), 4);  /* pea (0xc2,A2) */
+                             req + 0x8e, &ACL_$DIRIN_ACL,
+                             (uid_t *)(req + 0xba),
+                             *(uint16_t *)(req + 0xc2));
             }
             break;
 
         case 0x54: /* Set protection (extended) */
-            dir_$do_op_set_def_prot(&local_uid, req + 0x96,
-                         req + 0x8e, req + 0xc2,
+            /*
+             * 0xE4C81C-0xE4C830, pushed right to left:
+             *   pea (0x4,A3) / pea (0xc2,A2) / pea (0x96,A2) /
+             *   pea (0x8e,A2) / pea (-0x10,A6)
+             *   bsr.w 0x00E52044 = dir_$do_op_set_def_prot
+             * so param_2 (0xc,A6) = req+0x8e, param_3 (0x10,A6) = req+0x96 and
+             * param_4 (0x14,A6) = req+0xc2; the callee forwards them in that
+             * order to dir_$write_def_prot at 0xE5207E/0xE5207A/0xE52076.
+             */
+            dir_$do_op_set_def_prot(&local_uid, req + 0x8e,
+                         req + 0x96, req + 0xc2,
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
+                /* 0xE4C842-0xE4C85C: move.w #0x4 / pea (0xc2,A2) /
+                   pea (0x8e,A2) / pea (0x96,A2) // pea (-0x10,A6) /
+                   move.l (0x4,A3) / bsr.w 0x00E4AF28 */
                 audit_$log_prot_op(resp->status, &local_uid,
                              req + 0x96, (uid_t *)(req + 0x8e),
-                             (uid_t *)(req + 0xc2), 4);  /* pea (0xc2,A2) */
+                             (uid_t *)(req + 0xc2), 4);
             }
             break;
 

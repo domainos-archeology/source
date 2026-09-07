@@ -99,17 +99,6 @@ typedef struct fim_build_locals_t {
  */
 
 /*
- * Cleanup handler stack head for each process
- *
- * Indexed by PROC1_$CURRENT (scaled by 4 at every access site); one longword
- * per PROC1 process, PROC1_MAX_PROCESSES of them.  Each entry points at the
- * most recently established fim_cleanup_entry_t for that process.
- *
- * Address: 0x00E216B2 (defined in fim/fim_data.c)
- */
-extern void *FIM_CLEANUP_STACK[PROC1_MAX_PROCESSES];
-
-/*
  * PROM bus error handler address (cold boot)
  * If this is FIM_$COLD_BUS_ERR, we're in cold boot
  */

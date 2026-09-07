@@ -209,12 +209,6 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
  * individually.  Every name in this block comes from that map
  * (sau2-maps/domain_os.10.2.map); the previous descriptive spellings are
  * given after each one.
- *
- * TODO(source-v7nn): ROUTE_$Q_OFLO (0xE87FCC) and ROUTE_$NETBUF_ALLOC
- * (0xE87FD0) carry map names whose sense does not obviously match the
- * recovered uses -- ROUTE_$INIT_ROUTING clears 0xE87FCC and stores 0x40 to
- * 0xE87FD0, and ROUTE_$PROCESS zeroes 0xE87FD0 at 0x00E87852.  The names are
- * the map's; the semantics still want confirmation.
  */
 #define ROUTE_$Q_DEPTH          ((uint32_t *)0xE87DA8)  /* was ROUTE_$PACKET_STATS */
 #define ROUTE_$STD_DLEN_ERR    (*(uint32_t *)0xE87FAC)  /* was ..._STAT_OVERSIZED_STD */
@@ -225,20 +219,83 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
 #define ROUTE_$TOO_FAR         (*(uint32_t *)0xE87FC0)  /* was ..._STAT_DROPPED_N_HOP */
 #define ROUTE_$MISROUTE        (*(uint32_t *)0xE87FC4)  /* was ..._STAT_DROPPED_N_ROUTE */
 #define ROUTE_$PKTS_ROUTED     (*(uint32_t *)0xE87FC8)  /* was ..._STAT_FORWARDED_N */
-#define ROUTE_$Q_OFLO          (*(uint32_t *)0xE87FCC)  /* was ..._USER_PORT_COUNT */
-#define ROUTE_$NETBUF_ALLOC    (*(uint16_t *)0xE87FD0)  /* was ..._USER_PORT_MAX */
-
-/* Count of currently wired pages (no map symbol; module-local) */
-#define ROUTE_$N_WIRED_PAGES    (*(int16_t *)0xE87FD2)
-
-/* Count of active user ports (no map symbol; module-local) */
-#define ROUTE_$N_USER_PORTS     (*(int16_t *)0xE87FD4)
 
 /*
- * ROUTE_$USER_STAT (0xE87FD6) is named by the SAU2 link map but is not yet
- * modelled here; the next map symbol after it is ROUTE_$PID at 0xE88216.
- * TODO(source-v7nn): recover its layout and the code that reads it.
+ * ROUTE_$Q_OFLO - count of packets addressed to the routing socket that were
+ * thrown away because that socket's queue was already full.  (Named
+ * ..._USER_PORT_COUNT in the tree before the map sweep.)
+ *
+ * Cleared with the other forwarding counters by ROUTE_$INIT_ROUTING
+ * ("clr.l (0x00E87FCC).l" at 0x00E69DF0) and bumped by one from the two
+ * receive paths, each time only when the socket the packet was addressed to
+ * is ROUTE_$SOCK (0xE26F18) and the enqueue reported "queue full":
+ *
+ *   0x00E756C6  ring_$process_rx_packet: SOCK_$PUT_INT_INT (0x00E161F8)
+ *               returned 1 (0x00E7565A), the socket in D4 is neither 2 nor 1,
+ *               and it matches ROUTE_$SOCK (cmp.w at 0x00E756BE).
+ *   0x00E0E45E  FUN_00E0E238: SOCK_$PUT (0x00E1614E) returned false
+ *               (0x00E0E3E4), the socket in D3 is not 2, it matches
+ *               ROUTE_$SOCK, and ROUTE_$SOCK is not -1 (0x00E0E446 -
+ *               0x00E0E45C); otherwise a per-module counter at (0xA8,A5) is
+ *               bumped instead.
+ *
+ * ASKNODE_$INTERNET_INFO copies it into two different reply records
+ * ("move.l (0x00E87FCC).l,(0x12,A1)" at 0x00E65106 and
+ * "move.l (0x00E87FCC).l,(0xA,A1)" at 0x00E65330).  /etc/rtstat prints it as
+ * "queue oflo" and describes it as the number of through-traffic packets
+ * lost because the through-traffic queue was already full, which is exactly
+ * what these two sites count.
  */
+#define ROUTE_$Q_OFLO          (*(uint32_t *)0xE87FCC)
+
+/*
+ * ROUTE_$NETBUF_ALLOC - the number of netbuf pages the routing socket asks
+ * SOCK_$ALLOCATE for, and hence the number of ROUTE_$Q_DEPTH buckets that
+ * carry meaning.  (Named ..._USER_PORT_MAX in the tree before the map sweep;
+ * it is not a port count.)
+ *
+ * ROUTE_$INIT_ROUTING stores 0x40 into it ("move.w #0x40,(0x00E87FD0).l" at
+ * 0x00E69D80) and immediately hands the cell to SOCK_$ALLOCATE
+ * ("move.w (0x00E87FD0).l,-(SP)" at 0x00E69D8C followed by two
+ * "move.w (SP),-(SP)" copies at 0x00E69D92/0x00E69D94, so the same 0x40 lands
+ * in three of SOCK_$ALLOCATE's four word arguments).  SOCK_$ALLOCATE passes
+ * the two it keeps in D3/D4 straight to
+ * NETBUF_$ADD_PAGES(hdr_count, dat_count) at 0x00E15F02, so the cell is the
+ * header-page and data-page count of that allocation.
+ *
+ * ROUTE_$PROCESS zeroes it on shutdown, right after SOCK_$FREE
+ * ("clr.w (0x250,A5)" at 0x00E87852; A5 = ROUTE_$WIRED_PAGES = 0xE87D80, so
+ * 0x250+0xE87D80 = 0xE87FD0) - no netbufs are held once the socket is gone.
+ *
+ * ASKNODE_$INTERNET_INFO reports it as a word (0x00E650F6 into (0x10,A1),
+ * 0x00E65328 into (0x8,A1)) and then uses it as the loop bound when copying
+ * ROUTE_$Q_DEPTH into the reply: "move.w (0x8,A1),D0w" at 0x00E6533E feeding
+ * the dbf at 0x00E6534E copies ROUTE_$NETBUF_ALLOC+1 buckets.
+ */
+#define ROUTE_$NETBUF_ALLOC    (*(uint16_t *)0xE87FD0)
+
+/*
+ * Count of currently wired pages.  The SAU2 link map does name this cell
+ * (line "E87FD2  ROUTE_$N_WIRED_PAGES"); an earlier note here that it was an
+ * unnamed module-local was wrong.  It is a word: route_$wire_routing_area
+ * tests it with "tst.w" (0x00E69B94), passes its address to the wiring call
+ * (0x00E69BD2) and ROUTE_$PROCESS reads it with "move.w (0x252,A5),D0w"
+ * (0x00E8785C) and clears it with "clr.w" (0x00E8787E).
+ */
+#define ROUTE_$N_WIRED_PAGES    (*(int16_t *)0xE87FD2)
+
+/*
+ * Count of active user (EtherBridge) routing ports.  Also named by the SAU2
+ * link map ("E87FD4  ROUTE_$N_USER_PORTS"), contrary to an earlier note here.
+ * A word: incremented by ROUTE_$SERVICE after NET_IO_$CREATE_PORT succeeds
+ * for a type-2 port ("addq.w #0x1,(0x00E87FD4).l" at 0x00E6A1A4), decremented
+ * by ROUTE_$CLOSE_PORT ("subq.w #0x1,(0x00E87FD4).l" at 0x00E69F90), and
+ * tested for zero by ROUTE_$CLEANUP_WIRED (0x00E69B84) and by ROUTE_$PROCESS
+ * ("tst.w (0x254,A5)" at 0x00E87856) before the wired pages are released.
+ */
+#define ROUTE_$N_USER_PORTS     (*(int16_t *)0xE87FD4)
+
+/* ROUTE_$USER_STAT (0xE87FD6): see route_$user_stat_t below. */
 
 /*
  * Constant cells in the routing code segment, all passed by reference
@@ -308,6 +365,73 @@ extern uint16_t ROUTE_$FWD_TIMEOUT;
 extern uint16_t ROUTE_$PACKET_SEQ;
 extern uint32_t ROUTE_$LAST_UPDATE_TIME;
 extern const uint16_t ROUTE_$ANNOUNCE_TEMPLATE;
+#endif
+
+/*
+ * =============================================================================
+ * ROUTE_$USER_STAT - per-user-port statistics records (0xE87FD6 .. 0xE88216)
+ * =============================================================================
+ *
+ * "User" ports are the EtherBridge ports /etc/rtsvc calls "-device USER";
+ * NET_IO_$CREATE_PORT owns this array and hands one record to each such port.
+ * Its allocator is a linear scan of four records of 0x90 bytes:
+ *
+ *   00e5a5c2  moveq   #0x3,D0        ; dbf count -> four records
+ *   00e5a5c4  movea.l #0xe87fd6,A0   ; ROUTE_$USER_STAT
+ *   00e5a5ca  moveq   #0x1,D1        ; record number, 1-based
+ *   00e5a5cc  lea     (0x90,A0),A0   ; stride 0x90
+ *   00e5a5d0  tst.b   (-0x90,A0)     ; record byte 0 = "in use" boolean
+ *   00e5a5d4  bmi.b   0x00e5a5e0     ; true -> record taken, try the next
+ *   ...
+ *   00e5a5e2  lea     (0x90,A0),A0
+ *   00e5a5e6  dbf     D0w,0x00e5a5d0
+ *
+ * The chosen record is then addressed as ROUTE_$USER_STAT + n*0x90 - 0x90
+ * (n*0x90 is built as n<<4 + n<<7 at 0x00E5A658 - 0x00E5A65E, and the -0x90
+ * bias is "lea (-0x90,A1),A1" at 0x00E5A664), stored in the port entry's
+ * driver_stats field ("move.l A1,(0x44,A3)" at 0x00E5A668) and marked in use
+ * with "st (A1)" at 0x00E5A682.  ROUTE_$CLOSE_PORT releases it with
+ * "movea.l (0x44,A3),A0 / clr.b (A0)" at 0x00E69F9A.
+ *
+ * 4 * 0x90 == 0x240 == 0xE88216 - 0xE87FD6, i.e. exactly the span between the
+ * SAU2 map's ROUTE_$USER_STAT and the next symbol, ROUTE_$PID.
+ *
+ * The body of a record is route_$port_stats_t (route/route.h): its byte 0 is
+ * the in-use boolean above (the byte ROUTE_$READ_USER_STATS copies out at
+ * 0x00E6A6B4 and ROUTE_$CLOSE_PORT clears), and the counters at 0x02, 0x06
+ * and 0x0A are the ones ROUTE_$PROCESS bumps at 0x00E8764E, 0x00E87660 and
+ * 0x00E8765A.  That record ends at 0x8D; nothing in the image reads or writes
+ * 0x8E or 0x8F, so they are carried here as unnamed tail bytes of the 0x90
+ * stride.
+ *
+ * ORIGINAL BUG (reproduced, not fixed - bead source-2km0): the record clear
+ * loop at 0x00E5A66C - 0x00E5A67E is "move.w #0x90,D1w / clr.w D0w /
+ * clr.b (0x0,A1,D0w) / addq.w #0x1,D0w / dbf D1w", i.e. 0x91 iterations
+ * writing offsets 0x00..0x90.  It zeroes one byte past the end of the record;
+ * for record 4 that byte is the first byte of ROUTE_$PID (0xE88216).
+ */
+
+#define ROUTE_$MAX_USER_STATS   4
+
+typedef struct route_$user_stat_t {
+    route_$port_stats_t stats;      /* 0x00: see route/route.h */
+    uint8_t             _tail_8e[2];/* 0x8E: no accessor anywhere in the image;
+                                     *       present only because the record
+                                     *       stride is 0x90 (0x00E5A5CC,
+                                     *       0x00E5A658) while every named
+                                     *       field ends at 0x8D */
+} __attribute__((packed)) route_$user_stat_t;
+
+_Static_assert(sizeof(route_$user_stat_t) == 0x90,
+               "route_$user_stat_t must be 0x90 bytes");
+_Static_assert(sizeof(route_$user_stat_t) * ROUTE_$MAX_USER_STATS
+                   == 0xE88216 - 0xE87FD6,
+               "ROUTE_$USER_STAT must span 0xE87FD6..0xE88216");
+
+#if defined(ARCH_M68K)
+#define ROUTE_$USER_STAT        ((route_$user_stat_t *)0xE87FD6)
+#else
+extern route_$user_stat_t ROUTE_$USER_STAT[ROUTE_$MAX_USER_STATS];
 #endif
 
 /*

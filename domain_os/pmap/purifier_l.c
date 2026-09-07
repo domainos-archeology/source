@@ -330,10 +330,10 @@ void PMAP_$PURIFIER_L(void)
 
                             /* 0x00E13C52: same flags2 test again */
                             if ((int8_t)page->flags2 >= 0) {
-                                TIME_$ABS_CLOCK((clock_t *)&aote->dtu_high);
-                                TIME_$CLOCK((clock_t *)&aote->len_high);
-                                aote->dta_high = aote->len_high;
-                                aote->dta_low = aote->len_low;
+                                TIME_$ABS_CLOCK((clock_t *)&aote->dtv_high);
+                                TIME_$CLOCK((clock_t *)&aote->dtm_high);
+                                aote->dta_high = aote->dtm_high;
+                                aote->dta_low = aote->dtm_low;
                                 aote->flags |= 0x20;    /* bset.b #5 */
                             }
                         }

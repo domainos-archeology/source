@@ -132,19 +132,19 @@ uint32_t MMAP_$WS_SCAN(uint16_t wsl_index, int16_t mode, uint32_t pages_needed, 
                      *   00e0d4da-00e0d4ec  seg * 0x14 (ON_DISK arm)
                      *   00e0d4f0  movea.l (-0x10,A0),A1  ; SEG_ASTE(seg)->aote
                      *   00e0d4f4  tst.w (0x28,A1) / sne  ; high word of
-                     *                                      aote->len_high
+                     *                                      aote->dtm_high
                      *   00e0d4fc-00e0d50e  seg * 0x14 (not-ON_DISK arm)
                      *   00e0d512  movea.l (-0x10,A0),A1
                      *   00e0d516  tst.w (0x8,A1) / smi   ; sign of the high
-                     *                                      word of vol_uid
+                     *                                      word of location
                      */
                     aote_t *aote = MMAP_$SEG_ASTE_FOR(page->segment)->aote;
 
                     boolean needs_flush;
                     if (page->flags2 & MMAPE_FLAG2_ON_DISK) {
-                        needs_flush = (aote->len_high >> 16) != 0;
+                        needs_flush = (aote->dtm_high >> 16) != 0;
                     } else {
-                        needs_flush = (aote->vol_uid & 0x80000000u) != 0;
+                        needs_flush = (aote->location & 0x80000000u) != 0;
                     }
 
                     if (needs_flush) {

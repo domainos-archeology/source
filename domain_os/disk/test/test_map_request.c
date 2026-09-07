@@ -70,7 +70,15 @@ short M$OIU$WLW(long dividend, short divisor)
  * ================================================================ */
 static uint8_t mock_dev_info[16];
 static disk_$vol_map_entry_t map[DISK_VOLUME_MAP_ENTRIES];
-static disk_io_req_t reqs[4];
+/*
+ * disk_io_req_t.next is a 32-bit target VA (bead source-wyn9), so the
+ * requests have to live in an arena that ARCH_HOST_VA_BASE points at -- see
+ * arch/host/arch.h and disk/test/test_rtn_qblks_internal.c.  The array starts
+ * one record into the arena so that no live request has VA 0, which is the
+ * NULL link.
+ */
+static uint8_t req_arena[5 * sizeof(disk_io_req_t)];
+#define reqs ((disk_io_req_t *)(req_arena + sizeof(disk_io_req_t)))
 static status_$t status;
 
 static disk_$volume_t *vol_of(int idx)
@@ -85,7 +93,8 @@ static void reset_fixture(uint16_t dev_flags)
     memset(mock_disk_data, 0, sizeof(mock_disk_data));
     memset(mock_dev_info, 0, sizeof(mock_dev_info));
     memset(map, 0, sizeof(map));
-    memset(reqs, 0, sizeof(reqs));
+    ARCH_HOST_VA_BASE = (uintptr_t)req_arena;
+    memset(req_arena, 0, sizeof(req_arena));
     status = 0x0BADF00D;
 
     *(uint16_t *)(mock_dev_info + 8) = dev_flags;
@@ -134,7 +143,7 @@ static int test_chs_split(void)
     CHECK(map[1].head == &reqs[0]);
     CHECK(map[1].tail == &reqs[0]);
     CHECK(map[0].head == NULL);
-    CHECK(reqs[0].next == NULL);
+    CHECK(reqs[0].next == 0);
 
     /* 0x00E3CC5E: the internal opcode is OR-ed into the low nibble */
     CHECK_EQ(1, reqs[0].op_flags);
@@ -270,9 +279,9 @@ static int test_striped_split(void)
 static int test_chain_linking(void)
 {
     reset_fixture(0);
-    reqs[0].next = &reqs[1];
-    reqs[1].next = &reqs[2];
-    reqs[2].next = NULL;
+    reqs[0].next = ARCH_PTR_TO_VA(&reqs[1]);
+    reqs[1].next = ARCH_PTR_TO_VA(&reqs[2]);
+    reqs[2].next = 0;
     reqs[0].daddr = 60;
     reqs[1].daddr = 120;
     reqs[2].daddr = 180;
@@ -282,9 +291,9 @@ static int test_chain_linking(void)
     CHECK_EQ(status_$ok, status);
     CHECK(map[1].head == &reqs[0]);
     CHECK(map[1].tail == &reqs[2]);
-    CHECK(reqs[0].next == &reqs[1]);
-    CHECK(reqs[1].next == &reqs[2]);
-    CHECK(reqs[2].next == NULL);
+    CHECK(reqs[0].next == ARCH_PTR_TO_VA(&reqs[1]));
+    CHECK(reqs[1].next == ARCH_PTR_TO_VA(&reqs[2]));
+    CHECK(reqs[2].next == 0);
     CHECK_EQ(1, reqs[0].daddr >> 16);
     CHECK_EQ(2, reqs[1].daddr >> 16);
     CHECK_EQ(3, reqs[2].daddr >> 16);
@@ -298,8 +307,8 @@ static int test_chain_linking(void)
 static int test_failure_stops_the_walk(void)
 {
     reset_fixture(0);
-    reqs[0].next = &reqs[1];
-    reqs[1].next = NULL;
+    reqs[0].next = ARCH_PTR_TO_VA(&reqs[1]);
+    reqs[1].next = 0;
     reqs[0].daddr = 60;
     reqs[1].daddr = 200000; /* past addr_end */
 

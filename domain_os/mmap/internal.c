@@ -262,7 +262,7 @@ done_scanning:
              *
              *   tst.b (-0x1ff7,A2) / bpl  -- mmape->flags2 bit 7 (ON_DISK)
              *   set:   tst.w (0x28,A3) / sne  -- the HIGH word of
-             *                                     aote->len_high
+             *                                     aote->dtm_high
              *   clear: tst.b (0xb9,A3) / smi  -- aote->remote_flag < 0
              *   TRUE -> type 4 (needs flush), FALSE -> type 3.
              */
@@ -270,7 +270,7 @@ done_scanning:
             boolean needs_flush;
 
             if ((page->flags2 & MMAPE_FLAG2_ON_DISK) != 0) {
-                needs_flush = ((aote->len_high >> 16) != 0) ?
+                needs_flush = ((aote->dtm_high >> 16) != 0) ?
                               (boolean)0xFF : 0;
             } else {
                 needs_flush = ((int8_t)aote->remote_flag < 0) ?

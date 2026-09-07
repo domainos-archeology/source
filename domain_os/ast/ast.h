@@ -117,7 +117,7 @@ typedef struct aote_t {
    *   bit 31       set  -> the object is remote (`tst.w (0xc,A6)` / `smi`
    *                        at 0x00E021B2-0x00E021B6 tests this longword's
    *                        sign through its high word, and mmap/ws_scan.c
-   *                        tests `aote->vol_uid & 0x80000000`)
+   *                        tests `aote->location & 0x80000000`)
    *   bits 20..30  remote only: the network number, filled in by
    *                        NETWORK_$INSTALL_NET (`(x & 0xFFF00000) | node`
    *                        at 0x00E01D2A, ast/load_aote.c:117 and
@@ -133,11 +133,11 @@ typedef struct aote_t {
    *
    * For a local object the word is replaced after the lookup by
    * obj_loc.block_hint (`move.l (0xa0,A3),(0x8,A3)` at 0x00E022AE).
-   * TODO(source-thsz, 0x00E04766): the field is still spelled `vol_uid`
-   * here and in mmap/ws_scan.c; renaming it to `location` is a tree-wide
-   * change outside the ast/ pass that recovered the encoding.
+   *
+   * Bead source-thsz renamed the field from `vol_uid` (which it never was)
+   * to `location` across ast/ and mmap/.
    */
-  uint32_t vol_uid;         /* 0x08: object location word (see above) */
+  uint32_t location;        /* 0x08: object location word (see above) */
 
   /*
    * 0x0C - 0x9B: object attributes.  Layout recovered instruction by
@@ -203,37 +203,47 @@ typedef struct aote_t {
                           * at 0x00E02AE2) */
 
   /*
-   * 0x28/0x2C: a 48-bit Apollo clock (high 32 / low 16), NOT a length, in
-   * spite of the field names.  Bead source-traa turned this up while
-   * establishing that 0x20 is the only length in the AOTE:
+   * 0x28 - 0x47: four 48-bit Apollo clocks (high 32 bits, then low 16, then
+   * two pad bytes each).  Bead source-xk18 settled the run; before it the
+   * first pair was misnamed `len_high`/`len_low` and the whole run was
+   * labelled one slot low.  aote+0x20 (`length`) is the only length in the
+   * AOTE (bead source-traa).  Evidence:
    *   - ast_$setup_page_read 0x00E02ABA-0x00E02ACE calls TIME_$CLOCK on
-   *     aote+0x40 and then copies aote+0x40/0x44 into aote+0x28/0x2C.
-   *   - pmap/purifier_l.c:334-336 does the same pair in the other
-   *     direction: TIME_$CLOCK(aote+0x28) then aote+0x40/0x44 := 0x28/0x2C.
-   *   - ast_$read_area_pages_network 0x00E02EC8 stores the freshly read
-   *     clock into both pairs.
-   *   - AST_$SET_ATTR_DISPATCH's "rounded" cases (0x00E04DA6-0x00E04DD4)
+   *     aote+0x40 (`pea (0x40,A1)` / `jsr 0x00e2afd6`) and then copies
+   *     aote+0x40/0x44 into aote+0x28/0x2C -- writing a page stamps DTM
+   *     from the same clock it stamps DTA with.
+   *   - pmap/purifier_l.c:333-336 does the pair in the other direction:
+   *     TIME_$CLOCK(aote+0x28) then aote+0x40/0x44 := 0x28/0x2C.
+   *   - ast_$read_area_pages_network 0x00E02EC8-0x00E02EDA stores one
+   *     freshly read clock into 0x40/0x44 and 0x28/0x2C both.
+   *   - AST_$SET_ATTR_DISPATCH's "rounded" cases 0x00E04DA6-0x00E04DD4
    *     round a non-zero LOW 16 bits up by adding one to the high 32 and
-   *     zeroing the low -- rounding a clock to the next whole tick, which
-   *     is meaningless for a length; and attribute 9, which writes 0x28 with
-   *     a 32-bit value and zeroes 0x2C (0x00E04D88), is FILE_ATTR_DTM_AST.
-   * TODO(source-xk18, 0x00E02ACE): rename this pair (and the 0x30 pair that
-   * shares the misnaming) once mmap/ and pmap/, which spell it `len_high`,
-   * can be updated in the same pass.
+   *     zeroing the low -- rounding to the next whole clock tick, which is
+   *     meaningless for a length.
+   *   - the attribute numbers pin which clock is which, since file/file.h
+   *     already names them: attr 9 = FILE_ATTR_DTM_AST writes 0x28 and
+   *     zeroes 0x2C (0x00E04D88), attr 10 = FILE_ATTR_DTU_AST writes 0x30
+   *     (0x00E04D98); attr 0x17 = FILE_ATTR_DTM_OLD lands on 0x28
+   *     (0x00E04DDC) and attr 0x18 = FILE_ATTR_DTU_FULL on 0x30
+   *     (0x00E04DEC).
+   *   - AST_$GET_DTV returns 0x38/0x3C verbatim (`move.l (0x38,A2),(A0)` /
+   *     `move.w (0x3c,A2),(0x4,A0)` at 0x00E054F4-0x00E054FC), and it is
+   *     0x38 that TIME_$ABS_CLOCK refreshes at 0x00E05132.
    */
-  uint32_t len_high;     /* 0x28: 48-bit clock, high 32 bits (DTM) */
-  uint16_t len_low;      /* 0x2C: 48-bit clock, low 16 bits */
+  uint32_t dtm_high;     /* 0x28: DTM (modified), high 32 bits */
+  uint16_t dtm_low;      /* 0x2C: DTM, low 16 bits */
   uint16_t unknown_2e;   /* 0x2E */
 
-  uint32_t dtm_high;     /* 0x30: DTM, high 32 bits (attr 10/0x18/0x1A/0x1B) */
-  uint16_t dtm_low;      /* 0x34: DTM, low 16 bits */
+  uint32_t dtu_high;     /* 0x30: DTU (used), high 32 (attr 10/0x18/0x1A/0x1B) */
+  uint16_t dtu_low;      /* 0x34: DTU, low 16 bits */
   uint16_t unknown_36;   /* 0x36 */
 
-  uint32_t dtu_high;     /* 0x38: DTU; TIME_$ABS_CLOCK writes 6 bytes here */
-  uint16_t dtu_low;      /* 0x3C */
+  uint32_t dtv_high;     /* 0x38: DTV; AST_$GET_DTV returns it, TIME_$ABS_CLOCK
+                          * writes 6 bytes here (0x00E05132) */
+  uint16_t dtv_low;      /* 0x3C */
   uint16_t unknown_3e;   /* 0x3E */
 
-  uint32_t dta_high;     /* 0x40: attribute-modified clock (common tail 0xE05100) */
+  uint32_t dta_high;     /* 0x40: DTA, attribute-modified clock (0xE05100) */
   uint16_t dta_low;      /* 0x44 */
   uint16_t unknown_46;   /* 0x46 */
 
@@ -265,12 +275,56 @@ typedef struct aote_t {
   uid_t uid_8c;          /* 0x8C (attr 0x0F) */
   uid_t acl_uid;         /* 0x94 (attrs 3, 0x13, 0x14) */
 
-  /* 0x9C - 0xBB: object UID and related info */
-  uid_t obj_uid;          /* 0x9C: secondary object UID */
-  uint32_t unknown_a4[5]; /* 0xA4 */
-  uint8_t vol_index;      /* 0xB8: volume index (AST_$DISMOUNT) */
-  int8_t remote_flag;     /* 0xB9: negative when the object is remote */
-  uint16_t unknown_ba;    /* 0xBA */
+  /*
+   * 0x9C - 0xBB: the object's embedded 0x20-byte file_$obj_loc_t.
+   * AST_$GET_LOCATION copies all eight longwords out of it verbatim
+   * (`lea (0x9c,A0),A4` / eight `move.l (A4)+,(A1)+` at 0x00E0476A) and
+   * AST_$GET_ATTRIBUTES copies them back in, so the two layouts are the
+   * same record; the names below are the file_$obj_loc_t field at the
+   * matching offset (bead source-xntu).
+   */
+  uid_t obj_uid;          /* 0x9C: obj_loc reserved_00/volume (+0x00) and
+                           * block_hint (+0x04); ast_$force_activate_segment
+                           * clears the first byte (`clr.b (0x9c,A3)` at
+                           * 0x00E021A4) and, once the object is located,
+                           * copies the block hint at 0xA0 over the location
+                           * word (`move.l (0xa0,A3),(0x8,A3)` at 0x00E022AE).
+                           * TODO(source-xntu, 0x00E021A4): this is not a UID;
+                           * splitting it into reserved_00/volume/block_hint
+                           * touches ast/get_attributes.c and
+                           * ast/activate_aote_canned.c and is left to its own
+                           * pass. */
+  uid_t obj_loc_uid;      /* 0xA4: obj_loc.uid (+0x08) -- a second copy of the
+                           * object UID.  ast_$force_activate_segment writes it
+                           * from the caller's UID with two post-increment
+                           * moves (`move.l (A0)+,(0xa4,A3)` at 0x00E021AA and
+                           * `move.l (A0)+,(0xa8,A3)` at 0x00E021AE), and
+                           * ast_$deactivate_segment logs the same eight bytes
+                           * (`lea (0xa4,A1),A1` at 0x00E0190A). */
+  uint32_t obj_loc_net;   /* 0xAC: obj_loc.loc_info (+0x10) -- the network
+                           * identifier NETWORK_$GET_NET returns for the
+                           * location word's network number.  Written only on
+                           * the remote path (`pea (0xac,A3)` /
+                           * `jsr 0x00e0f2cc` at 0x00E021F6-0x00E021FE), and
+                           * read as the first half of the eight bytes
+                           * ast_$set_attribute_internal hands to the remote
+                           * file server (`lea (0xac,A1),A0` at 0x00E052EA). */
+  uint32_t obj_loc_node;  /* 0xB0: obj_loc.node (+0x14) -- the node id, the low
+                           * 20 bits of the location word
+                           * (`move.l #0xfffff,D0` / `and.l (0xc,A6),D0` /
+                           * `move.l D0,(0xb0,A3)` at 0x00E021E6-0x00E021F0);
+                           * the second half of the 0x052EA pair. */
+  uint32_t obj_loc_res_18;/* 0xB4: obj_loc.reserved_18 (+0x18).  Nothing in
+                           * ast_$force_activate_segment writes it; it is only
+                           * ever carried along by the eight-longword copies at
+                           * 0x00E0476A and 0x00E0492C. */
+  uint8_t vol_index;      /* 0xB8: obj_loc.rights_bits (+0x1C) -- used here as
+                           * the logical volume index (AST_$DISMOUNT; the
+                           * `<= 0x0F` / A5+0x420 bit tests at 0x00E0228C,
+                           * 0x00E022BE and 0x00E02318) */
+  int8_t remote_flag;     /* 0xB9: obj_loc.flags (+0x1D); bit 7 = remote,
+                           * bit 6 = the scratch bit 0x00E021C6 clears */
+  uint16_t unknown_ba;    /* 0xBA: obj_loc.reserved_1e (+0x1E) */
 
   /* 0xBC - 0xBF: Flags and status */
   uint16_t status_flags; /* 0xBC: Status flags */
@@ -282,16 +336,16 @@ typedef struct aote_t {
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(aote_t, hash_next) == 0x00, "aote_t.hash_next");
 _Static_assert(__builtin_offsetof(aote_t, aste_list) == 0x04, "aote_t.aste_list");
-_Static_assert(__builtin_offsetof(aote_t, vol_uid) == 0x08, "aote_t.vol_uid");
+_Static_assert(__builtin_offsetof(aote_t, location) == 0x08, "aote_t.location");
 _Static_assert(__builtin_offsetof(aote_t, sub_type) == 0x0D, "aote_t.sub_type");
 _Static_assert(__builtin_offsetof(aote_t, attr_flags_lo) == 0x0F, "aote_t.attr_flags_lo");
 _Static_assert(__builtin_offsetof(aote_t, length) == 0x20, "aote_t.length");
 _Static_assert(__builtin_offsetof(aote_t, unknown_24) == 0x24, "aote_t.unknown_24");
-_Static_assert(__builtin_offsetof(aote_t, len_low) == 0x2C, "aote_t.len_low");
+_Static_assert(__builtin_offsetof(aote_t, dtm_low) == 0x2C, "aote_t.dtm_low");
 _Static_assert(__builtin_offsetof(aote_t, unknown_2e) == 0x2E, "aote_t.unknown_2e");
-_Static_assert(__builtin_offsetof(aote_t, dtm_low) == 0x34, "aote_t.dtm_low");
+_Static_assert(__builtin_offsetof(aote_t, dtu_low) == 0x34, "aote_t.dtu_low");
 _Static_assert(__builtin_offsetof(aote_t, unknown_36) == 0x36, "aote_t.unknown_36");
-_Static_assert(__builtin_offsetof(aote_t, dtu_low) == 0x3C, "aote_t.dtu_low");
+_Static_assert(__builtin_offsetof(aote_t, dtv_low) == 0x3C, "aote_t.dtv_low");
 _Static_assert(__builtin_offsetof(aote_t, unknown_3e) == 0x3E, "aote_t.unknown_3e");
 _Static_assert(__builtin_offsetof(aote_t, dta_low) == 0x44, "aote_t.dta_low");
 _Static_assert(__builtin_offsetof(aote_t, unknown_46) == 0x46, "aote_t.unknown_46");
@@ -302,7 +356,10 @@ _Static_assert(__builtin_offsetof(aote_t, rights5) == 0x70, "aote_t.rights5");
 _Static_assert(__builtin_offsetof(aote_t, unknown_72) == 0x72, "aote_t.unknown_72");
 _Static_assert(__builtin_offsetof(aote_t, owner2_ext) == 0x78, "aote_t.owner2_ext");
 _Static_assert(__builtin_offsetof(aote_t, owner3_ext) == 0x7C, "aote_t.owner3_ext");
-_Static_assert(__builtin_offsetof(aote_t, unknown_a4) == 0xA4, "aote_t.unknown_a4");
+_Static_assert(__builtin_offsetof(aote_t, obj_loc_uid) == 0xA4, "aote_t.obj_loc_uid");
+_Static_assert(__builtin_offsetof(aote_t, obj_loc_net) == 0xAC, "aote_t.obj_loc_net");
+_Static_assert(__builtin_offsetof(aote_t, obj_loc_node) == 0xB0, "aote_t.obj_loc_node");
+_Static_assert(__builtin_offsetof(aote_t, obj_loc_res_18) == 0xB4, "aote_t.obj_loc_res_18");
 _Static_assert(__builtin_offsetof(aote_t, unknown_ba) == 0xBA, "aote_t.unknown_ba");
 _Static_assert(__builtin_offsetof(aote_t, ref_count) == 0xBE, "aote_t.ref_count");
 #endif
@@ -312,9 +369,9 @@ _Static_assert(offsetof(aote_t, obj_type) == 0x0C, "aote_t.obj_type");
 _Static_assert(offsetof(aote_t, attr_flags_hi) == 0x0E, "aote_t.attr_flags_hi");
 _Static_assert(offsetof(aote_t, uid) == 0x10, "aote_t.uid");
 _Static_assert(offsetof(aote_t, dtc) == 0x18, "aote_t.dtc");
-_Static_assert(offsetof(aote_t, len_high) == 0x28, "aote_t.len_high");
-_Static_assert(offsetof(aote_t, dtm_high) == 0x30, "aote_t.dtm_high");
-_Static_assert(offsetof(aote_t, dtu_high) == 0x38, "aote_t.dtu_high");
+_Static_assert(offsetof(aote_t, dtm_high) == 0x28, "aote_t.dtm_high");
+_Static_assert(offsetof(aote_t, dtu_high) == 0x30, "aote_t.dtu_high");
+_Static_assert(offsetof(aote_t, dtv_high) == 0x38, "aote_t.dtv_high");
 _Static_assert(offsetof(aote_t, dta_high) == 0x40, "aote_t.dta_high");
 _Static_assert(offsetof(aote_t, mod_time) == 0x48, "aote_t.mod_time");
 _Static_assert(offsetof(aote_t, blocks) == 0x50, "aote_t.blocks");
@@ -637,7 +694,7 @@ typedef struct mste_t {
   uid_t uid;           /* 0x00: Object UID */
   uint16_t segment;    /* 0x08: Segment number */
   uint16_t unknown_0a; /* 0x0A: Unknown */
-  /* 0x0C: the object's location word, in the aote_t.vol_uid encoding.  The
+  /* 0x0C: the object's location word, in the aote_t.location encoding.  The
    * only use in the image is AST_$MSTE_ACTIVATE_AND_WIRE 0x00E02F64
    * (`move.l (0xc,A2),-(SP)`), which hands it to
    * ast_$force_activate_segment as that routine's `location` argument;
