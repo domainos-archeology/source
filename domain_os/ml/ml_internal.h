@@ -14,12 +14,6 @@
 #include "proc1/proc1.h"
 
 /*
- * Error status codes (defined in misc/crash_system.c)
- */
-extern status_$t Lock_ordering_violation;
-extern status_$t Illegal_lock_err;
-
-/*
  * ml_$release_tail - shared lock-release epilogue (0x00E20EB6 .. 0x00E20EEE)
  *
  * In the binary this is not a callable routine; it is a run of straight-line

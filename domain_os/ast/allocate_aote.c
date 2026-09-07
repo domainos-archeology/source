@@ -13,6 +13,19 @@
 #include "ast/ast_internal.h"
 
 /*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * 0x00E01EFC: pea (0x1a,PC) -> 0x00E01F18, jsr CRASH_SYSTEM at 0x00E01F00.
+ * The same cell is used by AST_$ALLOCATE_ASTE (0x00E02060).
+ */
+static const status_$t ast_$no_replaceable_astes_00e01f18 = 0x80030003;
+
+/*
  * AOTE management globals
  */
 #if defined(ARCH_M68K)
@@ -158,7 +171,7 @@ next_scan:
     }
 
     /* No AOTE available - crash */
-    CRASH_SYSTEM(&Some_ASTE_Error);
+    CRASH_SYSTEM(&ast_$no_replaceable_astes_00e01f18);
     aote = NULL;
     goto found;
 

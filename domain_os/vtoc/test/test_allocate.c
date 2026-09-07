@@ -588,7 +588,7 @@ static int test_no_free_vtoce_in_block(void)
 
     VTOC_$ALLOCATE(&loc, new_vtoce_img, &status);
 
-    CHECK_EQ(status_$VTOC_uid_mismatch, status);
+    CHECK_EQ((uint32_t)status_$VTOC_uid_mismatch, (uint32_t)status);   /* status_$t is int32_t: compare as 32-bit */
     CHECK_EQ(2, sb_count);
     CHECK(sb_calls[0].buffer == buf_b);
     CHECK_EQ(8, sb_calls[0].flags);

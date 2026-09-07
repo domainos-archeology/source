@@ -33,8 +33,6 @@ static proc1_t mock_pcb;
 proc1_t *PROC1_$CURRENT_PCB = &mock_pcb;
 proc1_t *PROC1_$READY_PCB = NULL;
 
-status_$t Illegal_lock_err = 0x000A0002;
-status_$t Lock_ordering_violation = 0x000A0003;
 
 /* Call trace */
 static int n_reorder;

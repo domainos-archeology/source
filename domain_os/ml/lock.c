@@ -8,15 +8,41 @@
  *
  * Original address: 0x00E20B12
  *
- * The original assembly uses a helper function at 0x00E20AE8 to handle
- * lock ordering validation and PCB updates before the actual lock attempt.
+ * The original assembly uses a helper at 0x00E20AE8 to handle lock ordering
+ * validation and PCB updates before the actual lock attempt.
+ *
+ * TODO(source-fay8): that helper is NOT private to ML_$LOCK.  0x00E20AE8 is
+ * the body of the public gate PROC1_$SET_LOCK at 0x00E20AE4 (`move.w
+ * (0x4,SP),D0w` then fall through), which 15 other call sites reach directly.
+ * ML_$LOCK just calls it with `bsr.b` at 0x00E20B16 having already loaded D0.
+ * It is modelled below as a file-static, which is wrong: it should become
+ * proc1/set_lock.c with a real gate, and ml/lock.c should call it.
  */
 
 #include "ml/ml_internal.h"
 
-/* Internal helper: prepare for lock acquisition
- * This was a nested Pascal procedure in the original.
- * Validates lock ordering and updates PCB state.
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * The ML module's one CRASH_SYSTEM call site is the shared tail at
+ * 0x00E20B56 (`pea (0x28c,PC)` -> 0x00E20DE4, `jsr CRASH_SYSTEM`).  Both the
+ * lock-ordering test in proc1_$set_lock_body (`bls.b 0x00E20B56` at
+ * 0x00E20AF8) and ML_$UNLOCK's not-locked test (`beq.b 0x00E20B56` at
+ * 0x00E20BA4) branch into it, so both crash with the same status.
+ */
+static const status_$t proc1_$illegal_lock_00e20de4 = 0x000A0002;
+
+/*
+ * proc1_$set_lock_body - 0x00E20AE8
+ *
+ * Validates lock ordering and updates the PCB.  See the TODO above: in the
+ * image this is the body of PROC1_$SET_LOCK (gate at 0x00E20AE4), not an
+ * ML-private nested procedure.
  */
 static void ml_$prepare_lock(int16_t resource_id)
 {
@@ -35,7 +61,7 @@ static void ml_$prepare_lock(int16_t resource_id)
      * in ascending order, preventing deadlocks.
      */
     if (lock_mask <= pcb->resource_locks_held) {
-        CRASH_SYSTEM(&Lock_ordering_violation);
+        CRASH_SYSTEM(&proc1_$illegal_lock_00e20de4);
     }
 
     /* Mark this lock as held in the PCB */

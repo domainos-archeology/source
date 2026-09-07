@@ -21,6 +21,16 @@
 #include "pmap/pmap.h"
 
 /*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/* 0x00E30AD6: pea (0x34,PC) -> 0x00E30B0C, jsr CRASH_SYSTEM at 0x00E30ADA. */
+static const status_$t mst_$vm_resources_exhausted_00e30b0c = 0x0004000E;
+
+/*
  * Static helper: Initialize an MST page (nested Pascal procedure)
  *
  * Allocates a physical page and maps it at the given virtual address,
@@ -38,7 +48,7 @@ static uint32_t mst_init_page(int32_t virt_addr)
     /* Allocate one physical page */
     pages_allocated = MMAP_$ALLOC_FREE(phys_addr, 1);
     if (pages_allocated == 0) {
-        CRASH_SYSTEM(&PMAP_VM_Resources_exhausted_err);
+        CRASH_SYSTEM(&mst_$vm_resources_exhausted_00e30b0c);
     }
 
     /* Map the physical page at the virtual address */

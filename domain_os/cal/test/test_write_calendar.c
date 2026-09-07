@@ -192,14 +192,29 @@ TEST(seconds_ones_is_written)
     ASSERT_EQ(check_digit(i, 0x01, 9, "S1"), i + 4);
 }
 
-/* 0x00E816D6: leap flag lands in bit 3 of the date-tens digit (+0x50). */
+/*
+ * 0x00E816D6: the leap flag lands in bit 3 of the date-tens digit (+0x50).
+ *
+ * ORIGINAL BUG (bead source-tcxm, resolved): the MSM5832 keeps its leap-year
+ * flag in D10 bit 2 and leaves D10 bit 3 unused, so this write never programs
+ * the chip's leap counter.  The test pins the behaviour as found: bit 3 set,
+ * bit 2 clear.
+ */
 TEST(leap_flag_sets_bit3_of_day_tens)
 {
+    uint8_t d10;
+
     /* 1983-06-17: month > 2 -> test year 84; 84 & 3 == 0 -> leap. */
     write_calendar(1983, 6, 17, 1, 14, 35, 9);
     /* day 17 + 0x50 = 97 -> tens 9 (0b1001: tens 1 plus bit 3), ones 7 */
     ASSERT_EQ(check_digit(1 + 4 * 4, 0x81, 9, "D10 leap"), 1 + 5 * 4);
     ASSERT_EQ(check_digit(1 + 5 * 4, 0x71, 7, "D1 leap"), 1 + 6 * 4);
+
+    /* The data port is written inverted; recover the digit the chip sees. */
+    d10 = (uint8_t)(~rtc_writes[1 + 4 * 4].value & 0x0f);
+    ASSERT_EQ(d10 & MSM5832_D10_UNUSED, MSM5832_D10_UNUSED);
+    ASSERT_EQ(d10 & MSM5832_D10_LEAP_FLAG, 0);
+    ASSERT_EQ(d10 & MSM5832_TENS_MASK, 1);   /* date tens of 17 */
 }
 
 /* January/February use the current year for the leap test (month <= 2). */

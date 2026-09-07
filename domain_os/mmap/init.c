@@ -12,6 +12,16 @@
 #include "mmu/mmu.h"
 #include "misc/misc.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/* 0x00E31A12: pea (0x16c,PC) -> 0x00E31B80, jsr CRASH_SYSTEM at 0x00E31A16. */
+static const status_$t mmap_$examined_max_00e31b80 = 0x00060007;
+
 void MMAP_$INIT(void *param)
 {
     uint32_t *mmape_phys_table = (uint32_t*)param;  /* Table of physical addresses */
@@ -66,7 +76,7 @@ void MMAP_$INIT(void *param)
                 in_range = true;
                 range_count++;
                 if (range_count > 3) {
-                    CRASH_SYSTEM(MMAP_Error_Examined_Max);
+                    CRASH_SYSTEM(&mmap_$examined_max_00e31b80);
                 }
                 MEM_EXAM_TABLE[range_count - 1].start = vpn << 10;
             }

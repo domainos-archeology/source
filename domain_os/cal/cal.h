@@ -45,7 +45,7 @@ extern uint CAL_$LAST_VALID_TIME;
  *    11   Y1    Year ones (0-9)
  *    10   MO10  Month tens (0-1)
  *     9   MO1   Month ones (0-9)
- *     8   D10   Date tens (0-3)      D2 = leap year (see the note below)
+ *     8   D10   Date tens (0-3)      D2 = leap year, D3 unused (always 0)
  *     7   D1    Date ones (0-9)
  *     6   W     Weekday (0-6)
  *     5   H10   Hour tens (0-2)      D2 = PM, D3 = 24-hour select
@@ -109,9 +109,39 @@ extern uint CAL_$LAST_VALID_TIME;
   (((a) << CAL_$RTC_CTL_ADDR_SHIFT) | CAL_$RTC_CTL_WRITE | CAL_$RTC_CTL_HOLD)
 
 /* Digit masks within the flag-carrying registers */
-#define MSM5832_D10_LEAP_FLAG 0x04 /* D10 bit 2: leap year (read side) */
+#define MSM5832_D10_LEAP_FLAG 0x04 /* D10 bit 2: leap year             */
+#define MSM5832_D10_UNUSED    0x08 /* D10 bit 3: not connected in the chip */
 #define MSM5832_H10_24H_FLAG  0x08 /* H10 bit 3: 24-hour select        */
 #define MSM5832_TENS_MASK     0x03 /* D0-D1 of a flag-carrying tens reg */
+
+/*
+ * Resolved: CAL_$WRITE_CALENDAR has an original bug in the leap-year flag
+ * (bead source-tcxm).
+ *
+ * Both sides compute the same leap predicate -- (year_2digit + (month > 2))
+ * mod 4 == 0 -- but they deposit the result in different bits of D10:
+ *
+ *   TIME_$READ_CAL   0x00E2AE78  bset.l #2,D1     -> D10 bit 2  (correct)
+ *                    0x00E2AEC8  and.w #3,D1      -> date tens is D0-D1 only
+ *   CAL_$WRITE_CALENDAR
+ *                    0x00E816D6  add.w #0x50,D1w  -> (day + 80) / 10 is
+ *                                (day / 10) + 8, i.e. D10 bit 3
+ *
+ * The MSM5832 defines D10 as {D0,D1 = date tens, D2 = leap year, D3 = unused},
+ * so the writer sets a bit the chip ignores and leaves the leap-year flag
+ * clear.  The same `add.w #0x50` idiom one register later (0x00E816EA, on the
+ * hour) IS correct, because H10 bit 3 is the 24-hour select -- the writer
+ * evidently reused it on the wrong register.  The correct constant for the
+ * date would have been 0x28 (add 40 == +4 in the tens digit).
+ *
+ * Observable effect: the chip's internal leap counter is never programmed by
+ * CAL_$WRITE_CALENDAR, so an MSM5832 left to run would skip February 29.  The
+ * date read back is unaffected, because the reader masks D10 with 3 and the
+ * chip ignores D3; and TIME_$READ_CAL re-writes D10 with bit 2 set on every
+ * read taken during a leap year, which repairs the flag at the next boot.
+ *
+ * Both sides are reproduced exactly as found.
+ */
 
 /*
  * Register access, isolated behind the arch layer.  On the target these are

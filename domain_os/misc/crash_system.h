@@ -159,34 +159,13 @@ void crash_putc(char c);
  * Status constants used with CRASH_SYSTEM
  * ===========================================================================
  *
- * CAVEAT: these are a modelling convenience, not objects that exist in the
- * image.  Every caller of CRASH_SYSTEM in the original passes `pea (d,PC)`
- * to a constant cell inside its own module, so each of these belongs as a
- * file-static constant next to its single caller.  See bead source-tzmw.
- *
- * Values marked "verified" were read out of the cell the caller points at.
+ * None are exported.  In the image every caller passes `pea (d,PC)` to a
+ * constant longword inside its own module, so each status lives as a
+ * file-static `static const status_$t <name>_00eXXXXX` beside the call site
+ * that takes its address (bead source-tzmw).  status_$system_reboot above is
+ * the one exception: it is a value CRASH_SYSTEM itself compares against
+ * (0x00E1E746), not a caller's cell.
+ * ===========================================================================
  */
-extern status_$t Lock_ordering_violation;
-extern status_$t Illegal_lock_err;
-extern status_$t No_calendar_on_system_err;
-extern status_$t OS_BAT_disk_needs_salvaging_err;
-extern status_$t No_err;
-extern status_$t PMAP_VM_Resources_exhausted_err;
-extern status_$t MST_Ref_OutOfBounds_Err;
-extern status_$t Disk_Queued_Drivers_Not_Supported_Err;
-extern status_$t Disk_Driver_Logic_Err;
-extern status_$t Disk_controller_err;
-extern status_$t Disk_driver_logic_err;
-extern status_$t Illegal_PID_Err;
-extern status_$t Illegal_WSL_Index_Err;
-extern status_$t WSL_Exhausted_Err;
-extern status_$t Inconsistent_MMAPE_Err;
-extern status_$t MMAP_Bad_Unavail_err;
-extern status_$t mmap_bad_avail;
-extern status_$t MMAP_Bad_Reclaim_Err;
-extern status_$t MMAP_Error_Examined_Max;
-extern status_$t Some_ASTE_Error;
-extern status_$t OS_PMAP_mismatch_err;
-extern status_$t OS_MMAP_bad_install;
 
 #endif /* MISC_CRASH_SYSTEM_H */

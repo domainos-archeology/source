@@ -11,6 +11,16 @@
 #include "mmap/mmap_internal.h"
 #include "misc/misc.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/* 0x00E0CED2: pea (0x120,PC) -> 0x00E0CFF4, jsr CRASH_SYSTEM at 0x00E0CED6. */
+static const status_$t mmap_$inconsistent_mmape_00e0cff4 = 0x00060008;
+
 void MMAP_$FREE_PAGES(uint32_t *vpn_array, uint16_t count)
 {
     if (count == 0) return;
@@ -29,7 +39,7 @@ void MMAP_$FREE_PAGES(uint32_t *vpn_array, uint16_t count)
 
         /* Validate page is in a WSL */
         if (!(page->flags1 & MMAPE_FLAG1_IN_WSL)) {
-            CRASH_SYSTEM(Inconsistent_MMAPE_Err);
+            CRASH_SYSTEM(&mmap_$inconsistent_mmape_00e0cff4);
         }
 
         /* Remove from current WSL */

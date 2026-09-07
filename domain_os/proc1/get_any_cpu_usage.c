@@ -17,6 +17,19 @@
 #include "misc/misc.h"
 #include "cal/cal.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * 0x00E15458: pea (-0x17a,PC) -> 0x00E152E0, jsr CRASH_SYSTEM at 0x00E1545C.
+ * Shared with PROC1_$SET_PRIORITY and PROC1_$GET_ANY_CPUT.
+ */
+static const status_$t proc1_$illegal_process_id_00e152e0 = 0x000A0001;
+
 void PROC1_$GET_ANY_CPU_USAGE(uint16_t *pid_ptr, void *cpu_time_ret,
                                uint32_t *stat1_ret, uint32_t *stat2_ret)
 {
@@ -28,7 +41,7 @@ void PROC1_$GET_ANY_CPU_USAGE(uint16_t *pid_ptr, void *cpu_time_ret,
 
     /* Validate PID - crash on invalid */
     if (pid == 0 || pid > 0x40) {
-        CRASH_SYSTEM(&Illegal_PID_Err);
+        CRASH_SYSTEM(&proc1_$illegal_process_id_00e152e0);
         return;
     }
 

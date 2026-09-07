@@ -40,8 +40,11 @@
 
 /*
  * "Add 0x50 to the value before splitting it into tens and ones" sets bit 3
- * of the tens digit, because (v + 80) / 10 == v / 10 + 8 for v < 20 * 10.
- * The original uses that idiom twice; see the note in CAL_$WRITE_CALENDAR.
+ * of the tens digit, because (v + 80) / 10 == v / 10 + 8 and (v + 80) % 10 ==
+ * v % 10.  The original uses that idiom twice: correctly on the hour (H10 bit
+ * 3 is the MSM5832's 24-hour select) and incorrectly on the date (D10 bit 3 is
+ * unused; the leap-year flag is D10 bit 2).  See the resolved note in
+ * cal/cal.h and in CAL_$WRITE_CALENDAR below.
  */
 #define CAL_WRITE_TENS_BIT3 0x50
 
@@ -201,13 +204,22 @@ void CAL_$WRITE_CALENDAR(int16_t *year, int16_t *month, int16_t *day,
         /*
          * 0x00E816D6: add.w #0x50,D1w.
          *
-         * NOTE (original discrepancy, preserved): this sets bit 3 of the D10
-         * (date tens) register, but TIME_$READ_CAL writes the leap flag with
-         * `bset.l #2` (0x00E2AE78) and masks the date tens with 3
-         * (0x00E2AEC8), i.e. it uses bit 2 -- which is where the MSM5832
-         * datasheet puts the leap-year bit.  The 0x50 here looks like the
-         * 24-hour-select idiom used for the hour below, applied to the wrong
-         * register.  Faithfully reproduced; see bead source-tcxm.
+         * ORIGINAL BUG, reproduced as found (bead source-tcxm, resolved).
+         *
+         * The MSM5832 D10 register is {D0,D1 = date tens, D2 = leap year,
+         * D3 = unused}.  Adding 80 before the /10 split puts the flag in the
+         * tens digit's bit 3 -- the unused bit -- so the chip's leap-year flag
+         * is never programmed by this routine.  The correct constant would
+         * have been 0x28 (add 40 == +4 in the tens digit, i.e. D10 bit 2),
+         * which is what TIME_$READ_CAL uses on the read side (`bset.l #2` at
+         * 0x00E2AE78, and `and.w #3` at 0x00E2AEC8 when decoding the date).
+         * The identical `add.w #0x50` on the hour at 0x00E816EA below IS
+         * correct, because H10 bit 3 is the 24-hour select; the idiom was
+         * evidently copied onto the wrong register.
+         *
+         * The mistake is benign for date read-back (the chip ignores D10 D3
+         * and the reader masks with 3) and TIME_$READ_CAL rewrites D10 with
+         * bit 2 set on every read taken in a leap year.
          */
         day_val = (int16_t)(day_val + CAL_WRITE_TENS_BIT3);
     }
@@ -218,7 +230,8 @@ void CAL_$WRITE_CALENDAR(int16_t *year, int16_t *month, int16_t *day,
 
     /*
      * 0x00E816EA: add.w #0x50 puts bit 3 into the H10 register, which is the
-     * MSM5832's 24-hour select.
+     * MSM5832's 24-hour select (MSM5832_H10_24H_FLAG).  Correct here, unlike
+     * the same idiom on the date above.
      */
     cal_$write_calendar_0_to_99(&control,
                                 (int16_t)(*hour + CAL_WRITE_TENS_BIT3)); /* H10, H1 */

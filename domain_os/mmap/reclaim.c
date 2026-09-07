@@ -13,6 +13,16 @@
 #include "misc/misc.h"
 #include "proc1/proc1.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/* 0x00E0D978: pea (0x6c,PC) -> 0x00E0D9E6, jsr CRASH_SYSTEM at 0x00E0D97C. */
+static const status_$t mmap_$bad_reclaim_00e0d9e6 = 0x0006000D;
+
 void MMAP_$RECLAIM(uint32_t *vpn_array, uint16_t count, int8_t use_wired)
 {
     uint16_t wsl_index;
@@ -35,7 +45,7 @@ void MMAP_$RECLAIM(uint32_t *vpn_array, uint16_t count, int8_t use_wired)
 
         /* Validate page is not in the free pool */
         if (page->wsl_index == WSL_INDEX_FREE_POOL) {
-            CRASH_SYSTEM(MMAP_Bad_Reclaim_Err);
+            CRASH_SYSTEM(&mmap_$bad_reclaim_00e0d9e6);
         }
 
         /* Remove from current pool */

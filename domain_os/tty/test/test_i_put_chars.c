@@ -104,7 +104,7 @@ static void mock_xmit_callback(uint32_t line_id)
 /* State flags */
 #define TTY_STATUS_OUTPUT_WAIT  0x01
 #define TTY_STATUS_INPUT_WAIT   0x02
-#define TTY_STATUS_XON_XOFF     0x04
+#define TTY_STATUS_OUTPUT_STOPPED 0x04  /* output stopped by XOFF (^S) */
 #define TTY_STATUS_SIG_PEND     0x10
 #define TTY_STATUS_OUTPUT_FLUSH  0x20
 #define TTY_STATUS_EOF_PEND     0x40
@@ -268,7 +268,7 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
         return count;
     }
 
-    if (tty->state_flags & TTY_STATUS_XON_XOFF) {
+    if (tty->state_flags & TTY_STATUS_OUTPUT_STOPPED) {
         return 0;
     }
 
@@ -566,7 +566,7 @@ TEST(put_chars_input_only)
 {
     tty_desc_t tty;
     init_test_tty(&tty);
-    tty.state_flags = TTY_STATUS_XON_XOFF;
+    tty.state_flags = TTY_STATUS_OUTPUT_STOPPED;
 
     uint8_t data[] = "hello";
     uint16_t result = tty_$i_put_chars(&tty, data, make_flags(5, 0));

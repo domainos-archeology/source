@@ -244,9 +244,18 @@ void TIME_$READ_CAL(clock_t *clock, uint32_t *time)
      * indicator for its internal day-counting logic.
      */
     if (((year_from_epoch + 1) & 3) == 0) {
-        /* 0x00E2AE74: bset.l #2 -- the leap-year bit is D10 bit 2 here.
-         * CAL_$WRITE_CALENDAR instead sets bit 3 of the same register; see
-         * bead source-tcxm. */
+        /*
+         * 0x00E2AE74/0x00E2AE78: bset.l #2 -- D10 bit 2, which is where the
+         * MSM5832 keeps the leap-year flag (D10 is {D0,D1 = date tens,
+         * D2 = leap year, D3 = unused}).  This side is correct.
+         *
+         * CAL_$WRITE_CALENDAR deposits the same predicate in D10 bit 3 --
+         * `add.w #0x50,D1w` at 0x00E816D6 -- which the chip ignores; that is
+         * an original bug, resolved and documented in cal/cal.h and
+         * cal/write_calendar.c (bead source-tcxm).  It is this write-back that
+         * repairs the flag: TIME_$READ_CAL re-asserts D10 bit 2 on every read
+         * taken during a leap year.
+         */
         int16_t day_tens_with_flag =
             (int16_t)(digits[DIGIT_DAY_TENS] | MSM5832_D10_LEAP_FLAG);
         CAL_$RTC_WRITE_DATA((uint8_t)~(uint8_t)day_tens_with_flag);
@@ -289,7 +298,11 @@ void TIME_$READ_CAL(clock_t *clock, uint32_t *time)
     total_days += (uint16_t)((uint16_t)(march_month / 5) * 3);
     total_days += (uint16_t)(((uint16_t)(march_month % 5) + 1) >> 1);
 
-    /* Add day of month (mask off MSM5832 D10.D2 leap year flag) */
+    /*
+     * 0x00E2AEC8: and.w #3 -- only D0-D1 of D10 are date tens, so both the
+     * leap-year flag (D2) and the unused bit CAL_$WRITE_CALENDAR sets (D3)
+     * are discarded here.
+     */
     total_days += (uint16_t)((digits[DIGIT_DAY_TENS] & MSM5832_TENS_MASK) * 10
                               + digits[DIGIT_DAY_ONES]);
 

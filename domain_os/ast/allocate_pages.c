@@ -15,6 +15,19 @@
 
 #include "ast/ast_internal.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * 0x00E00DF6: pea (0xb4,PC) -> 0x00E00EAC, jsr CRASH_SYSTEM at 0x00E00DFA.
+ * Shared with AST_$PMAP_ASSOC, AST_$ASSOC_AREA and AST_$TOUCH.
+ */
+static const status_$t pmap_$mismatch_00e00eac = 0x00050003;
+
 /* External function prototypes */
 
 /* External variables */
@@ -90,7 +103,7 @@ int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
                     (int16_t)segmap_entry[0] < 0 ||  /* In transition? */
                     (segmap_entry[0] & 0x4000) == 0 ||  /* Not in use? */
                     (segmap_entry[0] & 0x2000) != 0) {  /* Wired? */
-                    CRASH_SYSTEM(&OS_PMAP_mismatch_err);
+                    CRASH_SYSTEM(&pmap_$mismatch_00e00eac);
                 }
 
                 /* Clear the in-use flag (0x40) in high byte */

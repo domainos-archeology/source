@@ -83,7 +83,9 @@ $(BUILD_DIR)/%.o: %.s
 	@$(CC) $(SAU2_FLAGS) -c -o $@ $<
 
 # Unit tests (host build)
-$(TEST_BUILD_DIR)/%: %.c
+# Tests #include the .c under test and many headers; rebuild when any header changes.
+ALL_HEADERS := $(wildcard */*.h */*/*.h)
+$(TEST_BUILD_DIR)/%: %.c $(ALL_HEADERS)
 	@mkdir -p $(dir $@)
 	@echo "[HOSTCC] $<"
 	@$(HOST_CC) $(HOST_CFLAGS) -I$(dir $<) -o $@ $<

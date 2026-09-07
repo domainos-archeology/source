@@ -163,59 +163,12 @@ void CRASH_SYSTEM(const status_$t *status_p)
 /*
  * ===========================================================================
  * Status constants passed to CRASH_SYSTEM
+ * ===========================================================================
  *
- * These do not exist as objects in the image: every caller passes
- * `pea (d,PC)` to a constant cell in its own module.  They are kept here as
- * a single definition point until each one is pushed down to a file-static
- * next to its caller - see bead source-tzmw.
- *
- * "verified" means the value was read out of the cell the caller points at.
+ * There are none here, and there never were any in the image.  Every caller of
+ * CRASH_SYSTEM passes `pea (d,PC)` to a constant longword sitting in its own
+ * module's code region, so each status is a file-static constant next to the
+ * call site that uses it, named after the cell address (bead source-tzmw).
+ * Grep for `_00e` in the callers to find them.
  * ===========================================================================
  */
-
-/* PROC1 subsystem (0x000A) - process/lock errors */
-/*
- * TODO(source-tzmw): ml/lock.c's cell was never read; 0x000A0001 is inferred
- * from the subsystem prefix only.
- */
-status_$t Lock_ordering_violation = 0x000a0001;
-status_$t Illegal_lock_err = 0x000a0002;         /* verified: 0x00e20de4 */
-
-/* Calendar subsystem (0x001B) */
-status_$t No_calendar_on_system_err = 0x001b0004; /* verified: 0x00e34b10 */
-
-/* OS/BAT subsystem (0x0001) */
-status_$t OS_BAT_disk_needs_salvaging_err = 0x00010005; /* verified: 0x00e34ae0 */
-
-status_$t No_err = status_$ok;                    /* verified: 0x00e33774 */
-
-/* MST/PMAP subsystem (0x0004) */
-status_$t PMAP_VM_Resources_exhausted_err = 0x0004000e; /* verified: 0x00e30b0c */
-status_$t MST_Ref_OutOfBounds_Err = 0x00040005;  /* verified: 0x00e0e1b8 */
-
-/* Disk subsystem (0x0008) */
-status_$t Disk_Queued_Drivers_Not_Supported_Err = 0x0008002e; /* verified: 0x00e3c9fa */
-/* TODO(source-tzmw): a duplicate spelling of Disk_driver_logic_err used by
- * disk/dismount.c, which additionally declares it as `void *`. */
-status_$t Disk_Driver_Logic_Err = 0x00080022;
-status_$t Disk_controller_err = 0x00080004;       /* verified: 0x00e1940c */
-status_$t Disk_driver_logic_err = 0x00080022;     /* verified: 0x00e19410 */
-
-/* MMAP/WSL subsystem (0x0006) - virtual memory errors */
-status_$t Illegal_PID_Err = 0x0006000a;           /* verified: 0x00e0d1c4 */
-status_$t Illegal_WSL_Index_Err = 0x00060009;     /* verified: 0x00e0c9e0 */
-status_$t WSL_Exhausted_Err = 0x0006000b;         /* verified: 0x00e0d270 */
-status_$t Inconsistent_MMAPE_Err = 0x00060008;    /* verified: 0x00e0cff4 */
-status_$t MMAP_Bad_Unavail_err = 0x00060006;      /* verified: 0x00e0cd18 */
-status_$t mmap_bad_avail = 0x00060004;            /* verified: 0x00e0ccb8 */
-status_$t MMAP_Bad_Reclaim_Err = 0x0006000d;      /* verified: 0x00e0d9e6 */
-status_$t MMAP_Error_Examined_Max = 0x00060007;   /* verified: 0x00e31b80 */
-
-/* ASTE subsystem (0x8003) */
-status_$t Some_ASTE_Error = 0x80030003;           /* verified: 0x00e01f18 */
-
-/* PMAP subsystem (0x0005) */
-status_$t OS_PMAP_mismatch_err = 0x00050003;      /* verified: 0x00e00eac */
-
-/* MMAP subsystem (0x0006) */
-status_$t OS_MMAP_bad_install = 0x0006000c;       /* verified: 0x00e03544 */

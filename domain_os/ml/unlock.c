@@ -29,7 +29,7 @@
  *   00e20bae  beq.w 0x00e20eb0          ; ==0: clear resource_locks_held bit 0
  *   00e20bb2  bra.w 0x00e20eb6          ; !=0: straight into the shared tail
  *
- *   (0x00e20b56: pea (0x28c,PC) -> &Illegal_lock_err
+ *   (0x00e20b56: pea (0x28c,PC) -> the status cell at 0x00E20DE4
  *                jsr CRASH_SYSTEM
  *                bra.b 0x00e20b56       ; loops forever)
  *
@@ -38,6 +38,20 @@
  */
 
 #include "ml/ml_internal.h"
+
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * Reached through the shared crash tail at 0x00E20B56 (`beq.b 0x00E20B56` at
+ * 0x00E20BA4): `pea (0x28c,PC)` -> the cell at 0x00E20DE4.  ML_$LOCK's
+ * ordering check crashes with the same cell; see ml/lock.c.
+ */
+static const status_$t proc1_$illegal_lock_00e20de4 = 0x000A0002;
 
 void ML_$UNLOCK(int16_t resource_id)
 {
@@ -71,7 +85,7 @@ void ML_$UNLOCK(int16_t resource_id)
     if ((locks & lock_mask) == 0) {
         /* 0x00E20B56: crash, and the crash site loops back onto itself */
         for (;;) {
-            CRASH_SYSTEM(&Illegal_lock_err);
+            CRASH_SYSTEM(&proc1_$illegal_lock_00e20de4);
         }
     }
 

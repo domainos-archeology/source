@@ -10,10 +10,23 @@
 #include "mmap/mmap_internal.h"
 #include "misc/misc.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * 0x00E0D170: pea (0x52,PC) -> 0x00E0D1C4, jsr CRASH_SYSTEM at 0x00E0D174.
+ * The same cell is used by MMAP_$SET_WS_INDEX (0x00E0D1E4).
+ */
+static const status_$t mmap_$illegal_pid_00e0d1c4 = 0x0006000A;
+
 void MMAP_$FREE_WSL(uint16_t pid)
 {
     if (pid > MMAP_MAX_PID) {
-        CRASH_SYSTEM(Illegal_PID_Err);
+        CRASH_SYSTEM(&mmap_$illegal_pid_00e0d1c4);
     }
 
     uint16_t wsl_index = MMAP_PID_TO_WSL[pid];

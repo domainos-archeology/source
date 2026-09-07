@@ -12,13 +12,26 @@
 #include "misc/misc.h"
 #include "mmu/mmu.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * 0x00E0D382: pea (-0x9a4,PC) -> 0x00E0C9E0, jsr CRASH_SYSTEM at 0x00E0D386.
+ * Shared with MMAP_$SET_WS_PRI, MMAP_$PURGE and MMAP_$SET_WS_INDEX.
+ */
+static const status_$t mmap_$illegal_wsl_index_00e0c9e0 = 0x00060009;
+
 uint32_t MMAP_$WS_SCAN(uint16_t wsl_index, int16_t mode, uint32_t pages_needed, uint32_t param4)
 {
     (void)param4;  /* Unused in decompilation */
 
     /* Validate WSL index */
     if (wsl_index < WSL_INDEX_MIN_USER || wsl_index > MMAP_WSL_HI_MARK) {
-        CRASH_SYSTEM(Illegal_WSL_Index_Err);
+        CRASH_SYSTEM(&mmap_$illegal_wsl_index_00e0c9e0);
     }
 
     MMAP_$WS_SCAN_CNT++;

@@ -22,6 +22,24 @@
 #include "misc/misc.h"
 #include "mmap/mmap.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * 0x00E03414: pea (-0x256a,PC) -> 0x00E00EAC, jsr CRASH_SYSTEM at 0x00E03418.
+ * Shared with AST_$PMAP_ASSOC, AST_$ALLOCATE_PAGES and AST_$ASSOC_AREA.
+ */
+static const status_$t pmap_$mismatch_00e00eac = 0x00050003;
+/*
+ * 0x00E03434: pea (0x10e,PC) -> 0x00E03544, jsr CRASH_SYSTEM at 0x00E03438.
+ * Shared with AST_$PMAP_ASSOC and AST_$ASSOC_AREA.
+ */
+static const status_$t mmap_$bad_install_00e03544 = 0x0006000C;
+
 uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
                     uint32_t *ppn_array, status_$t *status, uint16_t flags)
 {
@@ -221,12 +239,12 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
             for (i = 0; i < pages_touched; i++) {
                 uint32_t ppn = ppn_array[i];
                 if (ppn == 0) {
-                    CRASH_SYSTEM(&OS_PMAP_mismatch_err);
+                    CRASH_SYSTEM(&pmap_$mismatch_00e00eac);
                 }
 
                 int pmape_offset = ppn * 0x10;
                 if (*(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 5) < 0) {
-                    CRASH_SYSTEM(&OS_MMAP_bad_install);
+                    CRASH_SYSTEM(&mmap_$bad_install_00e03544);
                 }
 
                 /* Set up PMAPE entry */

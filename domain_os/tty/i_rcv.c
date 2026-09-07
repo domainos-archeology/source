@@ -111,16 +111,16 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
             }
             break;
 
-        case TTY_CHAR_CLASS_XON:  /* 0x05 - 0xE1BA42: stop output */
-            tty->state_flags |= TTY_STATUS_XON_XOFF;   /* bset.b #2,(0x9,A2) */
+        case TTY_CHAR_CLASS_XOFF:  /* 0x05 - 0xE1BA42: ^S, stop output */
+            tty->state_flags |= TTY_STATUS_OUTPUT_STOPPED; /* bset.b #2,(0x9,A2) */
             if (tty->xon_xoff_handler != 0) {
                 /* 0xE1BA52: st -(SP) pushes the boolean TRUE (0xFF) */
                 tty->xon_xoff_handler(tty->line_id, true);
             }
             break;
 
-        case TTY_CHAR_CLASS_XOFF:  /* 0x06 - 0xE1BA60: resume output */
-            tty->state_flags &= (uint16_t)~TTY_STATUS_XON_XOFF; /* bclr.b #2 */
+        case TTY_CHAR_CLASS_XON:  /* 0x06 - 0xE1BA60: ^Q, resume output */
+            tty->state_flags &= (uint16_t)~TTY_STATUS_OUTPUT_STOPPED; /* bclr.b #2 */
             if (tty->xon_xoff_handler != 0) {
                 /* 0xE1BA6E: clr.w -(SP) pushes the boolean FALSE */
                 tty->xon_xoff_handler(tty->line_id, false);

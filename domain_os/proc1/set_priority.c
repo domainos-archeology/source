@@ -20,6 +20,19 @@
 #include "misc/misc.h"
 
 /*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * 0x00E1525E: pea (0x80,PC) -> 0x00E152E0, jsr CRASH_SYSTEM at 0x00E15262.
+ * Shared with PROC1_$GET_ANY_CPUT and PROC1_$GET_ANY_CPU_USAGE.
+ */
+static const status_$t proc1_$illegal_process_id_00e152e0 = 0x000A0001;
+
+/*
  * clamp_priority - Clamp priority value to valid range [1, 16]
  * This is an inline version of FUN_00e15222
  */
@@ -42,7 +55,7 @@ void PROC1_$SET_PRIORITY(uint16_t pid, int16_t mode, uint16_t *min_priority, uin
 
     /* Validate PID */
     if (pid == 0 || pid > 0x40) {
-        CRASH_SYSTEM(&Illegal_PID_Err);
+        CRASH_SYSTEM(&proc1_$illegal_process_id_00e152e0);
         return;
     }
 

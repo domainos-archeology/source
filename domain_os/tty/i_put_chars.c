@@ -112,8 +112,8 @@ uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)
         return count;
     }
 
-    /* If input-only mode (state_flags bit 2), return 0 */
-    if (tty->state_flags & TTY_STATUS_XON_XOFF) {
+    /* 0xE1B032: output stopped by XOFF (state_flags bit 2) - consume nothing */
+    if (tty->state_flags & TTY_STATUS_OUTPUT_STOPPED) {
         return 0;
     }
 

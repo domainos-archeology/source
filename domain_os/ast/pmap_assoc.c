@@ -20,6 +20,24 @@
 #include "mmu/mmu.h"
 #include "mmap/mmap.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * 0x00E04396: pea (-0x34ec,PC) -> 0x00E00EAC, jsr CRASH_SYSTEM at 0x00E0439A.
+ * Shared with AST_$ALLOCATE_PAGES, AST_$ASSOC_AREA and AST_$TOUCH.
+ */
+static const status_$t pmap_$mismatch_00e00eac = 0x00050003;
+/*
+ * 0x00E043C6: pea (-0xe84,PC) -> 0x00E03544, jsr CRASH_SYSTEM at 0x00E043CA.
+ * Shared with AST_$ASSOC_AREA and AST_$TOUCH.
+ */
+static const status_$t mmap_$bad_install_00e03544 = 0x0006000C;
+
 void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
                      uint16_t flags1, uint16_t flags2, status_$t *status)
 {
@@ -92,7 +110,7 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
 
     /* Validate new PPN */
     if (ppn == 0) {
-        CRASH_SYSTEM(&OS_PMAP_mismatch_err);
+        CRASH_SYSTEM(&pmap_$mismatch_00e00eac);
     }
 
     /* Set up new page mapping */
@@ -101,7 +119,7 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
 
         /* Check that page is not already installed */
         if (*(int8_t *)((uintptr_t)MMAPE_BASE + pmape_offset + 5) < 0) {
-            CRASH_SYSTEM(&OS_MMAP_bad_install);
+            CRASH_SYSTEM(&mmap_$bad_install_00e03544);
         }
 
         /* Set up PMAPE entry */

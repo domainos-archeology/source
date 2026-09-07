@@ -344,36 +344,44 @@ TEST(class_eof_emits_bs_twice)
     ASSERT_STR("", call_log);
 }
 
-/* 0xE1BA42 / 0xE1BA60: the handler's 2nd argument is st (0xFF) then clr (0) */
+/*
+ * 0xE1BA42 / 0xE1BA60: the handler's 2nd argument is st (0xFF) then clr (0).
+ * The default tables (0x00E351D8 / 0x00E8242C) map ^S (0x13) to class 0x05 and
+ * ^Q (0x11) to class 0x06, so class 0x05 is XOFF and class 0x06 is XON.
+ */
 TEST(class_xon_xoff_handler_second_arg)
 {
-    setup(TTY_CHAR_CLASS_XON);
+    /* ^S / DC3 -> TTY_CHAR_CLASS_XOFF (0x05): stops output */
+    setup(TTY_CHAR_CLASS_XOFF);
     tty.xon_xoff_handler = mock_xon_xoff;
     TTY_$I_RCV(&tty, 0x13);
     ASSERT_EQ(1, xon_calls);
     ASSERT_EQ(0xDEADBEEFu, xon_line_id);
     ASSERT_EQ((unsigned char)true, (unsigned char)xon_stop);
-    ASSERT_EQ(TTY_STATUS_XON_XOFF, tty.state_flags & TTY_STATUS_XON_XOFF);
+    ASSERT_EQ(TTY_STATUS_OUTPUT_STOPPED,
+              tty.state_flags & TTY_STATUS_OUTPUT_STOPPED);
     ASSERT_STR("xonxoff(deadbeef,ff);", call_log);
 
-    setup(TTY_CHAR_CLASS_XOFF);
-    tty.state_flags = TTY_STATUS_XON_XOFF;
+    /* ^Q / DC1 -> TTY_CHAR_CLASS_XON (0x06): resumes output */
+    setup(TTY_CHAR_CLASS_XON);
+    tty.state_flags = TTY_STATUS_OUTPUT_STOPPED;
     tty.xon_xoff_handler = mock_xon_xoff;
     tty.output_ec = 0x1234;
     TTY_$I_RCV(&tty, 0x11);
     ASSERT_EQ(1, xon_calls);
     ASSERT_EQ((unsigned char)false, (unsigned char)xon_stop);
-    ASSERT_EQ(0, tty.state_flags & TTY_STATUS_XON_XOFF);
+    ASSERT_EQ(0, tty.state_flags & TTY_STATUS_OUTPUT_STOPPED);
     ASSERT_STR("xonxoff(deadbeef,00);advance_ec(1234);", call_log);
 }
 
 /* A null handler pointer must be skipped (tst.l (0x2b8,A2)) */
-TEST(class_xon_null_handler)
+TEST(class_xoff_null_handler)
 {
-    setup(TTY_CHAR_CLASS_XON);
+    setup(TTY_CHAR_CLASS_XOFF);
     TTY_$I_RCV(&tty, 0x13);
     ASSERT_EQ(0, xon_calls);
-    ASSERT_EQ(TTY_STATUS_XON_XOFF, tty.state_flags & TTY_STATUS_XON_XOFF);
+    ASSERT_EQ(TTY_STATUS_OUTPUT_STOPPED,
+              tty.state_flags & TTY_STATUS_OUTPUT_STOPPED);
 }
 
 /* 0xE1BACE/0xE1BAF6/0xE1BAE2: the parity bit is re-ORed, then the editor runs */
@@ -647,7 +655,7 @@ int main(void)
     RUN_TEST(class_break_and_nl);
     RUN_TEST(class_eof_emits_bs_twice);
     RUN_TEST(class_xon_xoff_handler_second_arg);
-    RUN_TEST(class_xon_null_handler);
+    RUN_TEST(class_xoff_null_handler);
     RUN_TEST(class_editing_dispatch);
     RUN_TEST(class_reprint);
     RUN_TEST(class_discard);

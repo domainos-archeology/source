@@ -26,12 +26,17 @@
 #define TTY_CHAR_CLASS_SIGTSTP 0x02  // Suspend (^Z)
 #define TTY_CHAR_CLASS_BREAK 0x03    // Break character (end of line)
 #define TTY_CHAR_CLASS_EOF 0x04      // End of file (^D)
-// NOTE: class 0x05 SETS state bit 0x04 and calls the xon/xoff handler with
-// TRUE; class 0x06 CLEARS it, calls the handler with FALSE and advances the
-// output eventcount (0xE1BA42 / 0xE1BA60).  i.e. 0x05 stops output and 0x06
-// resumes it.  TODO: verify the historical names (source-2qng).
-#define TTY_CHAR_CLASS_XON 0x05      // Output stop  (^S) - sets TTY_STATUS_XON_XOFF
-#define TTY_CHAR_CLASS_XOFF 0x06     // Output resume (^Q) - clears TTY_STATUS_XON_XOFF
+// Classes 0x05/0x06 resolved from the two default tables (source-2qng):
+//   TTY_$I_INIT (0xE33284) copies the default function characters from
+//   0x00E351D8; TTY_$I_SET_DFL_FUNCS (0xE67274) sets A5 = 0x00E8242C, whose
+//   first 18 words are the function-index -> character-class table.
+//   Function index 13: character 0x13 (^S, DC3 = XOFF) -> class 0x05
+//   Function index 14: character 0x11 (^Q, DC1 = XON)  -> class 0x06
+// and the handlers agree: class 0x05 (0xE1BA42) SETS the output-stop bit and
+// calls the xon/xoff handler with TRUE; class 0x06 (0xE1BA60) CLEARS it, calls
+// the handler with FALSE and advances the output eventcount.
+#define TTY_CHAR_CLASS_XOFF 0x05     // ^S/DC3: stop output - sets TTY_STATUS_OUTPUT_STOPPED
+#define TTY_CHAR_CLASS_XON 0x06      // ^Q/DC1: resume output - clears TTY_STATUS_OUTPUT_STOPPED
 #define TTY_CHAR_CLASS_DEL 0x07      // Delete character
 #define TTY_CHAR_CLASS_KILL 0x08     // Kill line   (dispatches TTY_$I_KILL_LINE, 0xE1BAF6)
 #define TTY_CHAR_CLASS_WERASE 0x09   // Word erase  (dispatches TTY_$I_WORD_ERASE, 0xE1BAE2)
@@ -65,7 +70,8 @@
 // =============================================================================
 #define TTY_STATUS_OUTPUT_WAIT 0x01  // Waiting for output buffer drain
 #define TTY_STATUS_INPUT_WAIT 0x02   // Waiting for input
-#define TTY_STATUS_XON_XOFF 0x04     // XON/XOFF active
+#define TTY_STATUS_OUTPUT_STOPPED 0x04 // Output stopped by XOFF (^S); tty_$i_put_chars
+                                     // returns 0 while set (0xE1B032)
 #define TTY_STATUS_SIG_PEND 0x10     // Signal pending on input
 #define TTY_STATUS_OUTPUT_FLUSH 0x20 // Output flush in progress
 #define TTY_STATUS_EOF_PEND 0x40     // EOF pending

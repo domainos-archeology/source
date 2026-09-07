@@ -13,6 +13,19 @@
 #include "ast/ast_internal.h"
 #include "misc/misc.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/*
+ * 0x00E02060: pea (-0x14a,PC) -> 0x00E01F18, jsr CRASH_SYSTEM at 0x00E02064.
+ * The same cell is used by AST_$ALLOCATE_AOTE (0x00E01EFC).
+ */
+static const status_$t ast_$no_replaceable_astes_00e01f18 = 0x80030003;
+
 /* Internal function prototypes */
 static aste_t* try_free_aste(aste_t *aste, status_$t *status);
 
@@ -104,7 +117,7 @@ aste_t* AST_$ALLOCATE_ASTE(void)
     }
 
     /* Failed to allocate - crash */
-    CRASH_SYSTEM(&Some_ASTE_Error);
+    CRASH_SYSTEM(&ast_$no_replaceable_astes_00e01f18);
     aste = NULL;
 
 found:

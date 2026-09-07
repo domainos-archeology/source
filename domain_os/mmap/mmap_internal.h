@@ -85,19 +85,4 @@ extern uint32_t MMAP_$WS_DATA[];
  */
 extern uint16_t MMAP_$PROC_WS_LIST[];
 
-/*
- * ============================================================================
- * Error Status Arrays (internal)
- * ============================================================================
- */
-
-extern status_$t Illegal_WSL_Index_Err[];
-extern status_$t Illegal_PID_Err[];
-extern status_$t WSL_Exhausted_Err[];
-extern status_$t MMAP_Bad_Unavail_err[];
-extern status_$t mmap_bad_avail[];
-extern status_$t MMAP_Bad_Reclaim_Err[];
-extern status_$t Inconsistent_MMAPE_Err[];
-extern status_$t MMAP_Error_Examined_Max[];
-
 #endif /* MMAP_INTERNAL_H */

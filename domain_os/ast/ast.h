@@ -403,13 +403,6 @@ extern uint16_t ast_aste_l_cnt;
 #define AST_MIN_ASTE 0x50  /* 80 entries */
 
 /*
- * Error status codes
- */
-extern status_$t Some_ASTE_Error;
-extern status_$t OS_PMAP_mismatch_err;
-extern status_$t OS_MMAP_bad_install;
-
-/*
  * Lock IDs used by AST
  */
 #define AST_LOCK_ID 0x12  /* Main AST lock */

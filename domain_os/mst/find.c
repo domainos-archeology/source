@@ -18,6 +18,16 @@
 #include "misc/misc.h"
 
 /*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/* 0x00E0E130: pea (0x86,PC) -> 0x00E0E1B8, jsr CRASH_SYSTEM at 0x00E0E134. */
+static const status_$t mst_$ref_out_of_bounds_00e0e1b8 = 0x00040005;
+
+/*
  * MST_$FIND - Find physical address for virtual address
  *
  * @param virt_addr  Virtual address to look up
@@ -34,7 +44,7 @@ uint32_t MST_$FIND(uint32_t virt_addr, uint16_t flags)
      * This catches programming errors where caller passes wrong flags.
      */
     if ((flags & 5) != 0) {
-        CRASH_SYSTEM(&MST_Ref_OutOfBounds_Err);
+        CRASH_SYSTEM(&mst_$ref_out_of_bounds_00e0e1b8);
     }
 
     /* Lock MMU for translation */
