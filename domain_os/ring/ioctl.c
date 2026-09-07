@@ -82,7 +82,7 @@ void RING_$SET_TMASK(uint16_t unit, uint16_t mask)
         return;
     }
 
-    unit_data = &RING_$DATA.units[unit];
+    unit_data = &RING_$CTL.units[unit];
 
     /*
      * Update the mask value.

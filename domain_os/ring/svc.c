@@ -111,7 +111,7 @@ void RING_$SVC_CLOSE(uint16_t *unit_ptr, void *args, status_$t *status_ret)
         return;
     }
 
-    unit_data = &RING_$DATA.units[unit];
+    unit_data = &RING_$CTL.units[unit];
 
     /* Get channel number from args */
     channel = *((uint16_t *)args + 2);
@@ -193,7 +193,7 @@ void RING_$SVC_READ(uint16_t *unit_ptr, void *result, void *param3,
         return;
     }
 
-    unit_data = &RING_$DATA.units[unit];
+    unit_data = &RING_$CTL.units[unit];
 
     /* Check if unit is started and running */
     if (((unit_data->state_flags & RING_UNIT_STARTED) == 0) ||
@@ -363,7 +363,7 @@ void RING_$SVC_WRITE(uint16_t *unit_ptr, void *hdr, void *param3,
         return;
     }
 
-    unit_data = &RING_$DATA.units[unit];
+    unit_data = &RING_$CTL.units[unit];
 
     /* Get channel number from hdr */
     channel = *((uint16_t *)hdr + 2);

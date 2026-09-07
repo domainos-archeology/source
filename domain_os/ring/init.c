@@ -66,7 +66,7 @@ status_$t RING_$INIT(void *device_info)
     /*
      * Get pointer to this unit's data structure.
      */
-    unit_data = &RING_$DATA.units[unit_num];
+    unit_data = &RING_$CTL.units[unit_num];
 
     /*
      * Copy the network UID template to the global storage.
@@ -129,20 +129,20 @@ status_$t RING_$INIT(void *device_info)
          * Parameters:
          *   - 0: Mode/type
          *   - unit_num: Unit number
-         *   - &RING_$DATA + 0x518: Some data address
+         *   - &RING_$CTL + 0x518: Some data address
          *   - 0: Additional parameter
          *   - &status: Status output
          *
          * Returns the port number which is stored in the port array.
          */
         port_num = NET_IO_$CREATE_PORT(0, unit_num,
-                                       (void *)((uint8_t *)&RING_$DATA + 0x518),
+                                       (void *)((uint8_t *)&RING_$CTL + 0x518),
                                        0, &status);
 
         /*
          * Store the port number in the per-unit port array.
          */
-        RING_$DATA.port_array[unit_num] = port_num;
+        RING_$CTL.port_array[unit_num] = port_num;
 
         /*
          * Set the route port pointer to point into the route port array.

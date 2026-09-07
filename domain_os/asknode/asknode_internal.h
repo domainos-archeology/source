@@ -273,7 +273,7 @@ _Static_assert(offsetof(asknode_who_response_t, node_id) == 0x08, "who_response.
  * NETWORK_$CAPABLE_FLAGS) come from network/network.h; MEM_$MEM_REC from
  * mem/mem.h; MMAP_$REAL_PAGES from mmap/mmap.h; PROM_$MACHINE_ID from
  * prom/prom.h; MMU_$SYSTEM_REV from mmu/mmu.h; GPU_$PRESENT from gpu/gpu.h;
- * RING_$DATA from ring/ring.h.
+ * RING_$CTL from ring/ring.h.
  */
 
 /* Packet info template at 0x00E82408 - default values for PKT_$SEND_INTERNET */

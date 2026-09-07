@@ -17,7 +17,7 @@ store at `(-0x1E2+N,A0)` is payload offset N.  The payload's first word is
 0x0E) - do not call it a version.
 
 ring_info_t = 0x7A bytes: `_unknown_00` word (const 3), `diskless`
-(NETWORK_$DISKLESS), unwritten pad byte, `mother_node`, **RING_$STATS[0]**
+(NETWORK_$DISKLESS), unwritten pad byte, `mother_node`, **RING_$DATA[0]**
 (0xE261E0, 0x3C) at +0x08, **NETWORK_$FAILURE_REC** (0xE24BF4, 0x10) at +0x44,
 **RING_$SWDIAG_DATA** (0xE261C2, 0x1E) at +0x54, then xmit_biphase /
 rcv_biphase / xmit_esb / rcv_esb at +0x72..+0x79.
@@ -25,7 +25,7 @@ rcv_biphase / xmit_esb / rcv_esb at +0x72..+0x79.
 Two things this pass settled that are reusable:
 
 - **`ring_$swdiag_t` is 0x1E bytes, not the 0x18 ring/ring.h declares** - the
-  copy runs 0xE261C2..0xE261DF, i.e. right up to RING_$STATS[0].  +0x18 is
+  copy runs 0xE261C2..0xE261DF, i.e. right up to RING_$DATA[0].  +0x18 is
   `rcvhcsum` (the uniform -0x1A mirror of stats+0x32).  Bead source-twut.
 - **`network_$failure_rec_t` +0x04 and +0x0C are named backwards** in
   network/network.h: 0x00E10414 stores NODE_$ME into +0x04 and 0x00E1042E the

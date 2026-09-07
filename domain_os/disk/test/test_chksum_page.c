@@ -39,9 +39,7 @@ static int tests_run = 0;
  * Globals and mocks
  * ================================================================ */
 ml_$exclusion_t ml_$exclusion_t_00e7a274;
-ml_$exclusion_t ml_$exclusion_t_00e7a25c;
 ml_$exclusion_t MOUNT_LOCK;
-int8_t DISK_$DIAG;
 
 #define MAX_EVENTS 8
 
@@ -95,6 +93,10 @@ uint16_t CHKSUM_$GET_CHKSUM(const void *va)
 }
 
 #include "../chksum_page.c"
+
+/* DISK_$DIAG, DISK_$DO_CHKSUM and the module exclusion lock are cells of the
+ * DISK_ module block (disk/disk.h), so the host build provides the block. */
+uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
 static void reset_state(void)
 {

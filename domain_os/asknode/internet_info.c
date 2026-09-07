@@ -20,7 +20,7 @@
 /*
  * Globals: NETWORK_$*_CNT statistics and NETWORK_$CAPABLE_FLAGS come from
  * network/network.h, MEM_$MEM_REC from mem/mem.h, MMAP_$REAL_PAGES from
- * mmap/mmap.h, RING_$DATA from ring/ring.h and the status_$network_* codes
+ * mmap/mmap.h, RING_$CTL from ring/ring.h and the status_$network_* codes
  * from network/network.h (all via asknode_internal.h).
  */
 
@@ -78,9 +78,9 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         *(uint16_t *)((char *)result + 0x1A) = NETWORK_$READ_VIOL_CNT;
         *(uint16_t *)(result + 7) = NETWORK_$WRITE_VIOL_CNT;
         *(uint16_t *)((char *)result + 0x1E) = NETWORK_$BAD_CHKSUM_CNT;
-        /* Copy RING_$DATA (15 words) */
+        /* Copy RING_$CTL (15 words) */
         {
-            uint32_t *src = (uint32_t *)&RING_$DATA;
+            uint32_t *src = (uint32_t *)&RING_$CTL;
             uint32_t *dst = result + 8;
             int16_t i;
             for (i = 0; i < 15; i++) {

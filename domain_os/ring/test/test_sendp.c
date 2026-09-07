@@ -46,8 +46,8 @@ static int tests_run = 0;
 /* The register file, declared up here because the mocks below observe it. */
 static ring_hw_regs_t regs;
 
-ring_global_t RING_$DATA;
-ring_$stats_t RING_$STATS[RING_MAX_UNITS];
+ring_global_t RING_$CTL;
+ring_$stats_t RING_$DATA[RING_MAX_UNITS];
 uint16_t RING_$XMIT_BIPHASE;
 uint16_t RING_$XMIT_ESB;
 char NETWORK_$DO_CHKSUM;
@@ -155,7 +155,7 @@ void ring_$setup_tx_dma(uint32_t hdr_pa, int16_t hdr_len,
 {
     tx_dma_calls++;
     if (tx_dma_bump_ec) {
-        RING_$DATA.units[1].tx_ec.value++;
+        RING_$CTL.units[1].tx_ec.value++;
     }
     tx_dma_hdr_pa = hdr_pa;
     tx_dma_hdr_len = hdr_len;
@@ -217,15 +217,15 @@ static uint16_t send_opts;
 static uint16_t result_flags;
 static status_$t status;
 
-static ring_unit_t *unit_data(void) { return &RING_$DATA.units[UNIT]; }
-static ring_$stats_t *stats(void) { return &RING_$STATS[UNIT]; }
+static ring_unit_t *unit_data(void) { return &RING_$CTL.units[UNIT]; }
+static ring_$stats_t *stats(void) { return &RING_$DATA[UNIT]; }
 
 static void setup(void)
 {
     int i;
 
-    memset(&RING_$DATA, 0, sizeof(RING_$DATA));
-    memset(RING_$STATS, 0, sizeof(RING_$STATS));
+    memset(&RING_$CTL, 0, sizeof(RING_$CTL));
+    memset(RING_$DATA, 0, sizeof(RING_$DATA));
     memset(&regs, 0, sizeof(regs));
     memset(&hdr, 0, sizeof(hdr));
     memset(data_desc, 0, sizeof(data_desc));
@@ -256,13 +256,13 @@ static void setup(void)
     unit_data()->hw_regs = &regs;
     unit_data()->tx_ec.value = 0;
 
-    RING_$DATA.max_data_len = 1024;
+    RING_$CTL.max_data_len = 1024;
     /* a zero poll timeout makes the deadline the attempt start, so the very
      * first SUB48 in the poll loop is non-negative and the loop exits at once */
-    RING_$DATA.poll_timeout = (clock_t){ 0, 0 };
-    RING_$DATA.wait_timeout = (clock_t){ 0, 0x0064 };
-    RING_$DATA.xmit_timeout1 = (clock_t){ 0, 0x0011 };
-    RING_$DATA.xmit_timeout2 = (clock_t){ 0, 0x0022 };
+    RING_$CTL.poll_timeout = (clock_t){ 0, 0 };
+    RING_$CTL.wait_timeout = (clock_t){ 0, 0x0064 };
+    RING_$CTL.xmit_timeout1 = (clock_t){ 0, 0x0011 };
+    RING_$CTL.xmit_timeout2 = (clock_t){ 0, 0x0022 };
 
     regs.mode = 0x2000;         /* ready */
 
@@ -301,7 +301,7 @@ TEST(uninitialised_unit)
 TEST(data_too_long)
 {
     setup();
-    RING_$DATA.max_data_len = 4;
+    RING_$CTL.max_data_len = 4;
 
     run(5);
 
@@ -420,7 +420,7 @@ TEST(poll_sees_immediate_completion)
  * With a zero poll timeout the deadline equals the attempt start, so the very
  * first SUB48 is non-negative and the loop falls out to the first
  * TIME_$WAIT2, which must use the ABSOLUTE delay type (0x00E75DE0 == 1) and
- * the deadline built from RING_$DATA.wait_timeout.
+ * the deadline built from RING_$CTL.wait_timeout.
  */
 TEST(poll_timeout_takes_the_absolute_wait)
 {
@@ -435,7 +435,7 @@ TEST(poll_timeout_takes_the_absolute_wait)
     ASSERT_EQ(1, wait2_delay_type[0]);          /* absolute */
     ASSERT_EQ(0x0064, wait2_delay[0].low);      /* attempt_start + wait_timeout */
     ASSERT_EQ(1, wait2_count[0]);               /* tx_ec.value + 1 */
-    ASSERT_EQ(1, RING_$DATA.xmit_waited);       /* 0xE75AC0 */
+    ASSERT_EQ(1, RING_$CTL.xmit_waited);       /* 0xE75AC0 */
     ASSERT_EQ(status_$ok, status);
 }
 

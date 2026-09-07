@@ -257,65 +257,22 @@ typedef struct bat_$vtoce_block_t {
 } bat_$vtoce_block_t;
 
 /*
- * bat_$disk_info_t - the BAT manager's view of one DISK_$DVTBL entry
+ * BAT_$MOUNT's view of the DISK_$DVTBL entry for a volume is disk_$volume_t
+ * (disk/disk.h), reached through DISK_VOL(vol_idx).  0x00E3B820-0x00E3B830
  *
- * BAT_$MOUNT does not own this record: it reads the DISK module's volume
- * table.  The SAU2 map places that table at `E7A290  DISK_$DVTBL`, inside
- * `D E7A1CC  DISK_ size = B90`, and 0x00E3B820-0x00E3B830 form
- *
- *   0x00E3B820  movea.l #0xe7a290,A2
+ *   0x00E3B820  movea.l #0xe7a290,A2    ; DISK_$DVTBL
  *   0x00E3B826  lsl.w #0x3,D6w          ; vol*8
  *   0x00E3B828  move.w D6w,D7w
  *   0x00E3B82A  lsl.w #0x3,D7w          ; vol*64
  *   0x00E3B82C  add.w D7w,D6w           ; vol*0x48
  *   0x00E3B830  lea (0x0,A2,D6w*0x1),A2 ; A2 = 0xE7A290 + vol*0x48
  *
- * and then reach the fields at NEGATIVE displacements, so the record for
- * volume v starts at A2 - 0x48 = 0xE7A248 + v*0x48.  That is exactly the
- * biased base DISK_VOL(v) uses in disk/disk_internal.h
- * (DISK_VOLUME_BASE 0xE7A1CC + DISK_VOL_DESC_OFFSET 0x7C + v*0x48), so the
- * phantom element 0 sits at 0xE7A248 and DISK_$DVTBL is element 1.
- *
- * TODO(source-9ddf, 0x00E3B820): this record is a duplicate of
- * disk_$volume_t in disk/disk_internal.h; when disk/ can be edited, promote
- * that record to disk/disk.h and delete this view.  Only the four cells
- * BAT_$MOUNT actually touches are named here; the field names and the two
- * corroborating offsets (0x08 lv_start / 0x24 blocks_per_cyl) are taken from
- * disk/disk_internal.h's own _Static_asserts.
+ * then reads the fields at NEGATIVE displacements, so the record for volume
+ * v starts at A2 - 0x48 = 0xE7A248 + v*0x48 -- exactly the biased base
+ * DISK_VOL(v) uses (DISK_VOLUME_BASE 0xE7A1CC + DISK_VOL_DESC_OFFSET 0x7C +
+ * v*0x48).  The phantom element 0 sits at 0xE7A248 and DISK_$DVTBL is
+ * element 1.
  */
-typedef struct bat_$disk_info_t {
-    uint8_t     reserved_00[0x08];  /* 0x00 */
-    uint32_t    lv_start;           /* 0x08 (-0x40,A2): first disk block of the
-                                     *   logical volume.  0x00E3B858 adds it to
-                                     *   the volume record's first_data_block
-                                     *   before taking the chunk remainder. */
-    uint8_t     reserved_0c[0x18];  /* 0x0C */
-    uint16_t    blocks_per_cyl;     /* 0x24 (-0x24,A2): disk blocks in one
-                                     *   cylinder; zero-extended into the
-                                     *   allocation chunk size at 0x00E3B834
-                                     *   (`clr.l D7` precedes the move.w). */
-    uint8_t     reserved_26[0x06];  /* 0x26 */
-    uint16_t    num_parts;          /* 0x2C (-0x1c,A2): partition count; pushed
-                                     *   as the word argument of M$MIU$LLW at
-                                     *   0x00E3B846. */
-    uint8_t     reserved_2e[0x08];  /* 0x2E */
-    uint16_t    interleave_mode;    /* 0x36 (-0x12,A2): DISK_$DVTBL's
-                                     *   part_volx[0].  0x00E3B83C compares it
-                                     *   with 1 to decide whether the chunk
-                                     *   size is scaled by num_parts. */
-    uint8_t     reserved_38[0x10];  /* 0x38 */
-} bat_$disk_info_t;
-
-_Static_assert(sizeof(bat_$disk_info_t) == 0x48,
-               "bat_$disk_info_t must be 0x48 bytes (vol*0x48 at 0x00E3B826)");
-_Static_assert(__builtin_offsetof(bat_$disk_info_t, lv_start) == 0x08,
-               "lv_start must be at -0x40 (0x00E3B858)");
-_Static_assert(__builtin_offsetof(bat_$disk_info_t, blocks_per_cyl) == 0x24,
-               "blocks_per_cyl must be at -0x24 (0x00E3B834)");
-_Static_assert(__builtin_offsetof(bat_$disk_info_t, num_parts) == 0x2c,
-               "num_parts must be at -0x1c (0x00E3B846)");
-_Static_assert(__builtin_offsetof(bat_$disk_info_t, interleave_mode) == 0x36,
-               "interleave_mode must be at -0x12 (0x00E3B83C)");
 
 /*
  * The BAT module data segment (SAU2 map: `D E79478  BAT_  size = D54`, one
@@ -423,12 +380,6 @@ extern int16_t  bat_$cached_vol;
  * 0xE79478..0xE7A1AF)
  */
 extern bat_$volume_t bat_$volumes[BAT_MAX_VOLUMES];
-
-/*
- * The BAT manager's view of DISK_$DVTBL (biased base 0xE7A248, entry 1 is
- * DISK_$DVTBL itself at 0xE7A290).
- */
-extern bat_$disk_info_t bat_$disk_info[BAT_MAX_VOLUMES];
 
 /*
  * UID constants for buffer management

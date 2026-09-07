@@ -88,7 +88,7 @@ static boolean ring_$validate_receive(ring_rcv_frame_t *fr);
  * Assembly:
  *   link.w A6,0x0
  *   pea (A5)
- *   lea (0xe86400).l,A5        ; Load RING_$DATA base
+ *   lea (0xe86400).l,A5        ; Load RING_$CTL base
  *   subq.l #0x2,SP
  *   clr.w -(SP)                 ; Push unit 0
  *   bsr.w RING_$RCV_FROM_UNIT_PRIV
@@ -140,10 +140,10 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
     first_time = true;
 
     /*
-     * 0x00E76058-0x00E76060: A3 = &RING_$DATA.units[unit].  Note this is
+     * 0x00E76058-0x00E76060: A3 = &RING_$CTL.units[unit].  Note this is
      * computed from the raw parameter *before* IO_$GET_DCTE validates it.
      */
-    unit_data = &RING_$DATA.units[unit];
+    unit_data = &RING_$CTL.units[unit];
 
     /*
      * 0x00E76064-0x00E76076: IO_$GET_DCTE(&ring_dcte_ctype_net, &unit,
@@ -164,8 +164,8 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
     /* 0x00E760A0/0x00E760AA: wait_val = rx_wake_ec.value + 1 */
     wait_val = unit_data->rx_wake_ec.value + 1;
 
-    /* 0x00E760AC: D5 = RING_$STATS base; the unit is 0 based. */
-    stats = &RING_$STATS[unit];
+    /* 0x00E760AC: D5 = RING_$DATA base; the unit is 0 based. */
+    stats = &RING_$DATA[unit];
 
     for (;;) {                                      /* 0x00E760B8 */
         /*
@@ -338,8 +338,8 @@ static boolean ring_$validate_receive(ring_rcv_frame_t *fr)
 
     result = false;                                 /* 0x00E75DEE */
 
-    /* 0x00E75DF0-0x00E75E04: A3 = &RING_$STATS[unit] */
-    stats = &RING_$STATS[fr->unit];
+    /* 0x00E75DF0-0x00E75E04: A3 = &RING_$DATA[unit] */
+    stats = &RING_$DATA[fr->unit];
 
     /* 0x00E75E08 */
     swdiag = &RING_$SWDIAG_DATA;

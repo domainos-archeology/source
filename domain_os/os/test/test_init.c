@@ -324,7 +324,6 @@ int8_t PMAP_$SHUTTING_DOWN_FLAG;
 int8_t NETWORK_$DISKLESS;
 int8_t NETWORK_$REALLY_DISKLESS;
 char NETWORK_$DO_CHKSUM;
-int8_t DISK_$DO_CHKSUM;
 uint32_t NETWORK_$MOTHER_NODE;
 uid_t NETWORK_$PAGING_FILE_UID;
 uint32_t NODE_$ME;
@@ -350,6 +349,10 @@ as_$info_t AS_$INFO; /* AS_$STACK_HIGH is AS_$INFO.stack_high, 0xE2B950 */
 /* The code under test                                                 */
 /* ------------------------------------------------------------------ */
 #include "os/init.c"
+
+/* DISK_$DIAG, DISK_$DO_CHKSUM and the module exclusion lock are cells of the
+ * DISK_ module block (disk/disk.h), so the host build provides the block. */
+uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
 /* ------------------------------------------------------------------ */
 /* Harness                                                             */

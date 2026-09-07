@@ -80,8 +80,8 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
     boolean              is_fragment;       /* D3 */
     int8_t               queued;
 
-    /* 0x00E764B4: A2 = &RING_$DATA.units[unit] */
-    unit_data = &RING_$DATA.units[unit];
+    /* 0x00E764B4: A2 = &RING_$CTL.units[unit] */
+    unit_data = &RING_$CTL.units[unit];
 
     /* 0x00E764BE */
     hdr = *hdr_p;
@@ -151,7 +151,7 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
         demux_flag = is_fragment;                   /* 0x00E7657A */
 
         /* 0x00E7657E-0x00E7659C */
-        MAC_OS_$DEMUX(&mac_rec, &RING_$DATA.port_array[unit], &demux_flag,
+        MAC_OS_$DEMUX(&mac_rec, &RING_$CTL.port_array[unit], &demux_flag,
                       &status);
 
         if (status == status_$ok) {                 /* 0x00E765A0 */

@@ -1718,19 +1718,20 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
                  const boolean *blocking);
 
 /*
- * TODO(source-wk2f, 0x00E2720E): SMD_$XOR_CURSOR is not a data cell but a
- * ten-byte hand-written trampoline in the map's "D E26F20 SMD_WIRED size =
- * 5E0" block: `lea (-0x2f0,PC),A0` (A0 = 0x00E26F20, the block base) followed
- * by `jmp 0x00E15B90.l` into the SMD_WIRED code segment.  SMD_$OR_CURSOR
- * (0x00E27218) is the same shape, jumping to 0x00E15B9A.  Emitting them means
- * writing smd/sau2/xor_cursor.s plus the shared body at 0x00E15B90, so the
- * symbol is still unresolved.
+ * SMD_$XOR_CURSOR / SMD_$OR_CURSOR - Low-level cursor drawing
  *
- * SMD_$XOR_CURSOR - Low-level cursor drawing
+ * Called by the blink and show-cursor paths to draw or erase the cursor
+ * directly in display memory: SMD_$XOR_CURSOR combines the pattern with the
+ * frame buffer with EOR, SMD_$OR_CURSOR with OR.
  *
- * Called by blink routines to actually draw/erase cursor.
+ * Both are ten-byte hand-written trampolines in the map's
+ * "D E26F20 SMD_WIRED size = 5E0" block - `lea (d16,PC),A0` (A0 = 0x00E26F20,
+ * the block base) followed by `jmp` into the module's code segment - and they
+ * share one body at 0x00E15B90 (XOR entry) / 0x00E15B9A (OR entry).  All of
+ * it is emitted in smd/sau2/cursor_thunks.s; there is no C model, so these
+ * prototypes resolve only in the SAU2 build.
  *
- * Original address: 0x00E2720E
+ * Original addresses: 0x00E2720E (XOR), 0x00E27218 (OR)
  */
 /*
  * The last two arguments are pushed as *values* by every caller
@@ -1740,6 +1741,12 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
  * display memory base (+0x108).
  */
 boolean SMD_$XOR_CURSOR(int16_t *cursor_num, uint32_t *cursor_pos,
+                                  int16_t *bounds, smd_display_hw_t *hw,
+                                  const boolean *erase_flag,
+                                  uint32_t display_base,
+                                  SMD_HW_REG_PTR ctrl_regs);
+
+boolean SMD_$OR_CURSOR(int16_t *cursor_num, uint32_t *cursor_pos,
                                   int16_t *bounds, smd_display_hw_t *hw,
                                   const boolean *erase_flag,
                                   uint32_t display_base,

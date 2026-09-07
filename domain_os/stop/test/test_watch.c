@@ -39,7 +39,6 @@ boolean STOP_$WATCH_TRACE_FLAG;
 
 /* Owned by os/ and disk/, defined here for the test link */
 m68k_ptr_t PTR_OS_DATA_SHUTWIRED = 0x00E82128;
-int8_t DISK_$DIAG;
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                               */
@@ -126,6 +125,10 @@ void stop_$unhook(stopwatch_slot_t *slot)
 /* The code under test                                                 */
 /* ------------------------------------------------------------------ */
 #include "stop/watch.c"
+
+/* DISK_$DIAG, DISK_$DO_CHKSUM and the module exclusion lock are cells of the
+ * DISK_ module block (disk/disk.h), so the host build provides the block. */
+uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
 /* ------------------------------------------------------------------ */
 /* Harness                                                             */

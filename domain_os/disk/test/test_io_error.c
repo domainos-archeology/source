@@ -52,9 +52,7 @@ static uint8_t mock_disk_data[0xB00];
 #define DISK_VOLUME_BASE (mock_disk_data)
 
 ml_$exclusion_t ml_$exclusion_t_00e7a274;
-ml_$exclusion_t ml_$exclusion_t_00e7a25c;
 ml_$exclusion_t MOUNT_LOCK;
-int8_t DISK_$DIAG;
 uint32_t TIME_$CURRENT_CLOCKH;
 uint32_t TIME_$CLOCKH;
 
@@ -88,6 +86,10 @@ ulong M$MIU$LLW(ulong multiplicand, ushort multiplier)
 }
 
 #include "../io_error.c"
+
+/* DISK_$DIAG, DISK_$DO_CHKSUM and the module exclusion lock are cells of the
+ * DISK_ module block (disk/disk.h), so the host build provides the block. */
+uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
 /* ================================================================
  * Fixtures

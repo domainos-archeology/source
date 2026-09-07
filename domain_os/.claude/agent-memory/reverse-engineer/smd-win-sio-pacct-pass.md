@@ -96,8 +96,9 @@ xmit_bus, xmit_nortn, xmit_modem, xmit_error, xmit_tim. Two independent
 netmain orderings agree (the display block and the menu's descending selector
 keys), and xmit_modem@0x16 is pinned outright: netmain's help says "could not
 synchronize ... resulting in an Xmit ESB or biphase error" and 0x00E75C88 bumps
-+0x16 on exactly the `andi.w #0xc00` arm. RING_$STATS is at 0x00E261E0
-(Ghidra label RING_$DATA), stride 0x3C.
++0x16 on exactly the `andi.w #0xc00` arm. RING_$DATA is at 0x00E261E0
+(the map's name for the array; the tree used to call it RING_$STATS), stride
+0x3C.
 
 netmain's "xmit bph", "rcv bph" and "xmit esb" are the standalone words
 RING_$XMIT_BIPHASE / RING_$RCV_BIPHASE / RING_$XMIT_ESB (0x00E261BC / B8 / BE),

@@ -71,8 +71,8 @@ static int current_failed;
  * Globals the receive path touches
  * ============================================================================ */
 
-ring_global_t   RING_$DATA;
-ring_$stats_t   RING_$STATS[RING_MAX_UNITS];
+ring_global_t   RING_$CTL;
+ring_$stats_t   RING_$DATA[RING_MAX_UNITS];
 ring_$swdiag_t  RING_$SWDIAG_DATA;
 uint16_t        RING_$RCV_BIPHASE;
 uint16_t        RING_$RCV_ESB;
@@ -257,8 +257,8 @@ int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
         longjmp(escape, 1);
     }
     /* Deliver the "interrupt". */
-    RING_$DATA.units[0].state_flags =
-        (uint8_t)((RING_$DATA.units[0].state_flags & ~RING_UNIT_BUSY) |
+    RING_$CTL.units[0].state_flags =
+        (uint8_t)((RING_$CTL.units[0].state_flags & ~RING_UNIT_BUSY) |
                   wake_state_flags);
     hw.rcv_csr = wake_rcv_csr;
     wake_rcv_csr_written = 0;
@@ -330,12 +330,12 @@ uint8_t HDR_CHKSUM(const void *hdr, const uint16_t *len_p)
 
 #define TEST_UNIT   0
 
-static ring_unit_t *U(void) { return &RING_$DATA.units[TEST_UNIT]; }
+static ring_unit_t *U(void) { return &RING_$CTL.units[TEST_UNIT]; }
 
 static void setup(void)
 {
-    memset(&RING_$DATA, 0, sizeof(RING_$DATA));
-    memset(RING_$STATS, 0, sizeof(RING_$STATS));
+    memset(&RING_$CTL, 0, sizeof(RING_$CTL));
+    memset(RING_$DATA, 0, sizeof(RING_$DATA));
     memset(&RING_$SWDIAG_DATA, 0, sizeof(RING_$SWDIAG_DATA));
     memset(&hw, 0, sizeof(hw));
     memset(&hdr_buf, 0, sizeof(hdr_buf));
@@ -452,7 +452,7 @@ static void test_hw_register_writes(void)
     ASSERT_EQ(RING_RCV_CSR_ARM, hw.rcv_csr);
     ASSERT_EQ(RING_MODE_ENABLE, hw.mode);
     /* the congestion flag is cleared on the armed path */
-    ASSERT_EQ(0, RING_$STATS[TEST_UNIT].congestion_flag);
+    ASSERT_EQ(0, RING_$DATA[TEST_UNIT].congestion_flag);
     /* and the BUSY bit is cleared before arming */
     ASSERT_EQ(0, U()->state_flags & RING_UNIT_BUSY);
 }
@@ -478,7 +478,7 @@ static void test_ec_wait_arrays(void)
     ASSERT_EQ(101, last_vals.val[0]);   /* rx_wake_ec.value + 1 */
     ASSERT_EQ(0, last_vals.val[1]);
     ASSERT_EQ(0, last_vals.val[2]);
-    ASSERT_EQ(0, RING_$DATA.wakeup_cnt);
+    ASSERT_EQ(0, RING_$CTL.wakeup_cnt);
 }
 
 /* Each completed wait bumps the wait value and the wakeup counter. */
@@ -487,7 +487,7 @@ static void test_ec_wait_value_advances(void)
     U()->rx_wake_ec.value = 100;
     ASSERT_EQ(1, run_loop(1));      /* one wait completes, the second escapes */
     ASSERT_EQ(102, last_vals.val[0]);
-    ASSERT_EQ(1, RING_$DATA.wakeup_cnt);
+    ASSERT_EQ(1, RING_$CTL.wakeup_cnt);
     /* ready_ec is advanced only on the first pass */
     ASSERT_EQ(1, advance_calls);
 }
@@ -503,8 +503,8 @@ static void test_busy_bit_set_recovers(void)
     wake_rcv_csr_after_clear = 0;   /* the write to rcv_csr clears it */
     ASSERT_EQ(1, run_loop(1));
     ASSERT_EQ(0, recv_calls);
-    ASSERT_EQ(0, RING_$DATA.busy_on_rcv_int);
-    ASSERT_EQ(0, RING_$DATA.abort_cnt);
+    ASSERT_EQ(0, RING_$CTL.busy_on_rcv_int);
+    ASSERT_EQ(0, RING_$CTL.abort_cnt);
     /* both receive channels dropped, then the loop restarted */
     ASSERT_EQ(2, clear_dma_calls);
     ASSERT_EQ(0, clear_dma_chan[0]);
@@ -595,14 +595,14 @@ static void test_busy_bit_clear_counts(void)
     wake_state_flags = 0;
     wake_rcv_csr = RING_RCV_CSR_BUSY;
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$DATA.busy_on_rcv_int);
+    ASSERT_EQ(1, RING_$CTL.busy_on_rcv_int);
     /*
      * rcv_csr 0x2000 is outside the "no error" mask 0x0016, so
      * ring_$validate_receive takes the error path and the packet is aborted
      * rather than dispatched.
      */
     ASSERT_EQ(0, recv_calls);
-    ASSERT_EQ(1, RING_$DATA.abort_cnt);
+    ASSERT_EQ(1, RING_$CTL.abort_cnt);
     ASSERT_EQ(2, clear_dma_calls);
 }
 
@@ -630,10 +630,10 @@ static void test_validate_length_mismatch(void)
 {
     ring_$dma_chan1_count_cell = (0x400 - 0x20) / 2;   /* says 0x20, hdr says 0x40 */
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$DATA.bad_data_cnt);
-    ASSERT_EQ(1, RING_$DATA.abort_cnt);
+    ASSERT_EQ(1, RING_$CTL.bad_data_cnt);
+    ASSERT_EQ(1, RING_$CTL.abort_cnt);
     ASSERT_EQ(0, recv_calls);
-    ASSERT_EQ(0, RING_$STATS[TEST_UNIT].rcvcnt);
+    ASSERT_EQ(0, RING_$DATA[TEST_UNIT].rcvcnt);
     ASSERT_EQ(0, NETWORK_$ACTIVITY_FLAG);
 }
 
@@ -647,8 +647,8 @@ static void test_good_packet_dispatch(void)
 {
     ASSERT_EQ(1, run_loop(1));
 
-    ASSERT_EQ(1, RING_$STATS[TEST_UNIT].rcvcnt);
-    ASSERT_EQ(0, RING_$DATA.abort_cnt);
+    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvcnt);
+    ASSERT_EQ(0, RING_$CTL.abort_cnt);
     ASSERT_EQ((int8_t)-1, NETWORK_$ACTIVITY_FLAG);
     ASSERT_EQ(1, recv_calls);
     ASSERT_EQ(TEST_UNIT, recv_unit);
@@ -698,7 +698,7 @@ static void test_checksum_arguments(void)
     ASSERT_EQ(1, run_loop(1));
     ASSERT_EQ(1, chksum_calls);
     ASSERT_PTR(&hdr_buf, chksum_hdr);
-    ASSERT_EQ(1, RING_$STATS[TEST_UNIT].rcvcnt);
+    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvcnt);
     ASSERT_EQ(0, crash_calls);
 }
 
@@ -720,7 +720,7 @@ static void test_checksum_suppressed_by_flag(void)
     hdr_buf.flags = 0x01;
     ASSERT_EQ(1, run_loop(1));
     ASSERT_EQ(0, chksum_calls);
-    ASSERT_EQ(1, RING_$STATS[TEST_UNIT].rcvcnt);
+    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvcnt);
 }
 
 /* An error status routes to the matching per-unit counter. */
@@ -728,9 +728,9 @@ static void test_error_status_counters(void)
 {
     wake_rcv_csr = 0x0200;
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$STATS[TEST_UNIT].rcvtim);
+    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvtim);
     ASSERT_EQ(0, RING_$SWDIAG_DATA.rcvtim);   /* not a swdiag packet */
-    ASSERT_EQ(1, RING_$DATA.abort_cnt);
+    ASSERT_EQ(1, RING_$CTL.abort_cnt);
     ASSERT_EQ(0, recv_calls);
 }
 
@@ -740,7 +740,7 @@ static void test_swdiag_mirror_counters(void)
     hdr_buf.flags = 0x02 | 0x10;
     wake_rcv_csr = 0x0200;
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$STATS[TEST_UNIT].rcvtim);
+    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvtim);
     ASSERT_EQ(1, RING_$SWDIAG_DATA.rcvtim);
 }
 
@@ -751,7 +751,7 @@ static void test_esb_and_biphase(void)
     ASSERT_EQ(1, run_loop(1));
     ASSERT_EQ(1, RING_$RCV_ESB);
     ASSERT_EQ(1, RING_$RCV_BIPHASE);
-    ASSERT_EQ(1, RING_$STATS[TEST_UNIT].rcvpkt);
+    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvpkt);
 }
 
 /*
@@ -762,14 +762,14 @@ static void test_bit8_falls_through_to_bit7(void)
 {
     wake_rcv_csr = 0x0100 | 0x0080;
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$STATS[TEST_UNIT].rcvcrc);
-    ASSERT_EQ(1, RING_$STATS[TEST_UNIT].rcvxerr);
+    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvcrc);
+    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvxerr);
 }
 
 /*
  * ring_$swdiag_t is the 0x1E-byte block both responders copy whole
  * (0x00E11278..0x00E1128A and 0x00E64B68..0x00E64B7A), 0x00E261C2..0x00E261DF,
- * ending right at RING_$STATS[0] (0x00E261E0).  Bead source-twut.
+ * ending right at RING_$DATA[0] (0x00E261E0).  Bead source-twut.
  */
 static void test_swdiag_block_layout(void)
 {
@@ -805,7 +805,7 @@ static void test_failure_record(void)
     ASSERT_EQ(0x00ABCDEF, NETWORK_$FAILURE_REC.node_id);
     ASSERT_EQ(1, NETWORK_$FAILURE_REC.flag < 0);
     ASSERT_EQ(3, NETWORK_$FAILURE_REC.failure_type);
-    ASSERT_EQ(1, RING_$DATA.abort_cnt);
+    ASSERT_EQ(1, RING_$CTL.abort_cnt);
 }
 
 /* Odd advertised lengths lose the DMA pad byte. */
@@ -816,8 +816,8 @@ static void test_odd_length_pad(void)
     ring_$dma_chan0_count_cell = (0x400 - 0x1E) / 2;   /* 0x1E moved, 0x1D used */
     ring_$dma_chan1_count_cell = (0x400 - 0x42) / 2;   /* 0x42 moved, 0x41 used */
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$STATS[TEST_UNIT].rcvcnt);
-    ASSERT_EQ(0, RING_$DATA.bad_data_cnt);
+    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvcnt);
+    ASSERT_EQ(0, RING_$CTL.bad_data_cnt);
     ASSERT_EQ(0x1D, recv_hdr_len_val);
     ASSERT_EQ(0x41, recv_data_len_val);
 }

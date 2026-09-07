@@ -5,34 +5,18 @@
 #include "disk/disk_internal.h"
 
 /*
- * DISK_$DO_CHKSUM - Disk checksum enable flag (negative = checksums on)
- * Original address: 0xE7ACCC (1 byte; image value 0x00)
- */
-int8_t DISK_$DO_CHKSUM = 0;
-
-/*
  * DISK_$DATA - the DISK_ module data block (`D E7A1CC DISK_ size = B90`).
  * Zero in the image; DISK_$INIT builds the eventcount, the free list and the
  * volume descriptors at boot.
  *
- * NOTE: the module exclusion lock at DISK_$DATA + DMOD_EXCLUSION (0x90) is the
- * same storage as ml_$exclusion_t_00e7a25c below.  In the image they are one
- * object; here the tree keeps both spellings because the A5-displacement
- * callers (disk_$get_qblks_internal, disk_$rtn_qblks_internal) reach it
- * through the block while DISK_$INIT names it directly.
+ * The cells the SAU2 map names inside this block - the module exclusion lock
+ * at DMOD_EXCLUSION (0x90), DISK_$DIAG (0xafe) and DISK_$DO_CHKSUM (0xb00) -
+ * are accessors into it (disk/disk.h, disk/disk_internal.h), so each image
+ * object has exactly one definition here.
  *
  * Original address: 0xE7A1CC
  */
 uint8_t DISK_$DATA[DISK_$DATA_SIZE];
-
-/*
- * ml_$exclusion_t_00e7a25c - the disk module's request-pool exclusion lock,
- * DISK_$DATA + 0x90.  DISK_$INIT calls ML_$EXCLUSION_INIT on it
- * (disk/init.c); zero in the image.
- *
- * Original address: 0xE7A25C
- */
-ml_$exclusion_t ml_$exclusion_t_00e7a25c;
 
 /*
  * ml_$exclusion_t_00e7a274 - the disk module's second exclusion lock,
@@ -61,11 +45,9 @@ ml_$exclusion_t ml_$exclusion_t_00e7a274;
 ml_$exclusion_t MOUNT_LOCK = { 0, &MOUNT_LOCK, &MOUNT_LOCK, 0, -1 };
 
 /*
- * DISK_$DIAG - diagnostic mode flag, DISK_$DATA + 0xafe.  Both readers use
- * `tst.b (0x00e7acca).l` (DISK_$DIAG_IO's caller at 0x00E6BCAE and
- * STOP_$WATCH at 0x00E8186A), so it is a single byte; the byte at 0xE7ACCB is
- * padding to DISK_$DO_CHKSUM.  Image value 0x00.
- *
- * Original address: 0xE7ACCA (1 byte)
+ * DISK_$DIAG (0xE7ACCA) and DISK_$DO_CHKSUM (0xE7ACCC) are bytes of
+ * DISK_$DATA above, reached through the accessors in disk/disk.h.  Both
+ * readers of DISK_$DIAG use `tst.b (0x00e7acca).l` (DISK_$DIAG_IO's caller at
+ * 0x00E6BCAE and STOP_$WATCH at 0x00E8186A), so it is a single byte; the byte
+ * at 0xE7ACCB is padding to DISK_$DO_CHKSUM.  Both are 0x00 in the image.
  */
-int8_t DISK_$DIAG = 0;

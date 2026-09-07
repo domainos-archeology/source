@@ -268,7 +268,7 @@ _Static_assert(__builtin_offsetof(ring_pkt_type_t, _pad0a) == 0x0A, "ring_pkt_ty
  * ============================================================================
  * Per-Unit Data Structure (0x244 bytes)
  *
- * Located at RING_DATA_BASE + (unit * RING_UNIT_SIZE)
+ * Located at RING_CTL_BASE + (unit * RING_UNIT_SIZE)
  * ============================================================================
  */
 typedef struct ring_unit_t {
@@ -338,7 +338,7 @@ _Static_assert(sizeof(ring_pkt_type_t)             == 12, "sizeof ring_pkt_type_
  * ============================================================================
  * Global Ring Data Structure
  *
- * Located at RING_DATA_BASE (0xE86400).  This is the A5 module base every
+ * Located at RING_CTL_BASE (0xE86400).  This is the A5 module base every
  * ring routine loads with "lea (0xe86400).l,A5".
  * ============================================================================
  */
@@ -422,12 +422,18 @@ _Static_assert(offsetof(ring_global_t, rcv_proc)            == 0x5C8, "ring_glob
  * ============================================================================
  */
 
-/* Ring global data structure */
-extern ring_global_t RING_$DATA;
+/*
+ * Ring module control block, 0x00E86400.
+ *
+ * SAU2 map: `D E86400 RING size = 5D0` with the single exported symbol
+ * `E86400 RING_$CTL`.  The name RING_$DATA belongs to the per-unit statistics
+ * array at 0x00E261E0 (below), not to this block.
+ */
+extern ring_global_t RING_$CTL;
 
 /*
  * Software-diagnostic counters.  These live just below the per-unit statistics
- * array, at 0x00E261AC..0x00E261DF; they are NOT part of RING_$DATA.
+ * array, at 0x00E261AC..0x00E261DF; they are NOT part of RING_$CTL.
  */
 extern uint32_t RING_$SWDIAG_NODEID;    /* 0x00E261AC */
 extern uint32_t RING_$SWDIAG_GOODRCV_CNT; /* 0x00E261B0 */
@@ -463,7 +469,7 @@ extern uint16_t RING_$PAGING_OVERFLOW;  /* 0x00E261C0 */
  *   0x00E1128A  move.w (A1)+,(A4)+
  *
  * i.e. seven longwords plus a word = 30 bytes, 0x00E261C2..0x00E261DF, which
- * runs up to but not into RING_$STATS[0] at 0x00E261E0.  ASKNODE_$INTERNET_-
+ * runs up to but not into RING_$DATA[0] at 0x00E261E0.  ASKNODE_$INTERNET_-
  * INFO makes the identical 0x1E-byte copy at 0x00E64B68..0x00E64B7A.
  *
  * Two of the slots the block copy carries are dead: both responders
@@ -603,7 +609,7 @@ extern uid_t RING_$NETWORK_UID;
  *     0x00E75C88.  Both orderings independently place xmit_modem at +0x16.
  *
  * Every transmit counter below therefore carries the RING_$SENDP instruction
- * that bumps it, with A2 = RING_$STATS[unit] (0x00E7594C-0x00E75954).
+ * that bumps it, with A2 = RING_$DATA[unit] (0x00E7594C-0x00E75954).
  *
  * The three fields netmain displays that are NOT in this record --
  * "xmit bph", "rcv bph" and "xmit esb" -- are the standalone words

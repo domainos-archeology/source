@@ -7,17 +7,11 @@
  *
  * Assembly analysis:
  *   - Validates unit < 2 and initialized
- *   - Copies 0x3C bytes (15 longs) from RING_$STATS[unit] to buffer
+ *   - Copies 0x3C bytes (15 longs) from RING_$DATA[unit] to buffer
  *   - Returns length 0x3C
  */
 
 #include "ring/ring_internal.h"
-
-/*
- * Per-unit statistics array.
- * Located at 0xE261E0, 0x3C bytes per unit.
- */
-ring_$stats_t RING_$STATS[RING_MAX_UNITS];
 
 /*
  * RING_$GET_STATS - Get unit statistics
@@ -53,7 +47,7 @@ void RING_$GET_STATS(uint16_t *unit_ptr, void *stats_buf, uint16_t unused,
     /*
      * Get unit data and check initialization.
      */
-    unit_data = &RING_$DATA.units[unit_num];
+    unit_data = &RING_$CTL.units[unit_num];
 
     if (unit_data->initialized >= 0) {
         *len_out = 0;
@@ -70,7 +64,7 @@ void RING_$GET_STATS(uint16_t *unit_ptr, void *stats_buf, uint16_t unused,
      *   move.l (A3)+,(A4)+      ; Copy long
      *   dbf D1w,loop
      */
-    src = (uint32_t *)&RING_$STATS[unit_num];
+    src = (uint32_t *)&RING_$DATA[unit_num];
     dst = (uint32_t *)stats_buf;
 
     for (count = 0; count < 15; count++) {

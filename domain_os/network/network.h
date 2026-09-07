@@ -585,7 +585,7 @@ typedef struct ring_info_t {
                                      *       (-0x1de,A0)" at 0x00E112C8.
                                      *       netmain: "<node> pages from <node>." */
 
-    /* ---- 0x08: RING_$STATS[0] (0x00E261E0), 0x3C bytes -------------- *
+    /* ---- 0x08: RING_$DATA[0] (0x00E261E0), 0x3C bytes -------------- *
      * "movea.l #0xe261e0,A1 / lea (-0x1da,A0),A4 / moveq #0xe,D1 /
      *  move.l (A1)+,(A4)+ / dbf" at 0x00E11266..0x00E11274: fifteen longwords.
      * Field names, offsets and per-counter evidence: ring_$stats_t, ring/ring.h. */
@@ -635,7 +635,7 @@ typedef struct ring_info_t {
      * "movea.l #0xe261c2,A1 / lea (-0x18e,A0),A4 / moveq #0x6 /
      *  move.l (A1)+,(A4)+ / dbf / move.w (A1)+,(A4)+" at
      * 0x00E11278..0x00E1128A: seven longwords plus one word = 30 bytes, i.e.
-     * 0x00E261C2..0x00E261DF, which runs up to but not into RING_$STATS[0] at
+     * 0x00E261C2..0x00E261DF, which runs up to but not into RING_$DATA[0] at
      * 0x00E261E0.  ring/ring.h declares ring_$swdiag_t at that same 0x1E
      * (bead source-twut).
      *

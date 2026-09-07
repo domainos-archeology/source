@@ -297,3 +297,17 @@ duplicate declarations* - two different C names for one address
 0x00E6E8D6).  When a name disagreement shows up, grep the header for the
 *address* as well as the name - the duplicate is usually already there under
 the right name.
+
+## SMD_WIRED is split across two map segments (2026-09-07)
+
+`I E15B90 SMD_WIRED size=1FC` is the module's *code*; `D E26F20 SMD_WIRED
+size=5E0` is its wired data block, which also holds SMD_$DISP1_INT and a row
+of small `lea (d16,PC),A0` + `jmp abs.l` trampolines (XOR/OR_CURSOR,
+START/CONTINUE_SCROLL, START_BLT).  A0 is a register argument in every one of
+them: it always ends up 0x00E26F20, the block base, and the body copies it to
+A5 and addresses the block off it - (0x302,A5)=&PROC1_$SET_LOCK,
+(0x306,A5)=&PROC1_$CLR_LOCK (unnamed cells at 0x00E27222/0x00E27226),
+(0x3a6,A5)=SMD_$CURSOR_TABLE.  A body with *two* entry points that differ only
+in a discriminator left in D3 (0x00E15B90 XOR / 0x00E15B9A OR, the first
+branching over the second's duplicated prologue) is the giveaway that these
+are hand-written, not compiler output.

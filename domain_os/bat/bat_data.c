@@ -69,17 +69,11 @@ int16_t bat_$cached_dirty = 0;
 int16_t bat_$cached_vol = 0;
 
 /*
- * The BAT manager's view of DISK_$DVTBL.  This storage belongs to the DISK
- * module (map: `E7A290  DISK_$DVTBL` inside `D E7A1CC  DISK_ size = B90`);
- * BAT_$MOUNT only reads it, with the same 0x48 bias DISK_VOL() uses, so
- * entry 1 is DISK_$DVTBL itself at 0xE7A290 and entry 0 is a phantom at
- * 0xE7A248.
- *
- * TODO(source-9ddf, 0x00E3B820): this definition duplicates disk_$volume_t
- * in disk/disk_internal.h.  When disk/ can be edited, promote that record to
- * disk/disk.h and drop both this object and bat_$disk_info_t.
+ * BAT_$MOUNT's view of DISK_$DVTBL is not BAT storage: the table belongs to
+ * the DISK module (map: `E7A290  DISK_$DVTBL` inside `D E7A1CC  DISK_
+ * size = B90`) and BAT_$MOUNT only reads it, through DISK_VOL(vol_idx)
+ * (0x00E3B820).  No object is defined here.
  */
-bat_$disk_info_t bat_$disk_info[BAT_MAX_VOLUMES];
 
 /*
  * UID constants for buffer management

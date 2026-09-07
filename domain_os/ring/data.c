@@ -15,10 +15,30 @@
  */
 
 /*
- * Main ring data structure.
- * Located at 0xE86400 on original platform.
+ * Main ring control structure.
+ *
+ * The SAU2 map (~/src/domainos-archeology/sau2-maps/domain_os.10.2.map) names
+ * this segment and its one exported symbol:
+ *
+ *   D30  E86400  RING_DATA          loaded at 187C00, size = 5D0
+ *   D    E86400  RING               size = 5D0
+ *        E86400  RING_$CTL
+ *
+ * so 0xE86400 is RING_$CTL, not RING_$DATA (that name belongs to the
+ * per-unit statistics array at 0xE261E0, below).
  */
-ring_global_t RING_$DATA;
+ring_global_t RING_$CTL;
+
+/*
+ * Per-unit statistics array, 0x3C bytes per unit.
+ *
+ * SAU2 map:
+ *
+ *        E261E0  RING_$DATA                       MARKED
+ *
+ * i.e. the last object in the `D E261AC RING_WIRED size = AC` segment.
+ */
+ring_$stats_t RING_$DATA[RING_MAX_UNITS];
 
 /*
  * Network UID for ring interface.
@@ -66,7 +86,7 @@ status_$t Network_hardware_error = 0x00110001;
  * Global Counters (for external reference)
  * ============================================================================
  *
- * These are aliases to fields in RING_$DATA for convenience.
+ * These are aliases to fields in RING_$CTL for convenience.
  * The actual counters are in the ring_global_t structure.
  */
 

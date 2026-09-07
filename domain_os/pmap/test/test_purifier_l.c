@@ -133,7 +133,6 @@ uint16_t PROC1_$CURRENT;
 uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
 int8_t   NETLOG_$OK_TO_LOG;
 int8_t   NETWORK_$DISKLESS;
-int8_t   DISK_$DO_CHKSUM;
 log_state_t LOG_$STATE;
 uid_t    UID_$NIL;
 struct aste_t *ast_aste_base;
@@ -348,3 +347,7 @@ int main(void)
 
 /* The real implementation under test. */
 #include "../purifier_l.c"
+
+/* DISK_$DIAG, DISK_$DO_CHKSUM and the module exclusion lock are cells of the
+ * DISK_ module block (disk/disk.h), so the host build provides the block. */
+uint8_t DISK_$DATA[DISK_$DATA_SIZE];

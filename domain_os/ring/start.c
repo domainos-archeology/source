@@ -41,7 +41,7 @@ void RING_$START(uint16_t *unit_ptr, status_$t *status_ret)
     /*
      * Get unit data structure.
      */
-    unit_data = &RING_$DATA.units[unit_num];
+    unit_data = &RING_$CTL.units[unit_num];
 
     /*
      * Check if unit is initialized.

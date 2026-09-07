@@ -86,13 +86,13 @@ extern volatile uint16_t ring_$dma_chan1_count_cell;
  */
 
 /* Ring subsystem base address */
-#define RING_DATA_BASE          0xE86400
+#define RING_CTL_BASE           0xE86400
 
 /* Per-unit statistics base address */
-#define RING_STATS_BASE         0xE261E0
+#define RING_DATA_BASE          0xE261E0
 
 /* IIC data start (used for per-unit data) */
-#define IIC_DATA_START          (RING_DATA_BASE)
+#define IIC_DATA_START          (RING_CTL_BASE)
 
 /*
  * ============================================================================
@@ -103,8 +103,11 @@ extern volatile uint16_t ring_$dma_chan1_count_cell;
  * ============================================================================
  */
 
-/* Per-unit statistics array */
-extern ring_$stats_t RING_$STATS[RING_MAX_UNITS];
+/*
+ * Per-unit statistics array, 0x00E261E0.  SAU2 map: `E261E0 RING_$DATA`, the
+ * last object in `D E261AC RING_WIRED size = AC`.
+ */
+extern ring_$stats_t RING_$DATA[RING_MAX_UNITS];
 
 /* Ring network UID (copy for initialization), at 0x00E1747C */
 extern uid_t RING_$NETWORK_UID_TEMPLATE;
@@ -126,18 +129,18 @@ extern uint16_t ring_dcte_ctype_net;
 extern status_$t Network_hardware_error;
 
 /* Internal counters */
-#define RING_$RCV_INT_CNT       (RING_$DATA.rcv_int_cnt)
-#define RING_$WAKEUP_CNT        (RING_$DATA.wakeup_cnt)
-#define RING_$ABORT_CNT         (RING_$DATA.abort_cnt)
-#define RING_$BUSY_ON_RCV_INT   (RING_$DATA.busy_on_rcv_int)
-#define RING_$XMIT_WAITED       (RING_$DATA.xmit_waited)
-#define RING_$BAD_DATA_CNT      (RING_$DATA.bad_data_cnt)
-#define RING_$UNEXPECTED_XMIT_STAT (RING_$DATA.unexpected_xmit_stat)
+#define RING_$RCV_INT_CNT       (RING_$CTL.rcv_int_cnt)
+#define RING_$WAKEUP_CNT        (RING_$CTL.wakeup_cnt)
+#define RING_$ABORT_CNT         (RING_$CTL.abort_cnt)
+#define RING_$BUSY_ON_RCV_INT   (RING_$CTL.busy_on_rcv_int)
+#define RING_$XMIT_WAITED       (RING_$CTL.xmit_waited)
+#define RING_$BAD_DATA_CNT      (RING_$CTL.bad_data_cnt)
+#define RING_$UNEXPECTED_XMIT_STAT (RING_$CTL.unexpected_xmit_stat)
 
 /*
  * RING_$XMIT_BIPHASE (0x00E261BC), RING_$XMIT_ESB (0x00E261BE),
  * RING_$RCV_BIPHASE (0x00E261B8) and RING_$RCV_ESB (0x00E261BA) are standalone
- * words below the statistics array, not fields of RING_$DATA; they are
+ * words below the statistics array, not fields of RING_$CTL; they are
  * declared in ring/ring.h.
  */
 

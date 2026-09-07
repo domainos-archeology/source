@@ -5,14 +5,14 @@
  *
  * Traced block by block from the listing.  The overall shape is:
  *
- *   0xE75916  prologue; unit_data = RING_$DATA.units[unit] (stride 0x244),
- *             stats = RING_$STATS[unit] (stride 0x3C, formed as
+ *   0xE75916  prologue; unit_data = RING_$CTL.units[unit] (stride 0x244),
+ *             stats = RING_$DATA[unit] (stride 0x3C, formed as
  *             unit*64 - unit*4), *result_flags = 0
  *   0xE7595A  three refusals: unit not initialised, data too long, the
  *             controller's mode register not ready
  *   0xE759AA  retry budget, the two "no retry" inputs, the header checksum
  *   0xE75A22  transmit_retry: arm the DMA and start the transmitter
- *   0xE75A4A  normal arm: 0x6000, then spin until RING_$DATA.poll_timeout
+ *   0xE75A4A  normal arm: 0x6000, then spin until RING_$CTL.poll_timeout
  *             has elapsed, then two absolute-deadline TIME_$WAIT2 calls
  *   0xE75B24  force-start arm: 0x7000 plus one relative TIME_$WAIT2
  *   0xE75B72  abort with 0x4000; a second relative wait if still busy
@@ -193,8 +193,8 @@ void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, ring_$pkt_hdr_t *hdr,
 
     /* 0xE75930..0xE75954 */
     unit = *unit_ptr;
-    unit_data = &RING_$DATA.units[unit];
-    stats = &RING_$STATS[unit];
+    unit_data = &RING_$CTL.units[unit];
+    stats = &RING_$DATA[unit];
 
     /* 0xE75958 */
     *result_flags = 0;
@@ -211,7 +211,7 @@ void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, ring_$pkt_hdr_t *hdr,
     }
 
     /* 0xE75974 "cmp.w (0x51a,A5),D0w / bls" */
-    if (data_len > RING_$DATA.max_data_len) {
+    if (data_len > RING_$CTL.max_data_len) {
         *status_ret = status_$network_data_length_too_large;
         return;
     }
@@ -292,18 +292,18 @@ transmit_retry:
     if (stats->retry_pending < 0) {
         /*
          * Force-start arm, 0xE75B24.  TIME_$ABS_CLOCK writes the GLOBAL
-         * RING_$DATA.force_start_timeout and SUB48 then subtracts the time
+         * RING_$CTL.force_start_timeout and SUB48 then subtracts the time
          * this attempt started, so the global ends up holding how long the
          * attempt has been running.
          */
-        TIME_$ABS_CLOCK(&RING_$DATA.force_start_timeout);
-        SUB48(&RING_$DATA.force_start_timeout, &attempt_start);
+        TIME_$ABS_CLOCK(&RING_$CTL.force_start_timeout);
+        SUB48(&RING_$CTL.force_start_timeout, &attempt_start);
 
         hw->xmit_csr = RING_XMIT_CMD_FORCE_START;       /* 0xE75B40 */
         force_start = (int8_t)-1;                       /* 0xE75B44 "st D4b" */
 
         wait_delay_type = &ring_$c_delay_relative;      /* 0xE75B5E */
-        wait_delay = &RING_$DATA.xmit_timeout1;         /* 0xE75B5A */
+        wait_delay = &RING_$CTL.xmit_timeout1;         /* 0xE75B5A */
         goto shared_wait;
     }
 
@@ -313,9 +313,9 @@ transmit_retry:
     /* 0xE75A4E */
     TIME_$ABS_CLOCK(&attempt_start);
 
-    /* 0xE75A5A: deadline = attempt_start + RING_$DATA.poll_timeout */
+    /* 0xE75A5A: deadline = attempt_start + RING_$CTL.poll_timeout */
     deadline = attempt_start;
-    ADD48(&deadline, &RING_$DATA.poll_timeout);
+    ADD48(&deadline, &RING_$CTL.poll_timeout);
 
     /*
      * 0xE75A78-0xE75AA2: spin until either the transmit eventcount reaches
@@ -333,9 +333,9 @@ transmit_retry:
         }
     }
 
-    /* 0xE75AA4: deadline = attempt_start + RING_$DATA.wait_timeout */
+    /* 0xE75AA4: deadline = attempt_start + RING_$CTL.wait_timeout */
     deadline = attempt_start;
-    ADD48(&deadline, &RING_$DATA.wait_timeout);
+    ADD48(&deadline, &RING_$CTL.wait_timeout);
 
     RING_$XMIT_WAITED++;                                /* 0xE75AC0 */
 
@@ -373,7 +373,7 @@ shared_wait:
     if ((hw->xmit_csr & RING_MODE_READY) != 0) {
         /* 0xE75B7E: still running - one more relative wait */
         wait_delay_type = &ring_$c_delay_relative;      /* 0xE75B96 */
-        wait_delay = &RING_$DATA.xmit_timeout2;         /* 0xE75B92 */
+        wait_delay = &RING_$CTL.xmit_timeout2;         /* 0xE75B92 */
         ec_target_cell = (uint32_t)tx_ec_target;        /* 0xE75B7E */
         (void)TIME_$WAIT2((uint16_t *)wait_delay_type, wait_delay,
                           &unit_data->tx_ec, &ec_target_cell, &wait_status);

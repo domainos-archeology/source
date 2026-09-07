@@ -1,18 +1,21 @@
 /*
- * MST_$INIT - Full MST subsystem initialization
+ * MST_$INIT (0x00E30B88) - full MST subsystem initialisation.
  *
- * This function performs complete initialization of the Memory Segment Table
- * subsystem. It is called during boot after basic memory management is
- * available but before process creation begins.
+ * Called once from OS_$INIT (0x00E33970).  It:
+ *   1. sets the default touch-ahead count,
+ *   2. seeds the ASID set with ASID 0 allocated,
+ *   3. allocates and zeroes the pages backing the MST table at 0xEE5800,
+ *   4. clears every MST word,
+ *   5. allocates one page table page per Global A / Global B page and marks
+ *      it used in the MST page availability bitmap,
+ *   6. computes MST_$MST_PAGES_LIMIT from physical memory,
+ *   7. marks every page above the limit unavailable in the bitmap.
  *
- * Initialization steps:
- * 1. Set default touch-ahead count
- * 2. Clear ASID allocation bitmap
- * 3. Allocate physical pages for MST segment table
- * 4. Initialize all MST entries to zero
- * 5. Allocate pages for global segment table regions
- * 6. Calculate and set MST page limits
- * 7. Initialize MST page availability bitmap
+ * The body carries two nested Pascal procedures, 0x00E30AAE and 0x00E30B10.
+ * The inner one reaches MST_$INIT's frame through the static link it loads
+ * with `movea.l (A6),A2` (0x00E30B1C), so the three frame slots it shares
+ * with its parent - (-0x10,A6), (-0x12,A6) and (-0x14,A6) - are modelled
+ * here as file statics.
  */
 
 #include "mst/mst_internal.h"
@@ -31,239 +34,272 @@
 static const status_$t mst_$vm_resources_exhausted_00e30b0c = 0x0004000E;
 
 /*
- * Static helper: Initialize an MST page (nested Pascal procedure)
+ * MST_$INIT's shared frame slots, written by the parent and by the nested
+ * procedure at 0x00E30B10 through its static link:
  *
- * Allocates a physical page and maps it at the given virtual address,
- * then clears the page to zeros.
- *
- * @param virt_addr  Virtual address to map the page
- * @return Physical address of the allocated page
+ *   (-0x10,A6)  mst_init_va    longword virtual address of the next page
+ *   (-0x12,A6)  mst_init_word  bitmap LONGWORD index; scaled `lsl.w #0x2`
+ *                              at 0x00E30B56, 0x00E30B60, 0x00E30D66 and
+ *                              0x00E30D90, and scaled `lsl.w #0x5` at
+ *                              0x00E30B34 to form the page number
+ *   (-0x14,A6)  mst_init_bit   bit index within that longword; the operand
+ *                              of `bset.l D0,D1` at 0x00E30B4E and of
+ *                              `bset.l D2,D1` at 0x00E30D5E
  */
-static uint32_t mst_init_page(int32_t virt_addr)
-{
-    uint32_t phys_addr[3];  /* Buffer for MMAP_$ALLOC_FREE */
-    int16_t pages_allocated;
-    int16_t i;
+static uint32_t mst_init_va;
+static int16_t  mst_init_word;
+static int16_t  mst_init_bit;
 
-    /* Allocate one physical page */
-    pages_allocated = MMAP_$ALLOC_FREE(phys_addr, 1);
-    if (pages_allocated == 0) {
+/*
+ * Nested procedure at 0x00E30AAE - allocate a physical page, install it at
+ * `va` and zero it.  Returns the physical page number (D0 at 0x00E30AFE).
+ */
+static uint32_t mst_init_page(uint32_t va)
+{
+    uint32_t ppn[3];        /* the 12 bytes at (-0xc,A6); `pea (-0xc,A6)` */
+    uint16_t allocated;
+    int16_t  i;
+    uint32_t *p;
+
+    /* 0x00E30ABE/0x00E30AC2/0x00E30AC6: MMAP_$ALLOC_FREE(&ppn, 1) */
+    allocated = MMAP_$ALLOC_FREE(ppn, 1);
+
+    /* 0x00E30ACE: the page number is read before the count is tested. */
+    /* 0x00E30AD2 `tst.w D0w` / 0x00E30AD4 `bne.b` */
+    if (allocated == 0) {
         CRASH_SYSTEM(&mst_$vm_resources_exhausted_00e30b0c);
     }
 
-    /* Map the physical page at the virtual address */
-    /* Flag 0x16 = kernel, read/write, cached */
-    MMU_$INSTALL(phys_addr[0], virt_addr, 0x16);
+    /* 0x00E30AE2..0x00E30AEA: MMU_$INSTALL(ppn[0], va, 0x16) */
+    MMU_$INSTALL(ppn[0], va, 0x16);
 
-    /* Clear the entire page (256 longwords = 1024 bytes) */
-    uint32_t *ptr = (uint32_t *)(uintptr_t)virt_addr;
-    for (i = 0; i < 256; i++) {
-        *ptr++ = 0;
+    /* 0x00E30AF4 `move.w #0xff,D0w` / `clr.l (A2)+` / `dbf`: 256 longwords */
+    p = (uint32_t *)ARCH_VA_TO_PTR(va);
+    for (i = 0xff; i >= 0; i--) {
+        *p++ = 0;
     }
 
-    return phys_addr[0];
+    return ppn[0];
 }
 
 /*
- * Static helper: Initialize a global segment table page
- *
- * Called during init to set up pages for global segment mappings.
- * Updates the MST table entry and page tracking bitmap.
- *
- * @param seg_index  Index in global segment table
- *
- * Note: This function accesses parent's local variables via A6 register
- * chain, which is a Pascal nested procedure pattern. We simulate this
- * by using static variables set by the caller.
+ * Nested procedure at 0x00E30B10 - back MST entry `seg_index` with a fresh
+ * page table page and consume the next free bit of the availability bitmap.
  */
-
-/* Shared state between MST_$INIT and mst_init_global_page */
-static int32_t init_virt_addr;
-static int16_t init_bit_index;
-static int16_t init_word_index;
-
 static void mst_init_global_page(int16_t seg_index)
 {
     uint16_t page_num;
 
-    /* Allocate and clear the page */
-    mst_init_page(init_virt_addr);
+    /* 0x00E30B1E/0x00E30B22: the parent's (-0x10,A6) is the page address. */
+    (void)mst_init_page(mst_init_va);
 
-    /* Increment wired page count */
+    /* 0x00E30B2C `addq.w #0x1,(0x34,A0)` with A0 = 0xE7CF0C */
     MST_$MST_PAGES_WIRED++;
 
-    /* Calculate MST table entry value */
-    page_num = init_bit_index + init_word_index * 32;
-
-    /* Store in MST table */
+    /* 0x00E30B30..0x00E30B44: MST[seg_index] = word*32 + bit */
+    page_num = (uint16_t)((uint16_t)mst_init_word * 32u + (uint16_t)mst_init_bit);
     MST[seg_index] = page_num;
 
-    /* Clear bit in availability bitmap to mark page as used */
-    MST_$PAGE_AVAIL_BITMAP[init_word_index] &= ~(1 << (init_bit_index & 0x1f));
+    /* 0x00E30B48..0x00E30B58: bitmap[word] &= ~(1 << bit) */
+    MST_$PAGE_AVAIL_BITMAP[mst_init_word] &= ~(1u << (mst_init_bit & 0x1f));
 
-    /* Advance to next page */
-    if (MST_$PAGE_AVAIL_BITMAP[init_word_index] == 0) {
-        /* All bits in this word are used, move to next word */
-        init_word_index++;
-        init_bit_index = 0;
+    /* 0x00E30B5C `tst.l` / 0x00E30B66 `beq.b`: an exhausted longword moves
+     * the cursor on to the next one, otherwise the bit index advances. */
+    if (MST_$PAGE_AVAIL_BITMAP[mst_init_word] == 0) {
+        mst_init_word++;        /* 0x00E30B6E */
+        mst_init_bit = 0;       /* 0x00E30B72 */
     } else {
-        init_bit_index++;
+        mst_init_bit++;         /* 0x00E30B68 */
     }
 
-    /* Move virtual address to next page (1KB pages) */
-    init_virt_addr += 0x400;
+    /* 0x00E30B76 `addi.l #0x400,(-0x10,A2)` */
+    mst_init_va += 0x400;
 }
 
-/*
- * MST_$INIT - Initialize the MST subsystem
- */
 void MST_$INIT(void)
 {
-    uint32_t num_mst_pages;
-    uint32_t max_pages;
-    int16_t limit;
-    int16_t i;
-    uint16_t global_a_pages;
-    uint16_t global_b_pages;
-    uint16_t word_index;
-    uint16_t bit_index;
-    int32_t mst_table_addr;
-    int32_t page_table_addr;
+    uint32_t mst_words;
+    uint32_t ten_percent;
+    uint32_t product;
+    uint32_t page_base;
+    uint32_t mst_base_va;
+    uint32_t mst_end_va;
+    int16_t  limit;
+    int16_t  count;
+    int16_t  seg;
+    int16_t  bit;
+    int16_t  next_word;
+    uint16_t *mst_p;
 
-    /* Set default touch-ahead count to 4 pages */
+    /* 0x00E30B90 `move.w #0x4,(0x00E24448).l` */
     MST_$TOUCH_COUNT = 4;
 
-    /* Clear ASID allocation bitmap.  0x00E30B98 `clr.l (0x00E24384).l` and
-     * 0x00E30B9E `move.l #0x1,(0x00E24388).l` write the eight ASID-list bytes
-     * as two longwords; on the big-endian m68k the second store leaves
+    /* 0x00E30B98 `clr.l (0x00E24384).l` and 0x00E30B9E
+     * `move.l #0x1,(0x00E24388).l` write the eight ASID-set bytes as two
+     * longwords; on the big-endian m68k the second store leaves
      * 00 00 00 01, i.e. bit 0 of the last byte, which is where
      * MST_$ALLOC_ASID looks for ASID 0 (reserved for the kernel). */
     MST_$ASID_LIST_STORE_LONG(0, 0);
     MST_$ASID_LIST_STORE_LONG(1, 1);
 
-    /* Calculate number of MST pages needed */
-    /* Each page covers 64 segments (1024 bytes / 16 bytes per entry) */
-    num_mst_pages = M$MIU$LLW((uint32_t)(MST_$SEG_TN + 0x3f), MST_MAX_ASIDS);
+    /* 0x00E30BA8 `move.l #0xee5800,(-0x10,A6)` */
+    mst_base_va = ARCH_PTR_TO_VA(MST);
+    mst_init_va = mst_base_va;
 
-    /* Allocate and initialize MST table pages */
-    mst_table_addr = (int32_t)(uintptr_t)MST;  /* 0xee5800 */
-    page_table_addr = mst_table_addr;
+    /* 0x00E30BB0..0x00E30BC8: M$MIU$LLW(((uint16)(SEG_TN + 0x3f)) >> 6, 58).
+     * The word sum is zero-extended into the cleared D3 (0x00E30BB2,
+     * 0x00E30BBE) and only then shifted right by six (0x00E30BC0), so the
+     * multiplicand is the per-ASID page count and the product is the total
+     * number of MST words. */
+    mst_words = M$MIU$LLW((uint32_t)(uint16_t)(MST_$SEG_TN + 0x3f) >> 6,
+                          MST_MAX_ASIDS);
 
+    /* 0x00E30BD2..0x00E30BF6: allocate pages up to MST + mst_words*2.
+     * `cmpa.l (-0x10,A6),A2` / `bhi.b` is an unsigned compare. */
+    mst_end_va = mst_base_va + mst_words * 2;
     do {
-        mst_init_page(page_table_addr);
-        page_table_addr += 0x400;  /* Next 1KB page */
-    } while (page_table_addr < mst_table_addr + (int32_t)(num_mst_pages * 2));
+        (void)mst_init_page(mst_init_va);
+        mst_init_va += 0x400;
+    } while (mst_end_va > mst_init_va);
 
-    /* Clear all MST table entries */
-    for (i = (int16_t)num_mst_pages - 1; i >= 0; i--) {
-        MST[i] = 0;
-    }
+    /* 0x00E30BF8..0x00E30C06: `clr.w (A0)+` / `dbf D0w` clears
+     * (uint16)mst_words entries starting at MST. */
+    count = (int16_t)((uint16_t)mst_words - 1);
+    mst_p = MST;
+    do {
+        *mst_p++ = 0;
+        count--;
+    } while (count != -1);
 
-    /* Clear bit 0 of page availability bitmap word 0
-     * (Original code accessed byte offset 3 of the bitmap = low byte on M68K big-endian) */
-    MST_$PAGE_AVAIL_BITMAP[0] &= ~1U;
+    /* 0x00E30C10 `bclr.b #0x0,(0x3,A1)` with A1 = 0xE7CF0C: byte 0xE7CF0F is
+     * the low byte of bitmap longword 0 on the big-endian m68k, so this
+     * clears bit 0 - page 0 is never handed out. */
+    MST_$PAGE_AVAIL_BITMAP[0] &= ~1u;
 
-    /* Initialize page table base address */
-    page_table_addr = MST_PAGE_TABLE_BASE;
+    /* 0x00E30C16 `move.l #0xef6400,(-0x10,A6)` */
+    mst_init_va = MST_PAGE_TABLE_BASE;
 
-    /* Clear wired page count */
+    /* 0x00E30C1E `clr.w (0x34,A1)` */
     MST_$MST_PAGES_WIRED = 0;
 
-    /* Initialize shared state for helper function.
-     * TODO(source-ueq2): 0x00E30C22 `clr.w (-0x12,A6)` clears the LONGWORD
-     * index and 0x00E30C26 `move.w #0x1,(-0x14,A6)` sets the BIT index to 1
-     * (bit 0 having just been cleared by the bclr at 0x00E30C10); the two
-     * initialisers below are swapped with respect to that. */
-    init_virt_addr = page_table_addr;
-    init_bit_index = 0;
-    init_word_index = 1;
+    /* 0x00E30C22 `clr.w (-0x12,A6)` and 0x00E30C26 `move.w #0x1,(-0x14,A6)`:
+     * the cursor starts at longword 0, bit 1 - bit 0 having just been taken
+     * by the bclr above. */
+    mst_init_word = 0;
+    mst_init_bit = 1;
 
-    /*
-     * Allocate pages for Global A segment table
-     * Number of pages = GLOBAL_A_SIZE / 64 (64 segments per page)
-     */
-    global_a_pages = (MST_$GLOBAL_A_SIZE >> 6) - 1;
-    if (global_a_pages >= 0) {
-        for (i = 0; i <= global_a_pages; i++) {
-            mst_init_global_page(i);
-        }
+    /* 0x00E30C2C..0x00E30C48: one page per 64 Global A segments.
+     * `subq.w #0x1,D0w` / `bmi.b` (0x00E30C36) is a SIGNED word test. */
+    count = (int16_t)((MST_$GLOBAL_A_SIZE >> 6) - 1);
+    if (count >= 0) {
+        seg = 0;
+        do {
+            mst_init_global_page(seg);
+            seg++;
+            count--;
+        } while (count != -1);
     }
 
-    /*
-     * Allocate pages for Global B segment table
-     * Starts after Global A entries
-     */
-    global_b_pages = (uint16_t)((MST_$GLOBAL_A_SIZE + MST_$GLOBAL_B_SIZE) >> 6) - 1;
-    global_b_pages -= (MST_$GLOBAL_A_SIZE >> 6);
-    if (global_b_pages >= 0) {
-        uint16_t start_index = MST_$GLOBAL_A_SIZE >> 6;
-        for (i = 0; i <= global_b_pages; i++) {
-            mst_init_global_page(start_index + i);
-        }
+    /* 0x00E30C4C..0x00E30C80: the same for Global B, whose entries follow
+     * Global A's.  The sizes are added as zero-extended longwords
+     * (0x00E30C52..0x00E30C64) before the shift. */
+    seg = (int16_t)(MST_$GLOBAL_A_SIZE >> 6);
+    count = (int16_t)(((((uint32_t)MST_$GLOBAL_A_SIZE +
+                         (uint32_t)MST_$GLOBAL_B_SIZE) >> 6) - 1) - (uint32_t)seg);
+    if (count >= 0) {
+        do {
+            mst_init_global_page(seg);
+            seg++;
+            count--;
+        } while (count != -1);
     }
 
-    /*
-     * Calculate MST page limit based on available physical memory.
-     * Use 10% of real pages, capped between 125 (0x7d) and 358 (0x166) pages.
-     */
-    int32_t page_base;
-    if (!MST_M68020_IS_020()) {  /* tst.b M68020 / bmi: not a 68020+ */
-        page_base = MMAP_$PAGEABLE_PAGES;
+    /* 0x00E30C84 `tst.b (0x00e23d2e).l` / `bmi.b`: the sign of the M68020
+     * flag selects which physical page count feeds the limit. */
+    if (MST_M68020_IS_020()) {
+        page_base = MMAP_$REAL_PAGES;       /* 0x00E30C94 */
     } else {
-        page_base = MMAP_$REAL_PAGES;
+        page_base = MMAP_$PAGEABLE_PAGES;   /* 0x00E30C8C */
     }
 
-    /* Calculate 10% of pages */
-    max_pages = M$DIU$LLW(page_base * 10, 100);
+    /* 0x00E30C9C..0x00E30CB2: 10 percent of those pages.  The multiply by
+     * ten is open-coded as 2x + 8x. */
+    ten_percent = M$DIU$LLW(page_base * 10, 100);
 
-    /* Also limit by segment count */
-    num_mst_pages = M$MIU$LLW((uint32_t)(MST_$SEG_TN >> 6), MST_MAX_ASIDS);
-    if (max_pages > num_mst_pages) {
-        max_pages = num_mst_pages;
+    /* 0x00E30CB8..0x00E30CD0: (SEG_TN >> 6) * 58 pages would back every ASID */
+    product = M$MIU$LLW((uint32_t)MST_$SEG_TN >> 6, MST_MAX_ASIDS);
+
+    /* 0x00E30CD2 `cmp.l (-0x20,A6),D0` / `bls.b`: take the smaller. */
+    if (product > ten_percent) {
+        product = ten_percent;
     }
 
-    /* Apply minimum limit of 125 pages */
-    limit = 0x7d;
-    if ((int16_t)max_pages > limit) {
-        limit = (int16_t)max_pages;
+    /* The limit is stored after every clamp, exactly as the original does. */
+    MST_$MST_PAGES_LIMIT = (uint16_t)product;           /* 0x00E30CE2 */
+
+    limit = 0x7d;                                       /* 0x00E30CE6 */
+    if (limit < (int16_t)MST_$MST_PAGES_LIMIT) {        /* 0x00E30CE8 */
+        limit = (int16_t)MST_$MST_PAGES_LIMIT;          /* 0x00E30CEE */
+    }
+    MST_$MST_PAGES_LIMIT = (uint16_t)limit;             /* 0x00E30CF4 */
+
+    if (limit > 0x166) {                                /* 0x00E30CF8 */
+        limit = 0x166;                                  /* 0x00E30CFE */
+    }
+    MST_$MST_PAGES_LIMIT = (uint16_t)limit;             /* 0x00E30D04 */
+
+    if (limit < 0) {                                    /* 0x00E30D08 */
+        limit = (int16_t)(limit + 0x1f);                /* 0x00E30D0A */
+    }
+    /* 0x00E30D10 `asr.w #0x5` / 0x00E30D12 `lsl.w #0x5`: round to 32 */
+    limit = (int16_t)((int16_t)(limit >> 5) << 5);
+    MST_$MST_PAGES_LIMIT = (uint16_t)limit;             /* 0x00E30D14 */
+
+    /* 0x00E30D18 `move.w (-0x12,A6),(0x30,A1)`: the bitmap longword index
+     * the global-page loop left behind becomes the allocator's search hint.
+     * It is a store of that running index, not a clear. */
+    MST_$PAGE_ALLOC_HINT = (uint16_t)mst_init_word;
+
+    /* 0x00E30D1E..0x00E30D32: the first page past the limit, as a longword,
+     * split into a bitmap longword index (rounded toward zero) ... */
+    {
+        int32_t first_free = (int32_t)limit + 1;
+        int32_t rounded = first_free;
+
+        if (rounded < 0) {                              /* 0x00E30D26 */
+            rounded += 0x1f;                            /* 0x00E30D28 */
+        }
+        mst_init_word = (int16_t)(rounded >> 5);        /* 0x00E30D32 */
+
+        /* ... and a bit index within it (0x00E30D36: M$OIS$WLW(x, 32)).
+         * 0x00E30D50 writes that bit index back to (-0x14,A6) only on the
+         * path that runs the loop, so the store lives inside the guard. */
+        bit = M$OIS$WLW(first_free, 32);                /* 0x00E30D46 */
     }
 
-    /* Apply maximum limit of 358 pages */
-    if (limit > 0x166) {
-        limit = 0x166;
+    /* 0x00E30D48..0x00E30D70: clear the remaining bits of that longword. */
+    count = (int16_t)(0x1f - bit);                      /* 0x00E30D4A */
+    if (count >= 0) {
+        mst_init_bit = bit;                             /* 0x00E30D50 */
+        do {
+            MST_$PAGE_AVAIL_BITMAP[mst_init_word] &=
+                ~(1u << (mst_init_bit & 0x1f));         /* 0x00E30D5E/D68 */
+            mst_init_bit++;                             /* 0x00E30D6C */
+            count--;
+        } while (count != -1);
     }
 
-    /* Round down to multiple of 32 */
-    if (limit < 0) {
-        limit += 0x1f;
-    }
-    MST_$MST_PAGES_LIMIT = (limit >> 5) << 5;
-
-    /* 0x00E30D18 `move.w (-0x12,A6),(0x30,A1)` (A1 = 0xE7CF0C) stores the
-     * running bitmap word index - the frame slot the global-page helper
-     * advances - into MST_$PAGE_ALLOC_HINT at 0xE7CF3C.  It is a store of
-     * that index, not a clear, and it is a word in its own right rather than
-     * a thirteenth bitmap longword. */
-    MST_$PAGE_ALLOC_HINT = (uint16_t)init_word_index;
-
-    /*
-     * Initialize remaining bits in page availability bitmap.
-     * Mark pages beyond the limit as unavailable.
-     */
-    int32_t limit_plus_one = (int16_t)MST_$MST_PAGES_LIMIT + 1;
-    word_index = (limit_plus_one < 0 ? limit_plus_one + 0x1f : limit_plus_one) >> 5;
-    bit_index = M$OIS$WLW(limit_plus_one, 32);
-
-    /* Clear bits from bit_index to 31 in current word */
-    for (i = 31 - bit_index; i >= 0; i--) {
-        MST_$PAGE_AVAIL_BITMAP[word_index] &= ~(1 << (bit_index & 0x1f));
-        bit_index++;
-    }
-
-    /* Clear remaining words in bitmap */
-    word_index++;
-    for (i = 11 - word_index; i >= 0; i--) {
-        MST_$PAGE_AVAIL_BITMAP[word_index] = 0;
-        word_index++;
+    /* 0x00E30D74..0x00E30D9A: clear every bitmap longword above it, up to
+     * and including index 11 (`moveq #0xb,D2` at 0x00E30D78).  The advanced
+     * index is written back at 0x00E30D82, inside the guard. */
+    next_word = (int16_t)(mst_init_word + 1);           /* 0x00E30D7A */
+    count = (int16_t)(0xb - next_word);                 /* 0x00E30D7C */
+    if (count >= 0) {
+        mst_init_word = next_word;                      /* 0x00E30D82 */
+        do {
+            MST_$PAGE_AVAIL_BITMAP[mst_init_word] = 0;  /* 0x00E30D92 */
+            mst_init_word++;                            /* 0x00E30D96 */
+            count--;
+        } while (count != -1);
     }
 }

@@ -68,8 +68,6 @@ static uint8_t mock_disk_data[0xB00];
 
 ml_$exclusion_t MOUNT_LOCK;
 ml_$exclusion_t ml_$exclusion_t_00e7a274;
-ml_$exclusion_t ml_$exclusion_t_00e7a25c;
-int8_t DISK_$DIAG;
 
 uid_t PV_LABEL_$UID;
 uid_t LV_LABEL_$UID;
@@ -126,6 +124,10 @@ void DISK_$SET_BUFF(void *buffer, uint16_t flags, void *param_3)
 }
 
 #include "../lv_mount.c"
+
+/* DISK_$DIAG, DISK_$DO_CHKSUM and the module exclusion lock are cells of the
+ * DISK_ module block (disk/disk.h), so the host build provides the block. */
+uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
 /* ================================================================
  * Fixtures

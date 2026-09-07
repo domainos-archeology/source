@@ -34,6 +34,7 @@
 - [PROC2 table extents](proc2-table-extents.md) — 70 slots, the tail link cleared after the build loop, the 0xEA93D2 PID map base, 70 EC pairs.
 - [FIM per-AS tables are 58 entries](fim-per-as-tables.md) — the closed address chain that pins the count, the lea(d,PC) base trap, and the INIT_PID/FREE_PID ABI.
 - [FILE_$LOCK_INIT map and the LOT sentinel slot](file-lot-and-lock-init.md) — full 300-byte row clears, entries 1..1792, and why slot 1793 exists.
+- [RING_$CTL vs RING_$DATA](ring-ctl-vs-ring-data.md) - 0xE86400 is the module block, 0xE261E0 is the stats array; the tree had them swapped until 2026-09-07.
 - [ring_info_t (ASKNODE 0x1F) and the NETWORK_ reply-record shape](ring-info-record.md) — recovered from the responder; swdiag is 0x1E, failure_rec names are swapped.
 - [FIM cleanup-stack / trace-bit tables](fim-trace-and-cleanup-tables.md) — FIM_CLEANUP_STACK is 65 (PROC1), FIM_$TRACE_BIT lives in fim.s, how to byte-verify a gap.
 - [Apollo PDF internals manual and the disk images](reference_apollo_pdf_docs.md) — AEGIS Internals names on-disk record fields; how to extract its text with stdlib only.

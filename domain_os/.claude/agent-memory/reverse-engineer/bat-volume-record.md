@@ -59,13 +59,14 @@ only its sign.
 
 BAT_$MOUNT's chunk geometry (0x00E3B820-0x00E3B874) reads DISK_$DVTBL, not a
 BAT-owned array: A2 = 0xE7A290 + vol*0x48 and the fields sit at NEGATIVE
-displacements, i.e. record v starts at 0xE7A248 + v*0x48 = DISK_VOL(v) from
-disk/disk_internal.h.  Fields used: +0x08 lv_start (-0x40, NOT +0x40),
+displacements, i.e. record v starts at 0xE7A248 + v*0x48 = DISK_VOL(v).
+disk_$volume_t, DISK_VOL() and their offset asserts live in disk/disk.h
+(public) because BAT reads them; disk_internal.h keeps only DISK_VOL_FLAG_*.  Fields used: +0x08 lv_start (-0x40, NOT +0x40),
 +0x24 blocks_per_cyl (-0x24), +0x2C num_parts (-0x1c) and +0x36 part_volx[0]
 interleave mode (-0x12).  alloc_chunk_size = blocks_per_cyl, scaled by
 M$MIU$LLW(blocks_per_cyl, num_parts) only when interleave mode == 1; then
 alloc_chunk_offset = size - ((first_data_block + lv_start) mod size).
-bat/bat_internal.h keeps a duplicate view named bat_$disk_info_t; folding it
-into disk_$volume_t is bead source-9ddf.
+bat/mount.c reads these through DISK_VOL(vol_idx) directly (source-9ddf
+folded away BAT's duplicate view of the record).
 
 See [[recovered-layout-fixes]].

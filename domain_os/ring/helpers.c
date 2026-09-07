@@ -176,7 +176,7 @@ void ring_$clear_dma_channel(int16_t channel, uint16_t unit)
     /*
      * Get unit data for hardware register access.
      */
-    unit_data = &RING_$DATA.units[unit];
+    unit_data = &RING_$CTL.units[unit];
 
     /*
      * Get hardware status register pointer from device info.
@@ -233,7 +233,7 @@ void ring_$set_hw_mask(uint16_t unit, uint16_t mask)
 {
     ring_unit_t *unit_data;
 
-    unit_data = &RING_$DATA.units[unit];
+    unit_data = &RING_$CTL.units[unit];
 
     /*
      * Store the mask in the unit structure.

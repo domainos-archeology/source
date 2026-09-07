@@ -19,6 +19,15 @@
 
 #include "bat/bat_internal.h"
 
+/*
+ * DISK_VOLUME_BASE is a fixed m68k address (0x00E7A1CC), so the host build
+ * points DISK_VOL() at a mock buffer.  The stride stays DISK_VOLUME_SIZE
+ * (0x48) exactly as the machine code computes it (0x00E3B826-0x00E3B830).
+ */
+static uint8_t mock_disk_data[0x1000];
+#undef DISK_VOLUME_BASE
+#define DISK_VOLUME_BASE (mock_disk_data)
+
 #include <stdio.h>
 #include <string.h>
 
@@ -120,7 +129,7 @@ static void reset_world(void)
     memset(bat_$volumes, 0, sizeof(bat_$volumes));
     memset(bat_$mounted, 0, sizeof(bat_$mounted));
     memset(bat_$volume_flags, 0, sizeof(bat_$volume_flags));
-    memset(bat_$disk_info, 0, sizeof(bat_$disk_info));
+    memset(mock_disk_data, 0, sizeof(mock_disk_data));
     bat_$cached_buffer = NULL;
     bat_$cached_vol = 0;
     mock_get_status = status_$ok;
@@ -129,8 +138,8 @@ static void reset_world(void)
     NODE_$ME = 0x0000ABCD;
 
     /* One track's worth of blocks, so BAT_$MOUNT's geometry math is defined. */
-    bat_$disk_info[TEST_VOL].blocks_per_cyl = 32;
-    bat_$disk_info[TEST_VOL].interleave_mode = 0;
+    DISK_VOL(TEST_VOL)->blocks_per_cyl = 32;
+    DISK_VOL(TEST_VOL)->part_volx[0] = 0;
 }
 
 /* ============================================================================
@@ -254,19 +263,26 @@ TEST(module_scalar_types)
 }
 
 /*
- * bat_$disk_info_t mirrors one DISK_$DVTBL entry, reached at negative
- * displacements from 0xE7A290 + vol*0x48 (0x00E3B820-0x00E3B830), i.e. with
- * the same 0x48 bias DISK_VOL() uses.
+ * The record BAT_$MOUNT reads is disk_$volume_t (disk/disk.h), one DISK_$DVTBL
+ * entry reached at negative displacements from 0xE7A290 + vol*0x48
+ * (0x00E3B820-0x00E3B830), i.e. with the same 0x48 bias DISK_VOL() uses.
+ *
+ * disk/disk.h asserts the full m68k offset set (lv_start +0x08,
+ * blocks_per_cyl +0x24, num_parts +0x2c, part_volx +0x36) under ARCH_M68K;
+ * the host build cannot repeat it because dev_info (+0x18) is a native
+ * pointer, so what is checked here is the addressing itself.
  */
 TEST(disk_info_layout)
 {
-    ASSERT_EQ(0x48, sizeof(bat_$disk_info_t));
-    ASSERT_EQ(0x08, __builtin_offsetof(bat_$disk_info_t, lv_start));
-    ASSERT_EQ(0x24, __builtin_offsetof(bat_$disk_info_t, blocks_per_cyl));
-    ASSERT_EQ(0x2c, __builtin_offsetof(bat_$disk_info_t, num_parts));
-    ASSERT_EQ(0x36, __builtin_offsetof(bat_$disk_info_t, interleave_mode));
+    ASSERT_EQ(0x48, DISK_VOLUME_SIZE);
+    ASSERT_EQ(0x7c, DISK_VOL_DESC_OFFSET);
+    ASSERT_EQ(0x08, __builtin_offsetof(disk_$volume_t, lv_start));
+
+    /* vol*0x48 stride (0x00E3B826 lsl.w #3 / 0x00E3B82A lsl.w #3 / add.w) */
+    ASSERT_EQ(0x48, (uint8_t *)DISK_VOL(2) - (uint8_t *)DISK_VOL(1));
 
     /* Biased base: entry 1 is DISK_$DVTBL itself. */
+    ASSERT_EQ(0x00e7a290u, 0x00e7a1ccu + 1u * 0x48u + 0x7cu);
     ASSERT_EQ(0x00e7a290u, 0x00e7a248u + 1u * 0x48u);
 }
 
@@ -539,10 +555,10 @@ TEST(mount_chunk_geometry_from_dvtbl)
     reset_world();
     label_of()->version = 1;
     label_of()->first_data_block = 5;
-    bat_$disk_info[TEST_VOL].blocks_per_cyl = 32;
-    bat_$disk_info[TEST_VOL].num_parts = 4;
-    bat_$disk_info[TEST_VOL].interleave_mode = 0;
-    bat_$disk_info[TEST_VOL].lv_start = 3;
+    DISK_VOL(TEST_VOL)->blocks_per_cyl = 32;
+    DISK_VOL(TEST_VOL)->num_parts = 4;
+    DISK_VOL(TEST_VOL)->part_volx[0] = 0;
+    DISK_VOL(TEST_VOL)->lv_start = 3;
 
     BAT_$MOUNT(TEST_VOL, (int8_t)0x80, &status);
     ASSERT_EQ(status_$ok, status);
@@ -553,10 +569,10 @@ TEST(mount_chunk_geometry_from_dvtbl)
     reset_world();
     label_of()->version = 1;
     label_of()->first_data_block = 5;
-    bat_$disk_info[TEST_VOL].blocks_per_cyl = 32;
-    bat_$disk_info[TEST_VOL].num_parts = 4;
-    bat_$disk_info[TEST_VOL].interleave_mode = 1;
-    bat_$disk_info[TEST_VOL].lv_start = 3;
+    DISK_VOL(TEST_VOL)->blocks_per_cyl = 32;
+    DISK_VOL(TEST_VOL)->num_parts = 4;
+    DISK_VOL(TEST_VOL)->part_volx[0] = 1;
+    DISK_VOL(TEST_VOL)->lv_start = 3;
 
     BAT_$MOUNT(TEST_VOL, (int8_t)0x80, &status);
     ASSERT_EQ(status_$ok, status);

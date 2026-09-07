@@ -33,6 +33,15 @@
  * base (MMAP_GLOBALS / MMAP_WSL in mmap/mmap.h); the objects below are the
  * separately named cells the rest of the tree links against.
  *
+ * TODO(source-mu8j, 0xE23284): the block is still modelled twice - once as
+ * mmap_globals_t / MMAP_GLOBALS in mmap/mmap.h (plus the unused MMAP_LOCK in
+ * mmap/mmap_internal.h) and once as the standalone cells below.  Folding the
+ * cells into the block is not a local change: mmap_globals_t stops at
+ * wsl[70] and names only five of the twenty cells, MMAP_GLOBALS is a bare
+ * address literal on ARCH_M68K and an uninitialised pointer on ARCH_HOST,
+ * and mmap/test/test_ws_scan.c and pmap/test/test_purifier_l.c stub the
+ * cells directly.  Split out of source-75vi.
+ *
  * Image contents (gsk read 0x00E23284 / 0x00E23C88): everything is zero
  * except MMAP_$HI_INDX = 0xFFF, MMAP_$LO_INDX = 0x200,
  * MMAP_$MIN_RMT_POOL = 0x42, MMAP_$HPPN = 1, MMAP_$LPPN = 0xFFF,

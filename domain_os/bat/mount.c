@@ -34,7 +34,7 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
     uint32_t current_time;
     bat_$label_t *label;
     bat_$volume_t *vol;
-    bat_$disk_info_t *dinfo;
+    disk_$volume_t *dvol;
     int16_t i;
     boolean needs_salvage;
     boolean is_new_format;
@@ -188,18 +188,22 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
      *   0x00E3B858  move.l (-0x40,A2),D0    ; lv_start
      *   0x00E3B85C  add.l (-0x228,A1),D0    ; + vol->first_data_block
      */
-    dinfo = &bat_$disk_info[vol_idx];
-    chunk_size = (uint32_t)dinfo->blocks_per_cyl;
+    dvol = DISK_VOL(vol_idx);
+    /* blocks_per_cyl, +0x24 = (-0x24,A2) at 0x00E3B834 */
+    chunk_size = (uint32_t)dvol->blocks_per_cyl;
     vol->alloc_chunk_size = chunk_size;
 
-    if (dinfo->interleave_mode == 1) {
+    /* part_volx[0], +0x36 = (-0x12,A2) at 0x00E3B83C, is the interleave mode */
+    if (dvol->part_volx[0] == 1) {
         /* Striped volume: one chunk spans every member's cylinder */
-        chunk_size = M$MIU$LLW(chunk_size, dinfo->num_parts);
+        /* num_parts, +0x2c = (-0x1c,A2) at 0x00E3B846 */
+        chunk_size = M$MIU$LLW(chunk_size, dvol->num_parts);
         vol->alloc_chunk_size = chunk_size;
     }
 
     /* Calculate chunk offset: (first_data_block + lv_start) % chunk_size */
-    chunk_offset = M$OIS$LLL(vol->first_data_block + dinfo->lv_start,
+    /* lv_start, +0x08 = (-0x40,A2) at 0x00E3B858 */
+    chunk_offset = M$OIS$LLL(vol->first_data_block + dvol->lv_start,
                              chunk_size);
     vol->alloc_chunk_offset = chunk_size - chunk_offset;
 

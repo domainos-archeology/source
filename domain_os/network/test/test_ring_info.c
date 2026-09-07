@@ -87,7 +87,7 @@ TEST(header_offsets) {
 }
 
 TEST(stats_block_is_ring_stats_t) {
-    /* 15 longwords from 0x00E261E0 = RING_$STATS[0], 0x00E11266..0x00E11274 */
+    /* 15 longwords from 0x00E261E0 = RING_$DATA[0], 0x00E11266..0x00E11274 */
     ASSERT_EQ(0x08u, offsetof(ring_info_t, stats));
     ASSERT_EQ(0x3Cu, sizeof(((ring_info_t *)0)->stats));
     /* stats+0x02 / +0x06 are the two transmit longs */
