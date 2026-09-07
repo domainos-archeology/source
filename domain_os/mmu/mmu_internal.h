@@ -12,6 +12,7 @@
 #include "cache/cache.h"
 #include "mmap/mmap.h"
 #include "proc1/proc1.h"
+#include "fp/fp.h"     /* FP_$OWNER - its low byte is the MMU power-register byte */
 
 /*
  * ============================================================================
@@ -26,10 +27,13 @@
 /* CACHE_$CLEAR_ENTRY is exported from cache/cache.h (bead source-3uo). */
 
 /*
- * Power control byte for MMU power register updates.
- * Located at 0xE218D5 (m68k).
+ * There is no MMU_POWER_CONTROL_BYTE cell.  The byte MMU_$INSTALL_ASID
+ * restores into MMU_POWER_REG_BYTE lives at 0xE218D5, which the SAU2 map
+ * places inside FP_$OWNER (`E218D4 FP_$OWNER`, running to FIM_$BUS_ERR at
+ * 0xE218E8) - it is the low byte of that word, i.e. the ASID that currently
+ * owns the floating-point unit.  See fp/fp.h; mmu/install_asid.c names it
+ * directly.
  */
-extern uint8_t MMU_POWER_CONTROL_BYTE;
 
 /*
  * ============================================================================

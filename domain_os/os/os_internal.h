@@ -77,7 +77,18 @@ extern uint32_t BOOT_INFO_TABLE[];
  * ============================================================================
  */
 
+/*
+ * INT_STACK_BASE - the label the SAU2 map puts at 0x00EB2C00, the first byte
+ * past the top of the interrupt stack (the stack grows down from it; the map
+ * also puts INT_STACK_GUARD/P1_STACK_BASE at 0x00EB2000 and starts the
+ * VTOC_CACHE segment at 0x00EB2C00).  It is an address, not a cell holding
+ * one: OS_$INIT reaches it with `lea`, then zeroes the 0x400 bytes below it.
+ */
+#if defined(ARCH_M68K)
+#define INT_STACK_BASE ((char *)0x00EB2C00)
+#else
 extern char *INT_STACK_BASE;
+#endif
 
 /*
  * ============================================================================
@@ -103,7 +114,13 @@ extern uint32_t os_$vector_table[256];
  * ============================================================================
  */
 
-extern void *_NULL_PC;
+/*
+ * NULL_PC - the null process's saved PC cell, 0x00EB07FC (map: NULL_PC, in
+ * the OS_PAGE/PAGE segment at 0x00EB0000; NULL_STACK is at 0x00EB07F4).
+ * OS_$INIT stores the address of NULLPROC here.  The tree used to spell it
+ * `_NULL_PC`; the map name is NULL_PC (bead source-wk2f).
+ */
+extern void *NULL_PC;
 extern void *NULLPROC;
 extern void *_BUS_ERROR_VEC;
 /* FIM_$BUS_ERR and FIM_$PARITY_TRAP: see fim/fim.h */

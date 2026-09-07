@@ -20,9 +20,15 @@
  * the ten entries MAC_$CLOSE's bound allows (`cmpi.w #0xa,(A2)` / `bcc` at
  * 0x00E0BA90) end at A5+0x868 -- exactly where MAC_OS_$EXCLUSION begins.
  *
- * MAC_OS_$PORT_PKT_TABLES and MAC_OS_$PORT_INFO_TABLE are declared in
- * mac_os/mac_os.h but their A5 displacements are not yet pinned, so they are
- * not defined here.
+ *   +0x000  MAC_OS_$PORT_PKT_TABLES  8 x 0xF4 bytes (0x00E22990..0x00E23130)
+ *   +0x7A0  MAC_OS_$CHANNEL_TABLE   10 x 20 bytes  (0x00E23130..0x00E231F8)
+ *   +0x868  MAC_OS_$EXCLUSION       ml_$exclusion_t (0x00E231F8, labelled
+ *                                   MAC_OS_$EXCLUSION in the image)
+ *   +0x87C  MAC_OS_$PORTP_TABLE      8 pointers    (0x00E2320C)
+ *   +0x89C  MAC_OS_$PORT_TABLE       8 x 8 bytes   (0x00E2322C)
+ *
+ * The last two names come from the SAU2 map, which lists both inside
+ * `D E22990 MAC_OS size = 8EC`.
  */
 
 #include "mac_os/mac_os_internal.h"
@@ -42,3 +48,31 @@ mac_os_$channel_t MAC_OS_$CHANNEL_TABLE[MAC_OS_MAX_CHANNELS];
  * Address: 0x00E231F8 (MAC_OS_$DATA + 0x868)
  */
 ml_$exclusion_t MAC_OS_$EXCLUSION;
+
+/*
+ * MAC_OS_$PORT_PKT_TABLES - per-port packet-type tables, block + 0.
+ * MAC_OS_$INIT advances its cursor by 0xF4 per port (0x00E2F5E6) and 8 of
+ * them fill the block up to MAC_OS_$CHANNEL_TABLE at + 0x7A0.  Zero in the
+ * image.
+ *
+ * Address: 0x00E22990
+ */
+mac_os_$port_pkt_table_t MAC_OS_$PORT_PKT_TABLES[MAC_OS_MAX_PORTS];
+
+/*
+ * MAC_OS_$PORTP_TABLE - one pointer per port at block + 0x87C, filled in by
+ * MAC_OS_$INIT (0x00E2F54C-0x00E2F550) with the address of that port's
+ * MAC_OS_$PORT_TABLE entry.  Zero in the image.
+ *
+ * Address: 0x00E2320C
+ */
+mac_os_$port_info_t *MAC_OS_$PORTP_TABLE[MAC_OS_MAX_PORTS];
+
+/*
+ * MAC_OS_$PORT_TABLE - per-port version/config/mtu records at block + 0x89C,
+ * stride 8.  Zero in the image; MAC_OS_$INIT sets version to 1 and
+ * MAC_OS_$PUT_INFO replaces the whole record.
+ *
+ * Address: 0x00E2322C
+ */
+mac_os_$port_info_t MAC_OS_$PORT_TABLE[MAC_OS_MAX_PORTS];

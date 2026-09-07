@@ -38,3 +38,49 @@ uint32_t NAME_$LOCK_HANDLE[NAME_$MAX_LOCK_PROCS];
 /* A5+0x2B8 (0xE7FFDC): UID of the directory this process has locked;
  * zero means "no directory locked" (0xE548EA, cleared by DIR_$OLD_INIT). */
 uid_t NAME_$LOCK_UID[NAME_$MAX_LOCK_PROCS];
+
+/*
+ * ============================================================================
+ * UID_LIST entry owned by NAME
+ * ============================================================================
+ *
+ * NAME_$CANNED_REP_ROOT_UID lives in the shared read-only UID table the map
+ * calls "I E1737C UID_LIST size = 210"; its slot is 0x00E173FC, between
+ * DISKLESS_$UID (0x00E173F4) and DISPLAY3_$UID (0x00E17404), so the object is
+ * 8 bytes.  Image bytes: 00 00 04 04 00 00 00 00.  (NAME_$CANNED_ROOT_UID,
+ * the neighbouring 0x00E173E4 slot, is defined in name/init.c.)
+ */
+uid_t NAME_$CANNED_REP_ROOT_UID = UID_CONST(0x00000404, 0);
+
+/*
+ * ============================================================================
+ * Literal cells in the NAME / OLD_DIR code regions
+ * ============================================================================
+ *
+ * Domain Pascal passes VAR and const parameters by address, so each literal
+ * argument becomes a cell in the code region whose address is pushed.  All
+ * three below sit in "I E53EF8 OLD_DIR size = 4308" or "I E58488 NAME
+ * size = 5B0"; the map exports no symbol for them, so the Ghidra labels are
+ * kept.
+ */
+
+/* 0x00E5472E: the word 0, immediately after an `rts` at 0x00E5472C.
+ * Image bytes: 00 00. */
+int16_t NAME_$CONST_ZERO_W = 0;
+
+/* 0x00E54730: the longword 0, immediately after NAME_$CONST_ZERO_W and
+ * immediately before NAME_$UNLOCK_DIR (0x00E54734).  Image bytes:
+ * 00 00 00 00. */
+uint32_t NAME_$CONST_ZERO_L = 0;
+
+/* 0x00E544AE: the word 0x0020, immediately after an `rts` at 0x00E544AC.
+ * NAME_$VALIDATE_LEAF hands its address to MAP_CASE as the maximum output
+ * length (32 characters).  Image bytes: 00 20. */
+int16_t DAT_00e544ae = 0x0020;
+
+/*
+ * Naming_Internal_Err - 0x00E5855C, the status cell NAME_$MAP_DIR pea's to
+ * CRASH_SYSTEM at 0x00E5852A.  Image bytes: 00 0E 00 25.
+ */
+status_$t Naming_Internal_Err = 0x000E0025;
+

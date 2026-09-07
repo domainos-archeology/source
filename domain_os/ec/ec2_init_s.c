@@ -18,7 +18,7 @@ void EC2_$INIT_S(void)
     ec2_waiter_t *waiter;
 
     /* Initialize EC1 array (64 entries) */
-    ec1 = (ec_$eventcount_t *)EC1_ARRAY_BASE;
+    ec1 = (ec_$eventcount_t *)EC2_$WAIT_ECS;
     for (i = 0; i < 64; i++) {
         EC_$INIT(ec1);
         ec1++;

@@ -119,8 +119,13 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         }
 
         /* Map the temp file (mapped address is returned in A0) */
-        mapped_ptr = MST_$MAPS(PROC1_$AS_ID, 0xFF00, &temp_uid, 0, 0x10000,
-                               0x16, 0, 0xFF, map_result, status_ret);
+        /* 0x00E55E60 `move.b D2b,-(SP)` and 0x00E55E4C `move.b D2b,-(SP)`
+         * push arguments 2 and 8 as Pascal BOOLEAN bytes.
+         * TODO(source-qmdl): D2 is loaded from D4 at 0x00E55E04, so both
+         * bytes are a computed boolean rather than the constant true this
+         * call passes; the value of D4 is not yet recovered. */
+        mapped_ptr = MST_$MAPS(PROC1_$AS_ID, true, &temp_uid, 0, 0x10000,
+                               0x16, 0, true, map_result, status_ret);
         if (*status_ret != status_$ok) {
             goto cleanup;
         }
@@ -232,8 +237,10 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         /* Path 2: Directory structure is corrupted */
 
         /* Map the directory directly (mapped address is returned in A0) */
-        mapped_ptr = MST_$MAPS(PROC1_$AS_ID, 0xFF00, &local_dir, 0, 0x10000,
-                               0x16, 0, 0xFF, map_result, status_ret);
+        /* 0x00E55CCA `st -(SP)` and 0x00E55CB6 `st -(SP)` push arguments 2
+         * and 8 as Pascal BOOLEAN bytes (0xFF == true). */
+        mapped_ptr = MST_$MAPS(PROC1_$AS_ID, true, &local_dir, 0, 0x10000,
+                               0x16, 0, true, map_result, status_ret);
         if (*status_ret != status_$ok) {
             goto done;
         }

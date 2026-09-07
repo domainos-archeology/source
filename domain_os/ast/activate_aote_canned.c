@@ -73,7 +73,7 @@ void AST_$ACTIVATE_AOTE_CANNED(uint32_t *attrs, uint32_t *obj_info)
         /* Compare UIDs */
         if (hash_chain->obj_uid.high == aote->obj_uid.high &&
             hash_chain->obj_uid.low == aote->obj_uid.low) {
-            CRASH_SYSTEM(&status_$_00e2f1d0);
+            CRASH_SYSTEM(&status_$t_00e2f1d0);
         }
         hash_chain = hash_chain->hash_next;
     }

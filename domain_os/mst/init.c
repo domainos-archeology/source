@@ -133,9 +133,13 @@ void MST_$INIT(void)
     /* Set default touch-ahead count to 4 pages */
     MST_$TOUCH_COUNT = 4;
 
-    /* Clear ASID allocation bitmap */
-    MST_$ASID_LIST_LONG = 0;
-    DAT_00e24388 = 1;  /* Mark ASID 0 as allocated (reserved for kernel) */
+    /* Clear ASID allocation bitmap.  0x00E30B98 `clr.l (0x00E24384).l` and
+     * 0x00E30B9E `move.l #0x1,(0x00E24388).l` write the eight ASID-list bytes
+     * as two longwords; on the big-endian m68k the second store leaves
+     * 00 00 00 01, i.e. bit 0 of the last byte, which is where
+     * MST_$ALLOC_ASID looks for ASID 0 (reserved for the kernel). */
+    MST_$ASID_LIST_STORE_LONG(0, 0);
+    MST_$ASID_LIST_STORE_LONG(1, 1);
 
     /* Calculate number of MST pages needed */
     /* Each page covers 64 segments (1024 bytes / 16 bytes per entry) */
@@ -165,7 +169,11 @@ void MST_$INIT(void)
     /* Clear wired page count */
     MST_$MST_PAGES_WIRED = 0;
 
-    /* Initialize shared state for helper function */
+    /* Initialize shared state for helper function.
+     * TODO(source-ueq2): 0x00E30C22 `clr.w (-0x12,A6)` clears the LONGWORD
+     * index and 0x00E30C26 `move.w #0x1,(-0x14,A6)` sets the BIT index to 1
+     * (bit 0 having just been cleared by the bclr at 0x00E30C10); the two
+     * initialisers below are swapped with respect to that. */
     init_virt_addr = page_table_addr;
     init_bit_index = 0;
     init_word_index = 1;
@@ -231,8 +239,12 @@ void MST_$INIT(void)
     }
     MST_$MST_PAGES_LIMIT = (limit >> 5) << 5;
 
-    /* Clear MST_$PAGE_ALLOC_HINT (0x00E7CF3C, offset 0x30 from MST_$PAGE_AVAIL_BITMAP) */
-    MST_$PAGE_AVAIL_BITMAP[12] = 0;  /* word index 12 = offset 0x30 */
+    /* 0x00E30D18 `move.w (-0x12,A6),(0x30,A1)` (A1 = 0xE7CF0C) stores the
+     * running bitmap word index - the frame slot the global-page helper
+     * advances - into MST_$PAGE_ALLOC_HINT at 0xE7CF3C.  It is a store of
+     * that index, not a clear, and it is a word in its own right rather than
+     * a thirteenth bitmap longword. */
+    MST_$PAGE_ALLOC_HINT = (uint16_t)init_word_index;
 
     /*
      * Initialize remaining bits in page availability bitmap.

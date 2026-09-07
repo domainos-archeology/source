@@ -61,8 +61,10 @@ void HINT_$INIT(void)
          *   map_result: Output buffer
          *   &status: Status return
          */
-        mapped_ptr = (hint_file_t *)MST_$MAPS(0, (int16_t)0xFF00, &hintfile_uid, 0,
-                                               0x7FFF, 0x16, 0, (int8_t)0xFF,
+        /* 0x00E312AC `st -(SP)` and 0x00E3129A `st -(SP)` push arguments 2
+         * and 8 as Pascal BOOLEAN bytes (0xFF == true). */
+        mapped_ptr = (hint_file_t *)MST_$MAPS(0, true, &hintfile_uid, 0,
+                                               0x7FFF, 0x16, 0, true,
                                                map_result, &status);
 
         if (status != status_$ok) {

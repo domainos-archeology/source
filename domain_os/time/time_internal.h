@@ -83,8 +83,14 @@
  * ============================================================================
  */
 
-/* Fast clock event count for TIME_$GET_EC */
-extern uint32_t TIME_$FAST_CLOCK_EC;
+/*
+ * TIME_$FAST_CLOCK_EC - the fast-clock level-1 eventcount (map: symbol
+ * TIME_$FAST_CLOCK_EC at 0x00E2B0C8, the next map symbol TIME_$CLOCKH_EC is
+ * at 0x00E2B0D4, so the object is exactly 0x0C bytes = one ec_$eventcount_t).
+ * The image holds { 0, 0x00E2B0C8, 0x00E2B0C8 }: an EC_$INIT'd empty circular
+ * waiter list whose head and tail point at the eventcount itself.
+ */
+extern ec_$eventcount_t TIME_$FAST_CLOCK_EC;
 
 /*
  * Pascal by-reference constant cells at 0x00E58B52 / 0x00E58B54, shared by

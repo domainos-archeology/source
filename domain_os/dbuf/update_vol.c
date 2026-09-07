@@ -40,7 +40,7 @@ void DBUF_$UPDATE_VOL(uint16_t vol_idx, void *uid_p)
         return;
     }
 
-    entry = &DBUF;
+    entry = &DBUF[0];
 
     do {
         /* Check if buffer is dirty (valid bit set = 0x4000) */

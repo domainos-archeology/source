@@ -33,7 +33,7 @@ void TIME_$GET_EC(uint16_t *ec_id, void **ec_ret, status_$t *status)
     }
 
     if (time_fast_clock_ec == NULL) {
-        time_fast_clock_ec = EC2_$REGISTER_EC1((ec_$eventcount_t *)&TIME_$FAST_CLOCK_EC, status);
+        time_fast_clock_ec = EC2_$REGISTER_EC1(&TIME_$FAST_CLOCK_EC, status);
     }
 
     if (*status != status_$ok) {

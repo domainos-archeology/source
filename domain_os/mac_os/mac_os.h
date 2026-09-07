@@ -149,12 +149,27 @@ _Static_assert(sizeof(mac_os_$channel_t) == 20, "mac_os_$channel_t must be 20 by
 
 /*
  * Port info entry (8 bytes)
- * Port version and configuration information.
+ *
+ * MAC_OS_$INIT writes all three fields per port (0x00E2F55E-0x00E2F582,
+ * base A5 + 0x89C, stride 8):
+ *   move.l #0x1,(0x89c,A1)          version  = 1
+ *   clr.w  (0x8a0,A1)               config   = 0
+ *   move.w (0x4,A0),(0x8a2,A1)      mtu      = driver_info->mtu
+ * and MAC_OS_$PUT_INFO replaces the whole 8 bytes with OS_$DATA_COPY.
  */
 typedef struct mac_os_$port_info_t {
     uint32_t    version;        /* 0x00: Port version (must be 1) */
-    uint32_t    config;         /* 0x04: Port configuration */
+    uint16_t    config;         /* 0x04: Port configuration */
+    uint16_t    mtu;            /* 0x06: MTU copied from the driver info */
 } mac_os_$port_info_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(mac_os_$port_info_t, config) == 0x04,
+               "mac_os_$port_info_t.config");
+_Static_assert(__builtin_offsetof(mac_os_$port_info_t, mtu) == 0x06,
+               "mac_os_$port_info_t.mtu");
+_Static_assert(sizeof(mac_os_$port_info_t) == 8, "mac_os_$port_info_t must be 8 bytes");
+#endif
 
 /*
  * MAC_OS open parameters structure
@@ -423,6 +438,14 @@ _Static_assert(sizeof(mac_os_$send_pkt_t) == 0x4C, "mac_os_$send_pkt_t must be 0
  * ============================================================================
  */
 
+/*
+ * MAC_OS_$PORT_PKT_TABLES - per-port packet-type tables, MAC_OS_$DATA + 0
+ * (0x00E22990).  MAC_OS_$INIT clears each table's entry_count through a
+ * pointer it advances by 0xF4 per port (0x00E2F536 / 0x00E2F558 /
+ * 0x00E2F5E6), and 8 * 0xF4 = 0x7A0, exactly the displacement of
+ * MAC_OS_$CHANNEL_TABLE.  The map gives the segment base no interior symbol,
+ * so this stays a tree name.
+ */
 extern mac_os_$port_pkt_table_t MAC_OS_$PORT_PKT_TABLES[MAC_OS_MAX_PORTS];
 /*
  * MAC_OS_$CHANNEL_TABLE - per-channel receive state, 10 entries of 20 bytes
@@ -435,7 +458,26 @@ extern mac_os_$channel_t MAC_OS_$CHANNEL_TABLE[MAC_OS_MAX_CHANNELS];
  * Address: 0x00E231F8 (MAC_OS_$DATA + 0x868)
  */
 extern ml_$exclusion_t MAC_OS_$EXCLUSION;
-extern mac_os_$port_info_t MAC_OS_$PORT_INFO_TABLE[MAC_OS_MAX_PORTS];
+/*
+ * MAC_OS_$PORTP_TABLE - one pointer per port to that port's
+ * MAC_OS_$PORT_TABLE entry.  MAC_OS_$INIT fills it with
+ * `lea (0x89c,A0),A3 / move.l A3,(0x87c,A4)` (0x00E2F54C), A4 advancing by 4
+ * per port, so it is 8 pointers at MAC_OS_$DATA + 0x87C - immediately after
+ * MAC_OS_$EXCLUSION (0x868 + 0x14) and immediately before MAC_OS_$PORT_TABLE.
+ * Named by the SAU2 map.
+ *
+ * Address: 0x00E2320C
+ */
+extern mac_os_$port_info_t *MAC_OS_$PORTP_TABLE[MAC_OS_MAX_PORTS];
+
+/*
+ * MAC_OS_$PORT_TABLE - per-port version/config/mtu records, MAC_OS_$DATA +
+ * 0x89C, stride 8 (see mac_os_$port_info_t above).  Named by the SAU2 map;
+ * the tree previously called it MAC_OS_$PORT_INFO_TABLE.
+ *
+ * Address: 0x00E2322C
+ */
+extern mac_os_$port_info_t MAC_OS_$PORT_TABLE[MAC_OS_MAX_PORTS];
 
 /*
  * ============================================================================

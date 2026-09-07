@@ -100,9 +100,31 @@ void PROC1_$LOADAV_CALLBACK(void);
 extern char PROC1_$VT_TIMER_DATA[];
 
 /*
+ * DAT_00e20606 - the "deferred-interrupt callback in progress" flag.
+ *
+ * It lives at 0xE20606, the byte immediately after DI_$Q_HEAD (0xE20602,
+ * di/di.h); the SAU2 map's next symbol is PROC1_$CURRENT at 0xE20608, so the
+ * two share one 6-byte map entry and the flag has no name of its own.
+ *
+ * Only proc1/sau2/int_handler.s touches it, always a byte
+ * (`tst.b` at 0x00E20922, `st` at 0x00E20944, `sf` at 0x00E20956): the
+ * interrupt tail sets it while it runs a DI callback with interrupts enabled
+ * so a nested interrupt will not re-enter the queue.
+ */
+extern int8_t DAT_00e20606;
+
+/*
  * ============================================================================
  * Status Codes
  * ============================================================================
  */
+
+/*
+ * Bad_atomic_operation_err - the status proc1/sau2/dispatch.s hands
+ * CRASH_SYSTEM when PROC1_$DISPATCH_INT is entered inside an atomic
+ * operation.  The cell is a literal in the PROC1 assembly segment, reached by
+ * `pea (d,PC)` from 0x00E209EE; image bytes at 0x00E20DE8: 00 0a 00 07.
+ */
+extern status_$t Bad_atomic_operation_err;
 
 #endif /* PROC1_INTERNAL_H */

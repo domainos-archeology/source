@@ -67,7 +67,9 @@ boolean name_$map_dir(uid_t *dir_uid, int16_t asid,
     /* Map the directory */
     {
         uint32_t mapped_addr;
-        MST_$MAPS(asid, 0xFF00, &local_uid, 0, 0x10000, 0x16, 0, 0xFF,
+        /* 0x00E58504 `st -(SP)` and 0x00E584F0 `st -(SP)` push arguments 2
+         * and 8 as Pascal BOOLEAN bytes (0xFF == true). */
+        MST_$MAPS(asid, true, &local_uid, 0, 0x10000, 0x16, 0, true,
                   &map_result, status_ret);
 
         /* Get A0 return value (mapped address) - stored by MST_$MAPS */

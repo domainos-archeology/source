@@ -74,7 +74,7 @@ static int tests_failed = 0;
  * ============================================================================ */
 
 /* Big enough to cover every offset the function touches (max 0xAFC). */
-uint8_t DISK_$DATA[0xB00];
+uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
 uint16_t PROC1_$CURRENT = 7;
 uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];

@@ -1128,7 +1128,25 @@ void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid, uint16_t *upgid,
  */
 void PROC2_$GET_MY_UPIDS(uint16_t *upid, uint16_t *upgid, uint16_t *uppid);
 
-/* Pointer to the PROC2 data area (0x00E3238C), used by XPD_$INIT for MST_$WIRE_AREA */
+/*
+ * PROC2_$DATA - the PROC2 per-process data block.  The SAU2 map has
+ * `D67 EA551C PROC2_$DATA loaded at 1B3836, size = 4168`; the proc2 sources
+ * reach it through the absolute base 0xEA551C (entry 1 of the 0xE4-byte
+ * proc2_info_t table).
+ */
+#define PROC2_$DATA_ADDR 0x00EA551CUL
+
+/*
+ * PTR_PROC2_$DATA - literal pointer cell holding PROC2_$DATA's base.
+ *
+ * It sits in the tail of the XPD code segment (`I E32304 XPD size = 90`)
+ * beside PTR_XPD_$DATA, and XPD_$INIT pushes the ADDRESS of both to
+ * MST_$WIRE_AREA (xpd/init.c) so the wired range runs from XPD_$DATA
+ * (0x00EA5034) to PROC2_$DATA (0x00EA551C).  Image bytes at 0x00E3238C:
+ * 00 ea 55 1c.
+ *
+ * Original address: 0x00E3238C
+ */
 extern void *PTR_PROC2_$DATA;
 
 #endif /* PROC2_H */

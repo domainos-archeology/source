@@ -26,6 +26,7 @@
 #include "base/base.h"
 #include "ec/ec.h"
 #include "ml/ml.h"
+#include "mmap/mmap.h"   /* MMAP_$WSL_*_CNT, MMAP_WSL */
 
 /*
  * Forward declarations
@@ -57,11 +58,7 @@ extern uint16_t         PMAP_$CURRENT_SLOT;
 /*
  * External references to other modules
  */
-extern uint32_t MMAP_$WSL_DIRTY_RMT_CNT;    /* 0xE23344: MMAP_$WSL[4].page_count */
-extern uint32_t MMAP_$WSL_PURE_CNT;         /* 0xE232D8: MMAP_$WSL[1].page_count */
-extern uint32_t MMAP_$WSL_IMPURE_CNT;       /* 0xE232FC: MMAP_$WSL[2].page_count */
-extern uint32_t MMAP_$WSL_FREE_CNT;         /* 0xE232B4: MMAP_$WSL[0].page_count */
-extern uint32_t MMAP_$WSL_DIRTY_LOCAL_CNT;  /* 0xE23320: MMAP_$WSL[3].page_count */
+/* MMAP_$WSL_*_CNT are macros over MMAP_WSL[].page_count; see mmap/mmap.h. */
 
 /*
  * Lock IDs

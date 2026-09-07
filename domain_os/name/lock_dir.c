@@ -228,13 +228,13 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
         map_out = 0;
         *handle_ret = NAME_$PTR_TO_HANDLE(
             MST_$MAPS((int16_t)PROC1_$AS_ID,    /* asid */
-                      0xFF,                     /* boolean true, byte arg */
+                      true,                     /* 0xE54ACA `st -(SP)` */
                       &local_uid,
                       0,
                       0x10000,
                       0x16,
                       0,
-                      (int8_t)0xFF,             /* boolean true, byte arg */
+                      true,                     /* 0xE54AB6 `st -(SP)` */
                       &map_out,
                       status_ret));             /* result comes back in A0 (0xE54AE0) */
 

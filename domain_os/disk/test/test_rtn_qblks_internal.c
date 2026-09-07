@@ -57,7 +57,7 @@ static int tests_failed = 0;
  * ============================================================================ */
 
 /* Big enough to cover every offset the function touches (max 0xAFC). */
-uint8_t DISK_$DATA[0xB00];
+uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
 static int lock_starts;
 static int lock_stops;

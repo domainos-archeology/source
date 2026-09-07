@@ -46,7 +46,7 @@
  *   - SVC_$TRAP0: 0x00e7b044 (simple dispatcher, 32 entries)
  *   - SVC_$TRAP0_TABLE: 0x00e7b2de
  *   - SVC_$TRAP1: 0x00e7b05c (1-arg dispatcher, 66 entries)
- *   - SVC_$TRAP1_TABLE: 0x00e7b360
+ *   - SVC_$TRAP1_TABLE: 0x00e7b35e
  *   - SVC_$TRAP2: 0x00e7b094 (2-arg dispatcher, 133 entries)
  *   - SVC_$TRAP2_TABLE: 0x00e7b466
  *   - SVC_$TRAP3: 0x00e7b0d8 (3-arg dispatcher, 155 entries)
@@ -353,7 +353,7 @@ extern void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE];
  * Array of 66 handler addresses for single-argument syscalls.
  * USP and argument pointer validated < 0xCC0000.
  *
- * Original address: 0x00e7b360
+ * Original address: 0x00e7b35e
  */
 extern void *SVC_$TRAP1_TABLE[SVC_TRAP1_TABLE_SIZE];
 

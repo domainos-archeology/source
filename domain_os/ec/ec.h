@@ -97,16 +97,62 @@ _Static_assert(sizeof(ec2_waiter_t) == 0x0C, "ec2_waiter_t size");
 #define status_$fault_protection_boundary_violation     0x0012000B
 
 /*
- * Memory addresses (m68k)
+ * ============================================================================
+ * EC2 storage pools
+ * ============================================================================
  */
-extern ec_$eventcount_t EC1_ARRAY_BASE[];
-extern ec2_waiter_t EC2_WAITER_TABLE_BASE[];
-extern ec2_$eventcount_t EC2_PBU_ECS_BASE[];
 
 /*
- * External references (public memory-mapped data)
+ * EC2_$WAIT_ECS - the per-process level-1 eventcount EC2_$WAIT blocks on.
+ *
+ * The SAU2 map has `D E20F6C EC2_ASM size = 300` with the single interior
+ * symbol EC2_$WAIT_ECS at 0xE20F6C.  EC2_$INIT_S EC_$INITs 64 of them
+ * (0x00E30978-0x00E30994: `movea.l #0xe20f6c,A0 / moveq #0x3f,D2 /
+ * ... lea (0xc,A2),A2 / dbf D2w`), and 64 * 0x0C = 0x300 fills the segment.
+ *
+ * Callers reach an entry with an explicit BYTE displacement - EC2_$WAIT uses
+ * `PROC1_$CURRENT * 0x0C` (0x00E423F8) and EC2_$WAKEUP uses
+ * `waiter->proc_id * 0x0C` (0x00E428E0) - so the pool is declared as bytes
+ * and the stride is spelled out at every use, exactly as the machine code
+ * does it.
  */
-extern ec2_$eventcount_t EC2_$PBU_ECS;      /* PBU eventcount pool */
+#define EC2_WAIT_ECS_COUNT  64
+#define EC2_WAIT_EC_SIZE    0x0C
+extern uint8_t EC2_$WAIT_ECS[EC2_WAIT_ECS_COUNT * EC2_WAIT_EC_SIZE];
+
+/*
+ * EC2_$WAITER_TABLE - the EC2 waiter records, the first object in the EC2
+ * module data block (`D E7C06C EC2 size = EA0`).
+ *
+ * EC2_$INIT_S threads all of them onto the free list with a `dbf` on
+ * `move.w #0xe0,D1w` (0x00E30998-0x00E309B8), i.e. 0xE1 = 225 records of
+ * 0x0C bytes = 0xA84, which is exactly the displacement of the next cell in
+ * the block (ec2_$registered_count at + 0xA84).  Index 0 is never handed out:
+ * the free-list head starts at 1 and EC2_$WAKEUP rejects any index above 0xE0.
+ */
+#define EC2_WAITER_TABLE_SLOTS 225
+extern ec2_waiter_t EC2_WAITER_TABLE_BASE[EC2_WAITER_TABLE_SLOTS];
+
+/*
+ * EC2_$PBU_ECS - the pool of level-1 eventcounts EC2_$ALLOCATE_EC1 hands out
+ * as EC2 indices 0x101..0x120.
+ *
+ * The SAU2 map has `D E88460 EC2_PBU size = 300` with EC2_$PBU_ECS at its
+ * base, ending at PBU_$DATA_END (0xE88760).  EC2_$ALLOCATE_EC1 walks it with
+ * `moveq #0x1f,D0` and `lea (0x18,A0),A0` (0x00E429FA / 0x00E42A62), so it is
+ * 32 records of 0x18 bytes = 0x300.  Each record holds an ec_$eventcount_t at
+ * + 0x00 (EC_$INIT at 0x00E42A42 is passed the record address) and a waiter
+ * reference count word at + 0x0E (`tst.w (0xe,A2)` 0x00E42A0E,
+ * `clr.w (0xe,A2)` 0x00E42A4C).  Every caller computes a BYTE displacement
+ * `pbu_index * 0x18`, so the pool is declared as bytes.
+ */
+#define EC2_PBU_EC_COUNT 0x20
+#define EC2_PBU_EC_SIZE  0x18
+extern uint8_t EC2_$PBU_ECS[EC2_PBU_EC_COUNT * EC2_PBU_EC_SIZE];
+
+/* EC2_PBU_ECS_BASE is the same storage; the two spellings both appear in the
+ * EC2 sources. */
+#define EC2_PBU_ECS_BASE EC2_$PBU_ECS
 
 /*
  * Note: EC source files that need PROC1_$ functions/globals should

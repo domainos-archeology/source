@@ -1209,7 +1209,7 @@ extern const uint32_t smd_$unit_init_params[2];
  * ============================================================================
  * Cursor Pattern
  * ============================================================================
- * One per cursor number; SMD_CURSOR_PTABLE[n] points at it.
+ * One per cursor number; SMD_$CURSOR_PTABLE[n] points at it.
  *
  * Layout recovered from SMD_$LOAD_CRSR_BITMAP (0x00E6FCA0-0x00E6FCD0), which
  * validates each argument to 1..16 (width, height) or 0..16 (the hot spots)
@@ -1249,8 +1249,19 @@ _Static_assert(offsetof(smd_cursor_pattern_t, hot_y_adj) == 0x06, "pat hot_y");
 _Static_assert(offsetof(smd_cursor_pattern_t, bitmap) == 0x08, "pat bitmap");
 #endif
 
-/* Cursor pointer table at 0x00E27366 - 4 pointers to cursor patterns */
-extern smd_cursor_pattern_t *SMD_CURSOR_PTABLE[4];
+/*
+ * The four built-in cursor patterns, 0x00E272C6 (map: SMD_$CURSOR_TABLE),
+ * 0x28 bytes apart, ending exactly where SMD_$CURSOR_PTABLE starts.
+ */
+extern smd_cursor_pattern_t SMD_$CURSOR_TABLE[4];
+
+/*
+ * Cursor pointer table, 0x00E27366 (map: SMD_$CURSOR_PTABLE; the tree used to
+ * spell it SMD_CURSOR_PTABLE).  Four pointers, one per cursor number, running
+ * 0x00E27366..0x00E27375 -- SMD_$DISPLAY_COM starts at 0x00E27376.  The image
+ * values are &SMD_$CURSOR_TABLE[0..3].
+ */
+extern smd_cursor_pattern_t *SMD_$CURSOR_PTABLE[4];
 
 /*
  * The blink-routine pointer table is smd_globals_t.blink_func -- see the union
@@ -1300,8 +1311,11 @@ extern const boolean SMD_FALSE_DATA;
 extern int16_t SMD_ONE_LOCK_DATA;
 
 /* Exclusion lock protecting the tracking-rectangle list and cursor state.
- * Address: 0x00E2E520 (ml_$exclusion_t, 18 bytes).  Initialised by
- * SMD_$INIT via ML_$EXCLUSION_INIT. */
+ * Address: 0x00E2E520 (ml_$exclusion_t, 0x12 bytes).  Initialised by
+ * SMD_$INIT via ML_$EXCLUSION_INIT.  It sits immediately after
+ * SMD_DISPLAY_UNITS inside the map segment "D35 E2E3FC SMD_$WIRED_DATA
+ * loaded at 12FBFC, size = 13C": 0x00E2E3FC + 0x124 = 0x00E2E520, and the
+ * segment ends at 0x00E2E538. */
 extern ml_$exclusion_t ml_$exclusion_t_00e2e520;
 
 /* SMD_$DISP1_INT - display-1 BLT/scroll interrupt handler.
@@ -1704,6 +1718,14 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
                  const boolean *blocking);
 
 /*
+ * TODO(source-wk2f, 0x00E2720E): SMD_$XOR_CURSOR is not a data cell but a
+ * ten-byte hand-written trampoline in the map's "D E26F20 SMD_WIRED size =
+ * 5E0" block: `lea (-0x2f0,PC),A0` (A0 = 0x00E26F20, the block base) followed
+ * by `jmp 0x00E15B90.l` into the SMD_WIRED code segment.  SMD_$OR_CURSOR
+ * (0x00E27218) is the same shape, jumping to 0x00E15B9A.  Emitting them means
+ * writing smd/sau2/xor_cursor.s plus the shared body at 0x00E15B90, so the
+ * symbol is still unresolved.
+ *
  * SMD_$XOR_CURSOR - Low-level cursor drawing
  *
  * Called by blink routines to actually draw/erase cursor.

@@ -104,7 +104,7 @@ void BAT_$DISMOUNT(int16_t vol_idx, int16_t flags, status_$t *status)
      *   0x00E3B980  move.l (A4)+,(A1)+
      *   0x00E3B982  dbf D0w,0x00e3b980
      */
-    if ((bat_$volume_flags[vol_idx] >> 24) & 0x80) {
+    if (bat_$volume_flags[vol_idx] < 0) {
         const uint32_t *src = (const uint32_t *)&vol->num_partitions;
         uint32_t *dst = (uint32_t *)&label->num_partitions;
 

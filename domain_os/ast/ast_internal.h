@@ -31,9 +31,7 @@
 #include "area/area.h"
 
 /* MMAP working-set-list page counts at 0xE232xx (see mmap/mmap.h) */
-extern uint32_t MMAP_$WSL_FREE_CNT;    /* 0xE232B4: MMAP_$WSL[0].page_count */
-extern uint32_t MMAP_$WSL_PURE_CNT;    /* 0xE232D8: MMAP_$WSL[1].page_count */
-extern uint32_t MMAP_$WSL_IMPURE_CNT;  /* 0xE232FC: MMAP_$WSL[2].page_count */
+/* MMAP_$WSL_*_CNT are macros over MMAP_WSL[].page_count; see mmap/mmap.h. */
 
 /* Internal AST functions (VTOC_$SEARCH_VOLUMES comes from vtoc/vtoc.h) */
 extern void AST_$LOOKUP_WITH_HINTS(void *uid_info, uint32_t *vol_ptr, void *attrs, status_$t *status);
@@ -182,7 +180,14 @@ status_$t ast_$validate_uid(uid_t *uid, uint32_t flags);
  * Internal global variables
  */
 
-/* Volume info count at 0xE1E0A0 (offset 0x420 from globals) */
+/*
+ * Per-volume "dismount in progress" bit set, AST_ module block + 0x420
+ * (A5 = 0xE1DC80, so 0xE1E0A0).  AST_$DISMOUNT sets bit `vol_index` on entry
+ * (0x00E069F8 `or.w D3w,(0x420,A5)`) and clears it on exit (0x00E06B02);
+ * ast_$activate_aote (0x00E02588) and ast_$release_aote (0x00E02816) test it
+ * with `btst.l D2,D0` after guarding `vol_index <= 15`, and
+ * VTOC_$SEARCH_VOLUMES reads it at 0x00E0244E.  Always a word access.
+ */
 extern uint16_t ast_$vol_info_count;
 #define DAT_00e1e0a0 ast_$vol_info_count
 
@@ -192,11 +197,27 @@ extern uint16_t ast_$vol_info_count;
  * a 12-byte ec_$eventcount_t, not a bare longword.  See AST_$DISM_EC in ast.h.
  */
 
-/* Volume index array at 0xE1E092 */
-extern int16_t ast_$vol_indices[];
+/*
+ * Per-volume count of AOTEs currently activated on that volume, AST_ module
+ * block + 0x412 (0xE1E092).  Every access is
+ *
+ *   lea (0x0,A5,D0w*0x1),An      ; D0w = vol_index * 2
+ *   ...w (0x412,An)
+ *
+ * i.e. a word array based at A5 + 0x412: incremented by ast_$activate_aote
+ * (0x00E025B0/0x00E025B6), decremented and tested by ast_$release_aote
+ * (0x00E02800-0x00E0280A), and waited on by AST_$DISMOUNT (0x00E06A52).
+ *
+ * The extent is closed by ast_$vol_info_count at A5 + 0x420: 0xE bytes, seven
+ * words.  Volume indices are the VOLX mount-table indices, which run 1..6 (see
+ * volx/volx_internal.h - the six-entry table is the whole `VOLX_` segment), so
+ * slot 0 exists but is never used.
+ */
+#define AST_VOL_INDEX_SLOTS 7
+extern int16_t ast_$vol_indices[AST_VOL_INDEX_SLOTS];
 #define DAT_00e1e092 ast_$vol_indices
 
-/* Clobbered UID storage at 0xE1E110 (offset 0x490) */
+/* Clobbered UID storage at 0xE1E110 (AST_ module block + 0x490) */
 extern uid_t ast_$clobbered_uid;
 #define DAT_00e1e110 ast_$clobbered_uid
 
@@ -221,11 +242,20 @@ extern uint32_t ast_$attr_timestamp_mask;
  */
 extern dxm_$callback_t PTR_AST_$SET_TROUBLE_00e07272;
 
-/* Zero buffer for page operations (1KB = 256 uint32_t) */
+/*
+ * Zero buffer for page operations: the wired 1KB page at 0xFF8C00.  The SAU2
+ * map places it between AST_$COPY_BUFF (0xFF8800) and PAR_BUFF (0xFF9000), so
+ * it is one 0x400-byte page = 256 longwords.
+ */
 extern uint32_t AST_$ZERO_BUFF[256];
 
-/* Duplicate AOTE error status */
-extern status_$t status_$_00e2f1d0;
+/*
+ * The status AST_$ACTIVATE_AOTE_CANNED hands CRASH_SYSTEM.  The cell is a
+ * literal inside the AST_ init code segment (between AST_$ACTIVATE_AOTE_CANNED
+ * at 0xE2F0C2 and AST_$ACTIVATE_ASTE_CANNED at 0xE2F1D4), so the map gives it
+ * no name; the image holds 0x80030003.
+ */
+extern status_$t status_$t_00e2f1d0;
 
 /*
  * AOTE management globals

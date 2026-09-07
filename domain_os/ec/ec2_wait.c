@@ -157,7 +157,7 @@ int16_t EC2_$WAIT(ec2_$eventcount_t *ec, int32_t *wait_vals,
 
             /* Set up process EC for wait */
             int16_t proc_offset = PROC1_$CURRENT * 0x0C;
-            ec1_array[0] = (ec_$eventcount_t *)(EC1_ARRAY_BASE + proc_offset);
+            ec1_array[0] = (ec_$eventcount_t *)(EC2_$WAIT_ECS + proc_offset);
             ec1_wait_vals[0] = ec1_array[0]->value + 1;
 
             /* Set up quit EC - FIM_$QUIT_EC is array of ECs indexed by AS_ID */

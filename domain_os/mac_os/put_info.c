@@ -120,7 +120,7 @@ void MAC_OS_$PUT_INFO(mac_os_$port_info_t *info, int16_t *port_num, status_$t *s
     /* Copy port info to storage */
     /* Original uses OS_$DATA_COPY to copy 8 bytes */
     {
-        mac_os_$port_info_t *dest = &MAC_OS_$PORT_INFO_TABLE[port];
+        mac_os_$port_info_t *dest = &MAC_OS_$PORT_TABLE[port];
         OS_$DATA_COPY(info, dest, 8);
     }
 

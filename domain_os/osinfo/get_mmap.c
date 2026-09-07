@@ -53,7 +53,7 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
             if (asid == 0 || asid > 0x40) {
                 asid = PROC1_$CURRENT;
             }
-            MMAP_$SET_WS_MAX(MMAP_$WSL_INDEX_TABLE[asid - 1],
+            MMAP_$SET_WS_MAX(MMAP_$WS_OWNER[asid - 1],
                              global_info->set_value, status);
             break;
 
@@ -73,9 +73,14 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
                 asid = PROC1_$CURRENT;
             }
             {
-                short ws_index = MMAP_$WSL_INDEX_TABLE[asid - 1];
-                // ws_index * 0x24 = ws_index * 36, offset 0x20 in structure
-                MMAP_$WS_LIMIT_DATA[ws_index * 9 + 8] = global_info->set_value;
+                short ws_index = MMAP_$WS_OWNER[asid - 1];
+                /*
+                 * 00e5c762  movea.l #0xe232b0,A3        ; MMAP_WSL
+                 * 00e5c76a  lsl.w #0x2,D1w / lsl.w #0x3,D2w / add.w D2w,D1w
+                 * 00e5c772  move.l (0x28,A2),(0x20,A3,D1w*0x1)
+                 * i.e. MMAP_WSL[ws_index].ws_floor.
+                 */
+                MMAP_WSL[ws_index].ws_floor = global_info->set_value;
             }
             break;
         }
@@ -153,12 +158,12 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
         global_info->remote_pages = MMAP_$REMOTE_PAGES;
         global_info->wsl_hi_mark = MMAP_WSL_HI_MARK;   /* move.w (0xE23CA6) */
 
-        // Copy working set data (5 entries)
-        global_info->ws_data[0] = MMAP_$WS_DATA[0];    // 0xe232b4
-        global_info->ws_data[1] = MMAP_$WS_DATA[9];    // 0xe232d8 (offset 0x24)
-        global_info->ws_data[2] = MMAP_$WS_DATA[18];   // 0xe232fc (offset 0x48)
-        global_info->ws_data[3] = MMAP_$WS_DATA[27];   // 0xe23320 (offset 0x6c)
-        global_info->ws_data[4] = MMAP_$WS_DATA[36];   // 0xe23344 (offset 0x90)
+        /* Copy the five global pool page counts (0x00E5C898-0x00E5C8B8) */
+        global_info->ws_data[0] = MMAP_WSL[0].page_count;  /* 0xe232b4 */
+        global_info->ws_data[1] = MMAP_WSL[1].page_count;  /* 0xe232d8 */
+        global_info->ws_data[2] = MMAP_WSL[2].page_count;  /* 0xe232fc */
+        global_info->ws_data[3] = MMAP_WSL[3].page_count;  /* 0xe23320 */
+        global_info->ws_data[4] = MMAP_WSL[4].page_count;  /* 0xe23344 */
 
         global_info->ws_interval = PMAP_$WS_INTERVAL;
     }
@@ -195,8 +200,12 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
         if (count != 0) {
             // Copy working set list entries
             for (i = 0; i < count; i++) {
-                ws_list_ptr[i * 2] = MMAP_$WSL_INDEX_TABLE[i];
-                ws_list_ptr[i * 2 + 1] = MMAP_$PROC_WS_LIST[i];
+                /*
+                 * 00e5c96e  movea.l #0xe23ca8,A0   ; MMAP_$WS_OWNER
+                 * 00e5c97c  movea.l #0xe2612c,A4   ; PROC1_$TYPE
+                 */
+                ws_list_ptr[i * 2] = MMAP_$WS_OWNER[i];
+                ws_list_ptr[i * 2 + 1] = PROC1_$TYPE[i];
             }
         }
     }
@@ -206,7 +215,7 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
         count = MMAP_WSL_HI_MARK - 5;
         // Copy working set info (0xc bytes per entry from 0x24 byte structures)
         for (i = 0; i <= count; i++) {
-            uint32_t *src = (uint32_t *)((char *)MMAP_$WS_LIMIT_DATA + 0xb4 + i * 0x24);
+            uint32_t *src = (uint32_t *)((char *)MMAP_WSL + 0xb4 + i * 0x24);
             ws_data_ptr[i * 3] = src[1];      // offset 0x04
             ws_data_ptr[i * 3 + 1] = src[6];  // offset 0x18
             ws_data_ptr[i * 3 + 2] = src[7];  // offset 0x1c

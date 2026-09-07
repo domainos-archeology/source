@@ -219,6 +219,29 @@ extern uint16_t *mmap_pte_base;
 #define PTE_BASE mmap_pte_base
 #endif
 
+/*
+ * Per-pool page counts.
+ *
+ * The SAU2 map has a single object `E232B0 MMAP_$WSL` running to
+ * MMAP_$MIN_RMT_POOL at 0xE23C88 - 0x9D8 bytes, i.e. 70 ws_hdr_t records of
+ * 0x24 - which is exactly MMAP_WSL.  The six addresses Ghidra labels
+ * MMAP_$WSL_*_CNT are the page_count field (record + 0x04) of the six global
+ * pools, so they are not separate objects:
+ *
+ *   0xE232B4 MMAP_$WSL_FREE_CNT         MMAP_WSL[0].page_count
+ *   0xE232D8 MMAP_$WSL_PURE_CNT         MMAP_WSL[1].page_count
+ *   0xE232FC MMAP_$WSL_IMPURE_CNT       MMAP_WSL[2].page_count
+ *   0xE23320 MMAP_$WSL_DIRTY_LOCAL_CNT  MMAP_WSL[3].page_count
+ *   0xE23344 MMAP_$WSL_DIRTY_RMT_CNT    MMAP_WSL[4].page_count
+ *   0xE23368 MMAP_$WSL_WIRED_CNT        MMAP_WSL[5].page_count
+ */
+#define MMAP_$WSL_FREE_CNT         (MMAP_WSL[MMAP_WSL_POOL_FREE].page_count)
+#define MMAP_$WSL_PURE_CNT         (MMAP_WSL[MMAP_WSL_POOL_PURE].page_count)
+#define MMAP_$WSL_IMPURE_CNT       (MMAP_WSL[MMAP_WSL_POOL_IMPURE].page_count)
+#define MMAP_$WSL_DIRTY_LOCAL_CNT  (MMAP_WSL[MMAP_WSL_POOL_DIRTY_LOCAL].page_count)
+#define MMAP_$WSL_DIRTY_RMT_CNT    (MMAP_WSL[MMAP_WSL_POOL_DIRTY_RMT].page_count)
+#define MMAP_$WSL_WIRED_CNT        (MMAP_WSL[MMAP_WSL_POOL_WIRED].page_count)
+
 /* Get mmape entry for a virtual page number */
 #define MMAPE_FOR_VPN(vpn) (&MMAPE_BASE[(vpn)])
 

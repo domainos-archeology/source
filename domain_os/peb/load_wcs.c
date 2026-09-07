@@ -254,7 +254,9 @@ void PEB_$LOAD_WCS(void)
 
         /* Map the file into memory for the FP save area */
         /* Size 0x497A with protection 0x16 */
-        MST_$MAPS(0, 0xFF00, &file_uid, 0, 0x497A, 0x16, 0, 0xFF, &map_result, &status);
+        /* 0x00E3206E `st -(SP)` and 0x00E3205C `st -(SP)` push arguments 2
+         * and 8 as Pascal BOOLEAN bytes (0xFF == true). */
+        MST_$MAPS(0, true, &file_uid, 0, 0x497A, 0x16, 0, true, &map_result, &status);
         FP_$SAVEP = (uint32_t)map_result;
         if (PEB_$LOAD_WCS_CHECK_ERR(msg_map_file) < 0) {
             return;

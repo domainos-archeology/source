@@ -20,8 +20,15 @@ void MMU_$INSTALL_ASID(uint16_t asid)
     /* Write to hardware CSR */
     MMU_CSR = MMU_$PID_PRIV;
 
-    /* Update power register */
-    MMU_POWER_REG = (MMU_POWER_REG & 0xFF00) | MMU_POWER_CONTROL_BYTE;
+    /*
+     * Restore the FP-owner ASID byte into the power register.
+     *
+     *   00e2421c  move.b (0x00e218d5).l,(0x00ffb402).l
+     *
+     * 0xE218D5 is the low byte of FP_$OWNER (0xE218D4), and the store is a
+     * single byte - it does not read the register back first.
+     */
+    MMU_POWER_REG_BYTE = (uint8_t)FP_$OWNER;
 
     /* Clear cache (address space changed) */
     CACHE_$CLEAR();

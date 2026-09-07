@@ -24,11 +24,9 @@ be pinned against the instruction that writes it, not against a guess.
   LOGICAL shift.  `boolean` is a plain `char`, so `*p < 0` is
   host-signedness-dependent: mask with `(uint8_t)*p & 0x80`.
 - **MST_$MAPS' second parameter is a BYTE**, read with `move.b (0xa,A6)` at
-  0x00E43998; argument 8 likewise at 0x00E4399C.  Callers push them with
-  `st -(SP)`, which lands 0xFF in the HIGH half of the word slot.  While
-  `mst/mst.h` still declares argument 2 as `int16_t`, every call site must
-  spell TRUE as `0xFF00` (the tree's convention - see hint/init.c,
-  peb/load_wcs.c, log/init.c).  Tracked as bead source-qmdl.
+  0x00E43998; argument 8 likewise at 0x00E4399C.  Both are now `boolean` in
+  `mst/mst.h` and every call site passes `true` (bead source-qmdl, closed);
+  the old `0xFF00` word spelling is gone.  See [[mst-maps-and-data-cells]].
 - `cmpi.l #0x80,(0xc,A5)` / `bge` at 0x00E5AC66 is a SIGNED comparison of
   `buf_remaining`.
 

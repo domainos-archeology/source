@@ -55,18 +55,22 @@ void MAC_OS_$INIT(void)
         port_table = &MAC_OS_$PORT_PKT_TABLES[port];
         chan = &MAC_OS_$CHANNEL_TABLE[port];
 
-        /* Set up callback chain pointer (points to next entry's callback area) */
-        /* Original: *(puVar5 + 0x43e) = puVar4 + 0x44e */
-        /* This creates a linked list of callback slots */
-        chan->callback = (void *)((uint32_t)&MAC_OS_$PORT_INFO_TABLE[port]);
+        /*
+         * Point this port's MAC_OS_$PORTP_TABLE slot at its
+         * MAC_OS_$PORT_TABLE entry.
+         *
+         *   00e2f54c  lea (0x89c,A0),A3      ; A0 = A5 + port*8
+         *   00e2f550  move.l A3,(0x87c,A4)   ; A4 = A5 + port*4
+         */
+        MAC_OS_$PORTP_TABLE[port] = &MAC_OS_$PORT_TABLE[port];
 
         /* Clear packet type count */
         port_table->entry_count = 0;
 
         /* Initialize channel entry with default values */
         /* Original: move.l #0x1,(0x89c,A1) */
-        MAC_OS_$PORT_INFO_TABLE[port].version = 1;
-        MAC_OS_$PORT_INFO_TABLE[port].config = 0;
+        MAC_OS_$PORT_TABLE[port].version = 1;
+        MAC_OS_$PORT_TABLE[port].config = 0;
 
         /* Check if this port has a route port configured */
         route_port = route_portp[port];
@@ -82,7 +86,7 @@ void MAC_OS_$INIT(void)
 
         /* Store MTU from driver info */
         /* Original: move.w (0x4,A0),(0x8a2,A1) */
-        /* MAC_OS_$PORT_INFO_TABLE[port].mtu = *(uint16_t *)((uint8_t *)driver_info + 4); */
+        MAC_OS_$PORT_TABLE[port].mtu = *(uint16_t *)((uint8_t *)driver_info + 4);
 
         /* Call the NOP placeholder function */
         MAC_OS_$NOP();

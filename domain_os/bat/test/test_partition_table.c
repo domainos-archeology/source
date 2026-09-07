@@ -129,8 +129,8 @@ static void reset_world(void)
     NODE_$ME = 0x0000ABCD;
 
     /* One track's worth of blocks, so BAT_$MOUNT's geometry math is defined. */
-    bat_$disk_info[TEST_VOL].sectors_per_track = 32;
-    bat_$disk_info[TEST_VOL].disk_type = 0;
+    bat_$disk_info[TEST_VOL].blocks_per_cyl = 32;
+    bat_$disk_info[TEST_VOL].interleave_mode = 0;
 }
 
 /* ============================================================================
@@ -188,6 +188,86 @@ TEST(label_partition_region)
     ASSERT_EQ(0x108, __builtin_offsetof(bat_$label_t, partition_table));
     ASSERT_EQ(0x308, __builtin_offsetof(bat_$label_t, num_partitions) +
                      BAT_PART_TABLE_LONGWORDS * 4);
+}
+
+/* ============================================================================
+ * Module data segment (0xE79478..0xE7A1CB, map `D E79478 BAT_ size = D54`)
+ * ============================================================================ */
+
+/*
+ * The scalars start where the six volume records end and the last one ends
+ * where the segment does.  Every address below is the (disp,A5) displacement
+ * of an accessor plus A5 = 0xE79478.
+ */
+TEST(module_scalar_addresses)
+{
+    ASSERT_EQ(0x00e79478u, BAT_DATA_BASE);
+    ASSERT_EQ(0x00000d54u, BAT_DATA_SIZE);
+    ASSERT_EQ(0x00e7a1ccu, BAT_DATA_END);
+
+    /* 6 * 0x234 = 0xD38 bytes of volume records (0x00E3B756 mulu.w #0x234) */
+    ASSERT_EQ(BAT_CACHED_BUFFER_ADDR,
+              BAT_DATA_BASE + BAT_MAX_VOL_INDEX * 0x234u);
+    ASSERT_EQ(BAT_DATA_BASE, BAT_VOLUMES_BASE + 0x234u);
+
+    ASSERT_EQ(0x00e7a1b0u, BAT_CACHED_BUFFER_ADDR);   /* (0xd38,A5) */
+    ASSERT_EQ(0x00e7a1b4u, BAT_CACHED_BLOCK_ADDR);    /* (0xd3c,A5) */
+    ASSERT_EQ(0x00e7a1b7u, BAT_VOLUME_FLAGS_BASE);    /* (0xd3f,An) */
+    ASSERT_EQ(0x00e7a1bfu, BAT_MOUNTED_BASE);         /* (0xd47,An) */
+    ASSERT_EQ(0x00e7a1c6u, BAT_CACHED_DIRTY_ADDR);    /* (0xd4e,A5) */
+    ASSERT_EQ(0x00e7a1c8u, BAT_CACHED_VOL_ADDR);      /* (0xd50,A5) */
+
+    /* Live (non-phantom) extents of the two biased byte arrays. */
+    ASSERT_EQ(0x00e7a1b8u, BAT_VOLUME_FLAGS_BASE + 1u);
+    ASSERT_EQ(0x00e7a1bdu, BAT_VOLUME_FLAGS_BASE + BAT_MAX_VOL_INDEX);
+    ASSERT_EQ(0x00e7a1c0u, BAT_MOUNTED_BASE + 1u);
+    ASSERT_EQ(0x00e7a1c5u, BAT_MOUNTED_BASE + BAT_MAX_VOL_INDEX);
+
+    /* The last scalar plus its two tail bytes reaches the segment end. */
+    ASSERT_EQ(BAT_DATA_END, BAT_CACHED_VOL_ADDR + 2u + 2u);
+}
+
+/*
+ * The two per-volume arrays are byte arrays with stride 1: every accessor
+ * forms its address with `lea (0x0,A5,Dnw*0x1),An` and reaches it with a
+ * byte-wide instruction (0x00E3B764 move.b, 0x00E3B792 st, 0x00E3B72A clr.b).
+ * A wider element type would make bat_$volume_flags overlap
+ * bat_$cached_block, which is bead source-uu78.
+ */
+TEST(module_scalar_types)
+{
+    ASSERT_EQ(1, sizeof(bat_$volume_flags[0]));
+    ASSERT_EQ(1, sizeof(bat_$mounted[0]));
+    ASSERT_EQ(BAT_MAX_VOL_INDEX + 1, sizeof(bat_$volume_flags));
+    ASSERT_EQ(BAT_MAX_VOL_INDEX + 1, sizeof(bat_$mounted));
+    ASSERT_EQ(2, sizeof(bat_$cached_dirty));
+    ASSERT_EQ(2, sizeof(bat_$cached_vol));
+    ASSERT_EQ(4, sizeof(bat_$cached_block));
+
+    /* Both arrays are signed: every reader branches on the sign bit. */
+    bat_$volume_flags[TEST_VOL] = (int8_t)0xFF;
+    ASSERT_EQ(1, bat_$volume_flags[TEST_VOL] < 0);
+    bat_$mounted[TEST_VOL] = (int8_t)0xFF;
+    ASSERT_EQ(1, bat_$mounted[TEST_VOL] < 0);
+    bat_$volume_flags[TEST_VOL] = 0;
+    bat_$mounted[TEST_VOL] = 0;
+}
+
+/*
+ * bat_$disk_info_t mirrors one DISK_$DVTBL entry, reached at negative
+ * displacements from 0xE7A290 + vol*0x48 (0x00E3B820-0x00E3B830), i.e. with
+ * the same 0x48 bias DISK_VOL() uses.
+ */
+TEST(disk_info_layout)
+{
+    ASSERT_EQ(0x48, sizeof(bat_$disk_info_t));
+    ASSERT_EQ(0x08, __builtin_offsetof(bat_$disk_info_t, lv_start));
+    ASSERT_EQ(0x24, __builtin_offsetof(bat_$disk_info_t, blocks_per_cyl));
+    ASSERT_EQ(0x2c, __builtin_offsetof(bat_$disk_info_t, num_parts));
+    ASSERT_EQ(0x36, __builtin_offsetof(bat_$disk_info_t, interleave_mode));
+
+    /* Biased base: entry 1 is DISK_$DVTBL itself. */
+    ASSERT_EQ(0x00e7a290u, 0x00e7a248u + 1u * 0x48u);
 }
 
 /* ============================================================================
@@ -305,7 +385,7 @@ TEST(dismount_copies_exactly_0x83_longwords)
     reset_world();
 
     bat_$mounted[TEST_VOL] = (int8_t)0xFF;
-    bat_$volume_flags[TEST_VOL] = 0xFF000000;   /* new format: copy back */
+    bat_$volume_flags[TEST_VOL] = (int8_t)-1;   /* new format: copy back */
 
     /* Distinctive bytes across the WHOLE record, including +0x22C..+0x233. */
     fill_pattern(volbytes, sizeof(*vol), 0x11);
@@ -348,7 +428,7 @@ TEST(dismount_old_format_skips_partition_copy)
     reset_world();
 
     bat_$mounted[TEST_VOL] = (int8_t)0xFF;
-    bat_$volume_flags[TEST_VOL] = 0x00000000;   /* old format */
+    bat_$volume_flags[TEST_VOL] = 0;            /* old format */
 
     fill_pattern(volbytes, sizeof(*vol), 0x11);
     memset(mock_block + 0xFC, 0xEE, BAT_PART_TABLE_LONGWORDS * 4);
@@ -407,10 +487,90 @@ TEST(mount_dismount_round_trip)
     ASSERT_EQ(0, memcmp(mock_block + 0xFC, original, sizeof(original)));
 }
 
+/*
+ * 0x00E3B762 `sne D0b` / 0x00E3B764 `move.b D0b,(0xd3f,A2)` write ONE byte.
+ * Modelling the cell as a longword would have this store land on
+ * bat_$cached_block, which shares the longword at 0xE7A1B4 with the array's
+ * phantom element 0 (bead source-uu78).
+ */
+TEST(mount_writes_one_flag_byte)
+{
+    status_$t status;
+
+    reset_world();
+    bat_$cached_block = 0xDEADBEEF;
+    bat_$volume_flags[TEST_VOL - 1] = 0x11;
+    bat_$volume_flags[TEST_VOL + 1] = 0x22;
+
+    label_of()->version = 1;
+    BAT_$MOUNT(TEST_VOL, (int8_t)0x80, &status);
+    ASSERT_EQ(status_$ok, status);
+    ASSERT_EQ((uint8_t)0xFF, (uint8_t)bat_$volume_flags[TEST_VOL]);
+    ASSERT_EQ((int8_t)0xFF, bat_$mounted[TEST_VOL]);
+
+    /* Neighbours and the cached-block cell are untouched. */
+    ASSERT_EQ(0x11, bat_$volume_flags[TEST_VOL - 1]);
+    ASSERT_EQ(0x22, bat_$volume_flags[TEST_VOL + 1]);
+    ASSERT_EQ(0xDEADBEEF, bat_$cached_block);
+
+    /* version == 0 stores a plain zero (`sne` of a zero word). */
+    reset_world();
+    bat_$cached_block = 0xDEADBEEF;
+    label_of()->version = 0;
+    BAT_$MOUNT(TEST_VOL, (int8_t)0x80, &status);
+    ASSERT_EQ(status_$ok, status);
+    ASSERT_EQ(0, bat_$volume_flags[TEST_VOL]);
+    ASSERT_EQ(0xDEADBEEF, bat_$cached_block);
+}
+
+/*
+ * The allocation-chunk geometry comes from three DIFFERENT DISK_$DVTBL
+ * cells: blocks_per_cyl (+0x24), num_parts (+0x2C, only when
+ * interleave_mode (+0x36) is 1) and lv_start (+0x08).
+ *
+ *   alloc_chunk_size   = blocks_per_cyl [* num_parts]
+ *   alloc_chunk_offset = size - ((first_data_block + lv_start) mod size)
+ */
+TEST(mount_chunk_geometry_from_dvtbl)
+{
+    status_$t status;
+    bat_$volume_t *vol = &bat_$volumes[TEST_VOL];
+
+    reset_world();
+    label_of()->version = 1;
+    label_of()->first_data_block = 5;
+    bat_$disk_info[TEST_VOL].blocks_per_cyl = 32;
+    bat_$disk_info[TEST_VOL].num_parts = 4;
+    bat_$disk_info[TEST_VOL].interleave_mode = 0;
+    bat_$disk_info[TEST_VOL].lv_start = 3;
+
+    BAT_$MOUNT(TEST_VOL, (int8_t)0x80, &status);
+    ASSERT_EQ(status_$ok, status);
+    ASSERT_EQ(32, vol->alloc_chunk_size);
+    ASSERT_EQ(32 - ((5 + 3) % 32), vol->alloc_chunk_offset);
+
+    /* interleave_mode 1 scales the chunk by num_parts (0x00E3B83C/0x00E3B84C) */
+    reset_world();
+    label_of()->version = 1;
+    label_of()->first_data_block = 5;
+    bat_$disk_info[TEST_VOL].blocks_per_cyl = 32;
+    bat_$disk_info[TEST_VOL].num_parts = 4;
+    bat_$disk_info[TEST_VOL].interleave_mode = 1;
+    bat_$disk_info[TEST_VOL].lv_start = 3;
+
+    BAT_$MOUNT(TEST_VOL, (int8_t)0x80, &status);
+    ASSERT_EQ(status_$ok, status);
+    ASSERT_EQ(128, vol->alloc_chunk_size);
+    ASSERT_EQ(128 - ((5 + 3) % 128), vol->alloc_chunk_offset);
+}
+
 int main(void)
 {
     printf("=== BAT partition-table layout and copy tests ===\n");
 
+    RUN_TEST(module_scalar_addresses);
+    RUN_TEST(module_scalar_types);
+    RUN_TEST(disk_info_layout);
     RUN_TEST(volume_record_layout);
     RUN_TEST(partition_stride);
     RUN_TEST(label_partition_region);
@@ -420,6 +580,8 @@ int main(void)
     RUN_TEST(dismount_copies_exactly_0x83_longwords);
     RUN_TEST(dismount_old_format_skips_partition_copy);
     RUN_TEST(dismount_negative_flags_clears_total_blocks);
+    RUN_TEST(mount_writes_one_flag_byte);
+    RUN_TEST(mount_chunk_geometry_from_dvtbl);
     RUN_TEST(mount_dismount_round_trip);
 
     printf("\n%d passed, %d failed\n", tests_passed, tests_failed);

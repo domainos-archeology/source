@@ -164,13 +164,13 @@ static int        mock_maps_calls;
 static void      *mock_maps_result;
 static status_$t  mock_maps_status;
 static int16_t    mock_maps_asid;
-static int16_t    mock_maps_flags;
+static boolean    mock_maps_flags;
 static uint32_t   mock_maps_length;
 static int16_t    mock_maps_prot;
 static int8_t     mock_maps_create;
 
-void *MST_$MAPS(int16_t mode, int16_t flags, uid_t *uid, uint32_t offset,
-                uint32_t length, int16_t prot, uint32_t hint, int8_t create,
+void *MST_$MAPS(int16_t mode, boolean flags, uid_t *uid, uint32_t offset,
+                uint32_t length, int16_t prot, uint32_t hint, boolean create,
                 void *out, status_$t *status)
 {
     (void)uid; (void)offset; (void)hint; (void)out;
@@ -297,7 +297,7 @@ TEST(handle_comes_from_mst_maps_result)
     ASSERT_EQ(1, mock_maps_calls);
     ASSERT_EQ(NAME_$PTR_TO_HANDLE(dir_page), handle);
     ASSERT_EQ(TEST_ASID, mock_maps_asid);
-    ASSERT_EQ(0xFF, (uint16_t)mock_maps_flags);
+    ASSERT_EQ(0xFF, (uint8_t)mock_maps_flags);
     ASSERT_EQ(0x10000, mock_maps_length);
     ASSERT_EQ(0x16, mock_maps_prot);
     ASSERT_EQ((int8_t)0xFF, mock_maps_create);

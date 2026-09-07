@@ -43,14 +43,14 @@ void DIR_$CLEANUP(void)
             /* TODO(source-qgq): Verify exact slot entry size and owner field offset from Ghidra */
 
             /* Clean up the handle entry */
-            handle_entry = (void *)(&DAT_00e7f280 + i * 0x30);
+            handle_entry = (void *)(DAT_00e7f280 + i * 0x30);
             DIR_$VALIDATE_PAGES(handle_entry, 0, &status);
 
             /* Release request buffer */
             dir_$release_wire(handle_entry);
 
             /* Release handle slot */
-            handle_ptr = (void **)(&DAT_00e7f280 + i * 0x30);
+            handle_ptr = (void **)(DAT_00e7f280 + i * 0x30);
             dir_$release_handle(handle_ptr);
         }
     }

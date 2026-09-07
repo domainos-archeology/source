@@ -174,3 +174,22 @@ area_$entry_t *AREA_$ASID_LIST[AREA_MAX_ENTRIES] = { NULL };
  * Original address: 0xE1E6DC (globals + 0x5C4)
  */
 uint32_t AREA_$NEXT_CALLER_ID = 0;
+
+/*
+ * ============================================================================
+ * In-code status constant
+ * ============================================================================
+ */
+
+/*
+ * Area_Internal_Error - the status AREA_ hands CRASH_SYSTEM when it finds its
+ * own tables inconsistent.
+ *
+ * The cell is a literal inside the AREA_ code segment (it sits between
+ * AREA_$DELETE_FROM at 0xE07D06 and AREA_$FREE_ASID at 0xE07E80, so the map
+ * gives it no symbol of its own); thirteen `pea (d,PC)` sites in AREA_ point
+ * at it.  Image bytes at 0x00E07E7C: 00 32 00 0a.
+ *
+ * Original address: 0xE07E7C
+ */
+status_$t Area_Internal_Error = 0x0032000A;

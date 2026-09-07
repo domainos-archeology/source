@@ -92,3 +92,49 @@ uint16_t RING_$GLOBAL_BIPHASE_CNT;
  * Global ESB error count.
  */
 uint16_t RING_$GLOBAL_ESB_CNT;
+
+/*
+ * ============================================================================
+ * Software-diagnostic counters (`D E261AC RING_WIRED size = AC`)
+ * ============================================================================
+ *
+ * The SAU2 map names every cell in this segment:
+ *
+ *   E261AC  RING_$SWDIAG_NODEID       MARKED
+ *   E261B0  RING_$SWDIAG_GOODRCV_CNT  MARKED
+ *   E261B4  RING_$SWDIAG_RCVCNT       MARKED
+ *   E261B8  RING_$RCV_BIPHASE         MARKED
+ *   E261BA  RING_$RCV_ESB             MARKED
+ *   E261BC  RING_$XMIT_BIPHASE
+ *   E261BE  RING_$XMIT_ESB
+ *   E261C0  RING_$PAGING_OVERFLOW     MARKED
+ *   E261C2  RING_$SWDIAG_DATA         MARKED
+ *   E261E0  RING_$DATA                MARKED
+ *
+ * so RING_$SWDIAG_DATA runs 0xE261C2..0xE261E0 - the 0x1E bytes
+ * ring_$swdiag_t describes - and each of the four biphase/ESB counters is a
+ * single word.
+ *
+ * Image contents (gsk read 0x00E261AC 60): the whole segment is zero except
+ * RING_$SWDIAG_DATA._r00, which reads 0x0001.
+ */
+
+/*
+ * Per-line biphase-violation and end-of-single-bit error counts.  Bumped
+ * alongside the per-unit statistics; see ring/ring.h.
+ *
+ * Original addresses: 0xE261B8, 0xE261BA, 0xE261BC, 0xE261BE
+ */
+uint16_t RING_$RCV_BIPHASE;
+uint16_t RING_$RCV_ESB;
+uint16_t RING_$XMIT_BIPHASE;
+uint16_t RING_$XMIT_ESB;
+
+/*
+ * RING_$SWDIAG_DATA - the software-diagnostic receive-error mirror block that
+ * NETWORK_$PROCESS_PAGING_REQUEST (0x00E11278) and ASKNODE_$INTERNET_INFO
+ * (0x00E64B68) copy whole into their replies.
+ *
+ * Original address: 0xE261C2 (0x1E bytes)
+ */
+ring_$swdiag_t RING_$SWDIAG_DATA = { ._r00 = 1 };

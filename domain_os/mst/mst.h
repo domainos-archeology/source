@@ -171,9 +171,15 @@ extern uint16_t MST_ASID_BASE[MST_MAX_ASIDS];
 
 /*
  * MST base - array of segment table indices, one word per segment
- * Located at 0xee5800
+ *
+ * Located at 0xEE5800.  The SAU2 map places MST at EE5800 and the next
+ * object, PIT_PAGES, at EE6400, so the table is 0xC00 bytes = 0x600 words.
+ * It lives in the uninitialised VM_TABLES region (Ghidra cannot read the
+ * bytes), and MST_$INIT allocates and zeroes it a 0x400-byte page at a time
+ * (`movea.l #0xee5800,A2` at 0x00E30BFA).
  */
-extern uint16_t MST[];
+#define MST_TABLE_ENTRIES 0x600
+extern uint16_t MST[MST_TABLE_ENTRIES];
 
 /*
  * Page table area base
@@ -271,9 +277,38 @@ void MST_$MAP_TOP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
                   status_$t *status_ret);
 void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
                            uint32_t map_param, uint32_t flags, status_$t *status);
-void *MST_$MAPS(int16_t mode, int16_t flags, uid_t *uid, uint32_t offset,
-                uint32_t length, int16_t prot, uint32_t hint, int8_t create,
-                void *out, status_$t *status);
+/*
+ * MST_$MAPS - map an object, searching the private space from the top
+ *
+ * Original address: 0x00E43982 (82 bytes).  The whole body is one forwarding
+ * call to mst_$alloc_segs (bsr.w 0x00E43182 at 0x00E439C4).
+ *
+ * Parameter widths, read off the ten accesses the prologue makes to the
+ * argument block (frame is `link.w A6,-0x4`, so arguments start at A6+0x08):
+ *
+ *   +0x08 asid          word      move.w (0x8,A6),-(SP)   0x00E439AA
+ *   +0x0A direction     BYTE      move.b (0xa,A6),-(SP)   0x00E43998
+ *   +0x0C uid           longword  move.l (0xc,A6),-(SP)   0x00E439BA
+ *   +0x10 start_va      longword  move.l (0x10,A6),-(SP)  0x00E439B6
+ *   +0x14 length        longword  move.l (0x14,A6),-(SP)  0x00E439B2
+ *   +0x18 area_id       word      move.w (0x18,A6),-(SP)  0x00E439A6
+ *   +0x1A area_size     longword  move.l (0x1a,A6),-(SP)  0x00E439AE
+ *   +0x1E access_rights BYTE      move.b (0x1e,A6),-(SP)  0x00E4399C
+ *   +0x20 map_info      longword  move.l (0x20,A6),-(SP)  0x00E43994
+ *   +0x24 status        longword  move.l (0x24,A6),-(SP)  0x00E43990
+ *
+ * The two BYTE parameters are Domain Pascal BOOLEANs.  A byte pushed with
+ * `st -(SP)` or `move.b Dn,-(SP)` decrements A7 by two and writes the byte
+ * at the resulting (even) address, so it lands in the high half of the word
+ * slot - exactly the half the callee reads with `move.b (0xa,A6)`.  A caller
+ * therefore passes a plain boolean (0xFF / true), not the word 0xFF00.
+ *
+ * Returns the mapped virtual address in A0 (mst_$alloc_segs' own A0 result,
+ * stored to (-0x4,A6) at 0x00E439C8 and left in A0 across the epilogue).
+ */
+void *MST_$MAPS(int16_t asid, boolean direction, uid_t *uid, uint32_t start_va,
+                uint32_t length, int16_t area_id, uint32_t area_size,
+                boolean access_rights, void *map_info, status_$t *status);
 void MST_$MAPS_AT(void);
 void MST_$REMAP(void);
 /*

@@ -257,19 +257,132 @@ typedef struct bat_$vtoce_block_t {
 } bat_$vtoce_block_t;
 
 /*
- * Disk info structure for allocation chunk calculation
+ * bat_$disk_info_t - the BAT manager's view of one DISK_$DVTBL entry
  *
- * Used in BAT_$MOUNT to calculate allocation parameters from disk geometry.
- * Memory layout at 0xE7A290 + (vol_idx * 0x48):
+ * BAT_$MOUNT does not own this record: it reads the DISK module's volume
+ * table.  The SAU2 map places that table at `E7A290  DISK_$DVTBL`, inside
+ * `D E7A1CC  DISK_ size = B90`, and 0x00E3B820-0x00E3B830 form
+ *
+ *   0x00E3B820  movea.l #0xe7a290,A2
+ *   0x00E3B826  lsl.w #0x3,D6w          ; vol*8
+ *   0x00E3B828  move.w D6w,D7w
+ *   0x00E3B82A  lsl.w #0x3,D7w          ; vol*64
+ *   0x00E3B82C  add.w D7w,D6w           ; vol*0x48
+ *   0x00E3B830  lea (0x0,A2,D6w*0x1),A2 ; A2 = 0xE7A290 + vol*0x48
+ *
+ * and then reach the fields at NEGATIVE displacements, so the record for
+ * volume v starts at A2 - 0x48 = 0xE7A248 + v*0x48.  That is exactly the
+ * biased base DISK_VOL(v) uses in disk/disk_internal.h
+ * (DISK_VOLUME_BASE 0xE7A1CC + DISK_VOL_DESC_OFFSET 0x7C + v*0x48), so the
+ * phantom element 0 sits at 0xE7A248 and DISK_$DVTBL is element 1.
+ *
+ * TODO(source-9ddf, 0x00E3B820): this record is a duplicate of
+ * disk_$volume_t in disk/disk_internal.h; when disk/ can be edited, promote
+ * that record to disk/disk.h and delete this view.  Only the four cells
+ * BAT_$MOUNT actually touches are named here; the field names and the two
+ * corroborating offsets (0x08 lv_start / 0x24 blocks_per_cyl) are taken from
+ * disk/disk_internal.h's own _Static_asserts.
  */
 typedef struct bat_$disk_info_t {
-    uint8_t     reserved_00[0x24];  /* 0x00: Reserved */
-    uint16_t    sectors_per_track;  /* 0x24: Sectors per track */
-    uint8_t     reserved_26[0x10];  /* 0x26: Reserved */
-    int16_t     disk_type;          /* 0x36: Disk type (1 = special) */
-    uint8_t     reserved_38[0x08];  /* 0x38: Reserved */
-    uint32_t    offset;             /* 0x40: Offset value */
+    uint8_t     reserved_00[0x08];  /* 0x00 */
+    uint32_t    lv_start;           /* 0x08 (-0x40,A2): first disk block of the
+                                     *   logical volume.  0x00E3B858 adds it to
+                                     *   the volume record's first_data_block
+                                     *   before taking the chunk remainder. */
+    uint8_t     reserved_0c[0x18];  /* 0x0C */
+    uint16_t    blocks_per_cyl;     /* 0x24 (-0x24,A2): disk blocks in one
+                                     *   cylinder; zero-extended into the
+                                     *   allocation chunk size at 0x00E3B834
+                                     *   (`clr.l D7` precedes the move.w). */
+    uint8_t     reserved_26[0x06];  /* 0x26 */
+    uint16_t    num_parts;          /* 0x2C (-0x1c,A2): partition count; pushed
+                                     *   as the word argument of M$MIU$LLW at
+                                     *   0x00E3B846. */
+    uint8_t     reserved_2e[0x08];  /* 0x2E */
+    uint16_t    interleave_mode;    /* 0x36 (-0x12,A2): DISK_$DVTBL's
+                                     *   part_volx[0].  0x00E3B83C compares it
+                                     *   with 1 to decide whether the chunk
+                                     *   size is scaled by num_parts. */
+    uint8_t     reserved_38[0x10];  /* 0x38 */
 } bat_$disk_info_t;
+
+_Static_assert(sizeof(bat_$disk_info_t) == 0x48,
+               "bat_$disk_info_t must be 0x48 bytes (vol*0x48 at 0x00E3B826)");
+_Static_assert(__builtin_offsetof(bat_$disk_info_t, lv_start) == 0x08,
+               "lv_start must be at -0x40 (0x00E3B858)");
+_Static_assert(__builtin_offsetof(bat_$disk_info_t, blocks_per_cyl) == 0x24,
+               "blocks_per_cyl must be at -0x24 (0x00E3B834)");
+_Static_assert(__builtin_offsetof(bat_$disk_info_t, num_parts) == 0x2c,
+               "num_parts must be at -0x1c (0x00E3B846)");
+_Static_assert(__builtin_offsetof(bat_$disk_info_t, interleave_mode) == 0x36,
+               "interleave_mode must be at -0x12 (0x00E3B83C)");
+
+/*
+ * The BAT module data segment (SAU2 map: `D E79478  BAT_  size = D54`, one
+ * interior symbol `E79478  BAT_DATA`).
+ *
+ * Every BAT routine loads A5 = 0xE79478 and reaches the six volume records at
+ * negative displacements from A5 + vol_idx*0x234, so the record for volume v
+ * starts at 0xE79244 + v*0x234 and volume indices run 1..6 (BAT_$N_FREE
+ * rejects 0 and >6 at 0x00E3BA1A / 0x00E3BA1E).  Six records fill
+ * 0xE79478..0xE7A1AF and the module scalars follow at 0xE7A1B0, which is what
+ * pins the count.  The tree models the bias by giving both the volume array
+ * and the two per-volume byte arrays a phantom element 0.
+ *
+ * Scalar cells, all reached as (disp,A5) with A5 = 0xE79478 (the disassembly
+ * displacement is the address minus 0xE79478):
+ *
+ *   0xE7A1B0  (0xd38)  long   bat_$cached_buffer
+ *   0xE7A1B4  (0xd3c)  long   bat_$cached_block
+ *   0xE7A1B7  (0xd3f)  byte[] bat_$volume_flags, biased; [1..6] = B8..BD
+ *   0xE7A1BE           2 bytes, never referenced (alignment)
+ *   0xE7A1BF  (0xd47)  byte[] bat_$mounted, biased; [1..6] = C0..C5
+ *   0xE7A1C6  (0xd4e)  word   bat_$cached_dirty
+ *   0xE7A1C8  (0xd50)  word   bat_$cached_vol
+ *   0xE7A1CA           2 bytes, never referenced (segment tail)
+ */
+#define BAT_DATA_BASE               0x00e79478u  /* map: D E79478 BAT_ */
+#define BAT_DATA_SIZE               0x00000d54u  /* map: size = D54 */
+#define BAT_DATA_END                (BAT_DATA_BASE + BAT_DATA_SIZE)
+
+/* Highest volume index (0x00E3BA1E cmpi.w #0x6) */
+#define BAT_MAX_VOL_INDEX           6
+
+/* Biased base of bat_$volumes: element 0 is a phantom before the segment. */
+#define BAT_VOLUMES_BASE            0x00e79244u
+
+#define BAT_CACHED_BUFFER_ADDR      0x00e7a1b0u  /* (0xd38,A5) */
+#define BAT_CACHED_BLOCK_ADDR       0x00e7a1b4u  /* (0xd3c,A5) */
+#define BAT_VOLUME_FLAGS_BASE       0x00e7a1b7u  /* (0xd3f,A5), biased */
+#define BAT_MOUNTED_BASE            0x00e7a1bfu  /* (0xd47,A5), biased */
+#define BAT_CACHED_DIRTY_ADDR       0x00e7a1c6u  /* (0xd4e,A5) */
+#define BAT_CACHED_VOL_ADDR         0x00e7a1c8u  /* (0xd50,A5) */
+
+/* The six volume records end exactly where the scalars begin. */
+_Static_assert(BAT_VOLUMES_BASE + 0x234u == BAT_DATA_BASE,
+               "bat_$volumes[1] is the start of the BAT_ segment");
+_Static_assert(BAT_VOLUMES_BASE + (BAT_MAX_VOL_INDEX + 1) * 0x234u ==
+               BAT_CACHED_BUFFER_ADDR,
+               "six 0x234-byte volume records must fill 0xE79478..0xE7A1AF");
+_Static_assert(BAT_DATA_BASE + BAT_MAX_VOL_INDEX * 0x234u ==
+               BAT_CACHED_BUFFER_ADDR,
+               "the BAT scalars must start at 0xE7A1B0");
+
+/* Scalar chain: each cell's extent must reach the next cell. */
+_Static_assert(BAT_CACHED_BUFFER_ADDR + 4u == BAT_CACHED_BLOCK_ADDR,
+               "bat_$cached_buffer is one longword (0x00E3B2E2 move.l A0)");
+_Static_assert(BAT_CACHED_BLOCK_ADDR + 4u == BAT_VOLUME_FLAGS_BASE + 1u,
+               "bat_$volume_flags[1] follows bat_$cached_block at 0xE7A1B8");
+_Static_assert(BAT_VOLUME_FLAGS_BASE + 1u + BAT_MAX_VOL_INDEX + 2u ==
+               BAT_MOUNTED_BASE + 1u,
+               "two unreferenced bytes separate the flag and mount arrays");
+_Static_assert(BAT_MOUNTED_BASE + 1u + BAT_MAX_VOL_INDEX ==
+               BAT_CACHED_DIRTY_ADDR,
+               "bat_$mounted[6] ends where bat_$cached_dirty begins");
+_Static_assert(BAT_CACHED_DIRTY_ADDR + 2u == BAT_CACHED_VOL_ADDR,
+               "bat_$cached_dirty is one word (0x00E3B304 move.w #0x8)");
+_Static_assert(BAT_CACHED_VOL_ADDR + 2u + 2u == BAT_DATA_END,
+               "two unreferenced bytes end the BAT_ segment at 0xE7A1CC");
 
 /*
  * Global BAT state
@@ -277,33 +390,43 @@ typedef struct bat_$disk_info_t {
  * These variables track the currently cached BAT bitmap block.
  */
 
-/* Cached BAT bitmap buffer */
-extern void     *bat_$cached_buffer;        /* Address: 0xE7A1B0 */
+/* Cached BAT bitmap buffer (0xE7A1B0) */
+extern void     *bat_$cached_buffer;
 
-/* Block number of cached BAT bitmap */
-extern uint32_t bat_$cached_block;          /* Address: 0xE7A1B4 */
-
-/* Mount status for each volume (0xFF = mounted, 0 = not mounted) */
-extern int8_t   bat_$mounted[BAT_MAX_VOLUMES]; /* Address: 0xE7A1BF */
-
-/* Volume flags (high byte contains partition type flag) */
-extern uint32_t bat_$volume_flags[BAT_MAX_VOLUMES]; /* Address: 0xE7A1B4 (byte 3 per volume) */
-
-/* Dirty flags for cached buffer */
-extern int16_t  bat_$cached_dirty;          /* Address: 0xE7A1C6 */
-
-/* Volume index of cached buffer */
-extern int16_t  bat_$cached_vol;            /* Address: 0xE7A1C8 */
+/* Block number of the cached BAT bitmap (0xE7A1B4) */
+extern uint32_t bat_$cached_block;
 
 /*
- * Volume BAT data array
- * Base address: 0xE79244
+ * Per-volume new-format flag (biased base 0xE7A1B7, entries 1..6).
+ *
+ * BAT_$MOUNT stores `sne` of the label version word into it
+ * (0x00E3B760-0x00E3B764), so an entry is 0 for an old-format volume and
+ * -1 for a new-format one, and every reader tests only its sign
+ * (0x00E3B14A, 0x00E3B768, 0x00E3B96C, 0x00E3BAC2 `tst.b` + `bpl`).
+ */
+extern int8_t   bat_$volume_flags[BAT_MAX_VOLUMES];
+
+/*
+ * Per-volume mount flag (biased base 0xE7A1BF, entries 1..6).
+ * 0xFF = mounted (0x00E3B792 `st`), 0 = not mounted (0x00E3B72A `clr.b`).
+ */
+extern int8_t   bat_$mounted[BAT_MAX_VOLUMES];
+
+/* Dirty state passed to DBUF_$SET_BUFF for the cached buffer (0xE7A1C6) */
+extern int16_t  bat_$cached_dirty;
+
+/* Volume index owning the cached buffer (0xE7A1C8) */
+extern int16_t  bat_$cached_vol;
+
+/*
+ * Volume BAT data array (biased base 0xE79244, entries 1..6 at
+ * 0xE79478..0xE7A1AF)
  */
 extern bat_$volume_t bat_$volumes[BAT_MAX_VOLUMES];
 
 /*
- * Disk info array for allocation calculations
- * Base address: 0xE7A290
+ * The BAT manager's view of DISK_$DVTBL (biased base 0xE7A248, entry 1 is
+ * DISK_$DVTBL itself at 0xE7A290).
  */
 extern bat_$disk_info_t bat_$disk_info[BAT_MAX_VOLUMES];
 

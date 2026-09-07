@@ -235,3 +235,45 @@ time_queue_t PMAP_$WS_TIMER_QUEUES[PMAP_WS_SLOTS];
  * Original address: 0xE24D68 (DAT_00e24d68)
  */
 time_queue_elem_t PMAP_$WS_TIMER_ELEMENTS[PMAP_WS_SLOTS];
+
+/*
+ * ============================================================================
+ * PMAP_ module block scalars (A5 = 0xE24D44, `D E24D44 PMAP_ size = 7A4`)
+ * ============================================================================
+ */
+
+/*
+ * PMAP_$WS_RANDOM_SEED - the 16-bit LCG state PMAP_$PURIFIER_L uses to pick
+ * how much of a working set to steal.  Block + 0x79E; both accesses are word
+ * wide (0x00E13ED0 `move.w (0x79e,A5),D5w`, 0x00E13EDC `move.w D5w,(0x79e,A5)`).
+ * Image value 0x004D.
+ *
+ * Original address: 0xE254E2
+ */
+uint16_t PMAP_$WS_RANDOM_SEED = 0x004D;
+
+/*
+ * DAT_00e254e4 - the working-set slot pmap_$t_purif_callback is currently
+ * scanning, block + 0x7A0.  Image value 0x0005, the first user slot.
+ *
+ * Original address: 0xE254E4
+ */
+uint16_t DAT_00e254e4 = 5;
+
+/*
+ * ============================================================================
+ * In-code status constants
+ * ============================================================================
+ */
+
+/*
+ * PMAP_$FLUSH's crash status.  A literal inside the PMAP_ code segment;
+ * image bytes at 0x00E13A14: 00 05 00 03.
+ */
+status_$t status_$t_00e13a14 = 0x00050003;
+
+/*
+ * pmap_$ws_scan_callback's crash status.  Image bytes at 0x00E145EC:
+ * 00 05 00 10.
+ */
+status_$t status_$t_00e145ec = 0x00050010;

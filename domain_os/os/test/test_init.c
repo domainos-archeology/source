@@ -37,7 +37,7 @@ int __host_intr_disable_count = 0;
 /* ------------------------------------------------------------------ */
 uint32_t BOOT_INFO_TABLE[512];
 char *INT_STACK_BASE;
-void *_NULL_PC;
+void *NULL_PC;
 void *NULLPROC;
 os_$boot_device_t OS_$BOOT_DEVICE;
 

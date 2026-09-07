@@ -113,7 +113,7 @@ static uint16_t  stub_unmap_asid;
 
 static int       stub_maps_calls;
 static int16_t   stub_maps_mode;
-static int16_t   stub_maps_flags;
+static boolean   stub_maps_flags;
 static uid_t    *stub_maps_uid;
 static uint32_t  stub_maps_offset;
 static uint32_t  stub_maps_length;
@@ -209,8 +209,8 @@ void MST_$UNMAP_PRIVI(int16_t mode, uid_t *uid, uint32_t start, uint32_t size,
     *status_ret = status_$ok;
 }
 
-void *MST_$MAPS(int16_t mode, int16_t flags, uid_t *uid, uint32_t offset,
-                uint32_t length, int16_t prot, uint32_t hint, int8_t create,
+void *MST_$MAPS(int16_t mode, boolean flags, uid_t *uid, uint32_t offset,
+                uint32_t length, int16_t prot, uint32_t hint, boolean create,
                 void *out, status_$t *status)
 {
     stub_maps_calls++;
@@ -551,9 +551,9 @@ static void test_remap_path(void)
 
     ASSERT_EQ(stub_maps_calls, 1, "MST_$MAPS (0x00E5ACC4)");
     ASSERT_EQ(stub_maps_mode, 0, "MAPS arg 1 (0x00E5ACC2)");
-    /* 0x00E5ACC0 `st -(SP)` sets the BYTE at A6+0x0A, the high half of the
+    /* 0x00E5ACC0 `st -(SP)` sets the BYTE at A6+0x0A, the even half of the
      * word slot, which MST_$MAPS reads at 0x00E43998. */
-    ASSERT_EQ((uint16_t)stub_maps_flags, 0xFF00, "MAPS arg 2 byte (0x00E5ACC0)");
+    ASSERT_EQ((uint8_t)stub_maps_flags, 0xFF, "MAPS arg 2 byte (0x00E5ACC0)");
     ASSERT_EQ(stub_maps_uid, &pacct_state.owner, "MAPS arg 3 (0x00E5ACBE)");
     ASSERT_EQ(stub_maps_offset, 0x4000, "MAPS arg 4 (0x00E5ACBA, file_pos)");
     ASSERT_EQ(stub_maps_length, 0x8000, "MAPS arg 5 (0x00E5ACB4)");

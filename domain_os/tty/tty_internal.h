@@ -350,18 +350,24 @@ void tty_$i_wait(tty_desc_t *tty, char wait_flag, char *done_flag,
  */
 
 /*
- * DAT_00e82454 - Default break character
+ * DAT_00e82454 - break-mode function character mask
  *
- * Default character used for break handling.
+ * TTY_$K_SET_INPUT_BREAK_MODE hands it to tty_$i_set_funcs as the func_mask,
+ * so it is the same kind of value as tty_$i_dfl_func_enable_mask.  It is read
+ * as a longword: `move.l (0x28,A5),-(SP)` at 0x00E67860 and 0x00E6788C, with
+ * A5 = 0x00E8242C.  (It used to be declared uint8_t and described as a
+ * character -- bead source-wk2f.)
+ *
  * Original address: 0x00e82454
  */
-extern uint8_t DAT_00e82454;
+extern uint32_t DAT_00e82454;
 
 /*
  * tty_$i_dfl_func_enable_mask - Default enabled function character mask
  *
  * Bitmask of default-enabled function characters.
- * Used by TTY_$I_SET_DFL_FUNCS.
+ * Used by TTY_$I_SET_DFL_FUNCS.  Read as a longword at (0x24,A5) with
+ * A5 = 0x00E8242C.
  * Original address: 0x00e82450
  */
 extern uint32_t tty_$i_dfl_func_enable_mask;

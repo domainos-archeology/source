@@ -56,7 +56,7 @@ void DBUF_$INIT(void)
      * Initialize buffer entries and allocate physical pages.
      * Build the doubly-linked LRU list as we go.
      */
-    entry = &DBUF;
+    entry = &DBUF[0];
     prev_entry = NULL;
     va = DBUF_VA_BASE;
 
@@ -118,7 +118,7 @@ void DBUF_$INIT(void)
     *(uint32_t *)((char *)&DBUF + dbuf_$count * DBUF_ENTRY_SIZE + 4) = 0;
 
     /* Set head of LRU list to first buffer */
-    dbuf_$head = &DBUF;
+    dbuf_$head = &DBUF[0];
 
     /* Initialize event count for buffer waiters */
     EC_$INIT(&dbuf_$eventcount);

@@ -89,7 +89,7 @@ void SMD_$READ_CRSR_BITMAP(void *param1,
     }
 
     /* Get cursor data pointer from cursor table */
-    cursor_data = SMD_CURSOR_PTABLE[cursor_idx];
+    cursor_data = SMD_$CURSOR_PTABLE[cursor_idx];
 
     /* Return dimensions and hotspot */
     *width_ret = (uint16_t)cursor_data->width;

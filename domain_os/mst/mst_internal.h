@@ -43,21 +43,47 @@
  */
 
 /*
- * ASID allocation bitmap (32-bit access views)
- * MST_$ASID_LIST is also accessible as two 32-bit words.
+ * ASID allocation bitmap - longword access to MST_$ASID_LIST (0xE24384)
+ *
+ * The eight bytes at 0xE24384 are one Domain Pascal SET.  MST_$ALLOC_ASID
+ * locates ASID N at byte ((MST_MAX_ASIDS - 1) | 0x0f) - N) >> 3 == (63-N)>>3,
+ * bit N & 7, so the set is a 64-bit quantity whose bit 0 lives in its LAST
+ * byte (0xE2438B).  MST_$INIT initialises it with two longword stores -
+ * `clr.l (0x00E24384).l` at 0x00E30B98 and `move.l #0x1,(0x00E24388).l` at
+ * 0x00E30B9E - and on the big-endian m68k the second one leaves 00 00 00 01,
+ * i.e. exactly ASID 0 marked allocated.
+ *
+ * MST_$ASID_LIST_LONG (0xE24384) and the cell at 0xE24388 are therefore not
+ * separate objects: they are the two longwords of MST_$ASID_LIST, and the
+ * macro below performs such a store MSB-first so the resulting byte pattern
+ * is the m68k one on a host of any byte order.
  */
-extern uint32_t MST_$ASID_LIST_LONG;    /* First 32 bits of ASID bitmap */
-extern uint32_t DAT_00e24388;           /* Second part of ASID bitmap */
+#define MST_$ASID_LIST_LONG_COUNT 2
+#define MST_$ASID_LIST_STORE_LONG(idx, val)                                    \
+    do {                                                                       \
+        uint32_t mst_$asid_list_v_ = (uint32_t)(val);                          \
+        MST_$ASID_LIST[(idx) * 4 + 0] = (uint8_t)(mst_$asid_list_v_ >> 24);    \
+        MST_$ASID_LIST[(idx) * 4 + 1] = (uint8_t)(mst_$asid_list_v_ >> 16);    \
+        MST_$ASID_LIST[(idx) * 4 + 2] = (uint8_t)(mst_$asid_list_v_ >> 8);     \
+        MST_$ASID_LIST[(idx) * 4 + 3] = (uint8_t)(mst_$asid_list_v_);          \
+    } while (0)
 
 /*
- * MST page availability bitmap
- * Tracks which MST table pages are available for allocation.
- * 12 words (384 bits), set bit = page available.
- * Located at 0xE7CF0C (m68k).
+ * MST page availability bitmap - 0xE7CF0C, 12 longwords (0x30 bytes)
+ *
+ * Set bit = page available.  The count is pinned by MST_$INIT's final clear
+ * loop (`moveq #0xb,D2` at 0x00E30D78 walks longword indices up to 11) and by
+ * the SAU2 map: the MST_UNWIRED data segment starts at E7CF0C with size 0x48,
+ * and its first named symbol is MST_$MST_PAGES_LIMIT at E7CF3E, leaving
+ * E7CF0C..E7CF3B for the bitmap and E7CF3C for the allocation hint.
+ *
+ * 0xE7CF0C is also this module's A5 data base (`lea (0xe7cf0c).l,A5` at
+ * 0x00E43988 in MST_$MAPS), so the bitmap sits at A5+0, the hint at A5+0x30,
+ * MST_$MST_PAGES_LIMIT at A5+0x32 and MST_$MST_PAGES_WIRED at A5+0x34.
  */
-extern uint32_t MST_$PAGE_AVAIL_BITMAP[];
-extern uint16_t MST_$PAGE_ALLOC_HINT;    /* Search hint for next free word */
-extern uint16_t MST_$MST_PAGES_WIRED;    /* Count of wired MST pages */
+#define MST_$PAGE_AVAIL_BITMAP_LONGS 12
+extern uint32_t MST_$PAGE_AVAIL_BITMAP[MST_$PAGE_AVAIL_BITMAP_LONGS];
+extern uint16_t MST_$PAGE_ALLOC_HINT;    /* 0xE7CF3C: search hint (word) */
 
 #define status_$pmap_vm_resources_exhausted 0x0004000e
 
@@ -100,10 +126,16 @@ status_$t MST_$ALLOC_TABLE_PAGE(uint16_t asid, uint16_t flags, uint16_t *table_p
  * Returns the mapped virtual address in A0 register.
  *
  * Original address: 0x00E43182
+ *
+ * access_rights (its 9th argument, at A6+0x22) and direction (its 10th, at
+ * A6+0x24) are Pascal BYTEs: the body tests them with `tst.b (0x22,A6)`
+ * (0x00E43234, 0x00E43288) and `tst.b (0x24,A6)` (0x00E432F0, 0x00E4331A),
+ * i.e. the even/high byte of each word slot, which is where the callers'
+ * `st -(SP)` / `move.b Dn,-(SP)` pushes land.
  */
 void *mst_$alloc_segs(uint32_t addr_hint, uid_t *uid, uint32_t start_va, uint32_t length,
                       uint32_t area_size, int16_t asid, uint16_t area_id, uint16_t touch_count,
-                      uint8_t access_rights, int16_t direction, void *map_info,
+                      uint8_t access_rights, boolean direction, void *map_info,
                       status_$t *status);
 
 /*

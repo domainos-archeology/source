@@ -114,7 +114,10 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
     }
 
     /* Map the file into memory */
-    mapped_addr = MST_$MAPS(PROC1_$AS_ID, 0xFF6A, file_uid_ret, 0, 0x400, 0x16, 0, 0xFF,
+    /* 0x00E47A8C `st -(SP)` and 0x00E47A7C `st -(SP)` push arguments 2 and 8
+     * as Pascal BOOLEAN bytes (0xFF == true); the word 0xFF6A this call used
+     * to pass for argument 2 was never what the callee reads. */
+    mapped_addr = MST_$MAPS(PROC1_$AS_ID, true, file_uid_ret, 0, 0x400, 0x16, 0, true,
                             NULL, status_ret);
     if ((*status_ret & 0xFFFF) != 0) {
         goto cleanup_error;

@@ -60,8 +60,12 @@ extern uid_t proc2_proc_dir_uid;
  * process table index - 1).  The fork completion eventcount is at
  * offset 0x00 and the creation record eventcount at offset 0x0C.
  *
- * Original address: 0xE2B978 (Ghidra label PROC2_$EC; the same storage is
- * EC1_ARRAY_BASE in ec/ec.h)
+ * Original address: 0xE2B978 (Ghidra label PROC2_$EC).
+ *
+ * NOTE: an earlier note here claimed this was the same storage as
+ * ec/ec.h's EC1_ARRAY_BASE.  It is not: that pool is EC2_$WAIT_ECS at
+ * 0xE20F6C (`D E20F6C EC2_ASM size = 300` in the SAU2 map), which
+ * EC2_$INIT_S initialises at 0x00E30978.
  */
 typedef struct proc2_ec_entry_t {
     ec_$eventcount_t fork_ec;    /* 0x00: Fork completion EC */

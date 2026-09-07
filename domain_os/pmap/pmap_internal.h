@@ -52,21 +52,40 @@ extern int8_t PMAP_$SHUTTING_DOWN_FLAG;
  * flat MMAP_$WSL_*_CNT names below (the Ghidra labels for those addresses)
  * remain for the pmap/ast files that have not been re-emitted yet.
  */
-extern uint32_t MMAP_$WSL_FREE_CNT;         /* MMAP_$WSL[0].page_count - free pages */
-extern uint32_t MMAP_$WSL_PURE_CNT;         /* MMAP_$WSL[1].page_count - pure pages */
-extern uint32_t MMAP_$WSL_IMPURE_CNT;       /* MMAP_$WSL[2].page_count - clean impure */
-extern uint32_t MMAP_$WSL_DIRTY_LOCAL_CNT;  /* MMAP_$WSL[3].page_count - dirty, local */
-extern uint32_t MMAP_$WSL_DIRTY_RMT_CNT;    /* MMAP_$WSL[4].page_count - dirty, remote */
+/* MMAP_$WSL_*_CNT are macros over MMAP_WSL[].page_count; see mmap/mmap.h. */
 
-/* Global scan data */
-extern uint32_t DAT_00e23380;   /* Last global scan time */
-extern uint32_t DAT_00e2337c;   /* Previous global scan time */
-extern uint16_t DAT_00e23366;   /* Global scan counter */
-extern uint32_t DAT_00e2336c;   /* Global scan data */
-extern uint32_t MMAP_$WSL_WIRED_CNT;        /* MMAP_$WSL[5].page_count - wired pages */
+/*
+ * Global working-set scan state.
+ *
+ * These four addresses are not standalone cells either: they are fields of
+ * the wired pool's ws_hdr_t, MMAP_WSL[MMAP_WSL_POOL_WIRED] at
+ * 0xE232B0 + 5 * 0x24 = 0xE23364.
+ *
+ *   0xE23366  = record + 0x02  ws_hdr_t.owner          (word)
+ *   0xE2336C  = record + 0x08  ws_hdr_t.scan_pos
+ *   0xE2337C  = record + 0x18  ws_hdr_t.pri_timestamp
+ *   0xE23380  = record + 0x1C  ws_hdr_t.ws_timestamp
+ *
+ * pmap_$ws_scan_callback reuses them as the global scan counter and the two
+ * scan timestamps.
+ */
+#define DAT_00e23366 (MMAP_WSL[MMAP_WSL_POOL_WIRED].owner)
+#define DAT_00e2336c (MMAP_WSL[MMAP_WSL_POOL_WIRED].scan_pos)
+#define DAT_00e2337c (MMAP_WSL[MMAP_WSL_POOL_WIRED].pri_timestamp)
+#define DAT_00e23380 (MMAP_WSL[MMAP_WSL_POOL_WIRED].ws_timestamp)
 
-/* Timer purifier data */
-extern uint16_t DAT_00e254e4;   /* Current scan slot (5-69) */
+/*
+ * Current working-set scan slot, PMAP_ module block + 0x7A0 (A5 = 0xE24D44).
+ * pmap_$t_purif_callback wraps it from 0x45 back to 5 and steps it by one
+ * each tick:
+ *   00e143da  cmpi.w #0x45,(0x7a0,A5)
+ *   00e143e2  move.w #0x5,(0x7a0,A5)
+ *   00e143ea  addq.w #0x1,(0x7a0,A5)
+ * The SAU2 map names nothing past PMAP_$SHUTTING_DOWN_FLAG (0xE254DA) in the
+ * `D E24D44 PMAP_ size = 7A4` segment, so the DAT_ spelling stays.
+ * Image value 0x0005.
+ */
+extern uint16_t DAT_00e254e4;   /* 0xE254E4: current scan slot (5-69) */
 extern uint16_t PMAP_$WS_RANDOM_SEED;   /* 0xE254E2: random seed for page
                                          * selection (word; initial value 0x004D) */
 

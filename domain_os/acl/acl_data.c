@@ -126,3 +126,10 @@ uid_t ACL_$NIL = UID_CONST(0x00000100, 0);
  * address" half of TODO(source-yii).
  */
 uid_t ACL_$DIR_ACL;         /* 0xE1744C */
+
+/*
+ * ACL_$WORKSPACE - the ACL_ module block's 0x400-byte image workspace
+ * (A5 + 0 = 0xE7CF54).  Zero in the image.  See acl/acl_internal.h for how
+ * the 0x400 extent is pinned.
+ */
+uint8_t ACL_$WORKSPACE[ACL_WORKSPACE_SIZE];                     /* 0xE7CF54 */

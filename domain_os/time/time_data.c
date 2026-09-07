@@ -158,3 +158,18 @@ time_queue_t TIME_$RTEQ = { 0, 0, 0, 0, 0 };
  */
 di_queue_elem_t TIME_$DI_VT = { 0, 0, 0, 0 };
 di_queue_elem_t TIME_$DI_RTE = { 0, 0, 0, 0 };
+
+/*
+ * TIME_$FAST_CLOCK_EC - fast-clock eventcount (0x00E2B0C8, 0x0C bytes).
+ *
+ * Registered with EC2_$REGISTER_EC1 by TIME_$GET_EC for ec_id 1.  The image
+ * value is the EC_$INIT'd state: value 0 and an empty circular waiter list
+ * whose head and tail both point back at the eventcount.
+ */
+ec_$eventcount_t TIME_$FAST_CLOCK_EC = {
+    .value = 0,
+    .waiter_list_head = (ec_$eventcount_waiter_t *)&TIME_$FAST_CLOCK_EC,
+    .waiter_list_tail = (ec_$eventcount_waiter_t *)&TIME_$FAST_CLOCK_EC,
+};
+_Static_assert(sizeof(TIME_$FAST_CLOCK_EC) == 0x0C,
+               "TIME_$FAST_CLOCK_EC: 0x00E2B0C8..0x00E2B0D4 (TIME_$CLOCKH_EC)");

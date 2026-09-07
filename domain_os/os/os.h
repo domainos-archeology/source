@@ -44,9 +44,12 @@ extern os_$boot_device_t OS_$BOOT_DEVICE;
 extern ec_$eventcount_t OS_$SHUTDOWN_EC;
 
 /*
- * PTR_OS_DATA_SHUTWIRED - pointer cell (0x00E81D20) naming the start of the
- * OS_DATA_SHUTWIRED region.  Passed by address to MST_$WIRE_AREA by both
- * OS_$SHUTDOWN and STOP_$WATCH (as the end of the stopwatch wire area).
+ * PTR_OS_DATA_SHUTWIRED - pointer cell naming the start of the
+ * OS_DATA_SHUTWIRED region (map: 0x00E82128).  Passed by address to
+ * MST_$WIRE_AREA by both OS_$SHUTDOWN and STOP_$WATCH (as the end of the
+ * stopwatch wire area).  There are two cells with this value in the image:
+ * OS_$SHUTDOWN's literal at 0x00E6D688 and STOP_$WATCH's copy at 0x00E81D20;
+ * they share the one definition in os/os_data.c (bead source-wk2f).
  */
 extern m68k_ptr_t PTR_OS_DATA_SHUTWIRED;
 

@@ -37,11 +37,14 @@ void BAT_$RESERVE(int16_t vol_idx, uint32_t count, status_$t *status)
     vol = &bat_$volumes[vol_idx];
 
     /*
-     * Get volume type flag (byte 3 of volume flags).
+     * Get the volume's new-format flag.  It is one byte:
+     * 0x00E3BAAE `move.b (0xd3f,A1),D1b` with A1 = A5 + vol_idx*1
+     * (0x00E3BAA6 `lea (0x0,A5,D2w*0x1),A1`), re-tested at 0x00E3BAC2
+     * `tst.b (0xd3f,A1)`.
      * For old format volumes (flag >= 0), require extra 0xB blocks.
      * For new format volumes (flag < 0), just check count.
      */
-    vol_flag = (int8_t)((bat_$volume_flags[vol_idx] >> 24) & 0xFF);
+    vol_flag = bat_$volume_flags[vol_idx];
 
     if (vol_flag >= 0) {
         /* Old format: need count + 0xB blocks available */

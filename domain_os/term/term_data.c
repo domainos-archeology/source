@@ -91,3 +91,90 @@ void *PTR_TTY_$I_RCV_00e2cab0 = (void *)TTY_$I_RCV;
  * Original address: 0xe2ca08
  */
 void *PTR_TTY_$I_RCV_00e2ca08 = (void *)TTY_$I_RCV;
+
+/*
+ * ============================================================================
+ * Term_Manual_Stop_err
+ * ============================================================================
+ *
+ * 0x00E1CE8C, a status cell in the literal pool at the tail of KBD_$RCV
+ * (map segment "I E1C9FC KBD size = 4F0"; KBD_$CRASH_INIT follows at
+ * 0x00E1CE94).  Image bytes: 00 0B 00 08.
+ */
+status_$t Term_Manual_Stop_err = 0x000B0008;
+
+/*
+ * ============================================================================
+ * The second OS_TERM_INIT block, 0x00E35154
+ * ============================================================================
+ *
+ * Map: "D E35154 OS_TERM_INIT size = 5C", running 0x00E35154..0x00E351B0
+ * (the TTY segment starts there).  It exports no interior symbol; the four
+ * objects below fill it exactly, and their extents come from the addresses
+ * TERM_$INIT pushes: 0x00E35154, 0x00E3517C, 0x00E351A0 and 0x00E351AE.
+ * Read with `gsk read 0x00E35154 0x5C`.
+ */
+
+/*
+ * DAT_00e35154 - the console line's SIO vtable, SIO_$INIT_DESC's last
+ * argument.  0x28 bytes = 10 longwords; SIO_$INIT_DESC copies the entries
+ * from offset 0x14 on.
+ *   +0x14 0x00E1D586  +0x18 0x00E72656  +0x1C 0x00E72668
+ */
+m68k_ptr_t DAT_00e35154[10] = {
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00E1D586, 0x00E72656, 0x00E72668, 0x00000000, 0x00000000,
+};
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(DAT_00e35154) == 0x28,
+               "DAT_00e35154: 0x00E35154..0x00E3517C");
+#endif
+
+/*
+ * DAT_00e3517c - the serial lines' SIO vtable, used for both line 1 and
+ * line 2.  0x24 bytes = 9 longwords.
+ *   +0x14 0x00E1D4FC  +0x18 0x00E1D250  +0x1C 0x00E725B0  +0x20 0x00E1D114
+ */
+m68k_ptr_t DAT_00e3517c[9] = {
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00E1D4FC, 0x00E1D250, 0x00E725B0, 0x00E1D114,
+};
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(DAT_00e3517c) == 0x24,
+               "DAT_00e3517c: 0x00E3517C..0x00E351A0");
+#endif
+
+/*
+ * DAT_00e351a0 - SIO2681_$INIT's `config` argument, 0x0E bytes = 7 words.
+ */
+uint16_t DAT_00e351a0[7] = {
+    0x8f00, 0xf700, 0x8f00, 0x0000, 0x8f00, 0xf700, 0x8f00,
+};
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(DAT_00e351a0) == 0x0E,
+               "DAT_00e351a0: 0x00E351A0..0x00E351AE");
+#endif
+
+/*
+ * DAT_00e351ae - SIO6509_$INIT's `config` argument, the last 2 bytes of the
+ * block (the TTY segment starts at 0x00E351B0).
+ */
+uint8_t DAT_00e351ae[2] = { 0x03, 0xd9 };
+
+/*
+ * ============================================================================
+ * Literal words in TERM_$INIT's code region
+ * ============================================================================
+ *
+ * They sit between TERM_$INIT's `rts` at 0x00E3321C and the BITPAD segment at
+ * 0x00E33224 (0x00E33222 holds the two filler bytes 20 48).  TERM_$INIT hands
+ * their addresses to SIO6509_$INIT and SIO2681_$INIT.
+ */
+
+/* 0x00E3321E: the word 2 - SIO6509_$INIT's chip_num_ptr. */
+int16_t DAT_00e3321e = 2;
+
+/* 0x00E33220: the word 1 - SIO6509_$INIT's int_vec_ptr and both of
+ * SIO2681_$INIT's first two arguments. */
+int16_t DAT_00e33220 = 1;
+

@@ -135,7 +135,7 @@ void SMD_$LOAD_CRSR_BITMAP(void *param1,
 
     /* 0x00e6fc6a-0x00e6fc76: the cursor pattern table is 0-based, base
      * 0x00E27366 indexed by cursor_num*4. */
-    cursor_data = SMD_CURSOR_PTABLE[cursor_idx];
+    cursor_data = SMD_$CURSOR_PTABLE[cursor_idx];
 
     /*
      * 0x00e6fc78-0x00e6fc82: "seq D3b" then "and.b (0x38,A0),D3b" - the flag

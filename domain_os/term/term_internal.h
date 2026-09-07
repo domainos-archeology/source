@@ -45,42 +45,91 @@ extern term_data_t TERM_$DATA;
  */
 
 /*
- * Internal data arrays (DAT_* at fixed addresses)
- * These represent various terminal configuration and state tables.
+ * Cells inside the TERM_$DATA module block (0x00E2C9F0, the map segment
+ * "D E2C9F0 OS_TERM_INIT size = 1398").  TERM_$INIT reaches every one of them
+ * with an absolute `pea`/`lea`, and each is at a fixed offset from the block
+ * base, so they are aliases into TERM_$DATA rather than objects of their own
+ * (bead source-wk2f).  The Ghidra label names are kept because the fields they
+ * stand for are not all recovered yet.
+ *
+ * TODO(source-wk2f, 0x00E2C9F0): TERM_$DATA is image-initialised over its full
+ * 0x1398 bytes (function pointers, line records, SIO descriptors); term_data.c
+ * still only initialises kbd_string_data, so these aliases read as zero.
  */
-extern char DAT_00e2d9e0[];
-extern char DAT_00e2db48[];
-/* DTTE is TERM_$DATA.dtte; see the alias in term/term.h. */
-extern char DAT_00e2cb48[];
-extern char DAT_00e2db58[];
-extern char DAT_00e2caa0[];
-extern char DAT_00e2ca60[];
-extern char DAT_00e2cf1a[];
-extern char DAT_00e2dc40[];
-extern char DAT_00e2dbf6[];
-extern char DAT_00e2ca48[];
-extern char DAT_00e2d024[];
-extern char DAT_00e2dcc8[];
-extern char DAT_00e2da58[];
-extern char DAT_00e2ca30[];
-extern char DAT_00e2c9f0[];
+#define TERM_$DATA_AT(off) ((char *)&TERM_$DATA + (off))
+#define DAT_00e2c9f0   TERM_$DATA_AT(0x0000)  /* TERM_$DATA base; SIO_$INIT_DESC's `desc_base` argument */
+#define DAT_00e2ca30   TERM_$DATA_AT(0x0040)  /* serial-line SIO_$INIT_LINE handler block */
+#define DAT_00e2ca48   TERM_$DATA_AT(0x0058)  /* console SIO_$INIT_DESC descriptor block */
+#define DAT_00e2ca60   TERM_$DATA_AT(0x0070)  /* console SIO_$INIT_LINE handler block */
+#define DAT_00e2caa0   TERM_$DATA_AT(0x00B0)  /* OS_TERM_INIT's sixth argument */
+#define DAT_00e2cb48   TERM_$DATA_AT(0x0158)  /* console line record (the first per-line block) */
+#define DAT_00e2cf1a   TERM_$DATA_AT(0x052A)  /* console drain-handler cell */
+#define DAT_00e2d024   TERM_$DATA_AT(0x0634)  /* serial line 1 record */
+#define DAT_00e2d3f6   TERM_$DATA_AT(0x0A06)  /* serial line 1 drain-handler cell */
+#define DAT_00e2d500   TERM_$DATA_AT(0x0B10)  /* serial line 2 record */
+#define DAT_00e2d8d2   TERM_$DATA_AT(0x0EE2)  /* serial line 2 drain-handler cell */
+#define DAT_00e2d9e0   TERM_$DATA_AT(0x0FF0)  /* console SIO descriptor */
+#define DAT_00e2da38   TERM_$DATA_AT(0x1048)  /* per-process table TERM_$INIT stamps with 0xFFFFFFFF */
+#define DAT_00e2da58   TERM_$DATA_AT(0x1068)  /* serial line 1 SIO descriptor */
+#define DAT_00e2daa4   TERM_$DATA_AT(0x10B4)  /* SIO2681 channel A parameters */
+#define DAT_00e2dad0   TERM_$DATA_AT(0x10E0)  /* serial line 2 SIO descriptor */
+#define DAT_00e2db1c   TERM_$DATA_AT(0x112C)  /* SIO2681 channel B parameters */
+#define DAT_00e2db48   TERM_$DATA_AT(0x1158)  /* console drain-handler vector */
+#define DAT_00e2db58   TERM_$DATA_AT(0x1168)  /* OS_TERM_INIT's first argument */
+#define DAT_00e2dbf6   TERM_$DATA_AT(0x1206)  /* console SIO_$INIT_DESC's fifth argument */
+#define DAT_00e2dc40   TERM_$DATA_AT(0x1250)  /* SIO6509 chip record */
+#define DAT_00e2dc48   TERM_$DATA_AT(0x1258)  /* SIO2681 chip record */
+#define DAT_00e2dc74   TERM_$DATA_AT(0x1284)  /* SIO2681 channel B record */
+#define DAT_00e2dcb4   TERM_$DATA_AT(0x12C4)  /* TERM_$DATA.dtte[0].handler_ptr (0x12A0 + 0x24) */
+#define DAT_00e2dcc8   TERM_$DATA_AT(0x12D8)  /* TERM_$DATA.dtte[1] */
+#define DAT_00e2dd00   TERM_$DATA_AT(0x1310)  /* TERM_$DATA.dtte[2] */
+
+/*
+ * PTR_KBD_$RCV_00e2ca78 - TERM_$DATA + 0x88, the start of the console handler
+ * array; the image longword there is 0x00E1CCC0 = KBD_$RCV.  TERM_$INIT passes
+ * its address to SIO_$INIT_DESC.
+ */
+#define PTR_KBD_$RCV_00e2ca78 (*(void **)TERM_$DATA_AT(0x0088))
+
+/*
+ * Handler function pointer cells inside the TERM_$DATA region (for TERM_$INIT).
+ * These are term-owned data (defined in term/term_data.c); the names carry the
+ * TTY_ prefix only because Ghidra labels them by the routine they point to.
+ *
+ * TODO(source-wk2f, 0x00E2CA08): both cells are inside TERM_$DATA
+ * (0x00E2CA08 = +0x18 = ptr_tty_i_rcv, 0x00E2CAB0 = +0xC0 = ptr_tty_i_rcv_alt)
+ * but are still defined as separate objects in term/term_data.c.
+ */
+extern void *PTR_TTY_$I_RCV_00e2cab0;
+extern void *PTR_TTY_$I_RCV_00e2ca08;
+
+/*
+ * TONE_$CHANNEL (0x00E2DC58 = TERM_$DATA + 0x1268) is owned by tone/ and
+ * defined in tone/enable.c as a separate object; TERM_$INIT hands its address
+ * to SIO2681_$INIT as the channel-A record.
+ * TODO(source-wk2f, 0x00E2DC58): it overlaps TERM_$DATA and should become an
+ * alias like the cells above.
+ */
 extern char TONE_$CHANNEL[];
-extern char DAT_00e2d3f6[];
-extern char DAT_00e2d500[];
-extern char DAT_00e2dd00[];
-extern char DAT_00e2dad0[];
-extern char DAT_00e2dc74[];
-extern char DAT_00e2d8d2[];
-extern char DAT_00e2da38[];
-extern char DAT_00e2daa4[];
-extern char DAT_00e2db1c[];
-extern char DAT_00e2dc48[];
-extern char DAT_00e2dcb4[];
-extern char DAT_00e351ae[];
-extern char DAT_00e35154[];  /* SIO vtable for console/keyboard line */
-extern char DAT_00e3517c[];  /* SIO vtable for serial lines */
-extern char DAT_00e33220[];
-extern char DAT_00e3321e[];
+
+/*
+ * Cells in the second OS_TERM_INIT block, the map segment
+ * "D E35154 OS_TERM_INIT size = 5C" (0x00E35154..0x00E351B0).  They are the
+ * SIO vtables and the SIO2681/SIO6509 configuration TERM_$INIT hands to the
+ * chip initialisers, and they are objects of their own, not aliases.
+ */
+extern m68k_ptr_t DAT_00e35154[10];  /* 0x00E35154, 0x28: console SIO vtable */
+extern m68k_ptr_t DAT_00e3517c[9];   /* 0x00E3517C, 0x24: serial SIO vtable  */
+extern uint16_t   DAT_00e351a0[7];   /* 0x00E351A0, 0x0E: SIO2681 config     */
+extern uint8_t    DAT_00e351ae[2];   /* 0x00E351AE, 0x02: SIO6509 config     */
+
+/*
+ * Two literal words in TERM_$INIT's own code region, just before the BITPAD
+ * segment at 0x00E33224.  TERM_$INIT passes their addresses to SIO6509_$INIT
+ * and SIO2681_$INIT.
+ */
+extern int16_t DAT_00e3321e;  /* 0x00E3321E: the word 2 */
+extern int16_t DAT_00e33220;  /* 0x00E33220: the word 1 */
 
 /*
  * External module functions used by term/ come from the owning subsystems'
@@ -113,23 +162,6 @@ extern status_$t TERM_$STATUS_TRANSLATION_TABLE_36[];  // at 0xe2c9b0
 extern uint16_t TERM_$KBD_STRING_LEN;
 
 /* DTTY_$RELOAD_FONT is declared in dtty/dtty.h */
-
-/*
- * Handler function pointer cells inside the TERM_$DATA region (for TERM_$INIT).
- * These are term-owned data (defined in term/term_data.c); the names carry the
- * TTY_/KBD_ prefix only because Ghidra labels them by the routine they point
- * to.  PTR_KBD_$RCV_00e2ca78 is the start of the console handler array at
- * TERM_$DATA + 0x88.
- */
-extern void *PTR_TTY_$I_RCV_00e2cab0;
-extern void *PTR_KBD_$RCV_00e2ca78;
-extern void *PTR_TTY_$I_RCV_00e2ca08;
-
-/*
- * SIO2681 configuration block passed as the 10th argument of SIO2681_$INIT
- * by TERM_$INIT (0xe35154 + 0x4c; see sio2681/sio2681.h).
- */
-extern char DAT_00e351a0[];
 
 /*
  * External initialization functions used by TERM_$INIT come from:

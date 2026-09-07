@@ -44,7 +44,7 @@ void EC2_$WAKEUP(ec2_$eventcount_t *ec, status_$t *status_ret)
 
                     if ((ec_value - waiter->wait_val) >= 0) {
                         int16_t ec1_offset = waiter->proc_id * 0x0C;
-                        ec_$eventcount_t *ec1 = (ec_$eventcount_t *)(EC1_ARRAY_BASE + ec1_offset);
+                        ec_$eventcount_t *ec1 = (ec_$eventcount_t *)(EC2_$WAIT_ECS + ec1_offset);
                         EC_$ADVANCE(ec1);
                     }
                 } while (waiter_idx != first_waiter);

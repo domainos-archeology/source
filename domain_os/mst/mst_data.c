@@ -25,6 +25,16 @@
  *   MST_$GLOBAL_A_SIZE:          0xE24462 (2 bytes)   - Global A size (0x60)
  *   MST_$SEG_TN:                 0xE24464 (2 bytes)   - Total segments (0x140)
  *   MST_$GOT_COLOR:              0xE24466 (2 bytes)   - Color support flag
+ *
+ * The MST_UNWIRED data segment (SAU2 map: E7CF0C, size = 0x48) holds:
+ *   MST_$PAGE_AVAIL_BITMAP:      0xE7CF0C (0x30 bytes) - 12 longwords
+ *   MST_$PAGE_ALLOC_HINT:        0xE7CF3C (2 bytes)   - bitmap search hint
+ *   MST_$MST_PAGES_LIMIT:        0xE7CF3E (2 bytes)   - map symbol
+ *   MST_$MST_PAGES_WIRED:        0xE7CF40 (2 bytes)   - map symbol
+ *   (unnamed word table)         0xE7CF42 (0x12 bytes) - see TODO below
+ *
+ * And the segment table itself lives in the uninitialised VM_TABLES area:
+ *   MST:                         0xEE5800 (0xC00 bytes) - 0x600 words
  */
 
 #include "mst/mst_internal.h"
@@ -41,9 +51,22 @@
  * Tracks which ASIDs are allocated. Bit set = ASID is in use.
  * Supports up to 64 ASIDs (0-63), though only 58 are typically used.
  *
- * Original address: 0xE24384
+ * One Domain Pascal SET of eight bytes.  ASID N is bit N & 7 of byte
+ * (63 - N) >> 3 (MST_$ALLOC_ASID, 0x00E42D3A), i.e. the set reads as a
+ * big-endian 64-bit integer with bit N = 1 << N.
+ *
+ * MST_$INIT reaches the same storage as two longwords, at 0xE24384 (the cell
+ * the link inventory calls MST_$ASID_LIST_LONG) and 0xE24388.  Those are not
+ * separate objects - the SAU2 map has MST_$ASID_LIST at E24384 and the next
+ * symbol, MST_$MAP_ALTER_LOCK, at E2438C - so they are written through
+ * MST_$ASID_LIST_STORE_LONG() in mst/mst_internal.h rather than defined here.
+ *
+ * Image bytes at 0xE24384: 00 00 00 00 00 00 00 00.
+ *
+ * Original address: 0xE24384 (8 bytes)
  */
 uint8_t MST_$ASID_LIST[8] = { 0 };
+_Static_assert(sizeof(MST_$ASID_LIST) == 8, "MST_$ASID_LIST is E24384..E2438B");
 
 /*
  * Per-ASID base table
@@ -231,13 +254,92 @@ uint16_t MST_$GOT_COLOR = 0;
 /*
  * Number of wired MST pages
  *
- * Count of MST pages currently wired in memory.
+ * Count of MST pages currently wired in memory.  MST_$INIT clears it with
+ * `clr.w (0x34,A1)` at 0x00E30C1E, A1 = 0xE7CF0C.
+ *
+ * Original address: 0xE7CF40 (2 bytes, SAU2 map symbol)
  */
 uint16_t MST_$MST_PAGES_WIRED = 0;
 
 /*
  * Maximum MST pages to wire
  *
- * Limit on how many MST pages can be wired.
+ * Limit on how many MST pages can be wired.  MST_$INIT computes it into
+ * `(0x32,A1)` (0x00E30CE2 .. 0x00E30D14), A1 = 0xE7CF0C.
+ *
+ * Original address: 0xE7CF3E (2 bytes, SAU2 map symbol)
  */
 uint16_t MST_$MST_PAGES_LIMIT = 0;
+
+/*
+ * ============================================================================
+ * MST_UNWIRED page-table-page allocator state (0xE7CF0C)
+ * ============================================================================
+ */
+
+/*
+ * MST page availability bitmap
+ *
+ * 12 longwords = 384 bits, one per allocatable page-table page; a SET bit
+ * means the page is free.  Read and cleared through A5/A1 = 0xE7CF0C by
+ * MST_$INIT (`bclr.b #0x0,(0x3,A1)` at 0x00E30C10, the final clear loop at
+ * 0x00E30D86 which walks longword indices 0..11) and by
+ * MST_$ALLOC_TABLE_PAGE.
+ *
+ * Image bytes at 0xE7CF0C..0xE7CF3B are all 0xFF: every page starts free.
+ *
+ * Original address: 0xE7CF0C (0x30 bytes)
+ */
+uint32_t MST_$PAGE_AVAIL_BITMAP[MST_$PAGE_AVAIL_BITMAP_LONGS] = {
+    0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+    0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+    0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
+};
+_Static_assert(sizeof(MST_$PAGE_AVAIL_BITMAP) == 0x30,
+               "MST_$PAGE_AVAIL_BITMAP is E7CF0C..E7CF3B");
+
+/*
+ * Page allocation hint
+ *
+ * Index of the bitmap longword MST_$ALLOC_TABLE_PAGE should start its search
+ * at.  MST_$INIT seeds it with the first longword the global-segment
+ * pre-allocation left partly free (`move.w (-0x12,A6),(0x30,A1)` at
+ * 0x00E30D18); MST_$ALLOC_TABLE_PAGE reads and rewrites it.
+ *
+ * Image bytes at 0xE7CF3C: 00 00.
+ *
+ * Original address: 0xE7CF3C (2 bytes)
+ */
+uint16_t MST_$PAGE_ALLOC_HINT = 0;
+
+/*
+ * ============================================================================
+ * Segment table
+ * ============================================================================
+ */
+
+/*
+ * MST - the segment table proper
+ *
+ * One word per segment, holding the index of the page-table page that backs
+ * that segment.  MST_$INIT wires and zeroes it page by page starting at
+ * `movea.l #0xee5800,A2` (0x00E30BFA); MST_$ALLOC_ASID and mst_$va_to_pte
+ * index it.
+ *
+ * The SAU2 map has MST at EE5800 and PIT_PAGES at EE6400, so the table is
+ * 0xC00 bytes = 0x600 words.  It lies in the uninitialised VM_TABLES region,
+ * which carries no bytes in the image (`gsk read 0x00EE5800` fails), so the
+ * initial contents are whatever MST_$INIT writes.
+ *
+ * Original address: 0xEE5800 (0xC00 bytes)
+ */
+uint16_t MST[MST_TABLE_ENTRIES] = { 0 };
+_Static_assert(sizeof(MST) == 0xC00, "MST is EE5800..EE63FF");
+
+/*
+ * TODO(source-qmdl): 0xE7CF42..0xE7CF53, the last 0x12 bytes of the
+ * MST_UNWIRED data segment, hold an unnamed nine-word table
+ * { 0, 0, 1, 4, 5, 2, 3, 6, 7 } that no instruction in the image references
+ * directly (`gsk xrefs to 0x00E7CF42` and 0x00E7CF46 find nothing - it can
+ * only be reached through A5).  Not defined here until a use is found.
+ */

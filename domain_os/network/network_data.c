@@ -88,10 +88,55 @@ int16_t NETWORK_$RETRY_TIMEOUT;       /* 0xE24C18 */
  */
 void *NETWORK_$LOCK;                  /* 0xE24BA0 (+0x2A4) */
 
-/*
- * Loopback flag (non-M68K only - M68K uses direct memory access)
- */
-#if !defined(ARCH_M68K)
-int8_t NETWORK_$LOOPBACK_FLAG;
 /* NODE_$ME (0xE245A4) is defined in uid/uid_data.c */
-#endif
+
+/*
+ * ============================================================================
+ * NETWORK_ module block flags and pointers
+ *
+ * The SAU2 map's `D E248FC NETWORK size = 364` segment names each of these,
+ * and the distance to the next named symbol fixes each one's width:
+ *
+ *   E24BD0  NETWORK_$FILE_BACKLOG          (to NETWORK_$FAILURE_REC, 0xE24BF4)
+ *   E24C42  NETWORK_$ACTIVITY_FLAG
+ *   E24C44  NETWORK_$LOOPBACK_FLAG         (2 bytes)
+ *   E24C46  NETWORK_$DO_CHKSUM             (2 bytes)
+ *   E24C48  NETWORK_$USER_SOCK_OPEN
+ *
+ * All of them are zero in the image.
+ * ============================================================================
+ */
+
+/*
+ * NETWORK_$LOOPBACK_FLAG - Domain boolean; when set (< 0) the network layer
+ * loops packets addressed to this node back internally.
+ *
+ * Original address: 0xE24C44
+ */
+int8_t NETWORK_$LOOPBACK_FLAG;
+
+/*
+ * NETWORK_$DO_CHKSUM - Domain boolean enabling packet checksums.
+ *
+ * Original address: 0xE24C46
+ */
+char NETWORK_$DO_CHKSUM;
+
+/*
+ * NETWORK_$FILE_BACKLOG_OVERFLOW - the overflow counter at the end of the
+ * NETWORK_$FILE_BACKLOG record (0xE24BD0 + 0x20); the record runs up to
+ * NETWORK_$FAILURE_REC at 0xE24BF4, so this longword is its last field.
+ *
+ * Original address: 0xE24BF0
+ */
+uint32_t NETWORK_$FILE_BACKLOG_OVERFLOW;
+
+/*
+ * NETWORK_$SERVICE_INFO_PTR - pointer to the network service-info record.
+ *
+ * It lives in the SOCK data segment (`D E27510 SOCK size = 1C28`), one
+ * longword past SOCK_$SOCKET_PTR (0xE28DB4).  NULL in the image.
+ *
+ * Original address: 0xE28DB8
+ */
+uint8_t *NETWORK_$SERVICE_INFO_PTR;

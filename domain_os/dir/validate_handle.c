@@ -206,8 +206,11 @@ generic_map:
     {
         uint32_t mapped_addr;
 
-        MST_$MAPS(PROC1_$AS_ID, 0xFFFF, handle, 0, 0x10000, 0x16, 0,
-                  0xFF, &map_size, status_ret);
+        /* 0x00E4B656 `st -(SP)` and 0x00E4B644 `st -(SP)` push arguments 2
+         * and 8 as Pascal BOOLEAN bytes (0xFF == true); the word 0xFFFF this
+         * call used to pass for argument 2 was never what the callee reads. */
+        MST_$MAPS(PROC1_$AS_ID, true, handle, 0, 0x10000, 0x16, 0,
+                  true, &map_size, status_ret);
         /* TODO(source-qgq): MST_$MAPS returns address in A0 on m68k; assigned to handle+0x24 */
         mapped_addr = *(uint32_t *)(h + 0x24);
 

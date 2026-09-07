@@ -6,10 +6,31 @@
  * all SAU types. The actual trap dispatch code is architecture-specific
  * and lives in sau<N>/*.s files.
  *
- * Table addresses in original binary:
- *   SVC_$TRAP0_TABLE: 0x00e7b2de (32 entries)
- *   SVC_$TRAP1_TABLE: 0x00e7b360 (66 entries)
- *   SVC_$TRAP5_TABLE: 0x00e7baf2 (99 entries)
+ * Table addresses in the original binary.  The nine tables are packed back
+ * to back at the tail of the SVC_CATCHER segment (SAU2 map: "D E7B044
+ * SVC_CATCHER   size = E40", i.e. 0xE7B044..0xE7BE84, and 0xE7BE84 is where
+ * the PROC2 segment starts).  Each address is the target of the
+ * `lea (TABLE:w,%pc)' in the matching svc/sau2/trapN.s, and every table's
+ * size is exactly the distance to the next one - asserted below.
+ *
+ *   0xE7B2DE  SVC_$TRAP0_TABLE      32 entries * 4 = 0x080  (lea at 0xE7B04C)
+ *   0xE7B35E  SVC_$TRAP1_TABLE      66 entries * 4 = 0x108  (lea at 0xE7B064)
+ *   0xE7B466  SVC_$TRAP2_TABLE     133 entries * 4 = 0x214  (lea at 0xE7B09C)
+ *   0xE7B67A  SVC_$TRAP3_TABLE     155 entries * 4 = 0x26C  (lea at 0xE7B0E0)
+ *   0xE7B8E6  SVC_$TRAP4_TABLE     131 entries * 4 = 0x20C  (lea at 0xE7B128)
+ *   0xE7BAF2  SVC_$TRAP5_TABLE      99 entries * 4 = 0x18C  (lea at 0xE7B184)
+ *   0xE7BC7E  SVC_$TRAP7_TABLE      59 entries * 4 = 0x0EC  (lea at 0xE7B1E0)
+ *   0xE7BD6A  SVC_$TRAP8_TABLE      56 entries * 4 = 0x0E0  (lea at 0xE7B27C,
+ *                                                    0xE7B28E and 0xE7B2CC)
+ *   0xE7BE4A  SVC_$TRAP8_ARGCOUNT   56 entries * 1 = 0x038  (lea at 0xE7B240)
+ *   0xE7BE82  end of tables (2 bytes of pad to the 0xE7BE84 segment end)
+ *
+ * (source-6fbi: this comment used to give SVC_$TRAP1_TABLE as 0x00E7B360;
+ * SVC_$TRAP1 at 0xE7B064 loads 0xE7B35E, which is also 0xE7B2DE + 32*4.)
+ *
+ * SVC_TABLE_SECTION (svc/svc_internal.h) keeps the tables in the same
+ * output section as the dispatchers so those `lea (d16,PC)' forms still
+ * reach them after linking (source-a5t8).
  */
 
 #include "svc/svc_internal.h"
@@ -77,7 +98,7 @@
  *
  * Original address: 0x00e7b2de
  */
-void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE] = {
+void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x00 */ PROC2_$DELETE,
     /* 0x01 */ FIM_$GET_FIM_ADDR,
     /* 0x02 */ SVC_$INVALID_SYSCALL,
@@ -112,6 +133,10 @@ void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE] = {
     /* 0x1F */ SMD_$N_DEVICES,
 };
 
+/* Image layout chain: SVC_$TRAP0_TABLE fills 0xE7B2DE..0xE7B35E (4 bytes/entry). */
+_Static_assert(SVC_TRAP0_TABLE_SIZE * 4 == SVC_TRAP1_TABLE_ADDR - SVC_TRAP0_TABLE_ADDR,
+               "SVC_$TRAP0_TABLE does not fill 0xE7B2DE..0xE7B35E");
+
 /*
  * ============================================================================
  * SVC_$TRAP1_TABLE - 1-argument syscall handlers (66 entries)
@@ -120,9 +145,9 @@ void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE] = {
  * TRAP #1 syscalls take 1 argument via user stack at (USP+0x04).
  * The dispatcher validates USP and the argument pointer < 0xCC0000.
  *
- * Original address: 0x00e7b360
+ * Original address: 0x00e7b35e
  */
-void *SVC_$TRAP1_TABLE[SVC_TRAP1_TABLE_SIZE] = {
+void *SVC_$TRAP1_TABLE[SVC_TRAP1_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x00 */ SVC_$INVALID_SYSCALL,
     /* 0x01 */ SVC_$INVALID_SYSCALL,
     /* 0x02 */ FIM_$INSTALL,
@@ -191,6 +216,10 @@ void *SVC_$TRAP1_TABLE[SVC_TRAP1_TABLE_SIZE] = {
     /* 0x41 */ TIME_$GET_ADJUST,
 };
 
+/* Image layout chain: SVC_$TRAP1_TABLE fills 0xE7B35E..0xE7B466 (4 bytes/entry). */
+_Static_assert(SVC_TRAP1_TABLE_SIZE * 4 == SVC_TRAP2_TABLE_ADDR - SVC_TRAP1_TABLE_ADDR,
+               "SVC_$TRAP1_TABLE does not fill 0xE7B35E..0xE7B466");
+
 /*
  * ============================================================================
  * SVC_$TRAP2_TABLE - 2-argument syscall handlers (133 entries)
@@ -201,7 +230,7 @@ void *SVC_$TRAP1_TABLE[SVC_TRAP1_TABLE_SIZE] = {
  *
  * Original address: 0x00e7b466
  */
-void *SVC_$TRAP2_TABLE[SVC_TRAP2_TABLE_SIZE] = {
+void *SVC_$TRAP2_TABLE[SVC_TRAP2_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x00 */ SVC_$INVALID_SYSCALL,
     /* 0x01 */ SVC_$INVALID_SYSCALL,
     /* 0x02 */ FILE_$DELETE,
@@ -340,6 +369,10 @@ void *SVC_$TRAP2_TABLE[SVC_TRAP2_TABLE_SIZE] = {
     /* 0x84 */ SVC_$INVALID_SYSCALL,
 };
 
+/* Image layout chain: SVC_$TRAP2_TABLE fills 0xE7B466..0xE7B67A (4 bytes/entry). */
+_Static_assert(SVC_TRAP2_TABLE_SIZE * 4 == SVC_TRAP3_TABLE_ADDR - SVC_TRAP2_TABLE_ADDR,
+               "SVC_$TRAP2_TABLE does not fill 0xE7B466..0xE7B67A");
+
 /*
  * ============================================================================
  * SVC_$TRAP3_TABLE - 3-argument syscall handlers (155 entries)
@@ -350,7 +383,7 @@ void *SVC_$TRAP2_TABLE[SVC_TRAP2_TABLE_SIZE] = {
  *
  * Original address: 0x00e7b67a
  */
-void *SVC_$TRAP3_TABLE[SVC_TRAP3_TABLE_SIZE] = {
+void *SVC_$TRAP3_TABLE[SVC_TRAP3_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x00 */ SVC_$UNIMPLEMENTED,
     /* 0x01 */ SVC_$INVALID_SYSCALL,
     /* 0x02 */ FILE_$CREATE,
@@ -508,6 +541,10 @@ void *SVC_$TRAP3_TABLE[SVC_TRAP3_TABLE_SIZE] = {
     /* 0x9A */ SMD_$CLR_AND_LOAD_TRK_RECT,
 };
 
+/* Image layout chain: SVC_$TRAP3_TABLE fills 0xE7B67A..0xE7B8E6 (4 bytes/entry). */
+_Static_assert(SVC_TRAP3_TABLE_SIZE * 4 == SVC_TRAP4_TABLE_ADDR - SVC_TRAP3_TABLE_ADDR,
+               "SVC_$TRAP3_TABLE does not fill 0xE7B67A..0xE7B8E6");
+
 /*
  * ============================================================================
  * SVC_$TRAP4_TABLE - 4-argument syscall handlers (131 entries)
@@ -519,7 +556,7 @@ void *SVC_$TRAP3_TABLE[SVC_TRAP3_TABLE_SIZE] = {
  *
  * Original address: 0x00e7b8e6
  */
-void *SVC_$TRAP4_TABLE[SVC_TRAP4_TABLE_SIZE] = {
+void *SVC_$TRAP4_TABLE[SVC_TRAP4_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x00 */ SVC_$INVALID_SYSCALL,
     /* 0x01 */ MST_$SET_GUARD,
     /* 0x02 */ MST_$UNMAP_GLOBAL,
@@ -653,6 +690,10 @@ void *SVC_$TRAP4_TABLE[SVC_TRAP4_TABLE_SIZE] = {
     /* 0x82 */ PROC2_$PGROUP_INFO,
 };
 
+/* Image layout chain: SVC_$TRAP4_TABLE fills 0xE7B8E6..0xE7BAF2 (4 bytes/entry). */
+_Static_assert(SVC_TRAP4_TABLE_SIZE * 4 == SVC_TRAP5_TABLE_ADDR - SVC_TRAP4_TABLE_ADDR,
+               "SVC_$TRAP4_TABLE does not fill 0xE7B8E6..0xE7BAF2");
+
 /*
  * ============================================================================
  * SVC_$TRAP5_TABLE - Complex syscall handlers (99 entries)
@@ -663,7 +704,7 @@ void *SVC_$TRAP4_TABLE[SVC_TRAP4_TABLE_SIZE] = {
  *
  * Original address: 0x00e7baf2
  */
-void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE] = {
+void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x00 */ SVC_$INVALID_SYSCALL,      /* Reserved */
     /* 0x01 */ MST_$MAP_AREA,
     /* 0x02 */ SVC_$INVALID_SYSCALL,
@@ -765,6 +806,10 @@ void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE] = {
     /* 0x62 */ SVC_$UNIMPLEMENTED,
 };
 
+/* Image layout chain: SVC_$TRAP5_TABLE fills 0xE7BAF2..0xE7BC7E (4 bytes/entry). */
+_Static_assert(SVC_TRAP5_TABLE_SIZE * 4 == SVC_TRAP7_TABLE_ADDR - SVC_TRAP5_TABLE_ADDR,
+               "SVC_$TRAP5_TABLE does not fill 0xE7BAF2..0xE7BC7E");
+
 /*
  * ============================================================================
  * SVC_$TRAP7_TABLE - 6-argument syscall handlers (59 entries)
@@ -778,7 +823,7 @@ void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE] = {
  *
  * Original address: 0x00e7bc7e
  */
-void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE] = {
+void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x00 */ FILE_$LOCK,
     /* 0x01 */ VFMT_$WRITE10,
     /* 0x02 */ MST_$MAP_AREA_AT,
@@ -840,6 +885,10 @@ void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE] = {
     /* 0x3A */ RIP_$UPDATE_D,
 };
 
+/* Image layout chain: SVC_$TRAP7_TABLE fills 0xE7BC7E..0xE7BD6A (4 bytes/entry). */
+_Static_assert(SVC_TRAP7_TABLE_SIZE * 4 == SVC_TRAP8_TABLE_ADDR - SVC_TRAP7_TABLE_ADDR,
+               "SVC_$TRAP7_TABLE does not fill 0xE7BC7E..0xE7BD6A");
+
 /*
  * ============================================================================
  * SVC_$TRAP8_TABLE - Variable-argument syscall handlers (56 entries)
@@ -853,7 +902,7 @@ void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE] = {
  *
  * Original address: 0x00e7bd6a
  */
-void *SVC_$TRAP8_TABLE[SVC_TRAP8_TABLE_SIZE] = {
+void *SVC_$TRAP8_TABLE[SVC_TRAP8_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x00 */ MST_$MAP,                    /* 7 args */
     /* 0x01 */ MST_$MAP_AT,                 /* 8 args */
     /* 0x02 */ MST_$MAP_GLOBAL,             /* 7 args */
@@ -912,6 +961,10 @@ void *SVC_$TRAP8_TABLE[SVC_TRAP8_TABLE_SIZE] = {
     /* 0x37 */ MSG_$RCV_HW,                 /* 13 args */
 };
 
+/* Image layout chain: SVC_$TRAP8_TABLE fills 0xE7BD6A..0xE7BE4A (4 bytes/entry). */
+_Static_assert(SVC_TRAP8_TABLE_SIZE * 4 == SVC_TRAP8_ARGCOUNT_ADDR - SVC_TRAP8_TABLE_ADDR,
+               "SVC_$TRAP8_TABLE does not fill 0xE7BD6A..0xE7BE4A");
+
 /*
  * ============================================================================
  * SVC_$TRAP8_ARGCOUNT - Argument count table for TRAP #8 (56 entries)
@@ -925,7 +978,7 @@ void *SVC_$TRAP8_TABLE[SVC_TRAP8_TABLE_SIZE] = {
  *
  * Original address: 0x00e7be4a
  */
-unsigned char SVC_$TRAP8_ARGCOUNT[SVC_TRAP8_TABLE_SIZE] = {
+unsigned char SVC_$TRAP8_ARGCOUNT[SVC_TRAP8_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x00 */ 0x07,    /* MST_$MAP: 7 args */
     /* 0x01 */ 0x08,    /* MST_$MAP_AT: 8 args */
     /* 0x02 */ 0x07,    /* MST_$MAP_GLOBAL: 7 args */
@@ -983,3 +1036,7 @@ unsigned char SVC_$TRAP8_ARGCOUNT[SVC_TRAP8_TABLE_SIZE] = {
     /* 0x36 */ 0x0b,    /* Unimplemented: 11 args */
     /* 0x37 */ 0x0d,    /* MSG_$RCV_HW: 13 args */
 };
+
+/* Image layout chain: SVC_$TRAP8_ARGCOUNT fills 0xE7BE4A..0xE7BE82 (1 byte/entry). */
+_Static_assert(SVC_TRAP8_TABLE_SIZE * 1 == SVC_TABLES_END_ADDR - SVC_TRAP8_ARGCOUNT_ADDR,
+               "SVC_$TRAP8_ARGCOUNT does not fill 0xE7BE4A..0xE7BE82");

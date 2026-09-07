@@ -23,3 +23,22 @@ void *PTR_PEB_$WIRED_CODE_END_00e322e8 = (void *)0x00E70A3E;   /* 0x00E322E8 */
 int8_t peb_$installed_flag = 0;
 int8_t m68881_$save_flag = 0;
 #endif
+
+/*
+ * PEB_$DISP_INT_ADDR - display-interrupt dispatch cell, 0x00E24478.
+ *
+ * The map places it inside the hand-written "D E24468 PEB_ASM size = 88"
+ * block, between PEB_$INT (0x00E2446C) and the NET_IO segment.  It is the
+ * 32-bit operand of PEB_$INT's opening `jmp <abs>.l`
+ * (0x00E24476: 4E F9 00 E2 1F 20), so writing the cell re-targets that jump.
+ * The image value is 0x00E21F20 = FIM_$SPURIOUS_INT, the default target;
+ * SMD_$INTERRUPT_INIT overwrites it with SMD_$DISP1_INT when the PEB routes
+ * the display interrupt (smd/interrupt_init.c).
+ *
+ * TODO(source-wk2f, 0x00E24478): PEB_$INT is hand-written assembly and should
+ * be emitted as peb/sau2/int.s, with this cell as the jmp operand; peb/int.c
+ * currently models the jump as a direct FIM_$SPURIOUS_INT() call and so never
+ * reads the cell.
+ */
+void **PEB_$DISP_INT_ADDR = (void **)FIM_$SPURIOUS_INT;
+

@@ -669,10 +669,17 @@ extern int32_t ACL_$SUBS_MAGIC;             /* 0xE7DAC0 */
 extern ml_$exclusion_t ACL_$EXCLUSION_LOCK; /* 0xE2C014 */
 
 /*
- * ACL workspace buffer (A5-relative at offset 0)
- * Used by convert/image functions for temporary storage
+ * ACL workspace buffer - the ACL_ module data block's first object
+ * (A5 + 0, A5 = 0xE7CF54; `D E7CF54 ACL_ size = BFC` in the SAU2 map).
+ *
+ * ACL_$CONVERT_TO_9ACL and ACL_$CONVERT_FROM_9ACL hand it to
+ * acl_$image_internal / ACL_$PRIM_CREATE as the image buffer, and both pass
+ * 0x400 as the buffer's capacity, so it is a full 0x400-byte ACL image.  That
+ * is also exactly the distance to the next object in the block, ACL_$IMAGE_BUF
+ * at A5 + 0x400 (0xE7D354).
  */
-extern uint8_t ACL_$WORKSPACE[64];  /* 0xE7CF54 */
+#define ACL_WORKSPACE_SIZE 0x400
+extern uint8_t ACL_$WORKSPACE[ACL_WORKSPACE_SIZE];  /* 0xE7CF54 */
 
 /*
  * Default ACL UIDs (referenced in acl.h, defined here for internal use)

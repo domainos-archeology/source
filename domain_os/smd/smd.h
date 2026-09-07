@@ -1376,10 +1376,21 @@ void SMD_$WIRE_MM(uint32_t param_1, uint32_t param_2, uint32_t param_3,
                   status_$t *status_ret);
 
 /*
- * SMD_$KTT - SMD keyboard translation table (moved here from
- * kbd/kbd_internal.h -- bead source-3uo).
+ * The keyboard translation tables.  Each is 0x100 bytes and maps a raw key
+ * code to a character code; MNK_$KTT_PTRS (0x00E273DC) selects one by keyboard
+ * type.  The names are the SAU2 map's own symbols; the map lists
+ * SMD_$NORWEGIAN_KTT at the same address as SMD_$SWEDISH_KTT (0x00E84B7E), so
+ * there is one object for the two.
+ *
+ * SMD_$KTT - the default US table (moved here from kbd/kbd_internal.h --
+ * bead source-3uo).  0x00E273FE.
  */
-extern uint8_t SMD_$KTT[];
+extern uint8_t SMD_$KTT[0x100];
+extern uint8_t SMD_$GERMAN_KTT[0x100];   /* 0x00E8497E */
+extern uint8_t SMD_$FRENCH_KTT[0x100];   /* 0x00E84A7E */
+extern uint8_t SMD_$SWEDISH_KTT[0x100];  /* 0x00E84B7E, = SMD_$NORWEGIAN_KTT */
+extern uint8_t SMD_$UK_KTT[0x100];       /* 0x00E84C7E */
+extern uint8_t SMD_$SWISS_KTT[0x100];    /* 0x00E84D7E */
 
 /*
  * Display status code raised outside the SMD subsystem as well (tpad/):

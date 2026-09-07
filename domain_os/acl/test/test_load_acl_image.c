@@ -89,12 +89,12 @@ static int       maps_calls;
 static status_$t maps_status;
 static int16_t   maps_super_count_seen;    /* ACL_$SUPER_COUNT during the map */
 static int16_t   maps_mode_seen;
-static int16_t   maps_flags_seen;
+static boolean   maps_flags_seen;
 static uint32_t  maps_length_seen;
 static int16_t   maps_prot_seen;
 
-void *MST_$MAPS(int16_t mode, int16_t flags, uid_t *uid, uint32_t offset,
-                uint32_t length, int16_t prot, uint32_t hint, int8_t create,
+void *MST_$MAPS(int16_t mode, boolean flags, uid_t *uid, uint32_t offset,
+                uint32_t length, int16_t prot, uint32_t hint, boolean create,
                 void *out, status_$t *status)
 {
     (void)uid; (void)offset; (void)hint; (void)create; (void)out;
@@ -424,7 +424,7 @@ TEST(map_arguments_match_the_pushes)
     (void)run();
 
     ASSERT_EQ(9, (uint16_t)maps_mode_seen);         /* PROC1_$AS_ID */
-    ASSERT_EQ(0xFF00, (uint16_t)maps_flags_seen);   /* `st -(SP)` */
+    ASSERT_EQ(0xFF, (uint8_t)maps_flags_seen);      /* 0xE45AD4 `st -(SP)` */
     ASSERT_EQ(0x400, maps_length_seen);
     ASSERT_EQ(0x12, maps_prot_seen);
     ASSERT_EQ(1, unmap_mode_seen);

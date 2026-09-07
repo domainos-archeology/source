@@ -53,14 +53,14 @@ void TERM_$INIT(short *param1, short *param2) {
     SIO_$INIT_DESC((sio_desc_t *)local_vars[0], DAT_00e2ca48, local_vars[2],
                    (m68k_ptr_t *)&local_vars[5], (m68k_ptr_t *)&local_vars[6],
                    (m68k_ptr_t *)&PTR_KBD_$RCV_00e2ca78, (m68k_ptr_t *)&local_vars[4],
-                   DAT_00e35154);
+                   (char *)DAT_00e35154);
 
     SIO_$INIT_DTTE((dtte_t *)local_vars[2], 2);
 
     // Initialize SIO 6509 (keyboard/display controller)
     // 0xe33018: pea 0xe351ae ; pea (-0x14,A6) ; pea 0xe2dc40 ; pea 0xe3321e ; pea 0xe33220
-    SIO6509_$INIT((int16_t *)DAT_00e33220, (int16_t *)DAT_00e3321e, DAT_00e2dc40,
-                  (m68k_ptr_t *)&local_vars[0], (uint8_t *)DAT_00e351ae);
+    SIO6509_$INIT(&DAT_00e33220, &DAT_00e3321e, DAT_00e2dc40,
+                  (m68k_ptr_t *)&local_vars[0], DAT_00e351ae);
 
     // Initialize serial line 1
     local_vars[2] = DAT_00e2dcc8;
@@ -73,7 +73,7 @@ void TERM_$INIT(short *param1, short *param2) {
     SIO_$INIT_DESC((sio_desc_t *)DAT_00e2da58, DAT_00e2c9f0, local_vars[2],
                    (m68k_ptr_t *)&local_vars[3], (m68k_ptr_t *)&local_vars[4],
                    (m68k_ptr_t *)&PTR_TTY_$I_RCV_00e2ca08, (m68k_ptr_t *)&local_vars[6],
-                   DAT_00e3517c);
+                   (char *)DAT_00e3517c);
 
     SIO_$INIT_DTTE((dtte_t *)local_vars[2], 0);
 
@@ -88,7 +88,7 @@ void TERM_$INIT(short *param1, short *param2) {
     SIO_$INIT_DESC((sio_desc_t *)DAT_00e2dad0, DAT_00e2c9f0, local_vars[2],
                    (m68k_ptr_t *)&local_vars[3], (m68k_ptr_t *)&local_vars[6],
                    (m68k_ptr_t *)&PTR_TTY_$I_RCV_00e2ca08, (m68k_ptr_t *)&local_vars[4],
-                   DAT_00e3517c);
+                   (char *)DAT_00e3517c);
 
     SIO_$INIT_DTTE((dtte_t *)local_vars[2], 0);
 
@@ -105,12 +105,12 @@ void TERM_$INIT(short *param1, short *param2) {
     //   chan_a=0xe2dc58, chip_num=0xe33220, int_vec=0xe33220 (move.l (SP),-(SP))
     local_vars[7] = DAT_00e2dad0;
     local_vars[8] = DAT_00e2da58;
-    SIO2681_$INIT((int16_t *)DAT_00e33220, (int16_t *)DAT_00e33220,
+    SIO2681_$INIT(&DAT_00e33220, &DAT_00e33220,
                   (sio2681_channel_t *)TONE_$CHANNEL, (sio_desc_t **)&local_vars[8],
                   (sio_params_t *)DAT_00e2daa4,
                   (sio2681_channel_t *)DAT_00e2dc74, (sio_desc_t **)&local_vars[7],
                   (sio_params_t *)DAT_00e2db1c,
-                  (sio2681_chip_t *)DAT_00e2dc48, (uint16_t *)DAT_00e351a0);
+                  (sio2681_chip_t *)DAT_00e2dc48, DAT_00e351a0);
 
     // Enable crash handler for process 1
     if (*param1 == 1) {

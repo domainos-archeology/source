@@ -33,7 +33,7 @@ void DBUF_$INVALIDATE(int32_t block, uint16_t vol_idx)
         goto clear_trouble;
     }
 
-    entry = &DBUF;
+    entry = &DBUF[0];
 
     do {
         /* Check if this buffer belongs to the target volume */

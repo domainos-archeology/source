@@ -170,3 +170,25 @@ ec_$eventcount_t PROC1_$SUSPEND_EC = { 0 };
  * Original address: 0xe14a06
  */
 char PROC1_$VT_TIMER_DATA[8] = { 0 };
+
+/*
+ * ============================================================================
+ * Deferred-interrupt state and assembly-referenced constants
+ * ============================================================================
+ */
+
+/*
+ * DAT_00e20606 - "DI callback in progress" flag, the byte after DI_$Q_HEAD.
+ * Zero in the image.  See proc1/proc1_internal.h.
+ *
+ * Original address: 0xE20606
+ */
+int8_t DAT_00e20606 = 0;
+
+/*
+ * Bad_atomic_operation_err - PROC1_$DISPATCH_INT's crash status.
+ * Image bytes at 0x00E20DE8: 00 0a 00 07.
+ *
+ * Original address: 0xE20DE8
+ */
+status_$t Bad_atomic_operation_err = 0x000A0007;

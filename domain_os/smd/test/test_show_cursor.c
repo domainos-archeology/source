@@ -129,7 +129,7 @@ uint16_t PROC1_$AS_ID;
 
 static smd_display_hw_t test_hw;
 static smd_cursor_pattern_t test_patterns[4];
-smd_cursor_pattern_t *SMD_CURSOR_PTABLE[4];
+smd_cursor_pattern_t *SMD_$CURSOR_PTABLE[4];
 
 /* ------------------------------------------------------------------ */
 /* Mocked callees                                                      */
@@ -253,7 +253,7 @@ static void setup(int16_t max_x, int16_t max_y)
     test_rec()->ctrl_regs = (SMD_HW_REG_PTR)0;
 
     for (int i = 0; i < 4; i++) {
-        SMD_CURSOR_PTABLE[i] = &test_patterns[i];
+        SMD_$CURSOR_PTABLE[i] = &test_patterns[i];
     }
     /* Cursor 0: 16x16 with the hot spot at its top-left. */
     test_patterns[0].width = 16;

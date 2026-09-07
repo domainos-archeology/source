@@ -112,9 +112,9 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
     /* 00e6e260 st (-0x1c,A6) */
     visible = true;
 
-    /* 00e6e264-00e6e276: pattern = SMD_CURSOR_PTABLE[cursor_num] (the index is
+    /* 00e6e264-00e6e276: pattern = SMD_$CURSOR_PTABLE[cursor_num] (the index is
      * sign-extended, `ext.l D0`, before the *4 scale). */
-    pattern = SMD_CURSOR_PTABLE[local_cursor_num];
+    pattern = SMD_$CURSOR_PTABLE[local_cursor_num];
     pat_width = pattern->width;    /* 00e6e276 move.w (A0),(-0xc,A6) */
     pat_height = pattern->height;  /* 00e6e27e move.w (0x2,A0),D0w */
 

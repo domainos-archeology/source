@@ -4,14 +4,22 @@
  * Internal data structures and declarations for the Disk Buffer subsystem.
  * This header should only be included by DBUF implementation files.
  *
- * Memory Layout (base: 0xE78B58):
- *   +0x000: ec_$eventcount_t (event count for buffer availability)
- *   +0x010: dbuf_$entry_t[] (buffer entry array, 0x24 bytes each)
- *   +0x910: DBUF_SPIN_LOCK (spin lock for buffer pool)
- *   +0x914: dbuf_$head (pointer to LRU list head)
- *   +0x918: dbuf_$waiters (count of threads waiting for buffers)
- *   +0x91A: dbuf_$count (number of buffers in pool)
- *   +0x91C: DBUF_$TROUBLE (per-volume trouble flags)
+ * Memory Layout.  The SAU2 map has `D E78B58 DBUF size = 920`, with interior
+ * symbols DBUF at 0xE78B68 and DBUF_$TROUBLE at 0xE79474; every DBUF_ routine
+ * loads 0xE78B58 into A5 (e.g. DBUF_$INIT 0x00E3ABE2) and the displacements
+ * below are the ones DBUF_$INIT writes (0x00E3ABDA-0x00E3AD12):
+ *   +0x000: dbuf_$eventcount  ec_$eventcount_t   0xE78B58  (EC_$INIT at
+ *                             0x00E3AD08 takes `pea (A5)`)
+ *   +0x00C: 4 pad bytes (ec_$eventcount_t is 12 bytes, the array is aligned)
+ *   +0x010: DBUF              dbuf_$entry_t[64]  0xE78B68  (0x24 each;
+ *                             64 * 0x24 = 0x900, ending exactly at +0x910)
+ *   +0x910: DBUF_SPIN_LOCK                       0xE79468  (`pea (0x910,A5)`
+ *                             at 0x00E3A9C4 feeds ML_$SPIN_UNLOCK)
+ *   +0x914: dbuf_$head                           0xE7946C  (0x00E3AD02)
+ *   +0x918: dbuf_$waiters                        0xE79470  (0x00E3AD0E clr.w)
+ *   +0x91A: dbuf_$count                          0xE79472  (0x00E3ABF4 move.w)
+ *   +0x91C: DBUF_$TROUBLE                        0xE79474  (0x00E3AD12 clr.w)
+ * +0x91E..+0x920 is the segment's trailing pad.
  *
  * Buffer Virtual Addresses:
  *   Start: 0xD50400
@@ -111,25 +119,30 @@ typedef struct dbuf_$data_t {
  */
 
 /* DBUF spin lock for buffer pool protection */
-extern uint32_t DBUF_SPIN_LOCK;     /* 0xE78E68 (base + 0x910) */
+extern uint32_t DBUF_SPIN_LOCK;     /* 0xE79468 (base + 0x910) */
 
 /* Head of LRU buffer list */
-extern dbuf_$entry_t *dbuf_$head;   /* 0xE78E6C (base + 0x914) */
+extern dbuf_$entry_t *dbuf_$head;   /* 0xE7946C (base + 0x914) */
 
 /* Number of threads waiting for buffers */
-extern uint16_t dbuf_$waiters;      /* 0xE78E70 (base + 0x918) */
+extern uint16_t dbuf_$waiters;      /* 0xE79470 (base + 0x918) */
 
 /* Number of buffers in pool */
-extern uint16_t dbuf_$count;        /* 0xE78E72 (base + 0x91A) */
+extern uint16_t dbuf_$count;        /* 0xE79472 (base + 0x91A) */
 
 /* Per-volume trouble flags (bit N = volume N has trouble) */
-extern uint16_t DBUF_$TROUBLE;      /* 0xE78E74 (base + 0x91C) */
+extern uint16_t DBUF_$TROUBLE;      /* 0xE79474 (base + 0x91C) */
 
 /* Event count for buffer availability */
 extern ec_$eventcount_t dbuf_$eventcount; /* 0xE78B58 */
 
-/* First buffer entry */
-extern dbuf_$entry_t DBUF;          /* 0xE78B68 (base + 0x10) */
+/*
+ * The buffer entry array.  DBUF_$INIT clamps dbuf_$count to
+ * DBUF_MAX_BUFFERS (0x00E3AC04-0x00E3AC0A `moveq #0x40`), and 0x40 entries of
+ * DBUF_ENTRY_SIZE fill the block exactly from +0x10 to DBUF_SPIN_LOCK at
+ * +0x910, so the array is 64 entries long whatever dbuf_$count ends up being.
+ */
+extern dbuf_$entry_t DBUF[DBUF_MAX_BUFFERS];  /* 0xE78B68 (base + 0x10) */
 
 /* MMAP_$REAL_PAGES (0xE23CA0) comes from mmap/mmap.h */
 

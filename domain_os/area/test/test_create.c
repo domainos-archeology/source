@@ -238,7 +238,7 @@ void CRASH_SYSTEM(const status_$t *status_p)
     current_failed = 1;
 }
 
-status_$t Area_Internal_Error = 0x00320000;
+status_$t Area_Internal_Error = 0x0032000A;
 
 /* ==========================================================================
  * Code under test

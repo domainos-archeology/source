@@ -680,7 +680,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
 
     /* --- 0x00E33CE0-0x00E33D06 --------------------------------------- */
     UID_$INIT();
-    _NULL_PC = (void *)NULLPROC;
+    NULL_PC = (void *)NULLPROC;
     PROC1_$INIT();
     PROC1_$SET_TYPE(PROC1_$CURRENT, 1);
 

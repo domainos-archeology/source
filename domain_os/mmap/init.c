@@ -26,13 +26,21 @@ void MMAP_$INIT(void *param)
 {
     uint32_t *mmape_phys_table = (uint32_t*)param;  /* Table of physical addresses */
 
-    /* Clear the owner tracking array (65 entries) */
-    for (int i = 0; i < 65; i++) {
-        MMAP_PID_TO_WSL[i] = 0;
+    /*
+     * Clear MMAP_$WS_OWNER entries 1..63 and set entry 0 to 7.
+     *
+     *   00e31946  movea.l #0xe23ca8,A0
+     *   00e3194c  moveq #0x3e,D0          ; 63 iterations
+     *   00e3194e  addq.l #0x4,A0
+     *   00e31950  clr.w (-0x2,A0)         ; first store is 0xE23CAA
+     *   00e31954  addq.l #0x2,A0
+     *   00e31956  dbf D0w,0x00e31950
+     *   00e3195a  move.w #0x7,(0x00e23ca8).l
+     */
+    for (int i = 1; i < MMAP_WS_OWNER_SLOTS; i++) {
+        MMAP_$WS_OWNER[i] = 0;
     }
-
-    /* Set initial WS owner */
-    MMAP_$WS_OWNER = 7;
+    MMAP_$WS_OWNER[0] = 7;
 
     /* Initialize 70 working set list headers */
     for (int i = 0; i < 70; i++) {
@@ -75,12 +83,18 @@ void MMAP_$INIT(void *param)
             if (!in_range) {
                 in_range = true;
                 range_count++;
-                if (range_count > 3) {
+                /*
+                 * 00e31a08  addq.w #0x1,D4w
+                 * 00e31a0c  cmpi.w #0x2,D4w
+                 * 00e31a10  ble.b 0x00e31a1e     ; skip the crash while <= 2
+                 * so the third range crashes; DUMP_$ADDRS holds two ranges.
+                 */
+                if (range_count > DUMP_ADDRS_RANGES) {
                     CRASH_SYSTEM(&mmap_$examined_max_00e31b80);
                 }
-                MEM_EXAM_TABLE[range_count - 1].start = vpn << 10;
+                DUMP_$ADDRS[range_count - 1].start = vpn << 10;
             }
-            MEM_EXAM_TABLE[range_count - 1].end = vpn << 10;
+            DUMP_$ADDRS[range_count - 1].end = vpn << 10;
 
             /* Clear the physical table entry for this 1KB block */
             int block = (vpn - 0x200) >> 6;  /* 64 pages per block */
@@ -139,7 +153,7 @@ void MMAP_$INIT(void *param)
 
     /* Clear high bits of memory range entries */
     for (int i = 0; i < range_count; i++) {
-        MEM_EXAM_TABLE[i].start &= 0x0007FFFF;
+        DUMP_$ADDRS[i].start &= 0x0007FFFF;
     }
 
     /* Mark certain WSL indices as in-use */

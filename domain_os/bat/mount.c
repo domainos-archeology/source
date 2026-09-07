@@ -13,7 +13,7 @@
  * BAT_$MOUNT
  *
  * Parameters:
- *   vol_idx    - Volume index (0-6)
+ *   vol_idx    - Volume index (1-6)
  *   salvage_ok - If negative, skip salvage check; otherwise require clean volume
  *   status     - Output status code
  *
@@ -58,15 +58,17 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
 
     vol = &bat_$volumes[vol_idx];
 
-    /* Determine volume format based on version field */
-    is_new_format = (label->version != 0);
-
-    /* Store format flag in high byte of volume_flags */
-    if (is_new_format) {
-        bat_$volume_flags[vol_idx] |= 0xFF000000;
-    } else {
-        bat_$volume_flags[vol_idx] &= 0x00FFFFFF;
-    }
+    /*
+     * Determine volume format from the label version word and record it as a
+     * whole byte:
+     *
+     *   0x00E3B760  tst.w (A0)              ; label->version
+     *   0x00E3B762  sne D0b                 ; 0xFF if non-zero, else 0
+     *   0x00E3B764  move.b D0b,(0xd3f,A2)   ; bat_$volume_flags[vol_idx]
+     *   0x00E3B768  tst.b (0xd3f,A2)        ; re-read for the branch below
+     */
+    bat_$volume_flags[vol_idx] = (label->version != 0) ? (int8_t)-1 : (int8_t)0;
+    is_new_format = (bat_$volume_flags[vol_idx] < 0);
 
     /* Check salvage flag */
     if (is_new_format) {
@@ -173,19 +175,32 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
      * geometry and store them at +0x22C / +0x230, just past the partition
      * table (0x00E3B81E-0x00E3B874).
      */
+    /*
+     *   0x00E3B820  movea.l #0xe7a290,A2    ; DISK_$DVTBL
+     *   0x00E3B830  lea (0x0,A2,D6w*0x1),A2 ; A2 = DISK_VOL(vol_idx) + 0x48
+     *   0x00E3B82E  clr.l D7
+     *   0x00E3B834  move.w (-0x24,A2),D7w   ; blocks_per_cyl, zero-extended
+     *   0x00E3B838  move.l D7,(-0x8,A1)     ; vol->alloc_chunk_size
+     *   0x00E3B83C  cmpi.w #0x1,(-0x12,A2)  ; interleave_mode == 1 ?
+     *   0x00E3B846  move.w (-0x1c,A2),-(SP) ; num_parts  (2nd argument)
+     *   0x00E3B84A  move.l D7,-(SP)         ; blocks_per_cyl (1st argument)
+     *   0x00E3B84C  jsr M$MIU$LLW
+     *   0x00E3B858  move.l (-0x40,A2),D0    ; lv_start
+     *   0x00E3B85C  add.l (-0x228,A1),D0    ; + vol->first_data_block
+     */
     dinfo = &bat_$disk_info[vol_idx];
-    chunk_size = (uint32_t)dinfo->sectors_per_track;
+    chunk_size = (uint32_t)dinfo->blocks_per_cyl;
     vol->alloc_chunk_size = chunk_size;
 
-    if (dinfo->disk_type == 1) {
-        /* Special disk type: multiply by track width */
-        chunk_size = M$MIU$LLW(chunk_size,
-                               (uint16_t)dinfo->sectors_per_track);
+    if (dinfo->interleave_mode == 1) {
+        /* Striped volume: one chunk spans every member's cylinder */
+        chunk_size = M$MIU$LLW(chunk_size, dinfo->num_parts);
         vol->alloc_chunk_size = chunk_size;
     }
 
-    /* Calculate chunk offset: (first_data_block + disk_offset) % chunk_size */
-    chunk_offset = M$OIS$LLL(vol->first_data_block + dinfo->offset, chunk_size);
+    /* Calculate chunk offset: (first_data_block + lv_start) % chunk_size */
+    chunk_offset = M$OIS$LLL(vol->first_data_block + dinfo->lv_start,
+                             chunk_size);
     vol->alloc_chunk_offset = chunk_size - chunk_offset;
 
     /* Write back label with updated info */

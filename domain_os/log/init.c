@@ -86,7 +86,10 @@ void LOG_$INIT(void)
     /* Map the log file into memory
      * mode=0, flags=0xff00, offset=0, length=0x400, prot=0x16, hint=0
      */
-    vpn = (int16_t *)MST_$MAPS(0, (int16_t)0xff00, &LOG_$LOGFILE_UID, 0,
+    /* 0x00E30114 `st -(SP)` pushes argument 2 as a Pascal BOOLEAN byte, and
+     * 0x00E30100 `move.b D2b,-(SP)` pushes argument 8 the same way (D2 is the
+     * `seq` result computed at 0x00E300F6). */
+    vpn = (int16_t *)MST_$MAPS(0, true, &LOG_$LOGFILE_UID, 0,
                                 LOG_BUFFER_SIZE, 0x16, 0, is_new_file,
                                 &map_out, &status);   /* 0x00E300FC */
     if (log_$check_op_status("map%$", &status) < 0) {

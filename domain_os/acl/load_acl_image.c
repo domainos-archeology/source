@@ -57,11 +57,11 @@ static const uint16_t acl_$load_acl_image_hash_mod_00e45e8c = ACL_CACHE_HASH_MOD
 /* `bset.b #0x7,(A0)` on the first byte of the status longword (0x00E45BCC). */
 #define STATUS_FATAL_BIT            0x80000000UL
 
-/* MST_$MAPS' protection word (`move.w #0x12,-(SP)`, 0x00E45AC6) and its
- * "flags" byte, pushed by `st -(SP)` into the high half of a word slot
- * (0x00E45AD4) - the same 0xFF00 spelling every other MST_$MAPS caller uses. */
+/* MST_$MAPS' protection word (`move.w #0x12,-(SP)`, 0x00E45AC6).  Its
+ * argument 2 is a Pascal BOOLEAN byte, pushed by `st -(SP)` at 0x00E45AD4
+ * into the even half of a word slot, which is the half MST_$MAPS reads with
+ * `move.b (0xa,A6)`; it is passed as plain `true`. */
 #define ACL_MAPS_PROT               0x12
-#define ACL_MAPS_FLAGS              ((int16_t)0xFF00)
 
 /* MST_$UNMAP_PRIVI's mode word (`move.w #0x1,-(SP)`, 0x00E45B7A). */
 #define ACL_UNMAP_MODE              1
@@ -120,7 +120,7 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
     ACL_$SUPER_COUNT[PROC1_$CURRENT]++;
 
     /* 0x00E45ABA-0x00E45AE6 */
-    image = MST_$MAPS((int16_t)PROC1_$AS_ID, ACL_MAPS_FLAGS, acl_uid, 0,
+    image = MST_$MAPS((int16_t)PROC1_$AS_ID, true, acl_uid, 0,
                       ACL_CACHE_SLOT_SIZE, ACL_MAPS_PROT, 0, 0,
                       &map_out, status_ret);
 

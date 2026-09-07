@@ -60,8 +60,10 @@ uint32_t NODE_$ME = 0x00012345;
 uint16_t PROC1_$CURRENT = 4;
 uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
 int8_t   AUDIT_$ENABLED = 0;            /* >= 0: auditing off */
-uint16_t DIR_$OP_PARAMS[0x100];
-uint16_t DAT_00e7fc66;
+uint16_t DIR_$OP_PARAMS[DIR_$OP_PARAMS_WORDS];
+/* DAT_00e7fc66 is DIR_$OP_TAB[4].base_size (dir_internal.h), so the table
+ * itself is what has to exist here (bead source-wk2f). */
+dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];
 uint32_t DAT_00e4b33c;   /* 0x00E4B33C is a longword (dir_internal.h) */
 uid_t    ACL_$DIRIN_ACL = { 0x00000603u, 0x00000000u };  /* 0xE1745C */
 status_$t Naming_bad_request_header_ver_err;

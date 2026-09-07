@@ -67,7 +67,11 @@ void BAT_$ALLOCATE(int16_t vol_idx, uint32_t hint, uint32_t count,
     /* Check if enough blocks available */
     if (use_reserved == 0) {
         /* Using free pool */
-        int8_t vol_flag = (int8_t)((bat_$volume_flags[vol_idx] >> 24) & 0xFF);
+        /*
+         * 0x00E3B140 `move.b (0xd3f,A0),D3b` / 0x00E3B14A `tst.b (0xd3f,A0)`
+         * read the flag as a single byte; only its sign is used.
+         */
+        int8_t vol_flag = bat_$volume_flags[vol_idx];
         if (vol_flag >= 0) {
             /* Old format: need alloc_count + 0xB blocks */
             if ((int32_t)alloc_count > (int32_t)(vol->free_blocks - 0xB)) {

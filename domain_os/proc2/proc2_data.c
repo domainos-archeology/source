@@ -47,3 +47,9 @@ int16_t proc2_boot_flags;
 
 /* Per-process fork / creation record eventcounts (0xE2B978, PROC2_$EC) */
 proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
+
+/*
+ * PTR_PROC2_$DATA - the literal pointer cell at 0x00E3238C, holding
+ * PROC2_$DATA's base (0x00EA551C).  See proc2/proc2.h.
+ */
+void *PTR_PROC2_$DATA = (void *)PROC2_$DATA_ADDR;

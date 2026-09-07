@@ -157,11 +157,27 @@ void NET_IO_$INIT(void);
  *
  * Passed (by address) to NET_IO_$CREATE_PORT by ROUTE_$SERVICE: the NIL
  * driver for port type 1 (local network ports) and the USER driver for
- * user routing ports.  Layout not yet decoded.
+ * user routing ports.
+ *
+ * The SAU2 map has `D E244F0 NET_IO size = AC` holding, in order,
+ * NET_IO_$ALL_F_ADDR (0xE244F0), NET_IO_$NIL_DRIVER (0xE244F4),
+ * NET_IO_$USER_DRIVER (0xE24544) and RING_$OVERFLOW_OVERFLOW (0xE24594), so
+ * each driver block is exactly 0x50 bytes.
+ *
+ * TODO(source-wk2f, 0x00E244F4): the interior layout is still undecoded, so
+ * both blocks are emitted as their raw image bytes.  What is known is that
+ * three of the longwords are code addresses (SAU2 map names in brackets):
+ *   NIL  + 0x20 = 0x00E74EC8 [NET_IO_$CLEANUP_NIL]
+ *   USER + 0x08 = 0x00E87C34 [ROUTE_$SEND_USER_PORT]
+ *   USER + 0x0C = 0x00E6A65E [ROUTE_$READ_USER_STATS]
+ *   USER + 0x20 = 0x00E74F1E [NET_IO_$CLEANUP_USER]
+ * Once the record type is recovered these should become real function
+ * pointers instead of embedded constants.
  *
  * Original addresses: 0xE244F4 (NIL), 0xE24544 (USER)
  */
-extern uint8_t NET_IO_$NIL_DRIVER[];
-extern uint8_t NET_IO_$USER_DRIVER[];
+#define NET_IO_DRIVER_SIZE 0x50
+extern uint8_t NET_IO_$NIL_DRIVER[NET_IO_DRIVER_SIZE];
+extern uint8_t NET_IO_$USER_DRIVER[NET_IO_DRIVER_SIZE];
 
 #endif /* NET_IO_H */

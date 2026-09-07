@@ -78,3 +78,32 @@ uint32_t DAT_00e2ddd4 = 0x0000001F;
  * Original address: 0xe2ddd8
  */
 uint32_t DAT_00e2ddd8 = 0x0000003C;
+
+/*
+ * ============================================================================
+ * TTY module block at 0x00E8242C
+ * ============================================================================
+ *
+ * The map segment is "D E8242C TTY size = 2C" (0x00E8242C..0x00E82458) and it
+ * exports no interior symbol; six `lea (0xe8242c).l,A5` loads in tty/ make it
+ * the module's A5 base.  Its first 0x24 bytes are the 18 default function
+ * character classes (words 0007 0009 0008 000C 000B 0010 000F 000E 0001 0000
+ * 0002 0003 0004 0005 0006 000D 000A 0000); the two longwords below finish it.
+ *
+ * TODO(source-wk2f, 0x00E8242C): the 18-word class table has no tree symbol
+ * yet, so the block is not modelled as one record.
+ */
+
+/*
+ * tty_$i_dfl_func_enable_mask - A5+0x24 = 0x00E82450.
+ * Image longword: 0x0001FFFF (all 17 function characters enabled).
+ */
+uint32_t tty_$i_dfl_func_enable_mask = 0x0001FFFF;
+
+/*
+ * DAT_00e82454 - A5+0x28 = 0x00E82454.
+ * Image longword: 0x000000D0, the mask TTY_$K_SET_INPUT_BREAK_MODE enables
+ * or disables when it switches between raw and line mode.
+ */
+uint32_t DAT_00e82454 = 0x000000D0;
+

@@ -291,58 +291,92 @@ typedef struct dir_insert_ctx {
  * These tables contain operation-specific parameters indexed by operation type.
  * Located at 0xE7FC42 on M68K.
  */
-/* DIR_$OP_TAB is the Ghidra label at 0xE7FC42.  DIR_$SERVER indexes the
- * table with an 8-byte stride and a -0xA8 bias
- * (`movea.l #0xe7fc42,A1` / `lsl.l #0x3,D1` / `move.w (-0xa8,A0),D1w`
- * at 0x00E5824A..0x00E58258), so the real table base is 0xE7FB9A; the
- * cells below are the individual words the DIR request builders read. */
-extern uint16_t DIR_$OP_TAB;    /* word at 0xE7FC42 */
-extern uint16_t DAT_00e7fc4a;   /* ADD_HARD_LINKU params */
-extern uint16_t DAT_00e7fc4e;
-extern uint16_t DAT_00e7fc52;   /* DROP_HARD_LINKU params */
-extern uint16_t DAT_00e7fc56;
-extern uint16_t DAT_00e7fc62;   /* CNAMEU params */
-extern uint16_t DAT_00e7fc66;
-extern uint16_t DAT_00e7fc6a;   /* ADD_BAKU params */
-extern uint16_t DAT_00e7fc6e;
-extern uint16_t DAT_00e7fc72;   /* DELETE_FILEU params */
-extern uint16_t DAT_00e7fc76;
-extern uint16_t DAT_00e7fc7a;   /* CREATE_DIRU params */
-extern uint16_t DAT_00e7fc7e;
-extern uint16_t DAT_00e7fc82;   /* DROP_DIRU params */
-extern uint16_t DAT_00e7fc86;
-extern uint16_t DAT_00e7fc8a;   /* ADD_LINKU params */
-extern uint16_t DAT_00e7fc8e;
-extern uint16_t DAT_00e7fc92;   /* READ_LINKU params */
-extern uint16_t DAT_00e7fc96;
-extern uint16_t DAT_00e7fc9a;   /* DROP_LINKU params */
-extern uint16_t DAT_00e7fc9e;
+/*
+ * DIR_$OP_TAB - the client-side per-operation table at 0x00E7FC42 (the SAU2
+ * map names the symbol).  Records are 8 bytes; the DIR_$<op>U wrappers read
+ * two of the four words in their record:
+ *   +0x00  the request header version word they store in request.reserved
+ *   +0x04  the fixed part of the request size they add the name length to
+ * The Ghidra labels below are the addresses of those two words, so each pair
+ * (X, X+4) is one record and the records run 0x00E7FC42, 0x4A, 0x52, ... at a
+ * uniform 8-byte stride (bead source-wk2f).
+ *
+ * DIR_$SERVER indexes the same family of records with an 8-byte stride and a
+ * -0xA8 bias off 0x00E7FC42 (`movea.l #0xe7fc42,A1` / `lsl.l #0x3,D1` /
+ * `move.w (-0xa8,A0),D1w` at 0x00E5824A..0x00E58258), which puts the family's
+ * first record at 0x00E7FB9A and makes DIR_$OP_TAB record 21 of it; DIR_$DO_OP
+ * reaches its own fields at A5+0x1F9C and A5+0x1FA0 with A5 = 0x00E7DC00
+ * (`lea (0xe7dc00).l,A5` at 0x00E4C030), i.e. 0x00E7FB9C and 0x00E7FBA0.
+ *
+ * TODO(source-wk2f, 0x00E7FB9A): DIR_$OP_PARAMS below is modelled as a
+ * separate object covering 0x00E7FB9C..0x00E7FC00 because the two bases differ
+ * by two bytes; if they are one table the whole 0x00E7FB9A..0x00E7FD12 run
+ * should collapse into a single array of dir_$op_tab_entry_t.
+ */
+typedef struct dir_$op_tab_entry_t {
+  uint16_t version;    /* +0x00 request header version */
+  uint16_t w_02;       /* +0x02 */
+  uint16_t base_size;  /* +0x04 fixed part of the request size */
+  uint16_t w_06;       /* +0x06 */
+} dir_$op_tab_entry_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(dir_$op_tab_entry_t) == 8, "dir_$op_tab_entry_t");
+#endif
+
+#define DIR_$OP_TAB_ENTRIES 26
+extern dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];
+
+/* The two words of each record, by the address Ghidra labels them with. */
+#define DAT_00e7fc4a     (DIR_$OP_TAB[ 1].version)  /* 0x00E7FC4A */
+#define DAT_00e7fc4e     (DIR_$OP_TAB[ 1].base_size)  /* 0x00E7FC4E */
+#define DAT_00e7fc52     (DIR_$OP_TAB[ 2].version)  /* 0x00E7FC52 */
+#define DAT_00e7fc56     (DIR_$OP_TAB[ 2].base_size)  /* 0x00E7FC56 */
+#define DAT_00e7fc62     (DIR_$OP_TAB[ 4].version)  /* 0x00E7FC62 */
+#define DAT_00e7fc66     (DIR_$OP_TAB[ 4].base_size)  /* 0x00E7FC66 */
+#define DAT_00e7fc6a     (DIR_$OP_TAB[ 5].version)  /* 0x00E7FC6A */
+#define DAT_00e7fc6e     (DIR_$OP_TAB[ 5].base_size)  /* 0x00E7FC6E */
+#define DAT_00e7fc72     (DIR_$OP_TAB[ 6].version)  /* 0x00E7FC72 */
+#define DAT_00e7fc76     (DIR_$OP_TAB[ 6].base_size)  /* 0x00E7FC76 */
+#define DAT_00e7fc7a     (DIR_$OP_TAB[ 7].version)  /* 0x00E7FC7A */
+#define DAT_00e7fc7e     (DIR_$OP_TAB[ 7].base_size)  /* 0x00E7FC7E */
+#define DAT_00e7fc82     (DIR_$OP_TAB[ 8].version)  /* 0x00E7FC82 */
+#define DAT_00e7fc86     (DIR_$OP_TAB[ 8].base_size)  /* 0x00E7FC86 */
+#define DAT_00e7fc8a     (DIR_$OP_TAB[ 9].version)  /* 0x00E7FC8A */
+#define DAT_00e7fc8e     (DIR_$OP_TAB[ 9].base_size)  /* 0x00E7FC8E */
+#define DAT_00e7fc92     (DIR_$OP_TAB[10].version)  /* 0x00E7FC92 */
+#define DAT_00e7fc96     (DIR_$OP_TAB[10].base_size)  /* 0x00E7FC96 */
+#define DAT_00e7fc9a     (DIR_$OP_TAB[11].version)  /* 0x00E7FC9A */
+#define DAT_00e7fc9e     (DIR_$OP_TAB[11].base_size)  /* 0x00E7FC9E */
+
+/* 0x00E7FC42 is DIR_$OP_TAB itself, record 0's version word. */
+#define DAT_00e7fc42     (DIR_$OP_TAB[ 0].version)   /* 0x00E7FC42 */
 /* GET_ENTRYU (op 0x44) params.  Same record+0 / record+4 pair as the DAT_
  * cells above, but reached through A5 = 0xE7DC00 rather than by absolute
  * address: DIR_$GET_ENTRYU_FUN_00e4d460 reads (0x20aa,A5) at 0x00E4D4A6 and
  * (0x20ae,A5) at 0x00E4D4B8.  Named for what they are used for. */
 extern uint16_t DIR_$GET_ENTRYU_REQ_PARM;  /* word at 0xE7FCAA -> request+0x0E */
 extern uint16_t DIR_$GET_ENTRYU_REQ_LEN;   /* word at 0xE7FCAE, added to name_len */
-extern uint16_t DAT_00e7fcba;   /* FIX_DIR params */
-extern uint16_t DAT_00e7fcbe;
-extern uint16_t DAT_00e7fcca;   /* SET_DEFAULT_ACL params */
-extern uint16_t DAT_00e7fcce;
-extern uint16_t DAT_00e7fcd2;   /* GET_DEFAULT_ACL params */
-extern uint16_t DAT_00e7fcd6;
-extern uint16_t DAT_00e7fcda;   /* VALIDATE_ROOT_ENTRY params */
-extern uint16_t DAT_00e7fcde;
-extern uint16_t DAT_00e7fce2;   /* SET_PROTECTION params */
-extern uint16_t DAT_00e7fce6;
-extern uint16_t DAT_00e7fcea;   /* SET_DEF_PROTECTION params */
-extern uint16_t DAT_00e7fcee;
-extern uint16_t DAT_00e7fcf2;   /* GET_DEF_PROTECTION params */
-extern uint16_t DAT_00e7fcf6;
-extern uint16_t DAT_00e7fcfa;   /* RESOLVE params */
-extern uint16_t DAT_00e7fcfe;
-extern uint16_t DAT_00e7fd02;   /* ADD_MOUNT params - my_host_id word */
-extern uint16_t DAT_00e7fd06;   /* ADD_MOUNT request size */
-extern uint16_t DAT_00e7fd0a;   /* DROP_MOUNT params - my_host_id word */
-extern uint16_t DAT_00e7fd0e;   /* DROP_MOUNT request size */
+#define DAT_00e7fcba     (DIR_$OP_TAB[15].version)   /* FIX_DIR params */  /* 0x00E7FCBA */
+#define DAT_00e7fcbe     (DIR_$OP_TAB[15].base_size)  /* 0x00E7FCBE */
+#define DAT_00e7fcca     (DIR_$OP_TAB[17].version)   /* SET_DEFAULT_ACL params */  /* 0x00E7FCCA */
+#define DAT_00e7fcce     (DIR_$OP_TAB[17].base_size)  /* 0x00E7FCCE */
+#define DAT_00e7fcd2     (DIR_$OP_TAB[18].version)   /* GET_DEFAULT_ACL params */  /* 0x00E7FCD2 */
+#define DAT_00e7fcd6     (DIR_$OP_TAB[18].base_size)  /* 0x00E7FCD6 */
+#define DAT_00e7fcda     (DIR_$OP_TAB[19].version)   /* VALIDATE_ROOT_ENTRY params */  /* 0x00E7FCDA */
+#define DAT_00e7fcde     (DIR_$OP_TAB[19].base_size)  /* 0x00E7FCDE */
+#define DAT_00e7fce2     (DIR_$OP_TAB[20].version)   /* SET_PROTECTION params */  /* 0x00E7FCE2 */
+#define DAT_00e7fce6     (DIR_$OP_TAB[20].base_size)  /* 0x00E7FCE6 */
+#define DAT_00e7fcea     (DIR_$OP_TAB[21].version)   /* SET_DEF_PROTECTION params */  /* 0x00E7FCEA */
+#define DAT_00e7fcee     (DIR_$OP_TAB[21].base_size)  /* 0x00E7FCEE */
+#define DAT_00e7fcf2     (DIR_$OP_TAB[22].version)   /* GET_DEF_PROTECTION params */  /* 0x00E7FCF2 */
+#define DAT_00e7fcf6     (DIR_$OP_TAB[22].base_size)  /* 0x00E7FCF6 */
+#define DAT_00e7fcfa     (DIR_$OP_TAB[23].version)   /* RESOLVE params */  /* 0x00E7FCFA */
+#define DAT_00e7fcfe     (DIR_$OP_TAB[23].base_size)  /* 0x00E7FCFE */
+#define DAT_00e7fd02     (DIR_$OP_TAB[24].version)   /* ADD_MOUNT params - my_host_id word */  /* 0x00E7FD02 */
+#define DAT_00e7fd06     (DIR_$OP_TAB[24].base_size)   /* ADD_MOUNT request size */  /* 0x00E7FD06 */
+#define DAT_00e7fd0a     (DIR_$OP_TAB[25].version)   /* DROP_MOUNT params - my_host_id word */  /* 0x00E7FD0A */
+#define DAT_00e7fd0e     (DIR_$OP_TAB[25].base_size)   /* DROP_MOUNT request size */  /* 0x00E7FD0E */
 
 /*
  * ============================================================================
@@ -1048,8 +1082,8 @@ void dir_$old_read_entries(uid_t *uid, void *param_2, uint32_t param_3,
  */
 
 /* Directory operation parameter tables for SET_ACL */
-extern uint16_t DAT_00e7fcc2;   /* SET_ACL type field */
-extern uint16_t DAT_00e7fcc6;   /* SET_ACL request size */
+#define DAT_00e7fcc2     (DIR_$OP_TAB[16].version)   /* SET_ACL type field */  /* 0x00E7FCC2 */
+#define DAT_00e7fcc6     (DIR_$OP_TAB[16].base_size)   /* SET_ACL request size */  /* 0x00E7FCC6 */
 
 /* Directory handle slot data base address: 0xE7DC00 */
 extern uint32_t DAT_00e7fc3c;   /* Active slots bitmap */
@@ -1059,7 +1093,8 @@ extern uint32_t DAT_00e7fbf4;   /* Counter/flag */
 extern uint32_t DAT_00e7f4b0;   /* Counter/flag */
 extern void    *DAT_00e7fc30;   /* Free list head (handle entries) */
 extern void    *DAT_00e7fc38;   /* Free list head (request buffers) */
-extern uint8_t  DAT_00e7f280;   /* Start of handle entry pool */
+extern uint8_t  DAT_00e7f280[]; /* Start of handle entry pool, 0x30 bytes per
+                                 * entry, 0x00E7F280..0x00E7F470 */
 extern uint8_t  DAT_00e7f4bc;   /* Start of request buffer pool */
 extern uint16_t DAT_00e7fc40;   /* Link buffer mutex owner */
 
@@ -1077,7 +1112,8 @@ extern ec_$eventcount_t DIR_$WT_FOR_HDNL_EC;/* Wait-for-handle event counter */
  *   +0x04  reply body size   (0x00E4C254, added to the 0x14-byte header)
  * Spelled as a word array so the two displacements stay visible.
  */
-extern uint16_t DIR_$OP_PARAMS[];
+#define DIR_$OP_PARAMS_WORDS 0x32          /* 0x00E7FB9C..0x00E7FC00 */
+extern uint16_t DIR_$OP_PARAMS[DIR_$OP_PARAMS_WORDS];
 #define DIR_OP_PARAM_WORDS      4                   /* 8 bytes per record */
 #define DIR_$OP_VERSION(half)   DIR_$OP_PARAMS[(half) * DIR_OP_PARAM_WORDS + 0]
 #define DIR_$OP_REPLY_SIZE(half) DIR_$OP_PARAMS[(half) * DIR_OP_PARAM_WORDS + 2]
@@ -1374,11 +1410,13 @@ extern uint16_t DAT_00e5716a;
  * ============================================================================
  */
 
-/* DIR_$NAME_OFFSET_TABLE - Name offset by entry type (indexed by type & 7)
- * Located at A5+0x2000 on M68K. Gives the byte offset from entry start
- * to the name field for each directory entry type.
+/* DIR_$NAME_OFFSET_TABLE - Name offset by entry type (indexed by type & 7).
+ * 0x00E7FC00 = A5+0x2000 with A5 = 0x00E7DC00; the next map symbol,
+ * DIR_$ENTRY_CACHE_TOO_LONG_NAME, is at 0x00E7FC10, so the table is exactly
+ * the eight words the `& 7` index reaches.  Gives the byte offset from the
+ * entry start to its name field for each directory entry type.
  */
-extern int16_t DIR_$NAME_OFFSET_TABLE[];
+extern int16_t DIR_$NAME_OFFSET_TABLE[8];
 
 /* DIR_$CLEANUP is declared in dir/dir.h (also used by NAME_$CLEANUP) */
 
@@ -1591,7 +1629,9 @@ extern int16_t  DAT_00e4dffa;   /* 0xE4DFFA: word 0x0090 - FILE_$GET_ATTRIBUTES 
                                  * (`cmpi.w #0x90,(A0)` at 0x00E5D9F6) */
 extern uint8_t  DAT_00e4dffc;   /* 0xE4DFFC: NUL byte used as the 1-char name "\0" */
 extern uint8_t  PTR_DAT_00e4cd84; /* 0xE4CD84: case-folding character bitmap (07 ff ff fe ...) */
-extern uint8_t  DAT_00e4b448;   /* 0xE4B448: 0x00008000 - MST_$REMAP_PRIVI length parameter */
+extern uint32_t DAT_00e4b448;   /* 0xE4B448: longword 0x00008000 - MST_$REMAP_PRIVI
+                                 * length parameter.  It is read as a longword,
+                                 * so the cell is four bytes (bead source-wk2f). */
 extern const int32_t DAT_00e52040; /* 0xE52040: 0x00000400 - one page; FILE_$FW_PARTIAL byte
                                       count / FILE_$TRUNCATE length (defined in dir_data.c) */
 

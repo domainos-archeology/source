@@ -17,8 +17,21 @@
 /* PROM warm restart entry point - used for clean shutdown */
 extern void *PROM_$QUIET_RET_ADDR;
 
-/* PROM data */
+/*
+ * PROM_$MACHINE_ID - machine identification longword the boot PROM leaves in
+ * the trap page.
+ *
+ * The SAU2 map names 0x00000100 PROM_$MACHINE_ID, inside the "D37 0 TRAP_PAGE
+ * loaded at 0, size = 400" segment; the loaded image carries no bytes for it
+ * (the PROM writes it), so on the m68k it is an absolute-address cell rather
+ * than an object the kernel defines.  GET_BUILD_TIME reads only its high word
+ * (`move.w (0x00000100).l,D2w` at 0x00E380D6), the SAU-and-aux code.
+ */
+#if defined(ARCH_M68K)
+#define PROM_$MACHINE_ID (*(const volatile uint32_t *)0x00000100)
+#else
 extern uint32_t PROM_$MACHINE_ID;
+#endif
 
 /*
  * io_$probe - Hardware probe function

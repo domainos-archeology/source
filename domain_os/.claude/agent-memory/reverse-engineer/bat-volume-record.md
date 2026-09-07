@@ -1,6 +1,6 @@
 ---
 name: bat-volume-record
-description: The recovered 0x234-byte bat_$volume_t, its biased 1-based addressing, and the 0x83-longword label copy
+description: The 0x234-byte bat_$volume_t, the 0xE7A1B0 scalar cells, the biased 1-based addressing, and the 0x83-longword label copy
 metadata:
   type: project
 ---
@@ -37,10 +37,35 @@ Entry+4 is one longword: high byte = status (1 = VTOCE chain, 2 = free VTOCE
 slots), low 24 bits = VTOCE block (`and.l #0xffffff` / `andi.l #-0x1000000` in
 BAT_$ADD_PART_VTOCE at 0x00E3AE94/0x00E3AE98).
 
-Still wrong in the tree (not yet filed): `bat_$volume_flags[7]` in
-bat/bat_data.c models the new-format flag as a uint32 array whose byte 3 is
-the flag, but the real cell is a byte array at 0xE7A1B7 — the uint32 model
-aliases bat_$cached_block at 0xE7A1B4.  Likewise `bat_$disk_info` is addressed
-with the same 0x48 bias (its `offset` field is at +0x08, not +0x40).
+The scalars after the six records fill 0xE7A1B0..0xE7A1CB exactly (recovered
+from the (disp,A5) accessors, A5 = 0xE79478):
+
+  0xE7A1B0 (0xd38) long   bat_$cached_buffer   (move.l A0 / clr.l / movea.l)
+  0xE7A1B4 (0xd3c) long   bat_$cached_block    (cmp.l, move.l D5)
+  0xE7A1B7 (0xd3f) BYTE[] bat_$volume_flags, biased; live [1..6] = B8..BD
+  0xE7A1BE         2 bytes never referenced (alignment)
+  0xE7A1BF (0xd47) BYTE[] bat_$mounted, biased; live [1..6] = C0..C5
+  0xE7A1C6 (0xd4e) word   bat_$cached_dirty    (8 = clean, 9 = writeback)
+  0xE7A1C8 (0xd50) word   bat_$cached_vol
+  0xE7A1CA         2 bytes never referenced (segment tail)
+
+Both byte arrays are addressed `lea (0x0,A5,Dnw*0x1),An` + a byte-wide
+instruction, so their stride is 1 and their phantom element 0 overlaps the
+last byte of the preceding cell -- bat_$volume_flags[0] IS the low byte of
+bat_$cached_block.  Modelling either as a uint32 array is the bug closed by
+source-uu78.  BAT_$MOUNT stores `sne` of the label version word
+(0x00E3B762/0x00E3B764), so a flag entry is 0 or -1 and every reader tests
+only its sign.
+
+BAT_$MOUNT's chunk geometry (0x00E3B820-0x00E3B874) reads DISK_$DVTBL, not a
+BAT-owned array: A2 = 0xE7A290 + vol*0x48 and the fields sit at NEGATIVE
+displacements, i.e. record v starts at 0xE7A248 + v*0x48 = DISK_VOL(v) from
+disk/disk_internal.h.  Fields used: +0x08 lv_start (-0x40, NOT +0x40),
++0x24 blocks_per_cyl (-0x24), +0x2C num_parts (-0x1c) and +0x36 part_volx[0]
+interleave mode (-0x12).  alloc_chunk_size = blocks_per_cyl, scaled by
+M$MIU$LLW(blocks_per_cyl, num_parts) only when interleave mode == 1; then
+alloc_chunk_offset = size - ((first_data_block + lv_start) mod size).
+bat/bat_internal.h keeps a duplicate view named bat_$disk_info_t; folding it
+into disk_$volume_t is bead source-9ddf.
 
 See [[recovered-layout-fixes]].

@@ -57,36 +57,119 @@ _Static_assert(__builtin_offsetof(flp_regs_t, control) == 0x14, "flp_regs_t.cont
 #define FLP_STATUS_CMD_MASK 0x1F /* Command status mask */
 
 /*
- * Global data area at 0xe7aef4 (FLP_$DATA)
- * Layout based on analysis of code:
- *   +0x60:  FLP_$EC (event counter)
- *   +0x70:  FLP_$SREGS (status registers array)
- *   +0x78:  Unit status array (2 bytes per unit)
- *   +0x80:  I/O buffer area
- *   +0xe8:  Controller table (8 bytes per controller)
- *   +0xfc:  DAT_00e7aff0 (physical address)
- *   +0x108: DAT_00e7affc
- *   +0x114: DAT_00e7b008
- *   +0x116: DAT_00e7b00a (unit number)
- *   +0x120: DAT_00e7b014 (unit active flags)
- *   +0x124: DAT_00e7b018 (disk change flags)
- *   +0x12c: DAT_00e7b020 (controller address)
- *   +0x132: DAT_00e7b026
- *   +0x136: DAT_00e7b02a
- *   +0x138: DAT_00e7b02c (initialized flag)
+ * ============================================================================
+ * FLP_DATA - the floppy module's data block at 0x00E7AEF4
+ * ============================================================================
+ *
+ * The SAU2 map has `D E7AEF4 FLP_ size = 13C`, running 0x00E7AEF4..0x00E7B030
+ * (the OS_CAL_WIRED segment starts there).  Every FLP_ routine establishes it
+ * with `lea (0xe7aef4).l,A5`, so all the cells the driver touches are fields
+ * of this one block rather than separate objects; the names below that start
+ * with DAT_ are the Ghidra labels for fields whose purpose is only partly
+ * recovered (bead source-wk2f).
+ *
+ * The two interior symbols the map names are FLP_$EC (+0x60) and FLP_$SREGS
+ * (+0x70).  The image contents come from `gsk read 0x00E7AEF4 0x13C`; the
+ * command blocks in it are recognisable NEC 8272 FDC command strings, which
+ * is what pins their extents:
+ *
+ *   +0x02C  4D 00 03 08 74 4E              FORMAT TRACK, 6 words
+ *                                          (the count cell at 0x00E3DDC4)
+ *   +0x04A  00 00 00 00 00 03 08 35 FF     READ/WRITE DATA, 9 words
+ *                                          (the count cell at 0x00E3DFE0)
+ *   +0x108  03 DF 3C                       SPECIFY, 3 words
+ *                                          (the count cell at 0x00E3DDC2)
+ *   +0x110  04 00                          SENSE DRIVE STATUS, 2 words
+ *   +0x114  07 00                          RECALIBRATE, 2 words
+ *                                          (the count cell at 0x00E3E21C)
+ *   +0x118  0F 00 00                       SEEK, 3 words
  */
+typedef struct flp_data_t {
+  /* +0x000 FLP_$JUMP_TABLE: the driver entry points DISK_$REGISTER is given */
+  m68k_ptr_t jump_table[7];
+  /* +0x01C FLP_$SREGS_ARRAY */
+  uint16_t sregs_array[8];
+  /* +0x02C FORMAT TRACK command block: cmd, unit/head, N, SC, GPL, D */
+  uint16_t fmt_cmd[6];
+  /* +0x038 result-register array FLP_$INT fills from the FDC
+   * (flp/int.c: `(uint8_t *)&FLP_$JUMP_TABLE + 0x38`) */
+  uint16_t result_regs[9];
+  /* +0x04A READ/WRITE DATA command block: cmd, unit/head, cyl, head, sector,
+   * N, EOT, GPL, DTL.  The first three words are also the SEEK command. */
+  uint16_t rw_cmd[9];
+  uint16_t w_05c[2];              /* +0x05C */
+  ec_$eventcount_t ec;            /* +0x060 FLP_$EC */
+  uint16_t w_06c[2];              /* +0x06C */
+  uint16_t sregs[4];              /* +0x070 FLP_$SREGS (ST0..ST3 result words) */
+  uint8_t unit_cyl[8];            /* +0x078 current cylinder, 2 bytes per unit */
+  uint8_t io_buffer[0x68];        /* +0x080 FLP_IO_BUFFER */
+  uint8_t ctlr_table[0x14];       /* +0x0E8 8 bytes per controller: info ptr
+                                   * at +0, hardware address at +4 */
+  uint32_t fmt_buf_pa;            /* +0x0FC physical address of io_buffer */
+  uint16_t w_100;                 /* +0x100 */
+  uint16_t fmt_n;                 /* +0x102 sector-size code N; the driver
+                                   * writes only its low byte into the format
+                                   * buffer */
+  uint16_t w_104;                 /* +0x104 */
+  uint16_t base_cmd;              /* +0x106 MFM base command byte (0x40) */
+  uint16_t specify_cmd[4];        /* +0x108 SPECIFY command block */
+  uint16_t sense_cmd[2];          /* +0x110 SENSE DRIVE STATUS: cmd, unit/head */
+  uint16_t recal_cmd[2];          /* +0x114 RECALIBRATE: cmd, unit */
+  uint16_t seek_cmd[4];           /* +0x118 SEEK: cmd, unit/head, cylinder */
+  uint8_t unit_active[FLP_MAX_UNITS];  /* +0x120 */
+  uint8_t disk_change[FLP_MAX_UNITS];  /* +0x124 */
+  uint32_t buf_pa;                /* +0x128 physical address of the I/O buffer */
+  int32_t hw_addr;                /* +0x12C controller register base */
+  int16_t dma_retry;              /* +0x130 */
+  uint16_t cmd_retry;             /* +0x132 */
+  uint16_t w_134;                 /* +0x134 */
+  uint16_t unit_count;            /* +0x136 DISK_$REGISTER's unit-count word */
+  int8_t initialized;             /* +0x138 -1 once FLP_$DINIT has run */
+  uint8_t pad_139[3];             /* +0x139 */
+} flp_data_t;
 
-/* Event counter for floppy operations (FLP_$DATA + 0x60 = 0xe7af54) */
-extern ec_$eventcount_t FLP_$EC;
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(flp_data_t, sregs_array) == 0x01C, "flp_data_t.sregs_array");
+_Static_assert(__builtin_offsetof(flp_data_t, fmt_cmd) == 0x02C, "flp_data_t.fmt_cmd");
+_Static_assert(__builtin_offsetof(flp_data_t, result_regs) == 0x038, "flp_data_t.result_regs");
+_Static_assert(__builtin_offsetof(flp_data_t, rw_cmd) == 0x04A, "flp_data_t.rw_cmd");
+_Static_assert(__builtin_offsetof(flp_data_t, ec) == 0x060, "flp_data_t.ec");
+_Static_assert(__builtin_offsetof(flp_data_t, sregs) == 0x070, "flp_data_t.sregs");
+_Static_assert(__builtin_offsetof(flp_data_t, unit_cyl) == 0x078, "flp_data_t.unit_cyl");
+_Static_assert(__builtin_offsetof(flp_data_t, io_buffer) == 0x080, "flp_data_t.io_buffer");
+_Static_assert(__builtin_offsetof(flp_data_t, ctlr_table) == 0x0E8, "flp_data_t.ctlr_table");
+_Static_assert(__builtin_offsetof(flp_data_t, fmt_buf_pa) == 0x0FC, "flp_data_t.fmt_buf_pa");
+_Static_assert(__builtin_offsetof(flp_data_t, fmt_n) == 0x102, "flp_data_t.fmt_n");
+_Static_assert(__builtin_offsetof(flp_data_t, base_cmd) == 0x106, "flp_data_t.base_cmd");
+_Static_assert(__builtin_offsetof(flp_data_t, specify_cmd) == 0x108, "flp_data_t.specify_cmd");
+_Static_assert(__builtin_offsetof(flp_data_t, sense_cmd) == 0x110, "flp_data_t.sense_cmd");
+_Static_assert(__builtin_offsetof(flp_data_t, recal_cmd) == 0x114, "flp_data_t.recal_cmd");
+_Static_assert(__builtin_offsetof(flp_data_t, seek_cmd) == 0x118, "flp_data_t.seek_cmd");
+_Static_assert(__builtin_offsetof(flp_data_t, unit_active) == 0x120, "flp_data_t.unit_active");
+_Static_assert(__builtin_offsetof(flp_data_t, disk_change) == 0x124, "flp_data_t.disk_change");
+_Static_assert(__builtin_offsetof(flp_data_t, buf_pa) == 0x128, "flp_data_t.buf_pa");
+_Static_assert(__builtin_offsetof(flp_data_t, hw_addr) == 0x12C, "flp_data_t.hw_addr");
+_Static_assert(__builtin_offsetof(flp_data_t, dma_retry) == 0x130, "flp_data_t.dma_retry");
+_Static_assert(__builtin_offsetof(flp_data_t, cmd_retry) == 0x132, "flp_data_t.cmd_retry");
+_Static_assert(__builtin_offsetof(flp_data_t, unit_count) == 0x136, "flp_data_t.unit_count");
+_Static_assert(__builtin_offsetof(flp_data_t, initialized) == 0x138, "flp_data_t.initialized");
+_Static_assert(sizeof(flp_data_t) == 0x13C,
+               "flp_data_t: map segment FLP_ 0x00E7AEF4 size = 13C");
+#endif
 
-/* Saved registers from interrupt */
-extern uint16_t FLP_$SREGS;
+extern flp_data_t FLP_DATA;
 
-/* Jump table for floppy operations */
-extern void *FLP_$JUMP_TABLE;
+/* Event counter for floppy operations (FLP_DATA + 0x60 = 0xe7af54) */
+#define FLP_$EC (FLP_DATA.ec)
 
-/* Current controller address */
-extern int32_t DAT_00e7b020;
+/* FDC result status registers (FLP_DATA + 0x70 = 0xe7af64) */
+#define FLP_$SREGS (FLP_DATA.sregs[0])
+
+/* Jump table for floppy operations (FLP_DATA + 0x00 = 0xe7aef4) */
+#define FLP_$JUMP_TABLE (FLP_DATA.jump_table[0])
+
+/* Current controller address (FLP_DATA + 0x12c = 0xe7b020) */
+#define DAT_00e7b020 (FLP_DATA.hw_addr)
 
 /*
  * Function prototypes

@@ -198,8 +198,18 @@ extern disk_$per_proc_t DISK_$PER_PROC[DISK_PER_PROC_ENTRIES];
  * Global data areas
  */
 
-/* Disk subsystem base at 0xe7a1cc */
-extern uint8_t DISK_$DATA[];
+/*
+ * Disk subsystem module data block at 0xe7a1cc.
+ *
+ * The SAU2 map has `D E7A1CC DISK_ size = B90`, running up to the next
+ * segment (`D E7AD5C DISK_ size = 198`, the device table DISK_$DEVICES).  The
+ * interior symbols the map names - DISK_$DVTBL (+0xc4), DISK_BPTBL (+0x394),
+ * DISK_$ERROR_INFO (+0xa94), DISK_$RAW_PPN (+0xaec), DISK_$NFBLKS (+0xaf8),
+ * DISK_$DIAG (+0xafe) and DISK_$DO_CHKSUM (+0xb00) - are separate objects in
+ * this tree; DISK_$DATA is the block the A5-displacement code addresses.
+ */
+#define DISK_$DATA_SIZE 0xB90
+extern uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
 /* Device registration table at 0xe7ad5c (32 entries, 12 bytes each) */
 extern disk_device_entry_t DISK_$DEVICES[];

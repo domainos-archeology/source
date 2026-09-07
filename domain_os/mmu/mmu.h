@@ -124,6 +124,12 @@ _Static_assert(sizeof(mmu_globals_t) == 0x0A, "mmu_globals_t must be 10 bytes");
 /* MMU control registers */
 #define MMU_CSR (*(volatile uint16_t *)0xFFB400)       /* PID/Priv/Power */
 #define MMU_POWER_REG (*(volatile uint16_t *)0xFFB402) /* Power control */
+/*
+ * The first (most significant) byte of MMU_POWER_REG on its own.
+ * MMU_$INSTALL_ASID restores it with a byte store, not a word read-modify-
+ * write: `move.b (0x00e218d5).l,(0x00ffb402).l` (0x00E2421C).
+ */
+#define MMU_POWER_REG_BYTE (*(volatile uint8_t *)0xFFB402)
 #define MMU_STATUS_REG (*(volatile uint8_t *)0xFFB403) /* Status */
 #define MMU_MCR_M68010 (*(volatile uint8_t *)0xFFB405) /* MCR for 68010 */
 #define MMU_MCR_MASK (*(volatile uint8_t *)0xFFB407)   /* MCR mask */
@@ -232,6 +238,7 @@ extern uint8_t mmu_mcr_shadow;
 #define ASID_TABLE_BASE mmu_asid_table_base
 #define MMU_CSR (*mmu_csr)
 #define MMU_POWER_REG (*mmu_power_reg)
+#define MMU_POWER_REG_BYTE (*(volatile uint8_t *)mmu_power_reg)
 #define MMU_STATUS_REG (*mmu_status_reg)
 #define MMU_MCR_M68010 (*mmu_mcr_m68010)
 #define MMU_MCR_MASK (*mmu_mcr_mask)

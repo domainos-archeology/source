@@ -46,5 +46,11 @@
 - [Engineering Handbook names every I/O register](reference_engineering_handbook_io_regs.md) — the kernel maps only name page bases; the PDF gives bit diagrams.
 - [SAU2 MMU page 0xFFB400 registers](mmu-io-registers.md) — Apollo's names and bit layouts, and the big-endian byte-vs-word bit trap.
 - [PACCT_$LOG record stores](pacct-log-record-stores.md) — the A6-0x190 frame, the full store list, and MST_$MAPS' byte argument 2.
-- [BAT volume record and the 0x83-longword label copy](bat-volume-record.md) — 0x234 bytes, 1-based biased indexing, 0x40 partitions of 8 bytes at +0x2C.
+- [BAT volume record, scalars and the 0x83-longword label copy](bat-volume-record.md) — 0x234 bytes, 1-based biased indexing, the 0xE7A1B0 byte arrays, DISK_$DVTBL geometry.
 - [SVC dispatcher block 0xE7B044..0xE7B2DD](svc-dispatcher-block.md) — shared stubs, the branch-chain trick, gas CMP-immediate macros, whole-block byte check.
+- [sau2.ld section placement and PC16 overflows](sau2-ld-section-placement.md) - reproduce image code/data adjacency; ld's first-match rule and its 10-overflow print cap.
+- [MST_$MAPS byte arguments and the MST data cells](mst-maps-and-data-cells.md) - how an m68k byte argument is pushed, plus the MST_UNWIRED / MST / ASID-list layouts.
+- [The MMAP_ module block, field by field](mmap-module-block-map.md) — the map pins mmap_globals_t; MMAP_$WSL fields masquerade as separate cells.
+- [Byte pools vs typed arrays](byte-pool-vs-typed-array.md) — an explicit stride constant in the code means the C object must be bytes.
+- [Module-block alias pattern](module-block-alias-pattern.md) — how to define A5 blocks so overlapping DAT_ labels stay one object; no header deps in the Makefile.
+- [DIR/FLP op tables and the KTTs](dir-flp-op-tables.md) — DIR_$OP_TAB's 8-byte records, FLP_DATA's 8272 command strings, MNK_$KTT_PTRS' six tables.
