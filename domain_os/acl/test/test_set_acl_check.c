@@ -202,12 +202,12 @@ static void reset(void)
 
     /* Default: a local object whose ACL is held locally, both attribute
      * fetches succeed, the ACL object is of type 3. */
-    ga_attrs[0].obj_flags[ACL_ATTR_FLAGS]    = ACL_ATTR_FLAG_LOCAL;
-    ga_attrs[0].obj_flags[ACL_ATTR_OBJ_TYPE] = 5;
-    ga_attrs[0].obj_flags[ACL_ATTR_PRESENT]  = 1;
+    ga_attrs[0].obj_flags[ACL_ATTR_FLAGS_LO]    = ACL_ATTR_FLAG_LOCAL;
+    ga_attrs[0].obj_flags[ACL_ATTR_SUB_TYPE] = 5;
+    ga_attrs[0].obj_flags[ACL_ATTR_OBJ_TYPE] = 1;
     ga_attrs[0].default_acl = UID_$NIL;
-    ga_attrs[1].obj_flags[ACL_ATTR_OBJ_TYPE] = 3;
-    ga_attrs[1].obj_flags[ACL_ATTR_PRESENT]  = 1;
+    ga_attrs[1].obj_flags[ACL_ATTR_SUB_TYPE] = 3;
+    ga_attrs[1].obj_flags[ACL_ATTR_OBJ_TYPE] = 1;
     ga_attrs[1].default_acl = UID_$NIL;
     ACL_$CURRENT_SIDS[TEST_PID].login_sid = LOGIN;
 }
@@ -251,7 +251,7 @@ TEST(prologue_copies_the_uid_and_clears_the_setid_byte)
 TEST(remote_object_is_forwarded_with_the_project_count)
 {
     reset();
-    ga_attrs[0].obj_flags[ACL_ATTR_FLAGS] = 0;
+    ga_attrs[0].obj_flags[ACL_ATTR_FLAGS_LO] = 0;
     ga_loc[0].flags = (int8_t)0x80;
     ACL_$PROJ_UIDS[TEST_PID][0].high = 1;
     ACL_$PROJ_UIDS[TEST_PID][1].high = 2;
@@ -268,7 +268,7 @@ TEST(remote_object_is_forwarded_with_the_project_count)
 
     /* No NIL slot at all -> the count stays 8 (0x00E4711C). */
     reset();
-    ga_attrs[0].obj_flags[ACL_ATTR_FLAGS] = 0;
+    ga_attrs[0].obj_flags[ACL_ATTR_FLAGS_LO] = 0;
     ga_loc[0].flags = (int8_t)0x80;
     {
         int i;
@@ -279,7 +279,7 @@ TEST(remote_object_is_forwarded_with_the_project_count)
 
     /* A failed forward returns FALSE. */
     reset();
-    ga_attrs[0].obj_flags[ACL_ATTR_FLAGS] = 0;
+    ga_attrs[0].obj_flags[ACL_ATTR_FLAGS_LO] = 0;
     ga_loc[0].flags = (int8_t)0x80;
     rs_status_out = 0x000F0004;
     ASSERT_EQ(0x00, (unsigned char)call(0, NULL));
@@ -313,7 +313,7 @@ TEST(missing_acl_object)
 TEST(acl_object_type_must_be_three)
 {
     reset();
-    ga_attrs[1].obj_flags[ACL_ATTR_OBJ_TYPE] = 4;
+    ga_attrs[1].obj_flags[ACL_ATTR_SUB_TYPE] = 4;
     {
         status_$t st;
         ASSERT_EQ(0x00, (unsigned char)call(0, &st));
@@ -329,7 +329,7 @@ TEST(acl_object_type_must_be_three)
 TEST(rights_check_uses_the_recovered_constants)
 {
     reset();
-    ga_attrs[0].obj_flags[ACL_ATTR_OBJ_TYPE] = 5;
+    ga_attrs[0].obj_flags[ACL_ATTR_SUB_TYPE] = 5;
     (void)call(0, NULL);
 
     ASSERT_EQ(1, ar_calls);

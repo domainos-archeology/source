@@ -74,7 +74,8 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
      * record's first longword; 0x00E479CA `tst.b (-0x3,A6)` / bpl tests the
      * location record's flags byte for "remote".
      */
-    if ((acl_attr.obj_flags[3] & 0x01) == 0 && loc_rec.flags < 0) {
+    if ((acl_attr.obj_flags[ACL_ATTR_FLAGS_LO] & ACL_ATTR_FLAG_LOCAL) == 0 &&
+        loc_rec.flags < 0) {
         /* Remote creation */
         /* The 32-bit "type" argument is passed through unchanged (it is a
          * pointer on the m68k; uintptr_t preserves the full value). */
@@ -119,7 +120,7 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
         goto cleanup_error;
     }
 
-    if (acl_attr.obj_flags[0] == 0) {   /* 0x00E47AAA */
+    if (acl_attr.obj_flags[ACL_ATTR_OBJ_TYPE] == 0) {   /* 0x00E47AAA */
         /* Call internal creation helper */
         acl_$prim_create_internal((int32_t)(uintptr_t)type, acl_data, *data_len, (uint8_t *)acl_data + 2,
                                   0, mapped_addr, NULL, status_ret);

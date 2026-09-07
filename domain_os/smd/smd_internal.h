@@ -1704,22 +1704,6 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
                  const boolean *blocking);
 
 /*
- * smd_$send_loc_event - Send location event
- *
- * Queues a location event for processing.
- *
- * Parameters:
- *   unit    - Display unit
- *   type    - Event type
- *   pos     - Cursor position
- *   buttons - Button state
- *
- * Original address: 0x00E6E8D6
- */
-void smd_$send_loc_event(uint16_t unit, uint16_t type, uint32_t pos,
-                         uint16_t buttons);
-
-/*
  * SMD_$XOR_CURSOR - Low-level cursor drawing
  *
  * Called by blink routines to actually draw/erase cursor.
@@ -1901,7 +1885,11 @@ static inline uint16_t smd_get_current_unit(void) {
 /*
  * smd_$init_display_state - Initialize display state for borrow/associate
  *
- * Initializes the display state when borrowing or associating.
+ * The whole body of the exported SMD_$INIT_STATE wrapper (0x00E6F818), and
+ * also called by SMD_$BORROW_DISPLAY (0x00E6F69C).  Acquires the display,
+ * pokes the SMD_$ACQ_DISPLAY result into the unit's controller register,
+ * calls smd_$reset_unit_display(unit, full), re-enables video when `full`
+ * is true, and releases the display.  Runs on the caller's A5.
  *
  * Parameters:
  *   options    - Init options flag (negative = full init)
@@ -1910,32 +1898,6 @@ static inline uint16_t smd_get_current_unit(void) {
  * Original address: 0x00E6F514
  */
 void smd_$init_display_state(int8_t options, status_$t *status_ret);
-
-/*
- * smd_$reset_display_state - Reset display hardware and cursor state
- *
- * Resets the display hardware state and optionally clears cursor state.
- *
- * Parameters:
- *   unit    - Display unit number
- *   flag    - Reset flag (negative = full reset including cursor state)
- *
- * Original address: 0x00E6D736
- */
-void smd_$reset_display_state(uint16_t unit, int8_t flag);
-
-/*
- * smd_$reset_tracking_state - Reset tracking and event state
- *
- * Resets the global tracking and event queue state.
- *
- * Parameters:
- *   unit    - Display unit number
- *   flag    - Reset flag (negative = full reset)
- *
- * Original address: 0x00E6D7E2
- */
-void smd_$reset_tracking_state(uint16_t unit, int8_t flag);
 
 /* Request queue event counts */
 extern ec_$eventcount_t SMD_REQUEST_EC_WAIT;   /* At 0x00E2E3FC - wait for space */

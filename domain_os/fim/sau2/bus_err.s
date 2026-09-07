@@ -135,8 +135,11 @@
         .equ    FIM_EXIT,           0x00E228BC  /* RTE */
         .equ    FIM_COM,            0x00E213A4  /* Common fault delivery entry */
         .equ    FIM_DELIVER_TRACE_FAULT, 0x00E22866
-        .equ    FIM_TRACE_STS,      0x00E223A2  /* Per-AS trace fault status, 4 bytes/AS */
         .equ    FP_SAVEP,           0x00E218D0  /* Non-zero if FPU hardware present */
+
+        /* Per-AS trace fault status, 4 bytes per AS.  Defined in
+         * fim/fim_data.c; its sibling FIM_$TRACE_BIT is in fim/sau2/fim.s. */
+        .extern FIM_$TRACE_STS               /* 0x00E223A2 */
 
         /* Other subsystems */
         .equ    MMU_INSTALL,        0x00E24048  /* MMU_$INSTALL */
@@ -197,8 +200,11 @@
  * ==================================================================== */
         /* In ROM the trampoline sits at the odd-longword address 0x00E218CA,
          * so that BUS_ERROR_SWITCH - the jmp's operand - lands longword
-         * aligned at 0x00E218CC.  The word of padding reproduces that parity;
-         * it is the tail of the zero fill that runs up to 0x00E218CA. */
+         * aligned at 0x00E218CC.  These two directives reproduce that parity
+         * inside this object; they are an alignment device, not image bytes.
+         * What actually precedes 0x00E218CA in the image is the tail of
+         * FIM_$TRACE_BIT (0x00E21890, 58 bytes), which is emitted with the
+         * rest of that region in fim/sau2/fim.s. */
         .balign 4
         .short  0
 
@@ -349,7 +355,7 @@ FIM_$BUS_ERR:
         addq.l  #2,%sp
         move.w  (PROC1_AS_ID).l,%d0
         lsl.w   #2,%d0                  /* 4 bytes of trace status per AS */
-        lea     (FIM_TRACE_STS).l,%a0   /* was "lea (FIM_$TRACE_STS,%pc),%a0" */
+        lea     (FIM_$TRACE_STS).l,%a0  /* was "lea (FIM_$TRACE_STS,%pc),%a0" */
         move.l  #STATUS_MST_GUARD_FAULT,(0,%a0,%d0.w)
         bra.b   .bus_err_return
 

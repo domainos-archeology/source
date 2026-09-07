@@ -266,3 +266,34 @@ function, so call `ADVANCE_INT` from assembly.
 interrupt-level twin of the routine at 0x00E27070 that
 `smd/sau2/scroll_blt_setup.s` models. Its label is defined at the end of
 disp1_int.s so the `jsr (0xa8,PC)` at 0x00E26F8C keeps its displacement.
+
+## Name reconciliation, 2026-09-07 (source-dhie)
+
+Four SMD helper names disagreed between Ghidra and the C tree.  Settled as:
+
+- `0x00E6F514` = **`smd_$init_display_state`** (Ghidra renamed from
+  `smd_$reset_display_state`).  It is the entire body of the exported
+  `SMD_$INIT_STATE` (0x00E6F818, an SR10.4 map name) and is also called by
+  `SMD_$BORROW_DISPLAY` 0x00E6F69C.  The old Ghidra name collided with a C
+  alias for a *different* address.  Still has no `.c` (bead source-vkwk).
+- `0x00E6E8D6` = **`smd_$enqueue_event`** (not `smd_$send_loc_event`): it
+  enqueues *any* event, keyboard chars included, into the ring at
+  A5+0x728/+0x72A with 16-byte entries at +0x72C.
+- `0x00E6D7E2` = **`smd_$reset_display_globals`** (not
+  `smd_$reset_tracking_state`): clears info-entry fields and blink state as
+  well as the tracking globals.
+- `0x00E6E9A0` = **`SMD_$LOC_EVENT`** - an SR10.4 map name (3C4A1262), so it
+  wins outright.  Its signature
+  `int8_t SMD_$LOC_EVENT(int8_t, int16_t, uint32_t, int16_t)` already matched
+  the stack offsets (byte@8, word@0xA, long@0xC, word@0x10; result in D0.b,
+  caller pops 12 including the reserved 2-byte slot) and all three call sites
+  (TPAD_$DATA 0x00E69794/0x00E697AE, SMD_$SET_TP_CURSOR 0x00E6E994).
+
+**Root cause worth remembering:** `smd/smd_internal.h` carried three *stale
+duplicate declarations* - two different C names for one address
+(`smd_$reset_display_state` + `smd_$reset_unit_display` both for 0x00E6D736,
+`smd_$reset_tracking_state` + `smd_$reset_display_globals` both for
+0x00E6D7E2, `smd_$send_loc_event` + `smd_$enqueue_event` both for
+0x00E6E8D6).  When a name disagreement shows up, grep the header for the
+*address* as well as the name - the duplicate is usually already there under
+the right name.

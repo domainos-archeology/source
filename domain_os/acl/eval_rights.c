@@ -149,7 +149,7 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
      * pushed here come from the per-process globals, not from the caller's
      * arguments (0x00E46626-0x00E4664E).
      */
-    if ((attrs.obj_flags[ACL_ATTR_FLAGS] & ACL_ATTR_FLAG_LOCAL) == 0 &&
+    if ((attrs.obj_flags[ACL_ATTR_FLAGS_LO] & ACL_ATTR_FLAG_LOCAL) == 0 &&
         loc.flags < 0) {
         REM_FILE_$ACL_CHECK_RIGHTS(&loc.loc_info,
                                    &ACL_$CURRENT_SIDS[PROC1_$CURRENT],
@@ -180,7 +180,7 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
      * 0x00E4668E-0x00E466C4: the object type must match what the caller said
      * it was asking about.
      */
-    obj_type = (int16_t)attrs.obj_flags[ACL_ATTR_OBJ_TYPE];
+    obj_type = (int16_t)attrs.obj_flags[ACL_ATTR_SUB_TYPE];
     if (obj_type != option_flags &&
         !(option_flags == 1 && obj_type == 2) &&        /* seq/seq/and/bmi */
         option_flags != (int16_t)-1 &&
@@ -200,7 +200,7 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
      * owner/group/org/world protection record decides.
      */
     if (acl_$uid_eq(&attrs.default_acl, &UID_$NIL) < 0 &&
-        attrs.obj_flags[ACL_ATTR_PRESENT] != 0) {
+        attrs.obj_flags[ACL_ATTR_OBJ_TYPE] != 0) {
 
         /* 0x00E466FA-0x00E4671A */
         if ((prot->owner_rights & ACL_RIGHT_IGNORE) == 0 &&

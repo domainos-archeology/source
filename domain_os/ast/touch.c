@@ -160,7 +160,7 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
         } else {
             /* Normal page fault handling */
             /* Check if within file bounds */
-            uint32_t file_size = *(uint32_t *)((char *)aote + 0x20);
+            uint32_t file_size = aote->length;   /* 0x00E03258 */
             uint32_t page_offset = (uint32_t)page + (uint32_t)aste->segment * 0x20;
 
             if (file_size == 0 || ((file_size - 1) >> 10) < page_offset) {

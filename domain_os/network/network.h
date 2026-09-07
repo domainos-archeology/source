@@ -222,10 +222,43 @@ typedef struct network_$failure_rec_t {
                                  *       NETWORK_$ACTIVITY_FLAG < 0.  Test it
                                  *       with "< 0". */
     uint8_t     byte3;          /* 0x03 */
-    uint32_t    error_info;     /* 0x04: Failure information (request param2) */
+    /*
+     * +0x04 is the node the failure is reported AGAINST and +0x0C is the
+     * failure type.  All three writers agree (bead source-oowv):
+     *
+     *   NETWORK_$REPORT_FAILURE (0x00E103FA), A5 = 0x00E248FC and the record
+     *   at A5+0x2F8:
+     *     0x00E10414  move.l (0x00e245a4).l,(0x2fc,A5)  +0x04 <- NODE_$ME
+     *     0x00E10408  move.l (0x00e2b0d4).l,(0x300,A5)  +0x08 <- TIME_$CLOCKH
+     *     0x00E1042E  move.l D0,(0x304,A5)              +0x0C <- 1 or 3
+     *
+     *   ASKNODE_$SERVER request 0x0E (0x00E65D04):
+     *     0x00E65D0E  move.l D6,(0x4,A0)                +0x04 <- requesting
+     *                                                            node (D6,
+     *                                                            0x00E659D8)
+     *     0x00E65D1A  move.l (-0x264,A6),(0xc,A0)       +0x0C <- request word
+     *
+     *   ring_$validate_receive (0x00E75DE4), A0 = 0x00E24BF4:
+     *     0x00E75F1C  move.l (0x8,A4),(0x4,A0)          +0x04 <- hdr->src_id
+     *     0x00E75F2A  move.l (A4),(0xc,A0)              +0x0C <- hdr->msg_type
+     *                                                            (1 or 3)
+     *
+     * The name "failure type" is netmain's own: its hardware-failure display
+     * prints "v<n>  Failure type = <lh>" and "reported by <node> at <time>".
+     */
+    uint32_t    node_id;        /* 0x04: node the failure is reported against */
     uint32_t    timestamp;      /* 0x08: TIME_$CURRENT_CLOCKH at failure */
-    uint32_t    node_id;        /* 0x0C: Node involved */
+    uint32_t    failure_type;   /* 0x0C: 1 or 3 - netmain's "Failure type" */
 } network_$failure_rec_t;
+
+_Static_assert(sizeof(network_$failure_rec_t) == 0x10,
+               "network_$failure_rec_t must be 16 bytes");
+_Static_assert(offsetof(network_$failure_rec_t, node_id) == 0x04,
+               "network_$failure_rec_t.node_id (0x00E10414/0x00E65D0E/0x00E75F1C)");
+_Static_assert(offsetof(network_$failure_rec_t, timestamp) == 0x08,
+               "network_$failure_rec_t.timestamp (0x00E10408/0x00E65D12)");
+_Static_assert(offsetof(network_$failure_rec_t, failure_type) == 0x0C,
+               "network_$failure_rec_t.failure_type (0x00E1042E/0x00E65D1A/0x00E75F2A)");
 
 extern network_$failure_rec_t NETWORK_$FAILURE_REC;
 
@@ -595,10 +628,7 @@ typedef struct ring_info_t {
      * at 0x00E11256..0x00E11264.  netmain's hardware-failure display reads
      * "v<n>  Failure type = <lh>", "Status bits: broken / not broken",
      * "forced last time / did not force last time", "delay in / delay out",
-     * "forcing now / not forcing now" and "reported by <node> at <time>".
-     * TODO(source-oowv): network_$failure_rec_t+0x04 and +0x0C are named
-     * backwards above - 0x00E10414 stores NODE_$ME into +0x04 and 0x00E1042E
-     * stores the failure type into +0x0C. */
+     * "forcing now / not forcing now" and "reported by <node> at <time>". */
     network_$failure_rec_t  failure_rec;    /* 0x44..0x53 */
 
     /* ---- 0x54: RING_$SWDIAG_DATA (0x00E261C2), 0x1E bytes ----------- *
@@ -606,8 +636,8 @@ typedef struct ring_info_t {
      *  move.l (A1)+,(A4)+ / dbf / move.w (A1)+,(A4)+" at
      * 0x00E11278..0x00E1128A: seven longwords plus one word = 30 bytes, i.e.
      * 0x00E261C2..0x00E261DF, which runs up to but not into RING_$STATS[0] at
-     * 0x00E261E0.  ring/ring.h currently declares ring_$swdiag_t as only 0x18
-     * bytes; this copy shows the block is 0x1E (bead source-twut).
+     * 0x00E261E0.  ring/ring.h declares ring_$swdiag_t at that same 0x1E
+     * (bead source-twut).
      *
      * Two longwords of that copy are then overwritten in place from the
      * standalone globals that hold the live values, so the bytes the block

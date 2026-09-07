@@ -1,6 +1,6 @@
 ---
 name: fim-per-as-tables
-description: Every FIM per-address-space table holds 58 entries; the closed address chain that proves it, and the FIM_$INIT_PID/FIM_$FREE_PID ABI.
+description: Every FIM per-address-space table holds 58 entries; the closed address chain that proves it, and the FIM_$INIT_ASID/FIM_$FREE_ASID ABI.
 metadata:
   type: project
 ---
@@ -38,7 +38,7 @@ word* address 0x00E22892, giving A1 = 0x00E21890.  The same A1 then reaches
 is the independent check.  **Getting the PC base wrong on a `lea (d,PC)` is
 the easy way to be off by 2-8 on a whole table.**
 
-## FIM_$INIT_PID / FIM_$FREE_PID (0x00E0AA24, 0x00E0AA6C)
+## FIM_$INIT_ASID / FIM_$FREE_ASID (0x00E0AA24, 0x00E0AA6C)
 
 Both take the **address** of a word (Pascal `var`), not the value: the
 callers are `pea (0x96,A3)` at 0x00E73314 (= `&proc2_info_t.asid`) and

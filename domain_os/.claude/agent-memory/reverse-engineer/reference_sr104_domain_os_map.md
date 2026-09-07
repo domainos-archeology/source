@@ -22,9 +22,9 @@ D  3C42BDC0  FIM_               size = 28       <- D = data section
 entries inside a module and the gaps between them carry over between SAUs
 even though the addresses do not.  Anchor on one already-named function in
 the module, lay the map's order over the SAU2 addresses, and check a size or
-two.  That is how FIM_$INSTALL / FIM_$GET_FIM_ADDR / FIM_$INIT_PID /
-FIM_$FREE_PID were named (bead source-cry): FIM_$BUILD_DF anchored the
-module and FIM_$INIT_PID's 72 bytes matched the map exactly.
+two.  That is how FIM_$INSTALL / FIM_$GET_FIM_ADDR / FIM_$INIT_ASID /
+FIM_$FREE_ASID were named (bead source-cry): FIM_$BUILD_DF anchored the
+module and FIM_$INIT_ASID's 72 bytes matched the map exactly.
 
 Other things the map settles cheaply:
 

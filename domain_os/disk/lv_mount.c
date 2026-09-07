@@ -45,7 +45,7 @@
 #define ENTRY_LV_BLOCK        0x08
 #define ENTRY_DATA_ADDR       0x0C
 #define ENTRY_MOUNT_STATE     0x14
-#define ENTRY_SHIFT           0x26
+#define ENTRY_BAT_STEP        0x26
 #define ENTRY_FLAGS           0x28
 
 /* Number of LV slots to scan (indices 1-6) */
@@ -72,15 +72,19 @@
  * The LV label block contains:
  *   +0x00: Version (word) - must be <= 1
  *   +0x24: LV UID (8 bytes)
- *   +0x2C: Reserved blocks count (long)
- *   +0x38: Data start block (long)
- *   +0x40: Shift value (word)
+ *   +0x2C: BAT header: blocks the BAT represents (long)
+ *   +0x38: BAT header: block the BAT's first bit represents (long)
+ *   +0x40: BAT step (word) -- "the BAT step to use on this volume",
+ *          AEGIS Internals and Data Structures (Jan 1986) 4.3.3.  invol
+ *          calls it the sector interleave factor (sys/help/invol.hlp
+ *          option 10, "not supported at SR10.4").  bat/bat_internal.h
+ *          models the whole label and names the same word bat_step.
  */
 #define LV_LABEL_VERSION_OFFSET     0x00
 #define LV_LABEL_UID_OFFSET         0x24
 #define LV_LABEL_RESERVED_OFFSET    0x2C
 #define LV_LABEL_DATA_START_OFFSET  0x38
-#define LV_LABEL_SHIFT_OFFSET       0x40
+#define LV_LABEL_BAT_STEP_OFFSET    0x40
 
 /* PV_LABEL_$UID / LV_LABEL_$UID come from uid/uid.h via disk_internal.h */
 
@@ -235,12 +239,12 @@ int16_t DISK_$LV_MOUNT(uid_t *lv_uid, status_$t *status_ret)
                     *(uint16_t *)(lv_entry + ENTRY_FLAGS) = 0;
                     *(uint16_t *)(lv_entry + ENTRY_MOUNT_STATE) = DISK_MOUNT_MOUNTED;
 
-                    /* Copy shift value from LV label */
-                    uint16_t shift = *(uint16_t *)((uint8_t *)lv_label + LV_LABEL_SHIFT_OFFSET);
-                    *(uint16_t *)(lv_entry + ENTRY_SHIFT) = shift;
+                    /* Copy the BAT step from the LV label */
+                    uint16_t bat_step = *(uint16_t *)((uint8_t *)lv_label + LV_LABEL_BAT_STEP_OFFSET);
+                    *(uint16_t *)(lv_entry + ENTRY_BAT_STEP) = bat_step;
 
-                    /* Also update the PV entry's shift value */
-                    *(uint16_t *)(pv_entry + ENTRY_SHIFT) = shift;
+                    /* Also update the PV entry's BAT step */
+                    *(uint16_t *)(pv_entry + ENTRY_BAT_STEP) = bat_step;
 
                     /* Release the LV label buffer */
                     DISK_$SET_BUFF(lv_label, 0x0c, &status);

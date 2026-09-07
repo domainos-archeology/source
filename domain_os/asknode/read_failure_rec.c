@@ -59,7 +59,7 @@ void ASKNODE_$READ_FAILURE_REC(uint32_t *record)
     record[0] = ((uint32_t)NETWORK_$FAILURE_REC.word0 << 16) |
                 (((uint32_t)(uint8_t)NETWORK_$FAILURE_REC.flag) << 8) |
                 (uint32_t)NETWORK_$FAILURE_REC.byte3;
-    record[1] = NETWORK_$FAILURE_REC.error_info;
+    record[1] = NETWORK_$FAILURE_REC.node_id;
     record[2] = NETWORK_$FAILURE_REC.timestamp;
-    record[3] = NETWORK_$FAILURE_REC.node_id;
+    record[3] = NETWORK_$FAILURE_REC.failure_type;
 }

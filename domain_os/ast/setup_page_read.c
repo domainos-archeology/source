@@ -115,14 +115,15 @@ void ast_$setup_page_read(aste_t *aste, uint32_t *segmap, uint16_t start_page,
     end_offset = ((uint32_t)*((uint16_t *)((char *)aste + 0x0C)) * 32 +
                   count + start_page - 1) * 0x400;
 
-    if (end_offset < *((int32_t *)((char *)aote + 0x20))) {
+    /* 0x00E02AAA `cmp.l (0x20,A1),D0` / `blt` -- a SIGNED comparison. */
+    if (end_offset < (int32_t)aote->length) {
         /* Not extending file - check size hint flag */
         if ((flags & 0x40) == 0) {
             *((uint8_t *)((char *)aote + 0xBF)) |= 0x10;  /* Set size hint dirty */
         }
     } else {
         /* Extending file - update size and timestamps */
-        *((int32_t *)((char *)aote + 0x20)) = end_offset + 0x400;
+        aote->length = (uint32_t)(end_offset + 0x400);   /* 0x00E02AB6 */
         TIME_$CLOCK((clock_t *)((char *)aote + 0x40));
         *((uint32_t *)((char *)aote + 0x28)) = *((uint32_t *)((char *)aote + 0x40));
         *((uint16_t *)((char *)aote + 0x2C)) = *((uint16_t *)((char *)aote + 0x44));

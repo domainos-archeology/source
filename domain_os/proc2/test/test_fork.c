@@ -44,7 +44,7 @@ static proc2_ec_entry_t mock_ecs[PROC2_EC_ENTRIES];
 proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
 uint16_t P2_INFO_ALLOC_PTR;
 uint16_t P2_FREE_LIST_HEAD;
-uint16_t *P2_PID_TO_INDEX_TABLE = mock_pid_to_index;
+uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
 pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
 proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
 

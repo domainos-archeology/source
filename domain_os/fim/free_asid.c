@@ -1,11 +1,11 @@
 /*
- * FIM_$FREE_PID - release the FIM per-address-space state for a process
+ * FIM_$FREE_ASID - release the FIM per-address-space state for a process
  *
  * Called by PROC2_$DELETE_CLEANUP (0x00E743CE) at 0x00E749DA with
  * `pea (-0xb0,A6)`, a word local that PROC2_$DELETE_CLEANUP loads from the
- * process record at 0x00E74408/0x00E74410 -- so, as with FIM_$INIT_PID, the
+ * process record at 0x00E74408/0x00E74410 -- so, as with FIM_$INIT_ASID, the
  * argument is an address-space id passed by reference (Pascal `var`/`in`
- * parameter), a word; see fim/init_pid.c on the signedness of the
+ * parameter), a word; see fim/init_asid.c on the signedness of the
  * prototype.
  *
  * Original address: 0x00E0AA6C
@@ -34,13 +34,13 @@
  * reads.  Dropping it here is what makes the next FIM_$INSTALL in that
  * address space look like a first install.
  *
- * As in FIM_$INIT_PID the scaling is 16-bit and the scaled value is used as
+ * As in FIM_$INIT_ASID the scaling is 16-bit and the scaled value is used as
  * a signed word index; the original performs no bounds check.
  */
 
 #include "fim/fim_internal.h"
 
-void FIM_$FREE_PID(int16_t *as_id_p)
+void FIM_$FREE_ASID(int16_t *as_id_p)
 {
     int16_t as_id;
 

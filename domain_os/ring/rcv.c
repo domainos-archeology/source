@@ -427,9 +427,9 @@ error_path:
      */
     if (hdr->msg_type == 1 || hdr->msg_type == 3) {
         NETWORK_$FAILURE_REC.timestamp = TIME_$CURRENT_CLOCKH;   /* 0x00E75F10 */
-        NETWORK_$FAILURE_REC.error_info = fr->hdr->src_id;       /* 0x00E75F1C */
-        NETWORK_$FAILURE_REC.flag = (int8_t)0xFF;                        /* 0x00E75F22 */
-        NETWORK_$FAILURE_REC.node_id = fr->hdr->msg_type;        /* 0x00E75F2A */
+        NETWORK_$FAILURE_REC.node_id = fr->hdr->src_id;          /* 0x00E75F1C */
+        NETWORK_$FAILURE_REC.flag = (int8_t)0xFF;                /* 0x00E75F22 */
+        NETWORK_$FAILURE_REC.failure_type = fr->hdr->msg_type;   /* 0x00E75F2A */
         goto done;
     }
 

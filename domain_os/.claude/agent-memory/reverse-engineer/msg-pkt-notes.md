@@ -167,3 +167,14 @@ used by PKT_$BLD_INTERNET_HDR (0xE1211E/0xE12136) and MSG_$$SEND
   `pkt_$recv_result_t`: `.reply` / `.data` / `.data_pages` / `.hdr_f12`.
 
 Related: [[feedback-fidelity-gates]], [[domain-pascal-codegen-conventions]].
+
+## rem_name_$data+0x38 is PKT_$SAR_INTERNET's timeout, not a sequence number
+
+(2026-09-07, source-qg0q.) `move.w (0x38,A5),-(SP)` at 0x00E4A524 is the
+thirteenth of rem_name_$send_request's seventeen pushes, i.e. **argument 5**
+of PKT_$SAR_INTERNET = `timeout`. PKT_$SAR_INTERNET adds it to the word the
+send returned and turns the sum into the response deadline (`add.w (0x16,A6),D0w`
+at 0x00E71FBA, then `add.l (0x00e2b0d4).l,D0`), so it is an extra wait in clock
+ticks. Image value 0x0010; it is the ONLY access to A5+0x38 in the whole
+REM_NAME module. Field renamed `rem_name_data_t.sar_timeout`; Ghidra label
+`REM_NAME_$SAR_TIMEOUT` at 0xE7DBF0.

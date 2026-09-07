@@ -315,9 +315,9 @@ void ASKNODE_$SERVER(asknode_$server_ctx_t *ctx, int32_t *routing_info)
     } else if (request.request_type == ASKNODE_REQ_RECORD_FAILURE) {
         /* ---- 0x00E65D04: record the failure and answer nothing ---- */
         NETWORK_$FAILURE_REC.flag       = (int8_t)0xFF;     /* 0x00E65D0A */
-        NETWORK_$FAILURE_REC.error_info = dest_node;        /* 0x00E65D0E */
-        NETWORK_$FAILURE_REC.timestamp  = TIME_$CURRENT_CLOCKH;
-        NETWORK_$FAILURE_REC.node_id    = request.node_id;  /* 0x00E65D1A */
+        NETWORK_$FAILURE_REC.node_id      = dest_node;      /* 0x00E65D0E */
+        NETWORK_$FAILURE_REC.timestamp    = TIME_$CURRENT_CLOCKH;
+        NETWORK_$FAILURE_REC.failure_type = request.node_id;/* 0x00E65D1A */
         return;                                             /* 0x00E65D20 */
 
     } else if (request.request_type == ASKNODE_REQ_LOG_READ) {

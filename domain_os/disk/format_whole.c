@@ -9,6 +9,7 @@
  */
 
 #include "disk/disk_internal.h"
+#include "arch/arch.h"
 
 /* disk_$volume_t, DISK_VOL(), VALID_VOL_MASK and DISK_MOUNT_ASSIGNED come
  * from disk/disk_internal.h */
@@ -24,6 +25,10 @@ void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
     uint16_t vol_idx;
     uint16_t mount_state;
     int16_t mount_proc;
+    /* Two four-byte VA cells; disk_$get_qblks_internal stores each with one
+     * `move.l` (0x00E3BF7E, 0x00E3BFB8). */
+    uint32_t buffer_va;
+    uint32_t buffer_param_va;
     void *buffer;
     void *buffer_param;
     int32_t ec1, ec2;
@@ -50,7 +55,9 @@ void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status)
     }
 
     /* Allocate I/O request buffer */
-    disk_$get_qblks_internal(1, 0, &buffer, &buffer_param);
+    disk_$get_qblks_internal(1, 0, &buffer_va, &buffer_param_va);
+    buffer = ARCH_VA_TO_PTR(buffer_va);
+    buffer_param = ARCH_VA_TO_PTR(buffer_param_va);
 
     /* Get event counters from process table */
     ec1 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1_$CURRENT * 0x1c)) + 1;

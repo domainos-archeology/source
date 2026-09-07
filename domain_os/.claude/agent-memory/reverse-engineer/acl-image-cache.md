@@ -103,3 +103,51 @@ See [[acl-rights-abi]], [[acl-dir-name-abi-notes]] and
   because those sit at odd-multiple-of-2 offsets in a packed record.  The acl/
   house style is to compare `.high`/`.low` directly (see set_acl_check.c,
   eval_rights.c) rather than call acl_$uid_eq on them.
+
+## The two pre-version-5 converters (2026-09-07, source-wlps)
+
+`acl_$convert_rights` (0x00E44DBE) and `acl_$convert_image` (0x00E44E68) are
+**module-level** Pascal routines - no `movea.l (A6),An` static link, no A5 -
+now emitted as `acl/convert_rights.c` / `acl/convert_image.c`.
+
+Rights map (v4 32-bit word -> v5 rights byte). The two type blocks are
+*independent ifs*, not if/else, and two of the clauses fire on the ABSENCE of
+the old bit:
+
+| type | mapping |
+|------|---------|
+| ACL_$FILE_ACL | old 1->new 2, old 2->new 1, old 0->new 0, old 3 **clear**->new 6 |
+| ACL_$DIR_ACL | old 0->new 2, old 3&1&2&6 (all four)->new 1, old 5->new 0, old 4 **clear**->new 6 |
+| either | old 25->new 3 |
+
+So ACL_V4_RIGHTS_DEFAULT (0x1E0) converts to 0x41 for a directory.
+
+`acl_$convert_image` traps worth remembering:
+- The source entry pointer is held **biased by -8** in A2 (`lea (0x2c,A4),A2`,
+  fields read at +0x08/+0x10/+0x18/+0x30), so entry i still starts at
+  src+0x34+(i-1)*0x2C.
+- The all-nil entry (person = group = org = UID_$NIL) is **not copied**: its
+  converted rights become `prot->world_rights` and the output index does not
+  advance. That entry is exactly what the v3/v4 fixup appends.
+- Rights land as a **longword** store at dst_entry+0x18, so `reserved_18` is
+  zeroed and `rights` takes the byte; `reserved_1c` is never written.
+- The `moveq #0xb` clear loop covers **12** words from dst+0x2A (0x2A..0x41) -
+  it runs 14 bytes into entry 1. `acl_$image_internal` (0x00E47DB8) repeats it;
+  `acl_$load_acl_image` (0x00E45C40) only clears 5 words.
+- `sub.w D2w,D0w` + `bmi` on entry_count is a **signed word** test, so counts
+  0 and 0x8001..0xFFFF all mean "no entries".
+
+`flag_28`/`flag_29` are now `acl_$cache_slot_t.world_entry_present` /
+`unused_29`. Only reader in the whole image is `tst.b (0x28,A2)` + `bmi` at
+0x00E45CA0; the three writers only ever clear them.
+
+## ast_$acl_attr_t.obj_flags[] is ast_$common_attr_t's first longword (source-qg0q)
+
+AST_$GET_ACL_ATTRIBUTES copies attr-record+0x00 verbatim (0x00E04AD6), and the
+record is aote+0x0C onwards, so the four bytes are aote+0x0C..0x0F - the same
+four AST_$GET_COMMON_ATTRIBUTES calls obj_type / sub_type / attr_flags_hi /
+attr_flags_lo. The acl/ macros were **off by one**: the old `ACL_ATTR_PRESENT`
+(index 0) is obj_type and the old `ACL_ATTR_OBJ_TYPE` (index 1) is sub_type -
+the byte compared against ACL_$RIGHTS' option_flags. They are now
+ACL_ATTR_OBJ_TYPE / ACL_ATTR_SUB_TYPE / ACL_ATTR_FLAGS_HI / ACL_ATTR_FLAGS_LO.
+ast/ast.h still declares the longword as `uint8_t obj_flags[4]`.

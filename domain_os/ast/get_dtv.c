@@ -9,7 +9,7 @@
 #include "ast/ast_internal.h"
 #include "proc1/proc1.h"
 
-void AST_$GET_DTV(uid_t *uid, uint32_t unused, uint32_t *dtv, status_$t *status)
+void AST_$GET_DTV(uid_t *uid, uint32_t location, uint32_t *dtv, status_$t *status)
 {
     aote_t *aote;
     uid_t local_uid;
@@ -28,7 +28,8 @@ void AST_$GET_DTV(uid_t *uid, uint32_t unused, uint32_t *dtv, status_$t *status)
 
     if (aote == NULL) {
         /* AOTE not found - try to load it */
-        aote = ast_$force_activate_segment(&local_uid, unused, &local_status, 0xFF);
+        /* 0x00E054C6: the caller's location word is forwarded unchanged. */
+        aote = ast_$force_activate_segment(&local_uid, location, &local_status, 0xFF);
         if (aote == NULL) {
             goto done;
         }

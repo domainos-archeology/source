@@ -12,7 +12,7 @@
  *   subq.l #0x2,SP
  *   move.l (0x8,A6),-(SP)    ; push status_ret
  *   clr.w -(SP)              ; push 0 (options)
- *   bsr.w smd_$reset_display_state ; call smd_$init_display_state(0, status_ret)
+ *   bsr.w smd_$init_display_state ; smd_$init_display_state(0, status_ret)
  *   movea.l (-0x4,A6),A5
  *   unlk A6
  *   rts

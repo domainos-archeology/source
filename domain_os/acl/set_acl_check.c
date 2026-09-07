@@ -44,7 +44,8 @@
  *   0x00E47226  pea (0x652,PC) -> 0x00E4787A  longword 0x0000000F
  *
  * The option-flags argument is NOT a constant: 0x00E47218-0x00E47222 widens
- * the object type byte attrs1.obj_flags[1] into the frame word at A6-0xCE and
+ * the object sub-type byte attrs1.obj_flags[ACL_ATTR_SUB_TYPE] into the frame
+ * word at A6-0xCE and
  * passes that.
  */
 
@@ -129,7 +130,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
      * object itself lives on another node - forward the whole request.
      * `btst.b D4,(-0x8d,A6)` tests bit 0 (D4 is still zero here).
      */
-    if ((attrs1.obj_flags[ACL_ATTR_FLAGS] & ACL_ATTR_FLAG_LOCAL) == 0 &&
+    if ((attrs1.obj_flags[ACL_ATTR_FLAGS_LO] & ACL_ATTR_FLAG_LOCAL) == 0 &&
         loc.flags < 0) {
 
         /*
@@ -185,7 +186,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
     }
 
     /* 0x00E47200-0x00E47212: the ACL object must be of type 3. */
-    if ((int16_t)attrs2.obj_flags[ACL_ATTR_OBJ_TYPE] != 3) {
+    if ((int16_t)attrs2.obj_flags[ACL_ATTR_SUB_TYPE] != 3) {
         *status_ret = status_$acl_wrong_type;
         goto done;
     }
@@ -194,7 +195,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
      * 0x00E47216-0x00E47236: the caller needs all four rights on the object,
      * checked with the object's own type as the option-flags word.
      */
-    acl_opts = (int16_t)attrs1.obj_flags[ACL_ATTR_OBJ_TYPE];
+    acl_opts = (int16_t)attrs1.obj_flags[ACL_ATTR_SUB_TYPE];
     rights = ACL_$RIGHTS(&local_uid,
                          (boolean *)&ACL_$SET_ACL_CHECK_IGNORE_SUPER,
                          (uint32_t *)&ACL_$SET_ACL_CHECK_RIGHTS,
@@ -216,7 +217,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
      * has none (a NIL ACL UID together with a present protection record).
      */
     if (!(acl_$uid_eq(&attrs1.default_acl, &UID_$NIL) < 0 &&
-          attrs1.obj_flags[ACL_ATTR_PRESENT] != 0)) {
+          attrs1.obj_flags[ACL_ATTR_OBJ_TYPE] != 0)) {
         slot1 = acl_$find_acl_slot(&attrs1.default_acl, &cached_flag, prot1,
                                    status_ret);
         if (*status_ret != status_$ok &&
@@ -230,7 +231,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
 
     /* 0x00E472C2-0x00E472FE: and the ACL object's own image. */
     if (!(acl_$uid_eq(&attrs2.default_acl, &UID_$NIL) < 0 &&
-          attrs2.obj_flags[ACL_ATTR_PRESENT] != 0)) {
+          attrs2.obj_flags[ACL_ATTR_OBJ_TYPE] != 0)) {
         slot2 = acl_$find_acl_slot(&attrs2.default_acl, &cached_flag, prot2,
                                    status_ret);
         if (*status_ret != status_$ok) {
@@ -374,7 +375,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
         /* 0x00E47624-0x00E476FE: only the incoming ACL has an image. */
         acl_$cache_slot_t *s2 = &ACL_$ACL_CACHE[slot2];
 
-        obj_type = (int16_t)attrs1.obj_flags[ACL_ATTR_OBJ_TYPE];
+        obj_type = (int16_t)attrs1.obj_flags[ACL_ATTR_SUB_TYPE];
 
         /* 0x00E4763A-0x00E47694: the ACL's kind has to suit the object. */
         if (s2->type_uid.high == ACL_$DIR_ACL.high &&

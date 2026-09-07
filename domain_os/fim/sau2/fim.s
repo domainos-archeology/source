@@ -17,11 +17,14 @@
  *   FIM_$POP_SIGNAL:           0x00E21672 (12 bytes)
  *   FIM_$SIGNAL_FIRST:         0x00E2167E (10 bytes)
  *   FIM_$SIGNAL:               0x00E21688 (42 bytes)
- *   cleanup_stack_table:       0x00E216B2 (256 bytes, data)
+ *   cleanup_stack_table:       0x00E216B2 (260 bytes, data)
  *   FIM_$PROC2_STARTUP:        0x00E217B6 (30 bytes)
  *   FIM_$SINGLE_STEP:          0x00E217D4 (80 bytes)
  *   FIM_$FAULT_RETURN:         0x00E21828 (80 bytes)
  *   FIM_$SETUP_RETURN:         0x00E21878 (22 bytes)
+ *   (pad):                     0x00E2188E (2 bytes)
+ *   FIM_$TRACE_BIT:            0x00E21890 (58 bytes, data)
+ *   JMP_TO_BUS_ERR:            0x00E218CA (6 bytes; see sau2/bus_err.s)
  *   FP_$SAVEP:                 0x00E218D0 (4 bytes, data)
  *   FP_$OWNER:                 0x00E218D4 (2 bytes, data)
  *   FP_$EXCLUSION:              0x00E218D6 (18 bytes, ml_$exclusion_t)
@@ -57,11 +60,18 @@
         .equ    PROC1_AS_ID,        0x00E2060A  /* Current address space ID */
         .equ    OS_STACK_BASE,      0x00E25C18  /* OS stack base table */
 
+        /* Number of elements in every FIM per-address-space table; see the
+         * derivation of FIM_AS_COUNT in fim/fim.h. */
+        .equ    FIM_AS_COUNT,       58
+
         /* FIM data (not yet emitted in this file) */
         .equ    FIM_QUIT_INH,       0x00E2248A  /* Quit inhibit array */
-        .equ    FIM_TRACE_STS,      0x00E223A2  /* Trace status array */
-        .equ    FIM_TRACE_BIT,      0x00E21888  /* Trace bit array */
-        .equ    PENDING_TRACE,      0x00E21FF6  /* Pending trace faults */
+
+        /* FIM data defined in fim/fim_data.c, reached by name.
+         * FIM_$TRACE_BIT is the sibling of these two and IS emitted in this
+         * file (0x00E21890, just after FIM_$SETUP_RETURN). */
+        .extern FIM_$TRACE_STS               /* 0x00E223A2: 4 bytes per AS */
+        .extern FIM_$PENDING_TRACE_FAULTS    /* 0x00E21FFE: longword count */
 
         /* FIM code not yet in this file */
         .equ    FIM_COMMON_FAULT,   0x00E213A0  /* Common fault handler (Ghidra: FIM_$COMMON_FAULT) */
@@ -511,10 +521,20 @@ no_handler:
  * One entry per process (indexed by PROC1_$CURRENT << 2)
  * Each entry is a pointer to the head of the cleanup handler list
  *
- * Address: 0x00E216B2
+ * Address: 0x00E216B2 .. 0x00E217B5, i.e. 0x104 = 260 bytes = 65 longwords,
+ * one per PROC1 process (PROC1_MAX_PROCESSES); the extent is pinned by
+ * FIM_$PROC2_STARTUP at 0x00E217B6, and the whole range reads back as zero.
+ *
+ * This reservation exists so that the objects around it keep their image
+ * spacing.  The C-visible definition of the same table is FIM_CLEANUP_STACK
+ * in fim/fim_data.c, which carries the extent _Static_assert.
+ *
+ * TODO(source-z5bf, 0x00E216B2): one image object, two definitions.  This
+ * label and FIM_CLEANUP_STACK in fim/fim_data.c are now the same size but
+ * are still separate storage; the three lea sites below use this one.
  */
 cleanup_stack_table:
-        .space  256                     /* 64 processes * 4 bytes each */
+        .space  260, 0                  /* 65 processes * 4 bytes each */
 
 
 /* ====================================================================
@@ -563,7 +583,7 @@ FIM_$SINGLE_STEP:
         lea     (FIM_QUIT_INH).l,%a0    /* A0 = quit inhibit table */
         st      (0,%a0,%d0:w)           /* Set quit inhibited */
         lsl.w   #2,%d0                  /* D0 = AS * 4 */
-        lea     (FIM_TRACE_STS).l,%a0   /* A0 = trace status table */
+        lea     (FIM_$TRACE_STS).l,%a0  /* A0 = trace status table */
         move.l  #0x00120015,(0,%a0,%d0:w) /* Set trace fault status */
         bsr.w   FIM_$SETUP_RETURN       /* Set up return frame */
         movea.l (0x4,%sp),%a1           /* A1 = PC ptr */
@@ -649,6 +669,56 @@ FIM_$SETUP_RETURN:
 
 
 /* ====================================================================
+ * FIM_$TRACE_BIT - per-address-space pending trace fault bit
+ *
+ * One byte per address space.  Bit 7 is "a trace fault is pending for this
+ * address space": FIM_$DELIVER_TRACE_FAULT (0x00E22866) sets it with
+ * "bset.b #7" and FIM_$CLEAR_TRACE_FAULT (0x00E22890) clears it with
+ * "bclr.b #7"; the transitions that actually change the bit also step
+ * FIM_$PENDING_TRACE_FAULTS and, at the zero boundary, patch FIM_$EXIT
+ * between RTE and NOP.
+ *
+ * This is the first object of the module's wired data area, which the image
+ * places in the middle of the FIM code region, so it is emitted here rather
+ * than in fim/fim_data.c (which declares the rest of the per-AS tables).
+ * fim/fim.h declares it for C callers.
+ *
+ * Base 0x00E21890: FIM_$CLEAR_TRACE_FAULT opens with "lea (-0x1002,PC),A1";
+ * the PC for that displacement is its extension word at 0x00E22892, giving
+ * A1 = 0x00E21890.  The same A1 then reaches FIM_$PENDING_TRACE_FAULTS at
+ * (0x76E,A1) = 0x00E21FFE and FIM_$EXIT at (0x102C,A1) = 0x00E228BC, both of
+ * which check out, so the base is not a coincidence.
+ *
+ * Extent: 0x00E21890 + FIM_AS_COUNT = 0x00E218CA, which is JMP_TO_BUS_ERR.
+ * The image holds 58 zero bytes here ("gsk read 0x00E21890 58").
+ * ==================================================================== */
+
+        /* 0x00E2188E: two bytes of pad.  FIM_$SETUP_RETURN's rts ends at an
+         * address that is 2 mod 4, and the wired data area starts on the
+         * next 4-byte boundary.  The image bytes are 00 00. */
+        .balign 4, 0
+
+        .global FIM_$TRACE_BIT
+FIM_$TRACE_BIT:
+        .space  FIM_AS_COUNT, 0         /* 0x00E21890 .. 0x00E218C9 */
+.Lfim_trace_bit_end:
+
+        /* Assembly-side equivalent of the extent _Static_asserts that
+         * fim/fim_data.c carries for the other per-AS tables. */
+        .if (.Lfim_trace_bit_end - FIM_$TRACE_BIT) != (0x00E218CA - 0x00E21890)
+        .error "FIM_$TRACE_BIT must span 0x00E21890..0x00E218C9"
+        .endif
+
+/*
+ * 0x00E218CA .. 0x00E218CF is the six-byte "jmp (BUS_ERROR_SWITCH).l"
+ * trampoline JMP_TO_BUS_ERR, whose absolute operand longword at 0x00E218CC
+ * is BUS_ERROR_SWITCH itself.  Both are emitted in fim/sau2/bus_err.s next
+ * to FIM_$BUS_ERR, the only code that uses them, so nothing is reserved for
+ * them here and the FP data below follows immediately.
+ */
+
+
+/* ====================================================================
  * FP module data (PC-relative from FIM_$FLINE)
  *
  * In the original ROM, these were located at:
@@ -685,9 +755,6 @@ FIM_$SETUP_RETURN:
  * error handler installed in the vector table from 0x00E342E8.  It is
  * transcribed in fim/sau2/bus_err.s, together with the JMP_TO_BUS_ERR /
  * BUS_ERROR_SWITCH trampoline at 0x00E218CA that precedes this data.
- *
- * Still not emitted anywhere: FIM_$TRACE_BIT (0x00E21890) and the rest of
- * the gap from 0x00E2188E to 0x00E218CA.
  * ==================================================================== */
         .global FP_$SAVEP
 FP_$SAVEP:
@@ -995,13 +1062,14 @@ check_frame_type:
  * ==================================================================== */
         .global FIM_$DELIVER_TRACE_FAULT
 FIM_$DELIVER_TRACE_FAULT:
-        lea     (FIM_TRACE_BIT).l,%a1   /* A1 = trace bit table */
+        lea     (FIM_$TRACE_BIT).l,%a1  /* A1 = trace bit table (was a */
+                                        /* PC-relative lea in the image) */
         move.w  (0x4,%sp),%d0           /* D0 = process ID */
         move    %sr,-(%sp)              /* Save SR */
         ori     #0x0700,%sr             /* Disable interrupts */
         bset.b  #7,(0,%a1,%d0:w)        /* Set trace bit */
         bne.b   trace_already_set       /* Already set, skip */
-        addq.l  #1,(PENDING_TRACE).l    /* Increment pending count */
+        addq.l  #1,(FIM_$PENDING_TRACE_FAULTS).l /* Increment pending count */
         /* Patch FIM_$EXIT to NOP to catch trace */
         move.w  #0x4E71,(FIM_$EXIT).l   /* Write NOP instruction */
         jsr     (CACHE_CLEAR).l         /* Clear instruction cache */
@@ -1023,12 +1091,13 @@ trace_already_set:
  * ==================================================================== */
         .global FIM_$CLEAR_TRACE_FAULT
 FIM_$CLEAR_TRACE_FAULT:
-        lea     (FIM_TRACE_BIT).l,%a1   /* A1 = trace bit table */
+        lea     (FIM_$TRACE_BIT).l,%a1  /* A1 = trace bit table (was a */
+                                        /* PC-relative lea in the image) */
         move.w  (0x4,%sp),%d0           /* D0 = process ID */
         ori     #0x0700,%sr             /* Disable interrupts */
         bclr.b  #7,(0,%a1,%d0:w)        /* Clear trace bit */
         beq.b   trace_not_set           /* Wasn't set, skip */
-        subq.l  #1,(PENDING_TRACE).l    /* Decrement pending count */
+        subq.l  #1,(FIM_$PENDING_TRACE_FAULTS).l /* Decrement pending count */
         bne.b   trace_not_set           /* Still others pending */
         /* Restore FIM_$EXIT to RTE */
         move.w  #0x4E73,(FIM_$EXIT).l   /* Write RTE instruction */

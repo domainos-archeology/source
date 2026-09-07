@@ -85,21 +85,56 @@ typedef struct disk_$volume_t {
                                      *   (0xe3c1d0, 0xe3c1ee) use it as the
                                      *   divisor/multiplier that turns a disk
                                      *   address into a cylinder number. */
-    uint16_t    lv_shift;           /* 0x26 (-0x22 / +0xa2): the word at +0x40
-                                     *   of the logical-volume label.
-                                     *   DISK_$LV_MOUNT stores it into the new
-                                     *   LV descriptor (0xe6cbea) and then
+    uint16_t    bat_step;           /* 0x26 (-0x22 / +0xa2): the BAT step, the
+                                     *   word at +0x40 of the logical-volume
+                                     *   label.  DISK_$LV_MOUNT stores it into
+                                     *   the new LV descriptor (0xe6cbea) and
                                      *   mirrors it into the backing physical
                                      *   volume's descriptor (0xe6cbf4); the
                                      *   only reader is DISK_$GET_MNT_INFO,
                                      *   which reports it at info+0x0c
-                                     *   (0xe6bf04).  Nothing in the kernel
-                                     *   does arithmetic with it, so its
-                                     *   meaning is not established by the
-                                     *   code -- disk/lv_mount.c calls the
-                                     *   label word a "shift value".
-                                     *   TODO(source-zot4): confirm what the
-                                     *   LV label's +0x40 word means. */
+                                     *   (0xe6bf04).  The DISK subsystem never
+                                     *   does arithmetic with it -- this copy
+                                     *   exists only so mount info can hand it
+                                     *   back to invol.
+                                     *
+                                     *   The real consumer is the BAT manager,
+                                     *   whose own label record already names
+                                     *   the same word (bat/bat_internal.h
+                                     *   +0x40 bat_step): BAT_$MOUNT defaults
+                                     *   it to 3 (bat/mount.c) and
+                                     *   BAT_$GET_BAT_STEP returns it.
+                                     *
+                                     *   AEGIS Internals and Data Structures
+                                     *   (Jan 1986) 4.3.3 lists the BAT
+                                     *   header's contents in the order the
+                                     *   label stores them and ends with "the
+                                     *   BAT step to use on this volume"; the
+                                     *   glossary: "a bat step of 2 tells the
+                                     *   BAT manager to allocate the next block
+                                     *   at block n+2.  Users set the bat step,
+                                     *   via INVOL, to optimize disk seeks".
+                                     *   invol calls it the sector interleave
+                                     *   factor -- sys/help/invol.hlp option
+                                     *   10, "Display/change sector interleave
+                                     *   factor for a logical volume ... Note:
+                                     *   Option 10 is not supported at SR10.4",
+                                     *   which is why nothing in this release
+                                     *   writes it.  The SR10.2 invol binary
+                                     *   still carries the dialogue ("Current
+                                     *   interleave factor is %ld", "Interval
+                                     *   must be 1 on logically addressed
+                                     *   disks") and reads it through
+                                     *   disk_$get_mnt_info.
+                                     *
+                                     *   Two neighbours are corroborated by the
+                                     *   kernel's own arithmetic: 0xe6cbc8 adds
+                                     *   the longwords at label +0x2c and +0x38
+                                     *   to get the volume's end address
+                                     *   (+0x88).  The word reads 1 in every
+                                     *   image checked (sr103.awd and the three
+                                     *   disk-images/harddrive SR10.4 images).
+                                     */
     uint16_t    as_options;         /* 0x28 (-0x20 / +0xa4): async I/O options.
                                      *   Written as a whole word by
                                      *   DISK_$AS_OPTIONS (0xe6c108) and cleared
@@ -215,8 +250,8 @@ _Static_assert(__builtin_offsetof(disk_$volume_t, num_heads) == 0x22,
                "disk_$volume_t.num_heads must be at -0x26 (+0x9e)");
 _Static_assert(__builtin_offsetof(disk_$volume_t, blocks_per_cyl) == 0x24,
                "disk_$volume_t.blocks_per_cyl must be at -0x24 (+0xa0)");
-_Static_assert(__builtin_offsetof(disk_$volume_t, lv_shift) == 0x26,
-               "disk_$volume_t.lv_shift must be at -0x22 (+0xa2)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, bat_step) == 0x26,
+               "disk_$volume_t.bat_step must be at -0x22 (+0xa2)");
 _Static_assert(__builtin_offsetof(disk_$volume_t, stripe_blk_mask) == 0x2e,
                "disk_$volume_t.stripe_blk_mask must be at -0x1a (+0xaa)");
 _Static_assert(__builtin_offsetof(disk_$volume_t, stripe_blk_shift) == 0x30,
@@ -428,6 +463,13 @@ typedef struct disk_io_req_t {
                                      *   identifying. */
 } disk_io_req_t;
 
+/*
+ * TODO(source-wyn9, 0x00E3BE8A): next (0x00) and free_next (0x08) are
+ * declared as host pointers, so on a 64-bit host build every field from
+ * daddr (0x04) onwards slides and these asserts have to stay guarded.  Hold
+ * both links as uint32_t VA cells, as disk_$get_qblks_internal and
+ * disk_$rtn_qblks_internal already do for DMOD_FREE_HEAD, and drop the guard.
+ */
 /* Remaining documented offsets (bead source-pewa). */
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(disk_io_req_t, next) == 0x00, "disk_io_req_t.next");
@@ -643,12 +685,19 @@ void disk_$grow_qblk_pool(int16_t count);
  * Parameters:
  *   count     - Number of queue blocks to allocate
  *   mode      - Negative for write mode, non-negative for read
- *   first_out - Output: pointer to head of allocated block list
- *   last_out  - Output: pointer to tail of allocated block list
+ *   first_out - Output: 32-bit VA cell, receives the head of the allocated
+ *               block list (0x00E3BF7E `move.l (0xc0,A5),(A0)`)
+ *   last_out  - Output: 32-bit VA cell, receives the tail of the allocated
+ *               block list (0x00E3BFB8 `move.l (0xc0,A5),(A2)`, reloaded at
+ *               0x00E3BFD8 `movea.l (A2),A3`)
+ *
+ * Both out-cells are four bytes wide on the target; callers that want a host
+ * pointer convert with ARCH_VA_TO_PTR.
  *
  * Original address: 0x00e3be8a
  */
-void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void *last_out);
+void disk_$get_qblks_internal(int16_t count, int8_t mode, uint32_t *first_out,
+                              uint32_t *last_out);
 
 /*
  * disk_$rtn_qblks_internal - Return disk queue blocks

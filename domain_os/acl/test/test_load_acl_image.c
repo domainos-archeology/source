@@ -626,8 +626,8 @@ TEST(version_3_promotion_fills_in_the_version_4_header)
     m->type_uid = ACL_$FILE_ACL;
     m->required_uid.high = 0xDEADBEEFu;
     m->subsys_uid.high   = 0xFEEDFACEu;
-    m->flag_28  = 0x40;
-    m->flag_29  = 0x41;
+    m->world_entry_present  = 0x40;
+    m->unused_29  = 0x41;
     m->reserved_22 = 0xFFFFFFFFu;
     m->reserved_26 = 0xFFFF;
     memset(m->reserved_2a, 0xFF, sizeof(m->reserved_2a));
@@ -646,26 +646,26 @@ TEST(version_3_promotion_fills_in_the_version_4_header)
     ASSERT_EQ(0, convert_image_src.required_uid.low);
     ASSERT_EQ(0, convert_image_src.reserved_22);
     ASSERT_EQ(0, convert_image_src.reserved_26);
-    ASSERT_EQ(0, (uint8_t)convert_image_src.flag_28);   /* file ACL: cleared */
-    ASSERT_EQ(0, (uint8_t)convert_image_src.flag_29);
+    ASSERT_EQ(0, (uint8_t)convert_image_src.world_entry_present);   /* file ACL: cleared */
+    ASSERT_EQ(0, (uint8_t)convert_image_src.unused_29);
     for (i = 0; i < 10; i++) {
         ASSERT_EQ(0, convert_image_src.reserved_2a[i]);
     }
 }
 
-TEST(a_dir_acl_version_3_image_keeps_flag_28_through_the_promotion)
+TEST(a_dir_acl_version_3_image_keeps_world_entry_present_through_the_promotion)
 {
     acl_$cache_slot_t *m = &mapped_image;
 
     reset_world();
     m->version  = 3;
     m->type_uid = ACL_$DIR_ACL;
-    m->flag_28  = -1;
+    m->world_entry_present  = -1;
     convert_image_length = 0x34 + 0x20;
 
     ASSERT_EQ(4, run());
-    /* 0x00E45C24-0x00E45C38: only a non-directory image loses flag_28. */
-    ASSERT_EQ(0xFF, (uint8_t)convert_image_src.flag_28);
+    /* 0x00E45C24-0x00E45C38: only a non-directory image loses world_entry_present. */
+    ASSERT_EQ(0xFF, (uint8_t)convert_image_src.world_entry_present);
     ASSERT_EQ(4, convert_image_src.version);
 }
 
@@ -682,7 +682,7 @@ TEST(unconverted_dir_entries_get_the_default_rights_forced_in)
     reset_world();
     m->version     = 4;
     m->type_uid    = ACL_$DIR_ACL;
-    m->flag_28     = -1;            /* skip the required-entry append */
+    m->world_entry_present     = -1;            /* skip the required-entry append */
     m->entry_count = 2;
     ACL_$V4_ENTRY(m, 1)->rights = 0x00000003u;      /* bit 29 clear */
     ACL_$V4_ENTRY(m, 2)->rights = ACL_V4_RIGHTS_CONVERTED | 0x5u;
@@ -706,7 +706,7 @@ TEST(the_missing_required_entry_is_appended)
     reset_world();
     m->version     = 4;
     m->type_uid    = ACL_$DIR_ACL;
-    m->flag_28     = 0;             /* non-negative: run the append */
+    m->world_entry_present     = 0;             /* non-negative: run the append */
     m->entry_count = 1;
     e1 = ACL_$V4_ENTRY(m, 1);
     e1->person.high = 0x1111;       /* not the all-nil required entry */
@@ -734,7 +734,7 @@ TEST(an_existing_required_entry_is_not_duplicated)
     reset_world();
     m->version     = 4;
     m->type_uid    = ACL_$DIR_ACL;
-    m->flag_28     = 0;
+    m->world_entry_present     = 0;
     m->entry_count = 1;
     e1 = ACL_$V4_ENTRY(m, 1);
     memset(e1, 0, sizeof(*e1));     /* all-nil: this IS the required entry */
@@ -752,7 +752,7 @@ TEST(a_full_image_is_left_alone)
     reset_world();
     m->version     = 4;
     m->type_uid    = ACL_$DIR_ACL;
-    m->flag_28     = 0;
+    m->world_entry_present     = 0;
     m->entry_count = ACL_V4_MAX_ENTRIES;    /* `cmpi.w #0x16` + `bge` */
     convert_image_length = 0x34 + 0x20;
 
@@ -768,7 +768,7 @@ TEST(a_file_acl_version_4_image_skips_the_dir_fixups_entirely)
     reset_world();
     m->version     = 4;
     m->type_uid    = ACL_$FILE_ACL;
-    m->flag_28     = 0;
+    m->world_entry_present     = 0;
     m->entry_count = 1;
     e1 = ACL_$V4_ENTRY(m, 1);
     memset(e1, 0, sizeof(*e1));
@@ -809,7 +809,7 @@ int main(void)
     RUN_TEST(a_zero_cached_flag_leaves_the_rights_words_alone);
 
     RUN_TEST(version_3_promotion_fills_in_the_version_4_header);
-    RUN_TEST(a_dir_acl_version_3_image_keeps_flag_28_through_the_promotion);
+    RUN_TEST(a_dir_acl_version_3_image_keeps_world_entry_present_through_the_promotion);
 
     RUN_TEST(unconverted_dir_entries_get_the_default_rights_forced_in);
     RUN_TEST(the_missing_required_entry_is_appended);

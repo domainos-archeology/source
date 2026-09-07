@@ -21,7 +21,8 @@ aste_t* AST_$MSTE_ACTIVATE_AND_WIRE(mste_t *mste, status_$t *status)
 
     if (aote == NULL) {
         /* AOTE not found - try to create/load it */
-        aote = ast_$force_activate_segment(&mste->uid, mste->vol_uid, status, 0);
+        /* 0x00E02F64: mste+0x0C is the object's location word (bead source-sy5u). */
+        aote = ast_$force_activate_segment(&mste->uid, mste->location, status, 0);
         if (aote == NULL) {
             return NULL;
         }

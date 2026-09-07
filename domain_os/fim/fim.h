@@ -62,8 +62,8 @@
  *
  * The base addresses are the ones the code itself materialises: 0x00E2126C
  * and its +0x3C displacement from FIM_$INSTALL (0x00E0A9C2) and
- * FIM_$FREE_PID (0x00E0AA6C); 0x00E22002/0x00E222BA/0x00E2248A from
- * FIM_$INIT_PID (0x00E0AA24); 0x00E224C4 from FIM_$ACKNOWLEDGE (0x00E0A96C);
+ * FIM_$FREE_ASID (0x00E0AA6C); 0x00E22002/0x00E222BA/0x00E2248A from
+ * FIM_$INIT_ASID (0x00E0AA24); 0x00E224C4 from FIM_$ACKNOWLEDGE (0x00E0A96C);
  * 0x00E21890 from the "lea (-0x1002,PC),A1" at the head of
  * FIM_$CLEAR_TRACE_FAULT (0x00E22890).
  */
@@ -228,7 +228,7 @@ _Static_assert(__builtin_offsetof(sigcontext_t, sc_ps) == 0x18, "sigcontext_t.sc
  *
  * Each address space has a quit value that indicates whether
  * a quit (SIGQUIT) has been requested for processes in that AS.  It is a
- * snapshot of FIM_$QUIT_EC[as].value: FIM_$INIT_PID (0x00E0AA24) and
+ * snapshot of FIM_$QUIT_EC[as].value: FIM_$INIT_ASID (0x00E0AA24) and
  * FIM_$ACKNOWLEDGE (0x00E0A96C) both copy the eventcount's head longword
  * here, so a later read of the eventcount that differs means a quit was
  * advanced since.
@@ -257,7 +257,7 @@ extern int8_t FIM_IN_FIM[];
 
 /*
  * FIM_$USER_FIM_ADDR - Per-AS user-mode FIM handler address
- * Indexed by PROC1_$AS_ID << 2.  Cleared by FIM_$FREE_PID (0x00E0AA6C).
+ * Indexed by PROC1_$AS_ID << 2.  Cleared by FIM_$FREE_ASID (0x00E0AA6C).
  * Address: 0x00E212A8 (FIM_DATA_BASE + 0x3C), stride 4, FIM_AS_COUNT elements
  */
 extern void *FIM_$USER_FIM_ADDR[];
@@ -265,8 +265,8 @@ extern void *FIM_$USER_FIM_ADDR[];
 /*
  * FIM_$QUIT_INH - Per-AS quit inhibit flag (non-zero = inhibited)
  * Indexed by AS id.  Cleared by PROC2_$FORK / PROC2_$COMPLETE_VFORK
- * when a user FIM handler is inherited, and set by both FIM_$INIT_PID
- * (0x00E0AA24) and FIM_$FREE_PID (0x00E0AA6C).
+ * when a user FIM handler is inherited, and set by both FIM_$INIT_ASID
+ * (0x00E0AA24) and FIM_$FREE_ASID (0x00E0AA6C).
  * Address: 0x00E2248A, stride 1, FIM_AS_COUNT elements
  */
 extern int8_t FIM_$QUIT_INH[];
@@ -341,7 +341,7 @@ void *FIM_$INSTALL(void **new_addr);
 void FIM_$ACKNOWLEDGE(void);
 
 /*
- * FIM_$INIT_PID - Reset the per-PID quit state for a newly created process
+ * FIM_$INIT_ASID - Reset the per-PID quit state for a newly created process
  *
  * Takes the ADDRESS of the pid word (PROC2_$INIT_ENTRY_INTERNAL passes
  * &entry->asid at 0x00E73310).  Clears the trace fault, seeds
@@ -354,19 +354,34 @@ void FIM_$ACKNOWLEDGE(void);
  *
  * Address: 0x00e0aa24
  */
-void FIM_$INIT_PID(int16_t *pid);
+void FIM_$INIT_ASID(int16_t *pid);
 
 /*
- * FIM_$FREE_PID - Release the per-PID FIM state for a dying process
+ * FIM_$FREE_ASID - Release the per-PID FIM state for a dying process
  *
- * Counterpart of FIM_$INIT_PID, with the same by-reference word argument
+ * Counterpart of FIM_$INIT_ASID, with the same by-reference word argument
  * (PROC2_$DELETE_CLEANUP passes a word local at 0x00E749D6).  Clears the
  * trace fault, drops FIM_$USER_FIM_ADDR[pid] and sets FIM_$QUIT_INH[pid],
  * so the address space is back to "quits inhibited, no handler installed".
  *
  * Address: 0x00e0aa6c
  */
-void FIM_$FREE_PID(int16_t *pid);
+void FIM_$FREE_ASID(int16_t *pid);
+
+/*
+ * FIM_$GET_USER_PC - longword at the top of the current user stack
+ *
+ * Takes no arguments: the routine links an 8-byte frame and never reads
+ * (0x8,A6).  It calls PROC1_$GET_USP and returns *(uint32_t *)usp, which for
+ * a process stopped in the kernel is its user-mode return PC.  Nothing
+ * validates the USP.
+ *
+ * Last entry of the FIM_ module in the SR10.4 map order; see
+ * fim/get_user_pc.c.
+ *
+ * Address: 0x00e0aaa6 (22 bytes)
+ */
+uint32_t FIM_$GET_USER_PC(void);
 
 /*
  * FIM_$BUILD_DF - Build a delivery frame for fault delivery
@@ -451,7 +466,8 @@ void FIM_$FLINE(void);
  * FIM_$ILLEGAL_USP - Illegal USP handler
  *
  * Handles invalid user stack pointer situations.
- * Address: 0x00e216d2 (4 bytes)
+ * Address: 0x00E2158A (4 bytes) -- see fim/sau2/fim.s.  (This file used to
+ * give 0x00E216D2, which is inside the FIM_CLEANUP_STACK zero fill.)
  */
 void FIM_$ILLEGAL_USP(void);
 
@@ -539,7 +555,8 @@ void FIM_$PROC2_STARTUP(void *context);
  * FIM_$SINGLE_STEP - Single step exception handler
  *
  * Handles trace exceptions for single-step debugging.
- * Address: 0x00e21754 (80 bytes)
+ * Address: 0x00E217D4 (80 bytes) -- see fim/sau2/fim.s.  (This file used to
+ * give 0x00E21754, which is inside the FIM_CLEANUP_STACK zero fill.)
  */
 void FIM_$SINGLE_STEP(void);
 
@@ -749,14 +766,38 @@ extern void JMP_TO_BUS_ERR(void);
  * fault.
  *
  * Address: 0x00E223A2
- * Defined in fim/fim_data.c.  TODO(source-refr): fim/sau2/fim.s and
- * fim/sau2/bus_err.s still reach the array through
- * `.equ FIM_TRACE_STS, 0x00E223A2` rather than through this symbol, because
- * the sibling table FIM_$TRACE_BIT (0x00E21890) and the rest of the code-
- * region gap 0x00E2188E..0x00E218CA are not transcribed in fim/sau2/fim.s.
- * That bead covers emitting the gap and switching both .s files over.
+ * Defined in fim/fim_data.c; fim/sau2/fim.s and fim/sau2/bus_err.s reach it
+ * as an .extern of this symbol rather than through an absolute .equ.
  */
 extern status_$t FIM_$TRACE_STS[];
+
+/*
+ * FIM_$TRACE_BIT - per-address-space pending trace fault bit, 1 byte per AS
+ *
+ * Bit 7 of FIM_$TRACE_BIT[as] is the "a trace fault is pending for this
+ * address space" flag.  FIM_$DELIVER_TRACE_FAULT (0x00E22866) sets it with
+ * "bset.b #7", FIM_$CLEAR_TRACE_FAULT (0x00E22890) clears it with
+ * "bclr.b #7", and each transition that changes the bit also steps
+ * FIM_$PENDING_TRACE_FAULTS (0x00E21FFE) and, at the zero boundary, patches
+ * the instruction at FIM_$EXIT (0x00E228BC) between RTE and NOP.
+ *
+ * Address: 0x00E21890, stride 1, FIM_AS_COUNT elements; it is the first
+ * object of the module's wired data area, so it is defined -- as 58 zero
+ * bytes, which is what the image holds -- in fim/sau2/fim.s, immediately
+ * after FIM_$SETUP_RETURN, and not in fim/fim_data.c.  0x00E21890 + 58 =
+ * 0x00E218CA, the address of JMP_TO_BUS_ERR.
+ */
+extern uint8_t FIM_$TRACE_BIT[];
+
+/*
+ * FIM_$PENDING_TRACE_FAULTS - count of address spaces with a pending trace
+ * fault.  While it is non-zero FIM_$EXIT holds a NOP instead of an RTE, so
+ * that returns from exceptions fall through into the trace-delivery path.
+ *
+ * Address: 0x00E21FFE ((0x76E,A1) in FIM_$CLEAR_TRACE_FAULT, whose A1 is
+ * FIM_$TRACE_BIT).  Defined in fim/fim_data.c.
+ */
+extern uint32_t FIM_$PENDING_TRACE_FAULTS;
 
 /*
  * Fault descriptor built on the supervisor stack and handed to FIM_$COM

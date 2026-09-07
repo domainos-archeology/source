@@ -53,7 +53,7 @@
  *   00e6eb02    move.l (0xcc,A5),-(SP)        ; saved_cursor_pos
  *   00e6eb06    move.w #0xb,-(SP)             ; event_type = 0x0B (stop)
  *   00e6eb0a    move.w (-0x4,A6),-(SP)        ; unit
- *   00e6eb0e    bsr.w 0x00e6e8d6              ; smd_$send_loc_event
+ *   00e6eb0e    bsr.w 0x00e6e8d6              ; smd_$enqueue_event
  *   00e6eb12    lea (0xc,SP),SP
  *   00e6eb16    subq.l #0x2,SP
  *   00e6eb18    move.w #0x8,-(SP)             ; lock_id = 8
@@ -86,7 +86,7 @@ void SMD_$STOP_TP_CURSOR(uint16_t *unit)
     active = smd_$poll_keyboard();
     if (active < 0) {
         /* Send stop event (type 0x0B) */
-        smd_$send_loc_event(local_unit, 0x0B, SMD_GLOBALS.saved_cursor_pos, 0);
+        smd_$enqueue_event(local_unit, 0x0B, SMD_GLOBALS.saved_cursor_pos, 0);
     }
 
     /* Unlock */

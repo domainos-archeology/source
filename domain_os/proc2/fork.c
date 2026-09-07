@@ -301,7 +301,7 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
     new_entry->flags |= PROC2_FLAG_BOUND;
 
     /* 0x00E72D70 */
-    P2_PID_TO_INDEX_TABLE[new_pid] = (uint16_t)new_idx;
+    PROC2_$PID_TO_INDEX[new_pid] = (uint16_t)new_idx;
 
     /*
      * 0x00E72D80-0x00E72D9E.  Six longwords: 0x70, 0x74, 0x78, 0x7C, 0x84

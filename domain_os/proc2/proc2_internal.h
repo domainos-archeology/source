@@ -76,7 +76,15 @@ _Static_assert(__builtin_offsetof(proc2_ec_entry_t, cr_rec_ec) == 0x0C, "proc2_e
 _Static_assert(sizeof(proc2_ec_entry_t) == 0x18, "proc2_ec_entry_t must be 0x18 bytes");
 #endif
 
-#define PROC2_EC_ENTRIES 69
+/*
+ * One pair per process table slot, indices 1..P2_INFO_TABLE_SIZE.  The pair
+ * for index 1 is at 0xE2B978 (0x00E305A4 `movea.l #0xe2b978,A3` with
+ * 0x00E305B2 `pea (-0x18,A3,D2w*0x1)`, D2 = idx*0x18), and the next labelled
+ * object is UID_$GENERATOR_STATE at 0xE2C008 -- (0xE2C008 - 0xE2B978) / 0x18
+ * is exactly 70, so the array holds one pair for every slot the info table
+ * has (bead source-nm9e).
+ */
+#define PROC2_EC_ENTRIES P2_INFO_TABLE_SIZE
 extern proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
 
 /* Fork / creation record ECs for a 1-based process table index */

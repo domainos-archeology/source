@@ -36,7 +36,7 @@ Other facts recovered in the same pass:
   pgids share one number space.
 - `PROC2_UID` (0xE7BE94) is indexed by **ASID** (entry+0x96), not by table index
   (0x00E73308).
-- `FIM_$INIT_PID` (0x00E0AA24) takes the **address** of the pid word;
+- `FIM_$INIT_ASID` (0x00E0AA24) takes the **address** of the pid word;
   PROC2_$INIT_ENTRY_INTERNAL passes `&entry->asid`.
 - 0x00E4216E renamed `PROC2_$PGROUP_INHERIT_INTERNAL(from, to)` — bumps the source
   group's ref_count then copies +0x10.

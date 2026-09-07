@@ -221,10 +221,11 @@ static void reset(void)
     PROC1_$CURRENT = TEST_PID;
 
     /* The "object has its own protection record, no ACL" shape: default_acl
-     * is NIL and obj_flags[0] is non-zero (0x00E466D6 / 0x00E466F0). */
-    ga_attrs_out.obj_flags[ACL_ATTR_PRESENT]  = 1;
-    ga_attrs_out.obj_flags[ACL_ATTR_OBJ_TYPE] = 1;   /* matches option_flags 1 */
-    ga_attrs_out.obj_flags[ACL_ATTR_FLAGS]    = ACL_ATTR_FLAG_LOCAL;
+     * is NIL and obj_flags[ACL_ATTR_OBJ_TYPE] is non-zero (0x00E466D6 /
+     * 0x00E466F0). */
+    ga_attrs_out.obj_flags[ACL_ATTR_OBJ_TYPE]  = 1;
+    ga_attrs_out.obj_flags[ACL_ATTR_SUB_TYPE] = 1;   /* matches option_flags 1 */
+    ga_attrs_out.obj_flags[ACL_ATTR_FLAGS_LO]    = ACL_ATTR_FLAG_LOCAL;
     ga_attrs_out.default_acl = UID_$NIL;
 
     attrs_prot()->owner = OWNER_UID;
@@ -325,7 +326,8 @@ TEST(attribute_failure_is_swallowed_for_the_locksmith)
 }
 
 /*
- * 0x00E46606-0x00E46664: attrs.obj_flags[3] bit 0 clear plus a negative
+ * 0x00E46606-0x00E46664: attrs.obj_flags[ACL_ATTR_FLAGS_LO] bit 0 clear plus a
+ * negative
  * loc.flags byte routes the whole question to the owning node, and the
  * per-process GLOBAL tables - not the caller's arguments - are what get sent
  * (0x00E46626-0x00E4664E).
@@ -336,7 +338,7 @@ TEST(remote_objects_are_forwarded_with_the_global_tables)
     uint32_t  r;
 
     reset();
-    ga_attrs_out.obj_flags[ACL_ATTR_FLAGS] = 0;         /* not local */
+    ga_attrs_out.obj_flags[ACL_ATTR_FLAGS_LO] = 0;         /* not local */
     ga_loc_out.flags = (int8_t)FILE_OBJ_LOC_REMOTE;     /* bit 7 */
     rf_result_out = 0x0000004Au;
     rf_status_out = 0x00230002;
@@ -367,7 +369,7 @@ TEST(local_acl_bit_prevents_the_remote_forward)
     status_$t st = 0xdeadbeef;
 
     reset();
-    ga_attrs_out.obj_flags[ACL_ATTR_FLAGS] = ACL_ATTR_FLAG_LOCAL;
+    ga_attrs_out.obj_flags[ACL_ATTR_FLAGS_LO] = ACL_ATTR_FLAG_LOCAL;
     ga_loc_out.flags = (int8_t)FILE_OBJ_LOC_REMOTE;
     caller_sids.user_sid = OWNER_UID;
 
@@ -376,7 +378,8 @@ TEST(local_acl_bit_prevents_the_remote_forward)
 }
 
 /*
- * 0x00E4668E-0x00E466C4: the object type in attrs.obj_flags[1] must agree
+ * 0x00E4668E-0x00E466C4: the sub-type in attrs.obj_flags[ACL_ATTR_SUB_TYPE]
+ * must agree
  * with the caller's option_flags word, or the request is rejected with
  * "wrong type - operation illegal on system objects" (0x00230004).
  */
@@ -386,7 +389,7 @@ TEST(object_type_mismatch_is_rejected)
     uint32_t  r;
 
     reset();
-    ga_attrs_out.obj_flags[ACL_ATTR_OBJ_TYPE] = 3;
+    ga_attrs_out.obj_flags[ACL_ATTR_SUB_TYPE] = 3;
     r = call(false, 0x0000000Fu, 1, false, false, &st);
 
     ASSERT_EQ(0u, r);
@@ -405,7 +408,7 @@ TEST(object_type_exemptions_are_accepted)
 
     for (i = 0; i < sizeof(ok) / sizeof(ok[0]); i++) {
         reset();
-        ga_attrs_out.obj_flags[ACL_ATTR_OBJ_TYPE] = ok[i].type;
+        ga_attrs_out.obj_flags[ACL_ATTR_SUB_TYPE] = ok[i].type;
         caller_sids.user_sid = OWNER_UID;
         st = 0;
         (void)call(false, 0x0000000Fu, ok[i].opts, false, false, &st);
@@ -414,7 +417,7 @@ TEST(object_type_exemptions_are_accepted)
 
     /* opts == 0 with type 3 is NOT exempt. */
     reset();
-    ga_attrs_out.obj_flags[ACL_ATTR_OBJ_TYPE] = 3;
+    ga_attrs_out.obj_flags[ACL_ATTR_SUB_TYPE] = 3;
     st = 0;
     (void)call(false, 0x0000000Fu, 0, false, false, &st);
     ASSERT_EQ(0x00230004u, (uint32_t)st);
@@ -496,7 +499,7 @@ TEST(locksmith_group_sid_with_zero_options_grants_all)
     status_$t st = 0xdeadbeef;
 
     reset();
-    ga_attrs_out.obj_flags[ACL_ATTR_OBJ_TYPE] = 4;   /* exempt for opts 0 */
+    ga_attrs_out.obj_flags[ACL_ATTR_SUB_TYPE] = 4;   /* exempt for opts 0 */
     caller_sids.group_sid = RGYC_$G_LOCKSMITH_UID;
     ASSERT_EQ(0x0Fu, call(false, 0x0000000Fu, 0, false, false, &st));
 }

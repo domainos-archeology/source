@@ -105,10 +105,10 @@ void acl_$get_obj_acl_attrs(uid_t *uid, file_$obj_loc_t *loc,
          (acl_$uid_eq(&in_uid, &UID_$NIL) < 0))) {
 
         attrs->default_acl = norm_uid;                      /* 0x00E4606C */
-        attrs->obj_flags[ACL_ATTR_OBJ_TYPE] = 3;            /* 0x00E46074 */
-        attrs->obj_flags[ACL_ATTR_PRESENT]  = 1;            /* 0x00E4607A */
+        attrs->obj_flags[ACL_ATTR_SUB_TYPE] = 3;            /* 0x00E46074 */
+        attrs->obj_flags[ACL_ATTR_OBJ_TYPE] = 1;            /* 0x00E4607A */
         loc->flags &= (int8_t)~FILE_OBJ_LOC_REMOTE;         /* 0x00E4607E */
-        attrs->obj_flags[ACL_ATTR_FLAGS] &=
+        attrs->obj_flags[ACL_ATTR_FLAGS_LO] &=
             (uint8_t)~ACL_ATTR_FLAG_LOCAL;                  /* 0x00E46084 */
 
         /* 0x00E4608A-0x00E460AA: the nil UID itself is an error. */
@@ -132,7 +132,7 @@ void acl_$get_obj_acl_attrs(uid_t *uid, file_$obj_loc_t *loc,
      * 0x00E460CC-0x00E460F4: if AST says the ACL is held locally but the hint
      * cache did not, ask again in remote mode.
      */
-    if ((attrs->obj_flags[ACL_ATTR_FLAGS] & ACL_ATTR_FLAG_LOCAL) != 0 &&
+    if ((attrs->obj_flags[ACL_ATTR_FLAGS_LO] & ACL_ATTR_FLAG_LOCAL) != 0 &&
         (int8_t)hint_flag >= 0) {
         AST_$GET_ACL_ATTRIBUTES(loc, ACL_AST_MODE_REMOTE, attrs, &ast_status);
         if (((uint32_t)ast_status & 0xFFFFU) != 0) {
@@ -143,7 +143,7 @@ void acl_$get_obj_acl_attrs(uid_t *uid, file_$obj_loc_t *loc,
 
     /* 0x00E460FE-0x00E46148 */
     if (attrs->default_acl.high != 0) {
-        obj_type = (uint16_t)attrs->obj_flags[ACL_ATTR_OBJ_TYPE];
+        obj_type = (uint16_t)attrs->obj_flags[ACL_ATTR_SUB_TYPE];
         if (obj_type == 2 || obj_type == 1) {
             if (acl_$uid_eq(&attrs->default_acl, &ACL_$NIL) < 0) {
                 /* 0x00E4612A: a directory with no ACL gets the canned one. */
@@ -159,7 +159,7 @@ void acl_$get_obj_acl_attrs(uid_t *uid, file_$obj_loc_t *loc,
     }
 
     /* 0x00E4614A-0x00E46160 */
-    obj_type = (uint16_t)attrs->obj_flags[ACL_ATTR_OBJ_TYPE];
+    obj_type = (uint16_t)attrs->obj_flags[ACL_ATTR_SUB_TYPE];
     if (obj_type == 3) {
         attrs->default_acl = in_uid;                        /* 0x00E4615A */
     }

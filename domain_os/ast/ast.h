@@ -106,7 +106,38 @@ _Static_assert(sizeof(aste_t) == 0x14, "aste_t size");
 typedef struct aote_t {
   struct aote_t *hash_next; /* 0x00: Next in hash chain */
   struct aste_t *aste_list; /* 0x04: List of ASTEs for this object */
-  uint32_t vol_uid;         /* 0x08: Volume UID or network info */
+  /*
+   * 0x08: the object's LOCATION word -- not a UID.  This is the value
+   * ast_$force_activate_segment takes as its second argument and the value
+   * AST_$GET_LOCATION hands back through its `location_out` parameter
+   * (`move.l (0x8,A0),(A1)` at 0x00E04766).  Encoding, from
+   * ast_$force_activate_segment 0x00E021B2-0x00E021F0 and
+   * AST_$LOOKUP_WITH_HINTS 0x00E01D08-0x00E01D2A:
+   *
+   *   bit 31       set  -> the object is remote (`tst.w (0xc,A6)` / `smi`
+   *                        at 0x00E021B2-0x00E021B6 tests this longword's
+   *                        sign through its high word, and mmap/ws_scan.c
+   *                        tests `aote->vol_uid & 0x80000000`)
+   *   bits 20..30  remote only: the network number, filled in by
+   *                        NETWORK_$INSTALL_NET (`(x & 0xFFF00000) | node`
+   *                        at 0x00E01D2A, ast/load_aote.c:117 and
+   *                        ast/activate_aote_canned.c:47)
+   *   bits 0..19   remote only: the node id (`and.l #0xfffff` at
+   *                        0x00E021E6, copied to obj_loc.node aote+0xB0)
+   *   low byte     local only: the logical volume index, copied to
+   *                        aote+0xB8 (`move.b D0b,(0xb8,A3)` at 0x00E021DC
+   *                        after masking off bit 31)
+   *   0            "location unknown" -- 0x00E02222 `and.l #0x7fffffff` /
+   *                        `bne` selects the search-by-hint path instead of
+   *                        the direct VTOC lookup.
+   *
+   * For a local object the word is replaced after the lookup by
+   * obj_loc.block_hint (`move.l (0xa0,A3),(0x8,A3)` at 0x00E022AE).
+   * TODO(source-thsz, 0x00E04766): the field is still spelled `vol_uid`
+   * here and in mmap/ws_scan.c; renaming it to `location` is a tree-wide
+   * change outside the ast/ pass that recovered the encoding.
+   */
+  uint32_t vol_uid;         /* 0x08: object location word (see above) */
 
   /*
    * 0x0C - 0x9B: object attributes.  Layout recovered instruction by
@@ -120,11 +151,78 @@ typedef struct aote_t {
 
   uid_t uid;             /* 0x10: object UID (hashed by ast_$lookup_aote_by_uid) */
   uid_t dtc;             /* 0x18: creation time (attr 4) */
-  uint32_t unknown_20;   /* 0x20 */
-  uint32_t unknown_24;   /* 0x24 */
+  /*
+   * 0x20: the object's current LENGTH IN BYTES, 32 bits.  Bead source-traa.
+   * Every site that touches it treats it as a byte count over 1KB pages;
+   * nothing anywhere reads it as a page or segment count, and it is not a
+   * truncated copy of anything (see the 0x28 comment below -- that pair is a
+   * clock, not a 48-bit length).  The complete set of accesses in the image,
+   * found by disassembling all 1871 functions and keeping every `(0x20,An)`
+   * in a function that also touches the AOTE-only offsets 0x9C/0xB9/0xBF:
+   *
+   *   writers
+   *     0x00E02AB6  ast_$setup_page_read: when the last page just allocated
+   *                 ends at or past the current length, length :=
+   *                 last_page_byte_offset + 0x400, i.e. grown to the next
+   *                 whole 1KB page (`cmp.l (0x20,A1),D0` / `blt` /
+   *                 `addi.l #0x400,D0` at 0x00E02AAA-0x00E02AB6).
+   *     0x00E02EBE  ast_$read_area_pages_network: same idiom, 0x00E02E9A.
+   *     0x00E04918  AST_$GET_ATTRIBUTES: after refreshing the attribute
+   *                 record from the VTOC or the network, writes back
+   *                 max(cached length, record+0x14) -- 0x00E048F0-0x00E048FC.
+   *                 record+0x14 IS this field: 0x00E0490A copies 0x24
+   *                 longwords from the record over aote+0x0C, so record+0x14
+   *                 lands at aote+0x20.  The max() keeps a length the local
+   *                 pager already grew from being pulled back by a stale
+   *                 on-disk value; it is the reason the field only ever
+   *                 grows on the refresh path.
+   *     0x00E06098  AST_$TRUNCATE: length := the new-length argument
+   *                 (`move.l (0xc,A6),(0x20,A0)`), a byte count -- so the
+   *                 field is NOT a monotone high-water mark; truncation
+   *                 lowers it.
+   *   readers (all convert to a page index with `(length - 1) >> 10`, or
+   *   compare against a byte offset built as page_index * 0x400)
+   *     0x00E03258  AST_$TOUCH: `tst.l` for the empty object, then
+   *                 `(len-1)>>10` vs seg*32 + page (0x00E0325E-0x00E0326A).
+   *     0x00E05A78  AST_$PURIFY: snapshots it under the AST lock.
+   *     0x00E066C0  AST_$INVALIDATE: same `(len-1)>>10` page clamp.
+   *     0x00E06BF4  AST_$GET_SEG_MAP: snapshots it into the frame and
+   *                 compares it against byte offsets at 0x00E06D52/0x00E06D80.
+   *     0x00E13074  pmap_$write_page: `(seg*32+page)*0x400` vs length, then
+   *                 length again to size the partial last page of the write.
+   *     ast_$get_common_attributes 0x00E04A30 reads it as record+0x14 and
+   *                 stores it as the common record's +0x04 length.
+   *   NOT this field: AST_$SET_ATTR_DISPATCH's `(0x20,A1)`/`(0x20,A2)` at
+   *     0x00E04E78/0x00E04FAA are attribute-record+0x20 (owner1_ext), and
+   *     PMAP_$PURIFIER_L's 0x00E13EB4/0x00E13F1E walk a 0x24-byte record
+   *     (`lea (-0x24,A1),A1`), not an AOTE.
+   */
+  uint32_t length;       /* 0x20: current object length in bytes */
+  uint32_t unknown_24;   /* 0x24: page counter; ast_$setup_page_read adds the
+                          * number of pages just allocated (`add.l D5,(0x24,A1)`
+                          * at 0x00E02AE2) */
 
-  uint32_t len_high;     /* 0x28: current length, high 32 bits (attr 9/0x17/0x1A) */
-  uint16_t len_low;      /* 0x2C: current length, low 16 bits */
+  /*
+   * 0x28/0x2C: a 48-bit Apollo clock (high 32 / low 16), NOT a length, in
+   * spite of the field names.  Bead source-traa turned this up while
+   * establishing that 0x20 is the only length in the AOTE:
+   *   - ast_$setup_page_read 0x00E02ABA-0x00E02ACE calls TIME_$CLOCK on
+   *     aote+0x40 and then copies aote+0x40/0x44 into aote+0x28/0x2C.
+   *   - pmap/purifier_l.c:334-336 does the same pair in the other
+   *     direction: TIME_$CLOCK(aote+0x28) then aote+0x40/0x44 := 0x28/0x2C.
+   *   - ast_$read_area_pages_network 0x00E02EC8 stores the freshly read
+   *     clock into both pairs.
+   *   - AST_$SET_ATTR_DISPATCH's "rounded" cases (0x00E04DA6-0x00E04DD4)
+   *     round a non-zero LOW 16 bits up by adding one to the high 32 and
+   *     zeroing the low -- rounding a clock to the next whole tick, which
+   *     is meaningless for a length; and attribute 9, which writes 0x28 with
+   *     a 32-bit value and zeroes 0x2C (0x00E04D88), is FILE_ATTR_DTM_AST.
+   * TODO(source-xk18, 0x00E02ACE): rename this pair (and the 0x30 pair that
+   * shares the misnaming) once mmap/ and pmap/, which spell it `len_high`,
+   * can be updated in the same pass.
+   */
+  uint32_t len_high;     /* 0x28: 48-bit clock, high 32 bits (DTM) */
+  uint16_t len_low;      /* 0x2C: 48-bit clock, low 16 bits */
   uint16_t unknown_2e;   /* 0x2E */
 
   uint32_t dtm_high;     /* 0x30: DTM, high 32 bits (attr 10/0x18/0x1A/0x1B) */
@@ -187,7 +285,7 @@ _Static_assert(__builtin_offsetof(aote_t, aste_list) == 0x04, "aote_t.aste_list"
 _Static_assert(__builtin_offsetof(aote_t, vol_uid) == 0x08, "aote_t.vol_uid");
 _Static_assert(__builtin_offsetof(aote_t, sub_type) == 0x0D, "aote_t.sub_type");
 _Static_assert(__builtin_offsetof(aote_t, attr_flags_lo) == 0x0F, "aote_t.attr_flags_lo");
-_Static_assert(__builtin_offsetof(aote_t, unknown_20) == 0x20, "aote_t.unknown_20");
+_Static_assert(__builtin_offsetof(aote_t, length) == 0x20, "aote_t.length");
 _Static_assert(__builtin_offsetof(aote_t, unknown_24) == 0x24, "aote_t.unknown_24");
 _Static_assert(__builtin_offsetof(aote_t, len_low) == 0x2C, "aote_t.len_low");
 _Static_assert(__builtin_offsetof(aote_t, unknown_2e) == 0x2E, "aote_t.unknown_2e");
@@ -539,14 +637,19 @@ typedef struct mste_t {
   uid_t uid;           /* 0x00: Object UID */
   uint16_t segment;    /* 0x08: Segment number */
   uint16_t unknown_0a; /* 0x0A: Unknown */
-  uint32_t vol_uid;    /* 0x0C: Volume UID */
+  /* 0x0C: the object's location word, in the aote_t.vol_uid encoding.  The
+   * only use in the image is AST_$MSTE_ACTIVATE_AND_WIRE 0x00E02F64
+   * (`move.l (0xc,A2),-(SP)`), which hands it to
+   * ast_$force_activate_segment as that routine's `location` argument;
+   * bead source-sy5u. */
+  uint32_t location;   /* 0x0C: object location word */
 } mste_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
 _Static_assert(__builtin_offsetof(mste_t, uid) == 0x00, "mste_t.uid");
 _Static_assert(__builtin_offsetof(mste_t, segment) == 0x08, "mste_t.segment");
 _Static_assert(__builtin_offsetof(mste_t, unknown_0a) == 0x0A, "mste_t.unknown_0a");
-_Static_assert(__builtin_offsetof(mste_t, vol_uid) == 0x0C, "mste_t.vol_uid");
+_Static_assert(__builtin_offsetof(mste_t, location) == 0x0C, "mste_t.location");
 
 /*
  * Function prototypes - Activation and wiring
@@ -725,7 +828,7 @@ _Static_assert(sizeof(ast_$acl_attr_t) == 0x38, "sizeof ast_$acl_attr_t");
 #define AST_$LOC_REC_FLAGS  0x1D
 
 void AST_$GET_LOCATION(file_$obj_loc_t *loc_rec, uint16_t flags,
-                       uint32_t *unused, uint32_t *vol_uid_out,
+                       uint32_t *unused, uint32_t *location_out,
                        status_$t *status);
 /*
  * AST_$GET_ATTRIBUTES (0x00E047A0) takes the SAME 0x20-byte object-location
@@ -758,7 +861,7 @@ void AST_$SET_ATTRIBUTE(uid_t *uid, uint16_t attr_id, void *value,
  */
 void AST_$SET_ATTR(uid_t *uid, int16_t attr_id, void *value, uint8_t flags,
                    clock_t *clock, status_$t *status);
-void AST_$GET_DTV(uid_t *uid, uint32_t unused, uint32_t *dtv,
+void AST_$GET_DTV(uid_t *uid, uint32_t location, uint32_t *dtv,
                   status_$t *status);
 uint8_t AST_$SET_DTS(uint16_t flags, uid_t *uid, uint32_t *dtv,
                      uint32_t *access_time, status_$t *status);

@@ -210,13 +210,13 @@ TEST(nil_uid_is_well_known_and_reports_object_not_found)
 {
     reset_world();
     in_uid = UID_$NIL;
-    attrs.obj_flags[ACL_ATTR_FLAGS] = 0xFF;
+    attrs.obj_flags[ACL_ATTR_FLAGS_LO] = 0xFF;
     loc.flags = (int8_t)0xFF;
     run();
     ASSERT_EQ(0, mock_ast_calls);
-    ASSERT_EQ(1, attrs.obj_flags[ACL_ATTR_PRESENT]);
-    ASSERT_EQ(3, attrs.obj_flags[ACL_ATTR_OBJ_TYPE]);
-    ASSERT_EQ(0, attrs.obj_flags[ACL_ATTR_FLAGS] & ACL_ATTR_FLAG_LOCAL);
+    ASSERT_EQ(1, attrs.obj_flags[ACL_ATTR_OBJ_TYPE]);
+    ASSERT_EQ(3, attrs.obj_flags[ACL_ATTR_SUB_TYPE]);
+    ASSERT_EQ(0, attrs.obj_flags[ACL_ATTR_FLAGS_LO] & ACL_ATTR_FLAG_LOCAL);
     ASSERT_EQ(0, loc.flags & FILE_OBJ_LOC_REMOTE);      /* 0x00E4607E */
     ASSERT_EQ(0x000F0001u, status);                     /* 0x00E460A4 */
 }
@@ -227,7 +227,7 @@ TEST(acl_nil_is_well_known_and_leaves_status_ok)
     in_uid = ACL_$NIL;
     run();
     ASSERT_EQ(0, mock_ast_calls);
-    ASSERT_EQ(1, attrs.obj_flags[ACL_ATTR_PRESENT]);
+    ASSERT_EQ(1, attrs.obj_flags[ACL_ATTR_OBJ_TYPE]);
     ASSERT_EQ(ACL_$NIL.high, attrs.default_acl.high);
     ASSERT_EQ(status_$ok, status);
 }
@@ -239,7 +239,7 @@ TEST(volume_uid_with_top_word_1_is_well_known)
     in_uid.low  = 0x00000005u;
     run();
     ASSERT_EQ(0, mock_ast_calls);
-    ASSERT_EQ(3, attrs.obj_flags[ACL_ATTR_OBJ_TYPE]);
+    ASSERT_EQ(3, attrs.obj_flags[ACL_ATTR_SUB_TYPE]);
     ASSERT_EQ(status_$ok, status);
 }
 
@@ -249,7 +249,7 @@ TEST(volume_uid_with_top_word_2_is_well_known)
     in_uid.high = 0x00020000u;
     run();
     ASSERT_EQ(0, mock_ast_calls);
-    ASSERT_EQ(1, attrs.obj_flags[ACL_ATTR_PRESENT]);
+    ASSERT_EQ(1, attrs.obj_flags[ACL_ATTR_OBJ_TYPE]);
 }
 
 TEST(a_non_zero_top_byte_defeats_the_well_known_test)
@@ -286,7 +286,7 @@ TEST(local_flag_with_a_positive_hint_forces_a_second_remote_query)
 {
     reset_world();
     mock_hint_result = 0x00;                            /* >= 0 */
-    mock_ast_out[0].obj_flags[ACL_ATTR_FLAGS] = ACL_ATTR_FLAG_LOCAL;
+    mock_ast_out[0].obj_flags[ACL_ATTR_FLAGS_LO] = ACL_ATTR_FLAG_LOCAL;
     run();
     ASSERT_EQ(2, mock_ast_calls);                       /* 0x00E460D8 */
     ASSERT_EQ(0x0001, mock_ast_mode[0]);
@@ -297,7 +297,7 @@ TEST(local_flag_with_a_negative_hint_does_not_repeat_the_query)
 {
     reset_world();
     mock_hint_result = 0xFF;                            /* `bmi` at 0x00E460D6 */
-    mock_ast_out[0].obj_flags[ACL_ATTR_FLAGS] = ACL_ATTR_FLAG_LOCAL;
+    mock_ast_out[0].obj_flags[ACL_ATTR_FLAGS_LO] = ACL_ATTR_FLAG_LOCAL;
     run();
     ASSERT_EQ(1, mock_ast_calls);
 }
@@ -305,7 +305,7 @@ TEST(local_flag_with_a_negative_hint_does_not_repeat_the_query)
 TEST(second_ast_query_failure_is_reported)
 {
     reset_world();
-    mock_ast_out[0].obj_flags[ACL_ATTR_FLAGS] = ACL_ATTR_FLAG_LOCAL;
+    mock_ast_out[0].obj_flags[ACL_ATTR_FLAGS_LO] = ACL_ATTR_FLAG_LOCAL;
     mock_ast_status[1] = 0x000F0002u;
     run();
     ASSERT_EQ(2, mock_ast_calls);
@@ -317,7 +317,7 @@ TEST(second_ast_query_failure_is_reported)
 TEST(directory_with_acl_nil_gets_the_canned_dndcal)
 {
     reset_world();
-    mock_ast_out[0].obj_flags[ACL_ATTR_OBJ_TYPE] = 1;
+    mock_ast_out[0].obj_flags[ACL_ATTR_SUB_TYPE] = 1;
     mock_ast_out[0].default_acl = ACL_$NIL;
     run();
     ASSERT_EQ(ACL_$DNDCAL.high, attrs.default_acl.high);
@@ -327,7 +327,7 @@ TEST(directory_with_acl_nil_gets_the_canned_dndcal)
 TEST(directory_acl_with_top_word_1_is_bumped_to_2)
 {
     reset_world();
-    mock_ast_out[0].obj_flags[ACL_ATTR_OBJ_TYPE] = 2;
+    mock_ast_out[0].obj_flags[ACL_ATTR_SUB_TYPE] = 2;
     mock_ast_out[0].default_acl.high = 0x00010007u;
     mock_ast_out[0].default_acl.low  = 0x00000009u;
     run();
@@ -341,7 +341,7 @@ TEST(obj_type_3_with_a_zero_acl_high_takes_the_input_uid)
     reset_world();
     in_uid.high = 0x0BAD0000u;
     in_uid.low  = 0x0100BEEFu;
-    mock_ast_out[0].obj_flags[ACL_ATTR_OBJ_TYPE] = 3;
+    mock_ast_out[0].obj_flags[ACL_ATTR_SUB_TYPE] = 3;
     mock_ast_out[0].default_acl.high = 0;
     run();
     /* 0x00E4615A copies the ORIGINAL uid, and the trailing
@@ -353,7 +353,7 @@ TEST(obj_type_3_with_a_zero_acl_high_takes_the_input_uid)
 TEST(the_trailing_bclr_clears_bit_24_of_the_default_acl)
 {
     reset_world();
-    mock_ast_out[0].obj_flags[ACL_ATTR_OBJ_TYPE] = 7;   /* no fixup applies */
+    mock_ast_out[0].obj_flags[ACL_ATTR_SUB_TYPE] = 7;   /* no fixup applies */
     mock_ast_out[0].default_acl.high = 0x11112222u;
     mock_ast_out[0].default_acl.low  = 0x01003333u;
     run();

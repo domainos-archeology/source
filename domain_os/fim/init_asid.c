@@ -1,5 +1,5 @@
 /*
- * FIM_$INIT_PID - initialise the FIM per-address-space state for a process
+ * FIM_$INIT_ASID - initialise the FIM per-address-space state for a process
  *
  * Called by PROC2_$INIT_ENTRY_INTERNAL (0x00E732E4) at 0x00E73314 with
  * `pea (0x96,A3)`, i.e. a pointer to proc2_info_t.asid -- so despite the
@@ -41,7 +41,7 @@
  * as_id outside 0..FIM_AS_COUNT-1 would index wild memory.  The original
  * performs no bounds check; neither does this transcription.
  *
- * The counterpart is FIM_$FREE_PID (0x00E0AA6C), which clears
+ * The counterpart is FIM_$FREE_ASID (0x00E0AA6C), which clears
  * FIM_$USER_FIM_ADDR[as_id] and re-asserts the same quit inhibit.
  * Note the asymmetry that both functions set FIM_$QUIT_INH: quits stay
  * inhibited for the AS until FIM_$INSTALL (0x00E0A9C2) puts the first user
@@ -50,7 +50,7 @@
 
 #include "fim/fim_internal.h"
 
-void FIM_$INIT_PID(int16_t *as_id_p)
+void FIM_$INIT_ASID(int16_t *as_id_p)
 {
     int16_t as_id;
 

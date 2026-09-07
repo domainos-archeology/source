@@ -766,6 +766,33 @@ static void test_bit8_falls_through_to_bit7(void)
     ASSERT_EQ(1, RING_$STATS[TEST_UNIT].rcvxerr);
 }
 
+/*
+ * ring_$swdiag_t is the 0x1E-byte block both responders copy whole
+ * (0x00E11278..0x00E1128A and 0x00E64B68..0x00E64B7A), 0x00E261C2..0x00E261DF,
+ * ending right at RING_$STATS[0] (0x00E261E0).  Bead source-twut.
+ */
+static void test_swdiag_block_layout(void)
+{
+    ASSERT_EQ(0x1Eu, (unsigned)sizeof(ring_$swdiag_t));
+    ASSERT_EQ(0x16u, (unsigned)offsetof(ring_$swdiag_t, rcvxerr));
+    ASSERT_EQ(0x18u, (unsigned)offsetof(ring_$swdiag_t, rcvhcsum));
+    ASSERT_EQ(0x1Au, (unsigned)offsetof(ring_$swdiag_t, _r1a));
+}
+
+/*
+ * network_$failure_rec_t+0x04 is the node and +0x0C the failure type
+ * (0x00E75F1C / 0x00E75F2A here, 0x00E10414 / 0x00E1042E in
+ * NETWORK_$REPORT_FAILURE, 0x00E65D0E / 0x00E65D1A in ASKNODE_$SERVER).
+ * Bead source-oowv.
+ */
+static void test_failure_rec_layout(void)
+{
+    ASSERT_EQ(0x10u, (unsigned)sizeof(network_$failure_rec_t));
+    ASSERT_EQ(0x04u, (unsigned)offsetof(network_$failure_rec_t, node_id));
+    ASSERT_EQ(0x08u, (unsigned)offsetof(network_$failure_rec_t, timestamp));
+    ASSERT_EQ(0x0Cu, (unsigned)offsetof(network_$failure_rec_t, failure_type));
+}
+
 /* Message types 1 and 3 fill in NETWORK_$FAILURE_REC instead of a counter. */
 static void test_failure_record(void)
 {
@@ -775,9 +802,9 @@ static void test_failure_record(void)
     TIME_$CURRENT_CLOCKH = 0x11223344;
     ASSERT_EQ(1, run_loop(1));
     ASSERT_EQ(0x11223344, NETWORK_$FAILURE_REC.timestamp);
-    ASSERT_EQ(0x00ABCDEF, NETWORK_$FAILURE_REC.error_info);
+    ASSERT_EQ(0x00ABCDEF, NETWORK_$FAILURE_REC.node_id);
     ASSERT_EQ(1, NETWORK_$FAILURE_REC.flag < 0);
-    ASSERT_EQ(3, NETWORK_$FAILURE_REC.node_id);
+    ASSERT_EQ(3, NETWORK_$FAILURE_REC.failure_type);
     ASSERT_EQ(1, RING_$DATA.abort_cnt);
 }
 
@@ -822,6 +849,8 @@ int main(void)
     RUN_TEST(swdiag_mirror_counters);
     RUN_TEST(esb_and_biphase);
     RUN_TEST(bit8_falls_through_to_bit7);
+    RUN_TEST(swdiag_block_layout);
+    RUN_TEST(failure_rec_layout);
     RUN_TEST(failure_record);
     RUN_TEST(odd_length_pad);
 

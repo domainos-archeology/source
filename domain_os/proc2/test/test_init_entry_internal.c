@@ -31,7 +31,7 @@ static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
 proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
 uint16_t P2_INFO_ALLOC_PTR;
 uint16_t P2_FREE_LIST_HEAD;
-uint16_t *P2_PID_TO_INDEX_TABLE = mock_pid_to_index;
+uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
 pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
 uint16_t PROC2_$NEXT_UPID = P2_UPID_WRAP_TO;
 
@@ -93,7 +93,7 @@ void UID_$GEN(uid_t *uid_ret)
     uid_ret->low = 0x55667788u;
 }
 
-void FIM_$INIT_PID(int16_t *pid)
+void FIM_$INIT_ASID(int16_t *pid)
 {
     n_init_pid++;
     last_init_pid_arg = pid;

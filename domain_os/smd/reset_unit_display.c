@@ -7,8 +7,9 @@
  *
  * Original address: 0x00E6D736 (renamed from FUN_00e6d736)
  *
- * Callers: SMD_$ASSOC (0x00E6D8FE), SMD_$RETURN_DISPLAY (0x00E6F79E) and
- * smd_$reset_display_state (0x00E6F560); all three pass (unit, true).
+ * Callers: SMD_$ASSOC (0x00E6D8FE) and SMD_$RETURN_DISPLAY (0x00E6F79E) both
+ * push `st -(SP)` for `full`; smd_$init_display_state (0x00E6F560) forwards
+ * its own `full` byte (`move.b D2b,-(SP)`) instead.
  *
  * Assembly (every instruction accounted for):
  *   00e6d736    link.w A6,-0x14

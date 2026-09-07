@@ -32,9 +32,22 @@ records them. **How to apply:** trust these over any decompiler output.
   from the PV label's +0xbc word, and PV_MOUNT switches on it (1..5) at
   0xE6C6F2 to derive the two masks from `num_parts`. Non-zero is what makes
   disk_$map_request take the striped path.
-- `+0xa2` (named `lv_shift`): the LV label's +0x40 word, mirrored into the
-  backing PV descriptor, only ever read back out by GET_MNT_INFO at
-  info+0x0c. No arithmetic anywhere; meaning still open (bead source-zot4).
+- `+0xa2` is **`bat_step`**, not a shift (bead source-zot4, settled). It is
+  the LV label's +0x40 word, mirrored into the backing PV descriptor and only
+  read back out by GET_MNT_INFO at info+0x0c. The DISK subsystem does no
+  arithmetic with it because the real consumer is the BAT manager -- and
+  **this tree already had the answer**: `bat/bat_internal.h` names label
+  +0x40 `bat_step`, `bat/mount.c` defaults it to 3 and `BAT_$GET_BAT_STEP`
+  returns it. Grep the other subsystems for a field at the same source
+  offset before declaring a copied word unrecoverable.
+  Corroboration: AEGIS Internals and Data Structures (Jan 1986) 4.3.3 lists
+  the BAT header's fields in the label's own order and ends with "the BAT
+  step to use on this volume"; its glossary explains a step of 2 means
+  "allocate the next block at block n+2 ... set via INVOL to optimize disk
+  seeks". invol's user-facing name is the **sector interleave factor**
+  (sys/help/invol.hlp option 10, "not supported at SR10.4", which is why
+  nothing in SR10.4 writes it; the SR10.2 invol binary still has the
+  dialogue and reads it through disk_$get_mnt_info).
 
 ## disk_io_req_t sub-fields the struct hides
 
@@ -113,3 +126,23 @@ with a sign-extending `adda.w`, and 0x40*0x400 == 0x10000, so slot numbers
   disk tests `#undef`/`#define DISK_VOLUME_BASE` onto a mock array before
   including the .c). A spin loop that polls a plain global clock also needs a
   seam - `WIN_CLOCKH()` in win_internal.h - or the test hangs.
+
+## The queue-block allocator's out-parameters are 32-bit VA cells
+
+`disk_$get_qblks_internal` (0x00E3BE8A) writes both out-parameters with a
+single `move.l` -- 0x00E3BF7E `move.l (0xc0,A5),(A0)` for the head and
+0x00E3BFB8 `move.l (0xc0,A5),(A2)` for the tail -- and reloads the tail cell
+at that width with `movea.l (A2),A3` at 0x00E3BFD8.  So both are four-byte
+target VA cells, NOT host pointers, and the callee must not store a
+`void *` through them: DISK_IO's frame keeps them adjacent at (-0x90,A6) and
+(-0x8c,A6) (0x00E3D5DC), so an 8-byte store destroys the second.  Every
+out-of-subsystem caller already declares a four-byte cell
+(ast/read_area_pages.c, ast/touch_area.c, pmap/flush_write_batch.c,
+pmap/purifier_l.c, disk/as_xfer_multi.c), which is why `DISK_$GET_QBLKS`
+keeps its `int32_t *` / `uint32_t *` pair -- the signedness split is caller
+spelling, not two different cells.  Callers inside disk/ (io.c, format.c,
+format_whole.c) hold `uint32_t` cells and convert with `ARCH_VA_TO_PTR`.
+
+Related trap: `disk_io_req_t` declares `next` / `free_next` as host pointers,
+so on a 64-bit host its layout diverges from the target past +0x04.  A test
+must not mix `req->daddr` with a raw `+0x04` offset -- use one or the other.

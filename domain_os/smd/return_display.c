@@ -104,11 +104,11 @@ void SMD_$RETURN_DISPLAY(int16_t *unit, status_$t *status_ret)
      * Original: hw->field_1c = hw->field_10 */
     hw->field_1c = *((uint32_t *)((uint8_t *)hw + 0x10));
 
-    /* Reset tracking state (no full reset) */
-    smd_$reset_tracking_state(unit_num, 0);
+    /* Reset the module-wide cursor/tracking globals (00e6f794, full = false) */
+    smd_$reset_display_globals((int16_t)unit_num, (boolean)0);
 
-    /* Reset display state (full reset) */
-    smd_$reset_display_state(unit_num, 0xFF);
+    /* Reset the unit's display state (00e6f79e, full = true) */
+    smd_$reset_unit_display((int16_t)unit_num, (boolean)0xFF);
 
     /* Release the display */
     SMD_$REL_DISPLAY();

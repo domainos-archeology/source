@@ -172,9 +172,10 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
         int32_t end_offset = ((uint32_t)*((uint16_t *)((char *)aste + 0x0C)) * 32 +
                               pages_read + start_page - 1) * 0x400;
 
-        if (end_offset >= *((int32_t *)((char *)aote + 0x20))) {
+        /* 0x00E02E9A `cmp.l (0x20,A3),D1` / `blt` -- a SIGNED comparison. */
+        if (end_offset >= (int32_t)aote->length) {
             /* Extending file */
-            *((int32_t *)((char *)aote + 0x20)) = end_offset + 0x400;
+            aote->length = (uint32_t)(end_offset + 0x400);   /* 0x00E02EBE */
             if (dtm.high == 0) {
                 *((uint32_t *)((char *)aote + 0x40)) = clock.high;
                 *((uint16_t *)((char *)aote + 0x44)) = clock.low;

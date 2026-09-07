@@ -144,7 +144,7 @@ void AST_$GET_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags, void *attrs,
 
         /* 0x00E048F0-0x00E048FC: keep the larger of the cached length and the
          * one the remote node reported at attrs+0x14 (unsigned compare). */
-        length = aote->unknown_20;
+        length = aote->length;
         if (length <= attr_buf[0x14 / 4]) {
             length = attr_buf[0x14 / 4];
         }
@@ -161,7 +161,7 @@ void AST_$GET_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags, void *attrs,
         }
 
         /* 0x00E04918-0x00E04922 */
-        aote->unknown_20 = length;
+        aote->length = length;
         aote->dtu_high = saved_dtu_high;
         aote->dtu_low = saved_dtu_low;
 

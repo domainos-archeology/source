@@ -5,10 +5,17 @@
  * exist in the cache, allocates a new AOTE and loads the object info.
  *
  * Parameters:
- *   uid - Object UID to activate
- *   segment - Volume/segment info (high bit = remote, low bits = vol index or network node)
- *   status - Output status
- *   force - Force flag (negative = force activation)
+ *   uid      - Object UID to activate
+ *   location - the object's location word (A6+0x0C, a longword).  Bit 31 set
+ *              means remote: bits 0..19 are the node id and bits 20..30 the
+ *              network number.  Bit 31 clear means local: the low byte is the
+ *              logical volume index.  Zero means "location unknown", which
+ *              selects the hint search instead of a direct VTOC lookup.  The
+ *              encoding and the nine reads of this argument are documented on
+ *              aote_t.vol_uid in ast/ast.h and on the prototype in
+ *              ast/ast_internal.h (bead source-sy5u).
+ *   status   - Output status
+ *   force    - Force flag (negative = force activation)
  *
  * Returns: Pointer to AOTE (or NULL on error)
  *
@@ -32,7 +39,7 @@
 #define AST_$AOTE_SEQN       ast_$aote_seqn
 #endif
 
-aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t segment,
+aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t location,
                                     status_$t *status, int8_t force)
 {
     aote_t *aote;
@@ -84,7 +91,8 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t segment,
     aote->status_flags = 0;
     aote->hash_next = NULL;
     aote->aste_list = NULL;
-    *((uint32_t *)((char *)aote + 0x08)) = segment;
+    /* 0x00E02194: the location word is cached in the AOTE as-is. */
+    *((uint32_t *)((char *)aote + 0x08)) = location;
 
     /* Copy UID to AOTE (offset 0x10 and 0x14) */
     *((uint32_t *)((char *)aote + 0x10)) = uid->high;
@@ -95,17 +103,26 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t segment,
     *((uint32_t *)((char *)aote + 0xA4)) = uid->high;
     *((uint32_t *)((char *)aote + 0xA8)) = uid->low;
 
-    /* Set remote flag based on segment */
-    if ((int16_t)segment < 0) {
-        /* Remote object */
-        *((uint8_t *)((char *)aote + 0xB9)) = 0x80;  /* Set remote flag */
+    /*
+     * 0x00E021B2-0x00E021C6: bit 31 of the location word becomes bit 7 of
+     * aote+0xB9, the other bits of that byte are preserved and bit 6 is
+     * cleared unconditionally.  `tst.w (0xc,A6)` reads the HIGH word of the
+     * longword on this big-endian machine, so the test is the sign of the
+     * whole longword, not of its low half.
+     */
+    *((uint8_t *)((char *)aote + 0xB9)) =
+        (uint8_t)((*((uint8_t *)((char *)aote + 0xB9)) & 0x7F) |
+                  (((int32_t)location < 0) ? 0x80 : 0x00));
+    *((uint8_t *)((char *)aote + 0xB9)) &= (uint8_t)~0x40;
+
+    if ((int32_t)location < 0) {
+        /* Remote object - 0x00E021E2-0x00E02204 */
         *((uint8_t *)((char *)aote + 0xB8)) = 0;     /* Clear vol index */
-        *((uint32_t *)((char *)aote + 0xB0)) = segment & 0xFFFFF;  /* Network node */
-        NETWORK_$GET_NET(segment, (uint32_t *)(aote + 0xAC), status);
+        *((uint32_t *)((char *)aote + 0xB0)) = location & 0xFFFFF;  /* Node id */
+        NETWORK_$GET_NET(location, (uint32_t *)((char *)aote + 0xAC), status);
     } else {
-        /* Local object */
-        *((uint8_t *)((char *)aote + 0xB9)) &= 0x7F;  /* Clear remote flag */
-        *((uint8_t *)((char *)aote + 0xB8)) = (uint8_t)(segment & 0x7FFFFFFF);
+        /* Local object - 0x00E021D2-0x00E021DC */
+        *((uint8_t *)((char *)aote + 0xB8)) = (uint8_t)(location & 0x7FFFFFFF);
     }
 
     /* Insert into hash chain */
@@ -116,62 +133,89 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t segment,
     /* Release AST lock for I/O */
     ML_$UNLOCK(AST_LOCK_ID);
 
-    /* Load object info */
-    if ((segment & 0x7FFFFFFF) == 0) {
-        /* Root/system object */
+    /*
+     * Load object info.  0x00E02222: a location word whose low 31 bits are
+     * zero means the object's whereabouts are unknown, so the volume search
+     * or the hint search runs instead of a direct lookup.
+     */
+    if ((location & 0x7FFFFFFF) == 0) {
         if (force < 0) {
+            /* 0x00E02238 */
             VTOC_$SEARCH_VOLUMES((char *)aote + 0x9C, status);
-        } else {
-            AST_$LOOKUP_WITH_HINTS((char *)aote + 0x9C, (uint32_t *)((char *)aote + 0x0C),
-                        (char *)aote + 0x0C, status);
-            if (*status != status_$ok) {
-                goto relock_and_check;
-            }
-            if (*((int8_t *)((char *)aote + 0xB9)) < 0) {
-                *((uint32_t *)((char *)aote + 0x08)) = segment;
-            }
+            goto check_lookup_status;                  /* 0x00E0223C -> 0x00E022A8 */
         }
-        if (*status == status_$ok) {
-            *((uint32_t *)((char *)aote + 0x08)) = *((uint32_t *)((char *)aote + 0xA0));
+        /*
+         * 0x00E02244 pushes the ADDRESS of the location word: on success
+         * AST_$LOOKUP_WITH_HINTS writes the resolved remote location back
+         * through it (0x00E01D08 sets bit 31, 0x00E01D2A merges the network
+         * number and the node id).
+         */
+        AST_$LOOKUP_WITH_HINTS((char *)aote + 0x9C, &location,
+                    (char *)aote + 0x0C, status);
+        if (*status != status_$ok) {                   /* 0x00E02254 */
+            goto relock_and_check;
         }
-    } else {
-        /* Non-root object */
-        if (*((int8_t *)((char *)aote + 0xB9)) < 0) {
-            /* Remote */
-            NETWORK_$AST_GET_INFO((char *)aote + 0x9C, NET_INFO_FLAGS,
-                                 (char *)aote + 0x0C, status);
-        } else {
-            /* Local - check volume status */
-            uint8_t vol_idx = *((uint8_t *)((char *)aote + 0xB8));
-            if (vol_idx <= 0x0F) {
-                uint16_t vol_flags = *((uint16_t *)(0xE1E0A0));  /* A5+0x420 */
-                if ((vol_flags & (1 << vol_idx)) != 0) {
-                    *status = ast_$validate_uid(uid, 0x30F00);
-                    goto relock_and_check;
-                }
-            }
-            VTOC_$LOOKUP((vtoc_$lookup_req_t *)((char *)aote + 0x9C), status);
+        if (*((int8_t *)((char *)aote + 0xB9)) < 0) {  /* 0x00E0225A */
+            /* 0x00E02260: re-cache the location the hint search resolved. */
+            *((uint32_t *)((char *)aote + 0x08)) = location;
+            goto after_location_stored;                /* 0x00E02266 -> 0x00E022B4 */
         }
+        goto store_location_from_hint;                 /* falls into 0x00E022AE */
     }
 
-    if (*status == status_$ok && *((int8_t *)((char *)aote + 0xB9)) >= 0) {
+    /* 0x00E02268: the location is known. */
+    if (*((int8_t *)((char *)aote + 0xB9)) < 0) {
+        /* Remote - 0x00E0227C, no status test before 0x00E022B4 */
+        NETWORK_$AST_GET_INFO((char *)aote + 0x9C, NET_INFO_FLAGS,
+                             (char *)aote + 0x0C, status);
+        goto after_location_stored;                    /* 0x00E02286 */
+    }
+
+    /* Local - check volume status (0x00E02288) */
+    {
+        uint8_t vol_idx = *((uint8_t *)((char *)aote + 0xB8));
+        if (vol_idx <= 0x0F) {
+            uint16_t vol_flags = *((uint16_t *)(0xE1E0A0));  /* A5+0x420 */
+            if ((vol_flags & (1 << vol_idx)) != 0) {
+                goto bad_volume;                       /* 0x00E0229A -> 0x00E022CE */
+            }
+        }
+    }
+    VTOC_$LOOKUP((vtoc_$lookup_req_t *)((char *)aote + 0x9C), status);
+
+check_lookup_status:                                   /* 0x00E022A8 */
+    if (*status != status_$ok) {
+        goto relock_and_check;
+    }
+store_location_from_hint:                              /* 0x00E022AE */
+    /* For a located local object the location word becomes obj_loc.block_hint. */
+    *((uint32_t *)((char *)aote + 0x08)) = *((uint32_t *)((char *)aote + 0xA0));
+
+after_location_stored:                                 /* 0x00E022B4 */
+    if (*((int8_t *)((char *)aote + 0xB9)) < 0) {
+        goto relock_and_check;
+    }
+    {
         /* Load VTOCE for local objects */
         uint8_t vol_idx = *((uint8_t *)((char *)aote + 0xB8));
         if (vol_idx <= 0x0F) {
             uint16_t vol_flags = *((uint16_t *)(0xE1E0A0));
             if ((vol_flags & (1 << vol_idx)) != 0) {
-                *status = ast_$validate_uid(uid, 0x30F00);
-                goto relock_and_check;
+                goto bad_volume;                       /* 0x00E022CC -> 0x00E022CE */
             }
         }
-        VTOCE_$READ((vtoc_$lookup_req_t *)((char *)aote + 0x9C),
-                    (vtoce_$result_t *)((char *)aote + 0x0C), status);
-
-        /* Clear per-boot fields if object has them */
-        if ((*((uint8_t *)((char *)aote + 0x0F)) & 2) != 0) {
-            *((uint32_t *)((char *)aote + 0x50)) = 0;
-        }
     }
+    VTOCE_$READ((vtoc_$lookup_req_t *)((char *)aote + 0x9C),
+                (vtoce_$result_t *)((char *)aote + 0x0C), status);
+
+    /* Clear per-boot fields if object has them */
+    if ((*((uint8_t *)((char *)aote + 0x0F)) & 2) != 0) {
+        *((uint32_t *)((char *)aote + 0x50)) = 0;
+    }
+    goto relock_and_check;
+
+bad_volume:                                            /* 0x00E022CE */
+    *status = ast_$validate_uid(uid, 0x30F00);
 
 relock_and_check:
     ML_$LOCK(AST_LOCK_ID);

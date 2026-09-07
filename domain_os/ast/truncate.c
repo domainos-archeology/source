@@ -83,7 +83,7 @@ retry_loop:
     aote->flags |= AOTE_FLAG_IN_TRANS;
 
     /* Get current file size */
-    uint32_t current_size = *(uint32_t *)((char *)aote + 0x20);
+    uint32_t current_size = aote->length;   /* 0x00E0607C */
 
     /*
      * TODO(source-22c): the two size-change bodies of AST_$TRUNCATE
@@ -104,7 +104,7 @@ retry_loop:
     }
 
     /* Update file size */
-    *(uint32_t *)((char *)aote + 0x20) = new_size;
+    aote->length = new_size;                /* 0x00E06098 */
 
     /* Mark AOTE as dirty */
     aote->flags |= AOTE_FLAG_DIRTY;

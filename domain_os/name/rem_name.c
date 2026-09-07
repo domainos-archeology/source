@@ -13,7 +13,7 @@
  *   +0x2C: Last status code
  *   +0x30: Current node ID
  *   +0x34: Current network ID
- *   +0x38: Packet sequence number for PKT_$SAR_INTERNET
+ *   +0x38: PKT_$SAR_INTERNET's response-timeout increment, in clock ticks
  *   +0x3A: Retry counter
  *   +0x3C: Boolean - heard from server
  *
@@ -52,7 +52,7 @@ rem_name_data_t rem_name_$data = {
     .last_status = 0x80000000,
     .curr_node = 0,
     .curr_net = 0,
-    .pkt_seq_num = 0x0010,
+    .sar_timeout = 0x0010,
     .retry_count = 0,
     .heard_from_server = 0,
 };
@@ -178,7 +178,7 @@ static boolean rem_name_$send_request(uint32_t net, uint32_t node, void *request
     config[0] |= (uint16_t)flags;
 
     /* Send the packet */
-    PKT_$SAR_INTERNET(net, node, 10, config, rem_name_$data.pkt_seq_num,
+    PKT_$SAR_INTERNET(net, node, 10, config, rem_name_$data.sar_timeout,
                       request, req_size, (void *)pkt_callback_data, 0,
                       out_buf, response, resp_size, resp_len_ret,
                       out1, 0, &out2, &internal_status);

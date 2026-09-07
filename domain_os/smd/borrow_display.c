@@ -162,8 +162,8 @@ void SMD_$BORROW_DISPLAY(int16_t *unit, int8_t *options, status_$t *status_ret)
         SMD_$CLEAR_KBD_CURSOR(status_ret);
     }
 
-    /* Reset tracking state for this unit */
-    smd_$reset_tracking_state(unit_num, 0);
+    /* Reset the module-wide cursor/tracking globals (00e6f6ba, full = false) */
+    smd_$reset_display_globals((int16_t)unit_num, (boolean)0);
 
     /* If options is negative and display type supports it, clear the window */
     if (*options < 0) {

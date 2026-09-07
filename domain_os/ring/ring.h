@@ -451,10 +451,35 @@ extern uint16_t RING_$PAGING_OVERFLOW;  /* 0x00E261C0 */
  * +0x12, are the two whose stats counterparts it also never writes normally
  * (rcvbus CRASH_SYSTEMs first, rcvovr is not a CSR condition), which is what
  * pins the correspondence.  See ring_$stats_t for where the names come from.
+ *
+ * The block is 0x1E bytes, not 0x18 (bead source-twut).  NETWORK_$PROCESS_-
+ * PAGING_REQUEST case 0x0E copies it whole into its reply:
+ *
+ *   0x00E11278  movea.l #0xe261c2,A1
+ *   0x00E1127E  lea (-0x18e,A0),A4
+ *   0x00E11282  moveq #0x6,D0
+ *   0x00E11284  move.l (A1)+,(A4)+
+ *   0x00E11286  dbf D0w,0x00e11284
+ *   0x00E1128A  move.w (A1)+,(A4)+
+ *
+ * i.e. seven longwords plus a word = 30 bytes, 0x00E261C2..0x00E261DF, which
+ * runs up to but not into RING_$STATS[0] at 0x00E261E0.  ASKNODE_$INTERNET_-
+ * INFO makes the identical 0x1E-byte copy at 0x00E64B68..0x00E64B7A.
+ *
+ * Two of the slots the block copy carries are dead: both responders
+ * immediately overwrite them from the standalone globals that hold the live
+ * values (0x00E1128C / 0x00E64B7C from RING_$SWDIAG_RCVCNT over +0x02..0x05,
+ * and 0x00E11294 / 0x00E64B84 from RING_$SWDIAG_NODEID over +0x1A..0x1D).
+ * Nothing in the image writes those slots, +0x00, +0x18 or +0x1A within the
+ * block itself; only the seven counter bumps in ring_$validate_receive
+ * (0x00E75F86..0x00E7602E) touch it.  The image's initialised contents are
+ * all zero except +0x00, which is 1.
  */
 typedef struct ring_$swdiag_t {
-    uint16_t    _r00;                   /* 0x00 (0x00E261C2) */
-    uint16_t    _r02;                   /* 0x02 */
+    uint16_t    _r00;                   /* 0x00 (0x00E261C2), initialised to 1 */
+    uint16_t    _r02;                   /* 0x02: with _r04 the stale rcvcnt the
+                                         *       responders overwrite from
+                                         *       RING_$SWDIAG_RCVCNT */
     uint16_t    _r04;                   /* 0x04 */
     uint16_t    rcveor;                 /* 0x06: rcv_csr bit 5  (0x00E75FD6) */
     uint16_t    rcvcrc;                 /* 0x08: rcv_csr bit 8  (0x00E76004) */
@@ -465,7 +490,26 @@ typedef struct ring_$swdiag_t {
     uint16_t    rcvovr;                 /* 0x12: never written by the receive path */
     uint16_t    rcvapar;                /* 0x14: rcv_csr bit 0  (0x00E75FEC) */
     uint16_t    rcvxerr;                /* 0x16: rcv_csr bit 7  (0x00E76016) */
+    uint16_t    rcvhcsum;               /* 0x18: never written by the receive
+                                         *       path.  Every swdiag mirror
+                                         *       sits a uniform 0x1A below its
+                                         *       ring_$stats_t counter and
+                                         *       rcvhcsum is stats+0x32, so
+                                         *       this is its slot; netmain's
+                                         *       software-diagnostic display
+                                         *       prints "rcvxerr <n>
+                                         *       rcvhcsum <n>" as its own
+                                         *       line. */
+    uint16_t    _r1a[2];                /* 0x1A: the 4-byte tail the block copy
+                                         *       carries and both responders
+                                         *       then overwrite from
+                                         *       RING_$SWDIAG_NODEID
+                                         *       (0x00E11294, 0x00E64B84).
+                                         *       Nothing writes it in place. */
 } ring_$swdiag_t;
+
+_Static_assert(sizeof(ring_$swdiag_t) == 0x1E,
+               "ring_$swdiag_t must be 30 bytes (0x00E261C2..0x00E261DF)");
 
 extern ring_$swdiag_t RING_$SWDIAG_DATA;
 
@@ -647,6 +691,8 @@ _Static_assert(sizeof(ring_$stats_t)                       == RING_STATS_SIZE, "
 _Static_assert(offsetof(ring_$swdiag_t, rcveor)            == 0x06, "ring_$swdiag_t.rcveor");
 _Static_assert(offsetof(ring_$swdiag_t, rcvpkt)            == 0x10, "ring_$swdiag_t.rcvpkt");
 _Static_assert(offsetof(ring_$swdiag_t, rcvxerr)           == 0x16, "ring_$swdiag_t.rcvxerr");
+_Static_assert(offsetof(ring_$swdiag_t, rcvhcsum)          == 0x18, "ring_$swdiag_t.rcvhcsum");
+_Static_assert(offsetof(ring_$swdiag_t, _r1a)              == 0x1a, "ring_$swdiag_t._r1a");
 #endif /* ARCH_M68K */
 
 /*

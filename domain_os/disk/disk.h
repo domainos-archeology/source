@@ -236,6 +236,16 @@ void DISK_$SORT(void *dev_entry, void **queue_ptr);
  * Internal queue block operations (used by AST subsystem)
  * These have different signatures from the public wrappers
  */
+/*
+ * DISK_$GET_QBLKS (0x00E3BFF4) - allocate a chain of disk queue blocks.
+ *
+ * Both out-parameters are 32-bit target VA cells, not host pointers: the
+ * callee stores them with a single `move.l` each (0x00E3BF7E, 0x00E3BFB8 in
+ * disk_$get_qblks_internal) and reloads last_out at that width (0x00E3BFD8).
+ * Convert to a host pointer with ARCH_VA_TO_PTR.  The head cell is signed and
+ * the tail unsigned only because that is how the callers declare them; the
+ * two are the same four-byte cell.
+ */
 void DISK_$GET_QBLKS(int16_t count, int32_t *qblk_head, uint32_t *qblk_tail);
 void DISK_$RTN_QBLKS(int16_t count, int32_t qblk_head, uint32_t qblk_tail);
 

@@ -119,19 +119,39 @@ static inline boolean acl_$uid_eq(const uid_t *a, const uid_t *b)
 #define ACL_$PROT_DATA(attr)    ((acl_$prot_data_t *)((attr)->acl_data))
 
 /*
- * ast_$acl_attr_t.obj_flags[] bytes the ACL subsystem uses.  Named here
- * rather than in ast/ast.h because only acl/ interprets them:
- *   [0] non-zero when the object carries a protection record at all
- *       (`move.b (-0x80,A6),D0b` + `tst.w` at 0x00E466F0)
- *   [1] the object type (`move.b (-0x7f,A6),D0b` at 0x00E46690); compared
- *       against ACL_$RIGHTS' option_flags word
- *   [3] bit 0 = "the ACL is held locally"; when clear and the object location
- *       record says remote, acl_$eval_rights forwards the whole question to
- *       REM_FILE_$ACL_CHECK_RIGHTS (`btst.b #0x0,(-0x7d,A6)` at 0x00E46606)
+ * ast_$acl_attr_t.obj_flags[] - the FIRST LONGWORD of the 0x90-byte attribute
+ * record, copied verbatim by AST_$GET_ACL_ATTRIBUTES (`move.l (-0x90,A6),(A2)`
+ * at 0x00E04AD6).  AST_$GET_ATTRIBUTES fills that record from aote+0x0C
+ * onwards (0x00E049A2), so the four bytes are aote+0x0C..+0x0F - exactly the
+ * four bytes AST_$GET_COMMON_ATTRIBUTES copies into ast_$common_attr_t's
+ * obj_type / sub_type / attr_flags_hi / attr_flags_lo (0x00E04A2C).
+ * (source-qg0q.)
+ *
+ *   [0] obj_type       aote+0x0C.  acl/ only ever asks whether it is non-zero,
+ *                      i.e. "the object has a type, so it has a protection
+ *                      record" (`move.b (-0x80,A6),D0b` + `tst.w` at
+ *                      0x00E466F0).
+ *   [1] sub_type       aote+0x0D (`move.b (-0x7f,A6),D0b` at 0x00E46690); this
+ *                      is the byte compared against ACL_$RIGHTS' option_flags
+ *                      word, and the one acl_$get_obj_acl_attrs forces to 3
+ *                      for the well-known volume UIDs (0x00E46074).
+ *   [2] attr_flags_hi  aote+0x0E, with bits 1..0 replaced from aote+0x71
+ *                      bits 5..4.  acl/ never reads it.
+ *   [3] attr_flags_lo  aote+0x0F.  Bit 0 = "the ACL is held locally"; when
+ *                      clear and the object location record says remote,
+ *                      acl_$eval_rights forwards the whole question to
+ *                      REM_FILE_$ACL_CHECK_RIGHTS (`btst.b #0x0,(-0x7d,A6)`
+ *                      at 0x00E46606).
+ *
+ * TODO(source-qg0q, 0x00E04AD6): ast/ast.h still declares the longword as
+ * `uint8_t obj_flags[4]`; splitting it into the four named bytes belongs to
+ * ast/, and file/ and rem_file/ index it too.
  */
-#define ACL_ATTR_PRESENT        0
-#define ACL_ATTR_OBJ_TYPE       1
-#define ACL_ATTR_FLAGS          3
+#define ACL_ATTR_OBJ_TYPE       0
+#define ACL_ATTR_SUB_TYPE       1
+#define ACL_ATTR_FLAGS_HI       2
+#define ACL_ATTR_FLAGS_LO       3
+/* Bit 0 of attr_flags_lo. */
 #define ACL_ATTR_FLAG_LOCAL     0x01
 
 /*
@@ -170,16 +190,29 @@ typedef struct __attribute__((packed)) acl_$cache_slot_t {
                                  *       sids->login_sid at 0x00E46828 */
     uint32_t reserved_22;       /* 0x22: `clr.l (0x22,A1)` 0x00E45C1C */
     uint16_t reserved_26;       /* 0x26: `clr.w (0x26,A1)` 0x00E45C20 */
-    int8_t   flag_28;           /* 0x28: negative suppresses the "append the
-                                 *       missing required entry" fixup
-                                 *       (`tst.b (0x28,A2)` + `bmi`, 0x00E45CA0).
-                                 *       The version-3 fixup clears it unless the
-                                 *       image is a directory ACL (0x00E45C38);
-                                 *       acl_$convert_image clears it (0x00E44EC6).
-                                 * TODO(source-wlps, 0x00E45CA0): the flag's own
-                                 *       name is not recovered. */
-    int8_t   flag_29;           /* 0x29: always cleared alongside flag_28
-                                 *       (0x00E45C3C, 0x00E44ECA) */
+    int8_t   world_entry_present;
+                                /* 0x28: Pascal boolean.  Its ONE reader is the
+                                 *       version-3/4 directory fixup in
+                                 *       acl_$load_acl_image: `tst.b (0x28,A2)`
+                                 *       + `bmi` at 0x00E45CA0 skips appending
+                                 *       the all-nil (person = group = org =
+                                 *       UID_$NIL) entry with rights
+                                 *       ACL_V4_RIGHTS_DEFAULT when the flag is
+                                 *       negative.  That all-nil entry is what
+                                 *       acl_$convert_image turns into
+                                 *       prot->world_rights (0x00E44F44-
+                                 *       0x00E44F56), so a true flag means "this
+                                 *       image already carries its world entry".
+                                 *       The version-3 promotion clears it unless
+                                 *       the image is a directory ACL
+                                 *       (0x00E45C38); every version-5 image the
+                                 *       kernel builds clears it outright
+                                 *       (acl_$convert_image 0x00E44EC6,
+                                 *       acl_$image_internal 0x00E47DD8). */
+    int8_t   unused_29;         /* 0x29: no reader anywhere in the image; the
+                                 *       three writers only ever clear it
+                                 *       alongside world_entry_present
+                                 *       (0x00E45C3C, 0x00E44ECA, 0x00E47DDC). */
     uint8_t  reserved_2a[0x0A]; /* 0x2A..0x33: five words the version-3 fixup
                                  *       zeroes (0x00E45C40-0x00E45C4E) */
     uint8_t  entries[0x3CC];    /* 0x34: 0x20-byte ACL entries
@@ -189,8 +222,9 @@ typedef struct __attribute__((packed)) acl_$cache_slot_t {
 
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(acl_$cache_slot_t, type_uid)    == 0x02, "cache.type_uid");
-_Static_assert(__builtin_offsetof(acl_$cache_slot_t, flag_28)     == 0x28, "cache.flag_28");
-_Static_assert(__builtin_offsetof(acl_$cache_slot_t, flag_29)     == 0x29, "cache.flag_29");
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, world_entry_present) == 0x28,
+               "cache.world_entry_present");
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, unused_29)  == 0x29, "cache.unused_29");
 _Static_assert(__builtin_offsetof(acl_$cache_slot_t, entry_count) == 0x0E, "cache.entry_count");
 _Static_assert(__builtin_offsetof(acl_$cache_slot_t, required_uid)== 0x12, "cache.required_uid");
 _Static_assert(__builtin_offsetof(acl_$cache_slot_t, subsys_uid)  == 0x1A, "cache.subsys_uid");
@@ -379,13 +413,47 @@ _Static_assert(sizeof(acl_$v4_entry_t) == 0x2C, "sizeof acl_$v4_entry_t");
 extern acl_$cache_slot_t ACL_$IMAGE_BUF;    /* 0xE7D354 */
 
 /*
- * acl_$convert_rights (0x00E44DBE, was FUN_00e44dbe)
+ * The version-5 rights-byte bits acl_$convert_rights produces.  Bits 0..3 are
+ * the four rights ACL_RIGHTS_ALL covers; bit 6 is the one ACL_RIGHTS_PRIVILEGED
+ * also withholds.  Named by bit number rather than by right letter: nothing in
+ * the image spells the letters out.
+ */
+#define ACL_V5_RIGHT_0              0x01
+#define ACL_V5_RIGHT_1              0x02
+#define ACL_V5_RIGHT_2              0x04
+#define ACL_V5_RIGHT_3              0x08
+#define ACL_V5_RIGHT_6              0x40
+
+/*
+ * The pre-version-5 32-bit rights bits acl_$convert_rights reads
+ * (`btst.l #n,D1`, 0x00E44DE2-0x00E44E58).
+ */
+#define ACL_V4_RIGHT_0              0x00000001UL
+#define ACL_V4_RIGHT_1              0x00000002UL
+#define ACL_V4_RIGHT_2              0x00000004UL
+#define ACL_V4_RIGHT_3              0x00000008UL
+#define ACL_V4_RIGHT_4              0x00000010UL
+#define ACL_V4_RIGHT_5              0x00000020UL
+#define ACL_V4_RIGHT_6              0x00000040UL
+/* Bit 25 - the bit acl_$expand_default_acl forces on before it converts an
+ * encoded default-ACL rights word (ACL_CONVERT_RIGHTS_DEFAULT). */
+#define ACL_V4_RIGHT_25             0x02000000UL
+
+/*
+ * acl_$convert_rights (0x00E44DBE, was FUN_00e44dbe), 170 bytes
  *
  * Maps a pre-version-5 32-bit ACL rights word onto the version-5 rights byte.
- * `acl_type_uid` selects the bit assignment: ACL_$FILE_ACL or ACL_$DIR_ACL.
- * Bit 25 (0x02000000) of `old_rights` always contributes 0x08.
+ * `acl_type_uid` selects the bit assignment; a UID that is neither
+ * ACL_$FILE_ACL nor ACL_$DIR_ACL contributes nothing but bit 25.
  *
- * TODO(source-wlps, 0x00E44DBE): body not yet emitted.
+ *   ACL_$FILE_ACL     old 1 -> new 2, old 2 -> new 1, old 0 -> new 0,
+ *                     old 3 CLEAR -> new 6
+ *   ACL_$DIR_ACL      old 0 -> new 2, old 3&1&2&6 -> new 1, old 5 -> new 0,
+ *                     old 4 CLEAR -> new 6
+ *   both              old 25 -> new 3
+ *
+ * Module-level: no static link (`movea.l (A6),An`) and no A5 reference; it
+ * reads ACL_$FILE_ACL / ACL_$DIR_ACL through absolute addresses.
  */
 uint8_t acl_$convert_rights(uint32_t old_rights, uid_t *acl_type_uid);
 
@@ -397,7 +465,7 @@ uint8_t acl_$convert_rights(uint32_t old_rights, uid_t *acl_type_uid);
  * (0x00E4502C-0x00E4503A).  Argument order from acl_$load_acl_image's pushes
  * at 0x00E45D5C-0x00E45D6C.
  *
- * TODO(source-wlps, 0x00E44E68): body not yet emitted.
+ * Module-level: no static link and no A5 reference.
  */
 void acl_$convert_image(acl_$cache_slot_t *src, acl_$prot_data_t *prot,
                         acl_$cache_slot_t *dst, uint16_t *length_ret,
@@ -667,8 +735,9 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
  * by ACL_$SET_ACL_CHECK's identical sequence at 0x00E470EA-0x00E470FA.
  *
  * It seeds loc->uid from the caller's UID (0x00E45F90), clears bits 6 and 7 of
- * loc->flags (0x00E45FEA, 0x00E4607E), sets attrs->obj_flags[0]=1 and
- * obj_flags[1]=3 for the well-known volume UIDs (0x00E46074-0x00E4607A) and
+ * loc->flags (0x00E45FEA, 0x00E4607E), sets attrs->obj_flags[ACL_ATTR_OBJ_TYPE]
+ * = 1 and obj_flags[ACL_ATTR_SUB_TYPE] = 3 for the well-known volume UIDs
+ * (0x00E46074-0x00E4607A) and
  * otherwise calls AST_$GET_ACL_ATTRIBUTES (0x00E460BC).
  *
  * Emitted in acl/get_obj_acl_attrs.c.

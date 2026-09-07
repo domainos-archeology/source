@@ -213,7 +213,16 @@ extern file_lock_entry_detail_t FILE_$LOCK_ENTRIES[FILE_LOCK_ENTRY_COUNT + 1];
  * Word at 0xE9F9C4, 8 bytes below the per-process lock table base 0xE9F9CC.
  * FILE_$LOCK_INIT clears it (0x00E327AC) and that is the only reference to the
  * address in the image.
- * TODO(source-9r49): identify the word at 0xE9F9C4.
+ * The SR10.2 SAU2 link map settles the question as far as it can be settled:
+ * sau2.10.2.tar's sau2/domain_os.map is the map for THIS image (it places
+ * FILE_$LOCK_INIT at E32744, our address), and it puts 0xE9F9C4 inside the
+ * segment `D71  E935CC  FILE_$LOT_DATA  size = 1086C` - E935CC..EA3E38, which
+ * ends exactly where the per-ASID count array does.  That segment exports NO
+ * symbols at all, so the map cannot name the cell.  Nor can the code: the only
+ * table bases the image ever loads in 16-bit displacement range of 0xE9F9C4
+ * are #0xE935CC, #0xE97294 and #0xEA202C, and every displacement taken off
+ * them in the lock routines is -0x2662 (= 0xE9F9CC).  The word is
+ * write-only.  (source-9r49, closed as not-nameable.)
  */
 extern uint16_t FILE_$LOT_E9F9C4;
 

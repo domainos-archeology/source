@@ -1262,7 +1262,17 @@ void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
                          void *name_ret, void *len_ret, void *uid_ret,
                          status_$t *status_ret);
 void dir_$do_op_fix_dir(uid_t *uid, status_$t *status_ret);
-/* FUN_00e52bc2 is DIR_$SET_ACL - declared in dir.h */
+/* dir_$do_op_set_acl - DO_OP handler: set ACL (opcode 0x4A)
+ *
+ * 0x00E52BC2 is the SERVER-side handler, not DIR_$SET_ACL.  DIR_$SET_ACL is
+ * the client-side request builder at 0x00E52C86 (dir/set_acl.c, declared in
+ * dir.h).  Sole caller 0x00E4C78E passes the resolved object UID, the funky
+ * ACL UID at request+0x8E and response+0x04 as the status.
+ *
+ * Original address: 0x00E52BC2
+ * Size: 196 bytes
+ */
+void dir_$do_op_set_acl(uid_t *uid, uid_t *acl_uid, status_$t *status_ret);
 void dir_$do_op_set_default_acl(uid_t *uid, void *type, void *acl, status_$t *status_ret);
 void dir_$do_op_get_default_acl(uid_t *uid, uid_t *type, uid_t *acl_ret, status_$t *status_ret);
 void dir_$do_op_validate_root_entry(void *name, uint16_t name_len, status_$t *status_ret);

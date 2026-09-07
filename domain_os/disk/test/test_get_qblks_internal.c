@@ -29,6 +29,9 @@
  *   - the lock is taken and released around the whole body, and dropped
  *     across EC_$WAIT (0x00E3BF44-0x00E3BF6C)
  *   - no store spills into the neighbouring cell of any 32-bit link
+ *   - the two out-parameters are four-byte VA cells: DISK_IO's adjacent
+ *     frame pair (-0x90,A6)/(-0x8c,A6) at 0x00E3D5DC survives the call
+ *     and ARCH_VA_TO_PTR recovers the blocks (0x00E3BF7E, 0x00E3BFB8)
  */
 
 #include <stdio.h>
@@ -182,11 +185,11 @@ TEST(allocate_single_block)
     setup_free_list(3);
     D16(DMOD_AVAIL_COUNT) = 3;
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(1, 0, &first, &last);
 
-    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)first);
-    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)last);
+    ASSERT_EQ(BLOCK_VA(0), first);
+    ASSERT_EQ(BLOCK_VA(0), last);
 
     ASSERT_EQ(0u, *(uint32_t *)(BLOCK(0) + DISK_QBLK_STATUS));
     ASSERT_EQ(0u, *(uint16_t *)(BLOCK(0) + DISK_QBLK_FLAGS));
@@ -212,11 +215,11 @@ TEST(allocate_three_blocks_builds_the_forward_chain)
     setup_free_list(5);
     D16(DMOD_AVAIL_COUNT) = 5;
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(3, 0, &first, &last);
 
-    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)first);
-    ASSERT_EQ((uintptr_t)BLOCK(2), (uintptr_t)last);
+    ASSERT_EQ(BLOCK_VA(0), first);
+    ASSERT_EQ(BLOCK_VA(2), last);
 
     ASSERT_EQ(BLOCK_VA(1), BVA(BLOCK(0), DISK_QBLK_FORWARD));
     ASSERT_EQ(BLOCK_VA(2), BVA(BLOCK(1), DISK_QBLK_FORWARD));
@@ -249,7 +252,7 @@ TEST(link_stores_do_not_spill_into_the_neighbouring_cell)
     *(uint32_t *)(BLOCK(0) + 0x04) = 0xA1A2A3A4u;
     *(uint32_t *)(BLOCK(1) + 0x04) = 0xB1B2B3B4u;
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(2, 0, &first, &last);
 
     /* daddr survives the forward-link store on both blocks. */
@@ -270,7 +273,7 @@ TEST(owner_is_the_low_byte_of_the_current_process)
     D16(DMOD_AVAIL_COUNT) = 2;
     PROC1_$CURRENT = 0x142;     /* low byte 0x42 */
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(1, 0, &first, &last);
 
     ASSERT_EQ(0x42, *(BLOCK(0) + DISK_QBLK_OWNER));
@@ -287,11 +290,11 @@ TEST(write_mode_uses_the_reserve_block)
     D16(DMOD_AVAIL_COUNT) = 0;
     D8(DMOD_ALLOC_DISABLED) = -1;           /* growth disabled */
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(1, -1, &first, &last);
 
-    ASSERT_EQ((uintptr_t)RESERVE_BLOCK, (uintptr_t)first);
-    ASSERT_EQ((uintptr_t)RESERVE_BLOCK, (uintptr_t)last);
+    ASSERT_EQ((uint32_t)RESERVE_VA, first);
+    ASSERT_EQ((uint32_t)RESERVE_VA, last);
 
     /* 0x00E3BF02 copies the reserve VA into the head; 0x00E3BF08 clears the
      * flag.  The reserve cell itself is left alone. */
@@ -314,11 +317,11 @@ TEST(write_mode_ignores_the_pending_count)
     D16(DMOD_AVAIL_COUNT) = 3;
     D16(DMOD_PENDING_COUNT) = 2;
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(2, -1, &first, &last);
 
-    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)first);
-    ASSERT_EQ((uintptr_t)BLOCK(1), (uintptr_t)last);
+    ASSERT_EQ(BLOCK_VA(0), first);
+    ASSERT_EQ(BLOCK_VA(1), last);
     ASSERT_EQ(1, D16(DMOD_AVAIL_COUNT));
     ASSERT_EQ(0, ec_waits);
 }
@@ -332,7 +335,7 @@ TEST(read_mode_enqueues_and_waits_when_requests_are_pending)
     D8(DMOD_ALLOC_DISABLED) = -1;
     ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(2, 0, &first, &last);
 
     ASSERT_EQ(1, ec_waits);
@@ -363,7 +366,7 @@ TEST(write_mode_without_a_reserve_waits_for_the_eventcount_plus_one)
     ((ec_$eventcount_t *)DISK_$DATA)->value = 20;
     wait_adds_avail = 1;                    /* the wait is satisfied */
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(1, -1, &first, &last);
 
     /* 0x00E3BF0E-0x00E3BF10: move.l (A5),D1 / addq.l #1,D1 */
@@ -372,8 +375,8 @@ TEST(write_mode_without_a_reserve_waits_for_the_eventcount_plus_one)
     ASSERT_EQ(0, grow_calls);
 
     /* Write mode loops back to 0x00E3BEB8 and allocates on the retry. */
-    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)first);
-    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)last);
+    ASSERT_EQ(BLOCK_VA(0), first);
+    ASSERT_EQ(BLOCK_VA(0), last);
     ASSERT_EQ(0, D16(DMOD_AVAIL_COUNT));
     ASSERT_EQ(2, lock_starts);
     ASSERT_EQ(2, lock_stops);
@@ -392,7 +395,7 @@ TEST(request_queue_write_index_wraps_from_0x40_to_1)
     D16(DMOD_REQ_WRITE_IDX) = DMOD_REQ_QUEUE_SIZE;   /* 0x40 */
     ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(3, 0, &first, &last);
 
     ASSERT_EQ(1, D16(DMOD_REQ_WRITE_IDX));
@@ -410,7 +413,7 @@ TEST(pool_is_grown_when_growth_is_enabled)
     D16(DMOD_PENDING_COUNT) = 0;
     grow_adds_avail = 3;
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(2, 0, &first, &last);
 
     ASSERT_EQ(1, grow_calls);
@@ -429,7 +432,7 @@ TEST(pool_is_not_grown_for_process_type_5)
     PROC1_$TYPE[PROC1_$CURRENT] = 5;        /* 0x00E3BEE4 */
     ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(2, 0, &first, &last);
 
     ASSERT_EQ(0, grow_calls);
@@ -445,13 +448,102 @@ TEST(pool_is_not_grown_when_growth_is_disabled)
     D16(DMOD_PENDING_COUNT) = 0;
     ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
 
-    void *first = NULL, *last = NULL;
+    uint32_t first = 0, last = 0;
     disk_$get_qblks_internal(2, 0, &first, &last);
 
     ASSERT_EQ(0, grow_calls);
     ASSERT_EQ(1, ec_waits);
     /* wait_val = ec value + pending (now 1) */
     ASSERT_EQ(11, last_wait_vals.val[0]);
+}
+
+/*
+ * DISK_IO's frame keeps the two out-cells adjacent -- (-0x90,A6) and
+ * (-0x8c,A6) at 0x00E3D5DC -- and hands the results straight to
+ * disk_$map_request / disk_$rtn_qblks_internal as addresses.  This is the
+ * shape disk/io.c reproduces: two uint32_t cells, then ARCH_VA_TO_PTR.  A
+ * callee that stored a host pointer would write eight bytes into the first
+ * cell and destroy the second, so the pair is checked together.
+ */
+TEST(io_c_call_shape_two_adjacent_va_cells)
+{
+    struct {
+        uint32_t req_va;        /* (-0x90,A6) */
+        uint32_t req_last_va;   /* (-0x8c,A6) */
+        uint32_t guard;
+    } frame;
+
+    reset_module();
+    setup_free_list(3);
+    D16(DMOD_AVAIL_COUNT) = 3;
+    D8(DMOD_RESERVE_AVAIL) = 0;
+
+    frame.req_va = 0xDEADBEEFu;
+    frame.req_last_va = 0xFEEDFACEu;
+    frame.guard = 0xA5A5A5A5u;
+
+    /* 0x00E3D5DC: DISK_IO allocates one block in write mode (0xFF). */
+    disk_$get_qblks_internal(1, (int8_t)0xFF, &frame.req_va,
+                             &frame.req_last_va);
+
+    ASSERT_EQ(BLOCK_VA(0), frame.req_va);
+    ASSERT_EQ(BLOCK_VA(0), frame.req_last_va);
+    ASSERT_EQ(0xA5A5A5A5u, frame.guard);
+
+    /* The pointers disk/io.c derives from the two cells. */
+    disk_io_req_t *req = ARCH_VA_TO_PTR(frame.req_va);
+    void *req_last = ARCH_VA_TO_PTR(frame.req_last_va);
+    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)req);
+    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)req_last);
+
+    /*
+     * The block the pointer names is the one the callee initialised
+     * (0x00E3BF94 clr.l (0xc,A2), 0x00E3BFA4 move.b (A0),(0x1e,A2)).  The
+     * checks use raw offsets rather than disk_io_req_t fields because that
+     * record declares its links as host pointers, so its host layout past
+     * +0x04 is not the target layout (bead source-wyn9).
+     */
+    ASSERT_EQ(0u, *(uint32_t *)(BLOCK(0) + DISK_QBLK_STATUS));
+    ASSERT_EQ(7, *(BLOCK(0) + DISK_QBLK_OWNER));
+    ASSERT_EQ((uintptr_t)req, (uintptr_t)req_last);
+}
+
+/*
+ * The same shape with count > 1, which is what DISK_$GET_QBLKS' callers use:
+ * head and tail name different blocks and neither store reaches past its own
+ * four bytes.
+ */
+TEST(io_c_call_shape_head_and_tail_differ)
+{
+    struct {
+        uint32_t head_va;
+        uint32_t tail_va;
+        uint32_t guard;
+    } frame;
+
+    reset_module();
+    setup_free_list(4);
+    D16(DMOD_AVAIL_COUNT) = 4;
+
+    frame.head_va = 0u;
+    frame.tail_va = 0u;
+    frame.guard = 0xA5A5A5A5u;
+
+    /* 0x00E3BFF4 DISK_$GET_QBLKS passes mode 0. */
+    disk_$get_qblks_internal(3, 0, &frame.head_va, &frame.tail_va);
+
+    ASSERT_EQ(BLOCK_VA(0), frame.head_va);
+    ASSERT_EQ(BLOCK_VA(2), frame.tail_va);
+    ASSERT_EQ(0xA5A5A5A5u, frame.guard);
+
+    /* The tail cell was reloaded as an address at 0x00E3BFD8 to clear the
+     * two links of the last block. */
+    ASSERT_EQ(0u, BVA(BLOCK(2), DISK_QBLK_FORWARD));
+    ASSERT_EQ(0u, BVA(BLOCK(2), DISK_QBLK_FREE_NEXT));
+
+    /* The chain head still walks to the tail through DISK_QBLK_FORWARD. */
+    ASSERT_EQ(BLOCK_VA(1), BVA(ARCH_VA_TO_PTR(frame.head_va),
+                               DISK_QBLK_FORWARD));
 }
 
 int main(void)
@@ -470,6 +562,8 @@ int main(void)
     RUN_TEST(pool_is_grown_when_growth_is_enabled);
     RUN_TEST(pool_is_not_grown_for_process_type_5);
     RUN_TEST(pool_is_not_grown_when_growth_is_disabled);
+    RUN_TEST(io_c_call_shape_two_adjacent_va_cells);
+    RUN_TEST(io_c_call_shape_head_and_tail_differ);
 
     printf("\n  Results: %d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed > 0 ? 1 : 0;

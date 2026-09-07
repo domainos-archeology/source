@@ -28,7 +28,7 @@ uint16_t P2_FREE_LIST_HEAD;
 uint16_t PROC2_$NEXT_UPID = P2_UPID_WRAP_TO;
 
 /* Mapping table: PROC1 PID -> PROC2 index (at 0xEA551C + 0x3EB6) */
-uint16_t *P2_PID_TO_INDEX_TABLE;
+uint16_t *PROC2_$PID_TO_INDEX;
 
 /* Process group table (8-byte entries at 0xEA551C + 0x3F30) */
 pgroup_entry_t *PGROUP_TABLE;

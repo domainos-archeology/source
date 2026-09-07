@@ -180,14 +180,15 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
         cs->required_uid = UID_$NIL;        /* 0x00E45C0E-0x00E45C18 */
         cs->reserved_22  = 0;
         cs->reserved_26  = 0;
-        /* 0x00E45C24-0x00E45C38: a directory ACL keeps whatever flag_28 held.
+        /* 0x00E45C24-0x00E45C38: a directory ACL keeps whatever
+         * world_entry_present held.
          * Compared field-by-field rather than through acl_$uid_eq: type_uid
          * sits at slot+0x02, so its address is an unaligned pointer. */
         if (!(cs->type_uid.high == ACL_$DIR_ACL.high &&
               cs->type_uid.low  == ACL_$DIR_ACL.low)) {
-            cs->flag_28 = 0;
+            cs->world_entry_present = 0;
         }
-        cs->flag_29 = 0;
+        cs->unused_29 = 0;
         /* 0x00E45C40-0x00E45C4E: five words at +0x2A..+0x33. */
         for (i = 4; i != -1; i--) {
             /* `clr.w (0x28,A0)` with A0 walking cs+0x02 upwards by 2. */
@@ -215,7 +216,7 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
             }
 
             /* 0x00E45CA0-0x00E45CA4 */
-            if (cs->flag_28 >= 0) {
+            if (cs->world_entry_present >= 0) {
                 /* 0x00E45CA8-0x00E45CBA: `A0 = cs + entry_count * 0x2C` is
                  * the LAST entry (entries are 1-based). */
                 acl_$v4_entry_t *last = ACL_$V4_ENTRY(cs, cs->entry_count);

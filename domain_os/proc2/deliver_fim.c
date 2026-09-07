@@ -33,6 +33,15 @@
 #define SIGNAL_FAULT_MASK     0xFFFFFF67
 
 /*
+ * Bit 23 of the status longword: the flag the caller sets to ask for a
+ * pending signal and that this routine sets back when it has picked one.
+ * The image reaches it as the byte at offset 1 of the longword
+ * (0x00E3EE0C `tst.b (0x1,A2)`, 0x00E3EE54 `bset.b #0x7,(0x1,A2)`); the
+ * mask form is byte-order independent.
+ */
+#define P2_FIM_STATUS_SIGNAL_PENDING  0x00800000
+
+/*
  * Raw memory access macros for FIM-related fields
  */
 #if defined(ARCH_M68K)
@@ -102,8 +111,16 @@ int8_t PROC2_$DELIVER_FIM(int16_t *signal_ret, status_$t *status,
 
     info = P2_INFO_ENTRY(cur_idx);
 
-    /* Loop while status high byte has bit 7 set */
-    while (((uint8_t*)status)[1] < 0) {
+    /*
+     * 0x00E3EE0C  tst.b (0x1,A2)
+     * 0x00E3EE10  bpl.b 0x00e3ee5c
+     * A2 is the status pointer, so the byte at offset 1 of the big-endian
+     * longword is bits 16..23 and `bpl` tests bit 7 of it, i.e. bit 23 of
+     * the status.  Spelled as a mask so it means the same on a
+     * little-endian host (bead source-tt7d).  The loop is closed by the
+     * `bra.b 0x00e3ee0c` at 0x00E3EE44.
+     */
+    while ((*status & P2_FIM_STATUS_SIGNAL_PENDING) != 0) {
         /* Get next pending signal */
         signal = PROC2_$GET_NEXT_PENDING_SIGNAL(info);
         *signal_ret = signal;
@@ -125,8 +142,11 @@ int8_t PROC2_$DELIVER_FIM(int16_t *signal_ret, status_$t *status,
                 *status = 0;
             }
 
-            /* Set bit 7 of status high byte */
-            ((uint8_t*)status)[1] |= 0x80;
+            /*
+             * 0x00E3EE54  bset.b #0x7,(0x1,A2) -- set bit 23 of the status
+             * longword (bead source-tt7d).
+             */
+            *status |= P2_FIM_STATUS_SIGNAL_PENDING;
             goto handle_fault;
         }
 

@@ -9,7 +9,8 @@
  *   +0x04: Volume address range end (4 bytes, descriptor +0x8c)
  *   +0x08: Device type (2 bytes, dev_info +4)
  *   +0x0a: Unit id (2 bytes, descriptor +0x9a)
- *   +0x0c: descriptor +0xa2, lv_shift (2 bytes)
+ *   +0x0c: descriptor +0xa2, the BAT step (2 bytes) -- what invol's
+ *          "sector interleave factor" option reads back
  *   +0x0e: Sectors per track and head count (4 bytes, descriptor +0x9c)
  *   +0x12: 1 << sector_size_code, i.e. the hardware sectors per
  *          disk block (2 bytes: 1, 2 or 4)
@@ -86,7 +87,7 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
     dev_info = vol->dev_info;
     *(uint16_t *)(info_bytes + 8) = *(uint16_t *)((uint8_t *)dev_info + 4);
     *(uint16_t *)(info_bytes + 0x0a) = vol->unit_id;
-    *(uint16_t *)(info_bytes + 0x0c) = vol->lv_shift;
+    *(uint16_t *)(info_bytes + 0x0c) = vol->bat_step;
     /* 0xe6bf0a copies sec_per_track and num_heads together as one longword */
     *(uint32_t *)(info_bytes + 0x0e) =
         ((uint32_t)vol->sec_per_track << 16) | vol->num_heads;

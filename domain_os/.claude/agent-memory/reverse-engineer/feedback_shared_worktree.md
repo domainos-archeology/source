@@ -28,8 +28,8 @@ every binary under `build/host/test/` yourself and total the counts, since one
 other agent's broken test file stops `make test` before its summary line.
 
 Concurrency also reaches *inside* a subsystem you were told you own: while I
-was emitting `fim/init_pid.c` (2026-09-07) the agent working on `proc2/` added
-its own `void FIM_$INIT_PID(int16_t *pid);` prototype to `fim/fim.h` to make
+was emitting `fim/init_asid.c` (2026-09-07) the agent working on `proc2/` added
+its own `void FIM_$INIT_ASID(int16_t *pid);` prototype to `fim/fim.h` to make
 its call site compile, so my freshly added prototype collided
 ("conflicting types") in every host test that includes the header.  **Before
 adding a prototype for a function another subsystem already calls, grep the

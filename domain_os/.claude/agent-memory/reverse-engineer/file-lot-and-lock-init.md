@@ -19,8 +19,15 @@ metadata:
    `clr.b (-0x4,A1)` = refcount (+0x18) and `move.w D2w,(-0x8,A1)` = next
    (+0x14). Everything else in an entry survives init.
 3. 0xE327AC: `clr.w (0x00e9f9c4).l` - a lone word 8 bytes below the
-   per-process table base. Write-only in the entire image (bead source-9r49).
-4. Control block 0xE82128: `+0x2CE = 1` at 0xE327B8 **and again** at 0xE327E2
+   per-process table base. Write-only in the entire image, and **not
+   nameable**: the SAU2 SR10.2 map (see [[reference-sau2-domain-os-map]])
+   puts it inside segment `FILE_$LOT_DATA` (E935CC, size 0x1086C, i.e.
+   E935CC..EA3E38 - exactly through the per-ASID count array), and that
+   segment exports no symbols. Closed, bead source-9r49.
+4. Control block 0xE82128 (= `OS_DATA_SHUTWIRED`; `+0xC8` = 0xE821F0 is
+   **FILE_$LOT_HASHTAB**, `+0x2CE` = 0xE823F6 is **FILE_$LOT_FREE**, both from
+   the SAU2 map - the sr10.4 maps misleadingly call 0xE821F0's counterpart
+   FILE_$ASID_LOCKS): `+0x2CE = 1` at 0xE327B8 **and again** at 0xE327E2
    (a genuine double write); 251 words cleared from +0xC8 (0xE327BE);
    `+0x2CC = 1` (0xE327E8); `UID_$GEN(+0xC0)`; base_uid = UID_$NIL with the low
    longword's bottom 20 bits replaced by NODE_$ME (0xE245A4); `clr.b +0x2D0`.

@@ -17,7 +17,7 @@
  * Memory layout (m68k):
  *   - Process info table: 0xEA551C (base for index 1)
  *   - Table entry size: 0xE4 (228) bytes
- *   - Max processes: ~70 (indices 1-69)
+ *   - Max processes: 70 (indices 1-70; see P2_INFO_TABLE_SIZE)
  *   - Allocation pointer: P2_INFO_ALLOC_PTR at 0xE7BE84 + 0x1E0
  */
 
@@ -427,6 +427,16 @@ _Static_assert(__builtin_offsetof(pgroup_entry_t, session_id) == 0x06, "pgroup_e
 
 #define PGROUP_TABLE_SIZE 70 /* Indices 0-69, 0 unused */
 
+/*
+ * Number of process table entries: indices 1..70, index 0 unused (bead
+ * source-nm9e).  PROC2_$INIT builds the free list with 69 iterations
+ * (0x00E3049A `moveq #0x44,D0` against the `dbf` at 0x00E304D4) over
+ * D1 = 2..70 (0x00E3049C), and entry 1 is the init process.  There is no
+ * slot 71: entry 70 runs 0xEA9290..0xEA9373 and the PID-to-index table
+ * (base 0xEA93D2) and process-group table (0xEA9454) follow it.
+ */
+#define P2_INFO_TABLE_SIZE 70
+
 /* Base address for index calculations (table_base - entry_size) */
 extern proc2_info_t *P2_INFO_TABLE;
 
@@ -437,7 +447,7 @@ extern uint16_t P2_INFO_ALLOC_PTR;
 extern uint16_t P2_FREE_LIST_HEAD;
 
 /* Mapping table: PROC1 PID -> PROC2 index (at 0xEA551C + 0x3EB6) */
-extern uint16_t *P2_PID_TO_INDEX_TABLE;
+extern uint16_t *PROC2_$PID_TO_INDEX;
 
 /* Process group table (8-byte entries at 0xEA551C + 0x3F30) */
 extern pgroup_entry_t *PGROUP_TABLE;
@@ -454,7 +464,7 @@ extern pgroup_entry_t *PGROUP_TABLE;
 extern uid_t PROC2_UID[PROC2_UID_TABLE_SIZE];
 
 #define P2_INFO_ENTRY(idx) (&P2_INFO_TABLE[(idx) - 1])
-#define P2_PID_TO_INDEX(pid) (P2_PID_TO_INDEX_TABLE[(pid)])
+#define P2_PID_TO_INDEX(pid) (PROC2_$PID_TO_INDEX[(pid)])
 #define PGROUP_ENTRY(idx) (&PGROUP_TABLE[(idx)])
 
 /*

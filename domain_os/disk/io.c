@@ -21,6 +21,7 @@
  */
 
 #include "disk/disk_internal.h"
+#include "arch/arch.h"
 #include "mmu/mmu.h"
 #include "time/time.h"
 #include "proc1/proc1.h"
@@ -113,8 +114,15 @@ status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t ppn, uint32_t daddr,
     disk_$volume_t *io_vol;             /* A2: descriptor the transfer runs on */
     void *dev_info;                     /* (-0xb4,A6) */
     uint16_t dev_flags;
-    disk_io_req_t *req;                 /* A3 / (-0x90,A6) */
-    void *req_last;                     /* (-0x8c,A6) */
+    /*
+     * (-0x90,A6) and (-0x8c,A6) are the two four-byte VA cells
+     * disk_$get_qblks_internal fills in (0x00E3BF7E, 0x00E3BFB8).  The
+     * derived host pointers are what the rest of the body uses.
+     */
+    uint32_t req_va;                    /* (-0x90,A6) */
+    uint32_t req_last_va;               /* (-0x8c,A6) */
+    disk_io_req_t *req;                 /* A3, = ARCH_VA_TO_PTR(req_va) */
+    void *req_last;
     int16_t internal_op;                /* D4w */
     boolean raw_op;                     /* (-0xaa,A6) */
     boolean do_header_check;            /* D6b */
@@ -200,7 +208,9 @@ status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t ppn, uint32_t daddr,
 
     /* 0xe3d5dc: mode 0xFF = write mode (this allocation must not block behind
      * queued readers) */
-    disk_$get_qblks_internal(1, (int8_t)0xFF, &req, &req_last);
+    disk_$get_qblks_internal(1, (int8_t)0xFF, &req_va, &req_last_va);
+    req = ARCH_VA_TO_PTR(req_va);
+    req_last = ARCH_VA_TO_PTR(req_last_va);
 
     /* 0xe3d5fa-0xe3d602: dbf #7 -> 8 longwords */
     for (i = 0; i < 8; i++) {

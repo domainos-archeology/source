@@ -47,8 +47,8 @@
  * Parameters:
  *   count     - Number of queue blocks to allocate
  *   mode      - Negative for write mode, non-negative for read
- *   first_out - Output: pointer to first allocated block
- *   last_out  - Output: pointer to last allocated block
+ *   first_out - Output: 32-bit VA cell, receives the first allocated block
+ *   last_out  - Output: 32-bit VA cell, receives the last allocated block
  *
  * Original address: 0x00E3BE8A
  * Size: 362 bytes
@@ -68,11 +68,22 @@
  * address, not a host pointer.  They are read and written as uint32_t and
  * converted at the boundary with ARCH_VA_TO_PTR / ARCH_PTR_TO_VA (identity
  * casts on m68k), so a 64-bit host build does not overrun the neighbouring
- * field.  The two output parameters stay host pointers, which is how
- * disk/io.c uses them.
+ * field.
+ *
+ * The two output parameters are 32-bit VA cells too, not host pointers.  Each
+ * is written with a single `move.l` of DMOD_FREE_HEAD -- 0x00E3BF7E
+ * `move.l (0xc0,A5),(A0)` for first_out and 0x00E3BFB8 `move.l (0xc0,A5),(A2)`
+ * for last_out -- and last_out is read back at the same width at 0x00E3BFD8
+ * `movea.l (A2),A3`.  Every caller supplies a four-byte cell
+ * (ast/read_area_pages.c, ast/touch_area.c, pmap/flush_write_batch.c,
+ * pmap/purifier_l.c, disk/as_xfer_multi.c), so storing a host pointer here
+ * would overrun the neighbouring local on a 64-bit host.  Callers that want a
+ * pointer convert with ARCH_VA_TO_PTR (disk/io.c, disk/format.c,
+ * disk/format_whole.c).
  */
 
-void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void *last_out)
+void disk_$get_qblks_internal(int16_t count, int8_t mode, uint32_t *first_out,
+                              uint32_t *last_out)
 {
     uint8_t *data = DISK_$DATA;
 
@@ -155,8 +166,7 @@ void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void 
 allocate:
     /* Record the first block (current free list head).
      * 0x00E3BF7E: move.l (0xc0,A5),(A0) */
-    *(void **)first_out =
-        ARCH_VA_TO_PTR(*(uint32_t *)(data + DMOD_FREE_HEAD));
+    *first_out = *(uint32_t *)(data + DMOD_FREE_HEAD);
 
     /* Walk the free list, initialize each block, build allocated chain */
     int16_t remaining = count - 1;
@@ -177,7 +187,7 @@ allocate:
             /* Record last block when we reach the count'th one.
              * 0x00E3BFB8: move.l (0xc0,A5),(A2) */
             if (count == block_num) {
-                *(void **)last_out = ARCH_VA_TO_PTR(block_va);
+                *last_out = block_va;
             }
 
             /* 0x00E3BFC0 and 0x00E3BFC8 both re-read the free_next link;
@@ -194,8 +204,10 @@ allocate:
         } while (remaining != -1);  /* dbf loop semantics */
     }
 
-    /* Terminate the last allocated block (0x00E3BFDA, then 0x00E3BFDE) */
-    uint8_t *last_block = *(uint8_t **)last_out;
+    /* Terminate the last allocated block.  0x00E3BFD8 `movea.l (A2),A3`
+     * reloads the cell as an address, then 0x00E3BFDA / 0x00E3BFDE clear the
+     * two links in that order. */
+    uint8_t *last_block = ARCH_VA_TO_PTR(*last_out);
     *(uint32_t *)(last_block + DISK_QBLK_FREE_NEXT) = 0;
     *(uint32_t *)(last_block + DISK_QBLK_FORWARD) = 0;
 

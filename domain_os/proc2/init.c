@@ -7,7 +7,7 @@
  * 1. Global UIDs for the system
  * 2. PID-to-index mapping table (cleared)
  * 3. Process group table (cleared)
- * 4. Free list of process table entries (entries 2-69)
+ * 4. Free list of process table entries (entries 2-70)
  * 5. Entry 1 as the init/system process
  * 6. Memory mappings for creation records and initial stack
  * 7. Boot device initialization (tape/floppy if requested)
@@ -25,10 +25,23 @@
 
 #include "proc2/proc2_internal.h"
 
-/* Number of process table entries (indices 1-69, 0 unused) */
-#define P2_MAX_ENTRIES          70
+/*
+ * Process table extent (bead source-nm9e).
+ *
+ * The free-list build loop below runs 0x00E3049A `moveq #0x44,D0` (68)
+ * against the `dbf D0w` at 0x00E304D4, i.e. 69 iterations, with D1 stepping
+ * 2..70 from 0x00E3049C `moveq #0x2,D1`.  The last slot the table has is
+ * therefore index 70, and index 0 is unused (P2_INFO_ENTRY biases by one).
+ *
+ * There is no slot 71.  Entry 70 begins at 0xEA551C + 69*0xE4 = 0xEA9290 and
+ * ends at 0xEA9374; the PID-to-index table starts at 0xEA93D2 (element
+ * address 0xEA93D2 + pid*2, cf. 0x00E3F35E/0x00E3F364 in PROC2_$ACKNOWLEDGE)
+ * and the process-group table at 0xEA9454, so a 71st 0xE4-byte entry would
+ * run straight over them.  The 71 the loop leaves in slot 70's next_index is
+ * a transient that 0x00E304D8 overwrites; see the tail-link store below.
+ */
 #define P2_FIRST_FREE_ENTRY     2
-#define P2_LAST_ENTRY           69
+#define P2_LAST_ENTRY           P2_INFO_TABLE_SIZE
 
 /*
  * Globals used here (declared in subsystem headers):
@@ -94,11 +107,20 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     }
 
     /*
-     * Step 4: Clear PID-to-index mapping table
-     * (63 entries)
+     * Step 4: Clear PID-to-index mapping table.
+     *
+     * 0x00E30466  movea.l #0xea551c,A0
+     * 0x00E3046C  moveq #0x3e,D0        -- 62, so 63 iterations
+     * 0x00E3046E  addq.l #0x4,A0        -- A0 = 0xEA5520
+     * 0x00E30470  clr.w (0x3eb6,A0)
+     * 0x00E30474  addq.l #0x2,A0
+     * The first cleared word is 0xEA5520 + 0x3EB6 = 0xEA93D6, which is
+     * P2_PID_TO_INDEX(2) against the 0xEA93D2 base, and the stride is 2, so
+     * the loop covers PROC1 pids 2..64.  Pid 1's slot is written separately
+     * at 0x00E304EA (step 7).
      */
-    for (i = 0; i < 63; i++) {
-        P2_PID_TO_INDEX_TABLE[i] = 0;
+    for (i = 2; i <= 64; i++) {
+        PROC2_$PID_TO_INDEX[i] = 0;
     }
 
     /*
@@ -111,16 +133,26 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     }
 
     /*
-     * Step 6: Initialize free list (entries 2-69)
-     * Each entry points to next, with UID_NIL and cleared flags
+     * Step 6: Initialize free list (entries 2..70).
+     * Each entry points to the next, with UID_NIL and cleared flags.
+     *
+     * 0x00E30494  move.w #0x2,(0x1e2,A1)  -- P2_FREE_LIST_HEAD := 2
+     * 0x00E304B0 .. 0x00E304D4 is the loop body; A1 tracks entry(i)+0xE4, so
+     * the (-d,A0) displacements below are entry offset 0xE4 - d.
      */
     P2_FREE_LIST_HEAD = P2_FIRST_FREE_ENTRY;
 
     for (i = P2_FIRST_FREE_ENTRY; i <= P2_LAST_ENTRY; i++) {
         entry = P2_INFO_ENTRY(i);
 
-        /* Link to next entry (or 0 for last) */
-        entry->next_index = (i < P2_LAST_ENTRY) ? (i + 1) : 0;
+        /*
+         * 0x00E304B4  addq.w #0x1,D2w
+         * 0x00E304B6  move.w D2w,(-0xd2,A0)   -- entry+0x12 := i + 1
+         * The store is UNCONDITIONAL: there is no end-of-table test in the
+         * loop, so slot 70 is left pointing at the non-existent index 71
+         * until the store after the loop terminates the list.
+         */
+        entry->next_index = (uint16_t)(i + 1);
 
         /* Set parent UID to nil */
         entry->parent_uid.high = UID_$NIL.high;
@@ -140,9 +172,28 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     }
 
     /*
+     * Terminate the free list.
+     *
+     * 0x00E304D8  clr.w (0x00ea92a2).l
+     * 0xEA92A2 == 0xEA551C + 69*0xE4 + 0x12 == entry(70)->next_index, so the
+     * tail link is zeroed here, after the loop, overwriting the 71 the last
+     * iteration stored (bead source-nm9e).
+     */
+    P2_INFO_ENTRY(P2_LAST_ENTRY)->next_index = 0;
+
+    /*
      * Step 7: Initialize entry 1 as the init/system process
      */
+    /* 0x00E304E4  move.w #0x1,(0x1e0,A3)  -- A3 = 0xE7BE84, so 0xE7C064 */
     P2_INFO_ALLOC_PTR = 1;
+
+    /*
+     * 0x00E304EA  move.w #0x1,(0x00ea93d4).l
+     * 0xEA93D4 == 0xEA93D2 + 1*2 == P2_PID_TO_INDEX(1): PROC1 pid 1 maps to
+     * process table entry 1.
+     */
+    PROC2_$PID_TO_INDEX[1] = 1;
+
     init_entry = P2_INFO_ENTRY(1);
 
     /* Clear allocation list links */
@@ -336,7 +387,7 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     NAME_$RESOLVE((char*)boot_shell_path, &path_len, &boot_shell_uid, status_ret);
 
     status = OS_$BOOT_ERRCHK((char*)msg_unable_to_resolve, (char*)boot_shell_path,
-                              (uint16_t*)&path_len, status_ret);
+                              &path_len, status_ret);
     if ((int8_t)status >= 0) {
         return status;
     }
@@ -360,7 +411,7 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
                    &lock_rights_0, lock_result, status_ret);
 
         status = OS_$BOOT_ERRCHK((char*)msg_unable_to_lock, (char*)boot_shell_path,
-                                  (uint16_t*)&path_len, status_ret);
+                                  &path_len, status_ret);
         if ((int8_t)status >= 0) {
             return status;
         }
@@ -380,7 +431,7 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
                  &map_param4, (uint8_t*)&map_param5, (int32_t*)map_result, status_ret);
 
         status = OS_$BOOT_ERRCHK((char*)msg_unable_to_map, (char*)boot_shell_path,
-                                  (uint16_t*)&path_len, status_ret);
+                                  &path_len, status_ret);
         if ((int8_t)status >= 0) {
             return status;
         }
@@ -396,7 +447,7 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
             MST_$UNMAP(&boot_shell_uid, (uint32_t*)map_result, (uint32_t*)unmap_result, status_ret);
 
             status = OS_$BOOT_ERRCHK((char*)msg_unable_to_unmap, (char*)boot_shell_path,
-                                      (uint16_t*)&path_len, status_ret);
+                                      &path_len, status_ret);
             if ((int8_t)status >= 0) {
                 return status;
             }
@@ -411,7 +462,7 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
                         &map_param3, &map_param4, &map_param5, remap_result, status_ret);
 
             status = OS_$BOOT_ERRCHK((char*)msg_unable_to_map, (char*)boot_shell_path,
-                                      (uint16_t*)&path_len, status_ret);
+                                      &path_len, status_ret);
             if ((int8_t)status >= 0) {
                 return status;
             }

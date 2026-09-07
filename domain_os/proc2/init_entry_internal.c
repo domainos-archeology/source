@@ -50,7 +50,7 @@ void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry)
     PROC2_UID[entry->asid].low = entry->uid.low;
 
     /* 0x00E73310: the argument is &entry->asid (entry+0x96), not the value */
-    FIM_$INIT_PID((int16_t *)&entry->asid);
+    FIM_$INIT_ASID((int16_t *)&entry->asid);
 
     /* 0x00E7331C */
     entry->cleanup_flags = 0;

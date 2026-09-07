@@ -54,15 +54,34 @@ extern void AST_$DEACTIVATE_SEGMENT(aste_t *aste, uint32_t flags, status_$t *sta
 /* Look up AOTE by UID - returns AOTE pointer */
 aote_t *ast_$lookup_aote_by_uid(uid_t *uid);
 
-/* Force lookup/activate AOTE for segment - returns AOTE pointer */
-/* `segment` is a LONGWORD on the stack (A6+0x0C; `move.l (-0x14,A6),-(SP)` at
- * AST_$GET_ATTRIBUTES 0x00E04832) and the callee never reads it.
- * What the argument MEANS is bead source-sy5u: twelve of the thirteen
- * callers pass 0 and ast/mste_activate_and_wire.c passes mste->vol_uid, but
- * ast_$force_activate_segment (0x00E020FA) reads only A6+0x08 (uid),
- * A6+0x10 (status) and A6+0x14 (the boolean byte) -- A6+0x0C is dead -- so
- * the stack shape below is all the machine code constrains. */
-aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t segment, status_$t *status, int8_t force);
+/* Force lookup/activate AOTE for an object - returns AOTE pointer.
+ *
+ * `location` (A6+0x0C) is a LONGWORD and the callee reads it nine times;
+ * the earlier note here claiming A6+0x0C was dead was wrong, and closing
+ * bead source-sy5u meant reading the disassembly rather than the decompiler:
+ *
+ *   0x00E02194  move.l (0xc,A6),(0x8,A3)      aote->vol_uid := location
+ *   0x00E021B2  tst.w  (0xc,A6) / smi         bit 31 -> aote+0xB9 remote flag
+ *   0x00E021CC  tst.w  (0xc,A6) / bmi         local vs remote branch
+ *   0x00E021D8  and.l  #0x7fffffff            low byte -> aote+0xB8 vol index
+ *   0x00E021E6  and.l  #0xfffff               node id -> aote+0xB0
+ *   0x00E021FA  move.l (0xc,A6),-(SP)         NETWORK_$GET_NET(location, ...)
+ *   0x00E02228  and.l  #0x7fffffff / bne      zero selects the hint search
+ *   0x00E02244  pea    (0xc,A6)               &location to AST_$LOOKUP_WITH_HINTS,
+ *                                             which writes the resolved
+ *                                             network/node back through it
+ *   0x00E02260  move.l (0xc,A6),(0x8,A3)      re-store after that resolution
+ *
+ * The encoding is documented on aote_t.vol_uid in ast/ast.h -- it is the
+ * same word AST_$GET_LOCATION returns (0x00E04766).  Of the thirteen
+ * callers, AST_$MSTE_ACTIVATE_AND_WIRE passes mste->location (0x00E02F64)
+ * and AST_$GET_DTV forwards its own second argument (0x00E054C6); the other
+ * eleven pass a longword zero, meaning "location unknown, go find it".
+ * AST_$GET_ATTRIBUTES is one of those eleven: A6-0x14 is a dedicated frame
+ * cell cleared by `clr.l (-0x14,A6)` at 0x00E04822, never stored to again,
+ * and pushed at 0x00E04832 -- a plain zero, not a volume or a segment.
+ */
+aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t location, status_$t *status, int8_t force);
 
 /* Look up existing ASTE for AOTE/segment */
 aste_t* ast_$lookup_aste(aote_t *aote, int16_t segment);

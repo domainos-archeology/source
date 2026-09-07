@@ -755,9 +755,9 @@ TEST(record_failure_sends_nothing)
 
     ASSERT_EQ(0, mock_send_calls);
     ASSERT_TRUE(NETWORK_$FAILURE_REC.flag < 0);
-    ASSERT_EQ(0x000AAAAA, NETWORK_$FAILURE_REC.error_info);  /* rx node id */
+    ASSERT_EQ(0x000AAAAA, NETWORK_$FAILURE_REC.node_id);  /* rx node id */
     ASSERT_EQ(0x11223344, NETWORK_$FAILURE_REC.timestamp);
-    ASSERT_EQ(0x00066666, NETWORK_$FAILURE_REC.node_id);
+    ASSERT_EQ(0x00066666, NETWORK_$FAILURE_REC.failure_type);
 }
 
 /* Request 0x45 answers through the context record, not the network. */

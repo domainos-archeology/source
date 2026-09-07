@@ -52,7 +52,7 @@ void AST_$INVALIDATE(uid_t *uid, uint32_t start_page, uint32_t count,
     is_remote = *(int8_t *)((char *)aote + 0xB9);
 
     /* Check if file has any pages */
-    uint32_t file_size = *(uint32_t *)((char *)aote + 0x20);
+    uint32_t file_size = aote->length;   /* 0x00E066C0 */
     if (file_size != 0 && start_page <= ((file_size - 1) >> 10)) {
         /* Calculate end page */
         end_page = start_page + count - 1;

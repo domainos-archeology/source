@@ -125,9 +125,14 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     /* Initialize entry (generates UID, UPID, etc.) */
     PROC2_$INIT_ENTRY_INTERNAL(new_entry);
 
-    /* Store parent UID */
-    *(uint32_t*)((char*)new_entry + 0x08) = local_parent_uid.high;
-    *(uint32_t*)((char*)new_entry + 0x0C) = local_parent_uid.low;
+    /*
+     * Store parent UID.
+     * 0x00E72800  lea (-0x8,A6),A0
+     * 0x00E72804  move.l (A0)+,(-0xdc,A3)   -- entry+0x08 = parent_uid.high
+     * 0x00E72808  move.l (A0)+,(-0xd8,A3)   -- entry+0x0C = parent_uid.low
+     */
+    new_entry->parent_uid.high = local_parent_uid.high;
+    new_entry->parent_uid.low = local_parent_uid.low;
 
     /* Store code descriptor and user data */
     new_entry->cr_rec = (uint32_t)local_code_desc;
@@ -170,7 +175,7 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     new_entry->flags |= 0x01;
 
     /* Set up PID to index mapping */
-    P2_PID_TO_INDEX_TABLE[new_pid] = new_idx;
+    PROC2_$PID_TO_INDEX[new_pid] = new_idx;
 
     /* Clear signal masks */
     new_entry->sig_pending = 0;
@@ -225,11 +230,18 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
             DEBUG_SETUP_INTERNAL((int16_t)new_entry->self_index,
                                  (int16_t)current_entry->debugger_idx, 0);
 
-            /* Copy ptrace options from parent */
-            *(uint32_t*)((char*)new_entry + 0xCE) = *(uint32_t*)((char*)current_entry + 0xCE);
-            *(uint32_t*)((char*)new_entry + 0xD2) = *(uint32_t*)((char*)current_entry + 0xD2);
-            *(uint32_t*)((char*)new_entry + 0xD6) = *(uint32_t*)((char*)current_entry + 0xD6);
-            *(uint16_t*)((char*)new_entry + 0xDA) = *(uint16_t*)((char*)current_entry + 0xDA);
+            /*
+             * Copy ptrace options from parent.
+             * 0x00E72962  lea (-0x16,A2),A0    -- &current_entry->ptrace_opts
+             * 0x00E72966  lea (-0x16,A3),A1    -- &new_entry->ptrace_opts
+             * 0x00E7296A/6C/6E  move.l (A0)+,(A1)+
+             * 0x00E72970  move.w (A0)+,(A1)+
+             * 4 + 4 + 4 + 2 = 14 bytes, i.e. one xpd_$ptrace_opts_t, the
+             * same copy PROC2_$FORK makes at 0x00E73078-0x00E73086.
+             */
+            for (int i = 0; i < 14; i++) {
+                new_entry->ptrace_opts[i] = current_entry->ptrace_opts[i];
+            }
         }
     }
 

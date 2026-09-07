@@ -71,7 +71,17 @@ typedef struct rem_name_data_t {
     status_$t last_status;           /* +0x2C: Last status code */
     uint32_t curr_node;              /* +0x30: Current name server node */
     uint32_t curr_net;               /* +0x34: Current name server network */
-    uint16_t pkt_seq_num;            /* +0x38: Packet sequence number */
+    /*
+     * +0x38: the `timeout` argument rem_name_$send_request hands
+     * PKT_$SAR_INTERNET - the fifth of its seventeen arguments
+     * (`move.w (0x38,A5),-(SP)` at 0x00E4A524, thirteenth of the seventeen
+     * pushes).  PKT_$SAR_INTERNET adds it to the word the send returned and
+     * turns the sum into the response deadline (`add.w (0x16,A6),D0w` at
+     * 0x00E71FBA, then `add.l (0x00e2b0d4).l,D0`), so it is an extra wait in
+     * clock ticks, not a sequence number.  The image initialises it to 0x0010
+     * and nothing else in the module ever touches A5+0x38.  (source-qg0q.)
+     */
+    uint16_t sar_timeout;
     uint16_t retry_count;            /* +0x3A: Server locate retry counter */
     int8_t   heard_from_server;      /* +0x3C: True if contacted server */
 } rem_name_data_t;
@@ -85,7 +95,7 @@ _Static_assert(__builtin_offsetof(rem_name_data_t, time_heard_from_server) == 0x
 _Static_assert(__builtin_offsetof(rem_name_data_t, last_status) == 0x2C, "rem_name_data_t.last_status");
 _Static_assert(__builtin_offsetof(rem_name_data_t, curr_node) == 0x30, "rem_name_data_t.curr_node");
 _Static_assert(__builtin_offsetof(rem_name_data_t, curr_net) == 0x34, "rem_name_data_t.curr_net");
-_Static_assert(__builtin_offsetof(rem_name_data_t, pkt_seq_num) == 0x38, "rem_name_data_t.pkt_seq_num");
+_Static_assert(__builtin_offsetof(rem_name_data_t, sar_timeout) == 0x38, "rem_name_data_t.sar_timeout");
 _Static_assert(__builtin_offsetof(rem_name_data_t, retry_count) == 0x3A, "rem_name_data_t.retry_count");
 _Static_assert(__builtin_offsetof(rem_name_data_t, heard_from_server) == 0x3C, "rem_name_data_t.heard_from_server");
 

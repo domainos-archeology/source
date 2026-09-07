@@ -80,20 +80,39 @@ int8_t DISK_$DIAG;
  * Mocks
  * ================================================================ */
 
-static disk_io_req_t mock_req;
+/*
+ * disk_$get_qblks_internal fills in two four-byte VA cells (0x00E3BF7E
+ * `move.l (0xc0,A5),(A0)` and 0x00E3BFB8 `move.l (0xc0,A5),(A2)`), so the
+ * mock has to hand back target VAs, not host pointers.  The request block
+ * therefore lives in an arena that ARCH_HOST_VA_BASE points at, and the
+ * cells hold offsets into it.  The two VA cells are adjacent in the frame
+ * ((-0x90,A6) and (-0x8c,A6)), so a mock that wrote a host pointer would
+ * corrupt the second one on a 64-bit host.
+ */
+#define MOCK_REQ_VA     0x40u
+#define MOCK_REQ_LAST_VA 0xC0u
+
+static uint8_t qblk_arena[0x140];
+static disk_io_req_t *const mock_req_p =
+    (disk_io_req_t *)(qblk_arena + MOCK_REQ_VA);
+
 static int qblk_get_count;
 static int qblk_rtn_count;
 static int8_t qblk_get_mode;
+static uint32_t qblk_first_out;
+static uint32_t qblk_last_out;
 
-void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out,
-                              void *last_out)
+void disk_$get_qblks_internal(int16_t count, int8_t mode, uint32_t *first_out,
+                              uint32_t *last_out)
 {
     (void)count;
     qblk_get_mode = mode;
     qblk_get_count++;
-    memset(&mock_req, 0, sizeof(mock_req));
-    *(disk_io_req_t **)first_out = &mock_req;
-    *(void **)last_out = (void *)0x1234;
+    memset(mock_req_p, 0, sizeof(*mock_req_p));
+    *first_out = MOCK_REQ_VA;
+    *last_out = MOCK_REQ_LAST_VA;
+    qblk_first_out = *first_out;
+    qblk_last_out = *last_out;
 }
 
 void disk_$rtn_qblks_internal(int16_t count, void *blocks, void *param_3)
@@ -217,9 +236,13 @@ static uint16_t mock_dev_info[8];
 
 static void reset_all(uint16_t dev_flags)
 {
+    /* The queue-block VA cells hold offsets into qblk_arena. */
+    ARCH_HOST_VA_BASE = (uintptr_t)qblk_arena;
+
+    memset(qblk_arena, 0, sizeof(qblk_arena));
     memset(mock_disk_data, 0, sizeof(mock_disk_data));
     memset(mock_dev_info, 0, sizeof(mock_dev_info));
-    memset(&mock_req, 0, sizeof(mock_req));
+    memset(mock_req_p, 0, sizeof(*mock_req_p));
     memset(do_io_reply, 0, sizeof(do_io_reply));
 
     qblk_get_count = qblk_rtn_count = 0;
@@ -302,7 +325,7 @@ static int test_read_arg_order_and_header_writeback(void)
     CHECK_EQ((int8_t)0xFF, qblk_get_mode);
     CHECK_EQ(DISK_INTERNAL_OP_READ, map_seen_op);
     /* arg 3 = ppn (0xe3d658), arg 4 = daddr (0xe3d606) */
-    CHECK_EQ(0xABCDu, mock_req.ppn);
+    CHECK_EQ(0xABCDu, mock_req_p->ppn);
     CHECK_EQ(1, do_io_count);
     CHECK_EQ(1, mcr_change_count);
     /* header handed back for reads */
@@ -325,7 +348,7 @@ static int test_read_complements_block_number(void)
 
     DISK_IO(0, TEST_VOL, 0x10, 0x20, info);
 
-    CHECK_EQ(~0x00001357u, mock_req.header[2]);
+    CHECK_EQ(~0x00001357u, mock_req_p->header[2]);
     return 0;
 }
 
@@ -341,10 +364,10 @@ static int test_format_rewrites_daddr(void)
 
     CHECK_EQ(DISK_INTERNAL_OP_FORMAT, map_seen_op);
     /* head = low byte of daddr at +0x06, sector +0x07 = 0, high word = 0 */
-    CHECK_EQ(0x00005600u, mock_req.daddr);
-    CHECK_EQ(0x56, disk_req_head(&mock_req));
-    CHECK_EQ(0, disk_req_sector(&mock_req));
-    CHECK_EQ(0, disk_req_daddr_hi(&mock_req));
+    CHECK_EQ(0x00005600u, mock_req_p->daddr);
+    CHECK_EQ(0x56, disk_req_head(mock_req_p));
+    CHECK_EQ(0, disk_req_sector(mock_req_p));
+    CHECK_EQ(0, disk_req_daddr_hi(mock_req_p));
     return 0;
 }
 
@@ -477,8 +500,8 @@ static int test_checksummed_write_stamps_and_locks(void)
     CHECK_EQ(1, excl_start_count);
     CHECK_EQ(1, excl_stop_count);
     CHECK_EQ(DISK_INTERNAL_OP_WRITE, map_seen_op);
-    CHECK_EQ(TIME_$CLOCKH, mock_req.header[3]);
-    CHECK_EQ(0xBEEF, disk_req_chksum(&mock_req));
+    CHECK_EQ(TIME_$CLOCKH, mock_req_p->header[3]);
+    CHECK_EQ(0xBEEF, disk_req_chksum(mock_req_p));
     /* the read-after-write pass is skipped while the scratch page is 0 */
     CHECK_EQ(1, do_io_count);
     return 0;
@@ -498,8 +521,8 @@ static int test_raw_write_skips_stamp(void)
 
     DISK_IO(3, TEST_VOL, 0x10, 0x20, info);
 
-    CHECK_EQ(0u, mock_req.header[3]);
-    CHECK_EQ(0, disk_req_chksum(&mock_req));
+    CHECK_EQ(0u, mock_req_p->header[3]);
+    CHECK_EQ(0, disk_req_chksum(mock_req_p));
     CHECK_EQ(1, excl_start_count);      /* the lock is still taken */
     return 0;
 }

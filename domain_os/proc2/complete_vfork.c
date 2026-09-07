@@ -99,9 +99,13 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
     /* Store user data in creation record field */
     current_entry->cr_rec_2 = local_user_data;
 
-    /* Update UID in entry (stored at offset 0x08 in original code) */
-    *(uint32_t*)((char*)current_entry + 0x08) = local_uid.high;
-    *(uint32_t*)((char*)current_entry + 0x0C) = local_uid.low;
+    /*
+     * Update the entry's parent UID (entry+0x08).
+     * 0x00E736D0  move.l (A1)+,(-0xdc,A3)   -- entry+0x08
+     * 0x00E736D4  move.l (A1)+,(-0xd8,A3)   -- entry+0x0C
+     */
+    current_entry->parent_uid.high = local_uid.high;
+    current_entry->parent_uid.low = local_uid.low;
 
     /* Clear flag bit 3 (0x08) */
     current_entry->flags &= ~0x0008;
@@ -146,10 +150,14 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
         goto error_cleanup;
     }
 
-    /* Set TTY UID to nil (child starts with no controlling terminal) */
-    /* Stored at offset 0xDC in the structure (within pad_bf) */
-    *(uint32_t*)((char*)current_entry + 0xDC) = UID_$NIL.high;
-    *(uint32_t*)((char*)current_entry + 0xE0) = UID_$NIL.low;
+    /*
+     * Clear the stack-area UID (entry+0xDC) ahead of the mapping below.
+     * 0x00E73786  move.l (A0)+,(-0x8,A3)    -- entry+0xDC
+     * 0x00E7378A  move.l (A0)+,(-0x4,A3)    -- entry+0xE0
+     * A0 walks UID_$NIL (0xE1737C).
+     */
+    current_entry->stack_uid.high = UID_$NIL.high;
+    current_entry->stack_uid.low = UID_$NIL.low;
 
     /* Initialize naming subsystem for new ASID */
     NAME_$INIT_ASID((int16_t*)&current_entry->asid, &status);
@@ -180,12 +188,17 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
     /* Map the stack area */
     MST_$MAP_AREA_AT(&cr_rec->stack_low, &cr_rec->stack_size,
                      (void*)0x00e735f4, (void*)0x00e73860,  /* Placeholder addresses from original */
-                     (void*)((char*)current_entry + 0xDC),
+                     &current_entry->stack_uid,   /* 0x00E737F8 pea (-0x8,A3) */
                      &cr_rec->status);
 
-    /* Copy mapped UID to creation record */
-    cr_rec->cr_uid.high = *(uint32_t*)((char*)current_entry + 0xDC);
-    cr_rec->cr_uid.low = *(uint32_t*)((char*)current_entry + 0xE0);
+    /*
+     * Copy the mapped UID to the creation record.
+     * 0x00E73816  lea (-0x8,A3),A0          -- &entry->stack_uid
+     * 0x00E7381A  move.l (A0)+,(0xa8,A2)
+     * 0x00E7381E  move.l (A0)+,(0xac,A2)
+     */
+    cr_rec->cr_uid.high = current_entry->stack_uid.high;
+    cr_rec->cr_uid.low = current_entry->stack_uid.low;
 
     /* Check if stack mapping failed */
     if (cr_rec->status != status_$ok) {
