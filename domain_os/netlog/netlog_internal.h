@@ -163,13 +163,16 @@ extern netlog_data_t netlog_data;
 #endif
 
 /*
- * Helper macro to calculate entry address in buffer
+ * Helper macro to calculate an entry address in a buffer.
  *
- * entry_index is 1-based (1 to 39)
- * Entry address = buffer_base + (entry_index * 26)
+ * entry_index is the 1-based counter value (1 to 39).  The original builds
+ * `A0 = current_buf_ptr + count*26` (0x00E71BB6..0x00E71BCA) and then writes
+ * every field at a NEGATIVE displacement from -0x1A to -0x02, so the record
+ * really starts one entry lower, at (count - 1) * 26.
  */
 #define NETLOG_ENTRY_ADDR(buf_ptr, entry_index)                                \
-  ((netlog_entry_t *)((char *)(buf_ptr) + ((entry_index) * NETLOG_ENTRY_SIZE)))
+  ((netlog_entry_t *)((char *)(buf_ptr) +                                      \
+                      (((entry_index) - 1) * NETLOG_ENTRY_SIZE)))
 
 /*
  * Helper to switch between buffer indices (1 <-> 2)
@@ -184,22 +187,34 @@ extern netlog_data_t netlog_data;
  * On m68k these are absolute addresses of the NETLOG/AUDIT code and data
  * areas; on other architectures they are link-time symbols.
  */
+/*
+ * The two ranges NETLOG_$CNTL wires are held as Pascal by-reference constant
+ * cells behind NETLOG_$CNTL's rts (`gsk read 0x00E71B24`):
+ *
+ *   00e71b24  00 0a          word  10       max wired pages
+ *   00e71b28  00 e7 1d 7a    long  0xE71D7A code end
+ *   00e71b2c  00 e8 56 84    long  0xE85684 data start
+ *   00e71b30  00 e8 57 08    long  0xE85708 data end
+ *   00e71b34  00 e7 19 14    long  0xE71914 code start
+ *
+ * The pushes are `pea (0x142,PC)`/`pea (0x13a,PC)` (0x00E719F0/0x00E719EC)
+ * for the code range and `pea (0x10c,PC)`/`pea (0x114,PC)` (0x00E71A1E/
+ * 0x00E71A1A) for the data range.  0xE71914 is NETLOG_$CNTL itself and
+ * 0xE71D7A is just past NETLOG_$SEND_PAGE's rts; 0xE85684..0xE85708 is
+ * netlog_data_t.  Nothing about this range is AUDIT's.
+ *
+ * These are raw target virtual addresses in the image, so they are the same
+ * on every build; a real retarget has to repoint them at link symbols.
+ */
+#define NETLOG_WIRE_CODE_START_VA   0xE71914u   /* 0x00E71B34 */
+#define NETLOG_WIRE_CODE_END_VA     0xE71D7Au   /* 0x00E71B28 */
+#define NETLOG_WIRE_DATA_START_VA   0xE85684u   /* 0x00E71B2C */
+#define NETLOG_WIRE_DATA_END_VA     0xE85708u   /* 0x00E71B30 */
+
 #if defined(ARCH_M68K)
-    #define NETLOG_CODE_START       ((void*)0xE71914)   /* Start of NETLOG code (NETLOG_$CNTL) */
-    #define NETLOG_DATA_START       ((void*)0xE85684)   /* Start of NETLOG data */
-    #define NETLOG_DATA_END_ADDR    ((void*)0xE85800)   /* End of NETLOG data */
-    #define AUDIT_DATA_END_ADDR     ((void*)0xE248FC)   /* End of AUDIT data */
     #define AUDIT_PKT_INFO          ((void*)0xE248FC)   /* Packet info template */
 #else
-    extern char NETLOG_CODE_START_SYM;
-    extern char NETLOG_DATA_START_SYM;
-    extern char NETLOG_DATA_END_SYM;
-    extern char AUDIT_DATA_END_SYM;
     extern char AUDIT_PKT_INFO_SYM;
-    #define NETLOG_CODE_START       (&NETLOG_CODE_START_SYM)
-    #define NETLOG_DATA_START       (&NETLOG_DATA_START_SYM)
-    #define NETLOG_DATA_END_ADDR    (&NETLOG_DATA_END_SYM)
-    #define AUDIT_DATA_END_ADDR     (&AUDIT_DATA_END_SYM)
     #define AUDIT_PKT_INFO          (&AUDIT_PKT_INFO_SYM)
 #endif
 

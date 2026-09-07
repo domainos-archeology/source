@@ -248,10 +248,10 @@ int8_t SOCK_$GET(uint16_t sock_num, void *pkt_info)
     return mock_sock_get_result;
 }
 
-int8_t SOCK_$PUT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
+int8_t SOCK_$PUT(uint16_t sock_num, sock_$pkt_info_t *pkt_info, int8_t flags,
                  uint16_t ec_param1, uint16_t ec_param2)
 {
-    (void)pkt_ptr; (void)ec_param1; (void)ec_param2;
+    (void)pkt_info; (void)ec_param1; (void)ec_param2;
     mock_sock_put_calls++;
     mock_sock_put_socket = sock_num;
     mock_sock_put_flags = flags;
@@ -412,6 +412,14 @@ static void reset_mocks(void)
     memset(&mock_mac_send_rec, 0, sizeof(mock_mac_send_rec));
     memset(mock_unwire_order, 0, sizeof(mock_unwire_order));
 
+    /*
+     * sock_$pkt_info_t.hdr is a 32-bit target VA, so the mock page is
+     * addressed through ARCH_HOST_VA_BASE.  The base is put one page BELOW
+     * the array so that every VA handed out is non-zero (ARCH_VA_TO_PTR(0)
+     * is NULL by design).
+     */
+    ARCH_HOST_VA_BASE = (uintptr_t)mock_pkt_page - MOCK_PKT_PAGE_SIZE;
+
     /* The header buffer starts at a 1KB boundary inside the mock page. */
     mock_pkt = (route_$internet_hdr_t *)
         (void *)(((uintptr_t)mock_pkt_page + MOCK_PKT_PAGE_SIZE - 1) &
@@ -492,7 +500,7 @@ static xns_$idp_header_t *setup_packet(int std, uint8_t routing_type,
                                        uint16_t data_len, uint16_t hdr_len,
                                        uint32_t data_page0)
 {
-    mock_rcv_template.hdr = mock_pkt;
+    mock_rcv_template.hdr = ARCH_PTR_TO_VA(mock_pkt);
     mock_rcv_template.flags = std ? 0x0002 : 0x0000;
     mock_rcv_template.data_len = data_len;
     mock_rcv_template.hdr_len = hdr_len;
@@ -640,7 +648,7 @@ TEST(routing_type_below_two_is_not_forwarded)
 
     ASSERT_EQ(0, mock_nexthop_calls);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
-    ASSERT_EQ((uint32_t)(uintptr_t)mock_pkt, mock_rtn_hdr_value);
+    ASSERT_EQ(ARCH_PTR_TO_VA(mock_pkt), mock_rtn_hdr_value);
     ASSERT_EQ(1, mock_dump_data_calls);
     ASSERT_EQ(0, ROUTE_$STAT_FORWARDED_N);
     ASSERT_EQ(1, ROUTE_$SOCK_ECVAL);
@@ -1010,7 +1018,7 @@ TEST(net_io_send_arguments)
 
     ASSERT_EQ(1, mock_net_io_calls);
     ASSERT_EQ(3, mock_net_io_port);
-    ASSERT_EQ((uint32_t)(uintptr_t)mock_pkt, mock_net_io_pkt);
+    ASSERT_EQ(ARCH_PTR_TO_VA(mock_pkt), mock_net_io_pkt);
     ASSERT_EQ(0xDEADBEEF, mock_net_io_hdr_pa);
     ASSERT_EQ(0x2A, mock_net_io_hdr_len);
     ASSERT_EQ(0x123, mock_net_io_data_len);

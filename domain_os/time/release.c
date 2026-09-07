@@ -18,7 +18,7 @@ void TIME_$RELEASE(void)
 
     /* Calculate offset for this AS in the itimer database */
     as_offset = PROC1_$AS_ID * ITIMER_DB_ENTRY_SIZE;
-    itimer_entry = (uint8_t *)(ITIMER_DB_BASE + as_offset);
+    itimer_entry = (uint8_t *)ARCH_VA_TO_PTR(ITIMER_DB_BASE + as_offset);
 
     /* Remove real-time itimer from RTE queue */
     TIME_$Q_REMOVE_ELEM(&TIME_$RTEQ,
@@ -29,13 +29,16 @@ void TIME_$RELEASE(void)
     *(uint32_t *)(itimer_entry + ITIMER_REAL_INTERVAL_HIGH) = 0;
     *(uint16_t *)(itimer_entry + ITIMER_REAL_INTERVAL_LOW) = 0;
 
-    /* Calculate VT queue for current process */
-    vt_queue = (time_queue_t *)(VT_QUEUE_ARRAY_BASE +
-                                (PROC1_$CURRENT * 12) - 12);
+    /*
+     * 0xE58BBE..0xE58BCC: movea.l #0xe2a4a0,A2 / pea (-0xc,A2,D1w*0x1) with
+     * D1 = PROC1_$CURRENT*12 - the Pascal 1-based virtual timer queue array.
+     */
+    vt_queue = &TIME_$VTQ[PROC1_$CURRENT - 1];
 
     /* Remove virtual itimer from VT queue */
     TIME_$Q_REMOVE_ELEM(vt_queue,
-                        (time_queue_elem_t *)(itimer_entry + 0x658),
+                        (time_queue_elem_t *)(itimer_entry +
+                                              ITIMER_VIRT_ELEM_OFFSET),
                         &status);
 
     /* Clear the virtual interval */

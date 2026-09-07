@@ -50,23 +50,22 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
     TIME_$CLOCK(&timestamp);
 
     /*
-     * Increment entry count for current buffer and get index
-     * Entry indices are 1-based (1 to 39)
+     * 0xE71B90..0xE71BA6: the counter array is Pascal 1-based
+     * (`(0x6e,A0)` with A0 = A5 + current_buf_index*2), and the index used
+     * below is the value AFTER the increment.
      */
-    nl->page_counts[nl->current_buf_index]++;
-    entry_index = nl->page_counts[nl->current_buf_index];
+    nl->page_counts[nl->current_buf_index - 1]++;
+    entry_index = nl->page_counts[nl->current_buf_index - 1];
 
     /*
-     * Calculate entry address:
-     *   entry = buffer_base + (entry_index * 26)
-     *
-     * The original code calculates: entry_index * 26
-     *   = entry_index * (2 + 8 + 16)
-     *   = entry_index * 2 * (1 + 4) + entry_index * 2 * 8
-     *   = entry_index * 0x1A
+     * 0xE71BB6..0xE71BCA computes A0 = current_buf_ptr + entry_index*26
+     * (D1 = n*2; D0 = D1<<2 = n*8; D1 += D0 = n*10; D0 += D0 = n*16;
+     * D1 += D0 = n*26) and then writes every field at a negative
+     * displacement from -0x1A to -0x02, so the record actually begins one
+     * entry lower.
      */
-    entry = (netlog_entry_t *)((char *)nl->current_buf_ptr +
-                               (entry_index * NETLOG_ENTRY_SIZE));
+    entry = NETLOG_ENTRY_ADDR(ARCH_VA_TO_PTR(nl->current_buf_ptr),
+                              entry_index);
 
     /*
      * Fill in the log entry
@@ -85,7 +84,13 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
      */
     entry->kind = (uint8_t)kind;
     entry->process_id = NETLOG_GET_CURRENT_PID();
-    entry->timestamp = timestamp.high;  /* Use high 32 bits */
+    /*
+     * 0xE71BDA: move.l (-0xe,A6),(-0x18,A0).  TIME_$CLOCK filled the 6-byte
+     * clock at (-0x10,A6), so this longword is bytes 2..5 of it - the LOW
+     * 16 bits of `high` joined to the 16-bit `low`, i.e. the middle 32 bits
+     * of the 48-bit clock, not `high`.
+     */
+    entry->timestamp = ((timestamp.high & 0xFFFFu) << 16) | timestamp.low;
     entry->uid_high = uid_high;
     entry->uid_low = uid_low;
     entry->param3 = param3;
@@ -98,7 +103,8 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
     /*
      * Check if buffer is full (39 entries)
      */
-    if (nl->page_counts[nl->current_buf_index] == NETLOG_ENTRIES_PER_PAGE) {
+    /* 0xE71C14: cmpi.w #0x27,(0x6e,A1) */
+    if (nl->page_counts[nl->current_buf_index - 1] == NETLOG_ENTRIES_PER_PAGE) {
         /*
          * Buffer is full - prepare to send it
          * Save the index of the full buffer and increment done count
@@ -114,7 +120,7 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
         /*
          * Clear entry count for new buffer
          */
-        nl->page_counts[nl->current_buf_index] = 0;
+        nl->page_counts[nl->current_buf_index - 1] = 0;   /* 0xE71C38 */
 
         /*
          * Set flag to advance event count after releasing lock

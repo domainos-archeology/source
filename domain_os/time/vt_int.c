@@ -38,12 +38,11 @@ void TIME_$VT_INT(void)
     PROC1_$VT_INT(&vt_clock);
 
     /*
-     * Calculate address of this process's VT queue:
-     * base + (PROC1_$CURRENT * 12) + VT_QUEUE_OFFSET
+     * 0xE163EA/0xE16412/0xE16416: A5 = 0xE29198, lea (0,A5,cur*12),A0,
+     * pea (0x12fc,A0).  0xE29198 + 0x12FC + 12 == 0xE2A4A0 == &TIME_$VTQ[0],
+     * so this is element (PROC1_$CURRENT - 1) of the 1-based array.
      */
-    vt_queue = (time_queue_t *)((char *)VT_QUEUE_ARRAY_BASE +
-                                 (PROC1_$CURRENT * 12) +
-                                 VT_QUEUE_OFFSET);
+    vt_queue = &TIME_$VTQ[PROC1_$CURRENT - 1];
 
     /* Scan the VT queue and fire expired callbacks */
     TIME_$Q_SCAN_QUEUE(vt_queue, &vt_clock, &arg);

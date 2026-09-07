@@ -9,6 +9,7 @@
 #define MSG_MSG_H
 
 #include "os/os.h"
+#include "net_io/net_io.h"   /* net_io_$send_info_t, used by MSG_$SEND_HW */
 
 /*
  * Constants
@@ -101,37 +102,20 @@ boolean MSG_$WAIT(msg_$socket_t *socket, int16_t *timeout);
 /* Wait for message on socket (internal) */
 void MSG_$WAITI(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret);
 
-/* Receive a message */
-void MSG_$RCV(msg_$socket_t *socket,
-              void *dest_net,
-              void *dest_node,
-              void *dest_sock,
-              int16_t *bytes_received,
-              void *src_net,
-              void *data_buf,
-              uint32_t *data_len,
-              void *type_buf,
-              void *type_len,
-              void *options,
-              status_$t *status_ret);
-
-/* Receive a message (internal) */
-void MSG_$RCVI(msg_$socket_t *socket,
-               void *dest_net,
-               void *dest_node,
-               void *dest_sock,
-               void *src_net,
-               void *data_buf,
-               uint32_t *data_len,
-               void *type_buf,
-               void *type_len,
-               void *options,
-               int16_t *bytes_received,
-               void *timeout_sec,
-               void *timeout_usec,
-               int16_t *msg_len,
-               void *reserved,
-               status_$t *status_ret);
+/*
+ * MSG_$RCV / MSG_$RCVI - receive a message.
+ *
+ * Argument shapes recovered from the two prologues and from
+ * MSG_$$RCV_INTERNAL's (0x00E59548, see msg/msg_internal.h).  MSG_$RCVI has
+ * 16 arguments at 0x08..0x44 and MSG_$RCV 12 at 0x08..0x34; MSG_$RCV
+ * supplies locals for the four destination fields and for the whole
+ * msg_$hw_addr_t record, returning only its first word (0x00E59540).
+ *
+ * Both "max length" arguments are passed BY REFERENCE here and dereferenced
+ * by MSG_$RCVI (0x00E59712 / 0x00E59720 `move.w (An),-(SP)`).
+ *
+ * The record's declaration is below, so these prototypes appear after it.
+ */
 
 /*
  * Hardware address info structure for MSG_$RCV_CONTIGI and MSG_$RCV_HW
@@ -149,12 +133,49 @@ typedef struct msg_$hw_addr_s {
     uint8_t  inet_addr[16];     /* Internet address (if applicable) */
 } msg_$hw_addr_t;
 
-/* Receive contiguous message with hardware address info (internal) */
+/* Receive a message */
+void MSG_$RCV(msg_$socket_t *socket,
+              uint32_t *src_node,
+              uint16_t *src_sock,
+              uint16_t *proto_family_ret,
+              uint16_t *msg_type,
+              void *template,
+              uint16_t *template_max,
+              uint16_t *template_len_ret,
+              void *data,
+              uint16_t *data_max,
+              uint16_t *data_len_ret,
+              status_$t *status_ret);
+
+/* Receive a message (internal) */
+void MSG_$RCVI(msg_$socket_t *socket,
+               uint32_t *dest_net,
+               uint32_t *dest_node,
+               uint16_t *dest_sock,
+               uint32_t *src_net,
+               uint32_t *src_node,
+               uint16_t *src_sock,
+               msg_$hw_addr_t *hw_addr,
+               uint16_t *msg_type,
+               void *template,
+               uint16_t *template_max,
+               uint16_t *template_len_ret,
+               void *data,
+               uint16_t *data_max,
+               uint16_t *data_len_ret,
+               status_$t *status_ret);
+
+/*
+ * Receive a message into one contiguous buffer (0x00E597A6).
+ *
+ * Thirteen arguments at 0x08..0x38; the same address vocabulary as
+ * MSG_$RCVI, with the template and the payload concatenated into data_buf.
+ */
 void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
-                      uint32_t *dest_proc,
+                      uint32_t *dest_net,
                       uint32_t *dest_node,
                       uint16_t *dest_sock,
-                      uint32_t *src_proc,
+                      uint32_t *src_net,
                       uint32_t *src_node,
                       uint16_t *src_sock,
                       msg_$hw_addr_t *hw_addr,
@@ -164,32 +185,40 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
                       uint16_t *data_len,
                       status_$t *status);
 
-/* Receive contiguous message wrapper */
+/*
+ * The short form (0x00E59756), nine arguments at 0x08..0x28.  Note that
+ * data_buf_ptr is a pointer to the buffer POINTER (0x00E59760
+ * "movea.l (A0),A2").
+ */
 void MSG_$RCV_CONTIG(msg_$socket_t *socket,
-                     uint32_t *dest_node,
-                     uint32_t *dest_sock_out,
-                     uint16_t *hw_addr_ret,
                      uint32_t *src_node,
-                     uint32_t **src_node_ptr,
+                     uint16_t *src_sock,
+                     uint16_t *proto_family_ret,
                      uint16_t *msg_type,
+                     char **data_buf_ptr,
+                     uint16_t *max_len,
                      uint16_t *data_len,
                      status_$t *status);
 
-/* Receive message with hardware address info */
+/*
+ * Receive message, also reporting the two netbuf event-count words.
+ *
+ * Fourteen arguments at 0x08..0x3C (0x00E59950); the shape is MSG_$RCV's
+ * plus ec_param1_ret / ec_param2_ret before the status.
+ */
 void MSG_$RCV_HW(msg_$socket_t *socket,
-                 uint32_t *dest_node,
-                 uint32_t *dest_sock,
-                 uint16_t *hw_addr_ret,
                  uint32_t *src_node,
-                 uint32_t *src_sock,
-                 uint16_t *msg_type_ptr,
-                 uint16_t *hw_addr_buf,
-                 void *data_buf_ptr,
-                 uint32_t *src_node2,
-                 uint16_t *max_data_len,
-                 void *overflow_buf,
-                 void *overflow_info,
-                 uint16_t *max_overflow,
+                 uint16_t *src_sock,
+                 uint16_t *proto_family_ret,
+                 uint16_t *msg_type,
+                 void *template,
+                 uint16_t *template_max,
+                 uint16_t *template_len_ret,
+                 void *data,
+                 uint16_t *data_max,
+                 uint16_t *data_len_ret,
+                 uint16_t *ec_param1_ret,
+                 uint16_t *ec_param2_ret,
                  status_$t *status);
 
 /*
@@ -254,60 +283,80 @@ void MSG_$SENDI(uint32_t *routing_key,
                 uint16_t *xmit_status,
                 status_$t *status_ret);
 
-/* Send message using hardware address routing */
-void MSG_$SEND_HW(void *hw_addr_info,
-                  uint32_t *dest_proc,
+/*
+ * Send a message to an explicit network/socket pair (0x00E59B14).
+ *
+ * Fifteen arguments; the same by-reference shape as MSG_$SENDI with a
+ * msg_$hw_addr_t in front, whose proto_subtype (+0x06) and reserved1 (+0x08)
+ * are the network and socket handed to ROUTE_$FIND_PORT.
+ */
+void MSG_$SEND_HW(msg_$hw_addr_t *hw_addr,
+                  uint32_t *routing_key,
                   uint32_t *dest_node,
                   uint16_t *dest_sock,
-                  uint32_t *src_proc,
+                  int32_t *src_node_or,
                   uint32_t *src_node,
                   uint16_t *src_sock,
-                  void *msg_desc,
-                  uint16_t *type_val,
-                  void *type_data,
-                  uint16_t *header_len,
-                  void *data_ptr,
+                  void *pkt_info,
+                  uint16_t *request_id,
+                  void *template,
+                  uint16_t *template_len,
+                  void *data,
                   uint16_t *data_len,
-                  void *bytes_sent,
+                  net_io_$send_info_t *send_info,
                   status_$t *status);
 
-/* Send and receive (combined operation) */
-void MSG_$SAR(msg_$socket_t *socket,
-              void *send_buf,
-              uint32_t *send_len,
-              int16_t *src_sock,
-              void *dest_net,
-              void *dest_node,
-              void *dest_sock,
-              void *type_val,
-              void *type_data,
-              int16_t *bytes_received,
-              void *recv_buf,
-              uint32_t *recv_len,
-              void *timeout_sec,
-              void *timeout_usec,
-              void *recv_type,
-              void *options,
+/*
+ * Send and receive (combined operation), 0x00E59D52.
+ *
+ * Seventeen arguments at 0x08..0x48.  MSG_$SAR owns neither socket nor
+ * packet-info record: it allocates a temporary user socket inside
+ * MSG_$SARI and builds the 30-byte packet info from msg_$data_t's template
+ * with the caller's flags word on top (0x00E59D5E-0x00E59D72).
+ *
+ * @param timeout   a tick count added to TIME_$CLOCKH, SIGN extended
+ * @param flags     the word that overwrites the packet-info template's first
+ * @param proto_family_ret  msg_$hw_addr_t.proto_family from the reply
+ */
+void MSG_$SAR(int16_t *timeout,
+              uint32_t *dest_node,
+              uint16_t *dest_sock,
+              uint16_t *flags,
+              void *send_template,
+              uint16_t *send_template_len,
+              void *send_data,
+              uint16_t *send_data_len,
+              uint16_t *xmit_status_ret,
+              uint16_t *proto_family_ret,
+              void *rcv_template,
+              uint16_t *rcv_template_max,
+              uint16_t *rcv_template_len_ret,
+              void *rcv_data,
+              uint16_t *rcv_data_max,
+              uint16_t *rcv_data_len_ret,
               status_$t *status_ret);
 
-/* Send and receive (internal) */
-void MSG_$SARI(msg_$socket_t *socket,
-               void *callback,
-               void *send_buf,
-               uint32_t *send_len,
-               void *msg_desc,
-               void *dest_net,
-               void *dest_node,
-               void *dest_sock,
-               void *type_val,
-               void *type_data,
-               int16_t *bytes_received,
-               void *recv_buf,
-               uint32_t *recv_len,
-               void *timeout_sec,
-               void *timeout_usec,
-               void *recv_type,
-               void *options,
+/*
+ * Send and receive (internal), 0x00E59DD4.  Eighteen arguments at 0x08..0x4C;
+ * the packet-info record and the msg_$hw_addr_t are the caller's here.
+ */
+void MSG_$SARI(int16_t *timeout,
+               uint32_t *routing_key,
+               uint32_t *dest_node,
+               uint16_t *dest_sock,
+               void *pkt_info,
+               void *send_template,
+               uint16_t *send_template_len,
+               void *send_data,
+               uint16_t *send_data_len,
+               uint16_t *xmit_status_ret,
+               msg_$hw_addr_t *hw_addr,
+               void *rcv_template,
+               uint16_t *rcv_template_max,
+               uint16_t *rcv_template_len_ret,
+               void *rcv_data,
+               uint16_t *rcv_data_max,
+               uint16_t *rcv_data_len_ret,
                status_$t *status_ret);
 
 /* Get event count for socket */

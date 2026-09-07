@@ -27,9 +27,15 @@
 #define SOCK_FLAG_KERNEL        0x00    /* Kernel-mode socket */
 
 /*
- * Maximum valid socket number
+ * Maximum valid socket number.
+ *
+ * SOCK_$INIT (0x00E2FDF8 `move.w #0xdf,D2w` + dbf) runs 224 passes with
+ * sock_num starting at 1, so the descriptors cover 1..0xE0, and the only
+ * bounds check in the subsystem agrees: SOCK_$PUT_INT rejects `<= 0` and
+ * accepts up to 0xE0 (0x00E161AE `cmpi.w #0xe0,D0w` / `bls`).  MSG_$CLOSEI
+ * and MSG_$WAITI use the same `ble #0xe0`.
  */
-#define SOCK_MAX_NUMBER         0xDF    /* 223 */
+#define SOCK_MAX_NUMBER         0xE0    /* 224 */
 
 /*
  * SOCK_$INIT - Initialize socket subsystem
@@ -147,25 +153,6 @@ void SOCK_$CLOSE(uint16_t sock_num);
 int8_t SOCK_$GET(uint16_t sock_num, void *pkt_info);
 
 /*
- * SOCK_$PUT - Put packet on socket receive queue
- *
- * Queues a packet for delivery to a socket. If successful, advances
- * the socket's event count to wake any waiting processes.
- *
- * @param sock_num      Socket number
- * @param pkt_ptr       Pointer to packet buffer pointer
- * @param flags         Flags (bit 7 = copy queue count to packet header)
- * @param ec_param1     Event count parameter 1
- * @param ec_param2     Event count parameter 2
- *
- * @return Negative (0xFF) if packet queued, 0 on error (socket full or closed)
- *
- * Original address: 0x00E1614E
- */
-int8_t SOCK_$PUT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
-                 uint16_t ec_param1, uint16_t ec_param2);
-
-/*
  * sock_table_base - The socket table (0xE27510, see sock_internal.h)
  *
  * Layout:
@@ -273,7 +260,10 @@ _Static_assert(sizeof(sock_$sock_t) == 0x1C, "sock_$sock_t must be 0x1C bytes");
  * at most 11 hops fit.
  */
 typedef struct sock_$pkt_info_t {
-    void       *hdr;            /* 0x00 <- netbuf+0x3B8: header buffer VA */
+    uint32_t    hdr;            /* 0x00 <- netbuf+0x3B8: header buffer VA.
+                                 * A target VA, not a C pointer: a real
+                                 * pointer would break the 0x40-byte layout
+                                 * on a 64-bit host.  Use ARCH_VA_TO_PTR. */
     uint32_t    src_addr;       /* 0x04 <- netbuf+0x3BC */
     uint16_t    src_port;       /* 0x08 <- netbuf+0x3C0 */
     uint16_t    _hole_0a;       /* 0x0A: not written by SOCK_$GET */
@@ -298,7 +288,10 @@ typedef struct sock_$pkt_info_t {
  */
 #define SOCK_PKT_FLAG_XNS 0x0002    /* frame arrived over XNS ("standard") routing */
 
-#if defined(ARCH_M68K)
+/* No pointer fields, so the layout holds on the host too. */
+_Static_assert(offsetof(sock_$pkt_info_t, hdr)        == 0x00, "sock_$pkt_info_t.hdr");
+_Static_assert(offsetof(sock_$pkt_info_t, src_addr)   == 0x04, "sock_$pkt_info_t.src_addr");
+_Static_assert(offsetof(sock_$pkt_info_t, src_port)   == 0x08, "sock_$pkt_info_t.src_port");
 _Static_assert(offsetof(sock_$pkt_info_t, dst_addr)   == 0x0C, "sock_$pkt_info_t.dst_addr");
 _Static_assert(offsetof(sock_$pkt_info_t, flags)      == 0x10, "sock_$pkt_info_t.flags");
 _Static_assert(offsetof(sock_$pkt_info_t, n_hops)     == 0x12, "sock_$pkt_info_t.n_hops");
@@ -307,6 +300,31 @@ _Static_assert(offsetof(sock_$pkt_info_t, data_len)   == 0x2A, "sock_$pkt_info_t
 _Static_assert(offsetof(sock_$pkt_info_t, hdr_len)    == 0x2C, "sock_$pkt_info_t.hdr_len");
 _Static_assert(offsetof(sock_$pkt_info_t, data_pages) == 0x30, "sock_$pkt_info_t.data_pages");
 _Static_assert(sizeof(sock_$pkt_info_t) == 0x40, "sock_$pkt_info_t must be 0x40 bytes");
-#endif
+
+/*
+ * SOCK_$PUT - Put packet on socket receive queue
+ *
+ * Queues a packet for delivery to a socket. If successful, advances
+ * the socket's event count to wake any waiting processes.
+ *
+ * The record is passed straight through by value: SOCK_$PUT does
+ * `move.l (0xa,A6),-(SP)` (0x00E16164), SOCK_$PUT_INT re-pushes it with
+ * `pea (A2)` (0x00E161E4), and SOCK_$PUT_INT_INT then USES it as the record
+ * (`movea.l (0xc,A6),A2` at 0x00E16206, `move.w (0x2a,A2),D1w` at
+ * 0x00E1623C reads .data_len).  There is no extra level of indirection.
+ *
+ * @param sock_num      Socket number (1..SOCK_MAX_NUMBER)
+ * @param pkt_info      The packet record to queue
+ * @param flags         Domain boolean; true (negative) means "copy the
+ *                      socket's queue_count into the header buffer at +0x0F"
+ * @param ec_param1     Event count parameter 1
+ * @param ec_param2     Event count parameter 2
+ *
+ * @return Negative (0xFF) if packet queued, 0 on error (socket full or closed)
+ *
+ * Original address: 0x00E1614E
+ */
+int8_t SOCK_$PUT(uint16_t sock_num, sock_$pkt_info_t *pkt_info, int8_t flags,
+                 uint16_t ec_param1, uint16_t ec_param2);
 
 #endif /* SOCK_H */

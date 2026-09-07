@@ -16,10 +16,16 @@
 #include "wp/wp.h"
 
 /*
- * NETLOG_CODE_START, NETLOG_DATA_START, NETLOG_DATA_END_ADDR and
- * AUDIT_DATA_END_ADDR (code/data boundaries for MST_$WIRE_AREA) are
- * defined in netlog/netlog_internal.h.
+ * Pascal by-reference constant cells (see netlog/netlog_internal.h for the
+ * hex dump and the pea sites).  MST_$WIRE_AREA takes all five of its
+ * arguments by reference, so the two ranges and the page limit have to be
+ * addressable objects, not immediates.
  */
+static const uint32_t netlog_$c_wire_code_start = NETLOG_WIRE_CODE_START_VA;
+static const uint32_t netlog_$c_wire_code_end   = NETLOG_WIRE_CODE_END_VA;
+static const uint32_t netlog_$c_wire_data_start = NETLOG_WIRE_DATA_START_VA;
+static const uint32_t netlog_$c_wire_data_end   = NETLOG_WIRE_DATA_END_VA;
+static const int16_t  netlog_$c_max_wired_pages = NETLOG_MAX_WIRED_PAGES;
 
 void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
                   uint32_t *kinds, status_$t *status_ret)
@@ -27,6 +33,7 @@ void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
     netlog_data_t *nl = NETLOG_DATA;
     int16_t i;
     int16_t wire_count;
+    int16_t pages_wired;
     uint32_t ppn_shifted;
 
     *status_ret = status_$ok;
@@ -43,7 +50,8 @@ void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
         /*
          * If there are pending entries in the current buffer, send them
          */
-        if (nl->page_counts[nl->current_buf_index] > 0) {
+        /* 0xE7195C: tst.w (0x6e,A0) with A0 = A5 + index*2, i.e. 1-based */
+        if (nl->page_counts[nl->current_buf_index - 1] > 0) {
             nl->send_page_index = nl->current_buf_index;
             nl->done_cnt++;
             NETLOG_$SEND_PAGE();
@@ -69,13 +77,16 @@ void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
         /*
          * Clear page counts
          */
+        /* 0xE719A4/0xE719A8: clr.w (0x70,A5) and (0x72,A5) */
+        nl->page_counts[0] = 0;
         nl->page_counts[1] = 0;
-        nl->page_counts[2] = 0;
 
         /*
-         * Unwire the previously wired pages
+         * 0xE719AC..0xE719CA: the loop runs FORWARD from wired_pages[0]
+         * (A2 = A5 + 4, read at (0x1c,A2), A2 advanced by 4 each pass), and
+         * `subq.w #1 / bmi` skips it entirely when the count is zero.
          */
-        for (i = nl->wired_page_count - 1; i >= 0; i--) {
+        for (i = 0; i < nl->wired_page_count; i++) {
             WP_$UNWIRE(nl->wired_pages[i]);
         }
     }
@@ -88,21 +99,26 @@ void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
          * Wire code and data pages
          * First, wire the NETLOG code section
          */
+        /* 0xE719DC..0xE719FA: the NETLOG code range, limit 10 */
         nl->wired_page_count = 0;
-        MST_$WIRE_AREA(NETLOG_CODE_START, NETLOG_DATA_START,
+        MST_$WIRE_AREA(&netlog_$c_wire_code_start,
+                       &netlog_$c_wire_code_end,
                        &nl->wired_pages[0],
-                       (void *)(NETLOG_MAX_WIRED_PAGES - nl->wired_page_count),
+                       &netlog_$c_max_wired_pages,
                        &nl->wired_page_count);
 
         /*
-         * Wire the AUDIT data section (continuation of wire area)
+         * 0xE719FE..0xE71A30: the NETLOG data range, appended to the same
+         * array with whatever budget is left.  The count comes back in its
+         * own word and is added to wired_page_count afterwards.
          */
-        wire_count = NETLOG_MAX_WIRED_PAGES - nl->wired_page_count;
-        MST_$WIRE_AREA(AUDIT_DATA_END_ADDR, NETLOG_DATA_END_ADDR,
+        wire_count = (int16_t)(NETLOG_MAX_WIRED_PAGES - nl->wired_page_count);
+        MST_$WIRE_AREA(&netlog_$c_wire_data_start,
+                       &netlog_$c_wire_data_end,
                        &nl->wired_pages[nl->wired_page_count],
                        &wire_count,
-                       &wire_count);
-        nl->wired_page_count += wire_count;
+                       &pages_wired);
+        nl->wired_page_count += pages_wired;
 
         /*
          * Copy target node, socket, and kinds to globals
@@ -133,8 +149,9 @@ void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
          */
         nl->current_buf_index = 1;
         nl->done_cnt = 0;
+        /* 0xE71AB2/0xE71AB6 */
+        nl->page_counts[0] = 0;
         nl->page_counts[1] = 0;
-        nl->page_counts[2] = 0;
         nl->current_buf_ptr = nl->buffer_va[1];
 
         /*

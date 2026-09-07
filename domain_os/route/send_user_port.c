@@ -119,7 +119,7 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, uint32_t hdr
      * of the four copied payload pages is recorded.  Preserved as-is; see
      * the TODO below.
      */
-    pkt_info.hdr      = ARCH_VA_TO_PTR(hdr_va);         /* +0x00 */
+    pkt_info.hdr      = hdr_va;                         /* +0x00 */
     pkt_info.data_pages[0] = *src_pages;                /* +0x30 */
     pkt_info.hdr_len  = hdr_len;                        /* +0x2c */
     pkt_info.data_len = data_len;                       /* +0x2a */
@@ -130,7 +130,7 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, uint32_t hdr
      * The cast restates the "pea (-0x40,A6)" the machine code pushes:
      * SOCK_$PUT_INT_INT reads the record through that same pointer.
      */
-    put_result = SOCK_$PUT(*socket_ptr, (void **)&pkt_info, 0, 2, *socket_ptr);
+    put_result = SOCK_$PUT(*socket_ptr, &pkt_info, 0, 2, *socket_ptr);
 
     if (put_result < 0) {
         /* 0x00E87D00: success - packet queued */

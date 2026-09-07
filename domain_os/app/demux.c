@@ -78,7 +78,8 @@ void APP_$DEMUX(void *pkt_info, uint16_t *ec_ptr1, uint16_t *ec_ptr2,
     sock_num = *(uint16_t *)(app_hdr + 0x0C);
 
     /* Try to put packet on target socket */
-    put_result = SOCK_$PUT(sock_num, (void **)&local_pkt, 0, *ec_ptr1, *ec_ptr2);
+    put_result = SOCK_$PUT(sock_num, (sock_$pkt_info_t *)&local_pkt, 0,
+                           *ec_ptr1, *ec_ptr2);
 
     if (put_result >= 0) {
         /* Socket full or error - check if we should try overflow */
@@ -86,7 +87,8 @@ void APP_$DEMUX(void *pkt_info, uint16_t *ec_ptr1, uint16_t *ec_ptr2,
             /* File socket overflow - try overflow socket */
             RING_$FILE_OVERFLOW++;
 
-            put_result = SOCK_$PUT(APP_SOCK_TYPE_OVERFLOW, (void **)&local_pkt, 0,
+            put_result = SOCK_$PUT(APP_SOCK_TYPE_OVERFLOW,
+                                   (sock_$pkt_info_t *)&local_pkt, 0,
                                    *ec_ptr1, *ec_ptr2);
 
             if (put_result >= 0) {

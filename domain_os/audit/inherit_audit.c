@@ -16,7 +16,7 @@
  *   00e716b4    move.w (A0),D1w              ; D1 = *child_pid
  *   00e716b6    add.w D1w,D1w                ; D1 = child_pid * 2
  *   00e716b8    move.w (-0x2,A5,D0w*0x1),(-0x2,A5,D1w*0x1)
- *                                            ; suspend_count[child] = suspend_count[parent]
+ *                                            ; suspend_count[child-1] = suspend_count[parent-1]
  *   00e716be    movea.l (0xc,A6),A1          ; A1 = status_ret pointer
  *   00e716c2    clr.l (A1)                   ; *status_ret = 0
  *   00e716c4    movea.l (-0x4,A6),A5
@@ -31,8 +31,9 @@ void AUDIT_$INHERIT_AUDIT(int16_t *child_pid, status_$t *status_ret)
     int16_t parent_pid = PROC1_$CURRENT;
     int16_t child = *child_pid;
 
-    /* Copy parent's suspension counter to child */
-    AUDIT_$DATA.suspend_count[child] = AUDIT_$DATA.suspend_count[parent_pid];
+    /* Copy parent's suspension counter to child (the array is 1-based) */
+    AUDIT_$DATA.suspend_count[child - 1] =
+        AUDIT_$DATA.suspend_count[parent_pid - 1];
 
     *status_ret = status_$ok;
 }

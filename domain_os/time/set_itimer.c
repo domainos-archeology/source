@@ -5,50 +5,66 @@
  * Domain/OS implementation of the Unix setitimer() call.
  *
  * Parameters:
- *   which - Pointer to timer type:
- *           0 = ITIMER_REAL (real time, delivers SIGALRM)
- *           1 = ITIMER_VIRTUAL (virtual time, delivers SIGVTALRM)
- *   value - New timer value (itimerval: interval + value)
- *   ovalue - Receives old timer value (may be NULL)
- *   status - Status return
+ *   which     - Pointer to timer type: 0 = real, 1 = virtual
+ *   value     - New timer value
+ *   interval  - New timer interval
+ *   ovalue    - Receives the old timer value
+ *   ointerval - Receives the old timer interval
+ *   status    - Status return
  *
  * Original address: 0x00e58e58
+ *
+ * Assembly (else branch, `*which != 0`):
+ *   00e58ea6  move.l D3,-(SP)            ; source = the caller's `interval`
+ *   00e58ea8  pea (-0x8,A6)              ; dest   = interval_clock
+ *   00e58eac  bsr time_$itimer_to_clock
+ *   00e58eb6  move.l D2,-(SP)            ; source = the caller's `value`
+ *   00e58eb8  pea (-0x10,A6)             ; dest   = val_clock
+ *   00e58ebc  bsr time_$itimer_to_clock
+ *   00e58eca  bsr time_$set_itimer_internal(1, &val_clock, &interval_clock,
+ *                                           ovalue, ointerval, status)
+ *   00e58ed2  pea (A3)                   ; source = *ovalue (clock form)
+ *   00e58ed4  pea (-0x10,A6)             ; dest   = the temp
+ *   00e58ed8  bsr time_$clock_to_itimer
+ *   00e58ede  move.l (-0x10,A6),(A3) / move.w (-0xc,A6),(0x4,A3)
+ *   00e58ee8..00e58ef6  the same for *ointerval
+ *
+ * Note that the old-value buffers handed to time_$set_itimer_internal are the
+ * CALLER's (A3/A2), not locals: the conversion back to itimer form is done in
+ * place through the same 6-byte temporary that held val_clock.
  */
 
 #include "time/time_internal.h"
 
-void TIME_$SET_ITIMER(uint16_t *which, uint32_t *value, uint32_t *interval,
-                      uint32_t *ovalue, uint32_t *ointerval,
+void TIME_$SET_ITIMER(uint16_t *which, clock_t *value, clock_t *interval,
+                      clock_t *ovalue, clock_t *ointerval,
                       status_$t *status)
 {
     clock_t val_clock;
     clock_t interval_clock;
-    clock_t oval_clock;
-    clock_t ointerval_clock;
 
-    /* Register cleanup handler */
+    /* 0xE58E7A: Pascal function whose result is discarded (addq.w #4,SP) */
     PROC2_$SET_CLEANUP(6);
 
     if (*which == 0) {
-        /* ITIMER_REAL - values are already in ticks */
-        time_$set_itimer_internal(0, (clock_t *)value, (clock_t *)interval,
-                                  (clock_t *)ovalue, (clock_t *)ointerval,
+        /* Real timer - the values are already in clock form */
+        time_$set_itimer_internal(0, value, interval, ovalue, ointerval,
                                   status);
     } else {
-        /* ITIMER_VIRTUAL - convert from timeval to clock ticks */
+        /* Virtual timer - halve the incoming itimer-form values */
         time_$itimer_to_clock(&interval_clock, interval);
         time_$itimer_to_clock(&val_clock, value);
 
         time_$set_itimer_internal(1, &val_clock, &interval_clock,
-                                  &oval_clock, &ointerval_clock, status);
+                                  ovalue, ointerval, status);
 
-        /* Convert results back to timeval format */
-        time_$clock_to_itimer(&oval_clock, ovalue);
-        ovalue[0] = oval_clock.high;
-        ovalue[1] = oval_clock.low;
+        /* Convert the returned clock values back to itimer form in place */
+        time_$clock_to_itimer(&val_clock, ovalue);
+        ovalue->high = val_clock.high;
+        ovalue->low = val_clock.low;
 
-        time_$clock_to_itimer(&ointerval_clock, ointerval);
-        ointerval[0] = ointerval_clock.high;
-        ointerval[1] = ointerval_clock.low;
+        time_$clock_to_itimer(&val_clock, ointerval);
+        ointerval->high = val_clock.high;
+        ointerval->low = val_clock.low;
     }
 }

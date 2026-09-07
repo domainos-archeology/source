@@ -46,6 +46,22 @@
 #define TIME_INITIAL_TICK   0x1047
 
 /*
+ * TIME status codes.  Names from the SR10.4 status-code database,
+ * "OS / time manager" (subsystem 0x0D).
+ */
+#define status_$time_no_timer_queue_entry           0x000D0001
+#define status_$time_entry_to_cancel_not_found      0x000D0002
+#define status_$time_quit_while_waiting             0x000D0003
+#define status_$time_bad_timer_interrupt            0x000D0004
+#define status_$time_bad_timer_key                  0x000D0005
+#define status_$time_alarm_fault                    0x000D0006
+#define status_$time_real_interval_timer_fault      0x000D0007
+#define status_$time_virtual_interval_timer_fault   0x000D0008
+#define status_$time_queue_element_not_in_use       0x000D0009
+#define status_$time_queue_element_not_found        0x000D000A
+#define status_$time_cpu_time_limit_exceeded        0x000D000B
+
+/*
  * ============================================================================
  * Time Queue Structures
  * ============================================================================
@@ -161,6 +177,24 @@ extern uint32_t TIME_$CURRENT_DELTA;
  */
 extern uint8_t IN_VT_INT;
 extern uint8_t IN_RT_INT;
+
+/*
+ * Virtual-timer event queues, one per process, Pascal 1-based.
+ *
+ * TIME_$VTQ: 0xE2A4A0.  Every reference in the image reaches element
+ * (PROC1_$CURRENT - 1):
+ *   TIME_$VT_INT       0xE163EA/0xE16412/0xE16416  0xE29198 + cur*12 + 0x12FC
+ *   TIME_$INIT         loop base 0xE29198 + 0xC, + 0x12FC per iteration
+ *   TIME_$RELEASE      0xE58BBE/0xE58BCC  pea (-0xc,A2,D1w) with A2 = 0xE2A4A0
+ *   TIME_$SET_CPU_LIMIT 0xE58F88/0xE58F96 lea (-0xc,A0,D0w) with A0 = 0xE2A4A0
+ * 0xE29198 + 0x12FC + 0xC == 0xE2A4A0, so all four forms are the same array.
+ *
+ * The extent is fixed by the next global: 0xE2A7A0 (TIME_$RTEQ) - 0xE2A4A0 =
+ * 0x300 = 64 * sizeof(time_queue_t), and TIME_$INIT initialises exactly 64
+ * queues with ids 1..64.
+ */
+#define TIME_MAX_PROCESSES 64
+extern time_queue_t TIME_$VTQ[TIME_MAX_PROCESSES];
 
 /*
  * Real-time event queue
@@ -440,10 +474,19 @@ void TIME_$Q_ENTER_ELEM(time_queue_t *queue, clock_t *when,
 /*
  * TIME_$Q_ADD_CALLBACK - Add a callback to the queue
  *
+ * Prologue at 0x00e16dd4 fixes the argument shape:
+ *   0x08 queue, 0x0C when, 0x10 is_absolute (word), 0x12 now,
+ *   0x16 callback, 0x1A callback_arg, 0x1E flags (word), 0x20 interval,
+ *   0x24 qelem, 0x28 status.
+ * `when` supplies the element's expiry (0xE16DF8); when `is_absolute` is 0
+ * the expiry has `*now` added to it (0xE16E0C).  `now` - NOT `when` - is also
+ * what is handed to TIME_$Q_ENTER_ELEM (0xE16E34).
+ *
  * Original address: 0x00e16dd4
  */
-void TIME_$Q_ADD_CALLBACK(time_queue_t *queue, void *elem, uint16_t relative,
-                          clock_t *when, void *callback, void *callback_arg,
+void TIME_$Q_ADD_CALLBACK(time_queue_t *queue, clock_t *when,
+                          uint16_t is_absolute, clock_t *now,
+                          void *callback, void *callback_arg,
                           uint16_t flags, clock_t *interval,
                           time_queue_elem_t *qelem, status_$t *status);
 
@@ -496,19 +539,28 @@ void TIME_$ADVANCE_CALLBACK(void *arg);
  */
 
 /*
+ * The interval-timer entry points exchange 48-bit values in the SAME 6-byte
+ * {high:32, low:16} record as clock_t, but counting in units of two clock
+ * ticks: for `*which == 1` the kernel halves each incoming value
+ * (time_$itimer_to_clock) and doubles each returned one
+ * (time_$clock_to_itimer).  For `*which == 0` no scaling happens at all and
+ * the buffers hold plain clock_t values.
+ */
+
+/*
  * TIME_$SET_ITIMER - Set interval timer
  *
- * @param which: Pointer to timer type (0=ITIMER_REAL, 1=ITIMER_VIRTUAL, 2=ITIMER_PROF)
- * @param value: Pointer to new value (clock_t format)
- * @param interval: Pointer to new interval (clock_t format)
- * @param ovalue: Pointer to receive old value (clock_t format)
- * @param ointerval: Pointer to receive old interval (clock_t format)
+ * @param which: Pointer to timer type (0 = real, 1 = virtual)
+ * @param value: Pointer to new value
+ * @param interval: Pointer to new interval
+ * @param ovalue: Pointer to receive old value
+ * @param ointerval: Pointer to receive old interval
  * @param status: Status return
  *
  * Original address: 0x00e58e58
  */
-void TIME_$SET_ITIMER(uint16_t *which, uint32_t *value, uint32_t *interval,
-                      uint32_t *ovalue, uint32_t *ointerval, status_$t *status);
+void TIME_$SET_ITIMER(uint16_t *which, clock_t *value, clock_t *interval,
+                      clock_t *ovalue, clock_t *ointerval, status_$t *status);
 
 /*
  * TIME_$GET_ITIMER - Get interval timer
@@ -519,18 +571,20 @@ void TIME_$SET_ITIMER(uint16_t *which, uint32_t *value, uint32_t *interval,
  *
  * Original address: 0x00e58f06
  */
-void TIME_$GET_ITIMER(uint16_t *which, uint32_t *value, uint32_t *interval);
+void TIME_$GET_ITIMER(uint16_t *which, clock_t *value, clock_t *interval);
 
 /*
  * TIME_$SET_CPU_LIMIT - Set CPU time limit
  *
- * @param limit: Pointer to limit value (clock_t)
- * @param relative: Pointer to flag: 0 = absolute, non-zero = relative to current CPU time
+ * @param limit: Pointer to the limit in ITIMER form (0x00E58FA0 converts it
+ *               with time_$itimer_to_clock before use)
+ * @param relative: Pointer to a Domain boolean: true (0xFF) = relative to the
+ *               process's current CPU time, false = absolute
  * @param status: Status return
  *
  * Original address: 0x00e58f64
  */
-void TIME_$SET_CPU_LIMIT(clock_t *limit, int8_t *relative, status_$t *status);
+void TIME_$SET_CPU_LIMIT(clock_t *limit, boolean *relative, status_$t *status);
 
 /*
  * TIME_$RELEASE - Release timer resources for current process

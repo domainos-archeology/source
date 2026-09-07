@@ -88,8 +88,9 @@
 #define NETBUF_OFFSET_DST_PORT      0x3C8   /* Destination port (2 bytes) */
 #define NETBUF_OFFSET_HOP_COUNT     0x3CA   /* Hop count (2 bytes) */
 #define NETBUF_OFFSET_HOP_ARRAY     0x3CC   /* Hop array (variable) */
-#define NETBUF_OFFSET_EC_PARAM1     0x3E0   /* Event count param 1 */
-#define NETBUF_OFFSET_EC_PARAM2     0x3E2   /* Event count param 2 */
+/* Owned by netbuf/netbuf.h; see NETBUF_HDR_EC_PARAM1 / NETBUF_HDR_EC_PARAM2 */
+#define NETBUF_OFFSET_EC_PARAM1     NETBUF_HDR_EC_PARAM1
+#define NETBUF_OFFSET_EC_PARAM2     NETBUF_HDR_EC_PARAM2
 #define NETBUF_OFFSET_NEXT          0x3E4   /* Next buffer in queue */
 #define NETBUF_OFFSET_DATA_LEN      0x3E8   /* Data length (4 bytes) */
 #define NETBUF_OFFSET_DATA_PTRS     0x3EC   /* Data page pointers (16 bytes) */
@@ -143,13 +144,20 @@
  * Internal Function Prototypes
  */
 
-/* Put packet on socket queue (internal, returns event count pointer) */
-int8_t SOCK_$PUT_INT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
-                     uint16_t ec_param1, uint16_t ec_param2,
+/*
+ * Put packet on socket queue (internal, returns event count pointer).
+ * 0x00E16190: 0x08 sock_num(w), 0x0A pkt_info, 0x0E flags(b), 0x10/0x12 the
+ * two event-count words, 0x14 ec_ret.
+ */
+int8_t SOCK_$PUT_INT(uint16_t sock_num, sock_$pkt_info_t *pkt_info,
+                     int8_t flags, uint16_t ec_param1, uint16_t ec_param2,
                      ec_$eventcount_t **ec_ret);
 
-/* Put packet on socket queue (lowest level) */
-int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, void **pkt_ptr,
+/*
+ * Put packet on socket queue (lowest level).
+ * 0x00E161F8: 0x08 sock_view, 0x0C pkt_info, 0x10 flags(b), 0x12/0x14 words.
+ */
+int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, sock_$pkt_info_t *pkt_info,
                           int8_t flags, uint16_t ec_param1, uint16_t ec_param2);
 
 #endif /* SOCK_INTERNAL_H */

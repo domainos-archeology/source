@@ -48,6 +48,16 @@
 #define NETBUF_HDR_DATA_OFF     0x3e8   /* Start of data area (zeroed on init) */
 #define NETBUF_HDR_PHYS_OFF     0x3fc   /* Physical address storage */
 
+/*
+ * The two words a queued packet carries alongside its header, written by
+ * SOCK_$PUT_INT_INT (0x00E16290 / 0x00E16294) and read back by
+ * MSG_$$RCV_INTERNAL (0x00E59650 / 0x00E59658) and MSG_$RCV_CONTIGI.  MSG
+ * calls them ec_param1/ec_param2; ROUTE passes the receiving port's
+ * port_type and socket through them.
+ */
+#define NETBUF_HDR_EC_PARAM1    0x3e0
+#define NETBUF_HDR_EC_PARAM2    0x3e2
+
 /* Status codes */
 #define status_$network_out_of_blocks   0x00110003
 

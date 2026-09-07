@@ -155,7 +155,8 @@ void ROUTE_$PROCESS(void)
             CRASH_SYSTEM(&ROUTE_$SOCK_EMPTY_STATUS);        /* 0x00E874BC */
         }
 
-        pkt = (route_$internet_hdr_t *)rcv.hdr;             /* 0x00E874C8 */
+        /* sock_$pkt_info_t.hdr is a target VA (sock/sock.h), not a pointer */
+        pkt = (route_$internet_hdr_t *)ARCH_VA_TO_PTR(rcv.hdr); /* 0x00E874C8 */
 
         /*
          * 0x00E874CC - 0x00E874E6: bucket this packet by the routing
@@ -288,8 +289,8 @@ void ROUTE_$PROCESS(void)
                  * 0x00E8761C - 0x00E87634.  The third argument is D5b, the
                  * was_forwarded flag, which is still false here.
                  */
-                if (SOCK_$PUT(port->socket, &rcv.hdr, (uint8_t)was_forwarded,
-                              2, port->socket) < 0) {
+                if (SOCK_$PUT(port->socket, &rcv, was_forwarded,
+                              2, port->socket) < 0) {   /* 0x00E87626 pea (-0xb0,A6) */
                     was_forwarded = true;                   /* 0x00E8763C */
 
                     /* 0x00E8763E - 0x00E8765E */
@@ -354,7 +355,7 @@ void ROUTE_$PROCESS(void)
 
                 ML_$LOCK(ROUTE_$NET_IO_LOCK_ID);
 
-                hdr_ptr_cell[0] = (uint32_t)(uintptr_t)pkt;
+                hdr_ptr_cell[0] = ARCH_PTR_TO_VA(pkt);
                 NET_IO_$SEND(next_hop_port,             /* port                 */
                              hdr_ptr_cell,              /* &header VA           */
                              hdr_pa,                    /* header PA            */
@@ -397,7 +398,7 @@ void ROUTE_$PROCESS(void)
          * header pointer, not the SOCK_$GET record.
          */
         if (was_forwarded >= 0) {
-            hdr_ptr_cell[0] = (uint32_t)(uintptr_t)pkt;
+            hdr_ptr_cell[0] = ARCH_PTR_TO_VA(pkt);
             NETBUF_$RTN_HDR(hdr_ptr_cell);
             PKT_$DUMP_DATA(rcv.data_pages, (int16_t)rcv.data_len);
         }

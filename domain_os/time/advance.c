@@ -33,9 +33,9 @@ void TIME_$ADVANCE(uint16_t *delay_type, clock_t *delay, void *ec,
 
     /* Add callback to RTE queue */
     TIME_$Q_ADD_CALLBACK(&TIME_$RTEQ,
-                         delay,                    /* elem handle */
-                         *delay_type,              /* relative flag */
-                         &now,                     /* current time */
+                         delay,                    /* when (0xE16492) */
+                         *delay_type,              /* is_absolute (0xE1648C) */
+                         &now,                     /* now (0xE16484) */
                          TIME_$ADVANCE_CALLBACK,   /* callback */
                          ec,                       /* callback arg */
                          0,                        /* flags */

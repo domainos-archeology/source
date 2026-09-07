@@ -20,13 +20,13 @@
  * Original size: 132 bytes
  */
 static void copy_to_buffers(
-    void **src_ptr,      /* Pointer to source data pointer (updated) */
+    uint32_t *src_va_ptr, /* Cell holding the source target VA (updated) */
     int16_t length,      /* Number of bytes to copy */
     mac_$buffer_t **cur_buf,  /* Pointer to current buffer (updated) */
     int16_t *buf_offset  /* Pointer to offset in current buffer (updated) */
 )
 {
-    uint8_t *src = (uint8_t *)*src_ptr;
+    uint8_t *src = (uint8_t *)ARCH_VA_TO_PTR(*src_va_ptr);
     int16_t remaining = length;
     int16_t chunk_size;
     int32_t buf_remaining;
@@ -56,7 +56,7 @@ static void copy_to_buffers(
         }
     }
 
-    *src_ptr = src;
+    *src_va_ptr = ARCH_PTR_TO_VA(src);
 }
 
 void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *status_ret)
@@ -191,7 +191,7 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
          * The third argument is the record's payload page array, not NULL;
          * the first cast restates its 32-bit header VA cell.
          */
-        NETBUF_$RTN_PKT((uint32_t *)&pkt_info.hdr, &secondary_buf,
+        NETBUF_$RTN_PKT(&pkt_info.hdr, &secondary_buf,
                         pkt_info.data_pages, (int16_t)pkt_info.data_len);
         *status_ret = cleanup_status;
         return;
@@ -263,7 +263,7 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
 
     if (data_len != 0) {
         /* 0x00E0BF52: pea (-0x6c,A6) - likewise the payload VA cell. */
-        copy_to_buffers((void **)&secondary_buf, data_len, &cur_buf, &buf_offset);
+        copy_to_buffers(&secondary_buf, data_len, &cur_buf, &buf_offset);
     }
 
     /*
@@ -278,7 +278,7 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
 
 cleanup_and_return:
     /* Return packet buffers to the pool - 0x00E0BF8C, same shape as above */
-    NETBUF_$RTN_PKT((uint32_t *)&pkt_info.hdr, &secondary_buf,
+    NETBUF_$RTN_PKT(&pkt_info.hdr, &secondary_buf,
                     pkt_info.data_pages, (int16_t)pkt_info.data_len);
 
     /* Release cleanup handler */

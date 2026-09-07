@@ -172,7 +172,7 @@ void MSG_$$SEND(int16_t port_num, uint32_t routing_key, uint32_t dest_node,
              * Only these fields are written; the rest of the 0x40-byte record
              * keeps whatever was on the stack.
              */
-            local_pkt.hdr = hdr;                        /* 0x00E0DB58 */
+            local_pkt.hdr = hdr_va;                     /* 0x00E0DB58 */
             local_pkt.hdr_len = hdr_len;                /* 0x00E0DB5C, +0x2C */
             local_pkt.data_len = data_len;              /* 0x00E0DB60, +0x2A */
             local_pkt.n_hops = 0;                       /* 0x00E0DB64, +0x12 */
@@ -206,11 +206,10 @@ void MSG_$$SEND(int16_t port_num, uint32_t routing_key, uint32_t dest_node,
              *
              * SOCK_$PUT hands its second argument straight through to
              * SOCK_$PUT_INT_INT, which uses it AS the record
-             * ("movea.l (0xc,A6),A2" at 0x00E16206), so the void ** in
-             * sock.h is a mistyped sock_$pkt_info_t * (see source-bpz8).
+             * ("movea.l (0xc,A6),A2" at 0x00E16206).
              */
             {
-                int8_t queued = SOCK_$PUT(dest_sock, (void **)&local_pkt, true,
+                int8_t queued = SOCK_$PUT(dest_sock, &local_pkt, true,
                                           ROUTE_$PORT_ARRAY[0].port_type,
                                           ROUTE_$PORT_ARRAY[0].socket);
 

@@ -1,14 +1,16 @@
 /*
- * NETLOG Unit Tests
+ * netlog/test/test_netlog.c - Layout tests for the NETLOG records.
  *
- * Tests for the NETLOG network logging subsystem.
- * These tests verify data structure sizes and layout.
- *
- * Build with:
- *   gcc -I../.. test_netlog.c -o test_netlog
- *
- * Run:
- *   ./test_netlog
+ * These use the REAL netlog/netlog.h and netlog/netlog_internal.h types (the
+ * file previously carried a private copy of netlog_entry_t, so it could not
+ * catch a change to the shipped one) and check the two derived quantities the
+ * disassembly pins down:
+ *   - 39 entries of 26 bytes fit in the 1KB wired page NETLOG_$CNTL allocates
+ *     (0x00E71C14 `cmpi.w #0x27,(0x6e,A1)`),
+ *   - NETLOG_ENTRY_ADDR turns the 1-based counter value into the record the
+ *     original writes, which begins at (count - 1) * 26 because every store
+ *     at 0x00E71BCE..0x00E71C02 uses a negative displacement from
+ *     `current_buf_ptr + count*26`.
  */
 
 #include <stdio.h>
@@ -16,158 +18,110 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Test helper macros */
-#define TEST_ASSERT(cond, msg) do { \
-    if (!(cond)) { \
-        printf("FAIL: %s (%s:%d)\n", msg, __FILE__, __LINE__); \
-        failures++; \
-    } else { \
-        printf("PASS: %s\n", msg); \
-        passes++; \
-    } \
-} while(0)
+#define TEST_ASSERT(cond, msg) do {                                           \
+    if (!(cond)) {                                                            \
+        printf("FAIL: %s (%s:%d)\n", msg, __FILE__, __LINE__);                \
+        failures++;                                                           \
+    } else {                                                                  \
+        printf("PASS: %s\n", msg);                                            \
+        passes++;                                                             \
+    }                                                                         \
+} while (0)
 
 static int failures = 0;
 static int passes = 0;
 
-/*
- * Log entry structure (26 bytes, 0x1A)
- * Duplicated here to test independently of kernel headers
- */
-typedef struct test_netlog_entry_t {
-    uint8_t     kind;           /* 0x00: Log entry type/category */
-    uint8_t     process_id;     /* 0x01: Process ID that generated entry */
-    uint32_t    timestamp;      /* 0x02: Clock value (high 32 bits) */
-    uint32_t    uid_high;       /* 0x06: UID high word */
-    uint32_t    uid_low;        /* 0x0A: UID low word */
-    uint16_t    param3;         /* 0x0E: Parameter 3 */
-    uint8_t     param4;         /* 0x10: Parameter 4 (low byte only) */
-    uint8_t     _pad;           /* 0x11: Padding */
-    uint16_t    param5;         /* 0x12: Parameter 5 */
-    uint16_t    param6;         /* 0x14: Parameter 6 */
-    uint16_t    param7;         /* 0x16: Parameter 7 */
-    uint16_t    param8;         /* 0x18: Parameter 8 */
-} __attribute__((packed)) test_netlog_entry_t;
+#include "netlog/netlog_internal.h"
 
-/*
- * Test: Verify netlog_entry_t structure size
- */
-void test_entry_size(void) {
-    TEST_ASSERT(sizeof(test_netlog_entry_t) == 26,
-                "netlog_entry_t should be 26 bytes");
+/* netlog_internal.h declares these; the layout tests do not call any code. */
+netlog_data_t netlog_data;
+
+static void test_entry_size(void)
+{
+    TEST_ASSERT(sizeof(netlog_entry_t) == 26,
+                "netlog_entry_t is 26 bytes");
+    TEST_ASSERT(NETLOG_ENTRY_SIZE == 26,
+                "NETLOG_ENTRY_SIZE is 26");
 }
 
-/*
- * Test: Verify netlog_entry_t field offsets
- */
-void test_entry_offsets(void) {
-    TEST_ASSERT(offsetof(test_netlog_entry_t, kind) == 0,
-                "kind should be at offset 0");
-    TEST_ASSERT(offsetof(test_netlog_entry_t, process_id) == 1,
-                "process_id should be at offset 1");
-    TEST_ASSERT(offsetof(test_netlog_entry_t, timestamp) == 2,
-                "timestamp should be at offset 2");
-    TEST_ASSERT(offsetof(test_netlog_entry_t, uid_high) == 6,
-                "uid_high should be at offset 6");
-    TEST_ASSERT(offsetof(test_netlog_entry_t, uid_low) == 10,
-                "uid_low should be at offset 10");
-    TEST_ASSERT(offsetof(test_netlog_entry_t, param3) == 14,
-                "param3 should be at offset 14");
-    TEST_ASSERT(offsetof(test_netlog_entry_t, param4) == 16,
-                "param4 should be at offset 16");
-    TEST_ASSERT(offsetof(test_netlog_entry_t, param5) == 18,
-                "param5 should be at offset 18");
-    TEST_ASSERT(offsetof(test_netlog_entry_t, param6) == 20,
-                "param6 should be at offset 20");
-    TEST_ASSERT(offsetof(test_netlog_entry_t, param7) == 22,
-                "param7 should be at offset 22");
-    TEST_ASSERT(offsetof(test_netlog_entry_t, param8) == 24,
-                "param8 should be at offset 24");
+static void test_entry_offsets(void)
+{
+    TEST_ASSERT(offsetof(netlog_entry_t, kind) == 0x00, "kind at 0x00");
+    TEST_ASSERT(offsetof(netlog_entry_t, process_id) == 0x01, "process_id at 0x01");
+    TEST_ASSERT(offsetof(netlog_entry_t, timestamp) == 0x02, "timestamp at 0x02");
+    TEST_ASSERT(offsetof(netlog_entry_t, uid_high) == 0x06, "uid_high at 0x06");
+    TEST_ASSERT(offsetof(netlog_entry_t, uid_low) == 0x0A, "uid_low at 0x0A");
+    TEST_ASSERT(offsetof(netlog_entry_t, param3) == 0x0E, "param3 at 0x0E");
+    TEST_ASSERT(offsetof(netlog_entry_t, param4) == 0x10, "param4 at 0x10");
+    TEST_ASSERT(offsetof(netlog_entry_t, param5) == 0x12, "param5 at 0x12");
+    TEST_ASSERT(offsetof(netlog_entry_t, param6) == 0x14, "param6 at 0x14");
+    TEST_ASSERT(offsetof(netlog_entry_t, param7) == 0x16, "param7 at 0x16");
+    TEST_ASSERT(offsetof(netlog_entry_t, param8) == 0x18, "param8 at 0x18");
 }
 
-/*
- * Test: Verify entries per page constant
- */
-void test_entries_per_page(void) {
-    /* Each page holds 39 entries (39 * 26 = 1014 bytes) */
-    int entries_per_page = 39;
-    int entry_size = 26;
-    int total_size = entries_per_page * entry_size;
-
-    TEST_ASSERT(total_size == 1014,
-                "39 entries * 26 bytes = 1014 bytes (fits in 1KB page)");
-    TEST_ASSERT(entries_per_page == 0x27,
-                "Entries per page should be 0x27 (39)");
+static void test_data_offsets(void)
+{
+    TEST_ASSERT(offsetof(netlog_data_t, page_counts) == 0x70,
+                "page_counts at 0x70");
+    TEST_ASSERT(offsetof(netlog_data_t, current_buf_ptr) == 0x74,
+                "current_buf_ptr at 0x74 (so page_counts holds exactly two)");
+    TEST_ASSERT(sizeof(netlog_data.page_counts) == 4,
+                "page_counts is two words wide");
+    TEST_ASSERT(offsetof(netlog_data_t, buffer_va) == 0x54 &&
+                sizeof(netlog_data.buffer_va) == 12,
+                "buffer_va is three longwords at 0x54 (element 0 unused)");
 }
 
-/*
- * Test: Verify buffer switch calculation
- * The formula is: new_index = 3 - current_index
- * So 1 -> 2 and 2 -> 1
- */
-void test_buffer_switch(void) {
-    int idx1 = 1;
-    int idx2 = 2;
-
-    TEST_ASSERT(3 - idx1 == 2, "Buffer switch: 1 -> 2");
-    TEST_ASSERT(3 - idx2 == 1, "Buffer switch: 2 -> 1");
+static void test_page_capacity(void)
+{
+    TEST_ASSERT(NETLOG_ENTRIES_PER_PAGE == 0x27,
+                "NETLOG_ENTRIES_PER_PAGE is 0x27 (39)");
+    TEST_ASSERT(NETLOG_ENTRIES_PER_PAGE * NETLOG_ENTRY_SIZE == 1014,
+                "39 * 26 = 1014 bytes, which fits a 1KB page");
+    TEST_ASSERT((NETLOG_ENTRIES_PER_PAGE + 1) * NETLOG_ENTRY_SIZE > 1024,
+                "a 40th entry would not fit");
 }
 
-/*
- * Test: Verify kind filtering calculation
- * NETLOG checks: (KINDS & (1 << (kind & 0x1F))) != 0
- */
-void test_kind_filtering(void) {
-    uint32_t kinds = 0x00300007;  /* Bits 0, 1, 2, 20, 21 set */
+/* NETLOG_ENTRY_ADDR takes the 1-based counter value. */
+static void test_entry_address(void)
+{
+    char base[1024];
 
-    /* Check individual bits */
-    TEST_ASSERT((kinds & (1 << 0)) != 0, "Kind 0 should be enabled");
-    TEST_ASSERT((kinds & (1 << 1)) != 0, "Kind 1 should be enabled");
-    TEST_ASSERT((kinds & (1 << 2)) != 0, "Kind 2 should be enabled");
-    TEST_ASSERT((kinds & (1 << 3)) == 0, "Kind 3 should be disabled");
-    TEST_ASSERT((kinds & (1 << 20)) != 0, "Kind 20 (server) should be enabled");
-    TEST_ASSERT((kinds & (1 << 21)) != 0, "Kind 21 (server) should be enabled");
-
-    /* Check server bit mask */
-    uint32_t server_mask = 0x300000;  /* Bits 20 and 21 */
-    uint32_t non_server_mask = 0xFFCFFFFF;
-
-    TEST_ASSERT((kinds & server_mask) != 0, "Server bits should be set");
-    TEST_ASSERT((kinds & non_server_mask) != 0, "Non-server bits should be set");
-
-    /* Test with only server bits */
-    uint32_t server_only = 0x00100000;
-    TEST_ASSERT((server_only & server_mask) != 0, "Server-only has server bits");
-    TEST_ASSERT((server_only & non_server_mask) == 0, "Server-only has no non-server bits");
+    TEST_ASSERT((char *)NETLOG_ENTRY_ADDR(base, 1) == base,
+                "counter value 1 addresses offset 0");
+    TEST_ASSERT((char *)NETLOG_ENTRY_ADDR(base, 2) == base + 26,
+                "counter value 2 addresses offset 26");
+    TEST_ASSERT((char *)NETLOG_ENTRY_ADDR(base, 39) == base + 988,
+                "counter value 39 addresses offset 988");
+    TEST_ASSERT((char *)NETLOG_ENTRY_ADDR(base, 39) + NETLOG_ENTRY_SIZE ==
+                base + 1014,
+                "the 39th record ends at 1014, inside the page");
 }
 
-/*
- * Test: Verify entry calculation formula
- * entry_addr = buffer_base + (entry_index * 26)
- */
-void test_entry_calculation(void) {
-    /* Simulate entry index 1 (first entry) */
-    int entry_index = 1;
-    int offset = entry_index * 26;
-    TEST_ASSERT(offset == 26, "Entry 1 should be at offset 26");
+/* NETLOG_$CNTL's flag arithmetic (0x00E71AF0..0x00E71B14). */
+static void test_kind_masks(void)
+{
+    uint32_t kinds = 0x00300007;
 
-    /* Entry 39 (last entry) */
-    entry_index = 39;
-    offset = entry_index * 26;
-    TEST_ASSERT(offset == 1014, "Entry 39 should be at offset 1014");
+    TEST_ASSERT((kinds & ((1u << 21) | (1u << 20))) != 0,
+                "bits 20/21 select server logging");
+    TEST_ASSERT((kinds & 0xFFCFFFFFu) != 0,
+                "andi.l #-0x300001 keeps the non-server bits");
+    TEST_ASSERT((0x00100000u & 0xFFCFFFFFu) == 0,
+                "a server-only mask leaves no general bits");
 }
 
-int main(void) {
-    printf("=== NETLOG Unit Tests ===\n\n");
+int main(void)
+{
+    printf("=== NETLOG layout tests ===\n\n");
 
     test_entry_size();
     test_entry_offsets();
-    test_entries_per_page();
-    test_buffer_switch();
-    test_kind_filtering();
-    test_entry_calculation();
+    test_data_offsets();
+    test_page_capacity();
+    test_entry_address();
+    test_kind_masks();
 
     printf("\n=== Results: %d passed, %d failed ===\n", passes, failures);
-
     return failures > 0 ? 1 : 0;
 }

@@ -132,6 +132,15 @@ uint8_t IN_RT_INT = 0;
  */
 
 /*
+ * Virtual-timer event queues, one per process (Pascal 1-based).
+ *
+ * Original address: 0xE2A4A0, 64 entries of 12 bytes, ending exactly at
+ * TIME_$RTEQ (0xE2A7A0).  See the comment on the declaration in time/time.h
+ * for the four instruction sequences that address it.
+ */
+time_queue_t TIME_$VTQ[TIME_MAX_PROCESSES];
+
+/*
  * Real-time event queue
  *
  * Main queue for real-time timer events.

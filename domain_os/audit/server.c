@@ -22,8 +22,8 @@ void AUDIT_$SERVER(void)
     int32_t timeout_time;
     uint16_t wake_reason;
 
-    /* Mark this process as suspended from auditing */
-    AUDIT_$DATA.suspend_count[PROC1_$CURRENT] = 1;
+    /* 0xE710DC: mark this process as suspended (1-based array) */
+    AUDIT_$DATA.suspend_count[PROC1_$CURRENT - 1] = 1;
 
     /* Mark server as running */
     AUDIT_$DATA.server_running = (uint8_t)-1;

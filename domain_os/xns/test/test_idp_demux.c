@@ -145,16 +145,16 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code,
     *status_ret = status_$ok;
 }
 
-int8_t SOCK_$PUT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
+int8_t SOCK_$PUT(uint16_t sock_num, sock_$pkt_info_t *pkt_info, int8_t flags,
                  uint16_t ec_param1, uint16_t ec_param2)
 {
     sock_put_calls++;
     sock_put_sock = sock_num;
-    sock_put_pkt = pkt_ptr;
-    sock_put_flags = flags;
+    sock_put_pkt = (void **)pkt_info;
+    sock_put_flags = (uint8_t)flags;
     sock_put_p4 = ec_param1;
     sock_put_p5 = ec_param2;
-    memcpy(&sock_put_copy, pkt_ptr, sizeof(sock_put_copy));
+    memcpy(&sock_put_copy, pkt_info, sizeof(sock_put_copy));
     return sock_put_result;
 }
 
@@ -238,8 +238,7 @@ static void setup(void)
     pkt.d.mac_src_lo = 0xBBCC;
     pkt.d.pkt_len = 0xDDEE;
     pkt.d._unknown_2e = 0xFF01;
-    pkt.d._unknown_34[0] = 0x5A;
-    pkt.d._unknown_34[1] = 0x5B;
+    pkt.d._unknown_34 = 0x5A5B;
     pkt.d.port_info = 0x0A0B;
     for (i = 0; i < 0x10; i++) {
         pkt.d.mac_info[i] = (uint8_t)(0xC0 + i);
@@ -382,8 +381,7 @@ static void test_local_delivery_record(void)
     ASSERT_EQ(0xBBCC, demux_rec_copy.mac_src_lo);
     ASSERT_PTR(XNS_CHANNEL_PTR(3), demux_rec_copy.channel);
     ASSERT_EQ(0x0A0B, demux_rec_copy.port_info);
-    ASSERT_EQ(0x5A, demux_rec_copy._unknown_34[0]);
-    ASSERT_EQ(0x5B, demux_rec_copy._unknown_34[1]);
+    ASSERT_EQ(0x5A5B, demux_rec_copy._unknown_34);
     for (i = 0; i < 0x10; i++) {
         ASSERT_EQ(0xC0 + i, demux_rec_copy.mac_info[i]);
     }

@@ -43,7 +43,7 @@ void SOCK_$CLOSE(uint16_t sock_num)
 
             if (get_result < 0) {
                 /* Return header buffer */
-                NETBUF_$RTN_HDR((uint32_t *)&pkt_info.hdr); /* pea (-0x40,A6) @0x00E15FC4 */
+                NETBUF_$RTN_HDR(&pkt_info.hdr); /* pea (-0x40,A6) @0x00E15FC4 */
 
                 /*
                  * If data pages are present, dump them.  The original tests

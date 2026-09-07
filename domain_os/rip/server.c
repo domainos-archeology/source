@@ -292,11 +292,22 @@ static void RIP_$PROCESS_REQUEST(boolean is_std, rip_$server_frame_t *f)
      * The request the parent received.  On the XNS path this is
      * packet + 0x1E in the netbuf, set at 0x00E68A5A.
      *
-     * TODO(source-u9wy): on the Domain-internet path (RIP_$SERVER's
-     * 0x00E68C2C call) the parent NEVER writes payload_va - the only store to
-     * (-0x4f0,A6) in RIP_$SERVER is at 0x00E68A5A, inside the "tst.b D3b /
-     * bpl" XNS arm - so this pointer is whatever the previous stack frame
-     * left there.  The original reads through it all the same; preserved.
+     * ORIGINAL DEFECT, PRESERVED (bead source-u9wy, confirmed instruction by
+     * instruction).  RIP_$SERVER writes (-0x4f0,A6) at exactly one place,
+     * 0x00E68A5A `move.l D4,(-0x4f0,A6)`, and that store sits inside the XNS
+     * arm gated by 0x00E68A4E `tst.b D3b` / 0x00E68A50 `bpl.b 0x00E68A8E`.
+     * The Domain-internet path reaches this procedure through 0x00E68C2A
+     * `clr.w -(SP)` / 0x00E68C2C `bsr.w 0x00E688C8` without ever taking that
+     * arm, yet 0x00E688F6 `movea.l (-0x4f0,A0),A1` loads the slot on both
+     * paths - so an internet-borne request with entry_count > 0 reads the
+     * requested networks through whatever the previous stack frame left there.
+     *
+     * The intended pointer was almost certainly &(-0x4d0,A6):
+     * PKT_$BRK_INTERNET_HDR puts the internet payload there, and that is
+     * where the response arm reads it back from (0x00E68DA4
+     * `move.w (-0x4d0,A2),-(SP)`).  On the XNS path the two agree, because
+     * 0x00E68A70-0x00E68A82 copies 0x21E bytes from (-0x4f0,A6) to
+     * (-0x4d0,A6).  No fix is possible without changing behaviour.
      */
     const rip_$packet_t *request = (const rip_$packet_t *)ARCH_VA_TO_PTR(f->payload_va);
 
@@ -446,7 +457,8 @@ void RIP_$SERVER(void)
 
     PKT_$DUMP_DATA(f.pkt.data_pages, (int16_t)f.pkt.data_len);  /* 0x00E68A30 */
 
-    packet = (xns_$idp_header_t *)f.pkt.hdr;             /* 0x00E68A42 */
+    /* sock_$pkt_info_t.hdr is a target VA (sock/sock.h), not a C pointer */
+    packet = (xns_$idp_header_t *)ARCH_VA_TO_PTR(f.pkt.hdr); /* 0x00E68A42 */
 
     /* "move.l A2,D4 / andi.w #-0x400,D4w" - only the low word is masked, but
      * bits 0..9 are all it needs to clear: the 1KB netbuf page. */
@@ -778,17 +790,22 @@ arm_name_register:
         f.reg_network = f.header.src_network;            /* 0x00E68DDA */
 
         /*
-         * 0x00E68DE0-0x00E68DEE: "lea (-0xa,A6),A2" points at the IDP SOURCE
-         * HOST (header + 0x16) and then "and.l (0x6,A2),D1" reads the
-         * longword SIX bytes on, i.e. header + 0x1C.  That is src_socket
-         * followed by the two frame bytes between the header copy and A6, not
-         * the low four bytes of the host address.
+         * ORIGINAL DEFECT, PRESERVED (bead source-u9wy, confirmed instruction
+         * by instruction).  0x00E68DE0 `lea (-0xa,A6),A2` points at the IDP
+         * SOURCE HOST, header + 0x16, and 0x00E68DEA `and.l (0x6,A2),D1` then
+         * reads the longword six bytes on - A6-0x04, i.e. header + 0x1C.
          *
-         * TODO(source-u9wy): the +6 accessor belongs to the 10-byte
-         * { network, host_hi, host_lo } record (rip_$nexthop_t), so the
-         * original applied it to a pointer that was already four bytes into
-         * that record; the node id it hands the name server is built from
-         * src_socket and two uninitialised frame bytes.  Preserved as-is.
+         * The +6 accessor belongs to the 10-byte { network:4, host_hi:2,
+         * host_lo:4 } record (rip_$nexthop_t), whose base is header + 0x12 =
+         * A6-0x0E; applying it to a pointer already four bytes into that
+         * record yields src_socket (header + 0x1C, two bytes) followed by
+         * A6-0x02 and A6-0x01.  Those last two bytes are past the end of the
+         * 30-byte header copy at 0x00E68A62-0x00E68A6E, which fills only
+         * A6-0x20..A6-0x03, so they are uninitialised frame storage.
+         *
+         * The node id handed to the name server is therefore
+         * (src_socket << 16 | two junk bytes) & 0xFFFFF.  No fix is possible
+         * without changing behaviour.
          */
         f.reg_node_id = (((uint32_t)f.header.src_socket << 16)
                        | ((uint32_t)f.header_tail[0] << 8)

@@ -61,7 +61,7 @@ int8_t SOCK_$GET(uint16_t sock_num, void *pkt_info)
         out->src_port = *(uint16_t *)(netbuf + NETBUF_OFFSET_SRC_PORT);
         out->dst_addr = *(uint32_t *)(netbuf + NETBUF_OFFSET_DST_ADDR);
         out->flags    = *(uint16_t *)(netbuf + NETBUF_OFFSET_DST_PORT);
-        out->hdr      = *(void **)(netbuf + NETBUF_OFFSET_HDR_PTR);
+        out->hdr      = *(uint32_t *)(netbuf + NETBUF_OFFSET_HDR_PTR);
 
         /*
          * "move.l (0x3e8,A1),(0x2a,A2)" at 0x00E16108 copies the data length

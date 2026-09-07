@@ -31,15 +31,11 @@
 #define APOLLO_EPOCH_OFFSET 0x12CEA600
 
 /*
- * The VT queue walk starts at VT_QUEUE_ARRAY_BASE + 0xC (0xE29198 + 0xC =
- * 0xE291A4; original: movea.l #0xe29198,A2; lea (0xc,A2),A2).
- * VT_QUEUE_ARRAY_BASE itself is defined in time/time_internal.h.
+ * The VT queue walk starts at 0xE29198 + 0xC (original:
+ * movea.l #0xe29198,A2; lea (0xc,A2),A2) and adds 0x12FC to reach the queue
+ * itself, i.e. 0xE29198 + 0xC + 0x12FC == 0xE2A4A0 == &TIME_$VTQ[0].  The
+ * loop therefore initialises TIME_$VTQ[0..63] with ids 1..64.
  */
-
-/*
- * Offset from queue array to actual queue structure
- */
-#define VT_QUEUE_OFFSET 0x12FC
 
 void TIME_$INIT(uint8_t *flags)
 {
@@ -47,7 +43,6 @@ void TIME_$INIT(uint8_t *flags)
     int i;
     clock_t cal_clock;
     uint32_t cal_time;
-    time_queue_t *vt_queue_ptr;
 
     init_flags = *flags;
 
@@ -62,11 +57,8 @@ void TIME_$INIT(uint8_t *flags)
      * Each queue is 12 bytes apart in the queue table
      * Queue flags = 0xFF (all-queues marker), ID = 1..64
      */
-    vt_queue_ptr = (time_queue_t *)(VT_QUEUE_ARRAY_BASE + 0xC);
-    for (i = 1; i <= 64; i++) {
-        TIME_$Q_INIT_QUEUE(0xFF, (uint16_t)i,
-                          (time_queue_t *)((char *)vt_queue_ptr + VT_QUEUE_OFFSET));
-        vt_queue_ptr = (time_queue_t *)((char *)vt_queue_ptr + 12);
+    for (i = 1; i <= TIME_MAX_PROCESSES; i++) {
+        TIME_$Q_INIT_QUEUE(0xFF, (uint16_t)i, &TIME_$VTQ[i - 1]);
     }
 
     /* Initialize deferred interrupt elements */

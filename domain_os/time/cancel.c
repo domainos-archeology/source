@@ -18,7 +18,7 @@
 #include "misc/crash_system.h"
 
 /* Status code for element not in queue */
-#define status_$time_queue_elem_not_in_use 0x000D0009
+/* status_$time_queue_element_not_in_use is in time/time.h */
 
 void TIME_$CANCEL(int32_t wait_value, time_queue_elem_t *elem,
                   status_$t *status)
@@ -28,7 +28,7 @@ void TIME_$CANCEL(int32_t wait_value, time_queue_elem_t *elem,
     /* 0xE164BE: TIME_$Q_REMOVE_ELEM(&TIME_$RTEQ, elem, status) */
     TIME_$Q_REMOVE_ELEM(&TIME_$RTEQ, qelem, status);
 
-    if (*status == status_$time_queue_elem_not_in_use) {
+    if (*status == status_$time_queue_element_not_in_use) {
         /*
          * Element is currently being processed by callback.
          * Wait for it to complete by waiting on the EC stored

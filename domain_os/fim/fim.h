@@ -693,6 +693,7 @@ _Static_assert(sizeof(fim_fault_desc_t) == 8, "fim_fault_desc_t must be 8 bytes"
  */
 #define status_$fault_protection_violation  0x00120011  /* MMU protection violation */
 #define status_$fault_bus_timeout           0x0012000C  /* No device answered */
+#define status_$fault_process_quit          0x00120010  /* "process quit" */
 #define status_$mmu_memory_error_4          0x00070004
 #define status_$mmu_memory_error_5          0x00070005
 #define status_$mmu_memory_error_6          0x00070006

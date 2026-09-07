@@ -49,7 +49,8 @@ void NETLOG_$SEND_PAGE(void)
      * Copy done_cnt and entry count to packet header template
      */
     nl->pkt_done_cnt = nl->done_cnt;
-    nl->pkt_entry_cnt = nl->page_counts[nl->send_page_index];
+    /* 0xE71C98: move.w (0x6e,A0),(0x50,A5) with A0 = A5 + index*2 */
+    nl->pkt_entry_cnt = nl->page_counts[nl->send_page_index - 1];
 
     /*
      * Get a network header buffer

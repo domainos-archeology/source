@@ -194,13 +194,13 @@ static uint16_t sock_put_ec1;
 static uint16_t sock_put_ec2;
 static int8_t sock_put_result;
 
-int8_t SOCK_$PUT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
+int8_t SOCK_$PUT(uint16_t sock_num, sock_$pkt_info_t *pkt_info, int8_t flags,
                  uint16_t ec_param1, uint16_t ec_param2)
 {
     sock_put_calls++;
     sock_put_sock = sock_num;
-    sock_put_rec = *(sock_$pkt_info_t *)pkt_ptr;
-    sock_put_flags = (int8_t)flags;
+    sock_put_rec = *pkt_info;
+    sock_put_flags = flags;
     sock_put_ec1 = ec_param1;
     sock_put_ec2 = ec_param2;
     return sock_put_result;
@@ -519,8 +519,8 @@ TEST(local_delivery_builds_the_socket_record)
     ASSERT_EQ(status_$ok, out_status);
     ASSERT_EQ(1, sock_put_calls);
     ASSERT_EQ(0x0021, sock_put_sock);
-    ASSERT_EQ((long long)(uintptr_t)ARCH_VA_TO_PTR(TEST_HDR_VA),
-              (long long)(uintptr_t)sock_put_rec.hdr);
+    /* sock_$pkt_info_t.hdr is the target VA, not a host pointer */
+    ASSERT_EQ(TEST_HDR_VA, sock_put_rec.hdr);
     ASSERT_EQ(0x30, sock_put_rec.hdr_len);
     ASSERT_EQ(0, sock_put_rec.data_len);
     ASSERT_EQ(0, sock_put_rec.flags);

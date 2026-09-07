@@ -363,7 +363,7 @@ static void reset_mocks(void)
 
     memset(netbuf_page, 0, 1024);
     memset(&sock_get_record, 0, sizeof(sock_get_record));
-    sock_get_record.hdr = hdr_in_page();
+    sock_get_record.hdr = ARCH_PTR_TO_VA(hdr_in_page());
     sock_get_result = true;
     sock_get_calls = 0;
 
@@ -722,8 +722,8 @@ TEST(request_internet_answers_with_pkt_send_internet)
     /*
      * An empty request (entry_count 0): RIP_$PROCESS_REQUEST returns without
      * reading anything, which keeps this test clear of the uninitialised
-     * payload_va the internet path leaves behind (see the TODO in
-     * rip/server.c).  What is checked here is the fifteen-argument call at
+     * payload_va the internet path leaves behind (see the preserved-defect
+     * note in rip/server.c, bead source-u9wy).  What is checked here is the fifteen-argument call at
      * 0x00E68C38-0x00E68C7E.
      */
     rip_$packet_t *reply;

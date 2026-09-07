@@ -32,14 +32,19 @@
  * Status Codes
  * ============================================================================
  */
+/*
+ * Names taken from the SR10.4 status-code database ("OS / audit trail
+ * manager", subsystem 0x30).
+ */
 #define status_$audit_excessive_event_types         0x00300003
+#define status_$audit_event_logging_is_disabled     0x00300004
+#define status_$audit_invalid_action_code           0x00300007
+#define status_$audit_permission_denied             0x00300008
+#define status_$audit_file_not_found                0x0030000C
 #define status_$audit_event_logging_already_started 0x0030000E
 #define status_$audit_event_logging_already_stopped 0x0030000F
 #define status_$audit_event_list_not_current_format 0x00300010
-#define status_$audit_not_enabled                   0x00300011
-#define status_$audit_file_not_found                0x0030000C
-#define status_$audit_invalid_command               0x00300007
-#define status_$audit_not_administrator             0x00300008
+#define status_$audit_logging_is_enabled            0x00300011
 
 /*
  * ============================================================================
@@ -92,8 +97,19 @@
 #define AUDIT_CTRL_FLUSH            1   /* Flush audit buffer to disk */
 #define AUDIT_CTRL_START            2   /* Start audit logging */
 #define AUDIT_CTRL_STOP             3   /* Stop audit logging */
-#define AUDIT_CTRL_SUSPEND_SELF     4   /* Suspend auditing for caller */
-#define AUDIT_CTRL_RESUME_SELF      5   /* Resume auditing for caller */
+/*
+ * The two self-control codes are the way round the jump table at 0x00E715F8
+ * says, not the way the names would suggest.  Entry to AUDIT_$CONTROL always
+ * does suspend_count++ (0x00E715D4) and its exit always does suspend_count--
+ * (0x00E71688), so the net effect of each code is:
+ *   4 -> table entry 0x0044 = 0x00E7163C, "if count > 1 then count--": net -1
+ *        (floored at zero), i.e. RESUME
+ *   5 -> table entry 0x005C = 0x00E71654, "count++": net +1, i.e. SUSPEND
+ * A non-zero count means AUDIT_$IS_PROCESS_AUDITED returns false, so a higher
+ * count is more suspended.
+ */
+#define AUDIT_CTRL_RESUME_SELF      4   /* Resume auditing for caller */
+#define AUDIT_CTRL_SUSPEND_SELF     5   /* Suspend auditing for caller */
 #define AUDIT_CTRL_IS_ENABLED       6   /* Query if auditing is enabled */
 
 /*

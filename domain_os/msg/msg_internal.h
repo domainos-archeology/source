@@ -164,9 +164,81 @@ void MSG_$$SEND(int16_t port_num, uint32_t routing_key, uint32_t dest_node,
                 net_io_$send_info_t *send_info, status_$t *status_ret);
 
 /*
- * Internal receive implementation (0x00E59548)
+ * msg_$reply_hdr_t - the application reply record APP_$RECEIVE points
+ * app_$receive_rec_t.reply at, as read by the MSG receive path.
+ *
+ * Offsets recovered from MSG_$$RCV_INTERNAL (0x00E59548) and the identical
+ * inline copy in MSG_$RCV_CONTIGI (0x00E597A6); MSG_$$SEND builds the same
+ * record on the way out.  The longword at 0x0E is on an odd longword
+ * boundary, so the record must be packed for a host build to agree with
+ * m68k's 2-byte alignment.
  */
-void MSG_$$RCV_INTERNAL(int16_t socket, void *params, status_$t *status_ret);
+typedef struct msg_$reply_hdr_t {
+  uint16_t _f00;          /* 0x00: not read by the receive path */
+  uint16_t template_len;  /* 0x02: cmp.w D2w / move.w (0x2,A2) 0x00E5961C;
+                           *       decremented by 0x10 when the 16-byte
+                           *       internet address is consumed (0x00E59612) */
+  uint16_t data_len;      /* 0x04: 0x00E59666 / 0x00E5968A */
+  uint16_t msg_type;      /* 0x06: 0x00E595C0 */
+  uint32_t dest_node;     /* 0x08: 0x00E595A0 */
+  uint16_t dest_sock;     /* 0x0C: 0x00E595A8 */
+  uint32_t src_node;      /* 0x0E: 0x00E595B0 (unaligned longword) */
+  uint16_t src_sock;      /* 0x12: 0x00E595B8 */
+  uint8_t  proto_family;  /* 0x14: 0x00E595C6 */
+  uint8_t  proto_type;    /* 0x15: 0x00E595DC */
+  uint8_t  proto_subtype; /* 0x16: 0x00E595E6 */
+} __attribute__((packed)) msg_$reply_hdr_t;
+
+_Static_assert(offsetof(msg_$reply_hdr_t, template_len) == 0x02, "msg reply.template_len");
+_Static_assert(offsetof(msg_$reply_hdr_t, data_len) == 0x04, "msg reply.data_len");
+_Static_assert(offsetof(msg_$reply_hdr_t, msg_type) == 0x06, "msg reply.msg_type");
+_Static_assert(offsetof(msg_$reply_hdr_t, dest_node) == 0x08, "msg reply.dest_node");
+_Static_assert(offsetof(msg_$reply_hdr_t, dest_sock) == 0x0C, "msg reply.dest_sock");
+_Static_assert(offsetof(msg_$reply_hdr_t, src_node) == 0x0E, "msg reply.src_node");
+_Static_assert(offsetof(msg_$reply_hdr_t, src_sock) == 0x12, "msg reply.src_sock");
+_Static_assert(offsetof(msg_$reply_hdr_t, proto_family) == 0x14, "msg reply.proto_family");
+_Static_assert(offsetof(msg_$reply_hdr_t, proto_type) == 0x15, "msg reply.proto_type");
+_Static_assert(offsetof(msg_$reply_hdr_t, proto_subtype) == 0x16, "msg reply.proto_subtype");
+
+/*
+ * The proto_type / proto_subtype pair that makes MSG_$$RCV_INTERNAL peel a
+ * 16-byte internet address off the front of the template
+ * (0x00E595F6 `cmpi.w #0x2` / 0x00E595FC `cmpi.w #0x29`).
+ */
+#define MSG_PROTO_TYPE_INET     0x02
+#define MSG_PROTO_SUBTYPE_INET  0x29
+
+/*
+ * msg_$hw_addr_t.flags is the socket queue depth, extracted from
+ * app_$receive_rec_t.flags_lo with "move.w #0x7f80,D5w / and.w (-0x8,A6),D5w
+ * / lsr.w #0x7,D5w" (0x00E595CC).
+ */
+#define MSG_HW_FLAGS_MASK   0x7F80
+#define MSG_HW_FLAGS_SHIFT  7
+
+/*
+ * MSG_$$RCV_INTERNAL - the shared body behind MSG_$RCVI (0x00E59548).
+ *
+ * EIGHTEEN arguments; the prologue and body read them at 0x08 socket(w),
+ * 0x0A dest_net, 0x0E dest_node, 0x12 dest_sock, 0x16 src_net, 0x1A
+ * src_node, 0x1E src_sock, 0x22 hw_addr, 0x26 msg_type, 0x2A template,
+ * 0x2E template_max(w), 0x30 template_len_ret, 0x34 data, 0x38 data_max(w),
+ * 0x3A data_len_ret, 0x3E ec_param1_ret, 0x42 ec_param2_ret, 0x46 status.
+ * Callers reserve a 2-byte Pascal result slot they never read
+ * (0x00E596FE `subq.l #0x2,SP`, no pop - the unlk cleans up).
+ */
+void MSG_$$RCV_INTERNAL(uint16_t socket,
+                        uint32_t *dest_net, uint32_t *dest_node,
+                        uint16_t *dest_sock,
+                        uint32_t *src_net, uint32_t *src_node,
+                        uint16_t *src_sock,
+                        msg_$hw_addr_t *hw_addr, uint16_t *msg_type,
+                        void *template, uint16_t template_max,
+                        uint16_t *template_len_ret,
+                        void *data, uint16_t data_max,
+                        uint16_t *data_len_ret,
+                        uint16_t *ec_param1_ret, uint16_t *ec_param2_ret,
+                        status_$t *status_ret);
 
 /*
  * NETWORK_$SET_SERVICE operation codes used by MSG.

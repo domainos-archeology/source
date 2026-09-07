@@ -50,13 +50,13 @@ void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
 
     pid = PROC1_$CURRENT;
 
-    /* Check if process is suspended */
-    if (AUDIT_$DATA.suspend_count[pid] != 0) {
+    /* 0xE70E68: the counter array is Pascal 1-based ((-0x2,A5,pid*2)) */
+    if (AUDIT_$DATA.suspend_count[pid - 1] != 0) {
         return;
     }
 
-    /* Suspend auditing for this process while logging */
-    AUDIT_$DATA.suspend_count[pid]++;
+    /* 0xE70E70: suspend auditing for this process while logging */
+    AUDIT_$DATA.suspend_count[pid - 1]++;
 
     /* Clamp data length to maximum */
     actual_len = *data_len;
@@ -222,6 +222,6 @@ error:
     /* Unlock the exclusion */
     ML_$EXCLUSION_STOP((ml_$exclusion_t *)((char *)AUDIT_$DATA.event_count + 0x0C));
 
-    /* Resume auditing for this process */
-    AUDIT_$DATA.suspend_count[PROC1_$CURRENT]--;
+    /* 0xE710B0: re-reads PROC1_$CURRENT rather than reusing `pid` */
+    AUDIT_$DATA.suspend_count[PROC1_$CURRENT - 1]--;
 }

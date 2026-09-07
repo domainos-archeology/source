@@ -23,20 +23,19 @@
  * Copies packet metadata from the input buffer to the network buffer header.
  *
  * @param sock_view  Pointer to socket EC view
- * @param pkt_ptr    Pointer to packet info pointer
- * @param flags      Flags (bit 7 = copy queue count to packet)
+ * @param pkt_info   The packet record (0x00E16206 uses it directly)
+ * @param flags      Domain boolean (see SOCK_$PUT_INT)
  * @param ec_param1  Event count parameter 1 (stored in netbuf)
  * @param ec_param2  Event count parameter 2 (stored in netbuf)
  *
  * @return 0 on success, 1 if queue full, 2 if socket not open
  */
-int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, void **pkt_ptr,
+int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, sock_$pkt_info_t *pkt_info,
                           int8_t flags, uint16_t ec_param1, uint16_t ec_param2)
 {
     ml_$spin_token_t token;
     int16_t result;
     uint8_t *netbuf;
-    sock_$pkt_info_t *pkt_info = (sock_$pkt_info_t *)*pkt_ptr;
     uint16_t data_len;
     int16_t i;
 
@@ -74,7 +73,7 @@ int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, void **pkt_ptr,
          * the 1KB page: "move.l (A2),D6 / andi.w #-0x400,D6w" at 0x00E16266
          * masks only the low word, which is the same as clearing bits 0..9.
          */
-        netbuf = (uint8_t *)((uint32_t)(uintptr_t)pkt_info->hdr & 0xFFFFFC00u);
+        netbuf = (uint8_t *)ARCH_VA_TO_PTR(pkt_info->hdr & 0xFFFFFC00u);
 
         /* Clear next pointer (end of queue), 0x00E1626E */
         *(uint32_t *)(netbuf + NETBUF_OFFSET_NEXT) = 0;
@@ -98,7 +97,7 @@ int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, void **pkt_ptr,
 
         /* Hop count and header pointer (0x00E16298, 0x00E1629E) */
         *(uint16_t *)(netbuf + NETBUF_OFFSET_HOP_COUNT) = pkt_info->n_hops;
-        *(uint32_t *)(netbuf + NETBUF_OFFSET_HDR_PTR) = (uint32_t)(uintptr_t)pkt_info->hdr;
+        *(uint32_t *)(netbuf + NETBUF_OFFSET_HDR_PTR) = pkt_info->hdr;
 
         /* Copy the hop words (0x00E162A2-0x00E162BC, dbf = n_hops iterations) */
         {
@@ -114,13 +113,13 @@ int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, void **pkt_ptr,
         /* Link packet into queue (0x00E162C0-0x00E162E0) */
         if (sock_view->queue_tail == 0) {
             /* Queue was empty - packet is both head and tail */
-            sock_view->queue_head = (uint32_t)(uintptr_t)netbuf;
-            sock_view->queue_tail = (uint32_t)(uintptr_t)netbuf;
+            sock_view->queue_head = ARCH_PTR_TO_VA(netbuf);
+            sock_view->queue_tail = ARCH_PTR_TO_VA(netbuf);
         } else {
             /* Append to existing queue */
-            *(uint32_t *)((uint8_t *)(uintptr_t)sock_view->queue_tail +
-                          NETBUF_OFFSET_NEXT) = (uint32_t)(uintptr_t)netbuf;
-            sock_view->queue_tail = (uint32_t)(uintptr_t)netbuf;
+            *(uint32_t *)((uint8_t *)ARCH_VA_TO_PTR(sock_view->queue_tail) +
+                          NETBUF_OFFSET_NEXT) = ARCH_PTR_TO_VA(netbuf);
+            sock_view->queue_tail = ARCH_PTR_TO_VA(netbuf);
         }
 
         /*
@@ -152,17 +151,17 @@ int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, void **pkt_ptr,
  * Validates socket number and calls SOCK_$PUT_INT_INT.
  * Returns the socket's event count pointer for use by caller.
  *
- * @param sock_num   Socket number (1-223)
- * @param pkt_ptr    Pointer to packet info pointer
- * @param flags      Flags passed to PUT_INT_INT
+ * @param sock_num   Socket number (1..0xE0)
+ * @param pkt_info   The packet record
+ * @param flags      Domain boolean passed on to PUT_INT_INT
  * @param ec_param1  Event count parameter 1
  * @param ec_param2  Event count parameter 2
  * @param ec_ret     Output: pointer to socket's event count
  *
  * @return Negative on success, 0 on failure
  */
-int8_t SOCK_$PUT_INT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
-                     uint16_t ec_param1, uint16_t ec_param2,
+int8_t SOCK_$PUT_INT(uint16_t sock_num, sock_$pkt_info_t *pkt_info,
+                     int8_t flags, uint16_t ec_param1, uint16_t ec_param2,
                      ec_$eventcount_t **ec_ret)
 {
     sock_$sock_t *sock_view;
@@ -179,14 +178,19 @@ int8_t SOCK_$PUT_INT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
     /* Return EC pointer to caller */
     *ec_ret = &sock_view->ec;
 
-    /* If flags bit 7 is set, copy queue count to packet header byte 0x0F */
-    if ((int8_t)flags < 0) {
-        uint8_t *pkt_hdr = (uint8_t *)*pkt_ptr;
+    /*
+     * 0x00E161CC: tst.b D2b / bpl.  When the boolean is true the socket's
+     * queue_count is written into the packet's HEADER BUFFER at +0x0F -
+     * "movea.l (A2),A0 / move.b (0x15,A3),(0xf,A0)" dereferences the record's
+     * first longword, which is sock_$pkt_info_t.hdr.
+     */
+    if (flags < 0) {
+        uint8_t *pkt_hdr = (uint8_t *)ARCH_VA_TO_PTR(pkt_info->hdr);
         pkt_hdr[0x0F] = sock_view->queue_count;
     }
 
     /* Perform the queue insertion */
-    put_result = SOCK_$PUT_INT_INT(sock_view, pkt_ptr, (int8_t)flags,
+    put_result = SOCK_$PUT_INT_INT(sock_view, pkt_info, flags,
                                    ec_param1, ec_param2);
 
     /* Return success (negative) if put_result is 0 */
@@ -200,21 +204,22 @@ int8_t SOCK_$PUT_INT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
  * the socket's event count to wake any waiting processes.
  *
  * @param sock_num   Socket number
- * @param pkt_ptr    Pointer to packet info pointer
- * @param flags      Flags
+ * @param pkt_info   The packet record
+ * @param flags      Domain boolean
  * @param ec_param1  Event count parameter 1
  * @param ec_param2  Event count parameter 2
  *
  * @return Negative (0xFF) if packet queued, 0 on error
  */
-int8_t SOCK_$PUT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
+int8_t SOCK_$PUT(uint16_t sock_num, sock_$pkt_info_t *pkt_info, int8_t flags,
                  uint16_t ec_param1, uint16_t ec_param2)
 {
     ec_$eventcount_t *ec;
     int8_t result;
 
     /* Call mid-level PUT which returns EC pointer */
-    result = SOCK_$PUT_INT(sock_num, pkt_ptr, flags, ec_param1, ec_param2, &ec);
+    result = SOCK_$PUT_INT(sock_num, pkt_info, flags, ec_param1, ec_param2,
+                           &ec);
 
     if (result < 0) {
         /* Successfully queued - advance event count to wake waiters */
