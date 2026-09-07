@@ -29,7 +29,8 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_
                         void *pkt_info, uint16_t request_id,
                         void *template, uint16_t template_len,
                         void *data, int16_t data_len,
-                        uint16_t *len_out, void *extra, status_$t *status_ret)
+                        uint16_t *retry_hint, uint16_t *timeout_out,
+                        status_$t *status_ret)
 {
     uint32_t data_buffers[PKT_MAX_DATA_CHUNKS];
     uint16_t hdr_len[3];
@@ -89,15 +90,27 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_
             break;
         }
 
-        /* Update max_retries on first successful header build */
+        /*
+         * Update max_retries on first successful header build.
+         * 0x00E1271E "cmpi.w #-0x1,D4w" / 0x00E12724 "move.w (A3),D4w",
+         * A3 being the retry_hint argument (0x2E,A6).
+         */
         if (max_retries == 0xFFFF) {
-            max_retries = *len_out;
+            max_retries = *retry_hint;
         }
 
         /* Send the packet */
+        /*
+         * TODO(source-m8h7): the original passes PKT_$BLD_INTERNET_HDR the
+         * retry_hint and timeout_out arguments (0x00E126D8 / 0x00E126DC) and
+         * hands NET_IO_$SEND the address of a two-word local at A6-0x14
+         * (0x00E1272E), which is what the 0/0x2000 test below then reads
+         * (0x00E12770 / 0x00E12776).  This C crosses the two; the whole body
+         * needs re-emitting against 0x00E1264E.
+         */
         NET_IO_$SEND(port, &hdr_va, hdr_pa, hdr_len[0], 0,
                      data_buffers, data_len, PKT_$DATA->default_flags,
-                     extra, &local_status);
+                     timeout_out, &local_status);
 
         if (local_status == status_$ok) {
             /* Success - we're done */

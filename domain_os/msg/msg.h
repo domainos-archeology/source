@@ -85,12 +85,18 @@ int8_t MSG_$ALLOCATE(msg_$socket_t *socket, int16_t *depth, status_$t *status_re
 void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
 
 /*
- * Wait for message on socket (returns true on success)
+ * Wait for message on socket (returns true == 0xFF when the wait succeeded)
+ *
+ * Takes exactly two arguments: 0x00E59BA4 does "link.w A6,-0x8" and
+ * "pea (-0x4,A6)" to allocate the status_$t locally, pushes only (0x8,A6) and
+ * (0xc,A6), and returns "seq D0b" on that local status.  It never writes a
+ * caller-supplied status.  Reached through SVC_$TRAP2_TABLE[0x15], which is a
+ * two-argument dispatcher.
  *
  * timeout points at a 16-bit tick count added to TIME_$CLOCKH to form the
- * timeout deadline (only a word is read: 0x00e59c4e move.w (A4),D1w).
+ * timeout deadline (only a word is read: 0x00E59C4E "move.w (A4),D1w").
  */
-int8_t MSG_$WAIT(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret);
+boolean MSG_$WAIT(msg_$socket_t *socket, int16_t *timeout);
 
 /* Wait for message on socket (internal) */
 void MSG_$WAITI(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret);

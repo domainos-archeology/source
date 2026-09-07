@@ -55,6 +55,17 @@
  */
 
 /*
+ * MSG_$SOCK_OWNERS - per-socket ownership bitmaps, 8 bytes (64 ASID bits) each
+ *
+ * 0x00E80F5C = MSG_$DATA_BASE + MSG_OFF_OWNERSHIP.  MSG_$WAITI addresses it as
+ * base + socket*8 + byte_index (0x00E59BEA "lsl.w #3,D0w" then 0x00E59BFC
+ * "lea (0x1D8,A1),A1"), so slot 0 is unused and MSG_$SOCK_OWNERS[sock] is the
+ * bitmap for socket "sock".  Within a bitmap the byte is (0x3F - asid) >> 3
+ * and the bit is asid & 7 (0x00E59C00 "btst.b D1,(0x0,A1,D0w*0x1)").
+ */
+extern uint8_t MSG_$SOCK_OWNERS[][8];
+
+/*
  * MSG_$DATA - MSG subsystem global data structure
  *
  * Layout at MSG_$DATA_BASE (0xE80D84):
@@ -72,6 +83,9 @@ typedef struct msg_$data_s {
 
 /*
  * Check if current ASID owns the given socket
+ *
+ * TODO(source-eq3o): this and the four accessors below are unused, are
+ * compiled out on non-m68k hosts, and duplicate MSG_$SOCK_OWNERS above.
  */
 static inline int msg_$check_ownership(msg_$socket_t socket) {
 #if defined(ARCH_M68K)

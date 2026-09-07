@@ -21,6 +21,11 @@
  * - Packet ID counters (short and long)
  * - Ping request configuration
  */
+/*
+ * TODO(source-wv5s): these initialisers do not match the loaded image at
+ * 0x00E24C9C (short_id and long_id are 0 there, visibility_seq is 1, and the
+ * ping template reads 0x0010 0x0002 0x0002 0x8031 0xFFFF ...).
+ */
 pkt_$data_t PKT_$DATA_STRUCT = {
     /* Missing node tracking - all zeroed initially */
     .missing_nodes = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
@@ -34,7 +39,9 @@ pkt_$data_t PKT_$DATA_STRUCT = {
 
     /* Count of missing nodes */
     .n_missing = 0,
-    .pad_5a = 0,
+
+    /* 2-byte ping request header; image value at 0x00E24CF6 is 0x0001 */
+    .ping_req_hdr = 1,
 
     /* Short packet ID counter - starts at 1 */
     .short_id = 1,
@@ -77,8 +84,5 @@ pkt_$data_t PKT_$DATA_STRUCT = {
 
 /* Network loopback flag - normally defined in network/network_data.c */
 int8_t NETWORK_$LOOPBACK_FLAG = 0;
-
-/* Route port pointers - normally defined in route/route_data.c */
-uint32_t *ROUTE_$PORTP = NULL;
 
 #endif /* !M68K */

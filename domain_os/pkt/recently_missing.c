@@ -14,7 +14,7 @@
 
 #include "pkt/pkt_internal.h"
 
-int8_t PKT_$RECENTLY_MISSING(uint32_t node_id)
+boolean PKT_$RECENTLY_MISSING(uint32_t node_id)
 {
     int16_t i;
     int16_t count;
@@ -22,17 +22,17 @@ int8_t PKT_$RECENTLY_MISSING(uint32_t node_id)
 
     count = PKT_$N_MISSING - 1;
     if (count < 0) {
-        return 0;
+        return false;
     }
 
     /* Search through the missing nodes list */
     entry = &PKT_$DATA->missing_nodes[0];
     for (i = count; i >= 0; i--) {
         if (node_id == entry->node_id) {
-            return (int8_t)0xFF;  /* Found in missing list */
+            return true;  /* Found in missing list (0x00E128E2 "st D0b") */
         }
         entry++;
     }
 
-    return 0;  /* Not in missing list */
+    return false;  /* Not in missing list (0x00E128D0 "clr.b D0b") */
 }

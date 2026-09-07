@@ -223,7 +223,10 @@ void *SVC_$TRAP2_TABLE[SVC_TRAP2_TABLE_SIZE] = {
     /* 0x12 */ SVC_$UNIMPLEMENTED,
     /* 0x13 */ MSG_$ALLOCATE,
     /* 0x14 */ MSG_$OPEN,
-    /* 0x15 */ MSG_$WAIT,
+    /* 0x15 */ MSG_$WAIT,               /* 2 args: (socket, timeout); the
+                                         * status_$t is local to 0x00E59BA4
+                                         * ("link.w A6,-0x8" / "pea (-0x4,A6)")
+                                         * and the boolean comes back in D0.b */
     /* 0x16 */ SVC_$INVALID_SYSCALL,
     /* 0x17 */ SVC_$INVALID_SYSCALL,
     /* 0x18 */ SVC_$UNIMPLEMENTED,

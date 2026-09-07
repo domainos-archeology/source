@@ -133,7 +133,14 @@ void PKT_$PING_SERVER(void)
          */
         PKT_$DATA->ping_server_flags = (flags & 0xFF6F) | 0x20;
 
-        /* Send ping response back to source */
+        /*
+         * Send ping response back to source.
+         * TODO(source-f3py): 0x00E12CEA - 0x00E12D24 pushes &pkt_$no_data for
+         * the "data" argument (0x00E12CFA "pea (-0x148,PC)"), &PKT_$DATA->
+         * ping_req_hdr for the template (0x00E12D02 "pea (0x5a,A5)"), and two
+         * distinct word locals for retry_hint/timeout_out (0x00E12CF4 /
+         * 0x00E12CF0).  This call passes NULL for three of them.
+         */
         PKT_$SEND_INTERNET(routing_key, src_node_or, src_sock,
                            (int32_t)-1, NODE_$ME, PKT_PING_SOCKET,
                            &PKT_$DATA->ping_server_flags, request_id,

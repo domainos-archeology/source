@@ -18,7 +18,7 @@
 
 #include "pkt/pkt_internal.h"
 
-void PKT_$NOTE_VISIBLE(uint32_t node_id, int8_t is_visible)
+void PKT_$NOTE_VISIBLE(uint32_t node_id, boolean is_visible)
 {
     int16_t i;
     int16_t count;

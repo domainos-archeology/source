@@ -213,11 +213,23 @@ void PKT_$DAT_COPY(uint32_t *buffers, int16_t len, char *dest_va);
  * @param request_id    Request ID
  * @param template      Request template
  * @param template_len  Template length
- * @param data          Data buffer virtual address
+ * @param data          Data buffer virtual address (only read when
+ *                      data_len > 0: 0x00E12686 "tst.w D6w / ble")
  * @param data_len      Data length
- * @param len_out       Output: length written
- * @param extra         Extra parameters
+ * @param retry_hint    Output: retry limit hint.  PKT_$BLD_INTERNET_HDR
+ *                      stores 5 here (0x00E1230E "move.w #0x5,(A0)") and
+ *                      PKT_$SEND_INTERNET adopts it as the retry limit when
+ *                      pkt_info's own count is <= 0 (0x00E12724
+ *                      "move.w (A3),D4w").  Never NULL.
+ * @param timeout_out   Output: response timeout in clock ticks.
+ *                      PKT_$BLD_INTERNET_HDR stores 4 here (0x00E12316 /
+ *                      0x00E1231A "move.w #0x4,(A1)").  Never NULL.
  * @param status_ret    Output: status code
+ *
+ * Fifteen arguments plus a 2-byte Pascal function-result slot; the caller
+ * pops 0x34 bytes (0x00E12AC2 "lea (0x34,SP),SP") and the argument offsets in
+ * the prologue run 0x08, 0x0C, 0x10, 0x12, 0x16, 0x1A, 0x1C, 0x20, 0x22,
+ * 0x26, 0x28, 0x2C, 0x2E, 0x32, 0x36.
  *
  * Original address: 0x00E1264E
  */
@@ -226,7 +238,8 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_
                         void *pkt_info, uint16_t request_id,
                         void *template, uint16_t template_len,
                         void *data, int16_t data_len,
-                        uint16_t *len_out, void *extra, status_$t *status_ret);
+                        uint16_t *retry_hint, uint16_t *timeout_out,
+                        status_$t *status_ret);
 
 /*
  * PKT_$SAR_INTERNET - Send and receive internet packet
@@ -277,12 +290,12 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
  * @param node_id       Node ID to check
  *
  * Returns:
- *   Non-zero (0xFF) if node is in the recently missing list
- *   0 if node is not in the list
+ *   true (0xFF) if node is in the recently missing list, false otherwise
+ *   (0x00E128D0 "clr.b D0b" / 0x00E128E2 "st D0b")
  *
  * Original address: 0x00E128BA
  */
-int8_t PKT_$RECENTLY_MISSING(uint32_t node_id);
+boolean PKT_$RECENTLY_MISSING(uint32_t node_id);
 
 /*
  * PKT_$NOTE_VISIBLE - Update node visibility status
@@ -295,7 +308,17 @@ int8_t PKT_$RECENTLY_MISSING(uint32_t node_id);
  *
  * Original address: 0x00E128F6
  */
-void PKT_$NOTE_VISIBLE(uint32_t node_id, int8_t is_visible);
+void PKT_$NOTE_VISIBLE(uint32_t node_id, boolean is_visible);
+
+/*
+ * pkt_$net_addr_t - the 8-byte network/node pair PKT_$LIKELY_TO_ANSWER is
+ * handed.  Only these two longwords are read (0x00E129B4 "move.l (A0),..."
+ * and 0x00E129C0 "move.l (0x4,A0),D0").
+ */
+typedef struct pkt_$net_addr_t {
+    uint32_t    network;    /* 0x00: routing key / network number */
+    uint32_t    node;       /* 0x04: node id; only the low 20 bits matter */
+} pkt_$net_addr_t;
 
 /*
  * PKT_$LIKELY_TO_ANSWER - Check if node is likely to respond
@@ -303,15 +326,18 @@ void PKT_$NOTE_VISIBLE(uint32_t node_id, int8_t is_visible);
  * Determines if a node is likely to respond to requests. May send
  * a ping packet to verify the node is reachable.
  *
- * @param addr_info     Address info structure (node at offset 4)
+ * @param addr_info     pkt_$net_addr_t for the node in question.  Declared
+ *                      void * because callers hand it several different
+ *                      record types.
  * @param status_ret    Output: status code
  *
  * Returns:
- *   Non-zero (0xFF) if node is likely to respond
- *   0 if node is unlikely to respond
+ *   true (0xFF) if node is likely to respond, false otherwise.  The result is
+ *   a byte: every caller does "tst.b D0b" then bmi/bpl (0x00E0F9AC,
+ *   0x00E614FA, 0x00E7205A).
  *
  * Original address: 0x00E1299E
  */
-int8_t PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret);
+boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret);
 
 #endif /* PKT_H */
