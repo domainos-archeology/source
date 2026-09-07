@@ -165,8 +165,12 @@ typedef struct sio_desc {
     uint16_t    reserved_76;    /* 0x76: Reserved */
 } sio_desc_t;
 
-/* Verify structure size (should be 0x78 = 120 bytes) */
+/* Verify structure size (should be 0x78 = 120 bytes).  The record holds
+ * pointer fields, so the layout only matches on the 32-bit target; host
+ * builds (unit tests) skip the check. */
+#if defined(ARCH_M68K)
 _Static_assert(sizeof(sio_desc_t) == 0x78, "sio_desc_t must be 120 bytes");
+#endif
 
 /*
  * ============================================================================
