@@ -13,7 +13,7 @@
 #include "rip/rip_internal.h"
 #include "pkt/pkt.h"
 
-#include "name/name.h"
+#include "rem_name/rem_name.h"   /* REM_NAME_$REGISTER_SERVER */
 #include "route/route.h"
 
 /*

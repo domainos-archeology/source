@@ -75,7 +75,8 @@
 /*
  * Status codes
  */
-#define status_$VTOC_not_mounted    0x20001     /* VTOC not mounted */
+/* status_$VTOC_not_mounted: defined in vtoc/vtoc.h -- fm/ raises it too
+ * (bead source-3uo). */
 #define status_$VTOC_not_found      0x20005     /* VTOCE not found in chain */
 #define status_$VTOC_invalid_vtoce  0x20006     /* Invalid VTOCE */
 #define status_$VTOC_uid_mismatch   0x80020002  /* UID mismatch; also returned by
@@ -347,40 +348,8 @@ _Static_assert(__builtin_offsetof(vtoc_$vol_t, cur_bkt_idx) == 0x58,
                "vtoc_$vol_t.cur_bkt_idx must be at +0x04");
 #endif
 
-/*
- * VTOC global data structure
- *
- * Base address: 0xE784D0 (Ghidra label OS_DISK_DATA; the VTOC code loads it
- * into A5).  Volume indices are 1-based (1..7).
- *
- *   base + vol_idx*100 - 0x54 : per-volume VTOC configuration (100 bytes,
- *                               copied from label block offset 0x4C)
- *   base + vol_idx*2 - 2      : per-volume word stored by VTOC_$MOUNT
- *   base + 0x268              : VTOC_CACH_HITS    (0xE78738)
- *   base + 0x26C              : VTOC_CACH_LOOKUPS (0xE7873C)
- *   base + 0x26F + vol_idx    : per-volume write-protect flag (0xE7873F + vol_idx),
- *                               i.e. a 1-based array starting at 0xE78740
- *   base + 0x277 + vol_idx    : mount status (DAT_00e78747)
- *   base + 0x27F + vol_idx    : format flag (DAT_00e7874f)
- *   base + 0x286              : dirty flag (DAT_00e78756, initially 0xFF)
- *   base + 0x288              : vtoc_$free_list (0xE78758, 64 longs)
- */
-typedef struct vtoc_$data_t {
-    uint8_t     reserved[0x268];    /* 0x000: Per-volume data array */
-    uint32_t    cach_hits;          /* 0x268: VTOC_CACH_HITS - UID cache hit counter */
-    uint32_t    cach_lookups;       /* 0x26C: VTOC_CACH_LOOKUPS - lookup counter */
-    int8_t      cach_wp_flag[7];    /* 0x270: Write-protect flag per volume, 1-based:
-                                             index with [vol_idx - 1] (0xFF = read-only) */
-    int8_t      mounted[8];         /* 0x277: Mount status per volume (0xFF = mounted) */
-    int8_t      format[7];          /* 0x27F: Format flag per volume (bit 7 = new format) */
-    int8_t      dirty;              /* 0x286: DAT_00e78756 - pending disk-proc work flag */
-    uint8_t     pad_287;            /* 0x287 */
-} vtoc_$data_t;
-
-/*
- * External references to VTOC global data
- */
-extern vtoc_$data_t vtoc_$data;     /* Base: 0xE784D0 */
+/* vtoc_$data_t and vtoc_$data: declared in vtoc/vtoc.h -- fm/ reads the
+ * mount, format and write-protect arrays (bead source-3uo). */
 
 /*
  * Disk data base address - the same object as vtoc_$data, viewed as a byte
@@ -424,13 +393,8 @@ extern vtoc_$uid_cache_bucket_t vtoc_$uid_cache[VTOC_UID_CACHE_BUCKETS];
  * Helper macros
  */
 
-/* Check if volume is mounted */
-#define VTOC_IS_MOUNTED(vol_idx) \
-    (vtoc_$data.mounted[vol_idx] < 0)
-
-/* Check if volume uses new format */
-#define VTOC_IS_NEW_FORMAT(vol_idx) \
-    (vtoc_$data.format[vol_idx] < 0)
+/* VTOC_IS_MOUNTED / VTOC_IS_NEW_FORMAT: defined in vtoc/vtoc.h -- FM_$READ
+ * and FM_$WRITE test both (bead source-3uo). */
 
 /* Get per-volume data pointer (see vtoc_$vol_t: the record starts 0x54
  * bytes below the address the kernel computes as OS_DISK_DATA + n*100) */

@@ -33,6 +33,6 @@
  */
 
 #include "name/name_internal.h"
-#include "dir/dir_internal.h"
+#include "dir/dir.h"
 
 /* Stub - complex 656-byte function with remote/local/hint fallback */

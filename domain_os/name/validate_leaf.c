@@ -22,7 +22,7 @@
  */
 
 #include "name/name_internal.h"
-#include "dir/dir_internal.h"
+#include "dir/dir.h"
 #include "misc/string.h"
 
 /* DAT_00e544ae (MAP_CASE max output length, 0x0020) is declared in name_internal.h */

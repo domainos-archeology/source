@@ -51,7 +51,7 @@ static int current_failed = 0;
 /* ------------------------------------------------------------------ */
 
 #include "name/name_internal.h"
-#include "dir/dir_internal.h"
+#include "dir/dir.h"
 
 uint16_t   PROC1_$AS_ID;
 uint32_t   NAME_$CONST_ZERO_L;

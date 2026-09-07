@@ -10,7 +10,7 @@
 
 #include "kbd/kbd.h"
 #include "ec/ec.h"
-#include "term/term_internal.h"
+#include "term/term.h"          /* TERM_$MAX_DTTE */
 #include "mmu/mmu.h"
 #include "time/time.h"
 #include "misc/crash_system.h"
@@ -121,7 +121,7 @@ _Static_assert(sizeof(kbd_state_t) == 0xA4, "kbd_state_t size");
 extern uint8_t KBD_$MODE_TABLE[];
 
 /*
- * TERM_$MAX_DTTE is provided as a macro in term/term.h (included via term/term_internal.h)
+ * TERM_$MAX_DTTE is provided as a macro in term/term.h (included above)
  * aliasing TERM_$DATA.max_dtte at offset 0x1388.
  */
 
@@ -142,19 +142,10 @@ extern uint16_t DAT_00e2ddec[8];
  */
 extern uint16_t DAT_00e2ddfc[32];
 
-/*
- * MNK_$KTT_PTRS - Keyboard translation table pointers
- * Located at 0xe273dc
- */
-extern void *MNK_$KTT_PTRS[];
-
-/*
- * MNK_$KTT_MAX - Maximum keyboard translation table index
- * Located at 0xe273fc
- */
-extern int16_t MNK_$KTT_MAX;
-
-/* SMD_$KTT is exported from smd/smd.h (bead source-3uo). */
+/* MNK_$KTT_PTRS (0x00E273DC), MNK_$KTT_MAX (0x00E273FC) and SMD_$KTT are
+ * cells of the SMD_WIRED module (SAU2 map, 0xE26F20 size 0x5E0), so they are
+ * declared in smd/smd.h (bead source-3uo).  Their storage is still defined by
+ * kbd/kbd_data.c. */
 
 
 /*

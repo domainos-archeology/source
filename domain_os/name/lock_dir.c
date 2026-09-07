@@ -22,7 +22,7 @@
  */
 
 #include "name/name_internal.h"
-#include "file/file_internal.h"
+#include "file/file.h"
 
 /* Status codes (status_$naming_directory_locked comes from name/name.h). */
 #define file_$object_in_use              0x000F0006

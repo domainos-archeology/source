@@ -98,12 +98,12 @@
  * ============================================================================
  */
 /* status_$display_invalid_unit_number moved to smd/smd.h: tpad/ raises it
- * too (bead source-3uo). */
+ * too.  status_$display_invalid_use_of_driver_procedure and
+ * status_$display_unsupported_font_version moved there too: dtty/ raises both
+ * (bead source-3uo). */
 #define status_$display_font_not_loaded 0x00130002
 #define status_$display_internal_font_table_full 0x00130003
-#define status_$display_invalid_use_of_driver_procedure 0x00130004
 #define status_$display_error_unloading_internal_table 0x00130006
-#define status_$display_unsupported_font_version 0x0013000B
 #define status_$display_invalid_position_argument 0x00130015
 #define status_$display_invalid_blt_mode_register 0x0013001A
 #define status_$display_invalid_blt_control_register 0x0013001B
@@ -1498,19 +1498,8 @@ void SMD_$INTERRUPT_INIT(void);
 void SMD_$COPY_FONT_TO_HDM(uint32_t display_base, void *font,
                            smd_hdm_pos_t *hdm_pos);
 
-/*
- * SMD_$COPY_FONT_TO_MD_HDM - Copy font to main display hidden memory
- *
- * Copies font data to a fixed location in the main display's hidden memory.
- * Used for mono display types (1 and 2) to store a default system font.
- *
- * Parameters:
- *   font       - Pointer to font data
- *   status_ret - Status return
- *
- * Original address: 0x00E1D750
- */
-void SMD_$COPY_FONT_TO_MD_HDM(void **font, status_$t *status_ret);
+/* SMD_$COPY_FONT_TO_MD_HDM (0x00E1D750): declared in smd/smd.h -- DTTY_$LOAD_FONT
+ * calls it from outside smd/ (bead source-3uo). */
 
 /*
  * smd_$is_valid_blt_ctl - Validate BLT control register value

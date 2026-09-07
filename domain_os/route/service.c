@@ -42,7 +42,7 @@
 
 #define status_$route_no_idp_channel        0x2B0001    /* IDP channel not initialized */
 #define status_$route_invalid_port_status   0x2B0006    /* Invalid port status value */
-#define status_$route_invalid_port_type     0x2B0009    /* Invalid port type */
+/* 0x2B0009 is status_$route_illegal_op_for_port_type in route/route.h. */
 #define status_$route_must_have_network     0x2B0011    /* Port must have network address */
 #define status_$route_create_flag_required  0x2B0013    /* Create flag required for user ports */
 #define status_$route_queue_length_too_large 0x2B0014   /* Queue length exceeds maximum */
@@ -213,7 +213,7 @@ void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
      */
     if (op_flags & SERVICE_OP_USER_PORT) {
         if (request->port_type != 2) {
-            *status_ret = status_$route_invalid_port_type;
+            *status_ret = status_$route_illegal_op_for_port_type;
         } else if (!(op_flags & SERVICE_OP_CREATE_PORT)) {
             *status_ret = status_$route_create_flag_required;
         } else if (request->queue_length > MAX_USER_PORT_QUEUE_LENGTH) {

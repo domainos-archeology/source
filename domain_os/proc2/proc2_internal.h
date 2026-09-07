@@ -24,7 +24,8 @@
 #include "flop/flop.h"
 #include "mmu/mmu.h"
 #include "xpd/xpd.h"
-#include "file/file_internal.h"
+#include "file/file.h"
+#include "time/time.h"    /* TIME_$CLOCKH */
 #include "pchist/pchist.h"
 #include "msg/msg.h"
 #include "misc/crash_system.h"

@@ -12,14 +12,17 @@
 #define IIC_H
 
 #include "base/base.h"
+#include "uid/uid.h"   /* NIL_$NETWORK_UID, USER_$NETWORK_UID */
 
 /* =============================================================================
  * IIC Network UIDs
  * =============================================================================
  */
 extern uid_t IIC_$NETWORK_UID;          /* 0xE17484: IIC network UID */
-extern uid_t NIL_$NETWORK_UID;          /* 0xE1748C: Nil network UID */
-extern uid_t USER_$NETWORK_UID;         /* 0xE1749C: User network UID */
+/* NIL_$NETWORK_UID (0xE1748C) and USER_$NETWORK_UID (0xE1749C) are cells of
+ * the UID_LIST module (SAU2 map, 0xE1737C size 0x210) that uid/uid.h owns;
+ * they are declared there (bead source-3uo).  Their storage is still defined
+ * by iic/iic_data.c. */
 
 /* =============================================================================
  * IIC Status Codes (module 0x2C)

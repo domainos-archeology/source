@@ -8,7 +8,6 @@
  */
 
 #include "mem/mem_internal.h"
-#include "parity/parity_internal.h"
 
 /*
  * MEM_$PARITY_LOG

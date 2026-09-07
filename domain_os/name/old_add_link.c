@@ -31,7 +31,8 @@
  */
 
 #include "name/name_internal.h"
-#include "dir/dir_internal.h"
+#include "dir/dir.h"
+#include "rem_file/rem_file.h"  /* REM_FILE_$NAME_ADD_HARD_LINKU */
 
 /*
  * Constant cells for the ACL_$RIGHTS call at 0x00E567C0 (source-ns3b).  All

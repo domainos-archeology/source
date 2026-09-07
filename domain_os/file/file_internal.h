@@ -385,76 +385,11 @@ extern uint32_t FILE_$DEFAULT_SIZE;
  * ============================================================================
  */
 
-/*
- * FILE_$PRIV_LOCK - Core locking function
- *
- * Main internal function for all lock operations. Called by FILE_$LOCK,
- * FILE_$LOCK_D, FILE_$CHANGE_LOCK_D, and remote lock handlers.
- *
- * Parameters:
- *   file_uid   A6+0x08  UID of the object to lock
- *   asid       A6+0x0C  process ASID (usually PROC1_$AS_ID)
- *   side       A6+0x0E  lock "side" (0 or 1); anything else is rejected
- *   lock_mode  A6+0x10  requested lock mode, 0..11
- *   local_only A6+0x12  Pascal boolean: refuse to go off-node
- *   flags      A6+0x14  FILE_LOCK_FLAG_* word
- *   key        A6+0x16  caller-supplied lock key (remote requests)
- *   rem_key    A6+0x18  remote requester's lock key (entry+0x00)
- *   rem_node   A6+0x1C  remote requester's node (entry+0x04)
- *   rem_extra  A6+0x20  remote requester's extra word (entry+0x08)
- *   acl_ctx    A6+0x24  pointer to the ACL context pointer for
- *                       ACL_$RIGHTS_CHECK (0x00E5EDDE)
- *   rem_wait   A6+0x28  wait word forwarded to REM_FILE_$LOCK
- *   slot_io    A6+0x2A  in/out: per-process lock slot number
- *   rights_out A6+0x2E  out: rights word granted
- *   status_ret A6+0x32  out: status code
- *
- * Original address: 0x00E5F0EE
- */
-void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t side,
-                     uint16_t lock_mode, boolean local_only,
-                     uint16_t flags, uint16_t key,
-                     uint32_t rem_key, uint32_t rem_node, uint32_t rem_extra,
-                     void **acl_ctx, uint16_t rem_wait,
-                     uint32_t *slot_io, uint16_t *rights_out,
-                     status_$t *status_ret);
+/* FILE_$PRIV_LOCK: declared in file/file.h -- audit/, dir/, name/, pacct/ and
+ * rem_file/ call it (bead source-3uo). */
 
-/*
- * FILE_$PRIV_UNLOCK - Core unlock function
- *
- * Main internal function for all unlock operations.  The callee frame at
- * 0x00E5FD32 is `link.w A6,-0xfc` with ten arguments occupying 32 bytes:
- *
- *   file_uid   A6+0x08  long  UID of the object to unlock
- *   lock_slot  A6+0x0C  long  per-process lock slot, 0 = search the row.
- *                             Pushed whole (`ext.l D0; move.l D0,-(SP)` at
- *                             0x00E60F06) but only its low word A6+0x0E is
- *                             read (0x00E5FDA2).
- *   lock_mode  A6+0x10  word  lock mode to match, 0 = every mode (and then
- *                             repeat until nothing is left)
- *   asid       A6+0x12  word  owning process' ASID
- *   by_key     A6+0x14  word  Pascal boolean: search the hash chain by
- *                             (mode, key, rem_key, rem_node) instead of the
- *                             process' lock row.  Pushed with `st -(SP)`
- *                             (0x00E607B2), which stores the byte at the
- *                             even half of the word slot.
- *   key        A6+0x16  word  lock key to match, 0 = any (0x00E5FF1A)
- *   rem_key    A6+0x18  long  matched against entry->context  (0x00E5FF38)
- *   rem_node   A6+0x1C  long  matched against entry->node_low (0x00E5FF2E)
- *   dtv_out    A6+0x20  long  out: data-time-valid, 0 when not produced
- *   status_ret A6+0x24  long  out: status code
- *
- * Returns:
- *   The REM_FILE_$UNLOCK / AST_$TRUNCATE result byte, or 0 when the reported
- *   status is non-zero (`seq D0b; and.b (-0xd8,A6),D0b` at 0x00E6039C).
- *
- * Original address: 0x00E5FD32
- */
-boolean FILE_$PRIV_UNLOCK(uid_t *file_uid, int32_t lock_slot,
-                          uint16_t lock_mode, uint16_t asid,
-                          boolean by_key, uint16_t key,
-                          uint32_t rem_key, uint32_t rem_node,
-                          uint32_t *dtv_out, status_$t *status_ret);
+/* FILE_$PRIV_UNLOCK: declared in file/file.h -- same callers as
+ * FILE_$PRIV_LOCK (bead source-3uo). */
 
 /*
  * FILE_$PRIV_UNLOCK_ALL - Unlock all locks for a process
@@ -468,134 +403,23 @@ boolean FILE_$PRIV_UNLOCK(uid_t *file_uid, int32_t lock_slot,
  */
 void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr);
 
-/*
- * Internal lock info structure (34 bytes)
- * Output format for FILE_$LOCAL_READ_LOCK and FILE_$READ_LOCK_ENTRYI
- *
- * Note: This structure has 34 bytes total (8 longs + 1 short when copied).
- * The holder_node field at offset 0x16 is unaligned for 32-bit access,
- * so this structure should be packed on non-m68k architectures.
- *
- * For local locks (remote_flag=0):
- *   holder_node/port = NODE_$ME/ROUTE_$PORT (we are the holder)
- *   owner_node = entry.node_low (who locked it)
- *   remote_info = entry.node_high
- *
- * For remote locks (remote_flag=1):
- *   holder_node/port = entry.node_low/high (remote holder)
- *   owner_node = NODE_$ME (we are the owner)
- *   remote_info = ROUTE_$PORT
- */
-typedef struct __attribute__((packed)) {
-    uid_t    file_uid;      /* 0x00: File UID (8 bytes) */
-    uint32_t context;       /* 0x08: Lock context */
-    uint32_t owner_node;    /* 0x0C: Owner's node address (who initiated the lock) */
-    uint16_t side;          /* 0x10: Lock side (0=reader, 1=writer) */
-    uint16_t mode;          /* 0x12: Lock mode */
-    uint16_t sequence;      /* 0x14: Lock sequence number */
-    uint32_t holder_node;   /* 0x16: Lock holder's node (who actually holds it) */
-    uint32_t holder_port;   /* 0x1A: Lock holder's port */
-    uint32_t remote_info;   /* 0x1E: Remote node/port info (4 bytes, total=34) */
-} file_lock_info_internal_t;
+/* file_lock_info_internal_t: declared in file/file.h -- REM_FILE_$SERVER
+ * builds one (bead source-3uo). */
 
-/* Remaining documented offsets (bead source-pewa). */
-_Static_assert(__builtin_offsetof(file_lock_info_internal_t, file_uid) == 0x00, "file_lock_info_internal_t.file_uid");
-
-/*
- * The m68k ABI aligns longs to two bytes, so holder_node really does sit at
- * +0x16 in the image (FILE_$FORCE_UNLOCK reads it as `cmp.l (-0x12,A6),D0` at
- * 0x00E60DEA with the record based at A6-0x28).  `packed` reproduces that on
- * hosts whose natural alignment would push it to +0x18.
- */
-_Static_assert(offsetof(file_lock_info_internal_t, context)     == 0x08, "lock_info.context");
-_Static_assert(offsetof(file_lock_info_internal_t, owner_node)  == 0x0C, "lock_info.owner_node");
-_Static_assert(offsetof(file_lock_info_internal_t, side)        == 0x10, "lock_info.side");
-_Static_assert(offsetof(file_lock_info_internal_t, mode)        == 0x12, "lock_info.mode");
-_Static_assert(offsetof(file_lock_info_internal_t, sequence)    == 0x14, "lock_info.sequence");
-_Static_assert(offsetof(file_lock_info_internal_t, holder_node) == 0x16, "lock_info.holder_node");
-_Static_assert(offsetof(file_lock_info_internal_t, holder_port) == 0x1A, "lock_info.holder_port");
-_Static_assert(offsetof(file_lock_info_internal_t, remote_info) == 0x1E, "lock_info.remote_info");
-_Static_assert(sizeof(file_lock_info_internal_t)                == 0x22, "sizeof lock_info");
-
-/*
- * FILE_$READ_LOCK_ENTRYI - Read lock entry by iteration
- *
- * Iterates through lock entries, returning info about each.
- *
- * Parameters:
- *   file_uid   - File UID to search for
- *   index      - Pointer to iteration index (starts at 1)
- *   info_out   - Output buffer for lock info
- *   status_ret - Output status code
- *
- * Original address: 0x00E6093C
- */
-void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
-                             file_lock_info_internal_t *info_out, status_$t *status_ret);
+/* FILE_$READ_LOCK_ENTRYI: declared in file/file.h -- rem_file/ and svc/ call
+ * it (bead source-3uo). */
 
 /* FILE_$READ_LOCK_ENTRYUI (0x00E6046E) is declared in file/file.h - it is
  * called from name/ (name_$old_add_link 0x00E5687E). */
 
-/*
- * FILE_$LOCAL_READ_LOCK - Read local lock entry data
- *
- * Searches the local lock table for a lock on the specified file
- * and returns the lock information.
- *
- * Parameters:
- *   file_uid   - UID of file to query
- *   info_out   - Output buffer for lock info (34 bytes)
- *   status_ret - Output status code
- *
- * Original address: 0x00E6050E
- */
-void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out, status_$t *status_ret);
+/* FILE_$LOCAL_READ_LOCK: declared in file/file.h -- rem_file/ calls it
+ * (bead source-3uo). */
 
-/*
- * Extended lock entry query structure
- * Passed from callers like FILE_$READ_LOCK_ENTRYUI
- * Contains both the file UID and process identification
- */
-/*
- * This record is the head of file_lock_info_internal_t: FILE_$VERIFY_LOCK_HOLDER
- * passes its lock_info straight to FILE_$LOCAL_LOCK_VERIFY.  The two words the
- * verifier reads sit at +0x10 and +0x12 (00e608a0 `cmp.w (0x10,A2),D1w` and
- * 00e608b2 `cmp.w (0x12,A2),D0w`), so 0x08..0x0F must be spelled out.
- */
-typedef struct {
-    uid_t file_uid;      /* 0x00: File UID (8 bytes) */
-    uint32_t context;    /* 0x08: file_lock_info_internal_t.context (unused here) */
-    uint32_t owner_node; /* 0x0C: file_lock_info_internal_t.owner_node (unused here) */
-    uint16_t side;       /* 0x10: Lock side (0=reader, 1=writer) from flags2 bit 7 */
-    /* 0x12: the lock MODE being asked about, not a process ASID (source-9dc2).
-     * FILE_$LOCAL_LOCK_VERIFY compares it twice, both times against a mode:
-     * directly against the entry's own (flags2 & 0x78) >> 3 at 0x00E608AA-
-     * 0x00E608B2, and against FILE_$LOCK_MODE_MAP[entry_mode] at
-     * 0x00E608C0-0x00E608C8. */
-    uint16_t mode;       /* 0x12: Lock mode to check */
-} lock_verify_request_t;
+/* lock_verify_request_t: declared in file/file.h -- rem_file/ builds one
+ * (bead source-3uo). */
 
-/* Layout recovered from the disassembly -- see the field comments above. */
-_Static_assert(__builtin_offsetof(lock_verify_request_t, file_uid) == 0x00, "lock_verify_request_t.file_uid");
-_Static_assert(__builtin_offsetof(lock_verify_request_t, context) == 0x08, "lock_verify_request_t.context");
-_Static_assert(__builtin_offsetof(lock_verify_request_t, owner_node) == 0x0C, "lock_verify_request_t.owner_node");
-_Static_assert(__builtin_offsetof(lock_verify_request_t, side) == 0x10, "lock_verify_request_t.side");
-_Static_assert(__builtin_offsetof(lock_verify_request_t, mode) == 0x12, "lock_verify_request_t.mode");
-_Static_assert(sizeof(lock_verify_request_t) == 0x14, "lock_verify_request_t size");
-
-/*
- * FILE_$LOCAL_LOCK_VERIFY - Verify local lock ownership
- *
- * Checks if the specified file is locked by the process identified
- * in the request structure.
- *
- * Parameters:
- *   request    - Lock verification request containing file UID and process info
- *   status_ret - Output status code
- *
- * Original address: 0x00E6081C
- */
-void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_ret);
+/* FILE_$LOCAL_LOCK_VERIFY: declared in file/file.h -- rem_file/ calls it
+ * (bead source-3uo). */
 
 /*
  * FILE_$VERIFY_LOCK_HOLDER - Verify lock holder is still valid
@@ -625,25 +449,8 @@ void FILE_$AUDIT_LOCK(status_$t status, uid_t *file_uid, uint16_t lock_mode);
  * ============================================================================
  */
 
-/*
- * FILE_$SET_PROT_INT - Set file protection (internal)
- *
- * Core internal function for setting file protection. Handles both local
- * and remote files, ACL checking, and locksmith privileges.
- *
- * Parameters:
- *   file_uid    - UID of file to modify
- *   acl_data    - ACL data buffer (44 bytes)
- *   attr_type   - Protection attribute type
- *   prot_type   - Protection type being set
- *   subsys_flag - Subsystem data flag (negative to allow override)
- *   status_ret  - Output status code
- *
- * Original address: 0x00E5DD08
- */
-void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
-                        uint16_t prot_type, int16_t subsys_flag,
-                        status_$t *status_ret);
+/* FILE_$SET_PROT_INT: declared in file/file.h -- rem_file/ calls it
+ * (bead source-3uo). */
 
 /*
  * FILE_$CHECK_SAME_VOLUME - Check if two files are on the same volume

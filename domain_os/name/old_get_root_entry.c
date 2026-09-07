@@ -33,6 +33,6 @@
  */
 
 #include "name/name_internal.h"
-#include "dir/dir_internal.h"
+#include "dir/dir.h"
 
 /* Stub - 226-byte root directory entry lookup with remote fallback */

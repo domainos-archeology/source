@@ -163,8 +163,8 @@ typedef struct route_$port_stats_t {
 
 /*
  * The blocks these pointers refer to are the four records of ROUTE_$USER_STAT
- * (0xE87FD6, SAU2 map); route/route_internal.h models the array and explains
- * why the record stride there is 0x90 rather than this 0x8E.
+ * (0xE87FD6, SAU2 map); the array below models it and explains why the record
+ * stride there is 0x90 rather than this 0x8E.
  */
 
 #if defined(ARCH_M68K)
@@ -176,6 +176,73 @@ _Static_assert(offsetof(route_$port_stats_t, queue_depth) == 0x0A,
                "route_$port_stats_t.queue_depth");
 _Static_assert(sizeof(route_$port_stats_t) == 0x8E,
                "route_$port_stats_t must be 0x8E bytes");
+#endif
+
+/*
+ * =============================================================================
+ * ROUTE_$USER_STAT - per-user-port statistics records (0xE87FD6 .. 0xE88216)
+ * =============================================================================
+ *
+ * "User" ports are the EtherBridge ports /etc/rtsvc calls "-device USER";
+ * NET_IO_$CREATE_PORT owns this array and hands one record to each such port.
+ * Its allocator is a linear scan of four records of 0x90 bytes:
+ *
+ *   00e5a5c2  moveq   #0x3,D0        ; dbf count -> four records
+ *   00e5a5c4  movea.l #0xe87fd6,A0   ; ROUTE_$USER_STAT
+ *   00e5a5ca  moveq   #0x1,D1        ; record number, 1-based
+ *   00e5a5cc  lea     (0x90,A0),A0   ; stride 0x90
+ *   00e5a5d0  tst.b   (-0x90,A0)     ; record byte 0 = "in use" boolean
+ *   00e5a5d4  bmi.b   0x00e5a5e0     ; true -> record taken, try the next
+ *   ...
+ *   00e5a5e2  lea     (0x90,A0),A0
+ *   00e5a5e6  dbf     D0w,0x00e5a5d0
+ *
+ * The chosen record is then addressed as ROUTE_$USER_STAT + n*0x90 - 0x90
+ * (n*0x90 is built as n<<4 + n<<7 at 0x00E5A658 - 0x00E5A65E, and the -0x90
+ * bias is "lea (-0x90,A1),A1" at 0x00E5A664), stored in the port entry's
+ * driver_stats field ("move.l A1,(0x44,A3)" at 0x00E5A668) and marked in use
+ * with "st (A1)" at 0x00E5A682.  ROUTE_$CLOSE_PORT releases it with
+ * "movea.l (0x44,A3),A0 / clr.b (A0)" at 0x00E69F9A.
+ *
+ * 4 * 0x90 == 0x240 == 0xE88216 - 0xE87FD6, i.e. exactly the span between the
+ * SAU2 map's ROUTE_$USER_STAT and the next symbol, ROUTE_$PID.
+ *
+ * The body of a record is route_$port_stats_t (route/route.h): its byte 0 is
+ * the in-use boolean above (the byte ROUTE_$READ_USER_STATS copies out at
+ * 0x00E6A6B4 and ROUTE_$CLOSE_PORT clears), and the counters at 0x02, 0x06
+ * and 0x0A are the ones ROUTE_$PROCESS bumps at 0x00E8764E, 0x00E87660 and
+ * 0x00E8765A.  That record ends at 0x8D; nothing in the image reads or writes
+ * 0x8E or 0x8F, so they are carried here as unnamed tail bytes of the 0x90
+ * stride.
+ *
+ * ORIGINAL BUG (reproduced, not fixed - bead source-2km0): the record clear
+ * loop at 0x00E5A66C - 0x00E5A67E is "move.w #0x90,D1w / clr.w D0w /
+ * clr.b (0x0,A1,D0w) / addq.w #0x1,D0w / dbf D1w", i.e. 0x91 iterations
+ * writing offsets 0x00..0x90.  It zeroes one byte past the end of the record;
+ * for record 4 that byte is the first byte of ROUTE_$PID (0xE88216).
+ */
+
+#define ROUTE_$MAX_USER_STATS   4
+
+typedef struct route_$user_stat_t {
+    route_$port_stats_t stats;      /* 0x00: see route/route.h */
+    uint8_t             _tail_8e[2];/* 0x8E: no accessor anywhere in the image;
+                                     *       present only because the record
+                                     *       stride is 0x90 (0x00E5A5CC,
+                                     *       0x00E5A658) while every named
+                                     *       field ends at 0x8D */
+} __attribute__((packed)) route_$user_stat_t;
+
+_Static_assert(sizeof(route_$user_stat_t) == 0x90,
+               "route_$user_stat_t must be 0x90 bytes");
+_Static_assert(sizeof(route_$user_stat_t) * ROUTE_$MAX_USER_STATS
+                   == 0xE88216 - 0xE87FD6,
+               "ROUTE_$USER_STAT must span 0xE87FD6..0xE88216");
+
+#if defined(ARCH_M68K)
+#define ROUTE_$USER_STAT        ((route_$user_stat_t *)0xE87FD6)
+#else
+extern route_$user_stat_t ROUTE_$USER_STAT[ROUTE_$MAX_USER_STATS];
 #endif
 
 /* Number of network ports supported */
@@ -297,7 +364,7 @@ void ROUTE_$SHORT_PORT(route_$port_t *port_struct, route_$short_port_t *short_in
  * Status codes:
  *   status_$ok: Success
  *   status_$internet_unknown_network_port (0x2B0003): Port not found
- *   status_$route_not_routing_mode (0x2B0009): Port not in routing mode
+ *   status_$route_illegal_op_for_port_type (0x2B0009): Port not in routing mode
  *   status_$route_invalid_ec_type (0x2B0012): Invalid EC type
  *
  * Original address: 0x00E69C2C
@@ -448,7 +515,12 @@ int16_t ROUTE_$VALIDATE_PORT(int32_t routing_key, int8_t is_local);
  */
 #define status_$internet_unknown_network_port   0x2B0003
 #define status_$internet_illegal_port_type      0x2B0004
-#define status_$route_not_routing_mode          0x2B0009
+/* "operation not legal on this port type" (SR10.4 stcodes 2b0009).
+ * The single name for this code: ROUTE_$GET_EC returns it for a port that is
+ * not in routing mode (0x00E69C72) and NET_IO_$CREATE_PORT for a port type it
+ * cannot create (0x00E5A4F6); both are the same "not legal for this port
+ * type" condition. */
+#define status_$route_illegal_op_for_port_type  0x2B0009
 #define status_$route_invalid_ec_type           0x2B0012
 
 
@@ -511,19 +583,9 @@ void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index,
  * RIP_$ prefix, so they are declared in rip/rip.h (included above) even though
  * the storage is defined in route/route_data.c (bead source-3uo). */
 
-/*
- * Wired routing-send cells shared with RIP_$SEND's nested procedure
- * RIP_$SEND_TO_PORT_INTERNET (rip/send.c).
- *   RTWIRED_$SEND_FLAGS  - send flags word at 0xE87D74 (A5+0xC, A5 = 0xE87D68)
- *   RTWIRED_$CALLBACK    - callback/data-length cell at 0xE870D8
- */
-#if defined(ARCH_M68K)
-#define RTWIRED_$SEND_FLAGS     (*(uint16_t *)0xE87D74)
-#define RTWIRED_$CALLBACK       ((uint32_t *)0xE870D8)
-#else
-extern uint16_t RTWIRED_$SEND_FLAGS;
-extern uint32_t RTWIRED_$CALLBACK_DATA;
-#define RTWIRED_$CALLBACK       (&RTWIRED_$CALLBACK_DATA)
-#endif
+/* RTWIRED_$SEND_FLAGS (0xE87D74) and RTWIRED_$CALLBACK (0xE870D8) sit inside
+ * the RIP_RTWIRED segments (SAU2 map: I 0xE87000 size 0x3EC, D 0xE87D68 size
+ * 0x18), so they are declared in rip/rip.h (included above) even though the
+ * storage is defined in route/route_data.c (bead source-3uo). */
 
 #endif /* ROUTE_H */

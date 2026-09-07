@@ -15,20 +15,10 @@
 #include "ec/ec.h"              /* EC_$INIT, ec_$eventcount_t */
 #include "proc1/proc1.h"        /* PROC1_$AS_ID */
 #include "proc2/proc2.h"        /* PROC2_$SET_CLEANUP */
-#include "route/route.h"        /* route_$port_t, ROUTE_$PORTP, ROUTE_$FIND_PORTP */
+#include "route/route.h"        /* route_$port_t, ROUTE_$PORTP, ROUTE_$FIND_PORTP,
+                                 * route_$user_stat_t, ROUTE_$USER_STAT */
 #include "sock/sock.h"          /* SOCK_$ALLOCATE, SOCK_$EVENT_COUNTERS */
 #include "time/time.h"          /* TIME_$CURRENT_CLOCKH */
-
-/*
- * ROUTE_$USER_STAT lives in route/route_internal.h even though
- * NET_IO_$CREATE_PORT is its allocator and ROUTE_$CLOSE_PORT is the only
- * other accessor.  Reaching across for it keeps a single definition of the
- * record instead of a second one here.
- *
- * TODO(source-tjv5, 0x00E87FD6): route_$user_stat_t and ROUTE_$USER_STAT
- * belong in route/route.h, since their allocator lives outside route/.
- */
-#include "route/route_internal.h"
 
 /*
  * PROC2_$SET_CLEANUP handler class NET_IO_$CREATE_PORT and NET_$OPEN both

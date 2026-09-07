@@ -58,3 +58,6 @@
 - [The net_io driver record and NET_IO_$CREATE_PORT](net-io-driver-record.md) — the 0x50-byte record's 16 slots, RING_$DRIVER at 0xE86918, NET_IO_UNWIRED, the 0x91-byte clear loop.
 - [Biased tables, split tables and dead cells](biased-tables-and-dead-cells.md) — DIR_$OP_TAB's 21-record bias, the KBD 8/32 split, and how to prove a cell is unreferenced.
 - [TERM_$DATA's two initialised windows and peb/sau2/int.s](term-data-block-and-peb-asm.md) — the recovered handler fields, TONE_$CHANNEL as a record, and the 0xC0BC encoding gas cannot emit.
+- [8-bit branches across objects](short-branch-across-objects.md) — gas keeps `bsr.b`, the linker cannot; emit the image `.short` literal instead.
+- [Header ownership follows the map segment](header-ownership-rule.md) — the SAU2 module, not the name prefix, decides which `<sub>/<sub>.h` a declaration belongs in.
+- [Header-hygiene gates](gate-scripts-header-hygiene.md) — the two scans, why ugrep lies about `\$`, and why a clean rebuild is mandatory after moving includes.

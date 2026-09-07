@@ -356,9 +356,10 @@ void VTOCE_$TRUNCATE(void *vtoce_loc, uint32_t flags, int32_t new_length,
                      int32_t param_4, uint32_t *blocks_freed,
                      status_$t *status);
 
-/* Nil owner/org UIDs (defined in vtoc/vtoc_data.c; also used by file/) */
-extern uid_t PPO_$NIL_USER_UID;     /* 0xE174EC: Nil user UID */
-extern uid_t PPO_$NIL_ORG_UID;      /* 0xE17574: Nil org UID */
+/* PPO_$NIL_USER_UID (0xE174EC) and PPO_$NIL_ORG_UID (0xE17574) are cells of
+ * the UID_LIST module (SAU2 map, 0xE1737C size 0x210) that uid/uid.h owns, so
+ * they are declared there (uid/uid.h is included above -- bead source-3uo).
+ * Their storage is still defined by vtoc/vtoc_data.c. */
 
 /*
  * UID constants for VTOC block types (moved here from vtoc_internal.h:
@@ -367,5 +368,63 @@ extern uid_t PPO_$NIL_ORG_UID;      /* 0xE17574: Nil org UID */
  */
 extern uid_t VTOC_$UID;             /* 0xE1739C: VTOC block UID */
 extern uid_t VTOC_BKT_$UID;         /* 0xE173AC: VTOC bucket UID */
+
+
+/*
+ * ============================================================================
+ * VTOC global data reached from outside vtoc/
+ *
+ * Moved here from vtoc/vtoc_internal.h (bead source-3uo): FM_$READ and
+ * FM_$WRITE test the mount and format flags and raise
+ * status_$VTOC_not_mounted, so fm/ must not include a foreign internal
+ * header.  Nothing about the record or the macros changed.
+ * ============================================================================
+ */
+
+/* Status code, module 0x20 ("OS / VTOC manager"), code 1: "VTOC not mounted" */
+#define status_$VTOC_not_mounted    0x20001
+
+/*
+ * VTOC global data structure
+ *
+ * Base address: 0xE784D0 (Ghidra label OS_DISK_DATA; the VTOC code loads it
+ * into A5).  Volume indices are 1-based (1..7).
+ *
+ *   base + vol_idx*100 - 0x54 : per-volume VTOC configuration (100 bytes,
+ *                               copied from label block offset 0x4C)
+ *   base + vol_idx*2 - 2      : per-volume word stored by VTOC_$MOUNT
+ *   base + 0x268              : VTOC_CACH_HITS    (0xE78738)
+ *   base + 0x26C              : VTOC_CACH_LOOKUPS (0xE7873C)
+ *   base + 0x26F + vol_idx    : per-volume write-protect flag (0xE7873F + vol_idx),
+ *                               i.e. a 1-based array starting at 0xE78740
+ *   base + 0x277 + vol_idx    : mount status (DAT_00e78747)
+ *   base + 0x27F + vol_idx    : format flag (DAT_00e7874f)
+ *   base + 0x286              : dirty flag (DAT_00e78756, initially 0xFF)
+ *   base + 0x288              : vtoc_$free_list (0xE78758, 64 longs)
+ */
+typedef struct vtoc_$data_t {
+    uint8_t     reserved[0x268];    /* 0x000: Per-volume data array */
+    uint32_t    cach_hits;          /* 0x268: VTOC_CACH_HITS - UID cache hit counter */
+    uint32_t    cach_lookups;       /* 0x26C: VTOC_CACH_LOOKUPS - lookup counter */
+    int8_t      cach_wp_flag[7];    /* 0x270: Write-protect flag per volume, 1-based:
+                                             index with [vol_idx - 1] (0xFF = read-only) */
+    int8_t      mounted[8];         /* 0x277: Mount status per volume (0xFF = mounted) */
+    int8_t      format[7];          /* 0x27F: Format flag per volume (bit 7 = new format) */
+    int8_t      dirty;              /* 0x286: DAT_00e78756 - pending disk-proc work flag */
+    uint8_t     pad_287;            /* 0x287 */
+} vtoc_$data_t;
+
+/*
+ * External references to VTOC global data
+ */
+extern vtoc_$data_t vtoc_$data;     /* Base: 0xE784D0 */
+
+/* Check if volume is mounted */
+#define VTOC_IS_MOUNTED(vol_idx) \
+    (vtoc_$data.mounted[vol_idx] < 0)
+
+/* Check if volume uses new format */
+#define VTOC_IS_NEW_FORMAT(vol_idx) \
+    (vtoc_$data.format[vol_idx] < 0)
 
 #endif /* VTOC_H */

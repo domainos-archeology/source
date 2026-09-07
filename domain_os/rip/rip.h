@@ -433,5 +433,24 @@ extern uint8_t RIP_$HALT_PACKET[24];
  */
 #define RIP_$SEND_DEST_ADDR     ((rip_$dest_addr_t *)RIP_$HALT_PACKET)
 
+/*
+ * Wired routing-send cells used by RIP_$SEND's nested procedure
+ * RIP_$SEND_TO_PORT_INTERNET (rip/send.c).  Both addresses fall inside the
+ * RIP_RTWIRED segments the SAU2 map names (I 0xE87000 size 0x3EC, D 0xE87D68
+ * size 0x18), so RIP owns them; the storage is defined in route/route_data.c
+ * (moved here from route/route.h -- bead source-3uo).
+ *
+ *   RTWIRED_$SEND_FLAGS  - send flags word at 0xE87D74 (A5+0xC, A5 = 0xE87D68)
+ *   RTWIRED_$CALLBACK    - callback/data-length cell at 0xE870D8
+ */
+#if defined(ARCH_M68K)
+#define RTWIRED_$SEND_FLAGS     (*(uint16_t *)0xE87D74)
+#define RTWIRED_$CALLBACK       ((uint32_t *)0xE870D8)
+#else
+extern uint16_t RTWIRED_$SEND_FLAGS;
+extern uint32_t RTWIRED_$CALLBACK_DATA;
+#define RTWIRED_$CALLBACK       (&RTWIRED_$CALLBACK_DATA)
+#endif
+
 
 #endif /* RIP_H */

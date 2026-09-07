@@ -14,7 +14,7 @@
 #include "time/time.h"
 #include "cal/cal.h"
 #include "acl/acl.h"
-#include "file/file_internal.h"
+#include "file/file.h"
 #include "rgyc/rgyc.h"
 #include "mst/mst.h"
 

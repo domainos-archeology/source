@@ -33,8 +33,7 @@
  * The two ACL statuses this routine raises directly rather than through
  * ACL_$RIGHTS (`move.l #0x230001` at 0x00E5D1FE, `#0x230002` at 0x00E5D20C).
  */
-#define status_$no_right_to_perform_operation               0x00230001
-#define status_$insufficient_rights_to_perform_operation    0x00230002
+/* Module-0x23 status codes come from acl/acl.h (included above). */
 
 /*
  * A LOT entry's rights byte carries bit 4 as "this entry does not speak for

@@ -173,23 +173,15 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
                                  boolean wait_flag, ast_$subject_t *subject,
                                  clock_t *clock_info, status_$t *status);
 
-/* Validate UID and return status */
-status_$t ast_$validate_uid(uid_t *uid, uint32_t flags);
+/* ast_$validate_uid: declared in ast/ast.h -- VTOC_$SEARCH_VOLUMES
+ * (vtoc/search_volumes.c) calls it (bead source-3uo). */
 
 /*
  * Internal global variables
  */
 
-/*
- * Per-volume "dismount in progress" bit set, AST_ module block + 0x420
- * (A5 = 0xE1DC80, so 0xE1E0A0).  AST_$DISMOUNT sets bit `vol_index` on entry
- * (0x00E069F8 `or.w D3w,(0x420,A5)`) and clears it on exit (0x00E06B02);
- * ast_$activate_aote (0x00E02588) and ast_$release_aote (0x00E02816) test it
- * with `btst.l D2,D0` after guarding `vol_index <= 15`, and
- * VTOC_$SEARCH_VOLUMES reads it at 0x00E0244E.  Always a word access.
- */
-extern uint16_t ast_$vol_info_count;
-#define DAT_00e1e0a0 ast_$vol_info_count
+/* ast_$vol_info_count / DAT_00e1e0a0: declared in ast/ast.h --
+ * VTOC_$SEARCH_VOLUMES reads it at 0x00E0244E (bead source-3uo). */
 
 /*
  * Dismount eventcount at 0xE1E088 (offset 0x408).  AST_$DISMOUNT waits on it

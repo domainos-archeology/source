@@ -29,6 +29,7 @@
 #define PACCT_H
 
 #include "base/base.h"
+#include "acl/acl.h"   /* status_$insufficient_rights_to_perform_operation */
 
 /*
  * ============================================================================
@@ -44,7 +45,8 @@
 
 /* Status codes */
 #define status_$no_rights                               0x000F0010
-#define status_$insufficient_rights_to_perform_operation 0x00230002
+/* status_$insufficient_rights_to_perform_operation is a module-0x23 code
+ * defined in acl/acl.h (included above -- bead source-3uo). */
 
 /*
  * ============================================================================

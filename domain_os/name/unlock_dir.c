@@ -16,7 +16,7 @@
  */
 
 #include "name/name_internal.h"
-#include "file/file_internal.h"
+#include "file/file.h"
 
 void NAME_$UNLOCK_DIR(status_$t *status_ret)
 {

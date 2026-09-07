@@ -654,4 +654,89 @@ void DIR_$DROP_MOUNT(uid_t *mount_point_uid, uid_t *dir_uid, uint32_t *lv_num,
  */
 void DIR_$SERVER(void *request, void *response, uint16_t *reply_len);
 
+
+/*
+ * ============================================================================
+ * DIR entry points reached from outside dir/
+ *
+ * Moved here from dir/dir_internal.h (bead source-3uo): rem_file/ and name/
+ * call these, so they must not reach into a foreign internal header.  Nothing
+ * about the routines or the record changed.
+ * ============================================================================
+ */
+
+void DIR_$OLD_ADD_HARD_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
+                             uid_t *target_uid, status_$t *status_ret);
+
+void DIR_$OLD_DROP_HARD_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
+                              uint16_t *flags, status_$t *status_ret);
+
+void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
+                              status_$t *status_ret);
+
+/*
+ * The record DIR_$OLD_GET_ENTRYU fills.  NAME_$OLD_DELETE_ENTRYU reads its
+ * first two fields: the entry type word at +0x00 (`move.w (-0xc8,A6),D0w` at
+ * 0x00E56B44) and the object UID at +0x02 (`lea (-0xc6,A6),A0` at
+ * 0x00E56BC6).  The UID lands on an odd multiple of two, so the record is
+ * packed.
+ */
+typedef struct __attribute__((packed)) dir_$old_entry_t {
+    uint16_t type;      /* 0x00: 1 = file, 3 = link */
+    uid_t    uid;       /* 0x02: the object UID */
+} dir_$old_entry_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(dir_$old_entry_t, uid) == 0x02, "dir_$old_entry_t.uid");
+_Static_assert(sizeof(dir_$old_entry_t) == 0x0A, "sizeof dir_$old_entry_t");
+#endif
+
+void DIR_$OLD_GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
+                         void *entry_ret, status_$t *status_ret);
+
+/* dir_$old_unlink_entry - Find and remove directory entry by name
+ *
+ * Finds the named entry via dir_$old_find_entry, checks its type
+ * (0=file, 1=hard link, 3=soft link), copies UID to result (or
+ * UID_$NIL for type 0/3), then removes via dir_$old_delete_entry.
+ * Type 3 with op_type=1 returns invalid_link_operation error.
+ * Type 1 with op_type=3 sets naming_not_a_link but still proceeds.
+ *
+ * Original address: 0x00E5569C
+ * Size: 200 bytes
+ */
+void dir_$old_unlink_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
+                           uint16_t name_len, uint16_t op_type,
+                           void *result, status_$t *status_ret);
+
+/* dir_$old_add_entry - Add entry to directory buffer
+ *
+ * Core directory entry addition. Checks for duplicates via dir_$old_find_entry,
+ * then adds to either flat entry area (stride 0x30) or hashed overflow area.
+ * Copies name (up to 32 chars, space-padded), sets type byte and UID,
+ * increments entry count.
+ *
+ * Returns: status_$ok, status_$name_already_exists, or status_$directory_is_full
+ *
+ * Original address: 0x00E55220
+ * Size: 486 bytes
+ */
+void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
+                        uint16_t name_len, uint16_t type, void *uid_data,
+                        uint16_t flags, uint8_t *result, status_$t *status_ret);
+
+/* dir_$old_add_entry_ext - Add entry to directory with extra field
+ *
+ * Thin wrapper around dir_$old_add_entry. After successful add, stores
+ * the 'extra' value at offset 0x20 of the new entry structure.
+ * Used for root directory entries and entries needing location info.
+ *
+ * Original address: 0x00E55406
+ * Size: 86 bytes
+ */
+void dir_$old_add_entry_ext(uid_t *dir_uid, uint32_t handle, uint8_t *name,
+                            uint16_t name_len, uint16_t type, void *uid_data,
+                            uint32_t extra, uint8_t replace_flag,
+                            uint8_t *result, status_$t *status_ret);
+
 #endif /* DIR_H */

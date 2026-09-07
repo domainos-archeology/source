@@ -38,7 +38,7 @@
  */
 
 #include "name/name_internal.h"
-#include "dir/dir_internal.h"
+#include "dir/dir.h"
 
 void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
                           uint16_t type, void *result, status_$t *status_ret)

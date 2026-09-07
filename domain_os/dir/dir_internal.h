@@ -14,9 +14,11 @@
 #include "ast/ast.h"
 #include "audit/audit.h"
 #include "rem_file/rem_file.h"
-#include "file/file_internal.h" // we call FILE_$PRIV_UNLOCK
+#include "file/file.h" // we call FILE_$PRIV_UNLOCK
 #include "fim/fim.h"
+#include "hint/hint.h"    /* HINT_$ADDI, HINT_$GET_HINTS */
 #include "name/name.h"
+#include "rem_name/rem_name.h"   /* REM_NAME_$GET_ENTRY, REM_NAME_$DIR_READU, ... */
 #include "mst/mst.h"
 #include "network/network.h"
 #include "proc1/proc1.h"
@@ -416,8 +418,7 @@ void DIR_$OLD_ADDU(uid_t *dir_uid, char *name, int16_t *name_len,
 void DIR_$OLD_ROOT_ADDU(uid_t *dir_uid, char *name, int16_t *name_len,
                         uid_t *file_uid, uint32_t *flags, status_$t *status_ret);
 
-void DIR_$OLD_ADD_HARD_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
-                             uid_t *target_uid, status_$t *status_ret);
+/* DIR_$OLD_ADD_HARD_LINKU: declared in dir/dir.h -- REM_FILE_$SERVER calls it. */
 
 void DIR_$OLD_ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
                         void *target, uint16_t *target_len, status_$t *status_ret);
@@ -434,8 +435,7 @@ void DIR_$OLD_DELETE_FILEU(uid_t *dir_uid, char *name, uint16_t *name_len,
 void DIR_$OLD_DROPU(uid_t *dir_uid, char *name, uint16_t *name_len,
                     uid_t *file_uid, status_$t *status_ret);
 
-void DIR_$OLD_DROP_HARD_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
-                              uint16_t *flags, status_$t *status_ret);
+/* DIR_$OLD_DROP_HARD_LINKU: declared in dir/dir.h -- REM_FILE_$SERVER calls it. */
 
 void DIR_$OLD_DROP_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
                          uid_t *target_uid, status_$t *status_ret);
@@ -454,8 +454,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret);
 void DIR_$OLD_GET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_ret,
                               status_$t *status_ret);
 
-void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
-                              status_$t *status_ret);
+/* DIR_$OLD_SET_DEFAULT_ACL: declared in dir/dir.h -- REM_FILE_$SERVER calls it. */
 
 void DIR_$OLD_VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
                                   status_$t *status_ret);
@@ -465,25 +464,8 @@ void DIR_$OLD_FIND_UID(uid_t *dir_uid, uid_t *target_uid, char *name_buf,
 
 uint32_t DIR_$OLD_FIND_NET(uid_t *dir_uid, uint32_t *index);
 
-/*
- * The record DIR_$OLD_GET_ENTRYU fills.  NAME_$OLD_DELETE_ENTRYU reads its
- * first two fields: the entry type word at +0x00 (`move.w (-0xc8,A6),D0w` at
- * 0x00E56B44) and the object UID at +0x02 (`lea (-0xc6,A6),A0` at
- * 0x00E56BC6).  The UID lands on an odd multiple of two, so the record is
- * packed.
- */
-typedef struct __attribute__((packed)) dir_$old_entry_t {
-    uint16_t type;      /* 0x00: 1 = file, 3 = link */
-    uid_t    uid;       /* 0x02: the object UID */
-} dir_$old_entry_t;
-
-#if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(dir_$old_entry_t, uid) == 0x02, "dir_$old_entry_t.uid");
-_Static_assert(sizeof(dir_$old_entry_t) == 0x0A, "sizeof dir_$old_entry_t");
-#endif
-
-void DIR_$OLD_GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
-                         void *entry_ret, status_$t *status_ret);
+/* dir_$old_entry_t and DIR_$OLD_GET_ENTRYU: declared in dir/dir.h --
+ * NAME_$OLD_DELETE_ENTRYU (name/old_delete_entryu.c) uses both. */
 
 void DIR_$OLD_READ_LINKU(int16_t dir_uid_low, int16_t name_low, uint16_t *name_len,
                          int16_t target_low, int16_t *target_len,
@@ -568,20 +550,8 @@ void dir_$find_uid_internal(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
 /* NAME_$OLD_DELETE_ENTRYU carries the NAME_$ prefix, so its prototype lives
  * in name/name.h (bead source-3uo); the body is dir/old_delete_entryu.c. */
 
-/* dir_$old_unlink_entry - Find and remove directory entry by name
- *
- * Finds the named entry via dir_$old_find_entry, checks its type
- * (0=file, 1=hard link, 3=soft link), copies UID to result (or
- * UID_$NIL for type 0/3), then removes via dir_$old_delete_entry.
- * Type 3 with op_type=1 returns invalid_link_operation error.
- * Type 1 with op_type=3 sets naming_not_a_link but still proceeds.
- *
- * Original address: 0x00E5569C
- * Size: 200 bytes
- */
-void dir_$old_unlink_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
-                           uint16_t name_len, uint16_t op_type,
-                           void *result, status_$t *status_ret);
+/* dir_$old_unlink_entry: declared in dir/dir.h -- NAME_$OLD_DROP_ENTRY
+ * (name/old_drop_entry.c) calls it. */
 
 /* dir_$old_find_entry - Find entry in directory by name
  *
@@ -622,35 +592,11 @@ uint16_t dir_$old_hash_name(uint8_t *name, uint16_t name_len, uint16_t num_bucke
 void dir_$old_delete_entry(uint32_t handle, uint16_t slot_idx,
                            uint16_t chain_level, uint16_t hash);
 
-/* dir_$old_add_entry - Add entry to directory buffer
- *
- * Core directory entry addition. Checks for duplicates via dir_$old_find_entry,
- * then adds to either flat entry area (stride 0x30) or hashed overflow area.
- * Copies name (up to 32 chars, space-padded), sets type byte and UID,
- * increments entry count.
- *
- * Returns: status_$ok, status_$name_already_exists, or status_$directory_is_full
- *
- * Original address: 0x00E55220
- * Size: 486 bytes
- */
-void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
-                        uint16_t name_len, uint16_t type, void *uid_data,
-                        uint16_t flags, uint8_t *result, status_$t *status_ret);
+/* dir_$old_add_entry: declared in dir/dir.h -- NAME_$OLD_ADD_LINK_LOCAL
+ * (name/old_add_link_local.c) calls it. */
 
-/* dir_$old_add_entry_ext - Add entry to directory with extra field
- *
- * Thin wrapper around dir_$old_add_entry. After successful add, stores
- * the 'extra' value at offset 0x20 of the new entry structure.
- * Used for root directory entries and entries needing location info.
- *
- * Original address: 0x00E55406
- * Size: 86 bytes
- */
-void dir_$old_add_entry_ext(uid_t *dir_uid, uint32_t handle, uint8_t *name,
-                            uint16_t name_len, uint16_t type, void *uid_data,
-                            uint32_t extra, uint8_t replace_flag,
-                            uint8_t *result, status_$t *status_ret);
+/* dir_$old_add_entry_ext: declared in dir/dir.h -- NAME_$OLD_ADD_ENTRY
+ * (name/old_add_entry.c) calls it. */
 
 /* dir_$old_add_link_entry - Add symbolic link entry to directory
  *
@@ -1198,12 +1144,9 @@ extern status_$t Bad_request_header_version_err;
 #ifndef status_$name_already_exists
 #define status_$name_already_exists                  0x000E0003
 #endif
-#ifndef status_$no_right_to_perform_operation
-#define status_$no_right_to_perform_operation        0x00230001
-#endif
-#ifndef status_$insufficient_rights_to_perform_operation
-#define status_$insufficient_rights_to_perform_operation 0x00230002
-#endif
+/* status_$no_right_to_perform_operation / 
+ * status_$insufficient_rights_to_perform_operation are module-0x23 (ACL)
+ * codes and are defined once in acl/acl.h, included above (bead source-3uo). */
 #ifndef file_$objects_on_different_volumes
 #define file_$objects_on_different_volumes           0x000F0013
 #endif
@@ -1240,8 +1183,7 @@ extern status_$t Bad_request_header_version_err;
  *   REM_FILE_$RN_DO_OP, MAP_CASE, UNMAP_CASE, CRASH_SYSTEM
  */
 
-/* NAME_CONVERT_ACL_STATUS - convert ACL status to naming status */
-void NAME_CONVERT_ACL_STATUS(status_$t *status_ret);
+/* NAME_CONVERT_ACL_STATUS is declared in name/name.h, included above. */
 
 /*
  * ACL_$RIGHTS, REM_FILE_$DROP_HARD_LINKU, etc. are already

@@ -25,7 +25,8 @@
 #include "ml/ml.h"
 #include "mmap/mmap.h"  /* For GET_WIRED */
 #include "ec/ec.h"
-#include "file/file_internal.h"
+#include "file/file.h"
+#include "uid/uid.h"      /* UID_$NIL, UID_$HASH, NODE_$ME */
 
 /*
  * ============================================================================

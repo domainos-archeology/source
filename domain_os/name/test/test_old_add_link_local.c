@@ -34,7 +34,7 @@ static int current_failed = 0;
 } while (0)
 
 #include "name/name_internal.h"
-#include "dir/dir_internal.h"
+#include "dir/dir.h"
 #include "acl/acl.h"
 
 /* ------------------------------------------------------------------ */

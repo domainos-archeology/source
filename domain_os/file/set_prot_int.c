@@ -8,6 +8,7 @@
  */
 
 #include "file/file_internal.h"
+#include "acl/acl.h"
 
 /* Status codes */
 #define file_$objects_on_different_volumes   0x000F0013
@@ -15,7 +16,7 @@
 #define file_$bad_reply_received_from_remote 0x000F0003
 #define file_$incompatible_request           0x000F0015
 #define status_$ast_incompatible_request            0x00030006
-#define status_$no_right_to_perform_operation       0x00230001
+/* status_$no_right_to_perform_operation comes from acl/acl.h. */
 #define status_$acl_no_right_to_set_subsystem_data  0x00230010
 
 /* PROC1 type for server process */

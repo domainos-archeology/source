@@ -9,7 +9,7 @@
 
 #include "peb/peb_internal.h"
 #include "mmu/mmu.h"
-#include "fim/fim_internal.h"
+#include "fim/fim.h"
 
 /*
  * Global data definitions

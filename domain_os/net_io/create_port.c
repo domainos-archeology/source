@@ -56,7 +56,7 @@ int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
         /* 0x00E5A4E6  tst.b D4b / bpl -- taken when the port already exists */
         if (not_found >= 0) {
             /* 0x00E5A4F6  move.l #0x2b0009,(A0) */
-            *status_ret = status_$net_io_illegal_op_for_port_type;
+            *status_ret = status_$route_illegal_op_for_port_type;
             /* 0x00E5A4FC  bra.w 0x00e5a6b0 */
             return result;
         }

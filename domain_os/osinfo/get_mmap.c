@@ -7,7 +7,6 @@
 
 #include "osinfo/osinfo_internal.h"
 #include "mmap/mmap.h"
-#include "mmap/mmap_internal.h"
 #include "pmap/pmap.h"
 #include "ast/ast.h"
 #include "proc2/proc2.h"

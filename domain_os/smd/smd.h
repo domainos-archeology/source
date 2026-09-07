@@ -1393,9 +1393,38 @@ extern uint8_t SMD_$UK_KTT[0x100];       /* 0x00E84C7E */
 extern uint8_t SMD_$SWISS_KTT[0x100];    /* 0x00E84D7E */
 
 /*
- * Display status code raised outside the SMD subsystem as well (tpad/):
- * module 0x13, code 1.
+ * MNK_$KTT_PTRS - the eight keyboard-translation-table pointers, one per
+ * keyboard type, at 0x00E273DC, and MNK_$KTT_MAX (0x00E273FC), the highest
+ * valid index.  Both are cells of the SMD_WIRED module (SAU2 map, 0xE26F20
+ * size 0x5E0); their storage is defined by kbd/kbd_data.c and KBD_$SET_TYPE
+ * is their only reader (moved here from kbd/kbd_internal.h -- bead
+ * source-3uo).
+ */
+extern void *MNK_$KTT_PTRS[];
+extern int16_t MNK_$KTT_MAX;
+
+/*
+ * Display status codes (module 0x13) raised outside the SMD subsystem as
+ * well: code 1 by tpad/, codes 4 and 0xB by dtty/ (bead source-3uo).
  */
 #define status_$display_invalid_unit_number 0x00130001
+#define status_$display_invalid_use_of_driver_procedure 0x00130004
+#define status_$display_unsupported_font_version 0x0013000B
+
+/*
+ * SMD_$COPY_FONT_TO_MD_HDM - Copy font to main display hidden memory
+ *
+ * Copies font data to a fixed location in the main display's hidden memory.
+ * Used for mono display types (1 and 2) to store a default system font.
+ * DTTY_$LOAD_FONT (dtty/helpers.c, 0x00E1D750 call site) is the caller
+ * outside smd/, so the declaration is public.
+ *
+ * Parameters:
+ *   font       - Pointer to font data
+ *   status_ret - Status return
+ *
+ * Original address: 0x00E1D750
+ */
+void SMD_$COPY_FONT_TO_MD_HDM(void **font, status_$t *status_ret);
 
 #endif /* SMD_H */

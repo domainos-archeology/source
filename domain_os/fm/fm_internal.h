@@ -11,7 +11,7 @@
 #include "fm/fm.h"
 #include "ml/ml.h"
 #include "dbuf/dbuf.h"
-#include "vtoc/vtoc_internal.h"
+#include "vtoc/vtoc.h"
 
 /*
  * Lock ID for disk operations
@@ -46,9 +46,9 @@
 #define FM_VTOCE_OLD_SIZE       0xCC    /* 204 bytes - old format */
 
 /*
- * Status codes
+ * Status codes: status_$VTOC_not_mounted comes from vtoc/vtoc.h (included
+ * above -- bead source-3uo).
  */
-#define status_$VTOC_not_mounted    0x20001     /* VTOC not mounted */
 
 /*
  * Address extraction macros

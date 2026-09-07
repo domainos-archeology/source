@@ -196,7 +196,7 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
 /* RIP_$HALT_PACKET / RIP_$HALT_PACKET_DATA are declared in route/route.h
  * because RIP_$HALT_ROUTER (rip/misc.c) sends the packet. */
 
-/* RTWIRED_$SEND_FLAGS / RTWIRED_$CALLBACK: see route/route.h (used by rip/send.c) */
+/* RTWIRED_$SEND_FLAGS / RTWIRED_$CALLBACK: see rip/rip.h (used by rip/send.c) */
 
 /* Array of wired page addresses */
 #define ROUTE_$WIRED_PAGES      ((uint32_t *)0xE87D80)
@@ -295,7 +295,7 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
  */
 #define ROUTE_$N_USER_PORTS     (*(int16_t *)0xE87FD4)
 
-/* ROUTE_$USER_STAT (0xE87FD6): see route_$user_stat_t below. */
+/* ROUTE_$USER_STAT (0xE87FD6): see route/route.h. */
 
 /*
  * Constant cells in the routing code segment, all passed by reference
@@ -368,71 +368,10 @@ extern const uint16_t ROUTE_$ANNOUNCE_TEMPLATE;
 #endif
 
 /*
- * =============================================================================
- * ROUTE_$USER_STAT - per-user-port statistics records (0xE87FD6 .. 0xE88216)
- * =============================================================================
- *
- * "User" ports are the EtherBridge ports /etc/rtsvc calls "-device USER";
- * NET_IO_$CREATE_PORT owns this array and hands one record to each such port.
- * Its allocator is a linear scan of four records of 0x90 bytes:
- *
- *   00e5a5c2  moveq   #0x3,D0        ; dbf count -> four records
- *   00e5a5c4  movea.l #0xe87fd6,A0   ; ROUTE_$USER_STAT
- *   00e5a5ca  moveq   #0x1,D1        ; record number, 1-based
- *   00e5a5cc  lea     (0x90,A0),A0   ; stride 0x90
- *   00e5a5d0  tst.b   (-0x90,A0)     ; record byte 0 = "in use" boolean
- *   00e5a5d4  bmi.b   0x00e5a5e0     ; true -> record taken, try the next
- *   ...
- *   00e5a5e2  lea     (0x90,A0),A0
- *   00e5a5e6  dbf     D0w,0x00e5a5d0
- *
- * The chosen record is then addressed as ROUTE_$USER_STAT + n*0x90 - 0x90
- * (n*0x90 is built as n<<4 + n<<7 at 0x00E5A658 - 0x00E5A65E, and the -0x90
- * bias is "lea (-0x90,A1),A1" at 0x00E5A664), stored in the port entry's
- * driver_stats field ("move.l A1,(0x44,A3)" at 0x00E5A668) and marked in use
- * with "st (A1)" at 0x00E5A682.  ROUTE_$CLOSE_PORT releases it with
- * "movea.l (0x44,A3),A0 / clr.b (A0)" at 0x00E69F9A.
- *
- * 4 * 0x90 == 0x240 == 0xE88216 - 0xE87FD6, i.e. exactly the span between the
- * SAU2 map's ROUTE_$USER_STAT and the next symbol, ROUTE_$PID.
- *
- * The body of a record is route_$port_stats_t (route/route.h): its byte 0 is
- * the in-use boolean above (the byte ROUTE_$READ_USER_STATS copies out at
- * 0x00E6A6B4 and ROUTE_$CLOSE_PORT clears), and the counters at 0x02, 0x06
- * and 0x0A are the ones ROUTE_$PROCESS bumps at 0x00E8764E, 0x00E87660 and
- * 0x00E8765A.  That record ends at 0x8D; nothing in the image reads or writes
- * 0x8E or 0x8F, so they are carried here as unnamed tail bytes of the 0x90
- * stride.
- *
- * ORIGINAL BUG (reproduced, not fixed - bead source-2km0): the record clear
- * loop at 0x00E5A66C - 0x00E5A67E is "move.w #0x90,D1w / clr.w D0w /
- * clr.b (0x0,A1,D0w) / addq.w #0x1,D0w / dbf D1w", i.e. 0x91 iterations
- * writing offsets 0x00..0x90.  It zeroes one byte past the end of the record;
- * for record 4 that byte is the first byte of ROUTE_$PID (0xE88216).
+ * ROUTE_$USER_STAT / route_$user_stat_t: see route/route.h.  Its allocator is
+ * NET_IO_$CREATE_PORT (0x00E5A5C2), outside route/, so the record and the
+ * array are public (bead source-tjv5).
  */
-
-#define ROUTE_$MAX_USER_STATS   4
-
-typedef struct route_$user_stat_t {
-    route_$port_stats_t stats;      /* 0x00: see route/route.h */
-    uint8_t             _tail_8e[2];/* 0x8E: no accessor anywhere in the image;
-                                     *       present only because the record
-                                     *       stride is 0x90 (0x00E5A5CC,
-                                     *       0x00E5A658) while every named
-                                     *       field ends at 0x8D */
-} __attribute__((packed)) route_$user_stat_t;
-
-_Static_assert(sizeof(route_$user_stat_t) == 0x90,
-               "route_$user_stat_t must be 0x90 bytes");
-_Static_assert(sizeof(route_$user_stat_t) * ROUTE_$MAX_USER_STATS
-                   == 0xE88216 - 0xE87FD6,
-               "ROUTE_$USER_STAT must span 0xE87FD6..0xE88216");
-
-#if defined(ARCH_M68K)
-#define ROUTE_$USER_STAT        ((route_$user_stat_t *)0xE87FD6)
-#else
-extern route_$user_stat_t ROUTE_$USER_STAT[ROUTE_$MAX_USER_STATS];
-#endif
 
 /*
  * =============================================================================

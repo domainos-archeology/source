@@ -394,12 +394,11 @@ extern net_io_unwired_t NET_IO_UNWIRED;
  * =============================================================================
  */
 /*
- * 0x2B0009 "operation not legal on this port type".  route/route.h defines
- * the same value as status_$route_not_routing_mode; that name describes
- * ROUTE_$GET_EC's use of it, not NET_IO_$CREATE_PORT's.
- * TODO(source-6vat, 0x00E5A4F6): fold the two names into one.
+ * 0x2B0009 "operation not legal on this port type" belongs to status module
+ * 0x2B (OS / internet routing) and is declared once, as
+ * status_$route_illegal_op_for_port_type, in route/route.h (bead source-6vat).
+ * NET_IO_$CREATE_PORT stores it at 0x00E5A4F6.
  */
-#define status_$net_io_illegal_op_for_port_type 0x2B0009
 #define status_$net_io_max_ports_open           0x2B0005  /* "max number of ports already open" */
 #define status_$net_io_no_user_buffer_queues    0x2B000B  /* "no more buffer queues for user networks" */
 #define status_$net_io_max_user_ports_open      0x2B000F  /* "max number of USER ports already open" */

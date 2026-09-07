@@ -31,7 +31,8 @@
  */
 
 #include "name/name_internal.h"
-#include "dir/dir_internal.h"
+#include "dir/dir.h"
+#include "hint/hint.h"       /* HINT_$ADDI */
 
 void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,
                          uint16_t name_len, uid_t *file_uid,

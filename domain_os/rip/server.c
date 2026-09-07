@@ -28,7 +28,7 @@
 #include "pkt/pkt.h"
 #include "netbuf/netbuf.h"
 #include "time/time.h"
-#include "name/name.h"      /* REM_NAME_$REGISTER_SERVER */
+#include "rem_name/rem_name.h"  /* REM_NAME_$REGISTER_SERVER */
 #include "hint/hint.h"
 #include "uid/uid.h"        /* NODE_$ME (0xE245A4) */
 #include "xns/xns.h"        /* xns_$idp_header_t: the header the XNS path copies */

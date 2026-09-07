@@ -28,7 +28,7 @@
  */
 
 #include "name/name_internal.h"
-#include "dir/dir_internal.h"
+#include "dir/dir.h"
 #include "acl/acl.h"
 
 /* NAME_$LOCK_DIR lock mode 4 (`move.w #0x4,-(SP)` at 0x00E56624) - the same

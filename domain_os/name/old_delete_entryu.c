@@ -39,7 +39,8 @@
  */
 
 #include "name/name_internal.h"
-#include "dir/dir_internal.h"
+#include "dir/dir.h"
+#include "rem_file/rem_file.h"  /* REM_FILE_$DROP_HARD_LINKU */
 
 /*
  * Constant cells for the two ACL_$RIGHTS calls (source-kr90).  Both are

@@ -8,7 +8,7 @@
 #define DTTY_INTERNAL_H
 
 #include "dtty/dtty.h"
-#include "smd/smd_internal.h" // SMD_$COPY_FONT_DO_HDM is here... not sure why
+#include "smd/smd.h"          /* SMD_$COPY_FONT_TO_MD_HDM, status_$display_* */
 #include "proc1/proc1.h"
 
 /*
@@ -40,11 +40,8 @@
  */
 #define DTTY_DISPLAY_UNIT       1
 
-/*
- * SMD status codes used by DTTY
- */
-#define status_$display_unsupported_font_version     0x0013000B
-#define status_$display_invalid_use_of_driver_procedure 0x00130004
+/* The SMD status codes DTTY raises (0x0013000B, 0x00130004) are declared in
+ * smd/smd.h (included above -- bead source-3uo). */
 
 /*
  * ============================================================================

@@ -18,6 +18,7 @@
 #define UID_H
 
 #include "base/base.h"
+#include "node/node.h"   /* NODE_$ME */
 
 /*
  * UID generator state
@@ -40,6 +41,14 @@ extern uid_t DISKLESS_$UID;             /* 0xE173F4: Diskless node UID pattern *
 extern uid_t OS_WIRED_$UID;             /* OS wired/pinned memory UID */
 extern uid_t DISPLAY1_$UID;             /* 0xE173D4: Display 1 object UID (OS_$INSTALL_DISPLAY_ASTE) */
 extern uid_t UNSTRUCT_$UID;             /* 0xE173C4: Unstructured file type UID */
+extern uid_t NIL_$NETWORK_UID;          /* 0xE1748C: Nil network UID
+                                         * (defined in iic/iic_data.c) */
+extern uid_t USER_$NETWORK_UID;         /* 0xE1749C: User network UID
+                                         * (defined in iic/iic_data.c) */
+extern uid_t PPO_$NIL_USER_UID;         /* 0xE174EC: Nil user UID
+                                         * (defined in vtoc/vtoc_data.c) */
+extern uid_t PPO_$NIL_ORG_UID;          /* 0xE17574: Nil org UID
+                                         * (defined in vtoc/vtoc_data.c) */
 
 /*
  * ============================================================================
@@ -89,9 +98,10 @@ void UID_$GEN(uid_t *uid_ret);
 uint32_t UID_$HASH(uid_t *uid, uint16_t *table_size);
 
 /*
- * NODE_$ME - This node's ID (low 20 bits of UIDs generated here).
- * Original address: 0xE245A4 (uid/uid_data.c)
+ * NODE_$ME is a cell of the NET_ASM module (SAU2 map, 0xE2459C size 0xC), not
+ * of UID_LIST, so it is declared in node/node.h (included above -- bead
+ * source-3uo).  Its storage is still defined by uid/uid_data.c, and UID_$INIT
+ * reads it.
  */
-extern uint32_t NODE_$ME;
 
 #endif /* UID_H */

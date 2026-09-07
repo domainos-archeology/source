@@ -13,7 +13,7 @@
  */
 
 #include "vtoc/vtoc_internal.h"
-#include "ast/ast_internal.h"
+#include "ast/ast.h"
 #include "network/network.h"
 
 /* Status codes */

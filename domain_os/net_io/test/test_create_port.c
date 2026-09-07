@@ -165,7 +165,7 @@ static int test_duplicate_port_rejected(void)
     index = NET_IO_$CREATE_PORT(0, 1, &test_driver, 10, &status);
 
     ASSERT_EQ(-1, index);
-    ASSERT_EQ(status_$net_io_illegal_op_for_port_type, status);
+    ASSERT_EQ(status_$route_illegal_op_for_port_type, status);
     ASSERT_EQ(0, set_cleanup_calls);
     return 0;
 }

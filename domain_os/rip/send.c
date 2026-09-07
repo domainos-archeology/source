@@ -45,8 +45,8 @@
  *   RIP_$BCAST_CONTROL   (0xE26EC0) - rip/rip.h
  *   RIP_$INFO            (0xE263BC) - rip/rip_internal.h
  *   ROUTE_$PORT_ARRAY    (0xE2E0A0) - route/route.h
- *   RTWIRED_$CALLBACK    (0xE870D8) - route/route.h
- *   RTWIRED_$SEND_FLAGS  (0xE87D74) - route/route.h
+ *   RTWIRED_$CALLBACK    (0xE870D8) - rip/rip.h
+ *   RTWIRED_$SEND_FLAGS  (0xE87D74) - rip/rip.h
  *   NODE_$ME             (0xE245A4) - network/network.h
  */
 

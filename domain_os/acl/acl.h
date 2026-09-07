@@ -20,6 +20,15 @@
 #include "base/base.h"
 
 /*
+ * Status codes, module 0x23 ("OS / ACL manager" in the SR10.4 status-code
+ * database).  These are the single definitions; dir/, file/, name/ and pacct/
+ * all raise them and include this header rather than redefining them
+ * (bead source-3uo).
+ */
+#define status_$no_right_to_perform_operation            0x00230001
+#define status_$insufficient_rights_to_perform_operation 0x00230002
+
+/*
  * ============================================================================
  * Initialization
  * ============================================================================

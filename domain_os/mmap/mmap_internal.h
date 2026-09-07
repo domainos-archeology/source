@@ -9,6 +9,7 @@
 #define MMAP_INTERNAL_H
 
 #include "mmap/mmap.h"
+#include "dump/dump.h"  /* mem_range_t, DUMP_$ADDRS (MMAP_$INIT fills it) */
 #include "mmu/mmu.h"  /* For PMAPE_FOR_VPN, PMAPE_FLAG_* */
 #include "ast/ast.h" /* For aste_t / aote_t (the 0xEC5400 segment table) */
 
@@ -18,14 +19,8 @@
  * ============================================================================
  */
 
-/*
- * Memory range descriptor
- * Used for tracking physical memory ranges during initialization.
- */
-typedef struct mem_range_t {
-    uint32_t start;
-    uint32_t end;
-} mem_range_t;
+/* mem_range_t, the element type of DUMP_$ADDRS, moved to dump/dump.h with
+ * the array it describes (bead source-3uo). */
 
 /*
  * ============================================================================
@@ -41,24 +36,7 @@ typedef struct mem_range_t {
  * same object declared there.
  */
 
-/*
- * DUMP_$ADDRS - the physical memory ranges MMAP_$INIT hands to the crash-dump
- * code.  Named by the SAU2 map (`E007EC DUMP_$ADDRS`, inside the DUMP
- * segment, 0x14 bytes up to the APP segment at 0xE00800); the tree used to
- * call it MEM_EXAM_TABLE.
- *
- * MMAP_$INIT walks it with `movea.l #0xe007ec,A4 / lea (A4),A3` and
- * `addq.l #0x8,A3` per range, writing start at (-0x8,A3) and end at
- * (-0x4,A3) (0x00E319D6-0x00E31A2E), and crashes once the range count passes
- * 2 (`cmpi.w #0x2,D4w / ble`, 0x00E31A0C) - so two 8-byte ranges are all it
- * will fill.  DUMP reads range 0's end at 0x00E004E8 and range 1's start at
- * 0x00E004E4.
- *
- * Image contents: range 0 = { 0x00100000, 0x0017FC00 }, range 1 = { 0, 0 }.
- * The last 4 bytes of the map's 0x14 extent (0xE007FC) have no reference.
- */
-#define DUMP_ADDRS_RANGES 2
-extern mem_range_t DUMP_$ADDRS[DUMP_ADDRS_RANGES];
+/* DUMP_$ADDRS / DUMP_ADDRS_RANGES: see dump/dump.h (bead source-3uo). */
 
 /*
  * Segment info table, at 0xEC5400 (m68k).

@@ -21,8 +21,9 @@
 #include <string.h>
 
 #include "rem_file/rem_file_internal.h"
-#include "file/file_internal.h"
+#include "file/file.h"
 #include "network/network.h"
+#include "name/name.h"      /* name_$data_t, NAME_$DATA */
 
 /* ============================================================================
  * Test framework

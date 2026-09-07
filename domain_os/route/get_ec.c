@@ -95,7 +95,7 @@ void ROUTE_$GET_EC(void *port_info, int16_t *ec_type, void **ec_ret,
     
     /* Check if port is in routing mode (type == 2) */
     if (port->port_type != ROUTE_PORT_TYPE_ROUTING) {
-        *status_ret = status_$route_not_routing_mode;
+        *status_ret = status_$route_illegal_op_for_port_type;
         return;
     }
     

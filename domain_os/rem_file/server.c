@@ -32,10 +32,9 @@
  */
 
 #include "rem_file/rem_file_internal.h"
-#include "file/file_internal.h"
+#include "file/file.h"
 #include "name/name.h"
 #include "dir/dir.h"
-#include "dir/dir_internal.h"
 #include "area/area.h"
 #include "ml/ml.h"
 #include "app/app.h"

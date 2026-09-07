@@ -14,6 +14,7 @@
 #include "misc/crash_system.h"
 #include "misc/string.h"
 #include "name/name.h"
+#include "rem_name/rem_name.h"   /* REM_NAME_$* (bodies in name/rem_name.c) */
 #include "vtoc/vtoc.h"
 #include "proc1/proc1.h"
 #include "vfmt/vfmt.h"
@@ -100,6 +101,9 @@ _Static_assert(__builtin_offsetof(rem_name_data_t, retry_count) == 0x3A, "rem_na
 _Static_assert(__builtin_offsetof(rem_name_data_t, heard_from_server) == 0x3C, "rem_name_data_t.heard_from_server");
 
 extern rem_name_data_t rem_name_$data;  /* 0xE7DBB8 - defined in rem_name.c */
+/* TODO(source-ev4k, 0xE7DBB8): rem_name_data_t, rem_name_$data and
+ * REM_NAME_$SOCK belong with the REM_NAME module; its body is still
+ * name/rem_name.c, so they stay here for now. */
 
 /*
  * Socket used by the remote naming service.
