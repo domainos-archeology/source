@@ -31,6 +31,11 @@ void AST_$SAVE_CLOBBERED_UID(uid_t *uid)
     uid_ptr = &DAT_00e1e110;
 
     /* Schedule callback to AST_$SET_TROUBLE */
+    /*
+     * 0x00E07244 pea (-0xc,A6)     -> status
+     * 0x00E07248 st  -(SP)          -> check_dup = true
+     * 0x00E0724A move.w #0x8,-(SP)  -> data_size = 8 (the 8-byte UID)
+     */
     DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q, &PTR_AST_$SET_TROUBLE_00e07272,
-                      &uid_ptr, 0xFF08, &status);
+                      &uid_ptr, 8, true, &status);
 }

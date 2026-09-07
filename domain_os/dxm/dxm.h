@@ -47,6 +47,20 @@ typedef struct dxm_queue_t {
 } dxm_queue_t;
 
 /*
+ * Offsets confirmed in DXM_$ADD_CALLBACK: (A2) head, (0x2,A2) tail,
+ * (0x4,A2) mask, (0x8,A2) lock, (0xc,A2) ec, (0x18,A2) entries.
+ */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(dxm_queue_t, head) == 0x00, "dxm_queue_t.head");
+_Static_assert(__builtin_offsetof(dxm_queue_t, tail) == 0x02, "dxm_queue_t.tail");
+_Static_assert(__builtin_offsetof(dxm_queue_t, mask) == 0x04, "dxm_queue_t.mask");
+_Static_assert(__builtin_offsetof(dxm_queue_t, lock) == 0x08, "dxm_queue_t.lock");
+_Static_assert(__builtin_offsetof(dxm_queue_t, ec) == 0x0C, "dxm_queue_t.ec");
+_Static_assert(__builtin_offsetof(dxm_queue_t, entries) == 0x18, "dxm_queue_t.entries");
+_Static_assert(sizeof(dxm_queue_t) == 0x1C, "dxm_queue_t must be 28 bytes");
+#endif
+
+/*
  * DXM Queue Entry Structure
  *
  * Represents a single callback in the queue.
@@ -58,13 +72,35 @@ typedef struct dxm_entry_t {
 } dxm_entry_t;
 
 /*
- * DXM Add Callback Flags
+ * The 16-byte stride is baked into the code: DXM_$ADD_CALLBACK scales the
+ * scan index with `lsl.l #0x4,D0` (0x00E17060) and the insert index with
+ * `lsl.w #0x4,D1w` (0x00E17102), and DXM_$SCAN_QUEUE does the same at
+ * 0x00E17176.
  *
- * The flags parameter to DXM_$ADD_CALLBACK is packed:
- *   - Low 16 bits: Data size (0-12 bytes)
- *   - Bit 16 (high byte bit 0): If set, check for duplicate entries
+ * TODO(source-wy9y): on a 64-bit host `callback` is eight bytes, so `data`
+ * moves from +0x04 to +0x08 and sizeof grows to 24.  The asserts below are
+ * therefore ARCH_M68K-only, and host unit tests must lay their entry arrays
+ * out with the image's 16-byte stride (see dxm/test/test_add_callback.c).
+ * Making the field a 4-byte cell everywhere would fix it, but the cells the
+ * callers hand to DXM_$ADD_CALLBACK are modelled three different ways
+ * across tty/, term/, ast/ and suma/ and unifying them is a separate change.
  */
-#define DXM_FLAG_CHECK_DUP      0x00800000  /* Check for duplicate entries */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(dxm_entry_t, callback) == 0x00,
+               "dxm_entry_t.callback must be at 0x00");
+_Static_assert(__builtin_offsetof(dxm_entry_t, data) == 0x04,
+               "dxm_entry_t.data must be at 0x04");
+_Static_assert(sizeof(dxm_entry_t) == DXM_ENTRY_SIZE,
+               "dxm_entry_t must be 16 bytes (lsl #4 index scaling)");
+#endif
+
+/*
+ * DXM_$ADD_CALLBACK's data_size / check_dup pair
+ *
+ * These are two separate Pascal parameters in the binary -- a word at
+ * (0x14,A6) and a Domain boolean byte at (0x16,A6) -- not one packed
+ * longword.  There is no flags word.
+ */
 
 /*
  * Status codes
@@ -141,19 +177,21 @@ void DXM_$INIT(void);
  * The callback will be executed later by a helper process.
  *
  * Parameters:
- *   queue - Queue to add callback to (DXM_$WIRED_Q or DXM_$UNWIRED_Q)
- *   callback - Pointer to callback function pointer
- *   data - Pointer to data to copy (up to 12 bytes)
- *   flags - Packed flags: low 16 bits = data size, bit 23 = check duplicates
+ *   queue      - Queue to add callback to (DXM_$WIRED_Q or DXM_$UNWIRED_Q)
+ *   callback   - Pointer to a cell holding the callback's address
+ *   data       - Pointer to a cell holding the address of the bytes to copy
+ *   data_size  - Number of bytes to copy, 0..12 (word at (0x14,A6),
+ *                0x00E16FF6); a larger value crashes the system
+ *   check_dup  - Domain boolean (byte at (0x16,A6), 0x00E16FFA).  When true
+ *                (negative) the queue is scanned head..tail and a matching
+ *                callback+data entry suppresses the insert.
  *   status_ret - Status return
- *
- * If the check duplicates flag is set and a matching entry already
- * exists in the queue (same callback and data), no new entry is added.
  *
  * Original address: 0x00E16FE0
  */
 void DXM_$ADD_CALLBACK(dxm_queue_t *queue, void **callback, void **data,
-                       uint32_t flags, status_$t *status_ret);
+                       uint16_t data_size, boolean check_dup,
+                       status_$t *status_ret);
 
 /*
  * DXM_$SCAN_QUEUE - Process all pending callbacks in a queue
@@ -232,7 +270,7 @@ void DXM_$HELPER_UNWIRED(void);
  * Original address: 0x00E17270
  */
 void DXM_$ADD_SIGNAL(uint16_t routine, uint16_t proc_index, uint16_t signal,
-                     uint32_t param, uint8_t check_dup, status_$t *status_ret);
+                     uint32_t param, boolean check_dup, status_$t *status_ret);
 
 /*
  * Deferred signal record

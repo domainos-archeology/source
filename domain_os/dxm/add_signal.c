@@ -57,11 +57,10 @@
  *   rts
  */
 void DXM_$ADD_SIGNAL(uint16_t routine, uint16_t proc_index, uint16_t signal,
-                     uint32_t param, uint8_t check_dup, status_$t *status_ret)
+                     uint32_t param, boolean check_dup, status_$t *status_ret)
 {
     dxm_signal_data_t signal_data;
     dxm_signal_data_t *data_ptr;
-    uint32_t flags;
 
     /*
      * Package the signal parameters.  Note the argument order on the stack
@@ -81,21 +80,15 @@ void DXM_$ADD_SIGNAL(uint16_t routine, uint16_t proc_index, uint16_t signal,
     data_ptr = &signal_data;
 
     /*
-     * Flags: data size = 10 (`move.w #0xa,-(SP)` at 0x00E172A6) plus the
-     * check-duplicates boolean (`move.b (0x12,A6),-(SP)` at 0x00E172A2).
-     *
-     * TODO(source-w0bp): in the binary these are two separate Pascal
-     * parameters -- a word at (0x14,A6) and a byte at (0x16,A6) as read by
-     * DXM_$ADD_CALLBACK (0x00E16FF6/0x00E16FFA) -- not one packed longword.
-     * DXM_$ADD_CALLBACK's C signature merges them; unpicking it touches
-     * callers in kbd/, tty/, ast/ and suma/.
+     * Queue the signal callback.  data_size is the literal 10
+     * (`move.w #0xa,-(SP)` at 0x00E172A6) and check_dup is this function's
+     * own boolean parameter (`move.b (0x12,A6),-(SP)` at 0x00E172A2); they
+     * are two distinct Pascal parameters, not a packed longword.
      */
-    flags = 10 | ((uint32_t)check_dup << 16);
-
-    /* Queue the signal callback */
     DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q,
                       (void **)&PTR_DXM_$ADD_SIGNAL_CALLBACK,
                       (void **)&data_ptr,
-                      flags,
+                      10,
+                      check_dup,
                       status_ret);
 }

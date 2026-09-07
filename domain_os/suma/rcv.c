@@ -179,10 +179,15 @@ void SUMA_$RCV(uint32_t param_1, uint8_t data_byte)
 
             /* Queue callback to process the event */
             callback_data[0] = &SUMA_$STATE.tpad_buffer;
+            /*
+             * 0x00E1AE7A pea (-0x4,A6)     -> status
+             * 0x00E1AE7E st  -(SP)          -> check_dup = true
+             * 0x00E1AE80 move.w #0x4,-(SP)  -> data_size = 4
+             */
             DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q,
                               (void **)&PTR_TERM_$ENQUEUE_TPAD_00e1aecc,
                               (void **)callback_data,
-                              (4 << 16) | (0xff << 8) | 0x3a,  /* flags: size=4, check_dup=0xff, type=0x3a */
+                              4, true,
                               &status);
 
             /* Reset threshold to initial value */

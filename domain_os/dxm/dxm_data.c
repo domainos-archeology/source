@@ -39,12 +39,6 @@ dxm_queue_t DXM_$UNWIRED_Q;
 dxm_queue_t DXM_$WIRED_Q;
 
 /*
- * Error messages
- */
-const char DXM_Datum_too_large_err[] = "DXM: Datum too large";
-const char DXM_No_room_err[] = " DXM: No room %H";
-
-/*
  * Deferred signal-delivery routine table
  *
  * Original address: 0x00E85708 (Ghidra label DXM_$SIGNAL_ROUTINES;

@@ -104,11 +104,49 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
                  void **ec_ret, status_$t *status_ret)
 {
     /*
-     * NOTE (TODO source-hh0j): `status` is the A6-0x2C local.  On the
-     * MST_$ALLOC_ASID failure path (0x00E72CC6) the original writes the
-     * error into *status_ret and then jumps to 0x00E73240, whose exit at
-     * 0x00E732D6 overwrites *status_ret with this still-unwritten local.
-     * That behaviour is reproduced here; the value is indeterminate.
+     * `status` is the A6-0x2C local.  It is the value both exits assign to
+     * *status_ret (0x00E732D6 `move.l (-0x2c,A6),(A2)`, reached from the
+     * success path at 0x00E7313C/0x00E73142 as well as from the cleanup
+     * tail), so it is deliberately left indeterminate here.
+     *
+     * ORIGINAL BUG (source-hh0j, confirmed 2026-09-06 by tracing every
+     * reference to A6-0x2C in the 1814-byte function).  The complete list
+     * of stores to that slot is:
+     *
+     *   0x00E72D02  pea (-0x2c,A6)  PROC1_$ALLOC_STACK    writes it
+     *   0x00E72D46  pea (-0x2c,A6)  PROC1_$BIND           writes it
+     *   0x00E72E60  pea (-0x2c,A6)  EC2_$REGISTER_EC1     writes it
+     *   0x00E72EA6  pea (-0x2c,A6)  ACL_$ALLOC_ASID       writes it
+     *   0x00E72EB6  pea (-0x2c,A6)  AUDIT_$INHERIT_AUDIT  writes it
+     *   0x00E72F0E  pea (-0x2c,A6)  FILE_$FORK_LOCK       writes it
+     *   0x00E72F4A  pea (-0x2c,A6)  MST_$FORK             writes it
+     *   0x00E72F6E  pea (-0x2c,A6)  MST_$GET_VA_INFO      writes it
+     *   0x00E72FA0  pea (-0x2c,A6)  MST_$GET_VA_INFO      writes it
+     *   0x00E730FE  pea (-0x2c,A6)  PROC1_$RESUME         writes it
+     *   0x00E73114  pea (-0x2c,A6)  CRASH_SYSTEM          reads it
+     *   0x00E731B8  bset.b #0x7,(-0x2c,A6)                modifies it
+     *   0x00E732D6  move.l (-0x2c,A6),(A2)                reads it
+     *
+     * The MST_$ALLOC_ASID failure branch is taken at 0x00E72CC6
+     * (`tst.w (0x2,A1)` / `beq`), sets bit 31 of the CALLER's status at
+     * 0x00E72CC8 (`bset.b #0x7,(A1)`), and then `bra.w 0x00E73240`
+     * (0x00E72CCC) into the entry-teardown tail.  Every one of the stores
+     * above sits at an address strictly between 0x00E72CCC and 0x00E73240,
+     * and 0x00E73240..0x00E732D4 contains no reference to A6-0x2C at all
+     * (only PGROUP_CLEANUP_INTERNAL, the free-list relinking, the UID
+     * stores and ML_$UNLOCK).  Nothing before 0x00E72CCC touches it either:
+     * the only frame stores in 0x00E72BCE..0x00E72CCC are (-0x20,A6) for
+     * TIME_$CLOCK.  So on this one path the slot still holds whatever the
+     * previous stack frame left there, and 0x00E732D6 hands that leftover
+     * to the caller, discarding the real error MST_$ALLOC_ASID reported.
+     *
+     * That the author knew the difference is visible two branches earlier:
+     * the "process table full" exit at 0x00E72C2E jumps to 0x00E732DA,
+     * i.e. deliberately PAST the `*status_ret = status` store, so its own
+     * write at 0x00E72C1C survives.  The ASID path does not.
+     *
+     * We cannot diff against a second Domain/OS build, so the behaviour is
+     * reproduced as found rather than "corrected".
      */
     status_$t status;
     status_$t temp_status;
@@ -206,6 +244,13 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
     if ((*status_ret & 0xFFFF) != 0) {
         /* 0x00E72CC8: bset.b #0x7,(A1) == bit 31 */
         *status_ret |= 0x80000000;
+        /*
+         * 0x00E72CCC: bra.w 0x00E73240.  This value does NOT reach the
+         * caller: the shared exit at 0x00E732D6 overwrites *status_ret
+         * with the A6-0x2C local, which no instruction on this path has
+         * written.  See the note on `status` above (source-hh0j) -- an
+         * original bug, reproduced.
+         */
         goto cleanup_entry;
     }
 
@@ -397,13 +442,15 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
     }
 
     /*
-     * 0x00E72F4A-0x00E72F62.
-     * TODO(source-n7i0): the original pushes *fork_flags as a LONGWORD
-     * (0x00E72F52 move.l), but mst/mst.h declares MST_$FORK's third
-     * parameter as uint8_t, so this call truncates it.
+     * 0x00E72F4A-0x00E72F62: four parameters, 12 bytes of stack.
+     *   0x00E72F4A  pea (-0x2c,A6)            -> &status
+     *   0x00E72F4E  movea.l (0x10,A6),A0      -> fork_flags
+     *   0x00E72F52  move.l (A0),-(SP)         -> *fork_flags, a LONGWORD
+     *   0x00E72F54  move.w (-0x4a,A2),-(SP)   -> new_entry->level1_pid
+     *   0x00E72F58  move.w (-0x4e,A2),-(SP)   -> new_entry->asid
      */
     MST_$FORK(new_entry->asid, new_entry->level1_pid,
-              (uint8_t)*fork_flags, &status);
+              (uint32_t)*fork_flags, &status);
 
     /* 0x00E72F66 */
     if ((status & 0xFFFF) != 0) {

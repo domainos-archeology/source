@@ -85,6 +85,10 @@ static int n_lock, n_unlock, n_init_entry, n_pgroup_cleanup;
 static int n_unbind, n_free_stack, n_free_asid, n_cleanup_handlers;
 static int n_waitn, n_resume, n_crash, n_debug_setup, n_profil_fork;
 static int n_get_va_info;
+static int n_mst_fork;
+static uint16_t last_mst_fork_asid;
+static uint16_t last_mst_fork_pid;
+static uint32_t last_mst_fork_flags;
 static void *last_bind_ctx;
 static void *last_bind_stack;
 static void *last_bind_startup;
@@ -120,6 +124,10 @@ static void reset_mocks(void)
 
     n_lock = n_unlock = n_init_entry = n_pgroup_cleanup = 0;
     n_unbind = n_free_stack = n_free_asid = n_cleanup_handlers = 0;
+    n_mst_fork = 0;
+    last_mst_fork_asid = 0xFFFFu;
+    last_mst_fork_pid = 0xFFFFu;
+    last_mst_fork_flags = 0xFFFFFFFFu;
     n_waitn = n_resume = n_crash = n_debug_setup = n_profil_fork = 0;
     n_get_va_info = 0;
     last_bind_ctx = last_bind_stack = last_bind_startup = NULL;
@@ -149,9 +157,18 @@ void MST_$FREE_ASID(uint16_t asid, status_$t *status_ret)
     n_free_asid++;
 }
 
-void MST_$FORK(uint16_t asid, uint16_t pid, uint8_t flags, status_$t *status)
+/*
+ * source-n7i0: the third parameter is a LONGWORD.  PROC2_$FORK pushes
+ * *fork_flags with `move.l (A0),-(SP)` at 0x00E72F52 and MST_$FORK reads it
+ * with `move.l (0xc,A6),D0` at 0x00E73A0A.
+ */
+void MST_$FORK(uint16_t asid, uint16_t pid, uint32_t flags, status_$t *status)
 {
-    (void)asid; (void)pid; (void)flags;
+    (void)asid; (void)pid;
+    n_mst_fork++;
+    last_mst_fork_asid = asid;
+    last_mst_fork_pid = pid;
+    last_mst_fork_flags = flags;
     *status = status_$ok;
 }
 
@@ -777,6 +794,98 @@ static void test_debug_inheritance(void)
     printf("test_debug_inheritance: PASSED\n");
 }
 
+/*
+ * source-n7i0: MST_$FORK's third parameter is a longword.
+ *
+ * 0x00E72F4A  pea (-0x2c,A6)          -> &status
+ * 0x00E72F4E  movea.l (0x10,A6),A0    -> fork_flags
+ * 0x00E72F52  move.l (A0),-(SP)       -> *fork_flags, all 32 bits
+ * 0x00E72F54  move.w (-0x4a,A2),-(SP) -> child level1_pid
+ * 0x00E72F58  move.w (-0x4e,A2),-(SP) -> child asid
+ * 0x00E72F62  lea (0xc,SP),SP         -> 12 bytes, i.e. 2+2+4+4
+ *
+ * A value with bits set above bit 7 proves the argument is not truncated
+ * to a byte the way mst/mst.h used to declare it.
+ */
+static void test_mst_fork_flags_longword(void)
+{
+    uid_t uid = { 0, 0 };
+    uint16_t upid = 0;
+    void *ec = NULL;
+    status_$t st = 0;
+
+    setup_table();
+    mock_bind_pid = 0x0031;
+    mock_alloc_asid_result = 7;
+
+    run_fork((int32_t)0x12345678, &uid, &upid, &ec, &st);
+
+    assert(n_mst_fork == 1);
+    assert(last_mst_fork_flags == 0x12345678u);
+    assert(last_mst_fork_asid == child()->asid);
+    assert(last_mst_fork_pid == child()->level1_pid);
+
+    printf("test_mst_fork_flags_longword: PASSED\n");
+}
+
+/*
+ * source-hh0j: the MST_$ALLOC_ASID failure branch.
+ *
+ * 0x00E72CC2  tst.w (0x2,A1)      test the LOW word of the CALLER's status
+ * 0x00E72CC6  beq.b 0x00E72CD0
+ * 0x00E72CC8  bset.b #0x7,(A1)    set bit 31 of *status_ret
+ * 0x00E72CCC  bra.w 0x00E73240    straight into the entry-teardown tail
+ *
+ * The branch target is 0x00E73240 (cleanup_entry), NOT 0x00E73146
+ * (cleanup_locked), so none of the cleanup_locked work runs: the lock is
+ * never re-taken, no ASID is freed, no stack is freed and no cleanup
+ * handlers run.  PROC2_$INIT_ENTRY_INTERNAL (0x00E72CFA) has not run
+ * either, because the failure is detected before it.
+ *
+ * The status the caller ends up with is deliberately NOT asserted: the
+ * shared exit at 0x00E732D6 copies the A6-0x2C frame local over
+ * *status_ret, and no instruction on this path writes that local (see the
+ * trace in proc2/fork.c).  The value is whatever the previous frame left
+ * behind -- an original bug we reproduce rather than repair.
+ */
+static void test_alloc_asid_failure_goes_to_entry_teardown(void)
+{
+    uid_t uid = { 0, 0 };
+    uint16_t upid = 0;
+    void *ec = NULL;
+    status_$t st = 0;
+    uint16_t free_head_before;
+
+    setup_table();
+    mock_alloc_asid_status = 0x00040006; /* status_$no_asid_available */
+    mock_alloc_asid_result = 0;
+
+    free_head_before = P2_FREE_LIST_HEAD;
+    assert(free_head_before == CHILD_IDX);
+
+    run_fork(1, &uid, &upid, &ec, &st);
+
+    /* The entry was taken off the free list and handed straight back. */
+    assert(P2_FREE_LIST_HEAD == CHILD_IDX);
+
+    /* cleanup_entry ran ... */
+    assert(n_pgroup_cleanup == 1);
+    assert(n_unlock == 1);
+    assert(n_lock == 1);
+
+    /* ... and cleanup_locked did not. */
+    assert(n_free_asid == 0);
+    assert(n_unbind == 0);
+    assert(n_free_stack == 0);
+    assert(n_cleanup_handlers == 0);
+
+    /* The failure is detected before the entry is initialised or forked. */
+    assert(n_init_entry == 0);
+    assert(n_mst_fork == 0);
+
+    printf("test_alloc_asid_failure_goes_to_entry_teardown: PASSED\n");
+}
+
 int main(void)
 {
     printf("Running PROC2_$FORK tests...\n\n");
@@ -797,6 +906,8 @@ int main(void)
     test_bind_failure_cleanup();
     test_profil_fork_bit();
     test_debug_inheritance();
+    test_mst_fork_flags_longword();
+    test_alloc_asid_failure_goes_to_entry_teardown();
 
     printf("\nAll tests PASSED!\n");
     return 0;

@@ -15,16 +15,10 @@
 #include "ml/ml.h"
 
 /*
- * Error message for datum too large
- * Original address: 0x00E17162
+ * The crash-console string at 0x00E17154 and the status constant at
+ * 0x00E17164 are `pea (d16,PC)` cells inside DXM_$ADD_CALLBACK's own code
+ * region, so they live as file-statics in dxm/add_callback.c.
  */
-extern const char DXM_Datum_too_large_err[];
-
-/*
- * Error message for queue full
- * Original address: 0x00E17154
- */
-extern const char DXM_No_room_err[];
 
 /*
  * Pointer to DXM_$ADD_SIGNAL_CALLBACK

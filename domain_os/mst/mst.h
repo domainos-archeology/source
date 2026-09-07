@@ -304,8 +304,21 @@ void MST_$GET_PRIVATE_SIZE(void);
 void MST_$PRIV_SET_TOUCH_AHEAD_CNT(void);
 void MST_$SET_TOUCH_AHEAD_CNT(void);
 
-/* Fork support */
-void MST_$FORK(uint16_t asid, uint16_t pid, uint8_t flags, status_$t *status);
+/*
+ * MST_$FORK (0x00E739F8) - clone the parent's MST segment entries into the
+ * child's address space.
+ *
+ * Parameter shape read off the callee's own frame:
+ *   +0x08  asid    word       0x00E73A06  move.w  (0x8,A6),D3w
+ *   +0x0A  pid     word       0x00E73B42  move.w  (0xa,A6),-(SP)
+ *   +0x0C  flags   longword   0x00E73A0A  move.l  (0xc,A6),D0
+ *   +0x10  status  longword   0x00E73B6A  movea.l (0x10,A6),A0
+ *
+ * and confirmed at the single call site in PROC2_$FORK, which pushes
+ * *fork_flags with `move.l (A0),-(SP)` (0x00E72F52) and then cleans up
+ * 12 bytes (`lea (0xc,SP),SP` at 0x00E72F62).
+ */
+void MST_$FORK(uint16_t asid, uint16_t pid, uint32_t flags, status_$t *status);
 
 /* Internal helper functions */
 void mst_$unwire_page(void);

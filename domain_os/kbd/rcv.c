@@ -108,8 +108,13 @@ void KBD_$RCV(kbd_state_t *state, uint8_t key)
 
                 /* Queue callback */
                 callback_param = (kbd_state_t *)((uint8_t *)state + 0x30);
+                /*
+                 * 0x00E1CDEE pea (-0x8,A6)     -> status
+                 * 0x00E1CDF2 st  -(SP)          -> check_dup = true
+                 * 0x00E1CDF4 move.w #0x4,-(SP)  -> data_size = 4
+                 */
                 DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q, &PTR_TERM_$ENQUEUE_TPAD_00e1ce90,
-                                  &callback_param, 0x04FFA6, status);
+                                  &callback_param, 4, true, status);
             }
 
             /* Save current time as last time */

@@ -51,10 +51,14 @@ void TTY_$I_SIGNAL(tty_desc_t *tty, short signal)
     // Get pointer to the signal entry (each entry is 12 bytes)
     entry_ptr = &tty->signals[signal_index];
 
-    // Queue the signal delivery via DXM callback
-    // Options: 0x0C (size), 0xFF (flags)
+    /*
+     * Queue the signal delivery via DXM callback.
+     * 0x00E1B86E pea (-0x4,A6)     -> status
+     * 0x00E1B872 st  -(SP)          -> check_dup = true
+     * 0x00E1B874 move.w #0xc,-(SP)  -> data_size = 12
+     */
     DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q, &PTR_TTY_$I_DXM_SIGNAL,
-                      &entry_ptr, 0x0CFF00, &status);
+                      &entry_ptr, 12, true, &status);
 }
 
 void TTY_$I_INTERRUPT(tty_desc_t *tty)
