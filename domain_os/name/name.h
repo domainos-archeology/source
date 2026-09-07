@@ -191,8 +191,11 @@ extern uid_t NAME_$CANNED_ROOT_UID; /* Canned root UID (for fallback), 0xE173E4 
  * Constants living in the NAME code region that are passed by reference
  * (Pascal VAR parameters) by NAME and DIR routines.
  */
-extern uint8_t DAT_00e54730;    /* 0xE54730: 4 zero bytes just before NAME_$UNLOCK_DIR;
-                                   FILE_$PRIV_LOCK param_10 / FILE_$TRUNCATE length arg.
+extern uint32_t DAT_00e54730;   /* 0xE54730: longword 0 just before NAME_$UNLOCK_DIR.
+                                   Read as a longword by every consumer:
+                                   FILE_$TRUNCATE new_size, FILE_$SET_REFCNT refcnt
+                                   (`move.l (A0),D0` at 0x00E5E40E) and
+                                   FILE_$FW_PARTIAL start_offset (0x00E5E69C).
                                    Ghidra label: NAME_$CONST_ZERO_L */
 extern int16_t NAME_$CONST_ZERO_W; /* 0xE5472E: shared literal zero word.  Roles seen in the
                                    code: TIME_$WAIT delay type 0 (relative) at 0xE54940 and

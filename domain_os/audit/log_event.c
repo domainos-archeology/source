@@ -11,7 +11,8 @@
 #include "acl/acl.h"
 
 void AUDIT_$LOG_EVENT(uid_t *event_uid, uint16_t *event_flags,
-                      uint32_t *status, char *data, uint16_t *data_len)
+                      uint32_t *status, char *data,
+                      const uint16_t *data_len)
 {
     uint8_t sid_buffer[40];
     status_$t local_status;

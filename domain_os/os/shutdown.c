@@ -11,6 +11,17 @@
 static uint16_t wait_delay_type = 0;  /* 0 = relative wait */
 static clock_t wait_duration = { 0, 0 };
 
+/*
+ * Constant cell in this module's code region, passed to
+ * NETWORK_$SET_SERVICE by reference:
+ *   0x00E6D5EC "pea (0x3c,PC)" -> 0x00E6D5EE + 0x3C = 0x00E6D62A, a word
+ *   holding 0x0002 (read with `gsk read 00e6d62a`), i.e.
+ *   NETWORK_OP_SET_VALUE.  Read-only in the original image; declared
+ *   non-const here only because NETWORK_$SET_SERVICE's first parameter is
+ *   a plain int16_t * (it only reads it, 0x00E0F478 "move.w (A0),D2w").
+ */
+static int16_t os_$shutdown_net_op_00e6d62a = NETWORK_OP_SET_VALUE;
+
 // Shutdown flag: OS_$SHUTTING_DOWN_FLAG is defined in os_data.c (0xE82734)
 
 void OS_$SHUTDOWN(status_$t *status_p)
@@ -112,10 +123,20 @@ do_shutdown:
 
     CRASH_SHOW_STRING("Shutdown successful.");
 
-    // Clear service status
+    // Clear the allowed-service mask
     {
-        status_$t svc_status = 0;
-        NETWORK_$SET_SERVICE(&wait_duration, &svc_status, &local_status);
+        /*
+         * 0x00E6D5E0-0x00E6D5F0:
+         *   clr.l (-0x24c,A6)   ; the new service value, a longword zero
+         *   pea (-0x254,A6)     ; status_p
+         *   pea (-0x24c,A6)     ; value_ptr
+         *   pea (0x3c,PC)       ; op_ptr -> the constant word 2
+         * All three arguments are addresses; the first is NOT the shutdown
+         * wait_duration record.
+         */
+        uint32_t svc_value = 0;
+        NETWORK_$SET_SERVICE(&os_$shutdown_net_op_00e6d62a, &svc_value,
+                             &local_status);
     }
 
     // Spin/delay loop before final crash

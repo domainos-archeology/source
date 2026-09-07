@@ -337,13 +337,21 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
 
     /* Lock the boot shell file */
     {
-        uint8_t lock_result[8];
-        uint32_t lock_param1 = 0x00000001;  /* Lock mode */
-        uint32_t lock_param2 = 0x00000000;  /* Offset */
-        uint32_t lock_param3 = 0x00000001;  /* Length/mode */
+        uint8_t lock_result[8];      /* (-0x24,A6) */
+        /*
+         * 0x00E30778-0x00E30780: the lock index / mode / rights arguments are
+         * addresses of constant cells in the code region (cell address = pea
+         * instruction address + 2 + displacement).  Values read with gsk:
+         *   0x00E30896 word 0 - lock index
+         *   0x00E30898 word 1 - lock mode
+         *   0x00E30892 byte 0 - rights
+         */
+        static const uint16_t lock_index_0 = 0;
+        static const uint16_t lock_mode_1 = 1;
+        static const uint8_t lock_rights_0 = 0;
 
-        FILE_$LOCK(&boot_shell_uid, &lock_param1, &lock_param2, &lock_param3,
-                   lock_result, status_ret);
+        FILE_$LOCK(&boot_shell_uid, &lock_index_0, &lock_mode_1,
+                   &lock_rights_0, lock_result, status_ret);
 
         status = OS_$BOOT_ERRCHK((char*)msg_unable_to_lock, (char*)boot_shell_path,
                                   (uint16_t*)&path_len, status_ret);

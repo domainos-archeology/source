@@ -26,7 +26,8 @@ typedef struct exsid_t {
 void PACCT_$STOP(void)
 {
     status_$t status;
-    uint8_t status_buf[8];
+    /* (-0x70,A6): FILE_$PRIV_UNLOCK's data-time-valid longword out. */
+    uint32_t dtv_out;
     exsid_t exsid;
 
     /* Get caller's extended SID for privilege check */
@@ -41,8 +42,9 @@ void PACCT_$STOP(void)
      */
     if ((exsid.login_sid.high != RGYC_$G_LOCKSMITH_UID.high ||
          exsid.login_sid.low != RGYC_$G_LOCKSMITH_UID.low) &&
-        (exsid.org_sid.high != RGYC_$G_LOCKSMITH_UID.high ||
-         exsid.org_sid.low != RGYC_$G_LOCKSMITH_UID.low) &&
+        /* 0x00E5A8F8 compares (-0x60,A6) = exsid + 8 = group_sid. */
+        (exsid.group_sid.high != RGYC_$G_LOCKSMITH_UID.high ||
+         exsid.group_sid.low != RGYC_$G_LOCKSMITH_UID.low) &&
         (exsid.user_sid.high != RGYC_$G_LOCKSMITH_UID.high ||
          exsid.user_sid.low != RGYC_$G_LOCKSMITH_UID.low)) {
         /* No locksmith privilege - silently return */
@@ -58,7 +60,7 @@ void PACCT_$STOP(void)
 
     /* Unmap buffer if currently mapped */
     if (DAT_00e81804 != NULL) {
-        MST_$UNMAP_PRIVI(1, &UID_$NIL, DAT_00e81804, DAT_00e81800, 0, &status);
+        MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(DAT_00e81804), DAT_00e81800, 0, &status);
     }
 
     /* Clear buffer state */
@@ -70,7 +72,7 @@ void PACCT_$STOP(void)
     /* `move.l (0x8,A5)` slot, `move.l #0x40000` = mode word 4 + asid word 0,
      * then three `clr.l`. */
     (void)FILE_$PRIV_UNLOCK(&pacct_owner, (int32_t)DAT_00e817f4, 4, 0,
-                            0, 0, 0, 0, status_buf, &status);
+                            0, 0, 0, 0, &dtv_out, &status);
 
     /* Disable accounting by setting owner to nil */
     pacct_owner.high = UID_$NIL.high;

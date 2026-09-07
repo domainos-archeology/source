@@ -382,15 +382,15 @@ extern void TTY_$K_INQ_FLAGS(short *line_ptr, uint16_t *flags_ptr,
 // @param func_ptr: Pointer to function number (0-17)
 // @param ch_ptr: Pointer to character value
 // @param status: Pointer to receive status code
-extern void TTY_$K_SET_FUNC_CHAR(short *line_ptr, ushort *func_ptr,
-                                 char *ch_ptr, status_$t *status);
+extern void TTY_$K_SET_FUNC_CHAR(short *line_ptr, const uint16_t *func_ptr,
+                                 const char *ch_ptr, status_$t *status);
 
 // TTY_$K_INQ_FUNC_CHAR - Inquire function character binding
 // @param line_ptr: Pointer to terminal line number
 // @param func_ptr: Pointer to function number (0-17)
 // @param ch_ptr: Pointer to receive character value
 // @param status: Pointer to receive status code
-extern void TTY_$K_INQ_FUNC_CHAR(short *line_ptr, ushort *func_ptr,
+extern void TTY_$K_INQ_FUNC_CHAR(short *line_ptr, const uint16_t *func_ptr,
                                  char *ch_ptr, status_$t *status);
 
 // TTY_$K_ENABLE_FUNC - Enable/disable function character
@@ -398,8 +398,8 @@ extern void TTY_$K_INQ_FUNC_CHAR(short *line_ptr, ushort *func_ptr,
 // @param func_ptr: Pointer to function number (0-17)
 // @param enable_ptr: Pointer to enable flag (negative = enable, zero/positive = disable)
 // @param status: Pointer to receive status code
-extern void TTY_$K_ENABLE_FUNC(short *line_ptr, ushort *func_ptr,
-                               char *enable_ptr, status_$t *status);
+extern void TTY_$K_ENABLE_FUNC(short *line_ptr, const uint16_t *func_ptr,
+                               const char *enable_ptr, status_$t *status);
 
 // TTY_$K_INQ_FUNC_ENABLED - Inquire enabled function characters
 // @param line_ptr: Pointer to terminal line number
@@ -413,8 +413,8 @@ extern void TTY_$K_INQ_FUNC_ENABLED(short *line_ptr, uint32_t *enabled_ptr,
 // @param flag_ptr: Pointer to flag number (bit position)
 // @param value_ptr: Pointer to value (negative = set, zero/positive = clear)
 // @param status: Pointer to receive status code
-extern void TTY_$K_SET_INPUT_FLAG(short *line_ptr, ushort *flag_ptr,
-                                  char *value_ptr, status_$t *status);
+extern void TTY_$K_SET_INPUT_FLAG(short *line_ptr, const uint16_t *flag_ptr,
+                                  const char *value_ptr, status_$t *status);
 
 // TTY_$K_INQ_INPUT_FLAGS - Inquire input processing flags
 // @param line_ptr: Pointer to terminal line number
@@ -428,8 +428,8 @@ extern void TTY_$K_INQ_INPUT_FLAGS(short *line_ptr, uint32_t *flags_ptr,
 // @param flag_ptr: Pointer to flag number (bit position)
 // @param value_ptr: Pointer to value (negative = set, zero/positive = clear)
 // @param status: Pointer to receive status code
-extern void TTY_$K_SET_OUTPUT_FLAG(short *line_ptr, ushort *flag_ptr,
-                                   char *value_ptr, status_$t *status);
+extern void TTY_$K_SET_OUTPUT_FLAG(short *line_ptr, const uint16_t *flag_ptr,
+                                   const char *value_ptr, status_$t *status);
 
 // TTY_$K_INQ_OUTPUT_FLAGS - Inquire output processing flags
 // @param line_ptr: Pointer to terminal line number

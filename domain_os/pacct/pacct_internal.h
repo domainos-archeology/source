@@ -37,7 +37,11 @@ typedef struct pacct_state_t {
     uint32_t    buf_remaining;  /* 0x0C: Bytes remaining in mapped buffer */
     uint32_t   *write_ptr;      /* 0x10: Current write pointer in buffer */
     uint32_t    map_offset;     /* 0x14: Current mapping offset in file */
-    uint32_t   *map_ptr;        /* 0x18: Base of mapped region */
+    /* 0x18: base of the mapped region.  MST_$UNMAP_PRIVI takes the start VA
+     * BY VALUE (0x00E5A94C `move.l (0x18,A5),-(SP)`; the callee reads it as a
+     * longword at (0x0E,A6), 0x00E448D6), so callers pass ARCH_PTR_TO_VA of
+     * this field, not the field itself. */
+    uint32_t   *map_ptr;
     uint32_t    file_pos;       /* 0x1C: Current file position/length */
 } pacct_state_t;
 

@@ -147,7 +147,7 @@ done_search:
         *depth_ret = *depth_ret + 1;
         if (*depth_ret > flags) {
             if (flags != 0) {
-                CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+                CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
             }
         } else {
             int16_t slot = *depth_ret << 2;

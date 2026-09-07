@@ -16,6 +16,17 @@
 static const char trying_normal_shell[] = "Trying normal shell";
 static const int16_t trying_normal_shell_len = sizeof(trying_normal_shell) - 1;
 
+/*
+ * Constant cells in the code region that flop_$mount_floppy hands to
+ * VOLX_$MOUNT / VOLX_$DISMOUNT by reference.  Addresses resolved from the
+ * pea displacements at 0x00E32400-0x00E32412 and 0x00E324EA-0x00E324FC
+ * (PC = the instruction address + 2) and read out of the image.
+ */
+static const int8_t  flop_$write_prot = 0;   /* 0x00E32538: also DISMOUNT force */
+static const int16_t flop_$bus_ctlr   = 0;   /* 0x00E3253E: bus and controller */
+static const int16_t flop_$dev_lv     = 1;   /* 0x00E32540: device and LV number */
+static const int8_t  flop_$salvage_ok = -1;  /* 0x00E32542: Pascal true (0xFF) */
+
 /* Mount point name */
 static const char flp_name[] = "flp";
 static const int16_t flp_name_len = 3;
@@ -114,15 +125,12 @@ void flop_$mount_floppy(status_$t *status_ret)
     status_$t local_status;     /* Local status for cleanup operations */
     int8_t added_dir = 0;       /* Flag: did we add the directory? */
 
-    /* Step 1: Mount the floppy volume */
-    {
-        /* Mount parameters - values from data section */
-        int16_t vol_type = 0;
-        int16_t flags = 0;
-
-        VOLX_$MOUNT(&vol_type, &flags, &flags, &vol_type, &flags, &flags,
-                    &UID_$NIL, &mount_uid, &mount_status);
-    }
+    /* Step 1: Mount the floppy volume (0x00E32416).  dev and lv_num share
+     * the cell at 0x00E32540 (= 1); bus and ctlr share 0x00E3253E (= 0). */
+    VOLX_$MOUNT((int16_t *)&flop_$dev_lv, (int16_t *)&flop_$bus_ctlr,
+                (int16_t *)&flop_$bus_ctlr, (int16_t *)&flop_$dev_lv,
+                (int8_t *)&flop_$salvage_ok, (int8_t *)&flop_$write_prot,
+                &UID_$NIL, &mount_uid, &mount_status);
 
     /* Check mount status - OK or "already mounted" (0x14ffff) are acceptable */
     if (mount_status != status_$ok) {
@@ -178,10 +186,10 @@ void flop_$mount_floppy(status_$t *status_ret)
 
 cleanup:
     /* Error occurred - clean up */
-    {
-        int16_t flags = 0;
-        VOLX_$DISMOUNT(&flags, &flags, &flags, &flags, &mount_uid, &flags, &local_status);
-    }
+    /* 0x00E32500: the same constant cells as the mount call. */
+    VOLX_$DISMOUNT((int16_t *)&flop_$dev_lv, (int16_t *)&flop_$bus_ctlr,
+                   (int16_t *)&flop_$bus_ctlr, (int16_t *)&flop_$dev_lv,
+                   &mount_uid, (int8_t *)&flop_$write_prot, &local_status);
 
     if (added_dir < 0) {
         /* We added the directory, so remove it */

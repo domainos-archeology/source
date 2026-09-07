@@ -11,9 +11,6 @@
 #include "rem_file/rem_file_internal.h"
 #include "os/os.h"
 
-/* Default project UID (static data at 0xe61718) */
-static const uid_t default_proj_uid = {0};
-
 /*
  * Remote operation request buffer structure
  * The actual layout depends on the operation type (byte at offset 3)
@@ -26,7 +23,7 @@ typedef struct {
     uint8_t re_sids[0x14];      /* Offset 0x14: RE SIDs */
     uint8_t sids[0x24];         /* Offset 0x28: SIDs */
     uint8_t proj_list[0x40];    /* Offset 0x4C: Project list */
-    uint8_t proj_out[2];        /* Offset 0x8C: Project output */
+    int16_t proj_out;           /* Offset 0x8C: ACL_$GET_PROJ_LIST count */
     uint16_t extra_len;         /* Offset 0x8E: varies */
     uint16_t extra_len2;        /* Offset 0x90: varies */
     void *extra_ptr;            /* Offset 0x92: varies */
@@ -63,14 +60,17 @@ void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buffer,
     status_$t local_status;
 
     /* Get RE SIDs */
-    ACL_$GET_RE_ALL_SIDS(re_sids, &op_buf->sids, sids_out, &op_buf->re_sids,
+    ACL_$GET_RE_ALL_SIDS(re_sids, op_buf->sids, sids_out, op_buf->re_sids,
                          &response->status);
     if (response->status != status_$ok) {
         return;
     }
 
     /* Get project list */
-    ACL_$GET_PROJ_LIST((void *)&op_buf->proj_list, (void *)&default_proj_uid,
+    /* 0x00E61588 `pea (0x18e,PC)` (PC = 0x00E6158A) resolves to 0x00E61718,
+     * i.e. &REM_FILE_$MAX_PROJ_LIST - not a UID. */
+    ACL_$GET_PROJ_LIST((uid_t *)(void *)op_buf->proj_list,
+                       (int16_t *)&REM_FILE_$MAX_PROJ_LIST,
                        &op_buf->proj_out, &response->status);
     if (response->status != status_$ok) {
         return;

@@ -96,8 +96,11 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
          * 0x00E7661E: NET_IO_$PUT_IN_SOCK(0, unit, hdr_p, data_pa_p,
          *                                 *hdr_len_p, *data_len_p).
          * No stack adjustment follows the call - "unlk A6" restores SP.
+         * The callee takes the *address* of a 32-bit VA cell; here that cell
+         * is the caller's ring_$pkt_hdr_t * , so the cast just restates the
+         * longword the "pea"/"move.l" pushes.
          */
-        NET_IO_$PUT_IN_SOCK(0, unit, (void **)hdr_p, (void **)data_pa_p,
+        NET_IO_$PUT_IN_SOCK(0, unit, (uint32_t *)hdr_p, data_pa_p,
                             (uint16_t)*hdr_len_p, (uint16_t)*data_len_p);
         return 0;
     }

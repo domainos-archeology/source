@@ -49,25 +49,16 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
     int8_t same_volume_result = 0;
     status_$t local_status;
 
-    /* Location info for remote handling */
-    struct {
-        uint32_t data[8];       /* 32 bytes */
-    } location_info;
-
     /*
-     * Lookup context structure for AST_$GET_LOCATION
-     * AST_$GET_LOCATION expects UID at offset 8 within the structure.
-     * It writes location data and sets remote_flags bit 7 if remote.
+     * A6-0x20: the single 0x20-byte object-location record.  It is both
+     * FILE_$CHECK_SAME_VOLUME's `location_out` buffer (`pea (-0x20,A6)` at
+     * 0x00E5DD36) and AST_$GET_LOCATION's record (`pea (-0x20,A6)` at
+     * 0x00E5DD8C) - the two uses share one cell in the original.
      */
-    struct {
-        uint32_t data[2];       /* 8 bytes - location output starts here */
-        uid_t    uid;           /* 8 bytes - UID input at offset 8 */
-        uint32_t data2[4];      /* 16 bytes - more location output */
-        uint8_t  pad[5];
-        uint8_t  remote_flags;  /* Bit 7 set if remote */
-    } lookup_context;
+    file_$obj_loc_t lookup_context;
 
-    uint32_t vol_uid_out;       /* Volume UID output from AST_$GET_LOCATION */
+    uint32_t loc_unused;        /* A6-0x98: pea'd, never touched */
+    uint32_t vol_uid_out;       /* A6-0x9C: receives aote+0x08 */
 
     /* For ACL operations */
     uint8_t exsid[104];         /* Extended SID buffer */
@@ -87,7 +78,8 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
         same_volume_result = FILE_$CHECK_SAME_VOLUME(file_uid,
                                                       (uid_t *)acl_source_uid,
                                                       -1,  /* Copy location */
-                                                      location_info.data,
+                                                      (uint32_t *)(void *)
+                                                          &lookup_context,
                                                       status_ret);
 
         if (same_volume_result >= 0) {
@@ -110,9 +102,10 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
          */
         lookup_context.uid.high = file_uid->high;
         lookup_context.uid.low = file_uid->low;
-        lookup_context.remote_flags &= ~0x40;
+        lookup_context.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-        AST_$GET_LOCATION((uint32_t *)&lookup_context, 0, 0, &vol_uid_out, &local_status);
+        AST_$GET_LOCATION(&lookup_context, 0, &loc_unused, &vol_uid_out,
+                          &local_status);
 
         if (local_status != status_$ok) {
             *status_ret = local_status;
@@ -123,7 +116,7 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
     /*
      * Check if file is remote (bit 7 of remote_flags)
      */
-    if ((int8_t)lookup_context.remote_flags < 0) {
+    if (lookup_context.flags < 0) {
         /* Remote file handling */
 
         /* Get extended SID */
@@ -133,7 +126,8 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
         }
 
         /* Call remote file set protection */
-        REM_FILE_$FILE_SET_PROT(&lookup_context,
+        /* 0x00E5DDD4: `pea (-0x10,A6)` = the record base + 0x10. */
+        REM_FILE_$FILE_SET_PROT(&lookup_context.loc_info,
                                 file_uid,
                                 acl_data,
                                 attr_type,
@@ -146,8 +140,9 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
             /* Fall through to local operation */
         } else if (*status_ret == status_$ok) {
             /* Update local AST cache with result */
-            AST_$SET_ATTR(file_uid, attr_type, *(uint32_t *)acl_data, 0,
-                          (uint32_t *)&attr_result, status_ret);
+            /* 0x00E5DDFA pea's the acl_data POINTER, not its contents. */
+            AST_$SET_ATTR(file_uid, attr_type, acl_data, 0,
+                          &attr_result, status_ret);
             goto audit_and_return;
         } else {
             goto audit_and_return;

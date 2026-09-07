@@ -23,7 +23,7 @@ void dir_$release_wire(void *handle)
 
     /* Crash if max_slots is already 2 (double release) */
     if (*(int16_t *)(h + 0x1C) == 2) {
-        CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+        CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
     }
 
     /* Reset max_slots to 2 (both cache slots available) */

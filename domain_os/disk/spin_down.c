@@ -11,10 +11,19 @@
 /* Device registration table */
 #define DISK_DEVICE_TABLE  ((uint8_t *)0x00e7ad5c)
 
-/* Timeout type constant */
-static uint16_t timeout_type = 0;  /* Embedded in code at 0xe3db72 */
+/*
+ * 0x00E3DB72: the constant delay-type word TIME_$WAIT is handed by reference
+ * (`pea (0x12,PC)` at 0x00E3DB5E; PC = 0x00E3DB60).  Value 0 = relative.
+ */
+static const uint16_t disk_$spin_down_delay_type = 0;
 
-void DISK_$SPIN_DOWN(int16_t vol_idx, status_$t *status)
+/*
+ * The routine reads no stack parameters (`link.w A6,-0x20` at 0x00E3DB04 is
+ * followed by no positive-displacement A6 access) and never writes a caller
+ * status - TIME_$WAIT's status goes into a local cell at A6-0x14 that is
+ * discarded.
+ */
+void DISK_$SPIN_DOWN(void)
 {
     int16_t max_time = 0;
     int16_t device_time;
@@ -23,8 +32,8 @@ void DISK_$SPIN_DOWN(int16_t vol_idx, status_$t *status)
     void *jump_table;
     int16_t (*spin_down_func)(void *);
 
-    (void)vol_idx;
-    *status = status_$ok;
+    /* A6-0x14: TIME_$WAIT's status cell; never read back */
+    status_$t wait_status;
 
     /* Iterate through all device registration entries */
     entry = (uint32_t *)DISK_DEVICE_TABLE;
@@ -51,8 +60,12 @@ void DISK_$SPIN_DOWN(int16_t vol_idx, status_$t *status)
 
     /* If any device returned a spin-down time, wait */
     if (max_time > 0) {
-        int32_t wait_time = (int32_t)max_time << 2;
-        uint16_t wait_mode = 0;
-        TIME_$WAIT(&timeout_type, &wait_time, status);
+        /* A6-0x10: the clock_t built at 0x00E3DB4A - high = max_time * 4
+         * (sign-extended then shifted), low word cleared. */
+        clock_t wait_time;
+        wait_time.high = (uint32_t)((int32_t)max_time << 2);
+        wait_time.low = 0;
+        TIME_$WAIT((uint16_t *)&disk_$spin_down_delay_type, &wait_time,
+                   &wait_status);
     }
 }

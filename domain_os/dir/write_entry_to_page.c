@@ -109,7 +109,7 @@ void dir_$write_entry_to_page(dir_insert_ctx_t *ctx, uint8_t flag,
     switch (entry[0] & 7) {
     case 1:
         /* Type 1 is invalid for leaf pages */
-        CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+        CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
         break;
 
     case 2: {

@@ -61,7 +61,7 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
     uint8_t *entry_ptr;
     void *entry_ret;
     uint8_t extra1[2];
-    uint8_t extra2[4];
+    int16_t depth_ret;   /* dir_$find_entry's depth word (`clr.w (A0)` at 0x00E4C9F0) */
     status_$t local_status;
 
     /*
@@ -73,9 +73,9 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
      *   +0x0C: uid.low (4 bytes, input)
      *   +0x1D: flags byte (bit 6 cleared before call)
      */
-    uint8_t loc_desc[30];
-    uint8_t get_loc_buf1[4];
-    uint8_t get_loc_buf2[4];
+    file_$obj_loc_t loc_desc;  /* 0x00e52824 pea (-0x28,A6); 0x20 bytes */
+    uint32_t get_loc_buf1;   /* 0x00e5281c pea (-0x44,A6) - never touched */
+    uint32_t get_loc_buf2;   /* 0x00e52818 pea (-0x48,A6) - aote+0x08 out */
 
     uint8_t delete_buf[8];
     uint8_t remove_buf[8];
@@ -93,7 +93,7 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
 
     /* Look up the entry by name */
     found = dir_$find_entry(parent_h, name, name_len, 0,
-                         &entry_ret, extra1, extra2);
+                         &entry_ret, extra1, &depth_ret);
     entry_ptr = (uint8_t *)entry_ret;
     if (found >= 0) {
         /* Entry not found */
@@ -130,18 +130,21 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
     }
 
     /* Set up location descriptor with target UID */
-    *(uint32_t *)(loc_desc + 0x08) = target_uid.high;
-    *(uint32_t *)(loc_desc + 0x0C) = target_uid.low;
+    loc_desc.uid.high = target_uid.high;
+    loc_desc.uid.low = target_uid.low;
     /* Clear bit 6 of flags byte in descriptor */
-    loc_desc[0x1D] &= 0xBF;
+    loc_desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
     /* Get location info for the target */
-    AST_$GET_LOCATION(loc_desc, 1, get_loc_buf1, get_loc_buf2, &local_status);
+    AST_$GET_LOCATION(&loc_desc, 1, &get_loc_buf1, &get_loc_buf2,
+                      &local_status);
 
     /* Check if target is on same volume as parent and is local */
-    if (*(int16_t *)(loc_desc + 0x02) == *(int16_t *)((char *)parent_h + 0x3A) &&
+    /* The word at record+0x02 is the low half of the longword at +0x00. */
+    if ((int16_t)(loc_desc.reserved_00[0] & 0xFFFFu) ==
+            *(int16_t *)((char *)parent_h + 0x3A) &&
         local_status == status_$ok &&
-        (int8_t)loc_desc[0x1D] >= 0) {
+        loc_desc.flags >= 0) {
 
         /* Same volume, local object - check ACL rights */
         int16_t acl_result;

@@ -28,7 +28,11 @@
  * declared by the headers pulled in through name/name_internal.h. */
 
 /* Callback data for PKT_$SAR_INTERNET - at 0x00e4a584 */
-static const uint8_t pkt_callback_data[] = { 0 };
+/*
+ * 0x00E4A584: the empty request-data block PKT_$SAR_INTERNET is handed with
+ * a length of 0 (`pea (0x6a,PC)` at 0x00E4A518; PC = 0x00E4A51A).
+ */
+static const uint8_t pkt_callback_data[] = { 0, 0, 0, 0 };
 
 /*
  * REM_NAME data area - complete structure at 0xE7DBB8 (rem_name_data_t is
@@ -154,18 +158,21 @@ static boolean rem_name_$send_request(uint32_t net, uint32_t node, void *request
                                        void *response, int16_t resp_size,
                                        int16_t *resp_len_ret, status_$t *status_ret)
 {
-    uint16_t config[16];
-    uint8_t out_buf[40];
-    uint8_t out1[4];
-    uint8_t out2[2];
-    status_$t internal_status;
+    /*
+     * A6-0x48: 0x00E4A4F0 copies seven longwords and then one more word,
+     * i.e. exactly 15 words, from the module block at A5.
+     */
+    uint16_t config[15];
+    uint8_t out_buf[40];        /* A6-0x28 */
+    uint8_t out1[4];            /* A6-0x4C */
+    uint16_t out2;              /* A6-0x52: response data length out */
+    status_$t internal_status;  /* A6-0x50 */
     int i;
 
     /* Copy configuration data from global structure */
     for (i = 0; i < 15; i++) {
         config[i] = rem_name_$data.config[i];
     }
-    config[15] = rem_name_$data.config[14];  /* Copy last word */
 
     /* OR in additional flags */
     config[0] |= (uint16_t)flags;
@@ -174,7 +181,7 @@ static boolean rem_name_$send_request(uint32_t net, uint32_t node, void *request
     PKT_$SAR_INTERNET(net, node, 10, config, rem_name_$data.pkt_seq_num,
                       request, req_size, (void *)pkt_callback_data, 0,
                       out_buf, response, resp_size, resp_len_ret,
-                      out1, 0, out2, &internal_status);
+                      out1, 0, &out2, &internal_status);
 
     if (internal_status != status_$ok) {
         *status_ret = internal_status;
@@ -590,7 +597,8 @@ void REM_NAME_$READ_DIR(uint32_t net, uint32_t node, uid_t *dir_uid,
         uint32_t start_index;
     } request;
 
-    uint8_t netbuf_hdr[4];
+    /* A6-0x58: NETBUF_$GET_HDR's physical-address output (a longword) */
+    uint32_t netbuf_phys;
     uint8_t *response;
     uint32_t response_ptr;
     int16_t resp_len;
@@ -603,7 +611,7 @@ void REM_NAME_$READ_DIR(uint32_t net, uint32_t node, uid_t *dir_uid,
     uint16_t name_len;
 
     /* Get network buffer for large response */
-    NETBUF_$GET_HDR(netbuf_hdr, &response_ptr);
+    NETBUF_$GET_HDR(&netbuf_phys, &response_ptr);
     response = (uint8_t *)response_ptr;
 
     *count_ret = 0;
@@ -702,7 +710,8 @@ void REM_NAME_$READ_REP(uint32_t net, uint32_t node, uid_t *dir_uid,
         uint32_t start_index;
     } request;
 
-    uint8_t netbuf_hdr[4];
+    /* A6-0x58: NETBUF_$GET_HDR's physical-address output (a longword) */
+    uint32_t netbuf_phys;
     uint8_t *response;
     uint32_t response_ptr;
     int16_t resp_len;
@@ -712,7 +721,7 @@ void REM_NAME_$READ_REP(uint32_t net, uint32_t node, uid_t *dir_uid,
     uint8_t *src;
     uint32_t *dst;
 
-    NETBUF_$GET_HDR(netbuf_hdr, &response_ptr);
+    NETBUF_$GET_HDR(&netbuf_phys, &response_ptr);
     response = (uint8_t *)response_ptr;
 
     *count_ret = 0;

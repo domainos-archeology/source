@@ -29,6 +29,7 @@
  */
 
 #include "rip/rip_internal.h"
+#include "arch/arch.h"
 #include "route/route.h"
 #include "netbuf/netbuf.h"
 #include "pkt/pkt.h"
@@ -225,13 +226,15 @@ static void RIP_$SEND_TO_PORT_INTERNET(int16_t port_index,
         (int32_t)port->network,         /* 4  src_node_or                     */
         NODE_$ME,                       /* 5  src_node                        */
         RIP_SOCKET,                     /* 6  src_sock   (8)                  */
-        RIP_$BCAST_CONTROL,             /* 7  pkt_info                        */
+        /* 7 pkt_info: "move.l #0xe26ec0,-(SP)" at 0x00E8705A pushes the
+         * ADDRESS of the cell, which the builder reads as a pkt_$info_t. */
+        (const pkt_$info_t *)RIP_$BCAST_CONTROL,
         frame->pkt_id,                  /* 8  request_id                      */
         frame->route_data,              /* 9  template                        */
         frame->route_len,               /* 10 hdr_len                         */
         0,                              /* 11 protocol                        */
         &frame->nexthop_port,           /* 12 port_out                        */
-        (uint32_t *)(uintptr_t)frame->hdr_va,  /* 13 hdr_buf, BY VALUE        */
+        (pkt_$hdr_t *)ARCH_VA_TO_PTR(frame->hdr_va), /* 13 hdr_buf, BY VALUE  */
         &frame->hdr_len,                /* 14 len_out                         */
         &frame->out_6c,                 /* 15                                 */
         &frame->out_6a,                 /* 16                                 */

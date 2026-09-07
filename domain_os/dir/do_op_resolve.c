@@ -64,7 +64,7 @@ void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
     uint16_t depth;
     int8_t is_server_proc;
     uint32_t start_time;
-    int16_t entry_type;
+    uint16_t entry_type;
     uid_t entry_uid;
     uint32_t entry_extra;
 
@@ -166,7 +166,7 @@ void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
 
         /* Look up the component in the current directory */
         dir_$do_op_get_entryu(dir_uid, path + *cont - 1, *size,
-                              &entry_type, (char *)&entry_uid, &entry_extra,
+                              &entry_type, &entry_uid, &entry_extra,
                               status_ret);
 
         {

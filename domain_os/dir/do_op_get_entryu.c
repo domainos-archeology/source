@@ -12,8 +12,8 @@
  *   uid        - Directory UID
  *   name       - Entry name to search for
  *   name_len   - Length of name
- *   type_ret   - Output: entry type (short*)
- *   uid_ret    - Output: entry UID (char* pointing to 8 bytes)
+ *   type_ret   - Output: entry type (word at resp+0x14)
+ *   uid_ret    - Output: entry UID (the uid_t at resp+0x16)
  *   extra_ret  - Output: extra data (uint32_t*)
  *   status_ret - Output: status code
  *
@@ -26,7 +26,7 @@
 /* ROUTE_$PORT - Network routing port reference */
 
 void dir_$do_op_get_entryu(uid_t *uid, void *name, uint16_t name_len,
-                           short *type_ret, char *uid_ret,
+                           uint16_t *type_ret, uid_t *uid_ret,
                            uint32_t *extra_ret, status_$t *status_ret)
 {
     /* Perform cached directory entry lookup */
@@ -34,9 +34,11 @@ void dir_$do_op_get_entryu(uid_t *uid, void *name, uint16_t name_len,
                           extra_ret, status_ret);
 
     /* Check if the result UID points to a different node */
-    if ((*(uint32_t *)(uid_ret + 4) & 0xFFFFF) != NODE_$ME) {
+    if ((uid_ret->low & 0xFFFFF) != NODE_$ME) {
         /* Entry is on a different node */
-        uint16_t entry_type_byte = (uint16_t)(uint8_t)uid_ret[0];
+        /* 0x00E4D026 `move.b (A0),D0b` reads byte 0 of the UID record, i.e.
+         * the most significant byte of uid.high on this big-endian target. */
+        uint16_t entry_type_byte = (uint16_t)(uint8_t)(uid_ret->high >> 24);
         if (entry_type_byte != 0) {
             /* Non-zero first byte of UID result */
             if (*type_ret == 1) {

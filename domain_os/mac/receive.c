@@ -68,9 +68,16 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
     uint16_t socket_num;
     status_$t cleanup_status;
 
-    /* Local packet info from socket get */
-    uint8_t pkt_buf[64];  /* Buffer for packet header from socket */
-    uint32_t secondary_buf;  /* Secondary buffer for packet data */
+    /*
+     * A6-0x40: the record SOCK_$GET fills in.  Every field this routine
+     * touches lands on a sock_$pkt_info_t offset: hdr 0x00 (-0x40),
+     * src_addr 0x04 (-0x3c), src_port 0x08 (-0x38), dst_addr 0x0c (-0x34),
+     * flags 0x10 (the byte at -0x2f), n_hops 0x12 (-0x2e), hops 0x14
+     * (-0x2c), data_len 0x2a (-0x16), hdr_len 0x2c (-0x14) and data_pages
+     * 0x30 (-0x10).
+     */
+    sock_$pkt_info_t pkt_info;
+    uint32_t secondary_buf;  /* A6-0x6c: VA of the payload page */
 
     /* Buffer info from packet header */
     uint16_t header_len;
@@ -139,7 +146,7 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
      * Get next packet from socket.
      * SOCK_$GET returns negative on success.
      */
-    if (SOCK_$GET(socket_num, (void **)pkt_buf) >= 0) {
+    if (SOCK_$GET(socket_num, &pkt_info) >= 0) {
         *status_ret = status_$mac_no_packet_available_to_receive;
         return;
     }
@@ -148,30 +155,30 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
      * Extract packet info from the retrieved packet.
      * Set arp_flag (broadcast indicator) from bit 0 of flags byte.
      */
-    {
-        uint8_t pkt_flags = pkt_buf[0x2F - 0x40 + 0x40];  /* Offset adjustment */
-        pkt_desc->arp_flag = (pkt_flags & 1) ? -1 : 0;
-    }
+    /* 0x00E0BE42: btst.b #0,(-0x2f,A6) / sne - bit 0 of the flags word */
+    pkt_desc->arp_flag = (pkt_info.flags & 1) ? -1 : 0;
 
-    /* Copy packet type info */
-    pkt_desc->num_packet_types = *(int16_t *)(pkt_buf + 0x2E - 0x40 + 0x40);
+    /* 0x00E0BE52: move.w (-0x2e,A6),(A3) */
+    pkt_desc->num_packet_types = (int16_t)pkt_info.n_hops;
 
-    /* Copy packet type values */
+    /*
+     * 0x00E0BE5C: both pointers walk FORWARD ("addq.l #0x2,A0" and
+     * "addq.l #0x2,A1"), copying n_hops words from the record's hop array
+     * into pkt_desc + 0x02.
+     */
     {
-        int16_t *src = (int16_t *)(pkt_buf + 0x2C - 0x40 + 0x40);
-        int16_t *dst = (int16_t *)pkt_desc->packet_types;
         int16_t i;
         int16_t count = pkt_desc->num_packet_types;
 
-        for (i = count - 1; i >= 0; i--) {
-            dst[i] = src[-i];  /* Copy in reverse, adjusting offsets */
+        for (i = 0; i < count; i++) {
+            pkt_desc->packet_types[i] = pkt_info.hops[i];
         }
     }
 
-    /* Copy additional header fields */
-    *(uint32_t *)((uint8_t *)pkt_desc + 0x2A) = *(uint32_t *)(pkt_buf + 0x3C - 0x40 + 0x40);
-    *(int16_t *)((uint8_t *)pkt_desc + 0x2E) = *(int16_t *)(pkt_buf + 0x38 - 0x40 + 0x40);
-    *(uint32_t *)((uint8_t *)pkt_desc + 0x30) = *(uint32_t *)(pkt_buf + 0x34 - 0x40 + 0x40);
+    /* 0x00E0BE6E - 0x00E0BE7A */
+    *(uint32_t *)((uint8_t *)pkt_desc + 0x2A) = pkt_info.src_addr;
+    *(int16_t *)((uint8_t *)pkt_desc + 0x2E) = (int16_t)pkt_info.src_port;
+    *(uint32_t *)((uint8_t *)pkt_desc + 0x30) = pkt_info.dst_addr;
 
     /*
      * Set up cleanup handler for fault recovery.
@@ -179,7 +186,13 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
     cleanup_status = FIM_$CLEANUP(cleanup_buf);
     if (cleanup_status != status_$cleanup_handler_set) {
         /* Cleanup triggered - return buffers and exit */
-        NETBUF_$RTN_PKT(pkt_buf, &secondary_buf, NULL, data_len);
+        /*
+         * 0x00E0BFB4: pea (-0x40,A6) / pea (-0x6c,A6) / pea (-0x10,A6).
+         * The third argument is the record's payload page array, not NULL;
+         * the first cast restates its 32-bit header VA cell.
+         */
+        NETBUF_$RTN_PKT((uint32_t *)&pkt_info.hdr, &secondary_buf,
+                        pkt_info.data_pages, (int16_t)pkt_info.data_len);
         *status_ret = cleanup_status;
         return;
     }
@@ -213,8 +226,8 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
      * Get header and data lengths from packet buffer.
      * header_len at offset -0x14, data_len at offset -0x16
      */
-    header_len = *(uint16_t *)(pkt_buf + 0x14);  /* Placeholder offset */
-    data_len = *(uint16_t *)(pkt_buf + 0x16);    /* Placeholder offset */
+    header_len = pkt_info.hdr_len;   /* record +0x2c, "move.w (-0x14,A6)" */
+    data_len = pkt_info.data_len;    /* record +0x2a, "move.w (-0x16,A6)" */
 
     /* Check if buffers are large enough */
     if (total_buf_size < (int32_t)(header_len + data_len)) {
@@ -226,7 +239,8 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
      * If there's data in a secondary buffer, get its virtual address.
      */
     if (data_len != 0) {
-        data_ppn = *(uint32_t *)(pkt_buf + 0x10);  /* PPN at offset -0x10 */
+        /* 0x00E0BF0C: move.l (-0x10,A6),-(SP) - the page VA, by value */
+        data_ppn = pkt_info.data_pages[0];
         NETBUF_$GETVA(data_ppn, &secondary_buf, status_ret);
         if (*status_ret != status_$ok) {
             secondary_buf = 0;
@@ -242,13 +256,14 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
     buf_offset = 0;
 
     if (header_len != 0) {
-        void *hdr_ptr = (void *)(*(uint32_t *)pkt_buf);  /* Header data pointer */
-        copy_to_buffers(&hdr_ptr, header_len, &cur_buf, &buf_offset);
+        /* 0x00E0BF3C: pea (-0x40,A6) - the helper advances the record's own
+         * header cell, so it must be passed by reference. */
+        copy_to_buffers(&pkt_info.hdr, header_len, &cur_buf, &buf_offset);
     }
 
     if (data_len != 0) {
-        void *data_ptr = (void *)secondary_buf;
-        copy_to_buffers(&data_ptr, data_len, &cur_buf, &buf_offset);
+        /* 0x00E0BF52: pea (-0x6c,A6) - likewise the payload VA cell. */
+        copy_to_buffers((void **)&secondary_buf, data_len, &cur_buf, &buf_offset);
     }
 
     /*
@@ -262,8 +277,9 @@ void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *statu
     *status_ret = status_$ok;
 
 cleanup_and_return:
-    /* Return packet buffers to the pool */
-    NETBUF_$RTN_PKT(pkt_buf, &secondary_buf, NULL, data_len);
+    /* Return packet buffers to the pool - 0x00E0BF8C, same shape as above */
+    NETBUF_$RTN_PKT((uint32_t *)&pkt_info.hdr, &secondary_buf,
+                    pkt_info.data_pages, (int16_t)pkt_info.data_len);
 
     /* Release cleanup handler */
     FIM_$RLS_CLEANUP(cleanup_buf);
@@ -276,7 +292,7 @@ cleanup_and_return:
     (void)owner_asid;
     (void)socket_num;
     (void)cleanup_status;
-    (void)pkt_buf;
+    (void)pkt_info;
     (void)secondary_buf;
     (void)header_len;
     (void)data_len;

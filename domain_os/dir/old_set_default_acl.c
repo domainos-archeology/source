@@ -57,18 +57,14 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     uint32_t info_buf[4];     /* 16 bytes: dir_acl(8) + file_acl(8) */
     int16_t info_len;
     uid_t old_acl;            /* Previous ACL UID to clean up */
-    uid_t location_uid;       /* local_6c/local_68 */
-    /* A6-0x70 in the image, a full 0x20-byte object-location descriptor:
-     * AST_$GET_ATTRIBUTES overwrites all 32 bytes on success (0x00E049B0),
-     * so a 16-byte buffer here was overrunning the frame.
-     * TODO(source-qgq): retype this as file_$obj_loc_t once the
-     * AST_$GET_LOCATION output fields this function reads at +0x0C/+0x0D are
-     * mapped onto its members. */
-    uint8_t location_buf[0x20];
-    uint8_t attr_byte;        /* local_58 */
-    uint8_t attr_flags;       /* local_57 */
-    uint8_t loc_buf1[4];      /* auStack_b0 */
-    uint8_t loc_buf2[4];      /* auStack_ac */
+    /* A6-0x70 in the image: the 0x20-byte object-location descriptor.
+     * The UID goes in at +0x08 (A6-0x68) and the flags byte is +0x1D
+     * (A6-0x53); the byte the volume comparison uses is +0x1C (A6-0x54). */
+    file_$obj_loc_t location_buf;
+    uint8_t attr_byte;        /* D2.B: location_buf.rights_bits (+0x1C) */
+    uint32_t loc_buf1;        /* A6-0xac; pea'd but never touched by callee */
+    uint32_t loc_buf2;        /* A6-0xa8; receives aote+0x08 */
+    uint8_t trunc_result;     /* A6-0xb2; AST_$TRUNCATE result byte (0x00e564b0) */
     status_$t loc_status;     /* local_a8 */
     uid_t default_acl;
     uid_t *acl_to_set;
@@ -87,22 +83,24 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     }
 
     /* Get location info */
-    location_uid.high = ((uint32_t *)dir_uid)[0];
-    location_uid.low = ((uint32_t *)dir_uid)[1];
-    /* Clear bit 6 of attribute flags */
-    /* attr_flags = attr_flags & 0xBF; (bclr #6) */
-    AST_$GET_LOCATION(location_buf, 0, loc_buf1, loc_buf2, &loc_status);
-    attr_byte = location_buf[0x0c]; /* local_58 */
+    location_buf.uid.high = ((uint32_t *)dir_uid)[0];
+    location_buf.uid.low = ((uint32_t *)dir_uid)[1];
+    /* 0x00E5621E `bclr.b #0x6,(-0x53,A6)` = the record's flags byte at +0x1D */
+    location_buf.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
+    AST_$GET_LOCATION(&location_buf, 0, &loc_buf1, &loc_buf2, &loc_status);
+    /* 0x00E56250 `move.b (-0x54,A6),D2b` = the byte at record+0x1C */
+    attr_byte = (uint8_t)location_buf.rights_bits;
     if (loc_status != status_$ok) {
         *status_ret = loc_status;
         return;
     }
 
-    attr_flags = location_buf[0x0d]; /* local_57 */
-    /* Check if remote */
-    if ((int8_t)attr_flags < 0) {
-        /* Remote directory - delegate to REM_FILE */
-        REM_FILE_$SET_DEF_ACL(location_buf, dir_uid, acl_type, acl_uid, status_ret);
+    /* 0x00E56254 `tst.b (-0x53,A6)` / bpl: the record's flags byte */
+    if (location_buf.flags < 0) {
+        /* Remote directory - delegate to REM_FILE (0x00E56262 pea's
+         * A6-0x60, i.e. the record base + 0x10). */
+        REM_FILE_$SET_DEF_ACL(&location_buf.loc_info, dir_uid, acl_type,
+                              acl_uid, status_ret);
         if (*status_ret == file_$bad_reply_received_from_remote_node) {
             *status_ret = status_$naming_illegal_directory_operation;
         }
@@ -173,11 +171,13 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     }
 
     /* ACL is on different volume - need to verify and set attribute */
-    location_uid.high = acl_uid->high;
-    location_uid.low = acl_uid->low;
-    AST_$GET_LOCATION(location_buf, 1, loc_buf1, loc_buf2, status_ret);
+    location_buf.uid.high = acl_uid->high;
+    location_buf.uid.low = acl_uid->low;
+    location_buf.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;   /* 0x00E563BA */
+    AST_$GET_LOCATION(&location_buf, 1, &loc_buf1, &loc_buf2, status_ret);
     if (*status_ret == status_$ok) {
-        if (location_buf[0x0c] == attr_byte) {
+        /* 0x00E563F0: the same +0x1C byte compared against D2 */
+        if ((uint8_t)location_buf.rights_bits == attr_byte) {
             /* Same volume - set attribute */
             attr_val[0] = 1;
             AST_$SET_ATTRIBUTE(acl_uid, 6, attr_val, status_ret);
@@ -219,9 +219,9 @@ write_infoblk:
     }
 
     /* Old ACL exists - check if it's an ACL object and truncate */
-    location_uid.high = old_acl.high;
-    location_uid.low = old_acl.low;
-    AST_$GET_COMMON_ATTRIBUTES((uid_t *)(void *)location_buf,
+    location_buf.uid.high = old_acl.high;
+    location_buf.uid.low = old_acl.low;
+    AST_$GET_COMMON_ATTRIBUTES((uid_t *)(void *)&location_buf,
                                DIR_CATTR_SET_DEF_ACL, &common_attr,
                                &loc_status);            /* 0x00E56486 */
     if (loc_status == status_$ok) {
@@ -234,7 +234,8 @@ write_infoblk:
             return;
         }
         /* Truncate the old ACL */
-        AST_$TRUNCATE(&old_acl, 0, 3, (void *)loc_buf1, &loc_status);
+        /* 0x00e564b0 pea (-0xb2,A6): a result cell of its own, not loc_buf1. */
+        AST_$TRUNCATE(&old_acl, 0, 3, &trunc_result, &loc_status);
         if (loc_status != status_$ok) {
             *status_ret = loc_status;
         }

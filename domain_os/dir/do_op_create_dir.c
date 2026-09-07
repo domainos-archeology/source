@@ -98,12 +98,12 @@ void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
                 /* Look up the existing entry */
                 void *entry_ptr;
                 uint8_t extra1[2];
-                uint8_t extra2[2];
+                int16_t depth_ret;  /* `clr.w (A0)` at 0x00E4C9F0 */
                 char found;
 
                 found = dir_$find_entry((void *)local_handle, name,
                                      name_len, 0, &entry_ptr,
-                                     extra1, extra2);
+                                     extra1, &depth_ret);
                 if (found < 0) {
                     /* Entry found - copy its UID */
                     uint8_t *ep = (uint8_t *)entry_ptr;

@@ -14,7 +14,8 @@
 
 #include "tty/tty_internal.h"
 
-void TTY_$K_SET_FUNC_CHAR(short *line_ptr, ushort *func_ptr, char *ch_ptr,
+void TTY_$K_SET_FUNC_CHAR(short *line_ptr, const uint16_t *func_ptr,
+                          const char *ch_ptr,
                           status_$t *status)
 {
     tty_desc_t *tty;
@@ -49,7 +50,7 @@ void TTY_$K_SET_FUNC_CHAR(short *line_ptr, ushort *func_ptr, char *ch_ptr,
     }
 }
 
-void TTY_$K_INQ_FUNC_CHAR(short *line_ptr, ushort *func_ptr, char *ch_ptr,
+void TTY_$K_INQ_FUNC_CHAR(short *line_ptr, const uint16_t *func_ptr, char *ch_ptr,
                           status_$t *status)
 {
     tty_desc_t *tty;
@@ -74,7 +75,8 @@ void TTY_$K_INQ_FUNC_CHAR(short *line_ptr, ushort *func_ptr, char *ch_ptr,
     *ch_ptr = tty->func_chars[func_num];
 }
 
-void TTY_$K_ENABLE_FUNC(short *line_ptr, ushort *func_ptr, char *enable_ptr,
+void TTY_$K_ENABLE_FUNC(short *line_ptr, const uint16_t *func_ptr,
+                        const char *enable_ptr,
                         status_$t *status)
 {
     tty_desc_t *tty;

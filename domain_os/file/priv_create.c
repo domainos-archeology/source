@@ -44,6 +44,7 @@
  * RGYC_$G_NIL_UID from rgyc/rgyc.h.
  */
 #include "rgyc/rgyc.h"
+#include "vtoc/vtoc.h"      /* vtoc_$lookup_req_t, VTOC_$ALLOCATE */
 
 /*
  * Status codes used
@@ -55,54 +56,61 @@
 #define file_$invalid_type                       0x000F0016
 
 /*
- * File attribute structure for new file creation (144 bytes = 0x90)
- * This matches the layout expected by VTOC_$ALLOCATE
+ * The new-format VTOCE image the local-create path builds (0x90 bytes,
+ * A6-0x108).  Field offsets recovered store by store from 0x00E5D63E
+ * onwards; everything not listed is left zero by the 36-longword clear at
+ * 0x00E5D640 (`moveq #0x23,D0` + `dbf`).
+ *
+ * NOTE: this is the SAME 0x90-byte stack buffer AST_$GET_ATTRIBUTES filled
+ * earlier in the function (`pea (-0x108,A6)` at 0x00E5D3F2) - see obj_buf
+ * below.
  */
 typedef struct file_create_attrs_t {
-    uint8_t     flags1;             /* 0x00: Flags byte 1 */
-    uint8_t     file_type;          /* 0x01: Object type */
-    uint8_t     flags2;             /* 0x02: Flags byte 2 (bit 4 = directory) */
-    uint8_t     flags3;             /* 0x03: Flags byte 3 */
-    uint32_t    dtc_high;           /* 0x04: Date/time created high */
-    uint16_t    dtc_low;            /* 0x08: Date/time created low */
-    uint16_t    pad_0a;             /* 0x0A: Padding */
-    uid_t       file_uid;           /* 0x0C: File UID */
-    uid_t       type_uid;           /* 0x14: Type UID */
-    uint32_t    dtm_high;           /* 0x1C: Date/time modified high */
-    uint16_t    dtm_low;            /* 0x20: Date/time modified low */
-    uint16_t    pad_22;             /* 0x22: Padding */
-    uint32_t    dtu_high;           /* 0x24: Date/time used high */
-    uint16_t    dtu_low;            /* 0x28: Date/time used low */
-    uint32_t    dta_high;           /* 0x2A: Date/time accessed high */
-    uint16_t    dta_low;            /* 0x2E: Date/time accessed low */
-    uint32_t    dtb_high;           /* 0x30: Date/time backup high */
-    uint16_t    dtb_low;            /* 0x34: Date/time backup low */
-    uint16_t    pad_36;             /* 0x36: Padding */
-    uid_t       parent_uid;         /* 0x38: Parent directory UID */
-    uint32_t    refcount;           /* 0x40: Reference count (always 1) */
-    uint8_t     acl_data[24];       /* 0x44: ACL owner/group/org UIDs */
-    uint32_t    initial_size;       /* 0x5C: Initial file size */
-    uint8_t     acl_ext[12];        /* 0x60: Extended ACL data */
-    int16_t     is_dir;             /* 0x6C: Is directory flag */
-    uint8_t     pad_6e[6];          /* 0x6E: Padding */
-    uid_t       default_acl;        /* 0x74: Default ACL UID */
-    uint8_t     pad_7c[4];          /* 0x7C: Padding */
-    uid_t       vol_uid;            /* 0x80: Volume UID */
-    uint8_t     vol_flags;          /* 0x88: Volume flags */
-    uint8_t     pad_89[7];          /* 0x89: Padding to 0x90 */
+    uint8_t     flags1;             /* 0x00: attrs[0] - parent "is a file" byte */
+    uint8_t     file_type;          /* 0x01: 0x00E5D66C */
+    uint8_t     flags2;             /* 0x02: bit 4 = directory (0x00E5D654) */
+    uint8_t     flags3;             /* 0x03: attrs[3] - bit 1 = read-only volume */
+    uid_t       file_uid;           /* 0x04: 0x00E5D672 */
+    uid_t       type_uid;           /* 0x0C: 0x00E5D67C */
+    uint32_t    reserved_14[2];     /* 0x14: never written */
+    uint32_t    dtm_high;           /* 0x1C: 0x00E5D684 */
+    uint16_t    dtm_low;            /* 0x20: 0x00E5D68A */
+    uint16_t    pad_22;             /* 0x22 */
+    uint32_t    dtu_high;           /* 0x24: 0x00E5D690 */
+    uint16_t    dtu_low;            /* 0x28: 0x00E5D696 */
+    uint16_t    pad_2a;             /* 0x2A */
+    uint32_t    dta_high;           /* 0x2C: TIME_$CLOCKH (0x00E5D69C) */
+    uint32_t    reserved_30;        /* 0x30: never written */
+    uint32_t    dtb_high;           /* 0x34: 0x00E5D6A4 */
+    uint16_t    dtb_low;            /* 0x38: 0x00E5D6AA */
+    uint16_t    pad_3a;             /* 0x3A */
+    uid_t       parent_uid;         /* 0x3C: 0x00E5D6B4, from the location record */
+    uint32_t    refcount;           /* 0x44: always 1 (0x00E5D6BE) */
+    uint8_t     acl_data[24];       /* 0x48: 24 bytes from owner_ptr (0x00E5D6CC) */
+    uint32_t    initial_size;       /* 0x60: 0x00E5D6D2 */
+    uint32_t    reserved_64;        /* 0x64: never written */
+    uint8_t     acl_ext[12];        /* 0x68: 12 bytes from owner_ptr+0x24 */
+    int16_t     is_dir;             /* 0x74: 0x00E5D6EA */
+    uint8_t     reserved_76[18];    /* 0x76: never written */
+    uid_t       default_acl;        /* 0x88: 0x00E5D71C */
 } file_create_attrs_t;
 
-/*
- * Location info structure for parent directory (32 bytes)
- */
-typedef struct parent_location_t {
-    uid_t       parent_uid;         /* 0x00: Parent directory UID */
-    uint32_t    pad_08;             /* 0x08: Padding */
-    uint8_t     remote_flag;        /* 0x0C: Remote flag (bit 7 = remote) */
-    uint8_t     pad_0d[3];          /* 0x0D: Padding */
-    uint8_t     vol_flags;          /* 0x10: Volume flags (bit 1 = read-only) */
-    uint8_t     pad_11[15];         /* 0x11: Padding to 0x20 */
-} parent_location_t;
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(file_create_attrs_t, file_uid)     == 0x04, "vtoce.file_uid");
+_Static_assert(offsetof(file_create_attrs_t, type_uid)     == 0x0C, "vtoce.type_uid");
+_Static_assert(offsetof(file_create_attrs_t, dtm_high)     == 0x1C, "vtoce.dtm");
+_Static_assert(offsetof(file_create_attrs_t, dtu_high)     == 0x24, "vtoce.dtu");
+_Static_assert(offsetof(file_create_attrs_t, dta_high)     == 0x2C, "vtoce.dta");
+_Static_assert(offsetof(file_create_attrs_t, dtb_high)     == 0x34, "vtoce.dtb");
+_Static_assert(offsetof(file_create_attrs_t, parent_uid)   == 0x3C, "vtoce.parent_uid");
+_Static_assert(offsetof(file_create_attrs_t, refcount)     == 0x44, "vtoce.refcount");
+_Static_assert(offsetof(file_create_attrs_t, acl_data)     == 0x48, "vtoce.acl_data");
+_Static_assert(offsetof(file_create_attrs_t, initial_size) == 0x60, "vtoce.size");
+_Static_assert(offsetof(file_create_attrs_t, acl_ext)      == 0x68, "vtoce.acl_ext");
+_Static_assert(offsetof(file_create_attrs_t, is_dir)       == 0x74, "vtoce.is_dir");
+_Static_assert(offsetof(file_create_attrs_t, default_acl)  == 0x88, "vtoce.default_acl");
+_Static_assert(sizeof(file_create_attrs_t) == AST_ATTR_REC_SIZE, "sizeof vtoce");
+#endif
 
 uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_uid,
                            uid_t *file_uid_ret, uint32_t initial_size,
@@ -113,6 +121,7 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
     int16_t is_dir;
     int8_t is_file;
     uid_t parent_uid;
+    clock_t current_clock;          /* A6-0x17C: TIME_$CURRENT_CLOCKH, low = 0 */
 
     /*
      * Owner info buffer (48 bytes total):
@@ -143,14 +152,27 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
     uint8_t acl_data[40];
     uint8_t prot_info[16];
 
-    /* Parent location info - from AST_$GET_ATTRIBUTES */
-    struct {
-        uint8_t     attrs[0x108];       /* File attributes buffer */
-        parent_location_t location;     /* Location info at end */
-    } parent_info;
+    /*
+     * A6-0x108: ONE 0x90-byte buffer with two lives.  AST_$GET_ATTRIBUTES
+     * fills it with the parent's attribute record; the local-create path
+     * then clears it (0x00E5D640) and rebuilds it as the new object's
+     * VTOCE image before handing the same address to VTOC_$ALLOCATE
+     * (`pea (-0x108,A6)` at both 0x00E5D3F2 and 0x00E5D73E).
+     */
+    union {
+        uint8_t             attrs[AST_ATTR_REC_SIZE];
+        file_create_attrs_t vtoce;
+    } obj_buf;
 
-    /* File creation attributes */
-    file_create_attrs_t create_attrs;
+    /* A6-0x78: the 0x20-byte parent object-location record */
+    file_$obj_loc_t parent_loc;
+
+    /*
+     * A6-0x58: the VTOC location descriptor.  Same 0x20-byte shape as
+     * parent_loc; VTOC_$ALLOCATE rewrites it on every exit path, and
+     * REM_FILE_$CREATE_TYPE returns the new object's UID in its +0x08 field.
+     */
+    vtoc_$lookup_req_t vtoc_loc;
 
     /* Set up initial size */
     if (initial_size == 0) {
@@ -169,12 +191,15 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
     parent_uid.high = dir_uid->high;
     parent_uid.low = dir_uid->low;
 
-    /* Clear remote flag in location */
-    parent_info.location.remote_flag &= ~0x40;
+    /*
+     * Seed the location record with the parent UID at +0x08 and clear bit 6
+     * of its flags byte at +0x1D (0x00E5D3DE / 0x00E5D3E6).
+     */
+    parent_loc.uid = parent_uid;
+    parent_loc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
     /* Get parent directory attributes to check if remote and get vol info */
-    AST_$GET_ATTRIBUTES((uid_t *)&parent_info.location.parent_uid, 0,
-                        &parent_info.attrs, &status);
+    AST_$GET_ATTRIBUTES(&parent_loc.uid, 0, obj_buf.attrs, &status);
 
     if (status != status_$ok) {
         if (status != file_$object_not_found) {
@@ -185,7 +210,7 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
     }
 
     /* Determine if we're creating a directory-like object */
-    is_file = (parent_info.attrs[0] != 0) ? -1 : 0;  /* -1 if parent is file */
+    is_file = (obj_buf.attrs[0] != 0) ? -1 : 0;  /* -1 if parent is file */
 
     if (file_type == 1) {
         /* Always create directory for type 1 */
@@ -260,7 +285,7 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
     }
 
     /* Check if parent is remote (bit 7 of remote_flag) */
-    if ((int8_t)parent_info.location.remote_flag < 0) {
+    if (parent_loc.flags < 0) {
         /* Remote file creation */
 
         /* Cannot specify owner for remote creation */
@@ -270,14 +295,14 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
         }
 
         /* Create remote file */
-        REM_FILE_$CREATE_TYPE((uid_t *)&parent_info.location.parent_uid,
-                              file_type, (uid_t *)type_uid, size, flags,
-                              &owner_buf.owner, parent_info.attrs,
-                              &create_attrs.vol_uid, &status);
+        REM_FILE_$CREATE_TYPE((uid_t *)&parent_loc, file_type,
+                              (uid_t *)type_uid, size, flags,
+                              &owner_buf.owner, obj_buf.attrs,
+                              &vtoc_loc.uid, &status);
 
-        /* Copy returned file UID */
-        file_uid_ret->high = create_attrs.vol_uid.high;
-        file_uid_ret->low = create_attrs.vol_uid.low;
+        /* 0x00E5D53C: the new UID comes back at the record's +0x08 */
+        file_uid_ret->high = vtoc_loc.uid.high;
+        file_uid_ret->low = vtoc_loc.uid.low;
 
         if (status != status_$ok) {
             if (status == status_$vtoc_duplicate_uid) {
@@ -289,7 +314,7 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
                     status = file_$invalid_arg;
                 } else {
                     /* Fallback to pre-SR10 creation */
-                    REM_FILE_$CREATE_TYPE_PRESR10((uid_t *)&parent_info.location.parent_uid,
+                    REM_FILE_$CREATE_TYPE_PRESR10((uid_t *)&parent_loc,
                                                   file_type, is_dir, file_uid_ret, &status);
 
                     /* If type_uid is not nil and success, set the type attribute */
@@ -313,8 +338,9 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
     } else {
         /* Local file creation */
 
-        /* Check for read-only volume (bit 1 of vol_flags) */
-        if ((parent_info.location.vol_flags & 0x02) != 0) {
+        /* 0x00E5D602 `btst.b #0x1,(-0x105,A6)`: bit 1 of the ATTRIBUTE
+         * record's byte 3, not of the location record. */
+        if ((obj_buf.attrs[3] & 0x02) != 0) {
             if (file_type == 1 || file_type == 2) {
                 *status_ret = file_$volume_is_read_only;
                 return 0;
@@ -328,78 +354,83 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
             UID_$GEN(file_uid_ret);
         }
 
-        /* Clear the attribute structure */
+        /* 0x00E5D640: clear all 36 longwords of the 0x90-byte buffer */
         {
             int16_t i;
-            uint32_t *p = (uint32_t *)&create_attrs;
+            uint32_t *p = (uint32_t *)(void *)&obj_buf;
             for (i = 0x23; i >= 0; i--) {
                 *p++ = 0;
             }
         }
 
-        /* Set directory flag in flags2 (bit 4) */
-        create_attrs.flags2 = (create_attrs.flags2 & ~0x10) |
-                              ((is_dir != 0 ? 0x80 : 0x00) >> 3);
+        /* Set directory flag in flags2 (bit 4), 0x00E5D654 */
+        obj_buf.vtoce.flags2 = (uint8_t)((obj_buf.vtoce.flags2 & ~0x10) |
+                                         ((is_dir != 0 ? 0x80 : 0x00) >> 3));
 
-        /* Set timestamps to current time */
-        create_attrs.dtc_high = TIME_$CURRENT_CLOCKH;
-        create_attrs.dtc_low = 0;
-        create_attrs.file_type = (uint8_t)file_type;
+        /*
+         * A6-0x17C/-0x178: the clock_t temporary the three date fields are
+         * copied from (0x00E5D660 / 0x00E5D668).
+         */
+        current_clock.high = TIME_$CURRENT_CLOCKH;
+        current_clock.low = 0;
 
-        /* Set file UID */
-        create_attrs.file_uid.high = file_uid_ret->high;
-        create_attrs.file_uid.low = file_uid_ret->low;
+        obj_buf.vtoce.file_type = (uint8_t)file_type;    /* 0x01 */
 
-        /* Set type UID */
-        create_attrs.type_uid.high = type_uid->high;
-        create_attrs.type_uid.low = type_uid->low;
+        /* 0x04: the new object UID */
+        obj_buf.vtoce.file_uid.high = file_uid_ret->high;
+        obj_buf.vtoce.file_uid.low = file_uid_ret->low;
 
-        /* Set modification time */
-        create_attrs.dtm_high = TIME_$CURRENT_CLOCKH;
-        create_attrs.dtm_low = 0;
+        /* 0x0C: the type UID */
+        obj_buf.vtoce.type_uid.high = type_uid->high;
+        obj_buf.vtoce.type_uid.low = type_uid->low;
 
-        /* Set access time */
-        create_attrs.dtu_high = TIME_$CURRENT_CLOCKH;
-        create_attrs.dtu_low = 0;
+        /* 0x1C / 0x24 / 0x34: three copies of the same clock temporary */
+        obj_buf.vtoce.dtm_high = current_clock.high;
+        obj_buf.vtoce.dtm_low = current_clock.low;
+        obj_buf.vtoce.dtu_high = current_clock.high;
+        obj_buf.vtoce.dtu_low = current_clock.low;
 
-        /* Set backup time (use TIME_$CLOCKH for adjusted clock) */
-        create_attrs.dta_high = TIME_$CLOCKH;
+        /* 0x2C: TIME_$CLOCKH only - no low word is stored */
+        obj_buf.vtoce.dta_high = TIME_$CLOCKH;
 
-        /* Set another timestamp */
-        create_attrs.dtb_high = TIME_$CURRENT_CLOCKH;
-        create_attrs.dtb_low = 0;
+        obj_buf.vtoce.dtb_high = current_clock.high;
+        obj_buf.vtoce.dtb_low = current_clock.low;
 
-        /* Set parent directory UID */
-        create_attrs.parent_uid.high = parent_uid.high;
-        create_attrs.parent_uid.low = parent_uid.low;
+        /*
+         * 0x3C: 0x00E5D6B0 reads A6-0x70, i.e. the location record's UID
+         * field - the copy AST_$GET_ATTRIBUTES wrote back, not the caller's
+         * original `parent_uid`.
+         */
+        obj_buf.vtoce.parent_uid.high = parent_loc.uid.high;
+        obj_buf.vtoce.parent_uid.low = parent_loc.uid.low;
 
-        /* Set reference count to 1 */
-        create_attrs.refcount = 1;
+        /* 0x44: reference count of 1 */
+        obj_buf.vtoce.refcount = 1;
 
-        /* Copy ACL data (24 bytes from owner_ptr) */
+        /* 0x48: 24 bytes from owner_ptr (0x00E5D6CC, `moveq #0x17` + dbf) */
         {
             int16_t i;
             uint8_t *src = (uint8_t *)owner_ptr;
-            uint8_t *dst = create_attrs.acl_data;
+            uint8_t *dst = obj_buf.vtoce.acl_data;
             for (i = 0x17; i >= 0; i--) {
                 *dst++ = *src++;
             }
         }
 
-        /* Set initial size */
-        create_attrs.initial_size = size;
+        /* 0x60: initial size */
+        obj_buf.vtoce.initial_size = size;
 
-        /* Copy extended ACL data (12 bytes from owner_ptr + 0x24) */
+        /* 0x68: three longwords from owner_ptr+0x24 (0x00E5D6E4) */
         {
-            uint32_t *src = (uint32_t *)((uint8_t *)owner_ptr + 0x24);
-            uint32_t *dst = (uint32_t *)create_attrs.acl_ext;
+            uint32_t *src = (uint32_t *)(void *)((uint8_t *)owner_ptr + 0x24);
+            uint32_t *dst = (uint32_t *)(void *)obj_buf.vtoce.acl_ext;
             dst[0] = src[0];
             dst[1] = src[1];
             dst[2] = src[2];
         }
 
-        /* Set is_dir flag */
-        create_attrs.is_dir = is_dir;
+        /* 0x74: is-a-directory word */
+        obj_buf.vtoce.is_dir = is_dir;
 
         /* Select default ACL based on object type and whether parent is file */
         if (is_file) {
@@ -414,21 +445,22 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
             default_acl = &ACL_$FNDWRX;
         }
 
-        create_attrs.default_acl.high = default_acl->high;
-        create_attrs.default_acl.low = default_acl->low;
+        /* 0x88: default ACL UID (0x00E5D71C) */
+        obj_buf.vtoce.default_acl.high = default_acl->high;
+        obj_buf.vtoce.default_acl.low = default_acl->low;
 
-        /* Copy file UID to vol_uid location for VTOC */
-        create_attrs.vol_uid.high = file_uid_ret->high;
-        create_attrs.vol_uid.low = file_uid_ret->low;
-
-        /* Copy volume flag from parent location */
-        create_attrs.vol_flags = parent_info.location.remote_flag;
-
-        /* Copy parent volume reference */
-        /* create_attrs at offset 0x80 gets parent_info.location at 0x74 */
+        /*
+         * Fill in the VTOC location descriptor: the new object's UID at
+         * +0x08 (0x00E5D726), the parent record's byte at +0x1C
+         * (0x00E5D72E) and its longword at +0x04 (0x00E5D734).
+         */
+        vtoc_loc.uid.high = file_uid_ret->high;
+        vtoc_loc.uid.low = file_uid_ret->low;
+        vtoc_loc.vol_idx = (uint8_t)parent_loc.rights_bits;
+        vtoc_loc.block_hint = parent_loc.reserved_00[1];
 
         /* Allocate VTOC entry for the new file */
-        VTOC_$ALLOCATE(&create_attrs.vol_uid, parent_info.attrs, &status);
+        VTOC_$ALLOCATE(&vtoc_loc, &obj_buf.vtoce, &status);
 
         if (status != status_$ok) {
             goto done;
@@ -436,7 +468,10 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
     }
 
     /* Load the new file's AOTE into the active object table */
-    AST_$LOAD_AOTE((uint32_t *)parent_info.attrs, (uint32_t *)&create_attrs.vol_uid);
+    /* 0x00E5D756: the attribute buffer and the location descriptor, both
+     * passed by address (`pea (-0x108,A6)` / `pea (-0x58,A6)`). */
+    AST_$LOAD_AOTE((uint32_t *)(void *)obj_buf.attrs,
+                   (uint32_t *)(void *)&vtoc_loc);
 
 done:
     *status_ret = status;

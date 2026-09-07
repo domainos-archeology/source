@@ -89,7 +89,7 @@ uint8_t PEB_$TOUCH(uint32_t *addr)
         }
         /* Still busy after timeout */
         if (PEB_CTL < 0) {
-            CRASH_SYSTEM(PEB_FPU_Is_Hung_Err);
+            CRASH_SYSTEM(&PEB_FPU_Is_Hung_Err);
         }
     }
 

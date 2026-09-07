@@ -65,6 +65,9 @@ extern uint8_t WIN_$DATA[WIN_DATA_SIZE];
 #define WIN_DEV_TYPE_OFFSET 0x08
 #define WIN_FLAGS_OFFSET 0x0a
 #define WIN_LOCK_ARRAY_OFFSET 0x0c
+/* +0x10: the driver entry-point table whose ADDRESS WIN_$CINIT hands to
+ * DISK_$REGISTER (`lea (0x10,A3),A0` at 0x00E303AA). */
+#define WIN_JUMP_TABLE_OFFSET 0x10
 #define WIN_EC_ARRAY_OFFSET 0x30
 #define WIN_CNT_OFFSET 0x40
 #define WIN_STATUS_OFFSET 0x58
@@ -149,7 +152,6 @@ typedef struct {
 /*
  * Global data
  */
-extern void *WIN_$JUMP_TABLE;
 extern win_stats_t WIN_$CNT;
 
 /*

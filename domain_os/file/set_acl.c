@@ -48,9 +48,14 @@ void FILE_$SET_ACL(uid_t *file_uid, uid_t *acl_uid, status_$t *status_ret)
     uint16_t type_bits;
 
     /* Converted ACL components */
-    uint32_t acl_data[12];      /* 48 bytes for converted ACL data */
-    uint32_t prot_info[2];      /* 8 bytes for protection info */
-    uint32_t target_uid[2];     /* 8 bytes for target ACL UID */
+    uint32_t acl_data[12];      /* A6-0x40: 48 bytes of converted ACL data */
+    /*
+     * A6-0x10: an 8-byte UID.  FILE_$SET_PROT reads it as one
+     * (`and.w (0x4,A2),D0w` at 0x00E5DF58, then eight bytes at
+     * 0x00E5DF64), so it is a uid_t, not a pair of longwords.
+     */
+    uid_t prot_info;
+    uid_t target_uid;           /* A6-0x08 */
 
     /* Copy ACL UID */
     acl_high = acl_uid->high;
@@ -68,18 +73,19 @@ void FILE_$SET_ACL(uid_t *file_uid, uid_t *acl_uid, status_$t *status_ret)
         *status_ret = status_$acl_unimplemented_call;
     } else {
         /* Convert the funky ACL format */
-        ACL_$CONVERT_FUNKY_ACL(&acl_high, acl_data, prot_info, target_uid, status_ret);
+        ACL_$CONVERT_FUNKY_ACL(&acl_high, acl_data, &prot_info, &target_uid,
+                               status_ret);
 
         if (*status_ret == status_$ok) {
             /* Call FILE_$SET_PROT with type 4 */
             FILE_$SET_PROT(file_uid, (uint16_t *)&PROT_TYPE_4,
-                           acl_data, prot_info, status_ret);
+                           acl_data, &prot_info, status_ret);
             return;
         }
     }
 
     /* Log audit event if auditing is enabled and we didn't call SET_PROT */
     if ((int8_t)AUDIT_$ENABLED < 0) {
-        FILE_$AUDIT_SET_PROT(file_uid, acl_data, prot_info, 4, *status_ret);
+        FILE_$AUDIT_SET_PROT(file_uid, acl_data, &prot_info, 4, *status_ret);
     }
 }

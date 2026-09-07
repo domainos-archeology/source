@@ -71,7 +71,8 @@ void FIM_$RLS_CLEANUP(void *cleanup_data)
     mock_rls_cleanup_calls++;
 }
 
-void MST_$WIRE_AREA(void *start, void *end, void *buf1, void *param4,
+void MST_$WIRE_AREA(const void *start, const void *end, void *buf1,
+                    const void *param4,
                     void *buf2)
 {
     (void)start;

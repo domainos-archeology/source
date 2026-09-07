@@ -59,7 +59,7 @@ void ast_$setup_page_read(aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
         /* Log if enabled */
         if (NETLOG_$OK_TO_LOG < 0) {
-            NETLOG_$LOG_IT(9, (char *)aote + 0x10,
+            NETLOG_$LOG_IT(9, (uint32_t *)&aote->uid,
                            *((uint16_t *)((char *)aste + 0x0C)),
                            start_page, 0, 0, count, 0);
         }
@@ -98,7 +98,7 @@ void ast_$setup_page_read(aste_t *aste, uint32_t *segmap, uint16_t start_page,
         /* Log each allocation if enabled */
         if (NETLOG_$OK_TO_LOG < 0 && count > 0) {
             for (i = 0; i < count; i++) {
-                NETLOG_$LOG_IT(9, (char *)aote + 0x10,
+                NETLOG_$LOG_IT(9, (uint32_t *)&aote->uid,
                                *((uint16_t *)((char *)aste + 0x0C)),
                                start_page + i,
                                (uint16_t)(disk_addrs[i] >> 16),

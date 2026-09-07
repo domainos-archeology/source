@@ -130,10 +130,13 @@ check_proceed:
         if (*status_ret == status_$ok) {
             /* Invalidate the overflow page */
             uid_t inv_uid;
-            uint8_t inv_buf[16];
+            /* A6-0x44: AST_$INVALIDATE's status longword
+             * (`clr.l (A3)` at 0x00E0664C); the caller never inspects it. */
+            status_$t inv_status;
             inv_uid.high = handle_uid->high;
             inv_uid.low = handle_uid->low;
-            AST_$INVALIDATE(&inv_uid, (uint32_t)link_page, 1, 0xFFFF, inv_buf);
+            AST_$INVALIDATE(&inv_uid, (uint32_t)link_page, 1, 0xFFFF,
+                            &inv_status);
         }
     }
 

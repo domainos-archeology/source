@@ -1,15 +1,27 @@
 #include "term/term_internal.h"
 
-// Function ID constants (these are actually addresses in the original)
-static char func_id_default;    // 0xe66898
-static char func_id_break;      // 0xe667c4
-static char func_id_2;          // 0xe66d82
-static char func_id_int;        // 0xe66d86
-static char func_id_quit;       // 0xe66d84
-static char func_id_susp;       // 0xe66d8e
-static char func_id_cond;       // 0xe66896
-static char func_id_dsusp;      // 0xe66d8c
-static char func_id_status;     // 0xe66d8a
+/*
+ * TTY function / flag numbers.  The Pascal compiler placed these literals in
+ * the code region and passes them by reference (`pea (d,PC)`); the address of
+ * each cell is the pea's PC (instruction address + 2) plus the displacement.
+ * All of the TTY_$K_* entry points read them with `move.w (An),Dnw`
+ * (TTY_$K_SET_FUNC_CHAR 0x00E67500, TTY_$K_ENABLE_FUNC 0x00E675E8,
+ * TTY_$K_SET_INPUT_FLAG 0x00E67690, TTY_$K_SET_OUTPUT_FLAG 0x00E67728), so
+ * every cell is a word, not a byte.  Values read out of the image with gsk.
+ */
+static const uint16_t tty_num_0  = 0;   /* 0x00E66898 */
+static const uint16_t tty_num_1  = 1;   /* 0x00E66896 */
+static const uint16_t tty_num_2  = 2;   /* 0x00E667C4 */
+static const uint16_t tty_num_3  = 3;   /* 0x00E66D82 */
+static const uint16_t tty_num_8  = 8;   /* 0x00E66D8E - SUSP */
+static const uint16_t tty_num_9  = 9;   /* 0x00E66D8C - DSUSP */
+static const uint16_t tty_num_10 = 10;  /* 0x00E66D8A - STATUS */
+static const uint16_t tty_num_13 = 13;  /* 0x00E66D86 - INT */
+static const uint16_t tty_num_14 = 14;  /* 0x00E66D84 - QUIT */
+
+/* Byte constant 0xFF (a true Domain boolean) at 0x00E66D88, passed by
+ * reference as the value argument of case 29 (0x00E66A1E pea (0x368,PC)). */
+static const uint8_t tty_true_byte = 0xff;
 
 /*
  * SIO parameter block: TERM_$CONTROL keeps a 0x16-byte local at (-0x18,A6) and
@@ -82,15 +94,15 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
 
     switch (option) {
         case CTRL_SET_FUNC_CHAR_DEFAULT:
-            TTY_$K_SET_FUNC_CHAR(line_ptr, &func_id_default, value_ptr, status_ret);
+            TTY_$K_SET_FUNC_CHAR(line_ptr, &tty_num_0, (char *)value_ptr, status_ret);
             break;
 
         case CTRL_SET_FUNC_CHAR_BREAK:
-            TTY_$K_SET_FUNC_CHAR(line_ptr, &func_id_break, value_ptr, status_ret);
+            TTY_$K_SET_FUNC_CHAR(line_ptr, &tty_num_2, (char *)value_ptr, status_ret);
             break;
 
         case CTRL_SET_FUNC_CHAR_2:
-            TTY_$K_SET_FUNC_CHAR(line_ptr, &func_id_2, value_ptr, status_ret);
+            TTY_$K_SET_FUNC_CHAR(line_ptr, &tty_num_3, (char *)value_ptr, status_ret);
             break;
 
         case CTRL_FLUSH_SET_RAW:
@@ -99,13 +111,16 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             goto done_no_convert;
 
         case CTRL_INVERT_INPUT_FLAG:
+            /* 00e66a24: not.b the caller's byte into the local at (-0x36,A6),
+             * then pass that local by reference with flag number 0. */
             inverted = ~(*(unsigned char *)value_ptr);
-            TTY_$K_SET_INPUT_FLAG(line_ptr, &func_id_cond, (unsigned long)inverted, status_ret);
+            TTY_$K_SET_INPUT_FLAG(line_ptr, &tty_num_0, (char *)&inverted, status_ret);
             break;
 
         case CTRL_INVERT_OUTPUT_FLAG:
+            /* 00e669fa: same inversion, flag number 1. */
             inverted = ~(*(unsigned char *)value_ptr);
-            TTY_$K_SET_OUTPUT_FLAG(line_ptr, &func_id_cond, (unsigned long)inverted, status_ret);
+            TTY_$K_SET_OUTPUT_FLAG(line_ptr, &tty_num_1, (char *)&inverted, status_ret);
             break;
 
         case CTRL_SET_SPEED:
@@ -124,8 +139,8 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             goto done_no_convert;
 
         case CTRL_ENABLE_INT_QUIT:
-            TTY_$K_ENABLE_FUNC(line_ptr, &func_id_int, value_ptr, status_ret);
-            TTY_$K_ENABLE_FUNC(line_ptr, &func_id_quit, value_ptr, status_ret);
+            TTY_$K_ENABLE_FUNC(line_ptr, &tty_num_13, (char *)value_ptr, status_ret);
+            TTY_$K_ENABLE_FUNC(line_ptr, &tty_num_14, (char *)value_ptr, status_ret);
             break;
 
         case CTRL_NOP_9:
@@ -133,12 +148,13 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             goto done_no_convert;
 
         case CTRL_ENABLE_SUSP:
-            TTY_$K_ENABLE_FUNC(line_ptr, &func_id_susp, value_ptr, status_ret);
+            TTY_$K_ENABLE_FUNC(line_ptr, &tty_num_8, (char *)value_ptr, status_ret);
             goto set_pgroup;
 
         case CTRL_SET_INPUT_FLAG_COND:
-            inverted = ~(*(unsigned char *)value_ptr);
-            TTY_$K_SET_INPUT_FLAG(line_ptr, &func_id_cond, (unsigned long)inverted, status_ret);
+            /* 00e66a74: the caller's value pointer goes straight through
+             * (`move.l (0x10,A6),-(SP)`); there is no inversion here. */
+            TTY_$K_SET_INPUT_FLAG(line_ptr, &tty_num_1, (char *)value_ptr, status_ret);
             break;
 
         case CTRL_SET_ECHO:
@@ -246,31 +262,33 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             goto done;
 
         case CTRL_SET_FUNC_CHAR_SUSP:
-            TTY_$K_SET_FUNC_CHAR(line_ptr, &func_id_susp, value_ptr, status_ret);
+            TTY_$K_SET_FUNC_CHAR(line_ptr, &tty_num_8, (char *)value_ptr, status_ret);
             break;
 
         case CTRL_ENABLE_DSUSP:
-            TTY_$K_ENABLE_FUNC(line_ptr, &func_id_dsusp, value_ptr, status_ret);
+            TTY_$K_ENABLE_FUNC(line_ptr, &tty_num_9, (char *)value_ptr, status_ret);
             goto set_pgroup;
 
         case CTRL_SET_FUNC_CHAR_DSUSP:
-            TTY_$K_SET_FUNC_CHAR(line_ptr, &func_id_dsusp, value_ptr, status_ret);
+            TTY_$K_SET_FUNC_CHAR(line_ptr, &tty_num_9, (char *)value_ptr, status_ret);
             break;
 
         case CTRL_ENABLE_STATUS:
-            TTY_$K_ENABLE_FUNC(line_ptr, &func_id_status, value_ptr, status_ret);
+            TTY_$K_ENABLE_FUNC(line_ptr, &tty_num_10, (char *)value_ptr, status_ret);
         set_pgroup:
             pgroup_ptr = (void *)((char *)&PROC2_UID + (short)(PROC1_$AS_ID << 3));
             TTY_$K_SET_PGROUP(line_ptr, pgroup_ptr, status_ret);
             goto done;
 
         case CTRL_SET_FUNC_CHAR_STATUS:
-            TTY_$K_SET_FUNC_CHAR(line_ptr, &func_id_status, value_ptr, status_ret);
+            TTY_$K_SET_FUNC_CHAR(line_ptr, &tty_num_10, (char *)value_ptr, status_ret);
             break;
 
         case CTRL_SET_OUTPUT_FLAG_COND:
-            inverted = ~(*(unsigned char *)value_ptr);
-            TTY_$K_SET_OUTPUT_FLAG(line_ptr, &func_id_cond, (unsigned long)inverted, status_ret);
+            /* 00e66a1c: the value argument is the constant byte 0xFF at
+             * 0x00E66D88, not the caller's value; flag number 1. */
+            TTY_$K_SET_OUTPUT_FLAG(line_ptr, &tty_num_1, (char *)&tty_true_byte,
+                                   status_ret);
             break;
 
         case CTRL_SET_PGROUP:

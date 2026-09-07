@@ -111,7 +111,7 @@ int16_t MAC_OS_$FIND_PACKET_TYPE(uint32_t pkt_type, mac_os_$pkt_type_entry_t *ta
  *
  * Original address: 0x00E0B522
  */
-void MAC_OS_$COPY_BUFFER_DATA(int32_t *dest_ptr, int16_t length);
+void MAC_OS_$COPY_BUFFER_DATA(uint32_t *dest_ptr, int16_t length);
 
 /*
  * MAC_OS_$NOP - No operation placeholder

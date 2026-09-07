@@ -62,9 +62,9 @@ uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
 int8_t   AUDIT_$ENABLED = 0;            /* >= 0: auditing off */
 uint16_t DIR_$OP_PARAMS[0x100];
 uint16_t DAT_00e7fc66;
-uint8_t  DAT_00e4b33c;
-char     Naming_bad_request_header_ver_err;
-char    *PTR_Naming_bad_request_header_ver_err_00e7dbfc;
+uint32_t DAT_00e4b33c;   /* 0x00E4B33C is a longword (dir_internal.h) */
+status_$t Naming_bad_request_header_ver_err;
+status_$t *PTR_Naming_bad_request_header_ver_err_00e7dbfc;
 
 /* ============================================================================
  * Mock bookkeeping
@@ -290,8 +290,8 @@ void dir_$do_op_get_default_acl(uid_t *uid, uid_t *type, uid_t *acl_ret,
 { (void)uid;(void)type;(void)acl_ret; OK(st); }
 
 void dir_$do_op_get_entryu(uid_t *uid, void *name, uint16_t name_len,
-                           short *type_ret, char *uid_ret, uint32_t *extra_ret,
-                           status_$t *st)
+                           uint16_t *type_ret, uid_t *uid_ret,
+                           uint32_t *extra_ret, status_$t *st)
 { (void)uid;(void)name;(void)name_len;(void)type_ret;(void)uid_ret;(void)extra_ret; OK(st); }
 
 void dir_$do_op_read_linku(uid_t *uid, void *name, uint16_t name_len,

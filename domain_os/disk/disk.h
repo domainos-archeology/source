@@ -208,7 +208,8 @@ void DISK_$MNT_DINIT(uint16_t vol_idx, void **dev_ptr, void *param_3,
  * Original address: 0x00e3dc28
  */
 void DISK_$SHUTDOWN(disk_device_entry_t *dev_info, uint16_t unit);
-void DISK_$SPIN_DOWN(int16_t vol_idx, status_$t *status);
+/* 0x00E3DB04 reads no parameters and returns nothing. */
+void DISK_$SPIN_DOWN(void);
 void DISK_$REVALID(int16_t vol_idx);
 void DISK_$WRITE_PROTECT(int16_t mode, int16_t vol_idx, status_$t *status);
 void DISK_$GET_STATS(int16_t dev_type, int16_t controller, uint8_t *has_stats, void *stats);

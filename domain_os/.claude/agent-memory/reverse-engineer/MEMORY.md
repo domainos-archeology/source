@@ -16,3 +16,5 @@
 - [REM_FILE opcode table](rem-file-opcodes.md) — request+0x03, all 31 codes, the DIR/ACL forwarding ranges and the three two-phase builders.
 - [Ring statistics counter names](ring-stats-counter-names.md) — recovered from /etc/netmain, pinned by two logged status codes and the swdiag -0x1A mirror.
 - [SR10.4 user-space binaries name kernel stats](reference_sr104_userspace_binaries.md) — grep /etc/netmain before calling a field name unrecoverable.
+- [Pointer-warning pass findings](pointer-warning-pass-notes.md) — pea-cell constants, wrong-callee bugs, and why byte-pointer casts break the host tests.
+- [Warning sweeps are frame-model audits](feedback_warning_sweeps.md) — every pointer-type warning here hid a real ABI bug; fix the model, not the cast.

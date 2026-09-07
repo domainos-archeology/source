@@ -5,11 +5,14 @@
  * Used for debugging, diagnostics, and inter-node operations.
  *
  * Parameters:
- *   uid - Pointer to object UID info
+ *   uid - Pointer to the object UID
  *   start_offset - Starting byte offset
  *   unused - Unused parameter
- *   vol_uid - Volume UID
- *   count - Number of pages to retrieve
+ *   seg_count - Number of 32KB segments, passed BY VALUE
+ *               (`pea (0x1).w` at 0x00E4BB16, read with
+ *               `move.l (0x14,A6),D1` at 0x00E06B44)
+ *   map_size - Bitmap size, passed BY VALUE (`pea (0x20).w` at
+ *              0x00E4BB12, read with `cmpi.l #0x20,(0x18,A6)` at 0x00E06B66)
  *   flags - Operation flags
  *   output - Output buffer for segment map data
  *   status - Status return
@@ -20,10 +23,11 @@
 #include "ast/ast_internal.h"
 #include "proc1/proc1.h"
 
-void AST_$GET_SEG_MAP(uint32_t *uid_info, uint32_t start_offset, uint32_t unused,
-                      uid_t *vol_uid, uint32_t count, uint16_t flags,
+void AST_$GET_SEG_MAP(uid_t *uid, uint32_t start_offset, uint32_t unused,
+                      uint32_t seg_count, uint32_t map_size, uint16_t flags,
                       uint32_t *output, status_$t *status)
 {
+    uint32_t count = map_size;
     aote_t *aote;
     aste_t *aste;
     uint32_t *segmap_ptr;
@@ -38,8 +42,10 @@ void AST_$GET_SEG_MAP(uint32_t *uid_info, uint32_t start_offset, uint32_t unused
         output[i] = 0;
     }
 
-    /* Calculate segment range */
-    vol_uid->high = start_offset << 15;
+    /* Calculate segment range.  0x00E06B44 keeps seg_count << 15 in a frame
+     * local (A6-0x40); it is not stored through any caller pointer. */
+    uint32_t seg_span = seg_count << 15;
+    (void)seg_span;
     uint32_t aligned_offset = start_offset & 0xFFFFFC00;
     start_segment = (uint16_t)(start_offset >> 15);
     end_segment = start_segment;
@@ -60,11 +66,11 @@ void AST_$GET_SEG_MAP(uint32_t *uid_info, uint32_t start_offset, uint32_t unused
         ML_$LOCK(AST_LOCK_ID);
 
         /* Look up AOTE */
-        aote = ast_$lookup_aote_by_uid((uid_t *)uid_info);
+        aote = ast_$lookup_aote_by_uid(uid);
 
         if (aote == NULL) {
             /* Try to load the AOTE */
-            aote = ast_$force_activate_segment((uid_t *)uid_info, 0, status, 0);
+            aote = ast_$force_activate_segment(uid, 0, status, 0);
 
             if (aote == NULL) {
                 ML_$UNLOCK(AST_LOCK_ID);

@@ -8,6 +8,7 @@
 #ifndef XNS_INTERNAL_H
 #define XNS_INTERNAL_H
 
+#include "arch/arch.h"
 #include "ec/ec.h"
 #include "fim/fim.h"
 #include "mac/mac.h"

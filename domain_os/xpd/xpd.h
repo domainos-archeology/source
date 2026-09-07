@@ -487,14 +487,16 @@ void XPD_$READ(uint16_t *asid, void *addr, int32_t *len, void *buffer,
  * Parameters:
  *   asid       - Pointer to ASID
  *   addr       - Address to write to
- *   len        - Pointer to length
- *   buffer     - Pointer to buffer
+ *   len        - Pointer to the length longword (read-only,
+ *                0x00E5BAB6 `movea.l (0x10,A6),A0` / `move.l (A0),-(SP)`)
+ *   buffer     - Source buffer; its ADDRESS is forwarded by value
+ *                (0x00E5BAC0 `move.l (0x14,A6),-(SP)`)
  *   status_ret - Status return
  *
  * Original address: 0x00e5baa6
  */
-void XPD_$WRITE(uint16_t *asid, void *addr, int32_t *len, void *buffer,
-                status_$t *status_ret);
+void XPD_$WRITE(uint16_t *asid, void *addr, const int32_t *len,
+                const void *buffer, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -661,7 +663,8 @@ void XPD_$UNREGISTER_DEBUGGER(int16_t asid, status_$t *status_ret);
  * Original address: 0x00e5b704
  */
 void XPD_$COPY_MEMORY(int16_t dst_asid, void *dst_addr, int16_t src_asid,
-                      void *src_addr, uint32_t len, status_$t *status_ret);
+                      const void *src_addr, uint32_t len,
+                      status_$t *status_ret);
 
 /*
  * XPD_$FP_GET_STATE - Get floating-point state (internal)

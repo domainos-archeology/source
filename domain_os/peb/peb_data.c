@@ -10,7 +10,9 @@ status_$t PEB_WCS_Verify_Failed_Err = status_$peb_wcs_verify_failed;
  */
 void *PTR_PEB_CTL_00e31dd0 = (void *)0x00FF7000;               /* 0x00E31DD0 */
 void *PTR_PEB_$WIRED_DATA_START_00e322dc = (void *)0x00E84E80; /* 0x00E322DC */
+void *PTR_PEB_$WIRED_DATA_END_00e322e0 = (void *)0x00E854D8;   /* 0x00E322E0 */
 void *PTR_PEB_$TOUCH_00e322e4 = (void *)0x00E70810;            /* 0x00E322E4 */
+void *PTR_PEB_$WIRED_CODE_END_00e322e8 = (void *)0x00E70A3E;   /* 0x00E322E8 */
 
 /*
  * Host-build storage for the two exported PEB feature flags declared in

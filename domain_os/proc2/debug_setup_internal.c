@@ -31,22 +31,16 @@
 #define DEBUG_FLAG_AWAKEN_GUARDIAN  0x10
 
 /*
- * Ptrace options structure - 14 bytes
- * Located at offset 0xCE in proc2_info_t (beyond the defined fields).
- */
-typedef struct ptrace_opts_t {
-    uint32_t opt1;      /* 0x00 */
-    uint32_t opt2;      /* 0x04 */
-    uint32_t opt3;      /* 0x08 */
-    uint16_t opt4;      /* 0x0C */
-} ptrace_opts_t;
-
-/*
  * Get pointer to extended fields beyond the base proc2_info_t structure.
  * The full entry is 0xE4 bytes but proc2_info_t only defines through 0xBF.
  */
+/*
+ * The 14-byte ptrace option record at entry+0xCE is xpd/xpd.h's
+ * xpd_$ptrace_opts_t; proc2_info_t declares it as raw bytes so that xpd.h
+ * need not be included by proc2.h.
+ */
 #define ENTRY_PTRACE_OPTS(entry) \
-    ((ptrace_opts_t *)((uint8_t *)(entry) + 0xCE))
+    ((xpd_$ptrace_opts_t *)((entry)->ptrace_opts))
 
 #define ENTRY_DEBUG_ADDR(entry) \
     ((void *)((uint8_t *)(entry) + 0x96))
@@ -55,14 +49,20 @@ typedef struct ptrace_opts_t {
     (*((uint8_t *)(entry) + 0x2B))
 
 /* Static data for XPD_$WRITE calls - appears to be small constants */
-static const uint32_t debug_write_data1 = 0;
-static const uint32_t debug_write_data2 = 0;
+/*
+ * Constant cells in the code region, passed by reference to XPD_$WRITE
+ * (cell address = pea instruction address + 2 + d; values read with gsk):
+ *   0x00E41A20 (0x00E419E8 `pea (0x36,PC)`) - the length longword, 1
+ *   0x00E41A1C (0x00E419E4 `pea (0x36,PC)`) - the source bytes, 0xFFFFFFFF
+ */
+static const int32_t debug_write_len = 1;
+static const uint32_t debug_write_buffer = 0xFFFFFFFFu;
 
 void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag)
 {
     proc2_info_t *target_entry;
     proc2_info_t *debugger_entry;
-    ptrace_opts_t local_opts;
+    xpd_$ptrace_opts_t local_opts;
     status_$t status;
 
     target_entry = P2_INFO_ENTRY(target_idx);
@@ -106,11 +106,12 @@ void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag)
      */
     if (flag < 0) {
         uint32_t offset = target_entry->cr_rec_2 + 0x90;
-        /* XPD_$WRITE only reads through its length/buffer arguments (it
-         * copies from the buffer into the target address space), so the
-         * const data is safe. */
-        XPD_$WRITE(ENTRY_DEBUG_ADDR(target_entry), offset,
-                   (int32_t *)&debug_write_data1, (void *)&debug_write_data2, &status);
+        /*
+         * 0x00E419EC-0x00E419F8: `movea.l (-0x78,A2),A0; pea (0x90,A0)` -
+         * the target address is a 32-bit VA pushed BY VALUE.
+         */
+        XPD_$WRITE(ENTRY_DEBUG_ADDR(target_entry), ARCH_VA_TO_PTR(offset),
+                   &debug_write_len, &debug_write_buffer, &status);
     }
 
     /*

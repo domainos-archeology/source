@@ -160,7 +160,7 @@ void PACCT_$LOG(uint8_t *fork_flag, uint8_t *su_flag, int16_t *exit_status,
     if (DAT_00e817f8 < PACCT_RECORD_SIZE) {
         /* Unmap existing buffer if any */
         if (DAT_00e81804 != NULL) {
-            MST_$UNMAP_PRIVI(1, &UID_$NIL, DAT_00e81804, DAT_00e81800, 0, &status);
+            MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(DAT_00e81804), DAT_00e81800, 0, &status);
             DAT_00e81804 = NULL;
             DAT_00e81800 = 0;
             DAT_00e817f8 = 0;

@@ -16,6 +16,7 @@
  */
 
 #include "netlog/netlog_internal.h"
+#include "arch/arch.h"
 #include "network/network.h"
 #include "pkt/pkt.h"
 #include "net_io/net_io.h"
@@ -41,7 +42,7 @@ void NETLOG_$SEND_PAGE(void)
     uint32_t hdr_va;                /* -0x10: Header virtual address */
     status_$t status;               /* -0x0C: Status return */
     uint32_t hdr_pa;                /* -0x08: Header physical address */
-    uint8_t send_extra[4];          /* -0x04: Extra data for NET_IO_$SEND */
+    net_io_$send_info_t send_info;  /* -0x04: NET_IO_$SEND's report */
 
     /*
      * Capture metadata for the page being sent
@@ -67,13 +68,16 @@ void NETLOG_$SEND_PAGE(void)
             (int32_t)-1,                /* src_node_or: -1 = use default */
             NODE_$ME,                   /* src_node */
             NETLOG_$SOCK,               /* src_sock */
-            AUDIT_PKT_INFO,             /* pkt_info template */
+            /* pkt_info: "pea (A5)" at 0x00E71CE4 - the module data base
+             * itself, not AUDIT_PKT_INFO. */
+            &nl->pkt_info,
             0,                          /* param8 */
             &nl->pkt_type1,             /* template data (type1, type2, done_cnt, entry_cnt) */
             10,                         /* hdr_len: template size */
             NETLOG_PROTOCOL,            /* protocol: 0x3F6 */
             &port,                      /* port_out */
-            (uint32_t *)hdr_va,         /* hdr_buf */
+            (pkt_$hdr_t *)ARCH_VA_TO_PTR(hdr_va), /* hdr_buf, BY VALUE:
+                                         * "pea (A2)" at 0x00E71CD2 */
             &pkt_len,                   /* len_out */
             &extra1,                    /* param15 */
             extra2,                     /* param16 */
@@ -105,7 +109,7 @@ void NETLOG_$SEND_PAGE(void)
             &data_len,                                          /* data_len */
             NETLOG_PROTOCOL,                                    /* protocol: 0x3F6 */
             0,                                                  /* flags */
-            send_extra,                                         /* extra */
+            &send_info,                                         /* send_info */
             &status                                             /* status_ret */
         );
     }

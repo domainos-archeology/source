@@ -82,7 +82,8 @@ void FILE_$GET_SEG_MAP(uid_t *file_uid, uint32_t *start_off,
      *   output       - local buffer
      *   status       - local status
      */
-    AST_$GET_SEG_MAP((uint32_t *)&local_uid, *start_off, 0, (uid_t *)1,
+    /* Arguments 4 and 5 are longword values (`pea (0x1).w` / `pea (0x20).w`). */
+    AST_$GET_SEG_MAP(&local_uid, *start_off, 0, 1,
                      0x20, flags, seg_output, &local_status);
 
     /*

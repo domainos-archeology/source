@@ -43,10 +43,11 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
     int16_t pid = PROC1_$CURRENT;
     uid_t local_uid;
     status_$t local_status;
-    uint8_t acl_attr_buf[8];
-    char local_flags[4];
+    /* A6-0x58: the 0x38-byte record AST_$GET_ACL_ATTRIBUTES fills */
+    ast_$acl_attr_t acl_attr;
     uint8_t local_byte;
-    uint8_t local_data[16];
+    /* A6-0x20: the 0x20-byte object-location record */
+    file_$obj_loc_t loc_rec;
     void *mapped_addr;
     int16_t expected_len;
     int16_t num_entries;
@@ -54,26 +55,33 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
     uint8_t *acl_bytes = (uint8_t *)acl_data;
     uint32_t *mapped_words;
 
-    /* Copy directory UID to local */
-    local_uid.high = dir_uid->high;
-    local_uid.low = dir_uid->low;
+    /* Copy directory UID into the location record at +0x08 (0x00E4798C) */
+    loc_rec.uid.high = dir_uid->high;
+    loc_rec.uid.low = dir_uid->low;
 
-    /* Clear bit 6 of local_data flag */
-    local_data[13] &= 0xBF;
+    /* 0x00E47994: `bclr.b #0x6,(-0x3,A6)` = the record's flags byte at +0x1D */
+    loc_rec.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
     /* Get ACL attributes from AST */
-    AST_$GET_ACL_ATTRIBUTES(acl_attr_buf, 1, local_flags, &local_status);
+    AST_$GET_ACL_ATTRIBUTES(&loc_rec, 1, &acl_attr, &local_status);
     if (local_status != status_$ok) {
         *status_ret = local_status;
         return;
     }
 
-    /* Check if remote operation needed */
-    if ((local_flags[1] & 0x01) == 0 && (local_data[13] & 0x80)) {
+    /*
+     * 0x00E479C2 `btst.b #0x0,(-0x55,A6)` tests bit 0 of BYTE 3 of the
+     * record's first longword; 0x00E479CA `tst.b (-0x3,A6)` / bpl tests the
+     * location record's flags byte for "remote".
+     */
+    if ((acl_attr.obj_flags[3] & 0x01) == 0 && loc_rec.flags < 0) {
         /* Remote creation */
         /* The 32-bit "type" argument is passed through unchanged (it is a
          * pointer on the m68k; uintptr_t preserves the full value). */
-        REM_FILE_$ACL_CREATE(local_data, acl_data, (int32_t)(uintptr_t)type, dir_uid, file_uid_ret, status_ret);
+        /* 0x00E479DC pea's the location record base + 0x10. */
+        REM_FILE_$ACL_CREATE(&loc_rec.loc_info, acl_data,
+                             (int32_t)(uintptr_t)type, dir_uid, file_uid_ret,
+                             status_ret);
         return;
     }
 
@@ -111,7 +119,7 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
         goto cleanup_error;
     }
 
-    if (local_flags[0] == '\0') {
+    if (acl_attr.obj_flags[0] == 0) {   /* 0x00E47AAA */
         /* Call internal creation helper */
         acl_$prim_create_internal((int32_t)(uintptr_t)type, acl_data, *data_len, (uint8_t *)acl_data + 2,
                                   0, mapped_addr, NULL, status_ret);
@@ -135,7 +143,10 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
     }
 
     /* Unmap the file */
-    MST_$UNMAP_PRIVI(1, file_uid_ret, mapped_addr, 0x400, PROC1_$AS_ID, status_ret);
+    /* 0x00E47B06 `pea (0x400).w` pushes the constant 0x400, and D3 holds
+     * the mapped start VA returned in A0 by MST_$MAPS. */
+    MST_$UNMAP_PRIVI(1, file_uid_ret, ARCH_PTR_TO_VA(mapped_addr), 0x400,
+                     PROC1_$AS_ID, status_ret);
     if ((*status_ret & 0xFFFF) != 0) {
         goto cleanup_error;
     }

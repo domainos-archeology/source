@@ -32,6 +32,17 @@ static const char msg_map[] = "map_";
 /* Microcode file path */
 static const char peb_microcode_path[] = "/sys/peb2_microcode";
 
+/*
+ * Constant cells the compiler placed in the code region and passes by
+ * reference (`pea (d,PC)`; cell address = instruction address + 2 + d).
+ * Values read out of the image with gsk.
+ */
+static const uint16_t peb_lock_index_0 = 0;   /* 0x00E322C4 */
+static const uint16_t peb_lock_mode_4  = 4;   /* 0x00E322C6 */
+static const uint8_t  peb_lock_rights_0 = 0;  /* 0x00E322C8 (read as a byte) */
+static const uint16_t peb_lock_mode_1  = 1;   /* 0x00E31DCE */
+static const uint16_t peb_wire_max_pages = 10; /* 0x00E3229A */
+
 /* Warning messages */
 static const char msg_warning_unable[] = "      Warning: Unable to   ";
 static const char msg_peb_disabled[] = "  a      lh  PEB is disabled   ";
@@ -212,7 +223,12 @@ void PEB_$LOAD_WCS(void)
     peb_wcs_header_t *wcs_data;
     peb_wcs_entry_t verify_data;
     int16_t i, count;
-    int16_t wire_result1, wire_result2;
+    /* (-0x28,A6): the 10-longword page list MST_$WIRE_AREA fills in. */
+    uint32_t wired_pages[10];
+    /* (-0x54,A6), (-0x56,A6), (-0x62,A6): word counts. */
+    uint16_t wire_count1, wire_count2, wire_remaining;
+    /* (-0x48,A6): FILE_$LOCK's 8-byte lock-info block. */
+    uint8_t lock_info[8];
 
     /* Check which mode to operate in */
     if ((PEB_$M68881_SAVE_FLAG < 0) || (PEB_$SAVEP_FLAG < 0)) {
@@ -225,8 +241,13 @@ void PEB_$LOAD_WCS(void)
             return;
         }
 
-        /* Lock the file */
-        FILE_$LOCK(&file_uid, msg_map_file + 14, NULL, NULL, NULL, &status);
+        /*
+         * Lock the file.  0x00E3201A-0x00E32032 pushes, right to left:
+         * &status, &lock_info, &0x00E322C8 (rights byte 0),
+         * &0x00E322C6 (mode word 4), &0x00E322C4 (index word 0), &file_uid.
+         */
+        FILE_$LOCK(&file_uid, &peb_lock_index_0, &peb_lock_mode_4,
+                   &peb_lock_rights_0, lock_info, &status);
         if (PEB_$LOAD_WCS_CHECK_ERR(msg_lock_file + 2) < 0) {
             return;
         }
@@ -258,8 +279,12 @@ void PEB_$LOAD_WCS(void)
             return;
         }
 
-        /* Lock the file */
-        FILE_$LOCK(&file_uid, msg_map_file + 14, NULL, NULL, NULL, &status);
+        /*
+         * Lock the file.  0x00E320DC-0x00E320F4: same shape as above but the
+         * lock mode cell is 0x00E31DCE (word 1) rather than 0x00E322C6.
+         */
+        FILE_$LOCK(&file_uid, &peb_lock_index_0, &peb_lock_mode_1,
+                   &peb_lock_rights_0, lock_info, &status);
         if (PEB_$LOAD_WCS_CHECK_ERR(msg_resolve) < 0) {
             return;
         }
@@ -289,7 +314,7 @@ void PEB_$LOAD_WCS(void)
                 if (verify_data.word0 != entries[i].word0 ||
                     verify_data.word1 != entries[i].word1 ||
                     verify_data.word2 != entries[i].word2) {
-                    CRASH_SYSTEM(PEB_WCS_Verify_Failed_Err);
+                    CRASH_SYSTEM(&PEB_WCS_Verify_Failed_Err);
                 }
             }
         }
@@ -306,10 +331,23 @@ void PEB_$LOAD_WCS(void)
             return;
         }
 
-        /* Wire the PEB code and data areas */
-        MST_$WIRE_AREA(&PTR_PEB_$TOUCH_00e322e4, 0x22E8, 0, 0x229A, &wire_result1);
-        MST_$WIRE_AREA(&PTR_PEB_$WIRED_DATA_START_00e322dc, 0x22E0,
-                       (char)(wire_result1 << 2), (10 - wire_result1), &wire_result2);
+        /*
+         * Wire the PEB code and data areas.  MST_$WIRE_AREA (0x00E44BA4) takes
+         * &start_va, &end_va, page-list array, &max_pages (word), &count (word).
+         *
+         * 0x00E3220A: &wire_count1, &0x00E3229A (10), wired_pages,
+         *             &0x00E322E8 (0x00E70A3E), &0x00E322E4 (0x00E70810).
+         * 0x00E3222C: &wire_count2, &wire_remaining (10 - wire_count1),
+         *             &wired_pages[wire_count1] (`pea (-0x28,A6,D1w*1)` with
+         *             D1 = wire_count1 << 2), &0x00E322E0 (0x00E854D8),
+         *             &0x00E322DC (0x00E84E80).
+         */
+        MST_$WIRE_AREA(&PTR_PEB_$TOUCH_00e322e4, &PTR_PEB_$WIRED_CODE_END_00e322e8,
+                       wired_pages, &peb_wire_max_pages, &wire_count1);
+        wire_remaining = 10 - wire_count1;
+        MST_$WIRE_AREA(&PTR_PEB_$WIRED_DATA_START_00e322dc,
+                       &PTR_PEB_$WIRED_DATA_END_00e322e0,
+                       &wired_pages[wire_count1], &wire_remaining, &wire_count2);
 
         /* Enable PEB and mark as loaded */
         PEB_$CTL_SHADOW |= PEB_CTL_ENABLE;

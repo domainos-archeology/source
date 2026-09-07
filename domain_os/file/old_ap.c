@@ -31,8 +31,8 @@
  * 2. Otherwise, copy all ACL data and use attr_id 0x13
  * 3. Call FILE_$SET_PROT_INT with subsys_flag = -1
  */
-void FILE_$OLD_AP(uid_t *file_uid, int16_t *prot_type, uint32_t *acl_data,
-                  uint32_t *acl_uid, status_$t *status_ret)
+void FILE_$OLD_AP(uid_t *file_uid, int16_t *prot_type, void *acl_data,
+                  uid_t *acl_uid, status_$t *status_ret)
 {
     uint16_t attr_id;
     int16_t i;
@@ -52,12 +52,12 @@ void FILE_$OLD_AP(uid_t *file_uid, int16_t *prot_type, uint32_t *acl_data,
          * Type 6: Set protection by ACL UID.
          * Copy ACL UID to first two entries of local ACL.
          */
-        local_acl[0] = acl_uid[0];
-        local_acl[1] = acl_uid[1];
+        local_acl[0] = acl_uid->high;
+        local_acl[1] = acl_uid->low;
 
         /* Also copy to local UID for consistency */
-        local_uid[0] = acl_uid[0];
-        local_uid[1] = acl_uid[1];
+        local_uid[0] = acl_uid->high;
+        local_uid[1] = acl_uid->low;
 
         attr_id = 0x03;
     } else {
@@ -65,15 +65,15 @@ void FILE_$OLD_AP(uid_t *file_uid, int16_t *prot_type, uint32_t *acl_data,
          * Other types: Copy all ACL data.
          * Uses attribute ID 0x13.
          */
-        src = acl_data;
+        src = (uint32_t *)acl_data;
         dst = local_acl;
         for (i = 10; i >= 0; i--) {
             *dst++ = *src++;
         }
 
         /* Copy ACL UID */
-        local_uid[0] = acl_uid[0];
-        local_uid[1] = acl_uid[1];
+        local_uid[0] = acl_uid->high;
+        local_uid[1] = acl_uid->low;
 
         attr_id = 0x13;
     }

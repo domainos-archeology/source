@@ -19,6 +19,14 @@
 int8_t AUDIT_$ENABLED = 0;
 
 /*
+ * Audit event-UID table entries (image data, {class, subtype, 0}).
+ * VTOC_$MOUNT pushes 0x00E85648 at 0x00E3874C and VTOC_$DISMOUNT pushes
+ * 0x00E85640 at 0x00E38894.
+ */
+uid_t AUDIT_$DISMOUNT_LV_EU = { 0x0004000Eu, 0x00000000u };  /* 0x00E85640 */
+uid_t AUDIT_$MOUNT_LV_EU    = { 0x0004000Du, 0x00000000u };  /* 0x00E85648 */
+
+/*
  * AUDIT_$CORRUPTED - Error flag
  *
  * Set to 0xFF (-1) if the audit subsystem encountered an

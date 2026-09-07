@@ -30,7 +30,7 @@
 #define FW_PARTIAL_REMOTE   0x8003   /* Include remote sync */
 
 void FILE_$FW_PARTIAL(uid_t *file_uid, uint32_t *start_offset,
-                      int32_t *byte_count, status_$t *status_ret)
+                      uint32_t *byte_count, status_$t *status_ret)
 {
     int8_t was_locked;
     uint8_t delete_result[4];  /* Result buffer from DELETE_INT */

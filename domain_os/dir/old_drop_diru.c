@@ -65,18 +65,22 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
     uint32_t entry_uid_high;      /* uStack_6a */
     uint32_t entry_uid_low;       /* uStack_66 */
     uid_t dir_uid;                /* local_54 - UID of directory to drop */
-    uint8_t location_buf[32];     /* auStack_3c + auStack_24 */
+    /* A6-0x48: the 0x20-byte object-location record.  The directory UID
+     * goes in at +0x08 (0x00E5749C) and bit 6 of the flags byte at +0x1D is
+     * cleared (0x00E574A4 `bclr.b #6,(-0x2b,A6)`). */
+    file_$obj_loc_t location_buf;
     uint8_t entry_data[48];       /* entry buffer from GET_ENTRYU */
     uint32_t handle;              /* local_78 */
-    uint8_t loc_buf1[4];          /* auStack_74 */
-    uint8_t loc_buf2[4];          /* auStack_70 */
+    uint32_t loc_buf1;            /* 0x00e574b2 pea (-0x70,A6) - never touched */
+    uint32_t loc_buf2;            /* 0x00e574ae pea (-0x6c,A6) - aote+0x08 out */
     uint8_t parsed_name[32];      /* auStack_24 */
     uint16_t parsed_len[2];       /* local_7c */
     status_$t local_status;
     int16_t rights_result;
     int8_t is_empty;
     int8_t valid;
-    uint8_t attr_byte;            /* local_2f */
+    /* A6-0x7A: FILE_$DELETE_OBJ's word output (0x00E57516) */
+    uint16_t delete_out;
 
     /* Step 1: Look up the entry */
     DIR_$OLD_GET_ENTRYU(parent_uid, name, name_high,
@@ -170,30 +174,31 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
         return;
     }
 
-    /* Step 8: Get location info */
-    /* TODO(source-qgq): The following is simplified from the Ghidra output.
-     * The original code uses AST_$GET_LOCATION and checks attr_byte
-     * to determine if the directory is remote or local. */
-    AST_$GET_LOCATION(location_buf, 1, loc_buf1, loc_buf2, status_ret);
+    /* Step 8: Get location info (0x00E574BE) */
+    location_buf.uid.high = dir_uid.high;
+    location_buf.uid.low = dir_uid.low;
+    location_buf.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
+    AST_$GET_LOCATION(&location_buf, 1, &loc_buf1, &loc_buf2, status_ret);
     if (*status_ret != status_$ok) {
         ACL_$EXIT_SUPER();
         return;
     }
 
     /* Step 9: Check if remote or local and delete accordingly */
-    attr_byte = location_buf[0x0d]; /* local_2f maps to byte in location data */
-    if ((int8_t)attr_byte < 0) {
+    /* 0x00E574CE `tst.b (-0x2b,A6)` / bpl: the record's flags byte at +0x1D */
+    if (location_buf.flags < 0) {
         /* Remote directory - use REM_FILE to drop */
         valid = name_$validate_leaf(name, *name_high, parsed_name, parsed_len);
         if (valid < 0) {
-            REM_FILE_$DROP_HARD_LINKU(location_buf + 0x10, parent_uid,
+            REM_FILE_$DROP_HARD_LINKU(&location_buf.loc_info, parent_uid,
                                       parsed_name, parsed_len[0], 0, status_ret);
         } else {
             *status_ret = status_$naming_invalid_leaf;
         }
     } else {
         /* Local directory - delete object */
-        FILE_$DELETE_OBJ(&dir_uid, 0xFF, location_buf, status_ret);
+        /* 0x00E57516 pea's a word cell at A6-0x7A, not the location record. */
+        FILE_$DELETE_OBJ(&dir_uid, (int8_t)0xFF, &delete_out, status_ret);
         if (*status_ret == status_$ok) {
             /* Fix root entry */
             name_$old_drop_entry(parent_uid, name, *name_high, 0, &dir_uid, status_ret);

@@ -164,7 +164,11 @@ void FLP_$DO_IO(void *param_1, void *param_2, void *param_3, uint32_t param_4);
 void FLP_DO_IO(void *req, void *buf, void *param3, uint16_t lba_hi,
                uint32_t lba_lo);
 status_$t SHAKE(uint16_t *data_buf, int16_t *count_ptr, int16_t *dir_ptr);
-status_$t EXCS(uint16_t *cmd_buf, void *cmd_sig, void *req);
+/*
+ * EXCS hands its second argument straight to SHAKE as the byte count
+ * ("move.l (0xc,A6),-(SP)" at 0x00E3E28C), so it is the address of a word.
+ */
+status_$t EXCS(uint16_t *cmd_buf, int16_t *count_ptr, void *req);
 void FLP_FORMAT_TRACK(void *req, void *buf);
 
 /* External functions used by FLP */

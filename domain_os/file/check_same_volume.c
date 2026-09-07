@@ -20,16 +20,16 @@
  * by optionally copying location info for the caller.
  *
  * Parameters:
- *   file_uid1     - First file UID
- *   file_uid2     - Second file UID (from ACL source)
- *   copy_location - If true (negative), copy location info on remote hit
- *   location_out  - Output buffer for location info (32 bytes)
- *   status_ret    - Output status code
+ *   file_uid1     - First file UID                   (A6+0x08)
+ *   file_uid2     - Second file UID (from ACL source) (A6+0x0C)
+ *   copy_location - Pascal boolean; when true the remote path hands the
+ *                   caller the whole 0x20-byte record  (A6+0x10, byte)
+ *   location_out  - Output buffer for the location record (A6+0x12)
+ *   status_ret    - Output status code                (A6+0x16)
  *
  * Returns:
- *   0: Files are on different volumes or error occurred
- *   -1: Files are local and on different logical volumes
- *   Positive: Files are on same volume
+ *   D0.B - Pascal boolean: true (-1) when both objects are local and their
+ *          location records agree, false (0) otherwise.
  *
  * Flow:
  * 1. Get dismount sequence number (for consistency check)
@@ -45,74 +45,69 @@ int8_t FILE_$CHECK_SAME_VOLUME(uid_t *file_uid1, uid_t *file_uid2,
                                 int8_t copy_location, uint32_t *location_out,
                                 status_$t *status_ret)
 {
-    uint32_t uid1_high, uid1_low;
-    uint32_t uid2_high, uid2_low;
-    uint32_t uid1_masked_low, uid2_masked_low;
+    uid_t uid1_raw;                 /* A6-0x68: caller's UID, unmodified   */
+    uid_t uid2_raw;                 /* A6-0x60 */
+    uid_t uid1_masked;              /* A6-0x18: high nibble of low[31:24]  */
+    uid_t uid2_masked;              /* A6-0x10 */
     int32_t dism_seqn_start, dism_seqn_end;
-    status_$t location_status;
-    int8_t result;
+    status_$t location_status;      /* A6-0x6c */
+    int8_t result;                  /* D2.B    */
 
     /*
-     * Location info structures - AST_$GET_LOCATION expects:
-     *   - UID at offset 8 (bytes 8-15) as INPUT
-     *   - Writes 32 bytes of location info back to the buffer
+     * The two 0x20-byte object-location records AST_$GET_LOCATION fills
+     * (A6-0x58 and A6-0x38).  The UID goes in at +0x08 and the whole record
+     * is overwritten from aote+0x9C on success.
      */
-    struct {
-        uint32_t data[2];       /* 8 bytes - location output starts here */
-        uid_t    uid;           /* 8 bytes - UID input at offset 8 */
-        uint32_t data2[4];      /* 16 bytes - more location output */
-        uint8_t  pad[5];
-        uint8_t  remote_flags;  /* Bit 7 set if remote */
-    } loc_info1;
+    file_$obj_loc_t loc1;
+    file_$obj_loc_t loc2;
 
-    struct {
-        uint32_t data[2];       /* 8 bytes */
-        uid_t    uid;           /* 8 bytes - UID input at offset 8 */
-        uint16_t volume_id;
-        uint8_t  pad[3];
-        uint8_t  remote_flags;
-    } loc_info2;
+    /*
+     * A6-0x78 / A6-0x74: the two 4-byte cells both AST_$GET_LOCATION calls
+     * are handed (`pea (-0x78,A6)` / `pea (-0x74,A6)` at 0x00E5E4E4).  The
+     * first is the argument the routine never touches; the second receives
+     * aote+0x08.  Both calls share the same pair of cells, and neither value
+     * is read afterwards.
+     */
+    uint32_t get_location_unused;
+    uint32_t vol_uid;
 
-    uint32_t vol_uid1;
-    uint32_t vol_uid2;
-    uid_t neighbor_uid1;
-    uid_t neighbor_uid2;
+    /* Copy the caller's UIDs, then mask the top byte of the low longword.
+     * 0x00E5E4AA: `andi.b #-0x10,(-0x14,A6)` - the byte at +4 of the UID is
+     * uid.low bits 31..24 on the big-endian m68k. */
+    uid1_raw = *file_uid1;
+    uid2_raw = *file_uid2;
 
-    /* Copy and mask UIDs (clear type nibble from low word high byte) */
-    uid1_high = file_uid1->high;
-    uid1_low = file_uid1->low;
-    uid2_high = file_uid2->high;
-    uid2_low = file_uid2->low;
-
-    uid1_masked_low = uid1_low & 0xF0FFFFFF;
-    uid2_masked_low = uid2_low & 0xF0FFFFFF;
+    uid1_masked = uid1_raw;
+    uid1_masked.low &= 0xF0FFFFFFu;
+    uid2_masked = uid2_raw;
+    uid2_masked.low &= 0xF0FFFFFFu;
 
     do {
-        result = 0;
+        result = 0;                                     /* 0x00E5E4C2 */
 
         /* Get dismount sequence number to detect changes */
         dism_seqn_start = AST_$GET_DISM_SEQN();
 
-        /* Set up UID for first lookup at offset 8 in the structure */
-        loc_info1.uid.high = uid1_high;
-        loc_info1.uid.low = uid1_masked_low;
+        /* Set up UID for first lookup at offset 8 in the record */
+        loc1.uid = uid1_masked;                         /* 0x00E5E4D0 */
 
-        /* Clear remote flag before lookup */
-        loc_info1.remote_flags &= ~0x40;
+        /* Clear the scratch flag before the lookup (bclr.b #6,(-0x3b,A6)) */
+        loc1.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
         /* Get location of first file */
-        AST_$GET_LOCATION((uint32_t *)&loc_info1, 0, 0, &vol_uid1, &location_status);
+        AST_$GET_LOCATION(&loc1, 0, &get_location_unused, &vol_uid,
+                          &location_status);
 
         if (location_status != status_$ok) {
             goto done;
         }
 
-        /* Check if first file is remote */
-        if ((int8_t)loc_info1.remote_flags < 0) {  /* Bit 7 set */
+        /* Check if first file is remote (tst.b (-0x3b,A6); bpl) */
+        if (loc1.flags < 0) {
             if (copy_location < 0) {
-                /* Copy location info for caller */
+                /* 0x00E5E50E: copy all 8 longwords of the record out */
                 int16_t i;
-                uint32_t *src = loc_info1.data;
+                const uint32_t *src = (const uint32_t *)(const void *)&loc1;
                 for (i = 7; i >= 0; i--) {
                     *location_out++ = *src++;
                 }
@@ -120,42 +115,46 @@ int8_t FILE_$CHECK_SAME_VOLUME(uid_t *file_uid1, uid_t *file_uid2,
                 return 0;
             }
 
-            /* Get neighbor info for remote file */
-            neighbor_uid1.high = uid1_high;
-            neighbor_uid1.low = uid1_low;
-            neighbor_uid2.high = uid2_high;
-            neighbor_uid2.low = uid2_low;
-            result = REM_FILE_$NEIGHBORS(loc_info1.data,
-                                         &neighbor_uid1, &neighbor_uid2,
+            /*
+             * 0x00E5E526: REM_FILE_$NEIGHBORS(&loc1.loc_info, &uid1_masked,
+             *                                 &uid2_masked, &location_status)
+             * The MASKED UIDs are passed (pea (-0x18,A6) / pea (-0x10,A6)),
+             * and the record pointer is the record base + 0x10.
+             */
+            result = REM_FILE_$NEIGHBORS(&loc1.loc_info,
+                                         &uid1_masked, &uid2_masked,
                                          &location_status);
             goto done;
         }
 
         /* First file is local, check second file */
-        loc_info2.uid.high = uid2_high;
-        loc_info2.uid.low = uid2_masked_low;
+        loc2.uid = uid2_masked;                         /* 0x00E5E544 */
+        loc2.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;    /* 0x00E5E54C */
 
-        loc_info2.remote_flags &= ~0x40;
-
-        AST_$GET_LOCATION((uint32_t *)&loc_info2, 1, 0, &vol_uid2, &location_status);
+        AST_$GET_LOCATION(&loc2, 1, &get_location_unused, &vol_uid,
+                          &location_status);
 
         if (location_status != status_$ok) {
             goto done;
         }
 
         /*
-         * Compare volume identifiers.
-         * Both files must be local (bit 7 clear) and have matching volume IDs.
+         * 0x00E5E578: compare the WORD at offset +0x02 of each record
+         * (`move.w (-0x56,A6),D2w` / `cmp.w (-0x36,A6),D2w`) and AND that
+         * with "record 2 is not remote" (spl on the flags byte).  On the
+         * big-endian m68k the word at +0x02 is the low half of the longword
+         * at +0x00.
          */
-        result = ((int8_t)loc_info2.remote_flags >= 0) &&
-                 (vol_uid1 == vol_uid2) ? -1 : 0;
+        result = (int8_t)(((loc1.reserved_00[0] & 0xFFFFu) ==
+                           (loc2.reserved_00[0] & 0xFFFFu) ? -1 : 0) &
+                          (loc2.flags >= 0 ? -1 : 0));
 
         /* Check if dismount sequence changed */
         dism_seqn_end = AST_$GET_DISM_SEQN();
 
     } while (dism_seqn_end != dism_seqn_start);
 
-    location_status = status_$ok;
+    location_status = status_$ok;                       /* 0x00E5E59A */
 
 done:
     *status_ret = location_status;

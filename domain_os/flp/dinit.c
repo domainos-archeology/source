@@ -76,7 +76,8 @@ status_$t FLP_$DINIT(uint16_t unit, uint16_t ctlr,
     DAT_00e7b00a = unit;  /* Set current unit */
 
     /* Execute recalibrate command */
-    status = EXCS(DAT_00e7b008, DAT_00e3e21c, exec_buffer);
+    /* 0x00E3E1A6: EXCS(&recal_cmd, &const_2, &exec_buffer) */
+    status = EXCS(DAT_00e7b008, &DAT_00e3e21c, exec_buffer);
 
     /* Clear unit status */
     DAT_00e7af6c[unit * 2] = 0;

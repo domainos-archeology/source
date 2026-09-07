@@ -23,7 +23,7 @@
  *   name       - Entry name
  *   name_len   - Length of name
  *   type_ret   - Output: entry type (1=file, 3=link)
- *   uid_ret    - Output: 8-byte UID of the found entry
+ *   uid_ret    - Output: UID of the found entry
  *   extra_ret  - Output: extra data (type 3 entries only)
  *   found_ret  - Output: 0xFF if found in cache-eligible form, 0 otherwise
  *   status_ret - Output: status code
@@ -38,15 +38,19 @@
  * TODO(source-qgq): Replace with proper reference */
 
 void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
-                       short *type_ret, char *uid_ret, uint32_t *extra_ret,
-                       uint8_t *found_ret, status_$t *status_ret)
+                       uint16_t *type_ret, uid_t *uid_ret,
+                       uint32_t *extra_ret, uint8_t *found_ret,
+                       status_$t *status_ret)
 {
     char *a5 = (char *)__A5_BASE();
     uint32_t local_handle;
     uint8_t *entry_ptr;
-    uint8_t find_extra1[2];
-    uint8_t find_extra2[2];
-    uint8_t find_extra3[2];
+    /* A6-0x4E: dir_$find_entry's depth_ret, cleared with `clr.w (A0)`
+     * at 0x00E4C9F0 - a word, not a status longword. */
+    int16_t find_depth;
+    uint8_t find_extra2[2];       /* A6-0x4C: dir_$find_entry's extra array */
+    uint8_t find_extra3[2];       /* A6-0x4A: dir_$do_op_add_entry's result */
+    status_$t add_status;         /* A6-0x40: dir_$do_op_add_entry's status */
     int16_t local_type;
     int16_t remote_name_len;
     uint8_t remote_name[32];
@@ -67,7 +71,8 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
     /* Look up the entry */
     char found = dir_$find_entry((void *)(uintptr_t)local_handle,
                                  name, name_len, 0,
-                                 (void **)&entry_ptr, find_extra2, find_extra1);
+                                 (void **)&entry_ptr, find_extra2,
+                                 &find_depth);
 
     if (found < 0) {
         /* Entry found */
@@ -79,11 +84,8 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
         case 2:
             /* File/directory entry */
             *type_ret = 1;
-            {
-                uint32_t *uid_out = (uint32_t *)uid_ret;
-                uid_out[0] = *(uint32_t *)(entry_ptr + 4);
-                uid_out[1] = *(uint32_t *)(entry_ptr + 8);
-            }
+            uid_ret->high = *(uint32_t *)(entry_ptr + 4);
+            uid_ret->low  = *(uint32_t *)(entry_ptr + 8);
             *found_ret = 0xFF;
 
             /* Check UID remap table */
@@ -93,15 +95,12 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
                     int16_t ri = 1;
                     char *rp = a5;
                     do {
-                        if (*(uint32_t *)uid_ret == *(uint32_t *)(rp + 0x155C) &&
-                            *(uint32_t *)(uid_ret + 4) == *(uint32_t *)(rp + 0x1560)) {
+                        if (uid_ret->high == *(uint32_t *)(rp + 0x155C) &&
+                            uid_ret->low == *(uint32_t *)(rp + 0x1560)) {
                             *found_ret = 0;
                             rp = a5 + ri * 8;
-                            {
-                                uint32_t *uid_out = (uint32_t *)uid_ret;
-                                uid_out[0] = *(uint32_t *)(rp + 0x1594);
-                                uid_out[1] = *(uint32_t *)(rp + 0x1598);
-                            }
+                            uid_ret->high = *(uint32_t *)(rp + 0x1594);
+                            uid_ret->low  = *(uint32_t *)(rp + 0x1598);
                             break;
                         }
                         ri++;
@@ -115,11 +114,8 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
         case 3:
             /* Hard link entry - includes extra data */
             *type_ret = 1;
-            {
-                uint32_t *uid_out = (uint32_t *)uid_ret;
-                uid_out[0] = *(uint32_t *)(entry_ptr + 4);
-                uid_out[1] = *(uint32_t *)(entry_ptr + 8);
-            }
+            uid_ret->high = *(uint32_t *)(entry_ptr + 4);
+            uid_ret->low  = *(uint32_t *)(entry_ptr + 8);
             *extra_ret = *(uint32_t *)(entry_ptr + 0x0C);
             break;
 
@@ -129,7 +125,7 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
             break;
 
         default:
-            CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+            CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
             break;
         }
     } else {
@@ -166,16 +162,21 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
                 }
 
                 /* Add the remote entry to the local directory */
+                /* 0x00E4CD1C `pea (-0x33a,PC)` resolves to 0x00E4C9E4 -
+                 * dir_$find_entry's entry point.  target_len is 0 here
+                 * (`clr.w` at 0x00E4CD20) so the byte string is never read;
+                 * the compiler simply emitted a code address.  target_data
+                 * is a 32-bit VA cell, hence the cast.
+                 * 0x00E4CD14 pushes a *separate* status cell at A6-0x40,
+                 * not find_entry's depth word. */
                 dir_$do_op_add_entry(uid, 0, remote_name, remote_name_len,
                                      3, remote_extra, &remote_uid_high, 0,
-                                     dir_$find_entry, find_extra3, (status_$t *)find_extra1);
+                                     (uint32_t)(uintptr_t)dir_$find_entry,
+                                     find_extra3, &add_status);
 
                 *type_ret = local_type;
-                {
-                    uint32_t *uid_out = (uint32_t *)uid_ret;
-                    uid_out[0] = remote_uid_high;
-                    uid_out[1] = remote_uid_low;
-                }
+                uid_ret->high = remote_uid_high;
+                uid_ret->low  = remote_uid_low;
                 *extra_ret = remote_extra;
                 goto release_and_exit;
             }

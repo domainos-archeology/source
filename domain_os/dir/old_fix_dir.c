@@ -49,7 +49,12 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
     void *mapped_ptr;
     status_$t status;
     status_$t cleanup_status;
-    uint8_t dtv_buf[8];
+    /* A6-0x324: FILE_$PRIV_UNLOCK's dtv_out cell, a single longword
+     * (`clr.l (A0)` at 0x00E5FD50). */
+    uint32_t dtv_out;
+    /* A6-0x328: the cell MST_$UNMAP dereferences for the mapped address
+     * (`move.l A3,(-0x328,A6)` at 0x00E5603E). */
+    uint32_t unmap_addr;
     uint8_t map_result[4];
     int8_t did_lock;
     int8_t did_map;
@@ -57,6 +62,11 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
 
     /* Info block data */
     uint8_t info_buf[40];
+    /* A6-0x270 / A6-0xE8..: FILE_$GET_ATTRIBUTES' location record and
+     * 0x90-byte attribute buffer (`pea (-0x270,A6)` / `pea (-0x300,A6)`
+     * at 0x00E55D3A / 0x00E55D36). */
+    uint8_t attr_loc_rec[AST_$LOC_REC_SIZE];
+    uint8_t attr_out[AST_ATTR_REC_SIZE];
     int16_t info_len[2];
 
     /* Directory read state */
@@ -67,6 +77,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
     int16_t entry_name_len;
     char entry_name[258];
     uint8_t entry_uid_buf[8];
+    uint32_t root_add_flags;   /* A6-0x10C: DIR_$OLD_ROOT_ADDU's flags cell */
     uint8_t entry_link_buf[256];
     int16_t link_len[2];
     uid_t entry_uid;
@@ -150,13 +161,15 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
          * three `clr.l` covering by_key/key, rem_key and rem_node. */
         (void)FILE_$PRIV_UNLOCK(&temp_uid, (int32_t)lock_handle, 4,
                                 (uint16_t)PROC1_$AS_ID,
-                                0, 0, 0, 0, dtv_buf, status_ret);
+                                0, 0, 0, 0, &dtv_out, status_ret);
         if (*status_ret != status_$ok) {
             goto cleanup;
         }
 
         /* Unmap temp file */
-        MST_$UNMAP_PRIVI(1, &temp_uid, mapped_ptr, 0x10000,
+        /* 0x00E55F02 `pea (A3)` pushes the mapped address itself, a
+         * 32-bit VA passed by value. */
+        MST_$UNMAP_PRIVI(1, &temp_uid, (uint32_t)(uintptr_t)mapped_ptr, 0x10000,
                          PROC1_$AS_ID, status_ret);
         if (*status_ret != status_$ok) {
             goto cleanup;
@@ -189,8 +202,11 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
                 /* Regular entry - re-add */
                 if (NAME_$ROOT_UID.high == local_dir.high &&
                     NAME_$ROOT_UID.low == local_dir.low) {
+                    /* 0x00E55FB0 `pea (-0x10c,A6)`: a cell of its own that
+                     * sits right after entry_uid_buf (A6-0x114), not the
+                     * FILE_$PRIV_UNLOCK dtv cell. */
                     DIR_$OLD_ROOT_ADDU(&local_dir, entry_name, &entry_name_len,
-                                       (uid_t *)entry_uid_buf, (uint32_t *)dtv_buf,
+                                       (uid_t *)entry_uid_buf, &root_add_flags,
                                        &status);
                 } else {
                     DIR_$OLD_ADDU(&local_dir, entry_name, &entry_name_len,
@@ -240,15 +256,19 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
             /* Get attributes to restore parent UID */
             {
                 uint32_t attr_high, attr_low;
+                /* 0x00E55D3A/0x00E55D36: the location record and the
+                 * 0x90-byte attribute buffer are two separate frame
+                 * objects, not two windows onto info_buf. */
                 FILE_$GET_ATTRIBUTES(&local_dir, &DAT_00e56098,
-                                     &DAT_00e56094, info_buf,
-                                     info_buf + 0x3C, &status);
+                                     &DAT_00e56094, attr_loc_rec,
+                                     attr_out, &status);
                 if (status == status_$ok) {
-                    /* Restore parent UID at offset 0x0E in mapped buffer */
+                    /* Restore parent UID at offset 0x0E in mapped buffer.
+                     * 0x00E55D5A reads it from A6-0x2C4, i.e. attr_out+0x3C. */
                     *((uint32_t *)((uint8_t *)mapped_ptr + 0x0E)) =
-                        *((uint32_t *)(info_buf + 0x30));
+                        *((uint32_t *)(attr_out + 0x3C));
                     *((uint32_t *)((uint8_t *)mapped_ptr + 0x12)) =
-                        *((uint32_t *)(info_buf + 0x34));
+                        *((uint32_t *)(attr_out + 0x40));
                 }
             }
             *status_ret = status_$ok;
@@ -262,14 +282,15 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
          * 0x00E55EBC, then `clr.w -(SP)`). */
         (void)FILE_$PRIV_UNLOCK(&local_dir, (int32_t)lock_handle, 4,
                                 (uint16_t)PROC1_$AS_ID,
-                                0, 0, 0, 0, dtv_buf, &status);
+                                0, 0, 0, 0, &dtv_out, &status);
         if (*status_ret == status_$ok) {
             *status_ret = status;
         }
 
 unmap_and_done:
         /* Unmap */
-        MST_$UNMAP_PRIVI(1, &local_dir, mapped_ptr, 0x10000,
+        /* 0x00E55DB2 `pea (A3)`: the mapped address by value. */
+        MST_$UNMAP_PRIVI(1, &local_dir, (uint32_t)(uintptr_t)mapped_ptr, 0x10000,
                          PROC1_$AS_ID, &status);
         if (*status_ret == status_$ok) {
             *status_ret = status;
@@ -280,7 +301,11 @@ unmap_and_done:
 cleanup:
     /* Cleanup for Path 1 */
     if (did_map < 0) {
-        MST_$UNMAP(&temp_uid, 0, &DAT_00e5609e, &status);
+        /* 0x00E5603E stores the mapped address into the A6-0x328 cell and
+         * 0x00E5604A pea's that cell; MST_$UNMAP dereferences it
+         * (`movea.l (0xc,A6),A1; move.l (A1),-(SP)` at 0x00E4474A). */
+        unmap_addr = (uint32_t)(uintptr_t)mapped_ptr;
+        MST_$UNMAP(&temp_uid, &unmap_addr, &DAT_00e5609e, &status);
     }
     if (did_lock < 0) {
         FILE_$SET_REFCNT(&temp_uid, &DAT_00e54730, &status);

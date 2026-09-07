@@ -86,7 +86,8 @@ static uint8_t captured_event_data[128];
 static uint16_t captured_data_len;
 
 void AUDIT_$LOG_EVENT(uid_t *event_uid, uint16_t *event_flags,
-                      uint32_t *status, char *data, uint16_t *data_len)
+                      uint32_t *status, char *data,
+                      const uint16_t *data_len)
 {
     log_event_call_count++;
 

@@ -108,7 +108,7 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
     if (*(int8_t *)remote_flag < 0) {
         /* Remote object - set up network info */
         status_$t status;
-        NETWORK_$INSTALL_NET(obj_info[4], (void *)((char *)aote + 0x08), &status);
+        NETWORK_$INSTALL_NET(obj_info[4], &aote->vol_uid, &status);
         if (status != status_$ok) {
             ast_$release_aote(aote);
             goto done;

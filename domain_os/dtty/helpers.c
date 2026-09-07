@@ -171,10 +171,15 @@ void dtty_$load_font(void **font_ptr, status_$t *status_ret)
     /* Set up display type access (original uses A5 register) */
     dtty_$get_disp_type();
 
-    /* Load the font to hidden display memory
-     * Note: SMD_$COPY_FONT_TO_MD_HDM is at 0x00E1D750 based on the
-     * original analysis. The function name in the header says
-     * SMD_$COPY_FONT_TO_HDM but the actual implementation copies
-     * to MD (main display) HDM area. */
-    SMD_$COPY_FONT_TO_HDM(*font_ptr, NULL, status_ret);
+    /*
+     * Load the font to the main display's hidden memory.
+     *
+     * 0x00E1D678-0x00E1D680 pushes status_ret then font_ptr and jumps to
+     * 0x00E1D750, which is SMD_$COPY_FONT_TO_MD_HDM - a two-argument
+     * routine, not the three-argument SMD_$COPY_FONT_TO_HDM.  font_ptr is
+     * passed BY REFERENCE: the callee dereferences it itself
+     * (0x00E1D758 "movea.l (0x8,A6),A2" then 0x00E1D762 "tst.l (A2)" and
+     * 0x00E1D7A6 "movea.l (A2),A2").
+     */
+    SMD_$COPY_FONT_TO_MD_HDM(font_ptr, status_ret);
 }

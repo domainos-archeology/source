@@ -37,8 +37,9 @@ static void *file_$priv_lock_nil_acl_ctx = NULL;
  *                  compatibility but its contents are not populated.
  *   status_ret   - Output status code
  */
-void FILE_$LOCK(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
-                uint8_t *rights, void *lock_info, status_$t *status_ret)
+void FILE_$LOCK(uid_t *file_uid, const uint16_t *lock_index,
+                const uint16_t *lock_mode, const uint8_t *rights,
+                void *lock_info, status_$t *status_ret)
 {
     uint32_t local_8 = 0;   /* Lock context output - cleared at start */
     uint16_t result;

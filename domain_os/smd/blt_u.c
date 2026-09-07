@@ -10,6 +10,17 @@
 #include "smd/smd_internal.h"
 
 /*
+ * Constant cell in the code region, passed by reference with pea (d,PC):
+ *   0x00E6FB82 pea (-0x20c,PC) -> 0x00E6FB84 - 0x020C = 0x00E6F978, a
+ *                                 longword holding 0x00000000 (contents read
+ *                                 with gsk; the same cell SMD_$MAP_DISPLAY_U
+ *                                 calls smd_$map_zero).
+ * The other by-reference constant this file passes, 0x00E6D92C, is already
+ * declared in smd_internal.h as SMD_ACQ_LOCK_DATA.
+ */
+static const uint32_t smd_$blt_zero_long = 0;   /* 0x00E6F978 */
+
+/*
  * smd_$is_valid_blt_ctl - Validate BLT control register value
  *
  * Checks if a BLT control register value is one of the valid magic values.
@@ -164,10 +175,20 @@ void SMD_$BLT_U(smd_blt_ctl_t *blt_ctl, status_$t *status_ret)
         if (*status_ret == status_$ok) {
             /*
              * All validation passed - call internal BLT function.
-             * The second and third parameters are placeholder/null values
-             * in the original code (PC-relative addresses pointing to zeros).
+             *
+             * 0x00E6FB7C-0x00E6FB88 pushes, right to left:
+             *   pea (A3)          status_ret
+             *   pea (-0x2254,PC)  -> 0x00E6FB80 - 0x2254 = 0x00E6D92C,
+             *                        the module's constant word 0
+             *                        (SMD_ACQ_LOCK_DATA)
+             *   pea (-0x20c,PC)   -> 0x00E6FB84 - 0x020C = 0x00E6F978,
+             *                        a constant longword 0
+             *   pea (A2)          blt_ctl
+             * Both middle arguments are addresses of code-region constant
+             * cells, not null pointers; SMD_$BLT never reads either.
              */
-            SMD_$BLT(blt_ctl, NULL, NULL, status_ret);
+            SMD_$BLT(blt_ctl, &smd_$blt_zero_long, &SMD_ACQ_LOCK_DATA,
+                     status_ret);
         }
     }
 }

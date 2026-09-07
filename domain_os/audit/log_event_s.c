@@ -32,7 +32,7 @@
 
 void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
                         void *sid, uint32_t *status,
-                        char *data, uint16_t *data_len)
+                        char *data, const uint16_t *data_len)
 {
     int16_t pid;
     uint16_t actual_len;

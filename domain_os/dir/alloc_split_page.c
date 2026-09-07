@@ -76,7 +76,7 @@ void dir_$alloc_split_page(dir_insert_ctx_t *ctx, uint8_t flag,
             break;  /* Found last in-use page */
         }
         if (first_free_page == 0) {
-            CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+            CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
         }
         first_free_page--;
     }
@@ -180,9 +180,9 @@ void dir_$alloc_split_page(dir_insert_ctx_t *ctx, uint8_t flag,
                 /* AST_$GET_SEG_MAP: get 1 segment's bitmap (32 pages).
                  * offset = seg_map_index * 32768 (seg_map_index << 15).
                  * Original: jsr AST_$GET_SEG_MAP at 0x00E4ECB2 */
-                AST_$GET_SEG_MAP((uint32_t *)&local_uid,
+                AST_$GET_SEG_MAP(&local_uid,
                                  (uint32_t)seg_map_index << 15,
-                                 0, (uid_t *)1, 0x20, 2,
+                                 0, 1, 0x20, 2,
                                  seg_bitmap, &seg_status);
                 if (seg_status != status_$ok) {
                     *status_ret = seg_status;

@@ -33,7 +33,8 @@ typedef struct exsid_t {
 void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
 {
     exsid_t exsid;
-    uint8_t status_buf[4];
+    /* (-0x112,A6): FILE_$PRIV_LOCK's rights word out. */
+    uint16_t rights_out;
     uint8_t attr_buf[32];
     uint8_t file_info[64];
     uint8_t file_type;      /* At offset -0xe7 in original */
@@ -55,8 +56,9 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
      */
     if ((exsid.login_sid.high != RGYC_$G_LOCKSMITH_UID.high ||
          exsid.login_sid.low != RGYC_$G_LOCKSMITH_UID.low) &&
-        (exsid.org_sid.high != RGYC_$G_LOCKSMITH_UID.high ||
-         exsid.org_sid.low != RGYC_$G_LOCKSMITH_UID.low) &&
+        /* 0x00E5A784 compares (-0x60,A6) = exsid + 8 = group_sid. */
+        (exsid.group_sid.high != RGYC_$G_LOCKSMITH_UID.high ||
+         exsid.group_sid.low != RGYC_$G_LOCKSMITH_UID.low) &&
         (exsid.user_sid.high != RGYC_$G_LOCKSMITH_UID.high ||
          exsid.user_sid.low != RGYC_$G_LOCKSMITH_UID.low)) {
         *status_ret = status_$insufficient_rights_to_perform_operation;
@@ -66,12 +68,12 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
     /* Shutdown any existing accounting */
     if (pacct_owner.high != UID_$NIL.high ||
         pacct_owner.low != UID_$NIL.low) {
-        status_$t local_status;
-        uint8_t unlock_buf[8];
+        /* (-0x110,A6): FILE_$PRIV_UNLOCK's data-time-valid longword out. */
+        uint32_t dtv_out;
 
         /* Unmap buffer if mapped */
         if (DAT_00e81804 != NULL) {
-            MST_$UNMAP_PRIVI(1, &UID_$NIL, DAT_00e81804, DAT_00e81800, 0, status_ret);
+            MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(DAT_00e81804), DAT_00e81800, 0, status_ret);
         }
 
         /* Clear buffer state */
@@ -82,8 +84,10 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
         /* Unlock the old file */
         /* 0x00E5A7FA-0x00E5A812: `move.l (0x8,A5)` slot, `move.l #0x40000`
          * = mode word 4 + asid word 0, then three `clr.l`. */
+        /* 0x00E5A7FA `pea (A3)`: the status goes to the caller's status_ret,
+         * not to a local. */
         (void)FILE_$PRIV_UNLOCK(&pacct_owner, (int32_t)DAT_00e817f4, 4, 0,
-                                0, 0, 0, 0, unlock_buf, &local_status);
+                                0, 0, 0, 0, &dtv_out, status_ret);
     }
 
     /* Reset owner to nil */
@@ -96,7 +100,7 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
      * compiler passes its address, not a null pointer. */
     FILE_$PRIV_LOCK(file_uid, 0, 1, 4, 0, 0x0008, 0x0000,
                     0, 0, 0, &pacct_$start_nil_acl_ctx,
-                    0, (uint32_t *)&DAT_00e817f4, status_buf, status_ret);
+                    0, &DAT_00e817f4, &rights_out, status_ret);
 
     if (*status_ret != status_$ok) {
         return;

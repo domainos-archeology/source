@@ -72,7 +72,9 @@ void AST_$LOOKUP_WITH_HINTS(void *uid_info, uint32_t *vol_ptr, void *attrs,
 
                 if (*status == status_$ok) {
                     /* Success - update volume info with network */
-                    *(uint8_t *)vol_ptr |= 0x80;  /* Set remote flag */
+                    /* 00e01d08 `bset.b #0x7,(A0)`: bit 7 of the longword's
+                     * most significant byte = bit 31 of the longword. */
+                    *vol_ptr |= 0x80000000u;  /* Set remote flag */
                     NETWORK_$INSTALL_NET(hints[i * 2], vol_ptr, status);
                     *vol_ptr = (*vol_ptr & 0xFFF00000) | hints[i * 2 + 1];
                     return;

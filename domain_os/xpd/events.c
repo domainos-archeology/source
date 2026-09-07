@@ -107,7 +107,6 @@ void XPD_$CAPTURE_FAULT(void *context, int32_t *frame, uint16_t *signal,
     int32_t pc_value;
     uint8_t fp_state[256];
     uint8_t fp_regs[240];
-    int32_t *local_state;
     int32_t local_saved;     /* -0x18: *frame, the saved-state pointer used below */
     int32_t local_context;   /* -0x14: *context, copied by the prologue but not used */
     int8_t fp_modified;
@@ -119,7 +118,6 @@ void XPD_$CAPTURE_FAULT(void *context, int32_t *frame, uint16_t *signal,
     local_saved = *frame;                    /* movea.l (0xc,A6),A0; move.l (A0),(-0x18,A6) */
     local_context = *(int32_t *)context;     /* movea.l (0x8,A6),A1; move.l (A1),(-0x14,A6) */
     (void)local_context;
-    local_state = (int32_t *)local_saved;
     fp_modified = 0;
     input_status = *status_ret;
 
@@ -254,8 +252,15 @@ do_capture:
     /* Save FP state */
     XPD_$FP_GET_STATE(fp_state, fp_regs);   /* pushes (-0xc,A6) then (-0x10,A6) */
 
-    /* Store state pointer in process entry */
-    *(int32_t **)(PROC_TABLE_BASE + proc_offset + STATE_PTR_OFFSET) = &local_state;
+    /*
+     * Store state pointer in process entry.
+     *
+     * 0x00E5B402: `lea (-0x18,A6),A0 / move.l A0,(-0x1e,A3)` - what is stored
+     * is the ADDRESS of this frame's saved-state slot, not the saved-state
+     * pointer itself, so the debugger can write a new state pointer back
+     * (0x00E5B4B8 re-reads (-0x18,A6) afterwards).
+     */
+    *(int32_t **)(PROC_TABLE_BASE + proc_offset + STATE_PTR_OFFSET) = &local_saved;
 
     /* Set state_saved flag */
     *(uint8_t *)(PROC_TABLE_BASE + proc_offset + DEBUG_FLAGS_OFFSET) |= XPD_FLAG_STATE_SAVED;
@@ -271,8 +276,15 @@ do_capture:
     flags_ptr = (uint8_t *)(PROC_TABLE_BASE + proc_offset + DEBUG_FLAGS_OFFSET - 1);
 
     if ((*(flags_ptr + 1) & 0x10) == 0) {
-        /* Synchronous - awaken guardian */
-        PROC2_$AWAKEN_GUARDIAN(PROC_TABLE_BASE + proc_offset - 0xC8);
+        /*
+         * Synchronous - awaken guardian.
+         *
+         * 0x00E5B44A: `pea (-0xc8,A3)` - the guardian's process index word,
+         * passed BY ADDRESS (PROC2_$AWAKEN_GUARDIAN reads it with
+         * `movea.l (0x8,A6),A0 / move.w (A0),D0w` at 0x00E3E96E).
+         */
+        PROC2_$AWAKEN_GUARDIAN(
+            (int16_t *)(PROC_TABLE_BASE + proc_offset - 0xC8));
     } else {
         /* Async - advance debugger's EC */
         debugger_idx = *(int16_t *)(PROC_TABLE_BASE + proc_offset + DEBUGGER_IDX_OFFSET);

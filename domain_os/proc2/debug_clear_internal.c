@@ -39,9 +39,15 @@
 #define ENTRY_FLAGS_BYTE(entry) \
     (*((uint8_t *)(entry) + 0x2B))
 
-/* Static data for XPD_$WRITE calls */
-static const uint32_t debug_clear_data1 = 0;
-static const uint32_t debug_clear_data2 = 0;
+/*
+ * Constant cells the compiler placed in the code region and passes by
+ * reference to XPD_$WRITE (cell address = pea instruction address + 2 + d;
+ * values read out of the image with gsk):
+ *   0x00E41A20 (0x00E41A80 `pea (-0x62,PC)`) - the length longword, 1
+ *   0x00E41ABC (0x00E41A7C `pea (0x3e,PC)`)  - the source byte, 0x00
+ */
+static const int32_t debug_clear_len = 1;
+static const uint32_t debug_clear_buffer = 0x00000000;
 
 void DEBUG_CLEAR_INTERNAL(int16_t proc_idx, int8_t flag)
 {
@@ -78,11 +84,14 @@ void DEBUG_CLEAR_INTERNAL(int16_t proc_idx, int8_t flag)
     if (flag < 0) {
         uint32_t offset = entry->cr_rec_2 + 0x90;
 
-        /* Write debug data to clear debug state.  XPD_$WRITE only reads
-         * through its length/buffer arguments (it copies from the buffer
-         * into the target address space), so the const data is safe. */
-        XPD_$WRITE(ENTRY_DEBUG_ADDR(entry), offset,
-                   (int32_t *)&debug_clear_data1, (void *)&debug_clear_data2, status);
+        /*
+         * 0x00E41A84-0x00E41A90: `movea.l (-0x78,A2),A0; pea (0x90,A0)` -
+         * the target address is a 32-bit VA computed from cr_rec_2 and pushed
+         * BY VALUE, so it goes through ARCH_VA_TO_PTR rather than being a
+         * host pointer of its own.
+         */
+        XPD_$WRITE(ENTRY_DEBUG_ADDR(entry), ARCH_VA_TO_PTR(offset),
+                   &debug_clear_len, &debug_clear_buffer, status);
 
         /* Clear awaken flag again after XPD write */
         ENTRY_FLAGS_BYTE(entry) &= ~DEBUG_FLAG_AWAKEN_GUARDIAN;

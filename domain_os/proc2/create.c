@@ -216,11 +216,14 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     /* Handle debug inheritance */
     if (current_entry->debugger_idx != 0) {
         /* Parent is being debugged - check if child should inherit */
-        if (XPD_$INHERIT_PTRACE_OPTIONS((int16_t)((char*)current_entry -
-                                        (char*)P2_INFO_ENTRY(0) + 0xCE)) < 0) {
-            /* Set up debug relationship for child */
-            DEBUG_SETUP_INTERNAL(new_entry->first_debug_target_idx,
-                                 current_entry->debugger_idx, 0);
+        /* 0x00E7293E `pea (-0x16,A2)` = &current_entry->ptrace_opts
+         * (entry + 0xCE), the same shape PROC2_$FORK uses at 0x00E73046. */
+        if (XPD_$INHERIT_PTRACE_OPTIONS(
+                (xpd_$ptrace_opts_t *)current_entry->ptrace_opts) < 0) {
+            /* Set up debug relationship for child.
+             * 0x00E72956 `move.w (-0xc8,A3),-(SP)` = the child's entry+0x1C. */
+            DEBUG_SETUP_INTERNAL((int16_t)new_entry->owner_session,
+                                 (int16_t)current_entry->debugger_idx, 0);
 
             /* Copy ptrace options from parent */
             *(uint32_t*)((char*)new_entry + 0xCE) = *(uint32_t*)((char*)current_entry + 0xCE);

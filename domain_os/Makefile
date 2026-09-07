@@ -4,7 +4,7 @@ TARGET_SAU := sau2
 # List of all subsystems
 SUBSYSTEMS := acl app area as asknode arch ast audit base bat cache cal chksum dbuf di dir disk dma dtty dxm ec file fim flop flp fp gpu fm hint iic io kbd log mac mac_os math mem misc ml mmap mmu msg mst name net netlog net_io netbuf network os osinfo pacct parity pas pbu pchist peb pkt pmap proc1 proc2 rem_file rgyc ring rip route scsi sio sio2681 smd sock stop suma svc sysboot sysbus tape term time timer tone tpad tty uid vfmt volx vtoc win wp xns xpd
 
-WARNING_FLAGS := -Werror -Wno-error=incompatible-pointer-types -Wno-error=int-conversion
+WARNING_FLAGS := -Werror
 
 SAU2_FLAGS := -DARCH_M68K -DCPU_M68020 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68020 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
 

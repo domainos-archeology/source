@@ -62,11 +62,12 @@
  * EXCS - Execute command and check status
  *
  * @param cmd_buf    Command buffer to send
- * @param cmd_size   Pointer to command size / direction data
+ * @param count_ptr  Address of the word byte count (handed straight to SHAKE
+ *                   at 0x00E3E28C)
  * @param req        Request block (contains flags at offset 0x29)
  * @return Status code (0 = success, 0x8ffff = retry, else error)
  */
-status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
+status_$t EXCS(uint16_t *cmd_buf, int16_t *count_ptr, void *req)
 {
     status_$t status;
     status_$t result;
@@ -85,7 +86,7 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
     wait_value = FLP_$EC.value + 1;
 
     /* Send command to controller via SHAKE */
-    status = SHAKE(cmd_buf, (int16_t *)cmd_size, &DAT_00e3e110);
+    status = SHAKE(cmd_buf, count_ptr, &DAT_00e3e110);
     if (status != status_$ok) {
         return status;
     }
@@ -214,7 +215,7 @@ status_$t EXCS(uint16_t *cmd_buf, void *cmd_size, void *req)
             uint16_t unit = cmd_buf[1] & 3;
             DAT_00e7b00a = unit;
 
-            status = EXCS((uint16_t *)DAT_00e7b008, &DAT_00e3e21c, req);
+            status = EXCS(DAT_00e7b008, &DAT_00e3e21c, req);
 
             /* Clear unit status */
             DAT_00e7af6c[unit * 2] = 0;

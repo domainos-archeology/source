@@ -1,12 +1,17 @@
 #include "term/term_internal.h"
 
-// Function ID constants (addresses in original)
-static char func_id_default;    // 0xe66898
-static char func_id_break;      // 0xe667c4
-static char func_id_2;          // 0xe66d82
-static char func_id_susp;       // 0xe66d8e
-static char func_id_dsusp;      // 0xe66d8c
-static char func_id_status;     // 0xe66d8a
+/*
+ * TTY function numbers.  Word literals the compiler placed in the code region
+ * and passes by reference (`pea (d,PC)` at 0x00E66E00/E0C/E18/E24/E30/E3C);
+ * TTY_$K_INQ_FUNC_CHAR reads them with `move.w (A2),D1w` (0x00E67586).
+ * Values read out of the image with gsk.
+ */
+static const uint16_t tty_num_0  = 0;   /* 0x00E66898 */
+static const uint16_t tty_num_2  = 2;   /* 0x00E667C4 */
+static const uint16_t tty_num_3  = 3;   /* 0x00E66D82 */
+static const uint16_t tty_num_8  = 8;   /* 0x00E66D8E - SUSP */
+static const uint16_t tty_num_9  = 9;   /* 0x00E66D8C - DSUSP */
+static const uint16_t tty_num_10 = 10;  /* 0x00E66D8A - STATUS */
 
 /*
  * SIO parameter block: TERM_$INQUIRE keeps a 0x16-byte local at (-0x18,A6) and
@@ -87,15 +92,15 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
 
     switch (option) {
         case INQ_FUNC_CHAR_DEFAULT:
-            TTY_$K_INQ_FUNC_CHAR(line_ptr, &func_id_default, value_ret, status_ret);
+            TTY_$K_INQ_FUNC_CHAR(line_ptr, &tty_num_0, (char *)value_ret, status_ret);
             break;
 
         case INQ_FUNC_CHAR_BREAK:
-            TTY_$K_INQ_FUNC_CHAR(line_ptr, &func_id_break, value_ret, status_ret);
+            TTY_$K_INQ_FUNC_CHAR(line_ptr, &tty_num_2, (char *)value_ret, status_ret);
             break;
 
         case INQ_FUNC_CHAR_2:
-            TTY_$K_INQ_FUNC_CHAR(line_ptr, &func_id_2, value_ret, status_ret);
+            TTY_$K_INQ_FUNC_CHAR(line_ptr, &tty_num_3, (char *)value_ret, status_ret);
             break;
 
         case INQ_RAW_MODE:
@@ -223,7 +228,7 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
         }
 
         case INQ_FUNC_CHAR_SUSP:
-            TTY_$K_INQ_FUNC_CHAR(line_ptr, &func_id_susp, value_ret, status_ret);
+            TTY_$K_INQ_FUNC_CHAR(line_ptr, &tty_num_8, (char *)value_ret, status_ret);
             break;
 
         case INQ_NOP_24:
@@ -236,7 +241,7 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
             break;
 
         case INQ_FUNC_CHAR_DSUSP:
-            TTY_$K_INQ_FUNC_CHAR(line_ptr, &func_id_dsusp, value_ret, status_ret);
+            TTY_$K_INQ_FUNC_CHAR(line_ptr, &tty_num_9, (char *)value_ret, status_ret);
             break;
 
         case INQ_STATUS_ENABLED:
@@ -245,7 +250,7 @@ void TERM_$INQUIRE(short *line_ptr, unsigned short *option_ptr, unsigned short *
             break;
 
         case INQ_FUNC_CHAR_STATUS:
-            TTY_$K_INQ_FUNC_CHAR(line_ptr, &func_id_status, value_ret, status_ret);
+            TTY_$K_INQ_FUNC_CHAR(line_ptr, &tty_num_10, (char *)value_ret, status_ret);
             break;
 
         case INQ_PGROUP:

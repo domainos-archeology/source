@@ -13,8 +13,9 @@
 
 void audit_$close_log(status_$t *status_ret)
 {
-    int32_t final_size;
-    uint8_t lock_info[12];
+    int32_t final_size;         /* A6-0x10 */
+    /* A6-0x0C: FILE_$PRIV_UNLOCK's dtv output longword (0x00E718DA) */
+    uint32_t unlock_dtv;
 
     /* Check if log file is open */
     if (AUDIT_$DATA.log_file_uid.high == UID_$NIL.high &&
@@ -49,7 +50,7 @@ void audit_$close_log(status_$t *status_ret)
      * word 0, then three `clr.l` for by_key/key, rem_key, rem_node. */
     (void)FILE_$PRIV_UNLOCK(&AUDIT_$DATA.log_file_uid,
                             (int32_t)AUDIT_$DATA.lock_id, 4, 0,
-                            0, 0, 0, 0, lock_info, status_ret);
+                            0, 0, 0, 0, &unlock_dtv, status_ret);
 
     /* Reset log file UID */
     AUDIT_$DATA.log_file_uid.high = UID_$NIL.high;

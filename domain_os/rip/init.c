@@ -260,8 +260,15 @@ void RIP_$INIT(void)
      *
      * This sets up initial routing information from the mother node.
      */
-    RIP_$UPDATE_INT(route_port, &RIP_$DATA, 0, 0, 0, &status);
-    RIP_$UPDATE_INT(route_port, &RIP_$DATA, 0, 0, 0xFF, &status);
+    /*
+     * 0x00E2FD6A: "movea.l #0xe26258,A0 / move.l D5,(A0) / ... / pea (A0)" -
+     * the route port is stored at RIP_$DATA+0x00 and the SAME address is
+     * then handed over as the 10-byte source address, i.e. the record's
+     * first ten bytes are read as a rip_$xns_addr_t (network at +0x00, host
+     * at +0x04).  The second call repeats it with the literal 0xE26258.
+     */
+    RIP_$UPDATE_INT(route_port, (rip_$xns_addr_t *)&RIP_$DATA, 0, 0, 0, &status);
+    RIP_$UPDATE_INT(route_port, (rip_$xns_addr_t *)&RIP_$DATA, 0, 0, 0xFF, &status);
 
 cleanup:
     /*

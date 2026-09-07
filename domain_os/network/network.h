@@ -254,12 +254,16 @@ int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,
  * The network index (1-63) is encoded into bits 4-9 of the info parameter.
  *
  * @param node    Network ID to install
- * @param info    Pointer to network info (bits 4-9 receive network index)
+ * @param info    Address of the longword whose HIGH half is the network info
+ *                word; bits 4-9 of that word (bits 20-25 of the longword)
+ *                receive the network index.  0x00E0F1F2 takes it as a
+ *                longword address and updates it with `andi.w`/`or.w` on
+ *                (A0), i.e. the most significant half on m68k.
  * @param status  Output status code
  *
  * Original address: 0x00E0F1E0
  */
-void NETWORK_$INSTALL_NET(uint32_t node, uint16_t *info, status_$t *status);
+void NETWORK_$INSTALL_NET(uint32_t node, uint32_t *info, status_$t *status);
 
 /*
  * NETWORK_$REMOVE_NET - Remove network node

@@ -56,14 +56,15 @@ int16_t DIR_$NAME_OFFSET_TABLE[8] = {
     0, 4, 16, 20, 12, 0, 0, 0,
 };
 
-/* Mock error string */
-char Naming_bad_request_header_ver_err = 0;
-
 /* CRASH_SYSTEM stub - records that it was called, then longjmps out.
  * In the real system CRASH_SYSTEM never returns; we simulate that with longjmp. */
 static int crash_called = 0;
 static jmp_buf crash_jmpbuf;
 typedef uint32_t status_$t;
+
+/* Mock error status cell (declared status_$t in dir/dir_internal.h) */
+status_$t Naming_bad_request_header_ver_err = 0;
+
 void CRASH_SYSTEM(const status_$t *msg) {
     (void)msg;
     crash_called = 1;

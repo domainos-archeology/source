@@ -353,24 +353,27 @@ void ROUTE_$OUTGOING(void *port_info, uint32_t *nexthop_ret, uint8_t *packet_buf
  * Sends a packet through a user routing port for delivery. The packet
  * is copied to network buffers and queued to the socket.
  *
- * @param socket_ptr    Pointer to socket number
- * @param src_addr      Source address info
- * @param dest_addr     Destination address pointer
- * @param header_len    Header length
- * @param flags1        Protocol flags 1
- * @param flags2        Protocol flags 2
- * @param data_ptr      Packet data pointer
- * @param data_len      Packet data length
- * @param extra_ptr     Extra protocol info pointer
- * @param seq_ret       Output: packet sequence number
- * @param status_ret    Output: status code
+ * Parameter offsets are read off the prologue at 0x00E87C34; see
+ * route/send_user_port.c for the full mapping.
+ *
+ * @param socket_ptr    Pointer to the port's socket number (A6+0x08)
+ * @param src_addr      Source address info (A6+0x0c, never read)
+ * @param hdr_va        Header source VA (A6+0x10)
+ * @param hdr_len       Header length (A6+0x14)
+ * @param src_pages     Source payload page array (A6+0x16)
+ * @param src_data_va   Source payload VA, or 0 (A6+0x1a)
+ * @param data_len      Payload byte count (A6+0x1e)
+ * @param extra_ptr     Extra protocol info (A6+0x20, never read)
+ * @param seq_ret       Output: packet sequence number (A6+0x24)
+ * @param status_ret    Output: status code (A6+0x28)
  *
  * Original address: 0x00E87C34
  */
-void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, void *dest_addr,
-                           uint16_t header_len, uint16_t flags1, uint16_t flags2,
-                           void *data_ptr, uint16_t data_len, void *extra_ptr,
-                           uint16_t *seq_ret, status_$t *status_ret);
+void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, uint32_t hdr_va,
+                           uint16_t hdr_len, uint32_t *src_pages,
+                           uint32_t src_data_va, uint16_t data_len,
+                           void *extra_ptr, uint16_t *seq_ret,
+                           status_$t *status_ret);
 
 /*
  * ROUTE_$VALIDATE_PORT - Check network capability for node

@@ -82,9 +82,14 @@ void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,
 
                 if (check_perms < 0) {
                     /* ACL check required */
+                    /*
+                     * 0x00E3F1BE-0x00E3F1C8, right to left: `pea (-0x4a,A3)`
+                     * = &entry->level1_pid (entry + 0x9A), then
+                     * `move.l #0xe20608,-(SP)` = &PROC1_$CURRENT.
+                     */
                     acl_result = ACL_$CHECK_FAULT_RIGHTS(
-                        0x0608,  /* Source offset - current process? */
-                        (int16_t)(cur_idx * 0xE4 + 0x54D2));
+                        &PROC1_$CURRENT,
+                        &P2_INFO_ENTRY(cur_idx)->level1_pid);
 
                     if (acl_result >= 0) {
                         /* Permission denied - but check SIGCONT special case */

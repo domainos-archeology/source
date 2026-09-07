@@ -136,7 +136,8 @@ void AUDIT_$INHERIT_AUDIT(int16_t *child_pid, status_$t *status_ret);
  * Original address: 0x00E70DF6
  */
 void AUDIT_$LOG_EVENT(uid_t *event_uid, uint16_t *event_flags,
-                      uint32_t *status, char *data, uint16_t *data_len);
+                      uint32_t *status, char *data,
+                      const uint16_t *data_len);
 
 /*
  * AUDIT_$LOG_EVENT_S - Log an audit event with explicit SID
@@ -170,7 +171,7 @@ void AUDIT_$LOG_EVENT(uid_t *event_uid, uint16_t *event_flags,
  */
 void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
                         void *sid, uint32_t *status,
-                        char *data, uint16_t *data_len);
+                        char *data, const uint16_t *data_len);
 
 /*
  * ============================================================================
@@ -284,8 +285,18 @@ void audit_$log_prot_op(status_$t status, uid_t *uid, void *prot_data,
  * ============================================================================
  */
 
+/*
+ * Event UIDs.  These are 8-byte cells in the image's audit event-UID table
+ * at 0x00E85600: {word event_class, word subtype, longword 0}.
+ */
 /* Event UID for SID change audit events */
 extern uid_t AUDIT_$SET_SID_EU;
+
+/* 0x00E85640: class 4, subtype 0x0E - logical volume dismounted */
+extern uid_t AUDIT_$DISMOUNT_LV_EU;
+
+/* 0x00E85648: class 4, subtype 0x0D - logical volume mounted */
+extern uid_t AUDIT_$MOUNT_LV_EU;
 
 /* Master enable flag (0xE2E09E, defined in audit/audit_data.c) */
 extern int8_t AUDIT_$ENABLED;

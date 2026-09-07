@@ -82,18 +82,14 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
     uint16_t extra_buf2[2];
     uint8_t lookup_buf[4];
     status_$t local_status;
-    /* A6-0x68 in the image: a full 0x20-byte object-location descriptor.
+    /* A6-0x68 in the image: the 0x20-byte object-location descriptor.
      * AST_$GET_ATTRIBUTES writes all 32 bytes back on success (0x00E049B0).
-     * TODO(source-qgq): retype as file_$obj_loc_t and drop loc_uid_high /
-     * loc_uid_low / loc_flags / loc_vol_id, which are its +0x08, +0x0C,
-     * +0x1D and +0x02 fields. */
-    uint8_t loc_desc[0x20];
-    int16_t loc_vol_id;
-    uint32_t loc_uid_high;
-    uint32_t loc_uid_low;
-    uint8_t loc_flags;
-    uint8_t get_loc_buf1[4];
-    uint8_t get_loc_buf2[4];
+     * loc_vol_id is the WORD at +0x02, which on the big-endian m68k is the
+     * low half of the first longword. */
+    file_$obj_loc_t loc_desc;
+#define loc_vol_id  ((int16_t)(loc_desc.reserved_00[0] & 0xFFFFu))
+    uint32_t get_loc_buf1;   /* 0x00e50906 pea (-0x184,A6) - never touched */
+    uint32_t get_loc_buf2;   /* 0x00e50902 pea (-0x18c,A6) - aote+0x08 out */
     uint8_t attr_buf[4];
     ast_$common_attr_t common_attrs;    /* A6-0x80, 0x18 bytes */
     uint8_t common_buf[40];
@@ -160,13 +156,14 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
     }
 
     /* Verify backup UID is on the same volume */
-    loc_uid_high = backup_uid->high;
-    loc_uid_low = backup_uid->low;
-    loc_flags &= 0xBF;  /* Clear bit 6 */
-    AST_$GET_LOCATION(loc_desc, 1, get_loc_buf1, get_loc_buf2, &local_status);
+    loc_desc.uid.high = backup_uid->high;
+    loc_desc.uid.low = backup_uid->low;
+    loc_desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;  /* Clear bit 6 */
+    AST_$GET_LOCATION(&loc_desc, 1, &get_loc_buf1, &get_loc_buf2,
+                      &local_status);
     if (local_status != status_$ok ||
         *(int16_t *)((char *)(uintptr_t)local_handle + 0x3A) != loc_vol_id ||
-        (int8_t)loc_flags < 0) {
+        loc_desc.flags < 0) {
         *status_ret = local_status;
         if (*status_ret == status_$ok) {
             *status_ret = file_$objects_on_different_volumes;
@@ -276,14 +273,14 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
                 }
 
                 /* Verify old backup is on same volume and is a valid type */
-                loc_uid_high = old_bak_uid.high;
-                loc_uid_low = old_bak_uid.low;
-                loc_flags &= 0xBF;
-                AST_$GET_COMMON_ATTRIBUTES((uid_t *)(void *)loc_desc,
+                loc_desc.uid.high = old_bak_uid.high;
+                loc_desc.uid.low = old_bak_uid.low;
+                loc_desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
+                AST_$GET_COMMON_ATTRIBUTES((uid_t *)(void *)&loc_desc,
                                            DIR_CATTR_ADD_BAK, &common_attrs,
                                            &local_status);  /* 0x00E50AFE */
 
-                if ((int8_t)loc_flags >= 0 && local_status == status_$ok &&
+                if (loc_desc.flags >= 0 && local_status == status_$ok &&
                     *(int16_t *)((char *)(uintptr_t)local_handle + 0x3A) == loc_vol_id) {
 
                     /*

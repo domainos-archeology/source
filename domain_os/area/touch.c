@@ -21,20 +21,21 @@
  *   bste_idx    - BSTE index
  *   seg_idx     - Segment index
  *   param_4     - Unknown parameter
- *   param_5     - Unknown parameter
+ *   ppn_array   - PPN list, passed straight through to AST_$TOUCH_AREA
+ *                 (0x00E0965A: move.l (0x12,A6),-(SP))
  *   status_p    - Output: status code
  *
  * Original address: 0x00E094FE
  */
 void AREA_$TOUCH(area_$handle_t *handle_ptr, uint16_t bste_idx,
-                 uint16_t seg_idx, int16_t param_4, uint32_t param_5,
+                 uint16_t seg_idx, int16_t param_4, uint32_t *ppn_array,
                  status_$t *status_p)
 {
     uint16_t area_id = AREA_HANDLE_TO_ID(*handle_ptr);
     int16_t generation = AREA_HANDLE_TO_GEN(*handle_ptr);
     area_$entry_t *entry;
     int entry_offset;
-    void *aste_ptr;
+    aste_t *aste_ptr;
     uint32_t current_pages;
     int32_t needed_pages;
     uint32_t target_size;
@@ -108,10 +109,20 @@ void AREA_$TOUCH(area_$handle_t *handle_ptr, uint16_t bste_idx,
 
     ML_$LOCK(ML_LOCK_AST);
 
-    /* Touch the area through AST */
-    AST_$TOUCH_AREA(area_id, *(int16_t *)((char *)aste_ptr + 0x0E),
+    /*
+     * Touch the area through AST.
+     *
+     * 0x00E09666-0x00E09676 pushes, right to left:
+     *   (0x2,A4)  area_id  - the id half of the caller's area handle
+     *   (0xe,A2)  aste_ptr->seg_index, BY VALUE (a word, not the ASTE)
+     *   D3w       seg_idx  - the page within that segment
+     *   D0        (bste_idx << 5) + seg_idx, the area-relative page number
+     *   (0x12,A6) ppn_array
+     *   D5        status_p
+     */
+    AST_$TOUCH_AREA(area_id, aste_ptr->seg_index,
                     seg_idx, seg_idx + (uint32_t)bste_idx * 32,
-                    param_5, status_p);
+                    ppn_array, status_p);
 
     /* Mark area as touched */
     entry->flags |= AREA_FLAG_TOUCHED;

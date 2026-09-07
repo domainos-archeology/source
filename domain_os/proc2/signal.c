@@ -95,9 +95,15 @@ void PROC2_$SIGNAL(uid_t *proc_uid, int16_t *signal, uint32_t *param,
 
         if (!permission_ok) {
             /* ACL check - negative result means permission granted */
+            /*
+             * 0x00E3F03A-0x00E3F042, right to left: `pea (-0x4a,A2)` then
+             * `pea (-0x4a,A4)`.  A2/A4 are the target/current entry bases
+             * biased by 0xE4, so -0x4a is entry + 0x9A = level1_pid, and the
+             * first argument is the CURRENT process' pid.
+             */
             acl_result = ACL_$CHECK_FAULT_RIGHTS(
-                (int16_t)(cur_index * 0xE4 + 0x54D2),
-                (int16_t)(index * 0xE4 + 0x54D2));
+                &P2_INFO_ENTRY(cur_index)->level1_pid,
+                &P2_INFO_ENTRY(index)->level1_pid);
 
             if (acl_result >= 0) {
                 status = status_$proc2_permission_denied;

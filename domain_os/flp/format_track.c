@@ -114,7 +114,7 @@ void FLP_FORMAT_TRACK(void *req, void *buf)
         DAT_00e7b00e = DAT_00e7af22;  /* Copy unit + head */
         DAT_00e7b010 = *(uint16_t *)((uint8_t *)buf + 4);  /* Cylinder */
 
-        status = EXCS(&DAT_00e7b00c, DAT_00e3ddc2, req);
+        status = EXCS(&DAT_00e7b00c, &DAT_00e3ddc2, req);
 
         /* Update cached cylinder */
         *(uint16_t *)(&DAT_00e7af6c[unit_cyl_offset]) = DAT_00e7af66;
@@ -141,7 +141,7 @@ void FLP_FORMAT_TRACK(void *req, void *buf)
     *(volatile uint8_t *)(dma + DMA_CONTROL) = 0x80; /* Enable */
 
     /* Execute format track command */
-    status = EXCS(&DAT_00e7af20, DAT_00e3ddc4, req);
+    status = EXCS(&DAT_00e7af20, &DAT_00e3ddc4, req);
 
     success = (status == status_$ok);
     if (success) {

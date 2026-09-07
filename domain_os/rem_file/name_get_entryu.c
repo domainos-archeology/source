@@ -64,8 +64,8 @@ void REM_FILE_$NAME_GET_ENTRYU(void *addr_info, uid_t *dir_uid,
     uint8_t re_sids[40];
     uint8_t sids_out[36];
     uid_t proj_list[8];
-    uint8_t proj_out[2];
-    static const uid_t default_proj = {0};  /* Default project UID */
+    /* A6-0x100 (request+0x98): the project count ACL_$GET_PROJ_LIST returns */
+    int16_t proj_out;
 
     /* Initialize name field with spaces */
     request.name[0] = ' ';
@@ -97,7 +97,10 @@ void REM_FILE_$NAME_GET_ENTRYU(void *addr_info, uid_t *dir_uid,
     }
 
     /* Get project list */
-    ACL_$GET_PROJ_LIST(proj_list, (void *)&default_proj, proj_out, status);
+    /* 0x00E6212C `pea (-0xa16,PC)` (PC = 0x00E6212E) resolves to 0x00E61718,
+     * i.e. &REM_FILE_$MAX_PROJ_LIST - the max-count word, not a UID. */
+    ACL_$GET_PROJ_LIST(proj_list, (int16_t *)&REM_FILE_$MAX_PROJ_LIST,
+                       &proj_out, status);
     if (*status != status_$ok) {
         return;
     }
@@ -111,8 +114,9 @@ void REM_FILE_$NAME_GET_ENTRYU(void *addr_info, uid_t *dir_uid,
         request.proj_list[i] = proj_list[i];
     }
 
-    request.proj_extra[0] = proj_out[0];
-    request.proj_extra[1] = proj_out[1];
+    /* The count is a big-endian word in the request buffer. */
+    request.proj_extra[0] = (uint8_t)((uint16_t)proj_out >> 8);
+    request.proj_extra[1] = (uint8_t)proj_out;
     request.zero1 = 0;
     request.zero2 = 0;
 

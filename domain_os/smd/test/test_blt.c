@@ -145,7 +145,7 @@ static void test_unit_zero_is_an_error(void)
     setup();
     SMD_GLOBALS.asid_to_unit[TEST_ASID] = 0;
 
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
 
     CHECK_EQ(status_$display_invalid_use_of_driver_procedure, st);
     CHECK_EQ(0, acq_calls);
@@ -166,7 +166,7 @@ static void test_invalid_mode_bits_are_rejected(void)
         setup();
         params[0] = bad_modes[i];
 
-        SMD_$BLT(params, 0, 0, &st);
+        SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
 
         CHECK_EQ(status_$display_invalid_blt_op, st);
         CHECK_EQ(1, acq_calls);
@@ -185,7 +185,7 @@ static void test_mode_bit15_is_not_a_low_byte_test(void)
     setup();
     params[0] = 0x8000;
 
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
 
     CHECK_EQ(status_$ok, st);
     CHECK_EQ(1, start_blt_calls);
@@ -204,7 +204,7 @@ static void test_control_word_low_bits(void)
     setup();
     params[0] = 0x0023;   /* bits 5, 1 and 0 */
 
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
 
     CHECK_EQ(status_$ok, st);
     CHECK_EQ(0x0023, captured.control);
@@ -221,7 +221,7 @@ static void test_control_bits_from_the_parameter_bytes(void)
     params[1] = 0x0200;   /* high byte 0x02 -> control bit 3 */
     params[2] = 0x9920;   /* low byte 0x20 -> control bit 2 */
 
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
 
     CHECK_EQ(status_$ok, st);
     CHECK_EQ(0x000C, captured.control);
@@ -230,7 +230,7 @@ static void test_control_bits_from_the_parameter_bytes(void)
     setup();
     params[1] = 0x0002;
     params[2] = 0x2000;
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
     CHECK_EQ(0x0000, captured.control);
 }
 
@@ -249,7 +249,7 @@ static void test_parameter_pair_order_and_extents(void)
     params[11] = 20;
     params[12] = 0x00A3;   /* bit_pos 3, x end 0x0A0 */
 
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
 
     CHECK_EQ(status_$ok, st);
     CHECK_EQ(0x1234, captured.field_04);
@@ -276,7 +276,7 @@ static void test_extents_are_absolute(void)
     params[11] = 10;
     params[12] = 0x0050;
 
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
 
     CHECK_EQ((uint16_t)-11, captured.y_extent);
     CHECK_EQ((uint16_t)-6, captured.x_extent);
@@ -291,12 +291,12 @@ static void test_lock_word_selection(void)
 
     setup();
     params[0] = 0x0000;
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
     CHECK_EQ((long)(intptr_t)&SMD_SYNC_LOCK_DATA, (long)(intptr_t)last_lock_data);
 
     setup();
     params[0] = 0x0010;
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
     CHECK_EQ((long)(intptr_t)&SMD_ACQ_LOCK_DATA, (long)(intptr_t)last_lock_data);
 }
 
@@ -308,7 +308,7 @@ static void test_start_blt_gets_the_record_pointers(void)
     status_$t st = -1;
 
     setup();
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
 
     CHECK_EQ(1, start_blt_calls);
     CHECK_EQ((long)(intptr_t)&test_hw, (long)(intptr_t)last_hw);
@@ -324,7 +324,7 @@ static void test_sync_releases_async_records_asid(void)
 
     setup();
     params[0] = 0x0000;
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
     CHECK_EQ(1, rel_calls);
     CHECK_EQ(0, rec()->field_08);
     CHECK_EQ(0, rec()->owner_asid);
@@ -332,7 +332,7 @@ static void test_sync_releases_async_records_asid(void)
 
     setup();
     params[0] = 0x0010;
-    SMD_$BLT(params, 0, 0, &st);
+    SMD_$BLT((smd_blt_ctl_t *)params, NULL, NULL, &st);
     CHECK_EQ(0, rel_calls);
     CHECK_EQ(TEST_ASID, rec()->field_08);
     /* the owner ASID is deliberately left alone */

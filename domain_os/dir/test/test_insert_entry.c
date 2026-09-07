@@ -61,7 +61,7 @@ static int current_failed = 0;
  */
 int16_t DIR_$NAME_OFFSET_TABLE[8] = { 0, 4, 16, 20, 12, 0, 0, 0 };
 
-char Naming_bad_request_header_ver_err;
+status_$t Naming_bad_request_header_ver_err;
 
 #define DIR_PAGE_BYTES  0x400
 static uint8_t page_a[DIR_PAGE_BYTES];      /* the page for level 1 */

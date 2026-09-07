@@ -24,7 +24,8 @@ extern uint8_t DAT_00e7afe0[];  /* +0xec: Controller address table */
 
 /* Physical address/buffer info */
 extern uint32_t DAT_00e7aff0;   /* +0xfc: Physical address of format buffer */
-extern uint8_t DAT_00e7affc[];  /* +0x108: Specify command data */
+extern uint16_t DAT_00e7affc[]; /* +0x108: Specify command data; SHAKE's
+                                 * word command buffer (0x00E3E0CA) */
 extern uint8_t DAT_00e7aff7;    /* N value for format */
 
 /* Status registers */
@@ -55,7 +56,8 @@ extern uint8_t FLP_IO_BUFFER[];
 /* Command bytes */
 extern uint8_t DAT_00e7b004;    /* +0x110: Command byte 0 (sense drive status) */
 extern uint16_t DAT_00e7b006;   /* +0x112: Command byte 1 (unit + head) */
-extern uint8_t DAT_00e7b008[];  /* +0x114: Recalibrate/EXCS data area */
+extern uint16_t DAT_00e7b008[]; /* +0x114: Recalibrate/EXCS word command
+                                 * buffer (0x00E3E1AE) */
 extern uint16_t DAT_00e7b00a;   /* +0x116: Current unit number */
 extern uint16_t DAT_00e7b00c;   /* Seek command */
 extern uint16_t DAT_00e7b00e;   /* Unit + head (seek) */
@@ -69,7 +71,8 @@ extern uint8_t DAT_00e7b018[];  /* +0x124: Disk change flags */
 extern uint32_t DAT_00e7b01c;   /* +0x128: Physical buffer address */
 extern int16_t DAT_00e7b024;    /* +0x130: Retry/DMA retry count */
 extern uint16_t DAT_00e7b026;   /* +0x132: Retry/control flag */
-extern uint8_t DAT_00e7b02a[];  /* Registration data */
+extern uint16_t DAT_00e7b02a;   /* +0x136: unit count handed to
+                                 * DISK_$REGISTER (pea (0x136,A5) @0xE3E0EE) */
 extern int8_t DAT_00e7b02c;     /* +0x138: Initialized flag */
 
 /*
@@ -79,9 +82,12 @@ extern int8_t DAT_00e7b02c;     /* +0x138: Initialized flag */
  */
 
 /* Hardware signature and command parameters */
-extern uint8_t DAT_00e3ddc2[];  /* Seek command parameters */
-extern uint8_t DAT_00e3ddc4[];  /* Format command parameters */
-extern uint8_t DAT_00e3dfe0[];  /* Read/write command parameters */
+extern int16_t DAT_00e3ddc2;    /* Constant 3: SHAKE/EXCS byte count
+                                 * (pea (-0x2bc,PC) @0xE3E07C) */
+extern int16_t DAT_00e3ddc4;    /* Constant 6: format-track byte count
+                                 * (pea (0x3e,PC) @0xE3DD84) */
+extern int16_t DAT_00e3dfe0;    /* Constant 9: read/write byte count
+                                 * (pea (0x8c,PC) @0xE3DF52) */
 
 /* Direction/count values (used as pointers) */
 extern int16_t DAT_00e3e10e;    /* Read direction (0) */

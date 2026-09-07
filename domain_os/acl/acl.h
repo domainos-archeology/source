@@ -271,15 +271,17 @@ int8_t ACL_$SET_ACL_CHECK(uid_t *file_uid, void *acl_data, uid_t *source_uid,
  * Determines if process pid1 can handle faults for process pid2.
  *
  * Parameters:
- *   pid1 - Pointer to fault handler process ID
- *   pid2 - Pointer to faulting process ID
+ *   pid1 - Pointer to the fault handler's PROC1 pid word (read-only,
+ *          0x00E48A42 `move.w (A2),-(SP)`)
+ *   pid2 - Pointer to the faulting process' PROC1 pid word (read-only,
+ *          0x00E48A72 `move.w (A3),D1w`)
  *
  * Returns:
  *   Non-zero if fault handling allowed, 0 otherwise
  *
  * Original address: 0x00E48A28
  */
-int8_t ACL_$CHECK_FAULT_RIGHTS(int16_t *pid1, int16_t *pid2);
+int8_t ACL_$CHECK_FAULT_RIGHTS(const uint16_t *pid1, const uint16_t *pid2);
 
 /*
  * ACL_$CHECK_DEBUG_RIGHTS - Check debug rights between processes
@@ -342,21 +344,22 @@ void ACL_$GET_PID_SID(int16_t pid, uid_t *sid_ret, status_$t *status_ret);
 /*
  * ACL_$GET_RE_ALL_SIDS - Get all SIDs for current requester
  *
- * Parameters:
- *   acl_data  - Output buffer for ACL data (40 bytes)
- *   owner_uid - Output owner UID (8 bytes)
- *   prot_info - Output protection info (16 bytes)
- *   result    - Output result array (3 int32_t values)
- *   status    - Output status code
+ * Write sizes verified at 0x00E487C2 - 0x00E4880A: nine longwords into each
+ * of the first two buffers and three longwords into each of the next two.
+ * It is a procedure - no result slot is pushed at any call site.
  *
- * Returns:
- *   Result value (typically 0)
+ * Parameters:
+ *   acl_data   - Output buffer, 36 bytes (0x00E487C2)
+ *   re_sids    - Output buffer, 36 bytes (0x00E487D2)
+ *   prot_info  - Output buffer, 12 bytes (0x00E487F8)
+ *   subsys_ids - Output buffer, 12 bytes (0x00E48806)
+ *   status     - Output status code (cleared at 0x00E48810)
  *
  * Original address: 0x00E48792
  */
-uint32_t ACL_$GET_RE_ALL_SIDS(void *acl_data, uid_t *owner_uid,
-                              void *prot_info, int32_t *result,
-                              status_$t *status);
+void ACL_$GET_RE_ALL_SIDS(void *acl_data, void *re_sids,
+                          void *prot_info, void *subsys_ids,
+                          status_$t *status);
 
 /*
  * ============================================================================

@@ -445,14 +445,17 @@ void FILE_$GET_ATTR_INFO(uid_t *file_uid, void *param_2, int16_t *size_ptr,
  *   file_uid   - UID of file
  *   param_2    - Pointer to flags
  *   size_ptr   - Pointer to buffer size (must be 0x90 = 144)
- *   uid_out    - Output UID buffer (32 bytes)
+ *   loc_rec    - 0x20-byte object-location record; the routine hands its
+ *                UID field at +0x08 to file_$vol_of (`pea (0x8,A3)` at
+ *                0x00E5D9C2)
  *   attr_out   - Output attribute buffer (144 bytes)
  *   status_ret - Receives operation status
  *
  * Original address: 0x00E5D984
  */
 void FILE_$GET_ATTRIBUTES(uid_t *file_uid, void *param_2, int16_t *size_ptr,
-                          uint32_t *uid_out, void *attr_out, status_$t *status_ret);
+                          uint8_t *loc_rec, void *attr_out,
+                          status_$t *status_ret);
 
 /*
  * FILE_$ATTRIBUTES - Get file attributes (old format)
@@ -793,8 +796,9 @@ void FILE_$CHANGE_LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_m
  *
  * Original address: 0x00E5EB20
  */
-void FILE_$LOCK(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
-                uint8_t *rights, void *lock_info, status_$t *status_ret);
+void FILE_$LOCK(uid_t *file_uid, const uint16_t *lock_index,
+                const uint16_t *lock_mode, const uint8_t *rights,
+                void *lock_info, status_$t *status_ret);
 
 /*
  * FILE_$UNLOCK_D - Unlock a file with domain context
@@ -1015,7 +1019,10 @@ int16_t FILE_$CHECK_PROT(uid_t *file_uid, uint16_t access_mask, uint32_t slot_nu
  *
  * Original address: 0x00E5DF3A
  */
-void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, uint32_t *acl_data,
+/* acl_data is the 44-byte ACL data block (0x00E5DFA8 copies 11 longwords);
+ * acl_uid is an 8-byte UID whose low word carries the flag bits
+ * (`and.w (0x4,A2),D0w` at 0x00E5DF58). */
+void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, void *acl_data,
                     uid_t *acl_uid, status_$t *status_ret);
 
 /*
@@ -1048,8 +1055,10 @@ void FILE_$SET_ACL(uid_t *file_uid, uid_t *acl_uid, status_$t *status_ret);
  *
  * Original address: 0x00E5E100
  */
-void FILE_$OLD_AP(uid_t *file_uid, int16_t *prot_type, uint32_t *acl_data,
-                  uint32_t *acl_uid, status_$t *status_ret);
+/* Same argument shape as FILE_$SET_PROT: 0x00E5E132 copies 11 longwords of
+ * acl_data and 0x00E5E116 reads 8 bytes of acl_uid. */
+void FILE_$OLD_AP(uid_t *file_uid, int16_t *prot_type, void *acl_data,
+                  uid_t *acl_uid, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -1095,8 +1104,9 @@ void FILE_$FW_FILE(uid_t *file_uid, status_$t *status_ret);
  *
  * Original address: 0x00E5E680
  */
+/* byte_count is read as a longword (`move.l (A1),D2` at 0x00E5E6BC). */
 void FILE_$FW_PARTIAL(uid_t *file_uid, uint32_t *start_offset,
-                      int32_t *byte_count, status_$t *status_ret);
+                      uint32_t *byte_count, status_$t *status_ret);
 
 /*
  * FILE_$FW_PAGES - Force Write Specific Pages

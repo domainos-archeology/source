@@ -53,9 +53,9 @@ _Static_assert(sizeof(smd_hw_blt_t) == 0x10, "smd_hw_blt_t size");
  * Performs a hardware-accelerated bit block transfer.
  *
  * Parameters:
- *   params     - User BLT parameters (see assembly for format)
- *   param2     - Reserved (unused)
- *   param3     - Reserved (unused)
+ *   ctl        - User BLT control record, by reference
+ *   param2     - Reserved (unused): &(the longword 0 at 0x00E6F978)
+ *   param3     - Reserved (unused): &SMD_ACQ_LOCK_DATA (0x00E6D92C)
  *   status_ret - Output: status return
  *
  * BLT mode bits:
@@ -70,8 +70,15 @@ _Static_assert(sizeof(smd_hw_blt_t) == 0x10, "smd_hw_blt_t size");
  *   status_$display_invalid_use_of_driver_procedure if no display
  *   status_$display_invalid_blt_op if mode bits invalid
  */
-void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *status_ret)
+void SMD_$BLT(smd_blt_ctl_t *ctl, const uint32_t *param2,
+              const uint16_t *param3, status_$t *status_ret)
 {
+    /*
+     * The body reaches every field the way the assembly does - word
+     * displacements off A2 (0x00E6EC7C "movea.l (0x8,A6),A2") - so the
+     * record is aliased here as the word array the code addresses.
+     */
+    uint16_t *params = (uint16_t *)ctl;
     int16_t unit;
     smd_display_hw_t *hw;
     smd_display_unit_t *rec;

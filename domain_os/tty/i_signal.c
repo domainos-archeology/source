@@ -58,7 +58,7 @@ void TTY_$I_SIGNAL(tty_desc_t *tty, short signal)
      * 0x00E1B874 move.w #0xc,-(SP)  -> data_size = 12
      */
     DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q, &PTR_TTY_$I_DXM_SIGNAL,
-                      &entry_ptr, 12, true, &status);
+                      (void **)&entry_ptr, 12, true, &status);
 }
 
 void TTY_$I_INTERRUPT(tty_desc_t *tty)

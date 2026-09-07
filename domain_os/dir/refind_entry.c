@@ -79,7 +79,7 @@ void dir_$refind_entry(uint32_t local_handle, uint8_t *page_data,
                                      entry_ptr_ret, extra_array, depth_ret);
         if (found >= 0) {
             /* Entry should always be found - crash if not */
-            CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+            CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
         }
     }
 }

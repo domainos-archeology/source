@@ -278,8 +278,8 @@ void FILE_$SET_REFCNT(uid_t *a, uint32_t *b, status_$t *c)
     (void)b;
     *c = status_$ok;
 }
-void FILE_$LOCK(uid_t *a, uint16_t *b, uint16_t *c, uint8_t *d, void *e,
-                status_$t *f)
+void FILE_$LOCK(uid_t *a, const uint16_t *b, const uint16_t *c,
+                const uint8_t *d, void *e, status_$t *f)
 {
     (void)a;
     (void)b;

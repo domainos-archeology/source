@@ -33,20 +33,18 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, void *recv_params, status_$t *statu
     uint8_t cleanup_buf[24];
     status_$t local_status;
 
-    /* Socket get result */
-    struct {
-        int32_t header_ptr;
-        uint32_t mac_info1;
-        uint16_t mac_info2;
-        uint16_t header_len;
-        uint16_t data_len;
-        void *extra_ptr[4];
-    } sock_result;
+    /*
+     * A6-0x40: the record SOCK_$GET fills in.  The fields this routine
+     * touches sit at the sock_$pkt_info_t offsets: hdr 0x00 (-0x40),
+     * src_addr 0x04 (-0x3c), src_port 0x08 (-0x38), data_len 0x2a (-0x16),
+     * hdr_len 0x2c (-0x14) and data_pages 0x30 (-0x10).
+     */
+    sock_$pkt_info_t sock_result;
 
-    void *extra_buf = NULL;
+    /* A6-0x70: "clr.l (-0x70,A6)" at 0x00E18CFA */
+    uint32_t extra_buf = 0;
 
     *status_ret = status_$ok;
-    sock_result.header_ptr = 0;
 
     /* Validate channel number and access */
     if (channel >= XNS_MAX_CHANNELS) {
@@ -91,7 +89,7 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, void *recv_params, status_$t *statu
 
     /* Packet received - copy data to caller */
     {
-        int16_t *header = (int16_t *)sock_result.header_ptr;
+        int16_t *header = (int16_t *)sock_result.hdr;   /* movea.l (-0x40,A6),A0 */
 
         /* Copy source address to recv_params if "no header build" mode */
         if (*(uint8_t *)(base + iVar1 + XNS_CHAN_OFF_FLAGS) & 0x08) {
@@ -106,13 +104,19 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, void *recv_params, status_$t *statu
         }
 
         /* Copy MAC info */
-        *(uint32_t *)(params + 0x26) = sock_result.mac_info1;
-        *(uint16_t *)(params + 0x2A) = sock_result.mac_info2;
+        *(uint32_t *)(params + 0x26) = sock_result.src_addr;   /* 0x00E18D9E */
+        *(uint16_t *)(params + 0x2A) = sock_result.src_port;   /* 0x00E18DA4 */
 
         /* Set up cleanup handler */
         local_status = FIM_$CLEANUP(cleanup_buf);
         if (local_status != status_$cleanup_handler_set) {
-            NETBUF_$RTN_PKT(&sock_result, extra_buf, sock_result.extra_ptr, sock_result.data_len);
+            /*
+             * 0x00E18EE4: pea (-0x40,A6) / pea (-0x70,A6) / pea (-0x10,A6).
+             * The first cast restates the record's 32-bit header VA cell,
+             * the same treatment sock/close.c gives NETBUF_$RTN_HDR.
+             */
+            NETBUF_$RTN_PKT((uint32_t *)&sock_result.hdr, &extra_buf,
+                            sock_result.data_pages, (int16_t)sock_result.data_len);
             *status_ret = local_status;
             return;
         }
@@ -139,16 +143,17 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, void *recv_params, status_$t *statu
                 iov_ptr = (int32_t *)iov_ptr[2];
             }
 
-            if (total_size < (int32_t)(sock_result.header_len + sock_result.data_len)) {
+            if (total_size < (int32_t)(sock_result.hdr_len + sock_result.data_len)) {
                 *status_ret = status_$xns_buffer_too_small;
                 goto cleanup;
             }
 
             /* Get virtual address for extra data if needed */
             if (sock_result.data_len != 0) {
-                NETBUF_$GETVA(sock_result.extra_ptr[0], &extra_buf, status_ret);
+                /* 0x00E18E34: the page VA is pushed BY VALUE */
+                NETBUF_$GETVA(sock_result.data_pages[0], &extra_buf, status_ret);
                 if (*status_ret != status_$ok) {
-                    extra_buf = NULL;
+                    extra_buf = 0;
                     goto cleanup;
                 }
             }
@@ -156,8 +161,9 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, void *recv_params, status_$t *statu
             /* Copy data to iov chain */
             iov_ptr = iov;
 
-            if (sock_result.header_len != 0) {
-                xns_$copy_packet_data(&sock_result, sock_result.header_len);
+            if (sock_result.hdr_len != 0) {
+                /* 0x00E18E66: pea (-0x40,A6) - the record's header VA cell */
+                xns_$copy_packet_data(&sock_result.hdr, sock_result.hdr_len);
             }
 
             if (sock_result.data_len != 0) {
@@ -174,7 +180,9 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, void *recv_params, status_$t *statu
         }
 
 cleanup:
-        NETBUF_$RTN_PKT(&sock_result, extra_buf, sock_result.extra_ptr, sock_result.data_len);
+        /* 0x00E18EBC */
+        NETBUF_$RTN_PKT((uint32_t *)&sock_result.hdr, &extra_buf,
+                        sock_result.data_pages, (int16_t)sock_result.data_len);
         FIM_$RLS_CLEANUP(cleanup_buf);
     }
 }

@@ -44,13 +44,14 @@
  * of time spent in a foreign address space.
  */
 void XPD_$COPY_MEMORY(int16_t dst_asid, void *dst_addr, int16_t src_asid,
-                      void *src_addr, uint32_t len, status_$t *status_ret)
+                      const void *src_addr, uint32_t len,
+                      status_$t *status_ret)
 {
     uint16_t saved_asid;
     uint16_t current_asid;
     uint32_t remaining;
     uint32_t chunk_size;
-    char *src_ptr;
+    const char *src_ptr;
     char *dst_ptr;
     char copy_buffer[COPY_BUFFER_SIZE];
     uint8_t cleanup_state[24];
@@ -77,7 +78,7 @@ void XPD_$COPY_MEMORY(int16_t dst_asid, void *dst_addr, int16_t src_asid,
     *(uint32_t *)(FIM_TRACE_STS_BASE + (src_asid << 2)) = 0;
     *(uint32_t *)(FIM_TRACE_STS_BASE + (dst_asid << 2)) = 0;
 
-    src_ptr = (char *)src_addr;
+    src_ptr = (const char *)src_addr;
     dst_ptr = (char *)dst_addr;
 
     while (remaining > 0) {
@@ -207,7 +208,14 @@ void XPD_$READ_PROC_ASYNC(uid_t *proc_uid, void *addr, int32_t *len,
 
         /* Check if we're the debugger or have debug rights */
         if (debugger_idx != current_idx) {
-            has_rights = ACL_$CHECK_DEBUG_RIGHTS(&PROC1_$CURRENT, proc_offset + PROC_TABLE_BASE - 0x4A);
+            /*
+             * 0x00E5B902: `pea (-0x4a,A2) / move.l #0xe20608,-(SP)` - both
+             * arguments are addresses of words: PROC1_$CURRENT (0xE20608)
+             * and the target entry's process-id word at entry-0x4A.
+             */
+            has_rights = ACL_$CHECK_DEBUG_RIGHTS(
+                &PROC1_$CURRENT,
+                (int16_t *)(proc_offset + PROC_TABLE_BASE - 0x4A));
             if (has_rights >= 0) {
                 *status_ret = status_$proc2_permission_denied;
                 return;
@@ -275,7 +283,8 @@ void XPD_$READ(uint16_t *asid, void *addr, int32_t *len, void *buffer, status_$t
  * A lower-level interface that writes directly to an address
  * space given its ASID, without process validation.
  */
-void XPD_$WRITE(uint16_t *asid, void *addr, int32_t *len, void *buffer, status_$t *status_ret)
+void XPD_$WRITE(uint16_t *asid, void *addr, const int32_t *len,
+                const void *buffer, status_$t *status_ret)
 {
     /* Copy from current process's buffer to specified ASID */
     XPD_$COPY_MEMORY(*asid, addr, PROC1_$AS_ID, buffer, *len, status_ret);

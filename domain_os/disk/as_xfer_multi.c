@@ -53,8 +53,13 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
     uint32_t local_daddr[16];
     uint32_t local_info[16][8];
     status_$t local_status[129];
-    void *queue_ptr = NULL;
-    void *queue_param = NULL;
+    /*
+     * A6-0x310 / A6-0x30C: the queue-block head and tail DISK_$GET_QBLKS
+     * fills in (0x00E6BA7C).  Both are longword VALUES - 0x00E6BB10 /
+     * 0x00E6BB7A push their contents, not their addresses.
+     */
+    int32_t qblk_head = 0;
+    uint32_t qblk_tail = 0;
 
     vol_idx = *vol_idx_ptr;
     count = *count_ptr;
@@ -96,7 +101,7 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
     CACHE_$FLUSH_VIRTUAL();
 
     /* Allocate queue blocks */
-    DISK_$GET_QBLKS(count, &queue_ptr, &queue_param);
+    DISK_$GET_QBLKS(count, &qblk_head, &qblk_tail);
 
     /* TODO(source-pxn): Set up queue blocks with addresses and info */
     /* This requires understanding the queue block structure */
@@ -104,11 +109,13 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
     /* Perform I/O */
     if (op_type == 1) {
         /* Write operation */
-        DISK_$WRITE_MULTI(0, queue_ptr, local_status);
+        /* 0x00E6BAF2 pushes the head value itself as the request list. */
+        DISK_$WRITE_MULTI(0, (void *)(uintptr_t)qblk_head, local_status);
         completed = count;
     } else {
         /* Read operation */
-        DISK_$READ_MULTI(vol_idx, 0, 0, queue_ptr, queue_param, &completed, local_status);
+        DISK_$READ_MULTI(vol_idx, 0, 0, qblk_head, qblk_tail, &completed,
+                         local_status);
     }
 
     /* Unwire buffers and collect results */
@@ -125,7 +132,7 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
     }
 
     /* Return queue blocks */
-    DISK_$RTN_QBLKS(count, queue_ptr, queue_param);
+    DISK_$RTN_QBLKS(count, qblk_head, qblk_tail);
 
 cleanup:
     /* Copy individual statuses */

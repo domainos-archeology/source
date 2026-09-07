@@ -105,10 +105,13 @@ void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret)
                 goto cleanup_error;
             }
         } else {
-            /* Bind to specific port */
-            int16_t port_num[2];
-            MAC_$NET_TO_PORT_NUM((int16_t *)(opt + 4), port_num);
-            port = port_num[0];
+            /*
+             * Bind to specific port.  0x00E17FC4: pea (-0x16,A6) then
+             * pea (0x8,A1) - the network id is the longword at options+0x08.
+             */
+            int16_t port_num;                   /* A6-0x16 */
+            MAC_$NET_TO_PORT_NUM((int32_t *)((uint8_t *)options + 8), &port_num);
+            port = port_num;
             if (port == -1) {
                 *status_ret = status_$xns_listen_network_not_connected;
                 goto cleanup_error;
@@ -142,15 +145,18 @@ void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret)
 
         /* Find next hop to destination */
         {
-            int16_t nexthop_port[4];
-            uint8_t nexthop_info[16];
+            int16_t nexthop_port;               /* A6-0x16 */
+            uint8_t nexthop_info[16];           /* A6-0x10 */
+            int8_t  arp_is_broadcast;           /* A6-0x20 */
 
-            RIP_$FIND_NEXTHOP((int16_t *)dest_addr, 0xFF, nexthop_port, nexthop_info, status_ret);
+            /* 0x00E18042 */
+            RIP_$FIND_NEXTHOP(dest_addr, 0xFF, &nexthop_port, nexthop_info,
+                              status_ret);
             if (*status_ret != status_$ok) {
                 goto cleanup_error;
             }
 
-            port = nexthop_port[0];
+            port = nexthop_port;
             if (port == -1) {
                 *status_ret = status_$xns_network_unreachable;
                 goto cleanup_error;
@@ -159,9 +165,16 @@ void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret)
             /* Perform ARP to get MAC address */
             {
                 int iVar1 = channel * XNS_CHANNEL_SIZE;
+                /*
+                 * 0x00E1807E: the fourth argument is the address of a local
+                 * broadcast-flag byte ("pea (-0x20,A6)"), which MAC_OS_$ARP
+                 * writes with "clr.b (A3)" / "st (A3)"; it is never NULL.
+                 * The third is the channel's link-address word array at
+                 * channel + 0xBC ("pea (0xbc,A4)").
+                 */
                 MAC_OS_$ARP(nexthop_info, port,
-                            (uint8_t *)(base + iVar1 + XNS_CHAN_OFF_MAC_INFO),
-                            NULL, status_ret);
+                            (uint16_t *)(base + iVar1 + XNS_CHAN_OFF_MAC_INFO),
+                            (uint8_t *)&arp_is_broadcast, status_ret);
                 if (*status_ret != status_$ok) {
                     goto cleanup_error;
                 }

@@ -1597,8 +1597,12 @@ static inline uint16_t smd_get_current_unit(void) {
  * separate table at 0x00E84924 - that address is SMD_GLOBALS.default_unit.
  */
 
-/* Error string for borrow failures */
-extern const char SMD_Error_Borrowing_Display_Err[];
+/*
+ * The value SMD_$BORROW_DISPLAY hands CRASH_SYSTEM when SMD_$CLEAR_WINDOW
+ * fails is NOT a string: 0x00E6F6E4 "pea (0x16,PC)" resolves to 0x00E6F6FC,
+ * a constant longword 0x0013000E in the code region.  It is emitted as a
+ * file-static status cell in smd/borrow_display.c, so no extern is needed.
+ */
 
 /*
  * smd_$init_display_state - Initialize display state for borrow/associate

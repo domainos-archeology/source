@@ -496,16 +496,18 @@ uint32_t AREA_$COPY(int16_t gen, uint16_t area_id, int16_t new_asid,
  * Ensures pages within the specified range are in memory.
  *
  * @param handle_ptr    Pointer to area handle
- * @param bste_idx      BSTE index
- * @param seg_idx       Segment index
- * @param param_4       Unknown parameter
- * @param param_5       Unknown parameter
+ * @param bste_idx      BSTE index (A6+0x0C)
+ * @param seg_idx       Segment index (A6+0x0E)
+ * @param param_4       Unknown parameter (A6+0x10)
+ * @param ppn_array     PPN list handed straight to AST_$TOUCH_AREA
+ *                      (A6+0x12; 0x00E0965A pushes it as the fifth argument
+ *                      of the 0x00E03548 call, where it is dereferenced)
  * @param status_p      Output: status code
  *
  * Original address: 0x00E094FE
  */
 void AREA_$TOUCH(area_$handle_t *handle_ptr, uint16_t bste_idx,
-                 uint16_t seg_idx, int16_t param_4, uint32_t param_5,
+                 uint16_t seg_idx, int16_t param_4, uint32_t *ppn_array,
                  status_$t *status_p);
 
 /*

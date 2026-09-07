@@ -31,6 +31,7 @@
  */
 
 #include "route/route_internal.h"
+#include "arch/arch.h"
 #include "netbuf/netbuf.h"
 #include "net_io/net_io.h"
 #include "os/os.h"
@@ -77,10 +78,10 @@ void ROUTE_$INCOMING(void *port_info, uint8_t *packet_data, uint16_t *length_ptr
     uint32_t checksum;
     uint32_t computed_checksum;
     uint8_t *header_start;
-    void *data_buf;
-    void *data_va;
-    void *header_buf;
-    uint8_t header_info[8];
+    uint32_t data_buf;      /* A6-0x10: data buffer address (ppn << 10) */
+    uint32_t data_va;       /* A6-0x14: VA the data buffer is mapped at */
+    uint32_t header_buf;    /* A6-0x18: header buffer VA */
+    uint32_t header_phys;   /* A6-0x0c: header buffer physical address */
     int16_t i;
 
     /*
@@ -171,7 +172,7 @@ void ROUTE_$INCOMING(void *port_info, uint8_t *packet_data, uint16_t *length_ptr
      * Allocate data buffer if there's payload data
      */
     if (data_len == 0) {
-        data_buf = NULL;
+        data_buf = 0;               /* 0x00E879A4: clr.l (-0x10,A6) */
     } else {
         NETBUF_$GET_DAT(&data_buf);
         NETBUF_$GETVA(data_buf, &data_va, status_ret);
@@ -181,7 +182,12 @@ void ROUTE_$INCOMING(void *port_info, uint8_t *packet_data, uint16_t *length_ptr
         }
 
         /* Copy data portion to network buffer */
-        OS_$DATA_COPY(header_start + header_len, data_va, (uint32_t)data_len);
+        /*
+         * 0x00E879E0: the VA *value* is pushed as the destination, so the
+         * cell holds a target virtual address, not a host pointer.
+         */
+        OS_$DATA_COPY(header_start + header_len, ARCH_VA_TO_PTR(data_va),
+                      (uint32_t)data_len);
 
         NETBUF_$RTNVA(&data_va);
     }
@@ -189,8 +195,10 @@ void ROUTE_$INCOMING(void *port_info, uint8_t *packet_data, uint16_t *length_ptr
     /*
      * Allocate header buffer and copy header data
      */
-    NETBUF_$GET_HDR(header_info, &header_buf);
-    OS_$DATA_COPY(header_start, header_buf, (uint32_t)header_len);
+    /* 0x00E87A02: pea (-0xc,A6) = &header_phys, pea (-0x18,A6) = &header_buf */
+    NETBUF_$GET_HDR(&header_phys, &header_buf);
+    OS_$DATA_COPY(header_start, ARCH_VA_TO_PTR(header_buf),
+                  (uint32_t)header_len);
 
     /*
      * Inject packet into local network via socket

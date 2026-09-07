@@ -27,6 +27,7 @@
 
 #include "base/base.h"
 #include "ml/ml.h"
+#include "ast/ast.h"   /* locate_request_t, used by MST_$REMOVE_SEG */
 
 /*
  * MST status codes (module 0x04 = MST)
@@ -282,10 +283,39 @@ void MST_$UNMAP_PRIVI(int16_t mode, uid_t *uid, uint32_t start, uint32_t size,
 
 /* Segment operations */
 uint32_t MST_$FIND(uint32_t virt_addr, uint16_t flags);
-void MST_$REMOVE_SEG(uint32_t param_1, uint32_t param_2, uint16_t param_3,
-                     uint16_t param_4, uint8_t flags);
+/*
+ * MST_$REMOVE_SEG (0x00E0E0D6) - release an ASTE's pages.
+ *
+ * The first argument is the 12-byte AST_$LOCATE_ASTE request record, passed
+ * BY REFERENCE: 0x00E0E0EA "move.l (0x8,A6),-(SP)" hands this longword
+ * straight to AST_$LOCATE_ASTE, which dereferences it
+ * (0x00E0705E "movea.l (0x8,A6),A2" then "(0xa,A2)"/"(0x8,A2)").  The only
+ * caller, MST_$UNMAP_PRIVI, builds it on its own stack and passes its
+ * address (0x00E44A30 "pea (-0x400,A2)").
+ *
+ * Arguments 2-4 (A6+0x0C long, A6+0x10 word, A6+0x12 word) are never read by
+ * the body; `flags` is the byte at A6+0x14, forwarded to AST_$RELEASE_PAGES.
+ */
+void MST_$REMOVE_SEG(locate_request_t *request, uint32_t param_2,
+                     uint16_t param_3, uint16_t param_4, uint8_t flags);
 uint32_t MST_$WIRE(uint32_t vpn, status_$t *status_ret);
-void MST_$WIRE_AREA(void *start, void *end, void *buf1, void *param4, void *buf2);
+/*
+ * MST_$WIRE_AREA - wire every page of [*start_va_ptr, *end_va_ptr]
+ *
+ * Recovered from 0x00E44BA4:
+ *   (0x08,A6) A0 -> longword start VA          `move.l (A0),D3`
+ *   (0x0C,A6) A1 -> longword end VA            `move.l (A1),D1`
+ *   (0x10,A6) A2 -> array of longwords, written 1-based as
+ *                   `move.l D0,(-0x4,A2,D1w*1)` with D1 = count*4
+ *   (0x14,A6) A3 -> word page limit            `cmp.w (A3),D1w`, CRASH_SYSTEM
+ *                   (0x00E44BEA) if the count would exceed it
+ *   (0x18,A6) A4 -> word page count, cleared at entry and incremented per page
+ * The pointer parameters stay `void *` because callers hand it cells of
+ * several different declared types.
+ */
+void MST_$WIRE_AREA(const void *start_va_ptr, const void *end_va_ptr,
+                    void *page_list, const void *max_pages_ptr,
+                    void *page_count_ret);
 void MST_$INVALIDATE(void);
 void MST_$CHANGE_RIGHTS(void);
 void MST_$SET_GUARD(void);

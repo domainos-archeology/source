@@ -6,9 +6,10 @@
  * and returns the stored location information.
  *
  * Parameters:
- *   uid_info - Pointer to UID info structure (32 bytes, UID at offset 8)
+ *   loc_rec - The 0x20-byte object-location record (UID at offset 8,
+ *             flags byte at offset 0x1D); overwritten on success
  *   flags - Lookup flags (bit 0: force load if not cached)
- *   unused - Unused parameter
+ *   unused - 4-byte cell the routine never reads or writes
  *   vol_uid_out - Output: volume UID
  *   status - Status return
  *
@@ -18,10 +19,13 @@
 #include "ast/ast_internal.h"
 #include "route/route.h"
 
-void AST_$GET_LOCATION(uint32_t *uid_info, uint16_t flags, uint32_t unused,
-                       uint32_t *vol_uid_out, status_$t *status)
+void AST_$GET_LOCATION(file_$obj_loc_t *loc_rec, uint16_t flags,
+                       uint32_t *unused, uint32_t *vol_uid_out,
+                       status_$t *status)
 {
-    uid_t *uid = (uid_t *)((char *)uid_info + 8);
+    /* 0x00e04770 copies the record as 8 longwords, so keep a longword view. */
+    uint32_t *uid_info = (uint32_t *)(void *)loc_rec;
+    uid_t *uid = &loc_rec->uid;                 /* +0x08 (lea (0x8,A2),A0) */
     aote_t *aote;
     int i;
 

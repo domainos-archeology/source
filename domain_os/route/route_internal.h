@@ -10,6 +10,7 @@
 
 #include "route/route.h"
 #include "ec/ec.h"
+#include "ml/ml.h"
 #include "misc/crash_system.h"
 #include "network/network.h"
 #include "rip/rip.h"
@@ -57,7 +58,7 @@ extern uint32_t ROUTE_$SOCK_ECVAL;
  *
  * Original address: 0xE26280
  */
-extern uint32_t ROUTE_$SERVICE_MUTEX;
+extern ml_$exclusion_t ROUTE_$SERVICE_MUTEX;
 /*
  * ROUTE_$CONTROL_ECVAL - Control event count value
  *

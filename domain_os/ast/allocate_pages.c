@@ -189,7 +189,7 @@ static void NETLOG_$LOG_PAGE(void *pmape, int16_t ppn_high)
         /* Get ASTE field at offset -8 from base */
         aste_field = *(uint16_t *)(0xEC53F8 + aste_offset - 0x08);
 
-        NETLOG_$LOG_IT(4, &anon_uid, aste_field,
+        NETLOG_$LOG_IT(4, (uint32_t *)&anon_uid, aste_field,
                        *(uint8_t *)((char *)pmape + 1),
                        ppn_high, 0, 0, 0);
     } else {
@@ -199,7 +199,7 @@ static void NETLOG_$LOG_PAGE(void *pmape, int16_t ppn_high)
         /* Get ASTE field at offset -8 from base */
         aste_field = *(uint16_t *)(0xEC53F8 + aste_offset - 0x08);
 
-        NETLOG_$LOG_IT(4, uid_ptr, aste_field,
+        NETLOG_$LOG_IT(4, (uint32_t *)uid_ptr, aste_field,
                        *(uint8_t *)((char *)pmape + 1),
                        ppn_high, 0, 0, 0);
     }

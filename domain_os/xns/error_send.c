@@ -125,9 +125,9 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
     int32_t header_len;
     int16_t *orig_header;
     int16_t *error_header;
-    void *hdr_buf;
-    int32_t netbuf_handle = 0;
-    void *netbuf_ptr[2];
+    uint32_t netbuf_handle = 0;     /* A6-0x2c: header buffer physical address
+                                     *          (clr.l (-0x2c,A6) @0xE17A3C) */
+    uint32_t netbuf_va;             /* A6-0x28: header buffer VA */
     uint8_t cleanup_buf[24];
     status_$t local_status;
     int16_t packet_offset;
@@ -140,7 +140,7 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
     if (local_status != status_$cleanup_handler_set) {
         /* Cleanup failed - return original packet if allocated */
         if (netbuf_handle != 0) {
-            NETBUF_$RTN_HDR(netbuf_ptr);
+            NETBUF_$RTN_HDR(&netbuf_va);   /* 0x00E17BD0 */
         }
         *status_ret = local_status;
         return;
@@ -180,8 +180,9 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
     }
 
     /* Get a network buffer for the error packet */
-    NETBUF_$GET_HDR(&netbuf_handle, netbuf_ptr);
-    error_header = (int16_t *)netbuf_ptr[0];
+    /* 0x00E17AFC: pea (-0x28,A6) then pea (-0x2c,A6) - phys first, VA second */
+    NETBUF_$GET_HDR(&netbuf_handle, &netbuf_va);
+    error_header = (int16_t *)ARCH_VA_TO_PTR(netbuf_va);    /* movea.l (-0x28,A6),A2 */
 
     /* Copy original header info */
     xns_$copy_error_header(packet_info);
@@ -191,8 +192,7 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
     packet_offset = 0x4C - *(int16_t *)(pkt + 0x36);
 
     xns_error_send_params.hdr_desc.length  = packet_offset;   /* 0x00E17B2C */
-    xns_error_send_params.hdr_desc.address =
-        (uint32_t)(uintptr_t)netbuf_ptr[0];                   /* 0x00E17B30 */
+    xns_error_send_params.hdr_desc.address = netbuf_va;       /* 0x00E17B30 */
     xns_error_send_params.hdr_desc.next    = 0;               /* 0x00E17B34 */
     xns_error_send_params.hdr_prebuilt     = true;            /* 0x00E17B38 `st' */
 

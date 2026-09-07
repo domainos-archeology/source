@@ -16,7 +16,8 @@
 void PACCT_$SHUTDN(void)
 {
     status_$t status;
-    uint8_t status_buf[8];
+    /* (-0x8,A6): FILE_$PRIV_UNLOCK's data-time-valid longword out. */
+    uint32_t dtv_out;
 
     /* Check if accounting is enabled */
     if (pacct_owner.high == UID_$NIL.high &&
@@ -27,7 +28,7 @@ void PACCT_$SHUTDN(void)
 
     /* Unmap buffer if currently mapped */
     if (DAT_00e81804 != NULL) {
-        MST_$UNMAP_PRIVI(1, &UID_$NIL, DAT_00e81804, DAT_00e81800, 0, &status);
+        MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(DAT_00e81804), DAT_00e81800, 0, &status);
     }
 
     /* Clear buffer state */
@@ -39,7 +40,7 @@ void PACCT_$SHUTDN(void)
     /* `move.l (0x8,A5)` slot, `move.l #0x40000` = mode word 4 + asid word 0,
      * then three `clr.l`. */
     (void)FILE_$PRIV_UNLOCK(&pacct_owner, (int32_t)DAT_00e817f4, 4, 0,
-                            0, 0, 0, 0, status_buf, &status);
+                            0, 0, 0, 0, &dtv_out, &status);
 
     /* Disable accounting by setting owner to nil */
     pacct_owner.high = UID_$NIL.high;

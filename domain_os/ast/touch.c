@@ -279,7 +279,7 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
 
         /* Log the operation if enabled */
         if (NETLOG_$OK_TO_LOG < 0) {
-            NETLOG_$LOG_IT(log_type, (char *)aote + 0x10, aste->segment, page,
+            NETLOG_$LOG_IT(log_type, (uint32_t *)&aote->uid, aste->segment, page,
                           (uint16_t)*ppn_array, pages_touched,
                           (*(int8_t *)((char *)aote + 0xB9) < 0) ? 1 : 0, 0);
         }

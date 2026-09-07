@@ -18,6 +18,7 @@
 
 #include "file/file_internal.h"
 #include "dir/dir.h"
+#include "name/name.h"      /* NAME_$ROOT_UID */
 
 /* DISKLESS_$UID (0x00E173F4) is declared in uid/uid.h */
 
@@ -51,12 +52,8 @@ void FILE_$LOCATEI(uid_t *file_uid, uid_t *location_out, status_$t *status_ret)
      * AST_$GET_LOCATION expects UID at offset 8, and writes
      * 32 bytes of location info back to the buffer
      */
-    struct {
-        uint32_t data[2];    /* 8 bytes - location output */
-        uid_t uid;           /* 8 bytes - UID at offset 8 */
-        uid_t location;      /* 8 bytes - location output at offset 16 */
-        uint8_t padding[8];  /* Pad to 32 bytes */
-    } query_buf;
+    file_$obj_loc_t query_buf;      /* A6-0x20 */
+    uint32_t loc_unused;            /* A6-0x34: pea'd, never touched */
 
     /* Copy input UID to local buffer */
     local_uid.high = file_uid->high;
@@ -67,19 +64,19 @@ void FILE_$LOCATEI(uid_t *file_uid, uid_t *location_out, status_$t *status_ret)
     query_buf.uid.low = local_uid.low;
 
     /*
-     * Clear bit 6 of the flags byte in the UID
-     * This removes the "local only" constraint
+     * Clear bit 6 of the record's flags byte at +0x1D
+     * (0x00E606A6 `bclr.b #0x6,(-0x3,A6)` with the record based at A6-0x20).
+     * This removes the "local only" constraint.
      */
-    /* Byte 5 of the big-endian UID is bits 16-23 of uid.low */
-    query_buf.uid.low &= ~((uint32_t)0x40 << 16);  /* Clear bit 6 of byte 5 */
+    query_buf.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
     /* Call AST_$GET_LOCATION to get the file's location */
-    AST_$GET_LOCATION((uint32_t *)&query_buf, 0, 0, &vol_uid_out, &status);
+    AST_$GET_LOCATION(&query_buf, 0, &loc_unused, &vol_uid_out, &status);
 
     if (status == status_$ok) {
-        /* Success - return the location from the query buffer */
-        location_out->high = query_buf.location.high;
-        location_out->low = query_buf.location.low;
+        /* 0x00E606D0: the two longwords at record+0x10 and record+0x14 */
+        location_out->high = query_buf.loc_info;
+        location_out->low = query_buf.node;
     } else {
         /*
          * Location lookup failed - check for diskless client UID
@@ -103,7 +100,8 @@ void FILE_$LOCATEI(uid_t *file_uid, uid_t *location_out, status_$t *status_ret)
             location_out->low = index;
 
             /* Find network node for this diskless entry */
-            location_out->high = DIR_$FIND_NET(0x29C, &index);
+            /* 0x00E6070E pushes the longword 0x00E8029C = &NAME_$ROOT_UID. */
+            location_out->high = DIR_$FIND_NET(&NAME_$ROOT_UID, &index);
 
             /* Override status to success */
             status = status_$ok;

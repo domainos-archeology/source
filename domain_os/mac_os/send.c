@@ -52,10 +52,11 @@ void MAC_OS_$SEND(int16_t *channel, mac_os_$send_pkt_t *pkt_desc,
     uint8_t cleanup_info[24];  /* FIM cleanup info on stack */
 
     /* Local buffer state */
-    int32_t header_ptr;
-    int32_t data_ptr;
-    status_$t buffer_status;
-    void *data_buf_handle;
+    uint32_t header_ptr;        /* A6-0x2c: header buffer VA */
+    uint32_t header_phys;       /* A6-0x34: header buffer physical address */
+    uint32_t data_ptr;          /* A6-0x28: data buffer VA */
+    status_$t buffer_status;    /* A6-0x24 */
+    uint32_t data_buf_handle;   /* A6-0x30: data page (ppn << 10) */
 
     *bytes_sent = 0;
     *status_ret = status_$ok;
@@ -78,8 +79,9 @@ void MAC_OS_$SEND(int16_t *channel, mac_os_$send_pkt_t *pkt_desc,
     if (cleanup_status != status_$cleanup_handler_set) {
         /* Cleanup was triggered - return buffers */
         if (needs_buffers < 0) {
+            /* 0x00E0B7E8: pea (-0x2c,A6) / pea (-0x28,A6) / pea (0x3c,A4) */
             NETBUF_$RTN_PKT(&header_ptr, &data_ptr,
-                           (void *)((uint8_t *)pkt_desc + 0x3C), total_length);
+                           (uint32_t *)((uint8_t *)pkt_desc + 0x3C), total_length);
         }
         *status_ret = cleanup_status;
         return;
@@ -145,8 +147,8 @@ buffer_error:
     overflow_length = 0;
     /* buffer_chain is pkt_desc+0x1C */
 
-    /* Get header buffer */
-    NETBUF_$GET_HDR(cleanup_info + 4, &header_ptr);
+    /* 0x00E0B6B8: pea (-0x2c,A6) then pea (-0x34,A6) - phys first, VA second */
+    NETBUF_$GET_HDR(&header_phys, &header_ptr);
     header_ptr += chan->header_size;
 
     if (use_header_buf < 0) {
@@ -155,9 +157,13 @@ buffer_error:
             overflow_length = total_length - MAC_OS_LARGE_PACKET_SIZE;
             total_length = MAC_OS_LARGE_PACKET_SIZE;
         } else {
-            /* All data goes to header buffer */
-            total_length = 0;
+            /*
+             * All data goes to the header buffer.  0x00E0B6EE reads the
+             * length into D2 BEFORE clearing it: "move.w (-0x3e,A6),D2w /
+             * clr.w (-0x3e,A6)".
+             */
             overflow_length = total_length;
+            total_length = 0;
         }
 
         /* Copy data to header buffer */
@@ -175,8 +181,8 @@ buffer_error:
             goto send_done;
         }
 
-        /* Store data buffer handle in packet descriptor */
-        *(void **)((uint8_t *)pkt_desc + 0x3C) = data_buf_handle;
+        /* 0x00E0B742: move.l D3,(0x3c,A4) */
+        *(uint32_t *)((uint8_t *)pkt_desc + 0x3C) = data_buf_handle;
 
         /* Copy remaining data to data buffer */
         MAC_OS_$COPY_BUFFER_DATA(&data_ptr, total_length);
@@ -185,8 +191,8 @@ buffer_error:
         NETBUF_$RTNVA(&data_ptr);
         data_ptr = 0;
     } else {
-        /* No data buffer used */
-        *(void **)((uint8_t *)pkt_desc + 0x3C) = NULL;
+        /* 0x00E0B76C: clr.l (0x3c,A4) */
+        *(uint32_t *)((uint8_t *)pkt_desc + 0x3C) = 0;
     }
 
     /* Update packet descriptor with buffer info */

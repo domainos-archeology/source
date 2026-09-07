@@ -57,7 +57,7 @@
  *   -0x14: local_uid (8 bytes) - high at -0x14, low at -0x10
  *   -0x08: extra_data (8 bytes) - for ACL_$DEF_ACLDATA
  */
-void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, uint32_t *acl_data,
+void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, void *acl_data,
                     uid_t *acl_uid, status_$t *status_ret)
 {
     uint16_t type_val;

@@ -114,7 +114,7 @@ void KBD_$RCV(kbd_state_t *state, uint8_t key)
                  * 0x00E1CDF4 move.w #0x4,-(SP)  -> data_size = 4
                  */
                 DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q, &PTR_TERM_$ENQUEUE_TPAD_00e1ce90,
-                                  &callback_param, 4, true, status);
+                                  (void **)&callback_param, 4, true, status);
             }
 
             /* Save current time as last time */

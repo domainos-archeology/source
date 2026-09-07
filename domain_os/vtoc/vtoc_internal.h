@@ -472,4 +472,43 @@ uint16_t vtoc_$fm_traverse(uint32_t *block_ptr, uint16_t level, uint32_t hint);
 void vtoc_$free_indirect(uint32_t block, uint16_t level, uint32_t limit,
                          uint32_t step, char do_free);
 
+/*
+ * ============================================================================
+ * Audit event data records
+ * ============================================================================
+ *
+ * VTOC_$MOUNT and VTOC_$DISMOUNT each hand AUDIT_$LOG_EVENT one flat stack
+ * record.  The original code indexes them as Pascal 1-based byte arrays
+ * (`(-0x39,A6,D1w)` with D1 = 1..0x20 at 0x00E38664), so element N sits at
+ * C offset N-1.
+ */
+
+/* 0x32 bytes at A6-0x38 in VTOC_$MOUNT (length cell 0x00E38762 = 0x32) */
+typedef struct vtoc_$audit_mount_rec_t {
+    char        vol_name[32];   /* 0x00: label_block+0x04 .. +0x23 */
+    uint8_t     reserved_20[4]; /* 0x20: cleared at 0x00E38674 */
+    uid_t       vol_uid;        /* 0x24: label_block+0x24 (0x00E38658) */
+    uint16_t    param_2;        /* 0x2C: the caller's param_2 (0x00E3870A) */
+    uint16_t    vol_idx;        /* 0x2E: 0x00E38706 */
+    uint8_t     wp_flag;        /* 0x30: vtoc unit byte +0x26F (0x00E38700) */
+    uint8_t     pad_31;         /* 0x31 */
+} vtoc_$audit_mount_rec_t;
+
+/* 0x30 bytes at A6-0x30 in VTOC_$DISMOUNT (length cell 0x00E388AA = 0x30) */
+typedef struct vtoc_$audit_dismount_rec_t {
+    char        vol_name[32];   /* 0x00: label_block+0x04 .. +0x23 */
+    uint8_t     reserved_20[4]; /* 0x20: cleared at 0x00E387FC */
+    uid_t       vol_uid;        /* 0x24: label_block+0x24 (0x00E387E0) */
+    uint16_t    vol_idx;        /* 0x2C: 0x00E38882 */
+    uint8_t     flags;          /* 0x2E: 0x00E3887E */
+    uint8_t     pad_2f;         /* 0x2F */
+} vtoc_$audit_dismount_rec_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(vtoc_$audit_mount_rec_t, vol_uid) == 0x24, "amount.vol_uid");
+_Static_assert(sizeof(vtoc_$audit_mount_rec_t) == 0x32, "sizeof amount rec");
+_Static_assert(offsetof(vtoc_$audit_dismount_rec_t, vol_uid) == 0x24, "admount.vol_uid");
+_Static_assert(sizeof(vtoc_$audit_dismount_rec_t) == 0x30, "sizeof admount rec");
+#endif
+
 #endif /* VTOC_INTERNAL_H */

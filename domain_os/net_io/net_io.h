@@ -62,8 +62,14 @@ void NET_IO_$SEND(int16_t port, uint32_t *hdr_ptr, uint32_t hdr_pa,
  *
  * Original address: 0x00E0E4A0
  */
-void NET_IO_$PUT_IN_SOCK(uint16_t net_type, uint16_t socket, void **hdr_ptr,
-                         void **data_ptr, uint16_t hdr_len, uint16_t data_len);
+/*
+ * Arguments 3 and 4 are the ADDRESSES of two 32-bit cells, not the buffers
+ * themselves: 0x00E0E4BE / 0x00E0E4BA forward them as longwords and the
+ * callee at 0x00E0E2A0 does "movea.l (A4),A2" to reach the header.  Both
+ * callers push the address of a netbuf VA / physical-address cell.
+ */
+void NET_IO_$PUT_IN_SOCK(uint16_t net_type, uint16_t socket, uint32_t *hdr_va_p,
+                         uint32_t *data_pa_p, uint16_t hdr_len, uint16_t data_len);
 
 /*
  * NET_IO_$COPY_PACKET - Copy a packet to network buffers
@@ -71,20 +77,37 @@ void NET_IO_$PUT_IN_SOCK(uint16_t net_type, uint16_t socket, void **hdr_ptr,
  * Copies packet data from user buffers to network buffers suitable
  * for transmission.
  *
- * @param dest_addr_p   Pointer to destination address pointer
- * @param header_len    Header length
- * @param data_ptr      Pointer to packet data
- * @param flags         Flags (flags1 << 16 | flags2)
- * @param data_len      Data length
- * @param hdr_buf       Output header buffer array
- * @param data_buf      Output data buffer array
- * @param status_ret    Output status code
+ * Parameter offsets read off the prologue (link.w A6,-0x1c):
+ *   A6+0x08  hdr_src_p     "movea.l (0x8,A6),A1 / move.l (A1),-(SP)" at
+ *                          0x00E0E67C: the address of a cell holding the
+ *                          header SOURCE VA
+ *   A6+0x0c  hdr_len       word, "move.w (0xc,A6),D5w"
+ *   A6+0x0e  src_data_va   longword; when non-zero the payload is read
+ *                          linearly from it ("add.l (0xe,A6),D7" at
+ *                          0x00E0E60E), when zero it is read page by page
+ *   A6+0x12  src_pages     "movea.l (0x12,A6),A4 / addq.l #4,A4" - the
+ *                          source payload page array
+ *   A6+0x16  data_len      word
+ *   A6+0x18  hdr_va_out    passed BY VALUE to NETBUF_$GET_HDR as its va_out
+ *                          (0x00E0E660), so it is already a pointer
+ *   A6+0x1c  data_pages_out  "clr.l (A1)" / NETBUF_$GET_DAT fills it
+ *   A6+0x20  status_ret
+ *
+ * @param hdr_src_p       Address of the header source VA cell
+ * @param hdr_len         Header length
+ * @param src_data_va     Source payload VA, or 0 to use src_pages
+ * @param src_pages       Source payload page array
+ * @param data_len        Data length
+ * @param hdr_va_out      Output: new header buffer VA
+ * @param data_pages_out  Output: new payload page VAs
+ * @param status_ret      Output status code
  *
  * Original address: 0x00E0E514
  */
-void NET_IO_$COPY_PACKET(void **dest_addr_p, uint16_t header_len, void *data_ptr,
-                         uint32_t flags, uint16_t data_len,
-                         void **hdr_buf, void **data_buf, status_$t *status_ret);
+void NET_IO_$COPY_PACKET(uint32_t *hdr_src_p, uint16_t hdr_len,
+                         uint32_t src_data_va, uint32_t *src_pages,
+                         uint16_t data_len, uint32_t *hdr_va_out,
+                         uint32_t *data_pages_out, status_$t *status_ret);
 
 /*
  * NET_IO_$BOOT_DEVICE - Record the network boot device

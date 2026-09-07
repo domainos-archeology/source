@@ -96,7 +96,7 @@ void *dir_$map_page(void *handle, int16_t page_idx)
 
     /* Verify the remap returned expected size (0x8000 = 32KB) */
     if (result != 0x8000) {
-        CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+        CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
     }
 
     /* Compute final address */

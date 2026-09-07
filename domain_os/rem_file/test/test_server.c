@@ -292,8 +292,9 @@ void FILE_$SET_ATTRIBUTE(uid_t *u, int16_t id, void *v, uint16_t rights,
 
 void AST_$GET_ATTRIBUTES(uid_t *u, uint16_t fl, void *a, status_$t *st)
 { (void)u; (void)fl; memset(a, 0, 0x90); *st = status_$ok; }
-void AST_$GET_ACL_ATTRIBUTES(uid_t *u, uint16_t fl, void *a, status_$t *st)
-{ (void)u; (void)fl; memset(a, 0, 12); *st = status_$ok; }
+void AST_$GET_ACL_ATTRIBUTES(file_$obj_loc_t *u, uint16_t fl,
+                             ast_$acl_attr_t *a, status_$t *st)
+{ (void)u; (void)fl; memset(a, 0, sizeof(*a)); *st = status_$ok; }
 void AST_$SET_ATTRIBUTE(uid_t *u, uint16_t id, void *v, status_$t *st)
 { (void)u; (void)id; (void)v; *st = status_$ok; }
 uint16_t AST_$PURIFY(uid_t *u, uint16_t fl, int16_t sg, uint32_t *sl,
@@ -301,9 +302,9 @@ uint16_t AST_$PURIFY(uid_t *u, uint16_t fl, int16_t sg, uint32_t *sl,
 { (void)u; (void)fl; (void)sg; (void)sl; (void)un; *st = status_$ok; return 0; }
 void AST_$GET_DTV(uid_t *u, uint32_t un, uint32_t *dtv, status_$t *st)
 { (void)u; (void)un; (void)dtv; *st = status_$ok; }
-void AST_$GET_SEG_MAP(uint32_t *ui, uint32_t off, uint32_t un, uid_t *vu,
-                      uint32_t cnt, uint16_t fl, uint32_t *out, status_$t *st)
-{ (void)ui; (void)off; (void)un; (void)vu; (void)cnt; (void)fl; (void)out;
+void AST_$GET_SEG_MAP(uid_t *ui, uint32_t off, uint32_t un, uint32_t sc,
+                      uint32_t ms, uint16_t fl, uint32_t *out, status_$t *st)
+{ (void)ui; (void)off; (void)un; (void)sc; (void)ms; (void)fl; (void)out;
   *st = status_$ok; }
 void AST_$INVALIDATE(uid_t *u, uint32_t sp, uint32_t c, int16_t fl,
                      status_$t *st)
@@ -314,8 +315,8 @@ void AST_$TRUNCATE(uid_t *u, uint32_t sz, uint16_t fl, uint8_t *res,
                    status_$t *st)
 { (void)u; (void)sz; (void)fl; (void)res; mock_truncate_calls++;
   *st = status_$ok; }
-void AST_$GET_LOCATION(uint32_t *ui, uint16_t fl, uint32_t un, uint32_t *vu,
-                       status_$t *st)
+void AST_$GET_LOCATION(file_$obj_loc_t *ui, uint16_t fl, uint32_t *un,
+                       uint32_t *vu, status_$t *st)
 { (void)ui; (void)fl; (void)un; (void)vu; *st = file_$object_not_found; }
 
 void UID_$GEN(uid_t *u) { u->high = 0x11223344; u->low = 0x55667788; }
@@ -324,9 +325,9 @@ void ACL_$ENTER_SUPER(void) {}
 void ACL_$EXIT_SUPER(void) {}
 void AUDIT_$SUSPEND(void) {}
 void AUDIT_$RESUME(void) {}
-uint32_t ACL_$GET_RE_ALL_SIDS(void *a, uid_t *b, void *c, int32_t *d,
-                              status_$t *st)
-{ (void)a; (void)b; (void)c; (void)d; *st = status_$ok; return 0; }
+void ACL_$GET_RE_ALL_SIDS(void *a, void *b, void *c, void *d,
+                          status_$t *st)
+{ (void)a; (void)b; (void)c; (void)d; *st = status_$ok; }
 void ACL_$SET_RE_ALL_SIDS(void *a, void *b, void *c, void *d, status_$t *st)
 { (void)a; (void)b; (void)c; (void)d; *st = status_$ok; }
 void ACL_$GET_PROJ_LIST(uid_t *a, int16_t *b, int16_t *c, status_$t *st)

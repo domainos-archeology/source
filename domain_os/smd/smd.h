@@ -843,14 +843,20 @@ typedef struct smd_blt_ctl_t {
  * Performs a hardware-accelerated bit block transfer.
  *
  * Parameters:
- *   params     - BLT operation parameters
- *   param2     - Parameter 2
- *   param3     - Parameter 3
+ *   ctl        - BLT control record, BY REFERENCE (0x00E6EC7C
+ *                "movea.l (0x8,A6),A2"); the body addresses it as words
+ *   param2     - Longword constant cell, BY REFERENCE.  SMD_$BLT_U reaches
+ *                it with "pea (-0x20c,PC)" at 0x00E6FB82 -> 0x00E6F978,
+ *                which holds 0x00000000.  The body never reads it.
+ *   param3     - Word constant cell, BY REFERENCE.  SMD_$BLT_U reaches it
+ *                with "pea (-0x2254,PC)" at 0x00E6FB7E -> 0x00E6D92C,
+ *                i.e. SMD_ACQ_LOCK_DATA (0).  The body never reads it.
  *   status_ret - Status return
  *
  * Original address: 0x00E6EC6E
  */
-void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *status_ret);
+void SMD_$BLT(smd_blt_ctl_t *ctl, const uint32_t *param2,
+              const uint16_t *param3, status_$t *status_ret);
 
 /*
  * SMD_$BLT_U - User-mode bit block transfer

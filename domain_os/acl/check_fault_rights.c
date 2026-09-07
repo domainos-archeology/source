@@ -33,10 +33,10 @@ static int8_t uid_eq(uid_t *a, uid_t *b)
     return (a->high == b->high && a->low == b->low) ? -1 : 0;
 }
 
-int8_t ACL_$CHECK_FAULT_RIGHTS(int16_t *pid1_ptr, int16_t *pid2_ptr)
+int8_t ACL_$CHECK_FAULT_RIGHTS(const uint16_t *pid1_ptr, const uint16_t *pid2_ptr)
 {
-    int16_t pid1 = *pid1_ptr;
-    int16_t pid2 = *pid2_ptr;
+    int16_t pid1 = (int16_t)*pid1_ptr;
+    int16_t pid2 = (int16_t)*pid2_ptr;
     int8_t allowed = 0;
     acl_sid_block_t *p1_orig, *p1_curr;
     acl_sid_block_t *p2_saved, *p2_curr;

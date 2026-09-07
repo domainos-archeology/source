@@ -75,7 +75,8 @@ void TTY_$K_INQ_FLAGS(short *line_ptr, uint16_t *flags_ptr, status_$t *status)
     }
 }
 
-void TTY_$K_SET_INPUT_FLAG(short *line_ptr, ushort *flag_ptr, char *value_ptr,
+void TTY_$K_SET_INPUT_FLAG(short *line_ptr, const uint16_t *flag_ptr,
+                           const char *value_ptr,
                            status_$t *status)
 {
     tty_desc_t *tty;
@@ -107,7 +108,8 @@ void TTY_$K_INQ_INPUT_FLAGS(short *line_ptr, uint32_t *flags_ptr, status_$t *sta
     *flags_ptr = tty->input_flags;
 }
 
-void TTY_$K_SET_OUTPUT_FLAG(short *line_ptr, ushort *flag_ptr, char *value_ptr,
+void TTY_$K_SET_OUTPUT_FLAG(short *line_ptr, const uint16_t *flag_ptr,
+                            const char *value_ptr,
                             status_$t *status)
 {
     tty_desc_t *tty;

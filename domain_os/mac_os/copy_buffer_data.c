@@ -59,7 +59,7 @@
  *   [2]: next (4 bytes) - pointer to next buffer, or NULL
  */
 
-void MAC_OS_$COPY_BUFFER_DATA(int32_t *dest_ptr, int16_t length)
+void MAC_OS_$COPY_BUFFER_DATA(uint32_t *dest_ptr, int16_t length)
 {
     /*
      * NOTE: This function relies on accessing the caller's stack frame

@@ -30,6 +30,10 @@
 #include "base/base.h"
 #include "ec/ec.h"
 #include "ml/ml.h"
+/* file_$obj_loc_t - the 0x20-byte object-location record AST_$GET_LOCATION and
+ * AST_$GET_ATTRIBUTES fill from aote+0x9C.  Defined in file/file.h, which is
+ * where FILE_$PRIV_LOCK (its other producer) already documents the layout. */
+#include "file/file.h"
 
 /* AST status codes (module 0x03) */
 #define status_$ast_incompatible_request 0x00030006
@@ -496,8 +500,31 @@ aste_t *AST_$MSTE_ACTIVATE_AND_WIRE(mste_t *mste, status_$t *status);
 aste_t *AST_$ACTIVATE_AND_WIRE(uid_t *uid, uint16_t seg, status_$t *status);
 uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
                     uint32_t *ppn_array, status_$t *status, uint16_t flags);
-void AST_$TOUCH_AREA(aste_t *aste, uint32_t mode, uint16_t start,
-                     uint16_t count, status_$t *status, uint16_t flags);
+/*
+ * AST_$TOUCH_AREA (0x00E03548) - fault a run of area pages in.
+ *
+ * Parameter layout recovered from the prologue; the frame is
+ * `link.w A6,-0x70` so the arguments start at A6+0x08:
+ *   A6+0x08 word  area_id     0x00E03556 move.w (0x8,A6),D5w; D5*0x30+0xD94BD0
+ *                             is the AREA_$ENTRY (its +0x28 partner word
+ *                             selects the remote path)
+ *   A6+0x0A word  seg_index   0x00E03580 move.w (0xa,A6),D1w; D1<<7 indexes
+ *                             PMAP_$SEGMAP (0xED5000)
+ *   A6+0x0C word  page        0x00E0355A move.w (0xc,A6),D6w; D6<<2 is the
+ *                             byte offset of the first PMAP entry
+ *   A6+0x0E long  area_page   0x00E03672/0x00E037AA - the area-relative page
+ *                             number (bste*32+seg), stored into the qblk at
+ *                             +0x28 and reported to NETLOG as area_page>>5
+ *   A6+0x12 long  ppn_array   0x00E035A0 movea.l (0x12,A6),A3 - caller's PPN
+ *                             list, filled in by ast_$allocate_pages
+ *   A6+0x16 long  status      0x00E0355E movea.l (0x16,A6),A0; clr.l (A0)
+ *
+ * The caller reserves a 2-byte Pascal result slot at A6+0x1A, but the body
+ * never writes it, so this is a procedure.
+ */
+void AST_$TOUCH_AREA(uint16_t area_id, uint16_t seg_index, int16_t page,
+                     uint32_t area_page, uint32_t *ppn_array,
+                     status_$t *status);
 
 /*
  * Function prototypes - Association
@@ -599,20 +626,67 @@ _Static_assert(sizeof(ast_$common_attr_t) == 0x18, "sizeof ast_$common_attr_t");
 #define AST_ATTR_REC_SIZE       0x90
 
 /*
+ * ast_$acl_attr_t - the 0x38-byte record AST_$GET_ACL_ATTRIBUTES fills from
+ * the 0x90-byte attribute record (0x00E04AD6 - 0x00E04AF2):
+ *   +0x00 <- attrs[0x00]        (one longword)
+ *   +0x04 <- attrs[0x88..0x8F]  (the default-ACL UID)
+ *   +0x0C <- attrs[0x48..0x73]  (11 longwords = the 44-byte ACL data block)
+ */
+typedef struct ast_$acl_attr_t {
+    uint8_t     obj_flags[4];   /* 0x00: attrs[0].  Byte 0 selects the
+                                 *       ACL_$PRIM_CREATE copy path
+                                 *       (0x00E47AAA); byte 3 bit 0 is the
+                                 *       "local" test (0x00E479C2). */
+    uid_t       default_acl;    /* 0x04: the object's default-ACL UID */
+    uint8_t     acl_data[44];   /* 0x0C: the 44-byte ACL data block */
+} ast_$acl_attr_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(ast_$acl_attr_t, default_acl) == 0x04, "acl_attr.default_acl");
+_Static_assert(offsetof(ast_$acl_attr_t, acl_data)    == 0x0C, "acl_attr.acl_data");
+_Static_assert(sizeof(ast_$acl_attr_t) == 0x38, "sizeof ast_$acl_attr_t");
+#endif
+
+/*
  * Function prototypes - Attributes
  */
-void AST_$GET_LOCATION(uint32_t *uid_info, uint16_t flags, uint32_t unused,
-                       uint32_t *vol_uid_out, status_$t *status);
+/*
+ * AST_$GET_LOCATION (0x00e046c8) takes a 0x20-byte location record, not a
+ * bare UID.  The caller stores the object UID at +0x08 and clears bit 6 of
+ * the flags byte at +0x1D; on success the routine overwrites all 0x20 bytes
+ * with the 8 longwords at aote+0x9C (loop at 0x00e04770).  Argument 3 is a
+ * 4-byte cell every caller pea's but the routine never touches; argument 4
+ * receives the longword at aote+0x08 (0x00e04766).
+ */
+#define AST_$LOC_REC_SIZE   0x20
+#define AST_$LOC_REC_UID    0x08
+#define AST_$LOC_REC_FLAGS  0x1D
+
+void AST_$GET_LOCATION(file_$obj_loc_t *loc_rec, uint16_t flags,
+                       uint32_t *unused, uint32_t *vol_uid_out,
+                       status_$t *status);
 void AST_$GET_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs,
                          status_$t *status);
 void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid, uint16_t flags,
                                 ast_$common_attr_t *attrs, status_$t *status);
-void AST_$GET_ACL_ATTRIBUTES(uid_t *uid, uint16_t flags, void *acl,
-                             status_$t *status);
+/*
+ * AST_$GET_ACL_ATTRIBUTES (0x00e04aaa) is a thin wrapper over
+ * AST_$GET_ATTRIBUTES: it takes the same 0x20-byte object-location record,
+ * runs the lookup into a private 0x90-byte attribute buffer and then copies
+ * three slices of it into the caller's ast_$acl_attr_t.
+ */
+void AST_$GET_ACL_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags,
+                             ast_$acl_attr_t *acl, status_$t *status);
 void AST_$SET_ATTRIBUTE(uid_t *uid, uint16_t attr_id, void *value,
                         status_$t *status);
-void AST_$SET_ATTR(uid_t *uid, int16_t attr_id, uint32_t value, uint8_t flags,
-                   uint32_t *clock, status_$t *status);
+/*
+ * AST_$SET_ATTR (0x00e05400).  `value` is a POINTER: 0x00E05450 forwards the
+ * longword at A6+0x0E to ast_$set_attribute_internal, which dereferences it
+ * at 0x00E05320.  `clock` is likewise a pointer to a 6-byte clock_t
+ * (0x00E05224 / 0x00E05228).
+ */
+void AST_$SET_ATTR(uid_t *uid, int16_t attr_id, void *value, uint8_t flags,
+                   clock_t *clock, status_$t *status);
 void AST_$GET_DTV(uid_t *uid, uint32_t unused, uint32_t *dtv,
                   status_$t *status);
 uint8_t AST_$SET_DTS(uint16_t flags, uid_t *uid, uint32_t *dtv,
@@ -633,8 +707,15 @@ void AST_$INVALIDATE(uid_t *uid, uint32_t start_page, uint32_t count,
 void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count,
                   status_$t *status);
 void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status);
-void AST_$GET_SEG_MAP(uint32_t *uid_info, uint32_t start_offset,
-                      uint32_t unused, uid_t *vol_uid, uint32_t count,
+/*
+ * AST_$GET_SEG_MAP (0x00e06b1e).  Arguments 4 and 5 are longword *values*,
+ * not pointers: every caller pushes them with `pea (imm).w`
+ * (0x00E4BB12/0x00E4BB16) and the routine reads them with
+ * `move.l (0x14,A6),D1` (0x00E06B44) and `cmpi.l #0x20,(0x18,A6)`
+ * (0x00E06B66).
+ */
+void AST_$GET_SEG_MAP(uid_t *uid, uint32_t start_offset,
+                      uint32_t unused, uint32_t seg_count, uint32_t map_size,
                       uint16_t flags, uint32_t *output, status_$t *status);
 
 /*

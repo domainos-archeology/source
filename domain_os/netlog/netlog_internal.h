@@ -9,6 +9,8 @@
 #define NETLOG_INTERNAL_H
 
 #include "ml/ml.h"
+#include "net_io/net_io.h"
+#include "pkt/pkt.h"
 #include "netlog/netlog.h"
 #include "network/network.h"
 #include "time/time.h"
@@ -45,16 +47,25 @@
  */
 typedef struct netlog_data_t {
   /*
-   * Wired page handles (0x00 - 0x27)
-   * Space for up to 10 wired page handles (4 bytes each)
+   * Packet info template (0x00 - 0x1F)
+   *
+   * NETLOG_$SEND_PAGE hands the module data base itself to
+   * PKT_$BLD_INTERNET_HDR as the pkt_info argument ("pea (A5)" at
+   * 0x00E71CE4 with A5 = 0xE85684), so the record's first 0x20 bytes are a
+   * pkt_$info_t.
    */
-  uint32_t wired_pages[NETLOG_MAX_WIRED_PAGES]; /* 0x00 */
+  pkt_$info_t pkt_info; /* 0x00 */
 
   /*
-   * MST wire area data (0x28 - 0x47)
-   * Used by MST_$WIRE_AREA for wiring code/data pages
+   * Wired page handles (0x20 - 0x47)
+   *
+   * One array, not two: NETLOG_$CNTL unwires it with "lea (0x4,A5),A2 /
+   * move.l (0x1c,A2),-(SP) / addq.l #4,A2" (0x00E719B6, i.e. A5+0x20+4*i)
+   * and MST_$WIRE_AREA fills it from "pea (0x20,A5)" (0x00E719E8) and
+   * "pea (0x20,A5,D1w*0x1)" with D1 = wired_page_count*4 (0x00E71A16).
+   * Capacity is 10 ("moveq #0xa,D0 / sub.w (0x78,A5),D0w" at 0x00E71A02).
    */
-  uint32_t wire_area_data[8]; /* 0x28 */
+  uint32_t wired_pages[NETLOG_MAX_WIRED_PAGES]; /* 0x20 */
 
   /*
    * Packet header template (0x48 - 0x53)

@@ -43,7 +43,7 @@ aste_t *ast_$lookup_or_create_aste(aote_t *aote, uint16_t segment,
     if (*((int8_t *)((char *)aote + 0xB9)) >= 0) {
         vol_idx = *((uint8_t *)((char *)aote + 0xB8));
         if (vol_idx < 0x10 && (VOL_DISMOUNT_MASK & (1 << vol_idx)) != 0) {
-            *status = ast_$validate_uid((uid_t *)((char *)aote + 0x10), 0x30F00);
+            *status = ast_$validate_uid(&aote->uid, 0x30F00);
             return NULL;
         }
         /* Increment volume reference count */
@@ -79,7 +79,7 @@ aste_t *ast_$lookup_or_create_aste(aote_t *aote, uint16_t segment,
 
     /* Log if enabled */
     if (NETLOG_$OK_TO_LOG < 0) {
-        NETLOG_$LOG_IT(0, (char *)aote + 0x10, segment, 0,
+        NETLOG_$LOG_IT(0, (uint32_t *)&aote->uid, segment, 0,
                        *((uint16_t *)((char *)aste + 0x0E)), 0, 0, 0);
     }
 
@@ -183,7 +183,7 @@ inserted:
     } else {
         /* Error - handle special error code */
         if (*status == 0x20006) {
-            *status = ast_$validate_uid((uid_t *)((char *)aote + 0x10), 0x20006);
+            *status = ast_$validate_uid(&aote->uid, 0x20006);
         }
 
         /* Remove from ASTE list */

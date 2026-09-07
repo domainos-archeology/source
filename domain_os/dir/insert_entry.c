@@ -154,7 +154,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
             split_entry++;
             idx_offset += 2;
             if (num_entries < split_entry) {
-                CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+                CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
             }
             ctx->temp_entry = ctx->page_data +
                 (int32_t)*(int16_t *)(ctx->idx_base + idx_offset - 2);
@@ -327,7 +327,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
             } else {
                 /* Split point is at an existing entry */
                 if (split_entry + 1 > num_entries) {
-                    CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+                    CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
                 }
                 ctx->temp_entry = ctx->page_data +
                     (int32_t)*(int16_t *)(ctx->idx_base + split_entry * 2);

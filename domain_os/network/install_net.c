@@ -89,7 +89,20 @@
 
 #include "network/network_internal.h"
 
-void NETWORK_$INSTALL_NET(uint32_t net_id, uint16_t *info_ptr, status_$t *status)
+/*
+ * The `info` argument is the address of a LONGWORD whose most significant
+ * half holds the network-info word: 0x00E0F1F2 loads it with
+ * `movea.l (0xc,A6),A0` and then reaches it with word operations
+ * (`andi.w #-0x3f1,(A0)` / `or.w D4w,(A0)`), and both callers hand it the
+ * address of a longword field - AST_$LOAD_AOTE passes &aote->vol_uid
+ * (0x00E01D0E passes the same cell in AST_$LOOKUP_WITH_HINTS, which then
+ * does `andi.l #-0x100000,(A0)` on it).  Working on the whole longword with
+ * a shifted mask keeps the behaviour identical on a little-endian host.
+ */
+#define NETWORK_INDEX_MASK_L  ((uint32_t)NETWORK_INDEX_MASK << 16)
+#define NETWORK_INDEX_SHIFT_L (NETWORK_INDEX_SHIFT + 16)
+
+void NETWORK_$INSTALL_NET(uint32_t net_id, uint32_t *info_ptr, status_$t *status)
 {
     uint16_t index;
     uint16_t first_free;
@@ -98,7 +111,7 @@ void NETWORK_$INSTALL_NET(uint32_t net_id, uint16_t *info_ptr, status_$t *status
     /* Special case: net_id == 0 means "no network" / local */
     if (net_id == 0) {
         /* Clear network index bits (4-9) */
-        *info_ptr = *info_ptr & ~NETWORK_INDEX_MASK;
+        *info_ptr = *info_ptr & ~NETWORK_INDEX_MASK_L;
         *status = status_$ok;
         return;
     }
@@ -110,7 +123,8 @@ void NETWORK_$INSTALL_NET(uint32_t net_id, uint16_t *info_ptr, status_$t *status
         /* Check if this entry matches */
         if (NETWORK_$NET_TABLE[i].net_id == net_id) {
             /* Found matching entry - encode index and increment refcount */
-            *info_ptr = (*info_ptr & ~NETWORK_INDEX_MASK) | (i << NETWORK_INDEX_SHIFT);
+            *info_ptr = (*info_ptr & ~NETWORK_INDEX_MASK_L) |
+                        ((uint32_t)i << NETWORK_INDEX_SHIFT_L);
             NETWORK_$NET_TABLE[i].refcount++;
             *status = status_$ok;
             return;
@@ -125,13 +139,14 @@ void NETWORK_$INSTALL_NET(uint32_t net_id, uint16_t *info_ptr, status_$t *status
     /* No matching entry found */
     if (first_free == 0) {
         /* No free slots available */
-        *info_ptr = *info_ptr & ~NETWORK_INDEX_MASK;
+        *info_ptr = *info_ptr & ~NETWORK_INDEX_MASK_L;
         *status = status_$network_too_many_networks_in_internet;
         return;
     }
 
     /* Allocate new entry in first free slot */
-    *info_ptr = (*info_ptr & ~NETWORK_INDEX_MASK) | (first_free << NETWORK_INDEX_SHIFT);
+    *info_ptr = (*info_ptr & ~NETWORK_INDEX_MASK_L) |
+                ((uint32_t)first_free << NETWORK_INDEX_SHIFT_L);
     NETWORK_$NET_TABLE[first_free].net_id = net_id;
     NETWORK_$NET_TABLE[first_free].refcount = 1;
     *status = status_$ok;

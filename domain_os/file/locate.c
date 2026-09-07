@@ -29,10 +29,9 @@
  *   location_out - Output: receives location info (uint32_t node address)
  *   status_ret   - Output: status code
  *
- * Note: The input UID structure appears to have:
- *   - 8 bytes for the UID proper
- *   - Additional bytes including a flags field at offset 5 (byte position)
- *     where bit 6 indicates "local only"
+ * Note: AST_$GET_LOCATION takes a 0x20-byte location record, not a bare
+ * UID: the UID sits at +0x08 and the flags byte (bit 6 = "local only") at
+ * +0x1D.
  */
 void FILE_$LOCATE(uid_t *file_uid, uint32_t *location_out, status_$t *status_ret)
 {
@@ -42,35 +41,31 @@ void FILE_$LOCATE(uid_t *file_uid, uint32_t *location_out, status_$t *status_ret
     uint32_t vol_uid_out;
 
     /*
-     * Extended UID structure for the location query
-     * AST_$GET_LOCATION expects UID at offset 8, and writes
-     * 32 bytes of location info back to the buffer
+     * A6-0x20: the 0x20-byte AST location record.  The UID goes in at
+     * +0x08 (0x00E6063C) and bit 6 of the flags byte at +0x1D is cleared
+     * (0x00E60644 `bclr.b #6,(-0x3,A6)`); the routine then overwrites all
+     * 0x20 bytes.
      */
-    struct {
-        uint32_t data[2];    /* 8 bytes - location output */
-        uid_t uid;           /* 8 bytes - UID at offset 8 */
-        uint32_t location;   /* Location output at offset 16 */
-        uint8_t padding[12]; /* Pad to 32 bytes */
-    } query_buf;
+    file_$obj_loc_t loc_rec;
+    uid_t local_uid;               /* A6-0x28 */
+    uint32_t loc_unused;           /* A6-0x34: pea'd, never touched */
 
-    /* Copy input UID to query buffer at offset 8 */
-    query_buf.uid.high = file_uid->high;
-    query_buf.uid.low = file_uid->low;
+    /* Copy input UID, then seed the record's UID field at +0x08 */
+    local_uid.high = file_uid->high;
+    local_uid.low = file_uid->low;
+    loc_rec.uid = local_uid;
 
     /*
-     * Clear bit 6 of the flags byte in the UID
-     * This removes the "local only" constraint, allowing the query
-     * to return remote location information.
-     *
-     * The flags byte is at offset 5 within the UID
+     * Clear bit 6 of the record's flags byte at +0x1D.  This removes the
+     * "local only" constraint, allowing the query to return remote
+     * location information.
      */
-    /* Byte 5 of the big-endian UID is bits 16-23 of uid.low */
-    query_buf.uid.low &= ~((uint32_t)0x40 << 16);  /* Clear bit 6 of byte 5 */
+    loc_rec.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
     /* Call AST_$GET_LOCATION to get the file's location */
-    AST_$GET_LOCATION((uint32_t *)&query_buf, 0, 0, &vol_uid_out, &status);
+    AST_$GET_LOCATION(&loc_rec, 0, &loc_unused, &vol_uid_out, &status);
 
-    /* Return the location info from the output buffer */
-    *location_out = query_buf.location;
+    /* 0x00E60668 returns the longword at A6-0x0C, i.e. loc_rec+0x14. */
+    *location_out = loc_rec.node;
     *status_ret = status;
 }

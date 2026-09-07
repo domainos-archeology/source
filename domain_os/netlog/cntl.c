@@ -90,7 +90,7 @@ void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
          */
         nl->wired_page_count = 0;
         MST_$WIRE_AREA(NETLOG_CODE_START, NETLOG_DATA_START,
-                       &nl->wire_area_data[0],
+                       &nl->wired_pages[0],
                        (void *)(NETLOG_MAX_WIRED_PAGES - nl->wired_page_count),
                        &nl->wired_page_count);
 
@@ -99,7 +99,7 @@ void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
          */
         wire_count = NETLOG_MAX_WIRED_PAGES - nl->wired_page_count;
         MST_$WIRE_AREA(AUDIT_DATA_END_ADDR, NETLOG_DATA_END_ADDR,
-                       &nl->wire_area_data[nl->wired_page_count],
+                       &nl->wired_pages[nl->wired_page_count],
                        &wire_count,
                        &wire_count);
         nl->wired_page_count += wire_count;

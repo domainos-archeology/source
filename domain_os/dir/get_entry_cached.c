@@ -22,7 +22,7 @@
  *   name       - Entry name
  *   name_len   - Length of name (max 17; longer names bypass cache)
  *   type_ret   - Output: entry type
- *   uid_ret    - Output: entry UID (8 bytes)
+ *   uid_ret    - Output: entry UID
  *   extra_ret  - Output: extra data
  *   status_ret - Output: status code
  *
@@ -52,8 +52,8 @@ static const int16_t dir_$get_entry_acl_opts_00e4b444 = 1;
 /* ACL rights parameters for cache hit path */
 
 void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
-                           short *type_ret, char *uid_ret, uint32_t *extra_ret,
-                           status_$t *status_ret)
+                           uint16_t *type_ret, uid_t *uid_ret,
+                           uint32_t *extra_ret, status_$t *status_ret)
 {
     char *a5 = (char *)__A5_BASE();
     uint8_t *name_bytes = (uint8_t *)name;
@@ -71,9 +71,12 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
 
     *(int32_t *)(a5 + 0x2018) += 1;  /* Increment lookup counter */
 
-    /* Get DTV (directory tree version) for comparison */
+    /* Get DTV (directory tree version) for comparison.
+     * 0x00E4CDCC pushes the enclosing frame's UID *pointer*
+     * (`move.l (0x8,A3),-(SP)`), and 0x00E4CDC8 pushes the zeroed cell at
+     * A6-0x0C by value as argument 2. */
     uint32_t dtv_param = 0;
-    AST_$GET_DTV(*(uint32_t *)(uid), 0, dtv_data, status_ret);
+    AST_$GET_DTV(uid, dtv_param, dtv_data, status_ret);
     if (*status_ret == file_$object_not_found) {
         *status_ret = status_$naming_directory_locked;
     }
@@ -141,11 +144,8 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
 
     /* Cache hit */
     *type_ret = 1;
-    {
-        uint32_t *uid_out = (uint32_t *)uid_ret;
-        uid_out[0] = *(uint32_t *)(cache_entry + 0x408);
-        uid_out[1] = *(uint32_t *)(cache_entry + 0x40C);
-    }
+    uid_ret->high = *(uint32_t *)(cache_entry + 0x408);
+    uid_ret->low  = *(uint32_t *)(cache_entry + 0x40C);
     *extra_ret = 0;
     *(int32_t *)(a5 + 0x201C) += 1;  /* Increment hit counter */
 
@@ -167,7 +167,7 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
         return;
     }
     NAME_CONVERT_ACL_STATUS(status_ret);
-    *(uint32_t *)uid_ret = 0;  /* Clear result UID on ACL failure */
+    uid_ret->high = 0;  /* Clear result UID high on ACL failure */
     return;
 
 cache_miss:
@@ -194,11 +194,8 @@ cache_miss:
     *(uint32_t *)(cache_entry + 0x404) = uid->low;
 
     /* Copy result UID to cache */
-    {
-        uint32_t *uid_src = (uint32_t *)uid_ret;
-        *(uint32_t *)(cache_entry + 0x408) = uid_src[0];
-        *(uint32_t *)(cache_entry + 0x40C) = uid_src[1];
-    }
+    *(uint32_t *)(cache_entry + 0x408) = uid_ret->high;
+    *(uint32_t *)(cache_entry + 0x40C) = uid_ret->low;
 
     /* Copy DTV to cache */
     *(uint32_t *)(cache_entry + 0x410) = dtv_data[0];

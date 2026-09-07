@@ -18,7 +18,9 @@
  *   file_uid   - UID of file
  *   param_2    - Pointer to flags byte (bit 0=check lock, bit 1=check delete, bit 2=skip delete check)
  *   size_ptr   - Pointer to expected buffer size (must be 0x90 = 144)
- *   uid_out    - Output buffer for returned UID (32 bytes = 8 longs)
+ *   loc_rec    - 0x20-byte object-location record; its UID field at +0x08
+ *                is what FILE_$DELETE_INT is handed (`pea (0x8,A3)` at
+ *                0x00E5D9C2), and the whole record is rewritten on exit
  *   attr_out   - Output buffer for attributes (144 bytes)
  *   status_ret - Receives operation status
  *
@@ -28,8 +30,10 @@
  *   - Bit 2: Skip delete check (use flags=0x21)
  */
 void FILE_$GET_ATTRIBUTES(uid_t *file_uid, void *param_2, int16_t *size_ptr,
-                          uint32_t *uid_out, void *attr_out, status_$t *status_ret)
+                          uint8_t *loc_rec, void *attr_out,
+                          status_$t *status_ret)
 {
+    uint32_t *loc_words = (uint32_t *)(void *)loc_rec;
     status_$t status;
     uid_t local_uid;
     uint32_t attrs[36];  /* 144 bytes = 36 longs */
@@ -54,7 +58,8 @@ void FILE_$GET_ATTRIBUTES(uid_t *file_uid, void *param_2, int16_t *size_ptr,
         flags = 0x21;
     } else if ((flag_bytes[1] & 0x02) != 0) {
         /* Bit 1 set: check delete status first */
-        int8_t result = FILE_$DELETE_INT((uid_t *)(uid_out + 2), 0, result_buf, &status);
+        int8_t result = FILE_$DELETE_INT((uid_t *)(void *)(loc_rec + AST_$LOC_REC_UID), 0,
+                                        result_buf, &status);
         if (result < 0) {
             /* File is locked */
             flags = 0x01;
@@ -80,7 +85,7 @@ void FILE_$GET_ATTRIBUTES(uid_t *file_uid, void *param_2, int16_t *size_ptr,
 
     /* Copy 8 longs of UID info to output */
     for (i = 0; i < 8; i++) {
-        uid_out[i] = ((uint32_t *)&returned_uid)[i % 2];
+        loc_words[i] = ((uint32_t *)&returned_uid)[i % 2];
     }
 
     *status_ret = status;

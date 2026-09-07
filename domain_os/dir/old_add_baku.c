@@ -77,9 +77,16 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     uid_t entry_uid;
     uid_t default_acl;
     uid_t prot_uid;
-    uint8_t acl_data[48];
-    uint8_t attr_buf[32];
-    uint8_t attr_buf2[72];
+    /* A6-0x38: the 11-longword ACL data record FILE_$SET_PROT forwards
+     * (FILE_$OLD_AP copies it with `moveq #0xa; move.l (A1)+,(A3)+`
+     * at 0x00E5E13C). */
+    uint32_t acl_data[12];
+    /* A6-0x58: FILE_$GET_ATTRIBUTES' 0x20-byte location record
+     * (`pea (-0x58,A6)` at 0x00E5709C). */
+    uint8_t attr_buf[AST_$LOC_REC_SIZE];
+    /* A6-0xE8: its 0x90-byte attribute buffer (`pea (-0xe8,A6)` at
+     * 0x00E57098); the callee requires size_ptr == 0x90. */
+    uint8_t attr_buf2[AST_ATTR_REC_SIZE];
     uint32_t attr_data[16];
     uint8_t result_buf[8];
     status_$t local_status;

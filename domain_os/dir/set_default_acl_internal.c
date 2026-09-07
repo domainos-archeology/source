@@ -54,7 +54,7 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
      *   +0x0C: uid.low (4 bytes, input)
      *   +0x1D: flags byte (bit 6 cleared before call)
      */
-    uint32_t loc_desc[8];  /* 32 bytes to cover full struct */
+    file_$obj_loc_t loc_desc;   /* the 0x20-byte AST location record */
     uint32_t get_loc_buf1;
     uint32_t get_loc_buf2;
 
@@ -93,18 +93,18 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
     /* If ACL UID is non-nil, verify it's on the same volume */
     if (acl_high_byte != 0) {
         /* Set up location descriptor with ACL UID */
-        ((uint32_t *)((uint8_t *)loc_desc + 0x08))[0] = acl_uid.high;
-        ((uint32_t *)((uint8_t *)loc_desc + 0x0C))[0] = acl_uid.low;
+        loc_desc.uid.high = acl_uid.high;
+        loc_desc.uid.low = acl_uid.low;
         /* Clear bit 6 of flags byte at offset 0x1D */
-        ((uint8_t *)loc_desc)[0x1D] &= 0xBF;
+        loc_desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-        AST_$GET_LOCATION(loc_desc, 1, (uint32_t)(uintptr_t)&get_loc_buf1,
+        AST_$GET_LOCATION(&loc_desc, 1, &get_loc_buf1,
                           &get_loc_buf2, &local_status);
 
         if (local_status != status_$ok ||
             *(int16_t *)((char *)(uintptr_t)handle + 0x3A) !=
-                *(int16_t *)((uint8_t *)loc_desc + 0x02) ||
-            (int8_t)((uint8_t *)loc_desc)[0x1D] < 0) {
+                (int16_t)(loc_desc.reserved_00[0] & 0xFFFFu) ||
+            loc_desc.flags < 0) {
             *status_ret = local_status;
             if (*status_ret == file_$object_not_found ||
                 *status_ret == status_$ok) {

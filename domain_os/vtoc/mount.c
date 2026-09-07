@@ -9,6 +9,11 @@
  */
 
 #include "vtoc/vtoc_internal.h"
+#include "audit/audit.h"
+
+/* 0x00E38762: the constant length word AUDIT_$LOG_EVENT is handed by
+ * reference (`pea (0x22,PC)` at 0x00E3873E; PC = 0x00E38740). */
+static const uint16_t vtoc_$audit_mount_len = 0x32;
 
 void VTOC_$MOUNT(int16_t vol_idx, uint16_t param_2, uint8_t param_3, char param_4,
                  status_$t *status_ret)
@@ -20,8 +25,12 @@ void VTOC_$MOUNT(int16_t vol_idx, uint16_t param_2, uint8_t param_3, char param_
     uint32_t *src;
     status_$t bat_status;
     status_$t local_status;
-    uid_t vol_uid;
-    char name_buf[36];
+    /*
+     * A6-0x38: the 0x32-byte audit event record.  vol_uid and the trailing
+     * fields are part of the SAME record as the name, not separate locals -
+     * 0x00E38658 writes A6-0x14 = record+0x24.
+     */
+    vtoc_$audit_mount_rec_t audit_rec;
 
     /* If param_4 negative, set write protection */
     if (param_4 < 0) {
@@ -92,17 +101,17 @@ void VTOC_$MOUNT(int16_t vol_idx, uint16_t param_2, uint8_t param_3, char param_
 
         /* If auditing enabled, extract volume name and UID for logging */
         if (AUDIT_$ENABLED < 0) {
-            vol_uid.high = *(uint32_t *)((uint8_t *)label_block + 0x24);
-            vol_uid.low = *(uint32_t *)((uint8_t *)label_block + 0x28);
+            audit_rec.vol_uid.high = *(uint32_t *)((uint8_t *)label_block + 0x24);
+            audit_rec.vol_uid.low = *(uint32_t *)((uint8_t *)label_block + 0x28);
 
-            /* Copy volume name (32 bytes from offset 4) */
+            /* Copy volume name (32 bytes from offset 4), 0x00E38664 */
             for (i = 0x1F; i >= 0; i--) {
-                name_buf[i] = ((char *)label_block)[i + 4];
+                audit_rec.vol_name[i] = ((char *)label_block)[i + 4];
             }
 
             /* Clear trailing bytes (Pascal indices 0x21..0x24 => C 0x20..0x23) */
             for (i = 0; i < 4; i++) {
-                name_buf[0x20 + i] = 0;
+                audit_rec.reserved_20[i] = 0;
             }
         }
 
@@ -143,21 +152,32 @@ done:
 log_and_return:
     /* Log audit event if enabled */
     if (AUDIT_$ENABLED < 0) {
-        int16_t audit_param;
+        int16_t audit_param;         /* A6-0x48 */
+
+        /* 0x00E38700 - 0x00E3870A: the record's trailing fields */
+        audit_rec.wp_flag = (uint8_t)vtoc_$data.cach_wp_flag[vol_idx - 1];
+        audit_rec.vol_idx = (uint16_t)vol_idx;
+        audit_rec.param_2 = param_2;
 
         if (*status_ret == status_$ok) {
             audit_param = 0;
         } else {
-            /* Clear name buffer on error */
+            /* 0x00E3871A: clear Pascal elements 1..0x24 = the name and the
+             * four reserved bytes, then set the UID to nil. */
             for (i = 0x23; i >= 0; i--) {
-                name_buf[i] = 0;
+                ((char *)&audit_rec)[i] = 0;
             }
-            vol_uid.high = UID_$NIL.high;
-            vol_uid.low = UID_$NIL.low;
+            audit_rec.vol_uid.high = UID_$NIL.high;
+            audit_rec.vol_uid.low = UID_$NIL.low;
             audit_param = 1;
         }
 
-        AUDIT_$LOG_EVENT(0x5648, &audit_param, (int16_t *)status_ret,
-                        name_buf, 0x8762);
+        /*
+         * 0x00E3874C pushes &AUDIT_$MOUNT_LV_EU (0x00E85648); 0x00E3873E
+         * pea's the constant length word at 0x00E38762 (= 0x32).
+         */
+        AUDIT_$LOG_EVENT(&AUDIT_$MOUNT_LV_EU, (uint16_t *)&audit_param,
+                         (uint32_t *)status_ret, (char *)&audit_rec,
+                         &vtoc_$audit_mount_len);
     }
 }

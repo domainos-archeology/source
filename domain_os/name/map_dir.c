@@ -31,11 +31,15 @@ boolean name_$map_dir(uid_t *dir_uid, int16_t asid,
                       name_$mapped_info_t *mapped_info,
                       status_$t *status_ret)
 {
-    uid_t local_uid;
+    uid_t local_uid;                       /* A6-0x30 */
     uint8_t *info = (uint8_t *)mapped_info;
-    int16_t location_type;
-    uint8_t location_buf[4];
-    status_$t local_status;
+    /* A6-0x28: the 0x20-byte location record AST_$GET_LOCATION takes.  The
+     * UID goes in at +0x08 (0x00e584ac) and bit 6 of the flags byte at
+     * +0x1D is cleared (0x00e584b4 bclr.b #6,(-0xb,A6)) before the call. */
+    file_$obj_loc_t loc_rec;
+    uint32_t location_info;                /* A6-0x40; receives aote+0x08 */
+    uint32_t loc_unused;                   /* A6-0x3c; never touched */
+    status_$t local_status;                /* A6-0x34 */
     int32_t map_result;
 
     /* Copy UID locally */
@@ -45,10 +49,16 @@ boolean name_$map_dir(uid_t *dir_uid, int16_t asid,
     /* Clear valid flag initially */
     info[0] = 0;
 
-    /* Get object location */
-    AST_$GET_LOCATION(&local_uid, 0, location_buf, &location_type, &local_status);
+    /* Seed the location record from the local UID copy */
+    loc_rec.uid = local_uid;
+    loc_rec.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-    if (local_status != status_$ok || location_type < 0) {
+    /* Get object location */
+    AST_$GET_LOCATION(&loc_rec, 0, &loc_unused, &location_info, &local_status);
+
+    /* 0x00e584de `tst.w (-0x40,A6)` / bpl tests the sign of the longword's
+     * high word, i.e. bit 31 of location_info. */
+    if (local_status != status_$ok || (int32_t)location_info < 0) {
         /* Object not found or error */
         *status_ret = local_status;
         return 0;

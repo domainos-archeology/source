@@ -55,7 +55,7 @@ static int tests_failed = 0;
  * ================================================================ */
 
 /* Mock error string */
-char Naming_bad_request_header_ver_err = 0;
+status_$t Naming_bad_request_header_ver_err = 0;
 
 /* Mock DIR_$NAME_OFFSET_TABLE (not directly used by alloc_split_page,
  * but may be referenced via headers) */
@@ -124,11 +124,11 @@ static uint32_t mock_seg_bitmap = 0xFFFFFFFF;  /* All pages in use by default */
 static int seg_map_called = 0;
 static status_$t seg_map_status = 0;
 
-void AST_$GET_SEG_MAP(uint32_t *uid_info, uint32_t start_offset,
-                      uint32_t unused, uid_t *vol_uid, uint32_t count,
+void AST_$GET_SEG_MAP(uid_t *uid, uint32_t start_offset,
+                      uint32_t unused, uint32_t seg_count, uint32_t map_size,
                       uint16_t flags, uint32_t *output, status_$t *status) {
-    (void)uid_info; (void)start_offset; (void)unused;
-    (void)vol_uid; (void)count; (void)flags;
+    (void)uid; (void)start_offset; (void)unused;
+    (void)seg_count; (void)map_size; (void)flags;
     seg_map_called = 1;
     output[0] = mock_seg_bitmap;
     memset(output + 1, 0xFF, 28);  /* Fill rest of buffer */

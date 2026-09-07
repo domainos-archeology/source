@@ -195,9 +195,20 @@ uint32_t AREA_$COPY(int16_t gen, uint16_t area_id, int16_t new_asid,
 
                 ML_$UNLOCK(ML_LOCK_AST);
 
-                /* Copy the segment through AST */
+                /*
+                 * Copy the segment through AST.
+                 *
+                 * 0x00E09310: clr.l D0 / move.w D6w,D0w / lsl.l #8,D0 /
+                 * lsl.l #7,D0 / move.l D0,-(SP) - the sixth argument is the
+                 * *by value* virtual address (seg_page << 15), which
+                 * AST_$COPY_AREA dereferences as a byte buffer (0x00E03A7E
+                 * stashes it, 0x00E03F70 advances it by 0x400 per page).
+                 * ARCH_VA_TO_PTR is the identity cast on m68k.
+                 */
                 AST_$COPY_AREA(area_id, param_4, src_aste, dst_aste,
-                               seg_counter, (uint32_t)seg_page << 15, &status);
+                               seg_counter,
+                               (char *)ARCH_VA_TO_PTR((uint32_t)seg_page << 15),
+                               &status);
 
                 /* Decrement reference counts */
                 *(int8_t *)((char *)src_aste + 0x11) -= 1;

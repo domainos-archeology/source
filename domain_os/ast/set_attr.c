@@ -7,9 +7,12 @@
  * Parameters:
  *   uid - Pointer to object UID
  *   attr_id - Attribute identifier
- *   value - Attribute value
+ *   value - Pointer to the attribute value.  0x00E05450 forwards the
+ *           longword at A6+0x0E untouched and 0x00E05320 dereferences it
+ *           (`movea.l (0xe,A6),A1; move.w (A1),D0w`), so it is a pointer.
  *   flags - Operation flags
- *   clock - Timestamp for the operation
+ *   clock - Pointer to the 6-byte clock_t the internal routine reads at
+ *           0x00E05224/0x00E05228
  *   status - Status return
  *
  * Original address: 0x00e05400
@@ -19,8 +22,8 @@
 #include "proc1/proc1.h"
 #include "acl/acl.h"
 
-void AST_$SET_ATTR(uid_t *uid, int16_t attr_id, uint32_t value,
-                   uint8_t flags, uint32_t *clock, status_$t *status)
+void AST_$SET_ATTR(uid_t *uid, int16_t attr_id, void *value,
+                   uint8_t flags, clock_t *clock, status_$t *status)
 {
     uid_t local_uid;
     /* ACL_$GET_EXSID fills this with an ast_$subject_t (see ast/ast.h). */
@@ -42,9 +45,9 @@ void AST_$SET_ATTR(uid_t *uid, int16_t attr_id, uint32_t value,
     PROC1_$INHIBIT_BEGIN();
 
     /* Call internal attribute setter */
-    ast_$set_attribute_internal(&local_uid, attr_id, (void *)(uintptr_t)value,
+    ast_$set_attribute_internal(&local_uid, attr_id, value,
                                 flags, (ast_$subject_t *)exsid_buf,
-                                (clock_t *)clock, &local_status);
+                                clock, &local_status);
 
     PROC1_$INHIBIT_END();
 

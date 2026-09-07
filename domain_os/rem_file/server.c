@@ -145,10 +145,11 @@ typedef struct rem_file_server_frame_t {
     uint16_t    request_len;        /* 0x01A: -0x4CA */
     uint16_t    reply_len;          /* 0x01C: -0x4C8 */
     uint16_t    reply_hdr_len;      /* 0x01E: -0x4C6 */
-    uint16_t    uid_retry;          /* 0x020: -0x4C4 (generate_uid) */
+    uint16_t    pad_020;            /* 0x020: -0x4C4, unreferenced */
     uint16_t    tmp_index;          /* 0x022: -0x4C2, backlog index and the
                                      *        unmap_name copy counter */
-    uint16_t    pad_024;            /* 0x024 */
+    uint16_t    uid_retry;          /* 0x024: -0x4C0 (generate_uid;
+                                     *        `clr.w (-0x4c0,A2)` 0x00E632CE) */
     uint16_t    send_len_out;       /* 0x026: -0x4BE */
     uint16_t    send_extra_out;     /* 0x028: -0x4BC */
     uint16_t    seg_map_flag;       /* 0x02A: -0x4BA */
@@ -347,7 +348,9 @@ static void server_get_entry(rem_file_server_frame_t *f,
 static void server_set_attribute(rem_file_server_frame_t *f)
 {
     status_$t status;               /* A6-0x7C */
-    uint8_t   acl_attrs[12];        /* A6-0x78 */
+    /* A6-0x78: the 0x38-byte record AST_$GET_ACL_ATTRIBUTES fills; only its
+     * first byte (0x00E62E8C) and default_acl are read here. */
+    ast_$acl_attr_t acl_attrs;
     uint32_t  acl_data[11];         /* A6-0x6C */
     uint8_t   spare[0x2C];          /* A6-0x40 */
     uid_t     converted;            /* A6-0x10 */
@@ -374,14 +377,14 @@ static void server_set_attribute(rem_file_server_frame_t *f)
             /* 0x00E62E50 */
             desc.uid = *file_uid;
             desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
-            AST_$GET_ACL_ATTRIBUTES((uid_t *)&desc, 1, acl_attrs, &status);
+            AST_$GET_ACL_ATTRIBUTES(&desc, 1, &acl_attrs, &status);
             f->response.status = status;
             if (f->response.status != status_$ok) {
                 return;                                 /* 0x00E62E88 */
             }
             /* 0x00E62E8C: an object that is not already a 10-ACL goes
              * through unconverted, with its original attribute id. */
-            if (acl_attrs[0] == 0) {
+            if (acl_attrs.obj_flags[0] == 0) {
                 goto set_attribute;                     /* 0x00E62F2C */
             }
             old_acl.high = *(uint32_t *)attr_val;
@@ -602,33 +605,42 @@ static void server_truncate_delete(rem_file_server_frame_t *f)
  */
 static void server_generate_uid(rem_file_server_frame_t *f)
 {
-    uid_t   generated;
-    uid_t   probe;
-    uint8_t location[8];            /* A6-0x470 in the parent frame */
-    uint8_t vol_uid[8];
+    /*
+     * 0x00E632D6: UID_$GEN writes straight into the reply body at
+     * A3-0x198, so the generated UID never lives in a local of its own.
+     */
+    uid_t          *generated = (uid_t *)RSP_P(f, -0x198);
+    file_$obj_loc_t probe;              /* A6-0x28 in the nested frame */
+    uint32_t        vol_uid;            /* A6-0x2C: receives aote+0x08 */
 
     f->uid_retry = 0;
 
     do {
         f->uid_retry++;
-        UID_$GEN(&generated);
+        UID_$GEN(generated);
 
-        probe = generated;
-        AST_$GET_LOCATION((uint32_t *)&probe, 1, 0, (uint32_t *)vol_uid,
+        /* Seed the record's UID at +0x08 and clear bit 6 of +0x1D */
+        probe.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;   /* 0x00E632E2 */
+        probe.uid = *generated;                         /* 0x00E632E8 */
+
+        /*
+         * 0x00E632FE hands the routine the PARENT frame's scratch cell at
+         * A2-0x470 as the argument it never touches, and a local longword
+         * at A6-0x2C as the aote+0x08 output.
+         */
+        AST_$GET_LOCATION(&probe, 1,
+                          (uint32_t *)(void *)f->scratch_070, &vol_uid,
                           &f->response.status);
-        (void)location;
 
         if (f->response.status == file_$object_not_found) {
             break;
         }
-    } while (f->uid_retry < 11);
+    } while (f->uid_retry <= 10);
 
     if (f->response.status == file_$object_not_found) {
         f->response.status = status_$ok;
     }
 
-    RSP_L(f, -0x198) = generated.high;
-    RSP_L(f, -0x194) = generated.low;
     f->reply_len = 0x12;
 }
 
@@ -1274,18 +1286,18 @@ release_netbuf:                                     /* 0x00E639DC */
         f.zero_long = 0;
         if (f.request_len == 0x14) {
             f.seg_map_flag = ((int8_t)REQ_B(&f, -0x426) < 0) ? 1 : 0;
-            AST_$GET_SEG_MAP((uint32_t *)&f.request.uid,
+            AST_$GET_SEG_MAP(&f.request.uid,
                              (uint32_t)REQ_W(&f, -0x42C) << 15,
-                             f.zero_long, (uid_t *)(uintptr_t)1, 0x20,
+                             f.zero_long, 1, 0x20,
                              f.seg_map_flag,
                              (uint32_t *)RSP_P(&f, -0x198),
                              &f.response.status);
         } else {
             /* 0x00E63EEC: f.seg_map_flag is deliberately not re-set here. */
-            AST_$GET_SEG_MAP((uint32_t *)&f.request.uid,
+            AST_$GET_SEG_MAP(&f.request.uid,
                              REQ_L(&f, -0x424) << 10,
                              f.zero_long,
-                             (uid_t *)(uintptr_t)(uint32_t)REQ_W(&f, -0x420),
+                             (uint32_t)REQ_W(&f, -0x420),
                              (uint32_t)REQ_W(&f, -0x41E),
                              f.seg_map_flag,
                              (uint32_t *)RSP_P(&f, -0x198),

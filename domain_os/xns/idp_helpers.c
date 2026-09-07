@@ -90,27 +90,25 @@ void xns_$add_port(uint16_t channel, int16_t port, status_$t *status_ret)
 
         /* Open MAC layer for this port */
         {
-            struct {
-                code_ptr_t callback;
-                uint16_t flags;
-                uint32_t ethertype1;
-                uint32_t ethertype2;
-            } mac_open_params;
+            mac_os_$open_params_t mac_open_params;      /* A6-0x60 */
 
-            mac_open_params.callback = (code_ptr_t)XNS_IDP_$OS_DEMUX;
-            mac_open_params.flags = 1;
-            mac_open_params.ethertype1 = 0x600;
-            mac_open_params.ethertype2 = 0x600;
+            /* 0x00E17C40 - 0x00E17C56 */
+            mac_open_params.callback = (void *)XNS_IDP_$OS_DEMUX;
+            mac_open_params.num_pkt_types = 1;
+            mac_open_params.u.pkt_types[0].range_low  = 0x600;
+            mac_open_params.u.pkt_types[0].range_high = 0x600;
 
+            /* 0x00E17C64: pea (0xa,A6) - the port parameter's own slot */
             MAC_OS_$OPEN(&port, &mac_open_params, status_ret);
             if (*status_ret != status_$ok) {
                 return;
             }
 
-            /* Store MAC socket handle */
+            /* 0x00E17C76 / 0x00E17C7C: the two results share entry 0 */
             *(uint16_t *)(base + port_offset + XNS_PORT_OFF_MAC_SOCKET) =
-                (uint16_t)mac_open_params.ethertype2;
-            *(uint32_t *)(base + port_offset + XNS_PORT_OFF_REF) = mac_open_params.ethertype1;
+                mac_open_params.u.result.channel;
+            *(uint32_t *)(base + port_offset + XNS_PORT_OFF_REF) =
+                mac_open_params.u.result.mtu;
         }
     }
 

@@ -140,15 +140,45 @@ typedef struct mac_os_$port_info_t {
 
 /*
  * MAC_OS open parameters structure
- * Passed to MAC_OS_$OPEN to configure channel.
+ * Passed to MAC_OS_$OPEN to configure a channel.
+ *
+ * The packet-type filter array starts at offset 0x00: the registration loop
+ * at 0x00E0B304 walks the record with "movea.l A3,A2 / addq.l #0x8,A3" and
+ * copies two longwords per entry.  MAC_OS_$OPEN then overwrites that first
+ * entry with its two results - the MTU longword at +0x00 ("move.l D1,(A2)"
+ * at 0x00E0B42A) and the channel word at +0x04 ("move.w D2w,(0x4,A2)" at
+ * 0x00E0B41C) - so the two views share storage exactly as a Pascal variant
+ * record would.  The callback sits at +0x50 ("move.l (0x50,A1),(0x7a0,A0)"
+ * at 0x00E0B366) and the entry count at +0x54 ("move.w (0x54,A3),D0w" at
+ * 0x00E0B2F8).
  */
+#define MAC_OS_MAX_OPEN_PKT_TYPES   10      /* 0x50 bytes of 8-byte entries */
+
+typedef struct mac_os_$pkt_type_range_t {
+    uint32_t    range_low;      /* 0x00 */
+    uint32_t    range_high;     /* 0x04 */
+} mac_os_$pkt_type_range_t;
+
 typedef struct mac_os_$open_params_t {
-    uint32_t    mtu;            /* 0x00: Maximum transmission unit */
-    uint16_t    unused_04;      /* 0x04: Unused */
-    /* ... packet type entries ... */
-    void        *callback;      /* 0x50: Callback function pointer */
-    uint16_t    num_pkt_types;  /* 0x54: Number of packet type entries (offset 0x54 = 21 entries) */
+    union {
+        /* input: the packet-type ranges to register */
+        mac_os_$pkt_type_range_t pkt_types[MAC_OS_MAX_OPEN_PKT_TYPES];
+        /* output: written over entry 0 once the channel is open */
+        struct {
+            uint32_t    mtu;        /* 0x00: driver MTU */
+            uint16_t    channel;    /* 0x04: channel number 0..9 */
+        } result;
+    } u;
+    void        *callback;      /* 0x50: demux callback */
+    uint16_t    num_pkt_types;  /* 0x54: entries supplied in u.pkt_types */
 } mac_os_$open_params_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(mac_os_$open_params_t, callback) == 0x50,
+               "mac_os_$open_params_t.callback");
+_Static_assert(offsetof(mac_os_$open_params_t, num_pkt_types) == 0x54,
+               "mac_os_$open_params_t.num_pkt_types");
+#endif
 
 /*
  * mac_os_$rcv_pkt_t - the 0x40-byte record a port driver builds for

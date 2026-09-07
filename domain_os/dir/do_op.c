@@ -451,9 +451,9 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
         case 0x44: /* Get entry */
             dir_$do_op_get_entryu(&local_uid, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
-                         &resp->cookie,               /* pea (0x14,A3) */
-                         &resp->_22_4_,               /* pea (0x16,A3) */
-                         (uint8_t *)resp + 0x1e,
+                         &resp->_20_2_,               /* pea (0x14,A3) */
+                         &resp->resolve.start_uid,    /* pea (0x16,A3) */
+                         &resp->_24_4_,               /* pea (0x1e,A3) */
                          &resp->status);
             break;
 
@@ -607,7 +607,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         default:
-            CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+            CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
             break;
         }
 

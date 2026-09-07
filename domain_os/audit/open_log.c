@@ -29,7 +29,10 @@ void audit_$open_log(status_$t *status_ret)
 {
     uint8_t attr_buffer[40];
     uint32_t file_size;
-    uint8_t lock_info[10];
+    /* A6-0xCA: FILE_$PRIV_LOCK's granted-rights word (0x00E7177A) */
+    uint16_t lock_rights;
+    /* A6-0xC0: FILE_$PRIV_UNLOCK's dtv output longword (0x00E717E0) */
+    uint32_t unlock_dtv;
 
     /* Check if log file is already open */
     if (AUDIT_$DATA.log_file_uid.high != UID_$NIL.high ||
@@ -73,7 +76,7 @@ void audit_$open_log(status_$t *status_ret)
      * compiler passes its address, not a null pointer. */
     FILE_$PRIV_LOCK(&AUDIT_$DATA.log_file_uid, 0, 1, 4, 0, 0, 0, 0, 0, 0,
                     &audit_$open_log_nil_acl_ctx, 0,
-                    (uint32_t *)&AUDIT_$DATA.lock_id, lock_info,
+                    (uint32_t *)&AUDIT_$DATA.lock_id, &lock_rights,
                     status_ret);
     if (*status_ret != status_$ok) {
         goto error;
@@ -99,7 +102,7 @@ void audit_$open_log(status_$t *status_ret)
          * word 0, then three `clr.l` for by_key/key, rem_key, rem_node. */
         (void)FILE_$PRIV_UNLOCK(&AUDIT_$DATA.log_file_uid,
                                 (int32_t)AUDIT_$DATA.lock_id, 4, 0,
-                                0, 0, 0, 0, lock_info, status_ret);
+                                0, 0, 0, 0, &unlock_dtv, status_ret);
         goto error;
     }
 

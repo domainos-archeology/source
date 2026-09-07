@@ -1021,17 +1021,25 @@ extern uint16_t DIR_$OP_PARAMS[];
 #define DIR_$OP_VERSION(half)   DIR_$OP_PARAMS[(half) * DIR_OP_PARAM_WORDS + 0]
 #define DIR_$OP_REPLY_SIZE(half) DIR_$OP_PARAMS[(half) * DIR_OP_PARAM_WORDS + 2]
 
-/* DAT_00e4b33c - UID_$NIL reference used as lock callback */
-extern uint8_t DAT_00e4b33c;
+/* 0x00E4B33C, longword 0x00000000.  Passed by reference as
+ * FILE_$SET_REFCNT's refcnt (`move.l (A0),D0` at 0x00E5E40E) and as
+ * AST_$PURIFY's segment_list (0x00E4B2A4). */
+extern uint32_t DAT_00e4b33c;
 
-/* DAT_00e4b444 - MST remap / ACL check parameter table */
-extern uint8_t DAT_00e4b444;
+/* 0x00E4B444, word 0x0001 - MST remap / ACL check parameter, read as a
+ * word (`btst.b #0,(1,A0)` in FILE_$GET_ATTRIBUTES at 0x00E5D99E). */
+extern uint16_t DAT_00e4b444;
 
-/* Naming error string for crash */
-extern char *PTR_Naming_bad_request_header_ver_err_00e7dbfc;
-extern char  Naming_bad_request_header_ver_err;
+/*
+ * Constant status cells CRASH_SYSTEM is handed by `pea (d,PC)`.
+ * 0x00e4b230 holds the longword 0x000E0025 (status_$naming, subsys 0x0E,
+ * mod 0x00, code 0x25), so these are status_$t cells in the code region,
+ * not strings.  0x00e7dbfc is a pointer cell holding 0x00e4b230.
+ */
+extern status_$t *PTR_Naming_bad_request_header_ver_err_00e7dbfc;
+extern status_$t  Naming_bad_request_header_ver_err;
 /* Alias for crash in OLD_DIR_READU */
-extern char Bad_request_header_version_err;
+extern status_$t Bad_request_header_version_err;
 
 /*
  * OLD directory subsystem data area
@@ -1204,8 +1212,8 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                           void *size_ret, void *offset_ret,
                           void *count_ret, status_$t *status_ret);
 void dir_$do_op_get_entryu(uid_t *uid, void *name, uint16_t name_len,
-                           short *type_ret, char *uid_ret, uint32_t *extra_ret,
-                           status_$t *status_ret);
+                           uint16_t *type_ret, uid_t *uid_ret,
+                           uint32_t *extra_ret, status_$t *status_ret);
 void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
                          void *name_ret, void *len_ret, void *uid_ret,
                          status_$t *status_ret);
@@ -1230,15 +1238,28 @@ void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
 void dir_$do_op_add_mount(uid_t *uid, uid_t *mount_uid, uint32_t node_id, status_$t *status_ret);
 void dir_$do_op_drop_mount(uid_t *mount_uid, uint32_t node_id, status_$t *status_ret);
 
-/* DAT_00e56096 - Info block parameter table entries */
-extern uint8_t DAT_00e56096;
-extern uint8_t DAT_00e56098;
-extern uint8_t DAT_00e56094;
-extern uint8_t DAT_00e5609e;
+/* Info block parameter cells in the OLD DIR code region.  Widths taken
+ * from the reads in each callee:
+ *   0x00E56094  word 0x0090  FILE_$GET_ATTRIBUTES size_ptr (`cmpi.w #0x90,(A0)`
+ *                            at 0x00E5D9F6)
+ *   0x00E56096  word 0x0028  DIR_$OLD_READ_INFOBLK max_len (`move.w (A3),D0w`
+ *                            at 0x00E560F2)
+ *   0x00E56098  word 0x0004  FILE_$GET_ATTRIBUTES flags
+ *   0x00E5609E  long 0x00010000  MST_$UNMAP map_info (`move.l (A0),-(SP)`
+ *                            at 0x00E44748)
+ */
+extern int16_t  DAT_00e56096;
+extern uint16_t DAT_00e56098;
+extern int16_t  DAT_00e56094;
+extern uint32_t DAT_00e5609e;
 extern uint8_t DAT_00e560a2;
 extern uint8_t DAT_00e5609a;
-extern uint8_t DAT_00e564e2;
-extern uint8_t DAT_00e5716a;
+/* 0x00E564E2, longword 0x00000400: FILE_$FW_PARTIAL byte_count
+ * (`move.l (A1),D2` at 0x00E5E6BC). */
+extern uint32_t DAT_00e564e2;
+/* 0x00E5716A, word 0x0006: FILE_$SET_PROT prot_type
+ * (`move.w (A4),D2w` at 0x00E5DF56). */
+extern uint16_t DAT_00e5716a;
 /* DAT_00e54730 (NAME code region) is declared in name/name.h.
  *
  * The ACL_$RIGHTS constant cells 0xE4BC24, 0xE4CFF4, 0xE4CFF6, 0xE50C5C,
@@ -1274,8 +1295,8 @@ extern int16_t DIR_$NAME_OFFSET_TABLE[];
  * Size: 612 bytes
  */
 void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
-                           short *type_ret, char *uid_ret, uint32_t *extra_ret,
-                           status_$t *status_ret);
+                           uint16_t *type_ret, uid_t *uid_ret,
+                           uint32_t *extra_ret, status_$t *status_ret);
 
 /* dir_$lookup_entry - Uncached directory entry lookup
  *
@@ -1289,8 +1310,9 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
  * Size: 538 bytes
  */
 void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
-                       short *type_ret, char *uid_ret, uint32_t *extra_ret,
-                       uint8_t *found_ret, status_$t *status_ret);
+                       uint16_t *type_ret, uid_t *uid_ret,
+                       uint32_t *extra_ret, uint8_t *found_ret,
+                       status_$t *status_ret);
 
 /* dir_$refind_entry - Re-find current B-tree position after page navigation
  *
@@ -1467,7 +1489,8 @@ void dir_$finalize_split(dir_insert_ctx_t *ctx, status_$t *status_ret);
  */
 extern uint16_t DAT_00e50830;   /* 0xE50830: 0x0005 - FILE_$SET_PROT protection type (add_bak) */
 extern uint16_t DAT_00e50c5a;   /* 0xE50C5A: 0x0000 - ACL option flags / DROP_HARD_LINKU flags */
-extern uint8_t  DAT_00e4dffa;   /* 0xE4DFFA: 0x0090 - FILE_$GET_ATTRIBUTES attribute parameter */
+extern int16_t  DAT_00e4dffa;   /* 0xE4DFFA: word 0x0090 - FILE_$GET_ATTRIBUTES size_ptr
+                                 * (`cmpi.w #0x90,(A0)` at 0x00E5D9F6) */
 extern uint8_t  DAT_00e4dffc;   /* 0xE4DFFC: NUL byte used as the 1-char name "\0" */
 extern uint8_t  PTR_DAT_00e4cd84; /* 0xE4CD84: case-folding character bitmap (07 ff ff fe ...) */
 extern uint8_t  DAT_00e4b448;   /* 0xE4B448: 0x00008000 - MST_$REMAP_PRIVI length parameter */

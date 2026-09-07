@@ -160,7 +160,7 @@ void FLP_DO_IO(void *req, void *buf, void *param_3, uint16_t lba_hi, uint32_t lb
         if (*(int16_t *)(&DAT_00e7af6c[unit_cyl_offset]) != *(int16_t *)((uint8_t *)buf + 0x04)) {
             /* Need to seek - send recalibrate/seek command (0x0f) */
             DAT_00e7af3e = 0x0f;  /* Seek command */
-            status = EXCS(&DAT_00e7af3e, DAT_00e3ddc2, req);
+            status = EXCS(&DAT_00e7af3e, &DAT_00e3ddc2, req);
             /* Update cached cylinder */
             *(uint16_t *)(&DAT_00e7af6c[unit_cyl_offset]) = DAT_00e7af66;
         }
@@ -194,7 +194,7 @@ void FLP_DO_IO(void *req, void *buf, void *param_3, uint16_t lba_hi, uint32_t lb
             }
 
             /* Execute the command */
-            status = EXCS(&DAT_00e7af3e, DAT_00e3dfe0, req);
+            status = EXCS(&DAT_00e7af3e, &DAT_00e3dfe0, req);
 
             if (status == status_$ok) {
                 sectors_done++;

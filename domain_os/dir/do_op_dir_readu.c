@@ -386,7 +386,7 @@ start_named_search:
                     break;
 
                 default:
-                    CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+                    CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
                     break;
                 }
             } else {
@@ -432,7 +432,7 @@ start_named_search:
                     break;
 
                 default:
-                    CRASH_SYSTEM((const status_$t *)&Naming_bad_request_header_ver_err);
+                    CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
                     break;
                 }
             }

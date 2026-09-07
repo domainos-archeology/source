@@ -50,44 +50,34 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
     status_$t location_status;
 
     /*
-     * The original function uses a complex stack layout where the UID is
-     * stored at a fixed location and AST_$GET_LOCATION populates additional
-     * info. The remote flag is checked at offset -0x6B relative to frame.
-     *
-     * For simplicity, we use a struct to hold the location info.
+     * A6-0x88: the 0x20-byte object-location record.  The caller's UID goes
+     * in at +0x08 (A6-0x80, 0x00E5D25C) and the flags byte lives at +0x1D
+     * (A6-0x6B, `bclr.b #6,(-0x6b,A6)` at 0x00E5D264).
      */
-    struct {
-        uint32_t uid_high;          /* -0x80: UID high */
-        uint32_t uid_low;           /* -0x7C: UID low */
-        uint8_t  location[13];      /* -0x78 to -0x6B: Location info */
-        uint8_t  remote_flags;      /* -0x6B: Flags byte (bit 7 = remote) */
-    } lookup_context;
+    file_$obj_loc_t lookup_context;
 
-    uint32_t uid_info[2];           /* Output from AST_$GET_LOCATION (8 bytes) */
-    uint32_t vol_uid_out;           /* Volume UID output */
+    uint32_t loc_unused;            /* A6-0x9C: pea'd, never touched */
+    uint32_t vol_uid_out;           /* A6-0x98: receives aote+0x08 */
 
     /* For remote files */
-    uint8_t exsid[104];             /* Extended SID buffer */
-    uint32_t uid_low_masked;        /* Low UID masked for cache lookup */
-    int8_t cache_result;            /* Cache lookup result */
-    uint8_t clock_out[8];           /* Output clock from remote operation */
+    uint8_t exsid[104];             /* A6-0x68: extended SID buffer */
+    uint32_t uid_low_masked;        /* A6-0xA4: low UID masked for the cache */
+    int8_t cache_result;            /* A6-0xA0: cache lookup result */
+    clock_t mtime_out;              /* A6-0x90: mod time from the remote op */
 
     uint16_t required_rights = rights;   /* word at A6+0x12 */
     int16_t option_flags = options;      /* word at A6+0x14 */
     uint32_t rights_mask;
     int16_t rights_result;
 
-    /* Copy UID and set up for lookup */
-    lookup_context.uid_high = file_uid->high;
-    lookup_context.uid_low = file_uid->low;
+    /* Copy UID into the record at +0x08 and set up for lookup */
+    lookup_context.uid = *file_uid;
 
-    /* Clear the remote flag before lookup */
-    lookup_context.remote_flags &= ~0x40;  /* Clear bit 6 as in original */
+    /* Clear bit 6 of the record's flags byte before the lookup */
+    lookup_context.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-    /* Get file location
-     * AST_$GET_LOCATION signature: (uid_info, flags, unused, vol_uid_out, status)
-     */
-    AST_$GET_LOCATION(uid_info, 0, 0, &vol_uid_out, &location_status);
+    AST_$GET_LOCATION(&lookup_context, 0, &loc_unused, &vol_uid_out,
+                      &location_status);
 
     if (location_status != status_$ok) {
         *status_ret = location_status;
@@ -98,7 +88,7 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
      * Check if file is remote (bit 7 of remote_flags)
      * In the decompiled code this corresponds to local_6f.
      */
-    if ((lookup_context.remote_flags & 0x80) != 0) {
+    if (lookup_context.flags < 0) {
         /* Remote file handling */
 
         /* Get extended SID for access control */
@@ -108,20 +98,20 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
         }
 
         /* Check hint cache to see if we can use local operations */
-        uid_low_masked = lookup_context.uid_low & 0xFFFFF;
+        uid_low_masked = lookup_context.uid.low & 0xFFFFF;
         HINT_$LOOKUP_CACHE(&uid_low_masked, &cache_result);
 
         if (cache_result >= 0) {
             /* Not in local cache - must use remote operation */
             REM_FILE_$FILE_SET_ATTRIB(
-                lookup_context.location + 5,   /* Location info (auStack_7c + offset) */
+                &lookup_context.loc_info,       /* 0x00E5D2EE: record + 0x10 */
                 file_uid,                       /* File UID */
                 value,                          /* Attribute value */
                 attr_id,                        /* Attribute ID */
                 exsid,                          /* Extended SID */
                 required_rights,                /* Required rights */
                 option_flags,                   /* Option flags */
-                clock_out,                      /* Output clock */
+                &mtime_out,                     /* Output modification time */
                 status_ret);
 
             /* Check if we got a rights error */
@@ -134,8 +124,9 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
                 return;
             } else {
                 /* Success - update local AST cache */
-                AST_$SET_ATTR(file_uid, attr_id, *(uint32_t *)value, 0,
-                              (uint32_t *)clock_out, status_ret);
+                /* 0x00E5D322 pea's the value POINTER, not its contents. */
+                AST_$SET_ATTR(file_uid, attr_id, value, 0,
+                              &mtime_out, status_ret);
                 return;
             }
         }

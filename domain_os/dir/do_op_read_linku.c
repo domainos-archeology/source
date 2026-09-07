@@ -51,7 +51,7 @@ void dir_$do_op_read_linku(uid_t *uid, void *name, uint16_t name_len,
     uint8_t *entry;
     void *entry_ret;
     uint8_t extra1[4];
-    uint8_t extra2[2];
+    int16_t depth_ret;   /* dir_$find_entry's depth word (`clr.w (A0)` at 0x00E4C9F0) */
 
     /* Initialize outputs */
     uid_ret->high = UID_$NIL.high;
@@ -68,7 +68,7 @@ void dir_$do_op_read_linku(uid_t *uid, void *name, uint16_t name_len,
 
     /* Look up the named entry */
     found = dir_$find_entry((void *)local_handle, name, name_len, 0,
-                            &entry_ret, extra1, extra2);
+                            &entry_ret, extra1, &depth_ret);
     entry = (uint8_t *)entry_ret;
 
     if (found < 0) {

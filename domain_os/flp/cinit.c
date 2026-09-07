@@ -30,12 +30,16 @@ status_$t FLP_$CINIT(void *ctlr_info)
     uint16_t retry;
     status_$t status;
     int8_t found;
-    uint8_t probe_buffer[10];
-    uint16_t local_regs[2];
-    void *jump_table_ptr[2];
+    uint8_t probe_buffer[10];       /* A6-0x0e */
+    uint16_t dummy_cmd;             /* A6-0x10: "sense interrupt status" byte */
+    uint16_t reg_ctlr_num;          /* A6-0x14: DISK_$REGISTER's controller word */
+    void *jump_table_ptr[2];        /* A6-0x1c */
 
-    /* Probe for controller hardware */
-    found = io_$probe(DAT_00e3e10e,
+    /*
+     * 0x00E3E014 - 0x00E3E020: every argument is passed by reference; the
+     * first is the constant zero word at 0xE3E10E ("pea (0xf0,PC)").
+     */
+    found = io_$probe(&DAT_00e3e10e,
                          (uint8_t *)ctlr_info + 0x34,
                          probe_buffer);
 
@@ -74,11 +78,14 @@ status_$t FLP_$CINIT(void *ctlr_info)
         /* Controller busy - try to clear it */
         if ((regs->status & FLP_STATUS_DIO) == 0) {
             /* DIO=0: Send dummy command to reset */
-            local_regs[0] = 8;  /* Sense interrupt status */
-            SHAKE(local_regs, DAT_00e3e110, DAT_00e3e110);
+            /* 0x00E3E086: SHAKE(&dummy_cmd, &const_1, &const_1) - the same
+             * "pea (0x82,PC)" cell is pushed twice ("move.l (SP),-(SP)"). */
+            dummy_cmd = 8;  /* Sense interrupt status */
+            SHAKE(&dummy_cmd, &DAT_00e3e110, &DAT_00e3e110);
         } else {
             /* DIO=1: Read result bytes to clear */
-            SHAKE(&FLP_$SREGS, DAT_00e3ddc2, DAT_00e3e10e);
+            /* 0x00E3E078: SHAKE(&FLP_$SREGS, &const_3, &const_0) */
+            SHAKE(&FLP_$SREGS, &DAT_00e3ddc2, &DAT_00e3e10e);
         }
     }
 
@@ -87,18 +94,24 @@ status_$t FLP_$CINIT(void *ctlr_info)
 
 controller_ready:
     /* Send specify command to configure controller parameters */
-    status = SHAKE(DAT_00e7affc, DAT_00e3ddc2, DAT_00e3e110);
+    /* 0x00E3E0C2: SHAKE(&specify_cmd, &const_3, &const_1) */
+    status = SHAKE(DAT_00e7affc, &DAT_00e3ddc2, &DAT_00e3e110);
     if (status != status_$ok) {
         return status;
     }
 
     /* Register with disk subsystem */
     jump_table_ptr[0] = &FLP_$JUMP_TABLE;
-    local_regs[0] = ctlr_num;
-    DISK_$REGISTER(DAT_00e3e110,
-                   local_regs,
-                   DAT_00e7b02a,
-                   (uint8_t *)ctlr_info + 0x3c,
+    reg_ctlr_num = ctlr_num;
+    /*
+     * 0x00E3E0E6 - 0x00E3E0FA: all five arguments are addresses.  The device
+     * type is the constant one word at 0xE3E110 ("pea (0x18,PC)") and the
+     * flags word lives inside the caller's controller record at +0x3c.
+     */
+    DISK_$REGISTER(&DAT_00e3e110,
+                   &reg_ctlr_num,
+                   &DAT_00e7b02a,
+                   (uint16_t *)((uint8_t *)ctlr_info + 0x3c),
                    jump_table_ptr);
 
     return status;

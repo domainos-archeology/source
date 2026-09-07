@@ -16,16 +16,18 @@
 /*
  * MST_$REMOVE_SEG - Remove segment from AST
  *
- * @param param_1  First parameter (passed to AST_$LOCATE_ASTE)
- * @param param_2  Unused in current implementation
- * @param param_3  Unused in current implementation
- * @param param_4  Unused in current implementation
- * @param flags    Flags passed to AST_$RELEASE_PAGES
+ * @param request  AST_$LOCATE_ASTE request record, BY REFERENCE
+ *                 (0x00E0E0EA "move.l (0x8,A6),-(SP)"; the callee
+ *                 dereferences it at 0x00E0705E)
+ * @param param_2  Unused in current implementation (A6+0x0C, long)
+ * @param param_3  Unused in current implementation (A6+0x10, word)
+ * @param param_4  Unused in current implementation (A6+0x12, word)
+ * @param flags    Flags passed to AST_$RELEASE_PAGES (A6+0x14, byte)
  */
-void MST_$REMOVE_SEG(uint32_t param_1, uint32_t param_2,
+void MST_$REMOVE_SEG(locate_request_t *request, uint32_t param_2,
                       uint16_t param_3, uint16_t param_4, uint8_t flags)
 {
-    void *aste;
+    aste_t *aste;
 
     (void)param_2;  /* Unused */
     (void)param_3;  /* Unused */
@@ -35,7 +37,7 @@ void MST_$REMOVE_SEG(uint32_t param_1, uint32_t param_2,
     ML_$LOCK(MST_LOCK_AST);
 
     /* Locate the AST entry for this segment */
-    aste = AST_$LOCATE_ASTE(param_1);
+    aste = AST_$LOCATE_ASTE(request);
 
     if (aste != NULL) {
         /* Release all pages for this AST entry */

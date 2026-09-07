@@ -62,9 +62,13 @@ uint32_t ROUTE_$SOCK_ECVAL;
 /*
  * ROUTE_$SERVICE_MUTEX - Mutex for route service operations
  *
+ * ROUTE_$SERVICE passes its address to ML_$EXCLUSION_START as a literal:
+ * "move.l #0xe26280,-(SP) / jsr 0x00e20df8" at 0x00E6A048, so the cell is a
+ * whole ml_$exclusion_t (0x12 bytes), not a longword.
+ *
  * Original address: 0xE26280
  */
-uint32_t ROUTE_$SERVICE_MUTEX;
+ml_$exclusion_t ROUTE_$SERVICE_MUTEX;
 
 /*
  * ROUTE_$CONTROL_ECVAL - Control event count value
