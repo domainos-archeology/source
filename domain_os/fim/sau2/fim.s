@@ -25,6 +25,7 @@
  *   FP_$SAVEP:                 0x00E218D0 (4 bytes, data)
  *   FP_$OWNER:                 0x00E218D4 (2 bytes, data)
  *   FP_$EXCLUSION:              0x00E218D6 (4 bytes, data)
+ *   FIM_$BUS_ERR:              0x00E218E8 (484 bytes; see sau2/bus_err.s)
  *   FIM_$FLINE:                0x00E21ACC (68 bytes)
  *   FIM_$FP_ABORT:             0x00E21B80 (48 bytes; stub: 2 bytes)
  *   FIM_$FP_INIT:              0x00E21BB0 (84 bytes; stub: 2 bytes)
@@ -671,13 +672,12 @@ FIM_$SETUP_RETURN:
  *
  * The data region ends at 0x00E218E8; everything from there to
  * FIM_$FLINE (0x00E21ACC) is FIM_$BUS_ERR, a 484-byte hand-written bus
- * error handler installed in the vector table from 0x00E342E8.  It has
- * three internal entry points already labelled in Ghidra:
- *   0x00E218E8  FIM_$BUS_ERR
- *   0x00E2190A  fim_bus_error_stingray_68020
- *   0x00E2194A  fim_bus_error_68010
- * TODO: FIM_$BUS_ERR (0x00E218E8..0x00E21ACB) is not yet translated; see
- * bead source-z2ja.
+ * error handler installed in the vector table from 0x00E342E8.  It is
+ * transcribed in fim/sau2/bus_err.s, together with the JMP_TO_BUS_ERR /
+ * BUS_ERROR_SWITCH trampoline at 0x00E218CA that precedes this data.
+ *
+ * Still not emitted anywhere: FIM_$TRACE_BIT (0x00E21890) and the rest of
+ * the gap from 0x00E2188E to 0x00E218CA.
  * ==================================================================== */
         .global FP_$SAVEP
 FP_$SAVEP:
@@ -723,6 +723,10 @@ FIM_$FLINE:
         movem.l %d0-%d3/%a0-%a1,-(%sp)         /* Save registers */
         move.l  (FP_$SAVEP,%pc),%d0             /* d0 = FP_$SAVEP */
         beq.b   .fline_no_fpu                   /* No FPU -> UII */
+        .global fim_fline_switch
+fim_fline_switch:                               /* 0x00E21AD6: alternate entry */
+                                                /* used by FIM_$BUS_ERR, which */
+                                                /* has already tested FP_$SAVEP */
         move.w  (PROC1_AS_ID).l,%d2             /* d2 = current AS ID */
         beq.b   .fline_no_fpu                   /* AS 0 -> UII */
         cmp.w   (FP_$OWNER,%pc),%d2             /* Compare with FP owner */

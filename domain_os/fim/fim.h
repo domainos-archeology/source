@@ -560,10 +560,85 @@ void FIM_$CRASH(void *exception_frame, fim_regs_t *regs);
  *
  * OS_$INIT installs this as the PROM bus-error trap vector
  * (_PROM_TRAP_BUS_ERROR = &FIM_$BUS_ERR) once initialization is
- * far enough along to handle bus errors itself.
+ * far enough along to handle bus errors itself; the vector table cell
+ * that names it is at 0x00E342E8.
  *
- * Address: 0x00E218E8
+ * Transcribed in fim/sau2/bus_err.s.
+ *
+ * Address: 0x00E218E8 (484 bytes)
  */
 extern void FIM_$BUS_ERR(void);
+
+/*
+ * BUS_ERROR_SWITCH - installable bus-timeout recovery handler
+ *
+ * This cell is literally the absolute operand of the "jmp" instruction at
+ * JMP_TO_BUS_ERR (0x00E218CA).  When FIM_$BUS_ERR classifies a fault as a
+ * bus timeout it checks this cell; if it is non-zero it clears the cache,
+ * restores the registers it saved and branches to JMP_TO_BUS_ERR, which
+ * jumps here.  The target inherits the supervisor stack with the exception
+ * frame still on it and is responsible for unwinding it.
+ *
+ * io_$probe (0x00E29138) arms it around a hardware probe so that touching
+ * an absent controller reports "not present" instead of crashing.  Zero
+ * means nobody is fielding bus timeouts, and the handler delivers a SIGBUS
+ * fault instead.
+ *
+ * Address: 0x00E218CC (defined in fim/sau2/bus_err.s)
+ */
+extern void *BUS_ERROR_SWITCH;
+
+/*
+ * JMP_TO_BUS_ERR - the "jmp (BUS_ERROR_SWITCH).l" trampoline itself
+ *
+ * Address: 0x00E218CA (defined in fim/sau2/bus_err.s)
+ */
+extern void JMP_TO_BUS_ERR(void);
+
+/*
+ * FIM_$TRACE_STS - per-address-space trace fault status, 4 bytes per AS
+ *
+ * FIM_$BUS_ERR stores status_$mst_guard_fault here (indexed by
+ * PROC1_$AS_ID << 2) when it converts a guard page fault into a trace
+ * fault.
+ *
+ * Address: 0x00E223A2
+ * TODO(source-refr): not yet emitted anywhere in the tree.
+ */
+extern status_$t FIM_$TRACE_STS[];
+
+/*
+ * Fault descriptor built on the supervisor stack and handed to FIM_$COM
+ * (0x00E213A4) as its second argument.  FIM_$BUS_ERR and FIM_$PARITY_TRAP
+ * (0x00E21F84) both build this triple by hand.
+ *
+ * FIM_$COM is entered - by jmp, not call - with
+ *   (0x00,SP) = pointer to the CPU exception frame
+ *   (0x04,SP) = pointer to one of these
+ */
+typedef struct fim_fault_desc_t {
+    status_$t   status;         /* 0x00: status_$t to report */
+    uint16_t    signal;         /* 0x04: BSD signal number (SIGBUS=10, SIGSEGV=11) */
+    uint16_t    fault_class;    /* 0x06: 0x3000 for memory access faults */
+} __attribute__((packed)) fim_fault_desc_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(fim_fault_desc_t) == 8, "fim_fault_desc_t must be 8 bytes");
+#endif
+
+/* fault_class values seen in the image */
+#define FIM_FAULT_CLASS_ACCESS  0x3000  /* Memory access fault (bus error, parity) */
+#define FIM_FAULT_CLASS_OTHER   0xA000  /* Everything else in the FIM_$COM table */
+
+/*
+ * status_$t values FIM_$BUS_ERR reports.
+ * TODO(source-46ym): the official Apollo names for the module 0x12 (fault)
+ * and module 0x07 (MMU) codes below are not yet known.
+ */
+#define status_$fault_protection_violation  0x00120011  /* MMU protection violation */
+#define status_$fault_bus_timeout           0x0012000C  /* No device answered */
+#define status_$mmu_memory_error_4          0x00070004
+#define status_$mmu_memory_error_5          0x00070005
+#define status_$mmu_memory_error_6          0x00070006
 
 #endif /* FIM_H */
