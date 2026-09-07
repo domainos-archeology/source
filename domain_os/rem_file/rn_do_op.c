@@ -44,7 +44,7 @@ typedef struct {
 
 void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buffer,
                          int16_t base_len, uint16_t response_size,
-                         void *response_buf, void *extra_out)
+                         void *response_buf, uint16_t *received_len_out)
 {
     rem_file_rn_op_buf_t *op_buf = (rem_file_rn_op_buf_t *)op_buffer;
     rem_file_rn_op_resp_t *response = (rem_file_rn_op_resp_t *)response_buf;
@@ -136,7 +136,10 @@ void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buffer,
     REM_FILE_$SEND_REQUEST(addr_info, op_buf, request_len,
                            bulk_in_ptr, bulk_in_len,
                            response, response_size,
-                           extra_out, bulk_out_ptr, bulk_out_len,
+                           /* 0x00E616E4: the caller's cell is
+                            * REM_FILE_$SEND_REQUEST's `received_len`
+                            * (source-32ld). */
+                           received_len_out, bulk_out_ptr, bulk_out_len,
                            (int16_t *)&received_len, &packet_id,
                            &local_status);
 

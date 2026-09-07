@@ -40,7 +40,7 @@ static void *dir_$set_protection_acl_ctx = NULL;
  *   A2 = A6+0x14  prot_type  in/out word the caller supplies
  *   A3 = A6+0x18  status_ret
  *
- *   A6-0x100 word  do_op_extra   DIR_$DO_OP's fifth argument
+ *   A6-0x100 word  do_op_rcvd_len  DIR_$DO_OP's fifth argument
  *   A6-0x0FE word  lock_result   FILE_$PRIV_LOCK's rights word
  *   A6-0x0F8 long  lock_status   FILE_$PRIV_UNLOCK's status
  *   A6-0x0F4 8     dtv_buf       FILE_$PRIV_UNLOCK's DTV output
@@ -99,7 +99,7 @@ _Static_assert(sizeof(dir_$set_prot_request_t)            == 0xC4, "sizeof set_p
 void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
                          int16_t *prot_type, status_$t *status_ret)
 {
-    uint16_t        do_op_extra;    /* A6-0x100 */
+    uint16_t        do_op_rcvd_len; /* A6-0x100 */
     uint16_t        lock_result;    /* A6-0x0FE */
     status_$t       lock_status;    /* A6-0x0F8 */
     uint32_t        dtv_buf[2];     /* A6-0x0F4 */
@@ -131,15 +131,18 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
 
     /*
      * 0x00E5227C-0x00E52294.  The fifth argument is the frame word at
-     * A6-0x100, which lies 0x18 bytes BELOW the request - it is not the
-     * request's own base.
-     * TODO (bead source-32ld): what DIR_$DO_OP's fifth argument is for is
-     * still unknown; it is forwarded verbatim to REM_FILE_$RN_DO_OP
-     * (0x00E4C104).  Every other dir/ caller in this port passes its request
-     * buffer there instead.
+     * A6-0x100, which lies 0x18 bytes BELOW the request - it is NOT the
+     * request's own base.  It is REM_FILE_$SEND_REQUEST's `received_len`
+     * out-parameter (source-32ld): DIR_$DO_OP forwards the longword at
+     * A6+0x14 to REM_FILE_$RN_DO_OP (0x00E4C104), which forwards it again to
+     * REM_FILE_$SEND_REQUEST (0x00E616E4), which does
+     * `movea.l (0x1e,A6),A2 / move.w D4w,(A2)` at 0x00E61288.
+     *
+     * The original does not initialise the cell; it is written here only to
+     * keep the C defined.
      */
-    do_op_extra = 0;
-    DIR_$DO_OP(&request, DAT_00e7fce6, 0x14, &response, &do_op_extra);
+    do_op_rcvd_len = 0;
+    DIR_$DO_OP(&request, DAT_00e7fce6, 0x14, &response, &do_op_rcvd_len);
 
     /* 0x00E52298-0x00E522AA */
     status = response.status;

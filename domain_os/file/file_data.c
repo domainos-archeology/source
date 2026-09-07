@@ -89,13 +89,13 @@ uint16_t FILE_$LOCK_MAP_TABLE[12] = {
 };
 
 /*
- * ASID map table (12 entries)
+ * Lock-mode canonicalisation table (12 entries)
  * Original address: FILE_$LOCK_CONTROL + 0x40 (0xE82168)
  *
  * In the m68k binary this shares the same address as LOCK_MAP_TABLE.
  * For portability both symbols are defined; the values are identical.
  */
-uint16_t FILE_$ASID_MAP[12] = {
+uint16_t FILE_$LOCK_MODE_MAP[12] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 4
 };
 

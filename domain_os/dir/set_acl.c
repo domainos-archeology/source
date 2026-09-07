@@ -34,6 +34,10 @@ void DIR_$SET_ACL(uid_t *uid, void *acl, status_$t *status_ret)
         uid_t     acl_uid;
     } request;
     Dir_$OpResponse response;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
+     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
     status_$t status;
     uint32_t lock_handle;
     uint16_t lock_result;
@@ -48,7 +52,7 @@ void DIR_$SET_ACL(uid_t *uid, void *acl, status_$t *status_ret)
     request.acl_uid.low = ((uid_t *)acl)->low;
 
     /* Send the request */
-    DIR_$DO_OP(&request.op, DAT_00e7fcc6, 0x14, &response, &request);
+    DIR_$DO_OP(&request.op, DAT_00e7fcc6, 0x14, &response, &do_op_rcvd_len);
     status = response.status;
 
     /* Check for fallback conditions */

@@ -29,10 +29,16 @@
  *   req_size  - Request size
  *   resp_size - Response size
  *   response  - Response buffer (Dir_$OpResponse)
- *   resp_buf  - Extra parameter / request pointer
+ *   received_len - Output: reply length in bytes (source-32ld).  On the
+ *                  LOCAL path DIR_$DO_OP writes it itself at 0x00E4C24E
+ *                  (`moveq #0x14,D1 / add.w (0x1fa0,A0),D1w / move.w D1w,(A1)`);
+ *                  on the REMOTE path it hands the pointer to
+ *                  REM_FILE_$RN_DO_OP (0x00E4C104), which passes it on to
+ *                  REM_FILE_$SEND_REQUEST's `received_len` (0x00E616E4,
+ *                  written at 0x00E61288).
  */
 void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
-                void *response, void *resp_buf)
+                void *response, uint16_t *received_len)
 {
     uint8_t *req = (uint8_t *)request;
     Dir_$OpResponse *resp = (Dir_$OpResponse *)response;
@@ -98,7 +104,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                                req_size + 0x8e,
                                resp_size,
                                response,
-                               resp_buf);
+                               received_len);
 
             if (resp->status == status_$ok) {
                 uint32_t hint_extra;
@@ -201,7 +207,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
         /* Local node - dispatch based on operation code */
         /* Set response header fields */
         /* 0xE4C24E: moveq #0x14,D1; add.w (0x1fa0,A0),D1w; move.w D1w,(A1) */
-        *((int16_t *)resp_buf) = (int16_t)(DIR_$OP_REPLY_SIZE(op_half) + 0x14);
+        *received_len = (uint16_t)(DIR_$OP_REPLY_SIZE(op_half) + 0x14);
         /* 0xE4C25A: move.w (0x1f9c,A0),(0xa,A3) */
         *((uint16_t *)&resp->f18[2]) = DIR_$OP_VERSION(op_half);
         *((uint16_t *)&resp->f18[0]) = 0;
@@ -245,11 +251,12 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x2E: /* Delete file (with flags) */
+            /* 0x00E4C3B4 `btst.b #0x0,(0x91,A2)` + `sne`: a Domain boolean. */
             dir_$do_op_delete(&local_uid, req + 0x92,
                          *((uint16_t *)(req + 0x8e)),
-                         -((req[0x91] & 1) != 0),
-                         0xFF, 0xFF,
-                         result_buf, &resp->uid,     /* pea (0x14,A3) */
+                         (req[0x91] & 1) != 0 ? true : false,
+                         true, true,
+                         (uid_t *)result_buf, &resp->uid, /* pea (0x14,A3) */
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 AUDIT_$LOG_DIR_OP(0x20, resp->status, &local_uid,
@@ -262,8 +269,8 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
         case 0x30: /* Drop hard link */
             dir_$do_op_delete(&local_uid, req + 0x90,
                          *((uint16_t *)(req + 0x8e)),
-                         0xFF, 0xFF, 0xFF,
-                         result_buf, &resp->uid,     /* pea (0x14,A3) */
+                         true, true, true,
+                         (uid_t *)result_buf, &resp->uid, /* pea (0x14,A3) */
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 AUDIT_$LOG_DIR_OP(0x13, resp->status, &local_uid,
@@ -327,11 +334,13 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x36: /* Delete file (simple) */
+            /* 0x00E4C508-0x00E4C50E: the two request bytes go across as
+             * booleans, and the third argument is a `clr.w` (FALSE). */
             dir_$do_op_delete(&local_uid, req + 0x92,
                          *((uint16_t *)(req + 0x8e)),
-                         req[0x90],
-                         (uint16_t)req[0x91], 0,
-                         result_buf, &resp->uid,     /* pea (0x14,A3) */
+                         (boolean)req[0x90],
+                         (boolean)req[0x91], false,
+                         (uid_t *)result_buf, &resp->uid, /* pea (0x14,A3) */
                          &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 AUDIT_$LOG_DIR_OP(0x13, resp->status, &local_uid,

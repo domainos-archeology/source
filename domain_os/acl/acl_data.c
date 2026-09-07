@@ -30,7 +30,7 @@ acl_proj_list_t ACL_$SAVED_PROJ[PROC1_MAX_PROCESSES];   /* 0xE91F28 */
  * Per-process project UID array (indexed by PID, 8 UIDs per process)
  * Stride 0x40 = 64 bytes per process
  */
-uid_t ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS]; /* 0xE924F4 */
+uid_t ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS]; /* 0xE924FC */
 
 /*
  * Per-process subsystem level counter (indexed by PID, stride 2)
@@ -47,8 +47,15 @@ int16_t ACL_$SUPER_COUNT[PROC1_MAX_PROCESSES];
 /*
  * ASID bitmaps (8 bytes each, 64 bits for 64 ASIDs)
  */
-uint8_t ACL_$ASID_FREE_BITMAP[8];   /* 0xE92534: 1=free */
-uint8_t ACL_$ASID_SUSER_BITMAP[8];  /* 0xE935C4: 1=used suser */
+uint8_t ACL_$ASID_FREE_BITMAP[8];           /* 0xE92534: 1=free */
+uint8_t ACL_$LOCKSMITH_OVERRIDE_BITMAP[8];  /* 0xE935BC */
+uint8_t ACL_$ASID_SUSER_BITMAP[8];          /* 0xE935C4: 1=used suser */
+
+/*
+ * The 31-slot ACL image cache (0xE88834, stride 0x400).  ACL_$INIT zeroes it
+ * at 0x00E310AA and builds its mod-31 free list at 0x00E31140.
+ */
+acl_$cache_slot_t ACL_$ACL_CACHE[ACL_CACHE_SLOTS];  /* 0xE88834 */
 
 /*
  * Locksmith state
@@ -76,7 +83,7 @@ uid_t ACL_$FNDWRX;  /* 0xE174C4: Default ACL for files */
 /*
  * ACL type UIDs - well-known UIDs used to identify ACL operation types
  */
-uid_t ACL_$FILE_ACL;        /* 0xE1744C: {0x00000601, 0x00000000} */
+uid_t ACL_$FILE_ACL;        /* 0xE17444 */
 uid_t ACL_$FILEIN_ACL;      /* 0xE17454: {0x00000602, 0x00000000} */
 uid_t ACL_$DIRIN_ACL;       /* 0xE1745C: {0x00000603, 0x00000000} */
 uid_t ACL_$DIR_MERGE_ACL;   /* 0xE17464: {0x00000604, 0x00000000} */
@@ -91,4 +98,11 @@ uid_t ACL_$FILE_SUBS_ACL;   /* 0xE17474: {0x00000606, 0x00000000} */
  * that carries no ACL of its own.
  */
 uid_t ACL_$NIL = UID_CONST(0x00000100, 0);
-uid_t ACL_$DIR_ACL;         /* Well-known ACL UID for directories (TODO(source-yii): find actual address) */
+
+/*
+ * Well-known ACL UID for directories.  Ghidra labels 0xE1744C ACL_$DIR_ACL and
+ * 0xE17444 ACL_$FILE_ACL; ACL_$SET_ACL_CHECK reads both (0xE1744C at
+ * 0x00E4762E, 0xE17444 at 0x00E47660).  This resolves the "find actual
+ * address" half of TODO(source-yii).
+ */
+uid_t ACL_$DIR_ACL;         /* 0xE1744C */

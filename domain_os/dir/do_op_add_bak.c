@@ -84,10 +84,9 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
     status_$t local_status;
     /* A6-0x68 in the image: the 0x20-byte object-location descriptor.
      * AST_$GET_ATTRIBUTES writes all 32 bytes back on success (0x00E049B0).
-     * loc_vol_id is the WORD at +0x02, which on the big-endian m68k is the
-     * low half of the first longword. */
+     * loc_vol_id is the WORD at +0x02, i.e. file_$obj_loc_t.volume. */
     file_$obj_loc_t loc_desc;
-#define loc_vol_id  ((int16_t)(loc_desc.reserved_00[0] & 0xFFFFu))
+#define loc_vol_id  ((int16_t)loc_desc.volume)
     uint32_t get_loc_buf1;   /* 0x00e50906 pea (-0x184,A6) - never touched */
     uint32_t get_loc_buf2;   /* 0x00e50902 pea (-0x18c,A6) - aote+0x08 out */
     uint8_t attr_buf[4];

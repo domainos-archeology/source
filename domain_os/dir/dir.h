@@ -375,15 +375,22 @@ void DIR_$ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
  * Parameters:
  *   dir_uid    - UID of parent directory
  *   name       - Name of entry to delete
- *   name_len   - Pointer to name length (max 255)
- *   param4     - Status output parameter
- *   param5     - Flags parameter
- *   status_ret - Output: status code
+ *   name_len         - Pointer to name length (max 255)
+ *   status_ret       - Output: status code.  This is A6+0x14, NOT the last
+ *                      argument: `movea.l (0x14,A6),A4` at 0x00E515D6 and
+ *                      `move.l #0xe000b,(A4)` at 0x00E515EC.
+ *   check_del_right  - POINTER to a Domain boolean (A6+0x18)
+ *   no_lock          - POINTER to a Domain boolean (A6+0x1C)
+ *
+ * Both booleans are read a BYTE at a time (0x00E51628, 0x00E5162E) and are
+ * forwarded unchanged to DIR_$OLD_DELETE_FILEU on the fallback path
+ * (0x00E516A6-0x00E516B2).
  *
  * Original address: 0x00E515BC
  */
 void DIR_$DELETE_FILEU(uid_t *dir_uid, char *name, uint16_t *name_len,
-                       status_$t *param4, void *param5, status_$t *status_ret);
+                       status_$t *status_ret, boolean *check_del_right,
+                       boolean *no_lock);
 
 /*
  * DIR_$DROPU - Drop a directory entry
@@ -574,16 +581,32 @@ void DIR_$DIR_READU(uid_t *dir_uid, void *entries_ret, void *entries_size,
  * directory server and processes response.
  *
  * Parameters:
- *   request    - Request structure (varies by operation)
- *   req_size   - Size of request data
- *   resp_size  - Expected response size
- *   response   - Output: response structure
- *   resp_buf   - Additional response buffer
+ *   request      - Request structure (varies by operation)
+ *   req_size     - Size of request data
+ *   resp_size    - Expected response size
+ *   response     - Output: response structure
+ *   received_len - Output: number of response bytes the remote node returned
+ *
+ * source-32ld: the fifth argument is NOT the request buffer.  DIR_$DO_OP
+ * never dereferences it; it forwards the longword at A6+0x14 to
+ * REM_FILE_$RN_DO_OP as that routine's sixth argument (0x00E4C104),
+ * REM_FILE_$RN_DO_OP forwards it to REM_FILE_$SEND_REQUEST as its eighth
+ * (0x00E616E4), and REM_FILE_$SEND_REQUEST writes a word through it -
+ * `movea.l (0x1e,A6),A2 / move.w D4w,(A2)` at 0x00E61288, where D4 is
+ * min(bytes received, response_max).  That is SEND_REQUEST's declared
+ * `received_len` parameter.
+ *
+ * Every caller passes the address of a 2-byte frame cell: usually the two
+ * bytes immediately below the request buffer (e.g. DIR_$GET_DEF_PROTECTION
+ * 0x00E51D96 `pea (-0xea,A6)` against 0x00E51DA6 `pea (-0xe8,A6)`), but
+ * DIR_$SET_PROTECTION uses A6-0x100 with the request at A6-0xE8
+ * (0x00E5227C), DIR_$SET_ACL A6-0xC4 against A6-0xB0 (0x00E52CC0), and
+ * DIR_$SERVER passes a pointer it already holds in D2 (0x00E5831A).
  *
  * Original address: 0x00E4C02C
  */
 void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
-                void *response, void *resp_buf);
+                void *response, uint16_t *received_len);
 
 /*
  * DIR_$ADD_MOUNT - Add a volume mount point to a directory

@@ -37,6 +37,10 @@ void DIR_$CNAMEU(uid_t *dir_uid, char *old_name, uint16_t *old_name_len,
         char      name_data[512]; /* Both names stored here */
     } request;
     Dir_$OpResponse response;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
+     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
     status_$t status;
     uint16_t olen, nlen;
     int16_t i;
@@ -70,7 +74,7 @@ void DIR_$CNAMEU(uid_t *dir_uid, char *old_name, uint16_t *old_name_len,
     request.reserved = DAT_00e7fc62;
 
     /* Send the request - size includes both name lengths */
-    DIR_$DO_OP(&request.op, olen + nlen + DAT_00e7fc66, 0x14, &response, &request);
+    DIR_$DO_OP(&request.op, olen + nlen + DAT_00e7fc66, 0x14, &response, &do_op_rcvd_len);
     status = response.status;
 
     /* Check for fallback conditions */

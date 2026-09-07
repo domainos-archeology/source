@@ -22,11 +22,6 @@
 /*
  * Mount table offsets (relative to A5)
  */
-#define DIR_MOUNT_COUNT_OFF     0x1558
-#define DIR_MOUNT_COUNT16_OFF   0x155A
-#define DIR_MOUNT_SRC_BASE      0x155C  /* Source UIDs: +idx*8 */
-#define DIR_MOUNT_TGT_BASE      0x159C  /* Target UIDs: +idx*8 */
-#define DIR_MOUNT_NODE_BASE     0x15DC  /* Node IDs: +idx*4 */
 
 void dir_$do_op_drop_mount(uid_t *mount_uid, uint32_t node_id,
                             status_$t *status_ret)

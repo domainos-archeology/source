@@ -37,6 +37,10 @@ void DIR_$ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
         char      name_data[255 + 1024]; /* Name + target data */
     } request;
     Dir_$OpResponse response;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
+     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
     status_$t status;
     uint16_t len, tlen;
     int16_t i;
@@ -84,7 +88,7 @@ void DIR_$ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
     request.reserved = DAT_00e7fc8a;
 
     /* Send the request - size includes name and target length */
-    DIR_$DO_OP(&request.op, len + DAT_00e7fc8e, 0x14, &response, &request);
+    DIR_$DO_OP(&request.op, len + DAT_00e7fc8e, 0x14, &response, &do_op_rcvd_len);
     status = response.status;
 
     /* Check for fallback conditions */

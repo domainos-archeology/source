@@ -316,8 +316,12 @@ extern int8_t   FILE_$LOT_FULL;               /* At offset 0x2D0 - table full fl
  * FILE_$FORK_LOCK). */
 #define FILE_LOT_ML_LOCK_ID     5
 
-/* ASID group mapping table (12 entries) - same address as LOCK_MAP_TABLE on m68k */
-extern uint16_t FILE_$ASID_MAP[];
+/* Lock-mode canonicalisation table, 12 entries at FILE_$LOCK_CONTROL+0x40
+ * (0xE82168).  FILE_$LOCAL_LOCK_VERIFY indexes it with an ENTRY'S LOCK MODE
+ * (`move.w D0w,D1w / add.w D1w,D1w / cmp.w (0x40,A5,D1w*0x1),D2w` at
+ * 0x00E608C0-0x00E608C8), not with an ASID - it was called FILE_$ASID_MAP
+ * before source-9dc2 established what the compared field is. */
+extern uint16_t FILE_$LOCK_MODE_MAP[];
 
 /* Default initial file size */
 extern uint32_t FILE_$DEFAULT_SIZE;
@@ -480,19 +484,8 @@ _Static_assert(sizeof(file_lock_info_internal_t)                == 0x22, "sizeof
 void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
                              file_lock_info_internal_t *info_out, status_$t *status_ret);
 
-/*
- * FILE_$READ_LOCK_ENTRYUI - Read lock entry by UID (unchecked)
- *
- * Reads lock entry info for a file without access checks.
- *
- * Parameters:
- *   file_uid   - File UID to search for
- *   info_out   - Output buffer for lock info
- *   status_ret - Output status code
- *
- * Original address: 0x00E6046E
- */
-void FILE_$READ_LOCK_ENTRYUI(uid_t *file_uid, void *info_out, status_$t *status_ret);
+/* FILE_$READ_LOCK_ENTRYUI (0x00E6046E) is declared in file/file.h - it is
+ * called from name/ (name_$old_add_link 0x00E5687E). */
 
 /*
  * FILE_$LOCAL_READ_LOCK - Read local lock entry data
@@ -525,10 +518,12 @@ typedef struct {
     uint32_t context;    /* 0x08: file_lock_info_internal_t.context (unused here) */
     uint32_t owner_node; /* 0x0C: file_lock_info_internal_t.owner_node (unused here) */
     uint16_t side;       /* 0x10: Lock side (0=reader, 1=writer) from flags2 bit 7 */
-    /* 0x12 is compared against (flags2 & 0x78) >> 3 -- the lock MODE, not an
-     * ASID (00e608aa..00e608b2).  The name is retained because the .c body
-     * uses it; see the P2 bead. */
-    uint16_t asid;       /* 0x12: Lock mode to check */
+    /* 0x12: the lock MODE being asked about, not a process ASID (source-9dc2).
+     * FILE_$LOCAL_LOCK_VERIFY compares it twice, both times against a mode:
+     * directly against the entry's own (flags2 & 0x78) >> 3 at 0x00E608AA-
+     * 0x00E608B2, and against FILE_$LOCK_MODE_MAP[entry_mode] at
+     * 0x00E608C0-0x00E608C8. */
+    uint16_t mode;       /* 0x12: Lock mode to check */
 } lock_verify_request_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
@@ -536,7 +531,7 @@ _Static_assert(__builtin_offsetof(lock_verify_request_t, file_uid) == 0x00, "loc
 _Static_assert(__builtin_offsetof(lock_verify_request_t, context) == 0x08, "lock_verify_request_t.context");
 _Static_assert(__builtin_offsetof(lock_verify_request_t, owner_node) == 0x0C, "lock_verify_request_t.owner_node");
 _Static_assert(__builtin_offsetof(lock_verify_request_t, side) == 0x10, "lock_verify_request_t.side");
-_Static_assert(__builtin_offsetof(lock_verify_request_t, asid) == 0x12, "lock_verify_request_t.asid");
+_Static_assert(__builtin_offsetof(lock_verify_request_t, mode) == 0x12, "lock_verify_request_t.mode");
 _Static_assert(sizeof(lock_verify_request_t) == 0x14, "lock_verify_request_t size");
 
 /*

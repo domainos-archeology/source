@@ -67,9 +67,11 @@ static int16_t   mock_do_op_resp_size;
 static int       mock_loop_replies;
 
 void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
-                void *response, void *resp_buf)
+                void *response, uint16_t *received_len)
 {
-    (void)request; (void)req_size; (void)resp_buf;
+    (void)request; (void)req_size;
+    /* source-32ld: the fifth argument is the reply-length out cell. */
+    *received_len = (uint16_t)resp_size;
     mock_do_op_calls++;
     mock_do_op_resp_size = resp_size;
     if (mock_loop_replies > 0 && --mock_loop_replies == 0) {

@@ -65,11 +65,17 @@ void ACL_$FREE_ASID(int16_t asid, status_$t *status_ret)
     ACL_$SAVED_PROJ[asid] = *proj;
 
     /*
-     * Clear the 8 extended project UIDs for this ASID
-     * These are at a separate location indexed by ASID << 6
-     * (64 bytes per ASID, 8 UIDs)
+     * 0x00E74D20-0x00E74D48: clear the eight project UIDs for this ASID.
+     * `moveq #0x7,D1` + `dbf` is eight iterations; A0 = 0xE97294 + asid*0x40
+     * and D2 starts at 8, so the addresses written are
+     * 0xE924F4 + asid*0x40 + 8 + i*8 = &ACL_$PROJ_UIDS[asid][i] with the
+     * 0xE924FC base recorded in acl/acl_internal.h (source-4h7g).
      */
-    /* TODO(source-yii): Implement extended project UID clearing if needed */
+    /* TODO(source-x5dd): the routine indexes the SID and project tables with
+     * `asid` but the two bitmaps with (asid-1); confirm ASID == PID here. */
+    for (i = 0; i <= 7; i++) {
+        ACL_$PROJ_UIDS[asid][i] = UID_$NIL;
+    }
 
     /*
      * Clear subsystem level

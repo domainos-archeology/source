@@ -141,7 +141,7 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
 
     /* Check if target is on same volume as parent and is local */
     /* The word at record+0x02 is the low half of the longword at +0x00. */
-    if ((int16_t)(loc_desc.reserved_00[0] & 0xFFFFu) ==
+    if ((int16_t)loc_desc.volume ==
             *(int16_t *)((char *)parent_h + 0x3A) &&
         local_status == status_$ok &&
         loc_desc.flags >= 0) {

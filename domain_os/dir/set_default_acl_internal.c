@@ -103,7 +103,7 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
 
         if (local_status != status_$ok ||
             *(int16_t *)((char *)(uintptr_t)handle + 0x3A) !=
-                (int16_t)(loc_desc.reserved_00[0] & 0xFFFFu) ||
+                (int16_t)loc_desc.volume ||
             loc_desc.flags < 0) {
             *status_ret = local_status;
             if (*status_ret == file_$object_not_found ||

@@ -61,7 +61,11 @@ void dir_$dir_readu_via_do_op(status_$t *status_ret)
      * 4. Loop:
      *    a. Set continuation, max_entries, buffer_size in request
      *    b. Call DIR_$DO_OP(request, name_len + req_base_size, 0x24,
-     *                       response, response_header)
+     *                       response, received_len).  The fifth argument is
+     *                       `pea (-0x1d6,A6)` at 0x00E4E292 against the
+     *                       request at `pea (-0x1c8,A6)` (0x00E4E2A8): a
+     *                       2-byte reply-length cell, not the request
+     *                       (source-32ld).
      *    c. Copy status from response
      *    d. On success:
      *       - Update continuation from response

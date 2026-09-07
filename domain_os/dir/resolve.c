@@ -66,6 +66,10 @@ void DIR_$RESOLVE(void *pathname, uint16_t *path_len, uid_t *start_uid,
         void     *fl;
     } request;
     Dir_$OpResponse response;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
+     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
     uint16_t len;
 
     /* Initialize link count output */
@@ -103,7 +107,7 @@ void DIR_$RESOLVE(void *pathname, uint16_t *path_len, uid_t *start_uid,
         response.resolve.more = 0;
 
         /* Send the request */
-        DIR_$DO_OP(&request.op, DAT_00e7fcfe, 0x34, &response, &request);
+        DIR_$DO_OP(&request.op, DAT_00e7fcfe, 0x34, &response, &do_op_rcvd_len);
 
         /* Store status */
         *status_ret = response.status;

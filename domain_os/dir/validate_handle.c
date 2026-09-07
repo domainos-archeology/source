@@ -127,9 +127,11 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
         *(uint32_t *)(h + 0x10) = cattr.length;
     }
 
-    /* 0x00E4B566 `move.w (-0x56,A6),(0x3a,A2)`: descriptor+0x02, which
-     * AST_$GET_ATTRIBUTES filled from aote+0x9E. */
-    *(int16_t *)(h + 0x3A) = (int16_t)(desc.reserved_00[0] & 0xFFFFu);
+    /* 0x00E4B566 `move.w (-0x56,A6),(0x3a,A2)`: descriptor+0x02, i.e.
+     * file_$obj_loc_t.volume, which AST_$GET_ATTRIBUTES filled from
+     * aote+0x9E.  dir_$do_op_delete compares an object's own .volume against
+     * this word at 0x00E5138C. */
+    *(int16_t *)(h + DIR_HANDLE_VOLUME_OFF) = (int16_t)desc.volume;
 
     /* Check for well-known directory UIDs and use cached mapping info */
 

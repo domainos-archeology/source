@@ -356,8 +356,11 @@ void DIR_$OLD_ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
 void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
                        uid_t *backup_uid, status_$t *status_ret);
 
+/* A6+0x14 is the STATUS OUTPUT and A6+0x18/+0x1C are two pointers to Domain
+ * booleans - see the argument order at 0x00E5717C-0x00E5719C. */
 void DIR_$OLD_DELETE_FILEU(uid_t *dir_uid, char *name, uint16_t *name_len,
-                           status_$t *param4, void *param5, status_$t *status_ret);
+                           status_$t *status_ret, boolean *check_del_right,
+                           boolean *no_lock);
 
 void DIR_$OLD_DROPU(uid_t *dir_uid, char *name, uint16_t *name_len,
                     uid_t *file_uid, status_$t *status_ret);
@@ -392,6 +395,23 @@ void DIR_$OLD_FIND_UID(uid_t *dir_uid, uid_t *target_uid, char *name_buf,
                        int16_t *name_len_ret, status_$t *status_ret);
 
 uint32_t DIR_$OLD_FIND_NET(uid_t *dir_uid, uint32_t *index);
+
+/*
+ * The record DIR_$OLD_GET_ENTRYU fills.  NAME_$OLD_DELETE_ENTRYU reads its
+ * first two fields: the entry type word at +0x00 (`move.w (-0xc8,A6),D0w` at
+ * 0x00E56B44) and the object UID at +0x02 (`lea (-0xc6,A6),A0` at
+ * 0x00E56BC6).  The UID lands on an odd multiple of two, so the record is
+ * packed.
+ */
+typedef struct __attribute__((packed)) dir_$old_entry_t {
+    uint16_t type;      /* 0x00: 1 = file, 3 = link */
+    uid_t    uid;       /* 0x02: the object UID */
+} dir_$old_entry_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(dir_$old_entry_t, uid) == 0x02, "dir_$old_entry_t.uid");
+_Static_assert(sizeof(dir_$old_entry_t) == 0x0A, "sizeof dir_$old_entry_t");
+#endif
 
 void DIR_$OLD_GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
                          void *entry_ret, status_$t *status_ret);
@@ -785,6 +805,30 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret);
 void dir_$remove_entry(void *handle, void *name, int16_t name_len,
                        int16_t op_type, void *uid_ret, status_$t *status_ret);
 
+/*
+ * Directory handle field offsets used across dir/.
+ *
+ * 0x3A holds the volume word DIR_$VALIDATE_HANDLE copies out of the object's
+ * location descriptor (`move.w (-0x56,A6),(0x3a,A2)` at 0x00E4B566);
+ * dir_$do_op_delete compares an entry's own file_$obj_loc_t.volume against it
+ * at 0x00E5138C to decide whether the entry still names a live local object.
+ */
+#define DIR_HANDLE_VOLUME_OFF   0x3A
+
+/*
+ * DIR_$DO_OP's mount table, in the module data area A5 = 0xE7DC00 addresses.
+ * dir_$do_op_add_mount, dir_$do_op_drop_mount, dir_$do_op_find_uid and
+ * dir_$do_op_delete all walk it; dir_$do_op_delete reads the 16-bit count at
+ * `(0x155a,A5)` (0x00E51422) and the source UIDs at `A5 + 8 + 0x1554 + i*8`
+ * (0x00E5142A-0x00E5144C).
+ */
+#define DIR_MOUNT_COUNT_OFF     0x1558  /* Mount count (32-bit) */
+#define DIR_MOUNT_COUNT16_OFF   0x155A  /* Mount count (16-bit, low half) */
+#define DIR_MOUNT_SRC_BASE      0x155C  /* Source UIDs: +idx*8 */
+#define DIR_MOUNT_TGT_BASE      0x159C  /* Target UIDs: +idx*8 */
+#define DIR_MOUNT_NODE_BASE     0x15DC  /* Node IDs:    +idx*4 */
+#define DIR_MOUNT_MAX           8       /* Maximum mount entries */
+
 /* dir_$release_wire - Release wired page and reset cache state
  *
  * Releases a wired directory page (offset 0x14 in handle) via
@@ -1144,9 +1188,13 @@ void dir_$do_op_add_entry(uid_t *uid, uint16_t type, void *name, uint16_t name_l
  * Original address: 0x00E5125E
  * Size: 860 bytes
  */
-void dir_$do_op_delete(uid_t *uid, void *name, uint16_t name_len, uint8_t flag1,
-                       uint16_t flag2, uint16_t flag3, void *buf,
-                       uid_t *result_uid, status_$t *status_ret);
+/* The three flags are Domain BOOLEANS occupying the even byte of a 2-byte
+ * slot each (A6+0x12, +0x14, +0x16); every test on them is `tst.b` + `bmi` /
+ * `bpl` (0x00E51310, 0x00E51346, 0x00E514F2), a SIGNED test. */
+void dir_$do_op_delete(uid_t *dir_uid, void *name, uint16_t name_len,
+                       boolean check_del_right, boolean entry_only,
+                       boolean allow_link, uid_t *entry_uid_ret,
+                       uid_t *deleted_uid_ret, status_$t *status_ret);
 /* Frame at 0x00E518BC: 0x08 uid, 0x0C word (pushed by DIR_$DO_OP from
  * request+0x0E at 0x00E4C466 but never read by the callee), 0x0E old_name,
  * 0x12 old_name_len, 0x14 new_name, 0x18 new_name_len, 0x1A status_ret. */

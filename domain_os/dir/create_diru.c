@@ -35,6 +35,10 @@ void DIR_$CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
         char      name_data[255];
     } request;
     Dir_$OpResponse response;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
+     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
     status_$t status;
     uint16_t len;
     int16_t i;
@@ -61,7 +65,7 @@ void DIR_$CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
     request.reserved = DAT_00e7fc7a;
 
     /* Send the request - size includes name length */
-    DIR_$DO_OP(&request.op, len + DAT_00e7fc7e, 0x1c, &response, &request);
+    DIR_$DO_OP(&request.op, len + DAT_00e7fc7e, 0x1c, &response, &do_op_rcvd_len);
     status = response.status;
 
     /* Check for fallback conditions */

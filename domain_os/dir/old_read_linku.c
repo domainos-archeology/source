@@ -91,8 +91,9 @@ void DIR_$OLD_READ_LINKU(int16_t dir_uid_low, int16_t name_low, uint16_t *name_l
             /* Type 1: direct UID - copy from entry at offset 0x28 */
             target_uid->high = *((uint32_t *)(entry + 0x28));
             target_uid->low = *((uint32_t *)(entry + 0x2c));
-            /* TODO(source-qgq): Ghidra shows status 0xe0006, verify this status code */
-            *status_ret = 0x000E0006;
+            /* 0x000E0006 is "not a link" in the SR10.4 status database - a
+             * type-1 entry names an object, not a link (source-qgq). */
+            *status_ret = status_$naming_not_a_link;
         } else if (link_type == 3) {
             /* Type 3: text link - read via dir_$old_read_link_data into local buffer */
             dir_$old_read_link_data(handle, (void *)(uintptr_t)(entry + 0x28),

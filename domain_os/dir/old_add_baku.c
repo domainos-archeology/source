@@ -269,8 +269,10 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     /* If .BAK existed, drop it first */
     if (bak_found < 0) {
         /* Drop old .BAK entry */
+        /* 0x00E570E8-0x00E570EC: `st`, `st`, `clr.w` - check_del_right and
+         * no_lock TRUE, allow_link FALSE. */
         NAME_$OLD_DELETE_ENTRYU(dir_uid, name_buf + 4, bak_name_len,
-                     0xFF, 0xFF, 0, result_buf, status_ret);
+                     true, true, false, result_buf, status_ret);
         if (*status_ret != status_$ok) {
             ACL_$EXIT_SUPER();
             return;

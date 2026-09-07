@@ -137,8 +137,9 @@ static void reset(void)
     }
 
     memset(&mock_ast_record_out, 0, sizeof(mock_ast_record_out));
-    mock_ast_record_out.reserved_00[0] = 0x01020304;
-    mock_ast_record_out.reserved_00[1] = 0x05060708;
+    mock_ast_record_out.reserved_00 = 0x0102;
+    mock_ast_record_out.volume      = 0x0304;
+    mock_ast_record_out.block_hint  = 0x05060708;
     mock_ast_record_out.uid.high = 0x090A0B0Cu;
     mock_ast_record_out.uid.low  = 0x0D0E0F10u;
     mock_ast_record_out.loc_info = 0x11121314u;

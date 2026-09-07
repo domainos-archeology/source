@@ -457,7 +457,7 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
         vtoc_loc.uid.high = file_uid_ret->high;
         vtoc_loc.uid.low = file_uid_ret->low;
         vtoc_loc.vol_idx = (uint8_t)parent_loc.rights_bits;
-        vtoc_loc.block_hint = parent_loc.reserved_00[1];
+        vtoc_loc.block_hint = parent_loc.block_hint;
 
         /* Allocate VTOC entry for the new file */
         VTOC_$ALLOCATE(&vtoc_loc, &obj_buf.vtoce, &status);

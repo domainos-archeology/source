@@ -238,4 +238,19 @@ boolean name_$resolve_dir_and_leaf(char *path, int16_t path_len,
  */
 void name_$unmap_dir_buffers(int16_t asid, name_$mapped_info_t *mapped_info);
 
+/*
+ * name_$old_add_link_local (0x00E565B8, was FUN_00e565b8)
+ *
+ * The local half of name_$old_add_link, its only caller (0x00E56910).
+ * Argument order from that call's pushes (0x00E56900-0x00E5690E, right to
+ * left: status, file_uid, name_len, name, a constant zero word, dir_uid); the
+ * callee frame confirms it - A6+0x08 long, +0x0C word, +0x0E long, +0x12 word,
+ * +0x14 long, +0x18 long (0x00E565C0-0x00E565CC).
+ *
+ * TODO(source-kgqh): the body has not been emitted.
+ */
+void name_$old_add_link_local(uid_t *dir_uid, uint16_t flags, char *name,
+                              uint16_t name_len, uid_t *file_uid,
+                              status_$t *status_ret);
+
 #endif /* NAME_INTERNAL_H */

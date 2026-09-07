@@ -17,7 +17,8 @@
  *     ACL_$SUPER_COUNT[cur] (0x00E46A3C) and ACL_$SUBSYS_LEVEL[cur]
  *     (0x00E46A30), i.e. 0xFF when strictly greater than zero;
  *   - the SID block is ACL_$CURRENT_SIDS[cur] (0xE90D10 + cur*0x24) and the
- *     project list is 0xE924FC + cur*0x40;
+ *     project list is 0xE924FC + cur*0x40 = &ACL_$PROJ_UIDS[cur][0]
+ *     (source-4h7g);
  *   - the longword acl_$eval_rights leaves in D0 is ACL_$RIGHTS' own result
  *     (callers test it with `tst.l` / `cmpi.l`, e.g. 0x00E71504).
  */
@@ -268,8 +269,9 @@ TEST(privilege_booleans_are_sgt_of_the_per_process_counters)
 /*
  * 0x00E46A7C `pea (-0x6584,A0)` -> 0xE90D10 + cur*0x24 and 0x00E46A66
  * `pea (-0x4d98,A4)` -> 0xE924FC + cur*0x40, i.e. the first slot of the
- * current process' project list (ACL_$PROJ_UIDS carries the 1-biased base
- * 0xE924F4 that ACL_$ADD_PROJ uses).
+ * current process' project list.  ACL_$PROJ_UIDS is declared with the base
+ * 0xE924FC that ACL_$INIT proves (0x00E31122-0x00E3113C writes UID_$NIL to
+ * eight slots starting at 0xE9253C = 0xE924FC + 1*0x40), so this is [cur][0].
  */
 TEST(tables_are_indexed_by_the_current_process)
 {
@@ -283,7 +285,7 @@ TEST(tables_are_indexed_by_the_current_process)
     ACL_$RIGHTS(&uid, &flag, &mask, &opts, &status);
 
     ASSERT_TRUE(ev_sids == &ACL_$CURRENT_SIDS[TEST_PID]);
-    ASSERT_TRUE(ev_proj_uids == &ACL_$PROJ_UIDS[TEST_PID][1]);
+    ASSERT_TRUE(ev_proj_uids == &ACL_$PROJ_UIDS[TEST_PID][0]);
 
     /* The image reloads PROC1_$CURRENT for every table; a different process
      * selects a different pair of rows. */
@@ -291,13 +293,14 @@ TEST(tables_are_indexed_by_the_current_process)
     PROC1_$CURRENT = 0;
     ACL_$RIGHTS(&uid, &flag, &mask, &opts, &status);
     ASSERT_TRUE(ev_sids == &ACL_$CURRENT_SIDS[0]);
-    ASSERT_TRUE(ev_proj_uids == &ACL_$PROJ_UIDS[0][1]);
+    ASSERT_TRUE(ev_proj_uids == &ACL_$PROJ_UIDS[0][0]);
 }
 
 /*
- * The project pointer is 8 bytes past the row base: 0xE924FC, not 0xE924F4.
+ * The project pointer is exactly 0xE924FC + cur*0x40 - the row base, with no
+ * 8-byte bias, now that ACL_$PROJ_UIDS is declared at 0xE924FC (source-4h7g).
  */
-TEST(project_pointer_is_eight_bytes_past_the_row_base)
+TEST(project_pointer_is_the_row_base)
 {
     uid_t     uid  = TEST_UID;
     boolean   flag = false;
@@ -308,9 +311,9 @@ TEST(project_pointer_is_eight_bytes_past_the_row_base)
     reset();
     ACL_$RIGHTS(&uid, &flag, &mask, &opts, &status);
 
-    ASSERT_EQ(8, (const char *)ev_proj_uids -
+    ASSERT_EQ(0, (const char *)ev_proj_uids -
                  (const char *)&ACL_$PROJ_UIDS[TEST_PID][0]);
-    ASSERT_EQ(TEST_PID * 0x40 + 8,
+    ASSERT_EQ(TEST_PID * 0x40,
               (const char *)ev_proj_uids - (const char *)&ACL_$PROJ_UIDS[0][0]);
 }
 
@@ -366,7 +369,7 @@ int main(void)
     RUN_TEST(uid_is_copied_into_the_local_frame);
     RUN_TEST(privilege_booleans_are_sgt_of_the_per_process_counters);
     RUN_TEST(tables_are_indexed_by_the_current_process);
-    RUN_TEST(project_pointer_is_eight_bytes_past_the_row_base);
+    RUN_TEST(project_pointer_is_the_row_base);
     RUN_TEST(result_is_the_full_longword_from_eval_rights);
     RUN_TEST(status_pointer_is_passed_through);
 

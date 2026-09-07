@@ -25,5 +25,6 @@
 void DIR_$OLD_ADD_HARD_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
                              uid_t *target_uid, status_$t *status_ret)
 {
-    name_$old_add_link(dir_uid, name, *name_len, target_uid, 0xFF, status_ret);
+    name_$old_add_link(dir_uid, name, (uint16_t)*name_len, target_uid, true,
+                       status_ret);
 }

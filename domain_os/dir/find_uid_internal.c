@@ -87,6 +87,10 @@ void dir_$find_uid_internal(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
                             int16_t *name_len_ret, uint32_t *net_ret,
                             status_$t *status_ret)
 {
+    /* A6-0x1BA: REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
+
     /* Per-process data base pointer (M68K A5 register) */
     char *a5 = (char *)__A5_BASE();
 
@@ -117,11 +121,14 @@ void dir_$find_uid_internal(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
      * portion starting at offset 0x8E. DIR_$DO_OP adds 0x8E internally
      * for remote requests.
      * resp_size = 0x11A (282 bytes) is the response buffer size. */
+    /* 0x00E4E7D2 `pea (-0x1ba,A6)` is the 2-byte cell two bytes below the
+     * request base (0x00E4E7E2 `pea (-0x1b8,A6)`): REM_FILE_$SEND_REQUEST's
+     * `received_len` out-parameter (source-32ld). */
     DIR_$DO_OP(&request,
                *(int16_t *)(a5 + 0x20b6),  /* req_size */
                0x11a,                       /* resp_size */
                &op_resp,
-               &resp_buf);
+               &do_op_rcvd_len);
 
     /* --- Process the response --- */
 

@@ -19,19 +19,23 @@
  *   dir_uid    - UID of parent directory
  *   name       - Name of entry to delete
  *   name_len   - Pointer to name length
- *   param4     - Status output / flags source
- *   param5     - Additional flags source
- *   status_ret - Output: status code
+ *   status_ret       - Output: status code (A6+0x14, pushed first at
+ *                      0x00E5717C so it is the callee's LAST argument)
+ *   check_del_right  - POINTER to a Domain boolean (A6+0x18);
+ *                      `movea.l (0x18,A6),A1 / move.b (A1),-(SP)` at
+ *                      0x00E5718C supplies NAME_$OLD_DELETE_ENTRYU's arg 4
+ *   no_lock          - POINTER to a Domain boolean (A6+0x1C);
+ *                      `movea.l (0x1c,A6),A0 / move.b (A0),-(SP)` at
+ *                      0x00E57186 supplies its arg 5
  */
 void DIR_$OLD_DELETE_FILEU(uid_t *dir_uid, char *name, uint16_t *name_len,
-                           status_$t *param4, void *param5, status_$t *status_ret)
+                           status_$t *status_ret, boolean *check_del_right,
+                           boolean *no_lock)
 {
-    uint8_t buf[8];
+    uint8_t buf[8];     /* A6-0x08, `pea (-0x8,A6)` at 0x00E57180 */
 
-    /* Extract flag bytes from params and call shared helper.
-     * Assembly reads byte from param5 (0x1c(A6)) and byte from param4 (0x18(A6)).
-     * flag3 = 0 for delete file operation. */
+    /* 0x00E57184 `clr.w -(SP)`: allow_link is a constant FALSE here. */
     NAME_$OLD_DELETE_ENTRYU(dir_uid, name, *name_len,
-                 *((uint8_t *)param5), *((uint8_t *)param4), 0,
-                 buf, status_ret);
+                            *check_del_right, *no_lock, false,
+                            buf, status_ret);
 }

@@ -40,6 +40,10 @@ void DIR_$GET_DEF_PROTECTION(uid_t *dir_uid, uid_t *acl_type,
         uint32_t  prot[11];     /* Protection data (44 bytes) */
         uid_t     prot_id;      /* Protection UID */
     } response;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
+     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
     status_$t status;
     uint32_t *src, *dst;
     int16_t i;
@@ -54,7 +58,7 @@ void DIR_$GET_DEF_PROTECTION(uid_t *dir_uid, uid_t *acl_type,
 
     /* Send the request */
     DIR_$DO_OP(&request.op, DAT_00e7fcf6, 0x48,
-               (Dir_$OpResponse *)response.flags, &request);
+               (Dir_$OpResponse *)response.flags, &do_op_rcvd_len);
 
     status = *((status_$t *)&response.flags[4]);
 

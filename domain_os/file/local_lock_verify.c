@@ -128,19 +128,21 @@ void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_r
             uint16_t entry_mode = ((*flags2_ptr) & 0x78) >> 3;  /* Bits 3-6 = mode */
             uint8_t remote_flag = (*flags2_ptr) & 0x02;  /* Bit 1 = pending/remote */
 
-            if (entry_mode == request->asid) {
-                /* Direct ASID match */
+            if (entry_mode == request->mode) {
+                /* 0x00E608B2 `cmp.w (0x12,A2),D0w`: the caller's mode is the
+                 * mode this entry already holds. */
                 *status_ret = status_$ok;
                 goto done;
             }
 
             if (remote_flag == 0) {
                 /*
-                 * Not a remote/pending lock - check ASID group mapping
-                 * The map table translates ASIDs to groups
+                 * Not a remote/pending lock - 0x00E608C0-0x00E608C8 maps the
+                 * ENTRY's mode through FILE_$LOCK_MODE_MAP and compares the
+                 * result with the caller's mode.
                  */
-                uint16_t entry_group = FILE_$ASID_MAP[entry_mode];
-                if (request->asid == entry_group) {
+                uint16_t entry_group = FILE_$LOCK_MODE_MAP[entry_mode];
+                if (request->mode == entry_group) {
                     *status_ret = status_$ok;
                     goto done;
                 }

@@ -503,13 +503,14 @@ void REM_FILE_$NAME_GET_ENTRYU(void *addr_info, uid_t *dir_uid,
  * @param base_len       Base request length
  * @param response_size  Response buffer size
  * @param response       Response buffer
- * @param extra_out      Extra output data
+ * @param received_len   Output: reply length; forwarded to
+ *                       REM_FILE_$SEND_REQUEST's `received_len` (source-32ld)
  *
  * Original address: 0x00E61538
  */
 void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buf,
                          int16_t base_len, uint16_t response_size,
-                         void *response, void *extra_out);
+                         void *response, uint16_t *received_len);
 
 /*
  * REM_FILE_$SERVER - Remote file operations server dispatcher

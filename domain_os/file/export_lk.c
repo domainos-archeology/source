@@ -34,6 +34,9 @@
 #define MAX_PROC_LOCKS      150     /* 0x96 */
 #define LOCK_ENTRY_SIZE     0x1C    /* 28 bytes */
 #define PROC_LOT_BASE       0xEA202C
+/* TODO(source-xi4k): 0xE935BC is ACL_$LOCKSMITH_OVERRIDE_BITMAP; the lock
+ * table is addressed through 0xE935CC with a 0x1C stride
+ * (FILE_$PRIV_LOCK_$ALLOC_ENTRY 0x00E5EBCA). */
 #define LOT_DATA_BASE       0xE935BC
 #define LOT_MAX_COUNT_BASE  0xEA3DC4
 #define PROC_LOT_OFFSET     (-0x2662)

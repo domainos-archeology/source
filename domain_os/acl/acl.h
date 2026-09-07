@@ -245,25 +245,73 @@ int16_t ACL_$CHECK_RIGHTS(uid_t *uid, void *acl_data, void *options,
 uint32_t ACL_$MIN_RIGHTS(uid_t *uid);
 
 /*
- * ACL_$SET_ACL_CHECK - Check ACL permissions for set operation
+ * acl_$prot_data_t - the 44-byte protection block that
+ * AST_$GET_ACL_ATTRIBUTES leaves in ast_$acl_attr_t.acl_data (attribute
+ * record +0x0C..+0x37).
  *
- * Parameters:
- *   file_uid         - UID of file to modify
- *   acl_data         - ACL data buffer
- *   source_uid       - Source ACL UID (or NULL)
- *   prot_type        - Pointer to protection type
- *   permission_flags - Output permission flags
- *   status_ret       - Output status code
+ * Offsets recovered from acl_$eval_rights, whose copy of the record sits at
+ * A6-0x74 (= attrs +0x0C):
+ *   0x00 owner          `lea (-0x74,A6),A1` / cmpm against sids[0] (0x00E46706)
+ *   0x08 group          `lea (-0x6c,A6),A4`                        (0x00E4672A)
+ *   0x10 org            `lea (-0x64,A6),A2`                        (0x00E4679E)
+ *   0x18 owner_rights   `btst.b #0x4,(-0x5c,A6)`                   (0x00E466FA)
+ *   0x19 group_rights   `btst.b #0x4,(-0x5b,A6)`                   (0x00E4671E)
+ *   0x1A org_rights     `btst.b #0x4,(-0x5a,A6)`                   (0x00E46792)
+ *   0x1B world_rights   `move.b (-0x59,A6),D2b`                    (0x00E467BC)
+ *   0x1C subsys_rights  `move.b (0x1c,A2),D0b` in acl_$eval_acl_entries
+ *                                                                  (0x00E46224)
+ * acl_$find_acl_slot writes the last two from the cached default ACL data
+ * (`move.b (0x80d,A2),(0x1b,A1)` / `(0x80f,A2),(0x1c,A1)`, 0x00E45F24).
+ */
+typedef struct acl_$prot_data_t {
+    uid_t   owner;              /* 0x00 */
+    uid_t   group;             /* 0x08 */
+    uid_t   org;               /* 0x10 */
+    uint8_t owner_rights;      /* 0x18 */
+    uint8_t group_rights;      /* 0x19 */
+    uint8_t org_rights;        /* 0x1A */
+    uint8_t world_rights;      /* 0x1B */
+    uint8_t subsys_rights;     /* 0x1C */
+    uint8_t reserved_1d[15];   /* 0x1D..0x2B */
+} acl_$prot_data_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(acl_$prot_data_t, group)        == 0x08, "prot.group");
+_Static_assert(__builtin_offsetof(acl_$prot_data_t, org)          == 0x10, "prot.org");
+_Static_assert(__builtin_offsetof(acl_$prot_data_t, owner_rights) == 0x18, "prot.owner_rights");
+_Static_assert(__builtin_offsetof(acl_$prot_data_t, world_rights) == 0x1B, "prot.world_rights");
+_Static_assert(__builtin_offsetof(acl_$prot_data_t, subsys_rights)== 0x1C, "prot.subsys_rights");
+_Static_assert(sizeof(acl_$prot_data_t) == 44, "sizeof acl_$prot_data_t");
+#endif
+
+/*
+ * ACL_$SET_ACL_CHECK - may this caller replace an object's ACL?
  *
- * Returns:
- *   0 or positive if check completed successfully
- *   Negative if check could not be performed
+ * Parameters (source-u4vy; emitted in acl/set_acl_check.c):
+ *   obj_uid    - A6+0x08  the object whose ACL is being replaced; copied into
+ *                the routine's own frame at 0x00E470DA
+ *   new_prot   - A6+0x0C  the 44-byte protection record being installed.  It
+ *                is the same acl_$prot_data_t REM_FILE_$SET_ACL calls its
+ *                `acl_header` (11 longwords copied at 0x00E62B12), and the
+ *                three per-SID rights bytes at +0x18/+0x19/+0x1A are tested
+ *                with `btst.b #0x5` at 0x00E47720-0x00E47736.
+ *   acl_uid    - A6+0x10  the ACL object being installed
+ *   op_type    - A6+0x14  POINTER to an operation-type word.  5 skips the SID
+ *                checks (0x00E4770E); 3 takes the SIDs from the object's own
+ *                protection record rather than from new_prot (0x00E4776A,
+ *                0x00E477AA, 0x00E47830).
+ *   setid_ret  - A6+0x18  out: Domain boolean, cleared at 0x00E470E8 and set
+ *                with `st` at 0x00E474E4 / 0x00E47708 / 0x00E4775C
+ *   status_ret - A6+0x1C  out: status code
+ *
+ * Returns the Domain boolean in D4 (`move.b D4b,D0b` at 0x00E4786C): TRUE
+ * when the change is permitted.
  *
  * Original address: 0x00E470C4
  */
-int8_t ACL_$SET_ACL_CHECK(uid_t *file_uid, void *acl_data, uid_t *source_uid,
-                          int16_t *prot_type, int8_t *permission_flags,
-                          status_$t *status_ret);
+boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
+                           uid_t *acl_uid, int16_t *op_type,
+                           boolean *setid_ret, status_$t *status_ret);
 
 /*
  * ACL_$CHECK_FAULT_RIGHTS - Check fault handling rights between processes
@@ -647,19 +695,19 @@ void ACL_$CONVERT_TO_9ACL(void *type, uid_t *source_uid, uid_t *dir_uid,
                           void *default_prot, uid_t *result_uid, status_$t *status_ret);
 
 /*
- * ACL_$CONVERT_FROM_9ACL - Convert from 9-entry ACL format to new format
+ * ACL_$CONVERT_FROM_9ACL - render an ACL object as the old 9-entry image
  *
- * Inverse of ACL_$CONVERT_TO_9ACL. Converts old 9-entry ACL format
- * to the new protection format.
+ * It raises the caller's privilege, brackets acl_$image_internal
+ * (0x00E47B78) with both ACL locks, and marks the returned UID.
  *
  * Parameters:
- *   source_acl   - Source ACL UID in 9-entry format
- *   acl_type     - ACL type UID
- *   prot_buf_out - Output: protection data buffer (44 bytes)
- *   prot_uid_out - Output: protection UID
+ *   source_acl   - Source ACL UID
+ *   acl_type     - NEVER READ by the routine (A6+0x0C)
+ *   prot_buf_out - Output: acl_$image_internal's `data_out`
+ *   prot_uid_out - Output: source_acl with bit 24 of .low set (0x00E48FFC)
  *   status_ret   - Output status code
  *
- * TODO(source-yii): Locate and analyze actual implementation in Ghidra
+ * Original address: 0x00E48F56, 182 bytes (emitted in acl/convert_from_9acl.c)
  */
 void ACL_$CONVERT_FROM_9ACL(uid_t *source_acl, uid_t *acl_type,
                              void *prot_buf_out, uid_t *prot_uid_out,

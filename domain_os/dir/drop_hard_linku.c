@@ -40,6 +40,10 @@ void DIR_$DROP_HARD_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
         uint8_t   flags[20];
         uid_t     flush_uid;
     } response;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
+     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
     status_$t status;
     uint32_t flush_flags;
     status_$t flush_status;
@@ -70,7 +74,7 @@ void DIR_$DROP_HARD_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
 
     /* Send the request - size includes name length */
     DIR_$DO_OP(&request.op, len + DAT_00e7fc56, 0x1c,
-               (Dir_$OpResponse *)response.flags, &request);
+               (Dir_$OpResponse *)response.flags, &do_op_rcvd_len);
 
     /* Store status from response */
     status = *((status_$t *)&response.flags[4]);

@@ -167,13 +167,14 @@ int8_t DIR_$IS_RETRYABLE_STATUS(status_$t status)
 }
 
 void REM_FILE_$RN_DO_OP(void *hint, void *request, int16_t req_size,
-                        uint16_t resp_size, void *response, void *reply_len)
+                        uint16_t resp_size, void *response,
+                        uint16_t *received_len)
 {
     uint32_t *h = (uint32_t *)hint;
     uint8_t  *r = (uint8_t *)response;
     status_$t st;
 
-    (void)request; (void)resp_size; (void)reply_len;
+    (void)request; (void)resp_size; (void)received_len;
 
     mock_rn_hint_loc  = h[0];
     mock_rn_hint_node = h[1];
@@ -250,11 +251,12 @@ void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
                            void *result_uid, status_$t *st)
 { (void)uid;(void)name;(void)name_len;(void)result_uid; OK(st); }
 
-void dir_$do_op_delete(uid_t *uid, void *name, uint16_t name_len, uint8_t f1,
-                       uint16_t f2, uint16_t f3, void *buf, uid_t *result_uid,
+void dir_$do_op_delete(uid_t *uid, void *name, uint16_t name_len,
+                       boolean f1, boolean f2, boolean f3,
+                       uid_t *entry_uid_ret, uid_t *result_uid,
                        status_$t *st)
-{ (void)uid;(void)name;(void)name_len;(void)f1;(void)f2;(void)f3;(void)buf;
-  (void)result_uid; OK(st); }
+{ (void)uid;(void)name;(void)name_len;(void)f1;(void)f2;(void)f3;
+  (void)entry_uid_ret;(void)result_uid; OK(st); }
 
 void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                           uint16_t name_flags, void *cont, uint16_t max_entries,

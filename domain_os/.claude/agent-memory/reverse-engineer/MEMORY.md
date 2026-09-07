@@ -20,3 +20,6 @@
 - [Warning sweeps are frame-model audits](feedback_warning_sweeps.md) — every pointer-type warning here hid a real ABI bug; fix the model, not the cast.
 - [Ghidra name-sync workflow](ghidra-name-sync-workflow.md) — how to diff the whole tree against the symbol table, and the gsk quirks that fake a clean result.
 - [Attribute-query call shape and the big-endian request-word trap](attr-query-call-shape.md) — AST_$GET_ATTRIBUTES' 0x20-byte record in/out, the 0x7A compact record, `btst.b (0x1,A0)` is a word test.
+- [MSG receive/SAR ABIs, sock_$pkt_info_t.hdr, TIME queue and itimer orders](msg-rcv-and-sar-abis.md) — the 18-arg RCV_INTERNAL, msg_$reply_hdr_t, SOCK_MAX_NUMBER 0xE0, TIME_$VTQ.
+- [SMD/WIN/SIO2681/pacct/ring/xns recoveries, 2026-09-07](smd-win-sio-pacct-pass.md) — v3 font offsets, the blink table's true extent, WIN's 2-arg format-track, pacct's 0x80 record, ring's transmit counters.
+- [ACL/DIR/NAME recovered layouts and ABIs](acl-dir-name-abi-notes.md) — the 0xE924FC PROJ_UIDS base, the 31-slot ACL cache, DIR_$DO_OP's received_len, obj_loc.volume.

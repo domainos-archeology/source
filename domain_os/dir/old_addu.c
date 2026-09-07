@@ -25,5 +25,6 @@
 void DIR_$OLD_ADDU(uid_t *dir_uid, char *name, int16_t *name_len,
                    uid_t *file_uid, status_$t *status_ret)
 {
-    name_$old_add_link(dir_uid, name, (uint16_t)*name_len, file_uid, 0, status_ret);
+    name_$old_add_link(dir_uid, name, (uint16_t)*name_len, file_uid, false,
+                       status_ret);
 }

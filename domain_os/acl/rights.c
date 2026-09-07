@@ -57,18 +57,18 @@ uint32_t ACL_$RIGHTS(uid_t *uid, boolean *ignore_super, uint32_t *required_mask,
      * arg1 is 0xE90D10 + PROC1_$CURRENT * 0x24, the current process' SID
      * block (0x00E46A6A-0x00E46A7C computes cur*4 + cur*32 = cur*36).
      *
-     * arg2 is 0xE924FC + PROC1_$CURRENT * 0x40.  ACL_$PROJ_UIDS is recorded
-     * in acl/acl_internal.h with the 1-biased base 0xE924F4 that
-     * ACL_$ADD_PROJ's `lea (-0x4da0,A0)` uses, so the first project slot the
-     * image addresses here is element [1] of that declaration.
-     * TODO(source-4h7g): the rest of acl/ indexes that array 0-based, which
-     * puts its slots 8 bytes below the ones the image uses.
+     * arg2 is 0xE924FC + PROC1_$CURRENT * 0x40, i.e. &ACL_$PROJ_UIDS[cur][0]
+     * with the base 0xE924FC recorded in acl/acl_internal.h (source-4h7g).
+     * ACL_$ADD_PROJ (0x00E47EFE), ACL_$DELETE_PROJ (0x00E47FA4),
+     * ACL_$GET_PROJ_LIST (0x00E48052) and ACL_$SET_PROJ_LIST (0x00E4815A) all
+     * start their row displacement at 8 with the same `-0x4da0` bias, so every
+     * one of them addresses element [0] of this declaration first.
      *
      * Each of the three PROC1_$CURRENT reads in the original is a separate
      * load of the global at 0xE20608; they are kept separate here.
      */
     return acl_$eval_rights(&ACL_$CURRENT_SIDS[PROC1_$CURRENT],
-                            &ACL_$PROJ_UIDS[PROC1_$CURRENT][1],
+                            &ACL_$PROJ_UIDS[PROC1_$CURRENT][0],
                             &local_uid,
                             *ignore_super,      /* 0x00E46A54 move.b (A3) */
                             *required_mask,     /* 0x00E46A4E move.l (A2) */

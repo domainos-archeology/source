@@ -45,6 +45,10 @@ void DIR_$GET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_ret,
         uid_t     type;
     } request;
     Dir_$OpResponse response;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
+     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
 
     /* Build the request */
     request.op = DIR_OP_GET_DEFAULT_ACL;
@@ -55,7 +59,7 @@ void DIR_$GET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_ret,
     request.type.low = acl_type->low;
 
     /* Send the request */
-    DIR_$DO_OP(&request.op, DAT_00e7fcd6, 0x1c, &response, &request);
+    DIR_$DO_OP(&request.op, DAT_00e7fcd6, 0x1c, &response, &do_op_rcvd_len);
 
     /* Check for fallback conditions */
     if (response.status == file_$bad_reply_received_from_remote_node ||

@@ -35,6 +35,10 @@ void DIR_$FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
 {
     Dir_$FixDirRequest request;
     Dir_$OpResponse response;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
+     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
 
     /* Build the request */
     request.op = DIR_OP_FIX_DIR;
@@ -43,7 +47,7 @@ void DIR_$FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
     request.reserved = DAT_00e7fcba;
 
     /* Send the request */
-    DIR_$DO_OP(&request.op, DAT_00e7fcbe, 0x14, &response, &request);
+    DIR_$DO_OP(&request.op, DAT_00e7fcbe, 0x14, &response, &do_op_rcvd_len);
 
     /* Check for fallback conditions */
     if (response.status == file_$bad_reply_received_from_remote_node ||

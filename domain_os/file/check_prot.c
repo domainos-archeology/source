@@ -41,6 +41,9 @@
 #define LOCK_ENTRY_FLAGS_OFF        0x1A
 
 /* Lock entry base address */
+/* TODO(source-xi4k): 0xE935BC is ACL_$LOCKSMITH_OVERRIDE_BITMAP; the lock
+ * table is addressed through 0xE935CC with a 0x1C stride
+ * (FILE_$PRIV_LOCK_$ALLOC_ENTRY 0x00E5EBCA). */
 #define LOCK_ENTRIES_BASE           0xE935BC
 
 /* Status codes */

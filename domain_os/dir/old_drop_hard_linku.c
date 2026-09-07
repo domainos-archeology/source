@@ -26,15 +26,15 @@
 void DIR_$OLD_DROP_HARD_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
                               uint16_t *flags, status_$t *status_ret)
 {
-    uint8_t buf[8];
-    uint8_t negated_bit;
+    uint8_t buf[8];         /* A6-0x08, `pea (-0x8,A6)` at 0x00E56ADA */
+    boolean check_del_right;
 
-    /* Test bit 0 of the low byte of *flags.
-     * Assembly: btst #0, (1,A0) ; sne D0
-     * The low byte is at offset+1 in big-endian (which is *flags & 0xFF).
-     * sne sets D0 to 0xFF if bit was set, 0x00 if clear. */
-    negated_bit = ((*flags & 0x0001) != 0) ? 0xFF : 0x00;
+    /* 0x00E56AE6 `btst.b #0x0,(0x1,A0)` + `sne`: bit 0 of the LOW byte of
+     * the flags word, i.e. *flags & 1, as a Domain boolean. */
+    check_del_right = ((*flags & 0x0001) != 0) ? true : false;
 
-    NAME_$OLD_DELETE_ENTRYU(dir_uid, name, *name_len, negated_bit, 0xFF, 0xFF,
-                 buf, status_ret);
+    /* 0x00E56ADE / 0x00E56AE0: two `st` pushes - no_lock and allow_link are
+     * both a constant TRUE. */
+    NAME_$OLD_DELETE_ENTRYU(dir_uid, name, *name_len, check_del_right,
+                            true, true, buf, status_ret);
 }

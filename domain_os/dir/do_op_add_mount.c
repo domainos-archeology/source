@@ -44,12 +44,6 @@
  * selector this site uses. */
 #define DIR_CATTR_MOUNT         0x0080
 
-#define DIR_MOUNT_COUNT_OFF     0x1558  /* Mount count (32-bit) */
-#define DIR_MOUNT_COUNT16_OFF   0x155A  /* Mount count (16-bit, upper half) */
-#define DIR_MOUNT_SRC_BASE      0x155C  /* Source UIDs: +idx*8 */
-#define DIR_MOUNT_TGT_BASE      0x159C  /* Target UIDs: +idx*8 */
-#define DIR_MOUNT_NODE_BASE     0x15DC  /* Node IDs: +idx*4 */
-#define DIR_MOUNT_MAX           8       /* Maximum mount entries */
 
 /* Cache entry layout (offsets relative to A5) */
 #define DIR_CACHE_UID_BASE      0x400   /* First cache entry UID offset */

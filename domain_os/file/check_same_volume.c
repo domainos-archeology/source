@@ -145,8 +145,9 @@ int8_t FILE_$CHECK_SAME_VOLUME(uid_t *file_uid1, uid_t *file_uid2,
          * big-endian m68k the word at +0x02 is the low half of the longword
          * at +0x00.
          */
-        result = (int8_t)(((loc1.reserved_00[0] & 0xFFFFu) ==
-                           (loc2.reserved_00[0] & 0xFFFFu) ? -1 : 0) &
+        /* 0x00E5E578 `move.w (-0x56,A6),D2w` / 0x00E5E57C
+         * `cmp.w (-0x36,A6),D2w`: the WORD at loc+0x02, i.e. .volume. */
+        result = (int8_t)((loc1.volume == loc2.volume ? -1 : 0) &
                           (loc2.flags >= 0 ? -1 : 0));
 
         /* Check if dismount sequence changed */

@@ -285,14 +285,18 @@ void REM_FILE_$SEND_REQUEST(void *addr_info, void *request, int16_t request_len,
  * @param addr_info     Address info for target node
  * @param op_buffer     Operation buffer with request data
  * @param fixed_len     Fixed portion length
- * @param op_flags      Operation flags
+ * @param response_size      Operation flags
  * @param response      Response buffer (status at offset +4)
- * @param param_6       Additional parameter
+ * @param received_len  Output: reply length.  Forwarded verbatim to
+ *                      REM_FILE_$SEND_REQUEST's `received_len` argument
+ *                      (0x00E616E4 `move.l (0x18,A6),-(SP)`), which writes a
+ *                      word through it at 0x00E61288 (source-32ld).
  *
  * Original address: 0x00E61538
  */
 void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buffer, int16_t fixed_len,
-                        uint16_t op_flags, void *response, void *param_6);
+                        uint16_t response_size, void *response,
+                        uint16_t *received_len);
 
 /*
  * Helper macro to check if current process has admin privileges

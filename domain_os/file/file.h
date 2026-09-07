@@ -33,7 +33,17 @@
  * ----------------------------------------------------------------------------
  */
 typedef struct file_$obj_loc_t {
-    uint32_t    reserved_00[2];     /* 0x00: filled in by AST_$GET_ATTRIBUTES */
+    uint16_t    reserved_00;        /* 0x00: filled in by AST_$GET_ATTRIBUTES */
+    uint16_t    volume;             /* 0x02: volume index.  Two records are on
+                                     *       the same volume iff these agree:
+                                     *       FILE_$CHECK_SAME_VOLUME
+                                     *       `move.w (-0x56,A6),D2w` /
+                                     *       `cmp.w (-0x36,A6),D2w` (0x00E5E578)
+                                     *       and name_$old_add_link
+                                     *       `move.w (-0xbe,A6),D0w` /
+                                     *       `cmp.w (-0x9e,A6),D0w` (0x00E568CC) */
+    uint32_t    block_hint;         /* 0x04: passed on as the VTOC allocation
+                                     *       hint by FILE_$PRIV_CREATE */
     uid_t       uid;                /* 0x08: object UID (set by the caller) */
     uint32_t    loc_info;           /* 0x10: location word, copied to entry+0x08 */
     uint32_t    node;               /* 0x14: node id, copied to entry+0x04 */
@@ -45,6 +55,8 @@ typedef struct file_$obj_loc_t {
 } file_$obj_loc_t;
 
 #if defined(ARCH_M68K)
+_Static_assert(offsetof(file_$obj_loc_t, volume)     == 0x02, "obj_loc.volume");
+_Static_assert(offsetof(file_$obj_loc_t, block_hint) == 0x04, "obj_loc.block_hint");
 _Static_assert(offsetof(file_$obj_loc_t, uid)         == 0x08, "obj_loc.uid");
 _Static_assert(offsetof(file_$obj_loc_t, loc_info)    == 0x10, "obj_loc.loc_info");
 _Static_assert(offsetof(file_$obj_loc_t, node)        == 0x14, "obj_loc.node");
@@ -135,14 +147,21 @@ _Static_assert(sizeof(file_$obj_loc_t)                == 0x20, "sizeof obj_loc")
                                                                  (FILE_$CHANGE_LOCK_D 0x00E5EAC2,
                                                                   FILE_$PRIV_LOCK 0x00E5F154/0x00E5F466) */
 #define file_$local_lock_table_full                0x000F0009  /* Lock table full */
-#define file_$cannot_create_on_remote_with_uid     0x000F000B  /* Cannot create on remote with UID */
+/* 0x000F000B is "operation cannot be done from here" in the SR10.4 status
+ * database.  file_$cannot_create_on_remote_with_uid is an older, narrower
+ * name for the same code, kept for its existing users. */
+#define file_$cannot_create_on_remote_with_uid     0x000F000B
 #define file_$obj_not_locked_by_this_process       0x000F000C  /* Not locked by this process (alt) */
 #define file_$objects_on_different_volumes         0x000F0013  /* Objects on different volumes */
 #define file_$invalid_arg                          0x000F0014  /* Invalid argument */
 #define file_$incompatible_request                 0x000F0015  /* Incompatible request */
 #define file_$invalid_type                         0x000F0016  /* Alias, see
                                                                  file_$vol_mounted_read_only */
-#define file_$op_cannot_perform_here               0x000F0018  /* Cannot perform operation here */
+/* "operation cannot be done from here".  Was 0x000F0018, which is not a code
+ * the status database defines at all; FILE_$FORCE_UNLOCK stores it with
+ * `move.l #0xf000b,(A2)` at 0x00E60DFE and name_$old_add_link with
+ * `move.l #0xf000b,(-0xd0,A6)` at 0x00E568BC. */
+#define file_$op_cannot_perform_here               0x000F000B
 /* 0x000F0016: the file_$ flavour of "volume mounted read only".  Raised by
  * FILE_$PRIV_LOCK at 0x00E5F4D2 and 0x00E5F7E2 and by FILE_$PRIV_CREATE
  * (0x00E5C0xx) when the containing volume has bit 1 of its flags set. */
@@ -1444,5 +1463,21 @@ void UNMAP_CASE(char *name, int16_t *name_len, char *output,
  * Original address: 0x00E60BD0 (file/priv_unlock_all.c)
  */
 void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr);
+
+/*
+ * FILE_$READ_LOCK_ENTRYUI - Read lock entry by UID (unchecked)
+ *
+ * Reads lock entry info for a file without access checks.  Public because
+ * name_$old_add_link (0x00E5687E) calls it when a remote hard-link add comes
+ * back with file_$comm_failure.
+ *
+ * Parameters:
+ *   file_uid   - File UID to search for
+ *   info_out   - Output buffer for lock info
+ *   status_ret - Output status code
+ *
+ * Original address: 0x00E6046E
+ */
+void FILE_$READ_LOCK_ENTRYUI(uid_t *file_uid, void *info_out, status_$t *status_ret);
 
 #endif /* FILE_H */

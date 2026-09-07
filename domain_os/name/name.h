@@ -70,6 +70,8 @@ typedef enum {
 #define status_$naming_directory_not_empty                  0x000e000f  /* directory is not empty */
 #define status_$naming_illegal_directory_operation          0x000e0011  /* illegal directory operation */
 #define status_$naming_bad_type                             0x000e0012  /* bad type */
+#define status_$naming_name_is_not_a_file                   0x000e0010  /* name is not a file */
+#define status_$naming_no_rights                            0x000e0013  /* no rights */
 #define status_$naming_insufficient_rights                  0x000e0014  /* insufficient rights */
 #define status_$naming_directory_locked                     0x000e0016  /* directory is in use (locked) */
 #define status_$naming_cannot_find_entry_in_replicated_root 0x000e0019  /* cannot find entry in replicated root */
@@ -403,10 +405,12 @@ void NAME_$GET_CANNED_ROOT_UID(uid_t *canned_root_uid);
 
 /* name_$old_add_link - Add link with remote/local handling
  * Shared add entry helper for DIR_$OLD_ADDU and DIR_$OLD_ADD_HARD_LINKU.
+ * `hard_link` is a Domain boolean: 0x00E5679A tests it with `tst.b D3b` +
+ * `bmi`, a SIGNED test, so it must not be typed uint8_t.
  * Original address: 0x00E5674C (name/old_add_link.c)
  */
 void name_$old_add_link(uid_t *dir_uid, char *name, uint16_t name_len,
-                        uid_t *file_uid, uint8_t hard_link_flag,
+                        uid_t *file_uid, boolean hard_link,
                         status_$t *status_ret);
 
 /* name_$old_get_root_entry - Root directory entry lookup
@@ -777,14 +781,23 @@ void REM_NAME_$FIND_UID(uid_t *dir_uid, uid_t *target_uid,
  *
  * Handles deletion of directory entries.  Checks entry type (file/link),
  * verifies ACL rights, deletes the underlying object (file or hard link),
- * and removes the directory entry.  Only dir/ calls it, and the body lives
- * in dir/old_delete_entryu.c, but the NAME_$ prefix makes it a name-subsystem
- * export (moved here from dir/dir_internal.h -- bead source-3uo).
+ * and removes the directory entry.  Only dir/ calls it; the body is in
+ * name/old_delete_entryu.c, matching the NAME_$ prefix (source-kr90; it was a
+ * stub in dir/old_delete_entryu.c before).
+ *
+ * The three flags are Domain BOOLEANS, each in the even byte of a 2-byte
+ * slot; every test on them is `tst.b` + `bmi`/`bpl` (0x00E56B54,
+ * 0x00E56C5A, 0x00E56D12), a SIGNED test:
+ *   check_del_right  A6+0x12  the delete right must be held outright
+ *   no_lock          A6+0x14  do not take/release a lock around the drop;
+ *                             also FILE_$DELETE_OBJ's `force` argument
+ *   allow_link       A6+0x16  a type-3 link entry may be dropped
  *
  * Original address: 0x00E56B08
  */
 void NAME_$OLD_DELETE_ENTRYU(uid_t *dir_uid, char *name, uint16_t name_len,
-                             uint8_t flag1, uint8_t flag2, uint8_t flag3,
+                             boolean check_del_right, boolean no_lock,
+                             boolean allow_link,
                              uint8_t *result_buf, status_$t *status_ret);
 
 #endif /* NAME_H */

@@ -40,6 +40,10 @@ void DIR_$ADD_ENTRY_INTERNAL(uid_t *dir_uid, char *name, int16_t name_len,
         uint8_t  name_data[128]; /* Name buffer - will hold: file_uid + flags + name */
     } request;
     Dir_$OpResponse response;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
+     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
+     * (source-32ld). */
+    uint16_t do_op_rcvd_len;
     status_$t local_status;
     int16_t i;
     int16_t req_len;
@@ -84,7 +88,7 @@ void DIR_$ADD_ENTRY_INTERNAL(uid_t *dir_uid, char *name, int16_t name_len,
 #endif
 
     /* Perform directory operation */
-    DIR_$DO_OP(&request.op, req_len, 0x14, &response, &request.pad);
+    DIR_$DO_OP(&request.op, req_len, 0x14, &response, &do_op_rcvd_len);
 
     local_status = response.status;
 
