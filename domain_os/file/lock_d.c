@@ -16,6 +16,13 @@
 #include "file/file_internal.h"
 
 /*
+ * 0x00E5E61E: the longword the compiler passes with `pea (-0x530,PC)` /
+ * `pea (-0x436,PC)` / `pea (-0x4bc,PC)` as FILE_$PRIV_LOCK's ACL-context
+ * argument.  It holds NIL.
+ */
+static void *file_$priv_lock_nil_acl_ctx = NULL;
+
+/*
  * FILE_$LOCK_D - Lock a file with domain context
  *
  * Parameters:
@@ -23,11 +30,12 @@
  *   lock_index   - Pointer to lock index
  *   lock_mode    - Pointer to lock mode
  *   rights       - Pointer to rights byte
- *   param_5      - Additional parameter (context)
+ *   slot_io      - In/out per-process lock slot (A6+0x18, pushed by value
+ *                  at 0x00E5EA4C: it is already a pointer)
  *   status_ret   - Output status code
  */
 void FILE_$LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
-                  uint8_t *rights, uint32_t param_5, status_$t *status_ret)
+                  uint8_t *rights, uint32_t *slot_io, status_$t *status_ret)
 {
     uint16_t result;
 
@@ -43,17 +51,18 @@ void FILE_$LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
      */
     FILE_$PRIV_LOCK(file_uid,
                     PROC1_$AS_ID,
-                    *lock_index,
+                    *lock_index,          /* side */
                     *lock_mode,
-                    (int16_t)*rights,     /* Rights byte, sign-extended */
-                    0x40000,              /* flags = upgrade mode */
-                    0,                    /* param_7 = 0 (local) */
-                    0,                    /* param_8 = 0 (no node) */
-                    0,                    /* param_9 = 0 */
-                    NULL,                 /* param_10 = &DAT_00e5e61e (default addr) */
-                    0,                    /* param_11 = 0 */
-                    &param_5,             /* lock_ptr_out */
-                    &result,              /* result_out */
+                    (boolean)*rights,     /* local_only (byte at A6+0x12) */
+                    0x0004,               /* flags word (0x00E5EA5C move.l #0x40000) */
+                    0x0000,               /* key word */
+                    0,                    /* rem_key */
+                    0,                    /* rem_node */
+                    0,                    /* rem_extra */
+                    &file_$priv_lock_nil_acl_ctx,   /* 0x00E5EA52 pea (-0x436,PC) */
+                    0,                    /* rem_wait */
+                    slot_io,              /* 0x00E5EA4C pushes the caller's pointer */
+                    &result,              /* rights_out */
                     status_ret);
 
     /*

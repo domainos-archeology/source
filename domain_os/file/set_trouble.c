@@ -41,5 +41,6 @@ void FILE_$SET_TROUBLE(uid_t *file_uid, void *unused, status_$t *status_ret)
 
     /* Set attribute 2 (trouble) with flags 0xFFFF */
     FILE_$SET_ATTRIBUTE(file_uid, FILE_ATTR_TROUBLE, attr_buffer,
-                        FILE_FLAGS_TROUBLE_MASK, status_ret);
+                        FILE_ATTR_RIGHTS_NONE, FILE_ATTR_OPTS_ALL,
+                        status_ret);   /* move.l #0x0000FFFF */
 }

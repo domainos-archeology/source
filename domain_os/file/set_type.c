@@ -32,5 +32,6 @@ void FILE_$SET_TYPE(uid_t *file_uid, uid_t *type_uid, status_$t *status_ret)
 
     /* Set attribute 4 (type UID) with flags 0x20000 */
     FILE_$SET_ATTRIBUTE(file_uid, FILE_ATTR_TYPE_UID, &type_copy,
-                        0x00020000, status_ret);
+                        FILE_ATTR_RIGHTS_WRITE, FILE_ATTR_OPTS_NONE,
+                        status_ret);   /* move.l #0x00020000 */
 }

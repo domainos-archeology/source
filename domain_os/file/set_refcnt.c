@@ -49,7 +49,8 @@ void FILE_$SET_REFCNT(uid_t *file_uid, uint32_t *refcnt, status_$t *status_ret)
 
     /* Set attribute 8 (reference count) with flags 0x8FFFF */
     FILE_$SET_ATTRIBUTE(file_uid, FILE_ATTR_REFCNT, &ref_value,
-                        0x0008FFFF, status_ret);
+                        FILE_ATTR_RIGHTS_CTRL, FILE_ATTR_OPTS_ALL,
+                        status_ret);   /* move.l #0x0008FFFF */
 
     /* If refcount is now 0 and operation succeeded, delete the file */
     if (*status_ret == status_$ok && ref_value == 0) {

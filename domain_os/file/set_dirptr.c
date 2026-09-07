@@ -32,5 +32,6 @@ void FILE_$SET_DIRPTR(uid_t *file_uid, uid_t *dir_uid, status_$t *status_ret)
 
     /* Set attribute 5 (directory pointer) with flags 0xFFFF */
     FILE_$SET_ATTRIBUTE(file_uid, FILE_ATTR_DIR_PTR, &dir_copy,
-                        0x0000FFFF, status_ret);
+                        FILE_ATTR_RIGHTS_NONE, FILE_ATTR_OPTS_ALL,
+                        status_ret);   /* move.l #0x0000FFFF */
 }

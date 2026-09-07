@@ -1,0 +1,3 @@
+- [Fidelity gates and archivist rules](feedback_fidelity_gates.md) — the three gates to run and quote before claiming a function is done.
+- [The 2026-09-06 fidelity audit](project_audit_2026_09_06.md) — why the re-emission work exists and what its checklist is.
+- [OS_$INIT / STOP_$WATCH re-emission notes](os-stop-reemission.md) — recovered layouts, constant cells and the hand-written-asm emission convention.

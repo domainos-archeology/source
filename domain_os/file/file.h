@@ -58,12 +58,26 @@
 #define FILE_ATTR_DTM_CURRENT       26  /* DTM (use current time) */
 
 /*
- * Flag attribute masks for FILE_$SET_ATTRIBUTE
+ * FILE_$SET_ATTRIBUTE's last two value parameters.
+ *
+ * They are two Pascal words - the required-rights mask at A6+0x12
+ * (0x00E5D252, handed to ACL_$RIGHTS at 0x00E5D344 after zero extension) and
+ * the ACL option flags at A6+0x14 (0x00E5D338, passed BY REFERENCE) - which
+ * the compiler merges into a single `move.l` at most call sites.  The old
+ * FILE_FLAGS_*_MASK spellings below are those merged longwords: the HIGH
+ * half is the rights word, the LOW half the option word.
  */
-#define FILE_FLAGS_IMMUTABLE_MASK   0x0002FFFF  /* Mask for immutable flag */
-#define FILE_FLAGS_TROUBLE_MASK     0x0000FFFF  /* Mask for trouble flag */
-#define FILE_FLAGS_AUDITED_MASK     0x0000FFFF  /* Mask for audited flag */
-#define FILE_FLAGS_MAND_LOCK_MASK   0x00080000  /* Mask for mandatory lock */
+#define FILE_ATTR_RIGHTS_NONE       0x0000  /* no ACL check (tst.w D2w) */
+#define FILE_ATTR_RIGHTS_WRITE      0x0002
+#define FILE_ATTR_RIGHTS_CTRL       0x0008
+#define FILE_ATTR_OPTS_NONE         0x0000
+#define FILE_ATTR_OPTS_ALL          0xFFFF
+
+/* Deprecated merged spellings, kept so existing references still resolve. */
+#define FILE_FLAGS_IMMUTABLE_MASK   0x0002FFFF  /* rights 0x0002, opts 0xFFFF */
+#define FILE_FLAGS_TROUBLE_MASK     0x0000FFFF  /* rights 0x0000, opts 0xFFFF */
+#define FILE_FLAGS_AUDITED_MASK     0x0000FFFF  /* rights 0x0000, opts 0xFFFF */
+#define FILE_FLAGS_MAND_LOCK_MASK   0x00080000  /* rights 0x0008, opts 0x0000 */
 
 /*
  * Attribute buffer sizes
@@ -80,18 +94,35 @@
 #define file_$comms_problem_with_remote_node        0x000F0004  /* Communication problem with remote node */
 #define file_$object_not_locked_by_this_process    0x000F0005  /* Not locked by this process */
 #define file_$object_in_use                        0x000F0006  /* Object in use */
-#define file_$illegal_lock_request                 0x000F0008  /* Illegal lock request */
+#define file_$illegal_lock_request                 0x000F0007  /* Illegal lock request
+                                                                 (FILE_$CHANGE_LOCK_D 0x00E5EAC2,
+                                                                  FILE_$PRIV_LOCK 0x00E5F154/0x00E5F466) */
 #define file_$local_lock_table_full                0x000F0009  /* Lock table full */
 #define file_$cannot_create_on_remote_with_uid     0x000F000B  /* Cannot create on remote with UID */
 #define file_$obj_not_locked_by_this_process       0x000F000C  /* Not locked by this process (alt) */
 #define file_$objects_on_different_volumes         0x000F0013  /* Objects on different volumes */
 #define file_$invalid_arg                          0x000F0014  /* Invalid argument */
 #define file_$incompatible_request                 0x000F0015  /* Incompatible request */
-#define file_$invalid_type                         0x000F0016  /* Invalid type */
+#define file_$invalid_type                         0x000F0016  /* Alias, see
+                                                                 file_$vol_mounted_read_only */
 #define file_$op_cannot_perform_here               0x000F0018  /* Cannot perform operation here */
-#define file_$vol_mounted_read_only                0x000E0030  /* Volume is read-only */
-#define status_$naming_vol_mounted_read_only       0x00040014  /* Volume mounted read-only (naming) */
+/* 0x000F0016: the file_$ flavour of "volume mounted read only".  Raised by
+ * FILE_$PRIV_LOCK at 0x00E5F4D2 and 0x00E5F7E2 and by FILE_$PRIV_CREATE
+ * (0x00E5C0xx) when the containing volume has bit 1 of its flags set. */
+#define file_$vol_mounted_read_only                0x000F0016
+/* 0x000E0030: the naming-server flavour, raised for objects whose type byte
+ * says "directory" (FILE_$PRIV_LOCK 0x00E5F7D4).  Same value as
+ * dir_internal.h's definition. */
+#ifndef status_$naming_vol_mounted_read_only
+#define status_$naming_vol_mounted_read_only       0x000E0030
+#endif
+/* 0x000E000D (status_$naming_bad_directory, declared in name/name.h) is
+ * raised by FILE_$PRIV_LOCK at 0x00E5F79A for a non-empty directory locked
+ * for delete. */
 #define status_$insufficient_rights                0x000F0011  /* Insufficient rights */
+#ifndef status_$no_rights
+#define status_$no_rights                          0x000F0010  /* No rights at all */
+#endif
 
 /*
  * ============================================================================
@@ -328,11 +359,12 @@ void FILE_$REMOVE_WHEN_UNLOCKED(uid_t *file_uid, uint8_t *result, status_$t *sta
  * files, checking ACL permissions as needed.
  *
  * Parameters:
- *   file_uid   - UID of file to modify
- *   attr_id    - Attribute ID to set (see FILE_ATTR_* constants)
- *   value      - Pointer to attribute value
- *   flags      - Operation flags (low 16 bits = required rights, high 16 bits = option flags)
- *   status_ret - Receives operation status
+ *   file_uid   A6+0x08  UID of the file to modify
+ *   attr_id    A6+0x0C  attribute id (see FILE_ATTR_* constants)
+ *   value      A6+0x0E  pointer to the attribute value
+ *   rights     A6+0x12  required-rights mask; 0 skips the ACL check
+ *   options    A6+0x14  ACL option flags (passed by reference to ACL_$RIGHTS)
+ *   status_ret A6+0x16  receives the operation status
  *
  * Attribute IDs:
  *   4  = Type UID
@@ -350,7 +382,8 @@ void FILE_$REMOVE_WHEN_UNLOCKED(uid_t *file_uid, uint8_t *result, status_$t *sta
  * Original address: 0x00E5D242
  */
 void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
-                         uint32_t flags, status_$t *status_ret);
+                         uint16_t rights, int16_t options,
+                         status_$t *status_ret);
 
 /*
  * FILE_$GET_ATTR_INFO - Get file attribute info (compact format)
@@ -648,14 +681,35 @@ void FILE_$SET_MAND_LOCK(uid_t *file_uid, uint8_t *flag, status_$t *status_ret);
  */
 
 /*
- * Lock mode flags for FILE_$PRIV_LOCK param_6
- * These flags control locking behavior:
+ * Lock option flags for FILE_$PRIV_LOCK's `flags` parameter.
+ *
+ * This is the Pascal word at A6+0x14; the compiler frequently merges it with
+ * the `key` word at A6+0x16 into a single `move.l` (FILE_$LOCK_D pushes
+ * 0x00040000 = flags 0x0004, key 0x0000 at 0x00E5EA5C).  Every test in the
+ * body is a byte-sized btst against A6+0x15, i.e. the LOW byte of this word,
+ * so the bit numbers below are bit numbers within the 16-bit flags word.
  */
-#define FILE_LOCK_FLAG_REMOTE       0x020000   /* Lock is from remote request */
-#define FILE_LOCK_FLAG_LOCAL_ONLY   0x010000   /* Skip remote flush */
-#define FILE_LOCK_FLAG_CHANGE       0x400000   /* Change existing lock */
-#define FILE_LOCK_FLAG_UPGRADE      0x040000   /* Upgrade lock mode */
-#define FILE_LOCK_FLAG_NO_RIGHTS    0x080000   /* Skip rights check */
+#define FILE_LOCK_FLAG_LOCAL_ONLY   0x0001   /* bit 0: skip AST_$COND_FLUSH (0x00E5FB32) */
+#define FILE_LOCK_FLAG_REMOTE       0x0002   /* bit 1: request arrived from a remote node
+                                              *        (0x00E5F15E); also selects
+                                              *        ACL_$RIGHTS_CHECK over ACL_$RIGHTS */
+#define FILE_LOCK_FLAG_CHECK_RIGHTS 0x0004   /* bit 2: enforce the mode's rights mask
+                                              *        (0x00E5EE58) */
+#define FILE_LOCK_FLAG_NO_RIGHTS    0x0008   /* bit 3: skip the rights check entirely
+                                              *        (0x00E5F4DC, 0x00E5EDB8) */
+#define FILE_LOCK_FLAG_ENTRY_BIT0   0x0020   /* bit 5: copied into lock entry flags2 bit 0
+                                              *        (0x00E5ECAE) */
+#define FILE_LOCK_FLAG_CHANGE       0x0040   /* bit 6: change an existing lock
+                                              *        (0x00E5F1CC and six more sites) */
+#define FILE_LOCK_FLAG_FOR_DELETE   0x0080   /* bit 7: lock is being taken to delete the
+                                              *        object (0x00E5F790) */
+#define FILE_LOCK_FLAG_ACL_CHECK    0x0100   /* bit 8: passed on to ACL_$RIGHTS_CHECK
+                                              *        (0x00E5EDEA) */
+
+/* The old longword spellings; FILE_$LOCK_D et al. push flags and key as one
+ * longword, so <word flags> == <longword> >> 16. */
+#define FILE_LOCK_FLAGS_OF(lw)      ((uint16_t)((lw) >> 16))
+#define FILE_LOCK_KEY_OF(lw)        ((uint16_t)((lw) & 0xFFFF))
 
 /*
  * FILE_$LOCK_D - Lock a file with domain context
@@ -673,7 +727,7 @@ void FILE_$SET_MAND_LOCK(uid_t *file_uid, uint8_t *flag, status_$t *status_ret);
  * Original address: 0x00E5EA2A
  */
 void FILE_$LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
-                  uint8_t *rights, uint32_t param_5, status_$t *status_ret);
+                  uint8_t *rights, uint32_t *slot_io, status_$t *status_ret);
 
 /*
  * FILE_$CHANGE_LOCK_D - Change an existing lock with domain context
@@ -690,7 +744,7 @@ void FILE_$LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
  * Original address: 0x00E5EA9E
  */
 void FILE_$CHANGE_LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
-                         uint32_t param_4, status_$t *status_ret);
+                         uint32_t *slot_io, status_$t *status_ret);
 
 /*
  * FILE_$LOCK - Lock a file
@@ -1043,7 +1097,7 @@ void FILE_$FW_PAGES(uid_t *file_uid, uint32_t *page_list, uint16_t *page_count,
  *
  * Original address: 0x00E5E5AE
  */
-void FILE_$NEIGHBORS(uid_t *file_uid1, uid_t *file_uid2, status_$t *status_ret);
+int8_t FILE_$NEIGHBORS(uid_t *file_uid1, uid_t *file_uid2, status_$t *status_ret);
 
 /*
  * FILE_$PURIFY - Purify (flush) a file's dirty pages

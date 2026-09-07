@@ -217,35 +217,28 @@ retry_send:
         /* Wait loop for response */
         do {
             while (1) {
-                /* EC_$WAIT: wait on socket EC (index 0) and timer (index 1)
+                /* EC_$WAIT: 0x00E611E0-0x00E61200.
                  *
-                 * Assembly builds the EC array as:
-                 *   ecs[0] = NULL (terminator placeholder, but overwritten)
-                 *   ecs[1] = sock_ec (local_b0)
-                 *   ecs[2] = &TIME_$CLOCKH
+                 * The caller pushes six longwords; the callee reads the
+                 * first three as the eventcount array and the last three
+                 * as the value array (both by value):
+                 *   0x00E611F6  move.l (-0xac,A6),-(SP)   ecs[0] = sock_ec
+                 *   0x00E611F0  move.l #0xe2b0d4,-(SP)    ecs[1] = &TIME_$CLOCKH
+                 *   0x00E611EA  move.l #0x0,-(SP)         ecs[2] = NIL
+                 *   0x00E611E6  move.l (-0xbc,A6),-(SP)   vals[0] = sock_ec_wait_val
+                 *   0x00E611E2  move.l (-0xb4,A6),-(SP)   vals[1] = timeout_deadline
+                 *   0x00E611E0  clr.l -(SP)               vals[2] = 0
                  *
-                 * wait_vals = sock_ec_wait_val (local_c0) used as the value
-                 * for EC_$WAIT. The array layout is built on stack.
-                 *
-                 * Returns: 0 = sock event, 1 = timer, 2+ = quit
+                 * Returns the 0-based index: 0 = socket event, 1 = timer.
                  */
                 int16_t which;
-                do {
-                    ec_$eventcount_t *ecs[3];
-                    int32_t wait_vals[3];
 
-                    ecs[0] = NULL;
-                    ecs[1] = sock_ec;
-                    ecs[2] = (ec_$eventcount_t *)&TIME_$CLOCKH;
-
-                    /* EC_$WAIT uses the wait_val parameter as a pointer to
-                     * an array of int32_t values corresponding to each EC */
-                    wait_vals[0] = 0;
-                    wait_vals[1] = sock_ec_wait_val;
-                    wait_vals[2] = timeout_deadline;
-
-                    which = EC_$WAIT(ecs, (int32_t *)&sock_ec_wait_val);
-                } while (0);
+                which = EC_$WAIT((ec_$wait_ecs_t){{ sock_ec,
+                                                    (ec_$eventcount_t *)&TIME_$CLOCKH,
+                                                    NULL }},
+                                 (ec_$wait_vals_t){{ sock_ec_wait_val,
+                                                     timeout_deadline,
+                                                     0 }});
 
                 if (which == 0) {
                     /* Socket event */
@@ -423,20 +416,18 @@ retry_send:
              * TODO(source-0i3): The assembly does addq.l #1,(0x4,A5) which increments
              * a per-process counter. This needs arch-specific abstraction.
              */
-            {
-                ec_$eventcount_t *timer_ecs[3];
-                int32_t timer_vals[3];
-
-                timer_ecs[0] = NULL;
-                timer_ecs[1] = (ec_$eventcount_t *)&TIME_$CLOCKH;
-                timer_ecs[2] = NULL;
-
-                timer_vals[0] = 0;
-                timer_vals[1] = (int32_t)(TIME_$CLOCKH + 2);
-
-                /* Wait on just the timer EC (address 0xe2b0d4) */
-                EC_$WAIT(timer_ecs, timer_vals);
-            }
+            /* 0x00E61420-0x00E61442: wait on the tick eventcount only.
+             *   0x00E61436  move.l #0xe2b0d4,-(SP)  ecs[0]  = &TIME_$CLOCKH
+             *   0x00E61434  move.l (SP),-(SP)       ecs[1]  = copy of the
+             *                                       zero just pushed = NIL
+             *   0x00E6142E  move.l #0x0,-(SP)       ecs[2]  = NIL
+             *   0x00E6142C  move.l D5,-(SP)         vals[0] = TIME_$CLOCKH+2
+             *   0x00E61422  clr.l -(SP)             vals[1] = 0
+             *   0x00E61420  clr.l -(SP)             vals[2] = 0
+             */
+            EC_$WAIT((ec_$wait_ecs_t){{ (ec_$eventcount_t *)&TIME_$CLOCKH,
+                                        NULL, NULL }},
+                     (ec_$wait_vals_t){{ (int32_t)(TIME_$CLOCKH + 2), 0, 0 }});
             retry_count += 1;
             goto retry_send;
         }

@@ -14,6 +14,12 @@
 #include "pacct/pacct_internal.h"
 
 /*
+ * 0x00E5A8BC: longword 0.  Handed to FILE_$PRIV_LOCK by reference as its
+ * ACL-context argument (`pea (0x84,PC)` at 0x00E5A836).
+ */
+static void *pacct_$start_nil_acl_ctx = NULL;
+
+/*
  * Extended SID structure returned by ACL_$GET_EXSID
  * Contains user, group, and org SIDs for privilege checking
  */
@@ -84,9 +90,11 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
 
     /* Lock the new accounting file exclusively with write access */
     attr_size = 0;  /* Size placeholder for callback pointer location */
-    FILE_$PRIV_LOCK(file_uid, 0, 1, 4, 0, 0x80000,
-                    0, 0, 0, NULL /* callback at 0xe5a8bc */,
-                    0, &DAT_00e817f4, status_buf, status_ret);
+    /* 0x00E5A836 `pea (0x84,PC)` = the NIL longword at 0x00E5A8BC; the
+     * compiler passes its address, not a null pointer. */
+    FILE_$PRIV_LOCK(file_uid, 0, 1, 4, 0, 0x0008, 0x0000,
+                    0, 0, 0, &pacct_$start_nil_acl_ctx,
+                    0, (uint32_t *)&DAT_00e817f4, status_buf, status_ret);
 
     if (*status_ret != status_$ok) {
         return;

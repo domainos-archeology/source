@@ -93,14 +93,77 @@ typedef struct {
 extern uint8_t NETWORK_$CAPABLE_FLAGS;  /* 0xE24C3F: Network capability flags (bit 0 = capable) */
 
 /*
+ * The request is a wire record whose payload is interpreted differently by
+ * every opcode, so it is kept as an opaque byte area and reached through the
+ * REQ_* accessors below.  The three fields the dispatcher itself reads are
+ * named.
+ */
+typedef struct rem_file_server_req_t {
+    uint16_t    version;            /* 0x000: A6-0x438 */
+    uint8_t     reserved_02;        /* 0x002: A6-0x436 */
+    uint8_t     opcode;             /* 0x003: A6-0x435 */
+    uid_t       uid;                /* 0x004: A6-0x434 */
+    uint8_t     arg[0x28C];         /* 0x00C: A6-0x42C .. */
+} rem_file_server_req_t;            /* 0x298 */
+
+typedef struct rem_file_server_resp_t {
+    uint16_t    pkt_flag;           /* 0x000: A6-0x1A0 */
+    uint8_t     magic;              /* 0x002: A6-0x19E */
+    uint8_t     opcode;             /* 0x003: A6-0x19D */
+    status_$t   status;             /* 0x004: A6-0x19C */
+    uint8_t     data[0x118];        /* 0x008: A6-0x198 .. */
+} rem_file_server_resp_t;           /* 0x120 */
+
+/*
+ * The block APP_$RECEIVE fills in (A6-0x30, 0x30 bytes).  The first two
+ * longwords are real pointers, so they are typed as such here; on a 64-bit
+ * host that makes the record wider than the image's 0x30 bytes, which only
+ * the m68k `_Static_assert`s care about.
+ */
+typedef struct rem_file_rcv_t {
+    void       *hdr;                /* 0x00: -0x30, packet header record */
+    void       *data;               /* 0x04: -0x2C, request body */
+    uint32_t    bufs[4];            /* 0x08: -0x28, network buffer chain */
+    uint32_t    f_18;               /* 0x18: -0x18 */
+    uint32_t    f_1c;               /* 0x1C: -0x14 */
+    uint8_t     clock[6];           /* 0x20: -0x10, 48-bit arrival clock */
+    uint32_t    f_26;               /* 0x26: -0x0A */
+    uint16_t    pad_2a[3];          /* 0x2A */
+} rem_file_rcv_t;
+
+/*
  * REM_FILE module data
  */
 extern ml_$exclusion_t REM_FILE_$SOCK_LOCK;   /* 0xE24B3C: socket access lock */
-extern uint32_t DAT_00e823fc;                 /* 0xE823FC: REM_FILE module data base (A5); server request counter */
-extern status_$t File_Comms_Problem_With_Remote_Node_Err;  /* 0xE64592: crash message */
-extern uint8_t DAT_00e61d18[];                /* 0xE61D18: nil/empty data constant */
-extern uint8_t DAT_00e61718[];                /* 0xE61718: project list constant */
-extern uint8_t DAT_00e62d48[];                /* 0xE62D48: case mapping table (UNMAP_CASE/MAP_CASE) */
+
+/*
+ * 0xE823FC is the REM_FILE module base (A5 in REM_FILE_$SERVER).  The
+ * longword at A5+0 counts the stale-directory-entry replies the server has
+ * sent (`addq.l #1,(A5)` at 0x00E63E9E).
+ */
+extern uint32_t REM_FILE_$STALE_LINK_COUNT;
+
+/* 0xE64592: the status constant CRASH_SYSTEM is handed when the diskless
+ * partner node dies (0x000F0004). */
+extern status_$t REM_FILE_$COMMS_PROBLEM_STATUS;
+
+/* 0xE61D18: longword 0.  Passed by reference wherever the compiler emits
+ * `pea (d,PC)` for a NIL pointer / empty segment list. */
+extern uint32_t REM_FILE_$NIL_CONST;
+
+/* 0xE61718: word 8, the maximum project-list length ACL_$GET_PROJ_LIST and
+ * ACL_$SET_PROJ_LIST are given. */
+extern uint16_t REM_FILE_$MAX_PROJ_LIST;
+
+/* 0xE62D48: word 0x20, the output buffer size UNMAP_CASE / MAP_CASE get. */
+extern uint16_t REM_FILE_$MAX_NAME_LEN;
+
+/* 0xE2E39E: the 32-byte packet template REM_FILE_$SERVER hands
+ * PKT_$SEND_INTERNET (0x00E64236). */
+extern uint8_t REM_FILE_$SERVER_PKT_INFO[];
+
+/* 0xE2E3BC: "*** diskless partner node has crashed" */
+extern char REM_FILE_$DISKLESS_CRASH_MSG[];
 
 /*
  * Socket event counter array (0xE28DB0)

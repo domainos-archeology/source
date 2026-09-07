@@ -39,5 +39,6 @@ void FILE_$MK_IMMUTABLE(uid_t *file_uid, status_$t *status_ret)
 
     /* Set attribute 1 (immutable) with flags 0x2FFFF */
     FILE_$SET_ATTRIBUTE(file_uid, FILE_ATTR_IMMUTABLE, attr_buffer,
-                        FILE_FLAGS_IMMUTABLE_MASK, status_ret);
+                        FILE_ATTR_RIGHTS_WRITE, FILE_ATTR_OPTS_ALL,
+                        status_ret);   /* move.l #0x0002FFFF */
 }

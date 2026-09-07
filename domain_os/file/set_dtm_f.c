@@ -65,8 +65,11 @@ void FILE_$SET_DTM_F(uid_t *file_uid, int8_t *flags, void *time_value,
     /* Set the attribute
      * Flags = (option_flags << 16) | 0xFFFF
      */
+    /* The caller's word lands in the rights slot (A6+0x12); the option word
+     * (A6+0x14) is always 0xFFFF here. */
     FILE_$SET_ATTRIBUTE(file_uid, attr_id, &local_time,
-                        ((uint32_t)option_flags << 16) | 0xFFFF, status_ret);
+                        (uint16_t)option_flags, FILE_ATTR_OPTS_ALL,
+                        status_ret);
 
     /* If incompatible request, fall back to AST_$SET_ATTRIBUTE */
     if (*status_ret == status_$ast_incompatible_request) {

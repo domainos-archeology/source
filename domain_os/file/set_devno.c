@@ -31,5 +31,6 @@ void FILE_$SET_DEVNO(uid_t *file_uid, uint16_t *devno, status_$t *status_ret)
 
     /* Set attribute 22 (device number) with flags 0x8FFFF */
     FILE_$SET_ATTRIBUTE(file_uid, FILE_ATTR_DEVNO, &devno_copy,
-                        0x0008FFFF, status_ret);
+                        FILE_ATTR_RIGHTS_CTRL, FILE_ATTR_OPTS_ALL,
+                        status_ret);   /* move.l #0x0008FFFF */
 }

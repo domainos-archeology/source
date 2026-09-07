@@ -117,7 +117,9 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
                 /* Force mode with delete-on-unlock flag */
                 /* Call FILE_$SET_ATTRIBUTE to set attribute 7 (delete-on-unlock) */
                 attr_value[0] = 1;
-                FILE_$SET_ATTRIBUTE(file_uid, 7, attr_value, 0xFFFF, status_ret);
+                FILE_$SET_ATTRIBUTE(file_uid, 7, attr_value,
+                                    FILE_ATTR_RIGHTS_NONE, FILE_ATTR_OPTS_ALL,
+                                    status_ret);
 
                 /* These specific status codes are acceptable */
                 if (*status_ret == file_$object_is_remote ||

@@ -40,5 +40,6 @@ void FILE_$SET_MAND_LOCK(uid_t *file_uid, uint8_t *flag, status_$t *status_ret)
 
     /* Set attribute 25 (mandatory lock) with flags 0x80000 */
     FILE_$SET_ATTRIBUTE(file_uid, FILE_ATTR_MAND_LOCK, attr_buffer,
-                        FILE_FLAGS_MAND_LOCK_MASK, status_ret);
+                        FILE_ATTR_RIGHTS_CTRL, FILE_ATTR_OPTS_NONE,
+                        status_ret);   /* move.l #0x00080000 */
 }

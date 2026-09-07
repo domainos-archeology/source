@@ -17,6 +17,13 @@
 #include "file/file_internal.h"
 
 /*
+ * 0x00E5E61E: the longword the compiler passes with `pea (-0x530,PC)` /
+ * `pea (-0x436,PC)` / `pea (-0x4bc,PC)` as FILE_$PRIV_LOCK's ACL-context
+ * argument.  It holds NIL.
+ */
+static void *file_$priv_lock_nil_acl_ctx = NULL;
+
+/*
  * FILE_$LOCK - Lock a file
  *
  * Parameters:
@@ -50,17 +57,18 @@ void FILE_$LOCK(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_mode,
      */
     FILE_$PRIV_LOCK(file_uid,
                     PROC1_$AS_ID,
-                    *lock_index,
+                    *lock_index,          /* side */
                     *lock_mode,
-                    (int16_t)*rights,     /* Rights byte, sign-extended */
-                    0x240000,             /* flags = local_only + upgrade mode */
-                    0,                    /* param_7 = 0 (local) */
-                    0,                    /* param_8 = 0 (no node) */
-                    0,                    /* param_9 = 0 */
-                    NULL,                 /* param_10 = &DAT_00e5e61e (default addr) */
-                    0,                    /* param_11 = 0 */
-                    &local_8,             /* lock_ptr_out - uses local variable */
-                    &result,              /* result_out */
+                    (boolean)*rights,     /* local_only (byte at A6+0x12) */
+                    0x0024,               /* flags word  (0x00E5EB56 move.l #0x240000) */
+                    0x0000,               /* key word    (low half of the same long) */
+                    0,                    /* rem_key */
+                    0,                    /* rem_node */
+                    0,                    /* rem_extra */
+                    &file_$priv_lock_nil_acl_ctx,   /* 0x00E5EB4C pea (-0x530,PC) */
+                    0,                    /* rem_wait */
+                    &local_8,             /* slot_io */
+                    &result,              /* rights_out */
                     status_ret);
 
     /*

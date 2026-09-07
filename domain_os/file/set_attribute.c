@@ -23,7 +23,8 @@
  *   file_uid   - UID of file to modify
  *   attr_id    - Attribute ID to set
  *   value      - Pointer to attribute value
- *   flags      - Operation flags (low 16 bits = required rights, high 16 bits = option flags)
+ *   rights     - Required-rights mask (word at A6+0x12); 0 skips the check
+ *   options    - ACL option flags (word at A6+0x14)
  *   status_ret - Receives operation status
  *
  * Flow:
@@ -36,8 +37,15 @@
  * 3. If rights required, check ACL via ACL_$RIGHTS
  * 4. Finally call AST_$SET_ATTRIBUTE to set the attribute
  */
+/*
+ * 0x00E5D380: byte 0, ACL_$RIGHTS' second argument
+ * (`pea (0x36,PC)` at 0x00E5D348).
+ */
+static int8_t file_$set_attr_acl_zero_byte = 0;
+
 void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
-                         uint32_t flags, status_$t *status_ret)
+                         uint16_t rights, int16_t options,
+                         status_$t *status_ret)
 {
     status_$t location_status;
 
@@ -64,14 +72,10 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
     int8_t cache_result;            /* Cache lookup result */
     uint8_t clock_out[8];           /* Output clock from remote operation */
 
-    uint16_t required_rights;
-    int16_t option_flags;
+    uint16_t required_rights = rights;   /* word at A6+0x12 */
+    int16_t option_flags = options;      /* word at A6+0x14 */
     uint32_t rights_mask;
     int16_t rights_result;
-
-    /* Extract flags components */
-    required_rights = (uint16_t)(flags & 0xFFFF);
-    option_flags = (int16_t)(flags >> 16);
 
     /* Copy UID and set up for lookup */
     lookup_context.uid_high = file_uid->high;
@@ -140,8 +144,8 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
     /* Check ACL if rights are required */
     if (required_rights != 0) {
         rights_mask = (uint32_t)required_rights;
-        rights_result = ACL_$RIGHTS(file_uid, NULL, &rights_mask,
-                                    &option_flags, status_ret);
+        rights_result = ACL_$RIGHTS(file_uid, &file_$set_attr_acl_zero_byte,
+                                    &rights_mask, &option_flags, status_ret);
         if (rights_result == 0) {
             /* Access denied - shut down wired pages */
             OS_PROC_SHUTWIRED(status_ret);

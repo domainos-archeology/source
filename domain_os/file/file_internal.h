@@ -22,6 +22,7 @@
 #include "proc1/proc1.h"
 #include "vtoc/vtoc.h"
 #include "netlog/netlog.h"
+#include "name/name.h"
 
 /*
  * ============================================================================
@@ -161,6 +162,85 @@ typedef struct file_lock_entry_detail_t {
                                          bit 2=remote flag, bit 1=pending, bit 0=? */
 } file_lock_entry_detail_t;
 
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(file_lock_entry_detail_t, context)   == 0x00, "lot.context");
+_Static_assert(offsetof(file_lock_entry_detail_t, node_low)  == 0x04, "lot.node_low");
+_Static_assert(offsetof(file_lock_entry_detail_t, node_high) == 0x08, "lot.node_high");
+_Static_assert(offsetof(file_lock_entry_detail_t, uid_high)  == 0x0C, "lot.uid_high");
+_Static_assert(offsetof(file_lock_entry_detail_t, uid_low)   == 0x10, "lot.uid_low");
+_Static_assert(offsetof(file_lock_entry_detail_t, next)      == 0x14, "lot.next");
+_Static_assert(offsetof(file_lock_entry_detail_t, sequence)  == 0x16, "lot.sequence");
+_Static_assert(offsetof(file_lock_entry_detail_t, refcount)  == 0x18, "lot.refcount");
+_Static_assert(offsetof(file_lock_entry_detail_t, flags1)    == 0x19, "lot.flags1");
+_Static_assert(offsetof(file_lock_entry_detail_t, rights)    == 0x1A, "lot.rights");
+_Static_assert(offsetof(file_lock_entry_detail_t, flags2)    == 0x1B, "lot.flags2");
+_Static_assert(sizeof(file_lock_entry_detail_t)              == 0x1C, "sizeof lot entry");
+#endif
+
+/*
+ * ----------------------------------------------------------------------------
+ * Object location descriptor (32 bytes)
+ *
+ * FILE_$PRIV_LOCK builds one of these at A6-0x48 and hands it to
+ * AST_$GET_ATTRIBUTES (0x00E5F752), AST_$LOAD_AOTE (0x00E5FB76) and
+ * REM_FILE_$LOCK (0x00E5EEE0).  AST_$GET_ATTRIBUTES reads the caller's UID
+ * from +0x08 (`lea (0x8,A4),A0` at 0x00E047D2) and, on success, overwrites
+ * the whole 32-byte record with the AOTE's copy at aote+0x9C
+ * (0x00E0492C / 0x00E049B4).
+ * ----------------------------------------------------------------------------
+ */
+typedef struct file_$obj_loc_t {
+    uint32_t    reserved_00[2];     /* 0x00: filled in by AST_$GET_ATTRIBUTES */
+    uid_t       uid;                /* 0x08: object UID (set by the caller) */
+    uint32_t    loc_info;           /* 0x10: location word, copied to entry+0x08 */
+    uint32_t    node;               /* 0x14: node id, copied to entry+0x04 */
+    uint32_t    reserved_18;        /* 0x18 */
+    int8_t      rights_bits;        /* 0x1C: OR'ed into lock entry flags1 (0x00E5EC6C) */
+    int8_t      flags;              /* 0x1D: bit 7 = object is remote,
+                                     *       bit 6 = scratch flag used by PRIV_LOCK */
+    uint16_t    reserved_1e;        /* 0x1E */
+} file_$obj_loc_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(file_$obj_loc_t, uid)         == 0x08, "obj_loc.uid");
+_Static_assert(offsetof(file_$obj_loc_t, loc_info)    == 0x10, "obj_loc.loc_info");
+_Static_assert(offsetof(file_$obj_loc_t, node)        == 0x14, "obj_loc.node");
+_Static_assert(offsetof(file_$obj_loc_t, rights_bits) == 0x1C, "obj_loc.rights_bits");
+_Static_assert(offsetof(file_$obj_loc_t, flags)       == 0x1D, "obj_loc.flags");
+_Static_assert(sizeof(file_$obj_loc_t)                == 0x20, "sizeof obj_loc");
+#endif
+
+/* file_$obj_loc_t.flags bits */
+#define FILE_OBJ_LOC_REMOTE     0x80    /* bit 7: object lives on another node */
+#define FILE_OBJ_LOC_SCRATCH    0x40    /* bit 6: cleared/undefined scratch bit */
+
+/*
+ * One entry of the hint vector HINT_$GET_HINTS fills in.  FILE_$PRIV_LOCK
+ * indexes it 1-based (base A6-0x30, element i at A6-0x30+i*8) and passes
+ * &hints[1] (A6-0x28) to HINT_$GET_HINTS.
+ */
+typedef struct file_$lock_hint_t {
+    uint32_t    loc_info;           /* 0x00 */
+    uint32_t    node;               /* 0x04 */
+} file_$lock_hint_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(file_$lock_hint_t) == 8, "sizeof lock hint");
+#endif
+
+/* HINT_$GET_HINTS never reports more than five entries (hint/get_hints.c),
+ * and FILE_$PRIV_LOCK's frame only has room for hints[1..5]. */
+#define FILE_LOCK_MAX_HINTS     5
+
+/*
+ * Fields FILE_$PRIV_LOCK reads out of the AST_$GET_ATTRIBUTES record
+ * (0x00E5F768, 0x00E5F77C, 0x00E5F7A4).  The record is a raw 0x90-byte
+ * image, so the offsets are spelled out rather than typed.
+ */
+#define FILE_ATTR_NOT_EMPTY(a)  (((const uint8_t *)(a))[0])   /* +0x00 */
+#define FILE_ATTR_OBJ_TYPE(a)   (((const uint8_t *)(a))[1])   /* +0x01: 1,2 = directory */
+#define FILE_ATTR_VOL_FLAGS(a)  (*(const uint16_t *)(const void *)((const uint8_t *)(a) + 2))
+
 /*
  * Lock entry flags (flags2 byte at offset 0x1B)
  */
@@ -214,7 +294,58 @@ extern uint16_t FILE_$LOCK_MAP_TABLE[];       /* At offset 0x40 (12 entries) */
 extern uint16_t FILE_$LOCK_REQ_TABLE[];       /* At offset 0x88 (12 entries) */
 extern uint16_t FILE_$LOCK_CVT_TABLE[];       /* At offset 0xA0 (12 entries) */
 extern uint16_t FILE_$LOCK_ILLEGAL_MASK;      /* At offset 0x2C8 - illegal modes */
-extern uint8_t  FILE_$LOT_FULL;               /* At offset 0x2D0 - table full flag */
+
+/*
+ * Count of lock entries whose remote negotiation is still outstanding.
+ * FILE_$PRIV_LOCK bumps it at 0x00E5F954 and drops it again at 0x00E5FA8C,
+ * 0x00E5FAB4 and 0x00E5FAE2.  Word at FILE_$LOCK_CONTROL + 0x2CA (0xE823F2).
+ */
+extern uint16_t FILE_$LOT_PENDING;
+
+/*
+ * Lock conflict matrix, 8 entries, at FILE_$LOCK_CONTROL + 0x18 (0xE82140).
+ * Indexed by the *mapped* mode (FILE_$LOCK_MODE_TABLE[side][mode]); bit M of
+ * the entry is set when a held lock whose mapped mode is M may coexist with
+ * the request (FILE_$PRIV_LOCK_$CHECK_CONFLICTS 0x00E5EF8E / 0x00E5F04A).
+ */
+extern uint16_t FILE_$LOCK_CONFLICT_TABLE[8];
+
+/* Domain booleans: 0xFF is true, tested with tst.b/bmi. */
+extern int8_t   FILE_$LOT_FULL;               /* At offset 0x2D0 - table full flag */
+
+/*
+ * ----------------------------------------------------------------------------
+ * Lock table addressing
+ *
+ * Both tables are 1-based in the image:
+ *   lock entry N          at 0x00E935B0 + N*0x1C  (so the array base
+ *                         0x00E935CC is entry 1)
+ *   process ASID slot I   at 0x00E9F9CA + ASID*300 + I*2 (so the array base
+ *                         0x00E9F9CC is slot 1)
+ * On a host build we address the C globals instead so the code is testable.
+ * ----------------------------------------------------------------------------
+ */
+#if defined(ARCH_M68K)
+#define FILE_$LOT_BASE          ((file_lock_entry_detail_t *)0x00E935CCUL)
+#define FILE_$PROC_LOT_BASE     ((uint8_t *)0x00E9F9CCUL)
+#define FILE_$PROC_LOT_CNT_BASE ((uint16_t *)0x00EA3DC4UL)
+#else
+#define FILE_$LOT_BASE          ((file_lock_entry_detail_t *)FILE_$LOCK_ENTRIES)
+#define FILE_$PROC_LOT_BASE     ((uint8_t *)FILE_$LOCK_TABLE)
+#define FILE_$PROC_LOT_CNT_BASE (FILE_$LOCK_TABLE2)
+#endif
+
+#define FILE_$LOT_ENTRY(n)      (&FILE_$LOT_BASE[(int32_t)(n) - 1])
+#define FILE_$PROC_LOT_SLOT(asid, idx)                                        \
+    (*(uint16_t *)(FILE_$PROC_LOT_BASE                                        \
+                   + (int32_t)(asid) * FILE_LOCK_TABLE_ENTRY_SIZE             \
+                   + ((int32_t)(idx) - 1) * 2))
+#define FILE_$PROC_LOT_COUNT(asid)  (FILE_$PROC_LOT_CNT_BASE[(int32_t)(asid)])
+
+/* ML resource id guarding the lock tables (`move.w #0x5,-(SP)` before every
+ * ML_$LOCK / ML_$UNLOCK in FILE_$PRIV_LOCK, FILE_$PRIV_UNLOCK and
+ * FILE_$FORK_LOCK). */
+#define FILE_LOT_ML_LOCK_ID     5
 
 /* ASID group mapping table (12 entries) - same address as LOCK_MAP_TABLE on m68k */
 extern uint16_t FILE_$ASID_MAP[];
@@ -239,28 +370,32 @@ extern uint32_t FILE_$DEFAULT_SIZE;
  * FILE_$LOCK_D, FILE_$CHANGE_LOCK_D, and remote lock handlers.
  *
  * Parameters:
- *   file_uid     - UID of file to lock
- *   asid         - Process ASID (from PROC1_$AS_ID)
- *   lock_index   - Lock table index (0 for new lock)
- *   lock_mode    - Lock mode (0-20)
- *   rights       - Rights byte (mode specific)
- *   flags        - Lock operation flags (see FILE_LOCK_FLAG_* constants)
- *   param_7      - Context parameter (0 for local locks)
- *   param_8      - Node address for remote locks
- *   param_9      - Additional context
- *   param_10     - Default address (usually &DAT_00e5e61e)
- *   param_11     - Additional flags
- *   lock_ptr_out - Output: lock context pointer
- *   result_out   - Output: result status
- *   status_ret   - Output: status code
+ *   file_uid   A6+0x08  UID of the object to lock
+ *   asid       A6+0x0C  process ASID (usually PROC1_$AS_ID)
+ *   side       A6+0x0E  lock "side" (0 or 1); anything else is rejected
+ *   lock_mode  A6+0x10  requested lock mode, 0..11
+ *   local_only A6+0x12  Pascal boolean: refuse to go off-node
+ *   flags      A6+0x14  FILE_LOCK_FLAG_* word
+ *   key        A6+0x16  caller-supplied lock key (remote requests)
+ *   rem_key    A6+0x18  remote requester's lock key (entry+0x00)
+ *   rem_node   A6+0x1C  remote requester's node (entry+0x04)
+ *   rem_extra  A6+0x20  remote requester's extra word (entry+0x08)
+ *   acl_ctx    A6+0x24  pointer to the ACL context pointer for
+ *                       ACL_$RIGHTS_CHECK (0x00E5EDDE)
+ *   rem_wait   A6+0x28  wait word forwarded to REM_FILE_$LOCK
+ *   slot_io    A6+0x2A  in/out: per-process lock slot number
+ *   rights_out A6+0x2E  out: rights word granted
+ *   status_ret A6+0x32  out: status code
  *
  * Original address: 0x00E5F0EE
  */
-void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t lock_index,
-                     uint16_t lock_mode, int16_t rights, uint32_t flags,
-                     int32_t param_7, uint32_t param_8, uint32_t param_9,
-                     void *param_10, uint16_t param_11, uint32_t *lock_ptr_out,
-                     uint16_t *result_out, status_$t *status_ret);
+void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t side,
+                     uint16_t lock_mode, boolean local_only,
+                     uint16_t flags, uint16_t key,
+                     uint32_t rem_key, uint32_t rem_node, uint32_t rem_extra,
+                     void **acl_ctx, uint16_t rem_wait,
+                     uint32_t *slot_io, uint16_t *rights_out,
+                     status_$t *status_ret);
 
 /*
  * FILE_$PRIV_UNLOCK - Core unlock function

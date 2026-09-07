@@ -39,7 +39,8 @@ void FILE_$SET_DTU_F(uid_t *file_uid, void *time_value, status_$t *status_ret)
 
     /* Set attribute 24 (DTU full format) with flags 0xFFFF */
     FILE_$SET_ATTRIBUTE(file_uid, FILE_ATTR_DTU_FULL, &local_time,
-                        0x0000FFFF, status_ret);
+                        FILE_ATTR_RIGHTS_NONE, FILE_ATTR_OPTS_ALL,
+                        status_ret);   /* move.l #0x0000FFFF */
 
     /* If incompatible request, fall back to AST_$SET_ATTRIBUTE */
     if (*status_ret == status_$ast_incompatible_request) {

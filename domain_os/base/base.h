@@ -40,6 +40,15 @@ typedef int ptrdiff_t;
 #endif
 
 // =============================================================================
+// offsetof - needed by the _Static_assert struct-layout checks in the
+// subsystem headers.  <stddef.h> is unavailable on the freestanding m68k
+// build, so fall back to the compiler builtin.
+// =============================================================================
+#ifndef offsetof
+#define offsetof(type, member) __builtin_offsetof(type, member)
+#endif
+
+// =============================================================================
 // Basic type aliases
 // =============================================================================
 typedef unsigned long ulong;

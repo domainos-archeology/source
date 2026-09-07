@@ -24,7 +24,7 @@
  * 2. Call FILE_$CHECK_SAME_VOLUME with copy_location=0
  * 3. The result indicates whether the files are neighbors
  */
-void FILE_$NEIGHBORS(uid_t *file_uid1, uid_t *file_uid2, status_$t *status_ret)
+int8_t FILE_$NEIGHBORS(uid_t *file_uid1, uid_t *file_uid2, status_$t *status_ret)
 {
     uid_t local_uid1;
     uid_t local_uid2;
@@ -36,6 +36,9 @@ void FILE_$NEIGHBORS(uid_t *file_uid1, uid_t *file_uid2, status_$t *status_ret)
     local_uid2.high = file_uid2->high;
     local_uid2.low = file_uid2->low;
 
-    /* Check if files are on the same volume (copy_location=0) */
-    FILE_$CHECK_SAME_VOLUME(&local_uid1, &local_uid2, 0, location_buf, status_ret);
+    /* Check if files are on the same volume (copy_location=0).
+     * 0x00E5E5D8 falls straight out of the call, so D0 - the neighbour
+     * boolean - is this function's result. */
+    return FILE_$CHECK_SAME_VOLUME(&local_uid1, &local_uid2, 0, location_buf,
+                                   status_ret);
 }

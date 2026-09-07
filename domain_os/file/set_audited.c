@@ -66,6 +66,7 @@ void FILE_$SET_AUDITED(uid_t *file_uid, int8_t *param_2, int8_t *param_3,
     if (is_admin < 0) {
         /* Set attribute 0xD (audited flags) */
         FILE_$SET_ATTRIBUTE(file_uid, FILE_ATTR_AUDITED, audit_flags,
-                            FILE_FLAGS_AUDITED_MASK, status_ret);
+                            FILE_ATTR_RIGHTS_NONE, FILE_ATTR_OPTS_ALL,
+                            status_ret);   /* move.l #0x0000FFFF */
     }
 }

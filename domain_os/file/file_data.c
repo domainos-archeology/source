@@ -62,6 +62,17 @@ uint8_t FILE_$UID_LOCK_HOLDERS[FILE_UID_LOCK_BUCKETS];
  */
 
 /*
+ * Lock conflict matrix (8 entries)
+ * Original address: FILE_$LOCK_CONTROL + 0x18 (0xE82140)
+ *
+ * Indexed by the mapped mode of the *request*; bit M is set when a held lock
+ * of mapped mode M is compatible.  Values read straight out of the image.
+ */
+uint16_t FILE_$LOCK_CONFLICT_TABLE[8] = {
+    0x007F, 0x005F, 0x0047, 0x005B, 0x000B, 0x0001, 0x004F, 0x0000
+};
+
+/*
  * Lock compatibility table (12 entries)
  * Original address: FILE_$LOCK_CONTROL + 0x28 (0xE82150)
  */
@@ -158,7 +169,13 @@ uint16_t FILE_$LOT_HIGH;
 uint16_t FILE_$LOT_FREE;
 
 /*
- * Lock table full flag
+ * Count of lock entries whose remote negotiation is outstanding
+ * Original address: FILE_$LOCK_CONTROL + 0x2CA (0xE823F2)
+ */
+uint16_t FILE_$LOT_PENDING;
+
+/*
+ * Lock table full flag (Domain boolean: 0xFF = true)
  * Original address: FILE_$LOCK_CONTROL + 0x2D0 (0xE823F8)
  */
-uint8_t FILE_$LOT_FULL;
+int8_t FILE_$LOT_FULL;

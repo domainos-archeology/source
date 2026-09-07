@@ -12,6 +12,13 @@
 #include "mst/mst.h"
 #include "uid/uid.h"
 
+/*
+ * 0x00E70C20: longword 0.  The compiler emits `pea (-0xb66,PC)` at
+ * 0x00E71784 to hand FILE_$PRIV_LOCK the address of this cell as its
+ * ACL-context argument.
+ */
+static void *audit_$open_log_nil_acl_ctx = NULL;
+
 /* Path to audit log file */
 static const char log_path[] = "//node_data/audit/audit_log";
 static int16_t log_path_len = 26;
@@ -62,8 +69,12 @@ void audit_$open_log(status_$t *status_ret)
     AUDIT_$DATA.file_offset = file_size;
 
     /* Lock the file for exclusive access */
-    FILE_$PRIV_LOCK(&AUDIT_$DATA.log_file_uid, 0, 1, 4, 0, 0, 0, 0, 0,
-                    NULL, 0, &AUDIT_$DATA.lock_id, lock_info, status_ret);
+    /* 0x00E71784 `pea (-0xb66,PC)` = the NIL longword at 0x00E70C20; the
+     * compiler passes its address, not a null pointer. */
+    FILE_$PRIV_LOCK(&AUDIT_$DATA.log_file_uid, 0, 1, 4, 0, 0, 0, 0, 0, 0,
+                    &audit_$open_log_nil_acl_ctx, 0,
+                    (uint32_t *)&AUDIT_$DATA.lock_id, lock_info,
+                    status_ret);
     if (*status_ret != status_$ok) {
         goto error;
     }

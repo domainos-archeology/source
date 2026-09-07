@@ -55,7 +55,11 @@ void DIR_$SET_ACL(uid_t *uid, void *acl, status_$t *status_ret)
     if (status == file_$bad_reply_received_from_remote_node ||
         status == status_$naming_bad_directory) {
         /* Fall back to old FILE_$PRIV_LOCK / SET_ACL / PRIV_UNLOCK sequence */
-        FILE_$PRIV_LOCK(uid, PROC1_$AS_ID, 0, 4, 0, 0x0088, 0x0000, 0, 0, 0,
+        /* 0x00E52D0A `move.l #0x80000` => flags word 0x0008, key word 0.
+         * The ACL-context cell is `pea (-0x79c6,PC)` at 0x00E52D00 = the NIL
+         * longword at 0x00E4B33C; DAT_00e54730 is the identical NIL cell the
+         * other DIR call sites use. */
+        FILE_$PRIV_LOCK(uid, PROC1_$AS_ID, 0, 4, 0, 0x0008, 0x0000, 0, 0, 0,
                         (void **)&DAT_00e54730, 1,
                         (uint32_t *)&lock_handle, &lock_result, status_ret);
         if (*status_ret == status_$ok) {
