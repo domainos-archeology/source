@@ -236,8 +236,8 @@ static void LOCATE_SERVER(uint32_t *node_ret, uint32_t *net_ret, status_$t *stat
         if (time_diff > rem_name_$data.server_timeout) {
             /* Too long since last contact - need to relocate */
             rem_name_$data.heard_from_server = false;
-            rem_name_$data.last_status = status_$naming_directory_must_be_root;
-            *status_ret = status_$naming_directory_must_be_root;
+            rem_name_$data.last_status = status_$naming_cant_find_name_server_helper;
+            *status_ret = status_$naming_cant_find_name_server_helper;
             return;
         }
 
@@ -247,7 +247,7 @@ static void LOCATE_SERVER(uint32_t *node_ret, uint32_t *net_ret, status_$t *stat
         /* Haven't heard from server recently */
         if (rem_name_$data.retry_count > 3) {
             /* Too many retries */
-            *status_ret = status_$naming_directory_must_be_root;
+            *status_ret = status_$naming_cant_find_name_server_helper;
             return;
         }
 
@@ -616,7 +616,7 @@ void REM_NAME_$READ_DIR(uint32_t net, uint32_t node, uid_t *dir_uid,
 
     if (!rem_name_$send_request(net, node, &request, 0x36, 0, 0x0c,
                                  response, 0x200, &resp_len, status_ret)) {
-        if (*status_ret != status_$naming_name_server_helper_is_shutdown) {
+        if (*status_ret != status_$naming_last_entry_in_replicated_root_returned) {
             NETBUF_$RTN_HDR(&response_ptr);
             return;
         }
@@ -725,7 +725,7 @@ void REM_NAME_$READ_REP(uint32_t net, uint32_t node, uid_t *dir_uid,
 
     if (!rem_name_$send_request(net, node, &request, 0x36, 0, 0x0e,
                                  response, 0x200, &resp_len, status_ret)) {
-        if (*status_ret != status_$naming_name_server_helper_is_shutdown) {
+        if (*status_ret != status_$naming_last_entry_in_replicated_root_returned) {
             NETBUF_$RTN_HDR(&response_ptr);
             return;
         }
@@ -796,8 +796,8 @@ void REM_NAME_$DIR_READU(uid_t *dir_uid, void *entries_ret, int32_t *continuatio
             *continuation = (*continuation & 0xFFFF0000) |
                            (((*continuation & 0xFFFF) + entries_read) & 0xFFFF);
             *count_ret += entries_read;
-        } else if (*status_ret == status_$naming_last_entry_in_replicated_root_returned ||
-                   *status_ret == status_$naming_name_server_helper_is_shutdown) {
+        } else if (*status_ret == status_$naming_cannot_find_entry_in_replicated_root ||
+                   *status_ret == status_$naming_last_entry_in_replicated_root_returned) {
             *continuation = 0;
             *count_ret += entries_read;
             *status_ret = status_$ok;

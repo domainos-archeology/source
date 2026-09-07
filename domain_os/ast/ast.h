@@ -517,14 +517,96 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused, aste_t *src_aste,
                     status_$t *status);
 
 /*
+ * ============================================================================
+ * ast_$common_attr_t - the 0x18-byte "common attributes" summary
+ * ============================================================================
+ *
+ * AST_$GET_COMMON_ATTRIBUTES (0x00E04A00) asks AST_$GET_ATTRIBUTES for the
+ * full 0x90-byte attribute record (`link.w A6,-0x90`, buffer at A6-0x90) and
+ * distils this out of it.  The big record is a verbatim copy of the AOTE from
+ * +0x0C onwards (0x00E049A2: `lea (0xc,A2),A0` + `moveq #0x23` + 36 longword
+ * moves), so record offset R corresponds to aote_t offset 0x0C+R and every
+ * field below is named after the aote_t member it comes from.
+ *
+ * The A6 displacements in the listing are relative to A6-0x90, so a
+ * displacement d is record offset d+0x90 - getting that wrong is what put the
+ * wrong source offsets in ast/get_common_attributes.c before source-pdur.
+ */
+typedef struct ast_$common_attr_t {
+    uint8_t     obj_type;       /* 0x00 <- aote+0x0C  (0x00E04A2C, one long) */
+    uint8_t     sub_type;       /* 0x01 <- aote+0x0D */
+    uint8_t     attr_flags_hi;  /* 0x02 <- aote+0x0E, then bit 1 is replaced by
+                                 *      aote+0x71 bit 5 (0x00E04A76-0x00E04A88)
+                                 *      and bit 0 by aote+0x71 bit 4
+                                 *      (0x00E04A8C-0x00E04A9C) */
+    uint8_t     attr_flags_lo;  /* 0x03 <- aote+0x0F */
+    uint32_t    length;         /* 0x04 <- aote+0x20 (0x00E04A30, from record
+                                 *      +0x14): the object's length in bytes.
+                                 *      DIR_$VALIDATE_HANDLE stores it as the
+                                 *      directory's size and substitutes one
+                                 *      0x400-byte page when it is zero
+                                 *      (0x00E4B550-0x00E4B560).
+                                 *      AST_$GET_ATTRIBUTES keeps the larger of
+                                 *      the cached and the freshly read value
+                                 *      (0x00E048F0-0x00E04918), so it only
+                                 *      ever grows.
+                                 *      TODO: how this relates to aote+0x28's
+                                 *      48-bit length (attributes 9/0x17/0x1A)
+                                 *      is not yet established. */
+    uid_t       mod_time;       /* 0x08 <- aote+0x48, attribute 5 */
+    uint32_t    blocks;         /* 0x10 <- aote+0x50, attribute 0x0B
+                                 *      (0x00E04A36-0x00E04A42 copies 12 bytes
+                                 *      from record+0x3C in one dbf loop) */
+    uint16_t    refcount;       /* 0x14 <- aote+0x80: the object reference
+                                 *      count.  `move.w (-0x1c,A6),(0x14,A2)`
+                                 *      at 0x00E04A46; -0x1C+0x90 = record
+                                 *      +0x74 = aote+0x80, which is the word
+                                 *      AST_$SET_ATTR_DISPATCH's attributes
+                                 *      6/7/8 raise and lower
+                                 *      (`addq.w #0x1,(0x80,A2)` at 0x00E04CEE
+                                 *      and `subq` at 0x00E04D52, both guarded
+                                 *      by `cmpi.w #-0xb` = 0xFFF5). */
+    int8_t      access_flags;   /* 0x16: bit 7 <- aote+0x71 bit 7 (OS-only
+                                 *      access), bit 6 <- aote+0x71 bit 6
+                                 *      (0x00E04A4C-0x00E04A72).  A Domain
+                                 *      boolean when only bit 7 is consulted. */
+    uint8_t     pad_17;         /* 0x17: never written */
+} ast_$common_attr_t;
+
+_Static_assert(offsetof(ast_$common_attr_t, sub_type)      == 0x01, "cattr.sub_type");
+_Static_assert(offsetof(ast_$common_attr_t, attr_flags_hi) == 0x02, "cattr.attr_flags_hi");
+_Static_assert(offsetof(ast_$common_attr_t, attr_flags_lo) == 0x03, "cattr.attr_flags_lo");
+_Static_assert(offsetof(ast_$common_attr_t, length)        == 0x04, "cattr.length");
+_Static_assert(offsetof(ast_$common_attr_t, mod_time)      == 0x08, "cattr.mod_time");
+_Static_assert(offsetof(ast_$common_attr_t, blocks)        == 0x10, "cattr.blocks");
+_Static_assert(offsetof(ast_$common_attr_t, refcount)      == 0x14, "cattr.refcount");
+_Static_assert(offsetof(ast_$common_attr_t, access_flags)  == 0x16, "cattr.access_flags");
+_Static_assert(sizeof(ast_$common_attr_t) == 0x18, "sizeof ast_$common_attr_t");
+
+/* ast_$common_attr_t.access_flags bits (aote_t.access_flags, aote+0x71). */
+#define AST_CATTR_OS_ONLY       0x80    /* bit 7 */
+#define AST_CATTR_MODE_BIT6     0x40    /* bit 6 */
+
+/* ast_$common_attr_t.attr_flags_hi bits that AST_$GET_COMMON_ATTRIBUTES
+ * overwrites from aote+0x71 (rather than leaving as aote+0x0E's own bits). */
+#define AST_CATTR_HI_MODE_BIT5  0x02    /* <- aote+0x71 bit 5 */
+#define AST_CATTR_HI_MODE_BIT4  0x01    /* <- aote+0x71 bit 4 */
+
+/*
+ * The full 0x90-byte record AST_$GET_ATTRIBUTES fills (aote+0x0C onwards).
+ * Kept opaque for now; only its size matters to callers.
+ */
+#define AST_ATTR_REC_SIZE       0x90
+
+/*
  * Function prototypes - Attributes
  */
 void AST_$GET_LOCATION(uint32_t *uid_info, uint16_t flags, uint32_t unused,
                        uint32_t *vol_uid_out, status_$t *status);
 void AST_$GET_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs,
                          status_$t *status);
-void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs,
-                                status_$t *status);
+void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid, uint16_t flags,
+                                ast_$common_attr_t *attrs, status_$t *status);
 void AST_$GET_ACL_ATTRIBUTES(uid_t *uid, uint16_t flags, void *acl,
                              status_$t *status);
 void AST_$SET_ATTRIBUTE(uid_t *uid, uint16_t attr_id, void *value,

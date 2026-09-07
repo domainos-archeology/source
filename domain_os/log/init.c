@@ -30,12 +30,19 @@
 /* Status code for name not found */
 #define status_$naming_name_not_found 0x000e0007
 
+/* `move.w #0x2,-(SP)` at 0x00E300D0 - the AST_$GET_COMMON_ATTRIBUTES
+ * selector LOG_$INIT uses. */
+#define LOG_CATTR_SELECTOR      0x0002
+
 void LOG_$INIT(void)
 {
     status_$t status;
-    uid_t logfile_uid;
+    /* A6-0x20: the object-location descriptor AST_$GET_ATTRIBUTES reads the
+     * UID out of at +0x08 and overwrites in full on success. */
+    file_$obj_loc_t desc;
     int32_t file_size;
-    uint8_t out_attrs[8];
+    ast_$common_attr_t cattr;   /* A6-0x38, 0x18 bytes */
+    uint32_t map_out;           /* A6-0x40, MST_$MAPS' output longword */
     uint8_t lock_out[4];
     int16_t *vpn;
     int8_t is_new_file;
@@ -58,18 +65,22 @@ void LOG_$INIT(void)
         return;
     }
 
-    /* Copy UID and clear a flag bit */
-    logfile_uid.high = LOG_$LOGFILE_UID.high;
-    logfile_uid.low = LOG_$LOGFILE_UID.low;
+    /* 0x00E300B8: the UID goes to descriptor+0x08, where
+     * AST_$GET_ATTRIBUTES reads it - not at the head of the record. */
+    desc.uid = LOG_$LOGFILE_UID;
+    /* 0x00E300C0 `bclr.b #0x6,(-0x3,A6)` = descriptor+0x1D. */
+    desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-    /* Get file attributes to check size */
-    AST_$GET_COMMON_ATTRIBUTES(&LOG_$LOGFILE_UID, 2, out_attrs, &status);
+    /* Get file attributes to check size (0x00E300D8) */
+    AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, LOG_CATTR_SELECTOR, &cattr,
+                               &status);
     if (log_$check_op_status("get_attributes%$", &status) < 0) {
         return;
     }
 
-    /* Extract file size from attributes - file_size is at beginning */
-    file_size = *(int32_t *)out_attrs;
+    /* 0x00E300F2 `tst.l (-0x34,A6)` with the record at A6-0x38: the object's
+     * length, at +0x04.  `seq` makes is_new_file 0xFF when it is zero. */
+    file_size = (int32_t)cattr.length;
     is_new_file = (file_size == 0) ? (int8_t)-1 : 0;
 
     /* Map the log file into memory
@@ -77,7 +88,7 @@ void LOG_$INIT(void)
      */
     vpn = (int16_t *)MST_$MAPS(0, (int16_t)0xff00, &LOG_$LOGFILE_UID, 0,
                                 LOG_BUFFER_SIZE, 0x16, 0, is_new_file,
-                                out_attrs, &status);
+                                &map_out, &status);   /* 0x00E300FC */
     if (log_$check_op_status("map%$", &status) < 0) {
         return;
     }

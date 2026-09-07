@@ -115,7 +115,7 @@ void DIR_$LOCK_OBJ(void *handle, int16_t mode, status_$t *status_ret)
     }
 
 found:
-    *status_ret = status_$naming_ran_out_of_address_space;  /* 0x000E0016 */
+    *status_ret = status_$naming_directory_locked;  /* 0x000E0016 */
     lock_entry = (uint32_t *)h[0x0D];
     retry_limit = 2;
     retry_count = 1;

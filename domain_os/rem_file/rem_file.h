@@ -8,6 +8,7 @@
 #define REM_FILE_H
 
 #include "base/base.h"
+#include "file/file.h"     /* file_$obj_loc_t - REM_FILE_$UNLOCK takes one */
 
 /*
  * REM_FILE_$UNLOCK_ALL - Release all remote file locks
@@ -191,26 +192,33 @@ void REM_FILE_$LOCK(void *location_block, uint16_t lock_mode, uint16_t lock_type
  * REM_FILE_$UNLOCK - Unlock a remote file
  *
  * Callee frame at 0x00E61D1C: 0x08 long location_block, 0x0C word
- * unlock_mode, 0x0E long lock_key, 0x12 word lock_seq, 0x14 long remote_node,
+ * unlock_mode, 0x0E long rem_key, 0x12 word lock_key, 0x14 long rem_node,
  * 0x18 *byte* release_flag (`move.b (0x18,A6),D2b` at 0x00E61D3E - a Pascal
  * boolean in a word slot), 0x1A long status.
  *
- * @param location_block Location block (file_$obj_loc_t; the UID is at +0x08)
- * @param unlock_mode    Unlock mode
- * @param lock_key       Lock key (lock entry +0x00)
- * @param lock_seq       Lock sequence/key word (lock entry +0x16)
- * @param remote_node    Remote node holding lock
- * @param release_flag   Domain boolean: AST_$SET_DTS said the object was
- *                       modified, so ask the server for a new DTS
+ * The four middle arguments are exactly FILE_$PRIV_UNLOCK's lock_mode / key /
+ * rem_key / rem_node, which is how REM_FILE_$SERVER's 0x0C case unpacks them
+ * again on the far side (request +0x14, +0x1C, +0x0C, +0x10).
+ *
+ * @param location_block Object-location descriptor; the UID is at +0x08 and
+ *                       the remote address info at +0x10 (`pea (0x10,A2)` at
+ *                       0x00E61DBC)
+ * @param unlock_mode    Lock mode being released (request +0x14)
+ * @param rem_key        Remote lock context, lock entry +0x08 (request +0x0C)
+ * @param lock_key       Lock sequence word, lock entry +0x14 (request +0x1C)
+ * @param rem_node       Node that owns the lock (request +0x10)
+ * @param release_flag   Domain boolean: ask the server to return the object's
+ *                       timestamps so AST_$SET_DTS can refresh the AOTE
  * @param status         Output status code
  *
- * Returns: Result byte from unlock operation
+ * Returns: the result byte FILE_$PRIV_UNLOCK produced on the server
+ *          (response +0x0E), or 0 when the reply carried no payload
  *
  * Original address: 0x00E61D1C
  */
-uint8_t REM_FILE_$UNLOCK(void *location_block, uint16_t unlock_mode,
-                         uint32_t lock_key, uint16_t lock_seq,
-                         uint32_t remote_node, boolean release_flag,
+uint8_t REM_FILE_$UNLOCK(file_$obj_loc_t *location_block, uint16_t unlock_mode,
+                         uint32_t rem_key, uint16_t lock_key,
+                         uint32_t rem_node, boolean release_flag,
                          status_$t *status);
 
 /*

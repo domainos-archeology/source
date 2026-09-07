@@ -28,7 +28,7 @@
 #include "mst/mst.h"
 #include "misc/crash_system.h"
 
-void name_$unmap_dir_buffers(int16_t asid, void *mapped_info)
+void name_$unmap_dir_buffers(int16_t asid, name_$mapped_info_t *mapped_info)
 {
     char *info = (char *)mapped_info;
     int32_t unmap_size;

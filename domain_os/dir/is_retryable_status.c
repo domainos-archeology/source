@@ -11,7 +11,7 @@
  * Retryable status codes:
  *   0x000E002B - directory not local
  *   0x000E0020 - directory not found in pathname
- *   0x000E0033 - directory object not found (spelled naming_acl_not_found)
+ *   0x000E0033 - directory object not found
  *   0x000F0003 - bad reply received from remote node
  *   0x000F0004 - communications problem with remote node
  *   subsystem 0x11 (byte 1 == 0x11) - network subsystem errors
@@ -46,7 +46,7 @@ int8_t DIR_$IS_RETRYABLE_STATUS(status_$t status)
     if (status == status_$naming_directory_not_found_in_pathname) {
         result = (int8_t)0xFF;
     }
-    if (status == status_$naming_acl_not_found) {  /* 0x000E0033 */
+    if (status == status_$naming_directory_object_not_found) {  /* 0x000E0033 */
         result = (int8_t)0xFF;
     }
     if (status == file_$bad_reply_received_from_remote_node) {   /* 0xF0003 */

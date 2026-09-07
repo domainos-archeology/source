@@ -90,7 +90,7 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
             *(uint8_t *)status_ret &= 0x7F;
             if (*status_ret == file_$object_not_found) {
                 /* ACL object not found - convert to naming error */
-                *status_ret = status_$naming_acl_not_found;
+                *status_ret = status_$naming_directory_object_not_found;
             }
             goto error_release;
         }

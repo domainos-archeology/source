@@ -7,7 +7,7 @@
  * Process:
  * 1. Initialize output UID to UID_$NIL
  * 2. Call AST_$GET_COMMON_ATTRIBUTES for the target object
- * 3. Verify target is a file (not directory): status_$naming_name_is_not_a_file
+ * 3. Verify target is a file (not directory): status_$naming_branch_is_not_a_directory
  * 4. Check if directory is locked: status_$naming_directory_locked
  * 5. Check ACL rights via ACL_$RIGHTS:
  *    - status_$naming_insufficient_rights

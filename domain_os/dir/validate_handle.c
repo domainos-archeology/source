@@ -37,98 +37,99 @@
 
 #include "dir/dir_internal.h"
 #include "name/name.h"
+#include "proc1/proc1.h"
+
+/* `move.w #0x80,-(SP)` at 0x00E4B47A - the AST_$GET_COMMON_ATTRIBUTES
+ * selector this site uses. */
+#define DIR_CATTR_VALIDATE          0x0080
+
+/* `cmpi.w #0x9,(-0x2,A0,D0w*0x1)` at 0x00E4B4CA against PROC1_$TYPE. */
+#define DIR_PROC_TYPE_NS_HELPER     9
 
 void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
 {
     uint8_t *h = (uint8_t *)handle;
-    uid_t local_uid;
     status_$t local_status;
     uint32_t map_size;
 
-    /* Attribute output fields */
-    uint8_t attr_valid;       /* Whether attrs are valid */
-    uint8_t obj_type;         /* Object type byte */
-    uint8_t flags_byte;       /* Flags (bit 1 = read-only vol) */
-    uint32_t obj_size;        /* Object size */
-    int32_t stale_field;      /* Stale attribute counter */
-    int16_t vol_id;           /* Volume ID */
-    uint8_t remote_flag;      /* Bit 6 = remote object */
+    /* A6-0x58: the object-location descriptor AST_$GET_ATTRIBUTES reads the
+     * UID out of and overwrites in full on success. */
+    file_$obj_loc_t desc;
+    /* A6-0x70: the common-attribute summary. */
+    ast_$common_attr_t cattr;
 
-    /* Buffer for AST_$GET_COMMON_ATTRIBUTES output */
-    uint8_t attr_buf[0x80];
+    /* 0x00E4B45C-0x00E4B466: the handle's UID goes to descriptor+0x08. */
+    desc.uid.high = *(uint32_t *)(h + 0x00);
+    desc.uid.low  = *(uint32_t *)(h + 0x04);
+    /* 0x00E4B46A `bclr.b #0x6,(-0x3b,A6)` = descriptor+0x1D. */
+    desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-    /* Copy UID from handle */
-    local_uid.high = *(uint32_t *)(h + 0x00);
-    local_uid.low = *(uint32_t *)(h + 0x04);
+    AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, DIR_CATTR_VALIDATE, &cattr,
+                               &local_status);          /* 0x00E4B482 */
 
-    /* Clear bit 6 of remote flag before call */
-    /* attr_buf has remote_flag at relative offset, use local variables */
-    remote_flag = 0;
-
-    /* Get common attributes */
-    AST_$GET_COMMON_ATTRIBUTES(&local_uid, 0x80, &attr_valid, &local_status);
-
-    /* TODO(source-qgq): The exact layout of AST_$GET_COMMON_ATTRIBUTES output
-     * needs verification. The decompiler shows various field accesses
-     * into the output buffer. The key fields extracted are:
-     *   - attr_valid (byte): non-zero if attributes are present
-     *   - obj_type (byte): 1=file, 2=directory
-     *   - flags_byte (byte at offset ~0x0B): bit 1 = read-only volume
-     *   - remote_flag (byte at offset ~0x1D): bit 6 = remote object
-     *   - obj_size (4 bytes): object size
-     *   - stale_field (4 bytes): stale attribute counter
-     *   - vol_id (2 bytes): volume ID
-     */
-
-    if (local_status != status_$ok || (int8_t)remote_flag < 0) {
-        /* Attribute error or remote object */
+    /* 0x00E4B48C-0x00E4B4B2.  descriptor+0x1D bit 7 is set when the object
+     * lives on another node. */
+    if (local_status != status_$ok || desc.flags < 0) {
         *status_ret = local_status;
         if (*status_ret == status_$wrong_type || *status_ret == status_$ok) {
-            *status_ret = status_$naming_acl_not_found;  /* 0x000E0033 */
+            *status_ret = status_$naming_directory_object_not_found;  /* 0x000E0033 */
         }
         goto error;
     }
 
-    /* Check for server process with deleted object */
-    /* vol_id field (local_5e) is negative when object is pending delete */
-    /* Skipping detailed server check - see assembly for exact logic */
-
-    /* Check read-only volume for write mode */
-    if ((flags_byte & 2) != 0 && mode == 2) {
-        *status_ret = status_$naming_vol_mounted_read_only;
+    /*
+     * 0x00E4B4B6: `tst.w (-0x5a,A6)` is the WORD at cattr+0x16, whose high
+     * byte is access_flags - so this is "bit 7 of access_flags", the OS-only
+     * access bit.  A type-9 process (the naming server helper) may not touch
+     * such an object.
+     */
+    if (cattr.access_flags < 0 &&
+        PROC1_$TYPE[PROC1_$CURRENT] == DIR_PROC_TYPE_NS_HELPER) {  /* 0x00E4B4CA */
+        /* 0x00E4B4D2 `move.l #0x3000a,(A3)` then 0x00E4B4D8
+         * `bset.b #0x7,(A3)` - the error bit goes in bit 31. */
+        *status_ret = (status_$t)(status_$os_only_local_access_allowed | 0x80000000u);
         goto error;
     }
 
-    /* Validate object type */
-    if (obj_type != 1 && obj_type != 2) {
-        *status_ret = status_$naming_name_is_not_a_file;  /* 0x000E000E */
+    /* 0x00E4B4E0: bit 1 of the low attribute-flags byte marks a read-only
+     * volume; mode 2 is the write open. */
+    if ((cattr.attr_flags_lo & 0x02) != 0 && mode == 2) {
+        *status_ret = status_$naming_vol_mounted_read_only;      /* 0x00E4B4EE */
         goto error;
     }
 
-    /* Check if attributes are valid */
-    if (attr_valid == 0) {
-        *status_ret = status_$naming_bad_directory;  /* 0x000E000D */
+    /* 0x00E4B4FA: only sub-types 1 and 2 are directories. */
+    if (cattr.sub_type != 1 && cattr.sub_type != 2) {
+        *status_ret = status_$naming_branch_is_not_a_directory;  /* 0x000E000E */
         goto error;
     }
 
-    /* Clear stale attributes if present */
-    if (stale_field != 0) {
-        uint32_t zero = 0;
-        AST_$SET_ATTRIBUTE(&local_uid, 0x0B, &zero, status_ret);
+    /* 0x00E4B516: object type 0 means the object carries no attributes. */
+    if (cattr.obj_type == 0) {
+        *status_ret = status_$naming_bad_directory;              /* 0x000E000D */
+        goto error;
+    }
+
+    /* 0x00E4B528: a non-zero block count is stale; clear attribute 0x0B. */
+    if (cattr.blocks != 0) {
+        uint32_t zero = 0;                                       /* 0x00E4B52E */
+        AST_$SET_ATTRIBUTE((uid_t *)&desc, 0x0B, &zero, status_ret);
         if (*status_ret != status_$ok) {
             goto error_clear;
         }
     }
 
-    /* Set object size in handle */
-    if (obj_size == 0) {
-        *(uint32_t *)(h + 0x10) = 0x400;
+    /* 0x00E4B550-0x00E4B560: the directory's byte length; zero means one
+     * 0x400-byte page. */
+    if (cattr.length == 0) {
+        *(uint32_t *)(h + 0x10) = DIR_PAGE_SIZE;
     } else {
-        *(uint32_t *)(h + 0x10) = obj_size;
+        *(uint32_t *)(h + 0x10) = cattr.length;
     }
 
-    /* Copy volume ID */
-    *(int16_t *)(h + 0x3A) = vol_id;
+    /* 0x00E4B566 `move.w (-0x56,A6),(0x3a,A2)`: descriptor+0x02, which
+     * AST_$GET_ATTRIBUTES filled from aote+0x9E. */
+    *(int16_t *)(h + 0x3A) = (int16_t)(desc.reserved_00[0] & 0xFFFFu);
 
     /* Check for well-known directory UIDs and use cached mapping info */
 

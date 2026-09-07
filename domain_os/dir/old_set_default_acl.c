@@ -10,6 +10,10 @@
 
 #include "dir/dir_internal.h"
 
+/* `move.w #0x8,-(SP)` at 0x00E5647E - the AST_$GET_COMMON_ATTRIBUTES
+ * selector this site uses. */
+#define DIR_CATTR_SET_DEF_ACL   0x0008
+
 /*
  * DIR_$OLD_SET_DEFAULT_ACL - Legacy set default ACL
  *
@@ -37,7 +41,13 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     int16_t info_len;
     uid_t old_acl;            /* Previous ACL UID to clean up */
     uid_t location_uid;       /* local_6c/local_68 */
-    uint8_t location_buf[16]; /* auStack_64 */
+    /* A6-0x70 in the image, a full 0x20-byte object-location descriptor:
+     * AST_$GET_ATTRIBUTES overwrites all 32 bytes on success (0x00E049B0),
+     * so a 16-byte buffer here was overrunning the frame.
+     * TODO(source-qgq): retype this as file_$obj_loc_t once the
+     * AST_$GET_LOCATION output fields this function reads at +0x0C/+0x0D are
+     * mapped onto its members. */
+    uint8_t location_buf[0x20];
     uint8_t attr_byte;        /* local_58 */
     uint8_t attr_flags;       /* local_57 */
     uint8_t loc_buf1[4];      /* auStack_b0 */
@@ -45,7 +55,7 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     status_$t loc_status;     /* local_a8 */
     uid_t default_acl;
     uid_t *acl_to_set;
-    uint8_t common_attr[4];   /* uStack_1c area */
+    ast_$common_attr_t common_attr;  /* A6-0x18, 0x18 bytes */
     char obj_type;            /* local_1b */
     uint16_t attr_val[2];     /* local_54 */
 
@@ -192,9 +202,13 @@ write_infoblk:
     /* Old ACL exists - check if it's an ACL object and truncate */
     location_uid.high = old_acl.high;
     location_uid.low = old_acl.low;
-    AST_$GET_COMMON_ATTRIBUTES(location_buf, 8, common_attr, &loc_status);
+    AST_$GET_COMMON_ATTRIBUTES((uid_t *)(void *)location_buf,
+                               DIR_CATTR_SET_DEF_ACL, &common_attr,
+                               &loc_status);            /* 0x00E56486 */
     if (loc_status == status_$ok) {
-        if (common_attr[1] != 0x03) {
+        /* 0x00E56498 `move.b (-0x17,A6),D1b` with the record at A6-0x18:
+         * the object's sub-type.  3 is an ACL object. */
+        if (common_attr.sub_type != 0x03) {
             /* Not an ACL object type */
             /* 0x00E564A2 `move.l #0xe002f,(A2)`. */
             *status_ret = status_$naming_object_is_not_an_acl_object;

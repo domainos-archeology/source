@@ -28,6 +28,10 @@
 
 #include "dir/dir_internal.h"
 
+/* `move.w #0x88,-(SP)` at 0x00E526FE - the AST_$GET_COMMON_ATTRIBUTES
+ * selector this site uses. */
+#define DIR_CATTR_CREATE_DIR    0x0088
+
 void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
                            void *result_uid, status_$t *status_ret)
 {
@@ -107,23 +111,22 @@ void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
                     new_uid->low = *(uint32_t *)(ep + 8);
 
                     /* Verify it's a directory by checking common attributes */
-                    uid_t check_uid;
-                    uint8_t attr_buf[8];
-                    uint8_t common_buf[40];
-                    uint8_t type_byte;
+                    file_$obj_loc_t    desc;    /* A6-0x58, 0x20 bytes */
+                    ast_$common_attr_t cattr;   /* A6-0x70, 0x18 bytes */
 
-                    check_uid.high = new_uid->high;
-                    check_uid.low = new_uid->low;
+                    /* 0x00E526E6: the UID goes to descriptor+0x08. */
+                    desc.uid = *new_uid;
+                    /* 0x00E526EE `bclr.b #0x6,(-0x3b,A6)` = descriptor+0x1D. */
+                    desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-                    /* Clear bit 6 of the flags byte at offset within attr_buf */
-                    /* (This corresponds to bclr #6,(-0x3b,A6) in assembly) */
-
-                    AST_$GET_COMMON_ATTRIBUTES(common_buf, 0x88,
-                                               attr_buf, &status);
+                    AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc,
+                                               DIR_CATTR_CREATE_DIR,
+                                               &cattr, &status);  /* 0x00E52706 */
                     if (status == status_$ok) {
-                        type_byte = attr_buf[4];  /* type field */
-                        if (type_byte == 1 || type_byte == 2) {
-                            *status_ret = status_$ok;
+                        /* 0x00E52718 `move.b (-0x6f,A6),D0b` with the record
+                         * at A6-0x70: the object's sub-type. */
+                        if (cattr.sub_type == 1 || cattr.sub_type == 2) {
+                            *status_ret = status_$ok;   /* 0x00E52728 clr.l (A3) */
                         }
                     }
                 }

@@ -15,7 +15,7 @@
  *
  * Compares dir_uid against NAME_$ROOT_UID. If it matches,
  * calls name_$old_add_entry to add the entry with type=2.
- * Otherwise returns status_$naming_not_root_dir.
+ * Otherwise returns status_$naming_directory_must_be_root.
  *
  * Parameters:
  *   dir_uid    - UID of root directory
@@ -35,6 +35,6 @@ void DIR_$OLD_ROOT_ADDU(uid_t *dir_uid, char *name, int16_t *name_len,
         name_$old_add_entry(dir_uid, 2, name, (uint16_t)*name_len,
                      file_uid, *flags, status_ret);
     } else {
-        *status_ret = status_$naming_not_root_dir;
+        *status_ret = status_$naming_directory_must_be_root;
     }
 }

@@ -21,6 +21,43 @@
 #include "ec/ec.h"
 
 /*
+ * ----------------------------------------------------------------------------
+ * Object location descriptor (32 bytes)
+ *
+ * FILE_$PRIV_LOCK builds one of these at A6-0x48 and hands it to
+ * AST_$GET_ATTRIBUTES (0x00E5F752), AST_$LOAD_AOTE (0x00E5FB76) and
+ * REM_FILE_$LOCK (0x00E5EEE0).  AST_$GET_ATTRIBUTES reads the caller's UID
+ * from +0x08 (`lea (0x8,A4),A0` at 0x00E047D2) and, on success, overwrites
+ * the whole 32-byte record with the AOTE's copy at aote+0x9C
+ * (0x00E0492C / 0x00E049B4).
+ * ----------------------------------------------------------------------------
+ */
+typedef struct file_$obj_loc_t {
+    uint32_t    reserved_00[2];     /* 0x00: filled in by AST_$GET_ATTRIBUTES */
+    uid_t       uid;                /* 0x08: object UID (set by the caller) */
+    uint32_t    loc_info;           /* 0x10: location word, copied to entry+0x08 */
+    uint32_t    node;               /* 0x14: node id, copied to entry+0x04 */
+    uint32_t    reserved_18;        /* 0x18 */
+    int8_t      rights_bits;        /* 0x1C: OR'ed into lock entry flags1 (0x00E5EC6C) */
+    int8_t      flags;              /* 0x1D: bit 7 = object is remote,
+                                     *       bit 6 = scratch flag used by PRIV_LOCK */
+    uint16_t    reserved_1e;        /* 0x1E */
+} file_$obj_loc_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(file_$obj_loc_t, uid)         == 0x08, "obj_loc.uid");
+_Static_assert(offsetof(file_$obj_loc_t, loc_info)    == 0x10, "obj_loc.loc_info");
+_Static_assert(offsetof(file_$obj_loc_t, node)        == 0x14, "obj_loc.node");
+_Static_assert(offsetof(file_$obj_loc_t, rights_bits) == 0x1C, "obj_loc.rights_bits");
+_Static_assert(offsetof(file_$obj_loc_t, flags)       == 0x1D, "obj_loc.flags");
+_Static_assert(sizeof(file_$obj_loc_t)                == 0x20, "sizeof obj_loc");
+#endif
+
+/* file_$obj_loc_t.flags bits */
+#define FILE_OBJ_LOC_REMOTE     0x80    /* bit 7: object lives on another node */
+#define FILE_OBJ_LOC_SCRATCH    0x40    /* bit 6: cleared/undefined scratch bit */
+
+/*
  * ============================================================================
  * Constants
  * ============================================================================

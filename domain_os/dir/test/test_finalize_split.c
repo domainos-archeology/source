@@ -8,13 +8,18 @@
  *   - purify_split_pages is called
  *   - truncate_pages is called with the correct new_page_count on success
  *   - truncate_pages is NOT called when purify fails
+ *
+ * source-14k1: this file used to keep private copies of dir_insert_ctx_t,
+ * uid_t and status_$t and to #define DIR_INTERNAL_H so the real header stayed
+ * out.  The private context typed the directory handle as uintptr_t, so it
+ * silently disagreed with the real one.  It now includes dir/dir_internal.h
+ * and mocks only the callees, like dir/test/test_insert_entry.c does.
  */
 
 #include <stdio.h>
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdlib.h>
 
 /* Test result tracking */
 static int tests_passed = 0;
@@ -37,44 +42,7 @@ static int tests_failed = 0;
     } \
 } while(0)
 
-/* ================================================================
- * Minimal types and mock definitions
- * ================================================================ */
-
-typedef uint32_t status_$t;
-#define status_$ok 0
-
-#define uid_t dir_uid_t
-typedef struct { uint32_t high; uint32_t low; } dir_uid_t;
-
-#define DIR_MAX_BTREE_DEPTH 9
-typedef struct {
-    uintptr_t   handle;
-    void       *name;
-    uint16_t    name_len;
-    uint16_t    entry_type;
-    uint32_t    extra_val;
-    uid_t      *uid;
-    uint16_t    link_len;
-    void       *link_data;
-    int16_t     overflow_page;
-    int16_t     max_depth;
-    int16_t     current_slot;
-    int16_t     path_page[DIR_MAX_BTREE_DEPTH];
-    int16_t     path_entry[DIR_MAX_BTREE_DEPTH];
-    uint32_t    dir_uid_high;
-    uint32_t    dir_uid_low;
-    int16_t     split_pages[16];
-    int16_t     page_count;
-    uint8_t    *page_data;
-    uint8_t    *idx_base;
-    uint8_t    *new_page;
-    uint8_t    *inter_page;
-    uint8_t    *temp_entry;
-    int16_t     free_space;
-    uint8_t     fim_data[16];
-    uint8_t     remove_uid[8];
-} dir_insert_ctx_t;
+#include "dir/dir_internal.h"
 
 /* ================================================================
  * Mock globals
@@ -108,18 +76,13 @@ uint32_t dir_$truncate_pages(void *handle, uint16_t new_page_count,
     return 0;
 }
 
-/* Prevent real headers from being included */
-#define DIR_INTERNAL_H
-
 /*
- * dir/finalize_split.c turns the 32-bit directory handle into a pointer with
- * NAME_$HANDLE_TO_PTR (name/name.h).  This test carries its own
- * dir_insert_ctx_t whose handle is already a uintptr_t, so the m68k identity
- * form is the right one here.
- * TODO(source-14k1): this file should use the real dir_internal.h instead of
- * its private copies of dir_insert_ctx_t, uid_t and status_$t.
+ * dir/finalize_split.c turns the 32-bit directory handle back into a pointer
+ * with NAME_$HANDLE_TO_PTR (name/name.h).  On a 64-bit host that is the
+ * registry in name/handle_map.c, so it is compiled in here and the tests
+ * register mock_handle with NAME_$PTR_TO_HANDLE.
  */
-#define NAME_$HANDLE_TO_PTR(h)  ((void *)(uintptr_t)(h))
+#include "../../name/handle_map.c"
 
 /* Pull in the implementation */
 #include "../finalize_split.c"
@@ -154,7 +117,7 @@ TEST(basic_finalize) {
 
     dir_insert_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
-    ctx.handle = (uintptr_t)mock_handle;
+    ctx.handle = NAME_$PTR_TO_HANDLE(mock_handle);
     ctx.max_depth = 2;
     ctx.current_slot = 1;
 
@@ -201,7 +164,7 @@ TEST(purify_failure_skips_truncate) {
 
     dir_insert_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
-    ctx.handle = (uintptr_t)mock_handle;
+    ctx.handle = NAME_$PTR_TO_HANDLE(mock_handle);
     ctx.max_depth = 1;
     ctx.current_slot = 0;
     ctx.split_pages[1] = 5;  /* saved value */
@@ -233,7 +196,7 @@ TEST(negative_diff_skips_loop) {
 
     dir_insert_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
-    ctx.handle = (uintptr_t)mock_handle;
+    ctx.handle = NAME_$PTR_TO_HANDLE(mock_handle);
     ctx.max_depth = 0;
     ctx.current_slot = 1;
 
@@ -269,7 +232,7 @@ TEST(diff_zero_single_copy) {
 
     dir_insert_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
-    ctx.handle = (uintptr_t)mock_handle;
+    ctx.handle = NAME_$PTR_TO_HANDLE(mock_handle);
     ctx.max_depth = 3;
     ctx.current_slot = 3;
 
@@ -302,7 +265,7 @@ TEST(large_diff_multi_copy) {
 
     dir_insert_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
-    ctx.handle = (uintptr_t)mock_handle;
+    ctx.handle = NAME_$PTR_TO_HANDLE(mock_handle);
     ctx.max_depth = 4;
     ctx.current_slot = 1;
 
@@ -348,7 +311,7 @@ TEST(truncate_failure_propagates) {
 
     dir_insert_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
-    ctx.handle = (uintptr_t)mock_handle;
+    ctx.handle = NAME_$PTR_TO_HANDLE(mock_handle);
     ctx.max_depth = 1;
     ctx.current_slot = 0;
     ctx.split_pages[1] = 7;
@@ -381,7 +344,7 @@ TEST(handle_passed_to_truncate) {
 
     dir_insert_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
-    ctx.handle = (uintptr_t)other_handle;
+    ctx.handle = NAME_$PTR_TO_HANDLE(other_handle);
     ctx.max_depth = 1;
     ctx.current_slot = 1;
     ctx.split_pages[1] = 3;

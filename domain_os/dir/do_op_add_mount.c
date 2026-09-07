@@ -40,6 +40,10 @@
 /*
  * Mount table constants (offsets relative to A5)
  */
+/* `move.w #0x80,-(SP)` at 0x00E532FE - the AST_$GET_COMMON_ATTRIBUTES
+ * selector this site uses. */
+#define DIR_CATTR_MOUNT         0x0080
+
 #define DIR_MOUNT_COUNT_OFF     0x1558  /* Mount count (32-bit) */
 #define DIR_MOUNT_COUNT16_OFF   0x155A  /* Mount count (16-bit, upper half) */
 #define DIR_MOUNT_SRC_BASE      0x155C  /* Source UIDs: +idx*8 */
@@ -58,12 +62,11 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
 {
     uint32_t handle;
     char *a5 = (char *)__A5_BASE();
-    uid_t local_uid;
+    file_$obj_loc_t desc;   /* A6-0x40, the object-location descriptor */
     uid_t resolved_uid;     /* auStack_44 - resolved UID from handle open */
     int16_t i;
     int32_t count;
-    uint8_t attr_buf[4];    /* uStack_24 area */
-    char lock_state;        /* local_23 in decompilation */
+    ast_$common_attr_t cattr;   /* A6-0x20, 0x18 bytes */
 
     ACL_$ENTER_SUPER();
 
@@ -105,20 +108,23 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
      * Set up UID copy for attribute check.
      * Clear bit 6 of the flags byte in the local area.
      */
-    local_uid.high = dir_uid->high;
-    local_uid.low = dir_uid->low;
-    /* local_27 &= 0xBF - clear bit 6 of attribute flags byte */
+    /* 0x00E532E8: the UID goes to descriptor+0x08, where
+     * AST_$GET_ATTRIBUTES reads it. */
+    desc.uid = *dir_uid;
+    /* 0x00E532F0 `bclr.b #0x6,(-0x23,A6)` = descriptor+0x1D. */
+    desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-    /* Check directory attributes - verify it's not locked */
-    AST_$GET_COMMON_ATTRIBUTES(&local_uid, 0x80, attr_buf, status_ret);
+    /* Check directory attributes - verify it's not locked (0x00E53306) */
+    AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, DIR_CATTR_MOUNT, &cattr,
+                               status_ret);
     if (*status_ret != status_$ok) {
         goto cleanup;
     }
 
-    /* lock_state is at the attribute result byte corresponding to local_23 */
-    lock_state = ((char *)attr_buf)[3];
-    if (lock_state == 0x02) {
-        *status_ret = status_$naming_directory_locked;
+    /* 0x00E5331A `move.b (-0x1f,A6),D0b` with the record at A6-0x20: the
+     * object's sub-type, zero-extended to a word (0x00E5331E). */
+    if (cattr.sub_type == 2) {
+        *status_ret = status_$naming_directory_locked;   /* 0x00E53324 */
         goto cleanup;
     }
 

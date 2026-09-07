@@ -9,6 +9,10 @@
 
 #include "file/file_internal.h"
 
+/* `move.w #0x1,-(SP)` at 0x00E5DF18 - the attribute selector
+ * FILE_$GET_DEFAULT_PROT hands AST_$GET_COMMON_ATTRIBUTES. */
+#define FILE_GET_DEFAULT_PROT_ATTRS     0x0001
+
 /* Status codes */
 #define file_$invalid_arg    0x000F0014
 
@@ -90,7 +94,8 @@ void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, uint32_t *acl_data,
          *
          * This was a Pascal nested procedure that:
          * 1. Gets file_uid from parent frame
-         * 2. Calls AST_$GET_COMMON_ATTRIBUTES with mode 1
+         * 2. Calls AST_$GET_COMMON_ATTRIBUTES with selector 1 on a
+         *    file_$obj_loc_t it builds at its own A6-0x28
          * 3. Writes status to parent's local_status (-0x44)
          * 4. Returns protection value (first byte of attr buffer)
          *
@@ -98,21 +103,25 @@ void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, uint32_t *acl_data,
          * that access parent stack frames.
          */
         {
-            uint8_t attr_buf[24];   /* Common attributes buffer */
-            uid_t lookup_uid;       /* UID for lookup */
+            ast_$common_attr_t cattr;   /* A6-0x40, 0x18 bytes */
+            file_$obj_loc_t    desc;    /* A6-0x28, 0x20 bytes */
 
-            /* Copy file UID for lookup */
-            lookup_uid.high = file_uid->high;
-            lookup_uid.low = file_uid->low;
+            /* 0x00E5DEFC-0x00E5DF04: the UID goes at descriptor+0x08, which
+             * is where AST_$GET_ATTRIBUTES reads it (`lea (0x8,A4),A0` at
+             * 0x00E047D2) - not at the head of the record. */
+            desc.uid = *file_uid;
 
-            /* Note: Original clears bit 6 of a flags byte at -0xb offset
-             * This is related to remote flag handling in the lookup context */
+            /* 0x00E5DF08 `bclr.b #0x6,(-0xb,A6)`: descriptor+0x1D bit 6. */
+            desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-            /* Get common attributes (mode 1 = get protection info) */
-            AST_$GET_COMMON_ATTRIBUTES(&lookup_uid, 1, attr_buf, &local_status);
+            /* 0x00E5DF0E-0x00E5DF20.  The status goes to the parent frame's
+             * A2-0x44, which is this function's local_status. */
+            AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, FILE_GET_DEFAULT_PROT_ATTRS,
+                                       &cattr, &local_status);
 
-            /* Return protection value (first byte of attr_buf) */
-            default_prot = (int16_t)(uint8_t)attr_buf[0];
+            /* 0x00E5DF26-0x00E5DF30: the object type byte, zero-extended to
+             * the word the nested procedure writes through its argument. */
+            default_prot = (int16_t)cattr.obj_type;
         }
 
         *status_ret = local_status;

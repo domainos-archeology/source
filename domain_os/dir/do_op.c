@@ -172,7 +172,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                 return;
             }
 
-            if (resp->status == status_$naming_ran_out_of_address_space) {
+            if (resp->status == status_$naming_directory_locked) {
                 /* Retry with same hint */
                 retry_count++;
                 hint_count = next_idx;
@@ -625,7 +625,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             return;
         }
         /* 0xE4C9C2: only "directory object not found" tries the next hint. */
-        if (resp->status != status_$naming_acl_not_found) {
+        if (resp->status != status_$naming_directory_object_not_found) {
             return;
         }
 

@@ -99,7 +99,7 @@ static int      mock_cattr_calls;
 static uint16_t mock_cattr_flags;
 static status_$t mock_cattr_status;
 static uint8_t  mock_cattr_byte0;       /* +0x00: "not empty" */
-static uint16_t mock_cattr_w14;         /* +0x14 */
+static uint16_t mock_cattr_refcount;         /* +0x14 */
 
 static int      mock_local_read_lock_calls;
 static status_$t mock_local_read_lock_status;
@@ -195,17 +195,15 @@ void AST_$COND_FLUSH(uid_t *uid, uint32_t *timestamp, status_$t *status)
     *status = 0;
 }
 
-void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs,
-                                status_$t *status)
+void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid, uint16_t flags,
+                                ast_$common_attr_t *attrs, status_$t *status)
 {
-    uint8_t *a = (uint8_t *)attrs;
-
     (void)uid;
     mock_cattr_calls++;
     mock_cattr_flags = flags;
-    memset(a, 0, 0x18);
-    a[0] = mock_cattr_byte0;
-    *(uint16_t *)(void *)(a + 0x14) = mock_cattr_w14;
+    memset(attrs, 0, sizeof(*attrs));
+    attrs->obj_type = mock_cattr_byte0;
+    attrs->refcount = mock_cattr_refcount;
     *status = mock_cattr_status;
 }
 
@@ -217,18 +215,18 @@ void REM_FILE_$LOCAL_READ_LOCK(void *addr_info, uid_t *file_uid,
     *status = mock_local_read_lock_status;
 }
 
-uint8_t REM_FILE_$UNLOCK(void *location_block, uint16_t unlock_mode,
-                         uint32_t lock_key, uint16_t lock_seq,
-                         uint32_t remote_node, boolean release_flag,
+uint8_t REM_FILE_$UNLOCK(file_$obj_loc_t *location_block, uint16_t unlock_mode,
+                         uint32_t rem_key, uint16_t lock_key,
+                         uint32_t rem_node, boolean release_flag,
                          status_$t *status)
 {
-    file_$obj_loc_t *desc = (file_$obj_loc_t *)location_block;
+    file_$obj_loc_t *desc = location_block;
 
     mock_rem_unlock_calls++;
     mock_rem_unlock_mode      = unlock_mode;
-    mock_rem_unlock_key       = lock_key;
-    mock_rem_unlock_seq       = lock_seq;
-    mock_rem_unlock_node      = remote_node;
+    mock_rem_unlock_key       = rem_key;
+    mock_rem_unlock_seq       = lock_key;
+    mock_rem_unlock_node      = rem_node;
     mock_rem_unlock_release   = release_flag;
     mock_rem_unlock_uid       = desc->uid;
     mock_rem_unlock_loc_info  = desc->loc_info;
@@ -304,7 +302,7 @@ static void reset(void)
     mock_cattr_flags = 0;
     mock_cattr_status = 0;
     mock_cattr_byte0 = 0;
-    mock_cattr_w14 = 1;             /* != 0: skip REM_FILE_$LOCAL_READ_LOCK */
+    mock_cattr_refcount = 1;             /* != 0: skip REM_FILE_$LOCAL_READ_LOCK */
 
     mock_local_read_lock_calls = 0;
     mock_local_read_lock_status = 0;
@@ -915,7 +913,7 @@ TEST(remote_entry_read_lock_probe_schedules_a_truncate)
     uint32_t dtv = 0;
 
     reset();
-    mock_cattr_w14 = 0;
+    mock_cattr_refcount = 0;
     mock_local_read_lock_status = file_$object_not_locked_by_this_process;
     make_entry(ENTRY_A, &TEST_UID, 4, FILE_LOCK_F2_REMOTE, 1);
     FILE_$PROC_LOT_SLOT(TEST_ASID, 5) = ENTRY_A;
@@ -929,7 +927,7 @@ TEST(remote_entry_read_lock_probe_schedules_a_truncate)
 
     /* A non-zero +0x14 word skips the probe entirely. */
     reset();
-    mock_cattr_w14 = 1;
+    mock_cattr_refcount = 1;
     make_entry(ENTRY_A, &TEST_UID, 4, FILE_LOCK_F2_REMOTE, 1);
     FILE_$PROC_LOT_SLOT(TEST_ASID, 5) = ENTRY_A;
 

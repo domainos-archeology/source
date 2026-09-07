@@ -84,7 +84,6 @@ void FILE_$VERIFY_LOCK_HOLDER(file_lock_info_internal_t *lock_info, status_$t *s
      * the lock was released - need to clean up
      */
     if (verify_status == file_$object_not_locked_by_this_process) {
-        status_$t unlock_status;
         uint32_t holder_node;
 
         /*
@@ -121,38 +120,49 @@ void FILE_$VERIFY_LOCK_HOLDER(file_lock_info_internal_t *lock_info, status_$t *s
                                     lock_info->context,     /* rem_key   */
                                     lock_info->owner_node,  /* rem_node  */
                                     dtv_out,
-                                    &unlock_status);
+                                    &verify_status);
         } else {
             /*
-             * Remote holder - unlock via RPC
+             * Remote holder - unlock through REM_FILE_$UNLOCK.
+             *
+             * 0x00E607C8-0x00E607D8 builds a bare file_$obj_loc_t at A6-0x30:
+             *   move.l D0,(-0x1c,A6)          desc.node     = holder_node
+             *   move.l (0x1a,A2),(-0x20,A6)   desc.loc_info = holder_port
+             *   lea (A2),A0 / two move.l (A0)+ desc.uid     = lock_info->file_uid
+             * Nothing else in the 32-byte record is initialised - the original
+             * hands out uninitialised stack for +0x00..+0x07 and +0x18..+0x1F,
+             * which REM_FILE_$UNLOCK never reads.
+             *
+             * 0x00E607DC-0x00E607F8, pushed right to left:
+             *   subq.l #0x2,SP      result slot (the returned byte is dropped)
+             *   pea (-0x3c,A6)      status      = &verify_status
+             *   clr.w               release     = FALSE
+             *   move.l (0xc,A2)     rem_node    = lock_info->owner_node
+             *   move.w (0x14,A2)    lock_key    = lock_info->sequence
+             *   move.l (0x8,A2)     rem_key     = lock_info->context
+             *   move.w (0x12,A2)    unlock_mode = lock_info->mode
+             *   pea (-0x30,A6)      location_block = &desc
              */
-            struct {
-                uint32_t node;
-                uint32_t port;
-                uid_t    file_uid;
-            } unlock_params;
+            file_$obj_loc_t desc;
 
-            unlock_params.node = holder_node;
-            unlock_params.port = lock_info->holder_port;
-            unlock_params.file_uid.high = lock_info->file_uid.high;
-            unlock_params.file_uid.low = lock_info->file_uid.low;
+            desc.node     = holder_node;
+            desc.loc_info = lock_info->holder_port;
+            desc.uid      = lock_info->file_uid;
 
-            uint8_t result_buf[8];
-
-            REM_FILE_$UNLOCK(result_buf,
-                             lock_info->mode,
-                             lock_info->context,
-                             lock_info->sequence,
-                             lock_info->owner_node,
-                             0,                            /* modified_flag = 0 */
-                             &unlock_status);
+            (void)REM_FILE_$UNLOCK(&desc,
+                                   lock_info->mode,        /* unlock_mode */
+                                   lock_info->context,     /* rem_key     */
+                                   lock_info->sequence,    /* lock_key    */
+                                   lock_info->owner_node,  /* rem_node    */
+                                   false,                  /* release     */
+                                   &verify_status);
         }
 
         /*
          * If unlock succeeded, return the original "not locked" status
          * to signal that the caller should retry
          */
-        if (unlock_status == status_$ok) {
+        if (verify_status == status_$ok) {
             *status_ret = file_$object_not_locked_by_this_process;
             return;
         }

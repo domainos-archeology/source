@@ -567,7 +567,7 @@ restore_super:
         ACL_$EXIT_SUPER();
     }
 
-    if (f->response.status == status_$naming_object_not_found_in_dir) {
+    if (f->response.status == status_$naming_directory_locked) {
         f->response.pkt_flag = 0xFFFF;
         REM_FILE_$STALE_LINK_COUNT++;
     }
@@ -1340,7 +1340,7 @@ release_netbuf:                                     /* 0x00E639DC */
         if ((int8_t)REQ_B(&f, -0x400) < 0) {
             ACL_$EXIT_SUPER();
         }
-        if (f.dir_status != status_$naming_object_not_found_in_dir) {
+        if (f.dir_status != status_$naming_directory_locked) {
             goto reply_len_default;
         }
         f.response.pkt_flag = 0xFFFF;
@@ -1428,7 +1428,7 @@ release_netbuf:                                     /* 0x00E639DC */
     goto send_reply;
 
 stale_entry_check:                                  /* 0x00E63E8C */
-    if (f.response.status == status_$naming_object_not_found_in_dir) {
+    if (f.response.status == status_$naming_directory_locked) {
         f.response.pkt_flag = 0xFFFF;
         REM_FILE_$STALE_LINK_COUNT++;
     }

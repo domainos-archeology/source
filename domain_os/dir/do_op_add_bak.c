@@ -44,6 +44,10 @@
 
 #include "dir/dir_internal.h"
 
+/* `move.w #0x81,-(SP)` at 0x00E50AFA - the AST_$GET_COMMON_ATTRIBUTES
+ * selector this site uses. */
+#define DIR_CATTR_ADD_BAK       0x0081
+
 /* DAT_00e50c5c / DAT_00e50c5a - ACL rights parameters for add_bak */
 
 /* DAT_00e50830 - Protection type parameter for FILE_$SET_PROT */
@@ -61,7 +65,12 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
     uint16_t extra_buf2[2];
     uint8_t lookup_buf[4];
     status_$t local_status;
-    uint8_t loc_desc[8];
+    /* A6-0x68 in the image: a full 0x20-byte object-location descriptor.
+     * AST_$GET_ATTRIBUTES writes all 32 bytes back on success (0x00E049B0).
+     * TODO(source-qgq): retype as file_$obj_loc_t and drop loc_uid_high /
+     * loc_uid_low / loc_flags / loc_vol_id, which are its +0x08, +0x0C,
+     * +0x1D and +0x02 fields. */
+    uint8_t loc_desc[0x20];
     int16_t loc_vol_id;
     uint32_t loc_uid_high;
     uint32_t loc_uid_low;
@@ -69,7 +78,7 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
     uint8_t get_loc_buf1[4];
     uint8_t get_loc_buf2[4];
     uint8_t attr_buf[4];
-    uint8_t common_attrs[8];
+    ast_$common_attr_t common_attrs;    /* A6-0x80, 0x18 bytes */
     uint8_t common_buf[40];
     char type_byte;
     uid_t orig_uid;
@@ -246,14 +255,22 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
                 loc_uid_high = old_bak_uid.high;
                 loc_uid_low = old_bak_uid.low;
                 loc_flags &= 0xBF;
-                AST_$GET_COMMON_ATTRIBUTES(loc_desc, 0x81, common_attrs, &local_status);
+                AST_$GET_COMMON_ATTRIBUTES((uid_t *)(void *)loc_desc,
+                                           DIR_CATTR_ADD_BAK, &common_attrs,
+                                           &local_status);  /* 0x00E50AFE */
 
                 if ((int8_t)loc_flags >= 0 && local_status == status_$ok &&
                     *(int16_t *)((char *)(uintptr_t)local_handle + 0x3A) == loc_vol_id) {
 
-                    /* Check object type - reject types 0, 4, 5 */
-                    type_byte = common_attrs[4];  /* type field at offset within common attrs */
-                    if (type_byte == 0 || type_byte == 4 || type_byte == 5) {
+                    /*
+                     * 0x00E50B24-0x00E50B3C: `move.b (-0x7f,A6),D0b` with the
+                     * record at A6-0x80 reads sub_type, then three `seq`s are
+                     * OR'ed and `bmi` takes the delete path when ANY of them
+                     * matched.  Only sub-types 0, 4 and 5 may be replaced; any
+                     * other sub-type is 0x000E0010 (0x00E50B42).
+                     */
+                    type_byte = (char)common_attrs.sub_type;
+                    if (type_byte != 0 && type_byte != 4 && type_byte != 5) {
                         goto not_a_file;
                     }
 
@@ -301,7 +318,7 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
     }
 
 not_a_file:
-    *status_ret = status_$naming_name_is_not_a_file;
+    *status_ret = status_$naming_branch_is_not_a_directory;
 
 done:
     dir_$release_handle(&local_handle);

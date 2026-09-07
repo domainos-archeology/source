@@ -27,7 +27,8 @@
 #include "mst/mst.h"
 #include "ast/ast.h"
 
-boolean name_$map_dir(uid_t *dir_uid, int16_t asid, void *mapped_info,
+boolean name_$map_dir(uid_t *dir_uid, int16_t asid,
+                      name_$mapped_info_t *mapped_info,
                       status_$t *status_ret)
 {
     uid_t local_uid;

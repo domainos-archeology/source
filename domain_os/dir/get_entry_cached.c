@@ -58,7 +58,7 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
     uint32_t dtv_param = 0;
     AST_$GET_DTV(*(uint32_t *)(uid), 0, dtv_data, status_ret);
     if (*status_ret == file_$object_not_found) {
-        *status_ret = status_$naming_ran_out_of_address_space;
+        *status_ret = status_$naming_directory_locked;
     }
     if (*status_ret != status_$ok) {
         return;

@@ -65,9 +65,9 @@
  *   A6-0x098  desc            file_$obj_loc_t (uid at A6-0x90, loc_info at
  *                             A6-0x88, node at A6-0x84, flags at A6-0x7B)
  *   A6-0x078  attr_val        AST_$SET_ATTRIBUTE value scratch
- *   A6-0x040  attrs[0x40]     AST_$GET_COMMON_ATTRIBUTES output; the
- *                             REM_FILE_$LOCAL_READ_LOCK entry buffer starts
- *                             at attrs+0x18 (A6-0x28)
+ *   A6-0x040  attrs           ast_$common_attr_t (0x18 bytes) followed by the
+ *                             REM_FILE_$LOCAL_READ_LOCK entry buffer at
+ *                             attrs+0x18 (A6-0x28)
  */
 
 #include "file/file_internal.h"
@@ -112,16 +112,22 @@ static uint32_t file_$purify_nil_list = 0;
 #define FILE_NETLOG_UNLOCK          0x13
 
 /*
- * AST_$GET_COMMON_ATTRIBUTES output fields this function reads.  The record
- * is a raw image (see AST_$GET_COMMON_ATTRIBUTES at 0x00E04A00), so the
- * offsets are spelled out rather than typed.
+ * The 0x40-byte area at A6-0x40 is two records back to back: the
+ * ast_$common_attr_t AST_$GET_COMMON_ATTRIBUTES fills (0x18 bytes) and, right
+ * behind it at A6-0x28, the lock record REM_FILE_$LOCAL_READ_LOCK returns
+ * (`pea (-0x28,A6)` at 0x00E6024A).  Six bytes of the frame area are unused.
  */
-/* +0x14, word: 0 means "no remote lock recorded" (0x00E60240).
- * TODO(source-pdur): identify this field's name in the attribute record. */
-#define FILE_CATTR_W14(a)   (*(const uint16_t *)(const void *)((const uint8_t *)(a) + 0x14))
-/* +0x18: REM_FILE_$LOCAL_READ_LOCK's output buffer (`pea (-0x28,A6)` at
- * 0x00E6024A). */
-#define FILE_CATTR_LOCK_BUF(a)  ((void *)((uint8_t *)(a) + 0x18))
+typedef struct file_priv_unlock_attrs_t {
+    ast_$common_attr_t          cattr;      /* A6-0x40, 0x18 bytes */
+    file_lock_info_internal_t   lock_info;  /* A6-0x28, 0x22 bytes */
+    uint8_t                     spare[0x40 - 0x18 - 0x22];
+} file_priv_unlock_attrs_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(file_priv_unlock_attrs_t, lock_info) == 0x18,
+               "priv_unlock attrs.lock_info");
+_Static_assert(sizeof(file_priv_unlock_attrs_t) == 0x40, "sizeof priv_unlock attrs");
+#endif
 
 /*
  * ============================================================================
@@ -160,7 +166,7 @@ boolean FILE_$PRIV_UNLOCK(uid_t *file_uid, int32_t lock_slot,
         uint16_t w;
         uint32_t l;
     } attr_val;
-    uint8_t     attrs[0x40];                /* A6-0x40 */
+    file_priv_unlock_attrs_t attrs;         /* A6-0x40 */
 
     /* --- registers --------------------------------------------------- */
     int16_t     slot;                       /* D4 */
@@ -254,8 +260,10 @@ retry:                                                  /* 0x00E5FD9C */
              */
             desc.uid = *file_uid;                       /* 0x00E5FF8C */
             AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, FILE_CATTR_SHORT,
-                                       attrs, &local_status);  /* 0x00E5FFA6 */
-            if ((local_status == 0) && (FILE_ATTR_NOT_EMPTY(attrs) == 0)) {
+                                       &attrs.cattr, &local_status);  /* 0x00E5FFA6 */
+            /* 0x00E5FFB8 `move.b (-0x40,A6),D2b` then `tst.w D2w`: the
+             * object's type byte, zero-extended to a word. */
+            if ((local_status == 0) && (attrs.cattr.obj_type == 0)) {
                 attr_val.w = 1;                         /* 0x00E5FFC0 */
                 AST_$SET_ATTRIBUTE(file_uid, FILE_ATTR_DELETE_PENDING,
                                    &attr_val, &local_status);  /* 0x00E5FFD6 */
@@ -475,10 +483,13 @@ retry:                                                  /* 0x00E5FD9C */
         if (not_pending < 0) {                          /* 0x00E60212 */
             if (saw_other >= 0) {                       /* 0x00E60218 */
                 AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, FILE_CATTR_LOCK,
-                                           attrs, &status2);    /* 0x00E60230 */
-                if ((status2 == 0) && (FILE_CATTR_W14(attrs) == 0)) {
+                                           &attrs.cattr, &status2); /* 0x00E60230 */
+                /* 0x00E60240 `tst.w (-0x2c,A6)`: the object reference count.
+                 * Only an unreferenced object is worth asking the lock holder
+                 * about. */
+                if ((status2 == 0) && (attrs.cattr.refcount == 0)) {
                     REM_FILE_$LOCAL_READ_LOCK(&desc.loc_info, &desc.uid,
-                                              FILE_CATTR_LOCK_BUF(attrs),
+                                              &attrs.lock_info,
                                               &status2);        /* 0x00E60256 */
                     if (status2 == file_$object_not_locked_by_this_process) {
                         retry_read_lock = -1;           /* 0x00E6026A */

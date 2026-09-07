@@ -144,7 +144,8 @@ void FUN_00e4a060(char *path, int16_t path_len, uid_t *dir_uid, uid_t *file_uid,
  *
  * Original address: 0x00e58488
  */
-boolean name_$map_dir(uid_t *dir_uid, int16_t flags, void *mapped_info, status_$t *status_ret);
+boolean name_$map_dir(uid_t *dir_uid, int16_t asid,
+                      name_$mapped_info_t *mapped_info, status_$t *status_ret);
 
 /*
  * name_$split_path - Split path into directory and filename portions
@@ -220,6 +221,6 @@ boolean name_$resolve_dir_and_leaf(char *path, int16_t path_len,
  *
  * Original address: 0x00E58560
  */
-void name_$unmap_dir_buffers(int16_t asid, void *mapped_info);
+void name_$unmap_dir_buffers(int16_t asid, name_$mapped_info_t *mapped_info);
 
 #endif /* NAME_INTERNAL_H */

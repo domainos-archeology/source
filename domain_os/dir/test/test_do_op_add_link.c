@@ -14,7 +14,6 @@
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdlib.h>
 
 /* Test result tracking */
 static int tests_passed = 0;
@@ -46,28 +45,19 @@ static int tests_failed = 0;
 } while(0)
 
 /* ================================================================
- * Minimal types and mock definitions
+ * Types under test
  * ================================================================ */
 
-typedef uint32_t status_$t;
-#define status_$ok 0
+#include "dir/dir_internal.h"
 
-/* Avoid conflict with system uid_t */
-#define uid_t dir_uid_t
-typedef struct { uint32_t high; uint32_t low; } dir_uid_t;
-
-/* Status codes */
-#define status_$naming_insufficient_rights           0x000E0014
-#define status_$naming_too_many_hard_links            0x000E0032
-#define file_$object_not_found                        0x000F0001
-#define status_$no_right_to_perform_operation         0x00230001
-#define status_$insufficient_rights_to_perform_operation 0x00230002
-#define status_$name_already_exists                   0x000E0001
-
-/* Result buffer offsets (must match do_op_add_link.c) */
+/*
+ * The result-buffer offsets are dir/do_op_add_link.c's own; they are repeated
+ * here (identically, so the redefinitions are legal) because the mocks below
+ * are written before the implementation is pulled in.
+ */
 #define ADDRES_ENTRY_TYPE       0x00
 #define ADDRES_COMMON_ATTRS     0x08
-#define ADDRES_LINK_COUNT       0x1C
+#define ADDRES_REFCOUNT         0x1C
 #define ADDRES_TARGET_UID       0x20
 #define ADDRES_OBJ_TYPE         0x22
 #define ADDRES_FILE_UID_COPY    0x28
@@ -89,7 +79,7 @@ static uint8_t mock_add_entry_flags;      /* flags byte at result[0x3D] */
 /* AST_$GET_COMMON_ATTRIBUTES mock state */
 static int mock_get_common_attrs_called;
 static status_$t mock_get_common_attrs_status;
-static uint16_t mock_get_common_attrs_link_count;  /* at output[0x14] */
+static uint16_t mock_get_common_attrs_refcount;  /* at output[0x14] */
 static int16_t mock_get_common_attrs_obj_type;     /* at output[0x1A] */
 
 /* AST_$SET_ATTRIBUTE mock state */
@@ -129,7 +119,7 @@ static void reset_mocks(void)
 
     mock_get_common_attrs_called = 0;
     mock_get_common_attrs_status = status_$ok;
-    mock_get_common_attrs_link_count = 0;
+    mock_get_common_attrs_refcount = 0;
     mock_get_common_attrs_obj_type = 2;
 
     mock_set_attr_called = 0;
@@ -178,18 +168,23 @@ void dir_$do_op_add_entry(uid_t *uid_arg, uint16_t type, void *name,
 }
 
 void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid_arg, uint16_t flags_arg,
-                                void *attrs, status_$t *status)
+                                ast_$common_attr_t *attrs, status_$t *status)
 {
     mock_get_common_attrs_called = 1;
     *status = mock_get_common_attrs_status;
 
     if (mock_get_common_attrs_status == status_$ok) {
-        uint8_t *buf = (uint8_t *)attrs;
-        /* Link count at output offset 0x14 (result offset 0x1C - 0x08) */
-        *(uint16_t *)(buf + (ADDRES_LINK_COUNT - ADDRES_COMMON_ATTRS)) =
-            mock_get_common_attrs_link_count;
-        /* Object type at output offset 0x1A (result offset 0x22 - 0x08) */
-        *(int16_t *)(buf + (ADDRES_OBJ_TYPE - ADDRES_COMMON_ATTRS)) =
+        uint8_t *buf = (uint8_t *)(void *)attrs;
+        /* The reference count is the record's own +0x14 field. */
+        attrs->refcount = mock_get_common_attrs_refcount;
+        /*
+         * Result offset 0x22 is the *descriptor's* +0x02 word, which
+         * AST_$GET_ATTRIBUTES fills from aote+0x9E - it lies two bytes past
+         * the end of the 0x18-byte record, in the frame area the real
+         * dir_$do_op_add_link shares between the two (record at A6-0x78,
+         * descriptor at A6-0x60).
+         */
+        *(int16_t *)(void *)(buf + (ADDRES_OBJ_TYPE - ADDRES_COMMON_ATTRS)) =
             mock_get_common_attrs_obj_type;
     }
 }
@@ -233,14 +228,6 @@ void dir_$do_op_drop_entry(uid_t *uid_arg, uint16_t rights,
  * Function under test - include directly
  * ================================================================ */
 
-/* Provide uintptr_t for the function pointer cast */
-#include <stddef.h>
-
-/* Redefine the include to avoid pulling in the full header chain */
-#define DIR_INTERNAL_H
-#define DIR_H
-#define BASE_H
-
 /* Pull in the actual implementation */
 #include "../do_op_add_link.c"
 
@@ -270,7 +257,7 @@ TEST(add_entry_failure_returns_immediately)
 TEST(success_zero_link_count_sets_attribute)
 {
     reset_mocks();
-    mock_get_common_attrs_link_count = 0;
+    mock_get_common_attrs_refcount = 0;
     mock_get_common_attrs_obj_type = 2;
 
     uid_t dir_uid = {0xAAAA, 0xBBBB};
@@ -293,7 +280,7 @@ TEST(success_zero_link_count_sets_attribute)
 TEST(nonzero_link_count_checks_acl_then_sets_attribute)
 {
     reset_mocks();
-    mock_get_common_attrs_link_count = 5;
+    mock_get_common_attrs_refcount = 5;
     mock_get_common_attrs_obj_type = 2;
     mock_acl_rights_return = 0x48;  /* has both modify and link */
     mock_acl_rights_status = status_$ok;
@@ -316,7 +303,7 @@ TEST(nonzero_link_count_checks_acl_then_sets_attribute)
 TEST(acl_modify_but_no_link_returns_insufficient_rights)
 {
     reset_mocks();
-    mock_get_common_attrs_link_count = 5;
+    mock_get_common_attrs_refcount = 5;
     mock_get_common_attrs_obj_type = 2;
     mock_acl_rights_return = 0x40;  /* modify but NOT link */
     mock_acl_rights_status = status_$ok;
@@ -339,7 +326,7 @@ TEST(acl_modify_but_no_link_returns_insufficient_rights)
 TEST(too_many_hard_links)
 {
     reset_mocks();
-    mock_get_common_attrs_link_count = 0xFFF5;  /* at the limit */
+    mock_get_common_attrs_refcount = 0xFFF5;  /* at the limit */
     mock_get_common_attrs_obj_type = 2;
     mock_acl_rights_return = 0x48;  /* has both rights */
     mock_acl_rights_status = status_$ok;
@@ -359,7 +346,7 @@ TEST(too_many_hard_links)
 TEST(link_count_just_below_limit_succeeds)
 {
     reset_mocks();
-    mock_get_common_attrs_link_count = 0xFFF4;  /* one below limit */
+    mock_get_common_attrs_refcount = 0xFFF4;  /* one below limit */
     mock_get_common_attrs_obj_type = 2;
     mock_acl_rights_return = 0x48;
     mock_acl_rights_status = status_$ok;
@@ -420,7 +407,7 @@ TEST(entry_type_mismatch_skips_attribute_set)
     reset_mocks();
     mock_add_entry_type = 2;             /* entry type from add */
     mock_get_common_attrs_obj_type = 3;  /* different object type from attrs */
-    mock_get_common_attrs_link_count = 0;
+    mock_get_common_attrs_refcount = 0;
 
     uid_t dir_uid = {0xAAAA, 0xBBBB};
     uid_t file_uid = {0xCCCC, 0xDDDD};
@@ -438,7 +425,7 @@ TEST(entry_type_mismatch_skips_attribute_set)
 TEST(acl_other_error_converts_status)
 {
     reset_mocks();
-    mock_get_common_attrs_link_count = 5;
+    mock_get_common_attrs_refcount = 5;
     mock_get_common_attrs_obj_type = 2;
     mock_acl_rights_status = 0x00230099;  /* some other ACL error */
     mock_convert_acl_output = 0x000E0099; /* converted naming error */
@@ -459,7 +446,7 @@ TEST(acl_other_error_converts_status)
 TEST(set_attribute_failure_calls_drop_entry)
 {
     reset_mocks();
-    mock_get_common_attrs_link_count = 0;
+    mock_get_common_attrs_refcount = 0;
     mock_get_common_attrs_obj_type = 2;
     mock_set_attr_status = 0x000F9999;  /* some AST error */
 
@@ -478,7 +465,7 @@ TEST(set_attribute_failure_calls_drop_entry)
 TEST(insufficient_rights_status_checks_rights_mask)
 {
     reset_mocks();
-    mock_get_common_attrs_link_count = 5;
+    mock_get_common_attrs_refcount = 5;
     mock_get_common_attrs_obj_type = 2;
     mock_acl_rights_return = 0x48;  /* has both rights */
     mock_acl_rights_status = status_$insufficient_rights_to_perform_operation;
@@ -498,7 +485,7 @@ TEST(insufficient_rights_status_checks_rights_mask)
 TEST(no_right_status_with_modify_only_returns_naming_error)
 {
     reset_mocks();
-    mock_get_common_attrs_link_count = 5;
+    mock_get_common_attrs_refcount = 5;
     mock_get_common_attrs_obj_type = 2;
     mock_acl_rights_return = 0x40;  /* modify only, no link */
     mock_acl_rights_status = status_$no_right_to_perform_operation;

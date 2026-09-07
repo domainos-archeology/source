@@ -37,6 +37,10 @@
 
 #include "dir/dir_internal.h"
 
+/* `move.w #0x90,-(SP)` at 0x00E504B2 - the AST_$GET_COMMON_ATTRIBUTES
+ * selector this site uses. */
+#define DIR_CATTR_ADD_LINK      0x0090
+
 /*
  * Constants for the ACL_$RIGHTS call.
  * In the original binary, these are inline data at 0x00E505C4-0x00E505C9
@@ -67,7 +71,8 @@ static const int16_t add_link_option_flags = -1;           /* all options */
  */
 #define ADDRES_ENTRY_TYPE       0x00
 #define ADDRES_COMMON_ATTRS     0x08
-#define ADDRES_LINK_COUNT       0x1C
+#define ADDRES_REFCOUNT         0x1C    /* = ADDRES_COMMON_ATTRS + 0x14,
+                                         * ast_$common_attr_t.refcount */
 #define ADDRES_TARGET_UID       0x20
 #define ADDRES_OBJ_TYPE         0x22
 #define ADDRES_FILE_UID_COPY    0x28
@@ -110,17 +115,20 @@ void dir_$do_op_add_link(uid_t *uid, void *name, uint16_t name_len,
     result[ADDRES_FLAGS] &= ~0x40;
 
     /*
-     * Step 3: Get common attributes of the target object.
-     * Mask 0x90 retrieves the link count (at result offset 0x1C) and
-     * object type (at result offset 0x22). The target UID at offset 0x20
-     * was filled by dir_$do_op_add_entry.
+     * Step 3: Get common attributes of the target object (0x00E504BA).
      *
-     * The AST output overwrites result bytes 0x08-0x23, which is
-     * intentional -- those add_entry result fields are no longer needed.
+     * result+0x08 is the 0x18-byte ast_$common_attr_t (A6-0x78 in the image)
+     * and result+0x20 is the 0x20-byte object-location descriptor (A6-0x60),
+     * which is why the two are addressed as one frame area: 0x08+0x18 = 0x20.
+     * This function reads the record's refcount at result+0x1C
+     * (`tst.w (-0x64,A6)` at 0x00E50502) and the descriptor's own +0x02 word
+     * at result+0x22 (`cmp.w (-0x5e,A6)` at 0x00E504FA), which
+     * AST_$GET_ATTRIBUTES filled from aote+0x9E.
      */
     AST_$GET_COMMON_ATTRIBUTES((uid_t *)(result + ADDRES_TARGET_UID),
-                               0x90,
-                               result + ADDRES_COMMON_ATTRS,
+                               DIR_CATTR_ADD_LINK,
+                               (ast_$common_attr_t *)(void *)
+                                   (result + ADDRES_COMMON_ATTRS),
                                &status);
 
     if (status != status_$ok) {
@@ -161,9 +169,9 @@ check_entry:
     }
 
     {
-        uint16_t link_count = *(uint16_t *)(result + ADDRES_LINK_COUNT);
+        uint16_t refcount = *(uint16_t *)(result + ADDRES_REFCOUNT);
 
-        if (link_count == 0) {
+        if (refcount == 0) {                            /* 0x00E50502 */
             /* First link: no rights check needed */
             goto set_attr;
         }
@@ -191,7 +199,7 @@ check_entry:
                  */
                 if ((rights & 0x48) == 0x40) {
                     status = status_$naming_insufficient_rights;
-                } else if (link_count >= DIR_MAX_HARD_LINKS) {
+                } else if (refcount >= DIR_MAX_HARD_LINKS) {
                     status = status_$naming_too_many_hard_links;
                 } else {
                     goto set_attr;
