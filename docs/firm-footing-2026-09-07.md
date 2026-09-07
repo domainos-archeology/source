@@ -18,7 +18,7 @@ Gates, all of which pass at every commit since wave 7:
 - `make clean && make -k -j8` with `-Werror`: no compile diagnostics; the link
   fails only on symbols not yet emitted.
 - duplicate-global scan over every `build/sau2` object: empty.
-- `make test`: every host test passes (150 at the start of wave 7, 180 now);
+- `make test`: every host test passes (150 at the start of wave 7, 182 now);
   every test `#include`s the real `.c` it covers.
 - relocation overflows at link: 19 before, 0 now.
 - archivist rules on changed files: no `extern` in `.c`, first include is the
@@ -26,7 +26,7 @@ Gates, all of which pass at every commit since wave 7:
   address, no cross-subsystem `_internal.h` includes, no foreign-namespace
   declarations (checked map-driven).
 
-## What changed (waves 7 to 17, 55 local commits)
+## What changed (waves 7 to 17, 52 local commits)
 
 Representative corrections, each cited in the code with the instruction
 address that proves it:
@@ -65,7 +65,7 @@ Figures at the last commit:
 | measure | value |
 |---|---|
 | host tests, failures | 182, 0 |
-| undefined link references (all functions now) | 366, from 1212 |
+| undefined link references (all functions now) | 367 link lines (137 unique symbols), from 1212 |
 | relocation overflows | 0, from 19 |
 | hand-written assembly files under `*/sau2/` | 42 |
 | beads closed in this pass | about 50 |
@@ -82,7 +82,7 @@ P1) and its seven step beads. Nothing in this pass pre-empted its
 sections listed in `sau2.ld` in image order.
 
 Deferred by instruction: the "Complete/Implement/Emit remaining <subsystem>"
-translation beads (about 35). The 366 undefined references are that work.
+translation beads (about 35). The 367 undefined references (137 unique symbols) are that work.
 
 ## How to keep the footing
 

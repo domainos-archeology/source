@@ -71,7 +71,7 @@ uint8_t IO_$INT_STACK[IO_$INT_STACK_SIZE];
 dcte_t *IO_$DCTE_LIST = NULL;
 
 /*
- * IO_$INT_CTRL - per-controller-type interrupt dispatch block, 0x00E2C904.
+ * IO_$INT_CTRL - per-controller-type interrupt dispatch block, 0x00E22904.
  *
  * The map segment is "D E22904 ATBUS_ size = 2C" and it exports no interior
  * symbol, so the whole 0x2C bytes are this one module-local block; that is
