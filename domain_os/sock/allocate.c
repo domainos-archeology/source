@@ -69,14 +69,12 @@ int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_
         /*
          * Allocate network buffer pages if either count is non-zero
          * (0x00E15EF8 "move.w D3w,D0w / or.w D4w,D0w / beq").  The original
-         * pushes D4 then D3, so the longword NETBUF_$ADD_PAGES reads is
-         * (hdr_pages << 16) | data_pages (0x00E15EFE-0x00E15F02).
-         * TODO(source-ltga): NETBUF_$ADD_PAGES really takes two words
-         * (0x00E0E936/0x00E0E93A); the packed longword is only the m68k
-         * spelling of the same push sequence.
+         * pushes D4 then D3 (0x00E15EFE-0x00E15F02), which is exactly the
+         * two-word argument list NETBUF_$ADD_PAGES reads at
+         * 0x00E0E936/0x00E0E93A.
          */
         if ((hdr_pages | data_pages) != 0) {
-            NETBUF_$ADD_PAGES(((uint32_t)hdr_pages << 16) | data_pages);
+            NETBUF_$ADD_PAGES((int16_t)hdr_pages, (int16_t)data_pages);
         }
 
         result = -1;  /* 0xFF = success */

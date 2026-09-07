@@ -38,6 +38,18 @@
 #define ARCH_SPIN_TICK() __asm__ __volatile__("" ::: "memory")
 
 /*
+ * ARCH_VA_TO_PTR / ARCH_PTR_TO_VA - target virtual addresses
+ *
+ * Several kernel records carry m68k 32-bit virtual addresses in uint32_t
+ * fields rather than in pointers, because that is what the binary stores
+ * (mac_os_$buf_desc_t.address, mac_os_$send_pkt_t.data_pages,
+ * rip_$send_frame_t.hdr_va, ...).  On the target a virtual address IS a
+ * pointer, so both macros are plain casts and generate no code.
+ */
+#define ARCH_VA_TO_PTR(va) ((void *)(uintptr_t)(va))
+#define ARCH_PTR_TO_VA(p)  ((uint32_t)(uintptr_t)(p))
+
+/*
  * M68K Global Register Variables
  *
  * The A5 register is used as the global data pointer in Domain/OS.

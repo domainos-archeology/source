@@ -43,119 +43,66 @@
 #define MSG_OFF_OPEN_COUNT 0x8E0 /* Count of open sockets */
 
 /*
- * Socket ownership bitmap layout:
- * Each socket has 8 bytes (64 bits) for tracking ownership by up to 64 ASIDs.
- * Bit N is set if ASID N owns the socket.
+ * msg_$data_t - the MSG subsystem's global record at MSG_$DATA_BASE
  *
- * To check if ASID owns socket:
- *   bitmap_base = MSG_$DATA_BASE + MSG_OFF_OWNERSHIP + (socket * 8)
- *   byte_index = (0x3F - ASID) >> 3
- *   bit_mask = 1 << (ASID & 7)
- *   owned = (bitmap[byte_index] & bit_mask) != 0
- */
-
-/*
- * MSG_$SOCK_OWNERS - per-socket ownership bitmaps, 8 bytes (64 ASID bits) each
+ * Recovered from MSG_$OPENI (0x00E591B4), MSG_$ALLOCATEI (0x00E592E6),
+ * MSG_$CLOSEI (0x00E593E4) and MSG_$WAITI (0x00E59BC0), which are the only
+ * writers.  All four establish A5 with "lea (0xe80d84).l,A5".
  *
- * 0x00E80F5C = MSG_$DATA_BASE + MSG_OFF_OWNERSHIP.  MSG_$WAITI addresses it as
- * base + socket*8 + byte_index (0x00E59BEA "lsl.w #3,D0w" then 0x00E59BFC
- * "lea (0x1D8,A1),A1"), so slot 0 is unused and MSG_$SOCK_OWNERS[sock] is the
- * bitmap for socket "sock".  Within a bitmap the byte is (0x3F - asid) >> 3
- * and the bit is asid & 7 (0x00E59C00 "btst.b D1,(0x0,A1,D0w*0x1)").
- */
-extern uint8_t MSG_$SOCK_OWNERS[][8];
-
-/*
- * MSG_$DATA - MSG subsystem global data structure
+ *   +0x1E   depth[]      "move.w (A3),(0x1e,A5,D1w*0x1)" with D1 = socket*2
+ *                        (0x00E59276, 0x00E5936C).  Indexed by the socket
+ *                        number itself, so slot 0 exists but is never used.
+ *   +0x1D8  ownership    "lsl.w #0x3,D2w / lea (0x0,A5,D2w),A0 /
+ *                        lea (0x1d8,A0),A1" (0x00E59202-0x00E5920A,
+ *                        0x00E5935A-0x00E59360, 0x00E59420-0x00E59432,
+ *                        0x00E59BEA-0x00E59BFC).  base + 0x1D8 + socket*8 is
+ *                        a ONE-based array: the lowest address any caller can
+ *                        reach is socket 1 at +0x1E0, which is exactly where
+ *                        the depth table ends.
+ *   +0x8E0  open_count   "addq.w #0x1,(0x8e0,A5)" (0x00E5927A, 0x00E59370),
+ *                        "subq.w #0x1,(0x8e0,A5)" (0x00E5949E).
  *
- * Layout at MSG_$DATA_BASE (0xE80D84):
- *   +0x00  : Reserved / header
- *   +0x1E  : Socket depth table (2 bytes per socket, up to 224 sockets)
- *   +0x1D8 : Socket ownership bitmaps (8 bytes per socket)
- *   +0x8E0 : Open socket count
+ * Socket numbers run 1..0xE0: MSG_$OPENI rejects >= 0xE0 (0x00E591D2
+ * "cmpi.w #0xe0,D0w / blt") while MSG_$CLOSEI and MSG_$WAITI accept 0xE0
+ * (0x00E593FE / 0x00E59BDA "cmpi.w #0xe0,D0w / ble"), so the tables are sized
+ * for socket 0xE0 as well.  depth therefore holds 0xE1 words (0x1E..0x1DF)
+ * and ownership 0xE0 bitmaps (0x1E0..0x8DF).
  */
-typedef struct msg_$data_s {
-  uint8_t reserved[0x1E];
-  int16_t depth[MSG_MAX_SOCKET];        /* Socket depth table */
-  uint8_t ownership[MSG_MAX_SOCKET][8]; /* Ownership bitmaps */
-  /* ... more fields at higher offsets ... */
+typedef struct msg_$data_t {
+  uint8_t reserved_00[0x1E];             /* 0x000 */
+  int16_t depth[MSG_MAX_SOCKET + 1];     /* 0x01E: indexed by socket */
+  uint8_t ownership[MSG_MAX_SOCKET][8];  /* 0x1E0: indexed by socket - 1 */
+  int16_t open_count;                    /* 0x8E0 */
 } msg_$data_t;
 
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(msg_$data_t, depth) == MSG_OFF_DEPTH_TABLE, "msg depth");
+_Static_assert(offsetof(msg_$data_t, ownership) == MSG_OFF_OWNERSHIP + 8,
+               "msg ownership starts one slot past the 1-based base");
+_Static_assert(offsetof(msg_$data_t, open_count) == MSG_OFF_OPEN_COUNT,
+               "msg open_count");
+_Static_assert(sizeof(msg_$data_t) == 0x8E2, "msg_$data_t must be 0x8E2 bytes");
+#endif
+
+#if defined(ARCH_M68K)
+#define MSG_$DATA ((msg_$data_t *)MSG_$DATA_BASE)
+#else
+extern msg_$data_t MSG_$DATA_STRUCT;
+#define MSG_$DATA (&MSG_$DATA_STRUCT)
+#endif
+
 /*
- * Check if current ASID owns the given socket
+ * MSG_$SOCK_OWNERS - the ONE-based spelling of msg_$data_t.ownership that the
+ * original uses everywhere: base + 0x1D8 + socket*8, so MSG_$SOCK_OWNERS[n] is
+ * socket n's 8-byte bitmap and slot 0 is never dereferenced.  It is the same
+ * storage as MSG_$DATA->ownership[n - 1].
  *
- * TODO(source-eq3o): this and the four accessors below are unused, are
- * compiled out on non-m68k hosts, and duplicate MSG_$SOCK_OWNERS above.
+ * Within a bitmap the byte index is (0x3F - asid) >> 3 in *word* arithmetic
+ * with a logical shift, and the bit is asid & 7 - "btst.b D1,(0x0,A1,D0w*0x1)"
+ * numbers bits modulo 8 (0x00E59C00, 0x00E59436).
  */
-static inline int msg_$check_ownership(msg_$socket_t socket) {
-#if defined(ARCH_M68K)
-  uint8_t *bitmap =
-      (uint8_t *)(MSG_$DATA_BASE + MSG_OFF_OWNERSHIP + socket * 8);
-  uint8_t asid = PROC1_$AS_ID;
-  uint8_t byte_index = (0x3F - asid) >> 3;
-  uint8_t bit_mask = 1 << (asid & 7);
-  return (bitmap[byte_index] & bit_mask) != 0;
-#else
-  (void)socket;
-  return 0;
-#endif
-}
-
-/*
- * Set ownership bit for ASID on socket
- */
-static inline void msg_$set_ownership(msg_$socket_t socket, uint8_t asid) {
-#if defined(ARCH_M68K)
-  uint8_t *bitmap =
-      (uint8_t *)(MSG_$DATA_BASE + MSG_OFF_OWNERSHIP + socket * 8);
-  uint8_t byte_index = (0x3F - asid) >> 3;
-  uint8_t bit_mask = 1 << (asid & 7);
-  bitmap[byte_index] |= bit_mask;
-#else
-  (void)socket;
-  (void)asid;
-#endif
-}
-
-/*
- * Clear ownership bit for ASID on socket
- */
-static inline void msg_$clear_ownership(msg_$socket_t socket, uint8_t asid) {
-#if defined(ARCH_M68K)
-  uint8_t *bitmap =
-      (uint8_t *)(MSG_$DATA_BASE + MSG_OFF_OWNERSHIP + socket * 8);
-  uint8_t byte_index = (0x3F - asid) >> 3;
-  uint8_t bit_mask = 1 << (asid & 7);
-  bitmap[byte_index] &= ~bit_mask;
-#else
-  (void)socket;
-  (void)asid;
-#endif
-}
-
-/*
- * Get socket depth
- */
-static inline int16_t msg_$get_depth(msg_$socket_t socket) {
-#if defined(ARCH_M68K)
-  return *(int16_t *)(MSG_$DATA_BASE + MSG_OFF_DEPTH_TABLE + socket * 2);
-#else
-  (void)socket;
-  return 0;
-#endif
-}
-
-/*
- * Set socket depth
- */
-static inline void msg_$set_depth(msg_$socket_t socket, int16_t depth) {
-#if defined(ARCH_M68K)
-  *(int16_t *)(MSG_$DATA_BASE + MSG_OFF_DEPTH_TABLE + socket * 2) = depth;
-#else
-  (void)socket;
-  (void)depth;
-#endif
-}
+#define MSG_$SOCK_OWNERS                                                       \
+  ((uint8_t(*)[8])((uint8_t *)MSG_$DATA + MSG_OFF_OWNERSHIP))
 
 /*
  * Internal receive implementation (0x00E59548)

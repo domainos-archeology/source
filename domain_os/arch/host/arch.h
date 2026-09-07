@@ -18,6 +18,8 @@
 #ifndef ARCH_HOST_ARCH_H
 #define ARCH_HOST_ARCH_H
 
+#include <stdint.h>    /* uintptr_t, for ARCH_VA_TO_PTR */
+
 /* Interrupt control (no-op stubs for testing) */
 #include "arch/host/intr.h"
 
@@ -55,6 +57,34 @@
  * requested number of times, and it emits no instructions of its own.
  */
 #define ARCH_SPIN_TICK() __asm__ __volatile__("" ::: "memory")
+
+/*
+ * ARCH_VA_TO_PTR / ARCH_PTR_TO_VA - target virtual addresses
+ *
+ * See arch/m68k/arch.h.  A 64-bit host pointer does not fit in the uint32_t
+ * fields the binary uses for virtual addresses, so a test that wants the
+ * code under test to dereference such a field points ARCH_HOST_VA_BASE at
+ * its own arena and stores offsets into that arena in the field.
+ *
+ * The default base of zero makes both macros plain casts, which is what
+ * every test that does not set it already assumes.  Host builds are one
+ * translation unit per test program, so a file-static is enough.
+ */
+static uintptr_t ARCH_HOST_VA_BASE = 0;
+
+static inline void *ARCH_VA_TO_PTR_FN(uint32_t va)
+{
+    /* virtual address zero is nil on the target, and must stay nil here */
+    return va ? (void *)(ARCH_HOST_VA_BASE + (uintptr_t)va) : (void *)0;
+}
+
+static inline uint32_t ARCH_PTR_TO_VA_FN(const void *p)
+{
+    return p ? (uint32_t)((uintptr_t)p - ARCH_HOST_VA_BASE) : 0u;
+}
+
+#define ARCH_VA_TO_PTR(va) ARCH_VA_TO_PTR_FN((uint32_t)(va))
+#define ARCH_PTR_TO_VA(p)  ARCH_PTR_TO_VA_FN((const void *)(p))
 
 /*
  * A5 Global Data Pointer - NOT AVAILABLE on host

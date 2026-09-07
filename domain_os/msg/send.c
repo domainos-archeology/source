@@ -61,8 +61,8 @@ status_$t MSG_$$SEND(int16_t port_num,
 {
 #if defined(ARCH_M68K)
     status_$t local_status = status_$ok;
-    void *header_buf;
-    uint32_t header_info;
+    uint32_t header_buf;    /* physical address NETBUF_$GET_HDR returns */
+    uint32_t header_info;   /* virtual address NETBUF_$GET_HDR returns */
     int16_t actual_port;
 
     /* Validate header size */
@@ -83,7 +83,11 @@ status_$t MSG_$$SEND(int16_t port_num,
      * Build internet packet header.
      * PKT_$BLD_INTERNET_HDR handles address resolution and header formatting.
      */
-    /* ... packet header building ... */
+    /*
+     * TODO(source-o80r): the whole 0x00E0D9EC body still needs emitting -
+     * the PKT_$BLD_INTERNET_HDR call and the port selection below are
+     * placeholders, not translations.
+     */
 
     /*
      * Determine port to use.

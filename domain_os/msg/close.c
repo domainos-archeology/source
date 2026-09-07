@@ -16,11 +16,11 @@
 /*
  * MSG_$CLOSEI - Close socket internal implementation
  */
+/* TODO(source-yo76): ARCH_M68K-only body with a fabricated #else status. */
 void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
 {
 #if defined(ARCH_M68K)
     int16_t sock_num;
-    int16_t sock_offset;
     uint8_t asid;
     uint8_t byte_index;
     uint8_t bit_mask;
@@ -42,9 +42,7 @@ void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
     /* Lock the socket table */
     ML_$EXCLUSION_START((void *)MSG_$SOCK_LOCK);
 
-    /* Calculate offset into ownership table */
-    sock_offset = sock_num << 3;
-    bitmap = (uint8_t *)(MSG_$DATA_BASE + MSG_OFF_OWNERSHIP + sock_offset);
+    bitmap = MSG_$SOCK_OWNERS[sock_num];   /* base + 0x1D8 + socket*8 */
 
     /*
      * Check if current ASID owns this socket.
@@ -85,15 +83,15 @@ void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
      */
     if (*(uint32_t *)bitmap == 0 && *(uint32_t *)(bitmap + 4) == 0) {
         /* Decrement open socket count */
-        (*(int16_t *)(MSG_$DATA_BASE + MSG_OFF_OPEN_COUNT))--;
+        MSG_$DATA->open_count--;               /* 0x00E5949E */
 
         /* Close the underlying socket */
         SOCK_$CLOSE(sock_num);
 
         /* If no more sockets open, unregister network service */
-        if (*(int16_t *)(MSG_$DATA_BASE + MSG_OFF_OPEN_COUNT) == 0) {
+        if (MSG_$DATA->open_count == 0) {       /* 0x00E594AE */
             /* Clear user socket open flag */
-            *(uint8_t *)0xE24C48 = 0;  /* NETWORK_$USER_SOCK_OPEN */
+            NETWORK_$USER_SOCK_OPEN = 0;        /* 0x00E594B4 "clr.b" */
 
             /* Unregister network service */
             service_type = 0x80000;

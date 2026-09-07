@@ -83,11 +83,11 @@ int8_t SOCK_$OPEN(uint16_t sock_num, uint32_t proto_bufpages, uint32_t max_queue
         /*
          * Allocate network buffer pages if either count is non-zero
          * (0x00E15E44 "tst.w D3w / bne / tst.w D4w / beq").  The push order
-         * at 0x00E15E4C makes the longword (hdr_pages << 16) | data_pages.
-         * TODO(source-ltga): NETBUF_$ADD_PAGES really takes two words.
+         * at 0x00E15E4C is D4 then D3 - the two words NETBUF_$ADD_PAGES reads
+         * at 0x00E0E936/0x00E0E93A.
          */
         if (hdr_pages != 0 || data_pages != 0) {
-            NETBUF_$ADD_PAGES(((uint32_t)hdr_pages << 16) | data_pages);
+            NETBUF_$ADD_PAGES((int16_t)hdr_pages, (int16_t)data_pages);
         }
 
         result = -1;  /* 0xFF = success */

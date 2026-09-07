@@ -77,7 +77,9 @@ void NETBUF_$GET_DAT(uint32_t *addr_out)
         }
 
         /* Network process: wait for buffer to become available */
-        TIME_$WAIT(&NETBUF_$DELAY_TYPE, NETBUF_$DELAY_Q, &status);
+        TIME_$WAIT(&NETBUF_$DELAY_TYPE, &NETBUF_$DELAY_TIME, &status);
+        /* 0x00E0EFE2 "pea (0x300,A5)" - the delay is a clock_t in the
+         * netbuf globals, not a timer queue. */
         if (status != status_$ok) {
             CRASH_SYSTEM(&status);
         }

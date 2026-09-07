@@ -47,24 +47,12 @@ typedef struct pkt_$missing_entry_t {
 } pkt_$missing_entry_t;
 
 /*
- * Packet request template for building requests
- * Size: varies by request type
- */
-typedef struct pkt_$request_template_t {
-  uint16_t type;        /* 0x00: Request type */
-  uint16_t length;      /* 0x02: Data length */
-  uint16_t id;          /* 0x04: Request ID */
-  uint8_t flags;        /* 0x06: Flags */
-  uint8_t protocol;     /* 0x07: Protocol number */
-  uint16_t retry_count; /* 0x08: Retry count (0 = unlimited) */
-  uint16_t pad_0a;      /* 0x0A: Padding */
-  uint16_t field_0c;    /* 0x0C: Protocol-specific field */
-                        /* Additional fields follow based on type */
-} pkt_$request_template_t;
-
-/*
  * PKT module global data area
  * Base address: 0xE24C9C (m68k)
+ *
+ * Every PKT function that touches it establishes A5 with
+ * "lea (0xe24c9c).l,A5" (0x00E1249A, 0x00E124E8, 0x00E12524, 0x00E12656,
+ * 0x00E128C0, 0x00E128FE, 0x00E129A6, 0x00E12BC0).
  */
 typedef struct pkt_$data_t {
   /* Missing node tracking (offset 0x00-0x4F) */
@@ -90,32 +78,37 @@ typedef struct pkt_$data_t {
   int32_t long_id;         /* 0x60: Long packet ID counter */
 
   /* Protocol configuration (offset 0x64) */
-  uint16_t default_flags; /* 0x64: Default send flags */
+  uint16_t default_flags; /* 0x64: Default send flags; NET_IO_$SEND's flags
+                           * argument (0x00E12732 "move.w (0x64,A5),-(SP)") */
   uint16_t pad_66;        /* 0x66: Padding */
 
-  /* Ping request template (offset 0x68) */
-  pkt_$request_template_t ping_template; /* 0x68: Ping request template */
-  /* TODO(source-wv5s): 0x76-0x87 not yet identified */
-  uint8_t reserved_76[0x12];
+  /*
+   * 0x68: the packet-info record PKT_$LIKELY_TO_ANSWER hands to
+   * PKT_$SEND_INTERNET for its ping request (0x00E12AA0 "pea (0x68,A5)").
+   */
+  pkt_$info_t ping_template;
 
   /*
    * 0x88: the packet-info record PKT_$PING_SERVER hands to
-   * PKT_$SEND_INTERNET.  The reply flags are stored into its first word
-   * (0x00E12CE6 "move.w D4w,(0x88,A5)") and its address is then pushed
-   * (0x00E12D0A "pea (0x88,A5)").
+   * PKT_$SEND_INTERNET for its reply.  The reply flags are stored into its
+   * first word (0x00E12CE6 "move.w D4w,(0x88,A5)") and its address is then
+   * pushed (0x00E12D0A "pea (0x88,A5)").  The two records are byte-identical
+   * in the image apart from that first word (0x0010 vs 0x0020).
    */
-  uint16_t ping_server_flags;
+  pkt_$info_t ping_reply_info;
 } pkt_$data_t;
 
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(pkt_$data_t, spin_lock) == 0x50, "pkt_$data_t.spin_lock");
+_Static_assert(offsetof(pkt_$data_t, visibility_seq) == 0x54, "pkt_$data_t.visibility_seq");
 _Static_assert(offsetof(pkt_$data_t, n_missing) == 0x58, "pkt_$data_t.n_missing");
 _Static_assert(offsetof(pkt_$data_t, ping_req_hdr) == 0x5A, "pkt_$data_t.ping_req_hdr");
 _Static_assert(offsetof(pkt_$data_t, short_id) == 0x5C, "pkt_$data_t.short_id");
 _Static_assert(offsetof(pkt_$data_t, long_id) == 0x60, "pkt_$data_t.long_id");
 _Static_assert(offsetof(pkt_$data_t, default_flags) == 0x64, "pkt_$data_t.default_flags");
 _Static_assert(offsetof(pkt_$data_t, ping_template) == 0x68, "pkt_$data_t.ping_template");
-_Static_assert(offsetof(pkt_$data_t, ping_server_flags) == 0x88, "pkt_$data_t.ping_server_flags");
+_Static_assert(offsetof(pkt_$data_t, ping_reply_info) == 0x88, "pkt_$data_t.ping_reply_info");
+_Static_assert(sizeof(pkt_$data_t) == 0xA8, "pkt_$data_t must be 0xA8 bytes");
 #endif
 
 /*
@@ -146,7 +139,14 @@ typedef struct pkt_$internet_hdr_t {
 
 /*
  * pkt_$recv_result_t - the 44-byte record APP_$RECEIVE fills in (app.h
- * documents the size).  PKT reads only these fields:
+ * documents the size).
+ *
+ * TODO(source-vhfr): this duplicates app_$receive_rec_t in app/app.h, which
+ * is the owning subsystem's definition of the same record.  Fold this away
+ * and retype PKT_$LIKELY_TO_ANSWER / PKT_$PING_SERVER onto app_$receive_rec_t
+ * (.reply / .data / .data_pages).
+ *
+ * PKT reads only these fields:
  *   0x00  hdr        header VA        (0x00E12AFE, 0x00E12C6A)
  *   0x04  hdr_ppn    header page      (0x00E12B08, 0x00E12CB0)
  *   0x08  data_bufs  data buffers     (0x00E12B24, 0x00E12CC8)

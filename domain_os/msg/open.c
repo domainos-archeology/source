@@ -21,12 +21,15 @@
  *   depth  - Pointer to socket depth (max messages queued)
  *   status_ret - Status return
  */
+/*
+ * TODO(source-yo76): the body is ARCH_M68K-only and the #else fabricates a
+ * status.  Only MSG_$SOCK_LOCK (0xE242E4) still needs a portable spelling.
+ */
 void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
 {
 #if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_depth;
-    int16_t sock_offset;
     uint8_t asid;
     uint8_t ownership[8];
     uint8_t byte_index;
@@ -52,11 +55,8 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
     /* Lock the socket table */
     ML_$EXCLUSION_START((void *)MSG_$SOCK_LOCK);
 
-    /* Calculate offset into ownership table: socket * 8 */
-    sock_offset = sock_num << 3;
-
     /* Get pointer to ownership bitmap for this socket */
-    bitmap = (uint8_t *)(MSG_$DATA_BASE + MSG_OFF_OWNERSHIP + sock_offset);
+    bitmap = MSG_$SOCK_OWNERS[sock_num];   /* base + 0x1D8 + socket*8 */
 
     /*
      * Check if socket is free (all ownership bits clear).
@@ -102,10 +102,10 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
     *(uint32_t *)(bitmap + 4) = *(uint32_t *)(ownership + 4);
 
     /* Store socket depth */
-    *(int16_t *)(MSG_$DATA_BASE + MSG_OFF_DEPTH_TABLE + sock_num * 2) = sock_depth;
+    MSG_$DATA->depth[sock_num] = sock_depth;   /* 0x00E59276 */
 
     /* Increment open socket count */
-    (*(int16_t *)(MSG_$DATA_BASE + MSG_OFF_OPEN_COUNT))++;
+    MSG_$DATA->open_count++;                   /* 0x00E5927A */
 
     /* Register process cleanup handler (type 7 = MSG cleanup) */
     PROC2_$SET_CLEANUP(7);
@@ -115,7 +115,7 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
     NETWORK_$SET_SERVICE((int16_t *)&MSG_$NET_SERVICE, &service_type, &net_status);
 
     /* Mark that user sockets are open */
-    *(uint8_t *)0xE24C48 = 0xFF;  /* NETWORK_$USER_SOCK_OPEN */
+    NETWORK_$USER_SOCK_OPEN = (int8_t)0xFF;    /* 0x00E592AA "st" */
 
     ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
     *status_ret = status_$ok;

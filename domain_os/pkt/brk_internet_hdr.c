@@ -13,13 +13,23 @@
 
 #include "pkt/pkt_internal.h"
 
-void PKT_$BRK_INTERNET_HDR(void *hdr_ptr, uint32_t *routing_key, uint32_t *dest_node,
-                           uint16_t *dest_sock, uint32_t *src_node_or, uint32_t *src_node,
-                           uint16_t *src_sock, uint16_t *info_out, uint16_t *id_out,
-                           char *template_out, uint16_t template_max,
+void PKT_$BRK_INTERNET_HDR(void *hdr_ptr, uint16_t hdr_len,
+                           uint32_t *routing_key, uint32_t *dest_node,
+                           uint16_t *dest_sock, uint32_t *src_node_or,
+                           uint32_t *src_node, uint16_t *src_sock,
+                           uint16_t *info_out, uint16_t *id_out,
+                           void *data_buf, uint16_t template_max,
                            uint16_t *template_len_out, status_$t *status_ret)
 {
     uint8_t *hdr = (uint8_t *)hdr_ptr;
+    char *template_out = (char *)data_buf;
+
+    /*
+     * The second argument is never read: no instruction between 0x00E12328
+     * and 0x00E1248C touches (0xC,A6).  It is in the signature because
+     * RIP_$SERVER pushes sock_$pkt_info_t.hdr_len there (0x00E68ABE).
+     */
+    (void)hdr_len;
     uint16_t routing_type;
     uint8_t hdr_size;
     uint16_t template_len;

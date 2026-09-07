@@ -46,8 +46,11 @@ static int tests_run = 0;
 
 #include "msg/msg_internal.h"
 
-/* Ownership bitmaps: slot 0 unused, one 8-byte bitmap per socket. */
-uint8_t MSG_$SOCK_OWNERS[MSG_MAX_SOCKET + 1][8];
+/*
+ * The MSG globals.  MSG_$SOCK_OWNERS is the one-based view of
+ * MSG_$DATA_STRUCT.ownership, so defining the record is enough.
+ */
+msg_$data_t MSG_$DATA_STRUCT;
 
 /* The socket table; SOCK_$EVENT_COUNTERS is (sock_table_base + 0x18A4). */
 uint8_t sock_table_base[SOCK_TABLE_SIZE];
@@ -85,7 +88,7 @@ static sock_$sock_t test_sock;
 
 static void reset_state(void)
 {
-    memset(MSG_$SOCK_OWNERS, 0, sizeof(MSG_$SOCK_OWNERS));
+    memset(&MSG_$DATA_STRUCT, 0, sizeof(MSG_$DATA_STRUCT));
     memset(sock_table_base, 0, sizeof(sock_table_base));
     memset(&test_sock, 0, sizeof(test_sock));
     memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));

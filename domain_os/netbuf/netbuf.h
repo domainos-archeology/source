@@ -10,7 +10,8 @@
  *    - Allocated via NETBUF_$GET_HDR, returned via NETBUF_$RTN_HDR
  *
  * 2. Data Buffers (DAT): Page-sized buffers for packet data
- *    - Tracked by page number, with free list stored in MMAPE next_vpn field
+ *    - Tracked by page number, with the free list stored in the MMAPE word
+ *      at entry offset 0x06 (mmap.h's prev_vpn)
  *    - Allocated via NETBUF_$GET_DAT, returned via NETBUF_$RTN_DAT
  *
  * Virtual Address Mapping:
@@ -71,11 +72,18 @@ void NETBUF_$INIT(void);
  *
  * Allocates physical pages and adds them to the header and data buffer pools.
  *
- * @param counts     Packed counts: high word = header count, low word = data count
+ * Two word arguments, read separately by the prologue:
+ *   0x00E0E936  move.w (0x8,A6),D5w      hdr_count
+ *   0x00E0E93A  move.w (0xa,A6),D2w      dat_count
+ * (Callers push them adjacently, which is why the pair reads as one longword
+ * on m68k.)  Matches NETBUF_$DEL_PAGES.
+ *
+ * @param hdr_count  Number of header buffers to add
+ * @param dat_count  Number of data buffers to add
  *
  * Original address: 0x00E0E928
  */
-void NETBUF_$ADD_PAGES(uint32_t counts);
+void NETBUF_$ADD_PAGES(int16_t hdr_count, int16_t dat_count);
 
 /*
  * NETBUF_$DEL_PAGES - Delete pages from buffer pools

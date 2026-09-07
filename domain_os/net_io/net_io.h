@@ -10,27 +10,52 @@
 #include "base/base.h"
 
 /*
+ * net_io_$send_info_t - the two-word record NET_IO_$SEND reports through its
+ * ninth argument.  It is written on every path:
+ *
+ *   0x00E0E75C  clr.w (A0) / ori.w #-0x7ff8,(0x2,A0)
+ *               loopback: port_net = 0, xmit_status |= 0x8008
+ *   0x00E0E82E  move.w (0x2e,A2),(A4) / clr.w (0x2,A4)
+ *               real send: port_net = the port's network number, then
+ *               xmit_status is cleared and handed to the driver by address
+ *               (0x00E0E870 "pea (0x2,A0)").
+ *
+ * PKT_$SEND_INTERNET reads both words to decide whether a failed send is
+ * worth retrying (0x00E12770 / 0x00E12776).
+ */
+typedef struct net_io_$send_info_t {
+    uint16_t    port_net;       /* 0x00 */
+    uint16_t    xmit_status;    /* 0x02 */
+} net_io_$send_info_t;
+
+/*
  * NET_IO_$SEND - Send a network packet
  *
  * Sends a packet over the network to a specified destination.
  *
- * @param port        Port/interface to send on
- * @param hdr_ptr     Pointer to header buffer pointer
- * @param hdr_pa      Header physical address
- * @param hdr_len     Header length
- * @param data_va     Data virtual address
- * @param data_len    Pointer to data length
- * @param protocol    Protocol number
- * @param flags       Send flags
- * @param extra       Extra parameters
- * @param status_ret  Output: status code
+ * Ten arguments; the caller pops 0x20 bytes (0x00E12754 "lea (0x20,SP),SP").
+ * The prologue offsets are 0x08, 0x0A, 0x0E, 0x12, 0x14, 0x18, 0x1C, 0x1E,
+ * 0x20, 0x24.
+ *
+ * @param port        Port/interface to send on (0x00E0E6A0, word)
+ * @param hdr_ptr     Address of the header VA; dereferenced twice
+ *                    (0x00E0E6FA "movea.l D3,A1 / movea.l (A1),A4")
+ * @param hdr_pa      Header physical address (0x00E0E88A)
+ * @param hdr_len     Header length (0x00E0E71C, word)
+ * @param data_va     Data virtual address (0x00E0E718)
+ * @param data_pages  The four data-page addresses PKT_$COPY_TO_PA filled in
+ *                    (0x00E0E6A8 "move.l (0x18,A6),D4")
+ * @param data_len    Data length (0x00E0E712, word)
+ * @param flags       Send flags (0x00E0E878, word)
+ * @param send_info   Output: net_io_$send_info_t (0x00E0E6AC)
+ * @param status_ret  Output: status code (0x00E0E6B0)
  *
  * Original address: 0x00E0E692
  */
 void NET_IO_$SEND(int16_t port, uint32_t *hdr_ptr, uint32_t hdr_pa,
-                  uint16_t hdr_len, uint32_t data_va, uint32_t *data_len,
-                  uint16_t protocol, uint16_t flags, void *extra,
-                  status_$t *status_ret);
+                  uint16_t hdr_len, uint32_t data_va, uint32_t *data_pages,
+                  int16_t data_len, uint16_t flags,
+                  net_io_$send_info_t *send_info, status_$t *status_ret);
 
 /*
  * NET_IO_$PUT_IN_SOCK - Put packet in socket

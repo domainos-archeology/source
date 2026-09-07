@@ -19,12 +19,12 @@
  *   depth  - Pointer to socket depth
  *   status_ret - Status return
  */
+/* TODO(source-yo76): ARCH_M68K-only body with a fabricated #else status. */
 void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
 {
 #if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_depth;
-    int16_t sock_offset;
     uint8_t asid;
     uint8_t ownership[8];
     uint8_t byte_index;
@@ -76,19 +76,17 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
     byte_index = (0x3F - asid) >> 3;
     ownership[byte_index] |= (1 << (asid & 7));
 
-    /* Calculate offset into ownership table */
-    sock_offset = sock_num << 3;
-    bitmap = (uint8_t *)(MSG_$DATA_BASE + MSG_OFF_OWNERSHIP + sock_offset);
+    bitmap = MSG_$SOCK_OWNERS[sock_num];   /* base + 0x1D8 + socket*8 */
 
     /* Store ownership bitmap */
     *(uint32_t *)bitmap = *(uint32_t *)ownership;
     *(uint32_t *)(bitmap + 4) = *(uint32_t *)(ownership + 4);
 
     /* Store socket depth */
-    *(int16_t *)(MSG_$DATA_BASE + MSG_OFF_DEPTH_TABLE + sock_num * 2) = sock_depth;
+    MSG_$DATA->depth[sock_num] = sock_depth;   /* 0x00E5936C */
 
     /* Increment open socket count */
-    (*(int16_t *)(MSG_$DATA_BASE + MSG_OFF_OPEN_COUNT))++;
+    MSG_$DATA->open_count++;                   /* 0x00E59370 */
 
     /* Register process cleanup handler */
     PROC2_$SET_CLEANUP(7);
@@ -98,7 +96,7 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
     NETWORK_$SET_SERVICE((int16_t *)&MSG_$NET_SERVICE, &service_type, &net_status);
 
     /* Mark that user sockets are open */
-    *(uint8_t *)0xE24C48 = 0xFF;  /* NETWORK_$USER_SOCK_OPEN */
+    NETWORK_$USER_SOCK_OPEN = (int8_t)0xFF;    /* 0x00E593A0 "st" */
 
     ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
     *status_ret = status_$ok;

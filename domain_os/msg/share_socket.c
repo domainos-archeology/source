@@ -24,7 +24,6 @@ void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
 {
 #if defined(ARCH_M68K)
     int16_t sock_num;
-    int16_t sock_offset;
     uint8_t asid;
     uint8_t target_asid;
     uint8_t byte_index;
@@ -47,8 +46,8 @@ void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
 
     /* Check current process owns the socket */
     asid = PROC1_$AS_ID;
-    sock_offset = sock_num << 3;
-    bitmap = (uint8_t *)(MSG_$DATA_BASE + MSG_OFF_OWNERSHIP + sock_offset);
+    /* base + 0x1D8 + socket*8 - the one-based ownership table. */
+    bitmap = MSG_$SOCK_OWNERS[sock_num];
     byte_index = (0x3F - asid) >> 3;
 
     if ((bitmap[byte_index] & (1 << (asid & 7))) == 0) {

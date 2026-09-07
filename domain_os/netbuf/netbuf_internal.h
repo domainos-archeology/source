@@ -30,9 +30,14 @@ typedef struct netbuf_globals_t {
    * or next free index when slot is free */
   uint32_t va_slots[NETBUF_VA_SLOTS]; /* 0x000: 192 * 4 = 768 bytes */
 
-  /* Padding to align to 0x2fc */
-  uint32_t reserved_300; /* 0x300: delay queue header? */
-  uint32_t reserved_304; /* 0x304: delay queue tail? */
+  /*
+   * 0x300: the 48-bit delay NETBUF_$GET_HDR and NETBUF_$GET_DAT hand to
+   * TIME_$WAIT.  Both push its address directly out of the globals
+   * (0x00E0EE18 and 0x00E0EFE2 "pea (0x300,A5)"); it is a clock_t, not a
+   * timer queue.  0x306/0x307 are the alignment gap before the spin lock.
+   */
+  clock_t delay_time; /* 0x300 (long) + 0x304 (word) */
+  uint16_t pad_306;   /* 0x306 */
 
   /* Spin lock for protecting all netbuf data */
   uint32_t spin_lock; /* 0x308: Spin lock */
@@ -66,15 +71,24 @@ typedef struct netbuf_globals_t {
  */
 #if defined(ARCH_M68K)
 #define NETBUF_GLOBALS ((netbuf_globals_t *)0xE245A8)
-#define NETBUF_$DELAY_Q ((time_queue_t *)0xE248A8)
 #define NETBUF_$VA_BASE 0xD64C00
 #else
 extern netbuf_globals_t *netbuf_globals;
-extern time_queue_t *netbuf_delay_q;
 extern uint32_t netbuf_va_base;
 #define NETBUF_GLOBALS netbuf_globals
-#define NETBUF_$DELAY_Q netbuf_delay_q
 #define NETBUF_$VA_BASE netbuf_va_base
+#endif
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(netbuf_globals_t, delay_time) == 0x300, "netbuf.delay_time");
+_Static_assert(offsetof(netbuf_globals_t, spin_lock) == 0x308, "netbuf.spin_lock");
+_Static_assert(offsetof(netbuf_globals_t, dat_lim) == 0x31C, "netbuf.dat_lim");
+_Static_assert(offsetof(netbuf_globals_t, dat_cnt) == 0x320, "netbuf.dat_cnt");
+_Static_assert(offsetof(netbuf_globals_t, dat_top) == 0x324, "netbuf.dat_top");
+_Static_assert(offsetof(netbuf_globals_t, hdr_top) == 0x328, "netbuf.hdr_top");
+_Static_assert(offsetof(netbuf_globals_t, va_top) == 0x32C, "netbuf.va_top");
+_Static_assert(offsetof(netbuf_globals_t, va_base) == 0x330, "netbuf.va_base");
+_Static_assert(offsetof(netbuf_globals_t, hdr_alloc) == 0x334, "netbuf.hdr_alloc");
 #endif
 
 /* Convenience macros for global access */
@@ -91,23 +105,36 @@ extern uint32_t netbuf_va_base;
 #define NETBUF_$VA_TOP (NETBUF_GLOBALS->va_top)
 #define NETBUF_$VA_BASE_ADDR (NETBUF_GLOBALS->va_base)
 #define NETBUF_$HDR_ALLOC (NETBUF_GLOBALS->hdr_alloc)
+#define NETBUF_$DELAY_TIME (NETBUF_GLOBALS->delay_time)
 
 /*
  * Data buffer next pointer access
  *
- * Data buffers use the MMAPE next_vpn field (at offset 0x06 in each 16-byte
- * entry) to store the free list link. MMAPE base is 0xEB2800.
+ * Data buffers keep their free-list link in the MMAPE word at offset 0x06 of
+ * the 16-byte entry - mmap.h calls that field prev_vpn.  Every netbuf site
+ * spells it "movea.l #0xeb4800,A0 / lsl.l #0x4,Dn / lea (0,A0,Dn),A1" and
+ * then addresses (-0x1ffa,A1), i.e. 0xEB4800 - 0x1FFA = 0xEB2806 = MMAPE base
+ * + 6 (0x00E0EAA2, 0x00E0EADA, 0x00E0EF64, 0x00E0F086).  It is NOT next_vpn
+ * at 0x0A.
  */
-#define NETBUF_DAT_NEXT(ppn) (MMAPE_BASE[(ppn)].next_vpn)
+#define NETBUF_DAT_NEXT(ppn) (MMAPE_BASE[(ppn)].prev_vpn)
 
 /*
  * Header buffer structure access
  *
- * Header buffers are 1KB each. The free list next pointer is at offset 0x3e4,
- * and the physical address is stored at offset 0x3fc.
+ * Header buffers are 1KB each.  The free-list link is the longword at offset
+ * 0x3E4 (0x00E0ED84 "movea.l (0x328,A5),A0 / move.l (0x3e4,A0),(0x328,A5)",
+ * 0x00E0EA4A) and the buffer's physical address is the longword at 0x3FC
+ * (0x00E0EA26, 0x00E0EEA4).
+ *
+ * The buffer is addressed by target virtual address, so the field accessors
+ * go through ARCH_VA_TO_PTR: on m68k that is the identity cast, and a host
+ * test can point ARCH_HOST_VA_BASE at its own arena.
  */
-#define NETBUF_HDR_NEXT(va) (*(uint32_t *)((va) + NETBUF_HDR_NEXT_OFF))
-#define NETBUF_HDR_PHYS(va) (*(uint32_t *)((va) + NETBUF_HDR_PHYS_OFF))
+#define NETBUF_HDR_FIELD(va, off)                                              \
+  (*(uint32_t *)((uint8_t *)ARCH_VA_TO_PTR(va) + (off)))
+#define NETBUF_HDR_NEXT(va) NETBUF_HDR_FIELD(va, NETBUF_HDR_NEXT_OFF)
+#define NETBUF_HDR_PHYS(va) NETBUF_HDR_FIELD(va, NETBUF_HDR_PHYS_OFF)
 
 /*
  * Process type 7 is the network process type that can wait on delays
@@ -130,10 +157,12 @@ extern uint32_t netbuf_va_base;
 uint32_t netbuf_rtnva_locked(uint32_t *va_ptr);
 
 /*
- * Delay time for waiting on buffers (constant at 0x00E0EEB2)
+ * NETBUF_$DELAY_TYPE - TIME_$WAIT's delay-type argument, a Pascal `const`
+ * passed by reference out of the code region: both waiters resolve to the
+ * zero word at 0x00E0EEB2 (0x00E0EE1C "pea (0x94,PC)" and 0x00E0EFE6
+ * "pea (-0x136,PC)").  Zero is the relative-delay type.
  */
 extern uint16_t NETBUF_$DELAY_TYPE;
-extern clock_t NETBUF_$DELAY_TIME;
 
 /*
  * Error status for crash

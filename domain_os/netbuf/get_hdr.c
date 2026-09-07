@@ -76,7 +76,9 @@ void NETBUF_$GET_HDR(uint32_t *phys_out, uint32_t *va_out)
         }
 
         /* Network process: wait for buffer to become available */
-        TIME_$WAIT(&NETBUF_$DELAY_TYPE, NETBUF_$DELAY_Q, &status);
+        TIME_$WAIT(&NETBUF_$DELAY_TYPE, &NETBUF_$DELAY_TIME, &status);
+        /* 0x00E0EE18 "pea (0x300,A5)" - the delay is a clock_t in the
+         * netbuf globals, not a timer queue. */
         if (status != status_$ok) {
             CRASH_SYSTEM(&status);
         }
@@ -100,10 +102,14 @@ void NETBUF_$GET_HDR(uint32_t *phys_out, uint32_t *va_out)
 
     NETBUF_$HDR_ALLOCS++;
 
-    /* Initialize the buffer data area (offsets 0x3ec-0x3fb) */
+    /*
+     * Initialise the buffer data area, 0x3EC..0x3FB.
+     * 0x00E0EE8A "moveq #0x3,D0 / moveq #0x4,D1" then
+     * 0x00E0EE9A "clr.l (0x3e8,A3)" with A3 = va + D1, D1 stepping 4..0x10.
+     */
     va = *va_out;
     for (i = 0; i < 4; i++) {
-        *(uint32_t *)(va + 0x3ec + i * 4) = 0;
+        NETBUF_HDR_FIELD(va, NETBUF_HDR_DATA_OFF + 4 + i * 4) = 0;
     }
 
     /* Store physical address */

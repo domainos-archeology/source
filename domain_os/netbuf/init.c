@@ -47,8 +47,10 @@ void NETBUF_$INIT(void)
     /* Set data buffer limit to half of pageable pages */
     NETBUF_$DAT_LIM = MMAP_$PAGEABLE_PAGES_LOWER_LIMIT >> 1;
 
-    /* Allocate initial buffers: 0x27 (39) header buffers, 0x0a (10) data buffers
-     * Packed as: (hdr_count << 16) | dat_count = 0x27000a
+    /*
+     * Allocate the initial buffers: 0x27 (39) header pages and 0x0A (10) data
+     * pages.  The original pushes the two words adjacently, which Ghidra
+     * renders as the single longword 0x27000A.
      */
-    NETBUF_$ADD_PAGES(0x27000a);
+    NETBUF_$ADD_PAGES(0x27, 0x0A);
 }

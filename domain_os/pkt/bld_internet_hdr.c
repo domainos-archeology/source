@@ -37,6 +37,11 @@ void PKT_$BLD_INTERNET_HDR(uint32_t routing_key, uint32_t dest_node, uint16_t de
     uint8_t hdr_size;
     uint16_t total_len;
     uint32_t local_addr_info[6];
+    /*
+     * TODO(source-82m6): pkt.h now carries the recovered pkt_$info_t and the
+     * header buffer this routine fills in is still an untyped uint32_t*.  The
+     * whole 764-byte function at 0x00E1202C needs re-emitting against both.
+     */
     uint8_t *pkt_info_bytes = (uint8_t *)pkt_info;
     uint32_t *pkt_info_words = (uint32_t *)pkt_info;
 
