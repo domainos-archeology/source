@@ -32,17 +32,28 @@ void MMAP_$RELEASE_PAGES(uint16_t pid, uint32_t *vpn_array, uint16_t count)
         uint16_t *pmape = PMAPE_FOR_VPN(vpn);
 
         if ((pmape[1] & PMAPE_FLAG_MODIFIED) || (page->flags2 & MMAPE_FLAG2_MODIFIED)) {
-            /* Page is dirty - check segment for flush requirement */
-            uint16_t seg = page->segment;
-            void *seg_info = SEGMENT_TABLE[seg];
+            /*
+             * Page is dirty - ask the owning object whether the write has to
+             * be flushed.  A4 holds 0xEC5400 for the whole loop (loaded at
+             * 00e0d034); both arms index it by seg * 0x14 and read the
+             * longword at -0x10, i.e. SEG_ASTE(seg)->aote:
+             *
+             *   00e0d0b0-00e0d0ba  seg * 0x14 (ON_DISK arm)
+             *   00e0d0bc  lea (0x0,A4,D0w),A1
+             *   00e0d0c0  movea.l (-0x10,A1),A0
+             *   00e0d0c4  tst.w (0x28,A0) / sne  ; high word of aote->len_high
+             *   00e0d0cc-00e0d0d6  seg * 0x14 (not-ON_DISK arm)
+             *   00e0d0d8  lea (0x0,A4,D0w),A1
+             *   00e0d0dc  movea.l (-0x10,A1),A0
+             *   00e0d0e0  tst.b (0xb9,A0) / smi  ; aote->remote_flag < 0
+             */
+            aote_t *aote = MMAP_$SEG_ASTE_FOR(page->segment)->aote;
 
             boolean needs_flush;
             if (page->flags2 & MMAPE_FLAG2_ON_DISK) {
-                /* Check segment's write-back requirement (offset 0x28) */
-                needs_flush = (*(int16_t*)((char*)seg_info + 0x28)) != 0;
+                needs_flush = (aote->len_high >> 16) != 0;
             } else {
-                /* Check segment's flush flag (offset 0xB9 bit 7) */
-                needs_flush = (*(int8_t*)((char*)seg_info + 0xB9)) < 0;
+                needs_flush = aote->remote_flag < 0;
             }
 
             dest_type = needs_flush ? MMAP_PAGE_TYPE_DIRTY_FL : MMAP_PAGE_TYPE_DIRTY_NF;

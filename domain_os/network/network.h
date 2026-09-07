@@ -486,22 +486,190 @@ void NETWORK_$PAGE_SERVER(void);
 void NETWORK_$REQUEST_SERVER(void);
 
 /*
- * ring_info_t - Token Ring network status information
+ * ring_info_t - Token Ring status record carried by ASKNODE request 0x1F
  *
- * Structure returned by NETWORK_$RING_INFO containing status about
- * the token ring network.  The size is pinned by the copy loop at
- * 0x00E103E6..0x00E103EE (moveq #0x1d + dbf = 30 longs, then one word):
- * 122 bytes.
+ * 122 bytes (0x7A).  The size is pinned twice: NETWORK_$RING_INFO's copy loop
+ * at 0x00E103E6..0x00E103EE (moveq #0x1d + dbf = 30 longs, then one word)
+ * takes it out of the response packet at offset 6, and the responder --
+ * NETWORK_$PROCESS_PAGING_REQUEST case 0x0E, 0x00E11246..0x00E112D4 -- fills exactly
+ * 0x7A bytes at reply+6 and nothing beyond.
  *
- * TODO(source-4omb): field layout unrecovered.  The kernel never interprets
- * the bytes -- NETWORK_$RING_INFO copies them out of the response buffer and
- * its only caller, ASKNODE_$INTERNET_INFO (0x00E645EA), forwards them to the
- * requester -- so the layout comes from the ASKNODE wire protocol, not from
- * the image.  Modelled as an opaque byte array until it is recovered.
+ * The kernel never interprets the bytes on the receiving side, so the layout
+ * comes from the *sending* side.  In this image both sides are present:
+ *
+ *   requester  ASKNODE_$INTERNET_INFO (0x00E645EA), request word 0x1F, calls
+ *              NETWORK_$RING_INFO with the ASKNODE reply record + 8
+ *              (pea (0x8,A1) at 0x00E6557E) and puts the network status at
+ *              reply+4; the reply opcode is 0x20.
+ *   responder  NETWORK_$PROCESS_PAGING_REQUEST case 0x0E, which sets the reply type
+ *              word to 0x000F (0x00E11250), clears the reply status longword
+ *              (0x00E1124C) and then builds this record at reply+6.
+ *
+ * Every field below cites the instruction in that responder that stores it.
+ * A5 there is the network module base 0x00E248FC (proved by
+ * "lea (0xe248fc).l,A5" at 0x00E10402 in NETWORK_$REPORT_FAILURE, which uses
+ * the same A5 displacements for NETWORK_$FAILURE_REC).
+ *
+ * The field *names* are Apollo's own, from /etc/netmain in the SR10.4
+ * distribution: its "Error counts for <node>" display formats this record and
+ * names the counters (see ring_$stats_t in ring/ring.h, bead source-1a5o).
+ * netmain shows 25 counters where ring_$stats_t holds 22 - the extra three,
+ * "xmit bph", "rcv bph" and "xmit esb", are the standalone words at the tail
+ * of this record, which is what identifies +0x72..+0x79.
+ *
+ * The record is a wire record: it is packed, and it embeds two copies of
+ * records that live elsewhere.
+ *
+ *   +0x08 is a verbatim copy of ring_$stats_t for unit 0 (ring/ring.h).  It
+ *         is spelled out field by field rather than embedded by type because
+ *         ring/ring.h #includes this header for the status_$network_* codes,
+ *         so this header cannot include ring/ring.h back.  ring/ring.h is the
+ *         authority for those names and for the evidence behind them.
+ *   +0x54 is a copy of RING_$SWDIAG_DATA (0x00E261C2), the software-diagnostic
+ *         mirror of the receive counters, with two longwords patched in from
+ *         the standalone globals that hold the live values.
  */
 typedef struct ring_info_t {
-    uint8_t     data[122];      /* Raw ring info data */
-} ring_info_t;
+    /* ---- header ---------------------------------------------------- */
+    uint16_t    _unknown_00;        /* 0x00: always the constant 3
+                                     *       ("move.w #0x3,(-0x1e2,A0)",
+                                     *       0x00E112BC).  Other replies from
+                                     *       the same dispatcher put an
+                                     *       unrelated value in this slot
+                                     *       (8 at 0x00E10A3C / 0x00E11172 /
+                                     *       0x00E1148C / 0x00E1151E), so it is
+                                     *       per-payload, not a shared header
+                                     *       word.  TODO(source-4omb): name it. */
+    int8_t      diskless;           /* 0x02: NETWORK_$DISKLESS (0x00E24C4C =
+                                     *       A5+0x350), "move.b (0x350,A5),
+                                     *       (-0x1e0,A0)" at 0x00E112C2.
+                                     *       Pascal boolean, test it with "< 0".
+                                     *       netmain: "<node> is diskless." /
+                                     *       "<node> has a disk." */
+    uint8_t     _unknown_03;        /* 0x03: never written by the responder */
+    uint32_t    mother_node;        /* 0x04: NETWORK_$MOTHER_NODE (0x00E24C0C =
+                                     *       A5+0x310), "move.l (0x310,A5),
+                                     *       (-0x1de,A0)" at 0x00E112C8.
+                                     *       netmain: "<node> pages from <node>." */
+
+    /* ---- 0x08: RING_$STATS[0] (0x00E261E0), 0x3C bytes -------------- *
+     * "movea.l #0xe261e0,A1 / lea (-0x1da,A0),A4 / moveq #0xe,D1 /
+     *  move.l (A1)+,(A4)+ / dbf" at 0x00E11266..0x00E11274: fifteen longwords.
+     * Field names, offsets and per-counter evidence: ring_$stats_t, ring/ring.h. */
+    struct {
+        uint16_t    _reserved0;     /* 0x08 (stats+0x00) */
+        uint32_t    xmit_call;      /* 0x0A (stats+0x02) */
+        uint32_t    xmitcnt;        /* 0x0E (stats+0x06) */
+        uint16_t    xmit_nack;      /* 0x12 (stats+0x0A) */
+        uint16_t    xmit_wack;      /* 0x14 (stats+0x0C) */
+        uint16_t    xmit_orun;      /* 0x16 (stats+0x0E) */
+        uint16_t    xmit_apar;      /* 0x18 (stats+0x10) */
+        uint16_t    xmit_bus;       /* 0x1A (stats+0x12) */
+        uint16_t    xmit_nortn;     /* 0x1C (stats+0x14) */
+        uint16_t    xmit_modem;     /* 0x1E (stats+0x16) */
+        uint16_t    xmit_error;     /* 0x20 (stats+0x18) */
+        uint16_t    xmit_tim;       /* 0x22 (stats+0x1A) */
+        uint32_t    rcvcnt;         /* 0x24 (stats+0x1C) */
+        uint16_t    rcveor;         /* 0x28 (stats+0x20) */
+        uint16_t    rcvcrc;         /* 0x2A (stats+0x22) */
+        uint16_t    rcvtim;         /* 0x2C (stats+0x24) */
+        uint16_t    rcvbus;         /* 0x2E (stats+0x26) */
+        uint16_t    rcvmodem;       /* 0x30 (stats+0x28) */
+        uint16_t    rcvpkt;         /* 0x32 (stats+0x2A) */
+        uint16_t    rcvovr;         /* 0x34 (stats+0x2C) */
+        uint16_t    rcvapar;        /* 0x36 (stats+0x2E) */
+        uint16_t    rcvxerr;        /* 0x38 (stats+0x30) */
+        uint16_t    rcvhcsum;       /* 0x3A (stats+0x32) */
+        int8_t      last_success;   /* 0x3C (stats+0x34) */
+        int8_t      _reserved2;     /* 0x3D (stats+0x35) */
+        int8_t      congestion_flag;/* 0x3E (stats+0x36) */
+        int8_t      _reserved3;     /* 0x3F (stats+0x37) */
+        int8_t      biphase_flag;   /* 0x40 (stats+0x38) */
+        int8_t      _reserved4;     /* 0x41 (stats+0x39) */
+        int8_t      retry_pending;  /* 0x42 (stats+0x3A) */
+        int8_t      _reserved5;     /* 0x43 (stats+0x3B) */
+    } __attribute__((packed)) stats;
+
+    /* ---- 0x44: NETWORK_$FAILURE_REC (0x00E24BF4 = A5+0x2F8) --------- *
+     * "lea (0x2f8,A5),A1 / lea (-0x19e,A0),A4" + four "move.l (A1)+,(A4)+"
+     * at 0x00E11256..0x00E11264.  netmain's hardware-failure display reads
+     * "v<n>  Failure type = <lh>", "Status bits: broken / not broken",
+     * "forced last time / did not force last time", "delay in / delay out",
+     * "forcing now / not forcing now" and "reported by <node> at <time>".
+     * TODO(source-oowv): network_$failure_rec_t+0x04 and +0x0C are named
+     * backwards above - 0x00E10414 stores NODE_$ME into +0x04 and 0x00E1042E
+     * stores the failure type into +0x0C. */
+    network_$failure_rec_t  failure_rec;    /* 0x44..0x53 */
+
+    /* ---- 0x54: RING_$SWDIAG_DATA (0x00E261C2), 0x1E bytes ----------- *
+     * "movea.l #0xe261c2,A1 / lea (-0x18e,A0),A4 / moveq #0x6 /
+     *  move.l (A1)+,(A4)+ / dbf / move.w (A1)+,(A4)+" at
+     * 0x00E11278..0x00E1128A: seven longwords plus one word = 30 bytes, i.e.
+     * 0x00E261C2..0x00E261DF, which runs up to but not into RING_$STATS[0] at
+     * 0x00E261E0.  ring/ring.h currently declares ring_$swdiag_t as only 0x18
+     * bytes; this copy shows the block is 0x1E (bead source-twut).
+     *
+     * Two longwords of that copy are then overwritten in place from the
+     * standalone globals that hold the live values, so the bytes the block
+     * copy put at +0x56..+0x59 and +0x6E..+0x71 are dead. */
+    struct {
+        uint16_t    _unknown_54;    /* 0x54 (swdiag+0x00) */
+        uint32_t    rcvcnt;         /* 0x56: RING_$SWDIAG_RCVCNT (0x00E261B4),
+                                     *       "move.l (0x00e261b4).l,(-0x18c,A0)"
+                                     *       at 0x00E1128C - overwrites the
+                                     *       block copy of swdiag+0x02..0x05 */
+        uint16_t    rcveor;         /* 0x5A (swdiag+0x06) */
+        uint16_t    rcvcrc;         /* 0x5C (swdiag+0x08) */
+        uint16_t    rcvtim;         /* 0x5E (swdiag+0x0A) */
+        uint16_t    rcvbus;         /* 0x60 (swdiag+0x0C) */
+        uint16_t    rcvmodem;       /* 0x62 (swdiag+0x0E) */
+        uint16_t    rcvpkt;         /* 0x64 (swdiag+0x10) */
+        uint16_t    rcvovr;         /* 0x66 (swdiag+0x12) */
+        uint16_t    rcvapar;        /* 0x68 (swdiag+0x14) */
+        uint16_t    rcvxerr;        /* 0x6A (swdiag+0x16) */
+        uint16_t    rcvhcsum;       /* 0x6C (swdiag+0x18): the swdiag mirror
+                                     *       sits a uniform 0x1A below its
+                                     *       ring_$stats_t counter and
+                                     *       rcvhcsum is stats+0x32, so this is
+                                     *       its slot; netmain's software-
+                                     *       diagnostic display prints
+                                     *       "rcvxerr <n>  rcvhcsum <n>" as its
+                                     *       own line.  The receive path never
+                                     *       bumps this mirror. */
+        uint32_t    nodeid;         /* 0x6E: RING_$SWDIAG_NODEID (0x00E261AC),
+                                     *       "move.l (0x00e261ac).l,(-0x174,A0)"
+                                     *       at 0x00E11294 - overwrites the
+                                     *       block copy of swdiag+0x1A..0x1D */
+    } __attribute__((packed)) swdiag;
+
+    /* ---- 0x72: the four standalone biphase/ESB words ---------------- *
+     * netmain prints them in exactly this order ("xmit bph", "rcv bph",
+     * "xmit esb", then "rcv esb" on the software-diagnostic line), and the two
+     * receive ones are already pinned to their globals by ring_$validate_receive
+     * (0x00E75F7C), which fixes the other two. */
+    uint16_t    xmit_biphase;       /* 0x72: RING_$XMIT_BIPHASE (0x00E261BC),
+                                     *       0x00E1129C */
+    uint16_t    rcv_biphase;        /* 0x74: RING_$RCV_BIPHASE (0x00E261B8),
+                                     *       0x00E112A4 */
+    uint16_t    xmit_esb;           /* 0x76: RING_$XMIT_ESB (0x00E261BE),
+                                     *       0x00E112AC */
+    uint16_t    rcv_esb;            /* 0x78: RING_$RCV_ESB (0x00E261BA),
+                                     *       0x00E112B4 */
+} __attribute__((packed)) ring_info_t;
+
+_Static_assert(sizeof(ring_info_t) == 122, "sizeof ring_info_t");
+_Static_assert(offsetof(ring_info_t, diskless)             == 0x02, "ring_info_t.diskless");
+_Static_assert(offsetof(ring_info_t, mother_node)          == 0x04, "ring_info_t.mother_node");
+_Static_assert(offsetof(ring_info_t, stats)                == 0x08, "ring_info_t.stats");
+_Static_assert(offsetof(ring_info_t, stats.rcvcnt)         == 0x24, "ring_info_t.stats.rcvcnt");
+_Static_assert(offsetof(ring_info_t, stats.rcvhcsum)       == 0x3A, "ring_info_t.stats.rcvhcsum");
+_Static_assert(offsetof(ring_info_t, failure_rec)          == 0x44, "ring_info_t.failure_rec");
+_Static_assert(offsetof(ring_info_t, swdiag)               == 0x54, "ring_info_t.swdiag");
+_Static_assert(offsetof(ring_info_t, swdiag.rcvcnt)        == 0x56, "ring_info_t.swdiag.rcvcnt");
+_Static_assert(offsetof(ring_info_t, swdiag.rcvhcsum)      == 0x6C, "ring_info_t.swdiag.rcvhcsum");
+_Static_assert(offsetof(ring_info_t, swdiag.nodeid)        == 0x6E, "ring_info_t.swdiag.nodeid");
+_Static_assert(offsetof(ring_info_t, xmit_biphase)         == 0x72, "ring_info_t.xmit_biphase");
+_Static_assert(offsetof(ring_info_t, rcv_esb)              == 0x78, "ring_info_t.rcv_esb");
 
 /*
  * NETWORK_$RING_INFO - Get token ring network information

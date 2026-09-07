@@ -61,7 +61,7 @@ NORETURN void PROC2_$SIGRETURN(void *context_ptr, void *regs_ptr,
      * If (pending & ~blocked) != 0, deliver them.
      */
     if ((entry->sig_mask_2 & ~entry->sig_blocked_2) != 0) {
-        PROC2_$DELIVER_PENDING_INTERNAL(entry->owner_session);
+        PROC2_$DELIVER_PENDING_INTERNAL(entry->self_index);
     }
 
     ML_$UNLOCK(PROC2_LOCK_ID);

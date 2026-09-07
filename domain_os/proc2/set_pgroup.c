@@ -55,16 +55,19 @@ void PROC2_$SET_PGROUP(uid_t *proc_uid, uint16_t *new_upgid, status_$t *status_r
     target_entry = P2_INFO_ENTRY(target_idx);
 
     /*
-     * Permission check:
-     * - If caller and target have same owner_session, proceed
-     * - Else if caller's owner_session == target's parent_pgroup_idx, check flags
+     * Permission check (the POSIX setpgid rule -- bead source-e8c8):
+     *   0x00E41142/0x00E41146  current->self_index == target->self_index
+     *                          ("is the target me?")
+     *   0x00E4114C             current->self_index == target->parent_pgroup_idx
+     *                          ("am I the target's parent?")
+     * The session test is separate, on +0x5C, at 0x00E41178.
      */
-    if (current_entry->owner_session == target_entry->owner_session) {
-        /* Same session - permission granted */
+    if (current_entry->self_index == target_entry->self_index) {
+        /* The target is the caller itself - permission granted */
         goto permission_ok;
     }
 
-    if (current_entry->owner_session != target_entry->parent_pgroup_idx) {
+    if (current_entry->self_index != target_entry->parent_pgroup_idx) {
         /* Caller is not parent */
         status = status_$proc2_uid_not_found;
         goto done;

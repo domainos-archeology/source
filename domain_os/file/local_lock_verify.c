@@ -25,21 +25,15 @@
 #include "ml/ml.h"
 
 /*
- * Lock entry data base addresses
- * Entries are at DAT_00e935b0 with 0x1C byte stride
- */
-#define LOT_DATA_BASE       0xE935B0
-#define LOT_ENTRY_SIZE      0x1C
-
-/*
- * Offsets within lock entry (relative to base + index * 0x1C + 0x1C)
- *   -0x10 (0x0C): uid_high
- *   -0x0C (0x10): uid_low
- *   -0x08 (0x14): next pointer
- *   -0x06 (0x16): sequence
- *   -0x04 (0x18): refcount
- *   -0x03 (0x19): flags1 (bits 0-5 = rights mask, bit 6 unused, bit 7 = remote)
- *   -0x01 (0x1B): flags2 (bit 7 = side, bits 3-6 = mode, bit 2 = remote, etc)
+ * Lock entries are reached through FILE_$LOT_ENTRY() (file/file_internal.h).
+ * 0x00E6087A `movea.l #0xe935cc,A0` loads the table base - entry 1 - and the
+ * fields are read at negative displacements off `base + index*0x1C`, the END
+ * of entry `index`:
+ *   -0x10 -> +0x0C uid_high    -0x06 -> +0x16 sequence
+ *   -0x0c -> +0x10 uid_low     -0x04 -> +0x18 refcount
+ *   -0x08 -> +0x14 next        -0x03 -> +0x19 flags1
+ *                              -0x01 -> +0x1B flags2
+ * The private biased base this file used to define has been dropped.
  */
 
 /*
@@ -57,8 +51,7 @@ void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_r
 {
     int16_t hash_index;
     int16_t entry_idx;
-    uint8_t *entry_base;
-    int32_t entry_offset;
+    file_lock_entry_detail_t *entry;
     int8_t found = 0;
 
     /* Compute hash bucket for the file UID */
@@ -85,26 +78,13 @@ void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_r
 
     /* Iterate through hash chain */
     while (entry_idx > 0) {
-        /*
-         * Compute entry base address
-         * Entry N is at LOT_DATA_BASE + N * 0x1C
-         * We access data relative to the end of the entry (+ 0x1C offset)
-         */
-        entry_offset = (int32_t)entry_idx * LOT_ENTRY_SIZE;
-        entry_base = (uint8_t *)(LOT_DATA_BASE + LOT_ENTRY_SIZE + entry_offset);
-
-        /*
-         * Check if this entry matches the file UID
-         */
-        uint32_t *uid_high_ptr = (uint32_t *)(entry_base - 0x10);
-        uint32_t *uid_low_ptr = (uint32_t *)(entry_base - 0x0C);
-        int16_t *next_ptr = (int16_t *)(entry_base - 0x08);
-        uint8_t *flags2_ptr = entry_base - 0x01;
+        /* Entry `entry_idx` of the 1-based table (0x00E6087A). */
+        entry = FILE_$LOT_ENTRY(entry_idx);
 
         /* Compare UIDs */
         found = 0;
-        if (*uid_high_ptr == request->file_uid.high) {
-            if (*uid_low_ptr == request->file_uid.low) {
+        if (entry->uid_high == request->file_uid.high) {
+            if (entry->uid_low == request->file_uid.low) {
                 found = -1;  /* UID matches */
             }
         }
@@ -112,7 +92,7 @@ void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_r
         /*
          * Check if lock side matches (bit 7 of flags2)
          */
-        uint16_t entry_side = (*flags2_ptr >> 7) & 1;
+        uint16_t entry_side = (entry->flags2 >> 7) & 1;
         int8_t side_match = (entry_side == request->side) ? -1 : 0;
 
         /*
@@ -124,9 +104,8 @@ void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_r
              * Either ASID matches directly, or
              * (remote flag clear AND ASID maps to same group)
              */
-            uint8_t *flags1_ptr = entry_base - 0x03;
-            uint16_t entry_mode = ((*flags2_ptr) & 0x78) >> 3;  /* Bits 3-6 = mode */
-            uint8_t remote_flag = (*flags2_ptr) & 0x02;  /* Bit 1 = pending/remote */
+            uint16_t entry_mode = (entry->flags2 & 0x78) >> 3;  /* Bits 3-6 = mode */
+            uint8_t remote_flag = entry->flags2 & 0x02;  /* Bit 1 = pending/remote */
 
             if (entry_mode == request->mode) {
                 /* 0x00E608B2 `cmp.w (0x12,A2),D0w`: the caller's mode is the
@@ -149,8 +128,8 @@ void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_r
             }
         }
 
-        /* Move to next entry in chain */
-        entry_idx = *next_ptr;
+        /* Move to next entry in chain (entry +0x14, read at (-0x8,An)) */
+        entry_idx = (int16_t)entry->next;
     }
 
 done:

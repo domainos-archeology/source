@@ -32,11 +32,25 @@ void MMAP_$GET_IMPURE(uint16_t wsl_index, uint32_t *vpn_array, int8_t all_pages,
 
         boolean is_impure = false;
 
-        /* Check if page should be included based on segment type */
+        /*
+         * Check if page should be included based on the owning object's
+         * attribute flags:
+         *
+         *   00e0d662  tst.b (-0x1ff7,A0) / bmi  ; skip when ON_DISK
+         *   00e0d668  move.w (-0x1ffe,A0),D6w   ; mmape->segment
+         *   00e0d66c  movea.l #0xec5400,A3
+         *   00e0d672  lsl.w #0x2,D6w
+         *   00e0d674  move.w D6w,D7w
+         *   00e0d676  lsl.w #0x2,D7w
+         *   00e0d678  add.w D7w,D6w             ; seg * 0x14
+         *   00e0d67a  lea (0x0,A3,D6w),A3
+         *   00e0d67e  movea.l (-0x10,A3),A4     ; SEG_ASTE(seg)->aote
+         *   00e0d682  move.w (0xe,A4),D7w       ; attribute flags word
+         *   00e0d686  btst.l #0xc,D7
+         */
         if (!(page->flags2 & MMAPE_FLAG2_ON_DISK)) {
-            uint16_t seg = page->segment;
-            void *seg_info = SEGMENT_TABLE[seg];
-            if ((*(uint16_t*)((char*)seg_info + 0x0E)) & 0x1000) {
+            aote_t *aote = MMAP_$SEG_ASTE_FOR(page->segment)->aote;
+            if (MMAP_AOTE_ATTR_FLAGS(aote) & MMAP_AOTE_ATTR_FLAG_BIT12) {
                 is_impure = true;
             }
         }

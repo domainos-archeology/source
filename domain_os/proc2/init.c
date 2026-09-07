@@ -126,11 +126,17 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
         entry->parent_uid.high = UID_$NIL.high;
         entry->parent_uid.low = UID_$NIL.low;
 
-        /* Clear valid/bound flags */
-        entry->flags &= ~(PROC2_FLAG_VALID | 0x01);
+        /*
+         * 0x00E304C4  andi.w #-0x181,(-0xba,A0)  -- entry+0x2A &= 0xFE7F,
+         * i.e. exactly PROC2_FLAG_VALID (0x0180) is cleared and nothing else.
+         */
+        entry->flags &= (uint16_t)~PROC2_FLAG_VALID;
 
-        /* Store index for prev link (used in free list traversal) */
-        entry->first_debug_target_idx = i;
+        /*
+         * 0x00E304CA  move.w D1w,(-0xc8,A0)  -- entry+0x1C := i, the slot's
+         * own 1-based table index (bead source-e8c8).
+         */
+        entry->self_index = (uint16_t)i;
     }
 
     /*
@@ -146,8 +152,8 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     /* Set ASID = 1 */
     init_entry->asid = 1;
 
-    /* Set owner_session = 1 */
-    init_entry->owner_session = 1;
+    /* 0x00E30502: entry 1's own table index is 1 */
+    init_entry->self_index = 1;
 
     /* Copy the UID generated for table entry 1 (DAT_00e7be9c) to the entry */
     init_entry->uid = PROC2_UID[1];
@@ -209,8 +215,8 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     /*
      * Step 8: Initialize eventcounts for init process
      */
-    EC_$INIT(PROC_FORK_EC(init_entry->owner_session));
-    EC_$INIT(PROC_CR_REC_EC(init_entry->owner_session));
+    EC_$INIT(PROC_FORK_EC(init_entry->self_index));
+    EC_$INIT(PROC_CR_REC_EC(init_entry->self_index));
 
     /*
      * Step 9: Map creation record area

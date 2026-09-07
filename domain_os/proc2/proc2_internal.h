@@ -95,6 +95,19 @@ extern status_$t PROC2_Internal_Error;
  * ============================================================================
  */
 
+/*
+ * Rolling UPID allocator used by PROC2_$INIT_ENTRY_INTERNAL.  The word is
+ * initialised data in the image (0x0041 at 0xE7C06A), read at 0x00E73330
+ * and bumped at 0x00E7333C / 0x00E73344.
+ *
+ * Original address: 0xE7C06A (= 0xE7BE84 + 0x1E6)
+ */
+extern uint16_t PROC2_$NEXT_UPID;
+
+/* Wrap bounds of the UPID allocator (0x00E73334 / 0x00E7333C). */
+#define P2_UPID_WRAP_AT    30000
+#define P2_UPID_WRAP_TO    0x41
+
 /* Process entry initialization */
 void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry);
 
@@ -132,6 +145,15 @@ void PGROUP_CLEANUP_INTERNAL(proc2_info_t *entry, int16_t mode);
 
 /* Set process's process group */
 void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_$t *status_ret);
+
+/*
+ * PROC2_$PGROUP_INHERIT_INTERNAL - Copy one entry's process group to another
+ *
+ * Bumps the source group's reference count (if any) and copies the pgroup
+ * table index across.  Only caller: PROC2_$INIT_ENTRY_INTERNAL (0x00E733EC).
+ * Original address: 0x00e4216e
+ */
+void PROC2_$PGROUP_INHERIT_INTERNAL(proc2_info_t *from, proc2_info_t *to);
 
 /* Decrement pgroup leader count - signals orphaned group if count reaches 0 */
 void PGROUP_DECR_LEADER_COUNT(int16_t pgroup_idx);

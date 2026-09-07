@@ -43,7 +43,7 @@
  *   00e3f3ac  move.l (-0x68,A4),D1 / not.l D1 / and.l D3,D1   ; sig_mask_3
  *   00e3f3b4  bne.b 0x00e3f3bc
  *   00e3f3b6  bset.b #0x2,(-0xba,A4)   ; flags |= 0x0400 (HIGH byte, bit 2)
- *   00e3f3bc  jsr 0x00e0a96c.l         ; FIM_$ADVANCE_SIGNAL_DELIVERY()
+ *   00e3f3bc  jsr 0x00e0a96c.l         ; FIM_$ACKNOWLEDGE()
  *   00e3f3c4  andi.l #-0x1980001,D1    ; sig_mask & 0xFE67FFFF
  *   00e3f3ca  bne.w 0x00e3f4d0
  *   00e3f3ce  move.l (-0x74,A4),D1 / not.l D1 / and.l D3,D1   ; sig_pending
@@ -165,7 +165,7 @@ void PROC2_$ACKNOWLEDGE(uint32_t *new_blocked, int16_t *signal,
     }
 
     /* 0x00E3F3BC */
-    FIM_$ADVANCE_SIGNAL_DELIVERY();
+    FIM_$ACKNOWLEDGE();
 
     /* 0x00E3F3C4 */
     if ((sig_mask & SIGNAL_NON_JOB_CONTROL_MASK) == 0 &&
@@ -192,7 +192,7 @@ void PROC2_$ACKNOWLEDGE(uint32_t *new_blocked, int16_t *signal,
             if (send_kill) {
                 /* 0x00E3F410 */
                 deliver_param = 0x09010009;
-                PROC2_$DELIVER_SIGNAL_INTERNAL((int16_t)entry->owner_session,
+                PROC2_$DELIVER_SIGNAL_INTERNAL((int16_t)entry->self_index,
                                                9 /* SIGKILL */,
                                                deliver_param, &status);
             } else {
@@ -241,7 +241,7 @@ void PROC2_$ACKNOWLEDGE(uint32_t *new_blocked, int16_t *signal,
     }
 
     /* 0x00E3F4E8 */
-    PROC2_$DELIVER_PENDING_INTERNAL((int16_t)entry->owner_session);
+    PROC2_$DELIVER_PENDING_INTERNAL((int16_t)entry->self_index);
 
     /* 0x00E3F4EE */
     ML_$UNLOCK(PROC2_LOCK_ID);

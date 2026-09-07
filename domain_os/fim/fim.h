@@ -43,6 +43,32 @@
 #define FIM_FRAME_FORMAT_SHORT_BUS 0xA  /* Short bus cycle fault */
 #define FIM_FRAME_FORMAT_LONG_BUS  0xB  /* Long bus cycle fault */
 
+/*
+ * FIM_AS_COUNT - number of address spaces the FIM per-AS tables are sized for
+ *
+ * Every per-AS table in the FIM module holds exactly 58 (0x3A) elements.
+ * The tables are laid out back to back in the module's data area, so each
+ * one's element count is pinned by the address of the next object; the whole
+ * chain closes on known code and data addresses:
+ *
+ *   0x00E2126C FIM_IN_FIM          58 * 1  -> 0x00E212A6 (+2 align)
+ *   0x00E212A8 FIM_$USER_FIM_ADDR  58 * 4  -> 0x00E21390 FIM_FRAME_SIZE_TABLE
+ *   0x00E21890 FIM_$TRACE_BIT      58 * 1  -> 0x00E218CA JMP_TO_BUS_ERR
+ *   0x00E22002 FIM_$QUIT_EC        58 * 12 -> 0x00E222BA FIM_$QUIT_VALUE
+ *   0x00E222BA FIM_$QUIT_VALUE     58 * 4  -> 0x00E223A2 FIM_$TRACE_STS
+ *   0x00E223A2 FIM_$TRACE_STS      58 * 4  -> 0x00E2248A FIM_$QUIT_INH
+ *   0x00E2248A FIM_$QUIT_INH       58 * 1  -> 0x00E224C4 FIM_$DELIV_EC
+ *   0x00E224C4 FIM_$DELIV_EC       58 * 12 -> 0x00E2277C FIM_$GET_USER_SR_PTR
+ *
+ * The base addresses are the ones the code itself materialises: 0x00E2126C
+ * and its +0x3C displacement from FIM_$INSTALL (0x00E0A9C2) and
+ * FIM_$FREE_PID (0x00E0AA6C); 0x00E22002/0x00E222BA/0x00E2248A from
+ * FIM_$INIT_PID (0x00E0AA24); 0x00E224C4 from FIM_$ACKNOWLEDGE (0x00E0A96C);
+ * 0x00E21890 from the "lea (-0x1002,PC),A1" at the head of
+ * FIM_$CLEAR_TRACE_FAULT (0x00E22890).
+ */
+#define FIM_AS_COUNT            58
+
 /* FP save area types */
 #define FIM_FP_TYPE_NULL        0       /* Null state (no FP context) */
 #define FIM_FP_TYPE_IDLE        1       /* Idle state */
@@ -201,7 +227,13 @@ _Static_assert(__builtin_offsetof(sigcontext_t, sc_ps) == 0x18, "sigcontext_t.sc
  * FIM_$QUIT_VALUE - Quit value array indexed by address space ID
  *
  * Each address space has a quit value that indicates whether
- * a quit (SIGQUIT) has been requested for processes in that AS.
+ * a quit (SIGQUIT) has been requested for processes in that AS.  It is a
+ * snapshot of FIM_$QUIT_EC[as].value: FIM_$INIT_PID (0x00E0AA24) and
+ * FIM_$ACKNOWLEDGE (0x00E0A96C) both copy the eventcount's head longword
+ * here, so a later read of the eventcount that differs means a quit was
+ * advanced since.
+ *
+ * Address: 0x00E222BA, stride 4, FIM_AS_COUNT elements
  */
 extern uint32_t FIM_$QUIT_VALUE[];
 
@@ -212,26 +244,30 @@ extern uint32_t FIM_$QUIT_VALUE[];
  * When a quit is requested, the corresponding EC is advanced.
  * Access pattern: FIM_$QUIT_EC[as_id] gives the quit EC for that AS.
  */
+/* Address: 0x00E22002, stride 12, FIM_AS_COUNT elements */
 extern ec_$eventcount_t FIM_$QUIT_EC[];
 
 /*
  * FIM_IN_FIM - Per-AS flag indicating FIM is handling a fault
  * Indexed by PROC1_$AS_ID
  * Values: 0 = not in FIM, 0xFF = in FIM, negative = FIM blocked
+ * Address: 0x00E2126C, stride 1, FIM_AS_COUNT elements
  */
 extern int8_t FIM_IN_FIM[];
 
 /*
  * FIM_$USER_FIM_ADDR - Per-AS user-mode FIM handler address
- * Indexed by PROC1_$AS_ID << 2
+ * Indexed by PROC1_$AS_ID << 2.  Cleared by FIM_$FREE_PID (0x00E0AA6C).
+ * Address: 0x00E212A8 (FIM_DATA_BASE + 0x3C), stride 4, FIM_AS_COUNT elements
  */
 extern void *FIM_$USER_FIM_ADDR[];
 
 /*
  * FIM_$QUIT_INH - Per-AS quit inhibit flag (non-zero = inhibited)
  * Indexed by AS id.  Cleared by PROC2_$FORK / PROC2_$COMPLETE_VFORK
- * when a user FIM handler is inherited.
- * Address: 0x00E2248A
+ * when a user FIM handler is inherited, and set by both FIM_$INIT_PID
+ * (0x00E0AA24) and FIM_$FREE_PID (0x00E0AA6C).
+ * Address: 0x00E2248A, stride 1, FIM_AS_COUNT elements
  */
 extern int8_t FIM_$QUIT_INH[];
 
@@ -281,7 +317,7 @@ void *FIM_$GET_FIM_ADDR(void);
 void *FIM_$INSTALL(void **new_addr);
 
 /*
- * FIM_$ADVANCE_SIGNAL_DELIVERY - Advance signal delivery mechanism
+ * FIM_$ACKNOWLEDGE - Advance signal delivery mechanism
  *
  * Updates the quit value for the current address space from the quit
  * event counter, clears the quit inhibit flag, and advances the
@@ -290,8 +326,47 @@ void *FIM_$INSTALL(void **new_addr);
  * Called during signal acknowledge and signal delivery operations.
  *
  * Address: 0x00e0a96c
+ *
+ * The name comes from the SR10.4 kernel link maps
+ * (sr10.4-install/sau7/domain_os.map), which list the FIM_ module's entries
+ * in address order: INIT_FF_POOL, DISPOSE_FF, RESTORE_FF, BUILD_DF,
+ * ACKNOWLEDGE, INSTALL, GET_FIM_ADDR, INIT_PID, FREE_PID, GET_USER_PC.  In
+ * the SAU2 image FIM_$BUILD_DF is 0x00E0A458 and the next four entries are
+ * 0x00E0A96C, 0x00E0A9C2 (INSTALL), 0x00E0AA04 (GET_FIM_ADDR) and
+ * 0x00E0AA24 (INIT_PID), which pins this one as FIM_$ACKNOWLEDGE.  Until
+ * bead source-y6s0 the tree carried it under the descriptive name it had
+ * been given here, spelled the way this file used to be named:
+ * fim/advance_signal_delivery.c.
  */
-void FIM_$ADVANCE_SIGNAL_DELIVERY(void);
+void FIM_$ACKNOWLEDGE(void);
+
+/*
+ * FIM_$INIT_PID - Reset the per-PID quit state for a newly created process
+ *
+ * Takes the ADDRESS of the pid word (PROC2_$INIT_ENTRY_INTERNAL passes
+ * &entry->asid at 0x00E73310).  Clears the trace fault, seeds
+ * FIM_$QUIT_VALUE[pid] from the head longword of FIM_$QUIT_EC[pid] and sets
+ * FIM_$QUIT_INH[pid].
+ *
+ * The "pid" is the address-space id: the caller passes &proc2_info_t.asid,
+ * and every table this function touches is one of the FIM per-AS tables
+ * (FIM_AS_COUNT entries each).
+ *
+ * Address: 0x00e0aa24
+ */
+void FIM_$INIT_PID(int16_t *pid);
+
+/*
+ * FIM_$FREE_PID - Release the per-PID FIM state for a dying process
+ *
+ * Counterpart of FIM_$INIT_PID, with the same by-reference word argument
+ * (PROC2_$DELETE_CLEANUP passes a word local at 0x00E749D6).  Clears the
+ * trace fault, drops FIM_$USER_FIM_ADDR[pid] and sets FIM_$QUIT_INH[pid],
+ * so the address space is back to "quits inhibited, no handler installed".
+ *
+ * Address: 0x00e0aa6c
+ */
+void FIM_$FREE_PID(int16_t *pid);
 
 /*
  * FIM_$BUILD_DF - Build a delivery frame for fault delivery
@@ -608,7 +683,7 @@ void FIM_$DELIVER_TRACE_FAULT(int16_t as_id);
 /*
  * FIM_$CLEAR_TRACE_FAULT - Clear trace fault state
  *
- * Address: 0x00e2281c (44 bytes)
+ * Address: 0x00E22890 (44 bytes) -- see fim/sau2/fim.s
  */
 void FIM_$CLEAR_TRACE_FAULT(int16_t as_id);   /* move.w (0x4,SP),D0: one word argument */
 

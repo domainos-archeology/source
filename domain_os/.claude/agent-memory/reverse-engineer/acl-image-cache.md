@@ -52,11 +52,54 @@ separate cells.
 `0xE935CC + index*0x1C`, which is the **END** of 1-based entry `index`, and
 reads fields at NEGATIVE displacements: UID -0x10 (field +0x0C), free/hash link
 -0x08 (+0x14), refcount -0x04 (+0x18), flags1 -0x03 (+0x19), rights -0x02
-(+0x1A), flags2 -0x01 (+0x1B). `FILE_$LOT_ENTRY(n)` in file/file_internal.h and
-`file_lock_entry_detail_t` are the correct model; `file_lock_entry_t` in
-file/file.h is a stale second model of the same table (bead source-0sgi).
+(+0x1A), flags2 -0x01 (+0x1B). `FILE_$LOT_ENTRY(n)` and
+`file_lock_entry_detail_t` (file/file_internal.h) are the ONLY model - bead
+source-0sgi (closed 2026-09-07) deleted the second `file_lock_entry_t` from
+file/file.h and the private `0xE935B0` bases from five .c files. No m68k
+instruction ever holds 0xE935B0 or 0xE9F9CA; those were biased bases invented
+for the C. See [[file-lot-and-lock-init]].
 Slot-range asymmetry: `FILE_$CHECK_PROT` `bcc` on 0x96 (0xE5D192) **excludes**
 it, `FILE_$EXPORT_LK` `bls` (0xE74152) **includes** it.
 
 See [[acl-rights-abi]], [[acl-dir-name-abi-notes]] and
 [[feedback_fidelity_gates]].
+
+## The miss path: acl_$load_acl_image (0x00E45A60) and its two helpers
+
+- **acl_$expand_default_acl (0x00E45984, was FUN_00e45984)** - a "default ACL"
+  is encoded entirely in the ACL UID: high word of `uid.high` is the type
+  (1 = file, 2 = directory), low word is the rights.  ACL_$NIL (0x00E17384)
+  aliases ACL_$FNDWRX (0x00E174C4 = {0x0001800F,0}).  Bit 0x2000 set means
+  "take the rights literally" and is cleared; otherwise a directory ACL gets
+  0x1E0 OR'd in.  Result masked with 0x3FFF, bit 25 set, handed to
+  acl_$convert_rights.  Returns false for any other type word.
+  It calls `ACL_$DEF_ACLDATA(prot, acl_uid)` with the CALLER'S uid as the
+  out-parameter, so it leaves UID_$NIL in *acl_uid.
+- **acl_$alloc_cache_slot (0x00E458E4, was FUN_00e458e4)** - free-list head, or
+  the LRU tail (`links[LRU_HEAD].prev`).  Crashes with status 0x00230000 (the
+  cell at 0x00E45980; no stcode entry) when both lists are empty.
+- Both are `bsr.w` with NO static link and reach globals through A5 -
+  module-level Pascal procedures, so separate files, not statics.
+- **The free list is threaded through ACL_$CACHE_HASH_LINKS** (A5+0xA70); only
+  the head differs (ACL_$CACHE_FREE_HEAD A5+0xB74).  That is why the failure
+  relink at 0x00E45BD0 is a single `acl_$cache_list_insert(&FREE_HEAD,
+  HASH_LINKS, slot)`.
+- **ACL_$IMAGE_BUF at A5+0x400 = 0xE7D354**, 0x400 bytes, ends exactly where
+  ACL_$CACHE_DIR (A5+0x800) starts.  The scratch buffer acl_$convert_image
+  writes into.
+- Layout corrections made in this pass:
+  - `acl_$cache_slot_t` +0x00 is a signed `version` word (3, 4, 5); +0x28/+0x29
+    are two flag bytes; +0x2A..0x33 are five words the v3 fixup zeroes.
+  - `acl_$cache_dir_t` +0x08 is `hash_bucket` (which bucket the slot is chained
+    in); +0x0C and +0x0E are WORDS (world/subsys rights), written wide at
+    0x00E45E40/0x00E45E4A and read back a byte at a time at +0x0D/+0x0F.
+  - `acl_$v4_entry_t` (pre-v5 entry) is 0x2C bytes at slot+0x34+(i-1)*0x2C,
+    1-based like the v5 entries: person 0x00, group 0x08, org 0x10,
+    subsys 0x18, longs at 0x20/0x24, rights long at 0x28.
+- Statuses: MST's 0x40001 "object not found" is rewritten to 0x23000d "ACL
+  object not found"; any other map/unmap failure gets `bset.b #7` on byte 0 of
+  the status (0x80000000).  0x120035 is "cleanup handler set".
+- `-Waddress-of-packed-member` fires on `&cs->type_uid` / `&...->required_uid`
+  because those sit at odd-multiple-of-2 offsets in a packed record.  The acl/
+  house style is to compare `.high`/`.low` directly (see set_acl_check.c,
+  eval_rights.c) rather than call acl_$uid_eq on them.

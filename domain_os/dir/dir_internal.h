@@ -317,6 +317,12 @@ extern uint16_t DAT_00e7fc92;   /* READ_LINKU params */
 extern uint16_t DAT_00e7fc96;
 extern uint16_t DAT_00e7fc9a;   /* DROP_LINKU params */
 extern uint16_t DAT_00e7fc9e;
+/* GET_ENTRYU (op 0x44) params.  Same record+0 / record+4 pair as the DAT_
+ * cells above, but reached through A5 = 0xE7DC00 rather than by absolute
+ * address: DIR_$GET_ENTRYU_FUN_00e4d460 reads (0x20aa,A5) at 0x00E4D4A6 and
+ * (0x20ae,A5) at 0x00E4D4B8.  Named for what they are used for. */
+extern uint16_t DIR_$GET_ENTRYU_REQ_PARM;  /* word at 0xE7FCAA -> request+0x0E */
+extern uint16_t DIR_$GET_ENTRYU_REQ_LEN;   /* word at 0xE7FCAE, added to name_len */
 extern uint16_t DAT_00e7fcba;   /* FIX_DIR params */
 extern uint16_t DAT_00e7fcbe;
 extern uint16_t DAT_00e7fcca;   /* SET_DEFAULT_ACL params */

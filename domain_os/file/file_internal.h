@@ -141,11 +141,35 @@ void FILE_$UID_LOCK_RELEASE(uid_t *uid);
  */
 
 /*
- * File lock entry structure (detailed)
- * Size: 28 bytes (0x1C)
+ * file_lock_entry_detail_t - one slot of the lock object table (LOT).
+ * Size: 28 bytes (0x1C).  This is the ONLY model of the table; the second,
+ * wrong one that used to sit in file/file.h was removed by bead source-0sgi.
  *
- * This is the complete structure for each lock entry.
- * Entries are stored at DAT_00e935b0 (base offset for entry N = N * 0x1C)
+ * Layout proof - FILE_$PRIV_LOCK_$ALLOC_ENTRY (0x00E5EB98..0x00E5ED57):
+ *   0x00E5EBCA  movea.l #0xe935cc,A2        ; A2 = table base
+ *   0x00E5EBC2  lsl.l #0x2,D2 / neg.l / lsl.l #0x3 / add.l   ; D2 = index*0x1C
+ *   0x00E5EBFE  lea (0x0,A2,D2*0x1),A1      ; A1 = 0xE935CC + index*0x1C
+ * and then writes ONLY negative displacements off A1, -0x1C through -0x01:
+ *   0x00E5EC14  move.l (0x18,A0),(-0x1c,A1)   -> +0x00 context
+ *   0x00E5EC20  move.l (0x1c,A0),(-0x18,A1)   -> +0x04 node_low
+ *   0x00E5EC26  move.l (0x20,A0),(-0x14,A1)   -> +0x08 node_high
+ *   0x00E5EC06  move.l (A2)+,(-0x10,A1)       -> +0x0C uid_high
+ *   0x00E5EC0A  move.l (A2)+,(-0xc,A1)        -> +0x10 uid_low
+ *   0x00E5EBD2  move.w (-0x8,A2,D2*0x1),...   -> +0x14 next (free-list pop)
+ *   0x00E5EC1A  move.w (0x16,A0),(-0x6,A1)    -> +0x16 sequence
+ *   0x00E5EC42  clr.b (-0x4,A1)               -> +0x18 refcount
+ *   0x00E5EC58  andi.b #0x7f,(-0x3,A1)        -> +0x19 flags1
+ *   0x00E5EC74  andi.b #0x7f,(-0x1,A1)        -> +0x1B flags2
+ * A1 is therefore the END of the entry named by `index`, so entry `index`
+ * starts at 0xE935CC + (index-1)*0x1C: THE TABLE IS 1-BASED, and the array
+ * base 0xE935CC is entry 1.  FILE_$LOCK_INIT confirms it independently - its
+ * free-list loop (0x00E32788-0x00E327A8) pre-biases A0 by one entry
+ * (`movea.l #0xe935cc,A0` then `lea (0x1c,A0),A0`) and starts its index
+ * counter D1 at 1.  Address entries with FILE_$LOT_ENTRY() below, never by
+ * adding index*0x1C to the base.
+ *
+ * (+0x1A, `rights`, is not written by ALLOC_ENTRY; FILE_$CHECK_PROT reads it
+ * at (-0x2,A2) - 0x00E5D1B8.)
  */
 typedef struct file_lock_entry_detail_t {
     uint32_t    context;        /* 0x00: Lock context (param_7/param_5) */
@@ -162,20 +186,36 @@ typedef struct file_lock_entry_detail_t {
                                          bit 2=remote flag, bit 1=pending, bit 0=? */
 } file_lock_entry_detail_t;
 
-#if defined(ARCH_M68K)
-_Static_assert(offsetof(file_lock_entry_detail_t, context)   == 0x00, "lot.context");
-_Static_assert(offsetof(file_lock_entry_detail_t, node_low)  == 0x04, "lot.node_low");
-_Static_assert(offsetof(file_lock_entry_detail_t, node_high) == 0x08, "lot.node_high");
-_Static_assert(offsetof(file_lock_entry_detail_t, uid_high)  == 0x0C, "lot.uid_high");
-_Static_assert(offsetof(file_lock_entry_detail_t, uid_low)   == 0x10, "lot.uid_low");
-_Static_assert(offsetof(file_lock_entry_detail_t, next)      == 0x14, "lot.next");
-_Static_assert(offsetof(file_lock_entry_detail_t, sequence)  == 0x16, "lot.sequence");
-_Static_assert(offsetof(file_lock_entry_detail_t, refcount)  == 0x18, "lot.refcount");
-_Static_assert(offsetof(file_lock_entry_detail_t, flags1)    == 0x19, "lot.flags1");
-_Static_assert(offsetof(file_lock_entry_detail_t, rights)    == 0x1A, "lot.rights");
-_Static_assert(offsetof(file_lock_entry_detail_t, flags2)    == 0x1B, "lot.flags2");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, context)   == 0x00, "lot.context");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, node_low)  == 0x04, "lot.node_low");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, node_high) == 0x08, "lot.node_high");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, uid_high)  == 0x0C, "lot.uid_high");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, uid_low)   == 0x10, "lot.uid_low");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, next)      == 0x14, "lot.next");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, sequence)  == 0x16, "lot.sequence");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, refcount)  == 0x18, "lot.refcount");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, flags1)    == 0x19, "lot.flags1");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, rights)    == 0x1A, "lot.rights");
+_Static_assert(__builtin_offsetof(file_lock_entry_detail_t, flags2)    == 0x1B, "lot.flags2");
 _Static_assert(sizeof(file_lock_entry_detail_t)              == 0x1C, "sizeof lot entry");
-#endif
+
+/*
+ * The lock object table itself.  FILE_$LOCK_INIT links entries 1..1792
+ * (`move.w #0x6ff,D0w` at 0x00E32784 = 0x700 dbf iterations); the extra
+ * trailing slot is the free-list terminator - entry 1792's `next` is set to
+ * 1793 (0x00E3279E) and slot 1793 is never written, so it keeps the zero that
+ * ends the chain in FILE_$PRIV_LOCK_$ALLOC_ENTRY (`tst.w`/`beq` at
+ * 0x00E5EBB4).  On the m68k image that zero is BSS beyond 0xE9B1CC.
+ */
+extern file_lock_entry_detail_t FILE_$LOCK_ENTRIES[FILE_LOCK_ENTRY_COUNT + 1];
+
+/*
+ * Word at 0xE9F9C4, 8 bytes below the per-process lock table base 0xE9F9CC.
+ * FILE_$LOCK_INIT clears it (0x00E327AC) and that is the only reference to the
+ * address in the image.
+ * TODO(source-9r49): identify the word at 0xE9F9C4.
+ */
+extern uint16_t FILE_$LOT_E9F9C4;
 
 /*
  * file_$obj_loc_t (the 32-byte object-location descriptor) is shared with

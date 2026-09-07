@@ -161,8 +161,33 @@ typedef struct proc2_info_t {
   uint16_t pad_14;     /* 0x14: Unknown */
   uint16_t upid;       /* 0x16: Unix-style PID (returned by GET_UPIDS) */
   uint16_t pad_18[2];  /* 0x18: Unknown */
-  uint16_t
-      owner_session; /* 0x1C: Owning session (used for permission checks) */
+  /*
+   * 0x1C: the entry's OWN 1-based index into the process table.  Slot
+   * identity: assigned once when the table is built and never rewritten
+   * (PROC2_$INIT_ENTRY_INTERNAL at 0x00E732E4 leaves it alone).
+   *
+   * Deciding evidence (bead source-e8c8):
+   *   0x00E304CA  move.w D1w,(-0xc8,A0)   PROC2_$INIT's free-list loop walks
+   *               A0 = entry(i)+0xE4 for i = 2..70 and stores i into
+   *               entry+0x1C -- each slot gets its own index.
+   *   0x00E30502  move.w #0x1,(0x1c,A2)   A2 = 0xEA551C = entry(1); entry 1's
+   *               copy is 1.
+   *   0x00E41688 vs 0x00E41788  PROC2_$DEBUG pushes the raw current table
+   *               index D2w for the target argument; PROC2_$OVERRIDE_DEBUG
+   *               pushes entry+0x1C for the SAME argument of the same callee.
+   *   0x00E72928  move.w (-0xc8,A2),(-0xc6,A3)   PROC2_$CREATE seeds the
+   *               child's parent link (+0x1E) from the parent's +0x1C.
+   *   0x00E40DC2  PROC2_$MAKE_ORPHAN compares sibling links (+0x22, which
+   *               hold table indices) against target+0x1C.
+   *
+   * The former name "owner_session" came from PROC2_$SET_PGROUP, which was
+   * read as a session test.  It is not one: at 0x00E41142/0x00E41146 it asks
+   * "is the target me?" (current+0x1C == target+0x1C) and at 0x00E4114C "am I
+   * the target's parent?" (current+0x1C == target+0x1E) -- the POSIX setpgid
+   * permission rule.  The real session test follows separately at
+   * 0x00E41178, on +0x5C (session_id).
+   */
+  uint16_t self_index;
   uint16_t parent_pgroup_idx;  /* 0x1E: Parent process index (for pgroup leader
                                   counting) */
   uint16_t first_child_idx;    /* 0x20: First child process index (head of child
@@ -319,8 +344,8 @@ _Static_assert(__builtin_offsetof(proc2_info_t, upid) == 0x16,
                "proc2_info_t.upid must be at 0x16");        /* 0xE40BB2 */
 _Static_assert(__builtin_offsetof(proc2_info_t, pad_18) == 0x18,
                "proc2_info_t.pad_18 must be at 0x18");      /* 0xE72DD2 */
-_Static_assert(__builtin_offsetof(proc2_info_t, owner_session) == 0x1C,
-               "proc2_info_t.owner_session must be at 0x1C"); /* 0xE72E2C */
+_Static_assert(__builtin_offsetof(proc2_info_t, self_index) == 0x1C,
+               "proc2_info_t.self_index must be at 0x1C"); /* 0xE304CA */
 _Static_assert(__builtin_offsetof(proc2_info_t, parent_pgroup_idx) == 0x1E,
                "proc2_info_t.parent_pgroup_idx must be at 0x1E"); /* 0xE72C7C */
 _Static_assert(__builtin_offsetof(proc2_info_t, first_child_idx) == 0x20,

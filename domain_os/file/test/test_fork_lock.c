@@ -68,8 +68,7 @@ void ML_$UNLOCK(int16_t id) { mock_unlock_called++; mock_unlock_num = id; }
 
 static void reset_world(int16_t parent_asid)
 {
-    memset(FILE_$LOCK_ENTRIES, 0,
-           sizeof(file_lock_entry_t) * FILE_LOCK_ENTRY_COUNT);
+    memset(FILE_$LOCK_ENTRIES, 0, sizeof(FILE_$LOCK_ENTRIES));
     memset(FILE_$LOCK_TABLE, 0,
            sizeof(file_lock_table_entry_t) * FILE_LOCK_TABLE_ENTRIES);
     memset(FILE_$LOCK_TABLE2, 0,

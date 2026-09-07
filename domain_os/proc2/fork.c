@@ -363,18 +363,18 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
 
     /*
      * 0x00E72E2C-0x00E72E3E: the eventcount pair is indexed by
-     * entry+0x1C (owner_session), NOT by the table index.  A4 lands on
+     * entry+0x1C (self_index), NOT by the table index.  A4 lands on
      * PROC2_$EC + idx*0x18, and the two pea's are (-0x18,A4) and
      * (-0xC,A4), i.e. PROC2_$EC[idx-1].fork_ec / .cr_rec_ec.
      */
-    fork_ec = PROC_FORK_EC(new_entry->owner_session);
+    fork_ec = PROC_FORK_EC(new_entry->self_index);
     EC_$INIT(fork_ec);
 
     /* 0x00E72E4E: the fork EC starts at -1 */
     fork_ec->value = -1;
 
     /* 0x00E72E54 */
-    EC_$INIT(PROC_CR_REC_EC(new_entry->owner_session));
+    EC_$INIT(PROC_CR_REC_EC(new_entry->self_index));
 
     /* 0x00E72E68: the handle comes back in A0 */
     registered_ec = EC2_$REGISTER_EC1(fork_ec, &status);
@@ -518,7 +518,7 @@ set_priority:
             ML_$LOCK(PROC2_LOCK_ID);
 
             /* 0x00E73064: the first argument is the child's entry+0x1C */
-            DEBUG_SETUP_INTERNAL((int16_t)new_entry->owner_session,
+            DEBUG_SETUP_INTERNAL((int16_t)new_entry->self_index,
                                  (int16_t)parent_entry->debugger_idx, 0);
 
             /* 0x00E73078-0x00E73086: 4 + 4 + 4 + 2 = 14 bytes */
@@ -540,10 +540,10 @@ set_priority:
 
     /* 0x00E730AE-0x00E730E8 */
     {
-        int32_t wait_val = EC_$READ(PROC_FORK_EC(new_entry->owner_session)) + 1;
+        int32_t wait_val = EC_$READ(PROC_FORK_EC(new_entry->self_index)) + 1;
         ec_$eventcount_t *ec_list[1];
 
-        ec_list[0] = PROC_FORK_EC(new_entry->owner_session);
+        ec_list[0] = PROC_FORK_EC(new_entry->self_index);
 
         /* 0x00E730EC */
         PROC1_$SET_TYPE(new_entry->level1_pid, 2);

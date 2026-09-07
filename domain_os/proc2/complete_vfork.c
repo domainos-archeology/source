@@ -162,7 +162,7 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
      * Advance fork eventcount to wake parent.
      * Parent is waiting on this EC in PROC2_$FORK.
      */
-    EC_$ADVANCE(PROC_FORK_EC(current_entry->owner_session));
+    EC_$ADVANCE(PROC_FORK_EC(current_entry->self_index));
 
     /* Switch to new ASID */
     PROC1_$SET_ASID(new_asid);

@@ -81,8 +81,7 @@ static status_$t status;
 
 static void reset_world(void)
 {
-    memset(FILE_$LOCK_ENTRIES, 0,
-           sizeof(file_lock_entry_t) * FILE_LOCK_ENTRY_COUNT);
+    memset(FILE_$LOCK_ENTRIES, 0, sizeof(FILE_$LOCK_ENTRIES));
     memset(FILE_$LOCK_TABLE, 0,
            sizeof(file_lock_table_entry_t) * FILE_LOCK_TABLE_ENTRIES);
 

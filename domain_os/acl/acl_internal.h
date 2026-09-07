@@ -153,7 +153,13 @@ static inline boolean acl_$uid_eq(const uid_t *a, const uid_t *b)
 #define ACL_CACHE_NO_SLOT       ((int16_t)-1)
 
 typedef struct __attribute__((packed)) acl_$cache_slot_t {
-    uint16_t reserved_00;       /* 0x00 */
+    int16_t  version;           /* 0x00: image format version.  acl_$load_acl_image
+                                 *       tests it with `cmpi.w #0x3,(A2)`
+                                 *       (0x00E45BF6) and `cmpi.w #0x5,(A2)` +
+                                 *       `bge` (0x00E45C52); acl_$convert_image
+                                 *       stamps 5 into the image it builds
+                                 *       (`move.w #0x5,(A2)`, 0x00E44E86).  The
+                                 *       compare is signed, hence int16_t. */
     uid_t    type_uid;          /* 0x02: ACL_$FILE_ACL / ACL_$DIR_ACL / ...
                                  *       (0x00E4745C, 0x00E4763A) */
     uint32_t reserved_0a;       /* 0x0A */
@@ -162,7 +168,20 @@ typedef struct __attribute__((packed)) acl_$cache_slot_t {
     uid_t    required_uid;      /* 0x12: 0x00E474E6, 0x00E475C6 */
     uid_t    subsys_uid;        /* 0x1A: subsystem manager; compared against
                                  *       sids->login_sid at 0x00E46828 */
-    uint8_t  reserved_22[0x12]; /* 0x22 */
+    uint32_t reserved_22;       /* 0x22: `clr.l (0x22,A1)` 0x00E45C1C */
+    uint16_t reserved_26;       /* 0x26: `clr.w (0x26,A1)` 0x00E45C20 */
+    int8_t   flag_28;           /* 0x28: negative suppresses the "append the
+                                 *       missing required entry" fixup
+                                 *       (`tst.b (0x28,A2)` + `bmi`, 0x00E45CA0).
+                                 *       The version-3 fixup clears it unless the
+                                 *       image is a directory ACL (0x00E45C38);
+                                 *       acl_$convert_image clears it (0x00E44EC6).
+                                 * TODO(source-wlps, 0x00E45CA0): the flag's own
+                                 *       name is not recovered. */
+    int8_t   flag_29;           /* 0x29: always cleared alongside flag_28
+                                 *       (0x00E45C3C, 0x00E44ECA) */
+    uint8_t  reserved_2a[0x0A]; /* 0x2A..0x33: five words the version-3 fixup
+                                 *       zeroes (0x00E45C40-0x00E45C4E) */
     uint8_t  entries[0x3CC];    /* 0x34: 0x20-byte ACL entries
                                  *       (`lea (0x34,A0),A0` + `lea (0x20,A0),A0`
                                  *        at 0x00E461AC / 0x00E46232) */
@@ -170,6 +189,8 @@ typedef struct __attribute__((packed)) acl_$cache_slot_t {
 
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(acl_$cache_slot_t, type_uid)    == 0x02, "cache.type_uid");
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, flag_28)     == 0x28, "cache.flag_28");
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, flag_29)     == 0x29, "cache.flag_29");
 _Static_assert(__builtin_offsetof(acl_$cache_slot_t, entry_count) == 0x0E, "cache.entry_count");
 _Static_assert(__builtin_offsetof(acl_$cache_slot_t, required_uid)== 0x12, "cache.required_uid");
 _Static_assert(__builtin_offsetof(acl_$cache_slot_t, subsys_uid)  == 0x1A, "cache.subsys_uid");
@@ -223,19 +244,31 @@ extern acl_$cache_slot_t ACL_$ACL_CACHE[ACL_CACHE_SLOTS];   /* 0xE88834 */
  */
 typedef struct acl_$cache_dir_t {
     uid_t    acl_uid;           /* 0x00: `cmpm.l` pair at 0x00E45F06 */
-    uint16_t reserved_08;       /* 0x08 */
+    uint16_t hash_bucket;       /* 0x08: the UID_$HASH bucket this slot is
+                                 *       chained in.  acl_$load_acl_image stores
+                                 *       it (`move.w D0w,(0x808,A2)`, 0x00E45E5E)
+                                 *       and acl_$alloc_cache_slot reads it back
+                                 *       to unlink an evicted slot from its
+                                 *       bucket (`move.w (0x808,A0),D2w`,
+                                 *       0x00E45954). */
     int8_t   cached_flag;       /* 0x0A: `move.b (0x80a,A2),(A1)` 0x00E45F10 */
-    uint8_t  reserved_0b[2];    /* 0x0B */
-    uint8_t  world_rights;      /* 0x0D: -> prot->world_rights  (0x00E45F24) */
-    uint8_t  reserved_0e;       /* 0x0E */
-    uint8_t  subsys_rights;     /* 0x0F: -> prot->subsys_rights (0x00E45F2A) */
+    uint8_t  reserved_0b;       /* 0x0B */
+    uint16_t world_rights;      /* 0x0C: WORD - acl_$load_acl_image widens
+                                 *       prot->world_rights into it
+                                 *       (`move.w D5w,(0x80c,A2)`, 0x00E45E40).
+                                 *       acl_$find_acl_slot reads only its low
+                                 *       byte at +0x0D (0x00E45F24). */
+    uint16_t subsys_rights;     /* 0x0E: WORD, same treatment
+                                 *       (`move.w D5w,(0x80e,A2)`, 0x00E45E4A;
+                                 *        low byte read at +0x0F, 0x00E45F2A) */
 } acl_$cache_dir_t;
 
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(acl_$cache_dir_t, acl_uid)       == 0x00, "cache_dir.acl_uid");
 _Static_assert(__builtin_offsetof(acl_$cache_dir_t, cached_flag)   == 0x0A, "cache_dir.cached_flag");
-_Static_assert(__builtin_offsetof(acl_$cache_dir_t, world_rights)  == 0x0D, "cache_dir.world_rights");
-_Static_assert(__builtin_offsetof(acl_$cache_dir_t, subsys_rights) == 0x0F, "cache_dir.subsys_rights");
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, hash_bucket)   == 0x08, "cache_dir.hash_bucket");
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, world_rights)  == 0x0C, "cache_dir.world_rights");
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, subsys_rights) == 0x0E, "cache_dir.subsys_rights");
 _Static_assert(sizeof(acl_$cache_dir_t) == 0x10, "sizeof acl_$cache_dir_t");
 #endif
 
@@ -289,6 +322,123 @@ _Static_assert(sizeof(acl_$acl_entry_t) == 0x20, "sizeof acl_$acl_entry_t");
     ((acl_$acl_entry_t *)((uint8_t *)(slot)->entries + ((int32_t)(i) - 1) * 0x20))
 
 /*
+ * acl_$v4_entry_t - one entry of a PRE-version-5 (version 3 or 4) ACL image.
+ *
+ * acl_$load_acl_image walks these with a base pointer of `slot + i*0x2C` and
+ * field displacements of +0x08..+0x30 (0x00E45C7E-0x00E45D54), i.e. entry i
+ * (1-based) starts at slot+0x34+(i-1)*0x2C - the same place version-5 entry i
+ * starts, but 0x2C bytes wide instead of 0x20.  acl_$convert_image reads them
+ * with the same stride (`lea (0x2c,A4),A2`, 0x00E44EF8).
+ *
+ * Every member is naturally aligned inside the record, so no packing
+ * attribute is needed - the _Static_asserts below pin the layout.
+ */
+typedef struct acl_$v4_entry_t {
+    uid_t    person;            /* 0x00: `(0x08,A0)` 0x00E45CD8 */
+    uid_t    group;             /* 0x08: `(0x10,A0)` 0x00E45CEC */
+    uid_t    org;               /* 0x10: `(0x18,A0)` 0x00E45CC4 */
+    uid_t    subsys;            /* 0x18: `(0x20,A0)` 0x00E45D44 */
+    uint32_t reserved_20;       /* 0x20: `tst.l (0x28,A0)` 0x00E45CBE */
+    uint32_t reserved_24;       /* 0x24: `clr.l (0x2c,A2)` 0x00E45D50 */
+    uint32_t rights;            /* 0x28: `(0x30,A0)` 0x00E45C86 / 0x00E45D54 */
+} acl_$v4_entry_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(acl_$v4_entry_t, subsys) == 0x18, "v4_entry.subsys");
+_Static_assert(__builtin_offsetof(acl_$v4_entry_t, rights) == 0x28, "v4_entry.rights");
+_Static_assert(sizeof(acl_$v4_entry_t) == 0x2C, "sizeof acl_$v4_entry_t");
+#endif
+
+/* Version-3/4 entry i (1-based).  slot+0x34 is entry 1, stride 0x2C. */
+#define ACL_$V4_ENTRY(slot, i)                                                \
+    ((acl_$v4_entry_t *)((uint8_t *)(slot)->entries + ((int32_t)(i) - 1) * 0x2C))
+
+/*
+ * The largest entry index the version-3/4 "append the missing required entry"
+ * fixup will write: `cmpi.w #0x16,(0xe,A2)` + `bge` at 0x00E45CB4 gives up when
+ * the image already holds 0x16 entries.
+ */
+#define ACL_V4_MAX_ENTRIES          0x16
+
+/*
+ * The rights bits acl_$load_acl_image forces into every directory-ACL entry of
+ * a pre-version-5 image whose bit 29 is clear (`btst.l #0x1d` +
+ * `ori.l #0x200001e0,(0x30,A0)`, 0x00E45C8A-0x00E45C90), and the value it gives
+ * the required entry it appends (`move.l #0x1e0,(0x30,A2)`, 0x00E45D54).
+ */
+#define ACL_V4_RIGHTS_CONVERTED     0x20000000UL
+#define ACL_V4_RIGHTS_DEFAULT       0x000001E0UL
+#define ACL_V4_RIGHTS_FIXUP         (ACL_V4_RIGHTS_CONVERTED | ACL_V4_RIGHTS_DEFAULT)
+
+/*
+ * ACL_$IMAGE_BUF (A5+0x400 = 0xE7D354) - the 0x400-byte scratch image
+ * acl_$load_acl_image hands to acl_$convert_image (`pea (0x400,A5)`,
+ * 0x00E45D64) and then copies into ACL_$ACL_CACHE[slot] (0x00E45DD0).  It ends
+ * exactly where ACL_$CACHE_DIR (A5+0x800) begins, which fixes its size.
+ */
+extern acl_$cache_slot_t ACL_$IMAGE_BUF;    /* 0xE7D354 */
+
+/*
+ * acl_$convert_rights (0x00E44DBE, was FUN_00e44dbe)
+ *
+ * Maps a pre-version-5 32-bit ACL rights word onto the version-5 rights byte.
+ * `acl_type_uid` selects the bit assignment: ACL_$FILE_ACL or ACL_$DIR_ACL.
+ * Bit 25 (0x02000000) of `old_rights` always contributes 0x08.
+ *
+ * TODO(source-wlps, 0x00E44DBE): body not yet emitted.
+ */
+uint8_t acl_$convert_rights(uint32_t old_rights, uid_t *acl_type_uid);
+
+/*
+ * acl_$convert_image (0x00E44E68, was FUN_00e44e68)
+ *
+ * Rewrites the version-3/4 image `src` as a version-5 image in `dst` and
+ * rebuilds `prot` from it.  *length_ret = 0x34 + 0x20 * dst->entry_count
+ * (0x00E4502C-0x00E4503A).  Argument order from acl_$load_acl_image's pushes
+ * at 0x00E45D5C-0x00E45D6C.
+ *
+ * TODO(source-wlps, 0x00E44E68): body not yet emitted.
+ */
+void acl_$convert_image(acl_$cache_slot_t *src, acl_$prot_data_t *prot,
+                        acl_$cache_slot_t *dst, uint16_t *length_ret,
+                        status_$t *status_ret);
+
+/*
+ * acl_$expand_default_acl (0x00E45984, was FUN_00e45984)
+ *
+ * A "default ACL" carries its whole definition inside the ACL UID: the high
+ * word of uid.high is 1 (file) or 2 (directory) and the low word holds the
+ * rights bits.  Returns false when the UID is neither - a real ACL object that
+ * acl_$load_acl_image has to map - and true after filling `prot` from
+ * ACL_$DEF_ACLDATA plus the encoded rights.
+ */
+boolean acl_$expand_default_acl(uid_t *acl_uid, acl_$prot_data_t *prot);
+
+/*
+ * acl_$alloc_cache_slot (0x00E458E4, was FUN_00e458e4)
+ *
+ * Takes the head of the free list, or evicts the LRU victim, and returns the
+ * slot.  The returned slot is linked into no list; the caller does that.
+ * Always clears *status_ret and never sets it.
+ */
+int16_t acl_$alloc_cache_slot(status_$t *status_ret);
+
+/* The two "default ACL" type words in the high half of a default-ACL UID
+ * (`cmpi.w #0x1` / `#0x2` at 0x00E459C4 / 0x00E459CA). */
+#define ACL_DEFAULT_TYPE_FILE       1
+#define ACL_DEFAULT_TYPE_DIR        2
+/* Rights-bit surgery acl_$expand_default_acl performs on the encoded word:
+ * bit 13 set means "use the bits as they are" and is cleared
+ * (`btst.b #0x5` / `bclr.b #0x5` on the HIGH byte, 0x00E459E6/0x00E459EE);
+ * otherwise a directory default ACL gets 0x1E0 OR'd in (0x00E459FE).  What
+ * survives is masked with 0x3FFF (`move.l #0x3fff,D0`, 0x00E45A04) and handed
+ * to acl_$convert_rights with bit 25 set (0x00E45A44). */
+#define ACL_DEFAULT_RIGHTS_LITERAL  0x2000
+#define ACL_DEFAULT_RIGHTS_DIR_ADD  0x01E0
+#define ACL_DEFAULT_RIGHTS_MASK     0x3FFF
+#define ACL_CONVERT_RIGHTS_DEFAULT  0x02000000UL
+
+/*
  * acl_$cache_list_insert (0x00E44C3C, was FUN_00e44c3c)
  * acl_$cache_list_remove (0x00E44C92, was FUN_00e44c92)
  *
@@ -308,8 +458,6 @@ void acl_$cache_list_remove(int16_t *head, acl_$cache_link_t *links, int16_t slo
  * ACL_CACHE_NO_SLOT.  Argument order from acl_$find_acl_slot's pushes at
  * 0x00E45ECE-0x00E45ED4 and confirmed by the callee frame
  * (A6+0x08 uid, +0x0C flag, +0x10 prot, +0x14 status).
- *
- * TODO(source-3cq1): the body has not been emitted.
  */
 int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
                             acl_$prot_data_t *prot, status_$t *status_ret);

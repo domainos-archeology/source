@@ -20,6 +20,13 @@ uint16_t P2_INFO_ALLOC_PTR;
 /* Free list head (index of first free entry) */
 uint16_t P2_FREE_LIST_HEAD;
 
+/*
+ * Rolling UPID allocator (0xE7C06A).  Initialised data in the image: the
+ * word at 0xE7C06A reads 0x0041, the same value the wrap at 0x00E7333C
+ * resets it to.
+ */
+uint16_t PROC2_$NEXT_UPID = P2_UPID_WRAP_TO;
+
 /* Mapping table: PROC1 PID -> PROC2 index (at 0xEA551C + 0x3EB6) */
 uint16_t *P2_PID_TO_INDEX_TABLE;
 

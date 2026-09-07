@@ -22,19 +22,14 @@
 #include "file/file_internal.h"
 
 /*
- * Lock table base addresses
+ * Both tables are reached through the shared 1-based accessors in
+ * file/file_internal.h.  The two base constants this file used to define were
+ * the table bases biased down by one element so that `base + index*stride`
+ * lands on the 1-based element; the machine holds the unbiased values:
+ *   0x00E603FA  movea.l #0xe935cc,A2   -> FILE_$LOT_ENTRY(), entry 1 at 0xE935CC
+ *   0x00E603D4  movea.l #0xea202c,A2   -> FILE_$PROC_LOT_SLOT(), row base
+ *                                         0xEA202C-0x2662+2 = 0xE9F9CC
  */
-#define LOT_DATA_BASE           0xE935B0
-#define LOT_ENTRY_SIZE          0x1C
-
-/*
- * Per-process lock table
- * Base at 0xEA202C + ASID*300
- * Lock indices at base + index*2 - 0x2662
- */
-#define PROC_LOT_TABLE_BASE     0xEA202C
-#define PROC_LOT_ENTRY_SIZE     300     /* 0x12C */
-#define PROC_LOT_INDEX_OFFSET   (-0x2662)
 
 /*
  * Maximum lock index per process
@@ -63,8 +58,7 @@ void FILE_$IMPORT_LK(uid_t *file_uid, uint32_t *index_in, uint32_t *index_out,
 {
     uint32_t lock_index = *index_in;
     int16_t entry_idx;
-    int32_t entry_offset;
-    uint8_t *entry_base;
+    file_lock_entry_detail_t *entry;
 
     /*
      * Validate lock index range: must be non-zero and <= 150 (0x96)
@@ -75,14 +69,12 @@ void FILE_$IMPORT_LK(uid_t *file_uid, uint32_t *index_in, uint32_t *index_out,
     }
 
     /*
-     * Look up the lock in the per-ASID table for current process
-     * Table base = 0xEA202C + PROC1_$AS_ID * 300
-     * Entry = base + lock_index * 2 - 0x2662
+     * Look up the lock in the per-ASID table for the current process.
+     * 0x00E603D4 `movea.l #0xea202c,A2`; the slot is at
+     * 0xEA202C + ASID*300 + lock_index*2 - 0x2662, i.e. slot `lock_index` of
+     * the 1-based row.
      */
-    int32_t proc_table_base = PROC_LOT_TABLE_BASE + PROC1_$AS_ID * PROC_LOT_ENTRY_SIZE;
-    uint16_t *entry_ptr = (uint16_t *)(proc_table_base + lock_index * 2 + PROC_LOT_INDEX_OFFSET);
-
-    entry_idx = *entry_ptr;
+    entry_idx = (int16_t)FILE_$PROC_LOT_SLOT(PROC1_$AS_ID, lock_index);
 
     if (entry_idx == 0) {
         /* No lock at this index */
@@ -91,14 +83,14 @@ void FILE_$IMPORT_LK(uid_t *file_uid, uint32_t *index_in, uint32_t *index_out,
     }
 
     /*
-     * Verify the lock entry matches the requested file UID
+     * Verify the lock entry matches the requested file UID.
+     * 0x00E603FA loads #0xe935cc and the UID is read at (-0x10,An)/(-0xc,An)
+     * off the entry END, i.e. fields +0x0C and +0x10 of entry `entry_idx`.
      */
-    entry_offset = (int32_t)entry_idx * LOT_ENTRY_SIZE;
-    entry_base = (uint8_t *)(LOT_DATA_BASE + LOT_ENTRY_SIZE + entry_offset);
+    entry = FILE_$LOT_ENTRY(entry_idx);
 
-    /* Get file UID from entry (at offsets -0x10 and -0x0C) */
-    uint32_t entry_uid_high = *(uint32_t *)(entry_base - 0x10);
-    uint32_t entry_uid_low = *(uint32_t *)(entry_base - 0x0C);
+    uint32_t entry_uid_high = entry->uid_high;
+    uint32_t entry_uid_low = entry->uid_low;
 
     /* Compare with requested UID */
     if (entry_uid_high != file_uid->high || entry_uid_low != file_uid->low) {

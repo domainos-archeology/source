@@ -21,10 +21,32 @@ file_lock_control_t FILE_$LOCK_CONTROL;
 file_lock_table_entry_t FILE_$LOCK_TABLE[FILE_LOCK_TABLE_ENTRIES];
 
 /*
- * Lock entries (1792 entries × 28 bytes)
- * Original address: 0xE935CC
+ * Lock object table.  Original address: 0xE935CC, 0x1C bytes per entry.
+ *
+ * Element count re-derived from FILE_$LOCK_INIT's free-list loop:
+ *   0x00E32784  move.w #0x6ff,D0w        ; dbf trip count -> 0x700 = 1792
+ *   0x00E32788  movea.l #0xe935cc,A0
+ *   0x00E3278E  moveq #0x1,D1            ; first index is 1, not 0
+ *   0x00E32790  lea (0x1c,A0),A0         ; A0 = END of entry 1
+ * so entries 1..1792 span 0xE935CC..0xE9B1CB (1792*0x1C = 0x7C00).  Nothing
+ * is labelled between 0xE9B1CC and the next known datum 0xE9F9C4, so the
+ * table's own loop is the only witness to the count - and it is decisive.
+ *
+ * The array carries one extra slot (index 1793).  FILE_$LOCK_INIT's last
+ * iteration writes 1793 into entry 1792's `next` (0x00E3279E), so 1793 is the
+ * value FILE_$LOT_FREE reaches once every entry is allocated; slot 1793 is
+ * never initialised and its zero `next` is what terminates the free list at
+ * FILE_$PRIV_LOCK_$ALLOC_ENTRY 0x00E5EBB4 (`tst.w (-0x122,A0)` / `beq`).
+ * On the m68k image that zero comes from BSS; here it comes from this slot.
  */
-file_lock_entry_t FILE_$LOCK_ENTRIES[FILE_LOCK_ENTRY_COUNT];
+file_lock_entry_detail_t FILE_$LOCK_ENTRIES[FILE_LOCK_ENTRY_COUNT + 1];
+
+/*
+ * Word at 0xE9F9C4 - cleared by FILE_$LOCK_INIT (0x00E327AC) and referenced
+ * nowhere else in the image.
+ * TODO(source-9r49): identify the word at 0xE9F9C4.
+ */
+uint16_t FILE_$LOT_E9F9C4;
 
 /*
  * Secondary lock table (58 words)

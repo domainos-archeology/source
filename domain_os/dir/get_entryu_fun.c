@@ -1,9 +1,23 @@
 /*
  * DIR_$GET_ENTRYU_FUN_00e4d460 - Internal entry retrieval helper
  *
- * Nested Pascal subprocedure of DIR_$GET_ENTRYU. Builds a DIR
- * request with op=DIR_OP_GET_ENTRYU_OP (0x44), sends it via
- * DIR_$DO_OP, and copies the response fields to entry_ret.
+ * Nested Pascal subprocedure of DIR_$GET_ENTRYU (0x00E4D500).  In the
+ * original it takes only one explicit argument (the status pointer at
+ * A6+0x8); everything else is reached through the parent frame, which it
+ * loads with `movea.l (A6),A3` at 0x00E4D46C - A3 is the caller's saved A6,
+ * i.e. DIR_$GET_ENTRYU's frame:
+ *
+ *   (-0x8,A3)  parent's local copy of the directory UID
+ *   ( 0xc,A3)  name
+ *   (0x10,A3)  pointer to the name length word
+ *   (0x14,A3)  entry_ret
+ *
+ * A5 is inherited, not established here: DIR_$GET_ENTRYU does
+ * `lea (0xe7dc00).l,A5` at 0x00E4D508, so A5 = 0xE7DC00, the DIR module
+ * data base.  The two A5-relative words this routine reads are therefore
+ * 0xE7FCAA (A5+0x20AA) and 0xE7FCAE (A5+0x20AE) - the record+0 / record+4
+ * pair of the GET_ENTRYU (op 0x44) entry in the DIR operation parameter
+ * table, NOT DIR_$OP_TAB (0xE7FC42), which belongs to a different opcode.
  *
  * Original address: 0x00E4D460
  * Original size: 160 bytes
@@ -14,55 +28,113 @@
 /*
  * DIR_$GET_ENTRYU_FUN_00e4d460 - Internal entry retrieval helper
  *
- * Originally a nested Pascal subprocedure that accessed its parent's
- * stack frame. Flattened to take explicit parameters.
- *
- * Builds a get-entry request with operation code 0x44, copies the name
- * into the request buffer, and sends it via DIR_$DO_OP. On success,
- * copies response fields into the caller's entry_ret buffer.
+ * Flattened to take explicit parameters in place of the parent-frame
+ * accesses listed above.
  *
  * Parameters:
- *   local_uid  - UID of directory (local copy from parent)
- *   name       - Name to look up (from parent frame)
- *   name_len   - Name length (from parent frame)
- *   entry_ret  - Output: entry information (from parent frame)
- *   status_ret - Output: status code
+ *   local_uid  - UID of directory (parent's local copy, A3-0x8)
+ *   name       - Name to look up (A3+0xC)
+ *   name_len   - Name length (*(uint16_t *)(A3+0x10), read at 0x00E4D46E)
+ *   entry_ret  - Output: entry information (A3+0x14)
+ *   status_ret - Output: status code (A6+0x8)
  */
 void DIR_$GET_ENTRYU_FUN_00e4d460(uid_t *local_uid, char *name,
                                    uint16_t name_len, void *entry_ret,
                                    status_$t *status_ret)
 {
-    struct {
-        uint8_t   op;
-        uint8_t   padding[3];
-        uid_t     uid;          /* Directory UID */
-        uint16_t  reserved;
-        uint8_t   gap[0x80];
-        uint16_t  path_len;     /* Name length */
-        char      name_data[255];
+    /*
+     * Request buffer, base A6-0x1B8 (the address actually pushed at
+     * 0x00E4D4C2).  Offsets recovered from the stores:
+     *   +0x03  op byte          move.b #0x44,(-0x1b5,A6)   0x00E4D494
+     *   +0x04  directory UID    two move.l from (-0x8,A3)  0x00E4D49E/A2
+     *   +0x0E  table parm word  move.w (0x20aa,A5),(-0x1aa,A6) 0x00E4D4A6
+     *   +0x8E  name length      move.w (A0),(-0x12a,A6)    0x00E4D472
+     *   +0x90  name bytes       move.b ...,(-0x129,A0)     0x00E4D488
+     * DIR_$DO_OP adds 0x8E to req_size (0x00E4C110), so the wire length is
+     * 0x8E + name_len + DIR_$GET_ENTRYU_REQ_LEN = 0x90 + name_len, exactly
+     * through the end of the name.
+     */
+    struct __attribute__((packed, aligned(2))) {
+        uint8_t   pad0[3];      /* +0x00: untouched request header bytes */
+        uint8_t   op;           /* +0x03 */
+        uid_t     uid;          /* +0x04 */
+        uint8_t   pad0c[2];     /* +0x0C: untouched */
+        uint16_t  parm;         /* +0x0E */
+        uint8_t   gap[0x7E];    /* +0x10..0x8D: untouched */
+        uint16_t  path_len;     /* +0x8E */
+        char      name_data[255];   /* +0x90 */
     } request;
     Dir_$OpResponse response;
-    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
-     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
-     * (source-32ld). */
+    /*
+     * Fields DIR_$GET_ENTRYU_FUN writes back through entry_ret (A3+0x14).
+     * Sources are all in the response payload:
+     *   +0x00 <- response+0x14   move.w (-0x14,A6),(A0)      0x00E4D4D8
+     *   +0x02 <- response+0x16   move.l (A0)+,(0x2,A1)       0x00E4D4E4
+     *   +0x06 <- response+0x1A   move.l (A0)+,(0x6,A1)       0x00E4D4E8
+     *   +0x0A <- response+0x1E   move.l (-0xa,A6),(0xa,A0)   0x00E4D4F0
+     *
+     * TODO(source-qgq): the four fields are copied verbatim at
+     * 0x00E4D4D4..0x00E4D4F4; their meaning is not recovered - f02/f06 are
+     * plausibly a UID pair, but no consumer of entry_ret has been decompiled
+     * yet to confirm it.
+     */
+    struct __attribute__((packed, aligned(2))) dir_$get_entryu_ret {
+        uint16_t f00;
+        uint32_t f02;
+        uint32_t f06;
+        uint32_t f0a;
+    } *entry = (struct dir_$get_entryu_ret *)entry_ret;
+    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument
+     * (pea (-0x1ba,A6) at 0x00E4D4AC, the two bytes immediately below the
+     * request buffer); it is REM_FILE_$SEND_REQUEST's `received_len`
+     * out-parameter (source-32ld). */
     uint16_t do_op_rcvd_len;
     int16_t i;
 
-    /* Copy name into request buffer */
+    _Static_assert(__builtin_offsetof(__typeof__(request), op) == 0x03,
+                   "get_entryu request.op");
+    _Static_assert(__builtin_offsetof(__typeof__(request), uid) == 0x04,
+                   "get_entryu request.uid");
+    _Static_assert(__builtin_offsetof(__typeof__(request), parm) == 0x0E,
+                   "get_entryu request.parm");
+    _Static_assert(__builtin_offsetof(__typeof__(request), path_len) == 0x8E,
+                   "get_entryu request.path_len");
+    _Static_assert(__builtin_offsetof(__typeof__(request), name_data) == 0x90,
+                   "get_entryu request.name_data");
+    _Static_assert(__builtin_offsetof(struct dir_$get_entryu_ret, f0a) == 0x0A,
+                   "get_entryu entry_ret.f0a");
+
+    /* Copy name into request buffer (0x00E4D472..0x00E4D490) */
     request.path_len = name_len;
     for (i = 0; i < (int16_t)name_len; i++) {
         request.name_data[i] = name[i];
     }
 
-    /* Build the request */
+    /* Build the request (0x00E4D494..0x00E4D4AA) */
     request.op = DIR_OP_GET_ENTRYU_OP;
     request.uid.high = local_uid->high;
     request.uid.low = local_uid->low;
-    request.reserved = DIR_$OP_TAB;
+    request.parm = DIR_$GET_ENTRYU_REQ_PARM;
 
-    /* Send the request */
-    /* TODO(source-qgq): Verify exact parameter table entries for GET_ENTRYU */
-    DIR_$DO_OP(&request.op, name_len + DIR_$OP_TAB, 0x1c, &response, &do_op_rcvd_len);
+    /*
+     * Send the request.  Argument order and the two constants are taken
+     * straight from the push sequence at 0x00E4D4AC..0x00E4D4C6:
+     *   pea (-0x1ba,A6)                       -> received_len
+     *   pea (-0x28,A6)                        -> response
+     *   move.w #0x22,-(SP)                    -> resp_size
+     *   (0x20ae,A5) + (-0x12a,A6)             -> req_size
+     *   pea (-0x1b8,A6)                       -> request
+     */
+    DIR_$DO_OP(&request, (int16_t)(name_len + DIR_$GET_ENTRYU_REQ_LEN), 0x22,
+               &response, &do_op_rcvd_len);
 
     *status_ret = response.status;
+
+    /* On success copy the entry fields out (0x00E4D4D2..0x00E4D4F6) */
+    if (response.status == status_$ok) {
+        entry->f00 = response._20_2_;
+        entry->f02 = response._22_4_;
+        entry->f06 = response.f1a;
+        entry->f0a = response._24_4_;
+    }
 }

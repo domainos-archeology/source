@@ -222,7 +222,7 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
                 (xpd_$ptrace_opts_t *)current_entry->ptrace_opts) < 0) {
             /* Set up debug relationship for child.
              * 0x00E72956 `move.w (-0xc8,A3),-(SP)` = the child's entry+0x1C. */
-            DEBUG_SETUP_INTERNAL((int16_t)new_entry->owner_session,
+            DEBUG_SETUP_INTERNAL((int16_t)new_entry->self_index,
                                  (int16_t)current_entry->debugger_idx, 0);
 
             /* Copy ptrace options from parent */

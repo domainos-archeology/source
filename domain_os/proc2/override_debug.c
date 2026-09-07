@@ -55,7 +55,7 @@ void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret)
         int16_t current_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
         proc2_info_t *current_entry = P2_INFO_ENTRY(current_idx);
 
-        target_idx = (int16_t)current_entry->owner_session;
+        target_idx = (int16_t)current_entry->self_index;
         debugger_idx = (int16_t)current_entry->parent_pgroup_idx;
         flag = 0;
     } else {

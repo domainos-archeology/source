@@ -80,8 +80,11 @@ int16_t acl_$find_acl_slot(uid_t *acl_uid, int8_t *cached_flag_ret,
                  * so rebuild the default protection record and then restore
                  * the two rights bytes the image really carries. */
                 ACL_$DEF_ACLDATA(prot, &def_acl_uid);
-                prot->world_rights  = dir->world_rights;
-                prot->subsys_rights = dir->subsys_rights;
+                /* The directory holds these as words (acl_$load_acl_image
+                 * widens them at 0x00E45E40/0x00E45E4A); the `move.b
+                 * (0x80d,A2)` / `(0x80f,A2)` here read only the low byte. */
+                prot->world_rights  = (uint8_t)dir->world_rights;
+                prot->subsys_rights = (uint8_t)dir->subsys_rights;
             }
 
             /* 0x00E45F48: a hit moves the slot to the front of the LRU list -

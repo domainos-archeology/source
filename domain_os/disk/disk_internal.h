@@ -311,8 +311,8 @@ void DISK_$REVALID(struct disk_$volume_t *vol);
 #define DMOD_EVENTCOUNT       0x000  /* ec_$eventcount_t - module eventcount */
 #define DMOD_REQ_QUEUE        0x00E  /* int16_t[64] - circular request buffer (1-indexed) */
 #define DMOD_EXCLUSION        0x090  /* ml_$exclusion_t - module exclusion lock */
-#define DMOD_RESERVE_BLOCK    0x0BC  /* void* - reserve block for write-mode allocation */
-#define DMOD_FREE_HEAD        0x0C0  /* void* - free list head */
+#define DMOD_RESERVE_BLOCK    0x0BC  /* uint32_t VA - reserve block for write-mode allocation */
+#define DMOD_FREE_HEAD        0x0C0  /* uint32_t VA - free list head */
 #define DMOD_PAGES_ALLOC      0xAF0  /* int16_t - pool pages allocated */
 #define DMOD_REQ_READ_IDX     0xAF2  /* int16_t - request queue read index */
 #define DMOD_REQ_WRITE_IDX    0xAF4  /* int16_t - request queue write index */
@@ -356,8 +356,8 @@ void DISK_$REVALID(struct disk_$volume_t *vol);
  * Queue blocks (disk I/O request blocks) are linked in free and allocated
  * chains. These offsets are used for initialization during allocation.
  */
-#define DISK_QBLK_FORWARD     0x00  /* void* - next in allocated chain */
-#define DISK_QBLK_FREE_NEXT   0x08  /* void* - next in free list */
+#define DISK_QBLK_FORWARD     0x00  /* uint32_t VA - next in allocated chain */
+#define DISK_QBLK_FREE_NEXT   0x08  /* uint32_t VA - next in free list */
 #define DISK_QBLK_STATUS      0x0C  /* uint32_t - I/O status */
 #define DISK_QBLK_FLAGS       0x1C  /* uint16_t - I/O flags */
 #define DISK_QBLK_OWNER       0x1E  /* uint8_t - owning process ID */

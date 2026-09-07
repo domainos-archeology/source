@@ -21,10 +21,12 @@
 #include "ml/ml.h"
 
 /*
- * Lock table base addresses
+ * Lock entries are reached through FILE_$LOT_ENTRY() (file/file_internal.h).
+ * 0x00E6056C `movea.l #0xe935cc,A0` loads the table base - entry 1 - and every
+ * field is then read at a NEGATIVE displacement off `base + index*0x1C`, the
+ * END of entry `index`.  The private biased base this file used to define has
+ * been dropped in favour of the shared 1-based accessor.
  */
-#define LOT_DATA_BASE       0xE935B0
-#define LOT_ENTRY_SIZE      0x1C
 
 /*
  * FILE_$LOCAL_READ_LOCK - Read local lock entry data
@@ -44,8 +46,7 @@ void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out,
 {
     int16_t hash_index;
     int16_t entry_idx;
-    uint8_t *entry_base;
-    int32_t entry_offset;
+    file_lock_entry_detail_t *entry;
 
     /* Compute hash bucket for the file UID */
     hash_index = UID_$HASH(file_uid, NULL);
@@ -61,41 +62,31 @@ void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out,
 
     /* Iterate through hash chain */
     while (entry_idx > 0) {
-        /*
-         * Compute entry base address
-         * Entry N is at LOT_DATA_BASE + N * 0x1C
-         * We access data relative to the end of the entry (+ 0x1C offset)
-         */
-        entry_offset = (int32_t)entry_idx * LOT_ENTRY_SIZE;
-        entry_base = (uint8_t *)(LOT_DATA_BASE + LOT_ENTRY_SIZE + entry_offset);
-
-        /* Get pointers to entry fields */
-        uint32_t *uid_high_ptr = (uint32_t *)(entry_base - 0x10);
-        uint32_t *uid_low_ptr = (uint32_t *)(entry_base - 0x0C);
-        int16_t *next_ptr = (int16_t *)(entry_base - 0x08);
+        /* Entry `entry_idx` of the 1-based table (0x00E6056C). */
+        entry = FILE_$LOT_ENTRY(entry_idx);
 
         /* Compare UIDs */
-        if (*uid_high_ptr == file_uid->high && *uid_low_ptr == file_uid->low) {
+        if (entry->uid_high == file_uid->high && entry->uid_low == file_uid->low) {
             /*
              * Found matching entry - copy lock information
              */
 
             /* File UID */
-            info_out->file_uid.high = *uid_high_ptr;
-            info_out->file_uid.low = *uid_low_ptr;
+            info_out->file_uid.high = entry->uid_high;
+            info_out->file_uid.low = entry->uid_low;
 
-            /* Context: at offset -0x1C from entry end */
-            info_out->context = *(uint32_t *)(entry_base - 0x1C);
+            /* Context: entry +0x00, read at (-0x1c,An) off the entry end */
+            info_out->context = entry->context;
 
-            /* Lock side: bit 7 of flags2 (at -0x01) */
-            uint8_t flags2 = *(entry_base - 0x01);
+            /* Lock side: bit 7 of flags2 (entry +0x1B, (-0x1,An)) */
+            uint8_t flags2 = entry->flags2;
             info_out->side = (flags2 >> 7) & 1;
 
             /* Lock mode: bits 3-6 of flags2 */
             info_out->mode = (flags2 & 0x78) >> 3;
 
-            /* Sequence number: at offset -0x06 */
-            info_out->sequence = *(uint16_t *)(entry_base - 0x06);
+            /* Sequence number: entry +0x16, read at (-0x6,An) */
+            info_out->sequence = entry->sequence;
 
             /*
              * Node/port information depends on remote flag (bit 2 of flags2)
@@ -109,8 +100,8 @@ void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out,
                  * owner_node = NODE_$ME (we are the owner)
                  * remote_info = ROUTE_$PORT
                  */
-                info_out->holder_node = *(uint32_t *)(entry_base - 0x18);
-                info_out->holder_port = *(uint32_t *)(entry_base - 0x14);
+                info_out->holder_node = entry->node_low;
+                info_out->holder_port = entry->node_high;
                 info_out->owner_node = NODE_$ME;
                 info_out->remote_info = ROUTE_$PORT;
             } else {
@@ -122,8 +113,8 @@ void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out,
                  */
                 info_out->holder_node = NODE_$ME;
                 info_out->holder_port = ROUTE_$PORT;
-                info_out->owner_node = *(uint32_t *)(entry_base - 0x18);
-                info_out->remote_info = *(uint32_t *)(entry_base - 0x14);
+                info_out->owner_node = entry->node_low;
+                info_out->remote_info = entry->node_high;
             }
 
             /* Success */
@@ -131,8 +122,8 @@ void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out,
             goto done;
         }
 
-        /* Move to next entry in chain */
-        entry_idx = *next_ptr;
+        /* Move to next entry in chain (entry +0x14, read at (-0x8,An)) */
+        entry_idx = (int16_t)entry->next;
     }
 
 done:

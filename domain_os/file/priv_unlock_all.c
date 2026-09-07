@@ -22,17 +22,13 @@
 #include "ml/ml.h"
 
 /*
- * Lock table base addresses (m68k target)
+ * The lock tables are addressed through FILE_$LOT_ENTRY / FILE_$PROC_LOT_SLOT /
+ * FILE_$PROC_LOT_COUNT (file/file_internal.h).  This file used to carry a
+ * private lock-table base biased down by one entry so that `base + index*0x1C`
+ * lands on the 1-based entry; the machine never holds that value.
+ * 0x00E60C70 loads `#0xe935cc` (the real base, entry 1) and 0x00E60C0C /
+ * 0x00E60C22 load `#0xea202c` for the per-process rows.
  */
-#define LOT_BASE        ((file_lock_entry_detail_t *)0xE935B0)
-#define LOT_ENTRY(n)    ((file_lock_entry_detail_t *)((uint8_t *)LOT_BASE + (n) * 0x1C))
-
-/* Per-process lock table */
-#define PROC_LOT_BASE   ((uint16_t *)0xE9F9CA)
-#define PROC_LOT_ENTRY(asid, idx) \
-    (*(uint16_t *)((uint8_t *)PROC_LOT_BASE + (asid) * 300 + (idx) * 2))
-#define PROC_LOT_COUNT(asid) \
-    (*(uint16_t *)((uint8_t *)0xEA3DC4 + (asid) * 2))
 
 /*
  * FILE_$PRIV_UNLOCK_ALL - Unlock all locks for a process
@@ -68,15 +64,15 @@ void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr)
      * Iterate through each ASID in range
      */
     for (asid = start_asid; asid <= end_asid; asid++) {
-        count = PROC_LOT_COUNT(asid) - 1;
+        count = FILE_$PROC_LOT_COUNT(asid) - 1;
         if (count >= 0) {
             /*
              * Iterate through all slots for this ASID
              */
             for (slot = 1; slot <= (uint16_t)(count + 1); slot++) {
-                entry_idx = PROC_LOT_ENTRY(asid, slot);
+                entry_idx = FILE_$PROC_LOT_SLOT(asid, slot);
                 if (entry_idx != 0) {
-                    entry = LOT_ENTRY(entry_idx);
+                    entry = FILE_$LOT_ENTRY(entry_idx);
 
                     /*
                      * Check refcount to decide how to handle
@@ -86,7 +82,7 @@ void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr)
                          * Multiple references - just decrement and clear slot
                          * Don't actually unlock yet
                          */
-                        PROC_LOT_ENTRY(asid, slot) = 0;
+                        FILE_$PROC_LOT_SLOT(asid, slot) = 0;
                         entry->refcount--;
                     } else {
                         /*
@@ -130,7 +126,7 @@ void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr)
         /*
          * Clear the count for this ASID
          */
-        PROC_LOT_COUNT(asid) = 0;
+        FILE_$PROC_LOT_COUNT(asid) = 0;
     }
 
     ML_$UNLOCK(5);

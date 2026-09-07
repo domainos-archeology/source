@@ -1,26 +1,49 @@
 /*
- * disk/test/test_get_qblks_internal.c - Unit tests for disk_$get_qblks_internal
+ * disk/test/test_get_qblks_internal.c - Unit tests for
+ * disk_$get_qblks_internal (0x00E3BE8A)
  *
- * Tests the queue block allocation function by mocking all subsystem
- * calls (ML_$EXCLUSION, EC_$WAIT, disk_$grow_qblk_pool) and verifying:
- *   - Simple allocation from a free list with sufficient blocks
- *   - Correct block initialization (status, flags, owner, reserved cleared)
- *   - Correct chain linking through forward pointers
- *   - Correct first_out and last_out outputs
- *   - Last block has NULL terminators
- *   - Single block allocation
- *   - Write mode with reserve block available
- *   - Read mode enqueues request when blocks unavailable
- *   - Pool growth attempted when blocks unavailable and not disabled
+ * The real disk/get_qblks_internal.c is #included below and driven through a
+ * host copy of the disk module data area; ML_$EXCLUSION_START/STOP, EC_$WAIT
+ * and disk_$grow_qblk_pool are stubbed and counted.
+ *
+ * The free-list cells (DMOD_RESERVE_BLOCK 0x0BC, DMOD_FREE_HEAD 0x0C0,
+ * DISK_QBLK_FORWARD 0x00, DISK_QBLK_FREE_NEXT 0x08) hold 32-bit target
+ * virtual addresses, so the queue blocks live in an arena that
+ * ARCH_HOST_VA_BASE points at and the cells hold offsets into it.
+ *
+ * Covered:
+ *   - the fast path: count <= avail with no pending requests, avail
+ *     decremented by count (0x00E3BEB8-0x00E3BECC)
+ *   - block initialisation and the allocated chain built through
+ *     DISK_QBLK_FORWARD (0x00E3BF90-0x00E3BFD0)
+ *   - the last block's free_next and forward links are cleared, in that
+ *     order (0x00E3BFDA, 0x00E3BFDE)
+ *   - write mode takes the reserve block by copying DMOD_RESERVE_BLOCK into
+ *     DMOD_FREE_HEAD (0x00E3BF02) and clearing DMOD_RESERVE_AVAIL
+ *   - write mode ignores the pending count; read mode does not
+ *     (0x00E3BEBE-0x00E3BEC6)
+ *   - read mode enqueues into the one-based request queue and wraps the
+ *     write index from 0x40 to 1 (0x00E3BF14-0x00E3BF34)
+ *   - the pool is grown only when growth is enabled, nothing is pending and
+ *     PROC1_$TYPE[PROC1_$CURRENT] != 5 (0x00E3BED0-0x00E3BEF6)
+ *   - the lock is taken and released around the whole body, and dropped
+ *     across EC_$WAIT (0x00E3BF44-0x00E3BF6C)
+ *   - no store spills into the neighbouring cell of any 32-bit link
  */
 
 #include <stdio.h>
-#include <assert.h>
-#include <stdint.h>
 #include <string.h>
-#include <stdlib.h>
 
-/* Test result tracking */
+#include "disk/disk_internal.h"
+#include "ec/ec.h"
+#include "ml/ml.h"
+#include "proc1/proc1.h"
+#include "arch/arch.h"
+
+/* ============================================================================
+ * Test framework
+ * ============================================================================ */
+
 static int tests_passed = 0;
 static int tests_failed = 0;
 
@@ -30,532 +53,424 @@ static int tests_failed = 0;
     test_##name(); \
     tests_passed++; \
     printf("PASSED\n"); \
-} while(0)
+} while (0)
 
 #define ASSERT_EQ(expected, actual) do { \
-    if ((expected) != (actual)) { \
+    unsigned long _e = (unsigned long)(expected); \
+    unsigned long _a = (unsigned long)(actual); \
+    if (_e != _a) { \
         printf("FAILED\n    Expected: 0x%lx, Got: 0x%lx at line %d\n", \
-               (unsigned long)(expected), (unsigned long)(actual), __LINE__); \
+               _e, _a, __LINE__); \
         tests_failed++; \
         return; \
     } \
-} while(0)
+} while (0)
 
-#define ASSERT_TRUE(cond) do { \
-    if (!(cond)) { \
-        printf("FAILED\n    Condition false at line %d\n", __LINE__); \
-        tests_failed++; \
-        return; \
-    } \
-} while(0)
+/* ============================================================================
+ * Module data and mocks
+ * ============================================================================ */
 
-#define ASSERT_NULL(ptr) do { \
-    if ((ptr) != NULL) { \
-        printf("FAILED\n    Expected NULL, got %p at line %d\n", (void*)(ptr), __LINE__); \
-        tests_failed++; \
-        return; \
-    } \
-} while(0)
-
-/* ================================================================
- * Minimal types and mock definitions
- * ================================================================ */
-
-typedef uint32_t status_$t;
-#define status_$ok 0
-
-/* Avoid system uid_t conflict */
-#define uid_t disk_uid_t
-typedef struct { uint32_t high; uint32_t low; } disk_uid_t;
-
-/* Minimal ec_$eventcount_t */
-typedef struct {
-    int32_t value;
-    void *waiter_list_head;
-    void *waiter_list_tail;
-} ec_$eventcount_t;
-
-/* Minimal ml_$exclusion_t */
-typedef struct { uint32_t data[4]; } ml_$exclusion_t;
-
-/* EC_$WAIT argument records: two 3-element arrays passed BY VALUE
- * (0x00E20610); mirrors ec/ec.h, which this test does not include. */
-typedef struct ec_$wait_ecs_t {
-    ec_$eventcount_t *ec[3];
-} ec_$wait_ecs_t;
-
-typedef struct ec_$wait_vals_t {
-    int32_t val[3];
-} ec_$wait_vals_t;
-
-/* ================================================================
- * Mock state
- * ================================================================ */
-
-/* DISK_$DATA - mock disk module data area */
+/* Big enough to cover every offset the function touches (max 0xAFC). */
 uint8_t DISK_$DATA[0xB00];
 
-/* PROC1 globals */
 uint16_t PROC1_$CURRENT = 7;
-#define PROC1_MAX_PROCESSES 65
 uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
 
-/* Mock function call tracking */
-static int mock_exclusion_start_count;
-static int mock_exclusion_stop_count;
-static int mock_ec_wait_count;
-static int mock_grow_pool_count;
-static int16_t mock_grow_pool_last_count;
+static int lock_starts;
+static int lock_stops;
+static int ec_waits;
+static int grow_calls;
+static int16_t grow_last_count;
+static int16_t grow_adds_avail;
+static int16_t wait_adds_avail;
 
-/* For grow_pool mock: optionally add blocks on call */
-static int mock_grow_pool_add_avail;
+static ec_$wait_ecs_t  last_wait_ecs;
+static ec_$wait_vals_t last_wait_vals;
 
-void ML_$EXCLUSION_START(ml_$exclusion_t *lock) {
-    (void)lock;
-    mock_exclusion_start_count++;
-}
+void ML_$EXCLUSION_START(ml_$exclusion_t *excl) { (void)excl; lock_starts++; }
+void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)  { (void)excl; lock_stops++; }
 
-void ML_$EXCLUSION_STOP(ml_$exclusion_t *lock) {
-    (void)lock;
-    mock_exclusion_stop_count++;
-}
-
-/* Both 3-element arrays arrive BY VALUE (0xE20610); see ec/ec.h. */
-static ec_$wait_ecs_t mock_ec_wait_last_ecs;
-static ec_$wait_vals_t mock_ec_wait_last_vals;
-
-int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals) {
-    mock_ec_wait_last_ecs = ecs;
-    mock_ec_wait_last_vals = vals;
-    mock_ec_wait_count++;
+/* Both 3-element arrays arrive BY VALUE (0x00E20610); see ec/ec.h. */
+int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
+{
+    last_wait_ecs = ecs;
+    last_wait_vals = vals;
+    ec_waits++;
+    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) =
+        (int16_t)(*(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) + wait_adds_avail);
     return 0;
 }
 
-void disk_$grow_qblk_pool(int16_t count) {
-    mock_grow_pool_count++;
-    mock_grow_pool_last_count = count;
-
-    /* If configured, add blocks to the available count */
-    if (mock_grow_pool_add_avail > 0) {
-        *(int16_t *)(DISK_$DATA + 0xAF8) += mock_grow_pool_add_avail;
-    }
+void disk_$grow_qblk_pool(int16_t count)
+{
+    grow_calls++;
+    grow_last_count = count;
+    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) =
+        (int16_t)(*(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) + grow_adds_avail);
 }
 
-/* ================================================================
- * Suppress real headers, include implementation directly
- * ================================================================ */
+/* ============================================================================
+ * Code under test
+ * ============================================================================ */
 
-#define DISK_INTERNAL_H
-#define DISK_H
-#define BASE_H
-#define ML_H
-#define EC_H
-#define PROC1_H
-#define PROC1_CONFIG_H
-#define PROC2_H
-#define DBUF_H
-#define TIME_H
-
-/* We need the DMOD_ and DISK_QBLK_ offset macros from the header */
-#define DMOD_EVENTCOUNT       0x000
-#define DMOD_REQ_QUEUE        0x00E
-#define DMOD_EXCLUSION        0x090
-#define DMOD_RESERVE_BLOCK    0x0BC
-#define DMOD_FREE_HEAD        0x0C0
-#define DMOD_PAGES_ALLOC      0xAF0
-#define DMOD_REQ_READ_IDX     0xAF2
-#define DMOD_REQ_WRITE_IDX    0xAF4
-#define DMOD_PENDING_COUNT    0xAF6
-#define DMOD_AVAIL_COUNT      0xAF8
-#define DMOD_ALLOC_DISABLED   0xAFA
-#define DMOD_RESERVE_AVAIL    0xAFC
-#define DMOD_REQ_QUEUE_SIZE   0x40
-
-#define DISK_QBLK_FORWARD     0x00
-#define DISK_QBLK_FREE_NEXT   0x08
-#define DISK_QBLK_STATUS      0x0C
-#define DISK_QBLK_FLAGS       0x1C
-#define DISK_QBLK_OWNER       0x1E
-#define DISK_QBLK_RESERVED    0x1F
-
-/* Create a stub disk_internal.h that the .c file will find via -I.
- * The real header is suppressed by DISK_INTERNAL_H guard above. */
-
-/* Pull in the actual implementation.
- * The #include "disk/disk_internal.h" in the .c file is guarded by
- * DISK_INTERNAL_H which we defined above, so it will be a no-op. */
-#define disk_disk_internal_h_already_handled
 #include "../get_qblks_internal.c"
 
-/* ================================================================
- * Test helpers
- * ================================================================ */
+/* ============================================================================
+ * Helpers
+ * ============================================================================ */
 
-/* Mock queue blocks - 0x40 bytes each, large enough for all fields */
-#define MOCK_BLOCK_SIZE 0x40
-#define MAX_MOCK_BLOCKS 5
-static uint8_t mock_blocks[MAX_MOCK_BLOCKS][MOCK_BLOCK_SIZE];
+/*
+ * The free-list links are 32-bit target VAs, so the blocks have to live in
+ * an arena that ARCH_HOST_VA_BASE points at (see arch/host/arch.h).  Block
+ * VAs start at 0x40 so that a zero cell stays distinguishable from block 0.
+ */
+#define ARENA_BLOCKS    5
+#define BLOCK_SIZE      0x40
+#define BLOCK_BASE      0x40
+#define RESERVE_VA      (BLOCK_BASE + ARENA_BLOCKS * BLOCK_SIZE)
 
-static void reset_mocks(void)
+static uint8_t arena[RESERVE_VA + BLOCK_SIZE];
+
+#define BLOCK_VA(i)     ((uint32_t)(BLOCK_BASE + (i) * BLOCK_SIZE))
+#define BLOCK(i)        (arena + BLOCK_VA(i))
+#define RESERVE_BLOCK   (arena + RESERVE_VA)
+
+#define D16(off)  (*(int16_t *)(DISK_$DATA + (off)))
+#define D8(off)   (*(int8_t *)(DISK_$DATA + (off)))
+#define DVA(off)  (*(uint32_t *)(DISK_$DATA + (off)))
+#define REQ(i)    (((int16_t *)(DISK_$DATA + DMOD_REQ_QUEUE))[i])
+#define BVA(p, off) (*(uint32_t *)((uint8_t *)(p) + (off)))
+
+static void reset_module(void)
 {
     memset(DISK_$DATA, 0, sizeof(DISK_$DATA));
-    memset(mock_blocks, 0xCC, sizeof(mock_blocks));
+    memset(arena, 0xCC, sizeof(arena));
     memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
 
     PROC1_$CURRENT = 7;
 
-    mock_exclusion_start_count = 0;
-    mock_exclusion_stop_count = 0;
-    mock_ec_wait_count = 0;
-    mock_grow_pool_count = 0;
-    mock_grow_pool_last_count = 0;
-    mock_grow_pool_add_avail = 0;
+    lock_starts = 0;
+    lock_stops = 0;
+    ec_waits = 0;
+    grow_calls = 0;
+    grow_last_count = 0;
+    grow_adds_avail = 0;
+    wait_adds_avail = 0;
+
+    ARCH_HOST_VA_BASE = (uintptr_t)arena;
+    D16(DMOD_REQ_WRITE_IDX) = 1;
+    D16(DMOD_REQ_READ_IDX) = 1;
 }
 
-/* Set up a free list of 'count' mock blocks linked through DISK_QBLK_FREE_NEXT */
+/* Link 'count' arena blocks into the module free list. */
 static void setup_free_list(int count)
 {
-    for (int i = 0; i < count && i < MAX_MOCK_BLOCKS; i++) {
-        memset(mock_blocks[i], 0xCC, MOCK_BLOCK_SIZE);
-        if (i < count - 1) {
-            *(void **)(mock_blocks[i] + DISK_QBLK_FREE_NEXT) = mock_blocks[i + 1];
-        } else {
-            *(void **)(mock_blocks[i] + DISK_QBLK_FREE_NEXT) = NULL;
-        }
+    for (int i = 0; i < count; i++) {
+        BVA(BLOCK(i), DISK_QBLK_FREE_NEXT) =
+            (i < count - 1) ? BLOCK_VA(i + 1) : 0u;
     }
-    /* Set free list head in module data */
-    *(void **)(DISK_$DATA + DMOD_FREE_HEAD) = mock_blocks[0];
+    DVA(DMOD_FREE_HEAD) = count > 0 ? BLOCK_VA(0) : 0u;
 }
 
-/* ================================================================
+/* ============================================================================
  * Tests
- * ================================================================ */
+ * ============================================================================ */
 
 TEST(allocate_single_block)
 {
-    reset_mocks();
+    reset_module();
     setup_free_list(3);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 3;
+    D16(DMOD_AVAIL_COUNT) = 3;
 
     void *first = NULL, *last = NULL;
     disk_$get_qblks_internal(1, 0, &first, &last);
 
-    /* First and last should both point to mock_blocks[0] */
-    ASSERT_EQ((uintptr_t)mock_blocks[0], (uintptr_t)first);
-    ASSERT_EQ((uintptr_t)mock_blocks[0], (uintptr_t)last);
+    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)first);
+    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)last);
 
-    /* Block should be initialized */
-    ASSERT_EQ(0, *(uint32_t *)(mock_blocks[0] + DISK_QBLK_STATUS));
-    ASSERT_EQ(0, *(uint16_t *)(mock_blocks[0] + DISK_QBLK_FLAGS));
-    ASSERT_EQ(7, *(mock_blocks[0] + DISK_QBLK_OWNER));
-    ASSERT_EQ(0, *(mock_blocks[0] + DISK_QBLK_RESERVED));
+    ASSERT_EQ(0u, *(uint32_t *)(BLOCK(0) + DISK_QBLK_STATUS));
+    ASSERT_EQ(0u, *(uint16_t *)(BLOCK(0) + DISK_QBLK_FLAGS));
+    ASSERT_EQ(7, *(BLOCK(0) + DISK_QBLK_OWNER));
+    ASSERT_EQ(0, *(BLOCK(0) + DISK_QBLK_RESERVED));
 
-    /* Last block should have NULL terminators */
-    ASSERT_EQ(0, *(uint32_t *)(mock_blocks[0] + DISK_QBLK_FORWARD));
-    ASSERT_EQ(0, *(uint32_t *)(mock_blocks[0] + DISK_QBLK_FREE_NEXT));
+    /* The single block is both first and last, so it is terminated. */
+    ASSERT_EQ(0u, BVA(BLOCK(0), DISK_QBLK_FORWARD));
+    ASSERT_EQ(0u, BVA(BLOCK(0), DISK_QBLK_FREE_NEXT));
 
-    /* Available count decremented */
-    ASSERT_EQ(2, *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT));
+    ASSERT_EQ(2, D16(DMOD_AVAIL_COUNT));
+    ASSERT_EQ(BLOCK_VA(1), DVA(DMOD_FREE_HEAD));
 
-    /* Free head advanced to next block */
-    ASSERT_EQ((uintptr_t)mock_blocks[1], (uintptr_t)*(void **)(DISK_$DATA + DMOD_FREE_HEAD));
-
-    /* Exclusion lock was acquired and released */
-    ASSERT_EQ(1, mock_exclusion_start_count);
-    ASSERT_EQ(1, mock_exclusion_stop_count);
-
-    /* No waiting or pool growth needed */
-    ASSERT_EQ(0, mock_ec_wait_count);
-    ASSERT_EQ(0, mock_grow_pool_count);
+    ASSERT_EQ(1, lock_starts);
+    ASSERT_EQ(1, lock_stops);
+    ASSERT_EQ(0, ec_waits);
+    ASSERT_EQ(0, grow_calls);
 }
 
-TEST(allocate_three_blocks)
+TEST(allocate_three_blocks_builds_the_forward_chain)
 {
-    reset_mocks();
+    reset_module();
     setup_free_list(5);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 5;
+    D16(DMOD_AVAIL_COUNT) = 5;
 
     void *first = NULL, *last = NULL;
     disk_$get_qblks_internal(3, 0, &first, &last);
 
-    /* First should point to mock_blocks[0] */
-    ASSERT_EQ((uintptr_t)mock_blocks[0], (uintptr_t)first);
-    /* Last should point to mock_blocks[2] (the 3rd block) */
-    ASSERT_EQ((uintptr_t)mock_blocks[2], (uintptr_t)last);
+    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)first);
+    ASSERT_EQ((uintptr_t)BLOCK(2), (uintptr_t)last);
 
-    /* Check forward chain: block[0]->forward = block[1], block[1]->forward = block[2] */
-    ASSERT_EQ((uintptr_t)mock_blocks[1],
-              *(uintptr_t *)(mock_blocks[0] + DISK_QBLK_FORWARD));
-    ASSERT_EQ((uintptr_t)mock_blocks[2],
-              *(uintptr_t *)(mock_blocks[1] + DISK_QBLK_FORWARD));
+    ASSERT_EQ(BLOCK_VA(1), BVA(BLOCK(0), DISK_QBLK_FORWARD));
+    ASSERT_EQ(BLOCK_VA(2), BVA(BLOCK(1), DISK_QBLK_FORWARD));
 
-    /* Last block terminated */
-    ASSERT_EQ(0, *(uint32_t *)(mock_blocks[2] + DISK_QBLK_FORWARD));
-    ASSERT_EQ(0, *(uint32_t *)(mock_blocks[2] + DISK_QBLK_FREE_NEXT));
+    /* Last block terminated on both links. */
+    ASSERT_EQ(0u, BVA(BLOCK(2), DISK_QBLK_FORWARD));
+    ASSERT_EQ(0u, BVA(BLOCK(2), DISK_QBLK_FREE_NEXT));
 
-    /* All blocks initialized with correct owner */
     for (int i = 0; i < 3; i++) {
-        ASSERT_EQ(0, *(uint32_t *)(mock_blocks[i] + DISK_QBLK_STATUS));
-        ASSERT_EQ(0, *(uint16_t *)(mock_blocks[i] + DISK_QBLK_FLAGS));
-        ASSERT_EQ(7, *(mock_blocks[i] + DISK_QBLK_OWNER));
-        ASSERT_EQ(0, *(mock_blocks[i] + DISK_QBLK_RESERVED));
+        ASSERT_EQ(0u, *(uint32_t *)(BLOCK(i) + DISK_QBLK_STATUS));
+        ASSERT_EQ(0u, *(uint16_t *)(BLOCK(i) + DISK_QBLK_FLAGS));
+        ASSERT_EQ(7, *(BLOCK(i) + DISK_QBLK_OWNER));
+        ASSERT_EQ(0, *(BLOCK(i) + DISK_QBLK_RESERVED));
     }
 
-    /* Available count decremented by 3 */
-    ASSERT_EQ(2, *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT));
-
-    /* Free head advanced past the 3 allocated blocks */
-    ASSERT_EQ((uintptr_t)mock_blocks[3], (uintptr_t)*(void **)(DISK_$DATA + DMOD_FREE_HEAD));
+    ASSERT_EQ(2, D16(DMOD_AVAIL_COUNT));
+    ASSERT_EQ(BLOCK_VA(3), DVA(DMOD_FREE_HEAD));
 }
 
-TEST(blocks_initialized_with_different_owner)
+/*
+ * The links are four bytes wide: writing DISK_QBLK_FORWARD (0x00) must not
+ * disturb daddr at 0x04, and writing DISK_QBLK_FREE_NEXT (0x08) must not
+ * disturb status at 0x0C.  A `void **` store would clobber both.
+ */
+TEST(link_stores_do_not_spill_into_the_neighbouring_cell)
 {
-    reset_mocks();
+    reset_module();
     setup_free_list(2);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 2;
+    D16(DMOD_AVAIL_COUNT) = 2;
+    *(uint32_t *)(BLOCK(0) + 0x04) = 0xA1A2A3A4u;
+    *(uint32_t *)(BLOCK(1) + 0x04) = 0xB1B2B3B4u;
 
-    /* Set a different process ID */
-    PROC1_$CURRENT = 42;
+    void *first = NULL, *last = NULL;
+    disk_$get_qblks_internal(2, 0, &first, &last);
+
+    /* daddr survives the forward-link store on both blocks. */
+    ASSERT_EQ(0xA1A2A3A4u, *(uint32_t *)(BLOCK(0) + 0x04));
+    ASSERT_EQ(0xB1B2B3B4u, *(uint32_t *)(BLOCK(1) + 0x04));
+
+    /* status is cleared by the initialisation, not spilled into. */
+    ASSERT_EQ(0u, *(uint32_t *)(BLOCK(1) + DISK_QBLK_STATUS));
+
+    /* DMOD_RESERVE_BLOCK sits four bytes below DMOD_FREE_HEAD. */
+    ASSERT_EQ(0u, DVA(DMOD_RESERVE_BLOCK));
+}
+
+TEST(owner_is_the_low_byte_of_the_current_process)
+{
+    reset_module();
+    setup_free_list(2);
+    D16(DMOD_AVAIL_COUNT) = 2;
+    PROC1_$CURRENT = 0x142;     /* low byte 0x42 */
 
     void *first = NULL, *last = NULL;
     disk_$get_qblks_internal(1, 0, &first, &last);
 
-    ASSERT_EQ(42, *(mock_blocks[0] + DISK_QBLK_OWNER));
+    ASSERT_EQ(0x42, *(BLOCK(0) + DISK_QBLK_OWNER));
 }
 
-TEST(write_mode_uses_reserve_block)
+TEST(write_mode_uses_the_reserve_block)
 {
-    reset_mocks();
+    reset_module();
     setup_free_list(0);
+    BVA(RESERVE_BLOCK, DISK_QBLK_FREE_NEXT) = 0;
 
-    /* Set up a reserve block */
-    static uint8_t reserve_block[MOCK_BLOCK_SIZE];
-    memset(reserve_block, 0xCC, MOCK_BLOCK_SIZE);
-    *(void **)(reserve_block + DISK_QBLK_FREE_NEXT) = NULL;
-
-    *(void **)(DISK_$DATA + DMOD_RESERVE_BLOCK) = reserve_block;
-    *(uint8_t *)(DISK_$DATA + DMOD_RESERVE_AVAIL) = 0xFF;  /* st instruction */
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 0;  /* No blocks in main pool */
-    *(uint8_t *)(DISK_$DATA + DMOD_ALLOC_DISABLED) = 0xFF;  /* Prevent grow loop */
+    DVA(DMOD_RESERVE_BLOCK) = RESERVE_VA;
+    D8(DMOD_RESERVE_AVAIL) = -1;            /* st */
+    D16(DMOD_AVAIL_COUNT) = 0;
+    D8(DMOD_ALLOC_DISABLED) = -1;           /* growth disabled */
 
     void *first = NULL, *last = NULL;
     disk_$get_qblks_internal(1, -1, &first, &last);
 
-    /* Should have used the reserve block */
-    ASSERT_EQ((uintptr_t)reserve_block, (uintptr_t)first);
-    ASSERT_EQ((uintptr_t)reserve_block, (uintptr_t)last);
+    ASSERT_EQ((uintptr_t)RESERVE_BLOCK, (uintptr_t)first);
+    ASSERT_EQ((uintptr_t)RESERVE_BLOCK, (uintptr_t)last);
 
-    /* Reserve flag should be cleared */
-    ASSERT_EQ(0, *(uint8_t *)(DISK_$DATA + DMOD_RESERVE_AVAIL));
+    /* 0x00E3BF02 copies the reserve VA into the head; 0x00E3BF08 clears the
+     * flag.  The reserve cell itself is left alone. */
+    ASSERT_EQ(RESERVE_VA, DVA(DMOD_RESERVE_BLOCK));
+    ASSERT_EQ(0, D8(DMOD_RESERVE_AVAIL));
 
-    /* Block should be initialized */
-    ASSERT_EQ(0, *(uint32_t *)(reserve_block + DISK_QBLK_STATUS));
-    ASSERT_EQ(7, *(reserve_block + DISK_QBLK_OWNER));
+    ASSERT_EQ(0u, *(uint32_t *)(RESERVE_BLOCK + DISK_QBLK_STATUS));
+    ASSERT_EQ(7, *(RESERVE_BLOCK + DISK_QBLK_OWNER));
 
-    /* No waiting needed */
-    ASSERT_EQ(0, mock_ec_wait_count);
+    /* avail was never decremented: this path skips 0x00E3BEC8. */
+    ASSERT_EQ(0, D16(DMOD_AVAIL_COUNT));
+    ASSERT_EQ(0, ec_waits);
+    ASSERT_EQ(1, lock_stops);
 }
 
-TEST(write_mode_allocates_when_available)
+TEST(write_mode_ignores_the_pending_count)
 {
-    reset_mocks();
+    reset_module();
     setup_free_list(3);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 3;
+    D16(DMOD_AVAIL_COUNT) = 3;
+    D16(DMOD_PENDING_COUNT) = 2;
 
     void *first = NULL, *last = NULL;
     disk_$get_qblks_internal(2, -1, &first, &last);
 
-    /* Should allocate from main pool (write mode, but enough blocks) */
-    ASSERT_EQ((uintptr_t)mock_blocks[0], (uintptr_t)first);
-    ASSERT_EQ((uintptr_t)mock_blocks[1], (uintptr_t)last);
-    ASSERT_EQ(1, *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT));
-    ASSERT_EQ(0, mock_ec_wait_count);
+    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)first);
+    ASSERT_EQ((uintptr_t)BLOCK(1), (uintptr_t)last);
+    ASSERT_EQ(1, D16(DMOD_AVAIL_COUNT));
+    ASSERT_EQ(0, ec_waits);
 }
 
-TEST(write_mode_ignores_pending_count)
+TEST(read_mode_enqueues_and_waits_when_requests_are_pending)
 {
-    reset_mocks();
-    setup_free_list(3);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 3;
-    *(int16_t *)(DISK_$DATA + DMOD_PENDING_COUNT) = 2;  /* Pending requests */
-
-    void *first = NULL, *last = NULL;
-    disk_$get_qblks_internal(2, -1, &first, &last);
-
-    /* Write mode should succeed despite pending requests */
-    ASSERT_EQ((uintptr_t)mock_blocks[0], (uintptr_t)first);
-    ASSERT_EQ(0, mock_ec_wait_count);
-}
-
-TEST(read_mode_blocked_by_pending)
-{
-    reset_mocks();
+    reset_module();
     setup_free_list(5);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 5;
-    *(int16_t *)(DISK_$DATA + DMOD_PENDING_COUNT) = 1;  /* Has pending */
-    *(uint8_t *)(DISK_$DATA + DMOD_ALLOC_DISABLED) = 0xFF;  /* Disabled - can't grow */
-    *(int16_t *)(DISK_$DATA + DMOD_REQ_WRITE_IDX) = 1;
-
-    /* Set eventcount value */
+    D16(DMOD_AVAIL_COUNT) = 5;
+    D16(DMOD_PENDING_COUNT) = 1;
+    D8(DMOD_ALLOC_DISABLED) = -1;
     ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
 
     void *first = NULL, *last = NULL;
     disk_$get_qblks_internal(2, 0, &first, &last);
 
-    /* Should have enqueued request, waited, then allocated */
-    ASSERT_EQ(1, mock_ec_wait_count);
+    ASSERT_EQ(1, ec_waits);
+    ASSERT_EQ(2, REQ(1));                       /* one-based queue */
+    ASSERT_EQ(2, D16(DMOD_REQ_WRITE_IDX));
+    ASSERT_EQ(2, D16(DMOD_PENDING_COUNT));
 
-    /* Request should be enqueued: req_queue[1] = 2, write_idx advanced */
-    ASSERT_EQ(2, *(int16_t *)(DISK_$DATA + DMOD_REQ_QUEUE + 1 * 2));
-    ASSERT_EQ(2, *(int16_t *)(DISK_$DATA + DMOD_REQ_WRITE_IDX));
+    /* wait_val = ec value + the new pending count (0x00E3BF38-0x00E3BF3E) */
+    ASSERT_EQ(12, last_wait_vals.val[0]);
+    ASSERT_EQ(0, last_wait_vals.val[1]);
+    ASSERT_EQ(0, last_wait_vals.val[2]);
+    ASSERT_EQ((uintptr_t)DISK_$DATA, (uintptr_t)last_wait_ecs.ec[0]);
+    ASSERT_EQ(0, (uintptr_t)last_wait_ecs.ec[1]);
+    ASSERT_EQ(0, (uintptr_t)last_wait_ecs.ec[2]);
 
-    /* Pending count incremented */
-    ASSERT_EQ(2, *(int16_t *)(DISK_$DATA + DMOD_PENDING_COUNT));
+    /* Lock dropped across the wait and retaken (0x00E3BF44 / 0x00E3BF6C). */
+    ASSERT_EQ(2, lock_starts);
+    ASSERT_EQ(2, lock_stops);
 }
 
-TEST(grow_pool_called_when_not_disabled)
+TEST(write_mode_without_a_reserve_waits_for_the_eventcount_plus_one)
 {
-    reset_mocks();
-    setup_free_list(5);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 0;  /* No blocks */
-    *(uint8_t *)(DISK_$DATA + DMOD_ALLOC_DISABLED) = 0;  /* Not disabled */
-    *(int16_t *)(DISK_$DATA + DMOD_PENDING_COUNT) = 0;  /* No pending */
-
-    /* grow_pool mock will add 3 blocks */
-    mock_grow_pool_add_avail = 3;
+    reset_module();
+    setup_free_list(1);
+    D16(DMOD_AVAIL_COUNT) = 0;
+    D8(DMOD_RESERVE_AVAIL) = 0;             /* no reserve block available */
+    D8(DMOD_ALLOC_DISABLED) = -1;           /* growth disabled */
+    ((ec_$eventcount_t *)DISK_$DATA)->value = 20;
+    wait_adds_avail = 1;                    /* the wait is satisfied */
 
     void *first = NULL, *last = NULL;
-    disk_$get_qblks_internal(2, 0, &first, &last);
+    disk_$get_qblks_internal(1, -1, &first, &last);
 
-    /* Should have called grow_pool */
-    ASSERT_TRUE(mock_grow_pool_count > 0);
-    ASSERT_EQ(2, mock_grow_pool_last_count);
+    /* 0x00E3BF0E-0x00E3BF10: move.l (A5),D1 / addq.l #1,D1 */
+    ASSERT_EQ(1, ec_waits);
+    ASSERT_EQ(21, last_wait_vals.val[0]);
+    ASSERT_EQ(0, grow_calls);
 
-    /* No waiting needed since grow added enough blocks */
-    ASSERT_EQ(0, mock_ec_wait_count);
+    /* Write mode loops back to 0x00E3BEB8 and allocates on the retry. */
+    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)first);
+    ASSERT_EQ((uintptr_t)BLOCK(0), (uintptr_t)last);
+    ASSERT_EQ(0, D16(DMOD_AVAIL_COUNT));
+    ASSERT_EQ(2, lock_starts);
+    ASSERT_EQ(2, lock_stops);
+    /* Nothing was enqueued: the request queue belongs to read mode. */
+    ASSERT_EQ(0, D16(DMOD_PENDING_COUNT));
+    ASSERT_EQ(1, D16(DMOD_REQ_WRITE_IDX));
 }
 
-TEST(grow_pool_skipped_for_process_type_5)
+TEST(request_queue_write_index_wraps_from_0x40_to_1)
 {
-    reset_mocks();
+    reset_module();
     setup_free_list(5);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 0;
-    *(uint8_t *)(DISK_$DATA + DMOD_ALLOC_DISABLED) = 0;
-    *(int16_t *)(DISK_$DATA + DMOD_PENDING_COUNT) = 0;
-    *(int16_t *)(DISK_$DATA + DMOD_REQ_WRITE_IDX) = 1;
-
-    /* Set process type to 5 */
-    PROC1_$TYPE[PROC1_$CURRENT] = 5;
-
-    ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
-
-    void *first = NULL, *last = NULL;
-    disk_$get_qblks_internal(2, 0, &first, &last);
-
-    /* grow_pool should NOT have been called */
-    ASSERT_EQ(0, mock_grow_pool_count);
-
-    /* Should have fallen through to the wait path instead */
-    ASSERT_EQ(1, mock_ec_wait_count);
-}
-
-TEST(grow_pool_skipped_when_disabled)
-{
-    reset_mocks();
-    setup_free_list(5);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 0;
-    *(uint8_t *)(DISK_$DATA + DMOD_ALLOC_DISABLED) = 0xFF;  /* Disabled */
-    *(int16_t *)(DISK_$DATA + DMOD_PENDING_COUNT) = 0;
-    *(int16_t *)(DISK_$DATA + DMOD_REQ_WRITE_IDX) = 1;
-
-    ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
-
-    void *first = NULL, *last = NULL;
-    disk_$get_qblks_internal(2, 0, &first, &last);
-
-    /* grow_pool should NOT have been called */
-    ASSERT_EQ(0, mock_grow_pool_count);
-
-    /* Should have gone to wait path */
-    ASSERT_EQ(1, mock_ec_wait_count);
-}
-
-TEST(request_queue_wraps_at_64)
-{
-    reset_mocks();
-    setup_free_list(5);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 0;
-    *(uint8_t *)(DISK_$DATA + DMOD_ALLOC_DISABLED) = 0xFF;  /* Can't grow */
-    *(int16_t *)(DISK_$DATA + DMOD_PENDING_COUNT) = 1;
-    *(int16_t *)(DISK_$DATA + DMOD_REQ_WRITE_IDX) = 0x40;  /* At max */
-
+    D16(DMOD_AVAIL_COUNT) = 0;
+    D8(DMOD_ALLOC_DISABLED) = -1;
+    D16(DMOD_PENDING_COUNT) = 1;
+    D16(DMOD_REQ_WRITE_IDX) = DMOD_REQ_QUEUE_SIZE;   /* 0x40 */
     ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
 
     void *first = NULL, *last = NULL;
     disk_$get_qblks_internal(3, 0, &first, &last);
 
-    /* Write index should have wrapped to 1 */
-    ASSERT_EQ(1, *(int16_t *)(DISK_$DATA + DMOD_REQ_WRITE_IDX));
-
-    /* Request enqueued at position 0x40 */
-    ASSERT_EQ(3, *(int16_t *)(DISK_$DATA + DMOD_REQ_QUEUE + 0x40 * 2));
+    ASSERT_EQ(1, D16(DMOD_REQ_WRITE_IDX));
+    ASSERT_EQ(3, REQ(DMOD_REQ_QUEUE_SIZE));
+    ASSERT_EQ(2, D16(DMOD_PENDING_COUNT));
+    ASSERT_EQ(12, last_wait_vals.val[0]);
 }
 
-TEST(exclusion_lock_balanced)
+TEST(pool_is_grown_when_growth_is_enabled)
 {
-    reset_mocks();
-    setup_free_list(3);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 3;
+    reset_module();
+    setup_free_list(5);
+    D16(DMOD_AVAIL_COUNT) = 0;
+    D8(DMOD_ALLOC_DISABLED) = 0;
+    D16(DMOD_PENDING_COUNT) = 0;
+    grow_adds_avail = 3;
 
-    void *first = NULL, *last = NULL;
-    disk_$get_qblks_internal(1, 0, &first, &last);
-
-    /* Lock should be acquired once and released once */
-    ASSERT_EQ(1, mock_exclusion_start_count);
-    ASSERT_EQ(1, mock_exclusion_stop_count);
-}
-
-TEST(poison_fill_cleared_by_init)
-{
-    reset_mocks();
-    setup_free_list(2);
-    *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) = 2;
-
-    /* Blocks are poison-filled with 0xCC by setup_free_list.
-     * Verify that the initialization clears the expected fields. */
     void *first = NULL, *last = NULL;
     disk_$get_qblks_internal(2, 0, &first, &last);
 
-    for (int i = 0; i < 2; i++) {
-        ASSERT_EQ(0, *(uint32_t *)(mock_blocks[i] + DISK_QBLK_STATUS));
-        ASSERT_EQ(0, *(uint16_t *)(mock_blocks[i] + DISK_QBLK_FLAGS));
-        ASSERT_EQ(7, *(mock_blocks[i] + DISK_QBLK_OWNER));
-        ASSERT_EQ(0, *(mock_blocks[i] + DISK_QBLK_RESERVED));
-    }
+    ASSERT_EQ(1, grow_calls);
+    ASSERT_EQ(2, grow_last_count);
+    ASSERT_EQ(0, ec_waits);
+    ASSERT_EQ(1, D16(DMOD_AVAIL_COUNT));    /* 3 grown - 2 taken */
 }
 
-/* ================================================================
- * Test runner
- * ================================================================ */
+TEST(pool_is_not_grown_for_process_type_5)
+{
+    reset_module();
+    setup_free_list(5);
+    D16(DMOD_AVAIL_COUNT) = 0;
+    D8(DMOD_ALLOC_DISABLED) = 0;
+    D16(DMOD_PENDING_COUNT) = 0;
+    PROC1_$TYPE[PROC1_$CURRENT] = 5;        /* 0x00E3BEE4 */
+    ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
+
+    void *first = NULL, *last = NULL;
+    disk_$get_qblks_internal(2, 0, &first, &last);
+
+    ASSERT_EQ(0, grow_calls);
+    ASSERT_EQ(1, ec_waits);
+}
+
+TEST(pool_is_not_grown_when_growth_is_disabled)
+{
+    reset_module();
+    setup_free_list(5);
+    D16(DMOD_AVAIL_COUNT) = 0;
+    D8(DMOD_ALLOC_DISABLED) = -1;
+    D16(DMOD_PENDING_COUNT) = 0;
+    ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
+
+    void *first = NULL, *last = NULL;
+    disk_$get_qblks_internal(2, 0, &first, &last);
+
+    ASSERT_EQ(0, grow_calls);
+    ASSERT_EQ(1, ec_waits);
+    /* wait_val = ec value + pending (now 1) */
+    ASSERT_EQ(11, last_wait_vals.val[0]);
+}
 
 int main(void)
 {
-    printf("=== disk_$get_qblks_internal tests ===\n");
+    printf("test_get_qblks_internal:\n");
 
     RUN_TEST(allocate_single_block);
-    RUN_TEST(allocate_three_blocks);
-    RUN_TEST(blocks_initialized_with_different_owner);
-    RUN_TEST(write_mode_uses_reserve_block);
-    RUN_TEST(write_mode_allocates_when_available);
-    RUN_TEST(write_mode_ignores_pending_count);
-    RUN_TEST(read_mode_blocked_by_pending);
-    RUN_TEST(grow_pool_called_when_not_disabled);
-    RUN_TEST(grow_pool_skipped_for_process_type_5);
-    RUN_TEST(grow_pool_skipped_when_disabled);
-    RUN_TEST(request_queue_wraps_at_64);
-    RUN_TEST(exclusion_lock_balanced);
-    RUN_TEST(poison_fill_cleared_by_init);
+    RUN_TEST(allocate_three_blocks_builds_the_forward_chain);
+    RUN_TEST(link_stores_do_not_spill_into_the_neighbouring_cell);
+    RUN_TEST(owner_is_the_low_byte_of_the_current_process);
+    RUN_TEST(write_mode_uses_the_reserve_block);
+    RUN_TEST(write_mode_ignores_the_pending_count);
+    RUN_TEST(read_mode_enqueues_and_waits_when_requests_are_pending);
+    RUN_TEST(write_mode_without_a_reserve_waits_for_the_eventcount_plus_one);
+    RUN_TEST(request_queue_write_index_wraps_from_0x40_to_1);
+    RUN_TEST(pool_is_grown_when_growth_is_enabled);
+    RUN_TEST(pool_is_not_grown_for_process_type_5);
+    RUN_TEST(pool_is_not_grown_when_growth_is_disabled);
 
-    printf("\n%d passed, %d failed\n", tests_passed, tests_failed);
+    printf("\n  Results: %d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed > 0 ? 1 : 0;
 }

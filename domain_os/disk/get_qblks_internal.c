@@ -19,6 +19,31 @@
  *   - Links blocks through forward pointer (offset 0x00)
  *   - Terminates list with NULL pointers on last block
  *
+ * A5 is not loaded here: the function inherits the disk module base
+ * 0x00E7A1CC (DISK_$DATA) from its callers, so every A5-relative cell below
+ * is a module global rather than per-process data.
+ *
+ * Allocation loop (0x00E3BF90-0x00E3BFD0), one iteration:
+ *   movea.l (0xc0,A5),A2 ; clr.l  (0xc,A2)         ; status  = 0  (longword)
+ *   movea.l (0xc0,A5),A2 ; clr.w  (0x1c,A2)        ; flags   = 0  (word)
+ *   movea.l (0xc0,A5),A2 ; move.b (A0),(0x1e,A2)   ; owner   = PROC1_$CURRENT low byte
+ *   movea.l (0xc0,A5),A2 ; clr.b  (0x1f,A2)        ; reserved = 0
+ *   cmp.w   D1w,D2w ; bne.b + movea.l (0x10,A6),A2 ; *last_out = free head
+ *                     move.l  (0xc0,A5),(A2)
+ *   movea.l (0xc0,A5),A2 ; move.l (0x8,A2),(A2)    ; forward   = free_next
+ *   movea.l (0xc0,A5),A2 ; move.l (0x8,A2),(0xc0,A5) ; head    = free_next
+ *   addq.w  #0x1,D1w ; dbf D0w,0x00e3bf90
+ *
+ * A0 is set up once at 0x00E3BF8C as `lea (0x1,A1),A0` with A1 = A3 =
+ * 0x00E20608 = &PROC1_$CURRENT, i.e. the LOW byte of that word on the
+ * big-endian target; `(uint8_t)PROC1_$CURRENT` expresses the same value
+ * without a byte-order assumption.
+ *
+ * The growth test at 0x00E3BEE4 is `cmpi.w #0x5,(-0x2,A4,D1w*0x1)` with
+ * A4 = 0x00E2612C and D1 = PROC1_$CURRENT * 2, which addresses
+ * 0x00E2612A + 2*current -- exactly PROC1_$TYPE[PROC1_$CURRENT], since
+ * proc1/proc1.h places the PROC1_$TYPE array at 0x00E2612A.
+ *
  * Parameters:
  *   count     - Number of queue blocks to allocate
  *   mode      - Negative for write mode, non-negative for read
@@ -30,6 +55,22 @@
  */
 
 #include "disk/disk_internal.h"
+#include "ec/ec.h"
+#include "ml/ml.h"
+#include "proc1/proc1.h"
+#include "arch/arch.h"
+
+/*
+ * DMOD_RESERVE_BLOCK (0x0BC) and DMOD_FREE_HEAD (0x0C0) are four bytes
+ * apart, and DISK_QBLK_FORWARD (0x00) and DISK_QBLK_FREE_NEXT (0x08) are
+ * likewise four-byte cells with live fields immediately above them: every
+ * one of them is moved with a `move.l`/`clr.l` and holds a 32-bit target
+ * address, not a host pointer.  They are read and written as uint32_t and
+ * converted at the boundary with ARCH_VA_TO_PTR / ARCH_PTR_TO_VA (identity
+ * casts on m68k), so a 64-bit host build does not overrun the neighbouring
+ * field.  The two output parameters stay host pointers, which is how
+ * disk/io.c uses them.
+ */
 
 void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void *last_out)
 {
@@ -60,6 +101,9 @@ void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void 
                 if (PROC1_$TYPE[PROC1_$CURRENT] == 5) {
                     break;
                 }
+                /* 0x00E3BEEC: the caller reserves an extra word above the
+                 * argument and pops it with the argument at 0x00E3BEF4
+                 * without ever reading it. */
                 disk_$grow_qblk_pool(count);
                 continue;  /* Re-check availability */
             }
@@ -72,8 +116,10 @@ void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void 
         if (mode < 0) {
             /* Write mode: check for reserve block */
             if ((int8_t)*(uint8_t *)(data + DMOD_RESERVE_AVAIL) < 0) {
-                /* Reserve available - swap it into the free list */
-                *(void **)(data + DMOD_FREE_HEAD) = *(void **)(data + DMOD_RESERVE_BLOCK);
+                /* Reserve available - swap it into the free list.
+                 * 0x00E3BF02: move.l (0xbc,A5),(0xc0,A5) */
+                *(uint32_t *)(data + DMOD_FREE_HEAD) =
+                    *(uint32_t *)(data + DMOD_RESERVE_BLOCK);
                 *(uint8_t *)(data + DMOD_RESERVE_AVAIL) = 0;
                 goto allocate;
             }
@@ -107,8 +153,10 @@ void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void 
     } while (mode < 0);  /* Write mode loops; read mode falls through */
 
 allocate:
-    /* Record the first block (current free list head) */
-    *(void **)first_out = *(void **)(data + DMOD_FREE_HEAD);
+    /* Record the first block (current free list head).
+     * 0x00E3BF7E: move.l (0xc0,A5),(A0) */
+    *(void **)first_out =
+        ARCH_VA_TO_PTR(*(uint32_t *)(data + DMOD_FREE_HEAD));
 
     /* Walk the free list, initialize each block, build allocated chain */
     int16_t remaining = count - 1;
@@ -117,14 +165,8 @@ allocate:
         int16_t block_num = 1;
 
         do {
-            uint8_t *block = *(uint8_t **)(data + DMOD_FREE_HEAD);
-
-            /* Save next-free pointer before modifying block fields.
-             * On m68k (32-bit), the pointer at offset 0x08 (4 bytes) does not
-             * overlap with the status field at offset 0x0C. On 64-bit hosts,
-             * reading void* at offset 0x08 reads 8 bytes which would overlap.
-             * Hoisting the read preserves correct semantics on all platforms. */
-            void *next_free = *(void **)(block + DISK_QBLK_FREE_NEXT);
+            uint32_t block_va = *(uint32_t *)(data + DMOD_FREE_HEAD);
+            uint8_t *block = ARCH_VA_TO_PTR(block_va);
 
             /* Initialize block fields */
             *(uint32_t *)(block + DISK_QBLK_STATUS) = 0;
@@ -132,22 +174,27 @@ allocate:
             *(block + DISK_QBLK_OWNER) = owner;
             *(block + DISK_QBLK_RESERVED) = 0;
 
-            /* Record last block when we reach the count'th one */
+            /* Record last block when we reach the count'th one.
+             * 0x00E3BFB8: move.l (0xc0,A5),(A2) */
             if (count == block_num) {
-                *(void **)last_out = block;
+                *(void **)last_out = ARCH_VA_TO_PTR(block_va);
             }
 
+            /* 0x00E3BFC0 and 0x00E3BFC8 both re-read the free_next link;
+             * nothing written above touches offset 0x08. */
+            uint32_t next_free = *(uint32_t *)(block + DISK_QBLK_FREE_NEXT);
+
             /* Link: block->forward = block->free_next (build allocated chain) */
-            *(void **)(block + DISK_QBLK_FORWARD) = next_free;
+            *(uint32_t *)(block + DISK_QBLK_FORWARD) = next_free;
             /* Advance free list head to next block */
-            *(void **)(data + DMOD_FREE_HEAD) = next_free;
+            *(uint32_t *)(data + DMOD_FREE_HEAD) = next_free;
 
             block_num++;
             remaining--;
         } while (remaining != -1);  /* dbf loop semantics */
     }
 
-    /* Terminate the last allocated block */
+    /* Terminate the last allocated block (0x00E3BFDA, then 0x00E3BFDE) */
     uint8_t *last_block = *(uint8_t **)last_out;
     *(uint32_t *)(last_block + DISK_QBLK_FREE_NEXT) = 0;
     *(uint32_t *)(last_block + DISK_QBLK_FORWARD) = 0;

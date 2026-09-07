@@ -48,7 +48,7 @@ uint32_t PROC2_$SIGSETMASK(uint32_t *mask_ptr, uint32_t *result)
          *             entry+0x1C, the entry's own 1-based table index.
          * 0x00E3F720: bsr.w 0x00E3ECEA
          */
-        PROC2_$DELIVER_PENDING_INTERNAL((int16_t)entry->owner_session);
+        PROC2_$DELIVER_PENDING_INTERNAL((int16_t)entry->self_index);
     }
 
     ML_$UNLOCK(PROC2_LOCK_ID);

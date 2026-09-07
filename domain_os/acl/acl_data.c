@@ -58,6 +58,13 @@ uint8_t ACL_$ASID_SUSER_BITMAP[8];          /* 0xE935C4: 1=used suser */
 acl_$cache_slot_t ACL_$ACL_CACHE[ACL_CACHE_SLOTS];  /* 0xE88834 */
 
 /*
+ * The 0x400-byte scratch image acl_$load_acl_image hands to
+ * acl_$convert_image (A5+0x400 = 0xE7D354).  It ends exactly where
+ * ACL_$CACHE_DIR (A5+0x800) begins.
+ */
+acl_$cache_slot_t ACL_$IMAGE_BUF;                               /* 0xE7D354 */
+
+/*
  * The ACL image cache directory, in the ACL module's A5 data area
  * (A5 = 0xE7CF54).  See acl/acl_internal.h for how the element counts were
  * fixed; ACL_$CACHE_LRU_HEAD shares its address with ACL_$SUPER_COUNT[0],

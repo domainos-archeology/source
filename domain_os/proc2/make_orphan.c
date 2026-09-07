@@ -59,7 +59,7 @@
  *   00e40db6  muls.w #0xe4,D0
  *   00e40dba  lea (0x0,A1,D0),A0         ; A0 = scan entry + 0xE4
  *   00e40dbe  move.w (-0xc2,A0),D0w      ; scan->next_child_sibling (+0x22)
- *   00e40dc2  cmp.w (-0xc8,A2),D0w       ; target->owner_session (+0x1C)
+ *   00e40dc2  cmp.w (-0xc8,A2),D0w       ; target->self_index (+0x1C)
  *   00e40dc6  bne.b 0x00e40d9c
  *   00e40dc8  move.w D2w,-(SP)           ; predecessor index
  *   00e40dca  move.w D3w,-(SP)           ; target index
@@ -70,13 +70,13 @@
  *
  * Note on the loop test at 0x00E40DC2: the predecessor search compares the
  * scanned entry's next_child_sibling against the TARGET's field at +0x1C
- * (proc2_info_t.owner_session), not against target_idx itself.  Every other
+ * (proc2_info_t.self_index), not against target_idx itself.  Every other
  * use of +0x1C is as a 1-based entry index (PROC_FORK_EC / PROC_CR_REC_EC
  * are indexed by it, PROC2_$INIT sets entry 1's copy to 1, and PROC2_$FORK
  * only ever reads it), so the field holds the entry's own table index,
  * assigned once when the slot is initialised.  That makes this test
- * equivalent to comparing against target_idx.  The field keeps its existing
- * name here; renaming it is tracked separately.
+ * equivalent to comparing against target_idx.  Settled and renamed to
+ * self_index by bead source-e8c8; see proc2/proc2.h for the full evidence.
  */
 
 #include "proc2/proc2_internal.h"
@@ -139,7 +139,7 @@ void PROC2_$MAKE_ORPHAN(uid_t *proc_uid, status_$t *status_ret)
                 for (;;) {
                     /* 0x00E40DAE..0x00E40DC6 */
                     if ((int16_t)P2_INFO_ENTRY(scan_idx)->next_child_sibling ==
-                        (int16_t)target->owner_session) {
+                        (int16_t)target->self_index) {
                         break;
                     }
 

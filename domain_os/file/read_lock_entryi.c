@@ -23,20 +23,20 @@
 #include "cal/cal.h"
 
 /*
- * Lock table base addresses
+ * Lock entries are reached through FILE_$LOT_ENTRY() (file/file_internal.h).
+ * 0x00E60A74 and 0x00E60AE0 both load `#0xe935cc` - the table base, entry 1 -
+ * and then read fields at negative displacements off `base + index*0x1C`, the
+ * END of entry `index`.  The private biased base this file used to define has
+ * been dropped in favour of the shared 1-based accessor.
  */
-#define LOT_DATA_BASE       0xE935B0
-#define LOT_ENTRY_SIZE      0x1C
 
 /*
- * Per-process lock table (per-ASID)
- * Located at 0xEA202C + ASID*300 + offset
- * Offset 0x1D98 from base+ASID*300 has the lock count
- * Offset 0x2662 is subtracted to get actual lock index array
+ * The per-process lock table is reached through FILE_$PROC_LOT_SLOT() and
+ * FILE_$PROC_LOT_COUNT() (file/file_internal.h).  0x00E609D6 and 0x00E60A06
+ * load `#0xea202c`; slot `i` of row `asid` is at 0xEA202C + asid*300 + i*2
+ * - 0x2662 (row base 0xE9F9CC, 1-based) and the row's slot high-water mark is
+ * at 0xEA202C + asid*300 + 0x1D98 (0xEA3DC4 + asid*2).
  */
-#define PROC_LOT_TABLE_BASE     0xEA202C
-#define PROC_LOT_ENTRY_SIZE     300     /* 0x12C */
-#define PROC_LOT_COUNT_OFFSET   0x1D98
 
 /* CAL_$BOOT_VOLX is declared in cal/cal.h */
 
@@ -124,12 +124,6 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
     }
 
     /*
-     * Compute base address for per-ASID table
-     * Table is at 0xEA202C + ASID*300
-     */
-    int32_t proc_table_base = PROC_LOT_TABLE_BASE + asid * PROC_LOT_ENTRY_SIZE;
-
-    /*
      * Main search loop - may retry if lock holder verification fails
      */
     do {
@@ -140,27 +134,23 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
 
         if (is_per_asid < 0) {
             /*
-             * Per-ASID table query
-             * Lock count is at proc_table_base + 0x1D98
-             * Lock indices are at proc_table_base - 0x2662 + index*2
+             * Per-ASID table query: walk slots start_index..lock_count of the
+             * 1-based row for `asid` (0x00E609D6 / 0x00E60A06).
              */
-            uint16_t *count_ptr = (uint16_t *)(proc_table_base + PROC_LOT_COUNT_OFFSET);
-            uint16_t lock_count = *count_ptr;
+            uint16_t lock_count = FILE_$PROC_LOT_COUNT(asid);
 
             if (start_index <= lock_count) {
                 int16_t remaining = lock_count - start_index;
                 uint16_t slot = start_index;
-                int32_t entry_offset = start_index * 2;
 
                 while (remaining >= 0) {
-                    uint16_t *entry_ptr = (uint16_t *)(proc_table_base + entry_offset - 0x2662);
-                    if (*entry_ptr != 0) {
-                        found_entry = *entry_ptr;
+                    uint16_t slot_value = FILE_$PROC_LOT_SLOT(asid, slot);
+                    if (slot_value != 0) {
+                        found_entry = slot_value;
                         start_index = slot + 1;
                         break;
                     }
                     slot++;
-                    entry_offset += 2;
                     remaining--;
                 }
             }
@@ -172,26 +162,23 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
             if (start_index <= FILE_$LOT_HIGH) {
                 int16_t remaining = FILE_$LOT_HIGH - start_index;
                 uint16_t entry_idx = start_index;
-                uint8_t *entry_ptr = (uint8_t *)(LOT_DATA_BASE + LOT_ENTRY_SIZE +
-                                                  entry_idx * LOT_ENTRY_SIZE);
+                file_lock_entry_detail_t *scan = FILE_$LOT_ENTRY(entry_idx);
 
                 while (remaining >= 0) {
                     /*
                      * Check if entry is valid (refcount != 0)
-                     * and matches volume filter (if volx != 0)
+                     * and matches volume filter (if volx != 0).
+                     * refcount is +0x18 ((-0x4,An)), flags1 +0x19 ((-0x3,An))
+                     * and flags2 +0x1B ((-0x1,An)) off the entry end.
                      */
-                    uint8_t *refcount_ptr = entry_ptr - 4;  /* Offset 0x18 - 0x1C = -4 */
-                    uint8_t *flags1_ptr = entry_ptr - 3;    /* Offset 0x19 - 0x1C = -3 */
-                    uint8_t *flags2_ptr = entry_ptr - 1;    /* Offset 0x1B - 0x1C = -1 */
-
-                    if (*refcount_ptr != 0) {
+                    if (scan->refcount != 0) {
                         int8_t vol_match = 0;
 
                         if (volx == 0) {
                             vol_match = -1;  /* No filter - match all */
-                        } else if ((*flags2_ptr & 0x04) == 0) {
+                        } else if ((scan->flags2 & 0x04) == 0) {
                             /* Local entry - check volume (stored in flags1 bits 0-5) */
-                            uint8_t entry_vol = (*flags1_ptr) & 0x3F;
+                            uint8_t entry_vol = scan->flags1 & 0x3F;
                             if (entry_vol == volx) {
                                 vol_match = -1;
                             }
@@ -205,7 +192,7 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
                     }
 
                     entry_idx++;
-                    entry_ptr += LOT_ENTRY_SIZE;
+                    scan++;
                     remaining--;
                 }
             }
@@ -223,35 +210,34 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
         /*
          * Found an entry - extract information
          */
-        int32_t entry_offset = found_entry * LOT_ENTRY_SIZE;
-        uint8_t *entry_base = (uint8_t *)(LOT_DATA_BASE + LOT_ENTRY_SIZE + entry_offset);
+        file_lock_entry_detail_t *entry = FILE_$LOT_ENTRY(found_entry);
 
-        /* File UID: at offsets -0x10 and -0x0C */
-        info_out->file_uid.high = *(uint32_t *)(entry_base - 0x10);
-        info_out->file_uid.low = *(uint32_t *)(entry_base - 0x0C);
+        /* File UID: +0x0C and +0x10, read at (-0x10,An)/(-0xc,An) */
+        info_out->file_uid.high = entry->uid_high;
+        info_out->file_uid.low = entry->uid_low;
 
-        /* Lock side: bit 7 of flags2 (at -0x01) */
-        info_out->side = (*(entry_base - 0x01) >> 7) & 1;
+        /* Lock side: bit 7 of flags2 (+0x1B, (-0x1,An)) */
+        info_out->side = (entry->flags2 >> 7) & 1;
 
         /* Lock mode: bits 3-6 of flags2 */
-        info_out->mode = ((*(entry_base - 0x01)) & 0x78) >> 3;
+        info_out->mode = (entry->flags2 & 0x78) >> 3;
 
         /* Sequence number */
         if (is_per_asid < 0) {
-            /* Per-ASID: use refcount byte */
-            info_out->sequence = *(entry_base - 4);
+            /* Per-ASID: use refcount byte (+0x18, (-0x4,An)) */
+            info_out->sequence = entry->refcount;
         } else {
-            /* Global: use sequence field at -0x06 */
-            info_out->sequence = *(uint16_t *)(entry_base - 0x06);
+            /* Global: use sequence field (+0x16, (-0x6,An)) */
+            info_out->sequence = entry->sequence;
         }
 
-        /* Context: at offset -0x1C */
-        info_out->context = *(uint32_t *)(entry_base - 0x1C);
+        /* Context: +0x00, read at (-0x1c,An) */
+        info_out->context = entry->context;
 
         /*
          * Node/port information depends on remote flag (bit 2 of flags2)
          */
-        uint8_t remote_flag = (*(entry_base - 0x01)) & 0x04;
+        uint8_t remote_flag = entry->flags2 & 0x04;
 
         if (remote_flag) {
             /*
@@ -260,8 +246,8 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
              * owner_node = NODE_$ME (we are the owner)
              * remote_info = ROUTE_$PORT
              */
-            info_out->holder_node = *(uint32_t *)(entry_base - 0x18);
-            info_out->holder_port = *(uint32_t *)(entry_base - 0x14);
+            info_out->holder_node = entry->node_low;
+            info_out->holder_port = entry->node_high;
             info_out->owner_node = NODE_$ME;
             info_out->remote_info = ROUTE_$PORT;
         } else {
@@ -273,8 +259,8 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
              */
             info_out->holder_node = NODE_$ME;
             info_out->holder_port = ROUTE_$PORT;
-            info_out->owner_node = *(uint32_t *)(entry_base - 0x18);
-            info_out->remote_info = *(uint32_t *)(entry_base - 0x14);
+            info_out->owner_node = entry->node_low;
+            info_out->remote_info = entry->node_high;
         }
 
         ML_$UNLOCK(5);

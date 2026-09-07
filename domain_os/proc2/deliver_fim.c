@@ -203,7 +203,7 @@ handle_fault:
 
 no_signal:
     result = 0;
-    FIM_$ADVANCE_SIGNAL_DELIVERY();
+    FIM_$ACKNOWLEDGE();
 
 done:
     ML_$UNLOCK(PROC2_LOCK_ID);

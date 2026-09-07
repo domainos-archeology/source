@@ -368,7 +368,7 @@ static void setup_table(void)
     parent()->uid.high = 0x01020304u;
     parent()->uid.low = 0x05060708u;
     parent()->asid = 3;
-    parent()->owner_session = PARENT_IDX;
+    parent()->self_index = PARENT_IDX;
     parent()->cr_rec = 0x00110000u;
     parent()->cr_rec_2 = 0x00220000u;
     parent()->first_child_idx = 6;
@@ -390,8 +390,8 @@ static void setup_table(void)
     parent()->sig_mask_1    = 0x84848484u;
     parent()->sig_mask_4    = 0x8C8C8C8Cu;
 
-    /* The child slot's owner_session is what indexes the EC pair. */
-    child()->owner_session = CHILD_IDX;
+    /* The child slot's self_index is what indexes the EC pair. */
+    child()->self_index = CHILD_IDX;
 }
 
 static void run_fork(int32_t flags_value, uid_t *uid_ret, uint16_t *upid_ret,
@@ -679,7 +679,7 @@ static void test_eventcount_index(void)
     uid_t uid; uint16_t upid; void *ec; status_$t st;
 
     setup_table();
-    child()->owner_session = 3;
+    child()->self_index = 3;
     /* poison the entry the buggy code would have used (entry+0x24) */
     child()->first_debug_target_idx = 6;
     PROC2_$EC[6 - 1].fork_ec.value = 0x5555;

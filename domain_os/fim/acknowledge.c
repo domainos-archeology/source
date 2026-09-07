@@ -1,5 +1,5 @@
 /*
- * FIM_$ADVANCE_SIGNAL_DELIVERY - Advance signal delivery mechanism
+ * FIM_$ACKNOWLEDGE - Advance signal delivery mechanism
  *
  * Updates the quit value for the current address space from the quit
  * event counter, clears the quit inhibit flag, and advances the
@@ -8,6 +8,17 @@
  * Called during signal acknowledge and signal delivery operations.
  *
  * Original address: 0x00e0a96c
+ *
+ * The name comes from the SR10.4 kernel link maps
+ * (sr10.4-install/sau7/domain_os.map), which list the FIM_ module's entries
+ * in address order: INIT_FF_POOL, DISPOSE_FF, RESTORE_FF, BUILD_DF,
+ * ACKNOWLEDGE, INSTALL, GET_FIM_ADDR, INIT_PID, FREE_PID, GET_USER_PC.  In
+ * the SAU2 image FIM_$BUILD_DF is 0x00E0A458 and the next four entries are
+ * 0x00E0A96C, 0x00E0A9C2 (INSTALL), 0x00E0AA04 (GET_FIM_ADDR) and
+ * 0x00E0AA24 (INIT_PID), which pins this one as FIM_$ACKNOWLEDGE.  Until
+ * bead source-y6s0 the tree carried it under the descriptive name it had
+ * been given here, spelled the way this file used to be named:
+ * fim/advance_signal_delivery.c.
  */
 
 #include "fim/fim_internal.h"
@@ -43,7 +54,7 @@
     #define FIM_DELIV_EC(asid)      (&fim_dummy_ec)
 #endif
 
-void FIM_$ADVANCE_SIGNAL_DELIVERY(void)
+void FIM_$ACKNOWLEDGE(void)
 {
     int16_t asid;
 

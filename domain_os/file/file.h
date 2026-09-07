@@ -78,7 +78,9 @@ _Static_assert(sizeof(file_$obj_loc_t)                == 0x20, "sizeof obj_loc")
 /* Number of entries in the lock table (hash buckets) */
 #define FILE_LOCK_TABLE_ENTRIES     58
 
-/* Number of lock entry slots */
+/* Number of lock entry slots linked by FILE_$LOCK_INIT's free-list loop
+ * (`move.w #0x6ff,D0w` at 0x00E32784 -> 0x700 dbf iterations).  Entries are
+ * numbered 1..FILE_LOCK_ENTRY_COUNT; see FILE_$LOT_ENTRY(). */
 #define FILE_LOCK_ENTRY_COUNT       1792
 
 /* Size of each lock table entry in bytes */
@@ -182,34 +184,23 @@ _Static_assert(sizeof(file_$obj_loc_t)                == 0x20, "sizeof obj_loc")
  */
 
 /*
- * File lock entry structure
- * Size: 28 bytes (0x1C)
- *
- * Used for tracking individual file locks. Organized as a free list
- * during initialization, then allocated as locks are requested.
+ * The lock-object-table entry (file_lock_entry_detail_t, 0x1C bytes) and the
+ * FILE_$LOCK_ENTRIES table itself are private to the FILE subsystem; they live
+ * in file/file_internal.h.  Bead source-0sgi removed a second, wrong model of
+ * the same table that used to be declared here.
  */
-typedef struct file_lock_entry_t {
-    uint8_t     data[0x14];     /* 0x00: Lock-specific data (TBD) */
-    uint16_t    next_free;      /* 0x14: Next free entry index (free list) */
-    uint16_t    reserved1;      /* 0x16: Reserved */
-    uint8_t     flags;          /* 0x18: Lock flags */
-    uint8_t     reserved2[3];   /* 0x19: Padding to 28 bytes */
-} file_lock_entry_t;
-
-/* Layout recovered from the disassembly -- see the field comments above. */
-_Static_assert(__builtin_offsetof(file_lock_entry_t, data) == 0x00, "file_lock_entry_t.data");
-_Static_assert(__builtin_offsetof(file_lock_entry_t, next_free) == 0x14, "file_lock_entry_t.next_free");
-_Static_assert(__builtin_offsetof(file_lock_entry_t, reserved1) == 0x16, "file_lock_entry_t.reserved1");
-_Static_assert(__builtin_offsetof(file_lock_entry_t, flags) == 0x18, "file_lock_entry_t.flags");
-_Static_assert(__builtin_offsetof(file_lock_entry_t, reserved2) == 0x19, "file_lock_entry_t.reserved2");
-_Static_assert(sizeof(file_lock_entry_t) == 0x1C, "file_lock_entry_t size");
 
 /*
  * File lock table entry structure
  * Size: 300 bytes (0x12C)
  *
  * Hash bucket entry for file lock lookups by UID.
- * First 2 bytes are preserved during init (possibly count or head pointer).
+ *
+ * FILE_$LOCK_INIT clears all 300 bytes of every row (0x00E3276C clears the
+ * word at 0xE9F9CA + 2 = 0xE9F9CC first, and the xref 0x00E3276C -> 0xE9F9CC
+ * pins it), so the `header` word is NOT preserved.  Address rows through
+ * FILE_$PROC_LOT_SLOT() in file/file_internal.h, which numbers the 150 slots
+ * 1-based the way the machine code does.
  */
 typedef struct file_lock_table_entry_t {
     uint16_t    header;         /* 0x00: Entry header (preserved during init) */
@@ -264,9 +255,6 @@ extern file_lock_control_t FILE_$LOCK_CONTROL;
 
 /* Lock table (58 entries) */
 extern file_lock_table_entry_t FILE_$LOCK_TABLE[];
-
-/* Lock entries (1792 entries) */
-extern file_lock_entry_t FILE_$LOCK_ENTRIES[];
 
 /* UID lock eventcount */
 extern ec_$eventcount_t FILE_$UID_LOCK_EC;

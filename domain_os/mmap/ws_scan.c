@@ -62,10 +62,23 @@ uint32_t MMAP_$WS_SCAN(uint16_t wsl_index, int16_t mode, uint32_t pages_needed, 
                                (page->flags2 & MMAPE_FLAG2_MODIFIED);
 
             if (is_dirty && !(page->flags2 & MMAPE_FLAG2_ON_DISK)) {
-                /* Check segment info for removability */
-                uint16_t seg = page->segment;
-                void *seg_info = SEGMENT_TABLE[seg];
-                if ((*(uint16_t*)((char*)seg_info + 0x0E)) & 0x1000) {
+                /*
+                 * The owning object's attribute flags decide whether the
+                 * page may be taken:
+                 *
+                 *   00e0d424  move.w (-0x1ffe,A3),D1w  ; mmape->segment
+                 *   00e0d428  movea.l #0xec5400,A1
+                 *   00e0d42e  lsl.w #0x2,D1w
+                 *   00e0d430  move.w D1w,D0w
+                 *   00e0d432  lsl.w #0x2,D0w
+                 *   00e0d434  add.w D0w,D1w            ; seg * 0x14
+                 *   00e0d436  lea (0x0,A1,D1w),A1
+                 *   00e0d43a  movea.l (-0x10,A1),A4    ; SEG_ASTE(seg)->aote
+                 *   00e0d43e  move.w (0xe,A4),D0w      ; attribute flags word
+                 *   00e0d442  btst.l #0xc,D0
+                 */
+                aote_t *aote = MMAP_$SEG_ASTE_FOR(page->segment)->aote;
+                if (MMAP_AOTE_ATTR_FLAGS(aote) & MMAP_AOTE_ATTR_FLAG_BIT12) {
                     should_remove = true;
                 }
             }
@@ -111,15 +124,27 @@ uint32_t MMAP_$WS_SCAN(uint16_t wsl_index, int16_t mode, uint32_t pages_needed, 
                         free_list = current_vpn;
                     }
                 } else {
-                    /* Dirty page - check if needs flush */
-                    uint16_t seg = page->segment;
-                    void *seg_info = SEGMENT_TABLE[seg];
+                    /*
+                     * Dirty page - ask the owning object whether the write
+                     * has to be flushed.  Both arms rebuild the same
+                     * 0xEC5400 + seg * 0x14 address and read (-0x10,A0):
+                     *
+                     *   00e0d4da-00e0d4ec  seg * 0x14 (ON_DISK arm)
+                     *   00e0d4f0  movea.l (-0x10,A0),A1  ; SEG_ASTE(seg)->aote
+                     *   00e0d4f4  tst.w (0x28,A1) / sne  ; high word of
+                     *                                      aote->len_high
+                     *   00e0d4fc-00e0d50e  seg * 0x14 (not-ON_DISK arm)
+                     *   00e0d512  movea.l (-0x10,A0),A1
+                     *   00e0d516  tst.w (0x8,A1) / smi   ; sign of the high
+                     *                                      word of vol_uid
+                     */
+                    aote_t *aote = MMAP_$SEG_ASTE_FOR(page->segment)->aote;
 
                     boolean needs_flush;
                     if (page->flags2 & MMAPE_FLAG2_ON_DISK) {
-                        needs_flush = (*(int16_t*)((char*)seg_info + 0x28)) != 0;
+                        needs_flush = (aote->len_high >> 16) != 0;
                     } else {
-                        needs_flush = (*(int16_t*)((char*)seg_info + 0x08)) < 0;
+                        needs_flush = (aote->vol_uid & 0x80000000u) != 0;
                     }
 
                     if (needs_flush) {
