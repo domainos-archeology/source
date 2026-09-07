@@ -185,7 +185,7 @@ void SUMA_$RCV(uint32_t param_1, uint8_t data_byte)
              * 0x00E1AE80 move.w #0x4,-(SP)  -> data_size = 4
              */
             DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q,
-                              (void **)&PTR_TERM_$ENQUEUE_TPAD_00e1aecc,
+                              &PTR_TERM_$ENQUEUE_TPAD_00e1aecc,
                               (void **)callback_data,
                               4, true,
                               &status);

@@ -9,6 +9,7 @@
 #define TTY_INTERNAL_H
 
 #include "tty/tty.h"
+#include "dxm/dxm.h"
 
 /*
  * ============================================================================
@@ -393,10 +394,12 @@ extern uint32_t DAT_00e2ddd8;
 extern uint8_t tty_$word_sep_bitmap[];
 
 /*
- * PTR_TTY_$I_DXM_SIGNAL - Pointer to TTY_$I_DXM_SIGNAL function
+ * PTR_TTY_$I_DXM_SIGNAL - cell holding TTY_$I_DXM_SIGNAL's address
  *
- * Used for DXM callback registration.
+ * TTY_$I_SIGNAL pushes the ADDRESS of this cell to DXM_$ADD_CALLBACK, so the
+ * cell holds the callback's 4-byte code address.  dxm_$callback_t keeps the
+ * queue entry 16 bytes on every target (source-wy9y).
  */
-extern m68k_ptr_t PTR_TTY_$I_DXM_SIGNAL;
+extern dxm_$callback_t PTR_TTY_$I_DXM_SIGNAL;
 
 #endif /* TTY_INTERNAL_H */

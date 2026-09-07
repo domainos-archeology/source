@@ -10,8 +10,8 @@
  * via FP_$GET_FP. When done (typically at context switch), it
  * releases ownership via FP_$PUT_FP.
  *
- * FPU state is saved per-address space in a save area indexed by
- * AS ID * 0x14A (330 bytes per AS).
+ * FPU state is saved per-address space in a table whose base is the
+ * pointer FP_$SAVEP, indexed by AS ID * 0x14A (330 bytes per AS).
  *
  * All FP operations are protected by an exclusion lock to ensure
  * atomic context switching.
@@ -32,19 +32,11 @@
 /* Size of FP save area per address space (330 bytes) */
 #define FP_SAVE_AREA_SIZE       0x14A
 
-/* FP state save area contents:
- *   Offset 0x00: State pointer (4 bytes)
- *   Offset 0x04: Flags/format (2 bytes)
- *   Offset 0x06: FPCR (4 bytes)
- *   Offset 0x0A: FPSR (4 bytes)
- *   Offset 0x0E: FPIAR (4 bytes)
- *   Offset 0x12: FP0-FP7 (8 * 12 = 96 bytes extended precision)
- *   Offset 0x72: Internal state from FSAVE (variable, up to 184 bytes)
+/*
+ * A slot's layout is described in fp/fp_internal.h: the LAST longword of
+ * the slot is a pointer to the top of the saved frame, and the frame is
+ * written downward from there.  The slot is not a forward-laid-out record.
  */
-
-/* FP state flags */
-#define FP_STATE_VALID          0xFFFF  /* State is valid and has FP regs */
-#define FP_STATE_INTERNAL_ONLY  0x0000  /* Only internal state, no regs */
 
 /*
  * ============================================================================
@@ -64,14 +56,22 @@
 extern uint16_t FP_$OWNER;
 
 /*
- * FP_$SAVEP - FP save pending flag
+ * FP_$SAVEP - base of the per-address-space FP save-area table
  *
- * Non-zero if an FP save is pending (the FPU state needs
- * to be saved before switching owners).
+ * This is a POINTER, not a flag (source-djly).  fp_$switch_owner_d2
+ * (0x00E21B1A `movea.l (-0x24c,PC),A1`) and fp_$check_owner (0x00E21D7A)
+ * load it into A1, and fp_$save_state / fp_$restore_state then address
+ * an address space's slot as (-0x4,A1,asid*FP_SAVE_AREA_SIZE).
+ *
+ * The table is allocated at boot by PEB_$LOAD_WCS
+ * (`move.l A0,(0x00e218d0).l` at 0x00E3207C) and cleared by OS_$SHUTDOWN
+ * (0x00E6D52E); a zero value means "no FPU configured", which is what
+ * FIM_$FP_ABORT (0x00E21B80) and FIM_$FP_INIT (0x00E21BB0) test with
+ * `tst.l` before doing anything.  It is zero in the image.
  *
  * Address: 0x00E218D0
  */
-extern uint32_t FP_$SAVEP;
+extern m68k_ptr_t FP_$SAVEP;
 
 /*
  * FP_$EXCLUSION - FPU access exclusion lock
@@ -106,6 +106,11 @@ extern ml_$exclusion_t FP_$EXCLUSION;
  * Parameters:
  *   asid - Address space ID to get FP context for
  *
+ * Note that the owner it installs is PROC1_$AS_ID (fp_$check_owner) while
+ * the state it restores is the caller's `asid` argument, reloaded into D2
+ * at 0x00E21D58.  The two need not be the same.
+ *
+ * Hand-written assembly: fp/sau2/fp_context.s.
  * Original address: 0x00E21D48 (40 bytes)
  */
 void FP_$GET_FP(uint16_t asid);
@@ -125,6 +130,7 @@ void FP_$GET_FP(uint16_t asid);
  * Parameters:
  *   asid - Address space ID to save FP context for
  *
+ * Hand-written assembly: fp/sau2/fp_context.s.
  * Original address: 0x00E21D94 (46 bytes)
  */
 void FP_$PUT_FP(uint16_t asid);

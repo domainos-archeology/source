@@ -24,7 +24,7 @@
  *   FIM_$SETUP_RETURN:         0x00E21878 (22 bytes)
  *   FP_$SAVEP:                 0x00E218D0 (4 bytes, data)
  *   FP_$OWNER:                 0x00E218D4 (2 bytes, data)
- *   FP_$EXCLUSION:              0x00E218D6 (4 bytes, data)
+ *   FP_$EXCLUSION:              0x00E218D6 (18 bytes, ml_$exclusion_t)
  *   FIM_$BUS_ERR:              0x00E218E8 (484 bytes; see sau2/bus_err.s)
  *   FIM_$FLINE:                0x00E21ACC (68 bytes)
  *   FIM_$FP_ABORT:             0x00E21B80 (48 bytes; stub: 2 bytes)
@@ -652,7 +652,17 @@ FIM_$SETUP_RETURN:
  * FP module data (PC-relative from FIM_$FLINE)
  *
  * In the original ROM, these were located at:
- *   FP_$SAVEP     0x00E218D0 - uint32: non-zero if FPU hardware is present
+ *   FP_$SAVEP     0x00E218D0 - pointer to the per-address-space FP
+ *                                save-area table, 0x14A bytes per AS
+ *                                (source-djly).  Not a flag: fp_$save_state
+ *                                and fp_$restore_state address a slot as
+ *                                (-0x4,A1,asid*0x14A) with A1 = this cell.
+ *                                Allocated at boot by PEB_$LOAD_WCS
+ *                                (0x00E3207C), cleared by OS_$SHUTDOWN
+ *                                (0x00E6D52E); zero == no FPU configured,
+ *                                which is what the `tst.l` in FIM_$FP_ABORT
+ *                                (0x00E21B80) and FIM_$FP_INIT (0x00E21BB0)
+ *                                is testing.
  *   FP_$OWNER     0x00E218D4 - uint16: AS ID of current FPU owner
  *   FP_$EXCLUSION 0x00E218D6 - ml_$exclusion_t: FP exclusion lock
  *
@@ -681,7 +691,7 @@ FIM_$SETUP_RETURN:
  * ==================================================================== */
         .global FP_$SAVEP
 FP_$SAVEP:
-        .long   0                       /* 0x00E218D0: non-zero if FPU present */
+        .long   0                       /* 0x00E218D0: FP save-area table base */
 
         .global FP_$OWNER
 FP_$OWNER:

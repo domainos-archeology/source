@@ -30,7 +30,7 @@ uint32_t TTY_$SPIN_LOCK = 0;
  *
  * Original address: 0xe1b8ac
  */
-m68k_ptr_t PTR_TTY_$I_DXM_SIGNAL = (m68k_ptr_t)TTY_$I_DXM_SIGNAL;
+DXM_$DEFINE_CALLBACK_CELL(PTR_TTY_$I_DXM_SIGNAL, TTY_$I_DXM_SIGNAL);
 
 /*
  * tty_$word_sep_bitmap - Word separator character bitmap

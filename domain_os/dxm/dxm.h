@@ -61,13 +61,71 @@ _Static_assert(sizeof(dxm_queue_t) == 0x1C, "dxm_queue_t must be 28 bytes");
 #endif
 
 /*
+ * ============================================================================
+ * Callback cells
+ * ============================================================================
+ *
+ * A DXM queue entry stores the callback as a 4-byte code address, and the
+ * callers hand DXM_$ADD_CALLBACK the ADDRESS of a cell holding that value
+ * (`pea PTR_...` at every call site).  Modelling such a cell as a native
+ * function pointer makes the entry 24 bytes on a 64-bit host and moves
+ * `data` from +0x04 to +0x08, so the cell is a fixed 32-bit word on every
+ * target (source-wy9y).
+ *
+ * On a target whose code addresses are 32 bits (m68k) the cell IS the code
+ * address.  On a 64-bit host it is a handle into a small registry, and
+ * dxm_$callback_fn() maps it back to a callable function pointer.  Define a
+ * cell with DXM_$DEFINE_CALLBACK_CELL so both spellings stay in one place.
+ */
+typedef void (*dxm_$callback_fn_t)(void *);
+
+typedef m68k_ptr_t dxm_$callback_t;
+
+#if defined(ARCH_M68K)
+
+#define DXM_$CALLBACK_CELL(fn) ((dxm_$callback_t)(uintptr_t)(fn))
+
+static inline dxm_$callback_fn_t dxm_$callback_fn(dxm_$callback_t cell)
+{
+    return (dxm_$callback_fn_t)(uintptr_t)cell;
+}
+
+#define DXM_$DEFINE_CALLBACK_CELL(name, fn) \
+    dxm_$callback_t name = DXM_$CALLBACK_CELL(fn)
+
+#else /* host: a code address does not fit in 32 bits */
+
+/* Registry capacity; there are five callback cells in the kernel today. */
+#define DXM_HOST_CALLBACK_MAX   32
+
+/* Register fn and return its cell value (never 0). */
+dxm_$callback_t dxm_$callback_cell(dxm_$callback_fn_t fn);
+
+/* Map a cell value back to the registered function (NULL if unregistered). */
+dxm_$callback_fn_t dxm_$callback_fn(dxm_$callback_t cell);
+
+#define DXM_$CALLBACK_CELL(fn) dxm_$callback_cell((dxm_$callback_fn_t)(fn))
+
+/*
+ * The registration cannot happen in a static initialiser (a truncated
+ * function address is not a constant expression), so the host build binds
+ * the cell before main().
+ */
+#define DXM_$DEFINE_CALLBACK_CELL(name, fn) \
+    dxm_$callback_t name; \
+    __attribute__((constructor)) static void name##_$bind(void) \
+    { name = DXM_$CALLBACK_CELL(fn); }
+
+#endif
+
+/*
  * DXM Queue Entry Structure
  *
  * Represents a single callback in the queue.
  * Size: 16 bytes
  */
 typedef struct dxm_entry_t {
-    void            (*callback)(void *);  /* 0x00: Callback function */
+    dxm_$callback_t callback;                /* 0x00: callback code address */
     uint8_t         data[DXM_MAX_DATA_SIZE]; /* 0x04: Callback data */
 } dxm_entry_t;
 
@@ -75,24 +133,14 @@ typedef struct dxm_entry_t {
  * The 16-byte stride is baked into the code: DXM_$ADD_CALLBACK scales the
  * scan index with `lsl.l #0x4,D0` (0x00E17060) and the insert index with
  * `lsl.w #0x4,D1w` (0x00E17102), and DXM_$SCAN_QUEUE does the same at
- * 0x00E17176.
- *
- * TODO(source-wy9y): on a 64-bit host `callback` is eight bytes, so `data`
- * moves from +0x04 to +0x08 and sizeof grows to 24.  The asserts below are
- * therefore ARCH_M68K-only, and host unit tests must lay their entry arrays
- * out with the image's 16-byte stride (see dxm/test/test_add_callback.c).
- * Making the field a 4-byte cell everywhere would fix it, but the cells the
- * callers hand to DXM_$ADD_CALLBACK are modelled three different ways
- * across tty/, term/, ast/ and suma/ and unifying them is a separate change.
+ * 0x00E17176.  The record is pointer-free, so these hold on every target.
  */
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(dxm_entry_t, callback) == 0x00,
                "dxm_entry_t.callback must be at 0x00");
 _Static_assert(__builtin_offsetof(dxm_entry_t, data) == 0x04,
                "dxm_entry_t.data must be at 0x04");
 _Static_assert(sizeof(dxm_entry_t) == DXM_ENTRY_SIZE,
                "dxm_entry_t must be 16 bytes (lsl #4 index scaling)");
-#endif
 
 /*
  * DXM_$ADD_CALLBACK's data_size / check_dup pair
@@ -178,7 +226,8 @@ void DXM_$INIT(void);
  *
  * Parameters:
  *   queue      - Queue to add callback to (DXM_$WIRED_Q or DXM_$UNWIRED_Q)
- *   callback   - Pointer to a cell holding the callback's address
+ *   callback   - Pointer to a dxm_$callback_t cell holding the callback's
+ *                4-byte code address (every call site pushes `pea PTR_...`)
  *   data       - Pointer to a cell holding the address of the bytes to copy
  *   data_size  - Number of bytes to copy, 0..12 (word at (0x14,A6),
  *                0x00E16FF6); a larger value crashes the system
@@ -189,9 +238,9 @@ void DXM_$INIT(void);
  *
  * Original address: 0x00E16FE0
  */
-void DXM_$ADD_CALLBACK(dxm_queue_t *queue, void **callback, void **data,
-                       uint16_t data_size, boolean check_dup,
-                       status_$t *status_ret);
+void DXM_$ADD_CALLBACK(dxm_queue_t *queue, const dxm_$callback_t *callback,
+                       void **data, uint16_t data_size,
+                       boolean check_dup, status_$t *status_ret);
 
 /*
  * DXM_$SCAN_QUEUE - Process all pending callbacks in a queue

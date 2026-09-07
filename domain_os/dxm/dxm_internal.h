@@ -21,10 +21,11 @@
  */
 
 /*
- * Pointer to DXM_$ADD_SIGNAL_CALLBACK
- * Used as callback address when adding signal callbacks.
+ * Cell holding DXM_$ADD_SIGNAL_CALLBACK's address
+ * Used as callback address when adding signal callbacks; DXM_$ADD_SIGNAL
+ * pushes its ADDRESS (`pea PTR_DXM_$ADD_SIGNAL_CALLBACK` at 0x00E172AA).
  * Original address: 0x00E172CC
  */
-extern void (*PTR_DXM_$ADD_SIGNAL_CALLBACK)(void *);
+extern dxm_$callback_t PTR_DXM_$ADD_SIGNAL_CALLBACK;
 
 #endif /* DXM_INTERNAL_H */

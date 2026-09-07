@@ -9,6 +9,7 @@
 #define AST_INTERNAL_H
 
 #include "ast/ast.h"
+#include "dxm/dxm.h"
 #include "mmap/mmap.h"
 #include "mmu/mmu.h"
 #include "time/time.h"
@@ -168,8 +169,16 @@ extern uint32_t ast_$attr_timestamp_mask;
 #define AST_$ATTR_TIMESTAMP_MASK ast_$attr_timestamp_mask
 #endif
 
-/* Set trouble callback pointer */
-extern void *PTR_AST_$SET_TROUBLE_00e07272;
+/*
+ * Cell holding AST_$SET_TROUBLE's address.  AST_$SAVE_CLOBBERED_UID pushes
+ * the ADDRESS of this cell to DXM_$ADD_CALLBACK (0x00E0724E);
+ * dxm_$callback_t keeps the queue entry 16 bytes on every target
+ * (source-wy9y).
+ *
+ * TODO(source-f4qo): no translation unit defines this cell; it needs an
+ * ast/ast_data.c with DXM_$DEFINE_CALLBACK_CELL(..., AST_$SET_TROUBLE).
+ */
+extern dxm_$callback_t PTR_AST_$SET_TROUBLE_00e07272;
 
 /* Zero buffer for page operations (1KB = 256 uint32_t) */
 extern uint32_t AST_$ZERO_BUFF[256];

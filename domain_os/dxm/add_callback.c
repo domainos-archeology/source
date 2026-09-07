@@ -54,8 +54,10 @@ static const char dxm_$no_room_msg_00e17154[] = "(DXM) No room%";
  * `move.b (d,A6),-(SP)` (DXM_$ADD_SIGNAL, TIME_$Q_SCAN_QUEUE), both of which
  * predecrement A7 by two and land the byte at the slot's low address.
  *
- * `callback` points at a cell holding the callback's address; `data` points
- * at a cell holding the address of the bytes to copy.
+ * `callback` points at a dxm_$callback_t cell holding the callback's 4-byte
+ * code address (source-wy9y: a native function pointer would make the queue
+ * entry 24 bytes on a 64-bit host); `data` points at a cell holding the
+ * address of the bytes to copy.
  *
  * Behaviour:
  *   - data_size > 12 crashes (unsigned compare at 0x00E17004).
@@ -67,8 +69,8 @@ static const char dxm_$no_room_msg_00e17154[] = "(DXM) No room%";
  *     CRASH_SYSTEM and bumps DXM_$OVERRUNS.
  *   - A successful insert advances the tail and signals the queue eventcount.
  */
-void DXM_$ADD_CALLBACK(dxm_queue_t *queue, void **callback, void **data,
-                       uint16_t data_size, boolean check_dup,
+void DXM_$ADD_CALLBACK(dxm_queue_t *queue, const dxm_$callback_t *callback,
+                       void **data, uint16_t data_size, boolean check_dup,
                        status_$t *status_ret)
 {
     uint32_t num_words;      /* D5 */
@@ -128,7 +130,7 @@ void DXM_$ADD_CALLBACK(dxm_queue_t *queue, void **callback, void **data,
                                     ((uint32_t)idx << 4));
 
             /* 0x00E17066  movea.l (A0),A1 / cmpa.l (A3),A1 */
-            if (entry->callback != (void (*)(void *))*callback) {
+            if (entry->callback != *callback) {
                 continue;
             }
 
@@ -182,7 +184,7 @@ void DXM_$ADD_CALLBACK(dxm_queue_t *queue, void **callback, void **data,
                             (int32_t)(int16_t)(uint16_t)(queue->tail << 4));
 
     /* 0x00E17110  move.l (A3),(A0) */
-    entry->callback = (void (*)(void *))*callback;
+    entry->callback = *callback;
 
     /* 0x00E17112  tst.w D5w / dbf loop at 0x00E17120 */
     if ((uint16_t)num_words != 0) {

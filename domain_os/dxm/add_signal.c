@@ -86,7 +86,7 @@ void DXM_$ADD_SIGNAL(uint16_t routine, uint16_t proc_index, uint16_t signal,
      * are two distinct Pascal parameters, not a packed longword.
      */
     DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q,
-                      (void **)&PTR_DXM_$ADD_SIGNAL_CALLBACK,
+                      &PTR_DXM_$ADD_SIGNAL_CALLBACK,
                       (void **)&data_ptr,
                       10,
                       check_dup,

@@ -19,17 +19,14 @@
  *   0x00E17164  the status longword 0x00170002 (datum too large)
  *   0x00E17154  the crash-console string "(DXM) No room%"
  *
- * HOST LAYOUT NOTE (source-wy9y): the image entry is 16 bytes and both the
- * scan and the insert scale their index by 16 (`lsl.l #0x4,D0` at
- * 0x00E17060, `lsl.w #0x4,D1w` at 0x00E17102).  On this 64-bit host
- * dxm_entry_t is 24 bytes because `callback` is a native function pointer,
- * so the entry array here is a raw byte block indexed with the image's
- * 16-byte stride, exactly the way the code under test indexes it.  Within a
- * 16-byte slot the host record occupies bytes 0..7 (callback) and 8..8+size
- * (data), so tests that put more than one entry in the queue keep their
- * payloads to 8 bytes or fewer; the 10- and 12-byte cases use a single
- * entry in an otherwise empty queue and the block carries two slots of
- * slack past the ring.
+ * LAYOUT (source-wy9y): the image entry is 16 bytes and both the scan and
+ * the insert scale their index by 16 (`lsl.l #0x4,D0` at 0x00E17060,
+ * `lsl.w #0x4,D1w` at 0x00E17102).  dxm_entry_t now models `callback` as a
+ * 4-byte dxm_$callback_t cell rather than a native function pointer, so the
+ * record is 16 bytes on the host too and the entry array below is a plain
+ * dxm_entry_t[].  DXM_$ADD_CALLBACK only ever compares and stores the cell
+ * value (`cmpa.l (A3),A1` / `move.l (A3),(A0)`), never calls through it, so
+ * the tests use literal code addresses for the two callbacks.
  */
 
 #include <stdio.h>
@@ -114,20 +111,22 @@ void CRASH_SHOW_STRING(const char *str)
 
 static dxm_queue_t q;
 
-/* Two slots of slack so a 12-byte payload in the last slot cannot run off
- * the end of the block on the host (see the HOST LAYOUT NOTE above). */
-alignas(16) static uint8_t slot_mem[(QSLOTS + 2) * DXM_ENTRY_SIZE];
+static dxm_entry_t slot_mem[QSLOTS];
 
 static dxm_entry_t *slot(int i)
 {
-    return (dxm_entry_t *)(slot_mem + (unsigned)i * DXM_ENTRY_SIZE);
+    return &slot_mem[i];
 }
 
-static void cb_a(void *p) { (void)p; }
-static void cb_b(void *p) { (void)p; }
+/*
+ * Two distinct callback cells.  The values stand in for code addresses in
+ * the image's text; nothing in DXM_$ADD_CALLBACK dereferences them.
+ */
+#define CB_A ((dxm_$callback_t)0x00E1B8ACu)
+#define CB_B ((dxm_$callback_t)0x00E72472u)   /* TERM_$ENQUEUE_TPAD */
 
-static void (*ptr_cb_a)(void *) = cb_a;
-static void (*ptr_cb_b)(void *) = cb_b;
+static const dxm_$callback_t ptr_cb_a = CB_A;
+static const dxm_$callback_t ptr_cb_b = CB_B;
 
 static void reset(void)
 {
@@ -152,11 +151,11 @@ static void reset(void)
  * The callers pass a pointer to a cell holding the callback address and a
  * pointer to a cell holding the address of the payload.
  */
-static void add(void (**cb)(void *), void *payload, uint16_t size,
+static void add(const dxm_$callback_t *cb, void *payload, uint16_t size,
                 boolean dup, status_$t *st)
 {
     void *data_cell = payload;
-    DXM_$ADD_CALLBACK(&q, (void **)cb, &data_cell, size, dup, st);
+    DXM_$ADD_CALLBACK(&q, cb, &data_cell, size, dup, st);
 }
 
 /* ------------------------------------------------------------------ */
@@ -184,7 +183,7 @@ static void test_basic_insert(void)
     assert(n_crash == 0);
     assert(q.tail == 1);                 /* 0x00E1712A */
     assert(q.head == 0);
-    assert(slot(0)->callback == cb_a);   /* 0x00E17110 */
+    assert(slot(0)->callback == CB_A);   /* 0x00E17110 */
     assert(memcmp(slot(0)->data, payload, 12) == 0);
     assert(n_lock == 1 && n_unlock == 1);
     assert(last_token == MOCK_TOKEN);
@@ -209,7 +208,7 @@ static void test_zero_size_insert(void)
 
     assert(st == status_$ok);
     assert(q.tail == 1);
-    assert(slot(0)->callback == cb_a);
+    assert(slot(0)->callback == CB_A);
     assert(slot(0)->data[0] == 0xEE);    /* untouched */
     assert(n_advance == 1);
 
@@ -260,8 +259,8 @@ static void test_check_dup_false_does_not_scan(void)
     add(&ptr_cb_a, (void *)payload, 4, false, &st);
 
     assert(q.tail == 2);
-    assert(slot(0)->callback == cb_a);
-    assert(slot(1)->callback == cb_a);
+    assert(slot(0)->callback == CB_A);
+    assert(slot(1)->callback == CB_A);
     assert(n_advance == 2);
 
     printf("test_check_dup_false_does_not_scan: PASSED\n");

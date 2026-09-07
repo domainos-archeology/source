@@ -33,7 +33,6 @@
         .extern PROC1_$READY_PCB
         .extern proc1_$reorder_if_needed
         .extern CRASH_SYSTEM
-        .extern Illegal_lock_err
 
 /*
  * PROC1_$SET_LOCK - Public entry point
@@ -90,3 +89,14 @@ proc1_$set_lock_body:
         pea     Illegal_lock_err
         jsr     CRASH_SYSTEM
         bra.s   .Lcrash                 /* loop forever (shouldn't return) */
+
+/*
+ * Illegal_lock_err - the crash status longword at 0x00E20DE4 (0x000A0002),
+ * reached by `pea (0x28c,PC)` at 0x00E20B56.  In the image it is a constant
+ * cell in this module's own code region; ML_$UNLOCK's "lock not held" test
+ * (`beq.b 0x00E20B56` at 0x00E20BA4) and PROC1_$CLR_LOCK share it.
+ */
+        .global Illegal_lock_err
+        .even
+Illegal_lock_err:
+        .long   0x000A0002

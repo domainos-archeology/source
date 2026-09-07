@@ -75,7 +75,7 @@ void DXM_$SCAN_QUEUE(dxm_queue_t *queue)
 {
     uint16_t token;
     dxm_entry_t *entry;
-    void (*callback)(void *);
+    dxm_$callback_fn_t callback;
     void *data_ptr;
 
     for (;;) {
@@ -93,8 +93,12 @@ void DXM_$SCAN_QUEUE(dxm_queue_t *queue)
         entry = (dxm_entry_t *)((char *)queue->entries +
                                 ((int16_t)queue->head << 4));
 
-        /* Extract callback and save data pointer */
-        callback = entry->callback;
+        /*
+         * Extract callback and save data pointer.  The entry holds a
+         * 4-byte code address (source-wy9y); dxm_$callback_fn() turns it
+         * back into something callable on the host.
+         */
+        callback = dxm_$callback_fn(entry->callback);
         data_ptr = entry->data;
 
         /* Advance head pointer with wraparound */

@@ -7,10 +7,10 @@
 #include "fp/fp_internal.h"
 
 /*
- * FP_$SAVEP - FP save pending flag
+ * FP_$SAVEP - base of the per-address-space FP save-area table
  *
- * Non-zero if the current FPU state needs to be saved
- * before switching to a new owner.
+ * A pointer, not a flag; see fp/fp.h (source-djly).  Zero means "no FPU
+ * configured".
  *
  * Address: 0x00E218D0
  */
@@ -22,7 +22,7 @@
  */
 #if !defined(ARCH_M68K)
 
-uint32_t FP_$SAVEP;
+m68k_ptr_t FP_$SAVEP;
 
 /*
  * FP_$OWNER - Current FPU owner (address space ID)

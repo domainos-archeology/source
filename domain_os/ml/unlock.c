@@ -48,8 +48,12 @@
  */
 /*
  * Reached through the shared crash tail at 0x00E20B56 (`beq.b 0x00E20B56` at
- * 0x00E20BA4): `pea (0x28c,PC)` -> the cell at 0x00E20DE4.  ML_$LOCK's
- * ordering check crashes with the same cell; see ml/lock.c.
+ * 0x00E20BA4): `pea (0x28c,PC)` -> the cell at 0x00E20DE4.  The same cell
+ * serves proc1_$set_lock_body's lock-ordering check (`bls.b 0x00E20B56` at
+ * 0x00E20AF8) and PROC1_$CLR_LOCK; it is emitted once, as the global
+ * `Illegal_lock_err`, in proc1/sau2/set_lock.s.  This file-static copy
+ * exists only because ML_$UNLOCK is C and must hand CRASH_SYSTEM the
+ * address of a cell with that value.
  */
 static const status_$t proc1_$illegal_lock_00e20de4 = 0x000A0002;
 

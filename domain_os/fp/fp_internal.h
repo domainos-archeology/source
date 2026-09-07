@@ -1,8 +1,14 @@
 /*
  * fp/fp_internal.h - FP Internal Declarations
  *
- * Internal data structures and helper function declarations
- * for the floating point context management subsystem.
+ * Internal data structures and helper declarations for the 68881/68882
+ * context-management subsystem.
+ *
+ * Every routine below is hand-written assembly in the image: they take
+ * their arguments in registers, fall through into one another and rely on
+ * A1 surviving across calls.  They are transcribed in
+ * fp/sau2/fp_context.s, and the prototypes here exist only so that C
+ * callers in other subsystems have a declaration to reference.
  */
 
 #ifndef FP_INTERNAL_H
@@ -18,131 +24,156 @@
  * ============================================================================
  */
 
-/* FP exclusion lock address */
-#define FP_EXCLUSION_ADDR       0x00E218D6
+/* Addresses of the FP module's data cells (see fim/sau2/fim.s, which
+ * defines them because FIM_$FLINE reaches them PC-relative). */
+#define FP_SAVEP_ADDR           0x00E218D0  /* longword: save-area base ptr */
+#define FP_OWNER_ADDR           0x00E218D4  /* word: owning AS id */
+#define FP_EXCLUSION_ADDR       0x00E218D6  /* ml_$exclusion_t, 18 bytes */
 
-/* FP owner address */
-#define FP_OWNER_ADDR           0x00E218D4
-
-/* Hardware FP owner register (on some SAU2 hardware) */
+/*
+ * Hardware FPU-owner register.  fp_$switch_owner_d2 (0x00E21B28) and
+ * fp_$check_owner (0x00E21D88) mirror the low byte of the owning AS id
+ * here, and FIM_$FP_INIT (0x00E21BDE) clears it.
+ */
 #define FP_HW_OWNER_ADDR        0x00FFB402
 
-/* FP save pending flag address */
-#define FP_SAVEP_ADDR           0x00E218D0
-
-/* FP save area base address
- * Indexed by: base + (asid * FP_SAVE_AREA_SIZE)
+/*
+ * FPCR loaded for an address space that has no saved frame
+ * (0x00E21B3E `fmove.l #0xf400,FPCR`): extended precision, round to
+ * nearest, every exception trap disabled.
  */
-#define FP_SAVE_AREA_BASE       0x00E21928
-
-/* FPCR default value (no exceptions enabled, round to nearest) */
 #define FP_DEFAULT_FPCR         0x0000F400
 
 /*
  * ============================================================================
- * FP State Structure
+ * FP save area (source-djly)
  * ============================================================================
  *
- * The FP save area for each address space contains:
+ * There is NO fixed save-area address in the image.  FP_$SAVEP
+ * (0x00E218D0) is a longword POINTER to the per-address-space table; it
+ * is allocated at boot by PEB_$LOAD_WCS (`move.l A0,(0x00e218d0).l` at
+ * 0x00E3207C) and cleared by OS_$SHUTDOWN (0x00E6D52E).  A zero value
+ * means "no FPU configured", which is exactly what FIM_$FP_ABORT
+ * (0x00E21B80 `move.l (-0x2b2,PC),D0` / `beq`) and FIM_$FP_INIT
+ * (0x00E21BB0 `tst.l (0x00e218d0).l` / `beq`) test.
  *
- * When FP state is saved with full registers (flags == 0xFFFF):
- *   -0x6A: Flags (0xFFFF = has full state)
- *   -0x68: FPCR, FPSR, FPIAR (12 bytes)
- *   -0x5C: FP0-FP7 (96 bytes, 12 bytes each in extended precision)
- *   -0x04: FSAVE state (variable size, depends on FPU state)
+ * (The previous FP_SAVE_AREA_BASE 0x00E21928 was inside FIM_$BUS_ERR --
+ * the extension words of the `cmpi.b #0xA0,(0x22,SP)` at 0x00E21926 --
+ * and has been removed.)
  *
- * When FP state is saved with internal state only (flags == 0x0000):
- *   -0x04: FSAVE state only
+ * Slot addressing, from fp_$save_state / fp_$restore_state:
  *
- * The pointer stored at (base + asid*0x14A - 4) points to the
- * current top of the saved state.
+ *   00e21b5c  mulu.w #0x14a,D0             ; byte offset of the slot
+ *   00e21b60  beq -> rts                   ; asid 0 = no address space
+ *   00e21b62  lea (-0x4,A1,D0*0x1),A0      ; A0 = &slot->state
+ *
+ * so a slot is FP_SAVE_AREA_SIZE (0x14A) bytes and its LAST longword
+ * holds the pointer to the top of the saved frame.  The frame is written
+ * DOWNWARD from that cell:
+ *
+ *   state -> [0xFFFF][FPCR FPSR FPIAR (12)][FP0..FP7 (96)][FSAVE frame]
+ *
+ * when the FSAVE frame is not null (`tst.b (0x1,A0)` at 0x00E21B68 tests
+ * the 68881/68882 frame-size byte), and
+ *
+ *   state -> [FSAVE frame]
+ *
+ * when it is.  The 0xFFFF marker is what fp_$restore_state skips with
+ * `addq.w #2,A0` at 0x00E21B4E before reloading the registers.  326 bytes
+ * (0x14A - 4) are available below the cell, which is exactly the 2 + 12 +
+ * 96 bytes of register state plus the 216-byte maximum 68882 FSAVE frame.
  */
 
-typedef struct fp_save_area_t {
-    uint16_t    flags;          /* 0xFFFF if full state, 0 if internal only */
-    uint32_t    fpcr;           /* FP control register */
-    uint32_t    fpsr;           /* FP status register */
-    uint32_t    fpiar;          /* FP instruction address register */
-    uint8_t     fp_regs[96];    /* FP0-FP7 in extended precision (12 bytes each) */
-    uint8_t     internal[184];  /* FSAVE internal state (max size for 68882) */
+typedef struct __attribute__((packed)) fp_save_area_t {
+    /*
+     * 0x000: the saved frame, filled downward from the end of this array.
+     * `state` below points at its first live byte; the bytes before that
+     * point are stale.
+     */
+    uint8_t     frame[FP_SAVE_AREA_SIZE - 4];
+
+    /*
+     * 0x146: pointer to the top of the frame above, or 0 if this address
+     * space has never had its FP state saved (FIM_$FP_INIT clears it with
+     * `clr.l (-0x4,A0,D1w*0x1)` at 0x00E21BFE).
+     */
+    m68k_ptr_t  state;
 } fp_save_area_t;
 
+_Static_assert(__builtin_offsetof(fp_save_area_t, frame) == 0,
+               "fp_save_area_t.frame must be at 0x00");
+_Static_assert(__builtin_offsetof(fp_save_area_t, state) == FP_SAVE_AREA_SIZE - 4,
+               "fp_save_area_t.state must be the slot's last longword");
+_Static_assert(sizeof(fp_save_area_t) == FP_SAVE_AREA_SIZE,
+               "fp_save_area_t must be 0x14A bytes (mulu.w #0x14a)");
+
+/* Bytes of frame available below a slot's state cell. */
+#define FP_FRAME_MAX            (FP_SAVE_AREA_SIZE - 4)
+
+/* Word written in front of the register block when registers were saved
+ * (0x00E21B76 `move.w #-1,-(A0)`). */
+#define FP_STATE_MARKER         0xFFFF
+
 /*
  * ============================================================================
- * Internal Function Prototypes (Assembly)
+ * Internal routines (fp/sau2/fp_context.s)
  * ============================================================================
+ *
+ * None of these follows the C calling convention; the declarations are
+ * `void (void)` so that C sources can name them, and the register
+ * contracts are documented per routine.
  */
 
 /*
- * fp_$switch_owner - Switch FP owner and restore state
+ * fp_$switch_owner - 0x00E21B10 (6 bytes, falls through)
  *
- * Sets PROC1_$AS_ID as the new FP owner. If the new owner
- * is different from the current owner, saves the current
- * owner's state and restores the new owner's state.
- *
- * This is the main entry point for FP context switching.
- *
- * Original address: 0x00E21B10 (6 bytes entry, falls through)
+ * Loads D2 = PROC1_$AS_ID and falls into fp_$switch_owner_d2.
  */
 void fp_$switch_owner(void);
 
 /*
- * fp_$switch_owner_d2 - Switch FP owner with AS ID in D2
+ * fp_$switch_owner_d2 - 0x00E21B16 (26 bytes, falls through)
  *
- * Alternate entry point to fp_$switch_owner where the caller
- * has already loaded the desired AS ID into register D2.
+ * In:  D2.w = desired AS id
+ * Out: A1 = FP_$SAVEP
  *
- * This bypasses the PROC1_$AS_ID load at the start of
- * fp_$switch_owner, allowing callers to switch to a specific
- * AS rather than the current one.
- *
- * Original address: 0x00E21B16
+ * If D2 is already FP_$OWNER the routine returns.  Otherwise it makes D2
+ * the owner (memory and FP_HW_OWNER_ADDR), calls fp_$save_state with
+ * D0 = the PREVIOUS owner, then falls through into fp_$restore_state.
+ * Reached from FIM_$FLINE (`bsr` at 0x00E21AF0).
  */
 void fp_$switch_owner_d2(void);
 
 /*
- * fp_$check_owner - Check and set FP owner
+ * fp_$check_owner - 0x00E21D70 (36 bytes)
  *
- * Checks if PROC1_$AS_ID is already the FP owner.
- * If not, sets it as owner and saves the previous owner's state.
+ * Out: A1 = FP_$SAVEP
  *
- * Does NOT restore the new owner's state (unlike fp_$switch_owner).
- *
- * Original address: 0x00E21D70 (36 bytes)
+ * fp_$switch_owner without the fall-through: it takes ownership for
+ * PROC1_$AS_ID and saves the previous owner's state, but does not restore
+ * anything.
  */
 void fp_$check_owner(void);
 
 /*
- * fp_$save_state - Save FP state for an address space
+ * fp_$save_state - 0x00E21B5C (36 bytes)
  *
- * Saves the current FPU state (registers and internal state)
- * to the save area for the specified AS.
+ * In: D0.w = asid, A1 = FP_$SAVEP
  *
- * Input:
- *   D0.w - Address space ID
- *   A1 - Base pointer for save area calculation
- *
- * Uses FSAVE to save internal state, then FMOVEM.X and FMOVEM.L
- * to save the FP registers.
- *
- * Original address: 0x00E21B5C (36 bytes)
+ * `fsave -(A0)` from the end of the slot, then, if the frame is not null,
+ * FP0-FP7, FPCR/FPSR/FPIAR and the 0xFFFF marker; finally stores the
+ * frame pointer in the slot's last longword.  asid 0 is a no-op.
  */
 void fp_$save_state(void);
 
 /*
- * fp_$restore_state - Restore FP state for an address space
+ * fp_$restore_state - 0x00E21B30 (44 bytes)
  *
- * Restores the FPU state (registers and internal state)
- * from the save area for the specified AS.
+ * In: D2.w = asid, A1 = FP_$SAVEP
  *
- * Input:
- *   D2.w - Address space ID
- *   A1 - Base pointer for save area calculation
- *
- * Uses FRESTORE to restore internal state, then FMOVEM.L and
- * FMOVEM.X to restore the FP registers.
- *
- * Original address: 0x00E21B30 (44 bytes)
+ * Reloads the slot's frame with `frestore (A0)+`, preceded by the
+ * register reload when the frame is not null.  With no saved frame it
+ * only sets FPCR to FP_DEFAULT_FPCR.  asid 0 is a no-op.
  */
 void fp_$restore_state(void);
 

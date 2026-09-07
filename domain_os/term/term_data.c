@@ -72,7 +72,7 @@ uint16_t TERM_$KBD_STRING_LEN = 5;
  *
  * Original address: 0xe1ce90
  */
-void *PTR_TERM_$ENQUEUE_TPAD_00e1ce90 = (void *)TERM_$ENQUEUE_TPAD;
+DXM_$DEFINE_CALLBACK_CELL(PTR_TERM_$ENQUEUE_TPAD_00e1ce90, TERM_$ENQUEUE_TPAD);
 
 /*
  * PTR_TTY_$I_RCV_00e2cab0 - Function pointer to TTY_$I_RCV

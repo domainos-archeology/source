@@ -3,6 +3,7 @@
 
 #include "base/base.h"
 #include "ec/ec.h"
+#include "dxm/dxm.h"
 
 // Maximum number of terminal lines
 #define TERM_MAX_LINES 4
@@ -132,6 +133,12 @@ extern void TERM_$ENQUEUE_TPAD(void **param1);
 extern void TERM_$P2_CLEANUP(short *param1);
 
 extern status_$t Term_Manual_Stop_err;
-extern void *PTR_TERM_$ENQUEUE_TPAD_00e1ce90;
+/*
+ * PTR_TERM_$ENQUEUE_TPAD_00e1ce90 - cell holding TERM_$ENQUEUE_TPAD's
+ * address.  KBD_$RCV pushes the ADDRESS of this cell to DXM_$ADD_CALLBACK
+ * (0x00E1CDF8); dxm_$callback_t keeps the queue entry 16 bytes on every
+ * target (source-wy9y).
+ */
+extern dxm_$callback_t PTR_TERM_$ENQUEUE_TPAD_00e1ce90;
 
 #endif /* TERM_H */
