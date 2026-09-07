@@ -60,10 +60,18 @@ _Static_assert(sizeof(pbu_ec_entry_t) == 0x18, "pbu_ec_entry_t size");
 #endif
 
 /*
- * External data
- * PBU eventcount array (32 entries at 0xE88460)
+ * PBU_$EC_ARRAY - the pool of eventcounts PBU units advance, 0x00E88460.
+ *
+ * This is not an object of its own: the SAU2 map has one segment there,
+ * "D86 E88460 PBU_WIRED_DATA loaded at 189C60, size = 300" / "D E88460
+ * EC2_PBU size = 300", whose single interior symbol is EC2_$PBU_ECS
+ * (0x00E88460) and which ends at PBU_$DATA_END (0x00E88760).  ec/ owns the
+ * storage as a byte pool because every EC2 caller computes an explicit
+ * `pbu_index * 0x18` displacement into it (ec/ec.h); PBU_$ADVANCE_EC_INT
+ * indexes the same 0x300 bytes as 32 records of 0x18 bytes, so PBU_$EC_ARRAY
+ * is the typed view of EC2_$PBU_ECS rather than a second definition.
  */
-extern pbu_ec_entry_t PBU_$EC_ARRAY[PBU_EC_COUNT];
+#define PBU_$EC_ARRAY ((pbu_ec_entry_t *)(void *)EC2_$PBU_ECS)
 
 /*
  * PBU_$FREE_ASID - Free an Address Space ID

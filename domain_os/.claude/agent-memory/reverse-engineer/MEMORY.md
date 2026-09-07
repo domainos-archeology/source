@@ -55,3 +55,6 @@
 - [Byte pools vs typed arrays](byte-pool-vs-typed-array.md) — an explicit stride constant in the code means the C object must be bytes.
 - [Module-block alias pattern](module-block-alias-pattern.md) — how to define A5 blocks so overlapping DAT_ labels stay one object; no header deps in the Makefile.
 - [DIR/FLP op tables and the KTTs](dir-flp-op-tables.md) — DIR_$OP_TAB's 8-byte records, FLP_DATA's 8272 command strings, MNK_$KTT_PTRS' six tables.
+- [The net_io driver record and NET_IO_$CREATE_PORT](net-io-driver-record.md) — the 0x50-byte record's 16 slots, RING_$DRIVER at 0xE86918, NET_IO_UNWIRED, the 0x91-byte clear loop.
+- [Biased tables, split tables and dead cells](biased-tables-and-dead-cells.md) — DIR_$OP_TAB's 21-record bias, the KBD 8/32 split, and how to prove a cell is unreferenced.
+- [TERM_$DATA's two initialised windows and peb/sau2/int.s](term-data-block-and-peb-asm.md) — the recovered handler fields, TONE_$CHANNEL as a record, and the 0xC0BC encoding gas cannot emit.

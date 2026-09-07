@@ -1179,6 +1179,27 @@ extern uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE +
  * reaches entry 2, because smd_$validate_unit rejects every unit but 1
  * (0x00E6D70A "cmpi.w #0x1,D0w" / 0x00E6D70E "bne").
  */
+/*
+ * SMD_DISPLAY_INFO_SECTION - keep the table inside the SMD_WIRED code segment.
+ *
+ * The SAU2 map's SMD_WIRED segment (0xE26F20, size 0x5E0) holds SMD_$DISP1_INT
+ * first and its constant tables last: SMD_$CURSOR_TABLE 0xE272C6,
+ * SMD_$CURSOR_PTABLE 0xE27366, SMD_$DISPLAY_COM (= SMD_DISPLAY_INFO) 0xE27376.
+ * SMD_$DISP1_INT reaches the table with a 16-bit PC-relative operand:
+ * `43 fa 04 46  lea (0x446,PC),A1' at 0xE26F2E (0xE26F30 + 0x446 = 0xE27376).
+ * Emitted as ordinary `.bss' it lands tens of kilobytes from
+ * smd/sau2/disp1_int.o and the R_68K_PC16 relocation overflows (source-uwxz),
+ * so give it a section of its own that sau2.ld emits directly after
+ * disp1_int.o - the same technique the SVC dispatch tables use (source-a5t8).
+ * This is a code-segment cell, not an A5 module block, so it is outside the
+ * `.moddata.<name>` scheme of docs/design-per-process-data.md (source-0i3).
+ */
+#if defined(ARCH_M68K)
+#define SMD_DISPLAY_INFO_SECTION  __attribute__((section(".text.smd_display_info")))
+#else
+#define SMD_DISPLAY_INFO_SECTION
+#endif
+
 extern smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 
 /*

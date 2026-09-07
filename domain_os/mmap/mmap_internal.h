@@ -34,26 +34,12 @@ typedef struct mem_range_t {
  */
 
 /*
- * Global lock for MMAP data structures
- * Located at MMAP_GLOBALS base.
+ * The MMAP_ module data block is one object, mmap_globals_t (mmap/mmap.h).
+ * Its spin lock is MMAP_GLOBALS.lock at offset 0 - the cell every entry
+ * point hands ML_$SPIN_LOCK as the bare A5 base - and every separately named
+ * cell of the block, MMAP_$WS_OWNER included, is an accessor macro over the
+ * same object declared there.
  */
-extern void *MMAP_LOCK;
-
-/*
- * MMAP_$WS_OWNER - the WSL index in use by each process.
- *
- * The SAU2 map places it at 0xE23CA8 (mmap_globals_t + 0xA24), running to
- * MMAP_$RMT_LIMIT at 0xE23D28 - 0x80 bytes, 64 words.  MMAP_$INIT clears
- * entries 1..63 with a `dbf` on `moveq #0x3e` and then stores 7 into entry 0
- * (0x00E31946-0x00E3195A).
- *
- * Every indexed reader biases the base by -2 and uses a 1-based index, e.g.
- * OSINFO_$GET_MMAP's `movea.l #0xe23ca8,A3 / move.w (-0x2,A3,D1w*0x1)` with
- * D1 = asid * 2 (0x00E5C71C-0x00E5C724), so C code spells that
- * MMAP_$WS_OWNER[asid - 1].
- */
-#define MMAP_WS_OWNER_SLOTS 64
-extern uint16_t MMAP_$WS_OWNER[MMAP_WS_OWNER_SLOTS];
 
 /*
  * DUMP_$ADDRS - the physical memory ranges MMAP_$INIT hands to the crash-dump

@@ -34,6 +34,30 @@ Two counting traps:
 - **A compile error anywhere makes the count read 0** because the link never
   runs. Check `grep -c LINK` in the log before believing a zero.
 
+**Pulling one object out of the gather can strand its neighbours.** The
+adjacency unit is the image *segment*, not the referencing object. Naming only
+`smd/sau2/disp1_int.o` moved it away from `cursor_thunks.o` / `scroll.o` /
+`start_blt.o`, whose own `lea (SMD_$DISP1_INT:w,%pc),%a0` then overflowed - one
+fixed site traded for five new ones. List the whole run (or the whole
+subsystem, as ec+proc1 needed for their mutual `bsr.w`), in image order.
+
+**Not every PC16 target is data.** `bsr.w`/`bra.w` are 16-bit too, so
+code->code references across subsystems overflow the same way and are fixed by
+the same ordering, with no section attribute anywhere (ec/sau2 -> PROC1_ASM's
+dispatcher, proc1/sau2 -> ec's ADVANCE_INT).
+
+**Check the SAU2 map before assuming an A5 block.** A cell the code reaches
+`(d16,PC)` is almost always *inside* a code segment, so it takes `.text.<name>`
+and is out of scope for source-0i3's `.moddata.<name>`. Confirmed for
+`PROC1_$CURRENT` 0xE20608 (inside PROC1_ASM 0xE1EAC8+0x24A4),
+`SIO2681_$PTRS` 0xE2DF80 (opens SIO_INT, 0x8C), `SMD_$DISPLAY_COM` /
+`SMD_DISPLAY_INFO` 0xE27376 (closes SMD_WIRED 0xE26F20+0x5E0).
+
+**Verify placement with `-Map`, not just a clean link.** Relink the same
+objects with `m68k-elf-ld -T sau2.ld -Map out.map -o /dev/null` and read the
+resulting gaps: SIO2681_$PTRS -> SIO2681_$INT1_RTE came out at exactly the
+image's 0x20.
+
 See [[feedback_shared_worktree]]: other agents edit the same tree, so gate a
 link-order change against `git archive HEAD` plus your own files copied over it,
 built in a scratch directory - otherwise their in-flight compile errors mask

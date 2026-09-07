@@ -11,12 +11,12 @@
 
 uint16_t MMAP_$ALLOC_FREE(uint32_t *vpn_array, uint16_t count)
 {
-    uint16_t token = ML_$SPIN_LOCK(MMAP_GLOBALS);
+    uint16_t token = ML_$SPIN_LOCK(&MMAP_GLOBALS.lock);
 
     ws_hdr_t *free_pool = WSL_FOR_INDEX(WSL_INDEX_FREE_POOL);
 
     if (free_pool->page_count == 0) {
-        ML_$SPIN_UNLOCK(MMAP_GLOBALS, token);
+        ML_$SPIN_UNLOCK(&MMAP_GLOBALS.lock, token);
         return 0;
     }
 
@@ -26,7 +26,7 @@ uint16_t MMAP_$ALLOC_FREE(uint32_t *vpn_array, uint16_t count)
 
     mmap_$alloc_pages_from_wsl(free_pool, vpn_array, to_alloc);
 
-    ML_$SPIN_UNLOCK(MMAP_GLOBALS, token);
+    ML_$SPIN_UNLOCK(&MMAP_GLOBALS.lock, token);
 
     MMAP_$ALLOC_CNT++;
     MMAP_$ALLOC_PAGES += to_alloc;

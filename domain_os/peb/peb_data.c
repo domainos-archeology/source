@@ -25,20 +25,24 @@ int8_t m68881_$save_flag = 0;
 #endif
 
 /*
- * PEB_$DISP_INT_ADDR - display-interrupt dispatch cell, 0x00E24478.
+ * The PEB_ASM module, 0x00E24468..0x00E244F0 (map: "D E24468 PEB_ASM
+ * size = 88"), is hand-written assembly and is emitted as peb/sau2/int.s.
+ * All three of its symbols live there on the m68k:
  *
- * The map places it inside the hand-written "D E24468 PEB_ASM size = 88"
- * block, between PEB_$INT (0x00E2446C) and the NET_IO segment.  It is the
- * 32-bit operand of PEB_$INT's opening `jmp <abs>.l`
- * (0x00E24476: 4E F9 00 E2 1F 20), so writing the cell re-targets that jump.
- * The image value is 0x00E21F20 = FIM_$SPURIOUS_INT, the default target;
- * SMD_$INTERRUPT_INIT overwrites it with SMD_$DISP1_INT when the PEB routes
- * the display interrupt (smd/interrupt_init.c).
+ *   0x00E24468  PEB_$STATUS_REG      the latched 0x000070F4 exception status
+ *   0x00E2446C  PEB_$INT             the interrupt handler
+ *   0x00E24478  PEB_$DISP_INT_ADDR   the 32-bit operand of PEB_$INT's opening
+ *                                    `jmp <abs>.l` (0x00E24476: 4E F9 00 E2
+ *                                    1F 20), so writing it re-targets that
+ *                                    jump.  The image value is 0x00E21F20 =
+ *                                    FIM_$SPURIOUS_INT; SMD_$INTERRUPT_INIT
+ *                                    overwrites it with SMD_$DISP1_INT when
+ *                                    the PEB routes the display interrupt
+ *                                    (smd/interrupt_init.c).
  *
- * TODO(source-wk2f, 0x00E24478): PEB_$INT is hand-written assembly and should
- * be emitted as peb/sau2/int.s, with this cell as the jmp operand; peb/int.c
- * currently models the jump as a direct FIM_$SPURIOUS_INT() call and so never
- * reads the cell.
+ * The host build has no .s, so the two data cells get plain storage here.
  */
-void **PEB_$DISP_INT_ADDR = (void **)FIM_$SPURIOUS_INT;
-
+#if !defined(ARCH_M68K)
+uint32_t PEB_$STATUS_REG = 0;
+void **PEB_$DISP_INT_ADDR = (void **)0x00E21F20;
+#endif

@@ -67,19 +67,67 @@ SECTIONS {
         *(.text.svc_tables)
 
         /*
-         * TODO(source-uwxz): the same code/data adjacency is still missing for
-         * the other image-adjacent tables, whose PC16 references also overflow:
-         *   PROC1_$DISPATCH_INT  <- ec/sau2/advance.s, advance_all.s
-         *   PROC1_$CURRENT (0xE2611E), ADVANCE_INT <- proc1/sau2/init_stack.s,
-         *                                             int_handler.s
-         *   SIO2681_$PTRS        <- sio2681/sau2/int_rte.s
-         *   SMD_DISPLAY_INFO     <- smd/sau2/disp1_int.s
-         * Those tables are owned by proc1/sio2681/smd and need the same
-         * treatment (a dedicated section named here, in image order) once
-         * their owners annotate the definitions.  Placing them belongs with
-         * source-0i3's `.moddata.<name>' scheme where the block is a Pascal
-         * module data block pinned at its A5 address.
+         * PROC1_ASM (image 0xE1EAC8, size 0x24A4 - SAU2 map domain_os.10.2.map)
+         *
+         * One image segment holds the EC and PROC1 assembly routines together
+         * with a handful of data cells, and five of the cross-references
+         * inside it are 16-bit PC-relative:
+         *
+         *   0xE206F8 bsr.w PROC1_$DISPATCH_INT  (ec/sau2/advance.s,   +0x326)
+         *   0xE2070E bsr.w PROC1_$DISPATCH_INT  (ec/sau2/advance_all.s, +0x310)
+         *   0xE208FA bsr.w ADVANCE_INT          (proc1/sau2/int_handler.s,
+         *                                        twice, -0x1D0 and -0x236)
+         *   0xE20AD8 move.w (-0x4d2,PC),-(SP)   (proc1/sau2/init_stack.s ->
+         *                                        PROC1_$CURRENT at 0xE20608)
+         *
+         * The default gather puts ec/ and proc1/ far apart (and PROC1_$CURRENT
+         * in .bss ~0x11000 away), so all five overflow (source-uwxz).  Emit the
+         * segment's contents together, in image order: the data cell first
+         * (0xE20608), then ec (EC_$WAIT 0xE20610 ... ADVANCE 0xE20728), then
+         * proc1 (PROC1_$REMOVE_READY 0xE206D2 ... 0xE20F6C).  Whole subsystems
+         * are listed rather than the five referencing objects alone, because
+         * pulling single objects out would in turn strand their intra-ec and
+         * intra-proc1 bsr.w/bra.w partners (e.g. ec/sau2/advance_all.s ->
+         * ADVANCE_ALL_INT at 0xE207C6, proc1/sau2/clr_lock.s ->
+         * PROC1_$DISPATCH_INT2).
+         *
+         * PROC1_$CURRENT is a code-segment cell here, not a Pascal A5 module
+         * block, so it uses the source-a5t8 `.text.<name>' technique and is
+         * deliberately not part of source-0i3's `.moddata.<name>' scheme.
          */
+        *(.text.proc1_asm_data)
+        */ec/*.o(.text)
+        */proc1/*.o(.text)
+
+        /*
+         * SIO_INT (image 0xE2DF80, size 0x8C).  SIO2681_$PTRS is the first
+         * thing in the segment and the two 2681 stubs follow it at 0xE2DFA0
+         * and 0xE2DFB0, each reaching an entry with `lea (-0x2a,PC),A0'
+         * (0xE2DFA8 -> 0xE2DF80, 0xE2DFB8 -> 0xE2DF90).  Table first, then the
+         * stubs - image order (source-uwxz).
+         */
+        *(.text.sio2681_ptrs)
+        */sio2681/sau2/int_rte.o(.text)
+
+        /*
+         * SMD_WIRED (image 0xE26F20, size 0x5E0).  SMD_$DISP1_INT opens the
+         * segment and its constant/common tables close it; the routine reaches
+         * SMD_$DISPLAY_COM (= SMD_DISPLAY_INFO, 0xE27376) with
+         * `lea (0x446,PC),A1' at 0xE26F2E.  Code first, then the table - image
+         * order (source-uwxz).
+         *
+         * SMD_$XOR_CURSOR/$OR_CURSOR, $START_SCROLL/$CONTINUE_SCROLL and
+         * $START_BLT all reach SMD_$DISP1_INT with their own
+         * `lea (SMD_$DISP1_INT:w,PC),A0', so the whole run of SMD_WIRED
+         * routines has to travel with it; they are listed in image order.
+         */
+        */smd/sau2/disp1_int.o(.text)       /* SMD_$DISP1_INT      0xE26F20 */
+        */smd/sau2/cursor_thunks.o(.text)   /* SMD_$XOR_CURSOR     0xE2720E */
+        */smd/blink_cursor_1.o(.text)       /* SMD_$BLINK_CURSOR_1 0xE2722C */
+        */smd/interrupt_init.o(.text)       /* SMD_$INTERRUPT_INIT 0xE27284 */
+        */smd/sau2/scroll.o(.text)          /* SMD_$START_SCROLL   0xE272A8 */
+        */smd/sau2/start_blt.o(.text)       /* SMD_$START_BLT      0xE272BC */
+        *(.text.smd_display_info)           /* SMD_$DISPLAY_COM    0xE27376 */
 
         *(.text .text.*)
     }

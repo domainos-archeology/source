@@ -292,40 +292,52 @@ typedef struct dir_insert_ctx {
  * Located at 0xE7FC42 on M68K.
  */
 /*
- * DIR_$OP_TAB - the client-side per-operation table at 0x00E7FC42 (the SAU2
- * map names the symbol).  Records are 8 bytes; the DIR_$<op>U wrappers read
- * two of the four words in their record:
- *   +0x00  the request header version word they store in request.reserved
- *   +0x04  the fixed part of the request size they add the name length to
- * The Ghidra labels below are the addresses of those two words, so each pair
- * (X, X+4) is one record and the records run 0x00E7FC42, 0x4A, 0x52, ... at a
- * uniform 8-byte stride (bead source-wk2f).
+ * DIR_$OP_TAB - the per-operation parameter table, 0x00E7FC42 (the SAU2 map
+ * names the symbol).  Records are 8 bytes and every reader indexes the same
+ * family by (opcode >> 1) with an 8-byte stride, from a *virtual* base of
+ * 0x00E7FB9A -- 21 records below DIR_$OP_TAB, i.e. the table is biased and
+ * only records 21..46 are physically present:
  *
- * DIR_$SERVER indexes the same family of records with an 8-byte stride and a
- * -0xA8 bias off 0x00E7FC42 (`movea.l #0xe7fc42,A1` / `lsl.l #0x3,D1` /
- * `move.w (-0xa8,A0),D1w` at 0x00E5824A..0x00E58258), which puts the family's
- * first record at 0x00E7FB9A and makes DIR_$OP_TAB record 21 of it; DIR_$DO_OP
- * reaches its own fields at A5+0x1F9C and A5+0x1FA0 with A5 = 0x00E7DC00
- * (`lea (0xe7dc00).l,A5` at 0x00E4C030), i.e. 0x00E7FB9C and 0x00E7FBA0.
+ *   DIR_$SERVER  0x00E58248  move.w D0w,D1w (D0 = opcode >> 1)
+ *                0x00E5824A  movea.l #0xe7fc42,A1
+ *                0x00E58252  lsl.l #0x3,D1 / lea (0x0,A1,D1),A0
+ *                0x00E58258  move.w (-0xa8,A0),D1w      -> record + 0x00
+ *   DIR_$DO_OP   0x00E4C034  lea (0xe7dc00).l,A5
+ *                0x00E4C0B4  lsl.l #0x3,D1 / lea (0x0,A5,D1),A0
+ *                0x00E4C0BA  move.w (0x1f9c,A0),(0x12,A2)  -> record + 0x02
+ *                0x00E4C188  cmp.w  (0x1f9c,A0),D2w        -> record + 0x02
+ *                0x00E4C254  add.w  (0x1fa0,A0),D1w        -> record + 0x06
+ *                0x00E4C25A  move.w (0x1f9c,A0),(0xa,A3)   -> record + 0x02
+ *   the DIR_$<op>U client wrappers read their own record's + 0x00 and + 0x04
+ *   by absolute address (e.g. DIR_$ADD_MOUNT 0x00E534D6 / 0x00E534FC read
+ *   0x00E7FD02 and 0x00E7FD06, which is record 45).
  *
- * TODO(source-wk2f, 0x00E7FB9A): DIR_$OP_PARAMS below is modelled as a
- * separate object covering 0x00E7FB9C..0x00E7FC00 because the two bases differ
- * by two bytes; if they are one table the whole 0x00E7FB9A..0x00E7FD12 run
- * should collapse into a single array of dir_$op_tab_entry_t.
+ * 0x00E7FC42 - 0x00E7FB9A = 0xA8 = 21 * 8, and DIR_$DO_OP's jump table admits
+ * opcodes 0x2A..0x5C (`subi.w #0x2a,D0w` / `cmpi.w #0x33,D0w` / `bcc` at
+ * 0x00E4C266), i.e. records 21..46 -- exactly 26 records running
+ * 0x00E7FC42..0x00E7FD12.  The bytes a record 0..20 would occupy are other
+ * DIR globals (DIR_$NAME_OFFSET_TABLE, DIR_$LK_WAITS, the free-list heads),
+ * so the array below starts at record 21 and DIR_$OP_REC applies the bias.
  */
 typedef struct dir_$op_tab_entry_t {
-  uint16_t version;    /* +0x00 request header version */
-  uint16_t w_02;       /* +0x02 */
-  uint16_t base_size;  /* +0x04 fixed part of the request size */
-  uint16_t w_06;       /* +0x06 */
+  uint16_t version;        /* +0x00 request body version */
+  uint16_t reply_version;  /* +0x02 reply body version */
+  uint16_t base_size;      /* +0x04 fixed part of the request size */
+  uint16_t reply_size;     /* +0x06 fixed part of the reply body size */
 } dir_$op_tab_entry_t;
 
 #if defined(ARCH_M68K)
 _Static_assert(sizeof(dir_$op_tab_entry_t) == 8, "dir_$op_tab_entry_t");
 #endif
 
+/* The first record present, opcode 0x2A >> 1. */
+#define DIR_$OP_TAB_BASE_INDEX 21
+
 #define DIR_$OP_TAB_ENTRIES 26
 extern dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];
+
+/* The record for op_half = opcode >> 1, with the table's 21-record bias. */
+#define DIR_$OP_REC(half) (DIR_$OP_TAB[(half) - DIR_$OP_TAB_BASE_INDEX])
 
 /* The two words of each record, by the address Ghidra labels them with. */
 #define DAT_00e7fc4a     (DIR_$OP_TAB[ 1].version)  /* 0x00E7FC4A */
@@ -375,8 +387,20 @@ extern uint16_t DIR_$GET_ENTRYU_REQ_LEN;   /* word at 0xE7FCAE, added to name_le
 #define DAT_00e7fcfe     (DIR_$OP_TAB[23].base_size)  /* 0x00E7FCFE */
 #define DAT_00e7fd02     (DIR_$OP_TAB[24].version)   /* ADD_MOUNT params - my_host_id word */  /* 0x00E7FD02 */
 #define DAT_00e7fd06     (DIR_$OP_TAB[24].base_size)   /* ADD_MOUNT request size */  /* 0x00E7FD06 */
+
 #define DAT_00e7fd0a     (DIR_$OP_TAB[25].version)   /* DROP_MOUNT params - my_host_id word */  /* 0x00E7FD0A */
 #define DAT_00e7fd0e     (DIR_$OP_TAB[25].base_size)   /* DROP_MOUNT request size */  /* 0x00E7FD0E */
+/*
+ * The last 0x12 bytes of the DIR segment, 0x00E7FD12..0x00E7FD24, defined in
+ * dir/dir_data.c.  dir_$do_op_dir_readu reads the three longwords through
+ * A5 = 0x00E7DC00 as (0x2114,A5) / (0x2118,A5) / (0x211c,A5); the pad word
+ * and the ".bak" string have no reader in the image.
+ */
+extern uint16_t DAT_00e7fd12;   /* 0x00E7FD12 alignment fill */
+extern uint32_t DAT_00e7fd14;   /* 0x00E7FD14 first-real-entry cookie */
+extern uint32_t DAT_00e7fd18;   /* 0x00E7FD18 ".." pseudo-entry cookie */
+extern uint32_t DAT_00e7fd1c;   /* 0x00E7FD1C "." pseudo-entry cookie */
+extern char     DAT_00e7fd20[4];/* 0x00E7FD20 ".bak" */
 
 /*
  * ============================================================================
@@ -1106,17 +1130,24 @@ extern ec_$eventcount_t DIR_$WT_FOR_HDNL_EC;/* Wait-for-handle event counter */
 
 /* Hint subsystem data */
 /*
- * Per-operation parameter records at 0x00E7FB9C (= A5+0x1F9C in DIR_$DO_OP),
- * eight bytes each, indexed by (opcode >> 1).  DIR_$DO_OP touches two fields:
- *   +0x00  protocol version  (0x00E4C0BA, 0x00E4C188, 0x00E4C25A)
- *   +0x04  reply body size   (0x00E4C254, added to the 0x14-byte header)
- * Spelled as a word array so the two displacements stay visible.
+ * The two DIR_$OP_TAB fields DIR_$DO_OP reaches through A5 = 0x00E7DC00.
+ * (0x1f9c,A0) is record + 0x02 and (0x1fa0,A0) record + 0x06, because the
+ * record base is 0x00E7FB9A + (opcode >> 1) * 8 -- see DIR_$OP_REC above.
+ *   DIR_$OP_REPLY_VERSION  0x00E4C0BA -> request + 0x12
+ *                          0x00E4C188  reply + 0x0A must be <= it
+ *                          0x00E4C25A -> reply + 0x0A on the local path
+ *   DIR_$OP_REPLY_SIZE     0x00E4C254  added to the 0x14-byte reply header
  */
-#define DIR_$OP_PARAMS_WORDS 0x32          /* 0x00E7FB9C..0x00E7FC00 */
-extern uint16_t DIR_$OP_PARAMS[DIR_$OP_PARAMS_WORDS];
-#define DIR_OP_PARAM_WORDS      4                   /* 8 bytes per record */
-#define DIR_$OP_VERSION(half)   DIR_$OP_PARAMS[(half) * DIR_OP_PARAM_WORDS + 0]
-#define DIR_$OP_REPLY_SIZE(half) DIR_$OP_PARAMS[(half) * DIR_OP_PARAM_WORDS + 2]
+#define DIR_$OP_VERSION(half)    (DIR_$OP_REC(half).reply_version)
+#define DIR_$OP_REPLY_SIZE(half) (DIR_$OP_REC(half).reply_size)
+
+/*
+ * The record + 0x00 word DIR_$SERVER checks the incoming request body
+ * version against (`move.w (-0xa8,A0),D1w` / `cmp.w (0xe,A2),D1w` at
+ * 0x00E58258, 0x00E5825C).  It is the same word the DIR_$<op>U client
+ * wrappers store into request + 0x0E.
+ */
+#define DIR_$OP_REQ_VERSION(half) (DIR_$OP_REC(half).version)
 
 /* 0x00E4B33C, longword 0x00000000.  Passed by reference as
  * FILE_$SET_REFCNT's refcnt (`move.l (A0),D0` at 0x00E5E40E) and as

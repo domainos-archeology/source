@@ -15,20 +15,11 @@
  *   - Restores A5 and returns
  *
  * Data layout:
- *   0xE2C9F0: Data segment base (A5)
- *   0xE2DC58: TONE_$CHANNEL pointer (A5 + 0x1268)
+ *   0xE2C9F0: TERM_$DATA, the OS_TERM_INIT module block (A5)
+ *   0xE2DC58: TONE_$CHANNEL, the SIO2681 channel-A record (A5 + 0x1268)
  */
 
 #include "tone/tone_internal.h"
-
-/*
- * Pointer to the SIO2681 channel used for tone generation.
- * This is stored at address 0xE2DC58 (= 0xE2C9F0 + 0x1268).
- * It is initialized during system startup by the keyboard/console driver.
- *
- * Original address: 0xE2DC58
- */
-sio2681_channel_t *TONE_$CHANNEL = NULL;
 
 /*
  * TONE_$ENABLE - Enable or disable tone
@@ -43,18 +34,16 @@ sio2681_channel_t *TONE_$CHANNEL = NULL;
  */
 void TONE_$ENABLE(uint8_t *enable)
 {
-    sio2681_channel_t **channel_ptr;
+    sio2681_channel_t *channel_ptr;
     uint32_t unused1;
     uint32_t unused2;
 
     /*
-     * Get pointer to the tone channel pointer.
-     * The original assembly computes this as A5+0x1268 and stores
-     * the address in a local variable, then passes a pointer to
-     * that local variable to SIO2681_$TONE.
-     *
-     * Since TONE_$CHANNEL is our global at 0xE2DC58, we just
-     * take its address.
+     * 0x00E1ACFC `lea (0x1268,A5),A0` / 0x00E1AD00 `move.l A0,(-0x8,A6)`:
+     * the A6-8 local holds the ADDRESS of the channel record, and
+     * 0x00E1AD04 `pea (-0x8,A6)` hands SIO2681_$TONE a pointer to that
+     * local.  TONE_$CHANNEL is the record itself (tone/tone.h), so the
+     * local is &TONE_$CHANNEL.
      */
     channel_ptr = &TONE_$CHANNEL;
 
@@ -63,5 +52,5 @@ void TONE_$ENABLE(uint8_t *enable)
      * The third and fourth parameters are unused stack space
      * in the original code.
      */
-    SIO2681_$TONE(*channel_ptr, enable, unused1, unused2);
+    SIO2681_$TONE(channel_ptr, enable, unused1, unused2);
 }

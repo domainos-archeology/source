@@ -13,7 +13,7 @@ void MMAP_$FREE_LIST(uint32_t vpn_head)
 {
     uint16_t token;
 
-    token = ML_$SPIN_LOCK(MMAP_GLOBALS);
+    token = ML_$SPIN_LOCK(&MMAP_GLOBALS.lock);
 
     while (vpn_head != 0) {
         mmape_t *page = MMAPE_FOR_VPN(vpn_head);
@@ -25,5 +25,5 @@ void MMAP_$FREE_LIST(uint32_t vpn_head)
         vpn_head = next;
     }
 
-    ML_$SPIN_UNLOCK(MMAP_GLOBALS, token);
+    ML_$SPIN_UNLOCK(&MMAP_GLOBALS.lock, token);
 }

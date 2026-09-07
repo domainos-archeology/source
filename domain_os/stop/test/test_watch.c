@@ -38,7 +38,7 @@ stopwatch_slot_t STOPWATCH_SLOTS[STOP_MAX_SLOTS];
 boolean STOP_$WATCH_TRACE_FLAG;
 
 /* Owned by os/ and disk/, defined here for the test link */
-m68k_ptr_t PTR_OS_DATA_SHUTWIRED = 0x00E82128;
+m68k_ptr_t PTR_OS_DATA_SHUTWIRED_00e81d20 = 0x00E82128;
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                               */

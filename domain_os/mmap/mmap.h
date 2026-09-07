@@ -155,6 +155,20 @@ _Static_assert(sizeof(mmape_t) == 0x10, "mmape_t stride must be 0x10 bytes");
 #define WSL_INDEX_MIN_USER 5  /* Minimum user WSL index */
 #define WSL_INDEX_MAX 69      /* Maximum WSL index (0x45) */
 
+/*
+ * MMAP_$WSL holds WSL_INDEX_MAX + 1 records: the map runs the object from
+ * 0xE232B0 to MMAP_$MIN_RMT_POOL at 0xE23C88, 0x9D8 bytes / 0x24 = 70.
+ */
+#define MMAP_WSL_SLOTS 70
+
+/*
+ * MMAP_$WS_OWNER holds 64 words: the map runs it from 0xE23CA8 to
+ * MMAP_$RMT_LIMIT at 0xE23D28, 0x80 bytes.  MMAP_$INIT clears entries 1..63
+ * with a `dbf' on `moveq #0x3e' and then stores 7 into entry 0
+ * (0x00E31946-0x00E3195A).
+ */
+#define MMAP_WS_OWNER_SLOTS 64
+
 /* Maximum PID for pid-to-wsl mapping */
 #define MMAP_MAX_PID 64 /* 0x40 */
 
@@ -166,58 +180,269 @@ _Static_assert(sizeof(mmape_t) == 0x10, "mmape_t stride must be 0x10 bytes");
 #define MMAP_PAGE_TYPE_DIRTY_FL 4 /* Dirty page, needs flush */
 
 /*
- * MMAP Global Data Structure
+ * ============================================================================
+ * The MMAP_ module data block
+ * ============================================================================
  *
- * This represents the global MMAP state starting at 0xE23284.
- * Note: Some fields are accessed via offsets, this struct may not be complete.
+ * `D E23284 MMAP_ size = AA8` in the SAU2 map - 0xE23284..0xE23D2C - is one
+ * Domain Pascal module data block, reached through a single A5 base: e.g.
+ * MMAP_$FREE (0x00E0CACA) does `lea (0xe23284).l,A5` and then names each
+ * cell as a displacement off A5.  The map's interior symbols name every
+ * field below except offset 0x000, and MMAP_$FREE's `pea (A5)` into
+ * ML_$SPIN_LOCK (0x00E0CAE2/0x00E0CB0E) shows that offset 0x000 is the
+ * module's spin lock.
+ *
+ *   +0x000  0xE23284  (the cell ML_$SPIN_LOCK/ML_$SPIN_UNLOCK are handed)
+ *   +0x004  0xE23288  MMAP_$HI_INDX
+ *   +0x008  0xE2328C  MMAP_$LO_INDX
+ *   +0x00C  0xE23290  MMAP_$WS_REMOVE
+ *   +0x010  0xE23294  MMAP_$RECLAIM_PUR_CNT
+ *   +0x014  0xE23298  MMAP_$RECLAIM_SHAR_CNT
+ *   +0x018  0xE2329C  MMAP_$WS_SCAN_CNT
+ *   +0x01C  0xE232A0  MMAP_$WS_OVERFLOW
+ *   +0x020  0xE232A4  MMAP_$STEAL_CNT
+ *   +0x024  0xE232A8  MMAP_$ALLOC_PAGES
+ *   +0x028  0xE232AC  MMAP_$ALLOC_CNT
+ *   +0x02C  0xE232B0  MMAP_$WSL                 70 x ws_hdr_t (0x9D8)
+ *   +0xA04  0xE23C88  MMAP_$MIN_RMT_POOL
+ *   +0xA08  0xE23C8C  MMAP_$HPPN
+ *   +0xA0C  0xE23C90  MMAP_$LPPN
+ *   +0xA10  0xE23C94  MMAP_$PAGEABLE_PAGES_LOWER_LIMIT
+ *   +0xA14  0xE23C98  MMAP_$PAGEABLE_PAGES
+ *   +0xA18  0xE23C9C  MMAP_$REMOTE_PAGES
+ *   +0xA1C  0xE23CA0  MMAP_$REAL_PAGES
+ *   +0xA20  0xE23CA4  MMAP_$FORMAT              (word)
+ *   +0xA22  0xE23CA6  MMAP_$WSL_HI_MARK         (word)
+ *   +0xA24  0xE23CA8  MMAP_$WS_OWNER            64 words (0x80)
+ *   +0xAA4  0xE23D28  MMAP_$RMT_LIMIT
+ *
+ * Image contents (`gsk read 0x00E23284` / `gsk read 0x00E23C88`): everything
+ * is zero except MMAP_$HI_INDX = 0xFFF, MMAP_$LO_INDX = 0x200,
+ * MMAP_$MIN_RMT_POOL = 0x42, MMAP_$HPPN = 1, MMAP_$LPPN = 0xFFF,
+ * MMAP_$PAGEABLE_PAGES_LOWER_LIMIT = 0x42, MMAP_$FORMAT = 1 and
+ * MMAP_$WSL_HI_MARK = 8.  mmap/mmap_data.c carries those seeds.
  */
 typedef struct mmap_globals_t {
-  uint32_t reserved1[7];    /* 0x00-0x1B: Reserved/unknown */
-  uint32_t ws_overflow_cnt; /* 0x1C: Working set overflow count */
-  uint32_t steal_cnt;       /* 0x20: Page steal count */
-  uint32_t alloc_pages;     /* 0x24: Total allocated pages */
-  uint32_t alloc_cnt;       /* 0x28: Allocation count */
-  ws_hdr_t wsl[70];         /* 0x2C: Working set list headers */
-                            /* After WSL array (at offset 0xA14): */
-                            /* uint32_t pageable_pages_lower_limit; */
-  /* Offset 0xA22: uint16_t pid_to_wsl[65]; (pid-to-wsl mapping) */
+  /*
+   * +0x000 - the module spin lock.  Unnamed in the map; every MMAP_ entry
+   * point that takes it passes the bare A5 base (`pea (A5)`).
+   */
+  uint32_t lock;
+
+  /*
+   * +0x004 / +0x008 - MMAP_$HI_INDX / MMAP_$LO_INDX.  Seeded in the image
+   * (0xFFF and 0x200) and read by nothing in this build: `gsk xrefs to
+   * 00E23288` and `00E2328C` are both empty.
+   */
+  uint32_t hi_indx;
+  uint32_t lo_indx;
+
+  /* +0x00C - pages removed from working sets by the WS scanner */
+  uint32_t ws_remove;
+
+  /* +0x010 / +0x014 - reclaim counters reported by OSINFO_$GET_MMAP */
+  uint32_t reclaim_pur_cnt;
+  uint32_t reclaim_shar_cnt;
+
+  /* +0x018 - working-set scan passes */
+  uint32_t ws_scan_cnt;
+
+  /* +0x01C - working sets that exceeded their maximum */
+  uint32_t ws_overflow;
+
+  /* +0x020 / +0x024 / +0x028 - allocator counters */
+  uint32_t steal_cnt;
+  uint32_t alloc_pages;
+  uint32_t alloc_cnt;
+
+  /*
+   * +0x02C - MMAP_$WSL, the 70 working-set list headers.  The map runs the
+   * object from 0xE232B0 to MMAP_$MIN_RMT_POOL at 0xE23C88, i.e. 0x9D8
+   * bytes = 70 records of 0x24.
+   */
+  ws_hdr_t wsl[MMAP_WSL_SLOTS];
+
+  /*
+   * +0xA04 - MMAP_$MIN_RMT_POOL, a longword: NETWORK_$PAGE_SERVER does
+   * `add.l D1,(0x00e23c88).l` at 0x00E11578 and then copies it into
+   * pageable_pages_lower_limit at 0x00E1157E.
+   */
+  uint32_t min_rmt_pool;
+
+  /*
+   * +0xA08 / +0xA0C - the highest and lowest pageable page numbers.
+   * MMAP_$INIT narrows them from the image seeds (HPPN = 1, LPPN = 0xFFF)
+   * as it walks the PMAP entries (mmap/init.c).
+   */
+  uint32_t hppn;
+  uint32_t lppn;
+
+  /*
+   * +0xA10 - the floor PMAP's purifiers keep the pageable-page count above.
+   * Written at 0x00E1157E and 0x00E11910; image value 0x42.
+   */
+  uint32_t pageable_pages_lower_limit;
+
+  /* +0xA14 - pages currently pageable (counted up by MMAP_$INIT) */
+  uint32_t pageable_pages;
+
+  /* +0xA18 / +0xA1C - remote and real page totals */
+  uint32_t remote_pages;
+  uint32_t real_pages;
+
+  /*
+   * +0xA20 - MMAP_$FORMAT, a word (MMAP_$WSL_HI_MARK follows two bytes
+   * later).  Image value 1; `gsk xrefs to 00E23CA4` is empty.
+   */
+  uint16_t format;
+
+  /*
+   * +0xA22 - MMAP_$WSL_HI_MARK, the highest WSL slot handed out so far.
+   * Image value 8.
+   */
+  uint16_t wsl_hi_mark;
+
+  /*
+   * +0xA24 - MMAP_$WS_OWNER, the WSL index in use by each process, 64
+   * words (the map runs it to MMAP_$RMT_LIMIT at 0xE23D28).  Every indexed
+   * reader biases the base by -2 and uses a 1-based index, so C code spells
+   * that MMAP_$WS_OWNER[n - 1]; MMAP_PID_TO_WSL below is that biased base.
+   */
+  uint16_t ws_owner[MMAP_WS_OWNER_SLOTS];
+
+  /*
+   * +0xAA4 - MMAP_$RMT_LIMIT, the last longword of the block.  Its only two
+   * readers, NETWORK_$PAGE_SERVER at 0x00E11598 and 0x00E1192A, do
+   * `tst.b (0x00e23d28).l / bpl`, i.e. they test the sign of the
+   * most-significant byte, which is the sign of the big-endian longword.
+   */
+  uint32_t rmt_limit;
 } mmap_globals_t;
 
-/* Layout recovered from the disassembly -- see the field comments above. */
-_Static_assert(__builtin_offsetof(mmap_globals_t, reserved1) == 0x00, "mmap_globals_t.reserved1");
-_Static_assert(__builtin_offsetof(mmap_globals_t, ws_overflow_cnt) == 0x1C, "mmap_globals_t.ws_overflow_cnt");
-_Static_assert(__builtin_offsetof(mmap_globals_t, steal_cnt) == 0x20, "mmap_globals_t.steal_cnt");
-_Static_assert(__builtin_offsetof(mmap_globals_t, alloc_pages) == 0x24, "mmap_globals_t.alloc_pages");
-_Static_assert(__builtin_offsetof(mmap_globals_t, alloc_cnt) == 0x28, "mmap_globals_t.alloc_cnt");
-_Static_assert(__builtin_offsetof(mmap_globals_t, wsl) == 0x2C, "mmap_globals_t.wsl");
+/*
+ * Layout recovered from the SAU2 map's interior symbols (addresses above)
+ * plus the accessing instructions quoted in the field comments.  The block
+ * holds no pointers, so these hold on every target.
+ */
+_Static_assert(__builtin_offsetof(mmap_globals_t, lock) == 0x000,
+               "mmap_globals_t.lock (0xE23284)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, hi_indx) == 0x004,
+               "mmap_globals_t.hi_indx (0xE23288 MMAP_$HI_INDX)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, lo_indx) == 0x008,
+               "mmap_globals_t.lo_indx (0xE2328C MMAP_$LO_INDX)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, ws_remove) == 0x00C,
+               "mmap_globals_t.ws_remove (0xE23290 MMAP_$WS_REMOVE)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, reclaim_pur_cnt) == 0x010,
+               "mmap_globals_t.reclaim_pur_cnt (0xE23294)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, reclaim_shar_cnt) == 0x014,
+               "mmap_globals_t.reclaim_shar_cnt (0xE23298)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, ws_scan_cnt) == 0x018,
+               "mmap_globals_t.ws_scan_cnt (0xE2329C)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, ws_overflow) == 0x01C,
+               "mmap_globals_t.ws_overflow (0xE232A0)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, steal_cnt) == 0x020,
+               "mmap_globals_t.steal_cnt (0xE232A4)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, alloc_pages) == 0x024,
+               "mmap_globals_t.alloc_pages (0xE232A8)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, alloc_cnt) == 0x028,
+               "mmap_globals_t.alloc_cnt (0xE232AC)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, wsl) == 0x02C,
+               "mmap_globals_t.wsl (0xE232B0 MMAP_$WSL)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, min_rmt_pool) == 0xA04,
+               "mmap_globals_t.min_rmt_pool (0xE23C88)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, hppn) == 0xA08,
+               "mmap_globals_t.hppn (0xE23C8C MMAP_$HPPN)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, lppn) == 0xA0C,
+               "mmap_globals_t.lppn (0xE23C90 MMAP_$LPPN)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, pageable_pages_lower_limit)
+                   == 0xA10,
+               "mmap_globals_t.pageable_pages_lower_limit (0xE23C94)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, pageable_pages) == 0xA14,
+               "mmap_globals_t.pageable_pages (0xE23C98)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, remote_pages) == 0xA18,
+               "mmap_globals_t.remote_pages (0xE23C9C)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, real_pages) == 0xA1C,
+               "mmap_globals_t.real_pages (0xE23CA0)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, format) == 0xA20,
+               "mmap_globals_t.format (0xE23CA4 MMAP_$FORMAT)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, wsl_hi_mark) == 0xA22,
+               "mmap_globals_t.wsl_hi_mark (0xE23CA6)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, ws_owner) == 0xA24,
+               "mmap_globals_t.ws_owner (0xE23CA8 MMAP_$WS_OWNER)");
+_Static_assert(__builtin_offsetof(mmap_globals_t, rmt_limit) == 0xAA4,
+               "mmap_globals_t.rmt_limit (0xE23D28 MMAP_$RMT_LIMIT)");
+_Static_assert(sizeof(mmap_globals_t) == 0xAA8,
+               "MMAP_ block is 0xE23284..0xE23D2C (`D E23284 MMAP_ size = AA8')");
 
 /*
- * Architecture-independent macros for page entry access
- * These isolate m68k-specific memory layout
+ * The block itself.  On the target it is the fixed A5 base every MMAP_ entry
+ * point loads; on the host it is a single definition in mmap/mmap_data.c
+ * (unit tests that drive one MMAP_ function supply their own).
+ */
+#if defined(ARCH_M68K)
+#define MMAP_GLOBALS (*(mmap_globals_t *)0xE23284)
+#else
+extern mmap_globals_t MMAP_GLOBALS_STORAGE;
+#define MMAP_GLOBALS MMAP_GLOBALS_STORAGE
+#endif
+
+/*
+ * The other two page tables are separate objects, not part of the MMAP_
+ * block: the mmape_t array at 0xEB2800 and the PTEs at 0xED5000.
  */
 #if defined(ARCH_M68K)
 #define MMAPE_BASE ((mmape_t *)0xEB2800)
-#define MMAP_GLOBALS ((mmap_globals_t *)0xE23284)
-#define MMAP_WSL ((ws_hdr_t *)0xE232B0)
-#define MMAP_WSL_HI_MARK (*(uint16_t *)0xE23CA6)
-#define MMAP_PID_TO_WSL ((uint16_t *)0xE23CA6)
 #define PTE_BASE ((uint16_t *)0xED5000)
 #else
 /* For non-m68k platforms, these will be provided by platform init */
 extern mmape_t *mmap_mmape_base;
-extern mmap_globals_t *mmap_globals;
-extern ws_hdr_t *mmap_wsl;
-extern uint16_t mmap_wsl_hi_mark;
-extern uint16_t *mmap_pid_to_wsl;
 extern uint16_t *mmap_pte_base;
 
 #define MMAPE_BASE mmap_mmape_base
-#define MMAP_GLOBALS mmap_globals
-#define MMAP_WSL mmap_wsl
-#define MMAP_WSL_HI_MARK mmap_wsl_hi_mark
-#define MMAP_PID_TO_WSL mmap_pid_to_wsl
 #define PTE_BASE mmap_pte_base
 #endif
+
+/*
+ * Every separately named cell of the block, as an accessor over the one
+ * object.  The names are the SAU2 map's, so users outside mmap/ spell them
+ * exactly as the map does.
+ */
+#define MMAP_$HI_INDX                    (MMAP_GLOBALS.hi_indx)
+#define MMAP_$LO_INDX                    (MMAP_GLOBALS.lo_indx)
+#define MMAP_$WS_REMOVE                  (MMAP_GLOBALS.ws_remove)
+#define MMAP_$RECLAIM_PUR_CNT            (MMAP_GLOBALS.reclaim_pur_cnt)
+#define MMAP_$RECLAIM_SHAR_CNT           (MMAP_GLOBALS.reclaim_shar_cnt)
+#define MMAP_$WS_SCAN_CNT                (MMAP_GLOBALS.ws_scan_cnt)
+#define MMAP_$WS_OVERFLOW                (MMAP_GLOBALS.ws_overflow)
+#define MMAP_$STEAL_CNT                  (MMAP_GLOBALS.steal_cnt)
+#define MMAP_$ALLOC_PAGES                (MMAP_GLOBALS.alloc_pages)
+#define MMAP_$ALLOC_CNT                  (MMAP_GLOBALS.alloc_cnt)
+#define MMAP_$WSL                        (MMAP_GLOBALS.wsl)
+#define MMAP_$MIN_RMT_POOL               (MMAP_GLOBALS.min_rmt_pool)
+#define MMAP_$HPPN                       (MMAP_GLOBALS.hppn)
+#define MMAP_$LPPN                       (MMAP_GLOBALS.lppn)
+#define MMAP_$PAGEABLE_PAGES_LOWER_LIMIT (MMAP_GLOBALS.pageable_pages_lower_limit)
+#define MMAP_$PAGEABLE_PAGES             (MMAP_GLOBALS.pageable_pages)
+#define MMAP_$REMOTE_PAGES               (MMAP_GLOBALS.remote_pages)
+#define MMAP_$REAL_PAGES                 (MMAP_GLOBALS.real_pages)
+#define MMAP_$FORMAT                     (MMAP_GLOBALS.format)
+#define MMAP_$WSL_HI_MARK                (MMAP_GLOBALS.wsl_hi_mark)
+#define MMAP_$WS_OWNER                   (MMAP_GLOBALS.ws_owner)
+#define MMAP_$RMT_LIMIT                  (MMAP_GLOBALS.rmt_limit)
+
+/* The tree's older spellings of two of those cells. */
+#define MMAP_WSL         MMAP_$WSL
+#define MMAP_WSL_HI_MARK MMAP_$WSL_HI_MARK
+
+/*
+ * MMAP_PID_TO_WSL - MMAP_$WS_OWNER reached the way the binary reaches it,
+ * through the base biased by -2 and a 1-based index.  OSINFO_$GET_MMAP does
+ * `movea.l #0xe23ca8,A3 / move.w (-0x2,A3,D1w*0x1)` with D1 = asid * 2
+ * (0x00E5C71C-0x00E5C724), and MMAP_$SET_WS_INDEX and friends address the
+ * same words as 0xE23CA6 + pid * 2, so MMAP_PID_TO_WSL[pid] is
+ * MMAP_$WS_OWNER[pid - 1] and MMAP_PID_TO_WSL[0] is MMAP_$WSL_HI_MARK.
+ */
+#define MMAP_PID_TO_WSL ((uint16_t *)&MMAP_GLOBALS.wsl_hi_mark)
 
 /*
  * Per-pool page counts.
@@ -250,24 +475,6 @@ extern uint16_t *mmap_pte_base;
 
 /* Get WSL index for a process ID */
 #define WSL_FOR_PID(pid) (MMAP_PID_TO_WSL[(pid)])
-
-/*
- * MMAP global data
- */
-extern uint32_t MMAP_$PAGEABLE_PAGES;
-extern uint32_t MMAP_$WS_OVERFLOW;
-extern uint32_t MMAP_$WS_REMOVE;
-extern uint32_t MMAP_$WS_SCAN_CNT;
-extern uint32_t MMAP_$ALLOC_CNT;
-extern uint32_t MMAP_$ALLOC_PAGES;
-extern uint32_t MMAP_$STEAL_CNT;
-extern uint32_t MMAP_$REAL_PAGES;
-extern uint32_t MMAP_$LPPN; /* Lowest pageable page number */
-extern uint32_t MMAP_$HPPN; /* Highest pageable page number */
-/* Statistics read by OSINFO_$GET_MMAP */
-extern uint32_t MMAP_$REMOTE_PAGES;      /* 0xE23C9C */
-extern uint32_t MMAP_$RECLAIM_SHAR_CNT;  /* 0xE23298 */
-extern uint32_t MMAP_$RECLAIM_PUR_CNT;   /* 0xE23294 */
 
 /*
  * Note: Internal error status arrays and other internal globals

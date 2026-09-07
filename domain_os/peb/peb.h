@@ -177,13 +177,16 @@ extern uint32_t peb_wired_data_addr;
 /* Per-process FP state storage (wired memory) */
 extern peb_fp_state_t PEB_$WIRED_DATA_START[];
 
-/* PEB status register shadow (cached copy of last interrupt status) */
+/* PEB status register shadow (cached copy of last interrupt status),
+ * 0x00E24468, the first cell of the PEB_ASM module (peb/sau2/int.s). */
 extern uint32_t PEB_$STATUS_REG;
 
 /*
  * PEB_$DISP_INT_ADDR - display interrupt handler address cell (0x00E24478).
  * SMD_$INTERRUPT_INIT stores the address of SMD_$DISP1_INT here when the PEB
- * is routing the display interrupt instead of the direct vector at 0x70.
+ * is routing the display interrupt instead of the direct vector at 0x70.  It
+ * is the 32-bit operand of PEB_$INT's opening `jmp <abs>.l`, so it is defined
+ * inside peb/sau2/int.s rather than as a C object.
  */
 extern void **PEB_$DISP_INT_ADDR;
 
@@ -214,9 +217,14 @@ void PEB_$INIT(void);
 /*
  * PEB_$INT - PEB interrupt handler
  *
- * Handles PEB interrupt signals. Called from the interrupt vector.
- * Checks for spurious interrupts, saves FP status, and signals
- * waiting processes via DXM.
+ * Handles PEB interrupt signals.  PEB_$INIT installs it in interrupt vector
+ * 0x1C (address 0x00000070).  Checks for a spurious interrupt, latches the
+ * PEB exception status into PEB_$STATUS_REG and signals the waiting process
+ * via DXM_$ADD_SIGNAL, then leaves through the shared interrupt exit.
+ *
+ * Hand-written assembly: no frame, direct SR writes and a `jmp` exit rather
+ * than an rts, and its opening jump's operand is the patchable data cell
+ * PEB_$DISP_INT_ADDR.  Emitted as peb/sau2/int.s.
  *
  * Original address: 0x00E2446C (110 bytes)
  */

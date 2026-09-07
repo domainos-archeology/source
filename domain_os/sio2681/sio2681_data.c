@@ -147,7 +147,7 @@ sio2681_global_data_t SIO2681_$DATA = {
  * holds zeroes here; SIO2681_$INIT fills an entry in and the interrupt stubs
  * write its saved_pc field.
  */
-sio2681_ptrs_entry_t SIO2681_$PTRS[SIO2681_MAX_CHIPS];
+sio2681_ptrs_entry_t SIO2681_$PTRS[SIO2681_MAX_CHIPS] SIO2681_PTRS_SECTION;
 
 /*
  * SIO2681_$INT_VECTORS - the two interrupt stubs, 0x00E351EC

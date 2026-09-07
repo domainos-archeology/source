@@ -20,21 +20,11 @@
  * Internal Data Declarations
  * ============================================================================
  *
- * The SIO2681 channel used for tone output is initialized elsewhere
- * (likely in the console/keyboard driver initialization).
- *
- * Address 0xE2DC58 contains a pointer to the sio2681_channel_t structure
- * used for tone control. This is set up during system initialization.
+ * The SIO2681 channel record used for tone output is initialized elsewhere:
+ * TERM_$INIT hands its address to SIO2681_$INIT as the channel-A record.
  */
 
-/*
- * Pointer to SIO2681 channel used for tone generation.
- * This pointer is stored at address 0xE2DC58 and is set up during
- * system initialization by the keyboard/console driver.
- *
- * Original address: 0xE2DC58
- */
-extern sio2681_channel_t *TONE_$CHANNEL;
+/* TONE_$CHANNEL (0x00E2DC58 = TERM_$DATA + 0x1268) is defined in tone/tone.h. */
 
 /*
  * ============================================================================

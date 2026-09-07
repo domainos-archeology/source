@@ -73,16 +73,67 @@ _Static_assert(sizeof(term_line_data_t) == 0x4dc,
 // Base address: 0xe2c9f0 in original binary
 // =============================================================================
 typedef struct term_data {
-  // Global handler function pointers (offsets 0x00-0x27)
-  char reserved_00[0x18];     // 0x00: unknown
-  m68k_ptr_t ptr_tty_i_rcv;   // 0x18: PTR_TTY_$I_RCV
-  m68k_ptr_t ptr_tty_i_drain; // 0x1c: PTR_TTY_$I_OUTPUT_BUFFER_DRAINED
-  m68k_ptr_t ptr_tty_i_hup;   // 0x20: PTR_TTY_$I_HUP
-  m68k_ptr_t ptr_tty_i_int;   // 0x24: PTR_TTY_$I_INTERRUPT
+  /*
+   * 0x00-0x17: the serial lines' SIO_$INIT_DESC descriptor block (TERM_$INIT
+   * passes &TERM_$DATA as SIO_$INIT_DESC's desc_base at 0x00E330C4 and
+   * 0x00E3313C).  Only the six words below are non-zero in the image.
+   */
+  uint16_t w_00;              // 0x00: 0
+  uint16_t w_02;              // 0x02: 0x0009
+  uint16_t w_04;              // 0x04: 0
+  uint16_t w_06;              // 0x06: 0x000c
+  uint16_t w_08;              // 0x08: 0
+  uint16_t w_0a;              // 0x0a: 0
+  uint16_t w_0c;              // 0x0c: 0x000e
+  uint16_t w_0e;              // 0x0e: 0x000e
+  uint16_t w_10;              // 0x10: 0x0003
+  uint16_t w_12;              // 0x12: 0x0001
+  uint16_t w_14;              // 0x14: 0
+  uint16_t w_16;              // 0x16: 0
 
-  char reserved_28[0x98]; // 0x28-0xbf: unknown
+  // Global handler function pointers (offsets 0x18-0x27)
+  m68k_ptr_t ptr_tty_i_rcv;   // 0x18: TTY_$I_RCV                 0x00E1B92A
+  m68k_ptr_t ptr_tty_i_drain; // 0x1c: TTY_$I_OUTPUT_BUFFER_DRAINED 0x00E1B394
+  m68k_ptr_t ptr_tty_i_hup;   // 0x20: TTY_$I_HUP                 0x00E1BECE
+  m68k_ptr_t ptr_tty_i_int;   // 0x24: TTY_$I_INTERRUPT           0x00E1BEA8
+  m68k_ptr_t ptr_tty_i_err;   // 0x28: TTY_$I_ERR                 0x00E1BE08
 
-  m68k_ptr_t ptr_tty_i_rcv_alt; // 0xc0: PTR_TTY_$I_RCV_ALT
+  char reserved_2c[0x1c]; // 0x2c-0x47: zero in the image
+
+  // 0x40 = the serial lines' SIO_$INIT_LINE handler block (DAT_00e2ca30)
+  m68k_ptr_t ptr_sio_i_tstart;       // 0x48: SIO_$I_TSTART        0x00E1C7A8
+  m68k_ptr_t ptr_sio_i_inhibit_xmit; // 0x4c: SIO_$I_INHIBIT_XMIT  0x00E1C9CE
+  m68k_ptr_t ptr_sio_i_inhibit_rcv;  // 0x50: SIO_$I_INHIBIT_RCV   0x00E1C94A
+  m68k_ptr_t ptr_sio_i_err;          // 0x54: SIO_$I_ERR           0x00E67D9C
+
+  // 0x58 = the console SIO_$INIT_DESC descriptor block (DAT_00e2ca48)
+  uint16_t w_58;              // 0x58: 0
+  uint16_t w_5a;              // 0x5a: 0x0009
+  char reserved_5c[0x08];     // 0x5c-0x63: zero in the image
+  uint16_t w_64;              // 0x64: 0x0007
+  uint16_t w_66;              // 0x66: 0x0007
+  uint16_t w_68;              // 0x68: 0x0003
+  uint16_t w_6a;              // 0x6a: 0x0001
+  uint16_t w_6c;              // 0x6c: 0x0003
+  char reserved_6e[0x0a];     // 0x6e-0x77: zero in the image
+
+  // 0x70 = the console SIO_$INIT_LINE handler block (DAT_00e2ca60)
+  m68k_ptr_t ptr_dtty_tstart; // 0x78: DTTY_$TSTART               0x00E1D6D0
+
+  char reserved_7c[0x0c]; // 0x7c-0x87: zero in the image
+
+  // 0x88 = the console handler array SIO_$INIT_DESC is handed
+  m68k_ptr_t ptr_kbd_rcv;     // 0x88: KBD_$RCV                   0x00E1CCC0
+  m68k_ptr_t ptr_kbd_drain;   // 0x8c: KBD_$OUTPUT_BUFFER_DRAINED 0x00E1CE96
+
+  char reserved_90[0x24]; // 0x90-0xb3: zero in the image
+
+  // 0xb0 = OS_TERM_INIT's sixth argument (DAT_00e2caa0)
+  m68k_ptr_t ptr_sio_i_tstart_b4;    // 0xb4: SIO_$I_TSTART       0x00E1C7A8
+
+  char reserved_b8[0x08]; // 0xb8-0xbf: zero in the image
+
+  m68k_ptr_t ptr_tty_i_rcv_alt; // 0xc0: TTY_$I_RCV               0x00E1B92A
 
   char reserved_c4[0x94]; // 0xc4-0x157: unknown
 
@@ -105,18 +156,32 @@ typedef struct term_data {
   m68k_ptr_t tty_spin_lock; // 0x1384: TTY_$SPIN_LOCK
   int16_t max_dtte;         // 0x1388: TERM_$MAX_DTTE (typically 3)
 
-  char reserved_138a[0x06]; // 0x138a-0x138f: unknown
+  char reserved_138a[0x03]; // 0x138a-0x138c: zero in the image
+  uint8_t b_138d;           // 0x138d: 0xff in the image; no reader
+  char reserved_138e[0x02]; // 0x138e-0x138f: zero in the image
 
-  char kbd_string_data[16]; // 0x1390: keyboard string data buffer (size TBD)
+  /* 0x1390: the keyboard string TERM_$SEND_KBD_STRING passes to 0x00E1AAFC
+   * (`pea (0x1390,A5)` at 0x00E1AC74, with the length word 5 at 0x00E1AC9C).
+   * Eight bytes: the map segment ends at 0x00E2DD88 = base + 0x1398.
+   * Image bytes: ff 00 ff 12 21 00 00 00. */
+  char kbd_string_data[8];
 } term_data_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
-_Static_assert(__builtin_offsetof(term_data_t, reserved_00) == 0x00, "term_data_t.reserved_00");
+_Static_assert(__builtin_offsetof(term_data_t, w_00) == 0x00, "term_data_t.w_00");
 _Static_assert(__builtin_offsetof(term_data_t, ptr_tty_i_rcv) == 0x18, "term_data_t.ptr_tty_i_rcv");
 _Static_assert(__builtin_offsetof(term_data_t, ptr_tty_i_drain) == 0x1C, "term_data_t.ptr_tty_i_drain");
 _Static_assert(__builtin_offsetof(term_data_t, ptr_tty_i_hup) == 0x20, "term_data_t.ptr_tty_i_hup");
 _Static_assert(__builtin_offsetof(term_data_t, ptr_tty_i_int) == 0x24, "term_data_t.ptr_tty_i_int");
-_Static_assert(__builtin_offsetof(term_data_t, reserved_28) == 0x28, "term_data_t.reserved_28");
+_Static_assert(__builtin_offsetof(term_data_t, ptr_tty_i_err) == 0x28, "term_data_t.ptr_tty_i_err");
+_Static_assert(__builtin_offsetof(term_data_t, ptr_sio_i_tstart) == 0x48, "term_data_t.ptr_sio_i_tstart");
+_Static_assert(__builtin_offsetof(term_data_t, ptr_sio_i_err) == 0x54, "term_data_t.ptr_sio_i_err");
+_Static_assert(__builtin_offsetof(term_data_t, w_58) == 0x58, "term_data_t.w_58");
+_Static_assert(__builtin_offsetof(term_data_t, w_64) == 0x64, "term_data_t.w_64");
+_Static_assert(__builtin_offsetof(term_data_t, ptr_dtty_tstart) == 0x78, "term_data_t.ptr_dtty_tstart");
+_Static_assert(__builtin_offsetof(term_data_t, ptr_kbd_rcv) == 0x88, "term_data_t.ptr_kbd_rcv");
+_Static_assert(__builtin_offsetof(term_data_t, ptr_kbd_drain) == 0x8C, "term_data_t.ptr_kbd_drain");
+_Static_assert(__builtin_offsetof(term_data_t, ptr_sio_i_tstart_b4) == 0xB4, "term_data_t.ptr_sio_i_tstart_b4");
 _Static_assert(__builtin_offsetof(term_data_t, ptr_tty_i_rcv_alt) == 0xC0, "term_data_t.ptr_tty_i_rcv_alt");
 _Static_assert(__builtin_offsetof(term_data_t, reserved_c4) == 0xC4, "term_data_t.reserved_c4");
 _Static_assert(__builtin_offsetof(term_data_t, reserved_158) == 0x158, "term_data_t.reserved_158");
@@ -127,7 +192,10 @@ _Static_assert(__builtin_offsetof(term_data_t, reserved_1380) == 0x1380, "term_d
 _Static_assert(__builtin_offsetof(term_data_t, tty_spin_lock) == 0x1384, "term_data_t.tty_spin_lock");
 _Static_assert(__builtin_offsetof(term_data_t, max_dtte) == 0x1388, "term_data_t.max_dtte");
 _Static_assert(__builtin_offsetof(term_data_t, reserved_138a) == 0x138A, "term_data_t.reserved_138a");
+_Static_assert(__builtin_offsetof(term_data_t, b_138d) == 0x138D, "term_data_t.b_138d");
 _Static_assert(__builtin_offsetof(term_data_t, kbd_string_data) == 0x1390, "term_data_t.kbd_string_data");
+/* Map: "D E2C9F0 OS_TERM_INIT size = 1398" (0x00E2C9F0..0x00E2DD88). */
+_Static_assert(sizeof(term_data_t) == 0x1398, "term_data_t size");
 
 // Global TERM data structure (at 0xe2c9f0 in original binary)
 extern term_data_t TERM_$DATA;

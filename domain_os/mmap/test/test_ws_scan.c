@@ -59,6 +59,8 @@ static int tests_failed = 0;
  * Module data
  * ============================================================================ */
 
+/* Slots exercised out of the block's MMAP_WSL_SLOTS; MMAP_$WS_SCAN rejects
+ * anything above MMAP_$WSL_HI_MARK. */
 #define TEST_WSL_SLOTS  20
 #define TEST_PAGES      16
 #define TEST_SEGMENTS   8
@@ -68,16 +70,20 @@ static int tests_failed = 0;
 #define TEST_VPN        3
 #define TEST_SEG        1       /* the table is 1-based */
 
-static ws_hdr_t wsl_store[TEST_WSL_SLOTS];
 static mmape_t  mmape_store[TEST_PAGES];
 static uint32_t pft_store[TEST_PAGES];
 static uint16_t pte_store[TEST_PTES];
 
-ws_hdr_t *mmap_wsl        = wsl_store;
+/*
+ * The MMAP_ module data block (`D E23284 MMAP_ size = AA8').  Every cell the
+ * scanner touches - the WSL array, MMAP_$WSL_HI_MARK and the three counters -
+ * is a field of this one object, so the test allocates the block itself.
+ */
+mmap_globals_t MMAP_GLOBALS_STORAGE;
+
 mmape_t  *mmap_mmape_base = mmape_store;
 uint32_t *mmu_pft_base    = pft_store;
 uint16_t *mmap_pte_base   = pte_store;
-uint16_t  mmap_wsl_hi_mark;
 
 /*
  * The 0xEC5400 table and the AOTEs it points at.  MMAP_$SEG_ASTE_FOR(seg)
@@ -85,10 +91,6 @@ uint16_t  mmap_wsl_hi_mark;
  */
 aste_t MMAP_$SEG_ASTE[TEST_SEGMENTS];
 static aote_t aote_store[TEST_SEGMENTS];
-
-uint32_t MMAP_$PAGEABLE_PAGES;
-uint32_t MMAP_$WS_SCAN_CNT;
-uint32_t MMAP_$WS_REMOVE;
 
 /* ============================================================================
  * Mocks
@@ -136,7 +138,7 @@ static aote_t  *aote;
  */
 static void reset_module(uint8_t flags2)
 {
-    memset(wsl_store, 0, sizeof(wsl_store));
+    memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     memset(mmape_store, 0, sizeof(mmape_store));
     memset(pft_store, 0, sizeof(pft_store));
     memset(pte_store, 0, sizeof(pte_store));
@@ -146,13 +148,10 @@ static void reset_module(uint8_t flags2)
     move_calls = 0;
     mmu_removes = 0;
     crashes = 0;
-    MMAP_$PAGEABLE_PAGES = 0;
-    MMAP_$WS_SCAN_CNT = 0;
-    MMAP_$WS_REMOVE = 0;
-    mmap_wsl_hi_mark = TEST_WSL_SLOTS - 1;
+    MMAP_WSL_HI_MARK = TEST_WSL_SLOTS - 1;
 
-    wsl_store[TEST_WSL].page_count = 1;
-    wsl_store[TEST_WSL].head_vpn = TEST_VPN;
+    MMAP_WSL[TEST_WSL].page_count = 1;
+    MMAP_WSL[TEST_WSL].head_vpn = TEST_VPN;
 
     page = MMAPE_FOR_VPN(TEST_VPN);
     page->wire_count = 0;
@@ -189,7 +188,7 @@ TEST(aggressive_mode_takes_page_when_aote_bit12_set)
     ASSERT_EQ(MMAP_PAGE_TYPE_DIRTY_FL, move_type[0]);
     ASSERT_EQ(TEST_VPN, move_head[0]);
     ASSERT_EQ(1u, MMAP_$WS_REMOVE);
-    ASSERT_EQ(0u, wsl_store[TEST_WSL].page_count);
+    ASSERT_EQ(0u, MMAP_WSL[TEST_WSL].page_count);
 }
 
 /* Same page, positive location high word -> the DIRTY_NF pool. */
@@ -221,7 +220,7 @@ TEST(aggressive_mode_leaves_page_when_aote_bit12_clear)
     ASSERT_EQ(1u, scanned);
     ASSERT_EQ(0, move_calls);
     ASSERT_EQ(0u, MMAP_$WS_REMOVE);
-    ASSERT_EQ(1u, wsl_store[TEST_WSL].page_count);
+    ASSERT_EQ(1u, MMAP_WSL[TEST_WSL].page_count);
 }
 
 /*

@@ -1,14 +1,15 @@
 ---
 name: dir-flp-op-tables
-description: Recovered layouts for DIR_$OP_TAB / DIR_$OP_PARAMS / DIR_$NAME_OFFSET_TABLE, FLP_DATA and MNK_$KTT_PTRS.
+description: Recovered layouts for DIR_$OP_TAB (one biased table) / DIR_$NAME_OFFSET_TABLE, FLP_DATA and MNK_$KTT_PTRS.
 metadata:
   type: project
 ---
 
 **DIR module block** `D E7DBF8 DIR size = 212C`.  DIR_$DO_OP does
 `lea (0xe7dc00).l,A5` at 0x00E4C030, so A5 = block base + 8.
-- `DIR_$OP_PARAMS` = A5+0x1F9C = 0x00E7FB9C: 8-byte records indexed by
-  (opcode>>1); +0x00 protocol version, +0x04 reply body size.
+- There is no separate `DIR_$OP_PARAMS`: A5+0x1F9C = 0x00E7FB9C is record+0x02
+  of the one biased DIR_$OP_TAB family (virtual base 0xE7FB9A).  See
+  [[biased-tables-and-dead-cells]] for the record shape and the bias.
 - `DIR_$NAME_OFFSET_TABLE` = A5+0x2000 = 0x00E7FC00: 8 words
   {0,4,16,20,12,0,0,0}, ends at DIR_$ENTRY_CACHE_TOO_LONG_NAME (0x00E7FC10).
 - `DIR_$OP_TAB` 0x00E7FC42: 26 records of 8 bytes.  The DIR_$<op>U client
@@ -17,7 +18,10 @@ metadata:
   family with a -0xA8 bias, which puts the family base at 0x00E7FB9A and makes
   DIR_$OP_TAB record 21; the two bases differ by 2 and are still modelled as
   separate objects.
-- The DIR segment's last 0x12 bytes hold three words and the string ".bak".
+- The DIR segment's last 0x12 bytes: a 2-byte alignment pad, three longword
+  directory-read continuation cookies (0xE7FD14 first real entry, 0xE7FD18
+  "..", 0xE7FD1C ".") that dir_$do_op_dir_readu reads as (0x2114/0x2118/
+  0x211c,A5), and the unreferenced string ".bak" at 0xE7FD20.
 
 **FLP_ module block** `D E7AEF4 FLP_ size = 13C`, A5 = 0x00E7AEF4.  Extents are
 pinned by NEC 8272 command strings in the image and by the by-reference word

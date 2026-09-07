@@ -10,21 +10,54 @@
  *   TERM_$STATUS_TRANSLATION_TABLE_36:   0xe2c9b0
  *   TERM_$KBD_STRING_LEN:                0xe1ac9c
  *   PTR_TERM_$ENQUEUE_TPAD_00e1ce90:     0xe1ce90
- *   PTR_TTY_$I_RCV_00e2cab0:             0xe2cab0
- *   PTR_TTY_$I_RCV_00e2ca08:             0xe2ca08
  */
 
 #include "term/term_internal.h"
 #include "suma/suma.h"
 
 /*
- * TERM_$DATA - Main terminal data structure
+ * TERM_$DATA - the OS_TERM_INIT module block, 0x00E2C9F0, 0x1398 bytes
+ * (map: "D E2C9F0 OS_TERM_INIT size = 1398", 0x00E2C9F0..0x00E2DD88, with
+ * TTY_$SPIN_LOCK at +0x1384 and TERM_$MAX_DTTE at +0x1388 as its two
+ * interior symbols).
  *
- * The kbd_string_data field at offset 0x1390 is statically initialized
- * with the keyboard string sequence { 0xff, 0x00, 0xff, 0x12, 0x21 }.
+ * Only 59 of those bytes are non-zero in the image, in two windows -- the
+ * handler and descriptor blocks at +0x00..+0xC3, and +0x138D plus the
+ * keyboard string at +0x1390..+0x1394.  Everything else (the per-line
+ * records at +0x158, the SIO descriptors, the DTTE array) is zero-filled and
+ * is built at run time by TERM_$INIT.  Every value below is the image
+ * longword/word at that offset; the pointer cells are given as addresses,
+ * with the SAU2 map symbol they name in the comment.
  */
 term_data_t TERM_$DATA = {
-    .kbd_string_data = { 0xff, 0x00, 0xff, 0x12, 0x21 }
+    .w_02 = 0x0009,                      /* 0x00E2C9F2 */
+    .w_06 = 0x000c,                      /* 0x00E2C9F6 */
+    .w_0c = 0x000e,                      /* 0x00E2C9FC */
+    .w_0e = 0x000e,                      /* 0x00E2C9FE */
+    .w_10 = 0x0003,                      /* 0x00E2CA00 */
+    .w_12 = 0x0001,                      /* 0x00E2CA02 */
+    .ptr_tty_i_rcv   = 0x00E1B92A,       /* 0x00E2CA08 TTY_$I_RCV */
+    .ptr_tty_i_drain = 0x00E1B394,       /* 0x00E2CA0C TTY_$I_OUTPUT_BUFFER_DRAINED */
+    .ptr_tty_i_hup   = 0x00E1BECE,       /* 0x00E2CA10 TTY_$I_HUP */
+    .ptr_tty_i_int   = 0x00E1BEA8,       /* 0x00E2CA14 TTY_$I_INTERRUPT */
+    .ptr_tty_i_err   = 0x00E1BE08,       /* 0x00E2CA18 TTY_$I_ERR */
+    .ptr_sio_i_tstart       = 0x00E1C7A8,/* 0x00E2CA38 SIO_$I_TSTART */
+    .ptr_sio_i_inhibit_xmit = 0x00E1C9CE,/* 0x00E2CA3C SIO_$I_INHIBIT_XMIT */
+    .ptr_sio_i_inhibit_rcv  = 0x00E1C94A,/* 0x00E2CA40 SIO_$I_INHIBIT_RCV */
+    .ptr_sio_i_err          = 0x00E67D9C,/* 0x00E2CA44 SIO_$I_ERR */
+    .w_5a = 0x0009,                      /* 0x00E2CA4A */
+    .w_64 = 0x0007,                      /* 0x00E2CA54 */
+    .w_66 = 0x0007,                      /* 0x00E2CA56 */
+    .w_68 = 0x0003,                      /* 0x00E2CA58 */
+    .w_6a = 0x0001,                      /* 0x00E2CA5A */
+    .w_6c = 0x0003,                      /* 0x00E2CA5C */
+    .ptr_dtty_tstart = 0x00E1D6D0,       /* 0x00E2CA68 DTTY_$TSTART */
+    .ptr_kbd_rcv     = 0x00E1CCC0,       /* 0x00E2CA78 KBD_$RCV */
+    .ptr_kbd_drain   = 0x00E1CE96,       /* 0x00E2CA7C KBD_$OUTPUT_BUFFER_DRAINED */
+    .ptr_sio_i_tstart_b4 = 0x00E1C7A8,   /* 0x00E2CAA4 SIO_$I_TSTART */
+    .ptr_tty_i_rcv_alt   = 0x00E1B92A,   /* 0x00E2CAB0 TTY_$I_RCV */
+    .b_138d = 0xff,                      /* 0x00E2DD7D; no reader in the image */
+    .kbd_string_data = { 0xff, 0x00, 0xff, 0x12, 0x21 }, /* 0x00E2DD80 */
 };
 
 /*
@@ -73,24 +106,6 @@ uint16_t TERM_$KBD_STRING_LEN = 5;
  * Original address: 0xe1ce90
  */
 DXM_$DEFINE_CALLBACK_CELL(PTR_TERM_$ENQUEUE_TPAD_00e1ce90, TERM_$ENQUEUE_TPAD);
-
-/*
- * PTR_TTY_$I_RCV_00e2cab0 - Function pointer to TTY_$I_RCV
- *
- * Used by TERM_$INIT for console handler setup.
- *
- * Original address: 0xe2cab0
- */
-void *PTR_TTY_$I_RCV_00e2cab0 = (void *)TTY_$I_RCV;
-
-/*
- * PTR_TTY_$I_RCV_00e2ca08 - Function pointer to TTY_$I_RCV
- *
- * Used by TERM_$INIT for serial port handler setup.
- *
- * Original address: 0xe2ca08
- */
-void *PTR_TTY_$I_RCV_00e2ca08 = (void *)TTY_$I_RCV;
 
 /*
  * ============================================================================

@@ -63,21 +63,25 @@ static int tests_failed = 0;
  * ========================================================================
  */
 
-#define TEST_WSL_SLOTS  16
 #define TEST_SEGMENTS   8
 #define TEST_PAGES      64
 
-static ws_hdr_t          wsl_store[TEST_WSL_SLOTS];
 static pmap_segmap_row_t segmap_store[TEST_SEGMENTS];
 static mmape_t           mmape_store[TEST_PAGES];
 static uint32_t          pft_store[TEST_PAGES];
 
-ws_hdr_t          *mmap_wsl = wsl_store;
+/*
+ * The MMAP_ module data block (`D E23284 MMAP_ size = AA8').  MMAP_$WSL,
+ * MMAP_$WSL_HI_MARK, MMAP_$STEAL_CNT and MMAP_$PAGEABLE_PAGES are all fields
+ * of this one object (mmap/mmap.h), so the daemon's whole MMAP_ world is
+ * this single definition.
+ */
+mmap_globals_t MMAP_GLOBALS_STORAGE;
+
 pmap_segmap_row_t *pmap_segmap = segmap_store;
 mmape_t           *mmap_mmape_base = mmape_store;
 uint32_t          *mmu_pft_base = pft_store;
 
-uint16_t mmap_wsl_hi_mark;      /* MMAP_WSL_HI_MARK on ARCH_HOST */
 uint16_t PMAP_$WS_INTERVAL;
 uint32_t PMAP_$IDLE_INTERVAL;
 uint32_t TIME_$CLOCKH;
@@ -128,7 +132,6 @@ uint32_t PMAP_$PUR_L_CNT;
 int8_t   PMAP_$SHUTTING_DOWN_FLAG;
 clock_t  PMAP_$SHORT_WAIT_DELAY;
 ec_$eventcount_t PMAP_$L_PURIFIER_EC, PMAP_$PAGES_EC;
-uint32_t MMAP_$STEAL_CNT, MMAP_$PAGEABLE_PAGES;
 uint16_t PROC1_$CURRENT;
 uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
 int8_t   NETLOG_$OK_TO_LOG;
@@ -173,7 +176,7 @@ void pmap_$write_page(uint32_t vpn, status_$t *st, int8_t f)
 
 static void reset_mocks(void)
 {
-    memset(wsl_store, 0, sizeof(wsl_store));
+    memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     memset(segmap_store, 0, sizeof(segmap_store));
     memset(mmape_store, 0, sizeof(mmape_store));
     memset(pft_store, 0, sizeof(pft_store));
@@ -211,19 +214,19 @@ static void test_overdue_slot_is_rescanned_from_the_top(void)
 {
     int32_t prev_steal = 0;
 
-    wsl_store[5].page_count = 4;
-    wsl_store[5].owner = 99;
-    wsl_store[7].page_count = 4;
-    wsl_store[7].owner = 99;
-    wsl_store[7].ws_timestamp = 0;
+    MMAP_WSL[5].page_count = 4;
+    MMAP_WSL[5].owner = 99;
+    MMAP_WSL[7].page_count = 4;
+    MMAP_WSL[7].owner = 99;
+    MMAP_WSL[7].ws_timestamp = 0;
 
     ASSERT_TRUE(pmap_$purifier_ws_scan_pass(50, &prev_steal) < 0);
 
     ASSERT_EQ(1, scan_calls);
     ASSERT_EQ(7, scan_slot[0]);
-    ASSERT_EQ(0, wsl_store[7].owner);              /* 0x00E13E82 */
-    ASSERT_EQ(1000, wsl_store[7].ws_timestamp);    /* 0x00E13E86 */
-    ASSERT_EQ(99, wsl_store[5].owner);             /* never reached */
+    ASSERT_EQ(0, MMAP_WSL[7].owner);              /* 0x00E13E82 */
+    ASSERT_EQ(1000, MMAP_WSL[7].ws_timestamp);    /* 0x00E13E86 */
+    ASSERT_EQ(99, MMAP_WSL[5].owner);             /* never reached */
     ASSERT_EQ(1, prev_steal);                      /* 0x00E13E3E */
 }
 
@@ -232,9 +235,9 @@ static void test_idle_slot_is_purged(void)
 {
     int32_t prev_steal = 0;
 
-    wsl_store[6].page_count = 4;
-    wsl_store[6].owner = 0;                 /* not overdue */
-    wsl_store[6].pri_timestamp = 800;       /* < 1000 - 100 */
+    MMAP_WSL[6].page_count = 4;
+    MMAP_WSL[6].owner = 0;                 /* not overdue */
+    MMAP_WSL[6].pri_timestamp = 800;       /* < 1000 - 100 */
 
     ASSERT_TRUE(pmap_$purifier_ws_scan_pass(50, &prev_steal) < 0);
 
@@ -253,12 +256,12 @@ static void test_no_candidate_returns_false(void)
     int32_t prev_steal = 0;
 
     /* Every set is entirely at or below its floor. */
-    wsl_store[5].page_count = 3;
-    wsl_store[5].ws_floor = 3;
-    wsl_store[5].pri_timestamp = 1000;
-    wsl_store[6].page_count = 2;
-    wsl_store[6].ws_floor = 9;
-    wsl_store[6].pri_timestamp = 1000;
+    MMAP_WSL[5].page_count = 3;
+    MMAP_WSL[5].ws_floor = 3;
+    MMAP_WSL[5].pri_timestamp = 1000;
+    MMAP_WSL[6].page_count = 2;
+    MMAP_WSL[6].ws_floor = 9;
+    MMAP_WSL[6].pri_timestamp = 1000;
 
     ASSERT_TRUE(pmap_$purifier_ws_scan_pass(50, &prev_steal) == 0);
     ASSERT_EQ(0, scan_calls);
@@ -273,9 +276,9 @@ static void test_empty_pools_ignore_the_floor(void)
 {
     int32_t prev_steal = 0;
 
-    wsl_store[5].page_count = 3;
-    wsl_store[5].ws_floor = 3;
-    wsl_store[5].pri_timestamp = 1000;
+    MMAP_WSL[5].page_count = 3;
+    MMAP_WSL[5].ws_floor = 3;
+    MMAP_WSL[5].pri_timestamp = 1000;
 
     /* total_pages != 0: nothing stealable. */
     ASSERT_TRUE(pmap_$purifier_ws_scan_pass(50, &prev_steal) == 0);
@@ -298,12 +301,12 @@ static void test_selection_takes_the_first_slot_crossed(void)
 {
     int32_t prev_steal = 0;
 
-    wsl_store[5].page_count = 8;
-    wsl_store[5].ws_floor = 0;
-    wsl_store[5].pri_timestamp = 1000;
-    wsl_store[7].page_count = 8;
-    wsl_store[7].ws_floor = 0;
-    wsl_store[7].pri_timestamp = 1000;
+    MMAP_WSL[5].page_count = 8;
+    MMAP_WSL[5].ws_floor = 0;
+    MMAP_WSL[5].pri_timestamp = 1000;
+    MMAP_WSL[7].page_count = 8;
+    MMAP_WSL[7].ws_floor = 0;
+    MMAP_WSL[7].pri_timestamp = 1000;
 
     PMAP_$WS_RANDOM_SEED = 0;      /* the draw stays 0, so target == 0 */
 

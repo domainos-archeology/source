@@ -11,6 +11,31 @@
 #include "proc1/proc1.h"
 
 /*
+ * PROC1_ASM_DATA_SECTION - keep PROC1_$CURRENT inside the PROC1_ASM code
+ * segment.
+ *
+ * In the image PROC1_$CURRENT is not part of a Pascal A5 data block: the SAU2
+ * map puts it at 0xE20608, inside the PROC1_ASM segment (0xE1EAC8, size
+ * 0x24A4) between DI_$Q_HEAD and PROC1_$AS_ID, i.e. in the same segment as the
+ * EC/PROC1 assembly routines.  proc1_$process_exit_handler reads it with a
+ * 16-bit PC-relative operand - `3f 3a fb 2e  move.w (-0x4d2,PC),-(SP)' at
+ * 0xE20AD8 (0xE20ADA - 0x4D2 = 0xE20608) - so the cell has to stay within
+ * 32KB of proc1/sau2/init_stack.o or the R_68K_PC16 relocation overflows
+ * (source-uwxz).  Give it a section of its own that sau2.ld emits just ahead
+ * of the ec/proc1 code, exactly as svc/svc_internal.h does for the SVC
+ * dispatch tables (source-a5t8).
+ *
+ * This is a code-segment cell, NOT an A5 module block, so it is deliberately
+ * outside the scope of the `.moddata.<name>' scheme in
+ * docs/design-per-process-data.md (source-0i3).
+ */
+#if defined(ARCH_M68K)
+#define PROC1_ASM_DATA_SECTION  __attribute__((section(".text.proc1_asm_data")))
+#else
+#define PROC1_ASM_DATA_SECTION
+#endif
+
+/*
  * ============================================================================
  * Internal Function Declarations
  * ============================================================================

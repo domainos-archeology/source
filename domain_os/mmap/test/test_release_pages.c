@@ -58,7 +58,6 @@ static int tests_failed = 0;
 
 #define TEST_PAGES      16
 #define TEST_SEGMENTS   8
-#define TEST_PIDS       65
 
 #define TEST_PID        2
 #define TEST_WSL        7
@@ -67,11 +66,16 @@ static int tests_failed = 0;
 
 static mmape_t  mmape_store[TEST_PAGES];
 static uint32_t pft_store[TEST_PAGES];
-static uint16_t pid_to_wsl_store[TEST_PIDS];
+
+/*
+ * The MMAP_ module data block (`D E23284 MMAP_ size = AA8').  The pid-to-WSL
+ * words this test writes are MMAP_$WS_OWNER reached through the -2 bias, so
+ * they are fields of this one object rather than a separate array.
+ */
+mmap_globals_t MMAP_GLOBALS_STORAGE;
 
 mmape_t  *mmap_mmape_base = mmape_store;
 uint32_t *mmu_pft_base    = pft_store;
-uint16_t *mmap_pid_to_wsl = pid_to_wsl_store;
 
 aste_t MMAP_$SEG_ASTE[TEST_SEGMENTS];
 static aote_t aote_store[TEST_SEGMENTS];
@@ -124,7 +128,7 @@ static void reset_module(uint8_t flags1, uint8_t flags2)
 {
     memset(mmape_store, 0, sizeof(mmape_store));
     memset(pft_store, 0, sizeof(pft_store));
-    memset(pid_to_wsl_store, 0, sizeof(pid_to_wsl_store));
+    memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     memset(MMAP_$SEG_ASTE, 0, sizeof(MMAP_$SEG_ASTE));
     memset(aote_store, 0, sizeof(aote_store));
 

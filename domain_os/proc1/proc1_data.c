@@ -23,7 +23,12 @@
  */
 proc1_t *PROC1_$CURRENT_PCB = NULL;     /* Pointer to current process's PCB */
 proc1_t *PROC1_$READY_PCB = NULL;       /* Head of the ready list */
-uint16_t PROC1_$CURRENT = 0;            /* PID of current process */
+/*
+ * 0xE20608, inside the PROC1_ASM code segment; reached PC-relative from
+ * proc1_$process_exit_handler (proc1/sau2/init_stack.s).  See
+ * PROC1_ASM_DATA_SECTION in proc1/proc1_internal.h (source-uwxz).
+ */
+uint16_t PROC1_$CURRENT PROC1_ASM_DATA_SECTION = 0; /* PID of current process */
 
 /*
  * Ready list tracking

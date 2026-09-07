@@ -63,8 +63,12 @@ uint8_t  MST_$ASID_LIST[8];
 uint32_t MST_$PAGE_AVAIL_BITMAP[MST_$PAGE_AVAIL_BITMAP_LONGS];
 uint16_t MST_$PAGE_ALLOC_HINT;
 uint16_t MST[MST_TABLE_ENTRIES];
-uint32_t MMAP_$PAGEABLE_PAGES;
-uint32_t MMAP_$REAL_PAGES;
+/*
+ * MMAP_$PAGEABLE_PAGES and MMAP_$REAL_PAGES are two cells of the MMAP_
+ * module data block (`D E23284 MMAP_ size = AA8'), so the test allocates
+ * the block rather than the two scalars (bead source-mu8j).
+ */
+mmap_globals_t MMAP_GLOBALS_STORAGE;
 uint16_t mmu_m68020;
 
 /* The four global-segment pages plus the MST pages land in this arena. */

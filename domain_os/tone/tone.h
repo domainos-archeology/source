@@ -15,6 +15,8 @@
 #define TONE_H
 
 #include "base/base.h"
+#include "term/term.h"        /* TERM_$DATA -- TONE_$CHANNEL is a field of it */
+#include "sio2681/sio2681.h"  /* sio2681_channel_t */
 
 /*
  * ============================================================================
@@ -24,6 +26,23 @@
 
 /* Resource lock ID for tone operations (PROC1 lock system) */
 #define TONE_LOCK_ID    0x0E
+
+/*
+ * TONE_$CHANNEL - the SIO2681 channel-A record the speaker hangs off,
+ * 0x00E2DC58.  It is not an object of its own: it lies inside the
+ * OS_TERM_INIT module block ("D E2C9F0 OS_TERM_INIT size = 1398"), at
+ * TERM_$DATA + 0x1268.  Both users form the record's ADDRESS, they do not
+ * load a pointer out of the cell:
+ *   TONE_$ENABLE  0x00E1ACEE  lea (0xe2c9f0).l,A5
+ *                 0x00E1ACFC  lea (0x1268,A5),A0
+ *                 0x00E1AD00  move.l A0,(-0x8,A6)   -- the local SIO2681_$TONE
+ *                 0x00E1AD04  pea (-0x8,A6)            is handed by reference
+ *   TERM_$INIT    0x00E331C0  pushes 0x00E2DC58 as SIO2681_$INIT's channel-A
+ *                             record, next to channel B at 0x00E2DC74
+ *                             (TERM_$DATA + 0x1284).
+ * It is zero in the image; SIO2681_$INIT fills it in.
+ */
+#define TONE_$CHANNEL (*(sio2681_channel_t *)((char *)&TERM_$DATA + 0x1268))
 
 /*
  * ============================================================================

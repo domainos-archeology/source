@@ -185,7 +185,8 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
      */
     if (STOPWATCH_WIRED == 0) {
         uint8_t wire_buf[16];
-        MST_$WIRE_AREA(&PTR_STOP_$WATCH, &PTR_OS_DATA_SHUTWIRED, wire_buf,
+        MST_$WIRE_AREA(&PTR_STOP_$WATCH, &PTR_OS_DATA_SHUTWIRED_00e81d20,
+                       wire_buf,
                        &STOPWATCH_WIRE_COUNT, &STOPWATCH_WIRED);
     }
 

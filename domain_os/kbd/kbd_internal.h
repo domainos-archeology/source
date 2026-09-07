@@ -133,7 +133,14 @@ extern uint8_t DAT_00e2dcbc[];
 /*
  * DAT_00e2ddec - State transition table
  */
-extern uint16_t DAT_00e2ddec[];
+extern uint16_t DAT_00e2ddec[8];
+
+/*
+ * DAT_00e2ddfc - 0x00E2DDFC, the 32 words between DAT_00e2ddec and
+ * TERM_$TPAD_BUFFER in the map segment "D E2DDE4 KBD size = D4".  No
+ * instruction in the image reaches them; see kbd/kbd_data.c.
+ */
+extern uint16_t DAT_00e2ddfc[32];
 
 /*
  * MNK_$KTT_PTRS - Keyboard translation table pointers

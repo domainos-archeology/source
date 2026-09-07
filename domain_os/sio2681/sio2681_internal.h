@@ -186,6 +186,27 @@ _Static_assert(__builtin_offsetof(sio2681_ptrs_entry_t, saved_pc) == 0x0C, "sio2
 _Static_assert(sizeof(sio2681_ptrs_entry_t) == 0x10, "sio2681_ptrs_entry_t must be 16 bytes");
 #endif
 
+/*
+ * SIO2681_PTRS_SECTION - keep SIO2681_$PTRS inside the SIO_INT code segment.
+ *
+ * The SAU2 map's SIO_INT segment (0xE2DF80, size 0x8C) opens with
+ * SIO2681_$PTRS at 0xE2DF80 and is followed immediately by the two stubs at
+ * 0xE2DFA0/0xE2DFB0, which reach the table with a 16-bit PC-relative operand:
+ * `41 fa ff d6  lea (-0x2a,PC),A0' at 0xE2DFA8 (0xE2DFAA - 0x2A = 0xE2DF80)
+ * and the same at 0xE2DFB8 for entry 2.  Emitted as ordinary `.bss' the table
+ * lands tens of kilobytes from sio2681/sau2/int_rte.o and both R_68K_PC16
+ * relocations overflow (source-uwxz), so give it a section of its own that
+ * sau2.ld emits directly ahead of int_rte.o - the same technique the SVC
+ * dispatch tables use (source-a5t8).  This is a code-segment cell, not an A5
+ * module block, so it is outside the `.moddata.<name>` scheme of
+ * docs/design-per-process-data.md (source-0i3).
+ */
+#if defined(ARCH_M68K)
+#define SIO2681_PTRS_SECTION  __attribute__((section(".text.sio2681_ptrs")))
+#else
+#define SIO2681_PTRS_SECTION
+#endif
+
 extern sio2681_ptrs_entry_t SIO2681_$PTRS[SIO2681_MAX_CHIPS];
 
 /*

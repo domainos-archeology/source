@@ -37,7 +37,7 @@ uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
  * runs to 0x00E273D5 and SMD_TIME_$COM starts at 0x00E273D6.  This used to be
  * sized SMD_MAX_DISPLAY_UNITS, which over-allocated 0x120 bytes (source-9j2l).
  */
-smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
+smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT] SMD_DISPLAY_INFO_SECTION;
 
 /*
  * SMD_EC_1 (0x00E2E3FC) and SMD_EC_2 (0x00E2E408) are not separate objects:

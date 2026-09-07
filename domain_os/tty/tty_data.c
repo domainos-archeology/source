@@ -86,13 +86,37 @@ uint32_t DAT_00e2ddd8 = 0x0000003C;
  *
  * The map segment is "D E8242C TTY size = 2C" (0x00E8242C..0x00E82458) and it
  * exports no interior symbol; six `lea (0xe8242c).l,A5` loads in tty/ make it
- * the module's A5 base.  Its first 0x24 bytes are the 18 default function
- * character classes (words 0007 0009 0008 000C 000B 0010 000F 000E 0001 0000
- * 0002 0003 0004 0005 0006 000D 000A 0000); the two longwords below finish it.
+ * the module's A5 base.  The three objects below fill it exactly:
  *
- * TODO(source-wk2f, 0x00E8242C): the 18-word class table has no tree symbol
- * yet, so the block is not modelled as one record.
+ *   +0x00  0x00E8242C  tty_$i_dfl_func_classes[18]   0x24 bytes
+ *   +0x24  0x00E82450  tty_$i_dfl_func_enable_mask   longword
+ *   +0x28  0x00E82454  DAT_00e82454                  longword
+ *
+ * Read with `gsk read 0x00E8242C 0x2C`.
  */
+
+/*
+ * tty_$i_dfl_func_classes - A5+0x00 = 0x00E8242C (the Ghidra label).
+ *
+ * The function index -> character class table.  tty_$i_set_funcs walks
+ * indices 0..17 (`moveq #0x11,D0` + `dbf`) and writes
+ * `tty->char_class[tty->func_chars[i]] = tty_$i_dfl_func_classes[i]` for
+ * every enabled function, or TTY_CLASS_NORMAL (0x12) for a disabled one;
+ * the matching default characters are tty_$i_dfl_func_chars (0x00E351D8),
+ * which TTY_$I_INIT copies into tty->func_chars at 0x00E33284.
+ *
+ * Image words: 0007 0009 0008 000C 000B 0010 000F 000E 0001 0000 0002 0003
+ * 0004 0005 0006 000D 000A 0000.
+ */
+uint16_t tty_$i_dfl_func_classes[TTY_MAX_FUNC_CHARS] = {
+    0x0007, 0x0009, 0x0008, 0x000c, 0x000b, 0x0010,
+    0x000f, 0x000e, 0x0001, 0x0000, 0x0002, 0x0003,
+    0x0004, 0x0005, 0x0006, 0x000d, 0x000a, 0x0000
+};
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(tty_$i_dfl_func_classes) == 0x24,
+               "tty_$i_dfl_func_classes: 0x00E8242C..0x00E82450");
+#endif
 
 /*
  * tty_$i_dfl_func_enable_mask - A5+0x24 = 0x00E82450.

@@ -28,7 +28,7 @@
  *   +0x500  0x00E81D14  STOP_$CALIB_PATCH     patch record used to calibrate:
  *                                             { &STOP_$NULL_PROC, NULL }
  *   +0x508  0x00E81D1C  PTR_STOP_$WATCH       = 0x00E81814
- *   +0x50C  0x00E81D20  PTR_OS_DATA_SHUTWIRED = 0x00E82128 (os/os.h)
+ *   +0x50C  0x00E81D20  PTR_OS_DATA_SHUTWIRED_00e81d20 = 0x00E82128
  *   +0x510  0x00E81D24  STOPWATCH_WIRED       word
  *   +0x512  0x00E81D26  STOPWATCH_WIRE_COUNT  word, = 4 in the image
  *   +0x514  0x00E81D28  STOPWATCH_SLOTS[16]   64 bytes each
@@ -40,7 +40,7 @@
 #define STOP_INTERNAL_H
 
 #include "stop/stop.h"
-#include "os/os.h"     /* PTR_OS_DATA_SHUTWIRED */
+#include "os/os.h"     /* OS_$SHUTDOWN, os status codes */
 #include "disk/disk.h" /* DISK_$DIAG */
 
 /*
@@ -127,6 +127,8 @@ extern int32_t STOP_$CALIBRATION;      /* 0x00E81C0C */
 extern int32_t STOP_$TRAP_COUNTS[STOP_TRAP_COUNT_ENTRIES]; /* 0x00E81C10 */
 extern stop_$patch_rec_t STOP_$CALIB_PATCH; /* 0x00E81D14 */
 extern m68k_ptr_t PTR_STOP_$WATCH;     /* 0x00E81D1C */
+/* 0x00E81D20 (A5+0x50C): the end address of the region STOP_$WATCH wires. */
+extern m68k_ptr_t PTR_OS_DATA_SHUTWIRED_00e81d20;
 extern int16_t STOPWATCH_WIRED;        /* 0x00E81D24 */
 extern int16_t STOPWATCH_WIRE_COUNT;   /* 0x00E81D26 */
 extern stopwatch_slot_t STOPWATCH_SLOTS[STOP_MAX_SLOTS]; /* 0x00E81D28 */

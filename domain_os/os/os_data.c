@@ -121,11 +121,11 @@ void *NULL_PC = NULL;
  * and each holds the address the SAU2 map gives for the matching region.
  *
  * STOP_$WATCH carries its own copy of the OS_DATA_SHUTWIRED start pointer at
- * 0x00E81D20, inside its frame record (stop/stop_internal.h documents it at
- * +0x50C); both cells hold 0x00E82128, and stop/watch.c links against the
- * definition below.
- * TODO(source-wk2f, 0x00E81D20): give STOP_$WATCH's copy its own definition
- * inside the stop module block so the two cells are not conflated.
+ * 0x00E81D20 (Ghidra label PTR_OS_DATA_SHUTWIRED_00e81d20), a cell of the
+ * stopwatch module block at A5+0x50C rather than of this literal pool; both
+ * cells hold 0x00E82128.  It is defined in stop/stop_data.c alongside the
+ * rest of that block, so the two addresses are two C objects, as in the
+ * image.
  */
 
 /* 0x00E6D688 -> OS_DATA_SHUTWIRED (map: 0x00E82128) */

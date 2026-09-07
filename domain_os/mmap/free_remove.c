@@ -18,7 +18,7 @@ void MMAP_$FREE_REMOVE(mmape_t *page, uint32_t vpn)
         mmap_$remove_from_wsl(page, vpn);
     }
 
-    token = ML_$SPIN_LOCK(MMAP_GLOBALS);
+    token = ML_$SPIN_LOCK(&MMAP_GLOBALS.lock);
 
     /* Clear "on disk" flag */
     page->flags2 &= ~MMAPE_FLAG2_ON_DISK;
@@ -26,5 +26,5 @@ void MMAP_$FREE_REMOVE(mmape_t *page, uint32_t vpn)
     /* Add to WSL 0 (free pool), inserting at tail */
     mmap_$add_to_wsl(page, vpn, 0, -1);
 
-    ML_$SPIN_UNLOCK(MMAP_GLOBALS, token);
+    ML_$SPIN_UNLOCK(&MMAP_GLOBALS.lock, token);
 }

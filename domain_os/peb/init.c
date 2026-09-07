@@ -18,8 +18,8 @@
 /* Per-process FP state storage - 58 processes * 28 bytes each = 1624 bytes */
 peb_fp_state_t PEB_$WIRED_DATA_START[PEB_MAX_PROCESSES];
 
-/* PEB status register shadow */
-uint32_t PEB_$STATUS_REG;
+/* PEB_$STATUS_REG (0x00E24468) is the first cell of the PEB_ASM module and
+ * is defined there (peb/sau2/int.s); peb/peb_data.c carries host storage. */
 
 /*
  * Probe data and hardware address pointer for PEB detection

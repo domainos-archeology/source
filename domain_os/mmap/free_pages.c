@@ -25,7 +25,7 @@ void MMAP_$FREE_PAGES(uint32_t *vpn_array, uint16_t count)
 {
     if (count == 0) return;
 
-    uint16_t token = ML_$SPIN_LOCK(MMAP_GLOBALS);
+    uint16_t token = ML_$SPIN_LOCK(&MMAP_GLOBALS.lock);
 
     uint32_t first_vpn = vpn_array[0];
     uint32_t last_vpn = vpn_array[count - 1];
@@ -86,5 +86,5 @@ void MMAP_$FREE_PAGES(uint32_t *vpn_array, uint16_t count)
 
     free_pool->page_count += count;
 
-    ML_$SPIN_UNLOCK(MMAP_GLOBALS, token);
+    ML_$SPIN_UNLOCK(&MMAP_GLOBALS.lock, token);
 }

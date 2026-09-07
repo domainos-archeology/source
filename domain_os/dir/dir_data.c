@@ -57,19 +57,14 @@ const int32_t DAT_00e52040 = 0x00000400;
  */
 
 /*
- * DIR_$OP_PARAMS - 0x00E7FB9C (A5+0x1F9C), the server-side per-operation
- * records DIR_$DO_OP indexes by (opcode >> 1) with an 8-byte stride:
- *   0x00E4C0B6  lea (0x00,A5,D1.l),A0 / move.w (0x1f9c,A0),(0x12,A2)
- *   0x00E4C254  add.w (0x1fa0,A0),D1  / move.w (0x1f9c,A0),(0xa,A3)
- * i.e. +0x00 is the protocol version and +0x04 the reply body size.  The
- * region runs up to DIR_$NAME_OFFSET_TABLE at 0x00E7FC00, which is 0x64 bytes,
- * and the image holds zeroes throughout.
- *
- * TODO(source-wk2f, 0x00E7FB9C): 0x64 bytes is 12.5 records, so either the
- * index is biased or the table shares its tail with the neighbouring counters;
- * the opcode range DIR_$DO_OP admits has not been narrowed far enough to say.
+ * 0x00E7FB9C (A5+0x1F9C) is not an object: it is the +0x02 word of the
+ * DIR_$OP_TAB record for (opcode >> 1), reached through a virtual table base
+ * of 0x00E7FB9A that sits 21 records below DIR_$OP_TAB (see the record
+ * comment in dir/dir_internal.h).  For the opcodes DIR_$DO_OP admits,
+ * 0x2A..0x5C, the addresses it forms run 0x00E7FC44..0x00E7FD10, all inside
+ * DIR_$OP_TAB; the bytes 0x00E7FB9A..0x00E7FC42 that records 0..20 would
+ * occupy hold DIR_$NAME_OFFSET_TABLE and the DIR globals below.
  */
-uint16_t DIR_$OP_PARAMS[DIR_$OP_PARAMS_WORDS] = { 0 };
 
 /*
  * DIR_$NAME_OFFSET_TABLE - 0x00E7FC00 (A5+0x2000), eight words, one per
@@ -90,15 +85,12 @@ uint32_t DAT_00e7fc3c = 0;      /* 0x00E7FC3C active-slot bitmap, 32 slots  */
 uint16_t DAT_00e7fc40 = 0;      /* 0x00E7FC40 link-buffer mutex owner       */
 
 /*
- * DIR_$OP_TAB - 0x00E7FC42, the client-side per-operation table (see the
- * record type in dir/dir_internal.h).  26 records of 8 bytes cover
- * 0x00E7FC42..0x00E7FD12, which is every record the DIR_$<op>U wrappers reach
- * (the highest is DIR_$DROP_MOUNT's at 0x00E7FD0A).  Read with
- * `gsk read 0x00E7FC42 0xE2`.
- *
- * TODO(source-wk2f, 0x00E7FD12): the remaining 0x12 bytes of the DIR segment
- * hold three more words (0001 0000 0001) and the four characters ".bak" at
- * 0x00E7FD20; neither has a tree symbol yet.
+ * DIR_$OP_TAB - 0x00E7FC42, the per-operation parameter table (see the record
+ * type and the 21-record bias in dir/dir_internal.h).  26 records of 8 bytes
+ * cover 0x00E7FC42..0x00E7FD12, i.e. records 21..46 = opcodes 0x2A..0x5C, the
+ * exact range DIR_$DO_OP's jump table admits and every record the DIR_$<op>U
+ * wrappers reach (the highest is DIR_$DROP_MOUNT's at 0x00E7FD0A).  Read with
+ * `gsk read 0x00E7FC42 0xD0`.
  */
 dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES] = {
     { 0x0000, 0x0000, 0x000e, 0x0000 },  /* [ 0] 0x00E7FC42 */
@@ -132,6 +124,44 @@ dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES] = {
 _Static_assert(sizeof(DIR_$OP_TAB) == 0xD0,
                "DIR_$OP_TAB: 0x00E7FC42..0x00E7FD12");
 #endif
+
+/*
+ * The last 0x12 bytes of the DIR segment, 0x00E7FD12..0x00E7FD24 (the map has
+ * "D E7DBF8 DIR size = 212C", and OLD_DIR's A5 base is the very next byte:
+ * `lea (0xe7fd24).l,A5` in every OLD_DIR routine, e.g. 0x00E54B30).
+ */
+
+/*
+ * 0x00E7FD12: two bytes of zero fill between DIR_$OP_TAB's last record and
+ * the longword constants below, which the compiler placed on a longword
+ * boundary.  Nothing reads it.
+ */
+uint16_t DAT_00e7fd12 = 0x0000;
+
+/*
+ * 0x00E7FD14 / 0x00E7FD18 / 0x00E7FD1C: the three directory-read continuation
+ * cookies dir_$do_op_dir_readu compares and stores as whole longwords through
+ * A5 = 0x00E7DC00 (`cmp.l (0x211c,A5),D0` at 0x00E4DA00, 0x00E4DA50 and
+ * 0x00E4DA60; `move.l (0x2114,A5),(A3)` at 0x00E4DA06, 0x00E4DA3E, 0x00E4DB50;
+ * `cmp.l`/`move.l (0x2118,A5)` at 0x00E4DA22, 0x00E4DA56, 0x00E4DAE0).
+ *
+ *   0x00E7FD1C  the "." pseudo-entry     (a 1-character name of dots)
+ *   0x00E7FD18  the ".." pseudo-entry    (2 characters; 0x00E4DA1C compares
+ *                                         the name byte against '.' = 0x2E)
+ *   0x00E7FD14  the first real entry, the value the cursor moves to once both
+ *               pseudo-entries have been emitted (0x00E4DA26 loop exit)
+ */
+uint32_t DAT_00e7fd14 = 0x00020001;
+uint32_t DAT_00e7fd18 = 0x00010001;
+uint32_t DAT_00e7fd1c = 0x00000001;
+
+/*
+ * 0x00E7FD20: the four characters ".bak".  No instruction in the image reads
+ * it -- there is no absolute reference to 0x00E7FD20 anywhere, and no DIR or
+ * OLD_DIR routine forms (0x2120,A5) or (-0x4,A5) -- so it is a constant the
+ * Pascal source declared whose only use was compiled away.
+ */
+char DAT_00e7fd20[4] = { '.', 'b', 'a', 'k' };
 
 /*
  * ============================================================================

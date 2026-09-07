@@ -60,9 +60,9 @@ uint32_t NODE_$ME = 0x00012345;
 uint16_t PROC1_$CURRENT = 4;
 uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
 int8_t   AUDIT_$ENABLED = 0;            /* >= 0: auditing off */
-uint16_t DIR_$OP_PARAMS[DIR_$OP_PARAMS_WORDS];
-/* DAT_00e7fc66 is DIR_$OP_TAB[4].base_size (dir_internal.h), so the table
- * itself is what has to exist here (bead source-wk2f). */
+/* DAT_00e7fc66 is DIR_$OP_TAB[4].base_size and DIR_$OP_VERSION /
+ * DIR_$OP_REPLY_SIZE are DIR_$OP_REC(half).reply_version / .reply_size, so
+ * the one biased table is all that has to exist here (bead source-wk2f). */
 dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];
 uint32_t DAT_00e4b33c;   /* 0x00E4B33C is a longword (dir_internal.h) */
 uid_t    ACL_$DIRIN_ACL = { 0x00000603u, 0x00000000u };  /* 0xE1745C */
@@ -422,7 +422,7 @@ static void reset(uint8_t op_code)
 {
     memset(req_buf, 0, sizeof(req_buf));
     memset(resp_buf, 0, sizeof(resp_buf));
-    memset(DIR_$OP_PARAMS, 0, sizeof(DIR_$OP_PARAMS));
+    memset(DIR_$OP_TAB, 0, sizeof(DIR_$OP_TAB));
     memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
     reply_len = 0;
 

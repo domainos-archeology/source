@@ -5,7 +5,8 @@
  *   MNK_$KTT_PTRS    0x00E273DC  0x20 bytes (8 pointers)
  *   MNK_$KTT_MAX     0x00E273FC  2 bytes
  *   KBD_$MODE_TABLE  0x00E2DDE4  8 bytes
- *   DAT_00e2ddec     0x00E2DDEC  0x50 bytes (40 words)
+ *   DAT_00e2ddec     0x00E2DDEC  0x10 bytes (8 words)
+ *   DAT_00e2ddfc     0x00E2DDFC  0x40 bytes (32 words)
  */
 
 #include "kbd/kbd_internal.h"
@@ -52,28 +53,47 @@ uint8_t KBD_$MODE_TABLE[8] = {
 };
 
 /*
- * DAT_00e2ddec - 0x00E2DDEC, the word table that follows KBD_$MODE_TABLE and
- * runs up to TERM_$TPAD_BUFFER (0x00E2DE3C), i.e. 0x50 bytes = 40 words.
+ * DAT_00e2ddec - 0x00E2DDEC (A5+0x08), eight words.
  *
- * KBD_$RCV reads only the first eight of them, indexed by the descriptor's
- * kbd_type_idx (the same 0..MNK_$KTT_MAX range MNK_$KTT_PTRS uses): the state
- * KBD_$RCV moves to when the received byte's low nibble is 0x0F.  The
- * remaining 32 words are part of the same unnamed KBD block; they are carried
- * here so the object covers the image bytes exactly.
- *
- * TODO(source-wk2f, 0x00E2DDFC): nothing in the tree reaches words 8..39 yet,
- * so their purpose is unrecovered.
+ * The escape state each keyboard type moves to when the received byte's low
+ * nibble is 0x0F.  Both readers index it with a word scale off the KBD
+ * module's A5 = 0x00E2DDE4 (`lea (0xe2dde4).l,A5` at 0x00E1CB06 and
+ * 0x00E1CCC8):
+ *   0x00E1CE2A  KBD_$RCV        move.w (0x3c,A2),D1w / add.w D1w,D1w /
+ *                               move.w (0x8,A5,D1w),(0x38,A2)
+ *                               i.e. state->state = table[state->kbd_type_idx]
+ *   0x00E1CBD6  kbd_$fetch_key  move.w (A0),D1w / add.w D1w,D1w /
+ *                               move.w (0x8,A5,D1w),D4w, D4 -> state->sub_state
+ * Both indices run 0..MNK_$KTT_MAX (7), the same range KBD_$MODE_TABLE and
+ * MNK_$KTT_PTRS use, so the table is eight words and ends at 0x00E2DDFC.
  */
-uint16_t DAT_00e2ddec[40] = {
-    /* words 0..7: KBD_$RCV's per-keyboard-type "escape" state */
-    0x0000, 0x0008, 0x0006, 0x0007, 0x000e, 0x000e, 0x000e, 0x000e,
-    /* words 8..39: 0x00E2DDFC..0x00E2DE3B */
+uint16_t DAT_00e2ddec[8] = {
+    0x0000, 0x0008, 0x0006, 0x0007, 0x000e, 0x000e, 0x000e, 0x000e
+};
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(DAT_00e2ddec) == 0x10,
+               "DAT_00e2ddec: 0x00E2DDEC..0x00E2DDFC");
+#endif
+
+/*
+ * DAT_00e2ddfc - 0x00E2DDFC (A5+0x18), 32 words, up to TERM_$TPAD_BUFFER
+ * (0x00E2DE3C).  The last object of the map segment "D E2DDE4 KBD size = D4"
+ * before that buffer.
+ *
+ * Nothing in the image reads it.  The only two routines that load the KBD
+ * A5 (0x00E1CB06, 0x00E1CCC8) touch (0x8,A5) indexed -- DAT_00e2ddec -- and
+ * (0x58,A5) / (0x5a,A5) / (0x5c,A5), which are TERM_$TPAD_BUFFER's head and
+ * tail; no instruction anywhere in the image carries an absolute address in
+ * 0x00E2DDFC..0x00E2DE3A either.  It is carried here so the segment's bytes
+ * are covered exactly.
+ */
+uint16_t DAT_00e2ddfc[32] = {
     0x0000, 0x0005, 0x0006, 0x0006, 0x0007, 0x0007, 0x0008, 0x0008,
     0x0009, 0x0009, 0x000a, 0x000f, 0x0010, 0x0011, 0x0012, 0x0013,
     0x0014, 0x0016, 0x0017, 0x001a, 0x001b, 0x001c, 0x001d, 0x001d,
-    0x001e, 0x001f, 0x0020, 0x0020, 0x0021, 0x0023, 0x0000, 0x0000,
+    0x001e, 0x001f, 0x0020, 0x0020, 0x0021, 0x0023, 0x0000, 0x0000
 };
 #if defined(ARCH_M68K)
-_Static_assert(sizeof(DAT_00e2ddec) == 0x50,
-               "DAT_00e2ddec: 0x00E2DDEC..0x00E2DE3C (TERM_$TPAD_BUFFER)");
+_Static_assert(sizeof(DAT_00e2ddfc) == 0x40,
+               "DAT_00e2ddfc: 0x00E2DDFC..0x00E2DE3C (TERM_$TPAD_BUFFER)");
 #endif

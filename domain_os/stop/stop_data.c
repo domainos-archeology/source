@@ -50,6 +50,17 @@ stop_$patch_rec_t STOP_$CALIB_PATCH = {
 /* 0x00E81D1C (A5+0x508): start of the region STOP_$WATCH wires down */
 m68k_ptr_t PTR_STOP_$WATCH = 0x00E81814;
 
+/*
+ * 0x00E81D20 (A5+0x50C): end of that region -- the stopwatch module's own
+ * copy of the OS_DATA_SHUTWIRED start address, not the one in OS_$SHUTDOWN's
+ * literal pool at 0x00E6D688 (os/os_data.c).  STOP_$WATCH passes this cell's
+ * address as MST_$WIRE_AREA's `end` argument (`pea (0x46c,PC)` at
+ * 0x00E818B2, right after `pea (0x464,PC)` = &PTR_STOP_$WATCH), so it is a
+ * cell of this block, not of OS_$SHUTDOWN's.  Ghidra label
+ * PTR_OS_DATA_SHUTWIRED_00e81d20; image longword 0x00E82128.
+ */
+m68k_ptr_t PTR_OS_DATA_SHUTWIRED_00e81d20 = 0x00E82128;
+
 /* 0x00E81D24 (A5+0x510): non-zero once MST_$WIRE_AREA has run */
 int16_t STOPWATCH_WIRED;
 

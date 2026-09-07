@@ -22,7 +22,7 @@
 #include "math/math.h"          /* M$OIS$WLW */
 #include "os/os.h"              /* OS_TERM_INIT */
 #include "uid/uid.h"   /* UID_$NIL */
-#include "uid/uid.h"   /* UID_$NIL */
+#include "tone/tone.h"  /* TONE_$CHANNEL (TERM_$DATA + 0x1268) */
 
 /*
  * ============================================================================
@@ -52,9 +52,10 @@ extern term_data_t TERM_$DATA;
  * (bead source-wk2f).  The Ghidra label names are kept because the fields they
  * stand for are not all recovered yet.
  *
- * TODO(source-wk2f, 0x00E2C9F0): TERM_$DATA is image-initialised over its full
- * 0x1398 bytes (function pointers, line records, SIO descriptors); term_data.c
- * still only initialises kbd_string_data, so these aliases read as zero.
+ * Only two windows of TERM_$DATA carry image bytes -- +0x00..+0xC3 and
+ * +0x138D/+0x1390..+0x1394 (59 non-zero bytes in all) -- and term/term_data.c
+ * now initialises both, so the aliases below that fall inside those windows
+ * carry their image values and the rest are zero, as in the image.
  */
 #define TERM_$DATA_AT(off) ((char *)&TERM_$DATA + (off))
 #define DAT_00e2c9f0   TERM_$DATA_AT(0x0000)  /* TERM_$DATA base; SIO_$INIT_DESC's `desc_base` argument */
@@ -89,28 +90,24 @@ extern term_data_t TERM_$DATA;
  * array; the image longword there is 0x00E1CCC0 = KBD_$RCV.  TERM_$INIT passes
  * its address to SIO_$INIT_DESC.
  */
-#define PTR_KBD_$RCV_00e2ca78 (*(void **)TERM_$DATA_AT(0x0088))
+#define PTR_KBD_$RCV_00e2ca78 (TERM_$DATA.ptr_kbd_rcv)
 
 /*
  * Handler function pointer cells inside the TERM_$DATA region (for TERM_$INIT).
- * These are term-owned data (defined in term/term_data.c); the names carry the
- * TTY_ prefix only because Ghidra labels them by the routine they point to.
- *
- * TODO(source-wk2f, 0x00E2CA08): both cells are inside TERM_$DATA
- * (0x00E2CA08 = +0x18 = ptr_tty_i_rcv, 0x00E2CAB0 = +0xC0 = ptr_tty_i_rcv_alt)
- * but are still defined as separate objects in term/term_data.c.
+ * They are fields of the block, not objects of their own: 0x00E2CA08 is
+ * TERM_$DATA + 0x18 and 0x00E2CAB0 is TERM_$DATA + 0xC0, and both hold
+ * 0x00E1B92A = TTY_$I_RCV in the image.  The names carry the TTY_ prefix only
+ * because Ghidra labels them by the routine they point to.
  */
-extern void *PTR_TTY_$I_RCV_00e2cab0;
-extern void *PTR_TTY_$I_RCV_00e2ca08;
+#define PTR_TTY_$I_RCV_00e2ca08 (TERM_$DATA.ptr_tty_i_rcv)
+#define PTR_TTY_$I_RCV_00e2cab0 (TERM_$DATA.ptr_tty_i_rcv_alt)
 
 /*
- * TONE_$CHANNEL (0x00E2DC58 = TERM_$DATA + 0x1268) is owned by tone/ and
- * defined in tone/enable.c as a separate object; TERM_$INIT hands its address
- * to SIO2681_$INIT as the channel-A record.
- * TODO(source-wk2f, 0x00E2DC58): it overlaps TERM_$DATA and should become an
- * alias like the cells above.
+ * TONE_$CHANNEL (0x00E2DC58 = TERM_$DATA + 0x1268) is the SIO2681 channel-A
+ * record inside this block; TERM_$INIT hands its address to SIO2681_$INIT and
+ * TONE_$ENABLE forms it with `lea (0x1268,A5),A0` (0x00E1ACFC, A5 =
+ * 0x00E2C9F0).  tone/tone.h aliases it onto TERM_$DATA.
  */
-extern char TONE_$CHANNEL[];
 
 /*
  * Cells in the second OS_TERM_INIT block, the map segment

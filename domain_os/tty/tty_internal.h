@@ -363,6 +363,18 @@ void tty_$i_wait(tty_desc_t *tty, char wait_flag, char *done_flag,
 extern uint32_t DAT_00e82454;
 
 /*
+ * tty_$i_dfl_func_classes - the default function index -> character class
+ * table, A5+0x00 = 0x00E8242C (the Ghidra label; the map segment
+ * "D E8242C TTY size = 2C" exports no interior symbol).  18 words, one per
+ * function slot, paired with the 18 default characters at 0x00E351D8.
+ * tty_$i_set_funcs (0x00E6720E) walks indices 0..17 and writes
+ * tty->char_class[tty->func_chars[i]] from it.
+ *
+ * Original address: 0x00e8242c
+ */
+extern uint16_t tty_$i_dfl_func_classes[TTY_MAX_FUNC_CHARS];
+
+/*
  * tty_$i_dfl_func_enable_mask - Default enabled function character mask
  *
  * Bitmask of default-enabled function characters.

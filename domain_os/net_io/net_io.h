@@ -120,7 +120,7 @@ void NET_IO_$COPY_PACKET(uint32_t *hdr_src_p, uint16_t hdr_len,
  * OS_$INIT stores the result in NETWORK_$DISKLESS.
  *
  * Original address: 0x00E31C14
- * TODO(source-8qa7): NOT EMITTED.  132 bytes at 0x00E31C14..0x00E31C97;
+ * TODO(source-8qa7, 0x00E31C14): NOT EMITTED.  132 bytes at 0x00E31C14..0x00E31C97;
  * only the prototype exists, so OS_$INIT's call does not link.  Missing:
  * the boot-device code classification (2/3, 6, 8) and the diskless-path
  * store of the boot-info low word.  Tracked in the net_io link inventory
@@ -135,11 +135,14 @@ char NET_IO_$BOOT_DEVICE(short boot_device, short param);
  * driver long at 0xC(A6), queue_length word at 0x10(A6), status_ret long
  * at 0x12(A6); result returned in D0.w.
  *
+ * The driver argument is the address of a net_io_$driver_t (declared below);
+ * it is kept as void * because both callers hold it that way -
+ * ROUTE_$SERVICE in a `void *` local (0x00E6A158) and RING_$INIT as
+ * "pea (0x518,A0)" off RING_$CTL (0x00E2FB84).
+ *
+ * Returns the index of the new port, or -1 when *status_ret is set.
+ *
  * Original address: 0x00E5A4A4
- * TODO(source-8qa7): NOT EMITTED.  538 bytes at 0x00E5A4A4..0x00E5A6B9;
- * only the prototype exists, so the RING_$INIT and ROUTE_$SERVICE calls do
- * not link.  Missing: the whole port-table allocation, driver binding and
- * queue setup body.  Tracked in the net_io link inventory as source-8qa7.
  */
 int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
                             void *driver, uint16_t queue_length,
@@ -153,31 +156,252 @@ int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
 void NET_IO_$INIT(void);
 
 /*
+ * =============================================================================
+ * net_io_$driver_t - the 0x50-byte network driver descriptor
+ * =============================================================================
+ *
+ * route_$port_t.driver_info (+0x48) points at one of these; every network
+ * entry point in the kernel reaches its device through it.  The record is a
+ * short scalar head followed by sixteen procedure variables and a UID:
+ *
+ *   head    +0x00 word, +0x02 word, +0x04 word, +0x06 byte, +0x07 byte
+ *   vector  +0x08 .. +0x47, sixteen longword procedure variables
+ *   tail    +0x48 .. +0x4F, the eight-byte network-type UID
+ *
+ * Three blocks in the image have this shape and together they name every
+ * slot.  Two are here; the third is the ring driver at RING_$CTL + 0x518
+ * (0xE86918, handed to NET_IO_$CREATE_PORT at 0x00E2FB84), whose slots all
+ * carry SAU2 map symbols and so give the fields their names:
+ *
+ *   off   NIL         USER                      RING (0xE86918)
+ *   0x08  0           ROUTE_$SEND_USER_PORT     RING_$SENDP
+ *   0x0C  0           ROUTE_$READ_USER_STATS    RING_$GET_STATS
+ *   0x10  0           0                         RING_$GET_STATS
+ *   0x14  0           0                         RING_$START
+ *   0x18  0           0                         RING_$STOP
+ *   0x1C  0           0                         0
+ *   0x20  NET_IO_$CLEANUP_NIL  NET_IO_$CLEANUP_USER  RING_$PROC2_CLEANUP
+ *   0x24  0           0                         RING_$IOCTL
+ *   0x28  0           0                         RING_$SVC_OPEN
+ *   0x2C  0           0                         RING_$SVC_CLOSE
+ *   0x30  0           0                         RING_$SVC_IOCTL
+ *   0x34  0           0                         RING_$SVC_WRITE
+ *   0x38  0           0                         RING_$SVC_READ
+ *   0x3C  0           0                         RING_$OPEN_OS
+ *   0x40  0           0                         RING_$CLOSE_OS
+ *   0x44  0           0                         RING_$SEND_OS
+ *
+ * The dispatchers, with the instruction that proves each slot:
+ *   0x08  NET_IO_$SEND        "movea.l (0x8,A4),A0 / jsr (A0)"   0x00E0E892
+ *   0x0C  NET_IO_$DEVICE_STAT "movea.l (0xc,A2),A1 / jsr (A1)"   0x00E5A410
+ *   0x10  NET_IO_$DEVICE_STAT2 "movea.l (0x10,A2),A1 / jsr (A1)" 0x00E5A494
+ *   0x14  ROUTE_$SERVICE      leaving port status 1              0x00E6A4xx
+ *   0x18  ROUTE_$SERVICE      entering port status 1             0x00E6A5xx
+ *   0x1C  ROUTE_$SERVICE      after the 0x14 call succeeds
+ *   0x20  NET_IO_$FREE_ASID   "movea.l (0x20,A2),A0 / jsr (A0)"  0x00E74EB0
+ *   0x24  NETWORK_$SET_SERVICE "movea.l (0x24,A1),A0 / jsr (A0)" 0x00E0F5E4
+ *   0x28  NET_$OPEN   \                                          0x00E5A1B8
+ *   0x2C  NET_$CLOSE   \  each computes its slot as
+ *   0x30  NET_$IOCTL    >  "lea (0xe2451c+k).l,A0 / sub.l        0x00E5A228
+ *   0x34  NET_$SEND    /    #0xe244f4,D0" and hands the
+ *   0x38  NET_$RCV    /     difference to NET_$FIND_HANDLER      0x00E5A2E0
+ *   0x3C  MAC_OS_$OPEN, 0x40 MAC_OS_$CLOSE, 0x44 MAC_OS_$SEND
+ *          (mac_os/mac_os.h MAC_OS_DRIVER_*_OFFSET)
+ *
+ * The slots are procedure variables, not data: every dispatcher tests the
+ * slot for zero and reports status_$network_operation_not_defined_on_hardware
+ * (or simply does nothing) when it is nil.  One generic type is used for all
+ * sixteen because their argument lists differ; the callers cast.
+ */
+typedef void (*net_io_$driver_fn_t)(void);
+
+typedef struct net_io_$driver_t {
+    uint16_t    _unknown0;          /* 0x00: 2 in all three blocks; no reader
+                                     *       found in the image */
+    uint16_t    max_data_len;       /* 0x02: largest data length this port will
+                                     *       carry.  PKT_$BLD_INTERNET_HDR
+                                     *       compares against it and against it
+                                     *       plus 0x100 ("cmp.w (0x2,A0),D3w" at
+                                     *       0x00E1211E, "move.w (0x2,A0),D6w /
+                                     *       addi.l #0x100,D6" at 0x00E12136);
+                                     *       MSG_$$SEND repeats both tests at
+                                     *       0x00E0DAD0 and 0x00E0DAEC.
+                                     *       NIL 0x1000, USER 0x400, RING 0x400 */
+    uint16_t    mtu;                /* 0x04: MAC_OS_$INIT copies it into
+                                     *       mac_os_$port_info_t.mtu
+                                     *       ("move.w (0x4,A0),(0x8a2,A1)");
+                                     *       NIL 0x1400, USER 0, RING 0 */
+    uint8_t     _unknown6;          /* 0x06: 0 in all three blocks */
+    uint8_t     flags;              /* 0x07: driver capability bits.
+                                     *       ROUTE_$VALIDATE_PORT requires bit
+                                     *       1 (0x02) before it will route
+                                     *       through the port; NIL 0, USER 0,
+                                     *       RING 3 */
+    net_io_$driver_fn_t sendp;      /* 0x08: transmit a packet (NET_IO_$SEND) */
+    net_io_$driver_fn_t get_stats;  /* 0x0C: NET_IO_$DEVICE_STAT */
+    net_io_$driver_fn_t get_stats2; /* 0x10: NET_IO_$DEVICE_STAT2 */
+    net_io_$driver_fn_t start;      /* 0x14: bring the port up (ROUTE_$SERVICE) */
+    net_io_$driver_fn_t stop;       /* 0x18: take the port down (ROUTE_$SERVICE) */
+    net_io_$driver_fn_t detach;     /* 0x1C: ROUTE_$SERVICE calls it right after
+                                     *       a successful start; nil in all
+                                     *       three blocks, so its purpose is
+                                     *       inferred only from the call shape
+                                     *       (port socket ptr, nil, 0, 0) */
+    net_io_$driver_fn_t proc2_cleanup;/* 0x20: per-address-space teardown
+                                     *       (NET_IO_$FREE_ASID) */
+    net_io_$driver_fn_t ioctl;      /* 0x24: NETWORK_$SET_SERVICE's notification
+                                     *       entry; RING_$IOCTL in the ring
+                                     *       block.  route/route.h models the
+                                     *       same slot as
+                                     *       route_$driver_info_t.set_service */
+    net_io_$driver_fn_t svc_open;   /* 0x28: NET_$OPEN */
+    net_io_$driver_fn_t svc_close;  /* 0x2C: NET_$CLOSE */
+    net_io_$driver_fn_t svc_ioctl;  /* 0x30: NET_$IOCTL */
+    net_io_$driver_fn_t svc_write;  /* 0x34: NET_$SEND */
+    net_io_$driver_fn_t svc_read;   /* 0x38: NET_$RCV */
+    net_io_$driver_fn_t open_os;    /* 0x3C: MAC_OS_$OPEN */
+    net_io_$driver_fn_t close_os;   /* 0x40: MAC_OS_$CLOSE */
+    net_io_$driver_fn_t send_os;    /* 0x44: MAC_OS_$SEND */
+    uid_t       network_uid;        /* 0x48: network-type UID.  NET_IO_$BOOT_DEVICE
+                                     *       copies NIL_$NETWORK_UID (0xE1748C)
+                                     *       here in the NIL block
+                                     *       (0x00E31C28 -> 0xE2453C) and
+                                     *       USER_$NETWORK_UID (0xE1749C) in the
+                                     *       USER block (0x00E31C3A -> 0xE2458C);
+                                     *       NET_IO_$DEVICE_STAT copies the two
+                                     *       longwords out and substitutes
+                                     *       UNKNOWN_$NETWORK_UID (0xE174A4)
+                                     *       when the port does not exist
+                                     *       ("lea (0x48,A2),A1 / move.l (A1)+"
+                                     *       at 0x00E5A3EA) */
+} net_io_$driver_t;
+
+#define NET_IO_DRIVER_SIZE 0x50
+
+/*
+ * Layout checks.  The record holds procedure variables, so its size only
+ * matches the image on a 32-bit-pointer target; the host test build carries
+ * wider pointers and is exempt.
+ */
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(net_io_$driver_t, max_data_len)   == 0x02, "net_io_$driver_t.max_data_len");
+_Static_assert(offsetof(net_io_$driver_t, mtu)            == 0x04, "net_io_$driver_t.mtu");
+_Static_assert(offsetof(net_io_$driver_t, flags)          == 0x07, "net_io_$driver_t.flags");
+_Static_assert(offsetof(net_io_$driver_t, sendp)          == 0x08, "net_io_$driver_t.sendp");
+_Static_assert(offsetof(net_io_$driver_t, get_stats)      == 0x0C, "net_io_$driver_t.get_stats");
+_Static_assert(offsetof(net_io_$driver_t, get_stats2)     == 0x10, "net_io_$driver_t.get_stats2");
+_Static_assert(offsetof(net_io_$driver_t, start)          == 0x14, "net_io_$driver_t.start");
+_Static_assert(offsetof(net_io_$driver_t, stop)           == 0x18, "net_io_$driver_t.stop");
+_Static_assert(offsetof(net_io_$driver_t, detach)         == 0x1C, "net_io_$driver_t.detach");
+_Static_assert(offsetof(net_io_$driver_t, proc2_cleanup)  == 0x20, "net_io_$driver_t.proc2_cleanup");
+_Static_assert(offsetof(net_io_$driver_t, ioctl)          == 0x24, "net_io_$driver_t.ioctl");
+_Static_assert(offsetof(net_io_$driver_t, svc_open)       == 0x28, "net_io_$driver_t.svc_open");
+_Static_assert(offsetof(net_io_$driver_t, svc_close)      == 0x2C, "net_io_$driver_t.svc_close");
+_Static_assert(offsetof(net_io_$driver_t, svc_ioctl)      == 0x30, "net_io_$driver_t.svc_ioctl");
+_Static_assert(offsetof(net_io_$driver_t, svc_write)      == 0x34, "net_io_$driver_t.svc_write");
+_Static_assert(offsetof(net_io_$driver_t, svc_read)       == 0x38, "net_io_$driver_t.svc_read");
+_Static_assert(offsetof(net_io_$driver_t, open_os)        == 0x3C, "net_io_$driver_t.open_os");
+_Static_assert(offsetof(net_io_$driver_t, close_os)       == 0x40, "net_io_$driver_t.close_os");
+_Static_assert(offsetof(net_io_$driver_t, send_os)        == 0x44, "net_io_$driver_t.send_os");
+_Static_assert(offsetof(net_io_$driver_t, network_uid)    == 0x48, "net_io_$driver_t.network_uid");
+_Static_assert(sizeof(net_io_$driver_t) == NET_IO_DRIVER_SIZE,
+               "net_io_$driver_t must be 0x50 bytes");
+#endif
+
+/*
+ * NET_IO_$CLEANUP_NIL / NET_IO_$CLEANUP_USER - the proc2_cleanup slots of the
+ * two software driver blocks.  NET_IO_$FREE_ASID calls the slot as
+ * "pea (0x30,A4) / move.w (0x8,A6),-(SP)" (0x00E74EAC), i.e. the port's
+ * socket cell by address and the address-space id by value, with a word
+ * result slot that is discarded.
+ *
+ * TODO(source-8qa7, 0x00E74EC8): NOT EMITTED.  84 bytes at 0x00E74EC8 and
+ * 94 bytes at 0x00E74F1E; only these prototypes exist, so the two driver
+ * blocks below do not link.
+ */
+void NET_IO_$CLEANUP_NIL(uint16_t *socket_ptr, uint16_t asid);
+void NET_IO_$CLEANUP_USER(uint16_t *socket_ptr, uint16_t asid);
+
+/*
  * NET_IO_$NIL_DRIVER / NET_IO_$USER_DRIVER - Driver descriptor blocks
  *
  * Passed (by address) to NET_IO_$CREATE_PORT by ROUTE_$SERVICE: the NIL
  * driver for port type 1 (local network ports) and the USER driver for
- * user routing ports.
+ * user routing ports (0x00E6A158 / 0x00E6A162).
  *
  * The SAU2 map has `D E244F0 NET_IO size = AC` holding, in order,
  * NET_IO_$ALL_F_ADDR (0xE244F0), NET_IO_$NIL_DRIVER (0xE244F4),
  * NET_IO_$USER_DRIVER (0xE24544) and RING_$OVERFLOW_OVERFLOW (0xE24594), so
  * each driver block is exactly 0x50 bytes.
  *
- * TODO(source-wk2f, 0x00E244F4): the interior layout is still undecoded, so
- * both blocks are emitted as their raw image bytes.  What is known is that
- * three of the longwords are code addresses (SAU2 map names in brackets):
- *   NIL  + 0x20 = 0x00E74EC8 [NET_IO_$CLEANUP_NIL]
- *   USER + 0x08 = 0x00E87C34 [ROUTE_$SEND_USER_PORT]
- *   USER + 0x0C = 0x00E6A65E [ROUTE_$READ_USER_STATS]
- *   USER + 0x20 = 0x00E74F1E [NET_IO_$CLEANUP_USER]
- * Once the record type is recovered these should become real function
- * pointers instead of embedded constants.
+ * Both are declared as one-element arrays because that is how their users
+ * name them: ROUTE_$SERVICE assigns the block itself to a `void *` and passes
+ * it on ("driver = NET_IO_$NIL_DRIVER"), matching the image, where the symbol
+ * is the block's address.
  *
  * Original addresses: 0xE244F4 (NIL), 0xE24544 (USER)
  */
-#define NET_IO_DRIVER_SIZE 0x50
-extern uint8_t NET_IO_$NIL_DRIVER[NET_IO_DRIVER_SIZE];
-extern uint8_t NET_IO_$USER_DRIVER[NET_IO_DRIVER_SIZE];
+extern net_io_$driver_t NET_IO_$NIL_DRIVER[1];
+extern net_io_$driver_t NET_IO_$USER_DRIVER[1];
+
+/*
+ * =============================================================================
+ * NET_IO_UNWIRED (0xE81668, `D E81668 NET_IO_UNWIRED size = 14`)
+ * =============================================================================
+ *
+ * The module's whole unwired data block: eight per-port address-space ids
+ * followed by the boot device the PROM handed the kernel.  It has no interior
+ * symbols in the SAU2 map, so the field names are tree names.
+ *
+ *   0x00  port_asid[8]  NET_IO_$CREATE_PORT stores PROC1_$AS_ID for the port
+ *                       it just built ("move.w (0x00e2060a).l,(0x0,A5,D0*0x1)"
+ *                       at 0x00E5A5B0 and 0x00E5A688, with D0/D3 the port
+ *                       index doubled); NET_IO_$CLEANUP_NIL (0x00E74EE0) and
+ *                       NET_IO_$CLEANUP_USER (0x00E74F36) read it back.
+ *   0x10  boot_unit     the second argument of NET_IO_$BOOT_DEVICE
+ *                       ("move.w D1w,(0x10,A0)" at 0x00E31C8C).  0x3E7 (999)
+ *                       in the image, the "no network boot device" sentinel
+ *                       NET_IO_$CREATE_PORT tests at 0x00E5A50C.
+ *   0x12  boot_port_type  0 for boot devices 2 and 3, 4 for device 6, 5 for
+ *                       device 8 (0x00E31C5A / 0x00E31C6C / 0x00E31C80).
+ *
+ * NET_IO_$CREATE_PORT gives the port that matches (boot_port_type, boot_unit)
+ * index 0, the primary network port (0x00E5A500 - 0x00E5A524).
+ */
+#define NET_IO_$MAX_PORTS       8
+
+/* The value NET_IO_$BOOT_DEVICE never wrote: "no network boot device". */
+#define NET_IO_$NO_BOOT_UNIT    0x3E7
+
+typedef struct net_io_unwired_t {
+    uint16_t    port_asid[NET_IO_$MAX_PORTS];   /* 0x00 */
+    uint16_t    boot_unit;                      /* 0x10 */
+    uint16_t    boot_port_type;                 /* 0x12 */
+} net_io_unwired_t;
+
+_Static_assert(offsetof(net_io_unwired_t, boot_unit) == 0x10,
+               "net_io_unwired_t.boot_unit");
+_Static_assert(offsetof(net_io_unwired_t, boot_port_type) == 0x12,
+               "net_io_unwired_t.boot_port_type");
+_Static_assert(sizeof(net_io_unwired_t) == 0x14,
+               "NET_IO_UNWIRED must be 0x14 bytes");
+
+extern net_io_unwired_t NET_IO_UNWIRED;
+
+/*
+ * =============================================================================
+ * Status codes (names and texts from the SR10.2 status-code database)
+ * =============================================================================
+ */
+/*
+ * 0x2B0009 "operation not legal on this port type".  route/route.h defines
+ * the same value as status_$route_not_routing_mode; that name describes
+ * ROUTE_$GET_EC's use of it, not NET_IO_$CREATE_PORT's.
+ * TODO(source-6vat, 0x00E5A4F6): fold the two names into one.
+ */
+#define status_$net_io_illegal_op_for_port_type 0x2B0009
+#define status_$net_io_max_ports_open           0x2B0005  /* "max number of ports already open" */
+#define status_$net_io_no_user_buffer_queues    0x2B000B  /* "no more buffer queues for user networks" */
+#define status_$net_io_max_user_ports_open      0x2B000F  /* "max number of USER ports already open" */
 
 #endif /* NET_IO_H */
