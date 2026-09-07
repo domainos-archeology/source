@@ -43,3 +43,8 @@
 - [REM_FILE_$NAME_GET_ENTRYU frame map](rem-file-name-get-entryu.md) — the in-place request pattern, the unclipped 32-byte name copy, and the 0x9A/0x9E alignment trap.
 - [SVC_CATCHER fault tail and byte-exact .s verification](svc-catcher-tail.md) — there is no FIM_$FAULT; the tail must live in trap8.s; objcopy/gsk-read diff recipe.
 - [DIR_$DO_OP case argument order](do_op-case-argument-order.md) — first pea is the LAST parameter, and the DIR_$X vs dir_$do_op_x client/server twin trap.
+- [Engineering Handbook names every I/O register](reference_engineering_handbook_io_regs.md) — the kernel maps only name page bases; the PDF gives bit diagrams.
+- [SAU2 MMU page 0xFFB400 registers](mmu-io-registers.md) — Apollo's names and bit layouts, and the big-endian byte-vs-word bit trap.
+- [PACCT_$LOG record stores](pacct-log-record-stores.md) — the A6-0x190 frame, the full store list, and MST_$MAPS' byte argument 2.
+- [BAT volume record and the 0x83-longword label copy](bat-volume-record.md) — 0x234 bytes, 1-based biased indexing, 0x40 partitions of 8 bytes at +0x2C.
+- [SVC dispatcher block 0xE7B044..0xE7B2DD](svc-dispatcher-block.md) — shared stubs, the branch-chain trick, gas CMP-immediate macros, whole-block byte check.

@@ -71,27 +71,44 @@ void BAT_$DISMOUNT(int16_t vol_idx, int16_t flags, status_$t *status)
         goto done;
     }
 
-    /* Copy volume statistics back to label (8 longwords at offset 0x2C) */
-    label->total_blocks = vol->total_blocks;
-    label->free_blocks = vol->free_blocks;
-    label->bat_block_start = vol->bat_block_start;
-    label->first_data_block = vol->first_data_block;
-    label->step_blocks = vol->step_blocks;
-    label->bat_step = vol->bat_step;
-    label->reserved_blocks = vol->reserved_blocks;
+    /*
+     * Copy the BAT header back into the label: BAT_HEADER_LONGWORDS
+     * longwords from bat_$volume_t +0x00 into label +0x2C.
+     *
+     *   0x00E3B958  lea (-0x234,A2),A1      ; source = volume record + 0x00
+     *   0x00E3B95C  lea (0x2c,A0),A4        ; dest   = label + 0x2C
+     *   0x00E3B960  moveq #0x7,D0
+     *   0x00E3B964  move.l (A1)+,(A4)+
+     *   0x00E3B966  dbf D0w,0x00e3b964
+     */
+    {
+        const uint32_t *src = (const uint32_t *)&vol->total_blocks;
+        uint32_t *dst = (uint32_t *)&label->total_blocks;
+
+        for (i = 0; i < BAT_HEADER_LONGWORDS; i++) {
+            *dst++ = *src++;
+        }
+    }
 
     /*
-     * For new format volumes, copy partition table back.
+     * For a new-format volume, copy the partition table back:
+     * BAT_PART_TABLE_LONGWORDS longwords from bat_$volume_t +0x20 into
+     * label +0xFC, i.e. 0x20C bytes -- the cells at +0x22C and +0x230 are
+     * derived from the drive's geometry and are never written to disk.
      *
-     * TODO(source-ffrk, 0x00E3B980): the original moves 0x83 LONGWORDS here
-     * (move.w #0x82,D0w / move.l (A4)+,(A1)+ / dbf), 0x20C bytes; this loop
-     * moves two longwords per iteration and so copies twice as much.
+     *   0x00E3B96C  tst.b (0xd3f,A1)        ; new-format flag
+     *   0x00E3B970  bpl.b 0x00e3b986        ; old format: skip the copy
+     *   0x00E3B972  lea (-0x214,A2),A4      ; source = volume record + 0x20
+     *   0x00E3B976  lea (0xfc,A0),A1        ; dest   = label + 0xFC
+     *   0x00E3B97A  move.w #0x82,D0w
+     *   0x00E3B980  move.l (A4)+,(A1)+
+     *   0x00E3B982  dbf D0w,0x00e3b980
      */
     if ((bat_$volume_flags[vol_idx] >> 24) & 0x80) {
-        uint32_t *src = (uint32_t *)&vol->num_partitions;
+        const uint32_t *src = (const uint32_t *)&vol->num_partitions;
         uint32_t *dst = (uint32_t *)&label->num_partitions;
-        for (i = 0; i <= 0x82; i++) {
-            *dst++ = *src++;
+
+        for (i = 0; i < BAT_PART_TABLE_LONGWORDS; i++) {
             *dst++ = *src++;
         }
     }

@@ -145,7 +145,11 @@ typedef struct {
 // =============================================================================
 // Boolean type (Domain/OS style)
 // =============================================================================
-typedef char boolean;
+/* Domain Pascal booleans are a signed byte: 0xFF is true and the code tests
+ * them with tst.b / bmi, i.e. "< 0".  int8_t (not char) keeps that test
+ * byte-order and host-signedness independent (char is unsigned on some
+ * hosts, e.g. Linux aarch64). */
+typedef int8_t boolean;
 #define true ((boolean) - 1) // 0xFF in Domain/OS convention
 #define false ((boolean)0)
 

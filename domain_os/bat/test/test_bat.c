@@ -40,16 +40,16 @@ void ML_$UNLOCK(int16_t id) {
 static void test_get_bat_step(void) {
     printf("Testing BAT_$GET_BAT_STEP...\n");
 
-    /* Initialize test data */
-    memset(&bat_$volumes[0], 0, sizeof(bat_$volume_t));
-    bat_$volumes[0].bat_step = 0x1234;
-
+    /* Volume indices run 1..6 (0x00E3BA1A tst.w / 0x00E3BA1E cmpi.w #0x6) */
     memset(&bat_$volumes[1], 0, sizeof(bat_$volume_t));
-    bat_$volumes[1].bat_step = 0x5678;
+    bat_$volumes[1].bat_step = 0x1234;
+
+    memset(&bat_$volumes[2], 0, sizeof(bat_$volume_t));
+    bat_$volumes[2].bat_step = 0x5678;
 
     /* Test retrieval */
-    assert(BAT_$GET_BAT_STEP(0) == 0x1234);
-    assert(BAT_$GET_BAT_STEP(1) == 0x5678);
+    assert(BAT_$GET_BAT_STEP(1) == 0x1234);
+    assert(BAT_$GET_BAT_STEP(2) == 0x5678);
 
     printf("  PASSED\n");
 }
@@ -63,29 +63,29 @@ static void test_cancel(void) {
     printf("Testing BAT_$CANCEL...\n");
 
     /* Initialize test data */
-    memset(&bat_$volumes[0], 0, sizeof(bat_$volume_t));
-    bat_$volumes[0].free_blocks = 100;
-    bat_$volumes[0].reserved_blocks = 50;
+    memset(&bat_$volumes[1], 0, sizeof(bat_$volume_t));
+    bat_$volumes[1].free_blocks = 100;
+    bat_$volumes[1].reserved_blocks = 50;
 
     ml_lock_count = 0;
     ml_unlock_count = 0;
 
     /* Test successful cancel */
-    BAT_$CANCEL(0, 20, &status);
+    BAT_$CANCEL(1, 20, &status);
     assert(status == status_$ok);
-    assert(bat_$volumes[0].free_blocks == 120);
-    assert(bat_$volumes[0].reserved_blocks == 30);
+    assert(bat_$volumes[1].free_blocks == 120);
+    assert(bat_$volumes[1].reserved_blocks == 30);
 
     /* Verify lock was taken and released */
     assert(ml_lock_count == 1);
     assert(ml_unlock_count == 1);
 
     /* Test cancel more than reserved (should fail) */
-    BAT_$CANCEL(0, 100, &status);
+    BAT_$CANCEL(1, 100, &status);
     assert(status == bat_$error);
     /* Counts should not change on error */
-    assert(bat_$volumes[0].free_blocks == 120);
-    assert(bat_$volumes[0].reserved_blocks == 30);
+    assert(bat_$volumes[1].free_blocks == 120);
+    assert(bat_$volumes[1].reserved_blocks == 30);
 
     printf("  PASSED\n");
 }
@@ -117,13 +117,17 @@ static void test_vtoce_block_macros(void) {
 static void test_structure_sizes(void) {
     printf("Testing structure sizes...\n");
 
-    /* bat_$partition_t should be 8 bytes */
+    /* bat_$partition_t is 8 bytes: lsl.l #0x3 at 0x00E3AD74 */
     assert(sizeof(bat_$partition_t) == 8);
 
-    /* bat_$volume_t should be 0x234 (564) bytes */
-    /* Note: This may vary depending on alignment */
-    printf("  bat_$volume_t size: %zu bytes (expected ~564)\n",
-           sizeof(bat_$volume_t));
+    /* bat_$volume_t is 0x234 bytes: mulu.w #0x234 at 0x00E3B756 */
+    assert(sizeof(bat_$volume_t) == 0x234);
+
+    /* The partition array runs +0x2C..+0x22B (0x00E3B810 / 0x00E3B838) */
+    assert(__builtin_offsetof(bat_$volume_t, partitions) == 0x2C);
+    assert(BAT_MAX_PARTITIONS == 0x40);
+    assert(__builtin_offsetof(bat_$volume_t, alloc_chunk_size) == 0x22C);
+    assert(__builtin_offsetof(bat_$volume_t, alloc_chunk_offset) == 0x230);
 
     printf("  PASSED\n");
 }

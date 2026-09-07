@@ -95,12 +95,18 @@ void PACCT_$LOG(boolean *fork_flag, boolean *su_flag, int16_t *exit_status,
      */
 
     /* Flags: bit 0 = arg1's boolean, bit 1 = arg2's boolean
-     * (0x00E5AAFC `clr.w`, then 0x00E5AB08 / 0x00E5AB1A). */
+     * (0x00E5AAFC `clr.w`, then 0x00E5AB08 / 0x00E5AB1A).
+     *
+     * The test is on bit 7 of the byte, not on its sign: 0x00E5AB04
+     * `move.b (A0),D0b` / 0x00E5AB06 `lsr.b #0x7,D0b` is a LOGICAL shift, and
+     * 0x00E5AB16 / 0x00E5AB18 do the same for arg2 before 0x00E5AB20 doubles
+     * it into bit 1.  `boolean` is a plain `char`, whose signedness is
+     * host-defined, so mask the byte instead of comparing it against zero. */
     record.ac_flags = 0;
-    if (*fork_flag < 0) {
+    if ((uint8_t)*fork_flag & 0x80u) {
         record.ac_flags |= 0x0001;
     }
-    if (*su_flag < 0) {
+    if ((uint8_t)*su_flag & 0x80u) {
         record.ac_flags |= 0x0002;
     }
 
@@ -189,8 +195,9 @@ void PACCT_$LOG(boolean *fork_flag, boolean *su_flag, int16_t *exit_status,
     /* Enter superuser mode for mapping */
     ACL_$ENTER_SUPER();
 
-    /* Check if we need to map a new buffer region */
-    if (DAT_00e817f8 < PACCT_RECORD_SIZE) {
+    /* Check if we need to map a new buffer region.  0x00E5AC66
+     * `cmpi.l #0x80,(0xc,A5)` / 0x00E5AC6E `bge` is a SIGNED comparison. */
+    if ((int32_t)DAT_00e817f8 < PACCT_RECORD_SIZE) {
         /* Unmap existing buffer if any */
         if (DAT_00e81804 != NULL) {
             MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(DAT_00e81804), DAT_00e81800, 0, &status);
@@ -200,7 +207,19 @@ void PACCT_$LOG(boolean *fork_flag, boolean *su_flag, int16_t *exit_status,
         }
 
         /* Map new 32KB region at current file position */
-        map_result = MST_$MAPS(0, 0xFF,     /* flags */
+        /*
+         * 0x00E5ACA4-0x00E5ACC4 push the ten arguments.  Two of them are
+         * Pascal BYTE parameters that occupy the high half of a word slot:
+         * 0x00E5ACC0 `st -(SP)` is argument 2 (MST_$MAPS reads it with
+         * `move.b (0xa,A6)` at 0x00E43998) and 0x00E5ACAC `st -(SP)` is
+         * argument 8 (`move.b (0x1e,A6)` at 0x00E4399C).  mst/mst.h still
+         * declares argument 2 as an int16_t, so it must be passed as 0xFF00
+         * -- the tree's convention for that slot -- and not as 0xFF, which
+         * would leave the callee's byte reading 0.
+         * TODO(source-qmdl): retype MST_$MAPS' second parameter as a byte in
+         * mst/mst.h (0x00E43998) and drop the 0xFF00 spelling here.
+         */
+        map_result = MST_$MAPS(0, (int16_t)0xFF00,   /* byte arg, 0x00E5ACC0 */
                                &pacct_owner, DAT_00e81808,
                                PACCT_BUFFER_SIZE, 0x16,
                                0, 0xFF, &DAT_00e81800, &status);

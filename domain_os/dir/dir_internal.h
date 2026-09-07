@@ -892,10 +892,22 @@ void dir_$read_def_prot(uint32_t handle, void *acl_type,
                         void *prot_buf, void *acl_uid, status_$t *status_ret);
 
 /* dir_$write_def_prot - Write default protection to directory page
+ *
+ * Argument roles read off the prologue at 0x00E51E18-0x00E51E30:
+ *   (0x08,A6) -> D4  handle
+ *   (0x0C,A6) -> D5  acl_type, compared against ACL_$DIR_ACL (0x00E1744C) at
+ *                    0x00E51F2A and ACL_$FILE_ACL (0x00E17444) at 0x00E51F7C
+ *   (0x10,A6)        prot_data, copied as 11 longwords = 44 bytes by the loop
+ *                    at 0x00E51E7C-0x00E51E88
+ *   (0x14,A6) -> A2  src_acl_uid; funky test and.w (0x4,A2),D0w at 0x00E51E48,
+ *                    8 bytes copied out of it at 0x00E51E8C on the plain path
+ *   (0x18,A6) -> D3b flush_flag; FILE_$FW_PARTIAL only when negative
+ *   (0x1A,A6) -> A3  status_ret
+ *
  * Original address: 0x00E51E18
  */
 void dir_$write_def_prot(uint32_t handle, void *acl_type,
-                         void *prot_buf, void *acl_uid, char flush_flag,
+                         void *prot_data, void *src_acl_uid, char flush_flag,
                          status_$t *status_ret);
 
 /* dir_$remove_entry_from_page - Remove entry from its directory page
@@ -914,11 +926,20 @@ void dir_$remove_entry_from_page(int16_t slot_idx, status_$t *status_ret);
  *
  * Handles both ACL_$DIR_ACL and ACL_$FILE_ACL types.
  *
+ * Argument roles read off the prologue at 0x00E52D70-0x00E52D88:
+ *   (0x08,A6) -> D4  handle
+ *   (0x0C,A6) -> D5  acl_type, compared against ACL_$DIR_ACL (0x00E1744C) at
+ *                    0x00E52E64 and ACL_$FILE_ACL (0x00E17444) at 0x00E52EB4
+ *   (0x10,A6) -> A2  src_acl_uid; funky test and.w (0x4,A2),D0w at 0x00E52DA0
+ *                    selects ACL_$CONVERT_FUNKY_ACL over ACL_$CONVERT_TO_10ACL
+ *   (0x14,A6) -> D2b flush_flag; FILE_$FW_PARTIAL only when negative (0x00E52F34)
+ *   (0x16,A6) -> A3  status_ret
+ *
  * Original address: 0x00E52D70
  * Size: 566 bytes
  */
-void dir_$set_default_acl_internal(uint32_t handle, void *acl_data,
-                                   void *acl_param, char all_entries,
+void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
+                                   void *src_acl_uid, char flush_flag,
                                    status_$t *status_ret);
 
 /* dir_$create_dir_obj - Create new directory file
@@ -1273,13 +1294,36 @@ void dir_$do_op_fix_dir(uid_t *uid, status_$t *status_ret);
  * Size: 196 bytes
  */
 void dir_$do_op_set_acl(uid_t *uid, uid_t *acl_uid, status_$t *status_ret);
-void dir_$do_op_set_default_acl(uid_t *uid, void *type, void *acl, status_$t *status_ret);
+/* dir_$do_op_set_default_acl - DO_OP handler: set default ACL (opcode 0x4C)
+ *
+ * Call site 0x00E4C794 pushes, right to left, pea (0x4,A3) / pea (0x96,A2) /
+ * pea (0x8e,A2) / pea (-0x10,A6), so acl_type = request+0x8E (8-byte ACL type
+ * UID) and src_acl_uid = request+0x96 (8-byte source ACL UID).  Both are
+ * forwarded in that order to dir_$set_default_acl_internal at 0x00E52FDC and
+ * 0x00E52FD8, which is where the two roles are pinned.
+ *
+ * Original address: 0x00E52FA6
+ * Size: 94 bytes
+ */
+void dir_$do_op_set_default_acl(uid_t *dir_uid, void *acl_type, void *src_acl_uid,
+                                status_$t *status_ret);
 void dir_$do_op_get_default_acl(uid_t *uid, uid_t *type, uid_t *acl_ret, status_$t *status_ret);
 void dir_$do_op_validate_root_entry(void *name, uint16_t name_len, status_$t *status_ret);
 void dir_$do_op_set_prot(uid_t *uid, void *prot_data, void *acl_uid,
                          int16_t prot_type, status_$t *status_ret);
-void dir_$do_op_set_def_prot(uid_t *uid, void *acl_type, void *prot_buf,
-                             void *acl_uid, status_$t *status_ret);
+/* dir_$do_op_set_def_prot - DO_OP handler: set default protection (opcode 0x54)
+ *
+ * Call site 0x00E4C81C pushes, right to left, pea (0x4,A3) / pea (0xc2,A2) /
+ * pea (0x96,A2) / pea (0x8e,A2) / pea (-0x10,A6), so acl_type = request+0x8E
+ * (8-byte ACL type UID), prot_data = request+0x96 (44 bytes, 0x96..0xC1) and
+ * src_acl_uid = request+0xC2 (8-byte source ACL UID).  All three are forwarded
+ * in that order to dir_$write_def_prot at 0x00E5207E / 0x00E5207A / 0x00E52076.
+ *
+ * Original address: 0x00E52044
+ * Size: 98 bytes
+ */
+void dir_$do_op_set_def_prot(uid_t *dir_uid, void *acl_type, void *prot_data,
+                             void *src_acl_uid, status_$t *status_ret);
 void dir_$do_op_get_def_prot(uid_t *uid, void *acl_type, void *prot_buf,
                              void *acl_ret, status_$t *status_ret);
 void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,

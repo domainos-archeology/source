@@ -157,10 +157,20 @@ typedef struct bat_$label_t {
      * +0x20 (lea (0xfc,A0),A2 / move.w #0x82,D6w / dbf at
      * 0x00E3B7EA-0x00E3B7FA); BAT_$DISMOUNT copies them back (0x00E3B976).
      */
-    uint16_t    num_partitions;     /* 0xFC */
-    uint16_t    partition_start_offset; /* 0xFE */
-    uint32_t    partition_size;     /* 0x100 */
-    /* ... partition array follows ... */
+    uint16_t    num_partitions;         /* 0xFC  -> bat_$volume_t +0x20 */
+    uint16_t    partition_start_offset; /* 0xFE  -> bat_$volume_t +0x22 */
+    uint32_t    partition_size;         /* 0x100 -> bat_$volume_t +0x24 */
+    uint32_t    unknown_104;            /* 0x104 -> bat_$volume_t +0x28 */
+
+    /*
+     * 0x108: the 0x40 eight-byte partition records, mirroring
+     * bat_$volume_t.partitions.  The copy at 0x00E3B7EA moves
+     * 0x83 longwords starting at 0xFC, so it ends at 0x308; the
+     * 0xC-byte header above leaves exactly 0x200 bytes here.
+     * Held as raw bytes because bat_$partition_t is internal to
+     * the BAT manager (bat/bat_internal.h).
+     */
+    uint8_t     partition_table[0x200]; /* 0x108..0x307 */
 } bat_$label_t;
 
 /* Every field the BAT and DISK code touches, at the address that proves it. */
@@ -206,6 +216,15 @@ _Static_assert(__builtin_offsetof(bat_$label_t, partition_start_offset) == 0xFE,
                "bat_$label_t.partition_start_offset (0x00E3B7EA)");
 _Static_assert(__builtin_offsetof(bat_$label_t, partition_size) == 0x100,
                "bat_$label_t.partition_size (0x00E3B7EA)");
+_Static_assert(__builtin_offsetof(bat_$label_t, unknown_104) == 0x104,
+               "bat_$label_t.unknown_104 (0x00E3B7EA copy)");
+_Static_assert(__builtin_offsetof(bat_$label_t, partition_table) == 0x108,
+               "bat_$label_t.partition_table (0x00E3B7EA copy)");
+/* The 0x83-longword copy at 0x00E3B7EA / 0x00E3B980 starts at 0xFC and must
+ * land wholly inside the record. */
+_Static_assert(sizeof(bat_$label_t) >=
+               __builtin_offsetof(bat_$label_t, num_partitions) + 0x83 * 4,
+               "bat_$label_t partition-table copy extent (0x00E3B7F2)");
 
 /*
  * BAT_$ALLOCATE - Allocate disk blocks

@@ -12,15 +12,22 @@
  *   - ACL_$FILE_ACL type: data at 0x4E, UID at 0x7A
  *
  * If the ACL UID changed, sets attribute 6 on the new ACL object.
- * If all_entries flag is set (negative), writes via FILE_$FW_PARTIAL.
+ * If flush_flag is negative, flushes the page via FILE_$FW_PARTIAL
+ * (tst.b D2 / bpl at 0x00E52F34).
  * If the old ACL UID was non-nil, truncates the old ACL object.
  *
  * Parameters:
- *   handle     - Open directory handle (from dir_$open_dir)
- *   acl_type   - Pointer to ACL type UID (ACL_$DIR_ACL or ACL_$FILE_ACL)
- *   acl_param  - ACL data/source to convert
- *   all_entries - If negative (bit 7 set), write partial to all entries
- *   status_ret - Output: status code
+ *   handle      - Open directory handle (from dir_$open_dir)
+ *   acl_type    - Pointer to the ACL type UID, ACL_$DIR_ACL (0x00E1744C,
+ *                 compared at 0x00E52E64) or ACL_$FILE_ACL (0x00E17444,
+ *                 compared at 0x00E52EB4).  Arrives in D5.
+ *   src_acl_uid - Pointer to the source ACL object UID.  Arrives in A2;
+ *                 its "funky" bits are tested at 0x00E52DA0
+ *                 (and.w (0x4,A2),D0w) to pick ACL_$CONVERT_FUNKY_ACL
+ *                 over ACL_$CONVERT_TO_10ACL.
+ *   flush_flag  - If negative (bit 7 set), flush the page with
+ *                 FILE_$FW_PARTIAL (0x00E52F34)
+ *   status_ret  - Output: status code
  *
  * Original address: 0x00E52D70
  * Original size: 566 bytes
@@ -31,7 +38,7 @@
 /* DAT_00e52040 - 0x00000400 constant used as FILE_$FW_PARTIAL byte count */
 
 void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
-                                   void *acl_param, char all_entries,
+                                   void *src_acl_uid, char flush_flag,
                                    status_$t *status_ret)
 {
     uint32_t *type_ptr = (uint32_t *)acl_type;
@@ -65,19 +72,19 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
 
     /* Check ACL format and convert appropriately */
     {
-        uint16_t format_field = *(uint16_t *)((uint8_t *)acl_param + 4);
+        uint16_t format_field = *(uint16_t *)((uint8_t *)src_acl_uid + 4);
         uint16_t format_check = ((format_field & 0xFF0) >> 4) & 0xE0;
 
         if (format_check == 0) {
             /* Standard format - convert to 10ACL */
-            ACL_$CONVERT_TO_10ACL(acl_param, (void *)(uintptr_t)handle,
+            ACL_$CONVERT_TO_10ACL(src_acl_uid, (void *)(uintptr_t)handle,
                                   &acl_uid, acl_data, status_ret);
             if (*status_ret != status_$ok) {
                 goto audit;
             }
         } else {
             /* Non-standard ("funky") format */
-            ACL_$CONVERT_FUNKY_ACL(acl_param, acl_data, &acl_uid,
+            ACL_$CONVERT_FUNKY_ACL(src_acl_uid, acl_data, &acl_uid,
                                    extra_buf, status_ret);
             if (*status_ret != status_$ok) {
                 goto audit;
@@ -184,8 +191,8 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
         }
     }
 
-    /* If all_entries flag is set, write partial */
-    if ((int8_t)all_entries < 0) {
+    /* If flush_flag is negative, flush the page (0x00E52F34) */
+    if ((int8_t)flush_flag < 0) {
         FILE_$FW_PARTIAL((uid_t *)(uintptr_t)handle,
                          (uint32_t *)&DAT_00e4b33c,
                          (int32_t *)&DAT_00e52040 /* const; only read by callee */, status_ret);

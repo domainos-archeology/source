@@ -324,23 +324,24 @@ void dir_$do_op_read_linku(uid_t *uid, void *name, uint16_t name_len,
 { (void)uid;(void)name;(void)name_len;(void)buf_len;(void)extra;(void)link_type_ret;
   (void)uid_ret; OK(st); }
 
-void dir_$do_op_set_def_prot(uid_t *uid, void *acl_type, void *prot_buf,
-                             void *acl_uid, status_$t *st)
+void dir_$do_op_set_def_prot(uid_t *dir_uid, void *acl_type, void *prot_data,
+                             void *src_acl_uid, status_$t *st)
 {
-    (void)uid;
+    (void)dir_uid;
     mock_set_def_prot_calls++;
     mock_set_def_prot_p2 = acl_type;
-    mock_set_def_prot_p3 = prot_buf;
-    mock_set_def_prot_p4 = acl_uid;
+    mock_set_def_prot_p3 = prot_data;
+    mock_set_def_prot_p4 = src_acl_uid;
     OK(st);
 }
 
-void dir_$do_op_set_default_acl(uid_t *uid, void *type, void *acl, status_$t *st)
+void dir_$do_op_set_default_acl(uid_t *dir_uid, void *acl_type, void *src_acl_uid,
+                                status_$t *st)
 {
-    (void)uid;
+    (void)dir_uid;
     mock_set_default_acl_calls++;
-    mock_set_default_acl_p2 = type;
-    mock_set_default_acl_p3 = acl;
+    mock_set_default_acl_p2 = acl_type;
+    mock_set_default_acl_p3 = src_acl_uid;
     OK(st);
 }
 
@@ -754,7 +755,13 @@ TEST(set_acl_calls_the_server_handler_with_req_0x8e)
 }
 
 /* 0x00E4C794-0x00E4C7A4: pea (0x4,A3) / pea (0x96,A2) / pea (0x8e,A2) /
-   pea (-0x10,A6), so param_2 = req+0x8E and param_3 = req+0x96. */
+   pea (-0x10,A6), so param_2 = req+0x8E and param_3 = req+0x96.
+
+   Roles come from dir_$set_default_acl_internal (0x00E52D70): param_2 lands
+   in D5 and is compared as two longwords against ACL_$DIR_ACL / ACL_$FILE_ACL
+   at 0x00E52E64 / 0x00E52EB4, so req+0x8E is an 8-byte ACL TYPE uid; param_3
+   lands in A2 and is the source ACL uid (funky test at 0x00E52DA0).  The two
+   uids are therefore adjacent, 0x96 - 0x8E = 8. */
 TEST(set_default_acl_takes_req_0x8e_then_req_0x96)
 {
     reset(0x4C);
@@ -763,10 +770,20 @@ TEST(set_default_acl_takes_req_0x8e_then_req_0x96)
     ASSERT_EQ(1, mock_set_default_acl_calls);
     ASSERT_EQ(1, mock_set_default_acl_p2 == (void *)(req_buf + 0x8e));
     ASSERT_EQ(1, mock_set_default_acl_p3 == (void *)(req_buf + 0x96));
+    /* acl_type is a whole 8-byte uid, so src_acl_uid starts right after it */
+    ASSERT_EQ(8, (int)((char *)mock_set_default_acl_p3 -
+                       (char *)mock_set_default_acl_p2));
 }
 
 /* 0x00E4C81C-0x00E4C830: pea (0x4,A3) / pea (0xc2,A2) / pea (0x96,A2) /
-   pea (0x8e,A2) / pea (-0x10,A6). */
+   pea (0x8e,A2) / pea (-0x10,A6).
+
+   Roles come from dir_$write_def_prot (0x00E51E18): param_2 lands in D5 and
+   is compared against ACL_$DIR_ACL / ACL_$FILE_ACL at 0x00E51F2A / 0x00E51F7C
+   (8-byte ACL TYPE uid); param_3 is copied as 11 longwords = 44 bytes by the
+   loop at 0x00E51E7C-0x00E51E88 (default-protection data); param_4 lands in
+   A2 and is the source ACL uid (funky test at 0x00E51E48, 8 bytes copied at
+   0x00E51E8C).  Hence 0x96 - 0x8E = 8 and 0xC2 - 0x96 = 44. */
 TEST(set_def_prot_takes_req_0x8e_0x96_0xc2_in_that_order)
 {
     reset(0x54);
@@ -776,6 +793,11 @@ TEST(set_def_prot_takes_req_0x8e_0x96_0xc2_in_that_order)
     ASSERT_EQ(1, mock_set_def_prot_p2 == (void *)(req_buf + 0x8e));
     ASSERT_EQ(1, mock_set_def_prot_p3 == (void *)(req_buf + 0x96));
     ASSERT_EQ(1, mock_set_def_prot_p4 == (void *)(req_buf + 0xc2));
+    /* acl_type is an 8-byte uid; prot_data is the 44 bytes after it */
+    ASSERT_EQ(8, (int)((char *)mock_set_def_prot_p3 -
+                       (char *)mock_set_def_prot_p2));
+    ASSERT_EQ(44, (int)((char *)mock_set_def_prot_p4 -
+                        (char *)mock_set_def_prot_p3));
 }
 
 /* 0x00E4C842-0x00E4C85C, the case 0x54 audit tail:

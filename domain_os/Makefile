@@ -62,6 +62,11 @@ endef
 # Instantiate the template for each subsystem
 $(foreach sub,$(SUBSYSTEMS),$(eval $(call SUBSYSTEM_template,$(sub))))
 
+# svc/sau2/*.s share instruction-encoding macros through a gas .include
+# (svc/sau2/svc_macros.inc, resolved relative to this directory).  The
+# generic %.o: %.s rule cannot see that, so state the dependency here.
+$(svc_ASM_OBJS): svc/$(TARGET_SAU)/svc_macros.inc
+
 # Main target
 domain_os: $(DIST_DIR)/domain_os
 

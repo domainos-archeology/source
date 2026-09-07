@@ -121,27 +121,42 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
     /* Mark volume as needing salvage on disk until clean dismount */
     label->salvage_flag = 1;
 
-    /* Copy volume statistics from label (8 longwords at offset 0x2C) */
-    vol->total_blocks = label->total_blocks;
-    vol->free_blocks = label->free_blocks;
-    vol->bat_block_start = label->bat_block_start;
-    vol->first_data_block = label->first_data_block;
-    vol->unknown_10 = (uint16_t)(label->volume_trouble & 0xFFFF);
-    vol->step_blocks = label->step_blocks;
-    vol->bat_step = label->bat_step;
-    vol->reserved_blocks = label->reserved_blocks;
-
-    /* Copy partition table (0x83 entries starting at offset 0xFC) */
     /*
-     * TODO(source-ffrk, 0x00E3B7EA): the original moves 0x83 LONGWORDS here
-     * (move.w #0x82,D6w / move.l (A2)+,(A4)+ / dbf), 0x20C bytes; this loop
-     * moves two longwords per iteration and so copies twice as much.
+     * Copy the BAT header out of the label: BAT_HEADER_LONGWORDS longwords
+     * from label +0x2C into bat_$volume_t +0x00.
+     *
+     *   0x00E3B7DA  lea (0x2c,A0),A4        ; source = label + 0x2C
+     *   0x00E3B7DE  lea (-0x234,A1),A2      ; dest   = volume record + 0x00
+     *   0x00E3B7E2  moveq #0x7,D6
+     *   0x00E3B7E4  move.l (A4)+,(A2)+
+     *   0x00E3B7E6  dbf D6w,0x00e3b7e4
      */
     {
-        uint32_t *src = (uint32_t *)&label->num_partitions;
-        uint32_t *dst = (uint32_t *)&vol->num_partitions;
-        for (i = 0; i <= 0x82; i++) {
+        const uint32_t *src = (const uint32_t *)&label->total_blocks;
+        uint32_t *dst = (uint32_t *)&vol->total_blocks;
+
+        for (i = 0; i < BAT_HEADER_LONGWORDS; i++) {
             *dst++ = *src++;
+        }
+    }
+
+    /*
+     * Copy the partition table out of the label: BAT_PART_TABLE_LONGWORDS
+     * longwords from label +0xFC into bat_$volume_t +0x20, i.e. 0x20C bytes
+     * ending at +0x22B -- the two cells at +0x22C and +0x230 are computed
+     * below and are NOT part of the copy.
+     *
+     *   0x00E3B7EA  lea (0xfc,A0),A2        ; source = label + 0xFC
+     *   0x00E3B7EE  lea (-0x214,A1),A4      ; dest   = volume record + 0x20
+     *   0x00E3B7F2  move.w #0x82,D6w
+     *   0x00E3B7F8  move.l (A2)+,(A4)+
+     *   0x00E3B7FA  dbf D6w,0x00e3b7f8
+     */
+    {
+        const uint32_t *src = (const uint32_t *)&label->num_partitions;
+        uint32_t *dst = (uint32_t *)&vol->num_partitions;
+
+        for (i = 0; i < BAT_PART_TABLE_LONGWORDS; i++) {
             *dst++ = *src++;
         }
     }
@@ -153,7 +168,11 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
         vol->partitions[0].free_count = vol->free_blocks - 0xB;
     }
 
-    /* Calculate allocation chunk parameters from disk geometry */
+    /*
+     * Calculate the allocation-chunk (track) parameters from the drive's
+     * geometry and store them at +0x22C / +0x230, just past the partition
+     * table (0x00E3B81E-0x00E3B874).
+     */
     dinfo = &bat_$disk_info[vol_idx];
     chunk_size = (uint32_t)dinfo->sectors_per_track;
     vol->alloc_chunk_size = chunk_size;

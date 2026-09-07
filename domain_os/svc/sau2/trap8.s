@@ -18,6 +18,8 @@
 |   0x00E7B2A0  SVC_$BAD_USER_PTR
 |   0x00E7B2A6  SVC_$GENERATE_FAULT
 |   0x00E7B2C4  SVC_$ILLEGAL_USP_UNLK
+|   0x00E7B2C6  SVC_$ILLEGAL_USP_JMP    (the fixed-arg dispatchers' entry;
+|                                        they have no LINK frame to unlk)
 |   0x00E7B2CC  SVC_$UNIMPLEMENTED
 |
 | The tail lives here rather than in trap5.s because SVC_$TRAP8 is the only
@@ -50,6 +52,8 @@
 |   SVC_$TRAP8_TABLE at 0xE7BD6A - handler addresses (56 entries)
 |
 
+        .include "svc/sau2/svc_macros.inc"
+
         .text
         .even
 
@@ -75,10 +79,8 @@
 
 SVC_$TRAP8:
         lea     (SVC_$TRAP8_ARGCOUNT:w,%pc),%a1 | 00e7b240  43 fa 0c 08 -> 0xE7BE4A
-        | 00e7b244  b0 7c 00 38: CMP.W #imm,D0.  gas always assembles
-        | `cmp.w #0x38,%d0' as CMPI.W (0c40 0038), so the image's CMP form is
-        | emitted literally here to keep the byte image exact.
-        .short  0xb07c, 0x0038          | cmp.w #0x38,%d0
+        | 00e7b244  b0 7c 00 38: CMP.W #imm,D0 (see svc_macros.inc)
+        cmp_w_imm 0x38, 0               | Check syscall number < 56
         bcc.b   SVC_$TRAP8_INVALID      | 00e7b248  64 44 -> 0xE7B28E
 
         link    %a6,#0                  | 00e7b24a  4e 56 00 00
@@ -126,6 +128,7 @@ SVC_$TRAP8_NO_ARGS:
 | Falls into SVC_$INVALID_SYSCALL.
 |----------------------------------------------------------------------
 
+        .global SVC_$TRAP8_INVALID
 SVC_$TRAP8_INVALID:
         lea     (SVC_$TRAP8_TABLE:w,%pc),%a0 | 00e7b28e  41 fa 0a da -> 0xE7BD6A
         cmpa.l  %a0,%a1                 | 00e7b292  b3 c8
@@ -188,8 +191,10 @@ SVC_$GENERATE_FAULT:
 |----------------------------------------------------------------------
 
         .global SVC_$ILLEGAL_USP_UNLK
+        .global SVC_$ILLEGAL_USP_JMP
 SVC_$ILLEGAL_USP_UNLK:
         unlk    %a6                     | 00e7b2c4  4e 5e
+SVC_$ILLEGAL_USP_JMP:
         jmp     FIM_$ILLEGAL_USP        | 00e7b2c6  4e f9 00 e2 15 8a
 
 |----------------------------------------------------------------------

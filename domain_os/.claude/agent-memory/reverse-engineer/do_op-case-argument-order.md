@@ -32,3 +32,24 @@ request builder `DIR_$X` a few hundred bytes away (e.g. dir_$do_op_set_acl
 0xE52BC2 vs DIR_$SET_ACL 0xE52C86). Naming the wrong one in a DO_OP case makes
 the server re-send the request. Always resolve the `bsr` target address with
 `gsk analyze` rather than trusting a name that "reads right".
+
+## Field roles for the ACL/protection cases (pinned 2026-09-07)
+
+Order alone was not enough: the *roles* were also mislabelled.  They are fixed
+by the consumers, not by the case block.
+
+- `dir_$set_default_acl_internal` 0xE52D70: `(0xC,A6)->D5` is compared as two
+  longwords against `ACL_$DIR_ACL` (0xE1744C, at 0xE52E64) / `ACL_$FILE_ACL`
+  (0xE17444, at 0xE52EB4) => an 8-byte **ACL type uid**.  `(0x10,A6)->A2` gets
+  the funky test `and.w (0x4,A2)` at 0xE52DA0 => the **source ACL uid**.
+  `(0x14,A6)->D2b` is a **flush flag** (FILE_$FW_PARTIAL only when negative,
+  0xE52F34), not an "all entries" flag.
+- `dir_$write_def_prot` 0xE51E18: same D5 type-uid compare (0xE51F2A/0xE51F7C);
+  `(0x10,A6)` is copied as 11 longwords = **44 bytes** at 0xE51E7C-0xE51E88
+  (default-protection / 10-ACL data); `(0x14,A6)->A2` is the source ACL uid.
+- So opcode 0x4C request: +0x8E type uid (8), +0x96 acl uid (8).
+  Opcode 0x54 request: +0x8E type uid (8), +0x96 prot data (44), +0xC2 acl uid.
+  The arithmetic closes: 0x8E+8=0x96, 0x96+44=0xC2.
+- Independent check: `audit_$log_prot_op` takes (status, uid, 44-byte acl data,
+  type uid, acl uid, flags) - see 0xE52F82 and the case 0x54 tail 0xE4C842,
+  which pass req+0x96 then req+0x8E then req+0xC2 in exactly those roles.

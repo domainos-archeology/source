@@ -14,14 +14,20 @@
  * Note: The MMAPE (Memory Map Page Entry) at 0xEB2800 is a separate 16-byte
  * per-page structure managed by the MMAP layer (see mmap/mmap.h).
  *
- * MMU Control Registers (0xFFB400-0xFFB409):
+ * MMU Control Registers (0xFFB400-0xFFB40B):
  * - 0xFFB400: PID/Privilege/Power register (CSR)
- * - 0xFFB402: Power/status control
+ * - 0xFFB402: Power/status control (the handbook's "FPU Owner Register",
+ *             write-only ASID of the current FPU owner)
  * - 0xFFB403: Status register (bit 4 = normal mode)
  * - 0xFFB405: MCR control (M68010)
  * - 0xFFB407: MCR mask
  * - 0xFFB408: MCR control (M68020)
  * - 0xFFB409: Hardware revision
+ * - 0xFFB40A: MMU Parity Register (word, 0xFFB40A-0xFFB40B)
+ *
+ * Register names and bit layouts are Apollo's own, from the "DN3xx" chapter
+ * of the Domain Engineering Handbook (002398-04 Rev4, Jan87), pages 7-23
+ * through 7-27; SAU2 is DN300/DN320/DN330.
  *
  * Original source was likely Pascal, converted to C.
  */
@@ -124,6 +130,55 @@ _Static_assert(sizeof(mmu_globals_t) == 0x0A, "mmu_globals_t must be 10 bytes");
 #define MMU_MCR_M68020 (*(volatile uint8_t *)0xFFB408) /* MCR for 68020 */
 #define DN330_MMU_HARDWARE_REV (*(volatile uint8_t *)0xFFB409) /* HW revision  \
                                                                 */
+
+/*
+ * MMU Parity Register [800A-800B] = 0xFFB40A, DN3xx only.
+ *
+ * Domain Engineering Handbook 002398-04 Rev4 (Jan87), DN3xx chapter, page
+ * 7-27, gives the word layout:
+ *
+ *    15      14      13      12     11                             0
+ *   +-------+-------+-------+-------+------------------------------+
+ *   | WWP   | PFE   | PTTPE | PFTPE | PFTX (PFT Parity Error Index)|
+ *   +-------+-------+-------+-------+------------------------------+
+ *   |--R/W--|--R/W--|--CLR--|--CLR--|------------R/O---------------|
+ *
+ *   bit 15  Write Wrong MMU Parity (both PFT and PTT)
+ *   bit 14  MMU Parity Fault Enable (MMU PFE)
+ *   bit 13  PTT Parity Error
+ *   bit 12  PFT Parity Error
+ *   bits 11..0  PFTX, the PFT index of the failing entry
+ *
+ * The handbook adds: "Bus error occurs on parity operation if MMU PFE is
+ * set, and bits 12 and 13 were clear."
+ *
+ * FIM_$BUS_ERR (fim/sau2/bus_err.s) is the only code in the image that
+ * touches the register.  It reads the HIGH byte of the word - m68k is
+ * big-endian, so the byte at 0xFFB40A carries word bits 15..8 - and tests
+ * byte bit 5 (= word bit 13, PTT parity) then byte bit 4 (= word bit 12,
+ * PFT parity), choosing status_$mmu_ptt_parity_error,
+ * status_$mmu_pft_parity_error or, when neither is set,
+ * status_$mmu_timeout.  Those three status texts ("ptt parity error",
+ * "pft parity error", "mmu timeout" - SR10.4 status database, module 0x07)
+ * confirm the bit assignment independently of the handbook.  It then
+ * writes the word 0x4000 back: PFE set, WWP clear, and 0 into the two CLR
+ * bits, which acknowledges the latched error and re-arms parity faults.
+ */
+#define MMU_PARITY_REG (*(volatile uint16_t *)0xFFB40A)
+
+#define MMU_PARITY_PFTX_MASK 0x0FFF /* bits 11..0: failing PFT index */
+#define MMU_PARITY_PFT_ERR 0x1000   /* bit 12: PFT parity error (CLR) */
+#define MMU_PARITY_PTT_ERR 0x2000   /* bit 13: PTT parity error (CLR) */
+#define MMU_PARITY_PFE 0x4000       /* bit 14: MMU parity fault enable */
+#define MMU_PARITY_WRITE_WRONG 0x8000 /* bit 15: write wrong MMU parity */
+
+/* Value FIM_$BUS_ERR writes to acknowledge a latched MMU parity error. */
+#define MMU_PARITY_ACK MMU_PARITY_PFE
+
+/* MMU status codes selected from this register (module 0x07). */
+#define status_$mmu_ptt_parity_error 0x00070004
+#define status_$mmu_pft_parity_error 0x00070005
+#define status_$mmu_timeout 0x00070006
 
 /*
  * MMU module globals.

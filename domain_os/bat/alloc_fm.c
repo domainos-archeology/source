@@ -36,7 +36,13 @@ uint32_t BAT_$ALLOC_FM(int16_t vol_idx, status_$t *status)
     int16_t num_parts;
     int16_t search_idx;
     int16_t best_idx;
-    uint32_t best_count;
+    /*
+     * The running best free-block count lives in D4 and is only ever read
+     * back as a WORD (`move.w D4w,D0w / ext.l D0` at 0x00E3AD92 and
+     * `move.w D4w,D6w / ext.l D6` at 0x00E3ADAA), so it is a signed 16-bit
+     * value even where the code stores a longword into it (0x00E3ADB8).
+     */
+    int16_t best_count;
     uint32_t threshold;
     int16_t remaining;
     uint32_t hint;
@@ -68,16 +74,21 @@ uint32_t BAT_$ALLOC_FM(int16_t vol_idx, status_$t *status)
                 best_idx = search_idx;
                 break;
             }
-            /* Otherwise, track as candidate if better than current best */
+            /*
+             * Otherwise, track as candidate if better than current best.
+             * 0x00E3AD9C stores only the LOW WORD of the free count
+             * (`move.w (-0x206,A0),D4w`).
+             */
             if ((int32_t)best_count < (int32_t)part_free) {
-                best_count = part_free;
+                best_count = (int16_t)(part_free & 0xFFFF);
                 best_idx = search_idx;
             }
         } else {
             /* Type 0: Regular partition - use half of free count as metric */
             uint32_t metric = part_free >> 1;
             if ((int32_t)best_count < (int32_t)metric) {
-                best_count = metric;
+                /* 0x00E3ADB8 `move.l D0,D4`; only D4w is ever read back. */
+                best_count = (int16_t)(metric & 0xFFFF);
                 best_idx = search_idx;
             }
         }

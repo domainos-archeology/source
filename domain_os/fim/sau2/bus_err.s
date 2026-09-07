@@ -151,9 +151,15 @@
         .equ    MMU_CSR_LOW,        0x00FFB401  /* Low byte of MMU CSR (0xFFB400) */
         .equ    FP_HW_OWNER,        0x00FFB402  /* Hardware FPU owner register */
         .equ    MMU_STATUS_REG,     0x00FFB403  /* MMU status / fault classification */
-        .equ    MMU_ERR_SRC_REG,    0x00FFB40A  /* Memory error source; written to clear */
-                                                /* TODO(source-nx70): verify the name - */
-                                                /* only this handler touches the register */
+        /* MMU Parity Register [800A-800B].  Domain Engineering Handbook
+         * 002398-04 Rev4 (Jan87), DN3xx, p.7-27:
+         *   bit 15 write wrong MMU parity, bit 14 MMU parity fault enable,
+         *   bit 13 PTT parity error, bit 12 PFT parity error,
+         *   bits 11..0 PFTX (failing PFT index).
+         * The btsts below read the high byte at 0xFFB40A, so byte bit 5 is
+         * word bit 13 (PTT) and byte bit 4 is word bit 12 (PFT).
+         * See mmu/mmu.h. */
+        .equ    MMU_PARITY_REG,     0x00FFB40A
 
 /* ====================================================================
  * Constants
@@ -394,20 +400,22 @@ FIM_$BUS_ERR:
  * Assembly (0x00E21A1C):
  * -------------------------------------------------------------------- */
 .bus_err_check_timeout:
-        btst    #5,%d1                  /* Bus timeout? */
+        btst    #5,%d1                  /* Bus/MMU timeout or MMU parity error? */
         beq.w   .bus_err_fp             /* Neither - treat as an FPU cycle */
-        btst    #0,%d1                  /* Type 1 MMU has no error source reg */
-        bne.b   .bus_err_switch
-        btst    #3,%d1                  /* Memory error reported alongside? */
-        beq.b   .bus_err_switch
+        btst    #0,%d1                  /* 1 -> not a Stingray 020 board, i.e. a */
+        bne.b   .bus_err_switch         /* DN300/320: no MMU parity register */
+        btst    #3,%d1                  /* MMU error (timeout or parity), valid */
+        beq.b   .bus_err_switch         /* only while bit 5 is set */
 
-        /* Hard memory error: pick the status the error source register
-         * indicates and crash. */
+        /* Hard memory error: pick the status the MMU parity register
+         * indicates and crash.  The btsts read the high byte of the word at
+         * 0xFFB40A, so #5 is word bit 13 (PTT parity error) and #4 is word
+         * bit 12 (PFT parity error); neither set means an MMU timeout. */
         lea     (.bus_err_sts_4,%pc),%a0
-        btst    #5,(MMU_ERR_SRC_REG).l
+        btst    #5,(MMU_PARITY_REG).l
         bne.b   .bus_err_crash
         lea     (.bus_err_sts_5,%pc),%a0
-        btst    #4,(MMU_ERR_SRC_REG).l
+        btst    #4,(MMU_PARITY_REG).l
         bne.b   .bus_err_crash
         lea     (.bus_err_sts_6,%pc),%a0
 
@@ -415,7 +423,8 @@ FIM_$BUS_ERR:
         move.l  %a0,-(%sp)              /* CRASH_SYSTEM takes &status_$t */
         jsr     (CRASH_SYSTEM).l
         addq.w  #4,%sp
-        move.w  #0x4000,(MMU_ERR_SRC_REG).l  /* Acknowledge the error */
+        move.w  #0x4000,(MMU_PARITY_REG).l  /* Clear the latched PTT/PFT parity */
+                                        /* bits and re-arm MMU PFE (bit 14) */
         bra.w   .bus_err_return         /* CRASH_SYSTEM can return */
 
         /* Status constants, addressed PC-relatively above.
