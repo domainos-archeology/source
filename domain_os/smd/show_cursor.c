@@ -52,7 +52,7 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
     smd_display_hw_t *cur_hw;       /* (-0x28,A6), later A4 */
     smd_display_unit_t *prev_rec;   /* (-0x2c,A6): A3 - 0xF4 */
     smd_display_hw_t *prev_hw;      /* A2 */
-    smd_blink_state_t *blink;       /* (-0x34,A6) = 0x00E273D6 */
+    smd_time_com_t *blink;          /* (-0x34,A6) = 0x00E273D6 */
     const smd_cursor_pattern_t *pattern; /* A0 */
     int16_t pat_width;              /* (-0xc,A6) */
     int16_t pat_height;             /* D0 */
@@ -97,7 +97,7 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
     prev_hw = prev_rec->hw;
 
     /* 00e6e23e move.l #0xe273d6,(-0x34,A6) */
-    blink = &SMD_BLINK_STATE;
+    blink = &SMD_TIME_$COM;
 
     /* 00e6e246 cmp.l (0x1d94,A5),D0 / bne / move.l (0x32,A2),(-0x8,A6) */
     if (local_pos == SMD_GLOBALS.cursor_pos_sentinel) {
@@ -238,10 +238,10 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
     /* 00e6e384 tst.b (0x38,A2) / bpl -> 0x00e6e3c2 */
     if (prev_hw->cursor_visible < 0) {
         /* 00e6e38a movea.l (-0x34,A6),A0 / clr.b (A0) */
-        blink->smd_time_com = 0;
+        blink->blink_enable = 0;
 
         /* 00e6e390 tst.b (0x2,A0) / bpl -> 0x00e6e3ba */
-        if (blink->blink_flag < 0) {
+        if (blink->cursor_painted < 0) {
             /*
              * Erase the cursor that is currently on the screen.  The last two
              * arguments are pushed as *values* read out of the previous unit's
@@ -323,9 +323,9 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
             SMD_GLOBALS.default_cursor_pos = local_pos;
             SMD_GLOBALS.cursor_button_state = draw_cursor_num;
             cur_hw->cursor_visible = true;
-            blink->smd_time_com = (draw_cursor_num == 0) ? true : false;
-            blink->blink_flag = true;
-            blink->blink_counter = 7;
+            blink->blink_enable = (draw_cursor_num == 0) ? true : false;
+            blink->cursor_painted = true;
+            blink->blink_defer = 7;
         } else {
             /* 00e6e440 st (0x1744,A5) */
             SMD_GLOBALS.cursor_pending_flag = true;

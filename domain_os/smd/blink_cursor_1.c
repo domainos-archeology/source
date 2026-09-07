@@ -10,24 +10,31 @@
 #include "smd/smd_internal.h"
 
 /*
- * Display state block at 0x00E27376 (for unit 1, offset 0x60 bytes)
- * Used for cursor display parameters.
+ * The two PC-relative `lea`s resolve to the two SMD data objects, not to
+ * anonymous addresses (pea (d,PC) / lea (d,PC) target = instruction + 2 + d):
  *
- * Cursor state structure at 0x00E273D8:
- *   - blink_flag (byte at 0x00E273D8): current blink state
+ *   00e27248  lea (0x18e,PC),A1 -> 0x00e2724a + 0x18e = 0x00E273D8
+ *                                = &SMD_TIME_$COM.cursor_painted
+ *   00e2724c  lea (0x128,PC),A0 -> 0x00e2724e + 0x128 = 0x00E27376
+ *                                = SMD_$DISPLAY_COM = &SMD_DISPLAY_INFO[0]
+ *
+ * so every (d,A0) below is a field of unit 1's hardware record and A1/A2 is
+ * SMD_TIME_$COM's "cursor is painted" flag - the very flag
+ * SMD_$BLINK_CURSOR_CALLBACK re-tests at 0x00E6FF8E right after calling this
+ * routine through SMD_BLINK_FUNC_PTABLE.  (An earlier version of this file
+ * had 0x00E27316 for A0, which is 0x60 low.)
  */
 
-/* Fixed display state addresses for unit 1 */
-#define SMD_UNIT1_DISPLAY_COM    ((void *)0x00E27316)  /* Display communication area */
-#define SMD_UNIT1_CURSOR_STATE   ((int8_t *)0x00E273D8)
-#define SMD_UNIT1_CURSOR_NUM     ((int16_t *)0x00E273AC)
-#define SMD_UNIT1_CURSOR_POS     ((uint32_t *)0x00E273A8)
-#define SMD_UNIT1_DISPLAY_HW     ((void *)0x00E273C4)
 /* The last two arguments of SMD_$XOR_CURSOR are passed by value:
  * the display memory base and the controller register base of unit 1
- * (0x00E27308 pushes the same longwords SMD_$INIT plants in the unit record). */
+ * (0x00E27256 and 0x00E27250 push the same longwords SMD_$INIT plants in
+ * the unit record at +0x108 and +0xFC). */
 #define SMD_UNIT1_DISPLAY_BASE   0x00FC0000u
 #define SMD_UNIT1_CTRL_REGS      ((SMD_HW_REG_PTR)0x00FF9800u)
+
+/* The display-valid probe at 0x00E2723E reads the controller register
+ * directly rather than through the unit record. */
+#define SMD_UNIT1_STATUS_REG     (*(volatile int16_t *)0x00FF9800)
 
 /*
  * SMD_$BLINK_CURSOR_1 - Blink cursor for unit 1
@@ -68,37 +75,39 @@
  */
 void SMD_$BLINK_CURSOR_1(void)
 {
-    uint16_t saved_sr;
-
     /* Save status register and disable interrupts */
     /* Note: In C we can't directly manipulate SR, this would need
      * assembly or a platform-specific intrinsic.
      * For now, we represent the logic flow. */
 
-    /* Check if display hardware is valid */
-    if (*(volatile int16_t *)0x00FF9800 >= 0) {
+    /* 00e2723e tst.w (0x00ff9800).l / 00e27244 bmi -> skip */
+    if (SMD_UNIT1_STATUS_REG >= 0) {
         /* Display is valid, perform cursor blink */
 
-        /* Call internal cursor draw routine
-         * Parameters from original assembly:
-         *   - cursor_num ptr: 0x00E273AC (offset 0x36 from 0x00E27376)
-         *   - cursor_pos ptr: 0x00E273A8 (offset 0x32 from 0x00E27376)
-         *   - display_hw+0x4E: 0x00E273C4
-         *   - display_comm: 0x00E27376
-         *   - cursor_flag: 0x00E273D8
-         *   - display_base (by value): 0x00FC0000
-         *   - ctrl_regs (by value):    0x00FF9800
-         */
-        SMD_$XOR_CURSOR(SMD_UNIT1_CURSOR_NUM,
-                                   SMD_UNIT1_CURSOR_POS,
-                                   (void *)((uintptr_t)SMD_UNIT1_DISPLAY_COM + 0x4E),
-                                   SMD_UNIT1_DISPLAY_COM,
-                                   (const boolean *)SMD_UNIT1_CURSOR_STATE,
-                                   SMD_UNIT1_DISPLAY_BASE,
-                                   SMD_UNIT1_CTRL_REGS);
+        smd_display_hw_t *hw = smd_$unit_info(1);   /* A0 = 0x00E27376 */
 
-        /* Toggle blink flag */
-        *SMD_UNIT1_CURSOR_STATE = ~(*SMD_UNIT1_CURSOR_STATE);
+        /*
+         * Arguments are pushed right to left, so the last `pea` is the first
+         * argument:
+         *   00e2726a pea (0x36,A0)  -> &hw->cursor_number  (0x00E273AC)
+         *   00e27266 pea (0x32,A0)  -> &hw->cursor_pos     (0x00E273A8)
+         *   00e27262 pea (0x4e,A0)  -> &hw->min_x          (0x00E273C4)
+         *   00e27260 pea (A0)       -> hw                  (0x00E27376)
+         *   00e2725e pea (A1)       -> &SMD_TIME_$COM.cursor_painted
+         *   00e27256 move.l #0xfc0000,-(SP)  display_base, by value
+         *   00e27250 move.l #0xff9800,-(SP)  ctrl_regs,   by value
+         */
+        SMD_$XOR_CURSOR(&hw->cursor_number,
+                        &hw->cursor_pos,
+                        &hw->min_x,
+                        hw,
+                        &SMD_TIME_$COM.cursor_painted,
+                        SMD_UNIT1_DISPLAY_BASE,
+                        SMD_UNIT1_CTRL_REGS);
+
+        /* 00e27276 not.b (A2): one's complement of the whole byte, which
+         * flips the Domain boolean between 0x00 and 0xFF. */
+        SMD_TIME_$COM.cursor_painted = (boolean)~SMD_TIME_$COM.cursor_painted;
     }
 
     /* Status register restored implicitly when function returns */

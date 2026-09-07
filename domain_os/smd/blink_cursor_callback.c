@@ -32,9 +32,9 @@
  *   00e6ff5e    lea (0xe82b8c).l,A5
  *   00e6ff64    move.l #0x1e848,(-0x8,A6)     ; default interval
  *   00e6ff6c    movea.l #0xe273d6,A2          ; blink state struct
- *   00e6ff72    tst.b (A2)                    ; check smd_time_com
+ *   00e6ff72    tst.b (A2)                    ; check blink_enable
  *   00e6ff74    bpl.b 0x00e6ffa0              ; if not active, skip blink
- *   00e6ff76    tst.w (0x4,A2)                ; blink_counter
+ *   00e6ff76    tst.w (0x4,A2)                ; blink_defer
  *   00e6ff7a    bne.b 0x00e6ff9c              ; if counter != 0, skip call
  *   00e6ff7c    move.w (0x1d98,A5),D0w        ; default_unit
  *   00e6ff80    ext.l D0
@@ -42,7 +42,7 @@
  *   00e6ff84    lea (0x0,A5,D0*0x1),A0
  *   00e6ff88    movea.l (0x1da0,A0),A1        ; blink_func_ptable[unit]
  *   00e6ff8c    jsr (A1)                      ; call blink function
- *   00e6ff8e    tst.b (0x2,A2)                ; blink_flag
+ *   00e6ff8e    tst.b (0x2,A2)                ; cursor_painted
  *   00e6ff92    bpl.b 0x00e6ff9c              ; if cursor off, normal rate
  *   00e6ff94    move.l #0x3d090,(-0x8,A6)     ; use slow rate
  *   00e6ff9c    clr.w (0x4,A2)                ; reset counter
@@ -91,21 +91,23 @@ void SMD_$BLINK_CURSOR_CALLBACK(void)
 
     interval = BLINK_INTERVAL_NORMAL;
 
-    /* Check if cursor blink is active */
-    if (SMD_BLINK_STATE.smd_time_com < 0) {
-        /* Counter check - only blink when counter is 0 */
-        if (SMD_BLINK_STATE.blink_counter == 0) {
+    /* 00e6ff72 tst.b (A2) / bpl: Domain boolean, blink only when negative */
+    if (SMD_TIME_$COM.blink_enable < 0) {
+        /* 00e6ff76 tst.w (0x4,A2) / bne: a pending defer skips this tick */
+        if (SMD_TIME_$COM.blink_defer == 0) {
             /* Call the unit-specific blink function */
             /* The blink function pointer table is at A5+0x1DA0 for each unit */
             SMD_BLINK_FUNC_PTABLE[SMD_GLOBALS.default_unit]();
 
-            /* If cursor is currently visible, use slower blink rate */
-            if (SMD_BLINK_STATE.blink_flag < 0) {
+            /* 00e6ff8e tst.b (0x2,A2) / bpl: the blink routine has just
+             * toggled the flag (SMD_$BLINK_CURSOR_1 0x00E27276 not.b (A2)),
+             * so a painted cursor stays up for the long interval. */
+            if (SMD_TIME_$COM.cursor_painted < 0) {
                 interval = BLINK_INTERVAL_SLOW;
             }
         }
-        /* Reset blink counter */
-        SMD_BLINK_STATE.blink_counter = 0;
+        /* 00e6ff9c clr.w (0x4,A2): the defer is always consumed whole */
+        SMD_TIME_$COM.blink_defer = 0;
     }
 
     /* Reschedule the timer callback */

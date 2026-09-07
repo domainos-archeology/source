@@ -117,8 +117,8 @@ smd_globals_t SMD_GLOBALS;
 /* Big enough that smd_$unit_rec(1) (base + 0x10C - 0xF4) plus a whole
  * record stays inside the object on a 64-bit host too. */
 uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
-smd_display_info_t SMD_DISPLAY_INFO[SMD_MAX_DISPLAY_UNITS];
-smd_blink_state_t SMD_BLINK_STATE;
+smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
+smd_time_com_t SMD_TIME_$COM;
 ml_$exclusion_t ml_$exclusion_t_00e2e520;
 uint16_t PROC1_$AS_ID;
 
@@ -224,7 +224,7 @@ static void setup(int16_t max_x, int16_t max_y)
     memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
     memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
     memset(&test_hw, 0, sizeof(test_hw));
-    memset(&SMD_BLINK_STATE, 0, sizeof(SMD_BLINK_STATE));
+    memset(&SMD_TIME_$COM, 0, sizeof(SMD_TIME_$COM));
     memset(test_patterns, 0, sizeof(test_patterns));
     memset(draw_calls, 0, sizeof(draw_calls));
     draw_call_count = 0;
@@ -465,7 +465,7 @@ static void test_erase_then_draw_passes_record_values(void)
 {
     setup(1023, 799);
     test_hw.cursor_visible = true;             /* forces the erase call */
-    SMD_BLINK_STATE.blink_flag = true; /* and lets it happen */
+    SMD_TIME_$COM.cursor_painted = true; /* and lets it happen */
     test_rec()->display_base = 0x00FC0000u;
     test_rec()->ctrl_regs = (SMD_HW_REG_PTR)&test_hw;
     SMD_GLOBALS.default_cursor_pos = SMD_POS_MAKE(1, 2);
@@ -494,8 +494,8 @@ static void test_erase_then_draw_passes_record_values(void)
     /* 00e6e41a clr.b (0x1744,A5) on a successful draw */
     CHECK_EQ(0, SMD_GLOBALS.cursor_pending_flag);
     /* 00e6e434/00e6e438 */
-    CHECK_EQ((int8_t)0xFF, SMD_BLINK_STATE.blink_flag);
-    CHECK_EQ(7, SMD_BLINK_STATE.blink_counter);
+    CHECK_EQ((int8_t)0xFF, SMD_TIME_$COM.cursor_painted);
+    CHECK_EQ(7, SMD_TIME_$COM.blink_defer);
 }
 
 static void test_failed_draw_sets_pending_flag(void)

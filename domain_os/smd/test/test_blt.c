@@ -62,7 +62,7 @@ static int current_failed = 0;
 
 smd_globals_t SMD_GLOBALS;
 uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
-smd_display_info_t SMD_DISPLAY_INFO[SMD_MAX_DISPLAY_UNITS];
+smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 uint16_t PROC1_$AS_ID;
 uint16_t SMD_ACQ_LOCK_DATA = 0;
 int16_t SMD_SYNC_LOCK_DATA = 1;

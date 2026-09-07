@@ -6,6 +6,13 @@
  *
  * Original address: 0x00E27070
  *
+ * TODO(source-k6h0): this file predates the byte-for-byte convention and has
+ * not been re-emitted against the image.  0x00E27070 is the non-interrupt twin
+ * of the routine at 0x00E27036 that SMD_$DISP1_INT calls (the two share the
+ * "subq.w #2,(0x2e,A1)" step accounting and the four-way direction switch);
+ * neither has been transcribed instruction for instruction, and the crash
+ * paths here use absolute `pea` where the image uses `pea (d16,PC)`.
+ *
  * This function is called via the SAU dispatch table at offset 0x150.
  * It sets up BLT parameters based on the scroll direction and amount.
  *
@@ -254,12 +261,19 @@ blt_in_use_error:
         addq.w  #4, %sp
         bra.b   blt_in_use_error        /* Loop forever (CRASH_SYSTEM doesn't return) */
 
-        .data
-
-SMD_Invalid_BLT_In_Use_Err:
-        .word   0x0007                  /* Error module: SMD (0x13>>1 = 7?) */
-        .word   0x0013                  /* Subsystem: SMD */
-
-SMD_Invalid_Direction_From_SM_Err:
-        .word   0x0008                  /* Error code within module */
-        .word   0x0013                  /* Subsystem: SMD */
+/*
+ * SMD_Invalid_BLT_In_Use_Err and SMD_Invalid_Direction_From_SM_Err used to be
+ * defined here, in .data, as two words each.  Both were wrong and both were
+ * duplicates:
+ *   - the image keeps them in the *code* region at 0x00E2702A and 0x00E27026
+ *     respectively, four bytes each, and both this routine and
+ *     SMD_$DISP1_INT reach them with `pea (d16,PC)` (0x00E270C4
+ *     "487a ff60" -> 0x00E27026);
+ *   - the values were swapped and split into two words in the wrong order:
+ *     0x00E27026 holds 00 13 00 07 (SMD_Invalid_Direction_From_SM_Err =
+ *     0x00130007) and 0x00E2702A holds 00 13 00 08 (SMD_Invalid_BLT_In_Use_Err
+ *     = 0x00130008), so ".word 0x0007 / .word 0x0013" produced 0x00070013 on
+ *     this big-endian target.
+ * They now have exactly one definition, in smd/sau2/disp1_int.s, at the
+ * offsets the image puts them (bead source-tzn8).
+ */

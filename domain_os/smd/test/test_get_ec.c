@@ -70,7 +70,7 @@ static int current_failed = 0;
 
 smd_globals_t SMD_GLOBALS;
 uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
-smd_display_info_t SMD_DISPLAY_INFO[SMD_MAX_DISPLAY_UNITS];
+smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 uint16_t PROC1_$AS_ID;
 
 ec_$eventcount_t DTTE;              /* 0x00E2DC90 */

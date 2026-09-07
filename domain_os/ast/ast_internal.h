@@ -175,8 +175,7 @@ extern uint32_t ast_$attr_timestamp_mask;
  * dxm_$callback_t keeps the queue entry 16 bytes on every target
  * (source-wy9y).
  *
- * TODO(source-f4qo): no translation unit defines this cell; it needs an
- * ast/ast_data.c with DXM_$DEFINE_CALLBACK_CELL(..., AST_$SET_TROUBLE).
+ * The cell holds 0x00e071ea (AST_$SET_TROUBLE); defined in ast/ast_data.c.
  */
 extern dxm_$callback_t PTR_AST_$SET_TROUBLE_00e07272;
 

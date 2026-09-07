@@ -19,7 +19,7 @@
  *   00e6d7f2    move.w D0w,D2w
  *   00e6d7f4    movea.l #0xe27376,A0        ; display info base
  *   00e6d7fa    ext.l D2
- *   00e6d7fc    movea.l #0xe273d6,A1        ; &SMD_BLINK_STATE
+ *   00e6d7fc    movea.l #0xe273d6,A1        ; &SMD_TIME_$COM
  *   00e6d802    lsl.l #0x5,D2               ; unit * 32
  *   00e6d804    move.l D2,D3
  *   00e6d806    add.l D3,D3                 ; unit * 64
@@ -28,8 +28,8 @@
  *   00e6d80e    clr.l (-0x2e,A0)            ; info[unit-1].cursor_pos = 0
  *   00e6d812    clr.w (-0x2a,A0)            ; info[unit-1].cursor_number = 0
  *   00e6d816    clr.b (-0x28,A0)            ; info[unit-1].cursor_visible = false
- *   00e6d81a    clr.b (A1)                  ; SMD_BLINK_STATE.smd_time_com = 0
- *   00e6d81c    clr.b (0x2,A1)              ; SMD_BLINK_STATE.blink_flag = 0
+ *   00e6d81a    clr.b (A1)                  ; SMD_TIME_$COM.blink_enable = 0
+ *   00e6d81c    clr.b (0x2,A1)              ; SMD_TIME_$COM.cursor_painted = 0
  *   00e6d820    tst.b D1b
  *   00e6d822    bpl.b 0x00e6d844            ; `full` false -> skip
  *   00e6d824    clr.w (0xcc,A5)             ; saved_cursor_pos, high half
@@ -77,8 +77,8 @@ void smd_$reset_display_globals(int16_t unit, boolean full)
     info->cursor_visible = false;
 
     /* 0x00e6d81a-0x00e6d81c */
-    SMD_BLINK_STATE.smd_time_com = 0;
-    SMD_BLINK_STATE.blink_flag = 0;
+    SMD_TIME_$COM.blink_enable = 0;
+    SMD_TIME_$COM.cursor_painted = 0;
 
     /* 0x00e6d820: `full` is a Domain boolean, tested with tst.b/bpl. */
     if (full < 0) {

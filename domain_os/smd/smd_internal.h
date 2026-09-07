@@ -44,6 +44,16 @@
 /* Display info entry size */
 #define SMD_DISPLAY_INFO_SIZE 0x60 /* 96 bytes */
 
+/*
+ * Number of entries in the display info table at 0x00E27376.
+ *
+ * The image has exactly one: the table's single 0x60-byte entry ends at
+ * 0x00E273D5 and SMD_TIME_$COM begins at 0x00E273D6.  This is deliberately
+ * NOT SMD_MAX_DISPLAY_UNITS - the per-unit *record* block at 0x00E2E3FC is
+ * sized for SMD_MAX_DISPLAY_UNITS, but the info/hardware table is not.
+ */
+#define SMD_DISPLAY_INFO_COUNT 1
+
 /* Maximum ASIDs supported */
 /*
  * ASID -> unit table length.  smd_globals_t.asid_to_unit runs from 0x48 up to
@@ -817,21 +827,61 @@ typedef struct smd_blt_params_t {
 
 /*
  * ============================================================================
- * Cursor Blink State
+ * SMD_TIME_$COM - the SMD_TIME module's common block
  * ============================================================================
- * State for cursor blinking.
- * Base address: 0x00E273D6
+ * Base address: 0x00E273D6 (Ghidra label SMD_TIME_$COM).  It is exactly six
+ * bytes long: SMD_$DISPLAY_COM ends at 0x00E273D5 and MNK_$KTT_PTRS starts at
+ * 0x00E273DC, and the only displacements the image ever uses are +0x00 (byte),
+ * +0x02 (byte) and +0x04 (word):
+ *
+ *   SMD_$INIT_BLINK             00e34ec6  clr.b (A0) / st (0x2,A0) / clr.w (0x4,A0)
+ *   smd_$reset_display_globals  00e6d81a  clr.b (A1) / clr.b (0x2,A1)
+ *   SHOW_CURSOR                 00e6e38e  clr.b (A0) / tst.b (0x2,A0)
+ *   SHOW_CURSOR                 00e6e432  move.b D4b,(A0) / st (0x2,A0)
+ *                                         / move.w #0x7,(0x4,A0)
+ *   SMD_$BLINK_CURSOR_CALLBACK  00e6ff72  tst.b (A2) / tst.w (0x4,A2)
+ *                               00e6ff8e  tst.b (0x2,A2) / clr.w (0x4,A2)
+ *
+ * The two flags are Domain booleans: written with clr.b / st / seq and tested
+ * with tst.b + bpl/bmi, so they must be signed.
  */
-typedef struct smd_blink_state_t {
-  /* Domain booleans: written with clr.b / st / seq and tested with
-   * tst.b + bpl/bmi (SMD_$BLINK_CURSOR_CALLBACK 0x00E6FF72 / 0x00E6FF8E,
-   * SHOW_CURSOR 0x00E6E390), so they must be signed. */
-  boolean smd_time_com;   /* 0x00: Time communication flag */
-  uint8_t pad_01;         /* 0x01: Padding */
-  boolean blink_flag;     /* 0x02: Blink state (0xFF = enabled) */
-  uint8_t pad_03;         /* 0x03: Padding */
-  uint16_t blink_counter; /* 0x04: Blink counter */
-} smd_blink_state_t;
+typedef struct smd_time_com_t {
+  /*
+   * 0x00: blinking is permitted for the cursor that is currently shown.
+   * SHOW_CURSOR sets it to (cursor_number == 0) - `move.w D2w,(0xd4,A5)`
+   * at 0x00E6E424 sets Z, `seq D4b` at 0x00E6E42C turns that into the
+   * Domain boolean, and 0x00E6E432 stores it.  Everything else clears it.
+   */
+  boolean blink_enable;
+  uint8_t pad_01;   /* 0x01: Padding */
+  /*
+   * 0x02: the cursor image is currently painted on screen.  SHOW_CURSOR uses
+   * it to decide whether the old cursor has to be erased (0x00E6E390) and
+   * sets it after painting the new one (0x00E6E434); the blink callback uses
+   * it after calling the unit's blink routine to pick the long interval
+   * (0x00E6FF8E).
+   */
+  boolean cursor_painted;
+  uint8_t pad_03;   /* 0x03: Padding */
+  /*
+   * 0x04: skip-one-tick counter.  SHOW_CURSOR sets it to 7 (0x00E6E438) so
+   * that the cursor it just painted survives the next blink tick; the
+   * callback clears it unconditionally (0x00E6FF9C), so only the very next
+   * tick is skipped whatever the value.
+   */
+  uint16_t blink_defer;
+} smd_time_com_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(smd_time_com_t, blink_enable) == 0x00,
+               "smd_time_com_t.blink_enable at 0x00 (00e6ff72 tst.b (A2))");
+_Static_assert(__builtin_offsetof(smd_time_com_t, cursor_painted) == 0x02,
+               "smd_time_com_t.cursor_painted at 0x02 (00e6ff8e tst.b (0x2,A2))");
+_Static_assert(__builtin_offsetof(smd_time_com_t, blink_defer) == 0x04,
+               "smd_time_com_t.blink_defer at 0x04 (00e6ff76 tst.w (0x4,A2))");
+_Static_assert(sizeof(smd_time_com_t) == 6,
+               "SMD_TIME_$COM is 0x00E273D6..0x00E273DB (MNK_$KTT_PTRS follows)");
+#endif
 
 /*
  * ============================================================================
@@ -861,12 +911,12 @@ extern uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE +
  * Display info / hardware record table at 0x00E27376, one 0x60-byte entry per
  * unit, 1-based (use smd_$unit_info()).
  *
- * TODO(source-9j2l): the image holds exactly ONE entry - 0x00E27376..
- * 0x00E273D5, immediately followed by SMD_TIME_$COM at 0x00E273D6 - and
- * smd_$validate_unit only ever accepts unit 1 (0x00E6D70A "cmpi.w #0x1,D0w").
- * smd_data.c still over-allocates SMD_MAX_DISPLAY_UNITS entries.
+ * The image holds exactly SMD_DISPLAY_INFO_COUNT (= 1) entry: the table runs
+ * 0x00E27376..0x00E273D5 and SMD_TIME_$COM starts at 0x00E273D6.  Nothing
+ * reaches entry 2, because smd_$validate_unit rejects every unit but 1
+ * (0x00E6D70A "cmpi.w #0x1,D0w" / 0x00E6D70E "bne").
  */
-extern smd_display_info_t SMD_DISPLAY_INFO[];
+extern smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 
 /*
  * The two standalone eventcounts at 0x00E2E3FC and 0x00E2E408 (bead
@@ -879,8 +929,8 @@ extern smd_display_info_t SMD_DISPLAY_INFO[];
 #define SMD_EC_1 (*(ec_$eventcount_t *)&SMD_DISPLAY_UNITS[0x00])
 #define SMD_EC_2 (*(ec_$eventcount_t *)&SMD_DISPLAY_UNITS[0x0C])
 
-/* Blink state at 0x00E273D6 */
-extern smd_blink_state_t SMD_BLINK_STATE;
+/* SMD_TIME module common block at 0x00E273D6 */
+extern smd_time_com_t SMD_TIME_$COM;
 
 /*
  * Two initialiser longwords at 0x00E173D4 (0x00000400 and 0x00000000) that
@@ -933,7 +983,16 @@ _Static_assert(offsetof(smd_cursor_pattern_t, bitmap) == 0x08, "pat bitmap");
 /* Cursor pointer table at 0x00E27366 - 4 pointers to cursor patterns */
 extern smd_cursor_pattern_t *SMD_CURSOR_PTABLE[4];
 
-/* Blink function pointer table at SMD_GLOBALS + 0x1DA0 */
+/*
+ * Blink function pointer table at SMD_GLOBALS + 0x1DA0, indexed by the unit
+ * number itself (SMD_$BLINK_CURSOR_CALLBACK 0x00E6FF84 "lea (0x0,A5,D0*0x1),A0"
+ * / 0x00E6FF88 "movea.l (0x1da0,A0),A1" with D0 = default_unit * 4).
+ *
+ * TODO(source-q85g): 0x1DA0 is also smd_globals_t.last_idm_button, and
+ * sizeof(smd_globals_t) is asserted to be 0x1DA4, so this table's entry for
+ * unit 1 (SMD_GLOBALS + 0x1DA4) starts exactly where that record ends.  The
+ * two declarations name overlapping storage and nothing defines this array.
+ */
 typedef void (*smd_blink_func_t)(void);
 extern smd_blink_func_t SMD_BLINK_FUNC_PTABLE[SMD_MAX_DISPLAY_UNITS];
 
@@ -983,8 +1042,14 @@ extern int16_t SMD_ONE_LOCK_DATA;
  * SMD_$INIT via ML_$EXCLUSION_INIT. */
 extern ml_$exclusion_t ml_$exclusion_t_00e2e520;
 
-/* SMD_$DISP1_INT - display interrupt handler (assembly, not yet emitted).
- * Original address: 0x00E26F20.
+/* SMD_$DISP1_INT - display-1 BLT/scroll interrupt handler.
+ * Original address: 0x00E26F20, emitted as smd/sau2/disp1_int.s.
+ *
+ * Not a C-callable routine: it is an interrupt vector that raises the IPL,
+ * dispatches on the hardware record's lock_state through a jump table and
+ * leaves through PROC1_$INT_EXIT / PROC1_$INT_ADVANCE instead of an `rts`.
+ * The prototype exists only so that SMD_$INTERRUPT_INIT can take its address
+ * and so that SMD_$START_BLT's trampoline can name it.
  *
  * Resolved (bead source-8xb): the label conflict was an off-by-two.
  * SMD_$INTERRUPT_INIT loads it with "lea (-0x366,PC),A0" at 0x00E27284, and
@@ -992,6 +1057,22 @@ extern ml_$exclusion_t ml_$exclusion_t_00e2e520;
  * "movem.l {...},-(SP)" starts.  0x00E26F1E is the byte immediately before
  * it and really is ROUTE_$ROUTING (see route/route_internal.h). */
 void SMD_$DISP1_INT(void);
+
+/*
+ * The four CRASH_SYSTEM status constants in SMD_$DISP1_INT's code region,
+ * 0x00E27026..0x00E27035.  They are defined once, in smd/sau2/disp1_int.s,
+ * at exactly those offsets, because both SMD_$DISP1_INT and the scroll-BLT
+ * setup subroutine reach them with `pea (d16,PC)`.
+ *
+ *   0x00E27026  0x00130007  SMD_Invalid_Direction_From_SM_Err
+ *   0x00E2702A  0x00130008  SMD_Invalid_BLT_In_Use_Err
+ *   0x00E2702E  0x0013001C  SMD_Invalid_BLT_Done_Interrupt_Err
+ *   0x00E27032  0x0013001D  SMD_Invalid_Interrupt_Routine_State_Err
+ */
+extern const status_$t SMD_Invalid_Direction_From_SM_Err;
+extern const status_$t SMD_Invalid_BLT_In_Use_Err;
+extern const status_$t SMD_Invalid_BLT_Done_Interrupt_Err;
+extern const status_$t SMD_Invalid_Interrupt_Routine_State_Err;
 
 /* smd_$setup_scroll_blt - SAU-specific scroll BLT register setup.
  * Implemented in smd/sau2/scroll_blt_setup.s.  Original address: 0x00E27070 */

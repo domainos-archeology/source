@@ -74,7 +74,7 @@ _Static_assert(offsetof(smd_hdm_pos_t, x) == 0x02, "hdm pos column second");
 
 smd_globals_t SMD_GLOBALS;
 uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
-smd_display_info_t SMD_DISPLAY_INFO[SMD_MAX_DISPLAY_UNITS];
+smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 uint16_t PROC1_$AS_ID;
 
 #define TEST_ASID 2

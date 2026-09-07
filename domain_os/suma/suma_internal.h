@@ -22,8 +22,9 @@
  *
  * Original address: 0x00e1aecc (relative to SUMA_$RCV at PC+0x3a)
  *
- * TODO(source-f4qo): no translation unit defines this cell; it needs a
- * suma/suma_data.c with DXM_$DEFINE_CALLBACK_CELL(..., TERM_$ENQUEUE_TPAD).
+ * The cell holds 0x00e72472 (TERM_$ENQUEUE_TPAD); defined in
+ * suma/suma_data.c.  KBD's cell at 0x00e1ce90 is a separate literal with
+ * the same contents (term/term_data.c).
  */
 extern dxm_$callback_t PTR_TERM_$ENQUEUE_TPAD_00e1aecc;
 

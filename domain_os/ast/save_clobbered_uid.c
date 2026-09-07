@@ -37,5 +37,5 @@ void AST_$SAVE_CLOBBERED_UID(uid_t *uid)
      * 0x00E0724A move.w #0x8,-(SP)  -> data_size = 8 (the 8-byte UID)
      */
     DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q, &PTR_AST_$SET_TROUBLE_00e07272,
-                      &uid_ptr, 8, true, &status);
+                      (void **)&uid_ptr, 8, true, &status);
 }

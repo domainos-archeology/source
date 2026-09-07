@@ -8,8 +8,8 @@
  *   0x00E82B8C - SMD_GLOBALS
  *   0x00E2E3FC - SMD_DISPLAY_UNITS array (also SMD_EC_1)
  *   0x00E2E408 - SMD_EC_2
- *   0x00E27376 - SMD_DISPLAY_INFO array
- *   0x00E273D6 - SMD_BLINK_STATE
+ *   0x00E27376 - SMD_DISPLAY_INFO array (SMD_$DISPLAY_COM, ONE entry)
+ *   0x00E273D6 - SMD_TIME_$COM (6 bytes; MNK_$KTT_PTRS follows at 0x00E273DC)
  *   0x00E84924 - SMD_GLOBALS.default_unit (SMD_GLOBALS + 0x1D98)
  */
 
@@ -30,10 +30,14 @@ smd_globals_t SMD_GLOBALS;
 uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
 
 /*
- * Display info table - configuration for each display
- * Original address: 0x00E27376
+ * Display info / hardware record table.
+ * Original address: 0x00E27376 (Ghidra label SMD_$DISPLAY_COM).
+ *
+ * Exactly SMD_DISPLAY_INFO_COUNT (= 1) entry: the single 0x60-byte record
+ * runs to 0x00E273D5 and SMD_TIME_$COM starts at 0x00E273D6.  This used to be
+ * sized SMD_MAX_DISPLAY_UNITS, which over-allocated 0x120 bytes (source-9j2l).
  */
-smd_display_info_t SMD_DISPLAY_INFO[SMD_MAX_DISPLAY_UNITS];
+smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 
 /*
  * SMD_EC_1 (0x00E2E3FC) and SMD_EC_2 (0x00E2E408) are not separate objects:
@@ -43,10 +47,12 @@ smd_display_info_t SMD_DISPLAY_INFO[SMD_MAX_DISPLAY_UNITS];
  */
 
 /*
- * Cursor blink state
- * Original address: 0x00E273D6
+ * SMD_TIME_$COM - the SMD_TIME module's common block (cursor blink state).
+ * Original address: 0x00E273D6, 6 bytes.  It is the object that immediately
+ * follows SMD_DISPLAY_INFO's single entry, which is how that table's length
+ * is pinned down.
  */
-smd_blink_state_t SMD_BLINK_STATE;
+smd_time_com_t SMD_TIME_$COM;
 
 /*
  * Display unit record initialisers, original address 0x00E173D4.

@@ -18,9 +18,10 @@
  * (displacements are +4 over the usual (0x4,SP) because of the movem push.)
  *
  * The trampoline's `lea (-0x39e,PC),A0` puts 0x00E272BE - 0x39E = 0x00E26F20
- * in A0 - the same base SMD_$INTERRUPT_INIT installs as SMD_$DISP1_INT.  The
- * body immediately overwrites A0 with its first argument, so the value is
- * dead; it is kept here because the original keeps it.
+ * in A0 - the same base SMD_$INTERRUPT_INIT installs as SMD_$DISP1_INT, and
+ * the symbol smd/sau2/disp1_int.s now defines.  The body immediately
+ * overwrites A0 with its first argument, so the value is dead; it is kept
+ * here because the original keeps it.
  *
  * Behaviour, instruction for instruction:
  *   00e272bc    lea (-0x39e,PC),A0
@@ -52,12 +53,11 @@
  *   00e15d84    movem.l (SP)+,{  A2}
  *   00e15d88    rts
  *
- * Verified with m68k-elf-gcc -c + m68k-elf-objdump -d: the body assembles to
- * 108 bytes that are byte for byte identical to 0x00E15D1E..0x00E15D89.  The
- * trampoline keeps the original's two-instruction shape and length (10 bytes,
- * 0x41FA + 0x4EF9) but its `lea` displacement necessarily differs, because
- * the address it names (SMD_$DISP1_INT at 0x00E26F20) is not emitted yet and
- * the value is dead anyway.
+ * Verified with m68k-elf-gcc -c + m68k-elf-objcopy: the whole routine
+ * assembles to 118 bytes whose only differences from
+ * 0x00E272BC..0x00E272C5 plus 0x00E15D1E..0x00E15D89 are the six bytes that
+ * carry relocations - the `lea`'s two-byte displacement to SMD_$DISP1_INT
+ * and the `jmp`'s four-byte absolute address of the body.
  *
  * The portable C model in smd/start_blt.c is compiled only when ARCH_M68K is
  * not defined, so the two never collide at link time.
@@ -71,14 +71,17 @@ SMD_$START_BLT:
  * 00e272bc  41 fa fc 62   lea (-0x39e,PC),A0    ; A0 = 0x00E26F20
  * 00e272c0  4e f9 00 e1 5d 1e  jmp 0x00e15d1e.l
  *
- * 0x00E26F20 is SMD_$DISP1_INT, which lives in another translation unit and
- * has not been emitted yet, so the PC-relative displacement cannot be
- * reproduced.  A0 is dead - 0x00E15D22 overwrites it with the first argument
- * before any use - so the `lea` is kept only for shape, pointing at the body
- * label.  TODO(source-tzn8): once SMD_$DISP1_INT exists as a symbol, load it
- * here instead.
+ * 0x00E272BE - 0x39E = 0x00E26F20 = SMD_$DISP1_INT, now emitted as
+ * smd/sau2/disp1_int.s, so the `lea` names it.  It is a different translation
+ * unit, so the assembler leaves an R_68K_PC16 relocation and the two
+ * displacement bytes only take their final value at link time; the opcode
+ * word (0x41FA) and the instruction's length are unchanged.  A0 is dead
+ * anyway - 0x00E15D22 overwrites it with the first argument before any use.
+ *
+ * The ":w" forces the brief PC-relative form; without it gas picks the 68020
+ * full extension word (0x43FB ...) and the instruction grows by two bytes.
  */
-        lea     Lstart_blt_body(%pc),%a0        /* 00e272bc                  */
+        lea     (SMD_$DISP1_INT:w,%pc),%a0      /* 00e272bc                  */
         jmp     (Lstart_blt_body).l             /* 00e272c0                  */
 
 Lstart_blt_body:

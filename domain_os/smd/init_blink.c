@@ -9,10 +9,10 @@
  *   link.w A6,-0x4
  *   movem.l {A5 D2},-(SP)
  *   lea (0xe35380).l,A5        ; unused (A5 base)
- *   movea.l #0xe273d6,A0       ; SMD_BLINK_STATE address
- *   clr.b (A0)                 ; smd_time_com = 0
- *   st (0x2,A0)                ; blink_flag = 0xFF (enabled)
- *   clr.w (0x4,A0)             ; blink_counter = 0
+ *   movea.l #0xe273d6,A0       ; SMD_TIME_$COM address
+ *   clr.b (A0)                 ; SMD_TIME_$COM.blink_enable   = 0
+ *   st (0x2,A0)                ; SMD_TIME_$COM.cursor_painted = 0xFF
+ *   clr.w (0x4,A0)             ; SMD_TIME_$COM.blink_defer    = 0
  *   movea.l #0xe82b8c,A1       ; SMD_GLOBALS base
  *   pea (0x1d98,A1)            ; push &SMD_GLOBALS.default_unit (A5+0x1D98)
  *   jsr SMD_$INQ_DISP_TYPE     ; call to check if display exists
@@ -49,10 +49,12 @@ void SMD_$INIT_BLINK(void)
     uint16_t disp_type;
     int8_t has_display;
 
-    /* Initialize blink state */
-    SMD_BLINK_STATE.smd_time_com = 0;      /* Time communication flag = 0 */
-    SMD_BLINK_STATE.blink_flag = true;     /* Blink enabled */
-    SMD_BLINK_STATE.blink_counter = 0;     /* Counter = 0 */
+    /* 00e34ec6-00e34ecc: initialise the SMD_TIME common block.  Note that
+     * blinking is left DISABLED here; SHOW_CURSOR turns it on once a cursor
+     * with number 0 has actually been painted (0x00E6E432). */
+    SMD_TIME_$COM.blink_enable = 0;
+    SMD_TIME_$COM.cursor_painted = true;
+    SMD_TIME_$COM.blink_defer = 0;
 
     /* Check if default display exists */
     disp_type = SMD_$INQ_DISP_TYPE(&SMD_GLOBALS.default_unit);
