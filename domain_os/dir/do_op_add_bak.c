@@ -276,7 +276,7 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
                 loc_desc.uid.high = old_bak_uid.high;
                 loc_desc.uid.low = old_bak_uid.low;
                 loc_desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
-                AST_$GET_COMMON_ATTRIBUTES((uid_t *)(void *)&loc_desc,
+                AST_$GET_COMMON_ATTRIBUTES(&loc_desc,
                                            DIR_CATTR_ADD_BAK, &common_attrs,
                                            &local_status);  /* 0x00E50AFE */
 

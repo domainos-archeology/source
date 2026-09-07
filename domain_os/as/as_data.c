@@ -58,7 +58,8 @@ as_$info_t AS_$INFO = {
 int16_t AS_$INFO_SIZE = 92;  /* 0x5C */
 
 /*
- * AS_$PROTECTION - Protection flags
- * At 0xE2B972: 00 cc
+ * AS_$PROTECTION - Address-space protection boundary
+ * At 0xE2B972: 00 cc 00 00, read as a LONGWORD by EC2_$WAIT
+ * (00e424c2 `cmp.l (0x00e2b972).l,D6`, 00e42772 `cmpa.l (0x00e2b972).l,A1`).
  */
-int16_t AS_$PROTECTION = 0x00CC;
+void *AS_$PROTECTION = (void *)0x00CC0000;

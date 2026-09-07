@@ -81,6 +81,19 @@ typedef struct crash_report_t {
     uint32_t  usp;               /* +0x6C: user stack pointer */
 } __attribute__((packed)) crash_report_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(crash_report_t, lead) == 0x00, "crash_report_t.lead");
+_Static_assert(__builtin_offsetof(crash_report_t, status_label) == 0x02, "crash_report_t.status_label");
+_Static_assert(__builtin_offsetof(crash_report_t, status_fmt) == 0x0F, "crash_report_t.status_fmt");
+_Static_assert(__builtin_offsetof(crash_report_t, pc_label) == 0x14, "crash_report_t.pc_label");
+_Static_assert(__builtin_offsetof(crash_report_t, pc_fmt) == 0x19, "crash_report_t.pc_fmt");
+_Static_assert(__builtin_offsetof(crash_report_t, pid_label) == 0x1E, "crash_report_t.pid_label");
+_Static_assert(__builtin_offsetof(crash_report_t, pid_fmt) == 0x23, "crash_report_t.pid_fmt");
+_Static_assert(__builtin_offsetof(crash_report_t, pad) == 0x27, "crash_report_t.pad");
+_Static_assert(__builtin_offsetof(crash_report_t, reserved_0x68) == 0x68, "crash_report_t.reserved_0x68");
+#endif
+
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(crash_report_t, status) == 0x10, "crash_report_t.status");
 _Static_assert(__builtin_offsetof(crash_report_t, pc) == 0x1A, "crash_report_t.pc");

@@ -117,16 +117,18 @@ typedef struct uid_t {
   uint32_t low;  /* 0x04: Low word (node ID + counter) */
 } uid_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(uid_t, high) == 0x00, "uid_t.high");
+_Static_assert(__builtin_offsetof(uid_t, low) == 0x04, "uid_t.low");
+
 /* UID constant initializer - stores in big-endian format */
 #define UID_CONST(high, low) {BE32_CONST(high), BE32_CONST(low)}
 
 /*
- * UID_$NIL - The nil/empty UID (all zeros)
- *
- * Used to represent "no UID" or an uninitialized UID.
- * Original address: (data constant)
+ * UID_$NIL and the other well-known object UIDs are declared in uid/uid.h,
+ * which includes this header for uid_t (bead source-3uo).  Declaring UID_$NIL
+ * here as well duplicated it.
  */
-extern uid_t UID_$NIL;
 
 // =============================================================================
 // Clock type

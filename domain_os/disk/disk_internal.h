@@ -391,6 +391,16 @@ typedef struct disk_io_req_t {
                                      *   identifying. */
 } disk_io_req_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(disk_io_req_t, next) == 0x00, "disk_io_req_t.next");
+_Static_assert(__builtin_offsetof(disk_io_req_t, daddr) == 0x04, "disk_io_req_t.daddr");
+_Static_assert(__builtin_offsetof(disk_io_req_t, free_next) == 0x08, "disk_io_req_t.free_next");
+_Static_assert(__builtin_offsetof(disk_io_req_t, reserved_10) == 0x10, "disk_io_req_t.reserved_10");
+_Static_assert(__builtin_offsetof(disk_io_req_t, reserved_18) == 0x18, "disk_io_req_t.reserved_18");
+_Static_assert(__builtin_offsetof(disk_io_req_t, owner) == 0x1E, "disk_io_req_t.owner");
+#endif
+
 #if defined(ARCH_M68K)
 _Static_assert(sizeof(disk_io_req_t) == 0x40,
                "disk_io_req_t must be 0x40 bytes");

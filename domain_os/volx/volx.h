@@ -68,6 +68,16 @@ typedef struct volx_entry_t {
   int16_t lv_num;   /* 0x1E: Logical volume number */
 } volx_entry_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(volx_entry_t, dir_uid) == 0x00, "volx_entry_t.dir_uid");
+_Static_assert(__builtin_offsetof(volx_entry_t, lv_uid) == 0x08, "volx_entry_t.lv_uid");
+_Static_assert(__builtin_offsetof(volx_entry_t, parent_uid) == 0x10, "volx_entry_t.parent_uid");
+_Static_assert(__builtin_offsetof(volx_entry_t, dev) == 0x18, "volx_entry_t.dev");
+_Static_assert(__builtin_offsetof(volx_entry_t, bus) == 0x1A, "volx_entry_t.bus");
+_Static_assert(__builtin_offsetof(volx_entry_t, ctlr) == 0x1C, "volx_entry_t.ctlr");
+_Static_assert(__builtin_offsetof(volx_entry_t, lv_num) == 0x1E, "volx_entry_t.lv_num");
+_Static_assert(sizeof(volx_entry_t) == 0x20, "volx_entry_t size");
+
 /*
  * Global data
  */

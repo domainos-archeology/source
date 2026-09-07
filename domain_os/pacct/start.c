@@ -20,6 +20,16 @@
 static void *pacct_$start_nil_acl_ctx = NULL;
 
 /*
+ * Constant cells in the code region, passed by reference to
+ * FILE_$GET_ATTR_INFO at 0x00E5A86A (`pea (0x4c,PC)` -> 0xE5A8B8) and
+ * 0x00E5A86E (`pea (0x4a,PC)` -> 0xE5A8BA).  The image holds 0x007A - the
+ * compact record's size - and 0x0401, whose second byte sets bit 0, i.e.
+ * "the caller already holds the lock" (this routine has just taken it).
+ */
+static int16_t  pacct_$start_attr_info_size = FILE_ATTR_INFO_SIZE;  /* 0xE5A8B8 */
+static uint16_t pacct_$start_attr_info_req  = 0x0401;               /* 0xE5A8BA */
+
+/*
  * Extended SID structure returned by ACL_$GET_EXSID
  * Contains user, group, and org SIDs for privilege checking
  */
@@ -35,12 +45,13 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
     exsid_t exsid;
     /* (-0x112,A6): FILE_$PRIV_LOCK's rights word out. */
     uint16_t rights_out;
-    uint8_t attr_buf[32];
-    uint8_t file_info[64];
+    /* (-0x108,A6): the 0x20-byte object-location record FILE_$GET_ATTR_INFO
+     * rewrites; nothing here reads it back. */
+    file_$obj_loc_t loc_rec;
+    /* (-0xE8,A6): the 0x7A-byte compact attribute record. */
+    uint8_t file_info[FILE_ATTR_INFO_SIZE];
     uint8_t file_type;      /* At offset -0xe7 in original */
     uint32_t file_len;      /* At offset -0xd4 in original */
-    int16_t attr_size;
-    int16_t attr_flags;
 
     (void)unused;
 
@@ -95,7 +106,6 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
     pacct_owner.low = UID_$NIL.low;
 
     /* Lock the new accounting file exclusively with write access */
-    attr_size = 0;  /* Size placeholder for callback pointer location */
     /* 0x00E5A836 `pea (0x84,PC)` = the NIL longword at 0x00E5A8BC; the
      * compiler passes its address, not a null pointer. */
     FILE_$PRIV_LOCK(file_uid, 0, 1, 4, 0, 0x0008, 0x0000,
@@ -106,11 +116,10 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
         return;
     }
 
-    /* Get file attributes to verify it's a regular file */
-    attr_size = 0x7A;   /* Size constant at 0xe5a8b8 */
-    attr_flags = 0;     /* Flags at 0xe5a8ba */
-    FILE_$GET_ATTR_INFO(file_uid, &attr_flags, &attr_size,
-                        (uint32_t *)attr_buf, file_info, status_ret);
+    /* Get file attributes to verify it's a regular file (0x00E5A860) */
+    FILE_$GET_ATTR_INFO(file_uid, &pacct_$start_attr_info_req,
+                        &pacct_$start_attr_info_size,
+                        &loc_rec, file_info, status_ret);
 
     if (*status_ret != status_$ok) {
         return;

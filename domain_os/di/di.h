@@ -36,6 +36,15 @@ typedef struct di_queue_elem_t {
     uint8_t reserved[3];           /* 0x0D-0x0F: Padding */
 } di_queue_elem_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(di_queue_elem_t, next) == 0x00, "di_queue_elem_t.next");
+_Static_assert(__builtin_offsetof(di_queue_elem_t, arg1) == 0x04, "di_queue_elem_t.arg1");
+_Static_assert(__builtin_offsetof(di_queue_elem_t, arg2) == 0x08, "di_queue_elem_t.arg2");
+_Static_assert(__builtin_offsetof(di_queue_elem_t, enqueued) == 0x0C, "di_queue_elem_t.enqueued");
+_Static_assert(__builtin_offsetof(di_queue_elem_t, reserved) == 0x0D, "di_queue_elem_t.reserved");
+#endif
+
 /*
  * Global queue head pointer
  * Points to the first element in the deferred interrupt queue.

@@ -76,6 +76,19 @@ typedef struct rem_name_data_t {
     int8_t   heard_from_server;      /* +0x3C: True if contacted server */
 } rem_name_data_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(rem_name_data_t, config) == 0x00, "rem_name_data_t.config");
+_Static_assert(__builtin_offsetof(rem_name_data_t, reserved1) == 0x1E, "rem_name_data_t.reserved1");
+_Static_assert(__builtin_offsetof(rem_name_data_t, server_timeout) == 0x20, "rem_name_data_t.server_timeout");
+_Static_assert(__builtin_offsetof(rem_name_data_t, reserved2) == 0x24, "rem_name_data_t.reserved2");
+_Static_assert(__builtin_offsetof(rem_name_data_t, time_heard_from_server) == 0x28, "rem_name_data_t.time_heard_from_server");
+_Static_assert(__builtin_offsetof(rem_name_data_t, last_status) == 0x2C, "rem_name_data_t.last_status");
+_Static_assert(__builtin_offsetof(rem_name_data_t, curr_node) == 0x30, "rem_name_data_t.curr_node");
+_Static_assert(__builtin_offsetof(rem_name_data_t, curr_net) == 0x34, "rem_name_data_t.curr_net");
+_Static_assert(__builtin_offsetof(rem_name_data_t, pkt_seq_num) == 0x38, "rem_name_data_t.pkt_seq_num");
+_Static_assert(__builtin_offsetof(rem_name_data_t, retry_count) == 0x3A, "rem_name_data_t.retry_count");
+_Static_assert(__builtin_offsetof(rem_name_data_t, heard_from_server) == 0x3C, "rem_name_data_t.heard_from_server");
+
 extern rem_name_data_t rem_name_$data;  /* 0xE7DBB8 - defined in rem_name.c */
 
 /*

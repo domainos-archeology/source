@@ -195,10 +195,10 @@ void AST_$COND_FLUSH(uid_t *uid, uint32_t *timestamp, status_$t *status)
     *status = 0;
 }
 
-void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid, uint16_t flags,
+void AST_$GET_COMMON_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags,
                                 ast_$common_attr_t *attrs, status_$t *status)
 {
-    (void)uid;
+    (void)loc_rec;
     mock_cattr_calls++;
     mock_cattr_flags = flags;
     memset(attrs, 0, sizeof(*attrs));

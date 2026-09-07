@@ -90,7 +90,14 @@ typedef struct as_$info {
  */
 extern as_$info_t AS_$INFO;         /* Address space info structure at 0xE2B914 */
 extern int16_t AS_$INFO_SIZE;       /* Size of info area at 0xE2B970 */
-extern int16_t AS_$PROTECTION;      /* Protection flags at 0xE2B972 */
+/*
+ * Address-space protection boundary at 0xE2B972.  The only two references in
+ * the image are longword compares against a pointer -- EC2_$WAIT
+ * `cmp.l (0x00e2b972).l,D6` (00e424c2) and `cmpa.l (0x00e2b972).l,A1`
+ * (00e42772) -- and the longword there is 0x00CC0000, so this is an ADDRESS,
+ * not the 16-bit 0x00CC the earlier declaration assumed.
+ */
+extern void *AS_$PROTECTION;        /* Protection boundary address, 0xE2B972 */
 
 /* Convenience aliases to structure fields */
 #define AS_$GLOBAL_A        AS_$INFO.global_a

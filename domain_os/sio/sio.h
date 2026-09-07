@@ -104,8 +104,17 @@ typedef struct sio_txbuf {
     uint16_t    read_idx;       /* 0x00: Read index (consumer) */
     uint16_t    write_idx;      /* 0x02: Write index (producer) */
     uint16_t    size;           /* 0x04: Buffer size */
-    uint8_t     data[1];        /* 0x05: Buffer data (variable size) */
+    /* Pascal 1-based: SIO_$I_TSTART fetches a byte with
+     * `move.b (0x5,A2,D0w*0x1),D2b` (00e1c826), so element i lives at
+     * txbuf+0x05+i and the array itself starts at 0x06. */
+    uint8_t     data[1];        /* 0x06: Buffer data, data[i - 1] (variable) */
 } sio_txbuf_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(sio_txbuf_t, read_idx) == 0x00, "sio_txbuf_t.read_idx");
+_Static_assert(__builtin_offsetof(sio_txbuf_t, write_idx) == 0x02, "sio_txbuf_t.write_idx");
+_Static_assert(__builtin_offsetof(sio_txbuf_t, size) == 0x04, "sio_txbuf_t.size");
+_Static_assert(__builtin_offsetof(sio_txbuf_t, data) == 0x06, "sio_txbuf_t.data");
 
 /*
  * ============================================================================
@@ -115,6 +124,9 @@ typedef struct sio_txbuf {
  * Serial port parameters - 0x16 bytes
  * Used with SIO_$K_SET_PARAM and SIO_$K_INQ_PARAM
  */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct sio_params {
     uint32_t    flags1;         /* 0x00: Control flags (flow control, etc.) */
     uint32_t    flags2;         /* 0x04: Extended flags */
@@ -123,7 +135,17 @@ typedef struct sio_params {
     int16_t     char_size;      /* 0x10: Character size (0-3) */
     int16_t     stop_bits;      /* 0x12: Stop bits (1-3) */
     int16_t     parity;         /* 0x14: Parity setting (0-3) */
-} sio_params_t;
+} __attribute__((packed)) sio_params_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(sio_params_t, flags1) == 0x00, "sio_params_t.flags1");
+_Static_assert(__builtin_offsetof(sio_params_t, flags2) == 0x04, "sio_params_t.flags2");
+_Static_assert(__builtin_offsetof(sio_params_t, break_mask) == 0x08, "sio_params_t.break_mask");
+_Static_assert(__builtin_offsetof(sio_params_t, baud_rate) == 0x0C, "sio_params_t.baud_rate");
+_Static_assert(__builtin_offsetof(sio_params_t, char_size) == 0x10, "sio_params_t.char_size");
+_Static_assert(__builtin_offsetof(sio_params_t, stop_bits) == 0x12, "sio_params_t.stop_bits");
+_Static_assert(__builtin_offsetof(sio_params_t, parity) == 0x14, "sio_params_t.parity");
+_Static_assert(sizeof(sio_params_t) == 0x16, "sio_params_t size");
 
 /*
  * ============================================================================
@@ -164,6 +186,37 @@ typedef struct sio_desc {
     /* Note: offset 0x75 is the transmit state byte, accessed separately */
     uint16_t    reserved_76;    /* 0x76: Reserved */
 } sio_desc_t;
+
+/* Remaining documented offsets (bead source-pewa).  Guarded for the same
+ * reason as the sizeof check below: the record holds native pointers and an
+ * embedded ec_$eventcount_t, so everything past 0x68 shifts on a 64-bit host. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(sio_desc_t, context) == 0x00, "sio_desc_t.context");
+_Static_assert(__builtin_offsetof(sio_desc_t, owner) == 0x04, "sio_desc_t.owner");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_08) == 0x08, "sio_desc_t.reserved_08");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_0c) == 0x0C, "sio_desc_t.reserved_0c");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_10) == 0x10, "sio_desc_t.reserved_10");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_14) == 0x14, "sio_desc_t.reserved_14");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_18) == 0x18, "sio_desc_t.reserved_18");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_1c) == 0x1C, "sio_desc_t.reserved_1c");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_20) == 0x20, "sio_desc_t.reserved_20");
+_Static_assert(__builtin_offsetof(sio_desc_t, txbuf) == 0x24, "sio_desc_t.txbuf");
+_Static_assert(__builtin_offsetof(sio_desc_t, rcv_handler) == 0x28, "sio_desc_t.rcv_handler");
+_Static_assert(__builtin_offsetof(sio_desc_t, drain_handler) == 0x2C, "sio_desc_t.drain_handler");
+_Static_assert(__builtin_offsetof(sio_desc_t, dcd_handler) == 0x30, "sio_desc_t.dcd_handler");
+_Static_assert(__builtin_offsetof(sio_desc_t, special_rcv) == 0x34, "sio_desc_t.special_rcv");
+_Static_assert(__builtin_offsetof(sio_desc_t, data_rcv) == 0x38, "sio_desc_t.data_rcv");
+_Static_assert(__builtin_offsetof(sio_desc_t, output_char) == 0x3C, "sio_desc_t.output_char");
+_Static_assert(__builtin_offsetof(sio_desc_t, set_params) == 0x40, "sio_desc_t.set_params");
+_Static_assert(__builtin_offsetof(sio_desc_t, inq_params) == 0x44, "sio_desc_t.inq_params");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_48) == 0x48, "sio_desc_t.reserved_48");
+_Static_assert(__builtin_offsetof(sio_desc_t, params) == 0x4C, "sio_desc_t.params");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_62) == 0x62, "sio_desc_t.reserved_62");
+_Static_assert(__builtin_offsetof(sio_desc_t, pending_int) == 0x64, "sio_desc_t.pending_int");
+_Static_assert(__builtin_offsetof(sio_desc_t, ec) == 0x68, "sio_desc_t.ec");
+_Static_assert(__builtin_offsetof(sio_desc_t, state) == 0x74, "sio_desc_t.state");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_76) == 0x76, "sio_desc_t.reserved_76");
+#endif
 
 /* Verify structure size (should be 0x78 = 120 bytes).  The record holds
  * pointer fields, so the layout only matches on the 32-bit target; host

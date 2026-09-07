@@ -45,6 +45,20 @@ typedef struct pbu_ec_entry_t {
     int32_t          reserved3; /* 0x14: Reserved */
 } pbu_ec_entry_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+/* The recovered offsets put 32-bit fields on odd word boundaries, which
+ * only m68k's 2-byte alignment reproduces.  The record cannot be marked
+ * packed because callers take the address of those members
+ * (-Waddress-of-packed-member), so the layout is asserted on m68k only. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(pbu_ec_entry_t, ec) == 0x00, "pbu_ec_entry_t.ec");
+_Static_assert(__builtin_offsetof(pbu_ec_entry_t, owner_id) == 0x0C, "pbu_ec_entry_t.owner_id");
+_Static_assert(__builtin_offsetof(pbu_ec_entry_t, reserved1) == 0x0E, "pbu_ec_entry_t.reserved1");
+_Static_assert(__builtin_offsetof(pbu_ec_entry_t, reserved2) == 0x10, "pbu_ec_entry_t.reserved2");
+_Static_assert(__builtin_offsetof(pbu_ec_entry_t, reserved3) == 0x14, "pbu_ec_entry_t.reserved3");
+_Static_assert(sizeof(pbu_ec_entry_t) == 0x18, "pbu_ec_entry_t size");
+#endif
+
 /*
  * External data
  * PBU eventcount array (32 entries at 0xE88460)

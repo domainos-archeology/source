@@ -92,7 +92,7 @@ void HINT_$INIT(void)
         /* Check if network info matches current node */
         {
             uint16_t *net_info = (uint16_t *)&HINT_$HINTFILE_PTR->header.net_info;
-            uint16_t *route_info = (uint16_t *)(ROUTE_$PORTP + 0x2E);
+            uint16_t *route_info = (uint16_t *)((uint8_t *)ROUTE_$PORTP[0] + 0x2E);
 
             if (net_info[0] == route_info[0] && net_info[1] == route_info[1]) {
                 /* Network matches - save the port */

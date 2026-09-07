@@ -85,6 +85,43 @@ typedef struct proc1_t {
     uint32_t    field_64;           /* 0x64: Unknown */
 } proc1_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(proc1_t, nextp) == 0x00, "proc1_t.nextp");
+_Static_assert(__builtin_offsetof(proc1_t, prevp) == 0x04, "proc1_t.prevp");
+_Static_assert(__builtin_offsetof(proc1_t, save_d2) == 0x08, "proc1_t.save_d2");
+_Static_assert(__builtin_offsetof(proc1_t, save_d3) == 0x0C, "proc1_t.save_d3");
+_Static_assert(__builtin_offsetof(proc1_t, save_d4) == 0x10, "proc1_t.save_d4");
+_Static_assert(__builtin_offsetof(proc1_t, save_d5) == 0x14, "proc1_t.save_d5");
+_Static_assert(__builtin_offsetof(proc1_t, save_d6) == 0x18, "proc1_t.save_d6");
+_Static_assert(__builtin_offsetof(proc1_t, save_d7) == 0x1C, "proc1_t.save_d7");
+_Static_assert(__builtin_offsetof(proc1_t, save_a2) == 0x20, "proc1_t.save_a2");
+_Static_assert(__builtin_offsetof(proc1_t, save_a3) == 0x24, "proc1_t.save_a3");
+_Static_assert(__builtin_offsetof(proc1_t, save_a4) == 0x28, "proc1_t.save_a4");
+_Static_assert(__builtin_offsetof(proc1_t, save_a5) == 0x2C, "proc1_t.save_a5");
+_Static_assert(__builtin_offsetof(proc1_t, save_a6) == 0x30, "proc1_t.save_a6");
+_Static_assert(__builtin_offsetof(proc1_t, save_a7) == 0x34, "proc1_t.save_a7");
+_Static_assert(__builtin_offsetof(proc1_t, save_usp) == 0x38, "proc1_t.save_usp");
+_Static_assert(__builtin_offsetof(proc1_t, wait_start) == 0x3C, "proc1_t.wait_start");
+_Static_assert(__builtin_offsetof(proc1_t, resource_locks_held) == 0x40, "proc1_t.resource_locks_held");
+_Static_assert(__builtin_offsetof(proc1_t, mypid) == 0x44, "proc1_t.mypid");
+_Static_assert(__builtin_offsetof(proc1_t, asid) == 0x46, "proc1_t.asid");
+_Static_assert(__builtin_offsetof(proc1_t, vtimer) == 0x48, "proc1_t.vtimer");
+_Static_assert(__builtin_offsetof(proc1_t, pad_4a) == 0x4A, "proc1_t.pad_4a");
+_Static_assert(__builtin_offsetof(proc1_t, cpu_total) == 0x4C, "proc1_t.cpu_total");
+_Static_assert(__builtin_offsetof(proc1_t, cpu_usage) == 0x50, "proc1_t.cpu_usage");
+_Static_assert(__builtin_offsetof(proc1_t, state) == 0x52, "proc1_t.state");
+_Static_assert(__builtin_offsetof(proc1_t, pri_min) == 0x54, "proc1_t.pri_min");
+_Static_assert(__builtin_offsetof(proc1_t, pri_max) == 0x55, "proc1_t.pri_max");
+_Static_assert(__builtin_offsetof(proc1_t, inh_count) == 0x56, "proc1_t.inh_count");
+_Static_assert(__builtin_offsetof(proc1_t, sw_bsr) == 0x58, "proc1_t.sw_bsr");
+_Static_assert(__builtin_offsetof(proc1_t, nesting_depth) == 0x5A, "proc1_t.nesting_depth");
+_Static_assert(__builtin_offsetof(proc1_t, field_5c) == 0x5C, "proc1_t.field_5c");
+_Static_assert(__builtin_offsetof(proc1_t, field_60) == 0x60, "proc1_t.field_60");
+_Static_assert(__builtin_offsetof(proc1_t, field_64) == 0x64, "proc1_t.field_64");
+_Static_assert(sizeof(proc1_t) == 0x68, "proc1_t size");
+#endif
+
 /*
  * PCB flag bits (in pri_max at offset 0x55)
  */
@@ -125,6 +162,15 @@ typedef struct ts_timer_entry_t {
     uint16_t cpu_time_low;      /* 0x24 */
     uint16_t field_26;          /* 0x26 */
 } ts_timer_entry_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(ts_timer_entry_t, callback_info) == 0x14, "ts_timer_entry_t.callback_info");
+_Static_assert(__builtin_offsetof(ts_timer_entry_t, callback_param) == 0x1C, "ts_timer_entry_t.callback_param");
+_Static_assert(__builtin_offsetof(ts_timer_entry_t, cpu_time_high) == 0x20, "ts_timer_entry_t.cpu_time_high");
+_Static_assert(__builtin_offsetof(ts_timer_entry_t, cpu_time_low) == 0x24, "ts_timer_entry_t.cpu_time_low");
+_Static_assert(__builtin_offsetof(ts_timer_entry_t, field_26) == 0x26, "ts_timer_entry_t.field_26");
+#endif
 
 /*
  * Maximum number of state/priority levels for timeslice table

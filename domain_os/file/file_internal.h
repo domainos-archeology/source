@@ -445,6 +445,9 @@ typedef struct __attribute__((packed)) {
     uint32_t remote_info;   /* 0x1E: Remote node/port info (4 bytes, total=34) */
 } file_lock_info_internal_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+_Static_assert(__builtin_offsetof(file_lock_info_internal_t, file_uid) == 0x00, "file_lock_info_internal_t.file_uid");
+
 /*
  * The m68k ABI aligns longs to two bytes, so holder_node really does sit at
  * +0x16 in the image (FILE_$FORCE_UNLOCK reads it as `cmp.l (-0x12,A6),D0` at
@@ -511,11 +514,30 @@ void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out,
  * Passed from callers like FILE_$READ_LOCK_ENTRYUI
  * Contains both the file UID and process identification
  */
+/*
+ * This record is the head of file_lock_info_internal_t: FILE_$VERIFY_LOCK_HOLDER
+ * passes its lock_info straight to FILE_$LOCAL_LOCK_VERIFY.  The two words the
+ * verifier reads sit at +0x10 and +0x12 (00e608a0 `cmp.w (0x10,A2),D1w` and
+ * 00e608b2 `cmp.w (0x12,A2),D0w`), so 0x08..0x0F must be spelled out.
+ */
 typedef struct {
     uid_t file_uid;      /* 0x00: File UID (8 bytes) */
+    uint32_t context;    /* 0x08: file_lock_info_internal_t.context (unused here) */
+    uint32_t owner_node; /* 0x0C: file_lock_info_internal_t.owner_node (unused here) */
     uint16_t side;       /* 0x10: Lock side (0=reader, 1=writer) from flags2 bit 7 */
-    uint16_t asid;       /* 0x12: Process ASID to check */
+    /* 0x12 is compared against (flags2 & 0x78) >> 3 -- the lock MODE, not an
+     * ASID (00e608aa..00e608b2).  The name is retained because the .c body
+     * uses it; see the P2 bead. */
+    uint16_t asid;       /* 0x12: Lock mode to check */
 } lock_verify_request_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(lock_verify_request_t, file_uid) == 0x00, "lock_verify_request_t.file_uid");
+_Static_assert(__builtin_offsetof(lock_verify_request_t, context) == 0x08, "lock_verify_request_t.context");
+_Static_assert(__builtin_offsetof(lock_verify_request_t, owner_node) == 0x0C, "lock_verify_request_t.owner_node");
+_Static_assert(__builtin_offsetof(lock_verify_request_t, side) == 0x10, "lock_verify_request_t.side");
+_Static_assert(__builtin_offsetof(lock_verify_request_t, asid) == 0x12, "lock_verify_request_t.asid");
+_Static_assert(sizeof(lock_verify_request_t) == 0x14, "lock_verify_request_t size");
 
 /*
  * FILE_$LOCAL_LOCK_VERIFY - Verify local lock ownership

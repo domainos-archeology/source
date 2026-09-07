@@ -171,7 +171,7 @@ aote_t *ast_$lookup_aote_by_uid(uid_t *uid)
     return NULL;
 }
 
-aote_t *ast_$force_activate_segment(uid_t *uid, uint16_t segment,
+aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t segment,
                                     status_$t *status, int8_t force)
 {
     (void)uid; (void)segment; (void)force;

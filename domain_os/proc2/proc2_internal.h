@@ -68,7 +68,11 @@ typedef struct proc2_ec_entry_t {
     ec_$eventcount_t cr_rec_ec;  /* 0x0C: Creation record EC */
 } proc2_ec_entry_t;
 
+/* Remaining documented offsets (bead source-pewa).  Guarded: ec_$eventcount_t
+ * holds two native pointers, so the pair is 0x18 bytes only on the target. */
 #if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(proc2_ec_entry_t, fork_ec) == 0x00, "proc2_ec_entry_t.fork_ec");
+_Static_assert(__builtin_offsetof(proc2_ec_entry_t, cr_rec_ec) == 0x0C, "proc2_ec_entry_t.cr_rec_ec");
 _Static_assert(sizeof(proc2_ec_entry_t) == 0x18, "proc2_ec_entry_t must be 0x18 bytes");
 #endif
 

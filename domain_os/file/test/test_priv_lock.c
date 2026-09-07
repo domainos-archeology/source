@@ -127,9 +127,9 @@ void HINT_$ADDI(uid_t *uid_ptr, uint32_t *addresses)
 void HINT_$LOOKUP_CACHE(uint32_t *key, uint8_t *result) { (void)key; *result = 0; }
 void HINT_$ADD_CACHE(uint32_t *key, uint8_t *result)    { (void)key; (void)result; }
 
-void AST_$GET_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs, status_$t *status)
+void AST_$GET_ATTRIBUTES(file_$obj_loc_t *desc, uint16_t flags, void *attrs,
+                         status_$t *status)
 {
-    file_$obj_loc_t *desc = (file_$obj_loc_t *)uid;
     uint8_t *a = (uint8_t *)attrs;
 
     (void)flags;

@@ -191,6 +191,19 @@ extern uint8_t sock_table_base[SOCK_TABLE_SIZE];
 #define SOCK_$EVENT_COUNTERS    ((ec_$eventcount_t **)(sock_table_base + 0x18A4))
 
 /*
+ * Aliases for the same socket pointer table used by other subsystems.  They
+ * used to be re-declared in app/app_internal.h, network/network_internal.h and
+ * rem_file/rem_file_internal.h with three different types; the storage is
+ * owned here (bead source-3uo).
+ *
+ *   SOCK_$TABLE_BASE  - slot 0 of the table (0xE28DB0, the socket spinlock);
+ *                       app/ indexes from its ADDRESS by sock_num*4.
+ *   SOCK_$SOCKET_PTR  - slot 1 onwards (0xE28DB4), i.e. SOCK_$EVENT_COUNTERS.
+ */
+#define SOCK_$TABLE_BASE        (*(void **)(sock_table_base + 0x18A0))
+#define SOCK_$SOCKET_PTR        ((void **)(sock_table_base + 0x18A4))
+
+/*
  * =============================================================================
  * Recovered record layouts (verified against the SOCK_$GET disassembly)
  * =============================================================================

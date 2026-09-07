@@ -11,6 +11,7 @@
 #include "flp/flp.h"
 #include "ec/ec.h"
 #include "disk/disk.h"
+#include "io/io.h"   /* io_$probe */
 
 /*
  * ============================================================================
@@ -109,6 +110,6 @@ extern uint8_t DAT_00e7a55c[];
  */
 
 /* Hardware probe function */
-int8_t io_$probe(void *signature, void *hw_addr, void *buffer);
+/* io_$probe is declared in io/io.h (bead source-3uo). */
 
 #endif /* FLP_INTERNAL_H */

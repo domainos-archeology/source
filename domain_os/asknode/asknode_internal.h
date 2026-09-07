@@ -95,6 +95,13 @@ typedef struct asknode_request_t {
   uint32_t param3;       /* 0x14 */
 } asknode_request_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(asknode_request_t, version) == 0x00, "asknode_request_t.version");
+_Static_assert(__builtin_offsetof(asknode_request_t, request_type) == 0x02, "asknode_request_t.request_type");
+_Static_assert(__builtin_offsetof(asknode_request_t, _pad_11) == 0x11, "asknode_request_t._pad_11");
+#endif
+
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(asknode_request_t, node_id)   == 0x04, "asknode_request_t.node_id");
 _Static_assert(offsetof(asknode_request_t, param1)    == 0x08, "asknode_request_t.param1");
@@ -123,6 +130,12 @@ typedef struct asknode_response_t {
   int16_t count;          /* 0x0E: Count remaining (0x00E65B28) */
                           /* Response data follows */
 } asknode_response_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(asknode_response_t, version) == 0x00, "asknode_response_t.version");
+_Static_assert(__builtin_offsetof(asknode_response_t, response_type) == 0x02, "asknode_response_t.response_type");
+#endif
 
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(asknode_response_t, status)  == 0x04, "asknode_response_t.status");
@@ -235,6 +248,16 @@ typedef struct asknode_who_response_t {
   uint32_t time_low;      /* 0x14: Time low word */
 } asknode_who_response_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(asknode_who_response_t, version) == 0x00, "asknode_who_response_t.version");
+_Static_assert(__builtin_offsetof(asknode_who_response_t, response_type) == 0x02, "asknode_who_response_t.response_type");
+_Static_assert(__builtin_offsetof(asknode_who_response_t, flags) == 0x0C, "asknode_who_response_t.flags");
+_Static_assert(__builtin_offsetof(asknode_who_response_t, count) == 0x0E, "asknode_who_response_t.count");
+_Static_assert(__builtin_offsetof(asknode_who_response_t, time_high) == 0x10, "asknode_who_response_t.time_high");
+_Static_assert(__builtin_offsetof(asknode_who_response_t, time_low) == 0x14, "asknode_who_response_t.time_low");
+#endif
+
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(asknode_who_response_t, status)  == 0x04, "who_response.status");
 _Static_assert(offsetof(asknode_who_response_t, node_id) == 0x08, "who_response.node_id");
@@ -254,7 +277,7 @@ _Static_assert(offsetof(asknode_who_response_t, node_id) == 0x08, "who_response.
  */
 
 /* Packet info template at 0x00E82408 - default values for PKT_$SEND_INTERNET */
-extern uint32_t PKT_$DEFAULT_INFO[8];
+/* PKT_$DEFAULT_INFO is exported from pkt/pkt.h (bead source-3uo). */
 
 /*
  * Protocol version at 0x00E82426 - determines WHO request version

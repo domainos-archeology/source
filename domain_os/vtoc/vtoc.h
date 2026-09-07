@@ -360,4 +360,12 @@ void VTOCE_$TRUNCATE(void *vtoce_loc, uint32_t flags, int32_t new_length,
 extern uid_t PPO_$NIL_USER_UID;     /* 0xE174EC: Nil user UID */
 extern uid_t PPO_$NIL_ORG_UID;      /* 0xE17574: Nil org UID */
 
+/*
+ * UID constants for VTOC block types (moved here from vtoc_internal.h:
+ * bat/ and other subsystems reference them, so they belong in the public
+ * header -- bead source-3uo).
+ */
+extern uid_t VTOC_$UID;             /* 0xE1739C: VTOC block UID */
+extern uid_t VTOC_BKT_$UID;         /* 0xE173AC: VTOC bucket UID */
+
 #endif /* VTOC_H */

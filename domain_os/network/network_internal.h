@@ -9,6 +9,7 @@
 #define NETWORK_INTERNAL_H
 
 #include "network/network.h"
+#include "sock/sock.h"   /* SOCK_$SOCKET_PTR */
 
 /*
  * NETWORK_$LOOPBACK_FLAG - Loopback mode indicator
@@ -18,11 +19,7 @@
  *
  * Original address: 0xE24C44
  */
-#if defined(ARCH_M68K)
-#define NETWORK_$LOOPBACK_FLAG (*(int8_t *)0xE24C44)
-#else
-extern int8_t NETWORK_$LOOPBACK_FLAG;
-#endif
+/* NETWORK_$LOOPBACK_FLAG is exported from network/network.h -- pkt/ uses it. */
 
 /*
  * Network command codes
@@ -76,10 +73,7 @@ extern int16_t NETWORK_$RETRY_TIMEOUT; /* 0xE24C18 - timeout for retries */
  */
 extern void *NETWORK_$LOCK;
 
-/*
- * Socket pointer array (for event count access)
- */
-extern void *SOCK_$SOCKET_PTR[]; /* 0xE28DB4 */
+/* SOCK_$SOCKET_PTR is exported from sock/sock.h (bead source-3uo). */
 
 /*
  * network_$send_request - Send a network request packet

@@ -158,4 +158,18 @@ void DMA_$INIT(void);
 void DMA_$INIT_M68450_CHANNEL(uint8_t *chan_virtual_address, int16_t channel_number);
 
 
+/*
+ * check_dma_error - Read and clear a DMAC channel's error state
+ *
+ * Reads the channel status byte at 0xFFA000 + channel*0x40, clears it, and
+ * maps the error code in the following byte to a status_$t.  The parameter is
+ * a word scaled unsigned (00e0a3aa `move.w (0x8,A6),D0w` / 00e0a3b6
+ * `lsl.w #0x6,D1w`).  FLP and WIN both call it with channel 3; it used to be
+ * declared in flp/flp.h and win/win_internal.h with conflicting parameter
+ * types (bead source-3uo).
+ *
+ * Original address: 0x00E0A3A6
+ */
+status_$t check_dma_error(uint16_t channel);
+
 #endif /* DMA_DMA_H */

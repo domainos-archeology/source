@@ -72,6 +72,12 @@ typedef struct stopwatch_slot_t {
     int32_t reserved3c;  /* +0x3C */
 } stopwatch_slot_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(stopwatch_slot_t, pad11) == 0x11, "stopwatch_slot_t.pad11");
+_Static_assert(__builtin_offsetof(stopwatch_slot_t, reserved3c) == 0x3C, "stopwatch_slot_t.reserved3c");
+#endif
+
 /*
  * Slot flag bits.  The code uses `btst.b #n,(0x10,A1)` on the byte at +0x10,
  * so these are bit numbers within that byte, not within a word.

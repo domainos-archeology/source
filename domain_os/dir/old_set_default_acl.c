@@ -221,7 +221,7 @@ write_infoblk:
     /* Old ACL exists - check if it's an ACL object and truncate */
     location_buf.uid.high = old_acl.high;
     location_buf.uid.low = old_acl.low;
-    AST_$GET_COMMON_ATTRIBUTES((uid_t *)(void *)&location_buf,
+    AST_$GET_COMMON_ATTRIBUTES(&location_buf,
                                DIR_CATTR_SET_DEF_ACL, &common_attr,
                                &loc_status);            /* 0x00E56486 */
     if (loc_status == status_$ok) {

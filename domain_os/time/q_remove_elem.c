@@ -22,7 +22,7 @@
  *   00e16e62    pea (-0x4,A6)             ; &local_status
  *   00e16e66    move.l (0xc,A6),-(SP)     ; elem
  *   00e16e6a    pea (A2)                  ; queue
- *   00e16e6c    bsr.w FUN_00e16b70        ; Internal remove
+ *   00e16e6c    bsr.w time_$q_remove_internal ; Internal remove
  *   00e16e70    lea (0xc,SP),SP
  *   00e16e74    ; ML_$SPIN_UNLOCK
  *   00e16e84    movea.l (0x10,A6),A0      ; status

@@ -73,7 +73,12 @@ uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
 smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 uint16_t PROC1_$AS_ID;
 
-ec_$eventcount_t DTTE;              /* 0x00E2DC90 */
+/*
+ * DTTE is TERM_$DATA.dtte (0x00E2DC90 = TERM_$DATA + 0x12A0), and
+ * SMD_$DTTE_EC aliases the eventcount in the head of its first entry --
+ * see term/term.h and smd/smd_internal.h.
+ */
+term_data_t TERM_$DATA;
 ec_$eventcount_t OS_$SHUTDOWN_EC;   /* 0x00E1DC00 */
 
 static smd_display_hw_t test_hw;
@@ -113,7 +118,7 @@ static void setup(uint16_t unit_for_asid)
     memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
     memset(SMD_DISPLAY_INFO, 0, sizeof(SMD_DISPLAY_INFO));
     memset(&test_hw, 0, sizeof(test_hw));
-    memset(&DTTE, 0, sizeof(DTTE));
+    memset(&TERM_$DATA, 0, sizeof(TERM_$DATA));
     memset(&OS_$SHUTDOWN_EC, 0, sizeof(OS_$SHUTDOWN_EC));
 
     PROC1_$AS_ID = 3;
@@ -157,7 +162,7 @@ static void test_key_0_is_dtte(void)
     SMD_$GET_EC(&key, &ec2, &status);
 
     CHECK_EQ(1, register_calls);
-    CHECK_EQ((long)(intptr_t)&DTTE, (long)(intptr_t)last_ec1);
+    CHECK_EQ((long)(intptr_t)&SMD_$DTTE_EC, (long)(intptr_t)last_ec1);
     CHECK_EQ((long)(intptr_t)&mock_ec2_handle, (long)(intptr_t)ec2);
     CHECK_EQ(status_$ok, status);
 }

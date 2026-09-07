@@ -16,6 +16,7 @@
 #include "rip/rip.h"
 #include "sock/sock.h"
 #include "xns/xns.h"
+#include "ring/ringlog.h"   /* RINGLOG_$ROUTE_FORWARD */
 
 /*
  * =============================================================================
@@ -235,7 +236,7 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
  */
 #define ROUTE_$NET_SERVICE_ON   (*(int16_t *)0xE8789C)
 #define ROUTE_$NET_SERVICE_OFF  (*(int16_t *)0xE8789E)
-#define RINGLOG_$ROUTE_FORWARD  ((uint8_t *)0xE878A0)
+/* RINGLOG_$ROUTE_FORWARD (0xE878A0) is declared in ring/ringlog.h. */
 #define ROUTE_$SOCK_EMPTY_STATUS (*(const status_$t *)0xE878A4)
 
 /* Send callback/data pointer (4 bytes of zeros at 0xE870D8) */
@@ -282,7 +283,6 @@ extern int16_t ROUTE_$N_WIRED_PAGES;
 extern int16_t ROUTE_$N_USER_PORTS;
 extern int16_t ROUTE_$NET_SERVICE_ON;
 extern int16_t ROUTE_$NET_SERVICE_OFF;
-extern uint8_t RINGLOG_$ROUTE_FORWARD[4];
 extern const status_$t ROUTE_$SOCK_EMPTY_STATUS;
 extern uint16_t ROUTE_$PROCESS_UID;
 extern int8_t ROUTE_$CHECKSUM_ENABLED;

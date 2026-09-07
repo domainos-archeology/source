@@ -290,7 +290,8 @@ void FILE_$SET_ATTRIBUTE(uid_t *u, int16_t id, void *v, uint16_t rights,
                          int16_t options, status_$t *st)
 { (void)u; (void)id; (void)v; (void)rights; (void)options; *st = status_$ok; }
 
-void AST_$GET_ATTRIBUTES(uid_t *u, uint16_t fl, void *a, status_$t *st)
+void AST_$GET_ATTRIBUTES(file_$obj_loc_t *u, uint16_t fl, void *a,
+                         status_$t *st)
 { (void)u; (void)fl; memset(a, 0, 0x90); *st = status_$ok; }
 void AST_$GET_ACL_ATTRIBUTES(file_$obj_loc_t *u, uint16_t fl,
                              ast_$acl_attr_t *a, status_$t *st)

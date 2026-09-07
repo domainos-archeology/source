@@ -9,6 +9,7 @@
 #define PMAP_INTERNAL_H
 
 #include "pmap/pmap.h"
+#include "uid/uid.h"   /* UID_$NIL */
 #include "mmap/mmap.h"
 #include "mmu/mmu.h"
 #include "time/time.h"
@@ -85,6 +86,10 @@ typedef struct pmap_segmap_entry_t {
     uint8_t  reserved[3];   /* 0x01: rest of the 4-byte entry */
 } pmap_segmap_entry_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+_Static_assert(__builtin_offsetof(pmap_segmap_entry_t, flags) == 0x00, "pmap_segmap_entry_t.flags");
+_Static_assert(__builtin_offsetof(pmap_segmap_entry_t, reserved) == 0x01, "pmap_segmap_entry_t.reserved");
+
 #define PMAP_SEGMAP_WRITING     0x80    /* bset.b #7 at 0x00E13C32 */
 #define PMAP_SEGMAP_PAGES_PER_SEG 32    /* 0x80 bytes / 4 bytes per entry */
 
@@ -121,6 +126,13 @@ typedef struct pmap_qblk_t {
     uint8_t  reserved_18[0x24]; /* 0x18 */
     uint32_t log_info;          /* 0x3C: word pair logged by NETLOG_$LOG_IT */
 } pmap_qblk_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(pmap_qblk_t, reserved_00) == 0x00, "pmap_qblk_t.reserved_00");
+_Static_assert(__builtin_offsetof(pmap_qblk_t, reserved_10) == 0x10, "pmap_qblk_t.reserved_10");
+_Static_assert(__builtin_offsetof(pmap_qblk_t, reserved_18) == 0x18, "pmap_qblk_t.reserved_18");
+#endif
 
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(pmap_qblk_t, next) == 0x08, "pmap_qblk_t.next");

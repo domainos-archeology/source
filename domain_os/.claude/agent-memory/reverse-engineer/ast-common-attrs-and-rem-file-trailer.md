@@ -51,6 +51,11 @@ followed (all four were present at nine call sites):
 arguably its real owner, but the `file_$` name and the existing users made
 moving it to ast/ more churn than it was worth.
 
+**Both prototypes now say `file_$obj_loc_t *` (source-x18q, 2026-09-07)**, so
+the `(uid_t *)&desc` casts that used to paper over this are gone tree-wide.
+See [[attr-query-call-shape]] for AST_$GET_ATTRIBUTES' own control flow and
+the two 32-byte writebacks.
+
 ## Every REM_FILE request carries a {version, super-mode} trailer
 
 Right after each opcode's payload, at the next even offset:

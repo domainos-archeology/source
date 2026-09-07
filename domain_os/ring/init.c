@@ -14,7 +14,7 @@
  *   - Initializes 3 event counts at +0x04, +0x10, +0x24
  *   - Initializes 2 exclusion locks at +0x34, +0x4C
  *   - Clears 10 channel entries (loop from +0x08, 8 bytes each, offset +0x5A)
- *   - Calls internal init function (FUN_00e2fa86)
+ *   - Calls internal init function (ring_$init_internal, 0x00E2FA86)
  *   - Creates network I/O port via NET_IO_$CREATE_PORT
  *   - Sets route port pointer at unit offset +0x00
  *   - Sets initialized flag at unit offset +0x60
@@ -169,7 +169,7 @@ status_$t RING_$INIT(void *device_info)
 /*
  * ring_$init_internal - Internal initialization helper
  *
- * This corresponds to FUN_00e2fa86 in the original.
+ * This corresponds to ring_$init_internal (0x00E2FA86) in the original.
  * Sets up additional unit-specific data based on the IIC data.
  *
  * @param unit_data     Unit data structure

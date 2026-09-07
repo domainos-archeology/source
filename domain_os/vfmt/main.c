@@ -34,7 +34,7 @@
 /*
  * output_char - Output a single character to the buffer
  *
- * Implements VFMT_$MAIN_FUN_00e6a9f6
+ * Implements vfmt_output_char (0x00E6A9F6)
  * Accesses parent frame via unaff_A6 in original code.
  */
 static void output_char(vfmt_ctx_t *ctx, char c)
@@ -50,7 +50,7 @@ static void output_char(vfmt_ctx_t *ctx, char c)
 /*
  * parse_width - Parse numeric width from format specifier
  *
- * Implements VFMT_$MAIN_FUN_00e6aa4c
+ * Implements vfmt_parse_number (0x00E6AA4C)
  * Parses digits to form a width value, returns -1 if no digits.
  */
 static int16_t parse_width(const char *spec, int16_t spec_len)
@@ -83,7 +83,7 @@ static int16_t parse_width(const char *spec, int16_t spec_len)
 /*
  * parse_width_after_m - Parse width after 'M' modifier
  *
- * Implements VFMT_$MAIN_FUN_00e6aab6
+ * Implements vfmt_parse_number_after_m (0x00E6AAB6)
  * Only parses digits that appear after an 'M' in the specifier.
  */
 static int16_t parse_width_after_m(const char *spec, int16_t spec_len)
@@ -116,7 +116,7 @@ static int16_t parse_width_after_m(const char *spec, int16_t spec_len)
 /*
  * get_next_arg - Get next argument from varargs list
  *
- * Implements FUN_00e6aa38
+ * Implements vfmt_get_next_arg (0x00E6AA38)
  * Advances the argument pointer and returns the value.
  */
 static void *get_next_arg(vfmt_ctx_t *ctx)
@@ -130,7 +130,7 @@ static void *get_next_arg(vfmt_ctx_t *ctx)
 /*
  * format_number - Format a numeric value
  *
- * Implements FUN_00e6a704
+ * Implements vfmt_format_number (0x00E6A704)
  * Converts integer to string with specified base and options.
  */
 static void format_number(const char *spec, int16_t spec_len, void *value_p,

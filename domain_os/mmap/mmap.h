@@ -54,6 +54,13 @@ typedef struct mmape_t {
   uint32_t disk_addr; /* 0x0C: Disk address (used by AST layer for paging) */
 } mmape_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(mmape_t, wire_count) == 0x00, "mmape_t.wire_count");
+_Static_assert(__builtin_offsetof(mmape_t, prev_vpn) == 0x06, "mmape_t.prev_vpn");
+_Static_assert(__builtin_offsetof(mmape_t, next_vpn) == 0x0A, "mmape_t.next_vpn");
+#endif
+
 /* mmape_t flags1 bit definitions */
 #define MMAPE_FLAG1_IN_WSL 0x80 /* Page is installed in a working set list */
 #define MMAPE_FLAG1_IMPURE                                                     \
@@ -88,6 +95,12 @@ typedef struct ws_hdr_t {
    */
   uint32_t ws_floor;
 } ws_hdr_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(ws_hdr_t, flags) == 0x00, "ws_hdr_t.flags");
+_Static_assert(__builtin_offsetof(ws_hdr_t, reserved1) == 0x01, "ws_hdr_t.reserved1");
+#endif
 
 /*
  * The WSL array stride is 0x24 (36) bytes, not 0x28: PMAP_$PURIFIER_L walks
@@ -169,6 +182,14 @@ typedef struct mmap_globals_t {
                             /* uint32_t pageable_pages_lower_limit; */
   /* Offset 0xA22: uint16_t pid_to_wsl[65]; (pid-to-wsl mapping) */
 } mmap_globals_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(mmap_globals_t, reserved1) == 0x00, "mmap_globals_t.reserved1");
+_Static_assert(__builtin_offsetof(mmap_globals_t, ws_overflow_cnt) == 0x1C, "mmap_globals_t.ws_overflow_cnt");
+_Static_assert(__builtin_offsetof(mmap_globals_t, steal_cnt) == 0x20, "mmap_globals_t.steal_cnt");
+_Static_assert(__builtin_offsetof(mmap_globals_t, alloc_pages) == 0x24, "mmap_globals_t.alloc_pages");
+_Static_assert(__builtin_offsetof(mmap_globals_t, alloc_cnt) == 0x28, "mmap_globals_t.alloc_cnt");
+_Static_assert(__builtin_offsetof(mmap_globals_t, wsl) == 0x2C, "mmap_globals_t.wsl");
 
 /*
  * Architecture-independent macros for page entry access

@@ -65,7 +65,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
     /* A6-0x270 / A6-0xE8..: FILE_$GET_ATTRIBUTES' location record and
      * 0x90-byte attribute buffer (`pea (-0x270,A6)` / `pea (-0x300,A6)`
      * at 0x00E55D3A / 0x00E55D36). */
-    uint8_t attr_loc_rec[AST_$LOC_REC_SIZE];
+    file_$obj_loc_t attr_loc_rec;
     uint8_t attr_out[AST_ATTR_REC_SIZE];
     int16_t info_len[2];
 
@@ -260,7 +260,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
                  * 0x90-byte attribute buffer are two separate frame
                  * objects, not two windows onto info_buf. */
                 FILE_$GET_ATTRIBUTES(&local_dir, &DAT_00e56098,
-                                     &DAT_00e56094, attr_loc_rec,
+                                     &DAT_00e56094, &attr_loc_rec,
                                      attr_out, &status);
                 if (status == status_$ok) {
                     /* Restore parent UID at offset 0x0E in mapped buffer.

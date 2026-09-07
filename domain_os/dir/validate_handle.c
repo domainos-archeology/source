@@ -64,7 +64,7 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
     /* 0x00E4B46A `bclr.b #0x6,(-0x3b,A6)` = descriptor+0x1D. */
     desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-    AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, DIR_CATTR_VALIDATE, &cattr,
+    AST_$GET_COMMON_ATTRIBUTES(&desc, DIR_CATTR_VALIDATE, &cattr,
                                &local_status);          /* 0x00E4B482 */
 
     /* 0x00E4B48C-0x00E4B4B2.  descriptor+0x1D bit 7 is set when the object

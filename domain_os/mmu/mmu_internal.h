@@ -23,7 +23,7 @@
  * Entry point address for CACHE_$CLEAR
  * Used by MMU_$INIT to patch cache clear on 68010 CPUs.
  */
-extern uint16_t CACHE_$CLEAR_ENTRY;
+/* CACHE_$CLEAR_ENTRY is exported from cache/cache.h (bead source-3uo). */
 
 /*
  * Power control byte for MMU power register updates.

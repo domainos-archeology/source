@@ -12,6 +12,7 @@
 #include "proc1/proc1.h"
 #include "ml/ml.h"
 #include "rgyc/rgyc.h"
+#include "uid/uid.h"   /* UID_$NIL */
 
 /*
  * ============================================================================
@@ -59,6 +60,13 @@ typedef struct acl_sid_block_t {
     uid_t login_sid;     /* 0x18: Login SID */
     uint32_t pad;        /* 0x20: Padding to 36 bytes */
 } acl_sid_block_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(acl_sid_block_t, user_sid) == 0x00, "acl_sid_block_t.user_sid");
+_Static_assert(__builtin_offsetof(acl_sid_block_t, group_sid) == 0x08, "acl_sid_block_t.group_sid");
+_Static_assert(__builtin_offsetof(acl_sid_block_t, org_sid) == 0x10, "acl_sid_block_t.org_sid");
+_Static_assert(__builtin_offsetof(acl_sid_block_t, login_sid) == 0x18, "acl_sid_block_t.login_sid");
+_Static_assert(__builtin_offsetof(acl_sid_block_t, pad) == 0x20, "acl_sid_block_t.pad");
 
 /*
  * Project list entry (12 bytes per process)

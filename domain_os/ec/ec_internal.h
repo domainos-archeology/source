@@ -9,6 +9,7 @@
 #define EC_INTERNAL_H
 
 #include "ec/ec.h"
+#include "as/as.h"   /* AS_$PROTECTION */
 
 /*
  * ============================================================================
@@ -76,12 +77,5 @@ extern uint32_t DAT_00e7cefc;
  * External References (from other subsystems)
  * ============================================================================
  */
-
-/*
- * Address space protection boundary
- * Addresses >= this value are protected from direct EC2 access.
- * TODO(source-qvt): Move to proc/as.h when that subsystem is cleaned up.
- */
-extern void *AS_$PROTECTION;
 
 #endif /* EC_INTERNAL_H */

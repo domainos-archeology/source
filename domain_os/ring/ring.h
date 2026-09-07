@@ -139,6 +139,13 @@ typedef struct ring_hw_regs_t {
     volatile uint16_t   mode;       /* 0x06: receiver mode */
 } ring_hw_regs_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(ring_hw_regs_t, xmit_csr) == 0x00, "ring_hw_regs_t.xmit_csr");
+_Static_assert(__builtin_offsetof(ring_hw_regs_t, rcv_csr) == 0x02, "ring_hw_regs_t.rcv_csr");
+_Static_assert(__builtin_offsetof(ring_hw_regs_t, tmask) == 0x04, "ring_hw_regs_t.tmask");
+_Static_assert(__builtin_offsetof(ring_hw_regs_t, _pad05) == 0x05, "ring_hw_regs_t._pad05");
+_Static_assert(__builtin_offsetof(ring_hw_regs_t, mode) == 0x06, "ring_hw_regs_t.mode");
+
 /*
  * Receive status register access
  *
@@ -220,6 +227,12 @@ typedef struct ring_channel_t {
                                  *       mismatch" (0x00E76BAE). */
 } ring_channel_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+_Static_assert(__builtin_offsetof(ring_channel_t, flags) == 0x00, "ring_channel_t.flags");
+_Static_assert(__builtin_offsetof(ring_channel_t, _pad01) == 0x01, "ring_channel_t._pad01");
+_Static_assert(__builtin_offsetof(ring_channel_t, asid) == 0x02, "ring_channel_t.asid");
+_Static_assert(__builtin_offsetof(ring_channel_t, socket_id) == 0x04, "ring_channel_t.socket_id");
+
 /*
  * ============================================================================
  * Packet type table entry (12 bytes per entry)
@@ -235,6 +248,12 @@ typedef struct ring_pkt_type_t {
     int16_t     channel;        /* 0x08: owning channel (1-based) */
     int16_t     _pad0a;         /* 0x0A */
 } ring_pkt_type_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+_Static_assert(__builtin_offsetof(ring_pkt_type_t, low) == 0x00, "ring_pkt_type_t.low");
+_Static_assert(__builtin_offsetof(ring_pkt_type_t, high) == 0x04, "ring_pkt_type_t.high");
+_Static_assert(__builtin_offsetof(ring_pkt_type_t, channel) == 0x08, "ring_pkt_type_t.channel");
+_Static_assert(__builtin_offsetof(ring_pkt_type_t, _pad0a) == 0x0A, "ring_pkt_type_t._pad0a");
 
 /*
  * ============================================================================
@@ -270,6 +289,18 @@ typedef struct ring_unit_t {
     ring_$pkt_hdr_t    *rx_hdr;             /* 0x23C: header buffer virtual address */
     uint32_t            rx_data_pa;         /* 0x240: data buffer DMA address */
 } ring_unit_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(ring_unit_t, route_port) == 0x00, "ring_unit_t.route_port");
+_Static_assert(__builtin_offsetof(ring_unit_t, _r030) == 0x30, "ring_unit_t._r030");
+_Static_assert(__builtin_offsetof(ring_unit_t, _r046) == 0x46, "ring_unit_t._r046");
+_Static_assert(__builtin_offsetof(ring_unit_t, _r04a) == 0x4A, "ring_unit_t._r04a");
+_Static_assert(__builtin_offsetof(ring_unit_t, _r05e) == 0x5E, "ring_unit_t._r05e");
+_Static_assert(__builtin_offsetof(ring_unit_t, _r061) == 0x61, "ring_unit_t._r061");
+_Static_assert(__builtin_offsetof(ring_unit_t, _r0b2) == 0xB2, "ring_unit_t._r0b2");
+_Static_assert(__builtin_offsetof(ring_unit_t, _r236) == 0x236, "ring_unit_t._r236");
+#endif
 
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(ring_unit_t, rx_wake_ec)   == 0x004, "ring_unit_t.rx_wake_ec");
@@ -336,6 +367,20 @@ typedef struct ring_global_t {
     uint16_t        _r5c6;                  /* 0x5C6 */
     void          (*rcv_proc[RING_MAX_UNITS])(void); /* 0x5C8: RING_$RCV0 / RING_$RCV1 */
 } ring_global_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(ring_global_t, units) == 0x00, "ring_global_t.units");
+_Static_assert(__builtin_offsetof(ring_global_t, _r518) == 0x518, "ring_global_t._r518");
+_Static_assert(__builtin_offsetof(ring_global_t, _r51c) == 0x51C, "ring_global_t._r51c");
+_Static_assert(__builtin_offsetof(ring_global_t, _r56e) == 0x56E, "ring_global_t._r56e");
+_Static_assert(__builtin_offsetof(ring_global_t, _r57e) == 0x57E, "ring_global_t._r57e");
+_Static_assert(__builtin_offsetof(ring_global_t, _r586) == 0x586, "ring_global_t._r586");
+_Static_assert(__builtin_offsetof(ring_global_t, _r596) == 0x596, "ring_global_t._r596");
+_Static_assert(__builtin_offsetof(ring_global_t, _r59e) == 0x59E, "ring_global_t._r59e");
+_Static_assert(__builtin_offsetof(ring_global_t, tmask_chg_and_busy_cnt) == 0x5AC, "ring_global_t.tmask_chg_and_busy_cnt");
+_Static_assert(__builtin_offsetof(ring_global_t, _r5c6) == 0x5C6, "ring_global_t._r5c6");
+#endif
 
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(ring_global_t, scrub)               == 0x488, "ring_global_t.scrub");
@@ -867,5 +912,17 @@ void RING_$POLL_STICKY_BPHERR(void *param1, void *param2);
  * Original address: 0x00E76A42
  */
 void RING_$PROC2_CLEANUP(void *param1);
+
+/*
+ * Ring receive overflow counters (moved here from app/app_internal.h --
+ * bead source-3uo).
+ */
+#if defined(ARCH_M68K)
+#define RING_$FILE_OVERFLOW     (*(uint16_t *)0xE24596)
+#define RING_$OVERFLOW_OVERFLOW (*(uint16_t *)0xE24594)
+#else
+extern uint16_t RING_$FILE_OVERFLOW;
+extern uint16_t RING_$OVERFLOW_OVERFLOW;
+#endif
 
 #endif /* RING_H */

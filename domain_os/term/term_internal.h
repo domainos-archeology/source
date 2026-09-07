@@ -21,6 +21,8 @@
 #include "suma/suma.h"          /* SUMA_$INIT, SUMA_$RCV */
 #include "math/math.h"          /* M$OIS$WLW */
 #include "os/os.h"              /* OS_TERM_INIT */
+#include "uid/uid.h"   /* UID_$NIL */
+#include "uid/uid.h"   /* UID_$NIL */
 
 /*
  * ============================================================================
@@ -48,7 +50,7 @@ extern term_data_t TERM_$DATA;
  */
 extern char DAT_00e2d9e0[];
 extern char DAT_00e2db48[];
-extern char DTTE[];
+/* DTTE is TERM_$DATA.dtte; see the alias in term/term.h. */
 extern char DAT_00e2cb48[];
 extern char DAT_00e2db58[];
 extern char DAT_00e2caa0[];

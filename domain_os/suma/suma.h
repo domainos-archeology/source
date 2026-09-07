@@ -60,6 +60,18 @@ typedef struct suma_sample_t {
     uint8_t     y_low;          /* 0x0F: Y coordinate low byte */
 } suma_sample_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(suma_sample_t, delta_time) == 0x00, "suma_sample_t.delta_time");
+_Static_assert(__builtin_offsetof(suma_sample_t, timestamp_high) == 0x04, "suma_sample_t.timestamp_high");
+_Static_assert(__builtin_offsetof(suma_sample_t, timestamp_low) == 0x08, "suma_sample_t.timestamp_low");
+_Static_assert(__builtin_offsetof(suma_sample_t, id_flags) == 0x0A, "suma_sample_t.id_flags");
+_Static_assert(__builtin_offsetof(suma_sample_t, reserved_0b) == 0x0B, "suma_sample_t.reserved_0b");
+_Static_assert(__builtin_offsetof(suma_sample_t, x_high) == 0x0C, "suma_sample_t.x_high");
+_Static_assert(__builtin_offsetof(suma_sample_t, x_low) == 0x0D, "suma_sample_t.x_low");
+_Static_assert(__builtin_offsetof(suma_sample_t, y_high) == 0x0E, "suma_sample_t.y_high");
+_Static_assert(__builtin_offsetof(suma_sample_t, y_low) == 0x0F, "suma_sample_t.y_low");
+_Static_assert(sizeof(suma_sample_t) == 0x10, "suma_sample_t size");
+
 /*
  * SUMA state structure
  *
@@ -92,6 +104,32 @@ typedef struct suma_state_t {
     uint16_t    threshold;          /* 0x2A: Position threshold for filtering */
 } suma_state_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(suma_state_t, last_time) == 0x00, "suma_state_t.last_time");
+_Static_assert(__builtin_offsetof(suma_state_t, prev_delta) == 0x04, "suma_state_t.prev_delta");
+_Static_assert(__builtin_offsetof(suma_state_t, prev_timestamp_high) == 0x08, "suma_state_t.prev_timestamp_high");
+_Static_assert(__builtin_offsetof(suma_state_t, prev_timestamp_low) == 0x0C, "suma_state_t.prev_timestamp_low");
+_Static_assert(__builtin_offsetof(suma_state_t, prev_id_flags) == 0x0E, "suma_state_t.prev_id_flags");
+_Static_assert(__builtin_offsetof(suma_state_t, prev_reserved) == 0x0F, "suma_state_t.prev_reserved");
+_Static_assert(__builtin_offsetof(suma_state_t, prev_x_high) == 0x10, "suma_state_t.prev_x_high");
+_Static_assert(__builtin_offsetof(suma_state_t, prev_x_low) == 0x11, "suma_state_t.prev_x_low");
+_Static_assert(__builtin_offsetof(suma_state_t, prev_y_high) == 0x12, "suma_state_t.prev_y_high");
+_Static_assert(__builtin_offsetof(suma_state_t, prev_y_low) == 0x13, "suma_state_t.prev_y_low");
+_Static_assert(__builtin_offsetof(suma_state_t, cur_delta) == 0x14, "suma_state_t.cur_delta");
+_Static_assert(__builtin_offsetof(suma_state_t, cur_timestamp_high) == 0x18, "suma_state_t.cur_timestamp_high");
+_Static_assert(__builtin_offsetof(suma_state_t, cur_timestamp_low) == 0x1C, "suma_state_t.cur_timestamp_low");
+_Static_assert(__builtin_offsetof(suma_state_t, cur_id_flags) == 0x1E, "suma_state_t.cur_id_flags");
+_Static_assert(__builtin_offsetof(suma_state_t, cur_reserved) == 0x1F, "suma_state_t.cur_reserved");
+_Static_assert(__builtin_offsetof(suma_state_t, cur_x_high) == 0x20, "suma_state_t.cur_x_high");
+_Static_assert(__builtin_offsetof(suma_state_t, cur_x_low) == 0x21, "suma_state_t.cur_x_low");
+_Static_assert(__builtin_offsetof(suma_state_t, cur_y_high) == 0x22, "suma_state_t.cur_y_high");
+_Static_assert(__builtin_offsetof(suma_state_t, cur_y_low) == 0x23, "suma_state_t.cur_y_low");
+_Static_assert(__builtin_offsetof(suma_state_t, tpad_buffer) == 0x24, "suma_state_t.tpad_buffer");
+_Static_assert(__builtin_offsetof(suma_state_t, rcv_state) == 0x28, "suma_state_t.rcv_state");
+_Static_assert(__builtin_offsetof(suma_state_t, threshold) == 0x2A, "suma_state_t.threshold");
+#endif
+
 /*
  * TPAD buffer structure
  *
@@ -103,6 +141,11 @@ typedef struct tpad_buffer_t {
     uint16_t    tail;               /* 0x02: Tail index (read position) */
     suma_sample_t samples[SUMA_TPAD_BUFFER_SIZE]; /* 0x04: Sample buffer */
 } tpad_buffer_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(tpad_buffer_t, head) == 0x00, "tpad_buffer_t.head");
+_Static_assert(__builtin_offsetof(tpad_buffer_t, tail) == 0x02, "tpad_buffer_t.tail");
+_Static_assert(__builtin_offsetof(tpad_buffer_t, samples) == 0x04, "tpad_buffer_t.samples");
 
 /*
  * ============================================================================
@@ -117,14 +160,9 @@ typedef struct tpad_buffer_t {
  */
 extern suma_state_t SUMA_$STATE;
 
-/*
- * TERM_$TPAD_BUFFER - Tablet pad sample buffer
- *
- * Circular buffer storing tablet position samples.
- *
- * Original address: 0x00e2de3c
- */
-extern tpad_buffer_t TERM_$TPAD_BUFFER;
+/* TERM_$TPAD_BUFFER carries the TERM_$ prefix and is defined in
+ * term/term_data.c, so it is declared in term/term.h (bead source-3uo).
+ * Its type, tpad_buffer_t, stays here with suma_sample_t. */
 
 /*
  * ============================================================================

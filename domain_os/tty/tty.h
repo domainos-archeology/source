@@ -110,6 +110,12 @@ typedef struct tty_signal_entry {
   uint16_t reserved;   // 0x0A: Reserved/padding
 } tty_signal_entry_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+_Static_assert(__builtin_offsetof(tty_signal_entry_t, tty_desc) == 0x00, "tty_signal_entry_t.tty_desc");
+_Static_assert(__builtin_offsetof(tty_signal_entry_t, callback) == 0x04, "tty_signal_entry_t.callback");
+_Static_assert(__builtin_offsetof(tty_signal_entry_t, signal_num) == 0x08, "tty_signal_entry_t.signal_num");
+_Static_assert(__builtin_offsetof(tty_signal_entry_t, reserved) == 0x0A, "tty_signal_entry_t.reserved");
+
 _Static_assert(sizeof(tty_signal_entry_t) == 0x0C,
                "tty_signal_entry_t must be 12 bytes");
 
@@ -211,6 +217,33 @@ typedef struct tty_desc {
   uint16_t reserved_4DA; // 0x4DA: Reserved
 
 } tty_desc_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(tty_desc_t, line_id) == 0x00, "tty_desc_t.line_id");
+_Static_assert(__builtin_offsetof(tty_desc_t, handler_ptr) == 0x04, "tty_desc_t.handler_ptr");
+_Static_assert(__builtin_offsetof(tty_desc_t, output_flags) == 0x0C, "tty_desc_t.output_flags");
+_Static_assert(__builtin_offsetof(tty_desc_t, reserved_10) == 0x10, "tty_desc_t.reserved_10");
+_Static_assert(__builtin_offsetof(tty_desc_t, reserved_18) == 0x18, "tty_desc_t.reserved_18");
+_Static_assert(__builtin_offsetof(tty_desc_t, reserved_1A) == 0x1A, "tty_desc_t.reserved_1A");
+_Static_assert(__builtin_offsetof(tty_desc_t, echo_flags) == 0x1C, "tty_desc_t.echo_flags");
+_Static_assert(__builtin_offsetof(tty_desc_t, func_enabled) == 0x20, "tty_desc_t.func_enabled");
+_Static_assert(__builtin_offsetof(tty_desc_t, func_chars) == 0x24, "tty_desc_t.func_chars");
+_Static_assert(__builtin_offsetof(tty_desc_t, reserved_36) == 0x36, "tty_desc_t.reserved_36");
+_Static_assert(__builtin_offsetof(tty_desc_t, min_chars) == 0x3A, "tty_desc_t.min_chars");
+_Static_assert(__builtin_offsetof(tty_desc_t, reserved_3C) == 0x3C, "tty_desc_t.reserved_3C");
+_Static_assert(__builtin_offsetof(tty_desc_t, delay) == 0x40, "tty_desc_t.delay");
+_Static_assert(__builtin_offsetof(tty_desc_t, reserved_4A) == 0x4A, "tty_desc_t.reserved_4A");
+_Static_assert(__builtin_offsetof(tty_desc_t, pgroup_uid) == 0x4C, "tty_desc_t.pgroup_uid");
+_Static_assert(__builtin_offsetof(tty_desc_t, session_id) == 0x54, "tty_desc_t.session_id");
+_Static_assert(__builtin_offsetof(tty_desc_t, reserved_5A) == 0x5A, "tty_desc_t.reserved_5A");
+_Static_assert(__builtin_offsetof(tty_desc_t, reserved_2AC) == 0x2AC, "tty_desc_t.reserved_2AC");
+_Static_assert(__builtin_offsetof(tty_desc_t, err_handler) == 0x2B0, "tty_desc_t.err_handler");
+_Static_assert(__builtin_offsetof(tty_desc_t, xmit_callback) == 0x2B4, "tty_desc_t.xmit_callback");
+_Static_assert(__builtin_offsetof(tty_desc_t, status_handler) == 0x2C0, "tty_desc_t.status_handler");
+_Static_assert(__builtin_offsetof(tty_desc_t, last_input_clock_low) == 0x2C8, "tty_desc_t.last_input_clock_low");
+_Static_assert(__builtin_offsetof(tty_desc_t, reserved_4DA) == 0x4DA, "tty_desc_t.reserved_4DA");
+#endif
 
 // Layout recovered from the SAU2 image; see the addresses cited above.
 #if defined(ARCH_M68K)

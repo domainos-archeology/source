@@ -772,4 +772,19 @@ void REM_NAME_$FIND_NETWORK(uid_t *dir_uid, uint32_t *target_node,
 void REM_NAME_$FIND_UID(uid_t *dir_uid, uid_t *target_uid,
                         void *entry_ret, status_$t *status_ret);
 
+/*
+ * NAME_$OLD_DELETE_ENTRYU - Shared delete/drop entry helper
+ *
+ * Handles deletion of directory entries.  Checks entry type (file/link),
+ * verifies ACL rights, deletes the underlying object (file or hard link),
+ * and removes the directory entry.  Only dir/ calls it, and the body lives
+ * in dir/old_delete_entryu.c, but the NAME_$ prefix makes it a name-subsystem
+ * export (moved here from dir/dir_internal.h -- bead source-3uo).
+ *
+ * Original address: 0x00E56B08
+ */
+void NAME_$OLD_DELETE_ENTRYU(uid_t *dir_uid, char *name, uint16_t name_len,
+                             uint8_t flag1, uint8_t flag2, uint8_t flag3,
+                             uint8_t *result_buf, status_$t *status_ret);
+
 #endif /* NAME_H */

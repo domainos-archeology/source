@@ -51,6 +51,11 @@ typedef struct smd_disp_info_result_t {
     uint16_t    height;             /* 0x08: Visible height in pixels */
 } smd_disp_info_result_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(smd_disp_info_result_t, display_type) == 0x00, "smd_disp_info_result_t.display_type");
+#endif
+
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_disp_info_result_t, mem_width) == 0x02, "di mem_w");
 _Static_assert(offsetof(smd_disp_info_result_t, mem_height) == 0x04, "di mem_h");
@@ -101,6 +106,13 @@ typedef struct smd_track_rect_t {
     int16_t     y2;                 /* 0x06: Bottom Y */
 } smd_track_rect_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_track_rect_t, x1) == 0x00, "smd_track_rect_t.x1");
+_Static_assert(__builtin_offsetof(smd_track_rect_t, x2) == 0x02, "smd_track_rect_t.x2");
+_Static_assert(__builtin_offsetof(smd_track_rect_t, y1) == 0x04, "smd_track_rect_t.y1");
+_Static_assert(__builtin_offsetof(smd_track_rect_t, y2) == 0x06, "smd_track_rect_t.y2");
+_Static_assert(sizeof(smd_track_rect_t) == 0x08, "smd_track_rect_t size");
+
 /*
  * Field order recovered from the overlap test SMD_$SHOW_CURSOR runs over the
  * global tracking-rectangle array (0x00E6E2EE .. 0x00E6E304, with A0 pointing
@@ -131,6 +143,13 @@ typedef struct smd_rect_t {
     int16_t     y1;                 /* 0x04: Top Y coordinate */
     int16_t     y2;                 /* 0x06: Bottom Y coordinate */
 } smd_rect_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_rect_t, x1) == 0x00, "smd_rect_t.x1");
+_Static_assert(__builtin_offsetof(smd_rect_t, x2) == 0x02, "smd_rect_t.x2");
+_Static_assert(__builtin_offsetof(smd_rect_t, y1) == 0x04, "smd_rect_t.y1");
+_Static_assert(__builtin_offsetof(smd_rect_t, y2) == 0x06, "smd_rect_t.y2");
+_Static_assert(sizeof(smd_rect_t) == 0x08, "smd_rect_t size");
 
 /*
  * ============================================================================
@@ -819,6 +838,17 @@ typedef struct smd_blt_ctl_t {
     uint16_t    dst_height;     /* 0x18: Destination height (<= 0x3FF) */
 } __attribute__((packed)) smd_blt_ctl_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_blt_ctl_t, src_y) == 0x0A, "smd_blt_ctl_t.src_y");
+_Static_assert(__builtin_offsetof(smd_blt_ctl_t, src_x) == 0x0C, "smd_blt_ctl_t.src_x");
+_Static_assert(__builtin_offsetof(smd_blt_ctl_t, dst_y) == 0x0E, "smd_blt_ctl_t.dst_y");
+_Static_assert(__builtin_offsetof(smd_blt_ctl_t, dst_x) == 0x10, "smd_blt_ctl_t.dst_x");
+_Static_assert(__builtin_offsetof(smd_blt_ctl_t, src_width) == 0x12, "smd_blt_ctl_t.src_width");
+_Static_assert(__builtin_offsetof(smd_blt_ctl_t, src_height) == 0x14, "smd_blt_ctl_t.src_height");
+_Static_assert(__builtin_offsetof(smd_blt_ctl_t, dst_width) == 0x16, "smd_blt_ctl_t.dst_width");
+_Static_assert(__builtin_offsetof(smd_blt_ctl_t, dst_height) == 0x18, "smd_blt_ctl_t.dst_height");
+_Static_assert(sizeof(smd_blt_ctl_t) == 0x1A, "smd_blt_ctl_t size");
+
 /* Valid BLT control register values */
 #define SMD_BLT_CTL_VALID_1     0x02020020
 #define SMD_BLT_CTL_VALID_2     0x02020060
@@ -1344,5 +1374,17 @@ void SMD_$UNMAP_DISPLAY_U(status_$t *status_ret);
  */
 void SMD_$WIRE_MM(uint32_t param_1, uint32_t param_2, uint32_t param_3,
                   status_$t *status_ret);
+
+/*
+ * SMD_$KTT - SMD keyboard translation table (moved here from
+ * kbd/kbd_internal.h -- bead source-3uo).
+ */
+extern uint8_t SMD_$KTT[];
+
+/*
+ * Display status code raised outside the SMD subsystem as well (tpad/):
+ * module 0x13, code 1.
+ */
+#define status_$display_invalid_unit_number 0x00130001
 
 #endif /* SMD_H */

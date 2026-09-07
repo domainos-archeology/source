@@ -64,7 +64,11 @@ extern int16_t tpad_$unit_num_for_init;
  * ============================================================================
  * Status Codes
  * ============================================================================
+ *
+ * status_$display_invalid_unit_number (0x00130001) is a display-subsystem
+ * status code and is defined once in smd/smd.h (included above); the
+ * duplicate compound-literal spelling that used to live here redefined the
+ * macro (bead source-3uo).
  */
-#define status_$display_invalid_unit_number  ((status_$t){0x00130001})
 
 #endif /* TPAD_INTERNAL_H */

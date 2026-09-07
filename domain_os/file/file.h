@@ -177,6 +177,14 @@ typedef struct file_lock_entry_t {
     uint8_t     reserved2[3];   /* 0x19: Padding to 28 bytes */
 } file_lock_entry_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(file_lock_entry_t, data) == 0x00, "file_lock_entry_t.data");
+_Static_assert(__builtin_offsetof(file_lock_entry_t, next_free) == 0x14, "file_lock_entry_t.next_free");
+_Static_assert(__builtin_offsetof(file_lock_entry_t, reserved1) == 0x16, "file_lock_entry_t.reserved1");
+_Static_assert(__builtin_offsetof(file_lock_entry_t, flags) == 0x18, "file_lock_entry_t.flags");
+_Static_assert(__builtin_offsetof(file_lock_entry_t, reserved2) == 0x19, "file_lock_entry_t.reserved2");
+_Static_assert(sizeof(file_lock_entry_t) == 0x1C, "file_lock_entry_t size");
+
 /*
  * File lock table entry structure
  * Size: 300 bytes (0x12C)
@@ -189,6 +197,11 @@ typedef struct file_lock_table_entry_t {
     uint8_t     data[298];      /* 0x02: Lock chain data (cleared during init) */
 } file_lock_table_entry_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(file_lock_table_entry_t, header) == 0x00, "file_lock_table_entry_t.header");
+_Static_assert(__builtin_offsetof(file_lock_table_entry_t, data) == 0x02, "file_lock_table_entry_t.data");
+_Static_assert(sizeof(file_lock_table_entry_t) == 0x12C, "file_lock_table_entry_t size");
+
 /*
  * File lock control block structure
  * Located at 0xE82128 on m68k
@@ -198,11 +211,28 @@ typedef struct file_lock_control_t {
     uint8_t     reserved1[0xb8];    /* 0x00: Reserved/unknown */
     uid_t       base_uid;           /* 0xB8: Base UID (derived from UID_$NIL + NODE_$ME) */
     uid_t       generated_uid;      /* 0xC0: UID generated at init */
-    uint16_t    lock_map[251];      /* 0xC8: Lock mapping table (cleared at init) */
+    uint16_t    lock_map[251];      /* 0xC8: Lock mapping table (cleared at init).
+                                     * FILE_$LOCK_INIT clears 0xFB words from
+                                     * +0xC8 (00e327be `move.w #0xfa,D0w` /
+                                     * `clr.w (0xc8,A0)` / `dbf`), so the array
+                                     * ends at 0x2BD. */
+    uint8_t     reserved_2be[14];   /* 0x2BE: Untouched by FILE_$LOCK_INIT */
     uint16_t    flag_2cc;           /* 0x2CC: Flag (set to 1 at init) */
     uint16_t    lot_free;           /* 0x2CE: FILE_$LOT_FREE - head of free list */
     uint8_t     flag_2d0;           /* 0x2D0: Flag (cleared at init) */
 } file_lock_control_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+_Static_assert(__builtin_offsetof(file_lock_control_t, reserved_2be) == 0x2BE, "file_lock_control_t.reserved_2be");
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(file_lock_control_t, reserved1) == 0x00, "file_lock_control_t.reserved1");
+_Static_assert(__builtin_offsetof(file_lock_control_t, base_uid) == 0xB8, "file_lock_control_t.base_uid");
+_Static_assert(__builtin_offsetof(file_lock_control_t, generated_uid) == 0xC0, "file_lock_control_t.generated_uid");
+_Static_assert(__builtin_offsetof(file_lock_control_t, lock_map) == 0xC8, "file_lock_control_t.lock_map");
+_Static_assert(__builtin_offsetof(file_lock_control_t, flag_2cc) == 0x2CC, "file_lock_control_t.flag_2cc");
+_Static_assert(__builtin_offsetof(file_lock_control_t, lot_free) == 0x2CE, "file_lock_control_t.lot_free");
+_Static_assert(__builtin_offsetof(file_lock_control_t, flag_2d0) == 0x2D0, "file_lock_control_t.flag_2d0");
 
 /*
  * ============================================================================
@@ -427,14 +457,20 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
  *   file_uid   - UID of file
  *   param_2    - Pointer to flags byte (bit 0=check lock, bit 1=check delete, bit 2=skip delete check)
  *   size_ptr   - Pointer to buffer size (must be 0x7A = 122)
- *   uid_out    - Output UID buffer (32 bytes = 8 longs)
- *   attr_out   - Output attribute buffer (structure TBD)
+ *   loc_rec    - 0x20-byte object-location record.  FILE_$GET_ATTR_INFO
+ *                hands its UID field at +0x08 to FILE_$DELETE_INT
+ *                (`pea (0x8,A1)` at 0x00E5D838) and, on success, copies the
+ *                whole record back out of the local descriptor
+ *                AST_$GET_ATTRIBUTES filled (0x00E5D88E, eight longwords)
+ *   attr_out   - Output attribute buffer (0x7A bytes; see
+ *                file/get_attr_info.c for the recovered layout)
  *   status_ret - Receives operation status
  *
  * Original address: 0x00E5D7F4
  */
 void FILE_$GET_ATTR_INFO(uid_t *file_uid, void *param_2, int16_t *size_ptr,
-                         uint32_t *uid_out, void *attr_out, status_$t *status_ret);
+                         file_$obj_loc_t *loc_rec, void *attr_out,
+                         status_$t *status_ret);
 
 /*
  * FILE_$GET_ATTRIBUTES - Get file attributes (full format)
@@ -446,15 +482,17 @@ void FILE_$GET_ATTR_INFO(uid_t *file_uid, void *param_2, int16_t *size_ptr,
  *   param_2    - Pointer to flags
  *   size_ptr   - Pointer to buffer size (must be 0x90 = 144)
  *   loc_rec    - 0x20-byte object-location record; the routine hands its
- *                UID field at +0x08 to file_$vol_of (`pea (0x8,A3)` at
- *                0x00E5D9C2)
+ *                UID field at +0x08 to FILE_$DELETE_INT (`pea (0x8,A3)` at
+ *                0x00E5D9C2) and copies the whole record back out of the
+ *                local descriptor AST_$GET_ATTRIBUTES filled (0x00E5DA30,
+ *                eight longwords)
  *   attr_out   - Output attribute buffer (144 bytes)
  *   status_ret - Receives operation status
  *
  * Original address: 0x00E5D984
  */
 void FILE_$GET_ATTRIBUTES(uid_t *file_uid, void *param_2, int16_t *size_ptr,
-                          uint8_t *loc_rec, void *attr_out,
+                          file_$obj_loc_t *loc_rec, void *attr_out,
                           status_$t *status_ret);
 
 /*

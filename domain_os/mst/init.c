@@ -231,7 +231,7 @@ void MST_$INIT(void)
     }
     MST_$MST_PAGES_LIMIT = (limit >> 5) << 5;
 
-    /* Clear DAT_00e7cf3c (offset 0x30 from MST_$PAGE_AVAIL_BITMAP) */
+    /* Clear MST_$PAGE_ALLOC_HINT (0x00E7CF3C, offset 0x30 from MST_$PAGE_AVAIL_BITMAP) */
     MST_$PAGE_AVAIL_BITMAP[12] = 0;  /* word index 12 = offset 0x30 */
 
     /*

@@ -25,7 +25,7 @@
  *   00e16d86    move.w D0w,(-0x2,A6)      ; save token
  *   00e16d8a    move.l (0x10,A6),-(SP)    ; elem
  *   00e16d8e    pea (A2)                  ; queue
- *   00e16d90    bsr.w FUN_00e16ae8        ; Insert into sorted position
+ *   00e16d90    bsr.w time_$q_insert_sorted   ; Insert into sorted position
  *   00e16d94    addq.w #0x8,SP
  *   00e16d96    tst.b D0b                 ; Check if at head
  *   00e16d98    bpl.b skip_timer_setup

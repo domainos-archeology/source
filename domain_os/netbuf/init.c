@@ -12,7 +12,7 @@
  *   DAT_00e248d8 = 0xd64c00;
  *   sVar1 = 0xbf;  // 191
  *   iVar2 = 0;
- *   piVar3 = &DAT_00e245a8;
+ *   piVar3 = &NETBUF_$DATA;    (was DAT_00e245a8)
  *   do {
  *     iVar2 = iVar2 + 1;
  *     *piVar3 = iVar2;

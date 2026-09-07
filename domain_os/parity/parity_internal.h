@@ -32,14 +32,32 @@ typedef struct parity_state_t {
   uint16_t err_data;      /* 0x12: Data word at error location */
 } parity_state_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(parity_state_t, spurious_count) == 0x00, "parity_state_t.spurious_count");
+_Static_assert(__builtin_offsetof(parity_state_t, chk_in_progress) == 0x02, "parity_state_t.chk_in_progress");
+_Static_assert(__builtin_offsetof(parity_state_t, reserved_03) == 0x03, "parity_state_t.reserved_03");
+_Static_assert(__builtin_offsetof(parity_state_t, err_ppn) == 0x04, "parity_state_t.err_ppn");
+_Static_assert(__builtin_offsetof(parity_state_t, err_pa) == 0x08, "parity_state_t.err_pa");
+_Static_assert(__builtin_offsetof(parity_state_t, err_va) == 0x0C, "parity_state_t.err_va");
+_Static_assert(__builtin_offsetof(parity_state_t, err_status) == 0x10, "parity_state_t.err_status");
+_Static_assert(__builtin_offsetof(parity_state_t, err_data) == 0x12, "parity_state_t.err_data");
+
 /*
  * Log entry structure for parity errors
  */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct parity_log_entry_t {
   uint16_t status;    /* 0x00: Hardware status word */
   uint32_t phys_addr; /* 0x02: Physical address */
   uint32_t virt_addr; /* 0x06: Virtual address */
-} parity_log_entry_t;
+} __attribute__((packed)) parity_log_entry_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(parity_log_entry_t, status) == 0x00, "parity_log_entry_t.status");
+_Static_assert(__builtin_offsetof(parity_log_entry_t, phys_addr) == 0x02, "parity_log_entry_t.phys_addr");
+_Static_assert(__builtin_offsetof(parity_log_entry_t, virt_addr) == 0x06, "parity_log_entry_t.virt_addr");
 
 /*
  * Memory Error Register Bit Definitions
@@ -141,13 +159,24 @@ extern volatile uint16_t *mem_err_status_word;
 #define MEM_PARITY_PAGE_RECORDS 4
 
 /* Memory parity record for tracking errors per page */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct mem_parity_record_t {
   uint32_t phys_addr;   /* 0x00: Physical address */
   uint16_t count;       /* 0x04: Error count for this page */
   uint8_t reserved[12]; /* 0x06: Padding to 0x12 bytes */
-} mem_parity_record_t;
+} __attribute__((packed)) mem_parity_record_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(mem_parity_record_t, phys_addr) == 0x00, "mem_parity_record_t.phys_addr");
+_Static_assert(__builtin_offsetof(mem_parity_record_t, count) == 0x04, "mem_parity_record_t.count");
+_Static_assert(__builtin_offsetof(mem_parity_record_t, reserved) == 0x06, "mem_parity_record_t.reserved");
 
 /* Memory parity log globals structure */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct mem_parity_log_t {
   uint16_t reserved_00[4]; /* 0x00: Reserved */
   uint16_t board1_count;   /* 0x08: Errors on board 1 (< 0x300000) */
@@ -155,7 +184,14 @@ typedef struct mem_parity_log_t {
   uint16_t reserved_0c[3]; /* 0x0C: Reserved */
   mem_parity_record_t
       records[MEM_PARITY_PAGE_RECORDS]; /* 0x12: Per-page records */
-} mem_parity_log_t;
+} __attribute__((packed)) mem_parity_log_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(mem_parity_log_t, reserved_00) == 0x00, "mem_parity_log_t.reserved_00");
+_Static_assert(__builtin_offsetof(mem_parity_log_t, board1_count) == 0x08, "mem_parity_log_t.board1_count");
+_Static_assert(__builtin_offsetof(mem_parity_log_t, board2_count) == 0x0A, "mem_parity_log_t.board2_count");
+_Static_assert(__builtin_offsetof(mem_parity_log_t, reserved_0c) == 0x0C, "mem_parity_log_t.reserved_0c");
+_Static_assert(__builtin_offsetof(mem_parity_log_t, records) == 0x12, "mem_parity_log_t.records");
 
 #if defined(ARCH_M68K)
 #define MEM_PARITY_LOG (*(mem_parity_log_t *)0xE22930)

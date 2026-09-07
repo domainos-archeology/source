@@ -594,4 +594,11 @@ typedef struct pkt_$net_addr_t {
  */
 boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret);
 
+/*
+ * PKT_$DEFAULT_INFO - the 30-byte packet-info template every sender copies
+ * before filling in its own fields.  Declared here (bead source-3uo); the
+ * definition currently lives in asknode/asknode_data.c.
+ */
+extern uint32_t PKT_$DEFAULT_INFO[8];
+
 #endif /* PKT_H */

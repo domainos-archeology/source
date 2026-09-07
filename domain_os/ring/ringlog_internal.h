@@ -102,6 +102,17 @@ typedef struct __attribute__((packed)) ringlog_entry_t {
 
 } ringlog_entry_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+_Static_assert(__builtin_offsetof(ringlog_entry_t, _reserved0) == 0x00, "ringlog_entry_t._reserved0");
+_Static_assert(__builtin_offsetof(ringlog_entry_t, sock_byte1) == 0x02, "ringlog_entry_t.sock_byte1");
+_Static_assert(__builtin_offsetof(ringlog_entry_t, sock_byte2) == 0x03, "ringlog_entry_t.sock_byte2");
+_Static_assert(__builtin_offsetof(ringlog_entry_t, remote_network_id) == 0x04, "ringlog_entry_t.remote_network_id");
+_Static_assert(__builtin_offsetof(ringlog_entry_t, local_network_id_flags) == 0x08, "ringlog_entry_t.local_network_id_flags");
+_Static_assert(__builtin_offsetof(ringlog_entry_t, field_0c) == 0x0C, "ringlog_entry_t.field_0c");
+_Static_assert(__builtin_offsetof(ringlog_entry_t, field_10) == 0x10, "ringlog_entry_t.field_10");
+_Static_assert(__builtin_offsetof(ringlog_entry_t, packet_type) == 0x14, "ringlog_entry_t.packet_type");
+_Static_assert(__builtin_offsetof(ringlog_entry_t, packet_data) == 0x16, "ringlog_entry_t.packet_data");
+
 /*
  * Verify structure size at compile time
  */
@@ -120,6 +131,10 @@ typedef struct ringlog_buffer_t {
     int16_t             current_index;              /* 0x00: Next entry to write (0-99) */
     ringlog_entry_t     entries[RINGLOG_MAX_ENTRIES]; /* 0x02: Entry array */
 } ringlog_buffer_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(ringlog_buffer_t, current_index) == 0x00, "ringlog_buffer_t.current_index");
+_Static_assert(__builtin_offsetof(ringlog_buffer_t, entries) == 0x02, "ringlog_buffer_t.entries");
 
 /* ringlog_ctl_t and RINGLOG_$CTL are declared in ring/ringlog.h so that
  * ROUTE_$PROCESS can test RING_$LOGGING_NOW (0x00E2C364) without reaching

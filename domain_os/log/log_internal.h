@@ -26,6 +26,10 @@ typedef struct log_buffer_header_t {
     /* Entry data follows */
 } log_buffer_header_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(log_buffer_header_t, head) == 0x00, "log_buffer_header_t.head");
+_Static_assert(__builtin_offsetof(log_buffer_header_t, tail) == 0x02, "log_buffer_header_t.tail");
+
 /*
  * Log entry header structure
  *
@@ -37,6 +41,11 @@ typedef struct log_entry_header_t {
     uint32_t    timestamp;          /* 0x04: Timestamp from TIME_$CURRENT_CLOCKH */
     /* Entry data follows at offset 0x08 */
 } log_entry_header_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(log_entry_header_t, size) == 0x00, "log_entry_header_t.size");
+_Static_assert(__builtin_offsetof(log_entry_header_t, type) == 0x02, "log_entry_header_t.type");
+_Static_assert(__builtin_offsetof(log_entry_header_t, timestamp) == 0x04, "log_entry_header_t.timestamp");
 
 /* =============================================================================
  * Early Log Buffer Structure
@@ -53,6 +62,10 @@ typedef struct early_log_t {
     uint8_t     data[8];            /* 0x04: Crash/boot data */
 } early_log_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(early_log_t, magic) == 0x00, "early_log_t.magic");
+_Static_assert(__builtin_offsetof(early_log_t, data) == 0x04, "early_log_t.data");
+
 /* Additional early log at 0x00e0000c */
 typedef struct early_log_extended_t {
     uint32_t    magic;              /* 0x00: LOG_PENDING_MAGIC if valid */
@@ -61,6 +74,13 @@ typedef struct early_log_extended_t {
     uint32_t    timestamp;          /* 0x08: Timestamp */
     uint8_t     data[8];            /* 0x0c: Log data */
 } early_log_extended_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(early_log_extended_t, magic) == 0x00, "early_log_extended_t.magic");
+_Static_assert(__builtin_offsetof(early_log_extended_t, data_len) == 0x04, "early_log_extended_t.data_len");
+_Static_assert(__builtin_offsetof(early_log_extended_t, type) == 0x06, "early_log_extended_t.type");
+_Static_assert(__builtin_offsetof(early_log_extended_t, timestamp) == 0x08, "early_log_extended_t.timestamp");
+_Static_assert(__builtin_offsetof(early_log_extended_t, data) == 0x0C, "early_log_extended_t.data");
 
 /* =============================================================================
  * Global State

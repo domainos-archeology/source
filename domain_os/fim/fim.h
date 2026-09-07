@@ -58,24 +58,41 @@
  * m68010 exception frame - varies by format
  * Format code is in bits 15:12 of the status register extension word
  */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct fim_exception_frame_t {
     uint16_t    sr;             /* 0x00: Status register */
     uint32_t    pc;             /* 0x02: Program counter */
     uint16_t    format_vector;  /* 0x06: Format code (bits 15:12) and vector (bits 11:0) */
     /* Additional words depend on format code - see frame tables */
-} fim_exception_frame_t;
+} __attribute__((packed)) fim_exception_frame_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(fim_exception_frame_t, sr) == 0x00, "fim_exception_frame_t.sr");
+_Static_assert(__builtin_offsetof(fim_exception_frame_t, pc) == 0x02, "fim_exception_frame_t.pc");
+_Static_assert(__builtin_offsetof(fim_exception_frame_t, format_vector) == 0x06, "fim_exception_frame_t.format_vector");
 
 /*
  * Long bus cycle fault frame (format 0xB, 68010)
  * This is the largest exception frame format
  */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct fim_long_bus_frame_t {
     uint16_t    sr;             /* 0x00: Status register */
     uint32_t    pc;             /* 0x02: Program counter */
     uint16_t    format_vector;  /* 0x06: Format/vector word */
     uint16_t    ssw;            /* 0x08: Special status word */
     /* Additional fields for address, data, etc. */
-} fim_long_bus_frame_t;
+} __attribute__((packed)) fim_long_bus_frame_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(fim_long_bus_frame_t, sr) == 0x00, "fim_long_bus_frame_t.sr");
+_Static_assert(__builtin_offsetof(fim_long_bus_frame_t, pc) == 0x02, "fim_long_bus_frame_t.pc");
+_Static_assert(__builtin_offsetof(fim_long_bus_frame_t, format_vector) == 0x06, "fim_long_bus_frame_t.format_vector");
+_Static_assert(__builtin_offsetof(fim_long_bus_frame_t, ssw) == 0x08, "fim_long_bus_frame_t.ssw");
 
 /*
  * FIM delivery frame - created on user stack for fault delivery
@@ -84,11 +101,14 @@ typedef struct fim_long_bus_frame_t {
  * This structure is built by FIM_$BUILD_DF and contains all the
  * context needed to deliver a fault to user mode.
  */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct fim_delivery_frame_t {
     uint16_t    magic;          /* 0x00: Magic number 0xDFDF */
     uint32_t    status;         /* 0x02: Fault status code */
     /* 0x06-0x41: Saved registers D0-D7, A0-A6 (15 longs = 60 bytes) */
-    uint32_t    regs[15];       /* D0-D7, A0-A5, A6 */
+    uint32_t    regs[15];       /* 0x06: D0-D7, A0-A5, A6 */
     uint32_t    pc;             /* 0x42: Saved PC */
     uint32_t    fault_info1;    /* 0x46: Fault-specific info */
     uint32_t    fault_info2;    /* 0x4A: Fault-specific info */
@@ -102,7 +122,25 @@ typedef struct fim_delivery_frame_t {
     uint16_t    param3;         /* 0x60: Signal parameter 3 */
     uint32_t    param4;         /* 0x62: Signal parameter 4 */
     uint32_t    user_pc;        /* 0x66: User program counter */
-} fim_delivery_frame_t;
+} __attribute__((packed)) fim_delivery_frame_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, magic) == 0x00, "fim_delivery_frame_t.magic");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, status) == 0x02, "fim_delivery_frame_t.status");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, regs) == 0x06, "fim_delivery_frame_t.regs");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, pc) == 0x42, "fim_delivery_frame_t.pc");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, fault_info1) == 0x46, "fim_delivery_frame_t.fault_info1");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, fault_info2) == 0x4A, "fim_delivery_frame_t.fault_info2");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, flags) == 0x4E, "fim_delivery_frame_t.flags");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, version) == 0x4F, "fim_delivery_frame_t.version");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, reserved1) == 0x50, "fim_delivery_frame_t.reserved1");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, orig_sr) == 0x54, "fim_delivery_frame_t.orig_sr");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, orig_pc) == 0x56, "fim_delivery_frame_t.orig_pc");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, orig_sr2) == 0x5A, "fim_delivery_frame_t.orig_sr2");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, fp_save_ptr) == 0x5C, "fim_delivery_frame_t.fp_save_ptr");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, param3) == 0x60, "fim_delivery_frame_t.param3");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, param4) == 0x62, "fim_delivery_frame_t.param4");
+_Static_assert(__builtin_offsetof(fim_delivery_frame_t, user_pc) == 0x66, "fim_delivery_frame_t.user_pc");
 
 /*
  * FIM per-process cleanup handler entry
@@ -123,6 +161,10 @@ typedef struct fim_regs_t {
     uint32_t    usp;            /* User stack pointer */
 } fim_regs_t;
 
+/* No offsets were recovered for fim_regs_t -- it is a plain register save
+ * area whose layout follows from the declared widths -- so it carries no
+ * layout _Static_asserts. */
+
 /*
  * Signal context structure (BSD m68k sigcontext)
  *
@@ -139,6 +181,15 @@ typedef struct sigcontext_t {
     uint32_t    sc_pc;          /* 0x14: Program counter */
     uint16_t    sc_ps;          /* 0x18: Status register */
 } sigcontext_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(sigcontext_t, sc_onstack) == 0x00, "sigcontext_t.sc_onstack");
+_Static_assert(__builtin_offsetof(sigcontext_t, sc_mask) == 0x04, "sigcontext_t.sc_mask");
+_Static_assert(__builtin_offsetof(sigcontext_t, sc_sp) == 0x08, "sigcontext_t.sc_sp");
+_Static_assert(__builtin_offsetof(sigcontext_t, sc_fp) == 0x0C, "sigcontext_t.sc_fp");
+_Static_assert(__builtin_offsetof(sigcontext_t, sc_ap) == 0x10, "sigcontext_t.sc_ap");
+_Static_assert(__builtin_offsetof(sigcontext_t, sc_pc) == 0x14, "sigcontext_t.sc_pc");
+_Static_assert(__builtin_offsetof(sigcontext_t, sc_ps) == 0x18, "sigcontext_t.sc_ps");
 
 /*
  * ============================================================================
@@ -621,6 +672,11 @@ typedef struct fim_fault_desc_t {
     uint16_t    signal;         /* 0x04: BSD signal number (SIGBUS=10, SIGSEGV=11) */
     uint16_t    fault_class;    /* 0x06: 0x3000 for memory access faults */
 } __attribute__((packed)) fim_fault_desc_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+_Static_assert(__builtin_offsetof(fim_fault_desc_t, status) == 0x00, "fim_fault_desc_t.status");
+_Static_assert(__builtin_offsetof(fim_fault_desc_t, signal) == 0x04, "fim_fault_desc_t.signal");
+_Static_assert(__builtin_offsetof(fim_fault_desc_t, fault_class) == 0x06, "fim_fault_desc_t.fault_class");
 
 #if defined(ARCH_M68K)
 _Static_assert(sizeof(fim_fault_desc_t) == 8, "fim_fault_desc_t must be 8 bytes");

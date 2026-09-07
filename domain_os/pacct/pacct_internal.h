@@ -45,6 +45,17 @@ typedef struct pacct_state_t {
     uint32_t    file_pos;       /* 0x1C: Current file position/length */
 } pacct_state_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(pacct_state_t, owner) == 0x00, "pacct_state_t.owner");
+_Static_assert(__builtin_offsetof(pacct_state_t, lock_handle) == 0x08, "pacct_state_t.lock_handle");
+_Static_assert(__builtin_offsetof(pacct_state_t, buf_remaining) == 0x0C, "pacct_state_t.buf_remaining");
+_Static_assert(__builtin_offsetof(pacct_state_t, write_ptr) == 0x10, "pacct_state_t.write_ptr");
+_Static_assert(__builtin_offsetof(pacct_state_t, map_offset) == 0x14, "pacct_state_t.map_offset");
+_Static_assert(__builtin_offsetof(pacct_state_t, file_pos) == 0x1C, "pacct_state_t.file_pos");
+_Static_assert(sizeof(pacct_state_t) == 0x20, "pacct_state_t size");
+#endif
+
 /*
  * Global accounting state
  */

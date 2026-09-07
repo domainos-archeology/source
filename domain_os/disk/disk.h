@@ -88,6 +88,18 @@ typedef struct {
   uint16_t flags;       /* +0x0a: Device flags */
 } disk_device_entry_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(disk_device_entry_t, jump_table) == 0x00, "disk_device_entry_t.jump_table");
+_Static_assert(__builtin_offsetof(disk_device_entry_t, device_type) == 0x04, "disk_device_entry_t.device_type");
+_Static_assert(__builtin_offsetof(disk_device_entry_t, controller) == 0x06, "disk_device_entry_t.controller");
+_Static_assert(__builtin_offsetof(disk_device_entry_t, unit_count) == 0x08, "disk_device_entry_t.unit_count");
+_Static_assert(__builtin_offsetof(disk_device_entry_t, flags) == 0x0A, "disk_device_entry_t.flags");
+/* Stride 0x0C, 32 entries: DISK_$REGISTER walks the table with
+ * `lea (0xc,A0),A0` / `moveq #0x1f,D1` / `dbf` (00e3d9e8..00e3da0e). */
+_Static_assert(sizeof(disk_device_entry_t) == 0x0C, "disk_device_entry_t size");
+#endif
+
 /*
  * Device jump table structure
  *
@@ -106,6 +118,14 @@ typedef struct {
   void *_reserved3; /* +0x0c */
   void *do_io;      /* +0x10: I/O function */
 } disk_jump_table_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(disk_jump_table_t, _reserved1) == 0x00, "disk_jump_table_t._reserved1");
+_Static_assert(__builtin_offsetof(disk_jump_table_t, dinit) == 0x08, "disk_jump_table_t.dinit");
+_Static_assert(__builtin_offsetof(disk_jump_table_t, _reserved3) == 0x0C, "disk_jump_table_t._reserved3");
+_Static_assert(__builtin_offsetof(disk_jump_table_t, do_io) == 0x10, "disk_jump_table_t.do_io");
+#endif
 
 /*
  * Global data areas

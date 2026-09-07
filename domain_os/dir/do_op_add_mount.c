@@ -115,7 +115,7 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
     desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
     /* Check directory attributes - verify it's not locked (0x00E53306) */
-    AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, DIR_CATTR_MOUNT, &cattr,
+    AST_$GET_COMMON_ATTRIBUTES(&desc, DIR_CATTR_MOUNT, &cattr,
                                status_ret);
     if (*status_ret != status_$ok) {
         goto cleanup;

@@ -113,7 +113,6 @@ sio2681_global_data_t SIO2681_$DATA = {
         0x0C,  /* 15: 19200 baud */
         0x0D,  /* 16: 38400 baud */
     },
-    .pad_95 = 0x00,
 };
 
 /*

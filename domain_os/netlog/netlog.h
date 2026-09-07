@@ -48,6 +48,9 @@
  * Each log entry contains a kind, process ID, timestamp, UID,
  * and up to 6 additional parameters.
  */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct netlog_entry_t {
     uint8_t     kind;           /* 0x00: Log entry type/category */
     uint8_t     process_id;     /* 0x01: Process ID that generated entry */
@@ -61,7 +64,21 @@ typedef struct netlog_entry_t {
     uint16_t    param6;         /* 0x14: Parameter 6 */
     uint16_t    param7;         /* 0x16: Parameter 7 */
     uint16_t    param8;         /* 0x18: Parameter 8 */
-} netlog_entry_t;
+} __attribute__((packed)) netlog_entry_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(netlog_entry_t, kind) == 0x00, "netlog_entry_t.kind");
+_Static_assert(__builtin_offsetof(netlog_entry_t, process_id) == 0x01, "netlog_entry_t.process_id");
+_Static_assert(__builtin_offsetof(netlog_entry_t, timestamp) == 0x02, "netlog_entry_t.timestamp");
+_Static_assert(__builtin_offsetof(netlog_entry_t, uid_high) == 0x06, "netlog_entry_t.uid_high");
+_Static_assert(__builtin_offsetof(netlog_entry_t, uid_low) == 0x0A, "netlog_entry_t.uid_low");
+_Static_assert(__builtin_offsetof(netlog_entry_t, param3) == 0x0E, "netlog_entry_t.param3");
+_Static_assert(__builtin_offsetof(netlog_entry_t, param4) == 0x10, "netlog_entry_t.param4");
+_Static_assert(__builtin_offsetof(netlog_entry_t, _pad) == 0x11, "netlog_entry_t._pad");
+_Static_assert(__builtin_offsetof(netlog_entry_t, param5) == 0x12, "netlog_entry_t.param5");
+_Static_assert(__builtin_offsetof(netlog_entry_t, param6) == 0x14, "netlog_entry_t.param6");
+_Static_assert(__builtin_offsetof(netlog_entry_t, param7) == 0x16, "netlog_entry_t.param7");
+_Static_assert(__builtin_offsetof(netlog_entry_t, param8) == 0x18, "netlog_entry_t.param8");
 
 /* Entries per page: 39 (0x27) */
 #define NETLOG_ENTRIES_PER_PAGE     39

@@ -54,7 +54,7 @@
 typedef struct {
   uint16_t seg_tn;        /* 0x148: Total number of segments */
   uint16_t global_b_size; /* 0x14a: Size of global B region */
-  uint16_t _reserved_14c;
+  uint16_t _reserved_14c;        /* 0x14c: written 0x7e0 by MST_$PRE_INIT */
   uint16_t seg_global_b;         /* 0x14e: First segment in global B */
   uint16_t seg_global_b_offset;  /* 0x150: Offset for global B mapping */
   uint16_t seg_high;             /* 0x152: Highest segment number */
@@ -69,6 +69,44 @@ typedef struct {
 } mst_config_t;
 
 /*
+ * The comment offsets above are MST module-data offsets (A5-relative), not
+ * offsets within this record: MST_$PRE_INIT writes the 14 config words to the
+ * absolute addresses 0xE2444A..0xE24464 (00e30a04..00e30a6c), so the record
+ * begins at module offset MST_CONFIG_BASE_OFF and each _Static_assert
+ * subtracts that base.
+ */
+#define MST_CONFIG_BASE_OFF 0x148
+_Static_assert(__builtin_offsetof(mst_config_t, seg_tn) == 0x148 - MST_CONFIG_BASE_OFF,
+               "mst_config_t.seg_tn");
+_Static_assert(__builtin_offsetof(mst_config_t, global_b_size) == 0x14A - MST_CONFIG_BASE_OFF,
+               "mst_config_t.global_b_size");
+_Static_assert(__builtin_offsetof(mst_config_t, _reserved_14c) == 0x14C - MST_CONFIG_BASE_OFF,
+               "mst_config_t._reserved_14c");
+_Static_assert(__builtin_offsetof(mst_config_t, seg_global_b) == 0x14E - MST_CONFIG_BASE_OFF,
+               "mst_config_t.seg_global_b");
+_Static_assert(__builtin_offsetof(mst_config_t, seg_global_b_offset) == 0x150 - MST_CONFIG_BASE_OFF,
+               "mst_config_t.seg_global_b_offset");
+_Static_assert(__builtin_offsetof(mst_config_t, seg_high) == 0x152 - MST_CONFIG_BASE_OFF,
+               "mst_config_t.seg_high");
+_Static_assert(__builtin_offsetof(mst_config_t, seg_private_b) == 0x154 - MST_CONFIG_BASE_OFF,
+               "mst_config_t.seg_private_b");
+_Static_assert(__builtin_offsetof(mst_config_t, seg_private_b_end) == 0x156 - MST_CONFIG_BASE_OFF,
+               "mst_config_t.seg_private_b_end");
+_Static_assert(__builtin_offsetof(mst_config_t, private_a_size) == 0x158 - MST_CONFIG_BASE_OFF,
+               "mst_config_t.private_a_size");
+_Static_assert(__builtin_offsetof(mst_config_t, seg_private_a_end) == 0x15A - MST_CONFIG_BASE_OFF,
+               "mst_config_t.seg_private_a_end");
+_Static_assert(__builtin_offsetof(mst_config_t, seg_global_a) == 0x15C - MST_CONFIG_BASE_OFF,
+               "mst_config_t.seg_global_a");
+_Static_assert(__builtin_offsetof(mst_config_t, global_a_size) == 0x15E - MST_CONFIG_BASE_OFF,
+               "mst_config_t.global_a_size");
+_Static_assert(__builtin_offsetof(mst_config_t, seg_global_a_end) == 0x160 - MST_CONFIG_BASE_OFF,
+               "mst_config_t.seg_global_a_end");
+_Static_assert(__builtin_offsetof(mst_config_t, seg_private_b_offset) == 0x162 - MST_CONFIG_BASE_OFF,
+               "mst_config_t.seg_private_b_offset");
+_Static_assert(sizeof(mst_config_t) == 0x1C, "mst_config_t size (14 words)");
+
+/*
  * MST entry - describes a single segment mapping
  * Each entry is 16 bytes and describes the mapping for one segment
  */
@@ -79,6 +117,13 @@ typedef struct {
   uint8_t page_info;    /* 0x0c: Page count info */
   uint8_t _reserved[3]; /* 0x0d-0x0f */
 } mst_entry_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(mst_entry_t, uid) == 0x00, "mst_entry_t.uid");
+_Static_assert(__builtin_offsetof(mst_entry_t, area_id) == 0x08, "mst_entry_t.area_id");
+_Static_assert(__builtin_offsetof(mst_entry_t, flags) == 0x0A, "mst_entry_t.flags");
+_Static_assert(__builtin_offsetof(mst_entry_t, page_info) == 0x0C, "mst_entry_t.page_info");
+_Static_assert(__builtin_offsetof(mst_entry_t, _reserved) == 0x0D, "mst_entry_t._reserved");
 
 /*
  * MSTE flags field bits

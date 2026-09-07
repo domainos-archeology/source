@@ -59,6 +59,9 @@
 // Paging Counters Structure (returned by MMAP_FLAG_GET_COUNTERS)
 // Offset 0x00 in param_2, 0x42 bytes total
 // =============================================================================
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct osinfo_paging_counters {
   uint32_t pur_l_cnt;        // 0x00: Local purge count
   uint32_t pur_r_cnt;        // 0x04: Remote purge count
@@ -77,7 +80,27 @@ typedef struct osinfo_paging_counters {
   uint32_t reclaim_pur_cnt;  // 0x38: Purge reclaim count
   uint32_t ws_remove;        // 0x3C: Working set remove count
   uint16_t scan_fract;       // 0x40: Scan fraction
-} osinfo_paging_counters_t;
+} __attribute__((packed)) osinfo_paging_counters_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, pur_l_cnt) == 0x00, "osinfo_paging_counters_t.pur_l_cnt");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, pur_r_cnt) == 0x04, "osinfo_paging_counters_t.pur_r_cnt");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, page_flt_cnt) == 0x08, "osinfo_paging_counters_t.page_flt_cnt");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, ws_flt_cnt) == 0x0C, "osinfo_paging_counters_t.ws_flt_cnt");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, t_pur_scans) == 0x10, "osinfo_paging_counters_t.t_pur_scans");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, alloc_cnt) == 0x14, "osinfo_paging_counters_t.alloc_cnt");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, alloc_pages) == 0x18, "osinfo_paging_counters_t.alloc_pages");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, steal_cnt) == 0x1C, "osinfo_paging_counters_t.steal_cnt");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, ws_overflow) == 0x20, "osinfo_paging_counters_t.ws_overflow");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, ws_scan_cnt) == 0x24, "osinfo_paging_counters_t.ws_scan_cnt");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, reserved_28) == 0x28, "osinfo_paging_counters_t.reserved_28");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, ast_alloc_cnt) == 0x2C, "osinfo_paging_counters_t.ast_alloc_cnt");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, alloc_too_few) == 0x30, "osinfo_paging_counters_t.alloc_too_few");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, reclaim_shar_cnt) == 0x34, "osinfo_paging_counters_t.reclaim_shar_cnt");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, reclaim_pur_cnt) == 0x38, "osinfo_paging_counters_t.reclaim_pur_cnt");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, ws_remove) == 0x3C, "osinfo_paging_counters_t.ws_remove");
+_Static_assert(__builtin_offsetof(osinfo_paging_counters_t, scan_fract) == 0x40, "osinfo_paging_counters_t.scan_fract");
+_Static_assert(sizeof(osinfo_paging_counters_t) == 0x42, "osinfo_paging_counters_t size");
 
 // =============================================================================
 // Global Memory Info Structure (returned by MMAP_FLAG_GET_GLOBAL)
@@ -93,10 +116,32 @@ typedef struct osinfo_global_info {
   uint16_t pid;                  // 0x24: Process ID (from GET_PID)
   uint16_t set_op;               // 0x26: Set operation code
   uint32_t set_value;            // 0x28: Set operation value
-  uint32_t reserved_2C;          // 0x2C: Reserved
+  // 0x28 is read and written as a longword (00e5c6fc / 00e5c7d6), 0x2E and
+  // 0x30 as words (00e5c6f0, 00e5c95c), so only a single word sits at 0x2C.
+  uint16_t reserved_2C;          // 0x2C: Reserved
   uint16_t asid;                 // 0x2E: Address space ID
   uint16_t ws_list_count;        // 0x30: Working set list count
 } osinfo_global_info_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, real_pages) == 0x00, "osinfo_global_info_t.real_pages");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, pageable_lower_limit) == 0x04, "osinfo_global_info_t.pageable_lower_limit");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, remote_pages) == 0x08, "osinfo_global_info_t.remote_pages");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, ws_data) == 0x0C, "osinfo_global_info_t.ws_data");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, ws_interval) == 0x20, "osinfo_global_info_t.ws_interval");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, wsl_hi_mark) == 0x22, "osinfo_global_info_t.wsl_hi_mark");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, pid) == 0x24, "osinfo_global_info_t.pid");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, set_op) == 0x26, "osinfo_global_info_t.set_op");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, set_value) == 0x28, "osinfo_global_info_t.set_value");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, reserved_2C) == 0x2C, "osinfo_global_info_t.reserved_2C");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, asid) == 0x2E, "osinfo_global_info_t.asid");
+_Static_assert(__builtin_offsetof(osinfo_global_info_t, ws_list_count) == 0x30, "osinfo_global_info_t.ws_list_count");
+/* m68k rounds struct size to 2 bytes (a host rounds to 4), so the sizeof
+ * check is target-specific; every offset above is checked unconditionally. */
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(osinfo_global_info_t) == 0x32,
+               "osinfo_global_info_t: fields end at 0x31 (ws_list_count)");
+#endif
 
 // =============================================================================
 // Function Declarations

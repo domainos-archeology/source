@@ -98,11 +98,6 @@ pkt_$data_t PKT_$DATA_STRUCT = {
  * These are defined elsewhere in the kernel but needed by PKT functions.
  */
 
-#if !defined(ARCH_M68K)
-
-/* NODE_$ME (0xE245A4) is defined in uid/uid_data.c */
-
-/* Network loopback flag - normally defined in network/network_data.c */
-int8_t NETWORK_$LOOPBACK_FLAG = 0;
-
-#endif /* !M68K */
+/* NODE_$ME (0xE245A4) is defined in uid/uid_data.c.
+ * NETWORK_$LOOPBACK_FLAG is defined in network/network_data.c; the duplicate
+ * host-only definition that used to live here was removed (bead source-3uo). */

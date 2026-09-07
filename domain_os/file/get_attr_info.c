@@ -1,194 +1,283 @@
 /*
- * FILE_$GET_ATTR_INFO - Get file attribute info (compact format)
+ * FILE_$GET_ATTR_INFO - Get file attributes in the compact 0x7A-byte format
  *
- * Returns file attributes in a compact 122-byte format (0x7A).
- * Checks lock status if requested via param_2 flags.
+ * Original address: 0x00E5D7F4, 400 bytes.
  *
- * Original address: 0x00E5D7F4
+ * Frame (`link.w A6,-0xb8`, `movem.l {A5 A4 A3 A2 D3 D2},-(SP)`):
+ *   A5 = 0xE82128 = FILE_$LOCK_CONTROL, established at 0x00E5D7FC but never
+ *        dereferenced by this routine.
+ *   A6+0x08  file_uid    caller's object UID
+ *   A6+0x0C  param_2     (A0) pointer to the two-byte request word
+ *   A6+0x10  size_ptr    pointer to the caller's buffer size word
+ *   A6+0x14  loc_rec     (D2) the caller's 0x20-byte object-location record
+ *   A6+0x18  attr_out    (A2) the caller's 0x7A-byte compact record
+ *   A6+0x1C  status_ret  (A3)
+ *
+ *   A6-0xB8  uint8_t   lock_info[2]   FILE_$DELETE_INT's third argument
+ *   A6-0xB6  uint16_t  flags          AST_$GET_ATTRIBUTES' flag word
+ *   A6-0xB4  status_$t status
+ *   A6-0xB0  uint8_t   attrs[0x90]    the full attribute record; a listing
+ *                                     displacement d is record offset d+0xB0
+ *   A6-0x20  file_$obj_loc_t desc     UID at A6-0x18, flags byte at A6-0x03
  */
 
 #include "file/file_internal.h"
 
 /*
- * Compact attribute output structure
- *
- * This is a repackaged version of the full 144-byte attributes
- * into a more compact 122-byte (0x7A) format.
- *
- * The exact layout is complex - this is a best-effort reconstruction
- * based on the decompiled code.
+ * Bits tested in the request word (`btst.b #n,(0x1,A0)` at 0x00E5D812,
+ * 0x00E5D81A and 0x00E5D822 - the second byte of a big-endian word is its low
+ * byte) - the same three-way dispatch FILE_$GET_ATTRIBUTES uses.
  */
-typedef struct compact_attr_t {
-    uint32_t flags;          /* 0x00: Repackaged flags */
-    uint8_t  data1[24];      /* 0x04: Attribute data from offset 0x04 */
-    uint32_t times[6];       /* 0x1C: Time values */
-    uint8_t  data2[16];      /* 0x34: More attribute data */
-    uint8_t  data3[28];      /* 0x44: Extended attribute data */
-    uint8_t  reserved[18];   /* 0x60: Reserved/padding */
-    uint8_t  byte_6a;        /* 0x6A: Single byte field */
-    uint8_t  padding[3];     /* 0x6B: Padding */
-    uint32_t data4[3];       /* 0x6E: Final data fields */
-} compact_attr_t;
+#define FILE_ATTR_INFO_REQ_LOCKED   0x01    /* bit 0 */
+#define FILE_ATTR_INFO_REQ_NO_PROBE 0x04    /* bit 2 */
+#define FILE_ATTR_INFO_REQ_PROBE    0x02    /* bit 1 */
+
+/* `move.w #0x1` / `#0x21` at 0x00E5D848 / 0x00E5D850. */
+#define FILE_ATTR_INFO_FLAGS_LOCKED 0x0001
+#define FILE_ATTR_INFO_FLAGS_NORMAL 0x0021
 
 /*
- * FILE_$GET_ATTR_INFO
- *
- * Gets file attributes in compact format.
- *
- * Parameters:
- *   file_uid   - UID of file
- *   param_2    - Pointer to flags byte
- *   size_ptr   - Pointer to expected buffer size (must be 0x7A = 122)
- *   uid_out    - Output buffer for returned UID (32 bytes = 8 longs)
- *   attr_out   - Output buffer for compact attributes (122 bytes)
- *   status_ret - Receives operation status
- *
- * Flag bits in param_2[1]:
- *   - Bit 0: Check if file is locked
- *   - Bit 1: Check delete status
- *   - Bit 2: Skip delete check
+ * The 0x7A-byte compact record this routine builds, recovered store by store
+ * from 0x00E5D8B0-0x00E5D978.  Every displacement below is the A2 offset in
+ * the listing; the three byte ranges the record never writes (0x34, 0x6B-0x6D
+ * and the alignment holes) are spelled out so the layout is exact.
  */
+typedef struct __attribute__((packed, aligned(2))) file_$attr_info_t {
+    uint8_t  obj_flags[4];  /* 0x00: attrs+0x00 masked with 0x00FF1F06.  Kept
+                             * as four bytes rather than a longword because
+                             * the routine goes on to do bit surgery on
+                             * record+0x02 and +0x03 individually, which only
+                             * lines up with the image's longword if the bytes
+                             * are placed big-endian by hand. */
+    /* obj_flags[2] (record+0x02) is rewritten bit by bit:
+     *   bit 1 <- attrs+0x65 bit 7 (0x00E5D8BC-0x00E5D8CC)
+     *   bit 0 <- attrs+0x65 bit 5 (0x00E5D950-0x00E5D962)
+     * and record+0x03 bit 7 <- attrs+0x65 bit 4 (0x00E5D964-0x00E5D976).
+     * They are addressed as bytes because the mask leaves the rest alone. */
+    uint8_t  name[24];      /* 0x04: attrs+0x04, 24 bytes (0x00E5D8D0) */
+    uint32_t dtu_high;      /* 0x1C: attrs+0x3C (0x00E5D8E0) */
+    uint32_t dtu_low;       /* 0x20: attrs+0x40 */
+    uint32_t dtm_high;      /* 0x24: attrs+0x1C (0x00E5D8EC) */
+    uint16_t dtm_low;       /* 0x28: attrs+0x20 (0x00E5D8F2) */
+    uint16_t pad_2a;        /* 0x2A: never written */
+    uint32_t dtc_high;      /* 0x2C: attrs+0x24 (0x00E5D8F8) */
+    uint16_t dtc_low;       /* 0x30: attrs+0x28 (0x00E5D8FE) */
+    uint16_t devno;         /* 0x32: attrs+0x76 (0x00E5D904) - PACCT_$LOG
+                             * reads this word back as the TTY device number */
+    uint16_t pad_34;        /* 0x34: never written */
+    uint32_t blocks;        /* 0x36: attrs+0x34 (0x00E5D90A) */
+    uint16_t blocks_low;    /* 0x3A: attrs+0x38 (0x00E5D910) */
+    uint16_t refcount;      /* 0x3C: attrs+0x74 (0x00E5D916) */
+    uint8_t  uids[16];      /* 0x3E: attrs+0x78, 16 bytes (0x00E5D91C) */
+    uint8_t  acl[28];       /* 0x4E: attrs+0x48, 28 bytes (0x00E5D92C) */
+    uint8_t  access_mode;   /* 0x6A: attrs+0x64 (0x00E5D93C) */
+    uint8_t  pad_6b[3];     /* 0x6B: never written */
+    uint32_t tail[3];       /* 0x6E: attrs+0x68/0x6C/0x70 (0x00E5D942) */
+} file_$attr_info_t;
+
+_Static_assert(offsetof(file_$attr_info_t, obj_flags) == 0x00, "attr_info.obj_flags");
+_Static_assert(offsetof(file_$attr_info_t, name)     == 0x04, "attr_info.name");
+_Static_assert(offsetof(file_$attr_info_t, dtu_high) == 0x1C, "attr_info.dtu_high");
+_Static_assert(offsetof(file_$attr_info_t, dtm_high) == 0x24, "attr_info.dtm_high");
+_Static_assert(offsetof(file_$attr_info_t, devno)    == 0x32, "attr_info.devno");
+_Static_assert(offsetof(file_$attr_info_t, blocks)   == 0x36, "attr_info.blocks");
+_Static_assert(offsetof(file_$attr_info_t, refcount) == 0x3C, "attr_info.refcount");
+_Static_assert(offsetof(file_$attr_info_t, uids)     == 0x3E, "attr_info.uids");
+_Static_assert(offsetof(file_$attr_info_t, acl)      == 0x4E, "attr_info.acl");
+_Static_assert(offsetof(file_$attr_info_t, access_mode) == 0x6A, "attr_info.access_mode");
+_Static_assert(offsetof(file_$attr_info_t, tail)     == 0x6E, "attr_info.tail");
+_Static_assert(sizeof(file_$attr_info_t) == FILE_ATTR_INFO_SIZE, "sizeof attr_info");
+
+/*
+ * Offsets into the 0x90-byte attribute record.  Each is the listing's A6
+ * displacement plus 0xB0.
+ */
+#define ATTR_TYPE_FLAGS     0x00    /* -0xB0 */
+#define ATTR_NAME           0x04    /* -0xAC */
+#define ATTR_DTM_HIGH       0x1C    /* -0x94 */
+#define ATTR_DTM_LOW        0x20    /* -0x90 */
+#define ATTR_DTC_HIGH       0x24    /* -0x8C */
+#define ATTR_DTC_LOW        0x28    /* -0x88 */
+#define ATTR_BLOCKS         0x34    /* -0x7C */
+#define ATTR_BLOCKS_LOW     0x38    /* -0x78 */
+#define ATTR_DTU_HIGH       0x3C    /* -0x74 */
+#define ATTR_ACL            0x48    /* -0x68 */
+#define ATTR_ACCESS_MODE    0x64    /* -0x4C */
+#define ATTR_ACCESS_FLAGS   0x65    /* -0x4B */
+#define ATTR_TAIL           0x68    /* -0x48 */
+#define ATTR_REFCOUNT       0x74    /* -0x3C */
+#define ATTR_DEVNO          0x76    /* -0x3A */
+#define ATTR_UIDS           0x78    /* -0x38 */
+
+/* `andi.l #0xff1f06,D1` at 0x00E5D8B4. */
+#define ATTR_INFO_FLAG_MASK 0x00FF1F06
+
+/* Bits of the attrs+0x65 access-flags byte that are folded into the record. */
+#define ATTR_ACCESS_OS_ONLY 0x80    /* -> record+0x02 bit 1 */
+#define ATTR_ACCESS_MODE5   0x20    /* -> record+0x02 bit 0 */
+#define ATTR_ACCESS_MODE4   0x10    /* -> record+0x03 bit 7 */
+
 void FILE_$GET_ATTR_INFO(uid_t *file_uid, void *param_2, int16_t *size_ptr,
-                         uint32_t *uid_out, void *attr_out, status_$t *status_ret)
+                         file_$obj_loc_t *loc_rec, void *attr_out,
+                         status_$t *status_ret)
 {
-    status_$t status;
-    uid_t local_uid;
-    uid_t returned_uid;
-    uint16_t flags;
-    uint8_t result_buf[2];
-    uint8_t *flag_bytes = (uint8_t *)param_2;
-    int16_t i;
+    /* `btst.b #n,(0x1,A0)` addresses the SECOND byte of the two-byte request
+     * cell, which on the m68k is the word's LOW byte - so the tests below
+     * are on the word, not on a byte at a fixed array index. */
+    const uint16_t *req = (const uint16_t *)param_2;    /* A0 */
+    uint8_t         lock_info[2];               /* A6-0xB8 */
+    uint16_t        flags;                      /* A6-0xB6 */
+    status_$t       status;                     /* A6-0xB4 */
+    uint8_t         attrs[AST_ATTR_REC_SIZE];   /* A6-0xB0 */
+    file_$obj_loc_t desc;                       /* A6-0x20 */
+    file_$attr_info_t *out = (file_$attr_info_t *)attr_out;     /* A2 */
+    uint32_t        obj_flags;
+    int8_t          access_flags;               /* D3 */
+    const uint32_t *src32;
+    uint32_t       *dst32;
+    const uint8_t  *src8;
+    uint8_t        *dst8;
+    int16_t         i;
 
-    /*
-     * Full attribute buffer layout:
-     * 0x00-0x03: First flags word
-     * 0x04-0x17: Data copied to output+0x04 (24 bytes)
-     * 0x18-0x4B: More attribute data
-     * ...etc
-     */
-    struct {
-        uint32_t flags_0;           /* 0x00 */
-        uint8_t  data_04[24];       /* 0x04: Copy to output+0x04 */
-        uint32_t time_1c;           /* 0x1C: uStack_78 */
-        uint32_t time_20;           /* 0x20: uStack_74 */
-        uint32_t time_24;           /* 0x24: local_98 */
-        uint16_t time_28;           /* 0x28: local_94 */
-        uint16_t pad_2a;            /* 0x2A: padding */
-        uint32_t time_2c;           /* 0x2C: local_90 */
-        uint16_t time_30;           /* 0x30: local_8c */
-        uint16_t pad_32;            /* 0x32 */
-        uint16_t val_34;            /* 0x34: local_3e -> output+0x32 */
-        uint16_t pad_36;            /* 0x36 */
-        uint32_t val_38;            /* 0x38: local_80 -> output+0x36 */
-        uint16_t val_3c;            /* 0x3C: local_7c -> output+0x3A */
-        uint16_t val_3e;            /* 0x3E: local_40 -> output+0x3C */
-        uint8_t  data_40[16];       /* 0x40: -> output+0x3E */
-        uint8_t  data_50[28];       /* 0x50: auStack_6c -> output+0x4E */
-        uint8_t  byte_6c;           /* 0x6C: local_50 -> output+0x6A */
-        uint8_t  flags_6d;          /* 0x6D: local_4f - contains flag bits */
-        uint16_t pad_6e;            /* 0x6E */
-        uint32_t data_70[3];        /* 0x70: uStack_4c,48,44 -> output+0x6E */
-    } full_attrs;
-
-    /* Determine flags based on param_2 */
-    if ((flag_bytes[1] & 0x01) != 0) {
-        flags = 0x01;
-    } else if ((flag_bytes[1] & 0x04) != 0) {
-        flags = 0x21;
-    } else if ((flag_bytes[1] & 0x02) != 0) {
-        int8_t result = FILE_$DELETE_INT((uid_t *)(uid_out + 2), 0, result_buf, &status);
-        if (result < 0) {
-            flags = 0x01;
+    /* 0x00E5D812-0x00E5D856 */
+    if ((*req & FILE_ATTR_INFO_REQ_LOCKED) != 0) {
+        flags = FILE_ATTR_INFO_FLAGS_LOCKED;
+    } else if ((*req & FILE_ATTR_INFO_REQ_NO_PROBE) != 0) {
+        flags = FILE_ATTR_INFO_FLAGS_NORMAL;
+    } else if ((*req & FILE_ATTR_INFO_REQ_PROBE) != 0) {
+        /* 0x00E5D82A-0x00E5D846: `movea.l D2,A1; pea (0x8,A1)` - the probe
+         * reads the UID out of the CALLER's record, before it is rewritten. */
+        if (FILE_$DELETE_INT(&loc_rec->uid, 0, lock_info, &status) < 0) {
+            flags = FILE_ATTR_INFO_FLAGS_LOCKED;
         } else {
-            flags = 0x21;
+            flags = FILE_ATTR_INFO_FLAGS_NORMAL;
         }
     } else {
+        /* 0x00E5D828 `beq` shares the 0x00E5D8A6 error store. */
         *status_ret = file_$invalid_arg;
         return;
     }
 
-    /* Copy the file UID to local storage */
-    local_uid.high = file_uid->high;
-    local_uid.low = file_uid->low;
+    /* 0x00E5D856-0x00E5D862 */
+    desc.uid.high = file_uid->high;
+    desc.uid.low  = file_uid->low;
+    desc.flags   &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-    /* Get attributes */
-    AST_$GET_ATTRIBUTES(&returned_uid, flags, &full_attrs, &status);
+    /* 0x00E5D868-0x00E5D880 */
+    AST_$GET_ATTRIBUTES(&desc, flags, attrs, &status);
 
+    /* 0x00E5D884-0x00E5D88A: unlike FILE_$GET_ATTRIBUTES, this routine stops
+     * on a bad status before copying anything out. */
     *status_ret = status;
     if (status != status_$ok) {
         return;
     }
 
-    /* Copy 8 longs of UID to output */
-    for (i = 0; i < 8; i++) {
-        uid_out[i] = ((uint32_t *)&returned_uid)[i % 2];
+    /* 0x00E5D88E-0x00E5D89A: 8 longwords, the local descriptor -> the
+     * caller's record. */
+    src32 = (const uint32_t *)(const void *)&desc;
+    dst32 = (uint32_t *)(void *)loc_rec;
+    for (i = (AST_$LOC_REC_SIZE / 4) - 1; i >= 0; i--) {
+        *dst32++ = *src32++;
     }
 
-    /* Check size - must be 0x7A (122 bytes) */
+    /* 0x00E5D89C-0x00E5D8AC */
     if (*size_ptr != FILE_ATTR_INFO_SIZE) {
         *status_ret = file_$invalid_arg;
         return;
     }
 
-    /* Repackage attributes into compact format */
-    {
-        uint32_t *out = (uint32_t *)attr_out;
-        uint8_t *out_bytes = (uint8_t *)attr_out;
+    /* 0x00E5D8B0-0x00E5D8BA: `move.l (-0xb0,A6),D1`, `andi.l #0xff1f06,D1`,
+     * `move.l D1,(A2)`.  Both ends are spelled out byte by byte so the four
+     * record bytes keep their image order on a little-endian host. */
+    obj_flags = ((uint32_t)attrs[ATTR_TYPE_FLAGS + 0] << 24) |
+                ((uint32_t)attrs[ATTR_TYPE_FLAGS + 1] << 16) |
+                ((uint32_t)attrs[ATTR_TYPE_FLAGS + 2] << 8) |
+                 (uint32_t)attrs[ATTR_TYPE_FLAGS + 3];
+    obj_flags &= ATTR_INFO_FLAG_MASK;
+    out->obj_flags[0] = (uint8_t)(obj_flags >> 24);
+    out->obj_flags[1] = (uint8_t)(obj_flags >> 16);
+    out->obj_flags[2] = (uint8_t)(obj_flags >> 8);
+    out->obj_flags[3] = (uint8_t)obj_flags;
 
-        /* Repackage first flags word */
-        out[0] = full_attrs.flags_0 & 0x00FF1F06;
+    access_flags = (int8_t)attrs[ATTR_ACCESS_FLAGS];
 
-        /* Set bit 1 of byte 2 based on bit 7 of flags_6d */
-        out_bytes[2] &= 0xFD;
-        if (full_attrs.flags_6d & 0x80) {
-            out_bytes[2] |= 0x02;
-        }
+    /* 0x00E5D8BC-0x00E5D8CE: `tst.b`/`smi`/`lsr.b #7`/`add.b D3b,D3b` puts the
+     * sign bit of the access byte into bit 1 of record+0x02. */
+    out->obj_flags[2] &= (uint8_t)~0x02;
+    if ((access_flags & ATTR_ACCESS_OS_ONLY) != 0) {
+        out->obj_flags[2] |= 0x02;
+    }
 
-        /* Copy 24 bytes from offset 0x04 */
-        for (i = 0; i < 24; i++) {
-            out_bytes[4 + i] = full_attrs.data_04[i];
-        }
+    /* The 0x00FF1F06 mask above already zeroed record+0x00 entirely and cut
+     * record+0x02 to bits 0-4 and record+0x03 to bits 1-2; the two remaining
+     * access bits are folded in at the end of the routine. */
 
-        /* Copy time values */
-        out[7] = full_attrs.time_1c;
-        out[8] = full_attrs.time_20;
-        out[9] = full_attrs.time_24;
-        *((uint16_t *)&out[10]) = full_attrs.time_28;
-        out[11] = full_attrs.time_2c;
-        *((uint16_t *)&out[12]) = full_attrs.time_30;
+    /* 0x00E5D8D0-0x00E5D8DE: 24 bytes, attrs+0x04 -> record+0x04. */
+    src8 = &attrs[ATTR_NAME];
+    dst8 = out->name;
+    for (i = 0x17; i >= 0; i--) {
+        *dst8++ = *src8++;
+    }
 
-        /* Copy more values */
-        *((uint16_t *)&out_bytes[0x32]) = full_attrs.val_34;
-        *((uint32_t *)&out_bytes[0x36]) = full_attrs.val_38;
-        *((uint16_t *)&out_bytes[0x3A]) = full_attrs.val_3c;
-        *((uint16_t *)&out_bytes[0x3C]) = full_attrs.val_3e;
+    /* 0x00E5D8E0-0x00E5D8EA: two longwords, attrs+0x3C/0x40. */
+    out->dtu_high = *(const uint32_t *)(const void *)&attrs[ATTR_DTU_HIGH];
+    out->dtu_low  = *(const uint32_t *)(const void *)&attrs[ATTR_DTU_HIGH + 4];
 
-        /* Copy 16 bytes to offset 0x3E */
-        for (i = 0; i < 16; i++) {
-            out_bytes[0x3E + i] = full_attrs.data_40[i];
-        }
+    /* 0x00E5D8EC-0x00E5D8F6 */
+    out->dtm_high = *(const uint32_t *)(const void *)&attrs[ATTR_DTM_HIGH];
+    out->dtm_low  = *(const uint16_t *)(const void *)&attrs[ATTR_DTM_LOW];
 
-        /* Copy 28 bytes to offset 0x4E */
-        for (i = 0; i < 28; i++) {
-            out_bytes[0x4E + i] = full_attrs.data_50[i];
-        }
+    /* 0x00E5D8F8-0x00E5D902 */
+    out->dtc_high = *(const uint32_t *)(const void *)&attrs[ATTR_DTC_HIGH];
+    out->dtc_low  = *(const uint16_t *)(const void *)&attrs[ATTR_DTC_LOW];
 
-        /* Copy single byte to offset 0x6A */
-        out_bytes[0x6A] = full_attrs.byte_6c;
+    /* 0x00E5D904 */
+    out->devno = *(const uint16_t *)(const void *)&attrs[ATTR_DEVNO];
 
-        /* Copy 3 longs to offset 0x6E */
-        *((uint32_t *)&out_bytes[0x6E]) = full_attrs.data_70[0];
-        *((uint32_t *)&out_bytes[0x72]) = full_attrs.data_70[1];
-        *((uint32_t *)&out_bytes[0x76]) = full_attrs.data_70[2];
+    /* 0x00E5D90A-0x00E5D914 */
+    out->blocks     = *(const uint32_t *)(const void *)&attrs[ATTR_BLOCKS];
+    out->blocks_low = *(const uint16_t *)(const void *)&attrs[ATTR_BLOCKS_LOW];
 
-        /* Set additional flag bits based on flags_6d */
-        out_bytes[2] &= 0xFE;
-        if (full_attrs.flags_6d & 0x20) {
-            out_bytes[2] |= 0x01;
-        }
-        out_bytes[3] &= 0x7F;
-        if (full_attrs.flags_6d & 0x10) {
-            out_bytes[3] |= 0x80;
-        }
+    /* 0x00E5D916 */
+    out->refcount = *(const uint16_t *)(const void *)&attrs[ATTR_REFCOUNT];
+
+    /* 0x00E5D91C-0x00E5D92A: 16 bytes, attrs+0x78 -> record+0x3E. */
+    src8 = &attrs[ATTR_UIDS];
+    dst8 = out->uids;
+    for (i = 0x0F; i >= 0; i--) {
+        *dst8++ = *src8++;
+    }
+
+    /* 0x00E5D92C-0x00E5D93A: 28 bytes, attrs+0x48 -> record+0x4E. */
+    src8 = &attrs[ATTR_ACL];
+    dst8 = out->acl;
+    for (i = 0x1B; i >= 0; i--) {
+        *dst8++ = *src8++;
+    }
+
+    /* 0x00E5D93C */
+    out->access_mode = attrs[ATTR_ACCESS_MODE];
+
+    /* 0x00E5D942-0x00E5D94E: three longwords, attrs+0x68 -> record+0x6E.
+     * Neither end is longword-aligned in the image; the copy is byte-exact
+     * either way. */
+    src32 = (const uint32_t *)(const void *)&attrs[ATTR_TAIL];
+    for (i = 0; i < 3; i++) {
+        out->tail[i] = src32[i];
+    }
+
+    /* 0x00E5D950-0x00E5D962: bit 5 of the access byte becomes bit 0 of
+     * record+0x02 (`sne` + `lsr.b #7` yields 0 or 1). */
+    out->obj_flags[2] &= (uint8_t)~0x01;
+    if ((access_flags & ATTR_ACCESS_MODE5) != 0) {
+        out->obj_flags[2] |= 0x01;
+    }
+
+    /* 0x00E5D964-0x00E5D978: bit 4 becomes bit 7 of record+0x03
+     * (`sne` gives 0xFF, `andi.b #-0x80` keeps only bit 7). */
+    out->obj_flags[3] &= (uint8_t)0x7F;
+    if ((access_flags & ATTR_ACCESS_MODE4) != 0) {
+        out->obj_flags[3] |= 0x80;
     }
 }

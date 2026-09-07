@@ -298,6 +298,18 @@ extern uid_t AUDIT_$DISMOUNT_LV_EU;
 /* 0x00E85648: class 4, subtype 0x0D - logical volume mounted */
 extern uid_t AUDIT_$MOUNT_LV_EU;
 
+/*
+ * audit_$log_resolve_op - Audit a name-resolve operation
+ *
+ * Only DIR_$DO_OP calls it and the body currently lives in
+ * dir/audit_log_resolve_op.c, but the audit_$ prefix makes it an audit
+ * export (moved here from dir/dir_internal.h -- bead source-3uo).
+ *
+ * Original address: 0x00E4BF92
+ */
+void audit_$log_resolve_op(uint32_t pname_data, uint16_t path_len,
+                           void *result, status_$t status);
+
 /* Master enable flag (0xE2E09E, defined in audit/audit_data.c) */
 extern int8_t AUDIT_$ENABLED;
 

@@ -95,8 +95,11 @@ typedef struct netlog_data_t {
    * Page tracking (0x6C - 0x77)
    */
   uint32_t done_cnt; /* 0x6C: Total completed pages count */
-  uint16_t page_counts[NETLOG_NUM_BUFFERS + 1]; /* 0x70: Entry counts [0,1,2] */
-                                                /* Note: index 0 is padding */
+  /* Only two words exist: NETLOG_$CNTL clears 0x70 and 0x72 (00e719a4 /
+   * 00e719a8) and NETLOG_$LOG_IT bumps `(0x6e,A0)` with A0 = A5 + 2*index
+   * (00e71b9c), i.e. element `index` sits at 0x6E + 2*index for index 1..2.
+   * The array is therefore Pascal 1-based: page_counts[index - 1]. */
+  uint16_t page_counts[NETLOG_NUM_BUFFERS]; /* 0x70: Entry counts, 1-based */
   uint32_t current_buf_ptr; /* 0x74: Pointer to current buffer */
 
   /*
@@ -106,8 +109,36 @@ typedef struct netlog_data_t {
   uint16_t send_page_index;   /* 0x7A: Index of page to send (1 or 2) */
   uint16_t current_buf_index; /* 0x7C: Current buffer index (1 or 2) */
   int8_t initialized;         /* 0x7E: Initialization flag (0xFF = yes) */
+  int8_t _pad_7f;             /* 0x7F: Padding (0x7E and 0x80 are both bytes) */
   int8_t ok_to_send;          /* 0x80: OK to send packets flag */
 } netlog_data_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(netlog_data_t, pkt_info) == 0x00, "netlog_data_t.pkt_info");
+_Static_assert(__builtin_offsetof(netlog_data_t, wired_pages) == 0x20, "netlog_data_t.wired_pages");
+_Static_assert(__builtin_offsetof(netlog_data_t, pkt_type1) == 0x48, "netlog_data_t.pkt_type1");
+_Static_assert(__builtin_offsetof(netlog_data_t, pkt_type2) == 0x4A, "netlog_data_t.pkt_type2");
+_Static_assert(__builtin_offsetof(netlog_data_t, pkt_done_cnt) == 0x4C, "netlog_data_t.pkt_done_cnt");
+_Static_assert(__builtin_offsetof(netlog_data_t, pkt_entry_cnt) == 0x50, "netlog_data_t.pkt_entry_cnt");
+_Static_assert(__builtin_offsetof(netlog_data_t, _pad_52) == 0x52, "netlog_data_t._pad_52");
+_Static_assert(__builtin_offsetof(netlog_data_t, buffer_va) == 0x54, "netlog_data_t.buffer_va");
+_Static_assert(__builtin_offsetof(netlog_data_t, buffer_ppn) == 0x60, "netlog_data_t.buffer_ppn");
+_Static_assert(__builtin_offsetof(netlog_data_t, spin_lock) == 0x68, "netlog_data_t.spin_lock");
+_Static_assert(__builtin_offsetof(netlog_data_t, done_cnt) == 0x6C, "netlog_data_t.done_cnt");
+_Static_assert(__builtin_offsetof(netlog_data_t, page_counts) == 0x70, "netlog_data_t.page_counts");
+_Static_assert(__builtin_offsetof(netlog_data_t, current_buf_ptr) == 0x74, "netlog_data_t.current_buf_ptr");
+_Static_assert(__builtin_offsetof(netlog_data_t, wired_page_count) == 0x78, "netlog_data_t.wired_page_count");
+_Static_assert(__builtin_offsetof(netlog_data_t, send_page_index) == 0x7A, "netlog_data_t.send_page_index");
+_Static_assert(__builtin_offsetof(netlog_data_t, current_buf_index) == 0x7C, "netlog_data_t.current_buf_index");
+_Static_assert(__builtin_offsetof(netlog_data_t, initialized) == 0x7E, "netlog_data_t.initialized");
+_Static_assert(__builtin_offsetof(netlog_data_t, _pad_7f) == 0x7F, "netlog_data_t._pad_7f");
+_Static_assert(__builtin_offsetof(netlog_data_t, ok_to_send) == 0x80, "netlog_data_t.ok_to_send");
+/* m68k rounds struct size to 2 bytes (a host rounds to 4), so the sizeof
+ * check is target-specific; every offset above is checked unconditionally. */
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(netlog_data_t) == 0x82,
+               "netlog_data_t: fields end at 0x80 (ok_to_send)");
+#endif
 
 /*
  * Architecture-specific access macros

@@ -18,6 +18,7 @@
 #include "mmu/mmu.h"
 #include "proc1/proc1.h"
 #include "prom/prom.h"
+#include "uid/uid.h"   /* UID_$NIL */
 
 /*
  * ============================================================================
@@ -43,8 +44,8 @@ extern void *PTR_PEB_$WIRED_CODE_END_00e322e8;
  *
  * PEB global data is located at 0xE24C78.
  * Layout:
- *   +0x00: Event counter (8 bytes)
- *   +0x08: Reserved
+ *   +0x00: Reserved (8 bytes)
+ *   +0x08: Event counter (12 bytes, EC_$INIT'd at 00e31d12)
  *   +0x14: Current owner process ID (2 bytes)
  *   +0x16: Current owner AS ID (2 bytes)
  *   +0x18: PEB CTL shadow register (2 bytes)
@@ -59,8 +60,13 @@ extern void *PTR_PEB_$WIRED_CODE_END_00e322e8;
  */
 
 typedef struct peb_globals_t {
-  ec_$eventcount_t eventcount; /* +0x00: PEB event counter */
-  uint8_t reserved1[12];       /* +0x08: Reserved */
+  /* PEB_$INIT calls EC_$INIT with 0xE24C80 (00e31d12 `pea (0xe24c80).l`),
+   * i.e. globals + 0x08, and ec_$eventcount_t is 12 bytes -- so the counter
+   * runs 0x08..0x13 and owner_pid follows at 0x14 (00e5ad42
+   * `move.w (0x00e20608).l,(0x14,A0)`).  The earlier layout put the counter
+   * at 0x00 and reserved1 at 0x08, which overlapped both. */
+  uint8_t reserved0[8];        /* +0x00: Reserved */
+  ec_$eventcount_t eventcount; /* +0x08: PEB event counter */
   uint16_t owner_pid;          /* +0x14: Current owner process ID */
   uint16_t owner_asid;         /* +0x16: Current owner AS ID */
   uint16_t ctl_shadow;         /* +0x18: PEB_CTL shadow register */
@@ -73,6 +79,27 @@ typedef struct peb_globals_t {
   uint8_t m68881_save_flag;    /* +0x20: MC68881 save flag */
   uint8_t flag_21;             /* +0x21: Unknown flag */
 } peb_globals_t;
+
+/* Layout recovered from the disassembly -- see the field comments above.
+ * Guarded: the embedded ec_$eventcount_t holds two native pointers, so the
+ * record is 8 bytes longer from +0x14 on a 64-bit host. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(peb_globals_t, reserved0) == 0x00, "peb_globals_t.reserved0");
+_Static_assert(__builtin_offsetof(peb_globals_t, eventcount) == 0x08, "peb_globals_t.eventcount");
+_Static_assert(__builtin_offsetof(peb_globals_t, owner_pid) == 0x14, "peb_globals_t.owner_pid");
+_Static_assert(__builtin_offsetof(peb_globals_t, owner_asid) == 0x16, "peb_globals_t.owner_asid");
+_Static_assert(__builtin_offsetof(peb_globals_t, ctl_shadow) == 0x18, "peb_globals_t.ctl_shadow");
+_Static_assert(__builtin_offsetof(peb_globals_t, installed) == 0x1A, "peb_globals_t.installed");
+_Static_assert(__builtin_offsetof(peb_globals_t, wcs_loaded) == 0x1B, "peb_globals_t.wcs_loaded");
+_Static_assert(__builtin_offsetof(peb_globals_t, savep_flag) == 0x1C, "peb_globals_t.savep_flag");
+_Static_assert(__builtin_offsetof(peb_globals_t, flag_1d) == 0x1D, "peb_globals_t.flag_1d");
+_Static_assert(__builtin_offsetof(peb_globals_t, info_byte) == 0x1E, "peb_globals_t.info_byte");
+_Static_assert(__builtin_offsetof(peb_globals_t, mmu_installed) == 0x1F, "peb_globals_t.mmu_installed");
+_Static_assert(__builtin_offsetof(peb_globals_t, m68881_save_flag) == 0x20, "peb_globals_t.m68881_save_flag");
+_Static_assert(__builtin_offsetof(peb_globals_t, flag_21) == 0x21, "peb_globals_t.flag_21");
+_Static_assert(sizeof(peb_globals_t) == 0x22,
+               "peb_globals_t: fields end at 0x21 (flag_21)");
+#endif
 
 /*
  * Global PEB data
@@ -128,6 +155,11 @@ typedef struct peb_wcs_entry_t {
   uint32_t word2; /* +0x04 */
 } peb_wcs_entry_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(peb_wcs_entry_t, word0) == 0x00, "peb_wcs_entry_t.word0");
+_Static_assert(__builtin_offsetof(peb_wcs_entry_t, word1) == 0x02, "peb_wcs_entry_t.word1");
+_Static_assert(__builtin_offsetof(peb_wcs_entry_t, word2) == 0x04, "peb_wcs_entry_t.word2");
+
 /*
  * WCS microcode file header:
  *   +0x00: Start address (2 bytes)
@@ -140,6 +172,10 @@ typedef struct peb_wcs_header_t {
   uint16_t entry_count; /* +0x02: Number of entries */
                         /* peb_wcs_entry_t entries[] follow */
 } peb_wcs_header_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(peb_wcs_header_t, start_addr) == 0x00, "peb_wcs_header_t.start_addr");
+_Static_assert(__builtin_offsetof(peb_wcs_header_t, entry_count) == 0x02, "peb_wcs_header_t.entry_count");
 
 /*
  * ============================================================================

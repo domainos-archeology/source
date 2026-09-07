@@ -127,6 +127,17 @@ typedef struct ringlog_ctl_t {
 
 } ringlog_ctl_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(ringlog_ctl_t, wired_pages) == 0x00, "ringlog_ctl_t.wired_pages");
+_Static_assert(__builtin_offsetof(ringlog_ctl_t, spinlock) == 0x28, "ringlog_ctl_t.spinlock");
+_Static_assert(__builtin_offsetof(ringlog_ctl_t, filter_id) == 0x2C, "ringlog_ctl_t.filter_id");
+_Static_assert(__builtin_offsetof(ringlog_ctl_t, wire_count) == 0x30, "ringlog_ctl_t.wire_count");
+_Static_assert(__builtin_offsetof(ringlog_ctl_t, mbx_sock_filter) == 0x32, "ringlog_ctl_t.mbx_sock_filter");
+_Static_assert(__builtin_offsetof(ringlog_ctl_t, who_sock_filter) == 0x34, "ringlog_ctl_t.who_sock_filter");
+_Static_assert(__builtin_offsetof(ringlog_ctl_t, nil_sock_filter) == 0x36, "ringlog_ctl_t.nil_sock_filter");
+_Static_assert(__builtin_offsetof(ringlog_ctl_t, logging_active) == 0x38, "ringlog_ctl_t.logging_active");
+_Static_assert(__builtin_offsetof(ringlog_ctl_t, first_entry_flag) == 0x3A, "ringlog_ctl_t.first_entry_flag");
+
 /*
  * Ring log control structure.
  * On m68k, located at 0xE2C32C.  RINGLOG_$CTL.logging_active is the global
@@ -207,5 +218,20 @@ void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret);
  * Original address: 0x00E721CC
  */
 void RINGLOG_$STOP_LOGGING(void);
+
+/*
+ * RINGLOG_$ROUTE_FORWARD - the 4-byte RINGLOG_$LOGIT header-info cell the
+ * routing forwarder passes.  Only byte 0 is read, and only its bit 7 (the
+ * "inbound" flag), at 0x00E1A2F6.  The storage is defined in
+ * route/route_data.c (moved here from route/route_internal.h --
+ * bead source-3uo).
+ *
+ * Original address: 0xE878A0
+ */
+#if defined(ARCH_M68K)
+#define RINGLOG_$ROUTE_FORWARD  ((uint8_t *)0xE878A0)
+#else
+extern uint8_t RINGLOG_$ROUTE_FORWARD[4];
+#endif
 
 #endif /* RINGLOG_H */

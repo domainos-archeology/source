@@ -46,6 +46,11 @@ typedef struct dxm_queue_t {
     void            *entries;       /* 0x18: Pointer to entry array */
 } dxm_queue_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(dxm_queue_t, pad_06) == 0x06, "dxm_queue_t.pad_06");
+#endif
+
 /*
  * Offsets confirmed in DXM_$ADD_CALLBACK: (A2) head, (0x2,A2) tail,
  * (0x4,A2) mask, (0x8,A2) lock, (0xc,A2) ec, (0x18,A2) entries.

@@ -48,7 +48,19 @@
  */
 
 /* Maximum number of processes that can be tracked for audit suspension */
-#define AUDIT_MAX_PROCESSES     PROC1_MAX_PROCESSES
+/*
+ * Number of per-process audit suspension counters.
+ *
+ * NOT PROC1_MAX_PROCESSES.  AUDIT_$INIT clears exactly 0x40 words
+ * (00e70b4e `moveq #0x3f,D0` ... `dbf`) starting at AUDIT_$DATA+0, and
+ * AUDIT_$INIT then writes log_file_uid at +0x80 (00e70b3e
+ * `move.l (A0)+,(0x80,A5)`), so the array is 64 words wide, not 65.
+ *
+ * The array is Pascal 1-based: AUDIT_$SUSPEND indexes it as
+ * `(-0x2,A0,D0w*0x1)` with D0 = PROC1_$CURRENT*2 (00e70dc8), i.e. element
+ * (pid - 1).  Entries therefore cover PIDs 1..64.
+ */
+#define AUDIT_MAX_PROCESSES     64
 
 /* Hash table size for audit list UIDs */
 #define AUDIT_HASH_TABLE_SIZE   37
@@ -112,6 +124,14 @@ typedef struct audit_hash_node_t {
     uint32_t uid_low;                   /* 0x08: UID low word */
 } audit_hash_node_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(audit_hash_node_t, next) == 0x00, "audit_hash_node_t.next");
+_Static_assert(__builtin_offsetof(audit_hash_node_t, uid_high) == 0x04, "audit_hash_node_t.uid_high");
+_Static_assert(__builtin_offsetof(audit_hash_node_t, uid_low) == 0x08, "audit_hash_node_t.uid_low");
+_Static_assert(sizeof(audit_hash_node_t) == 0x0C, "audit_hash_node_t size");
+#endif
+
 /*
  * Audit event record header
  *
@@ -135,6 +155,26 @@ typedef struct audit_event_record_t {
     /* Variable-length data follows at 0x46 */
 } audit_event_record_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+/* The recovered offsets put 32-bit fields on odd word boundaries, which
+ * only m68k's 2-byte alignment reproduces.  The record cannot be marked
+ * packed because callers take the address of those members
+ * (-Waddress-of-packed-member), so the layout is asserted on m68k only. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(audit_event_record_t, record_size) == 0x00, "audit_event_record_t.record_size");
+_Static_assert(__builtin_offsetof(audit_event_record_t, version) == 0x02, "audit_event_record_t.version");
+_Static_assert(__builtin_offsetof(audit_event_record_t, sid_data) == 0x04, "audit_event_record_t.sid_data");
+_Static_assert(__builtin_offsetof(audit_event_record_t, event_flags) == 0x28, "audit_event_record_t.event_flags");
+_Static_assert(__builtin_offsetof(audit_event_record_t, node_id) == 0x2A, "audit_event_record_t.node_id");
+_Static_assert(__builtin_offsetof(audit_event_record_t, event_uid) == 0x2E, "audit_event_record_t.event_uid");
+_Static_assert(__builtin_offsetof(audit_event_record_t, status) == 0x36, "audit_event_record_t.status");
+_Static_assert(__builtin_offsetof(audit_event_record_t, timestamp) == 0x3A, "audit_event_record_t.timestamp");
+_Static_assert(__builtin_offsetof(audit_event_record_t, process_id) == 0x40, "audit_event_record_t.process_id");
+_Static_assert(__builtin_offsetof(audit_event_record_t, upid_high) == 0x42, "audit_event_record_t.upid_high");
+_Static_assert(__builtin_offsetof(audit_event_record_t, upid_low) == 0x44, "audit_event_record_t.upid_low");
+_Static_assert(sizeof(audit_event_record_t) == 0x46, "audit_event_record_t size");
+#endif
+
 /*
  * Audit list file header
  *
@@ -150,24 +190,30 @@ typedef struct audit_list_header_t {
     /* uid_t entries[entry_count] follows at 0x10 */
 } audit_list_header_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(audit_list_header_t, list_uid) == 0x00, "audit_list_header_t.list_uid");
+_Static_assert(__builtin_offsetof(audit_list_header_t, timeout_units) == 0x08, "audit_list_header_t.timeout_units");
+_Static_assert(__builtin_offsetof(audit_list_header_t, version) == 0x0A, "audit_list_header_t.version");
+_Static_assert(__builtin_offsetof(audit_list_header_t, entry_count) == 0x0C, "audit_list_header_t.entry_count");
+_Static_assert(__builtin_offsetof(audit_list_header_t, flags) == 0x0E, "audit_list_header_t.flags");
+
 /*
  * Audit subsystem data area
  *
  * Main data structure for the audit subsystem.
  * Base address on m68k: 0xE854D8
  *
- * Total size: 0x1A3 bytes (419 bytes)
+ * Fields extend to 0x1A2 (server_running, the last byte AUDIT_$INIT touches
+ * at 00e70b1e `clr.b (0x1a2,A5)`).  The record is longword aligned, so the
+ * C sizeof is 0x1A4; nothing in the image references 0xE8567B..0xE8567C.
  */
 typedef struct audit_data_t {
     /* Per-process audit suspension counters (indexed by PID) */
     /* When > 0, auditing is suspended for that process */
-    int16_t suspend_count[AUDIT_MAX_PROCESSES]; /* 0x00-0x81 (130 bytes) */
-
-    /* Padding to align log_file_uid */
-    int16_t pad0;                               /* 0x82-0x83 (not used, overlap) */
+    /* Pascal 1-based: element i holds the counter for PID i+1 */
+    int16_t suspend_count[AUDIT_MAX_PROCESSES]; /* 0x00-0x7F (128 bytes) */
 
     /* Audit log file information */
-    /* Note: actual offset 0x80 due to array sizing */
     uid_t    log_file_uid;          /* 0x80-0x87: Audit log file UID */
     void    *buffer_base;           /* 0x88-0x8B: Mapped buffer base */
     uint32_t buffer_size;           /* 0x8C-0x8F: Mapped buffer size */
@@ -198,6 +244,32 @@ typedef struct audit_data_t {
     int16_t  server_pid;            /* 0x1A0-0x1A1: Server process ID */
     uint8_t  server_running;        /* 0x1A2: Server is running */
 } audit_data_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(audit_data_t, suspend_count) == 0x00, "audit_data_t.suspend_count");
+_Static_assert(__builtin_offsetof(audit_data_t, log_file_uid) == 0x80, "audit_data_t.log_file_uid");
+_Static_assert(__builtin_offsetof(audit_data_t, buffer_base) == 0x88, "audit_data_t.buffer_base");
+_Static_assert(__builtin_offsetof(audit_data_t, buffer_size) == 0x8C, "audit_data_t.buffer_size");
+_Static_assert(__builtin_offsetof(audit_data_t, write_ptr) == 0x90, "audit_data_t.write_ptr");
+_Static_assert(__builtin_offsetof(audit_data_t, bytes_remaining) == 0x94, "audit_data_t.bytes_remaining");
+_Static_assert(__builtin_offsetof(audit_data_t, file_offset) == 0x98, "audit_data_t.file_offset");
+_Static_assert(__builtin_offsetof(audit_data_t, dirty) == 0x9C, "audit_data_t.dirty");
+_Static_assert(__builtin_offsetof(audit_data_t, pad1) == 0x9D, "audit_data_t.pad1");
+_Static_assert(__builtin_offsetof(audit_data_t, list_uid) == 0xA0, "audit_data_t.list_uid");
+_Static_assert(__builtin_offsetof(audit_data_t, flags) == 0xA8, "audit_data_t.flags");
+_Static_assert(__builtin_offsetof(audit_data_t, timeout) == 0xAA, "audit_data_t.timeout");
+_Static_assert(__builtin_offsetof(audit_data_t, list_count) == 0xAC, "audit_data_t.list_count");
+_Static_assert(__builtin_offsetof(audit_data_t, pad2) == 0xAE, "audit_data_t.pad2");
+_Static_assert(__builtin_offsetof(audit_data_t, hash_buckets) == 0xB0, "audit_data_t.hash_buckets");
+_Static_assert(__builtin_offsetof(audit_data_t, pad3) == 0x144, "audit_data_t.pad3");
+_Static_assert(__builtin_offsetof(audit_data_t, event_count) == 0x198, "audit_data_t.event_count");
+_Static_assert(__builtin_offsetof(audit_data_t, lock_id) == 0x19C, "audit_data_t.lock_id");
+_Static_assert(__builtin_offsetof(audit_data_t, server_pid) == 0x1A0, "audit_data_t.server_pid");
+_Static_assert(__builtin_offsetof(audit_data_t, server_running) == 0x1A2, "audit_data_t.server_running");
+_Static_assert(sizeof(audit_data_t) == 0x1A4,
+               "audit_data_t: fields end at 0x1A2, longword aligned to 0x1A4");
+#endif
 
 /*
  * ============================================================================

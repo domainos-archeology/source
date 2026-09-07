@@ -12,6 +12,7 @@
 #include "fim/fim.h"
 #include "os/os.h"
 #include "peb/peb.h"
+#include "uid/uid.h"   /* UID_$NIL */
 
 /*
  * Pointer to the XPD data area (0x00E32390), passed to MST_$WIRE_AREA

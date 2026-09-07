@@ -42,8 +42,8 @@
  *   00e6e486    pea (A5)
  *   00e6e488    lea (0xe82b8c).l,A5
  *   00e6e48e    clr.b (0xe0,A5)               ; tracking_enabled = 0
- *   00e6e492    pea (-0x3c,PC)                ; param3: &DAT_00e6e458
- *   00e6e496    pea (-0xb6c,PC)               ; param2: &DAT_00e6d92c
+ *   00e6e492    pea (-0x3c,PC)                ; param3: &SMD_$TRUE_DATA (0x00E6E458)
+ *   00e6e496    pea (-0xb6c,PC)               ; param2: &SMD_$ACQ_LOCK_DATA (0x00E6D92C)
  *   00e6e49a    pea (0x1d94,A5)               ; param1: &default_cursor_pos
  *   00e6e49e    bsr.w 0x00e6e1cc              ; SHOW_CURSOR
  *   00e6e4a2    movea.l (0xc,A6),A0           ; A0 = status_ret

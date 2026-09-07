@@ -64,8 +64,8 @@
         .equ    PENDING_TRACE,      0x00E21FF6  /* Pending trace faults */
 
         /* FIM code not yet in this file */
-        .equ    FIM_COMMON_FAULT,   0x00E213A0  /* Common fault handler */
-        .equ    FIM_BUILD_DF,       0x00E213A4  /* Build delivery frame */
+        .equ    FIM_COMMON_FAULT,   0x00E213A0  /* Common fault handler (Ghidra: FIM_$COMMON_FAULT) */
+        .equ    FIM_BUILD_DF,       0x00E213A4  /* Build delivery frame (Ghidra label: FIM_$COM; NOT FIM_$BUILD_DF, which is 0x00E0A458) */
 
         /* ML module */
         .equ    ML_EXCLUSION_START, 0x00E20DF8  /* Acquire exclusion lock */
@@ -86,7 +86,7 @@
         .equ    PARITY_CHK,         0x00E0AE68  /* Parity check function */
 
         /* Fault generation (not yet in this file) */
-        .equ    GENERATE_TARGET,    0x00E21458  /* Fault generation entry */
+        .equ    GENERATE_TARGET,    0x00E21458  /* Fault generation entry (Ghidra: FIM_$GENERATE_TARGET) */
 
 
 /* ====================================================================

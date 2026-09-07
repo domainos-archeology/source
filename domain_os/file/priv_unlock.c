@@ -259,7 +259,7 @@ retry:                                                  /* 0x00E5FD9C */
              * touches the refcount.
              */
             desc.uid = *file_uid;                       /* 0x00E5FF8C */
-            AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, FILE_CATTR_SHORT,
+            AST_$GET_COMMON_ATTRIBUTES(&desc, FILE_CATTR_SHORT,
                                        &attrs.cattr, &local_status);  /* 0x00E5FFA6 */
             /* 0x00E5FFB8 `move.b (-0x40,A6),D2b` then `tst.w D2w`: the
              * object's type byte, zero-extended to a word. */
@@ -482,7 +482,7 @@ retry:                                                  /* 0x00E5FD9C */
 
         if (not_pending < 0) {                          /* 0x00E60212 */
             if (saw_other >= 0) {                       /* 0x00E60218 */
-                AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, FILE_CATTR_LOCK,
+                AST_$GET_COMMON_ATTRIBUTES(&desc, FILE_CATTR_LOCK,
                                            &attrs.cattr, &status2); /* 0x00E60230 */
                 /* 0x00E60240 `tst.w (-0x2c,A6)`: the object reference count.
                  * Only an unreferenced object is worth asking the lock holder

@@ -114,6 +114,9 @@
  * Signal mask info structure (returned by GET_SIG_MASK)
  * Size: 0x1E (30) bytes
  */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct proc2_sig_mask_t {
   uint32_t blocked_1; /* 0x00: Blocked signals part 1 */
   uint32_t blocked_2; /* 0x04: Blocked signals part 2 */
@@ -124,7 +127,19 @@ typedef struct proc2_sig_mask_t {
   uint32_t mask_4;    /* 0x18: Signal mask part 4 */
   uint8_t flag_1;     /* 0x1C: Signal flag (from flags bit 10) */
   uint8_t flag_2;     /* 0x1D: Signal flag (from flags bit 2) */
-} proc2_sig_mask_t;
+} __attribute__((packed)) proc2_sig_mask_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(proc2_sig_mask_t, blocked_1) == 0x00, "proc2_sig_mask_t.blocked_1");
+_Static_assert(__builtin_offsetof(proc2_sig_mask_t, blocked_2) == 0x04, "proc2_sig_mask_t.blocked_2");
+_Static_assert(__builtin_offsetof(proc2_sig_mask_t, pending) == 0x08, "proc2_sig_mask_t.pending");
+_Static_assert(__builtin_offsetof(proc2_sig_mask_t, mask_1) == 0x0C, "proc2_sig_mask_t.mask_1");
+_Static_assert(__builtin_offsetof(proc2_sig_mask_t, mask_2) == 0x10, "proc2_sig_mask_t.mask_2");
+_Static_assert(__builtin_offsetof(proc2_sig_mask_t, mask_3) == 0x14, "proc2_sig_mask_t.mask_3");
+_Static_assert(__builtin_offsetof(proc2_sig_mask_t, mask_4) == 0x18, "proc2_sig_mask_t.mask_4");
+_Static_assert(__builtin_offsetof(proc2_sig_mask_t, flag_1) == 0x1C, "proc2_sig_mask_t.flag_1");
+_Static_assert(__builtin_offsetof(proc2_sig_mask_t, flag_2) == 0x1D, "proc2_sig_mask_t.flag_2");
+_Static_assert(sizeof(proc2_sig_mask_t) == 0x1E, "proc2_sig_mask_t size");
 
 /*
  * Process information structure (proc2_info_t)
@@ -261,6 +276,18 @@ typedef struct proc2_info_t {
   uid_t stack_uid;      /* 0xDC: Stack area UID (from MST_$MAP_AREA_AT) */
 } proc2_info_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(proc2_info_t, pad_5e) == 0x5E, "proc2_info_t.pad_5e");
+_Static_assert(__builtin_offsetof(proc2_info_t, sig_blocked_1) == 0x74, "proc2_info_t.sig_blocked_1");
+_Static_assert(__builtin_offsetof(proc2_info_t, sig_blocked_2) == 0x78, "proc2_info_t.sig_blocked_2");
+_Static_assert(__builtin_offsetof(proc2_info_t, sig_mask_3) == 0x7C, "proc2_info_t.sig_mask_3");
+_Static_assert(__builtin_offsetof(proc2_info_t, pad_88) == 0x88, "proc2_info_t.pad_88");
+_Static_assert(__builtin_offsetof(proc2_info_t, pad_90) == 0x90, "proc2_info_t.pad_90");
+_Static_assert(__builtin_offsetof(proc2_info_t, pad_92) == 0x92, "proc2_info_t.pad_92");
+_Static_assert(__builtin_offsetof(proc2_info_t, pad_94) == 0x94, "proc2_info_t.pad_94");
+#endif
+
 /*
  * Read one of the five big-endian longwords a zombie keeps at entry+0xA4
  * (index 0..4).  Spelled out with shifts so it behaves identically on a
@@ -366,6 +393,12 @@ typedef struct pgroup_entry_t {
   uint16_t upgid;       /* 0x04: Unix process group ID */
   uint16_t session_id;  /* 0x06: Session ID for this group */
 } pgroup_entry_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(pgroup_entry_t, ref_count) == 0x00, "pgroup_entry_t.ref_count");
+_Static_assert(__builtin_offsetof(pgroup_entry_t, leader_count) == 0x02, "pgroup_entry_t.leader_count");
+_Static_assert(__builtin_offsetof(pgroup_entry_t, upgid) == 0x04, "pgroup_entry_t.upgid");
+_Static_assert(__builtin_offsetof(pgroup_entry_t, session_id) == 0x06, "pgroup_entry_t.session_id");
 
 #define PGROUP_TABLE_SIZE 70 /* Indices 0-69, 0 unused */
 

@@ -26,6 +26,7 @@
 #include "network/network.h"
 #include "os/os.h"
 #include "pkt/pkt.h"
+#include "ring/ring.h"   /* RING_$FILE_OVERFLOW, RING_$OVERFLOW_OVERFLOW */
 #include "route/route.h"
 #include "sock/sock.h"
 #include "xns/xns.h"
@@ -93,6 +94,24 @@ typedef struct app_receive_result_t {
   uint16_t _reserved;     /* 0x2A: Reserved */
 } app_receive_result_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(app_receive_result_t, hdr_ptr) == 0x00, "app_receive_result_t.hdr_ptr");
+_Static_assert(__builtin_offsetof(app_receive_result_t, data_ptr) == 0x04, "app_receive_result_t.data_ptr");
+_Static_assert(__builtin_offsetof(app_receive_result_t, src_uid_high) == 0x08, "app_receive_result_t.src_uid_high");
+_Static_assert(__builtin_offsetof(app_receive_result_t, src_uid_low) == 0x0C, "app_receive_result_t.src_uid_low");
+_Static_assert(__builtin_offsetof(app_receive_result_t, dest_uid_high) == 0x10, "app_receive_result_t.dest_uid_high");
+_Static_assert(__builtin_offsetof(app_receive_result_t, dest_uid_low) == 0x14, "app_receive_result_t.dest_uid_low");
+_Static_assert(__builtin_offsetof(app_receive_result_t, src_node) == 0x18, "app_receive_result_t.src_node");
+_Static_assert(__builtin_offsetof(app_receive_result_t, dest_node) == 0x1C, "app_receive_result_t.dest_node");
+_Static_assert(__builtin_offsetof(app_receive_result_t, routing_key) == 0x20, "app_receive_result_t.routing_key");
+_Static_assert(__builtin_offsetof(app_receive_result_t, sock_num) == 0x24, "app_receive_result_t.sock_num");
+_Static_assert(__builtin_offsetof(app_receive_result_t, flags) == 0x26, "app_receive_result_t.flags");
+_Static_assert(__builtin_offsetof(app_receive_result_t, info) == 0x28, "app_receive_result_t.info");
+_Static_assert(__builtin_offsetof(app_receive_result_t, _reserved) == 0x2A, "app_receive_result_t._reserved");
+_Static_assert(sizeof(app_receive_result_t) == 0x2C, "app_receive_result_t size");
+#endif
+
 /*
  * APP packet header structure
  *
@@ -100,6 +119,9 @@ typedef struct app_receive_result_t {
  *
  * Size: 24 bytes (0x18)
  */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct app_pkt_hdr_t {
   uint16_t type;         /* 0x00: Packet type (0x118 for std) */
   uint16_t data_len;     /* 0x02: Data length */
@@ -113,7 +135,22 @@ typedef struct app_pkt_hdr_t {
   uint8_t addr_size;     /* 0x15: Address size indicator */
   uint8_t flags;         /* 0x16: Flags */
   uint8_t _reserved;     /* 0x17: Reserved */
-} app_pkt_hdr_t;
+} __attribute__((packed)) app_pkt_hdr_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, type) == 0x00, "app_pkt_hdr_t.type");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, data_len) == 0x02, "app_pkt_hdr_t.data_len");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, template_len) == 0x04, "app_pkt_hdr_t.template_len");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, protocol) == 0x06, "app_pkt_hdr_t.protocol");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, src_node) == 0x08, "app_pkt_hdr_t.src_node");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, src_sock) == 0x0C, "app_pkt_hdr_t.src_sock");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, dest_node) == 0x0E, "app_pkt_hdr_t.dest_node");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, dest_sock) == 0x12, "app_pkt_hdr_t.dest_sock");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, net_type) == 0x14, "app_pkt_hdr_t.net_type");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, addr_size) == 0x15, "app_pkt_hdr_t.addr_size");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, flags) == 0x16, "app_pkt_hdr_t.flags");
+_Static_assert(__builtin_offsetof(app_pkt_hdr_t, _reserved) == 0x17, "app_pkt_hdr_t._reserved");
+_Static_assert(sizeof(app_pkt_hdr_t) == 0x18, "app_pkt_hdr_t size");
 
 /*
  * XNS IDP open parameters
@@ -125,6 +162,13 @@ typedef struct xns_idp_open_params_t {
   void *demux_handler; /* 0x04: Demultiplex handler function */
   uint32_t net_info;   /* 0x08: Network info from ROUTE_$PORTP */
 } xns_idp_open_params_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(xns_idp_open_params_t, protocol) == 0x00, "xns_idp_open_params_t.protocol");
+_Static_assert(__builtin_offsetof(xns_idp_open_params_t, demux_handler) == 0x04, "xns_idp_open_params_t.demux_handler");
+_Static_assert(__builtin_offsetof(xns_idp_open_params_t, net_info) == 0x08, "xns_idp_open_params_t.net_info");
+#endif
 
 /*
  * ============================================================================
@@ -143,21 +187,11 @@ typedef struct xns_idp_open_params_t {
 /* Temporary buffer for large packets (at 0xE1DC24, 0x394 bytes) */
 #define APP_$TEMP_BUFFER ((uint8_t *)0xE1DC24)
 
-/* Socket table base (at 0xE28DB0) */
-#define SOCK_$TABLE_BASE (*(void **)0xE28DB0)
-
-/* Ring overflow counters */
-#define RING_$FILE_OVERFLOW (*(uint16_t *)0xE24596)
-#define RING_$OVERFLOW_OVERFLOW (*(uint16_t *)0xE24594)
-
 #else
 /* Non-m68k: extern declarations */
 extern ml_$exclusion_t APP_$EXCLUSION_LOCK;
 extern uint16_t APP_$STD_IDP_CHANNEL;
 extern uint8_t APP_$TEMP_BUFFER[];
-extern void *SOCK_$TABLE_BASE;
-extern uint16_t RING_$FILE_OVERFLOW;
-extern uint16_t RING_$OVERFLOW_OVERFLOW;
 #endif
 
 #endif /* APP_INTERNAL_H */

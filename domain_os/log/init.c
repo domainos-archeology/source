@@ -72,7 +72,7 @@ void LOG_$INIT(void)
     desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
     /* Get file attributes to check size (0x00E300D8) */
-    AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, LOG_CATTR_SELECTOR, &cattr,
+    AST_$GET_COMMON_ATTRIBUTES(&desc, LOG_CATTR_SELECTOR, &cattr,
                                &status);
     if (log_$check_op_status("get_attributes%$", &status) < 0) {
         return;

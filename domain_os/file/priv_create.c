@@ -199,7 +199,7 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
     parent_loc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
     /* Get parent directory attributes to check if remote and get vol info */
-    AST_$GET_ATTRIBUTES(&parent_loc.uid, 0, obj_buf.attrs, &status);
+    AST_$GET_ATTRIBUTES(&parent_loc, 0, obj_buf.attrs, &status);
 
     if (status != status_$ok) {
         if (status != file_$object_not_found) {

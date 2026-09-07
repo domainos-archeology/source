@@ -44,4 +44,10 @@ uint32_t CACHE_$CLEAR(void);
  */
 void CACHE_$FLUSH_VIRTUAL(void);
 
+/*
+ * CACHE_$CLEAR_ENTRY - the patchable first word of the cache-clear routine
+ * (moved here from mmu/mmu_internal.h -- bead source-3uo).
+ */
+extern uint16_t CACHE_$CLEAR_ENTRY;
+
 #endif /* CACHE_H */

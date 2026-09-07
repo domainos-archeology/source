@@ -17,6 +17,7 @@
 #include "ml/ml.h"
 #include "parity/parity.h"
 #include "wp/wp.h"
+#include "dma/dma.h"   /* check_dma_error */
 
 /*
  * Maximum number of floppy units supported
@@ -42,6 +43,11 @@ typedef struct {
   uint8_t _pad2;
   uint8_t control; /* 0x14: Control register */
 } flp_regs_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(flp_regs_t, status) == 0x10, "flp_regs_t.status");
+_Static_assert(__builtin_offsetof(flp_regs_t, data) == 0x12, "flp_regs_t.data");
+_Static_assert(__builtin_offsetof(flp_regs_t, control) == 0x14, "flp_regs_t.control");
 
 /*
  * Status register bits
@@ -175,6 +181,6 @@ void FLP_FORMAT_TRACK(void *req, void *buf);
 /* WP_$WIRE declared in wp/wp.h */
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
 /* PARITY_$CHK_IO declared in parity/parity.h */
-extern status_$t check_dma_error(int16_t channel);
+/* check_dma_error is declared in dma/dma.h (bead source-3uo). */
 
 #endif /* FLP_H */

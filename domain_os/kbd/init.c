@@ -36,9 +36,14 @@ void KBD_$INIT(kbd_state_t *state)
     /* Initialize event counter */
     EC_$INIT(&state->ec);
 
-    /* Set ring buffer indices */
-    state->ring_head = 0x10001;
-    state->ring_tail = 0x40;
+    /*
+     * 00e333b6 `move.l #0x10001,(0x58,A2)` seeds the head and tail words at
+     * 0x58/0x5A in one longword store (both = 1, the ring is 1-based), and
+     * 00e333be `move.w #0x40,(0x5c,A2)` sets the capacity word at 0x5C.
+     */
+    state->ring_head = 1;
+    state->ring_tail = 1;
+    state->ring_size = KBD_RING_SIZE;
 
     /* Set secondary values */
     state->flags2 = 0x10001;

@@ -19,6 +19,8 @@
 #include "fim/fim.h"
 #include "ml/ml.h"
 #include "proc1/proc1.h"
+#include "term/term.h"   /* DTTE */
+#include "time/time.h"   /* TIME_$CLOCKH */
 
 /*
  * ============================================================================
@@ -95,7 +97,8 @@
  * Status Codes (module 0x13)
  * ============================================================================
  */
-#define status_$display_invalid_unit_number 0x00130001
+/* status_$display_invalid_unit_number moved to smd/smd.h: tpad/ raises it
+ * too (bead source-3uo). */
 #define status_$display_font_not_loaded 0x00130002
 #define status_$display_internal_font_table_full 0x00130003
 #define status_$display_invalid_use_of_driver_procedure 0x00130004
@@ -157,6 +160,13 @@ typedef struct smd_scroll_rect_t {
   uint16_t x2; /* 0x04: Right X coordinate */
   uint16_t y2; /* 0x06: Bottom Y coordinate */
 } smd_scroll_rect_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_scroll_rect_t, x1) == 0x00, "smd_scroll_rect_t.x1");
+_Static_assert(__builtin_offsetof(smd_scroll_rect_t, y1) == 0x02, "smd_scroll_rect_t.y1");
+_Static_assert(__builtin_offsetof(smd_scroll_rect_t, x2) == 0x04, "smd_scroll_rect_t.x2");
+_Static_assert(__builtin_offsetof(smd_scroll_rect_t, y2) == 0x06, "smd_scroll_rect_t.y2");
+_Static_assert(sizeof(smd_scroll_rect_t) == 0x08, "smd_scroll_rect_t size");
 
 /*
  * ============================================================================
@@ -222,6 +232,28 @@ typedef struct smd_display_hw_t {
   uint16_t field_5e;          /* 0x5E: Unknown (cleared in init) */
 } smd_display_hw_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(smd_display_hw_t, display_type) == 0x00, "smd_display_hw_t.display_type");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, field_24) == 0x24, "smd_display_hw_t.field_24");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, scroll_x1) == 0x26, "smd_display_hw_t.scroll_x1");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, scroll_y1) == 0x28, "smd_display_hw_t.scroll_y1");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, scroll_x2) == 0x2A, "smd_display_hw_t.scroll_x2");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, scroll_y2) == 0x2C, "smd_display_hw_t.scroll_y2");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, scroll_dy) == 0x2E, "smd_display_hw_t.scroll_dy");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, scroll_dx) == 0x30, "smd_display_hw_t.scroll_dx");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, pad_39) == 0x39, "smd_display_hw_t.pad_39");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, field_3a) == 0x3A, "smd_display_hw_t.field_3a");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, tracking_enabled) == 0x3C, "smd_display_hw_t.tracking_enabled");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, pad_3d) == 0x3D, "smd_display_hw_t.pad_3d");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, field_3e) == 0x3E, "smd_display_hw_t.field_3e");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, pad_3f) == 0x3F, "smd_display_hw_t.pad_3f");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, field_4c) == 0x4C, "smd_display_hw_t.field_4c");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, clip_x2) == 0x58, "smd_display_hw_t.clip_x2");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, clip_y1) == 0x5A, "smd_display_hw_t.clip_y1");
+_Static_assert(__builtin_offsetof(smd_display_hw_t, field_5e) == 0x5E, "smd_display_hw_t.field_5e");
+#endif
+
 /*
  * Packed cursor position helpers (SMD_POS_X / SMD_POS_Y / SMD_POS_MAKE) and
  * the smd_cursor_pos_t typedef they go with now live in smd/smd.h, where the
@@ -263,6 +295,11 @@ typedef struct smd_hdm_block_t {
   uint16_t size;   /* 0x02: Size of free block */
 } smd_hdm_block_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_hdm_block_t, offset) == 0x00, "smd_hdm_block_t.offset");
+_Static_assert(__builtin_offsetof(smd_hdm_block_t, size) == 0x02, "smd_hdm_block_t.size");
+_Static_assert(sizeof(smd_hdm_block_t) == 0x04, "smd_hdm_block_t size");
+
 /*
  * ============================================================================
  * HDM Allocation List
@@ -280,6 +317,11 @@ typedef struct smd_hdm_list_t {
   uint16_t count;            /* 0x00: Number of free blocks */
   smd_hdm_block_t blocks[1]; /* 0x02: Variable-length array of blocks */
 } smd_hdm_list_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(smd_hdm_list_t, count) == 0x00, "smd_hdm_list_t.count");
+#endif
 
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_hdm_list_t, blocks) == 0x02, "hdm list blocks");
@@ -302,6 +344,11 @@ typedef struct smd_font_entry_t {
    * (0x00E6DCF0); SMD_$UNLOAD_FONT hands it to SMD_$FREE_HDM (0x00E6DD80). */
   smd_hdm_pos_t hdm_pos;
 } smd_font_entry_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(smd_font_entry_t, font_ptr) == 0x00, "smd_font_entry_t.font_ptr");
+#endif
 
 #if defined(ARCH_M68K)
 _Static_assert(sizeof(smd_font_entry_t) == 8, "smd_font_entry_t size");
@@ -333,6 +380,22 @@ typedef struct smd_font_v1_t {
   /* Glyph metrics and bitmap data follow at offset 0x92 */
 } smd_font_v1_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_font_v1_t, version) == 0x00, "smd_font_v1_t.version");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, data_offset) == 0x02, "smd_font_v1_t.data_offset");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, field_04) == 0x04, "smd_font_v1_t.field_04");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, hdm_size) == 0x06, "smd_font_v1_t.hdm_size");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, char_width) == 0x08, "smd_font_v1_t.char_width");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, char_spacing) == 0x0A, "smd_font_v1_t.char_spacing");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, unknown_char_width) == 0x0C, "smd_font_v1_t.unknown_char_width");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, field_0e) == 0x0E, "smd_font_v1_t.field_0e");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, cell_height) == 0x10, "smd_font_v1_t.cell_height");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, default_missing) == 0x12, "smd_font_v1_t.default_missing");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, field_14) == 0x14, "smd_font_v1_t.field_14");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, descent) == 0x16, "smd_font_v1_t.descent");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, ascent) == 0x18, "smd_font_v1_t.ascent");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, char_map) == 0x1A, "smd_font_v1_t.char_map");
+
 /*
  * ============================================================================
  * Font Header - Version 3
@@ -340,6 +403,9 @@ typedef struct smd_font_v1_t {
  * Version 3 font format (more flexible, variable-width).
  * Indicated by version == 3 at offset 0x00.
  */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct smd_font_v3_t {
   uint16_t version;           /* 0x00: Font version (3) */
   uint16_t field_02;          /* 0x02: Unknown */
@@ -354,8 +420,10 @@ typedef struct smd_font_v3_t {
   uint16_t field_14;          /* 0x14: Unknown */
   uint16_t field_16;          /* 0x16: Unknown */
   uint16_t field_18;          /* 0x18: Unknown */
-  uint32_t char_map_offset;   /* 0x1A: Offset to character map */
-  uint32_t glyph_data_offset; /* 0x1E: Offset to glyph data */
+  /* 0x1A/0x1E were guessed to be the map/glyph offsets, but SMD_$WRITE_STRING
+   * reads those from 0x34 and 0x38 (see below), so these are unidentified. */
+  uint32_t field_1a;          /* 0x1A: Unknown */
+  uint32_t field_1e;          /* 0x1E: Unknown */
   uint16_t field_22;          /* 0x22: Unknown */
   uint16_t field_24;          /* 0x24: Unknown */
   uint16_t field_26;          /* 0x26: Unknown */
@@ -363,10 +431,80 @@ typedef struct smd_font_v3_t {
   uint32_t data_size;         /* 0x2C: Size of font bitmap data */
   uint16_t field_30;          /* 0x30: Unknown */
   uint16_t field_32;          /* 0x32: Unknown */
-  uint8_t char_map[256];      /* 0x34: Full 8-bit character map */
-  uint16_t hdm_size;          /* 0x42 (after map): HDM size needed */
-                              /* More fields and glyph data follow */
-} smd_font_v3_t;
+
+  /*
+   * The image reads the region from 0x34 two contradictory ways, so it is
+   * spelled as a union rather than silently picking one:
+   *
+   *   - the drawing path computes the glyph index as
+   *     `add.l (0x34,A2),D0` / `move.b (0x0,A2,D0*0x1),D1b` (00e70426), i.e.
+   *     0x34 is a LONGWORD byte-offset to the map, and 00e70438
+   *     `adda.l (0x38,A2),A1` (with a `lea (-0x8,A2)` bias) makes 0x38 the
+   *     glyph-data offset;
+   *   - the width-measuring path reads the map inline with
+   *     `move.b (0x34,A2,D0w*0x1),D1b` (00e70634).
+   *
+   * The remaining v3 metrics sit past 0x34 as well and mirror the v1 fields:
+   * 0x42 hdm_size (SMD_$LOAD_FONT 00e6dcbe / SMD_$UNLOAD_FONT), 0x48 descent
+   * (00e704fc, v1 0x16), 0x4A ascent (00e7056c, v1 0x18), 0x5A char_spacing
+   * (00e7060e, v1 0x10) and 0x6E default_missing width (00e7063a, v1 0x12).
+   * See the P2 bead: only one of the two readings can be correct.
+   */
+  union {
+    uint8_t char_map[256];      /* 0x34: inline map (00e70634 reading) */
+    struct {
+      uint32_t char_map_offset;   /* 0x34: byte offset to map (00e70426) */
+      uint32_t glyph_data_offset; /* 0x38: byte offset to glyphs (00e70438) */
+      uint16_t field_3c;          /* 0x3C: Unknown */
+      uint16_t field_3e;          /* 0x3E: Unknown */
+      uint16_t field_40;          /* 0x40: Unknown */
+      uint16_t hdm_size;          /* 0x42: HDM size needed */
+      uint16_t field_44;          /* 0x44: Unknown */
+      uint16_t field_46;          /* 0x46: Unknown */
+      uint16_t descent;           /* 0x48: Baseline descent */
+      uint16_t ascent;            /* 0x4A: Baseline ascent */
+      uint8_t  gap_4c[0x0E];      /* 0x4C: Unknown */
+      uint16_t char_spacing;      /* 0x5A: Character spacing */
+      uint8_t  gap_5c[0x12];      /* 0x5C: Unknown */
+      uint16_t default_missing;   /* 0x6E: Width for missing glyphs */
+    };
+  };
+} __attribute__((packed)) smd_font_v3_t;
+
+/* The union members are all measured from 0x34, so the offsets are asserted
+ * through it. */
+_Static_assert(__builtin_offsetof(smd_font_v3_t, char_map) == 0x34, "smd_font_v3_t.char_map");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, char_map_offset) == 0x34, "smd_font_v3_t.char_map_offset");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, glyph_data_offset) == 0x38, "smd_font_v3_t.glyph_data_offset");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, hdm_size) == 0x42, "smd_font_v3_t.hdm_size");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, descent) == 0x48, "smd_font_v3_t.descent");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, ascent) == 0x4A, "smd_font_v3_t.ascent");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, char_spacing) == 0x5A, "smd_font_v3_t.char_spacing");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, default_missing) == 0x6E, "smd_font_v3_t.default_missing");
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_font_v3_t, version) == 0x00, "smd_font_v3_t.version");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_02) == 0x02, "smd_font_v3_t.field_02");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_04) == 0x04, "smd_font_v3_t.field_04");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_06) == 0x06, "smd_font_v3_t.field_06");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_08) == 0x08, "smd_font_v3_t.field_08");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_0a) == 0x0A, "smd_font_v3_t.field_0a");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_0c) == 0x0C, "smd_font_v3_t.field_0c");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_0e) == 0x0E, "smd_font_v3_t.field_0e");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_10) == 0x10, "smd_font_v3_t.field_10");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_12) == 0x12, "smd_font_v3_t.field_12");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_14) == 0x14, "smd_font_v3_t.field_14");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_16) == 0x16, "smd_font_v3_t.field_16");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_18) == 0x18, "smd_font_v3_t.field_18");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_1a) == 0x1A, "smd_font_v3_t.field_1a");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_1e) == 0x1E, "smd_font_v3_t.field_1e");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_22) == 0x22, "smd_font_v3_t.field_22");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_24) == 0x24, "smd_font_v3_t.field_24");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_26) == 0x26, "smd_font_v3_t.field_26");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, data_offset) == 0x28, "smd_font_v3_t.data_offset");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, data_size) == 0x2C, "smd_font_v3_t.data_size");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_30) == 0x30, "smd_font_v3_t.field_30");
+_Static_assert(__builtin_offsetof(smd_font_v3_t, field_32) == 0x32, "smd_font_v3_t.field_32");
 
 /*
  * ============================================================================
@@ -383,6 +521,15 @@ typedef struct smd_glyph_metrics_t {
   uint8_t bitmap_col;  /* 0x05: Column in bitmap */
   uint16_t bitmap_row; /* 0x06: Row in bitmap */
 } smd_glyph_metrics_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_glyph_metrics_t, bearing_x) == 0x00, "smd_glyph_metrics_t.bearing_x");
+_Static_assert(__builtin_offsetof(smd_glyph_metrics_t, width) == 0x01, "smd_glyph_metrics_t.width");
+_Static_assert(__builtin_offsetof(smd_glyph_metrics_t, bearing_y) == 0x02, "smd_glyph_metrics_t.bearing_y");
+_Static_assert(__builtin_offsetof(smd_glyph_metrics_t, height) == 0x03, "smd_glyph_metrics_t.height");
+_Static_assert(__builtin_offsetof(smd_glyph_metrics_t, advance) == 0x04, "smd_glyph_metrics_t.advance");
+_Static_assert(__builtin_offsetof(smd_glyph_metrics_t, bitmap_col) == 0x05, "smd_glyph_metrics_t.bitmap_col");
+_Static_assert(__builtin_offsetof(smd_glyph_metrics_t, bitmap_row) == 0x06, "smd_glyph_metrics_t.bitmap_row");
 
 #define SMD_FONT_VERSION_1 1
 #define SMD_FONT_VERSION_3 3
@@ -461,6 +608,12 @@ typedef struct smd_display_unit_t {
   uint32_t display_base;         /* 0x108 (A3+0x14) = 0x00FC0000 */
 } smd_display_unit_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(smd_display_unit_t, field_08) == 0x08, "smd_display_unit_t.field_08");
+_Static_assert(__builtin_offsetof(smd_display_unit_t, field_0c) == 0x0C, "smd_display_unit_t.field_0c");
+#endif
+
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_display_unit_t, hw) == 0x00, "unit hw");
 _Static_assert(offsetof(smd_display_unit_t, owner_asid) == 0x04, "unit owner");
@@ -535,6 +688,13 @@ typedef struct smd_event_entry_t {
   uint16_t button_or_char; /* 0x0E: Button state or character */
 } smd_event_entry_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_event_entry_t, timestamp) == 0x04, "smd_event_entry_t.timestamp");
+_Static_assert(__builtin_offsetof(smd_event_entry_t, field_08) == 0x08, "smd_event_entry_t.field_08");
+_Static_assert(__builtin_offsetof(smd_event_entry_t, unit) == 0x0A, "smd_event_entry_t.unit");
+_Static_assert(__builtin_offsetof(smd_event_entry_t, event_type) == 0x0C, "smd_event_entry_t.event_type");
+_Static_assert(__builtin_offsetof(smd_event_entry_t, button_or_char) == 0x0E, "smd_event_entry_t.button_or_char");
+
 /*
  * Internal event type codes (in the queue):
  *   0x00 = key press with meta key (returns as keystroke, char only)
@@ -596,6 +756,11 @@ typedef struct smd_idm_event_t {
   };
 } smd_idm_event_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_idm_event_t, timestamp) == 0x00, "smd_idm_event_t.timestamp");
+_Static_assert(__builtin_offsetof(smd_idm_event_t, field_04) == 0x04, "smd_idm_event_t.field_04");
+_Static_assert(__builtin_offsetof(smd_idm_event_t, field_08) == 0x08, "smd_idm_event_t.field_08");
+
 /*
  * Unit event data structure (14 bytes)
  * Returned by SMD_$GET_UNIT_EVENT
@@ -607,6 +772,13 @@ typedef struct smd_unit_event_t {
   uint16_t unit;           /* 0x0A: Display unit */
   uint16_t button_or_char; /* 0x0C: Button state or character */
 } smd_unit_event_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_unit_event_t, timestamp) == 0x00, "smd_unit_event_t.timestamp");
+_Static_assert(__builtin_offsetof(smd_unit_event_t, field_04) == 0x04, "smd_unit_event_t.field_04");
+_Static_assert(__builtin_offsetof(smd_unit_event_t, field_08) == 0x08, "smd_unit_event_t.field_08");
+_Static_assert(__builtin_offsetof(smd_unit_event_t, unit) == 0x0A, "smd_unit_event_t.unit");
+_Static_assert(__builtin_offsetof(smd_unit_event_t, button_or_char) == 0x0C, "smd_unit_event_t.button_or_char");
 
 /* Alias for compatibility */
 typedef smd_unit_event_t smd_event_data_t;
@@ -623,6 +795,13 @@ typedef struct smd_crsr_bitmap_t {
   int16_t bitmap[16];   /* 0x08: Bitmap data */
 } smd_crsr_bitmap_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_crsr_bitmap_t, width) == 0x00, "smd_crsr_bitmap_t.width");
+_Static_assert(__builtin_offsetof(smd_crsr_bitmap_t, height) == 0x02, "smd_crsr_bitmap_t.height");
+_Static_assert(__builtin_offsetof(smd_crsr_bitmap_t, hot_x) == 0x04, "smd_crsr_bitmap_t.hot_x");
+_Static_assert(__builtin_offsetof(smd_crsr_bitmap_t, hot_y_offset) == 0x06, "smd_crsr_bitmap_t.hot_y_offset");
+_Static_assert(__builtin_offsetof(smd_crsr_bitmap_t, bitmap) == 0x08, "smd_crsr_bitmap_t.bitmap");
+
 /*
  * ============================================================================
  * Request Queue Entry Structure
@@ -635,6 +814,11 @@ typedef struct smd_request_entry_t {
   uint16_t param_count;  /* 0x02: Number of parameters */
   uint16_t params[16];   /* 0x04: Parameter array (max 16) */
 } smd_request_entry_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+_Static_assert(__builtin_offsetof(smd_request_entry_t, request_type) == 0x00, "smd_request_entry_t.request_type");
+_Static_assert(__builtin_offsetof(smd_request_entry_t, param_count) == 0x02, "smd_request_entry_t.param_count");
+_Static_assert(__builtin_offsetof(smd_request_entry_t, params) == 0x04, "smd_request_entry_t.params");
 
 #define SMD_REQUEST_QUEUE_SIZE 40
 #define SMD_REQUEST_QUEUE_MAX 0x28 /* 40 entries, 1-based */
@@ -761,6 +945,15 @@ typedef struct smd_globals_t {
   uint8_t pad_1da3;            /* 0x1DA3: Padding */
 } smd_globals_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(smd_globals_t, display_map_length) == 0x00, "smd_globals_t.display_map_length");
+_Static_assert(__builtin_offsetof(smd_globals_t, pad_e1) == 0xE1, "smd_globals_t.pad_e1");
+_Static_assert(__builtin_offsetof(smd_globals_t, pad_172c) == 0x172C, "smd_globals_t.pad_172c");
+_Static_assert(__builtin_offsetof(smd_globals_t, pad_1740) == 0x1740, "smd_globals_t.pad_1740");
+_Static_assert(__builtin_offsetof(smd_globals_t, pad_1da3) == 0x1DA3, "smd_globals_t.pad_1da3");
+#endif
+
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_globals_t, asid_to_unit) == 0x48, "g asid_to_unit");
 _Static_assert(offsetof(smd_globals_t, kbd_cursor_track_rect) == 0xC0, "g kbd");
@@ -825,6 +1018,18 @@ typedef struct smd_blt_params_t {
   uint16_t height;   /* 0x12: Height (low nibble: plane) */
 } smd_blt_params_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_blt_params_t, flags) == 0x00, "smd_blt_params_t.flags");
+_Static_assert(__builtin_offsetof(smd_blt_params_t, rop_mode) == 0x02, "smd_blt_params_t.rop_mode");
+_Static_assert(__builtin_offsetof(smd_blt_params_t, pattern) == 0x03, "smd_blt_params_t.pattern");
+_Static_assert(__builtin_offsetof(smd_blt_params_t, reserved) == 0x04, "smd_blt_params_t.reserved");
+_Static_assert(__builtin_offsetof(smd_blt_params_t, src_x) == 0x08, "smd_blt_params_t.src_x");
+_Static_assert(__builtin_offsetof(smd_blt_params_t, src_y) == 0x0A, "smd_blt_params_t.src_y");
+_Static_assert(__builtin_offsetof(smd_blt_params_t, dst_x) == 0x0C, "smd_blt_params_t.dst_x");
+_Static_assert(__builtin_offsetof(smd_blt_params_t, dst_y) == 0x0E, "smd_blt_params_t.dst_y");
+_Static_assert(__builtin_offsetof(smd_blt_params_t, width) == 0x10, "smd_blt_params_t.width");
+_Static_assert(__builtin_offsetof(smd_blt_params_t, height) == 0x12, "smd_blt_params_t.height");
+
 /*
  * ============================================================================
  * SMD_TIME_$COM - the SMD_TIME module's common block
@@ -871,6 +1076,12 @@ typedef struct smd_time_com_t {
    */
   uint16_t blink_defer;
 } smd_time_com_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(smd_time_com_t, pad_01) == 0x01, "smd_time_com_t.pad_01");
+_Static_assert(__builtin_offsetof(smd_time_com_t, pad_03) == 0x03, "smd_time_com_t.pad_03");
+#endif
 
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(smd_time_com_t, blink_enable) == 0x00,
@@ -941,7 +1152,6 @@ extern smd_time_com_t SMD_TIME_$COM;
 extern const uint32_t smd_$unit_init_params[2];
 
 /* TIME_$CLOCKH - high word of system clock */
-extern uint32_t TIME_$CLOCKH;
 
 /*
  * ============================================================================
@@ -974,6 +1184,13 @@ typedef struct smd_cursor_pattern_t {
   int16_t hot_y_adj;    /* 0x06: height - hot spot Y - 1 */
   uint16_t bitmap[16];  /* 0x08: one word per raster line */
 } smd_cursor_pattern_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(smd_cursor_pattern_t, width) == 0x00, "smd_cursor_pattern_t.width");
+_Static_assert(__builtin_offsetof(smd_cursor_pattern_t, height) == 0x02, "smd_cursor_pattern_t.height");
+_Static_assert(__builtin_offsetof(smd_cursor_pattern_t, hot_x) == 0x04, "smd_cursor_pattern_t.hot_x");
+#endif
 
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_cursor_pattern_t, hot_y_adj) == 0x06, "pat hot_y");
@@ -1246,6 +1463,16 @@ typedef struct smd_hw_blt_regs_t {
   uint16_t x_start;  /* 0x0E: Starting X coordinate */
 } smd_hw_blt_regs_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(smd_hw_blt_regs_t, bit_pos) == 0x02, "smd_hw_blt_regs_t.bit_pos");
+_Static_assert(__builtin_offsetof(smd_hw_blt_regs_t, mask) == 0x04, "smd_hw_blt_regs_t.mask");
+_Static_assert(__builtin_offsetof(smd_hw_blt_regs_t, pattern) == 0x06, "smd_hw_blt_regs_t.pattern");
+_Static_assert(__builtin_offsetof(smd_hw_blt_regs_t, y_extent) == 0x08, "smd_hw_blt_regs_t.y_extent");
+_Static_assert(__builtin_offsetof(smd_hw_blt_regs_t, x_extent) == 0x0A, "smd_hw_blt_regs_t.x_extent");
+_Static_assert(__builtin_offsetof(smd_hw_blt_regs_t, y_start) == 0x0C, "smd_hw_blt_regs_t.y_start");
+_Static_assert(__builtin_offsetof(smd_hw_blt_regs_t, x_start) == 0x0E, "smd_hw_blt_regs_t.x_start");
+_Static_assert(sizeof(smd_hw_blt_regs_t) == 0x10, "smd_hw_blt_regs_t size");
+
 /* BLT control register command codes */
 #define SMD_BLT_CMD_START 0x8000 /* Bit 15: start operation */
 #define SMD_BLT_CMD_DRAW 0x000E  /* Draw operation code */
@@ -1283,6 +1510,11 @@ typedef struct smd_util_ctx_t {
   smd_display_hw_t *hw;
   status_$t status;      /* 0x10: Status code */
 } smd_util_ctx_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(smd_util_ctx_t, reserved) == 0x00, "smd_util_ctx_t.reserved");
+#endif
 
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_util_ctx_t, display_base) == 0x04, "ctx base");
@@ -1512,8 +1744,16 @@ void smd_$enqueue_event(uint16_t unit, uint16_t type, uint32_t pos,
 int8_t smd_$add_trk_rects_internal(int8_t clear_flag, smd_track_rect_t *rects,
                                    uint16_t count);
 
-/* Display Transfer Table Event count at 0x00E2DC90 */
-extern ec_$eventcount_t DTTE;
+/*
+ * SMD_$DTTE_EC - the "display transfer" eventcount SMD_$GET_EC key 0 returns.
+ *
+ * SMD_$GET_EC loads A4 = 0xE2DC90 (00e6fdc6) and pushes it for key 0
+ * (00e6fdf4).  That address is TERM_$DATA.dtte[0], so the leading 12 bytes of
+ * the first DTTE entry (dtte_t.reserved_00) double as an ec_$eventcount_t.
+ * The old `extern ec_$eventcount_t DTTE;` here collided with the DTTE array
+ * declarations in term/ and sio/ (bead source-3uo).
+ */
+#define SMD_$DTTE_EC (*(ec_$eventcount_t *)&DTTE[0])
 
 /* FIM_$QUIT_EC / FIM_$QUIT_VALUE come from fim/fim.h */
 

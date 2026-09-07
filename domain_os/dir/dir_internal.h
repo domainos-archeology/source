@@ -274,6 +274,11 @@ typedef struct dir_insert_ctx {
     uint8_t     remove_uid[8];     /* UID buffer for FIM error recovery (A1-0x20) */
 } dir_insert_ctx_t;
 
+/* NOTE: dir_insert_ctx_t is NOT a recovered memory record -- it is a C
+ * gathering of dir_$add_entry's m68k stack-frame locals, and the (A1+/-N)
+ * annotations above are frame displacements, not struct offsets.  It
+ * therefore carries no layout _Static_asserts. */
+
 /*
  * ============================================================================
  * Internal Global Data References
@@ -471,20 +476,8 @@ void dir_$find_uid_internal(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
  * declared in name/name.h (included above).
  */
 
-/* NAME_$OLD_DELETE_ENTRYU - Shared delete/drop entry helper
- *
- * Handles deletion of directory entries. Checks entry type (file/link),
- * verifies ACL rights, deletes the underlying object (file or hard link),
- * and removes the directory entry.
- *
- * Although it carries the NAME_$ prefix, this routine is implemented in
- * dir/old_delete_entryu.c and is only called from dir/, so it stays here.
- *
- * Original address: 0x00E56B08
- */
-void NAME_$OLD_DELETE_ENTRYU(uid_t *dir_uid, char *name, uint16_t name_len,
-                             uint8_t flag1, uint8_t flag2, uint8_t flag3,
-                             uint8_t *result_buf, status_$t *status_ret);
+/* NAME_$OLD_DELETE_ENTRYU carries the NAME_$ prefix, so its prototype lives
+ * in name/name.h (bead source-3uo); the body is dir/old_delete_entryu.c. */
 
 /* dir_$old_unlink_entry - Find and remove directory entry by name
  *
@@ -700,16 +693,8 @@ void DIR_$UPDATE_HINT(uid_t *uid, uint32_t hint1, uint32_t hint2,
  * (audit/log_*_op.c); they are declared in audit/audit.h (included above).
  */
 
-/* audit_$log_resolve_op - Audit resolve operation
- *
- * Despite the audit_$ prefix this helper is implemented in
- * dir/audit_log_resolve_op.c and only used by DIR_$DO_OP, so it is
- * declared here rather than in audit/audit.h.
- *
- * Original address: 0x00E4BF92
- */
-void audit_$log_resolve_op(uint32_t pname_data, uint16_t path_len,
-                           void *result, status_$t status);
+/* audit_$log_resolve_op carries the audit_$ prefix, so its prototype lives in
+ * audit/audit.h (bead source-3uo); the body is dir/audit_log_resolve_op.c. */
 
 /* DIR_$VALIDATE_PAGES - Validate and compact directory pages
  *

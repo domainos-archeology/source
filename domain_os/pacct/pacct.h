@@ -69,6 +69,9 @@ typedef uint16_t comp_t;
  *
  * This is written to the accounting file for each terminated process.
  */
+/* PACKED: m68k aligns 32-bit fields to 2 bytes, so the recovered offsets
+ * below are only reproducible on a 4/8-byte-aligning host if the record is
+ * packed.  Packing changes no m68k layout. */
 typedef struct pacct_record_t {
     uint16_t    ac_flags;       /* 0x00: Accounting flags (fork, su, core) */
     uint8_t     ac_stat;        /* 0x02: Exit status (low 8 bits) */
@@ -90,7 +93,30 @@ typedef struct pacct_record_t {
     comp_t      ac_mem;         /* 0x4A: Average memory usage compressed */
     uint8_t     ac_pad3[28];    /* 0x4C: Padding to offset 0x68 */
     uint8_t     ac_comm[24];    /* 0x68: Command name (up to 24 chars, padded) */
-} pacct_record_t;
+} __attribute__((packed)) pacct_record_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_flags) == 0x00, "pacct_record_t.ac_flags");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_stat) == 0x02, "pacct_record_t.ac_stat");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_pad1) == 0x03, "pacct_record_t.ac_pad1");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_uid) == 0x04, "pacct_record_t.ac_uid");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_gid) == 0x0C, "pacct_record_t.ac_gid");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_org) == 0x14, "pacct_record_t.ac_org");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_login) == 0x1C, "pacct_record_t.ac_login");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_prot_uid) == 0x24, "pacct_record_t.ac_prot_uid");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_devno) == 0x2C, "pacct_record_t.ac_devno");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_btime) == 0x30, "pacct_record_t.ac_btime");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_io_read) == 0x34, "pacct_record_t.ac_io_read");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_io_write) == 0x36, "pacct_record_t.ac_io_write");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_elapsed) == 0x38, "pacct_record_t.ac_elapsed");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_proc_uid) == 0x3A, "pacct_record_t.ac_proc_uid");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_pad2) == 0x42, "pacct_record_t.ac_pad2");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_utime) == 0x46, "pacct_record_t.ac_utime");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_stime) == 0x48, "pacct_record_t.ac_stime");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_mem) == 0x4A, "pacct_record_t.ac_mem");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_pad3) == 0x4C, "pacct_record_t.ac_pad3");
+_Static_assert(__builtin_offsetof(pacct_record_t, ac_comm) == 0x68, "pacct_record_t.ac_comm");
+_Static_assert(sizeof(pacct_record_t) == 0x80, "pacct_record_t size");
 
 /*
  * ============================================================================

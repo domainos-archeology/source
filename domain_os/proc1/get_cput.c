@@ -16,7 +16,7 @@
 
 /*
  * get_current_cpu_time - Internal helper to compute current CPU time
- * Original: FUN_00e208d0
+ * Original: proc1_$get_current_cpu_time (0x00E208D0; was FUN_00e208d0)
  *
  * Returns:
  *   D0:D1 = CPU time (D0=low 16 bits, D1=high 32 bits)

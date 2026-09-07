@@ -198,5 +198,5 @@ void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
 static void route_$update_port_count(void)
 {
     /* Stub - needs implementation based on analysis of 0xe69bce */
-    /* This function updates DAT_00e87fd4 and related counters */
+    /* This function updates ROUTE_$N_USER_PORTS (0x00E87FD4) and related counters */
 }

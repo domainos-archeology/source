@@ -573,7 +573,7 @@ static void server_truncate_delete(rem_file_server_frame_t *f)
     desc->flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
     if ((do_delete < 0) && (f->request.reserved_02 == 0)) {
-        AST_$GET_ATTRIBUTES((uid_t *)desc, 0x81, attrs, &f->response.status);
+        AST_$GET_ATTRIBUTES(desc, 0x81, attrs, &f->response.status);
         if ((f->response.status == status_$ok) && (attrs[0] == 0)) {
             uint16_t one = 1;
             AST_$SET_ATTRIBUTE(file_uid, 7, &one, &f->response.status);
@@ -591,7 +591,7 @@ static void server_truncate_delete(rem_file_server_frame_t *f)
 
             AST_$TRUNCATE(file_uid, REQ_L(f, -0x42A), 0, trunc_result,
                           &f->response.status);
-            AST_$GET_ATTRIBUTES((uid_t *)desc, 0x80, attrs,
+            AST_$GET_ATTRIBUTES(desc, 0x80, attrs,
                                 &f->response.status);
             RSP_L(f, -0x198) = *(uint32_t *)(attrs + 0x38);
             RSP_W(f, -0x194) = *(uint16_t *)(attrs + 0x3C);
@@ -726,7 +726,7 @@ static void server_set_prot_attrib(rem_file_server_frame_t *f)
         file_$obj_loc_t *desc = (file_$obj_loc_t *)RSP_P(f, -0x104);
 
         desc->uid = f->request.uid;
-        AST_$GET_ATTRIBUTES((uid_t *)desc, 0x81, RSP_P(f, -0x194),
+        AST_$GET_ATTRIBUTES(desc, 0x81, RSP_P(f, -0x194),
                             &f->response.status);
     }
 
@@ -1121,7 +1121,7 @@ release_netbuf:                                     /* 0x00E639DC */
                 RSP_L(&f, -0x190) = desc->uid.high;
                 RSP_L(&f, -0x18C) = desc->uid.low;
             } else {
-                AST_$GET_ATTRIBUTES((uid_t *)desc, 0x81, RSP_P(&f, -0x194),
+                AST_$GET_ATTRIBUTES(desc, 0x81, RSP_P(&f, -0x194),
                                     &f.response.status);
             }
             f.reply_len = 0xBE;
@@ -1148,7 +1148,7 @@ release_netbuf:                                     /* 0x00E639DC */
 
             desc->uid = f.request.uid;
             desc->flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
-            AST_$GET_ATTRIBUTES((uid_t *)desc, 0x280, RSP_P(&f, -0x194),
+            AST_$GET_ATTRIBUTES(desc, 0x280, RSP_P(&f, -0x194),
                                 &f.local_status);
             RSP_L(&f, -0x190) = RSP_L(&f, -0x170);
             RSP_W(&f, -0x18C) = RSP_W(&f, -0x16C);
@@ -1372,7 +1372,7 @@ release_netbuf:                                     /* 0x00E639DC */
             desc->uid.high = REQ_L(&f, -0x42C);
             desc->uid.low  = REQ_L(&f, -0x428);
             desc->flags   &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
-            AST_$GET_ATTRIBUTES((uid_t *)desc, 1, RSP_P(&f, -0x194),
+            AST_$GET_ATTRIBUTES(desc, 1, RSP_P(&f, -0x194),
                                 &f.local_status);
             if (f.local_status != status_$ok) {
                 f.response.status = f.local_status;

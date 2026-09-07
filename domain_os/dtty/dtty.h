@@ -90,6 +90,12 @@ typedef struct dtty_tstart_t {
     void     *buffer_info;          /* 0x08: Pointer to buffer descriptor */
 } dtty_tstart_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(dtty_tstart_t, callback_arg) == 0x04, "dtty_tstart_t.callback_arg");
+_Static_assert(__builtin_offsetof(dtty_tstart_t, buffer_info) == 0x08, "dtty_tstart_t.buffer_info");
+#endif
+
 /*
  * Buffer descriptor used by TSTART
  * Describes a circular or linear string buffer.
@@ -100,6 +106,12 @@ typedef struct dtty_buffer_t {
     uint16_t    end;                /* 0x04: End of valid data in buffer */
     char        data[1];            /* 0x06: Start of character data (variable length) */
 } dtty_buffer_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(dtty_buffer_t, current) == 0x00, "dtty_buffer_t.current");
+_Static_assert(__builtin_offsetof(dtty_buffer_t, target) == 0x02, "dtty_buffer_t.target");
+_Static_assert(__builtin_offsetof(dtty_buffer_t, end) == 0x04, "dtty_buffer_t.end");
+_Static_assert(__builtin_offsetof(dtty_buffer_t, data) == 0x06, "dtty_buffer_t.data");
 
 /*
  * ============================================================================

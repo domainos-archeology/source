@@ -24,6 +24,7 @@
 #include "route/route.h"
 #include "sock/sock.h"
 #include "time/time.h"
+#include "network/network.h"   /* NETWORK_$LOOPBACK_FLAG */
 
 /*
  * Constants
@@ -162,7 +163,6 @@ extern pkt_$data_t PKT_$DATA_STRUCT;
  * route/route.h; PKT_$LIKELY_TO_ANSWER indexes it with the port number that
  * RIP_$FIND_NEXTHOP returned (0x00E129FA - 0x00E12A08).
  */
-extern int8_t NETWORK_$LOOPBACK_FLAG; /* Network loopback mode flag */
 
 /*
  * Internal function prototypes

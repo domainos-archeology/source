@@ -116,7 +116,7 @@ void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, void *acl_data,
 
             /* 0x00E5DF0E-0x00E5DF20.  The status goes to the parent frame's
              * A2-0x44, which is this function's local_status. */
-            AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc, FILE_GET_DEFAULT_PROT_ATTRS,
+            AST_$GET_COMMON_ATTRIBUTES(&desc, FILE_GET_DEFAULT_PROT_ATTRS,
                                        &cattr, &local_status);
 
             /* 0x00E5DF26-0x00E5DF30: the object type byte, zero-extended to

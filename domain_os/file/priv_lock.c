@@ -413,7 +413,7 @@ remote_done:                                            /* 0x00E5FA50 */
 
                 /* 0x00E5F744: AST_$GET_ATTRIBUTES takes the descriptor, whose
                  * UID sits at +8, and refills it from the AOTE. */
-                AST_$GET_ATTRIBUTES((uid_t *)&f.desc, 0x80, f.attrs,
+                AST_$GET_ATTRIBUTES(&f.desc, 0x80, f.attrs,
                                     &f.local_status);
                 if (f.local_status != 0) {
                     continue;                            /* 0x00E5F764 */

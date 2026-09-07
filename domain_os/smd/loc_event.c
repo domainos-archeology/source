@@ -254,5 +254,5 @@ void smd_$enqueue_event(uint16_t unit, uint16_t type, uint32_t pos, uint16_t but
     SMD_GLOBALS.event_queue_head = next_head;
 
     /* Signal event count to wake any waiters */
-    EC_$ADVANCE(&DTTE);
+    EC_$ADVANCE(&SMD_$DTTE_EC);
 }

@@ -32,7 +32,7 @@
 #define AST_$AOTE_SEQN       ast_$aote_seqn
 #endif
 
-aote_t *ast_$force_activate_segment(uid_t *uid, uint16_t segment,
+aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t segment,
                                     status_$t *status, int8_t force)
 {
     aote_t *aote;

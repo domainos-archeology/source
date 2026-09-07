@@ -67,6 +67,18 @@ typedef struct log_state_t {
     int8_t      pad_19[3];          /* 0x19: Padding to word boundary */
 } log_state_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(log_state_t, logfile_uid) == 0x00, "log_state_t.logfile_uid");
+_Static_assert(__builtin_offsetof(log_state_t, current_entry_ptr) == 0x08, "log_state_t.current_entry_ptr");
+_Static_assert(__builtin_offsetof(log_state_t, spin_lock) == 0x0C, "log_state_t.spin_lock");
+_Static_assert(__builtin_offsetof(log_state_t, pad_0e) == 0x0E, "log_state_t.pad_0e");
+_Static_assert(__builtin_offsetof(log_state_t, wired_handle) == 0x10, "log_state_t.wired_handle");
+_Static_assert(__builtin_offsetof(log_state_t, logfile_ptr) == 0x14, "log_state_t.logfile_ptr");
+_Static_assert(__builtin_offsetof(log_state_t, dirty_flag) == 0x18, "log_state_t.dirty_flag");
+_Static_assert(__builtin_offsetof(log_state_t, pad_19) == 0x19, "log_state_t.pad_19");
+#endif
+
 /* Global log state - address 0x00e2b280 */
 extern log_state_t LOG_$STATE;
 

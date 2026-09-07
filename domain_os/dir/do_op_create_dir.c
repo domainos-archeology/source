@@ -119,7 +119,7 @@ void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
                     /* 0x00E526EE `bclr.b #0x6,(-0x3b,A6)` = descriptor+0x1D. */
                     desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-                    AST_$GET_COMMON_ATTRIBUTES((uid_t *)&desc,
+                    AST_$GET_COMMON_ATTRIBUTES(&desc,
                                                DIR_CATTR_CREATE_DIR,
                                                &cattr, &status);  /* 0x00E52706 */
                     if (status == status_$ok) {

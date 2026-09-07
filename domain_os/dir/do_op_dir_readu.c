@@ -90,8 +90,11 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
     int16_t num_entries;
     void *find_entry_ret;
     uint16_t extra_array[18];
-    uint8_t attr_buf1[32];
-    uint8_t attr_buf2[60];
+    /* The 0x20-byte object-location record FILE_$GET_ATTRIBUTES rewrites. */
+    file_$obj_loc_t attr_buf1;
+    /* FILE_$GET_ATTRIBUTES copies 36 longwords into this buffer
+     * unconditionally (0x00E5DA20), so it is a full 0x90 bytes. */
+    uint8_t attr_buf2[AST_ATTR_REC_SIZE];
     uint32_t parent_uid_high;
     uint32_t parent_uid_low;
 
@@ -200,7 +203,7 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                         *(uint32_t *)(last_entry + 4) = root->low;
                     } else {
                         FILE_$GET_ATTRIBUTES(uid, &DAT_00e4b444,
-                                             &DAT_00e4dffa, attr_buf1,
+                                             &DAT_00e4dffa, &attr_buf1,
                                              attr_buf2, status_ret);
                         if (*status_ret != status_$ok) goto exit_cleanup;
                         /* Parent UID is at offset 0x60-0x5c from attr_buf2 base */

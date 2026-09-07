@@ -27,7 +27,7 @@ void HINT_$ADD_NET(uint32_t net_port)
 
     /* Copy network info from ROUTE_$PORTP + 0x2E */
     {
-        uint32_t *net_info = (uint32_t *)(ROUTE_$PORTP + 0x2E);
+        uint32_t *net_info = (uint32_t *)((uint8_t *)ROUTE_$PORTP[0] + 0x2E);
         hintfile->header.net_info = *net_info;
     }
 

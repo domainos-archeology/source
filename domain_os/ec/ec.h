@@ -73,6 +73,14 @@ typedef struct ec2_waiter_t {
     int16_t     pad;                /* 0x0A: Padding */
 } ec2_waiter_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(ec2_waiter_t, wait_val) == 0x00, "ec2_waiter_t.wait_val");
+_Static_assert(__builtin_offsetof(ec2_waiter_t, next) == 0x04, "ec2_waiter_t.next");
+_Static_assert(__builtin_offsetof(ec2_waiter_t, prev) == 0x06, "ec2_waiter_t.prev");
+_Static_assert(__builtin_offsetof(ec2_waiter_t, proc_id) == 0x08, "ec2_waiter_t.proc_id");
+_Static_assert(__builtin_offsetof(ec2_waiter_t, pad) == 0x0A, "ec2_waiter_t.pad");
+_Static_assert(sizeof(ec2_waiter_t) == 0x0C, "ec2_waiter_t size");
+
 /*
  * Lock IDs
  */

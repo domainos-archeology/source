@@ -16,6 +16,7 @@
 #include "time/time.h"
 #include "network/network.h"
 #include "uid/uid.h"
+#include "vtoc/vtoc.h"   /* VTOC_$UID */
 
 /*
  * Number of partitions per volume
@@ -189,7 +190,6 @@ extern bat_$disk_info_t bat_$disk_info[BAT_MAX_VOLUMES];
  *       TIME_$* are declared in time/time.h
  */
 extern uid_t BAT_$UID;        /* BAT bitmap UID */
-extern uid_t VTOC_$UID;       /* VTOCE block UID */
 
 /*
  * Helper macro to get partition VTOCE block as uint32_t

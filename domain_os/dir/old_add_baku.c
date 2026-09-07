@@ -83,7 +83,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     uint32_t acl_data[12];
     /* A6-0x58: FILE_$GET_ATTRIBUTES' 0x20-byte location record
      * (`pea (-0x58,A6)` at 0x00E5709C). */
-    uint8_t attr_buf[AST_$LOC_REC_SIZE];
+    file_$obj_loc_t attr_buf;
     /* A6-0xE8: its 0x90-byte attribute buffer (`pea (-0xe8,A6)` at
      * 0x00E57098); the callee requires size_ptr == 0x90. */
     uint8_t attr_buf2[AST_ATTR_REC_SIZE];
@@ -253,7 +253,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
 
     /* Get attributes from old file */
     FILE_$GET_ATTRIBUTES(&old_file_uid, &ACL_TYPE_DIR, &DAT_00e56094,
-                         attr_buf, attr_buf2, status_ret);
+                         &attr_buf, attr_buf2, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;

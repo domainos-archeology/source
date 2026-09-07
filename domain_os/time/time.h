@@ -64,6 +64,13 @@ typedef struct time_queue_t {
     uint16_t queue_id;      /* 0x0A: Queue identifier */
 } time_queue_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(time_queue_t, head) == 0x00, "time_queue_t.head");
+_Static_assert(__builtin_offsetof(time_queue_t, tail) == 0x04, "time_queue_t.tail");
+_Static_assert(__builtin_offsetof(time_queue_t, flags) == 0x08, "time_queue_t.flags");
+_Static_assert(__builtin_offsetof(time_queue_t, pad) == 0x09, "time_queue_t.pad");
+_Static_assert(__builtin_offsetof(time_queue_t, queue_id) == 0x0A, "time_queue_t.queue_id");
+
 /*
  * Time queue element structure - 26 bytes (0x1A)
  *
@@ -79,6 +86,16 @@ typedef struct time_queue_elem_t {
     uint32_t interval_high; /* 0x14: Repeat interval high word */
     uint16_t interval_low;  /* 0x18: Repeat interval low word */
 } time_queue_elem_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(time_queue_elem_t, next) == 0x00, "time_queue_elem_t.next");
+_Static_assert(__builtin_offsetof(time_queue_elem_t, callback) == 0x04, "time_queue_elem_t.callback");
+_Static_assert(__builtin_offsetof(time_queue_elem_t, callback_arg) == 0x08, "time_queue_elem_t.callback_arg");
+_Static_assert(__builtin_offsetof(time_queue_elem_t, expire_high) == 0x0C, "time_queue_elem_t.expire_high");
+_Static_assert(__builtin_offsetof(time_queue_elem_t, expire_low) == 0x10, "time_queue_elem_t.expire_low");
+_Static_assert(__builtin_offsetof(time_queue_elem_t, flags) == 0x12, "time_queue_elem_t.flags");
+_Static_assert(__builtin_offsetof(time_queue_elem_t, interval_high) == 0x14, "time_queue_elem_t.interval_high");
+_Static_assert(__builtin_offsetof(time_queue_elem_t, interval_low) == 0x18, "time_queue_elem_t.interval_low");
 
 /*
  * ============================================================================

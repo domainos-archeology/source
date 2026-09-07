@@ -84,6 +84,12 @@ typedef struct peb_fp_state_t {
   uint32_t instr_counter; /* +0x18: FP instruction counter */
 } peb_fp_state_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(peb_fp_state_t, data_regs) == 0x00, "peb_fp_state_t.data_regs");
+_Static_assert(__builtin_offsetof(peb_fp_state_t, status_reg) == 0x10, "peb_fp_state_t.status_reg");
+_Static_assert(__builtin_offsetof(peb_fp_state_t, ctrl_reg) == 0x14, "peb_fp_state_t.ctrl_reg");
+_Static_assert(__builtin_offsetof(peb_fp_state_t, instr_counter) == 0x18, "peb_fp_state_t.instr_counter");
+
 #define PEB_FP_STATE_SIZE 0x1C /* 28 bytes per process */
 #define PEB_MAX_PROCESSES 58   /* 0x3A processes supported */
 

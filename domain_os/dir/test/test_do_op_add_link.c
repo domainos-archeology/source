@@ -170,7 +170,7 @@ void dir_$do_op_add_entry(uid_t *uid_arg, uint16_t type, void *name,
     }
 }
 
-void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid_arg, uint16_t flags_arg,
+void AST_$GET_COMMON_ATTRIBUTES(file_$obj_loc_t *loc_arg, uint16_t flags_arg,
                                 ast_$common_attr_t *attrs, status_$t *status)
 {
     mock_get_common_attrs_called = 1;

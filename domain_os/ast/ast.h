@@ -72,6 +72,20 @@ typedef struct aste_t {
   uint16_t flags;      /* 0x12: Flags - see ASTE_FLAG_* below */
 } aste_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(aste_t, next) == 0x00, "aste_t.next");
+_Static_assert(__builtin_offsetof(aste_t, aote) == 0x04, "aste_t.aote");
+_Static_assert(__builtin_offsetof(aste_t, segment) == 0x08, "aste_t.segment");
+_Static_assert(__builtin_offsetof(aste_t, unknown_0a) == 0x0A, "aste_t.unknown_0a");
+_Static_assert(__builtin_offsetof(aste_t, timestamp) == 0x0C, "aste_t.timestamp");
+_Static_assert(__builtin_offsetof(aste_t, seg_index) == 0x0E, "aste_t.seg_index");
+_Static_assert(__builtin_offsetof(aste_t, page_count) == 0x10, "aste_t.page_count");
+_Static_assert(__builtin_offsetof(aste_t, wire_count) == 0x11, "aste_t.wire_count");
+_Static_assert(__builtin_offsetof(aste_t, flags) == 0x12, "aste_t.flags");
+_Static_assert(sizeof(aste_t) == 0x14, "aste_t size");
+#endif
+
 /* ASTE flags (at offset 0x12) */
 #define ASTE_FLAG_IN_TRANS 0x8000 /* In transition (being modified) */
 #define ASTE_FLAG_LOCKED 0x4000   /* Locked - cannot be freed */
@@ -165,6 +179,35 @@ typedef struct aote_t {
   uint8_t ref_count;     /* 0xBE: Reference count */
   uint8_t flags;         /* 0xBF: Flags - see AOTE_FLAG_* below */
 } aote_t;
+
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(aote_t, hash_next) == 0x00, "aote_t.hash_next");
+_Static_assert(__builtin_offsetof(aote_t, aste_list) == 0x04, "aote_t.aste_list");
+_Static_assert(__builtin_offsetof(aote_t, vol_uid) == 0x08, "aote_t.vol_uid");
+_Static_assert(__builtin_offsetof(aote_t, sub_type) == 0x0D, "aote_t.sub_type");
+_Static_assert(__builtin_offsetof(aote_t, attr_flags_lo) == 0x0F, "aote_t.attr_flags_lo");
+_Static_assert(__builtin_offsetof(aote_t, unknown_20) == 0x20, "aote_t.unknown_20");
+_Static_assert(__builtin_offsetof(aote_t, unknown_24) == 0x24, "aote_t.unknown_24");
+_Static_assert(__builtin_offsetof(aote_t, len_low) == 0x2C, "aote_t.len_low");
+_Static_assert(__builtin_offsetof(aote_t, unknown_2e) == 0x2E, "aote_t.unknown_2e");
+_Static_assert(__builtin_offsetof(aote_t, dtm_low) == 0x34, "aote_t.dtm_low");
+_Static_assert(__builtin_offsetof(aote_t, unknown_36) == 0x36, "aote_t.unknown_36");
+_Static_assert(__builtin_offsetof(aote_t, dtu_low) == 0x3C, "aote_t.dtu_low");
+_Static_assert(__builtin_offsetof(aote_t, unknown_3e) == 0x3E, "aote_t.unknown_3e");
+_Static_assert(__builtin_offsetof(aote_t, dta_low) == 0x44, "aote_t.dta_low");
+_Static_assert(__builtin_offsetof(aote_t, unknown_46) == 0x46, "aote_t.unknown_46");
+_Static_assert(__builtin_offsetof(aote_t, rights2) == 0x6D, "aote_t.rights2");
+_Static_assert(__builtin_offsetof(aote_t, rights3) == 0x6E, "aote_t.rights3");
+_Static_assert(__builtin_offsetof(aote_t, rights4) == 0x6F, "aote_t.rights4");
+_Static_assert(__builtin_offsetof(aote_t, rights5) == 0x70, "aote_t.rights5");
+_Static_assert(__builtin_offsetof(aote_t, unknown_72) == 0x72, "aote_t.unknown_72");
+_Static_assert(__builtin_offsetof(aote_t, owner2_ext) == 0x78, "aote_t.owner2_ext");
+_Static_assert(__builtin_offsetof(aote_t, owner3_ext) == 0x7C, "aote_t.owner3_ext");
+_Static_assert(__builtin_offsetof(aote_t, unknown_a4) == 0xA4, "aote_t.unknown_a4");
+_Static_assert(__builtin_offsetof(aote_t, unknown_ba) == 0xBA, "aote_t.unknown_ba");
+_Static_assert(__builtin_offsetof(aote_t, ref_count) == 0xBE, "aote_t.ref_count");
+#endif
 
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(aote_t, obj_type) == 0x0C, "aote_t.obj_type");
@@ -469,6 +512,12 @@ typedef struct locate_request_t {
   uint16_t hint;     /* 0x0A: ASTE index hint (low 9 bits) */
 } locate_request_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(locate_request_t, uid_high) == 0x00, "locate_request_t.uid_high");
+_Static_assert(__builtin_offsetof(locate_request_t, uid_low) == 0x04, "locate_request_t.uid_low");
+_Static_assert(__builtin_offsetof(locate_request_t, segment) == 0x08, "locate_request_t.segment");
+_Static_assert(__builtin_offsetof(locate_request_t, hint) == 0x0A, "locate_request_t.hint");
+
 aste_t *AST_$LOCATE_ASTE(locate_request_t *request);
 
 /*
@@ -492,6 +541,12 @@ typedef struct mste_t {
   uint16_t unknown_0a; /* 0x0A: Unknown */
   uint32_t vol_uid;    /* 0x0C: Volume UID */
 } mste_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(mste_t, uid) == 0x00, "mste_t.uid");
+_Static_assert(__builtin_offsetof(mste_t, segment) == 0x08, "mste_t.segment");
+_Static_assert(__builtin_offsetof(mste_t, unknown_0a) == 0x0A, "mste_t.unknown_0a");
+_Static_assert(__builtin_offsetof(mste_t, vol_uid) == 0x0C, "mste_t.vol_uid");
 
 /*
  * Function prototypes - Activation and wiring
@@ -665,9 +720,18 @@ _Static_assert(sizeof(ast_$acl_attr_t) == 0x38, "sizeof ast_$acl_attr_t");
 void AST_$GET_LOCATION(file_$obj_loc_t *loc_rec, uint16_t flags,
                        uint32_t *unused, uint32_t *vol_uid_out,
                        status_$t *status);
-void AST_$GET_ATTRIBUTES(uid_t *uid, uint16_t flags, void *attrs,
+/*
+ * AST_$GET_ATTRIBUTES (0x00E047A0) takes the SAME 0x20-byte object-location
+ * record as AST_$GET_LOCATION, not a bare UID: it reads the object UID from
+ * loc_rec+0x08 (`lea (0x8,A4),A0` at 0x00E047D2, `pea (0x8,A4)` at
+ * 0x00E047EC / 0x00E04810 / 0x00E04836) and, on every non-error path,
+ * overwrites all 0x20 bytes from aote+0x9C (0x00E0492C and 0x00E049B0).
+ * It also tests loc_rec+0x1D bit 7 at 0x00E049D6 and fills loc_rec+0x10 with
+ * ROUTE_$PORT_ARRAY[0].network when it is zero (0x00E049E8).
+ */
+void AST_$GET_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags, void *attrs,
                          status_$t *status);
-void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid, uint16_t flags,
+void AST_$GET_COMMON_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags,
                                 ast_$common_attr_t *attrs, status_$t *status);
 /*
  * AST_$GET_ACL_ATTRIBUTES (0x00e04aaa) is a thin wrapper over

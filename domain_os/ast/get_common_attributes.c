@@ -15,7 +15,8 @@
  * touched; it is established for AST_$GET_ATTRIBUTES.
  *
  * Arguments (0x00E04A10-0x00E04A20, pushed right to left for the inner call):
- *   A6+0x08 uid / object-location descriptor   -> AST_$GET_ATTRIBUTES arg 1
+ *   A6+0x08 object-location descriptor (0x20 bytes, NOT a bare UID)
+ *                                              -> AST_$GET_ATTRIBUTES arg 1
  *   A6+0x0C flags word                         -> arg 2
  *   A6+0x0E out (A2, the ast_$common_attr_t)
  *   A6+0x12 status                             -> arg 4
@@ -33,7 +34,7 @@
 #define AST_ATTR_REFCOUNT       0x74    /* -0x1C: aote+0x80 */
 #define AST_ATTR_ACCESS_FLAGS   0x65    /* -0x2B: aote+0x71 */
 
-void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid, uint16_t flags,
+void AST_$GET_COMMON_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags,
                                 ast_$common_attr_t *attrs, status_$t *status)
 {
     uint8_t full_attrs[AST_ATTR_REC_SIZE];      /* A6-0x90 */
@@ -43,7 +44,7 @@ void AST_$GET_COMMON_ATTRIBUTES(uid_t *uid, uint16_t flags,
 
     /* 0x00E04A0E-0x00E04A28.  The `subq.l #0x2,SP` is the Pascal result slot
      * of AST_$GET_ATTRIBUTES, whose value this procedure ignores. */
-    AST_$GET_ATTRIBUTES(uid, flags, full_attrs, status);
+    AST_$GET_ATTRIBUTES(loc_rec, flags, full_attrs, status);
 
     /* 0x00E04A2C: one longword - obj_type, sub_type and the two attribute
      * flag bytes. */

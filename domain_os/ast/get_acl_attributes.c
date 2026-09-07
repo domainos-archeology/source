@@ -25,11 +25,11 @@ void AST_$GET_ACL_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags,
     int i;
 
     /*
-     * 0x00E04ACA passes the caller's record pointer unchanged.  The cast
-     * matches the machine code: AST_$GET_ATTRIBUTES' first argument is the
-     * record base, not a bare UID (see the note in file/file.h).
+     * 0x00E04ACA passes the caller's record pointer unchanged:
+     * AST_$GET_ATTRIBUTES' first argument is the 0x20-byte object-location
+     * record, not a bare UID (see the note in file/file.h).
      */
-    AST_$GET_ATTRIBUTES((uid_t *)(void *)loc_rec, flags, full_attrs, status);
+    AST_$GET_ATTRIBUTES(loc_rec, flags, full_attrs, status);
 
     /* 0x00E04AD6: out[0x00] <- attrs[0x00] */
     out[0] = full_attrs[0];

@@ -55,7 +55,10 @@ extern void AST_$DEACTIVATE_SEGMENT(aste_t *aste, uint32_t flags, status_$t *sta
 aote_t *ast_$lookup_aote_by_uid(uid_t *uid);
 
 /* Force lookup/activate AOTE for segment - returns AOTE pointer */
-aote_t *ast_$force_activate_segment(uid_t *uid, uint16_t segment, status_$t *status, int8_t force);
+/* `segment` is a LONGWORD on the stack (A6+0x0C; `move.l (-0x14,A6),-(SP)` at
+ * AST_$GET_ATTRIBUTES 0x00E04832) and the callee never reads it.
+ * TODO (bead source-sy5u): what the argument means is still unknown. */
+aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t segment, status_$t *status, int8_t force);
 
 /* Look up existing ASTE for AOTE/segment */
 aste_t* ast_$lookup_aste(aote_t *aote, int16_t segment);

@@ -42,12 +42,13 @@
 typedef struct sio2681_global_data {
     /* Spin lock for SIO2681 operations */
     uint32_t    spin_lock;              /* 0x00: Spin lock variable */
+    uint32_t    reserved_04;            /* 0x04: Unused (error_table is at 0x08) */
 
     /* Error flag to status code mapping table */
-    uint32_t    error_table[8];         /* 0x08: Error flags -> status codes */
-    /* Index 0: no error
-     * Index 1-7: various error conditions
-     */
+    /* Indexed by SR[7:4] (0..15): SIO2681_$INT does
+     * `move.l (0x8,A5,D1w*0x1),-(SP)` with D1 = 4*index (00e1cf52), and the
+     * 16 longwords run 0x08..0x47 -- cmd_break_stop follows at 0x48. */
+    uint32_t    error_table[16];        /* 0x08: Error flags -> status codes */
 
     /* Command register values */
     uint8_t     cmd_break_stop;         /* 0x48: Stop break command (0x70) */
@@ -79,11 +80,35 @@ typedef struct sio2681_global_data {
     /* Baud rate index table - maps baud rate index to support bit */
     uint16_t    baud_bits[17];          /* 0x62: Baud rate support bits */
 
-    /* Baud rate code table - maps index to CSR value */
-    uint8_t     baud_codes[17];         /* 0x84: Baud rate CSR codes */
-    uint8_t     pad_95;
+    /* Baud rate code table - maps index to CSR value.  The stride is a WORD:
+     * sio2681_set_baud_rate reads `move.b (0x85,A2),D1b` with A2 = A5 + 2*index
+     * (00e1d204 / 00e1d20e), i.e. the CSR nibble is the low byte of the word at
+     * 0x84 + 2*index.  The table ends at 0xA5. */
+    uint16_t    baud_codes[17];         /* 0x84: Baud rate CSR codes */
 
 } sio2681_global_data_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, spin_lock) == 0x00, "sio2681_global_data_t.spin_lock");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, reserved_04) == 0x04, "sio2681_global_data_t.reserved_04");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, error_table) == 0x08, "sio2681_global_data_t.error_table");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, cmd_break_stop) == 0x48, "sio2681_global_data_t.cmd_break_stop");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, cmd_break_start) == 0x4A, "sio2681_global_data_t.cmd_break_start");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, default_baud) == 0x4C, "sio2681_global_data_t.default_baud");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, baud_mask_a) == 0x50, "sio2681_global_data_t.baud_mask_a");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, baud_mask_b) == 0x52, "sio2681_global_data_t.baud_mask_b");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, cmd_reset_error) == 0x54, "sio2681_global_data_t.cmd_reset_error");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, cmd_enable_rx_tx) == 0x56, "sio2681_global_data_t.cmd_enable_rx_tx");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, cmd_reset_rx) == 0x58, "sio2681_global_data_t.cmd_reset_rx");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, cmd_reset_tx) == 0x5A, "sio2681_global_data_t.cmd_reset_tx");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, cmd_reset_mr) == 0x5C, "sio2681_global_data_t.cmd_reset_mr");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, mr2_template) == 0x5E, "sio2681_global_data_t.mr2_template");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, mr1_template) == 0x60, "sio2681_global_data_t.mr1_template");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, baud_bits) == 0x62, "sio2681_global_data_t.baud_bits");
+_Static_assert(__builtin_offsetof(sio2681_global_data_t, baud_codes) == 0x84, "sio2681_global_data_t.baud_codes");
+/* The record's fields end at 0xA5; no sizeof assert, because the C size
+ * depends on the target's struct rounding (0xA6 on m68k, 0xA8 on a host
+ * that aligns uint32_t to 4). */
 
 /*
  * Global data instance

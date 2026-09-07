@@ -3,7 +3,7 @@
  *
  * Receives a message from a socket and returns extended hardware
  * address information. This is similar to MSG_$RCV_CONTIGI but
- * uses a helper function (FUN_00e59548) for the main work.
+ * uses a helper function (MSG_$$RCV_INTERNAL, 0x00E59548) for the main work.
  *
  * Original address: 0x00E59950 (172 bytes)
  *
@@ -17,7 +17,7 @@
 #include "netbuf/netbuf.h"
 
 /*
- * Internal receive helper (FUN_00e59548)
+ * Internal receive helper (MSG_$$RCV_INTERNAL, 0x00E59548)
  *
  * This is the shared implementation used by MSG_$RCV_HW and other
  * receive variants. It handles the actual receive operation after

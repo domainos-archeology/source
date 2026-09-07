@@ -25,6 +25,7 @@
 #include "route/route.h"
 #include "network/network.h"
 #include "netlog/netlog.h"
+#include "rgyc/rgyc.h"   /* RGYC_$G_NIL_UID */
 
 /*
  * Lock ID for disk operations
@@ -388,17 +389,14 @@ extern vtoc_$data_t vtoc_$data;     /* Base: 0xE784D0 */
 #define OS_DISK_DATA    ((uint8_t *)&vtoc_$data)    /* 0xE784D0 */
 
 /*
- * UID constants for VTOC block types
- * Note: UID_$NIL is declared in base/base.h
+ * UID constants for VTOC block types are exported from vtoc/vtoc.h
+ * (VTOC_$UID, VTOC_BKT_$UID) -- bat/ and others need them.
  */
-extern uid_t VTOC_$UID;             /* 0xE1739C: VTOC block UID */
-extern uid_t VTOC_BKT_$UID;         /* 0xE173AC: VTOC bucket UID */
 
 /*
  * Special UIDs for ACL defaults
  * (PPO_$NIL_USER_UID / PPO_$NIL_ORG_UID are declared in vtoc/vtoc.h)
  */
-extern uid_t RGYC_$G_NIL_UID;       /* 0xE17524: Nil group UID */
 
 /*
  * UID cache structure for quick VTOCE lookup

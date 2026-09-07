@@ -8,6 +8,7 @@
 #define PROM_H
 
 #include "base/base.h"
+#include "io/io.h"   /* io_$probe */
 
 /*
  * PROM entry points and data
@@ -36,6 +37,6 @@ extern uint32_t PROM_$SAU_AND_AUX;
  *
  * Original address: 0x00e29138
  */
-int8_t io_$probe(void *type, void *addr, void *result);
+/* io_$probe is declared in io/io.h (bead source-3uo). */
 
 #endif /* PROM_H */

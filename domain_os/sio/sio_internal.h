@@ -136,7 +136,7 @@ void sio_$set_break(sio_desc_t *desc, uint8_t enable);
  * From TERM module
  * TERM_$MAX_DTTE is provided as a macro in term/term.h aliasing TERM_$DATA.max_dtte.
  */
-extern dtte_t DTTE[];
+/* DTTE is TERM_$DATA.dtte; the alias lives in term/term.h. */
 
 /* TERM_$GET_REAL_LINE (0x00e1a9d4) is declared in term/term.h */
 

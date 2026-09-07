@@ -182,6 +182,16 @@ typedef struct sio2681_chip {
     uint8_t     reserved_09[3]; /* 0x09: Padding */
 } sio2681_chip_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(sio2681_chip_t, regs) == 0x00, "sio2681_chip_t.regs");
+_Static_assert(__builtin_offsetof(sio2681_chip_t, config1) == 0x04, "sio2681_chip_t.config1");
+_Static_assert(__builtin_offsetof(sio2681_chip_t, config2) == 0x06, "sio2681_chip_t.config2");
+_Static_assert(__builtin_offsetof(sio2681_chip_t, imr_shadow) == 0x08, "sio2681_chip_t.imr_shadow");
+_Static_assert(__builtin_offsetof(sio2681_chip_t, reserved_09) == 0x09, "sio2681_chip_t.reserved_09");
+_Static_assert(sizeof(sio2681_chip_t) == 0x0C, "sio2681_chip_t size");
+#endif
+
 /*
  * SIO2681 Channel Structure
  *
@@ -201,6 +211,20 @@ typedef struct sio2681_channel {
     uint16_t    tx_int_mask;    /* 0x18: Transmit interrupt mask bit */
     uint16_t    baud_support;   /* 0x1A: Supported baud rates mask */
 } sio2681_channel_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(sio2681_channel_t, regs) == 0x00, "sio2681_channel_t.regs");
+_Static_assert(__builtin_offsetof(sio2681_channel_t, chip) == 0x04, "sio2681_channel_t.chip");
+_Static_assert(__builtin_offsetof(sio2681_channel_t, peer) == 0x08, "sio2681_channel_t.peer");
+_Static_assert(__builtin_offsetof(sio2681_channel_t, sio_desc) == 0x0C, "sio2681_channel_t.sio_desc");
+_Static_assert(__builtin_offsetof(sio2681_channel_t, flags) == 0x10, "sio2681_channel_t.flags");
+_Static_assert(__builtin_offsetof(sio2681_channel_t, int_bit) == 0x12, "sio2681_channel_t.int_bit");
+_Static_assert(__builtin_offsetof(sio2681_channel_t, reserved_14) == 0x14, "sio2681_channel_t.reserved_14");
+_Static_assert(__builtin_offsetof(sio2681_channel_t, tx_int_mask) == 0x18, "sio2681_channel_t.tx_int_mask");
+_Static_assert(__builtin_offsetof(sio2681_channel_t, baud_support) == 0x1A, "sio2681_channel_t.baud_support");
+_Static_assert(sizeof(sio2681_channel_t) == 0x1C, "sio2681_channel_t size");
+#endif
 
 /* Channel flags */
 #define SIO2681_FLAG_CHANNEL_B      0x02    /* This is channel B (vs A) */

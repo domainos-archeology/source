@@ -95,6 +95,15 @@ typedef struct {
   uint16_t dma_overrun; /* +0x16: offset 0x54 from base */
 } win_stats_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(win_stats_t, seek_errors) == 0x00, "win_stats_t.seek_errors");
+_Static_assert(__builtin_offsetof(win_stats_t, not_ready) == 0x04, "win_stats_t.not_ready");
+_Static_assert(__builtin_offsetof(win_stats_t, reserved1) == 0x08, "win_stats_t.reserved1");
+_Static_assert(__builtin_offsetof(win_stats_t, equip_check) == 0x0C, "win_stats_t.equip_check");
+_Static_assert(__builtin_offsetof(win_stats_t, reserved2) == 0x10, "win_stats_t.reserved2");
+_Static_assert(__builtin_offsetof(win_stats_t, data_check) == 0x14, "win_stats_t.data_check");
+_Static_assert(__builtin_offsetof(win_stats_t, dma_overrun) == 0x16, "win_stats_t.dma_overrun");
+
 /*
  * ANSI command codes for Winchester drives
  */

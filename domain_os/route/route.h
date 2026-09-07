@@ -460,35 +460,9 @@ extern uint32_t ROUTE_$STAT_DROPPED_STD_ROUTE;
 void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index,
                            int8_t port_type_flag);
 
-/*
- * RIP_$HALT_PACKET / RIP_$HALT_PACKET_DATA - the RIP "poison" packet the
- * router transmits when it shuts down: a 16-byte internet header followed by
- * 8 bytes of RIP data at +0x10.  The storage lives in the ROUTE wired data
- * area (route/route_data.c) but the only user is RIP_$HALT_ROUTER
- * (rip/misc.c, 0x00E873B4 / 0x00E873D6), so the declaration is public.
- *
- * Original addresses: 0xE87D68, 0xE87D78
- */
-#if defined(ARCH_M68K)
-#define RIP_$HALT_PACKET        ((uint8_t *)0xE87D68)
-#define RIP_$HALT_PACKET_DATA   ((uint8_t *)0xE87D78)
-#else
-extern uint8_t RIP_$HALT_PACKET[24];
-#define RIP_$HALT_PACKET_DATA   (&RIP_$HALT_PACKET[0x10])
-#endif
-
-/*
- * RIP_$SEND_DEST_ADDR - the destination-address scratch RIP_$SEND is handed
- *
- * The first 12 bytes of the same 0x00E87D68 block are a rip_$dest_addr_t that
- * RIP_$SEND rewrites in place (broadcast host and socket, then each port's
- * network in turn).  Both RIP_$BROADCAST ("lea (0xe87d68).l,A5" at
- * 0x00E872A0, "pea (A5)" at 0x00E87386) and RIP_$HALT_ROUTER (0x00E873B4)
- * pass it.  RIP_$SEND itself uses the same address as its A5 module base
- * (0x00E871BE).
- */
-#define RIP_$SEND_DEST_ADDR     ((rip_$dest_addr_t *)RIP_$HALT_PACKET)
-
+/* RIP_$HALT_PACKET, RIP_$HALT_PACKET_DATA and RIP_$SEND_DEST_ADDR carry the
+ * RIP_$ prefix, so they are declared in rip/rip.h (included above) even though
+ * the storage is defined in route/route_data.c (bead source-3uo). */
 
 /*
  * Wired routing-send cells shared with RIP_$SEND's nested procedure

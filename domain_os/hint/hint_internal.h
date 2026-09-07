@@ -26,8 +26,9 @@
 #include "mst/mst.h"
 #include "name/name.h"
 #include "network/network.h"
-#include "route/route.h"
+#include "route/route.h"   /* ROUTE_$PORT, ROUTE_$PORTP */
 #include "time/time.h"
+#include "uid/uid.h"   /* UID_$NIL */
 
 /*
  * ============================================================================
@@ -81,6 +82,10 @@ typedef struct hint_addr_t {
   uint32_t node_id; /* 0x04: Node ID where file might be located */
 } hint_addr_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(hint_addr_t, flags) == 0x00, "hint_addr_t.flags");
+_Static_assert(__builtin_offsetof(hint_addr_t, node_id) == 0x04, "hint_addr_t.node_id");
+
 /*
  * Hint slot - single entry within a hash bucket
  *
@@ -94,6 +99,11 @@ typedef struct hint_slot_t {
   hint_addr_t addrs[3];    /* 0x04: Up to 3 hint addresses (24 bytes) */
 } hint_slot_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(hint_slot_t, uid_low_masked) == 0x00, "hint_slot_t.uid_low_masked");
+_Static_assert(__builtin_offsetof(hint_slot_t, addrs) == 0x04, "hint_slot_t.addrs");
+_Static_assert(sizeof(hint_slot_t) == 0x1C, "hint_slot_t size");
+
 /*
  * Hint bucket - hash bucket containing multiple slots
  *
@@ -102,8 +112,14 @@ typedef struct hint_slot_t {
  * Size: 84 bytes (0x54)
  */
 typedef struct hint_bucket_t {
-  hint_slot_t slots[HINT_SLOTS_PER_BUCKET]; /* 3 slots x 28 bytes = 84 bytes */
+  hint_slot_t slots[HINT_SLOTS_PER_BUCKET]; /* 0x00: 3 slots x 28 bytes = 84 */
 } hint_bucket_t;
+
+/* Bucket stride 0x54 and slot stride 0x1C: HINT_$add_internal 00e49a5c
+ * `moveq #0x54,D2` / `muls.w D0w,D2` selects the bucket, then 00e49a76 /
+ * 00e49adc `lea (0x1c,A1),A1` walks the three slots. */
+_Static_assert(__builtin_offsetof(hint_bucket_t, slots) == 0x00, "hint_bucket_t.slots");
+_Static_assert(sizeof(hint_bucket_t) == 0x54, "hint_bucket_t size");
 
 /*
  * Hint file header
@@ -120,6 +136,11 @@ typedef struct hint_file_header_t {
   uint32_t net_info; /* 0x08: Network info (2 shorts packed) */
 } hint_file_header_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(hint_file_header_t, version) == 0x00, "hint_file_header_t.version");
+_Static_assert(__builtin_offsetof(hint_file_header_t, net_port) == 0x04, "hint_file_header_t.net_port");
+_Static_assert(__builtin_offsetof(hint_file_header_t, net_info) == 0x08, "hint_file_header_t.net_info");
+
 /*
  * Complete hint file structure
  *
@@ -127,9 +148,17 @@ typedef struct hint_file_header_t {
  * Total size: 12 + (64 * 84) = 5388 bytes
  */
 typedef struct hint_file_t {
-  hint_file_header_t header;             /* 12 bytes */
-  hint_bucket_t buckets[HINT_HASH_SIZE]; /* 64 * 84 = 5376 bytes */
+  hint_file_header_t header;             /* 0x00: 12 bytes */
+  hint_bucket_t buckets[HINT_HASH_SIZE]; /* 0x0C: 64 * 84 = 5376 bytes */
 } hint_file_t;
+
+/* HINT_$add_internal reaches slot i of bucket b at
+ * hintfile + 84*b + 0x1C*i - 0x10 (00e49a6c/00e49a76/00e49a8a), i.e.
+ * hintfile + 0x0C + 84*b + 0x1C*(i-1): the bucket array starts at 0x0C,
+ * just past the 12-byte header, and the slot index is Pascal 1-based. */
+_Static_assert(__builtin_offsetof(hint_file_t, header) == 0x00, "hint_file_t.header");
+_Static_assert(__builtin_offsetof(hint_file_t, buckets) == 0x0C, "hint_file_t.buckets");
+_Static_assert(sizeof(hint_file_t) == 0x150C, "hint_file_t size (12 + 64*84)");
 
 /*
  * Local hint cache entry
@@ -146,6 +175,13 @@ typedef struct hint_cache_entry_t {
   uint32_t uid_low_masked; /* 0x08: UID key (low 20 bits) */
 } hint_cache_entry_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(hint_cache_entry_t, timestamp) == 0x00, "hint_cache_entry_t.timestamp");
+_Static_assert(__builtin_offsetof(hint_cache_entry_t, result) == 0x04, "hint_cache_entry_t.result");
+_Static_assert(__builtin_offsetof(hint_cache_entry_t, pad) == 0x05, "hint_cache_entry_t.pad");
+_Static_assert(__builtin_offsetof(hint_cache_entry_t, uid_low_masked) == 0x08, "hint_cache_entry_t.uid_low_masked");
+_Static_assert(sizeof(hint_cache_entry_t) == 0x0C, "hint_cache_entry_t size");
+
 /*
  * HINT subsystem global state
  *
@@ -153,13 +189,29 @@ typedef struct hint_cache_entry_t {
  * Located at 0xE7DB50 on m68k.
  */
 typedef struct hint_globals_t {
+  /* Pascal 1-based: HINT_$LOOKUP_CACHE / HINT_$ADD_CACHE address entry i as
+   * A5 + 12*i - 0xC .. -0x4 (00e49d34/00e49d38, 00e49dc8), i.e. cache[i-1]. */
   hint_cache_entry_t cache[HINT_CACHE_SIZE]; /* 0x00: Local cache (24 bytes) */
-  uint16_t cache_index;                      /* 0x18: Next cache slot to use */
-  uint16_t bucket_index; /* 0x1A: Internal round-robin index */
-  /* Additional space for internal state */
-  hint_file_t *hintfile_ptr; /* 0x20: Pointer to mapped hint file */
-  uid_t hintfile_uid;        /* 0x24: UID of the hint file */
+  uid_t hintfile_uid;        /* 0x18: UID of the hint file (00e31248) */
+  hint_file_t *hintfile_ptr; /* 0x20: Mapped hint file (00e312c0) */
+  uint16_t cache_index;      /* 0x24: Round-robin cache slot, 1..2 (00e31402) */
+  uint16_t bucket_index;     /* 0x26: Round-robin slot in bucket, 1..3 (00e49afa) */
 } hint_globals_t;
+
+/* Layout recovered from the disassembly.  HINT_$INIT writes the hint-file UID
+ * at (0x18,A1)/(0x1c,A1) (00e31248) and the mapped pointer at (0x20,A1)
+ * (00e312c0); HINT_$INIT_CACHE seeds the cache index at (0x24,A1) (00e31402)
+ * and HINT_$add_internal cycles the bucket index at (0x26,A5) (00e49afa).
+ * The earlier layout had cache_index/bucket_index at 0x18/0x1A, which
+ * collided with hintfile_uid. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(hint_globals_t, cache) == 0x00, "hint_globals_t.cache");
+_Static_assert(__builtin_offsetof(hint_globals_t, hintfile_uid) == 0x18, "hint_globals_t.hintfile_uid");
+_Static_assert(__builtin_offsetof(hint_globals_t, hintfile_ptr) == 0x20, "hint_globals_t.hintfile_ptr");
+_Static_assert(__builtin_offsetof(hint_globals_t, cache_index) == 0x24, "hint_globals_t.cache_index");
+_Static_assert(__builtin_offsetof(hint_globals_t, bucket_index) == 0x26, "hint_globals_t.bucket_index");
+_Static_assert(sizeof(hint_globals_t) == 0x28, "hint_globals_t size");
+#endif
 
 /*
  * ============================================================================
@@ -190,12 +242,6 @@ typedef struct hint_globals_t {
 /* Bucket round-robin index (at 0xE7DB76) */
 #define HINT_$BUCKET_INDEX (*(uint16_t *)0xE7DB76)
 
-/* Network routing port pointer (external reference) */
-#define ROUTE_$PORTP (*(uint8_t **)0xE26EE8)
-
-/* Network port for current node */
-#define ROUTE_$PORT (*(uint32_t *)0xE2E0A0)
-
 #else
 /* Non-m68k: extern declarations */
 extern hint_file_t *HINT_$HINTFILE_PTR;
@@ -204,8 +250,6 @@ extern ml_$exclusion_t HINT_$EXCLUSION_LOCK;
 extern hint_cache_entry_t HINT_$CACHE[];
 extern uint16_t HINT_$CACHE_INDEX;
 extern uint16_t HINT_$BUCKET_INDEX;
-extern uint8_t *ROUTE_$PORTP;
-extern uint32_t ROUTE_$PORT;
 #endif
 
 /*

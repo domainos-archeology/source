@@ -18,3 +18,5 @@
 - [SR10.4 user-space binaries name kernel stats](reference_sr104_userspace_binaries.md) — grep /etc/netmain before calling a field name unrecoverable.
 - [Pointer-warning pass findings](pointer-warning-pass-notes.md) — pea-cell constants, wrong-callee bugs, and why byte-pointer casts break the host tests.
 - [Warning sweeps are frame-model audits](feedback_warning_sweeps.md) — every pointer-type warning here hid a real ABI bug; fix the model, not the cast.
+- [Ghidra name-sync workflow](ghidra-name-sync-workflow.md) — how to diff the whole tree against the symbol table, and the gsk quirks that fake a clean result.
+- [Attribute-query call shape and the big-endian request-word trap](attr-query-call-shape.md) — AST_$GET_ATTRIBUTES' 0x20-byte record in/out, the 0x7A compact record, `btst.b (0x1,A0)` is a word test.

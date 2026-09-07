@@ -66,6 +66,16 @@ typedef struct netbuf_globals_t {
   int16_t hdr_alloc; /* 0x334: Total header buffers allocated */
 } netbuf_globals_t;
 
+/* Remaining documented offsets (bead source-pewa). */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(netbuf_globals_t, va_slots) == 0x00, "netbuf_globals_t.va_slots");
+_Static_assert(__builtin_offsetof(netbuf_globals_t, pad_306) == 0x306, "netbuf_globals_t.pad_306");
+_Static_assert(__builtin_offsetof(netbuf_globals_t, dat_allocs) == 0x30C, "netbuf_globals_t.dat_allocs");
+_Static_assert(__builtin_offsetof(netbuf_globals_t, hdr_allocs) == 0x310, "netbuf_globals_t.hdr_allocs");
+_Static_assert(__builtin_offsetof(netbuf_globals_t, dat_delays) == 0x314, "netbuf_globals_t.dat_delays");
+_Static_assert(__builtin_offsetof(netbuf_globals_t, hdr_delays) == 0x318, "netbuf_globals_t.hdr_delays");
+#endif
+
 /*
  * Architecture-specific access to netbuf globals
  */

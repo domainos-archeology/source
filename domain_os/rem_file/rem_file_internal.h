@@ -20,6 +20,7 @@
 #include "ast/ast.h"
 #include "ml/ml.h"
 #include "netlog/netlog.h"
+#include "network/network.h"   /* NETWORK_$CAPABLE_FLAGS */
 
 /*
  * =============================================================================
@@ -128,7 +129,6 @@ typedef struct {
  * NODE_$ME come from network/network.h; NETLOG_$OK_TO_LOG_SERVER from
  * netlog/netlog.h; UID_$NIL from uid/uid.h; ACL_$SUPER_COUNT from acl/acl.h.)
  */
-extern uint8_t NETWORK_$CAPABLE_FLAGS;  /* 0xE24C3F: Network capability flags (bit 0 = capable) */
 
 /*
  * The request is a wire record whose payload is interpreted differently by
@@ -144,6 +144,13 @@ typedef struct rem_file_server_req_t {
     uint8_t     arg[0x28C];         /* 0x00C: A6-0x42C .. */
 } rem_file_server_req_t;            /* 0x298 */
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(rem_file_server_req_t, version) == 0x00, "rem_file_server_req_t.version");
+_Static_assert(__builtin_offsetof(rem_file_server_req_t, reserved_02) == 0x02, "rem_file_server_req_t.reserved_02");
+_Static_assert(__builtin_offsetof(rem_file_server_req_t, opcode) == 0x03, "rem_file_server_req_t.opcode");
+_Static_assert(__builtin_offsetof(rem_file_server_req_t, uid) == 0x04, "rem_file_server_req_t.uid");
+_Static_assert(__builtin_offsetof(rem_file_server_req_t, arg) == 0x0C, "rem_file_server_req_t.arg");
+
 typedef struct rem_file_server_resp_t {
     uint16_t    pkt_flag;           /* 0x000: A6-0x1A0 */
     uint8_t     magic;              /* 0x002: A6-0x19E */
@@ -151,6 +158,13 @@ typedef struct rem_file_server_resp_t {
     status_$t   status;             /* 0x004: A6-0x19C */
     uint8_t     data[0x118];        /* 0x008: A6-0x198 .. */
 } rem_file_server_resp_t;           /* 0x120 */
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(rem_file_server_resp_t, pkt_flag) == 0x00, "rem_file_server_resp_t.pkt_flag");
+_Static_assert(__builtin_offsetof(rem_file_server_resp_t, magic) == 0x02, "rem_file_server_resp_t.magic");
+_Static_assert(__builtin_offsetof(rem_file_server_resp_t, opcode) == 0x03, "rem_file_server_resp_t.opcode");
+_Static_assert(__builtin_offsetof(rem_file_server_resp_t, status) == 0x04, "rem_file_server_resp_t.status");
+_Static_assert(__builtin_offsetof(rem_file_server_resp_t, data) == 0x08, "rem_file_server_resp_t.data");
 
 /*
  * The block APP_$RECEIVE fills in (A6-0x30, 0x30 bytes).  The first two
@@ -168,6 +182,19 @@ typedef struct rem_file_rcv_t {
     uint32_t    f_26;               /* 0x26: -0x0A */
     uint16_t    pad_2a[3];          /* 0x2A */
 } rem_file_rcv_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(rem_file_rcv_t, hdr) == 0x00, "rem_file_rcv_t.hdr");
+_Static_assert(__builtin_offsetof(rem_file_rcv_t, data) == 0x04, "rem_file_rcv_t.data");
+_Static_assert(__builtin_offsetof(rem_file_rcv_t, bufs) == 0x08, "rem_file_rcv_t.bufs");
+_Static_assert(__builtin_offsetof(rem_file_rcv_t, f_18) == 0x18, "rem_file_rcv_t.f_18");
+_Static_assert(__builtin_offsetof(rem_file_rcv_t, f_1c) == 0x1C, "rem_file_rcv_t.f_1c");
+_Static_assert(__builtin_offsetof(rem_file_rcv_t, clock) == 0x20, "rem_file_rcv_t.clock");
+_Static_assert(__builtin_offsetof(rem_file_rcv_t, f_26) == 0x26, "rem_file_rcv_t.f_26");
+_Static_assert(__builtin_offsetof(rem_file_rcv_t, pad_2a) == 0x2A, "rem_file_rcv_t.pad_2a");
+_Static_assert(sizeof(rem_file_rcv_t) == 0x30, "rem_file_rcv_t size");
+#endif
 
 /*
  * REM_FILE module data
@@ -203,12 +230,9 @@ extern uint8_t REM_FILE_$SERVER_PKT_INFO[];
 /* 0xE2E3BC: "*** diskless partner node has crashed" */
 extern char REM_FILE_$DISKLESS_CRASH_MSG[];
 
-/*
- * Socket event counter array (0xE28DB0)
- * Indexed by socket number to get the EC pointer for that socket.
- * Despite the name, this is actually an array of EC pointers.
- */
-extern ec_$eventcount_t *SOCK_$SOCKET_EC[];
+/* The socket pointer table is owned by sock/sock.h (SOCK_$EVENT_COUNTERS /
+ * SOCK_$SOCKET_PTR); the unused SOCK_$SOCKET_EC alias that used to be
+ * declared here was removed (bead source-3uo). */
 
 /*
  * PKT info template data at 0xE2E380

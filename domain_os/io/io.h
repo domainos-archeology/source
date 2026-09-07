@@ -41,6 +41,29 @@ typedef struct dcte_t {
   uint32_t pdvte_index;    /* 0x44: PDVTE index */
 } dcte_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(dcte_t, no_clue) == 0x00, "dcte_t.no_clue");
+_Static_assert(__builtin_offsetof(dcte_t, ctype) == 0x04, "dcte_t.ctype");
+_Static_assert(__builtin_offsetof(dcte_t, cnum) == 0x06, "dcte_t.cnum");
+_Static_assert(__builtin_offsetof(dcte_t, nextp) == 0x08, "dcte_t.nextp");
+_Static_assert(__builtin_offsetof(dcte_t, csrsytr) == 0x0C, "dcte_t.csrsytr");
+_Static_assert(__builtin_offsetof(dcte_t, cstatus) == 0x10, "dcte_t.cstatus");
+_Static_assert(__builtin_offsetof(dcte_t, blk_hdr_ptr) == 0x14, "dcte_t.blk_hdr_ptr");
+_Static_assert(__builtin_offsetof(dcte_t, blk_hdr_pa) == 0x18, "dcte_t.blk_hdr_pa");
+_Static_assert(__builtin_offsetof(dcte_t, reserved_1c) == 0x1C, "dcte_t.reserved_1c");
+_Static_assert(__builtin_offsetof(dcte_t, vector_ptr) == 0x28, "dcte_t.vector_ptr");
+_Static_assert(__builtin_offsetof(dcte_t, int_entry) == 0x2C, "dcte_t.int_entry");
+_Static_assert(__builtin_offsetof(dcte_t, int_routine) == 0x30, "dcte_t.int_routine");
+_Static_assert(__builtin_offsetof(dcte_t, disk_dinit) == 0x34, "dcte_t.disk_dinit");
+_Static_assert(__builtin_offsetof(dcte_t, disk_do_io) == 0x38, "dcte_t.disk_do_io");
+_Static_assert(__builtin_offsetof(dcte_t, disk_error_que) == 0x3C, "dcte_t.disk_error_que");
+_Static_assert(__builtin_offsetof(dcte_t, dflags) == 0x40, "dcte_t.dflags");
+_Static_assert(__builtin_offsetof(dcte_t, d_unit_irq) == 0x42, "dcte_t.d_unit_irq");
+_Static_assert(__builtin_offsetof(dcte_t, pdvte_index) == 0x44, "dcte_t.pdvte_index");
+_Static_assert(sizeof(dcte_t) == 0x48, "dcte_t size");
+#endif
+
 /*
  * ============================================================================
  * Interrupt Controller Data Structure
@@ -78,6 +101,15 @@ typedef struct io_int_ctrl_t {
   dcte_t *type0_dcte;                /* 0x24 */
   void (*type0_dinit)(dcte_t *dcte); /* 0x28 */
 } io_int_ctrl_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(io_int_ctrl_t, type2_dcte) == 0x04, "io_int_ctrl_t.type2_dcte");
+_Static_assert(__builtin_offsetof(io_int_ctrl_t, reserved_0c) == 0x0C, "io_int_ctrl_t.reserved_0c");
+_Static_assert(__builtin_offsetof(io_int_ctrl_t, type1_dcte) == 0x14, "io_int_ctrl_t.type1_dcte");
+_Static_assert(__builtin_offsetof(io_int_ctrl_t, reserved_1c) == 0x1C, "io_int_ctrl_t.reserved_1c");
+_Static_assert(__builtin_offsetof(io_int_ctrl_t, type0_dcte) == 0x24, "io_int_ctrl_t.type0_dcte");
+#endif
 
 /*
  * ============================================================================
@@ -224,5 +256,14 @@ dcte_t *IO_$GET_DCTE(uint16_t *ctypep, uint16_t *cnump, status_$t *status_ret);
  * TODO: no C implementation yet (only declared here for OS_$INIT).
  */
 void IO_$INIT(void *param1, char *verbose_flag, status_$t *status_ret);
+
+/*
+ * io_$probe - Hardware probe helper
+ *
+ * Probes for a controller by writing a signature and reading it back.
+ * Returns a Domain boolean (0xFF = found).  Declared here because flp/,
+ * prom/, peb/, win/ and smd/ all call it (bead source-3uo).
+ */
+int8_t io_$probe(void *type, void *addr, void *result);
 
 #endif /* IO_H */

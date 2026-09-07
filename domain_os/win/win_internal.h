@@ -11,6 +11,7 @@
 #include "win/win.h"
 
 #include "time/time.h"
+#include "dma/dma.h"   /* check_dma_error */
 
 /*
  * Reading the clock the WIN spin loops poll.
@@ -64,7 +65,7 @@ uint32_t win_$host_clockh(void);
  */
 status_$t SEEK(uint16_t unit, uint16_t cylinder, void *req, uint8_t flags);
 status_$t read_or_write_disk_record(uint16_t unit);
-status_$t check_dma_error(uint16_t param);
+/* check_dma_error is declared in dma/dma.h (bead source-3uo). */
 
 /*
  * WAIT_FOR_CONTROLLER (0x00E190BC, was FUN_00e190bc) - spin until the drive's

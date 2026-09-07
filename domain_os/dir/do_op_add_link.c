@@ -135,7 +135,8 @@ void dir_$do_op_add_link(uid_t *uid, void *name, uint16_t name_len,
      * at result+0x22 (`cmp.w (-0x5e,A6)` at 0x00E504FA), which
      * AST_$GET_ATTRIBUTES filled from aote+0x9E.
      */
-    AST_$GET_COMMON_ATTRIBUTES((uid_t *)(result + ADDRES_TARGET_UID),
+    AST_$GET_COMMON_ATTRIBUTES((file_$obj_loc_t *)(void *)
+                                   (result + ADDRES_TARGET_UID),
                                DIR_CATTR_ADD_LINK,
                                (ast_$common_attr_t *)(void *)
                                    (result + ADDRES_COMMON_ATTRS),

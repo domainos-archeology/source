@@ -68,7 +68,7 @@ void SMD_$GET_EC(uint16_t *key, void **ec2_ret, status_$t *status_ret)
     switch (*key) {
     case SMD_EC_KEY_DTTE:
         /* Display Transfer Table Event */
-        ec1 = &DTTE;
+        ec1 = &SMD_$DTTE_EC;
         break;
 
     case SMD_EC_KEY_DISP_OP:

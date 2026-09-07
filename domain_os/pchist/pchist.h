@@ -43,6 +43,16 @@ typedef struct pchist_proc_t {
     uint32_t *overflow_ptr; /* 0x10: Pointer to track overflow (or NULL) */
 } pchist_proc_t;
 
+/* Layout recovered from the disassembly -- see the field comments above. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(pchist_proc_t, buffer) == 0x00, "pchist_proc_t.buffer");
+_Static_assert(__builtin_offsetof(pchist_proc_t, bufsize) == 0x04, "pchist_proc_t.bufsize");
+_Static_assert(__builtin_offsetof(pchist_proc_t, offset) == 0x08, "pchist_proc_t.offset");
+_Static_assert(__builtin_offsetof(pchist_proc_t, scale) == 0x0C, "pchist_proc_t.scale");
+_Static_assert(__builtin_offsetof(pchist_proc_t, overflow_ptr) == 0x10, "pchist_proc_t.overflow_ptr");
+_Static_assert(sizeof(pchist_proc_t) == 0x14, "pchist_proc_t size");
+#endif
+
 /*
  * System-wide histogram control structure
  * Located at 0xe85c24
@@ -63,6 +73,21 @@ typedef struct pchist_histogram_t {
     uint32_t  wrong_pid;         /* 0x24: Samples for wrong PID */
     uint32_t  histogram[PCHIST_HISTOGRAM_BINS]; /* 0x28+: Histogram bins */
 } pchist_histogram_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(pchist_histogram_t, enabled) == 0x00, "pchist_histogram_t.enabled");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, doalign) == 0x02, "pchist_histogram_t.doalign");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, pad1) == 0x04, "pchist_histogram_t.pad1");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, multiplier) == 0x06, "pchist_histogram_t.multiplier");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, pid_filter) == 0x08, "pchist_histogram_t.pid_filter");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, shift) == 0x0A, "pchist_histogram_t.shift");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, range_start) == 0x0C, "pchist_histogram_t.range_start");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, range_end) == 0x10, "pchist_histogram_t.range_end");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, bucket_size) == 0x14, "pchist_histogram_t.bucket_size");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, total_samples) == 0x18, "pchist_histogram_t.total_samples");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, over_range) == 0x1C, "pchist_histogram_t.over_range");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, under_range) == 0x20, "pchist_histogram_t.under_range");
+_Static_assert(__builtin_offsetof(pchist_histogram_t, wrong_pid) == 0x24, "pchist_histogram_t.wrong_pid");
 
 /*
  * PCHIST control structure (internal state)
@@ -85,6 +110,9 @@ typedef struct pchist_control_t {
     /* At offset 0x126 from base: */
     int8_t   doalign;               /* Alignment mode flag */
 } pchist_control_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(pchist_control_t, lock) == 0x00, "pchist_control_t.lock");
 
 /*
  * External data references
