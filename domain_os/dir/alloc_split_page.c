@@ -39,8 +39,8 @@ void dir_$alloc_split_page(dir_insert_ctx_t *ctx, uint8_t flag,
                            int16_t slot_idx, int16_t base_offset,
                            status_$t *status_ret)
 {
-    uint8_t *handle = (uint8_t *)(uintptr_t)ctx->handle;
-    void *handle_ptr = (void *)(uintptr_t)ctx->handle;
+    uint8_t *handle = (uint8_t *)NAME_$HANDLE_TO_PTR(ctx->handle);
+    void *handle_ptr = NAME_$HANDLE_TO_PTR(ctx->handle);
 
     /* Store current slot index in context for finalize_split to read later.
      * Original: move.w (0x8,A0),(-0xa8,A2) */

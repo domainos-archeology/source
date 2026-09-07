@@ -111,6 +111,16 @@ uint32_t dir_$truncate_pages(void *handle, uint16_t new_page_count,
 /* Prevent real headers from being included */
 #define DIR_INTERNAL_H
 
+/*
+ * dir/finalize_split.c turns the 32-bit directory handle into a pointer with
+ * NAME_$HANDLE_TO_PTR (name/name.h).  This test carries its own
+ * dir_insert_ctx_t whose handle is already a uintptr_t, so the m68k identity
+ * form is the right one here.
+ * TODO(source-14k1): this file should use the real dir_internal.h instead of
+ * its private copies of dir_insert_ctx_t, uid_t and status_$t.
+ */
+#define NAME_$HANDLE_TO_PTR(h)  ((void *)(uintptr_t)(h))
+
 /* Pull in the implementation */
 #include "../finalize_split.c"
 

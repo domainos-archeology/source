@@ -80,8 +80,10 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
         DAT_00e817f8 = 0;
 
         /* Unlock the old file */
-        FILE_$PRIV_UNLOCK(&pacct_owner, (int16_t)DAT_00e817f4, 0x40000,
-                          0, 0, 0, unlock_buf, &local_status);
+        /* 0x00E5A7FA-0x00E5A812: `move.l (0x8,A5)` slot, `move.l #0x40000`
+         * = mode word 4 + asid word 0, then three `clr.l`. */
+        (void)FILE_$PRIV_UNLOCK(&pacct_owner, (int32_t)DAT_00e817f4, 4, 0,
+                                0, 0, 0, 0, unlock_buf, &local_status);
     }
 
     /* Reset owner to nil */

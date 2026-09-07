@@ -64,8 +64,12 @@ void DIR_$SET_ACL(uid_t *uid, void *acl, status_$t *status_ret)
                         (uint32_t *)&lock_handle, &lock_result, status_ret);
         if (*status_ret == status_$ok) {
             FILE_$SET_ACL(uid, (uid_t *)acl, status_ret);
-            FILE_$PRIV_UNLOCK(uid, (uint16_t)lock_handle, 0x00040000 | PROC1_$AS_ID,
-                              0, 0, 0, dtv_buf, &status);
+            /* 0x00E52D3E-0x00E52D5C: mode 4 and PROC1_$AS_ID are two
+             * separate words, the slot is a full longword, and the four
+             * remaining input arguments are zero. */
+            (void)FILE_$PRIV_UNLOCK(uid, (int32_t)lock_handle, 4,
+                                    (uint16_t)PROC1_$AS_ID,
+                                    0, 0, 0, 0, dtv_buf, &status);
             if (*status_ret == status_$ok) {
                 *status_ret = status;
             }

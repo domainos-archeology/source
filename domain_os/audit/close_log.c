@@ -45,8 +45,11 @@ void audit_$close_log(status_$t *status_ret)
     FILE_$TRUNCATE(&AUDIT_$DATA.log_file_uid, &final_size, status_ret);
 
     /* Unlock the file */
-    FILE_$PRIV_UNLOCK(&AUDIT_$DATA.log_file_uid, (int16_t)AUDIT_$DATA.lock_id,
-                      0x40000, 0, 0, 0, lock_info, status_ret);
+    /* `move.l (0x19c,A5)` slot, `move.l #0x40000` = mode word 4 + asid
+     * word 0, then three `clr.l` for by_key/key, rem_key, rem_node. */
+    (void)FILE_$PRIV_UNLOCK(&AUDIT_$DATA.log_file_uid,
+                            (int32_t)AUDIT_$DATA.lock_id, 4, 0,
+                            0, 0, 0, 0, lock_info, status_ret);
 
     /* Reset log file UID */
     AUDIT_$DATA.log_file_uid.high = UID_$NIL.high;

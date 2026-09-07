@@ -54,23 +54,28 @@ void FILE_$UNLOCK_VOL(uid_t *vol_uid, status_$t *status_ret)
         }
 
         /*
-         * Unlock this entry
-         * Combine mode=0 (from lock_info.mode), with ASID from flags
-         *
-         * From assembly:
-         *   move.w (-0x14,A6),-(SP)   ; lock_info.sequence (offset 0x16 from base -0x28)
-         *   st -(SP)                   ; remote_flags = -1 (0xFF)
-         *   move.l (-0x1c,A6),-(SP)   ; lock_info.context (offset 0x00)
-         *   move.l (-0x20,A6),-(SP)   ; lock_info.owner_node (offset 0x04)
+         * Unlock this entry.  0x00E60D74-0x00E60D92, pushed right to left
+         * (the lock_info record is based at A6-0x28):
+         *   pea (-0x3c,A6)            status_ret = &local_status
+         *   pea (-0x38,A6)            dtv_out
+         *   move.l (-0x1c,A6)         rem_node  = lock_info.owner_node (+0x0C)
+         *   move.l (-0x20,A6)         rem_key   = lock_info.context    (+0x08)
+         *   move.w (-0x14,A6)         key       = lock_info.sequence   (+0x14)
+         *   st                        by_key    = TRUE
+         *   clr.l                     lock_mode = 0, asid = 0
+         *   clr.l                     lock_slot = 0
+         *   pea (-0x28,A6)            file_uid  = &lock_info.file_uid
          */
-        FILE_$PRIV_UNLOCK(&lock_info.file_uid,   /* Use UID from lock info */
-                          0,                     /* lock_index = 0 (search) */
-                          (uint32_t)lock_info.mode << 16,  /* mode_asid: mode shifted, asid=0 */
-                          -1,                    /* remote_flags = -1 (remote unlock) */
-                          lock_info.context,     /* param_5 = context */
-                          lock_info.owner_node,  /* param_6 = node address */
-                          dtv_out,               /* dtv_out */
-                          &local_status);
+        (void)FILE_$PRIV_UNLOCK((uid_t *)(void *)&lock_info,
+                                0,                      /* lock_slot        */
+                                0,                      /* lock_mode: any   */
+                                0,                      /* asid             */
+                                -1,                     /* by_key = true    */
+                                lock_info.sequence,     /* key              */
+                                lock_info.context,      /* rem_key          */
+                                lock_info.owner_node,   /* rem_node         */
+                                dtv_out,
+                                &local_status);
     }
 
     /*

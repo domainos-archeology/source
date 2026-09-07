@@ -67,8 +67,10 @@ void PACCT_$STOP(void)
     DAT_00e817f8 = 0;       /* buf_remaining = 0 */
 
     /* Unlock the accounting file */
-    FILE_$PRIV_UNLOCK(&pacct_owner, (int16_t)DAT_00e817f4, 0x40000,
-                      0, 0, 0, status_buf, &status);
+    /* `move.l (0x8,A5)` slot, `move.l #0x40000` = mode word 4 + asid word 0,
+     * then three `clr.l`. */
+    (void)FILE_$PRIV_UNLOCK(&pacct_owner, (int32_t)DAT_00e817f4, 4, 0,
+                            0, 0, 0, 0, status_buf, &status);
 
     /* Disable accounting by setting owner to nil */
     pacct_owner.high = UID_$NIL.high;

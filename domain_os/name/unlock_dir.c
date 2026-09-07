@@ -62,24 +62,26 @@ void NAME_$UNLOCK_DIR(status_$t *status_ret)
     }
 
     /*
-     * 0xE547EA.  The original pushes nine arguments: the UID, the longword
-     * NAME_$LOCK_SLOT[cur] at (0x0C,A6), then two separate words
-     * NAME_$LOCK_MODE[cur] at (0x10,A6) and PROC1_$AS_ID at (0x12,A6), three
-     * zero longwords, the 12-byte output buffer and the status.
-     *
-     * TODO(source-fi9u): file/file_internal.h declares FILE_$PRIV_UNLOCK with
-     * `uint16_t lock_index` where the original takes a full longword, and it
-     * merges the lock-mode and ASID words into a single `mode_asid` longword.
-     * That header belongs to the file subsystem, so the call below is written
-     * against the declaration as it stands; the slot value is truncated to 16
-     * bits, which is wrong whenever the slot does not fit in a word.
+     * 0xE547EA-0xE5481E, pushed right to left:
+     *   pea (-0x20,A6)              status_ret = &unlock_status
+     *   pea (-0x1c,A6)              dtv_out
+     *   clr.l / clr.l               rem_node, rem_key
+     *   clr.l                       by_key = false, key = 0
+     *   move.w PROC1_$AS_ID         asid
+     *   move.w (0x13e,A0)           lock_mode = NAME_$LOCK_MODE[cur]
+     *   move.l (0x3c,A5,D0w*4)      lock_slot = NAME_$LOCK_SLOT[cur], a full
+     *                               longword
+     *   pea (-0x10,A6)              file_uid = &local_uid
      */
-    FILE_$PRIV_UNLOCK(&local_uid,
-                      (uint16_t)NAME_$LOCK_SLOT[PROC1_$CURRENT],
-                      ((uint32_t)(uint16_t)NAME_$LOCK_MODE[PROC1_$CURRENT] << 16) |
-                          (uint32_t)PROC1_$AS_ID,
-                      0, 0, 0,
-                      dtv_out, &unlock_status);
+    (void)FILE_$PRIV_UNLOCK(&local_uid,
+                            (int32_t)NAME_$LOCK_SLOT[PROC1_$CURRENT],
+                            (uint16_t)NAME_$LOCK_MODE[PROC1_$CURRENT],
+                            (uint16_t)PROC1_$AS_ID,
+                            0,          /* by_key = false */
+                            0,          /* key            */
+                            0,          /* rem_key        */
+                            0,          /* rem_node       */
+                            dtv_out, &unlock_status);
 
     /*
      * 0xE54828: `clr.l (0x2b8,A0)` clears only the HIGH longword of the

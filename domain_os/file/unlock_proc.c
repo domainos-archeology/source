@@ -95,14 +95,20 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
         }
 
         for (slot = 1; slot <= count + 1; slot++) {
-            FILE_$PRIV_UNLOCK(file_uid,
-                              (uint16_t)slot,
-                              ((uint32_t)*lock_mode << 16) | (uint32_t)asid,
-                              0,                     /* local unlock */
-                              0,                     /* param_5 */
-                              0,                     /* param_6 */
-                              dtv_out,               /* dtv_out */
-                              status_ret);
+            /*
+             * 0x00E60EF6-0x00E60F0E: the slot number is sign-extended into a
+             * longword (`move.w D3w,D0w; ext.l D0; move.l D0,-(SP)`).
+             */
+            (void)FILE_$PRIV_UNLOCK(file_uid,
+                                    (int32_t)(int16_t)slot, /* lock_slot    */
+                                    *lock_mode,             /* lock_mode    */
+                                    (uint16_t)asid,         /* asid         */
+                                    0,                      /* by_key       */
+                                    0,                      /* key          */
+                                    0,                      /* rem_key      */
+                                    0,                      /* rem_node     */
+                                    dtv_out,
+                                    status_ret);
 
             if (*status_ret != file_$object_not_locked_by_this_process) {
                 return;
@@ -134,17 +140,28 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
                     /* Check mode matches (or mode=0 for any) */
                     if ((req_mode == lock_info.mode) || (req_mode == 0)) {
                         /*
-                         * Call FILE_$PRIV_UNLOCK with remote unlock flags
-                         * remote_flags = -1 (0xFF prefix = remote unlock)
+                         * 0x00E60F88-0x00E60FA4, pushed right to left:
+                         *   pea (A2)            status_ret
+                         *   pea (-0x30,A6)      dtv_out
+                         *   move.l (-0x1c,A6)   rem_node = lock_info.owner_node
+                         *   move.l (-0x20,A6)   rem_key  = lock_info.context
+                         *   move.w (-0x14,A6)   key      = lock_info.sequence
+                         *   st                  by_key   = TRUE
+                         *   clr.w               asid     = 0
+                         *   move.w D4w          lock_mode = *lock_mode
+                         *   clr.l               lock_slot = 0
+                         *   pea (A4)            file_uid
                          */
-                        FILE_$PRIV_UNLOCK(file_uid,
-                                          0,                     /* lock_index = 0 (search) */
-                                          (uint32_t)req_mode << 16,
-                                          -1,                    /* remote_flags = -1 */
-                                          lock_info.context,     /* context */
-                                          lock_info.owner_node,  /* node address */
-                                          dtv_out,               /* dtv_out */
-                                          status_ret);
+                        (void)FILE_$PRIV_UNLOCK(file_uid,
+                                                0,                      /* lock_slot */
+                                                req_mode,               /* lock_mode */
+                                                0,                      /* asid      */
+                                                -1,                     /* by_key    */
+                                                lock_info.sequence,     /* key       */
+                                                lock_info.context,      /* rem_key   */
+                                                lock_info.owner_node,   /* rem_node  */
+                                                dtv_out,
+                                                status_ret);
 
                         if (*status_ret == file_$object_not_locked_by_this_process) {
                             *status_ret = status_$ok;

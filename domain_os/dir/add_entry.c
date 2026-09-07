@@ -68,7 +68,7 @@ invalid_leaf:
     }
 
     /* Check for duplicate name */
-    found = dir_$find_entry((void *)(uintptr_t)handle, name, name_len, 8,
+    found = dir_$find_entry(NAME_$HANDLE_TO_PTR(handle), name, name_len, 8,
                             (void **)lookup_buf, lookup_buf2, slot_info);
     if (found < 0) {
         /* Name already exists */
@@ -135,7 +135,7 @@ invalid_leaf:
 
     /* If insertion failed and overflow flag is set, try cleanup */
     if (*status_ret != status_$ok) {
-        if (*(int8_t *)((char *)(uintptr_t)handle + 0x0E) < 0) {
+        if (*(int8_t *)((char *)NAME_$HANDLE_TO_PTR(handle) + 0x0E) < 0) {
             DIR_$CLEANUP();
         }
     }

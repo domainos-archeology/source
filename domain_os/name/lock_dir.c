@@ -24,9 +24,8 @@
 #include "name/name_internal.h"
 #include "file/file_internal.h"
 
-/* Status codes */
+/* Status codes (status_$naming_directory_locked comes from name/name.h). */
 #define file_$object_in_use              0x000F0006
-#define status_$naming_directory_locked  0x000E0016
 
 /*
  * Constant cells in the code region passed by reference (`pea (d,PC)`).

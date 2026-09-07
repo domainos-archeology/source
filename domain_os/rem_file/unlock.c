@@ -38,8 +38,8 @@ typedef struct {
 } rem_file_unlock_resp_t;
 
 uint8_t REM_FILE_$UNLOCK(void *location_block, uint16_t unlock_mode,
-                         uint32_t lock_key, uint16_t wait_flag,
-                         uint32_t remote_node, int16_t release_flag,
+                         uint32_t lock_key, uint16_t lock_seq,
+                         uint32_t remote_node, boolean release_flag,
                          status_$t *status)
 {
     rem_file_unlock_req_t request;
@@ -59,7 +59,7 @@ uint8_t REM_FILE_$UNLOCK(void *location_block, uint16_t unlock_mode,
 
     request.lock_key = lock_key;
     request.remote_node = remote_node;
-    request.wait_flag = wait_flag;
+    request.wait_flag = lock_seq;
     request.unlock_mode = unlock_mode;
     request.flags = 3;
     request.admin_flag = REM_FILE_PROCESS_HAS_ADMIN() ? -1 : 0;

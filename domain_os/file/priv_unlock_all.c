@@ -99,17 +99,27 @@ void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr)
                         ML_$UNLOCK(5);
 
                         /*
-                         * Call FILE_$PRIV_UNLOCK for this entry
-                         * Pass lock mode 0 to match any, and the slot number
+                         * 0x00E60CB0-0x00E60CCC, pushed right to left:
+                         *   pea (-0x14,A6)      status_ret = &local_status
+                         *   pea (-0x10,A6)      dtv_out
+                         *   clr.l / clr.l       rem_node, rem_key
+                         *   clr.l               by_key = false, key = 0
+                         *   move.w D3w          asid
+                         *   clr.w               lock_mode = 0 (any)
+                         *   clr.l D1; move.w D5w,D1w; move.l D1
+                         *                       lock_slot, zero-extended
+                         *   pea (-0x8,A6)       file_uid = &local_uid
                          */
-                        FILE_$PRIV_UNLOCK(&local_uid,
-                                          (uint16_t)slot,
-                                          (uint32_t)asid,  /* mode=0, asid in low word */
-                                          0,               /* remote_flags */
-                                          0,               /* param_5 */
-                                          0,               /* param_6 */
-                                          dtv_out,         /* dtv_out */
-                                          &local_status);
+                        (void)FILE_$PRIV_UNLOCK(&local_uid,
+                                                (int32_t)(uint16_t)slot, /* lock_slot */
+                                                0,              /* lock_mode: any */
+                                                (uint16_t)asid, /* asid           */
+                                                0,              /* by_key         */
+                                                0,              /* key            */
+                                                0,              /* rem_key        */
+                                                0,              /* rem_node       */
+                                                dtv_out,
+                                                &local_status);
 
                         ML_$LOCK(5);
                     }

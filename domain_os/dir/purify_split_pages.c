@@ -75,6 +75,6 @@ void dir_$purify_split_pages(dir_insert_ctx_t *ctx, status_$t *status_ret)
      * param_3=0: no offset
      * param_4=page_array: array of page numbers
      * param_5=page_count: number of pages */
-    AST_$PURIFY((uid_t *)(uintptr_t)ctx->handle,
+    AST_$PURIFY((uid_t *)NAME_$HANDLE_TO_PTR(ctx->handle),
                 0x12, 0, page_array, page_count, status_ret);
 }

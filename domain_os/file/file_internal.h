@@ -400,26 +400,38 @@ void FILE_$PRIV_LOCK(uid_t *file_uid, int16_t asid, uint16_t side,
 /*
  * FILE_$PRIV_UNLOCK - Core unlock function
  *
- * Main internal function for all unlock operations.
+ * Main internal function for all unlock operations.  The callee frame at
+ * 0x00E5FD32 is `link.w A6,-0xfc` with ten arguments occupying 32 bytes:
  *
- * Parameters:
- *   file_uid     - UID of file to unlock
- *   lock_index   - Lock table index (0 to search)
- *   mode_asid    - Combined: high word=lock_mode, low word=ASID
- *   remote_flags - Remote operation flags
- *   param_5      - Context high
- *   param_6      - Context low (node address)
- *   dtv_out      - Output: data-time-valid info
- *   status_ret   - Output: status code
+ *   file_uid   A6+0x08  long  UID of the object to unlock
+ *   lock_slot  A6+0x0C  long  per-process lock slot, 0 = search the row.
+ *                             Pushed whole (`ext.l D0; move.l D0,-(SP)` at
+ *                             0x00E60F06) but only its low word A6+0x0E is
+ *                             read (0x00E5FDA2).
+ *   lock_mode  A6+0x10  word  lock mode to match, 0 = every mode (and then
+ *                             repeat until nothing is left)
+ *   asid       A6+0x12  word  owning process' ASID
+ *   by_key     A6+0x14  word  Pascal boolean: search the hash chain by
+ *                             (mode, key, rem_key, rem_node) instead of the
+ *                             process' lock row.  Pushed with `st -(SP)`
+ *                             (0x00E607B2), which stores the byte at the
+ *                             even half of the word slot.
+ *   key        A6+0x16  word  lock key to match, 0 = any (0x00E5FF1A)
+ *   rem_key    A6+0x18  long  matched against entry->context  (0x00E5FF38)
+ *   rem_node   A6+0x1C  long  matched against entry->node_low (0x00E5FF2E)
+ *   dtv_out    A6+0x20  long  out: data-time-valid, 0 when not produced
+ *   status_ret A6+0x24  long  out: status code
  *
  * Returns:
- *   Result byte (modified flag)
+ *   The REM_FILE_$UNLOCK / AST_$TRUNCATE result byte, or 0 when the reported
+ *   status is non-zero (`seq D0b; and.b (-0xd8,A6),D0b` at 0x00E6039C).
  *
  * Original address: 0x00E5FD32
  */
-uint8_t FILE_$PRIV_UNLOCK(uid_t *file_uid, uint16_t lock_index,
-                          uint32_t mode_asid, int32_t remote_flags,
-                          int32_t param_5, int32_t param_6,
+boolean FILE_$PRIV_UNLOCK(uid_t *file_uid, int32_t lock_slot,
+                          uint16_t lock_mode, uint16_t asid,
+                          boolean by_key, uint16_t key,
+                          uint32_t rem_key, uint32_t rem_node,
                           uint32_t *dtv_out, status_$t *status_ret);
 
 /*
@@ -452,7 +464,7 @@ void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr);
  *   owner_node = NODE_$ME (we are the owner)
  *   remote_info = ROUTE_$PORT
  */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uid_t    file_uid;      /* 0x00: File UID (8 bytes) */
     uint32_t context;       /* 0x08: Lock context */
     uint32_t owner_node;    /* 0x0C: Owner's node address (who initiated the lock) */
@@ -463,6 +475,22 @@ typedef struct {
     uint32_t holder_port;   /* 0x1A: Lock holder's port */
     uint32_t remote_info;   /* 0x1E: Remote node/port info (4 bytes, total=34) */
 } file_lock_info_internal_t;
+
+/*
+ * The m68k ABI aligns longs to two bytes, so holder_node really does sit at
+ * +0x16 in the image (FILE_$FORCE_UNLOCK reads it as `cmp.l (-0x12,A6),D0` at
+ * 0x00E60DEA with the record based at A6-0x28).  `packed` reproduces that on
+ * hosts whose natural alignment would push it to +0x18.
+ */
+_Static_assert(offsetof(file_lock_info_internal_t, context)     == 0x08, "lock_info.context");
+_Static_assert(offsetof(file_lock_info_internal_t, owner_node)  == 0x0C, "lock_info.owner_node");
+_Static_assert(offsetof(file_lock_info_internal_t, side)        == 0x10, "lock_info.side");
+_Static_assert(offsetof(file_lock_info_internal_t, mode)        == 0x12, "lock_info.mode");
+_Static_assert(offsetof(file_lock_info_internal_t, sequence)    == 0x14, "lock_info.sequence");
+_Static_assert(offsetof(file_lock_info_internal_t, holder_node) == 0x16, "lock_info.holder_node");
+_Static_assert(offsetof(file_lock_info_internal_t, holder_port) == 0x1A, "lock_info.holder_port");
+_Static_assert(offsetof(file_lock_info_internal_t, remote_info) == 0x1E, "lock_info.remote_info");
+_Static_assert(sizeof(file_lock_info_internal_t)                == 0x22, "sizeof lock_info");
 
 /*
  * FILE_$READ_LOCK_ENTRYI - Read lock entry by iteration

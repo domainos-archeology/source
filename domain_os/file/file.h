@@ -110,15 +110,10 @@
  * FILE_$PRIV_LOCK at 0x00E5F4D2 and 0x00E5F7E2 and by FILE_$PRIV_CREATE
  * (0x00E5C0xx) when the containing volume has bit 1 of its flags set. */
 #define file_$vol_mounted_read_only                0x000F0016
-/* 0x000E0030: the naming-server flavour, raised for objects whose type byte
- * says "directory" (FILE_$PRIV_LOCK 0x00E5F7D4).  Same value as
- * dir_internal.h's definition. */
-#ifndef status_$naming_vol_mounted_read_only
-#define status_$naming_vol_mounted_read_only       0x000E0030
-#endif
-/* 0x000E000D (status_$naming_bad_directory, declared in name/name.h) is
- * raised by FILE_$PRIV_LOCK at 0x00E5F79A for a non-empty directory locked
- * for delete. */
+/* The naming-server flavours FILE_$PRIV_LOCK raises - 0x000E0030 for objects
+ * whose type byte says "directory" (0x00E5F7D4) and 0x000E000D for a
+ * non-empty directory locked for delete (0x00E5F79A) - are declared once in
+ * name/name.h, which file/file_internal.h includes. */
 #define status_$insufficient_rights                0x000F0011  /* Insufficient rights */
 #ifndef status_$no_rights
 #define status_$no_rights                          0x000F0010  /* No rights at all */

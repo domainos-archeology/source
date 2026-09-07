@@ -190,12 +190,18 @@ void REM_FILE_$LOCK(void *location_block, uint16_t lock_mode, uint16_t lock_type
 /*
  * REM_FILE_$UNLOCK - Unlock a remote file
  *
- * @param location_block Location block
+ * Callee frame at 0x00E61D1C: 0x08 long location_block, 0x0C word
+ * unlock_mode, 0x0E long lock_key, 0x12 word lock_seq, 0x14 long remote_node,
+ * 0x18 *byte* release_flag (`move.b (0x18,A6),D2b` at 0x00E61D3E - a Pascal
+ * boolean in a word slot), 0x1A long status.
+ *
+ * @param location_block Location block (file_$obj_loc_t; the UID is at +0x08)
  * @param unlock_mode    Unlock mode
- * @param lock_key       Lock key
- * @param wait_flag      Wait flag
+ * @param lock_key       Lock key (lock entry +0x00)
+ * @param lock_seq       Lock sequence/key word (lock entry +0x16)
  * @param remote_node    Remote node holding lock
- * @param release_flag   Release flag
+ * @param release_flag   Domain boolean: AST_$SET_DTS said the object was
+ *                       modified, so ask the server for a new DTS
  * @param status         Output status code
  *
  * Returns: Result byte from unlock operation
@@ -203,8 +209,8 @@ void REM_FILE_$LOCK(void *location_block, uint16_t lock_mode, uint16_t lock_type
  * Original address: 0x00E61D1C
  */
 uint8_t REM_FILE_$UNLOCK(void *location_block, uint16_t unlock_mode,
-                         uint32_t lock_key, uint16_t wait_flag,
-                         uint32_t remote_node, int16_t release_flag,
+                         uint32_t lock_key, uint16_t lock_seq,
+                         uint32_t remote_node, boolean release_flag,
                          status_$t *status);
 
 /*

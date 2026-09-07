@@ -52,10 +52,15 @@
 
 /* DAT_00e51b64 - ACL rights mask (0x00000040 = rename right) */
 
-void dir_$do_op_cname(uid_t *uid, void *old_name, uint16_t old_name_len,
+void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
+                      void *old_name, uint16_t old_name_len,
                       void *new_name, uint16_t new_name_len,
                       status_$t *status_ret)
 {
+    /* A6+0x0C is never read by this routine; it is part of the frame the
+     * caller builds (0x00E4C466 `move.w (0xe,A2),-(SP)`). */
+    (void)req_version;
+
     char *a5 = (char *)__A5_BASE();
     uint32_t local_handle;
     void *entry_ptr;

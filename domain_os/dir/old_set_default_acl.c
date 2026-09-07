@@ -196,6 +196,7 @@ write_infoblk:
     if (loc_status == status_$ok) {
         if (common_attr[1] != 0x03) {
             /* Not an ACL object type */
+            /* 0x00E564A2 `move.l #0xe002f,(A2)`. */
             *status_ret = status_$naming_object_is_not_an_acl_object;
             return;
         }

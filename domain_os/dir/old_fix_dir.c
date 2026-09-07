@@ -146,9 +146,11 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         need_unlock = 0;  /* No longer need to unlock */
 
         /* Unlock temp file */
-        FILE_$PRIV_UNLOCK(&temp_uid, (uint16_t)lock_handle,
-                          0x00040000 | PROC1_$AS_ID,
-                          1 << 16, 0, 0, dtv_buf, status_ret);
+        /* 0x00E55D70-0x00E55D90: slot longword, mode 4, PROC1_$AS_ID, and
+         * three `clr.l` covering by_key/key, rem_key and rem_node. */
+        (void)FILE_$PRIV_UNLOCK(&temp_uid, (int32_t)lock_handle, 4,
+                                (uint16_t)PROC1_$AS_ID,
+                                0, 0, 0, 0, dtv_buf, status_ret);
         if (*status_ret != status_$ok) {
             goto cleanup;
         }
@@ -255,9 +257,12 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         }
 
         /* Unlock */
-        FILE_$PRIV_UNLOCK(&local_dir, (uint16_t)lock_handle,
-                          0x00040000 | PROC1_$AS_ID,
-                          0, 0, 0, dtv_buf, &status);
+        /* 0x00E55EBE-0x00E55EDE: here the by_key boolean and the key word
+         * are pushed separately (`move.b D4b,-(SP)` with D4 cleared at
+         * 0x00E55EBC, then `clr.w -(SP)`). */
+        (void)FILE_$PRIV_UNLOCK(&local_dir, (int32_t)lock_handle, 4,
+                                (uint16_t)PROC1_$AS_ID,
+                                0, 0, 0, 0, dtv_buf, &status);
         if (*status_ret == status_$ok) {
             *status_ret = status;
         }

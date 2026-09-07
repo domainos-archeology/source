@@ -34,7 +34,8 @@ void DIR_$DIR_READU(uid_t *dir_uid, void *entries_ret, void *entries_size,
 {
     /* Check if max_entries is valid */
     if (*count_ret < 1) {
-        *status_ret = status_$naming_object_is_not_an_acl_object;
+        /* 0x00E4E40A `move.l #0xe002e,(A2)` - "bad buffer size". */
+        *status_ret = status_$naming_bad_buffer_size;
         return;
     }
 
@@ -62,8 +63,13 @@ void DIR_$DIR_READU(uid_t *dir_uid, void *entries_ret, void *entries_size,
         return;
     }
 
-    /* Validate that we have entries or EOF */
-    if (*eof_ret == 0 && *continuation == 0) {
-        *status_ret = status_$naming_object_is_not_an_acl_object;
+    /*
+     * 0x00E4E3FA-0x00E4E408: `tst.l (A0)` on eof_ret must be zero and
+     * `tst.l (A1); beq` on continuation leaves through the exit, so the
+     * error is raised when the continuation is NON-zero.
+     */
+    if (*eof_ret == 0 && *continuation != 0) {
+        /* 0x00E4E40A `move.l #0xe002e,(A2)` - "bad buffer size". */
+        *status_ret = status_$naming_bad_buffer_size;
     }
 }

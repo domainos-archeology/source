@@ -187,6 +187,7 @@ void *MST_$MAPS(int16_t mode, int16_t flags, uid_t *uid, uint32_t offset,
 /* ------------------------------------------------------------------ */
 
 #include "../name_data.c"
+#include "../handle_map.c"
 #include "../lock_dir.c"
 
 /* ------------------------------------------------------------------ */
@@ -323,7 +324,7 @@ TEST(mst_maps_status_tests_low_word_only)
     mock_maps_status = 0x00000007;      /* low half set */
     NAME_$LOCK_DIR(&uid, &handle, 1, 0, &status);
 
-    ASSERT_EQ(0x80000007, status);      /* bset.b #7,(A3) */
+    ASSERT_EQ((status_$t)0x80000007u, status);   /* bset.b #7,(A3) */
     ASSERT_EQ(1, mock_unlock_calls);
 }
 
@@ -368,7 +369,7 @@ TEST(lock_failure_sets_high_bit_and_leaves_uid_clear)
     mock_lock_status_after_retry = 0x000F0002;
     NAME_$LOCK_DIR(&uid, &handle, 1, 0, &status);
 
-    ASSERT_EQ(0x800F0002, status);
+    ASSERT_EQ((status_$t)0x800F0002u, status);
     ASSERT_EQ(0, NAME_$LOCK_UID[TEST_PROC].high);
     ASSERT_EQ(1, mock_enter_super_calls);
     ASSERT_EQ(0, mock_maps_calls);

@@ -36,29 +36,70 @@ typedef enum {
 } start_path_type_t;
 
 /*
- * Status codes for naming operations (module 0x0E)
+ * ============================================================================
+ * Status codes for the naming server (module 0x0E)
+ *
+ * This is the single home for every 0x000Exxxx status code; dir/ and file/
+ * used to carry `#ifndef`-guarded copies of most of them with two different
+ * spellings and, in one case, two different values (source-pp31).
+ *
+ * The text after each code is the entry in the Domain/OS 10.4 status-code
+ * database.  Where the C identifier disagrees with that text the identifier
+ * is the one this port inherited; renaming it means re-deriving every call
+ * site from the binary, which is tracked separately - see the MISNAMED
+ * markers and source-tiil.
+ * ============================================================================
  */
-#define status_$naming_invalid_pathname                        0x000e0004
-#define status_$naming_invalid_link                            0x000e0005
-#define status_$naming_name_not_found                          0x000e0007
-#define status_$naming_invalid_leaf                            0x000e000b
-/* Also spelled (with different case, so not a benign redefinition) in
- * file/file.h; guarded until that duplicate is removed - see source-pp31. */
-#ifndef status_$naming_bad_directory
-#define status_$naming_bad_directory                           0x000e000d
-#endif
-/* 0x000E0016: the directory entry a remote request named is gone.  The
- * remote-file server answers these with a flagged reply and bumps
- * REM_FILE_$STALE_LINK_COUNT (0x00E63E8C, 0x00E63FBA, 0x00E63182). */
-#ifndef status_$naming_object_not_found_in_dir
-#define status_$naming_object_not_found_in_dir                 0x000e0016
-#endif
-#define status_$naming_last_entry_in_replicated_root_returned  0x000e0019
-#define status_$naming_name_server_helper_is_shutdown          0x000e001a
-#define status_$naming_helper_sent_packets_with_errors         0x000e001c
-#define status_$naming_directory_must_be_root                  0x000e001e
-#define status_$naming_directory_not_found_in_pathname         0x000e0020
-#define status_$naming_object_is_not_an_acl_object             0x000e002e
+#define status_$naming_invalid_pathname                        0x000e0004  /* invalid pathname */
+#define status_$naming_invalid_link                            0x000e0005  /* invalid link */
+#define status_$naming_not_a_link                              0x000e0006  /* not a link */
+#define status_$naming_name_not_found                          0x000e0007  /* name not found */
+#define status_$naming_invalid_link_operation                  0x000e000a  /* invalid link operation */
+#define status_$naming_invalid_leaf                            0x000e000b  /* invalid leaf */
+#define status_$naming_bad_directory                           0x000e000d  /* bad directory */
+/* MISNAMED: 0x000E000E is "branch is not a directory"; "name is not a file"
+ * is 0x000E0010.  Used by dir/validate_handle.c, old_add_baku.c,
+ * do_op_add_bak.c. */
+#define status_$naming_name_is_not_a_file                      0x000e000e  /* branch is not a directory */
+#define status_$naming_directory_not_empty                     0x000e000f  /* directory is not empty */
+#define status_$naming_illegal_directory_operation             0x000e0011  /* illegal directory operation */
+#define status_$naming_bad_type                                0x000e0012  /* bad type */
+#define status_$naming_insufficient_rights                     0x000e0014  /* insufficient rights */
+#define status_$naming_directory_locked                        0x000e0016  /* directory is in use (locked) */
+/* Two more spellings of 0x000E0016 that the dir/ and rem_file/ code already
+ * uses.  MISNAMED: "ran out of address space" is really 0x000E0034 and the
+ * remote-file server's "entry is gone" answer (0x00E63E8C, 0x00E63FBA,
+ * 0x00E63182) is the locked-directory code. */
+#define status_$naming_object_not_found_in_dir                 0x000e0016  /* directory is in use (locked) */
+#define status_$naming_ran_out_of_address_space                0x000e0016  /* directory is in use (locked) */
+/* MISNAMED: 0x000E0019 is "cannot find entry in replicated root" and
+ * 0x000E001A is "last entry in replicated root returned". */
+#define status_$naming_last_entry_in_replicated_root_returned  0x000e0019  /* cannot find entry in replicated root */
+#define status_$naming_name_server_helper_is_shutdown          0x000e001a  /* last entry in replicated root returned */
+#define status_$naming_helper_sent_packets_with_errors         0x000e001c  /* name server helper sent packet with errors */
+/* MISNAMED: 0x000E001E is "cant find name server helper"; "directory must be
+ * root" is 0x000E001F (status_$naming_not_root_dir below). */
+#define status_$naming_directory_must_be_root                  0x000e001e  /* cant find name server helper */
+#define status_$naming_not_root_dir                            0x000e001f  /* directory must be root */
+#define status_$naming_directory_not_found_in_pathname         0x000e0020  /* directory not found in pathname */
+#define status_$naming_entry_stale                             0x000e0022  /* cache entry is stale */
+#define status_$naming_entry_repaired                          0x000e0023  /* cache entry was stale and was updated */
+#define status_$naming_internal_error                          0x000e0025  /* internal error */
+#define status_$naming_directory_not_local                     0x000e002b  /* directory not local */
+#define status_$naming_leaf_truncated                          0x000e002d  /* leaf truncated */
+/* 0x000E002E was spelled status_$naming_object_is_not_an_acl_object here,
+ * which made every dir/ TU see 0x2E for a name whose value is 0x2F.  The
+ * binary stores 0xE002E for the short-buffer cases (0x00E4D704 in
+ * DIR_$READ_LINKU, 0x00E4E40A in DIR_$DIR_READU) and 0xE002F for the ACL
+ * case (0x00E564A2 in DIR_$OLD_SET_DEFAULT_ACL). */
+#define status_$naming_bad_buffer_size                         0x000e002e  /* bad buffer size */
+#define status_$naming_object_is_not_an_acl_object             0x000e002f  /* object is not an acl object */
+#define status_$naming_vol_mounted_read_only                   0x000e0030  /* volume has been mounted read-only */
+#define status_$naming_cant_recovery_dir_on_ro_vol             0x000e0031  /* write-protected volume prevents recovery of a damaged directory */
+#define status_$naming_too_many_hard_links                     0x000e0032  /* too many hard links exist to file */
+/* MISNAMED: 0x000E0033 is "directory object not found" (dir/open_dir.c,
+ * dir/validate_handle.c, dir/is_retryable_status.c). */
+#define status_$naming_acl_not_found                           0x000e0033  /* directory object not found */
 
 /*
  * Cached directory mapping info (16 bytes)
@@ -185,6 +226,30 @@ extern uint32_t NAME_$LOCK_SLOT[NAME_$MAX_LOCK_PROCS];   /* A5+0x03C = 0xE7FD60:
 extern int16_t  NAME_$LOCK_MODE[NAME_$MAX_LOCK_PROCS];   /* A5+0x13E = 0xE7FE62: lock mode in effect */
 extern uint32_t NAME_$LOCK_HANDLE[NAME_$MAX_LOCK_PROCS]; /* A5+0x1BC = 0xE7FEE0: mapped directory base */
 extern uid_t    NAME_$LOCK_UID[NAME_$MAX_LOCK_PROCS];    /* A5+0x2B8 = 0xE7FFDC: UID of the locked dir */
+
+/*
+ * Directory handles
+ *
+ * NAME_$LOCK_DIR hands back the virtual address at which the directory is
+ * mapped and stores it in a 32-bit word, because m68k pointers are 32 bits
+ * wide.  Turning that word back into a pointer (0xE54B06:
+ * `movea.l (A0),A1 ; cmpi.w #0x1,(A1)`) is the one architecture-specific step
+ * in the routine.  On m68k it is the identity cast the original performs; a
+ * host whose pointers are wider supplies a translation (name/handle_map.c)
+ * instead, so the code can be exercised without a 32-bit address space.
+ *
+ * dir/ uses the same pair for the directory handle dir_$add_entry receives at
+ * A6+0x08 and passes down through dir_insert_ctx_t.handle.
+ */
+#if defined(ARCH_M68K)
+#define NAME_$HANDLE_TO_PTR(h)   ((void *)(uintptr_t)(h))
+#define NAME_$PTR_TO_HANDLE(p)   ((uint32_t)(uintptr_t)(p))
+#else
+void    *name_$handle_to_ptr(uint32_t handle);
+uint32_t name_$ptr_to_handle(const void *ptr);
+#define NAME_$HANDLE_TO_PTR(h)   name_$handle_to_ptr(h)
+#define NAME_$PTR_TO_HANDLE(p)   name_$ptr_to_handle(p)
+#endif
 
 /* ============================================================================
  * Public Function Prototypes

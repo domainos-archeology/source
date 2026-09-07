@@ -56,7 +56,8 @@ void DIR_$READ_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
     /* Validate buffer length */
     tlen = (uint16_t)*buf_len;
     if (tlen < 1) {
-        *status_ret = status_$naming_object_is_not_an_acl_object;
+        /* 0x00E4D704 `move.l #0xe002e,(A2)` - "bad buffer size". */
+        *status_ret = status_$naming_bad_buffer_size;
         return;
     }
 

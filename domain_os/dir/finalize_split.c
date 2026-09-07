@@ -62,7 +62,7 @@ void dir_$finalize_split(dir_insert_ctx_t *ctx, status_$t *status_ret)
         /* Truncate the directory to remove excess pages.
          * Original: bsr dir_$truncate_pages at 0x00E4EF34
          * with handle from ctx->handle (A2+0x08) and saved page count */
-        dir_$truncate_pages((void *)(uintptr_t)ctx->handle,
+        dir_$truncate_pages(NAME_$HANDLE_TO_PTR(ctx->handle),
                             new_page_count, status_ret);
     }
 }

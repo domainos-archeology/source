@@ -9,11 +9,11 @@
  * zero if it is not.
  *
  * Retryable status codes:
- *   0x000E002B - naming_directory_not_local
- *   0x000E0020 - naming_directory_not_found_in_pathname
- *   0x000E0033 - naming_acl_not_found (stale object)
- *   0x000F0003 - file_$comms_problem_with_remote_node
- *   0x000F0004 - file_$bad_reply_received_from_remote_node
+ *   0x000E002B - directory not local
+ *   0x000E0020 - directory not found in pathname
+ *   0x000E0033 - directory object not found (spelled naming_acl_not_found)
+ *   0x000F0003 - bad reply received from remote node
+ *   0x000F0004 - communications problem with remote node
  *   subsystem 0x11 (byte 1 == 0x11) - network subsystem errors
  *
  * Parameters:
@@ -28,19 +28,13 @@
 
 #include "dir/dir_internal.h"
 
-/* Status codes for retryable conditions */
-#ifndef status_$naming_directory_not_local
-#define status_$naming_directory_not_local       0x000E002B
-#endif
-#ifndef status_$naming_directory_not_found_in_pathname
-#define status_$naming_directory_not_found_in_pathname 0x000E0020
-#endif
-#ifndef file_$comms_problem_with_remote_node
-#define file_$comms_problem_with_remote_node     0x000F0003
-#endif
-#ifndef file_$bad_reply_received_from_remote_node
-#define file_$bad_reply_received_from_remote_node 0x000F0004
-#endif
+/*
+ * The five longwords compared at 0x00E4BC2A..0x00E4BC60 are
+ * 0xE002B, 0xE0020, 0xE0033, 0xF0003 and 0xF0004; all five constants come
+ * from name/name.h and file/file.h.  The guarded copies that used to sit here
+ * had 0xF0003 and 0xF0004 the wrong way round (they were inert because
+ * dir_internal.h pulls in file/file.h first).
+ */
 
 int8_t DIR_$IS_RETRYABLE_STATUS(status_$t status)
 {
@@ -55,10 +49,10 @@ int8_t DIR_$IS_RETRYABLE_STATUS(status_$t status)
     if (status == status_$naming_acl_not_found) {  /* 0x000E0033 */
         result = (int8_t)0xFF;
     }
-    if (status == file_$comms_problem_with_remote_node) {
+    if (status == file_$bad_reply_received_from_remote_node) {   /* 0xF0003 */
         result = (int8_t)0xFF;
     }
-    if (status == file_$bad_reply_received_from_remote_node) {
+    if (status == file_$comms_problem_with_remote_node) {        /* 0xF0004 */
         result = (int8_t)0xFF;
     }
 

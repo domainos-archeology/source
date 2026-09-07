@@ -88,26 +88,8 @@ extern rem_name_data_t rem_name_$data;  /* 0xE7DBB8 - defined in rem_name.c */
  * means "the name server runs on this node".  The declaration therefore lives
  * in sock/sock.h; only the socket number belongs to NAME.
  */
-/*
- * Directory handles
- *
- * NAME_$LOCK_DIR hands back the virtual address at which the directory is
- * mapped and stores it in a 32-bit word, because m68k pointers are 32 bits
- * wide.  Turning that word back into a pointer (0xE54B06:
- * `movea.l (A0),A1 ; cmpi.w #0x1,(A1)`) is the one architecture-specific step
- * in the routine.  On m68k it is the identity cast the original performs; a
- * host whose pointers are wider supplies a translation instead, so the code
- * can be exercised without a 32-bit address space.
- */
-#if defined(ARCH_M68K)
-#define NAME_$HANDLE_TO_PTR(h)   ((void *)(uintptr_t)(h))
-#define NAME_$PTR_TO_HANDLE(p)   ((uint32_t)(uintptr_t)(p))
-#else
-void    *name_$handle_to_ptr(uint32_t handle);
-uint32_t name_$ptr_to_handle(const void *ptr);
-#define NAME_$HANDLE_TO_PTR(h)   name_$handle_to_ptr(h)
-#define NAME_$PTR_TO_HANDLE(p)   name_$ptr_to_handle(p)
-#endif
+/* Directory handles: NAME_$HANDLE_TO_PTR / NAME_$PTR_TO_HANDLE live in
+ * name/name.h - dir/ uses them too. */
 
 #define REM_NAME_$SOCK          10      /* well-known naming-service socket */
 #define SOCK_FLAG_SERVER_LOCAL  0x2000  /* sock_$sock_t.flags bit 13 */

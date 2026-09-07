@@ -73,7 +73,8 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
         /* Normal process - get hints for this UID */
         *((uint16_t *)(req + 0x20)) = 2;
         hint_count = HINT_$GET_HINTS(&local_uid, &hints[0]);
-        *((uint16_t *)(req + 0x12)) = *((uint16_t *)(&DAT_00e7fb9c + op_half * 8));
+        /* 0xE4C0BA: move.w (0x1f9c,A0),(0x12,A2) */
+        *((uint16_t *)(req + 0x12)) = DIR_$OP_VERSION(op_half);
     }
 
     /* Store in per-process slot */
@@ -100,17 +101,26 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                                resp_buf);
 
             if (resp->status == status_$ok) {
-                /* Success - validate response version */
-                int16_t resp_ver = *((int16_t *)&resp->f18[0]);
-                if (resp_ver > 0 ||
-                    resp_ver < *((int16_t *)(&DAT_00e7fb9c + op_half * 8))) {
+                uint32_t hint_extra;
+
+                /*
+                 * 0xE4C174-0xE4C196: the reply is rejected when its version
+                 * word at +0x08 is greater than zero, or when the accepted
+                 * version at +0x0A is GREATER than this operation's entry in
+                 * the table at A5+0x1F9C (`cmp.w (0x1f9c,A0),D2w; ble` keeps
+                 * the reply).
+                 */
+                if ((*((int16_t *)&resp->f18[0]) > 0) ||
+                    (*((int16_t *)&resp->f18[2]) >
+                     (int16_t)DIR_$OP_VERSION(op_half))) {
                     resp->status = file_$bad_reply_received_from_remote_node;
                     return;
                 }
 
-                /* Update hints if not first try */
+                /* 0xE4C19A: `cmpi.w #0x1,D3w; beq` - the first hint is
+                 * already in the cache.  0xE4C1A6 passes &hints[k]. */
                 if (next_idx != 1) {
-                    HINT_$ADDI(&local_uid, &hints[next_idx * 2 - 1]);
+                    HINT_$ADDI(&local_uid, &hints[hint_idx * 2]);
                 }
 
                 /* 0xE4C1B6: bset.b #0,(0x13,A3) - the flag byte is response
@@ -123,17 +133,42 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                     return;
                 }
 
-                /* Handle redirect */
-                if (((local_uid.low & 0xFFFFF) == (resp->f1a & 0xFFFFF)) ||
-                    op_code != 0x58) {
-                    /* Various early return conditions */
-                    return;
+                /*
+                 * 0xE4C1C8-0xE4C1E6: a RESOLVE whose reply names a different
+                 * node carries its redirect longword at reply+0x30.
+                 */
+                if (((local_uid.low & 0xFFFFF) != (resp->f1a & 0xFFFFF)) &&
+                    (op_code == 0x58)) {
+                    hint_extra = resp->resolve.redirect;    /* (0x30,A3) */
+                } else {
+                    /*
+                     * 0xE4C1E8-0xE4C222: otherwise only a GET_ENTRYU (0x44)
+                     * whose reply length word is 1 redirects, and its
+                     * longword lives at reply+0x1E.  The `tst.w D0w` at
+                     * 0xE4C1E8 re-tests the reply+0x16 byte that 0xE4C1C4
+                     * already proved non-zero, so it can never branch.
+                     */
+                    if (((local_uid.high >> 24) & 0xFF) == 0) {
+                        return;                             /* 0xE4C1F6 */
+                    }
+                    if ((local_uid.low & 0xFFFFF) == (resp->f1a & 0xFFFFF)) {
+                        return;                             /* 0xE4C20C */
+                    }
+                    if (op_code != 0x44) {
+                        return;                             /* 0xE4C214 */
+                    }
+                    if (resp->_20_2_ != 1) {
+                        return;                             /* 0xE4C21E */
+                    }
+                    hint_extra = resp->_24_4_;              /* (0x1e,A3) */
                 }
 
-                /* Update hint after redirect */
-                DIR_$UPDATE_HINT(&local_uid, &hints[next_idx * 2 - 1],
-                             (int16_t)hints[next_idx * 2],
-                             (uint8_t *)resp + 0x16, 0);
+                /* 0xE4C226-0xE4C23C: both hint longwords go by value. */
+                DIR_$UPDATE_HINT(&local_uid,
+                                 hints[hint_idx * 2],       /* loc_info */
+                                 hints[hint_idx * 2 + 1],   /* node */
+                                 (uid_t *)((uint8_t *)resp + 0x16),
+                                 hint_extra);
                 return;
             }
 
@@ -147,8 +182,10 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                 continue;
             }
 
-            /* Check if error is retryable */
-            if (DIR_$IS_RETRYABLE_STATUS((int16_t)resp->status) >= 0) {
+            /* 0xE4C150 `move.l D1,-(SP)`: the whole status longword goes on
+             * the stack; the callee compares it against five longwords and
+             * also tests its second byte (0x00E4BC66). */
+            if (DIR_$IS_RETRYABLE_STATUS(resp->status) >= 0) {
                 /* Not retryable */
                 return;
             }
@@ -163,9 +200,10 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
 
         /* Local node - dispatch based on operation code */
         /* Set response header fields */
-        *((int16_t *)resp_buf) = *((int16_t *)(&DAT_00e7fba0 + op_half * 8)) + 0x14;
-        *((uint16_t *)&resp->f18[2]) =
-            *((uint16_t *)(&DAT_00e7fb9c + op_half * 8));
+        /* 0xE4C24E: moveq #0x14,D1; add.w (0x1fa0,A0),D1w; move.w D1w,(A1) */
+        *((int16_t *)resp_buf) = (int16_t)(DIR_$OP_REPLY_SIZE(op_half) + 0x14);
+        /* 0xE4C25A: move.w (0x1f9c,A0),(0xa,A3) */
+        *((uint16_t *)&resp->f18[2]) = DIR_$OP_VERSION(op_half);
         *((uint16_t *)&resp->f18[0]) = 0;
 
         switch (op_code) {
@@ -237,16 +275,29 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
 
         case 0x32: /* Change name (rename) */
             {
+                /*
+                 * 0xE4C444-0xE4C46E, pushed right to left:
+                 *   pea (0x4,A3)          status_ret
+                 *   move.w (0x90,A2)      new_name_len
+                 *   pea (0x8e,A4)         new_name, A4 = req + DAT_00e7fc66
+                 *                         + old_name_len (0xE4C44E)
+                 *   move.w (0x8e,A2)      old_name_len
+                 *   pea (0x92,A2)         old_name
+                 *   move.w (0xe,A2)       request version word
+                 *   pea (-0x10,A6)        &local_uid
+                 */
                 uint16_t old_name_len = *((uint16_t *)(req + 0x8e));
-                int16_t new_name_offset = old_name_len + DAT_00e7fc66;
-                uint8_t *new_name = req + 0x8e + new_name_offset;
+                int16_t new_name_offset =
+                    (int16_t)(DAT_00e7fc66 + old_name_len);
+                uint8_t *new_name = req + new_name_offset + 0x8e;
 
                 dir_$do_op_cname(&local_uid,
-                             (uint32_t)*((uint16_t *)(req + 0x0e)) << 16,
-                             (int16_t)(uintptr_t)(req + 0x92),
-                             ((uint32_t)old_name_len << 16) | (uint16_t)(uintptr_t)new_name,
-                             (int16_t)(uintptr_t)new_name,
-                             (uint32_t)*((uint16_t *)(req + 0x90)) << 16);
+                             *((uint16_t *)(req + 0x0e)),
+                             req + 0x92,
+                             old_name_len,
+                             new_name,
+                             *((uint16_t *)(req + 0x90)),
+                             &resp->status);
             }
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 uint16_t old_name_len2 = *((uint16_t *)(req + 0x8e));
@@ -480,28 +531,50 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                     resp_bytes[0x16 + j] = req[0x94 + j];
                 }
 
+                /*
+                 * 0xE4C894-0xE4C8CE, pushed right to left, and re-derived
+                 * from dir_$do_op_resolve's own frame at 0x00E4D0E2
+                 * (0x08 long path, 0x0C word len, 0x0E .. 0x3A):
+                 *   move.l (0x8e,A2)   path
+                 *   move.w (0x92,A2)   path_len
+                 *   pea (0x16,A3)      result       (resolve.start_uid)
+                 *   pea (0x30,A3)      extra_ret    (clr.l at 0x00E4D118)
+                 *   pea (0x1e,A3)      parent_uid   (resolve.resolved_uid)
+                 *   pea (0x14,A3)      flags1       (st at 0x00E4D0FE)
+                 *   pea (0x15,A3)      flags2       (clr.b at 0x00E4D104)
+                 *   pea (0x26,A3)      cont
+                 *   pea (0x28,A3)      size
+                 *   pea (0x2a,A3)      last_start
+                 *   pea (0x2c,A3)      last_size
+                 *   move.l (0xac,A2)   max
+                 *   pea (0x2e,A3)      link_count   (clr.w at 0x00E4D10A)
+                 *   pea (0x4,A3)       status_ret
+                 */
                 dir_$do_op_resolve(*((uint32_t *)(req + 0x8e)),
                              *((uint16_t *)(req + 0x92)),
                              resp_bytes + 0x16,
-                             &resp->cookie,          /* pea (0x14,A3) */
+                             (uint32_t *)(resp_bytes + 0x30),
+                             (uint32_t *)(resp_bytes + 0x1e),
+                             resp_bytes + 0x14,
                              resp_bytes + 0x15,
-                             resp_bytes + 0x26,
-                             resp_bytes + 0x28,
-                             resp_bytes + 0x2a,
-                             resp_bytes + 0x2c,
-                             resp_bytes + 0x2e,
-                             resp_bytes + 0x30,
-                             *((uint32_t *)&resp->f18[2]),
-                             resp_bytes + 0x1e,
+                             (uint16_t *)(void *)(resp_bytes + 0x26),
+                             (uint16_t *)(void *)(resp_bytes + 0x28),
+                             (uint16_t *)(void *)(resp_bytes + 0x2a),
+                             (uint16_t *)(void *)(resp_bytes + 0x2c),
+                             *((uint32_t *)(req + 0xac)),
+                             (uint16_t *)(void *)(resp_bytes + 0x2e),
                              &resp->status);
 
                 /* Audit if enabled */
                 if ((int8_t)AUDIT_$ENABLED < 0) {
-                    uint8_t flags_byte = resp_bytes[0x14];
-                    uint8_t loop_byte = resp_bytes[0x15];
-                    if ((~loop_byte & flags_byte) != 0 &&
-                        resp->status == status_$ok &&
-                        *((uint16_t *)(resp_bytes + 0x2e)) == 0) {
+                    /* 0xE4C8E0-0xE4C8F2: `move.b (0x15,A3); not.b; and.b
+                     * (0x14,A3); seq on status; and.b; bpl` - three Domain
+                     * booleans ANDed and tested for bit 7, not for != 0. */
+                    int8_t flags_byte = (int8_t)resp_bytes[0x14];
+                    int8_t loop_byte = (int8_t)resp_bytes[0x15];
+                    if ((int8_t)(~loop_byte & flags_byte
+                                 & (resp->status == status_$ok ? -1 : 0)) < 0 &&
+                        *((uint16_t *)(void *)(resp_bytes + 0x2e)) == 0) {
                         audit_$log_resolve_op(*((uint32_t *)(req + 0x8e)),
                                     *((uint16_t *)(req + 0x92)),
                                     resp_bytes + 0x16,
@@ -538,26 +611,27 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
         }
 
-        /* Post-operation: check status and handle retries */
+        /* 0xE4C99C: post-operation status handling. */
         if (resp->status == status_$ok) {
-            /* Success - update hints if not first hint */
+            /* 0xE4C9A2: the first hint is already cached. */
             if (next_idx != 1) {
-                HINT_$ADDI(&local_uid, &hints[next_idx * 2 - 1]);
+                HINT_$ADDI(&local_uid, &hints[hint_idx * 2]);
             }
             return;
         }
 
-        /* Check if this is a retryable "stale" error (0x000E0033) */
-        if (is_server_proc >= 0 && resp->status == 0x000E0033) {
-            if (hint_idx < hint_count) {
-                resp->status = status;
-                continue;
-            }
+        /* 0xE4C9BE `tst.b D4b; bmi`: a server process never falls back. */
+        if (is_server_proc < 0) {
+            return;
+        }
+        /* 0xE4C9C2: only "directory object not found" tries the next hint. */
+        if (resp->status != status_$naming_acl_not_found) {
+            return;
         }
 
-        /* Done */
-        resp->status = status;
-        return;
+        /* 0xE4C9CC: advance and re-test; when the hints run out the loop
+         * exit at 0xE4C9D4 reports the saved status. */
+        hint_idx = next_idx;
     }
 
     /* Exhausted all hints */

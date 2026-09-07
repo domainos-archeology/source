@@ -98,22 +98,30 @@ void FILE_$VERIFY_LOCK_HOLDER(file_lock_info_internal_t *lock_info, status_$t *s
              * Call FILE_$PRIV_UNLOCK with the lock parameters
              */
             uint32_t dtv_out[2];
-            uint32_t mode_asid;
 
             /*
-             * Build mode_asid: high word = lock_mode, low word = sequence
-             * But use 0xFF for certain flags (from assembly analysis)
+             * 0x00E6079E-0x00E607BE, pushed right to left (A2 = lock_info):
+             *   pea (-0x3c,A6)      status_ret = &unlock_status
+             *   pea (-0x38,A6)      dtv_out
+             *   move.l (0xc,A2)     rem_node  = lock_info->owner_node
+             *   move.l (0x8,A2)     rem_key   = lock_info->context
+             *   move.w (0x14,A2)    key       = lock_info->sequence
+             *   st                  by_key    = TRUE
+             *   clr.w               asid      = 0
+             *   move.w (0x12,A2)    lock_mode = lock_info->mode
+             *   clr.l               lock_slot = 0
+             *   pea (A2)            file_uid  = &lock_info->file_uid
              */
-            mode_asid = ((uint32_t)lock_info->mode << 16);
-
-            FILE_$PRIV_UNLOCK(&lock_info->file_uid,
-                              0,                            /* lock_index = 0 (search) */
-                              mode_asid,
-                              -1,                           /* remote_flags (negative) */
-                              lock_info->context,           /* param_5 = context */
-                              lock_info->owner_node,        /* param_6 = owner_node */
-                              dtv_out,
-                              &unlock_status);
+            (void)FILE_$PRIV_UNLOCK((uid_t *)(void *)lock_info,
+                                    0,                      /* lock_slot */
+                                    lock_info->mode,        /* lock_mode */
+                                    0,                      /* asid      */
+                                    -1,                     /* by_key    */
+                                    lock_info->sequence,    /* key       */
+                                    lock_info->context,     /* rem_key   */
+                                    lock_info->owner_node,  /* rem_node  */
+                                    dtv_out,
+                                    &unlock_status);
         } else {
             /*
              * Remote holder - unlock via RPC

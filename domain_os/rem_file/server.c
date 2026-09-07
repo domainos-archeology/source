@@ -70,6 +70,28 @@
 /* Largest bulk transfer (0x00E64204 and 0x00E636EA). */
 #define REM_FILE_BULK_MAX           0x400
 
+/*
+ * How far past A6 the split-reply bulk area reaches.
+ *
+ * The reply record starts at A6-0x1A0 and 0x00E6417C takes the bulk pointer
+ * as `lea (0x60,A6),A4` - reply + 0x200 - which is 0x60 bytes ABOVE A6, in
+ * the caller's stack.  REM_FILE_$SERVER is reached by `jsr` with no arguments
+ * at all (0x00E11AC2), so what lies there is NETWORK_$REQUEST_SERVER's own
+ * frame: that function's `link.w A6,-0xe0` plus its nine-register `movem`
+ * (0x24 bytes) put its stack pointer at the call at A6_caller-0x104, so
+ *
+ *   A6_callee      = A6_caller - 0x10C     (return address + the link)
+ *   A6_callee+0x60 = A6_caller - 0x0AC
+ *
+ * which is a longword local NETWORK_$REQUEST_SERVER writes at 0x00E11A68 /
+ * 0x00E11A72.  Nothing coordinates the two uses: this is the original
+ * overrunning its own frame into its caller's, and the only faithful C model
+ * is to keep that memory inside the same object, which `caller_frame` below
+ * does.  It has to reach reply+0x200+REM_FILE_BULK_MAX, i.e. frame offset
+ * 0x344 + 0x200 + 0x400 = 0x944, so 0x944 - 0x4E4 bytes.
+ */
+#define REM_FILE_SPILL_BYTES        0x460
+
 /* Response header marker written at 0x00E637E4. */
 #define REM_FILE_RESPONSE_MAGIC     0x80
 
@@ -191,6 +213,8 @@ typedef struct rem_file_server_frame_t {
     uint32_t    netbuf_hdr[4];      /* 0x464: -0x80, copy of rcv+0x08..0x17 */
     uint8_t     pad_474[0x40];      /* 0x474: -0x70 */
     rem_file_rcv_t rcv;             /* 0x4B4: -0x30, APP_$RECEIVE result */
+    /* ---- past A6: the caller's frame, see REM_FILE_SPILL_BYTES ---- */
+    uint8_t     caller_frame[REM_FILE_SPILL_BYTES]; /* 0x4E4: A6+0x00 */
 } rem_file_server_frame_t;
 
 #if defined(ARCH_M68K)
@@ -219,7 +243,11 @@ _Static_assert(offsetof(rem_file_rcv_t, clock) == 0x20, "rcv.clock at -0x10");
 _Static_assert(offsetof(rem_file_rcv_t, f_26)  == 0x26, "rcv.f_26 at -0x0A");
 _Static_assert(sizeof(rem_file_server_req_t)  == 0x298, "sizeof request");
 _Static_assert(sizeof(rem_file_server_resp_t) == 0x120, "sizeof response");
-_Static_assert(sizeof(rem_file_server_frame_t) == 0x4E4, "sizeof server frame");
+_Static_assert(offsetof(rem_file_server_frame_t, caller_frame) == 0x4E4,
+               "the frame proper ends at A6+0x00");
+_Static_assert(offsetof(rem_file_server_frame_t, response) + 0x200 <
+               sizeof(rem_file_server_frame_t),
+               "the split-reply bulk area must be inside the object");
 #endif
 
 /*
@@ -1139,24 +1167,30 @@ release_netbuf:                                     /* 0x00E639DC */
         }
 
         /*
-         * 0x00E63CDE pushes ten arguments (32 bytes):
-         *   uid, long 0, word REQ_W(-0x424), word 0, byte TRUE,
-         *   word REQ_W(-0x41C), long REQ_L(-0x42C), long REQ_L(-0x428),
-         *   &resp+0x08, &resp+0x04
-         * TODO(source-fi9u): file/file_internal.h's FILE_$PRIV_UNLOCK
-         * prototype is 30 bytes of arguments in a different order and cannot
-         * express the word at A6+0x12 or the byte at A6+0x14.  The call below
-         * therefore drops those two; fixing it needs FILE_$PRIV_UNLOCK itself
-         * re-emitted against the real ABI.
+         * 0x00E63CDE-0x00E63D00 pushes ten arguments (32 bytes), right to
+         * left:
+         *   pea (-0x19c,A6)     status_ret = &f.response.status
+         *   pea (-0x198,A6)     dtv_out
+         *   move.l (-0x428,A6)  rem_node
+         *   move.l (-0x42c,A6)  rem_key
+         *   move.w (-0x41c,A6)  key
+         *   st                  by_key = TRUE
+         *   clr.w               asid = 0
+         *   move.w (-0x424,A6)  lock_mode
+         *   clr.l               lock_slot = 0
+         *   pea (-0x434,A6)     file_uid = &f.request.uid
          */
         RSP_B(&f, -0x192) =
-            FILE_$PRIV_UNLOCK(&f.request.uid, 0,
-                              (uint32_t)REQ_W(&f, -0x424) << 16,
-                              (int32_t)REQ_W(&f, -0x41C),
-                              (int32_t)REQ_L(&f, -0x42C),
-                              (int32_t)REQ_L(&f, -0x428),
-                              (uint32_t *)RSP_P(&f, -0x198),
-                              &f.response.status);
+            (uint8_t)FILE_$PRIV_UNLOCK(&f.request.uid,
+                                       0,                       /* lock_slot */
+                                       REQ_W(&f, -0x424),       /* lock_mode */
+                                       0,                       /* asid      */
+                                       -1,                      /* by_key    */
+                                       REQ_W(&f, -0x41C),       /* key       */
+                                       REQ_L(&f, -0x42C),       /* rem_key   */
+                                       REQ_L(&f, -0x428),       /* rem_node  */
+                                       (uint32_t *)RSP_P(&f, -0x198),
+                                       &f.response.status);
         f.reply_len = 0x16;
         break;
     }
@@ -1184,12 +1218,26 @@ release_netbuf:                                     /* 0x00E639DC */
             if ((f.lock_info.owner_node & 0x000FFFFFu) != peer_node) {
                 continue;
             }
-            /* 0x00E63D7A: same ten-argument shape as opcode 0x0C - see the
-             * TODO(source-fi9u) above. */
-            (void)FILE_$PRIV_UNLOCK((uid_t *)&f.lock_info, 0, 0,
-                                    (int32_t)f.lock_info.sequence,
-                                    (int32_t)f.lock_info.context,
-                                    (int32_t)f.lock_info.owner_node,
+            /*
+             * 0x00E63D7A-0x00E63D98, right to left:
+             *   pea (-0x494,A6)     status_ret = &f.local_status
+             *   pea (-0x46c,A6)     dtv_out
+             *   move.l (-0x454,A6)  rem_node = f.lock_info.owner_node (+0x0C)
+             *   move.l (-0x458,A6)  rem_key  = f.lock_info.context    (+0x08)
+             *   move.w (-0x44c,A6)  key      = f.lock_info.sequence   (+0x14)
+             *   st                  by_key   = TRUE
+             *   clr.l               lock_mode = 0, asid = 0
+             *   clr.l               lock_slot = 0
+             *   pea (-0x460,A6)     file_uid = &f.lock_info (its UID is at +0)
+             */
+            (void)FILE_$PRIV_UNLOCK((uid_t *)&f.lock_info,
+                                    0,                      /* lock_slot */
+                                    0,                      /* lock_mode */
+                                    0,                      /* asid      */
+                                    -1,                     /* by_key    */
+                                    f.lock_info.sequence,   /* key       */
+                                    f.lock_info.context,    /* rem_key   */
+                                    f.lock_info.owner_node, /* rem_node  */
                                     (uint32_t *)f.scratch_070,
                                     &f.local_status);
         }
@@ -1403,10 +1451,12 @@ send_reply:                                         /* 0x00E6414A */
     if (f.reply_len > REM_FILE_REPLY_SPLIT) {
         f.reply_hdr_len = REM_FILE_REPLY_SPLIT;
         extra_len = (uint16_t)(f.reply_len - REM_FILE_REPLY_SPLIT);
-        /* TODO(source-3axe): A6+0x60 is above this function's own frame - the
-         * bulk area belongs to the caller (0x00E11AC2).  There is no portable
-         * spelling for it, so the split path sends no data here. */
-        bulk = NULL;
+        /* 0x00E6417C `lea (0x60,A6),A4`: reply + 0x200, which runs off the
+         * end of this frame into the caller's (see REM_FILE_SPILL_BYTES).
+         * Overwriting A4 here also loses the netbuf address the DIR/ACL paths
+         * put in it, so the release at 0x00E6425C frees this pointer instead
+         * - the original does exactly that. */
+        bulk = RSP_P(&f, 0x60);
     } else {
         f.reply_hdr_len = f.reply_len;              /* 0x00E64184 */
 

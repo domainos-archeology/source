@@ -82,7 +82,11 @@ typedef struct __attribute__((packed, aligned(2))) Dir_$OpResponse {
             uint16_t param6;        /* 0x28 */
             uint16_t param7;        /* 0x2A */
             uint16_t param8;        /* 0x2C */
-            uint16_t link_count;    /* 0x2E */
+            uint16_t link_count;    /* 0x2E: clr.w at 0x00E4D10A */
+            uint32_t redirect;      /* 0x30: dir_$do_op_resolve's extra_ret
+                                     * (clr.l at 0x00E4D118); DIR_$DO_OP
+                                     * forwards it to DIR_$UPDATE_HINT for a
+                                     * cross-node RESOLVE (0x00E4C1E2) */
         } resolve;
         uint8_t  raw[0x30];     /* 0x14..0x43 raw view */
     };
@@ -105,6 +109,7 @@ _Static_assert(__builtin_offsetof(Dir_$OpResponse, resolve.start_uid) == 0x16, "
 _Static_assert(__builtin_offsetof(Dir_$OpResponse, resolve.resolved_uid) == 0x1E, "resolve.resolved_uid");
 _Static_assert(__builtin_offsetof(Dir_$OpResponse, resolve.param5) == 0x26, "resolve.param5");
 _Static_assert(__builtin_offsetof(Dir_$OpResponse, resolve.link_count) == 0x2E, "resolve.link_count");
+_Static_assert(__builtin_offsetof(Dir_$OpResponse, resolve.redirect) == 0x30, "resolve.redirect");
 _Static_assert(sizeof(Dir_$OpResponse) == 0x44, "Dir_$OpResponse spans 0x14..0x43 of payload");
 #endif
 
@@ -217,7 +222,12 @@ _Static_assert(__builtin_offsetof(dir_page_hdr_t, heap_base) == 0x10, "dir_page_
  */
 typedef struct dir_insert_ctx {
     /* === Parameters from dir_$add_entry === */
-    uint32_t    handle;             /* Directory handle (A1+0x08) */
+    uint32_t    handle;             /* Directory handle (A1+0x08).  A kernel
+                                     * virtual address in a 32-bit word; every
+                                     * dereference goes through
+                                     * NAME_$HANDLE_TO_PTR (name/name.h) so
+                                     * the code is exercisable on a host whose
+                                     * pointers are wider (source-qu3v). */
     void       *name;              /* Entry name (A1+0x0C) */
     uint16_t    name_len;          /* Entry name length (A1+0x10) */
     uint16_t    entry_type;        /* Entry type 2/3/4 (A1+0x12) */
@@ -999,8 +1009,17 @@ extern ml_$exclusion_t  DIR_$LINK_BUF_MUTEX;/* Link buffer mutex */
 extern ec_$eventcount_t DIR_$WT_FOR_HDNL_EC;/* Wait-for-handle event counter */
 
 /* Hint subsystem data */
-extern uint8_t DAT_00e7fb9c;    /* Hint parameter table base */
-extern uint8_t DAT_00e7fba0;    /* Hint size table base */
+/*
+ * Per-operation parameter records at 0x00E7FB9C (= A5+0x1F9C in DIR_$DO_OP),
+ * eight bytes each, indexed by (opcode >> 1).  DIR_$DO_OP touches two fields:
+ *   +0x00  protocol version  (0x00E4C0BA, 0x00E4C188, 0x00E4C25A)
+ *   +0x04  reply body size   (0x00E4C254, added to the 0x14-byte header)
+ * Spelled as a word array so the two displacements stay visible.
+ */
+extern uint16_t DIR_$OP_PARAMS[];
+#define DIR_OP_PARAM_WORDS      4                   /* 8 bytes per record */
+#define DIR_$OP_VERSION(half)   DIR_$OP_PARAMS[(half) * DIR_OP_PARAM_WORDS + 0]
+#define DIR_$OP_REPLY_SIZE(half) DIR_$OP_PARAMS[(half) * DIR_OP_PARAM_WORDS + 2]
 
 /* DAT_00e4b33c - UID_$NIL reference used as lock callback */
 extern uint8_t DAT_00e4b33c;
@@ -1032,59 +1051,19 @@ extern char Bad_request_header_version_err;
 #define DIR_OLD_HANDLE_OFFSET 0x2B8
 
 /*
- * Status codes used by OLD functions
- * Only define if not already defined in included headers
+ * Status codes used by OLD functions.
+ *
+ * Every 0x000Exxxx (naming server) code now lives in name/name.h, which this
+ * header includes; the guarded copies that used to sit here disagreed with
+ * name/name.h about status_$naming_object_is_not_an_acl_object and were
+ * silently overridden by it (source-pp31).
  */
 #ifndef status_$wrong_type
 #define status_$wrong_type                          0x000F0001
 #endif
-#ifndef status_$naming_illegal_directory_operation
-#define status_$naming_illegal_directory_operation  0x000E0011
-#endif
-#ifndef status_$naming_bad_type
-#define status_$naming_bad_type                     0x000E0012
-#endif
-#ifndef status_$naming_not_root_dir
-#define status_$naming_not_root_dir                 0x000E001F
-#endif
-#ifndef status_$naming_ran_out_of_address_space
-#define status_$naming_ran_out_of_address_space     0x000E0016
-#endif
-/* Note: status_$naming_directory_locked shares code 0x000E0016 with
- * status_$naming_ran_out_of_address_space per Apollo naming conventions */
-#ifndef status_$naming_directory_locked
-#define status_$naming_directory_locked              0x000E0016
-#endif
 /* status_$directory_is_full now lives in dir/dir.h */
 #ifndef status_$name_already_exists
 #define status_$name_already_exists                  0x000E0003
-#endif
-#ifndef status_$naming_internal_error
-#define status_$naming_internal_error                0x000E0025
-#endif
-#ifndef status_$naming_leaf_truncated
-#define status_$naming_leaf_truncated                0x000E002D
-#endif
-#ifndef status_$naming_entry_repaired
-#define status_$naming_entry_repaired               0x000E0023
-#endif
-#ifndef status_$naming_entry_stale
-#define status_$naming_entry_stale                  0x000E0022
-#endif
-#ifndef status_$naming_not_a_link
-#define status_$naming_not_a_link                    0x000E0006
-#endif
-#ifndef status_$naming_invalid_link_operation
-#define status_$naming_invalid_link_operation        0x000E000A
-#endif
-#ifndef status_$naming_directory_not_empty
-#define status_$naming_directory_not_empty           0x000E000F
-#endif
-#ifndef status_$naming_name_is_not_a_file
-#define status_$naming_name_is_not_a_file            0x000E000E
-#endif
-#ifndef status_$naming_object_is_not_an_acl_object
-#define status_$naming_object_is_not_an_acl_object   0x000E002F
 #endif
 #ifndef status_$no_right_to_perform_operation
 #define status_$no_right_to_perform_operation        0x00230001
@@ -1092,32 +1071,8 @@ extern char Bad_request_header_version_err;
 #ifndef status_$insufficient_rights_to_perform_operation
 #define status_$insufficient_rights_to_perform_operation 0x00230002
 #endif
-#ifndef status_$naming_name_not_found
-#define status_$naming_name_not_found               0x000E0007
-#endif
-#ifndef status_$naming_bad_directory
-#define status_$naming_bad_directory                 0x000E000D
-#endif
-#ifndef status_$naming_insufficient_rights
-#define status_$naming_insufficient_rights           0x000E0014
-#endif
 #ifndef file_$objects_on_different_volumes
 #define file_$objects_on_different_volumes           0x000F0013
-#endif
-#ifndef status_$naming_vol_mounted_read_only
-#define status_$naming_vol_mounted_read_only         0x000E0030
-#endif
-#ifndef status_$naming_cant_recovery_dir_on_ro_vol
-#define status_$naming_cant_recovery_dir_on_ro_vol   0x000E0031
-#endif
-#ifndef status_$naming_too_many_hard_links
-#define status_$naming_too_many_hard_links            0x000E0032
-#endif
-/* TODO(source-qvt): Verify this error name. Used in dir_$open_dir when ACL check
- * fails with file_$object_not_found. Possibly "naming_no_acl_object"
- * or "naming_acl_not_accessible". */
-#ifndef status_$naming_acl_not_found
-#define status_$naming_acl_not_found                 0x000E0033
 #endif
 
 /* DIR_OP_SET_ACL and DIR_OP_GET_ENTRYU operation codes */
@@ -1202,7 +1157,11 @@ void dir_$do_op_add_entry(uid_t *uid, uint16_t type, void *name, uint16_t name_l
 void dir_$do_op_delete(uid_t *uid, void *name, uint16_t name_len, uint8_t flag1,
                        uint16_t flag2, uint16_t flag3, void *buf,
                        uid_t *result_uid, status_$t *status_ret);
-void dir_$do_op_cname(uid_t *uid, void *old_name, uint16_t old_name_len,
+/* Frame at 0x00E518BC: 0x08 uid, 0x0C word (pushed by DIR_$DO_OP from
+ * request+0x0E at 0x00E4C466 but never read by the callee), 0x0E old_name,
+ * 0x12 old_name_len, 0x14 new_name, 0x18 new_name_len, 0x1A status_ret. */
+void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
+                      void *old_name, uint16_t old_name_len,
                       void *new_name, uint16_t new_name_len,
                       status_$t *status_ret);
 void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name_len,

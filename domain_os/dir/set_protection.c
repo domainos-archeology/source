@@ -108,8 +108,11 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
         FILE_$SET_PROT(file_uid, NULL, prot_buf, &response.temp_acl, status_ret);
 
         /* Unlock the file */
-        FILE_$PRIV_UNLOCK(file_uid, (uint16_t)lock_handle, ((uint32_t)4 << 16) | PROC1_$AS_ID,
-                          0, 0, 0, dtv_buf, &lock_status);
+        /* 0x00E52360-0x00E5237E: `move.l (-0xec,A6)` slot, `move.w #0x4`
+         * mode, `move.w PROC1_$AS_ID` asid, then three zero longwords. */
+        (void)FILE_$PRIV_UNLOCK(file_uid, (int32_t)lock_handle, 4,
+                                (uint16_t)PROC1_$AS_ID,
+                                0, 0, 0, 0, dtv_buf, &lock_status);
     } else {
         *status_ret = status;
     }

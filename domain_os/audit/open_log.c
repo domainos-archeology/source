@@ -95,8 +95,11 @@ void audit_$open_log(status_$t *status_ret)
 
     if (*status_ret != status_$ok) {
         /* Mapping failed, unlock and cleanup */
-        FILE_$PRIV_UNLOCK(&AUDIT_$DATA.log_file_uid, (int16_t)AUDIT_$DATA.lock_id,
-                          0x40000, 0, 0, 0, lock_info, status_ret);
+        /* `move.l (0x19c,A5)` slot, `move.l #0x40000` = mode word 4 + asid
+         * word 0, then three `clr.l` for by_key/key, rem_key, rem_node. */
+        (void)FILE_$PRIV_UNLOCK(&AUDIT_$DATA.log_file_uid,
+                                (int32_t)AUDIT_$DATA.lock_id, 4, 0,
+                                0, 0, 0, 0, lock_info, status_ret);
         goto error;
     }
 

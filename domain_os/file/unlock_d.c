@@ -30,20 +30,24 @@ void FILE_$UNLOCK_D(uid_t *file_uid, uint32_t *lock_index, uint16_t *lock_mode,
     uint32_t dtv_out[2];  /* 8 bytes for data-time-valid output */
 
     /*
-     * Call FILE_$PRIV_UNLOCK with:
-     *   - file_uid as the file UID
-     *   - (short)*lock_index as the lock table index (low 16 bits)
-     *   - Combined mode_asid: (*lock_mode << 16) | PROC1_$AS_ID
-     *   - 0 for remote_flags (local operation)
-     *   - 0 for param_5 and param_6 (no remote context)
-     *   - dtv_out for data-time-valid output
+     * 0x00E5FCCE-0x00E5FCF2, pushed right to left:
+     *   move.l (0x14,A6)        status_ret
+     *   pea (-0x8,A6)           dtv_out
+     *   clr.l / clr.l           rem_node, rem_key
+     *   clr.l                   by_key, key
+     *   move.w PROC1_$AS_ID     asid
+     *   move.w (A0)             lock_mode = *lock_mode
+     *   move.l (A1)             lock_slot = *lock_index (a full longword)
+     *   move.l (0x8,A6)         file_uid
      */
-    FILE_$PRIV_UNLOCK(file_uid,
-                      (uint16_t)(*lock_index),        /* Lock index */
-                      ((uint32_t)*lock_mode << 16) | (uint32_t)PROC1_$AS_ID,  /* mode_asid */
-                      0,                              /* remote_flags = 0 */
-                      0,                              /* param_5 = 0 */
-                      0,                              /* param_6 = 0 */
-                      dtv_out,                        /* dtv_out */
-                      status_ret);
+    (void)FILE_$PRIV_UNLOCK(file_uid,
+                            (int32_t)*lock_index,   /* lock_slot        */
+                            *lock_mode,             /* lock_mode        */
+                            PROC1_$AS_ID,           /* asid             */
+                            0,                      /* by_key = false   */
+                            0,                      /* key              */
+                            0,                      /* rem_key          */
+                            0,                      /* rem_node         */
+                            dtv_out,
+                            status_ret);
 }

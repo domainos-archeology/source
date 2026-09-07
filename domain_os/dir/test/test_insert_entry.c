@@ -10,6 +10,12 @@
  *
  * dir_page_hdr_t's offsets are checked here too, because the _Static_asserts
  * that guard them only compile under ARCH_M68K.
+ *
+ * The simple insertion path (0xE4FCB6-0xE4FDBE) dereferences the directory
+ * handle at handle+0x0E.  ctx->handle is a 32-bit kernel virtual address, so
+ * the host build routes it through NAME_$HANDLE_TO_PTR (name/name.h,
+ * implemented by name/handle_map.c) and the tests below register a real
+ * directory header with NAME_$PTR_TO_HANDLE (source-qu3v).
  */
 
 #include <stdio.h>
@@ -60,6 +66,14 @@ char Naming_bad_request_header_ver_err;
 #define DIR_PAGE_BYTES  0x400
 static uint8_t page_a[DIR_PAGE_BYTES];      /* the page for level 1 */
 static uint8_t page_b[DIR_PAGE_BYTES];      /* the page for level 0 (parent) */
+
+/*
+ * The mapped directory dir_$add_entry was handed.  Only byte +0x0E matters
+ * here: the original tests it with `tst.b` / `bmi` at 0xE4FD3E and 0xE4FD9A,
+ * so it is a Domain boolean - negative means "volatile directory".
+ */
+#define DIR_HDR_VOLATILE_FLAG   0x0E
+static uint8_t dir_header[0x40];
 
 static int      mock_map_calls;
 static int16_t  mock_map_last_page;
@@ -140,7 +154,9 @@ void dir_$release_wire(void *handle) { (void)handle; mock_release_calls++; }
 static int mock_crash_calls;
 void CRASH_SYSTEM(const status_$t *status_p) { (void)status_p; mock_crash_calls++; }
 
-status_$t FIM_$CLEANUP(void *handler) { (void)handler; return 0; }
+static int mock_fim_cleanup_calls;
+status_$t FIM_$CLEANUP(void *handler)
+{ (void)handler; mock_fim_cleanup_calls++; return 0; }
 void FIM_$RLS_CLEANUP(void *cleanup_data) { (void)cleanup_data; }
 void FIM_$SIGNAL(status_$t status) { (void)status; }
 
@@ -148,6 +164,7 @@ void FIM_$SIGNAL(status_$t status) { (void)status; }
 /* Code under test                                                      */
 /* ------------------------------------------------------------------ */
 
+#include "../../name/handle_map.c"
 #include "../insert_entry.c"
 
 /* ------------------------------------------------------------------ */
@@ -181,7 +198,8 @@ static void build_full_leaf(uint8_t *page, uint16_t page_no,
 static void reset(void)
 {
     memset(&ctx, 0, sizeof(ctx));
-    ctx.handle = 0x1234;                /* only ever handed to mocks */
+    memset(dir_header, 0, sizeof(dir_header));
+    ctx.handle = NAME_$PTR_TO_HANDLE(dir_header);
     ctx.entry_type = 2;                 /* fixed part = 16 bytes */
     ctx.overflow_page = -1;
     ctx.link_len = 0;
@@ -205,6 +223,7 @@ static void reset(void)
     mock_release_calls = 0;
     mock_crash_calls = 0;
     mock_entry_size = 0x1F7;            /* one iteration ends the split search */
+    mock_fim_cleanup_calls = 0;
 
     /* Level 1: a full, reclaimable, NON-root page with four index slots. */
     build_full_leaf(page_a, /*page_no*/ 5, /*index_end*/ 0x1A,
@@ -334,6 +353,118 @@ TEST(non_reclaimable_page_skips_compaction)
     ASSERT_EQ(1, mock_map_calls);
 }
 
+/*
+ * Build a non-root leaf page with room to spare, so dir_$insert_entry takes
+ * the simple insertion path at 0xE4FCB6 instead of splitting.
+ *   page_no != 0    -> base_offset = 0x12 (0xE4F428)
+ *   kind 0          -> entry size = DIR_$NAME_OFFSET_TABLE[type] + name_len
+ *   index_end 0x16  -> two index words, so num_entries == 2 (0xE4F430)
+ *   heap_base 0x300 -> free_space = 0x2EA, far more than aligned_size + 2
+ */
+static void build_roomy_leaf(uint8_t *page)
+{
+    dir_page_hdr_t *hdr = (dir_page_hdr_t *)page;
+
+    memset(page, 0, DIR_PAGE_BYTES);
+    hdr->kind      = 0x00;
+    hdr->version   = 5;
+    hdr->page_no   = 3;
+    hdr->next_page = 0xFFFF;
+    hdr->index_end = DIR_PAGE_HDR_SIZE + 4;
+    hdr->heap_base = 0x300;
+    /* Two index words the shift loop at 0xE4FCF0 has to move up by one. */
+    *(int16_t *)(page + DIR_PAGE_HDR_SIZE + 0) = 0x1111;
+    *(int16_t *)(page + DIR_PAGE_HDR_SIZE + 2) = 0x2222;
+}
+
+/*
+ * The simple insertion path.  It wires the page, shifts the index words up by
+ * one from target_entry_idx+1, writes the entry, and releases the wire.
+ */
+TEST(simple_insertion_wires_shifts_and_writes)
+{
+    status_$t status = 0xdeadbeef;
+
+    reset();
+    build_roomy_leaf(page_a);
+
+    dir_$insert_entry(&ctx, 1, 0, 4, &status);
+
+    ASSERT_EQ(status_$ok, status);
+    ASSERT_EQ(0, mock_compact_calls);
+    ASSERT_EQ(0, mock_alloc_split_calls);   /* leaf page: 0xE4FCC8 skips it */
+    ASSERT_EQ(1, mock_wire_calls);          /* 0xE4FCDE */
+    ASSERT_EQ(1, mock_write_calls);         /* 0xE4FD5A */
+    ASSERT_EQ(1, mock_release_calls);       /* 0xE4FDBA */
+    /* 0xE4FCF0: index[0] and index[1] moved up one slot. */
+    ASSERT_EQ(0x1111, *(int16_t *)(page_a + DIR_PAGE_HDR_SIZE + 2));
+    ASSERT_EQ(0x2222, *(int16_t *)(page_a + DIR_PAGE_HDR_SIZE + 4));
+}
+
+/*
+ * 0xE4FD9A `tst.b (0xe,A0); bpl`: only a volatile directory (handle+0x0E
+ * negative) gets its UID stamped into the page header.
+ */
+TEST(volatile_directory_stamps_the_page_uid)
+{
+    status_$t status = 0xdeadbeef;
+    dir_page_hdr_t *hdr = (dir_page_hdr_t *)page_a;
+
+    reset();
+    build_roomy_leaf(page_a);
+    dir_header[DIR_HDR_VOLATILE_FLAG] = 0xFF;       /* Domain boolean: true */
+    ctx.dir_uid_high = 0xAABBCCDDu;
+    ctx.dir_uid_low  = 0x11223344u;
+
+    dir_$insert_entry(&ctx, 1, 0, 4, &status);
+
+    ASSERT_EQ(status_$ok, status);
+    ASSERT_EQ(0xAABBCCDDu, hdr->dir_uid_high);
+    ASSERT_EQ(0x11223344u, hdr->dir_uid_low);
+
+    /* A non-volatile directory leaves the header alone. */
+    reset();
+    build_roomy_leaf(page_a);
+    dir_header[DIR_HDR_VOLATILE_FLAG] = 0;
+    ctx.dir_uid_high = 0xAABBCCDDu;
+    ctx.dir_uid_low  = 0x11223344u;
+
+    dir_$insert_entry(&ctx, 1, 0, 4, &status);
+
+    ASSERT_EQ(0, hdr->dir_uid_high);
+    ASSERT_EQ(0, hdr->dir_uid_low);
+}
+
+/*
+ * 0xE4FD3E `tst.b (0xe,A0); bmi` guards the FIM cleanup: it runs only for a
+ * type-4 (link) entry on a directory that is NOT volatile.
+ */
+TEST(fim_cleanup_only_for_type_4_on_a_stable_directory)
+{
+    status_$t status = 0xdeadbeef;
+
+    reset();
+    build_roomy_leaf(page_a);
+    ctx.entry_type = 4;
+    dir_header[DIR_HDR_VOLATILE_FLAG] = 0;
+    mock_fim_cleanup_calls = 0;
+
+    dir_$insert_entry(&ctx, 1, 0, 4, &status);
+    ASSERT_EQ(1, mock_fim_cleanup_calls);
+    ASSERT_EQ(1, mock_write_calls);
+
+    /* Volatile directory: no cleanup, but the entry is still written. */
+    reset();
+    build_roomy_leaf(page_a);
+    ctx.entry_type = 4;
+    dir_header[DIR_HDR_VOLATILE_FLAG] = 0xFF;
+    mock_fim_cleanup_calls = 0;
+
+    dir_$insert_entry(&ctx, 1, 0, 4, &status);
+    ASSERT_EQ(0, mock_fim_cleanup_calls);
+    ASSERT_EQ(1, mock_write_calls);
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -343,6 +474,9 @@ int main(void)
     RUN_TEST(non_root_page_still_recurses);
     RUN_TEST(free_space_is_reread_after_compaction);
     RUN_TEST(non_reclaimable_page_skips_compaction);
+    RUN_TEST(simple_insertion_wires_shifts_and_writes);
+    RUN_TEST(volatile_directory_stamps_the_page_uid);
+    RUN_TEST(fim_cleanup_only_for_type_4_on_a_stable_directory);
     printf("\n%d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed == 0 ? 0 : 1;
 }

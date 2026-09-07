@@ -65,7 +65,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
 
     /* 0xE4F3D0: map the target page using the B-tree path for this level */
     ctx->page_data = (uint8_t *)dir_$map_page(
-        (void *)(uintptr_t)ctx->handle,
+        NAME_$HANDLE_TO_PTR(ctx->handle),
         ctx->path_page[slot_idx]);
     page = dir_page_hdr(ctx->page_data);
     int16_t target_entry_idx = ctx->path_entry[slot_idx];
@@ -108,9 +108,9 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
     /* 0xE4F4D4: reclaim space if needed and the page has dead entries */
     if (ctx->free_space < aligned_size + 2 &&
         (dir_page_flags(page) & DIR_PAGE_RECLAIMABLE) != 0) {
-        DIR_$WIRE_PAGE((void *)(uintptr_t)ctx->handle, ctx->page_data);
+        DIR_$WIRE_PAGE(NAME_$HANDLE_TO_PTR(ctx->handle), ctx->page_data);
         dir_$compact_page_entries(ctx);
-        dir_$release_wire((void *)(uintptr_t)ctx->handle);
+        dir_$release_wire(NAME_$HANDLE_TO_PTR(ctx->handle));
         /* 0xE4F512: the header is re-read - compaction rewrote the page. */
         ctx->free_space = (int16_t)page->heap_base - (int16_t)page->index_end;
     }
@@ -174,7 +174,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
             /* Allocate first new child page */
             ctx->page_count++;
             ctx->new_page = (uint8_t *)dir_$map_page(
-                (void *)(uintptr_t)ctx->handle,
+                NAME_$HANDLE_TO_PTR(ctx->handle),
                 ctx->split_pages[ctx->page_count]);
 
             /* 0xE4F642: initialize the new page header */
@@ -196,7 +196,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
             newp->index_end = DIR_PAGE_HDR_SIZE;
             newp->heap_base = DIR_PAGE_SIZE;
 
-            DIR_$WIRE_PAGE((void *)(uintptr_t)ctx->handle, ctx->page_data);
+            DIR_$WIRE_PAGE(NAME_$HANDLE_TO_PTR(ctx->handle), ctx->page_data);
 
             /* Determine starting entry for copy based on page kind */
             int16_t copy_start;
@@ -226,7 +226,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
             /* Allocate second new child page */
             ctx->page_count++;
             ctx->new_page = (uint8_t *)dir_$map_page(
-                (void *)(uintptr_t)ctx->handle,
+                NAME_$HANDLE_TO_PTR(ctx->handle),
                 ctx->split_pages[ctx->page_count]);
 
             /* Initialize second page header */
@@ -346,7 +346,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
 
             /* Re-map the page after recursion (may have been invalidated) */
             ctx->page_data = (uint8_t *)dir_$map_page(
-                (void *)(uintptr_t)ctx->handle,
+                NAME_$HANDLE_TO_PTR(ctx->handle),
                 ctx->path_page[slot_idx]);
             page = dir_page_hdr(ctx->page_data);
             ctx->idx_base = ctx->page_data + local_base_offset;
@@ -354,7 +354,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
             /* Allocate new page for the split */
             ctx->page_count++;
             ctx->new_page = (uint8_t *)dir_$map_page(
-                (void *)(uintptr_t)ctx->handle,
+                NAME_$HANDLE_TO_PTR(ctx->handle),
                 ctx->split_pages[ctx->page_count]);
 
             /* Initialize new page from current page */
@@ -368,7 +368,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
             newp->index_end = DIR_PAGE_HDR_SIZE;
             newp->heap_base = DIR_PAGE_SIZE;
 
-            DIR_$WIRE_PAGE((void *)(uintptr_t)ctx->handle, ctx->page_data);
+            DIR_$WIRE_PAGE(NAME_$HANDLE_TO_PTR(ctx->handle), ctx->page_data);
 
             int16_t move_from;
             if (found_insert_point >= 0) {
@@ -418,7 +418,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
         page->dir_uid_high = ctx->dir_uid_high;
         page->dir_uid_low = ctx->dir_uid_low;
 
-        dir_$release_wire((void *)(uintptr_t)ctx->handle);
+        dir_$release_wire(NAME_$HANDLE_TO_PTR(ctx->handle));
 
         /* If we've reached the original slot level, finalize */
         if (ctx->max_depth == slot_idx) {
@@ -435,7 +435,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
             if (*status_ret != status_$ok) return;
         }
 
-        DIR_$WIRE_PAGE((void *)(uintptr_t)ctx->handle, ctx->page_data);
+        DIR_$WIRE_PAGE(NAME_$HANDLE_TO_PTR(ctx->handle), ctx->page_data);
 
         /* Shift index entries from target_entry_idx+1 to num_entries */
         num_entries++;
@@ -456,7 +456,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
 
         /* Handle FIM cleanup for type 4 entries on non-volatile dirs */
         int32_t fim_status = 0;
-        if (*(int8_t *)((char *)(uintptr_t)ctx->handle + 0x0E) >= 0 &&
+        if (*(int8_t *)((char *)NAME_$HANDLE_TO_PTR(ctx->handle) + 0x0E) >= 0 &&
             ctx->entry_type == 4) {
             fim_status = FIM_$CLEANUP(ctx->fim_data);
         }
@@ -469,19 +469,19 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
                 FIM_$RLS_CLEANUP(ctx->fim_data);
             }
         } else {
-            dir_$release_wire((void *)(uintptr_t)ctx->handle);
-            dir_$remove_entry((void *)(uintptr_t)ctx->handle,
+            dir_$release_wire(NAME_$HANDLE_TO_PTR(ctx->handle));
+            dir_$remove_entry(NAME_$HANDLE_TO_PTR(ctx->handle),
                               ctx->name, ctx->name_len, 4,
                               ctx->remove_uid, status_ret);
             FIM_$SIGNAL(fim_status);
         }
 
         /* Update directory UID in page header for volatile directories */
-        if (*(int8_t *)((char *)(uintptr_t)ctx->handle + 0x0E) < 0) {
+        if (*(int8_t *)((char *)NAME_$HANDLE_TO_PTR(ctx->handle) + 0x0E) < 0) {
             page->dir_uid_high = ctx->dir_uid_high;
             page->dir_uid_low = ctx->dir_uid_low;
         }
 
-        dir_$release_wire((void *)(uintptr_t)ctx->handle);
+        dir_$release_wire(NAME_$HANDLE_TO_PTR(ctx->handle));
     }
 }

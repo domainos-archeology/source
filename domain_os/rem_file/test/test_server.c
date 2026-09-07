@@ -101,6 +101,7 @@ static int16_t   mock_send_data_len;
 static void     *mock_send_data;
 static uint16_t  mock_send_request_id;
 static uint32_t  mock_send_dest_node;
+static void     *mock_send_tpl;
 
 static int       mock_dir_server_calls;
 static int       mock_acl_server_calls;
@@ -183,7 +184,7 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node,
                         void *pkt_info, uint16_t request_id,
                         void *tpl, uint16_t tpl_len,
                         void *data, int16_t data_len,
-                        uint16_t *len_out, void *extra, status_$t *status)
+                        uint16_t *len_out, uint16_t *extra, status_$t *status)
 {
     (void)routing_key; (void)dest_sock; (void)src_override; (void)src_node;
     (void)src_sock; (void)pkt_info; (void)tpl; (void)extra;
@@ -191,6 +192,7 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node,
     mock_send_tpl_len    = tpl_len;
     mock_send_data_len   = data_len;
     mock_send_data       = data;
+    mock_send_tpl        = tpl;
     mock_send_request_id = request_id;
     mock_send_dest_node  = dest_node;
     capture_response(tpl);
@@ -198,10 +200,17 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node,
     *status = status_$ok;
 }
 
+/* When set, DIR_$SERVER stamps this byte all over the reply's bulk area
+ * (reply+0x200), the region 0x00E6417C hands to PKT_$SEND_INTERNET. */
+static uint8_t mock_dir_server_bulk_fill;
+
 void DIR_$SERVER(void *req, void *resp, uint16_t *reply_len)
 {
-    (void)req; (void)resp;
+    (void)req;
     mock_dir_server_calls++;
+    if (mock_dir_server_bulk_fill != 0) {
+        memset((uint8_t *)resp + 0x200, mock_dir_server_bulk_fill, 0x100);
+    }
     *reply_len = mock_dir_server_reply_len;
 }
 
@@ -241,11 +250,13 @@ void FILE_$PRIV_LOCK(uid_t *u, int16_t asid, uint16_t side, uint16_t mode,
     *st = status_$ok;
 }
 
-uint8_t FILE_$PRIV_UNLOCK(uid_t *u, uint16_t li, uint32_t ma, int32_t rf,
-                          int32_t p5, int32_t p6, uint32_t *dtv,
-                          status_$t *st)
+boolean FILE_$PRIV_UNLOCK(uid_t *u, int32_t slot, uint16_t mode, uint16_t asid,
+                          boolean by_key, uint16_t key,
+                          uint32_t rem_key, uint32_t rem_node,
+                          uint32_t *dtv, status_$t *st)
 {
-    (void)u; (void)li; (void)ma; (void)rf; (void)p5; (void)p6; (void)dtv;
+    (void)u; (void)slot; (void)mode; (void)asid; (void)by_key; (void)key;
+    (void)rem_key; (void)rem_node; (void)dtv;
     *st = status_$ok;
     return 0;
 }
@@ -411,6 +422,8 @@ static void reset_world(void)
     mock_send_tpl_len = 0;
     mock_send_data_len = 0;
     mock_send_data = NULL;
+    mock_send_tpl = NULL;
+    mock_dir_server_bulk_fill = 0;
     mock_dir_server_calls = 0;
     mock_acl_server_calls = 0;
     mock_dir_server_reply_len = 0x40;
@@ -729,6 +742,47 @@ TEST(reply_longer_than_0x200_is_split)
     ASSERT_EQ(0x80, (uint16_t)mock_send_data_len);
 }
 
+/*
+ * 0x00E6417C `lea (0x60,A6),A4`: the bulk pointer is the reply record plus
+ * 0x200 (the reply is based at A6-0x1A0), which runs past the end of
+ * REM_FILE_$SERVER's own frame.  The C model keeps that memory in the frame
+ * object so the pointer is a real, writable address - it used to be NULL.
+ */
+TEST(split_reply_bulk_is_the_reply_record_plus_0x200)
+{
+    reset_world();
+    set_request(1, REM_FILE_DIR_OP_FIRST + 2, 0x20, 0);
+    mock_dir_server_reply_len = 0x280;
+    mock_dir_server_bulk_fill = 0xA5;
+    REM_FILE_$SERVER();
+
+    ASSERT_EQ(1, mock_send_calls);
+    ASSERT_EQ(0x200, mock_send_tpl_len);
+    ASSERT_EQ(0x80, (uint16_t)mock_send_data_len);
+    ASSERT_EQ(1, mock_send_data != NULL);
+    ASSERT_EQ(1, mock_send_data == (void *)((uint8_t *)mock_send_tpl + 0x200));
+    /* The bytes DIR_$SERVER put there are the bytes that go out. */
+    ASSERT_EQ(0xA5, ((const uint8_t *)mock_send_data)[0]);
+    ASSERT_EQ(0xA5, ((const uint8_t *)mock_send_data)[0x7F]);
+}
+
+/*
+ * The unsplit path leaves A4 alone, so the bulk pointer is still whatever the
+ * dispatch put there - a netbuf address, or NULL when no netbuf was taken.
+ */
+TEST(unsplit_reply_leaves_the_bulk_pointer_alone)
+{
+    reset_world();
+    set_request(1, REM_FILE_DIR_OP_FIRST + 2, 0x20, 0);
+    mock_dir_server_reply_len = 0x40;
+    REM_FILE_$SERVER();
+
+    ASSERT_EQ(1, mock_send_calls);
+    ASSERT_EQ(0x40, mock_send_tpl_len);
+    ASSERT_EQ(0, (uint16_t)mock_send_data_len);
+    ASSERT_EQ(1, mock_send_data == NULL);
+}
+
 TEST(reply_exactly_0x200_is_not_split)
 {
     reset_world();
@@ -852,6 +906,8 @@ int main(void)
     RUN_TEST(per_opcode_reply_lengths);
 
     RUN_TEST(reply_longer_than_0x200_is_split);
+    RUN_TEST(split_reply_bulk_is_the_reply_record_plus_0x200);
+    RUN_TEST(unsplit_reply_leaves_the_bulk_pointer_alone);
     RUN_TEST(reply_exactly_0x200_is_not_split);
     RUN_TEST(bulk_over_0x400_raises_0x00110001);
     RUN_TEST(send_arguments_come_from_the_packet_header);

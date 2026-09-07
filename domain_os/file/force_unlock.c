@@ -30,20 +30,14 @@ void FILE_$FORCE_UNLOCK(uid_t *file_uid, status_$t *status_ret)
     uid_t local_uid;
     uint32_t dtv_out[2];
 
-    /* Lock entry info buffer from FILE_$READ_LOCK_ENTRYUI */
-    struct {
-        uint32_t    context;        /* 0x00 */
-        uint32_t    node_low;       /* 0x04 */
-        uint32_t    node_high;      /* 0x08 */
-        uint32_t    uid_high;       /* 0x0C */
-        uint32_t    uid_low;        /* 0x10 */
-        uint16_t    next;           /* 0x14 */
-        uint16_t    sequence;       /* 0x16 */
-        uint8_t     refcount;       /* 0x18 */
-        uint8_t     flags1;         /* 0x19 */
-        uint8_t     rights;         /* 0x1A */
-        uint8_t     flags2;         /* 0x1B */
-    } lock_info;
+    /*
+     * FILE_$READ_LOCK_ENTRYUI's output record (A6-0x28), the same
+     * file_lock_info_internal_t every other reader of that routine uses:
+     * 0x00E60DEA reads the holder node at +0x16, 0x00E60DF6 the owner node at
+     * +0x0C, 0x00E60E10 the context at +0x08 and 0x00E60E14 the sequence at
+     * +0x14.
+     */
+    file_lock_info_internal_t lock_info;
 
     /* Copy file UID to local */
     local_uid.high = file_uid->high;
@@ -56,29 +50,34 @@ void FILE_$FORCE_UNLOCK(uid_t *file_uid, status_$t *status_ret)
 
     if (*status_ret == status_$ok) {
         /*
-         * Validate that this lock can be force-unlocked:
-         * 1. The lock's node_high must match NODE_$ME
-         * 2. The lock's node_low (masked to 20 bits) must NOT match NODE_$ME
-         *
-         * This ensures we can only force-unlock locks that are:
-         * - Managed by our node (node_high == NODE_$ME)
-         * - But were created from a remote node (node_low != NODE_$ME)
-         *
-         * This prevents accidentally forcing our own local locks.
+         * 0x00E60DE4-0x00E60E04: the lock must be held on this node
+         * (holder_node == NODE_$ME) and have been taken from another node
+         * (owner_node & 0xFFFFF != NODE_$ME); anything else is refused.
          */
-        if ((NODE_$ME == lock_info.node_high) &&
-            ((lock_info.node_low & 0xFFFFF) != NODE_$ME)) {
+        if ((NODE_$ME == lock_info.holder_node) &&
+            ((lock_info.owner_node & 0xFFFFF) != NODE_$ME)) {
             /*
-             * Valid - call FILE_$PRIV_UNLOCK with remote_flags=-1
+             * 0x00E60E06-0x00E60E22, pushed right to left:
+             *   pea (A2)            status_ret
+             *   pea (-0x38,A6)      dtv_out
+             *   move.l (-0x1c,A6)   rem_node  = lock_info.owner_node
+             *   move.l (-0x20,A6)   rem_key   = lock_info.context
+             *   move.w (-0x14,A6)   key       = lock_info.sequence
+             *   st                  by_key    = TRUE
+             *   clr.l               lock_mode = 0, asid = 0
+             *   clr.l               lock_slot = 0
+             *   pea (-0x30,A6)      file_uid  = &local_uid
              */
-            FILE_$PRIV_UNLOCK(&local_uid,
-                              0,                     /* lock_index = 0 (search) */
-                              (uint32_t)lock_info.sequence << 16,  /* mode_asid */
-                              -1,                    /* remote_flags = -1 (remote unlock) */
-                              lock_info.context,     /* param_5 = context */
-                              lock_info.node_low,    /* param_6 = node address */
-                              dtv_out,               /* dtv_out */
-                              status_ret);
+            (void)FILE_$PRIV_UNLOCK(&local_uid,
+                                    0,                      /* lock_slot */
+                                    0,                      /* lock_mode: any */
+                                    0,                      /* asid      */
+                                    -1,                     /* by_key    */
+                                    lock_info.sequence,     /* key       */
+                                    lock_info.context,      /* rem_key   */
+                                    lock_info.owner_node,   /* rem_node  */
+                                    dtv_out,
+                                    status_ret);
         } else {
             /*
              * Cannot force unlock - lock is either:
