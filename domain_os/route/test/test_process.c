@@ -348,17 +348,17 @@ void ML_$LOCK(int16_t resource_id)   { (void)resource_id; mock_ml_lock_depth++; 
 void ML_$UNLOCK(int16_t resource_id) { (void)resource_id; mock_ml_lock_depth--; }
 
 void NET_IO_$SEND(int16_t port, uint32_t *hdr_ptr, uint32_t hdr_pa,
-                  uint16_t hdr_len, uint32_t data_va, uint32_t *data_len,
-                  uint16_t protocol, uint16_t flags, void *extra,
-                  status_$t *status_ret)
+                  uint16_t hdr_len, uint32_t data_va, uint32_t *data_pages,
+                  int16_t data_len, uint16_t flags,
+                  net_io_$send_info_t *send_info, status_$t *status_ret)
 {
-    (void)data_va; (void)data_len; (void)flags; (void)extra;
+    (void)data_va; (void)data_pages; (void)flags; (void)send_info;
     mock_net_io_calls++;
     mock_net_io_port = port;
     mock_net_io_pkt = hdr_ptr[0];
     mock_net_io_hdr_pa = hdr_pa;
     mock_net_io_hdr_len = hdr_len;
-    mock_net_io_data_len = protocol;
+    mock_net_io_data_len = (uint16_t)data_len;
     *status_ret = status_$ok;
 }
 

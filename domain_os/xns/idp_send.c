@@ -1,12 +1,12 @@
 /*
  * XNS IDP Send Operations
  *
- * Implementation of XNS_IDP_$SEND and XNS_IDP_$OS_SEND for
- * sending IDP packets.
+ *   XNS_IDP_$OS_SEND:  0x00E18256   (594 bytes)
+ *   XNS_IDP_$SEND:     0x00E18A66   (292 bytes)
  *
- * Original addresses:
- *   XNS_IDP_$SEND:     0x00E18A66
- *   XNS_IDP_$OS_SEND:  0x00E18256
+ * Both were re-emitted against the disassembly for source-tvrs; every basic
+ * block of both functions is accounted for below and the addresses are cited
+ * inline.
  */
 
 #include "xns/xns_internal.h"
@@ -14,319 +14,337 @@
 /*
  * XNS_IDP_$OS_SEND - Send a packet (OS-level)
  *
- * Low-level packet send operation used by both kernel and user-level code.
- * This function:
- *   1. Validates parameters
- *   2. Builds the IDP header (if not already built)
- *   3. Finds the route to destination
- *   4. Computes checksum (if needed)
- *   5. Sends via MAC layer
+ * Builds the 0x4C-byte mac_os_$send_pkt_t the port driver wants out of the
+ * caller's xns_$os_send_rec_t, optionally building the IDP header first,
+ * resolves the next hop when the channel is not a connected one, and hands
+ * the result to MAC_OS_$SEND.
  *
- * @param channel_ptr   Pointer to channel number
- * @param send_params   Send parameters structure:
- *                      +0x00-0x17: Destination address (24 bytes)
- *                      +0x18: header_len
- *                      +0x1C: header_ptr
- *                      +0x20: iov chain
- *                      +0x24: flags
- *                      +0x2D: packet_type
- *                      +0x34-0x47: extra fields
- *                      +0x36: checksum control
- * @param checksum_ret  Output: computed checksum
- * @param status_ret    Output: status code
+ * Frame (link.w A6,-0xac at 0x00E18256):
+ *   A6-0x88  the mac_os_$send_pkt_t handed to MAC_OS_$SEND (0x4C bytes)
+ *   A6-0x98  the FIM_$CLEANUP status
+ *   A6-0xA0  RIP_$FIND_NEXTHOP's port_ret word
+ *   A6-0x38  RIP_$FIND_NEXTHOP's rip_$nexthop_t, also MAC_OS_$ARP's input
+ *   A6-0x28  the FIM cleanup record
+ *   A6-0x10  the 12-byte destination copied out of the IDP header
+ *
+ * A5 is loaded absolutely with `lea (0xe2b314).l,A5' (0x00E1825E), so the
+ * module base is the IDP state itself and the channel pointer A2 is
+ * A5 + channel * 0x48 - i.e. &state->channels[channel] shifted down by the
+ * 0xA0 array base, which is why the field displacements below read 0xA4/0xD4
+ * rather than 0x04/0x34.
  *
  * Original address: 0x00E18256
  */
-void XNS_IDP_$OS_SEND(int16_t *channel_ptr, void *send_params, uint16_t *checksum_ret,
-                      status_$t *status_ret)
+void XNS_IDP_$OS_SEND(int16_t *channel_ptr, xns_$os_send_rec_t *rec,
+                      int16_t *len_sent_ret, status_$t *status_ret)
 {
-    uint8_t *base = XNS_IDP_BASE;
-    uint8_t *params = (uint8_t *)send_params;
-    int16_t channel = *channel_ptr;
-    int iVar1;
-    int8_t is_connected;
-    int8_t is_broadcast;
-    int16_t *header_ptr;
-    int header_len;
-    int total_len;
-    int16_t port;
-    uint8_t mac_info[24];
-    status_$t local_status;
-    uint8_t cleanup_buf[24];
+    xns_$idp_state_t   *state = XNS_$IDP_STATE;
+    xns_$channel_t     *chan;
+    xns_$idp_header_t  *hdr;
+    boolean             is_connected;   /* D0b, `sne' at 0x00E182AA */
+    boolean             build_header;   /* D1b, `sne' at 0x00E182B2 */
+    int16_t             port;           /* D2w */
+    int                 i;
 
-    *checksum_ret = 0;
+    mac_os_$send_pkt_t  send_rec;       /* A6-0x88 */
+    status_$t           fim_status;     /* A6-0x98 */
+    int16_t             nexthop_port;   /* A6-0xA0 */
+    rip_$nexthop_t      nexthop;        /* A6-0x38 */
+    uint8_t             cleanup[24];    /* A6-0x28 */
+    rip_$dest_addr_t    dest;           /* A6-0x10 */
+
+    /* 0x00E18264-0x00E1826E */
+    *len_sent_ret = 0;
     *status_ret = status_$ok;
 
-    /* Set up cleanup handler */
-    local_status = FIM_$CLEANUP(cleanup_buf);
-    if (local_status != status_$cleanup_handler_set) {
-        *status_ret = local_status;
+    /* 0x00E18270-0x00E18286 */
+    fim_status = FIM_$CLEANUP(cleanup);
+    if (fim_status != status_$cleanup_handler_set) {
+        /* 0x00E18498: the fault path returns the FIM status, no release */
+        *status_ret = fim_status;
         return;
     }
 
-    /* Get channel base address */
-    iVar1 = channel * XNS_CHANNEL_SIZE;
+    /* 0x00E1828A: D3 = rec->hdr_desc.address, kept for the whole function */
+    hdr = (xns_$idp_header_t *)ARCH_VA_TO_PTR(rec->hdr_desc.address);
 
-    /* Check if connected mode */
-    is_connected = (*(uint8_t *)(base + iVar1 + XNS_CHAN_OFF_FLAGS) & 0x20) ? -1 : 0;
+    /* 0x00E18292-0x00E182A0: A2 = A5 + channel * 0x48 */
+    chan = &state->channels[*channel_ptr];
 
-    /* Check if "no header build" mode */
-    if (*(uint8_t *)(base + iVar1 + XNS_CHAN_OFF_FLAGS) & 0x08) {
-        /* Header already built, just need to fill in destination */
-        header_ptr = *(int16_t **)(params + 0x1C);
-        header_ptr[0] = -1;  /* Checksum = none initially */
+    /* 0x00E182A4-0x00E182B2: byte btst on the high half of the flags word */
+    is_connected = (chan->flags & XNS_CHAN_FLAG_CONNECT) ? true : false;
+    build_header = (chan->flags & XNS_CHAN_FLAG_BUILD_HEADER) ? true : false;
 
-        /* Calculate total length from iov chain */
-        header_len = *(int32_t *)(params + 0x18);
-        {
-            int32_t *iov = *(int32_t **)(params + 0x20);
-            total_len = header_len;
+    /* 0x00E182B4: bpl -> 0x00E18342 */
+    if (build_header < 0) {
+        int32_t total;
+        mac_os_$buf_desc_t *buf;
 
-            while (iov != NULL) {
-                int32_t len = iov[0];
-                if (len < 0 || (len > 0 && iov[1] == 0)) {
-                    FIM_$RLS_CLEANUP(cleanup_buf);
-                    *status_ret = status_$xns_invalid_param;
-                    return;
-                }
-                total_len += len;
-                iov = (int32_t *)iov[2];  /* Next in chain */
+        hdr->checksum = 0xFFFF;                     /* 0x00E182BC */
+
+        /* 0x00E182C4-0x00E182FC: walk the chain hanging off rec->hdr_desc,
+         * accumulating lengths into D1 which starts at hdr_desc.length. */
+        total = rec->hdr_desc.length;
+        for (buf = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR(rec->hdr_desc.next);
+             buf != NULL;
+             buf = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR(buf->next)) {
+            int32_t len = buf->length;              /* 0x00E182CE */
+
+            /* 0x00E182D0-0x00E182D8: negative length, or a positive length
+             * with a nil address, is rejected. */
+            if (len < 0 || (len > 0 && buf->address == 0)) {
+                FIM_$RLS_CLEANUP(cleanup);
+                *status_ret = status_$xns_invalid_param;   /* 0x3B0008 */
+                return;
             }
+            total += len;                           /* 0x00E182F2 */
         }
 
-        /* Set packet length */
-        header_ptr[1] = *(int16_t *)(params + 0x36) + (int16_t)total_len;
+        /* 0x00E18302-0x00E18306: `add.w (0x36,A3),D1w' adds the LOW WORD of
+         * the longword at rec +0x34 and only the low word of the sum is
+         * stored. */
+        hdr->length = (uint16_t)((uint16_t)total + (uint16_t)rec->data_length);
 
-        /* Set transport control and packet type */
-        *(uint8_t *)((uint8_t *)header_ptr + 4) = 0;
-        *(uint8_t *)((uint8_t *)header_ptr + 5) = params[0x2D];
+        hdr->transport_ctl = 0;                     /* 0x00E1830A */
+        /* 0x00E1830E: `move.b (0x2d,A3)' - the low byte of the +0x2C word */
+        hdr->packet_type = (uint8_t)rec->packet_type;
 
-        /* Fill in addresses */
+        /* 0x00E18314: bpl -> 0x00E18336 */
         if (is_connected < 0) {
-            /* Use channel's stored addresses */
-            *(uint32_t *)(header_ptr + 3) = *(uint32_t *)(base + iVar1 + XNS_CHAN_OFF_DEST_NETWORK);
-            *(uint32_t *)(header_ptr + 5) = *(uint32_t *)(base + iVar1 + XNS_CHAN_OFF_DEST_NETWORK + 4);
-            *(uint32_t *)(header_ptr + 7) = *(uint32_t *)(base + iVar1 + XNS_CHAN_OFF_DEST_NETWORK + 8);
-            *(uint32_t *)(header_ptr + 9) = *(uint32_t *)(base + iVar1 + XNS_CHAN_OFF_SRC_NETWORK);
-            *(uint32_t *)(header_ptr + 0xB) = *(uint32_t *)(base + iVar1 + XNS_CHAN_OFF_SRC_HOST);
-            *(uint32_t *)(header_ptr + 0xD) = *(uint32_t *)(base + iVar1 + XNS_CHAN_OFF_SRC_HOST + 4);
-        } else {
-            /* Copy from send_params */
-            int16_t i;
-            uint8_t *src = params;
-            uint8_t *dst = (uint8_t *)(header_ptr + 3);
-            for (i = 0; i < 24; i++) {
-                *dst++ = *src++;
+            /* 0x00E18318-0x00E18332: two three-longword copies, the channel's
+             * connected destination then its bound source. */
+            hdr->dest_network = chan->dest_network;
+            for (i = 0; i < 6; i++) {
+                hdr->dest_host[i] = chan->dest_host[i];
             }
+            hdr->dest_socket = chan->dest_socket;
+            hdr->src_network = chan->src_network;
+            for (i = 0; i < 6; i++) {
+                hdr->src_host[i] = chan->src_host[i];
+            }
+            hdr->src_socket = chan->src_port;
+        } else {
+            /* 0x00E18336-0x00E1833E: 24 bytes straight out of the record. */
+            hdr->dest_network = rec->dest_addr.network;
+            for (i = 0; i < 6; i++) {
+                hdr->dest_host[i] = rec->dest_addr.host[i];
+            }
+            hdr->dest_socket = rec->dest_addr.socket;
+            hdr->src_network = rec->src_addr.network;
+            for (i = 0; i < 6; i++) {
+                hdr->src_host[i] = rec->src_addr.host[i];
+            }
+            hdr->src_socket = rec->src_addr.socket;
         }
     }
 
-    /* Get destination and find route */
+    /* 0x00E18342: bpl -> 0x00E1835E */
     if (is_connected < 0) {
-        /* Connected mode - use stored port and MAC info */
-        port = *(int16_t *)(base + iVar1 + XNS_CHAN_OFF_CONN_PORT);
-        {
-            uint8_t *src = base + iVar1 + XNS_CHAN_OFF_MAC_INFO;
-            uint8_t *dst = mac_info;
-            int16_t i;
-            for (i = 0; i < 24; i++) {
-                *dst++ = *src++;
-            }
+        /* 0x00E18346: the port was fixed when the channel was connected */
+        port = chan->connected_port;
+
+        /* 0x00E1834A-0x00E18358: six longwords, chan +0xBC -> record +0x00.
+         * Note that this covers only the record's first 24 bytes, so
+         * is_broadcast (+0x18) is left as it was - the original does not
+         * initialise it on this path. */
+        for (i = 0; i < 0x18; i++) {
+            ((uint8_t *)&send_rec)[i] = chan->mac_info[i];
         }
+        /* 0x00E1835A: bra -> 0x00E183E0 */
     } else {
-        /* Look up route to destination */
-        int16_t nexthop_port[4];
-        uint8_t nexthop_info[16];
-        uint32_t dest_addr[3];
+        /* 0x00E18360-0x00E1836C: three longwords, header +0x06 -> A6-0x10 */
+        dest.network = hdr->dest_network;
+        dest.host_hi = (uint16_t)((hdr->dest_host[0] << 8) | hdr->dest_host[1]);
+        dest.host_lo = ((uint32_t)hdr->dest_host[2] << 24) |
+                       ((uint32_t)hdr->dest_host[3] << 16) |
+                       ((uint32_t)hdr->dest_host[4] << 8) |
+                       (uint32_t)hdr->dest_host[5];
+        dest.socket = hdr->dest_socket;
 
-        header_ptr = *(int16_t **)(params + 0x1C);
-        dest_addr[0] = *(uint32_t *)(header_ptr + 3);
-        dest_addr[1] = *(uint32_t *)(header_ptr + 5);
-        dest_addr[2] = *(uint32_t *)(header_ptr + 7);
+        /* 0x00E1836E-0x00E18388: the second argument is `st -(SP)', a Pascal
+         * boolean true pushed by value.  The function result slot is reserved
+         * and then discarded with the arguments by `lea (0x14,SP),SP'. */
+        (void)RIP_$FIND_NEXTHOP(&dest, true, &nexthop_port, &nexthop, status_ret);
 
-        RIP_$FIND_NEXTHOP((int16_t *)dest_addr, 0xFF, nexthop_port, nexthop_info, status_ret);
-        if (*status_ret != status_$ok) {
-            goto cleanup;
+        port = nexthop_port;                        /* 0x00E1838C */
+        if (*status_ret != status_$ok) {            /* 0x00E18394 */
+            goto release;
         }
 
-        port = nexthop_port[0];
+        /* 0x00E1839E */
         if (port == -1) {
-            FIM_$RLS_CLEANUP(cleanup_buf);
-            *status_ret = status_$xns_no_nexthop;
+            FIM_$RLS_CLEANUP(cleanup);
+            *status_ret = status_$xns_no_nexthop;   /* 0x3B0013 */
             return;
         }
 
-        MAC_OS_$ARP(nexthop_info, port, mac_info, NULL, status_ret);
-        if (*status_ret != status_$ok) {
-            goto cleanup;
+        /* 0x00E183BC-0x00E183D2: ARP fills the record's link address (+0x00)
+         * and its broadcast flag (+0x18).  Its function result is discarded
+         * the same way. */
+        MAC_OS_$ARP(&nexthop, port, (uint16_t *)&send_rec.link_addr,
+                    (uint8_t *)&send_rec.is_broadcast, status_ret);
+        if (*status_ret != status_$ok) {            /* 0x00E183DA */
+            goto release;
         }
     }
 
-    /* Add port to channel if not already */
-    xns_$add_port(channel, port, status_ret);
-    if (*status_ret != status_$ok) {
-        goto cleanup;
+    /* 0x00E183E0-0x00E183F0: the channel number is re-read from the argument */
+    xns_$add_port((uint16_t)*channel_ptr, port, status_ret);
+    if (*status_ret != status_$ok) {                /* 0x00E183F6 */
+        goto release;
     }
 
-    /* Build MAC send parameters */
-    {
-        struct {
-            uint32_t ethertype;
-            int32_t header_len;
-            void *header_ptr;
-            void *iov;
-            uint8_t flags;
-            uint8_t extra[0x14];
-        } mac_send_params;
+    send_rec.frame_type = XNS_MAC_FRAME_TYPE;       /* 0x00E183FC */
 
-        mac_send_params.ethertype = 0x600;  /* XNS ethertype */
-        mac_send_params.header_len = *(int32_t *)(params + 0x18);
-        mac_send_params.header_ptr = *(void **)(params + 0x1C);
-        mac_send_params.iov = *(void **)(params + 0x20);
-        mac_send_params.flags = params[0x24];
+    /* 0x00E18408-0x00E18414: three longwords, rec +0x18 -> record +0x1C */
+    send_rec.hdr_desc = rec->hdr_desc;
 
-        /* Copy extra fields */
-        {
-            int16_t i;
-            for (i = 0; i < 0x14; i++) {
-                mac_send_params.extra[i] = params[0x34 + i];
-            }
-        }
+    /* 0x00E18416 */
+    send_rec.hdr_prebuilt = rec->hdr_prebuilt;
 
-        /* Compute checksum if needed */
-        header_ptr = *(int16_t **)(params + 0x1C);
-        if (header_ptr[0] != -1) {
-            /* Checksum already set or disabled */
-        } else {
-            int16_t csum = xns_$get_checksum(mac_info);
-            header_ptr[0] = csum;
-            if (csum == -1) {
-                FIM_$RLS_CLEANUP(cleanup_buf);
-                *status_ret = status_$xns_bad_checksum;
-                return;
-            }
-        }
+    /* 0x00E1841C-0x00E18428: five longwords, rec +0x34 -> record +0x38 */
+    send_rec.data_length = rec->data_length;
+    for (i = 0; i < 4; i++) {
+        send_rec.data_pages[i] = rec->data_pages[i];
+    }
 
-        /* Send via MAC layer */
-        {
-            route_$port_t *rport = ROUTE_$PORTP[port];
-            uint8_t *port_addr = (uint8_t *)rport + 0x48;
-            MAC_OS_$SEND(port_addr, mac_info, checksum_ret, status_ret);
-        }
+    /* 0x00E1842E: `cmpi.w #-1,(A3) / beq' - the checksum is computed only
+     * when the header does NOT already say "no checksum". */
+    if (hdr->checksum != 0xFFFF) {
+        int16_t csum = xns_$get_checksum(&send_rec);    /* 0x00E18438 */
 
-        if (*status_ret == status_$ok) {
-            /* Increment packets sent counter */
-            *(uint32_t *)base += 1;
+        hdr->checksum = (uint16_t)csum;                 /* 0x00E1843E */
+        if (csum == -1) {                               /* 0x00E18440 */
+            FIM_$RLS_CLEANUP(cleanup);
+            *status_ret = status_$xns_bad_checksum;     /* 0x3B0011 */
+            return;
         }
     }
 
-cleanup:
-    FIM_$RLS_CLEANUP(cleanup_buf);
+    /* 0x00E1845C-0x00E1847E: the channel argument is
+     * `pea (0x48,A5,D1*0x1)' with D1 = port * 12, i.e. state +0x40 +
+     * port * 0x0C + 0x08 - the port's MAC socket word. */
+    MAC_OS_$SEND((int16_t *)&state->ports[port].mac_socket, &send_rec,
+                 len_sent_ret, status_ret);
+
+    /* 0x00E18486-0x00E1848A */
+    if (*status_ret == status_$ok) {
+        state->packets_sent += 1;
+    }
+
+release:
+    /* 0x00E1848C */
+    FIM_$RLS_CLEANUP(cleanup);
 }
 
 /*
  * XNS_IDP_$SEND - Send a packet (user-level)
  *
- * User-level wrapper for packet send. Validates ownership and
- * calls XNS_IDP_$OS_SEND.
+ * Validates the channel and its owner, copies the user's request into a
+ * kernel-resident xns_$os_send_rec_t, clears the flag byte of every buffer in
+ * the user's chain, and calls XNS_IDP_$OS_SEND.
  *
- * @param channel_ptr   Pointer to channel number
- * @param send_params   Send parameters structure (xns_$idp_send_t)
- * @param checksum_ret  Output: computed checksum
- * @param status_ret    Output: status code
+ * Frame (link.w A6,-0x74 at 0x00E18A66):
+ *   A6-0x48  the xns_$os_send_rec_t built for XNS_IDP_$OS_SEND
+ *   A6-0x60  the FIM cleanup record
+ *   A6-0x68  the status XNS_IDP_$OS_SEND returned
+ *   A6-0x6C  the FIM_$CLEANUP status
+ *   A6-0x6E  the length word XNS_IDP_$OS_SEND returned
  *
  * Original address: 0x00E18A66
  */
 void XNS_IDP_$SEND(uint16_t *channel_ptr, xns_$idp_send_t *send_params,
-                   uint16_t *checksum_ret, status_$t *status_ret)
+                   int16_t *len_sent_ret, status_$t *status_ret)
 {
-    uint8_t *base = XNS_IDP_BASE;
-    uint16_t channel = *channel_ptr;
-    int iVar1;
-    uint8_t cleanup_buf[24];
-    status_$t local_status;
+    xns_$idp_state_t   *state = XNS_$IDP_STATE;
+    xns_$channel_t     *chan;
+    xns_$idp_iov_t     *iov;
 
-    /* Local copy of send parameters */
-    uint8_t local_params[0x48];
-    uint16_t local_checksum;
-    status_$t local_status2;
+    xns_$os_send_rec_t  rec;            /* A6-0x48 */
+    uint8_t             cleanup[24];    /* A6-0x60 */
+    status_$t           send_status;    /* A6-0x68 */
+    status_$t           fim_status;     /* A6-0x6C */
+    int16_t             len_sent;       /* A6-0x6E */
 
-    *checksum_ret = 0;
+    /* 0x00E18A74-0x00E18A7E */
+    *len_sent_ret = 0;
     *status_ret = status_$ok;
 
-    /* Validate channel number and ownership */
-    if (channel >= XNS_MAX_CHANNELS) {
+    /* 0x00E18A84: `cmpi.w #0x10,(A2) / bcc' - an UNSIGNED bound */
+    if (*channel_ptr >= XNS_MAX_CHANNELS) {
+        *status_ret = status_$xns_bad_channel;      /* 0x3B0004 */
+        return;
+    }
+
+    /* 0x00E18A8A-0x00E18A94 */
+    chan = &state->channels[*channel_ptr];
+
+    /* 0x00E18A98: `tst.w (0xe4,A0) / bpl' - the state word's sign bit */
+    if (chan->state >= 0) {
         *status_ret = status_$xns_bad_channel;
         return;
     }
 
-    iVar1 = channel * XNS_CHANNEL_SIZE;
-
-    /* Check channel is active */
-    if (*(int16_t *)(base + iVar1 + XNS_CHAN_OFF_STATE) >= 0) {
+    /* 0x00E18A9E-0x00E18AAE: the AS_ID lives in word bits 5..10 and is
+     * compared against the word at 0x00E2060A. */
+    if (((chan->flags & XNS_CHAN_FLAG_AS_ID_MASK) >> XNS_CHAN_FLAG_AS_ID_SHIFT)
+        != PROC1_$AS_ID) {
         *status_ret = status_$xns_bad_channel;
         return;
     }
 
-    /* Check ownership (AS_ID must match) */
-    {
-        uint16_t chan_as_id = (*(uint16_t *)(base + iVar1 + XNS_CHAN_OFF_FLAGS) &
-                               XNS_CHAN_FLAG_AS_ID_MASK) >> XNS_CHAN_FLAG_AS_ID_SHIFT;
-        if (chan_as_id != PROC1_$AS_ID) {
-            *status_ret = status_$xns_bad_channel;
-            return;
-        }
-    }
-
-    /* Set up cleanup handler */
-    local_status = FIM_$CLEANUP(cleanup_buf);
-    if (local_status != status_$cleanup_handler_set) {
-        *status_ret = local_status;
+    /* 0x00E18ABA-0x00E18AD0 */
+    fim_status = FIM_$CLEANUP(cleanup);
+    if (fim_status != status_$cleanup_handler_set) {
+        /* 0x00E18B7A */
+        *status_ret = fim_status;
         return;
     }
 
-    /* Validate send parameters */
-    if (*(void **)(send_params + 0x1C) == NULL ||
-        *(int32_t *)(send_params + 0x18) < XNS_IDP_HEADER_SIZE) {
-        FIM_$RLS_CLEANUP(cleanup_buf);
-        *status_ret = status_$xns_invalid_param;
+    /* 0x00E18AD8-0x00E18AE6: a nil header address, or a header shorter than
+     * the 30-byte IDP header, is rejected. */
+    if (send_params->hdr_desc.address == 0 ||
+        send_params->hdr_desc.length < XNS_IDP_HEADER_SIZE) {
+        FIM_$RLS_CLEANUP(cleanup);
+        *status_ret = status_$xns_invalid_param;    /* 0x3B0008 */
         return;
     }
 
-    /* Copy destination address portion */
-    {
-        int16_t i;
-        uint8_t *src = (uint8_t *)send_params;
-        uint8_t *dst = local_params;
-        for (i = 0; i < 24; i++) {
-            *dst++ = *src++;
-        }
+    /* 0x00E18B00-0x00E18B08: 24 bytes, user record +0x00 -> local +0x00 */
+    rec.dest_addr = send_params->dest_addr;
+    rec.src_addr = send_params->src_addr;
+
+    /* 0x00E18B10: a WORD copy of the packet type */
+    rec.packet_type = send_params->packet_type;
+
+    /* 0x00E18B16-0x00E18B1A: the payload length and the first payload page.
+     * The remaining three pages (+0x3C..+0x47) are left uninitialised, as in
+     * the original; XNS_IDP_$OS_SEND copies them anyway but data_length is
+     * zero so no driver looks at them. */
+    rec.data_length = 0;
+    rec.data_pages[0] = 0;
+
+    /* 0x00E18B1E-0x00E18B2A: three longwords, user +0x18 -> local +0x18 */
+    rec.hdr_desc = send_params->hdr_desc;
+
+    /* 0x00E18B2C: the kernel builds the buffers itself */
+    rec.hdr_prebuilt = false;
+
+    /* 0x00E18B30-0x00E18B42: clear the flag byte of every user buffer */
+    for (iov = (xns_$idp_iov_t *)ARCH_VA_TO_PTR(send_params->hdr_desc.next);
+         iov != NULL;
+         iov = (xns_$idp_iov_t *)ARCH_VA_TO_PTR(iov->desc.next)) {
+        iov->flags = 0;
     }
 
-    /* Copy packet type and other fields */
-    *(uint16_t *)(local_params + 0x1C) = ((uint8_t *)send_params)[0x2C];
-    *(uint32_t *)(local_params + 0x14) = 0;
-    *(uint32_t *)(local_params + 0x10) = 0;
+    /* 0x00E18B44-0x00E18B58: note that the CALLER's channel pointer is
+     * forwarded, not a copy. */
+    XNS_IDP_$OS_SEND((int16_t *)channel_ptr, &rec, &len_sent, &send_status);
 
-    /* Copy header/iov info */
-    *(uint32_t *)(local_params + 0x18) = *(uint32_t *)((uint8_t *)send_params + 0x18);
-    *(uint32_t *)(local_params + 0x1C) = *(uint32_t *)((uint8_t *)send_params + 0x1C);
-    *(uint32_t *)(local_params + 0x20) = *(uint32_t *)((uint8_t *)send_params + 0x20);
-    local_params[0x24] = 0;
+    /* 0x00E18B5C-0x00E18B6C */
+    *len_sent_ret = len_sent;
+    *status_ret = send_status;
 
-    /* Clear iov flags */
-    {
-        xns_$idp_iov_t *iov = *(xns_$idp_iov_t **)((uint8_t *)send_params + 0x20);
-        while (iov != NULL) {
-            iov->flags = 0;
-            iov = iov->next;
-        }
-    }
-
-    /* Call OS-level send */
-    XNS_IDP_$OS_SEND((int16_t *)channel_ptr, local_params, &local_checksum, &local_status2);
-    *checksum_ret = local_checksum;
-    *status_ret = local_status2;
-
-    FIM_$RLS_CLEANUP(cleanup_buf);
+    /* 0x00E18B6E */
+    FIM_$RLS_CLEANUP(cleanup);
 }

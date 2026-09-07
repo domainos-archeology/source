@@ -281,7 +281,18 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
     {
         /* Build request packet */
         uint16_t req_buf[12];   /* Request buffer (0x18 bytes) */
-        uint32_t pkt_info[8];   /* Packet info block */
+        uint32_t pkt_info[8];   /* A6-0xB8: the 30-byte PKT_$DEFAULT_INFO copy */
+        /*
+         * A6-0xD8: PKT_$SAR_INTERNET's tenth argument, a second packet-info
+         * record of the same shape that the callee WRITES.  When a request
+         * times out with no reply it stores the attempt counter there:
+         * "movea.l (0x24,A6),A0 / move.w D3w,(0x8,A0)" at
+         * 0x00E7205E-0x00E72062, just before setting status 0x00110007.
+         * ASKNODE_$INTERNET_INFO never reads it back - the record only has
+         * to exist so the callee's store lands in this frame and not
+         * through a nil pointer.  (source-0fks)
+         */
+        uint32_t sar_resp_info[8];
         uint16_t resp_tpl_len;      /* A6-0x146 */
         uint8_t temp2[4];
         uint16_t data_len = 0;
@@ -382,19 +393,31 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
             uint16_t resp_data_len;
 
             /*
-             * 0x00E656F6 - 0x00E6573C.  Arguments 11-17 are, in order,
-             * (0x1c,A6) = result, the word D7 points at, &(-0x146,A6),
-             * result + 0x0A, (-0x144,A6), &(-0x142,A6) and the status
-             * pointer.
-             *
-             * TODO(source-0fks): argument 10 (resp_buf) is &(-0xd8,A6), a
-             * local response record, not NULL - "pea (-0xd8,A6)" at
-             * 0x00E65716.
+             * 0x00E656FC - 0x00E6573C, seventeen arguments and a 0x38-byte
+             * caller cleanup.  Pushed last to first:
+             *    1  (-0xE8,A6)          the routing key
+             *    2  *node_id            "movea.l D4,A0 / move.l (A0),-(SP)"
+             *    3  #4                  the ASKNODE socket
+             *    4  &(-0xB8,A6)         the PKT_$DEFAULT_INFO copy
+             *    5  #6                  timeout
+             *    6  &(-0x100,A6)        the request template
+             *    7  #0x18               its length
+             *    8  (0x1AE,PC)          the empty request-data cell at
+             *                           0x00E658CC
+             *    9  #0                  request data length
+             *   10  &(-0xD8,A6)         sar_resp_info, see above
+             *   11  (0x1C,A6)           the caller's reply record
+             *   12  *(D7)               its capacity
+             *   13  &(-0x146,A6)        resp_tpl_len
+             *   14  (0x1C,A6) + 0x0A    the reply data area
+             *   15  (-0x144,A6)         its capacity
+             *   16  &(-0x142,A6)        resp_data_len
+             *   17  A4                  status_ret
              */
             PKT_$SAR_INTERNET(port, *node_id, 4, pkt_info, 6,
                               req_buf, 0x18,
                               &ASKNODE_$EMPTY_DATA, 0,  /* No request data */
-                              NULL, (char *)result, *resp_len,
+                              sar_resp_info, (char *)result, *resp_len,
                               &resp_tpl_len, (uint16_t *)((char *)result + 10),
                               data_len,
                               &resp_data_len, status);

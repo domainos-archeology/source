@@ -24,6 +24,7 @@
 #include "time/time.h"
 #include "rem_name/rem_name.h"
 #include "hint/hint.h"
+#include "xns/xns.h"     /* xns_$idp_header_t: the IDP header RIP_$SERVER copies */
 
 /*
  * =============================================================================
@@ -110,15 +111,15 @@ int16_t RIP_$PACKET_LENGTH(int16_t entry_count)
  * If changes are pending (flag is negative), clears the flag and
  * broadcasts the routing table.
  *
- * @param is_std    If negative, handle non-standard routes; else standard routes
+ * @param is_xns    If negative, handle non-standard routes; else standard routes
  *
  * Original address: 0x00E6887A
  */
-void RIP_$SEND_UPDATES(boolean is_std)
+void RIP_$SEND_UPDATES(boolean is_xns)
 {
     uint8_t flags;
 
-    if ((int8_t)is_std < 0) {
+    if ((int8_t)is_xns < 0) {
         /* Non-standard routes */
         if (ROUTE_$STD_N_ROUTING_PORTS < 2) {
             /* Not enough ports for routing */
@@ -335,83 +336,135 @@ void RIP_$PROCESS_REQUEST(boolean flags)
  *
  * Called from socket receive processing when a packet arrives on socket 8.
  *
+ * Frame (link.w A6,-0x538 at 0x00E68A08).  Every displacement the prologue
+ * and the PKT_$BRK_INTERNET_HDR call use, with the local it names:
+ *
+ *   A6-0x070  sock_$pkt_info_t  the record SOCK_$GET fills in (0x40 bytes);
+ *                               -0x70 is .hdr, -0x5F the low byte of .flags,
+ *                               -0x46 .data_len, -0x44 .hdr_len, -0x40
+ *                               .data_pages
+ *   A6-0x020  xns_$idp_header_t the 30-byte IDP header copy the XNS path
+ *                               makes (0x00E68A60-0x00E68A6E); -0x1E is its
+ *                               .length and -0x1A its .dest_network
+ *   A6-0x4F0  uint32_t          packet + 0x1E, the XNS payload address
+ *   A6-0x4FC  uint32_t          BRK arg 3,  routing_key
+ *   A6-0x500  uint32_t          BRK arg 4,  dest_node
+ *   A6-0x51C  uint16_t          BRK arg 5,  dest_sock
+ *   A6-0x4F4  uint32_t          BRK arg 6,  src_node_or
+ *   A6-0x4F8  uint32_t          BRK arg 7,  src_node
+ *   A6-0x51A  uint16_t          BRK arg 8,  src_sock
+ *   A6-0x2B0  pkt info record   BRK arg 9,  info_out
+ *   A6-0x518  uint16_t          BRK arg 10, id_out
+ *   A6-0x4D0  uint8_t[0x21E]    BRK arg 11, the payload buffer
+ *   A6-0x516  uint16_t          BRK arg 13, the payload length
+ *   A6-0x4EC  status_$t         BRK arg 14, status_ret
+ *   A6-0x514  int16_t           the entry count (data_len - 2) / 6
+ *   A6-0x508  uint32_t          the header VA handed to NETBUF_$RTN_HDR
+ *
  * Original address: 0x00E68A08
  */
 void RIP_$SERVER(void)
 {
-    void *packet;
-    uint16_t result;
-    int8_t is_std;
-    uint8_t packet_flags;
+    sock_$pkt_info_t    pkt;            /* A6-0x70 */
+    xns_$idp_header_t  *packet;         /* A2 = pkt.hdr */
+    uint8_t            *page_base;      /* A3 = A2 & ~0x3FF, the netbuf page */
+    boolean             got_packet;     /* D0b */
+    boolean             is_xns;         /* D3b */
 
-    /* Local buffers for packet parsing */
-    int32_t src_network;
-    uint8_t src_info[4];
-    uint8_t dest_info[2];
-    uint32_t idp_network;
-    uint32_t idp_host;
-    uint16_t port_network;
-    uint16_t unused1;
-    uint16_t port_socket;
-    int16_t data_len;
-    status_$t status;
+    /* PKT_$BRK_INTERNET_HDR's output block */
+    uint32_t    routing_key;            /* A6-0x4FC */
+    uint32_t    dest_node;              /* A6-0x500 */
+    uint16_t    dest_sock;              /* A6-0x51C */
+    uint32_t    src_node_or;            /* A6-0x4F4 */
+    uint32_t    src_node;               /* A6-0x4F8 */
+    uint16_t    src_sock;               /* A6-0x51A */
+    uint16_t    info_out[15];           /* A6-0x2B0: the 30-byte info record */
+    uint16_t    id_out;                 /* A6-0x518 */
+    uint16_t    data_len;               /* A6-0x516 */
+    status_$t   status;                 /* A6-0x4EC */
 
-    /* Packet header copy for non-standard processing */
-    uint8_t header_copy[0x1E];
+    uint32_t    payload_va;             /* A6-0x4F0 */
+    uint16_t    packet_data[0x10F];     /* A6-0x4D0, 0x21E bytes */
+    xns_$idp_header_t header_copy;      /* A6-0x20 */
+    uint8_t    *header_bytes = (uint8_t *)&header_copy;
+    int16_t     entry_count;            /* A6-0x514 */
+    uint32_t    hdr_va;                 /* A6-0x508 */
 
-    /* Request/response data buffers */
-    uint16_t packet_data[0x10F];  /* Up to 90 entries + command */
-    int16_t entry_count;
+    int16_t     port_index;
+    uint16_t    i;
 
-    /* Response buffer */
+    /*
+     * TODO(source-4nvz): the three dispatch arms below are still the earlier
+     * sketch.  They have NOT been traced against 0x00E68B5E-0x00E68E1C, so
+     * the locals they use keep their old names and their reads of
+     * header_bytes[] / packet_data[] are unverified.  The head of the
+     * function (0x00E68A08-0x00E68B5C) is a faithful translation.
+     */
+    uint16_t    port_network;
+    uint16_t    port_socket;
+    uint32_t    idp_network;
+    uint32_t    idp_host;
+    int32_t     src_network;
+    route_$port_t *port;
+    rip_$xns_addr_t source_addr;
+
+    /* Response buffer built by the request arm */
     uint16_t response_cmd;
     int16_t response_count;
     uint8_t response_data[RIP_MAX_ENTRIES * RIP_ENTRY_SIZE];
 
-    /* Source address for updates */
-    rip_$xns_addr_t source_addr;
-
-    int16_t port_index;
-    route_$port_t *port;
-    uint16_t i;
-
-    /* Get packet from socket 8 (RIP socket) */
-    result = SOCK_$GET(RIP_SOCKET, &packet);
-    if ((int8_t)result >= 0) {
-        /* No packet available */
-        return;
+    /* 0x00E68A10-0x00E68A24: SOCK_$GET(8, &pkt) returns a Pascal boolean */
+    got_packet = (boolean)SOCK_$GET(RIP_SOCKET, &pkt);
+    if (got_packet >= 0) {
+        return;                             /* 0x00E68E1C */
     }
 
-    /* Check packet flags for standard vs non-standard */
-    packet_flags = *((uint8_t *)packet + 0x41);  /* Flags at offset 0x41 from packet base */
-    is_std = (packet_flags & 0x02) ? -1 : 0;
+    /*
+     * 0x00E68A28: "btst.b #0x1,(-0x5f,A6)" is bit 1 of the LOW byte of
+     * sock_$pkt_info_t.flags, i.e. bit 1 of the word - the packet arrived
+     * over XNS routing and its IDP header is already in front of us.
+     */
+    is_xns = (pkt.flags & SOCK_PKT_FLAG_XNS) ? true : false;
 
-    /* Dump packet for debugging */
-    PKT_$DUMP_DATA((uint8_t *)packet + 0x10, *((uint16_t *)packet + 0x23));
+    /* 0x00E68A30-0x00E68A40 */
+    PKT_$DUMP_DATA(pkt.data_pages, (int16_t)pkt.data_len);
 
-    if (is_std < 0) {
-        /* Non-standard packet - copy header and data directly */
-        status = 0;
+    /* 0x00E68A42-0x00E68A4C */
+    packet = (xns_$idp_header_t *)pkt.hdr;
+    page_base = (uint8_t *)((uintptr_t)packet & ~(uintptr_t)0x3FF);
 
-        /* Copy header (0x1E bytes) */
-        for (i = 0; i < 0x1E; i++) {
-            header_copy[i] = ((uint8_t *)packet)[i];
+    if (is_xns < 0) {
+        /* 0x00E68A52-0x00E68A88: no Apollo internet header to parse */
+        status = status_$ok;
+        payload_va = (uint32_t)(uintptr_t)packet + XNS_IDP_HEADER_SIZE;
+
+        /* seven longwords plus a word: the 30-byte IDP header */
+        header_copy = *packet;
+
+        /* 0x87 longwords plus a word: 0x21E bytes of payload */
+        for (i = 0; i < sizeof(packet_data); i++) {
+            ((uint8_t *)packet_data)[i] =
+                ((const uint8_t *)(uintptr_t)payload_va)[i];
         }
 
-        /* Copy packet data */
-        uint8_t *pkt_data = (uint8_t *)packet + 0x1E;
-        for (i = 0; i < 0x10E; i++) {
-            ((uint8_t *)packet_data)[i] = pkt_data[i];
-        }
-
-        src_network = -1;  /* Unknown source network for non-standard */
-        data_len = *((uint16_t *)header_copy + 0x0F) - 0x1E;  /* Subtract header size */
+        /* 0x00E68A84: the IDP length minus the header it counts */
+        data_len = (uint16_t)(header_copy.length - XNS_IDP_HEADER_SIZE);
     } else {
-        /* Standard packet - parse IDP header */
-        PKT_$BRK_INTERNET_HDR(packet, &src_network, src_info, dest_info,
-                              &idp_network, &idp_host, &port_network,
-                              &unused1, &port_socket, packet_data,
-                              0x21E, &data_len, &status);
+        /*
+         * 0x00E68A8E-0x00E68AC4: fourteen arguments, 0x34 bytes of caller
+         * cleanup.  Argument 2 is sock_$pkt_info_t.hdr_len, which
+         * PKT_$BRK_INTERNET_HDR never reads (nothing in 0x00E12328-0x00E1248C
+         * touches (0xC,A6)); it is passed all the same.
+         */
+        PKT_$BRK_INTERNET_HDR(packet, pkt.hdr_len,
+                              &routing_key, &dest_node, &dest_sock,
+                              &src_node_or, &src_node, &src_sock,
+                              info_out, &id_out,
+                              packet_data, sizeof(packet_data),
+                              &data_len, &status);
+
+        /* 0x00E68AD2: D4 = the routing key, read again by the response arm */
+        src_network = (int32_t)routing_key;
     }
 
     /* Update statistics - packet received */
@@ -434,19 +487,19 @@ void RIP_$SERVER(void)
         goto error_return;
     }
 
-    /* Find port for this packet */
-    {
-        uint32_t page_base = (uint32_t)packet & 0xFFFFFC00;
-        port_network = *(uint16_t *)(page_base + 0x3E0);
-        uint32_t port_sock = *(uint16_t *)(page_base + 0x3E2);
-        port_index = ROUTE_$FIND_PORT(port_network, port_sock);
-    }
+    /*
+     * 0x00E68B2E-0x00E68B42: the netbuf page A3 was computed from the header
+     * VA at 0x00E68A46; +0x3E0 is the receiving port's network number and
+     * +0x3E2 its socket, zero-extended to a longword by "clr.l D5 /
+     * move.w (0x3e2,A3),D5w".
+     */
+    port_network = *(uint16_t *)(page_base + 0x3E0);
+    port_index = ROUTE_$FIND_PORT(port_network,
+                                  (uint32_t)*(uint16_t *)(page_base + 0x3E2));
 
-    /* Return packet buffer */
-    {
-        uint32_t pkt_va = (uint32_t)(uintptr_t)packet;
-        NETBUF_$RTN_HDR(&pkt_va);
-    }
+    /* 0x00E68B46-0x00E68B54: the header buffer goes back either way */
+    hdr_va = (uint32_t)(uintptr_t)packet;
+    NETBUF_$RTN_HDR(&hdr_va);
 
     if (port_index == -1) {
         /* Unknown port - ignore packet */
@@ -461,11 +514,11 @@ void RIP_$SERVER(void)
         /*
          * RIP Request - send back routing information
          */
-        if (is_std < 0) {
+        if (is_xns < 0) {
             /* Non-standard request */
             if (ROUTE_$STD_N_ROUTING_PORTS < 2) {
                 /* Check if this is a broadcast request (all FFs in address) */
-                uint16_t *addr = (uint16_t *)&header_copy[0x14];
+                uint16_t *addr = (uint16_t *)&header_bytes[0x14];
                 if (addr[0] == 0xFFFF && addr[1] == 0xFFFF && addr[2] == 0xFFFF) {
                     return;
                 }
@@ -519,7 +572,7 @@ void RIP_$SERVER(void)
                 uint8_t xns_addr[12];
                 /* Copy from header - source becomes destination */
                 for (i = 0; i < 12; i++) {
-                    xns_addr[i] = header_copy[0x08 + i];  /* Source address in header */
+                    xns_addr[i] = header_bytes[0x08 + i];  /* Source address in header */
                 }
                 *(uint16_t *)&xns_addr[10] = 1;  /* Socket 1? */
 
@@ -634,8 +687,8 @@ void RIP_$SERVER(void)
         port = ROUTE_$PORTP[port_index];
 
         /* Get source network from packet or header */
-        if (is_std < 0) {
-            src_network = *(int32_t *)&header_copy[0x1A];
+        if (is_xns < 0) {
+            src_network = *(int32_t *)&header_bytes[0x1A];
         }
 
         /* Check if source network changed for this port */
@@ -657,12 +710,12 @@ void RIP_$SERVER(void)
 
                 /* Invalidate old network route */
                 RIP_$UPDATE_INT(old_network, &source_addr, 0x10, port_index,
-                                is_std, &status);
+                                is_xns, &status);
 
                 /* Add new network route */
                 source_addr.network = src_network;
                 RIP_$UPDATE_INT(src_network, &source_addr, 0, port_index,
-                                is_std, &status);
+                                is_xns, &status);
 
                 /* Update port network */
                 *(int32_t *)port = src_network;
@@ -676,7 +729,7 @@ void RIP_$SERVER(void)
         }
 
         /* Check if we should process routes from this packet */
-        if (is_std < 0) {
+        if (is_xns < 0) {
             if (ROUTE_$STD_N_ROUTING_PORTS >= 2) {
                 uint16_t port_flags = *(uint16_t *)((uint8_t *)port + 0x2C);
                 if (ROUTE_$STD_N_ROUTING_PORTS >= 2 &&
@@ -700,14 +753,14 @@ void RIP_$SERVER(void)
     process_routes:
         /* Build source address for updates */
         source_addr.network = src_network;
-        if (is_std < 0) {
+        if (is_xns < 0) {
             /* Copy host from header for non-standard */
-            source_addr.host[0] = header_copy[0x0A];
-            source_addr.host[1] = header_copy[0x0B];
-            source_addr.host[2] = header_copy[0x0C];
-            source_addr.host[3] = header_copy[0x0D];
-            source_addr.host[4] = header_copy[0x0E];
-            source_addr.host[5] = header_copy[0x0F];
+            source_addr.host[0] = header_bytes[0x0A];
+            source_addr.host[1] = header_bytes[0x0B];
+            source_addr.host[2] = header_bytes[0x0C];
+            source_addr.host[3] = header_bytes[0x0D];
+            source_addr.host[4] = header_bytes[0x0E];
+            source_addr.host[5] = header_bytes[0x0F];
         } else {
             /* For standard, use idp_host (lower 20 bits) */
             source_addr.host[0] = 0;
@@ -723,12 +776,12 @@ void RIP_$SERVER(void)
             uint32_t net = *(uint32_t *)&packet_data[1 + i * 3];
             uint16_t metric = packet_data[3 + i * 3];
 
-            RIP_$UPDATE_INT(net, &source_addr, metric, port_index, is_std, &status);
+            RIP_$UPDATE_INT(net, &source_addr, metric, port_index, is_xns, &status);
         }
 
     send_updates:
         /* Send any pending updates */
-        RIP_$SEND_UPDATES(is_std);
+        RIP_$SEND_UPDATES(is_xns);
         return;
 
     case RIP_CMD_NAME_REGISTER:
@@ -738,16 +791,16 @@ void RIP_$SERVER(void)
          * The original pushes two arguments to REM_NAME_$REGISTER_SERVER,
          * but the routine (0xE4A4AE) ignores them; see name/name.h.
          */
-        if (is_std < 0) {
+        if (is_xns < 0) {
             /* Non-standard - check for specific socket type */
-            if ((uint8_t)header_copy[0x1B] != 0xBE) {
+            if ((uint8_t)header_bytes[0x1B] != 0xBE) {
                 RIP_$STATS.unknown_commands++;
                 return;
             }
 
             /* Extract parameters - kept for documentation */
-            /* uint32_t param1 = *(uint32_t *)&header_copy[0x14]; */
-            /* uint32_t param2 = *(uint32_t *)&header_copy[0x04] & 0xFFFFF; */
+            /* uint32_t param1 = *(uint32_t *)&header_bytes[0x14]; */
+            /* uint32_t param2 = *(uint32_t *)&header_bytes[0x04] & 0xFFFFF; */
             REM_NAME_$REGISTER_SERVER();
         } else {
             /* Standard - call name registration */

@@ -52,7 +52,7 @@ void ROUTE_$PROCESS(void)
     sock_$sock_t           *route_sock;      /* A6-0xE8 */
     uint32_t                next_broadcast;  /* A6-0xD8 */
     status_$t               status;          /* A6-0xD0 */
-    uint32_t                net_io_extra;    /* A6-0xD4 */
+    net_io_$send_info_t     net_io_info;     /* A6-0xD4: NET_IO_$SEND's ninth arg */
     uint32_t                hdr_pa;          /* A6-0xE4 */
     uint32_t                hdr_ptr_cell[1]; /* A6-0xE0 */
     sock_$pkt_info_t        rcv;             /* A6-0xB0, 0x40 bytes */
@@ -219,13 +219,14 @@ void ROUTE_$PROCESS(void)
                  * is copied out of the IDP header before the lookup, which
                  * overwrites the copy with the next hop.
                  */
-                {
-                    const uint32_t *src = (const uint32_t *)&idp->dest_network;
-                    uint32_t *dst = (uint32_t *)&dest_addr;
-                    dst[0] = src[0];
-                    dst[1] = src[1];
-                    dst[2] = src[2];
-                }
+                dest_addr.network = idp->dest_network;
+                dest_addr.host_hi = (uint16_t)((idp->dest_host[0] << 8) |
+                                               idp->dest_host[1]);
+                dest_addr.host_lo = ((uint32_t)idp->dest_host[2] << 24) |
+                                    ((uint32_t)idp->dest_host[3] << 16) |
+                                    ((uint32_t)idp->dest_host[4] << 8) |
+                                    (uint32_t)idp->dest_host[5];
+                dest_addr.socket  = idp->dest_socket;
 
                 /* 0x00E87572 - 0x00E87590 */
                 RIP_$FIND_NEXTHOP(&dest_addr, false, &next_hop_port,
@@ -362,7 +363,7 @@ void ROUTE_$PROCESS(void)
                              rcv.data_pages,            /* payload page vector  */
                              pkt->data_len,             /* payload length       */
                              ROUTE_$FWD_TIMEOUT,        /* send flags/timeout   */
-                             &net_io_extra,             /* out                  */
+                             &net_io_info,              /* out send_info        */
                              &status);
 
                 ML_$UNLOCK(ROUTE_$NET_IO_LOCK_ID);

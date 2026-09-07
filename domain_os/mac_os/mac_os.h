@@ -264,8 +264,7 @@ typedef struct mac_os_$buf_desc_t {
  *         data_length and all four pages in one five-longword loop) fill
  *         them all before setting hdr_prebuilt.
  *
- * TODO(source-tvrs): xns/idp_send.c still builds an invented record instead
- * of this one.
+ * xns/idp_send.c builds one of these at A6-0x88 (source-tvrs, closed).
  * TODO(source-5lqz): 0x08..0x17 is copied verbatim by MAC_$SEND
  * (0x00E0BBC2 "moveq #0x5" = 6 longwords from the user's record) but no
  * driver seen so far reads it.

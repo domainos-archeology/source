@@ -95,9 +95,9 @@ the *right* of the visible area on type 1 (column 800) and *below* it on type 2
   argument (0x00E6F938), and SMD_$UNMAP_DISPLAY_U passes the same cell.
 - `field_173d`/`field_173e`/`field_173f` at 0x173D..0x173F, touched only by
   `smd_$reset_display_globals`.
-- Careful: `SMD_GLOBALS.default_unit` (globals+0x1D98) and the separate
-  `SMD_DEFAULT_DISPLAY_UNIT` global at 0x00E84924 are **different** words and
-  several files conflate them (bead source-nuan).
+- ~~`SMD_GLOBALS.default_unit` and `SMD_DEFAULT_DISPLAY_UNIT` are different
+  words~~ **WRONG** - see "0x00E84924 is not a separate global" below. They
+  are the same cell; `SMD_DEFAULT_DISPLAY_UNIT` no longer exists.
 
 ## Newly named functions
 
@@ -115,5 +115,87 @@ file as a portable model behind `#if !defined(ARCH_M68K)` so the m68k build
 links the assembly and `make test` keeps a callable version. Both return a
 Domain boolean in the **low byte** of D0 (`clr.b`/`st`, `seq`), so the C
 prototype is `int8_t`, not `int16_t`.
+
+## The display "info table" IS the hardware record (source-fqne)
+
+`SMD_DISPLAY_INFO` at 0x00E27376 and the record `smd_display_unit_t::hw`
+points at are the **same 0x60-byte object**. Ghidra already labels it
+`SMD_$DISPLAY_COM`. Proof: SMD_$INIT stores the literal into the hw pointer
+(0x00E34D92 `move.l #0xe27376,(0x18,A0)`) and then writes +0x50/+0x54 through
+`A4 = rec->hw` (0x00E34E00-0x00E34E18). `smd_display_info_t` is now a typedef
+alias of `smd_display_hw_t`; the old struct's clip window at +0x0C..+0x1B was
+invented.
+
+**There is exactly one entry.** 0x00E273D6 is `SMD_TIME_$COM`, so the table is
+0x60 bytes long, and `smd_$validate_unit` accepts only unit 1
+(0x00E6D70A `cmpi.w #0x1,D0w`). smd_data.c still over-allocates 4 - bead
+source-9j2l.
+
+Offsets beyond the ones listed earlier:
+
+| off | field | evidence |
+|---|---|---|
+| 0x02 | `lock_state` | SMD_$START_BLT 0x00E15D68 |
+| 0x10 | `op_ec` | SMD_$GET_EC 0x00E6FDFA `pea (0x10,A3)` |
+| 0x1C | `field_1c` | SMD_$START_BLT 0x00E15D72 |
+| 0x22 | `video_flags` | SMD_$START_BLT 0x00E15D5E |
+| 0x38 | `cursor_visible` | what SMD_$INQ_KBD_CURSOR *returns* (0x00E6E112) |
+| 0x40 | `cursor_ec` | SMD_$SEND_RESPONSE 0x00E6F500 `pea (-0x20,A2)`; SMD_$BORROW_DISPLAY waits on it (0x00E6F63A) |
+| 0x4C | `field_4c` | `bset.b #0x7,(0x4c,A3)` = bit **15** of the word |
+| 0x4E..0x54 | `min_x, max_x, min_y, max_y` | SMD_$SET_CLIP_WINDOW 0x00E6FE7E-0x00E6FEA6 |
+| 0x56..0x5C | `clip_x1, clip_x2, clip_y1, clip_y2` | smd_$write_str_clip_impl tests X against +0x56/+0x58 (0x00E70402) and Y against +0x5A/+0x5C (0x00E7040E) |
+
+Consequence: **SMD_$SET_CLIP_WINDOW's argument is {x1, x2, y1, y2}**, not
+{x1, y1, x2, y2} - 0x00E6FE76/0x00E6FE7A store it as two longwords into the
+(min, max) pairs.
+
+## 0x00E84924 is not a separate global
+
+`SMD_GLOBALS` is at 0x00E82B8C and 0x00E82B8C + 0x1D98 = **0x00E84924**, so
+every `(0x1d98,A5)` reference and that absolute address are one word:
+`SMD_GLOBALS.default_unit`. `SMD_DEFAULT_DISPLAY_UNIT` is gone (bead
+source-nuan supersedes the "they are different words" note above). Two other
+phantoms went with it: `SMD_BORROW_EC` is `SMD_EC_2` (0x00E6F61E
+`pea (0xe2e408).l`) and `SMD_BORROW_RESPONSE` is
+`SMD_GLOBALS.response_pending[unit-1]` (SMD_GLOBALS + 0x1D99 + unit;
+0x00E6F4FC writes it, 0x00E6F650 reads it).
+
+**Rule:** whenever a "second global at address X" turns up in this subsystem,
+first compute X - 0x00E82B8C and check it against smd_globals_t.
+
+## Code-region constant cells (source-2c9v)
+
+Named in smd_internal.h/smd_data.c and labelled in Ghidra:
+
+| addr | value | name |
+|---|---|---|
+| 0x00E6E59A | word 0xFFFF | `SMD_MINUS_ONE_DATA` - SHOW_CURSOR "keep the current cursor number" (0x00E6E256) |
+| 0x00E6E458 | byte 0xFF | `SMD_TRUE_DATA` |
+| 0x00E6E45A | byte 0x00 | `SMD_FALSE_DATA` |
+| 0x00E6D92A | word 1 | `SMD_ONE_LOCK_DATA` |
+| 0x00E6D92C | word 0 | `SMD_ACQ_LOCK_DATA` |
+| 0x00E6DFF8 | word 1 | `SMD_SYNC_LOCK_DATA` |
+
+SHOW_CURSOR's arg 2 is dereferenced as a **word** (0x00E6E1EA) and arg 3 as a
+**byte** (0x00E6E1EE) - the width matters when typing the cell.
+
+## SMD_$START_BLT is now smd/sau2/start_blt.s
+
+Body 0x00E15D1E..0x00E15D89 assembles **byte for byte identical**. The one
+trap: GNU as normalises `and.w #imm,%d0` to ANDI.W (0x0240) where the original
+uses AND.W-with-immediate (0xC07C); emit `.short 0xc07c, 0xffde` to match.
+(lock_display.s hits the same thing with CMP.W 0xB07C vs CMPI.W 0x0C40 and
+could be made exact the same way.) The trampoline at 0x00E272BC loads a
+**dead** A0 = 0x00E26F20 (SMD_$DISP1_INT) - bead source-tzn8.
+
+## TPAD per-unit config (source-j999)
+
+`A1/A3 = config + 0x2C` in all three writers, so displacement -0x2C+k is
+config offset k. +0x06/+0x08 are **x_scale/y_scale** (TPAD_$SET_UNIT_MODE
+0x00E69838/0x00E69840 write its xs/ys arguments there) and +0x0A/+0x0C are
+**x_range/y_range** (TPAD_$RE_RANGE_UNIT 0x00E69A74/0x00E69A7A seed them with
+0x200 beside x_min/y_min). The factor is always `range / scale`, guarded on
+`scale == 0`. TPAD_$INIT copies x_max_disp/y_max_disp (+0x14/+0x18) into the
+*scale* pair.
 
 Related: [[handwritten-asm-verification]], [[feedback_fidelity_gates]].

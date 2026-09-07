@@ -21,6 +21,7 @@
 #define XNS_H
 
 #include "base/base.h"
+#include "mac_os/mac_os.h"   /* mac_os_$buf_desc_t */
 #include "ml/ml.h"
 
 /*
@@ -70,7 +71,7 @@ typedef struct xns_$net_addr_t {
   uint32_t network; /* 0x00: Network number */
   uint8_t host[6];  /* 0x04: Host ID (usually MAC address) */
   uint16_t socket;  /* 0x0A: Socket number */
-} xns_$net_addr_t;
+} __attribute__((packed)) xns_$net_addr_t;
 
 /*
  * XNS IDP Packet Header (30 bytes)
@@ -89,7 +90,27 @@ typedef struct xns_$idp_header_t {
   uint32_t src_network;  /* 0x12: Source network */
   uint8_t src_host[6];   /* 0x16: Source host */
   uint16_t src_socket;   /* 0x1C: Source socket */
-} xns_$idp_header_t;
+} __attribute__((packed)) xns_$idp_header_t;
+
+/*
+ * The 24 bytes at header +0x06..+0x1D are exactly the destination address
+ * followed by the source address.  XNS_IDP_$OS_SEND fills them either with
+ * one 24-byte `move.b (A3)+,(A4)+' / `dbf' loop out of its request record
+ * (0x00E1833C) or with two three-longword copies out of the channel's
+ * dest_network / src_network (0x00E18318-0x00E18332); RIP_$SEND_TO_PORT
+ * does the same pair of copies at 0x00E8712E / 0x00E8713C.
+ */
+/*
+ * Both structures are `packed' so that the host build lays them out the way
+ * m68k does.  m68k aligns 32-bit scalars on two-byte boundaries, so the
+ * unpacked declaration happened to be right for the target but put
+ * dest_network at +0x08 on a host with four-byte alignment.  The remaining
+ * offsets are asserted next to ROUTE_$PROCESS's accessors further down.
+ */
+_Static_assert(sizeof(xns_$net_addr_t) == 12, "xns_$net_addr_t must be 12 bytes");
+_Static_assert(sizeof(xns_$idp_header_t) == XNS_IDP_HEADER_SIZE,
+               "xns_$idp_header_t must be 30 bytes");
+_Static_assert(offsetof(xns_$idp_header_t, src_host) == 0x16, "idp_header src_host at +0x16");
 
 /*
  * XNS IDP per-port state (0x0C = 12 bytes per port)
@@ -218,10 +239,26 @@ typedef struct xns_$sock_pkt_t {
 #define XNS_SOCK_PKT_F_IDP       0x0002 /* move.w #2: always set by the IDP demux */
 #define XNS_SOCK_PKT_F_MAC_BCAST 0x0004 /* bset.b #2: XNS_IDP_$OS_DEMUX arg 3 was true */
 
-/* Channel flags (in flags field at 0xDA) */
-#define XNS_CHAN_FLAG_BIND_LOCAL 0x08   /* Bit 3: Bind to local address */
-#define XNS_CHAN_FLAG_CONNECT 0x10      /* Bit 4: Connected mode */
-#define XNS_CHAN_FLAG_BROADCAST 0x20    /* Bit 5: Broadcast capable */
+/*
+ * Channel flags - the 16-bit word xns_$channel_t.flags (channel +0x3A,
+ * state +0xDA).
+ *
+ * XNS_IDP_$OS_OPEN builds it from the open-option byte at opt +0x03:
+ * "andi.b #0x7,(0xda,A0) / move.b (0x3,A1),D1b / lsl.b #0x3,D1b /
+ * or.b D1b,(0xda,A0)" at 0x00E1817A-0x00E18186.  Because those are BYTE
+ * operations on the HIGH byte of the word, open-option bit n lands in word
+ * bit n+11.  The AS_ID then goes into bits 5..10 with a WORD operation
+ * ("andi.w #-0x7e1 / lsl.w #0x5 / or.w" at 0x00E18192-0x00E1819A), which is
+ * why the two ranges do not collide.
+ *
+ * XNS_IDP_$OS_SEND reads them back with byte btst: "btst.b #0x5,(0xda,A2)"
+ * (0x00E182A4) is word bit 13 and "btst.b #0x3,(0xda,A2)" (0x00E182AC) is
+ * word bit 11.
+ */
+#define XNS_CHAN_FLAG_BUILD_HEADER 0x0800 /* Bit 11 (opt bit 0): OS_SEND builds the IDP header */
+#define XNS_CHAN_FLAG_BIND_LOCAL 0x1000 /* Bit 12 (opt XNS_OPEN_FLAG_BIND_LOCAL) */
+#define XNS_CHAN_FLAG_CONNECT 0x2000    /* Bit 13 (opt XNS_OPEN_FLAG_CONNECT) */
+#define XNS_CHAN_FLAG_NO_ALLOC 0x4000   /* Bit 14 (opt XNS_OPEN_FLAG_NO_ALLOC) */
 #define XNS_CHAN_FLAG_AS_ID_MASK 0x07E0 /* Bits 5-10: Owning AS_ID */
 #define XNS_CHAN_FLAG_AS_ID_SHIFT 5
 
@@ -369,64 +406,97 @@ typedef struct xns_$idp_open_opt_t {
  * Used for scatter-gather I/O operations.
  */
 typedef struct xns_$idp_iov_t {
-  int32_t length; /* 0x00: Buffer length (negative = error, 0 = end of list) */
-  void *buffer;   /* 0x04: Buffer pointer */
-  struct xns_$idp_iov_t *next; /* 0x08: Next descriptor in chain */
-  uint8_t flags;               /* 0x0C: Flags */
+  mac_os_$buf_desc_t desc; /* 0x00: {length, address, next} - the same triple
+                            * MAC_OS_$SEND walks, so `next' is a virtual
+                            * address and not a host pointer */
+  uint8_t flags;           /* 0x0C: cleared by XNS_IDP_$SEND at 0x00E18B36 */
+  uint8_t _pad_0d[3];      /* 0x0D */
 } xns_$idp_iov_t;
 
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(xns_$idp_iov_t, desc)  == 0x00, "idp_iov.desc");
+_Static_assert(offsetof(xns_$idp_iov_t, flags) == 0x0C, "idp_iov.flags");
+#endif
+
 /*
- * XNS IDP Send Parameters
+ * xns_$idp_send_t - the request record XNS_IDP_$SEND (0x00E18A66) is given.
+ *
+ * Everything XNS_IDP_$SEND reads out of its second argument, in order:
+ *   0x00  24 bytes copied verbatim into its own request record with
+ *         "moveq #0x17,D1 / move.b (A0)+,(A1)+ / dbf" at 0x00E18B04, i.e. the
+ *         destination address followed by the source address (see
+ *         xns_$os_send_rec_t)
+ *   0x18  "cmpi.l #0x1e,(0x18,A0)" at 0x00E18ADE - rejected below the
+ *         30-byte IDP header size - and then the whole {length, address,
+ *         next} descriptor is copied at 0x00E18B1E-0x00E18B2A
+ *   0x1C  "tst.l (0x1c,A0)" at 0x00E18AD8 - rejected when zero
+ *   0x20  the head of the caller's buffer chain, walked at
+ *         0x00E18B30-0x00E18B42 clearing each entry's +0x0C flag byte
+ *   0x2C  "move.w (0x2c,A0),(-0x1c,A6)" at 0x00E18B10 - a WORD; only its low
+ *         byte (+0x2D) is used, as the IDP packet type
+ *
+ * Nothing else is read, so the size of the user's record is unknown; the
+ * tail is padded out to the 0x48 bytes of the record built for
+ * XNS_IDP_$OS_SEND.
  */
 typedef struct xns_$idp_send_t {
-  /* Destination address (24 bytes if unconnected) */
-  uint8_t dest_addr[24]; /* 0x00: Destination address info */
+  xns_$net_addr_t dest_addr;      /* 0x00: destination network/host/socket */
+  xns_$net_addr_t src_addr;       /* 0x0C: source network/host/socket */
+  mac_os_$buf_desc_t hdr_desc;    /* 0x18: {length, address, next} */
+  uint8_t _unknown_24[8];         /* 0x24: not read by XNS_IDP_$SEND */
+  uint16_t packet_type;           /* 0x2C: low byte is the IDP packet type */
+  uint8_t _unknown_2e[0x1A];      /* 0x2E: not read by XNS_IDP_$SEND */
+} __attribute__((packed)) xns_$idp_send_t;
 
-  /* Packet info */
-  int32_t header_len;  /* 0x18: Header length */
-  void *header_ptr;    /* 0x1C: Header buffer pointer */
-  xns_$idp_iov_t *iov; /* 0x20: I/O vector for data */
-  uint8_t flags;       /* 0x24: Send flags */
-  uint8_t _pad[7];     /* 0x25-0x2B: Padding */
-  uint8_t packet_type; /* 0x2C: Packet type (or at +0x2D) */
-  uint8_t _pad2;       /* 0x2D: Padding */
-  /* Additional fields for checksum control etc. */
-  uint8_t _extra[0x1A]; /* 0x2E-0x47: Extra fields */
-} xns_$idp_send_t;
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(xns_$idp_send_t, dest_addr)   == 0x00, "idp_send.dest_addr");
+_Static_assert(offsetof(xns_$idp_send_t, src_addr)    == 0x0C, "idp_send.src_addr");
+_Static_assert(offsetof(xns_$idp_send_t, hdr_desc)    == 0x18, "idp_send.hdr_desc");
+_Static_assert(offsetof(xns_$idp_send_t, packet_type) == 0x2C, "idp_send.packet_type");
+_Static_assert(sizeof(xns_$idp_send_t) == 0x48, "xns_$idp_send_t must be 0x48 bytes");
+#endif
 
 /*
  * Status codes for XNS IDP operations
  */
-#define status_$xns_channel_table_full 0x3B0001   /* No free channels */
-#define status_$xns_socket_already_open 0x3B0002  /* Socket already in use */
-#define status_$xns_bad_channel 0x3B0004          /* Invalid channel number */
-#define status_$xns_no_socket 0x3B0005            /* Channel has no socket */
-#define status_$xns_no_data 0x3B0006              /* No data available */
-#define status_$xns_buffer_too_small 0x3B0007     /* Receive buffer too small */
-#define status_$xns_invalid_param 0x3B0008        /* Invalid parameter */
-#define status_$xns_unknown_network_port 0x3B000B /* Unknown network port */
-#define status_$xns_reserved_socket 0x3B000C    /* Socket number is reserved */
-#define status_$xns_too_many_channels 0x3B000D  /* Channel limit exceeded */
-#define status_$xns_socket_in_use 0x3B000E      /* Socket already in use */
-#define status_$xns_no_route 0x3B0010           /* No route to destination */
-#define status_$xns_bad_checksum 0x3B0011       /* Checksum error */
-#define status_$xns_hop_count_exceeded 0x3B0012 /* Too many hops */
-#define status_$xns_no_nexthop 0x3B0013         /* No next hop found */
-#define status_$xns_version_mismatch 0x3B0015   /* Version mismatch */
-#define status_$xns_packet_dropped 0x3B0016     /* Packet was dropped */
-#define status_$xns_no_buffer_size 0x3B0017     /* Buffer size not specified */
-#define status_$xns_incompatible_flags                                         \
-  0x3B0018 /* Incompatible flags (bind+noalloc) */
-#define status_$xns_incompatible_flags2                                        \
-  0x3B0019 /* Incompatible flags (connect+noalloc) */
-#define status_$xns_broadcast_no_addr 0x3B001A /* Broadcast requires address   \
-                                                */
-#define status_$xns_local_addr_in_use                                          \
-  0x3B001B /* Local address already in use */
-#define status_$xns_connect_bind_conflict                                      \
-  0x3B001C                                  /* Connect and bind conflict */
-#define status_$xns_too_many_addrs 0x3B001D /* Too many registered addresses   \
-                                             */
+/*
+ * Status codes for XNS IDP operations (module 0x3B, "OS / XNS IDP").
+ *
+ * The comment after each line is the exact text the 10.4 status-code
+ * database gives for that code.  Several of the identifiers below predate
+ * that check and do not say the same thing as the database.
+ *
+ * TODO(source-v1lr): rename the eight that disagree across xns/.
+ */
+#define status_$xns_channel_table_full 0x3B0001   /* no channels available */
+#define status_$xns_socket_already_open 0x3B0002  /* no OS sockets available */
+#define status_$xns_no_demux 0x3B0003             /* caller specified neither OS socket nor demux proc */
+#define status_$xns_bad_channel 0x3B0004          /* channel is not open */
+#define status_$xns_no_socket 0x3B0005            /* no socket allocated for caller */
+#define status_$xns_no_data 0x3B0006              /* no packet available to receive */
+#define status_$xns_buffer_too_small 0x3B0007     /* data capacity too small for received packet */
+#define status_$xns_invalid_param 0x3B0008        /* illegal buffer specification */
+#define status_$xns_addr_in_use 0x3B0009          /* address in use */
+#define status_$xns_invalid_type_count 0x3B000A   /* invalid type count */
+#define status_$xns_unknown_network_port 0x3B000B /* listen network not connected */
+#define status_$xns_reserved_socket 0x3B000C      /* illegal IDP socket */
+#define status_$xns_too_many_channels 0x3B000D    /* IDP socket table full */
+#define status_$xns_socket_in_use 0x3B000E        /* IDP socket in use */
+#define status_$xns_os_socket_not_open 0x3B000F   /* OS socket not open */
+#define status_$xns_no_route 0x3B0010             /* no client for packet */
+#define status_$xns_bad_checksum 0x3B0011         /* bad IDP checksum */
+#define status_$xns_hop_count_exceeded 0x3B0012   /* maximum hops exceeded by packet */
+#define status_$xns_no_nexthop 0x3B0013           /* network unreachable */
+#define status_$xns_illegal_os_socket 0x3B0014    /* illegal OS socket */
+#define status_$xns_version_mismatch 0x3B0015     /* invalid version number */
+#define status_$xns_packet_dropped 0x3B0016       /* could not put packet into socket */
+#define status_$xns_no_buffer_size 0x3B0017       /* no OS socket depth given */
+#define status_$xns_incompatible_flags 0x3B0018   /* cannot send only as well as listen */
+#define status_$xns_incompatible_flags2 0x3B0019  /* cannot send only as well as connect */
+#define status_$xns_broadcast_no_addr 0x3B001A    /* cannot connect to broadcast address */
+#define status_$xns_local_addr_in_use 0x3B001B    /* connection source address must be this node */
+#define status_$xns_connect_bind_conflict 0x3B001C /* cannot connect as well as listen */
+#define status_$xns_too_many_addrs 0x3B001D       /* host address table full */
 
 /*
  * XNS Error Protocol codes (param to XNS_ERROR_$SEND)
@@ -502,13 +572,14 @@ void XNS_IDP_$CLOSE(uint16_t *channel, status_$t *status_ret);
  *
  * @param channel       Pointer to channel number
  * @param send_params   Send parameters structure
- * @param checksum_ret  Output: computed checksum (or 0)
+ * @param len_sent_ret  Output: the word XNS_IDP_$OS_SEND returned
+ *                      (0x00E18B5C-0x00E18B64)
  * @param status_ret    Output: status code
  *
  * Original address: 0x00E18A66
  */
 void XNS_IDP_$SEND(uint16_t *channel, xns_$idp_send_t *send_params,
-                   uint16_t *checksum_ret, status_$t *status_ret);
+                   int16_t *len_sent_ret, status_$t *status_ret);
 
 /*
  * XNS_IDP_$RECEIVE - Receive a packet (user-level)
@@ -593,6 +664,15 @@ void XNS_IDP_$OS_CLOSE(int16_t *channel, status_$t *status_ret);
  * xns_$os_send_rec_t - the 0x48-byte request record XNS_IDP_$OS_SEND is given
  *
  * XNS_IDP_$OS_SEND (0x00E18256) reads its second argument as follows:
+ *   0x00  24 bytes copied into the IDP header at header +0x06 with
+ *         "lea (0x6,A1),A4 / moveq #0x17,D1 / move.b (A3)+,(A4)+ / dbf" at
+ *         0x00E18336-0x00E1833E, taken only when the channel asks for a
+ *         header build and is NOT connected.  The connected alternative at
+ *         0x00E18318-0x00E18332 writes those same 24 header bytes from the
+ *         channel's dest_network (chan +0xA4, twelve bytes) and src_network
+ *         (chan +0xB0, twelve bytes), which is what identifies the range:
+ *         a destination xns_$net_addr_t followed by a source one.
+ *         (source-2ptk)
  *   0x18  "move.l (0x18,A3),D1"  at 0x00E182C8 - the first buffer length, and
  *         the running total it accumulates while walking the chain
  *   0x1C  "move.l (0x1c,A1),D3"  at 0x00E1828E - the IDP header buffer; the
@@ -604,51 +684,65 @@ void XNS_IDP_$OS_CLOSE(int16_t *channel, status_$t *status_ret);
  *         next} triple MAC_OS_$SEND walks
  *   0x24  "move.b (0x24,A1),(-0x60,A6)" at 0x00E18416 - becomes the MAC
  *         record's hdr_prebuilt boolean
+ *   0x2D  "move.b (0x2d,A3),(0x5,A1)" at 0x00E1830E - the IDP packet type.
+ *         XNS_IDP_$SEND writes the containing word at +0x2C
+ *         (0x00E18B10), so the field is modelled as a word.
  *   0x34  five longwords copied to the MAC record's +0x38
  *         (0x00E1841C-0x00E18428): the payload length followed by the four
- *         payload page addresses
+ *         payload page addresses.  Its low word is also added to the IDP
+ *         length ("add.w (0x36,A3),D1w" at 0x00E18302).
  *
  * The record is therefore a mac_os_$send_pkt_t shifted down by four bytes
- * from +0x18 on.  0x00..0x17 is not read on the RIP_$SEND path, whose caller
- * (RIP_$SEND at A6-0x48) never writes it.
- *
- * TODO(source-2ptk): identify what fills 0x00..0x17 for the other callers of
- * XNS_IDP_$OS_SEND.
+ * from +0x18 on.  0x00..0x17 is not written on the RIP_$SEND path (whose
+ * copy lives at A6-0x48 and whose channel builds its own IDP header) nor on
+ * the XNS_ERROR_$SEND path (record at 0x00E2B29C); XNS_IDP_$SEND fills it
+ * from the user's record at 0x00E18B04.
  */
 typedef struct xns_$os_send_rec_t {
-    uint8_t     _unknown_00[0x18];  /* 0x00: not read on the RIP path */
-    uint32_t    hdr_length;         /* 0x18 */
-    uint32_t    hdr_address;        /* 0x1C: the IDP header buffer VA */
-    uint32_t    hdr_next;           /* 0x20: next descriptor, 0 = end */
-    int8_t      hdr_prebuilt;       /* 0x24: Pascal boolean, 0xFF = true */
-    uint8_t     _pad_25[3];         /* 0x25 */
-    uint8_t     _unknown_28[0x0C];  /* 0x28 */
-    uint32_t    data_length;        /* 0x34 */
-    uint32_t    data_pages[4];      /* 0x38 */
-} xns_$os_send_rec_t;
+    xns_$net_addr_t     dest_addr;      /* 0x00: destination network/host/socket */
+    xns_$net_addr_t     src_addr;       /* 0x0C: source network/host/socket */
+    mac_os_$buf_desc_t  hdr_desc;       /* 0x18: {length, address, next} */
+    int8_t      hdr_prebuilt;           /* 0x24: Pascal boolean, 0xFF = true */
+    uint8_t     _pad_25[3];             /* 0x25 */
+    uint8_t     _unknown_28[4];         /* 0x28 */
+    uint16_t    packet_type;            /* 0x2C: low byte is the IDP packet type */
+    uint8_t     _unknown_2e[6];         /* 0x2E */
+    uint32_t    data_length;            /* 0x34 */
+    uint32_t    data_pages[4];          /* 0x38 */
+} __attribute__((packed)) xns_$os_send_rec_t;
 
 #if defined(ARCH_M68K)
-_Static_assert(offsetof(xns_$os_send_rec_t, hdr_length)   == 0x18, "os_send_rec.hdr_length");
-_Static_assert(offsetof(xns_$os_send_rec_t, hdr_address)  == 0x1C, "os_send_rec.hdr_address");
-_Static_assert(offsetof(xns_$os_send_rec_t, hdr_next)     == 0x20, "os_send_rec.hdr_next");
+_Static_assert(offsetof(xns_$os_send_rec_t, dest_addr)    == 0x00, "os_send_rec.dest_addr");
+_Static_assert(offsetof(xns_$os_send_rec_t, src_addr)     == 0x0C, "os_send_rec.src_addr");
+_Static_assert(offsetof(xns_$os_send_rec_t, hdr_desc)     == 0x18, "os_send_rec.hdr_desc");
 _Static_assert(offsetof(xns_$os_send_rec_t, hdr_prebuilt) == 0x24, "os_send_rec.hdr_prebuilt");
+_Static_assert(offsetof(xns_$os_send_rec_t, packet_type)  == 0x2C, "os_send_rec.packet_type");
 _Static_assert(offsetof(xns_$os_send_rec_t, data_length)  == 0x34, "os_send_rec.data_length");
 _Static_assert(offsetof(xns_$os_send_rec_t, data_pages)   == 0x38, "os_send_rec.data_pages");
 _Static_assert(sizeof(xns_$os_send_rec_t) == 0x48, "xns_$os_send_rec_t must be 0x48 bytes");
 #endif
 
 /*
+ * The MAC frame type XNS_IDP_$OS_SEND stamps into mac_os_$send_pkt_t.frame_type
+ * ("move.l #0x600,(-0x58,A6)" at 0x00E183FC).  ROUTE_$PROCESS uses the same
+ * value at 0x00E876BA.
+ */
+#define XNS_MAC_FRAME_TYPE 0x600
+
+/*
  * XNS_IDP_$OS_SEND - Send a packet (OS-level)
  *
- * @param channel       Pointer to channel number
- * @param send_params   Send parameters
- * @param checksum_ret  Output: computed checksum
+ * @param channel       Pointer to channel number (read as a word)
+ * @param send_rec      The request record
+ * @param len_sent_ret  Output: the word MAC_OS_$SEND reports (cleared at
+ *                      0x00E18268, handed straight to MAC_OS_$SEND's third
+ *                      argument at 0x00E18460)
  * @param status_ret    Output: status code
  *
  * Original address: 0x00E18256
  */
-void XNS_IDP_$OS_SEND(int16_t *channel, void *send_params,
-                      uint16_t *checksum_ret, status_$t *status_ret);
+void XNS_IDP_$OS_SEND(int16_t *channel, xns_$os_send_rec_t *send_rec,
+                      int16_t *len_sent_ret, status_$t *status_ret);
 
 /*
  * XNS_IDP_$OS_DEMUX - Demultiplex incoming packet (OS-level)

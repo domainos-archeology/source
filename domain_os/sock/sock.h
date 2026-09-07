@@ -276,6 +276,15 @@ typedef struct sock_$pkt_info_t {
     uint32_t    data_pages[4];  /* 0x30 <- netbuf+0x3EC: payload page VAs */
 } sock_$pkt_info_t;
 
+/*
+ * sock_$pkt_info_t.flags
+ *
+ * Both readers test bit 1 with a byte btst on the LOW half of the word:
+ * ROUTE_$PROCESS "btst.b #1,(0x11,rec)" at 0x00E874EA and RIP_$SERVER
+ * "btst.b #0x1,(-0x5f,A6)" at 0x00E68A28.
+ */
+#define SOCK_PKT_FLAG_XNS 0x0002    /* frame arrived over XNS ("standard") routing */
+
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(sock_$pkt_info_t, dst_addr)   == 0x0C, "sock_$pkt_info_t.dst_addr");
 _Static_assert(offsetof(sock_$pkt_info_t, flags)      == 0x10, "sock_$pkt_info_t.flags");

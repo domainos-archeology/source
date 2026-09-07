@@ -117,7 +117,7 @@ typedef struct rip_$send_frame_t {
     uint32_t            hdr_va;         /* A6-0x64 */
     uint32_t            hdr_pa;         /* A6-0x60 */
     uint32_t            hdr;            /* A6-0x58 */
-    uint32_t            send_extra;     /* A6-0x5C */
+    net_io_$send_info_t send_info;      /* A6-0x5C: NET_IO_$SEND's ninth arg */
     status_$t           status;         /* A6-0x54 */
     void               *route_data_p;   /* A6-0x50 */
     uint32_t            hdr_data;       /* A6-0x4C */
@@ -173,7 +173,7 @@ static void RIP_$SEND_TO_PORT(int16_t port_index, rip_$send_frame_t *frame)
                   (int32_t)frame->route_len);
 
     /* 0x00E8716C */
-    frame->send_rec.hdr_address = frame->hdr;
+    frame->send_rec.hdr_desc.address = frame->hdr;
 
     /* 0x00E87172-0x00E8718A */
     XNS_IDP_$OS_SEND(&RIP_$STD_IDP_CHANNEL, &frame->send_rec,
@@ -248,7 +248,7 @@ static void RIP_$SEND_TO_PORT_INTERNET(int16_t port_index,
                      RTWIRED_$CALLBACK,         /* 6  data_len (0xE870D8)     */
                      0,                         /* 7  protocol                */
                      RTWIRED_$SEND_FLAGS,       /* 8  flags   (0xE87D74)      */
-                     &frame->send_extra,        /* 9                          */
+                     &frame->send_info,         /* 9  send_info               */
                      &frame->status);           /* 10 status_ret              */
     }
 
@@ -296,8 +296,8 @@ void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
         frame.pkt_len      = (uint16_t)(RIP_IDP_HDR_LEN + route_len);
         frame.route_data_p = route_data;
 
-        frame.send_rec.hdr_length   = frame.pkt_len;
-        frame.send_rec.hdr_next     = 0;
+        frame.send_rec.hdr_desc.length  = frame.pkt_len;
+        frame.send_rec.hdr_desc.next    = 0;
         frame.send_rec.hdr_prebuilt = (int8_t)0xFF;      /* st */
         frame.send_rec.data_length  = 0;
         frame.send_rec.data_pages[0] = 0;

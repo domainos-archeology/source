@@ -7,3 +7,7 @@
 - [DISK / WIN / VTOC re-emission notes](disk-win-vtoc-reemission.md) — striping fields, the 0x90 VTOCE record, WIN's unit records and STOP_$WATCH's ops 8-10.
 - [SMD unit-record / HDM / position layouts](smd-unit-record-pass.md) — the biased A3 record, the 1-based info/font/HDM tables, and why every SMD position is Y-first.
 - [Shared record ownership](feedback_shared_records.md) — one definition in the owner's public header; delete the duplicate in the same pass.
+- [ML / DXM / FP / CHKSUM recovered ABIs](ml-dxm-fp-chksum-notes.md) — the SET_LOCK gate, the 16-byte DXM callback cell, FP_$SAVEP as a pointer, and gas `(sym:w,%pc)`.
+- [NETBUF layouts and the ARCH_VA_TO_PTR test idiom](netbuf-notes.md) — globals at 0xE245A8, the MMAPE link at offset 0x06, 1KB header-buffer fields.
+- [AST common attributes, the REM_FILE request trailer, ACL_$RIGHTS](ast-common-attrs-and-rem-file-trailer.md) — the 0x18-byte cattr record, its four-part call shape, and two wrong public prototypes.
+- [XNS / RIP send-path ABIs](xns-rip-send-notes.md) — the 0x48-byte send record head, byte-btst channel flags, BRK_INTERNET_HDR's 14 args, packed wire records.

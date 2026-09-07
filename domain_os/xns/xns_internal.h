@@ -160,13 +160,18 @@ void xns_$add_port(uint16_t channel, int16_t port, status_$t *status_ret);
 void xns_$delete_port(uint16_t channel, int16_t port, status_$t *status_ret);
 
 /*
- * xns_$get_checksum - Calculate checksum from packet info
+ * xns_$get_checksum - compute the IDP checksum over a packet descriptor
  *
- * Extracts and validates the IDP packet checksum.
+ * Reads its argument at +0x1C/+0x20/+0x24 (the {length, address, next} header
+ * descriptor, walked to the end of the chain at 0x00E17D52-0x00E17DD2) and at
+ * +0x38/+0x3C.. (the payload length and pages, 0x00E17DD4-0x00E17E08).  Both
+ * mac_os_$send_pkt_t (XNS_IDP_$OS_SEND, 0x00E18434) and the receive
+ * descriptor XNS_IDP_$OS_DEMUX is handed (0x00E184F2) have those fields at
+ * those offsets, so the parameter stays untyped.
  *
- * @param packet_info   Packet information structure
+ * @param packet_info   mac_os_$send_pkt_t or xns_$mac_rcv_t
  *
- * @return Calculated checksum, or computed checksum from packet
+ * @return the checksum, or -1 when the packet is malformed
  *
  * Original address: 0x00E17D46
  */

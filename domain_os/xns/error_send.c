@@ -13,14 +13,14 @@
 /* Internal state for error socket */
 int32_t XNS_ERROR_$STD_IDP_CHANNEL = 0;
 
-/* Static data for error sending (at 0xE2B29C) */
-static struct {
-    uint8_t _reserved[0x18];
-    int32_t header_len;         /* +0x18 */
-    void *header_ptr;           /* +0x1C */
-    void *iov;                  /* +0x20 */
-    uint8_t flags;              /* +0x24 */
-} xns_error_send_params;
+/*
+ * The request record XNS_ERROR_$SEND hands to XNS_IDP_$OS_SEND.  It is not a
+ * local: A5 is 0x00E2B29C for this module and the call at 0x00E17BB0 passes
+ * "pea (A5)", so the record IS the module's data base.  Only +0x18..+0x24 is
+ * written (0x00E17B2C-0x00E17B38); the address block at +0x00..+0x17 is
+ * never touched because the error channel builds its own IDP header.
+ */
+static xns_$os_send_rec_t xns_error_send_params;
 
 /*
  * Static helper: xns_$maybe_open_error_socket
@@ -190,16 +190,17 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
     /* Build error packet */
     packet_offset = 0x4C - *(int16_t *)(pkt + 0x36);
 
-    xns_error_send_params.header_len = packet_offset;
-    xns_error_send_params.header_ptr = netbuf_ptr[0];
-    xns_error_send_params.iov = NULL;
-    xns_error_send_params.flags = 0xFF;
+    xns_error_send_params.hdr_desc.length  = packet_offset;   /* 0x00E17B2C */
+    xns_error_send_params.hdr_desc.address =
+        (uint32_t)(uintptr_t)netbuf_ptr[0];                   /* 0x00E17B30 */
+    xns_error_send_params.hdr_desc.next    = 0;               /* 0x00E17B34 */
+    xns_error_send_params.hdr_prebuilt     = true;            /* 0x00E17B38 `st' */
 
     /* Set checksum to "compute" */
     error_header[0] = -1;
 
     /* Set length */
-    error_header[1] = (uint16_t)xns_error_send_params.header_len;
+    error_header[1] = (uint16_t)xns_error_send_params.hdr_desc.length;
 
     /* Set transport control and packet type */
     *(uint8_t *)((uint8_t *)error_header + 4) = 0;
@@ -231,8 +232,9 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
     error_header[0x0F] = *error_param;
 
     /* Send the error packet */
+    /* 0x00E17BA2-0x00E17BB0: arg1 is (0x76,A5), arg2 the record at (A5) */
     XNS_IDP_$OS_SEND((int16_t *)&XNS_ERROR_$STD_IDP_CHANNEL,
-                     &xns_error_send_params, result_ret, status_ret);
+                     &xns_error_send_params, (int16_t *)result_ret, status_ret);
 
     /* Close error socket */
     xns_$maybe_close_error_socket();
