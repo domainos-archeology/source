@@ -26,7 +26,7 @@ Gates, all of which pass at every commit since wave 7:
   address, no cross-subsystem `_internal.h` includes, no foreign-namespace
   declarations (checked map-driven).
 
-## What changed (waves 7 to 15, 53 local commits)
+## What changed (waves 7 to 17, 55 local commits)
 
 Representative corrections, each cited in the code with the instruction
 address that proves it:
@@ -64,16 +64,17 @@ Figures at the last commit:
 
 | measure | value |
 |---|---|
-| host tests, failures | 180, 0 |
+| host tests, failures | 182, 0 |
 | undefined link references (all functions now) | 366, from 1212 |
 | relocation overflows | 0, from 19 |
-| hand-written assembly files under `*/sau2/` | 41 |
+| hand-written assembly files under `*/sau2/` | 44 |
 | beads closed in this pass | about 50 |
 
 ## What is left
 
-Fidelity backlog: only `source-4omb` (two unknown bytes in ring_info_t) and
-the four small follow-ups of the final wave if any stay open.
+Fidelity backlog: `source-4omb` (two unknown bytes in ring_info_t) and
+`source-xx4l` (the two 0x0002 head words of MEM_$MEM_REC), both research
+questions with no code consequence.
 
 Blocked on user review: `docs/design-per-process-data.md` (bead `source-0i3`,
 P1) and its seven step beads. Nothing in this pass pre-empted its
