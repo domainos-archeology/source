@@ -44,7 +44,7 @@
 /*
  * The version block is the OS_$REV array (os/os.h, 0x00E78400, 204 bytes);
  * its first longword is the "OS revision flag" that must be 0 for a
- * production build.  PROM_$SAU_AND_AUX (0x00000100) comes from prom/prom.h.
+ * production build.  PROM_$MACHINE_ID (0x00000100) comes from prom/prom.h.
  */
 
 /*
@@ -117,10 +117,10 @@ void GET_BUILD_TIME(char *buf, int16_t *len_p)
      */
     /*
      * Original: move.w (0x00000100).l,D2w - a 16-bit read at 0x100.
-     * prom/prom.h declares PROM_$SAU_AND_AUX as a 32-bit word at that
+     * prom/prom.h declares PROM_$MACHINE_ID as a 32-bit word at that
      * address, so on big-endian m68k the word read is the high half.
      */
-    int16_t sau_and_aux = (int16_t)(PROM_$SAU_AND_AUX >> 16);
+    int16_t sau_and_aux = (int16_t)(PROM_$MACHINE_ID >> 16);
     if (sau_and_aux == 0) {
         /* No SAU type - simple format */
         VFMT_$FORMATN(fmt_no_sau, buf, &max_len, len_p,

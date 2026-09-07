@@ -35,7 +35,7 @@ uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
 pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
 uint16_t PROC2_$NEXT_UPID = P2_UPID_WRAP_TO;
 
-uid_t PROC2_UID[PROC2_UID_TABLE_SIZE];
+uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
 
 uint16_t PROC1_$CURRENT;
 
@@ -63,7 +63,7 @@ static void reset_mocks(void)
     memset(mock_entries, 0, sizeof(mock_entries));
     memset(mock_pid_to_index, 0, sizeof(mock_pid_to_index));
     memset(mock_pgroups, 0, sizeof(mock_pgroups));
-    memset(PROC2_UID, 0, sizeof(PROC2_UID));
+    memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
 
     P2_INFO_ALLOC_PTR = 0;
     P2_FREE_LIST_HEAD = 0;
@@ -195,10 +195,10 @@ static void test_uid_publication_and_fim_init(void)
     assert(fresh()->uid.high == 0x11223344u);
     assert(fresh()->uid.low == 0x55667788u);
 
-    /* PROC2_UID is indexed by the ASID, not by the table index */
-    assert(PROC2_UID[3].high == 0x11223344u);
-    assert(PROC2_UID[3].low == 0x55667788u);
-    assert(PROC2_UID[NEW_IDX].high == 0);
+    /* PROC2_$UID is indexed by the ASID, not by the table index */
+    assert(PROC2_$UID[3].high == 0x11223344u);
+    assert(PROC2_$UID[3].low == 0x55667788u);
+    assert(PROC2_$UID[NEW_IDX].high == 0);
 
     /* 0x00E73310 passes the ADDRESS of entry->asid */
     assert(n_init_pid == 1);

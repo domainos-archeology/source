@@ -46,7 +46,7 @@ void TIME_$SET_ITIMER_VIRT_CALLBACK(time_$callback_arg_t arg)
 
     if (*(uint32_t *)(itimer_entry + ITIMER_VIRT_INTERVAL_HIGH) != 0 ||
         *(uint16_t *)(itimer_entry + ITIMER_VIRT_INTERVAL_LOW) != 0) {
-        PROC2_$SIGNAL_OS(&PROC2_UID[as_id],   /* 0xE7BE94 + as_id*8 */
+        PROC2_$SIGNAL_OS(&PROC2_$UID[as_id],   /* 0xE7BE94 + as_id*8 */
                          (int16_t *)&time_$c_itimer_virt_signal,
                          (uint32_t *)&time_$c_itimer_virt_fault,
                          &status);

@@ -149,7 +149,7 @@ void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
     // Handle GET_GLOBAL operation
     if (flag_byte & MMAP_FLAG_GET_GLOBAL) {
         global_info->real_pages = MMAP_$REAL_PAGES;
-        global_info->pageable_lower_limit = MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
+        global_info->pageable_lower_limit = MMAP_$PAGEABLE_PAGES;
         global_info->remote_pages = MMAP_$REMOTE_PAGES;
         global_info->wsl_hi_mark = MMAP_WSL_HI_MARK;   /* move.w (0xE23CA6) */
 

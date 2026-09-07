@@ -70,7 +70,7 @@ static const char msg_68881_disabled[] = "68881 savearea   68881 is disab";
  *   00e31ed0    tst.w (-0x4e,A2)          ; Test status at caller's frame-0x4E
  *   00e31ed4    beq.b 0x00e31f4e          ; If 0, no error
  *   00e31ed6    pea (0x80,PC)             ; Push warning message
- *   ... (ERROR_$PRINT calls)
+ *   ... (VFMT_$WRITE10 calls)
  *   00e31f4a    st D0b                    ; Return -1 (error)
  *   00e31f4c    bra.b 0x00e31f50
  *   00e31f4e    clr.b D0b                 ; Return 0 (success)

@@ -115,7 +115,7 @@ with a sign-extending `adda.w`, and 0x40*0x400 == 0x10000, so slot numbers
   `M$MIU$LLW` an unsigned 32x16 product (0xE0AC02); `M$MIS$LLW`/`M$MIS$LLL`
   the signed ones (0xE0AC44 / 0xE0ABD4). All truncate to 32 bits and preserve
   A1.
-- ERROR_$PRINT (0xE825F4) is a gate into VFMT_$WRITEN: `VFMT_$WRITEN(fmt,
+- VFMT_$WRITE10 (0xE825F4; called ERROR_$PRINT before the SAU2 map sweep) is a gate into VFMT_$WRITEN: `VFMT_$WRITEN(fmt,
   &varargs)`, so its extra arguments are **addresses**, and vfmt's `%a` takes
   two - a character pointer and a pointer to its length.
 - A longword constant in the code region can produce a false Ghidra string:

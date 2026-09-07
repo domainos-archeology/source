@@ -83,9 +83,9 @@ void AUDIT_$INIT(void)
 
     if (status != status_$ok) {
         /* Startup failed - print warning messages */
-        ERROR_$PRINT(msg_warning, &status, NULL);
-        ERROR_$PRINT(msg_all_events, NULL, NULL);
-        ERROR_$PRINT(msg_admins_only, NULL, NULL);
+        VFMT_$WRITE10(msg_warning, &status, NULL);
+        VFMT_$WRITE10(msg_all_events, NULL, NULL);
+        VFMT_$WRITE10(msg_admins_only, NULL, NULL);
 
         /* Set corrupted flag - all events will be logged */
         AUDIT_$CORRUPTED = (int8_t)-1;

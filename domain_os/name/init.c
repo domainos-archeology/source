@@ -41,8 +41,8 @@ static void name_$init_check_status(char *msg, void *param1, int param2,
 {
     if (*status != status_$ok) {
         /* Print error messages */
-        ERROR_$PRINT("               Unable to   ", NULL);
-        ERROR_$PRINT(msg, NULL);
+        VFMT_$WRITE10("               Unable to   ", NULL);
+        VFMT_$WRITE10(msg, NULL);
         /* TIME_$WAIT and CRASH_SYSTEM would be called here */
         CRASH_SYSTEM(status);
     }

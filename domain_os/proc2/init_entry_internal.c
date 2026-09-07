@@ -4,7 +4,7 @@
  * Called by PROC2_$CREATE (0x00E727FA) and PROC2_$FORK (0x00E72CFA) once the
  * new entry has been taken off the free list and its ASID assigned.  It:
  *
- *   1. generates the process UID and publishes it in PROC2_UID[asid];
+ *   1. generates the process UID and publishes it in PROC2_$UID[asid];
  *   2. resets the FIM per-PID quit state;
  *   3. allocates a UPID that collides with no live process's UPID, no live
  *      process's session id and no live process's process group;
@@ -43,11 +43,11 @@ void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry)
 
     /*
      * 0x00E732FA-0x00E7330C: publish the new UID in the per-ASID table.
-     * D0 = entry->asid << 3 indexes 0xE7BE84 + 0x10 = PROC2_UID (0xE7BE94),
+     * D0 = entry->asid << 3 indexes 0xE7BE84 + 0x10 = PROC2_$UID (0xE7BE94),
      * and the two longwords are copied high then low.
      */
-    PROC2_UID[entry->asid].high = entry->uid.high;
-    PROC2_UID[entry->asid].low = entry->uid.low;
+    PROC2_$UID[entry->asid].high = entry->uid.high;
+    PROC2_$UID[entry->asid].low = entry->uid.low;
 
     /* 0x00E73310: the argument is &entry->asid (entry+0x96), not the value */
     FIM_$INIT_ASID((int16_t *)&entry->asid);

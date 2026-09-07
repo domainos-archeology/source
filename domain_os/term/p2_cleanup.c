@@ -25,7 +25,7 @@ void TERM_$P2_CLEANUP(short *param1) {
     uid_offset = (short)(as_id << 3);  // as_id * 8 for UID array indexing
 
     // Get pointer to process's UID
-    proc_uid = (uid_t *)((char *)&PROC2_UID + uid_offset);
+    proc_uid = (uid_t *)((char *)&PROC2_$UID + uid_offset);
 
     // Iterate through 3 terminal line entries (indices 0, 1, 2)
     // Each entry is TERM_LINE_DATA_SIZE (0x4dc) bytes with UID at TERM_LINE_UID_OFFSET (0x1a4)

@@ -576,7 +576,7 @@ void AST_$INIT(void);
 void AST_$ACTIVATE_AOTE_CANNED(uint32_t *attrs, uint32_t *obj_info);
 
 /*
- * AST_$ACTIVATE_CANNED_SEG - activate one segment of a well-known object
+ * AST_$ACTIVATE_ASTE_CANNED - activate one segment of a well-known object
  *
  * Takes the AST lock (ML_$LOCK(0x12)), finds the AOTE for the UID, and
  * either creates the object's first ASTE -- initialising its 32-entry
@@ -593,7 +593,7 @@ void AST_$ACTIVATE_AOTE_CANNED(uint32_t *attrs, uint32_t *obj_info);
  *
  * Original address: 0x00E2F1D4 (462 bytes)
  */
-aste_t *AST_$ACTIVATE_CANNED_SEG(uid_t *uid, uint16_t seg);
+aste_t *AST_$ACTIVATE_ASTE_CANNED(uid_t *uid, uint16_t seg);
 
 /*
  * Function prototypes - ASTE management

@@ -458,10 +458,10 @@ extern pgroup_entry_t *PGROUP_TABLE;
  * generates a separate UID for entry 1.  The table runs from 0xE7BE94
  * up to P2_INFO_ALLOC_PTR (0xE7C064).
  *
- * Original address: 0xE7BE94 (Ghidra label PROC2_UID)
+ * Original address: 0xE7BE94 (Ghidra label PROC2_$UID)
  */
 #define PROC2_UID_TABLE_SIZE 58
-extern uid_t PROC2_UID[PROC2_UID_TABLE_SIZE];
+extern uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
 
 #define P2_INFO_ENTRY(idx) (&P2_INFO_TABLE[(idx) - 1])
 #define P2_PID_TO_INDEX(pid) (PROC2_$PID_TO_INDEX[(pid)])

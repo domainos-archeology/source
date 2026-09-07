@@ -46,7 +46,7 @@ pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
 proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
 uint16_t PROC2_$NEXT_UPID = P2_UPID_WRAP_TO;
 
-uid_t PROC2_UID[PROC2_UID_TABLE_SIZE];
+uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
 uid_t proc2_system_uid;
 uid_t proc2_proc_dir_uid;
 int16_t proc2_boot_flags;
@@ -207,7 +207,7 @@ static void run_init(void)
     memset(mock_entries, CANARY, sizeof(mock_entries));
     memset(mock_pid_to_index, CANARY, sizeof(mock_pid_to_index));
     memset(mock_pgroups, 0, sizeof(mock_pgroups));
-    memset(PROC2_UID, 0, sizeof(PROC2_UID));
+    memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
 
     P2_INFO_ALLOC_PTR = 0;
     P2_FREE_LIST_HEAD = 0;

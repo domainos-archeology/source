@@ -48,12 +48,12 @@ void PMAP_$T_PURIF_CALLBACK(void)
 
     /* Check WSL flags - if bit 13 not set, update working set limit */
     if ((*(uint16_t *)(WSL_BASE + wsl_offset) & 0x2000) == 0) {
-        uint32_t limit = MMAP_$PAGEABLE_PAGES_LOWER_LIMIT >> 2;
+        uint32_t limit = MMAP_$PAGEABLE_PAGES >> 2;
         if (limit > 0x800) {
             limit = 0x800;
         }
         *(uint32_t *)(WSL_BASE + wsl_offset + WSL_WS_LIMIT_OFFSET) =
-            MMAP_$PAGEABLE_PAGES_LOWER_LIMIT - limit;
+            MMAP_$PAGEABLE_PAGES - limit;
     }
 
     /* Check if slot has pages and needs scanning */

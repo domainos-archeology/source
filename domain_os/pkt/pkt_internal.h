@@ -109,6 +109,7 @@ _Static_assert(offsetof(pkt_$data_t, long_id) == 0x60, "pkt_$data_t.long_id");
 _Static_assert(offsetof(pkt_$data_t, default_flags) == 0x64, "pkt_$data_t.default_flags");
 _Static_assert(offsetof(pkt_$data_t, ping_template) == 0x68, "pkt_$data_t.ping_template");
 _Static_assert(offsetof(pkt_$data_t, ping_reply_info) == 0x88, "pkt_$data_t.ping_reply_info");
+/* Confirmed by the SR10.2 SAU2 link map: "D    E24C9C  PKT   size = A8". */
 _Static_assert(sizeof(pkt_$data_t) == 0xA8, "pkt_$data_t must be 0xA8 bytes");
 #endif
 

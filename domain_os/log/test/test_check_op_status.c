@@ -3,12 +3,12 @@
  *
  * Covers bead source-5pu: the nested procedure's uplevel status variable is
  * now an explicit "status_$t *" parameter instead of a file-scope copy, and
- * the address that is handed to ERROR_$PRINT is the caller's own variable
+ * the address that is handed to VFMT_$WRITE10 is the caller's own variable
  * (0xE2FF8E "pea (-0x44,A2)").
  *
  * Also pins the two things the previous version got wrong:
  *   - only the HIGH word of the status is tested (0xE2FF84 "tst.w (-0x42,A2)")
- *   - three 3-argument ERROR_$PRINT calls are made, the middle one using the
+ *   - three 3-argument VFMT_$WRITE10 calls are made, the middle one using the
  *     operation name itself as the continuation format with two copies of
  *     LOG_$VFMT_NO_ARG.
  */
@@ -52,14 +52,14 @@ static int tests_failed = 0;
 uint32_t LOG_$VFMT_NO_ARG = 0;
 
 /*
- * ERROR_$PRINT mock.  The real routine is a thunk to VFMT_$WRITEN taking a
+ * VFMT_$WRITE10 mock.  The real routine is a thunk to VFMT_$WRITEN taking a
  * format plus two by-reference arguments; record all three.
  */
 #define MAX_PRINTS 8
 static int print_count;
 static const void *print_args[MAX_PRINTS][3];
 
-void ERROR_$PRINT(const char *format, ...)
+void VFMT_$WRITE10(const char *format, ...)
 {
     va_list ap;
     if (print_count < MAX_PRINTS) {
@@ -104,7 +104,7 @@ static void test_only_high_word_is_tested(void)
 }
 
 /*
- * The failure path emits exactly three continued ERROR_$PRINT calls, and the
+ * The failure path emits exactly three continued VFMT_$WRITE10 calls, and the
  * first one hands out the ADDRESS of the caller's own status variable.
  */
 static void test_failure_message_shape(void)

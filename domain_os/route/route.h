@@ -470,11 +470,11 @@ extern uint16_t ROUTE_$SOCK;
  * Original addresses: 0xE87FB0, 0xE87FB4
  */
 #if defined(ARCH_M68K)
-#define ROUTE_$STAT_DROPPED_STD_HOP (*(uint32_t *)0xE87FB0)
-#define ROUTE_$STAT_DROPPED_STD_ROUTE (*(uint32_t *)0xE87FB4)
+#define ROUTE_$STD_TOO_FAR (*(uint32_t *)0xE87FB0)
+#define ROUTE_$STD_MISROUTE (*(uint32_t *)0xE87FB4)
 #else
-extern uint32_t ROUTE_$STAT_DROPPED_STD_HOP;
-extern uint32_t ROUTE_$STAT_DROPPED_STD_ROUTE;
+extern uint32_t ROUTE_$STD_TOO_FAR;
+extern uint32_t ROUTE_$STD_MISROUTE;
 #endif
 
 /*

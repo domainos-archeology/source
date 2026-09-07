@@ -357,7 +357,7 @@ void *SVC_$TRAP3_TABLE[SVC_TRAP3_TABLE_SIZE] = {
     /* 0x03 */ FILE_$UNLOCK,
     /* 0x04 */ FILE_$TRUNCATE,
     /* 0x05 */ MST_$UNMAPS,
-    /* 0x06 */ ERROR_$PRINT,
+    /* 0x06 */ VFMT_$WRITE10,
     /* 0x07 */ FILE_$ATTRIBUTES,
     /* 0x08 */ FILE_$SET_LEN,
     /* 0x09 */ FILE_$SET_TYPE,
@@ -780,7 +780,7 @@ void *SVC_$TRAP5_TABLE[SVC_TRAP5_TABLE_SIZE] = {
  */
 void *SVC_$TRAP7_TABLE[SVC_TRAP7_TABLE_SIZE] = {
     /* 0x00 */ FILE_$LOCK,
-    /* 0x01 */ ERROR_$PRINT,
+    /* 0x01 */ VFMT_$WRITE10,
     /* 0x02 */ MST_$MAP_AREA_AT,
     /* 0x03 */ SVC_$INVALID_SYSCALL,
     /* 0x04 */ SVC_$INVALID_SYSCALL,

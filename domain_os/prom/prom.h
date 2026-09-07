@@ -18,7 +18,7 @@
 extern void *PROM_$QUIET_RET_ADDR;
 
 /* PROM data */
-extern uint32_t PROM_$SAU_AND_AUX;
+extern uint32_t PROM_$MACHINE_ID;
 
 /*
  * io_$probe - Hardware probe function

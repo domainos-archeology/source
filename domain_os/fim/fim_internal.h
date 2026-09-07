@@ -44,7 +44,7 @@
 #define FIM_STATUS_CLEANUP_SET  0x00240002  /* Cleanup handler set */
 
 /* Bus error handler address (cold boot) */
-#define PROM_TRAP_BUS_ERROR     0x00000008  /* Vector 2: Bus Error */
+#define BUS_ERROR_VEC     0x00000008  /* Vector 2: Bus Error */
 
 /* Frame size table offset from FIM_DATA_BASE */
 #define FIM_FRAME_SIZE_OFFSET   0x124
@@ -113,7 +113,7 @@ extern void *FIM_CLEANUP_STACK[PROC1_MAX_PROCESSES];
  * PROM bus error handler address (cold boot)
  * If this is FIM_$COLD_BUS_ERR, we're in cold boot
  */
-extern void *PROM_TRAP_BUS_ERROR_PTR;
+extern void *BUS_ERROR_VEC_PTR;
 
 /*
  * ============================================================================

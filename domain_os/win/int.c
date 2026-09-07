@@ -58,7 +58,7 @@ uint32_t WIN_$INT(void *param)
         }
     } else {
         /* Check DMA completion */
-        status = check_dma_error(3);
+        status = DMA_$CHECK(3);
         if (*(status_$t *)(win_data + WIN_STATUS_OFFSET) == status_$ok) {
             *(status_$t *)(win_data + WIN_STATUS_OFFSET) = status;
         }

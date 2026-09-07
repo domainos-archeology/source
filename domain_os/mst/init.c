@@ -200,7 +200,7 @@ void MST_$INIT(void)
      */
     int32_t page_base;
     if (!MST_M68020_IS_020()) {  /* tst.b M68020 / bmi: not a 68020+ */
-        page_base = MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
+        page_base = MMAP_$PAGEABLE_PAGES;
     } else {
         page_base = MMAP_$REAL_PAGES;
     }

@@ -40,7 +40,7 @@
  * Globals used here (declared in subsystem headers):
  *   FIM_$USER_FIM_ADDR (0xE212A8), FIM_$QUIT_INH (0xE2248A)   - fim/fim.h
  *   PROC2_$EC / PROC_FORK_EC / PROC_CR_REC_EC (0xE2B978),
- *   PROC2_UID table (0xE7BE94), proc2_system_uid (0xE7BE8C)  - proc2 headers
+ *   PROC2_$UID table (0xE7BE94), proc2_system_uid (0xE7BE8C)  - proc2 headers
  */
 
 #if defined(ARCH_M68K)
@@ -618,11 +618,11 @@ cleanup_locked:
         /* 0x00E731D8: release the alternate ASID and restore the
          * parent's own UID into the per-ASID table (parent+0x00). */
         MST_$FREE_ASID(new_entry->asid_alt, &temp_status);
-        PROC2_UID[new_entry->asid] = parent_entry->uid;
+        PROC2_$UID[new_entry->asid] = parent_entry->uid;
     } else {
         /* 0x00E73204 */
         MST_$FREE_ASID(new_entry->asid, &temp_status);
-        PROC2_UID[new_entry->asid] = proc2_system_uid;
+        PROC2_$UID[new_entry->asid] = proc2_system_uid;
     }
 
     /* 0x00E7322E */

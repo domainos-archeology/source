@@ -46,7 +46,7 @@
 /*
  * Globals used here (declared in subsystem headers):
  *   proc2_boot_flags (0xE7C068), proc2_proc_dir_uid (0xE7BE84),
- *   proc2_system_uid (0xE7BE8C), PROC2_UID table (0xE7BE94),
+ *   proc2_system_uid (0xE7BE8C), PROC2_$UID table (0xE7BE94),
  *   PROC2_$EC / PROC_FORK_EC / PROC_CR_REC_EC (0xE2B978)  - proc2 headers
  *   AS_$CR_REC (0xE2B930), AS_$CR_REC_FILE_SIZE (0xE2B96C),
  *   AS_$STACK_FILE_LOW (0xE2B92C), AS_$INIT_STACK_FILE_SIZE (0xE2B960),
@@ -84,10 +84,10 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     /*
      * Step 1: Generate system UIDs
      *   DAT_00e7be8c - system process UID (proc2_system_uid)
-     *   DAT_00e7be9c - PROC2_UID[1]
+     *   DAT_00e7be9c - PROC2_$UID[1]
      */
     UID_$GEN(&proc2_system_uid);
-    UID_$GEN(&PROC2_UID[1]);
+    UID_$GEN(&PROC2_$UID[1]);
 
     /*
      * Step 2: Set priority for init process
@@ -101,9 +101,9 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
      * Entry 0 is stored directly, then the loop (dbf with count 0x37)
      * fills entries 2..57, skipping entry 1 generated above.
      */
-    PROC2_UID[0] = proc2_system_uid;
+    PROC2_$UID[0] = proc2_system_uid;
     for (i = 2; i <= 57; i++) {
-        PROC2_UID[i] = proc2_system_uid;
+        PROC2_$UID[i] = proc2_system_uid;
     }
 
     /*
@@ -207,7 +207,7 @@ status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     init_entry->self_index = 1;
 
     /* Copy the UID generated for table entry 1 (DAT_00e7be9c) to the entry */
-    init_entry->uid = PROC2_UID[1];
+    init_entry->uid = PROC2_$UID[1];
 
     /* Set PROC1 PID */
     init_entry->level1_pid = PROC1_$CURRENT;

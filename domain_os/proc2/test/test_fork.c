@@ -51,7 +51,7 @@ proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
 
-uid_t PROC2_UID[PROC2_UID_TABLE_SIZE];
+uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
 uid_t proc2_system_uid = { 0x11112222u, 0x33334444u };
 uid_t proc2_proc_dir_uid;
 int16_t proc2_boot_flags;
@@ -102,7 +102,7 @@ static void reset_mocks(void)
     memset(mock_pgroups, 0, sizeof(mock_pgroups));
     memset(mock_ecs, 0, sizeof(mock_ecs));
     memset(PROC2_$EC, 0, sizeof(PROC2_$EC));
-    memset(PROC2_UID, 0, sizeof(PROC2_UID));
+    memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
     memset(FIM_$USER_FIM_ADDR, 0, sizeof(FIM_$USER_FIM_ADDR));
     memset(FIM_$QUIT_INH, 0, sizeof(FIM_$QUIT_INH));
 
@@ -745,7 +745,7 @@ static void test_bind_failure_cleanup(void)
     assert(child()->uid.high == proc2_system_uid.high);
     assert(child()->uid.low == proc2_system_uid.low);
     assert(child()->parent_uid.high == 0 && child()->parent_uid.low == 0);
-    assert(PROC2_UID[child()->asid].high == proc2_system_uid.high);
+    assert(PROC2_$UID[child()->asid].high == proc2_system_uid.high);
 
     printf("test_bind_failure_cleanup: PASSED\n");
 }

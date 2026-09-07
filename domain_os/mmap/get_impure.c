@@ -83,5 +83,5 @@ void MMAP_$GET_IMPURE(uint16_t wsl_index, uint32_t *vpn_array, int8_t all_pages,
     *returned = return_count;
     *scanned = scan_count;
 
-    MMAP_$PAGEABLE_PAGES_LOWER_LIMIT -= return_count;
+    MMAP_$PAGEABLE_PAGES -= return_count;
 }

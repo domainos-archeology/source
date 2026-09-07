@@ -66,6 +66,14 @@ typedef struct netbuf_globals_t {
   int16_t hdr_alloc; /* 0x334: Total header buffers allocated */
 } netbuf_globals_t;
 
+/*
+ * The SR10.2 SAU2 link map sizes the whole data segment as
+ * "D    E245A8  NETBUF_   size = 338", i.e. E245A8..E248E0.  The last field
+ * modelled above ends at 0x336, so the final two bytes of the segment are
+ * not yet accounted for; no _Static_assert on sizeof() is made here.
+ * TODO(source-v7nn): identify netbuf_globals_t+0x336.
+ */
+
 /* Remaining documented offsets (bead source-pewa). */
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(netbuf_globals_t, va_slots) == 0x00, "netbuf_globals_t.va_slots");

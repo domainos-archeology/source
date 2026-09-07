@@ -174,7 +174,7 @@ static const char msg_node_1[] = /* 0x00E347E4 */
     "%/The node number of this node differs %$";
 static const char msg_node_2[] = /* 0x00E347CE */
     "from that stored on%.";
-static const char msg_node_3[] = /* 0x00E349E0, the ERROR_$PRINT format */
+static const char msg_node_3[] = /* 0x00E349E0, the VFMT_$WRITE10 format */
     "the boot volume.  Prom node #%h, stored node #%h.%.";
 
 /*
@@ -1042,7 +1042,7 @@ after_paging_file:
              * 0x00E34426-0x00E34438: activate (or find) the ASTE for this
              * segment of the paging file.  The result comes back in A0.
              */
-            aste = AST_$ACTIVATE_CANNED_SEG(&NETWORK_$PAGING_FILE_UID,
+            aste = AST_$ACTIVATE_ASTE_CANNED(&NETWORK_$PAGING_FILE_UID,
                                             (uint16_t)seg);
             warned = false; /* 0x00E3443A: clr.b D5b */
 
@@ -1153,7 +1153,7 @@ after_paging_file:
         if (stored_node != prom_node) {
             OS_$PRINT_INIT_ERROR(msg_node_1);
             OS_$PRINT_INIT_ERROR(msg_node_2);
-            ERROR_$PRINT(msg_node_3, &prom_node, &stored_node);
+            VFMT_$WRITE10(msg_node_3, &prom_node, &stored_node);
             OS_$PRINT_INIT_ERROR(msg_proceed_prompt);
             if (prompt_for_yes_or_no() >= 0) {
                 status = status_$ok;

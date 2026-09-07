@@ -22,7 +22,7 @@
  * Parameters:
  *   routine    - index into DXM_$SIGNAL_ROUTINES (0 = PROC2_$SIGNAL_OS,
  *                1 = PROC2_$SIGNAL_PGROUP_OS)
- *   proc_index - index into PROC2_UID identifying the target
+ *   proc_index - index into PROC2_$UID identifying the target
  *   signal     - signal number
  *   param      - signal parameter (4 bytes)
  *   check_dup  - Domain boolean (0xFF) -> DXM_$ADD_CALLBACK dedupes

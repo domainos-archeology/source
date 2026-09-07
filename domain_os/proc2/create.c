@@ -354,10 +354,10 @@ cleanup_asid:
      *   00e72afe  movea.l #0xe7be84,A0         ; PROC2 module data base
      *   00e72b04  lsl.w #0x3,D0w               ; asid * sizeof(uid_t)
      *   00e72b06  lea (0x8,A0),A1              ; &proc2_system_uid (0xE7BE8C)
-     *   00e72b0a  move.l (A1)+,(0x10,A0,D0w)   ; PROC2_UID (0xE7BE94)
+     *   00e72b0a  move.l (A1)+,(0x10,A0,D0w)   ; PROC2_$UID (0xE7BE94)
      *   00e72b0e  move.l (A1)+,(0x14,A0,D0w)
      */
-    PROC2_UID[new_entry->asid] = proc2_system_uid;
+    PROC2_$UID[new_entry->asid] = proc2_system_uid;
 
     /* 0x00E72B12: tst.w (-0x48,A2) -- entry+0x9C, cleanup_flags */
     if (new_entry->cleanup_flags != 0) {

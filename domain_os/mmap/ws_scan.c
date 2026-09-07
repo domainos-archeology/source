@@ -157,7 +157,7 @@ uint32_t MMAP_$WS_SCAN(uint16_t wsl_index, int16_t mode, uint32_t pages_needed, 
                 }
             } else {
                 /* Page is wired - just update stats */
-                MMAP_$PAGEABLE_PAGES_LOWER_LIMIT--;
+                MMAP_$PAGEABLE_PAGES--;
                 page->flags1 &= ~MMAPE_FLAG1_IN_WSL;
             }
         }

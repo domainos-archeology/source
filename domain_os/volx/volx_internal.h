@@ -66,8 +66,27 @@
  *   0xE82600 = base + 0x1C (ctlr of entry 1)
  *   0xE82602 = base + 0x1E (lv_num of entry 1)
  *
- * Note: VFMT_$FORMATN and ERROR_$PRINT are misidentified labels in Ghidra
- * that actually point into the VOLX table.
+ * The claim that once stood here -- that VFMT_$FORMATN (0xE825E4) and
+ * ERROR_$PRINT (0xE825F4) are "misidentified labels that actually point into
+ * the VOLX table" -- is wrong.  The SR10.2 SAU2 link map
+ * (sau2-maps/domain_os.10.2.map) lays this region out as
+ *
+ *   D    E825E4  VFMT_$FORMATN     size = 10
+ *   D    E825F4  VFMT_$WRITEN      size = 10
+ *   D    E82604  VOLX_             size = C0
+ *   D    E826C4  DISK_             size = 64
+ *
+ * so those two are the VFMT procedure-variable descriptors, and the VOLX
+ * table is exactly E82604..E826C4 -- 0xC0 bytes, six 0x20-byte entries, the
+ * volume indices 1..6.
+ *
+ * TODO(source-3kbr): that segment extent contradicts the macros below.  The
+ * addressing documented above (ptr = base + (vol_idx << 5); dir_uid at
+ * ptr - 0x20) puts index 1 at 0xE82604, but VOLX_ENTRY() and the
+ * VOLX_*_FIELD() macros drop the -0x20, so with VOLX_$TABLE_BASE = 0xE82604
+ * they reach index 1 at 0xE82624 and index 6 at 0xE826E4 -- one entry past
+ * the end of the segment.  Left as-is here because the SAU2 map sweep
+ * (source-9y3r) was renames only.
  */
 #if defined(ARCH_M68K)
 #define VOLX_DIR_UID_FIELD(idx)                                                \

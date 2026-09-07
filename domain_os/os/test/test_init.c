@@ -118,7 +118,7 @@ void DBUF_$SET_BUFF(void *a, uint16_t b, status_$t *c)
     *c = status_$ok;
 }
 void AST_$ACTIVATE_AOTE_CANNED(uint32_t *a, uint32_t *b) { (void)a; (void)b; }
-aste_t *AST_$ACTIVATE_CANNED_SEG(uid_t *a, uint16_t b)
+aste_t *AST_$ACTIVATE_ASTE_CANNED(uid_t *a, uint16_t b)
 {
     (void)a;
     (void)b;
@@ -306,7 +306,7 @@ status_$t PROC2_$INIT(uint16_t *a, status_$t *b)
     *b = status_$ok;
     return status_$ok;
 }
-void ERROR_$PRINT(const char *a, ...) { (void)a; }
+void VFMT_$WRITE10(const char *a, ...) { (void)a; }
 uint16_t SMD_$INQ_DISP_TYPE(uint16_t *a)
 {
     (void)a;

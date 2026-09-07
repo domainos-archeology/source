@@ -1,11 +1,22 @@
 /*
- * ERROR_$PRINT - Error message print function
+ * VFMT_$WRITE10 - Error message print function
  *
  * This is a Pascal-style procedure variable that wraps VFMT_$WRITE.
  * It formats and prints error messages to the console.
  *
  * Original address: 0x00E825F4
  * Original size: 10 bytes
+ *
+ * Naming: the SR10.2 SAU2 link map (sau2-maps/domain_os.10.2.map) puts a
+ * 0x10-byte data segment VFMT_$WRITEN at 0x00E825F4 carrying three aliases
+ * for this one descriptor -- VFMT_$WRITE2, VFMT_$WRITE5 and VFMT_$WRITE10
+ * (the SR2/SR5/SR10 compatibility spellings, exactly as the sibling
+ * descriptor at 0x00E825E4 carries VFMT_$FORMAT2/5/10 and
+ * VFMT_$ENCODE2/5/10).  This file was previously called ERROR_$PRINT, a
+ * guessed name: no map of any SAU build contains an ERROR_$PRINT symbol.
+ * VFMT_$WRITE10 is used here because this image is SR10.2; the segment
+ * name VFMT_$WRITEN is already taken by the code thunk at 0x00E6B0A4
+ * (vfmt/sau2/writen.s).
  *
  * Assembly structure (procedure variable thunk):
  *   00e825f4    lea (-0x2,PC),A0       ; A0 = address of this descriptor
@@ -27,15 +38,15 @@
  * mechanism used in Pascal.
  *
  * Usage:
- *   ERROR_$PRINT("Error code: %h%$", &error_code);
- *   ERROR_$PRINT("File not found: %a%$", &filename_len, filename);
+ *   VFMT_$WRITE10("Error code: %h%$", &error_code);
+ *   VFMT_$WRITE10("File not found: %a%$", &filename_len, filename);
  */
 
 #include "vfmt/vfmt_internal.h"
 #include <stdarg.h>
 
 /*
- * ERROR_$PRINT - Print formatted error message
+ * VFMT_$WRITE10 - Print formatted error message
  *
  * Flattening of the procedure-variable dispatch.  Verified against the
  * image: the descriptor at 0x00E825F4 is
@@ -49,7 +60,7 @@
  * arguments: the caller's first stack argument (the format pointer) and the
  * *address* of the caller's second stack argument.  So the whole chain is
  *
- *   ERROR_$PRINT(format, a1, a2, ...) -> VFMT_$WRITE(format, &a1)
+ *   VFMT_$WRITE10(format, a1, a2, ...) -> VFMT_$WRITE(format, &a1)
  *
  * which is what the va_list below stands in for: on m68k a va_list is the
  * address of the next stack argument, so `ap` after va_start(ap, format) is
@@ -62,7 +73,7 @@
  * Note: The format string uses %$ as end marker, not null termination
  * for the argument list parsing.
  */
-void ERROR_$PRINT(const char *format, ...)
+void VFMT_$WRITE10(const char *format, ...)
 {
     va_list args;
     va_start(args, format);

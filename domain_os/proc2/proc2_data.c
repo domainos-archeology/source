@@ -34,7 +34,7 @@ uint16_t *PROC2_$PID_TO_INDEX;
 pgroup_entry_t *PGROUP_TABLE;
 
 /* Per-ASID process UID table (0xE7BE94) */
-uid_t PROC2_UID[PROC2_UID_TABLE_SIZE];
+uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
 
 /* UID of /node_data/proc_dir (0xE7BE84, DAT_00e7be84) */
 uid_t proc2_proc_dir_uid;

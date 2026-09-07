@@ -55,7 +55,7 @@
  * never examined: a failing console write is silently dropped and the loop
  * carries on.  That is reproduced here.
  *
- * `args` is the address of the caller's first format argument.  ERROR_$PRINT
+ * `args` is the address of the caller's first format argument.  VFMT_$WRITE10
  * (0x00e825f4) is a procedure-variable trampoline whose installed target is
  * this routine; the VFMT_$WRITEN thunk it jumps through (0x00e6b0a4) computes
  * that address with `pea (0xc,SP)` and passes it as the second argument.

@@ -203,26 +203,42 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
 
 /*
  * Routing statistics area (0x81 longwords, cleared by ROUTE_$INIT_ROUTING).
- * Entries 0..0x80 are per-packet-size counters; the named counters that
- * follow (0xE87FAC..) are cleared individually.
+ * Entries 0..0x80 are indexed by the queue depth seen when a packet was
+ * queued, which is why the SR10.2 SAU2 link map calls the array
+ * ROUTE_$Q_DEPTH; the named counters that follow (0xE87FAC..) are cleared
+ * individually.  Every name in this block comes from that map
+ * (sau2-maps/domain_os.10.2.map); the previous descriptive spellings are
+ * given after each one.
+ *
+ * TODO(source-v7nn): ROUTE_$Q_OFLO (0xE87FCC) and ROUTE_$NETBUF_ALLOC
+ * (0xE87FD0) carry map names whose sense does not obviously match the
+ * recovered uses -- ROUTE_$INIT_ROUTING clears 0xE87FCC and stores 0x40 to
+ * 0xE87FD0, and ROUTE_$PROCESS zeroes 0xE87FD0 at 0x00E87852.  The names are
+ * the map's; the semantics still want confirmation.
  */
-#define ROUTE_$PACKET_STATS         ((uint32_t *)0xE87DA8)
-#define ROUTE_$STAT_OVERSIZED_STD   (*(uint32_t *)0xE87FAC)
-#define ROUTE_$STAT_DROPPED_STD_HOP (*(uint32_t *)0xE87FB0)
-#define ROUTE_$STAT_DROPPED_STD_ROUTE (*(uint32_t *)0xE87FB4)
-#define ROUTE_$STAT_FORWARDED_STD   (*(uint32_t *)0xE87FB8)
-#define ROUTE_$STAT_OVERSIZED_N     (*(uint32_t *)0xE87FBC)
-#define ROUTE_$STAT_DROPPED_N_HOP   (*(uint32_t *)0xE87FC0)
-#define ROUTE_$STAT_DROPPED_N_ROUTE (*(uint32_t *)0xE87FC4)
-#define ROUTE_$STAT_FORWARDED_N     (*(uint32_t *)0xE87FC8)
-#define ROUTE_$USER_PORT_COUNT      (*(uint32_t *)0xE87FCC)
-#define ROUTE_$USER_PORT_MAX        (*(uint16_t *)0xE87FD0)
+#define ROUTE_$Q_DEPTH          ((uint32_t *)0xE87DA8)  /* was ROUTE_$PACKET_STATS */
+#define ROUTE_$STD_DLEN_ERR    (*(uint32_t *)0xE87FAC)  /* was ..._STAT_OVERSIZED_STD */
+#define ROUTE_$STD_TOO_FAR     (*(uint32_t *)0xE87FB0)  /* was ..._STAT_DROPPED_STD_HOP */
+#define ROUTE_$STD_MISROUTE    (*(uint32_t *)0xE87FB4)  /* was ..._STAT_DROPPED_STD_ROUTE */
+#define ROUTE_$STD_PKTS_ROUTED (*(uint32_t *)0xE87FB8)  /* was ..._STAT_FORWARDED_STD */
+#define ROUTE_$DLEN_ERR        (*(uint32_t *)0xE87FBC)  /* was ..._STAT_OVERSIZED_N */
+#define ROUTE_$TOO_FAR         (*(uint32_t *)0xE87FC0)  /* was ..._STAT_DROPPED_N_HOP */
+#define ROUTE_$MISROUTE        (*(uint32_t *)0xE87FC4)  /* was ..._STAT_DROPPED_N_ROUTE */
+#define ROUTE_$PKTS_ROUTED     (*(uint32_t *)0xE87FC8)  /* was ..._STAT_FORWARDED_N */
+#define ROUTE_$Q_OFLO          (*(uint32_t *)0xE87FCC)  /* was ..._USER_PORT_COUNT */
+#define ROUTE_$NETBUF_ALLOC    (*(uint16_t *)0xE87FD0)  /* was ..._USER_PORT_MAX */
 
-/* Count of currently wired pages */
+/* Count of currently wired pages (no map symbol; module-local) */
 #define ROUTE_$N_WIRED_PAGES    (*(int16_t *)0xE87FD2)
 
-/* Count of active user ports */
+/* Count of active user ports (no map symbol; module-local) */
 #define ROUTE_$N_USER_PORTS     (*(int16_t *)0xE87FD4)
+
+/*
+ * ROUTE_$USER_STAT (0xE87FD6) is named by the SAU2 link map but is not yet
+ * modelled here; the next map symbol after it is ROUTE_$PID at 0xE88216.
+ * TODO(source-v7nn): recover its layout and the code that reads it.
+ */
 
 /*
  * Constant cells in the routing code segment, all passed by reference
@@ -242,8 +258,8 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
 /* Send callback/data pointer (4 bytes of zeros at 0xE870D8) */
 
 /* Routing process state */
-#define ROUTE_$PROCESS_UID      (*(uint16_t *)0xE88216)
-#define ROUTE_$CHECKSUM_ENABLED (*(int8_t *)0xE88218)
+#define ROUTE_$PID      (*(uint16_t *)0xE88216)
+#define ROUTE_$USER_CHECKSUM (*(int8_t *)0xE88218)
 #define ROUTE_$SERVICE_ID       (*(uint32_t *)0xE8821C)
 #define PTR_ROUTE_$CONTROL_EC   (*(ec_$eventcount_t **)0xE88220)
 #define ROUTE_$FWD_TIMEOUT      (*(uint16_t *)0xE88224)
@@ -268,24 +284,24 @@ extern char ROUTE_$WIRED_AREA_END_SYM[];
 
 extern const status_$t ROUTE_$UNKNOWN_PORT_STATUS;
 extern uint32_t ROUTE_$WIRED_PAGES[ROUTE_$MAX_WIRED_PAGES];
-extern uint32_t ROUTE_$PACKET_STATS[0x81];
-extern uint32_t ROUTE_$STAT_OVERSIZED_STD;
-extern uint32_t ROUTE_$STAT_DROPPED_STD_HOP;
-extern uint32_t ROUTE_$STAT_DROPPED_STD_ROUTE;
-extern uint32_t ROUTE_$STAT_FORWARDED_STD;
-extern uint32_t ROUTE_$STAT_OVERSIZED_N;
-extern uint32_t ROUTE_$STAT_DROPPED_N_HOP;
-extern uint32_t ROUTE_$STAT_DROPPED_N_ROUTE;
-extern uint32_t ROUTE_$STAT_FORWARDED_N;
-extern uint32_t ROUTE_$USER_PORT_COUNT;
-extern uint16_t ROUTE_$USER_PORT_MAX;
+extern uint32_t ROUTE_$Q_DEPTH[0x81];
+extern uint32_t ROUTE_$STD_DLEN_ERR;
+extern uint32_t ROUTE_$STD_TOO_FAR;
+extern uint32_t ROUTE_$STD_MISROUTE;
+extern uint32_t ROUTE_$STD_PKTS_ROUTED;
+extern uint32_t ROUTE_$DLEN_ERR;
+extern uint32_t ROUTE_$TOO_FAR;
+extern uint32_t ROUTE_$MISROUTE;
+extern uint32_t ROUTE_$PKTS_ROUTED;
+extern uint32_t ROUTE_$Q_OFLO;
+extern uint16_t ROUTE_$NETBUF_ALLOC;
 extern int16_t ROUTE_$N_WIRED_PAGES;
 extern int16_t ROUTE_$N_USER_PORTS;
 extern int16_t ROUTE_$NET_SERVICE_ON;
 extern int16_t ROUTE_$NET_SERVICE_OFF;
 extern const status_$t ROUTE_$SOCK_EMPTY_STATUS;
-extern uint16_t ROUTE_$PROCESS_UID;
-extern int8_t ROUTE_$CHECKSUM_ENABLED;
+extern uint16_t ROUTE_$PID;
+extern int8_t ROUTE_$USER_CHECKSUM;
 extern uint32_t ROUTE_$SERVICE_ID;
 extern ec_$eventcount_t *PTR_ROUTE_$CONTROL_EC;
 extern uint16_t ROUTE_$FWD_TIMEOUT;

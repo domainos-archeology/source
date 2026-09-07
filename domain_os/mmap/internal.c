@@ -61,7 +61,7 @@ void mmap_$add_to_wsl(mmape_t *page, uint32_t vpn, uint16_t wsl_index, int8_t in
 
 skip_head_update:
     wsl->page_count++;
-    MMAP_$PAGEABLE_PAGES_LOWER_LIMIT++;
+    MMAP_$PAGEABLE_PAGES++;
 }
 
 /*
@@ -130,7 +130,7 @@ void mmap_$add_pages_to_wsl(uint32_t *vpn_array, uint16_t count, uint16_t wsl_in
     }
 
     wsl->page_count += count;
-    MMAP_$PAGEABLE_PAGES_LOWER_LIMIT += count;
+    MMAP_$PAGEABLE_PAGES += count;
 }
 
 /*
@@ -161,7 +161,7 @@ void mmap_$remove_from_wsl(mmape_t *page, uint32_t vpn)
 
     wsl->page_count--;
     page->flags1 &= ~MMAPE_FLAG1_IN_WSL;
-    MMAP_$PAGEABLE_PAGES_LOWER_LIMIT--;
+    MMAP_$PAGEABLE_PAGES--;
 }
 
 /*
@@ -206,7 +206,7 @@ void mmap_$trim_wsl(uint16_t wsl_index, uint32_t pages_to_trim)
         }
 
         /* Page can be removed */
-        MMAP_$PAGEABLE_PAGES_LOWER_LIMIT--;
+        MMAP_$PAGEABLE_PAGES--;
         page->flags1 &= ~MMAPE_FLAG1_IN_WSL;
 
         /* Unlink from list */

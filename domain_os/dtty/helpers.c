@@ -89,30 +89,30 @@ void dtty_$clear_window(void *region, status_$t *status_ret)
  *   pea     newline               ; "\r\n"
  *   pea     (0x8,A6)              ; &status (for %h)
  *   pea     error_msg             ; " Error status %h returned from "
- *   jsr     ERROR_$PRINT
+ *   jsr     VFMT_$WRITE10
  *   lea     (0xc,SP),SP
  *   pea     newline               ; "\r\n"
  *   move.l  (SP),-(SP)            ; duplicate
  *   move.l  (0xc,A6),-(SP)        ; push func_name
- *   jsr     ERROR_$PRINT
+ *   jsr     VFMT_$WRITE10
  *   lea     (0xc,SP),SP
  *   cmpi.b  #'$',(A2)             ; Check if context starts with '$'
  *   beq.b   skip_context
  *   pea     newline               ; "\r\n"
  *   move.l  (SP),-(SP)
  *   pea     performing_msg        ; " performing "
- *   jsr     ERROR_$PRINT
+ *   jsr     VFMT_$WRITE10
  *   lea     (0xc,SP),SP
  *   pea     newline               ; "\r\n"
  *   move.l  (SP),-(SP)
  *   pea     (A2)                  ; push context
- *   jsr     ERROR_$PRINT
+ *   jsr     VFMT_$WRITE10
  *   lea     (0xc,SP),SP
  * skip_context:
  *   pea     newline               ; "\r\n"
  *   move.l  (SP),-(SP)
  *   pea     crlf_only             ; "\r\n"
- *   jsr     ERROR_$PRINT
+ *   jsr     VFMT_$WRITE10
  *   movea.l (-0x8,A6),A2
  *   unlk    A6
  *   rts
@@ -124,19 +124,19 @@ void dtty_$report_error(status_$t status, const char *func_name, const char *con
     static const char *newline = "\r\n";
 
     /* Print: " Error status <hex> returned from " */
-    ERROR_$PRINT(error_fmt, &status, newline);
+    VFMT_$WRITE10(error_fmt, &status, newline);
 
     /* Print: "<func_name>" */
-    ERROR_$PRINT(func_name, newline, newline);
+    VFMT_$WRITE10(func_name, newline, newline);
 
     /* If context doesn't start with '$', print context info */
     if (*context != '$') {
-        ERROR_$PRINT(performing_msg, newline, newline);
-        ERROR_$PRINT(context, newline, newline);
+        VFMT_$WRITE10(performing_msg, newline, newline);
+        VFMT_$WRITE10(context, newline, newline);
     }
 
     /* Print final newline */
-    ERROR_$PRINT(newline, newline, newline);
+    VFMT_$WRITE10(newline, newline, newline);
 }
 
 /*

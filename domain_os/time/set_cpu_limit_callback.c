@@ -52,7 +52,7 @@ void TIME_$SET_CPU_LIMIT_CALLBACK(time_$callback_arg_t arg)
 
     if (*(uint32_t *)(cpu_entry + CPU_LIMIT_HIGH) != 0 ||
         *(uint16_t *)(cpu_entry + CPU_LIMIT_LOW) != 0) {
-        PROC2_$SIGNAL_OS(&PROC2_UID[as_id],   /* 0xE7BE94 + as_id*8 */
+        PROC2_$SIGNAL_OS(&PROC2_$UID[as_id],   /* 0xE7BE94 + as_id*8 */
                          (int16_t *)&time_$c_cpu_limit_signal,
                          (uint32_t *)&time_$c_cpu_limit_fault,
                          &status);

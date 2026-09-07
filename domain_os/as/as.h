@@ -86,6 +86,24 @@ typedef struct as_$info {
 #define AS_INFO_SIZE  92  /* 0x5C bytes */
 
 /*
+ * The SR10.2 SAU2 link map (sau2-maps/domain_os.10.2.map) lays the AS_ASM
+ * data segment out as
+ *
+ *   D    E2B914  AS_ASM   size = 64
+ *        E2B914  AS_$INFO
+ *        ...
+ *        E2B970  AS_$INFO_SIZE
+ *        E2B972  AS_$PROTECTION
+ *
+ * so AS_$INFO occupies E2B914..E2B970, exactly AS_INFO_SIZE (0x5C) bytes,
+ * and the whole segment is 0x64 bytes.
+ */
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(as_$info_t) == AS_INFO_SIZE,
+               "as_$info_t must be 0x5C bytes (map: E2B914..E2B970)");
+#endif
+
+/*
  * Global variables
  */
 extern as_$info_t AS_$INFO;         /* Address space info structure at 0xE2B914 */

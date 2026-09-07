@@ -229,8 +229,8 @@ void PMAP_$PURIFIER_L(void)
     wait_value = PMAP_$L_PURIFIER_EC.value + 1;
 
     /* 0x00E13AF6: divu.w - a 16-bit unsigned divide in the original */
-    PMAP_$LOW_THRESH = (uint16_t)(MMAP_$PAGEABLE_PAGES_LOWER_LIMIT / 0x32);
-    PMAP_$MID_THRESH = (uint16_t)(MMAP_$PAGEABLE_PAGES_LOWER_LIMIT / 0x14);
+    PMAP_$LOW_THRESH = (uint16_t)(MMAP_$PAGEABLE_PAGES / 0x32);
+    PMAP_$MID_THRESH = (uint16_t)(MMAP_$PAGEABLE_PAGES / 0x14);
 
     carryover = 0;
     carryover_delta = 0;
@@ -526,12 +526,12 @@ void PMAP_$PURIFIER_L(void)
                 MMAP_WSL[MMAP_WSL_POOL_DIRTY_LOCAL].page_count + 0x0B, 0x0C);
 
             /* 0x00E1406A: LOW_THRESH slews half-way to limit/0x32 */
-            quotient = M$DIU$LLW(MMAP_$PAGEABLE_PAGES_LOWER_LIMIT, 0x32);
+            quotient = M$DIU$LLW(MMAP_$PAGEABLE_PAGES, 0x32);
             PMAP_$LOW_THRESH =
                 (uint16_t)(((uint32_t)PMAP_$LOW_THRESH + quotient) >> 1);
 
             /* 0x00E1408C: MID_THRESH slews half-way to limit/0x14 */
-            quotient = M$DIU$LLW(MMAP_$PAGEABLE_PAGES_LOWER_LIMIT, 0x14);
+            quotient = M$DIU$LLW(MMAP_$PAGEABLE_PAGES, 0x14);
             PMAP_$MID_THRESH =
                 (uint16_t)(((uint32_t)PMAP_$MID_THRESH + quotient) >> 1);
 

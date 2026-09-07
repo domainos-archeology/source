@@ -25,7 +25,8 @@
  *
  * TODO(source-ld0): PROC2_$DELETE_CLEANUP (0x00E743CE, 1692 bytes) is not
  * yet decompiled; this body is empty.  Everything the original does is
- * missing: XPD_$CLEANUP, SMD_$FREE_ASID, FUN_00E0A454, SCSI_$FREE_ASID,
+ * missing: XPD_$CLEANUP, SMD_$FREE_ASID, DMA_$FREE_ASID (0x00E0A454),
+ * SCSI_$FREE_ASID,
  * the ML_$LOCK/ML_$UNLOCK-bracketed process-group teardown via
  * PGROUP_CLEANUP_INTERNAL, DIR_$DROPU, the EC_$ADVANCE notifications,
  * PROC1_$GET_CPU_USAGE accounting, FIM_$CLEANUP / FIM_$RLS_CLEANUP,

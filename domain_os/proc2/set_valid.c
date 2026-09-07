@@ -42,7 +42,7 @@
  *   00e73534  btst.l #0xb,D1 / bne.w 0x00e735e6   ; 0x0800 must be clear
  *   00e7353c  move.w (0x00e2060a).l,D1w   ; PROC1_$AS_ID
  *   00e73548  lsl.w #0x3,D1w
- *   00e7354a  lea (0x10,A0,D1w),A1        ; &PROC2_UID[asid] (0xE7BE94)
+ *   00e7354a  lea (0x10,A0,D1w),A1        ; &PROC2_$UID[asid] (0xE7BE94)
  *   00e7354e  move.l (A1)+,(0x98,A2)      ; cr_rec->proc_uid
  *   00e73552  move.l (A1)+,(0x9c,A2)
  *   00e73556  move.w (-0xce,A3),D1w       ; entry->upid (+0x16)
@@ -62,7 +62,7 @@
  *   00e73592  move.w #0x1,(0xc6,A2)
  *   00e73598  btst.b #0x3,(0xc5,A2) / beq.b 0x00e735b2
  *   00e735a0  move.w (-0xc6,A3),D1w       ; entry->parent_pgroup_idx (+0x1E)
- *   00e735a6  lea (0x10,A0,D1w),A1        ; &PROC2_UID[that index]
+ *   00e735a6  lea (0x10,A0,D1w),A1        ; &PROC2_$UID[that index]
  *   00e735aa  move.l (A1)+,(0xbc,A2)
  *   00e735ae  move.l (A1)+,(0xc0,A2)
  *   00e735b2  tst.w (-0xbe,A3)            ; entry->debugger_idx (+0x26)
@@ -78,7 +78,7 @@
  *    PROC2_$COMPLETE_VFORK uses, not from entry+0x68.
  *  - The "no stack file yet" test at 0x00E734B4 compares only the HIGH
  *    longword of the UID against UID_$NIL.
- *  - PROC2_UID at 0x00E735A6 is indexed by entry+0x1E, while the boolean
+ *  - PROC2_$UID at 0x00E735A6 is indexed by entry+0x1E, while the boolean
  *    written to cr_rec+0x90 comes from entry+0x26.  Both reproduced as found.
  */
 
@@ -127,7 +127,7 @@ typedef struct cr_rec_t {
     uint32_t    addr_lo;            /* 0xB0: Stack file low address */
     uint32_t    size;               /* 0xB4: Stack file size */
     int32_t     field_b8;           /* 0xB8: entry->upid, sign-extended */
-    uid_t       debugger_uid;       /* 0xBC: PROC2_UID[entry->parent_pgroup_idx] */
+    uid_t       debugger_uid;       /* 0xBC: PROC2_$UID[entry->parent_pgroup_idx] */
     uint8_t     pad_c4;             /* 0xC4: Padding */
     uint8_t     flags_c5;           /* 0xC5: Flags byte (bit 3 gates 0xBC) */
     uint16_t    count_c6;           /* 0xC6: Counter (set to 1) */
@@ -206,7 +206,7 @@ void PROC2_$SET_VALID(void)
         (entry->flags & PROC2_FLAG_ALT_ASID) == 0) {
 
         /* 0x00E7354E */
-        cr_rec->proc_uid = PROC2_UID[PROC1_$AS_ID];
+        cr_rec->proc_uid = PROC2_$UID[PROC1_$AS_ID];
 
         /* 0x00E73556: ext.l -- the upid is sign-extended into a longword */
         cr_rec->field_b8 = (int32_t)(int16_t)entry->upid;
@@ -230,7 +230,7 @@ void PROC2_$SET_VALID(void)
         /* 0x00E73598: btst.b #0x3,(0xc5,A2) */
         if ((cr_rec->flags_c5 & 0x08) != 0) {
             /* 0x00E735A0: indexed by entry+0x1E, not by the debugger index */
-            cr_rec->debugger_uid = PROC2_UID[entry->parent_pgroup_idx];
+            cr_rec->debugger_uid = PROC2_$UID[entry->parent_pgroup_idx];
         }
 
         /* 0x00E735B2: sne on entry+0x26 */

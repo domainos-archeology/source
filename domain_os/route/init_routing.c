@@ -39,7 +39,7 @@
 #define SOCK_ALLOC_SIZE         0x400400
 
 /*
- * The routing data area (ROUTE_$PACKET_STATS, 0x81 longs at 0xE87DA8), the
+ * The routing data area (ROUTE_$Q_DEPTH, 0x81 longs at 0xE87DA8), the
  * statistics counters and the process state all live in the wired routing
  * area; see route/route_internal.h.  SOCK_$EVENT_COUNTERS is from sock/sock.h.
  */
@@ -95,7 +95,7 @@ void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
      * Clear routing data area (0x81 longs = 516 bytes)
      * This area contains routing tables and working data.
      */
-    data_ptr = ROUTE_$PACKET_STATS;
+    data_ptr = ROUTE_$Q_DEPTH;
     for (i = 0x80; i >= 0; i--) {
         *data_ptr++ = 0;
     }
@@ -112,7 +112,7 @@ void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
      * Create the routing process
      * This process runs ROUTE_$PROCESS to handle routing updates
      */
-    ROUTE_$PROCESS_UID = PROC1_$CREATE_P((void *)ROUTE_$PROCESS,
+    ROUTE_$PID = PROC1_$CREATE_P((void *)ROUTE_$PROCESS,
                                           PROC_FLAG_ROUTING,
                                           &status);
 
@@ -133,7 +133,7 @@ void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
     /*
      * Set maximum user ports
      */
-    ROUTE_$USER_PORT_MAX = 0x40;
+    ROUTE_$NETBUF_ALLOC = 0x40;
 
     /*
      * Allocate a socket for routing communication
@@ -173,15 +173,15 @@ void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
     /*
      * Clear all statistics counters
      */
-    ROUTE_$USER_PORT_COUNT = 0;             /* 0xE87FCC */
-    ROUTE_$STAT_DROPPED_N_HOP = 0;          /* 0xE87FC0 */
-    ROUTE_$STAT_DROPPED_N_ROUTE = 0;        /* 0xE87FC4 */
-    ROUTE_$STAT_FORWARDED_N = 0;            /* 0xE87FC8 */
-    ROUTE_$STAT_OVERSIZED_N = 0;            /* 0xE87FBC */
-    ROUTE_$STAT_DROPPED_STD_HOP = 0;        /* 0xE87FB0 */
-    ROUTE_$STAT_DROPPED_STD_ROUTE = 0;      /* 0xE87FB4 */
-    ROUTE_$STAT_FORWARDED_STD = 0;          /* 0xE87FB8 */
-    ROUTE_$STAT_OVERSIZED_STD = 0;          /* 0xE87FAC */
+    ROUTE_$Q_OFLO = 0;             /* 0xE87FCC */
+    ROUTE_$TOO_FAR = 0;          /* 0xE87FC0 */
+    ROUTE_$MISROUTE = 0;        /* 0xE87FC4 */
+    ROUTE_$PKTS_ROUTED = 0;            /* 0xE87FC8 */
+    ROUTE_$DLEN_ERR = 0;            /* 0xE87FBC */
+    ROUTE_$STD_TOO_FAR = 0;        /* 0xE87FB0 */
+    ROUTE_$STD_MISROUTE = 0;      /* 0xE87FB4 */
+    ROUTE_$STD_PKTS_ROUTED = 0;          /* 0xE87FB8 */
+    ROUTE_$STD_DLEN_ERR = 0;          /* 0xE87FAC */
 
     /*
      * Advance control EC to signal process startup complete

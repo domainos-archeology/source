@@ -86,7 +86,7 @@ uint16_t  mmap_wsl_hi_mark;
 aste_t MMAP_$SEG_ASTE[TEST_SEGMENTS];
 static aote_t aote_store[TEST_SEGMENTS];
 
-uint32_t MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
+uint32_t MMAP_$PAGEABLE_PAGES;
 uint32_t MMAP_$WS_SCAN_CNT;
 uint32_t MMAP_$WS_REMOVE;
 
@@ -146,7 +146,7 @@ static void reset_module(uint8_t flags2)
     move_calls = 0;
     mmu_removes = 0;
     crashes = 0;
-    MMAP_$PAGEABLE_PAGES_LOWER_LIMIT = 0;
+    MMAP_$PAGEABLE_PAGES = 0;
     MMAP_$WS_SCAN_CNT = 0;
     MMAP_$WS_REMOVE = 0;
     mmap_wsl_hi_mark = TEST_WSL_SLOTS - 1;

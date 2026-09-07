@@ -16,7 +16,7 @@
  *   00e58a62  tst.w (0x10,A0) / beq -> return
  *   00e58a6c  pea (0x26,PC)              ; -> 0xE58A94, status cell
  *   00e58a70  pea (0x20,PC)              ; -> 0xE58A92, signal-number cell
- *   00e58a80  pea (0x0,A1,D1w*0x1)       ; &PROC2_UID[as_id]
+ *   00e58a80  pea (0x0,A1,D1w*0x1)       ; &PROC2_$UID[as_id]
  *   00e58a84  jsr PROC2_$SIGNAL_OS
  */
 
@@ -52,7 +52,7 @@ void TIME_$SET_ITIMER_REAL_CALLBACK(time_$callback_arg_t arg)
 
     if (*(uint32_t *)(itimer_entry + ITIMER_REAL_INTERVAL_HIGH) != 0 ||
         *(uint16_t *)(itimer_entry + ITIMER_REAL_INTERVAL_LOW) != 0) {
-        PROC2_$SIGNAL_OS(&PROC2_UID[as_id],   /* 0xE7BE94 + as_id*8 */
+        PROC2_$SIGNAL_OS(&PROC2_$UID[as_id],   /* 0xE7BE94 + as_id*8 */
                          (int16_t *)&time_$c_itimer_real_signal,
                          (uint32_t *)&time_$c_itimer_real_fault,
                          &status);

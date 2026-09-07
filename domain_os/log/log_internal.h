@@ -99,7 +99,7 @@ extern early_log_extended_t EARLY_LOG_EXTENDED; /* 0x00e0000c (DAT_00e0000c) */
 
 /*
  * Zero-length data sentinel passed to LOG_$ADD for the init entry and, twice
- * per call, to ERROR_$PRINT by log_$check_op_status.  In the original this is
+ * per call, to VFMT_$WRITE10 by log_$check_op_status.  In the original this is
  * the zero longword at 0x00e2fffc, just after the vfmt strings.
  */
 extern uint32_t LOG_$VFMT_NO_ARG;
@@ -153,7 +153,7 @@ void log_$read_internal(void *buffer, uint16_t offset, uint16_t max_len, uint16_
  * =============================================================================
  */
 
-/* WP_$UNWIRE declared in wp/wp.h; ERROR_$PRINT declared in vfmt/vfmt.h */
+/* WP_$UNWIRE declared in wp/wp.h; VFMT_$WRITE10 declared in vfmt/vfmt.h */
 
 /* Path to system error log file */
 /*

@@ -271,7 +271,7 @@ _Static_assert(offsetof(asknode_who_response_t, node_id) == 0x08, "who_response.
  * Network globals (NETWORK_$FAILURE_REC, NETWORK_$ACTIVITY_FLAG,
  * NETWORK_$DISKLESS, NETWORK_$MOTHER_NODE, the NETWORK_$*_CNT statistics,
  * NETWORK_$CAPABLE_FLAGS) come from network/network.h; MEM_$MEM_REC from
- * mem/mem.h; MMAP_$REAL_PAGES from mmap/mmap.h; PROM_$SAU_AND_AUX from
+ * mem/mem.h; MMAP_$REAL_PAGES from mmap/mmap.h; PROM_$MACHINE_ID from
  * prom/prom.h; MMU_$SYSTEM_REV from mmu/mmu.h; GPU_$PRESENT from gpu/gpu.h;
  * RING_$DATA from ring/ring.h.
  */

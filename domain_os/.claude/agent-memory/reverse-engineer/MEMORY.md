@@ -25,11 +25,12 @@
 - [ACL/DIR/NAME recovered layouts and ABIs](acl-dir-name-abi-notes.md) — the 0xE924FC PROJ_UIDS base, the 31-slot ACL cache, DIR_$DO_OP's received_len, obj_loc.volume.
 - [ACL image cache and the FILE LOT addressing convention](acl-image-cache.md) — A5+0x800..0xB76 layout, 1-based ACL entries, and why 0xE935CC is the END of an entry.
 - [MM/PROC nested procedures and the allocate_pages ABI](mm-proc-nested-procedures.md) — static links arriving in A1, the 0xE20EB6 shared tail, ast_$allocate_pages' three words.
+- [SAU2 map name corrections, 2026-09-07](sau2-map-name-corrections.md) — every name the map fixed, every one it deliberately did not, and why 53 FUN_ rows is "done".
 - [The SAU2 SR10.2 link map (sau2.10.2.tar)](reference_sau2_domain_os_map.md) — the map for the *exact* Ghidra image; names data too, so it settles or closes address questions.
 - [SR10.4 kernel link maps (domain_os.map)](reference_sr104_domain_os_map.md) — real module/symbol names in address order; how to lay them over the SAU2 image.
 - [Inherited A5 is a module base, not per-process data](module-base-inherited-a5.md) — check the callers before writing an A5 TODO; plus split-longword globals and 32-bit VA cells.
 - [The 0xEC5400 segment table is 1-based aste_t[]](mmap-seg-aste-table.md) — every site loads (-0x10,An) = aste->aote; which aote field each mmap site tests.
-- [proc2_info_t+0x1C is self_index](proc2-self-index.md) — the setpgid check that faked a session field, plus the UPID allocator and PROC2_UID indexing.
+- [proc2_info_t+0x1C is self_index](proc2-self-index.md) — the setpgid check that faked a session field, plus the UPID allocator and PROC2_$UID indexing.
 - [PROC2 table extents](proc2-table-extents.md) — 70 slots, the tail link cleared after the build loop, the 0xEA93D2 PID map base, 70 EC pairs.
 - [FIM per-AS tables are 58 entries](fim-per-as-tables.md) — the closed address chain that pins the count, the lea(d,PC) base trap, and the INIT_PID/FREE_PID ABI.
 - [FILE_$LOCK_INIT map and the LOT sentinel slot](file-lot-and-lock-init.md) — full 300-byte row clears, entries 1..1792, and why slot 1793 exists.

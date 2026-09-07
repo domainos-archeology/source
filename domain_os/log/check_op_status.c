@@ -8,7 +8,7 @@
  * NAME_$RESOLVE, MST_$MAPS, FILE_$LOCK, etc. as "&status".
  *
  * The flattening passes that uplevel variable explicitly as a pointer, so the
- * ERROR_$PRINT call that takes its address (0xE2FF8E "pea (-0x44,A2)") stays
+ * VFMT_$WRITE10 call that takes its address (0xE2FF8E "pea (-0x44,A2)") stays
  * faithful.  (Previously it went through a file-scope log_$last_status copy;
  * bead source-5pu.)
  *
@@ -24,19 +24,19 @@
  *   00e2ff8a    pea (0x70,PC)            ; &LOG_$VFMT_NO_ARG   (0xE2FFFC)
  *   00e2ff8e    pea (-0x44,A2)           ; &status
  *   00e2ff92    pea (0x40,PC)            ; log_$msg_unable_to  (0xE2FFD4)
- *   00e2ff96    jsr ERROR_$PRINT
+ *   00e2ff96    jsr VFMT_$WRITE10
  *   00e2ffa0    pea (0x5a,PC)            ; &LOG_$VFMT_NO_ARG   (0xE2FFFC)
  *   00e2ffa4    move.l (SP),-(SP)        ; ...pushed a second time
  *   00e2ffa6    move.l (0x8,A6),-(SP)    ; op (used as the continuation format)
- *   00e2ffaa    jsr ERROR_$PRINT
+ *   00e2ffaa    jsr VFMT_$WRITE10
  *   00e2ffb4    pea (0x8e,PC)            ; &log_$logfile_path_len_l (0xE30044)
  *   00e2ffb8    pea (0x66,PC)            ; log_$logfile_path        (0xE30020)
  *   00e2ffbc    pea (0x42,PC)            ; log_$msg_logging_disabled(0xE30000)
- *   00e2ffc0    jsr ERROR_$PRINT
+ *   00e2ffc0    jsr VFMT_$WRITE10
  *   00e2ffc6    st D0b                   ; return 0xFF
  *   00e2ffca    clr.b D0b                ; return 0
  *
- * The three ERROR_$PRINT calls form ONE message: the Apollo VFMT "%$"
+ * The three VFMT_$WRITE10 calls form ONE message: the Apollo VFMT "%$"
  * directive at the end of a format means "the format continues in the next
  * call", and "%." ends it.  That is why the operation names in LOG_$INIT are
  * themselves "...%$" strings and why the middle call has to supply two
@@ -72,9 +72,9 @@ int8_t log_$check_op_status(const char *op, status_$t *status)
         return 0;                       /* 0xE2FFCA: clr.b D0b */
     }
 
-    ERROR_$PRINT(log_$msg_unable_to, status, &LOG_$VFMT_NO_ARG);
-    ERROR_$PRINT(op, &LOG_$VFMT_NO_ARG, &LOG_$VFMT_NO_ARG);
-    ERROR_$PRINT(log_$msg_logging_disabled, log_$logfile_path,
+    VFMT_$WRITE10(log_$msg_unable_to, status, &LOG_$VFMT_NO_ARG);
+    VFMT_$WRITE10(op, &LOG_$VFMT_NO_ARG, &LOG_$VFMT_NO_ARG);
+    VFMT_$WRITE10(log_$msg_logging_disabled, log_$logfile_path,
                  &log_$logfile_path_len_l);
 
     return (int8_t)-1;                  /* 0xE2FFC6: st D0b */

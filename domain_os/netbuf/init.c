@@ -45,7 +45,7 @@ void NETBUF_$INIT(void)
     NETBUF_$VA_TOP = (int32_t)-1;
 
     /* Set data buffer limit to half of pageable pages */
-    NETBUF_$DAT_LIM = MMAP_$PAGEABLE_PAGES_LOWER_LIMIT >> 1;
+    NETBUF_$DAT_LIM = MMAP_$PAGEABLE_PAGES >> 1;
 
     /*
      * Allocate the initial buffers: 0x27 (39) header pages and 0x0A (10) data

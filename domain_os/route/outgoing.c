@@ -17,7 +17,7 @@
 #include "os/os.h"
 
 /*
- * ROUTE_$CHECKSUM_ENABLED - Flag to enable packet checksumming
+ * ROUTE_$USER_CHECKSUM - Flag to enable packet checksumming
  *
  * When the high bit is set (negative), a simple checksum is computed
  * over the packet data.
@@ -182,7 +182,7 @@ void ROUTE_$OUTGOING(void *port_info, uint32_t *nexthop_ret, uint8_t *packet_buf
     /* Compute checksum if enabled */
     checksum = 0x0DEC0DED;  /* Magic initial value */
 
-    if (ROUTE_$CHECKSUM_ENABLED < 0) {
+    if (ROUTE_$USER_CHECKSUM < 0) {
         int16_t checksum_len = copy_len + hdr_len - 1;
         if (checksum_len >= 0) {
             for (i = 4; checksum_len >= 0; i++, checksum_len--) {

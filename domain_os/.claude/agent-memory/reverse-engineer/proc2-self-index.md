@@ -34,7 +34,7 @@ Other facts recovered in the same pass:
   allocated list matches it on +0x16 (upid), +0x5C (session_id) or, when the
   candidate names a live group, +0x10 (pgroup index) — UPIDs, session ids and
   pgids share one number space.
-- `PROC2_UID` (0xE7BE94) is indexed by **ASID** (entry+0x96), not by table index
+- `PROC2_$UID` (0xE7BE94) is indexed by **ASID** (entry+0x96), not by table index
   (0x00E73308).
 - `FIM_$INIT_ASID` (0x00E0AA24) takes the **address** of the pid word;
   PROC2_$INIT_ENTRY_INTERNAL passes `&entry->asid`.

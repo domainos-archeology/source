@@ -93,7 +93,7 @@ void VFMT_$WRITE(const char *format, void *args);
  */
 
 /*
- * ERROR_$PRINT - Print formatted error message
+ * VFMT_$WRITE10 - Print formatted error message
  *
  * A 16-byte procedure-variable descriptor at 0x00e825f4 whose installed
  * routine is VFMT_$WRITE; calls reach it through the VFMT_$WRITEN thunk.
@@ -105,6 +105,6 @@ void VFMT_$WRITE(const char *format, void *args);
  *
  * Original address: 0x00e825f4
  */
-void ERROR_$PRINT(const char *format, ...);
+void VFMT_$WRITE10(const char *format, ...);
 
 #endif /* VFMT_H */

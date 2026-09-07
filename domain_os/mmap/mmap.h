@@ -231,7 +231,7 @@ extern uint16_t *mmap_pte_base;
 /*
  * MMAP global data
  */
-extern uint32_t MMAP_$PAGEABLE_PAGES_LOWER_LIMIT;
+extern uint32_t MMAP_$PAGEABLE_PAGES;
 extern uint32_t MMAP_$WS_OVERFLOW;
 extern uint32_t MMAP_$WS_REMOVE;
 extern uint32_t MMAP_$WS_SCAN_CNT;

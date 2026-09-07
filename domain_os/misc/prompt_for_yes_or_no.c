@@ -39,6 +39,6 @@ uint8_t prompt_for_yes_or_no(void)
         }
 
         /* Invalid response - prompt again */
-        ERROR_$PRINT("Please answer \"yes\" or \"no\": %$", NULL);
+        VFMT_$WRITE10("Please answer \"yes\" or \"no\": %$", NULL);
     }
 }

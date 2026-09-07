@@ -252,7 +252,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
          * routing (at least two routing ports).
          */
         if (ROUTE_$STD_N_ROUTING_PORTS < 2) {
-            ROUTE_$STAT_DROPPED_STD_ROUTE += 1;     /* 0x00E18678 */
+            ROUTE_$STD_MISROUTE += 1;     /* 0x00E18678 */
             goto drop_no_route;                     /* falls into 0x00E1867E */
         }
 
@@ -261,7 +261,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
          * *unsigned* against 15 (`bcs' = branch if lower).
          */
         if (header->transport_ctl >= 15) {
-            ROUTE_$STAT_DROPPED_STD_HOP += 1;               /* 0x00E1869A */
+            ROUTE_$STD_TOO_FAR += 1;               /* 0x00E1869A */
             XNS_PACKETS_DROP() += 1;                        /* 0x00E186A0 */
             *status_ret = status_$xns_hop_count_exceeded;   /* 0x00E186A6 */
             goto done;                                      /* 0x00E186AC */

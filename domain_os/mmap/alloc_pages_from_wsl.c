@@ -35,5 +35,5 @@ void mmap_$alloc_pages_from_wsl(ws_hdr_t *wsl, uint32_t *vpn_array, uint16_t cou
         wsl->head_vpn = current_vpn;
     }
 
-    MMAP_$PAGEABLE_PAGES_LOWER_LIMIT -= count;
+    MMAP_$PAGEABLE_PAGES -= count;
 }

@@ -20,7 +20,7 @@
  * with (format, &args), where &args is the address of the caller's second
  * stack argument -- i.e. the argument list that VFMT_$MAIN walks.
  *
- * The one descriptor of this shape in the SAU2 image is ERROR_$PRINT at
+ * The one descriptor of this shape in the SAU2 image is VFMT_$WRITE10 at
  * 0x00E825F4, whose installed routine is VFMT_$WRITE (0x00E6AFE2):
  *
  *   00e825f4  41 fa ff fe 4e f9 00 e6  b0 a4 00 e6 af e2 00 00

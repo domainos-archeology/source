@@ -159,7 +159,7 @@ void DMA_$INIT_M68450_CHANNEL(uint8_t *chan_virtual_address, int16_t channel_num
 
 
 /*
- * check_dma_error - Read and clear a DMAC channel's error state
+ * DMA_$CHECK - Read and clear a DMAC channel's error state
  *
  * Reads the channel status byte at 0xFFA000 + channel*0x40, clears it, and
  * maps the error code in the following byte to a status_$t.  The parameter is
@@ -170,6 +170,18 @@ void DMA_$INIT_M68450_CHANNEL(uint8_t *chan_virtual_address, int16_t channel_num
  *
  * Original address: 0x00E0A3A6
  */
-status_$t check_dma_error(uint16_t channel);
+status_$t DMA_$CHECK(uint16_t channel);
+
+
+/*
+ * DMA_$FREE_ASID - per-address-space teardown hook (no-op in this build)
+ *
+ * The entire routine is a single `rts`; the DMA subsystem holds no per-ASID
+ * state.  Called by PROC2_$DELETE_CLEANUP alongside SMD_$FREE_ASID,
+ * ACL_$FREE_ASID, NAME_$FREE_ASID and MST_$FREE_ASID.
+ *
+ * Original address: 0x00E0A454
+ */
+void DMA_$FREE_ASID(int16_t asid);
 
 #endif /* DMA_DMA_H */

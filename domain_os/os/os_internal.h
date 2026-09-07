@@ -105,7 +105,7 @@ extern uint32_t os_$vector_table[256];
 
 extern void *_NULL_PC;
 extern void *NULLPROC;
-extern void *_PROM_TRAP_BUS_ERROR;
+extern void *_BUS_ERROR_VEC;
 /* FIM_$BUS_ERR and FIM_$PARITY_TRAP: see fim/fim.h */
 
 /*
@@ -211,7 +211,7 @@ void CRASH_SHOW_STRING(const char *str);
 uint32_t VTOP_OR_CRASH(uint32_t *va_p);
 /* SUB48 declared in cal/cal.h */
 void PRINT_BUILD_TIME(void);
-/* ERROR_$PRINT declared in vfmt/vfmt.h (via misc/misc.h) */
+/* VFMT_$WRITE10 declared in vfmt/vfmt.h (via misc/misc.h) */
 
 /*
  * ============================================================================
@@ -220,7 +220,7 @@ void PRINT_BUILD_TIME(void);
  */
 
 /* io_$probe: see prom/prom.h */
-/* AST_$ACTIVATE_CANNED_SEG (0x00E2F1D4): see ast/ast.h */
+/* AST_$ACTIVATE_ASTE_CANNED (0x00E2F1D4): see ast/ast.h */
 /* network_$fetch_diskless_info: see network/network.h (2=time, 8=tz, 0x37=route) */
 void OS_$PRINT_INIT_ERROR(const char *msg);            /* Display message */
 void os_$free_va_page(uint32_t vaddr);          /* Free page at virtual address */

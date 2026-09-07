@@ -28,7 +28,7 @@
  * Globals used here (declared in subsystem headers):
  *   AS_$STACK_FILE_LOW (0xE2B92C), AS_$INIT_STACK_FILE_SIZE (0xE2B960) - as/as.h
  *   FIM_$USER_FIM_ADDR (0xE212A8), FIM_$QUIT_INH (0xE2248A)          - fim/fim.h
- *   PROC2_UID table (0xE7BE94), PROC2_$EC / PROC_FORK_EC (0xE2B978)  - proc2 headers
+ *   PROC2_$UID table (0xE7BE94), PROC2_$EC / PROC_FORK_EC (0xE2B978)  - proc2 headers
  */
 
 /*
@@ -117,8 +117,8 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
      * Update UID table for child's new ASID.
      * Copy child's UID to the UID table slot for new_asid.
      */
-    PROC2_UID[new_asid].high = current_entry->uid.high;
-    PROC2_UID[new_asid].low = current_entry->uid.low;
+    PROC2_$UID[new_asid].high = current_entry->uid.high;
+    PROC2_$UID[new_asid].low = current_entry->uid.low;
 
     /*
      * Update UID table for parent's ASID.
@@ -126,8 +126,8 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
      */
     parent_idx = current_entry->parent_pgroup_idx;
     parent_entry = P2_INFO_ENTRY(parent_idx);
-    PROC2_UID[old_asid].high = parent_entry->uid.high;
-    PROC2_UID[old_asid].low = parent_entry->uid.low;
+    PROC2_$UID[old_asid].high = parent_entry->uid.high;
+    PROC2_$UID[old_asid].low = parent_entry->uid.low;
 
     /* Initialize floating point state for new ASID */
     FIM_$FP_INIT(new_asid);

@@ -28,7 +28,7 @@
  */
 void CRASH_SYSTEM(const status_$t *status_p);
 
-/* NOTE: ERROR_$PRINT is declared in vfmt/vfmt.h */
+/* NOTE: VFMT_$WRITE10 is declared in vfmt/vfmt.h */
 
 /*
  * prompt_for_yes_or_no - Prompt user for yes/no answer

@@ -17,7 +17,7 @@
 #include "ml/ml.h"
 #include "parity/parity.h"
 #include "wp/wp.h"
-#include "dma/dma.h"   /* check_dma_error */
+#include "dma/dma.h"   /* DMA_$CHECK */
 
 /*
  * Maximum number of floppy units supported
@@ -181,6 +181,6 @@ void FLP_FORMAT_TRACK(void *req, void *buf);
 /* WP_$WIRE declared in wp/wp.h */
 /* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
 /* PARITY_$CHK_IO declared in parity/parity.h */
-/* check_dma_error is declared in dma/dma.h (bead source-3uo). */
+/* DMA_$CHECK is declared in dma/dma.h (bead source-3uo). */
 
 #endif /* FLP_H */

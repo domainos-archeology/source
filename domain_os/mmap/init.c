@@ -91,7 +91,7 @@ void MMAP_$INIT(void *param)
 
         if (pmape[0] & 0x4000) {
             /* Page is pageable - add to free pool */
-            MMAP_$PAGEABLE_PAGES_LOWER_LIMIT++;
+            MMAP_$PAGEABLE_PAGES++;
 
             if (vpn < MMAP_$LPPN) {
                 MMAP_$LPPN = vpn;

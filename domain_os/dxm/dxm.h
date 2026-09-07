@@ -315,7 +315,7 @@ void DXM_$HELPER_UNWIRED(void);
  *
  * Parameters:
  *   routine    - index into DXM_$SIGNAL_ROUTINES
- *   proc_index - index into PROC2_UID identifying the target
+ *   proc_index - index into PROC2_$UID identifying the target
  *   signal     - signal number
  *   param      - signal parameter (4 bytes)
  *   check_dup  - Domain boolean (0xFF) -> DXM_$ADD_CALLBACK dedupes
@@ -343,7 +343,7 @@ typedef struct dxm_signal_data_t {
     int16_t     routine;        /* 0x00: index into DXM_$SIGNAL_ROUTINES */
     int16_t     signal;         /* 0x02: signal number (passed by reference) */
     uint32_t    param;          /* 0x04: signal parameter (by reference) */
-    int16_t     proc_index;     /* 0x08: index into PROC2_UID */
+    int16_t     proc_index;     /* 0x08: index into PROC2_$UID */
 } dxm_signal_data_t;
 
 #if defined(ARCH_M68K)

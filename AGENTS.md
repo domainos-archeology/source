@@ -103,6 +103,32 @@ gsk label delete <ADDRESS> <LABEL>            # Remove label <LABEL> at address 
 
 For more commands use `gsk --help`
 
+### The SAU2 link map (names win over guesses)
+
+`~/src/domainos-archeology/sau2-maps/domain_os.10.2.map` is the linker map of
+the **exact** image loaded in Ghidra (SR10.2, SAU2 - anchors: `FILE_$LOCK_INIT`
+at `E32744`, `FIM_$GET_USER_PC` at `E0AAA6`).  It lists code *and* data symbols
+in address order, with per-segment sizes:
+
+```
+I    E0A458  FIM_               size = 664
+     E0A458  FIM_$BUILD_DF
+D71  E935CC  FILE_$LOT_DATA     loaded at 1A18E6, size = 1086C
+```
+
+**Its names are authoritative.**  Before inventing a descriptive name for a
+function or data cell, grep this map for the address; if it has a symbol there,
+use that name in Ghidra *and* in the C tree.  Where the SR10.4 maps
+(`~/src/domainos-archeology/sr10.4-install/sau*/domain_os.map`) disagree with
+this one, the SAU2 map wins - they are different builds and are only good for
+ordering.  A segment size is also authoritative for the size of the object it
+holds, so quote it (as a comment or `_Static_assert`) next to the C definition.
+
+Two things the map does *not* settle: symbols with no `$` (e.g. `CHKSUM`,
+`TESTPAGE`, `NULL_LOOP`) are module-local and may keep a more descriptive tree
+name, and a segment with no interior symbols is a real negative rather than a
+gap - it means the object genuinely exports nothing.
+
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 

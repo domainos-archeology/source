@@ -77,8 +77,8 @@ static route_$port_t    port0;
 route_$port_t          *ROUTE_$PORTP[8];
 uint16_t                ROUTE_$SOCK;
 int16_t                 ROUTE_$STD_N_ROUTING_PORTS;
-uint32_t                ROUTE_$STAT_DROPPED_STD_HOP;
-uint32_t                ROUTE_$STAT_DROPPED_STD_ROUTE;
+uint32_t                ROUTE_$STD_TOO_FAR;
+uint32_t                ROUTE_$STD_MISROUTE;
 
 /* ============================================================================
  * Recorded call state
@@ -229,8 +229,8 @@ static void setup(void)
     port0.socket = 0x2222;
     ROUTE_$SOCK = 0x0077;
     ROUTE_$STD_N_ROUTING_PORTS = 2;
-    ROUTE_$STAT_DROPPED_STD_HOP = 0;
-    ROUTE_$STAT_DROPPED_STD_ROUTE = 0;
+    ROUTE_$STD_TOO_FAR = 0;
+    ROUTE_$STD_MISROUTE = 0;
 
     chksum_calls = 0; chksum_arg = NULL; chksum_result = 0x1234;
     is_bcast_calls = 0; is_bcast_arg = NULL; is_bcast_result = -1;
@@ -467,8 +467,8 @@ static void test_forward_not_routing(void)
     is_bcast_result = 0;
     ROUTE_$STD_N_ROUTING_PORTS = 1;
     run();
-    ASSERT_EQ(1, ROUTE_$STAT_DROPPED_STD_ROUTE);
-    ASSERT_EQ(0, ROUTE_$STAT_DROPPED_STD_HOP);
+    ASSERT_EQ(1, ROUTE_$STD_MISROUTE);
+    ASSERT_EQ(0, ROUTE_$STD_TOO_FAR);
     ASSERT_EQ(1, idp_state.packets_dropped);
     ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, sock_put_calls);
@@ -480,8 +480,8 @@ static void test_forward_hop_limit(void)
     is_bcast_result = 0;
     header.transport_ctl = 15;
     run();
-    ASSERT_EQ(1, ROUTE_$STAT_DROPPED_STD_HOP);
-    ASSERT_EQ(0, ROUTE_$STAT_DROPPED_STD_ROUTE);
+    ASSERT_EQ(1, ROUTE_$STD_TOO_FAR);
+    ASSERT_EQ(0, ROUTE_$STD_MISROUTE);
     ASSERT_EQ(1, idp_state.packets_dropped);
     ASSERT_EQ(status_$xns_hop_count_exceeded, st);
     ASSERT_EQ(0, sock_put_calls);
@@ -493,7 +493,7 @@ static void test_forward_hop_limit_unsigned(void)
     is_bcast_result = 0;
     header.transport_ctl = 0x80;    /* negative as a signed byte, but >= 15 */
     run();
-    ASSERT_EQ(1, ROUTE_$STAT_DROPPED_STD_HOP);
+    ASSERT_EQ(1, ROUTE_$STD_TOO_FAR);
     ASSERT_EQ(status_$xns_hop_count_exceeded, st);
 }
 

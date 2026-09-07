@@ -166,7 +166,7 @@ void ROUTE_$PROCESS(void)
         if (stat_index > 0x80) {
             stat_index = 0x80;
         }
-        ROUTE_$PACKET_STATS[stat_index]++;
+        ROUTE_$Q_DEPTH[stat_index]++;
 
         /*
          * 0x00E874EA - 0x00E874FE: bit 1 of the flags byte at rcv+0x11
@@ -191,7 +191,7 @@ void ROUTE_$PROCESS(void)
          */
         if (should_forward < 0 && is_std_routing >= 0 &&
             rcv.data_pages[0] == 0 && pkt->data_len != 0) {
-            ROUTE_$STAT_OVERSIZED_N++;                      /* 0xE87FBC */
+            ROUTE_$DLEN_ERR++;                      /* 0xE87FBC */
             should_forward = false;
         }
 
@@ -207,9 +207,9 @@ void ROUTE_$PROCESS(void)
             hop_count = (int16_t)idp->transport_ctl;
             if (hop_count >= ROUTE_$MAX_HOP_COUNT) {
                 if (is_std_routing < 0) {
-                    ROUTE_$STAT_DROPPED_STD_HOP++;
+                    ROUTE_$STD_TOO_FAR++;
                 } else {
-                    ROUTE_$STAT_DROPPED_N_HOP++;
+                    ROUTE_$TOO_FAR++;
                 }
                 should_forward = false;
             }
@@ -235,9 +235,9 @@ void ROUTE_$PROCESS(void)
 
                 if (status != status_$ok) {                 /* 0x00E87594 */
                     if (is_std_routing < 0) {
-                        ROUTE_$STAT_DROPPED_STD_ROUTE++;
+                        ROUTE_$STD_MISROUTE++;
                     } else {
-                        ROUTE_$STAT_DROPPED_N_ROUTE++;
+                        ROUTE_$MISROUTE++;
                     }
                     should_forward = false;
                 }
@@ -256,13 +256,13 @@ void ROUTE_$PROCESS(void)
                  * must select bit 4 or 5 for standard routing.
                  */
                 if (((1u << (port->active & 0x1F)) & 0x30) == 0) {
-                    ROUTE_$STAT_DROPPED_STD_ROUTE++;
+                    ROUTE_$STD_MISROUTE++;
                     should_forward = was_forwarded;         /* move.b D5b,D3b */
                 }
             } else {
                 /* 0x00E875D6: btst.l D0,#0x28 - bit 3 or 5 */
                 if (((1u << (port->active & 0x1F)) & 0x28) == 0) {
-                    ROUTE_$STAT_DROPPED_N_ROUTE++;
+                    ROUTE_$MISROUTE++;
                     should_forward = was_forwarded;
                 }
                 /*
@@ -373,9 +373,9 @@ void ROUTE_$PROCESS(void)
 
             /* 0x00E87768 - 0x00E87776: too big to put on a real port */
             if (is_std_routing < 0) {
-                ROUTE_$STAT_OVERSIZED_STD++;
+                ROUTE_$STD_DLEN_ERR++;
             } else {
-                ROUTE_$STAT_OVERSIZED_N++;
+                ROUTE_$DLEN_ERR++;
             }
             should_forward = was_forwarded;
         }
@@ -387,9 +387,9 @@ void ROUTE_$PROCESS(void)
          * simply: count a forward against the matching bucket.
          */
         if (is_std_routing < 0 && should_forward < 0) {
-            ROUTE_$STAT_FORWARDED_STD++;
+            ROUTE_$STD_PKTS_ROUTED++;
         } else if (should_forward < 0) {
-            ROUTE_$STAT_FORWARDED_N++;
+            ROUTE_$PKTS_ROUTED++;
         }
 
         /*
@@ -421,7 +421,7 @@ void ROUTE_$PROCESS(void)
         ROUTE_$SOCK = 0xFFFF;
         SOCK_$CLOSE(closing_sock);
 
-        ROUTE_$USER_PORT_MAX = 0;                           /* 0x00E87852 */
+        ROUTE_$NETBUF_ALLOC = 0;                           /* 0x00E87852 */
 
         /*
          * 0x00E87856 - 0x00E8787E: with no user ports left, release the
@@ -437,7 +437,7 @@ void ROUTE_$PROCESS(void)
         }
 
         /* 0x00E87882 - 0x00E8788C: the process does not return from here */
-        PROC1_$UNBIND(ROUTE_$PROCESS_UID, &status);
+        PROC1_$UNBIND(ROUTE_$PID, &status);
         return;
     }
 }

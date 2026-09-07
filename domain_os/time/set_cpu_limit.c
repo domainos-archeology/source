@@ -103,7 +103,7 @@ void TIME_$SET_CPU_LIMIT(clock_t *limit, boolean *relative, status_$t *status)
          */
         if (SUB48(&scratch, &cpu_clock) >= 0) {
             /* 0xE59042: limit already exceeded - signal immediately */
-            PROC2_$SIGNAL_OS(&PROC2_UID[PROC1_$AS_ID],
+            PROC2_$SIGNAL_OS(&PROC2_$UID[PROC1_$AS_ID],
                              (int16_t *)&time_$c_cpu_limit_signal,
                              (uint32_t *)&time_$c_cpu_limit_fault,
                              status);

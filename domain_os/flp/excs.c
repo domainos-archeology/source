@@ -126,7 +126,7 @@ status_$t EXCS(uint16_t *cmd_buf, int16_t *count_ptr, void *req)
         }
 
         /* Check for DMA errors */
-        status = check_dma_error(3);
+        status = DMA_$CHECK(3);
         if (status != status_$ok && status != status_$dma_not_at_end_of_range) {
             goto check_retry;
         }

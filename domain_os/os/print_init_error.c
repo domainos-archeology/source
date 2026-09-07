@@ -2,7 +2,7 @@
  * OS_$PRINT_INIT_ERROR - Print initialization error message
  *
  * Prints an error message during system initialization.
- * Uses ERROR_$PRINT with a null format string.
+ * Uses VFMT_$WRITE10 with a null format string.
  *
  * Parameters:
  *   msg - Error message to display
@@ -19,5 +19,5 @@ static const uint32_t null_format = 0;
 
 void OS_$PRINT_INIT_ERROR(const char *msg)
 {
-    ERROR_$PRINT(msg, &null_format, &null_format);
+    VFMT_$WRITE10(msg, &null_format, &null_format);
 }

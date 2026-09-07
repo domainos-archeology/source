@@ -46,21 +46,21 @@ char CAL_$VERIFY(int *max_allowed_delta, void *param_2, char *param_3, status_$t
     if (delta < -229) {
         // Time has gone backwards significantly
         // "The calendar is more than a minute off"
-        ERROR_$PRINT("  The calendar is more than a minute behind the last valid time.\n",
+        VFMT_$WRITE10("  The calendar is more than a minute behind the last valid time.\n",
                      param_2, param_2);
     } else if (delta <= *max_allowed_delta) {
         // Time is within acceptable range
         return 0xFF;
     } else {
         // "More than N days have elapsed"
-        ERROR_$PRINT("  More than %a days have elapsed since last valid time.\n",
+        VFMT_$WRITE10("  More than %a days have elapsed since last valid time.\n",
                      param_2, param_2);
     }
 
     // If param_3 is negative, prompt user interactively
     if (*param_3 < 0) {
         do {
-            ERROR_$PRINT("Do you want to run DOMAIN/OS with the current calendar setting? (Y/N) ",
+            VFMT_$WRITE10("Do you want to run DOMAIN/OS with the current calendar setting? (Y/N) ",
                          param_2);
             TERM_$READ((void *)0xe684a4, input, (void *)0xe684a6, &status);
 
@@ -69,7 +69,7 @@ char CAL_$VERIFY(int *max_allowed_delta, void *param_2, char *param_3, status_$t
             }
         } while (input[0] != 'N' && input[0] != 'n');
 
-        ERROR_$PRINT("  Please set the calendar using the 'set_time' command.\n", param_2);
+        VFMT_$WRITE10("  Please set the calendar using the 'set_time' command.\n", param_2);
         *status_ret = status_$cal_refused;
     }
 

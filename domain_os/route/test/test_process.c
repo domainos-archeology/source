@@ -119,17 +119,17 @@ const status_$t ROUTE_$UNKNOWN_PORT_STATUS = status_$internet_unknown_network_po
 uint8_t  RIP_$HALT_PACKET[24];
 uint16_t RTWIRED_$SEND_FLAGS;
 uint32_t ROUTE_$WIRED_PAGES[ROUTE_$MAX_WIRED_PAGES];
-uint32_t ROUTE_$PACKET_STATS[0x81];
-uint32_t ROUTE_$STAT_OVERSIZED_STD;
-uint32_t ROUTE_$STAT_DROPPED_STD_HOP;
-uint32_t ROUTE_$STAT_DROPPED_STD_ROUTE;
-uint32_t ROUTE_$STAT_FORWARDED_STD;
-uint32_t ROUTE_$STAT_OVERSIZED_N;
-uint32_t ROUTE_$STAT_DROPPED_N_HOP;
-uint32_t ROUTE_$STAT_DROPPED_N_ROUTE;
-uint32_t ROUTE_$STAT_FORWARDED_N;
-uint32_t ROUTE_$USER_PORT_COUNT;
-uint16_t ROUTE_$USER_PORT_MAX;
+uint32_t ROUTE_$Q_DEPTH[0x81];
+uint32_t ROUTE_$STD_DLEN_ERR;
+uint32_t ROUTE_$STD_TOO_FAR;
+uint32_t ROUTE_$STD_MISROUTE;
+uint32_t ROUTE_$STD_PKTS_ROUTED;
+uint32_t ROUTE_$DLEN_ERR;
+uint32_t ROUTE_$TOO_FAR;
+uint32_t ROUTE_$MISROUTE;
+uint32_t ROUTE_$PKTS_ROUTED;
+uint32_t ROUTE_$Q_OFLO;
+uint16_t ROUTE_$NETBUF_ALLOC;
 int16_t  ROUTE_$N_WIRED_PAGES;
 int16_t  ROUTE_$N_USER_PORTS;
 int16_t  ROUTE_$NET_SERVICE_ON = 0;
@@ -137,8 +137,8 @@ int16_t  ROUTE_$NET_SERVICE_OFF = 1;
 uint8_t  RINGLOG_$ROUTE_FORWARD[4] = { 0x00, 0x00, 0x20, 0x48 };
 const status_$t ROUTE_$SOCK_EMPTY_STATUS = status_$network_buffer_queue_is_empty;
 uint32_t RTWIRED_$CALLBACK_DATA;
-uint16_t ROUTE_$PROCESS_UID;
-int8_t   ROUTE_$CHECKSUM_ENABLED;
+uint16_t ROUTE_$PID;
+int8_t   ROUTE_$USER_CHECKSUM;
 uint32_t ROUTE_$SERVICE_ID;
 ec_$eventcount_t *PTR_ROUTE_$CONTROL_EC;
 uint16_t ROUTE_$FWD_TIMEOUT;
@@ -406,7 +406,7 @@ static void reset_mocks(void)
     memset(mock_pkt_page, 0, sizeof(mock_pkt_page));
     memset(&mock_port_stats, 0, sizeof(mock_port_stats));
     memset(ROUTE_$PORT_ARRAY, 0, sizeof(ROUTE_$PORT_ARRAY));
-    memset(ROUTE_$PACKET_STATS, 0, sizeof(ROUTE_$PACKET_STATS));
+    memset(ROUTE_$Q_DEPTH, 0, sizeof(ROUTE_$Q_DEPTH));
     memset(ROUTE_$WIRED_PAGES, 0, sizeof(ROUTE_$WIRED_PAGES));
     memset(&mock_rcv_template, 0, sizeof(mock_rcv_template));
     memset(&mock_mac_send_rec, 0, sizeof(mock_mac_send_rec));
@@ -428,14 +428,14 @@ static void reset_mocks(void)
     ROUTE_$SOCK = MOCK_SOCK;
     SOCK_$EVENT_COUNTERS[MOCK_SOCK - 1] = (ec_$eventcount_t *)&mock_sock_desc;
 
-    ROUTE_$STAT_OVERSIZED_STD = 0;
-    ROUTE_$STAT_DROPPED_STD_HOP = 0;
-    ROUTE_$STAT_DROPPED_STD_ROUTE = 0;
-    ROUTE_$STAT_FORWARDED_STD = 0;
-    ROUTE_$STAT_OVERSIZED_N = 0;
-    ROUTE_$STAT_DROPPED_N_HOP = 0;
-    ROUTE_$STAT_DROPPED_N_ROUTE = 0;
-    ROUTE_$STAT_FORWARDED_N = 0;
+    ROUTE_$STD_DLEN_ERR = 0;
+    ROUTE_$STD_TOO_FAR = 0;
+    ROUTE_$STD_MISROUTE = 0;
+    ROUTE_$STD_PKTS_ROUTED = 0;
+    ROUTE_$DLEN_ERR = 0;
+    ROUTE_$TOO_FAR = 0;
+    ROUTE_$MISROUTE = 0;
+    ROUTE_$PKTS_ROUTED = 0;
     ROUTE_$SOCK_ECVAL = 0;
     ROUTE_$CONTROL_ECVAL = 0;
     ROUTE_$N_ROUTING_PORTS = 0;
@@ -444,7 +444,7 @@ static void reset_mocks(void)
     ROUTE_$N_WIRED_PAGES = 0;
     ROUTE_$ROUTING = 0;
     ROUTE_$FWD_TIMEOUT = 1;
-    ROUTE_$PROCESS_UID = 0x1234;
+    ROUTE_$PID = 0x1234;
     TIME_$CLOCKH = 1000;
     NODE_$ME = 0xABCDE;
     RING_$LOGGING_NOW = 0;
@@ -620,8 +620,8 @@ TEST(packet_stats_bucket)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$PACKET_STATS[5]);
-    ASSERT_EQ(0, ROUTE_$PACKET_STATS[0]);
+    ASSERT_EQ(1, ROUTE_$Q_DEPTH[5]);
+    ASSERT_EQ(0, ROUTE_$Q_DEPTH[0]);
 }
 
 TEST(packet_stats_bucket_capped)
@@ -632,7 +632,7 @@ TEST(packet_stats_bucket_capped)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$PACKET_STATS[0x80]);
+    ASSERT_EQ(1, ROUTE_$Q_DEPTH[0x80]);
 }
 
 /*
@@ -650,7 +650,7 @@ TEST(routing_type_below_two_is_not_forwarded)
     ASSERT_EQ(1, mock_rtn_hdr_calls);
     ASSERT_EQ(ARCH_PTR_TO_VA(mock_pkt), mock_rtn_hdr_value);
     ASSERT_EQ(1, mock_dump_data_calls);
-    ASSERT_EQ(0, ROUTE_$STAT_FORWARDED_N);
+    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
     ASSERT_EQ(1, ROUTE_$SOCK_ECVAL);
 }
 
@@ -670,8 +670,8 @@ TEST(std_flag_forces_forward_candidate)
     ASSERT_EQ(1, mock_nexthop_calls);
     ASSERT_EQ(1, mock_arp_calls);
     ASSERT_EQ(1, mock_mac_send_calls);
-    ASSERT_EQ(1, ROUTE_$STAT_FORWARDED_STD);
-    ASSERT_EQ(0, ROUTE_$STAT_FORWARDED_N);
+    ASSERT_EQ(1, ROUTE_$STD_PKTS_ROUTED);
+    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
 }
 
 /* The IDP header base differs between the two routing modes - 0x00E87500. */
@@ -732,7 +732,7 @@ TEST(drop_when_no_data_pages)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STAT_OVERSIZED_N);
+    ASSERT_EQ(1, ROUTE_$DLEN_ERR);
     ASSERT_EQ(0, mock_nexthop_calls);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
 }
@@ -746,7 +746,7 @@ TEST(no_drop_when_data_pages_present)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(0, ROUTE_$STAT_OVERSIZED_N);
+    ASSERT_EQ(0, ROUTE_$DLEN_ERR);
     ASSERT_EQ(1, mock_nexthop_calls);
 }
 
@@ -766,7 +766,7 @@ TEST(hop_limit_boundary)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(0, ROUTE_$STAT_DROPPED_N_HOP);
+    ASSERT_EQ(0, ROUTE_$TOO_FAR);
     ASSERT_EQ(1, mock_nexthop_calls);
 
     reset_mocks();
@@ -778,8 +778,8 @@ TEST(hop_limit_boundary)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STAT_DROPPED_N_HOP);
-    ASSERT_EQ(0, ROUTE_$STAT_DROPPED_STD_HOP);
+    ASSERT_EQ(1, ROUTE_$TOO_FAR);
+    ASSERT_EQ(0, ROUTE_$STD_TOO_FAR);
     ASSERT_EQ(0, mock_nexthop_calls);
 }
 
@@ -794,8 +794,8 @@ TEST(hop_limit_counts_against_std_bucket)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STAT_DROPPED_STD_HOP);
-    ASSERT_EQ(0, ROUTE_$STAT_DROPPED_N_HOP);
+    ASSERT_EQ(1, ROUTE_$STD_TOO_FAR);
+    ASSERT_EQ(0, ROUTE_$TOO_FAR);
 }
 
 /* A failed route lookup counts in the per-mode "dropped route" bucket. */
@@ -807,8 +807,8 @@ TEST(no_route_counts_dropped)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STAT_DROPPED_N_ROUTE);
-    ASSERT_EQ(0, ROUTE_$STAT_FORWARDED_N);
+    ASSERT_EQ(1, ROUTE_$MISROUTE);
+    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
 }
 
@@ -824,8 +824,8 @@ TEST(port_active_mask_normal)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STAT_DROPPED_N_ROUTE);
-    ASSERT_EQ(0, ROUTE_$STAT_FORWARDED_N);
+    ASSERT_EQ(1, ROUTE_$MISROUTE);
+    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
 }
 
 TEST(port_active_mask_std)
@@ -836,8 +836,8 @@ TEST(port_active_mask_std)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STAT_DROPPED_STD_ROUTE);
-    ASSERT_EQ(0, ROUTE_$STAT_FORWARDED_STD);
+    ASSERT_EQ(1, ROUTE_$STD_MISROUTE);
+    ASSERT_EQ(0, ROUTE_$STD_PKTS_ROUTED);
 }
 
 /*
@@ -889,7 +889,7 @@ TEST(user_routing_port_uses_sock_put)
     ASSERT_EQ(1, mock_port_stats.queue_depth[4]);
     ASSERT_EQ(0, mock_port_stats.failed_puts);
     ASSERT_EQ(1, ROUTE_$PORT_ARRAY[1].forward_count);
-    ASSERT_EQ(1, ROUTE_$STAT_FORWARDED_N);
+    ASSERT_EQ(1, ROUTE_$PKTS_ROUTED);
     ASSERT_EQ(0, mock_rtn_hdr_calls);           /* the socket owns it now */
     ASSERT_EQ(0, mock_dump_data_calls);
 }
@@ -937,7 +937,7 @@ TEST(user_routing_port_put_failure)
 
     ASSERT_EQ(1, mock_port_stats.failed_puts);
     ASSERT_EQ(1, ROUTE_$PORT_ARRAY[1].forward_count);
-    ASSERT_EQ(1, ROUTE_$STAT_FORWARDED_N);
+    ASSERT_EQ(1, ROUTE_$PKTS_ROUTED);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
     ASSERT_EQ(1, mock_dump_data_calls);
 }
@@ -971,8 +971,8 @@ TEST(oversize_packet_counted)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STAT_OVERSIZED_N);
-    ASSERT_EQ(0, ROUTE_$STAT_FORWARDED_N);
+    ASSERT_EQ(1, ROUTE_$DLEN_ERR);
+    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
     ASSERT_EQ(0, mock_net_io_calls);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
 
@@ -983,8 +983,8 @@ TEST(oversize_packet_counted)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STAT_OVERSIZED_STD);
-    ASSERT_EQ(0, ROUTE_$STAT_FORWARDED_STD);
+    ASSERT_EQ(1, ROUTE_$STD_DLEN_ERR);
+    ASSERT_EQ(0, ROUTE_$STD_PKTS_ROUTED);
 }
 
 /* Exactly 0x400 still goes out. */
@@ -996,9 +996,9 @@ TEST(max_size_packet_still_sent)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(0, ROUTE_$STAT_OVERSIZED_N);
+    ASSERT_EQ(0, ROUTE_$DLEN_ERR);
     ASSERT_EQ(1, mock_net_io_calls);
-    ASSERT_EQ(1, ROUTE_$STAT_FORWARDED_N);
+    ASSERT_EQ(1, ROUTE_$PKTS_ROUTED);
 }
 
 /*
@@ -1053,7 +1053,7 @@ TEST(mac_send_descriptor)
     ASSERT_EQ(0x2000, mock_mac_send_rec.data_pages[0]);
     ASSERT_EQ(0x3000, mock_mac_send_rec.data_pages[1]);
     ASSERT_TRUE(mock_mac_send_channel == XNS_IDP_$PORT_MAC_CHANNEL(2));
-    ASSERT_EQ(1, ROUTE_$STAT_FORWARDED_STD);
+    ASSERT_EQ(1, ROUTE_$STD_PKTS_ROUTED);
 }
 
 /* An ARP failure clears should_forward, so nothing is counted - 0x00E876A0. */
@@ -1068,7 +1068,7 @@ TEST(arp_failure_stops_forward)
 
     ASSERT_EQ(1, mock_arp_calls);
     ASSERT_EQ(0, mock_mac_send_calls);
-    ASSERT_EQ(0, ROUTE_$STAT_FORWARDED_STD);
+    ASSERT_EQ(0, ROUTE_$STD_PKTS_ROUTED);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
 }
 
