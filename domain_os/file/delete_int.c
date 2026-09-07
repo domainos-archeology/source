@@ -88,18 +88,22 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
     entry_index = FILE_$LOCK_CONTROL.lock_map[hash_index];
 
     while (entry_index > 0) {
-        file_lock_entry_t *entry = &FILE_$LOCK_ENTRIES[entry_index - 1];
-        uint32_t *entry_uid = (uint32_t *)entry->data;
+        /*
+         * 0x00E5E92C-0x00E5E942: `lsl.l #0x2` / `neg` / `lsl.l #0x3` / `add` is
+         * entry_index*0x1C added to 0xE935CC, which addresses the END of the
+         * entry - so the UID is read at -0x10 (field +0x0C) and the chain link
+         * at -0x08 (field +0x14).  FILE_$LOT_ENTRY(n) is the same entry
+         * addressed from its start.
+         */
+        file_lock_entry_detail_t *entry = FILE_$LOT_ENTRY(entry_index);
 
-        /* Check if this entry matches the file UID */
-        /* Entry UID is at offset 0x00 within lock_entry_t.data (offset -0x10 from base + 0x1c offset) */
-        if (entry_uid[0] == file_uid->high && entry_uid[1] == file_uid->low) {
-            found_locked = -1;  /* Found - file is locked */
+        if (entry->uid_high == file_uid->high &&
+            entry->uid_low  == file_uid->low) {
+            found_locked = -1;  /* 0x00E5E954 st D3b - the file is locked */
             break;
         }
 
-        /* Follow the chain - next entry index is at offset 0x08 relative to entry_uid */
-        entry_index = *(int16_t *)&entry_uid[2];
+        entry_index = (int16_t)entry->next;         /* 0x00E5E958 */
     }
 
     /* Now handle based on flags */

@@ -58,6 +58,19 @@ uint8_t ACL_$ASID_SUSER_BITMAP[8];          /* 0xE935C4: 1=used suser */
 acl_$cache_slot_t ACL_$ACL_CACHE[ACL_CACHE_SLOTS];  /* 0xE88834 */
 
 /*
+ * The ACL image cache directory, in the ACL module's A5 data area
+ * (A5 = 0xE7CF54).  See acl/acl_internal.h for how the element counts were
+ * fixed; ACL_$CACHE_LRU_HEAD shares its address with ACL_$SUPER_COUNT[0],
+ * which is never used because process numbers start at 1.
+ */
+acl_$cache_dir_t  ACL_$CACHE_DIR[ACL_CACHE_SLOTS];              /* 0xE7D754 */
+acl_$cache_link_t ACL_$CACHE_LRU_LINKS[ACL_CACHE_LINK_SLOTS];   /* 0xE7D944 */
+acl_$cache_link_t ACL_$CACHE_HASH_LINKS[ACL_CACHE_LINK_SLOTS];  /* 0xE7D9C4 */
+int16_t ACL_$CACHE_HASH_BUCKETS_TAB[ACL_CACHE_HASH_BUCKETS];    /* 0xE7DA44 */
+int16_t ACL_$CACHE_FREE_HEAD;                                   /* 0xE7DAC8 */
+int16_t ACL_$CACHE_LRU_HEAD;                                    /* 0xE7DACA */
+
+/*
  * Locksmith state
  */
 int16_t ACL_$LOCAL_LOCKSMITH;       /* 0xE7DAC4 (A5+0xB70) */

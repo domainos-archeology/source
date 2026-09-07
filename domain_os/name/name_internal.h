@@ -247,9 +247,15 @@ void name_$unmap_dir_buffers(int16_t asid, name_$mapped_info_t *mapped_info);
  * callee frame confirms it - A6+0x08 long, +0x0C word, +0x0E long, +0x12 word,
  * +0x14 long, +0x18 long (0x00E565C0-0x00E565CC).
  *
- * TODO(source-kgqh): the body has not been emitted.
+ * The word at A6+0x0C is NAME_$LOCK_DIR's `acl_rights` argument
+ * (`move.w (0xc,A6),-(SP)` right below `move.w #0x4` at 0x00E56620-0x00E56628)
+ * and name_$old_add_entry's `type` on the root-directory path (0x00E565EE);
+ * name_$old_add_link passes 0, which is what makes NAME_$LOCK_DIR skip its own
+ * ACL_$RIGHTS check.
+ *
+ * Emitted in name/old_add_link_local.c.
  */
-void name_$old_add_link_local(uid_t *dir_uid, uint16_t flags, char *name,
+void name_$old_add_link_local(uid_t *dir_uid, int16_t acl_rights, char *name,
                               uint16_t name_len, uid_t *file_uid,
                               status_$t *status_ret);
 

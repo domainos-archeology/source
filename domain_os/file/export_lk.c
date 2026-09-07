@@ -1,178 +1,124 @@
 /*
- * FILE_$EXPORT_LK - Export a lock to another process
+ * FILE_$EXPORT_LK - hand one of this process's locks to another process
  *
- * Original address: 0x00E74110
- * Size: 306 bytes
+ * Original address: 0x00E74110, 306 bytes.
  *
- * Exports a file lock from the current process to another process,
- * allowing the target process to share the lock. This is used for
- * lock inheritance across process boundaries (e.g., fork).
+ * Copies the caller's lock-object-table (LOT) reference into a free slot of
+ * the target process's per-process lock table and bumps the LOT entry's
+ * reference count, so both processes now hold the same lock.
  *
- * Assembly analysis:
- *   - link.w A6,-0x10         ; Stack frame
- *   - Saves D2-D5, A2, A3, A5 to stack
- *   - Saves current ASID from PROC1_$AS_ID to D2
- *   - Calls PROC2_$FIND_ASID to get target process ASID
- *   - Validates lock_index is in range [1, 0x96]
- *   - Looks up lock entry in per-process table
- *   - Verifies file UID matches
- *   - Acquires lock 5 via ML_$LOCK
- *   - Searches for free slot in target's lock table
- *   - If found, copies lock index, updates count, increments refcount
- *   - Releases lock 5 via ML_$UNLOCK
+ * Frame (A6+):
+ *   0x08 file_uid    (long)  the file the lock must be on
+ *   0x0C lock_index  (long) -> A3, POINTER to the caller's slot number
+ *   0x10 target_proc (long)  UID of the process to export to
+ *   0x14 index_out   (long)  the slot number assigned in the target
+ *   0x18 status_ret  (long) -> A2
  *
- * Data structures used:
- *   - Per-process lock table at 0xEA202C + ASID*300
- *   - Lock entry data at 0xE935BC + entry*0x1C
- *   - Max lock count at 0xEA3DC4 + ASID*2
+ * `lea (0xe8605c).l,A5` at 0x00E74118 sets a module base that this routine
+ * never uses; every table it touches is addressed absolutely.
  */
 
 #include "file/file_internal.h"
 #include "proc2/proc2.h"
 
-/* Constants from assembly */
-#define MAX_PROC_LOCKS      150     /* 0x96 */
-#define LOCK_ENTRY_SIZE     0x1C    /* 28 bytes */
-#define PROC_LOT_BASE       0xEA202C
-/* TODO(source-xi4k): 0xE935BC is ACL_$LOCKSMITH_OVERRIDE_BITMAP; the lock
- * table is addressed through 0xE935CC with a 0x1C stride
- * (FILE_$PRIV_LOCK_$ALLOC_ENTRY 0x00E5EBCA). */
-#define LOT_DATA_BASE       0xE935BC
-#define LOT_MAX_COUNT_BASE  0xEA3DC4
-#define PROC_LOT_OFFSET     (-0x2662)
+/*
+ * Slot numbers run 1..0x96 here - `cmpi.l #0x96,D0` + `bls` at 0x00E74152
+ * accepts 0x96 itself, unlike FILE_$CHECK_PROT's `bcc`.
+ */
+#define FILE_EXPORT_LK_MAX_SLOT     0x96
 
-/* Dummy parameter for PROC2_$FIND_ASID */
-static const int8_t find_asid_param = 0;
+/* 150 iterations: `move.w #0x95,D1w` + `dbf` at 0x00E741CC / 0x00E74228. */
+#define FILE_EXPORT_LK_SLOT_COUNT   150
 
 /*
- * FILE_$EXPORT_LK - Export a lock to another process
- *
- * Exports a file lock held by the current process to another process
- * identified by process UID. This allows the target process to share
- * the lock, incrementing the lock's reference count.
- *
- * Parameters:
- *   file_uid    - UID of file that must match the locked file
- *   lock_index  - Pointer to lock index to export
- *   target_proc - UID of target process to export lock to
- *   index_out   - Output: lock index assigned in target's table
- *   status_ret  - Output status code
- *
- * The function:
- *   1. Finds the target process's ASID
- *   2. Validates the lock index is in valid range
- *   3. Looks up the lock entry and verifies the file UID matches
- *   4. Finds a free slot in the target's lock table
- *   5. Copies the lock reference and increments the refcount
- *
- * Status codes:
- *   status_$ok                              - Export succeeded
- *   status_$proc2_uid_not_found             - Target process not found
- *   file_$invalid_arg                - Invalid lock index
- *   file_$object_not_locked_by_this_process - Lock not found or UID mismatch
- *   file_$local_lock_table_full      - Target's lock table is full
+ * 0x00E74242: the operand of the `pea (0x112,PC)` at 0x00E7412E - a Pascal
+ * constant handed to PROC2_$FIND_ASID by reference.  The raw byte there is
+ * 0xFF, i.e. Domain TRUE, which is the arm PROC2_$FIND_ASID tests with
+ * `tst.b (A0)` / `bpl` at 0x00E4075A: TRUE makes it return the process's UPID
+ * (proc2 record +0x4C when bit 11 of +0xBA is set) rather than the plain ASID
+ * at +0x4E.
  */
+static const boolean file_$export_lk_want_upid_00e74242 = true;
+
 void FILE_$EXPORT_LK(uid_t *file_uid, uint32_t *lock_index,
                      uid_t *target_proc, int32_t *index_out,
                      status_$t *status_ret)
 {
-    int16_t current_asid;
-    int16_t target_asid;
-    uint32_t idx;
-    int16_t entry_idx;
-    uint8_t *entry_ptr;
-    uint32_t entry_offset;
-    int16_t slot;
-    int16_t remaining;
-    int32_t proc_table_base;
+    uint16_t  current_asid;         /* D2w, before it is reused */
+    uint16_t  target_asid;          /* D3w */
+    uint32_t  slot_num;             /* D0 */
+    uint16_t  entry_index;          /* D2w, after the table read */
+    file_lock_entry_detail_t *entry;/* A3, after it is reused */
+    int16_t   slot;                 /* D4w */
+    int16_t   remaining;            /* D1w, the dbf counter */
 
-    /* Save current process ASID */
-    current_asid = PROC1_$AS_ID;
+    current_asid = PROC1_$AS_ID;                        /* 0x00E74126 */
 
-    /* Find target process ASID */
-    target_asid = PROC2_$FIND_ASID(target_proc, (int8_t *)&find_asid_param, status_ret);
-
+    /* 0x00E7412C-0x00E74144 */
+    target_asid = PROC2_$FIND_ASID(target_proc,
+                                   (int8_t *)&file_$export_lk_want_upid_00e74242,
+                                   status_ret);
     if (*status_ret != status_$ok) {
         return;
     }
 
-    /* Validate lock index is in range [1, 0x96] */
-    idx = *lock_index;
-    if (idx == 0 || idx > MAX_PROC_LOCKS) {
-        *status_ret = file_$invalid_arg;
+    /* 0x00E74148-0x00E7415A */
+    slot_num = *lock_index;
+    if (slot_num == 0 || slot_num > FILE_EXPORT_LK_MAX_SLOT) {
+        *status_ret = file_$invalid_arg;                /* 0x000F0014 */
         return;
+    }
+
+    /* 0x00E7415E-0x00E74178: the caller's own slot must name a LOT entry. */
+    entry_index = FILE_$PROC_LOT_SLOT(current_asid, slot_num);
+    if (entry_index == 0) {
+        goto not_locked;
     }
 
     /*
-     * Look up lock entry in current process's table
-     * Table is at PROC_LOT_BASE + ASID*300 + PROC_LOT_OFFSET + index*2
+     * 0x00E7417A-0x00E741AC.  A3 = 0xE935CC + entry_index*0x1C addresses the
+     * END of the entry, so the original reads the reference count at -4 and
+     * the UID at -0x10; FILE_$LOT_ENTRY(n) is the same entry addressed from
+     * its start.
      */
-    proc_table_base = PROC_LOT_BASE + current_asid * FILE_PROC_LOCK_ENTRY_SIZE;
-    entry_idx = *(int16_t *)(proc_table_base + PROC_LOT_OFFSET + idx * 2);
-
-    if (entry_idx == 0) {
-        *status_ret = file_$object_not_locked_by_this_process;
-        return;
+    entry = FILE_$LOT_ENTRY(entry_index);
+    if ((uint16_t)entry->refcount == 0) {               /* 0x00E74194 */
+        goto not_locked;
+    }
+    if (entry->uid_high != file_uid->high ||
+        entry->uid_low  != file_uid->low) {
+        goto not_locked;
     }
 
-    /* Get lock entry data */
-    entry_offset = entry_idx * LOCK_ENTRY_SIZE;
-    entry_ptr = (uint8_t *)(LOT_DATA_BASE + entry_offset);
+    /* 0x00E741B8: assume the target's table is full until a slot is found. */
+    *status_ret = file_$local_lock_table_full;          /* 0x000F0009 */
 
-    /* Check refcount is non-zero */
-    if (entry_ptr[0x0C] == 0) {  /* refcount at offset 0x0C from entry base */
-        *status_ret = file_$object_not_locked_by_this_process;
-        return;
-    }
+    ML_$LOCK(FILE_LOT_ML_LOCK_ID);                      /* 0x00E741C4 */
 
-    /* Verify file UID matches */
-    uint32_t *entry_uid = (uint32_t *)(entry_ptr);
-    if (entry_uid[0] != file_uid->high || entry_uid[1] != file_uid->low) {
-        *status_ret = file_$object_not_locked_by_this_process;
-        return;
-    }
+    slot = 1;                                           /* 0x00E741D0 */
+    for (remaining = FILE_EXPORT_LK_SLOT_COUNT - 1; remaining >= 0; remaining--) {
+        if (FILE_$PROC_LOT_SLOT(target_asid, slot) == 0) {
 
-    /* Set initial status - will be cleared if slot found */
-    *status_ret = file_$local_lock_table_full;
+            /* 0x00E741EE-0x00E741FC */
+            FILE_$PROC_LOT_SLOT(target_asid, slot) = entry_index;
 
-    /* Acquire lock 5 (file locking lock) */
-    ML_$LOCK(5);
-
-    /*
-     * Search for free slot in target's lock table
-     * Iterate through slots 1 to 0x96 (150 entries)
-     */
-    proc_table_base = PROC_LOT_BASE + target_asid * FILE_PROC_LOCK_ENTRY_SIZE;
-
-    remaining = MAX_PROC_LOCKS - 1;  /* 0x95 */
-    slot = 1;
-
-    while (remaining >= 0) {
-        int16_t *slot_ptr = (int16_t *)(proc_table_base + PROC_LOT_OFFSET + slot * 2);
-
-        if (*slot_ptr == 0) {
-            /* Found free slot - assign lock index */
-            *slot_ptr = entry_idx;
-
-            /* Update max lock count if needed */
-            int16_t *max_ptr = (int16_t *)(LOT_MAX_COUNT_BASE + target_asid * 2);
-            if (*max_ptr < slot) {
-                *max_ptr = slot;
+            /* 0x00E741FE-0x00E74214: keep the target's high-water mark. */
+            if (slot > (int16_t)FILE_$PROC_LOT_COUNT(target_asid)) {
+                FILE_$PROC_LOT_COUNT(target_asid) = (uint16_t)slot;
             }
 
-            /* Increment lock refcount */
-            entry_ptr[0x0C]++;
-
-            /* Success */
-            *status_ret = status_$ok;
-            *index_out = (int32_t)slot;
+            entry->refcount++;                          /* 0x00E74216 */
+            *status_ret = status_$ok;                   /* 0x00E7421A */
+            /* `move.l D0,(A1)` - D0 is the sign-extended slot number. */
+            *index_out = (int32_t)slot;                 /* 0x00E74220 */
             break;
         }
-
-        slot++;
-        remaining--;
+        slot++;                                         /* 0x00E74224 */
     }
 
-    /* Release lock 5 */
-    ML_$UNLOCK(5);
+    ML_$UNLOCK(FILE_LOT_ML_LOCK_ID);                    /* 0x00E74232 */
+    return;
+
+not_locked:                                             /* 0x00E741AE */
+    *status_ret = file_$object_not_locked_by_this_process;   /* 0x000F0005 */
 }

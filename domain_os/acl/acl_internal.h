@@ -180,6 +180,142 @@ _Static_assert(sizeof(acl_$cache_slot_t) == ACL_CACHE_SLOT_SIZE, "sizeof acl_$ca
 extern acl_$cache_slot_t ACL_$ACL_CACHE[ACL_CACHE_SLOTS];   /* 0xE88834 */
 
 /*
+ * ----------------------------------------------------------------------------
+ * The ACL image cache directory (ACL module A5 data, A5 = 0xE7CF54)
+ * ----------------------------------------------------------------------------
+ *
+ * ACL_$ACL_CACHE holds the 31 raw 0x400-byte ACL images.  The bookkeeping that
+ * decides which image lives in which slot is a set of parallel A5-relative
+ * arrays that acl_$find_acl_slot (0x00E45E8E) walks:
+ *
+ *   A5+0x800  ACL_$CACHE_DIR[31]          16 bytes each  (0xE7D754)
+ *   A5+0x9F0  ACL_$CACHE_LRU_LINKS[32]     4 bytes each  (0xE7D944)
+ *   A5+0xA70  ACL_$CACHE_HASH_LINKS[32]    4 bytes each  (0xE7D9C4)
+ *   A5+0xAF0  ACL_$CACHE_HASH_BUCKETS[64]  2 bytes each  (0xE7DA44)
+ *   A5+0xB74  ACL_$CACHE_FREE_HEAD                       (0xE7DAC8)
+ *   A5+0xB76  ACL_$CACHE_LRU_HEAD                        (0xE7DACA)
+ *
+ * The addresses are contiguous and each array ends exactly where the next
+ * begins, which is what fixes their element counts:
+ * 0x800 + 31*0x10 = 0x9F0, 0x9F0 + 32*4 = 0xA70, 0xA70 + 32*4 = 0xAF0 and
+ * 0xAF0 + 64*2 = 0xB70 (= ACL_$LOCAL_LOCKSMITH).
+ *
+ * NOTE: 0xE7DACA is also the address of ACL_$SUPER_COUNT[0].  Process numbers
+ * are 1-based, so element 0 of that array is never used and the LRU head lives
+ * inside it - the same trick ACL_$ASID_FREE_BITMAP plays inside
+ * ACL_$PROJ_UIDS[0].  ACL_$ENTER_SUPER's `addq.w #0x1,(0xb76,A0)` with
+ * A0 = A5 + PROC1_$CURRENT*2 (0x00E46FA8) is what pins the array base there.
+ */
+
+/* UID_$HASH modulus for the ACL cache: the word at 0x00E45E8C, reached by the
+ * `pea (-0x20,PC)` at 0x00E45EAA.  Raw bytes 00 3D. */
+#define ACL_CACHE_HASH_MOD          61
+/* The bucket array runs to A5+0xB70, so 64 words are reserved for the 61 the
+ * modulus can produce. */
+#define ACL_CACHE_HASH_BUCKETS      64
+/* Both link arrays are 32 elements wide even though only slots 0..30 exist. */
+#define ACL_CACHE_LINK_SLOTS        32
+
+/*
+ * One directory entry: which ACL UID a slot currently holds, plus the two
+ * rights bytes acl_$find_acl_slot replays into the caller's protection record
+ * when the cached image is a "default ACL" (flag byte negative).
+ */
+typedef struct acl_$cache_dir_t {
+    uid_t    acl_uid;           /* 0x00: `cmpm.l` pair at 0x00E45F06 */
+    uint16_t reserved_08;       /* 0x08 */
+    int8_t   cached_flag;       /* 0x0A: `move.b (0x80a,A2),(A1)` 0x00E45F10 */
+    uint8_t  reserved_0b[2];    /* 0x0B */
+    uint8_t  world_rights;      /* 0x0D: -> prot->world_rights  (0x00E45F24) */
+    uint8_t  reserved_0e;       /* 0x0E */
+    uint8_t  subsys_rights;     /* 0x0F: -> prot->subsys_rights (0x00E45F2A) */
+} acl_$cache_dir_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, acl_uid)       == 0x00, "cache_dir.acl_uid");
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, cached_flag)   == 0x0A, "cache_dir.cached_flag");
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, world_rights)  == 0x0D, "cache_dir.world_rights");
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, subsys_rights) == 0x0F, "cache_dir.subsys_rights");
+_Static_assert(sizeof(acl_$cache_dir_t) == 0x10, "sizeof acl_$cache_dir_t");
+#endif
+
+/*
+ * One node of a circular doubly-linked slot list.  acl_$cache_list_insert /
+ * acl_$cache_list_remove read `next` at +0 and `prev` at +2 (0x00E44C54,
+ * 0x00E44CB2) and index the array with `lsl.l #0x2`.
+ */
+typedef struct acl_$cache_link_t {
+    int16_t next;               /* 0x00 */
+    int16_t prev;               /* 0x02 */
+} acl_$cache_link_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(acl_$cache_link_t) == 4, "sizeof acl_$cache_link_t");
+#endif
+
+extern acl_$cache_dir_t  ACL_$CACHE_DIR[ACL_CACHE_SLOTS];            /* 0xE7D754 */
+extern acl_$cache_link_t ACL_$CACHE_LRU_LINKS[ACL_CACHE_LINK_SLOTS]; /* 0xE7D944 */
+extern acl_$cache_link_t ACL_$CACHE_HASH_LINKS[ACL_CACHE_LINK_SLOTS];/* 0xE7D9C4 */
+extern int16_t ACL_$CACHE_HASH_BUCKETS_TAB[ACL_CACHE_HASH_BUCKETS];  /* 0xE7DA44 */
+extern int16_t ACL_$CACHE_FREE_HEAD;                                 /* 0xE7DAC8 */
+extern int16_t ACL_$CACHE_LRU_HEAD;                                  /* 0xE7DACA */
+
+/*
+ * acl_$acl_entry_t - one 0x20-byte entry of a cached ACL image.
+ *
+ * acl_$eval_acl_entries walks them with `lea (0x34,A0),A0` + `lea (0x20,A0),A0`
+ * (0x00E461AC / 0x00E46232) and also addresses entry i directly as
+ * `lea (0x14,slot,i*0x20)` (0x00E462DE) - so the entries are numbered from 1
+ * and entry i starts at slot+0x14+i*0x20 = &slot->entries[(i-1)*0x20].
+ */
+typedef struct acl_$acl_entry_t {
+    uid_t    person;            /* 0x00: 0x00E461C6 */
+    uid_t    group;             /* 0x08: 0x00E461DC */
+    uid_t    org;               /* 0x10: 0x00E46202 */
+    uint16_t reserved_18;       /* 0x18 */
+    uint16_t rights;            /* 0x1A: `and.w (0x1a,A0),D0w` 0x00E46228 */
+    uint32_t reserved_1c;       /* 0x1C */
+} acl_$acl_entry_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(acl_$acl_entry_t, group)  == 0x08, "acl_entry.group");
+_Static_assert(__builtin_offsetof(acl_$acl_entry_t, org)    == 0x10, "acl_entry.org");
+_Static_assert(__builtin_offsetof(acl_$acl_entry_t, rights) == 0x1A, "acl_entry.rights");
+_Static_assert(sizeof(acl_$acl_entry_t) == 0x20, "sizeof acl_$acl_entry_t");
+#endif
+
+/* Entry i (1-based) of a cached image.  slot+0x34 is entry 1. */
+#define ACL_$CACHE_ENTRY(slot, i)                                             \
+    ((acl_$acl_entry_t *)((uint8_t *)(slot)->entries + ((int32_t)(i) - 1) * 0x20))
+
+/*
+ * acl_$cache_list_insert (0x00E44C3C, was FUN_00e44c3c)
+ * acl_$cache_list_remove (0x00E44C92, was FUN_00e44c92)
+ *
+ * The two circular-doubly-linked-list primitives the ACL image cache runs its
+ * LRU and free lists on.  `head` is -1 when the list is empty; insert makes
+ * `slot` the new head, remove unlinks it (and empties the list when it was the
+ * only member).  Neither touches the entry it unlinks.
+ */
+void acl_$cache_list_insert(int16_t *head, acl_$cache_link_t *links, int16_t slot);
+void acl_$cache_list_remove(int16_t *head, acl_$cache_link_t *links, int16_t slot);
+
+/*
+ * acl_$load_acl_image (0x00E45A60, was FUN_00e45a60)
+ *
+ * acl_$find_acl_slot's miss path: takes a free (or LRU-victim) slot, maps and
+ * reads the ACL object into ACL_$ACL_CACHE and returns the slot index, or
+ * ACL_CACHE_NO_SLOT.  Argument order from acl_$find_acl_slot's pushes at
+ * 0x00E45ECE-0x00E45ED4 and confirmed by the callee frame
+ * (A6+0x08 uid, +0x0C flag, +0x10 prot, +0x14 status).
+ *
+ * TODO(source-3cq1): the body has not been emitted.
+ */
+int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
+                            acl_$prot_data_t *prot, status_$t *status_ret);
+
+
+/*
  * Project list entry (12 bytes per process)
  */
 typedef struct acl_proj_list_t {
@@ -264,6 +400,22 @@ extern int16_t ACL_$SUPER_COUNT[PROC1_MAX_PROCESSES];           /* 0xE7DACA */
 #define ACL_PID_BITMAP_BYTE(pid)    ((uint16_t)(((uint8_t)(pid) - 1u) >> 3))
 #define ACL_PID_BITMAP_MASK(pid)    ((uint8_t)(0x80u >> (((uint8_t)(pid) - 1u) & 7u)))
 
+/*
+ * ASID and PID are the SAME number as far as every table on this page is
+ * concerned (bead source-x5dd).  ACL_$ALLOC_ASID (0x00E73BB8) copies row
+ * PROC1_$CURRENT (the word at 0xE20608) into row `new_asid` (its A6+0x08 word)
+ * using identical bases, biases and strides for all six arrays -
+ * -0x6E84/0x24, -0x6584/0x24, -0x5C84/0x24, -0x4D98/0x40, -0x536C/0x0C and
+ * -0x506C/0x0C off 0xE97294 (0x00E73BCC-0x00E73C98) - and then applies the
+ * (n-1)>>3 / 0x80>>((n-1)&7) bitmap arithmetic to PROC1_$CURRENT's low byte
+ * against ACL_$ASID_FREE_BITMAP (0x00E73C9A-0x00E73CBA).  ACL_$FREE_ASID
+ * (0x00E74C6A) uses exactly the same bases with its `asid` argument.  If the
+ * two were different numbering spaces, the row ACL_$ALLOC_ASID writes would
+ * never be the row acl_$eval_rights and ACL_$RIGHTS read.
+ *
+ * 0xE20608 (PROC1_$CURRENT) and 0xE2060A (PROC1_$AS_ID) are still separate
+ * cells; only the ACL tables treat their contents interchangeably.
+ */
 extern uint8_t ACL_$ASID_FREE_BITMAP[8];    /* 0xE92534: 1=free */
 /*
  * 1 = the process was granted locksmith rights while ACL_$LOCAL_LOCKSMITH was
@@ -371,7 +523,7 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
  * obj_flags[1]=3 for the well-known volume UIDs (0x00E46074-0x00E4607A) and
  * otherwise calls AST_$GET_ACL_ATTRIBUTES (0x00E460BC).
  *
- * TODO(source-ldyv): the body has not been emitted.
+ * Emitted in acl/get_obj_acl_attrs.c.
  */
 void acl_$get_obj_acl_attrs(uid_t *uid, file_$obj_loc_t *loc,
                             ast_$acl_attr_t *attrs, status_$t *status_ret);
@@ -387,7 +539,7 @@ void acl_$get_obj_acl_attrs(uid_t *uid, file_$obj_loc_t *loc,
  *
  * Argument order from acl_$eval_rights' 0x00E467D2-0x00E467E2 pushes.
  *
- * TODO(source-5ng8): the body has not been emitted.
+ * Emitted in acl/find_acl_slot.c.
  */
 int16_t acl_$find_acl_slot(uid_t *acl_uid, int8_t *cached_flag_ret,
                            acl_$prot_data_t *prot, status_$t *status_ret);
@@ -401,7 +553,7 @@ int16_t acl_$find_acl_slot(uid_t *acl_uid, int8_t *cached_flag_ret,
  * The result is only 16 bits wide - acl_$eval_rights zero-extends it with
  * `clr.l D1 / move.w D0w,D1w` at 0x00E46880.
  *
- * TODO(source-1ifr): the body has not been emitted.
+ * Emitted in acl/eval_acl_entries.c.
  */
 uint16_t acl_$eval_acl_entries(acl_$cache_slot_t *slot, uid_t *sids,
                                uid_t *proj_uids, acl_$prot_data_t *prot);

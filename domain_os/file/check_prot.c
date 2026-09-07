@@ -1,184 +1,121 @@
 /*
- * FILE_$CHECK_PROT - Check file protection/access rights
+ * FILE_$CHECK_PROT - check a caller's rights on a file
  *
- * Checks if the current process has the requested access rights to a file.
- * First checks a per-process lock cache, then falls back to ACL_$RIGHTS.
+ * Original address: 0x00E5D172, 208 bytes.
  *
- * Original address: 0x00E5D172
+ * A fast path in front of ACL_$RIGHTS: if the caller already holds a lock on
+ * the object, the rights it was granted when the lock was taken are cached in
+ * the lock-object table (LOT) entry and no ACL evaluation is needed.
+ *
+ * Frame (A6+):
+ *   0x08 file_uid     (long) -> A3
+ *   0x0C access_mask  (word) -> D2w
+ *   0x0E slot_num     (long) the caller's per-process lock slot, 1-based
+ *   0x12 ignore_super (byte) ACL_$RIGHTS' boolean; its ADDRESS is passed on
+ *                            (`pea (0x12,A6)` at 0x00E5D226)
+ *   0x14 option_flags (word) ACL_$RIGHTS' option word; likewise by address
+ *                            (`pea (0x14,A6)` at 0x00E5D216)
+ *   0x16 rights_out   (long)
+ *   0x1A status_ret   (long) -> A2
+ *
+ * Locals (A6-):
+ *   -0x0C rights_mask long   access_mask zero-extended, ACL_$RIGHTS' third
+ *                            argument (passed by reference)
+ *
+ * Result: the cache paths leave the `moveq #0x1,D0` of the UID compare in D0;
+ * the ACL path leaves ACL_$RIGHTS' own D0.
  */
 
 #include "file/file_internal.h"
+#include "acl/acl.h"
 
 /*
- * Lock table addresses (m68k)
- *
- * The lock lookup table is organized as:
- * - Base at 0xEA202C (FILE_$LOCK_TABLE2 + offset)
- * - Indexed by PROC1_$AS_ID * 300 + slot * 2
- * - Each entry is a 16-bit index into the lock entries table
- *
- * Lock entries are at 0xE935BC with the following layout per entry:
- * - Offset 0x0C: UID high (4 bytes)
- * - Offset 0x10: UID low (4 bytes)
- * - Offset 0x1A: Flags byte
- * - Entry size: 28 bytes (0x1C)
- *
- * Lock flags (bit meanings):
- * - Bit 4 (0x10): Entry is invalid/placeholder
- * - Other bits: Access rights mask
+ * The two ACL statuses this routine raises directly rather than through
+ * ACL_$RIGHTS (`move.l #0x230001` at 0x00E5D1FE, `#0x230002` at 0x00E5D20C).
  */
-
-/* Lock lookup table base (indexed by AS_ID and slot) */
-#define LOCK_LOOKUP_TABLE_BASE      0xEA202C
-#define LOCK_LOOKUP_OFFSET          0x2662   /* Offset from table to first entry */
-#define LOCK_ENTRIES_PER_ASID       300      /* Entries per address space */
-#define MAX_LOCK_SLOT               0x96     /* Maximum slot value (150) */
-
-/* Lock entry offsets from entry base */
-#define LOCK_ENTRY_SIZE             28       /* 0x1C bytes per entry */
-#define LOCK_ENTRY_UID_HIGH_OFF     0x0C
-#define LOCK_ENTRY_UID_LOW_OFF      0x10
-#define LOCK_ENTRY_FLAGS_OFF        0x1A
-
-/* Lock entry base address */
-/* TODO(source-xi4k): 0xE935BC is ACL_$LOCKSMITH_OVERRIDE_BITMAP; the lock
- * table is addressed through 0xE935CC with a 0x1C stride
- * (FILE_$PRIV_LOCK_$ALLOC_ENTRY 0x00E5EBCA). */
-#define LOCK_ENTRIES_BASE           0xE935BC
-
-/* Status codes */
 #define status_$no_right_to_perform_operation               0x00230001
 #define status_$insufficient_rights_to_perform_operation    0x00230002
 
 /*
- * FILE_$CHECK_PROT
- *
- * Checks protection rights for a file. Uses a fast path through the
- * per-process lock cache when available, otherwise falls back to
- * full ACL checking via ACL_$RIGHTS.
- *
- * Parameters:
- *   file_uid     A6+0x08  UID of file to check (8 bytes)
- *   access_mask  A6+0x0C  Required access rights mask (word)
- *   slot_num     A6+0x0E  Lock table slot number (0-149, longword)
- *   ignore_super A6+0x12  ACL_$RIGHTS' ignore_super boolean; its ADDRESS is
- *                         handed to ACL_$RIGHTS (`pea (0x12,A6)` at
- *                         0x00E5D226)
- *   option_flags A6+0x14  ACL_$RIGHTS' option-flags word; its ADDRESS is
- *                         handed to ACL_$RIGHTS (`pea (0x14,A6)` at
- *                         0x00E5D216)
- *   rights_out   A6+0x16  Output: actual rights available
- *   status_ret   A6+0x1A  Output: status code
- *
- * Returns:
- *   1 if rights check completed (check status for success/failure)
- *   Result from ACL_$RIGHTS otherwise
- *
- * Flow:
- * 1. If slot_num is valid (1-149):
- *    a. Look up entry in per-AS lock table
- *    b. If entry found and UID matches and entry is valid:
- *       - Return rights from cache
- * 2. Otherwise call ACL_$RIGHTS for full access check
+ * A LOT entry's rights byte carries bit 4 as "this entry does not speak for
+ * the object's protection" (`btst.l #0x4,D4` at 0x00E5D1F4) - the same bit
+ * acl/acl_internal.h calls ACL_RIGHT_IGNORE.
  */
+#define FILE_LOT_RIGHTS_IGNORE      0x10
+
+/*
+ * Slot numbers run 1..0x95 here.  `cmpi.l #0x96,D0` + `bcc` (0x00E5D192) is an
+ * UNSIGNED test, so 0x96 itself falls through to the ACL path - unlike
+ * FILE_$EXPORT_LK, whose `bls` at 0x00E74152 accepts 0x96.
+ */
+#define FILE_CHECK_PROT_MAX_SLOT    0x96
+
 int16_t FILE_$CHECK_PROT(uid_t *file_uid, uint16_t access_mask, uint32_t slot_num,
                          boolean ignore_super, int16_t option_flags,
                          uint16_t *rights_out, status_$t *status_ret)
 {
-    int16_t lock_index;
-    int32_t entry_offset;
-    uint8_t entry_flags;
-    uint32_t *entry_ptr;
-    uint32_t rights_mask;
+    int16_t   entry_index;              /* D1w */
+    uint16_t  rights;                   /* D4w */
+    uint32_t  rights_mask;              /* A6-0x0C */
+    file_lock_entry_detail_t *entry;
 
-    *status_ret = status_$ok;
+    *status_ret = status_$ok;                           /* 0x00E5D18A */
 
-    /*
-     * Check if slot_num is valid for cache lookup.
-     * Slot 0 is not used, and max is 149 (0x95).
-     */
-    if (slot_num != 0 && slot_num < MAX_LOCK_SLOT) {
+    /* 0x00E5D18C-0x00E5D198 */
+    if (slot_num != 0 && slot_num < FILE_CHECK_PROT_MAX_SLOT) {
+
         /*
-         * Calculate address in lock lookup table:
-         * table_addr = LOCK_LOOKUP_TABLE_BASE + PROC1_$AS_ID * 300 + slot_num * 2 - LOCK_LOOKUP_OFFSET
-         *
-         * The lookup table contains 16-bit indices into the lock entries array.
+         * 0x00E5D19A-0x00E5D1BA: the caller's per-process lock table.  The
+         * slot holds an index into the global LOT; zero means "not held".
          */
-#ifdef M68K_TARGET
-        int16_t *lookup_table = (int16_t *)(LOCK_LOOKUP_TABLE_BASE +
-                                            (int16_t)(PROC1_$AS_ID * LOCK_ENTRIES_PER_ASID) +
-                                            slot_num * 2 - LOCK_LOOKUP_OFFSET);
-        lock_index = *lookup_table;
-#else
-        /* For non-m68k targets, this would need to access emulated memory */
-        lock_index = 0;
-#endif
+        entry_index = (int16_t)FILE_$PROC_LOT_SLOT(PROC1_$AS_ID, slot_num);
 
-        if (lock_index != 0) {
+        if (entry_index != 0) {
             /*
-             * Found an entry. Calculate the offset into lock entries table.
-             * Each lock entry is 28 bytes.
+             * 0x00E5D1BC-0x00E5D1D6: `lsl.l #0x2` / `neg` / `lsl.l #0x3` /
+             * `add` is index*0x1C, added to 0xE935CC - which addresses the END
+             * of entry `index`, so the fields are read at negative
+             * displacements.  In the C model that is FILE_$LOT_ENTRY(index)
+             * (0xE935CC + (index-1)*0x1C) with ordinary field offsets.
              */
-            entry_offset = (int32_t)lock_index * LOCK_ENTRY_SIZE;
+            entry = FILE_$LOT_ENTRY(entry_index);
 
-#ifdef M68K_TARGET
-            /* Get entry flags */
-            entry_flags = *(uint8_t *)(LOCK_ENTRIES_BASE + entry_offset + LOCK_ENTRY_FLAGS_OFF - LOCK_ENTRY_UID_HIGH_OFF);
+            /* 0x00E5D1D6: `move.b (-0x2,A1,D0)` is entry->rights (+0x1A);
+             * 0x00E5D1DE zero-extends it into the caller's word.  Note this
+             * happens BEFORE the UID check, so a foreign entry still
+             * overwrites *rights_out. */
+            rights = (uint16_t)entry->rights;
+            *rights_out = rights;
 
-            /* Return current rights */
-            *rights_out = (uint16_t)entry_flags;
+            /* 0x00E5D1E4-0x00E5D1F8: the entry must be this file's, and must
+             * not be flagged "ignore". */
+            if (entry->uid_high == file_uid->high &&
+                entry->uid_low  == file_uid->low &&
+                (rights & FILE_LOT_RIGHTS_IGNORE) == 0) {
 
-            /* Get entry UID and compare */
-            entry_ptr = (uint32_t *)(LOCK_ENTRIES_BASE + entry_offset);
-
-            /* Check if UID matches and entry is valid (bit 4 not set) */
-            if (entry_ptr[0] == file_uid->high &&
-                entry_ptr[1] == file_uid->low &&
-                (entry_flags & 0x10) == 0) {
-
-                /* If no rights at all, return error */
-                if (entry_flags == 0) {
+                if (rights == 0) {                      /* 0x00E5D1FA */
                     *status_ret = status_$no_right_to_perform_operation;
                     return 1;
                 }
-
-                /* Check if we have the required rights */
-                if ((access_mask & entry_flags) == access_mask) {
-                    /* Have sufficient rights */
-                    return 1;
+                if ((rights & access_mask) == access_mask) {
+                    return 1;                           /* 0x00E5D20A */
                 }
-
-                /* Insufficient rights */
                 *status_ret = status_$insufficient_rights_to_perform_operation;
-                return 1;
+                return 1;                               /* 0x00E5D20C */
             }
-#else
-            (void)entry_offset;
-            (void)entry_flags;
-            (void)entry_ptr;
-#endif
         }
     }
 
     /*
-     * Cache miss or invalid slot - perform full ACL check.
-     *
-     * 0x00E5D214-0x00E5D22C, pushed right to left:
-     *   pea (A2)          status_ret
-     *   pea (0x14,A6)     &option_flags
-     *   pea (-0xc,A6)     &rights_mask   (access_mask, zero-extended to a long
-     *                                     by `clr.l D0` / `move.w D2w,D0w`)
-     *   pea (0x12,A6)     &ignore_super
-     *   pea (A3)          file_uid
-     *
-     * The two parameter slots are passed by reference, so they are taken as
-     * addresses of this function's own parameters here.
+     * 0x00E5D214-0x00E5D236: the full ACL evaluation.  All four of
+     * ACL_$RIGHTS' non-status arguments are passed by reference, so the two
+     * that are this routine's own parameters have their addresses taken here.
      */
-    rights_mask = (uint32_t)access_mask;
+    rights_mask = (uint32_t)access_mask;                /* 0x00E5D21C */
     *rights_out = (uint16_t)ACL_$RIGHTS(file_uid, &ignore_super, &rights_mask,
                                         &option_flags, status_ret);
 
-    /* 0x00E5D236 `move.w D0w,(A1)`: only the low word reaches *rights_out,
-     * and ACL_$RIGHTS' D0 is also this function's own result. */
+    /* `move.w D0w,(A1)`: only the low word reaches *rights_out, and
+     * ACL_$RIGHTS' D0 is also this function's own result. */
     return (int16_t)*rights_out;
 }

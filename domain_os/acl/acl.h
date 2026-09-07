@@ -474,8 +474,14 @@ void ACL_$DEFAULT_ACL(uid_t *acl_ret, int16_t *acl_type);
 /*
  * ACL_$DEF_ACLDATA - Get default ACL data
  *
+ * Fills a 44-byte acl_$prot_data_t with the system default protection -
+ * owner RGYC_$P_SYS_USER_UID (0xE174EC), group RGYC_$G_NIL_UID (0xE17524),
+ * org PPO_$NIL_ORG_UID (0xE17574), rights 0x10/0x10/0x10 and world 0x0F
+ * (0x00E478EE-0x00E4792E) - and sets *uid_out to UID_$NIL
+ * (0x00E4793E-0x00E4794A).
+ *
  * Parameters:
- *   acl_data_out - Output ACL data buffer (44 bytes)
+ *   acl_data_out - Output ACL data buffer (44 bytes, an acl_$prot_data_t)
  *   uid_out      - Output UID buffer (8 bytes, set to UID_$NIL)
  *
  * Original address: 0x00E478DC
@@ -485,11 +491,18 @@ void ACL_$DEF_ACLDATA(void *acl_data_out, void *uid_out);
 /*
  * ACL_$CONVERT_FUNKY_ACL - Convert "funky" ACL format
  *
+ * Bits 4..11 of acl_uid.low's high word select the encoding; 0x80, 0x40 and
+ * 0x20 (after `lsr.w #4` + `andi.w #0xe0`, 0x00E49040-0x00E49060) are the three
+ * the routine knows, anything else falls through untouched.
+ *
  * Parameters:
- *   acl_uid        - ACL UID in funky format
- *   acl_data_out   - Output ACL data buffer (48 bytes)
- *   prot_info_out  - Output protection info (8 bytes)
- *   target_uid_out - Output target ACL UID (8 bytes)
+ *   acl_uid        - ACL UID in funky format (8 bytes)
+ *   acl_data_out   - Output ACL data buffer (an acl_$prot_data_t)
+ *   prot_info_out  - In/out: the normalised object UID (8 bytes).  0x00E490E4
+ *                    can set bit 24 of its low half (`bset.b #0x0,(0x4,A3)`).
+ *   target_uid_out - Output ACL type UID (8 bytes): ACL_$FILE_ACL (0xE17444)
+ *                    or ACL_$DIR_ACL (0xE1744C), stored at 0x00E490D2 /
+ *                    0x00E49126
  *   status_ret     - Output status code
  *
  * Original address: 0x00E4900C

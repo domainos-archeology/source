@@ -50,7 +50,13 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
     file_$obj_loc_t   loc;              /* A6-0x48 */
     ast_$acl_attr_t   attrs;            /* A6-0x80 */
     acl_$prot_data_t *prot;             /* = ACL_$PROT_DATA(&attrs) = A6-0x74 */
-    uid_t             local_sids[4];    /* A6-0x28 */
+    /*
+     * A6-0x28.  The original frame has 40 bytes here (A6-0x28..A6-0x01) and
+     * acl_$eval_acl_entries copies 36 of them (`moveq #0x8,D5` + nine
+     * `move.l`, 0x00E46276), so the array must be five UIDs wide even though
+     * only four are ever written.
+     */
+    uid_t             local_sids[5];    /* A6-0x28 */
     uid_t            *sid_p;            /* A6-0x84 */
     uid_t            *proj_p;           /* A6-0x88 */
     /*

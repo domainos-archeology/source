@@ -159,16 +159,16 @@ void AST_$SET_ATTRIBUTE(uid_t *uid, uint16_t attr_id, void *value,
 
 /* --- name_$old_add_link_local --- */
 static int       la_calls;
-static uint16_t  la_flags;
+static int16_t   la_acl_rights;
 static uint16_t  la_name_len;
 static status_$t la_status_out;
-void name_$old_add_link_local(uid_t *dir_uid, uint16_t flags, char *name,
+void name_$old_add_link_local(uid_t *dir_uid, int16_t acl_rights, char *name,
                               uint16_t name_len, uid_t *file_uid,
                               status_$t *status_ret)
 {
     (void)dir_uid; (void)name; (void)file_uid;
     la_calls++;
-    la_flags    = flags;
+    la_acl_rights = acl_rights;
     la_name_len = name_len;
     *status_ret = la_status_out;
 }
@@ -403,7 +403,7 @@ TEST(local_add_and_rollback)
     reset();
     ASSERT_EQ(status_$ok, (uint32_t)call(false));
     ASSERT_EQ(1, la_calls);
-    ASSERT_EQ(0, la_flags);
+    ASSERT_EQ(0, la_acl_rights);
     ASSERT_EQ(2, la_name_len);
     ASSERT_EQ(1, sa_calls);         /* only the bump */
 
