@@ -9,9 +9,14 @@
 
 #include "smd/smd_internal.h"
 
-/* Lock data addresses from original code */
-static const uint32_t load_crsr_lock_data = 0x00E6DFF8;
-static const uint32_t load_crsr_lock_data_2 = 0x00E6D92C;
+/*
+ * The two constant words this function passes by reference live in the code
+ * region and are reached with pea (d,PC):
+ *   0x00E6FC86 pea (-0x1c90,PC) -> 0x00E6FC88 - 0x1C90 = 0x00E6DFF8 (value 1)
+ *   0x00E6FD00 pea (-0x1d0a,PC) -> 0x00E6FD02 - 0x1D0A = 0x00E6DFF8 (value 1)
+ *   0x00E6FC96 pea (-0x236c,PC) -> 0x00E6FC98 - 0x236C = 0x00E6D92C (value 0)
+ * They are SMD_SYNC_LOCK_DATA and SMD_ACQ_LOCK_DATA (smd_internal.h).
+ */
 
 /*
  * Cursor bitmap structure:
@@ -88,7 +93,7 @@ void SMD_$LOAD_CRSR_BITMAP(void *param1,
     smd_cursor_pattern_t *cursor_data;
     int8_t need_tracking_update;
     int16_t i;
-    int32_t unit_offset;
+    int16_t unit;
     smd_display_hw_t *hw;
 
     (void)param1;  /* Unused parameter */
@@ -116,27 +121,37 @@ void SMD_$LOAD_CRSR_BITMAP(void *param1,
 
     *status_ret = status_$ok;
 
-    /* Save current unit for this ASID */
-    SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID] = SMD_DEFAULT_DISPLAY_UNIT;
+    /*
+     * 0x00e6fc4a "move.w (0x1d98,A5),(0x48,A5,D3w*0x1)": the unit that gets
+     * bound to this ASID is SMD_GLOBALS.default_unit, not the separate
+     * SMD_DEFAULT_DISPLAY_UNIT global at 0x00E84924.
+     */
+    unit = SMD_GLOBALS.default_unit;
+    SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID] = (uint16_t)unit;
 
-    /* Get cursor data pointer from cursor table */
+    /* 0x00e6fc54-0x00e6fc64 */
+    hw = smd_$unit_rec(unit)->hw;
+
+    /* 0x00e6fc6a-0x00e6fc76: the cursor pattern table is 0-based, base
+     * 0x00E27366 indexed by cursor_num*4. */
     cursor_data = SMD_CURSOR_PTABLE[cursor_idx];
 
-    /* Calculate unit offset for checking if this is the active cursor */
-    unit_offset = (int32_t)SMD_DEFAULT_DISPLAY_UNIT * SMD_DISPLAY_UNIT_SIZE;
-    hw = SMD_DISPLAY_UNITS[SMD_DEFAULT_DISPLAY_UNIT].hw;
-
-    /* Check if we need to update tracking (cursor is currently displayed) */
-    need_tracking_update = 0;
-    if (cursor_idx == hw->cursor_number && (int8_t)hw->cursor_visible < 0) {
-        need_tracking_update = 0xFF;
-        /* Add tracking rectangle to hide cursor during update */
+    /*
+     * 0x00e6fc78-0x00e6fc82: "seq D3b" then "and.b (0x38,A0),D3b" - the flag
+     * is the byte-wise AND of two Domain booleans, and the branch is bpl, so
+     * the update only happens when the result is negative.
+     */
+    need_tracking_update =
+        (int8_t)((cursor_idx == hw->cursor_number ? (uint8_t)0xFF : (uint8_t)0) &
+                 (uint8_t)hw->cursor_visible);
+    if (need_tracking_update < 0) {
+        /* 0x00e6fc84-0x00e6fc8e */
         SMD_$ADD_TRK_RECT(&SMD_GLOBALS.kbd_cursor_track_rect,
-                          (uint16_t *)&load_crsr_lock_data, status_ret);
+                          (uint16_t *)&SMD_SYNC_LOCK_DATA, status_ret);
     }
 
-    /* Acquire display for exclusive access */
-    SMD_$ACQ_DISPLAY((void *)&load_crsr_lock_data_2);
+    /* 0x00e6fc96 */
+    SMD_$ACQ_DISPLAY((int16_t *)&SMD_ACQ_LOCK_DATA);
 
     /* 00e6fca0-00e6fcb2: width, height, hot_x, then height - hot_y - 1 */
     cursor_data->width = width;
@@ -157,9 +172,10 @@ void SMD_$LOAD_CRSR_BITMAP(void *param1,
     /* Release display lock */
     SMD_$REL_DISPLAY();
 
-    /* If cursor was visible, delete tracking rectangle to show it again */
-    if ((int8_t)need_tracking_update < 0) {
+    /* 0x00e6fcfa-0x00e6fd08: if the cursor was visible, drop the tracking
+     * rectangle again so it reappears. */
+    if (need_tracking_update < 0) {
         SMD_$DEL_TRK_RECT(&SMD_GLOBALS.kbd_cursor_track_rect,
-                          (uint16_t *)&load_crsr_lock_data, status_ret);
+                          (uint16_t *)&SMD_SYNC_LOCK_DATA, status_ret);
     }
 }

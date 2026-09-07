@@ -48,17 +48,15 @@
  * 6. Writes the BLT control value to the event count location
  *
  * Parameters:
- *   hw - Display hardware info structure
- *   ec - Event count for completion signaling (actually a BLT control pointer)
- *
- * The ec parameter is somewhat misnamed - it's actually used to write the
- * BLT control value that starts the scroll operation.
+ *   hw        - Display hardware info structure
+ *   ctrl_regs - Display controller register base (the unit record's +0xFC
+ *               field; SMD_$SOFT_SCROLL pushes it by value at 0x00E6F38C)
  *
  * Original assembly at 0x00E15C68:
  *   move.l A5,-(SP)              ; Save A5
  *   movea.l A0,A5                ; A5 = dispatch table base
  *   movea.l (0x8,SP),A1          ; A1 = hw parameter
- *   movea.l (0xc,SP),A0          ; A0 = ec parameter (BLT control ptr)
+ *   movea.l (0xc,SP),A0          ; A0 = ctrl_regs parameter
  *   move.w #0x2,(0x2,A1)         ; hw->lock_state = 2 (SCROLL)
  *   ori.w #0x20,(0x22,A1)        ; hw->video_flags |= 0x20
  *   clr.w (0x20,A1)              ; hw->field_20 = 0
@@ -66,14 +64,13 @@
  *   jsr (0x150,A5)               ; Call smd_$setup_scroll_blt
  *   or.w (0x22,A1),D0w           ; D0 |= hw->video_flags
  *   or.w #-0x7ff0,D0w            ; D0 |= 0x8010
- *   move.w D0w,(A0)              ; *ec = D0 (starts BLT)
+ *   move.w D0w,(A0)              ; ctrl_regs[0] = D0 (starts BLT)
  *   movea.l (SP)+,A5             ; Restore A5
  *   rts
  */
-void SMD_$START_SCROLL(smd_display_hw_t *hw, ec_$eventcount_t *ec)
+void SMD_$START_SCROLL(smd_display_hw_t *hw, SMD_HW_REG_PTR ctrl_regs)
 {
     uint16_t blt_ctl;
-    uint16_t *blt_ptr = (uint16_t *)ec;  /* ec is actually a BLT control ptr */
 
     /* Set lock state to indicate scroll in progress */
     hw->lock_state = SMD_LOCK_STATE_SCROLL;
@@ -81,8 +78,9 @@ void SMD_$START_SCROLL(smd_display_hw_t *hw, ec_$eventcount_t *ec)
     /* Set video flag bit 5 to indicate scroll operation */
     hw->video_flags |= 0x20;
 
-    /* Clear field_20 (scroll state flag?) */
+    /* "clr.w (0x20,A1)" clears the whole word at +0x20, i.e. both bytes */
     hw->field_20 = 0;
+    hw->field_21 = 0;
 
     /* Save operation event count to field_1c */
     /* This preserves the EC state during the scroll */
@@ -90,7 +88,7 @@ void SMD_$START_SCROLL(smd_display_hw_t *hw, ec_$eventcount_t *ec)
 
     /* Call SAU-specific BLT setup function
      * This sets up the BLT registers and returns control flags */
-    blt_ctl = smd_$setup_scroll_blt(blt_ptr, hw);
+    blt_ctl = smd_$setup_scroll_blt(ctrl_regs, hw);
 
     /* Combine BLT control with video flags and start bit
      * 0x8010 = start bit (0x8000) + unknown flags (0x10) */
@@ -98,5 +96,5 @@ void SMD_$START_SCROLL(smd_display_hw_t *hw, ec_$eventcount_t *ec)
     blt_ctl |= 0x8010;
 
     /* Write to BLT control register to start the operation */
-    *blt_ptr = blt_ctl;
+    ctrl_regs[0] = blt_ctl;
 }

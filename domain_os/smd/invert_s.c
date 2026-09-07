@@ -10,9 +10,6 @@
 
 #include "smd/smd_internal.h"
 
-/* Lock data for display acquisition */
-static const uint32_t invert_s_lock_data = 0x00E6D92C;
-
 /*
  * SMD_$INVERT_S - Invert display (user-callable)
  *
@@ -48,17 +45,18 @@ static const uint32_t invert_s_lock_data = 0x00E6D92C;
  *   00e6ddd8    move.l D0,D1               ; D1 = D0
  *   00e6ddda    add.l D1,D1                ; D1 *= 2
  *   00e6dddc    add.l D1,D0                ; D0 += D1 (D0 *= 3, so D0 = unit * 96)
- *   00e6ddde    lea (0x0,A1,D0*0x1),A2     ; A2 = &SMD_DISPLAY_INFO[unit]
+ *   00e6ddde    lea (0x0,A1,D0*0x1),A2     ; A2 = info base + unit*0x60
  *   00e6dde2    clr.l (A0)                 ; *status_ret = 0
- *   00e6dde4    pea (-0x4ba,PC)            ; push lock_data
+ *   00e6dde4    pea (-0x4ba,PC)            ; &SMD_ACQ_LOCK_DATA
+ *                                          ; (0x00e6dde6 - 0x4ba = 0x00e6d92c)
  *   00e6dde8    bsr.w 0x00e6eb42           ; ACQ_DISPLAY
  *   00e6ddec    addq.w #0x4,SP
- *   00e6ddee    pea (-0x60,A2)             ; push display_info - 0x60
+ *   00e6ddee    pea (-0x60,A2)             ; &SMD_DISPLAY_INFO[unit-1]
  *   00e6ddf2    move.w D2w,D1w             ; D1 = unit
  *   00e6ddf4    movea.l #0xe2e3fc,A0       ; A0 = SMD_DISPLAY_UNITS base
  *   00e6ddfa    muls.w #0x10c,D1           ; D1 = unit * 0x10C
- *   00e6ddfe    lea (0x0,A0,D1*0x1),A1     ; A1 = &unit[D2]
- *   00e6de02    move.l (0x14,A1),-(SP)     ; push unit.field_14 (display base)
+ *   00e6ddfe    lea (0x0,A0,D1*0x1),A1     ; A1 = biased unit record
+ *   00e6de02    move.l (0x14,A1),-(SP)     ; rec->display_base (record +0x108)
  *   00e6de06    jsr 0x00e70376.l           ; INVERT_DISP
  *   00e6de0c    addq.w #0x8,SP
  *   00e6de0e    bsr.w 0x00e6ec10           ; REL_DISPLAY
@@ -69,49 +67,38 @@ static const uint32_t invert_s_lock_data = 0x00E6D92C;
 void SMD_$INVERT_S(status_$t *status_ret)
 {
     uint16_t asid;
-    uint16_t unit_num;
-    smd_display_slot_t *unit;
+    int16_t unit_num;
     smd_display_info_t *info;
 
-    /* Default to error status */
+    /* 0x00e6ddb8: the error status is stored first and only cleared later */
     *status_ret = status_$display_invalid_use_of_driver_procedure;
 
-    /* Get current process's address space ID */
+    /* 0x00e6ddbe-0x00e6ddc6 */
     asid = PROC1_$AS_ID;
-
-    /* Look up display unit for this ASID */
-    unit_num = SMD_GLOBALS.asid_to_unit[asid];
+    unit_num = (int16_t)SMD_GLOBALS.asid_to_unit[asid];
 
     if (unit_num == 0) {
-        /* No display associated with this process */
+        /* No display associated with this process (0x00e6ddca) */
         return;
     }
 
-    /* Clear status - we have a valid display */
+    /* 0x00e6ddce-0x00e6ddde plus the -0x60 at 0x00e6ddee: the info table is
+     * 1-based on the unit number. */
+    info = smd_$unit_info(unit_num);
+
+    /* 0x00e6dde2 */
     *status_ret = status_$ok;
 
-    /* Get unit and info pointers */
-    unit = &SMD_DISPLAY_UNITS[unit_num];
-    info = &SMD_DISPLAY_INFO[unit_num];
-
-    /* Acquire display for exclusive access */
-    SMD_$ACQ_DISPLAY((void *)&invert_s_lock_data);
+    /* 0x00e6dde4: the lock word is the code-region constant at 0x00E6D92C */
+    SMD_$ACQ_DISPLAY((int16_t *)&SMD_ACQ_LOCK_DATA);
 
     /*
-     * Call INVERT_DISP with:
-     *   - display_base: 00e6de02 move.l (0x14,A1),-(SP), i.e. the unit
-     *     record's display memory base (record +0x108)
-     *   - display_info offset by -0x60 from computed address
-     *
-     * The -0x60 offset in the original code adjusts for the
-     * way the info table is indexed. Since info = &table[unit],
-     * info - 0x60 would be &table[unit-1] (each entry is 0x60 bytes).
-     * This suggests the display_info parameter is used to access
-     * data from the "previous" entry, likely for some hardware
-     * configuration purpose.
+     * 0x00e6ddee-0x00e6de06: arguments are pushed right to left, so the
+     * display memory base (record +0x108, pushed last at 0x00e6de02) is the
+     * first argument and the info entry the second.
      */
-    SMD_$INVERT_DISP(smd_$unit_rec((int16_t)unit_num)->display_base, info - 1);
+    SMD_$INVERT_DISP(smd_$unit_rec(unit_num)->display_base, info);
 
-    /* Release display lock */
+    /* 0x00e6de0e */
     SMD_$REL_DISPLAY();
 }

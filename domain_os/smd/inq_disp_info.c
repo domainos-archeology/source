@@ -25,13 +25,48 @@
  *   00e70154    bmi.b 0x00e70160                   ; if valid, continue
  *   00e70156    move.l #0x130001,(A4)              ; status = invalid_unit
  *   00e7015c    bra.w 0x00e701e4
- *   ; ... continues with display type and resolution lookup
+ *   00e70160    move.w (A3),D0w                    ; D0 = *unit
+ *   00e70162    movea.l #0xe27376,A0
+ *   00e70168    move.w D0w,D1w
+ *   00e7016a    lsl.w #0x5,D1w                     ; unit * 32
+ *   00e7016c    move.w D1w,D2w
+ *   00e7016e    add.w D2w,D2w                      ; unit * 64
+ *   00e70170    add.w D2w,D1w                      ; unit * 96
+ *   00e70172    move.w (-0x60,A0,D1w*0x1),(A2)     ; info[unit-1].display_type
+ *   00e70176    move.w D0w,D1w
+ *   00e70178    movea.l #0xe2e3fc,A1
+ *   00e7017e    muls.w #0x10c,D1
+ *   00e70182    lea (0x0,A1,D1*0x1),A0             ; biased unit record
+ *   00e70186    movea.l (-0xf4,A0),A1              ; A1 = rec->hw
+ *   00e7018a    move.w (0x50,A1),D1w               ; hw->max_x
+ *   00e7018e    addq.w #0x1,D1w
+ *   00e70190    move.w D1w,(0x6,A2)                ; result->width
+ *   00e70194    move.w (0x54,A1),D1w               ; hw->max_y
+ *   00e70198    addq.w #0x1,D1w
+ *   00e7019a    move.w D1w,(0x8,A2)                ; result->height
+ *   00e7019e    move.w (A2),D0w
+ *   00e701a0    subq.w #0x1,D0w
+ *   00e701a2    cmpi.w #0xb,D0w                    ; types 1..11 only
+ *   00e701a6    bcc.b 0x00e701e4
+ *   00e701a8    add.w D0w,D0w
+ *   00e701aa    move.w (0xe701b2,PC,D0w*0x1),D0w   ; jump table at 0x00E701B2
+ *   00e701ae    jmp (0xe701b2,PC,D0w*0x1)
+ *   00e701c8    move.l #0x4000400,(0x2,A2)         ; 1024 x 1024
+ *   00e701d0    bra.b 0x00e701e4
+ *   00e701d2    move.l #0x4000800,(0x2,A2)         ; 1024 x 2048
+ *   00e701da    bra.b 0x00e701e4
+ *   00e701dc    move.l #0x8000400,(0x2,A2)         ; 2048 x 1024
+ *   00e701e4    movem.l (-0x18,A6),{  D2 A2 A3 A4 A5}
+ *   00e701ea    unlk A6
+ *   00e701ec    rts
+ *
+ * The jump table at 0x00E701B2 (read with gsk, 11 words):
+ *   0016 0016 0020 0020 002a 0016 0032 0016 002a 0016 0016
+ * i.e. types 1,2,6,8,10,11 -> 0x00E701C8; types 3,4 -> 0x00E701D2;
+ * types 5,9 -> 0x00E701DC; type 7 -> 0x00E701E4 (nothing at all).
  */
 
 #include "smd/smd_internal.h"
-
-/* Forward declaration */
-static int8_t smd_validate_unit(uint16_t unit);
 
 /*
  * SMD_$INQ_DISP_INFO - Inquire display information
@@ -46,98 +81,67 @@ static int8_t smd_validate_unit(uint16_t unit);
  */
 void SMD_$INQ_DISP_INFO(uint16_t *unit, smd_disp_info_result_t *info, status_$t *status_ret)
 {
-    smd_display_slot_t *disp_unit;
     smd_display_hw_t *hw;
     uint16_t disp_type;
 
-    /* Initialize output structure to zero */
+    /* 0x00e7013e-0x00e70146: the whole 10-byte result is cleared first. */
     info->display_type = 0;
-    info->bits_per_pixel = 0;
-    info->num_planes = 0;
-    info->height = 0;
+    info->mem_width = 0;
+    info->mem_height = 0;
     info->width = 0;
-
-    /* Assume success */
+    info->height = 0;
     *status_ret = status_$ok;
 
-    /* Validate unit number */
-    if (smd_validate_unit(*unit) >= 0) {
+    /* 0x00e7014c-0x00e70156 */
+    if (smd_$validate_unit(*unit) >= 0) {
         *status_ret = status_$display_invalid_unit_number;
         return;
     }
 
-    /* Get display type from info table */
-    disp_type = SMD_DISPLAY_INFO[*unit].display_type;
+    /* 0x00e70172: the info table is 1-based on the unit number. */
+    disp_type = smd_$unit_info((int16_t)*unit)->display_type;
     info->display_type = disp_type;
 
-    /* Get hardware info for dimensions */
-    disp_unit = smd_get_unit(*unit);
-    hw = disp_unit->hw;
-    /*
-     * 00e7018a move.w (0x50,A1),D1w / addq.w #1 / move.w D1w,(0x6,A2)
-     * 00e70194 move.w (0x54,A1),D1w / addq.w #1 / move.w D1w,(0x8,A2)
-     *
-     * hw->max_x lands at +0x06 of the result record and hw->max_y at +0x08.
-     * The `height`/`width` names in smd_disp_info_result_t are the wrong way
-     * round for those offsets, but the byte layout below is what the original
-     * produces, so it is kept as-is.
-     * TODO(source-5nq5): rename smd_disp_info_result_t's +0x06/+0x08 fields
-     * (and TPAD_$INIT's use of them) once TPAD_$INIT has been checked against
-     * its assembly.
-     */
-    info->height = (uint16_t)(hw->max_x + 1);
-    info->width = (uint16_t)(hw->max_y + 1);
+    /* 0x00e70178-0x00e70186 */
+    hw = smd_$unit_rec((int16_t)*unit)->hw;
+
+    /* 0x00e7018a / 0x00e70194: max_x + 1 is the width, max_y + 1 the height */
+    info->width = (uint16_t)(hw->max_x + 1);
+    info->height = (uint16_t)(hw->max_y + 1);
 
     /*
-     * Set bits_per_pixel and num_planes based on display type.
-     * Original uses a switch/jump table at 0x00e701b2.
+     * 0x00e7019e-0x00e701dc: the frame-buffer dimensions, written as a single
+     * longword covering +0x02 and +0x04.  Types outside 1..11 - and type 7 -
+     * leave both at zero.
      */
     switch (disp_type) {
-        case SMD_DISP_TYPE_MONO_LANDSCAPE:      /* 1 */
-        case SMD_DISP_TYPE_MONO_PORTRAIT:       /* 2 */
+        case SMD_DISP_TYPE_MONO_PORTRAIT:       /* 1 */
+        case SMD_DISP_TYPE_MONO_LANDSCAPE:      /* 2 */
         case SMD_DISP_TYPE_MONO_1024x1024_A:    /* 6 */
         case SMD_DISP_TYPE_MONO_1024x1024_B:    /* 8 */
         case SMD_DISP_TYPE_MONO_1024x1024_C:    /* 10 */
         case SMD_DISP_TYPE_MONO_1024x1024_D:    /* 11 */
-            /* Monochrome: 4 bits/pixel, 4 planes */
-            info->bits_per_pixel = 4;
-            info->num_planes = 4;
+            /* 0x00e701c8 move.l #0x04000400 */
+            info->mem_width = 0x0400;
+            info->mem_height = 0x0400;
             break;
 
         case SMD_DISP_TYPE_COLOR_1024x2048:     /* 3 */
         case SMD_DISP_TYPE_COLOR_1024x2048_B:   /* 4 */
-            /* Color: 4 bits/pixel, 8 planes */
-            info->bits_per_pixel = 4;
-            info->num_planes = 8;
+            /* 0x00e701d2 move.l #0x04000800 */
+            info->mem_width = 0x0400;
+            info->mem_height = 0x0800;
             break;
 
         case SMD_DISP_TYPE_HI_RES_2048x1024:    /* 5 */
         case SMD_DISP_TYPE_HI_RES_2048x1024_B:  /* 9 */
-            /* Hi-res: 8 bits/pixel, 4 planes */
-            info->bits_per_pixel = 8;
-            info->num_planes = 4;
+            /* 0x00e701dc move.l #0x08000400 */
+            info->mem_width = 0x0800;
+            info->mem_height = 0x0400;
             break;
 
         default:
-            /* Unknown type - leave as zero */
+            /* Types 7 and anything outside 1..11: left as zero */
             break;
     }
-}
-
-/*
- * smd_validate_unit - Validate display unit number
- *
- * Internal helper to check if a unit number is valid.
- *
- * Returns:
- *   Negative value if valid, non-negative if invalid
- */
-static int8_t smd_validate_unit(uint16_t unit)
-{
-    if (unit < SMD_MAX_DISPLAY_UNITS) {
-        if (SMD_DISPLAY_INFO[unit].display_type != 0) {
-            return -1;  /* Valid */
-        }
-    }
-    return 0;  /* Invalid */
 }

@@ -61,7 +61,7 @@ void SMD_$RETURN_DISPLAY(int16_t *unit, status_$t *status_ret)
     int8_t valid;
     uint16_t unit_num;
     int16_t unit_offset;
-    smd_unit_aux_t *unit_aux;
+    smd_display_unit_t *unit_aux;
     smd_display_hw_t *hw;
 
     unit_num = *unit;
@@ -75,7 +75,7 @@ void SMD_$RETURN_DISPLAY(int16_t *unit, status_$t *status_ret)
 
     /* Get unit auxiliary data */
     unit_offset = unit_num * SMD_DISPLAY_UNIT_SIZE;
-    unit_aux = smd_get_unit_aux(unit_num);
+    unit_aux = smd_$unit_rec(unit_num);
     hw = unit_aux->hw;
 
     /* Check if display is actually borrowed (tracking_enabled used as flag) */

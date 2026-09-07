@@ -22,10 +22,12 @@
 smd_globals_t SMD_GLOBALS;
 
 /*
- * Display unit array - one entry per possible display
+ * Display unit area - the two standalone eventcounts followed by the per-unit
+ * display records.  See smd_internal.h: record N lives at
+ * SMD_DISPLAY_UNITS + N*0x10C - 0xF4, which is what smd_$unit_rec() computes.
  * Original address: 0x00E2E3FC
  */
-smd_display_slot_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS];
+uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
 
 /*
  * Display info table - configuration for each display
@@ -71,8 +73,14 @@ ec_$eventcount_t SMD_REQUEST_EC_SIGNAL; /* At 0x00E2E408 - signal new request */
  * Constant lock/line words that live in the code segment of the original
  * binary.  Their addresses are passed to SMD_$ACQ_DISPLAY, KBD_$*, and
  * TERM_$CONTROL as by-reference arguments.
+ *   0x00E6D92A: 0x0001
  *   0x00E6D92C: 0x0000
  *   0x00E6DFF8: 0x0001
  */
 uint16_t SMD_ACQ_LOCK_DATA = 0;
 int16_t SMD_SYNC_LOCK_DATA = 1;
+
+/*
+ * A second constant word holding 0x0001, at 0x00E6D92A.
+ */
+int16_t SMD_ONE_LOCK_DATA = 1;

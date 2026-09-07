@@ -45,8 +45,8 @@ static const uint32_t clear_window_lock_data = 0x00E84958;
  *   00e706e2    movea.l (0x20,A6),A0            ; A0 = rect
  *   00e706e6    move.l (A0)+,D6                 ; D6 = packed x coords
  *   00e706e8    move.l (A0),D7                  ; D7 = packed y coords
- *   00e706ea    movea.l (-0x18,A6),A2           ; A2 = ctx.field_04
- *   00e706ee    movea.l (-0x14,A6),A3           ; A3 = ctx.hw_regs
+ *   00e706ea    movea.l (-0x18,A6),A2           ; A2 = ctx.display_base
+ *   00e706ee    movea.l (-0x14,A6),A3           ; A3 = ctx.ctrl_regs
  *   00e706f2    pea (0x24,A5)                   ; push lock data
  *   00e706f6    movea.l (0x18,A5),A0            ; A0 = ACQ_DISPLAY ptr
  *   00e706fa    jsr (A0)                        ; call ACQ_DISPLAY
@@ -110,37 +110,37 @@ void SMD_$CLEAR_WINDOW(smd_rect_t *rect, status_$t *status_ret)
     control = SMD_$ACQ_DISPLAY((void *)&clear_window_lock_data);
 
     /* Set pattern for clearing */
-    ctx.hw_regs->pattern = SMD_BLT_PATTERN_CLEAR;
+    ctx.ctrl_regs->pattern = SMD_BLT_PATTERN_CLEAR;
 
     /* Set default mask */
-    ctx.hw_regs->mask = SMD_BLT_DEFAULT_MASK;
+    ctx.ctrl_regs->mask = SMD_BLT_DEFAULT_MASK;
 
     /* Set bit position and X start */
-    ctx.hw_regs->bit_pos = x2 & 0x0F;
-    ctx.hw_regs->x_start = x1;
+    ctx.ctrl_regs->bit_pos = x2 & 0x0F;
+    ctx.ctrl_regs->x_start = x1;
 
     /* Calculate width in words */
     width = (int16_t)((x2 >> 4) - (x1 >> 4));
     if (width >= 0) {
         width = -width;
     }
-    ctx.hw_regs->x_extent = (uint16_t)(width - 1);
+    ctx.ctrl_regs->x_extent = (uint16_t)(width - 1);
 
     /* Set Y start */
-    ctx.hw_regs->y_start = y1;
+    ctx.ctrl_regs->y_start = y1;
 
     /* Calculate height */
     height = (int16_t)(y2 - y1);
     if (height >= 0) {
         height = -height;
     }
-    ctx.hw_regs->y_extent = (uint16_t)(height - 1);
+    ctx.ctrl_regs->y_extent = (uint16_t)(height - 1);
 
     /* Start the BLT operation */
-    ctx.hw_regs->control = control | SMD_BLT_CMD_START_DRAW;
+    ctx.ctrl_regs->control = control | SMD_BLT_CMD_START_DRAW;
 
     /* Busy-wait for completion */
-    while ((int16_t)ctx.hw_regs->control < 0) {
+    while ((int16_t)ctx.ctrl_regs->control < 0) {
         /* Spin until bit 15 clears */
     }
 

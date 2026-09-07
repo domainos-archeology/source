@@ -60,7 +60,7 @@ void SMD_$BORROW_DISPLAY(int16_t *unit, int8_t *options, status_$t *status_ret)
     int16_t disp_type;
     uint16_t unit_num;
     int16_t unit_offset;
-    smd_unit_aux_t *unit_aux;
+    smd_display_unit_t *unit_aux;
     smd_display_hw_t *hw;
     uint32_t wait_value;
     int16_t wait_result;
@@ -83,7 +83,7 @@ void SMD_$BORROW_DISPLAY(int16_t *unit, int8_t *options, status_$t *status_ret)
 
     /* Calculate unit offset for auxiliary data access */
     unit_offset = unit_num * SMD_DISPLAY_UNIT_SIZE;
-    unit_aux = smd_get_unit_aux(unit_num);
+    unit_aux = smd_$unit_rec(unit_num);
     hw = unit_aux->hw;
 
     /* Acquire the respond lock for synchronization */

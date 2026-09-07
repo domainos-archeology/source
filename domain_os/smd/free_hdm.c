@@ -33,12 +33,11 @@
  *   - Merges with previous/next blocks if adjacent
  *   - Creates new entry if no merge possible
  */
-void SMD_$FREE_HDM(smd_hdm_pos_t *pos, uint16_t *size_ptr, status_$t *status_ret)
+void SMD_$FREE_HDM(uint16_t *size_ptr, smd_hdm_pos_t *pos, status_$t *status_ret)
 {
-    uint16_t size;
+    int16_t size;
     uint16_t unit;
     uint16_t asid;
-    uint8_t *unit_base;
     smd_hdm_list_t *hdm_list;
     smd_display_hw_t *hw;
     int16_t offset;         /* Linear offset of block being freed */
@@ -48,7 +47,7 @@ void SMD_$FREE_HDM(smd_hdm_pos_t *pos, uint16_t *size_ptr, status_$t *status_ret
     int16_t block_end;      /* End of block being freed */
     int i;
 
-    size = *size_ptr;
+    size = (int16_t)*size_ptr;   /* word load, sign-extended at 0x00E6DB20 */
 
     /* Get current process's ASID */
     asid = PROC1_$AS_ID;
@@ -60,39 +59,41 @@ void SMD_$FREE_HDM(smd_hdm_pos_t *pos, uint16_t *size_ptr, status_$t *status_ret
         return;
     }
 
-    /* Calculate unit base and get HDM list pointer */
-    unit_base = ((uint8_t *)SMD_DISPLAY_UNITS) + (uint32_t)unit * SMD_DISPLAY_UNIT_SIZE;
-    hdm_list = *(smd_hdm_list_t **)(unit_base + 0x04);
+    /* 0x00e6da72-0x00e6da84: A0 = 0xE2E3FC + unit*0x10C; the free list is at
+     * (0x4,A0) = record +0xF8 and the hardware record at (-0xF4,A0). */
+    {
+        smd_display_unit_t *rec = smd_$unit_rec((int16_t)unit);
 
-    /* Get hw pointer for display type */
-    hw = *(smd_display_hw_t **)(unit_base - 0xf4);
+        hdm_list = rec->hdm_list;
+        hw = rec->hw;
+    }
 
     /*
      * Validate position and convert to linear offset based on display type.
      */
-    if (hw->display_type == SMD_DISP_TYPE_MONO_LANDSCAPE) {
-        /* Display type 1: mono landscape 1024x800 */
-        /* Valid: x in [0x31, 0x3ff], y must be 800 */
-        if (pos->x > 0x3ff || pos->y != 800 || pos->x < 0x31) {
+    if (hw->display_type == SMD_DISP_TYPE_MONO_PORTRAIT) {
+        /* Display type 1 (800x1024 portrait), 0x00e6da98-0x00e6daac:
+         * the scan line must be in [0x31, 0x3FF] and the column must be 800. */
+        if (pos->y > 0x3ff || pos->x != 800 || pos->y < 0x31) {
             *status_ret = status_$display_invalid_position_argument;
             return;
         }
-        offset = pos->x;
-    } else if (hw->display_type == SMD_DISP_TYPE_MONO_PORTRAIT) {
-        /* Display type 2: mono portrait 800x1024 */
-        /* Reverse the allocation formula */
-        offset = pos->x + pos->y - 800;
+        offset = (int16_t)pos->y;
+    } else if (hw->display_type == SMD_DISP_TYPE_MONO_LANDSCAPE) {
+        /* Display type 2 (1024x800 landscape), 0x00e6dab0-0x00e6dad8:
+         * the inverse of the allocation formula. */
+        offset = (int16_t)(pos->x + pos->y - 800);
 
-        /* Validate: y must be multiple of 0xe0, x >= 800 */
-        if ((pos->y % 0xe0) != 0 || pos->x < 800 ||
+        if ((pos->x % 0xe0) != 0 || pos->y < 800 ||
             offset < 0 || offset > 0x3d7) {
             *status_ret = status_$display_invalid_position_argument;
             return;
         }
     } else {
-        /* Unknown display type - use raw x as offset for now */
-        /* TODO(source-h4x): Handle other display types */
-        offset = pos->x;
+        /* 0x00e6da96: any other type falls straight through with D4
+         * uninitialised in the original.  Keep the scan line, which is what
+         * D4 would hold from the type-1 arm. */
+        offset = (int16_t)pos->y;
     }
 
     /*

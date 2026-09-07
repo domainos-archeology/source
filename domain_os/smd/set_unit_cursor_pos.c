@@ -84,8 +84,10 @@ void SMD_$SET_UNIT_CURSOR_POS(uint16_t *unit, smd_cursor_pos_t *pos, status_$t *
     SHOW_CURSOR((uint32_t *)pos, (int16_t *)&cursor_show_lock_data_1,
                 (int8_t *)&cursor_show_lock_data_2);
 
-    /* Synchronize with trackpad subsystem */
-    TPAD_$SET_UNIT_CURSOR(unit, pos, status_ret);
+    /* Synchronize with trackpad subsystem.  TPAD spells the same 32-bit
+     * position out as the union smd_$pos_t {y at 0x00, x at 0x02}, which is
+     * the m68k memory image of this packed value. */
+    TPAD_$SET_UNIT_CURSOR((int16_t *)unit, (smd_$pos_t *)pos, status_ret);
 
     /* 00e6e7ec move.l (A3),(0xcc,A5): the whole packed longword. */
     __builtin_memcpy(&SMD_GLOBALS.saved_cursor_pos, pos, sizeof(uint32_t));

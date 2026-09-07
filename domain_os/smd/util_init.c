@@ -42,10 +42,10 @@
  *   00e6defc    move.w D0w,D1w             ; D1 = unit number
  *   00e6defe    movea.l #0xe2e3fc,A1       ; A1 = SMD_DISPLAY_UNITS base
  *   00e6df04    muls.w #0x10c,D1           ; D1 = unit * 0x10C
- *   00e6df08    move.l (0x14,A1,D1*0x1),(0x4,A0) ; ctx->field_04 from unit[x].field_14
- *   00e6df0e    move.l (0x8,A1,D1*0x1),(0x8,A0)  ; ctx->field_08 from unit[x].field_08
- *   00e6df14    lea (0x0,A1,D1*0x1),A1     ; A1 = &unit[x]
- *   00e6df18    move.l (-0xf4,A1),(0xc,A0) ; ctx->hw_regs from unit[x-1].hw
+ *   00e6df08    move.l (0x14,A1,D1*0x1),(0x4,A0) ; ctx->display_base (rec+0x108)
+ *   00e6df0e    move.l (0x8,A1,D1*0x1),(0x8,A0)  ; ctx->ctrl_regs   (rec+0x0FC)
+ *   00e6df14    lea (0x0,A1,D1*0x1),A1     ; A1 = biased unit record
+ *   00e6df18    move.l (-0xf4,A1),(0xc,A0) ; ctx->hw          (rec+0x000)
  *   00e6df1e    clr.l (0x10,A0)            ; ctx->status = 0
  *   00e6df22    movea.l (-0x8,A6),A5
  *   00e6df26    unlk A6
@@ -54,44 +54,29 @@
 void SMD_$UTIL_INIT(smd_util_ctx_t *ctx)
 {
     uint16_t asid;
-    uint16_t unit_num;
-    smd_display_slot_t *unit_base;
+    int16_t unit_num;
+    smd_display_unit_t *rec;
 
-    /* Get current process's address space ID */
+    /* 0x00e6dee0-0x00e6deec */
     asid = PROC1_$AS_ID;
-
-    /* Look up display unit for this ASID */
-    unit_num = SMD_GLOBALS.asid_to_unit[asid];
+    unit_num = (int16_t)SMD_GLOBALS.asid_to_unit[asid];
 
     if (unit_num == 0) {
-        /* No display associated with this process */
+        /* 0x00e6def2 - and nothing else in the record is written */
         ctx->status = status_$display_invalid_use_of_driver_procedure;
         return;
     }
 
     /*
-     * Get pointers from the display unit structure.
-     *
-     * The original code uses 1-based unit numbers and accesses data
-     * at various offsets. The hardware pointer is accessed at -0xF4
-     * from (base + unit*0x10C), which effectively gives us the hw
-     * pointer from the previous slot - but since units are 1-based,
-     * this correctly maps to the hw field of the unit structure.
+     * 0x00e6defe-0x00e6df18: all three pointers come out of the same biased
+     * record (A1 + unit*0x10C), at displacements +0x14, +0x08 and -0xF4,
+     * i.e. record offsets 0x108, 0xFC and 0x00.
      */
-    unit_base = &SMD_DISPLAY_UNITS[unit_num];
+    rec = smd_$unit_rec(unit_num);
+    ctx->display_base = rec->display_base;
+    ctx->ctrl_regs = (smd_hw_blt_regs_t *)rec->ctrl_regs;
+    ctx->hw = rec->hw;
 
-    /* Copy field at offset 0x14 */
-    ctx->field_04 = unit_base->field_14;
-
-    /* Copy field at offset 0x08 (part of event_count_1) */
-    ctx->field_08 = *((uint32_t *)((uint8_t *)unit_base + 0x08));
-
-    /*
-     * Get hardware register pointer.
-     * The -0xF4 offset from current position maps to the hw field
-     * of the actual unit (due to 1-based indexing).
-     */
-    ctx->hw_regs = (smd_hw_blt_regs_t *)SMD_DISPLAY_UNITS[unit_num - 1].hw;
-
+    /* 0x00e6df1e */
     ctx->status = status_$ok;
 }

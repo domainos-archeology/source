@@ -21,10 +21,10 @@
  *   00e6ec30    move.w D0w,D1w
  *   00e6ec32    mulu.w #0x10c,D1              ; D1 = unit * 0x10c
  *   00e6ec36    lea (0x0,A0,D1*0x1),A2        ; A2 = unit structure
- *   00e6ec3a    movea.l (-0xf4,A2),A3         ; A3 = hw pointer
+ *   00e6ec3a    movea.l (-0xf4,A2),A3         ; A3 = rec->hw
  *   00e6ec3e    cmpi.w #0x4,(0x2,A3)          ; if (hw->lock_state == 4)
  *   00e6ec44    bne.b 0x00e6ec56
- *   00e6ec46    move.l (0x8,A2),-(SP)         ; push ec from unit+8
+ *   00e6ec46    move.l (0x8,A2),-(SP)         ; push rec->ctrl_regs (+0xFC)
  *   00e6ec4a    pea (A3)                      ; push hw
  *   00e6ec4c    jsr 0x00e272b2.l              ; SMD_$CONTINUE_SCROLL
  *   00e6ec52    addq.w #0x8,SP
@@ -51,26 +51,25 @@
 void SMD_$REL_DISPLAY(void)
 {
     smd_display_hw_t *hw;
-    smd_display_slot_t *unit_ptr;
-    ec_$eventcount_t *ec;
+    smd_display_unit_t *rec;
     uint16_t asid;
     uint16_t unit_num;
 
-    /* Get current process's display unit */
+    /* Get current process's display unit (0x00e6ec1e-0x00e6ec26) */
     asid = PROC1_$AS_ID;
     unit_num = SMD_GLOBALS.asid_to_unit[asid];
 
-    /* Get display unit structure */
-    unit_ptr = smd_get_unit(unit_num);
-    hw = unit_ptr->hw;
+    /* 0x00e6ec2a-0x00e6ec3a: A2 = 0xE2E3FC + unit*0x10C (an *unsigned*
+     * multiply here, mulu.w, unlike the muls.w most SMD callers use), hw at
+     * (-0xF4,A2). */
+    rec = smd_$unit_rec((int16_t)unit_num);
+    hw = rec->hw;
 
-    /* Check if we're in scroll-cleanup state */
+    /* Check if we're in scroll-cleanup state (0x00e6ec3e) */
     if (hw->lock_state == SMD_LOCK_STATE_LOCKED_4) {
-        /* Continue the scroll operation */
-        /* The ec is at unit_ptr->field_08 in the original, which maps to
-         * an eventcount used for scroll completion signaling */
-        ec = (ec_$eventcount_t *)(uintptr_t)unit_ptr->field_08;
-        SMD_$CONTINUE_SCROLL(hw, ec);
+        /* 0x00e6ec46: the second argument is the display controller register
+         * base held at record +0xFC, pushed by value. */
+        SMD_$CONTINUE_SCROLL(hw, rec->ctrl_regs);
     } else {
         /* Clear the lock state */
         hw->lock_state = SMD_LOCK_STATE_UNLOCKED;

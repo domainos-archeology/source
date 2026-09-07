@@ -27,14 +27,22 @@
  */
 typedef struct smd_hw_blt_t {
     uint16_t    control;        /* 0x00: Control word */
-    uint16_t    bit_pos;        /* 0x02: Bit position */
-    uint16_t    mask;           /* 0x04: Mask */
-    uint16_t    pattern;        /* 0x06: Pattern/ROP */
-    uint16_t    y_extent;       /* 0x08: Y extent (negative: height-1) */
-    uint16_t    x_extent;       /* 0x0A: X extent (negative: width-1) */
-    uint16_t    y_start;        /* 0x0C: Y start coordinate */
-    uint16_t    x_start;        /* 0x0E: X start coordinate */
+    uint16_t    bit_pos;        /* 0x02: Bit position (plane select) */
+    /* 0x04/0x06: copied verbatim from params[5]/params[6] as one longword
+     * (0x00E6ED9C "move.l (0xa,A2),(-0xc,A6)").  SMD_$START_BLT copies both
+     * straight into the controller registers at the same offsets
+     * (0x00E15D3A / 0x00E15D34), so their meaning is a hardware detail. */
+    uint16_t    field_04;
+    uint16_t    field_06;
+    uint16_t    y_extent;       /* 0x08: -1 - |params[11] - params[7]| */
+    uint16_t    x_extent;       /* 0x0A: -1 - |params[12]>>4 - params[8]>>4| */
+    uint16_t    y_start;        /* 0x0C: params[7] */
+    uint16_t    x_start;        /* 0x0E: params[8] */
 } smd_hw_blt_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(smd_hw_blt_t) == 0x10, "smd_hw_blt_t size");
+#endif
 
 /* Lock data for async (0x00E6D92C = SMD_ACQ_LOCK_DATA, value 0) vs sync
  * (0x00E6DFF8 = SMD_SYNC_LOCK_DATA, value 1) BLT; declared in smd_internal.h */
@@ -64,11 +72,9 @@ typedef struct smd_hw_blt_t {
  */
 void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *status_ret)
 {
-    uint16_t unit;
-    int32_t unit_offset;
+    int16_t unit;
     smd_display_hw_t *hw;
-    smd_display_slot_t *display_unit;
-    smd_unit_aux_t *aux;
+    smd_display_unit_t *rec;
     uint16_t mode;
     int16_t *lock_data;
     smd_hw_blt_t hw_params;
@@ -77,86 +83,113 @@ void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *sta
     (void)param2;
     (void)param3;
 
-    /* Get current process's display unit */
-    unit = SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID];
+    /* 0x00e6ec8c */
+    unit = (int16_t)SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID];
 
     if (unit == 0) {
+        /* 0x00e6ec92 */
         *status_ret = status_$display_invalid_use_of_driver_procedure;
         return;
     }
 
+    /* 0x00e6ec9c: the mode word is latched into a local before anything else */
     mode = params[0];
 
-    /* Calculate unit offset */
-    unit_offset = (int32_t)unit * SMD_DISPLAY_UNIT_SIZE;
-    /* Original: base 0x00E2E3FC (== SMD_DISPLAY_UNITS / SMD_EC_1) + unit*0x10C */
-    display_unit = (smd_display_slot_t *)((uint8_t *)SMD_DISPLAY_UNITS + unit_offset);
-    aux = smd_get_unit_aux(unit);
-    hw = aux->hw;
+    /* 0x00e6eca2-0x00e6ecb0: A3 = 0xE2E3FC + unit*0x10C, hw at (-0xF4,A3) */
+    rec = smd_$unit_rec(unit);
+    hw = rec->hw;
 
-    /* Select lock data based on async mode */
+    /*
+     * 0x00e6ecb4-0x00e6ecc2: both lock words are constants in the code
+     * region reached with pea (d,PC):
+     *   0x00E6ECBC pea (-0x1392,PC) -> 0x00E6ECBE - 0x1392 = 0x00E6D92C (0)
+     *   0x00E6ECC2 pea (-0x0CCC,PC) -> 0x00E6ECC4 - 0x0CCC = 0x00E6DFF8 (1)
+     */
     if ((mode & 0x10) != 0) {
-        lock_data = (int16_t *)&SMD_ACQ_LOCK_DATA;   /* 0x00E6D92C */
+        lock_data = (int16_t *)&SMD_ACQ_LOCK_DATA;
     } else {
-        lock_data = &SMD_SYNC_LOCK_DATA;             /* 0x00E6DFF8 */
+        lock_data = &SMD_SYNC_LOCK_DATA;
     }
 
-    /* Acquire display lock */
+    /* 0x00e6ecc6 - the result is discarded here */
     SMD_$ACQ_DISPLAY(lock_data);
 
-    /* Validate mode bits: bit 7, bit 6, and bit 3 must be clear */
-    if ((int8_t)mode < 0 || (mode & 0x40) != 0 || (mode & 0x08) != 0) {
+    /*
+     * 0x00e6eccc-0x00e6ece0: the three validity tests are byte tests on the
+     * LOW byte of the mode word (A6-0x15 is the second byte of the word at
+     * A6-0x16), i.e. bits 7, 6 and 3 of the mode.
+     */
+    if ((int8_t)(mode & 0xFF) < 0 || (mode & 0x40) != 0 || (mode & 0x08) != 0) {
         *status_ret = status_$display_invalid_blt_op;
         SMD_$REL_DISPLAY();
         return;
     }
 
-    /* Build hardware BLT parameters */
+    /*
+     * Build the hardware BLT record (0x00e6ecf0-0x00e6edd0).
+     *
+     * The control word is assembled a bit at a time.  Bit 15 comes from a
+     * byte operation on the *high* byte of the word (0x00E6ECFC
+     * "andi.b #0x7f,(-0x10,A6)" / 0x00E6ED06 "or.b D1b,(-0x10,A6)" with D1
+     * = 0x80 when the mode word is negative), so it is bit 15 of the word,
+     * not bit 7.  0x00E6ED0A then masks the word with 0x803F, leaving bit 15
+     * and bits 0..5 alive.
+     */
+    hw_params.control =
+        (uint16_t)(((mode & 0x8000u) ? 0x8000u : 0u) |
+                   ((mode & 0x20u) ? 0x20u : 0u) |        /* 0x00e6ed10 */
+                   ((mode & 0x10u) ? 0x10u : 0u) |        /* 0x00e6ed26 */
+                   /* 0x00e6ed3c cmpi.b #0x2,(-0x14,A6): the first byte of the
+                    * longword copied from params+2, i.e. the high byte of
+                    * params[1].  Written with shifts so it holds on a
+                    * little-endian host too. */
+                   ((((params[1] >> 8) & 0xFFu) == 0x02u) ? 0x08u : 0u) |
+                   /* 0x00e6ed52 cmpi.b #0x20,(-0x11,A6): the fourth byte of
+                    * that longword, i.e. the low byte of params[2]. */
+                   (((params[2] & 0xFFu) == 0x20u) ? 0x04u : 0u) |
+                   ((mode & 0x02u) ? 0x02u : 0u) |        /* 0x00e6ed68 */
+                   ((mode & 0x01u) ? 0x01u : 0u));        /* 0x00e6ed7e */
 
-    /* Control byte: build from mode flags */
-    hw_params.control = ((mode & 0x8000) ? 0x80 : 0) |      /* Direction */
-                        ((mode & 0x20) ? 0x20 : 0) |        /* Alt ROP */
-                        ((mode & 0x10) ? 0x10 : 0) |        /* Async */
-                        /* Original: move.l (0x2,A2),tmp; cmpi.b #0x2,tmp+0 -> byte at
-                         * params+2 = high byte of params[1] (big-endian);
-                         * cmpi.b #0x20,tmp+3 -> byte at params+5 = low byte of params[2].
-                         * Expressed as shift/mask so it is endian-independent. */
-                        ((((params[1] >> 8) & 0xFF) == 0x02) ? 0x08 : 0) |  /* Pattern type */
-                        (((params[2] & 0xFF) == 0x20) ? 0x04 : 0) |         /* Mask type */
-                        ((mode & 0x02) ? 0x02 : 0) |        /* Src enable */
-                        ((mode & 0x01) ? 0x01 : 0);         /* Dest enable */
+    /* 0x00e6ed92-0x00e6ed98 */
+    hw_params.bit_pos = (uint16_t)(params[12] & 0x0F);
 
-    /* Bit position: plane select from low nibble of params[12] */
-    hw_params.bit_pos = params[12] & 0x0F;
+    /* 0x00e6ed9c move.l (0xa,A2),(-0xc,A6): params[5] lands at +0x04 and
+     * params[6] at +0x06. */
+    hw_params.field_04 = params[5];
+    hw_params.field_06 = params[6];
 
-    /* Pattern and mask from params[5-6] */
-    hw_params.pattern = params[5];
-    hw_params.mask = params[6];
+    /* 0x00e6eda2-0x00e6edb2 */
+    dy = (int16_t)(params[11] - params[7]);
+    if (dy < 0) {
+        dy = (int16_t)-dy;
+    }
+    hw_params.y_extent = (uint16_t)(-1 - dy);
 
-    /* Calculate extents (negative values) */
-    dy = params[11] - params[7];
-    if (dy < 0) dy = -dy;
-    hw_params.y_extent = -1 - dy;
+    /* 0x00e6edb6-0x00e6edcc */
+    dx = (int16_t)((uint16_t)(params[12] >> 4) - (uint16_t)(params[8] >> 4));
+    if (dx < 0) {
+        dx = (int16_t)-dx;
+    }
+    hw_params.x_extent = (uint16_t)(-1 - dx);
 
-    dx = (params[12] >> 4) - (params[8] >> 4);
-    if (dx < 0) dx = -dx;
-    hw_params.x_extent = -1 - dx;
-
-    /* Start coordinates */
+    /* 0x00e6edd0 move.l (0xe,A2),(-0x4,A6) */
     hw_params.y_start = params[7];
     hw_params.x_start = params[8];
 
-    /* Start the BLT operation */
-    SMD_$START_BLT((uint16_t *)&hw_params, hw,
-                   (uint16_t *)((uint8_t *)SMD_DISPLAY_UNITS + unit_offset + 8));
+    /* 0x00e6edd6-0x00e6ede0: the register base is the record's +0xFC field,
+     * pushed by value. */
+    SMD_$START_BLT((uint16_t *)&hw_params, hw, rec->ctrl_regs);
 
+    /* 0x00e6edea-0x00e6edf8 */
     if ((mode & 0x10) == 0) {
-        /* Sync mode - release display lock now */
+        /* Sync mode - release the display now */
         SMD_$REL_DISPLAY();
     } else {
-        /* Async mode - record owner ASID for later release */
-        display_unit->asid = PROC1_$AS_ID;
+        /* Async mode - remember who owns the pending operation.  The store is
+         * to (-0xec,A3), i.e. the record's +0x08 field, not the owner ASID. */
+        rec->field_08 = PROC1_$AS_ID;
     }
 
+    /* 0x00e6ee00 */
     *status_ret = status_$ok;
 }

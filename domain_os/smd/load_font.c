@@ -45,25 +45,23 @@ uint16_t SMD_$LOAD_FONT(void **font_ptr, status_$t *status_ret)
 {
     uint16_t unit;
     uint16_t asid;
-    uint8_t *unit_base;
+    smd_display_unit_t *rec;
     smd_font_entry_t *font_table;
     smd_font_v1_t *font;
     uint16_t slot;
     uint16_t hdm_size;
-    smd_hdm_pos_t hdm_pos;
-    uint32_t display_base;
 
-    /* Get current process's ASID */
+    /* 0x00e6dc2e-0x00e6dc3a */
     asid = PROC1_$AS_ID;
-
-    /* Look up display unit for this ASID */
     unit = SMD_GLOBALS.asid_to_unit[asid];
     if (unit == 0) {
+        /* 0x00e6dc40 - the original leaves D0 holding the zero unit number */
         *status_ret = status_$display_invalid_use_of_driver_procedure;
         return 0;
     }
 
-    /* Validate font pointer */
+    /* 0x00e6dc4c "tst.l (A0)": a null font pointer takes the same exit as a
+     * bad version. */
     if (*font_ptr == NULL) {
         *status_ret = status_$display_unsupported_font_version;
         return 0;
@@ -71,71 +69,67 @@ uint16_t SMD_$LOAD_FONT(void **font_ptr, status_$t *status_ret)
 
     font = (smd_font_v1_t *)*font_ptr;
 
-    /* Calculate unit base address */
-    unit_base = ((uint8_t *)SMD_DISPLAY_UNITS) + (uint32_t)unit * SMD_DISPLAY_UNIT_SIZE;
+    /* 0x00e6dc50-0x00e6dc66: A2 = 0xE2E3FC + unit*0x10C and the font table is
+     * the record's +0xF4 field, read as (A2). */
+    rec = smd_$unit_rec((int16_t)unit);
+    font_table = rec->font_table;
 
-    /* Get font table pointer (first pointer at unit offset 0x00) */
-    font_table = *(smd_font_entry_t **)unit_base;
-
-    /* Validate font version - must be 1 or 3 */
+    /* 0x00e6dc68-0x00e6dc72 */
     if (font->version != SMD_FONT_VERSION_1 && font->version != SMD_FONT_VERSION_3) {
         *status_ret = status_$display_unsupported_font_version;
         return 0;
     }
 
     /*
-     * Search for an empty slot in the font table.
-     * Slots are numbered 1-8 (1-based indexing).
-     * Each entry is 8 bytes (font_ptr + hdm_pos).
+     * 0x00e6dc7e-0x00e6dc96: find a free slot.  Slots are 1-based and the
+     * entry for slot s is at font_table + s*8 - 8.
      */
     slot = 1;
     while (slot <= SMD_MAX_FONTS_PER_UNIT && font_table[slot - 1].font_ptr != NULL) {
         slot++;
     }
 
+    /* 0x00e6dc98 */
     if (slot > SMD_MAX_FONTS_PER_UNIT) {
         *status_ret = status_$display_internal_font_table_full;
         return 0;
     }
 
-    /*
-     * Get HDM size needed based on font version.
-     * Version 1: size at offset 0x06 (hdm_size field)
-     * Version 3: size at offset 0x42 (after char_map)
-     */
+    /* 0x00e6dca6-0x00e6dcbe: version 1 keeps its HDM size at +0x06, version 3
+     * at +0x42 (and re-reads the font pointer to get there). */
     if (font->version == SMD_FONT_VERSION_1) {
         hdm_size = font->hdm_size;
     } else {
-        /* Version 3: size is at offset 0x42 */
-        hdm_size = *(uint16_t *)((uint8_t *)font + 0x42);
+        hdm_size = *(uint16_t *)((uint8_t *)*font_ptr + 0x42);
     }
 
-    /* Allocate HDM space for the font */
-    SMD_$ALLOC_HDM(&hdm_size, &hdm_pos, status_ret);
+    /*
+     * 0x00e6dcca-0x00e6dcd4: the position argument is the *font table entry's
+     * own* hdm_pos field, so SMD_$ALLOC_HDM fills it in place - the original
+     * keeps no local copy.
+     */
+    SMD_$ALLOC_HDM(&hdm_size, &font_table[slot - 1].hdm_pos, status_ret);
+
+    /* 0x00e6dcdc */
     if (*status_ret != status_$ok) {
         return 0;
     }
 
-    /* Store font pointer in the table */
+    /* 0x00e6dce0 */
     font_table[slot - 1].font_ptr = *font_ptr;
 
-    /*
-     * Acquire display lock and copy font data to HDM.
-     * The lock_data pointer (PC-relative in original) identifies the caller.
-     */
-    SMD_$ACQ_DISPLAY(NULL);
+    /* 0x00e6dce6 pea (-0x3be,PC) -> 0x00e6dce8 - 0x3be = 0x00e6d92a */
+    SMD_$ACQ_DISPLAY(&SMD_ONE_LOCK_DATA);
 
-    /* Get display base address from unit data at offset 0x14 */
-    display_base = *(uint32_t *)(unit_base + 0x14);
+    /* 0x00e6dcf0-0x00e6dcfe: display base from the record's +0x108 field. */
+    SMD_$COPY_FONT_TO_HDM(rec->display_base, *font_ptr,
+                          &font_table[slot - 1].hdm_pos);
 
-    /* Copy font bitmap to HDM */
-    SMD_$COPY_FONT_TO_HDM(display_base, *font_ptr, &hdm_pos);
-
+    /* 0x00e6dd08 */
     SMD_$REL_DISPLAY();
 
-    /* Store HDM position in font table (combined y and x into single uint32) */
-    font_table[slot - 1].hdm_offset = hdm_pos.y;
-
-    *status_ret = status_$ok;
+    /* 0x00e6dd0c "move.w D2w,D0w": the slot number is the result.  The
+     * original does NOT clear the status here - it was already zero, having
+     * been checked after SMD_$ALLOC_HDM. */
     return slot;
 }

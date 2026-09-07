@@ -1,479 +1,360 @@
 /*
- * smd/test/test_blt.c - Unit tests for SMD_$BLT
+ * smd/test/test_blt.c - Unit tests for SMD_$BLT (0x00E6EC6E)
  *
- * Tests BLT parameter conversion, mode validation, lock selection,
- * sync vs async behavior, and the unit==0 error path.
+ * The real smd/blt.c is #included below and the real SMD_$BLT is called;
+ * everything it depends on is mocked in this translation unit.  The
+ * interesting behaviour is the hardware BLT record it builds, which is
+ * captured out of the mocked SMD_$START_BLT.
+ *
+ * Facts under test (all cited from the disassembly in blt.c):
+ *   - bit 15 of the mode word lands in bit 15 of the control word, because
+ *     the original sets it with a byte operation on the *high* byte of the
+ *     word at A6-0x10 (0x00E6ECFC / 0x00E6ED06)
+ *   - params[5] goes to record +0x04 and params[6] to +0x06 (0x00E6ED9C)
+ *   - the display register base handed to SMD_$START_BLT is the unit
+ *     record's +0xFC field (0x00E6EDD6)
+ *   - the async path stores the ASID in the record's +0x08 field, not the
+ *     owner ASID (0x00E6EDF8)
  */
 
 #include <stdio.h>
-#include <assert.h>
 #include <stdint.h>
 #include <string.h>
 
-/* Minimal type stubs for native compilation */
-typedef long status_$t;
-#define status_$ok 0
-#define status_$display_invalid_use_of_driver_procedure 0x00130004
-#define status_$display_invalid_blt_op 0x00130028
+#include "smd/smd_internal.h"
 
-/* Test result tracking */
+/* ------------------------------------------------------------------ */
+/* Test harness                                                        */
+/* ------------------------------------------------------------------ */
+
 static int tests_passed = 0;
 static int tests_failed = 0;
+static int current_failed = 0;
 
-#define TEST(name) static void test_##name(void)
-#define RUN_TEST(name) do { \
-    printf("  Running %s... ", #name); \
-    test_##name(); \
-    tests_passed++; \
-    printf("PASSED\n"); \
-} while(0)
+#define RUN_TEST(name)                                                        \
+    do {                                                                      \
+        printf("  %-44s", #name);                                             \
+        current_failed = 0;                                                   \
+        test_##name();                                                        \
+        if (current_failed) {                                                 \
+            tests_failed++;                                                   \
+        } else {                                                              \
+            tests_passed++;                                                   \
+            printf("PASSED\n");                                               \
+        }                                                                     \
+    } while (0)
 
-#define ASSERT_EQ(expected, actual) do { \
-    if ((expected) != (actual)) { \
-        printf("FAILED\n    Expected: 0x%lx, Got: 0x%lx at line %d\n", \
-               (unsigned long)(expected), (unsigned long)(actual), __LINE__); \
-        tests_failed++; \
-        return; \
-    } \
-} while(0)
+#define CHECK_EQ(expected, actual)                                            \
+    do {                                                                      \
+        long _e = (long)(expected);                                           \
+        long _a = (long)(actual);                                             \
+        if (_e != _a) {                                                       \
+            if (!current_failed) printf("FAILED\n");                          \
+            current_failed = 1;                                               \
+            printf("      %s:%d: %s: expected 0x%lx, got 0x%lx\n", __FILE__,  \
+                   __LINE__, #actual, (unsigned long)_e, (unsigned long)_a);  \
+        }                                                                     \
+    } while (0)
 
-#define ASSERT_NEQ(not_expected, actual) do { \
-    if ((not_expected) == (actual)) { \
-        printf("FAILED\n    Expected not 0x%lx at line %d\n", \
-               (unsigned long)(not_expected), __LINE__); \
-        tests_failed++; \
-        return; \
-    } \
-} while(0)
+/* ------------------------------------------------------------------ */
+/* Mocked globals                                                      */
+/* ------------------------------------------------------------------ */
 
-/*
- * Mock data structures
- */
+smd_globals_t SMD_GLOBALS;
+uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
+smd_display_info_t SMD_DISPLAY_INFO[SMD_MAX_DISPLAY_UNITS];
+uint16_t PROC1_$AS_ID;
+uint16_t SMD_ACQ_LOCK_DATA = 0;
+int16_t SMD_SYNC_LOCK_DATA = 1;
+int16_t SMD_ONE_LOCK_DATA = 1;
 
-/* Event count - minimal mock (12 bytes like ec_$eventcount_t) */
-typedef struct {
-    uint32_t value;
-    uint32_t head;
-    uint32_t tail;
-} mock_ec_t;
+#define TEST_ASID 3
+#define TEST_UNIT 1
 
-/* Display hardware info - minimal mock matching smd_display_hw_t */
-typedef struct {
-    uint16_t display_type;
-    uint16_t lock_state;
-    mock_ec_t lock_ec;    /* 0x04 */
-    mock_ec_t op_ec;      /* 0x10 */
-} mock_hw_t;
+static smd_display_hw_t test_hw;
+static uint16_t test_ctrl_regs[8];
 
-/* Display unit - minimal mock matching smd_display_unit_t */
-typedef struct {
-    mock_ec_t event_count_1;          /* 0x00 */
-    void *hdm_list_ptr;               /* 0x0C */
-    uint16_t field_10;                /* 0x10 */
-    uint16_t asid;                    /* 0x12 */
-    uint16_t field_14;                /* 0x14 */
-    uint16_t field_16;                /* 0x16 */
-    mock_hw_t *hw;                    /* 0x18 */
-    uint32_t field_1c;                /* 0x1C */
-    uint32_t field_20;                /* 0x20 */
-} mock_display_unit_t;
+/* ------------------------------------------------------------------ */
+/* Mocked callees                                                      */
+/* ------------------------------------------------------------------ */
 
-/* Unit auxiliary data */
-typedef struct {
-    mock_hw_t *hw;
-    uint16_t owner_asid;
-    uint16_t borrowed_asid;
-} mock_unit_aux_t;
+static int acq_calls, rel_calls, start_blt_calls;
+static const int16_t *last_lock_data;
+static uint16_t captured_words[8];  /* smd_hw_blt_t is local to blt.c */
+static smd_display_hw_t *last_hw;
+static SMD_HW_REG_PTR last_regs;
 
-/* SMD globals - minimal */
-#define MOCK_MAX_ASIDS 256
-typedef struct {
-    uint8_t pad_00[0x48];
-    uint16_t asid_to_unit[MOCK_MAX_ASIDS];
-} mock_smd_globals_t;
-
-/* Mock globals */
-static mock_smd_globals_t mock_globals;
-static mock_hw_t mock_hw;
-static mock_unit_aux_t mock_unit_aux;
-static uint16_t mock_as_id;
-static int16_t mock_blt_async_lock_data;
-static int16_t mock_blt_sync_lock_data;
-
-/* Tracking variables for mock calls */
-static int16_t *last_acq_lock_data;
-static int acq_display_called;
-static int rel_display_called;
-static int start_blt_called;
-static uint16_t *last_start_blt_params;
-static mock_hw_t *last_start_blt_hw;
-static uint16_t *last_start_blt_hw_regs;
-
-/*
- * Redefine external references to use mocks
- */
-#define SMD_GLOBALS mock_globals
-#define PROC1_$AS_ID mock_as_id
-#define SMD_EC_1 mock_ec_1
-#define SMD_DISPLAY_UNIT_SIZE sizeof(mock_display_unit_t)
-#define SMD_BLT_ASYNC_LOCK_DATA mock_blt_async_lock_data
-#define SMD_BLT_SYNC_LOCK_DATA mock_blt_sync_lock_data
-
-/*
- * We override address-based display_unit computation to use our mock.
- * The real code does: (uint8_t *)&SMD_EC_1 + unit_offset
- * Since our mock unit size matches, this should land on mock_display_unit
- * as long as we arrange memory correctly.
- *
- * For simplicity, we'll set up so that unit=1 maps to mock_display_unit
- * by placing mock_ec_1 right before mock_display_unit in a combined array.
- */
-static struct {
-    mock_display_unit_t units[2]; /* unit 0 = EC_1 base, unit 1 = actual display unit */
-} mock_unit_array;
-
-/* Redirect SMD_EC_1 to be the first element of our array */
-#undef SMD_EC_1
-#define SMD_EC_1 mock_unit_array.units[0].event_count_1
-
-/* Mock smd_get_unit_aux */
-static mock_unit_aux_t *smd_get_unit_aux(uint16_t unit_num) {
-    (void)unit_num;
-    return &mock_unit_aux;
-}
-
-/* Mock SMD_$ACQ_DISPLAY */
-static uint16_t SMD_$ACQ_DISPLAY(int16_t *lock_data) {
-    last_acq_lock_data = lock_data;
-    acq_display_called++;
+uint16_t SMD_$ACQ_DISPLAY(int16_t *lock_data)
+{
+    acq_calls++;
+    last_lock_data = lock_data;
     return 0;
 }
 
-/* Mock SMD_$REL_DISPLAY */
-static void SMD_$REL_DISPLAY(void) {
-    rel_display_called++;
-}
+void SMD_$REL_DISPLAY(void) { rel_calls++; }
 
-/* Mock SMD_$START_BLT */
-static void SMD_$START_BLT(uint16_t *params, mock_hw_t *hw, uint16_t *hw_regs) {
-    last_start_blt_params = params;
-    last_start_blt_hw = hw;
-    last_start_blt_hw_regs = hw_regs;
-    start_blt_called++;
-}
-
-/* Typedefs to satisfy function under test */
-typedef mock_ec_t ec_$eventcount_t;
-typedef mock_hw_t smd_display_hw_t;
-typedef mock_unit_aux_t smd_unit_aux_t;
-typedef mock_display_unit_t smd_display_unit_t;
-
-/*
- * Hardware BLT parameter structure (from blt.c)
- */
-typedef struct smd_hw_blt_t {
-    uint16_t    control;
-    uint16_t    bit_pos;
-    uint16_t    mask;
-    uint16_t    pattern;
-    uint16_t    y_extent;
-    uint16_t    x_extent;
-    uint16_t    y_start;
-    uint16_t    x_start;
-} smd_hw_blt_t;
-
-/*
- * Function under test - reimplemented with mocks
- */
-void SMD_$BLT(uint16_t *params, uint32_t param2, uint32_t param3, status_$t *status_ret)
+void SMD_$START_BLT(uint16_t *params, smd_display_hw_t *hw,
+                    SMD_HW_REG_PTR hw_regs)
 {
-    uint16_t unit;
-    int32_t unit_offset;
-    smd_display_hw_t *hw;
-    smd_display_unit_t *display_unit;
-    smd_unit_aux_t *aux;
-    uint16_t mode;
-    int16_t *lock_data;
-    smd_hw_blt_t hw_params;
-    int16_t dx, dy;
-
-    (void)param2;
-    (void)param3;
-
-    unit = SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID];
-
-    if (unit == 0) {
-        *status_ret = status_$display_invalid_use_of_driver_procedure;
-        return;
-    }
-
-    mode = params[0];
-
-    unit_offset = (int32_t)unit * SMD_DISPLAY_UNIT_SIZE;
-    display_unit = (smd_display_unit_t *)((uint8_t *)&SMD_EC_1 + unit_offset);
-    aux = smd_get_unit_aux(unit);
-    hw = aux->hw;
-
-    if ((mode & 0x10) != 0) {
-        lock_data = &SMD_BLT_ASYNC_LOCK_DATA;
-    } else {
-        lock_data = &SMD_BLT_SYNC_LOCK_DATA;
-    }
-
-    SMD_$ACQ_DISPLAY(lock_data);
-
-    if ((int8_t)mode < 0 || (mode & 0x40) != 0 || (mode & 0x08) != 0) {
-        *status_ret = status_$display_invalid_blt_op;
-        SMD_$REL_DISPLAY();
-        return;
-    }
-
-    hw_params.control = ((mode & 0x8000) ? 0x80 : 0) |
-                        ((mode & 0x20) ? 0x20 : 0) |
-                        ((mode & 0x10) ? 0x10 : 0) |
-                        ((((uint8_t *)&params[1])[3] == 0x02) ? 0x08 : 0) |
-                        ((((uint8_t *)&params[1])[0] == 0x20) ? 0x04 : 0) |
-                        ((mode & 0x02) ? 0x02 : 0) |
-                        ((mode & 0x01) ? 0x01 : 0);
-
-    hw_params.bit_pos = params[12] & 0x0F;
-    hw_params.pattern = params[5];
-    hw_params.mask = params[6];
-
-    dy = params[11] - params[7];
-    if (dy < 0) dy = -dy;
-    hw_params.y_extent = -1 - dy;
-
-    dx = (params[12] >> 4) - (params[8] >> 4);
-    if (dx < 0) dx = -dx;
-    hw_params.x_extent = -1 - dx;
-
-    hw_params.y_start = params[7];
-    hw_params.x_start = params[8];
-
-    SMD_$START_BLT((uint16_t *)&hw_params, hw,
-                   (uint16_t *)((uint8_t *)&SMD_EC_1 + unit_offset + 8));
-
-    if ((mode & 0x10) == 0) {
-        SMD_$REL_DISPLAY();
-    } else {
-        display_unit->asid = PROC1_$AS_ID;
-    }
-
-    *status_ret = status_$ok;
+    start_blt_calls++;
+    memcpy(captured_words, params, sizeof(captured_words));
+    last_hw = hw;
+    last_regs = hw_regs;
 }
 
-/*
- * Test setup helper
- */
+/* ------------------------------------------------------------------ */
+/* The function under test                                             */
+/* ------------------------------------------------------------------ */
+
+#include "../blt.c"
+
+#define captured (*(const smd_hw_blt_t *)captured_words)
+
+static smd_display_unit_t *rec(void) { return smd_$unit_rec(TEST_UNIT); }
+
 static void setup(void)
 {
-    memset(&mock_globals, 0, sizeof(mock_globals));
-    memset(&mock_hw, 0, sizeof(mock_hw));
-    memset(&mock_unit_aux, 0, sizeof(mock_unit_aux));
-    memset(&mock_unit_array, 0, sizeof(mock_unit_array));
+    memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
+    memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
+    memset(&test_hw, 0, sizeof(test_hw));
+    memset(test_ctrl_regs, 0, sizeof(test_ctrl_regs));
+    memset(captured_words, 0, sizeof(captured_words));
 
-    mock_unit_aux.hw = &mock_hw;
-    mock_as_id = 1;
-    mock_globals.asid_to_unit[1] = 1; /* ASID 1 -> unit 1 */
-    mock_blt_async_lock_data = 0;
-    mock_blt_sync_lock_data = 0;
+    PROC1_$AS_ID = TEST_ASID;
+    SMD_GLOBALS.asid_to_unit[TEST_ASID] = TEST_UNIT;
+    rec()->hw = &test_hw;
+    rec()->ctrl_regs = test_ctrl_regs;
 
-    last_acq_lock_data = NULL;
-    acq_display_called = 0;
-    rel_display_called = 0;
-    start_blt_called = 0;
-    last_start_blt_params = NULL;
-    last_start_blt_hw = NULL;
-    last_start_blt_hw_regs = NULL;
+    acq_calls = rel_calls = start_blt_calls = 0;
+    last_lock_data = NULL;
+    last_hw = NULL;
+    last_regs = NULL;
 }
 
-/*
- * Tests
- */
+/* ------------------------------------------------------------------ */
+/* Tests                                                               */
+/* ------------------------------------------------------------------ */
 
-TEST(unit_zero_error)
+/* 0x00E6EC90: no unit for this ASID is "invalid use of driver procedure",
+ * and nothing else happens - not even the display acquire. */
+static void test_unit_zero_is_an_error(void)
 {
-    setup();
-    mock_globals.asid_to_unit[1] = 0; /* No display for this ASID */
     uint16_t params[13] = {0};
     status_$t st = -1;
 
+    setup();
+    SMD_GLOBALS.asid_to_unit[TEST_ASID] = 0;
+
     SMD_$BLT(params, 0, 0, &st);
 
-    ASSERT_EQ(status_$display_invalid_use_of_driver_procedure, st);
-    ASSERT_EQ(0, acq_display_called);
-    ASSERT_EQ(0, start_blt_called);
+    CHECK_EQ(status_$display_invalid_use_of_driver_procedure, st);
+    CHECK_EQ(0, acq_calls);
+    CHECK_EQ(0, start_blt_calls);
 }
 
-TEST(invalid_mode_bit7)
+/* 0x00E6ECCC-0x00E6ECE0: bits 7, 6 and 3 of the *low byte* of the mode word
+ * are each rejected, and the display is acquired before the test and
+ * released after it. */
+static void test_invalid_mode_bits_are_rejected(void)
 {
-    setup();
+    static const uint16_t bad_modes[] = { 0x0080, 0x0040, 0x0008 };
+
+    for (unsigned i = 0; i < sizeof(bad_modes) / sizeof(bad_modes[0]); i++) {
+        uint16_t params[13] = {0};
+        status_$t st = -1;
+
+        setup();
+        params[0] = bad_modes[i];
+
+        SMD_$BLT(params, 0, 0, &st);
+
+        CHECK_EQ(status_$display_invalid_blt_op, st);
+        CHECK_EQ(1, acq_calls);
+        CHECK_EQ(1, rel_calls);
+        CHECK_EQ(0, start_blt_calls);
+    }
+}
+
+/* Bit 15 of the mode word is *not* one of the rejected bits, even though the
+ * low-byte test is a signed byte test: 0x8000 has a zero low byte. */
+static void test_mode_bit15_is_not_a_low_byte_test(void)
+{
     uint16_t params[13] = {0};
-    params[0] = 0x0080; /* bit 7 set */
     status_$t st = -1;
 
+    setup();
+    params[0] = 0x8000;
+
     SMD_$BLT(params, 0, 0, &st);
 
-    ASSERT_EQ(status_$display_invalid_blt_op, st);
-    ASSERT_EQ(1, acq_display_called);
-    ASSERT_EQ(1, rel_display_called); /* Lock released on error */
-    ASSERT_EQ(0, start_blt_called);
+    CHECK_EQ(status_$ok, st);
+    CHECK_EQ(1, start_blt_calls);
+    /* 0x00E6ECFC "andi.b #0x7f,(-0x10,A6)" then "or.b D1b,(-0x10,A6)" with
+     * D1 = 0x80 acts on the high byte of the word, i.e. word bit 15. */
+    CHECK_EQ(0x8000, captured.control);
 }
 
-TEST(invalid_mode_bit6)
+/* 0x00E6ED10-0x00E6ED8E: the remaining control bits all live in the low
+ * byte, and 0x00E6ED0A masks the word with 0x803F so nothing else survives. */
+static void test_control_word_low_bits(void)
 {
-    setup();
     uint16_t params[13] = {0};
-    params[0] = 0x0040; /* bit 6 set */
     status_$t st = -1;
 
+    setup();
+    params[0] = 0x0023;   /* bits 5, 1 and 0 */
+
     SMD_$BLT(params, 0, 0, &st);
 
-    ASSERT_EQ(status_$display_invalid_blt_op, st);
-    ASSERT_EQ(1, rel_display_called);
-    ASSERT_EQ(0, start_blt_called);
+    CHECK_EQ(status_$ok, st);
+    CHECK_EQ(0x0023, captured.control);
 }
 
-TEST(invalid_mode_bit3)
+/* 0x00E6ED3C compares the *high* byte of params[1] against 2, and
+ * 0x00E6ED52 the *low* byte of params[2] against 0x20. */
+static void test_control_bits_from_the_parameter_bytes(void)
 {
-    setup();
     uint16_t params[13] = {0};
-    params[0] = 0x0008; /* bit 3 set */
     status_$t st = -1;
 
+    setup();
+    params[1] = 0x0200;   /* high byte 0x02 -> control bit 3 */
+    params[2] = 0x9920;   /* low byte 0x20 -> control bit 2 */
+
     SMD_$BLT(params, 0, 0, &st);
 
-    ASSERT_EQ(status_$display_invalid_blt_op, st);
-    ASSERT_EQ(1, rel_display_called);
-    ASSERT_EQ(0, start_blt_called);
+    CHECK_EQ(status_$ok, st);
+    CHECK_EQ(0x000C, captured.control);
+
+    /* The other halves must not be looked at. */
+    setup();
+    params[1] = 0x0002;
+    params[2] = 0x2000;
+    SMD_$BLT(params, 0, 0, &st);
+    CHECK_EQ(0x0000, captured.control);
 }
 
-TEST(sync_mode_uses_sync_lock)
+/* 0x00E6ED9C "move.l (0xa,A2),(-0xc,A6)": params[5] lands at record +0x04,
+ * params[6] at +0x06 - the order the old hand-written model had backwards. */
+static void test_parameter_pair_order_and_extents(void)
 {
-    setup();
     uint16_t params[13] = {0};
-    params[0] = 0x0000; /* sync mode (bit 4 clear) */
     status_$t st = -1;
 
-    SMD_$BLT(params, 0, 0, &st);
-
-    ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ((unsigned long)&mock_blt_sync_lock_data, (unsigned long)last_acq_lock_data);
-    ASSERT_EQ(1, rel_display_called); /* Sync releases lock */
-}
-
-TEST(async_mode_uses_async_lock)
-{
     setup();
-    uint16_t params[13] = {0};
-    params[0] = 0x0010; /* async mode (bit 4 set) */
-    status_$t st = -1;
-
-    SMD_$BLT(params, 0, 0, &st);
-
-    ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ((unsigned long)&mock_blt_async_lock_data, (unsigned long)last_acq_lock_data);
-    ASSERT_EQ(0, rel_display_called); /* Async does NOT release lock */
-}
-
-TEST(async_records_asid)
-{
-    setup();
-    uint16_t params[13] = {0};
-    params[0] = 0x0010; /* async mode */
-    status_$t st = -1;
-
-    SMD_$BLT(params, 0, 0, &st);
-
-    ASSERT_EQ(status_$ok, st);
-    /* Verify the async path sets display_unit->asid to the current ASID */
-    ASSERT_EQ(mock_as_id, mock_unit_array.units[1].asid);
-}
-
-TEST(hw_pointer_from_aux)
-{
-    setup();
-    uint16_t params[13] = {0};
-    params[0] = 0x0000;
-    status_$t st = -1;
-
-    SMD_$BLT(params, 0, 0, &st);
-
-    ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ(1, start_blt_called);
-    /* Verify hw pointer came from aux->hw, not from direct address casting */
-    ASSERT_EQ((unsigned long)&mock_hw, (unsigned long)last_start_blt_hw);
-}
-
-TEST(basic_blt_params)
-{
-    setup();
-    uint16_t params[13] = {0};
-    /* mode = 0x0003 (src+dest enable) */
-    params[0] = 0x0003;
-    /* params[5] = pattern, params[6] = mask */
     params[5] = 0x1234;
     params[6] = 0x5678;
-    /* y_start=10, x_start=0x0050 */
-    params[7] = 10;
-    params[8] = 0x0050;
-    /* y_end=20, x_end with bit_pos */
+    params[7] = 10;        /* y start */
+    params[8] = 0x0050;    /* x start */
     params[11] = 20;
-    params[12] = 0x00A3; /* x_end = 0x0A << 4 = 0x00A0, bit_pos = 3 */
-    status_$t st = -1;
+    params[12] = 0x00A3;   /* bit_pos 3, x end 0x0A0 */
 
     SMD_$BLT(params, 0, 0, &st);
 
-    ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ(1, start_blt_called);
-
-    /* Verify the hw_params passed to SMD_$START_BLT */
-    smd_hw_blt_t *hw_p = (smd_hw_blt_t *)last_start_blt_params;
-    ASSERT_EQ(0x0003, hw_p->control);     /* src+dest enable */
-    ASSERT_EQ(3, hw_p->bit_pos);          /* low nibble of params[12] */
-    ASSERT_EQ(0x1234, hw_p->pattern);
-    ASSERT_EQ(0x5678, hw_p->mask);
-    ASSERT_EQ(10, hw_p->y_start);
-    ASSERT_EQ(0x0050, hw_p->x_start);
-
-    /* y_extent = -1 - |20-10| = -11 = 0xFFF5 */
-    ASSERT_EQ((uint16_t)(-11), hw_p->y_extent);
-
-    /* dx = (0x00A3 >> 4) - (0x0050 >> 4) = 0x0A - 0x05 = 5 */
-    /* x_extent = -1 - 5 = -6 = 0xFFFA */
-    ASSERT_EQ((uint16_t)(-6), hw_p->x_extent);
+    CHECK_EQ(status_$ok, st);
+    CHECK_EQ(0x1234, captured.field_04);
+    CHECK_EQ(0x5678, captured.field_06);
+    CHECK_EQ(3, captured.bit_pos);
+    CHECK_EQ(10, captured.y_start);
+    CHECK_EQ(0x0050, captured.x_start);
+    /* -1 - |20 - 10| */
+    CHECK_EQ((uint16_t)-11, captured.y_extent);
+    /* -1 - |0x0A - 0x05| */
+    CHECK_EQ((uint16_t)-6, captured.x_extent);
 }
 
-TEST(control_word_alt_rop)
+/* The extents are absolute values, so reversing the coordinates gives the
+ * same answer (0x00E6EDAA / 0x00E6EDC6 "neg.w"). */
+static void test_extents_are_absolute(void)
 {
-    setup();
     uint16_t params[13] = {0};
-    params[0] = 0x0020; /* alt ROP (bit 5) */
     status_$t st = -1;
+
+    setup();
+    params[7] = 20;
+    params[8] = 0x00A0;
+    params[11] = 10;
+    params[12] = 0x0050;
 
     SMD_$BLT(params, 0, 0, &st);
 
-    ASSERT_EQ(status_$ok, st);
-    smd_hw_blt_t *hw_p = (smd_hw_blt_t *)last_start_blt_params;
-    ASSERT_EQ(0x0020, hw_p->control);
+    CHECK_EQ((uint16_t)-11, captured.y_extent);
+    CHECK_EQ((uint16_t)-6, captured.x_extent);
+}
+
+/* 0x00E6ECB4-0x00E6ECC2: mode bit 4 chooses which constant word is passed to
+ * SMD_$ACQ_DISPLAY. */
+static void test_lock_word_selection(void)
+{
+    uint16_t params[13] = {0};
+    status_$t st = -1;
+
+    setup();
+    params[0] = 0x0000;
+    SMD_$BLT(params, 0, 0, &st);
+    CHECK_EQ((long)(intptr_t)&SMD_SYNC_LOCK_DATA, (long)(intptr_t)last_lock_data);
+
+    setup();
+    params[0] = 0x0010;
+    SMD_$BLT(params, 0, 0, &st);
+    CHECK_EQ((long)(intptr_t)&SMD_ACQ_LOCK_DATA, (long)(intptr_t)last_lock_data);
+}
+
+/* 0x00E6EDD6 pushes the record's +0xFC field by value and 0x00E6EDDA the
+ * hardware record read from (-0xF4,A3). */
+static void test_start_blt_gets_the_record_pointers(void)
+{
+    uint16_t params[13] = {0};
+    status_$t st = -1;
+
+    setup();
+    SMD_$BLT(params, 0, 0, &st);
+
+    CHECK_EQ(1, start_blt_calls);
+    CHECK_EQ((long)(intptr_t)&test_hw, (long)(intptr_t)last_hw);
+    CHECK_EQ((long)(intptr_t)test_ctrl_regs, (long)(intptr_t)last_regs);
+}
+
+/* 0x00E6EDEA-0x00E6EDF8: the synchronous path releases the display, the
+ * asynchronous one records the ASID in the record's +0x08 field instead. */
+static void test_sync_releases_async_records_asid(void)
+{
+    uint16_t params[13] = {0};
+    status_$t st = -1;
+
+    setup();
+    params[0] = 0x0000;
+    SMD_$BLT(params, 0, 0, &st);
+    CHECK_EQ(1, rel_calls);
+    CHECK_EQ(0, rec()->field_08);
+    CHECK_EQ(0, rec()->owner_asid);
+    CHECK_EQ(status_$ok, st);
+
+    setup();
+    params[0] = 0x0010;
+    SMD_$BLT(params, 0, 0, &st);
+    CHECK_EQ(0, rel_calls);
+    CHECK_EQ(TEST_ASID, rec()->field_08);
+    /* the owner ASID is deliberately left alone */
+    CHECK_EQ(0, rec()->owner_asid);
+    CHECK_EQ(status_$ok, st);
 }
 
 int main(void)
 {
-    printf("test_blt:\n");
+    printf("SMD_$BLT (0x00E6EC6E) tests\n");
 
-    RUN_TEST(unit_zero_error);
-    RUN_TEST(invalid_mode_bit7);
-    RUN_TEST(invalid_mode_bit6);
-    RUN_TEST(invalid_mode_bit3);
-    RUN_TEST(sync_mode_uses_sync_lock);
-    RUN_TEST(async_mode_uses_async_lock);
-    RUN_TEST(async_records_asid);
-    RUN_TEST(hw_pointer_from_aux);
-    RUN_TEST(basic_blt_params);
-    RUN_TEST(control_word_alt_rop);
+    RUN_TEST(unit_zero_is_an_error);
+    RUN_TEST(invalid_mode_bits_are_rejected);
+    RUN_TEST(mode_bit15_is_not_a_low_byte_test);
+    RUN_TEST(control_word_low_bits);
+    RUN_TEST(control_bits_from_the_parameter_bytes);
+    RUN_TEST(parameter_pair_order_and_extents);
+    RUN_TEST(extents_are_absolute);
+    RUN_TEST(lock_word_selection);
+    RUN_TEST(start_blt_gets_the_record_pointers);
+    RUN_TEST(sync_releases_async_records_asid);
 
-    printf("\n  Results: %d passed, %d failed\n", tests_passed, tests_failed);
+    printf("\n%d tests, %d failed\n", tests_passed + tests_failed, tests_failed);
     return tests_failed > 0 ? 1 : 0;
 }

@@ -64,12 +64,14 @@
  *   00e707bc    bmi.b 0x00e707ba                ; loop while busy
  */
 void SMD_$VERT_LINE(int16_t *x, int16_t *y1, int16_t *y2, void *param4,
-                    smd_hw_blt_regs_t *hw_regs, uint16_t *control)
+                    smd_hw_blt_regs_t *hw_regs, uint16_t *control,
+                    void *param7)
 {
     uint16_t x_val, y1_val, y2_val;
     int16_t height;
 
     (void)param4;   /* Unused */
+    (void)param7;   /* Loaded into A0 at 0x00E707B4, then never used */
 
     x_val = (uint16_t)*x;
     y1_val = (uint16_t)*y1;

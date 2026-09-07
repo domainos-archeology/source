@@ -1,86 +1,72 @@
 /*
- * smd/lock_display.c - SMD_$LOCK_DISPLAY implementation
+ * smd/lock_display.c - portable model of SMD_$LOCK_DISPLAY
  *
- * Low-level display lock with interrupt disable. Manages the lock state
- * machine for exclusive display access during operations like scrolling.
+ * Original address: 0x00E15CCE.
  *
- * Original address: 0x00E15CCE
+ * The real routine is hand-written assembly and lives in
+ * smd/sau2/lock_display.s; this file supplies a C stand-in for hosts that
+ * are not the SAU2, and is compiled out entirely on m68k so the two do not
+ * collide at link time (bead source-c3ap).
  *
- * Lock states:
- *   0 = unlocked
- *   3 = scroll done (transitions to 4 when param2[0] == 1)
- *   4 = post-scroll locked
- *   5 = initial lock
- *
- * Assembly analysis:
- *   - Disables interrupts (ori #0x700,SR)
- *   - Checks lock_data[1] (offset 2) for current state
- *   - If state == 0: set state to 5, return success (0xFF)
- *   - If state == 3 and param2[0] == 1: set state to 4, clear param2[0x12], return success
- *   - Otherwise: return failure (0x00)
- *   - Re-enables interrupts (andi #-0x701,SR)
+ * The model is faithful about the state machine but not about the interrupt
+ * discipline: the original brackets its body with "ori #0x700,SR" and
+ * "andi #0xf8ff,SR", which *forces* IPL 0 on the way out instead of
+ * restoring the caller's level.  ENABLE_INTERRUPTS() restores, so a caller
+ * that ran at a raised IPL would come back at that IPL here and at 0 on the
+ * hardware.
  */
 
 #include "smd/smd_internal.h"
 
+#if !defined(ARCH_M68K)
+
 /*
  * SMD_$LOCK_DISPLAY - Lock display for exclusive access
  *
- * Acquires a low-level lock on the display hardware. This function operates
- * with interrupts disabled to ensure atomicity.
- *
  * Parameters:
- *   lock_data - Pointer to display hardware structure (smd_display_hw_t)
- *               The lock state is at offset +2 (lock_state field)
- *   param2    - Secondary parameter structure
- *               offset +0: condition flag (must be 1 for state 3 transition)
- *               offset +0x24: field to clear on successful state 3 transition
+ *   hw        - the unit's hardware record; the lock state is hw->lock_state
+ *               (offset +0x02)
+ *   lock_data - caller's lock word.  Only the scroll-done transition looks at
+ *               it, and that path also clears the word at +0x24.
  *
  * Returns:
- *   0xFF (-1) if lock acquired successfully
- *   0x00 if lock not available
+ *   0xFF (negative) when the lock was taken, 0 when it was not.  The original
+ *   only ever writes the low byte of D0 (clr.b / st), which is why the result
+ *   is a byte.
  *
- * Lock state machine:
- *   State 0 (unlocked): Transitions to state 5, returns success
- *   State 3 (scroll done): If param2[0] == 1, transitions to state 4, returns success
- *   Other states: Returns failure (lock busy)
+ * Lock state machine (0x00E15CD6-0x00E15D0E):
+ *   0 (unlocked)    -> 5, success
+ *   3 (scroll done) -> 4 plus lock_data[0x12] cleared, but only when
+ *                      lock_data[0] == 1; success
+ *   anything else   -> unchanged, failure
  */
-/*
- * TODO(source-c3ap): this routine is hand-written assembly (no link/unlk,
- * arguments read straight off the stack at (0x4,SP)/(0x8,SP), and
- * ori #0x700,SR / andi #0xf8ff,SR - a forced IPL 0, not an SR restore).
- * Per CLAUDE.md it belongs in smd/sau2/lock_display.s.
- */
-int16_t SMD_$LOCK_DISPLAY(smd_display_hw_t *lock_data, int16_t *param2)
+int8_t SMD_$LOCK_DISPLAY(smd_display_hw_t *hw, int16_t *lock_data)
 {
     int16_t state;
-    uint8_t high_byte;
     uint16_t sr;
 
-    DISABLE_INTERRUPTS(sr);
+    DISABLE_INTERRUPTS(sr); /* 0x00E15CD2 ori #0x700,SR */
 
-    /* Read current lock state from offset +2 */
-    state = lock_data->lock_state;
-    high_byte = (uint8_t)(state >> 8);
+    state = (int16_t)hw->lock_state; /* 0x00E15CD6 */
 
     if (state == SMD_LOCK_STATE_UNLOCKED) {
-        /* State 0: Unlocked - acquire lock, transition to state 5 */
-        lock_data->lock_state = SMD_LOCK_STATE_LOCKED_5;
-        /* 0x00E15CE6 bra 0x00E15D0A: this path also falls through the
-         * `andi #0xf8ff,SR` before returning. */
-        ENABLE_INTERRUPTS(sr);
-        return (int16_t)((high_byte << 8) | 0xFF);  /* Success */
+        /* 0x00E15CE0 */
+        hw->lock_state = SMD_LOCK_STATE_LOCKED_5;
+        ENABLE_INTERRUPTS(sr); /* 0x00E15D0A andi #0xf8ff,SR */
+        return (int8_t)0xFF;   /* 0x00E15D0E st D0b */
     }
 
-    if (state == SMD_LOCK_STATE_SCROLL_DONE && param2[0] == 1) {
-        /* State 3: Scroll done and condition met - transition to state 4 */
-        lock_data->lock_state = SMD_LOCK_STATE_LOCKED_4;
-        param2[0x12] = 0;  /* Clear field at offset 0x24 (0x12 * 2) */
+    if (state == SMD_LOCK_STATE_SCROLL_DONE && lock_data[0] == 1) {
+        /* 0x00E15D00 / 0x00E15D06 */
+        hw->lock_state = SMD_LOCK_STATE_LOCKED_4;
+        lock_data[0x12] = 0; /* clr.w (0x24,A1) */
         ENABLE_INTERRUPTS(sr);
-        return (int16_t)((high_byte << 8) | 0xFF);  /* Success */
+        return (int8_t)0xFF;
     }
 
-    /* Lock not available */
+    /* 0x00E15CF8 / 0x00E15CFC */
     ENABLE_INTERRUPTS(sr);
-    return (int16_t)(high_byte << 8);  /* Failure (0x00 in low byte) */
+    return 0;
 }
+
+#endif /* !ARCH_M68K */

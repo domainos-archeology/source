@@ -30,17 +30,17 @@
  *
  * Original implementation notes:
  *   - Searches free list for first-fit block
- *   - For display type 1 (mono landscape): y=800, x=block offset
- *   - For display type 2 (mono portrait): coordinates calculated differently
+ *   - For display type 1 (mono portrait, 800x1024): x=800, y=block offset
+ *   - For display type 2 (mono landscape, 1024x800): tiled into the 224-line
+ *     hidden band starting at y=800
  *   - If exact fit, removes block from list
  *   - If larger, splits block and updates remaining
  */
 void SMD_$ALLOC_HDM(uint16_t *size_ptr, smd_hdm_pos_t *pos, status_$t *status_ret)
 {
-    uint16_t size;
+    int16_t size;   /* word load + signed cmp.w/bgt at 0x00E6D992 */
     uint16_t unit;
     uint16_t asid;
-    uint8_t *unit_base;
     smd_hdm_list_t *hdm_list;
     smd_display_hw_t *hw;
     int16_t num_blocks;
@@ -48,7 +48,7 @@ void SMD_$ALLOC_HDM(uint16_t *size_ptr, smd_hdm_pos_t *pos, status_$t *status_re
     int16_t block_offset;
     int16_t block_size;
 
-    size = *size_ptr;
+    size = (int16_t)*size_ptr;
 
     /* Get current process's ASID */
     asid = PROC1_$AS_ID;
@@ -60,15 +60,18 @@ void SMD_$ALLOC_HDM(uint16_t *size_ptr, smd_hdm_pos_t *pos, status_$t *status_re
         return;
     }
 
-    /* Calculate unit base and get HDM list pointer */
-    unit_base = ((uint8_t *)SMD_DISPLAY_UNITS) + (uint32_t)unit * SMD_DISPLAY_UNIT_SIZE;
-    hdm_list = *(smd_hdm_list_t **)(unit_base + 0x04);
+    /* 0x00e6d966-0x00e6d978: A0 = 0xE2E3FC + unit*0x10C; the free list is at
+     * (0x4,A0) = record +0xF8 and the hardware record at (-0xF4,A0). */
+    {
+        smd_display_unit_t *rec = smd_$unit_rec((int16_t)unit);
 
-    /* Get hw pointer for display type */
-    hw = *(smd_display_hw_t **)(unit_base - 0xf4);
+        hdm_list = rec->hdm_list;
+        hw = rec->hw;
+    }
 
-    /* Search free list for a block large enough */
-    num_blocks = hdm_list->count;
+    /* 0x00e6d97e-0x00e6da24: walk the free list, first fit.  D3 = count-1
+     * plus dbf makes exactly `count` iterations. */
+    num_blocks = (int16_t)hdm_list->count;
     for (i = 0; i < num_blocks; i++) {
         block_size = hdm_list->blocks[i].size;
 
@@ -77,33 +80,30 @@ void SMD_$ALLOC_HDM(uint16_t *size_ptr, smd_hdm_pos_t *pos, status_$t *status_re
             block_offset = hdm_list->blocks[i].offset;
 
             /*
-             * Calculate output position based on display type.
-             * Display type 1: mono landscape 1024x800
-             *   - y = 800 (start of hidden memory below visible)
-             *   - x = block offset
-             *
-             * Display type 2: mono portrait 800x1024
-             *   - Different calculation involving division by 0xe0 (224)
-             *   - y = (offset / 224) * 224
-             *   - x = (offset % 224) + 800
+             * Calculate the output position from the display type
+             * (0x00e6d998-0x00e6d9e2).
              */
-            if (hw->display_type == SMD_DISP_TYPE_MONO_LANDSCAPE) {
-                pos->y = 800;
-                pos->x = block_offset;
-            } else if (hw->display_type == SMD_DISP_TYPE_MONO_PORTRAIT) {
-                int16_t div_result = block_offset / 0xe0;
-                pos->y = div_result * 0xe0;
-                pos->x = (block_offset % 0xe0) + 800;
+            if (hw->display_type == SMD_DISP_TYPE_MONO_PORTRAIT) {
+                /* 0x00e6d9ae/0x00e6d9b4: x = 800 (the first hidden column of
+                 * an 800-pixel-wide display), y = the block's scan line. */
+                pos->x = 800;
+                pos->y = (uint16_t)block_offset;
+            } else if (hw->display_type == SMD_DISP_TYPE_MONO_LANDSCAPE) {
+                /* 0x00e6d9ba-0x00e6d9e2: the hidden band is the 224 scan lines
+                 * from 800 up, tiled 224 columns at a time. */
+                int16_t div_result = (int16_t)(block_offset / 0xe0);
+                pos->x = (uint16_t)(div_result * 0xe0);
+                pos->y = (uint16_t)((block_offset % 0xe0) + 800);
             }
-            /* TODO(source-h4x): Handle other display types if needed */
+            /* 0x00e6d9aa: any other display type leaves *pos untouched. */
 
             if (size == block_size) {
                 /*
                  * Exact fit - remove this block from the list.
                  * Shift remaining blocks down.
                  */
-                hdm_list->count = num_blocks - 1;
-                for (int j = i; j < hdm_list->count; j++) {
+                hdm_list->count = (uint16_t)(num_blocks - 1);
+                for (int j = i; j < (int16_t)hdm_list->count; j++) {
                     hdm_list->blocks[j] = hdm_list->blocks[j + 1];
                 }
             } else {
@@ -111,8 +111,8 @@ void SMD_$ALLOC_HDM(uint16_t *size_ptr, smd_hdm_pos_t *pos, status_$t *status_re
                  * Partial allocation - update block to reflect remaining space.
                  * Reduce size and advance offset.
                  */
-                hdm_list->blocks[i].size = block_size - size;
-                hdm_list->blocks[i].offset = block_offset + size;
+                hdm_list->blocks[i].size = (uint16_t)(block_size - size);
+                hdm_list->blocks[i].offset = (uint16_t)(block_offset + size);
             }
 
             *status_ret = status_$ok;

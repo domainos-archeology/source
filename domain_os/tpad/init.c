@@ -47,12 +47,32 @@ void TPAD_$INIT(void)
         /* Query display dimensions */
         SMD_$INQ_DISP_INFO(&unit, &disp_info, &status);
 
-        /* If display info is valid (type != 0), use display dimensions */
+        /*
+         * If display info is valid (type != 0), use display dimensions.
+         * 0x00E335C6 "move.w (-0x8,A6),D0w" / "subq.w #0x1" /
+         * "move.w D0w,(-0x14,A3)" takes the result record's +0x08 field - the
+         * *height* now that smd_disp_info_result_t is named correctly (bead
+         * source-5nq5) - into config +0x18 (y_max_disp), and 0x00E335D0 takes
+         * the +0x06 field (the width) into config +0x14 (x_max_disp).
+         */
         if (disp_info.display_type != 0) {
             config->y_max_disp = disp_info.height - 1;
             config->x_max_disp = disp_info.width - 1;
         }
 
+        /*
+         * TODO(source-j999): these two copies and the two divisions below do
+         * not match TPAD_$INIT's assembly.  0x00E335DA
+         * "move.w (-0x18,A3),(-0x26,A3)" writes config +0x14 (x_max_disp)
+         * into config +0x06, which tpad.h calls x_scale, not +0x0A (x_range);
+         * 0x00E335E0 likewise writes y_max_disp into +0x08 (y_scale).  The
+         * factors then come out as 0x00E335F4 "move.w (-0x22,A3),D0w" /
+         * "divs.w (-0x26,A3),D0", i.e. config[+0x0A] / config[+0x06] - the
+         * reciprocal of what is written here.  Either the copies below are
+         * inverted or tpad.h's names for +0x06/+0x0A (and +0x08/+0x0C) are;
+         * tpad is not owned by the SMD pass that found this, so the bytes are
+         * left alone for now.
+         */
         /* Copy display bounds to coordinate range */
         config->x_range = config->x_max_disp;
         config->y_range = config->y_max_disp;

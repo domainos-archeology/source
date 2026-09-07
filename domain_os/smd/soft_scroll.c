@@ -52,53 +52,48 @@
 void SMD_$SOFT_SCROLL(smd_scroll_rect_t *scroll_rect, int16_t *scroll_dx,
                       int16_t *scroll_dy, status_$t *status_ret)
 {
-    uint16_t unit;
+    int16_t unit;
     uint16_t as_id;
     smd_display_hw_t *hw;
-    smd_display_slot_t *unit_ptr;
+    smd_display_unit_t *rec;
 
-    /* Get current address space ID */
+    /* 0x00e6f334-0x00e6f340 */
     as_id = PROC1_$AS_ID;
-
-    /* Look up display unit for this ASID */
-    unit = SMD_GLOBALS.asid_to_unit[as_id];
+    unit = (int16_t)SMD_GLOBALS.asid_to_unit[as_id];
 
     if (unit == 0) {
-        /* No display unit associated with this ASID */
+        /* 0x00e6f348 */
         *status_ret = status_$display_invalid_use_of_driver_procedure;
         return;
     }
 
-    /* Acquire display lock for exclusive access */
-    /* Lock data is at a fixed offset within the SMD module */
-    SMD_$ACQ_DISPLAY(&SMD_ACQ_LOCK_DATA);
+    /* 0x00e6f350 pea (-0x1a26,PC) -> 0x00e6f352 - 0x1a26 = 0x00e6d92c */
+    SMD_$ACQ_DISPLAY((int16_t *)&SMD_ACQ_LOCK_DATA);
 
-    /* Get pointer to display unit data */
-    /* Unit number is used as index into display unit array */
-    unit_ptr = &SMD_DISPLAY_UNITS[unit];
+    /* 0x00e6f35c-0x00e6f36e: A2 = 0xE2E3FC + unit*0x10C, hw at (-0xF4,A2) */
+    rec = smd_$unit_rec(unit);
+    hw = rec->hw;
 
-    /* Get hardware info pointer from display unit */
-    hw = unit_ptr->hw;
-
-    /* Copy scroll region coordinates to hardware structure */
-    /* Scroll region is stored as two 32-bit values (x1/y1 and x2/y2) */
+    /* 0x00e6f374/0x00e6f378: the scroll rectangle is copied as two longwords
+     * through a post-incrementing source pointer. */
     hw->scroll_x1 = scroll_rect->x1;
     hw->scroll_y1 = scroll_rect->y1;
     hw->scroll_x2 = scroll_rect->x2;
     hw->scroll_y2 = scroll_rect->y2;
 
-    /* Copy scroll direction/amount */
+    /* 0x00e6f380: the second argument goes to +0x30 (scroll_dx) ... */
     hw->scroll_dx = *scroll_dx;
+    /* 0x00e6f388: ... and the third to +0x2E (scroll_dy) */
     hw->scroll_dy = *scroll_dy;
 
-    /* Start the scroll operation */
-    /* Pass hardware structure and event count for completion signaling */
-    SMD_$START_SCROLL(hw, &unit_ptr->event_count_1);
+    /* 0x00e6f38c-0x00e6f392: the second argument is the record's controller
+     * register base (+0xFC), pushed by value. */
+    SMD_$START_SCROLL(hw, rec->ctrl_regs);
 
-    /* Record which ASID initiated this scroll operation */
-    /* This is stored at offset -0xEC from end of unit structure */
-    /* which corresponds to unit_ptr->asid */
-    unit_ptr->asid = as_id;
+    /* 0x00e6f398: the ASID is re-read from the global here, and the store is
+     * to (-0xec,A2), i.e. the record's +0x08 field. */
+    rec->field_08 = PROC1_$AS_ID;
 
+    /* 0x00e6f3a2 */
     *status_ret = status_$ok;
 }

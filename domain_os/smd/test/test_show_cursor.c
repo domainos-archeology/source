@@ -116,7 +116,7 @@ _Static_assert(offsetof(smd_cursor_pattern_t, bitmap) == 0x08, "pat bitmap");
 smd_globals_t SMD_GLOBALS;
 /* Big enough that smd_$unit_rec(1) (base + 0x10C - 0xF4) plus a whole
  * record stays inside the object on a 64-bit host too. */
-smd_display_slot_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS];
+uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
 smd_display_info_t SMD_DISPLAY_INFO[SMD_MAX_DISPLAY_UNITS];
 smd_blink_state_t SMD_BLINK_STATE;
 ml_$exclusion_t ml_$exclusion_t_00e2e520;
@@ -133,7 +133,7 @@ smd_cursor_pattern_t *SMD_CURSOR_PTABLE[4];
 static int8_t mock_validate_result;
 static int excl_start_calls, excl_stop_calls;
 static int acq_calls, rel_calls, lock_calls;
-static int16_t mock_lock_result;
+static int8_t mock_lock_result;
 static boolean mock_draw_result;
 
 typedef struct {
@@ -174,7 +174,7 @@ uint16_t SMD_$ACQ_DISPLAY(int16_t *lock_data)
     return 0;
 }
 
-int16_t SMD_$LOCK_DISPLAY(smd_display_hw_t *hw, int16_t *lock_data)
+int8_t SMD_$LOCK_DISPLAY(smd_display_hw_t *hw, int16_t *lock_data)
 {
     (void)hw;
     CHECK_EQ(1, *lock_data);

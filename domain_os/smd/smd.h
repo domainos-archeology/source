@@ -27,12 +27,37 @@
  * Size: 10 bytes
  */
 typedef struct smd_disp_info_result_t {
-    uint16_t    display_type;       /* 0x00: Display type code */
-    uint16_t    bits_per_pixel;     /* 0x02: Bits per pixel (4, 8, etc.) */
-    uint16_t    num_planes;         /* 0x04: Number of planes (4, 8, etc.) */
-    uint16_t    height;             /* 0x06: Display height in pixels */
-    uint16_t    width;              /* 0x08: Display width in pixels */
+    uint16_t    display_type;       /* 0x00: Display type code (0x00E70172) */
+    /*
+     * 0x02/0x04: the *frame buffer* dimensions in pixels.  SMD_$INQ_DISP_INFO
+     * writes both as one longword from a jump table (0x00E701B2):
+     *   0x00E701C8 move.l #0x04000400 -> 1024 x 1024 (types 1,2,6,8,10,11)
+     *   0x00E701D2 move.l #0x04000800 -> 1024 x 2048 (types 3,4)
+     *   0x00E701DC move.l #0x08000400 -> 2048 x 1024 (types 5,9)
+     * They are not a bit depth or a plane count; the older names claimed
+     * values of 4 and 8, which the original never writes.
+     */
+    uint16_t    mem_width;          /* 0x02: Frame-buffer width in pixels */
+    uint16_t    mem_height;         /* 0x04: Frame-buffer height in pixels */
+    /*
+     * 0x06/0x08: the *visible* dimensions, taken from the hardware record:
+     *   0x00E7018A move.w (0x50,A1),D1w / addq.w #1 / move.w D1w,(0x6,A2)
+     *              -> hw->max_x + 1, i.e. the width
+     *   0x00E70194 move.w (0x54,A1),D1w / addq.w #1 / move.w D1w,(0x8,A2)
+     *              -> hw->max_y + 1, i.e. the height
+     * (bead source-5nq5: these two names used to be the other way round.)
+     */
+    uint16_t    width;              /* 0x06: Visible width in pixels */
+    uint16_t    height;             /* 0x08: Visible height in pixels */
 } smd_disp_info_result_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(smd_disp_info_result_t, mem_width) == 0x02, "di mem_w");
+_Static_assert(offsetof(smd_disp_info_result_t, mem_height) == 0x04, "di mem_h");
+_Static_assert(offsetof(smd_disp_info_result_t, width) == 0x06, "di width");
+_Static_assert(offsetof(smd_disp_info_result_t, height) == 0x08, "di height");
+_Static_assert(sizeof(smd_disp_info_result_t) == 10, "smd_disp_info_result_t");
+#endif
 
 /*
  * ============================================================================
@@ -41,10 +66,26 @@ typedef struct smd_disp_info_result_t {
  * Represents a position in hidden display memory.
  * Size: 4 bytes
  */
+/*
+ * Like every other SMD position, this is stored Y first: the *row* is at
+ * offset 0x00 and the *column* at offset 0x02.  Proved in
+ * SMD_$COPY_FONT_TO_HDM (0x00E70328 "move.w (A4),D1w" / 0x00E70330
+ * "lsl.l #0x7,D1" -> display_base + row*0x80 words, and 0x00E70340
+ * "move.w (0x2,A4),D1w" / "lsr.w #0x3,D1w" -> the byte column within the
+ * scan line), and corroborated by SMD_$ALLOC_HDM (0x00E6D9AE stores the
+ * constant 800 - the first hidden column of an 800-pixel-wide display - at
+ * +0x02 and the scan-line offset at +0x00 for display type 1).
+ */
 typedef struct smd_hdm_pos_t {
-    uint16_t    x;                  /* 0x00: X coordinate */
-    uint16_t    y;                  /* 0x02: Y coordinate */
+    uint16_t    y;                  /* 0x00: row (scan line) */
+    uint16_t    x;                  /* 0x02: column (pixels) */
 } smd_hdm_pos_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(smd_hdm_pos_t, y) == 0x00, "hdm pos y");
+_Static_assert(offsetof(smd_hdm_pos_t, x) == 0x02, "hdm pos x");
+_Static_assert(sizeof(smd_hdm_pos_t) == 4, "smd_hdm_pos_t size");
+#endif
 
 /*
  * ============================================================================
@@ -97,10 +138,35 @@ typedef struct smd_rect_t {
  * ============================================================================
  * Size: 4 bytes
  */
-typedef struct smd_cursor_pos_t {
-    int16_t     x;                  /* 0x00: X position */
-    int16_t     y;                  /* 0x02: Y position */
-} smd_cursor_pos_t;
+/*
+ * A cursor position is a single longword, not a pair of fields: the X
+ * coordinate is the LOW half and the Y coordinate the HIGH half.  Proved in
+ * smd_$write_str_clip_impl (0x00E703F6):
+ *   move.l (A0),D5 / move.w D5w,D4w  -> D4 = low half, clipped against the
+ *                                       X bounds (hw +0x56/+0x58) and shifted
+ *                                       right by 4 to index words in a line
+ *   swap D5                          -> D5 = high half, clipped against the
+ *                                       Y bounds (hw +0x5A/+0x5C)
+ * Every SMD entry point that takes one loads it with a single `move.l`
+ * (SMD_$DISPLAY_CURSOR 0x00E6E096, SMD_$CLEAR_CURSOR 0x00E6E0C0,
+ * SMD_$SET_TP_CURSOR 0x00E6E976, SMD_$SET_UNIT_CURSOR_POS 0x00E6E7EC), so it
+ * is exported as the packed value.  Use SMD_POS_X()/SMD_POS_Y()/
+ * SMD_POS_MAKE() to take it apart; those are written with shifts so they mean
+ * the same thing on a little-endian host (bead source-1god - the old struct
+ * declared {int16_t x; int16_t y}, which put X in the high half on m68k).
+ * tpad/tpad.h's union smd_$pos_t spells the same 32-bit value out as
+ * {int16_t y; int16_t x}, i.e. the m68k memory image of this packed value.
+ */
+typedef uint32_t smd_cursor_pos_t;
+
+#define SMD_POS_X(p) ((int16_t)((uint32_t)(p) & 0xFFFFu))
+#define SMD_POS_Y(p) ((int16_t)(((uint32_t)(p) >> 16) & 0xFFFFu))
+#define SMD_POS_MAKE(x, y)                                                     \
+  ((uint32_t)((((uint32_t)(uint16_t)(y)) << 16) | (uint32_t)(uint16_t)(x)))
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(smd_cursor_pos_t) == 4, "smd_cursor_pos_t size");
+#endif
 
 /*
  * ============================================================================
@@ -369,6 +435,11 @@ void SMD_$ALLOC_HDM(uint16_t *size, smd_hdm_pos_t *pos, status_$t *status_ret);
 /*
  * SMD_$FREE_HDM - Free hidden display memory
  *
+ * NOTE: the size comes first.  0x00E6DA4C "movea.l (0x8,A6),A0" /
+ * 0x00E6DA50 "move.w (A0),(-0x10,A6)" reads the size out of the first
+ * argument, while 0x00E6DA48 "movea.l (0xc,A6),A1" uses the second as the
+ * position (0x00E6DA98 onwards).
+ *
  * Parameters:
  *   pos        - Position of memory to free
  *   size       - Size of memory to free
@@ -376,7 +447,7 @@ void SMD_$ALLOC_HDM(uint16_t *size, smd_hdm_pos_t *pos, status_$t *status_ret);
  *
  * Original address: 0x00E6DA3A
  */
-void SMD_$FREE_HDM(smd_hdm_pos_t *pos, uint16_t *size, status_$t *status_ret);
+void SMD_$FREE_HDM(uint16_t *size, smd_hdm_pos_t *pos, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -1087,14 +1158,19 @@ void SMD_$SIGNAL(uint16_t *unit_ptr, uint16_t *params, uint16_t *param_count,
  *   lock_data  - Lock data pointer
  *
  * Returns:
- *   Lock result code
+ *   0xFF (negative) when the lock was taken, 0 when it was not.  The routine
+ *   only ever writes the low byte of D0 ("clr.b D0b" / "st D0b"), so the
+ *   result is a byte.
+ *
+ * Hand-written assembly: smd/sau2/lock_display.s on m68k, with a portable
+ * model in smd/lock_display.c for other hosts.
  *
  * Original address: 0x00E15CCE
  */
 struct smd_display_hw_t; /* Forward declaration */
 /* `lock_data` is not read-only: on the scroll-done path SMD_$LOCK_DISPLAY
  * clears lock_data[0x12] (0x00E15D06 clr.w (0x24,A1)). */
-int16_t SMD_$LOCK_DISPLAY(struct smd_display_hw_t *hw, int16_t *lock_data);
+int8_t SMD_$LOCK_DISPLAY(struct smd_display_hw_t *hw, int16_t *lock_data);
 
 /*
  * SMD_$BIT_SET - Atomic test and set bit 7
@@ -1108,6 +1184,9 @@ int16_t SMD_$LOCK_DISPLAY(struct smd_display_hw_t *hw, int16_t *lock_data);
  * Returns:
  *   0xFF (-1) if bit was previously clear (now set)
  *   0x00 if bit was previously set
+ *
+ * Hand-written assembly: smd/sau2/bit_set.s on m68k, with a (non-atomic)
+ * portable model in smd/bit_set.c for other hosts.
  *
  * Original address: 0x00E15D12
  */
@@ -1185,7 +1264,8 @@ void SMD_$SHUTDOWN(void);
  *
  * Original address: 0x00E701EE
  */
-void SMD_$DISPLAY_LOGO(uint16_t *unit_ptr, int32_t **logo_data, status_$t *status_ret);
+void SMD_$DISPLAY_LOGO(uint16_t *unit_ptr, void **logo_data,
+                       status_$t *status_ret);
 
 /*
  * SMD_$FREE_ASID - Free display resources for an ASID

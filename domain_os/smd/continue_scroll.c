@@ -23,14 +23,14 @@
  * Otherwise, another scroll step is initiated.
  *
  * Parameters:
- *   hw - Display hardware info structure
- *   ec - Event count for completion signaling (actually a BLT control pointer)
+ *   hw        - Display hardware info structure
+ *   ctrl_regs - Display controller register base (unit record +0xFC)
  *
  * Original assembly at 0x00E15C9C:
  *   move.l A5,-(SP)              ; Save A5
  *   movea.l A0,A5                ; A5 = dispatch table base
  *   movea.l (0x8,SP),A1          ; A1 = hw parameter
- *   movea.l (0xc,SP),A0          ; A0 = ec parameter (BLT control ptr)
+ *   movea.l (0xc,SP),A0          ; A0 = ctrl_regs parameter
  *   tst.w (0x24,A1)              ; Test hw->field_24
  *   bne.b continue               ; If non-zero, continue scrolling
  *   move.w #0x3,(0x2,A1)         ; hw->lock_state = 3 (SCROLL_DONE)
@@ -40,17 +40,16 @@
  *   jsr (0x150,A5)               ; Call smd_$setup_scroll_blt
  *   or.w (0x22,A1),D0w           ; D0 |= hw->video_flags
  *   or.w #-0x7ff0,D0w            ; D0 |= 0x8010
- *   move.w D0w,(A0)              ; *ec = D0 (starts BLT)
+ *   move.w D0w,(A0)              ; ctrl_regs[0] = D0 (starts BLT)
  *   move.w #0x2,(0x2,A1)         ; hw->lock_state = 2 (SCROLL)
  *   bra.b done
  * done:
  *   movea.l (SP)+,A5
  *   rts
  */
-void SMD_$CONTINUE_SCROLL(smd_display_hw_t *hw, ec_$eventcount_t *ec)
+void SMD_$CONTINUE_SCROLL(smd_display_hw_t *hw, SMD_HW_REG_PTR ctrl_regs)
 {
     uint16_t blt_ctl;
-    uint16_t *blt_ptr = (uint16_t *)ec;  /* ec is actually a BLT control ptr */
 
     /* Check if scroll is complete */
     if (hw->field_24 == 0) {
@@ -60,14 +59,14 @@ void SMD_$CONTINUE_SCROLL(smd_display_hw_t *hw, ec_$eventcount_t *ec)
     }
 
     /* More scrolling to do - set up the next BLT operation */
-    blt_ctl = smd_$setup_scroll_blt(blt_ptr, hw);
+    blt_ctl = smd_$setup_scroll_blt(ctrl_regs, hw);
 
     /* Combine BLT control with video flags and start bit */
     blt_ctl |= hw->video_flags;
     blt_ctl |= 0x8010;
 
     /* Write to BLT control register to start the operation */
-    *blt_ptr = blt_ctl;
+    ctrl_regs[0] = blt_ctl;
 
     /* Set lock state back to SCROLL to indicate operation in progress */
     hw->lock_state = SMD_LOCK_STATE_SCROLL;

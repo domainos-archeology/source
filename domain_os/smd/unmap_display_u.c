@@ -35,63 +35,50 @@ void SMD_$UNMAP_DISPLAY_U(status_$t *status_ret)
 {
     uint16_t unit;
     uint16_t asid;
-    uint8_t *unit_base;
+    smd_display_unit_t *rec;
     smd_display_hw_t *hw;
-    uint32_t existing_mapping;
     uint32_t unmap_addr;
 
-    /* Get current process's ASID */
+    /* 0x00e6f98a-0x00e6f996 */
     asid = PROC1_$AS_ID;
-
-    /* Look up display unit for this ASID */
     unit = SMD_GLOBALS.asid_to_unit[asid];
     if (unit == 0) {
-        /* No display associated with this process */
+        /* 0x00e6f99c */
         *status_ret = status_$display_invalid_use_of_driver_procedure;
         return;
     }
 
-    /*
-     * Calculate unit base address.
-     * unit_base = SMD_DISPLAY_UNITS + unit * 0x10c
-     */
-    unit_base = ((uint8_t *)SMD_DISPLAY_UNITS) + (uint32_t)unit * SMD_DISPLAY_UNIT_SIZE;
+    /* 0x00e6f9a6-0x00e6f9b0 */
+    rec = smd_$unit_rec((int16_t)unit);
 
-    /* Get existing mapping for this ASID */
-    /* Offset is ASID*4 - 0xe8 from unit_base */
-    existing_mapping = *(uint32_t *)(unit_base + ((int32_t)asid * 4) - 0xe8);
+    /* 0x00e6f9b4-0x00e6f9c0: (-0xE8,A3) + asid*4, i.e. the 1-based
+     * mapped_addresses entry.  The ASID is re-read from the global. */
+    asid = PROC1_$AS_ID;
+    unmap_addr = rec->mapped_addresses[asid - 1];
 
-    if (existing_mapping == 0) {
-        /* Not currently mapped */
+    if (unmap_addr == 0) {
+        /* 0x00e6f9c6 */
         *status_ret = status_$display_memory_not_mapped;
         return;
     }
 
     /*
-     * Unmap the display memory via MST_$UNMAP.
-     * Pass the UID from offset +0x0c and the mapped address.
+     * 0x00e6f9ce-0x00e6f9e8: MST_$UNMAP(uid, &addr, &length, status), with the
+     * mapped address copied into a local first (the callee gets a var
+     * parameter) and the length taken from the per-display-type table at the
+     * front of the globals.
      */
-    uid_t *uid_ptr;
-
-    uid_ptr = (uid_t *)(unit_base + 0x0c);
-
-    /* Get hw pointer to determine display type for unmap parameters */
-    hw = *(smd_display_hw_t **)(unit_base - 0xf4);
-
-    /* Set up address to unmap */
-    unmap_addr = existing_mapping;
-
-    MST_$UNMAP(uid_ptr, &unmap_addr,
-               (uint32_t *)((uint8_t *)&SMD_GLOBALS + (hw->display_type << 2)),
+    hw = rec->hw;
+    MST_$UNMAP(&rec->display_uid, &unmap_addr,
+               &SMD_GLOBALS.display_map_length[hw->display_type],
                status_ret);
 
-    /* Clear the cached mapping */
-    *(uint32_t *)(unit_base + ((int32_t)asid * 4) - 0xe8) = 0;
+    /* 0x00e6f9f2-0x00e6f9fe: clear the cached mapping (ASID re-read again) */
+    asid = PROC1_$AS_ID;
+    rec->mapped_addresses[asid - 1] = 0;
 
+    /* 0x00e6fa02-0x00e6fa06: "bset.b #7,(A2)" sets bit 31 of the status */
     if (*status_ret != status_$ok) {
-        /* Set high bit to indicate error from nested call */
-        /* Original: bset.b #7,(A2) on the first (most significant) byte of the
-         * 32-bit status_$t (big-endian) */
-        *status_ret |= 0x80000000;
+        *status_ret |= 0x80000000u;
     }
 }

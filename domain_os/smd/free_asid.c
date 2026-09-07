@@ -61,11 +61,11 @@ void SMD_$FREE_ASID(int16_t asid)
 {
     int16_t unit;
     status_$t status;
-    smd_unit_aux_t *aux;
+    smd_display_unit_t *aux;
 
     /* Process unit 1 (loop runs once per original code) */
     unit = 1;
-    aux = smd_get_unit_aux(unit);
+    aux = smd_$unit_rec(unit);
 
     /* Check if this ASID has borrowed unit 1 */
     if (aux->borrowed_asid == asid) {

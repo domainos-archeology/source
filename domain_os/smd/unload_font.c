@@ -28,37 +28,32 @@ void SMD_$UNLOAD_FONT(uint16_t *slot_ptr, status_$t *status_ret)
     uint16_t unit;
     uint16_t asid;
     uint16_t slot;
-    uint8_t *unit_base;
     smd_font_entry_t *font_table;
     smd_font_v1_t *font;
-    smd_hdm_pos_t hdm_pos;
     uint16_t hdm_size;
 
-    /* Get current process's ASID */
+    /* 0x00e6dd2a-0x00e6dd36 */
     asid = PROC1_$AS_ID;
-
-    /* Look up display unit for this ASID */
     unit = SMD_GLOBALS.asid_to_unit[asid];
     if (unit == 0) {
+        /* 0x00e6dd3c */
         *status_ret = status_$display_invalid_use_of_driver_procedure;
         return;
     }
 
     slot = *slot_ptr;
 
-    /* Validate slot number (1-8) */
+    /* 0x00e6dd44-0x00e6dd4c: slot 0 and slots above 8 are "not loaded"
+     * (the second test is bhi, i.e. unsigned). */
     if (slot == 0 || slot > SMD_MAX_FONTS_PER_UNIT) {
         *status_ret = status_$display_font_not_loaded;
         return;
     }
 
-    /* Calculate unit base address */
-    unit_base = ((uint8_t *)SMD_DISPLAY_UNITS) + (uint32_t)unit * SMD_DISPLAY_UNIT_SIZE;
+    /* 0x00e6dd50-0x00e6dd60: the font table is the record's +0xF4 field. */
+    font_table = smd_$unit_rec((int16_t)unit)->font_table;
 
-    /* Get font table pointer */
-    font_table = *(smd_font_entry_t **)unit_base;
-
-    /* Check if font is actually loaded in this slot */
+    /* 0x00e6dd66 */
     if (font_table[slot - 1].font_ptr == NULL) {
         *status_ret = status_$display_font_not_loaded;
         return;
@@ -67,26 +62,25 @@ void SMD_$UNLOAD_FONT(uint16_t *slot_ptr, status_$t *status_ret)
     font = (smd_font_v1_t *)font_table[slot - 1].font_ptr;
 
     /*
-     * Get HDM size based on font version to free the correct amount.
-     * Version 1: size at offset 0x06
-     * Version 3: size at offset 0x42
+     * 0x00e6dd78-0x00e6dd94: version 3 keeps its HDM size at +0x42, every
+     * other version at +0x06, and the *address* of that word is the first
+     * argument to SMD_$FREE_HDM - the size is not copied into a local.
      */
     if (font->version == SMD_FONT_VERSION_3) {
         hdm_size = *(uint16_t *)((uint8_t *)font + 0x42);
     } else {
-        /* Version 1 */
         hdm_size = font->hdm_size;
     }
 
-    /* Reconstruct HDM position for freeing */
-    hdm_pos.y = font_table[slot - 1].hdm_offset;
-    hdm_pos.x = 0;  /* x coordinate stored elsewhere or derived */
+    /* 0x00e6dd94: FREE_HDM(size, pos, status); the position is the font table
+     * entry's own hdm_pos field ("pea (-0x4,A3)"). */
+    SMD_$FREE_HDM(&hdm_size, &font_table[slot - 1].hdm_pos, status_ret);
 
-    /* Free the HDM space */
-    SMD_$FREE_HDM(&hdm_pos, &hdm_size, status_ret);
-
-    /* Clear the font table entry */
+    /* 0x00e6dd98 */
     font_table[slot - 1].font_ptr = NULL;
 
-    *status_ret = status_$ok;
+    /*
+     * NOTE: the original does not clear the status here - SMD_$FREE_HDM's
+     * status is what the caller sees.
+     */
 }

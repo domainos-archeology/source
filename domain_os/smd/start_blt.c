@@ -41,7 +41,8 @@
  *   bit 4: async mode (use interrupt completion)
  *   bit 0-3: other control flags
  */
-void SMD_$START_BLT(uint16_t *params, smd_display_hw_t *hw, uint16_t *hw_regs)
+void SMD_$START_BLT(uint16_t *params, smd_display_hw_t *hw,
+                    SMD_HW_REG_PTR hw_regs)
 {
     uint16_t control;
 
@@ -61,7 +62,10 @@ void SMD_$START_BLT(uint16_t *params, smd_display_hw_t *hw, uint16_t *hw_regs)
     if ((control & 0x10) != 0) {
         /* Async mode - set up for interrupt completion */
         hw->lock_state = 1;      /* Mark as busy */
-        hw->field_24 = 0;        /* Clear field at +0x20 */
+        /* 0x00E15D6E "clr.w (0x20,A2)" clears the whole word at +0x20,
+         * i.e. both bytes - not field_24. */
+        hw->field_20 = 0;
+        hw->field_21 = 0;
         hw->field_1c = hw->op_ec.value;  /* Save EC value for completion check */
     }
 

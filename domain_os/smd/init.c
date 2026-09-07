@@ -69,10 +69,13 @@ void SMD_$INIT(void)
      */
     rec = smd_$unit_rec(1);
 
-    /* 0x00E34D6E move.l A2,(0x10c,A0) with A2 = lea (0x1748,A1) */
-    rec->buf_ptr_a = (uint8_t *)&SMD_GLOBALS + SMD_UNIT1_BUF_A_OFFSET;
+    /* 0x00E34D6E move.l A2,(0x10c,A0) with A2 = lea (0x1748,A1): the unit's
+     * 8-entry font table (see smd_$reset_unit_display, 0x00E6D76C). */
+    rec->font_table =
+        (smd_font_entry_t *)((uint8_t *)&SMD_GLOBALS + SMD_UNIT1_BUF_A_OFFSET);
     /* 0x00E34D7E move.l A2,(0x110,A0) with A2 = lea (0x1788,A1) */
-    rec->buf_ptr_b = (uint8_t *)&SMD_GLOBALS + SMD_UNIT1_BUF_B_OFFSET;
+    rec->hdm_list =
+        (smd_hdm_list_t *)((uint8_t *)&SMD_GLOBALS + SMD_UNIT1_BUF_B_OFFSET);
     /* 0x00E34D82 move.l #0xfc0000,(0x120,A0) */
     rec->display_base = SMD_SAU2_DISPLAY_BASE;
     /* 0x00E34D8A move.l #0xff9800,(0x114,A0) */
@@ -87,8 +90,8 @@ void SMD_$INIT(void)
     rec->hw->display_type = 0;
     /* 0x00E34DA2 movea.l #0xe173d4,A2 / move.l (A2)+,(0x118,A0)
      *                                 / move.l (A2)+,(0x11c,A0) */
-    rec->field_100 = smd_$unit_init_params[0];
-    rec->field_104 = smd_$unit_init_params[1];
+    rec->display_uid.high = smd_$unit_init_params[0];
+    rec->display_uid.low = smd_$unit_init_params[1];
 
     /*
      * Per-unit loop (0x00E34DB2-0x00E34E7E).  A2 starts at 0x00E2E3FC + 0x10C,

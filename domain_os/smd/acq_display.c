@@ -19,7 +19,10 @@
  *   00e6eb5a    add.w D0w,D0w                 ; D0 *= 2
  *   00e6eb5c    move.w (0x48,A5,D0w*0x1),D0w  ; D0 = asid_to_unit[ASID]
  *   00e6eb60    movea.l #0xe2e3fc,A0          ; A0 = display units base
- *   ; ... computes unit offset and gets hw pointer ...
+ *   00e6eb66    move.w D0w,D1w
+ *   00e6eb68    mulu.w #0x10c,D1              ; D1 = unit * 0x10C
+ *   00e6eb6c    lea (0x0,A0,D1*0x1),A0        ; A0 = biased unit record
+ *   00e6eb70    movea.l (-0xf4,A0),A3         ; A3 = rec->hw
  *   00e6eb74    move.w (0x22,A3),D2w          ; D2 = hw->video_flags
  *   ; ... main loop starts ...
  *   00e6ebf2    pea (A2)
@@ -29,10 +32,6 @@
  */
 
 #include "smd/smd_internal.h"
-
-/* Display units base address */
-#define SMD_DISPLAY_UNITS_BASE  0x00E2E3FC
-#define SMD_DISPLAY_UNIT_SIZE   0x10C
 
 /*
  * SMD_$ACQ_DISPLAY - Acquire display lock
@@ -62,7 +61,6 @@
 uint16_t SMD_$ACQ_DISPLAY(int16_t *lock_data)
 {
     smd_display_hw_t *hw;
-    smd_display_slot_t *unit_ptr;
     uint16_t asid;
     uint16_t unit_num;
     uint16_t video_flags;
@@ -76,10 +74,9 @@ uint16_t SMD_$ACQ_DISPLAY(int16_t *lock_data)
     asid = PROC1_$AS_ID;
     unit_num = SMD_GLOBALS.asid_to_unit[asid];
 
-    /* Calculate display unit structure address
-     * Base + unit_num * 0x10C, then access -0xF4 for hw pointer */
-    unit_ptr = smd_get_unit(unit_num);
-    hw = unit_ptr->hw;
+    /* 0x00e6eb60-0x00e6eb70: A0 = 0xE2E3FC + unit*0x10C (mulu.w here), and
+     * the hw pointer is the record's first field at (-0xF4,A0). */
+    hw = smd_$unit_rec((int16_t)unit_num)->hw;
 
     /* Save video flags to return */
     video_flags = hw->video_flags;

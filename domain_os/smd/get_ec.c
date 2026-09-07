@@ -47,7 +47,7 @@
 void SMD_$GET_EC(uint16_t *key, void **ec2_ret, status_$t *status_ret)
 {
     uint16_t unit;
-    smd_unit_aux_t *aux;
+    smd_display_unit_t *aux;
     ec_$eventcount_t *ec1;
     smd_display_hw_t *hw;
 
@@ -62,7 +62,7 @@ void SMD_$GET_EC(uint16_t *key, void **ec2_ret, status_$t *status_ret)
     *status_ret = status_$ok;
 
     /* Get hardware info via unit auxiliary data */
-    aux = smd_get_unit_aux(unit);
+    aux = smd_$unit_rec(unit);
     hw = aux->hw;
 
     switch (*key) {
