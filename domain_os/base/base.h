@@ -61,7 +61,7 @@ typedef void *code_ptr_t;
 // =============================================================================
 // Status type
 // =============================================================================
-typedef long status_$t;
+typedef int32_t status_$t;   /* 32-bit on m68k; keep it 32-bit on 64-bit hosts so embedded layouts hold */
 
 // Common status codes
 #define status_$ok 0
