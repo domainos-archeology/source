@@ -10,6 +10,18 @@
 
 #include "win/win_internal.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/* 0x00E192C8: pea (0x142,PC) -> 0x00E1940C, jsr CRASH_SYSTEM at 0x00E192CC. */
+static const status_$t disk_$controller_error_00e1940c = 0x00080004;
+/* 0x00E193EA: pea (0x24,PC) -> 0x00E19410, jsr CRASH_SYSTEM at 0x00E193EE. */
+static const status_$t disk_$driver_logic_error_00e19410 = 0x00080022;
+
 status_$t WIN_$CHECK_DISK_STATUS(uint16_t unit)
 {
     uint8_t *win_data = WIN_DATA_BASE;
@@ -44,7 +56,7 @@ status_$t WIN_$CHECK_DISK_STATUS(uint16_t unit)
         if ((disk_status & 0xfa) != 0) {
             /* Bit 3: Controller error - crash system */
             if ((disk_status & 0x08) != 0) {
-                CRASH_SYSTEM(&Disk_controller_err);
+                CRASH_SYSTEM(&disk_$controller_error_00e1940c);
             }
             /* Bit 4: Equipment check */
             else if ((disk_status & 0x10) != 0) {
@@ -124,7 +136,7 @@ status_$t WIN_$CHECK_DISK_STATUS(uint16_t unit)
         secondary_status = status_$disk_not_ready;
     } else if ((extended_status & 0x4c00) != 0) {
         /* Logic error */
-        CRASH_SYSTEM(&Disk_driver_logic_err);
+        CRASH_SYSTEM(&disk_$driver_logic_error_00e19410);
     }
 
     /* Return primary status if set, otherwise secondary */

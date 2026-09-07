@@ -51,9 +51,6 @@
 #define NETLOG_KIND_DISK_READ   6
 #define NETLOG_KIND_DISK_WRITE  7
 
-/* Number of entries in the per-request physical-volume map (0xe3d53e) */
-#define DISK_VOLUME_MAP_ENTRIES 10
-
 /*
  * The disk module's second exclusion lock, DISK_$DATA + 0xa8, taken around
  * checksummed transfers (0xe3d678 / 0xe3d910).
@@ -126,7 +123,7 @@ status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t ppn, uint32_t daddr,
     char io_queued;                     /* (-0xa6,A6): DISK_$DO_IO result */
     int32_t io_ec_val;                  /* (-0x80,A6) */
     int32_t err_ec_val;                 /* (-0x7c,A6) */
-    uint32_t volume_map[DISK_VOLUME_MAP_ENTRIES * 2];   /* (-0x58,A6) */
+    disk_$vol_map_entry_t volume_map[DISK_VOLUME_MAP_ENTRIES]; /* (-0x58,A6) */
     uint32_t verify_info[8];            /* (-0x78,A6) */
     status_$t verify_status;            /* (-0x84,A6): written, never read */
     uint16_t io_volx;                   /* D2w, initially the op */
@@ -145,7 +142,7 @@ status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t ppn, uint32_t daddr,
     /* 0xe3d53a-0xe3d54a: clear the first longword of each of the ten
      * 8-byte physical-volume map entries (dbf #9 -> 10 iterations). */
     for (i = 0; i < DISK_VOLUME_MAP_ENTRIES; i++) {
-        volume_map[i * 2] = 0;
+        volume_map[i].head = NULL;
     }
 
     vol = DISK_VOL(vol_idx);                            /* 0xe3d54e */
@@ -237,7 +234,7 @@ status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t ppn, uint32_t daddr,
      */
     io_volx = op;
     for (i = 1; i <= DISK_VOLUME_MAP_ENTRIES; i++) {
-        if (volume_map[(i - 1) * 2] != 0) {
+        if (volume_map[i - 1].head != NULL) {
             io_volx = (uint16_t)i;
             break;
         }

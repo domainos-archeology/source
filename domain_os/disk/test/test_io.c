@@ -76,11 +76,6 @@ ml_$exclusion_t ml_$exclusion_t_00e7a25c;
 ml_$exclusion_t MOUNT_LOCK;
 int8_t DISK_$DIAG;
 
-status_$t Disk_Queued_Drivers_Not_Supported_Err;
-status_$t Disk_Driver_Logic_Err;
-status_$t Disk_controller_err;
-status_$t Disk_driver_logic_err;
-
 /* ================================================================
  * Mocks
  * ================================================================ */
@@ -114,13 +109,14 @@ static int16_t map_seen_op;
 static int map_count;
 
 void disk_$map_request(disk_io_req_t *req, int16_t vol_idx, int16_t internal_op,
-                       void *volume_map, status_$t *status)
+                       disk_$vol_map_entry_t *volume_map, status_$t *status)
 {
-    (void)req; (void)vol_idx;
+    (void)vol_idx;
     map_count++;
     map_seen_op = internal_op;
     if (map_mark_volx > 0) {
-        ((uint32_t *)volume_map)[(map_mark_volx - 1) * 2] = 0xA5A5A5A5u;
+        volume_map[map_mark_volx - 1].head = req;
+        volume_map[map_mark_volx - 1].tail = req;
     }
     *status = map_status;
 }

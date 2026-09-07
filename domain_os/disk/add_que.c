@@ -20,6 +20,16 @@
 #include "disk/disk_internal.h"
 #include "misc/misc.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/* 0x00E3C738: pea (0x2c0,PC) -> 0x00E3C9FA, jsr CRASH_SYSTEM at 0x00E3C73C. */
+static const status_$t disk_$queued_drivers_not_supported_00e3c9fa = 0x0008002E;
+
 /* Request block offsets */
 #define REQ_NEXT_OFFSET     0x00   /* Pointer to next request */
 #define REQ_CYL_OFFSET      0x04   /* Cylinder (word) */
@@ -70,7 +80,7 @@ void DISK_$ADD_QUE(uint16_t flags, void *dev_entry, void *queue, void *req_list)
     dev_flags = *(uint16_t *)((uint8_t *)*dev_info + 8);
 
     if ((dev_flags & DEV_FLAG_SCSI) != 0) {
-        CRASH_SYSTEM(&Disk_Queued_Drivers_Not_Supported_Err);
+        CRASH_SYSTEM(&disk_$queued_drivers_not_supported_00e3c9fa);
     }
 
     /* Get coalesce limit from device entry */

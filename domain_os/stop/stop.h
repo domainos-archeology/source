@@ -47,6 +47,30 @@
 #define STOP_OP_POKE_LONG 7 /* 0x00E81862 (DISK_$DIAG gated) */
 
 /*
+ * There is no upper bound on the operation code: 0x00E8183E is
+ * `cmp.w #1,D3 / ble` and nothing else, so the jump can land anywhere.
+ * Operation 7's entry is a four-byte `bsr.w`, not a two-byte `bra.b`, so
+ * three more codes land on real instruction boundaries inside the table's
+ * own island and have defined -- if plainly unintended -- behaviour:
+ *
+ *   8  0x00E81864  `ori.b #0x81,D6` on a register the exit movem restores,
+ *                  then a branch to the common exit: a no-op returning ok.
+ *   9  0x00E81866  `move.l D1,(A1)`: a long poke that never passes the
+ *                  DISK_$DIAG gate operation 7 goes through.
+ *  10  0x00E81868  the common exit branch itself: a no-op returning ok.
+ *
+ * Operation 11 lands on the gate at 0x00E8186A, entered by `jmp` instead of
+ * `bsr`, so its `rts` returns to STOP_$WATCH's caller with the frame still
+ * linked and its refusal path pops the caller's return address; 12 and above
+ * land in the middle of instructions.  STOP_OP_MAX_DEFINED is the last code
+ * a translation can reproduce.
+ */
+#define STOP_OP_ORI_D6 8            /* 0x00E81864, no-op */
+#define STOP_OP_POKE_LONG_UNGATED 9 /* 0x00E81866, NOT DISK_$DIAG gated */
+#define STOP_OP_NOP 10              /* 0x00E81868, no-op */
+#define STOP_OP_MAX_DEFINED 10
+
+/*
  * Status codes returned by STOP_$WATCH (subsystem byte 0x30).
  *
  * Note: audit/ also claims subsystem 0x30; these three codes are the ones

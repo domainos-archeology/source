@@ -58,13 +58,31 @@ static const boolean os_$init_true = true;
  * argument. */
 static const boolean os_$init_false = false;
 
-/* 0x00E34AD8 and 0x00E34ADC: the first two arguments CAL_$VERIFY (0x00E68380)
- * is given.  Their raw contents are 0x00192549 and 0x35202000; the widths the
- * callee reads them at are not established (0x00E34ADA also reads as the vfmt
- * string "%I5  ", so the two cells may overlap a shared literal).
- * TODO(source-rcd6): decode CAL_$VERIFY's first two parameters. */
-static const uint32_t os_$init_cal_verify_p1 = 0x00192549;
-static const uint32_t os_$init_cal_verify_p2 = 0x35202000;
+/*
+ * 0x00E34AD8: the first argument of CAL_$VERIFY (0x00E68380), its
+ * max_allowed_delta.  The callee reads it as a full longword --
+ * `movea.l (0x8,A6),A0` / `cmp.l (A0),D0` at 0x00E683DE-0x00E683E2 -- so this
+ * is a signed 32-bit count of TIME_$CLOCKH ticks.  One CLOCKH tick is
+ * 65536 * 4 us = 0.262144 s (the same scale makes CAL_$VERIFY's -229 test at
+ * 0x00E683CA "more than a minute"), so 0x00192549 = 1647945 ticks =
+ * 431999.0 s, i.e. five days to within a second.  That is exactly what the
+ * message this threshold guards prints; see the cell below.
+ */
+static const int32_t os_$init_cal_max_elapsed = 0x00192549;
+
+/*
+ * 0x00E34ADC: the second argument of CAL_$VERIFY.  The callee never
+ * dereferences it: at 0x00E683EC it does `move.l (0xc,A6),-(SP)`, pushing the
+ * pointer itself as the vfmt argument for the "%a" in CAL_$VERIFY's
+ * "%/More than %a days have elapsed since the last shutdown. %." (0x00E68528).
+ * The matching length argument is CAL_$VERIFY's own cell at 0x00E68564, whose
+ * longword is 3, so the object here is the three characters "5  ".
+ *
+ * Ghidra reports a string "%I5  " at 0x00E34ADA; that is a false positive.  It
+ * starts inside the longword above (0x2549 == "%I") and runs into these three
+ * bytes.  0x00E34ADF is alignment padding before the status at 0x00E34AE0.
+ */
+static const char os_$init_cal_days_text[3] = { '5', ' ', ' ' };
 
 /* 0x00E34A9C / 0x00E34AA0: the display aperture handed to io_$probe and
  * OS_$INSTALL_DISPLAY_ASTE -- 128 KB at physical 0x00FC0000. */
@@ -200,12 +218,16 @@ _Static_assert(__builtin_offsetof(boot_params_t, flags) == 6, "flags");
 #define BOOT_FLAG_IO_VERBOSE 0x8000  /* 0x00E33C0A: tst.w / smi */
 
 /*
- * The VTOCE the boot volume's paging file resolves to.  The original clears
- * exactly 0x90 bytes at A6-0x128 (0x00E34018: `moveq #0x23` + `dbf` = 36
- * longwords), which is also all the frame has room for, so this is 0x90
- * bytes and not the 0x150 that vtoc/vtoc.h gives vtoce_$result_t.
- * TODO(source-eb9k): reconcile vtoce_$result_t's declared size with the
- * buffer OS_$INIT actually provides.
+ * The VTOCE the boot volume's paging file resolves to: a named view of the
+ * fields OS_$INIT touches inside a vtoce_$result_t.
+ *
+ * The original clears exactly 0x90 bytes at A6-0x128 (0x00E34018:
+ * `moveq #0x23` + `dbf` = 36 longwords), and the next frame slot -- the
+ * lookup request at A6-0x98 -- starts 0x90 bytes later, so the buffer is
+ * 0x90 bytes.  That is the true size of the record: VTOCE_$READ moves the
+ * same 36 longwords into it (0x00E395B0) and VTOCE_$WRITE and VTOC_$ALLOCATE
+ * move 36 back out (0x00E3977A, 0x00E38C26).  0x150 is the on-disk entry
+ * stride, not the size of this record; vtoc/vtoc.h now says so.
  */
 typedef struct os_$init_vtoce_t {
     uint32_t reserved00;                  /* +0x00 */
@@ -221,6 +243,8 @@ typedef struct os_$init_vtoce_t {
 
 #if defined(ARCH_M68K)
 _Static_assert(sizeof(os_$init_vtoce_t) == 0x90, "os_$init_vtoce_t size");
+_Static_assert(sizeof(os_$init_vtoce_t) == sizeof(vtoce_$result_t),
+               "os_$init_vtoce_t must be the same record as vtoce_$result_t");
 _Static_assert(__builtin_offsetof(os_$init_vtoce_t, file_uid) == 0x04, "uid");
 _Static_assert(__builtin_offsetof(os_$init_vtoce_t, length) == 0x14, "length");
 _Static_assert(__builtin_offsetof(os_$init_vtoce_t, field74) == 0x74, "f74");
@@ -731,8 +755,8 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
          * CAL_$VERIFY returns a boolean; a refusal with a bad-time status
          * shuts the volume down and crashes.
          */
-        if (CAL_$VERIFY((int *)&os_$init_cal_verify_p1,
-                        (void *)&os_$init_cal_verify_p2,
+        if (CAL_$VERIFY((int *)&os_$init_cal_max_elapsed,
+                        (void *)os_$init_cal_days_text,
                         (char *)&os_$init_true, &status) >= 0 &&
             status == status_$cal_refused) {
             status = (status_$t)VOLX_$SHUTDOWN();

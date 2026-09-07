@@ -10,8 +10,10 @@
  *   - Directory structure information
  *
  * Two VTOCE formats are supported:
- *   - Old format: 0xCC (204) bytes per entry
- *   - New format: 0x150 (336) bytes per entry with extended ACL support
+ *   - Old format: 0xCC (204) bytes per on-disk entry
+ *   - New format: 0x150 (336) bytes per on-disk entry with extended ACL
+ *     support, of which only the first 0x90 bytes are the VTOCE the API
+ *     passes around (see vtoce_$result_t)
  */
 
 #ifndef VTOC_H
@@ -21,14 +23,50 @@
 #include "uid/uid.h"
 
 /*
- * VTOCE read result structure
+ * VTOCE read result structure -- 0x90 (144) bytes.
  *
  * Contains the VTOCE data in new format, regardless of on-disk format.
  * Old format VTOCEs are converted to new format on read.
+ *
+ * The record the VTOCE API hands across the caller boundary is NOT the whole
+ * 0x150-byte on-disk entry: that is only the entry *stride* inside a VTOCE
+ * block.  Every routine that moves an entry to or from a caller's buffer
+ * moves exactly 36 longwords:
+ *
+ *   VTOCE_$READ      0x00E395B0  moveq #0x23,D4 / move.l (A1)+,(A0)+ / dbf
+ *                                (from block + 8 + idx*0x150 into *result)
+ *   VTOCE_$WRITE     0x00E3977A  moveq #0x23,D1 / move.l (A0)+,(A1)+ / dbf
+ *   VTOC_$ALLOCATE   0x00E38C26  moveq #0x23,D6 / move.l (A0)+,(A4)+ / dbf
+ *
+ * and the two format converters agree: VTOCE_$OLD_TO_NEW's highest write to
+ * its destination is the longword at +0x8C (0x00E19F32) after clearing 31
+ * longwords from +0x14 to +0x90 (0x00E19E72), and VTOCE_$NEW_TO_OLD's highest
+ * read from its source is +0x88 (0x00E38556).
+ *
+ * This is also exactly what OS_$INIT provides: it clears 36 longwords at
+ * A6-0x128 (0x00E34018) and the next frame slot, the lookup request, starts
+ * at A6-0x98 = A6-0x128 + 0x90.
+ *
+ * Known fields (offsets recovered from VTOCE_$READ, VTOCE_$OLD_TO_NEW and
+ * OS_$INIT; the record is left opaque because callers index it by offset):
+ *   +0x00 byte  object type
+ *   +0x01 byte  flags (low nibble := 1 by VTOCE_$READ's caller)
+ *   +0x02 word  status; bit 15 = entry in use, +0x03 bit 1 = volume read-only
+ *               (VTOCE_$READ 0x00E395D8)
+ *   +0x04 uid   object UID
+ *   +0x14 long  length / current size (OS_$INIT 0x00E34048)
+ *   +0x65 byte  bit 7 = the old-format "directory" bit (0x00E19F46)
+ *   +0x74 word  block count (OS_$INIT 0x00E3404C, OLD_TO_NEW 0x00E19ECC)
+ *   +0x88 uid   ACL UID (OS_$INIT 0x00E3403A)
  */
 typedef struct vtoce_$result_t {
-    uint8_t     data[0x150];        /* VTOCE data in new format (336 bytes) */
+    uint8_t     data[0x90];         /* VTOCE data in new format (144 bytes) */
 } vtoce_$result_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(vtoce_$result_t) == 0x90,
+               "vtoce_$result_t must be 0x90 bytes (36 longwords)");
+#endif
 
 /*
  * VTOC lookup request structure (0x20 bytes)
@@ -107,9 +145,10 @@ void VTOC_$DISMOUNT(uint16_t vol_idx, uint8_t flags, status_$t *status);
  *                  object-location descriptor is rewritten on EVERY exit path
  *                  (0xE38F24-0xE38F72), whether or not the allocation
  *                  succeeded; loc->uid is left untouched.
- * @param new_vtoce In: the new-format VTOCE image to install (0x150 bytes; the
- *                  object UID is at +4 and the first 0x90 bytes are copied to
- *                  disk).  VTOC_$ALLOCATE sets its in-use bit and type byte.
+ * @param new_vtoce In: the new-format VTOCE image to install (0x90 bytes, i.e.
+ *                  a vtoce_$result_t: 0x00E38C26 copies exactly 36 longwords
+ *                  to the block entry).  The object UID is at +4.
+ *                  VTOC_$ALLOCATE sets its in-use bit and type byte.
  * @param status    Output status code
  *
  * Original address: 0x00e388ac
@@ -228,11 +267,12 @@ void VTOCE_$WRITE(vtoc_$lookup_req_t *req, vtoce_$result_t *data, char flags,
 /*
  * VTOCE_$OLD_TO_NEW - Convert old format VTOCE to new format
  *
- * Converts a 0xCC byte old format VTOCE to 0x150 byte new format.
+ * Converts a 0xCC byte old format VTOCE to the 0x90 byte in-core new format.
  * Sets default values for fields not present in old format.
  *
  * @param old_vtoce Pointer to old format VTOCE (0xCC bytes)
- * @param new_vtoce Pointer to receive new format VTOCE (0x150 bytes)
+ * @param new_vtoce Pointer to receive the new format VTOCE (0x90 bytes; the
+ *                  highest store is the longword at +0x8C, 0x00E19F32)
  *
  * Original address: 0x00e19db8
  */
@@ -241,10 +281,11 @@ void VTOCE_$OLD_TO_NEW(void *old_vtoce, void *new_vtoce);
 /*
  * VTOCE_$NEW_TO_OLD - Convert new format VTOCE to old format
  *
- * Converts a 0x150 byte new format VTOCE to 0xCC byte old format.
+ * Converts a 0x90 byte new format VTOCE to 0xCC byte old format.
  * Some fields are lost in the conversion.
  *
- * @param new_vtoce Pointer to new format VTOCE (0x150 bytes)
+ * @param new_vtoce Pointer to new format VTOCE (0x90 bytes; the highest load
+ *                  is the longword at +0x88, 0x00E38556)
  * @param flags     Conversion flags (bit 7 = use alternate parent)
  * @param old_vtoce Pointer to receive old format VTOCE (0xCC bytes)
  *

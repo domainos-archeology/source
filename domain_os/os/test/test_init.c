@@ -570,6 +570,12 @@ static void test_boot_params_layout(void)
 static void test_vtoce_layout(void)
 {
     CHECK_EQ(0x90u, sizeof(os_$init_vtoce_t));
+    /*
+     * source-eb9k: the record VTOCE_$READ/$WRITE and VTOC_$ALLOCATE move is
+     * 36 longwords (0x00E395B0, 0x00E3977A, 0x00E38C26), which is exactly
+     * what OS_$INIT provides at A6-0x128.
+     */
+    CHECK_EQ(sizeof(vtoce_$result_t), sizeof(os_$init_vtoce_t));
     CHECK_EQ(0x04u, __builtin_offsetof(os_$init_vtoce_t, file_uid));
     CHECK_EQ(0x14u, __builtin_offsetof(os_$init_vtoce_t, length));
     CHECK_EQ(0x74u, __builtin_offsetof(os_$init_vtoce_t, field74));

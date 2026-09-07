@@ -43,7 +43,7 @@ status_$t WIN_$ANSI_COMMAND(uint16_t unit, uint16_t ansi_cmd,
     unit_data[0x0e] = 5;
 
     /* Execute command */
-    status = FUN_00e190bc(unit);
+    status = WAIT_FOR_CONTROLLER(unit);
 
     /* Copy output parameter if command returns data */
     if (has_input >= 0) {

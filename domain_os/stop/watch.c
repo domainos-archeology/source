@@ -9,6 +9,8 @@
  *   operations 2 .. 7   privileged physical peek/poke, dispatched through
  *                       the two-byte branch table at 0x00E81854 and, for the
  *                       three poke operations, gated by DISK_$DIAG
+ *   operations 8 .. 10  the unintended tails of that table's last entry: a
+ *                       no-op, an UNGATED long poke, and another no-op
  *
  * The whole body runs under a FIM cleanup handler established at 0x00E81824.
  *
@@ -54,8 +56,10 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
     /*
      * 0x00E8183E-0x00E81854: anything above 1 goes through the branch table.
      * Note the original only tests `cmp.w #1,D3 / ble` -- there is no upper
-     * bound, so operations >= 8 branch into the middle of the table's own
-     * instruction stream.
+     * bound at all.  The table's own island runs 0x00E81858..0x00E81896, so
+     * operations 2..10 land on instruction boundaries inside it (8, 9 and 10
+     * on the tails of operation 7's four-byte `bsr.w` and what follows) and
+     * anything from 11 up leaves it.
      */
     if (d3_operation > 1) {
         /*
@@ -66,37 +70,49 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
         volatile uint8_t *addr = (volatile uint8_t *)(*(uint32_t **)p4);
         uint32_t d1_value = *(uint32_t *)p5;
         uint32_t d2_value = 0; /* 0x00E81850: clr.l D2 */
-        boolean is_poke;
-        boolean is_peek;
 
+        /*
+         * The branch table.  The `jmp (0xe81854,PC,D3.w)` computes
+         * 0x00E81854 + 2*operation, and the island it lands in is only
+         * 0x00E81858 .. 0x00E81896 long, so only operations 2 .. 10 have a
+         * defined meaning:
+         *
+         *   2  0x00E81858 bra -> 0x00E8187E  move.b (A1),D2b ; -> store
+         *   3  0x00E8185A bra -> 0x00E81882  gate ; move.b D1b,(A1)
+         *   4  0x00E8185C bra -> 0x00E81888  move.w (A1),D2w ; -> store
+         *   5  0x00E8185E bra -> 0x00E8188C  gate ; move.w D1w,(A1)
+         *   6  0x00E81860 bra -> 0x00E81892  move.l (A1),D2  ; -> store
+         *   7  0x00E81862 bsr -> gate ; move.l D1,(A1)
+         *   8  0x00E81864 ori.b #0x81,D6 ; bra 0x00E81896   (D6 is restored
+         *                 by the exit movem, so this is a no-op)
+         *   9  0x00E81866 move.l D1,(A1) ; bra 0x00E81896   (a long poke
+         *                 that MISSES the DISK_$DIAG gate -- an original
+         *                 bug, reproduced)
+         *  10  0x00E81868 bra 0x00E81896                     (a no-op)
+         *
+         * Operation 8 is the tail of operation 7's four-byte `bsr.w`, and
+         * 9 and 10 are the tails of the instructions after it; the original
+         * has no upper bound at 0x00E8183E (`cmp.w #1,D3 / ble` only), so
+         * these really are reachable.  See STOP_OP_MAX_DEFINED in stop.h.
+         */
         switch (d3_operation) {
-        case STOP_OP_PEEK_BYTE: /* 2 */
-        case STOP_OP_PEEK_WORD: /* 4 */
-        case STOP_OP_PEEK_LONG: /* 6 */
-            is_peek = true;
-            is_poke = false;
+        case STOP_OP_PEEK_BYTE: /* 2, 0x00E8187E */
+            /* D2 was cleared, so the byte is zero extended. */
+            d2_value = *addr;
+            *(uint32_t *)p5 = d2_value; /* 0x00E81894: move.l D2,(A0) */
             break;
-        case STOP_OP_POKE_BYTE: /* 3 */
-        case STOP_OP_POKE_WORD: /* 5 */
-        case STOP_OP_POKE_LONG: /* 7 */
-            is_peek = false;
-            is_poke = true;
-            break;
-        default:
-            /*
-             * TODO(source-3ena): operations >= 8 index past the end of the
-             * branch table at 0x00E81854 (whose last entry, for operation 7,
-             * is the four-byte `bsr.w` at 0x00E81862) and land in the middle
-             * of instructions.  The original has no bound check; there is no
-             * defined behaviour to reproduce, so nothing is done here and
-             * the status stays 0.
-             */
-            is_peek = false;
-            is_poke = false;
-            break;
-        }
 
-        if (is_poke < 0) {
+        case STOP_OP_PEEK_WORD: /* 4, 0x00E81888 */
+            d2_value = *(volatile uint16_t *)addr;
+            *(uint32_t *)p5 = d2_value; /* 0x00E81894 */
+            break;
+
+        case STOP_OP_PEEK_LONG: /* 6, 0x00E81892 */
+            d2_value = *(volatile uint32_t *)addr;
+            *(uint32_t *)p5 = d2_value; /* 0x00E81894 */
+            break;
+
+        case STOP_OP_POKE_BYTE: /* 3, 0x00E81882 */
             /*
              * 0x00E8186A-0x00E8187C: the gate is a `bsr` that either
              * returns (diagnostics enabled) or pops its own return address
@@ -108,33 +124,53 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
                 d2_status = status_$stop_not_diag;
                 goto release_cleanup;
             }
-            switch (d3_operation) {
-            case STOP_OP_POKE_BYTE: /* 0x00E81884: move.b D1,(A1) */
-                *addr = (uint8_t)d1_value;
-                break;
-            case STOP_OP_POKE_WORD: /* 0x00E8188E: move.w D1,(A1) */
-                *(volatile uint16_t *)addr = (uint16_t)d1_value;
-                break;
-            default: /* 0x00E81866: move.l D1,(A1) */
-                *(volatile uint32_t *)addr = d1_value;
-                break;
+            *addr = (uint8_t)d1_value; /* 0x00E81884 */
+            break;
+
+        case STOP_OP_POKE_WORD: /* 5, 0x00E8188C */
+            if (DISK_$DIAG == 0) { /* 0x00E8186A */
+                d2_status = status_$stop_not_diag;
+                goto release_cleanup;
             }
-        } else if (is_peek < 0) {
-            switch (d3_operation) {
-            case STOP_OP_PEEK_BYTE:
-                /* 0x00E8187E: move.b (A1),D2b -- D2 was cleared, so the
-                 * byte is zero extended into the full longword. */
-                d2_value = *addr;
-                break;
-            case STOP_OP_PEEK_WORD: /* 0x00E81888: move.w (A1),D2w */
-                d2_value = *(volatile uint16_t *)addr;
-                break;
-            default: /* 0x00E81892: move.l (A1),D2 */
-                d2_value = *(volatile uint32_t *)addr;
-                break;
+            *(volatile uint16_t *)addr = (uint16_t)d1_value; /* 0x00E8188E */
+            break;
+
+        case STOP_OP_POKE_LONG: /* 7, 0x00E81862 */
+            if (DISK_$DIAG == 0) { /* 0x00E8186A */
+                d2_status = status_$stop_not_diag;
+                goto release_cleanup;
             }
-            /* 0x00E81894: move.l D2,(A0) -- the result goes back through p5 */
-            *(uint32_t *)p5 = d2_value;
+            *(volatile uint32_t *)addr = d1_value; /* 0x00E81866 */
+            break;
+
+        case STOP_OP_ORI_D6: /* 8, 0x00E81864 */
+            /* `ori.b #0x81,D6` on a register the exit movem restores. */
+            break;
+
+        case STOP_OP_POKE_LONG_UNGATED: /* 9, 0x00E81866 */
+            /*
+             * The DISK_$DIAG gate is skipped entirely: the jump lands one
+             * instruction past the `bsr.w` that operation 7 executes.
+             */
+            *(volatile uint32_t *)addr = d1_value;
+            break;
+
+        case STOP_OP_NOP: /* 10, 0x00E81868 */
+            break;
+
+        default:
+            /*
+             * Operations >= 11 (and any operation whose doubled value
+             * overflows the signed word index) leave the island entirely.  Operation 11 lands on the gate at
+             * 0x00E8186A, which was entered by `jmp` rather than `bsr`, so
+             * its `rts` returns to STOP_$WATCH's caller without unwinding
+             * the frame and its refusal path pops the caller's return
+             * address with `addq.l #4,SP`; 12 and beyond land in the middle
+             * of instructions.  None of that has behaviour a C translation
+             * can express, so nothing is done here and the status stays 0,
+             * as it would for operations 8 and 10.
+             */
+            break;
         }
 
         d2_status = status_$ok; /* 0x00E81896: clr.l D2 */
@@ -235,12 +271,29 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
 
                 if (parent_idx >= 0) {
                     /*
-                     * TODO(source-3ena): the original has no upper bound on
-                     * the parent index here (0x00E81988 is `blt` only), so a
-                     * parent >= 16 indexes past STOPWATCH_SLOTS.  Reproduced
-                     * as written.
+                     * 0x00E81988 is `blt` only: the sole bound is "negative
+                     * means no parent".  There is NO upper bound, so a
+                     * parent >= 16 indexes past STOPWATCH_SLOTS; reproduced.
+                     *
+                     * The scaling is done in 16 bits and the result is added
+                     * to the base with `adda.w`, which sign-extends:
+                     *   0x00E8198A  lsl.w #0x6,D1w   (wraps modulo 0x10000)
+                     *   0x00E8198C  lea (0x39a,PC),A2 -> 0x00E81D28
+                     *   0x00E81990  adda.w D1w,A2
+                     * A slot is 0x40 bytes, so 0x40 * 0x400 is exactly
+                     * 0x10000: the byte offset only depends on the low ten
+                     * bits of the index, and an index of 0x200..0x3FF comes
+                     * back out of the sign extension as a NEGATIVE slot
+                     * number.  Written here as the element index that
+                     * arithmetic yields, so it means the same thing on a
+                     * host whose pointers are not four bytes wide.
                      */
-                    parent_slot = &STOPWATCH_SLOTS[parent_idx];
+                    int32_t slot_index = (int32_t)(parent_idx & 0x03FF);
+
+                    if (slot_index >= 0x0200) {
+                        slot_index -= 0x0400; /* the sign of adda.w */
+                    }
+                    parent_slot = &STOPWATCH_SLOTS[0] + slot_index;
                 }
 
                 stop_$hook((const stop_$patch_rec_t *)p4, sl, parent_slot,

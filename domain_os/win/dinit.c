@@ -32,7 +32,9 @@ uint32_t WIN_$DINIT(uint16_t vol_idx, uint16_t unit, void *param_3,
     ML_$LOCK(lock_id);
 
     /* Call common disk initialization */
-    result = DISK_INIT(unit, vol_idx, param_3, param_4, param_5, param_6, param_7);
+    result = DISK_INIT(unit, vol_idx, (int32_t *)param_3, (uint16_t *)param_4,
+                       (uint16_t *)param_5, (uint16_t *)param_6,
+                       (uint16_t *)param_7);
 
     /* Release unit lock */
     ML_$UNLOCK(lock_id);

@@ -12,6 +12,16 @@
 #include "disk/disk_internal.h"
 #include "misc/misc.h"
 
+/*
+ * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
+ *
+ * These are constant longwords in this module's own code region, not
+ * shared globals; the cell address is part of each name.  Names come from
+ * the SR10.4 status-code database.
+ */
+/* 0x00E6D0AC: pea (0x82,PC) -> 0x00E6D130, jsr CRASH_SYSTEM at 0x00E6D0B0. */
+static const status_$t disk_$driver_logic_error_00e6d130 = 0x00080022;
+
 /* Valid volume index mask (volumes 1-10) */
 #define VALID_VOL_MASK  0x7fe
 
@@ -79,7 +89,7 @@ void DISK_$DISMOUNT(uint16_t vol_idx)
         /* If no other volumes use this device, shut it down */
         if (count == 0) {
             if (first_vol == 0) {
-                CRASH_SYSTEM(&Disk_Driver_Logic_Err);
+                CRASH_SYSTEM(&disk_$driver_logic_error_00e6d130);
             }
 
             /* Get first volume's entry and shut its device down

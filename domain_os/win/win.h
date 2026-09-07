@@ -23,9 +23,21 @@
 #include "misc/crash_system.h"
 
 /*
- * WIN data area base at 0xe2b89c
+ * WIN data area base at 0xe2b89c.
+ *
+ * Every WIN entry point loads it with `lea (0xe2b89c).l,A5` (e.g. DISK_INIT
+ * at 0x00E1998E, WIN_$DINIT at 0x00E19CF0) and then addresses the module
+ * globals as (off,A5).  On a host build the same offsets are applied to a
+ * plain array the unit tests supply, so the translated code can be driven
+ * without an Apollo.
  */
+#if defined(ARCH_M68K)
 #define WIN_DATA_BASE ((uint8_t *)0x00e2b89c)
+#else
+#define WIN_DATA_SIZE 0x78
+extern uint8_t WIN_$DATA[WIN_DATA_SIZE];
+#define WIN_DATA_BASE (WIN_$DATA)
+#endif
 
 /*
  * WIN data area structure
@@ -85,19 +97,53 @@ typedef struct {
  */
 #define ANSI_CMD_CLEAR_FAULT 0x01
 #define ANSI_CMD_REPORT_GENERAL_STATUS 0x0F
+#define ANSI_CMD_REPORT_DRIVE_ATTRIBUTE 0x10
+#define ANSI_CMD_WRITE_CONTROL 0x41
+#define ANSI_CMD_LOAD_ATTRIBUTE_NUMBER 0x50
 #define ANSI_CMD_SPIN_CONTROL 0x55
+
+/*
+ * WIN_$ANSI_COMMAND (0x00E19128) treats commands >= 0x40 as taking an input
+ * byte and commands < 0x40 as returning an output byte, so of the codes above
+ * only WRITE_CONTROL, LOAD_ATTRIBUTE_NUMBER and SPIN_CONTROL read the
+ * ansi_in_param cell.
+ */
+#define ANSI_CMD_TAKES_INPUT 0x40
+
+/*
+ * The register block each unit record points at (unit + 0x04).  These are the
+ * fields DISK_INIT, WIN_$ANSI_COMMAND and WIN_$CHECK_DISK_STATUS touch; the
+ * gaps are unexamined.
+ */
+#define WIN_REG_COMMAND 0x00   /* ANSI command code / extended status */
+#define WIN_REG_PARAM 0x02     /* input or output parameter byte */
+#define WIN_REG_STATUS 0x06    /* status word, see WIN_STAT_* below */
+#define WIN_REG_MODE 0x0C      /* written 0x01 / 0x0A before a command */
+#define WIN_REG_GO 0x0E        /* command type: 5 ANSI, 6 init, 0 idle */
+
+/* Bits of the WIN_REG_STATUS word, from the tests that read it. */
+#define WIN_STAT_BUSY 0x8000   /* 0x00E190EC `tst.w` / `bpl`: bit 15 */
+#define WIN_STAT_NOT_READY 0x0080 /* 0x00E1910A `tst.b D3b` / `bpl`: bit 7 */
+
+/* Drive identifiers, the low nibble of the LOAD ATTRIBUTE NUMBER result. */
+#define WIN_DRIVE_MICROPOLIS_1203 3 /* reported as 0x0103 */
+#define WIN_DRIVE_PRIAM_3450 4      /* reported as 0x0104 */
+#define WIN_DRIVE_PRIAM_7050 5      /* reported as 0x0105 */
+#define WIN_DRIVE_ID_BASE 0x0100    /* 0x00E19B08: addi.w #0x100 */
 
 /*
  * Status codes
  */
 #define status_$io_controller_not_in_system 0x00100002
 #define status_$disk_not_ready 0x00080001
+#define status_$disk_controller_busy 0x00080002
 #define status_$disk_controller_timeout 0x00080003
 #define status_$disk_equipment_check 0x00080005
 #define status_$disk_data_check 0x00080009
 #define status_$DMA_overrun 0x0008000a
 #define status_$disk_seek_error 0x00080015
 #define status_$unknown_error_status_from_drive 0x00080023
+#define status_$unrecognized_drive_id 0x00080024
 #define status_$memory_parity_error_during_disk_write 0x00080025
 
 /*
@@ -139,10 +185,24 @@ void WIN_$GET_STATS(int16_t param_1, int16_t param_2, void *stats);
  * DISK_INIT (0x00e19986) is WIN-internal, not a disk-subsystem entry point:
  * it sits inside the WIN code region and its only callers are WIN_$DINIT
  * (0x00e19d32) and FUN_00e194b4 (0x00e194e0), so this prototype belongs here
- * and not in disk/disk.h.  It has no C file yet.
- * TODO(source-1nob): emit DISK_INIT under win/.
+ * and not in disk/disk.h.  See win/disk_init.c.
+ *
+ * It is reached with `bsr` and returns its status in D0 with no Pascal result
+ * slot, so it is a module-internal routine rather than an exported entry.
+ * Its arguments are all by reference except the two leading words:
+ *
+ *   unit             (0x08,A6) word, the drive
+ *   sub_unit         (0x0A,A6) word, must be 0
+ *   total_blocks     (0x0C,A6) long*  in/out: >0 on entry means "geometry
+ *                              already known"; otherwise filled in
+ *   blocks_per_track (0x10,A6) word*  out
+ *   heads            (0x14,A6) word*  out
+ *   geometry         (0x18,A6) word[2]* out: [0] always 0, [1] the cylinder
+ *                              count reported to the caller
+ *   drive_id         (0x1C,A6) word*  out: 0x0100 | (attribute & 0x0F)
  */
-uint32_t DISK_INIT(uint16_t unit, uint16_t vol_idx, void *p3, void *p4,
-                   void *p5, void *p6, void *p7);
+status_$t DISK_INIT(uint16_t unit, uint16_t sub_unit, int32_t *total_blocks,
+                    uint16_t *blocks_per_track, uint16_t *heads,
+                    uint16_t *geometry, uint16_t *drive_id);
 
 #endif /* WIN_H */

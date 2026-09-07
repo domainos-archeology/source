@@ -129,11 +129,12 @@ extern m68k_ptr_t PTR_OS_DATA_SHUTWIRED_END;
  * ============================================================================
  * Global Data - Status Constants
  * ============================================================================
+ *
+ * The statuses OS_$INIT passes to its callees are `pea (d,PC)` constant cells
+ * in the OS module's own code region; they are file-static constants in
+ * os/init.c, not globals (see bead source-tzmw).
  */
 
-extern status_$t No_err;
-extern status_$t No_calendar_on_system_err;
-extern status_$t OS_BAT_disk_needs_salvaging_err;
 /* status_$disk_needs_salvaging is a macro in disk/disk.h */
 /* status_$cal_refused is a macro in cal/cal.h */
 /* status_$pmap_bad_assoc is a macro in ast/ast.h */

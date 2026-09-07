@@ -8,7 +8,9 @@
  *
  * Coverage: the FIM fault return, the wire-once and calibrate-once guards,
  * the slot bound check, both start and stop paths, the negative-operation
- * unhook, and the whole peek/poke branch table including the DISK_$DIAG gate.
+ * unhook, the whole peek/poke branch table including the DISK_$DIAG gate,
+ * the three unintended operations past the end of that table (8, 9, 10) and
+ * the unbounded parent slot index.
  */
 
 #include <stdio.h>
@@ -491,6 +493,81 @@ static void test_poke_allowed(void)
     CHECK_EQ(0x11223344u, value_cell);
 }
 
+/*
+ * source-3ena: the operation code has NO upper bound (0x00E8183E is
+ * `cmp.w #1,D3 / ble` and nothing more), and operation 7's table entry is a
+ * four-byte `bsr.w`, so codes 8, 9 and 10 land on real instructions inside
+ * the table's island.  8 and 10 are no-ops; 9 is a long poke that never
+ * reaches the DISK_$DIAG gate.
+ */
+static void test_op_above_table(void)
+{
+    static uint8_t mem[8];
+    void *addr_cell;
+    uint32_t value_cell;
+
+    memset(mem, 0, sizeof(mem));
+    addr_cell = mem;
+    DISK_$DIAG = 0; /* diagnostics DISABLED for all of this test */
+
+    /* 8: `ori.b #0x81,D6` then the common exit -- no memory touched */
+    value_cell = 0xAABBCCDDu;
+    CHECK_EQ(status_$ok,
+             call_watch(STOP_OP_ORI_D6, 0, 0, &addr_cell, &value_cell));
+    CHECK_EQ(0u, *(uint32_t *)mem);
+
+    /* 10: the common exit branch itself -- also a no-op */
+    CHECK_EQ(status_$ok,
+             call_watch(STOP_OP_NOP, 0, 0, &addr_cell, &value_cell));
+    CHECK_EQ(0u, *(uint32_t *)mem);
+
+    /*
+     * 9 (0x00E81866): `move.l D1,(A1)` with the gate skipped, so it writes
+     * even though DISK_$DIAG is zero -- unlike operation 7, which refuses.
+     */
+    CHECK_EQ(status_$ok, call_watch(STOP_OP_POKE_LONG_UNGATED, 0, 0,
+                                    &addr_cell, &value_cell));
+    CHECK_EQ(0xAABBCCDDu, *(uint32_t *)mem);
+
+    /* the gated long poke with the same state refuses and writes nothing */
+    memset(mem, 0, sizeof(mem));
+    CHECK_EQ(status_$stop_not_diag,
+             call_watch(STOP_OP_POKE_LONG, 0, 0, &addr_cell, &value_cell));
+    CHECK_EQ(0u, *(uint32_t *)mem);
+}
+
+/*
+ * source-3ena: the parent slot index is guarded only by `blt` (0x00E81988),
+ * so any non-negative value is scaled and used.  The scaling is a 16-bit
+ * `lsl.w #6` and the base is reached with a sign-extending `adda.w`, so
+ * 0x200..0x3FF walk backwards from &STOPWATCH_SLOTS[0] and 0x400 wraps to
+ * exactly the base.
+ */
+static void test_parent_unbounded(void)
+{
+    stop_$patch_rec_t rec = {(uint16_t *)0x1234, NULL};
+    stopwatch_slot_t *base = &STOPWATCH_SLOTS[0];
+
+    /* past the end of the 16-slot table, still used */
+    CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 0, 20, &rec, NULL));
+    CHECK(mock_hook_parent == base + 20);
+
+    /* 0x200 * 0x40 = 0x8000: negative once sign-extended by adda.w */
+    STOPWATCH_SLOTS[1].flags = 0;
+    CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 1, 0x200, &rec, NULL));
+    CHECK(mock_hook_parent == base - 0x200);
+
+    /* 0x400 * 0x40 wraps the word to 0, landing back on slot 0 */
+    STOPWATCH_SLOTS[2].flags = 0;
+    CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 2, 0x400, &rec, NULL));
+    CHECK(mock_hook_parent == base);
+
+    /* 0x401 comes back as slot 1, not slot 0x401 */
+    STOPWATCH_SLOTS[3].flags = 0;
+    CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 3, 0x401, &rec, NULL));
+    CHECK(mock_hook_parent == base + 1);
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -508,6 +585,8 @@ int main(void)
     RUN(test_peek);
     RUN(test_poke_gated);
     RUN(test_poke_allowed);
+    RUN(test_op_above_table);
+    RUN(test_parent_unbounded);
 
     printf("%d tests, %d failed\n", tests_run, tests_failed);
     return tests_failed != 0;

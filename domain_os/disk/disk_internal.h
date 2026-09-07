@@ -74,9 +74,32 @@ typedef struct disk_$volume_t {
                                      *   DISK_$GET_MNT_INFO */
     uint16_t    sec_per_track;      /* 0x20 (-0x28 / +0x9c) */
     uint16_t    num_heads;          /* 0x22 (-0x26 / +0x9e) */
-    uint16_t    field_24;           /* 0x24 (-0x24 / +0xa0)  TODO: verify */
-    uint16_t    field_26;           /* 0x26 (-0x22 / +0xa2): copied to
-                                     *   info+0x0c by GET_MNT_INFO  TODO: verify */
+    uint16_t    blocks_per_cyl;     /* 0x24 (-0x24 / +0xa0): disk blocks in one
+                                     *   cylinder.  DISK_$PV_MOUNT_INTERNAL
+                                     *   computes it as
+                                     *   (num_heads * sec_per_track) >>
+                                     *   sector_size_code
+                                     *   (0xe6c74e-0xe6c75c) and both
+                                     *   disk_$map_request (0xe3cb84,
+                                     *   0xe3cc08) and disk_$io_error
+                                     *   (0xe3c1d0, 0xe3c1ee) use it as the
+                                     *   divisor/multiplier that turns a disk
+                                     *   address into a cylinder number. */
+    uint16_t    lv_shift;           /* 0x26 (-0x22 / +0xa2): the word at +0x40
+                                     *   of the logical-volume label.
+                                     *   DISK_$LV_MOUNT stores it into the new
+                                     *   LV descriptor (0xe6cbea) and then
+                                     *   mirrors it into the backing physical
+                                     *   volume's descriptor (0xe6cbf4); the
+                                     *   only reader is DISK_$GET_MNT_INFO,
+                                     *   which reports it at info+0x0c
+                                     *   (0xe6bf04).  Nothing in the kernel
+                                     *   does arithmetic with it, so its
+                                     *   meaning is not established by the
+                                     *   code -- disk/lv_mount.c calls the
+                                     *   label word a "shift value".
+                                     *   TODO(source-zot4): confirm what the
+                                     *   LV label's +0x40 word means. */
     uint16_t    as_options;         /* 0x28 (-0x20 / +0xa4): async I/O options.
                                      *   Written as a whole word by
                                      *   DISK_$AS_OPTIONS (0xe6c108) and cleared
@@ -86,13 +109,53 @@ typedef struct disk_$volume_t {
                                      *   DISK_IO (0xe3d584) poke with bset.b /
                                      *   btst.b.  On big-endian m68k bit n of
                                      *   that byte is bit n of this word. */
-    uint16_t    sector_size_code;   /* 0x2a (-0x1e / +0xa6): 0/1/2 -> 256/512/1024 */
+    uint16_t    sector_size_code;   /* 0x2a (-0x1e / +0xa6): log2 of the number
+                                     *   of hardware sectors in one disk block.
+                                     *   It is used as a shift in both
+                                     *   directions: PV_MOUNT_INTERNAL divides
+                                     *   heads*sectors by it to get
+                                     *   blocks_per_cyl (0xe6c75a),
+                                     *   disk_$map_request shifts a block
+                                     *   remainder left by it before splitting
+                                     *   into head/sector (0xe3cba2) and
+                                     *   disk_$io_error shifts the other way
+                                     *   (0xe3c1c8).  DISK_$GET_MNT_INFO
+                                     *   reports 1 << code at info+0x12
+                                     *   (0xe6bf10-0xe6bf34). */
     uint16_t    num_parts;          /* 0x2c (-0x1c / +0xa8): partition count;
                                      *   DISK_$DISMOUNT reads it as a unit count */
-    uint16_t    field_2e;           /* 0x2e (-0x1a / +0xaa)  TODO: verify */
-    uint16_t    field_30;           /* 0x30 (-0x18 / +0xac)  TODO: verify */
-    uint16_t    field_32;           /* 0x32 (-0x16 / +0xae)  TODO: verify */
-    uint16_t    field_34;           /* 0x34 (-0x14 / +0xb0)  TODO: verify */
+    /*
+     * The four striping parameters.  They only matter when part_volx[0] (the
+     * interleave mode, +0xb2) is non-zero; DISK_$PV_MOUNT_INTERNAL derives
+     * all four from the physical volume label at 0xe6c6ec-0xe6c74c and
+     * disk_$map_request (0xe3cbc8-0xe3cc30) and disk_$io_error
+     * (0xe3c1b2-0xe3c20e) are the only users.
+     *
+     * A striped disk address is split as
+     *
+     *   chunk_offset = daddr & stripe_blk_mask          (0xe3cbd0)
+     *   group        = daddr >> stripe_blk_shift        (0xe3cbd4)
+     *   cyl_quot     = group / blocks_per_cyl           (0xe3cc08)
+     *   member       = cyl_quot & stripe_vol_mask       (0xe3cc0e)
+     *   cylinder     = cyl_quot >> stripe_vol_shift     (0xe3cc1e)
+     *   volume       = part_volx[chunk_offset +
+     *                            (member << stripe_blk_shift) + 1]
+     *
+     * so the two masks are one less than a power of two and the two shifts
+     * are the matching log2: PV_MOUNT_INTERNAL looks each shift up in the
+     * word table at DISK module base + 0x4a indexed by its mask
+     * (0xe6c73c, 0xe6c748).
+     */
+    uint16_t    stripe_blk_mask;    /* 0x2e (-0x1a / +0xaa): (blocks per stripe
+                                     *   chunk) - 1.  Also stored, plus one,
+                                     *   into the request at +0x1c by
+                                     *   disk_$map_request (0xe3cb68). */
+    uint16_t    stripe_blk_shift;   /* 0x30 (-0x18 / +0xac): log2 of the blocks
+                                     *   per stripe chunk */
+    uint16_t    stripe_vol_mask;    /* 0x32 (-0x16 / +0xae): (number of striped
+                                     *   volumes) - 1 */
+    uint16_t    stripe_vol_shift;   /* 0x34 (-0x14 / +0xb0): log2 of the number
+                                     *   of striped volumes */
     uint16_t    part_volx[9];       /* 0x36 (-0x12 / +0xb2): partition -> volume
                                      *   index table.  DISK_$FORMAT indexes it
                                      *   as (+0xb2)[part] for part 1..8
@@ -100,7 +163,25 @@ typedef struct disk_$volume_t {
                                      *   entry 1 (+0xb4) as the physical volume
                                      *   backing an LV (0xe6bec2).  Entry 0
                                      *   (+0xb2) is copied to info+0x26
-                                     *   (0xe6bf40). */
+                                     *   (0xe6bf40).
+                                     *
+                                     *   Entry 0 is NOT a volume index: it is
+                                     *   the interleave mode, taken from the PV
+                                     *   label word at +0xbc (0xe6c4f4,
+                                     *   0xe6c6e6).  A non-zero value is what
+                                     *   makes disk_$map_request take the
+                                     *   striped path (0xe3cb72), and
+                                     *   PV_MOUNT_INTERNAL switches on it at
+                                     *   0xe6c6f2 to set the stripe_* fields:
+                                     *     1  blk_mask := num_parts - 1
+                                     *     2  vol_mask := num_parts - 1
+                                     *     3  neither (the template's values)
+                                     *     4  blk_mask := 1,
+                                     *        vol_mask := (num_parts >> 1) - 1
+                                     *     5  blk_mask := 3,
+                                     *        vol_mask := (num_parts >> 2) - 1
+                                     *   Entries 1..8 come from the label at
+                                     *   +0xac..+0xbb (0xe6c4e0, 0xe6c6d2). */
 } disk_$volume_t;
 
 #if defined(ARCH_M68K)
@@ -132,6 +213,18 @@ _Static_assert(__builtin_offsetof(disk_$volume_t, num_parts) == 0x2c,
                "disk_$volume_t.num_parts must be at -0x1c (+0xa8)");
 _Static_assert(__builtin_offsetof(disk_$volume_t, num_heads) == 0x22,
                "disk_$volume_t.num_heads must be at -0x26 (+0x9e)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, blocks_per_cyl) == 0x24,
+               "disk_$volume_t.blocks_per_cyl must be at -0x24 (+0xa0)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, lv_shift) == 0x26,
+               "disk_$volume_t.lv_shift must be at -0x22 (+0xa2)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, stripe_blk_mask) == 0x2e,
+               "disk_$volume_t.stripe_blk_mask must be at -0x1a (+0xaa)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, stripe_blk_shift) == 0x30,
+               "disk_$volume_t.stripe_blk_shift must be at -0x18 (+0xac)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, stripe_vol_mask) == 0x32,
+               "disk_$volume_t.stripe_vol_mask must be at -0x16 (+0xae)");
+_Static_assert(__builtin_offsetof(disk_$volume_t, stripe_vol_shift) == 0x34,
+               "disk_$volume_t.stripe_vol_shift must be at -0x14 (+0xb0)");
 _Static_assert(__builtin_offsetof(disk_$volume_t, part_volx) == 0x36,
                "disk_$volume_t.part_volx must be at -0x12 (+0xb2)");
 #endif
@@ -271,19 +364,31 @@ extern ml_$exclusion_t ml_$exclusion_t_00e7a25c;  /* DISK_$DATA +0x90 */
  * masks so they are byte-order independent.
  */
 typedef struct disk_io_req_t {
-    uint32_t    next;               /* 0x00: next block in the allocated chain */
+    struct disk_io_req_t *next;     /* 0x00: next block in the allocated chain */
     uint32_t    daddr;              /* 0x04: disk address / (head, sector) */
-    uint32_t    free_next;          /* 0x08: next block in the free list */
+    struct disk_io_req_t *free_next;/* 0x08: next block in the free list */
     status_$t   status;             /* 0x0c: result status */
     uint32_t    reserved_10;        /* 0x10 */
     uint32_t    ppn;                /* 0x14: physical page number; its low word
                                      *   (+0x16) is what NETLOG logs */
     uint32_t    reserved_18;        /* 0x18 */
-    uint16_t    flags;              /* 0x1c */
+    uint16_t    flags;              /* 0x1c: the transfer length the driver may
+                                     *   use, one stripe chunk.
+                                     *   disk_$map_request stores
+                                     *   stripe_blk_mask + 1 here for striped
+                                     *   and unstriped volumes alike
+                                     *   (0xe3cb68-0xe3cb6e). */
     uint8_t     owner;              /* 0x1e: owning process id */
     uint8_t     op_flags;           /* 0x1f: low nibble = operation code,
                                      *   bit 7 = "checksum this transfer" */
-    uint32_t    header[8];          /* 0x20: on-disk block header */
+    uint32_t    header[8];          /* 0x20: on-disk block header.  DISK_IO
+                                     *   copies the caller's eight longwords
+                                     *   in here (0xe3d5fa) and
+                                     *   disk_$map_request then overwrites
+                                     *   header[7] (+0x3c) with the absolute
+                                     *   disk address the block will live at
+                                     *   (0xe3cb42), so the header is self
+                                     *   identifying. */
 } disk_io_req_t;
 
 #if defined(ARCH_M68K)
@@ -317,6 +422,92 @@ _Static_assert(__builtin_offsetof(disk_io_req_t, header) == 0x20,
 status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t ppn, uint32_t daddr,
                   uint32_t *info);
 
+/* Status codes the three internal helpers below load directly */
+#define status_$invalid_disk_address          0x00080012
+#define status_$disk_striping_not_supported   0x0008002d
+
+/*
+ * The per-request physical-volume map disk_$map_request fills in and DISK_IO
+ * scans.  Ten entries of two longwords each; entry v-1 belongs to volume v,
+ * because the original addresses it as (-0x8,A3,volx*8) / (-0x4,A3,volx*8)
+ * (0xe3cc38-0xe3cc4e).
+ */
+#define DISK_VOLUME_MAP_ENTRIES 10
+
+/*
+ * One entry of that map: the head and tail of the chain of queue blocks that
+ * landed on this physical volume.  Eight bytes on the target, which is the
+ * stride the original's (volx*8) indexing assumes.
+ */
+typedef struct disk_$vol_map_entry_t {
+    struct disk_io_req_t *head; /* (-0x8,A3,volx*8) */
+    struct disk_io_req_t *tail; /* (-0x4,A3,volx*8) */
+} disk_$vol_map_entry_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(disk_$vol_map_entry_t) == 8,
+               "disk_$vol_map_entry_t must be 8 bytes");
+#endif
+
+/*
+ * The module's disk error record, DISK_$DATA + 0xa94 = 0xe7ac60.  86 bytes,
+ * which is exactly what DISK_$GET_ERROR_INFO copies out (21 longwords plus a
+ * word).  Written only by disk_$io_error.
+ */
+typedef struct disk_$error_info_t {
+    uint32_t    timestamp;      /* +0x00 (A5+0xa94): TIME_$CURRENT_CLOCKH */
+    uint32_t    daddr;          /* +0x04 (A5+0xa98): the failing disk address */
+    uint32_t    geometry;       /* +0x08 (A5+0xa9c): the longword at the
+                                 *   physical volume's +0x9c, i.e.
+                                 *   sec_per_track in the high half and
+                                 *   num_heads in the low half.  Only the
+                                 *   CHS path writes it (0xe3c288). */
+    uint32_t    info[8];        /* +0x0c (A5+0xaa0): the caller's block header,
+                                 *   CHS path only (0xe3c298) */
+    uint32_t    header[8];      /* +0x2c (A5+0xac0): the request's block
+                                 *   header, CHS path only (0xe3c2a8) */
+    uint32_t    ppn;            /* +0x4c (A5+0xae0) */
+    status_$t   status;         /* +0x50 (A5+0xae4) */
+    uint16_t    vol_idx;        /* +0x54 (A5+0xae8) */
+} disk_$error_info_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(disk_$error_info_t) == 0x56,
+               "disk_$error_info_t must be 86 bytes");
+_Static_assert(__builtin_offsetof(disk_$error_info_t, info) == 0x0c,
+               "disk_$error_info_t.info must be at +0x0c (A5+0xaa0)");
+_Static_assert(__builtin_offsetof(disk_$error_info_t, header) == 0x2c,
+               "disk_$error_info_t.header must be at +0x2c (A5+0xac0)");
+_Static_assert(__builtin_offsetof(disk_$error_info_t, vol_idx) == 0x54,
+               "disk_$error_info_t.vol_idx must be at +0x54 (A5+0xae8)");
+#endif
+
+#define DISK_$ERROR_INFO \
+    (*(disk_$error_info_t *)(DISK_VOLUME_BASE + 0xa94))
+
+/*
+ * The 16-byte record disk_$io_error hands to LOG_$ADD as log type 12
+ * (0xe3c350-0xe3c35c).  It is built on the stack at A6-0x18.
+ */
+typedef struct disk_$error_log_t {
+    uint32_t    daddr;          /* -0x18: the failing disk address */
+    uint32_t    block;          /* -0x14: cyl*blocks_per_cyl + block-in-cyl on
+                                 *   the CHS path, the raw address otherwise */
+    status_$t   status;         /* -0x10 */
+    uint16_t    pv_devid;       /* -0x0c: packed device id of the physical
+                                 *   volume the transfer ran on */
+    uint16_t    vol_devid;      /* -0x0a: packed device id of the volume the
+                                 *   caller asked for (the same value on the
+                                 *   non-CHS path, 0xe3c330) */
+} disk_$error_log_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(disk_$error_log_t) == 0x10,
+               "disk_$error_log_t must be 16 bytes");
+#endif
+
+#define DISK_LOG_TYPE_IO_ERROR 12
+
 /*
  * disk_$map_request - resolve a request's disk address to a physical volume
  *
@@ -326,17 +517,15 @@ status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t ppn, uint32_t daddr,
  * each physical volume the request touches; DISK_IO uses the first such entry
  * as the volume to issue the transfer against (0xe3d63e).
  *
- * Original address: 0x00e3cae0 (was FUN_00e3cae0)
- * TODO(source-cm2w): not yet emitted as C.
+ * Original address: 0x00e3cae0 (was FUN_00e3cae0); see disk/map_request.c
  */
 void disk_$map_request(disk_io_req_t *req, int16_t vol_idx, int16_t internal_op,
-                       void *volume_map, status_$t *status);
+                       disk_$vol_map_entry_t *volume_map, status_$t *status);
 
 /*
  * disk_$io_error - post-process a failed disk request
  *
- * Original address: 0x00e3c14c (was FUN_00e3c14c)
- * TODO(source-cm2w): not yet emitted as C.
+ * Original address: 0x00e3c14c (was FUN_00e3c14c); see disk/io_error.c
  */
 void disk_$io_error(int16_t vol_idx, disk_io_req_t *req, uint32_t *info);
 
@@ -346,8 +535,7 @@ void disk_$io_error(int16_t vol_idx, disk_io_req_t *req, uint32_t *info);
  * Temporarily maps the page at the scratch virtual address 0xff8400, runs
  * CHKSUM_$GET_CHKSUM over it and restores the previous mapping.
  *
- * Original address: 0x00e0a290 (was FUN_00e0a290)
- * TODO(source-cm2w): not yet emitted as C.
+ * Original address: 0x00e0a290 (was FUN_00e0a290); see disk/chksum_page.c
  */
 uint16_t disk_$chksum_page(uint32_t *ppn);
 
