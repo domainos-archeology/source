@@ -36,7 +36,7 @@
 #define status_$mst_object_not_found 0x00040001 /* Object UID not found */
 #define status_$no_asid_available 0x00040006    /* No free ASIDs */
 #define status_$no_space_available 0x00040003   /* Segment table full */
-#define status_$mst_segment_modified 0x0004000a /* COW segment modified */
+#define status_$mst_guard_fault 0x0004000a /* "guard fault" (SR10.4 stcodes 4000a) */
 #define status_$mst_access_violation 0x00040005 /* Access rights violation */
 
 /*

@@ -7,6 +7,20 @@
 #include "base/base.h"
 #include "ml/ml.h"
 
+/*
+ * Status codes, module 0x35 ("OS / terminal handler" in the SR10.4 status-code
+ * database).  These are the single definitions; they used to be split between
+ * base/base.h and tty/k_get.c / tty/k_put.c under two names apiece.
+ */
+#define status_$tty_invalid_option              0x00350001  /* "invalid option" */
+#define status_$tty_invalid_function            0x00350002
+#define status_$tty_buffer_full                 0x00350004
+#define status_$tty_eof                         0x00350005
+#define status_$tty_invalid_output_buffer_length 0x00350006 /* "invalid output buffer length" */
+#define status_$tty_quit_while_waiting_for_input 0x00350007 /* "quit while waiting for input" */
+#define status_$tty_input_buffer_overrun        0x00350009  /* "input buffer overrun" */
+#define status_$tty_would_block                 0x0035000a
+
 // =============================================================================
 // TTY Constants
 // =============================================================================

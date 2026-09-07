@@ -383,6 +383,9 @@ extern uid_t VTOC_BKT_$UID;         /* 0xE173AC: VTOC bucket UID */
 
 /* Status code, module 0x20 ("OS / VTOC manager"), code 1: "VTOC not mounted" */
 #define status_$VTOC_not_mounted    0x20001
+/* "duplicate UID" (SR10.4 stcodes 20007).  VTOC_$ALLOCATE (0xE389E0 /
+ * 0xE38D44) raises it; FILE_$PRIV_CREATE tests for it, so it is public. */
+#define status_$vtoc_duplicate_uid  0x20007
 
 /*
  * VTOC global data structure

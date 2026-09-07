@@ -93,7 +93,6 @@ _Static_assert(sizeof(ec2_waiter_t) == 0x0C, "ec2_waiter_t size");
 #define status_$ec2_async_fault_while_waiting           0x00180003
 #define status_$ec2_unable_to_allocate_level_1_eventcount  0x00180005
 #define status_$ec2_level_1_ec_not_allocated            0x00180006
-#define status_$cleanup_handler_set                     0x00120035
 #define status_$fault_protection_boundary_violation     0x0012000B
 
 /*

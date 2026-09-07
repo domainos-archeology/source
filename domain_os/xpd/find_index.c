@@ -62,7 +62,7 @@ int16_t XPD_$FIND_INDEX(uid_t *proc_uid, status_$t *status_ret)
 
     /* Verify that the current process is the debugger for this target */
     if (debugger_idx != current_idx) {
-        *status_ret = status_$xpd_proc_not_debug_target;
+        *status_ret = status_$proc2_proc_not_debug_target;
         return index;
     }
 

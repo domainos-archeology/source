@@ -79,7 +79,6 @@
 #define status_$stop_bad_slot 0x00300001    /* 0x00E8190E: slot > 15, or */
                                             /* stop of a slot not running */
 #define status_$stop_already_running 0x00300002 /* 0x00E81956 */
-#define status_$stop_not_diag 0x00300004     /* 0x00E81874: poke refused */
 
 /*
  * Accumulated stopwatch data returned by operation 0.

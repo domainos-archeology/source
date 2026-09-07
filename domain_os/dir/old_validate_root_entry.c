@@ -20,7 +20,7 @@
  * 4. If they differ:
  *    a. Fix stale entries via name_$old_drop_entry
  *    b. Re-add via name_$old_add_entry if needed
- *    c. Return status_$naming_entry_repaired or status_$naming_entry_stale
+ *    c. Return status_$naming_cache_entry_stale_and_updated or status_$naming_cache_entry_stale
  * 5. If they match, return status_$ok
  *
  * Parameters:
@@ -53,7 +53,7 @@ void DIR_$OLD_VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
         /* If remote lookup fails, check if local entry is stale */
         if (remote_status == status_$naming_name_not_found) {
             /* Entry exists locally but not on server - mark as stale */
-            *status_ret = status_$naming_entry_stale;
+            *status_ret = status_$naming_cache_entry_stale;
         } else {
             *status_ret = remote_status;
         }
@@ -67,7 +67,7 @@ void DIR_$OLD_VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
         /* Entries differ - fix the local entry */
         name_$old_drop_entry(&root_uid, name, *name_len, 0, drop_result, status_ret);
         if ((*status_ret & 0xFFFF) != 0) {
-            *status_ret = 0xe0022;  /* status_$naming_entry_stale */
+            *status_ret = 0xe0022;  /* status_$naming_cache_entry_stale */
             return;
         }
 
@@ -76,7 +76,7 @@ void DIR_$OLD_VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
                      (uid_t *)(remote_entry + 2), 0, status_ret);
 
         if ((int16_t)*status_ret == 0) {
-            *status_ret = status_$naming_entry_repaired;
+            *status_ret = status_$naming_cache_entry_stale_and_updated;
         }
     } else {
         *status_ret = status_$ok;

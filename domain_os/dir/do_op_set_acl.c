@@ -32,7 +32,6 @@
 #include "dir/dir_internal.h"
 
 /* (23001c) "attempt to issue unimplemented ACL call" */
-#define status_$acl_unimplemented_call  0x0023001CUL
 
 /*
  * The word 4 handed to FILE_$SET_PROT as its protection type.

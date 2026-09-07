@@ -149,9 +149,11 @@ extern volatile uint16_t *mem_err_status_word;
 #endif /* M68K */
 
 /*
- * The MEM_ module's parity-log cells (0xE22930..0xE2298C in the SAU2 map's
- * `D E22930 MEM_ size = 5C` segment) moved to mem/mem_internal.h with their
- * only consumer, MEM_$PARITY_LOG (mem/parity_log.c) -- bead source-3uo.
+ * The MEM_ module's parity-log cells are the one A5 block MEM_DATA
+ * (0xE22930..0xE2298C, the SAU2 map's `D E22930 MEM_ size = 5C` segment); it
+ * is declared in mem/mem.h along with MEM_$SIZE, MEM_$MEM_REC,
+ * MEM_$BOARD_ERRORS and MEM_$PAGE_ERRORS, and its only writer is
+ * MEM_$PARITY_LOG (mem/parity_log.c) -- beads source-3uo, source-eqom.
  */
 /* MEM_$PARITY_LOG is declared in mem/mem.h (included above) */
 

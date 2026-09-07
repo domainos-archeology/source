@@ -21,21 +21,21 @@ _EC_$ADVANCE:
     /*
      * Image: 0xE206F6  61 34  bsr.b ADVANCE_INT  (0xE206F8 + 0x34 = 0xE2072C)
      *
-     * Emitted as the literal image encoding, not as `bsr.b ADVANCE_INT'.
-     * gas does keep the two-byte form for the symbolic operand (it emits
-     * 61 00 plus an R_68K_PC8 fixup on the displacement byte), but the link
-     * cannot resolve it: ADVANCE_INT is the C routine ec/advance_int.c, and
-     * sau2.ld's ec-object gather takes objects in Makefile order, so every
-     * ec C object precedes the ec/sau2 assembly objects and ADVANCE_INT
-     * lands ~0xDD0 bytes ahead of this branch - far outside the +/-127 byte
-     * reach of a byte displacement ("relocation truncated to fit:
-     * R_68K_PC8").  `bsr.w' relocates cleanly but is 4 bytes and displaces
-     * every following instruction, so byte fidelity wins here.
+     * sau2.ld links ec/advance_int.o immediately after the three ec/sau2
+     * objects (SAU2 map PROC1_ASM order), so the R_68K_PC8 displacement is
+     * in range and gas keeps the image's two-byte encoding: the object holds
+     * `61 00' plus the fixup and is 0x14 bytes, exactly the image's
+     * 0xE206EE..0xE20701 (source-mc3k).
      *
-     * TODO(source-mc3k, 0xE206F6): restore `bsr.b ADVANCE_INT' once sau2.ld
-     * places ec/advance_int.o after the ec/sau2 objects, in image order.
+     * The linked displacement is 0x32, not the image's 0x34, for two reasons,
+     * neither of them an instruction-byte difference:
+     *   -4  TODO(source-0ke7, 0xE20728): ADVANCE, the 4-byte C-callable entry
+     *       that falls through into ADVANCE_INT, is not in the tree yet, so
+     *       ec/advance_int.o starts directly at ADVANCE_INT.
+     *   +2  gas gives every .s .text section 2**2 alignment, so a 2-byte pad
+     *       follows advance_all.o (image size 0x16, ending 2-mod-4).
      */
-    .short  0x6134                  /* bsr.b ADVANCE_INT */
+    bsr.b   ADVANCE_INT             /* Call internal advance */
     bsr.w   PROC1_$DISPATCH_INT     /* Call dispatcher */
     andi.w  #0xF8FF, %sr            /* Restore interrupts (clear IPL) */
     rts

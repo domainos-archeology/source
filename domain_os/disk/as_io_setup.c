@@ -15,7 +15,6 @@
 #include "mst/mst.h"
 
 /* Status code for buffer alignment */
-#define status_$disk_buffer_not_page_aligned  0x00080013
 
 /* disk_$volume_t and DISK_VOL() come from disk_internal.h */
 

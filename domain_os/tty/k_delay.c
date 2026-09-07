@@ -23,7 +23,7 @@ void TTY_$K_SET_DELAY(short *line_ptr, ushort *delay_type_ptr, short *value_ptr,
 
     // Validate delay type (must be in range 0-4, i.e., bit set in 0x1F)
     if (((1 << (delay_type & 0x1F)) & 0x1F) == 0) {
-        *status = status_$tty_access_denied;
+        *status = status_$tty_invalid_option;
         return;
     }
 
@@ -47,7 +47,7 @@ void TTY_$K_INQ_DELAY(short *line_ptr, ushort *delay_type_ptr, short *value_ptr,
 
     // Validate delay type
     if (((1 << (delay_type & 0x1F)) & 0x1F) == 0) {
-        *status = status_$tty_access_denied;
+        *status = status_$tty_invalid_option;
         return;
     }
 
@@ -106,7 +106,7 @@ void TTY_$K_DRAIN_OUTPUT(short *line_ptr, status_$t *status)
 
         // Check if quit was signaled
         if ((short)wait_result == 2) {
-            *status = status_$tty_quit_signalled;
+            *status = status_$tty_quit_while_waiting_for_input;
             // Update quit value to acknowledge
             FIM_$QUIT_VALUE[PROC1_$AS_ID] = *(uint32_t *)&FIM_$QUIT_EC[PROC1_$AS_ID * 12];
             break;

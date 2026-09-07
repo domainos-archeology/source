@@ -72,7 +72,7 @@ void MSG_$$SEND(int16_t port_num, uint32_t routing_key, uint32_t dest_node,
 
     /* 0x00E0DA16  cmpi.w #0x200,D5w / bls  (unsigned) */
     if (template_len > MSG_MAX_TEMPLATE_LEN) {
-        *status_ret = status_$network_message_header_too_big;
+        *status_ret = status_$network_msg_header_too_big;
         return;                     /* 0x00E0DA22, nothing to release yet */
     }
 

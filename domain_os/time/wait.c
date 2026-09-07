@@ -30,7 +30,6 @@
 #include "misc/crash_system.h"
 
 /* 0x00E1660A: move.l #0xd0003,(A2) */
-#define status_$time_quit_while_waiting 0x000D0003
 
 /*
  * Constant status cell passed by reference at 0x00E1663A:

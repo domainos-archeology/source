@@ -26,9 +26,6 @@
 
 #include "dir/dir_internal.h"
 
-#ifndef status_$naming_invalid_leaf
-#define status_$naming_invalid_leaf 0x000E000B
-#endif
 
 void dir_$add_entry(uint32_t handle, void *name, uint16_t name_len,
                     uint16_t entry_type, uint32_t extra, uid_t *uid,

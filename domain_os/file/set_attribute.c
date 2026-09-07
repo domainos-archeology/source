@@ -10,9 +10,7 @@
 #include "file/file_internal.h"
 
 /* Remote file access denied status codes */
-#define status_$no_rights                              0x000F0010
 #define file_$bad_reply_received_from_remote    0x000F0003
-#define status_$insufficient_rights                    0x000F0011
 
 /*
  * FILE_$SET_ATTRIBUTE

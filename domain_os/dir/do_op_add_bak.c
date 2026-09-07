@@ -215,7 +215,7 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
                     (uint32_t *)&dir_$add_bak_rights_00e50c5c,
                     (int16_t *)&dir_$add_bak_acl_opts_00e50c5a, status_ret);
         if (*status_ret != status_$ok) {
-            if (*status_ret == status_$wrong_type) {
+            if (*status_ret == status_$file_object_not_found) {
                 goto not_a_file;
             }
             NAME_CONVERT_ACL_STATUS(status_ret);
@@ -262,8 +262,8 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
                 if (*status_ret != status_$ok) {
                     /* Clear high bit and check for wrong_type */
                     *status_ret &= 0x7FFFFFFF;
-                    if (*status_ret != status_$wrong_type) {
-                        if (*status_ret == status_$wrong_type) {
+                    if (*status_ret != status_$file_object_not_found) {
+                        if (*status_ret == status_$file_object_not_found) {
                             goto not_a_file;
                         }
                         NAME_CONVERT_ACL_STATUS(status_ret);

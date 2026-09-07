@@ -13,6 +13,13 @@
 #include "base/base.h"
 
 /*
+ * Status codes (module 0x10 = OS / I/O manager)
+ *
+ * Single definition; flp/, ring/, scsi/ and win/ include this header.
+ */
+#define status_$io_controller_not_in_system 0x00100002
+
+/*
  * ============================================================================
  * Device Controller Table Entry (DCTE) Structure
  * ============================================================================

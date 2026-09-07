@@ -113,9 +113,6 @@ static const uint16_t dir_$do_op_delete_unlock_mode_00e515ba = 4;
  * _name_is_not_a_file, _no_rights, _insufficient_rights, _directory_locked)
  * come from name/name.h.
  */
-#define status_$ast_only_local_access_allowed       0x0003000A  /* 0x00E513E4 */
-#define status_$ast_refcount_says_unused            0x00030007  /* 0x00E514DA */
-#define status_$file_no_rights                      0x000F0010  /* 0x00E513C0 */
 
 void dir_$do_op_delete(uid_t *dir_uid, void *name, uint16_t name_len,
                        boolean check_del_right, boolean entry_only,
@@ -239,7 +236,7 @@ have_attrs:                                             /* 0x00E513AE */
      * references may not be deleted through this path. */
     if ((cattr.access_flags & DIR_CATTR_ACCESS_REFCOUNTED) != 0 &&
         cattr.refcount < 2) {
-        *status_ret = status_$file_no_rights;
+        *status_ret = status_$no_rights;
         goto release_and_out;
     }
 

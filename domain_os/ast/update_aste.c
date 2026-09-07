@@ -42,7 +42,6 @@ static void ast_$update_aste_log(const aste_t *aste,
                                  const uint32_t *disk_data);
 
 /* Status codes */
-#define status_$disk_write_protected 0x00080007
 
 void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, uint16_t flags,
                       status_$t *status)

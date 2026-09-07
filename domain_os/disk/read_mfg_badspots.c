@@ -14,7 +14,6 @@
 #include "wp/wp.h"
 
 /* Block header error status */
-#define status_$disk_block_header_error  0x00080011
 
 void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *buffer_ptr,
                               uint32_t count, status_$t *status)

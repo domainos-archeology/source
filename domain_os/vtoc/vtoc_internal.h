@@ -83,11 +83,10 @@
                                                    VTOC_$ALLOCATE (0xE38BF6) when the
                                                    freshly allocated VTOCE block has no
                                                    free entry */
-#define status_$vtoc_duplicate_uid  0x20007     /* A VTOCE with this UID already exists
-                                                   (VTOC_$ALLOCATE 0xE389E0 / 0xE38D44) */
+/* status_$vtoc_duplicate_uid (0x20007) is defined in vtoc/vtoc.h --
+ * FILE_$PRIV_CREATE tests for it, so it is public. */
 #define status_$no_UID              0x20004     /* No UID found */
 #define status_$end_of_file         0x20003     /* End of file */
-#define status_$out_of_space        0xF0016     /* Out of disk space */
 
 /*
  * Old format VTOCE structure (0xCC bytes)

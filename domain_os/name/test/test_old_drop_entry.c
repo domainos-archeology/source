@@ -37,14 +37,7 @@ static int tests_failed = 0;
 } while(0)
 
 /* Apollo types */
-typedef struct {
-    uint32_t high;
-    uint32_t low;
-} uid_t;
-
-typedef uint32_t status_$t;
-#define status_$ok                     0
-#define status_$naming_invalid_leaf    0xE000B
+#include "name/name.h"   /* status_$t, status_$ok, status_$naming_invalid_leaf */
 
 /*
  * Mock control variables
@@ -148,7 +141,7 @@ static void reset_mocks(void)
  * Function under test - reimplemented here with the same logic as
  * the production code, to allow testing on the host platform.
  */
-static void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
+void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
                                  uint16_t type, void *result, status_$t *status_ret)
 {
     int8_t valid;

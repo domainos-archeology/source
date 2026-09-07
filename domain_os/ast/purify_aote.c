@@ -24,7 +24,6 @@
 #endif
 
 /* Status codes */
-#define status_$disk_write_protected 0x00080007
 
 void ast_$purify_aote(aote_t *aote, uint16_t flags, status_$t *status)
 {

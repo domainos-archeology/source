@@ -29,8 +29,6 @@
 /* Maximum packet data length (0x7FC = 2044 bytes) */
 #define ROUTE_$MAX_PACKET_DATA  0x7FC
 
-/* Status code for port not in user mode */
-#define status_$route_port_not_user_mode    0x2B0001
 
 /*
  * ROUTE_$OUTGOING - Retrieve and prepare outgoing routed packet
@@ -51,7 +49,7 @@
  * Status codes:
  *   status_$ok: Success
  *   status_$internet_unknown_network_port: Port not found
- *   status_$route_port_not_user_mode: Port not in user/routing mode
+ *   status_$internet_network_port_not_open: Port not in user/routing mode
  *   status_$network_buffer_queue_is_empty: No packet queued
  *
  * Original address: 0x00E87A4E
@@ -95,13 +93,13 @@ void ROUTE_$OUTGOING(void *port_info, uint32_t *nexthop_ret, uint8_t *packet_buf
 
     /* Check that bits 0-1 of active field are not set when masked */
     if (((1 << (port->active & 0x1F)) & 0x3) != 0) {
-        *status_ret = status_$route_port_not_user_mode;
+        *status_ret = status_$internet_network_port_not_open;
         return;
     }
 
     /* Port type must be 2 (routing) */
     if (port->port_type != ROUTE_PORT_TYPE_ROUTING) {
-        *status_ret = status_$route_port_not_user_mode;
+        *status_ret = status_$internet_network_port_not_open;
         return;
     }
 

@@ -11,11 +11,11 @@
 #define NET_NET_H
 
 #include "os/os.h"
+#include "network/network.h"   /* status_$network_* (module 0x11) */
 
 /*
  * Status codes
  */
-#define status_$network_operation_not_defined_on_hardware 0x0011001D
 
 /*
  * Handler table offsets (relative to base 0xE244F4)

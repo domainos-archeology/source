@@ -26,7 +26,6 @@
  */
 
 /* Status codes */
-#define status_$ast_segment_not_deactivatable 0x00030004
 
 /*
  * ast_$deactivate_segment_log - the nested NETLOG helper at 0x00E01872

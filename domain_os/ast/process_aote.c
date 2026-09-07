@@ -21,7 +21,6 @@
 /* External function prototypes */
 
 /* Status codes */
-#define status_$ast_segment_not_deactivatable 0x00030004
 
 /* Hash table info */
 #if defined(ARCH_M68K)

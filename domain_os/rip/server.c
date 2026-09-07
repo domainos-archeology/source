@@ -181,7 +181,6 @@ static uint16_t rip_$server_wait_delay_type = 0;    /* 0x00E68E26 */
 
 /* 0x000D0003 "quit while waiting for event" - the retry loop's exit test at
  * 0x00E68C00. */
-#define status_$time_quit_while_waiting     0x000D0003
 
 /* Response retry loop (0x00E68BB8-0x00E68C10): five attempts, 25000 ticks
  * apart. */

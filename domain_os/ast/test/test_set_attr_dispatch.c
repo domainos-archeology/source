@@ -375,7 +375,7 @@ TEST(truncate_object_not_found_is_cleared)
     setup_aote();
     test_aote.acl_uid.high = 0x77000000;
     test_aote.acl_uid.low = 0;
-    mock_truncate_status = status_$ast_object_not_found;
+    mock_truncate_status = status_$file_object_not_found;
 
     call_dispatch(ATTR_TYPE_ACL_UID, &new_acl, &status);
 
@@ -457,7 +457,7 @@ TEST(sub_refcount_to_zero_still_stamps_clock)
 
     ASSERT_EQ(0, test_aote.refcount);
     ASSERT_EQ(0xEF, test_aote.attr_flags_hi);
-    ASSERT_EQ(status_$ast_refcount_underflow, status);
+    ASSERT_EQ(status_$ast_refcount_says_unused, status);
     ASSERT_EQ(0x0A0B0C0D, test_aote.dta_high);
     ASSERT_EQ(0x0E0F, test_aote.dta_low);
 }
@@ -474,7 +474,7 @@ TEST(sub_refcount_last_ref_on_sub_type_1_fails)
     call_dispatch(ATTR_TYPE_SUB_REFCOUNT, NULL, &status);
 
     ASSERT_EQ(1, test_aote.refcount);              /* unchanged */
-    ASSERT_EQ(status_$ast_refcount_underflow, status);
+    ASSERT_EQ(status_$ast_refcount_says_unused, status);
     ASSERT_EQ(0, test_aote.flags);                 /* no dirty bit: 0xE04D4E */
 }
 
@@ -489,7 +489,7 @@ TEST(basic_attr_set_rejects_high_types)
 
     call_dispatch(ATTR_TYPE_UID_84, &v, &status);
 
-    ASSERT_EQ(status_$ast_invalid_attribute_type, status);
+    ASSERT_EQ(status_$ast_incompatible_request, status);
     ASSERT_EQ(0, test_aote.uid_84.high);
 }
 
@@ -519,7 +519,7 @@ TEST(out_of_range_attr_type_is_invalid)
 
     call_dispatch(0x1C, NULL, &status);
 
-    ASSERT_EQ(status_$ast_invalid_attribute_type, status);
+    ASSERT_EQ(status_$ast_incompatible_request, status);
 }
 
 /* 0xE04B46: a special object accepts MOD_TIME and BLOCKS and nothing else. */
@@ -534,7 +534,7 @@ TEST(special_object_rejects_other_attrs)
 
     call_dispatch(ATTR_TYPE_DTM, &v, &status);
 
-    ASSERT_EQ(status_$ast_object_special_attribute, status);
+    ASSERT_EQ(status_$file_volume_has_been_mounted_read_only, status);
     ASSERT_EQ(0, test_aote.dtm_high);
 }
 
@@ -776,7 +776,7 @@ TEST(len_rounded_on_basic_object_is_rejected)
 
     call_dispatch(ATTR_TYPE_DTM_ROUNDED, &v, &status);
 
-    ASSERT_EQ(status_$ast_invalid_attribute_type, status);
+    ASSERT_EQ(status_$ast_incompatible_request, status);
     ASSERT_EQ(0, test_aote.dtm_high);           /* never reached the store */
     ASSERT_EQ(0, test_aote.dtm_low);
 }

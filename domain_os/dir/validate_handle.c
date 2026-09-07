@@ -71,7 +71,7 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
      * lives on another node. */
     if (local_status != status_$ok || desc.flags < 0) {
         *status_ret = local_status;
-        if (*status_ret == status_$wrong_type || *status_ret == status_$ok) {
+        if (*status_ret == status_$file_object_not_found || *status_ret == status_$ok) {
             *status_ret = status_$naming_directory_object_not_found;  /* 0x000E0033 */
         }
         goto error;
@@ -87,7 +87,7 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
         PROC1_$TYPE[PROC1_$CURRENT] == DIR_PROC_TYPE_NS_HELPER) {  /* 0x00E4B4CA */
         /* 0x00E4B4D2 `move.l #0x3000a,(A3)` then 0x00E4B4D8
          * `bset.b #0x7,(A3)` - the error bit goes in bit 31. */
-        *status_ret = (status_$t)(status_$os_only_local_access_allowed | 0x80000000u);
+        *status_ret = (status_$t)(status_$ast_only_local_access_allowed | 0x80000000u);
         goto error;
     }
 

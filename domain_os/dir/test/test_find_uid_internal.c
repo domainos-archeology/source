@@ -11,11 +11,14 @@
  *   3. Error passthrough (DO_OP returns other error)
  */
 
+/* Suppress POSIX uid_t so base/base.h can define Apollo's uid_t struct */
+#define uid_t posix_uid_t
 #include <stdio.h>
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#undef uid_t
 
 /* Test result tracking */
 static int tests_passed = 0;
@@ -48,18 +51,12 @@ static int tests_failed = 0;
 
 /* ===== Type Definitions ===== */
 
-typedef uint32_t status_$t;
-#define status_$ok 0
+#include "name/name.h"   /* status_$t, status_$ok, the 0x000Exxxx codes */
 
-/* Avoid conflict with system uid_t (macOS defines it as unsigned int) */
-#define uid_t dir_uid_t
-typedef struct { uint32_t high; uint32_t low; } dir_uid_t;
+typedef uid_t dir_uid_t;
 
 /* Status codes used by find_uid_internal */
 #define file_$bad_reply_received_from_remote_node  0x000F0003
-#define status_$naming_bad_directory               0x000E000D
-#define status_$naming_leaf_truncated              0x000E002D
-#define status_$naming_name_not_found              0x000E0007
 
 /* ===== Mock State ===== */
 

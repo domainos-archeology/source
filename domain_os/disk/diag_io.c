@@ -26,10 +26,6 @@
 #include "wp/wp.h"
 
 /* Status codes */
-#define status_$disk_buffer_not_page_aligned     0x00080013
-#define status_$disk_block_header_error          0x00080011
-#define status_$volume_in_use                    0x0008000b
-#define status_$operation_requires_physical_vol  0x0008000e
 
 /* Volume table base and offsets come from disk_internal.h */
 
@@ -73,7 +69,7 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
 
     /* Must be a physical volume (no LV data) */
     if (vol->lv_start != 0) {
-        *status = status_$operation_requires_physical_vol;
+        *status = status_$operation_requires_a_physical_volume;
         return;
     }
 

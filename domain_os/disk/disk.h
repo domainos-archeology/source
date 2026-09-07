@@ -50,6 +50,18 @@
  * Status codes
  */
 #define status_$disk_write_protected 0x00080007
+#define status_$disk_not_ready 0x00080001
+#define status_$disk_controller_busy 0x00080002
+#define status_$disk_controller_timeout 0x00080003
+#define status_$disk_controller_error 0x00080004
+#define status_$disk_equipment_check 0x00080005
+#define status_$disk_data_check 0x00080009
+#define status_$DMA_overrun 0x0008000a
+#define status_$logical_volume_not_found 0x00080010
+#define status_$disk_block_header_error 0x00080011
+#define status_$disk_buffer_not_page_aligned 0x00080013
+#define status_$disk_already_mounted 0x0008001e
+#define status_$memory_parity_error_during_disk_write 0x00080025
 #define status_$volume_in_use 0x0008000b
 #define status_$volume_table_full 0x0008000c
 #define status_$volume_not_properly_mounted 0x0008000d

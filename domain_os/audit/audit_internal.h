@@ -38,7 +38,6 @@
  * manager", subsystem 0x30).
  */
 #define status_$audit_excessive_event_types         0x00300003
-#define status_$audit_event_logging_is_disabled     0x00300004
 #define status_$audit_invalid_action_code           0x00300007
 #define status_$audit_permission_denied             0x00300008
 #define status_$audit_file_not_found                0x0030000C

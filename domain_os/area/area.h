@@ -60,7 +60,6 @@
 #define status_$area_bad_handle         0x00320002  /* Invalid area handle */
 #define status_$area_bad_offset         0x00320003  /* Invalid offset */
 #define status_$area_create_failed      0x00320004  /* Create operation failed */
-#define status_$area_no_uid             0x00320005  /* No UID available */
 #define status_$area_not_active         0x00320006  /* Area not active */
 #define status_$area_not_owner          0x00320007  /* Caller doesn't own area */
 #define status_$area_not_found          0x00320008  /* Area not found */

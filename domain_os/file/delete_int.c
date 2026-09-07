@@ -26,7 +26,6 @@
 #define status_$ok                          0
 #define file_$object_in_use          0x000F0006
 #define file_$object_is_remote       0x000F0002
-#define status_$ast_refcnt_says_unused      0x00030007
 
 /* File lock ID */
 #define FILE_LOCK_ID    5
@@ -127,7 +126,7 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
 
                 /* These specific status codes are acceptable */
                 if (*status_ret == file_$object_is_remote ||
-                    *status_ret == status_$ast_refcnt_says_unused) {
+                    *status_ret == status_$ast_refcount_says_unused) {
                     *status_ret = status_$ok;
                 }
             }

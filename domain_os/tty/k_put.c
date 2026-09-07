@@ -23,10 +23,6 @@
 #include "ec/ec.h"
 
 /* Status codes */
-#define status_$tty_no_space       0x350001
-#define status_$tty_bad_count      0x350006
-#define status_$tty_quit           0x350007
-#define status_$tty_overflow       0x350009
 /* status_$tty_would_block comes from base/base.h */
 
 /* TTY_$I_PUT_OUTPUT declared in tty_internal.h */
@@ -46,7 +42,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
 
     /* Validate count */
     if ((int16_t)*count < 0) {
-        *status_ret = status_$tty_bad_count;
+        *status_ret = status_$tty_invalid_output_buffer_length;
         return;
     }
 
@@ -76,7 +72,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
 
         /* Check if request is non-blocking */
         if ((*(uint16_t *)options & 0x0001) == 0) {
-            *status_ret = status_$tty_no_space;
+            *status_ret = status_$tty_invalid_option;
             return;
         }
 
@@ -104,7 +100,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
                 *status_ret = ((status_$t (*)(short))tty->status_handler)(
                     (short)tty->line_id);
             } else if ((*(uint8_t *)((char *)tty + 0x0b) & TTY_ERR_OVERFLOW) != 0) {
-                *status_ret = status_$tty_overflow;
+                *status_ret = status_$tty_input_buffer_overrun;
             }
             tty->pending_signal = 0;
             if (*status_ret != status_$ok) {
@@ -152,7 +148,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
 
         /* Check if quit signaled */
         if (wait_result == 2) {
-            *status_ret = status_$tty_quit;
+            *status_ret = status_$tty_quit_while_waiting_for_input;
             /* Update quit value */
             FIM_$QUIT_VALUE[PROC1_$AS_ID] = FIM_$QUIT_EC[PROC1_$AS_ID].value;
             goto done;

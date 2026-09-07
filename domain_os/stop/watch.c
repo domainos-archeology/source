@@ -21,6 +21,7 @@
 #include "stop/stop_internal.h"
 
 #include "arch/arch.h"
+#include "audit/audit.h"   /* status_$audit_event_logging_is_disabled (0x00300004) */
 #include "fim/fim.h"
 #include "mst/mst.h"
 
@@ -121,7 +122,7 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
              * with `tst.b / bne`, not with the usual boolean `< 0`.
              */
             if (DISK_$DIAG == 0) {
-                d2_status = status_$stop_not_diag;
+                d2_status = status_$audit_event_logging_is_disabled;
                 goto release_cleanup;
             }
             *addr = (uint8_t)d1_value; /* 0x00E81884 */
@@ -129,7 +130,7 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
 
         case STOP_OP_POKE_WORD: /* 5, 0x00E8188C */
             if (DISK_$DIAG == 0) { /* 0x00E8186A */
-                d2_status = status_$stop_not_diag;
+                d2_status = status_$audit_event_logging_is_disabled;
                 goto release_cleanup;
             }
             *(volatile uint16_t *)addr = (uint16_t)d1_value; /* 0x00E8188E */
@@ -137,7 +138,7 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
 
         case STOP_OP_POKE_LONG: /* 7, 0x00E81862 */
             if (DISK_$DIAG == 0) { /* 0x00E8186A */
-                d2_status = status_$stop_not_diag;
+                d2_status = status_$audit_event_logging_is_disabled;
                 goto release_cleanup;
             }
             *(volatile uint32_t *)addr = d1_value; /* 0x00E81866 */

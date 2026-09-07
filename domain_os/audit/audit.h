@@ -24,6 +24,13 @@
 #ifndef AUDIT_H
 #define AUDIT_H
 
+/*
+ * Status codes, module 0x30 ("OS / audit trail manager" in the SR10.4
+ * status-code database).  Single definition; stop/ raises it too and used to
+ * spell it status_$stop_not_diag.
+ */
+#define status_$audit_event_logging_is_disabled 0x00300004
+
 #include "base/base.h"
 
 /*

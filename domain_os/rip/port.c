@@ -55,7 +55,6 @@ typedef struct xns_idp_$open_params_t {
  */
 
 /* Status code returned on successful packet queue */
-#define status_$sock_packet_queued      0x3B0016
 
 /*
  * RIP_$STD_OPEN - Open standard RIP IDP channel
@@ -128,7 +127,7 @@ void RIP_$STD_OPEN(void)
  * 1. Extracts network addresses, socket, and length from IDP header
  * 2. Copies RIP-specific data from packet
  * 3. Queues to socket 8 (RIP_SOCKET) via SOCK_$PUT
- * 4. Returns status_$sock_packet_queued (0x3B0016) on success
+ * 4. Returns status_$xns_could_not_put_packet_into_socket (0x3B0016) on success
  *
  * Assembly analysis (0x00E15A2C):
  *   - Builds local buffer from IDP packet fields
@@ -186,7 +185,7 @@ void RIP_$STD_DEMUX(idp_$packet_t *pkt, uint16_t *param_2, uint16_t *param_3,
 
     /* 0xE15A98 "tst.b D0b / bmi" - a negative result skips the store */
     if (result >= 0) {
-        *status_ret = status_$sock_packet_queued;
+        *status_ret = status_$xns_could_not_put_packet_into_socket;
     }
 }
 

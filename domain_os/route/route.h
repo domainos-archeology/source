@@ -513,6 +513,12 @@ int16_t ROUTE_$VALIDATE_PORT(int32_t routing_key, int8_t is_local);
  * subsystems (ring, rip, xns, ...) include this header rather than
  * redefining them.
  */
+/* "network port not open" (SR10.4 stcodes 2b0001).  The single name for this
+ * code: ROUTE_$INCOMING returns it for a port that is not in routing mode
+ * (0x00E878A8), ROUTE_$OUTGOING for a port not in user/routing mode
+ * (0x00E87C08) and ROUTE_$SERVICE when the port has no IDP channel
+ * (0x00E88C1E); all three are the same "port not open" condition. */
+#define status_$internet_network_port_not_open  0x2B0001
 #define status_$internet_unknown_network_port   0x2B0003
 #define status_$internet_illegal_port_type      0x2B0004
 /* "operation not legal on this port type" (SR10.4 stcodes 2b0009).

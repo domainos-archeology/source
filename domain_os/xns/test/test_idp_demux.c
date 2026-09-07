@@ -524,7 +524,7 @@ static void test_forward_failure(void)
     run();
     ASSERT_EQ(1, sock_put_calls);
     ASSERT_EQ(1, idp_state.packets_dropped);
-    ASSERT_EQ(status_$xns_packet_dropped, st);
+    ASSERT_EQ(status_$xns_could_not_put_packet_into_socket, st);
 }
 
 /*

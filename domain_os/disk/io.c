@@ -29,7 +29,6 @@
 #include "misc/crash_system.h"
 
 /* Additional disk status codes */
-#define status_$disk_block_header_error             0x00080011
 #define status_$read_after_write_failed             0x0008001C
 #define status_$software_detected_checksum_error    0x0008001F
 #define status_$checksum_error_in_read_after_write  0x00080020

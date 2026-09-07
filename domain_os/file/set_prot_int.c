@@ -15,9 +15,7 @@
 #define file_$object_is_remote               0x000F0002
 #define file_$bad_reply_received_from_remote 0x000F0003
 #define file_$incompatible_request           0x000F0015
-#define status_$ast_incompatible_request            0x00030006
 /* status_$no_right_to_perform_operation comes from acl/acl.h. */
-#define status_$acl_no_right_to_set_subsystem_data  0x00230010
 
 /* PROC1 type for server process */
 #define PROC1_TYPE_SERVER                           9

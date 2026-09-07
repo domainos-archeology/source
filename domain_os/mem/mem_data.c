@@ -1,83 +1,37 @@
 /*
- * mem_data.c - MEM Module Global Data Definitions
+ * mem_data.c - MEM module A5 block
  *
- * This file defines the global variables used by the MEM (Memory Support)
- * module. These primarily relate to memory error tracking.
+ * The SAU2 map has one data segment for this module:
  *
- * Original M68K addresses:
- *   MEM_$SIZE:         0xE22930 (4 bytes)  - Total system memory size
- *   MEM_$MEM_REC:      0xE22934 (4 bytes)  - Memory record base
- *   MEM_$BOARD_ERRORS: 0xE22938 (4 bytes)  - Per-board error counts (2 x 2 bytes)
- *   MEM_$PAGE_ERRORS:  0xE22942 (72 bytes) - Per-page error tracking (4 x 18 bytes)
+ *     D  E22930  MEM_   size = 5C
+ *        E22930  MEM_$SIZE
+ *        E22934  MEM_$MEM_REC
  *
- * Memory layout:
- *   0xE22930: MEM_$SIZE (4 bytes)
- *   0xE22934: MEM_$MEM_REC (4 bytes)
- *   0xE22938: Board 1 error count (2 bytes) - for addresses < 3MB
- *   0xE2293A: Board 2 error count (2 bytes) - for addresses >= 3MB
- *   0xE2293C: Reserved (6 bytes)
- *   0xE22942: Page error entries (4 entries x 18 bytes each)
+ * and MEM_$PARITY_LOG establishes it as a single base register
+ * (`lea (0xe22930).l,A5` at 0x00E0ADB8), so it is defined here as one
+ * object.  Its layout is mem_data_t in mem/mem.h; the offsets that layout
+ * asserts are the ones the accessing instructions prove:
  *
- * Each page error entry (18 bytes):
- *   Offset 0x00: Physical address (4 bytes)
- *   Offset 0x04: Error count (2 bytes)
- *   Offset 0x06: Reserved (12 bytes)
+ *   0xE22930  MEM_$SIZE                     longword, module offset 0x00
+ *   0xE22934  MEM_$MEM_REC.w_00             word,  image value 0x0002
+ *   0xE22936  MEM_$MEM_REC.w_02             word,  image value 0x0002
+ *   0xE22938  MEM_$BOARD_ERRORS[0]          word,  never touched (bias slot)
+ *   0xE2293A  MEM_$BOARD_ERRORS[1]          word,  00e0add4 (0x8,A5,D1) D1=2
+ *   0xE2293C  MEM_$BOARD_ERRORS[2]          word,  00e0add4 (0x8,A5,D1) D1=4
+ *   0xE2293E  MEM_$MEM_REC.w_0a             word,  no references
+ *   0xE22940  MEM_$MEM_REC.w_0c             word,  no references
+ *   0xE22942  MEM_$PAGE_ERRORS[0..3]        4 x 18 bytes, 00e0adde
+ *   0xE2298A  tail word                     outside MEM_$MEM_REC
+ *
+ * Initial contents are `gsk read 0x00E22930 0x5C`: all zero except the two
+ * words at 0xE22934 and 0xE22936.
  */
 
 #include "mem/mem_internal.h"
 
-/*
- * ============================================================================
- * Memory Configuration
- * ============================================================================
- */
-
-/*
- * Total system memory size in bytes
- *
- * Original address: 0xE22930
- */
-uint32_t MEM_$SIZE = 0;
-
-/*
- * Memory record base
- *
- * Used as base address for memory tracking structures.
- *
- * Original address: 0xE22934
- */
-uint32_t MEM_$MEM_REC = 0;
-
-/*
- * ============================================================================
- * Parity Error Tracking
- * ============================================================================
- */
-
-/*
- * Per-board error counts
- *
- * Array of error counts per memory board:
- *   [0]: Board 1 errors (addresses < 3MB)
- *   [1]: Board 2 errors (addresses >= 3MB)
- *
- * Original address: 0xE22938
- */
-uint16_t MEM_$BOARD_ERRORS[2] = { 0 };
-
-/*
- * Per-page error tracking table
- *
- * Tracks the most frequently failing pages. When a new page has an error
- * and the table is full, the entry with the lowest count is replaced.
- *
- * Each entry is 18 bytes:
- *   - 4 bytes: Physical address
- *   - 2 bytes: Error count
- *   - 12 bytes: Reserved/padding
- *
- * Original address: 0xE22942
- *
- * (mem_$page_error_t is defined in mem/mem_internal.h)
- */
-mem_$page_error_t MEM_$PAGE_ERRORS[4] = { { 0 } };
+mem_data_t MEM_DATA = {
+    .rec = {
+        .w_00 = 0x0002,
+        .w_02 = 0x0002,
+    },
+};

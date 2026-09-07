@@ -36,7 +36,7 @@ void TTY_$K_SIMULATE_TERMINAL_INPUT(short *line_ptr, char *ch_ptr, status_$t *st
         // Check if our UID matches the TTY's process group UID
         if (my_uid.high != tty->pgroup_uid.high ||
             my_uid.low != tty->pgroup_uid.low) {
-            *status = status_$tty_access_denied;
+            *status = status_$tty_invalid_option;
             return;
         }
     }

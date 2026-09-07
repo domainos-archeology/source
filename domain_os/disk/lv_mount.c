@@ -16,8 +16,6 @@
 /*
  * Status codes for LV mount operations
  */
-#define status_$disk_already_mounted       0x0008001e
-#define status_$logical_volume_not_found   0x00080010
 
 /*
  * The volume table is the array of disk_$volume_t descriptors DISK_VOL()

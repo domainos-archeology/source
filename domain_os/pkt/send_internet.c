@@ -35,7 +35,6 @@ static uint16_t pkt_$wait_relative = 0;
  * 0x00E127A2 "cmpi.l #0xd0003,D0" - "quit while waiting for event" from the
  * OS time manager (module 0x0D).
  */
-#define status_$time_quit_while_waiting 0x000D0003
 
 void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_sock,
                         int32_t src_node_or, uint32_t src_node, uint16_t src_sock,

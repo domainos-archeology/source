@@ -17,6 +17,8 @@
 #include <string.h>
 
 #include "stop/stop_internal.h"
+#include "fim/fim.h"     /* status_$cleanup_handler_set (0x00120035) */
+#include "audit/audit.h" /* status_$audit_event_logging_is_disabled (0x00300004) */
 
 /* ------------------------------------------------------------------ */
 /* Host runtime bits the arch macros need                              */
@@ -447,17 +449,17 @@ static void test_poke_gated(void)
 
     DISK_$DIAG = 0;
     value_cell = 0x99;
-    CHECK_EQ(status_$stop_not_diag,
+    CHECK_EQ(status_$audit_event_logging_is_disabled,
              call_watch(STOP_OP_POKE_BYTE, 0, 0, &addr_cell, &value_cell));
     CHECK_EQ(0, mem[0]);
 
     value_cell = 0x1122;
-    CHECK_EQ(status_$stop_not_diag,
+    CHECK_EQ(status_$audit_event_logging_is_disabled,
              call_watch(STOP_OP_POKE_WORD, 0, 0, &addr_cell, &value_cell));
     CHECK_EQ(0, mem[0]);
 
     value_cell = 0x11223344;
-    CHECK_EQ(status_$stop_not_diag,
+    CHECK_EQ(status_$audit_event_logging_is_disabled,
              call_watch(STOP_OP_POKE_LONG, 0, 0, &addr_cell, &value_cell));
     CHECK_EQ(0, mem[0]);
 
@@ -535,7 +537,7 @@ static void test_op_above_table(void)
 
     /* the gated long poke with the same state refuses and writes nothing */
     memset(mem, 0, sizeof(mem));
-    CHECK_EQ(status_$stop_not_diag,
+    CHECK_EQ(status_$audit_event_logging_is_disabled,
              call_watch(STOP_OP_POKE_LONG, 0, 0, &addr_cell, &value_cell));
     CHECK_EQ(0u, *(uint32_t *)mem);
 }

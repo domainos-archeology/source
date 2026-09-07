@@ -28,6 +28,7 @@
 #include "ml/ml.h"
 #include "network/network.h"    /* status_$network_* */
 #include "route/route.h"        /* status_$internet_* */
+#include "io/io.h"   /* status_$io_controller_not_in_system */
 
 /*
  * ============================================================================
@@ -78,7 +79,6 @@
 #define status_$ring_invalid_stats_block            0x00310011
 #define status_$ring_illegal_dest_address           0x00310012
 
-#define status_$io_controller_not_in_system         0x00100002
 
 /*
  * status_$internet_unknown_network_port: route/route.h

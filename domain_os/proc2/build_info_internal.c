@@ -24,7 +24,6 @@
 #include "misc/string.h"
 
 /* Status codes */
-#define status_$proc2_not_level_2_process           0x00190002
 #define status_$proc2_request_is_for_current_process 0x00190004
 
 /*

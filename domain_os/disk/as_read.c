@@ -14,7 +14,6 @@
 #include "wp/wp.h"
 
 /* Block header error status */
-#define status_$disk_block_header_error  0x00080011
 
 void DISK_$AS_READ(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr, uint16_t *count_ptr,
                    uint32_t *info, status_$t *status)

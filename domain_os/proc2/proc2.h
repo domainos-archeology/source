@@ -37,8 +37,9 @@
  * Status codes
  */
 #define status_$proc2_uid_not_found 0x00190001
-#define status_$proc2_invalid_signal 0x00190002
+#define status_$proc2_not_level_2_process 0x00190002  /* "not a level two process" */
 #define status_$proc2_bad_process_group 0x00190003
+#define status_$proc2_proc_not_debug_target 0x00190010  /* "process is not a debug target" */
 #define status_$proc2_suspend_timed_out 0x00190005
 #define status_$proc2_not_suspended 0x00190006
 #define status_$proc2_already_suspended 0x00190007

@@ -19,17 +19,12 @@
 #include "os/os_internal.h"
 
 /* Internal ACL status codes (module 0x23) */
-#define status_$acl_no_right_to_perform_operation           0x00230001
-#define status_$acl_insufficient_rights_to_perform_operation 0x00230002
-#define status_$acl_wrong_type                              0x00230004
 #define status_$acl_on_different_volume                     0x00230007
 
 /* External file status codes (module 0x0F) - mapped versions */
-#define status_$no_rights                                   0x000F0010
 #define file_$wrong_type                             0x000F0012
 
 /* Special status code that should not be modified */
-#define status_$special_passthrough                         0x000F0001
 
 /*
  * OS_PROC_SHUTWIRED - Translate status codes for shutdown wired operations
@@ -41,11 +36,11 @@
  */
 void OS_PROC_SHUTWIRED(status_$t *status_ret)
 {
-    if (*status_ret == status_$acl_no_right_to_perform_operation) {
+    if (*status_ret == status_$no_right_to_perform_operation) {
         /* no_right_to_perform_operation -> no_rights */
         *status_ret = status_$no_rights;
     }
-    else if (*status_ret == status_$acl_insufficient_rights_to_perform_operation) {
+    else if (*status_ret == status_$insufficient_rights_to_perform_operation) {
         /* insufficient_rights_to_perform_operation -> insufficient_rights */
         *status_ret = status_$insufficient_rights;
     }
@@ -57,7 +52,7 @@ void OS_PROC_SHUTWIRED(status_$t *status_ret)
         /* acl_on_different_volume -> file_objects_on_different_volumes */
         *status_ret = file_$objects_on_different_volumes;
     }
-    else if (*status_ret != status_$special_passthrough) {
+    else if (*status_ret != status_$file_object_not_found) {
         /* For all other codes except 0xF0001, set high bit to mark as internal */
         /* Original: bset.b #7,(A0) on the most significant byte of the
          * big-endian 32-bit status */

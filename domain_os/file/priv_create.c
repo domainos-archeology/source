@@ -49,11 +49,9 @@
 /*
  * Status codes used
  */
-#define status_$vtoc_duplicate_uid                      0x00020007
 #define file_$bad_reply_received_from_remote_node 0x000F0003
 #define file_$cannot_create_on_remote_with_uid   0x000F000B
 #define file_$volume_is_read_only                0x000E0030
-#define file_$invalid_type                       0x000F0016
 
 /*
  * The new-format VTOCE image the local-create path builds (0x90 bytes,
@@ -345,7 +343,7 @@ uint32_t FILE_$PRIV_CREATE(int16_t file_type, const uid_t *type_uid, uid_t *dir_
                 *status_ret = file_$volume_is_read_only;
                 return 0;
             }
-            *status_ret = file_$invalid_type;
+            *status_ret = status_$file_volume_has_been_mounted_read_only;
             return 0;
         }
 

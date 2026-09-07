@@ -502,7 +502,7 @@ TEST(read_only_volume_rejects_writing_mode)
     mock_attr_vol_flags = 0x0002;
     call_new_lock(0, 2, FILE_LOCK_FLAG_NO_RIGHTS);
     /* Not a directory -> the file_$ flavour, 0x000F0016. */
-    ASSERT_EQ(file_$vol_mounted_read_only, test_status);
+    ASSERT_EQ(status_$file_volume_has_been_mounted_read_only, test_status);
     ASSERT_EQ(0x000F0016, test_status);
 }
 
@@ -660,7 +660,7 @@ TEST(change_on_read_only_volume_entry_is_rejected)
     hold_lock(0, CHG_HELD_MODE, NODE_$ME, 0xFF, 0)->flags1 = 0x80;
     call_change_lock(0, CHG_MODE, (uint16_t)(FILE_LOCK_FLAG_CHANGE |
                                              FILE_LOCK_FLAG_NO_RIGHTS), 1);
-    ASSERT_EQ(file_$vol_mounted_read_only, test_status);
+    ASSERT_EQ(status_$file_volume_has_been_mounted_read_only, test_status);
     ASSERT_EQ(0x000F0016, test_status);
 }
 

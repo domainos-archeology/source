@@ -84,7 +84,7 @@ void XPD_$SET_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts, status_$t *
             *(uint32_t *)(dst + 8) = *(uint32_t *)(src + 8);
             *(uint16_t *)(dst + 12) = *(uint16_t *)(src + 12);
         } else {
-            status = status_$xpd_proc_not_debug_target;
+            status = status_$proc2_proc_not_debug_target;
         }
     }
 
@@ -144,7 +144,7 @@ void XPD_$INQ_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts, status_$t *
             *(uint32_t *)(dst + 8) = *(uint32_t *)(src + 8);
             *(uint16_t *)(dst + 12) = *(uint16_t *)(src + 12);
         } else {
-            status = status_$xpd_proc_not_debug_target;
+            status = status_$proc2_proc_not_debug_target;
         }
     }
 

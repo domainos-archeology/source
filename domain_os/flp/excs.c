@@ -22,15 +22,9 @@
 #include "time/time.h"
 
 /* Status codes for floppy operations */
-#define status_$memory_parity_error_during_disk_write  0x00080025
 #define status_$dma_not_at_end_of_range                0x0008001d
-#define status_$disk_not_ready                         0x00080001
-#define status_$disk_equipment_check                   0x00080005
 #define status_$floppy_is_not_2_sided                  0x00080006
-#define status_$disk_write_protected                   0x00080007
 #define status_$bad_disk_format                        0x00080008
-#define status_$disk_data_check                        0x00080009
-#define status_$DMA_overrun                            0x0008000a
 #define status_$unknown_status_returned_by_hardware    0x00080019
 
 /* Retry marker - indicates operation should be retried */

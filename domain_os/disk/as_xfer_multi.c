@@ -30,7 +30,6 @@
 #include "wp/wp.h"
 
 /* Status codes */
-#define status_$disk_buffer_not_page_aligned  0x00080013
 #define status_$disk_io_abandoned             0x00080029
 
 /* Page alignment mask */

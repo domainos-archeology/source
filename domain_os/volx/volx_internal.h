@@ -16,6 +16,7 @@
 #include "dir/dir.h"
 #include "disk/disk.h"
 #include "network/network.h"
+#include "name/name.h"   /* status_$directory_is_full, status_$name_already_exists */
 #include "volx/volx.h"
 #include "vtoc/vtoc.h"
 

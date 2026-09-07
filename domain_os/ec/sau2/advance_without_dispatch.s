@@ -22,20 +22,17 @@ _EC_$ADVANCE_WITHOUT_DISPATCH:
     /*
      * Image: 0xE20722  61 08  bsr.b ADVANCE_INT  (0xE20724 + 0x08 = 0xE2072C)
      *
-     * Emitted as the literal image encoding, not as `bsr.b ADVANCE_INT'.
-     * gas does keep the two-byte form for the symbolic operand (it emits
-     * 61 00 plus an R_68K_PC8 fixup on the displacement byte), but the link
-     * cannot resolve it: ADVANCE_INT is the C routine ec/advance_int.c, and
-     * sau2.ld's ec-object gather takes objects in Makefile order, so every
-     * ec C object precedes the ec/sau2 assembly objects and ADVANCE_INT
-     * lands ~0xDD0 bytes ahead of this branch - far outside the +/-127 byte
-     * reach of a byte displacement ("relocation truncated to fit:
-     * R_68K_PC8").  `bsr.w' relocates cleanly but is 4 bytes and displaces
-     * every following instruction, so byte fidelity wins here.
+     * sau2.ld links ec/advance_int.o immediately after the three ec/sau2
+     * objects (SAU2 map PROC1_ASM order), so the R_68K_PC8 displacement is
+     * in range and gas keeps the image's two-byte encoding: the object holds
+     * `61 00' plus the fixup and is 0x10 bytes, exactly the image's
+     * 0xE20718..0xE20727 (source-mc3k).
      *
-     * TODO(source-mc3k, 0xE20722): restore `bsr.b ADVANCE_INT' once sau2.ld
-     * places ec/advance_int.o after the ec/sau2 objects, in image order.
+     * The linked displacement is 0x04, not the image's 0x08.
+     * TODO(source-0ke7, 0xE20728): ADVANCE, the 4-byte C-callable entry that
+     * falls through into ADVANCE_INT, is not in the tree yet, so
+     * ec/advance_int.o starts directly at ADVANCE_INT.
      */
-    .short  0x6108                  /* bsr.b ADVANCE_INT */
+    bsr.b   ADVANCE_INT             /* Call internal advance */
     move.w  (%sp)+, %sr             /* Restore saved SR */
     rts

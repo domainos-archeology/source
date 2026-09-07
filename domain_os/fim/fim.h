@@ -881,10 +881,11 @@ _Static_assert(sizeof(fim_fault_desc_t) == 8, "fim_fault_desc_t must be 8 bytes"
  * 0x07 is the MMU.
  */
 #define status_$fault_access_violation      0x00120011  /* "access violation" */
+/* "cleanup handler set" (SR10.4 stcodes 120035): the value PFM_$CLEANUP
+ * returns on its initial (non-fault) return.  Single definition; acl/, ec/
+ * and proc2/ used to carry copies. */
+#define status_$cleanup_handler_set         0x00120035
 #define status_$fault_bus_time_out          0x0012000C  /* "bus time-out" */
 #define status_$fault_process_quit          0x00120010  /* "process quit" */
-#define status_$mmu_ptt_parity_error        0x00070004  /* "ptt parity error" */
-#define status_$mmu_pft_parity_error        0x00070005  /* "pft parity error" */
-#define status_$mmu_timeout                 0x00070006  /* "mmu timeout" */
 
 #endif /* FIM_H */

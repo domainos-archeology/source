@@ -28,7 +28,6 @@
 #include "file/file.h"
 
 /* Status code for name not found */
-#define status_$naming_name_not_found 0x000e0007
 
 /* `move.w #0x2,-(SP)` at 0x00E300D0 - the AST_$GET_COMMON_ATTRIBUTES
  * selector LOG_$INIT uses. */

@@ -184,7 +184,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
                 (uint32_t *)&dir_$old_add_baku_rights_00e56946,
                 (int16_t *)&dir_$old_add_baku_acl_opts_00e5472e, status_ret);
     if (*status_ret != status_$ok) {
-        if (*status_ret == status_$wrong_type) {
+        if (*status_ret == status_$file_object_not_found) {
             *status_ret = status_$naming_branch_is_not_a_directory;
         } else {
             NAME_CONVERT_ACL_STATUS(status_ret);
@@ -230,7 +230,7 @@ void DIR_$OLD_ADD_BAKU(uid_t *dir_uid, char *name, uint16_t *name_len,
                     (int16_t *)&dir_$old_add_baku_acl_opts_00e5472e,
                     status_ret);
         if (*status_ret != status_$ok) {
-            if (*status_ret == status_$wrong_type) {
+            if (*status_ret == status_$file_object_not_found) {
                 *status_ret = status_$naming_branch_is_not_a_directory;
             } else {
                 NAME_CONVERT_ACL_STATUS(status_ret);

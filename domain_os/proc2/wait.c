@@ -32,7 +32,6 @@
 
 /* Status codes */
 #define status_$proc2_wait_found_no_children    0x0019000D
-#define status_$ec2_async_fault_while_waiting   0x00180003
 
 /*
  * Raw memory access macros for wait-related fields

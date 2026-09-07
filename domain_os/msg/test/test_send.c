@@ -360,7 +360,7 @@ TEST(template_too_long_allocates_nothing)
     MSG_$$SEND(-1, 0, TEST_REMOTE, 0, -1, TEST_NODE_ME, 0, &caller_info, 0,
                template_buf, 0x201, payload_buf, 0, &out_info, &out_status);
 
-    ASSERT_EQ(status_$network_message_header_too_big, out_status);
+    ASSERT_EQ(status_$network_msg_header_too_big, out_status);
     ASSERT_EQ(0, get_hdr_calls);
     ASSERT_EQ(0, bld_calls);
     ASSERT_EQ(0, rtn_hdr_calls);

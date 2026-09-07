@@ -57,10 +57,6 @@
 /*
  * Additional status codes used by VOLX
  */
-#define status_$disk_already_mounted 0x0008001e
-#define status_$storage_module_stopped 0x0008001b
-#define status_$directory_is_full 0x000e0002
-#define status_$name_already_exists 0x000e0003
 
 /*
  * VOLX table entry structure

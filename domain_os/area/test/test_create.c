@@ -691,7 +691,7 @@ TEST(create_from_reuses_existing_chain)
  * ORIGINAL BUG, reproduced deliberately (0x00E07AC4 .. 0x00E07B44).
  *
  * When the hash-record pool is exhausted the area just created is deleted,
- * status_$area_no_uid is reported, and the function returns the LOW WORD OF
+ * status_$area_no_free_resources is reported, and the function returns the LOW WORD OF
  * THE REMOTE UID because D2 was never overwritten with the area id.
  */
 TEST(create_from_pool_exhausted_returns_remote_uid_low_word)
@@ -704,7 +704,7 @@ TEST(create_from_pool_exhausted_returns_remote_uid_low_word)
 
     id = AREA_$CREATE_FROM(0xAABBCCDD, 0x8000, 0, 0x777, &status);
 
-    ASSERT_EQ(status_$area_no_uid, status);
+    ASSERT_EQ(status_$area_no_free_resources, status);
     /* The faithful, buggy result: 0xCCDD, not the area id 1. */
     ASSERT_EQ(0xCCDD, id);
     ASSERT_EQ(1, internal_delete_calls);

@@ -62,3 +62,31 @@ See [[feedback_shared_worktree]]: other agents edit the same tree, so gate a
 link-order change against `git archive HEAD` plus your own files copied over it,
 built in a scratch directory - otherwise their in-flight compile errors mask
 your result.
+
+## Byte-displacement reach: ordering by object, not by subsystem
+
+A whole-subsystem gather (`*/ec/*.o(.text)`) takes objects in the linker
+command line's order, which is the Makefile's: every `<sub>/*.c` object, then
+every `<sub>/sau2/*.s` object.  That is enough for PC16 reach but never for
+PC8.  For an `R_68K_PC8` (`bsr.b`) the two objects must be *adjacent*, so spell
+the head of the run out object by object in the map's symbol order and leave
+the whole-subsystem gathers after it as a catch-all.  Cross-subsystem
+interleaving in the map is fine to reproduce this way (PROC1_ASM has
+`proc1/remove_ready.o` sitting between `ec/waitn.o` and `ec/sau2/advance.o`).
+
+Two things stop a linked displacement from matching the image exactly even
+when the ordering is right:
+
+- **gas gives every `.s` `.text` section 2**2 alignment** (objdump -h shows
+  `Algn 2**2`), so an object whose image size is 2-mod-4 is followed by a
+  2-byte pad.  Nothing in the `.s` requests it; it is the default.
+- **A fall-through entry that is missing from the tree.**  Several image
+  routines have a tiny C-callable head that loads a register argument and
+  falls through into the register-argument body, e.g. `ADVANCE` at 0xE20728
+  (`20 6f 00 04`, movea.l (4,%sp),%a0) falling into `ADVANCE_INT` 0xE2072C.
+  If only the body was emitted, every branch aimed at the body links short by
+  the head's size.
+
+Verify with `m68k-elf-objcopy -O binary -j .text <obj>` against `gsk read`:
+the object bytes should differ from the image only in relocated displacement
+fields, and the `.text` size should equal the map's symbol-to-symbol span.

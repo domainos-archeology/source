@@ -550,7 +550,7 @@ _Static_assert(sizeof(xns_$idp_send_t) == 0x48, "xns_$idp_send_t must be 0x48 by
 #define status_$xns_network_unreachable              0x3B0013  /* network unreachable */
 #define status_$xns_illegal_os_socket                0x3B0014  /* illegal OS socket */
 #define status_$xns_version_mismatch                 0x3B0015  /* invalid version number */
-#define status_$xns_packet_dropped                   0x3B0016  /* could not put packet into socket */
+#define status_$xns_could_not_put_packet_into_socket  0x3B0016  /* could not put packet into socket */
 #define status_$xns_no_buffer_size                   0x3B0017  /* no OS socket depth given */
 #define status_$xns_incompatible_flags               0x3B0018  /* cannot send only as well as listen */
 #define status_$xns_incompatible_flags2              0x3B0019  /* cannot send only as well as connect */

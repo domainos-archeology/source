@@ -40,7 +40,6 @@
  * =============================================================================
  */
 
-#define status_$route_no_idp_channel        0x2B0001    /* IDP channel not initialized */
 #define status_$route_invalid_port_status   0x2B0006    /* Invalid port status value */
 /* 0x2B0009 is status_$route_illegal_op_for_port_type in route/route.h. */
 #define status_$route_must_have_network     0x2B0011    /* Port must have network address */
@@ -469,7 +468,7 @@ void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
                 ((1 << (old_status & 0x1f)) & PORT_STATUS_DISABLE_STD) != 0 &&
                 ((1 << (request->status & 0x1f)) & PORT_STATUS_ROUTING_MASK) != 0) {
                 if (RIP_$STD_IDP_CHANNEL == -1) {
-                    *status_ret = status_$route_no_idp_channel;
+                    *status_ret = status_$internet_network_port_not_open;
                 } else {
                     ROUTE_$INIT_ROUTING(port_index, 0xFF);  /* STD routing */
                 }

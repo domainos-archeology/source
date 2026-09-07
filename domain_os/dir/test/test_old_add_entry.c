@@ -49,17 +49,8 @@ static int tests_failed = 0;
     } \
 } while(0)
 
-/* Provide the Apollo uid_t type */
-typedef struct {
-    uint32_t high;
-    uint32_t low;
-} uid_t;
-
-/* Provide status_$t */
-typedef uint32_t status_$t;
-#define status_$ok                  0
-#define status_$name_already_exists 0xE0003
-#define status_$directory_is_full   0xE0002
+/* status_$t, status_$ok, status_$name_already_exists, status_$directory_is_full */
+#include "name/name.h"
 
 /*
  * Use uintptr_t for handle to allow testing on 64-bit hosts.

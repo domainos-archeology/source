@@ -27,8 +27,6 @@
 #include "ec/ec.h"
 
 /* Status codes (status_$tty_buffer_full / status_$tty_eof come from base/base.h) */
-#define status_$tty_quit           0x350007
-#define status_$tty_overflow       0x350009
 
 /* tty_$i_wait declared in tty/tty_internal.h */
 
@@ -209,7 +207,7 @@ update_read_pos:
             *status_ret = ((status_$t (*)(short))tty->status_handler)(
                 (short)tty->line_id);
         } else if ((*(uint8_t *)((char *)tty + 0x0b) & TTY_ERR_OVERFLOW) != 0) {
-            *status_ret = status_$tty_overflow;
+            *status_ret = status_$tty_input_buffer_overrun;
         }
         tty->pending_signal = 0;
     }

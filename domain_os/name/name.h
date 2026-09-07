@@ -52,13 +52,14 @@ typedef enum {
  * at every call site (dir/do_op.c, dir/get_entry_cached.c, dir/lock_obj.c,
  * rem_file/server.c).
  *
- * Codes this port has never needed and therefore does not define: 0x000E0002,
- * 0x000E0003, 0x000E000C, 0x000E0010 ("name is not a file"), 0x000E0013,
+ * Codes this port has never needed and therefore does not define: 0x000E000C, 0x000E0010 ("name is not a file"), 0x000E0013,
  * 0x000E0015, 0x000E0017, 0x000E0018, 0x000E001B, 0x000E0021, 0x000E0024,
  * 0x000E0026..0x000E002A, 0x000E002C, 0x000E0034 ("ran out of address
  * space"), 0x000E0035.  Add them from the database, never by guessing.
  * ============================================================================
  */
+#define status_$directory_is_full                           0x000e0002  /* directory is full */
+#define status_$name_already_exists                         0x000e0003  /* name already exists */
 #define status_$naming_invalid_pathname                     0x000e0004  /* invalid pathname */
 #define status_$naming_invalid_link                         0x000e0005  /* invalid link */
 #define status_$naming_not_a_link                           0x000e0006  /* not a link */
@@ -80,8 +81,8 @@ typedef enum {
 #define status_$naming_cant_find_name_server_helper         0x000e001e  /* cant find name server helper */
 #define status_$naming_directory_must_be_root               0x000e001f  /* directory must be root */
 #define status_$naming_directory_not_found_in_pathname      0x000e0020  /* directory not found in pathname */
-#define status_$naming_entry_stale                          0x000e0022  /* cache entry is stale */
-#define status_$naming_entry_repaired                       0x000e0023  /* cache entry was stale and was updated */
+#define status_$naming_cache_entry_stale                    0x000e0022  /* cache entry is stale */
+#define status_$naming_cache_entry_stale_and_updated        0x000e0023  /* cache entry was stale and was updated */
 #define status_$naming_internal_error                       0x000e0025  /* internal error */
 #define status_$naming_directory_not_local                  0x000e002b  /* directory not local */
 #define status_$naming_leaf_truncated                       0x000e002d  /* leaf truncated */
@@ -568,19 +569,10 @@ boolean NAMEQ(char *str1, uint16_t *len1, char *str2, uint16_t *len2);
  * ============================================================================ */
 
 /*
- * REM_NAME_SERVER_LOCAL - Check if naming server is on local node
- *
- * Returns:
- *   true (0xFF) if local server, false (0) if remote
- *
- * Original address: 0x00e4a408
- */
-boolean REM_NAME_SERVER_LOCAL(void);
-
-/*
- * The REM_NAME_$* prototypes moved to rem_name/rem_name.h, the public header
- * of the REM_NAME module (SAU2 map, I 0xE4A408 size 0xB20) -- bead source-3uo.
- * Their bodies are still in name/rem_name.c.
+ * The REM_NAME entry points -- REM_NAME_SERVER_LOCAL and the REM_NAME_$*
+ * prototypes -- are declared by the public header of the REM_NAME module
+ * (SAU2 map, I 0xE4A408 size 0xB20), not here: beads source-3uo (the
+ * prototypes) and source-ev4k (the bodies and the module data).
  */
 
 /*

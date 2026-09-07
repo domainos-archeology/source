@@ -34,9 +34,6 @@
  * mount entry.  volx/volx.h also spells this out for VOLX_$MOUNT; the
  * guard keeps the two from clashing.
  */
-#ifndef status_$directory_is_full
-#define status_$directory_is_full 0x000e0002
-#endif
 
 /* Maximum pathname/leaf name lengths */
 #define DIR_MAX_LEAF_LEN    255     /* Maximum leaf (filename) length */

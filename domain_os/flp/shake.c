@@ -18,8 +18,6 @@
 #include "flp/flp_internal.h"
 
 /* Status codes */
-#define status_$disk_controller_timeout  0x00080003
-#define status_$disk_controller_error    0x00080004
 
 /*
  * SHAKE - Handshake data with controller

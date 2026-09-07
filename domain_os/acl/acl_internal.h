@@ -21,18 +21,13 @@
  * Status Codes
  * ============================================================================
  */
-#define status_$no_right_to_perform_operation   0x00230001
-#define status_$insufficient_rights_to_perform_operation 0x00230002
 /* "wrong type - operation illegal on system objects" (stcode 230004) */
-#define status_$acl_wrong_type                  0x00230004
 /* "no right to set subsystem data or subsystem manager" (stcode 230010) */
-#define status_$acl_no_right_to_set_subsystem   0x00230010
 /* "ACL object not found" (stcode 23000d) */
 #define status_$acl_object_not_found            0x0023000d
 #define status_$project_list_is_full            0x00230011
 #define status_$acl_proj_list_too_big           0x00230012
 #define status_$image_buffer_too_small          0x0023000c
-#define status_$cleanup_handler_set             0x00120035
 
 /*
  * ============================================================================

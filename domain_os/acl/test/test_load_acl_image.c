@@ -42,6 +42,7 @@ static int current_failed = 0;
 
 #include "acl/acl_internal.h"
 #include "mst/mst.h"      /* status_$mst_object_not_found */
+#include "fim/fim.h"      /* status_$cleanup_handler_set (0x00120035) */
 
 /* ------------------------------------------------------------------ */
 /* Globals the module owns                                              */

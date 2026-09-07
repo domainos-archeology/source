@@ -15,8 +15,6 @@
 #include "flp/flp_internal.h"
 
 /* Status codes */
-#define status_$disk_controller_busy    0x00080002
-#define status_$storage_module_stopped  0x0008001b
 
 /* Retry marker */
 #define FLP_RETRY_NEEDED               0x0008ffff

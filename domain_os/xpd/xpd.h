@@ -30,6 +30,7 @@
 #include "ec/ec.h"
 #include "ml/ml.h"
 #include "proc1/proc1.h"
+#include "mst/mst.h"     /* status_$mst_guard_fault (0x0004000a) */
 #include "proc2/proc2.h"
 
 /*
@@ -62,7 +63,6 @@ typedef uint16_t xpd_$response_t;
 #define status_$xpd_invalid_ec_key 0x0016000C
 #define status_$xpd_state_unavailable_for_this_event 0x0016000E
 #define status_$xpd_invalid_option 0x0016000F
-#define status_$xpd_proc_not_debug_target 0x00190010
 #define status_$xpd_illegal_target_setup 0x00160011
 #define status_$xpd_invalid_state_argument 0x00160003
 
@@ -76,7 +76,6 @@ typedef uint16_t xpd_$response_t;
 #define status_$xpd_target_is_loading_exec_image 0x00160016
 #define status_$fault_single_step_completed 0x00120015
 #define status_$fault_process_BLAST 0x00120019
-#define status_$mst_guard_fault 0x0004000a
 
 /*
  * Ptrace options structure

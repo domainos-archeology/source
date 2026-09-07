@@ -317,7 +317,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
         }
 
         XNS_PACKETS_DROP() += 1;                        /* 0x00E18710 */
-        *status_ret = status_$xns_packet_dropped;       /* 0x00E18716 */
+        *status_ret = status_$xns_could_not_put_packet_into_socket;       /* 0x00E18716 */
         goto done;
     }
 
@@ -426,7 +426,7 @@ void XNS_IDP_$DEMUX(xns_$pkt_desc_t *rec, uint16_t *port_type,
     }
 
     XNS_PACKETS_DROP() += 1;                    /* 0x00E18C4A */
-    *status_ret = status_$xns_packet_dropped;   /* 0x00E18C4E */
+    *status_ret = status_$xns_could_not_put_packet_into_socket;   /* 0x00E18C4E */
 
 done:
     /* 0x00E18C54: shared movem/unlk/rts epilogue. */

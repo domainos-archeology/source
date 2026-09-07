@@ -19,7 +19,6 @@
 #include "proc2/proc2_internal.h"
 
 /* Status codes */
-#define status_$proc2_proc_not_debug_target     0x00190010
 
 void PROC2_$UNDEBUG(uid_t *proc_uid, status_$t *status_ret)
 {

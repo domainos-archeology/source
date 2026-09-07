@@ -1137,13 +1137,7 @@ extern status_$t Bad_request_header_version_err;
  * name/name.h about status_$naming_object_is_not_an_acl_object and were
  * silently overridden by it (source-pp31).
  */
-#ifndef status_$wrong_type
-#define status_$wrong_type                          0x000F0001
-#endif
 /* status_$directory_is_full now lives in dir/dir.h */
-#ifndef status_$name_already_exists
-#define status_$name_already_exists                  0x000E0003
-#endif
 /* status_$no_right_to_perform_operation / 
  * status_$insufficient_rights_to_perform_operation are module-0x23 (ACL)
  * codes and are defined once in acl/acl.h, included above (bead source-3uo). */

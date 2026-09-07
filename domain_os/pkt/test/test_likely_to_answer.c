@@ -543,12 +543,12 @@ TEST(send_failure_aborts_immediately)
     status_$t status = status_$ok;
 
     reset_state();
-    send_status = status_$network_message_header_too_big;
+    send_status = status_$network_msg_header_too_big;
 
     ASSERT_EQ(0, PKT_$LIKELY_TO_ANSWER(&addr, &status));
     ASSERT_EQ(1, send_calls);
     ASSERT_EQ(0, ec_wait_calls);
-    ASSERT_EQ(status_$network_message_header_too_big, status);
+    ASSERT_EQ(status_$network_msg_header_too_big, status);
     ASSERT_EQ(1, sock_close_calls);
     ASSERT_EQ(1, note_visible_calls);
 }

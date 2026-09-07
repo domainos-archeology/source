@@ -17,7 +17,6 @@
 #include "time/time_internal.h"
 
 /* Status code for bad key */
-#define status_$time_bad_key 0x000D0005
 
 /* Cached EC pointers (lazily initialized) */
 static void *time_clock_ec = NULL;
@@ -49,7 +48,7 @@ void TIME_$GET_EC(uint16_t *ec_id, void **ec_ret, status_$t *status)
             *ec_ret = time_fast_clock_ec;
             break;
         default:
-            *status = status_$time_bad_key;
+            *status = status_$time_bad_timer_key;
             break;
     }
 }

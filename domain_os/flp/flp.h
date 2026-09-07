@@ -18,6 +18,7 @@
 #include "parity/parity.h"
 #include "wp/wp.h"
 #include "dma/dma.h"   /* DMA_$CHECK */
+#include "io/io.h"   /* status_$io_controller_not_in_system */
 
 /*
  * Maximum number of floppy units supported
@@ -27,9 +28,6 @@
 /*
  * Floppy status codes
  */
-#define status_$io_controller_not_in_system 0x00100002
-#define status_$disk_controller_error 0x00080004
-#define status_$invalid_unit_number 0x00080018
 
 /*
  * Floppy controller registers structure

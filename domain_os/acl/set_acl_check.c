@@ -273,7 +273,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
     }
 
     /* From here on the refusal reason is "no right to set subsystem data". */
-    result_status = status_$acl_no_right_to_set_subsystem;
+    result_status = status_$acl_no_right_to_set_subsystem_data;
 
     if (acl_$uid_eq(&attrs1.default_acl, &UID_$NIL) >= 0 &&
         acl_$uid_eq(&attrs2.default_acl, &UID_$NIL) >= 0) {
@@ -290,7 +290,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
             goto unlock_and_store;
         }
 
-        result_status = status_$acl_no_right_to_set_subsystem;
+        result_status = status_$acl_no_right_to_set_subsystem_data;
         sid_row = &ACL_$CURRENT_SIDS[PROC1_$CURRENT];
 
         /* 0x00E4747E-0x00E474E4: the subsystem manager may change hands only

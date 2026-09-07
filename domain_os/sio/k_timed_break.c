@@ -12,7 +12,7 @@
  * 4. Disable break
  *
  * If the quit signal is received during the wait, the function returns
- * status_$tty_quit_signalled and restores the quit value.
+ * status_$tty_quit_while_waiting_for_input and restores the quit value.
  *
  * Original address: 0x00e67ee0
  */
@@ -78,7 +78,7 @@ void SIO_$K_TIMED_BREAK(int16_t *line_ptr, uint16_t *duration_ptr,
          * Quit signal received - return quit status and
          * restore quit value to avoid re-triggering
          */
-        *status_ret = status_$tty_quit_signalled;
+        *status_ret = status_$tty_quit_while_waiting_for_input;
         FIM_$QUIT_VALUE[as_id] = FIM_$QUIT_EC[as_id].value;
     }
 

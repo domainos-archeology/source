@@ -21,6 +21,7 @@
 #include "disk/disk.h"
 #include "parity/parity.h"
 #include "misc/crash_system.h"
+#include "io/io.h"   /* status_$io_controller_not_in_system */
 
 /*
  * WIN data area base at 0xe2b89c.
@@ -150,17 +151,9 @@ _Static_assert(__builtin_offsetof(win_stats_t, dma_overrun) == 0x16, "win_stats_
 /*
  * Status codes
  */
-#define status_$io_controller_not_in_system 0x00100002
-#define status_$disk_not_ready 0x00080001
-#define status_$disk_controller_busy 0x00080002
-#define status_$disk_controller_timeout 0x00080003
-#define status_$disk_equipment_check 0x00080005
-#define status_$disk_data_check 0x00080009
-#define status_$DMA_overrun 0x0008000a
 #define status_$disk_seek_error 0x00080015
 #define status_$unknown_error_status_from_drive 0x00080023
 #define status_$unrecognized_drive_id 0x00080024
-#define status_$memory_parity_error_during_disk_write 0x00080025
 
 /*
  * Global data

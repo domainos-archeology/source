@@ -15,7 +15,6 @@
 #include "proc2/proc2_internal.h"
 
 /* Expected status from FIM_$CLEANUP */
-#define status_$cleanup_handler_set 0x00120035
 
 void PROC2_$LIST_PGROUP(uid_t *pgroup_uid, uid_t *uid_list, uint16_t *max_count, uint16_t *count)
 {

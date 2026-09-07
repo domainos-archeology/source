@@ -18,11 +18,11 @@
 #define SCSI_H
 
 #include "base/base.h"
+#include "io/io.h"   /* status_$io_controller_not_in_system */
 
 /*
  * Status codes used by SCSI subsystem
  */
-#define status_$io_controller_not_in_system 0x00100002
 
 /*
  * SCSI_$CINIT - Controller initialization

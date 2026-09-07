@@ -188,7 +188,7 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
                     } else {
                         /* Clear high bit and check for wrong_type */
                         *status_ret &= 0x7FFFFFFF;
-                        if (*status_ret != status_$wrong_type) {
+                        if (*status_ret != status_$file_object_not_found) {
                             NAME_CONVERT_ACL_STATUS(status_ret);
                             goto done;
                         }

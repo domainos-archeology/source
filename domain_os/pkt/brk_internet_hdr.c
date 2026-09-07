@@ -104,7 +104,7 @@ void PKT_$BRK_INTERNET_HDR(pkt_$hdr_t *hdr, uint16_t hdr_len,
     template_off = (uint32_t)(uint16_t)(hdr->hdr_size + 0x1F);
 
     if (template_off + (uint32_t)*data_len >= PKT_MAX_HEADER) {
-        *status_ret = status_$network_header_plus_data_too_big;   /* 0x00E1245E */
+        *status_ret = status_$network_header_data_length_exceeds_max;   /* 0x00E1245E */
         return;
     }
 

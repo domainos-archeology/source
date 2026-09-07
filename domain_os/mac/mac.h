@@ -26,6 +26,7 @@
 
 #include "base/base.h"
 #include "mac_os/mac_os.h"
+#include "route/route.h"   /* status_$internet_network_port_not_open (0x2B0001) */
 
 /*
  * ============================================================================
@@ -56,14 +57,10 @@
 #define status_$mac_no_socket_allocated 0x3a0009
 #define status_$mac_no_packet_available_to_receive 0x3a000a
 #define status_$mac_received_packet_too_big 0x3a000b
-#define status_$mac_illegal_buffer_spec 0x3a000c
-#define status_$mac_XXX_unknown 0x3a000f
 #define status_$mac_failed_to_put_packet_into_socket 0x3a0010
 #define status_$mac_invalid_port 0x3a0011
 #define status_$mac_invalid_packet_type_count 0x3a0012
 
-/* Internet status code used by MAC */
-#define status_$internet_network_port_not_open 0x2b0001
 
 /*
  * ============================================================================

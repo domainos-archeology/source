@@ -69,15 +69,7 @@ typedef int32_t status_$t;   /* 32-bit on m68k; keep it 32-bit on 64-bit hosts s
 #define status_$requested_line_or_operation_not_implemented 0x000b000d
 #define status_$term_invalid_option 0x000b0004
 
-// TTY status codes (module 0x35)
-#define status_$tty_access_denied 0x00350001
-#define status_$tty_invalid_function 0x00350002
-#define status_$tty_buffer_full 0x00350004
-#define status_$tty_eof 0x00350005
-#define status_$tty_invalid_count 0x00350006
-#define status_$tty_quit_signalled 0x00350007
-#define status_$tty_hangup 0x00350009
-#define status_$tty_would_block 0x0035000a
+// TTY status codes (module 0x35) live in tty/tty.h, their owning module.
 
 // =============================================================================
 // m68k pointer type

@@ -64,7 +64,7 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
         if (*(int8_t *)((char *)aote + 0x71) < 0) {
             /* Special access checking */
             if (*(int16_t *)((char *)PROC1_$TYPE + (int16_t)(PROC1_$CURRENT * 2)) == 8) {
-                *status = status_$os_only_local_access_allowed;
+                *status = status_$ast_only_local_access_allowed;
                 return 0;
             }
         }

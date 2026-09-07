@@ -347,7 +347,7 @@ uint16_t AREA_$CREATE_FROM(uint32_t remote_uid, uint32_t virt_size,
                 /*
                  * 0x00E07AC4: the pool is exhausted.  The area just created
                  * is deleted (do_unlink false, `clr.w -(SP)`) and
-                 * status_$area_no_uid is reported.
+                 * status_$area_no_free_resources is reported.
                  *
                  * ORIGINAL BUG (0x00E07AEC -> 0x00E07B38 -> 0x00E07B44):
                  * this path branches straight to the epilogue without doing
@@ -359,7 +359,7 @@ uint16_t AREA_$CREATE_FROM(uint32_t remote_uid, uint32_t virt_size,
                  */
                 area_$internal_delete(AREA_ID_TO_ENTRY(area_id), (int16_t)area_id,
                                       status_p, false);
-                *status_p = status_$area_no_uid;
+                *status_p = status_$area_no_free_resources;
                 ML_$UNLOCK(ML_LOCK_AREA);
                 return (uint16_t)d2_result;
             }

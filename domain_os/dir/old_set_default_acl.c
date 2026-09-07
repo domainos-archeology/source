@@ -190,7 +190,7 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
         *status_ret = file_$objects_on_different_volumes;
         return;
     }
-    if (*status_ret != status_$wrong_type) {
+    if (*status_ret != status_$file_object_not_found) {
         /* Error - set high bit */
         *status_ret |= 0x80000000;  /* or.b #0x80 into the first (MSB) byte on m68k */
         return;

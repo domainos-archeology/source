@@ -21,7 +21,6 @@
 #include "ml/ml.h"
 
 /* Status code for invalid buffer size */
-#define status_$display_invalid_buffer_size     0x0013000C
 
 /* Request queue event counts SMD_REQUEST_EC_WAIT / SMD_REQUEST_EC_SIGNAL are
  * declared in smd/smd_internal.h */

@@ -44,7 +44,6 @@
 #define PACCT_BUFFER_SIZE       0x8000  /* 32KB mapping */
 
 /* Status codes */
-#define status_$no_rights                               0x000F0010
 /* status_$insufficient_rights_to_perform_operation is a module-0x23 code
  * defined in acl/acl.h (included above -- bead source-3uo). */
 

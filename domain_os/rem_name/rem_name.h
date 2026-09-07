@@ -1,9 +1,9 @@
 /*
  * rem_name/rem_name.h - Remote Naming Service Functions
  *
- * This header provides the remote naming service API.
- * The actual functions are declared in name/name.h, this is a
- * convenience header for backward compatibility.
+ * Public header of the REM_NAME module (SAU2 map, I 0xE4A408 size 0xB20,
+ * D 0xE7DBB8 size 0x40): the entry points other subsystems call.  The
+ * module's internal types and helpers are in rem_name/rem_name_internal.h.
  */
 
 #ifndef REM_NAME_H
@@ -12,9 +12,9 @@
 #include "name/name.h"
 
 /*
- * The REM_NAME_$* entry points of the REM_NAME module (SAU2 map, I 0xE4A408
- * size 0xB20).  Their bodies are still in name/rem_name.c; the declarations
- * moved here from name/name.h (bead source-3uo).
+ * The REM_NAME_$* entry points of the REM_NAME module.  The declarations
+ * moved here from name/name.h (bead source-3uo); the bodies moved from
+ * name/rem_name.c to rem_name/, one file per function (bead source-ev4k).
  *
  * REM_NAME_$REGISTER_SERVER (0xE4A4AE) takes no parameters; its callers in
  * rip/server.c push two ignored arguments.
@@ -23,6 +23,18 @@
  * 1. Low-level functions that take explicit net/node parameters
  * 2. High-level wrappers that auto-locate a server and retry on failure
  */
+
+/*
+ * REM_NAME_SERVER_LOCAL - Check if naming server is on local node
+ *
+ * The one REM_NAME entry point whose name carries no `$'.
+ *
+ * Returns:
+ *   true (0xFF) if local server, false (0) if remote
+ *
+ * Original address: 0x00e4a408
+ */
+boolean REM_NAME_SERVER_LOCAL(void);
 
 /*
  * REM_NAME_$REGISTER_SERVER - Register contact with naming server

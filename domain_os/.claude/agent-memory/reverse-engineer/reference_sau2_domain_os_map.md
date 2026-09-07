@@ -80,3 +80,10 @@ Two traps worth remembering:
   `AS_ASM` segment is 0x64) and `E2B970 AS_$INFO_SIZE`.
 
 See [[sau2-map-name-corrections]] for the address-by-address table.
+
+**A `D` segment size is the allocation, not `sizeof` the record.**  The map
+rounds it up to a longword, while m68k gcc aligns `uint32_t` on 2 bytes, so an
+`_Static_assert(sizeof(rec) == <map size>)` can fail on a perfectly correct
+layout.  `REM_NAME` (D E7DBB8 size = 40) ends at its boolean at +0x3C, i.e. a
+0x3E-byte record in a 0x40-byte segment.  Assert `sizeof(rec) <= <map size>`
+plus the offset of the last field instead (bead source-ev4k).

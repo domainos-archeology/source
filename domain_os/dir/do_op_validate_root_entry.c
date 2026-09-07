@@ -33,10 +33,8 @@
 #include "dir/dir_internal.h"
 
 #ifndef status_$naming_cache_entry_stale
-#define status_$naming_cache_entry_stale               0x000E0022
 #endif
 #ifndef status_$naming_cache_entry_stale_and_updated
-#define status_$naming_cache_entry_stale_and_updated    0x000E0023
 #endif
 
 void dir_$do_op_validate_root_entry(void *name, uint16_t name_len,

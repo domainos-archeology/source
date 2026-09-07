@@ -490,7 +490,7 @@ TEST(template_length_tests)
     ASSERT_EQ(0, copy_calls);
     /* 4 + 0x8000 + 0x1E, truncated to a word, is still stored in the header */
     ASSERT_EQ((uint16_t)(0x8000 + 4 + 0x1E), hdr->total_len);
-    ASSERT_EQ(status_$network_message_header_too_big, out_status);
+    ASSERT_EQ(status_$network_msg_header_too_big, out_status);
 
     reset_state();
     info.routing_type = PKT_ROUTING_LOCAL;
@@ -512,7 +512,7 @@ TEST(total_length_cap)
     reset_state();
     info.routing_type = PKT_ROUTING_LOCAL;
     call_bld(0x3B8 - 0x22, 0, -1);              /* exactly 0x3B8 */
-    ASSERT_EQ(status_$network_header_plus_data_too_big, out_status);
+    ASSERT_EQ(status_$network_header_data_length_exceeds_max, out_status);
     ASSERT_EQ(0x3B8, out_len);                  /* written before the 2nd cap */
     ASSERT_EQ(0, copy_calls);
 
@@ -520,7 +520,7 @@ TEST(total_length_cap)
     info.routing_type = PKT_ROUTING_LOCAL;
     out_len = 0xBEEF;
     call_bld(0x3B8 - 0x21, 0, -1);              /* 0x3B9 */
-    ASSERT_EQ(status_$network_message_header_too_big, out_status);
+    ASSERT_EQ(status_$network_msg_header_too_big, out_status);
     ASSERT_EQ(0xBEEF, out_len);                 /* len_out is not written */
     ASSERT_EQ(0, copy_calls);
     ASSERT_EQ(0, out_retry);                    /* nor the retry / timeout */
@@ -542,7 +542,7 @@ TEST(template_offset_cap)
     reset_state();
     info.routing_type = PKT_ROUTING_LOCAL;
     call_bld(0x395, 0, -1);
-    ASSERT_EQ(status_$network_header_plus_data_too_big, out_status);
+    ASSERT_EQ(status_$network_header_data_length_exceeds_max, out_status);
     ASSERT_EQ(0, copy_calls);
     ASSERT_EQ(0, out_retry);
 }

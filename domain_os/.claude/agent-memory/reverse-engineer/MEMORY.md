@@ -61,3 +61,4 @@
 - [8-bit branches across objects](short-branch-across-objects.md) — gas keeps `bsr.b`, the linker cannot; emit the image `.short` literal instead.
 - [Header ownership follows the map segment](header-ownership-rule.md) — the SAU2 module, not the name prefix, decides which `<sub>/<sub>.h` a declaration belongs in.
 - [Header-hygiene gates](gate-scripts-header-hygiene.md) — the two scans, why ugrep lies about `\$`, and why a clean rebuild is mandatory after moving includes.
+- [The MEM_ module block at 0xE22930](mem-module-block.md) — 1-based board counts at +0x0A/+0x0C, page id is bits 21..16, MEM_$MEM_REC is 0x56 bytes.

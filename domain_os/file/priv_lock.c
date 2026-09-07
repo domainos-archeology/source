@@ -439,7 +439,7 @@ remote_done:                                            /* 0x00E5FA50 */
                             (FILE_ATTR_OBJ_TYPE(f.attrs) == 2)) {
                             *status_ret = status_$naming_vol_mounted_read_only;
                         } else {
-                            *status_ret = file_$vol_mounted_read_only;
+                            *status_ret = status_$file_volume_has_been_mounted_read_only;
                         }
                         goto retry_on_in_use;
                     }
@@ -636,7 +636,7 @@ remote_done:                                            /* 0x00E5FA50 */
     if (((int8_t)entry->flags1 < 0) &&
         ((entry->flags2 & FILE_LOCK_F2_REMOTE) == 0) &&
         ((FILE_$LOCK_COMPAT_TABLE[lock_mode] & 0x0002) != 0)) {
-        *status_ret = file_$vol_mounted_read_only;
+        *status_ret = status_$file_volume_has_been_mounted_read_only;
         goto free_and_unlock;
     }
 

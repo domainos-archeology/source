@@ -30,6 +30,7 @@
 #define NETBUF_H
 
 #include "base/base.h"
+#include "network/network.h"   /* status_$network_out_of_blocks (0x00110003) */
 
 /* Maximum number of VA slots */
 #define NETBUF_VA_SLOTS         192     /* 0xC0 */
@@ -59,7 +60,6 @@
 #define NETBUF_HDR_EC_PARAM2    0x3e2
 
 /* Status codes */
-#define status_$network_out_of_blocks   0x00110003
 
 /*
  * ============================================================================

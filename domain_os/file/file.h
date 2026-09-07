@@ -157,25 +157,27 @@ _Static_assert(sizeof(file_$obj_loc_t)                == 0x20, "sizeof obj_loc")
 #define file_$objects_on_different_volumes         0x000F0013  /* Objects on different volumes */
 #define file_$invalid_arg                          0x000F0014  /* Invalid argument */
 #define file_$incompatible_request                 0x000F0015  /* Incompatible request */
-#define file_$invalid_type                         0x000F0016  /* Alias, see
-                                                                 file_$vol_mounted_read_only */
 /* "operation cannot be done from here".  Was 0x000F0018, which is not a code
  * the status database defines at all; FILE_$FORCE_UNLOCK stores it with
  * `move.l #0xf000b,(A2)` at 0x00E60DFE and name_$old_add_link with
  * `move.l #0xf000b,(-0xd0,A6)` at 0x00E568BC. */
 #define file_$op_cannot_perform_here               0x000F000B
-/* 0x000F0016: the file_$ flavour of "volume mounted read only".  Raised by
- * FILE_$PRIV_LOCK at 0x00E5F4D2 and 0x00E5F7E2 and by FILE_$PRIV_CREATE
- * (0x00E5C0xx) when the containing volume has bit 1 of its flags set. */
-#define file_$vol_mounted_read_only                0x000F0016
 /* The naming-server flavours FILE_$PRIV_LOCK raises - 0x000E0030 for objects
  * whose type byte says "directory" (0x00E5F7D4) and 0x000E000D for a
  * non-empty directory locked for delete (0x00E5F79A) - are declared once in
  * name/name.h, which file/file_internal.h includes. */
+/* "object not found" (SR10.4 stcodes f0001).  Single name for this code;
+ * dir/ used to spell it status_$wrong_type, os/ status_$special_passthrough
+ * and ast/ status_$ast_object_not_found. */
+#define status_$file_object_not_found              0x000F0001
+/* "volume has been mounted read-only" (SR10.4 stcodes f0016).  Single name for
+ * this code; it was also spelled file_$vol_mounted_read_only, file_$invalid_type
+ * (file/), status_$out_of_space (vtoc/) and status_$ast_object_special_attribute
+ * (ast/).  Raised by FILE_$PRIV_LOCK at 0x00E5F4D2 and 0x00E5F7E2 and by
+ * FILE_$PRIV_CREATE (0x00E5C0xx) when the volume has bit 1 of its flags set. */
+#define status_$file_volume_has_been_mounted_read_only 0x000F0016
 #define status_$insufficient_rights                0x000F0011  /* Insufficient rights */
-#ifndef status_$no_rights
 #define status_$no_rights                          0x000F0010  /* No rights at all */
-#endif
 
 /*
  * ============================================================================

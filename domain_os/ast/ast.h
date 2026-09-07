@@ -36,7 +36,9 @@
 #include "file/file.h"
 
 /* AST status codes (module 0x03) */
+#define status_$ast_segment_not_deactivatable 0x00030004  /* segment is not deactivatable */
 #define status_$ast_incompatible_request 0x00030006
+#define status_$ast_refcount_says_unused 0x00030007  /* reference count says unused */
 #define status_$ast_write_concurrency_violation 0x00030005
 #define status_$ast_eof 0x00030001
 
@@ -46,7 +48,7 @@
 #define status_$pmap_read_concurrency_violation 0x0005000A
 
 /* OS status codes (module 0x03) */
-#define status_$os_only_local_access_allowed 0x0003000A
+#define status_$ast_only_local_access_allowed 0x0003000A
 
 /*
  * Forward declarations

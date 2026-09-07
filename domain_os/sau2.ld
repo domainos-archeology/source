@@ -94,8 +94,28 @@ SECTIONS {
          * PROC1_$CURRENT is a code-segment cell here, not a Pascal A5 module
          * block, so it uses the source-a5t8 `.text.<name>' technique and is
          * deliberately not part of source-0i3's `.moddata.<name>' scheme.
+         *
+         * Within that run the branches to ADVANCE_INT (0xE2072C) are the
+         * image's 2-byte `bsr.b' (0xE206F6 61 34, 0xE20722 61 08), an
+         * R_68K_PC8 displacement with only +/-127 bytes of reach, so the
+         * objects holding EC_$ADVANCE / EC_$ADVANCE_WITHOUT_DISPATCH and
+         * ADVANCE_INT have to be adjacent.  The plain whole-subsystem ec
+         * gather takes objects in Makefile order - every ec C object first,
+         * then the ec/sau2 assembly objects - which puts ADVANCE_INT ~0xDD0
+         * bytes ahead of the branches and overflows both (source-mc3k).
+         * So the head of the run is spelled out object by object, in the
+         * order the SAU2 map gives for PROC1_ASM; the two whole-subsystem
+         * gathers below pick up whatever is left.
          */
-        *(.text.proc1_asm_data)
+        *(.text.proc1_asm_data)                     /* PROC1_$CURRENT       0xE20608 */
+        */ec/wait.o(.text)                          /* EC_$WAIT             0xE20610 */
+        */ec/waitn.o(.text)                         /* EC_$WAITN            0xE2063E */
+        */proc1/remove_ready.o(.text)               /* PROC1_$REMOVE_READY  0xE206D2 */
+        */ec/sau2/advance.o(.text)                  /* EC_$ADVANCE          0xE206EE */
+        */ec/sau2/advance_all.o(.text)              /* EC_$ADVANCE_ALL      0xE20702 */
+        */ec/sau2/advance_without_dispatch.o(.text) /* EC_$ADVANCE_WO_DISP  0xE20718 */
+        */ec/advance_int.o(.text)                   /* ADVANCE/ADVANCE_INT  0xE20728 */
+        */ec/advance_all_int.o(.text)               /* ADVANCE_ALL_INT      0xE207C6 */
         */ec/*.o(.text)
         */proc1/*.o(.text)
 

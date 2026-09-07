@@ -23,7 +23,7 @@
  * Status codes:
  *   status_$ok: Success
  *   status_$internet_unknown_network_port (0x2B0003): Port not found or wrong type
- *   status_$route_not_enabled (0x2B0001): Port not in routing mode
+ *   status_$internet_network_port_not_open (0x2B0001): Port not in routing mode
  *   status_$route_bad_packet_format (0x2B000D): Packet too small or malformed
  *   status_$route_checksum_error (0x2B000C): Packet checksum mismatch
  *
@@ -37,7 +37,6 @@
 #include "os/os.h"
 
 /* Status codes */
-#define status_$route_not_enabled       0x2B0001
 #define status_$route_bad_packet_format 0x2B000D
 #define status_$route_checksum_error    0x2B000C
 
@@ -112,7 +111,7 @@ void ROUTE_$INCOMING(void *port_info, uint8_t *packet_data, uint16_t *length_ptr
 
     if (((1 << (port->active & 0x1f)) & PORT_STATE_ROUTING_MASK) != 0 ||
         port->port_type != ROUTE_PORT_TYPE_ROUTING) {
-        *status_ret = status_$route_not_enabled;
+        *status_ret = status_$internet_network_port_not_open;
         return;
     }
 

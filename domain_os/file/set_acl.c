@@ -10,7 +10,6 @@
 #include "file/file_internal.h"
 
 /* Status codes */
-#define status_$acl_unimplemented_call  0x0023001C
 
 /*
  * Constant data for protection type 4

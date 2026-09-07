@@ -12,7 +12,6 @@
 #include "disk/disk_internal.h"
 
 /* Status code */
-#define status_$logical_volume_not_found  0x00080010
 
 /* disk_$volume_t and DISK_VOL() come from disk/disk_internal.h */
 

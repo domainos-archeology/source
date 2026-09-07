@@ -63,7 +63,6 @@
 /* Status code for adjustment too large: "OS / time manager: bus time-out"
  * is 0x0012000C; this one is subsystem 0x0D and the database has no text
  * past 0x000D000B, so the constant is reproduced literally (0x00E16902). */
-#define status_$time_adjust_too_large 0x000D000C
 
 void TIME_$ADJUST_TIME_OF_DAY(int32_t *delta, int32_t *old_delta, status_$t *status)
 {
@@ -93,7 +92,7 @@ void TIME_$ADJUST_TIME_OF_DAY(int32_t *delta, int32_t *old_delta, status_$t *sta
         abs_ticks = -abs_ticks;
     }
     if (abs_ticks > MAX_ADJUST_SECONDS) {
-        *status = status_$time_adjust_too_large;
+        *status = status_$time_adjustment_out_of_range;
         return;
     }
 

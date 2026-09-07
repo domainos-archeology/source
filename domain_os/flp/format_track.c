@@ -17,7 +17,6 @@
 #include "flp/flp_internal.h"
 
 /* Status codes */
-#define status_$disk_controller_busy  0x00080002
 
 /* DMA controller base address */
 #define DMA_BASE       0x00ffa000

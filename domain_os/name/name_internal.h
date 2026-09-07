@@ -14,7 +14,6 @@
 #include "misc/crash_system.h"
 #include "misc/string.h"
 #include "name/name.h"
-#include "rem_name/rem_name.h"   /* REM_NAME_$* (bodies in name/rem_name.c) */
 #include "vtoc/vtoc.h"
 #include "proc1/proc1.h"
 #include "vfmt/vfmt.h"
@@ -60,68 +59,8 @@ extern int16_t DAT_00e544ae;    /* 0xE544AE: 0x0020 - MAP_CASE max output length
  * pea's to CRASH_SYSTEM at 0x00e5852a, not a string. */
 extern status_$t Naming_Internal_Err;
 
-/*
- * REM_NAME data area - complete structure at 0xE7DBB8
- */
-typedef struct rem_name_data_t {
-    uint16_t config[15];             /* +0x00: Config copied to request packets */
-    uint16_t reserved1;              /* +0x1E: Reserved */
-    uint32_t server_timeout;         /* +0x20: Timeout for server contact */
-    uint32_t reserved2;              /* +0x24: Reserved */
-    uint32_t time_heard_from_server; /* +0x28: TIME_$CLOCKH when last heard */
-    status_$t last_status;           /* +0x2C: Last status code */
-    uint32_t curr_node;              /* +0x30: Current name server node */
-    uint32_t curr_net;               /* +0x34: Current name server network */
-    /*
-     * +0x38: the `timeout` argument rem_name_$send_request hands
-     * PKT_$SAR_INTERNET - the fifth of its seventeen arguments
-     * (`move.w (0x38,A5),-(SP)` at 0x00E4A524, thirteenth of the seventeen
-     * pushes).  PKT_$SAR_INTERNET adds it to the word the send returned and
-     * turns the sum into the response deadline (`add.w (0x16,A6),D0w` at
-     * 0x00E71FBA, then `add.l (0x00e2b0d4).l,D0`), so it is an extra wait in
-     * clock ticks, not a sequence number.  The image initialises it to 0x0010
-     * and nothing else in the module ever touches A5+0x38.  (source-qg0q.)
-     */
-    uint16_t sar_timeout;
-    uint16_t retry_count;            /* +0x3A: Server locate retry counter */
-    int8_t   heard_from_server;      /* +0x3C: True if contacted server */
-} rem_name_data_t;
-
-/* Layout recovered from the disassembly -- see the field comments above. */
-_Static_assert(__builtin_offsetof(rem_name_data_t, config) == 0x00, "rem_name_data_t.config");
-_Static_assert(__builtin_offsetof(rem_name_data_t, reserved1) == 0x1E, "rem_name_data_t.reserved1");
-_Static_assert(__builtin_offsetof(rem_name_data_t, server_timeout) == 0x20, "rem_name_data_t.server_timeout");
-_Static_assert(__builtin_offsetof(rem_name_data_t, reserved2) == 0x24, "rem_name_data_t.reserved2");
-_Static_assert(__builtin_offsetof(rem_name_data_t, time_heard_from_server) == 0x28, "rem_name_data_t.time_heard_from_server");
-_Static_assert(__builtin_offsetof(rem_name_data_t, last_status) == 0x2C, "rem_name_data_t.last_status");
-_Static_assert(__builtin_offsetof(rem_name_data_t, curr_node) == 0x30, "rem_name_data_t.curr_node");
-_Static_assert(__builtin_offsetof(rem_name_data_t, curr_net) == 0x34, "rem_name_data_t.curr_net");
-_Static_assert(__builtin_offsetof(rem_name_data_t, sar_timeout) == 0x38, "rem_name_data_t.sar_timeout");
-_Static_assert(__builtin_offsetof(rem_name_data_t, retry_count) == 0x3A, "rem_name_data_t.retry_count");
-_Static_assert(__builtin_offsetof(rem_name_data_t, heard_from_server) == 0x3C, "rem_name_data_t.heard_from_server");
-
-extern rem_name_data_t rem_name_$data;  /* 0xE7DBB8 - defined in rem_name.c */
-/* TODO(source-ev4k, 0xE7DBB8): rem_name_data_t, rem_name_$data and
- * REM_NAME_$SOCK belong with the REM_NAME module; its body is still
- * name/rem_name.c, so they stay here for now. */
-
-/*
- * Socket used by the remote naming service.
- *
- * REM_NAME_SERVER_LOCAL (0x00E4A408) does
- *     movea.l (0x00e28dd8).l,A0 ; move.w (0x16,A0),D0w ; btst.l #0xd,D0
- * 0xE28DD8 is not an eventcount of its own: it is slot 10 of the SOCK socket
- * pointer table (sock_table_base + 0x18A4 + 9*4, that is
- * SOCK_$EVENT_COUNTERS[REM_NAME_$SOCK - 1]), and the word at +0x16 of the
- * socket descriptor it points at is sock_$sock_t.flags.  Bit 13 of that word
- * means "the name server runs on this node".  The declaration therefore lives
- * in sock/sock.h; only the socket number belongs to NAME.
- */
 /* Directory handles: NAME_$HANDLE_TO_PTR / NAME_$PTR_TO_HANDLE live in
  * name/name.h - dir/ uses them too. */
-
-#define REM_NAME_$SOCK          10      /* well-known naming-service socket */
-#define SOCK_FLAG_SERVER_LOCAL  0x2000  /* sock_$sock_t.flags bit 13 */
 
 /*
  * name_$init_check_status (0x00e31578) - Status check / crash helper for

@@ -220,7 +220,7 @@ void PKT_$BLD_INTERNET_HDR(uint32_t routing_key, uint32_t dest_node, uint16_t de
 
     /* 0x00E122BE  cmpi.w #0x3b8,D1w / bls  (unsigned) */
     if (total_len > PKT_MAX_HEADER) {
-        *status_ret = status_$network_message_header_too_big;
+        *status_ret = status_$network_msg_header_too_big;
         return;
     }
 
@@ -232,7 +232,7 @@ void PKT_$BLD_INTERNET_HDR(uint32_t routing_key, uint32_t dest_node, uint16_t de
         uint32_t template_off = (uint32_t)(uint16_t)(hdr_size + 0x1F);
 
         if (template_off + (uint32_t)template_len >= PKT_MAX_HEADER) {
-            *status_ret = status_$network_header_plus_data_too_big;
+            *status_ret = status_$network_header_data_length_exceeds_max;
             return;
         }
 

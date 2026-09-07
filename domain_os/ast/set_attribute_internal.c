@@ -35,10 +35,6 @@
 
 /* Status codes */
 #define file_$object_is_remote                 0x000F0002
-#define status_$ast_invalid_attribute_type     0x00030006
-#define status_$ast_object_special_attribute   0x000F0016
-#define status_$ast_refcount_underflow         0x00030007
-#define status_$ast_object_not_found           0x000F0001
 
 /*
  * Attribute type constants (the 28-entry jump table lives at 0x00E04BA2).
@@ -188,7 +184,7 @@ static void ast_$set_attr_dispatch(uint16_t attr_type, void *value,
         } else if (attr_type == ATTR_TYPE_BLOCKS) {         /* 0xE04B68 */
             aote->blocks = *(uint32_t *)value;              /* 0xE04B74 */
         } else {
-            *status = status_$ast_object_special_attribute; /* 0xE04B80 */
+            *status = status_$file_volume_has_been_mounted_read_only; /* 0xE04B80 */
         }
         goto unlock_and_return;                             /* 0xE0513E */
     }
@@ -261,14 +257,14 @@ static void ast_$set_attr_dispatch(uint16_t attr_type, void *value,
         /* 0xE04D2A: zero, or one on a sub_type 1/2 object, is an underflow. */
         if (refcount == 0 ||
             (refcount == 1 && (aote->sub_type == 1 || aote->sub_type == 2))) {
-            *status = status_$ast_refcount_underflow;       /* 0xE04D48 */
+            *status = status_$ast_refcount_says_unused;       /* 0xE04D48 */
             goto unlock_and_return;
         }
         refcount = (uint16_t)(refcount - 1);                /* 0xE04D52 */
         aote->refcount = refcount;
         if (refcount == 0) {
             aote->attr_flags_hi &= (uint8_t)~0x10;          /* 0xE04D5A: bclr.b #4 */
-            *status = status_$ast_refcount_underflow;       /* 0xE04D64 */
+            *status = status_$ast_refcount_says_unused;       /* 0xE04D64 */
             /* 0xE04D6A branches to the common tail, not to the unlock. */
         }
         break;
@@ -547,7 +543,7 @@ set_dirty_flag:
     goto unlock_and_return;
 
 invalid_attr:
-    *status = status_$ast_invalid_attribute_type;           /* 0xE050F4 */
+    *status = status_$ast_incompatible_request;           /* 0xE050F4 */
 
 unlock_and_return:
     ML_$UNLOCK(PMAP_LOCK_ID);                               /* 0xE0513E: 0x14 */
@@ -582,7 +578,7 @@ unlock_and_return:
         if (((old_acl_uid.high >> 24) & 0xFF) != 0) {
             AST_$TRUNCATE(&old_acl_uid, 0, 3, &truncate_out, status); /* 0xE051E2 */
             /* 0xE051EE: "object not found" is not an error here. */
-            if (*status == status_$ast_object_not_found) {
+            if (*status == status_$file_object_not_found) {
                 *status = status_$ok;                       /* 0xE051FA */
             }
         }
@@ -675,7 +671,7 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
      * when the caller *is* one of the special process types.
      */
     if (aote->access_flags < 0 && is_special_proc < 0) {
-        *status = status_$os_only_local_access_allowed;     /* 0xE0535E */
+        *status = status_$ast_only_local_access_allowed;     /* 0xE0535E */
         goto unlock_and_return;
     }
 
