@@ -19,10 +19,8 @@
  *   depth  - Pointer to socket depth
  *   status_ret - Status return
  */
-/* TODO(source-yo76): ARCH_M68K-only body with a fabricated #else status. */
 void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
 {
-#if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_depth;
     uint8_t asid;
@@ -41,7 +39,7 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
     }
 
     /* Lock the socket table */
-    ML_$EXCLUSION_START((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_START(MSG_$SOCK_LOCK);
 
     /*
      * Try to allocate a socket using the lower-level allocator.
@@ -52,7 +50,7 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
      *   max_queue = 0x0400
      */
     if (SOCK_$ALLOCATE_USER(socket, sock_depth, sock_depth, 0x04, 0x00) >= 0) {
-        ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
         *status_ret = status_$msg_no_more_sockets;
         return;
     }
@@ -98,14 +96,9 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
     /* Mark that user sockets are open */
     NETWORK_$USER_SOCK_OPEN = (int8_t)0xFF;    /* 0x00E593A0 "st" */
 
-    ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
     *status_ret = status_$ok;
 
-#else
-    (void)socket;
-    (void)depth;
-    *status_ret = status_$msg_too_deep;
-#endif
 }
 
 /*

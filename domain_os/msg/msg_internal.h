@@ -8,6 +8,9 @@
 #define MSG_MSG_INTERNAL_H
 
 #include "ec/ec.h"
+#include "net_io/net_io.h"
+#include "netbuf/netbuf.h"
+#include "pkt/pkt.h"
 #include "misc/crash_system.h"
 #include "ml/ml.h"
 #include "msg/msg.h"
@@ -24,15 +27,51 @@
 #define MSG_$DATA_BASE 0xE80D84
 
 /*
- * MSG exclusion lock address
+ * MSG network-send record, base 0xE242E4
+ *
+ * MSG_$$SEND establishes it as its module base ("lea (0xe242e4).l,A5" at
+ * 0x00E0D9F4) and reaches the data page through it: (0x14,A5) is the page's
+ * virtual address, (0x18,A5) its physical address and (0x1C,A5) the in-use
+ * counter it bumps and drops (0x00E0DBE6, 0x00E0DC1E, 0x00E0DCA6).
+ * MSG_$OPENI, MSG_$ALLOCATEI, MSG_$CLOSEI, MSG_$SHARE_SOCKET and MSG_$FORK
+ * pass the base itself to ML_$EXCLUSION_START / ML_$EXCLUSION_STOP
+ * (0x00E591F2, 0x00E59410, 0x00E73F12), so the first 0x14 bytes are an
+ * ml_$exclusion_t.
+ *
+ * The lock and the data page are declared separately rather than as one
+ * record because sizeof(ml_$exclusion_t) is 0x12 on m68k but 0x20 on a
+ * 64-bit host, which would move every following field.
  */
-#define MSG_$SOCK_LOCK 0xE242E4
+#define MSG_$SOCK_LOCK_ADDR 0xE242E4    /* ml_$exclusion_t */
+#define MSG_$DPAGE_ADDR     0xE242F8    /* msg_$dpage_t (= lock base + 0x14) */
 
 /*
- * Data page addresses (for network message handling)
+ * msg_$dpage_t - the single bounce page MSG_$$SEND uses for short remote
+ * payloads instead of allocating netbuf pages.
  */
-#define MSG_$DPAGE_VA 0xE242F8 /* Data page virtual address */
-#define MSG_$DPAGE_PA 0xE242FC /* Data page physical address */
+typedef struct msg_$dpage_t {
+  uint32_t va;   /* 0x00 (0xE242F8): virtual address  (0x00E0DBF8) */
+  uint32_t pa;   /* 0x04 (0xE242FC): physical address (0x00E0DBFE) */
+  int16_t in_use;/* 0x08 (0xE24300): pre-increment claim counter; 0 after the
+                  *      increment means the caller owns the page
+                  *      (0x00E0DBE6 "addq.w #0x1,(0x1c,A5)" /
+                  *       0x00E0DBEA "tst.w (0x1c,A5) / bne") */
+} msg_$dpage_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(msg_$dpage_t, pa) == 0x04, "msg_$dpage_t.pa");
+_Static_assert(offsetof(msg_$dpage_t, in_use) == 0x08, "msg_$dpage_t.in_use");
+#endif
+
+#if defined(ARCH_M68K)
+#define MSG_$SOCK_LOCK ((ml_$exclusion_t *)MSG_$SOCK_LOCK_ADDR)
+#define MSG_$DPAGE     ((msg_$dpage_t *)MSG_$DPAGE_ADDR)
+#else
+extern ml_$exclusion_t MSG_$SOCK_LOCK_STRUCT;
+extern msg_$dpage_t MSG_$DPAGE_STRUCT;
+#define MSG_$SOCK_LOCK (&MSG_$SOCK_LOCK_STRUCT)
+#define MSG_$DPAGE     (&MSG_$DPAGE_STRUCT)
+#endif
 
 /*
  * Offsets from MSG_$DATA_BASE
@@ -69,13 +108,20 @@
  * and ownership 0xE0 bitmaps (0x1E0..0x8DF).
  */
 typedef struct msg_$data_t {
-  uint8_t reserved_00[0x1E];             /* 0x000 */
+  /*
+   * 0x000: the 30-byte pkt_$info_t template MSG_$SEND copies onto its stack
+   * before overwriting the flags word ("lea (A5),A2 / lea (-0x20,A6),A3 /
+   * moveq #0x6 / move.l (A2)+,(A3)+ / dbf / move.w (A2)+,(A3)+" at
+   * 0x00E59A40-0x00E59A4E).  Only 30 of pkt_$info_t's 32 bytes are copied.
+   */
+  uint8_t send_template[0x1E];           /* 0x000 */
   int16_t depth[MSG_MAX_SOCKET + 1];     /* 0x01E: indexed by socket */
   uint8_t ownership[MSG_MAX_SOCKET][8];  /* 0x1E0: indexed by socket - 1 */
   int16_t open_count;                    /* 0x8E0 */
 } msg_$data_t;
 
 #if defined(ARCH_M68K)
+_Static_assert(offsetof(msg_$data_t, send_template) == 0, "msg send_template");
 _Static_assert(offsetof(msg_$data_t, depth) == MSG_OFF_DEPTH_TABLE, "msg depth");
 _Static_assert(offsetof(msg_$data_t, ownership) == MSG_OFF_OWNERSHIP + 8,
                "msg ownership starts one slot past the 1-based base");
@@ -103,6 +149,19 @@ extern msg_$data_t MSG_$DATA_STRUCT;
  */
 #define MSG_$SOCK_OWNERS                                                       \
   ((uint8_t(*)[8])((uint8_t *)MSG_$DATA + MSG_OFF_OWNERSHIP))
+
+/*
+ * MSG_$$SEND - the shared body behind MSG_$SEND and MSG_$SENDI (0x00E0D9EC).
+ * Fifteen arguments at 0x08, 0x0A, 0x0E, 0x12, 0x14, 0x18, 0x1C, 0x1E, 0x22,
+ * 0x24, 0x28, 0x2A, 0x2E, 0x30, 0x34.  A Pascal procedure: it leaves no
+ * result, both callers read the answer out of send_info / status_ret.
+ */
+void MSG_$$SEND(int16_t port_num, uint32_t routing_key, uint32_t dest_node,
+                uint16_t dest_sock, int32_t src_node_or, uint32_t src_node,
+                uint16_t src_sock, const pkt_$info_t *pkt_info,
+                uint16_t request_id, void *template, uint16_t template_len,
+                void *data, uint16_t data_len,
+                net_io_$send_info_t *send_info, status_$t *status_ret);
 
 /*
  * Internal receive implementation (0x00E59548)

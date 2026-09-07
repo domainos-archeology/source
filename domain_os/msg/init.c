@@ -1,61 +1,58 @@
 /*
- * MSG_$INIT - Initialize MSG subsystem
+ * MSG_$INIT - Initialize the MSG subsystem
  *
- * Initializes the message passing subsystem:
- * - Gets a data page for message buffers
- * - Initializes the exclusion lock
- * - Sets up initial socket ownership state
+ * Claims the single network bounce page, maps it, initialises the socket
+ * exclusion lock and pre-assigns the five reserved sockets.
  *
- * Original address: 0x00E31B84
- * Original size: 144 bytes
+ * Original address: 0x00E31B84 (144 bytes)
  */
 
 #include "msg/msg_internal.h"
-#include "netbuf/netbuf.h"
+
+/*
+ * The ownership word MSG_$INIT stores in five bitmaps (0x00E31BD4 onwards).
+ * As bytes it is 04 00 00 00: byte index 0 with bit 2 set, i.e. the ASID for
+ * which (0x3F - asid) >> 3 == 0 and asid & 7 == 2 - ASID 0x3A.
+ */
+#define MSG_INIT_OWNER_BYTE0    0x04
+
+/*
+ * The sockets the initialiser hands to that ASID.  The stores are at
+ * MSG_$DATA_BASE + 0x1E0, 0x1E8, 0x1F8, 0x200 and 0x208, and the ownership
+ * table starts at +0x1D8 with a stride of 8, so these are sockets 1, 2, 4, 5
+ * and 6.  Socket 3 (+0x1F0) is deliberately skipped.
+ */
+static const int16_t MSG_$INIT_SOCKETS[5] = { 1, 2, 4, 5, 6 };
 
 void MSG_$INIT(void)
 {
-#if defined(ARCH_M68K)
     status_$t status;
+    int i;
+    int j;
 
-    /*
-     * Get a data page for network message handling.
-     * NETBUF_$GET_DAT returns the physical address in DPAGE_PA.
-     */
-    NETBUF_$GET_DAT((uint32_t *)MSG_$DPAGE_PA);
+    /* 0x00E31B88  move.l #0xe242fc,-(SP) - the data page's physical address */
+    NETBUF_$GET_DAT(&MSG_$DPAGE->pa);
 
-    /*
-     * Get the virtual address mapping for the data page.
-     */
-    NETBUF_$GETVA(*(uint32_t *)MSG_$DPAGE_PA, (uint32_t *)MSG_$DPAGE_VA, &status);
+    /* 0x00E31B96 - 0x00E31BAC */
+    NETBUF_$GETVA(MSG_$DPAGE->pa, &MSG_$DPAGE->va, &status);
+
+    /* 0x00E31BB0  tst.l (-0x4,A6) / beq */
     if (status != status_$ok) {
-        CRASH_SYSTEM(&status);
+        CRASH_SYSTEM(&status);                  /* 0x00E31BBA */
     }
 
-    /*
-     * Initialize the MSG socket exclusion lock.
-     */
-    ML_$EXCLUSION_INIT((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_INIT(MSG_$SOCK_LOCK);         /* 0x00E31BC2 */
 
     /*
-     * Initialize socket ownership entries for special sockets.
-     * Sets up ownership patterns at base + 0x1E0, 0x1E8, 0x1F8, 0x200, 0x208.
-     * Value 0x04000000 appears to be a special marker (possibly ASID 26 ownership).
+     * 0x00E31BCE - 0x00E31C10: five pairs of "move.l #0x4000000,(off,A0)"
+     * and "clr.l (off+4,A0)", i.e. each bitmap set to 04 00 00 00 00 00 00 00.
      */
-    {
-        uint32_t *base = (uint32_t *)MSG_$DATA_BASE;
+    for (i = 0; i < 5; i++) {
+        uint8_t *bitmap = MSG_$SOCK_OWNERS[MSG_$INIT_SOCKETS[i]];
 
-        /* Socket ownership entries initialization */
-        base[0x1E0 / 4] = 0x04000000;  /* offset 0x1E0 */
-        base[0x1E4 / 4] = 0;            /* offset 0x1E4 */
-        base[0x1E8 / 4] = 0x04000000;  /* offset 0x1E8 */
-        base[0x1EC / 4] = 0;            /* offset 0x1EC */
-        base[0x1F8 / 4] = 0x04000000;  /* offset 0x1F8 */
-        base[0x1FC / 4] = 0;            /* offset 0x1FC */
-        base[0x200 / 4] = 0x04000000;  /* offset 0x200 */
-        base[0x204 / 4] = 0;            /* offset 0x204 */
-        base[0x208 / 4] = 0x04000000;  /* offset 0x208 */
-        base[0x20C / 4] = 0;            /* offset 0x20C */
+        bitmap[0] = MSG_INIT_OWNER_BYTE0;
+        for (j = 1; j < 8; j++) {
+            bitmap[j] = 0;
+        }
     }
-#endif
 }

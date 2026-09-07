@@ -43,7 +43,8 @@ boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
     int32_t deadline;               /* A6-0x5C */
     uint16_t retry_hint;            /* A6-0x68 */
     uint16_t resp_timeout;          /* A6-0x66 */
-    pkt_$recv_result_t recv;        /* A6-0x50 */
+    app_$receive_rec_t recv;        /* A6-0x50 (the record APP_$RECEIVE fills) */
+    pkt_$internet_hdr_t *req_hdr;   /* A6-0x50 +0x00, "movea.l (-0x50,A6),A0" */
     uint16_t data_len;              /* A6-0x6E */
     int16_t resp_id;                /* D7 */
     uint32_t hdr_ppn;               /* A6-0x54 */
@@ -190,20 +191,25 @@ boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
             goto check_response;    /* 0x00E12AFC "bne.b 0x00E12B72" */
         }
 
-        data_len = recv.hdr->data_len;       /* 0x00E12B02 "(0x4,A0)" */
-        resp_id = recv.hdr->request_id;      /* 0x00E12B0C "(0x6,A0)" */
+        /*
+         * 0x00E12AFE "movea.l (-0x50,A6),A0" - the reply record APP_$RECEIVE
+         * left at +0x00 is what PKT parses as the response header.
+         */
+        req_hdr = (pkt_$internet_hdr_t *)recv.reply;
+        data_len = req_hdr->data_len;        /* 0x00E12B02 "(0x4,A0)" */
+        resp_id = req_hdr->request_id;       /* 0x00E12B0C "(0x6,A0)" */
 
         /*
-         * 0x00E12B08  move.l (-0x4c,A6),D0      recv.hdr_ppn
+         * 0x00E12B08  move.l (-0x4c,A6),D0      recv.data
          * 0x00E12B10  andi.w #-0x400,D0w        word AND: only bits 0..9 die
          * 0x00E12B14  move.l D0,(-0x54,A6)      into a separate local
          */
-        hdr_ppn = recv.hdr_ppn & 0xFFFFFC00u;
+        hdr_ppn = ARCH_PTR_TO_VA(recv.data) & 0xFFFFFC00u;
         NETBUF_$RTN_HDR(&hdr_ppn);           /* 0x00E12B1C */
 
         /* 0x00E12B24 "tst.l (-0x48,A6)" - the first data buffer slot */
-        if (recv.data_bufs[0] != 0) {
-            PKT_$DUMP_DATA(recv.data_bufs, (int16_t)data_len);  /* 0x00E12B34 */
+        if (recv.data_pages[0] != 0) {
+            PKT_$DUMP_DATA(recv.data_pages, (int16_t)data_len);  /* 0x00E12B34 */
         }
 
         /* 0x00E12B3A "cmp.w D7w,D3w" - our request id against the reply's */

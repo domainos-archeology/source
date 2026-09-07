@@ -62,6 +62,9 @@ typedef uint16_t ml_$spin_token_t;
 #define ML_LOCK_AST 0x12      /* AST lock */
 #define ML_LOCK_PMAP 0x14     /* PMAP lock */
 #define ML_LOCK_MST_MMU 0x14  /* MST MMU lock */
+#define ML_LOCK_NET_IO 0x18   /* Network transmit path; MSG_$$SEND brackets its
+                               * NET_IO_$SEND call with it (0x00E0DC4C and
+                               * 0x00E0DC86 "move.w #0x18,-(SP)") */
 
 /*
  * Resource-lock event entry

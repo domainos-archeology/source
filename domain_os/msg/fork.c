@@ -1,77 +1,75 @@
 /*
- * MSG_$FORK - Duplicate socket ownership for fork
+ * MSG_$FORK - Give a child address space the parent's socket ownership
  *
- * Copies all socket ownership from parent ASID to child ASID.
- * Called during process fork to share all open sockets with the child.
+ * Walks every socket the parent owns and adds the child's bit to that
+ * socket's ownership bitmap.
  *
- * Original address: 0x00E73F00
- * Original size: 142 bytes
+ * Original address: 0x00E73F00 (142 bytes)
  */
 
 #include "msg/msg_internal.h"
 
 /*
- * MSG_$FORK - Copy socket ownership from parent to child
+ * @param parent_asid   Parent ASID, read as a WORD each time round the loop
+ *                      ("movea.l D4,A2 / move.w (A2),D5w" at 0x00E73F2E)
+ * @param child_asid    Child ASID, likewise (0x00E73F4C)
  *
- * Parameters:
- *   parent_asid - Pointer to parent's ASID
- *   child_asid  - Pointer to child's ASID
- *
- * Returns:
- *   Non-zero if any sockets were shared, zero otherwise
+ * @return a Domain boolean: true when at least one socket was shared
+ *         (0x00E73F46 "st D2b", 0x00E73F82 "move.b D2b,D0b")
  */
-int8_t MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid)
+boolean MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid)
 {
-#if defined(ARCH_M68K)
     int16_t sock_num;
-    uint8_t parent;
-    uint8_t child;
-    uint8_t parent_byte_index;
-    uint8_t child_byte_index;
-    uint8_t *bitmap;
-    uint8_t child_ownership[8];
-    int8_t shared_any = 0;
+    int16_t parent;             /* D5w */
+    int16_t child;              /* D5w */
+    int16_t byte_index;         /* D1w */
+    uint8_t *bitmap;            /* A3 / A2 */
+    uint8_t child_ownership[8]; /* A6-0x14 */
+    boolean shared_any = false; /* D2b, 0x00E73F10 "clr.b D2b" */
     int i;
 
-    parent = (uint8_t)*parent_asid;
-    child = (uint8_t)*child_asid;
-
-    /* Lock the socket table */
-    ML_$EXCLUSION_START((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_START(MSG_$SOCK_LOCK);        /* 0x00E73F12 */
 
     /*
-     * Iterate through all sockets (1-223).
-     * For each socket owned by parent, add child as owner.
+     * 0x00E73F20 - 0x00E73F72
+     *   movea.l #0xe80d84,A1 / move.w #0xdf,D0w / addq.l #0x8,A1
+     *   ... lea (0x1d8,A0),A3 ... addq.l #0x8,A1 / dbf D0w
+     * "moveq #0xdf" plus dbf is 0xE0 iterations, and A1 starts one slot in,
+     * so the sockets visited are 1..0xE0 inclusive.
      */
-    for (sock_num = 1; sock_num < MSG_MAX_SOCKET; sock_num++) {
-        bitmap = (uint8_t *)(MSG_$DATA_BASE + MSG_OFF_OWNERSHIP + sock_num * 8);
+    for (sock_num = 1; sock_num <= MSG_MAX_SOCKET; sock_num++) {
+        bitmap = MSG_$SOCK_OWNERS[sock_num];
 
-        /* Check if parent owns this socket */
-        parent_byte_index = (0x3F - parent) >> 3;
-        if ((bitmap[parent_byte_index] & (1 << (parent & 7))) != 0) {
-            /* Parent owns this socket - add child ownership */
-            shared_any = -1;  /* 0xFF = true */
+        /*
+         * 0x00E73F30  moveq #0x3f,D1 / move.w (A2),D5w / sub.w D5w,D1w /
+         *             lsr.w #0x3,D1w / btst.b D5,(0x0,A3,D1w*0x1)
+         */
+        parent = (int16_t)*parent_asid;
+        byte_index = (int16_t)((uint16_t)(0x3F - parent) >> 3);
 
-            /* Build child ownership bitmap */
+        if ((bitmap[byte_index] & (1 << (parent & 7))) != 0) {
+            shared_any = true;                  /* 0x00E73F46  st D2b */
+
+            /* 0x00E73F48  clr.l (A3)+ / clr.l (A3)+ */
             for (i = 0; i < 8; i++) {
                 child_ownership[i] = 0;
             }
-            child_byte_index = (0x3F - child) >> 3;
-            child_ownership[child_byte_index] |= (1 << (child & 7));
 
-            /* Add child ownership: bitmap |= child_ownership */
+            /*
+             * 0x00E73F4E  moveq #0x3f,D1 / move.w (A3),D5w / sub.w D5w,D1w /
+             *             lsr.w #0x3,D1w / bset.b D5,(0x0,A4,D1w*0x1)
+             */
+            child = (int16_t)*child_asid;
+            byte_index = (int16_t)((uint16_t)(0x3F - child) >> 3);
+            child_ownership[byte_index] |= (uint8_t)(1 << (child & 7));
+
+            /* 0x00E73F66  moveq #0x1,D5 / move.l (A4)+,D1 / or.l D1,(A2)+ / dbf */
             for (i = 0; i < 8; i++) {
                 bitmap[i] |= child_ownership[i];
             }
         }
     }
 
-    ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);         /* 0x00E73F76 */
     return shared_any;
-
-#else
-    (void)parent_asid;
-    (void)child_asid;
-    return 0;
-#endif
 }

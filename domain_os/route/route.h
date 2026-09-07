@@ -29,6 +29,26 @@
  *   +0x36: secondary socket (2 bytes)
  *   +0x38: port event count structure (0x24 bytes)
  */
+/*
+ * route_$driver_info_t - the per-port driver record route_$port_t.driver_info
+ * (+0x48) points at.  Only two fields have been recovered so far.
+ */
+typedef struct route_$driver_info_t {
+    uint16_t    _unknown0;      /* 0x00 */
+    uint16_t    max_data_len;   /* 0x02: largest data length this port will
+                                 *       carry.  PKT_$BLD_INTERNET_HDR compares
+                                 *       the data length against it and then
+                                 *       against it plus 0x100 together with
+                                 *       the template ("cmp.w (0x2,A0),D3w" at
+                                 *       0x00E1211E and "move.w (0x2,A0),D6w /
+                                 *       addi.l #0x100,D6" at 0x00E12136);
+                                 *       MSG_$$SEND repeats both tests at
+                                 *       0x00E0DAD0 and 0x00E0DAEC. */
+    uint16_t    _unknown4;      /* 0x04 */
+    uint8_t     _unknown6;      /* 0x06 */
+    uint8_t     flags;          /* 0x07: ROUTE_$VALIDATE_PORT reads this byte */
+} route_$driver_info_t;
+
 typedef struct route_$port_t {
     uint32_t    network;            /* 0x00: Network address */
     uint8_t     _unknown0[0x1C];    /* 0x04: Unknown fields */
@@ -52,7 +72,11 @@ typedef struct route_$port_t {
     uint32_t    driver_stats;       /* 0x44: Driver statistics block pointer (32-bit
                                      *       address; ROUTE_$SEND_USER_PORT:
                                      *       movea.l (0x44,A0,D0),A2) */
-    uint8_t     _unknown2[0x10];    /* 0x48: Unknown fields */
+    uint32_t    driver_info;        /* 0x48: route_$driver_info_t * as a 32-bit
+                                     *       target address (same treatment as
+                                     *       driver_stats above), reached with
+                                     *       ARCH_VA_TO_PTR */
+    uint8_t     _unknown2[0x0C];    /* 0x4C: Unknown fields */
     uint32_t    forward_count;      /* 0x58: Packets forwarded to this port (ROUTE_$PROCESS) */
 } route_$port_t;
 
@@ -66,6 +90,7 @@ _Static_assert(offsetof(route_$port_t, socket)        == 0x30, "route_$port_t.so
 _Static_assert(offsetof(route_$port_t, socket2)       == 0x36, "route_$port_t.socket2");
 _Static_assert(offsetof(route_$port_t, port_ec)       == 0x38, "route_$port_t.port_ec");
 _Static_assert(offsetof(route_$port_t, driver_stats)  == 0x44, "route_$port_t.driver_stats");
+_Static_assert(offsetof(route_$port_t, driver_info)   == 0x48, "route_$port_t.driver_info");
 _Static_assert(offsetof(route_$port_t, forward_count) == 0x58, "route_$port_t.forward_count");
 _Static_assert(sizeof(route_$port_t) == 0x5C, "route_$port_t must be 0x5C bytes");
 #endif

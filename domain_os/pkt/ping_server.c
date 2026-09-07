@@ -48,7 +48,8 @@ void PKT_$PING_SERVER(void)
     uint32_t  dest_node;                /* A6-0x4C */
     status_$t status;                   /* A6-0x48 */
     uint32_t  hdr_page;                 /* A6-0x44 */
-    pkt_$recv_result_t recv;            /* A6-0x30 */
+    app_$receive_rec_t recv;            /* A6-0x30 (the record APP_$RECEIVE fills) */
+    pkt_$internet_hdr_t *req_hdr;       /* A6-0x30 +0x00, "movea.l (-0x30,A6),A0" */
     uint16_t  tpl_len;                  /* D3 */
     uint16_t  reply_flags;              /* D4 */
 
@@ -104,19 +105,20 @@ void PKT_$PING_SERVER(void)
             continue;
         }
 
-        routing_key = recv.routing_key;         /* 0x00E12C64 */
+        routing_key = recv.hdr_f12;             /* 0x00E12C64 */
 
         /* 0x00E12C6A "movea.l (-0x30,A6),A0" - the reply record APP_$RECEIVE
          * left at +0x00 is what PKT parses as the request header. */
-        data_len    = recv.hdr->data_len;       /* 0x00E12C6E "(0x4,A0)" */
-        dest_node   = recv.hdr->src_node;       /* 0x00E12C74 "(0xe,A0)" */
-        dest_sock   = recv.hdr->src_sock;       /* 0x00E12C7A "(0x12,A0)" */
+        req_hdr     = (pkt_$internet_hdr_t *)recv.reply;
+        data_len    = req_hdr->data_len;        /* 0x00E12C6E "(0x4,A0)" */
+        dest_node   = req_hdr->src_node;        /* 0x00E12C74 "(0xe,A0)" */
+        dest_sock   = req_hdr->src_sock;        /* 0x00E12C7A "(0x12,A0)" */
 
         /* 0x00E12C80 "clr.w D4w" / 0x00E12C82 "move.b (0x14,A0),D4b" - the
          * flags byte is zero-extended into the low half of D4. */
-        reply_flags = recv.hdr->flags;
+        reply_flags = req_hdr->flags;
 
-        request_id  = recv.hdr->request_id;     /* 0x00E12C86 "(0x6,A0)" */
+        request_id  = req_hdr->request_id;      /* 0x00E12C86 "(0x6,A0)" */
 
         /*
          * 0x00E12C8C  moveq #0x2,D3
@@ -124,8 +126,8 @@ void PKT_$PING_SERVER(void)
          * 0x00E12C94  move.w (0x2,A0),D3w
          */
         tpl_len = 2;
-        if (tpl_len > recv.hdr->hdr_len) {
-            tpl_len = recv.hdr->hdr_len;
+        if (tpl_len > req_hdr->hdr_len) {
+            tpl_len = req_hdr->hdr_len;
         }
 
         /*
@@ -135,7 +137,7 @@ void PKT_$PING_SERVER(void)
          * ever reads template_buf back - the reply template comes from
          * PKT_$DATA->ping_req_hdr - but the copy is part of the original.
          */
-        OS_$DATA_COPY((const void *)(uintptr_t)recv.hdr_ppn, template_buf,
+        OS_$DATA_COPY(recv.data, template_buf,
                       (uint32_t)tpl_len);
 
         /*
@@ -143,12 +145,12 @@ void PKT_$PING_SERVER(void)
          * 0x00E12CB4  andi.w #-0x400,D0w      a WORD and: only bits 0..9 die
          * 0x00E12CB8  move.l D0,(-0x44,A6)
          */
-        hdr_page = recv.hdr_ppn & 0xFFFFFC00u;
+        hdr_page = ARCH_PTR_TO_VA(recv.data) & 0xFFFFFC00u;
         NETBUF_$RTN_HDR(&hdr_page);             /* 0x00E12CC0 */
 
         /* 0x00E12CC8 "tst.l (-0x28,A6)" - the first data page slot. */
-        if (recv.data_bufs[0] != 0) {
-            PKT_$DUMP_DATA(recv.data_bufs, (int16_t)data_len);  /* 0x00E12CD8 */
+        if (recv.data_pages[0] != 0) {
+            PKT_$DUMP_DATA(recv.data_pages, (int16_t)data_len);  /* 0x00E12CD8 */
         }
 
         /*

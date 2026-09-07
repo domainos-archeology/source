@@ -29,6 +29,8 @@
 #define status_$network_no_more_free_sockets            0x0011000C
 #define status_$network_remote_node_failed_to_respond   0x00110007
 #define status_$network_buffer_queue_is_empty              0x00110006
+/* Header plus template will not fit a 0x3B8-byte buffer (0x00E122F6, 0x00E1245E) */
+#define status_$network_header_plus_data_too_big        0x00110024
 
 /*
  * ============================================================================
@@ -132,6 +134,172 @@ _Static_assert(sizeof(pkt_$info_t) == 0x20, "pkt_$info_t must be 32 bytes");
 #endif
 
 /*
+ * ============================================================================
+ * The internet packet header PKT builds and parses
+ * ============================================================================
+ *
+ * pkt_$inet_addr_t - the 12-byte address triple the internet part of the
+ * header carries twice.  PKT_$BLD_INTERNET_HDR writes it in three steps
+ * (0x00E121C0 - 0x00E121D8 for the destination, 0x00E12202 - 0x00E1221A for
+ * the source):
+ *
+ *   andi.l #0xff,(0x32,A2)          clears +0x00..+0x02 of the pair
+ *   andi.l #-0x1000000,(0x34,A2)    clears +0x03..+0x05
+ *   or.l   D6,(0x34,A2)             deposits the node id
+ *
+ * i.e. the "zero" word and the node longword together are zeroed and then the
+ * node is written; PKT_$BRK_INTERNET_HDR reads the node back masked to 24
+ * bits ("move.l #0xffffff,D1 / and.l (0x34,A2),D1" at 0x00E123CE).
+ *
+ * The node longword sits on an odd word boundary, so the record is packed.
+ */
+typedef struct pkt_$inet_addr_t {
+    uint32_t    net;        /* 0x00: routing key / network number */
+    uint16_t    zero;       /* 0x04: always cleared */
+    uint32_t    node;       /* 0x06: node id; only the low 24 bits are read */
+    uint16_t    sock;       /* 0x0A: socket */
+} __attribute__((packed)) pkt_$inet_addr_t;
+
+/* No pointer-bearing fields, so these hold on every host. */
+_Static_assert(offsetof(pkt_$inet_addr_t, zero) == 0x04, "pkt_$inet_addr_t.zero");
+_Static_assert(offsetof(pkt_$inet_addr_t, node) == 0x06, "pkt_$inet_addr_t.node");
+_Static_assert(offsetof(pkt_$inet_addr_t, sock) == 0x0A, "pkt_$inet_addr_t.sock");
+_Static_assert(sizeof(pkt_$inet_addr_t) == 0x0C, "pkt_$inet_addr_t must be 12 bytes");
+
+/*
+ * pkt_$hdr_t - the packet header PKT_$BLD_INTERNET_HDR (0x00E1202C) fills in
+ * and PKT_$BRK_INTERNET_HDR (0x00E12328) takes apart.
+ *
+ * The header is a FIXED 0x1E-byte part followed by a variable routing area
+ * whose length is the byte at +0x18; the caller's template is copied
+ * immediately after it.  Both routines use the same arithmetic:
+ *
+ *   total length   = hdr_size + template_len + 0x1E
+ *                    (0x00E122AE - 0x00E122BA)
+ *   template start = header + hdr_size + 0x1F - 1
+ *                    ("pea (-0x1,A2,D3*0x1)" at 0x00E12300 and 0x00E12478
+ *                     with D3 = hdr_size + 0x1F)
+ *
+ * hdr_size is 4 for a local packet (0x00E1226E) and 0x28 for an internet one
+ * (0x00E1217E), plus 6 when the packet carries a long request id
+ * (0x00E1223C "addq.b #0x6,(0x18,A2)") and a further 0x10 when the info
+ * record's protocol word is 0x29 (0x00E1225C).  0x1E + 0x3E = 0x5C, which is
+ * exactly where the internet variant ends.
+ *
+ * The routing area is an array of words indexed by the count at +0x19:
+ * PKT_$BRK_INTERNET_HDR reads the destination socket as
+ * "move.w (0x1e,A2,D6w*0x1),(A3)" with D6 = route_count * 2 (0x00E12392 -
+ * 0x00E12398).
+ */
+typedef struct pkt_$hdr_t {
+    /* --- fixed part, 0x1E bytes --- */
+    uint32_t    dest_node;      /* 0x00: local - the destination node
+                                 *       (0x00E1226A); internet - the next
+                                 *       hop masked to 20 bits (0x00E1217C) */
+    uint8_t     info_flags;     /* 0x04: low byte of pkt_$info_t.flags
+                                 *       (0x00E1206A) */
+    uint8_t     zero_05[3];     /* 0x05: cleared by the andi.l/clr.b pair at
+                                 *       0x00E12070 / 0x00E12078 */
+    uint32_t    src_node;       /* 0x08: NODE_$ME (0x00E1207C) */
+    uint8_t     routing_type;   /* 0x0C: low byte of pkt_$info_t.routing_type
+                                 *       (0x00E1228A); 1 = local, 2 = internet.
+                                 *       PKT_$BRK_INTERNET_HDR dispatches on it
+                                 *       (0x00E1235A) */
+    uint8_t     zero_0d;        /* 0x0D: 0x00E12290 */
+    uint8_t     flags_0e;       /* 0x0E: low byte of pkt_$info_t.flags again
+                                 *       (0x00E12298) */
+    uint8_t     zero_0f;        /* 0x0F: 0x00E12294 */
+    uint16_t    total_len;      /* 0x10: hdr_size + template_len + 0x1E
+                                 *       (0x00E122BA) */
+    uint16_t    template_len;   /* 0x12: 0x00E1229E */
+    uint16_t    data_len;       /* 0x14: 0x00E122A2 */
+    uint16_t    request_id;     /* 0x16: 0x00E122A6 */
+    uint8_t     hdr_size;       /* 0x18: length of the routing area */
+    uint8_t     route_count;    /* 0x19: number of words in the routing area */
+    uint16_t    src_sock;       /* 0x1A: 0x00E1208A */
+    uint16_t    src_node_lo;    /* 0x1C: low word of NODE_$ME, copied out of
+                                 *       +0x0A by 0x00E12084 */
+    /* --- variable routing area, 0x1E --- */
+    union {
+        /*
+         * The routing area seen as the word array PKT_$BRK_INTERNET_HDR
+         * indexes: "move.w (0x1e,A2,D6w*0x1),(A3)" with D6 = route_count * 2
+         * (0x00E12392 - 0x00E12398).
+         */
+        uint16_t    route[(0x5C - 0x1E) / 2];
+        /* routing_type 1: one route word plus the destination socket */
+        struct {
+            uint16_t    dest_node_lo;   /* 0x1E: 0x00E1227A */
+            uint16_t    dest_sock;      /* 0x20: 0x00E12280 */
+        } __attribute__((packed)) local;
+        /* routing_type 2 */
+        struct {
+            uint16_t    src_sock;       /* 0x1E: 0x00E1218A */
+            uint32_t    src_node;       /* 0x20: NODE_$ME (0x00E1218E) */
+            uint16_t    dest_node_lo;   /* 0x24: 0x00E12196 */
+            uint16_t    dest_sock;      /* 0x26: 0x00E1219C */
+            uint16_t    info_0c;        /* 0x28: pkt_$info_t.field_0c
+                                         *       (0x00E121A0) */
+            uint16_t    tpl_len_x;      /* 0x2A: template_len + 0x1E
+                                         *       (0x00E121A6 - 0x00E121AA) */
+            uint8_t     info_0b;        /* 0x2C: low byte of
+                                         *       pkt_$info_t.field_0a
+                                         *       (0x00E121AE) */
+            uint8_t     protocol;       /* 0x2D: low byte of
+                                         *       pkt_$info_t.protocol, or 4 when
+                                         *       the long request id is present
+                                         *       (0x00E121B4 / 0x00E12236) */
+            pkt_$inet_addr_t dest;      /* 0x2E */
+            pkt_$inet_addr_t src;       /* 0x3A */
+            /* present only while hdr_size >= 0x2E */
+            uint32_t    long_request_id;/* 0x46: 0x00E1222C */
+            uint16_t    subtype;        /* 0x4A: pkt_$info_t.protocol
+                                         *       (0x00E12230) */
+            /* present only while hdr_size == 0x3E (subtype 0x29) */
+            uint8_t     addr[16];       /* 0x4C: pkt_$info_t.addr
+                                         *       (0x00E12248 - 0x00E12256) */
+        } __attribute__((packed)) inet;
+    } u;
+} __attribute__((packed)) pkt_$hdr_t;
+
+/* No pointer-bearing fields, so these hold on every host. */
+_Static_assert(offsetof(pkt_$hdr_t, src_node)     == 0x08, "pkt_$hdr_t.src_node");
+_Static_assert(offsetof(pkt_$hdr_t, routing_type) == 0x0C, "pkt_$hdr_t.routing_type");
+_Static_assert(offsetof(pkt_$hdr_t, total_len)    == 0x10, "pkt_$hdr_t.total_len");
+_Static_assert(offsetof(pkt_$hdr_t, request_id)   == 0x16, "pkt_$hdr_t.request_id");
+_Static_assert(offsetof(pkt_$hdr_t, hdr_size)     == 0x18, "pkt_$hdr_t.hdr_size");
+_Static_assert(offsetof(pkt_$hdr_t, src_sock)     == 0x1A, "pkt_$hdr_t.src_sock");
+_Static_assert(offsetof(pkt_$hdr_t, src_node_lo)  == 0x1C, "pkt_$hdr_t.src_node_lo");
+_Static_assert(offsetof(pkt_$hdr_t, u)            == 0x1E, "pkt_$hdr_t routing area");
+_Static_assert(offsetof(pkt_$hdr_t, u.local.dest_sock)  == 0x20, "pkt_$hdr_t local sock");
+_Static_assert(offsetof(pkt_$hdr_t, u.inet.src_node)    == 0x20, "pkt_$hdr_t inet src_node");
+_Static_assert(offsetof(pkt_$hdr_t, u.inet.dest_sock)   == 0x26, "pkt_$hdr_t inet dest_sock");
+_Static_assert(offsetof(pkt_$hdr_t, u.inet.protocol)    == 0x2D, "pkt_$hdr_t inet protocol");
+_Static_assert(offsetof(pkt_$hdr_t, u.inet.dest)        == 0x2E, "pkt_$hdr_t inet dest");
+_Static_assert(offsetof(pkt_$hdr_t, u.inet.src)         == 0x3A, "pkt_$hdr_t inet src");
+_Static_assert(offsetof(pkt_$hdr_t, u.inet.long_request_id) == 0x46,
+               "pkt_$hdr_t inet long_request_id");
+_Static_assert(offsetof(pkt_$hdr_t, u.inet.subtype)     == 0x4A, "pkt_$hdr_t inet subtype");
+_Static_assert(offsetof(pkt_$hdr_t, u.inet.addr)        == 0x4C, "pkt_$hdr_t inet addr");
+_Static_assert(sizeof(pkt_$hdr_t) == 0x5C, "pkt_$hdr_t must be 0x5C bytes");
+
+/* Fixed part of pkt_$hdr_t, ahead of the variable routing area */
+#define PKT_HDR_FIXED_LEN       0x1E
+
+/* pkt_$hdr_t.hdr_size values (the length of the routing area) */
+#define PKT_HDR_SIZE_LOCAL      0x04    /* 0x00E1226E */
+#define PKT_HDR_SIZE_INET       0x28    /* 0x00E1217E */
+#define PKT_HDR_SIZE_LONG_ID    0x06    /* added at 0x00E1223C */
+#define PKT_HDR_SIZE_ADDR       0x10    /* added at 0x00E1225C */
+
+/* pkt_$hdr_t.routing_type */
+#define PKT_ROUTING_LOCAL       1
+#define PKT_ROUTING_INET        2
+
+/* pkt_$info_t.protocol value that puts the 16-byte address in the header */
+#define PKT_SUBTYPE_LONG_ADDR   0x29
+
+/*
  * PKT_$BLD_INTERNET_HDR - Build an internet packet header
  *
  * Builds a complete internet packet header for network transmission.
@@ -153,9 +321,9 @@ _Static_assert(sizeof(pkt_$info_t) == 0x20, "pkt_$info_t must be 32 bytes");
  *                      the internet path (0x00E120C0), the local path clears
  *                      it (0x00E12288), and 0x00E12102 "move.w (A1),D7w"
  *                      reads it back to index ROUTE_$PORTP.
- * @param hdr_buf       The header buffer to fill in (the VA NETWORK_$GETHDR
+ * @param hdr           The header buffer to fill in (the VA NETBUF_$GET_HDR
  *                      returned); passed by value, 0x00E12048
- *                      "movea.l (0x2e,A6),A2".
+ *                      "movea.l (0x2e,A6),A2".  See pkt_$hdr_t.
  * @param len_out       Output: total packet length (0x00E122D4)
  * @param retry_hint    Output: send retry limit.  Unconditionally set to 5
  *                      (0x00E1230E "move.w #0x5,(A0)"), so it may not be NULL.
@@ -171,9 +339,9 @@ _Static_assert(sizeof(pkt_$info_t) == 0x20, "pkt_$info_t must be 32 bytes");
  */
 void PKT_$BLD_INTERNET_HDR(uint32_t routing_key, uint32_t dest_node, uint16_t dest_sock,
                            int32_t src_node_or, uint32_t src_node, uint16_t src_sock,
-                           void *pkt_info, uint16_t request_id,
+                           const pkt_$info_t *pkt_info, uint16_t request_id,
                            void *template, uint16_t template_len, uint16_t data_len,
-                           int16_t *port_out, uint32_t *hdr_buf, uint16_t *len_out,
+                           int16_t *port_out, pkt_$hdr_t *hdr, uint16_t *len_out,
                            uint16_t *retry_hint, uint16_t *timeout_out,
                            status_$t *status_ret);
 
@@ -183,7 +351,8 @@ void PKT_$BLD_INTERNET_HDR(uint32_t routing_key, uint32_t dest_node, uint16_t de
  * Parses a received internet packet header and extracts addressing
  * and protocol information.
  *
- * @param hdr_ptr       Pointer to received packet header (0x00E12330)
+ * @param hdr           Pointer to received packet header (0x00E12330).
+ *                      See pkt_$hdr_t.
  * @param hdr_len        NOT READ.  Nothing between 0x00E12328 and 0x00E1248C
  *                      touches (0xC,A6); RIP_$SERVER passes
  *                      sock_$pkt_info_t.hdr_len there (0x00E68ABE) all the
@@ -216,7 +385,7 @@ void PKT_$BLD_INTERNET_HDR(uint32_t routing_key, uint32_t dest_node, uint16_t de
  *
  * Original address: 0x00E12328
  */
-void PKT_$BRK_INTERNET_HDR(void *hdr_ptr, uint16_t hdr_len,
+void PKT_$BRK_INTERNET_HDR(pkt_$hdr_t *hdr, uint16_t hdr_len,
                            uint32_t *routing_key, uint32_t *dest_node,
                            uint16_t *dest_sock, uint32_t *src_node_or,
                            uint32_t *src_node, uint16_t *src_sock,
@@ -329,13 +498,19 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_
  * @param routing_key   Routing key
  * @param dest_node     Destination node ID
  * @param dest_sock     Destination socket
- * @param pkt_info      Packet info structure (also receives retry count used)
+ * @param pkt_info      Packet info structure.  READ ONLY: the routine only
+ *                      looks at retry_limit, "movea.l (0x12,A6),A0 /
+ *                      tst.w (0x8,A0)" at 0x00E71F4C-0x00E71F52.  May not be
+ *                      nil.
  * @param timeout       Timeout in clock ticks
  * @param req_template  Request template
  * @param req_tpl_len   Request template length
  * @param req_data      Request data buffer
  * @param req_data_len  Request data length
- * @param resp_buf      Response buffer
+ * @param resp_buf      Response buffer; its word at +0x08 also RECEIVES the
+ *                      number of attempts made, "movea.l (0x24,A6),A0 /
+ *                      move.w D3w,(0x8,A0)" at 0x00E7205E-0x00E72062 (the
+ *                      no-answer exit).  May not be nil.
  * @param resp_tpl_buf  Response template buffer
  * @param resp_tpl_max  Maximum response template length
  * @param resp_tpl_len  Output: actual response template length

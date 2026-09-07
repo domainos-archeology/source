@@ -124,7 +124,8 @@ static const uint32_t pkt_$no_data = 0;
 
 /*
  * pkt_$internet_hdr_t - the fields PKT reads out of a received internet
- * packet header (the pointer APP_$RECEIVE leaves in pkt_$recv_result_t.hdr).
+ * packet header (the reply record APP_$RECEIVE leaves in
+ * app_$receive_rec_t.reply).
  */
 typedef struct pkt_$internet_hdr_t {
   uint16_t reserved_00;    /* 0x00 */
@@ -137,36 +138,9 @@ typedef struct pkt_$internet_hdr_t {
   uint8_t flags;           /* 0x14: request flags (0x00E12C82) */
 } __attribute__((packed)) pkt_$internet_hdr_t;
 
-/*
- * pkt_$recv_result_t - the 44-byte record APP_$RECEIVE fills in (app.h
- * documents the size).
- *
- * TODO(source-vhfr): this duplicates app_$receive_rec_t in app/app.h, which
- * is the owning subsystem's definition of the same record.  Fold this away
- * and retype PKT_$LIKELY_TO_ANSWER / PKT_$PING_SERVER onto app_$receive_rec_t
- * (.reply / .data / .data_pages).
- *
- * PKT reads only these fields:
- *   0x00  hdr        header VA        (0x00E12AFE, 0x00E12C6A)
- *   0x04  hdr_ppn    header page      (0x00E12B08, 0x00E12CB0)
- *   0x08  data_bufs  data buffers     (0x00E12B24, 0x00E12CC8)
- *   0x1C  routing_key                 (0x00E12C64)
- */
-typedef struct pkt_$recv_result_t {
-  pkt_$internet_hdr_t *hdr;               /* 0x00 */
-  uint32_t hdr_ppn;                       /* 0x04 */
-  uint32_t data_bufs[PKT_MAX_DATA_CHUNKS];/* 0x08 */
-  uint32_t reserved_18;                   /* 0x18 */
-  uint32_t routing_key;                   /* 0x1C */
-  uint32_t reserved_20[3];                /* 0x20 */
-} pkt_$recv_result_t;
-
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(pkt_$internet_hdr_t, request_id) == 0x06, "pkt_$internet_hdr_t.request_id");
 _Static_assert(offsetof(pkt_$internet_hdr_t, flags) == 0x14, "pkt_$internet_hdr_t.flags");
-_Static_assert(offsetof(pkt_$recv_result_t, data_bufs) == 0x08, "pkt_$recv_result_t.data_bufs");
-_Static_assert(offsetof(pkt_$recv_result_t, routing_key) == 0x1C, "pkt_$recv_result_t.routing_key");
-_Static_assert(sizeof(pkt_$recv_result_t) == 44, "pkt_$recv_result_t must be 44 bytes");
 #endif
 
 /*

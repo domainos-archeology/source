@@ -181,7 +181,7 @@ int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
 
 /* --- APP_$RECEIVE --------------------------------------------------------- */
 static pkt_$internet_hdr_t recv_hdr;
-static pkt_$recv_result_t recv_template;
+static app_$receive_rec_t recv_template;
 static status_$t recv_status;
 static int recv_calls;
 static uint16_t recv_sock;
@@ -274,9 +274,9 @@ static void reset_state(void)
     recv_calls = 0;
     recv_hdr.data_len = 0x20;
     recv_hdr.request_id = TEST_REQ_ID;
-    recv_template.hdr = &recv_hdr;
-    recv_template.hdr_ppn = 0x0004AB57;
-    recv_template.data_bufs[0] = 0;
+    recv_template.reply = &recv_hdr;
+    recv_template.data = ARCH_VA_TO_PTR(0x0004AB57);
+    recv_template.data_pages[0] = 0;
 
     rtn_hdr_calls = 0;
     dump_data_calls = 0;
@@ -454,8 +454,8 @@ TEST(ping_answered)
 
     reset_state();
     ec_wait_script[0] = 0;
-    recv_template.hdr_ppn = 0x0004AB57;
-    recv_template.data_bufs[0] = 0x1234;
+    recv_template.data = ARCH_VA_TO_PTR(0x0004AB57);
+    recv_template.data_pages[0] = 0x1234;
 
     ASSERT_EQ((int8_t)0xFF, PKT_$LIKELY_TO_ANSWER(&addr, &status));
     ASSERT_EQ(status_$ok, status);          /* 0x00E12BA0 skips the 0x110007 */
@@ -466,7 +466,7 @@ TEST(ping_answered)
     /* 0x00E12B10 "andi.w #-0x400,D0w" only clears bits 0..9. */
     ASSERT_EQ(1, rtn_hdr_calls);
     ASSERT_EQ(0x0004A800, rtn_hdr_value);
-    ASSERT_EQ(0x0004AB57, recv_template.hdr_ppn);   /* the record is untouched */
+    ASSERT_EQ(0x0004AB57, ARCH_PTR_TO_VA(recv_template.data)); /* the record is untouched */
 
     /* 0x00E12B24: only dumped when the first buffer slot is non-zero, and
      * the length is the header's data_len word. */
@@ -487,7 +487,7 @@ TEST(no_data_buffers_skips_dump)
 
     reset_state();
     ec_wait_script[0] = 0;
-    recv_template.data_bufs[0] = 0;
+    recv_template.data_pages[0] = 0;
 
     PKT_$LIKELY_TO_ANSWER(&addr, &status);
     ASSERT_EQ(0, dump_data_calls);

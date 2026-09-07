@@ -138,9 +138,9 @@ void NETWORK_$RTNHDR(uint32_t *va_ptr)
 
 void PKT_$BLD_INTERNET_HDR(uint32_t routing_key, uint32_t dest_node, uint16_t dest_sock,
                            int32_t src_node_or, uint32_t src_node, uint16_t src_sock,
-                           void *pkt_info, uint16_t request_id,
+                           const pkt_$info_t *pkt_info, uint16_t request_id,
                            void *template, uint16_t template_len, uint16_t data_len,
-                           int16_t *port_out, uint32_t *hdr_buf, uint16_t *len_out,
+                           int16_t *port_out, pkt_$hdr_t *hdr, uint16_t *len_out,
                            uint16_t *retry_hint, uint16_t *timeout_out,
                            status_$t *status_ret)
 {
@@ -149,7 +149,7 @@ void PKT_$BLD_INTERNET_HDR(uint32_t routing_key, uint32_t dest_node, uint16_t de
     (void)pkt_info; (void)request_id; (void)template; (void)template_len;
 
     bld_calls++;
-    bld_hdr_buf_seen  = (uint32_t)(uintptr_t)hdr_buf;
+    bld_hdr_buf_seen  = ARCH_PTR_TO_VA(hdr);
     bld_retry_hint_seen = retry_hint;
     bld_timeout_seen  = timeout_out;
     bld_data_len_seen = data_len;

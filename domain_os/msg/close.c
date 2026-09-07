@@ -16,10 +16,8 @@
 /*
  * MSG_$CLOSEI - Close socket internal implementation
  */
-/* TODO(source-yo76): ARCH_M68K-only body with a fabricated #else status. */
 void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
 {
-#if defined(ARCH_M68K)
     int16_t sock_num;
     uint8_t asid;
     uint8_t byte_index;
@@ -40,7 +38,7 @@ void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
     }
 
     /* Lock the socket table */
-    ML_$EXCLUSION_START((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_START(MSG_$SOCK_LOCK);
 
     bitmap = MSG_$SOCK_OWNERS[sock_num];   /* base + 0x1D8 + socket*8 */
 
@@ -54,7 +52,7 @@ void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
     if ((bitmap[byte_index] & bit_mask) == 0) {
         /* Current process doesn't own this socket */
         *status_ret = status_$msg_no_owner;
-        ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
         return;
     }
 
@@ -99,13 +97,9 @@ void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
         }
     }
 
-    ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
     *status_ret = status_$ok;
 
-#else
-    (void)socket;
-    *status_ret = status_$msg_socket_out_of_range;
-#endif
 }
 
 /*

@@ -16,4 +16,12 @@
  */
 msg_$data_t MSG_$DATA_STRUCT;
 
+/*
+ * The exclusion lock at 0xE242E4 and the bounce page record at 0xE242F8.
+ * ML_$EXCLUSION_INIT leaves the lock unlocked; the page addresses are filled
+ * in by MSG_$INIT.
+ */
+ml_$exclusion_t MSG_$SOCK_LOCK_STRUCT;
+msg_$dpage_t MSG_$DPAGE_STRUCT;
+
 #endif /* !ARCH_M68K */

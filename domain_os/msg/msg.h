@@ -192,50 +192,66 @@ void MSG_$RCV_HW(msg_$socket_t *socket,
                  uint16_t *max_overflow,
                  status_$t *status);
 
-/* Send a message (internal implementation) */
-status_$t MSG_$$SEND(int16_t port_num,
-                      uint32_t dest_proc,
-                      uint32_t dest_node,
-                      int16_t dest_sock,
-                      uint32_t src_proc,
-                      uint32_t src_node,
-                      int16_t src_sock,
-                      void *msg_desc,
-                      int16_t type_val,
-                      void *data_buf,
-                      uint16_t header_len,
-                      void *data_ptr,
-                      uint16_t data_len,
-                      void *result,
-                      status_$t *status_ret);
-
-/* Send a message */
-void MSG_$SEND(void *dest_proc,
-               int16_t *dest_node,
-               int16_t *dest_sock,
-               int16_t *src_sock,
-               int16_t *type_val,
-               void *data_buf,
-               int16_t *header_len,
-               void *data_ptr,
-               int16_t *data_len,
-               int16_t *bytes_sent,
+/*
+ * MSG_$SEND - send a message to a socket on another node (0x00E599FC)
+ *
+ * Eleven arguments, every one of them a pointer; the routine copies the
+ * 30-byte packet-info template out of MSG_$DATA, drops the caller's flags
+ * word into it (0x00E59A50) and hands the whole thing to MSG_$$SEND with
+ * port -1, routing key 0 and both source addresses set to NODE_$ME
+ * (0x00E59A54-0x00E59A8E).
+ *
+ * @param dest_node     Destination node id      ((0x8,A6), 0x00E59A0E)
+ * @param dest_sock     Destination socket, word ((0xc,A6), 0x00E59A16)
+ * @param src_sock      Source socket, word      ((0x10,A6), 0x00E59A1E)
+ * @param info_flags    Packet-info flags word written over the template's
+ *                      first word ((0x14,A6), 0x00E59A2A / 0x00E59A50)
+ * @param request_id    Request id, word         ((0x18,A6), 0x00E59A2C)
+ * @param template      Request template         ((0x1c,A6), passed by value)
+ * @param template_len  Template length, word    ((0x20,A6), 0x00E59A34)
+ * @param data          Payload                  ((0x24,A6), passed by value)
+ * @param data_len      Payload length, word     ((0x28,A6), 0x00E59A3C)
+ * @param xmit_status   Output: net_io_$send_info_t.xmit_status, the SECOND
+ *                      word of the send-info record ((0x2c,A6), 0x00E59A98
+ *                      "move.w (-0x22,A6),(A1)")
+ * @param status_ret    Output: status code      ((0x30,A6))
+ */
+void MSG_$SEND(uint32_t *dest_node,
+               uint16_t *dest_sock,
+               uint16_t *src_sock,
+               uint16_t *info_flags,
+               uint16_t *request_id,
+               void *template,
+               uint16_t *template_len,
+               void *data,
+               uint16_t *data_len,
+               uint16_t *xmit_status,
                status_$t *status_ret);
 
-/* Send a message (internal wrapper) */
-void MSG_$SENDI(void *dest_proc,
-                void *dest_node,
-                int16_t *dest_sock,
-                void *src_proc,
-                void *src_node,
-                int16_t *src_sock,
-                void *data_buf,
-                int16_t *type_val,
-                void *type_data,
-                int16_t *header_len,
-                void *data_ptr,
-                int16_t *data_len,
-                int16_t *bytes_sent,
+/*
+ * MSG_$SENDI - the by-reference form of MSG_$$SEND (0x00E59AA6)
+ *
+ * Fourteen arguments.  Every scalar is dereferenced on the way through; the
+ * packet-info record, the template and the payload are passed on by value
+ * (0x00E59AAE-0x00E59AF8).  The port number is fixed at -1.
+ *
+ * @param xmit_status   Output: net_io_$send_info_t.xmit_status, again the
+ *                      second word of the record MSG_$$SEND filled in
+ *                      ((0x38,A6), 0x00E59B06 "move.w (-0x2,A6),(A0)")
+ */
+void MSG_$SENDI(uint32_t *routing_key,
+                uint32_t *dest_node,
+                uint16_t *dest_sock,
+                int32_t *src_node_or,
+                uint32_t *src_node,
+                uint16_t *src_sock,
+                void *pkt_info,
+                uint16_t *request_id,
+                void *template,
+                uint16_t *template_len,
+                void *data,
+                uint16_t *data_len,
+                uint16_t *xmit_status,
                 status_$t *status_ret);
 
 /* Send message using hardware address routing */
@@ -298,7 +314,7 @@ void MSG_$SARI(msg_$socket_t *socket,
 void MSG_$GET_EC(msg_$socket_t *socket, uint32_t *ec, status_$t *status);
 
 /* Test if message is available on socket (returns non-zero if message pending) */
-int16_t MSG_$TEST_FOR_MESSAGE(msg_$socket_t *socket, uint32_t *ec_value,
+boolean MSG_$TEST_FOR_MESSAGE(msg_$socket_t *socket, uint32_t *ec_value,
                                status_$t *status_ret);
 
 /* Share socket with another address space */
@@ -306,7 +322,7 @@ void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
                         status_$t *status_ret);
 
 /* Duplicate socket ownership for fork (returns non-zero if any sockets shared) */
-int8_t MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid);
+boolean MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid);
 
 /* Free ASID resources */
 void MSG_$FREE_ASID(uint16_t *asid_ptr);

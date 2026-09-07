@@ -1,68 +1,74 @@
 /*
- * MSG_$TEST_FOR_MESSAGE - Test if message is available on socket
+ * MSG_$TEST_FOR_MESSAGE - Test whether a message is waiting on a socket
  *
- * Non-blocking check for message availability.
- * Returns the socket's event count and whether a message is pending.
+ * A non-blocking check: it reports the socket's event count value and returns
+ * a Domain boolean saying whether the socket's receive queue is non-empty.
  *
- * Original address: 0x00E59FB2
- * Original size: 122 bytes
+ * Original address: 0x00E59FB2 (122 bytes)
  */
 
 #include "msg/msg_internal.h"
 
-#define EC_$SOCK_TABLE      0xE28DB0    /* Socket event count table */
-
-int16_t MSG_$TEST_FOR_MESSAGE(msg_$socket_t *socket, uint32_t *ec_value,
-                               status_$t *status_ret)
+boolean MSG_$TEST_FOR_MESSAGE(msg_$socket_t *socket, uint32_t *ec_value,
+                              status_$t *status_ret)
 {
-#if defined(ARCH_M68K)
-    int16_t sock_num;
-    uint8_t asid;
-    uint8_t byte_index;
-    uint8_t *bitmap;
-    void *sock_ec;
-    uint8_t pending;
+    int16_t sock_num;       /* D0w */
+    int16_t asid;           /* D1w */
+    int16_t byte_index;     /* D0w */
+    uint8_t *bitmap;        /* A2 */
+    sock_$sock_t *sock;     /* A0 */
 
-    sock_num = *socket;
-
-    /* Validate socket number */
-    if (sock_num < 1 || sock_num > MSG_MAX_SOCKET) {
-        *status_ret = status_$msg_socket_out_of_range;
-        return 0;
+    /*
+     * 0x00E59FC8  move.w (A0),D0w / ble / cmpi.w #0xe0,D0w / ble
+     * Socket numbers run 1..0xE0 inclusive.
+     */
+    sock_num = (int16_t)*socket;
+    if (sock_num <= 0 || sock_num > MSG_MAX_SOCKET) {
+        *status_ret = status_$msg_socket_out_of_range;   /* 0x00E59FD2 */
+        /*
+         * 0x00E59FD8 jumps to the common exit with D0w still holding the
+         * socket number, so the byte the caller reads back is its low byte.
+         */
+        return (boolean)(int8_t)sock_num;
     }
 
-    /* Check ownership */
-    asid = PROC1_$AS_ID;
-    /* base + 0x1D8 + socket*8 - the one-based ownership table. */
+    /*
+     * 0x00E59FDA  lsl.w #0x3,D0w / lea (0x0,A5,D0w*0x1),A2 / lea (0x1d8,A2),A2
+     * i.e. the one-based ownership table.
+     */
     bitmap = MSG_$SOCK_OWNERS[sock_num];
-    byte_index = (0x3F - asid) >> 3;
+
+    /*
+     * 0x00E59FE0  moveq #0x3f,D0 / move.w PROC1_$AS_ID,D1w / sub.w D1w,D0w /
+     *             lsr.w #0x3,D0w / btst.b D1,(0x0,A2,D0w*0x1)
+     * All of it is word arithmetic with a LOGICAL shift, and the btst
+     * numbers bits modulo 8.
+     */
+    asid = (int16_t)PROC1_$AS_ID;
+    byte_index = (int16_t)((uint16_t)(0x3F - asid) >> 3);
 
     if ((bitmap[byte_index] & (1 << (asid & 7))) == 0) {
-        *status_ret = status_$msg_no_owner;
-        return 0;
+        *status_ret = status_$msg_no_owner;             /* 0x00E59FF6 */
+        /*
+         * 0x00E59FFC reaches the exit with D0w holding the byte index, so
+         * that is what the caller sees.
+         */
+        return (boolean)(int8_t)byte_index;
     }
 
     /*
-     * Get socket's event count.
+     * 0x00E59FFE  move.w (A0),D1w / movea.l #0xe28db4,A2 / lsl.w #0x2,D1w /
+     *             lea (0x0,A2,D1w*0x1),A2 / movea.l (-0x4,A2),A0
+     * The -4 makes this SOCK_$EVENT_COUNTERS[socket - 1].
      */
-    sock_ec = *(void **)(EC_$SOCK_TABLE + sock_num * 4);
+    sock = (sock_$sock_t *)SOCK_$EVENT_COUNTERS[sock_num - 1];
 
-    /* Return current event count value */
-    *ec_value = *(uint32_t *)sock_ec;
-
-    *status_ret = status_$ok;
+    *ec_value = (uint32_t)sock->ec.value;               /* 0x00E5A014 */
+    *status_ret = status_$ok;                           /* 0x00E5A016 */
 
     /*
-     * Check if message is pending (byte at offset 0x15).
-     * Return -1 if message pending, 0 if not.
+     * 0x00E5A018  clr.w D0w / move.b (0x15,A0),D0b / tst.w D0w / sne D0b
+     * A Domain boolean: 0xFF when anything is queued.
      */
-    pending = *(uint8_t *)((uint8_t *)sock_ec + 0x15);
-    return (pending != 0) ? -1 : 0;
-
-#else
-    (void)socket;
-    (void)ec_value;
-    *status_ret = status_$msg_socket_out_of_range;
-    return 0;
-#endif
+    return sock->queue_count != 0 ? true : false;
 }

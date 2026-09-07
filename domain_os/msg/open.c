@@ -21,13 +21,8 @@
  *   depth  - Pointer to socket depth (max messages queued)
  *   status_ret - Status return
  */
-/*
- * TODO(source-yo76): the body is ARCH_M68K-only and the #else fabricates a
- * status.  Only MSG_$SOCK_LOCK (0xE242E4) still needs a portable spelling.
- */
 void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
 {
-#if defined(ARCH_M68K)
     int16_t sock_num;
     int16_t sock_depth;
     uint8_t asid;
@@ -53,7 +48,7 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
     }
 
     /* Lock the socket table */
-    ML_$EXCLUSION_START((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_START(MSG_$SOCK_LOCK);
 
     /* Get pointer to ownership bitmap for this socket */
     bitmap = MSG_$SOCK_OWNERS[sock_num];   /* base + 0x1D8 + socket*8 */
@@ -64,7 +59,7 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
      */
     if (*(uint32_t *)bitmap != 0 || *(uint32_t *)(bitmap + 4) != 0) {
         *status_ret = status_$msg_socket_in_use;
-        ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
         return;
     }
 
@@ -75,7 +70,7 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
      */
     if (SOCK_$OPEN(sock_num, ((uint32_t)sock_depth << 16) | (uint16_t)sock_depth, 0x0400) >= 0) {
         *status_ret = status_$msg_socket_in_use;
-        ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
         return;
     }
 
@@ -117,14 +112,9 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
     /* Mark that user sockets are open */
     NETWORK_$USER_SOCK_OPEN = (int8_t)0xFF;    /* 0x00E592AA "st" */
 
-    ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
     *status_ret = status_$ok;
 
-#else
-    (void)socket;
-    (void)depth;
-    *status_ret = status_$msg_socket_out_of_range;
-#endif
 }
 
 /*

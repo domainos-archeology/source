@@ -127,7 +127,7 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_
                               src_node_or, src_node, src_sock,
                               pkt_info, request_id,
                               template, template_len, (uint16_t)data_len,
-                              &port, (uint32_t *)(uintptr_t)saved_hdr_va,
+                              &port, (pkt_$hdr_t *)ARCH_VA_TO_PTR(saved_hdr_va),
                               &total_len,
                               retry_hint, timeout_out, &status);
 

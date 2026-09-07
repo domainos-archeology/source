@@ -304,7 +304,7 @@ void FILE_$FORK_LOCK(uint16_t *new_asid, status_$t *status_ret)
 
 void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr) { (void)asid_ptr; }
 
-int8_t MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid)
+boolean MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid)
 {
     (void)parent_asid; (void)child_asid;
     return 0;

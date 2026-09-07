@@ -22,7 +22,6 @@
 void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
                         status_$t *status_ret)
 {
-#if defined(ARCH_M68K)
     int16_t sock_num;
     uint8_t asid;
     uint8_t target_asid;
@@ -33,14 +32,14 @@ void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
     int i;
 
     /* Lock the socket table */
-    ML_$EXCLUSION_START((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_START(MSG_$SOCK_LOCK);
 
     sock_num = *socket;
 
     /* Validate socket number */
     if (sock_num < 1 || sock_num > MSG_MAX_SOCKET) {
         *status_ret = status_$msg_socket_out_of_range;
-        ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
         return;
     }
 
@@ -52,14 +51,14 @@ void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
 
     if ((bitmap[byte_index] & (1 << (asid & 7))) == 0) {
         *status_ret = status_$msg_no_owner;
-        ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
         return;
     }
 
     /* Get ASID for target UID */
     target_asid = (uint8_t)PROC2_$FIND_ASID(uid, NULL, status_ret);
     if (*status_ret != status_$ok) {
-        ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
         return;
     }
 
@@ -94,12 +93,6 @@ void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
     }
 
     *status_ret = status_$ok;
-    ML_$EXCLUSION_STOP((void *)MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
 
-#else
-    (void)socket;
-    (void)uid;
-    (void)add_remove;
-    *status_ret = status_$msg_socket_out_of_range;
-#endif
 }
