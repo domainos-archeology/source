@@ -139,6 +139,28 @@ typedef struct ring_hw_regs_t {
     volatile uint16_t   mode;       /* 0x06: receiver mode */
 } ring_hw_regs_t;
 
+/*
+ * Receive status register access
+ *
+ * On the target these are plain volatile MMIO reads and writes of
+ * ring_hw_regs_t.rcv_csr.  On a host build they go through functions the
+ * unit tests supply, so that a test can model a controller whose receive
+ * status still reads busy after the register has been written zero - which is
+ * the condition RING_$RCV_FROM_UNIT_PRIV's recovery arm exists for
+ * (0x00E7618A-0x00E761E2) and which plain memory cannot reproduce.
+ *
+ * The other three registers are write-only on this path, so they stay direct.
+ */
+#if defined(ARCH_M68K)
+#define RING_$RCV_CSR_READ(regs)        ((regs)->rcv_csr)
+#define RING_$RCV_CSR_WRITE(regs, v)    ((regs)->rcv_csr = (uint16_t)(v))
+#else
+uint16_t ring_$rcv_csr_read(ring_hw_regs_t *regs);
+void     ring_$rcv_csr_write(ring_hw_regs_t *regs, uint16_t value);
+#define RING_$RCV_CSR_READ(regs)        ring_$rcv_csr_read(regs)
+#define RING_$RCV_CSR_WRITE(regs, v)    ring_$rcv_csr_write((regs), (uint16_t)(v))
+#endif
+
 /* Bits of ring_hw_regs_t.rcv_csr tested by the driver */
 #define RING_RCV_CSR_BUSY       0x2000  /* btst #13 - receiver still active */
 
@@ -188,9 +210,14 @@ typedef struct ring_channel_t {
     int8_t      _pad01;         /* 0x01 */
     int16_t     asid;           /* 0x02: PROC1_$AS_ID of the opener (0x00E76D76) */
     int16_t     socket_id;      /* 0x04: socket, or RING_OS_SOCKET_ID (0x00E76D7E) */
-    int16_t     open_word;      /* 0x06: first word of the open argument record
-                                 *       (0x00E76D84).
-                                 *       TODO(source-1a5o): meaning unknown */
+    int16_t     open_version;   /* 0x06: the driver interface version the
+                                 *       channel was opened with - the first
+                                 *       word of ring_$open_options_t
+                                 *       ("move.w (A1),(0x60,A0)" at
+                                 *       0x00E76D84).  ring_$open_internal
+                                 *       rejects anything above 1 with
+                                 *       0x00310010, "driver version
+                                 *       mismatch" (0x00E76BAE). */
 } ring_channel_t;
 
 /*
@@ -393,8 +420,34 @@ extern uid_t RING_$NETWORK_UID;
  * Per-unit statistics (0x3C bytes)
  * Located at 0xE261E0 + (unit * 0x3C), indexed with a 0-based unit number.
  *
- * TODO(source-1a5o): the receive error counters at 0x20..0x32 are named after
- * the rcv_csr bit that drives them; their Domain/OS names are not yet known.
+ * RING_$GET_STATS (0x00E76950) copies the whole block out verbatim - fifteen
+ * longwords, "moveq #0xe,D1 / move.l (A3)+,(A4)+ / dbf" at 0x00E7699C - and
+ * reports its size as 0x3C, so the kernel itself never names the fields.
+ *
+ * The receive error counters at 0x20..0x32 are decoded from the receive
+ * status register by ring_$validate_receive (0x00E75F60-0x00E76032), which
+ * tests the bits in this order and stops at the first match:
+ *
+ *   bit 10 or 11  -> +0x2A, swdiag +0x10   (also bumps RING_$RCV_BIPHASE /
+ *                                           RING_$RCV_ESB at 0x00E261B8 /
+ *                                           0x00E261BA)
+ *   bit 9         -> +0x24, swdiag +0x0A
+ *   bit 6         -> CRASH_SYSTEM first (0x00E75FB4), then +0x26; this is the
+ *                    only one with no software-diagnostic mirror
+ *   bit 5         -> +0x20, swdiag +0x06
+ *   bit 0         -> +0x2E, swdiag +0x14
+ *   bit 8         -> +0x22, swdiag +0x08
+ *   bit 7         -> +0x30, swdiag +0x16
+ *   bit 3         -> +0x28, swdiag +0x0E
+ *
+ * The swdiag mirror is bumped only when the packet came from the software
+ * diagnostic ("tst.b D0b / bpl" before each one).
+ *
+ * TODO(source-1a5o): the counters below are still named after the rcv_csr bit
+ * that drives them.  Their Domain/OS names are not in the kernel, not in the
+ * SR10.4 status-code database and not in the headers in this tree; they would
+ * have to come from a user-space consumer of RING_$GET_STATS (netstat / lcnet)
+ * or from Apollo documentation.
  */
 typedef struct ring_$stats_t {
     uint16_t    _reserved0;         /* 0x00 */

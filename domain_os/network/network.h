@@ -170,8 +170,12 @@ extern uint8_t NETWORK_$CAPABLE_FLAGS;
  */
 typedef struct network_$failure_rec_t {
     uint16_t    word0;          /* 0x00 */
-    uint8_t     flag;           /* 0x02: 0xFF once a failure has been recorded;
-                                 *       cleared when NETWORK_$ACTIVITY_FLAG < 0 */
+    int8_t      flag;           /* 0x02: Pascal boolean - "st (0x2,A0)" at
+                                 *       0x00E65D0A and 0x00E75F22 make it
+                                 *       0xFF once a failure has been
+                                 *       recorded; cleared when
+                                 *       NETWORK_$ACTIVITY_FLAG < 0.  Test it
+                                 *       with "< 0". */
     uint8_t     byte3;          /* 0x03 */
     uint32_t    error_info;     /* 0x04: Failure information (request param2) */
     uint32_t    timestamp;      /* 0x08: TIME_$CURRENT_CLOCKH at failure */
@@ -181,7 +185,7 @@ typedef struct network_$failure_rec_t {
 extern network_$failure_rec_t NETWORK_$FAILURE_REC;
 
 /*
- * Note: ROUTE_$N_ROUTING_PORTS is declared in route/route_internal.h
+ * Note: ROUTE_$N_ROUTING_PORTS is declared in route/route.h
  * Include that header if you need access to it.
  */
 

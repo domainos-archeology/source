@@ -23,9 +23,10 @@
 
 void ASKNODE_$PROPAGATE_WHO(int16_t *response, uint32_t *routing_info)
 {
-    uint32_t pkt_info[8];
-    uint8_t temp1[2], temp2[4];
-    status_$t status[3];
+    uint32_t    pkt_info[8];    /* A6-0x220, the 30-byte PKT_$DEFAULT_INFO copy */
+    uint16_t    retry_hint;     /* A6-0x230 */
+    uint16_t    timeout_out;    /* A6-0x22E */
+    status_$t   status;         /* A6-0x22C */
 
     /*
      * Check if already propagated (marked with ASKNODE_DONE_MARKER).
@@ -75,9 +76,9 @@ void ASKNODE_$PROPAGATE_WHO(int16_t *response, uint32_t *routing_info)
             8,                              /* response length */
             &ASKNODE_$EMPTY_DATA,                  /* no data */
             0,
-            temp1,
-            temp2,
-            status
+            &retry_hint,                    /* 13 A6-0x230 */
+            &timeout_out,                   /* 14 A6-0x22E */
+            &status                         /* 15 A6-0x22C */
         );
     } else {
         /*
@@ -99,9 +100,9 @@ void ASKNODE_$PROPAGATE_WHO(int16_t *response, uint32_t *routing_info)
             0x22,                           /* response length */
             &ASKNODE_$EMPTY_DATA,                  /* no data */
             0,
-            temp1,
-            temp2,
-            status
+            &retry_hint,                    /* 13 A6-0x230 */
+            &timeout_out,                   /* 14 A6-0x22E */
+            &status                         /* 15 A6-0x22C */
         );
     }
 

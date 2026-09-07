@@ -26,7 +26,6 @@
 
 #include "route/route_internal.h"
 #include "rip/rip.h"
-#include "rip/rip_internal.h"
 #include "net_io/net_io.h"
 #include "ml/ml.h"
 #include "hint/hint.h"
@@ -138,7 +137,7 @@ typedef struct route_service_request_t {
  *   - HINT_$ADD_NET in hint/hint.h
  *   - NET_IO_$CREATE_PORT in net_io/net_io.h
  *   - RIP_$UPDATE_D in rip/rip.h
- *   - RIP_$SEND_UPDATES in rip/rip_internal.h
+ *   - RIP_$SEND_UPDATES in rip/rip.h
  */
 
 /*

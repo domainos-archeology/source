@@ -21,6 +21,20 @@
 struct rip_$entry_t;
 
 /*
+ * rip_$xns_addr_t - the 10-byte XNS route source address (network plus the
+ * 6-byte host).  This is the shape of RIP_$UPDATE_D's / RIP_$UPDATE_INT's
+ * "source" argument and of rip_$route_t.nexthop.
+ *
+ * Exported here (rather than from rip_internal.h) because route/ and
+ * network/ build one on the stack to hand to RIP_$UPDATE_D / RIP_$UPDATE_INT
+ * (ROUTE_$SERVICE 0x00E6A0E6, ROUTE_$CLOSE_PORT 0x00E69F5A).
+ */
+typedef struct rip_$xns_addr_t {
+    uint32_t    network;        /* 0x00: Network address */
+    uint8_t     host[6];        /* 0x04: Host address (6 bytes) */
+} rip_$xns_addr_t;
+
+/*
  * rip_$dest_addr_t - the 12-byte XNS destination RIP_$FIND_NEXTHOP is asked
  * about (network, 6-byte host, socket).  ROUTE_$PROCESS copies it straight
  * out of the IDP header at idp+6 (0x00E87564) and PKT_$BLD_INTERNET_HDR
@@ -340,5 +354,54 @@ void RIP_$PORT_CLOSE(uint16_t port_index, boolean flags, boolean force);
  * Original address: 0x00E87396
  */
 void RIP_$HALT_ROUTER(boolean flags);
+
+/*
+ * RIP_$UPDATE_INT - Internal route update
+ *
+ * Updates routing table entries with new route information.  Called both
+ * inside RIP (RIP_$UPDATE_D / RIP_$SERVER) and from NETWORK_$FETCH_DISKLESS_INFO,
+ * which is why it is declared here rather than in rip_internal.h.
+ *
+ * @param network      Network to update (-1 for all entries, 0 = no-op)
+ * @param source       Source address (10 bytes, rip_$xns_addr_t)
+ * @param hop_count    New hop count / metric (clamped to 17)
+ * @param port_index   Port index for this route
+ * @param flags        If < 0, use non-standard routes; else standard
+ * @param status_ret   Output: status code
+ *
+ * Original address: 0x00E15922
+ */
+void RIP_$UPDATE_INT(uint32_t network, rip_$xns_addr_t *source,
+                     uint16_t hop_count, uint16_t port_index,
+                     boolean flags, status_$t *status_ret);
+
+/*
+ * RIP_$SEND_UPDATES - Send routing updates
+ *
+ * Sends routing update packets if there are recent changes.  ROUTE_$SERVICE
+ * calls it directly (0x00E6A19C), so it is public.
+ *
+ * @param is_std    Pascal boolean read as a byte at (0x8,A6)
+ *                  ("move.b (0x8,A6),D0b / bpl" at 0x00E6887E):
+ *                  < 0 = non-standard routes, >= 0 = standard routes
+ *
+ * Original address: 0x00E6887A
+ */
+void RIP_$SEND_UPDATES(boolean is_std);
+
+/*
+ * RIP_$BROADCAST - Build and broadcast the full routing table
+ *
+ * ROUTE_$PROCESS calls this on its periodic timer (0x00E87470 / 0x00E8747C),
+ * so it is public.
+ *
+ * @param flags     Pascal boolean read as a byte at (0x8,A6)
+ *                  ("move.b (0x8,A6),D2b" at 0x00E872A6):
+ *                  If < 0: broadcast non-standard routes (cap metric at 16)
+ *                  If >= 0: broadcast standard routes
+ *
+ * Original address: 0x00E87298
+ */
+void RIP_$BROADCAST(boolean flags);
 
 #endif /* RIP_H */

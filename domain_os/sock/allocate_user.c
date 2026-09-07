@@ -20,7 +20,7 @@ int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret,
                            uint16_t queue_hi, uint16_t queue_lo)
 {
     uint16_t *user_limit;
-    sock_ec_view_t *sock_view;
+    sock_$sock_t *sock_view;
     int8_t result;
     uint16_t sock_num;
     uint32_t proto_bufpages;

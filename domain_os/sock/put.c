@@ -30,13 +30,13 @@
  *
  * @return 0 on success, 1 if queue full, 2 if socket not open
  */
-int16_t SOCK_$PUT_INT_INT(sock_ec_view_t *sock_view, void **pkt_ptr,
+int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, void **pkt_ptr,
                           int8_t flags, uint16_t ec_param1, uint16_t ec_param2)
 {
     ml_$spin_token_t token;
     int16_t result;
     uint8_t *netbuf;
-    uint32_t *pkt_info = (uint32_t *)*pkt_ptr;
+    sock_$pkt_info_t *pkt_info = (sock_$pkt_info_t *)*pkt_ptr;
     uint16_t data_len;
     int16_t i;
 
@@ -44,78 +44,96 @@ int16_t SOCK_$PUT_INT_INT(sock_ec_view_t *sock_view, void **pkt_ptr,
     token = ML_$SPIN_LOCK(SOCK_GET_LOCK());
 
     /*
-     * Validate socket state:
-     * - Socket must be allocated (bit 13 set)
-     * - If flags bit 7 is set, socket must also be open (bit 15 set)
-     * - Data length must not exceed max_queue
+     * Validate socket state (0x00E1622A-0x00E16248):
+     *   btst.l #0xd,D1        socket must be allocated
+     *   tst.b D2b / bpl       if the flags byte is negative ...
+     *   tst.w D1w / bpl       ... the socket must also be open (bit 15)
+     *   move.w (0x2a,A2),D1w
+     *   cmp.w (0x18,A0),D1w   data length must not exceed max_data_len
+     *   bls                   (unsigned)
      */
-    data_len = *(uint16_t *)((uint8_t *)pkt_info + 0x2A);
+    data_len = pkt_info->data_len;
 
     if ((sock_view->flags & SOCK_FLAG_ALLOCATED) == 0 ||
         ((flags < 0) && ((sock_view->flags & SOCK_FLAG_OPEN) == 0)) ||
-        (data_len > sock_view->max_queue)) {
+        (data_len > sock_view->max_data_len)) {
         result = 2;  /* Socket not ready or data too large */
-    } else if (sock_view->queue_count >= sock_view->protocol) {
-        /* Queue is full (protocol field doubles as max queue depth here) */
+    } else if (sock_view->queue_count >= sock_view->max_queue) {
+        /*
+         * Queue is full: "move.b (0x15,A0),D5b / move.b (0x14,A0),D6b /
+         * cmp.w D6w,D5w / bcs" at 0x00E1624C-0x00E1625A only proceeds while
+         * queue_count < max_queue.
+         */
         result = 1;
     } else {
-        /* Increment queue count */
+        /* Increment queue count (0x00E16262 addq.b #1,(0x15,A0)) */
         sock_view->queue_count++;
 
-        /* Get network buffer address (aligned to 1KB boundary) */
-        netbuf = (uint8_t *)((uint32_t)pkt_info[0] & 0xFFFFFC00);
+        /*
+         * Get the network buffer address by rounding the header VA down to
+         * the 1KB page: "move.l (A2),D6 / andi.w #-0x400,D6w" at 0x00E16266
+         * masks only the low word, which is the same as clearing bits 0..9.
+         */
+        netbuf = (uint8_t *)((uint32_t)(uintptr_t)pkt_info->hdr & 0xFFFFFC00u);
 
-        /* Clear next pointer (end of queue) */
+        /* Clear next pointer (end of queue), 0x00E1626E */
         *(uint32_t *)(netbuf + NETBUF_OFFSET_NEXT) = 0;
 
-        /* Copy packet info to network buffer header */
-        *(uint32_t *)(netbuf + NETBUF_OFFSET_SRC_ADDR) = pkt_info[1];
-        *(uint16_t *)(netbuf + NETBUF_OFFSET_SRC_PORT) = *(uint16_t *)&pkt_info[2];
-        *(uint32_t *)(netbuf + NETBUF_OFFSET_DST_ADDR) = pkt_info[3];
-        *(uint16_t *)(netbuf + NETBUF_OFFSET_DST_PORT) = *(uint16_t *)&pkt_info[4];
-        *(uint32_t *)(netbuf + NETBUF_OFFSET_DATA_LEN) = *(uint32_t *)((uint8_t *)pkt_info + 0x2A);
+        /* Copy packet info to network buffer header (0x00E16272-0x00E1629E) */
+        *(uint32_t *)(netbuf + NETBUF_OFFSET_SRC_ADDR) = pkt_info->src_addr;
+        *(uint16_t *)(netbuf + NETBUF_OFFSET_SRC_PORT) = pkt_info->src_port;
+        *(uint32_t *)(netbuf + NETBUF_OFFSET_DST_ADDR) = pkt_info->dst_addr;
+        *(uint16_t *)(netbuf + NETBUF_OFFSET_DST_PORT) = pkt_info->flags;
 
-        /* Store EC parameters */
+        /*
+         * "move.l (0x2a,A2),(0x3e8,A0)" at 0x00E1628A copies both the data
+         * length and the header length in one longword.
+         */
+        *(uint16_t *)(netbuf + NETBUF_OFFSET_DATA_LEN)     = pkt_info->data_len;
+        *(uint16_t *)(netbuf + NETBUF_OFFSET_DATA_LEN + 2) = pkt_info->hdr_len;
+
+        /* Store EC parameters (0x00E16290, 0x00E16294) */
         *(uint16_t *)(netbuf + NETBUF_OFFSET_EC_PARAM1) = ec_param1;
         *(uint16_t *)(netbuf + NETBUF_OFFSET_EC_PARAM2) = ec_param2;
 
-        /* Copy hop count and hop array */
-        *(uint16_t *)(netbuf + NETBUF_OFFSET_HOP_COUNT) = *(uint16_t *)((uint8_t *)pkt_info + 0x12);
-        *(uint32_t *)(netbuf + NETBUF_OFFSET_HDR_PTR) = pkt_info[0];
+        /* Hop count and header pointer (0x00E16298, 0x00E1629E) */
+        *(uint16_t *)(netbuf + NETBUF_OFFSET_HOP_COUNT) = pkt_info->n_hops;
+        *(uint32_t *)(netbuf + NETBUF_OFFSET_HDR_PTR) = (uint32_t)(uintptr_t)pkt_info->hdr;
 
-        /* Copy hop array if present */
-        uint16_t hop_count = *(uint16_t *)((uint8_t *)pkt_info + 0x12);
-        if (hop_count > 0) {
+        /* Copy the hop words (0x00E162A2-0x00E162BC, dbf = n_hops iterations) */
+        {
+            uint16_t hop_count = pkt_info->n_hops;
             uint16_t *hop_out = (uint16_t *)(netbuf + NETBUF_OFFSET_HOP_ARRAY);
-            uint16_t *hop_in = (uint16_t *)((uint8_t *)pkt_info + 0x14);
+            const uint16_t *hop_in = pkt_info->hops;
 
-            for (i = hop_count - 1; i >= 0; i--) {
+            for (i = (int16_t)hop_count - 1; i >= 0; i--) {
                 *hop_out++ = *hop_in++;
             }
         }
 
-        /* Link packet into queue */
+        /* Link packet into queue (0x00E162C0-0x00E162E0) */
         if (sock_view->queue_tail == 0) {
             /* Queue was empty - packet is both head and tail */
-            sock_view->queue_head = (uint32_t)netbuf;
-            sock_view->queue_tail = (uint32_t)netbuf;
+            sock_view->queue_head = (uint32_t)(uintptr_t)netbuf;
+            sock_view->queue_tail = (uint32_t)(uintptr_t)netbuf;
         } else {
             /* Append to existing queue */
-            *(uint32_t *)(sock_view->queue_tail + NETBUF_OFFSET_NEXT) = (uint32_t)netbuf;
-            sock_view->queue_tail = (uint32_t)netbuf;
+            *(uint32_t *)((uint8_t *)(uintptr_t)sock_view->queue_tail +
+                          NETBUF_OFFSET_NEXT) = (uint32_t)(uintptr_t)netbuf;
+            sock_view->queue_tail = (uint32_t)(uintptr_t)netbuf;
         }
 
         /*
-         * Copy data page pointers.
-         * Up to 4 pages, each page is 1KB. Only copy pointers for
-         * pages that contain data based on data_len.
+         * Copy the four data page addresses, zeroing the slots the payload
+         * does not reach (0x00E162E4-0x00E1631E): the loop counter runs 1..4
+         * and the comparison is "data_len <= (n-1) * 0x400".
          */
         for (i = 0; i < 4; i++) {
-            if (((i) * 0x400) < data_len) {
-                *(uint32_t *)(netbuf + NETBUF_OFFSET_DATA_LEN + 4 + i * 4) =
-                    pkt_info[0x0C + i];
+            if ((int32_t)data_len > (int32_t)i * 0x400) {
+                *(uint32_t *)(netbuf + NETBUF_OFFSET_DATA_PTRS + i * 4) =
+                    pkt_info->data_pages[i];
             } else {
-                *(uint32_t *)(netbuf + NETBUF_OFFSET_DATA_LEN + 4 + i * 4) = 0;
+                *(uint32_t *)(netbuf + NETBUF_OFFSET_DATA_PTRS + i * 4) = 0;
             }
         }
 
@@ -147,7 +165,7 @@ int8_t SOCK_$PUT_INT(uint16_t sock_num, void **pkt_ptr, uint8_t flags,
                      uint16_t ec_param1, uint16_t ec_param2,
                      ec_$eventcount_t **ec_ret)
 {
-    sock_ec_view_t *sock_view;
+    sock_$sock_t *sock_view;
     int16_t put_result;
 
     /* Validate socket number */

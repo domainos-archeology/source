@@ -112,7 +112,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
     {
         uint32_t request[6];
         uint32_t pkt_info[8];
-        uint8_t temp1[2];
+        uint16_t retry_hint;    /* A6-0x2BA */
 
         request[0] = 0x00030045;  /* Version 3, request type 0x45 (WHO) */
         request[1] = NODE_$ME;
@@ -138,7 +138,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
                            sock_num, pkt_info, pkt_id,
                            request, 0x18,
                            &ASKNODE_$EMPTY_DATA, 0,  /* No data */
-                           temp1, &resp_timeout, local_status);
+                           &retry_hint, &resp_timeout, local_status);
     }
 
     if (local_status[0] != 0) {
@@ -159,8 +159,8 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
     /* Wait for responses */
     while (1) {
         int16_t wait_result;
-        int32_t pkt_ptr;
-        char *pkt_data;
+        app_$receive_rec_t rcv;     /* A6-0x30, 44 bytes */
+
 
         /*
          * 0x00E661EC - 0x00E6621A.  Both arrays are pushed by value:
@@ -192,9 +192,10 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
             break;
         }
 
-        /* Receive packet */
-        APP_$RECEIVE(sock_num, &pkt_ptr, local_status);
+        /* 0x00E6623C: APP_$RECEIVE(sock_num, &rcv, local_status) */
+        APP_$RECEIVE(sock_num, &rcv, local_status);
 
+        /* 0x00E66252: a failed receive goes straight back to the wait */
         if (local_status[0] != 0) {
             continue;
         }
@@ -203,28 +204,44 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         {
             uint16_t pkt_len;
             int16_t resp_id;
+            uint16_t dump_len;
             asknode_response_t response;
-
-            pkt_data = (char *)pkt_ptr;
-            pkt_len = *(uint16_t *)(pkt_data + 2);
-            if (pkt_len > 0x200) pkt_len = 0x200;
-            resp_id = *(int16_t *)(pkt_data + 6);
-
-            /* Copy response data */
-            OS_$DATA_COPY(pkt_data + 0x10, (char *)&response, pkt_len);
-            NETBUF_$RTN_HDR((void **)&pkt_data);
+            asknode_$reply_hdr_t *reply = (asknode_$reply_hdr_t *)rcv.reply;
 
             /*
-           * TODO(source-d24h): the original reads the responding node id out
-           * of the packet BEFORE returning the header buffer
-           * ("move.l (0xE,A0),(0x0,A1,D7w)" at 0x00E6626A, with the
-           * NETBUF_$RTN_HDR at 0x00E6629E), and hands PKT_$DUMP_DATA the
-           * APP_$RECEIVE record's own page vector at A6-0x28 rather than an
-           * offset into the buffer it has just given back.
-           */
-            node_list[*count] = *(int32_t *)(pkt_data + 0x0E);
+             * 0x00E66258-0x00E66284, in the original's order.  Everything the
+             * reply record is read for happens BEFORE the buffer goes back.
+             */
 
-            PKT_$DUMP_DATA((uint32_t *)(pkt_data + 0x1C), *(uint16_t *)(pkt_data + 4));
+            /* 0x00E6625C: keep the payload byte count for PKT_$DUMP_DATA */
+            dump_len = reply->data_len;
+
+            /* 0x00E66262-0x00E6626A: the responding node id, read here */
+            node_list[*count] = (int32_t)reply->node_id;
+
+            /* 0x00E66270: reply length, clamped to 0x200 */
+            pkt_len = reply->length;
+            if (pkt_len > 0x200) {
+                pkt_len = 0x200;
+            }
+
+            /* 0x00E66280 */
+            resp_id = reply->reply_id;
+
+            /*
+             * 0x00E66286-0x00E66296: the copy source is the record's DATA
+             * pointer (record+4), not an offset into the reply record.
+             */
+            OS_$DATA_COPY((char *)rcv.data, (char *)&response, pkt_len);
+
+            /* 0x00E6629A: return the buffer that data pointer names */
+            NETBUF_$RTN_HDR((uint32_t *)&rcv.data);
+
+            /*
+             * 0x00E662A6-0x00E662B6: the page vector is the record's own
+             * (A6-0x28), which is still valid after the header went back.
+             */
+            PKT_$DUMP_DATA(rcv.data_pages, dump_len);
 
             if (local_status[0] != 0) {
                 *status = local_status[0];

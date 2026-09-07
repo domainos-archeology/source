@@ -126,6 +126,7 @@ route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
  * route_internal.h); on other architectures they are plain variables.
  */
 #if !defined(ARCH_M68K)
+char ROUTE_$WIRED_AREA_START_SYM[1];
 char ROUTE_$WIRED_AREA_END_SYM[1];
 /* Contents of 0xE87D64 */
 const status_$t ROUTE_$UNKNOWN_PORT_STATUS = status_$internet_unknown_network_port;
@@ -164,4 +165,10 @@ ec_$eventcount_t *PTR_ROUTE_$CONTROL_EC = (ec_$eventcount_t *)&ROUTE_$CONTROL_EC
 uint16_t ROUTE_$FWD_TIMEOUT = 1;
 uint16_t ROUTE_$PACKET_SEQ = 0x8000;
 uint32_t ROUTE_$LAST_UPDATE_TIME;
+
+/*
+ * ROUTE_$ANNOUNCE_TEMPLATE (0xE825E0) - the constant word 2 that
+ * ROUTE_$ANNOUNCE_NET sends as its RIP template.
+ */
+const uint16_t ROUTE_$ANNOUNCE_TEMPLATE = 2;
 #endif

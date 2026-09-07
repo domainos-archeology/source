@@ -16,11 +16,11 @@
 
 void SOCK_$CLOSE(uint16_t sock_num)
 {
-    sock_ec_view_t *sock_view;
-    sock_ec_view_t **free_list_head;
+    sock_$sock_t *sock_view;
+    sock_$sock_t **free_list_head;
     uint16_t *user_limit;
     ml_$spin_token_t token;
-    sock_pkt_info_t pkt_info;
+    sock_$pkt_info_t pkt_info;
     int8_t get_result;
 
     /* Get pointer to socket's EC view */
@@ -35,7 +35,7 @@ void SOCK_$CLOSE(uint16_t sock_num)
     /* Release spinlock */
     ML_$SPIN_UNLOCK(SOCK_GET_LOCK(), token);
 
-    /* Drain any queued packets */
+    /* Drain any queued packets (0x00E15FBA tst on the byte at +0x15) */
     if (sock_view->queue_count != 0) {
         do {
             /* Get next packet from queue */
@@ -43,20 +43,29 @@ void SOCK_$CLOSE(uint16_t sock_num)
 
             if (get_result < 0) {
                 /* Return header buffer */
-                NETBUF_$RTN_HDR(&pkt_info.hdr_ptr);
+                NETBUF_$RTN_HDR((uint32_t *)&pkt_info.hdr); /* pea (-0x40,A6) @0x00E15FC4 */
 
-                /* If data pointers present, dump the data */
-                if (pkt_info.data_ptrs[0] != 0) {
-                    PKT_$DUMP_DATA(pkt_info.data_ptrs, pkt_info.data_len);
+                /*
+                 * If data pages are present, dump them.  The original tests
+                 * the longword at record+0x30 (tst.l (-0x10,A6) @0x00E15FD0)
+                 * and passes the WORD at record+0x2A as the length
+                 * (move.w (-0x16,A6),-(SP) @0x00E15FD8).
+                 */
+                if (pkt_info.data_pages[0] != 0) {
+                    PKT_$DUMP_DATA(pkt_info.data_pages, pkt_info.data_len);
                 }
             }
         } while (get_result < 0);
     }
 
-    /* Return buffer pages if allocated */
-    if (sock_view->buffer_pages_hi != 0 || sock_view->buffer_pages_lo != 0) {
-        NETBUF_$DEL_PAGES((int16_t)sock_view->buffer_pages_hi,
-                         (int16_t)sock_view->buffer_pages_lo);
+    /*
+     * Return buffer pages if any were allocated.  0x00E15FF8-0x00E16006 ORs
+     * the two bytes together; 0x00E1600A-0x00E16016 pushes +0x1B then +0x1A,
+     * so +0x1A is the header count and +0x1B the data count.
+     */
+    if ((sock_view->hdr_pages | sock_view->data_pages) != 0) {
+        NETBUF_$DEL_PAGES((int16_t)sock_view->hdr_pages,
+                          (int16_t)sock_view->data_pages);
     }
 
     /* Acquire spinlock again for final cleanup */
@@ -71,8 +80,8 @@ void SOCK_$CLOSE(uint16_t sock_num)
         sock_view->flags &= ~SOCK_FLAG_USER_MODE;
     }
 
-    /* Clear protocol */
-    sock_view->protocol = 0;
+    /* Refuse further packets (0x00E16044 clr.b (0x14,A2)) */
+    sock_view->max_queue = 0;
 
     /* For dynamic sockets (>= 32), return to free list */
     if (sock_num >= SOCK_DYNAMIC_MIN) {

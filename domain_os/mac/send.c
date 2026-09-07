@@ -26,6 +26,7 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
     mac_$send_pkt_t local_pkt;
     uint16_t local_bytes_sent;
     void *chain_ptr;
+    int8_t arp_broadcast;       /* A6-0x78: MAC_OS_$ARP's fourth argument */
 
     *bytes_sent = 0;
     *status_ret = status_$ok;
@@ -78,15 +79,14 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
     }
 
     /*
-     * If arp_flag is negative, we need to do ARP lookup.
-     * Otherwise, skip ARP and send directly.
+     * If the caller asked for ARP (the boolean at +0x18 is true), resolve the
+     * link address in place: 0x00E0BB8C "tst.b (0x18,A0) / bpl", and the ARP
+     * call at 0x00E0BB92-0x00E0BBAE passes the packet descriptor itself as
+     * the link-address output and a local byte as the broadcast answer.
      */
-    if (pkt_desc->arp_flag < 0) {
-        /* Do ARP lookup */
-        /* The original pushes the caller's packet descriptor address as the
-         * mac_addr argument of MAC_OS_$ARP (the descriptor starts with the
-         * 6-byte destination address). */
-        MAC_OS_$ARP(MAC_$ARP_TABLE, port_num, (uint16_t *)pkt_desc, NULL, status_ret);
+    if (pkt_desc->is_broadcast < 0) {
+        MAC_OS_$ARP(MAC_$ARP_TABLE, port_num, (uint16_t *)pkt_desc,
+                    (uint8_t *)&arp_broadcast, status_ret);
         if (*status_ret != status_$ok) {
             FIM_$RLS_CLEANUP(cleanup_buf);
             return;
@@ -94,9 +94,11 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
     }
 
     /*
-     * Copy first 6 longwords (24 bytes) of packet descriptor to local copy.
-     * This includes dest/src addresses, type, etc.
+     * Build the local descriptor MAC_OS_$SEND is given
+     * (0x00E0BBBA-0x00E0BBF2).
      */
+
+    /* Six longwords, 0x00..0x17 (0x00E0BBC2 "moveq #0x5" + dbf) */
     {
         uint32_t *src = (uint32_t *)pkt_desc;
         uint32_t *dst = (uint32_t *)&local_pkt;
@@ -106,29 +108,30 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
         }
     }
 
-    /* Copy arp_flag (offset 0x18) */
-    local_pkt.arp_flag = pkt_desc->arp_flag;
+    /* +0x18 as a byte (0x00E0BBCE) */
+    local_pkt.is_broadcast = pkt_desc->is_broadcast;
 
-    /* Copy total_length (offset 0x30) */
-    local_pkt.total_length = ((uint32_t *)pkt_desc)[0xC];
+    /* +0x30 (0x00E0BBD4) */
+    local_pkt.frame_type = pkt_desc->frame_type;
 
-    /* Clear some local fields */
-    ((uint32_t *)&local_pkt)[6] = 0;  /* offset 0x18 area */
-    ((uint32_t *)&local_pkt)[7] = 0;  /* offset 0x1C area */
+    /* +0x38 and +0x3C cleared (0x00E0BBDA, 0x00E0BBDE) */
+    local_pkt.data_length = 0;
+    local_pkt.data_pages[0] = 0;
 
-    /* Copy header info (offsets 0x1C-0x27) */
-    ((uint32_t *)&local_pkt)[7] = ((uint32_t *)pkt_desc)[7];  /* 0x1C */
-    ((uint32_t *)&local_pkt)[8] = ((uint32_t *)pkt_desc)[8];  /* 0x20 */
-    ((uint32_t *)&local_pkt)[9] = ((uint32_t *)pkt_desc)[9];  /* 0x24 */
+    /* The header descriptor, three longwords (0x00E0BBE2-0x00E0BBEE) */
+    local_pkt.hdr_desc = pkt_desc->hdr_desc;
 
-    /* Clear the flag byte at offset 0x28 (clr.b (-0x28,A6)) */
-    local_pkt.flags_28 = 0;
+    /*
+     * Clear "header already built" so MAC_OS_$SEND allocates and fills the
+     * header buffers itself (0x00E0BBF0 clr.b (-0x28,A6)).
+     */
+    local_pkt.hdr_prebuilt = 0;
 
     /*
      * Walk the buffer chain and clear flags in each buffer entry.
      * Original clears byte at offset 0xC in each chain entry.
      */
-    for (chain_ptr = (void *)((uint32_t *)pkt_desc)[9]; /* body_chain at 0x24 */
+    for (chain_ptr = (void *)(uintptr_t)pkt_desc->hdr_desc.next;  /* 0x00E0BBF4 */
          chain_ptr != NULL;
          chain_ptr = (void *)(*(uint32_t *)((uint8_t *)chain_ptr + 8))) {
         *(uint8_t *)((uint8_t *)chain_ptr + 0xC) = 0;
@@ -137,7 +140,7 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
     /* Call MAC_OS_$SEND to actually transmit the packet */
     /* MAC_OS_$SEND is declared with int16_t * channel/bytes_sent and a
      * mac_os_$send_pkt_t * descriptor; the same addresses are pushed here. */
-    MAC_OS_$SEND((int16_t *)channel, (mac_os_$send_pkt_t *)&local_pkt,
+    MAC_OS_$SEND((int16_t *)channel, &local_pkt,
                  (int16_t *)&local_bytes_sent, &os_status);
 
     *bytes_sent = local_bytes_sent;

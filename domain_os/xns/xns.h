@@ -590,6 +590,54 @@ void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret);
 void XNS_IDP_$OS_CLOSE(int16_t *channel, status_$t *status_ret);
 
 /*
+ * xns_$os_send_rec_t - the 0x48-byte request record XNS_IDP_$OS_SEND is given
+ *
+ * XNS_IDP_$OS_SEND (0x00E18256) reads its second argument as follows:
+ *   0x18  "move.l (0x18,A3),D1"  at 0x00E182C8 - the first buffer length, and
+ *         the running total it accumulates while walking the chain
+ *   0x1C  "move.l (0x1c,A1),D3"  at 0x00E1828E - the IDP header buffer; the
+ *         12-byte destination address is read from that buffer + 6
+ *         (0x00E18364) and handed to RIP_$FIND_NEXTHOP
+ *   0x20  "movea.l (0x20,A3),A0" at 0x00E182C4 - the next buffer descriptor
+ *   0x18..0x23 are copied straight into mac_os_$send_pkt_t.hdr_desc
+ *         (0x00E18408-0x00E18414), so they are the same {length, address,
+ *         next} triple MAC_OS_$SEND walks
+ *   0x24  "move.b (0x24,A1),(-0x60,A6)" at 0x00E18416 - becomes the MAC
+ *         record's hdr_prebuilt boolean
+ *   0x34  five longwords copied to the MAC record's +0x38
+ *         (0x00E1841C-0x00E18428): the payload length followed by the four
+ *         payload page addresses
+ *
+ * The record is therefore a mac_os_$send_pkt_t shifted down by four bytes
+ * from +0x18 on.  0x00..0x17 is not read on the RIP_$SEND path, whose caller
+ * (RIP_$SEND at A6-0x48) never writes it.
+ *
+ * TODO(source-2ptk): identify what fills 0x00..0x17 for the other callers of
+ * XNS_IDP_$OS_SEND.
+ */
+typedef struct xns_$os_send_rec_t {
+    uint8_t     _unknown_00[0x18];  /* 0x00: not read on the RIP path */
+    uint32_t    hdr_length;         /* 0x18 */
+    uint32_t    hdr_address;        /* 0x1C: the IDP header buffer VA */
+    uint32_t    hdr_next;           /* 0x20: next descriptor, 0 = end */
+    int8_t      hdr_prebuilt;       /* 0x24: Pascal boolean, 0xFF = true */
+    uint8_t     _pad_25[3];         /* 0x25 */
+    uint8_t     _unknown_28[0x0C];  /* 0x28 */
+    uint32_t    data_length;        /* 0x34 */
+    uint32_t    data_pages[4];      /* 0x38 */
+} xns_$os_send_rec_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(xns_$os_send_rec_t, hdr_length)   == 0x18, "os_send_rec.hdr_length");
+_Static_assert(offsetof(xns_$os_send_rec_t, hdr_address)  == 0x1C, "os_send_rec.hdr_address");
+_Static_assert(offsetof(xns_$os_send_rec_t, hdr_next)     == 0x20, "os_send_rec.hdr_next");
+_Static_assert(offsetof(xns_$os_send_rec_t, hdr_prebuilt) == 0x24, "os_send_rec.hdr_prebuilt");
+_Static_assert(offsetof(xns_$os_send_rec_t, data_length)  == 0x34, "os_send_rec.data_length");
+_Static_assert(offsetof(xns_$os_send_rec_t, data_pages)   == 0x38, "os_send_rec.data_pages");
+_Static_assert(sizeof(xns_$os_send_rec_t) == 0x48, "xns_$os_send_rec_t must be 0x48 bytes");
+#endif
+
+/*
  * XNS_IDP_$OS_SEND - Send a packet (OS-level)
  *
  * @param channel       Pointer to channel number

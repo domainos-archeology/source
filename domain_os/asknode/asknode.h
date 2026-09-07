@@ -53,9 +53,12 @@
 #define ASKNODE_REQ_PROC_UPIDS      0x23    /* Get process UPIDs */
 #define ASKNODE_REQ_LOG_CONTROL     0x25    /* Control ring/net logging */
 #define ASKNODE_REQ_SYSTEM_INFO     0x27    /* Get system configuration */
-#define ASKNODE_REQ_WHO             0x45    /* WHO query (time sync) */
-#define ASKNODE_REQ_WHO_REMOTE      0x2D    /* Remote WHO query */
-#define ASKNODE_REQ_LOG_READ        0x31    /* Read log entries */
+#define ASKNODE_REQ_WHO             0x00    /* WHO enumeration - ASKNODE_$SERVER
+                                             * jump-table entry 0 (0x00E65B18) */
+#define ASKNODE_REQ_TIME_SYNC       0x45    /* WHO query with time sync -
+                                             * entry 0x45 (0x00E65C7E) */
+#define ASKNODE_REQ_WHO_REMOTE      0x2D    /* Remote WHO query (0x00E65BA8) */
+#define ASKNODE_REQ_LOG_READ        0x31    /* Read log entries (0x00E65D24) */
 #define ASKNODE_REQ_DISK_INFO       0x51    /* Get specific disk info */
 
 /*

@@ -63,21 +63,47 @@
  */
 
 /*
- * asknode_request_t - Network request structure
+ * asknode_request_t - the 0x18-byte request record ASKNODE_$SERVER copies out
+ * of the received packet (0x00E659EE-0x00E65A0E; the copy length is
+ * min(0x18, reply->length)).
  *
- * Structure for ASKNODE network requests.
+ * It is a Pascal variant record - the request types overlay different shapes
+ * on the same words - so the longword fields below are read in halves at some
+ * sites.  Every such overlay is spelled with shifts in asknode/server.c so
+ * that it works on a little-endian host too:
+ *
+ *   node_id  +0x04: request 0x31 reads the HIGH word as a control word
+ *                   ("move.w (-0x264,A6),D1w" at 0x00E65D56) and the LOW word
+ *                   as the LOG_$READ2 offset ("move.w (-0x262,A6)" at
+ *                   0x00E65D66)
+ *   param1   +0x08: request 0x00 uses the HIGH word as a hop counter
+ *                   ("move.w (-0x260,A6),(-0x242,A6)" at 0x00E65B28 and
+ *                   "subq.w #0x1,(-0x260,A6)" at 0x00E65B32) while request
+ *                   0x2D reads the whole longword (0x00E65BC2, 0x00E65C38)
  */
 typedef struct asknode_request_t {
   uint16_t version;      /* 0x00: Protocol version (2 or 3) */
-  uint16_t request_type; /* 0x02: Request type code */
-  uint32_t node_id;      /* 0x04: Target node ID */
-  uint32_t param1;       /* 0x08: First parameter */
-  uint32_t param2;       /* 0x0C: Second parameter */
-  int16_t count;         /* 0x10: Count/size field */
-  int8_t flags;          /* 0x12: Request flags */
-  int8_t pad;            /* 0x13: Padding */
-  uint32_t param3;       /* 0x14: Third parameter */
+  uint16_t request_type; /* 0x02: Request type code, the jump-table index */
+  uint32_t node_id;      /* 0x04: Target node id / request 0x31's log control */
+  uint32_t param1;       /* 0x08 */
+  uint32_t param2;       /* 0x0C */
+  int8_t   forwarded;    /* 0x10: Pascal boolean - "tst.b (-0x258,A6) / bmi"
+                          *       at 0x00E65BB0, cleared at 0x00E65E5C */
+  int8_t   _pad_11;      /* 0x11 */
+  int16_t  count;        /* 0x12: hop counter for request 0x2D (0x00E65C32,
+                          *       0x00E65C42) */
+  uint32_t param3;       /* 0x14 */
 } asknode_request_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(asknode_request_t, node_id)   == 0x04, "asknode_request_t.node_id");
+_Static_assert(offsetof(asknode_request_t, param1)    == 0x08, "asknode_request_t.param1");
+_Static_assert(offsetof(asknode_request_t, param2)    == 0x0C, "asknode_request_t.param2");
+_Static_assert(offsetof(asknode_request_t, forwarded) == 0x10, "asknode_request_t.forwarded");
+_Static_assert(offsetof(asknode_request_t, count)     == 0x12, "asknode_request_t.count");
+_Static_assert(offsetof(asknode_request_t, param3)    == 0x14, "asknode_request_t.param3");
+_Static_assert(sizeof(asknode_request_t) == 0x18, "asknode_request_t must be 0x18 bytes");
+#endif
 
 /*
  * asknode_response_t - Network response structure
@@ -107,6 +133,44 @@ _Static_assert(sizeof(asknode_response_t) == 0x10, "asknode_response_t must be 1
 #endif
 
 /*
+ * asknode_$reply_hdr_t - what app_$receive_rec_t.reply points at
+ *
+ * ASKNODE_$WHO_NOTOPO reads it through A0 = record->reply
+ * (0x00E66258-0x00E66280); APP_$RECEIVE synthesises the same fields on the
+ * Domain-internet path (0x00E00980-0x00E009AC).
+ */
+typedef struct asknode_$reply_hdr_t {
+  uint16_t magic;         /* 0x00: 0x0118 (0x00E00984) */
+  uint16_t length;        /* 0x02: reply byte count, clamped to 0x200 by
+                           *       ASKNODE_$WHO_NOTOPO (0x00E66270) */
+  uint16_t data_len;      /* 0x04: payload byte count handed to
+                           *       PKT_$DUMP_DATA (saved at 0x00E6625C,
+                           *       pushed at 0x00E662A8) */
+  int16_t  reply_id;      /* 0x06: matched against the request id
+                           *       (0x00E66280 / 0x00E662C6) */
+  uint32_t sender_node;   /* 0x08: NODE_$ME of the sender (0x00E009C6) */
+  uint16_t f0c;           /* 0x0C */
+  uint32_t node_id;       /* 0x0E: the responding node id
+                           *       (0x00E6626A, UNALIGNED longword) */
+  uint16_t src_socket;    /* 0x12: the socket the packet came in on;
+                           *       ASKNODE_$SERVER reuses it as the reply's
+                           *       destination socket (0x00E659DC,
+                           *       0x00E65E1C) */
+  uint8_t  f14;           /* 0x14: request flags; ASKNODE_$SERVER tests bit 2
+                           *       ("btst.l #0x2,D4" at 0x00E65B98) */
+  uint8_t  _pad_15;       /* 0x15 */
+} __attribute__((packed)) asknode_$reply_hdr_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(asknode_$reply_hdr_t, data_len)    == 0x04, "reply_hdr.data_len");
+_Static_assert(offsetof(asknode_$reply_hdr_t, reply_id)    == 0x06, "reply_hdr.reply_id");
+_Static_assert(offsetof(asknode_$reply_hdr_t, sender_node) == 0x08, "reply_hdr.sender_node");
+_Static_assert(offsetof(asknode_$reply_hdr_t, node_id)     == 0x0E, "reply_hdr.node_id");
+_Static_assert(offsetof(asknode_$reply_hdr_t, src_socket)  == 0x12, "reply_hdr.src_socket");
+_Static_assert(offsetof(asknode_$reply_hdr_t, f14)         == 0x14, "reply_hdr.f14");
+#endif
+
+/*
  * asknode_$server_ctx_t - the record ASKNODE_$SERVER's caller passes as its
  * first argument (A2), 0x22 bytes.
  *
@@ -126,20 +190,30 @@ typedef struct asknode_$server_ctx_t {
   uint32_t node_id;       /* 0x04 */
   uint32_t param1;        /* 0x08 */
   uint32_t param2;        /* 0x0C */
-  int16_t  count;         /* 0x10 */
-  int8_t   flags;         /* 0x12 */
-  int8_t   pad;           /* 0x13 */
+  int8_t   forwarded;     /* 0x10: mirrors asknode_request_t.forwarded */
+  int8_t   _pad_11;       /* 0x11 */
+  int16_t  count;         /* 0x12: mirrors asknode_request_t.count */
   uint32_t param3;        /* 0x14 */
-  uint16_t src_port;      /* 0x18 */
-  int16_t  request_id;    /* 0x1A */
+  int16_t  request_id;    /* 0x18: the request id, taken from the received
+                           *       reply header's +0x06 ("move.w (-0x29a,A6),
+                           *       (0x18,A2)" at 0x00E65E76).
+                           *       ASKNODE_$PROPAGATE_WHO passes it as
+                           *       PKT_$SEND_INTERNET's request_id
+                           *       (0x00E65F04). */
+  uint16_t socket;        /* 0x1A: the socket the request arrived on, from the
+                           *       reply header's +0x12 ("move.w (-0x29c,A6),
+                           *       (0x1a,A2)" at 0x00E65E7C).
+                           *       ASKNODE_$PROPAGATE_WHO uses it as the
+                           *       destination socket (0x00E65F18) or the
+                           *       source socket (0x00E65F4E). */
   uint16_t clock_hi;      /* 0x1C */
   uint32_t clock_lo;      /* 0x1E */
 } __attribute__((packed)) asknode_$server_ctx_t;
 
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(asknode_$server_ctx_t, param3)     == 0x14, "server_ctx.param3");
-_Static_assert(offsetof(asknode_$server_ctx_t, src_port)   == 0x18, "server_ctx.src_port");
-_Static_assert(offsetof(asknode_$server_ctx_t, request_id) == 0x1A, "server_ctx.request_id");
+_Static_assert(offsetof(asknode_$server_ctx_t, request_id) == 0x18, "server_ctx.request_id");
+_Static_assert(offsetof(asknode_$server_ctx_t, socket)     == 0x1A, "server_ctx.socket");
 _Static_assert(offsetof(asknode_$server_ctx_t, clock_hi)   == 0x1C, "server_ctx.clock_hi");
 _Static_assert(offsetof(asknode_$server_ctx_t, clock_lo)   == 0x1E, "server_ctx.clock_lo");
 _Static_assert(sizeof(asknode_$server_ctx_t) == 0x22, "asknode_$server_ctx_t must be 0x22 bytes");

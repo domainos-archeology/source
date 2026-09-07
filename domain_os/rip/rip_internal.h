@@ -53,16 +53,10 @@
  */
 
 /*
- * XNS network address (10 bytes)
- *
- * In XNS/IDP networking:
- * - Network: 4 bytes identifying the network
- * - Host: 6 bytes (typically Ethernet MAC address)
+ * XNS network address (10 bytes): rip_$xns_addr_t now lives in rip/rip.h
+ * because ROUTE_$SERVICE / ROUTE_$CLOSE_PORT / NETWORK_$FETCH_DISKLESS_INFO
+ * build one to pass to RIP_$UPDATE_D / RIP_$UPDATE_INT.
  */
-typedef struct rip_$xns_addr_t {
-    uint32_t    network;        /* 0x00: Network address */
-    uint8_t     host[6];        /* 0x04: Host address (6 bytes) */
-} rip_$xns_addr_t;
 
 /*
  * Route entry structure (0x14 = 20 bytes)
@@ -76,8 +70,17 @@ typedef struct rip_$route_t {
     rip_$xns_addr_t     nexthop;        /* 0x04: Next hop address (10 bytes) */
     uint8_t             port;           /* 0x0E: Port number */
     uint8_t             metric;         /* 0x0F: Hop count (0x11 = infinity) */
-    uint16_t            flags;          /* 0x10: State flags (top 2 bits = state) */
-    uint16_t            _pad;           /* 0x12: Padding to 0x14 bytes */
+    uint8_t             flags;          /* 0x10: state in bits 6-7.  This is a
+                                         *       BYTE: every RIP function uses
+                                         *       byte operations on it -
+                                         *       "and.b (0x10,A2),D5b" with
+                                         *       0xC0 at 0x00E155F8 and
+                                         *       0x00E872E8, "andi.b #0x3f" at
+                                         *       0x00E1562A, "ori.b #-0x80" /
+                                         *       "ori.b #-0x40" at 0x00E15630 /
+                                         *       0x00E15656 */
+    uint8_t             _pad_11;        /* 0x11 */
+    uint16_t            _pad_12;        /* 0x12: padding to 0x14 bytes */
 } rip_$route_t;
 
 /*
@@ -91,6 +94,16 @@ typedef struct rip_$entry_t {
     uint32_t        network;            /* 0x00: Destination network address */
     rip_$route_t    routes[RIP_ROUTES_PER_ENTRY]; /* 0x04: Route entries */
 } rip_$entry_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(rip_$route_t, nexthop) == 0x04, "rip_$route_t.nexthop");
+_Static_assert(offsetof(rip_$route_t, port)    == 0x0E, "rip_$route_t.port");
+_Static_assert(offsetof(rip_$route_t, metric)  == 0x0F, "rip_$route_t.metric");
+_Static_assert(offsetof(rip_$route_t, flags)   == 0x10, "rip_$route_t.flags");
+_Static_assert(sizeof(rip_$route_t) == 0x14, "rip_$route_t must be 0x14 bytes");
+_Static_assert(offsetof(rip_$entry_t, routes)  == 0x04, "rip_$entry_t.routes");
+_Static_assert(sizeof(rip_$entry_t) == 0x2C, "rip_$entry_t must be 0x2C bytes");
+#endif
 
 /*
  * RIP subsystem data structure
@@ -194,46 +207,10 @@ void RIP_$UNLOCK(void);
  */
 void RIP_$AGE(void);
 
-/*
- * RIP_$SEND_UPDATES - Send routing updates
- *
- * Sends routing update packets if there are recent changes.
- *
- * @param is_std    Pascal boolean read as a byte at (0x8,A6)
- *                  ("move.b (0x8,A6),D0b / bpl" at 0x00E6887E):
- *                  < 0 = non-standard routes, >= 0 = standard routes
- *
- * Original address: 0x00E6887A
- */
-void RIP_$SEND_UPDATES(boolean is_std);
+/* RIP_$SEND_UPDATES (0x00E6887A) is declared in rip/rip.h (ROUTE_$SERVICE calls it). */
 
-/*
- * RIP_$UPDATE_INT - Internal route update function
- *
- * Updates routing table entries with new route information.
- * Used during initialization and when receiving routing updates.
- *
- * The function supports two modes:
- * - Single network update: Updates a specific network entry
- * - Bulk update: Updates all entries matching the source (when network == -1)
- *
- * Update logic follows standard RIP rules:
- * 1. Accept updates from the same source (they might be withdrawing the route)
- * 2. Accept better routes (lower metric)
- * 3. Accept non-infinity updates to non-valid routes
- *
- * @param network      Network to update (-1 for all entries, 0 = no-op)
- * @param source       Pointer to source address (10 bytes XNS address)
- * @param hop_count    New hop count / metric (clamped to 17)
- * @param port_index   Port index for this route
- * @param flags        If negative, use non-standard routes; else standard
- * @param status_ret   Output: status code
- *
- * Original address: 0x00E15922
- */
-void RIP_$UPDATE_INT(uint32_t network, rip_$xns_addr_t *source,
-                     uint16_t hop_count, uint16_t port_index,
-                     boolean flags, status_$t *status_ret);
+/* RIP_$UPDATE_INT (0x00E15922) is declared in rip/rip.h
+ * (NETWORK_$FETCH_DISKLESS_INFO calls it). */
 
 /*
  * Helper functions (nested Pascal procedures in original):
@@ -338,54 +315,17 @@ void RIP_$SERVER(void);
  */
 
 /*
- * RIP_$SEND_TO_PORT - Send RIP packet to specific port via XNS/IDP
+ * RIP_$SEND's two nested Pascal procedures - RIP_$SEND_TO_PORT (0x00E870DC,
+ * XNS/IDP) and RIP_$SEND_TO_PORT_INTERNET (0x00E87000, Domain internet) -
+ * are statics inside rip/send.c.  Each takes a single word parameter (the
+ * port index) and reaches the rest of its inputs through the static link
+ * "movea.l (A6),A2"; RIP_$SEND calls them with
+ * "subq.l #2,SP / move.w Dn,-(SP) / bsr" at 0x00E8724A, 0x00E87262,
+ * 0x00E8727C and 0x00E8728A.
  *
- * Internal helper function that sends a RIP packet to a specific port
- * using the XNS/IDP protocol. Builds an IDP header with broadcast
- * destination, copies route data, and sends via XNS_IDP_$OS_SEND.
- *
- * TODO(source-uk92): in the original this is a nested Pascal procedure of
- * RIP_$SEND with a single word parameter.  RIP_$SEND calls it with
- * "subq.l #2,SP / move.w D4w,-(SP) / bsr.w 0x00E870DC" (0x00E87262 and
- * 0x00E8727C) and the callee reaches the rest of its inputs through the
- * static link ("movea.l (A6),A2" at 0x00E870E8, then (-0x64,A2), (-0x60,A2),
- * ...).  The extra parameters below are this C translation's flattening of
- * those uplevel references; per CLAUDE.md it should instead become a static
- * function inside rip/send.c.
- *
- * @param port_index    Port index (0-7) - the only real parameter
- * @param addr_info     RIP_$SEND's addr_info (uplevel)
- * @param route_data    RIP_$SEND's route data buffer (uplevel)
- * @param route_len     RIP_$SEND's route data length (uplevel)
- *
- * Original address: 0x00E870DC
+ * 0x00E87000 also carries the label RTWIRED_PROC_START; that is the start of
+ * the wired routing region, not the procedure's name.
  */
-void RIP_$SEND_TO_PORT(int16_t port_index, void *addr_info,
-                        void *route_data, uint16_t route_len);
-
-/*
- * RTWIRED_PROC_START - Send RIP packet to wired/local port
- *
- * Sends a RIP packet to a directly connected (wired) network using
- * NET_IO_$SEND instead of IDP routing.
- *
- * TODO(source-uk92): like RIP_$SEND_TO_PORT this is a nested Pascal procedure
- * of RIP_$SEND taking one word parameter; RIP_$SEND calls it with
- * "subq.l #2,SP / move.w D4w,-(SP) / bsr.w 0x00E87000" (0x00E8724A and
- * 0x00E8728A) and everything else comes from the static link.  The extra
- * parameters below are this translation's flattening of those uplevel
- * references.
- *
- * @param port_index    Port index (0-7) - the only real parameter
- * @param packet_id     RIP_$SEND's packet id (uplevel, from PKT_$NEXT_ID)
- * @param route_data    RIP_$SEND's route data buffer (uplevel)
- * @param route_len     RIP_$SEND's route data length (uplevel)
- *
- * Original address: 0x00E87000
- * Implemented in: route/rtwired_proc_start.c
- */
-void RTWIRED_PROC_START(int16_t port_index, uint16_t packet_id,
-                        void *route_data, uint16_t route_len);
 
 /*
  * RIP_$SEND - Main RIP send function
@@ -409,19 +349,10 @@ void RIP_$SEND(void *addr_info, int16_t port_index, void *route_data,
                uint16_t route_len, boolean flags);
 
 /*
- * RIP_$BROADCAST - Build and broadcast full routing table
- *
- * Iterates through all routing table entries, builds a RIP response
- * packet containing all valid routes, and sends it to all ports.
- *
- * @param flags     Pascal boolean read as a byte at (0x8,A6)
- *                  ("move.b (0x8,A6),D2b" at 0x00E872A6):
- *                  If < 0: broadcast non-standard routes (cap metric at 16)
- *                  If >= 0: broadcast standard routes
- *
- * Original address: 0x00E87298
+ * RIP_$BROADCAST (0x00E87298) is declared in rip/rip.h - it iterates every
+ * routing table entry, builds a RIP response packet and sends it to all
+ * ports; ROUTE_$PROCESS drives it from its periodic timer.
  */
-void RIP_$BROADCAST(boolean flags);
 
 /*
  * =============================================================================

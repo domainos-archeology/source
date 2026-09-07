@@ -13,6 +13,7 @@
 #define ROUTE_H
 
 #include "base/base.h"
+#include "rip/rip.h"   /* rip_$dest_addr_t: route_$port_t.xns_addr */
 
 /*
  * Port structure (0x5C = 92 bytes)
@@ -30,8 +31,19 @@
  */
 typedef struct route_$port_t {
     uint32_t    network;            /* 0x00: Network address */
-    uint8_t     _unknown0[0x28];    /* 0x04: Unknown fields */
-    uint16_t    active;             /* 0x2C: Non-zero if port is active */
+    uint8_t     _unknown0[0x1C];    /* 0x04: Unknown fields */
+    rip_$dest_addr_t xns_addr;      /* 0x20: this port's own XNS endpoint
+                                     *       {network, 6-byte host, socket}.
+                                     *       RIP_$SEND_TO_PORT copies all 12
+                                     *       bytes into the IDP header's source
+                                     *       field ("lea (0x20,A3),A1" at
+                                     *       0x00E87134) and then overwrites
+                                     *       the socket half with 1. */
+    uint16_t    active;             /* 0x2C: routing-capability BIT NUMBER;
+                                     *       tested with "btst.l D0,D1" against
+                                     *       0x28 (standard) and 0x30
+                                     *       (non-standard) at 0x00E87240 /
+                                     *       0x00E87258 */
     uint16_t    port_type;          /* 0x2E: Port type (1=local, 2=routing) */
     uint16_t    socket;             /* 0x30: Socket identifier */
     uint8_t     _unknown1[0x04];    /* 0x32: Unknown fields */
@@ -47,6 +59,7 @@ typedef struct route_$port_t {
 /* Port entry size must match the original 0x5C-byte stride */
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(route_$port_t, network)       == 0x00, "route_$port_t.network");
+_Static_assert(offsetof(route_$port_t, xns_addr)      == 0x20, "route_$port_t.xns_addr");
 _Static_assert(offsetof(route_$port_t, active)        == 0x2C, "route_$port_t.active");
 _Static_assert(offsetof(route_$port_t, port_type)     == 0x2E, "route_$port_t.port_type");
 _Static_assert(offsetof(route_$port_t, socket)        == 0x30, "route_$port_t.socket");
@@ -401,6 +414,67 @@ extern uint16_t ROUTE_$SOCK;
 #else
 extern uint32_t ROUTE_$STAT_DROPPED_STD_HOP;
 extern uint32_t ROUTE_$STAT_DROPPED_STD_ROUTE;
+#endif
+
+/*
+ * ROUTE_$DECREMENT_PORT - Decrement port counters during close
+ *
+ * Helper that calls RIP_$PORT_CLOSE and decrements the appropriate routing
+ * port counter; may halt the router if this was the last active port.
+ * RIP_$PORT (rip/misc.c) calls it directly (0x00E15818), so it is public.
+ *
+ * @param delete_flag      Delete notification flag
+ * @param port_index       Port index being closed
+ * @param port_type_flag   Port type flag (negative = STD)
+ *
+ * Original address: 0x00E69E40
+ */
+void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index,
+                           int8_t port_type_flag);
+
+/*
+ * RIP_$HALT_PACKET / RIP_$HALT_PACKET_DATA - the RIP "poison" packet the
+ * router transmits when it shuts down: a 16-byte internet header followed by
+ * 8 bytes of RIP data at +0x10.  The storage lives in the ROUTE wired data
+ * area (route/route_data.c) but the only user is RIP_$HALT_ROUTER
+ * (rip/misc.c, 0x00E873B4 / 0x00E873D6), so the declaration is public.
+ *
+ * Original addresses: 0xE87D68, 0xE87D78
+ */
+#if defined(ARCH_M68K)
+#define RIP_$HALT_PACKET        ((uint8_t *)0xE87D68)
+#define RIP_$HALT_PACKET_DATA   ((uint8_t *)0xE87D78)
+#else
+extern uint8_t RIP_$HALT_PACKET[24];
+#define RIP_$HALT_PACKET_DATA   (&RIP_$HALT_PACKET[0x10])
+#endif
+
+/*
+ * RIP_$SEND_DEST_ADDR - the destination-address scratch RIP_$SEND is handed
+ *
+ * The first 12 bytes of the same 0x00E87D68 block are a rip_$dest_addr_t that
+ * RIP_$SEND rewrites in place (broadcast host and socket, then each port's
+ * network in turn).  Both RIP_$BROADCAST ("lea (0xe87d68).l,A5" at
+ * 0x00E872A0, "pea (A5)" at 0x00E87386) and RIP_$HALT_ROUTER (0x00E873B4)
+ * pass it.  RIP_$SEND itself uses the same address as its A5 module base
+ * (0x00E871BE).
+ */
+#define RIP_$SEND_DEST_ADDR     ((rip_$dest_addr_t *)RIP_$HALT_PACKET)
+
+
+/*
+ * Wired routing-send cells shared with RIP_$SEND's nested procedure
+ * RIP_$SEND_TO_PORT_INTERNET (rip/send.c).
+ *   RTWIRED_$SEND_FLAGS  - send flags word at 0xE87D74 (A5+0xC, A5 = 0xE87D68)
+ *   RTWIRED_$CALLBACK    - callback/data-length cell at 0xE870D8
+ */
+#if defined(ARCH_M68K)
+#define RTWIRED_$SEND_FLAGS     (*(uint16_t *)0xE87D74)
+#define RTWIRED_$CALLBACK       ((uint32_t *)0xE870D8)
+#else
+extern uint16_t RTWIRED_$SEND_FLAGS;
+extern uint32_t RTWIRED_$CALLBACK_DATA;
+#define RTWIRED_$CALLBACK       (&RTWIRED_$CALLBACK_DATA)
 #endif
 
 #endif /* ROUTE_H */

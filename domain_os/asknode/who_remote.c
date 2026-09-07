@@ -154,14 +154,14 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     request[0] = (req_version << 16) | req_type;
 
     /* Send WHO query */
-    uint8_t temp1[2];
+    uint16_t retry_hint;        /* A6-0x28A */
     uint16_t resp_timeout;      /* A6-0x288, read into D7 at 0x00E6652C */
     status_$t send_status;
     PKT_$SEND_INTERNET(routing_port, target_node_param, 4, -1, NODE_$ME,
                        ASKNODE_WHO_SOCKET, pkt_info, pkt_id,
                        request, 0x18,
                        &ASKNODE_$EMPTY_DATA, 0,  /* No data */
-                       temp1, &resp_timeout, &local_status);
+                       &retry_hint, &resp_timeout, &local_status);
 
     if (local_status != 0) {
         *status = local_status;
@@ -184,7 +184,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     while (initial_count < max_nodes) {
         int16_t wait_result;
         ec_$eventcount_t *ecs[3];
-        int32_t pkt_ptr;
+        app_$receive_rec_t rcv;     /* A6-0x30, 44 bytes */
         int32_t timeout_val;
 
         wait_val++;
@@ -223,29 +223,49 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
             break;
         }
 
-        /* Receive packet */
-        APP_$RECEIVE(ASKNODE_WHO_SOCKET, &pkt_ptr, &local_status);
+        /* 0x00E6661C */
+        APP_$RECEIVE(ASKNODE_WHO_SOCKET, &rcv, &local_status);
 
+        /* 0x00E66626: a failed receive goes back to the wait */
         if (local_status != 0) {
             continue;
         }
 
         /* Process response */
         {
-            char *pkt_data = (char *)pkt_ptr;
             uint16_t pkt_len;
             int16_t resp_id;
+            uint16_t dump_len;
             asknode_who_response_t response;
+            asknode_$reply_hdr_t *reply = (asknode_$reply_hdr_t *)rcv.reply;
 
-            pkt_len = *(uint16_t *)(pkt_data + 2);
-            if (pkt_len > 0x200) pkt_len = 0x200;
-            resp_id = *(int16_t *)(pkt_data + 6);
+            /*
+             * 0x00E6662E-0x00E6667E, in the original's order: the reply
+             * record is fully read before the header buffer goes back, and
+             * PKT_$DUMP_DATA gets the receive record's own page vector at
+             * A6-0x28 rather than an offset into the freed buffer.
+             */
 
-            /* Copy response data */
-            OS_$DATA_COPY(pkt_data + 0x10, (char *)&response, pkt_len);
-            NETBUF_$RTN_HDR((void **)&pkt_data);
+            /* 0x00E66632 */
+            dump_len = reply->data_len;
 
-            PKT_$DUMP_DATA((uint32_t *)(pkt_data + 0x1C), *(uint16_t *)(pkt_data + 4));
+            /* 0x00E66638: length, clamped to 0x200 */
+            pkt_len = reply->length;
+            if (pkt_len > 0x200) {
+                pkt_len = 0x200;
+            }
+
+            /* 0x00E66648 */
+            resp_id = reply->reply_id;
+
+            /* 0x00E6664E-0x00E6665E: source is the record's data pointer */
+            OS_$DATA_COPY((char *)rcv.data, (char *)&response, pkt_len);
+
+            /* 0x00E66662 */
+            NETBUF_$RTN_HDR((uint32_t *)&rcv.data);
+
+            /* 0x00E6666E-0x00E6667E */
+            PKT_$DUMP_DATA(rcv.data_pages, dump_len);
 
             local_status = response.status;
 

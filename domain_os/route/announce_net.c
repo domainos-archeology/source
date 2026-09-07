@@ -30,9 +30,19 @@
  */
 
 /*
- * Size of broadcast control packet
+ * Size of the broadcast control record copied out of RIP_$BCAST_CONTROL
+ * ("moveq #0x6,D0" + dbf = 7 longwords, then one more word: 0x00E69FC8 -
+ * 0x00E69FD2).
  */
 #define BCAST_CONTROL_SIZE      0x1E
+
+/*
+ * PC-relative constant cell of the original: 0x00E6A02C is a longword zero
+ * passed as PKT_$SEND_INTERNET's "data" ("pea (0x40,PC)" at 0x00E69FEA,
+ * whose target is 0x00E69FEC + 0x40).  data_len is zero, so PKT_$SEND_INTERNET
+ * never dereferences it (0x00E12686 "tst.w D6w / ble").
+ */
+static const uint32_t route_$announce_no_data = 0;
 
 /*
  * =============================================================================
@@ -44,71 +54,65 @@
  * ROUTE_$ANNOUNCE_NET - Announce network to mother node
  *
  * @param network   Network address to announce
+ *
+ * Original address: 0x00E69FB2
  */
 void ROUTE_$ANNOUNCE_NET(uint32_t network)
 {
-    uint8_t control_packet[BCAST_CONTROL_SIZE];
-    status_$t status;
-    uint8_t dummy1[2], dummy2[2];
-    uint16_t packet_id;
+    uint8_t     control_packet[BCAST_CONTROL_SIZE];  /* A6-0x28 */
+    status_$t   status;             /* A6-0x2C */
+    uint16_t    timeout_out;        /* A6-0x2E */
+    uint16_t    retry_hint;         /* A6-0x30 */
+    uint16_t    packet_id;
+    int         i;
 
-    /*
-     * Only send announcement if running diskless
-     * The original code checks if NETWORK_$DISKLESS < 0
-     */
+    /* 0x00E69FB6: only announce while diskless */
     if (NETWORK_$DISKLESS >= 0) {
         return;
     }
 
-    /*
-     * Copy the broadcast control template
-     * Original uses a word-copy loop for efficiency
-     */
-    for (int i = 0; i < BCAST_CONTROL_SIZE; i++) {
+    /* 0x00E69FBE-0x00E69FD2: copy the 30-byte control template */
+    for (i = 0; i < BCAST_CONTROL_SIZE; i++) {
         control_packet[i] = RIP_$BCAST_CONTROL[i];
     }
 
     /*
-     * Clear bit 7 of byte 1
-     * This removes a flag from the control packet
-     * Original: bclr.b #0x7,(-0x27,A6)
+     * 0x00E69FD4 "bclr.b #0x7,(-0x27,A6)": clear bit 7 of the record's second
+     * byte, i.e. bit 15 of its first word.
      */
-    control_packet[1] &= 0x7F;
+    control_packet[1] &= (uint8_t)0x7F;
 
-    /*
-     * Get next packet ID
-     */
+    /* 0x00E69FF6 */
     packet_id = PKT_$NEXT_ID();
 
     /*
-     * Send the announcement packet to the mother node
-     *
-     * Parameters:
-     *   - dest_net: The network being announced
-     *   - dest_node: NETWORK_$MOTHER_NODE (boot server)
-     *   - dest_socket: 8 (routing protocol socket)
-     *   - src_net: ROUTE_$PORT (this node's port network)
-     *   - src_node: NODE_$ME (this node's address)
-     *   - src_socket: 8 (routing protocol socket)
-     *   - data: The control packet
-     *   - packet_id: From PKT_$NEXT_ID()
-     *   - Remaining parameters are protocol extras
+     * 0x00E69FDA-0x00E6A020.  Argument order follows the pushes; both
+     * retry_hint and timeout_out are word locals that
+     * PKT_$BLD_INTERNET_HDR writes through unconditionally.
      */
     PKT_$SEND_INTERNET(
-        network,                /* Destination network */
-        NETWORK_$MOTHER_NODE,   /* Destination node */
-        8,                      /* Destination socket (routing) */
-        ROUTE_$PORT,            /* Source network */
-        NODE_$ME,               /* Source node */
-        8,                      /* Source socket (routing) */
-        control_packet,         /* Packet data */
-        packet_id,              /* Packet ID */
-        NULL,                   /* Extra parameter 1 */
-        2,                      /* Extra parameter 2 */
-        NULL,                   /* Extra parameter 3 (at 0xe6a02c = 0) */
-        0,                      /* Extra parameter 4 */
-        dummy1,                 /* Extra parameter 5 */
-        dummy2,                 /* Extra parameter 6 */
-        &status                 /* Output status */
+        network,                        /* 1  routing_key   (0x8,A6)         */
+        NETWORK_$MOTHER_NODE,           /* 2  dest_node     0xE24C0C         */
+        8,                              /* 3  dest_sock                      */
+        (int32_t)ROUTE_$PORT,           /* 4  src_node_or   0xE2E0A0         */
+        NODE_$ME,                       /* 5  src_node      0xE245A4         */
+        8,                              /* 6  src_sock                       */
+        control_packet,                 /* 7  pkt_info      A6-0x28          */
+        packet_id,                      /* 8  request_id                     */
+        (void *)&ROUTE_$ANNOUNCE_TEMPLATE, /* 9  template   pea (0x4,A5)      */
+        2,                              /* 10 template_len                   */
+        (void *)&route_$announce_no_data, /* 11 data        pea (0x40,PC)     */
+        0,                              /* 12 data_len                       */
+        &retry_hint,                    /* 13 retry_hint    A6-0x30          */
+        &timeout_out,                   /* 14 timeout_out   A6-0x2E          */
+        &status                         /* 15 status_ret    A6-0x2C          */
     );
+
+    /*
+     * The original never pops the arguments and never reads status - "unlk
+     * A6" at 0x00E6A026 discards the whole block.
+     */
+    (void)status;
+    (void)retry_hint;
+    (void)timeout_out;
 }

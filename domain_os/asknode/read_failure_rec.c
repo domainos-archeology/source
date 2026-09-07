@@ -57,7 +57,7 @@ void ASKNODE_$READ_FAILURE_REC(uint32_t *record)
      * The record consists of 4 32-bit words.
      */
     record[0] = ((uint32_t)NETWORK_$FAILURE_REC.word0 << 16) |
-                ((uint32_t)NETWORK_$FAILURE_REC.flag << 8) |
+                (((uint32_t)(uint8_t)NETWORK_$FAILURE_REC.flag) << 8) |
                 (uint32_t)NETWORK_$FAILURE_REC.byte3;
     record[1] = NETWORK_$FAILURE_REC.error_info;
     record[2] = NETWORK_$FAILURE_REC.timestamp;

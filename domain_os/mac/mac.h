@@ -25,6 +25,7 @@
 #define MAC_H
 
 #include "base/base.h"
+#include "mac_os/mac_os.h"
 
 /*
  * ============================================================================
@@ -119,26 +120,21 @@ typedef struct mac_$buffer_t {
 
 /*
  * Transmit packet descriptor
- * Describes a packet to send
+ *
+ * This is the same 0x4C-byte object MAC_OS_$SEND consumes: MAC_$SEND copies
+ * the caller's record field by field into a local one and hands that to
+ * MAC_OS_$SEND (0x00E0BBBA-0x00E0BC18).  The recovered layout, and the
+ * assembly that justifies each field, live on mac_os_$send_pkt_t in
+ * mac_os/mac_os.h; there is one definition so the two cannot drift.
+ *
+ * MAC_$SEND-specific notes:
+ *   - is_broadcast (+0x18) is the caller's "please ARP this" request on the
+ *     way in ("tst.b (0x18,A0) / bpl" at 0x00E0BB8C) and MAC_OS_$ARP's
+ *     broadcast answer on the way out.
+ *   - MAC_$SEND always clears hdr_prebuilt (+0x28) in its local copy
+ *     (0x00E0BBF0), so MAC_OS_$SEND builds the header buffers itself.
  */
-typedef struct mac_$send_pkt_t {
-  uint8_t dest_addr[6];  /* 0x00: Destination MAC address */
-  uint8_t pad_06[2];     /* 0x06: Padding */
-  uint8_t src_addr[6];   /* 0x08: Source MAC address */
-  uint8_t pad_0e[2];     /* 0x0E: Padding */
-  uint8_t pad_10[4];     /* 0x10: Unknown */
-  uint32_t type_length;  /* 0x14: Ethernet type/length field */
-  int8_t arp_flag;       /* 0x18: If negative, ARP lookup needed */
-  uint8_t pad_19[3];     /* 0x19: Padding */
-  uint32_t header_data;  /* 0x1C: Header data pointer */
-  uint32_t header_size;  /* 0x20: Header size */
-  uint32_t body_chain;   /* 0x24: Pointer to body buffer chain */
-  uint8_t flags_28;      /* 0x28: Unknown flag byte (cleared by MAC_$SEND) */
-  uint8_t pad_29[7];     /* 0x29: Unknown */
-  uint32_t total_length; /* 0x30: Total packet length */
-  uint8_t pad_34[8];     /* 0x34: Unknown */
-                         /* Additional fields at 0x3A+ for receive path */
-} mac_$send_pkt_t;
+typedef mac_os_$send_pkt_t mac_$send_pkt_t;
 
 /*
  * Receive packet descriptor

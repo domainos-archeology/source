@@ -1,3 +1,9 @@
 - [Fidelity gates and archivist rules](feedback_fidelity_gates.md) — the three gates to run and quote before claiming a function is done.
 - [The 2026-09-06 fidelity audit](project_audit_2026_09_06.md) — why the re-emission work exists and what its checklist is.
 - [OS_$INIT / STOP_$WATCH re-emission notes](os-stop-reemission.md) — recovered layouts, constant cells and the hand-written-asm emission convention.
+- [DXM / PROC2 / MST recovered ABIs](dxm-proc2-mst-notes.md) — DXM_$ADD_CALLBACK's 6 params, MST_$FORK's longword flags, and PROC2_$FORK's confirmed status bug.
+- [Never stash in the shared worktree](feedback_shared_worktree.md) — other agents edit the same tree; judge build errors by file path, not by a clean-tree diff.
+- [MSG / PKT recovered ABIs](msg-pkt-notes.md) — MSG_$WAIT's 2-arg shape, the socket-descriptor alias, PKT_$SEND_INTERNET's 15 args, PKT globals at 0xE24C9C.
+- [DISK / WIN / VTOC re-emission notes](disk-win-vtoc-reemission.md) — striping fields, the 0x90 VTOCE record, WIN's unit records and STOP_$WATCH's ops 8-10.
+- [SMD unit-record / HDM / position layouts](smd-unit-record-pass.md) — the biased A3 record, the 1-based info/font/HDM tables, and why every SMD position is Y-first.
+- [Shared record ownership](feedback_shared_records.md) — one definition in the owner's public header; delete the duplicate in the same pass.

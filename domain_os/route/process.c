@@ -22,7 +22,6 @@
 #include "proc1/proc1.h"
 #include "sock/sock.h"
 #include "rip/rip.h"
-#include "rip/rip_internal.h"
 #include "time/time.h"
 #include "netbuf/netbuf.h"
 #include "pkt/pkt.h"
@@ -34,12 +33,6 @@
 #include "uid/uid.h"
 #include "ml/ml.h"
 #include "ring/ringlog.h"
-/*
- * RING_$LOGGING_NOW has no public declaration; ring/ringlog.h only mentions
- * it in prose.  TODO(source-nudm): export it from ring/ringlog.h so that this
- * file does not have to reach into another subsystem's internal header.
- */
-#include "ring/ringlog_internal.h"
 
 /*
  * Every global this function touches comes from a header:
@@ -47,7 +40,7 @@
  *   SOCK_$EVENT_COUNTERS, SOCK_$* sock/sock.h
  *   TIME_$CLOCKH                  time/time.h
  *   NODE_$ME                      uid/uid.h
- *   RING_$LOGGING_NOW             ring/ringlog_internal.h
+ *   RING_$LOGGING_NOW             ring/ringlog.h
  *   XNS_$IDP_STATE                xns/xns.h
  */
 
@@ -74,7 +67,7 @@ void ROUTE_$PROCESS(void)
     int16_t                 next_hop_port;   /* A6-0xEE */
     rip_$dest_addr_t        dest_addr;       /* A6-0x70, 12 bytes */
     rip_$nexthop_t          next_hop;        /* A6-0x60, 10 bytes */
-    route_$mac_send_rec_t   mac_send;        /* A6-0x50, 0x4C bytes */
+    mac_os_$send_pkt_t      mac_send;        /* A6-0x50, 0x4C bytes */
     int16_t                 mac_bytes_sent;  /* A6-0xEA */
     uint16_t                closing_sock;    /* A6-0xF6 */
     route_$port_t          *port;            /* A3 */
@@ -335,9 +328,9 @@ void ROUTE_$PROCESS(void)
                      * describes the header buffer; the payload pages are
                      * copied straight out of the SOCK_$GET record.
                      */
-                    mac_send.hdr_length   = rcv.hdr_len;
-                    mac_send.hdr_address  = (uint32_t)(uintptr_t)pkt;
-                    mac_send.hdr_next     = 0;
+                    mac_send.hdr_desc.length  = rcv.hdr_len;
+                    mac_send.hdr_desc.address = (uint32_t)(uintptr_t)pkt;
+                    mac_send.hdr_desc.next    = 0;
                     mac_send.hdr_prebuilt = true;
                     mac_send.frame_type   = ROUTE_$MAC_FRAME_TYPE;
                     mac_send.data_length  = rcv.data_len;
@@ -347,8 +340,7 @@ void ROUTE_$PROCESS(void)
 
                     /* 0x00E876DC - 0x00E87704 */
                     MAC_OS_$SEND(XNS_IDP_$PORT_MAC_CHANNEL(next_hop_port),
-                                 (mac_os_$send_pkt_t *)&mac_send,
-                                 &mac_bytes_sent, &status);
+                                 &mac_send, &mac_bytes_sent, &status);
                     goto forward_stats;                     /* 0x00E87708 */
                 }
 

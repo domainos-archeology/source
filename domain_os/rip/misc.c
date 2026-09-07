@@ -14,13 +14,13 @@
 #include "pkt/pkt.h"
 
 #include "name/name.h"
-#include "route/route_internal.h"
+#include "route/route.h"
 
 /*
  * External data references:
  *   RIP_$BCAST_CONTROL (0xE26EC0), RIP_$NS_ANNOUNCEMENT (0xE26EBE) - rip/rip.h
  *   RIP_$ANNOUNCE_EXTRA (0xE68E28)                                - rip/rip_internal.h
- *   RIP_$HALT_PACKET (0xE87D68), RIP_$HALT_PACKET_DATA (0xE87D78) - route/route_internal.h
+ *   RIP_$HALT_PACKET (0xE87D68), RIP_$HALT_PACKET_DATA (0xE87D78) - route/route.h
  *   ROUTE_$PORT_ARRAY (0xE2E0A0)                                  - route/route.h
  *   NODE_$ME (0xE245A4)                                           - network/network.h
  */
@@ -53,9 +53,9 @@
 void RIP_$ANNOUNCE_NS(void)
 {
     uint16_t packet_id;
-    uint8_t out1[2];
-    uint8_t out2[2];
-    status_$t status;
+    uint16_t retry_hint;        /* A6-0x8 */
+    uint16_t timeout_out;       /* A6-0x6 */
+    status_$t status;           /* A6-0x4 */
 
     /*
      * Step 1: Register the routing port with the name service
@@ -73,34 +73,36 @@ void RIP_$ANNOUNCE_NS(void)
     packet_id = PKT_$NEXT_ID();
 
     /*
-     * Step 3: Send the name service announcement
-     *
-     * The packet is sent with:
-     * - dest_network = 0: Local network
-     * - dest_net_ext = 0xFFFFF: Extended broadcast address
-     * - socket = 8: RIP socket
-     * - src_port = ROUTE_$PORT: Our routing port
-     * - src_node = NODE_$ME: Our node ID
-     * - dest_node = 0xFFFF: Broadcast to all nodes
-     * - data = RIP_$NS_ANNOUNCEMENT: 2-byte announcement data
+     * Step 3: Send the name service announcement (0x00E69170-0x00E691B2).
+     * Argument order follows the pushes; both retry_hint and timeout_out are
+     * word locals that PKT_$BLD_INTERNET_HDR writes through unconditionally
+     * (0x00E1230E, 0x00E12316).
      */
     PKT_$SEND_INTERNET(
-        0,                      /* dest_network: local */
-        0xFFFFF,                /* dest_net_ext: broadcast */
-        RIP_SOCKET,             /* socket: 8 */
-        ROUTE_$PORT,            /* src_port */
-        NODE_$ME,               /* src_node */
-        0xFFFF,                 /* dest_node: broadcast */
-        RIP_$BCAST_CONTROL,     /* broadcast control params */
-        packet_id,              /* packet ID */
-        RIP_$NS_ANNOUNCEMENT,   /* data: NS announcement */
-        2,                      /* data_len: 2 bytes */
-        RIP_$ANNOUNCE_EXTRA,    /* extra_data (likely empty) */
-        0,                      /* extra_len */
-        out1,                   /* output buffer 1 */
-        out2,                   /* output buffer 2 */
-        &status                 /* output status */
+        0,                      /* 1  routing_key                           */
+        0xFFFFF,                /* 2  dest_node: the broadcast node id      */
+        RIP_SOCKET,             /* 3  dest_sock: 8                          */
+        (int32_t)ROUTE_$PORT,   /* 4  src_node_or: 0xE2E0A0                 */
+        NODE_$ME,               /* 5  src_node                              */
+        0xFFFF,                 /* 6  src_sock                              */
+        RIP_$BCAST_CONTROL,     /* 7  pkt_info: 0xE26EC0                    */
+        packet_id,              /* 8  request_id                            */
+        RIP_$NS_ANNOUNCEMENT,   /* 9  template: 0xE26EBE, 2 bytes           */
+        2,                      /* 10 template_len                          */
+        RIP_$ANNOUNCE_EXTRA,    /* 11 data: pea (-0x35a,PC) -> 0xE68E28     */
+        0,                      /* 12 data_len                              */
+        &retry_hint,            /* 13 retry_hint   A6-0x8                   */
+        &timeout_out,           /* 14 timeout_out  A6-0x6                   */
+        &status                 /* 15 status_ret   A6-0x4                   */
     );
+
+    /*
+     * The original never pops the argument block and never reads the status -
+     * "unlk A6" at 0x00E691B8 discards it.
+     */
+    (void)status;
+    (void)retry_hint;
+    (void)timeout_out;
 }
 
 /*

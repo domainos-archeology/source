@@ -18,11 +18,7 @@
  * channel's callback function.
  *
  * Parameters:
- *   pkt_info   - Received packet information structure
- *                0x30: Packet type (32-bit)
- *                0x2A: Timestamp high (set by this function)
- *                0x2E: Timestamp low (set by this function)
- *                0x34: Channel pointer (set by this function)
+ *   pkt_info   - mac_os_$rcv_pkt_t the driver built; see mac_os/mac_os.h
  *   port_num   - Pointer to port number (0-7)
  *   param3     - Additional parameter (passed through to callback)
  *   status_ret - Pointer to receive status code
@@ -33,61 +29,70 @@
  *   - Looks up packet type in port's table
  *   - Calls channel callback with: pkt_info, port_num, param3, status_ret
  */
-void MAC_OS_$DEMUX(void *pkt_info, int16_t *port_num, void *param3, status_$t *status_ret)
+void MAC_OS_$DEMUX(mac_os_$rcv_pkt_t *pkt_info, int16_t *port_num,
+                   void *param3, status_$t *status_ret)
 {
 #if defined(ARCH_M68K)
-    int16_t port;
     int16_t entry_idx;
     int16_t channel;
     mac_os_$port_pkt_table_t *port_table;
     mac_os_$channel_t *chan;
-    uint32_t pkt_type;
-    clock_t timestamp;
+    clock_t timestamp;                  /* A6-0x4C */
 
-    *status_ret = status_$ok;
+    *status_ret = status_$ok;           /* 0x00E0B830 clr.l (A3) */
 
-    /* Get current timestamp */
+    /* 0x00E0B832 */
     TIME_$ABS_CLOCK(&timestamp);
 
-    /* Get port's packet type table */
-    port = *port_num;
-    port_table = &MAC_OS_$PORT_PKT_TABLES[port];
+    /*
+     * 0x00E0B83E: the port index is a WORD read through the second argument,
+     * and the table stride is 0xF4.
+     */
+    port_table = &MAC_OS_$PORT_PKT_TABLES[*port_num];
 
-    /* Get packet type from pkt_info (offset 0x30) */
-    pkt_type = *(uint32_t *)((uint8_t *)pkt_info + 0x30);
+    /*
+     * 0x00E0B84A: MAC_OS_$FIND_PACKET_TYPE(frame_type, &table->entries[0],
+     * table->entry_count) - the pushes are the count word, the entry array
+     * address and the frame type, so the frame type is argument 1.
+     */
+    entry_idx = MAC_OS_$FIND_PACKET_TYPE(pkt_info->frame_type,
+                                         &port_table->entries[0],
+                                         port_table->entry_count);
 
-    /* Search for matching packet type entry */
-    entry_idx = MAC_OS_$FIND_PACKET_TYPE(pkt_type, &port_table->entries[0], port_table->entry_count);
-
+    /*
+     * 0x00E0B85E: a miss, or a channel with no callback, is the same error.
+     * The SR10.4 status-code table has no text for 0x003A000F, so the name
+     * stays the placeholder mac_os.h already carries.
+     */
     if (entry_idx == -1) {
-        /* No matching entry found */
         *status_ret = status_$mac_XXX_unknown;
         return;
     }
 
-    /* Get channel index from entry */
-    channel = port_table->entries[entry_idx].channel_index;
+    /* 0x00E0B864: entries are 12 bytes; the channel index is at +0x08 */
+    channel = (int16_t)port_table->entries[entry_idx].channel_index;
+
+    /* 0x00E0B870: channel entries are 0x14 bytes at MAC_OS_$CHANNEL_TABLE */
     chan = &MAC_OS_$CHANNEL_TABLE[channel];
 
-    /* Check if channel has a callback */
+    /* 0x00E0B882: tst.l (0x7a0,A2) - the callback is the entry's first field */
     if (chan->callback == NULL) {
         *status_ret = status_$mac_XXX_unknown;
         return;
     }
 
-    /* Store timestamp in packet info */
-    /* Original: move.l (-0x4c,A6),(0x2a,A4) - timestamp high */
-    /* Original: move.w (-0x48,A6),(0x2e,A4) - timestamp low */
-    *(uint32_t *)((uint8_t *)pkt_info + 0x2A) = timestamp.high;
-    *(uint16_t *)((uint8_t *)pkt_info + 0x2E) = timestamp.low;
+    /* 0x00E0B890 / 0x00E0B896: the 48-bit arrival time, in its two halves */
+    pkt_info->time_high = timestamp.high;
+    pkt_info->time_low  = timestamp.low;
 
-    /* Store pointer to channel in packet info (for receive processing) */
-    *(void **)((uint8_t *)pkt_info + 0x34) = chan;
+    /* 0x00E0B89C: the channel entry's address, not its index */
+    pkt_info->channel = (uint32_t)(uintptr_t)chan;
 
-    /* Call channel callback */
+    /* 0x00E0B8A4 - 0x00E0B8B2 */
     {
-        void (*callback)(void *, int16_t *, void *, status_$t *);
-        callback = chan->callback;
+        void (*callback)(mac_os_$rcv_pkt_t *, int16_t *, void *, status_$t *);
+        callback = (void (*)(mac_os_$rcv_pkt_t *, int16_t *, void *,
+                             status_$t *))chan->callback;
         (*callback)(pkt_info, port_num, param3, status_ret);
     }
 #else

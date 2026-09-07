@@ -76,7 +76,7 @@ static int current_failed = 0;
 #include "proc1/proc1.h"
 #include "sock/sock.h"
 #include "rip/rip.h"
-#include "rip/rip_internal.h"
+#include "rip/rip.h"
 #include "time/time.h"
 #include "netbuf/netbuf.h"
 #include "pkt/pkt.h"
@@ -88,7 +88,7 @@ static int current_failed = 0;
 #include "uid/uid.h"
 #include "ml/ml.h"
 #include "ring/ringlog.h"
-#include "ring/ringlog_internal.h"
+#include "ring/ringlog.h"
 
 /* ==========================================================================
  * Kernel data the function reads and writes
@@ -113,6 +113,7 @@ int16_t  ROUTE_$STD_N_ROUTING_PORTS;
 int16_t  ROUTE_$N_ROUTING_PORTS;
 boolean  ROUTE_$ROUTING;
 
+char ROUTE_$WIRED_AREA_START_SYM[1];
 char ROUTE_$WIRED_AREA_END_SYM[1];
 const status_$t ROUTE_$UNKNOWN_PORT_STATUS = status_$internet_unknown_network_port;
 uint8_t  RIP_$HALT_PACKET[24];
@@ -187,7 +188,7 @@ static int           mock_nexthop_calls;
 static status_$t mock_arp_status;
 static int       mock_arp_calls;
 static int       mock_mac_send_calls;
-static route_$mac_send_rec_t mock_mac_send_rec;
+static mac_os_$send_pkt_t mock_mac_send_rec;
 static int16_t  *mock_mac_send_channel;
 
 /* NET_IO */
@@ -338,7 +339,7 @@ void MAC_OS_$SEND(int16_t *channel, mac_os_$send_pkt_t *pkt_desc,
 {
     mock_mac_send_calls++;
     mock_mac_send_channel = channel;
-    mock_mac_send_rec = *(route_$mac_send_rec_t *)pkt_desc;
+    mock_mac_send_rec = *pkt_desc;
     *bytes_sent = 0;
     *status_ret = status_$ok;
 }
@@ -1035,9 +1036,9 @@ TEST(mac_send_descriptor)
 
     ASSERT_EQ(1, mock_arp_calls);
     ASSERT_EQ(1, mock_mac_send_calls);
-    ASSERT_EQ(0x22, mock_mac_send_rec.hdr_length);
-    ASSERT_EQ((uint32_t)(uintptr_t)mock_pkt, mock_mac_send_rec.hdr_address);
-    ASSERT_EQ(0, mock_mac_send_rec.hdr_next);
+    ASSERT_EQ(0x22, mock_mac_send_rec.hdr_desc.length);
+    ASSERT_EQ((uint32_t)(uintptr_t)mock_pkt, mock_mac_send_rec.hdr_desc.address);
+    ASSERT_EQ(0, mock_mac_send_rec.hdr_desc.next);
     ASSERT_TRUE(mock_mac_send_rec.hdr_prebuilt < 0);
     ASSERT_EQ(ROUTE_$MAC_FRAME_TYPE, mock_mac_send_rec.frame_type);
     ASSERT_EQ(0x111, mock_mac_send_rec.data_length);
@@ -1109,12 +1110,13 @@ TEST(record_layouts)
      * records below are made of fixed-width fields (and are packed where the
      * m68k alignment differs), so they must lay out identically everywhere.
      */
-    ASSERT_EQ(0x4C, sizeof(route_$mac_send_rec_t));
-    ASSERT_EQ(0x18, offsetof(route_$mac_send_rec_t, is_broadcast));
-    ASSERT_EQ(0x1C, offsetof(route_$mac_send_rec_t, hdr_length));
-    ASSERT_EQ(0x28, offsetof(route_$mac_send_rec_t, hdr_prebuilt));
-    ASSERT_EQ(0x38, offsetof(route_$mac_send_rec_t, data_length));
-    ASSERT_EQ(0x3C, offsetof(route_$mac_send_rec_t, data_pages));
+    ASSERT_EQ(0x4C, sizeof(mac_os_$send_pkt_t));
+    ASSERT_EQ(0x18, offsetof(mac_os_$send_pkt_t, is_broadcast));
+    ASSERT_EQ(0x1C, offsetof(mac_os_$send_pkt_t, hdr_desc));
+    ASSERT_EQ(0x28, offsetof(mac_os_$send_pkt_t, hdr_prebuilt));
+    ASSERT_EQ(0x30, offsetof(mac_os_$send_pkt_t, frame_type));
+    ASSERT_EQ(0x38, offsetof(mac_os_$send_pkt_t, data_length));
+    ASSERT_EQ(0x3C, offsetof(mac_os_$send_pkt_t, data_pages));
     ASSERT_EQ(0x8E, sizeof(route_$port_stats_t));
     ASSERT_EQ(0x0A, offsetof(route_$port_stats_t, queue_depth));
     ASSERT_EQ(10, sizeof(rip_$nexthop_t));

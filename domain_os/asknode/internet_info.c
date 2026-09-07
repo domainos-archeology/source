@@ -178,7 +178,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         }
         break;
 
-    case ASKNODE_REQ_WHO:         /* 0x45 */
+    case ASKNODE_REQ_TIME_SYNC:   /* 0x45 */
         /* Time sync WHO query - just return local node */
         /* This is handled by the caller with time synchronization */
         break;
@@ -282,7 +282,8 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
         /* Build request packet */
         uint16_t req_buf[12];   /* Request buffer (0x18 bytes) */
         uint32_t pkt_info[8];   /* Packet info block */
-        uint8_t temp1[2], temp2[4];
+        uint16_t resp_tpl_len;      /* A6-0x146 */
+        uint8_t temp2[4];
         uint16_t data_len = 0;
         uint32_t routing = *node_id;
         int32_t port = *req_len;
@@ -380,11 +381,22 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
         do {
             uint16_t resp_data_len;
 
+            /*
+             * 0x00E656F6 - 0x00E6573C.  Arguments 11-17 are, in order,
+             * (0x1c,A6) = result, the word D7 points at, &(-0x146,A6),
+             * result + 0x0A, (-0x144,A6), &(-0x142,A6) and the status
+             * pointer.
+             *
+             * TODO(source-0fks): argument 10 (resp_buf) is &(-0xd8,A6), a
+             * local response record, not NULL - "pea (-0xd8,A6)" at
+             * 0x00E65716.
+             */
             PKT_$SAR_INTERNET(port, *node_id, 4, pkt_info, 6,
                               req_buf, 0x18,
                               &ASKNODE_$EMPTY_DATA, 0,  /* No request data */
                               NULL, (char *)result, *resp_len,
-                              temp1, (uint16_t *)((char *)result + 10), data_len,
+                              &resp_tpl_len, (uint16_t *)((char *)result + 10),
+                              data_len,
                               &resp_data_len, status);
 
             if ((*status != status_$network_transmit_failed &&

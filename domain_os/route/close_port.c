@@ -25,7 +25,6 @@
 
 #include "route/route_internal.h"
 #include "rip/rip.h"
-#include "rip/rip_internal.h"
 #include "sock/sock.h"
 
 /* Port type check mask - bits 1 and 2 (port types 1 and 2) */
@@ -44,7 +43,7 @@ static const int8_t RIP_OP_FLAGS = 0;           /* From 0xe69fae (pea (0x4e,PC))
 
 /*
  * Note: Function declarations come from headers:
- *   - ROUTE_$DECREMENT_PORT, ROUTE_$CLEANUP_WIRED from route/route_internal.h
+ *   - ROUTE_$DECREMENT_PORT from route/route.h, ROUTE_$CLEANUP_WIRED from route/route_internal.h
  *   - RIP_$UPDATE_D from rip/rip.h
  */
 

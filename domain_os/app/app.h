@@ -33,6 +33,63 @@
  */
 
 /*
+ * app_$receive_rec_t - the 44-byte result record APP_$RECEIVE fills in
+ *
+ * APP_$RECEIVE (0x00E00800) takes the record in A2 and drives it from the
+ * sock_$pkt_info_t SOCK_$GET writes at A6-0x40:
+ *
+ *   0x00  the application reply record.  For XNS ("standard") routing it is
+ *         the received header + 0x1E ("moveq #0x1e,D0 / add.l (-0x40,A6),D0 /
+ *         move.l D0,(A2)" at 0x00E008A8); for Domain internet routing it is
+ *         the header + the rounded template length, or a copy APP_$RECEIVE
+ *         makes when the packet does not fit (0x00E00940-0x00E0097A).
+ *   0x04  the payload that follows that record - reply + 0x18 on the XNS
+ *         path (0x00E008B0), header + hdr_size + 0x1E on the internet path
+ *         (0x00E0093C).  This, not the reply pointer, is what callers hand
+ *         to NETBUF_$RTN_HDR.
+ *   0x08  the four payload page addresses, copied straight out of
+ *         sock_$pkt_info_t.data_pages (0x00E0083C-0x00E0084A).  This is the
+ *         vector callers pass to PKT_$DUMP_DATA.
+ *   0x18  longword from the received header + 0x06 (0x00E008BC)
+ *   0x1C  longword from the received header + 0x12 (0x00E008C2)
+ *   0x20  source address, from sock_$pkt_info_t.src_addr (0x00E0087E)
+ *   0x24  source port,    from sock_$pkt_info_t.src_port (0x00E00884)
+ *   0x26  an UNALIGNED flags longword: the socket queue depth is shifted into
+ *         it at 0x00E0086E-0x00E0087A, bit 7 of +0x27 carries a header flag
+ *         (0x00E0089A / 0x00E0090C), and +0x28 is masked and or-ed as a word
+ *         (0x00E008C8, 0x00E00994).
+ */
+typedef struct app_$receive_rec_t {
+    void       *reply;              /* 0x00 */
+    void       *data;               /* 0x04 */
+    uint32_t    data_pages[4];      /* 0x08 */
+    uint32_t    hdr_f06;            /* 0x18 */
+    uint32_t    hdr_f12;            /* 0x1C */
+    uint32_t    src_addr;           /* 0x20 */
+    uint16_t    src_port;           /* 0x24 */
+    uint16_t    flags_hi;           /* 0x26: the two halves of the UNALIGNED
+                                     *       longword the original masks with
+                                     *       "andi.l #-0x7f8001,(0x26,A2)" at
+                                     *       0x00E0086E; kept as two words so
+                                     *       the record needs no packing and
+                                     *       its members stay addressable */
+    uint16_t    flags_lo;           /* 0x28 */
+    uint8_t     _pad_2a[2];         /* 0x2A */
+} app_$receive_rec_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(app_$receive_rec_t, data)       == 0x04, "app_rcv.data");
+_Static_assert(offsetof(app_$receive_rec_t, data_pages) == 0x08, "app_rcv.data_pages");
+_Static_assert(offsetof(app_$receive_rec_t, hdr_f06)    == 0x18, "app_rcv.hdr_f06");
+_Static_assert(offsetof(app_$receive_rec_t, hdr_f12)    == 0x1C, "app_rcv.hdr_f12");
+_Static_assert(offsetof(app_$receive_rec_t, src_addr)   == 0x20, "app_rcv.src_addr");
+_Static_assert(offsetof(app_$receive_rec_t, src_port)   == 0x24, "app_rcv.src_port");
+_Static_assert(offsetof(app_$receive_rec_t, flags_hi)   == 0x26, "app_rcv.flags_hi");
+_Static_assert(offsetof(app_$receive_rec_t, flags_lo)   == 0x28, "app_rcv.flags_lo");
+_Static_assert(sizeof(app_$receive_rec_t) == 0x2C, "app_$receive_rec_t must be 44 bytes");
+#endif
+
+/*
  * APP_$RECEIVE - Receive a packet on a socket
  *
  * Receives the next available packet from a socket and parses the

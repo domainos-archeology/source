@@ -204,7 +204,7 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
             fr.hw_regs->mode = RING_MODE_IDLE;
         } else {
             /* 0x00E7610A/0x00E76114: arm the receiver */
-            fr.hw_regs->rcv_csr = RING_RCV_CSR_ARM;
+            RING_$RCV_CSR_WRITE(fr.hw_regs, RING_RCV_CSR_ARM);
             fr.hw_regs->mode = RING_MODE_ENABLE;
             /* 0x00E7612A: clr.b (0x36,A0,D0w) */
             stats->congestion_flag = 0;
@@ -241,17 +241,11 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
          */
         if ((unit_data->state_flags & RING_UNIT_BUSY) != 0) {
             /* 0x00E7617A */
-            if ((fr.hw_regs->rcv_csr & RING_RCV_CSR_BUSY) != 0) {
+            if ((RING_$RCV_CSR_READ(fr.hw_regs) & RING_RCV_CSR_BUSY) != 0) {
                 /* 0x00E7618A: try to shut the receiver down. */
-                fr.hw_regs->rcv_csr = 0;
+                RING_$RCV_CSR_WRITE(fr.hw_regs, 0);
 
-                if ((fr.hw_regs->rcv_csr & RING_RCV_CSR_BUSY) != 0) {
-                    /*
-                     * TODO(source-6nns): this recovery arm is not covered by
-                     * ring/test/test_rcv.c - it needs a receive status
-                     * register that still reads busy after being written
-                     * zero, which a plain-memory host mock cannot model.
-                     */
+                if ((RING_$RCV_CSR_READ(fr.hw_regs) & RING_RCV_CSR_BUSY) != 0) {
                     /* 0x00E7619E: delay ~0xABE ticks and look again. */
                     fr.delay.high = 0;
                     fr.delay.low = 0xABE;
@@ -260,7 +254,7 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
                     if (fr.status != status_$ok) {
                         /* 0x00E761C4 */
                         CRASH_SYSTEM(&fr.status);
-                    } else if ((fr.hw_regs->rcv_csr & RING_RCV_CSR_BUSY) != 0) {
+                    } else if ((RING_$RCV_CSR_READ(fr.hw_regs) & RING_RCV_CSR_BUSY) != 0) {
                         /* 0x00E761D8 */
                         CRASH_SYSTEM(&ring_$rcv_stuck_status);
                     }
@@ -274,7 +268,7 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
             /* rcv_csr idle: join the common tail at 0x00E76214. */
         } else {
             /* 0x00E76202 */
-            if ((fr.hw_regs->rcv_csr & RING_RCV_CSR_BUSY) != 0) {
+            if ((RING_$RCV_CSR_READ(fr.hw_regs) & RING_RCV_CSR_BUSY) != 0) {
                 RING_$BUSY_ON_RCV_INT++;            /* 0x00E76210 */
             }
         }
@@ -351,7 +345,7 @@ static boolean ring_$validate_receive(ring_rcv_frame_t *fr)
     swdiag = &RING_$SWDIAG_DATA;
 
     /* 0x00E75E12 */
-    fr->rcv_status = fr->hw_regs->rcv_csr;
+    fr->rcv_status = RING_$RCV_CSR_READ(fr->hw_regs);
 
     /*
      * 0x00E75E1C: "andi.w #-0x17,D1w" - every bit except 1, 2 and 4 is an
@@ -434,7 +428,7 @@ error_path:
     if (hdr->msg_type == 1 || hdr->msg_type == 3) {
         NETWORK_$FAILURE_REC.timestamp = TIME_$CURRENT_CLOCKH;   /* 0x00E75F10 */
         NETWORK_$FAILURE_REC.error_info = fr->hdr->src_id;       /* 0x00E75F1C */
-        NETWORK_$FAILURE_REC.flag = 0xFF;                        /* 0x00E75F22 */
+        NETWORK_$FAILURE_REC.flag = (int8_t)0xFF;                        /* 0x00E75F22 */
         NETWORK_$FAILURE_REC.node_id = fr->hdr->msg_type;        /* 0x00E75F2A */
         goto done;
     }

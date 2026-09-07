@@ -593,16 +593,35 @@ void RIP_$SERVER(void)
             /* Set response command */
             response_cmd = 0x20;  /* Response with extended flag? */
 
-            /* Send via PKT_$SEND_INTERNET for standard packets */
-            /* TODO(source-6sz): PKT_$SEND_INTERNET parameter mismatch with pkt.h - needs analysis */
+            /*
+             * Send the response (0x00E68C38-0x00E68C7E).  The pushes, in
+             * argument order, are:
+             *   1  (-0x4f4,A6)   2  (-0x4f8,A6)   3  (-0x51a,A6) word
+             *   4  D4            5  NODE_$ME      6  #8 word
+             *   7  &(-0x2b0,A6)  8  (-0x518,A6) word
+             *   9  &(-0x290,A6)  10 RIP_$PACKET_LENGTH((-0x512,A6))
+             *   11 pea (0x1de,PC) -> 0x00E68E28   12 #0 word
+             *   13 &(-0x50e,A6)  14 &(-0x50c,A6)  15 &(-0x4ec,A6)
+             * plus the 2-byte Pascal function-result slot at 0x00E68C38.
+             *
+             * PKT_$BLD_INTERNET_HDR writes a word through BOTH arguments 13
+             * and 14 unconditionally (0x00E1230E, 0x00E12316), so neither may
+             * be NULL; they are two distinct word locals here as in the
+             * original.
+             *
+             * TODO(source-6sz): arguments 1-10 still need each A6
+             * displacement matched to the local this translation names.
+             */
             {
-                uint16_t len_out;
+                uint16_t retry_hint;    /* A6-0x50E */
+                uint16_t timeout_out;   /* A6-0x50C */
+
                 PKT_$SEND_INTERNET(idp_network, idp_host, port_network,
                                    src_network, NODE_$ME, RIP_SOCKET,
                                    &response_cmd, port_socket,
                                    response_data, RIP_$PACKET_LENGTH(response_count),
-                                   NULL, 0,
-                                   &len_out, NULL, &status);
+                                   RIP_$ANNOUNCE_EXTRA, 0,
+                                   &retry_hint, &timeout_out, &status);
             }
             return;
         }

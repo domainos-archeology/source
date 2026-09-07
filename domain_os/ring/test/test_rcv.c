@@ -167,6 +167,21 @@ static int16_t  chksum_result;
 static uint8_t  wake_state_flags;
 static uint16_t wake_rcv_csr;
 static uint16_t wake_rcv_csr_after_clear;  /* value read back after "rcv_csr = 0" */
+
+/*
+ * Receive status register model (source-6nns).
+ *
+ * ring/ring.h routes RING_$RCV_CSR_READ / RING_$RCV_CSR_WRITE through these
+ * two functions on a host build, so a test can model a controller that keeps
+ * reporting BUSY after the driver has written the register zero - the exact
+ * condition RING_$RCV_FROM_UNIT_PRIV's recovery arm exists for
+ * (0x00E7618A-0x00E761E2).  With `rcv_stuck_writes` > 0 a write of zero is
+ * swallowed and the register keeps its value; every other write lands.
+ */
+static int      rcv_stuck_writes;
+static int      rcv_csr_writes;
+static uint16_t rcv_csr_last_write;
+static status_$t time_wait_status;
 static int      wake_rcv_csr_written;
 
 /* ============================================================================
@@ -250,13 +265,31 @@ int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
     return 0;
 }
 
+uint16_t ring_$rcv_csr_read(ring_hw_regs_t *regs)
+{
+    (void)regs;
+    return hw.rcv_csr;
+}
+
+void ring_$rcv_csr_write(ring_hw_regs_t *regs, uint16_t value)
+{
+    (void)regs;
+    rcv_csr_writes++;
+    rcv_csr_last_write = value;
+    if (value == 0 && rcv_stuck_writes > 0) {
+        rcv_stuck_writes--;
+        return;             /* the controller ignores the shutdown */
+    }
+    hw.rcv_csr = value;
+}
+
 void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status)
 {
     time_wait_calls++;
     time_wait_type_arg = delay_type;
     time_wait_type_val = *delay_type;
     time_wait_delay = *delay;
-    *status = status_$ok;
+    *status = time_wait_status;
     /* the receiver stays stuck unless the test says otherwise */
     hw.rcv_csr = wake_rcv_csr_after_clear;
 }
@@ -332,6 +365,10 @@ static void setup(void)
     wake_state_flags = 0;
     wake_rcv_csr = 0;
     wake_rcv_csr_after_clear = 0;
+    rcv_stuck_writes = 0;
+    rcv_csr_writes = 0;
+    rcv_csr_last_write = 0xFFFF;
+    time_wait_status = status_$ok;
     wake_rcv_csr_written = 0;
 
     U()->hw_regs = &hw;
@@ -481,6 +518,75 @@ static void test_busy_bit_set_recovers(void)
 }
 
 /*
+ * 0x00E7618A-0x00E761E2: when writing zero to the receive status register
+ * does NOT clear BUSY, the driver waits ~0xABE ticks and looks again.  If the
+ * receiver has come back by then it just restarts the loop.
+ */
+static void test_stuck_receiver_recovers_after_delay(void)
+{
+    wake_state_flags = RING_UNIT_BUSY;
+    wake_rcv_csr = RING_RCV_CSR_BUSY;
+    rcv_stuck_writes = 1;               /* the first write of 0 is ignored */
+    wake_rcv_csr_after_clear = 0;       /* but the delay clears it */
+
+    ASSERT_EQ(1, run_loop(1));
+
+    /* 0x00E7618A wrote zero, and the read-back still said BUSY */
+    ASSERT_EQ(0, rcv_csr_last_write == 0xFFFF ? 1 : 0);
+    ASSERT_EQ(1, time_wait_calls);
+    /* 0x00E761A2: the delay is 0x0ABE ticks, high half zero */
+    ASSERT_EQ(0, time_wait_delay.high);
+    ASSERT_EQ(0xABE, time_wait_delay.low);
+    /* 0x00E75DE2: the delay type cell is a zero word */
+    ASSERT_EQ(0, time_wait_type_val);
+    /* the receiver came back, so no crash */
+    ASSERT_EQ(0, crash_calls);
+    /* and the loop restarted after dropping both channels */
+    ASSERT_EQ(0, recv_calls);
+    ASSERT_EQ(2, clear_dma_calls);
+    ASSERT_EQ(0, clear_dma_chan[0]);
+    ASSERT_EQ(1, clear_dma_chan[1]);
+}
+
+/*
+ * 0x00E761D2-0x00E761DC: a receiver that is STILL busy after the delay is a
+ * dead controller - CRASH_SYSTEM with the cell at 0x00E76290 (0x00110005,
+ * "receive process failed to start").
+ */
+static void test_stuck_receiver_crashes(void)
+{
+    wake_state_flags = RING_UNIT_BUSY;
+    wake_rcv_csr = RING_RCV_CSR_BUSY;
+    rcv_stuck_writes = 1;
+    wake_rcv_csr_after_clear = RING_RCV_CSR_BUSY;   /* never recovers */
+
+    ASSERT_EQ(2, run_loop(1));          /* CRASH_SYSTEM longjmps with 2 */
+    ASSERT_EQ(1, time_wait_calls);
+    ASSERT_EQ(1, crash_calls);
+    ASSERT_EQ(0x00110005, crash_status);
+    /* the channels are dropped only after the crash check, so not yet */
+    ASSERT_EQ(0, clear_dma_calls);
+}
+
+/*
+ * 0x00E761BE-0x00E761C8: a TIME_$WAIT that fails crashes with ITS status,
+ * without looking at the register again.
+ */
+static void test_stuck_receiver_delay_failure_crashes(void)
+{
+    wake_state_flags = RING_UNIT_BUSY;
+    wake_rcv_csr = RING_RCV_CSR_BUSY;
+    rcv_stuck_writes = 1;
+    wake_rcv_csr_after_clear = 0;       /* would have recovered */
+    time_wait_status = (status_$t)0x00120003;
+
+    ASSERT_EQ(2, run_loop(1));
+    ASSERT_EQ(1, time_wait_calls);
+    ASSERT_EQ(1, crash_calls);
+    ASSERT_EQ(0x00120003, crash_status);
+}
+
+/*
  * 0x00E76202: the BUSY bit CLEAR only counts the condition and then goes on
  * to validate and dispatch the packet.
  */
@@ -504,10 +610,9 @@ static void test_busy_bit_clear_counts(void)
  * The four literals the routine passes by reference are real, shared,
  * file-static cells holding the values found in the code region.
  *
- * (The stuck-receiver path that consumes ring_$rcv_delay_type cannot be
- * driven from a host test: it needs a receive status register that stays
- * busy after being written zero, which plain memory cannot model.  See
- * TODO(source-6nns) in ring/rcv.c.)
+ * (The stuck-receiver path that consumes ring_$rcv_delay_type is driven by
+ * test_stuck_receiver_* above, through the RING_$RCV_CSR_READ /
+ * RING_$RCV_CSR_WRITE hooks in ring/ring.h.)
  */
 static void test_constant_cells(void)
 {
@@ -671,7 +776,7 @@ static void test_failure_record(void)
     ASSERT_EQ(1, run_loop(1));
     ASSERT_EQ(0x11223344, NETWORK_$FAILURE_REC.timestamp);
     ASSERT_EQ(0x00ABCDEF, NETWORK_$FAILURE_REC.error_info);
-    ASSERT_EQ(0xFF, NETWORK_$FAILURE_REC.flag);
+    ASSERT_EQ(1, NETWORK_$FAILURE_REC.flag < 0);
     ASSERT_EQ(3, NETWORK_$FAILURE_REC.node_id);
     ASSERT_EQ(1, RING_$DATA.abort_cnt);
 }
@@ -701,6 +806,9 @@ int main(void)
     RUN_TEST(ec_wait_arrays);
     RUN_TEST(ec_wait_value_advances);
     RUN_TEST(busy_bit_set_recovers);
+    RUN_TEST(stuck_receiver_recovers_after_delay);
+    RUN_TEST(stuck_receiver_crashes);
+    RUN_TEST(stuck_receiver_delay_failure_crashes);
     RUN_TEST(busy_bit_clear_counts);
     RUN_TEST(constant_cells);
     RUN_TEST(validate_length_mismatch);

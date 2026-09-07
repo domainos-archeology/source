@@ -28,7 +28,7 @@
 #include "cal/cal.h"
 #include "hint/hint.h"
 #include "misc/misc.h"
-#include "rip/rip_internal.h"
+#include "rip/rip.h"
 #include "route/route.h"
 #include "time/time.h"
 

@@ -21,43 +21,11 @@
  * (both via ring/ring_internal.h) */
 
 /*
- * ============================================================================
- * The record ring_$receive_packet builds on its stack for MAC_OS_$DEMUX
- * (base A6-0x50, 0x40 bytes).  Only the fields the builder writes are named;
- * the offsets are the A6 displacements re-based on A6-0x50.
- *
- * TODO(source-dj8t): move this to mac_os/mac_os.h once MAC_OS_$DEMUX
- * (0x00E0B816) itself has been decompiled and the remaining fields named.
- * ============================================================================
+ * The 0x40-byte record ring_$receive_packet builds for MAC_OS_$DEMUX is
+ * mac_os_$rcv_pkt_t (mac_os/mac_os.h); the ring driver fills net_type
+ * (0x00E76528), src_id (0x00E76532), is_local (0x00E7651E), body_len and
+ * body, clears +0x24 (0x00E7656A), and sets frame_type, data_len and data_pa.
  */
-typedef struct ring_mac_pkt_info_t {
-    uint16_t    net_type;       /* 0x00: constant 2 (0x00E76528) */
-    uint32_t    src_id;         /* 0x02: 4 bytes copied from hdr->src_id
-                                 *       (0x00E76532: moveq #1 + dbf = 2 words) */
-    uint8_t     _r06[0x12];     /* 0x06 */
-    boolean     is_local;       /* 0x18: hdr->flags bit 7 (0x00E7651E smi) */
-    uint8_t     _r19[0x03];     /* 0x19 */
-    int32_t     body_len;       /* 0x1C: *hdr_len_p - RING_HDR_SIZE */
-    uint32_t    body;           /* 0x20: hdr + RING_HDR_SIZE */
-    uint32_t    _r24;           /* 0x24: cleared (0x00E7656A) */
-    uint8_t     _r28[0x08];     /* 0x28 */
-    uint32_t    route_info;     /* 0x30: hdr->route_info */
-    uint8_t     _r34[0x04];     /* 0x34 */
-    uint32_t    data_len;       /* 0x38: *data_len_p, zero extended */
-    uint32_t    data_pa;        /* 0x3C: *data_pa_p */
-} ring_mac_pkt_info_t;
-
-#if defined(ARCH_M68K)
-_Static_assert(offsetof(ring_mac_pkt_info_t, src_id)     == 0x02, "mac rec src_id");
-_Static_assert(offsetof(ring_mac_pkt_info_t, is_local)   == 0x18, "mac rec is_local");
-_Static_assert(offsetof(ring_mac_pkt_info_t, body_len)   == 0x1C, "mac rec body_len");
-_Static_assert(offsetof(ring_mac_pkt_info_t, body)       == 0x20, "mac rec body");
-_Static_assert(offsetof(ring_mac_pkt_info_t, _r24)       == 0x24, "mac rec +0x24");
-_Static_assert(offsetof(ring_mac_pkt_info_t, route_info) == 0x30, "mac rec route_info");
-_Static_assert(offsetof(ring_mac_pkt_info_t, data_len)   == 0x38, "mac rec data_len");
-_Static_assert(offsetof(ring_mac_pkt_info_t, data_pa)    == 0x3C, "mac rec data_pa");
-_Static_assert(sizeof(ring_mac_pkt_info_t)               == 0x40, "sizeof mac rec");
-#endif
 
 /*
  * ring_$discard_packet (0x00E76470) - give the header buffer back to NETBUF
@@ -101,7 +69,7 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
 {
     ring_unit_t         *unit_data;         /* A2 */
     ring_$pkt_hdr_t     *hdr;               /* A3 after 0x00E764CC */
-    ring_mac_pkt_info_t  mac_rec;           /* A6-0x50 */
+    mac_os_$rcv_pkt_t  mac_rec;           /* A6-0x50 */
     sock_$pkt_info_t     sock_rec;          /* A6-0x90 */
     status_$t            status;            /* A6-0x98 */
     boolean              demux_flag;        /* A6-0xA6 */
@@ -169,7 +137,7 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
 
         mac_rec.net_type = 2;                       /* 0x00E76528 */
         mac_rec.src_id = hdr->src_id;               /* 0x00E76532: 2 words */
-        mac_rec.route_info = hdr->route_info;       /* 0x00E76542 */
+        mac_rec.frame_type = hdr->route_info;       /* 0x00E76542 */
         mac_rec.data_pa = *data_pa_p;               /* 0x00E7654A */
         mac_rec.body_len = (int32_t)(uint32_t)(uint16_t)*hdr_len_p
                            - (int32_t)RING_HDR_SIZE;    /* 0x00E76556 */

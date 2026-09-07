@@ -16,7 +16,7 @@
  */
 
 #include "network/network_internal.h"
-#include "route/route_internal.h"
+#include "route/route.h"
 
 /*
  * Unknown globals for disabled service notification code

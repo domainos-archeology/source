@@ -51,14 +51,19 @@ void SOCK_$INIT(void);
  * The socket must not already be in use.
  *
  * @param sock_num        Socket number to open (1-223)
- * @param proto_bufpages  Packed value: (protocol << 16) | buffer_pages
- *                        - High word (bits 16-31): protocol type identifier
- *                        - Low word (bits 0-15): buffer page allocation
- * @param max_queue       Maximum receive queue depth
+ * @param proto_bufpages  Packed pair of words: high word = the queue depth
+ *                        limit written to sock_$sock_t.max_queue (D2b at
+ *                        0x00E15E2E), low word = the netbuf HEADER page count
+ *                        written to hdr_pages (D3b at 0x00E15E20)
+ * @param max_queue       Packed pair of words: high word = the netbuf DATA
+ *                        page count written to data_pages (D4b at
+ *                        0x00E15E1C), low word = the maximum accepted packet
+ *                        data length written to max_data_len (D5w at
+ *                        0x00E15E24)
  *
  * @return Negative (0xFF) on success, 0 on failure (socket already in use)
  *
- * Note: If buffer_pages is non-zero, calls NETBUF_$ADD_PAGES to allocate buffers.
+ * Note: If either page count is non-zero, calls NETBUF_$ADD_PAGES.
  *
  * Original address: 0x00E15D8C
  */
@@ -71,10 +76,15 @@ int8_t SOCK_$OPEN(uint16_t sock_num, uint32_t proto_bufpages, uint32_t max_queue
  * the dynamic range (32-223). The socket is taken from the free list.
  *
  * @param sock_ret        Output: allocated socket number (0 on failure)
- * @param proto_bufpages  Packed value: (protocol << 16) | buffer_pages
- *                        - High word (bits 16-31): protocol type identifier
- *                        - Low word (bits 0-15): buffer page allocation
- * @param max_queue       Maximum receive queue depth
+ * @param proto_bufpages  Packed pair of words: high word = the queue depth
+ *                        limit written to sock_$sock_t.max_queue (D2b at
+ *                        0x00E15EDA), low word = the netbuf HEADER page count
+ *                        written to hdr_pages (D3b at 0x00E15ED2)
+ * @param max_queue       Packed pair of words: high word = the netbuf DATA
+ *                        page count written to data_pages (D4b at
+ *                        0x00E15ECE), low word = the maximum accepted packet
+ *                        data length written to max_data_len (D5w at
+ *                        0x00E15ED6)
  *
  * @return Negative (0xFF) on success, 0 on failure (no free sockets)
  *
@@ -95,10 +105,10 @@ int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_
  *   max_queue = (queue_hi << 16) | queue_lo
  *
  * @param sock_ret   Output: allocated socket number (0 on failure)
- * @param proto_hi   High word of proto_bufpages (protocol type)
- * @param proto_lo   Low word of proto_bufpages (buffer pages)
- * @param queue_hi   High word of max_queue
- * @param queue_lo   Low word of max_queue
+ * @param proto_hi   Queue depth limit          (-> sock_$sock_t.max_queue)
+ * @param proto_lo   Netbuf header page count    (-> sock_$sock_t.hdr_pages)
+ * @param queue_hi   Netbuf data page count      (-> sock_$sock_t.data_pages)
+ * @param queue_lo   Maximum packet data length  (-> sock_$sock_t.max_data_len)
  *
  * @return Negative (0xFF) on success, 0 on failure (no free user sockets)
  *
@@ -191,30 +201,51 @@ extern uint8_t sock_table_base[SOCK_TABLE_SIZE];
  *
  * SOCK_$EVENT_COUNTERS[n] points at the event count that begins the socket
  * descriptor, so the pointer may be treated either as an ec_$eventcount_t *
- * (EC_$WAIT, EC_$ADVANCE) or as a sock_$sock_t *.  SOCK_$GET reads the
- * queue depth as a byte at +0x15 (0x00E160A6) and ROUTE_$PROCESS uses the
- * same byte to bucket its packet statistics (0x00E874D2, 0x00E87644).
+ * (EC_$WAIT, EC_$ADVANCE) or as a sock_$sock_t *.  The descriptors are
+ * spaced 0x1C bytes apart in the table (SOCK_$INIT 0x00E2FE5A), and the EC
+ * of descriptor n sits 4 bytes into descriptor n's slot (0x00E2FE16), so the
+ * last four bytes of one socket's view overlap the next slot's first four.
  *
- * This is the public spelling of sock_ec_view_t in sock/sock_internal.h.
- * TODO(source-s8k4): fold the internal copy onto this one.
+ * Field meanings recovered from SOCK_$PUT_INT_INT (0x00E161F8):
+ *   0x14 is the queue depth LIMIT and 0x15 the current depth - the admission
+ *   test is "clr.w D5w / move.b (0x15,A0),D5b / clr.w D6w /
+ *   move.b (0x14,A0),D6b / cmp.w D6w,D5w / bcs" at 0x00E1624C-0x00E1625A,
+ *   i.e. accept only while queue_count < max_queue.
+ *   0x18 is the maximum packet data length: "move.w (0x2a,A2),D1w /
+ *   cmp.w (0x18,A0),D1w / bls" at 0x00E1623C compares it against the
+ *   sock_$pkt_info_t data length.
+ *   0x1A / 0x1B are the two netbuf page counts SOCK_$ALLOCATE hands to
+ *   NETBUF_$ADD_PAGES (0x00E15ECE/D2, pushed as D3 then D4 at 0x00E15EFE) and
+ *   SOCK_$CLOSE hands to NETBUF_$DEL_PAGES (0x00E1600A-0x00E16016): 0x1A is
+ *   the header count, 0x1B the data count.
+ *
+ * ROUTE_$PROCESS buckets its packet statistics by the byte at +0x15
+ * (0x00E874D2, 0x00E87644).
  */
 typedef struct sock_$sock_t {
     ec_$eventcount_t    ec;             /* 0x00: event count (12 bytes) */
-    uint32_t            queue_head;     /* 0x0C: head of the receive queue */
+    uint32_t            queue_head;     /* 0x0C: head of the receive queue;
+                                         *       doubles as the free-list link
+                                         *       (SOCK_$INIT 0x00E2FE46) */
     uint32_t            queue_tail;     /* 0x10: tail of the receive queue */
-    uint8_t             protocol;       /* 0x14: protocol type */
+    uint8_t             max_queue;      /* 0x14: queue depth limit; cleared to 0
+                                         *       while the socket is closed */
     uint8_t             queue_count;    /* 0x15: packets currently queued */
     uint16_t            flags;          /* 0x16: flags and socket number */
-    uint16_t            max_queue;      /* 0x18: maximum queue depth */
-    uint16_t            buffer_pages;   /* 0x1A: buffer pages */
+    uint16_t            max_data_len;   /* 0x18: largest accepted data length */
+    uint8_t             hdr_pages;      /* 0x1A: netbuf header pages owned */
+    uint8_t             data_pages;     /* 0x1B: netbuf data pages owned */
 } sock_$sock_t;
 
 #if defined(ARCH_M68K)
-_Static_assert(offsetof(sock_$sock_t, queue_head)  == 0x0C, "sock_$sock_t.queue_head");
-_Static_assert(offsetof(sock_$sock_t, queue_tail)  == 0x10, "sock_$sock_t.queue_tail");
-_Static_assert(offsetof(sock_$sock_t, protocol)    == 0x14, "sock_$sock_t.protocol");
-_Static_assert(offsetof(sock_$sock_t, queue_count) == 0x15, "sock_$sock_t.queue_count");
-_Static_assert(offsetof(sock_$sock_t, flags)       == 0x16, "sock_$sock_t.flags");
+_Static_assert(offsetof(sock_$sock_t, queue_head)   == 0x0C, "sock_$sock_t.queue_head");
+_Static_assert(offsetof(sock_$sock_t, queue_tail)   == 0x10, "sock_$sock_t.queue_tail");
+_Static_assert(offsetof(sock_$sock_t, max_queue)    == 0x14, "sock_$sock_t.max_queue");
+_Static_assert(offsetof(sock_$sock_t, queue_count)  == 0x15, "sock_$sock_t.queue_count");
+_Static_assert(offsetof(sock_$sock_t, flags)        == 0x16, "sock_$sock_t.flags");
+_Static_assert(offsetof(sock_$sock_t, max_data_len) == 0x18, "sock_$sock_t.max_data_len");
+_Static_assert(offsetof(sock_$sock_t, hdr_pages)    == 0x1A, "sock_$sock_t.hdr_pages");
+_Static_assert(offsetof(sock_$sock_t, data_pages)   == 0x1B, "sock_$sock_t.data_pages");
 _Static_assert(sizeof(sock_$sock_t) == 0x1C, "sock_$sock_t must be 0x1C bytes");
 #endif
 
@@ -227,10 +258,6 @@ _Static_assert(sizeof(sock_$sock_t) == 0x1C, "sock_$sock_t must be 0x1C bytes");
  *
  * The hop array holds n_hops words; the field after it starts at 0x2A, so
  * at most 11 hops fit.
- *
- * TODO(source-s8k4): sock/sock_internal.h's sock_pkt_info_t declares
- * hops[12] and so misplaces every field from +0x2A on; replace it with
- * this record.
  */
 typedef struct sock_$pkt_info_t {
     void       *hdr;            /* 0x00 <- netbuf+0x3B8: header buffer VA */

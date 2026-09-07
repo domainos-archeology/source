@@ -17,7 +17,7 @@ void SOCK_$INIT(void)
     uint16_t sock_num;
     uint8_t *sock_desc_ptr;
     uint8_t *ptr_array_base;
-    sock_ec_view_t **free_list_head;
+    sock_$sock_t **free_list_head;
 
     /*
      * Initialize loop variables:
@@ -35,14 +35,14 @@ void SOCK_$INIT(void)
     free_list_head = SOCK_GET_FREE_LIST();
 
     do {
-        sock_ec_view_t *ec_view = (sock_ec_view_t *)(sock_desc_ptr + 4);
+        sock_$sock_t *ec_view = (sock_$sock_t *)(sock_desc_ptr + 4);
 
         /*
          * Store EC pointer in the pointer array.
          * Array is at base + 0x18A0, indexed by (ptr_array_base - base - 4) / 4 + 1
          * which equals sock_num. So slot sock_num stores pointer to sock_num's EC.
          */
-        *(sock_ec_view_t **)(ptr_array_base + SOCK_TABLE_LOCK) = ec_view;
+        *(sock_$sock_t **)(ptr_array_base + SOCK_TABLE_LOCK) = ec_view;
 
         /* Initialize the event count */
         EC_$INIT(&ec_view->ec);
@@ -58,8 +58,12 @@ void SOCK_$INIT(void)
          * Sockets 0-31 are reserved for well-known services and not in the free list.
          */
         if (sock_num > SOCK_RESERVED_MAX) {
-            /* Link this socket into the free list */
-            ec_view->queue_tail = (uint32_t)*free_list_head;
+            /*
+             * Link this socket into the free list through queue_head:
+             * "move.l (0xc,A0),(0x10,A2)" at 0x00E2FE46 writes A2+0x10, and
+             * the record starts at A2+4, so the target is record+0x0C.
+             */
+            ec_view->queue_head = (uint32_t)*free_list_head;
             *free_list_head = ec_view;
         }
 

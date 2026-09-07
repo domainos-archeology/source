@@ -66,6 +66,84 @@
 
 /*
  * ============================================================================
+ * Ring Log Control Structure
+ *
+ * Contains configuration and state for the logging subsystem.
+ * Located at base 0xE2C32C on original platform.
+ * ============================================================================
+ */
+typedef struct ringlog_ctl_t {
+    /*
+     * Wired page addresses for the ring buffer.
+     * Up to some number of pages can be wired to keep buffer in physical memory.
+     * Index 0 is unused; entries 1..wire_count contain wired addresses.
+     */
+    uint32_t    wired_pages[10];        /* 0x00: Wired page addresses (indices 1-9 used) */
+
+    /*
+     * Spinlock for buffer access.
+     * Protects current_index and entry writes.
+     */
+    uint32_t    spinlock;               /* 0x28: Spinlock (at 0xE2C354) */
+
+    /*
+     * Network ID filter.
+     * If non-zero, only packets matching this network ID are logged.
+     */
+    uint32_t    filter_id;              /* 0x2C: RINGLOG_$ID filter (at 0xE2C358) */
+
+    /*
+     * Number of wired pages.
+     * Pages wired_pages[1] through wired_pages[wire_count] are wired.
+     */
+    int16_t     wire_count;             /* 0x30: Number of wired pages (at 0xE2C35C) */
+
+    /*
+     * Socket type filters.
+     * When >= 0, packets to/from that socket type are NOT logged.
+     * When < 0, filtering for that socket type is disabled.
+     */
+    int8_t      mbx_sock_filter;        /* 0x32: MBX socket filter (at 0xE2C35E) */
+    int8_t      _pad1;
+    int8_t      who_sock_filter;        /* 0x34: WHO socket filter (at 0xE2C360) */
+    int8_t      _pad2;
+    int8_t      nil_sock_filter;        /* 0x36: NIL socket filter (at 0xE2C362) */
+    int8_t      _pad3;
+
+    /*
+     * Logging active flag.
+     * -1 (0xFF) = logging is active
+     * 0 = logging is stopped
+     */
+    int8_t      logging_active;         /* 0x38: RING_$LOGGING_NOW (at 0xE2C364) */
+    int8_t      _pad4;
+
+    /*
+     * First entry flag.
+     * Set to -1 when buffer wraps or is cleared; reset after first entry.
+     * Used to detect if buffer has wrapped.
+     */
+    int8_t      first_entry_flag;       /* 0x3A: (at 0xE2C366) */
+
+} ringlog_ctl_t;
+
+/*
+ * Ring log control structure.
+ * On m68k, located at 0xE2C32C.  RINGLOG_$CTL.logging_active is the global
+ * Ghidra labels RING_$LOGGING_NOW at 0x00E2C364; it is read from outside the
+ * RING subsystem (ROUTE_$PROCESS 0x00E87602, 0x00E0E258, 0x00E0E83C,
+ * 0x00E75458), which is why the record is declared in this public header.
+ */
+extern ringlog_ctl_t RINGLOG_$CTL;
+
+/*
+ * RING_$LOGGING_NOW - Pascal boolean (0xFF true) at 0x00E2C364.
+ * Test it with "< 0", as the original does ("tst.b" / "bpl" at 0x00E87602).
+ */
+#define RING_$LOGGING_NOW       (RINGLOG_$CTL.logging_active)
+
+/*
+ * ============================================================================
  * Public Functions
  * ============================================================================
  */
