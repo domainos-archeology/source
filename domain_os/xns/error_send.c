@@ -151,7 +151,7 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
     orig_header = *(int16_t **)(pkt + 0x1C);
 
     if (header_len < XNS_IDP_HEADER_SIZE || orig_header == NULL) {
-        *status_ret = status_$xns_invalid_param;
+        *status_ret = status_$xns_illegal_buffer_spec;
         return;
     }
 
@@ -161,14 +161,14 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
         int8_t dest_bc = xns_$is_local_addr((uint8_t *)orig_header + 0x06);
 
         if ((src_bc | dest_bc) < 0) {
-            *status_ret = status_$xns_invalid_param;
+            *status_ret = status_$xns_illegal_buffer_spec;
             return;
         }
     }
 
     /* Don't send error for error packets */
     if (*(uint8_t *)((uint8_t *)orig_header + 5) == XNS_IDP_TYPE_ERROR) {
-        *status_ret = status_$xns_invalid_param;
+        *status_ret = status_$xns_illegal_buffer_spec;
         return;
     }
 

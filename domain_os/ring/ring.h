@@ -388,21 +388,29 @@ extern uint16_t RING_$PAGING_OVERFLOW;  /* 0x00E261C0 */
  * RING_$SWDIAG_DATA (0x00E261C2) - software diagnostic error counters,
  * bumped alongside the per-unit statistics by ring_$validate_receive when
  * the packet came from the software diagnostic (flags bit1 and bit4 set).
- * Only the words the receive path touches are named.
+ *
+ * From +0x06 on this is the SAME ten-word receive-error block as
+ * ring_$stats_t+0x20, at a uniform displacement of -0x1A: every mirror
+ * ring_$validate_receive touches is exactly its stats counter minus 0x1A
+ * (0x20/0x06, 0x22/0x08, 0x24/0x0A, 0x28/0x0E, 0x2A/0x10, 0x2E/0x14,
+ * 0x30/0x16).  The two mirrors the receive path never writes, +0x0C and
+ * +0x12, are the two whose stats counterparts it also never writes normally
+ * (rcvbus CRASH_SYSTEMs first, rcvovr is not a CSR condition), which is what
+ * pins the correspondence.  See ring_$stats_t for where the names come from.
  */
 typedef struct ring_$swdiag_t {
     uint16_t    _r00;                   /* 0x00 (0x00E261C2) */
     uint16_t    _r02;                   /* 0x02 */
     uint16_t    _r04;                   /* 0x04 */
-    uint16_t    rcv_stat_20_cnt;        /* 0x06: rcv_csr bit 5  (0x00E75FD6) */
-    uint16_t    rcv_stat_100_cnt;       /* 0x08: rcv_csr bit 8  (0x00E76004) */
-    uint16_t    rcv_stat_200_cnt;       /* 0x0A: rcv_csr bit 9  (0x00E75FA2) */
-    uint16_t    _r0c;                   /* 0x0C */
-    uint16_t    rcv_stat_08_cnt;        /* 0x0E: rcv_csr bit 3  (0x00E7602E) */
-    uint16_t    rcv_stat_esb_cnt;       /* 0x10: rcv_csr bit 10/11 (0x00E75F86) */
-    uint16_t    _r12;                   /* 0x12 */
-    uint16_t    rcv_stat_01_cnt;        /* 0x14: rcv_csr bit 0  (0x00E75FEC) */
-    uint16_t    rcv_stat_80_cnt;        /* 0x16: rcv_csr bit 7  (0x00E76016) */
+    uint16_t    rcveor;                 /* 0x06: rcv_csr bit 5  (0x00E75FD6) */
+    uint16_t    rcvcrc;                 /* 0x08: rcv_csr bit 8  (0x00E76004) */
+    uint16_t    rcvtim;                 /* 0x0A: rcv_csr bit 9  (0x00E75FA2) */
+    uint16_t    rcvbus;                 /* 0x0C: never written - bit 6 crashes */
+    uint16_t    rcvmodem;               /* 0x0E: rcv_csr bit 3  (0x00E7602E) */
+    uint16_t    rcvpkt;                 /* 0x10: rcv_csr bit 10/11 (0x00E75F86) */
+    uint16_t    rcvovr;                 /* 0x12: never written by the receive path */
+    uint16_t    rcvapar;                /* 0x14: rcv_csr bit 0  (0x00E75FEC) */
+    uint16_t    rcvxerr;                /* 0x16: rcv_csr bit 7  (0x00E76016) */
 } ring_$swdiag_t;
 
 extern ring_$swdiag_t RING_$SWDIAG_DATA;
@@ -443,11 +451,39 @@ extern uid_t RING_$NETWORK_UID;
  * The swdiag mirror is bumped only when the packet came from the software
  * diagnostic ("tst.b D0b / bpl" before each one).
  *
- * TODO(source-1a5o): the counters below are still named after the rcv_csr bit
- * that drives them.  Their Domain/OS names are not in the kernel, not in the
- * SR10.4 status-code database and not in the headers in this tree; they would
- * have to come from a user-space consumer of RING_$GET_STATS (netstat / lcnet)
- * or from Apollo documentation.
+ * The counter names below are Apollo's own (bead source-1a5o).  The kernel
+ * never names them - RING_$GET_STATS just copies the block out - so they were
+ * recovered from a user-space consumer, /etc/netmain in the SR10.4
+ * distribution, whose "Error counts for <node>" display formats the ASKNODE
+ * ring statistics record field by field:
+ *
+ *   rcvxerr  rcvhcsum  xmit bph  rcv bph   xmit esb
+ *   rcvbus   rcvmodem  rcvpkt    rcvovr    rcvapar
+ *   xmit_tim rcvcnt    rcveor    rcvcrc    rcvtim
+ *   ...
+ *
+ * That names exactly eleven receive fields - one long (rcvcnt) and ten words -
+ * which is exactly what 0x1C..0x33 holds.  Three of them are pinned directly
+ * by the image and the rest follow from the order:
+ *
+ *   +0x1C rcvcnt   - the only long, bumped once per accepted packet
+ *                    ("addq.l #1,(0x1c,A3)" at 0x00E75EEC)
+ *   +0x26 rcvbus   - the bit-6 arm logs status 0x00110013, "receive bus
+ *                    error", and CRASH_SYSTEMs (0x00E75FB4-0x00E75FBE)
+ *   +0x32 rcvhcsum - the header-checksum arm logs 0x00110010, "bad checksum"
+ *                    (0x00E75ED8-0x00E75EE2)
+ *
+ * Reading netmain's rows in the order (rcvcnt, rcveor, rcvcrc, rcvtim),
+ * (rcvbus, rcvmodem, rcvpkt, rcvovr, rcvapar), (rcvxerr, rcvhcsum) lands
+ * rcvbus on +0x26 and rcvhcsum on +0x32 - both anchors - and leaves +0x2C
+ * (rcvovr, a DMA overrun) as the one word the CSR decode never touches, which
+ * is consistent with the swdiag mirror also skipping its +0x12.
+ *
+ * The transmit half at 0x00..0x1B is still named from guesses; netmain names
+ * it xmit_call / xmitcnt (the two longs at +0x02 and +0x06) plus nine words -
+ * xmit_nack, xmit_wack, xmit_orun, xmit_tim, xmit_apar, xmit_bus,
+ * xmit_nortn, xmit_modem, xmit_error - but nothing in the image pins their
+ * order.  Bead source-11rf.
  */
 typedef struct ring_$stats_t {
     uint16_t    _reserved0;         /* 0x00 */
@@ -462,17 +498,22 @@ typedef struct ring_$stats_t {
     uint16_t    biphase_count;      /* 0x16: Biphase errors */
     uint16_t    unexpected_count;   /* 0x18: Unexpected status */
     uint16_t    retry_count;        /* 0x1A: Retry attempts */
-    uint32_t    good_rcv_count;     /* 0x1C: packets accepted (0x00E75EEC) */
-    uint16_t    rcv_stat_20_cnt;    /* 0x20: rcv_csr bit 5  (0x00E75FCE) */
-    uint16_t    rcv_stat_100_cnt;   /* 0x22: rcv_csr bit 8  (0x00E75FFC) */
-    uint16_t    rcv_stat_200_cnt;   /* 0x24: rcv_csr bit 9  (0x00E75F98) */
-    uint16_t    rcv_stat_40_cnt;    /* 0x26: rcv_csr bit 6  (0x00E75FBE) */
-    uint16_t    rcv_stat_08_cnt;    /* 0x28: rcv_csr bit 3  (0x00E76026) */
-    uint16_t    rcv_stat_esb_cnt;   /* 0x2A: rcv_csr bit 10/11 (0x00E75F7C) */
-    uint16_t    _reserved1;         /* 0x2C */
-    uint16_t    rcv_stat_01_cnt;    /* 0x2E: rcv_csr bit 0  (0x00E75FE4) */
-    uint16_t    rcv_stat_80_cnt;    /* 0x30: rcv_csr bit 7  (0x00E7600E) */
-    uint16_t    rcv_chksum_err_cnt; /* 0x32: header checksum mismatch (0x00E75EE2) */
+    uint32_t    rcvcnt;             /* 0x1C: packets accepted (0x00E75EEC) */
+    uint16_t    rcveor;             /* 0x20: rcv_csr bit 5  (0x00E75FCE) */
+    uint16_t    rcvcrc;             /* 0x22: rcv_csr bit 8  (0x00E75FFC) */
+    uint16_t    rcvtim;             /* 0x24: rcv_csr bit 9  (0x00E75F98) */
+    uint16_t    rcvbus;             /* 0x26: rcv_csr bit 6, status 0x00110013
+                                     *       "receive bus error" (0x00E75FBE) */
+    uint16_t    rcvmodem;           /* 0x28: rcv_csr bit 3  (0x00E76026) */
+    uint16_t    rcvpkt;             /* 0x2A: rcv_csr bit 10 or 11; the split is
+                                     *       counted separately in RING_$RCV_ESB /
+                                     *       RING_$RCV_BIPHASE (0x00E75F7C) */
+    uint16_t    rcvovr;             /* 0x2C: DMA overrun; not a CSR condition,
+                                     *       so the receive decode never bumps it */
+    uint16_t    rcvapar;            /* 0x2E: rcv_csr bit 0  (0x00E75FE4) */
+    uint16_t    rcvxerr;            /* 0x30: rcv_csr bit 7  (0x00E7600E) */
+    uint16_t    rcvhcsum;           /* 0x32: header checksum mismatch, status
+                                     *       0x00110010 "bad checksum" (0x00E75EE2) */
     int8_t      last_success;       /* 0x34: Last transmission succeeded */
     int8_t      _reserved2;         /* 0x35 */
     int8_t      congestion_flag;    /* 0x36: Network congestion */
@@ -484,13 +525,17 @@ typedef struct ring_$stats_t {
 } ring_$stats_t;
 
 #if defined(ARCH_M68K)
-_Static_assert(offsetof(ring_$stats_t, good_rcv_count)     == 0x1C, "ring_$stats_t.good_rcv_count");
-_Static_assert(offsetof(ring_$stats_t, rcv_stat_20_cnt)    == 0x20, "ring_$stats_t.rcv_stat_20_cnt");
-_Static_assert(offsetof(ring_$stats_t, rcv_stat_esb_cnt)   == 0x2A, "ring_$stats_t.rcv_stat_esb_cnt");
-_Static_assert(offsetof(ring_$stats_t, rcv_chksum_err_cnt) == 0x32, "ring_$stats_t.rcv_chksum_err_cnt");
+_Static_assert(offsetof(ring_$stats_t, rcvcnt)             == 0x1C, "ring_$stats_t.rcvcnt");
+_Static_assert(offsetof(ring_$stats_t, rcveor)             == 0x20, "ring_$stats_t.rcveor");
+_Static_assert(offsetof(ring_$stats_t, rcvbus)             == 0x26, "ring_$stats_t.rcvbus");
+_Static_assert(offsetof(ring_$stats_t, rcvovr)             == 0x2C, "ring_$stats_t.rcvovr");
+_Static_assert(offsetof(ring_$stats_t, rcvpkt)             == 0x2A, "ring_$stats_t.rcvpkt");
+_Static_assert(offsetof(ring_$stats_t, rcvhcsum)           == 0x32, "ring_$stats_t.rcvhcsum");
 _Static_assert(offsetof(ring_$stats_t, congestion_flag)    == 0x36, "ring_$stats_t.congestion_flag");
 _Static_assert(sizeof(ring_$stats_t)                       == RING_STATS_SIZE, "sizeof ring_$stats_t");
-_Static_assert(offsetof(ring_$swdiag_t, rcv_stat_80_cnt)   == 0x16, "ring_$swdiag_t.rcv_stat_80_cnt");
+_Static_assert(offsetof(ring_$swdiag_t, rcveor)            == 0x06, "ring_$swdiag_t.rcveor");
+_Static_assert(offsetof(ring_$swdiag_t, rcvpkt)            == 0x10, "ring_$swdiag_t.rcvpkt");
+_Static_assert(offsetof(ring_$swdiag_t, rcvxerr)           == 0x16, "ring_$swdiag_t.rcvxerr");
 #endif /* ARCH_M68K */
 
 /*

@@ -49,7 +49,7 @@ void REM_FILE_$ACL_SETIDS(void *addr_info, uid_t *acl_uid,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x6A;  /* ACL_SETIDS opcode */
+    request.opcode = REM_FILE_OP_ACL_SETIDS;  /* 0x6A, 0x00E62950 */
     request.acl_uid = *acl_uid;
     request.flags = 5;
 

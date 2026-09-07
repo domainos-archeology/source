@@ -36,7 +36,7 @@ void REM_FILE_$UNLOCK_ALL(void)
     /* Build request */
     request.msg_type = 1;
     request.magic = 0x80;
-    request.opcode = 0x12;  /* UNLOCK_ALL opcode */
+    request.opcode = REM_FILE_OP_UNLOCK_ALL;  /* 0x12, 0x00E61C84 */
     request.nil_uid = UID_$NIL;
     request.flags = 3;
     request.admin_flag = REM_FILE_PROCESS_HAS_ADMIN() ? -1 : 0;

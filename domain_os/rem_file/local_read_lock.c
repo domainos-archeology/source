@@ -41,7 +41,7 @@ void REM_FILE_$LOCAL_READ_LOCK(void *addr_info, uid_t *file_uid,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x16;  /* LOCAL_READ_LOCK opcode */
+    request.opcode = REM_FILE_OP_LOCAL_READ_LOCK;  /* 0x16, 0x00E61EB6 */
     request.file_uid = *file_uid;
 
     /* Send request */

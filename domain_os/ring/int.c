@@ -128,7 +128,7 @@ int8_t RING_$INT(void *device_info)
              * accepted-packet counter at stats+0x1C, the same one
              * ring_$validate_receive bumps at 0x00E75EEC.
              */
-            RING_$STATS[unit_num].good_rcv_count++;
+            RING_$STATS[unit_num].rcvcnt++;
 
             return (int8_t)-1;  /* 0xFF */
         }

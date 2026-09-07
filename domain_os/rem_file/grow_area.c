@@ -35,7 +35,7 @@ void REM_FILE_$GROW_AREA(void *addr_info, uint16_t area_handle,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x8A;  /* GROW_AREA opcode */
+    request.opcode = REM_FILE_OP_GROW_AREA;  /* 0x8A, 0x00E62754 */
     request.area_handle = area_handle;
     request.current_size = current_size;
     request.new_size = new_size;

@@ -53,7 +53,7 @@ void REM_FILE_$ACL_CHECK_RIGHTS(void *addr_info, void *sid_data,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x6C;  /* ACL_CHECK_RIGHTS opcode */
+    request.opcode = REM_FILE_OP_ACL_CHECK_RIGHTS;  /* 0x6C, 0x00E62A10 */
     request.file_uid = *file_uid;
     request.flags = 5;
     request.flags2 = flags2;

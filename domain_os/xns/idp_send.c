@@ -94,7 +94,7 @@ void XNS_IDP_$OS_SEND(int16_t *channel_ptr, xns_$os_send_rec_t *rec,
              * with a nil address, is rejected. */
             if (len < 0 || (len > 0 && buf->address == 0)) {
                 FIM_$RLS_CLEANUP(cleanup);
-                *status_ret = status_$xns_invalid_param;   /* 0x3B0008 */
+                *status_ret = status_$xns_illegal_buffer_spec;   /* 0x3B0008 */
                 return;
             }
             total += len;                           /* 0x00E182F2 */
@@ -174,7 +174,7 @@ void XNS_IDP_$OS_SEND(int16_t *channel_ptr, xns_$os_send_rec_t *rec,
         /* 0x00E1839E */
         if (port == -1) {
             FIM_$RLS_CLEANUP(cleanup);
-            *status_ret = status_$xns_no_nexthop;   /* 0x3B0013 */
+            *status_ret = status_$xns_network_unreachable;   /* 0x3B0013 */
             return;
         }
 
@@ -306,7 +306,7 @@ void XNS_IDP_$SEND(uint16_t *channel_ptr, xns_$idp_send_t *send_params,
     if (send_params->hdr_desc.address == 0 ||
         send_params->hdr_desc.length < XNS_IDP_HEADER_SIZE) {
         FIM_$RLS_CLEANUP(cleanup);
-        *status_ret = status_$xns_invalid_param;    /* 0x3B0008 */
+        *status_ret = status_$xns_illegal_buffer_spec;    /* 0x3B0008 */
         return;
     }
 

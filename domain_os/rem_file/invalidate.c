@@ -35,7 +35,7 @@ void REM_FILE_$INVALIDATE(uid_t *vol_uid, uid_t *uid, uint32_t start,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x20;  /* INVALIDATE opcode */
+    request.opcode = REM_FILE_OP_INVALIDATE;  /* 0x20, 0x00E623F8 */
     request.file_uid = *uid;
     request.start = start;
     request.count = count;

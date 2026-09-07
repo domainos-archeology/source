@@ -35,7 +35,7 @@ void REM_FILE_$SET_DEF_ACL(void *vol_uid, uid_t *dir_uid, uid_t *acl_uid,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x18;  /* SET_DEF_ACL opcode */
+    request.opcode = REM_FILE_OP_SET_DEF_ACL;  /* 0x18, 0x00E62300 */
     request.dir_uid = *dir_uid;
     request.acl_uid = *acl_uid;
     request.owner_uid = *owner_uid;

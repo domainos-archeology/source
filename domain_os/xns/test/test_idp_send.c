@@ -348,7 +348,7 @@ static void test_negative_buffer_length_rejected(void)
     buf1->length = -1;
     XNS_IDP_$OS_SEND(&channel_no, &rec, &len, &s);
 
-    ASSERT_EQ(status_$xns_invalid_param, s);
+    ASSERT_EQ(status_$xns_illegal_buffer_spec, s);
     ASSERT_EQ(1, fim_release_calls);
     ASSERT_EQ(0, send_calls);
 }
@@ -362,7 +362,7 @@ static void test_nil_buffer_address_rejected(void)
     buf2->address = 0;
     XNS_IDP_$OS_SEND(&channel_no, &rec, &len, &s);
 
-    ASSERT_EQ(status_$xns_invalid_param, s);
+    ASSERT_EQ(status_$xns_illegal_buffer_spec, s);
     ASSERT_EQ(0, send_calls);
 }
 
@@ -406,7 +406,7 @@ static void test_unreachable_network(void)
     find_nexthop_port = -1;
     XNS_IDP_$OS_SEND(&channel_no, &rec, &len, &s);
 
-    ASSERT_EQ(status_$xns_no_nexthop, s);
+    ASSERT_EQ(status_$xns_network_unreachable, s);
     ASSERT_EQ(1, fim_release_calls);
     ASSERT_EQ(0, arp_calls);
     ASSERT_EQ(0, send_calls);
@@ -463,13 +463,13 @@ static void test_add_port_arguments_and_failure(void)
     int16_t   len = 0;
     status_$t s = 0;
 
-    add_port_status = status_$xns_unknown_network_port;
+    add_port_status = status_$xns_listen_network_not_connected;
     XNS_IDP_$OS_SEND(&channel_no, &rec, &len, &s);
 
     ASSERT_EQ(1, add_port_calls);
     ASSERT_EQ(TEST_CHANNEL, add_port_channel);
     ASSERT_EQ(TEST_PORT, add_port_port);
-    ASSERT_EQ(status_$xns_unknown_network_port, s);
+    ASSERT_EQ(status_$xns_listen_network_not_connected, s);
     ASSERT_EQ(0, send_calls);
 }
 
@@ -779,7 +779,7 @@ static void test_user_header_too_short(void)
     user_rec.hdr_desc.length = XNS_IDP_HEADER_SIZE - 1;
     XNS_IDP_$SEND(&user_channel, &user_rec, &len, &s);
 
-    ASSERT_EQ(status_$xns_invalid_param, s);
+    ASSERT_EQ(status_$xns_illegal_buffer_spec, s);
     ASSERT_EQ(1, fim_release_calls);
     ASSERT_EQ(0, send_calls);
 }
@@ -793,7 +793,7 @@ static void test_user_nil_header(void)
     user_rec.hdr_desc.address = 0;
     XNS_IDP_$SEND(&user_channel, &user_rec, &len, &s);
 
-    ASSERT_EQ(status_$xns_invalid_param, s);
+    ASSERT_EQ(status_$xns_illegal_buffer_spec, s);
 }
 
 /*

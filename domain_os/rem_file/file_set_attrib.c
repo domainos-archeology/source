@@ -51,7 +51,7 @@ void REM_FILE_$FILE_SET_ATTRIB(void *addr_info, uid_t *file_uid,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x82;  /* FILE_SET_ATTRIB opcode */
+    request.opcode = REM_FILE_OP_FILE_SET_ATTRIB;  /* 0x82, 0x00E62C46 */
     request.file_uid = *file_uid;
 
     /* Copy attribute data block 1 (13 uint32s) */

@@ -95,7 +95,7 @@ void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
             (options->src_host_hi == 0xFFFF &&
              options->src_host_mid == 0xFFFF &&
              options->src_host_lo == 0xFFFF)) {
-            *status_ret = status_$xns_broadcast_no_addr;
+            *status_ret = status_$xns_connect_to_broadcast;
             return;
         }
     }
@@ -113,7 +113,7 @@ void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
                                              options->buffer_size,
                                              0x400);
         if (result >= 0) {
-            *status_ret = status_$xns_socket_already_open;
+            *status_ret = status_$xns_no_os_sockets;
             return;
         }
 

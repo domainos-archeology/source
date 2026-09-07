@@ -33,7 +33,7 @@ void REM_FILE_$RESERVE(uid_t *vol_uid, uid_t *uid, uint32_t start,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x7C;  /* RESERVE opcode */
+    request.opcode = REM_FILE_OP_RESERVE;  /* 0x7C, 0x00E62478 */
     request.file_uid = *uid;
     request.start = start;
     request.count = count;

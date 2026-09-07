@@ -77,7 +77,7 @@ void REM_FILE_$LOCK(void *location_block, uint16_t lock_mode, uint16_t lock_type
         int8_t in_subsys;
 
         req->magic = 0x80;
-        req->opcode = 0x84;
+        req->opcode = REM_FILE_OP_LOCK_EXT;   /* 0x84, 0x00E61AEA */
 
         /* Copy file UID from location block offset +8 */
         req->file_uid.high = loc_block[2];
@@ -116,7 +116,7 @@ void REM_FILE_$LOCK(void *location_block, uint16_t lock_mode, uint16_t lock_type
         rem_file_simple_lock_req_t *req = (rem_file_simple_lock_req_t *)request_buf;
 
         req->magic = 0x80;
-        req->opcode = 0x0A;
+        req->opcode = REM_FILE_OP_LOCK;       /* 0x0A, 0x00E61B5E */
 
         /* Copy file UID from location block offset +8 */
         req->file_uid.high = loc_block[2];

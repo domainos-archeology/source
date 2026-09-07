@@ -11,3 +11,8 @@
 - [NETBUF layouts and the ARCH_VA_TO_PTR test idiom](netbuf-notes.md) — globals at 0xE245A8, the MMAPE link at offset 0x06, 1KB header-buffer fields.
 - [AST common attributes, the REM_FILE request trailer, ACL_$RIGHTS](ast-common-attrs-and-rem-file-trailer.md) — the 0x18-byte cattr record, its four-part call shape, and two wrong public prototypes.
 - [XNS / RIP send-path ABIs](xns-rip-send-notes.md) — the 0x48-byte send record head, byte-btst channel flags, BRK_INTERNET_HDR's 14 args, packed wire records.
+- [ACL_$RIGHTS / acl_$eval_rights ABI](acl-rights-abi.md) — the ignore_super boolean pointer, the biased project-UID base, and the undisassembled cname call site.
+- [RIP_$SERVER re-emission](rip-server-reemission.md) — the 0x538 frame record, the nested PROCESS_REQUEST, the 6-byte entry format and two original bugs.
+- [REM_FILE opcode table](rem-file-opcodes.md) — request+0x03, all 31 codes, the DIR/ACL forwarding ranges and the three two-phase builders.
+- [Ring statistics counter names](ring-stats-counter-names.md) — recovered from /etc/netmain, pinned by two logged status codes and the swdiag -0x1A mirror.
+- [SR10.4 user-space binaries name kernel stats](reference_sr104_userspace_binaries.md) — grep /etc/netmain before calling a field name unrecoverable.

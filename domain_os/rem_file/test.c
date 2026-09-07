@@ -30,7 +30,7 @@ void REM_FILE_$TEST(void *addr_info, status_$t *status)
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x00;  /* TEST opcode */
+    request.opcode = REM_FILE_OP_TEST;  /* 0x00, "clr.b" at 0x00E62386 */
     request.nil_uid = UID_$NIL;
 
     /* Send request */

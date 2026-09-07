@@ -116,40 +116,17 @@
 #define REM_FILE_LOG_TICKS_PER_UNIT 250
 
 /*
- * Server opcodes (request byte at A6-0x435).
+ * Server opcodes: the request byte at A6-0x435 ("move.b (-0x435,A6),D0b" -
+ * the request record is based at A6-0x438 and the opcode is its byte +0x03).
+ * Every code a REM_FILE_$* builder can send is defined once, in
+ * rem_file/rem_file_internal.h (bead source-8joj); only the four DIR_$SERVER
+ * codes that REM_FILE_$SERVER has to special-case for their netbuf are local
+ * to this file, because no REM_FILE_$ builder produces them.
  */
-#define SERVER_OP_TEST              0x00
-#define SERVER_OP_SET_ATTRIBUTE     0x04
-#define SERVER_OP_TRUNCATE          0x08
-#define SERVER_OP_LOCK              0x0A
-#define SERVER_OP_UNLOCK            0x0C
-#define SERVER_OP_NEIGHBORS         0x10
-#define SERVER_OP_NODE_CRASH        0x12
-#define SERVER_OP_PURIFY            0x14
-#define SERVER_OP_LOCAL_READ_LOCK   0x16
-#define SERVER_OP_SET_DEF_ACL       0x18
-#define SERVER_OP_LOCAL_LOCK_VERIFY 0x1A
-#define SERVER_OP_GET_ENTRY         0x1C
-#define SERVER_OP_GET_SEG_MAP       0x1E
-#define SERVER_OP_INVALIDATE        0x20
-#define SERVER_OP_ADD_HARD_LINK     0x22
-#define SERVER_OP_GENERATE_UID      0x24
-#define SERVER_OP_CREATE_PRESR10    0x26
-#define SERVER_OP_DROP_HARD_LINK    0x28
 #define SERVER_OP_DIR_GET_ENTRY     0x3C    /* DIR_$SERVER, needs a netbuf */
 #define SERVER_OP_DIR_READ_LINK     0x3E    /* DIR_$SERVER, needs a netbuf */
 #define SERVER_OP_DIR_READ_DIR      0x42    /* DIR_$SERVER, needs a netbuf */
 #define SERVER_OP_DIR_LIST          0x58    /* DIR_$SERVER, needs a netbuf */
-#define SERVER_OP_ACL_GET           0x64    /* ACL_$SERVER, needs a netbuf */
-#define SERVER_OP_ACL_PUT           0x68    /* ACL_$SERVER, returns a netbuf */
-#define SERVER_OP_RESERVE           0x7C
-#define SERVER_OP_CREATE_TYPE       0x7E
-#define SERVER_OP_SET_PROT          0x80
-#define SERVER_OP_SET_ATTRIB        0x82
-#define SERVER_OP_LOCK_EXTENDED     0x84
-#define SERVER_OP_CREATE_AREA       0x86
-#define SERVER_OP_DELETE_AREA       0x88
-#define SERVER_OP_GROW_AREA         0x8A
 
 /*
  * ============================================================================
@@ -674,7 +651,7 @@ static void server_set_prot_attrib(rem_file_server_frame_t *f)
 
     f->reply_len = 0xBE;
 
-    if (opcode == SERVER_OP_SET_PROT) {
+    if (opcode == REM_FILE_OP_FILE_SET_PROT) {
         switch (REQ_W(f, -0x42A)) {
         case 0x03:  prot_type = 6; break;
         case 0x10:  prot_type = 0; break;
@@ -702,13 +679,13 @@ static void server_set_prot_attrib(rem_file_server_frame_t *f)
     if (f->response.status != status_$ok) goto restore;
 
     ACL_$SET_RE_ALL_SIDS(saved_sids1,
-                         (opcode == SERVER_OP_SET_PROT) ? REQ_P(f, -0x3F4)
+                         (opcode == REM_FILE_OP_FILE_SET_PROT) ? REQ_P(f, -0x3F4)
                                                         : REQ_P(f, -0x3F0),
                          saved_proj1, saved_proj2, &f->response.status);
     if (f->response.status != status_$ok) goto restore;
     sids_set = -1;
 
-    ACL_$SET_PROJ_LIST((uid_t *)((opcode == SERVER_OP_SET_PROT)
+    ACL_$SET_PROJ_LIST((uid_t *)((opcode == REM_FILE_OP_FILE_SET_PROT)
                                  ? REQ_P(f, -0x3D0) : REQ_P(f, -0x3CC)),
                        (int16_t *)&REM_FILE_$MAX_PROJ_LIST,
                        &f->response.status);
@@ -718,7 +695,7 @@ static void server_set_prot_attrib(rem_file_server_frame_t *f)
     AUDIT_$RESUME();
     ACL_$EXIT_SUPER();
 
-    if (opcode == SERVER_OP_SET_PROT) {
+    if (opcode == REM_FILE_OP_FILE_SET_PROT) {
         FILE_$SET_PROT_INT(&f->request.uid, REQ_P(f, -0x428),
                            REQ_W(f, -0x42A), prot_type,
                            (int16_t)REQ_W(f, -0x42C), &f->response.status);
@@ -931,7 +908,7 @@ void REM_FILE_$SERVER(void)
                 REQ_L(&f, -0x38C) = (uint32_t)(uintptr_t)bulk;
             }
             holds_netbuf = holds_lock;              /* 0x00E63796 */
-        } else if (opcode == SERVER_OP_ACL_PUT) {
+        } else if (opcode == REM_FILE_OP_ACL_CREATE) {
             if (extra_len > REM_FILE_BULK_MAX) {
                 goto request_too_long;              /* 0x00E63744 */
             }
@@ -981,7 +958,7 @@ build_response_header:
     }
 
     /* 0x00E6381E: everything except the node-crash opcode runs unlocked. */
-    if (f.request.opcode != SERVER_OP_NODE_CRASH) {
+    if (f.request.opcode != REM_FILE_OP_UNLOCK_ALL) {
         ML_$EXCLUSION_STOP(&REM_FILE_$SOCK_LOCK);
         holds_lock = 0;
     }
@@ -1031,7 +1008,7 @@ build_response_header:
 
     /* ---- ACL_$SERVER delegation (0x00E63958-0x00E639F8) ---- */
     if ((opcode >= REM_FILE_ACL_OP_FIRST) && (opcode <= REM_FILE_ACL_OP_LAST)) {
-        if (opcode == SERVER_OP_ACL_GET) {
+        if (opcode == REM_FILE_OP_ACL_IMAGE) {
             NETBUF_$GET_DAT(f.netbuf_hdr);
             NETBUF_$GETVA(f.netbuf_hdr[0], &f.netbuf_va, &f.local_status);
             bulk = (void *)(uintptr_t)f.netbuf_va;
@@ -1044,7 +1021,7 @@ build_response_header:
 
         ACL_$SERVER(&f.request, &f.response, &f.reply_len);
 
-        if (f.request.opcode != SERVER_OP_ACL_PUT) {
+        if (f.request.opcode != REM_FILE_OP_ACL_CREATE) {
             goto send_reply;
         }
 
@@ -1058,21 +1035,21 @@ release_netbuf:                                     /* 0x00E639DC */
     /* ---- inline opcode dispatch (0x00E639FC) ---- */
     switch (opcode) {
 
-    case SERVER_OP_TEST:                            /* 0x00E63E40 */
+    case REM_FILE_OP_TEST:                            /* 0x00E63E40 */
         f.response.status = status_$ok;
         goto reply_len_default;
 
-    case SERVER_OP_SET_ATTRIBUTE:                   /* 0x00E63AD4 */
+    case REM_FILE_OP_SET_ATTRIBUTE:                   /* 0x00E63AD4 */
         server_set_attribute(&f);
         break;
 
-    case SERVER_OP_TRUNCATE:                        /* 0x00E63B00 */
+    case REM_FILE_OP_TRUNCATE:                        /* 0x00E63B00 */
         server_truncate_delete(&f);
         break;
 
-    case SERVER_OP_LOCK:
-    case SERVER_OP_LOCK_EXTENDED: {                 /* 0x00E63B08 */
-        if (opcode == SERVER_OP_LOCK_EXTENDED) {
+    case REM_FILE_OP_LOCK:
+    case REM_FILE_OP_LOCK_EXT: {                 /* 0x00E63B08 */
+        if (opcode == REM_FILE_OP_LOCK_EXT) {
             f.lock_flags = (uint16_t)(2 | REQ_W(&f, -0x420));
             /* 0x00E63B30: the ACL context is the address of a cell holding
              * the address of the request's SID block. */
@@ -1121,7 +1098,7 @@ release_netbuf:                                     /* 0x00E639DC */
             goto send_reply;
         }
 
-        if (f.request.opcode == SERVER_OP_LOCK_EXTENDED) {
+        if (f.request.opcode == REM_FILE_OP_LOCK_EXT) {
             file_$obj_loc_t *desc = (file_$obj_loc_t *)RSP_P(&f, -0x104);
 
             /* 0x00E63BEA: eight longwords of location descriptor. */
@@ -1153,7 +1130,7 @@ release_netbuf:                                     /* 0x00E639DC */
         break;
     }
 
-    case SERVER_OP_UNLOCK: {                        /* 0x00E63C8C */
+    case REM_FILE_OP_UNLOCK: {                        /* 0x00E63C8C */
         if (((int8_t)REQ_B(&f, -0x418) < 0) && (f.request_len >= 0x22)) {
             file_$obj_loc_t *desc = (file_$obj_loc_t *)RSP_P(&f, -0x104);
 
@@ -1195,14 +1172,14 @@ release_netbuf:                                     /* 0x00E639DC */
         break;
     }
 
-    case SERVER_OP_NEIGHBORS:                       /* 0x00E63ADC */
+    case REM_FILE_OP_NEIGHBORS:                       /* 0x00E63ADC */
         RSP_B(&f, -0x198) = (uint8_t)FILE_$NEIGHBORS(&f.request.uid,
                                                      (uid_t *)REQ_P(&f, -0x42C),
                                                      &f.response.status);
         f.reply_len = 0x0A;
         break;
 
-    case SERVER_OP_NODE_CRASH:                      /* 0x00E63D18 */
+    case REM_FILE_OP_UNLOCK_ALL:                      /* 0x00E63D18 */
         if ((NETWORK_$DISKLESS < 0) && (peer_node == NETWORK_$MOTHER_NODE)) {
             CRASH_SHOW_STRING(REM_FILE_$DISKLESS_CRASH_MSG);
             CRASH_SYSTEM(&REM_FILE_$COMMS_PROBLEM_STATUS);
@@ -1251,21 +1228,21 @@ release_netbuf:                                     /* 0x00E639DC */
                         &f.local_status);
         goto unwind;                                /* no reply is sent */
 
-    case SERVER_OP_PURIFY:                          /* 0x00E63E16 */
+    case REM_FILE_OP_PURIFY:                          /* 0x00E63E16 */
         (void)AST_$PURIFY(&f.request.uid,
                           (uint16_t)(4 | REQ_W(&f, -0x42C)),
                           (int16_t)REQ_W(&f, -0x42A),
                           &REM_FILE_$NIL_CONST, 0, &f.response.status);
         goto reply_len_default;
 
-    case SERVER_OP_LOCAL_READ_LOCK:                 /* 0x00E63DDA */
+    case REM_FILE_OP_LOCAL_READ_LOCK:                 /* 0x00E63DDA */
         FILE_$LOCAL_READ_LOCK(&f.request.uid,
                               (file_lock_info_internal_t *)RSP_P(&f, -0x198),
                               &f.response.status);
         f.reply_len = 0x2A;
         break;
 
-    case SERVER_OP_SET_DEF_ACL:                     /* 0x00E63E48 */
+    case REM_FILE_OP_SET_DEF_ACL:                     /* 0x00E63E48 */
         if (REQ_W(&f, -0x41C) != 3) {
             f.response.status = file_$bad_reply_received_from_remote_node;
         } else {
@@ -1284,16 +1261,16 @@ release_netbuf:                                     /* 0x00E639DC */
         }
         goto stale_entry_check;                     /* 0x00E63E8C */
 
-    case SERVER_OP_LOCAL_LOCK_VERIFY:               /* 0x00E63E02 */
+    case REM_FILE_OP_LOCAL_VERIFY:               /* 0x00E63E02 */
         FILE_$LOCAL_LOCK_VERIFY((lock_verify_request_t *)REQ_P(&f, -0x42C),
                                 &f.response.status);
         goto reply_len_default;
 
-    case SERVER_OP_GET_ENTRY:                       /* 0x00E63DFA */
+    case REM_FILE_OP_NAME_GET_ENTRYU:                       /* 0x00E63DFA */
         server_get_entry_sids(&f);
         break;
 
-    case SERVER_OP_GET_SEG_MAP:                     /* 0x00E63EA4 */
+    case REM_FILE_OP_GET_SEG_MAP:                     /* 0x00E63EA4 */
         f.zero_long = 0;
         if (f.request_len == 0x14) {
             f.seg_map_flag = ((int8_t)REQ_B(&f, -0x426) < 0) ? 1 : 0;
@@ -1317,17 +1294,17 @@ release_netbuf:                                     /* 0x00E639DC */
         f.reply_len = 0x28;
         break;
 
-    case SERVER_OP_INVALIDATE:                      /* 0x00E63F30 */
+    case REM_FILE_OP_INVALIDATE:                      /* 0x00E63F30 */
         AST_$INVALIDATE(&f.request.uid, REQ_L(&f, -0x42C), REQ_L(&f, -0x428),
                         (int16_t)REQ_B(&f, -0x424), &f.response.status);
         goto reply_len_default;
 
-    case SERVER_OP_RESERVE:                         /* 0x00E63F50 */
+    case REM_FILE_OP_RESERVE:                         /* 0x00E63F50 */
         AST_$RESERVE(&f.request.uid, REQ_L(&f, -0x42C), REQ_L(&f, -0x428),
                      &f.response.status);
         goto reply_len_default;
 
-    case SERVER_OP_ADD_HARD_LINK:                   /* 0x00E63F6E */
+    case REM_FILE_OP_NAME_ADD_HARD_LINKU:                   /* 0x00E63F6E */
         server_unmap_name(&f, (char *)REQ_P(&f, -0x42C),
                           (int16_t *)REQ_P(&f, -0x40C));
         if ((int8_t)REQ_B(&f, -0x400) < 0) {
@@ -1347,15 +1324,15 @@ release_netbuf:                                     /* 0x00E639DC */
         REM_FILE_$STALE_LINK_COUNT++;
         goto reply_len_default;
 
-    case SERVER_OP_GENERATE_UID:                    /* 0x00E63FCE */
+    case REM_FILE_OP_GENERATE_UID:                    /* 0x00E63FCE */
         server_generate_uid(&f);
         break;
 
-    case SERVER_OP_DROP_HARD_LINK:                  /* 0x00E63FC6 */
+    case REM_FILE_OP_DROP_HARD_LINKU:                  /* 0x00E63FC6 */
         server_drop_link(&f);
         break;
 
-    case SERVER_OP_CREATE_PRESR10:                  /* 0x00E63FD6 */
+    case REM_FILE_OP_CREATE_TYPE_PRESR10:                  /* 0x00E63FD6 */
         f.create_flags = 2;
         if (REQ_W(&f, -0x426) == 0) {
             f.create_flags = 3;
@@ -1367,7 +1344,7 @@ release_netbuf:                                     /* 0x00E639DC */
         RSP_W(&f, -0x190) = REQ_W(&f, -0x426);
         break;
 
-    case SERVER_OP_CREATE_TYPE:                     /* 0x00E64020 */
+    case REM_FILE_OP_CREATE_TYPE:                     /* 0x00E64020 */
         (void)FILE_$PRIV_CREATE((int16_t)REQ_W(&f, -0x3E0),
                                 (const uid_t *)REQ_P(&f, -0x424),
                                 (uid_t *)REQ_P(&f, -0x41C),
@@ -1392,12 +1369,12 @@ release_netbuf:                                     /* 0x00E639DC */
         f.reply_len = 0xBE;
         break;
 
-    case SERVER_OP_SET_PROT:                        /* 0x00E640A0 */
-    case SERVER_OP_SET_ATTRIB:
+    case REM_FILE_OP_FILE_SET_PROT:                        /* 0x00E640A0 */
+    case REM_FILE_OP_FILE_SET_ATTRIB:
         server_set_prot_attrib(&f);
         break;
 
-    case SERVER_OP_CREATE_AREA:                     /* 0x00E640A8 */
+    case REM_FILE_OP_CREATE_AREA:                     /* 0x00E640A8 */
         RSP_W(&f, -0x198) =
             AREA_$CREATE_FROM(peer_node, REQ_L(&f, -0x42C),
                               (f.request_len < 0x1C) ? REQ_L(&f, -0x42C)
@@ -1408,12 +1385,12 @@ release_netbuf:                                     /* 0x00E639DC */
         f.reply_len = 0x0C;
         break;
 
-    case SERVER_OP_DELETE_AREA:                     /* 0x00E640EC */
+    case REM_FILE_OP_DELETE_AREA:                     /* 0x00E640EC */
         AREA_$DELETE_FROM(REQ_W(&f, -0x424), peer_node, REQ_L(&f, -0x428),
                           &f.response.status);
         goto reply_len_default;
 
-    case SERVER_OP_GROW_AREA:                       /* 0x00E64106 */
+    case REM_FILE_OP_GROW_AREA:                       /* 0x00E64106 */
         AREA_$GROW_TO(REQ_W(&f, -0x424), REQ_L(&f, -0x42C),
                       (f.request_len < 0x1C) ? REQ_L(&f, -0x42C)
                                              : REQ_L(&f, -0x420),
@@ -1470,7 +1447,7 @@ send_reply:                                         /* 0x00E6414A */
                    ((f.response.status == status_$ok) ||
                     (f.response.status == 0x000E002C))) {
             extra_len = RSP_W(&f, -0x18C);
-        } else if ((f.request.opcode == SERVER_OP_ACL_GET) &&
+        } else if ((f.request.opcode == REM_FILE_OP_ACL_IMAGE) &&
                    (f.response.status == status_$ok)) {
             extra_len = (REQ_W(&f, -0x42C) == 4) ? 0x3FC : 0x400;
         } else {

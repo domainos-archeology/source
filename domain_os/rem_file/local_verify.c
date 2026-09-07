@@ -34,7 +34,7 @@ void REM_FILE_$LOCAL_VERIFY(void *addr_info, void *lock_block, status_$t *status
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x1A;  /* LOCAL_VERIFY opcode */
+    request.opcode = REM_FILE_OP_LOCAL_VERIFY;  /* 0x1A, 0x00E61E38 */
 
     /* Copy file UID from lock block */
     request.file_uid.high = src[0];

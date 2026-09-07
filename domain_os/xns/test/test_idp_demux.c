@@ -279,7 +279,7 @@ static void test_packet_counted(void)
     ASSERT_EQ(1, idp_state.packets_received);
 }
 
-/* A broadcast SOURCE host is dropped once with status_$xns_no_route. */
+/* A broadcast SOURCE host is dropped once with status_$xns_no_client_for_packet. */
 static void test_broadcast_source_dropped(void)
 {
     int i;
@@ -288,7 +288,7 @@ static void test_broadcast_source_dropped(void)
     }
     run();
     ASSERT_EQ(1, idp_state.packets_dropped);
-    ASSERT_EQ(status_$xns_no_route, st);
+    ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, chksum_calls);
     ASSERT_EQ(0, demux_calls);
 }
@@ -415,14 +415,14 @@ static void test_undeliverable_sockets(void)
     header.dest_socket = 0;
     run();
     ASSERT_EQ(1, idp_state.packets_dropped);
-    ASSERT_EQ(status_$xns_no_route, st);
+    ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, demux_calls);
 
     setup();
     header.dest_socket = 0xFFFF;
     run();
     ASSERT_EQ(1, idp_state.packets_dropped);
-    ASSERT_EQ(status_$xns_no_route, st);
+    ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, demux_calls);
 }
 
@@ -432,7 +432,7 @@ static void test_no_channel_bound(void)
     XNS_CHANNEL_PTR(3)->xns_socket = 0x0051;
     run();
     ASSERT_EQ(1, idp_state.packets_dropped);
-    ASSERT_EQ(status_$xns_no_route, st);
+    ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, demux_calls);
 }
 
@@ -442,7 +442,7 @@ static void test_channel_without_vector(void)
     XNS_CHANNEL_PTR(3)->demux = NULL;
     run();
     ASSERT_EQ(1, idp_state.packets_dropped);
-    ASSERT_EQ(status_$xns_no_route, st);
+    ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, demux_calls);
 }
 
@@ -455,7 +455,7 @@ static void test_forward_not_routing(void)
     ASSERT_EQ(1, ROUTE_$STAT_DROPPED_STD_ROUTE);
     ASSERT_EQ(0, ROUTE_$STAT_DROPPED_STD_HOP);
     ASSERT_EQ(1, idp_state.packets_dropped);
-    ASSERT_EQ(status_$xns_no_route, st);
+    ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, sock_put_calls);
 }
 
@@ -611,7 +611,7 @@ static void test_channel_demux_unbound(void)
     XNS_IDP_$DEMUX(&rec, &port_type, &port_socket, &bcast, &s);
 
     ASSERT_EQ(0, sock_put_calls);
-    ASSERT_EQ(status_$xns_no_route, s);
+    ASSERT_EQ(status_$xns_no_client_for_packet, s);
     ASSERT_EQ(0, idp_state.packets_dropped);
 }
 

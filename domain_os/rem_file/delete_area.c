@@ -32,7 +32,7 @@ void REM_FILE_$DELETE_AREA(void *addr_info, uint16_t area_handle,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x88;  /* DELETE_AREA opcode */
+    request.opcode = REM_FILE_OP_DELETE_AREA;  /* 0x88, 0x00E626E6 */
     request.area_handle = area_handle;
     request.area_offset = area_offset;
 

@@ -63,10 +63,16 @@ source-0fks.
   packet-info record, A6-0x4FC/-0x500/-0x51C/-0x4F4/-0x4F8/-0x51A the
   BRK address outputs, A6-0x518 id, A6-0x516 length, A6-0x4EC status,
   A6-0x514 the entry count, A6-0x508 the header VA for NETBUF_$RTN_HDR.
-  The three dispatch arms are still untranslated (source-4nvz).
+  The whole frame is now the record `rip_$server_frame_t` and all three
+  dispatch arms are translated - see [[rip-server-reemission]].
 
 - **`stcode.js <db> <code>` does not take a code argument** - it only dumps the
   whole database.  Grep its output for `(3b0008)` instead.  Module 0x3B is
-  "OS / XNS IDP"; eight of xns.h's identifiers disagree with it (source-v1lr).
+  "OS / XNS IDP"; the eight xns.h identifiers that disagreed with it were
+  renamed to the database text (source-v1lr, values unchanged): 0x3B0002
+  no_os_sockets, 0x0008 illegal_buffer_spec, 0x000B
+  listen_network_not_connected, 0x000D idp_socket_table_full, 0x0010
+  no_client_for_packet, 0x0013 network_unreachable, 0x001A
+  connect_to_broadcast, 0x001B source_must_be_this_node.
 
 Related: [[netbuf-notes]], [[msg-pkt-notes]], [[feedback-fidelity-gates]].

@@ -119,7 +119,7 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, void *recv_params, status_$t *statu
 
         /* Validate receive buffer */
         if (*(void **)(params + 0x1C) == NULL) {
-            *status_ret = status_$xns_invalid_param;
+            *status_ret = status_$xns_illegal_buffer_spec;
             goto cleanup;
         }
 
@@ -132,7 +132,7 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, void *recv_params, status_$t *statu
             while (iov_ptr != NULL) {
                 int32_t len = iov_ptr[0];
                 if (len < 0 || (len > 0 && iov_ptr[1] == 0)) {
-                    *status_ret = status_$xns_invalid_param;
+                    *status_ret = status_$xns_illegal_buffer_spec;
                     goto cleanup;
                 }
                 total_size += len;

@@ -407,7 +407,7 @@ static boolean ring_$validate_receive(ring_rcv_frame_t *fr)
             if (chksum != fr->hdr_chksum) {         /* 0x00E75ECE */
                 CRASH_SYSTEM(&ring_$rcv_chksum_status);
                 /* 0x00E75EE2: unreachable, CRASH_SYSTEM does not return. */
-                stats->rcv_chksum_err_cnt++;
+                stats->rcvhcsum++;
                 goto done;
             }
         }
@@ -415,7 +415,7 @@ static boolean ring_$validate_receive(ring_rcv_frame_t *fr)
 
     /* 0x00E75EEA */
     result = true;
-    stats->good_rcv_count++;                        /* 0x00E75EEC */
+    stats->rcvcnt++;                        /* 0x00E75EEC */
     goto done;
 
 error_path:
@@ -452,18 +452,18 @@ error_path:
         if ((fr->rcv_status & 0x0800) != 0) {
             RING_$RCV_BIPHASE++;                    /* 0x00E75F76 */
         }
-        stats->rcv_stat_esb_cnt++;                  /* 0x00E75F7C */
+        stats->rcvpkt++;                  /* 0x00E75F7C */
         if (is_swdiag < 0) {
-            swdiag->rcv_stat_esb_cnt++;             /* 0x00E75F86 */
+            swdiag->rcvpkt++;             /* 0x00E75F86 */
         }
         goto done;
     }
 
     /* 0x00E75F8E */
     if ((fr->rcv_status & 0x0200) != 0) {
-        stats->rcv_stat_200_cnt++;
+        stats->rcvtim++;
         if (is_swdiag < 0) {
-            swdiag->rcv_stat_200_cnt++;
+            swdiag->rcvtim++;
         }
         goto done;
     }
@@ -472,24 +472,24 @@ error_path:
     if ((fr->rcv_status & 0x0040) != 0) {
         CRASH_SYSTEM(&ring_$rcv_stat40_status);
         /* 0x00E75FBE: unreachable. */
-        stats->rcv_stat_40_cnt++;
+        stats->rcvbus++;
         goto done;
     }
 
     /* 0x00E75FC4 */
     if ((fr->rcv_status & 0x0020) != 0) {
-        stats->rcv_stat_20_cnt++;
+        stats->rcveor++;
         if (is_swdiag < 0) {
-            swdiag->rcv_stat_20_cnt++;
+            swdiag->rcveor++;
         }
         goto done;
     }
 
     /* 0x00E75FDC: "btst.l D2,D1" with D2 still zero, i.e. bit 0. */
     if ((fr->rcv_status & 0x0001) != 0) {
-        stats->rcv_stat_01_cnt++;
+        stats->rcvapar++;
         if (is_swdiag < 0) {
-            swdiag->rcv_stat_01_cnt++;
+            swdiag->rcvapar++;
         }
         goto done;
     }
@@ -499,9 +499,9 @@ error_path:
      * it falls through into the 0x0080 test at 0x00E76008.
      */
     if ((fr->rcv_status & 0x0100) != 0) {
-        stats->rcv_stat_100_cnt++;
+        stats->rcvcrc++;
         if (is_swdiag < 0) {
-            swdiag->rcv_stat_100_cnt++;
+            swdiag->rcvcrc++;
         }
     }
 
@@ -510,18 +510,18 @@ error_path:
      * this is bit 7 of rcv_status.
      */
     if ((int8_t)(fr->rcv_status & 0x00FF) < 0) {
-        stats->rcv_stat_80_cnt++;
+        stats->rcvxerr++;
         if (is_swdiag < 0) {
-            swdiag->rcv_stat_80_cnt++;
+            swdiag->rcvxerr++;
         }
         goto done;
     }
 
     /* 0x00E7601C */
     if ((fr->rcv_status & 0x0008) != 0) {
-        stats->rcv_stat_08_cnt++;
+        stats->rcvmodem++;
         if (is_swdiag < 0) {
-            swdiag->rcv_stat_08_cnt++;
+            swdiag->rcvmodem++;
         }
     }
 

@@ -88,7 +88,7 @@ void REM_FILE_$CREATE_TYPE(void *ctx_ptr, uint16_t flags, uid_t *type_uid,
 
     /* Phase 1: Get session */
     req1.magic = 0x80;
-    req1.opcode = 0x24;  /* CREATE phase 1 */
+    req1.opcode = REM_FILE_OP_GENERATE_UID;  /* 0x24, 0x00E61742 */
 
     REM_FILE_$SEND_REQUEST(ctx->addr_info, &req1, 0x10,
                            &zero, 0,
@@ -105,7 +105,7 @@ void REM_FILE_$CREATE_TYPE(void *ctx_ptr, uint16_t flags, uid_t *type_uid,
     rem_file_create_type_resp_t *resp = (rem_file_create_type_resp_t *)response;
 
     req2.magic = 0x80;
-    req2.opcode = 0x7E;  /* CREATE_TYPE phase 2 */
+    req2.opcode = REM_FILE_OP_CREATE_TYPE;   /* 0x7E, 0x00E61788 */
     req2.parent_uid = ctx->parent_uid;
     req2.session_uid = resp->session_uid;
     req2.type_uid = *type_uid;

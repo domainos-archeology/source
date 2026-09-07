@@ -22,38 +22,76 @@
 #include "netlog/netlog.h"
 
 /*
- * Remote file operation codes (sent in request byte 1)
+ * =============================================================================
+ * Remote file operation codes - request byte +0x03
+ * =============================================================================
+ *
+ * Every REM_FILE_$* request builder writes the same two bytes at the head of
+ * its request record: 0x80 at +0x02 and the operation code at +0x03
+ * ("move.b #-0x80,(-0x16e,A6)" / "move.b #op,(-0x16d,A6)", the record being
+ * based at A6-0x170; REM_FILE_$CREATE_TYPE and REM_FILE_$NAME_GET_ENTRYU use
+ * A6-0x198 and REM_FILE_$UNLOCK_ALL A6-0xD0, same two offsets into the
+ * record).  REM_FILE_$SERVER reads it back at request+3 - "move.b
+ * (-0x435,A6),D0b" with the request at A6-0x438 (0x00E63A02 and 17 other
+ * sites).
+ *
+ * The whole table below was re-derived from the image for bead source-8joj;
+ * the values it replaced were guesses and almost all of them were wrong.
+ * Every code is even.  Before reaching its own dispatch, REM_FILE_$SERVER
+ * forwards two ranges wholesale:
+ *
+ *   0x2A..0x5C  -> DIR_$SERVER (0x00E58200)   - 0x00E63840-0x00E6384C
+ *   0x64..0x77  -> ACL_$SERVER (0x00E49594)   - 0x00E6395E-0x00E6396A
+ *
+ * so the ACL codes below are handled by ACL_$SERVER, not by REM_FILE_$SERVER.
+ * Everything else falls through to the compare chain at 0x00E63A02-0x00E63AD0;
+ * an unrecognised code lands at 0x00E64136.
  */
-#define REM_FILE_OP_TRUNCATE            0x08
-#define REM_FILE_OP_SET_ATTRIBUTE       0x0A
-#define REM_FILE_OP_LOCK                0x09
-#define REM_FILE_OP_UNLOCK              0x05
-#define REM_FILE_OP_NEIGHBORS           0x10
-#define REM_FILE_OP_PURIFY              0x0B
-#define REM_FILE_OP_SET_DEF_ACL         0x0C
-#define REM_FILE_OP_INVALIDATE          0x0E
-#define REM_FILE_OP_RESERVE             0x0F
-#define REM_FILE_OP_CREATE_TYPE         0x7E  /* Post-init create */
-#define REM_FILE_OP_CREATE_TYPE_INIT    0x24  /* Initial create request */
-#define REM_FILE_OP_TEST                0x06
-#define REM_FILE_OP_NAME_GET_ENTRYU     0x28
-#define REM_FILE_OP_NAME_ADD_HARD_LINKU 0x2C
-#define REM_FILE_OP_DROP_HARD_LINKU     0x2D
-#define REM_FILE_OP_CREATE_AREA         0x02
-#define REM_FILE_OP_DELETE_AREA         0x03
-#define REM_FILE_OP_GROW_AREA           0x01
-#define REM_FILE_OP_ACL_IMAGE           0x1A
-#define REM_FILE_OP_ACL_CREATE          0x18
-#define REM_FILE_OP_ACL_SETIDS          0x19
-#define REM_FILE_OP_ACL_CHECK_RIGHTS    0x17
-#define REM_FILE_OP_SET_ACL             0x1B
-#define REM_FILE_OP_FILE_SET_PROT       0x22
-#define REM_FILE_OP_FILE_SET_ATTRIB     0x23
-#define REM_FILE_OP_LOCAL_VERIFY        0x11
-#define REM_FILE_OP_LOCAL_READ_LOCK     0x12
-#define REM_FILE_OP_GET_SEG_MAP         0x2A
-#define REM_FILE_OP_UNLOCK_ALL          0x04
-#define REM_FILE_OP_RN_DO_OP            0x80  /* Generic operation marker */
+#define REM_FILE_OP_TEST                0x00  /* 0x00E62386 clr.b; server 0x00E63E40 */
+#define REM_FILE_OP_SET_ATTRIBUTE       0x04  /* 0x00E61A48; server __set_attribute   */
+#define REM_FILE_OP_TRUNCATE            0x08  /* 0x00E61996; server __truncate_delete */
+#define REM_FILE_OP_LOCK                0x0A  /* 0x00E61B5E; the plain lock           */
+#define REM_FILE_OP_UNLOCK              0x0C  /* 0x00E61D48; server 0x00E63C8C        */
+#define REM_FILE_OP_NEIGHBORS           0x10  /* 0x00E621D0; server 0x00E63ADC        */
+#define REM_FILE_OP_UNLOCK_ALL          0x12  /* 0x00E61C84; server 0x00E63D18        */
+#define REM_FILE_OP_PURIFY              0x14  /* 0x00E62272; server 0x00E63E16        */
+#define REM_FILE_OP_LOCAL_READ_LOCK     0x16  /* 0x00E61EB6; server 0x00E63DDA        */
+#define REM_FILE_OP_SET_DEF_ACL         0x18  /* 0x00E62300; server 0x00E63E48        */
+#define REM_FILE_OP_LOCAL_VERIFY        0x1A  /* 0x00E61E38; server 0x00E63E02        */
+#define REM_FILE_OP_NAME_GET_ENTRYU     0x1C  /* 0x00E620C2; server 0x00E63DFA        */
+#define REM_FILE_OP_GET_SEG_MAP         0x1E  /* 0x00E61F62; server 0x00E63EA4        */
+#define REM_FILE_OP_INVALIDATE          0x20  /* 0x00E623F8; server 0x00E63F30        */
+#define REM_FILE_OP_NAME_ADD_HARD_LINKU 0x22  /* 0x00E6250A; server 0x00E63F6E        */
+#define REM_FILE_OP_GENERATE_UID        0x24  /* server __generate_uid (0x00E632C2).
+                                               * Phase 1 of REM_FILE_$CREATE_TYPE
+                                               * (0x00E61742), CREATE_TYPE_PRESR10
+                                               * (0x00E6188C) and ACL_CREATE
+                                               * (0x00E62858) */
+#define REM_FILE_OP_CREATE_TYPE_PRESR10 0x26  /* 0x00E618E4; server 0x00E63FD6        */
+#define REM_FILE_OP_DROP_HARD_LINKU     0x28  /* 0x00E625AC; server 0x00E63FC6        */
+
+/* 0x64..0x77 - forwarded to ACL_$SERVER */
+#define REM_FILE_OP_ACL_IMAGE           0x64  /* 0x00E627C0 */
+#define REM_FILE_OP_SET_ACL             0x66  /* 0x00E62AC4 */
+#define REM_FILE_OP_ACL_CREATE          0x68  /* 0x00E628A2, phase 2 of ACL_CREATE */
+#define REM_FILE_OP_ACL_SETIDS          0x6A  /* 0x00E62950 */
+#define REM_FILE_OP_ACL_CHECK_RIGHTS    0x6C  /* 0x00E62A10 */
+
+#define REM_FILE_OP_RESERVE             0x7C  /* 0x00E62478; server 0x00E63F50        */
+#define REM_FILE_OP_CREATE_TYPE         0x7E  /* 0x00E61788; server 0x00E64020,
+                                               * phase 2 of REM_FILE_$CREATE_TYPE */
+#define REM_FILE_OP_FILE_SET_PROT       0x80  /* 0x00E62B84; server __set_prot_attrib */
+#define REM_FILE_OP_FILE_SET_ATTRIB     0x82  /* 0x00E62C46; same server handler      */
+#define REM_FILE_OP_LOCK_EXT            0x84  /* 0x00E61AEA; the extended lock, which
+                                               * shares the 0x0A handler
+                                               * (0x00E63B08) but carries the full
+                                               * lock record and an ACL check */
+#define REM_FILE_OP_CREATE_AREA         0x86  /* 0x00E62646; server 0x00E640A8        */
+#define REM_FILE_OP_DELETE_AREA         0x88  /* 0x00E626E6; server 0x00E640EC        */
+#define REM_FILE_OP_GROW_AREA           0x8A  /* 0x00E62754; server 0x00E64106        */
+
+/* The constant byte every builder writes at request+0x02. */
+#define REM_FILE_REQ_MAGIC              0x80
 
 /*
  * Request header (common to all remote file operations)

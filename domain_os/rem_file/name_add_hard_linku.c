@@ -42,7 +42,7 @@ void REM_FILE_$NAME_ADD_HARD_LINKU(void *addr_info, uid_t *dir_uid,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x22;  /* ADD_HARD_LINK opcode */
+    request.opcode = REM_FILE_OP_NAME_ADD_HARD_LINKU;  /* 0x22, 0x00E6250A */
     request.dir_uid = *dir_uid;
 
     /* Copy name (up to 32 bytes) */

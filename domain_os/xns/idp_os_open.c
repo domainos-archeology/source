@@ -53,7 +53,7 @@ void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret)
 
     /* Check channel limit */
     if (XNS_OPEN_COUNT() >= XNS_MAX_CHANNELS) {
-        *status_ret = status_$xns_too_many_channels;
+        *status_ret = status_$xns_idp_socket_table_full;
         return;
     }
 
@@ -110,7 +110,7 @@ void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret)
             MAC_$NET_TO_PORT_NUM((int16_t *)(opt + 4), port_num);
             port = port_num[0];
             if (port == -1) {
-                *status_ret = status_$xns_unknown_network_port;
+                *status_ret = status_$xns_listen_network_not_connected;
                 goto cleanup_error;
             }
             xns_$add_port(channel, port, status_ret);
@@ -135,7 +135,7 @@ void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret)
             /* Check if destination is in our address table */
             int8_t is_local = xns_$is_broadcast_addr(dest_addr);
             if (is_local >= 0) {
-                *status_ret = status_$xns_local_addr_in_use;
+                *status_ret = status_$xns_source_must_be_this_node;
                 goto cleanup_error;
             }
         }
@@ -152,7 +152,7 @@ void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret)
 
             port = nexthop_port[0];
             if (port == -1) {
-                *status_ret = status_$xns_no_nexthop;
+                *status_ret = status_$xns_network_unreachable;
                 goto cleanup_error;
             }
 

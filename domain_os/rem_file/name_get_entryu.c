@@ -76,7 +76,7 @@ void REM_FILE_$NAME_GET_ENTRYU(void *addr_info, uid_t *dir_uid,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x1C;  /* NAME_GET_ENTRY opcode */
+    request.opcode = REM_FILE_OP_NAME_GET_ENTRYU;  /* 0x1C, 0x00E620C2 */
     request.dir_uid = *dir_uid;
 
     /* Copy name (up to 32 bytes) */

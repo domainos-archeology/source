@@ -46,7 +46,7 @@ uint16_t REM_FILE_$CREATE_AREA(void *addr_info, uint32_t area_type,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x86;  /* CREATE_AREA opcode */
+    request.opcode = REM_FILE_OP_CREATE_AREA;  /* 0x86, 0x00E62646 */
     request.area_type = area_type;
     request.area_offset = area_offset;
     request.area_size = area_size;

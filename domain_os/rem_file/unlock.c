@@ -40,11 +40,11 @@
 #define REM_FILE_UNLOCK_RESP_SIZE   0xBE
 
 /* `move.b #-0x80,(-0x16e,A6)` at 0x00E61D42 / `move.b #0xc,(-0x16d,A6)` at
- * 0x00E61D48.  REM_FILE_$SERVER dispatches this as SERVER_OP_UNLOCK (0x0C).
- * NOTE: rem_file_internal.h's REM_FILE_OP_UNLOCK says 0x05, which the image
- * contradicts - see the TODO at the bottom of this file. */
-#define REM_FILE_UNLOCK_MAGIC       0x80
-#define REM_FILE_UNLOCK_OPCODE      0x0C
+ * 0x00E61D48.  REM_FILE_$SERVER dispatches this as REM_FILE_OP_UNLOCK (0x0C)
+ * at 0x00E63A2A; both constants now come from rem_file/rem_file_internal.h
+ * (bead source-8joj). */
+#define REM_FILE_UNLOCK_MAGIC       REM_FILE_REQ_MAGIC
+#define REM_FILE_UNLOCK_OPCODE      REM_FILE_OP_UNLOCK
 
 /* `move.w #0x3,(-0x158,A6)` at 0x00E61D6A.  Every REM_FILE request carries the
  * same {version word == 3, super-mode boolean} pair right after its payload
@@ -232,12 +232,3 @@ uint8_t REM_FILE_$UNLOCK(file_$obj_loc_t *location_block, uint16_t unlock_mode,
     /* 0x00E61E0E: the result byte FILE_$PRIV_UNLOCK returned on the server. */
     return response.result;
 }
-
-/*
- * TODO: rem_file/rem_file_internal.h's REM_FILE_OP_* table disagrees with the
- * image for at least four opcodes (UNLOCK is 0x0C here, not 0x05;
- * SET_DEF_ACL is 0x18 at 0x00E62300, not 0x0C; UNLOCK_ALL is 0x12,
- * LOCAL_VERIFY 0x1A).  Nothing uses those macros today - every request builder
- * writes its own literal - so the table is inert, but it should be re-derived
- * from the image and the builders converted.  Bead source-8joj.
- */

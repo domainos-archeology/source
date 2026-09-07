@@ -16,7 +16,7 @@
 typedef struct {
     uint16_t msg_type;      /* Set to 1 by SEND_REQUEST */
     uint8_t magic;          /* 0x80 */
-    uint8_t opcode;         /* 0x0B = purify */
+    uint8_t opcode;         /* 0x14 = purify (0x00E62272) */
     uid_t file_uid;         /* File UID (8 bytes) */
     uint16_t flags;         /* Purify flags */
     int16_t page_index;     /* Page index for partial purify */

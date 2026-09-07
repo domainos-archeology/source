@@ -244,24 +244,13 @@ void RIP_$AGE(void);
 int16_t RIP_$PACKET_LENGTH(int16_t entry_count);
 
 /*
- * RIP_$PROCESS_REQUEST - Process RIP request and build response
- *
- * Nested procedure called from RIP_$SERVER to process incoming RIP
- * requests. Builds a response containing route information.
- *
- * Two modes:
- * 1. Specific networks: Look up each requested network
- * 2. Full table: network=0xFFFFFFFF returns all VALID/AGING routes
- *
- * @param flags     If negative, use non-standard routes; else standard
- *
- * Note: This function accesses the caller's stack frame directly (nested
- * Pascal procedure pattern). In C, must be integrated into caller or
- * receive explicit buffer parameters.
- *
- * Original address: 0x00E688C8
+ * RIP_$PROCESS_REQUEST (0x00E688C8) is a nested Pascal procedure of
+ * RIP_$SERVER - "move.l (A6),D6" at 0x00E688D4 takes the parent's frame
+ * pointer out of the static link and every buffer it touches (entry_count,
+ * response_count, payload_va and the response packet) is a field of that
+ * frame.  It is therefore a static inside rip/server.c taking a
+ * rip_$server_frame_t *, not a global with an invented ABI.
  */
-void RIP_$PROCESS_REQUEST(boolean flags);
 
 /*
  * RIP_$SERVER - Main RIP protocol server

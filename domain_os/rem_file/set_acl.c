@@ -43,7 +43,7 @@ void REM_FILE_$SET_ACL(void *addr_info, uid_t *file_uid, uid_t *acl_uid,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x66;  /* SET_ACL opcode */
+    request.opcode = REM_FILE_OP_SET_ACL;  /* 0x66, 0x00E62AC4 */
     request.file_uid = *file_uid;
     request.flags = 5;
     request.flags2 = flags2;

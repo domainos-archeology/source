@@ -1,20 +1,26 @@
 /*
- * RIP_$SERVER - RIP Protocol Server Implementation
+ * RIP_$SERVER and friends - the RIP protocol server (0x00E68864-0x00E68E24)
  *
- * This file implements the RIP (Routing Information Protocol) server functions
- * that handle incoming routing protocol packets and send responses.
+ * Functions in this translation unit, in image order:
  *
- * Functions implemented:
- * - RIP_$PACKET_LENGTH: Calculate RIP packet data length
- * - RIP_$SEND_UPDATES: Send routing updates if changes detected
- * - RIP_$PROCESS_REQUEST: Build response to RIP request
- * - RIP_$SERVER: Main server - process incoming RIP packets
+ *   RIP_$PACKET_LENGTH    0x00E68864   entry_count * 6 + 2
+ *   RIP_$SEND_UPDATES     0x00E6887A   broadcast if the change flag is set
+ *   RIP_$PROCESS_REQUEST  0x00E688C8   nested procedure: builds the reply
+ *   RIP_$SERVER           0x00E68A08   one packet off socket 8
  *
- * Original addresses:
- * - RIP_$PACKET_LENGTH:    0x00E68864
- * - RIP_$SEND_UPDATES:     0x00E6887A
- * - RIP_$PROCESS_REQUEST:  0x00E688C8
- * - RIP_$SERVER:           0x00E68A08
+ * RIP_$PROCESS_REQUEST is a nested Pascal procedure: it takes one boolean
+ * parameter and reaches everything else through the static link
+ * ("move.l (A6),D6" at 0x00E688D4), so it is a static here that takes a
+ * pointer to the parent's frame (rip_$server_frame_t).
+ *
+ * The whole of RIP_$SERVER (0x00E68A08-0x00E68E24) was re-emitted block for
+ * block against the disassembly for bead source-4nvz; every A6 displacement
+ * the original uses is a named field of rip_$server_frame_t below.
+ *
+ * The frame's two 32-bit virtual addresses (payload_va and hdr_va) go through
+ * ARCH_PTR_TO_VA / ARCH_VA_TO_PTR: on m68k both are the identity cast, and a
+ * host test can point ARCH_HOST_VA_BASE at its own arena so a 64-bit pointer
+ * still survives the round trip through a uint32_t field.
  */
 
 #include "rip/rip_internal.h"
@@ -22,806 +28,799 @@
 #include "pkt/pkt.h"
 #include "netbuf/netbuf.h"
 #include "time/time.h"
-#include "rem_name/rem_name.h"
+#include "name/name.h"      /* REM_NAME_$REGISTER_SERVER */
 #include "hint/hint.h"
-#include "xns/xns.h"     /* xns_$idp_header_t: the IDP header RIP_$SERVER copies */
+#include "uid/uid.h"        /* NODE_$ME (0xE245A4) */
+#include "xns/xns.h"        /* xns_$idp_header_t: the header the XNS path copies */
 
 /*
  * =============================================================================
- * RIP Packet Format
+ * Wire formats
  * =============================================================================
  *
- * RIP packets consist of:
- * - 2 byte command (1=request, 2=response, 3=name service registration)
- * - N entries, each 6 bytes:
- *   - 4 byte network address
- *   - 2 byte metric (hop count)
+ * A RIP packet is a 2-byte command followed by 6-byte entries:
  *
- * Maximum 90 (0x5A) entries per packet.
+ *   +0x00  command   1 = request, 2 = response, 3 = name-service register
+ *   +0x02  entry 0   { network:4, metric:2 }
+ *   +0x08  entry 1
+ *   ...
+ *
+ * RIP_$PACKET_LENGTH(n) is exactly 6n + 2 and RIP_$SERVER refuses anything
+ * whose payload length disagrees with it (0x00E68B04-0x00E68B14).  The
+ * request arm reads entry i at request + 2 + 6i ("lea (0,A1,D5),A2" with
+ * D5 = 6(i+1) then "(-0x4,A2)" at 0x00E68904) and the response arm at
+ * packet_data + 2 + 6i ("(-0x4d4,A2)" with A2 = A6 + 6 + 6i at 0x00E68DAC).
+ */
+typedef struct rip_$pkt_entry_t {
+    uint32_t    network;                /* 0x00 */
+    uint16_t    metric;                 /* 0x04 */
+} __attribute__((packed)) rip_$pkt_entry_t;
+
+typedef struct rip_$packet_t {
+    uint16_t            command;                    /* 0x000 */
+    rip_$pkt_entry_t    entries[RIP_MAX_ENTRIES];   /* 0x002 */
+} __attribute__((packed)) rip_$packet_t;
+
+/* 2 + 90*6 = 542 = 0x21E, the size RIP_$SERVER hands PKT_$BRK_INTERNET_HDR
+ * as its data_max ("move.w #0x21e,-(SP)" at 0x00E68A96) and copies on the
+ * XNS path (0x87 longwords plus a word, 0x00E68A78-0x00E68A82). */
+_Static_assert(sizeof(rip_$pkt_entry_t) == RIP_ENTRY_SIZE, "rip_$pkt_entry_t");
+_Static_assert(sizeof(rip_$packet_t) == 0x21E, "rip_$packet_t must be 0x21E bytes");
+
+/*
+ * =============================================================================
+ * RIP_$SERVER's stack frame
+ * =============================================================================
+ *
+ * "link.w A6,-0x538" at 0x00E68A08.  Offsets below are from the frame base,
+ * i.e. field offset = 0x538 + <A6 displacement>.  RIP_$PROCESS_REQUEST reads
+ * and writes five of these fields through the static link, which is why the
+ * frame is a named record rather than a pile of C locals.
+ *
+ *   A6-0x538  reg_node_id      A6-0x4F4  src_node_or
+ *   A6-0x51C  dest_sock        A6-0x4F0  payload_va
+ *   A6-0x51A  src_sock         A6-0x4EC  status
+ *   A6-0x518  id_out           A6-0x4E0  reg_network
+ *   A6-0x516  data_len         A6-0x4DC  wait_delay (clock_t, 6 bytes)
+ *   A6-0x514  entry_count      A6-0x4D4  wait_status
+ *   A6-0x512  response_count   A6-0x4D0  packet_data (0x21E bytes)
+ *   A6-0x50E  send_retry_hint  A6-0x2B0  info_out (PKT_$BRK's 30-byte record)
+ *   A6-0x50C  send_timeout     A6-0x290  response (0x220 bytes)
+ *   A6-0x508  hdr_va           A6-0x070  pkt (sock_$pkt_info_t, 0x40 bytes)
+ *   A6-0x500  dest_node        A6-0x030  source_addr (rip_$xns_addr_t)
+ *   A6-0x4FC  network          A6-0x020  header (xns_$idp_header_t, 30 bytes)
+ *   A6-0x4F8  src_node         A6-0x002  header_tail
+ */
+typedef struct rip_$server_frame_t {
+    /* 0x000 */ uint32_t            reg_node_id;
+    /* 0x004 */ uint8_t             _gap_004[0x18];
+    /* 0x01C */ uint16_t            dest_sock;      /* BRK arg 5  */
+    /* 0x01E */ uint16_t            src_sock;       /* BRK arg 8  */
+    /* 0x020 */ uint16_t            id_out;         /* BRK arg 10 */
+    /* 0x022 */ uint16_t            data_len;       /* BRK arg 13 */
+    /* 0x024 */ int16_t             entry_count;
+    /* 0x026 */ int16_t             response_count;
+    /* 0x028 */ uint16_t            _gap_028;
+    /* 0x02A */ uint16_t            send_retry_hint;
+    /* 0x02C */ uint16_t            send_timeout;
+    /* 0x02E */ uint16_t            _gap_02e;
+    /* 0x030 */ uint32_t            hdr_va;
+    /* 0x034 */ uint32_t            _gap_034;
+    /* 0x038 */ uint32_t            dest_node;      /* BRK arg 4 */
+    /* 0x03C */ uint32_t            network;        /* BRK arg 3 */
+    /* 0x040 */ uint32_t            src_node;       /* BRK arg 7 */
+    /* 0x044 */ uint32_t            src_node_or;    /* BRK arg 6 */
+    /* 0x048 */ uint32_t            payload_va;
+    /* 0x04C */ status_$t           status;         /* BRK arg 14 */
+    /* 0x050 */ uint32_t            _gap_050[2];
+    /* 0x058 */ uint32_t            reg_network;
+    /* 0x05C */ clock_t             wait_delay;
+    /* 0x062 */ uint16_t            _gap_062;
+    /* 0x064 */ status_$t           wait_status;
+    /* 0x068 */ rip_$packet_t       packet_data;    /* BRK arg 11 */
+    /* 0x286 */ uint16_t            _gap_286;
+    /* 0x288 */ uint16_t            info_out[15];   /* BRK arg 9, 30 bytes */
+    /* 0x2A6 */ uint16_t            _gap_2a6;
+    /* 0x2A8 */ rip_$packet_t       response;
+    /* 0x4C6 */ uint16_t            _gap_4c6;
+    /* 0x4C8 */ sock_$pkt_info_t    pkt;
+    /* 0x508 */ rip_$xns_addr_t     source_addr;
+    /* 0x512 */ uint8_t             _gap_512[6];
+    /* 0x518 */ xns_$idp_header_t   header;
+    /* 0x536 */ uint8_t             header_tail[2];
+} rip_$server_frame_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(rip_$server_frame_t, dest_sock)       == 0x01C, "frame.dest_sock");
+_Static_assert(offsetof(rip_$server_frame_t, src_sock)        == 0x01E, "frame.src_sock");
+_Static_assert(offsetof(rip_$server_frame_t, id_out)          == 0x020, "frame.id_out");
+_Static_assert(offsetof(rip_$server_frame_t, data_len)        == 0x022, "frame.data_len");
+_Static_assert(offsetof(rip_$server_frame_t, entry_count)     == 0x024, "frame.entry_count");
+_Static_assert(offsetof(rip_$server_frame_t, response_count)  == 0x026, "frame.response_count");
+_Static_assert(offsetof(rip_$server_frame_t, send_retry_hint) == 0x02A, "frame.send_retry_hint");
+_Static_assert(offsetof(rip_$server_frame_t, send_timeout)    == 0x02C, "frame.send_timeout");
+_Static_assert(offsetof(rip_$server_frame_t, hdr_va)          == 0x030, "frame.hdr_va");
+_Static_assert(offsetof(rip_$server_frame_t, dest_node)       == 0x038, "frame.dest_node");
+_Static_assert(offsetof(rip_$server_frame_t, network)         == 0x03C, "frame.network");
+_Static_assert(offsetof(rip_$server_frame_t, src_node)        == 0x040, "frame.src_node");
+_Static_assert(offsetof(rip_$server_frame_t, src_node_or)     == 0x044, "frame.src_node_or");
+_Static_assert(offsetof(rip_$server_frame_t, payload_va)      == 0x048, "frame.payload_va");
+_Static_assert(offsetof(rip_$server_frame_t, status)          == 0x04C, "frame.status");
+_Static_assert(offsetof(rip_$server_frame_t, reg_network)     == 0x058, "frame.reg_network");
+_Static_assert(offsetof(rip_$server_frame_t, wait_delay)      == 0x05C, "frame.wait_delay");
+_Static_assert(offsetof(rip_$server_frame_t, wait_status)     == 0x064, "frame.wait_status");
+_Static_assert(offsetof(rip_$server_frame_t, packet_data)     == 0x068, "frame.packet_data");
+_Static_assert(offsetof(rip_$server_frame_t, info_out)        == 0x288, "frame.info_out");
+_Static_assert(offsetof(rip_$server_frame_t, response)        == 0x2A8, "frame.response");
+_Static_assert(offsetof(rip_$server_frame_t, pkt)             == 0x4C8, "frame.pkt");
+_Static_assert(offsetof(rip_$server_frame_t, source_addr)     == 0x508, "frame.source_addr");
+_Static_assert(offsetof(rip_$server_frame_t, header)          == 0x518, "frame.header");
+_Static_assert(offsetof(rip_$server_frame_t, header_tail)     == 0x536, "frame.header_tail");
+_Static_assert(sizeof(rip_$server_frame_t) == 0x538, "rip_$server_frame_t must be 0x538 bytes");
+#endif
+
+/*
+ * =============================================================================
+ * Constants the original passes by reference
+ * =============================================================================
  */
 
-/* RIP command types */
-#define RIP_CMD_REQUEST         1
-#define RIP_CMD_RESPONSE        2
-#define RIP_CMD_NAME_REGISTER   3
+/*
+ * "pea (0x232,PC)" at 0x00E68BF2 resolves to 0x00E68E26, a zero word in the
+ * code region: TIME_$WAIT's delay type (0 = relative).  A named file-static
+ * cell, per the 2026-09-06 audit's rule for `pea (d,PC)` constants.
+ */
+static uint16_t rip_$server_wait_delay_type = 0;    /* 0x00E68E26 */
 
-/* Maximum entries per RIP packet */
-#define RIP_MAX_ENTRIES         0x5A    /* 90 entries */
+/*
+ * "pea (0x1de,PC)" at 0x00E68C48 resolves to 0x00E68E28, the same zero cell
+ * RIP_$ANNOUNCE_NS passes as PKT_$SEND_INTERNET's data pointer with a length
+ * of zero (rip/misc.c, "pea (-0x35a,PC)" at 0x00E69192).  Declared once, in
+ * rip/rip_internal.h, as RIP_$ANNOUNCE_EXTRA.
+ */
 
-/* RIP packet entry size */
-#define RIP_ENTRY_SIZE          6
+/* 0x000D0003 "quit while waiting for event" - the retry loop's exit test at
+ * 0x00E68C00. */
+#define status_$time_quit_while_waiting     0x000D0003
 
-/* RIP socket number */
-#define RIP_SOCKET              8
-
-/* Retry count for RIP_$SEND responses */
+/* Response retry loop (0x00E68BB8-0x00E68C10): five attempts, 25000 ticks
+ * apart. */
 #define RIP_SEND_RETRIES        5
-
-/* Retry timeout in 100us units (25000 = 2.5 seconds) */
-#define RIP_SEND_TIMEOUT        25000
-
-/*
- * RIP_$STATS (0xE262AC), RIP_$STD_RECENT_CHANGES (0xE26EDE),
- * RIP_$RECENT_CHANGES (0xE26EE0) and RIP_$INFO come from rip/rip_internal.h;
- * ROUTE_$STD_N_ROUTING_PORTS / ROUTE_$N_ROUTING_PORTS from route/route.h.
- */
-
-/*
- * Note: Most external function prototypes come from included headers.
- *
- * TODO(source-6sz): The following functions have signature discrepancies between
- * this decompiled code and the headers. These need further analysis
- * to determine the correct signatures.
- */
-
-/*
- * REM_NAME_$REGISTER_SERVER (0xE4A4AE) takes no parameters: the routine only
- * stamps TIME_$CLOCKH into the name server record and sets the "server
- * contacted" flag; it never reads its stack arguments.  The callers push
- * two (ignored) arguments, which is why the decompiler showed parameters.
- */
+#define RIP_SEND_DELAY_LOW      0x61A8      /* 25000, clock_t.low */
 
 /*
  * =============================================================================
- * RIP_$PACKET_LENGTH
+ * RIP_$PACKET_LENGTH (0x00E68864)
  * =============================================================================
  *
- * Calculate RIP packet data length from entry count.
+ * "add.w D0w,D0w / move.w D0w,D1w / add.w D1w,D1w / add.w D1w,D0w /
+ *  addq.w #2,D0w" - entry_count * 6 + 2, computed entirely in 16 bits.
  *
- * @param entry_count   Number of route entries
- * @return              Packet data length in bytes (entry_count * 6 + 2)
- *
- * Original address: 0x00E68864
+ * @param entry_count   Number of route entries (word at (0x8,A6))
+ * @return              Packet data length in bytes
  */
 int16_t RIP_$PACKET_LENGTH(int16_t entry_count)
 {
-    /* Each entry is 6 bytes (4 byte network + 2 byte metric) */
-    /* Plus 2 bytes for command */
-    return entry_count * RIP_ENTRY_SIZE + 2;
+    int16_t d0 = (int16_t)(entry_count + entry_count);   /* 0x00E6886C */
+    int16_t d1 = (int16_t)(d0 + d0);                     /* 0x00E68870 */
+
+    return (int16_t)(d1 + d0 + 2);                       /* 0x00E68872 */
 }
 
 /*
  * =============================================================================
- * RIP_$SEND_UPDATES
+ * RIP_$SEND_UPDATES (0x00E6887A)
  * =============================================================================
  *
- * Send routing updates if there are recent changes.
+ * Broadcasts the routing table if the matching "recent changes" flag is set
+ * and there is more than one routing port.  The flag is cleared first, so a
+ * change that arrives during the broadcast is not lost.
  *
- * Checks the recent_changes flag for the specified route type.
- * If changes are pending (flag is negative), clears the flag and
- * broadcasts the routing table.
- *
- * @param is_xns    If negative, handle non-standard routes; else standard routes
- *
- * Original address: 0x00E6887A
+ * @param is_std    Pascal boolean at (0x8,A6), read with
+ *                  "move.b (0x8,A6),D0b / bpl" at 0x00E6887E:
+ *                    < 0  -> the STD (XNS) side: ROUTE_$STD_N_ROUTING_PORTS,
+ *                            RIP_$STD_RECENT_CHANGES, RIP_$BROADCAST(true)
+ *                    >= 0 -> the Domain-internet side: ROUTE_$N_ROUTING_PORTS,
+ *                            RIP_$RECENT_CHANGES, RIP_$BROADCAST(false)
  */
-void RIP_$SEND_UPDATES(boolean is_xns)
+void RIP_$SEND_UPDATES(boolean is_std)
 {
-    uint8_t flags;
+    boolean flags;
 
-    if ((int8_t)is_xns < 0) {
-        /* Non-standard routes */
-        if (ROUTE_$STD_N_ROUTING_PORTS < 2) {
-            /* Not enough ports for routing */
+    if (is_std < 0) {
+        /* 0x00E68884-0x00E6889E */
+        if (ROUTE_$STD_N_ROUTING_PORTS <= 1) {
             return;
         }
         if (RIP_$STD_RECENT_CHANGES >= 0) {
-            /* No recent changes */
             return;
         }
         RIP_$STD_RECENT_CHANGES = 0;
-        flags = 0xFF;
+        flags = true;
     } else {
-        /* Standard routes */
-        if (ROUTE_$N_ROUTING_PORTS < 2) {
-            /* Not enough ports for routing */
+        /* 0x00E688A2-0x00E688BC */
+        if (ROUTE_$N_ROUTING_PORTS <= 1) {
             return;
         }
         if (RIP_$RECENT_CHANGES >= 0) {
-            /* No recent changes */
             return;
         }
         RIP_$RECENT_CHANGES = 0;
-        flags = 0;
+        flags = false;
     }
 
-    RIP_$BROADCAST(flags);
+    RIP_$BROADCAST(flags);                              /* 0x00E688BE */
 }
 
 /*
  * =============================================================================
- * RIP_$PROCESS_REQUEST
+ * RIP_$PROCESS_REQUEST (0x00E688C8) - nested procedure
  * =============================================================================
  *
- * Process a RIP request packet and build the response data.
+ * Builds the reply to an incoming RIP request in the parent's response
+ * buffer.  Nested: "move.l (A6),D6" at 0x00E688D4 takes RIP_$SERVER's frame
+ * pointer out of the static link and every other operand is reached through
+ * it.  The five parent fields it touches are entry_count (read),
+ * response_count (read and written), payload_va (read) and the response
+ * buffer (written).
  *
- * This function is called from RIP_$SERVER when a RIP request (command=1)
- * is received. It builds a response containing the requested route information.
+ * Two modes, exactly as in the original:
+ *   - each requested network is looked up individually; the first entry whose
+ *     network is 0xFFFFFFFF abandons that loop (0x00E6890A) and
+ *   - the whole table is enumerated instead (0x00E6896E), capped at
+ *     RIP_MAX_ENTRIES answers.
  *
- * Two modes of operation:
- * 1. Specific networks: Request lists specific network addresses to query
- * 2. Full table: Request contains network=0xFFFFFFFF, returns all valid routes
- *
- * The response is built in the stack frame of the caller (RIP_$SERVER):
- * - response_count at frame - 0x512
- * - response_data at frame - 0x294 (6 bytes per entry)
- *
- * @param flags     If negative, use non-standard routes; else standard routes
- *
- * Stack frame layout (caller's frame in A6):
- *   -0x514: request entry count (input)
- *   -0x512: response entry count (output)
- *   -0x4f0: pointer to request packet data
- *   -0x294: response buffer start (6 bytes per entry: 4 byte net + 2 byte metric)
- *
- * Original address: 0x00E688C8
+ * @param is_std    (0x8,A6), "move.b (0x8,A6),D2b" at 0x00E688D0.
+ *                  < 0 selects routes[1] (the STD/XNS slot) and clamps the
+ *                  metric up to 0x10; >= 0 selects routes[0] and reports
+ *                  0x11 for an unknown network.
+ * @param f         The parent frame (the static link).
  */
-
-/* This function operates on the caller's stack frame, making it a nested procedure */
-/* We implement it using the caller's frame pointer passed implicitly */
-
-static void RIP_$PROCESS_REQUEST_INTERNAL(int8_t flags, uint8_t *frame_ptr)
+static void RIP_$PROCESS_REQUEST(boolean is_std, rip_$server_frame_t *f)
 {
-    int16_t request_count;
-    int16_t response_count;
-    uint32_t *request_data;
-    uint8_t *response_ptr;
-    int16_t i;
-    rip_$entry_t *entry;
-    rip_$route_t *route;
-    uint16_t metric;
-    int full_table_request;
+    boolean         full_table;     /* D3 */
+    int16_t         i;              /* the dbf index, 0-based */
+    int16_t         j;
+    uint32_t        network;
+    rip_$entry_t   *entry;          /* A0 - RIP_$NET_LOOKUP's result */
+    rip_$route_t   *route;          /* A1 */
+    uint32_t        metric_l;       /* D0/D1 as a longword on the STD side */
+    uint16_t        metric_w;       /* D0/D1 as a word on the internet side */
+    uint16_t        state;
 
     /*
-     * Stack frame offsets (relative to caller's A6):
-     * -0x514: request_count
-     * -0x512: response_count
-     * -0x4f0: request_data pointer
-     * -0x294: response buffer
-     * -0x290: first entry's metric (at offset 4 into entry)
+     * The request the parent received.  On the XNS path this is
+     * packet + 0x1E in the netbuf, set at 0x00E68A5A.
+     *
+     * TODO(source-u9wy): on the Domain-internet path (RIP_$SERVER's
+     * 0x00E68C2C call) the parent NEVER writes payload_va - the only store to
+     * (-0x4f0,A6) in RIP_$SERVER is at 0x00E68A5A, inside the "tst.b D3b /
+     * bpl" XNS arm - so this pointer is whatever the previous stack frame
+     * left there.  The original reads through it all the same; preserved.
      */
+    const rip_$packet_t *request = (const rip_$packet_t *)ARCH_VA_TO_PTR(f->payload_va);
 
-    request_count = *(int16_t *)(frame_ptr - 0x514);
-    request_data = *(uint32_t **)(frame_ptr - 0x4f0);
-    response_ptr = frame_ptr - 0x294;
+    f->response.command = RIP_CMD_RESPONSE;             /* 0x00E688D8 */
+    full_table = false;                                 /* 0x00E688DE */
+    f->response_count = f->entry_count;                 /* 0x00E688E0 */
 
-    /* Initialize response: command = 2 (response) */
-    *(uint16_t *)(frame_ptr - 0x290) = 2;
-
-    /* Copy request count to response count initially */
-    *(int16_t *)(frame_ptr - 0x512) = request_count;
-
-    /* Check for empty request */
-    if (request_count <= 0) {
-        return;
+    /* "move.w (-0x514,A0),D0w / subq.w #1,D0w / bmi" - nothing to answer */
+    if ((int16_t)(f->entry_count - 1) < 0) {            /* 0x00E688E6 */
+        goto check_full_table;
     }
 
-    full_table_request = 0;
-
-    /* Process each requested network */
-    for (i = 0; i < request_count; i++) {
-        uint32_t network = request_data[i];  /* Networks start at offset 2 in request */
+    /* 0x00E688F4-0x00E68964: dbf over entry_count requested networks */
+    for (i = 0; i < f->entry_count; i++) {
+        network = request->entries[i].network;           /* 0x00E68904 */
 
         if (network == 0xFFFFFFFF) {
-            /* Full table request - will enumerate all routes below */
-            full_table_request = 1;
-            break;
+            full_table = true;                           /* 0x00E6890A */
+            goto full_table_scan;                        /* 0x00E6890C */
         }
 
-        /* Look up specific network */
+        /* 0x00E6890E: one "clr.l -(SP)" covers both boolean word slots */
         entry = RIP_$NET_LOOKUP(network, 0, 0);
 
-        /* Store network in response */
-        *(uint32_t *)(response_ptr + i * 6) = network;
+        f->response.entries[i].network = network;        /* 0x00E6891C */
 
-        if (flags < 0) {
-            /* Non-standard routes at entry + 0x18 */
-            if (entry == NULL) {
-                metric = 0x10;  /* Unreachable */
-            } else {
-                metric = entry->routes[1].metric + 1;
-                if (metric < 0x10) {
-                    metric = 0x10;  /* Clamp to unreachable */
-                }
+        if (is_std < 0) {                                /* 0x00E68922 */
+            if (entry == NULL) {                         /* 0x00E68926 */
+                f->response.entries[i].metric = 0x10;    /* 0x00E6892C */
+                continue;
             }
+            /* Longword arithmetic and an UNSIGNED compare (0x00E6893C) */
+            metric_l = (uint32_t)entry->routes[1].metric + 1;
+            if (metric_l <= 0x10) {
+                metric_l = 0x10;                         /* 0x00E68944 */
+            }
+            f->response.entries[i].metric = (uint16_t)metric_l;  /* 0x00E6895E */
         } else {
-            /* Standard routes at entry + 0x04 */
-            if (entry == NULL) {
-                metric = 0x11;  /* Unreachable (infinity) */
-            } else {
-                metric = entry->routes[0].metric + 1;
+            if (entry == NULL) {                         /* 0x00E68948 */
+                f->response.entries[i].metric = 0x11;    /* 0x00E6894E */
+                continue;
             }
-        }
-
-        /* Store metric in response */
-        *(uint16_t *)(response_ptr + i * 6 + 4) = metric;
-    }
-
-    /* Handle full table request */
-    if (full_table_request) {
-        response_count = 0;
-        *(int16_t *)(frame_ptr - 0x512) = 0;
-
-        /* Enumerate all routing table entries */
-        for (i = 0; i < RIP_TABLE_SIZE; i++) {
-            entry = &RIP_$INFO[i];
-
-            if (flags < 0) {
-                route = &entry->routes[1];  /* Non-standard */
-            } else {
-                route = &entry->routes[0];  /* Standard */
-            }
-
-            /* Check if route is VALID (1) or AGING (2) */
-            uint8_t state = (route->flags >> RIP_STATE_SHIFT) & 0x03;
-            if (state == RIP_STATE_VALID || state == RIP_STATE_AGING) {
-                response_count++;
-                *(int16_t *)(frame_ptr - 0x512) = response_count;
-
-                /* Store network */
-                *(uint32_t *)(response_ptr + response_count * 6 - 6) = entry->network;
-
-                /* Calculate and store metric */
-                if (flags < 0) {
-                    metric = route->metric + 1;
-                    if (metric < 0x10) {
-                        metric = 0x10;
-                    }
-                } else {
-                    metric = route->metric + 1;
-                }
-                *(uint16_t *)(response_ptr + response_count * 6 - 2) = metric;
-
-                /* Maximum 90 entries in response */
-                if (response_count >= RIP_MAX_ENTRIES) {
-                    return;
-                }
-            }
+            metric_w = (uint16_t)(entry->routes[0].metric + 1);  /* 0x00E68956 */
+            f->response.entries[i].metric = metric_w;    /* 0x00E6895E */
         }
     }
-}
 
-/*
- * Public wrapper - this is what gets called
- * In the original code, this accesses the caller's stack frame via A6
- */
-void RIP_$PROCESS_REQUEST(boolean flags)
-{
+check_full_table:
     /*
-     * Note: In the original m68k code, this function accesses the caller's
-     * stack frame directly using register A6. This C implementation would
-     * need to be called with the frame pointer, or the caller would need
-     * to pass the necessary buffers explicitly.
-     *
-     * For now, this serves as documentation of the algorithm.
-     * A proper implementation would require restructuring RIP_$SERVER
-     * to pass buffers explicitly.
+     * 0x00E68968: D3 can only be false here - the one place that sets it
+     * branches straight to the enumeration - but the original tests it, so
+     * the test stays.
      */
+    if (full_table >= 0) {
+        return;                                          /* 0x00E689FE */
+    }
 
-    /* This cannot be properly implemented in standard C without access */
-    /* to the caller's stack frame. See RIP_$SERVER for the integrated version. */
+full_table_scan:
+    /* 0x00E6896E-0x00E689FA: 64 table slots, "moveq #0x3f,D0" + dbf */
+    f->response_count = 0;                               /* 0x00E68970 */
+
+    for (j = 0; j <= RIP_TABLE_SIZE - 1; j++) {
+        entry = &RIP_$INFO[j];                           /* stride 0x2C */
+
+        if (is_std < 0) {
+            route = &entry->routes[1];                   /* 0x00E68986: +0x18 */
+        } else {
+            route = &entry->routes[0];                   /* 0x00E6898C: +0x04 */
+        }
+
+        /* "move.w #0xc0,D1w / and.b (0x10,A1),D1b / lsr.w #6,D1w" */
+        state = (uint16_t)((route->flags & RIP_STATE_MASK) >> RIP_STATE_SHIFT);
+
+        /* "moveq #6,D4 / btst.l D1,D4" - VALID (1) or AGING (2) */
+        if (((1u << state) & 6u) == 0) {                 /* 0x00E6899C */
+            continue;
+        }
+
+        f->response_count++;                             /* 0x00E689A2 */
+
+        /* A4 = frame + 6*response_count; the store is at (-0x294,A4), i.e.
+         * response + 2 + 6*(response_count - 1). */
+        f->response.entries[f->response_count - 1].network = entry->network;
+
+        if (is_std < 0) {                                /* 0x00E689BA */
+            metric_l = (uint32_t)route->metric + 1;
+            if (metric_l <= 0x10) {
+                metric_l = 0x10;                         /* 0x00E689CE */
+            }
+            f->response.entries[f->response_count - 1].metric = (uint16_t)metric_l;
+        } else {
+            metric_w = (uint16_t)(route->metric + 1);    /* 0x00E689D4 */
+            f->response.entries[f->response_count - 1].metric = metric_w;
+        }
+
+        if (f->response_count == RIP_MAX_ENTRIES) {      /* 0x00E689EE */
+            return;
+        }
+    }
 }
 
 /*
  * =============================================================================
- * RIP_$SERVER
+ * RIP_$SERVER (0x00E68A08)
  * =============================================================================
  *
- * Main RIP server function - processes incoming RIP packets.
+ * Takes one packet off socket 8 and dispatches on its command word.  The
+ * caller (NETWORK_$SOCKET_SERVER, 0x00E11BA8) loops.
  *
- * Handles three types of RIP packets:
- * 1. Request (cmd=1): Send back routing information for requested networks
- * 2. Response (cmd=2): Update routing table with received routes
- * 3. Name register (cmd=3): Register name service (special Apollo extension)
- *
- * Called from socket receive processing when a packet arrives on socket 8.
- *
- * Frame (link.w A6,-0x538 at 0x00E68A08).  Every displacement the prologue
- * and the PKT_$BRK_INTERNET_HDR call use, with the local it names:
- *
- *   A6-0x070  sock_$pkt_info_t  the record SOCK_$GET fills in (0x40 bytes);
- *                               -0x70 is .hdr, -0x5F the low byte of .flags,
- *                               -0x46 .data_len, -0x44 .hdr_len, -0x40
- *                               .data_pages
- *   A6-0x020  xns_$idp_header_t the 30-byte IDP header copy the XNS path
- *                               makes (0x00E68A60-0x00E68A6E); -0x1E is its
- *                               .length and -0x1A its .dest_network
- *   A6-0x4F0  uint32_t          packet + 0x1E, the XNS payload address
- *   A6-0x4FC  uint32_t          BRK arg 3,  routing_key
- *   A6-0x500  uint32_t          BRK arg 4,  dest_node
- *   A6-0x51C  uint16_t          BRK arg 5,  dest_sock
- *   A6-0x4F4  uint32_t          BRK arg 6,  src_node_or
- *   A6-0x4F8  uint32_t          BRK arg 7,  src_node
- *   A6-0x51A  uint16_t          BRK arg 8,  src_sock
- *   A6-0x2B0  pkt info record   BRK arg 9,  info_out
- *   A6-0x518  uint16_t          BRK arg 10, id_out
- *   A6-0x4D0  uint8_t[0x21E]    BRK arg 11, the payload buffer
- *   A6-0x516  uint16_t          BRK arg 13, the payload length
- *   A6-0x4EC  status_$t         BRK arg 14, status_ret
- *   A6-0x514  int16_t           the entry count (data_len - 2) / 6
- *   A6-0x508  uint32_t          the header VA handed to NETBUF_$RTN_HDR
- *
- * Original address: 0x00E68A08
+ * Register aliases used below, as the original assigns them:
+ *   A2  packet     the header buffer VA out of sock_$pkt_info_t.hdr
+ *   A3  page_base  A2 rounded down to a 1KB netbuf page
+ *   D2  first the payload length, then the port index
+ *   D3  is_std     bit 1 of sock_$pkt_info_t.flags, then the retry counter
+ *   D4  the network the packet came in on
  */
 void RIP_$SERVER(void)
 {
-    sock_$pkt_info_t    pkt;            /* A6-0x70 */
-    xns_$idp_header_t  *packet;         /* A2 = pkt.hdr */
-    uint8_t            *page_base;      /* A3 = A2 & ~0x3FF, the netbuf page */
+    rip_$server_frame_t f;
+
+    xns_$idp_header_t  *packet;         /* A2 */
+    const uint8_t      *page_base;      /* A3 */
     boolean             got_packet;     /* D0b */
-    boolean             is_xns;         /* D3b */
+    boolean             is_std;         /* D3b */
+    int16_t             port_index;     /* D2w, after 0x00E68B44 */
+    uint16_t            retries;        /* D3w, after 0x00E68BB6 */
+    uint32_t            network;        /* D4 */
+    uint16_t            port_network;
+    route_$port_t      *port;           /* A2, in the response arm */
+    uint16_t            i;
+    int16_t             n;
 
-    /* PKT_$BRK_INTERNET_HDR's output block */
-    uint32_t    routing_key;            /* A6-0x4FC */
-    uint32_t    dest_node;              /* A6-0x500 */
-    uint16_t    dest_sock;              /* A6-0x51C */
-    uint32_t    src_node_or;            /* A6-0x4F4 */
-    uint32_t    src_node;               /* A6-0x4F8 */
-    uint16_t    src_sock;               /* A6-0x51A */
-    uint16_t    info_out[15];           /* A6-0x2B0: the 30-byte info record */
-    uint16_t    id_out;                 /* A6-0x518 */
-    uint16_t    data_len;               /* A6-0x516 */
-    status_$t   status;                 /* A6-0x4EC */
-
-    uint32_t    payload_va;             /* A6-0x4F0 */
-    uint16_t    packet_data[0x10F];     /* A6-0x4D0, 0x21E bytes */
-    xns_$idp_header_t header_copy;      /* A6-0x20 */
-    uint8_t    *header_bytes = (uint8_t *)&header_copy;
-    int16_t     entry_count;            /* A6-0x514 */
-    uint32_t    hdr_va;                 /* A6-0x508 */
-
-    int16_t     port_index;
-    uint16_t    i;
-
-    /*
-     * TODO(source-4nvz): the three dispatch arms below are still the earlier
-     * sketch.  They have NOT been traced against 0x00E68B5E-0x00E68E1C, so
-     * the locals they use keep their old names and their reads of
-     * header_bytes[] / packet_data[] are unverified.  The head of the
-     * function (0x00E68A08-0x00E68B5C) is a faithful translation.
-     */
-    uint16_t    port_network;
-    uint16_t    port_socket;
-    uint32_t    idp_network;
-    uint32_t    idp_host;
-    int32_t     src_network;
-    route_$port_t *port;
-    rip_$xns_addr_t source_addr;
-
-    /* Response buffer built by the request arm */
-    uint16_t response_cmd;
-    int16_t response_count;
-    uint8_t response_data[RIP_MAX_ENTRIES * RIP_ENTRY_SIZE];
-
-    /* 0x00E68A10-0x00E68A24: SOCK_$GET(8, &pkt) returns a Pascal boolean */
-    got_packet = (boolean)SOCK_$GET(RIP_SOCKET, &pkt);
+    /* 0x00E68A10-0x00E68A24: a Pascal function; nothing to do if the queue
+     * was empty. */
+    got_packet = (boolean)SOCK_$GET(RIP_SOCKET, &f.pkt);
     if (got_packet >= 0) {
-        return;                             /* 0x00E68E1C */
+        return;                                          /* 0x00E68E1C */
     }
 
     /*
-     * 0x00E68A28: "btst.b #0x1,(-0x5f,A6)" is bit 1 of the LOW byte of
-     * sock_$pkt_info_t.flags, i.e. bit 1 of the word - the packet arrived
-     * over XNS routing and its IDP header is already in front of us.
+     * 0x00E68A28: "btst.b #0x1,(-0x5f,A6) / sne D3b" is bit 1 of the LOW byte
+     * of sock_$pkt_info_t.flags, i.e. bit 1 of the word: the frame arrived
+     * over XNS ("standard") routing and its IDP header is already in front of
+     * us, so there is no Domain internet header to parse.
      */
-    is_xns = (pkt.flags & SOCK_PKT_FLAG_XNS) ? true : false;
+    is_std = ((f.pkt.flags & SOCK_PKT_FLAG_XNS) != 0) ? true : false;
 
-    /* 0x00E68A30-0x00E68A40 */
-    PKT_$DUMP_DATA(pkt.data_pages, (int16_t)pkt.data_len);
+    PKT_$DUMP_DATA(f.pkt.data_pages, (int16_t)f.pkt.data_len);  /* 0x00E68A30 */
 
-    /* 0x00E68A42-0x00E68A4C */
-    packet = (xns_$idp_header_t *)pkt.hdr;
-    page_base = (uint8_t *)((uintptr_t)packet & ~(uintptr_t)0x3FF);
+    packet = (xns_$idp_header_t *)f.pkt.hdr;             /* 0x00E68A42 */
 
-    if (is_xns < 0) {
-        /* 0x00E68A52-0x00E68A88: no Apollo internet header to parse */
-        status = status_$ok;
-        payload_va = (uint32_t)(uintptr_t)packet + XNS_IDP_HEADER_SIZE;
+    /* "move.l A2,D4 / andi.w #-0x400,D4w" - only the low word is masked, but
+     * bits 0..9 are all it needs to clear: the 1KB netbuf page. */
+    page_base = (const uint8_t *)((uintptr_t)packet & ~(uintptr_t)0x3FF);
 
-        /* seven longwords plus a word: the 30-byte IDP header */
-        header_copy = *packet;
+    if (is_std < 0) {
+        /* --- 0x00E68A52-0x00E68A8C: raw IDP, no header to break down --- */
+        f.status = status_$ok;                           /* 0x00E68A52 */
+        f.payload_va = ARCH_PTR_TO_VA(packet) + XNS_IDP_HEADER_SIZE;
 
-        /* 0x87 longwords plus a word: 0x21E bytes of payload */
-        for (i = 0; i < sizeof(packet_data); i++) {
-            ((uint8_t *)packet_data)[i] =
-                ((const uint8_t *)(uintptr_t)payload_va)[i];
+        /* 0x00E68A62-0x00E68A6E: 7 longwords plus a word = the 30-byte
+         * header.  Note header_tail is NOT part of the copy. */
+        f.header = *packet;
+
+        /* 0x00E68A70-0x00E68A82: 0x87 longwords plus a word = 0x21E bytes */
+        for (i = 0; i < sizeof(rip_$packet_t); i++) {
+            ((uint8_t *)&f.packet_data)[i] =
+                ((const uint8_t *)ARCH_VA_TO_PTR(f.payload_va))[i];
         }
 
-        /* 0x00E68A84: the IDP length minus the header it counts */
-        data_len = (uint16_t)(header_copy.length - XNS_IDP_HEADER_SIZE);
+        /* 0x00E68A84: the IDP length counts its own header */
+        f.data_len = (uint16_t)(f.header.length - XNS_IDP_HEADER_SIZE);
     } else {
         /*
-         * 0x00E68A8E-0x00E68AC4: fourteen arguments, 0x34 bytes of caller
-         * cleanup.  Argument 2 is sock_$pkt_info_t.hdr_len, which
-         * PKT_$BRK_INTERNET_HDR never reads (nothing in 0x00E12328-0x00E1248C
-         * touches (0xC,A6)); it is passed all the same.
+         * --- 0x00E68A8E-0x00E68AD2 ---
+         * Fourteen arguments, 0x34 bytes of caller cleanup.  Argument 2 is
+         * sock_$pkt_info_t.hdr_len, which PKT_$BRK_INTERNET_HDR never reads
+         * (nothing in 0x00E12328-0x00E1248C touches (0xC,A6)); it is passed
+         * all the same.
          */
-        PKT_$BRK_INTERNET_HDR(packet, pkt.hdr_len,
-                              &routing_key, &dest_node, &dest_sock,
-                              &src_node_or, &src_node, &src_sock,
-                              info_out, &id_out,
-                              packet_data, sizeof(packet_data),
-                              &data_len, &status);
-
-        /* 0x00E68AD2: D4 = the routing key, read again by the response arm */
-        src_network = (int32_t)routing_key;
+        PKT_$BRK_INTERNET_HDR((pkt_$hdr_t *)packet, f.pkt.hdr_len,
+                              &f.network, &f.dest_node, &f.dest_sock,
+                              &f.src_node_or, &f.src_node, &f.src_sock,
+                              f.info_out, &f.id_out,
+                              &f.packet_data, sizeof(rip_$packet_t),
+                              &f.data_len, &f.status);
     }
 
-    /* Update statistics - packet received */
-    RIP_$STATS.packets_received++;
+    /* 0x00E68AD2: D4 is loaded on the internet path only; the XNS arm loads
+     * it from the header copy in the response arm (0x00E68C9E). */
+    network = f.network;
 
-    /* Validate packet */
-    if (status != 0) {
-        goto error_return;
+    RIP_$STATS.packets_received++;                       /* 0x00E68AD6 */
+
+    /* 0x00E68ADC-0x00E68B14: three chances to reject the packet */
+    if (f.status != status_$ok) {
+        goto bad_packet;
     }
-
-    /* Calculate entry count: (data_len - 2) / 6 */
-    entry_count = (data_len - 2) / RIP_ENTRY_SIZE;
-
-    if (entry_count < 0 || entry_count > RIP_MAX_ENTRIES) {
-        goto error_return;
+    f.entry_count = (int16_t)(((int32_t)(int16_t)f.data_len - 2) / RIP_ENTRY_SIZE);
+    if (f.status != status_$ok) {                        /* 0x00E68AF0: retested */
+        goto bad_packet;
     }
-
-    /* Verify packet length matches entry count */
-    if (RIP_$PACKET_LENGTH(entry_count) != data_len) {
-        goto error_return;
+    if (f.entry_count < 0) {                             /* 0x00E68AFA */
+        goto bad_packet;
+    }
+    if (f.entry_count > RIP_MAX_ENTRIES) {               /* 0x00E68AFE */
+        goto bad_packet;
+    }
+    /* "cmp.w D2w,D0w / sne D5b / tst.b D5b / bpl" - lengths must agree */
+    if (RIP_$PACKET_LENGTH(f.entry_count) != (int16_t)f.data_len) {
+        goto bad_packet;
     }
 
     /*
-     * 0x00E68B2E-0x00E68B42: the netbuf page A3 was computed from the header
-     * VA at 0x00E68A46; +0x3E0 is the receiving port's network number and
-     * +0x3E2 its socket, zero-extended to a longword by "clr.l D5 /
-     * move.w (0x3e2,A3),D5w".
+     * 0x00E68B2E-0x00E68B42: the netbuf page carries the receiving port's
+     * network number at +0x3E0 and its socket at +0x3E2, the latter
+     * zero-extended to a longword by "clr.l D5 / move.w (0x3e2,A3),D5w".
      */
-    port_network = *(uint16_t *)(page_base + 0x3E0);
+    port_network = (uint16_t)((page_base[0x3E0] << 8) | page_base[0x3E1]);
     port_index = ROUTE_$FIND_PORT(port_network,
-                                  (uint32_t)*(uint16_t *)(page_base + 0x3E2));
+                                  (int32_t)(uint32_t)
+                                      ((page_base[0x3E2] << 8) | page_base[0x3E3]));
 
     /* 0x00E68B46-0x00E68B54: the header buffer goes back either way */
-    hdr_va = (uint32_t)(uintptr_t)packet;
-    NETBUF_$RTN_HDR(&hdr_va);
+    f.hdr_va = ARCH_PTR_TO_VA(packet);
+    NETBUF_$RTN_HDR(&f.hdr_va);
 
-    if (port_index == -1) {
-        /* Unknown port - ignore packet */
+    if (port_index == -1) {                              /* 0x00E68B56 */
         return;
     }
 
-    /* Dispatch based on command type */
-    uint16_t command = packet_data[0];
+    /* 0x00E68B5E-0x00E68B78: dispatch on the command word */
+    switch (f.packet_data.command) {
+    case RIP_CMD_REQUEST:       goto arm_request;        /* 0x00E68B7C */
+    case RIP_CMD_RESPONSE:      goto arm_response;       /* 0x00E68C88 */
+    case RIP_CMD_NAME_REGISTER: goto arm_name_register;  /* 0x00E68DCA */
+    default:                    goto unknown_command;    /* 0x00E68E14 */
+    }
 
-    switch (command) {
-    case RIP_CMD_REQUEST:
+/* ------------------------------------------------------------------------- */
+arm_request:
+    /* 0x00E68B7C */
+    if (is_std < 0) {
         /*
-         * RIP Request - send back routing information
-         */
-        if (is_xns < 0) {
-            /* Non-standard request */
-            if (ROUTE_$STD_N_ROUTING_PORTS < 2) {
-                /* Check if this is a broadcast request (all FFs in address) */
-                uint16_t *addr = (uint16_t *)&header_bytes[0x14];
-                if (addr[0] == 0xFFFF && addr[1] == 0xFFFF && addr[2] == 0xFFFF) {
-                    return;
-                }
-            }
-
-            /* Process request and build response in local buffer */
-            /* Note: Original uses nested procedure accessing caller's frame */
-            response_count = 0;
-            response_cmd = RIP_CMD_RESPONSE;
-
-            /* Build response for non-standard routes */
-            for (i = 0; i < (uint16_t)entry_count; i++) {
-                uint32_t net = *(uint32_t *)&packet_data[1 + i * 3];
-                rip_$entry_t *entry;
-                uint16_t metric;
-
-                if (net == 0xFFFFFFFF) {
-                    /* Full table request - enumerate all routes */
-                    int j;
-                    for (j = 0; j < RIP_TABLE_SIZE && response_count < RIP_MAX_ENTRIES; j++) {
-                        entry = &RIP_$INFO[j];
-                        rip_$route_t *route = &entry->routes[1];
-                        uint8_t state = (route->flags >> RIP_STATE_SHIFT) & 0x03;
-
-                        if (state == RIP_STATE_VALID || state == RIP_STATE_AGING) {
-                            *(uint32_t *)&response_data[response_count * 6] = entry->network;
-                            metric = route->metric + 1;
-                            if (metric < 0x10) metric = 0x10;
-                            *(uint16_t *)&response_data[response_count * 6 + 4] = metric;
-                            response_count++;
-                        }
-                    }
-                    break;
-                }
-
-                entry = RIP_$NET_LOOKUP(net, 0, 0);
-                *(uint32_t *)&response_data[response_count * 6] = net;
-
-                if (entry == NULL) {
-                    metric = 0x10;
-                } else {
-                    metric = entry->routes[1].metric + 1;
-                    if (metric < 0x10) metric = 0x10;
-                }
-                *(uint16_t *)&response_data[response_count * 6 + 4] = metric;
-                response_count++;
-            }
-
-            /* Send response with retry loop */
-            {
-                uint8_t xns_addr[12];
-                /* Copy from header - source becomes destination */
-                for (i = 0; i < 12; i++) {
-                    xns_addr[i] = header_bytes[0x08 + i];  /* Source address in header */
-                }
-                *(uint16_t *)&xns_addr[10] = 1;  /* Socket 1? */
-
-                for (i = 0; i < RIP_SEND_RETRIES; i++) {
-                    RIP_$SEND(xns_addr, port_index, response_data,
-                              RIP_$PACKET_LENGTH(response_count), 0xFF);
-
-                    /* Wait for response or timeout */
-                    /* TODO(source-6sz): TIME_$WAIT signature mismatch - needs further analysis */
-                    uint16_t delay_type = 0;
-                    clock_t delay = { 0, RIP_SEND_TIMEOUT };
-                    status_$t wait_status;
-
-                    TIME_$WAIT(&delay_type, &delay, &wait_status);
-
-                    if (wait_status == 0xD0003) {
-                        /* Timeout - done */
-                        return;
-                    }
-                }
-            }
-            return;
-        } else {
-            /* Standard request */
-            if (ROUTE_$N_ROUTING_PORTS < 2) {
-                uint8_t *response_flags = (uint8_t *)&packet_data[0x155];
-                if ((int8_t)*response_flags < 0) {
-                    return;
-                }
-            }
-
-            /* Build response for standard routes */
-            response_count = 0;
-            response_cmd = RIP_CMD_RESPONSE;
-
-            for (i = 0; i < (uint16_t)entry_count; i++) {
-                uint32_t net = *(uint32_t *)&packet_data[1 + i * 3];
-                rip_$entry_t *entry;
-                uint16_t metric;
-
-                if (net == 0xFFFFFFFF) {
-                    /* Full table request */
-                    int j;
-                    for (j = 0; j < RIP_TABLE_SIZE && response_count < RIP_MAX_ENTRIES; j++) {
-                        entry = &RIP_$INFO[j];
-                        rip_$route_t *route = &entry->routes[0];
-                        uint8_t state = (route->flags >> RIP_STATE_SHIFT) & 0x03;
-
-                        if (state == RIP_STATE_VALID || state == RIP_STATE_AGING) {
-                            *(uint32_t *)&response_data[response_count * 6] = entry->network;
-                            metric = route->metric + 1;
-                            *(uint16_t *)&response_data[response_count * 6 + 4] = metric;
-                            response_count++;
-                        }
-                    }
-                    break;
-                }
-
-                entry = RIP_$NET_LOOKUP(net, 0, 0);
-                *(uint32_t *)&response_data[response_count * 6] = net;
-
-                if (entry == NULL) {
-                    metric = RIP_INFINITY;
-                } else {
-                    metric = entry->routes[0].metric + 1;
-                }
-                *(uint16_t *)&response_data[response_count * 6 + 4] = metric;
-                response_count++;
-            }
-
-            /* Set response command */
-            response_cmd = 0x20;  /* Response with extended flag? */
-
-            /*
-             * Send the response (0x00E68C38-0x00E68C7E).  The pushes, in
-             * argument order, are:
-             *   1  (-0x4f4,A6)   2  (-0x4f8,A6)   3  (-0x51a,A6) word
-             *   4  D4            5  NODE_$ME      6  #8 word
-             *   7  &(-0x2b0,A6)  8  (-0x518,A6) word
-             *   9  &(-0x290,A6)  10 RIP_$PACKET_LENGTH((-0x512,A6))
-             *   11 pea (0x1de,PC) -> 0x00E68E28   12 #0 word
-             *   13 &(-0x50e,A6)  14 &(-0x50c,A6)  15 &(-0x4ec,A6)
-             * plus the 2-byte Pascal function-result slot at 0x00E68C38.
-             *
-             * PKT_$BLD_INTERNET_HDR writes a word through BOTH arguments 13
-             * and 14 unconditionally (0x00E1230E, 0x00E12316), so neither may
-             * be NULL; they are two distinct word locals here as in the
-             * original.
-             *
-             * TODO(source-6sz): arguments 1-10 still need each A6
-             * displacement matched to the local this translation names.
-             */
-            {
-                uint16_t retry_hint;    /* A6-0x50E */
-                uint16_t timeout_out;   /* A6-0x50C */
-
-                PKT_$SEND_INTERNET(idp_network, idp_host, port_network,
-                                   src_network, NODE_$ME, RIP_SOCKET,
-                                   &response_cmd, port_socket,
-                                   response_data, RIP_$PACKET_LENGTH(response_count),
-                                   RIP_$ANNOUNCE_EXTRA, 0,
-                                   &retry_hint, &timeout_out, &status);
-            }
-            return;
-        }
-        break;
-
-    case RIP_CMD_RESPONSE:
-        /*
-         * RIP Response - update routing table
-         */
-        port = ROUTE_$PORTP[port_index];
-
-        /* Get source network from packet or header */
-        if (is_xns < 0) {
-            src_network = *(int32_t *)&header_bytes[0x1A];
-        }
-
-        /* Check if source network changed for this port */
-        if (src_network != *(int32_t *)port) {
-            /* Check port flags to see if we should accept this */
-            uint16_t port_flags = *(uint16_t *)((uint8_t *)port + 0x2C);
-            if ((1 << (port_flags & 0x1F) & 0x38) == 0) {
-                /* Port network changed - update routing */
-                int32_t old_network = *(int32_t *)port;
-
-                /* Clear source address */
-                source_addr.network = old_network;
-                source_addr.host[0] = 0;
-                source_addr.host[1] = 0;
-                source_addr.host[2] = 0;
-                source_addr.host[3] = 0;
-                source_addr.host[4] = 0;
-                source_addr.host[5] = 0;
-
-                /* Invalidate old network route */
-                RIP_$UPDATE_INT(old_network, &source_addr, 0x10, port_index,
-                                is_xns, &status);
-
-                /* Add new network route */
-                source_addr.network = src_network;
-                RIP_$UPDATE_INT(src_network, &source_addr, 0, port_index,
-                                is_xns, &status);
-
-                /* Update port network */
-                *(int32_t *)port = src_network;
-                *(int32_t *)((uint8_t *)port + 0x20) = src_network;
-
-                /* If this is port 0, add to hints */
-                if (port_index == 0) {
-                    HINT_$ADD_NET((int16_t)*(int32_t *)port);
-                }
-            }
-        }
-
-        /* Check if we should process routes from this packet */
-        if (is_xns < 0) {
-            if (ROUTE_$STD_N_ROUTING_PORTS >= 2) {
-                uint16_t port_flags = *(uint16_t *)((uint8_t *)port + 0x2C);
-                if (ROUTE_$STD_N_ROUTING_PORTS >= 2 &&
-                    (1 << (port_flags & 0x1F) & 0x30) == 0) {
-                    goto process_routes;
-                }
-            }
-        } else {
-            if (ROUTE_$N_ROUTING_PORTS >= 2) {
-                uint16_t port_flags = *(uint16_t *)((uint8_t *)port + 0x2C);
-                if (ROUTE_$N_ROUTING_PORTS >= 2 &&
-                    (1 << (port_flags & 0x1F) & 0x28) == 0) {
-                    goto process_routes;
-                }
-            }
-        }
-
-        /* Don't process individual routes - just send updates if needed */
-        goto send_updates;
-
-    process_routes:
-        /* Build source address for updates */
-        source_addr.network = src_network;
-        if (is_xns < 0) {
-            /* Copy host from header for non-standard */
-            source_addr.host[0] = header_bytes[0x0A];
-            source_addr.host[1] = header_bytes[0x0B];
-            source_addr.host[2] = header_bytes[0x0C];
-            source_addr.host[3] = header_bytes[0x0D];
-            source_addr.host[4] = header_bytes[0x0E];
-            source_addr.host[5] = header_bytes[0x0F];
-        } else {
-            /* For standard, use idp_host (lower 20 bits) */
-            source_addr.host[0] = 0;
-            source_addr.host[1] = 0;
-            source_addr.host[2] = (idp_host >> 16) & 0x0F;  /* Mask to 20 bits */
-            source_addr.host[3] = (idp_host >> 8) & 0xFF;
-            source_addr.host[4] = idp_host & 0xFF;
-            source_addr.host[5] = 0;
-        }
-
-        /* Process each route entry */
-        for (i = 0; i < (uint16_t)(entry_count - 1); i++) {
-            uint32_t net = *(uint32_t *)&packet_data[1 + i * 3];
-            uint16_t metric = packet_data[3 + i * 3];
-
-            RIP_$UPDATE_INT(net, &source_addr, metric, port_index, is_xns, &status);
-        }
-
-    send_updates:
-        /* Send any pending updates */
-        RIP_$SEND_UPDATES(is_xns);
-        return;
-
-    case RIP_CMD_NAME_REGISTER:
-        /*
-         * Name service registration (Apollo extension)
+         * --- STD/XNS request (0x00E68B82-0x00E68C12) ---
          *
-         * The original pushes two arguments to REM_NAME_$REGISTER_SERVER,
-         * but the routine (0xE4A4AE) ignores them; see name/name.h.
+         * With only one STD routing port there is nothing worth answering a
+         * broadcast with, so a request addressed to the IDP broadcast host
+         * FF:FF:FF:FF:FF:FF is dropped.  The three word compares are on
+         * header + 0x0A, +0x0C and +0x0E - the DESTINATION host - and their
+         * "seq" results are ANDed, so "bmi" fires only when all three match.
          */
-        if (is_xns < 0) {
-            /* Non-standard - check for specific socket type */
-            if ((uint8_t)header_bytes[0x1B] != 0xBE) {
-                RIP_$STATS.unknown_commands++;
+        if (ROUTE_$STD_N_ROUTING_PORTS <= 1) {           /* 0x00E68B82 */
+            boolean all_ones =
+                (boolean)(-(int)(((f.header.dest_host[0] << 8) | f.header.dest_host[1]) == 0xFFFF)
+                        & -(int)(((f.header.dest_host[2] << 8) | f.header.dest_host[3]) == 0xFFFF)
+                        & -(int)(((f.header.dest_host[4] << 8) | f.header.dest_host[5]) == 0xFFFF));
+            if (all_ones < 0) {                          /* 0x00E68BA8 */
                 return;
             }
-
-            /* Extract parameters - kept for documentation */
-            /* uint32_t param1 = *(uint32_t *)&header_bytes[0x14]; */
-            /* uint32_t param2 = *(uint32_t *)&header_bytes[0x04] & 0xFFFFF; */
-            REM_NAME_$REGISTER_SERVER();
-        } else {
-            /* Standard - call name registration */
-            REM_NAME_$REGISTER_SERVER();
         }
-        return;
 
-    default:
-        /* Unknown command */
-        RIP_$STATS.unknown_commands++;
-        return;
+        RIP_$PROCESS_REQUEST(true, &f);                  /* 0x00E68BAC */
+
+        /*
+         * 0x00E68BB6-0x00E68C12: send the reply straight back to the IDP
+         * source address (header + 0x12 = { src_network, src_host,
+         * src_socket }, the 12 bytes RIP_$SEND wants), then wait; five
+         * attempts, or until TIME_$WAIT reports "quit while waiting".
+         *
+         * "pea (-0xe,A6)" is &header + 0x12; taken as a byte address because
+         * xns_$idp_header_t is packed.
+         */
+        retries = 0;
+        do {
+            retries++;                                   /* 0x00E68BBA */
+
+            RIP_$SEND((uint8_t *)&f.header + 0x12,       /* 1 addr_info  */
+                      port_index,                        /* 2 port       */
+                      &f.response,                       /* 3 route_data */
+                      (uint16_t)RIP_$PACKET_LENGTH(f.response_count),
+                      true);                             /* 5 flags      */
+
+            f.wait_delay.high = 0;                       /* 0x00E68BE0 */
+            f.wait_delay.low  = RIP_SEND_DELAY_LOW;      /* 0x00E68BE4 */
+            TIME_$WAIT(&rip_$server_wait_delay_type, &f.wait_delay,
+                       &f.wait_status);                  /* 0x00E68BF6 */
+
+            if (f.wait_status == status_$time_quit_while_waiting) {
+                return;                                  /* 0x00E68C08 */
+            }
+        } while (retries < RIP_SEND_RETRIES);            /* 0x00E68C0C, unsigned */
+
+        return;                                          /* 0x00E68C12 */
     }
 
+    /*
+     * --- Domain-internet request (0x00E68C16-0x00E68C84) ---
+     *
+     * With only one routing port, answer only if the low byte of the first
+     * word of PKT_$BRK_INTERNET_HDR's info record (header byte 0x0E) is
+     * negative - "tst.b (-0x2af,A6) / bmi" drops the packet when it is.
+     */
+    if (ROUTE_$N_ROUTING_PORTS <= 1) {                   /* 0x00E68C16 */
+        if ((int8_t)(f.info_out[0] & 0xFF) < 0) {        /* 0x00E68C20 */
+            return;
+        }
+    }
+
+    RIP_$PROCESS_REQUEST(false, &f);                     /* 0x00E68C2C */
+
+    f.info_out[0] = 0x20;                                /* 0x00E68C32 */
+
+    /*
+     * 0x00E68C38-0x00E68C7E: fifteen arguments plus the 2-byte Pascal result
+     * slot; the addresses the packet came from become the addresses it goes
+     * back to.  The frame is discarded by "unlk", so the block is never
+     * popped.
+     *
+     * PKT_$BLD_INTERNET_HDR writes a word through BOTH arguments 13 and 14
+     * unconditionally (0x00E1230E, 0x00E12316), so neither may be NULL; they
+     * are two distinct word locals here as in the original.
+     */
+    PKT_$SEND_INTERNET(
+        f.src_node_or,                  /*  1 routing_key   A6-0x4F4  */
+        f.src_node,                     /*  2 dest_node     A6-0x4F8  */
+        f.src_sock,                     /*  3 dest_sock     A6-0x51A  */
+        (int32_t)network,               /*  4 src_node_or   D4        */
+        NODE_$ME,                       /*  5 src_node      0xE245A4  */
+        RIP_SOCKET,                     /*  6 src_sock      #8        */
+        f.info_out,                     /*  7 pkt_info      A6-0x2B0  */
+        f.id_out,                       /*  8 request_id    A6-0x518  */
+        &f.response,                    /*  9 template      A6-0x290  */
+        (uint16_t)RIP_$PACKET_LENGTH(f.response_count),  /* 10 template_len */
+        RIP_$ANNOUNCE_EXTRA,            /* 11 data          0xE68E28  */
+        0,                              /* 12 data_len                */
+        &f.send_retry_hint,             /* 13               A6-0x50E  */
+        &f.send_timeout,                /* 14               A6-0x50C  */
+        &f.status);                     /* 15 status_ret    A6-0x4EC  */
+    return;                                              /* 0x00E68C84 */
+
+/* ------------------------------------------------------------------------- */
+arm_response:
+    /* 0x00E68C88-0x00E68C98: ROUTE_$PORTP is indexed from 0 here */
+    port = ROUTE_$PORTP[port_index];
+
+    if (is_std < 0) {
+        /* 0x00E68C9E: the network this XNS packet was addressed to */
+        network = f.header.dest_network;
+    }
+
+    /*
+     * 0x00E68CA4-0x00E68D16: the port has moved to a different network.
+     * "move.w (0x2c,A2),D1w / moveq #0x38,D5 / btst.l D1,D5" - ports whose
+     * routing-capability bit is 3, 4 or 5 are left alone.
+     */
+    if (network != port->network &&
+        ((0x38u >> (port->active & 0x1F)) & 1u) == 0) {
+
+        f.source_addr.network = port->network;           /* 0x00E68CB2 */
+        /* "clr.w" three times through A0 - the 6-byte host */
+        f.source_addr.host[0] = 0; f.source_addr.host[1] = 0;
+        f.source_addr.host[2] = 0; f.source_addr.host[3] = 0;
+        f.source_addr.host[4] = 0; f.source_addr.host[5] = 0;
+
+        /* Withdraw the old network (metric 0x10) ... 0x00E68CC6 */
+        RIP_$UPDATE_INT(port->network, &f.source_addr, 0x10,
+                        (uint16_t)port_index, is_std, &f.status);
+
+        f.source_addr.network = network;                 /* 0x00E68CE4 */
+
+        /* ... and install the new one at metric 0.  0x00E68CE8 */
+        RIP_$UPDATE_INT(network, &f.source_addr, 0,
+                        (uint16_t)port_index, is_std, &f.status);
+
+        port->network          = network;                /* 0x00E68D04 */
+        port->xns_addr.network = network;                /* 0x00E68D06 */
+
+        if (port_index == 0) {                           /* 0x00E68D0A */
+            HINT_$ADD_NET(port->network);                /* 0x00E68D0E */
+        }
+    }
+
+    /*
+     * 0x00E68D18-0x00E68D58: should the routes in this packet be believed?
+     * The two arms are the compiler's short-circuit expansion of
+     *   (n < 2) or ((n > 1) and (port^.active in <set>))
+     * with <set> = {4,5} (0x30) on the STD side and {3,5} (0x28) otherwise.
+     * The "tst.b D3b / bmi" at 0x00E68D38 is only reachable on the STD side,
+     * so it always branches; it is emitted because the original does.
+     */
+    if (is_std < 0) {                                    /* 0x00E68D18 */
+        n = ROUTE_$STD_N_ROUTING_PORTS;                  /* 0x00E68D1C */
+        if (n < 2) {
+            goto process_routes;                         /* 0x00E68D26 */
+        }
+        if (n > 1) {                                     /* 0x00E68D28 */
+            if (((0x30u >> (port->active & 0x1F)) & 1u) != 0) {
+                goto process_routes;                     /* 0x00E68D36 */
+            }
+        }
+        if (is_std < 0) {                                /* 0x00E68D38 */
+            goto send_updates;
+        }
+    }
+    n = ROUTE_$N_ROUTING_PORTS;                          /* 0x00E68D3E */
+    if (n < 2) {
+        goto process_routes;                             /* 0x00E68D48 */
+    }
+    if (n <= 1) {                                        /* 0x00E68D4A */
+        goto send_updates;
+    }
+    if (((0x28u >> (port->active & 0x1F)) & 1u) == 0) {  /* 0x00E68D50 */
+        goto send_updates;
+    }
+
+process_routes:
+    /* 0x00E68D5A-0x00E68D86: who the routes came from */
+    f.source_addr.network = network;
+
+    if (is_std < 0) {
+        /* Three words out of header + 0x16 - the IDP source host */
+        f.source_addr.host[0] = f.header.src_host[0];    /* 0x00E68D68 */
+        f.source_addr.host[1] = f.header.src_host[1];
+        f.source_addr.host[2] = f.header.src_host[2];
+        f.source_addr.host[3] = f.header.src_host[3];
+        f.source_addr.host[4] = f.header.src_host[4];
+        f.source_addr.host[5] = f.header.src_host[5];
+    } else {
+        /*
+         * 0x00E68D78-0x00E68D86: "andi.l #-0x100000,(-0x2a,A6)" then
+         * "or.l D1,(-0x2a,A6)" - the LOW FOUR bytes of the 6-byte host keep
+         * their top 12 bits and take the 20-bit source node id.  host[0] and
+         * host[1] are not touched on this path at all.
+         */
+        uint32_t host_lo = ((uint32_t)f.source_addr.host[2] << 24)
+                         | ((uint32_t)f.source_addr.host[3] << 16)
+                         | ((uint32_t)f.source_addr.host[4] << 8)
+                         |  (uint32_t)f.source_addr.host[5];
+        host_lo = (host_lo & 0xFFF00000u) | f.src_node;
+        f.source_addr.host[2] = (uint8_t)(host_lo >> 24);
+        f.source_addr.host[3] = (uint8_t)(host_lo >> 16);
+        f.source_addr.host[4] = (uint8_t)(host_lo >> 8);
+        f.source_addr.host[5] = (uint8_t)host_lo;
+    }
+
+    /*
+     * 0x00E68D88-0x00E68DBC: "move.w (-0x514,A6),D1w / subq.w #1,D1w / bmi"
+     * then "dbf" - entry_count iterations, not entry_count - 1.  A3 walks the
+     * frame from A6+6 in steps of 6, so entry i is read at packet_data + 2 +
+     * 6i (network) and packet_data + 6 + 6i (metric).
+     */
+    if ((int16_t)(f.entry_count - 1) < 0) {
+        goto send_updates;
+    }
+    for (n = 0; n < f.entry_count; n++) {
+        RIP_$UPDATE_INT(f.packet_data.entries[n].network,
+                        &f.source_addr,
+                        f.packet_data.entries[n].metric,
+                        (uint16_t)port_index, is_std, &f.status);
+    }
+
+send_updates:
+    RIP_$SEND_UPDATES(is_std);                           /* 0x00E68DC4 */
     return;
 
-error_return:
-    /* Error - return packet and increment error counter */
+/* ------------------------------------------------------------------------- */
+arm_name_register:
+    /* 0x00E68DCA */
+    if (is_std < 0) {
+        /*
+         * 0x00E68DCE-0x00E68DFA: only IDP packet type 0xBE (header + 0x05)
+         * carries a name-service registration.
+         */
+        if ((uint16_t)f.header.packet_type != 0xBE) {
+            goto unknown_command_std;                    /* 0x00E68DFC */
+        }
+
+        f.reg_network = f.header.src_network;            /* 0x00E68DDA */
+
+        /*
+         * 0x00E68DE0-0x00E68DEE: "lea (-0xa,A6),A2" points at the IDP SOURCE
+         * HOST (header + 0x16) and then "and.l (0x6,A2),D1" reads the
+         * longword SIX bytes on, i.e. header + 0x1C.  That is src_socket
+         * followed by the two frame bytes between the header copy and A6, not
+         * the low four bytes of the host address.
+         *
+         * TODO(source-u9wy): the +6 accessor belongs to the 10-byte
+         * { network, host_hi, host_lo } record (rip_$nexthop_t), so the
+         * original applied it to a pointer that was already four bytes into
+         * that record; the node id it hands the name server is built from
+         * src_socket and two uninitialised frame bytes.  Preserved as-is.
+         */
+        f.reg_node_id = (((uint32_t)f.header.src_socket << 16)
+                       | ((uint32_t)f.header_tail[0] << 8)
+                       |  (uint32_t)f.header_tail[1]) & 0xFFFFF;
+
+        /* "pea (-0x538,A6) / pea (-0x4e0,A6)" then the shared jsr */
+        REM_NAME_$REGISTER_SERVER();                     /* 0x00E68E0C */
+        return;                                          /* 0x00E68E12 */
+    }
+
+    /*
+     * 0x00E68E04-0x00E68E12: the internet path pushes &src_node_or and
+     * &src_node.  REM_NAME_$REGISTER_SERVER (0x00E4A4AE) reads neither - it
+     * only stamps TIME_$CLOCKH into the name-server record and sets the
+     * "server contacted" flag - and the arguments are never popped because
+     * "unlk A6" discards them.
+     */
+    REM_NAME_$REGISTER_SERVER();
+    return;
+
+unknown_command_std:
+    RIP_$STATS.unknown_commands++;                       /* 0x00E68DFC */
+    return;
+
+unknown_command:
+    RIP_$STATS.unknown_commands++;                       /* 0x00E68E14 */
+    return;
+
+/* ------------------------------------------------------------------------- */
+bad_packet:
+    /* 0x00E68B16-0x00E68B2A */
     RIP_$STATS.errors++;
-    {
-        uint32_t pkt_va = (uint32_t)(uintptr_t)packet;
-        NETBUF_$RTN_HDR(&pkt_va);
-    }
-    return;
+    f.hdr_va = ARCH_PTR_TO_VA(packet);
+    NETBUF_$RTN_HDR(&f.hdr_va);
 }

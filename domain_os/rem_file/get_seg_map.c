@@ -63,7 +63,7 @@ void REM_FILE_$GET_SEG_MAP(void *addr_info, uid_t *file_uid,
 
     /* Build base request */
     request.magic = 0x80;
-    request.opcode = 0x1E;  /* GET_SEG_MAP opcode */
+    request.opcode = REM_FILE_OP_GET_SEG_MAP;  /* 0x1E, 0x00E61F62 */
     request.file_uid = *file_uid;
     request.flags = 3;
     request.force_flag = 0xFF;

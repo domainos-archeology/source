@@ -199,3 +199,70 @@ config offset k. +0x06/+0x08 are **x_scale/y_scale** (TPAD_$SET_UNIT_MODE
 *scale* pair.
 
 Related: [[handwritten-asm-verification]], [[feedback_fidelity_gates]].
+
+## SMD_TIME_$COM and the one-entry info table (source-9j2l, 2026-09-06)
+
+`SMD_DISPLAY_INFO` (Ghidra `SMD_$DISPLAY_COM`, 0x00E27376) has **exactly one**
+0x60-byte entry. Proof by neighbour: `SMD_TIME_$COM` is at 0x00E273D6, and the
+labels run 0x00E27366 `SMD_$CURSOR_PTABLE`, 0x00E27376 `SMD_$DISPLAY_COM`,
+0x00E273D6 `SMD_TIME_$COM`, 0x00E273DC `MNK_$KTT_PTRS`, 0x00E273FC
+`MNK_$KTT_MAX`, 0x00E273FE `SMD_$KTT`. Use `SMD_DISPLAY_INFO_COUNT` (= 1), not
+`SMD_MAX_DISPLAY_UNITS`, which still sizes the *unit record* block.
+
+`SMD_TIME_$COM` is 6 bytes and used to be modelled as `SMD_BLINK_STATE` with a
+field literally named `smd_time_com`. Correct layout:
+
+| off | field | evidence |
+|---|---|---|
+| 0x00 | `blink_enable` (boolean) | 0x00E6FF72 `tst.b (A2)` / `bpl` gates the whole blink block |
+| 0x02 | `cursor_painted` (boolean) | 0x00E6FF8E `tst.b (0x2,A2)` picks 250000us over 125000us |
+| 0x04 | `blink_defer` (uint16) | 0x00E6FF76 `tst.w (0x4,A2)` skips one tick; 0x00E6FF9C clears it whatever the value |
+
+`blink_enable` is `(cursor_number == 0)`: 0x00E6E424 `move.w D2w,(0xd4,A5)`
+sets Z, 0x00E6E42C `seq D4b` turns that into the Domain boolean, 0x00E6E432
+stores it. `cursor_painted` is the byte `SMD_$BLINK_CURSOR_1` flips with
+`not.b (A2)` at 0x00E27276 - which is why the callback re-tests it *after*
+calling through SMD_BLINK_FUNC_PTABLE.
+
+Xrefs Ghidra reports "to 0x00E273D6" from 0x00E6DDDE, 0x00E6E10A, 0x00E6F4EC,
+0x00E6FE70 and 0x00E6FF08 are **not** accesses to it: they are
+`lea (0,A1,D0),A2` with A1 = 0x00E27376 and D0 = unit*0x60, i.e. the biased
+one-past pointer the code then uses as `(-0x60,A2)`. Check the addressing mode
+before believing a data xref in this table.
+
+`smd/blink_cursor_1.c` had `SMD_UNIT1_DISPLAY_COM = 0x00E27316`, 0x60 low.
+0x00E2724C `lea (0x128,PC),A0` -> 0x00E27376 and 0x00E27248
+`lea (0x18e,PC),A1` -> 0x00E273D8 = `&SMD_TIME_$COM.cursor_painted`.
+
+## SMD_$DISP1_INT (source-tzn8, 2026-09-06)
+
+Ghidra has **no function** at 0x00E26F20 - `gsk analyze` and `gsk disassemble`
+both say "Function not found", only the label exists. Recover such a routine by
+`gsk read <addr> <len>` and piping the hex through
+`m68k-elf-objdump -D -b binary -m m68k:68020 --adjust-vma=<addr>`. Note
+`gsk read` caps at 256 bytes per call, so long routines need several reads.
+
+Now `smd/sau2/disp1_int.s`, 0x00E26F20..0x00E27025 (0x106 bytes) plus the four
+status cells at 0x00E27026..0x00E27035 (0x00130007, 0x00130008, 0x0013001C,
+0x0013001D = SMD_Invalid_Direction_From_SM / _BLT_In_Use / _BLT_Done_Interrupt
+/ _Interrupt_Routine_State). Those cells belong in the *code* region and both
+this handler and `smd_$disp1_setup_blt` reach them with `pea (d16,PC)`, so they
+must be emitted inline for the displacements to reproduce.
+`smd/sau2/scroll_blt_setup.s` had defined two of them in `.data`, swapped and
+split into words in the wrong order - deleted.
+
+Structure: interrupt prologue (`ori #0x600,SR`, `jsr IO_$USE_INT_STACK`), then
+`A1 = SMD_DISPLAY_INFO`, `A0 = 0xFF9800`, `tst.b (1,A0)` to distinguish
+"BLT done" from anything else, and an 8-slot `bra.w` jump table at 0x00E26F4E
+entered by `jmp (2,PC,D0.w)` with D0 = `hw->lock_state * 4`. Exits are
+`jmp PROC1_$INT_EXIT` (0x00E208FE) and `jmp PROC1_$INT_ADVANCE` (0x00E208F6),
+never `rts`.
+
+`jsr 0x00E20728` is the four-byte gate `movea.l (0x4,SP),A0` that falls through
+into `ADVANCE_INT` at 0x00E2072C; `ec/advance_int.c` models gate+body as one C
+function, so call `ADVANCE_INT` from assembly.
+
+`smd_$disp1_setup_blt` (labelled at 0x00E27036, bead source-k6h0) is the
+interrupt-level twin of the routine at 0x00E27070 that
+`smd/sau2/scroll_blt_setup.s` models. Its label is defined at the end of
+disp1_int.s so the `jsr (0xa8,PC)` at 0x00E26F8C keeps its displacement.

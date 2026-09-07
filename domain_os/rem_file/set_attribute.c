@@ -37,7 +37,7 @@ void REM_FILE_$SET_ATTRIBUTE(void *vol_uid, uid_t *file_uid,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x04;  /* SET_ATTRIBUTE opcode */
+    request.opcode = REM_FILE_OP_SET_ATTRIBUTE;  /* 0x04, 0x00E61A48 */
     request.file_uid = *file_uid;
     request.attr_id = attr_id;
 

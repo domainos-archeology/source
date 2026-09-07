@@ -456,7 +456,7 @@ static void reset_world(void)
     /* bufs[0] == 0 => the request carries no extra buffer chain. */
     mock_rcv_template.bufs[0] = 0;
 
-    set_request(1, SERVER_OP_TEST, 0x10, 0);
+    set_request(1, REM_FILE_OP_TEST, 0x10, 0);
 }
 
 /*
@@ -511,7 +511,7 @@ TEST(service_disabled_replies_0x0011000F)
 TEST(request_length_is_clamped_to_0x294)
 {
     reset_world();
-    set_request(1, SERVER_OP_TEST, 0x400, 0);
+    set_request(1, REM_FILE_OP_TEST, 0x400, 0);
     REM_FILE_$SERVER();
     /* Nothing observable escapes, but the copy must not have overrun: the
      * reply is still the plain 8-byte acknowledgement. */
@@ -554,7 +554,7 @@ TEST(oversized_extra_data_is_dumped_and_refused)
 TEST(inline_extra_data_is_appended_and_dumped)
 {
     reset_world();
-    set_request(1, SERVER_OP_TEST, 0x100, 0x300);
+    set_request(1, REM_FILE_OP_TEST, 0x100, 0x300);
     mock_rcv_template.bufs[0] = 0x1234;
     REM_FILE_$SERVER();
     /* min(extra_len, 0x294 - request_len) = min(0x300, 0x194) */
@@ -571,11 +571,11 @@ TEST(inline_extra_data_is_appended_and_dumped)
 TEST(response_header_is_magic_and_opcode_plus_one)
 {
     reset_world();
-    set_request(1, SERVER_OP_NEIGHBORS, 0x20, 0);
+    set_request(1, REM_FILE_OP_NEIGHBORS, 0x20, 0);
     REM_FILE_$SERVER();
     ASSERT_EQ(1, mock_send_calls);
     ASSERT_EQ(0x80, SENT_MAGIC);
-    ASSERT_EQ(SERVER_OP_NEIGHBORS + 1, SENT_OPCODE);
+    ASSERT_EQ(REM_FILE_OP_NEIGHBORS + 1, SENT_OPCODE);
     ASSERT_EQ(1, SENT_PKT_FLAG);
     ASSERT_EQ(1, mock_neighbors_calls);
     ASSERT_EQ(0x0A, mock_send_tpl_len);
@@ -584,7 +584,7 @@ TEST(response_header_is_magic_and_opcode_plus_one)
 TEST(bad_version_is_answered_as_opcode_two)
 {
     reset_world();
-    set_request(9, SERVER_OP_NEIGHBORS, 0x20, 0);
+    set_request(9, REM_FILE_OP_NEIGHBORS, 0x20, 0);
     REM_FILE_$SERVER();
     /* 0x00E63810 rewrites the opcode to 2, which no case handles. */
     ASSERT_EQ(1, mock_send_calls);
@@ -607,7 +607,7 @@ TEST(unknown_opcode_is_refused)
 TEST(test_opcode_replies_ok)
 {
     reset_world();
-    set_request(1, SERVER_OP_TEST, 0x20, 0);
+    set_request(1, REM_FILE_OP_TEST, 0x20, 0);
     REM_FILE_$SERVER();
     ASSERT_EQ(status_$ok, SENT_STATUS);
     ASSERT_EQ(8, mock_send_tpl_len);
@@ -633,7 +633,7 @@ TEST(dir_range_is_delegated)
 TEST(acl_range_is_delegated)
 {
     for (unsigned op = REM_FILE_ACL_OP_FIRST; op <= REM_FILE_ACL_OP_LAST; op += 2) {
-        if ((op == SERVER_OP_ACL_GET) || (op == SERVER_OP_ACL_PUT)) {
+        if ((op == REM_FILE_OP_ACL_IMAGE) || (op == REM_FILE_OP_ACL_CREATE)) {
             continue;
         }
         reset_world();
@@ -673,7 +673,7 @@ TEST(range_boundaries_are_inclusive)
 TEST(opcode_0x7c_is_reserve_not_a_delegation)
 {
     reset_world();
-    set_request(1, SERVER_OP_RESERVE, 0x20, 0);
+    set_request(1, REM_FILE_OP_RESERVE, 0x20, 0);
     REM_FILE_$SERVER();
     ASSERT_EQ(0, mock_dir_server_calls);
     ASSERT_EQ(0, mock_acl_server_calls);
@@ -684,7 +684,7 @@ TEST(opcode_0x7c_is_reserve_not_a_delegation)
 TEST(node_crash_keeps_the_lock_and_sends_no_reply)
 {
     reset_world();
-    set_request(1, SERVER_OP_NODE_CRASH, 0x20, 0);
+    set_request(1, REM_FILE_OP_UNLOCK_ALL, 0x20, 0);
     REM_FILE_$SERVER();
     ASSERT_EQ(0, mock_send_calls);
     /* The lock is never dropped mid-flight for this opcode, so the unwind
@@ -695,22 +695,22 @@ TEST(node_crash_keeps_the_lock_and_sends_no_reply)
 TEST(per_opcode_reply_lengths)
 {
     struct { uint8_t op; uint16_t len; uint16_t req_len; } cases[] = {
-        { SERVER_OP_TEST,              0x08, 0x20 },
-        { SERVER_OP_NEIGHBORS,         0x0A, 0x20 },
-        { SERVER_OP_LOCAL_READ_LOCK,   0x2A, 0x20 },
-        { SERVER_OP_GET_SEG_MAP,       0x28, 0x20 },
-        { SERVER_OP_GENERATE_UID,      0x12, 0x20 },
-        { SERVER_OP_CREATE_PRESR10,    0x12, 0x20 },
-        { SERVER_OP_CREATE_TYPE,       0xBE, 0x20 },
-        { SERVER_OP_UNLOCK,            0x16, 0x20 },
-        { SERVER_OP_CREATE_AREA,       0x0C, 0x20 },
-        { SERVER_OP_DELETE_AREA,       0x08, 0x20 },
-        { SERVER_OP_LOCK,              0x10, 0x20 },
-        { SERVER_OP_LOCK,              0x0E, 0x1E },
-        { SERVER_OP_LOCK_EXTENDED,     0xBE, 0x20 },
-        { SERVER_OP_INVALIDATE,        0x08, 0x20 },
-        { SERVER_OP_PURIFY,            0x08, 0x20 },
-        { SERVER_OP_LOCAL_LOCK_VERIFY, 0x08, 0x20 },
+        { REM_FILE_OP_TEST,              0x08, 0x20 },
+        { REM_FILE_OP_NEIGHBORS,         0x0A, 0x20 },
+        { REM_FILE_OP_LOCAL_READ_LOCK,   0x2A, 0x20 },
+        { REM_FILE_OP_GET_SEG_MAP,       0x28, 0x20 },
+        { REM_FILE_OP_GENERATE_UID,      0x12, 0x20 },
+        { REM_FILE_OP_CREATE_TYPE_PRESR10,    0x12, 0x20 },
+        { REM_FILE_OP_CREATE_TYPE,       0xBE, 0x20 },
+        { REM_FILE_OP_UNLOCK,            0x16, 0x20 },
+        { REM_FILE_OP_CREATE_AREA,       0x0C, 0x20 },
+        { REM_FILE_OP_DELETE_AREA,       0x08, 0x20 },
+        { REM_FILE_OP_LOCK,              0x10, 0x20 },
+        { REM_FILE_OP_LOCK,              0x0E, 0x1E },
+        { REM_FILE_OP_LOCK_EXT,     0xBE, 0x20 },
+        { REM_FILE_OP_INVALIDATE,        0x08, 0x20 },
+        { REM_FILE_OP_PURIFY,            0x08, 0x20 },
+        { REM_FILE_OP_LOCAL_VERIFY, 0x08, 0x20 },
     };
 
     for (unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
@@ -806,7 +806,7 @@ TEST(bulk_over_0x400_raises_0x00110001)
 TEST(send_arguments_come_from_the_packet_header)
 {
     reset_world();
-    set_request(1, SERVER_OP_TEST, 0x20, 0);
+    set_request(1, REM_FILE_OP_TEST, 0x20, 0);
     REM_FILE_$SERVER();
     ASSERT_EQ(1, mock_send_calls);
     ASSERT_EQ(TEST_REQUEST_ID, mock_send_request_id);
@@ -816,13 +816,13 @@ TEST(send_arguments_come_from_the_packet_header)
 TEST(netlog_is_only_written_when_server_logging_is_on)
 {
     reset_world();
-    set_request(1, SERVER_OP_TEST, 0x20, 0);
+    set_request(1, REM_FILE_OP_TEST, 0x20, 0);
     REM_FILE_$SERVER();
     ASSERT_EQ(0, mock_netlog_calls);
 
     reset_world();
     NETLOG_$OK_TO_LOG_SERVER = -1;
-    set_request(1, SERVER_OP_TRUNCATE, 0x20, 0);
+    set_request(1, REM_FILE_OP_TRUNCATE, 0x20, 0);
     REM_FILE_$SERVER();
     ASSERT_EQ(1, mock_netlog_calls);
 }

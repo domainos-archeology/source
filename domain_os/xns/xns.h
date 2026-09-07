@@ -463,40 +463,40 @@ _Static_assert(sizeof(xns_$idp_send_t) == 0x48, "xns_$idp_send_t must be 0x48 by
  * Status codes for XNS IDP operations (module 0x3B, "OS / XNS IDP").
  *
  * The comment after each line is the exact text the 10.4 status-code
- * database gives for that code.  Several of the identifiers below predate
- * that check and do not say the same thing as the database.
- *
- * TODO(source-v1lr): rename the eight that disagree across xns/.
+ * database (module 0x3B, "OS / XNS IDP") gives for that code, and every
+ * identifier now agrees with it (bead source-v1lr; the eight that did not -
+ * 0x3B0002, 0x0008, 0x000B, 0x000D, 0x0010, 0x0013, 0x001A and 0x001B - were
+ * renamed, values unchanged).
  */
-#define status_$xns_channel_table_full 0x3B0001   /* no channels available */
-#define status_$xns_socket_already_open 0x3B0002  /* no OS sockets available */
-#define status_$xns_no_demux 0x3B0003             /* caller specified neither OS socket nor demux proc */
-#define status_$xns_bad_channel 0x3B0004          /* channel is not open */
-#define status_$xns_no_socket 0x3B0005            /* no socket allocated for caller */
-#define status_$xns_no_data 0x3B0006              /* no packet available to receive */
-#define status_$xns_buffer_too_small 0x3B0007     /* data capacity too small for received packet */
-#define status_$xns_invalid_param 0x3B0008        /* illegal buffer specification */
-#define status_$xns_addr_in_use 0x3B0009          /* address in use */
-#define status_$xns_invalid_type_count 0x3B000A   /* invalid type count */
-#define status_$xns_unknown_network_port 0x3B000B /* listen network not connected */
-#define status_$xns_reserved_socket 0x3B000C      /* illegal IDP socket */
-#define status_$xns_too_many_channels 0x3B000D    /* IDP socket table full */
-#define status_$xns_socket_in_use 0x3B000E        /* IDP socket in use */
-#define status_$xns_os_socket_not_open 0x3B000F   /* OS socket not open */
-#define status_$xns_no_route 0x3B0010             /* no client for packet */
-#define status_$xns_bad_checksum 0x3B0011         /* bad IDP checksum */
-#define status_$xns_hop_count_exceeded 0x3B0012   /* maximum hops exceeded by packet */
-#define status_$xns_no_nexthop 0x3B0013           /* network unreachable */
-#define status_$xns_illegal_os_socket 0x3B0014    /* illegal OS socket */
-#define status_$xns_version_mismatch 0x3B0015     /* invalid version number */
-#define status_$xns_packet_dropped 0x3B0016       /* could not put packet into socket */
-#define status_$xns_no_buffer_size 0x3B0017       /* no OS socket depth given */
-#define status_$xns_incompatible_flags 0x3B0018   /* cannot send only as well as listen */
-#define status_$xns_incompatible_flags2 0x3B0019  /* cannot send only as well as connect */
-#define status_$xns_broadcast_no_addr 0x3B001A    /* cannot connect to broadcast address */
-#define status_$xns_local_addr_in_use 0x3B001B    /* connection source address must be this node */
-#define status_$xns_connect_bind_conflict 0x3B001C /* cannot connect as well as listen */
-#define status_$xns_too_many_addrs 0x3B001D       /* host address table full */
+#define status_$xns_channel_table_full               0x3B0001  /* no channels available */
+#define status_$xns_no_os_sockets                    0x3B0002  /* no OS sockets available */
+#define status_$xns_no_demux                         0x3B0003  /* caller specified neither OS socket nor demux proc */
+#define status_$xns_bad_channel                      0x3B0004  /* channel is not open */
+#define status_$xns_no_socket                        0x3B0005  /* no socket allocated for caller */
+#define status_$xns_no_data                          0x3B0006  /* no packet available to receive */
+#define status_$xns_buffer_too_small                 0x3B0007  /* data capacity too small for received packet */
+#define status_$xns_illegal_buffer_spec              0x3B0008  /* illegal buffer specification */
+#define status_$xns_addr_in_use                      0x3B0009  /* address in use */
+#define status_$xns_invalid_type_count               0x3B000A  /* invalid type count */
+#define status_$xns_listen_network_not_connected     0x3B000B  /* listen network not connected */
+#define status_$xns_reserved_socket                  0x3B000C  /* illegal IDP socket */
+#define status_$xns_idp_socket_table_full            0x3B000D  /* IDP socket table full */
+#define status_$xns_socket_in_use                    0x3B000E  /* IDP socket in use */
+#define status_$xns_os_socket_not_open               0x3B000F  /* OS socket not open */
+#define status_$xns_no_client_for_packet             0x3B0010  /* no client for packet */
+#define status_$xns_bad_checksum                     0x3B0011  /* bad IDP checksum */
+#define status_$xns_hop_count_exceeded               0x3B0012  /* maximum hops exceeded by packet */
+#define status_$xns_network_unreachable              0x3B0013  /* network unreachable */
+#define status_$xns_illegal_os_socket                0x3B0014  /* illegal OS socket */
+#define status_$xns_version_mismatch                 0x3B0015  /* invalid version number */
+#define status_$xns_packet_dropped                   0x3B0016  /* could not put packet into socket */
+#define status_$xns_no_buffer_size                   0x3B0017  /* no OS socket depth given */
+#define status_$xns_incompatible_flags               0x3B0018  /* cannot send only as well as listen */
+#define status_$xns_incompatible_flags2              0x3B0019  /* cannot send only as well as connect */
+#define status_$xns_connect_to_broadcast             0x3B001A  /* cannot connect to broadcast address */
+#define status_$xns_source_must_be_this_node         0x3B001B  /* connection source address must be this node */
+#define status_$xns_connect_bind_conflict            0x3B001C  /* cannot connect as well as listen */
+#define status_$xns_too_many_addrs                   0x3B001D  /* host address table full */
 
 /*
  * XNS Error Protocol codes (param to XNS_ERROR_$SEND)

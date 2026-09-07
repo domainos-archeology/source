@@ -45,7 +45,7 @@ void REM_FILE_$ACL_IMAGE(void *addr_info, uid_t *file_uid,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x64;  /* ACL_IMAGE opcode */
+    request.opcode = REM_FILE_OP_ACL_IMAGE;  /* 0x64, 0x00E627C0 */
     request.file_uid = *file_uid;
     request.flags = 5;
     request.acl_type = acl_type;

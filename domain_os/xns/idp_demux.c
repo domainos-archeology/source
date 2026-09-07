@@ -321,7 +321,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
 drop_no_route:
     XNS_PACKETS_DROP() += 1;                    /* 0x00E1867E addq.l #1,(0x8,A5) */
 no_route:
-    *status_ret = status_$xns_no_route;         /* 0x00E18684 move.l #0x3B0010 */
+    *status_ret = status_$xns_no_client_for_packet;         /* 0x00E18684 move.l #0x3B0010 */
 done:
     /* 0x00E1871C: shared movem/unlk/rts epilogue. */
     return;
@@ -404,7 +404,7 @@ void XNS_IDP_$DEMUX(xns_$pkt_desc_t *rec, uint16_t *port_type,
 
     /* 0x00E18C16: no user socket bound to this channel. */
     if (chan->user_socket == XNS_NO_SOCKET) {
-        *status_ret = status_$xns_no_route; /* 0x00E18C1E; no drop counted */
+        *status_ret = status_$xns_no_client_for_packet; /* 0x00E18C1E; no drop counted */
         goto done;                          /* 0x00E18C24 */
     }
 

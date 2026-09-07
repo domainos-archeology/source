@@ -50,7 +50,7 @@ void REM_FILE_$FILE_SET_PROT(void *addr_info, uid_t *file_uid,
 
     /* Build request */
     request.magic = 0x80;
-    request.opcode = 0x80;  /* FILE_SET_PROT opcode */
+    request.opcode = REM_FILE_OP_FILE_SET_PROT;  /* 0x80, 0x00E62B84 */
     request.file_uid = *file_uid;
 
     /* Copy protection data block 1 (13 uint32s) */
