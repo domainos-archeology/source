@@ -1,49 +1,157 @@
 /*
- * PROC2_$SET_VALID - Mark process as valid
+ * PROC2_$SET_VALID - Mark the current process valid
  *
- * Called during process startup to mark the current process as valid.
- * Performs the following:
- * 1. If stack UID is nil, maps the stack area
- * 2. Sets the valid bit (0x80) in process flags
- * 3. If process has ORPHAN flag but not ALT_ASID flag, initializes
- *    various fields in the creation record
+ * Called during process startup.  It maps a stack file if the entry does
+ * not have one yet, sets the valid bit in the process flags, and -- for a
+ * process that is orphaned but does not have the alternate-ASID flag --
+ * fills in the creation record from the parent entry.
  *
- * Original address: 0x00e73484
+ * Original address: 0x00E73484 (364 bytes)
+ *
+ * Full instruction trace (A3 = P2_INFO_ENTRY(current_idx) + 0xE4, so a
+ * displacement d means entry offset 0xE4 + d; A2 = the creation record):
+ *   00e73484  link.w A6,-0x14
+ *   00e73488  movem.l {A4 A3 A2},-(SP)
+ *   00e7348c  move.w (0x00e20608).l,D0w   ; PROC1_$CURRENT
+ *   00e7349e  move.w (0x3eb6,A1),D0w      ; P2_PID_TO_INDEX[pid]
+ *   00e734a4  muls.w #0xe4,D1
+ *   00e734a8  lea (0x0,A0,D1),A3
+ *   00e734ac  movea.l (-0x78,A3),A2       ; entry->cr_rec_2 (+0x6C)
+ *   00e734b0  move.l (-0x8,A3),D1         ; entry->stack_uid.high (+0xDC)
+ *   00e734b4  cmp.l (0x00e1737c).l,D1     ; UID_$NIL.high ONLY
+ *   00e734ba  bne.b 0x00e73506
+ *   00e734bc  move.l (0x00e2b92c).l,(0xb0,A2)  ; AS_$STACK_FILE_LOW
+ *   00e734c4  move.l (0x00e2b960).l,(0xb4,A2)  ; AS_$INIT_STACK_FILE_SIZE
+ *   00e734cc  pea (0x94,A2)               ; &cr_rec->status        (arg 6)
+ *   00e734d0  pea (-0x8,A3)               ; &entry->stack_uid      (arg 5)
+ *   00e734d4  pea (0x11a,PC)              ; cell 0x00E735F0        (arg 4)
+ *   00e734d8  pea (0x11a,PC)              ; cell 0x00E735F4        (arg 3)
+ *   00e734dc  pea (0xb4,A2)               ; &cr_rec->size          (arg 2)
+ *   00e734e0  pea (0xb0,A2)               ; &cr_rec->addr_lo       (arg 1)
+ *   00e734e4  jsr 0x00e43c04.l            ; MST_$MAP_AREA_AT
+ *   00e734ee  tst.l (0x94,A2) / beq.b 0x00e734fa
+ *   00e734f4  jsr 0x00e74398.l            ; PROC2_$DELETE (never returns)
+ *   00e734fa  lea (-0x8,A3),A0
+ *   00e734fe  move.l (A0)+,(0xa8,A2)      ; cr_rec->stack_uid = entry->stack_uid
+ *   00e73502  move.l (A0)+,(0xac,A2)
+ *   00e73506  jsr 0x00e20b12.l            ; ML_$LOCK(4)
+ *   00e73514  bset.b #0x7,(-0xb9,A3)      ; flags |= 0x0080 (LOW byte, bit 7)
+ *   00e7351c  jsr 0x00e20b62.l            ; ML_$UNLOCK(4)
+ *   00e73528  move.w (-0xba,A3),D1w       ; flags
+ *   00e7352c  btst.l #0xc,D1 / beq.w 0x00e735e6   ; 0x1000 must be set
+ *   00e73534  btst.l #0xb,D1 / bne.w 0x00e735e6   ; 0x0800 must be clear
+ *   00e7353c  move.w (0x00e2060a).l,D1w   ; PROC1_$AS_ID
+ *   00e73548  lsl.w #0x3,D1w
+ *   00e7354a  lea (0x10,A0,D1w),A1        ; &PROC2_UID[asid] (0xE7BE94)
+ *   00e7354e  move.l (A1)+,(0x98,A2)      ; cr_rec->proc_uid
+ *   00e73552  move.l (A1)+,(0x9c,A2)
+ *   00e73556  move.w (-0xce,A3),D1w       ; entry->upid (+0x16)
+ *   00e7355a  ext.l D1                    ; SIGN-extended
+ *   00e7355c  move.l D1,(0xb8,A2)
+ *   00e73560  lea (-0xdc,A3),A1           ; &entry->parent_uid (+0x08)
+ *   00e73564  move.l (A1)+,(0xa0,A2)      ; cr_rec->parent_uid
+ *   00e73568  move.l (A1)+,(0xa4,A2)
+ *   00e7356c  lea (-0x8,A3),A1            ; &entry->stack_uid (+0xDC)
+ *   00e73570  move.l (A1)+,(0xa8,A2)      ; cr_rec->stack_uid
+ *   00e73574  move.l (A1)+,(0xac,A2)
+ *   00e73578  clr.l (0x74,A2)
+ *   00e7357c  clr.w (0x78,A2)
+ *   00e73580  lea (0x7c,A2),A1 / clr.l (A1)+ x3   ; 0x7C, 0x80, 0x84
+ *   00e7358a  clr.b (0x90,A2)
+ *   00e7358e  clr.b (0xc8,A2)
+ *   00e73592  move.w #0x1,(0xc6,A2)
+ *   00e73598  btst.b #0x3,(0xc5,A2) / beq.b 0x00e735b2
+ *   00e735a0  move.w (-0xc6,A3),D1w       ; entry->parent_pgroup_idx (+0x1E)
+ *   00e735a6  lea (0x10,A0,D1w),A1        ; &PROC2_UID[that index]
+ *   00e735aa  move.l (A1)+,(0xbc,A2)
+ *   00e735ae  move.l (A1)+,(0xc0,A2)
+ *   00e735b2  tst.w (-0xbe,A3)            ; entry->debugger_idx (+0x26)
+ *   00e735b6  sne D1b / move.b D1b,(0x90,A2)
+ *   00e735bc  movea.l A2,A0 / moveq #0xd,D0 / lea (0x4,A0),A1
+ *   00e735c4  clr.l (-0x4,A1) / addq.l #0x4,A1 / dbf   ; 14 longs, 0x00..0x37
+ *   00e735ce  lea (0x38,A2),A4 / moveq #0xd,D0 / movea.l A4,A1 / lea (0x4,A1),A0
+ *   00e735dc  clr.l (-0x4,A0) / addq.l #0x4,A0 / dbf   ; 14 longs, 0x38..0x6F
+ *   00e735e6  movem.l (-0x20,A6),{A2 A3 A4} / unlk A6 / rts
+ *
+ * Notes:
+ *  - The creation record comes from entry+0x6C (cr_rec_2), the same pointer
+ *    PROC2_$COMPLETE_VFORK uses, not from entry+0x68.
+ *  - The "no stack file yet" test at 0x00E734B4 compares only the HIGH
+ *    longword of the UID against UID_$NIL.
+ *  - PROC2_UID at 0x00E735A6 is indexed by entry+0x1E, while the boolean
+ *    written to cr_rec+0x90 comes from entry+0x26.  Both reproduced as found.
  */
 
 #include "proc2/proc2_internal.h"
 
 /*
- * Creation record structure (partial - offsets determined from decompilation)
- * This structure is pointed to by proc2_info_t.cr_rec and contains
- * process creation and accounting information.
+ * The two by-reference constants MST_$MAP_AREA_AT is called with
+ * (`pea (0x11a,PC)` twice at 0x00E734D4 / 0x00E734D8).  They sit in the
+ * PROC2 code region just past the end of this function.
+ *
+ * MST_$MAP_AREA_AT reads its third argument as a longword
+ * (`movea.l (0x10,A6),A0 / move.l (A0),-(SP)` at 0x00E43C24) and its
+ * fourth as a single boolean byte (`move.b (A4),-(SP)` at 0x00E43C22 and
+ * `tst.b (A4)` / `bpl` at 0x00E43C4E), which is why only the first of the
+ * four bytes at 0x00E735F0 (0xFF 0x00 0x20 0x48) matters.
+ */
+static const uint32_t proc2_$map_area_size_00e735f4 = 0x00004000;
+static const int8_t proc2_$map_area_true_00e735f0 = (int8_t)0xFF;
+
+/*
+ * Creation record structure (partial - offsets determined from the
+ * disassembly).  It is reached through proc2_info_t.cr_rec_2 (entry+0x6C)
+ * and holds process creation and accounting information.
  */
 typedef struct cr_rec_t {
-    uint32_t    fields_0x00[0x1d];  /* 0x00-0x73: Various fields */
+    uint32_t    fields_0x00[0x1d];  /* 0x00-0x73: cleared by the two dbf loops */
     uint32_t    field_74;           /* 0x74: CPU time related */
     uint16_t    field_78;           /* 0x78: CPU time related */
+    uint16_t    pad_7a;             /* 0x7A: alignment hole */
     uint32_t    field_7c;           /* 0x7C: Timing */
     uint32_t    field_80;           /* 0x80: Timing */
     uint32_t    field_84;           /* 0x84: Timing */
     uint8_t     field_88;           /* 0x88: Flag byte */
     uint8_t     field_89;           /* 0x89: Flag byte */
-    uint32_t    field_8a;           /* 0x8A: CPU usage */
-    uint16_t    field_8e;           /* 0x8E: CPU usage */
-    uint8_t     field_90;           /* 0x90: Flag */
+    uint8_t     field_8a[4];        /* 0x8A: CPU usage.  Declared as bytes so
+                                     * that the 0x8A offset survives on a
+                                     * host where uint32_t wants 4-byte
+                                     * alignment; m68k needs only 2. */
+    uint8_t     field_8e[2];        /* 0x8E: CPU usage */
+    uint8_t     field_90;           /* 0x90: TRUE when entry->debugger_idx != 0 */
     uint8_t     pad_91[3];          /* 0x91: Padding */
     status_$t   status;             /* 0x94: Status */
-    uid_t      proc_uid;           /* 0x98: Process UID */
-    uid_t      parent_uid;         /* 0xA0: Parent UID */
-    uid_t      stack_uid;          /* 0xA8: Stack file UID */
-    uint32_t    addr_lo;            /* 0xB0: Stack address low */
-    uint32_t    size;               /* 0xB4: Stack size */
-    uint32_t    field_b8;           /* 0xB8: Parent upid */
-    uid_t      debugger_uid;       /* 0xBC: Debugger UID */
+    uid_t       proc_uid;           /* 0x98: Process UID */
+    uid_t       parent_uid;         /* 0xA0: Parent UID */
+    uid_t       stack_uid;          /* 0xA8: Stack file UID */
+    uint32_t    addr_lo;            /* 0xB0: Stack file low address */
+    uint32_t    size;               /* 0xB4: Stack file size */
+    int32_t     field_b8;           /* 0xB8: entry->upid, sign-extended */
+    uid_t       debugger_uid;       /* 0xBC: PROC2_UID[entry->parent_pgroup_idx] */
     uint8_t     pad_c4;             /* 0xC4: Padding */
-    uint8_t     flags_c5;           /* 0xC5: Flags byte */
+    uint8_t     flags_c5;           /* 0xC5: Flags byte (bit 3 gates 0xBC) */
     uint16_t    count_c6;           /* 0xC6: Counter (set to 1) */
     uint8_t     field_c8;           /* 0xC8: Field */
 } cr_rec_t;
+
+_Static_assert(__builtin_offsetof(cr_rec_t, field_74) == 0x74, "cr_rec_t.field_74");   /* 0x00E73578 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_78) == 0x78, "cr_rec_t.field_78");   /* 0x00E7357C */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_7c) == 0x7C, "cr_rec_t.field_7c");   /* 0x00E73580 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_80) == 0x80, "cr_rec_t.field_80");   /* 0x00E73584 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_84) == 0x84, "cr_rec_t.field_84");   /* 0x00E73586 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_8a) == 0x8A, "cr_rec_t.field_8a");
+_Static_assert(__builtin_offsetof(cr_rec_t, field_90) == 0x90, "cr_rec_t.field_90");   /* 0x00E7358A */
+_Static_assert(__builtin_offsetof(cr_rec_t, status) == 0x94, "cr_rec_t.status");       /* 0x00E734CC */
+_Static_assert(__builtin_offsetof(cr_rec_t, proc_uid) == 0x98, "cr_rec_t.proc_uid");   /* 0x00E7354E */
+_Static_assert(__builtin_offsetof(cr_rec_t, parent_uid) == 0xA0, "cr_rec_t.parent_uid"); /* 0x00E73564 */
+_Static_assert(__builtin_offsetof(cr_rec_t, stack_uid) == 0xA8, "cr_rec_t.stack_uid"); /* 0x00E734FE */
+_Static_assert(__builtin_offsetof(cr_rec_t, addr_lo) == 0xB0, "cr_rec_t.addr_lo");     /* 0x00E734BC */
+_Static_assert(__builtin_offsetof(cr_rec_t, size) == 0xB4, "cr_rec_t.size");           /* 0x00E734C4 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_b8) == 0xB8, "cr_rec_t.field_b8");   /* 0x00E7355C */
+_Static_assert(__builtin_offsetof(cr_rec_t, debugger_uid) == 0xBC, "cr_rec_t.debugger_uid"); /* 0x00E735AA */
+_Static_assert(__builtin_offsetof(cr_rec_t, flags_c5) == 0xC5, "cr_rec_t.flags_c5");   /* 0x00E73598 */
+_Static_assert(__builtin_offsetof(cr_rec_t, count_c6) == 0xC6, "cr_rec_t.count_c6");   /* 0x00E73592 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_c8) == 0xC8, "cr_rec_t.field_c8");   /* 0x00E7358E */
 
 void PROC2_$SET_VALID(void)
 {
@@ -51,70 +159,65 @@ void PROC2_$SET_VALID(void)
     proc2_info_t *entry;
     cr_rec_t *cr_rec;
     uid_t *stack_uid_ptr;
-    status_$t status;
+    uint32_t *clear_ptr;
+    int i;
 
-    /* Get current process's table entry */
-    current_idx = P2_PID_TO_INDEX(PROC1_$CURRENT);
+    /* 0x00E7348C-0x00E734A8 */
+    current_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
     entry = P2_INFO_ENTRY(current_idx);
 
-    /* Get creation record pointer */
-    cr_rec = (cr_rec_t *)entry->cr_rec;
+    /* 0x00E734AC: the record hangs off entry+0x6C, not entry+0x68 */
+    cr_rec = (cr_rec_t *)entry->cr_rec_2;
 
-    /* Get stack UID pointer (entry offset 0xDC) */
+    /* 0x00E734B0: &entry->stack_uid (entry+0xDC) */
     stack_uid_ptr = &entry->stack_uid;
 
     /*
-     * If stack UID is nil, need to map the stack area
+     * 0x00E734B4: only the HIGH longword is compared against UID_$NIL.
      */
-    if (stack_uid_ptr->high == UID_$NIL.high && stack_uid_ptr->low == UID_$NIL.low) {
-        /* Initialize stack mapping parameters in creation record */
+    if (stack_uid_ptr->high == UID_$NIL.high) {
+        /* 0x00E734BC / 0x00E734C4 */
         cr_rec->addr_lo = AS_$STACK_FILE_LOW;
         cr_rec->size = AS_$INIT_STACK_FILE_SIZE;
 
-        /* Map the stack area */
+        /* 0x00E734E4 */
         MST_$MAP_AREA_AT(&cr_rec->addr_lo, &cr_rec->size,
-                         NULL, NULL,  /* Two parameters from PC-relative data */
+                         (void *)&proc2_$map_area_size_00e735f4,
+                         (void *)&proc2_$map_area_true_00e735f0,
                          stack_uid_ptr, &cr_rec->status);
 
-        /* If mapping failed, delete the process */
+        /* 0x00E734EE: any non-zero status is fatal here */
         if (cr_rec->status != status_$ok) {
             PROC2_$DELETE();
-            /* Does not return */
+            /* does not return */
         }
 
-        /* Copy stack UID to creation record */
-        cr_rec->stack_uid.high = stack_uid_ptr->high;
-        cr_rec->stack_uid.low = stack_uid_ptr->low;
+        /* 0x00E734FA */
+        cr_rec->stack_uid = *stack_uid_ptr;
     }
 
-    /* Set the valid bit under lock */
+    /* 0x00E73506-0x00E73520 */
     ML_$LOCK(PROC2_LOCK_ID);
-    entry->flags |= 0x0080;  /* Set valid bit */
+    entry->flags |= 0x0080;          /* bset.b #0x7,(-0xb9,A3) */
     ML_$UNLOCK(PROC2_LOCK_ID);
 
-    /*
-     * If ORPHAN flag is set but not ALT_ASID flag, initialize creation record
-     * This happens for newly forked processes that need to set up their
-     * creation record with parent process information.
-     */
+    /* 0x00E7352C / 0x00E73534 */
     if ((entry->flags & PROC2_FLAG_ORPHAN) != 0 &&
         (entry->flags & PROC2_FLAG_ALT_ASID) == 0) {
 
-        /* Set process UID from PROC2_UID table using PROC1_$AS_ID */
-        cr_rec->proc_uid.high = PROC2_UID[PROC1_$AS_ID].high;
-        cr_rec->proc_uid.low = PROC2_UID[PROC1_$AS_ID].low;
+        /* 0x00E7354E */
+        cr_rec->proc_uid = PROC2_UID[PROC1_$AS_ID];
 
-        /* Set parent upid */
-        cr_rec->field_b8 = entry->upid;
+        /* 0x00E73556: ext.l -- the upid is sign-extended into a longword */
+        cr_rec->field_b8 = (int32_t)(int16_t)entry->upid;
 
-        /* Copy parent UID from entry */
-        /* TODO(source-ld0): entry offset for parent_uid needs verification */
+        /* 0x00E73564 */
+        cr_rec->parent_uid = entry->parent_uid;
 
-        /* Copy stack UID */
-        cr_rec->stack_uid.high = stack_uid_ptr->high;
-        cr_rec->stack_uid.low = stack_uid_ptr->low;
+        /* 0x00E73570 */
+        cr_rec->stack_uid = *stack_uid_ptr;
 
-        /* Clear various fields */
+        /* 0x00E73578-0x00E73592 */
         cr_rec->field_74 = 0;
         cr_rec->field_78 = 0;
         cr_rec->field_7c = 0;
@@ -124,26 +227,31 @@ void PROC2_$SET_VALID(void)
         cr_rec->field_c8 = 0;
         cr_rec->count_c6 = 1;
 
-        /* Set debugger UID if debug flag set */
+        /* 0x00E73598: btst.b #0x3,(0xc5,A2) */
         if ((cr_rec->flags_c5 & 0x08) != 0) {
-            /* PROC2_UID table indexed by debugger_idx (0xE7BE94 + idx * 8) */
-            cr_rec->debugger_uid.high = PROC2_UID[entry->debugger_idx].high;
-            cr_rec->debugger_uid.low = PROC2_UID[entry->debugger_idx].low;
+            /* 0x00E735A0: indexed by entry+0x1E, not by the debugger index */
+            cr_rec->debugger_uid = PROC2_UID[entry->parent_pgroup_idx];
         }
 
-        /* Set flag based on session_id being non-zero */
-        cr_rec->field_90 = (entry->session_id != 0) ? 0xFF : 0x00;
+        /* 0x00E735B2: sne on entry+0x26 */
+        cr_rec->field_90 = (entry->debugger_idx != 0) ? 0xFF : 0x00;
 
-        /* Clear first 14 longwords of creation record */
-        uint32_t *ptr = (uint32_t *)cr_rec;
-        for (int i = 0; i < 14; i++) {
-            ptr[i] = 0;
+        /*
+         * 0x00E735BC: moveq #0xd + dbf = 14 longwords from cr_rec+0x00,
+         * i.e. offsets 0x00..0x37.
+         */
+        clear_ptr = (uint32_t *)cr_rec;
+        for (i = 0; i < 14; i++) {
+            clear_ptr[i] = 0;
         }
 
-        /* Clear longwords at offset 0x3C-0x70 (14 more longwords) */
-        ptr = (uint32_t *)((char *)cr_rec + 0x3C);
-        for (int i = 0; i < 14; i++) {
-            ptr[i] = 0;
+        /*
+         * 0x00E735CE: a second 14-longword clear starting at cr_rec+0x38,
+         * i.e. offsets 0x38..0x6F.
+         */
+        clear_ptr = (uint32_t *)((uint8_t *)cr_rec + 0x38);
+        for (i = 0; i < 14; i++) {
+            clear_ptr[i] = 0;
         }
     }
 }

@@ -632,9 +632,16 @@ typedef struct ast_$common_attr_t {
                                  *      the cached and the freshly read value
                                  *      (0x00E048F0-0x00E04918), so it only
                                  *      ever grows.
-                                 *      TODO: how this relates to aote+0x28's
-                                 *      48-bit length (attributes 9/0x17/0x1A)
-                                 *      is not yet established. */
+                                 *      It is a DIFFERENT field from the
+                                 *      48-bit length at aote+0x28/+0x2C
+                                 *      (attributes 9/0x17/0x1A): the merge at
+                                 *      0x00E048F0-0x00E04918 keeps the larger
+                                 *      of the two 32-bit values across the
+                                 *      0x90-byte attribute refresh, so
+                                 *      aote+0x20 only ever grows, and no case
+                                 *      in AST_$SET_ATTR_DISPATCH (0x00E04B00)
+                                 *      writes it.  Which of the two is
+                                 *      authoritative is bead source-traa. */
     uid_t       mod_time;       /* 0x08 <- aote+0x48, attribute 5 */
     uint32_t    blocks;         /* 0x10 <- aote+0x50, attribute 0x0B
                                  *      (0x00E04A36-0x00E04A42 copies 12 bytes
@@ -785,7 +792,18 @@ void AST_$GET_SEG_MAP(uid_t *uid, uint32_t start_offset,
 /*
  * Function prototypes - Page allocation
  */
-int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array);
+/*
+ * ast_$allocate_pages - allocate `count` physical pages
+ *
+ * Three Pascal parameters, not two: `move.w (0x8,A6),D2w` at 0x00E00D4E
+ * takes the requested count, `cmp.w (0xa,A6),D0w` at 0x00E00E56 compares
+ * the running total against a SECOND word (the minimum that must be
+ * obtained before the routine stops waking the purifier), and
+ * `movea.l (0xc,A6),A4` at 0x00E00D52 takes the array.  Every caller in
+ * the image pushes (count, 1, ppn_array).
+ */
+int16_t ast_$allocate_pages(int16_t count, int16_t min_count,
+                            uint32_t *ppn_array);
 
 /*
  * Function prototypes - Maintenance

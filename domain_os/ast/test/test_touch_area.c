@@ -161,10 +161,16 @@ void ast_$wait_for_page_transition(void)
     }
 }
 
-int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
+int16_t ast_$allocate_pages(int16_t count, int16_t min_count,
+                            uint32_t *ppn_array)
 {
     mock_alloc_calls++;
-    mock_alloc_arg = count_flags;
+    /*
+     * The two word arguments as the original pushes them: count at
+     * (0x8,A6) and the minimum at (0xa,A6), i.e. the high and low halves
+     * of the longword the tests used to check.
+     */
+    mock_alloc_arg = ((uint32_t)(uint16_t)count << 16) | (uint16_t)min_count;
     ppn_array[0] = mock_alloc_ppn;
     return mock_alloc_result;
 }

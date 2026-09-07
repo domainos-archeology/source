@@ -134,8 +134,16 @@ void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count, status_$
                 segmap_ptr++;
             }
 
-            /* Check if we've processed all pages in range */
-            /* TODO(source-22c): Complete bounds checking logic */
+            /*
+             * TODO(source-22c): the loop-continuation test of AST_$RESERVE
+             * (0x00E0677E, 588 bytes) is not decompiled -- this
+             * unconditional `break` stands in for it, so at most one run of
+             * pages is ever reserved per segment.  Missing: the comparison
+             * of the advanced segment-map pointer against the end of the
+             * requested range and the branch back to the run scan.
+             * Tracked by bead source-22c ("Complete AST subsystem logic
+             * (purification, truncation, bounds checking)").
+             */
             break;
         }
 

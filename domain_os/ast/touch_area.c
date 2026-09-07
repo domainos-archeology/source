@@ -169,7 +169,7 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
          * ------------------------------------------------------------------
          */
         *segmap |= SEGMAP_L_IN_TRANS;
-        ast_$allocate_pages(0x10001, ppn_array);           /* 0x00E00D46 */
+        ast_$allocate_pages(1, 1, ppn_array);              /* 0x00E00D46 */
         ZERO_PAGE(ppn_array[0]);                           /* 0x00E00EB0 */
         log_op = 8;                                        /* 0x00E0363C */
         req.uid.high = ANON_$UID.high;                     /* 0x00E03642 */
@@ -193,11 +193,9 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
             req.uid.high = ANON_$UID.high;                 /* 0x00E0368C */
             req.uid.low  = (uint32_t)(uint16_t)entry->remote_volx;
 
-            /* 0x00E0369E: the two D3 word pushes form the longword
-             * (pages_marked << 16) | pages_marked, i.e. 0x00010001. */
-            ast_$allocate_pages(((uint32_t)(uint16_t)pages_marked << 16) |
-                                    (uint32_t)(uint16_t)pages_marked,
-                                ppn_array);
+            /* 0x00E0369E: two D3 word pushes -- count and min_count are
+             * both pages_marked. */
+            ast_$allocate_pages(pages_marked, pages_marked, ppn_array);
             NETBUF_$RTN_DAT(ppn_array[0] << 10);           /* 0x00E0F046 */
             ML_$UNLOCK(PMAP_LOCK_ID);                      /* 0x00E036C0 */
 
@@ -257,10 +255,8 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
                 }
             }
 
-            /* 0x00E0376E: arg1 = (pages_marked << 16) | 1 */
-            alloc_count =
-                ast_$allocate_pages(((uint32_t)(uint16_t)pages_marked << 16) | 1,
-                                    ppn_array);
+            /* 0x00E0376E: count = pages_marked, min_count = 1 */
+            alloc_count = ast_$allocate_pages(pages_marked, 1, ppn_array);
             ML_$UNLOCK(PMAP_LOCK_ID);                      /* 0x00E03780 */
 
             DISK_$GET_QBLKS(alloc_count, &qblk_head, &qblk_tail);

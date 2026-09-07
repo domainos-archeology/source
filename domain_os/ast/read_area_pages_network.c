@@ -20,8 +20,29 @@
 
 #include "ast/ast_internal.h"
 
-/* Logging function stub */
-static void FUN_00e02c52(int16_t count, int8_t zero_flag);
+/*
+ * ast_$read_area_pages_net_log - the nested NETLOG helper at 0x00E02C52
+ *                                (84 bytes)
+ *
+ * Two stack arguments of its own -- a word count at (0x8,A6) and a boolean
+ * byte at (0xa,A6) -- plus two of this function's arguments reached through
+ * the static link (`movea.l (A6),A2` at 0x00E02C5E):
+ *
+ *   00e02c5a  move.b (0xa,A6),D0b / bpl.b 0x00e02c6a
+ *   00e02c62  move.w #0x8,(-0xa,A6)      ; zero flag TRUE  -> kind 8
+ *   00e02c6a  move.w #0x9,(-0xa,A6)      ; otherwise       -> kind 9
+ *   00e02c72  clr.w -(SP)                ; p8 = 0
+ *   00e02c74  move.w (0x8,A6),-(SP)      ; p7 = count
+ *   00e02c78  clr.l -(SP)                ; p5 = p6 = 0
+ *   00e02c7a  move.w (0x14,A2),-(SP)     ; p4 = the parent's start_page
+ *   00e02c82  move.w (0xc,A0),-(SP)      ; p3 = aste->timestamp
+ *   00e02c8e  pea (0x10,A4)              ; p2 = &aote->uid
+ *   00e02c92  move.w (-0xa,A6),-(SP)     ; p1 = the kind chosen above
+ *   00e02c96  jsr 0x00e71b38.l           ; NETLOG_$LOG_IT
+ */
+static void ast_$read_area_pages_net_log(int16_t count, int8_t zero_flag,
+                                         const aste_t *aste,
+                                         uint16_t start_page);
 
 /* Process page read statistics - PROC1_$CURRENT from proc1.h via ast_internal.h */
 #if defined(ARCH_M68K)
@@ -67,7 +88,7 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
     aote = *((aote_t **)((char *)aste + 0x04));
 
     /* Allocate pages - count_flags = (count << 16) | flags */
-    allocated = ast_$allocate_pages(((uint32_t)count << 16) | 1, ppn_array);
+    allocated = ast_$allocate_pages(count, 1, ppn_array);
 
     /* Check and clear read-ahead disable flag */
     aote_flags = *((uint16_t *)((char *)aote + 0xBE));
@@ -171,7 +192,7 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
 
     /* Log if enabled */
     if (NETLOG_$OK_TO_LOG < 0) {
-        FUN_00e02c52(pages_read, zero_flag);
+        ast_$read_area_pages_net_log(pages_read, zero_flag, aste, start_page);
     }
 
 done:
@@ -181,10 +202,18 @@ done:
     return pages_read;
 }
 
-/* Stub for logging function */
-static void FUN_00e02c52(int16_t count, int8_t zero_flag)
+static void ast_$read_area_pages_net_log(int16_t count, int8_t zero_flag,
+                                         const aste_t *aste,
+                                         uint16_t start_page)
 {
-    /* TODO(source-qvt): Implement network logging */
-    (void)count;
-    (void)zero_flag;
+    /* 0x00E02C5A: a Domain boolean -- TRUE is negative */
+    uint16_t kind = (zero_flag < 0) ? 8 : 9;
+
+    /* 0x00E02C96 */
+    NETLOG_$LOG_IT(kind, &aste->aote->uid.high,
+                   aste->timestamp,
+                   start_page,
+                   0, 0,
+                   (uint16_t)count,
+                   0);
 }

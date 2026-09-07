@@ -29,12 +29,15 @@
  * Original address: 0x00E12D84
  * Size: 218 bytes
  *
- * TODO(source-8ir): Implement fully - requires proper abstractions for:
- * - Page frame table (PMAPE) at 0xEB4800
- * - MMAPE table at 0xEC5400
- * - Physical map at 0xED5000
- * - Hardware page table at 0xFFB800
- * These are all m68k-specific memory-mapped structures.
+ * TODO(source-8ir): pmap_$write_complete (0x00E12D84, 218 bytes) is not yet
+ * decompiled; the file below has no function body at all, so the symbol is
+ * currently supplied by nothing and every basic block listed above is
+ * missing.  What it needs first is portable accessors for the four
+ * m68k-specific tables it walks -- the page frame table (PMAPE) at
+ * 0xEB4800 with its 0x10 stride, the MMAPE table at 0xEC5400 with its 0x14
+ * stride, the physical map at 0xED5000, and the hardware page table at
+ * 0xFFB800 indexed by vpn*4.  Tracked by bead source-8ir
+ * ("Implement pmap_$write_complete (0xE12D84)").
  */
 
 #include "pmap/pmap_internal.h"

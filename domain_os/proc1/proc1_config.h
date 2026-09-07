@@ -17,11 +17,11 @@
  * These values apply to the SAU2 (System Architecture Unit type 2)
  * which is the Apollo DN3000/DN4000/DN4500 series.
  *
- * TODO(source-qvt): Add #if blocks for other SAU types when they are analyzed:
- *   - SAU3: DN10000
- *   - SAU5: DSP series
- *   - SAU7: DN5500/DN10000VS
- *   - SAU8: Series 400
+ * Only SAU2 is present in the image being archived, so there is nothing to
+ * conditionalise: every constant below was read out of the SAU2 binary.  If
+ * another SAU's kernel is ever analysed (SAU3 DN10000, SAU5 DSP series,
+ * SAU7 DN5500/DN10000VS, SAU8 Series 400) its values belong in a sibling
+ * header selected by TARGET_SAU, not in #if blocks here.
  */
 
 /*

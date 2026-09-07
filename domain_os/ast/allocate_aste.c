@@ -86,8 +86,15 @@ aste_t* AST_$ALLOCATE_ASTE(void)
 
     AST_$ASTE_SCAN_POS = scan_pos;
 
-    /* Try the candidates we found */
-    for (pass = 1; pass >= 0; pass--) {
+    /*
+     * Try the candidates we found.
+     *
+     * 0x00E01FDE: `lea (0x4,A6),A3` then `movea.l (-0xc,A3),A2` reads
+     * A6-0x8 first -- candidate[0], the one with the LOWEST page count --
+     * and `addq.l #0x4,A3` moves on to A6-0x4 = candidate[1].  The order
+     * is ascending, not descending.
+     */
+    for (pass = 0; pass <= 1; pass++) {
         if (candidate[pass] != NULL) {
             aste = try_free_aste(candidate[pass], &status);
             if (status == status_$ok) {
@@ -140,14 +147,22 @@ done:
 /*
  * try_free_aste - Try to free an ASTE for reuse
  *
- * Internal helper that attempts to release pages and free an ASTE.
- * Returns the ASTE on success, NULL on failure.
+ * Not a routine in the original: all three sites emit the same four
+ * instructions inline, e.g. at 0x00E01F82
+ *
+ *   pea (-0xc,A6)     ; &status
+ *   clr.l -(SP)       ; flags = 0
+ *   pea (A2)          ; aste
+ *   bsr.w 0x00e01950  ; AST_$DEACTIVATE_SEGMENT
+ *   lea (0xc,SP),SP
+ *   tst.l (-0xc,A6)   ; success is status == 0
+ *
+ * (the other two are at 0x00E01FEC and 0x00E0203C).  Factored out here so
+ * the three call sites stay identical.
  */
 static aste_t* try_free_aste(aste_t *aste, status_$t *status)
 {
-    /* TODO(source-mpj): Implement page release logic */
-    /* This function needs to release any pages held by the ASTE
-     * and return it for reuse */
-    *status = status_$ok;
-    return aste;
+    AST_$DEACTIVATE_SEGMENT(aste, 0, status);
+
+    return (*status == status_$ok) ? aste : NULL;
 }

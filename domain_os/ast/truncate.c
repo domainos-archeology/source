@@ -85,13 +85,22 @@ retry_loop:
     /* Get current file size */
     uint32_t current_size = *(uint32_t *)((char *)aote + 0x20);
 
+    /*
+     * TODO(source-22c): the two size-change bodies of AST_$TRUNCATE
+     * (0x00E05C40, 1722 bytes) are not decompiled.  Missing on the
+     * shrink path: the walk over the segments beyond the new end of file
+     * that deactivates or flushes each ASTE, frees its pages through
+     * AST_$FREE_PAGES and releases the disk blocks through the BAT; and on
+     * the grow path (taken only when `extend` is TRUE): the block
+     * allocation and the segment-map fill-in.  Only the AOTE length store
+     * and the dirty marking below are present.  Tracked by bead source-22c
+     * ("Complete AST subsystem logic (purification, truncation, bounds
+     * checking)").
+     */
     if (new_size < current_size) {
-        /* Truncating - free pages beyond new size */
-        /* TODO(source-22c): Implement page freeing logic */
-        /* This involves iterating through segments and freeing pages */
+        /* shrink: page-freeing body not decompiled (see above) */
     } else if (new_size > current_size && extend < 0) {
-        /* Extending - may need to allocate disk blocks */
-        /* TODO(source-22c): Implement extension logic */
+        /* grow: block-allocation body not decompiled (see above) */
     }
 
     /* Update file size */

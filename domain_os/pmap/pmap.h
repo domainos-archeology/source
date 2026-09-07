@@ -77,12 +77,12 @@ extern uint32_t DAT_00e23320;            /* Impure pages flag */
  */
 
 /*
- * Internal helper functions
+ * Internal helper functions.
+ *
+ * pmap_$write_page, pmap_$update_seg_map and pmap_$flush_write_batch are
+ * PMAP-private (the latter two are nested procedures of PMAP_$FLUSH);
+ * their prototypes live in pmap/pmap_internal.h.
  */
-extern void pmap_$write_page(uint32_t ppn, status_$t *status, int8_t flags);
-extern void pmap_$update_seg_map(uint16_t *segmap, uint32_t ppn, uint16_t page);
-extern void pmap_$flush_write_batch(int16_t *batch_count_p, uint32_t *batch_vpns,
-                                     uint32_t *segmap, status_$t *status);
 
 /*
  * Error strings

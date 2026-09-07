@@ -28,8 +28,33 @@
 /* Status codes */
 #define status_$ast_segment_not_deactivatable 0x00030004
 
-/* Internal helper for logging */
-static void FUN_00e01872(int16_t seg_addr);
+/*
+ * ast_$deactivate_segment_log - the nested NETLOG helper at 0x00E01872
+ *                               (222 bytes)
+ *
+ * One stack argument of its own -- the address of this segment's 32-entry
+ * row in the segment map (`pea (-0x80,A3)` at 0x00E019D4, where A3 is
+ * 0xED5000 + seg_index*0x80, so the row base is 0xED4F80 + seg*0x80).  It
+ * reaches this function's `aste` argument through the static link
+ * (`move.l (A6),D3` at 0x00E0187A, then `movea.l (0x8,A0),A2`), which is
+ * passed explicitly here.
+ *
+ *   00e01884  tst.b (0x10,A2) / beq       ; skip the scan if page_count == 0
+ *   00e01890  jsr 0x00e20b12.l            ; ML_$LOCK(0x14)
+ *   00e01898  moveq #0x1f,D0              ; 32 segment-map entries
+ *   00e018a8  move.w (A0),D1w / btst.l #0xe,D1   ; entry installed?
+ *   00e018b0  move.w (0x2,A0),D1w / lsl.w #0x2   ; ppn * 4
+ *   00e018b6  move.w (0x2,A2,D1w),D4w     ; the PTE's second word
+ *   00e018ba  btst.l #0xd,D4 / beq        ; PMAPE_FLAG_REFERENCED
+ *   00e018c0  addq.w #0x1,D2w
+ *   00e018ce  jsr 0x00e20b62.l            ; ML_$UNLOCK(0x14)
+ *   00e018e0  btst.l #0xc,D0              ; aste->flags & 0x1000
+ *   00e018e6  set:   {ANON_$UID.high, (uint16_t)aote+0x2A}
+ *   00e01902  clear: the eight bytes at aote+0xA4
+ *   00e01940  jsr 0x00e71b38.l            ; NETLOG_$LOG_IT, kind 1
+ */
+static void ast_$deactivate_segment_log(const aste_t *aste,
+                                        const uint32_t *segmap_row);
 
 void AST_$DEACTIVATE_SEGMENT(aste_t *aste, uint32_t flags, status_$t *status)
 {
@@ -75,9 +100,13 @@ void AST_$DEACTIVATE_SEGMENT(aste_t *aste, uint32_t flags, status_$t *status)
     /* Calculate segment map offset */
     segmap_offset = (uint32_t)aste->seg_index * 0x80;
 
-    /* Log if enabled */
+    /*
+     * Log if enabled.  0x00E019D4 passes the row base, which is
+     * SEGMAP_BASE (0xED4F80) + seg_index * 0x80, i.e. a 32-entry row.
+     */
     if (NETLOG_$OK_TO_LOG < 0) {
-        FUN_00e01872((int16_t)segmap_offset + 0x4F80);
+        ast_$deactivate_segment_log(
+            aste, (const uint32_t *)(SEGMAP_BASE + segmap_offset));
     }
 
     /* Release AST lock for I/O */
@@ -149,9 +178,55 @@ error_exit:
     EC_$ADVANCE(&AST_$AST_IN_TRANS_EC);
 }
 
-/* Stub for internal logging function */
-static void FUN_00e01872(int16_t seg_addr)
+static void ast_$deactivate_segment_log(const aste_t *aste,
+                                        const uint32_t *segmap_row)
 {
-    /* TODO(source-mpj): Implement segment deactivation logging */
-    (void)seg_addr;
+    const aote_t *aote = aste->aote;
+    uint32_t log_uid[2];
+    int16_t referenced = 0;
+    int i;
+
+    /* 0x00E01884: nothing to count if the segment has no pages */
+    if (aste->page_count != 0) {
+        /* 0x00E01890 */
+        ML_$LOCK(PMAP_LOCK_ID);
+
+        for (i = 0; i < 32; i++) {
+            uint32_t entry = segmap_row[i];
+
+            /* 0x00E018AA: btst.l #0xe on the entry's HIGH word */
+            if ((entry & 0x40000000u) != 0) {
+                /* 0x00E018B0: the low word is the PPN */
+                uint16_t ppn = (uint16_t)entry;
+
+                /* 0x00E018B6/0x00E018BA: the PTE's second word, bit 13 */
+                if ((PMAPE_FOR_VPN(ppn)[1] & PMAPE_FLAG_REFERENCED) != 0) {
+                    referenced++;
+                }
+            }
+        }
+
+        /* 0x00E018CE */
+        ML_$UNLOCK(PMAP_LOCK_ID);
+    }
+
+    /* 0x00E018E0: btst.l #0xc on aste->flags */
+    if ((aste->flags & 0x1000) != 0) {
+        /* 0x00E018E6: only the FIRST longword of ANON_$UID is copied */
+        log_uid[0] = ANON_$UID.high;
+        /* 0x00E018F8: a zero-extended word from aote+0x2A */
+        log_uid[1] = (uint32_t)(uint16_t)((aote->len_high) & 0xFFFF);
+    } else {
+        /* 0x00E0190E: the eight bytes at aote+0xA4 */
+        log_uid[0] = aote->unknown_a4[0];
+        log_uid[1] = aote->unknown_a4[1];
+    }
+
+    /* 0x00E01940 */
+    NETLOG_$LOG_IT(1, log_uid,
+                   aste->timestamp,
+                   aste->page_count,
+                   aste->seg_index,
+                   0, 0,
+                   (uint16_t)referenced);
 }

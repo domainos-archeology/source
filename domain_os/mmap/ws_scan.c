@@ -154,16 +154,20 @@ uint32_t MMAP_$WS_SCAN(uint16_t wsl_index, int16_t mode, uint32_t pages_needed, 
 
     /* Move collected pages to their respective free lists */
     if (free_list != 0) {
-        mmap_$move_pages_to_wsl_type(free_list, MMAP_PAGE_TYPE_IMPURE);
+        mmap_$move_pages_to_wsl_type(free_list, MMAP_PAGE_TYPE_IMPURE,
+                                     wsl_index, mode);
     }
     if (pure_list != 0) {
-        mmap_$move_pages_to_wsl_type(pure_list, MMAP_PAGE_TYPE_PURE);
+        mmap_$move_pages_to_wsl_type(pure_list, MMAP_PAGE_TYPE_PURE,
+                                     wsl_index, mode);
     }
     if (dirty_nf_list != 0) {
-        mmap_$move_pages_to_wsl_type(dirty_nf_list, MMAP_PAGE_TYPE_DIRTY_NF);
+        mmap_$move_pages_to_wsl_type(dirty_nf_list, MMAP_PAGE_TYPE_DIRTY_NF,
+                                     wsl_index, mode);
     }
     if (dirty_fl_list != 0) {
-        mmap_$move_pages_to_wsl_type(dirty_fl_list, MMAP_PAGE_TYPE_DIRTY_FL);
+        mmap_$move_pages_to_wsl_type(dirty_fl_list, MMAP_PAGE_TYPE_DIRTY_FL,
+                                     wsl_index, mode);
     }
 
     return scanned;

@@ -133,6 +133,17 @@ static status_$t mock_write_multi_result;
 static int mock_write_complete_count;
 static int32_t mock_write_complete_vpns[MAX_QBLKS];
 
+/*
+ * PMAP_$FLUSH's own aste/flags arguments, forwarded through the batch.
+ * aste_t is opaque here: pmap_$flush_write_batch only passes the pointer
+ * (and the flags word) on to pmap_$update_seg_map, exactly as the original
+ * forwards its static link in A1.
+ */
+typedef struct aste_t aste_t;
+
+static aste_t *const mock_aste = (aste_t *)0x12345678u;
+static const uint16_t mock_flush_flags = 0x0001;
+
 static int mock_update_seg_map_count;
 static uint32_t mock_update_seg_map_vpns[MAX_QBLKS];
 static uint16_t mock_update_seg_map_pages[MAX_QBLKS];
@@ -259,7 +270,10 @@ void pmap_$write_complete(int32_t vpn, void *status_ptr) {
     mock_write_complete_count++;
 }
 
-void pmap_$update_seg_map(uint16_t *segmap_entry, uint32_t vpn, uint16_t page_idx) {
+void pmap_$update_seg_map(aste_t *aste, uint16_t flags,
+                          uint32_t *segmap_entry, uint32_t vpn,
+                          uint16_t page_idx) {
+    (void)aste; (void)flags; (void)segmap_entry;
     if (mock_update_seg_map_count < MAX_QBLKS) {
         mock_update_seg_map_vpns[mock_update_seg_map_count] = vpn;
         mock_update_seg_map_pages[mock_update_seg_map_count] = page_idx;
@@ -325,7 +339,8 @@ TEST(single_page_success)
     setup_qblk(0, 0x300, 0);
     setup_mock_qblk_chain();
 
-    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status);
+    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
+                            mock_aste, mock_flush_flags);
 
     /* Verify unlock then lock sequence */
     ASSERT_EQ(1, mock_ml_unlock_count);
@@ -385,7 +400,8 @@ TEST(multi_page_batch)
     setup_qblk(2, 0x302, 0);
     setup_mock_qblk_chain();
 
-    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status);
+    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
+                            mock_aste, mock_flush_flags);
 
     ASSERT_EQ(3, mock_write_complete_count);
     ASSERT_EQ(3, mock_update_seg_map_count);
@@ -409,7 +425,8 @@ TEST(write_error_propagates)
     setup_qblk(1, 0x301, 0x50007);
     setup_mock_qblk_chain();
 
-    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status);
+    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
+                            mock_aste, mock_flush_flags);
 
     ASSERT_EQ(2, mock_write_complete_count);
     ASSERT_EQ(1, mock_update_seg_map_count);
@@ -428,7 +445,8 @@ TEST(write_status_minus_one_ignored)
     setup_qblk(0, 0x300, -1);
     setup_mock_qblk_chain();
 
-    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status);
+    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
+                            mock_aste, mock_flush_flags);
 
     ASSERT_EQ(1, mock_write_complete_count);
     ASSERT_EQ(0, mock_update_seg_map_count);
@@ -446,7 +464,8 @@ TEST(write_multi_failure_crashes)
     mock_write_multi_result = 0xDEAD;
     setup_mock_qblk_chain();
 
-    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status);
+    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
+                            mock_aste, mock_flush_flags);
 
     ASSERT_TRUE(mock_crash_called);
 }
@@ -460,7 +479,8 @@ TEST(empty_batch)
 
     setup_mock_qblk_chain();
 
-    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status);
+    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
+                            mock_aste, mock_flush_flags);
 
     ASSERT_EQ(1, mock_ml_unlock_count);
     ASSERT_EQ(1, mock_ml_lock_count);
@@ -485,7 +505,8 @@ TEST(netlog_when_enabled)
     setup_qblk(0, 0x300, 0);
     setup_mock_qblk_chain();
 
-    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status);
+    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
+                            mock_aste, mock_flush_flags);
 
     ASSERT_EQ(1, mock_netlog_count);
     ASSERT_EQ(3, mock_netlog_kinds[0]);
@@ -503,7 +524,8 @@ TEST(netlog_when_disabled)
     setup_qblk(0, 0x300, 0);
     setup_mock_qblk_chain();
 
-    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status);
+    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
+                            mock_aste, mock_flush_flags);
 
     ASSERT_EQ(0, mock_netlog_count);
 }
@@ -523,7 +545,8 @@ TEST(process_stats_tracking)
     setup_qblk(1, 0x301, 0);
     setup_mock_qblk_chain();
 
-    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status);
+    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
+                            mock_aste, mock_flush_flags);
 
     ASSERT_EQ(2, PROC_STATS_BASE[3 * 4 + 2]);
     ASSERT_EQ(0, PROC_STATS_BASE[0 * 4 + 2]);
@@ -541,7 +564,8 @@ TEST(lock_ordering)
     setup_qblk(0, 0x300, 0);
     setup_mock_qblk_chain();
 
-    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status);
+    pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
+                            mock_aste, mock_flush_flags);
 
     ASSERT_EQ(1, mock_ml_unlock_count);
     ASSERT_EQ(1, mock_ml_lock_count);

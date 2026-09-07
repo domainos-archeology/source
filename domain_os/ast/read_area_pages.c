@@ -45,7 +45,7 @@ int16_t ast_$read_area_pages(aste_t *aste, uint32_t *segmap, uint32_t *ppn_array
     aote = *((aote_t **)((char *)aste + 0x04));
 
     /* Allocate pages - count_flags = (count << 16) | flags */
-    allocated = ast_$allocate_pages(((uint32_t)count << 16) | 1, ppn_array);
+    allocated = ast_$allocate_pages(count, 1, ppn_array);
 
     ML_$UNLOCK(PMAP_LOCK_ID);
 

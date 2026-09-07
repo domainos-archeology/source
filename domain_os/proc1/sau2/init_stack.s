@@ -29,12 +29,13 @@
  *
  * The stack is set up as follows (growing downward):
  *   [SP+4]: entry_point - where the process starts
- *   [SP+0]: exit_handler - return address if process exits
+ *   [SP+0]: exit_handler - the address immediately after this function
  *
- * When the dispatcher does its "rts" after restoring registers,
- * it will "return" to exit_handler, which is the address
- * immediately after this function. If the process's entry_point
- * returns, it will then "return" to exit_handler.
+ * When the dispatcher does its "rts" after restoring registers, it
+ * "returns" to proc1_$process_exit_handler (0x00E20ACC) with the entry
+ * point still on the stack.  That handler sets the SR, pops the entry
+ * point and `jsr`s it, so a process body that returns normally comes back
+ * there and is unbound.
  *
  * Parameters (on stack, stdcall convention):
  *   (4,SP)  - pcb: Pointer to process control block
@@ -79,26 +80,43 @@ INIT_STACK:
         rts
 
 /*
- * exit_handler - Process exit handler
+ * proc1_$process_exit_handler - initial return address of every level-1 process
  *
- * This is the return address pushed onto the initial stack.
- * If a process's entry point returns normally, execution
- * continues here. This would typically terminate the process.
+ * This is the return address INIT_STACK pushes underneath the entry point
+ * (`lea (0x1a,PC),A1` at 0x00E20AB0).  The dispatcher resumes a brand-new
+ * process by loading pcb->save_a7 and returning, which lands here with the
+ * entry point still on the stack.
  *
- * Address: 0x00E20ACC (immediately after INIT_STACK)
+ * Address: 0x00E20ACC (22 bytes, immediately after INIT_STACK)
  *
- * TODO: Analyze what code actually exists at 0x00E20ACC
- * to determine the proper exit handling behavior.
- * For now, this is a placeholder that will trap.
+ * Original instruction bytes (0x00E20ACC..0x00E20AE1):
+ *   46 fc 20 00        move    #0x2000,SR          ; supervisor, IPL 0, CCR clear
+ *   20 5f              movea.l (A7)+,A0            ; A0 = entry point
+ *   4e 90              jsr     (A0)                ; run the process body
+ *   59 4f              subq.w  #0x4,A7             ; 4-byte status_$t slot
+ *   48 57              pea     (A7)                ; &status  (2nd argument)
+ *   3f 3a fb 2e        move.w  (-0x4d2,PC),-(SP)   ; PROC1_$CURRENT (0x00E20608)
+ *   4e b9 00 e1 4e 24  jsr     0x00E14E24.l        ; PROC1_$UNBIND(pid, &status)
+ *   4e 4f              trap    #15                 ; UNBIND must not return
+ *
+ * The SR is loaded outright rather than adjusted: a freshly dispatched
+ * process starts at IPL 0 in supervisor state with a clear condition code,
+ * regardless of what the dispatcher was running at.  If the process body
+ * ever returns, the process unbinds itself and the trap catches a return
+ * from PROC1_$UNBIND.
  */
+        .global proc1_$process_exit_handler
 exit_handler:
-        /*
-         * The original code at 0x00E20ACC needs analysis.
-         * It likely calls PROC1_$UNBIND or similar to
-         * properly terminate the process.
-         *
-         * For now, use illegal instruction to trap if reached.
-         */
-        illegal
+proc1_$process_exit_handler:
+        move.w  #0x2000,%sr             /* supervisor, IPL 0, CCR cleared */
+        movea.l (%sp)+,%a0              /* A0 = entry point pushed by INIT_STACK */
+        jsr     (%a0)                   /* run the process body */
+
+        /* The body returned: unbind this process. */
+        subq.w  #0x4,%sp                /* 4-byte status_$t result slot */
+        pea     (%sp)                   /* &status                (arg 2) */
+        move.w  (PROC1_$CURRENT:w,%pc),-(%sp)  /* 0x00E20608     (arg 1) */
+        jsr     PROC1_$UNBIND
+        trap    #15                     /* PROC1_$UNBIND does not return */
 
         .end

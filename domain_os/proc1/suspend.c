@@ -52,13 +52,28 @@ int8_t PROC1_$SUSPEND(uint16_t process_id, status_$t *status_ret)
         return result;
     }
 
-    /* Try to suspend the process */
-    /* TODO(source-22m): Need to disable interrupts here (ori #0x700,SR) */
+    /*
+     * Try to suspend the process.
+     *
+     * 0x00E14850: ori #0x700,SR -- no SR is saved.  The epilogue at
+     * 0x00E1486C does NOT lower the IPL again; PROC1_$DISPATCH
+     * (0x00E20A18, called at 0x00E1485C) is what does.
+     */
+    SET_IPL7();
+
+    /* 0x00E14854: pea (A3) / bsr.w 0x00E1471C */
     PROC1_$TRY_TO_SUSPEND(pcb);
+
+    /* 0x00E1485C: jsr 0x00E20A18 */
     PROC1_$DISPATCH();
 
-    /* Check if suspension succeeded */
+    /*
+     * 0x00E14862: btst.b #0x1,(0x55,A3) / sne D0b -- the flag byte is
+     * re-read after the dispatch, not taken from the cached copy.
+     */
     result = (pcb->pri_max & PROC1_FLAG_SUSPENDED) ? -1 : 0;
+
+    /* 0x00E1486A: clr.l (A2) */
     *status_ret = status_$ok;
 
     return result;

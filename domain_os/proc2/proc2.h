@@ -753,10 +753,13 @@ int16_t PROC2_$UID_TO_PGROUP_INDEX(uid_t *pgroup_uid);
 /*
  * PROC2_$ACKNOWLEDGE - Acknowledge signal delivery
  * Called by signal handlers after processing a signal.
- * Clears signal masks and handles job control suspension.
+ * Installs a new blocked-signal mask (proc2_info_t.sig_blocked_2, written
+ * at 0x00E3F390 and read back for result[0] at 0x00E3F4FC), clears the
+ * acknowledged signal from the per-process masks, and handles job control
+ * suspension.
  * Original address: 0x00e3f338
  */
-void PROC2_$ACKNOWLEDGE(uint32_t *handler_addr, int16_t *signal,
+void PROC2_$ACKNOWLEDGE(uint32_t *new_blocked, int16_t *signal,
                         uint32_t *result);
 
 /*

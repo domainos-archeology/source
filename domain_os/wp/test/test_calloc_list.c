@@ -2,7 +2,7 @@
  * wp/test/test_calloc_list.c - Unit tests for WP_$CALLOC_LIST
  *
  * Tests that WP_$CALLOC_LIST correctly calls ML_$LOCK, ast_$allocate_pages,
- * and ML_$UNLOCK in the proper order, with correct count_flags packing.
+ * and ML_$UNLOCK in the proper order, with the correct pair of word arguments.
  */
 
 #include <stdio.h>
@@ -80,31 +80,33 @@ void ML_$UNLOCK(int16_t resource_id)
     }
 }
 
-int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
+int16_t ast_$allocate_pages(int16_t count, int16_t min_count,
+                            uint32_t *ppn_array)
 {
     if (call_count < MAX_CALLS) {
         call_log[call_count].type = CALL_AST_ALLOCATE_PAGES;
-        call_log[call_count].arg1 = count_flags;
+        /*
+         * The two word arguments as the original pushes them: the
+         * requested count at (0x8,A6) and the minimum at (0xa,A6).
+         */
+        call_log[call_count].arg1 =
+            ((uint32_t)(uint16_t)count << 16) | (uint16_t)min_count;
         call_count++;
     }
-    return (int16_t)(count_flags & 0xFFFF);
+    (void)ppn_array;
+    return count;
 }
 
 /*
- * WP_$CALLOC_LIST - function under test (reimplemented with mocks)
+ * Code under test: the real wp/calloc_list.c, with its headers suppressed
+ * so the stubs above stand in for them.
  */
+#define WP_INTERNAL_H
+#define WP_H
+#define AST_H
 #define WP_LOCK_ID 0x14
 
-void WP_$CALLOC_LIST(int16_t count, uint32_t *ppn_arr)
-{
-    uint32_t count_flags;
-
-    count_flags = ((uint32_t)(uint16_t)count << 16) | (uint16_t)count;
-
-    ML_$LOCK(WP_LOCK_ID);
-    ast_$allocate_pages(count_flags, ppn_arr);
-    ML_$UNLOCK(WP_LOCK_ID);
-}
+#include "wp/calloc_list.c"
 
 /*
  * Tests
@@ -131,40 +133,40 @@ TEST(calls_in_correct_order)
     ASSERT_EQ(0x14, call_log[2].arg1);
 }
 
-TEST(count_flags_packing_count_1)
+TEST(allocate_words_are_count_and_count_count_1)
 {
     uint32_t ppn_arr[1];
     reset_call_log();
 
     WP_$CALLOC_LIST(1, ppn_arr);
 
-    /* count=1 -> count_flags = 0x00010001 */
+    /* count=1 -> (count word, min_count word) = 0x00010001 */
     ASSERT_EQ(0x00010001, call_log[1].arg1);
 }
 
-TEST(count_flags_packing_count_4)
+TEST(allocate_words_are_count_and_count_count_4)
 {
     uint32_t ppn_arr[4];
     reset_call_log();
 
     WP_$CALLOC_LIST(4, ppn_arr);
 
-    /* count=4 -> count_flags = 0x00040004 */
+    /* count=4 -> (count word, min_count word) = 0x00040004 */
     ASSERT_EQ(0x00040004, call_log[1].arg1);
 }
 
-TEST(count_flags_packing_count_32)
+TEST(allocate_words_are_count_and_count_32)
 {
     uint32_t ppn_arr[32];
     reset_call_log();
 
     WP_$CALLOC_LIST(32, ppn_arr);
 
-    /* count=32 -> count_flags = 0x00200020 */
+    /* count=32 -> (count word, min_count word) = 0x00200020 */
     ASSERT_EQ(0x00200020, call_log[1].arg1);
 }
 
-TEST(count_flags_packing_count_256)
+TEST(allocate_words_are_count_and_count_256)
 {
     uint32_t ppn_arr[256];
     reset_call_log();
@@ -180,10 +182,10 @@ int main(void)
     printf("test_calloc_list:\n");
 
     RUN_TEST(calls_in_correct_order);
-    RUN_TEST(count_flags_packing_count_1);
-    RUN_TEST(count_flags_packing_count_4);
-    RUN_TEST(count_flags_packing_count_32);
-    RUN_TEST(count_flags_packing_count_256);
+    RUN_TEST(allocate_words_are_count_and_count_count_1);
+    RUN_TEST(allocate_words_are_count_and_count_count_4);
+    RUN_TEST(allocate_words_are_count_and_count_32);
+    RUN_TEST(allocate_words_are_count_and_count_256);
 
     printf("\n  Results: %d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed > 0 ? 1 : 0;

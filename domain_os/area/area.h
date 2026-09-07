@@ -384,13 +384,17 @@ void AREA_$FREE_ASID(int16_t asid);
 void AREA_$SHUTDOWN(void);
 
 /*
- * AREA_$FREE_FROM - Free areas from specific context
+ * AREA_$FREE_FROM - Free every area created from one remote UID
  *
- * @param param_1       Unknown parameter
+ * Deletes all area entries chained off the UID hash record for
+ * `remote_uid`, returns them to the free list, and returns the hash
+ * record itself to AREA_$UID_HASH_FREE.
+ *
+ * @param remote_uid    the value stored in area_$entry_t.remote_uid (+0x20)
  *
  * Original address: 0x00E07FC6
  */
-void AREA_$FREE_FROM(uint32_t param_1);
+void AREA_$FREE_FROM(uint32_t remote_uid);
 
 /*
  * AREA_$TRANSFER - Transfer area ownership to another address space
@@ -544,17 +548,22 @@ void AREA_$THREAD_BSTES(area_$handle_t *handle_ptr, int16_t bste_idx,
                         status_$t *status_ret);
 
 /*
- * AREA_$REMOVE_SEG - Remove segment from area
+ * AREA_$REMOVE_SEG - Remove a segment from an area
  *
- * Removes a segment from the area's segment list.
+ * Six Pascal parameters; see area/segment.c for the recovered shape and
+ * for the call site at 0x00E449F8 that proves it.
  *
- * @param area_id       Area ID
- * @param seg_idx       Segment index to remove
+ * @param seg_rec       record whose +0x02 is the area id
+ * @param arg_0c        compared against the area entry's +0x26
+ * @param arg_0e        added into the segment-count comparison
+ * @param arg_10        boolean gating the "delete the whole area" path
+ * @param arg_12        segment index / count
  * @param status_ret    Output: status code
  *
  * Original address: 0x00E09822
  */
-void AREA_$REMOVE_SEG(uint16_t area_id, uint16_t seg_idx,
+void AREA_$REMOVE_SEG(void *seg_rec, uint16_t arg_0c, uint16_t arg_0e,
+                      int8_t arg_10, uint16_t arg_12,
                       status_$t *status_ret);
 
 /*

@@ -36,19 +36,22 @@ void PROC2_$DEBUG(uid_t *proc_uid, status_$t *status_ret)
 
     if (uid.high == UID_$NIL.high && uid.low == UID_$NIL.low) {
         /*
-         * Debug current process's parent.
-         * Get parent index from current process's entry.
+         * 0x00E41660-0x00E4168A: UID_$NIL means "let my parent debug me".
+         * The target is the CALLER's own entry and the debugger is the
+         * caller's parent (+0x1E), with the flag pushed as a zero word.
+         *
+         *   00e41660  move.w (0x00e20608).l,D0w   ; PROC1_$CURRENT
+         *   00e4166c  add.w D0w,D0w
+         *   00e41674  move.w (0x3eb6,A1),D2w      ; P2_PID_TO_INDEX[pid]
+         *   00e41678  clr.w -(SP)                 ; flag = 0        (arg 3)
+         *   00e41684  move.w (-0xc6,A1),-(SP)     ; +0x1E           (arg 2)
+         *   00e41688  move.w D2w,-(SP)            ; caller's index  (arg 1)
          */
-        int16_t current_idx = P2_PID_TO_INDEX(PROC1_$CURRENT);
+        int16_t current_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
         proc2_info_t *current_entry = P2_INFO_ENTRY(current_idx);
 
-        /* Parent index is stored in first_debug_target_idx field of current process's parent */
-        /* Actually, look up parent's proc2 index from PID mapping */
-        target_idx = current_entry->first_debug_target_idx;  /* Parent idx stored here */
-
-        /* Get the parent entry to get its parent_idx as debugger_idx */
-        proc2_info_t *parent_entry = P2_INFO_ENTRY(target_idx);
-        debugger_idx = parent_entry->first_debug_target_idx;
+        target_idx = current_idx;
+        debugger_idx = (int16_t)current_entry->parent_pgroup_idx;
         flag = 0;
     } else {
         /* Find target process by UID */
@@ -66,17 +69,22 @@ void PROC2_$DEBUG(uid_t *proc_uid, status_$t *status_ret)
             goto done;
         }
 
-        /* Check ACL debug permissions */
-        /* ACL_$CHECK_DEBUG_RIGHTS returns negative on success */
-        /* TODO(source-ld0): Verify the second parameter - should be pointer to target's PID */
-        if (ACL_$CHECK_DEBUG_RIGHTS(&PROC1_$CURRENT, (int16_t *)entry) >= 0) {
+        /*
+         * 0x00E416C2: pea (-0x4a,A0,D2) -- entry + 0xE4 - 0x4A = entry+0x9A,
+         * i.e. &target->level1_pid, NOT the entry base.
+         * 0x00E416C6: move.l #0xe20608,-(SP) -- &PROC1_$CURRENT.
+         * 0x00E416D4: tst.b D0b / bpl -- the boolean result is negative
+         * (0xFF) on success, so a non-negative result denies permission.
+         */
+        if (ACL_$CHECK_DEBUG_RIGHTS((int16_t *)&PROC1_$CURRENT,
+                                    (int16_t *)&entry->level1_pid) >= 0) {
             status = status_$proc2_permission_denied;
             goto done;
         }
 
-        /* Get current process's PROC2 index as debugger */
-        debugger_idx = P2_PID_TO_INDEX(PROC1_$CURRENT);
-        flag = 0xFF;
+        /* 0x00E416DA: st -(SP) = TRUE; 0x00E416EE: caller's own index */
+        debugger_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+        flag = (int8_t)0xFF;
     }
 
     /* Set up debug relationship */

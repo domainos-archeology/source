@@ -34,7 +34,7 @@
  *                bra.b 0x00e20b56       ; loops forever)
  *
  * The function shares its exit path (0x00E20EB6) with ML_$EXCLUSION_STOP;
- * see ml_$release_tail() in ml/ml_internal.h.
+ * see proc1_$release_tail() in proc1/proc1.h.
  */
 
 #include "ml/ml_internal.h"
@@ -109,5 +109,5 @@ void ML_$UNLOCK(int16_t resource_id)
     }
 
     /* 0x00E20EB6: shared epilogue; ends with a forced IPL 0. */
-    ml_$release_tail(pcb);
+    proc1_$release_tail(pcb);
 }

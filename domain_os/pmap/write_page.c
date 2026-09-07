@@ -30,12 +30,16 @@
  * Original address: 0x00E12E5E
  * Size: 1044 bytes
  *
- * TODO(source-bab): Full implementation requires understanding of:
- * - Page frame table layout at 0xEB4800
- * - MMAPE structure at 0xEC5400
- * - Physical map entry structure at 0xED5000
- * - Network write protocol and partner packet handling
- * - AST_$INVALIDATE_PAGE and AST_$SAVE_CLOBBERED_UID
+ * TODO(source-bab): pmap_$write_page (0x00E12E5E, 1044 bytes) is not yet
+ * decompiled; the file below has no function body at all, so both the
+ * remote (NETWORK_$WRITE) and local (DISK_$WRITE) write paths, the
+ * sub-page split for small packet sizes, the parity-error
+ * AST_$SAVE_CLOBBERED_UID handling, the network sequence-number update and
+ * every error path are missing.  It needs the same table accessors as
+ * pmap_$write_complete (page frame table 0xEB4800, MMAPE 0xEC5400,
+ * physical map 0xED5000) plus the partner/packet-size protocol.  Tracked
+ * by bead source-bab ("Implement pmap_$write_page (1044 bytes) -
+ * disk/network page write with dual paths").
  */
 
 #include "pmap/pmap_internal.h"

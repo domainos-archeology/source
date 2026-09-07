@@ -87,11 +87,17 @@ void ML_$UNLOCK(int16_t resource_id)
     }
 }
 
-int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
+int16_t ast_$allocate_pages(int16_t count, int16_t min_count,
+                            uint32_t *ppn_array)
 {
     if (call_count < MAX_CALLS) {
         call_log[call_count].type = CALL_AST_ALLOCATE_PAGES;
-        call_log[call_count].arg1 = count_flags;
+        /*
+         * The two word arguments as the original pushes them: the
+         * requested count at (0x8,A6) and the minimum at (0xa,A6).
+         */
+        call_log[call_count].arg1 =
+            ((uint32_t)(uint16_t)count << 16) | (uint16_t)min_count;
         call_count++;
     }
     /* Simulate allocating one page */
@@ -100,21 +106,15 @@ int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
 }
 
 /*
- * WP_$CALLOC - function under test (reimplemented with mocks)
+ * Code under test: the real wp/calloc.c, with its headers suppressed so
+ * the stubs above stand in for them.
  */
+#define WP_INTERNAL_H
+#define WP_H
+#define AST_H
 #define WP_LOCK_ID 0x14
 
-void WP_$CALLOC(uint32_t *ppn_out, status_$t *status)
-{
-    uint32_t ppn_buf[32];
-
-    ML_$LOCK(WP_LOCK_ID);
-    ast_$allocate_pages(0x00010001, ppn_buf);
-    ML_$UNLOCK(WP_LOCK_ID);
-
-    *ppn_out = ppn_buf[0];
-    *status = status_$ok;
-}
+#include "wp/calloc.c"
 
 /*
  * Tests
@@ -135,7 +135,7 @@ TEST(calls_in_correct_order)
     ASSERT_EQ(CALL_ML_LOCK, call_log[0].type);
     ASSERT_EQ(0x14, call_log[0].arg1);
 
-    /* Second: ast_$allocate_pages(0x00010001, ...) */
+    /* Second: ast_$allocate_pages(count = 1, min_count = 1, ...) */
     ASSERT_EQ(CALL_AST_ALLOCATE_PAGES, call_log[1].type);
     ASSERT_EQ(0x00010001, call_log[1].arg1);
 
@@ -168,7 +168,7 @@ TEST(sets_status_ok)
     ASSERT_EQ(status_$ok, status);
 }
 
-TEST(count_flags_is_0x00010001)
+TEST(allocate_words_are_one_and_one)
 {
     uint32_t ppn = 0;
     status_$t status = -1;
@@ -176,7 +176,7 @@ TEST(count_flags_is_0x00010001)
 
     WP_$CALLOC(&ppn, &status);
 
-    /* Verify count_flags: low word = 1 (request), high word = 1 (minimum) */
+    /* count word = 1 (requested), min_count word = 1 */
     ASSERT_EQ(0x00010001, call_log[1].arg1);
 }
 
@@ -187,7 +187,7 @@ int main(void)
     RUN_TEST(calls_in_correct_order);
     RUN_TEST(copies_ppn_to_output);
     RUN_TEST(sets_status_ok);
-    RUN_TEST(count_flags_is_0x00010001);
+    RUN_TEST(allocate_words_are_one_and_one);
 
     printf("\n  Results: %d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed > 0 ? 1 : 0;

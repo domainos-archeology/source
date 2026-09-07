@@ -81,8 +81,17 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
         }
 
         if (match) {
-            /* Process this ASTE */
-            /* TODO(source-22c): Implement full purification logic */
+            /*
+             * TODO(source-22c): the per-ASTE purification body of
+             * AST_$PURIFY (0x00E0567A, 1314 bytes) is not decompiled.
+             * Missing: the segment-map scan that writes each dirty page
+             * back (PMAP_$FLUSH / ast_$update_aste), the optional
+             * invalidate-and-release pass selected by the flag bits, and
+             * the per-page status accumulation.  Only the matching test
+             * above and the timestamp update below are present.  Tracked
+             * by bead source-22c ("Complete AST subsystem logic
+             * (purification, truncation, bounds checking)").
+             */
             update_time = -1;
         }
 

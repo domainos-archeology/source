@@ -147,10 +147,14 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
                 if ((*map_ptr & 0x400000) == 0) break;
             } while (1);
 
-            /* Call count_valid_pages with flattened parameters
-             * per_boot_flag comes from AOTE flags at offset 0x0F */
-            pages_touched = ast_$count_valid_pages(aste, cow_count,
-                                                   *((uint8_t *)((char *)aote + 0x0F)),
+            /*
+             * 0x00E03226-0x00E03230: `pea (A2)` pushes the CURRENT segment
+             * map pointer, not the ASTE, and the nested procedure reads
+             * this function's own flags/ppn_array/status through the static
+             * link -- so they are forwarded explicitly.
+             */
+            pages_touched = ast_$count_valid_pages(segmap_ptr, cow_count,
+                                                   flags,
                                                    ppn_array, status);
             *(uint8_t *)((char *)aote + 0xBF) |= 0x10;
         } else {

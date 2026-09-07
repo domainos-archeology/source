@@ -10,6 +10,7 @@
 
 #include "mmap/mmap.h"
 #include "mmu/mmu.h"  /* For PMAPE_FOR_VPN, PMAPE_FLAG_* */
+#include "ast/ast.h" /* For aste_t / aote_t (the 0xEC5400 segment table) */
 
 /*
  * ============================================================================
@@ -55,8 +56,28 @@ extern mem_range_t MEM_EXAM_TABLE[];
  * Segment info table
  * Array of pointers to segment descriptors.
  * Located at 0xEC5400 (m68k).
+ *
+ * NOTE: this `void *` view does not match the machine code.  The table is
+ * an array of 0x14-byte aste_t records addressed 1-based:
+ * mmap_$trim_wsl (0x00E0C8C0) and AREA_$DEACTIVATE_ASTE (0x00E0A096) both
+ * form `0xEC5400 + seg * 0x14` and then use a negative displacement into
+ * the PREVIOUS record.  Use MMAP_$SEG_ASTE below for new code; the four
+ * remaining `SEGMENT_TABLE[seg]` users are tracked by bead source-4in.
  */
 extern void *SEGMENT_TABLE[];
+
+/*
+ * The same storage at 0xEC5400, correctly typed.
+ *
+ *   00e0c8c0  movea.l #0xec5400,A1
+ *   00e0c8c6  lsl.w #0x2,D0w / lsl.w #0x2,D1w / add.w D1w,D0w   ; seg * 0x14
+ *   00e0c8ce  lea (0x0,A1,D0w),A1
+ *   00e0c8d2  movea.l (-0x10,A1),A3          ; record(seg)+0x04 = aste->aote
+ *
+ * so record(seg) = 0xEC5400 + (seg - 1) * sizeof(aste_t).
+ */
+extern aste_t MMAP_$SEG_ASTE[];
+#define MMAP_$SEG_ASTE_FOR(seg) (&MMAP_$SEG_ASTE[(seg) - 1])
 
 /*
  * Internal statistics counters

@@ -296,10 +296,16 @@ late_cleanup:
     /* Fall through to cleanup_asid */
 
 cleanup_asid:
-    /* Clean up parent link if set */
-    if (new_entry->first_debug_target_idx != 0) {
-        proc2_info_t *parent = P2_INFO_ENTRY(new_entry->first_debug_target_idx);
-        parent->pad_18[0] = new_entry->pad_18[1];
+    /*
+     * 0x00E72B12-0x00E72AAC: unlink from the parent's child list.
+     *   00e72a90  tst.w (-0xc6,A2)                ; entry+0x1E parent
+     *   00e72a96  move.w (-0xc6,A2),D0w
+     *   00e72aa0  mulu.w #0xe4,D0
+     *   00e72aa8  move.w (-0xc2,A2),(-0xc4,A0)    ; parent+0x20 = entry+0x22
+     */
+    if (new_entry->parent_pgroup_idx != 0) {
+        proc2_info_t *parent = P2_INFO_ENTRY(new_entry->parent_pgroup_idx);
+        parent->first_child_idx = new_entry->next_child_sibling;
     }
 
     /* Unbind or free stack */
@@ -311,19 +317,38 @@ cleanup_asid:
         PROC1_$FREE_STACK(stack_ptr);
     }
 
-    /* Set error flag if not a PROC2 error */
-    if ((status >> 16) != 0x19) {
-        status |= 0x80000000;
+    /*
+     * 0x00E72ADA: cmpi.w #0x19,(-0x16,A6) / beq.b 0x00E72AE8, then
+     * 0x00E72AE2: bset.b #0x7,(-0x18,A6).
+     *
+     * The status longword lives at A6-0x18, so A6-0x16 is its LOW word --
+     * every error test in this function is `tst.w (-0x16,A6)` on that same
+     * half.  The comparison therefore asks whether the status CODE is 0x19,
+     * not whether the module byte is 0x19 (that byte is at A6-0x17, inside
+     * the word at A6-0x18).  Reproduced as found; the `bset.b #0x7` on the
+     * first byte is bit 31, the "fail" bit.
+     */
+    if ((status & 0xFFFF) != 0x19) {
+        status |= (status_$t)0x80000000u;
     }
 
-    /* Free ASID */
+    /* 0x00E72AF2: entry+0x96 */
     MST_$FREE_ASID(new_entry->asid, &temp_status);
 
-    /* Clear UID in global table */
-    /* TODO(source-ld0): UID table cleanup */
+    /*
+     * 0x00E72AFA-0x00E72B10: hand the address space's UID slot back to the
+     * system.
+     *   00e72afa  move.w (-0x4e,A2),D0w        ; entry->asid (+0x96)
+     *   00e72afe  movea.l #0xe7be84,A0         ; PROC2 module data base
+     *   00e72b04  lsl.w #0x3,D0w               ; asid * sizeof(uid_t)
+     *   00e72b06  lea (0x8,A0),A1              ; &proc2_system_uid (0xE7BE8C)
+     *   00e72b0a  move.l (A1)+,(0x10,A0,D0w)   ; PROC2_UID (0xE7BE94)
+     *   00e72b0e  move.l (A1)+,(0x14,A0,D0w)
+     */
+    PROC2_UID[new_entry->asid] = proc2_system_uid;
 
-    /* Call cleanup handlers if any were registered */
-    if (new_entry->level1_pid != 0) {
+    /* 0x00E72B12: tst.w (-0x48,A2) -- entry+0x9C, cleanup_flags */
+    if (new_entry->cleanup_flags != 0) {
         PROC2_$CLEANUP_HANDLERS_INTERNAL(new_entry);
     }
 

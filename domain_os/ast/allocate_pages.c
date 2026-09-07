@@ -5,8 +5,12 @@
  * attributes and wakes the purifier if memory is low.
  *
  * Parameters:
- *   count_flags - High word is minimum count, low word is flags (1 = from pure pool OK)
+ *   count     - Number of pages requested (0x00E00D4E: move.w (0x8,A6),D2w)
+ *   min_count - Minimum that must be obtained before the retry loop gives
+ *               up on waking the purifier (0x00E00E56: cmp.w (0xa,A6),D0w).
+ *               Every caller in the image passes 1.
  *   ppn_array - Array to receive allocated page numbers
+ *               (0x00E00D52: movea.l (0xc,A6),A4)
  *
  * Returns: Number of pages actually allocated
  *
@@ -48,10 +52,10 @@ static void NETLOG_$LOG_PAGE(void *pmape, int16_t ppn_high);
 #define AST_$ALLOC_TRY_CNT  ast_$alloc_try_cnt
 #endif
 
-int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
+int16_t ast_$allocate_pages(int16_t count_arg, int16_t min_count,
+                            uint32_t *ppn_array)
 {
     uint16_t num_pages;
-    uint16_t min_count;
     uint16_t allocated;
     uint16_t count;
     int16_t i;
@@ -63,8 +67,8 @@ int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
     AST_$ALLOC_TRY_CNT++;
 
     allocated = 0;
-    num_pages = (uint16_t)count_flags;           /* Low word - requested count */
-    min_count = (uint16_t)(count_flags >> 16);   /* High word - minimum required */
+    /* 0x00E00D4E: D2 is the running "still wanted" counter */
+    num_pages = (uint16_t)count_arg;
 
     while (1) {
         /* First try to allocate from free pool */
@@ -132,7 +136,7 @@ int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array)
         }
 
         /* Check if we have enough pages */
-        if (allocated >= min_count) {
+        if (allocated >= (uint16_t)min_count) {
             break;
         }
 

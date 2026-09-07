@@ -89,7 +89,8 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                         /* Flush any pending batch */
                         if (batch_count > 0) {
                             pmap_$flush_write_batch(&batch_count, batch_vpns,
-                                                    segmap, status);
+                                                    segmap, status,
+                                                    aste, flags);
                         }
                         *status = 0x50007;  /* Error: invalid page */
                         goto done;
@@ -136,7 +137,8 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                                 /* Remote write - synchronous */
                                 pmap_$write_page(vpn, status, -((flags & 4) == 0));
                                 if (*status != 0) goto done;
-                                pmap_$update_seg_map(segmap_ptr, vpn, page_idx);
+                                pmap_$update_seg_map(aste, flags, (uint32_t *)segmap_ptr,
+                                                     vpn, page_idx);
                             } else {
                                 /* Local write - batch it */
                                 *(uint8_t *)segmap_ptr |= 0x80;
@@ -146,7 +148,8 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                                 /* Flush batch if full (16 pages) */
                                 if (batch_count == 0x10) {
                                     pmap_$flush_write_batch(&batch_count, batch_vpns,
-                                                            segmap, status);
+                                                            segmap, status,
+                                                            aste, flags);
                                     if (*status != 0) goto done;
                                 }
                             }
@@ -155,7 +158,8 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
 
                     /* Release page if not modified or skipping writes */
                     if (modified_bit >= 0 || (flags & 2) != 0) {
-                        pmap_$update_seg_map(segmap_ptr, vpn, page_idx);
+                        pmap_$update_seg_map(aste, flags, (uint32_t *)segmap_ptr,
+                                                     vpn, page_idx);
                     }
                 }
 
@@ -168,7 +172,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
         /* Flush any remaining batch */
         if (batch_count > 0) {
             pmap_$flush_write_batch(&batch_count, batch_vpns,
-                                    segmap, status);
+                                    segmap, status, aste, flags);
             if (*status != 0) break;
         }
 

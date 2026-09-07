@@ -57,7 +57,11 @@ aote_t *ast_$lookup_aote_by_uid(uid_t *uid);
 /* Force lookup/activate AOTE for segment - returns AOTE pointer */
 /* `segment` is a LONGWORD on the stack (A6+0x0C; `move.l (-0x14,A6),-(SP)` at
  * AST_$GET_ATTRIBUTES 0x00E04832) and the callee never reads it.
- * TODO (bead source-sy5u): what the argument means is still unknown. */
+ * What the argument MEANS is bead source-sy5u: twelve of the thirteen
+ * callers pass 0 and ast/mste_activate_and_wire.c passes mste->vol_uid, but
+ * ast_$force_activate_segment (0x00E020FA) reads only A6+0x08 (uid),
+ * A6+0x10 (status) and A6+0x14 (the boolean byte) -- A6+0x0C is dead -- so
+ * the stack shape below is all the machine code constrains. */
 aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t segment, status_$t *status, int8_t force);
 
 /* Look up existing ASTE for AOTE/segment */
@@ -70,7 +74,18 @@ aste_t* ast_$lookup_or_create_aste(aote_t *aote, uint16_t segment, status_$t *st
 void ast_$wait_for_page_transition(void);
 
 /* Allocate pages - returns count, takes count_flags and ppn_array */
-int16_t ast_$allocate_pages(uint32_t count_flags, uint32_t *ppn_array);
+/*
+ * ast_$allocate_pages - allocate `count` physical pages
+ *
+ * Three Pascal parameters, not two: `move.w (0x8,A6),D2w` at 0x00E00D4E
+ * takes the requested count, `cmp.w (0xa,A6),D0w` at 0x00E00E56 compares
+ * the running total against a SECOND word (the minimum that must be
+ * obtained before the routine stops waking the purifier), and
+ * `movea.l (0xc,A6),A4` at 0x00E00D52 takes the array.  Every caller in
+ * the image pushes (count, 1, ppn_array).
+ */
+int16_t ast_$allocate_pages(int16_t count, int16_t min_count,
+                            uint32_t *ppn_array);
 
 /* Clear transition bits in segment map */
 void ast_$clear_transition_bits(uint32_t *segmap, uint16_t count);
@@ -79,14 +94,19 @@ void ast_$clear_transition_bits(uint32_t *segmap, uint16_t count);
 void ast_$setup_page_read(aste_t *aste, uint32_t *segmap, uint16_t start_page,
                           uint16_t count, uint16_t flags, status_$t *status);
 
-/* Count valid pages and allocate for reading
- * Note: This is a nested procedure - accesses parent frame variables.
- * The signature here represents the flattened version for portability.
+/*
+ * Allocate and zero the pages for a copy-on-write run.
+ *
+ * A nested procedure of AST_$TOUCH.  Its two real stack arguments are a
+ * pointer into the segment map (0x08,A6) and a page count (0x0C,A6); the
+ * remaining three are AST_$TOUCH's own `flags` (only bit 1 is read, via
+ * `btst.b #0x1,(0x1d,A2)`), `ppn_array` (0x14,A2) and `status` (0x18,A2),
+ * reached through the static link and passed explicitly here.
  */
-int16_t ast_$count_valid_pages(aste_t *aste, int16_t count,
-                                uint8_t per_boot_flag,
-                                uint32_t *ppn_array,
-                                status_$t *status);
+int16_t ast_$count_valid_pages(uint32_t *segmap_entry, int16_t count,
+                               uint16_t touch_flags,
+                               uint32_t *ppn_array,
+                               status_$t *status);
 
 /* Read area pages from disk */
 int16_t ast_$read_area_pages(aste_t *aste, uint32_t *segmap, uint32_t *ppn_array,

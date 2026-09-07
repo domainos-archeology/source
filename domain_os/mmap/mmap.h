@@ -271,7 +271,8 @@ void mmap_$remove_from_wsl(mmape_t *page, uint32_t vpn);
 void mmap_$trim_wsl(uint16_t wsl_index, uint32_t pages_to_trim);
 
 /* Move pages to a different WSL list type */
-void mmap_$move_pages_to_wsl_type(uint32_t vpn_head, uint16_t page_type);
+void mmap_$move_pages_to_wsl_type(uint32_t vpn_head, uint16_t page_type,
+                                  uint16_t scan_wsl_index, int16_t scan_mode);
 
 /*
  * Function prototypes - Public API

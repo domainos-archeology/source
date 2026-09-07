@@ -15,8 +15,31 @@
 
 #include "ast/ast_internal.h"
 
-/* Local netlog function */
-static void FUN_00e01502(void);
+/*
+ * ast_$update_aste_log - the nested NETLOG helper at 0x00E01502 (100 bytes)
+ *
+ * It takes no stack arguments; it reads this function's frame through the
+ * static link (`movea.l (A6),A2` at 0x00E0150A):
+ *
+ *   00e0150e  moveq #0x1f,D0                      ; 32 iterations
+ *   00e01514  lea (0x0,A2,D1),A0
+ *   00e01518  cmpi.l #-0x80000000,(-0x88,A0)      ; the disk-format image
+ *   00e01520  bcs.b 0x00e01524                    ; UNSIGNED compare, so
+ *   00e01522  addq.w #0x1,D2w                     ;   bit 31 set -> count it
+ *   00e0152a  subq.l #0x2,SP / clr.l -(SP) / clr.w -(SP)   ; p6..p8 = 0
+ *   00e01530  move.w D2w,-(SP)                    ; p5 = that count
+ *   00e01538  move.b (0x10,A0),D3b                ; p4 = aste->page_count
+ *   00e01542  move.w (0xc,A0),-(SP)               ; p3 = aste->timestamp
+ *   00e0154e  pea (0x10,A3)                       ; p2 = &aote->uid
+ *   00e01552  move.w #0xc,-(SP)                   ; p1 = kind 12
+ *   00e01556  jsr 0x00e71b38.l                    ; NETLOG_$LOG_IT
+ *
+ * A6-0x88 is `disk_data` below (`link.w A6,-0xa0`, and FM_$WRITE is handed
+ * `pea (-0x88,A6)` at 0x00E01686), so the flattening passes it and the ASTE
+ * explicitly.
+ */
+static void ast_$update_aste_log(const aste_t *aste,
+                                 const uint32_t *disk_data);
 
 /* Status codes */
 #define status_$disk_write_protected 0x00080007
@@ -83,7 +106,7 @@ void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, uint16_t flags,
 
     /* Log if enabled */
     if (NETLOG_$OK_TO_LOG < 0) {
-        FUN_00e01502();
+        ast_$update_aste_log(aste, disk_data);
     }
 
     /* Write to disk via FM */
@@ -106,8 +129,23 @@ void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, uint16_t flags,
     }
 }
 
-/* Stub for netlog function - to be implemented */
-static void FUN_00e01502(void)
+static void ast_$update_aste_log(const aste_t *aste,
+                                 const uint32_t *disk_data)
 {
-    /* TODO(source-qvt): Implement netlog call */
+    int16_t dirty_count = 0;
+    int i;
+
+    /* 0x00E0150E-0x00E01526: 32 longwords, count the ones with bit 31 set */
+    for (i = 0; i < 32; i++) {
+        if (disk_data[i] >= 0x80000000u) {
+            dirty_count++;
+        }
+    }
+
+    /* 0x00E01556 */
+    NETLOG_$LOG_IT(12, &aste->aote->uid.high,
+                   aste->timestamp,
+                   aste->page_count,
+                   (uint16_t)dirty_count,
+                   0, 0, 0);
 }

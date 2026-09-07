@@ -85,7 +85,7 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused,
                 }
 
                 /* Allocate pages */
-                ast_$allocate_pages((count << 16) | 1, ppn_array);
+                ast_$allocate_pages((int16_t)count, 1, ppn_array);
 
                 ML_$UNLOCK(PMAP_LOCK_ID);
 
@@ -101,16 +101,33 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused,
                                             AREA_$PARTNER_PKT_SIZE, 1, 0, 0,
                                             &dummy_dtm, &dummy_clock, &dummy_acl, status);
                         if (*status != status_$ok) {
-                            /* Error - get buffer back */
+                            /*
+                             * Error - get the buffer back.
+                             *
+                             * TODO(source-22c): the rest of the network
+                             * read-error path of AST_$COPY_AREA
+                             * (0x00E03A30, 1416 bytes) is not decompiled:
+                             * the already-read pages are neither released
+                             * nor unwired here, and the caller's status is
+                             * left as the network error rather than being
+                             * translated.  Tracked by bead source-22c.
+                             */
                             uint32_t temp_addr;
                             NETBUF_$GET_DAT(&temp_addr);
-                            /* TODO(source-mpj): Handle error properly */
                             break;
                         }
                     }
                 } else {
-                    /* Local disk read */
-                    /* TODO(source-mpj): Implement local disk read */
+                    /*
+                     * TODO(source-22c): the local-disk read branch of
+                     * AST_$COPY_AREA (0x00E03A30, 1416 bytes) is not
+                     * decompiled and this branch is empty, so a
+                     * locally-backed source area is copied as whatever the
+                     * freshly allocated pages happen to contain.  Missing:
+                     * the DISK_$READ (or read-multi) of `count` pages from
+                     * the source segment's disk addresses into ppn_array
+                     * and its error handling.  Tracked by bead source-22c.
+                     */
                 }
 
                 ML_$LOCK(PMAP_LOCK_ID);
@@ -129,8 +146,15 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused,
             continue;
         }
 
-        /* Source page is installed - copy to destination */
-        /* TODO(source-22c): Implement installed page copy logic */
+        /*
+         * Source page is installed.
+         *
+         * TODO(source-22c): the installed-page copy of AST_$COPY_AREA
+         * (0x00E03A30, 1416 bytes) is not decompiled, so an already-resident
+         * source page contributes nothing to the destination.  Missing: the
+         * wire of the source page, the 0x400-byte copy into the destination
+         * buffer and the matching unwire.  Tracked by bead source-22c.
+         */
 
         dst_segmap += 4;
         src_segmap++;

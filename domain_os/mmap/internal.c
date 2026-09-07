@@ -242,15 +242,43 @@ done_scanning:
         uint16_t next = page->prev_vpn;
         uint16_t page_type;
 
-        /* Determine page type for free list placement */
+        /*
+         * Determine page type for free list placement.
+         *
+         * 0x00E0C89A: btst.b #0x6,(-0x1ff7,A2)  -- mmape->flags2 bit 6
+         * 0x00E0C8AC: move.w (0x2,A1,vpn*4),D1w -- the SECOND word of the
+         *             hardware PTE, i.e. PMAPE_FOR_VPN(vpn)[1]
+         * 0x00E0C8B0: btst.l #0xe,D1            -- PMAPE_FLAG_MODIFIED
+         */
         if ((page->flags2 & MMAPE_FLAG2_MODIFIED) == 0 &&
-            (*PMAPE_FOR_VPN(free_list_head) & PMAPE_FLAG_MODIFIED) == 0) {
+            (PMAPE_FOR_VPN(free_list_head)[1] & PMAPE_FLAG_MODIFIED) == 0) {
+            /* 0x00E0C912: btst.b #0x6,(-0x1ffb,A2) -- mmape->flags1 bit 6 */
             page_type = (page->flags1 & MMAPE_FLAG1_IMPURE) ?
                         MMAP_PAGE_TYPE_PURE : MMAP_PAGE_TYPE_IMPURE;
         } else {
-            /* Dirty page - determine if needs flush */
-            /* TODO(source-4in): Check segment info for flush requirement */
-            page_type = MMAP_PAGE_TYPE_DIRTY_NF;
+            /*
+             * Dirty page: 0x00E0C8B6-0x00E0C910 asks the owning object
+             * whether the write has to go over the network.
+             *
+             *   tst.b (-0x1ff7,A2) / bpl  -- mmape->flags2 bit 7 (ON_DISK)
+             *   set:   tst.w (0x28,A3) / sne  -- the HIGH word of
+             *                                     aote->len_high
+             *   clear: tst.b (0xb9,A3) / smi  -- aote->remote_flag < 0
+             *   TRUE -> type 4 (needs flush), FALSE -> type 3.
+             */
+            aote_t *aote = MMAP_$SEG_ASTE_FOR(page->segment)->aote;
+            boolean needs_flush;
+
+            if ((page->flags2 & MMAPE_FLAG2_ON_DISK) != 0) {
+                needs_flush = ((aote->len_high >> 16) != 0) ?
+                              (boolean)0xFF : 0;
+            } else {
+                needs_flush = ((int8_t)aote->remote_flag < 0) ?
+                              (boolean)0xFF : 0;
+            }
+
+            page_type = (needs_flush < 0) ? MMAP_PAGE_TYPE_DIRTY_FL
+                                          : MMAP_PAGE_TYPE_DIRTY_NF;
         }
 
         mmap_$add_to_wsl(page, free_list_head, page_type, 0);
@@ -273,11 +301,31 @@ done_scanning:
  *
  * Used after scanning to move pages to their appropriate free lists.
  *
+ * This is a nested Pascal procedure of MMAP_$WS_SCAN: it reads the parent
+ * frame through the static link (`movea.l (A6),A0` at 0x00E0D284) to get
+ * the priority it stamps into each page:
+ *
+ *   00e0d28c  tst.b (0xa,A0)      ; MMAP_$WS_SCAN's `mode` word, high byte
+ *   00e0d290  bpl.b 0x00e0d298    ;   -- a Domain boolean
+ *   00e0d292  move.w (0x8,A0),D5w ; MMAP_$WS_SCAN's `wsl_index` word
+ *   00e0d298  clr.w D5w           ; otherwise 0
+ *   ...
+ *   00e0d2b0  move.b D5b,(-0x1ff8,A0)   ; mmape->priority
+ *
+ * Both are therefore explicit parameters here.
+ *
  * @param vpn_head: Head of the page list (linked via next_vpn)
  * @param page_type: Target WSL type (free/pure/impure/dirty)
+ * @param scan_wsl_index: MMAP_$WS_SCAN's first argument
+ * @param scan_mode: MMAP_$WS_SCAN's second argument (a boolean in its
+ *                   high byte, so TRUE reads as a negative int16_t)
  */
-void mmap_$move_pages_to_wsl_type(uint32_t vpn_head, uint16_t page_type)
+void mmap_$move_pages_to_wsl_type(uint32_t vpn_head, uint16_t page_type,
+                                  uint16_t scan_wsl_index, int16_t scan_mode)
 {
+    /* 0x00E0D28C-0x00E0D29A */
+    uint8_t priority = (scan_mode < 0) ? (uint8_t)scan_wsl_index : 0;
+
     ws_hdr_t *wsl = WSL_FOR_INDEX(page_type);
     uint32_t current = vpn_head;
     uint32_t last = 0;
@@ -288,7 +336,7 @@ void mmap_$move_pages_to_wsl_type(uint32_t vpn_head, uint16_t page_type)
         count++;
         mmape_t *page = MMAPE_FOR_VPN(current);
         page->prev_vpn = (uint16_t)last;
-        page->priority = 0;  /* TODO(source-4in): May need special handling */
+        page->priority = priority;   /* 0x00E0D2B0 */
         page->wsl_index = (uint8_t)page_type;
 
         last = current;

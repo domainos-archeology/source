@@ -60,7 +60,6 @@ void WP_$UNWIRE(uint32_t wired_addr);
  *   ppn - Physical page number to wire
  *
  * Original address: 0x00E071B0
- * TODO: no C implementation yet (called from FLP_$DINIT).
  */
 void WP_$WIRE(uint32_t ppn);
 

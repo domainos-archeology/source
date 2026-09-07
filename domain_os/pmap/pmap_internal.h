@@ -210,26 +210,34 @@ extern uint8_t *mmape_raw_base;         /* 0xEB2800: MMAPE array */
  *   batch_vpns    - Array of VPNs to write
  *   segmap        - Segment map base pointer
  *   status        - Pointer to caller's status output
+ *   aste          - PMAP_$FLUSH's `aste` argument, forwarded to
+ *                   pmap_$update_seg_map (the original reaches it through
+ *                   the static link in A4)
+ *   flags         - PMAP_$FLUSH's `flags` argument, forwarded likewise
  *
  * Original address: 0x00e1360c
  */
 void pmap_$flush_write_batch(int16_t *batch_count_p, uint32_t *batch_vpns,
-                              uint32_t *segmap, status_$t *status);
+                              uint32_t *segmap, status_$t *status,
+                              struct aste_t *aste, uint16_t flags);
 
-/* pmap_$update_seg_map - Update segment map after page write
+/*
+ * pmap_$update_seg_map - release or invalidate a page after write-back
  *
- * Checks ASTE flag at offset 0x15 bit 0. If not set, calls
- * MMAP_$AVAIL. If set, calls AST_$INVALIDATE_PAGE and optionally
- * logs via NETLOG_$LOG_IT.
+ * A nested Pascal procedure of PMAP_$FLUSH.  A1 carries the static link
+ * (PMAP_$FLUSH's frame), through which the original reads PMAP_$FLUSH's
+ * `aste` argument at (0x08,A1) and the low byte of its `flags` argument at
+ * (0x15,A1); both are passed explicitly in this flattening.
  *
- * NOTE: Uses hidden A1 register parameter (ASTE pointer) from
- * the m68k calling convention. On m68k, A1 is set by the caller
- * and read via movea.l A1,A2 at function entry.
+ * flags bit 0 clear -> MMAP_$AVAIL(vpn);
+ * flags bit 0 set   -> AST_$INVALIDATE_PAGE + optional NETLOG_$LOG_IT.
  *
  * Original address: 0x00e1359c
  * Size: 112 bytes
  */
-void pmap_$update_seg_map(uint16_t *segmap_entry, uint32_t vpn, uint16_t page_idx);
+void pmap_$update_seg_map(struct aste_t *aste, uint16_t flags,
+                          uint32_t *segmap_entry, uint32_t vpn,
+                          uint16_t page_idx);
 
 /*
  * pmap_$write_page - Write a single page to disk or network

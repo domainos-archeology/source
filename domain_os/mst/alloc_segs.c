@@ -53,14 +53,14 @@
  * Original address: 0x00E43182
  * Size: 1162 bytes
  *
- * TODO(source-n1i): Full C decompilation of this function is complex due to:
- * - Multiple segment search strategies (top-down, bottom-up, fixed)
- * - Page table page allocation during search
- * - MST/page table data structure access patterns
- * - Anonymous vs named area handling
- * - Audit logging for private mappings
- *
- * The assembly has been verified against the Ghidra output.
+ * TODO(source-n1i): mst_$alloc_segs (0x00E43182, 1162 bytes) is not yet
+ * decompiled; the file below has no function body at all.  Everything is
+ * missing: the three segment search strategies (top-down, bottom-up and
+ * fixed address), the page-table-page allocation performed during the
+ * search, the anonymous-versus-named area handling, the MST entry setup
+ * and the audit record written for private mappings.  Its five internal
+ * helpers are listed below.  Tracked by bead source-n1i
+ * ("Implement mst_$alloc_segs (0xe43182) - 1162-byte segment allocation").
  */
 
 #include "mst/mst_internal.h"

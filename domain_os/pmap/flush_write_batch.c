@@ -29,6 +29,11 @@
  *   A4+0x0C: segmap pointer (PMAP_$FLUSH parameter)
  *   A4+0x16: status pointer (PMAP_$FLUSH parameter)
  *
+ * A4 is also handed on unchanged (in A1) to pmap_$update_seg_map at
+ * 0x00E13718, which uses it to read PMAP_$FLUSH's `aste` (A4+0x08) and
+ * `flags` (the low byte of the word at A4+0x14).  Those two are therefore
+ * extra explicit parameters here.
+ *
  * Original address: 0x00E1360C
  * Size: 352 bytes
  */
@@ -81,7 +86,8 @@
 #endif
 
 void pmap_$flush_write_batch(int16_t *batch_count_p, uint32_t *batch_vpns,
-                              uint32_t *segmap, status_$t *status)
+                              uint32_t *segmap, status_$t *status,
+                              aste_t *aste, uint16_t flags)
 {
     /*
      * DISK_$GET_QBLKS returns queue block pointers.
@@ -168,15 +174,20 @@ void pmap_$flush_write_batch(int16_t *batch_count_p, uint32_t *batch_vpns,
                             0, 0, 0);
                     }
 
-                    /* Update segment map - release page or invalidate remote mapping.
-                     * segmap + page_idx gives byte offset page_idx*4 from segmap base
-                     * (since segmap is uint32_t*).
-                     * NOTE: On m68k, A1 is set to parent frame pointer before this call
-                     * as a hidden parameter for nested procedure access to ASTE. */
-                    pmap_$update_seg_map(
-                        (uint16_t *)(segmap + page_idx),
-                        (uint32_t)vpn,
-                        page_idx);
+                    /*
+                     * 0x00E13706-0x00E1371E: release the page or invalidate
+                     * the remote mapping.  `segmap + page_idx` is the
+                     * `pea (0x0,A1,D0w)` with D0 = page_idx << 2 at
+                     * 0x00E13714 (segmap is uint32_t*).  0x00E13718 loads
+                     * A1 with A4, this procedure's own static link, which
+                     * pmap_$update_seg_map uses to reach PMAP_$FLUSH's
+                     * `aste` and `flags` arguments -- forwarded explicitly
+                     * here.
+                     */
+                    pmap_$update_seg_map(aste, flags,
+                                         segmap + page_idx,
+                                         (uint32_t)vpn,
+                                         page_idx);
 
                 } else if (*qblk_status_p != -1) {
                     /* Write returned error (not -1 sentinel) -

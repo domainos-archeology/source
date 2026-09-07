@@ -29,7 +29,7 @@
  *
  * Note that on the no-waiter path interrupts are NOT disabled until
  * 0x00E20EAC, and the early return at 0x00E20EEE leaves the IPL alone.
- * See ml_$release_tail() in ml/ml_internal.h for the shared exit path.
+ * See proc1_$release_tail() in proc1/proc1.h for the shared exit path.
  */
 
 #include "ml/ml_internal.h"
@@ -89,5 +89,5 @@ void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
     pcb->resource_locks_held &= ~1u;
 
     /* 0x00E20EB6: shared epilogue; ends with a forced IPL 0. */
-    ml_$release_tail(pcb);
+    proc1_$release_tail(pcb);
 }
