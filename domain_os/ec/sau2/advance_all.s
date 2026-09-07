@@ -10,7 +10,17 @@
  * Original address: 0x00e20702
  */
 
-    .text
+/*
+ * Section note: gas fixes the pre-created .text section's alignment at 2**2
+ * and offers no directive to lower it, which pads this object out to a
+ * longword boundary and shifts the rest of the run off the image's gaps.  A
+ * section created with `.section' starts at 2**0 and `.balign 2' raises it to
+ * exactly the m68k requirement, so the four ec/sau2 objects link contiguously.
+ * sau2.ld names these sections explicitly (source-0ke7).
+ */
+        .section .text.ec_advance_all,"ax",@progbits
+        .balign 2
+
     .globl  EC_$ADVANCE_ALL
     .globl  _EC_$ADVANCE_ALL
 

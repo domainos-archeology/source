@@ -674,6 +674,13 @@ typedef struct ring_$stats_t {
     int8_t      _reserved5;         /* 0x3B */
 } ring_$stats_t;
 
+/*
+ * Per-unit statistics array, 0x00E261E0.  SAU2 map: `E261E0 RING_$DATA`, the
+ * last object in `D E261AC RING_WIRED size = AC`.  Public because
+ * ASKNODE_$INTERNET_INFO copies RING_$DATA[0] into its reply (0x00E647E6).
+ */
+extern ring_$stats_t RING_$DATA[RING_MAX_UNITS];
+
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(ring_$stats_t, xmit_call)          == 0x02, "ring_$stats_t.xmit_call");
 _Static_assert(offsetof(ring_$stats_t, xmitcnt)            == 0x06, "ring_$stats_t.xmitcnt");

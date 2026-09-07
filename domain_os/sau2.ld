@@ -106,16 +106,34 @@ SECTIONS {
          * So the head of the run is spelled out object by object, in the
          * order the SAU2 map gives for PROC1_ASM; the two whole-subsystem
          * gathers below pick up whatever is left.
+         *
+         * The four ec entries are named by SECTION rather than by object file
+         * (`.text.ec_advance' ... `.text.ec_advance_int', declared in the
+         * matching ec/sau2/*.s).  gas pins the pre-created .text section's
+         * alignment at 2**2 with no directive to lower it, so gathering these
+         * as `foo.o(.text)' padded advance_all.o - 0x16 bytes in the image,
+         * ending 2-mod-4 - out to 0x18 and pushed everything after it two
+         * bytes off the image's gaps.  Sections made with `.section' start at
+         * 2**0 and the files' `.balign 2' raises them to the m68k minimum, so
+         * the run is contiguous: 0xE206EE, +0x14 0xE20702, +0x16 0xE20718,
+         * +0x10 0xE20728 (ADVANCE), +4 0xE2072C (ADVANCE_INT), +0x9A 0xE207C6
+         * (ADVANCE_ALL_INT), +0xE 0xE207D4 = PROC1_$REORDER_READY.
+         *
+         * ADVANCE, ADVANCE_INT and ADVANCE_ALL_INT are one 0xAC-byte map
+         * object (`ADVANCE' at 0xE20728) and one source file,
+         * ec/sau2/advance_int.s - ADVANCE_ALL_INT branches into the middle of
+         * ADVANCE_INT, so they cannot be split (source-0ke7).
          */
         *(.text.proc1_asm_data)                     /* PROC1_$CURRENT       0xE20608 */
         */ec/wait.o(.text)                          /* EC_$WAIT             0xE20610 */
         */ec/waitn.o(.text)                         /* EC_$WAITN            0xE2063E */
         */proc1/remove_ready.o(.text)               /* PROC1_$REMOVE_READY  0xE206D2 */
-        */ec/sau2/advance.o(.text)                  /* EC_$ADVANCE          0xE206EE */
-        */ec/sau2/advance_all.o(.text)              /* EC_$ADVANCE_ALL      0xE20702 */
-        */ec/sau2/advance_without_dispatch.o(.text) /* EC_$ADVANCE_WO_DISP  0xE20718 */
-        */ec/advance_int.o(.text)                   /* ADVANCE/ADVANCE_INT  0xE20728 */
-        */ec/advance_all_int.o(.text)               /* ADVANCE_ALL_INT      0xE207C6 */
+        *(.text.ec_advance)                         /* EC_$ADVANCE          0xE206EE */
+        *(.text.ec_advance_all)                     /* EC_$ADVANCE_ALL      0xE20702 */
+        *(.text.ec_advance_wo_dispatch)             /* EC_$ADVANCE_WO_DISP  0xE20718 */
+        *(.text.ec_advance_int)                     /* ADVANCE              0xE20728 */
+                                                    /* ADVANCE_INT          0xE2072C */
+                                                    /* ADVANCE_ALL_INT      0xE207C6 */
         */ec/*.o(.text)
         */proc1/*.o(.text)
 

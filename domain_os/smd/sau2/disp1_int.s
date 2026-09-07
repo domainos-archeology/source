@@ -168,7 +168,7 @@ Lstate1:
          * models the gate and the body as one C function taking the
          * eventcount by reference, so that is the symbol to call.
          */
-        jsr     (ADVANCE_INT).l         /* 00e26fe6                          */
+        jsr     (ADVANCE).l         /* 00e26fe6                          */
         addq.w  #4,%sp                  /* 00e26fec  584f                    */
         movea.l (%sp)+,%a1              /* 00e26fee  225f                    */
 
@@ -272,7 +272,7 @@ Lcheck_steps_i:
         move.w  %sr,-(%sp)              /* 00e27056  40e7                    */
         ori.w   #0x700,%sr              /* 00e27058  007c 0700               */
         pea     (0x10,%a1)              /* 00e2705c  4869 0010               */
-        jsr     (ADVANCE_INT).l         /* 00e27060  4eb9 00e2 0728          */
+        jsr     (ADVANCE).l         /* 00e27060  4eb9 00e2 0728          */
         addq.w  #4,%sp                  /* 00e27066  584f                    */
         move.w  (%sp)+,%sr              /* 00e27068  46df                    */
         movem.l (%sp)+,%d0-%d1/%a0-%a1  /* 00e2706a  4cdf 0303               */

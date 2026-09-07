@@ -28,7 +28,8 @@
  * Handle local node query for request type
  */
 static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
-                                     uint32_t *result, status_$t *local_status)
+                                     uint32_t *result, status_$t *local_status,
+                                     status_$t *status)
 {
     uint32_t ret_val = 0;
     *local_status = 0;
@@ -52,6 +53,16 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
             result[2] = temp_uid.high;
             result[3] = temp_uid.low;
             result[1] = 0;
+            /*
+             * 0x00E648CC-0x00E648D2:
+             *   move.l (0x8,A1),D3 / neg.l D3 / move.l D3,(0x12,A1)
+             * reply+0x12 = -(reply+0x08).  The remote arm of this same
+             * function reads it back at 0x00E6581C as
+             * "(0x12,A1) + (0x8,A1) == 0", i.e. it is the complement that
+             * marks "this uid names the responding node itself"; the
+             * companion word pair at +0x22 sums to 1 instead (0x00E657F6).
+             */
+            *(uint32_t *)((char *)result + 0x12) = -result[2];
             /* Set mother node or local node based on diskless flag */
             uint32_t *word_1e = (uint32_t *)((char *)result + 0x1E);
             *word_1e = (*word_1e & 0xFFF00000);
@@ -78,9 +89,14 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         *(uint16_t *)((char *)result + 0x1A) = NETWORK_$READ_VIOL_CNT;
         *(uint16_t *)(result + 7) = NETWORK_$WRITE_VIOL_CNT;
         *(uint16_t *)((char *)result + 0x1E) = NETWORK_$BAD_CHKSUM_CNT;
-        /* Copy RING_$CTL (15 words) */
+        /*
+         * Copy 15 longwords to reply+0x20 (0x00E647E6-0x00E647F6).  The
+         * source the image names is 0xE261E0, which the SAU2 map calls
+         * RING_$DATA (the per-unit statistics array) - NOT RING_$CTL at
+         * 0xE86400.
+         */
         {
-            uint32_t *src = (uint32_t *)&RING_$CTL;
+            uint32_t *src = (uint32_t *)&RING_$DATA[0];
             uint32_t *dst = result + 8;
             int16_t i;
             for (i = 0; i < 15; i++) {
@@ -92,15 +108,28 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
             uint8_t temp;
             DISK_$GET_STATS(0, 0, &temp, result + 0x17);
         }
-        /* Copy memory stats (21 words) */
-        {
-            uint16_t *src = (uint16_t *)&MEM_$MEM_REC;
-            uint16_t *dst = (uint16_t *)((char *)result + 0x72);
-            int16_t i;
-            for (i = 0; i < 21; i++) {
-                *dst++ = *src++;
-            }
-        }
+        /*
+         * Copy MEM_$MEM_REC into the reply at +0x72 (0x00E64812-0x00E6482A):
+         *
+         *   00e64812  movea.l #0xe22934,A0     ; MEM_$MEM_REC
+         *   00e6481c  moveq #0x14,D3
+         *   00e6481e  lea (0x72,A1),A3
+         *   00e64824  move.l (A0)+,(A3)+
+         *   00e64826  dbf D3w,0x00e64824       ; 21 longwords
+         *   00e6482a  move.w (A0)+,(A3)+       ; + one word
+         *
+         * 21*4 + 2 = 0x56 bytes, 0xE22934..0xE22989 - the whole record,
+         * page-error table included (mem/mem.h).  The copy is expressed as a
+         * whole-record assignment through a correctly typed destination
+         * pointer: MEM_$MEM_REC is a field of the unpacked mem_data_t, so
+         * neither side is an address-of-packed-member, and sizeof is exactly
+         * the 0x56 bytes the loop moves.  Source and destination cannot
+         * overlap, so the moves' order is not observable.
+         *
+         * The destination runs 0x72..0xC7, so it covers the +0x76 word the
+         * next statement overwrites - the store order below is the image's.
+         */
+        *(mem_$mem_rec_t *)((char *)result + 0x72) = MEM_$MEM_REC;
         /* Real pages count */
         if (MMAP_$REAL_PAGES < 0x10000) {
             *(uint16_t *)((char *)result + 0x76) = (uint16_t)MMAP_$REAL_PAGES;
@@ -184,8 +213,14 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         break;
 
     default:
-        /* Unknown request type */
-        *local_status = status_$network_unknown_request_type;
+        /*
+         * 0x00E64786 falls through the whole cmpi chain to 0x00E65502:
+         *   move.l #0x11000d,(A4)
+         * A4 is the caller's status_ret (0x20,A6), not the local status word
+         * at (-0x110,A6) - so *status carries the error and reply+0x04 stays
+         * zero, since 0x00E65508 copies the untouched local status there.
+         */
+        *status = status_$network_unknown_request_type;
         break;
     }
 
@@ -220,7 +255,8 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
         }
 
         /* Handle the request locally */
-        ret_val = handle_local_request(request, param, result, &local_status);
+        ret_val = handle_local_request(request, param, result, &local_status,
+                                       status);
 
         /* Set response type (request + 1) */
         *(uint16_t *)((char *)result + 2) = request + 1;
@@ -294,6 +330,14 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
          */
         uint32_t sar_resp_info[8];
         uint16_t resp_tpl_len;      /* A6-0x146 */
+        /*
+         * A6-0x142, PKT_$SAR_INTERNET's sixteenth argument: the length of the
+         * reply DATA area the callee actually filled in.  The image copies it
+         * into D2 right after each call (0x00E65748) and the request-0x31 arm
+         * at 0x00E6589C-0x00E658A0 writes that copy back into the reply, so
+         * the cell has to outlive the retry loop.
+         */
+        uint16_t resp_data_len = 0;
         uint8_t temp2[4];
         uint16_t data_len = 0;
         uint32_t routing = *node_id;
@@ -371,7 +415,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
         /* If port is -1, use hint system to find routing */
         if (port == -1) {
             uid_t hint_uid;
-            int32_t hints[10];
+            uint32_t hints[10];
             hint_uid.high = UID_$NIL.high;
             hint_uid.low = (UID_$NIL.low & 0xFFF00000) | *node_id;
             HINT_$GET_HINTS(&hint_uid, hints);
@@ -390,8 +434,6 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
 
         /* Send and receive */
         do {
-            uint16_t resp_data_len;
-
             /*
              * 0x00E656FC - 0x00E6573C, seventeen arguments and a 0x38-byte
              * caller cleanup.  Pushed last to first:
@@ -449,7 +491,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
          * original stores is 0x11000B, "unexpected reply type"; the response
          * type is the word at +0x02 of the reply record.
          */
-        if ((uint16_t)*result != request + 1) {
+        if ((uint32_t)*(uint16_t *)((char *)result + 2) != (uint32_t)request + 1) {
             *status = status_$network_unexpected_reply_type;
             return (uint16_t)*result;
         }
@@ -476,9 +518,15 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
             }
         }
 
-        /* Special handling for log read response */
+        /*
+         * Special handling for the log-read response (0x00E65894-0x00E658A0):
+         *   cmpi.w #0x31,(-0xfe,A6) / movea.l (0x1c,A6),A1
+         *   move.w D2w,(0x8,A1)
+         * D2 is the reply DATA length PKT_$SAR_INTERNET returned
+         * (0x00E65748), not the request-side clamp in (-0x144,A6).
+         */
         if (request == 0x31) {
-            *(uint16_t *)(result + 2) = data_len;
+            *(uint16_t *)(result + 2) = resp_data_len;
         }
     }
 

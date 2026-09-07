@@ -10,7 +10,17 @@
  * Original address: 0x00e206ee
  */
 
-    .text
+/*
+ * Section note: gas fixes the pre-created .text section's alignment at 2**2
+ * and offers no directive to lower it, which pads this object out to a
+ * longword boundary and shifts the rest of the run off the image's gaps.  A
+ * section created with `.section' starts at 2**0 and `.balign 2' raises it to
+ * exactly the m68k requirement, so the four ec/sau2 objects link contiguously.
+ * sau2.ld names these sections explicitly (source-0ke7).
+ */
+        .section .text.ec_advance,"ax",@progbits
+        .balign 2
+
     .globl  EC_$ADVANCE
     .globl  _EC_$ADVANCE
 
@@ -21,19 +31,12 @@ _EC_$ADVANCE:
     /*
      * Image: 0xE206F6  61 34  bsr.b ADVANCE_INT  (0xE206F8 + 0x34 = 0xE2072C)
      *
-     * sau2.ld links ec/advance_int.o immediately after the three ec/sau2
-     * objects (SAU2 map PROC1_ASM order), so the R_68K_PC8 displacement is
-     * in range and gas keeps the image's two-byte encoding: the object holds
-     * `61 00' plus the fixup and is 0x14 bytes, exactly the image's
-     * 0xE206EE..0xE20701 (source-mc3k).
-     *
-     * The linked displacement is 0x32, not the image's 0x34, for two reasons,
-     * neither of them an instruction-byte difference:
-     *   -4  TODO(source-0ke7, 0xE20728): ADVANCE, the 4-byte C-callable entry
-     *       that falls through into ADVANCE_INT, is not in the tree yet, so
-     *       ec/advance_int.o starts directly at ADVANCE_INT.
-     *   +2  gas gives every .s .text section 2**2 alignment, so a 2-byte pad
-     *       follows advance_all.o (image size 0x16, ending 2-mod-4).
+     * sau2.ld links ec/sau2/advance_int.o (ADVANCE 0xE20728 / ADVANCE_INT
+     * 0xE2072C / ADVANCE_ALL_INT 0xE207C6) immediately after the three
+     * ec/sau2 entry objects, in the SAU2 map's PROC1_ASM order, so the
+     * R_68K_PC8 displacement is in range and gas keeps the image's two-byte
+     * encoding: the object holds `61 00' plus the fixup and is 0x14 bytes,
+     * exactly the image's 0xE206EE..0xE20701 (source-mc3k, source-0ke7).
      */
     bsr.b   ADVANCE_INT             /* Call internal advance */
     bsr.w   PROC1_$DISPATCH_INT     /* Call dispatcher */

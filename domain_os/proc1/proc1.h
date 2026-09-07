@@ -223,7 +223,11 @@ extern uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
  */
 extern ts_timer_entry_t TS_TIMER_TABLE[PROC1_MAX_PROCESSES]; /* 0xE254E8 */
 extern char TS_QUEUE_TABLE[PROC1_MAX_PROCESSES * 12];        /* 0xE2A494 */
-extern int16_t TIMESLICE_TABLE[PROC1_MAX_STATES];            /* 0xE205D2 */
+/* 0xE205D2: SAU2 map PROC1_$TSVV, one timeslice word per state, 18 entries
+ * (0xE205D2..0xE205F6 = PROC1_$SUSPEND_EC); ADVANCE_INT bounds the index with
+ * `cmp.l #0x11' at 0xE20780. */
+#define PROC1_TSVV_COUNT 18
+extern int16_t PROC1_$TSVV[PROC1_TSVV_COUNT];
 
 /*
  * Load average data

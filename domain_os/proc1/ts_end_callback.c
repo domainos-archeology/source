@@ -71,7 +71,7 @@ void PROC1_$TS_END_CALLBACK(void *arg)
         }
 
         /* Get new timeslice based on current state */
-        new_timeslice = TIMESLICE_TABLE[pcb->state - 1];
+        new_timeslice = PROC1_$TSVV[pcb->state - 1];
     }
 
     ENABLE_INTERRUPTS(saved_sr);

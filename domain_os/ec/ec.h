@@ -280,17 +280,37 @@ void EC_$ADVANCE_ALL(ec_$eventcount_t *ec);
 void EC_$ADVANCE_WITHOUT_DISPATCH(ec_$eventcount_t *ec);
 
 /*
+ * ADVANCE - the C-callable entry of the map's ADVANCE object (0xE20728,
+ * 0xE20728..0xE207D3).  Four bytes: it loads the eventcount pointer from the
+ * stack into %a0 and falls through into ADVANCE_INT.  Callers in the image are
+ * 0xE14760, 0xE7566E, 0xE26FE6 and 0xE27060.
+ *
+ * Implemented in ec/sau2/advance_int.s.
+ *
+ * Original address: 0x00e20728
+ */
+void ADVANCE(ec_$eventcount_t *ec);
+
+/*
  * Internal helper: ADVANCE_INT
  * Increments value and wakes eligible waiters.
  * Called with interrupts disabled.
+ *
+ * NOTE: hand-written assembly (ec/sau2/advance_int.s) that takes its argument
+ * in %a0, not on the stack.  This prototype is the shape callers written in C
+ * use; on m68k they must reach it through ADVANCE above.  Callers that are
+ * themselves assembly (ml/unlock.c's 0xE20B84 site, proc1/sau2/int_handler.s)
+ * branch to it directly.
  *
  * Original address: 0x00e2072c
  */
 void ADVANCE_INT(ec_$eventcount_t *ec);
 
 /*
- * Internal helper: ADVANCE_ALL (implementation)
- * Sets value to MAX_INT and processes waiter list.
+ * Internal helper: ADVANCE_ALL_INT (implementation)
+ * Slams value to 0x7FFFFFFF and rejoins ADVANCE_INT's waiter scan.
+ *
+ * NOTE: hand-written assembly (ec/sau2/advance_int.s); argument in %a0.
  *
  * Original address: 0x00e207c6
  */

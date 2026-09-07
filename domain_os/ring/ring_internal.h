@@ -103,12 +103,6 @@ extern volatile uint16_t ring_$dma_chan1_count_cell;
  * ============================================================================
  */
 
-/*
- * Per-unit statistics array, 0x00E261E0.  SAU2 map: `E261E0 RING_$DATA`, the
- * last object in `D E261AC RING_WIRED size = AC`.
- */
-extern ring_$stats_t RING_$DATA[RING_MAX_UNITS];
-
 /* Ring network UID (copy for initialization), at 0x00E1747C */
 extern uid_t RING_$NETWORK_UID_TEMPLATE;
 

@@ -132,7 +132,17 @@ char TS_QUEUE_TABLE[PROC1_MAX_PROCESSES * 12];
  *
  * Note: PROC1_MAX_STATES is defined in proc1.h
  */
-int16_t TIMESLICE_TABLE[PROC1_MAX_STATES] = { 0 };
+/* Image bytes at 0xE205D2 (gsk read): ffff x7, 7d00 x4, 30d4 x5, ffff x2.
+ * Lives in the PROC1_ASM code segment (map: E205D2 PROC1_$TSVV, before
+ * PROC1_$SUSPEND_EC E205F6), reached PC-relative by ADVANCE_INT's
+ * `lea (PROC1_$TSVV:w,%pc),%a0` at 0xE2078C, hence PROC1_ASM_DATA_SECTION. */
+int16_t PROC1_$TSVV[PROC1_TSVV_COUNT] PROC1_ASM_DATA_SECTION = {
+    -1, -1, -1, -1, -1, -1, -1,
+    0x7D00, 0x7D00, 0x7D00, 0x7D00,
+    0x30D4, 0x30D4, 0x30D4, 0x30D4, 0x30D4,
+    -1, -1
+};
+_Static_assert(sizeof(PROC1_$TSVV) == 0xE205F6 - 0xE205D2, "PROC1_$TSVV extent");
 
 /*
  * ============================================================================
