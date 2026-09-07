@@ -45,7 +45,7 @@ void TPAD_$INIT(void)
         config = TPAD_$UNIT_CONFIG(unit);
 
         /* Query display dimensions */
-        SMD_$INQ_DISP_INFO(&unit, &disp_info, &status);
+        SMD_$INQ_DISP_INFO((uint16_t *)&unit, &disp_info, &status);
 
         /*
          * If display info is valid (type != 0), use display dimensions.
@@ -61,34 +61,47 @@ void TPAD_$INIT(void)
         }
 
         /*
-         * TODO(source-j999): these two copies and the two divisions below do
-         * not match TPAD_$INIT's assembly.  0x00E335DA
-         * "move.w (-0x18,A3),(-0x26,A3)" writes config +0x14 (x_max_disp)
-         * into config +0x06, which tpad.h calls x_scale, not +0x0A (x_range);
-         * 0x00E335E0 likewise writes y_max_disp into +0x08 (y_scale).  The
-         * factors then come out as 0x00E335F4 "move.w (-0x22,A3),D0w" /
-         * "divs.w (-0x26,A3),D0", i.e. config[+0x0A] / config[+0x06] - the
-         * reciprocal of what is written here.  Either the copies below are
-         * inverted or tpad.h's names for +0x06/+0x0A (and +0x08/+0x0C) are;
-         * tpad is not owned by the SMD pass that found this, so the bytes are
-         * left alone for now.
+         * Resolved (bead source-j999): the header's names for +0x06/+0x08
+         * (x_scale/y_scale) and +0x0A/+0x0C (x_range/y_range) are correct and
+         * this file was inverted.  TPAD_$SET_UNIT_MODE writes its `xs`/`ys`
+         * arguments to +0x06/+0x08 (0x00E69838 "move.w (A4),(-0x26,A1)" and
+         * 0x00E69840 "move.w (A0),(-0x24,A1)", A1 = config + 0x2C), and
+         * TPAD_$RE_RANGE_UNIT seeds +0x0A/+0x0C with TPAD_$INITIAL_RANGE
+         * (0x00E69A74/0x00E69A7A "move.w #0x200,(-0x22,A1)"/"(-0x20,A1)")
+         * beside x_min/y_min.  So +0x06/+0x08 is the scale pair and
+         * +0x0A/+0x0C the range pair.
+         *
+         * TPAD_$INIT therefore copies the display bounds into the *scale*
+         * fields:
+         *   0x00E335DA move.w (-0x18,A3),(-0x26,A3)  ->  +0x06 = +0x14
+         *   0x00E335E0 move.w (-0x14,A3),(-0x24,A3)  ->  +0x08 = +0x18
+         * (A3 = config + 0x2C throughout the loop, so displacement -0x2C+k is
+         * config offset k.)
          */
-        /* Copy display bounds to coordinate range */
-        config->x_range = config->x_max_disp;
-        config->y_range = config->y_max_disp;
+        config->x_scale = config->x_max_disp;
+        config->y_scale = config->y_max_disp;
 
-        /* Compute X conversion factor */
-        if (config->x_range == 0) {
+        /*
+         * Conversion factors, identical in all three writers of these fields:
+         *   0x00E335E6 tst.w (-0x26,A3)      -> if x_scale == 0
+         *   0x00E335EC move.w #0x400,(-0x10,A3)      x_factor = 0x400
+         *   0x00E335F4 move.w (-0x22,A3),D0w / ext.l / divs.w (-0x26,A3),D0
+         *   0x00E335FE move.w D0w,(-0x10,A3)         x_factor = x_range/x_scale
+         * and the same shape at 0x00E33602-0x00E3361A for Y using +0x08,
+         * +0x0C and +0x1E.  Compare TPAD_$RE_RANGE_UNIT 0x00E69A80-0x00E69AB4
+         * and TPAD_$SET_UNIT_MODE 0x00E69844-0x00E69878, which are byte for
+         * byte the same sequence.
+         */
+        if (config->x_scale == 0) {
             config->x_factor = TPAD_$FACTOR_DEFAULT;  /* 0x400 = 1024 */
         } else {
-            config->x_factor = config->x_scale / config->x_range;
+            config->x_factor = config->x_range / config->x_scale;
         }
 
-        /* Compute Y conversion factor */
-        if (config->y_range == 0) {
+        if (config->y_scale == 0) {
             config->y_factor = TPAD_$FACTOR_DEFAULT;  /* 0x400 = 1024 */
         } else {
-            config->y_factor = config->y_scale / config->y_range;
+            config->y_factor = config->y_range / config->y_scale;
         }
     }
 

@@ -97,7 +97,7 @@ void SMD_$BLINK_CURSOR_CALLBACK(void)
         if (SMD_BLINK_STATE.blink_counter == 0) {
             /* Call the unit-specific blink function */
             /* The blink function pointer table is at A5+0x1DA0 for each unit */
-            SMD_BLINK_FUNC_PTABLE[SMD_DEFAULT_DISPLAY_UNIT]();
+            SMD_BLINK_FUNC_PTABLE[SMD_GLOBALS.default_unit]();
 
             /* If cursor is currently visible, use slower blink rate */
             if (SMD_BLINK_STATE.blink_flag < 0) {
@@ -124,7 +124,7 @@ void SMD_$BLINK_CURSOR_CALLBACK(void)
                 SMD_GLOBALS.blank_time = TIME_$CLOCKH;
             } else {
                 /* Blank timeout expired - turn off video */
-                SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID] = SMD_DEFAULT_DISPLAY_UNIT;
+                SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID] = SMD_GLOBALS.default_unit;
 
                 /* Turn off video */
                 static uint8_t video_off_flag = 0;  /* SMD_VIDEO_DISABLE */
@@ -139,7 +139,7 @@ void SMD_$BLINK_CURSOR_CALLBACK(void)
     if (SMD_GLOBALS.tp_cursor_timeout >= 0) {
         SMD_GLOBALS.tp_cursor_timeout++;
         if (SMD_GLOBALS.tp_cursor_timeout >= 2) {
-            SMD_$STOP_TP_CURSOR(&SMD_DEFAULT_DISPLAY_UNIT);
+            SMD_$STOP_TP_CURSOR(&SMD_GLOBALS.default_unit);
         }
     }
 }

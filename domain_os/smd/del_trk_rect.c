@@ -17,8 +17,17 @@
  *   0x00E6E59A - Lock data 1
  *   0x00E6E458 - Lock data 2
  */
-static const uint32_t cursor_lock_data_1 = 0x00E6E59A;
-static const uint32_t cursor_lock_data_2 = 0x00E6E458;
+/*
+ * Resolved (bead source-2c9v): these two by-reference arguments are code-region
+ * constant cells, not variables holding their addresses.  The call site pushes
+ *   0x00E6E706 "pea (0x1d94,A5)", 0x00E6E702 "pea (-0x16a,PC)" -> 0x00E6E59A, 0x00E6E6FE "pea (-0x2a8,PC)" -> 0x00E6E458
+ * ("pea (d,PC)" resolves to instruction + 2 + d), and SHOW_CURSOR dereferences
+ * argument 2 as a word (0x00E6E1EA "move.w (A1),D6w") and argument 3 as a byte
+ * (0x00E6E1EE "move.b (A2),D5b").  The cells hold 0xFFFF and 0xFF; the file
+ * statics that used to live here held the *addresses* 0x00E6E59A / 0x00E6E458,
+ * so SHOW_CURSOR read 0xE59A and 0x00 instead.  The named cells now live in
+ * smd_data.c / smd_internal.h.
+ */
 
 /*
  * SMD_$DEL_TRK_RECT - Delete tracking rectangles
@@ -128,6 +137,5 @@ void SMD_$DEL_TRK_RECT(smd_track_rect_t *rects, uint16_t *count, status_$t *stat
 
     /* Update cursor display */
     SHOW_CURSOR(&SMD_GLOBALS.cursor_pos_sentinel,
-                (int16_t *)&cursor_lock_data_1,
-                (int8_t *)&cursor_lock_data_2);
+                &SMD_MINUS_ONE_DATA, &SMD_TRUE_DATA);
 }

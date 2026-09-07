@@ -9,9 +9,17 @@
 #include "smd/smd_internal.h"
 #include "tpad/tpad.h"
 
-/* Lock data addresses from original code */
-static const uint32_t cursor_show_lock_data_1 = 0x00E6E59A;
-static const uint32_t cursor_show_lock_data_2 = 0x00E6E458;
+/*
+ * Resolved (bead source-2c9v): these two by-reference arguments are code-region
+ * constant cells, not variables holding their addresses.  The call site pushes
+ *   0x00E6E7D6 "pea (A3)" (the pos argument), 0x00E6E7D2 "pea (-0x23a,PC)" -> 0x00E6E59A, 0x00E6E7CE "pea (-0x378,PC)" -> 0x00E6E458
+ * ("pea (d,PC)" resolves to instruction + 2 + d), and SHOW_CURSOR dereferences
+ * argument 2 as a word (0x00E6E1EA "move.w (A1),D6w") and argument 3 as a byte
+ * (0x00E6E1EE "move.b (A2),D5b").  The cells hold 0xFFFF and 0xFF; the file
+ * statics that used to live here held the *addresses* 0x00E6E59A / 0x00E6E458,
+ * so SHOW_CURSOR read 0xE59A and 0x00 instead.  The named cells now live in
+ * smd_data.c / smd_internal.h.
+ */
 
 /*
  * SMD_$SET_UNIT_CURSOR_POS - Set cursor position for a specific unit
@@ -74,15 +82,21 @@ void SMD_$SET_UNIT_CURSOR_POS(uint16_t *unit, smd_cursor_pos_t *pos, status_$t *
         return;
     }
 
-    /* Track unit changes */
-    if ((uint32_t)*unit != (int32_t)(int16_t)SMD_DEFAULT_DISPLAY_UNIT) {
-        SMD_GLOBALS.unit_change_count++;
+    /*
+     * Track unit changes.  0x00E6E7B8 "clr.l D0" / "move.w (A2),D0w" makes the
+     * argument a *zero*-extended longword, while 0x00E6E7BC
+     * "move.w (0x1d98,A5),D1w" / "ext.l D1" sign-extends the current unit, and
+     * 0x00E6E7C2 "cmp.l D1,D0" compares the two longwords.  (Bead source-nuan:
+     * (0x1d98,A5) is 0x00E84924 - the same word - so this really is
+     * SMD_GLOBALS.default_unit.)
+     */
+    if ((uint32_t)(uint16_t)*unit != (uint32_t)(int32_t)SMD_GLOBALS.default_unit) {
+        SMD_GLOBALS.unit_change_count++;   /* 0x00E6E7C6 addq.w #0x1,(0x1d9e,A5) */
     }
-    SMD_DEFAULT_DISPLAY_UNIT = *unit;
+    SMD_GLOBALS.default_unit = (int16_t)*unit;  /* 0x00E6E7CA */
 
     /* Show cursor at new position */
-    SHOW_CURSOR((uint32_t *)pos, (int16_t *)&cursor_show_lock_data_1,
-                (int8_t *)&cursor_show_lock_data_2);
+    SHOW_CURSOR(pos, &SMD_MINUS_ONE_DATA, &SMD_TRUE_DATA);
 
     /* Synchronize with trackpad subsystem.  TPAD spells the same 32-bit
      * position out as the union smd_$pos_t {y at 0x00, x at 0x02}, which is

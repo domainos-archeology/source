@@ -219,6 +219,16 @@ typedef struct smd_display_hw_t {
  */
 
 #if defined(ARCH_M68K)
+_Static_assert(offsetof(smd_display_hw_t, lock_state) == 0x02, "hw lock_state");
+_Static_assert(offsetof(smd_display_hw_t, lock_ec) == 0x04, "hw lock_ec");
+/* SMD_$GET_EC 0x00E6FDFA "pea (0x10,A3)" and SMD_$START_BLT 0x00E15D72
+ * "move.l (0x10,A2),(0x1c,A2)". */
+_Static_assert(offsetof(smd_display_hw_t, op_ec) == 0x10, "hw op_ec");
+_Static_assert(offsetof(smd_display_hw_t, field_1c) == 0x1C, "hw field_1c");
+_Static_assert(offsetof(smd_display_hw_t, video_flags) == 0x22, "hw vflags");
+/* SMD_$SEND_RESPONSE 0x00E6F500 "pea (-0x20,A2)" and SMD_$BORROW_DISPLAY
+ * 0x00E6F60E "move.l (0x40,A3),D2". */
+_Static_assert(offsetof(smd_display_hw_t, cursor_ec) == 0x40, "hw cursor_ec");
 _Static_assert(offsetof(smd_display_hw_t, cursor_pos) == 0x32, "hw cursor_pos");
 _Static_assert(offsetof(smd_display_hw_t, cursor_number) == 0x36, "hw cursor#");
 _Static_assert(offsetof(smd_display_hw_t, cursor_visible) == 0x38, "hw vis");
@@ -462,45 +472,37 @@ _Static_assert(sizeof(smd_display_unit_t) == SMD_DISPLAY_UNIT_SIZE,
  * ============================================================================
  * Display Info Entry
  * ============================================================================
- * Per-display configuration. Each entry is 0x60 bytes.
- * Base address: 0x00E27376
+ * Resolved (bead source-fqne): the 0x60-byte "display info" entry at
+ * 0x00E27376 and the per-display *hardware* record that
+ * smd_display_unit_t::hw points at are one and the same object.  SMD_$INIT
+ * stores the literal 0x00E27376 into unit 1's hw pointer
+ * (0x00E34D96 "move.l #0xe27376,(0x18,A0)") and then reaches the same words
+ * through A4 = rec->hw (0x00E34DE8 "clr.w (0x52,A4)", 0x00E34E06
+ * "move.w #0x31f,(0x50,A4)").  Cross-checked from both sides:
+ *
+ *   +0x00  display_type  smd_$validate_unit 0x00E6D722 "tst.w (-0x60,A0,D1)"
+ *                        vs SMD_$INIT 0x00E34E1E "clr.w (0x2,A4)" neighbours
+ *   +0x32  cursor_pos    smd_$reset_display_globals 0x00E6D80E
+ *                        "clr.l (-0x2e,A0)" vs SHOW_CURSOR 0x00E6E250
+ *                        "move.l (0x32,A2),(-0x8,A6)"
+ *   +0x36  cursor_number smd_$reset_display_globals 0x00E6D812 vs
+ *                        SHOW_CURSOR 0x00E6E25C "move.w (0x36,A2),D6w"
+ *   +0x38  cursor_visible smd_$reset_display_globals 0x00E6D816 vs
+ *                        SMD_$INQ_KBD_CURSOR 0x00E6E112 "move.b (-0x28,A0),D0b"
+ *   +0x40  cursor_ec     SMD_$SEND_RESPONSE 0x00E6F500 "pea (-0x20,A2)"
+ *   +0x4E..+0x5C         SMD_$SET_CLIP_WINDOW 0x00E6FE7E-0x00E6FEB0 and
+ *                        smd_$write_str_clip_impl 0x00E70402/0x00E7040E
+ *
+ * The old separate smd_display_info_t put the clip window at +0x0C..+0x1B,
+ * which no instruction in the image agrees with, so it is gone: the name is
+ * now an alias for the single recovered layout.
+ *
+ * The entry is 1-based on the unit number - every accessor computes
+ * base + unit*0x60 and then subtracts 0x60 - so use smd_$unit_info(unit).
  */
-typedef struct smd_display_info_t {
-  uint16_t display_type; /* 0x00: Display type code */
-  uint16_t field_02;     /* 0x02: Unknown */
-  uint16_t field_04;     /* 0x04: Unknown */
-  uint16_t field_06;     /* 0x06: Unknown */
-  uint16_t field_08;     /* 0x08: Unknown */
-  uint16_t field_0a;     /* 0x0A: Unknown */
-  /* Clipping window - default bounds */
-  int16_t clip_x1_default; /* 0x0C: Default clip x1 */
-  int16_t clip_y1_default; /* 0x0E: Default clip y1 */
-  int16_t clip_x2_default; /* 0x10: Default clip x2 */
-  int16_t clip_y2_default; /* 0x12: Default clip y2 */
-  /* Clipping window - current bounds */
-  int16_t clip_x1;   /* 0x14: Current clip x1 */
-  int16_t clip_y1;   /* 0x16: Current clip y1 */
-  int16_t clip_x2;   /* 0x18: Current clip x2 */
-  int16_t clip_y2;   /* 0x1A: Current clip y2 */
-  uint8_t pad_1c[0x16]; /* 0x1C-0x31: Unknown */
-  /* 0x32: keyboard cursor position, packed (see smd_cursor_pos_t).
-   * SMD_$INQ_KBD_CURSOR 0x00E6E116 "move.l (-0x2e,A0),(A1)" with
-   * A0 = 0xE27376 + unit*0x60, and smd_$reset_display_globals 0x00E6D80E
-   * clears it. */
-  smd_cursor_pos_t kbd_cursor_pos;
-  uint16_t field_36;    /* 0x36: cleared by smd_$reset_display_globals
-                         *       (0x00E6D812 clr.w (-0x2a,A0)) */
-  /* 0x38: keyboard cursor type, returned by SMD_$INQ_KBD_CURSOR
-   * (0x00E6E112 "move.b (-0x28,A0),D0b") and cleared by
-   * smd_$reset_display_globals (0x00E6D816). */
-  uint8_t kbd_cursor_type;
-  uint8_t pad_39[0x27]; /* 0x39-0x5F: Remaining fields */
-} smd_display_info_t;
+typedef smd_display_hw_t smd_display_info_t;
 
 #if defined(ARCH_M68K)
-_Static_assert(offsetof(smd_display_info_t, kbd_cursor_pos) == 0x32, "di kbdpos");
-_Static_assert(offsetof(smd_display_info_t, field_36) == 0x36, "di 0x36");
-_Static_assert(offsetof(smd_display_info_t, kbd_cursor_type) == 0x38, "di kbdty");
 _Static_assert(sizeof(smd_display_info_t) == SMD_DISPLAY_INFO_SIZE,
                "smd_display_info_t size");
 #endif
@@ -725,7 +727,18 @@ typedef struct smd_globals_t {
                                  * its pos argument against it; every internal
                                  * caller passes its address as that argument
                                  * (e.g. 0x00E6E49A, 0x00E6E586, 0x00E6EB32). */
-  int16_t default_unit;        /* 0x1D98: unit SHOW_CURSOR validates (0x00E6E1F0) */
+  /*
+   * 0x1D98: the default/current display unit.  This is the *same word* the
+   * disassembly also shows as the absolute address 0x00E84924: SMD_GLOBALS is
+   * at 0x00E82B8C and 0x00E82B8C + 0x1D98 = 0x00E84924, and Ghidra's xrefs to
+   * 0x00E84924 are exactly the "(0x1d98,A5)" instructions (0x00E6E1F0,
+   * 0x00E6E0E8, 0x00E6E7BC, 0x00E6E7CA, 0x00E6FC4A, ...).  Bead source-nuan
+   * assumed they were two globals; they are one, so the separate
+   * SMD_DEFAULT_DISPLAY_UNIT object is gone and every caller uses this field.
+   * Signed: SMD_$INQ_KBD_CURSOR 0x00E6E0F6 does "move.w (0x1d98,A5),D0w" then
+   * "ext.l D0".
+   */
+  int16_t default_unit;
   /* 0x1D9A: per-unit "response pending" bytes.  SMD_$SEND_RESPONSE addresses
    * them as (0x1D99,A5 + unit) with unit 1-based (0x00E6F4FC), so unit N is
    * response_pending[N - 1]. */
@@ -844,12 +857,27 @@ extern smd_globals_t SMD_GLOBALS;
 extern uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE +
                                  0x18];
 
-/* Display info table at 0x00E27376 */
+/*
+ * Display info / hardware record table at 0x00E27376, one 0x60-byte entry per
+ * unit, 1-based (use smd_$unit_info()).
+ *
+ * TODO(source-9j2l): the image holds exactly ONE entry - 0x00E27376..
+ * 0x00E273D5, immediately followed by SMD_TIME_$COM at 0x00E273D6 - and
+ * smd_$validate_unit only ever accepts unit 1 (0x00E6D70A "cmpi.w #0x1,D0w").
+ * smd_data.c still over-allocates SMD_MAX_DISPLAY_UNITS entries.
+ */
 extern smd_display_info_t SMD_DISPLAY_INFO[];
 
-/* Event counts at 0x00E2E3FC, 0x00E2E408 */
-extern ec_$eventcount_t SMD_EC_1;
-extern ec_$eventcount_t SMD_EC_2;
+/*
+ * The two standalone eventcounts at 0x00E2E3FC and 0x00E2E408 (bead
+ * source-ufwn).  They are not separate objects: they occupy the first 0x18
+ * bytes of the 0x00E2E3FC block declared above, which is why unit 1's record
+ * only starts at 0x00E2E414.  SMD_$INIT initialises them by absolute address
+ * (0x00E34D34 "move.l #0xe2e3fc,-(SP)" and 0x00E34D42 "pea (0xe2e408).l"),
+ * so they must alias the block rather than sit somewhere else.
+ */
+#define SMD_EC_1 (*(ec_$eventcount_t *)&SMD_DISPLAY_UNITS[0x00])
+#define SMD_EC_2 (*(ec_$eventcount_t *)&SMD_DISPLAY_UNITS[0x0C])
 
 /* Blink state at 0x00E273D6 */
 extern smd_blink_state_t SMD_BLINK_STATE;
@@ -857,13 +885,10 @@ extern smd_blink_state_t SMD_BLINK_STATE;
 /*
  * Two initialiser longwords at 0x00E173D4 (0x00000400 and 0x00000000) that
  * SMD_$INIT's case-0 prologue copies into the display unit record's +0x100 and
- * +0x104 fields (0x00E34D92 movea.l #0xe173d4,A2 / move.l (A2)+,(0x118,A0) /
+ * +0x104 fields (0x00E34D96 movea.l #0xe173d4,A2 / move.l (A2)+,(0x118,A0) /
  * move.l (A2)+,(0x11c,A0)).
  */
 extern const uint32_t smd_$unit_init_params[2];
-
-/* Default display unit at 0x00E84924 */
-extern uint16_t SMD_DEFAULT_DISPLAY_UNIT;
 
 /* TIME_$CLOCKH - high word of system clock */
 extern uint32_t TIME_$CLOCKH;
@@ -924,6 +949,28 @@ extern uint16_t SMD_ACQ_LOCK_DATA;
 /* Lock data for synchronous BLT / cursor operations.
  * Address: 0x00E6DFF8 - a 16-bit word containing 0x0001 (code segment). */
 extern int16_t SMD_SYNC_LOCK_DATA;
+
+/*
+ * Three more code-region constant cells that the original passes by reference
+ * (bead source-2c9v).  Their *values* were read with `gsk read`; six SMD files
+ * used to declare a variable holding the cell's ADDRESS and pass that
+ * variable's address instead, so the callee read the low half of 0x00E6E59A
+ * rather than 0xFFFF.
+ *
+ *   0x00E6E59A: "ff ff" - the word -1.  SHOW_CURSOR takes its second argument
+ *               as a word (0x00E6E1EA "move.w (A1),D6w") and treats -1 as
+ *               "keep the display's current cursor number" (0x00E6E256
+ *               "cmpi.w #-0x1,D6w").
+ *   0x00E6E458: "ff"    - the Domain boolean true.  SHOW_CURSOR takes its
+ *               third argument as a byte (0x00E6E1EE "move.b (A2),D5b") and
+ *               uses it as the "block until the display lock is ours" flag
+ *               (0x00E6E35E).  Also SMD_$XOR_CURSOR's erase flag.
+ *   0x00E6E45A: "00"    - the Domain boolean false (SMD_$XOR_CURSOR's draw
+ *               flag, SHOW_CURSOR 0x00E6E3FA "pea (0x5e,PC)").
+ */
+extern const int16_t SMD_MINUS_ONE_DATA;
+extern const boolean SMD_TRUE_DATA;
+extern const boolean SMD_FALSE_DATA;
 
 /* Constant word 0x0001 at 0x00E6D92A (code segment, read with gsk).  Passed
  * by reference as TERM_$SET_REAL_LINE_DISCIPLINE's `discipline` argument
@@ -1452,11 +1499,22 @@ static inline uint16_t smd_get_current_unit(void) {
 #define SMD_REQUEST_LOCK smd_$request_lock
 #define SMD_RESPOND_LOCK smd_$respond_lock
 
-/* Secondary event count at 0x00E2E408 (used for borrow signaling) */
-extern ec_$eventcount_t SMD_BORROW_EC;
+/*
+ * The borrow-signalling eventcount is SMD_EC_2 itself: SMD_$BORROW_DISPLAY
+ * advances it by absolute address (0x00E6F61E "pea (0xe2e408).l"), and
+ * SMD_$INIT initialises 0x00E2E408 as one of its two eventcounts
+ * (0x00E34D42).  It is an alias, not a second object.
+ */
+#define SMD_BORROW_EC SMD_EC_2
 
-/* Borrow response table at 0x00E84924 */
-extern int8_t SMD_BORROW_RESPONSE[];
+/*
+ * The per-unit borrow-response bytes are SMD_GLOBALS.response_pending: both
+ * writer and reader address them as (0x1d99,A5) indexed by the 1-based unit
+ * number (SMD_$SEND_RESPONSE 0x00E6F4F8/0x00E6F4FC and SMD_$BORROW_DISPLAY
+ * 0x00E6F64C/0x00E6F650), i.e. SMD_GLOBALS + 0x1D99 + unit, which is
+ * response_pending[unit - 1].  The old SMD_BORROW_RESPONSE extern claimed a
+ * separate table at 0x00E84924 - that address is SMD_GLOBALS.default_unit.
+ */
 
 /* Error string for borrow failures */
 extern const char SMD_Error_Borrowing_Display_Err[];

@@ -101,8 +101,12 @@ void SMD_$BORROW_DISPLAY(int16_t *unit, int8_t *options, status_$t *status_ret)
         /* Save current cursor event count */
         wait_value = hw->cursor_ec.count;
 
-        /* Set borrow request flag (bit 7) */
-        *(uint8_t *)((uint8_t *)hw + 0x4c) |= 0x80;
+        /*
+         * 0x00E6F618 "bset.b #0x7,(0x4c,A3)" sets bit 7 of the *byte* at
+         * hw+0x4C, which on a big-endian m68k is bit 15 of the word there.
+         * Expressed on the word so the C is endian-neutral.
+         */
+        hw->field_4c |= 0x8000u;
 
         /* Advance the borrow event count to signal owner */
         EC_$ADVANCE(&SMD_BORROW_EC);
@@ -111,7 +115,10 @@ void SMD_$BORROW_DISPLAY(int16_t *unit, int8_t *options, status_$t *status_ret)
         wait_result = EC_$WAIT_1(&hw->cursor_ec, wait_value + 1, NULL, 0);
 
         /* Check borrow response */
-        if (SMD_BORROW_RESPONSE[unit_num + 1] >= 0) {
+        /* 0x00E6F64C "lea (0x0,A5,D0w*0x1),A1" / 0x00E6F650
+         * "tst.b (0x1d99,A1)" -> SMD_GLOBALS + 0x1D99 + unit, i.e.
+         * response_pending[unit - 1]; "bpl" means "not granted". */
+        if (SMD_GLOBALS.response_pending[unit_num - 1] >= 0) {
             /* Borrow request was denied */
             *status_ret = status_$display_borrow_request_denied_by_screen_manager;
             ML_$UNLOCK(SMD_RESPOND_LOCK);

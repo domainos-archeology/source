@@ -123,8 +123,9 @@ void SMD_$LOAD_CRSR_BITMAP(void *param1,
 
     /*
      * 0x00e6fc4a "move.w (0x1d98,A5),(0x48,A5,D3w*0x1)": the unit that gets
-     * bound to this ASID is SMD_GLOBALS.default_unit, not the separate
-     * SMD_DEFAULT_DISPLAY_UNIT global at 0x00E84924.
+     * bound to this ASID is SMD_GLOBALS.default_unit.  (Bead source-nuan: the
+     * global the disassembly elsewhere names 0x00E84924 is this same word -
+     * 0x00E82B8C + 0x1D98 - so there is nothing else it could be.)
      */
     unit = SMD_GLOBALS.default_unit;
     SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID] = (uint16_t)unit;

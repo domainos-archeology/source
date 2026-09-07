@@ -1,305 +1,294 @@
 /*
- * smd/test/test_get_ec.c - Unit tests for SMD_$GET_EC
+ * smd/test/test_get_ec.c - Unit tests for SMD_$GET_EC (0x00E6FD90)
  *
- * Tests event count retrieval for all key values (0-3) plus invalid keys,
- * and verifies the unit==0 error path.
+ * The real smd/get_ec.c is #included below and the real SMD_$GET_EC is
+ * called; only the globals and the one callee are mocked (bead source-ongi -
+ * this file used to carry a private copy of the function body and a
+ * mock_unit_aux_t / smd_get_unit_aux pair that no longer exist anywhere else,
+ * so it exercised nothing).
+ *
+ * Facts under test, each tied to an instruction:
+ *   0x00E6FDAA  the unit comes from SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID]
+ *   0x00E6FDB0  unit 0 -> status 0x00130004 and no EC written
+ *   0x00E6FDB8  otherwise the status is cleared first
+ *   0x00E6FDD4  the hw record is fetched from the unit record's +0x00
+ *               ("movea.l (-0xf4,A0),A3") before the key is examined
+ *   0x00E6FDDA  keys are dispatched with an *unsigned* "cmpi.w #0x4" /
+ *               "bcc", so 4 and above fall through to the error
+ *   0x00E6FDF4  key 0 -> DTTE (A4 = 0x00E2DC90)
+ *   0x00E6FDFA  key 1 -> hw + 0x10, i.e. hw->op_ec
+ *   0x00E6FE02  key 2 -> 0x00E2E408, i.e. SMD_EC_2
+ *   0x00E6FE0C  key 3 -> 0x00E1DC00, i.e. OS_$SHUTDOWN_EC
+ *   0x00E6FE12  EC2_$REGISTER_EC1(ec1, status_ret)
+ *   0x00E6FE1C  its result is stored through the second argument
+ *   0x00E6FE20  an out-of-range key -> status 0x00130026, no EC written
  */
 
 #include <stdio.h>
-#include <assert.h>
 #include <stdint.h>
 #include <string.h>
 
-/* Minimal type stubs for native compilation */
-typedef long status_$t;
-#define status_$ok 0
-#define status_$display_invalid_use_of_driver_procedure 0x00130004
-#define status_$display_invalid_event_count_key 0x00130026
+#include "smd/smd_internal.h"
+#include "os/os.h"
 
-/* Test result tracking */
+/* ------------------------------------------------------------------ */
+/* Test harness                                                        */
+/* ------------------------------------------------------------------ */
+
 static int tests_passed = 0;
 static int tests_failed = 0;
+static int current_failed = 0;
 
-#define TEST(name) static void test_##name(void)
-#define RUN_TEST(name) do { \
-    printf("  Running %s... ", #name); \
-    test_##name(); \
-    tests_passed++; \
-    printf("PASSED\n"); \
-} while(0)
+#define RUN_TEST(name)                                                        \
+    do {                                                                      \
+        printf("  %-52s", #name);                                             \
+        current_failed = 0;                                                   \
+        test_##name();                                                        \
+        if (current_failed) {                                                 \
+            tests_failed++;                                                   \
+        } else {                                                              \
+            tests_passed++;                                                   \
+            printf("PASSED\n");                                               \
+        }                                                                     \
+    } while (0)
 
-#define ASSERT_EQ(expected, actual) do { \
-    if ((expected) != (actual)) { \
-        printf("FAILED\n    Expected: 0x%lx, Got: 0x%lx at line %d\n", \
-               (unsigned long)(expected), (unsigned long)(actual), __LINE__); \
-        tests_failed++; \
-        return; \
-    } \
-} while(0)
+#define CHECK_EQ(expected, actual)                                            \
+    do {                                                                      \
+        long _e = (long)(expected);                                           \
+        long _a = (long)(actual);                                             \
+        if (_e != _a) {                                                       \
+            if (!current_failed) printf("FAILED\n");                          \
+            current_failed = 1;                                               \
+            printf("      %s:%d: %s: expected 0x%lx, got 0x%lx\n", __FILE__,  \
+                   __LINE__, #actual, (unsigned long)_e, (unsigned long)_a);  \
+        }                                                                     \
+    } while (0)
 
-#define ASSERT_NEQ(not_expected, actual) do { \
-    if ((not_expected) == (actual)) { \
-        printf("FAILED\n    Expected not 0x%lx at line %d\n", \
-               (unsigned long)(not_expected), __LINE__); \
-        tests_failed++; \
-        return; \
-    } \
-} while(0)
+/* ------------------------------------------------------------------ */
+/* Mocked globals                                                      */
+/* ------------------------------------------------------------------ */
 
-/*
- * Mock data structures
- */
+smd_globals_t SMD_GLOBALS;
+uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
+smd_display_info_t SMD_DISPLAY_INFO[SMD_MAX_DISPLAY_UNITS];
+uint16_t PROC1_$AS_ID;
 
-/* Event count - minimal mock (12 bytes like ec_$eventcount_t) */
-typedef struct {
-    uint32_t value;
-    uint32_t head;
-    uint32_t tail;
-} mock_ec_t;
+ec_$eventcount_t DTTE;              /* 0x00E2DC90 */
+ec_$eventcount_t OS_$SHUTDOWN_EC;   /* 0x00E1DC00 */
 
-/* Display hardware info - minimal mock matching smd_display_hw_t */
-typedef struct {
-    uint16_t display_type;
-    uint16_t lock_state;
-    mock_ec_t lock_ec;    /* 0x04 */
-    mock_ec_t op_ec;      /* 0x10 */
-    /* rest not needed for this test */
-} mock_hw_t;
+static smd_display_hw_t test_hw;
 
-/* Unit auxiliary data */
-typedef struct {
-    mock_hw_t *hw;
-    uint16_t owner_asid;
-    uint16_t borrowed_asid;
-} mock_unit_aux_t;
+/* ------------------------------------------------------------------ */
+/* Mocked callee                                                       */
+/* ------------------------------------------------------------------ */
 
-/* SMD globals - minimal */
-#define MOCK_MAX_ASIDS 256
-typedef struct {
-    uint8_t pad_00[0x48];
-    uint16_t asid_to_unit[MOCK_MAX_ASIDS];
-} mock_smd_globals_t;
+static ec_$eventcount_t *last_ec1;
+static status_$t *last_status_arg;
+static int register_calls;
+static status_$t mock_register_status;
 
-/* Mock globals */
-static mock_smd_globals_t mock_globals;
-static mock_hw_t mock_hw;
-static mock_unit_aux_t mock_unit_aux;
-static mock_ec_t mock_dtte;
-static mock_ec_t mock_smd_ec_2;
-static mock_ec_t mock_shutdown_ec;
-static uint16_t mock_as_id;
+/* A distinctive non-null handle so "was it stored?" is unambiguous. */
+static char mock_ec2_handle;
 
-/* Last EC1 passed to EC2_$REGISTER_EC1 */
-static void *last_register_ec1 = NULL;
-static void *mock_ec2_handle = (void *)0xBEEF;
-
-/*
- * Redefine external references to use mocks
- */
-#define SMD_GLOBALS mock_globals
-#define PROC1_$AS_ID mock_as_id
-#define DTTE mock_dtte
-#define SMD_EC_2 mock_smd_ec_2
-#define OS_$SHUTDOWN_EC mock_shutdown_ec
-#define SMD_DISPLAY_UNIT_SIZE 0x10C
-#define SMD_UNIT_AUX_BASE 0x00E2E308
-
-/* Mock smd_get_unit_aux */
-static mock_unit_aux_t *smd_get_unit_aux(uint16_t unit_num) {
-    (void)unit_num;
-    return &mock_unit_aux;
-}
-
-/* Mock EC2_$REGISTER_EC1 */
-static void *EC2_$REGISTER_EC1(void *ec1, status_$t *status_ret) {
-    last_register_ec1 = ec1;
-    *status_ret = status_$ok;
-    return mock_ec2_handle;
-}
-
-/* Typedefs to satisfy function under test */
-typedef mock_ec_t ec_$eventcount_t;
-typedef mock_hw_t smd_display_hw_t;
-typedef mock_unit_aux_t smd_unit_aux_t;
-
-/*
- * Event count key values (from get_ec.c)
- */
-#define SMD_EC_KEY_DTTE     0
-#define SMD_EC_KEY_DISP_OP  1
-#define SMD_EC_KEY_SMD_EC2  2
-#define SMD_EC_KEY_SHUTDOWN 3
-
-/*
- * Function under test - reimplemented with mocks
- */
-void SMD_$GET_EC(uint16_t *key, void **ec2_ret, status_$t *status_ret)
+void *EC2_$REGISTER_EC1(ec_$eventcount_t *ec1, status_$t *status_ret)
 {
-    uint16_t unit;
-    smd_unit_aux_t *aux;
-    ec_$eventcount_t *ec1;
-    smd_display_hw_t *hw;
+    register_calls++;
+    last_ec1 = ec1;
+    last_status_arg = status_ret;
+    *status_ret = mock_register_status;
+    return &mock_ec2_handle;
+}
 
-    unit = SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID];
+/* ------------------------------------------------------------------ */
+/* Function under test                                                 */
+/* ------------------------------------------------------------------ */
 
-    if (unit == 0) {
-        *status_ret = status_$display_invalid_use_of_driver_procedure;
-        return;
+#include "../get_ec.c"
+
+/* ------------------------------------------------------------------ */
+
+static void setup(uint16_t unit_for_asid)
+{
+    memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
+    memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
+    memset(SMD_DISPLAY_INFO, 0, sizeof(SMD_DISPLAY_INFO));
+    memset(&test_hw, 0, sizeof(test_hw));
+    memset(&DTTE, 0, sizeof(DTTE));
+    memset(&OS_$SHUTDOWN_EC, 0, sizeof(OS_$SHUTDOWN_EC));
+
+    PROC1_$AS_ID = 3;
+    SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID] = unit_for_asid;
+    smd_$unit_rec(1)->hw = &test_hw;
+
+    last_ec1 = NULL;
+    last_status_arg = NULL;
+    register_calls = 0;
+    mock_register_status = status_$ok;
+}
+
+/*
+ * 0x00E6FDAE "bne.b" / 0x00E6FDB0 "move.l #0x130004,(A2)": with no display
+ * bound to the calling ASID the routine reports an invalid use of the driver
+ * procedure and returns without touching the EC output or calling
+ * EC2_$REGISTER_EC1.
+ */
+static void test_no_display_for_asid(void)
+{
+    uint16_t key = 0;
+    void *ec2 = (void *)(intptr_t)0x5A5A5A5A;
+    status_$t status = 0x1234;
+
+    setup(0);
+    SMD_$GET_EC(&key, &ec2, &status);
+
+    CHECK_EQ(status_$display_invalid_use_of_driver_procedure, status);
+    CHECK_EQ(0, register_calls);
+    CHECK_EQ((long)(intptr_t)0x5A5A5A5A, (long)(intptr_t)ec2);
+}
+
+/* 0x00E6FDF4 "pea (A4)" with A4 = 0x00E2DC90 */
+static void test_key_0_is_dtte(void)
+{
+    uint16_t key = 0;
+    void *ec2 = NULL;
+    status_$t status = 0x1234;
+
+    setup(1);
+    SMD_$GET_EC(&key, &ec2, &status);
+
+    CHECK_EQ(1, register_calls);
+    CHECK_EQ((long)(intptr_t)&DTTE, (long)(intptr_t)last_ec1);
+    CHECK_EQ((long)(intptr_t)&mock_ec2_handle, (long)(intptr_t)ec2);
+    CHECK_EQ(status_$ok, status);
+}
+
+/* 0x00E6FDFA "pea (0x10,A3)" with A3 = unit_rec->hw */
+static void test_key_1_is_hw_op_ec(void)
+{
+    uint16_t key = 1;
+    void *ec2 = NULL;
+    status_$t status = 0x1234;
+
+    setup(1);
+    SMD_$GET_EC(&key, &ec2, &status);
+
+    CHECK_EQ(1, register_calls);
+    CHECK_EQ((long)(intptr_t)&test_hw.op_ec, (long)(intptr_t)last_ec1);
+    /* That op_ec really sits at hw+0x10 (the "pea (0x10,A3)") is enforced by
+     * the _Static_assert in smd_internal.h under ARCH_M68K; it cannot be
+     * checked here because ec_$eventcount_t holds host-width pointers. */
+}
+
+/* 0x00E6FE02 "pea (0xe2e408).l" - SMD_EC_2, which aliases the display-unit
+ * block's second 12 bytes (bead source-ufwn). */
+static void test_key_2_is_smd_ec_2(void)
+{
+    uint16_t key = 2;
+    void *ec2 = NULL;
+    status_$t status = 0x1234;
+
+    setup(1);
+    SMD_$GET_EC(&key, &ec2, &status);
+
+    CHECK_EQ(1, register_calls);
+    CHECK_EQ((long)(intptr_t)&SMD_EC_2, (long)(intptr_t)last_ec1);
+    /* 0x00E2E408 - 0x00E2E3FC = 0x0C */
+    CHECK_EQ(0x0C, (long)((char *)&SMD_EC_2 - (char *)SMD_DISPLAY_UNITS));
+}
+
+/* 0x00E6FE0C "move.l #0xe1dc00,-(SP)" */
+static void test_key_3_is_shutdown_ec(void)
+{
+    uint16_t key = 3;
+    void *ec2 = NULL;
+    status_$t status = 0x1234;
+
+    setup(1);
+    SMD_$GET_EC(&key, &ec2, &status);
+
+    CHECK_EQ(1, register_calls);
+    CHECK_EQ((long)(intptr_t)&OS_$SHUTDOWN_EC, (long)(intptr_t)last_ec1);
+}
+
+/*
+ * 0x00E6FDDA "cmpi.w #0x4,D0w" / "bcc.b 0x00e6fe20": an unsigned compare, so
+ * every key from 4 up - including 0xFFFF - lands on the invalid-key error and
+ * leaves the EC output alone.
+ */
+static void test_out_of_range_keys(void)
+{
+    static const uint16_t bad_keys[] = { 4, 5, 0x8000, 0xFFFF };
+    unsigned i;
+
+    for (i = 0; i < sizeof(bad_keys) / sizeof(bad_keys[0]); i++) {
+        uint16_t key = bad_keys[i];
+        void *ec2 = (void *)(intptr_t)0x5A5A5A5A;
+        status_$t status = 0x1234;
+
+        setup(1);
+        SMD_$GET_EC(&key, &ec2, &status);
+
+        CHECK_EQ(status_$display_invalid_event_count_key, status);
+        CHECK_EQ(0, register_calls);
+        CHECK_EQ((long)(intptr_t)0x5A5A5A5A, (long)(intptr_t)ec2);
     }
-
-    *status_ret = status_$ok;
-
-    aux = smd_get_unit_aux(unit);
-    hw = aux->hw;
-
-    switch (*key) {
-    case SMD_EC_KEY_DTTE:
-        ec1 = &DTTE;
-        break;
-    case SMD_EC_KEY_DISP_OP:
-        ec1 = &hw->op_ec;
-        break;
-    case SMD_EC_KEY_SMD_EC2:
-        ec1 = &SMD_EC_2;
-        break;
-    case SMD_EC_KEY_SHUTDOWN:
-        ec1 = &OS_$SHUTDOWN_EC;
-        break;
-    default:
-        *status_ret = status_$display_invalid_event_count_key;
-        return;
-    }
-
-    *ec2_ret = EC2_$REGISTER_EC1(ec1, status_ret);
 }
 
 /*
- * Test setup helper
+ * 0x00E6FE12 "jsr EC2_$REGISTER_EC1" is passed the caller's own status_ret
+ * (0x00E6FDF2 "pea (A2)"), so a failure there is what the caller sees - the
+ * routine does not overwrite it afterwards.
  */
-static void setup(void)
+static void test_register_status_is_passed_through(void)
 {
-    memset(&mock_globals, 0, sizeof(mock_globals));
-    memset(&mock_hw, 0, sizeof(mock_hw));
-    memset(&mock_unit_aux, 0, sizeof(mock_unit_aux));
-    memset(&mock_dtte, 0, sizeof(mock_dtte));
-    memset(&mock_smd_ec_2, 0, sizeof(mock_smd_ec_2));
-    memset(&mock_shutdown_ec, 0, sizeof(mock_shutdown_ec));
+    uint16_t key = 2;
+    void *ec2 = NULL;
+    status_$t status = 0x1234;
 
-    mock_unit_aux.hw = &mock_hw;
-    mock_as_id = 1;
-    mock_globals.asid_to_unit[1] = 1; /* ASID 1 -> unit 1 */
-    last_register_ec1 = NULL;
+    setup(1);
+    mock_register_status = 0x00190005;
+    SMD_$GET_EC(&key, &ec2, &status);
+
+    CHECK_EQ(0x00190005, status);
+    CHECK_EQ((long)(intptr_t)&status, (long)(intptr_t)last_status_arg);
 }
 
 /*
- * Tests
+ * The hw pointer is loaded at 0x00E6FDD4, before the key is looked at, so a
+ * key that does not use it still requires the unit record to be well formed.
+ * This test just pins that the routine reads the record for the *bound* unit
+ * rather than for a fixed unit 1.
  */
-
-TEST(key0_dtte)
+static void test_hw_comes_from_the_bound_unit(void)
 {
-    setup();
-    uint16_t key = SMD_EC_KEY_DTTE;
+    uint16_t key = 1;
     void *ec2 = NULL;
-    status_$t st = -1;
+    status_$t status = 0x1234;
+    static smd_display_hw_t other_hw;
 
-    SMD_$GET_EC(&key, &ec2, &st);
+    setup(2);
+    memset(&other_hw, 0, sizeof(other_hw));
+    smd_$unit_rec(2)->hw = &other_hw;
 
-    ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ((unsigned long)&mock_dtte, (unsigned long)last_register_ec1);
-    ASSERT_EQ((unsigned long)mock_ec2_handle, (unsigned long)ec2);
-}
+    SMD_$GET_EC(&key, &ec2, &status);
 
-TEST(key1_disp_op)
-{
-    setup();
-    uint16_t key = SMD_EC_KEY_DISP_OP;
-    void *ec2 = NULL;
-    status_$t st = -1;
-
-    SMD_$GET_EC(&key, &ec2, &st);
-
-    ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ((unsigned long)&mock_hw.op_ec, (unsigned long)last_register_ec1);
-    ASSERT_EQ((unsigned long)mock_ec2_handle, (unsigned long)ec2);
-}
-
-TEST(key2_smd_ec2)
-{
-    setup();
-    uint16_t key = SMD_EC_KEY_SMD_EC2;
-    void *ec2 = NULL;
-    status_$t st = -1;
-
-    SMD_$GET_EC(&key, &ec2, &st);
-
-    ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ((unsigned long)&mock_smd_ec_2, (unsigned long)last_register_ec1);
-}
-
-TEST(key3_shutdown)
-{
-    setup();
-    uint16_t key = SMD_EC_KEY_SHUTDOWN;
-    void *ec2 = NULL;
-    status_$t st = -1;
-
-    SMD_$GET_EC(&key, &ec2, &st);
-
-    ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ((unsigned long)&mock_shutdown_ec, (unsigned long)last_register_ec1);
-}
-
-TEST(key_invalid)
-{
-    setup();
-    uint16_t key = 4;
-    void *ec2 = NULL;
-    status_$t st = -1;
-
-    SMD_$GET_EC(&key, &ec2, &st);
-
-    ASSERT_EQ(status_$display_invalid_event_count_key, st);
-    /* EC2 should not have been set */
-    ASSERT_EQ((unsigned long)NULL, (unsigned long)ec2);
-}
-
-TEST(key_large_invalid)
-{
-    setup();
-    uint16_t key = 0xFF;
-    void *ec2 = NULL;
-    status_$t st = -1;
-
-    SMD_$GET_EC(&key, &ec2, &st);
-
-    ASSERT_EQ(status_$display_invalid_event_count_key, st);
-}
-
-TEST(unit_zero_error)
-{
-    setup();
-    mock_globals.asid_to_unit[1] = 0; /* No display for this ASID */
-    uint16_t key = SMD_EC_KEY_DTTE;
-    void *ec2 = NULL;
-    status_$t st = -1;
-
-    SMD_$GET_EC(&key, &ec2, &st);
-
-    ASSERT_EQ(status_$display_invalid_use_of_driver_procedure, st);
+    CHECK_EQ((long)(intptr_t)&other_hw.op_ec, (long)(intptr_t)last_ec1);
 }
 
 int main(void)
 {
-    printf("test_get_ec:\n");
+    printf("SMD_$GET_EC (0x00E6FD90)\n");
+    printf("========================\n");
 
-    RUN_TEST(key0_dtte);
-    RUN_TEST(key1_disp_op);
-    RUN_TEST(key2_smd_ec2);
-    RUN_TEST(key3_shutdown);
-    RUN_TEST(key_invalid);
-    RUN_TEST(key_large_invalid);
-    RUN_TEST(unit_zero_error);
+    RUN_TEST(no_display_for_asid);
+    RUN_TEST(key_0_is_dtte);
+    RUN_TEST(key_1_is_hw_op_ec);
+    RUN_TEST(key_2_is_smd_ec_2);
+    RUN_TEST(key_3_is_shutdown_ec);
+    RUN_TEST(out_of_range_keys);
+    RUN_TEST(register_status_is_passed_through);
+    RUN_TEST(hw_comes_from_the_bound_unit);
 
-    printf("\n  Results: %d passed, %d failed\n", tests_passed, tests_failed);
+    printf("\n%d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed > 0 ? 1 : 0;
 }

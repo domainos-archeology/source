@@ -25,10 +25,8 @@
 
         .text
         .globl  SMD_$BIT_SET
-        .globl  _SMD_$BIT_SET
 
 SMD_$BIT_SET:
-_SMD_$BIT_SET:
         movea.l 0x4(%sp),%a0            /* 00e15d12                     */
         bset.b  #0x7,(%a0)              /* 00e15d16: Z = old bit 7 == 0 */
         seq     %d0                     /* 00e15d1a: D0.b = 0xFF if Z   */

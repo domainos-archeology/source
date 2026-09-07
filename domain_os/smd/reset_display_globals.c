@@ -25,9 +25,9 @@
  *   00e6d806    add.l D3,D3                 ; unit * 64
  *   00e6d808    add.l D3,D2                 ; unit * 96 (0x60)
  *   00e6d80a    lea (0x0,A0,D2*0x1),A0      ; A0 = base + unit*0x60
- *   00e6d80e    clr.l (-0x2e,A0)            ; info[unit-1].kbd_cursor_pos = 0
- *   00e6d812    clr.w (-0x2a,A0)            ; info[unit-1].field_36 = 0
- *   00e6d816    clr.b (-0x28,A0)            ; info[unit-1].kbd_cursor_type = 0
+ *   00e6d80e    clr.l (-0x2e,A0)            ; info[unit-1].cursor_pos = 0
+ *   00e6d812    clr.w (-0x2a,A0)            ; info[unit-1].cursor_number = 0
+ *   00e6d816    clr.b (-0x28,A0)            ; info[unit-1].cursor_visible = false
  *   00e6d81a    clr.b (A1)                  ; SMD_BLINK_STATE.smd_time_com = 0
  *   00e6d81c    clr.b (0x2,A1)              ; SMD_BLINK_STATE.blink_flag = 0
  *   00e6d820    tst.b D1b
@@ -72,9 +72,9 @@ void smd_$reset_display_globals(int16_t unit, boolean full)
 
     /* 0x00e6d7f4-0x00e6d816: the info table is 1-based on the unit number. */
     info = smd_$unit_info(unit);
-    info->kbd_cursor_pos = 0;
-    info->field_36 = 0;
-    info->kbd_cursor_type = 0;
+    info->cursor_pos = 0;
+    info->cursor_number = 0;
+    info->cursor_visible = false;
 
     /* 0x00e6d81a-0x00e6d81c */
     SMD_BLINK_STATE.smd_time_com = 0;

@@ -10,7 +10,7 @@
  *   0x00E2E408 - SMD_EC_2
  *   0x00E27376 - SMD_DISPLAY_INFO array
  *   0x00E273D6 - SMD_BLINK_STATE
- *   0x00E84924 - SMD_DEFAULT_DISPLAY_UNIT
+ *   0x00E84924 - SMD_GLOBALS.default_unit (SMD_GLOBALS + 0x1D98)
  */
 
 #include "smd/smd_internal.h"
@@ -36,16 +36,11 @@ uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
 smd_display_info_t SMD_DISPLAY_INFO[SMD_MAX_DISPLAY_UNITS];
 
 /*
- * Primary SMD event count (same address as display unit 0)
- * Original address: 0x00E2E3FC
+ * SMD_EC_1 (0x00E2E3FC) and SMD_EC_2 (0x00E2E408) are not separate objects:
+ * they are the first 0x18 bytes of SMD_DISPLAY_UNITS above.  smd_internal.h
+ * defines them as aliases into that block (bead source-ufwn), so there is
+ * nothing to define here.
  */
-ec_$eventcount_t SMD_EC_1;
-
-/*
- * Secondary SMD event count
- * Original address: 0x00E2E408
- */
-ec_$eventcount_t SMD_EC_2;
 
 /*
  * Cursor blink state
@@ -60,10 +55,10 @@ smd_blink_state_t SMD_BLINK_STATE;
 const uint32_t smd_$unit_init_params[2] = { 0x00000400u, 0x00000000u };
 
 /*
- * Default display unit number (stored separately from globals)
- * Original address: 0x00E84924
+ * There is no separate "default display unit" object: 0x00E84924 is
+ * SMD_GLOBALS + 0x1D98 (0x00E82B8C + 0x1D98), i.e. SMD_GLOBALS.default_unit.
+ * See the field comment in smd_internal.h (bead source-nuan).
  */
-uint16_t SMD_DEFAULT_DISPLAY_UNIT;
 
 /* Request queue event counts */
 ec_$eventcount_t SMD_REQUEST_EC_WAIT;  /* At 0x00E2E3FC - wait for space */
@@ -84,3 +79,15 @@ int16_t SMD_SYNC_LOCK_DATA = 1;
  * A second constant word holding 0x0001, at 0x00E6D92A.
  */
 int16_t SMD_ONE_LOCK_DATA = 1;
+
+/*
+ * Three more code-region constant cells (bead source-2c9v).  Values read with
+ * `gsk read`:
+ *   0x00E6E59A  ff ff  -> the word -1
+ *   0x00E6E458  ff     -> the Domain boolean true
+ *   0x00E6E45A  00     -> the Domain boolean false
+ * They live in the read-only code segment of the original, hence `const`.
+ */
+const int16_t SMD_MINUS_ONE_DATA = -1;
+const boolean SMD_TRUE_DATA = true;
+const boolean SMD_FALSE_DATA = false;

@@ -10,8 +10,17 @@
 #include "ml/ml.h"
 
 /* Lock data addresses from original code */
-static const uint32_t stop_tp_cursor_lock_data_1 = 0x00E6D92C;
-static const uint32_t stop_tp_cursor_lock_data_2 = 0x00E6E458;
+/*
+ * Resolved (bead source-2c9v): these two by-reference arguments are code-region
+ * constant cells, not variables holding their addresses.  The call site pushes
+ *   0x00E6EB32 "pea (0x1d94,A5)", 0x00E6EB2E "pea (-0x1204,PC)" -> 0x00E6D92C, 0x00E6EB2A "pea (-0x6d4,PC)" -> 0x00E6E458
+ * ("pea (d,PC)" resolves to instruction + 2 + d), and SHOW_CURSOR dereferences
+ * argument 2 as a word (0x00E6E1EA "move.w (A1),D6w") and argument 3 as a byte
+ * (0x00E6E1EE "move.b (A2),D5b").  The cells hold 0xFFFF and 0xFF; the file
+ * statics that used to live here held the *addresses* 0x00E6E59A / 0x00E6E458,
+ * so SHOW_CURSOR read 0xE59A and 0x00 instead.  The named cells now live in
+ * smd_data.c / smd_internal.h.
+ */
 
 /*
  * SMD_$STOP_TP_CURSOR - Stop trackpad cursor
@@ -86,7 +95,7 @@ void SMD_$STOP_TP_CURSOR(uint16_t *unit)
     /* If cursor tracking was active, show cursor at default position */
     if (SMD_GLOBALS.tracking_enabled < 0) {
         SHOW_CURSOR(&SMD_GLOBALS.cursor_pos_sentinel,
-                    (int16_t *)&stop_tp_cursor_lock_data_1,
-                    (int8_t *)&stop_tp_cursor_lock_data_2);
+                    (const int16_t *)&SMD_ACQ_LOCK_DATA,
+                    &SMD_TRUE_DATA);
     }
 }

@@ -27,7 +27,7 @@
  *   00e6e76c    lea (0xe82b8c).l,A5
  *   00e6e772    move.l (0xc,A6),-(SP)         ; status_ret
  *   00e6e776    move.l (0x8,A6),-(SP)         ; pos
- *   00e6e77a    pea (0x1d98,A5)               ; &SMD_DEFAULT_DISPLAY_UNIT
+ *   00e6e77a    pea (0x1d98,A5)               ; &SMD_GLOBALS.default_unit
  *   00e6e77e    bsr.b 0x00e6e788              ; SET_UNIT_CURSOR_POS
  *   00e6e780    movea.l (-0x4,A6),A5
  *   00e6e784    unlk A6
@@ -35,5 +35,5 @@
  */
 void SMD_$SET_CURSOR_POS(smd_cursor_pos_t *pos, status_$t *status_ret)
 {
-    SMD_$SET_UNIT_CURSOR_POS(&SMD_DEFAULT_DISPLAY_UNIT, pos, status_ret);
+    SMD_$SET_UNIT_CURSOR_POS(&SMD_GLOBALS.default_unit, pos, status_ret);
 }

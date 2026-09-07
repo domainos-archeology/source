@@ -14,7 +14,7 @@
  *   st (0x2,A0)                ; blink_flag = 0xFF (enabled)
  *   clr.w (0x4,A0)             ; blink_counter = 0
  *   movea.l #0xe82b8c,A1       ; SMD_GLOBALS base
- *   pea (0x1d98,A1)            ; push &SMD_DEFAULT_DISPLAY_UNIT (A5+0x1D98)
+ *   pea (0x1d98,A1)            ; push &SMD_GLOBALS.default_unit (A5+0x1D98)
  *   jsr SMD_$INQ_DISP_TYPE     ; call to check if display exists
  *   addq.w #0x4,SP
  *   tst.w D0w                  ; test result
@@ -55,7 +55,7 @@ void SMD_$INIT_BLINK(void)
     SMD_BLINK_STATE.blink_counter = 0;     /* Counter = 0 */
 
     /* Check if default display exists */
-    disp_type = SMD_$INQ_DISP_TYPE(&SMD_DEFAULT_DISPLAY_UNIT);
+    disp_type = SMD_$INQ_DISP_TYPE(&SMD_GLOBALS.default_unit);
 
     has_display = (disp_type != 0) ? -1 : 0;
 

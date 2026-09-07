@@ -45,10 +45,10 @@
 
         .text
         .globl  smd_$setup_scroll_blt
-        .globl  _smd_$setup_scroll_blt
+
 
 smd_$setup_scroll_blt:
-_smd_$setup_scroll_blt:
+
         /* Check if BLT is currently busy */
         tst.w   (%a0)                   /* Test BLT control register */
         bmi.w   blt_in_use_error        /* If bit 15 set (busy), error */

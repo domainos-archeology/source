@@ -54,10 +54,8 @@
 
         .text
         .globl  SMD_$LOCK_DISPLAY
-        .globl  _SMD_$LOCK_DISPLAY
 
 SMD_$LOCK_DISPLAY:
-_SMD_$LOCK_DISPLAY:
         movea.l 0x4(%sp),%a0            /* 00e15cce: A0 = hw            */
         ori.w   #0x700,%sr              /* 00e15cd2: IPL 7              */
         move.w  0x2(%a0),%d0            /* 00e15cd6: D0 = hw->lock_state*/

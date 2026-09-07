@@ -31,7 +31,7 @@
  *
  * Notes:
  *   - Position format: high 16 bits = y, low 16 bits = x
- *   - Clip window temporarily set to default bounds (offset -0x12 from info)
+ *   - Clip window temporarily set to the display bounds at info +0x4E..+0x55
  *   - Original clip window restored after rendering
  */
 void SMD_$WRITE_STRING(uint32_t *pos, void *font, void *buffer,
@@ -42,8 +42,10 @@ void SMD_$WRITE_STRING(uint32_t *pos, void *font, void *buffer,
     uint32_t local_pos;
     uint16_t local_length;
     smd_display_info_t *info;
-    int32_t saved_clip_1;   /* Saved clip_x1/y1 (combined) */
-    int32_t saved_clip_2;   /* Saved clip_x2/y2 (combined) */
+    int16_t saved_clip_x1;  /* (-0x8,A6) .. (-0x2,A6) */
+    int16_t saved_clip_x2;
+    int16_t saved_clip_y1;
+    int16_t saved_clip_y2;
 
     /* Copy parameters to local storage */
     local_pos = *pos;
@@ -60,34 +62,43 @@ void SMD_$WRITE_STRING(uint32_t *pos, void *font, void *buffer,
     }
 
     /*
-     * Get display info pointer.
-     * Info table base is 0x00E27376, entry size is 0x60 bytes.
-     * The clip window is at offsets 0x14-0x1B (current) and 0x0C-0x13 (default).
-     * Address calculation: base + unit * 0x60
-     *
-     * Original code accesses via (base - 0x0A + unit * 0x60) for clip region.
+     * Bead source-fqne: 0x00E6FF08 "lea (0x0,A2,D1*0x1),A2" leaves A2 at
+     * base + unit*0x60 and every subsequent displacement is negative, so the
+     * entry addressed is base + unit*0x60 - 0x60 - the table is 1-based on the
+     * unit number.  Use smd_$unit_info().
      */
-    info = &SMD_DISPLAY_INFO[unit];
+    info = smd_$unit_info((int16_t)unit);
 
     /*
-     * Save current clip window (offsets 0x14-0x1B).
-     * Accessed as two 32-bit values at -0x0A and -0x06 from struct base + 0x60.
-     * This corresponds to clip_x1/y1 and clip_x2/y2.
+     * Save the current clip window.
+     *   00e6ff0c  lea (-0xa,A2),A4           ; A4 = entry + 0x56
+     *   00e6ff10  move.l (A4)+,(-0x8,A6)     ; clip_x1, clip_x2
+     *   00e6ff14  move.l (A4)+,(-0x4,A6)     ; clip_y1, clip_y2
+     * The original moves two longwords; copying the four words individually is
+     * the same bytes and keeps the C endian-neutral.
      */
-    saved_clip_1 = *(int32_t *)&info->clip_x1;
-    saved_clip_2 = *(int32_t *)&info->clip_x2;
+    saved_clip_x1 = info->clip_x1;
+    saved_clip_x2 = info->clip_x2;
+    saved_clip_y1 = info->clip_y1;
+    saved_clip_y2 = info->clip_y2;
 
     /*
-     * Set clip window to default bounds (offsets 0x0C-0x13).
-     * Copy default clip region to current clip region.
+     * Widen the clip window to the display's own bounds.
+     *   00e6ff18  lea (-0x12,A2),A4          ; A4 = entry + 0x4E
+     *   00e6ff1c  move.l (A4)+,(-0xa,A2)     ; clip_x1/clip_x2 = min_x/max_x
+     *   00e6ff20  move.l (A4)+,(-0x6,A2)     ; clip_y1/clip_y2 = min_y/max_y
      */
-    *(int32_t *)&info->clip_x1 = *(int32_t *)&info->clip_x1_default;
-    *(int32_t *)&info->clip_x2 = *(int32_t *)&info->clip_x2_default;
+    info->clip_x1 = info->min_x;
+    info->clip_x2 = info->max_x;
+    info->clip_y1 = info->min_y;
+    info->clip_y2 = info->max_y;
 
     /* Call internal string rendering function */
     SMD_$WRITE_STR_CLIP(&local_pos, font, buffer, &local_length, param5, status_ret);
 
-    /* Restore original clip window */
-    *(int32_t *)&info->clip_x1 = saved_clip_1;
-    *(int32_t *)&info->clip_x2 = saved_clip_2;
+    /* Restore the original clip window (0x00E6FF40-0x00E6FF48). */
+    info->clip_x1 = saved_clip_x1;
+    info->clip_x2 = saved_clip_x2;
+    info->clip_y1 = saved_clip_y1;
+    info->clip_y2 = saved_clip_y2;
 }

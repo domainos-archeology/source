@@ -5,87 +5,61 @@
  *
  * Original address: 0x00E6DE1C
  *
- * Assembly:
- *   00e6de1c    link.w A6,0x0
- *   00e6de20    movem.l {  A5 A2},-(SP)
- *   00e6de24    lea (0xe82b8c).l,A5
- *   00e6de2a    movea.l (0x8,A6),A2               ; A2 = param unit
- *   00e6de2e    subq.l #0x2,SP
- *   00e6de30    move.w (A2),-(SP)                  ; push *unit
- *   00e6de32    bsr.w 0x00e6d700                   ; smd_$validate_unit - validate unit
- *   00e6de36    addq.w #0x4,SP
- *   00e6de38    tst.b D0b
- *   00e6de3a    bpl.b 0x00e6de4e                   ; if invalid, return 0
- *   00e6de3c    move.w (A2),D0w                    ; D0 = *unit
- *   00e6de3e    movea.l #0xe27376,A0               ; A0 = display info table
- *   00e6de44    mulu.w #0x60,D0                    ; D0 = unit * 0x60
- *   00e6de48    move.w (0x0,A0,D0w*0x1),D0w        ; D0 = info[unit].display_type
- *   00e6de4c    bra.b 0x00e6de50
- *   00e6de4e    clr.w D0w                          ; return 0 (invalid)
- *   00e6de50    movem.l (-0x8,A6),{  A2 A5}
+ * Assembly (verified with gsk analyze 0x00E6DE1C; the listing that used to be
+ * quoted here was stale - the real code has no A5 setup, reads the unit once
+ * into D2, and indexes the table with -0x60):
+ *   00e6de1c    link.w A6,-0x4
+ *   00e6de20    move.l D2,-(SP)
+ *   00e6de22    movea.l (0x8,A6),A0           ; A0 = unit
+ *   00e6de26    subq.l #0x2,SP                ; Pascal function result slot
+ *   00e6de28    move.w (A0),D2w               ; D2 = *unit, read ONCE
+ *   00e6de2a    move.w D2w,-(SP)
+ *   00e6de2c    bsr.w 0x00e6d700              ; smd_$validate_unit
+ *   00e6de30    addq.w #0x4,SP
+ *   00e6de32    tst.b D0b
+ *   00e6de34    bmi.b 0x00e6de3a              ; valid -> read the table
+ *   00e6de36    clr.w D0w                     ; invalid -> return 0
+ *   00e6de38    bra.b 0x00e6de50
+ *   00e6de3a    move.w D2w,D0w
+ *   00e6de3c    movea.l #0xe27376,A0
+ *   00e6de42    ext.l D0                      ; signed index
+ *   00e6de44    lsl.l #0x5,D0                 ; unit * 0x20
+ *   00e6de46    move.l D0,D1
+ *   00e6de48    add.l D1,D1                   ; unit * 0x40
+ *   00e6de4a    add.l D1,D0                   ; unit * 0x60
+ *   00e6de4c    move.w (-0x60,A0,D0*0x1),D0w  ; entry[unit-1].display_type
+ *   00e6de50    move.l (-0x8,A6),D2
  *   00e6de54    unlk A6
  *   00e6de56    rts
  */
 
 #include "smd/smd_internal.h"
 
-/* Forward declaration of internal validation function */
-static int8_t smd_validate_unit(uint16_t unit);
-
 /*
  * SMD_$INQ_DISP_TYPE - Inquire display type
- *
- * Returns the display type code for the specified unit.
  *
  * Parameters:
  *   unit - Pointer to display unit number
  *
  * Returns:
- *   Display type code (1-11), or 0 if invalid unit
+ *   Display type code, or 0 if the unit does not validate.
+ *
+ * Bead source-fqne: the explicit "-0x60" at 0x00E6DE4C makes the table 1-based
+ * on the unit number, so this uses smd_$unit_info().  The file also carried a
+ * private `smd_validate_unit` stub that guessed at units 0..3; the real
+ * routine (smd/validate_unit.c, 0x00E6D700) accepts only unit 1 and is what
+ * the `bsr.w 0x00e6d700` above calls.
  */
 uint16_t SMD_$INQ_DISP_TYPE(uint16_t *unit)
 {
-    /* Validate the unit number */
-    if (smd_validate_unit(*unit) >= 0) {
-        /* Invalid unit - return 0 */
-        return 0;
+    int16_t unit_num;
+
+    /* 0x00E6DE28: the argument is fetched once and reused from D2. */
+    unit_num = (int16_t)*unit;
+
+    if (smd_$validate_unit((uint16_t)unit_num) >= 0) {
+        return 0;   /* 0x00E6DE36 clr.w D0w */
     }
 
-    /* Return display type from info table */
-    return SMD_DISPLAY_INFO[*unit].display_type;
-}
-
-/*
- * smd_validate_unit - Validate display unit number
- *
- * Internal helper to check if a unit number is valid.
- *
- * Parameters:
- *   unit - Display unit number to validate
- *
- * Returns:
- *   Negative value if valid, non-negative if invalid
- *
- * Note: The negative return for valid follows the original code's
- * convention where the validation function sets D0 negative on success.
- * This is likely because it returns -1 (0xFF) for true in Domain/OS style.
- *
- * Original address: 0x00E6D700 (smd_$validate_unit)
- */
-static int8_t smd_validate_unit(uint16_t unit)
-{
-    /*
-     * TODO(source-h4x): Full implementation requires understanding smd_$validate_unit (0x00e6d700).
-     * For now, assume units 0-3 are potentially valid.
-     * The original likely checks:
-     * 1. Unit < max_units
-     * 2. Unit has valid hardware present
-     */
-    if (unit < SMD_MAX_DISPLAY_UNITS) {
-        /* Check if display info exists for this unit */
-        if (SMD_DISPLAY_INFO[unit].display_type != 0) {
-            return -1;  /* Valid (negative = true in Domain/OS) */
-        }
-    }
-    return 0;  /* Invalid */
+    return smd_$unit_info(unit_num)->display_type;
 }

@@ -81,7 +81,7 @@ void SMD_$INIT(void)
     /* 0x00E34D8A move.l #0xff9800,(0x114,A0) */
     rec->ctrl_regs = SMD_SAU2_CTRL_REGS;
     /*
-     * 0x00E34D92 move.l #0xe27376,(0x18,A0)
+     * 0x00E34D96 move.l #0xe27376,(0x18,A0)
      * The per-display hardware record and the display info entry are the same
      * 0x60-byte object; the image keeps only one copy at 0x00E27376.
      */

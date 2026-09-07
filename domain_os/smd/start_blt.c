@@ -5,6 +5,14 @@
  *
  * Original address: 0x00E272BC (trampoline), 0x00E15D1E (implementation)
  *
+ * Resolved (bead source-x81r): the original is hand-written assembly - no
+ * link/unlk, a one-register movem thunk, arguments at (0x8,SP)/(0xc,SP)/
+ * (0x10,SP), a dead dispatch base in A0 from the trampoline, and a spin on a
+ * memory-mapped register - so it now lives in smd/sau2/start_blt.s.  What
+ * follows is a portable model of the same behaviour, compiled only when
+ * ARCH_M68K is not defined so the two do not collide at link time (the same
+ * convention as smd/bit_set.c and smd/lock_display.c).
+ *
  * Assembly analysis:
  * The function copies BLT parameters from the source structure to the
  * hardware register block, then initiates the operation. If the async
@@ -25,6 +33,8 @@
  */
 
 #include "smd/smd_internal.h"
+
+#if !defined(ARCH_M68K)
 
 /*
  * SMD_$START_BLT - Start BLT operation
@@ -80,3 +90,5 @@ void SMD_$START_BLT(uint16_t *params, smd_display_hw_t *hw,
         }
     }
 }
+
+#endif /* !ARCH_M68K */
