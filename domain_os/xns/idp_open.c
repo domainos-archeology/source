@@ -117,9 +117,13 @@ void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
             return;
         }
 
-        /* Clear the "in use" flag on the socket */
-        /* sock_spinlock[user_socket]->flags &= 0x7F */
-        /* TODO(source-0rv): This needs the sock structure definition */
+        /*
+         * TODO(source-0rv): the flag clear is missing.  The image does
+         * `bclr.b #0x7,(off,An)` on the socket record's flags byte, which is
+         * bit 15 of the containing word - the sock subsystem's record has not
+         * been recovered far enough to name it, so nothing is emitted rather
+         * than guessing an offset.
+         */
     } else {
         user_socket = XNS_NO_SOCKET;
     }
@@ -173,8 +177,13 @@ void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
 
     /* Register event count */
     if (user_socket != XNS_NO_SOCKET) {
-        /* TODO(source-0rv): EC2_$REGISTER_EC1 call */
-        options->user_data = EC2_$REGISTER_EC1(NULL /* sock_spinlock[user_socket] */, status_ret);
+        /*
+         * TODO(source-0rv): the first argument is NULL because the socket
+         * record it should point at is the same unrecovered sock structure as
+         * above.  The image passes the address of that record's eventcount.
+         */
+        options->user_data = EC2_$REGISTER_EC1(NULL /* &sock[user_socket].ec */,
+                                               status_ret);
     }
 }
 

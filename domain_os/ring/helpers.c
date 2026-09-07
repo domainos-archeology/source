@@ -241,8 +241,11 @@ void ring_$set_hw_mask(uint16_t unit, uint16_t mask)
     unit_data->tmask = mask;
 
     /*
-     * TODO(source-6co): Write mask to hardware register.
-     * The actual hardware write depends on the controller type.
+     * TODO(source-6co): the hardware write is missing.  ring_$set_hw_mask
+     * (0x00E767CC) stores the mask into the unit record and then writes the
+     * LOW byte of it to the controller's tmask register - RING_$RCV's copy of
+     * the same idiom is `move.b` to hw_regs+4.  Re-emit against 0x00E767CC
+     * with a volatile byte view of the register block.
      */
 }
 
@@ -266,10 +269,10 @@ void ring_$do_start(uint16_t unit, ring_unit_t *unit_data, status_$t *status_ret
     unit_data->state_flags |= RING_UNIT_STARTED;
 
     /*
-     * TODO(source-6co): Additional startup logic including:
-     *   - Create receive process
-     *   - Initialize hardware
-     *   - Setup initial DMA buffers
+     * TODO(source-6co): only the state flag is set.  ring_$do_start at
+     * 0x00E7671C is 0xB0 bytes and the rest of it - the receive-process
+     * creation, the hardware init and the initial DMA buffer setup - has not
+     * been transcribed.  RING_$START (0x00E76830) is its only caller.
      */
 
     *status_ret = status_$ok;
@@ -285,30 +288,62 @@ void ring_$do_start(uint16_t unit, ring_unit_t *unit_data, status_$t *status_ret
 void ring_$disable_interrupts(void)
 {
     /*
-     * TODO(source-6co): Disable ring interrupts.
-     * This is architecture-specific (uses SR on m68k).
+     * TODO(source-6co): the body is empty, and the NAME is wrong: 0x00E7667C
+     * does not touch the SR at all.  It is 140 bytes that take the mutex at
+     * 0x00E2C898 (`jsr 0x00E20DF8` at 0x00E7668E), test the counter at
+     * RING globals +0x5B4, and on zero call 0x00E44BA4 with five arguments -
+     * three of them `pea (d16,PC)` constant cells (0x00E766A0 `pea (0x66,PC)`,
+     * 0x00E766A8 `pea (0x62,PC)`, 0x00E766AC `pea (0x6a,PC)`) - then walk the
+     * 4-byte-stride table at RING globals +0x498.  Reverse it before renaming.
      */
 }
 
 /*
- * HDR_CHKSUM - Calculate header checksum
+ * HDR_CHKSUM - Calculate the ring header checksum
  *
- * Computes a checksum over the packet header.
+ * sum = 0; for each byte from hdr[12] up to hdr[*len_p - 1]:
+ *     sum = (sum << 1) + byte      (16-bit)
+ * and the result is the low byte of sum.  A header shorter than 13 bytes
+ * checksums to zero, because `subi.w #0xd,D2w` / `bmi` skips the loop before
+ * the accumulator is ever touched.
+ *
+ * The dbf count is *len_p - 13, i.e. *len_p - 12 iterations, and the index
+ * register starts at 13 while the load is `move.b (-0x1,A0,D2w*0x1),D3b` --
+ * so the first byte read is hdr[12], not hdr[13].
  *
  * Original address: 0x00E762CA
  *
- * @param hdr           Header pointer
- * @param data          Data pointer
+ * @param hdr    Header base
+ * @param len_p  Points at a WORD holding the header byte count
+ *               (0x00E762D6 `movea.l (0xc,A6),A1` / 0x00E762DC `move.w (A1),D0w`)
  *
- * @return Checksum value
+ * @return the checksum, in the low byte
  */
-uint8_t HDR_CHKSUM(void *hdr, void *data)
+uint8_t HDR_CHKSUM(const void *hdr, const uint16_t *len_p)
 {
-    /*
-     * TODO(source-6co): Implement checksum algorithm.
-     * For now return a placeholder value.
-     */
-    (void)hdr;
-    (void)data;
-    return 1;  /* Placeholder - indicates no checksum */
+    const uint8_t *bytes = (const uint8_t *)hdr;
+    uint16_t sum;          /* D1 */
+    int16_t  count;        /* D0, the dbf counter */
+    uint16_t index;        /* D2 */
+
+    sum = 0;                                        /* 0x00E762DA `clr.w D1w` */
+
+    /* 0x00E762DE-0x00E762E4. */
+    count = (int16_t)(*len_p) - 0x0D;
+    if (count < 0) {
+        return (uint8_t)(sum & 0x00FF);
+    }
+
+    index = 0x0D;                                   /* 0x00E762E8 `moveq #0xd,D2` */
+    do {
+        uint16_t b = bytes[index - 1];              /* 0x00E762F0 */
+
+        sum = (uint16_t)(sum + sum);                /* 0x00E762EE `add.w D1w,D1w` */
+        index = (uint16_t)(index + 1);              /* 0x00E762F4 */
+        sum = (uint16_t)(sum + b);                  /* 0x00E762F6 */
+        count--;
+    } while (count >= 0);                           /* 0x00E762F8 `dbf D0w` */
+
+    /* 0x00E762FE `andi.w #0xff,D0w`. */
+    return (uint8_t)(sum & 0x00FF);
 }

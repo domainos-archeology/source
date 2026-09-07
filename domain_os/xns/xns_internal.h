@@ -14,6 +14,7 @@
 #include "mac/mac.h"
 #include "mac_os/mac_os.h"
 #include "netbuf/netbuf.h"
+#include "os/os.h"
 #include "network/network.h"
 #include "proc1/proc1.h"
 #include "proc2/proc2.h"
@@ -205,20 +206,6 @@ int8_t xns_$is_broadcast_addr(void *addr);
  * Original address: 0x00E17850
  */
 int8_t xns_$is_local_addr(void *addr);
-
-/*
- * xns_$copy_header - Copy IDP header to packet buffer
- *
- * Copies source/destination addresses and other header fields
- * to the packet buffer being constructed.
- *
- * @param packet_info   Source packet information
- *
- * @return Packet type byte
- *
- * Original address: 0x00E17876
- */
-uint8_t xns_$copy_header(void *packet_info);
 
 /*
  * xns_$copy_packet_data - Copy packet data to user buffer

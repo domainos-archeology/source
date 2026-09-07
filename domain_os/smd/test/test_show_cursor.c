@@ -98,7 +98,12 @@ _Static_assert(offsetof(smd_globals_t, previous_unit) == 0x1D9C, "prev_unit");
 _Static_assert(offsetof(smd_globals_t, unit_change_count) == 0x1D9E, "ucc");
 _Static_assert(offsetof(smd_globals_t, last_idm_button) == 0x1DA0, "idm");
 _Static_assert(offsetof(smd_globals_t, power_off_reported) == 0x1DA2, "poff");
-_Static_assert(sizeof(smd_globals_t) == 0x1DA4, "smd_globals_t size");
+/* 0x1DA0 is also blink_func[0]; the record runs to 0x1DA8 because
+ * SMD_$BLINK_CURSOR_CALLBACK reads blink_func[1] at SMD_GLOBALS + 0x1DA4
+ * (0x00E84930 = 0x00E2722C = SMD_$BLINK_CURSOR_1) and the code at
+ * SMD_GLOBALS + 0x1DA8 is a trampoline.  Bead source-q85g. */
+_Static_assert(offsetof(smd_globals_t, blink_func) == 0x1DA0, "blink");
+_Static_assert(sizeof(smd_globals_t) == 0x1DA8, "smd_globals_t size");
 _Static_assert(sizeof(smd_track_rect_t) == 8, "smd_track_rect_t size");
 _Static_assert(sizeof(smd_request_entry_t) == 36, "smd_request_entry_t size");
 

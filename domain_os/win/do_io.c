@@ -22,7 +22,7 @@
 #define MAX_DMA_RETRIES      500
 #define MAX_OTHER_RETRIES    24  /* 0x17 + 1 */
 
-void WIN_$DO_IO(void *dev_entry, int32_t *req, void *param_3, uint8_t *result)
+void WIN_$DO_IO(void *dev_entry, win_$request_t *req, void *param_3, uint8_t *result)
 {
     uint8_t *win_data = WIN_DATA_BASE;
     int16_t resource_id;
@@ -34,7 +34,7 @@ void WIN_$DO_IO(void *dev_entry, int32_t *req, void *param_3, uint8_t *result)
     ec_$eventcount_t *win_ec;
     int32_t wait_val;
     int16_t wait_result;
-    int32_t *local_req;
+    win_$request_t *local_req;
 
     /* Clear result */
     *result = 0;
@@ -43,18 +43,18 @@ void WIN_$DO_IO(void *dev_entry, int32_t *req, void *param_3, uint8_t *result)
     resource_id = *(int16_t *)(win_data + WIN_DEV_TYPE_OFFSET);
 
     /* Get operation type from request */
-    op_type = *(uint8_t *)((uint8_t *)req + 0x1f) & 0x0f;
+    op_type = (uint8_t)req->flags & 0x0F;
 
     /* Handle format operation specially */
     if (op_type == 3) {
         ML_$LOCK(resource_id);
-        FUN_00e196aa(dev_entry);
+        WIN_$FORMAT_TRACK(dev_entry, req);
         ML_$UNLOCK(resource_id);
         return;
     }
 
     /* For write operations with linked requests, sort by cylinder */
-    if (op_type == 2 && *req != 0) {
+    if (op_type == 2 && req->next != 0) {
         local_req = req;
         DISK_$SORT(dev_entry, (void **)&local_req);
         req = local_req;
@@ -65,7 +65,7 @@ void WIN_$DO_IO(void *dev_entry, int32_t *req, void *param_3, uint8_t *result)
 
     /* Save current request info */
     *(void **)(win_data + WIN_DEV_INFO_OFFSET) = dev_entry;
-    *(int32_t **)(win_data + WIN_REQ_PTR_OFFSET) = req;
+    *(win_$request_t **)(win_data + WIN_REQ_PTR_OFFSET) = req;
 
     /* Initialize retry counters */
     dma_retries = 0;
@@ -147,10 +147,11 @@ retry_loop:
 
         if (status == status_$memory_parity_error_during_disk_write) {
             /* Check if parity error is real */
-            int32_t *cur_req = *(int32_t **)(win_data + WIN_REQ_PTR_OFFSET);
+            win_$request_t *cur_req =
+                *(win_$request_t **)(win_data + WIN_REQ_PTR_OFFSET);
             int16_t parity_result = (int16_t)PARITY_$CHK_IO(
-                (uint32_t)cur_req[4] >> 10,
-                cur_req[5]);
+                cur_req->pa >> 10,
+                cur_req->length);
             if (-parity_result < 0) {
                 goto error_exit;
             }
@@ -158,8 +159,9 @@ retry_loop:
         }
 
         if (status == status_$disk_data_check) {
-            int32_t *cur_req = *(int32_t **)(win_data + WIN_REQ_PTR_OFFSET);
-            if (*(int8_t *)((uint8_t *)cur_req + 0x1f) < 0) {
+            win_$request_t *cur_req =
+                *(win_$request_t **)(win_data + WIN_REQ_PTR_OFFSET);
+            if (cur_req->flags < 0) {
                 goto error_exit;
             }
             /* Fall through to retry */
@@ -190,18 +192,22 @@ retry_loop:
 error_exit:
     /* Mark all remaining requests as failed */
     if (status != status_$ok) {
-        int32_t *cur_req = *(int32_t **)(win_data + WIN_REQ_PTR_OFFSET);
-        uint8_t vol_idx = *(uint8_t *)((uint8_t *)cur_req + 0x1e);
+        win_$request_t *cur_req =
+            *(win_$request_t **)(win_data + WIN_REQ_PTR_OFFSET);
 
-        /* Clear something in process table */
-        /* (&DAT_00e7a55c)[vol_idx * 0x1c] = 0; */
+        /*
+         * 0x00E19934-0x00E1994A: invalidate the request's volume.  Same five
+         * instructions as WIN_$FORMAT_TRACK 0x00E19750-0x00E19764.
+         */
+        WIN_VOLUME_MOUNTED(cur_req->volume) = 0;
 
-        /* Set status in current request */
-        cur_req[3] = status;
+        /* 0x00E1994E `move.l D2,(0xc,A0)`. */
+        cur_req->status = status;
 
-        /* Mark remaining requests as failed */
-        while ((cur_req = (int32_t *)*cur_req) != NULL) {
-            cur_req[3] = -1;
+        /* 0x00E19956-0x00E19962: every queued request behind it fails. */
+        while ((cur_req = (win_$request_t *)ARCH_VA_TO_PTR(cur_req->next))
+                   != NULL) {
+            cur_req->status = (status_$t)-1;
         }
     }
 

@@ -58,7 +58,7 @@ void RING_$IOCTL(uint16_t *unit_ptr, int16_t *cmd, void *param,
         /*
          * Unknown command.
          */
-        *status_ret = status_$ring_invalid_ioctl;
+        *status_ret = status_$ring_not_implemented;
         break;
     }
 }
@@ -107,8 +107,9 @@ void RING_$SET_TMASK(uint16_t unit, uint16_t mask)
 void RING_$KICK_DRIVER(void)
 {
     /*
-     * TODO(source-6co): Implement driver kick logic.
-     * This typically involves advancing an event count
-     * or setting a flag to wake the driver process.
+     * TODO(source-6co): the body is empty.  RING_$KICK_DRIVER at 0x00E768A8
+     * is 0x40 bytes; re-emit it against the image, which advances the
+     * driver's eventcount through EC_$ADVANCE (0x00E206EE) after loading the
+     * RING globals base with `lea (0xe86400).l,A5`.
      */
 }

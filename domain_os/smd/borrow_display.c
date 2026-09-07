@@ -36,14 +36,16 @@
 
 /*
  * Status cell passed to CRASH_SYSTEM by `pea (0x16,PC)` at 0x00E6F6E4
- * (effective address 0x00E6F6E6 + 0x16 = 0x00E6F6FC), a constant longword
- * 0x0013000E in this module's code region - display module status 0x0E.
- * Read with `gsk read 00e6f6fc`.
+ * (effective address 0x00E6F6E6 + 0x16 = 0x00E6F6FC), a constant longword in
+ * this module's code region.  Read with `gsk read 00e6f6fc`.
  *
- * TODO(source-fnzt): recover the symbolic name of display status 0x0013000E;
- * it is not in any status list this tree has recovered so far.
+ * Module 0x13 code 0x0E is "error borrowing display from screen manager" in
+ * the SR10.4 status database (OS / display driver), which is exactly the
+ * failure this cell reports: SMD_$CLEAR_WINDOW returned an error while
+ * SMD_$BORROW_DISPLAY was taking the display over.
  */
-static const status_$t smd_$borrow_display_err_00e6f6fc = 0x0013000E;
+static const status_$t smd_$borrow_display_err =
+    status_$display_error_borrowing_from_screen_manager;
 
 /*
  * SMD_$BORROW_DISPLAY - Temporarily borrow display
@@ -176,7 +178,7 @@ void SMD_$BORROW_DISPLAY(int16_t *unit, int8_t *options, status_$t *status_ret)
 
             if (*status_ret != status_$ok) {
                 /* Fatal error - crash system (0x00E6F6E8) */
-                CRASH_SYSTEM(&smd_$borrow_display_err_00e6f6fc);
+                CRASH_SYSTEM(&smd_$borrow_display_err);
             }
         }
     }

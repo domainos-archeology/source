@@ -155,8 +155,8 @@ static int16_t  recv_data_len_val;
 static uint32_t recv_clears_data_pa;    /* if set, the stub zeroes *data_pa_p */
 
 static int      chksum_calls;
-static void    *chksum_hdr;
-static void    *chksum_len_p;
+static const void     *chksum_hdr;
+static const uint16_t *chksum_len_p;
 static int16_t  chksum_result;
 
 /*
@@ -313,11 +313,11 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
     return 0;
 }
 
-uint8_t HDR_CHKSUM(void *hdr, void *data)
+uint8_t HDR_CHKSUM(const void *hdr, const uint16_t *len_p)
 {
     chksum_calls++;
     chksum_hdr = hdr;
-    chksum_len_p = data;
+    chksum_len_p = len_p;
     return (uint8_t)chksum_result;
 }
 

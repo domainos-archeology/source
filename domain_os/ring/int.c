@@ -161,7 +161,10 @@ int8_t RING_$INT(void *device_info)
 ec_$eventcount_t *ring_$process_rx_packet(ring_unit_t *unit_data)
 {
     /*
-     * TODO(source-6co): Implement full packet processing logic.
+     * TODO(source-6co): the body is a stub.  ring_$process_rx_packet at
+     * 0x00E75400 is 0x348 bytes and RING_$INT's only use of it is
+     * 0x00E757A4 `bsr.w 0x00E75400`, whose NULL return makes the caller bump
+     * RING_$STATS[unit].rcvcnt at 0x00E757C6.  Re-emit block by block.
      *
      * The original function:
      *   1. Validates the received packet

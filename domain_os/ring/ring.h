@@ -58,16 +58,25 @@
  * Status Codes (module 0x31 = RING)
  * ============================================================================
  */
+/* Module 0x31, "OS / Ring", from the SR10.4 status database. */
+#define status_$ring_not_implemented                0x00310001
 #define status_$ring_invalid_unit_num               0x00310002
 #define status_$ring_illegal_header_length          0x00310003
 #define status_$ring_invalid_data_length            0x00310004
-#define status_$ring_socket_already_open            0x00310006
-#define status_$ring_too_many_args                  0x00310009
+#define status_$ring_transmit_failed                0x00310005
+#define status_$ring_no_packet_to_receive           0x00310006
+#define status_$ring_pkt_type_in_use                0x00310007
+#define status_$ring_no_channels                    0x00310008
 #define status_$ring_invalid_svc_packet_type        0x00310009
 #define status_$ring_channel_not_open               0x0031000A
 #define status_$ring_device_offline                 0x0031000B
-#define status_$ring_request_denied                 0x0031000E
-#define status_$ring_invalid_ioctl                  0x00310001
+#define status_$ring_device_already_online          0x0031000C
+#define status_$ring_internal_driver_error          0x0031000D
+#define status_$ring_controller_hardware_error      0x0031000E
+#define status_$ring_pkt_type_not_in_use            0x0031000F
+#define status_$ring_driver_version_mismatch        0x00310010
+#define status_$ring_invalid_stats_block            0x00310011
+#define status_$ring_illegal_dest_address           0x00310012
 
 #define status_$io_controller_not_in_system         0x00100002
 
@@ -524,25 +533,71 @@ extern uid_t RING_$NETWORK_UID;
  * (rcvovr, a DMA overrun) as the one word the CSR decode never touches, which
  * is consistent with the swdiag mirror also skipping its +0x12.
  *
- * The transmit half at 0x00..0x1B is still named from guesses; netmain names
- * it xmit_call / xmitcnt (the two longs at +0x02 and +0x06) plus nine words -
- * xmit_nack, xmit_wack, xmit_orun, xmit_tim, xmit_apar, xmit_bus,
- * xmit_nortn, xmit_modem, xmit_error - but nothing in the image pins their
- * order.  Bead source-11rf.
+ * The TRANSMIT half at 0x00..0x1B is named from the same binary (bead
+ * source-11rf).  Two independent orderings in /etc/netmain agree, and one
+ * counter is pinned outright by the image:
+ *
+ *  1. The "Error counts for <node>" display block lists, in row order,
+ *       xmit_call  xmitcnt  xmit_nack  xmit_wack  xmit_orun
+ *       xmit_apar  xmit_bus xmit_nortn xmit_modem xmit_error
+ *       xmit_tim   rcvcnt   rcveor     rcvcrc     rcvtim
+ *     -- so xmit_tim is the word immediately before the already-proven
+ *     rcvcnt at +0x1C, which fixes the whole run backwards from +0x1A.
+ *  2. netmain's counter-selection menu carries explicit selector keys, and
+ *     they run strictly descending over exactly these labels:
+ *       9 No acknowledge, 8 Wait acknowledge, 7 Xmit over run,
+ *       6 Xmit ack parity, 5 Xmit bus error, 4 Xmit no return,
+ *       3 Xmit modem error, 2 Xmit packet error, 1 Xmit time out
+ *     which is the same nine words in the same order.
+ *  3. The anchor: netmain's help text for "Transmit modem error" reads
+ *     "Counts the number of times the transmitter could not synchronize
+ *     properly with the network, resulting in an Xmit ESB or biphase error".
+ *     RING_$SENDP bumps +0x16 on exactly that condition -- the arm gated by
+ *     `andi.w #0xc00,D0w` (the two ESB/biphase status bits) at 0x00E75C5E,
+ *     which also bumps the standalone RING_$XMIT_BIPHASE / RING_$XMIT_ESB
+ *     words (0x00E75C70 / 0x00E75C82) before `addq.w #0x1,(0x16,A2)` at
+ *     0x00E75C88.  Both orderings independently place xmit_modem at +0x16.
+ *
+ * Every transmit counter below therefore carries the RING_$SENDP instruction
+ * that bumps it, with A2 = RING_$STATS[unit] (0x00E7594C-0x00E75954).
+ *
+ * The three fields netmain displays that are NOT in this record --
+ * "xmit bph", "rcv bph" and "xmit esb" -- are the standalone words
+ * RING_$XMIT_BIPHASE (0x00E261BC), RING_$RCV_BIPHASE (0x00E261B8) and
+ * RING_$XMIT_ESB (0x00E261BE); ASKNODE assembles them into the reply.  That
+ * is why netmain shows 25 counters where the record holds 22.
  */
 typedef struct ring_$stats_t {
-    uint16_t    _reserved0;         /* 0x00 */
-    uint32_t    xmit_count;         /* 0x02: Total transmit attempts */
-    uint32_t    success_count;      /* 0x06: Successful transmissions */
-    uint16_t    no_response_count;  /* 0x0A: No response errors */
-    uint16_t    collision_count;    /* 0x0C: Collisions detected */
-    uint16_t    abort_count;        /* 0x0E: Aborted transmissions */
-    uint16_t    noresp_count;       /* 0x10: No response count */
-    uint16_t    parity_count;       /* 0x12: Parity errors */
-    uint16_t    delayed_count;      /* 0x14: Delayed responses */
-    uint16_t    biphase_count;      /* 0x16: Biphase errors */
-    uint16_t    unexpected_count;   /* 0x18: Unexpected status */
-    uint16_t    retry_count;        /* 0x1A: Retry attempts */
+    uint16_t    _reserved0;         /* 0x00: never read or written by the
+                                     *       kernel; netmain does not display it */
+    uint32_t    xmit_call;          /* 0x02: RING_$SENDP calls; bumped once on
+                                     *       entry, 0x00E759CE `addq.l #0x1,(0x2,A2)` */
+    uint32_t    xmitcnt;            /* 0x06: successful sends; 0x00E75C42 (status
+                                     *       word == 0x14) and 0x00E75D66 (the
+                                     *       "accepted" and short-packet arms) */
+    uint16_t    xmit_nack;          /* 0x0A: "No acknowledge" - 0x00E75D72, the
+                                     *       arm reached when status bit 4 is
+                                     *       clear and the length is 0 or > 4 */
+    uint16_t    xmit_wack;          /* 0x0C: "Wait acknowledge" - status bit 1,
+                                     *       0x00E75D3E */
+    uint16_t    xmit_orun;          /* 0x0E: "Xmit over run" - status bit 0,
+                                     *       0x00E75CDC */
+    uint16_t    xmit_apar;          /* 0x10: "Xmit ack parity" - status bit 15,
+                                     *       0x00E75D02 */
+    uint16_t    xmit_bus;           /* 0x12: "Xmit bus error" - status bit 6,
+                                     *       0x00E75CCA (the other arm of the
+                                     *       same test reports 0x00110016,
+                                     *       "memory parity error during
+                                     *       transmit", instead of counting) */
+    uint16_t    xmit_nortn;         /* 0x14: "Xmit no return" - status bits 5|9
+                                     *       (`andi.w #0x220`), 0x00E75CF0 */
+    uint16_t    xmit_modem;         /* 0x16: "Xmit modem error" - status bits
+                                     *       10|11 (`andi.w #0xc00`), 0x00E75C88;
+                                     *       the anchor for this whole half */
+    uint16_t    xmit_error;         /* 0x18: "Xmit packet error" - status bits
+                                     *       3 and 4 both set, 0x00E75D22 */
+    uint16_t    xmit_tim;           /* 0x1A: "Xmit time out" - bumped on the
+                                     *       retransmit re-arm, 0x00E75BE0 */
     uint32_t    rcvcnt;             /* 0x1C: packets accepted (0x00E75EEC) */
     uint16_t    rcveor;             /* 0x20: rcv_csr bit 5  (0x00E75FCE) */
     uint16_t    rcvcrc;             /* 0x22: rcv_csr bit 8  (0x00E75FFC) */
@@ -570,6 +625,17 @@ typedef struct ring_$stats_t {
 } ring_$stats_t;
 
 #if defined(ARCH_M68K)
+_Static_assert(offsetof(ring_$stats_t, xmit_call)          == 0x02, "ring_$stats_t.xmit_call");
+_Static_assert(offsetof(ring_$stats_t, xmitcnt)            == 0x06, "ring_$stats_t.xmitcnt");
+_Static_assert(offsetof(ring_$stats_t, xmit_nack)          == 0x0A, "ring_$stats_t.xmit_nack");
+_Static_assert(offsetof(ring_$stats_t, xmit_wack)          == 0x0C, "ring_$stats_t.xmit_wack");
+_Static_assert(offsetof(ring_$stats_t, xmit_orun)          == 0x0E, "ring_$stats_t.xmit_orun");
+_Static_assert(offsetof(ring_$stats_t, xmit_apar)          == 0x10, "ring_$stats_t.xmit_apar");
+_Static_assert(offsetof(ring_$stats_t, xmit_bus)           == 0x12, "ring_$stats_t.xmit_bus");
+_Static_assert(offsetof(ring_$stats_t, xmit_nortn)         == 0x14, "ring_$stats_t.xmit_nortn");
+_Static_assert(offsetof(ring_$stats_t, xmit_modem)         == 0x16, "ring_$stats_t.xmit_modem");
+_Static_assert(offsetof(ring_$stats_t, xmit_error)         == 0x18, "ring_$stats_t.xmit_error");
+_Static_assert(offsetof(ring_$stats_t, xmit_tim)           == 0x1A, "ring_$stats_t.xmit_tim");
 _Static_assert(offsetof(ring_$stats_t, rcvcnt)             == 0x1C, "ring_$stats_t.rcvcnt");
 _Static_assert(offsetof(ring_$stats_t, rcveor)             == 0x20, "ring_$stats_t.rcveor");
 _Static_assert(offsetof(ring_$stats_t, rcvbus)             == 0x26, "ring_$stats_t.rcvbus");

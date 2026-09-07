@@ -328,7 +328,7 @@ void ring_$disable_interrupts(void);
  *
  * Original address: 0x00E762CA
  */
-uint8_t HDR_CHKSUM(void *hdr, void *data);
+uint8_t HDR_CHKSUM(const void *hdr, const uint16_t *len_p);
 
 /*
  * ============================================================================

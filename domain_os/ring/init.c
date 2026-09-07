@@ -182,11 +182,11 @@ status_$t RING_$INIT(void *device_info)
 static status_$t ring_$init_internal(ring_unit_t *unit_data, void *device_info)
 {
     /*
-     * TODO(source-6co): This function needs further analysis.
-     * It appears to set up IIC (Inter-IC Communication) related data
-     * structures for the ring controller.
-     *
-     * For now, return success to allow basic initialization to proceed.
+     * TODO(source-6co): the body is a stub that just returns success.
+     * ring_$init_internal at 0x00E2FA86 is 0x5A bytes and RING_$INIT
+     * (0x00E2FAE0) is its only caller; it appears to set up the controller's
+     * IIC descriptors.  Re-emit it against the image before trusting
+     * RING_$INIT.
      */
     (void)unit_data;
     (void)device_info;

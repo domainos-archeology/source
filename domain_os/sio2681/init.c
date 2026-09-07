@@ -14,7 +14,7 @@
  * SIO2681_$INIT - Initialize DUART chip and both channels
  *
  * Assembly analysis:
- *   - Calculates base address: 0xFFB000 - (chip_num << 5) = 0xFFAFE0 for chip 0
+ *   - Base address: 0xFFB000 - 0x20 + chip_num * 0x20 (lea (-0x20,A1,D0w) at 0xE333FC; chip numbers are 1-based, so chip 1 is 0xFFB000)
  *   - Channel A registers at base + 0x00
  *   - Channel B registers at base + 0x10
  *   - Sets up channel structures with hardware pointers
@@ -51,13 +51,20 @@ void SIO2681_$INIT(int16_t *int_vec_ptr, int16_t *chip_num_ptr,
 
     /*
      * Calculate base address for this chip's registers.
-     * Each chip uses 32 bytes of address space.
-     * Base is 0xFFB000, chips are at decreasing addresses.
+     * Each chip uses 32 bytes of address space, and chip numbers are
+     * 1-BASED: TERM_$INIT passes the constant word 1 from 0x00E33220 as both
+     * int_vec_ptr and chip_num_ptr (0x00E331C4 `pea (0x5a,PC)` /
+     * 0x00E331C8 `move.l (SP),-(SP)`).
      *
-     * Assembly: lsl.w #5,D0w ; lea (-0x20,A1,D0w*0x1),A1
-     * where A1 starts at 0xFFB000
+     * Assembly (0x00E333F4-0x00E333FC):
+     *   movea.l #0xffb000,A1
+     *   lsl.w   #0x5,D0w
+     *   lea     (-0x20,A1,D0w*0x1),A1
+     * i.e. A1 = 0xFFB000 - 0x20 + chip_num * 0x20, so chip 1 sits at
+     * 0xFFB000 and chip 2 at 0xFFB020.
      */
-    base_addr = (volatile uint8_t *)(SIO2681_BASE_ADDR - ((uint16_t)chip_num << 5));
+    base_addr = (volatile uint8_t *)(SIO2681_BASE_ADDR - 0x20
+                                     + ((uint16_t)chip_num << 5));
 
     /* Initialize chip structure */
     chip_struct->regs = base_addr;
@@ -74,7 +81,22 @@ void SIO2681_$INIT(int16_t *int_vec_ptr, int16_t *chip_num_ptr,
      */
     table_offset = (int16_t)chip_num << 4;
 
-    /* Register chip and channel A in global tables */
+    /*
+     * Register chip and channel A in global tables.
+     *
+     * TODO(source-jvc9): the image has ONE table here, not three.  The
+     * assembly writes `move.l A3,(-0x8,A4,D0w*0x1)` (0x00E33428),
+     * `move.l (0x10,A6),(-0x10,A4,D0w*0x1)` (0x00E3342C) and
+     * `move.l (0x1c,A6),(-0xc,A3,D0w*0x1)` (0x00E3346E) with
+     * A3 = A4 = 0x00E2DF80 (Ghidra label SIO2681_$PTRS) and D0 = chip_num*0x10,
+     * i.e. a 1-based array of 16-byte {chan_a, chan_b, chip, unused} records
+     * whose entry 1 IS the label.  SIO2681_$CHANNELS (claimed 0x00E2DF70) and
+     * SIO2681_$CHIPS (claimed 0x00E2DF78) are fabricated, overlap each other,
+     * and land inside SIO2681_$DATA's storage.  The same bead covers
+     * SIO2681_$INT_VECTORS, which is really the 2-entry table at 0x00E351EC
+     * ({0x00E2DFA0, 0x00E2DFB0} = SIO2681_$INT1_RTE / SIO2681_$INT2_RTE) read
+     * as `move.l (-0x4,A5,D0w*0x1)` with A5 = 0x00E351EC (0x00E334F0).
+     */
     SIO2681_$CHIPS[chip_num] = chip_struct;
     SIO2681_$CHANNELS[(chip_num << 1)] = chan_a_struct;
 

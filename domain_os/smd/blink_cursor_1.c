@@ -21,7 +21,7 @@
  * so every (d,A0) below is a field of unit 1's hardware record and A1/A2 is
  * SMD_TIME_$COM's "cursor is painted" flag - the very flag
  * SMD_$BLINK_CURSOR_CALLBACK re-tests at 0x00E6FF8E right after calling this
- * routine through SMD_BLINK_FUNC_PTABLE.  (An earlier version of this file
+ * routine through smd_globals_t.blink_func.  (An earlier version of this file
  * had 0x00E27316 for A0, which is 0x60 low.)
  */
 

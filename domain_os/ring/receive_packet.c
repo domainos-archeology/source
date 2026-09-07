@@ -167,7 +167,8 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
      * 0x00E765B8: ordinary channel - queue the packet on its socket.
      */
     socket_id = (uint16_t)unit_data->channels[chan - 1].socket_id;
-    sock_rec.hdr = hdr;                             /* 0x00E765BE */
+    /* sock_$pkt_info_t.hdr is a target VA, not a C pointer. */
+    sock_rec.hdr = ARCH_PTR_TO_VA(hdr);             /* 0x00E765BE */
     sock_rec.data_pages[0] = *data_pa_p;            /* 0x00E765C2 */
     sock_rec.hdr_len = (uint16_t)*hdr_len_p;        /* 0x00E765C8 */
     sock_rec.data_len = (uint16_t)*data_len_p;      /* 0x00E765D0 */
@@ -189,7 +190,7 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
     TIME_$ABS_CLOCK((clock_t *)&sock_rec.src_addr);
 
     /* 0x00E765F2 */
-    queued = SOCK_$PUT(socket_id, (void **)&sock_rec, 0, 0, unit);
+    queued = SOCK_$PUT(socket_id, (void *)&sock_rec, 0, 0, unit);
     if (queued < 0) {
         return 0;                                   /* 0x00E76638 */
     }

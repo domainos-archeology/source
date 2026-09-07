@@ -116,6 +116,8 @@
 #define status_$display_invalid_buffer_size 0x0013000C
 #define status_$display_bad_tracking_rectangle 0x00130030
 #define status_$display_tracking_list_full 0x00130031
+#define status_$display_error_borrowing_from_screen_manager 0x0013000E
+#define status_$display_unable_to_borrow_display_in_use 0x0013000F
 #define status_$display_borrow_request_denied_by_screen_manager 0x00130010
 #define status_$display_cant_return_not_borrowed 0x00130012
 #define status_$display_already_borrowed_by_this_process 0x00130014
@@ -366,12 +368,19 @@ typedef struct smd_font_v1_t {
   uint16_t data_offset;  /* 0x02: Offset to glyph data from header start */
   uint16_t field_04;     /* 0x04: Unknown */
   uint16_t hdm_size;     /* 0x06: Size needed in HDM (scanlines) */
-  uint16_t char_width;   /* 0x08: Default character width */
-  uint16_t char_spacing; /* 0x0A: Character spacing */
-  uint16_t unknown_char_width; /* 0x0C: Width for unknown characters */
-  uint16_t field_0e;           /* 0x0E: Unknown */
-  uint16_t cell_height;        /* 0x10: Character cell height */
-  uint16_t default_missing;    /* 0x12: Default character for missing glyphs */
+  uint16_t char_width;   /* 0x08: SMD_$COPY_FONT_TO_HDM reads it as the data
+                          *       size (smd/copy_font_to_hdm.c:74) */
+  uint16_t field_0a;     /* 0x0A: Unknown (was "char_spacing", a guess the
+                          *       write loop contradicts - see 0x10) */
+  uint16_t field_0c;     /* 0x0C: Unknown (was "unknown_char_width") */
+  uint16_t field_0e;     /* 0x0E: Unknown */
+  uint16_t char_spacing; /* 0x10: added to every glyph's advance, and to the
+                          *       missing-glyph width; smd_$write_str_clip_impl
+                          *       0x00E70614 `add.w (0x10,A2),D0w` and
+                          *       0x00E706B8.  The v3 twin is at 0x5A. */
+  uint16_t default_missing; /* 0x12: width used when the map yields index 0;
+                             *       0x00E7066E `move.w (0x12,A2),D0w` and
+                             *       0x00E706B4.  The v3 twin is at 0x6E. */
   uint16_t field_14;           /* 0x14: Unknown */
   uint16_t descent;            /* 0x16: Baseline descent */
   uint16_t ascent;             /* 0x18: Baseline ascent */
@@ -386,10 +395,10 @@ _Static_assert(__builtin_offsetof(smd_font_v1_t, data_offset) == 0x02, "smd_font
 _Static_assert(__builtin_offsetof(smd_font_v1_t, field_04) == 0x04, "smd_font_v1_t.field_04");
 _Static_assert(__builtin_offsetof(smd_font_v1_t, hdm_size) == 0x06, "smd_font_v1_t.hdm_size");
 _Static_assert(__builtin_offsetof(smd_font_v1_t, char_width) == 0x08, "smd_font_v1_t.char_width");
-_Static_assert(__builtin_offsetof(smd_font_v1_t, char_spacing) == 0x0A, "smd_font_v1_t.char_spacing");
-_Static_assert(__builtin_offsetof(smd_font_v1_t, unknown_char_width) == 0x0C, "smd_font_v1_t.unknown_char_width");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, field_0a) == 0x0A, "smd_font_v1_t.field_0a");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, field_0c) == 0x0C, "smd_font_v1_t.field_0c");
 _Static_assert(__builtin_offsetof(smd_font_v1_t, field_0e) == 0x0E, "smd_font_v1_t.field_0e");
-_Static_assert(__builtin_offsetof(smd_font_v1_t, cell_height) == 0x10, "smd_font_v1_t.cell_height");
+_Static_assert(__builtin_offsetof(smd_font_v1_t, char_spacing) == 0x10, "smd_font_v1_t.char_spacing");
 _Static_assert(__builtin_offsetof(smd_font_v1_t, default_missing) == 0x12, "smd_font_v1_t.default_missing");
 _Static_assert(__builtin_offsetof(smd_font_v1_t, field_14) == 0x14, "smd_font_v1_t.field_14");
 _Static_assert(__builtin_offsetof(smd_font_v1_t, descent) == 0x16, "smd_font_v1_t.descent");
@@ -433,47 +442,50 @@ typedef struct smd_font_v3_t {
   uint16_t field_32;          /* 0x32: Unknown */
 
   /*
-   * The image reads the region from 0x34 two contradictory ways, so it is
-   * spelled as a union rather than silently picking one:
+   * The image reads the region from 0x34 two contradictory ways.  The drawing
+   * path is the correct one and the width-measuring path carries an original
+   * bug (bead source-2gs7):
    *
-   *   - the drawing path computes the glyph index as
-   *     `add.l (0x34,A2),D0` / `move.b (0x0,A2,D0*0x1),D1b` (00e70426), i.e.
-   *     0x34 is a LONGWORD byte-offset to the map, and 00e70438
-   *     `adda.l (0x38,A2),A1` (with a `lea (-0x8,A2)` bias) makes 0x38 the
-   *     glyph-data offset;
-   *   - the width-measuring path reads the map inline with
-   *     `move.b (0x34,A2,D0w*0x1),D1b` (00e70634).
+   *   - drawing (0x00E70426 `add.l (0x34,A2),D0` / 0x00E7042A
+   *     `move.b (0x0,A2,D0*0x1),D1b`) treats 0x34 as a LONGWORD byte offset
+   *     from the font base to the character map;
+   *   - width measuring (0x00E70634 `move.b (0x34,A2,D0w*0x1),D1b`) reads the
+   *     map INLINE at 0x34.
    *
-   * The remaining v3 metrics sit past 0x34 as well and mirror the v1 fields:
-   * 0x42 hdm_size (SMD_$LOAD_FONT 00e6dcbe / SMD_$UNLOAD_FONT), 0x48 descent
-   * (00e704fc, v1 0x16), 0x4A ascent (00e7056c, v1 0x18), 0x5A char_spacing
-   * (00e7060e, v1 0x10) and 0x6E default_missing width (00e7063a, v1 0x12).
-   * See the P2 bead: only one of the two readings can be correct.
+   * Three things settle it in favour of the offset reading.  (1) Both paths
+   * agree that 0x38 is a longword glyph-data offset -- 0x00E70438 and
+   * 0x00E70646 are the identical `lea (-0x8,A2),A1` / `adda.l (0x38,A2),A1`
+   * pair -- and 0x38 would be map[4..7] if the map were inline.  (2) Every
+   * other v3 metric lies past 0x34 and would be buried inside a 256-byte
+   * inline map: 0x42 hdm_size (SMD_$LOAD_FONT 0x00E6DCBE), 0x48 descent
+   * (0x00E704FC, v1 0x16), 0x4A ascent (0x00E7056C, v1 0x18), 0x5A
+   * char_spacing (0x00E7060E, v1 0x10) and 0x6E default_missing
+   * (0x00E7063A, v1 0x12).  (3) The v1 layout is the same shape with the map
+   * inline at 0x1A and the glyph records biased from 0x92, so v3's indirection
+   * is exactly what a "more flexible" format would add.
+   *
+   * The measure path's inline read is therefore an original defect and is
+   * preserved as such in smd/write_str_clip.c: characters 0..7 pick up the two
+   * offset longwords and 8..255 pick up whatever follows them in the header.
+   * It only affects SMD_$WRITE_STRING's "string does not fit the clip window"
+   * arm, which measures the width instead of drawing.
    */
-  union {
-    uint8_t char_map[256];      /* 0x34: inline map (00e70634 reading) */
-    struct {
-      uint32_t char_map_offset;   /* 0x34: byte offset to map (00e70426) */
-      uint32_t glyph_data_offset; /* 0x38: byte offset to glyphs (00e70438) */
-      uint16_t field_3c;          /* 0x3C: Unknown */
-      uint16_t field_3e;          /* 0x3E: Unknown */
-      uint16_t field_40;          /* 0x40: Unknown */
-      uint16_t hdm_size;          /* 0x42: HDM size needed */
-      uint16_t field_44;          /* 0x44: Unknown */
-      uint16_t field_46;          /* 0x46: Unknown */
-      uint16_t descent;           /* 0x48: Baseline descent */
-      uint16_t ascent;            /* 0x4A: Baseline ascent */
-      uint8_t  gap_4c[0x0E];      /* 0x4C: Unknown */
-      uint16_t char_spacing;      /* 0x5A: Character spacing */
-      uint8_t  gap_5c[0x12];      /* 0x5C: Unknown */
-      uint16_t default_missing;   /* 0x6E: Width for missing glyphs */
-    };
-  };
+  uint32_t char_map_offset;   /* 0x34: byte offset to the 256-entry map */
+  uint32_t glyph_data_offset; /* 0x38: byte offset to the glyph records */
+  uint16_t field_3c;          /* 0x3C: Unknown */
+  uint16_t field_3e;          /* 0x3E: Unknown */
+  uint16_t field_40;          /* 0x40: Unknown */
+  uint16_t hdm_size;          /* 0x42: HDM size needed */
+  uint16_t field_44;          /* 0x44: Unknown */
+  uint16_t field_46;          /* 0x46: Unknown */
+  uint16_t descent;           /* 0x48: Baseline descent */
+  uint16_t ascent;            /* 0x4A: Baseline ascent */
+  uint8_t  gap_4c[0x0E];      /* 0x4C: Unknown */
+  uint16_t char_spacing;      /* 0x5A: Character spacing */
+  uint8_t  gap_5c[0x12];      /* 0x5C: Unknown */
+  uint16_t default_missing;   /* 0x6E: Width for missing glyphs */
 } __attribute__((packed)) smd_font_v3_t;
 
-/* The union members are all measured from 0x34, so the offsets are asserted
- * through it. */
-_Static_assert(__builtin_offsetof(smd_font_v3_t, char_map) == 0x34, "smd_font_v3_t.char_map");
 _Static_assert(__builtin_offsetof(smd_font_v3_t, char_map_offset) == 0x34, "smd_font_v3_t.char_map_offset");
 _Static_assert(__builtin_offsetof(smd_font_v3_t, glyph_data_offset) == 0x38, "smd_font_v3_t.glyph_data_offset");
 _Static_assert(__builtin_offsetof(smd_font_v3_t, hdm_size) == 0x42, "smd_font_v3_t.hdm_size");
@@ -830,6 +842,21 @@ _Static_assert(__builtin_offsetof(smd_request_entry_t, params) == 0x04, "smd_req
  * Global state for the SMD subsystem.
  * Base address: 0x00E82B8C
  */
+/*
+ * A per-unit cursor-blink routine.  Entry 1 is SMD_$BLINK_CURSOR_1
+ * (0x00E2722C); the callback reaches it through
+ * smd_globals_t.blink_func[default_unit].  There is room for two entries
+ * before the code at SMD_GLOBALS + 0x1DA8.
+ *
+ * The table holds 32-bit TARGET addresses, so the field type is uint32_t
+ * rather than a C function pointer: an 8-byte host pointer would push
+ * sizeof(smd_globals_t) past 0x1DA8.  SMD_BLINK_CALL turns one back into
+ * something callable.
+ */
+typedef void (*smd_blink_func_t)(void);
+#define SMD_BLINK_FUNC_ENTRIES 2
+#define SMD_BLINK_CALL(va) ((smd_blink_func_t)ARCH_VA_TO_PTR(va))
+
 typedef struct smd_globals_t {
   /*
    * 0x00-0x47: mapping length per display type, indexed by
@@ -940,9 +967,33 @@ typedef struct smd_globals_t {
   int16_t previous_unit;       /* 0x1D9C: unit the cursor was last shown on
                                 *         (SHOW_CURSOR 0x00E6E200/0x00E6E444) */
   uint16_t unit_change_count;  /* 0x1D9E: SMD_$SET_UNIT_CURSOR_POS 0x00E6E7C6 */
-  uint16_t last_idm_button;    /* 0x1DA0: SMD_$GET_IDM_EVENT 0x00E6EE7C/0x00E6EE88 */
-  boolean power_off_reported;  /* 0x1DA2: SMD_$DM_COND_EVENT_WAIT 0x00E6F078 */
-  uint8_t pad_1da3;            /* 0x1DA3: Padding */
+  /*
+   * 0x1DA0..0x1DA7 is the per-unit blink-routine pointer table, indexed by
+   * the unit number itself: SMD_$BLINK_CURSOR_CALLBACK does
+   * 0x00E6FF84 `lea (0x0,A5,D0*0x1),A0` / 0x00E6FF88 `movea.l (0x1da0,A0),A1`
+   * with D0 = SMD_GLOBALS.default_unit * 4.  The image confirms it: entry 1
+   * at 0x00E84930 holds 0x00E2722C, which is SMD_$BLINK_CURSOR_1.
+   *
+   * Entry 0 is never dereferenced -- smd_$validate_unit accepts only unit 1
+   * (0x00E6D70A `cmpi.w #0x1,D0w`) and default_unit is 1 in the image -- so
+   * the module reuses its two words for unrelated state.  That is not an
+   * overlap bug, it is how the storage is laid out; the union spells both.
+   * (Bead source-q85g.)
+   *
+   * The record really does end at 0x1DA8: 0x00E84934 = SMD_GLOBALS + 0x1DA8
+   * is a code trampoline (`lea (-0x2,PC),A0` / `jmp 0x00E702F4`) that
+   * 0x00E6DCFE calls, and 0x00E84942 is smd_$write_str_clip_impl's.
+   */
+  union {
+    uint32_t blink_func[SMD_BLINK_FUNC_ENTRIES];  /* 0x1DA0: target addresses */
+    struct {
+      uint16_t last_idm_button;    /* 0x1DA0: SMD_$GET_IDM_EVENT
+                                    *         0x00E6EE7C / 0x00E6EE88 */
+      boolean power_off_reported;  /* 0x1DA2: SMD_$DM_COND_EVENT_WAIT
+                                    *         0x00E6F078 */
+      uint8_t pad_1da3;            /* 0x1DA3: Padding */
+    };
+  };
 } smd_globals_t;
 
 /* Remaining documented offsets (bead source-pewa). */
@@ -988,7 +1039,8 @@ _Static_assert(offsetof(smd_globals_t, previous_unit) == 0x1D9C, "g prev_unit");
 _Static_assert(offsetof(smd_globals_t, unit_change_count) == 0x1D9E, "g ucc");
 _Static_assert(offsetof(smd_globals_t, last_idm_button) == 0x1DA0, "g idm");
 _Static_assert(offsetof(smd_globals_t, power_off_reported) == 0x1DA2, "g poff");
-_Static_assert(sizeof(smd_globals_t) == 0x1DA4, "smd_globals_t size");
+_Static_assert(offsetof(smd_globals_t, blink_func) == 0x1DA0, "g blink_func");
+_Static_assert(sizeof(smd_globals_t) == 0x1DA8, "smd_globals_t size");
 #endif
 
 /*
@@ -1201,17 +1253,10 @@ _Static_assert(offsetof(smd_cursor_pattern_t, bitmap) == 0x08, "pat bitmap");
 extern smd_cursor_pattern_t *SMD_CURSOR_PTABLE[4];
 
 /*
- * Blink function pointer table at SMD_GLOBALS + 0x1DA0, indexed by the unit
- * number itself (SMD_$BLINK_CURSOR_CALLBACK 0x00E6FF84 "lea (0x0,A5,D0*0x1),A0"
- * / 0x00E6FF88 "movea.l (0x1da0,A0),A1" with D0 = default_unit * 4).
- *
- * TODO(source-q85g): 0x1DA0 is also smd_globals_t.last_idm_button, and
- * sizeof(smd_globals_t) is asserted to be 0x1DA4, so this table's entry for
- * unit 1 (SMD_GLOBALS + 0x1DA4) starts exactly where that record ends.  The
- * two declarations name overlapping storage and nothing defines this array.
+ * The blink-routine pointer table is smd_globals_t.blink_func -- see the union
+ * at the end of that record.  There is no second object at SMD_GLOBALS +
+ * 0x1DA0 (bead source-q85g).
  */
-typedef void (*smd_blink_func_t)(void);
-extern smd_blink_func_t SMD_BLINK_FUNC_PTABLE[SMD_MAX_DISPLAY_UNITS];
 
 /* Request lock ID for cursor operations */
 #define smd_$request_lock 8
@@ -1291,8 +1336,17 @@ extern const status_$t SMD_Invalid_BLT_In_Use_Err;
 extern const status_$t SMD_Invalid_BLT_Done_Interrupt_Err;
 extern const status_$t SMD_Invalid_Interrupt_Routine_State_Err;
 
-/* smd_$setup_scroll_blt - SAU-specific scroll BLT register setup.
- * Implemented in smd/sau2/scroll_blt_setup.s.  Original address: 0x00E27070 */
+/*
+ * smd_$setup_scroll_blt - SAU-specific scroll BLT register setup, 0x00E27070.
+ * Emitted byte for byte in smd/sau2/disp1_int.s, where it shares its body with
+ * the interrupt-level entry smd_$disp1_setup_blt at 0x00E27036.
+ *
+ * NOT C-CALLABLE.  Its arguments arrive in REGISTERS - A0 = the BLT register
+ * block, A1 = the display hardware record - and its only caller is
+ * SMD_$START_SCROLL's own assembly, `jsr (0x150,A5)` at 0x00E15C8A with
+ * A5 = 0x00E26F20.  The prototype exists so the symbol has a declaration;
+ * C code must not call it (bead source-a2ip).
+ */
 uint16_t smd_$setup_scroll_blt(SMD_HW_REG_PTR blt_regs, smd_display_hw_t *hw);
 
 /*

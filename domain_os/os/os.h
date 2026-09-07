@@ -182,4 +182,14 @@ extern void OS_TERM_INIT(uint32_t *term_state, uint32_t *parent_desc,
                          uint32_t *src_field_14, uint32_t *src_field_00,
                          uint32_t *src_field_10, uint32_t *src_fields);
 
+/*
+ * OS_$DATA_COPY - block copy, longwords when both ends are even (0x00E11F04)
+ *
+ * Arguments are (src, dst, len): 0x00E11F04 `movem.l (0x4,SP),{A0 A1}` then
+ * 0x00E11F0A-0x00E11F0E swaps them, so A0 (the `(A0)+` destination) ends up
+ * holding argument 2.  Only the low WORD of the length is used
+ * (0x00E11F24 `move.w D0w,D1w`).
+ */
+extern void OS_$DATA_COPY(const void *src, void *dst, uint32_t len);
+
 #endif /* OS_H */

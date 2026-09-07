@@ -191,9 +191,40 @@ typedef struct xns_$pkt_desc_t {
   uint16_t pkt_len;                 /* 0x2C: NOT written by XNS_IDP_$OS_DEMUX */
   uint16_t _unknown_2e;             /* 0x2E */
   struct xns_$channel_t *channel;   /* 0x30: receiving channel (its demux field) */
-  uint8_t  _unknown_34[2];          /* 0x34: from mac +0x38 */
-  uint16_t port_info;               /* 0x36: from mac +0x3A */
-  uint8_t  mac_info[0x10];          /* 0x38: from mac +0x3C (16 bytes) */
+  /*
+   * 0x34..0x47 arrives as one 20-byte block (XNS_IDP_$OS_DEMUX copies five
+   * longwords from mac +0x38 with `moveq #0x4,D2` + `dbf` at 0x00E1852C).
+   * Three readers in the image slice it three different ways, so it is
+   * modelled as a union of the slicings rather than one of them:
+   *
+   *   - xns_$setup_error_header (0x00E17960) reads +0x34 as a LONGWORD byte
+   *     count (0x00E179BC `cmp.l (0x34,A0),D5`) and +0x38 as a LONGWORD
+   *     network-buffer handle (0x00E179D2 `move.l (0x38,A0),-(SP)` into
+   *     NETBUF_$GETVA).
+   *   - XNS_IDP_$OS_DEMUX's forwarding arm reads only the WORD at +0x36
+   *     (0x00E186D2 `move.w (0x3a,A0),(-0x16,A6)`, mac +0x3A = this record's
+   *     +0x36) into xns_$sock_pkt_t.port_info, and copies the 16 bytes from
+   *     +0x38 (0x00E186D8 `lea (0x3c,A0),A1` + four `move.l`) into that
+   *     record's mac_info.
+   *
+   * On a big-endian target netbuf_len is (_unknown_34 << 16) | port_info and
+   * netbuf_handle is the first four bytes of mac_info; on a little-endian
+   * host the views of course disagree numerically, which is why nothing may
+   * convert between them by hand.
+   */
+  union {
+    struct {
+      uint32_t netbuf_len;          /* 0x34: bytes reachable through the
+                                     *       current network-buffer page */
+      uint32_t netbuf_handle;       /* 0x38: NETBUF_$GETVA / NETBUF_$RTNVA */
+      uint8_t  _netbuf_rest[0x0C];  /* 0x3C */
+    };
+    struct {
+      uint16_t _unknown_34;         /* 0x34: from mac +0x38 */
+      uint16_t port_info;           /* 0x36: from mac +0x3A */
+      uint8_t  mac_info[0x10];      /* 0x38: from mac +0x3C (16 bytes) */
+    };
+  };
 } xns_$pkt_desc_t;
 
 /*
@@ -328,12 +359,15 @@ _Static_assert(offsetof(xns_$pkt_desc_t, mac_src_hi) == 0x26, "pkt_desc mac_src_
 _Static_assert(offsetof(xns_$pkt_desc_t, mac_src_lo) == 0x2A, "pkt_desc mac_src_lo at +0x2A");
 _Static_assert(offsetof(xns_$pkt_desc_t, pkt_len) == 0x2C, "pkt_desc pkt_len at +0x2C");
 _Static_assert(offsetof(xns_$pkt_desc_t, channel) == 0x30, "pkt_desc channel at +0x30");
+_Static_assert(offsetof(xns_$pkt_desc_t, netbuf_len) == 0x34, "pkt_desc netbuf_len at +0x34");
 _Static_assert(offsetof(xns_$pkt_desc_t, port_info) == 0x36, "pkt_desc port_info at +0x36");
+_Static_assert(offsetof(xns_$pkt_desc_t, netbuf_handle) == 0x38, "pkt_desc netbuf_handle at +0x38");
 _Static_assert(offsetof(xns_$pkt_desc_t, mac_info) == 0x38, "pkt_desc mac_info at +0x38");
 
 _Static_assert(offsetof(xns_$mac_rcv_t, d) == 0x04, "mac_rcv payload at +0x04");
 _Static_assert(offsetof(xns_$mac_rcv_t, d.header) == 0x20, "mac_rcv header at +0x20");
 _Static_assert(offsetof(xns_$mac_rcv_t, d.mac_src_hi) == 0x2A, "mac_rcv mac_src_hi at +0x2A");
+_Static_assert(offsetof(xns_$mac_rcv_t, d.netbuf_len) == 0x38, "mac_rcv netbuf_len at +0x38");
 _Static_assert(offsetof(xns_$mac_rcv_t, d.mac_info) == 0x3C, "mac_rcv mac_info at +0x3C");
 
 _Static_assert(sizeof(xns_$sock_pkt_t) == 0x40, "xns_$sock_pkt_t is 0x40 bytes");

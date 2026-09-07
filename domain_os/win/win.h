@@ -131,7 +131,11 @@ _Static_assert(__builtin_offsetof(win_stats_t, dma_overrun) == 0x16, "win_stats_
 #define WIN_REG_PARAM 0x02     /* input or output parameter byte */
 #define WIN_REG_STATUS 0x06    /* status word, see WIN_STAT_* below */
 #define WIN_REG_MODE 0x0C      /* written 0x01 / 0x0A before a command */
-#define WIN_REG_GO 0x0E        /* command type: 5 ANSI, 6 init, 0 idle */
+#define WIN_REG_GO 0x0E        /* command type: 5 ANSI, 6 init, 3 format, 0 idle */
+
+/* Values WIN_$FORMAT_TRACK writes (0x00E1970C / 0x00E19712). */
+#define WIN_MODE_FORMAT 0x09   /* -> WIN_REG_MODE */
+#define WIN_GO_FORMAT   0x03   /* -> WIN_REG_GO */
 
 /* Bits of the WIN_REG_STATUS word, from the tests that read it. */
 #define WIN_STAT_BUSY 0x8000   /* 0x00E190EC `tst.w` / `bpl`: bit 15 */
@@ -173,12 +177,58 @@ uint32_t WIN_$DINIT(uint16_t vol_idx, uint16_t unit, void *param_3,
                     void *param_4, void *param_5, void *param_6, void *param_7);
 
 /* I/O operations */
-void WIN_$DO_IO(void *dev_entry, int32_t *req, void *param_3, uint8_t *result);
+/* WIN_$DO_IO is declared below win_$request_t. */
 
 /* Command interface */
 status_$t WIN_$ANSI_COMMAND(uint16_t unit, uint16_t ansi_cmd,
                             char *ansi_in_param, char *ansi_out_param);
 status_$t WIN_$CHECK_DISK_STATUS(uint16_t unit);
+
+/*
+ * The I/O request records WIN_$DO_IO walks as a singly linked list.  Only the
+ * fields the WIN driver actually touches are named; everything else is a hole.
+ */
+typedef struct win_$request_t {
+    uint32_t  next;                 /* 0x00: 0 ends the chain (0x00E19956
+                                     *       `movea.l (A0),A0` / `cmpa.w #0`).
+                                     *       A target VA, not a C pointer: a
+                                     *       real pointer would break the
+                                     *       layout on a 64-bit host.  Use
+                                     *       ARCH_VA_TO_PTR. */
+    uint8_t   _unknown_04[8];       /* 0x04 */
+    status_$t status;               /* 0x0C: WIN_$FORMAT_TRACK 0x00E19768
+                                     *       `move.l D0,(0xc,A0)`, WIN_$DO_IO
+                                     *       0x00E1994E */
+    uint32_t  pa;                   /* 0x10: shifted right 10 to make the page
+                                     *       number PARITY_$CHK_IO is given */
+    uint32_t  length;               /* 0x14 */
+    uint8_t   _unknown_18[6];       /* 0x18 */
+    uint8_t   volume;               /* 0x1E: 1-based index into the disk
+                                     *       subsystem's per-volume table */
+    int8_t    flags;                /* 0x1F: low nibble is the operation
+                                     *       (2 = read/write chain, 3 = format,
+                                     *       0x00E1979A `moveq #0xf,D0` /
+                                     *       `and.b (0x1f,A2),D0b`); the sign
+                                     *       bit is tested on a data check */
+} win_$request_t;
+
+_Static_assert(__builtin_offsetof(win_$request_t, next) == 0x00, "win_$request_t.next");
+_Static_assert(__builtin_offsetof(win_$request_t, status) == 0x0C, "win_$request_t.status");
+_Static_assert(__builtin_offsetof(win_$request_t, pa) == 0x10, "win_$request_t.pa");
+_Static_assert(__builtin_offsetof(win_$request_t, length) == 0x14, "win_$request_t.length");
+_Static_assert(__builtin_offsetof(win_$request_t, volume) == 0x1E, "win_$request_t.volume");
+_Static_assert(__builtin_offsetof(win_$request_t, flags) == 0x1F, "win_$request_t.flags");
+
+/*
+ * WIN_$FORMAT_TRACK (0x00E196AA) - the op-type 3 arm of WIN_$DO_IO.
+ * Takes TWO arguments: 0x00E197B2 pushes `pea (A2)` (the request) and then
+ * `move.l (0x8,A6),-(SP)` (the device entry), and the callee reads both
+ * (0x00E196B2 `move.l (0x8,A6),D3` / 0x00E196B6 `move.l (0xc,A6),D4`).
+ */
+void WIN_$FORMAT_TRACK(void *dev_entry, win_$request_t *req);
+
+void WIN_$DO_IO(void *dev_entry, win_$request_t *req, void *param_3,
+                uint8_t *result);
 
 /* Control operations */
 uint32_t WIN_$SPIN_DOWN(uint16_t *unit_ptr);

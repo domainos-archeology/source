@@ -97,7 +97,7 @@ void SMD_$BLINK_CURSOR_CALLBACK(void)
         if (SMD_TIME_$COM.blink_defer == 0) {
             /* Call the unit-specific blink function */
             /* The blink function pointer table is at A5+0x1DA0 for each unit */
-            SMD_BLINK_FUNC_PTABLE[SMD_GLOBALS.default_unit]();
+            SMD_BLINK_CALL(SMD_GLOBALS.blink_func[SMD_GLOBALS.default_unit])();
 
             /* 00e6ff8e tst.b (0x2,A2) / bpl: the blink routine has just
              * toggled the flag (SMD_$BLINK_CURSOR_1 0x00E27276 not.b (A2)),

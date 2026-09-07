@@ -138,9 +138,8 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
             rec.iov = pkt->d.iov;                 /* 0x00E1851C */
             rec.from_net = true;                  /* 0x00E1851E st (-0x64,A6) */
 
-            rec._unknown_34[0] = pkt->d._unknown_34[0];   /* 0x00E1852C, */
-            rec._unknown_34[1] = pkt->d._unknown_34[1];   /* five longwords */
-            rec.port_info = pkt->d.port_info;
+            rec._unknown_34 = pkt->d._unknown_34;       /* 0x00E1852C, */
+            rec.port_info = pkt->d.port_info;           /* five longwords */
             for (i = 0; i < 16; i++) {
                 rec.mac_info[i] = pkt->d.mac_info[i];
             }
@@ -221,8 +220,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
         rec.iov = pkt->d.iov;                   /* 0x00E1862A */
         rec.from_net = true;                    /* 0x00E1862C st (-0x64,A6) */
 
-        rec._unknown_34[0] = pkt->d._unknown_34[0];
-        rec._unknown_34[1] = pkt->d._unknown_34[1];
+        rec._unknown_34 = pkt->d._unknown_34;
         rec.port_info = pkt->d.port_info;
         for (i = 0; i < 16; i++) {
             rec.mac_info[i] = pkt->d.mac_info[i];
@@ -301,7 +299,11 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
          * pushed from (0x30,A1) then (0x2E,A1), so port_type is the first
          * of them.
          */
-        put_ok = SOCK_$PUT(ROUTE_$SOCK, (void **)&fwd, 0,
+        /* The queue is generic: every producer builds its own 0x40-byte
+         * record, and XNS's is xns_$sock_pkt_t rather than sock's
+         * sock_$pkt_info_t, so the argument is passed as an opaque record
+         * address. */
+        put_ok = SOCK_$PUT(ROUTE_$SOCK, (void *)&fwd, 0,
                            rport->port_type, rport->socket);
 
         /*
@@ -412,7 +414,7 @@ void XNS_IDP_$DEMUX(xns_$pkt_desc_t *rec, uint16_t *port_type,
      * 0x00E18C26..0x00E18C3C: SOCK_$PUT(chan->user_socket, &out, 0,
      * *port_type, *port_socket).
      */
-    put_ok = SOCK_$PUT(chan->user_socket, (void **)&out, 0,
+    put_ok = SOCK_$PUT(chan->user_socket, (void *)&out, 0,
                        *port_type, *port_socket);
 
     /* 0x00E18C46 `tst.b D0b' / `bmi': queued, leave *status_ret ok. */

@@ -92,8 +92,14 @@ void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, void *hdr_va,
      * The initialized flag is at offset 0x60 and is -1 when initialized.
      */
     if (unit_data->initialized >= 0) {
-        /* Unit not initialized - cannot transmit */
-        *status_ret = status_$ok;
+        /*
+         * Unit not initialized - cannot transmit.
+         * 0x00E7595E `bmi` falls through to 0x00E75960 `bset.b #0x4,(0x1,A3)`
+         * and 0x00E7596A `move.l #0x100002,(A4)`, then branches straight to
+         * the epilogue at 0x00E75DD6 - skipping the transmit_done stores.
+         */
+        result_bytes[1] |= 0x10;
+        *status_ret = status_$io_controller_not_in_system;
         return;
     }
 
@@ -122,17 +128,20 @@ void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, void *hdr_va,
     }
 
     /*
-     * Get retry count from stats.
-     * If congestion flag is set, use shorter retry count.
+     * Retry budget.  0x00E759AA `moveq #0x14,D6`; 0x00E759AC
+     * `tst.b (0x34,A2)` / `bpl` skips 0x00E759B2 `moveq #0xa,D6`, so the
+     * budget drops to 10 only when the PREVIOUS send finished without a hard
+     * error (last_success, +0x34).
      */
     retry_count = 0x14;  /* 20 retries default */
-    if (stats->congestion_flag < 0) {
+    if (stats->last_success < 0) {
         retry_count = 10;
     }
 
-    /* Increment transmit count */
-    stats->xmit_count++;
-    stats->congestion_flag = 0;
+    /* 0x00E759CE `addq.l #0x1,(0x2,A2)` and 0x00E759D2
+     * `move.b D4b,(0x3a,A2)` with D4b still zero. */
+    stats->xmit_call++;
+    stats->retry_pending = 0;
 
     /*
      * Setup local data buffer info.
@@ -153,7 +162,18 @@ void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, void *hdr_va,
      * Calculate header checksum if enabled.
      */
     if (NETWORK_$DO_CHKSUM < 0) {
-        *((uint8_t *)hdr_va + 0xd) = HDR_CHKSUM(hdr_va, &data_info);
+        /*
+         * 0x00E759FE-0x00E75A12: `pea (0x14,A6)` gives HDR_CHKSUM the ADDRESS
+         * of the caller's fourth argument, and the callee reads its first
+         * WORD as the header byte count -- on m68k that is the top 16 bits of
+         * data_info.  The width is spelled out rather than taking the address
+         * of the 64-bit local, which would read the wrong half on a
+         * little-endian host.  (source-bwuv covers this frame's argument
+         * model, which is still approximate.)
+         */
+        uint16_t hdr_len_w = (uint16_t)(data_info >> 48);
+
+        *((uint8_t *)hdr_va + 0xd) = HDR_CHKSUM(hdr_va, &hdr_len_w);
     } else {
         *((uint8_t *)hdr_va + 0xd) = 1;
     }
@@ -176,9 +196,10 @@ transmit_retry:
                        local_data_pa, local_data_len);
 
     /*
-     * Check congestion state and choose transmission mode.
+     * Choose the transmission mode.  0x00E75A42 `tst.b (0x3a,A2)` / `bmi.w`
+     * selects the force-start arm at 0x00E75B24.
      */
-    if (stats->congestion_flag < 0) {
+    if (stats->retry_pending < 0) {
         /*
          * Congested mode - use force start with timeout.
          */
@@ -211,8 +232,9 @@ transmit_retry:
                        &unit_data->tx_ec, (uint32_t *)&local_ec_val, &local_status);
 
             if ((hw_regs[0] & RING_HW_STATUS_BUSY) != 0) {
-                /* Hardware error - timeout */
-                *status_ret = status_$ring_request_denied;
+                /* Still busy after the second wait: 0x00E75BAA `bne` to
+                 * 0x00E75BCC `move.l #0x31000e,(A4)`. */
+                *status_ret = status_$ring_controller_hardware_error;
                 goto transmit_done;
             }
         }
@@ -228,13 +250,19 @@ transmit_retry:
 
         /*
          * Poll for completion.
+         *
+         * TODO(source-bwuv): the deadline test is missing.  The image spins at
+         * 0x00E75A78-0x00E75AA2: `cmp.l (0x10,A1),D7` / `ble 0x00E75C18`, then
+         * TIME_$ABS_CLOCK into A6-0x18 and SUB48(A6-0x20, A6-0x18) at
+         * 0x00E75A98 with `tst.b D0b` / `bpl 0x00E75A78`, i.e. it loops until
+         * the 48-bit deadline seeded at 0x00E75A66 from RING_$DATA+0x590 has
+         * passed.  Everything from here to 0x00E75B72 is still a sketch.
          */
         do {
             if (tx_ec_val <= unit_data->tx_ec.value) {
                 goto process_status;
             }
             TIME_$ABS_CLOCK(&timeout);
-            /* Check if deadline passed - simplified */
             break;
         } while (1);
 
@@ -261,29 +289,46 @@ check_completion:
     /* Clear DMA channel and check for retry */
     ring_$clear_dma_channel(2, unit);
 
-    if (stats->congestion_flag >= 0) {
-        if (force_start < 0) {
-            goto transmit_done;
-        }
-        /* Update retry stats and flags */
-        stats->retry_count++;
-
-        /* Check if should set congestion flag */
-        if ((stats->biphase_flag & ~stats->_reserved2) & 0x80) {
-            stats->_reserved2 = -1;
-            result_bytes[0] |= 0x08;
-
-            /* Reconfigure hardware mode */
-            if ((hw_regs[3] & 0x4000) == 0) {
-                hw_regs[3] = 0x2800;
-            } else {
-                hw_regs[3] = 0x6800;
-            }
-        }
-
-        stats->congestion_flag = -1;
-        goto transmit_retry;
+    /*
+     * 0x00E75BC6 `tst.b (0x3a,A2)` / `bpl` - a retry that was already pending
+     * means the controller never came back, so report it.  This arm shares
+     * 0x00E75BCC with the "still busy" exit above.
+     */
+    if (stats->retry_pending < 0) {
+        *status_ret = status_$ring_controller_hardware_error;
+        goto transmit_done;
     }
+
+    /* 0x00E75BDA `tst.b D4b` / `bmi.w 0x00E75DC2`. */
+    if (force_start < 0) {
+        goto transmit_done;
+    }
+
+    /* 0x00E75BE0 `addq.w #0x1,(0x1a,A2)`. */
+    stats->xmit_tim++;
+
+    /*
+     * 0x00E75BE4-0x00E75BEE: `move.b (0x36,A2),D0b` / `not.b D0b` /
+     * `and.b (0x38,A2),D0b` / `bpl` - enter degraded mode the first time
+     * biphase_flag is true while congestion_flag is still false.
+     */
+    if ((int8_t)(~stats->congestion_flag & stats->biphase_flag) < 0) {
+        stats->congestion_flag = -1;            /* 0x00E75BF0 `st (0x36,A2)` */
+        result_bytes[0] |= 0x08;                /* 0x00E75BF4 `bset.b #0x3,(A3)` */
+
+        /* Reconfigure hardware mode (0x00E75BF8 `move.w (0x6,A4),D0w` /
+         * `btst.l #0xe,D0`). */
+        if ((hw_regs[3] & 0x4000) == 0) {
+            hw_regs[3] = 0x2800;
+        } else {
+            hw_regs[3] = 0x6800;
+        }
+    }
+
+    /* 0x00E75C10 `st (0x3a,A2)` then 0x00E75C14 `bra.w 0x00E75A22` - this arm
+     * always retries; it never falls into the status decode. */
+    stats->retry_pending = -1;
+    goto transmit_retry;
 
 process_status:
     /*
@@ -301,7 +346,7 @@ process_status:
      */
     if (hw_status == RING_HW_STATUS_COMPLETE) {
         result_bytes[0] |= 0x80;  /* Success flag */
-        stats->success_count++;
+        stats->xmitcnt++;
         success = -1;
         NETWORK_$ACTIVITY_FLAG = -1;
         goto transmit_done;
@@ -325,7 +370,7 @@ process_status:
             result_bytes[1] |= 0x04;
             RING_$XMIT_ESB++;
         }
-        stats->biphase_count++;
+        stats->xmit_modem++;
     }
 
     /*
@@ -335,7 +380,7 @@ process_status:
         /* Parity error - check if address comparison matches */
         /* This involves PARITY_$CHK_IO call in original */
         result_bytes[1] |= 0x80;
-        stats->parity_count++;
+        stats->xmit_bus++;
         goto retry_check;
     }
 
@@ -344,7 +389,7 @@ process_status:
      */
     if ((hw_status & RING_HW_STATUS_NOTACK) != 0) {
         result_bytes[0] |= 0x01;
-        stats->abort_count++;
+        stats->xmit_orun++;
         goto retry_check;
     }
 
@@ -353,7 +398,7 @@ process_status:
      */
     if ((hw_status & RING_HW_STATUS_DELAYED) != 0) {
         result_bytes[0] |= 0x04;
-        stats->delayed_count++;
+        stats->xmit_nortn++;
         goto retry_or_done;
     }
 
@@ -362,7 +407,7 @@ process_status:
      */
     if ((hw_status & RING_HW_STATUS_NORESP) != 0) {
         result_bytes[1] |= 0x40;
-        stats->noresp_count++;
+        stats->xmit_apar++;
         goto retry_or_done;
     }
 
@@ -377,7 +422,7 @@ process_status:
      */
     if ((hw_status & RING_HW_STATUS_CONGESTED) == RING_HW_STATUS_CONGESTED) {
         result_bytes[1] |= 0x40;
-        stats->unexpected_count++;
+        stats->xmit_error++;
         goto retry_or_done;
     }
 
@@ -386,7 +431,7 @@ process_status:
      */
     if ((hw_status & RING_HW_STATUS_ACCEPTED) != 0) {
         result_bytes[0] |= 0x80;
-        stats->success_count++;
+        stats->xmitcnt++;
         *status_ret = status_$ok;
         goto transmit_done;
     }
@@ -396,7 +441,7 @@ process_status:
      */
     if ((hw_status & RING_HW_STATUS_REJECT) != 0) {
         result_bytes[0] |= 0x40;
-        stats->collision_count++;
+        stats->xmit_wack++;
         timeout.low = 500;
         goto retry_check;
     }
@@ -418,13 +463,13 @@ process_status:
      */
     result_bytes[0] |= 0x20;
     if (*send_flags == 0 || *send_flags > 4) {
-        stats->no_response_count++;
+        stats->xmit_nack++;
         timeout.low = 250;
         goto retry_check;
     }
 
     /* Success */
-    stats->success_count++;
+    stats->xmitcnt++;
     *status_ret = status_$ok;
     goto transmit_done;
 
@@ -444,8 +489,8 @@ retry_check:
         goto transmit_done;
     }
 
-    /* Clear congestion flag and retry */
-    stats->congestion_flag = 0;
+    /* 0x00E75DA4 `clr.b (0x3a,A2)`. */
+    stats->retry_pending = 0;
 
     /* Wait before retry */
     delay_type = 0;
@@ -455,20 +500,24 @@ retry_check:
 
 transmit_done:
     /*
-     * Finalize status and return.
+     * 0x00E75DC2 `not.b D5b` is UNCONDITIONAL, and 0x00E75DC4
+     * `move.b D5b,(0x34,A2)` sets the condition codes the following `bpl`
+     * tests.  D5 is set only by the two `st D5b` sites (0x00E75C46 and
+     * 0x00E75D0A), so last_success ends up true exactly when neither fired.
      */
-    if (success >= 0) {
-        success = ~success;
-    }
-
-    /* Store final state */
+    success = (int8_t)~success;
     stats->last_success = success;
 
     if (success < 0) {
-        result_bytes[0] |= 0x02;
+        result_bytes[0] |= 0x02;    /* 0x00E75DCA `bset.b #0x1,(A3)` */
+        /*
+         * 0x00E75DCE `clr.b (0x38,A2)` is dead in the original: the very next
+         * instruction stores D4 over it on both paths.  Preserved as written.
+         */
         stats->biphase_flag = 0;
     }
 
-    /* Store send flag byte */
-    stats->biphase_flag = ((uint8_t *)send_flags)[1];
+    /* 0x00E75DD2 `move.b D4b,(0x38,A2)` - the force-start flag, not a byte of
+     * send_flags. */
+    stats->biphase_flag = force_start;
 }

@@ -9,7 +9,8 @@
 #include "smd/smd_internal.h"
 
 /* smd_$setup_scroll_blt - SAU-specific scroll BLT setup
- * (declared in smd/smd_internal.h, defined in smd/sau2/scroll_blt_setup.s) */
+ * (declared in smd/smd_internal.h, emitted in smd/sau2/disp1_int.s at
+ * 0x00E27070, sharing its body with smd_$disp1_setup_blt at 0x00E27036) */
 
 /*
  * SMD_$CONTINUE_SCROLL - Continue scroll operation

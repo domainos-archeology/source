@@ -95,7 +95,6 @@ smd_globals_t SMD_GLOBALS;
 uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
 smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 smd_time_com_t SMD_TIME_$COM;
-smd_blink_func_t SMD_BLINK_FUNC_PTABLE[SMD_MAX_DISPLAY_UNITS];
 uint32_t TIME_$CLOCKH;
 uint16_t PROC1_$AS_ID;
 
@@ -163,7 +162,7 @@ static void setup(void)
 {
     memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
     memset(&SMD_TIME_$COM, 0, sizeof(SMD_TIME_$COM));
-    memset(SMD_BLINK_FUNC_PTABLE, 0, sizeof(SMD_BLINK_FUNC_PTABLE));
+    memset(SMD_GLOBALS.blink_func, 0, sizeof(SMD_GLOBALS.blink_func));
 
     blink_calls = reschedule_calls = 0;
     last_interval = 0;
@@ -172,10 +171,16 @@ static void setup(void)
     mock_disp_type = 0;
     TIME_$CLOCKH = 0;
 
-    /* The callback indexes the table with the unit number itself
-     * ("lsl.l #0x2,D0" / "(0x1da0,A0)" at 0x00E6FF82-0x00E6FF88). */
+    /*
+     * The callback indexes the table with the unit number itself
+     * ("lsl.l #0x2,D0" / "(0x1da0,A0)" at 0x00E6FF82-0x00E6FF88), and the
+     * table holds 32-bit TARGET addresses.  Anchor ARCH_HOST_VA_BASE just
+     * below the mock so the round trip through a 32-bit VA is exact on a
+     * 64-bit host.
+     */
+    ARCH_HOST_VA_BASE = (uintptr_t)(void *)mock_blink_unit - 0x1000u;
     SMD_GLOBALS.default_unit = 1;
-    SMD_BLINK_FUNC_PTABLE[1] = mock_blink_unit;
+    SMD_GLOBALS.blink_func[1] = ARCH_PTR_TO_VA((void *)mock_blink_unit);
 
     /* Keep the blank-timeout and tp-cursor tails inert. */
     SMD_GLOBALS.blank_enabled = 0;       /* 0x00E6FFB2 tst.b / bpl -> skip */

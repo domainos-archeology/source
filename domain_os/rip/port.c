@@ -175,7 +175,7 @@ void RIP_$STD_DEMUX(idp_$packet_t *pkt, uint16_t *param_2, uint16_t *param_3,
     local_data.rip_data[15] = pkt->rip_data[15];
 
     /* Queue packet to RIP socket (socket 8) */
-    result = SOCK_$PUT(RIP_SOCKET, (void **)&local_data, 0, *param_2, *param_3);
+    result = SOCK_$PUT(RIP_SOCKET, (void *)&local_data, 0, *param_2, *param_3);
 
     /* If successful (result >= 0), set status indicating packet queued */
     if (result >= 0) {

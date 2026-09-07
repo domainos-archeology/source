@@ -34,29 +34,10 @@
  * of its output arguments: nine longwords into each of the first two
  * (0x00E487C2 / 0x00E487D2) and three longwords into each of the next two
  * (0x00E487F8 / 0x00E48806).  PACCT_$LOG gives it four distinct frame slots:
- * A6-0x110, A6-0xE8, A6-0xC0 and A6-0xB0 (0x00E5AADE-0x00E5AAF2).
+ * A6-0x110, A6-0xE8, A6-0xC0 and A6-0xB0 (0x00E5AADE-0x00E5AAF2), and copies
+ * the FIRST (A6-0x110, 0x00E5AB30) and the THIRD (A6-0xC0, 0x00E5AB42) into
+ * the record.  pacct_sid_block_t / pacct_prot_block_t are in pacct/pacct.h.
  */
-#define PACCT_SID_BLOCK_LONGS       9   /* 36 bytes */
-#define PACCT_PROT_BLOCK_LONGS      3   /* 12 bytes */
-
-typedef struct all_sids_t {
-    uid_t    user_sid;      /* 0x00: User SID */
-    uid_t    group_sid;     /* 0x08: Group SID */
-    uid_t    org_sid;       /* 0x10: Org SID */
-    uid_t    login_sid;     /* 0x18: Login SID */
-    uint32_t extra;         /* 0x20: the ninth longword the callee writes */
-} all_sids_t;
-
-_Static_assert(sizeof(all_sids_t) == PACCT_SID_BLOCK_LONGS * 4,
-               "all_sids_t is the nine longwords ACL_$GET_RE_ALL_SIDS writes");
-
-typedef struct prot_info_t {
-    uid_t    prot_uid;      /* 0x00: Protection UID */
-    uint32_t extra;         /* 0x08: the third longword the callee writes */
-} prot_info_t;
-
-_Static_assert(sizeof(prot_info_t) == PACCT_PROT_BLOCK_LONGS * 4,
-               "prot_info_t is the three longwords ACL_$GET_RE_ALL_SIDS writes");
 
 /*
  * Constant cells in the code region, passed by reference to
@@ -65,90 +46,127 @@ _Static_assert(sizeof(prot_info_t) == PACCT_PROT_BLOCK_LONGS * 4,
  * compact record's size - and 0x0004, whose second byte sets bit 2, i.e.
  * "do not run the FILE_$DELETE_INT probe".
  */
-static int16_t pacct_$attr_info_size = FILE_ATTR_INFO_SIZE;   /* 0xE5A8B8 */
-static uint16_t      pacct_$attr_info_req  = 0x0004;                /* 0xE5AD34 */
-
-/*
- * TODO: pacct_record_t's field offsets in pacct/pacct.h do not match the
- * stores this routine makes.  With the record at A6-0x190 the image writes
- * the SID block at +0x04 (36 bytes), the protection block at +0x28 (12
- * bytes), the device number at +0x34 (0x00E5AC5C), the start time at +0x38,
- * user/system time at +0x3C/+0x3E, the elapsed time at +0x40, a cleared
- * longword at +0x42, the I/O counts at +0x46/+0x48, the process UID at +0x4A
- * (0x00E5ABDE), the 32-byte command name at +0x52 (0x00E5AC04) and the memory
- * figure at +0x72 (0x00E5AB86).  Bead source-q5k1.  The header currently
- * claims 0x2C, 0x30,
- * 0x34/0x36, 0x38, 0x3A, 0x46/0x48/0x4A and 0x68.  Tracked as a bead; this
- * pass keeps the existing field names so the fix stays one change.
- */
+static int16_t  pacct_$attr_info_size = FILE_ATTR_INFO_SIZE;   /* 0xE5A8B8 */
+static uint16_t pacct_$attr_info_req  = 0x0004;                /* 0xE5AD34 */
 
 /* Unix epoch offset - difference between Domain/OS epoch and Unix epoch */
 #define UNIX_EPOCH_OFFSET   0x12CEA600
 
-void PACCT_$LOG(uint8_t *fork_flag, uint8_t *su_flag, int16_t *exit_status,
-                clock_t *start_clock, void *proc_times,
-                int32_t *user_time, int32_t *sys_time,
-                uid_t *tty_uid, uid_t *proc_uid,
-                char *comm_ptr, int16_t *comm_len)
+void PACCT_$LOG(boolean *fork_flag, boolean *su_flag, int16_t *exit_status,
+                clock_t *start_clock, const uint32_t *proc_times,
+                const uint32_t *io_write_count, const uint32_t *io_read_count,
+                uid_t *tty_uid, const uid_t *proc_uid,
+                const char *comm_ptr, const int16_t *comm_len)
 {
     status_$t status;
-    clock_t current_clock;
-    clock_t elapsed;
-    all_sids_t sids;                        /* A6-0x110 */
-    prot_info_t prot_info;                  /* A6-0xE8 */
-    int32_t prot_result[PACCT_PROT_BLOCK_LONGS];        /* A6-0xC0 */
-    int32_t subsys_ids[PACCT_PROT_BLOCK_LONGS];         /* A6-0xB0 */
+    clock_t current_clock;                  /* A6-0x19C */
+    pacct_sid_block_t sids;                 /* A6-0x110 */
+    pacct_sid_block_t cur_sids;             /* A6-0xE8  */
+    pacct_prot_block_t prot_info;           /* A6-0xC0  */
+    pacct_prot_block_t subsys_info;         /* A6-0xB0  */
     file_$obj_loc_t tty_loc;                /* A6-0x20 */
     uint8_t file_info[FILE_ATTR_INFO_SIZE]; /* A6-0xA0, the 0x7A compact record */
-    pacct_record_t record;
+    pacct_record_t record;                  /* A6-0x190 */
     int16_t len;
     int16_t i;
     void *map_result;
 
-    /* Check if accounting is enabled */
+    /* Check if accounting is enabled (0x00E5AABE-0x00E5AACE compares the
+     * eight bytes at 0x00E817EC against UID_$NIL at 0x00E1737C). */
     if (pacct_owner.high == UID_$NIL.high &&
         pacct_owner.low == UID_$NIL.low) {
         return;
     }
 
-    /* Get current clock for elapsed time calculation */
+    /* Get current clock; the elapsed time is computed in this same slot. */
     TIME_$CLOCK(&current_clock);
 
-    /* Get all SIDs for current process */
     /*
-     * 0x00E5AADE-0x00E5AAF2.  The fourth argument is a real 12-byte frame
-     * slot at A6-0xB0, not NULL: the callee copies three longwords through it
-     * unconditionally (`movea.l (0x14,A6),A2` + three `move.l (A1)+,(A2)+`
-     * at 0x00E48802-0x00E4880A).  Nothing in PACCT_$LOG reads it back.
+     * 0x00E5AADE-0x00E5AAF2.  All four output slots are real frame storage:
+     * the callee copies through every one of them unconditionally.  Only the
+     * first and the third are read back.
      */
-    ACL_$GET_RE_ALL_SIDS(&sids, &prot_info, prot_result, subsys_ids, &status);
+    ACL_$GET_RE_ALL_SIDS(&sids, &cur_sids, &prot_info, &subsys_info, &status);
 
     /*
-     * Build accounting record
+     * Build accounting record.  Note that ac_pad_03 and ac_pad_74 are never
+     * written, so the record copied to the file carries 13 uninitialised
+     * stack bytes.  That is the original behaviour; do not "fix" it.
      */
 
-    /* Flags: bit 0 = forked, bit 1 = used superuser */
+    /* Flags: bit 0 = arg1's boolean, bit 1 = arg2's boolean
+     * (0x00E5AAFC `clr.w`, then 0x00E5AB08 / 0x00E5AB1A). */
     record.ac_flags = 0;
-    if (*fork_flag & 0x80) {
-        record.ac_flags |= 0x01;
+    if (*fork_flag < 0) {
+        record.ac_flags |= 0x0001;
     }
-    if (*su_flag & 0x80) {
-        record.ac_flags |= 0x02;
+    if (*su_flag < 0) {
+        record.ac_flags |= 0x0002;
     }
 
-    /* Exit status - use byte at offset 1 */
-    record.ac_stat = *((uint8_t *)exit_status + 1);
-    record.ac_pad1 = 0;
+    /* Exit status: the LOW byte of the status word
+     * (0x00E5AB2A `move.b (0x1,A0),(-0x18e,A6)`). */
+    record.ac_stat = (uint8_t)(*exit_status & 0x00FF);
 
-    /* Copy SIDs */
-    record.ac_uid = sids.user_sid;
-    record.ac_gid = sids.group_sid;
-    record.ac_org = sids.org_sid;
-    record.ac_login = sids.login_sid;
-    record.ac_prot_uid = prot_info.prot_uid;
+    /* 36-byte SID block (0x00E5AB30) and 12-byte protection block
+     * (0x00E5AB42, sourced from the THIRD argument, A6-0xC0). */
+    record.ac_sids = sids;
+    record.ac_prot = prot_info;
 
-    /* Get device number from TTY UID */
+    /* 0x00E5AB50 `clr.l (-0x15c,A6)` clears the device number first. */
     record.ac_devno = 0;
+
+    /* 0x00E5AB54 `clr.l (-0x14e,A6)`. */
+    record.ac_zero_42 = 0;
+
+    /*
+     * I/O counters, from PROC1_$STATS[PROC1_$CURRENT]: arg6 is the
+     * pages-written cell (+0x08) and arg7 the pages-read cell (+0x0C).
+     * 0x00E5AB58-0x00E5AB6C.
+     */
+    record.ac_io_write = pacct_$compress(*io_write_count);
+    record.ac_io_read  = pacct_$compress(*io_read_count);
+
+    /*
+     * 0x00E5AB70-0x00E5AB86: D0 = (*arg6 + *arg7) << 2, then
+     * (D0 << 4) - D0, i.e. 60 * (*arg6 + *arg7).
+     */
+    record.ac_mem = pacct_$compress((*io_write_count + *io_read_count) * 60u);
+
+    /* CPU times out of the process record (0x00E5AB8A / 0x00E5AB9C read
+     * proc_times[+0x08] and proc_times[+0x0C]). */
+    record.ac_utime = pacct_$compress(proc_times[2]);
+    record.ac_stime = pacct_$compress(proc_times[3]);
+
+    /* Start time - convert clock to Unix seconds (0x00E5ABAA-0x00E5ABBA). */
+    record.ac_btime = CAL_$CLOCK_TO_SEC(start_clock) + UNIX_EPOCH_OFFSET;
+
+    /*
+     * Elapsed time.  SUB48's first argument is the destination
+     * (0x00E172E4 `movea.l (0x4,SP),A0`), and PACCT_$LOG pushes
+     * `move.l D2,-(SP)` (start_clock) before `pea (-0x19c,A6)`, so the
+     * subtraction runs in the current_clock slot: current_clock -= *start_clock.
+     */
+    SUB48(&current_clock, start_clock);
+    record.ac_etime = pacct_$clock_to_comp(&current_clock);
+
+    /* Process UID (0x00E5ABDE / 0x00E5ABE2, two longwords). */
+    record.ac_proc_uid = *proc_uid;
+
+    /* Command name - copy up to 32 chars, zero-fill the rest
+     * (0x00E5ABE6-0x00E5AC2A). */
+    len = *comm_len;
+    if (len > 32) {
+        len = 32;
+    }
+    for (i = 0; i < len; i++) {
+        record.ac_comm[i] = comm_ptr[i];
+    }
+    for (; i < 32; i++) {
+        record.ac_comm[i] = 0;
+    }
+
+    /* Get device number from the TTY object's attributes. */
     {
         /*
          * 0x00E5AC2A-0x00E5AC5C.  Both the size word and the request word are
@@ -160,46 +178,12 @@ void PACCT_$LOG(uint8_t *fork_flag, uint8_t *su_flag, int16_t *exit_status,
                             &tty_loc, file_info, &status);
         if (status != status_$ok) {
             /* 0x00E5AC52 `moveq #-0x1,D1` - no TTY. */
-            record.ac_devno = 0xFFFFFFFF;
+            record.ac_devno = 0xFFFFFFFFu;
         } else {
             /* 0x00E5AC58 `move.w (-0x6e,A6),D1w` - compact record +0x32,
              * zero-extended into the longword field. */
             record.ac_devno = *(const uint16_t *)(const void *)(file_info + 0x32);
         }
-    }
-
-    /* I/O counts from proc_times (offsets 0x08 and 0x0C) */
-    record.ac_io_read = pacct_$compress(*((uint32_t *)proc_times + 2));
-    record.ac_io_write = pacct_$compress(*((uint32_t *)proc_times + 3));
-
-    /* CPU times */
-    record.ac_utime = pacct_$compress(*user_time);
-    record.ac_stime = pacct_$compress(*sys_time);
-
-    /* Total CPU time in 60ths of a second */
-    record.ac_mem = pacct_$compress((*user_time + *sys_time) * 60);
-
-    /* Start time - convert clock to Unix seconds */
-    record.ac_btime = CAL_$CLOCK_TO_SEC(start_clock) + UNIX_EPOCH_OFFSET;
-
-    /* Elapsed time - subtract start from current */
-    elapsed = current_clock;
-    SUB48(&elapsed, start_clock);
-    record.ac_elapsed = pacct_$clock_to_comp(&elapsed);
-
-    /* Process UID */
-    record.ac_proc_uid = *proc_uid;
-
-    /* Command name - copy up to 32 chars, pad with zeros */
-    len = *comm_len;
-    if (len > 32) {
-        len = 32;
-    }
-    for (i = 0; i < len; i++) {
-        record.ac_comm[i] = comm_ptr[i];
-    }
-    for (; i < 32; i++) {
-        record.ac_comm[i] = 0;
     }
 
     /* Enter superuser mode for mapping */

@@ -51,12 +51,14 @@ void SIO2681_$SET_LINE(sio2681_channel_t *channel, sio_params_t *params,
     regs = channel->regs;
 
     /*
-     * Issue reset commands to prepare for configuration.
-     * The sequence resets the MR pointer, receiver, and transmitter.
+     * Issue reset commands to prepare for configuration.  The order is the
+     * image's: disable RX/TX, reset the receiver, reset the transmitter
+     * (0x00E1D280 `move.b (0x5c,A5),(0x5,A1)`, 0x00E1D286 `(0x58,A5)`,
+     * 0x00E1D28C `(0x5a,A5)`).
      */
-    regs[SIO2681_REG_CRA] = SIO2681_$DATA.cmd_reset_rx;      /* 0x20: Reset RX */
-    regs[SIO2681_REG_CRA] = SIO2681_$DATA.cmd_reset_tx;      /* 0x30: Reset TX */
-    regs[SIO2681_REG_CRA] = SIO2681_$DATA.cmd_reset_mr;      /* 0x10: Reset MR ptr */
+    regs[SIO2681_REG_CRA] = SIO2681_$DATA.cmd_disable_rx_tx; /* 0x0A */
+    regs[SIO2681_REG_CRA] = SIO2681_$DATA.cmd_reset_rx;      /* 0x2A */
+    regs[SIO2681_REG_CRA] = SIO2681_$DATA.cmd_reset_tx;      /* 0x3A */
 
     /* Clear the channel B indicator flag temporarily */
     channel->flags &= ~0x01;
@@ -191,7 +193,7 @@ void SIO2681_$SET_LINE(sio2681_channel_t *channel, sio_params_t *params,
          * Write mode registers.
          * Must reset MR pointer first, then write MR1, then MR2.
          */
-        regs[SIO2681_REG_CRA] = SIO2681_$DATA.cmd_reset_error;  /* 0x40: Reset error */
+        regs[SIO2681_REG_CRA] = SIO2681_$DATA.cmd_reset_mr_ptr; /* 0x10 (0x00E1D43E) */
         regs[SIO2681_REG_MRA] = mr1_val;
         regs[SIO2681_REG_MRA] = mr2_val;
     }
@@ -240,8 +242,9 @@ void SIO2681_$SET_LINE(sio2681_channel_t *channel, sio_params_t *params,
         chip->regs[SIO2681_REG_ROPBC] = opcr_val ^ 0xFF;
     }
 
-    /* Re-enable receiver and transmitter */
-    regs[SIO2681_REG_CRA] = SIO2681_$DATA.cmd_enable_rx_tx;  /* 0x05 */
+    /* Reset the error status and re-enable receiver and transmitter
+     * (0x00E1D4D6 `move.b (0x56,A5),(0x5,A1)`). */
+    regs[SIO2681_REG_CRA] = SIO2681_$DATA.cmd_reset_err_enable;  /* 0x45 */
 
     ML_$SPIN_UNLOCK(&SIO2681_$DATA.spin_lock, token);
 }

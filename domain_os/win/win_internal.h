@@ -76,7 +76,37 @@ status_$t read_or_write_disk_record(uint16_t unit);
  */
 status_$t WAIT_FOR_CONTROLLER(uint16_t unit);
 status_$t FUN_00e194b4(uint16_t param_1, uint16_t cylinder);
-void FUN_00e196aa(void *dev_entry);
 void FUN_00e19186(uint16_t unit, char status, uint16_t *out);
+
+/*
+ * The disk subsystem's per-volume record table.
+ *
+ * DISK's A5 is 0x00E7A1E8, so its A5 + 0x378 is 0x00E7A560, and
+ * DISK_$WRITE_MULTI addresses one record with `lea (0x0,A5,D0w*0x1),A3` plus
+ * `(0x378,A3)` / `(0x384,A3)` (0x00E3CE3E / 0x00E3CE46) where D0 = 0x1C *
+ * index -- a 0x1C-byte record, entry n at 0x00E7A560 + 0x1C * n.
+ *
+ * WIN_$FORMAT_TRACK (0x00E19764) and WIN_$DO_IO (0x00E1994A) invalidate a
+ * volume with `clr.b (-0x4,A1,D1w*0x1)`, A1 = 0x00E7A560 and D1 = 0x1C *
+ * req->volume -- that is entry (volume - 1) + 0x18, so a request's volume
+ * number is 1-BASED against this table.  FLP_FORMAT_TRACK (0x00E3DDB0) and
+ * 0x00E3DFBC use the identical five instructions.
+ *
+ * TODO(source-8uxv): only this one byte is named; the 0x1C-byte record itself
+ * has not been recovered and belongs in disk/disk.h.
+ */
+#if defined(ARCH_M68K)
+#define WIN_VOLUME_TABLE ((volatile uint8_t *)0x00E7A560)
+#else
+#define WIN_VOLUME_TABLE_SIZE 0x1C0
+extern uint8_t WIN_$VOLUME_TABLE[WIN_VOLUME_TABLE_SIZE];
+#define WIN_VOLUME_TABLE (WIN_$VOLUME_TABLE)
+#endif
+
+#define WIN_VOLUME_ENTRY_SIZE 0x1C
+
+/* entry (volume - 1) + 0x18 */
+#define WIN_VOLUME_MOUNTED(volume)                                             \
+    (WIN_VOLUME_TABLE[(uint32_t)(volume) * WIN_VOLUME_ENTRY_SIZE - 4])
 
 #endif /* WIN_INTERNAL_H */

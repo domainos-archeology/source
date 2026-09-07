@@ -276,10 +276,24 @@ int8_t xns_$is_local_addr(void *addr)
  */
 void xns_$copy_packet_data(void *iov_chain, uint16_t length)
 {
-    /* This is a simplified implementation - the actual one
-     * handles scatter-gather with multiple buffers */
+    /*
+     * TODO(source-0rv): the body is empty.  0x00E18C5E is 132 bytes and it is
+     * a NESTED PROCEDURE of XNS_IDP_$RECEIVE - 0x00E18C6A `movea.l (A6),A2`
+     * takes the static link, and everything else is a slot of the parent
+     * frame: (-0x76,A2) is the byte offset into the current descriptor and
+     * (-0x5c,A2) the descriptor pointer itself.
+     *
+     * The loop is: chunk = min(remaining, desc->length - offset); copy
+     * desc->address + offset with OS_$DATA_COPY (0x00E18CAA); if the chunk
+     * did not exhaust the request, clear the offset and follow desc->next at
+     * (0x8,A0) (0x00E18CC4), otherwise add the chunk to the offset and stop
+     * (0x00E18CBA).  It ends when either the byte count reaches zero or the
+     * descriptor pointer does (0x00E18CD0 / 0x00E18CD2).
+     *
+     * Emitting it needs XNS_IDP_$RECEIVE's frame record first, the way
+     * xns/error_send.c models xns_$setup_error_header's parent; the two
+     * call sites are 0x00E18E70 and 0x00E18E86.
+     */
     (void)iov_chain;
     (void)length;
-
-    /* TODO(source-0rv): Implement proper scatter-gather copy */
 }

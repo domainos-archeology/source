@@ -60,7 +60,7 @@ void RING_$OPEN_OS(uint16_t param1, void *args, status_$t *status_ret)
     /* Check argument count */
     arg_count = *((int16_t *)args + 0x2A);  /* Offset 0x15 words = 0x2A bytes */
     if (arg_count >= 0x11) {
-        *status_ret = status_$ring_too_many_args;
+        *status_ret = status_$ring_invalid_svc_packet_type;
         return;
     }
 
@@ -228,7 +228,7 @@ void RING_$SVC_READ(uint16_t *unit_ptr, void *result, void *param3,
         if (sock_info[0] == 0) {
             /* No data available */
             FIM_$RLS_CLEANUP(fim_cleanup);
-            *status_ret = status_$ring_socket_already_open;
+            *status_ret = status_$ring_no_packet_to_receive;
             return;
         }
 
@@ -413,7 +413,10 @@ void RING_$SVC_WRITE(uint16_t *unit_ptr, void *hdr, void *param3,
     }
 
     /*
-     * TODO(source-6co): Complete implementation
+     * TODO(source-6co): the send path stops here.  RING_$SVC_WRITE at
+     * 0x00E76F9E is 0x3E4 bytes and only its argument validation has been
+     * transcribed; everything from the header-buffer allocation on is
+     * missing, so the routine returns without ever transmitting.
      *
      * The full implementation would:
      * 1. Allocate header buffer via NETBUF_$GET_HDR
