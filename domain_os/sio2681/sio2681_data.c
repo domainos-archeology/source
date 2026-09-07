@@ -123,34 +123,38 @@ sio2681_global_data_t SIO2681_$DATA = {
         0x0C,  /* 15: 19200 baud */
         0x0D,  /* 16: 38400 baud */
     },
+
+    /*
+     * 0xA8 (0x00E2DF60): the eight longwords SIO6509_$RCV indexes at
+     * 0x00E1D56A with ((status >> 4) & 7) * 4.
+     */
+    .sio6509_rcv_flags = {
+        0x00000000,  /* 0 */
+        0x00000002,  /* 1 */
+        0x00000004,  /* 2 */
+        0x00000006,  /* 3 */
+        0x00000001,  /* 4 */
+        0x00000005,  /* 5 */
+        0x00000003,  /* 6 */
+        0x00000000,  /* 7 */
+    },
 };
 
 /*
- * Channel pointer table
- * Indexed by (chip_num << 1) | channel_num
- * Original address: 0xe2df70
- */
-sio2681_channel_t *SIO2681_$CHANNELS[SIO2681_MAX_CHIPS * 2] = {
-    NULL, NULL, NULL, NULL,
-    NULL, NULL, NULL, NULL
-};
-
-/*
- * Chip pointer table
- * Indexed by chip_num
- * Original address: 0xe2df78
- */
-sio2681_chip_t *SIO2681_$CHIPS[SIO2681_MAX_CHIPS] = {
-    NULL, NULL, NULL, NULL
-};
-
-/*
- * Interrupt vector table
- * Contains function pointers for each chip's interrupt handler.
- * Original address: 0xe351e8
+ * SIO2681_$PTRS - per-chip pointer table, 0x00E2DF80
  *
- * Note: These would be filled in during system initialization.
+ * One 16-byte record per chip, 1-based (see sio2681_internal.h).  The image
+ * holds zeroes here; SIO2681_$INIT fills an entry in and the interrupt stubs
+ * write its saved_pc field.
  */
-void (*SIO2681_$INT_VECTORS[4])(void) = {
-    NULL, NULL, NULL, NULL
+sio2681_ptrs_entry_t SIO2681_$PTRS[SIO2681_MAX_CHIPS];
+
+/*
+ * SIO2681_$INT_VECTORS - the two interrupt stubs, 0x00E351EC
+ *
+ *   00e351ec  00 e2 df a0  00 e2 df b0
+ */
+void (*const SIO2681_$INT_VECTORS[SIO2681_MAX_CHIPS])(void) = {
+    SIO2681_$INT1_RTE,      /* 0x00E2DFA0, chip 1 */
+    SIO2681_$INT2_RTE,      /* 0x00E2DFB0, chip 2 */
 };

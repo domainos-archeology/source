@@ -206,7 +206,8 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
             int16_t resp_id;
             uint16_t dump_len;
             asknode_response_t response;
-            asknode_$reply_hdr_t *reply = (asknode_$reply_hdr_t *)rcv.reply;
+            asknode_$reply_hdr_t *reply =
+                (asknode_$reply_hdr_t *)ARCH_VA_TO_PTR(rcv.reply);
 
             /*
              * 0x00E66258-0x00E66284, in the original's order.  Everything the
@@ -232,10 +233,11 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
              * 0x00E66286-0x00E66296: the copy source is the record's DATA
              * pointer (record+4), not an offset into the reply record.
              */
-            OS_$DATA_COPY((char *)rcv.data, (char *)&response, pkt_len);
+            OS_$DATA_COPY((char *)ARCH_VA_TO_PTR(rcv.data),
+                          (char *)&response, pkt_len);
 
             /* 0x00E6629A: return the buffer that data pointer names */
-            NETBUF_$RTN_HDR((uint32_t *)&rcv.data);
+            NETBUF_$RTN_HDR(&rcv.data);
 
             /*
              * 0x00E662A6-0x00E662B6: the page vector is the record's own

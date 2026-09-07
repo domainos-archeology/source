@@ -10,6 +10,7 @@
  */
 
 #include "mac/mac_internal.h"
+#include "route/route.h"
 
 void MAC_$NET_TO_PORT_NUM(int32_t *net_id, int16_t *port_ret)
 {
@@ -30,28 +31,24 @@ void MAC_$NET_TO_PORT_NUM(int32_t *net_id, int16_t *port_ret)
 
     /*
      * Search through all 8 ports (0-7).
-     * ROUTE_$PORTP is an array of pointers to port info structures.
-     * The first long (offset 0) of each port info is the network ID.
+     *
+     * The original walks the pointer table at 0xE26EE8 -- ROUTE_$PORTP, an
+     * array of route_$port_t * -- and compares the first longword of each
+     * entry, which is route_$port_t.network (offset 0x00, asserted in
+     * route/route.h).  The table is addressed here through the typed global
+     * instead of the absolute address, so the loop is architecture neutral.
+     *
+     * Note that the entries are dereferenced unconditionally: a null slot
+     * would fault, exactly as in the original.
      */
-#if defined(ARCH_M68K)
     for (i = 0; i <= 7; i++) {
-        /* Get port info pointer from ROUTE_$PORTP array */
-        void *port_info = *(void **)(0xE26EE8 + i * 4);
-
-        /* Get network ID from port info (offset 0) */
-        port_net_id = *(int32_t *)port_info;
+        port_net_id = (int32_t)ROUTE_$PORTP[i]->network;
 
         if (network == port_net_id) {
             *port_ret = i;
             return;
         }
     }
-#else
-    /* Non-M68K stub */
-    for (i = 0; i <= 7; i++) {
-        /* TODO(source-92v): Implement port table access for non-M68K */
-    }
-#endif
 
     /* Not found, *port_ret remains -1 */
 }

@@ -203,8 +203,10 @@ typedef struct win_$request_t {
                                      *       number PARITY_$CHK_IO is given */
     uint32_t  length;               /* 0x14 */
     uint8_t   _unknown_18[6];       /* 0x18 */
-    uint8_t   volume;               /* 0x1E: 1-based index into the disk
-                                     *       subsystem's per-volume table */
+    uint8_t   proc_id;              /* 0x1E: the requesting process id, the
+                                     *       0-based index into the disk
+                                     *       subsystem's per-process slot
+                                     *       array (disk_$per_proc_t) */
     int8_t    flags;                /* 0x1F: low nibble is the operation
                                      *       (2 = read/write chain, 3 = format,
                                      *       0x00E1979A `moveq #0xf,D0` /
@@ -216,7 +218,7 @@ _Static_assert(__builtin_offsetof(win_$request_t, next) == 0x00, "win_$request_t
 _Static_assert(__builtin_offsetof(win_$request_t, status) == 0x0C, "win_$request_t.status");
 _Static_assert(__builtin_offsetof(win_$request_t, pa) == 0x10, "win_$request_t.pa");
 _Static_assert(__builtin_offsetof(win_$request_t, length) == 0x14, "win_$request_t.length");
-_Static_assert(__builtin_offsetof(win_$request_t, volume) == 0x1E, "win_$request_t.volume");
+_Static_assert(__builtin_offsetof(win_$request_t, proc_id) == 0x1E, "win_$request_t.proc_id");
 _Static_assert(__builtin_offsetof(win_$request_t, flags) == 0x1F, "win_$request_t.flags");
 
 /*

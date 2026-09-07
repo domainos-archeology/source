@@ -60,8 +60,17 @@
  *         (0x00E008C8, 0x00E00994).
  */
 typedef struct app_$receive_rec_t {
-    void       *reply;              /* 0x00 */
-    void       *data;               /* 0x04 */
+    uint32_t    reply;              /* 0x00: a target VIRTUAL ADDRESS, not a C
+                                     *       pointer - 0x00E008A8
+                                     *       "moveq #0x1e,D0 / add.l
+                                     *       (-0x40,A6),D0 / move.l D0,(A2)"
+                                     *       stores an address computed from
+                                     *       sock_$pkt_info_t.hdr, which is
+                                     *       itself a VA.  A real pointer is
+                                     *       eight bytes on a 64-bit host and
+                                     *       would push every later field out
+                                     *       of place.  Use ARCH_VA_TO_PTR. */
+    uint32_t    data;               /* 0x04: likewise (0x00E008B0 / 0x00E0093C) */
     uint32_t    data_pages[4];      /* 0x08 */
     uint32_t    hdr_f06;            /* 0x18 */
     uint32_t    hdr_f12;            /* 0x1C */
@@ -77,7 +86,7 @@ typedef struct app_$receive_rec_t {
     uint8_t     _pad_2a[2];         /* 0x2A */
 } app_$receive_rec_t;
 
-#if defined(ARCH_M68K)
+/* No pointer fields, so the layout holds on the host too. */
 _Static_assert(offsetof(app_$receive_rec_t, data)       == 0x04, "app_rcv.data");
 _Static_assert(offsetof(app_$receive_rec_t, data_pages) == 0x08, "app_rcv.data_pages");
 _Static_assert(offsetof(app_$receive_rec_t, hdr_f06)    == 0x18, "app_rcv.hdr_f06");
@@ -87,7 +96,6 @@ _Static_assert(offsetof(app_$receive_rec_t, src_port)   == 0x24, "app_rcv.src_po
 _Static_assert(offsetof(app_$receive_rec_t, flags_hi)   == 0x26, "app_rcv.flags_hi");
 _Static_assert(offsetof(app_$receive_rec_t, flags_lo)   == 0x28, "app_rcv.flags_lo");
 _Static_assert(sizeof(app_$receive_rec_t) == 0x2C, "app_$receive_rec_t must be 44 bytes");
-#endif
 
 /*
  * APP_$RECEIVE - Receive a packet on a socket

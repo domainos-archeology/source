@@ -128,6 +128,73 @@ _Static_assert(__builtin_offsetof(disk_jump_table_t, do_io) == 0x10, "disk_jump_
 #endif
 
 /*
+ * disk_$per_proc_t - the per-process I/O slot inside DISK_$DATA
+ *
+ * DISK_$DATA + 0x378 starts an array of 0x1C-byte slots indexed by
+ * PROC1_$CURRENT.  DISK_$WRITE_MULTI (0x00E3CCEE) and DISK_$READ_MULTI
+ * (0x00E3CFCC) form the address the same way, with the index scaled to
+ * 0x1C by "id*32 - id*4" and used as a sign-extended word:
+ *
+ *   00e3ce2a  move.w (0x00e20608).l,D0w     ; PROC1_$CURRENT
+ *   00e3ce30  lsl.w #0x2,D0w / move.w D0w,D4w / neg.w D0w
+ *   00e3ce36  lsl.w #0x3,D4w / add.w D4w,D0w ; D0 = id * 0x1C
+ *   00e3ce3a  lea (0x0,A5,D0w*0x1),A3
+ *   00e3ce3e  move.l (0x378,A3),D5           ; io_ec.value
+ *   00e3ce46  move.l (0x384,A3),D4           ; err_ec.value
+ *   00e3cd3a  st (0x390,A2)                  ; io_pending = true
+ *   00e3ced2  tst.b (0x390,A0) / bmi         ; still pending -> return
+ *
+ * so the three field offsets 0x378 / 0x384 / 0x390 are 0x00 / 0x0C / 0x18
+ * within the slot.  disk/disk_internal.h names the same two eventcounts as
+ * DMOD_PER_PROC_IO_EC and DMOD_PER_PROC_ERR_EC.
+ *
+ * The array runs from DISK_$DATA + 0x378 up to the disk_$error_info_t record
+ * at DISK_$DATA + 0xA94, which is 0x1C * 0x41 bytes, so there are 65 slots -
+ * index 0 plus the 64 process ids PROC1_$CURRENT can take.
+ *
+ * The four drivers that retire a request clear the pending byte for the
+ * process the REQUEST names (its byte at +0x1E), with the identical five
+ * instructions and A1 = 0x00E7A560, i.e. slot base + 0x18 - 4 + 0x1C*id:
+ * WIN_$FORMAT_TRACK 0x00E19764, WIN_$DO_IO 0x00E1994A and FLP_FORMAT_TRACK
+ * 0x00E3DDB0 / 0x00E3DFBC.  The index is the same 0-based process id, NOT a
+ * volume number.
+ */
+#define DISK_PER_PROC_BASE_OFFSET   0x378
+#define DISK_PER_PROC_ENTRIES       0x41    /* ids 0..64 */
+
+typedef struct disk_$per_proc_t {
+    ec_$eventcount_t    io_ec;      /* 0x00 (A5+0x378): I/O completion */
+    ec_$eventcount_t    err_ec;     /* 0x0C (A5+0x384): error notification */
+    boolean             io_pending; /* 0x18 (A5+0x390): set by DISK before it
+                                     *       issues the requests, cleared by
+                                     *       the driver as each is retired */
+    uint8_t             _pad19[3];  /* 0x19: to the 0x1C stride */
+} disk_$per_proc_t;
+
+/*
+ * ec_$eventcount_t holds two native pointers, so the slot is 0x1C bytes only
+ * on the 32-bit target.
+ */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(disk_$per_proc_t, io_ec) == 0x00, "disk_$per_proc_t.io_ec");
+_Static_assert(__builtin_offsetof(disk_$per_proc_t, err_ec) == 0x0C, "disk_$per_proc_t.err_ec");
+_Static_assert(__builtin_offsetof(disk_$per_proc_t, io_pending) == 0x18, "disk_$per_proc_t.io_pending");
+_Static_assert(sizeof(disk_$per_proc_t) == 0x1C, "disk_$per_proc_t must be 28 bytes");
+#endif
+
+/*
+ * 0x00E7A544 == DISK_$DATA (0x00E7A1CC) + 0x378.  On the target the array is
+ * at that fixed address; a host build gets a real object so a test can supply
+ * it (the same shape the rest of the tree uses for A5-relative tables).
+ */
+#define DISK_PER_PROC_VA 0x00E7A544
+#if defined(ARCH_M68K)
+#define DISK_$PER_PROC ((disk_$per_proc_t *)DISK_PER_PROC_VA)
+#else
+extern disk_$per_proc_t DISK_$PER_PROC[DISK_PER_PROC_ENTRIES];
+#endif
+
+/*
  * Global data areas
  */
 
@@ -230,7 +297,8 @@ void DISK_$MNT_DINIT(uint16_t vol_idx, void **dev_ptr, void *param_3,
 void DISK_$SHUTDOWN(disk_device_entry_t *dev_info, uint16_t unit);
 /* 0x00E3DB04 reads no parameters and returns nothing. */
 void DISK_$SPIN_DOWN(void);
-void DISK_$REVALID(int16_t vol_idx);
+/* DISK_$REVALID takes a disk_$volume_t *, so it is declared in
+ * disk/disk_internal.h; nothing outside disk/ calls it. */
 void DISK_$WRITE_PROTECT(int16_t mode, int16_t vol_idx, status_$t *status);
 void DISK_$GET_STATS(int16_t dev_type, int16_t controller, uint8_t *has_stats, void *stats);
 void DISK_$UNASSIGN(uint16_t *vol_idx_ptr, status_$t *status);

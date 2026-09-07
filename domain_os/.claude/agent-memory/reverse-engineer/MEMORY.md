@@ -23,3 +23,7 @@
 - [MSG receive/SAR ABIs, sock_$pkt_info_t.hdr, TIME queue and itimer orders](msg-rcv-and-sar-abis.md) — the 18-arg RCV_INTERNAL, msg_$reply_hdr_t, SOCK_MAX_NUMBER 0xE0, TIME_$VTQ.
 - [SMD/WIN/SIO2681/pacct/ring/xns recoveries, 2026-09-07](smd-win-sio-pacct-pass.md) — v3 font offsets, the blink table's true extent, WIN's 2-arg format-track, pacct's 0x80 record, ring's transmit counters.
 - [ACL/DIR/NAME recovered layouts and ABIs](acl-dir-name-abi-notes.md) — the 0xE924FC PROJ_UIDS base, the 31-slot ACL cache, DIR_$DO_OP's received_len, obj_loc.volume.
+- [ACL image cache and the FILE LOT addressing convention](acl-image-cache.md) — A5+0x800..0xB76 layout, 1-based ACL entries, and why 0xE935CC is the END of an entry.
+- [MM/PROC nested procedures and the allocate_pages ABI](mm-proc-nested-procedures.md) — static links arriving in A1, the 0xE20EB6 shared tail, ast_$allocate_pages' three words.
+- [SR10.4 kernel link maps (domain_os.map)](reference_sr104_domain_os_map.md) — real module/symbol names in address order; how to lay them over the SAU2 image.
+- [Inherited A5 is a module base, not per-process data](module-base-inherited-a5.md) — check the callers before writing an A5 TODO; plus split-longword globals and 32-bit VA cells.

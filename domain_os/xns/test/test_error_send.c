@@ -178,7 +178,7 @@ static void setup(void)
 
     /* Head descriptor, embedded at packet record +0x18. */
     pkt.data_len = 0x10;
-    pkt.header   = (xns_$idp_header_t *)va_ptr(buf0_va);
+    pkt.header   = buf0_va;
     pkt.iov      = node1_va;
 
     node1->length  = 0x08;
@@ -234,7 +234,7 @@ static void test_all_addresses_in_window(void)
  */
 static void test_head_descriptor_is_checked(void)
 {
-    pkt.header = (xns_$idp_header_t *)va_ptr(POOL_LOW - 4);
+    pkt.header = POOL_LOW - 4;
     ASSERT_EQ(0x00, (uint8_t)xns_$pkt_bufs_in_netbuf_pool(&pkt),
               "the embedded head descriptor counts");
 }
@@ -397,7 +397,7 @@ static void test_zero_head_address_copies_nothing(void)
 {
     xns_$error_send_frame_t f;
 
-    pkt.header = NULL;
+    pkt.header = 0;
     make_frame(&f, false);
     xns_$setup_error_header(&f);
 

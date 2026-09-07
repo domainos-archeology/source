@@ -36,7 +36,7 @@ void MAC_OS_$CLOSE(int16_t *channel, status_$t *status_ret)
     chan_num = *channel;
 
     /* Enter exclusion region */
-    ML_$EXCLUSION_START((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
+    ML_$EXCLUSION_START(&MAC_OS_$EXCLUSION);
 
     chan = &MAC_OS_$CHANNEL_TABLE[chan_num];
 
@@ -83,5 +83,5 @@ void MAC_OS_$CLOSE(int16_t *channel, status_$t *status_ret)
     chan->driver_info = NULL;
     chan->callback = NULL;
 
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
+    ML_$EXCLUSION_STOP(&MAC_OS_$EXCLUSION);
 }

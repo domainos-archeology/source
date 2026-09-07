@@ -239,11 +239,19 @@ sort_again:
     int16_t queue_pos_flag = *(int16_t *)((uint8_t *)queue + 4);
 
     if (queue_pos_flag < 0) {
-        /* Queue is draining - merge ahead requests to front */
-        /* TODO(source-pxn): Complex merge logic */
+        /*
+         * TODO(source-pxn): NOT EMITTED.  The front-merge arm of
+         * DISK_$ADD_QUE (0x00E3C716, 740 bytes) is missing: it splices the
+         * new requests ahead of the ones already queued, through the helper
+         * at 0x00E3C690.
+         */
     } else {
-        /* Queue is filling - merge to back */
-        /* TODO(source-pxn): Complex merge logic */
+        /*
+         * TODO(source-pxn): NOT EMITTED.  The back-merge arm is missing: it
+         * appends through the helper at 0x00E3C5DA.  Both helpers are
+         * still FUN_ in Ghidra and both rewrite the queue's head/tail links
+         * in place, so they need tracing before either arm can be emitted.
+         */
     }
 
     /* Release spin lock */
@@ -251,7 +259,6 @@ sort_again:
 }
 
 /*
- * Note: FUN_00e3c690 and FUN_00e3c5da are internal merge helpers
- * that manipulate the queue links. Their full implementation
- * requires more reverse engineering.
+ * FUN_00e3c690 and FUN_00e3c5da are the two internal merge helpers named in
+ * the TODO(source-pxn) markers above.
  */

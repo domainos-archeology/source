@@ -114,8 +114,14 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
     num_parts = (int16_t)vol->num_parts - 1;
     if (num_parts >= 0) {
         for (i = 0; i <= num_parts; i++) {
-            /* This fills partition details - complex bit manipulation */
-            /* TODO(source-pxn): Full implementation requires more reverse engineering */
+            /*
+             * TODO(source-pxn): NOT EMITTED.  The body of this loop in
+             * DISK_$GET_MNT_INFO (0x00E6BE4A, 534 bytes) packs one word per
+             * partition into info+0x16..info+0x25 out of the volume
+             * descriptor's partition fields.  The packing is a bit-field
+             * build whose field boundaries are not yet recovered, so the
+             * array is left as the zeros the loop above wrote.
+             */
         }
     }
 

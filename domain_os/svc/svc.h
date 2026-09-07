@@ -137,7 +137,7 @@
  */
 
 #define SVC0_PROC2_DELETE           0x00    /* Delete process */
-#define SVC0_GET_FIM_ADDR           0x01    /* Get FIM address (FUN_00e0aa04) */
+#define SVC0_GET_FIM_ADDR           0x01    /* FIM_$GET_FIM_ADDR (0x00e0aa04) */
 /* 0x02: Invalid */
 #define SVC0_DTTY_RELOAD_FONT       0x03    /* Reload display font */
 #define SVC0_FILE_UNLOCK_ALL        0x04    /* Unlock all files */

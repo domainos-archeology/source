@@ -45,7 +45,6 @@
  */
 
 /* Forward declaration of helper function at 0xe69bce */
-static void route_$update_port_count(void);
 
 /* Error status for failed socket allocation */
 static const status_$t status_$route_sock_alloc_failed = 0x2B0015;
@@ -123,9 +122,13 @@ void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
     }
 
     /*
-     * Update port count tracking (helper function at 0xe69bce)
+     * 0x00E69D7C: bsr route_$wire_routing_area.  The helper at 0x00E69BCE is
+     * not a port-count update -- it wires the routing area
+     * (RTWIRED_PROC_START 0x00E87000 .. 0x00E88228) through MST_$WIRE_AREA
+     * the first time routing comes up.  It is emitted in
+     * route/wire_routing_area.c and declared in route/route_internal.h.
      */
-    route_$update_port_count();
+    route_$wire_routing_area();
 
     /*
      * Set maximum user ports
@@ -186,17 +189,3 @@ void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
     EC_$ADVANCE((ec_$eventcount_t *)&ROUTE_$CONTROL_EC);
 }
 
-/*
- * route_$update_port_count - Update port count tracking
- *
- * Helper function at 0xe69bce that updates internal port count
- * tracking. Called during initialization and when ports are
- * added/removed.
- *
- * TODO(source-qvt): Implement fully after analyzing 0xe69bce
- */
-static void route_$update_port_count(void)
-{
-    /* Stub - needs implementation based on analysis of 0xe69bce */
-    /* This function updates ROUTE_$N_USER_PORTS (0x00E87FD4) and related counters */
-}

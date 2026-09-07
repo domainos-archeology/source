@@ -195,7 +195,7 @@ boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
          * 0x00E12AFE "movea.l (-0x50,A6),A0" - the reply record APP_$RECEIVE
          * left at +0x00 is what PKT parses as the response header.
          */
-        req_hdr = (pkt_$internet_hdr_t *)recv.reply;
+        req_hdr = (pkt_$internet_hdr_t *)ARCH_VA_TO_PTR(recv.reply);
         data_len = req_hdr->data_len;        /* 0x00E12B02 "(0x4,A0)" */
         resp_id = req_hdr->request_id;       /* 0x00E12B0C "(0x6,A0)" */
 
@@ -204,7 +204,7 @@ boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
          * 0x00E12B10  andi.w #-0x400,D0w        word AND: only bits 0..9 die
          * 0x00E12B14  move.l D0,(-0x54,A6)      into a separate local
          */
-        hdr_ppn = ARCH_PTR_TO_VA(recv.data) & 0xFFFFFC00u;
+        hdr_ppn = recv.data & 0xFFFFFC00u;
         NETBUF_$RTN_HDR(&hdr_ppn);           /* 0x00E12B1C */
 
         /* 0x00E12B24 "tst.l (-0x48,A6)" - the first data buffer slot */

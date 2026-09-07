@@ -57,7 +57,7 @@ static int current_failed = 0;
  * Globals the code under test references
  * ============================================================================ */
 
-uint8_t   NETWORK_$CAPABLE_FLAGS;
+uint32_t  NETWORK_$ALLOWED_SERVICE;   /* NETWORK_$CAPABLE_FLAGS is bits 16..23 */
 int8_t    NETWORK_$DISKLESS;
 int8_t    NETWORK_$REALLY_DISKLESS;
 uint32_t  NETWORK_$MOTHER_NODE;
@@ -412,7 +412,7 @@ static void reset_world(void)
     NETWORK_$FILE_BACKLOG = 0;
     NETWORK_$FILE_BACKLOG_OVERFLOW = 0;
     NETWORK_$SERVICE_INFO_PTR = service_info;
-    NETWORK_$CAPABLE_FLAGS = NETWORK_CAP_FILE_SERVER;
+    NETWORK_$ALLOWED_SERVICE = (uint32_t)NETWORK_CAP_FILE_SERVER << 16;
     NETWORK_$DISKLESS = 0;
     NETWORK_$REALLY_DISKLESS = 0;
     NETWORK_$MOTHER_NODE = 0;
@@ -499,7 +499,7 @@ TEST(receive_error_sends_nothing)
 TEST(service_disabled_replies_0x0011000F)
 {
     reset_world();
-    NETWORK_$CAPABLE_FLAGS = 0;
+    NETWORK_$ALLOWED_SERVICE = 0;
     REM_FILE_$SERVER();
     ASSERT_EQ(1, mock_send_calls);
     ASSERT_EQ(8, mock_send_tpl_len);

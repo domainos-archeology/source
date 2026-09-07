@@ -39,8 +39,20 @@
 #define status_$volume_unable_to_dismount_boot_volume 0x00140002
 #define status_$volume_entry_directory_not_on_logical_volume 0x00140004
 #define status_$volume_physical_vol_replaced_since_mount 0x00140005
-#define status_$volume_cant_stream_this_object_type 0x00140006
-#define status_$volume_no_more_streams 0x00140007
+/*
+ * 0x00140006 "volume table full" and 0x00140007 "directory in use".  disk.h
+ * already carries a different status_$volume_table_full (0x0008000C, the BAT
+ * manager's), so these two module-0x14 codes keep the volx_ prefix.
+ */
+#define status_$volx_volume_table_full 0x00140006
+#define status_$volx_directory_in_use 0x00140007
+
+/*
+ * "Warning: disk is write protected".  The 0xFFFF subcode marks it as a
+ * warning rather than a failure; VOLX_$MOUNT returns it (0x00E6B22E) when a
+ * volume mounts read-only and the caller did not ask for that.
+ */
+#define status_$volume_disk_is_write_protected 0x0014FFFF
 
 /*
  * Additional status codes used by VOLX
@@ -49,8 +61,6 @@
 #define status_$storage_module_stopped 0x0008001b
 #define status_$directory_is_full 0x000e0002
 #define status_$name_already_exists 0x000e0003
-#define status_$stream_no_more_streams 0x00140007
-#define status_$stream_cant_stream_this_object_type 0x00140006
 
 /*
  * VOLX table entry structure

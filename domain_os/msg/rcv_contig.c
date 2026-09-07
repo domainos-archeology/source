@@ -102,8 +102,8 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
         return;
     }
 
-    payload = (const uint8_t *)rec.data;             /* 0xE5981C */
-    reply = (const msg_$reply_hdr_t *)rec.reply;     /* 0xE59820 */
+    payload = (const uint8_t *)ARCH_VA_TO_PTR(rec.data);   /* 0xE5981C */
+    reply = (const msg_$reply_hdr_t *)ARCH_VA_TO_PTR(rec.reply); /* 0xE59820 */
 
     /* 0xE59824 - 0xE59858 */
     *dest_net  = rec.hdr_f06;
@@ -138,7 +138,7 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
         ((msg_$reply_hdr_t *)reply)->template_len =
             (uint16_t)(reply->template_len - 0x10);
         payload += 0x10;
-        rec.data = (void *)payload;
+        rec.data = ARCH_PTR_TO_VA(payload);
     }
 
     /* 0xE598B4: bls, unsigned */
@@ -149,7 +149,8 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
     *data_len = copy_len;                            /* 0xE598C2 */
 
     /* 0xE598D2 */
-    OS_$DATA_COPY((const char *)rec.data, data_buf, (uint32_t)copy_len);
+    OS_$DATA_COPY((const char *)ARCH_VA_TO_PTR(rec.data), data_buf,
+                  (uint32_t)copy_len);
 
     /* 0xE598DC */
     if (rec.data_pages[0] != 0) {
@@ -182,7 +183,7 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
     }
 
     /* 0xE59930 */
-    netbuf_page = ARCH_PTR_TO_VA(rec.data) & 0xFFFFFC00u;
+    netbuf_page = rec.data & 0xFFFFFC00u;
     NETBUF_$RTN_HDR(&netbuf_page);
 }
 

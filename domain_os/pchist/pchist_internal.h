@@ -37,9 +37,12 @@
 #define PCHIST_$PROC_PC     (PCHIST_$CONTROL.proc_pc)
 
 /*
- * Wire area data for histogram buffer
- * Located at 0xe85c14 (array of page pointers)
+ * Wire area data for the histogram buffer.  One-based: slots 1..3 hold the
+ * wired page addresses, slot 0 is not part of the list.  See the definition
+ * in pchist/pchist_data.c for the provenance of the base and the size.
+ * Located at 0xe85c14
  */
+#define PCHIST_MAX_WIRE_PAGES 3
 extern uint32_t PCHIST_$WIRE_PAGES[];
 
 /*
@@ -47,12 +50,6 @@ extern uint32_t PCHIST_$WIRE_PAGES[];
  * Located at 0xe8604e
  */
 extern int16_t PCHIST_$WIRED_COUNT;
-
-/*
- * MST wire area context
- * Located at 0xe85c18
- */
-extern void *PCHIST_$WIRE_CONTEXT;
 
 /*
  * ============================================================================

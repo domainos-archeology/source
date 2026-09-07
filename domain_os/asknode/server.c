@@ -130,7 +130,7 @@ void ASKNODE_$SERVER(asknode_$server_ctx_t *ctx, int32_t *routing_info)
         return;
     }
 
-    rx = (asknode_$reply_hdr_t *)rcv.reply;
+    rx = (asknode_$reply_hdr_t *)ARCH_VA_TO_PTR(rcv.reply);
 
     /* 0x00E659B0: hand back the payload pages straight away */
     PKT_$DUMP_DATA(rcv.data_pages, rx->data_len);
@@ -151,10 +151,11 @@ void ASKNODE_$SERVER(asknode_$server_ctx_t *ctx, int32_t *routing_info)
     if (rx->length < copy_len) {
         copy_len = rx->length;
     }
-    OS_$DATA_COPY((char *)rcv.data, (char *)&request, (int32_t)copy_len);
+    OS_$DATA_COPY((char *)ARCH_VA_TO_PTR(rcv.data), (char *)&request,
+                  (int32_t)copy_len);
 
     /* 0x00E65A12: the header buffer goes back once everything is copied */
-    NETBUF_$RTN_HDR((uint32_t *)&rcv.data);
+    NETBUF_$RTN_HDR(&rcv.data);
 
     /* 0x00E65A1E - 0x00E65A36 */
     reply.hdr.response_type = (uint16_t)(request.request_type + 1);

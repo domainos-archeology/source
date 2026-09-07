@@ -162,45 +162,12 @@ void PROC2_$SET_CLEANUP(uint16_t bit_num) { (void)bit_num; }
 
 void TIME_$SET_CPU_LIMIT_CALLBACK(time_$callback_arg_t arg) { (void)arg; }
 
-/*
- * time_$set_itimer_internal / time_$get_itimer_internal are not decompiled
- * yet (bead source-gvvn); the mocks below just record their arguments and
- * hand back scripted clock values in the CALLER's buffers, which is what the
- * originals do (0xE58EC2/0xE58F1C pass A3/A2 straight through).
- */
-static int set_internal_calls;
-static uint16_t set_internal_which;
-static clock_t set_internal_value;
-static clock_t set_internal_interval;
-static clock_t set_internal_ovalue_out;
-static clock_t set_internal_ointerval_out;
+void TIME_$SET_ITIMER_REAL_CALLBACK(time_$callback_arg_t arg) { (void)arg; }
+void TIME_$SET_ITIMER_VIRT_CALLBACK(time_$callback_arg_t arg) { (void)arg; }
 
-void time_$set_itimer_internal(uint16_t which, clock_t *value,
-                               clock_t *interval, clock_t *ovalue,
-                               clock_t *ointerval, status_$t *status)
-{
-    set_internal_calls++;
-    set_internal_which = which;
-    set_internal_value = *value;
-    set_internal_interval = *interval;
-    *ovalue = set_internal_ovalue_out;
-    *ointerval = set_internal_ointerval_out;
-    *status = status_$ok;
-}
+static clock_t mock_abs_clock;
 
-static int get_internal_calls;
-static uint16_t get_internal_which;
-static clock_t get_internal_value_out;
-static clock_t get_internal_interval_out;
-
-void time_$get_itimer_internal(uint16_t which, clock_t *value,
-                               clock_t *interval)
-{
-    get_internal_calls++;
-    get_internal_which = which;
-    *value = get_internal_value_out;
-    *interval = get_internal_interval_out;
-}
+void TIME_$ABS_CLOCK(clock_t *clock) { *clock = mock_abs_clock; }
 
 /* ==========================================================================
  * Code under test
@@ -208,9 +175,39 @@ void time_$get_itimer_internal(uint16_t which, clock_t *value,
 
 #include "../clock_to_itimer.c"
 #include "../itimer_to_clock.c"
+#include "../get_itimer_internal.c"
+#include "../set_itimer_internal.c"
 #include "../get_itimer.c"
 #include "../set_itimer.c"
 #include "../set_cpu_limit.c"
+
+/* ==========================================================================
+ * The arena that stands in for TIME_$ITIMER_DB, and the recorders the
+ * wrapper tests use in place of the old hand-written mocks.
+ * ========================================================================== */
+
+/* Two halves of 58 entries, addressed as [which][as_id]. */
+static uint8_t itimer_arena[2 * ITIMER_DB_WHICH_STRIDE];
+
+static time_queue_elem_t *itimer_entry_for(uint16_t which, uint16_t as_id)
+{
+    return (time_queue_elem_t *)(itimer_arena +
+                                 which * ITIMER_DB_WHICH_STRIDE +
+                                 as_id * ITIMER_DB_ENTRY_SIZE);
+}
+
+static void itimer_setup(void)
+{
+    memset(itimer_arena, 0, sizeof(itimer_arena));
+    memset(TIME_$VTQ, 0, sizeof(TIME_$VTQ));
+    memset(&TIME_$RTEQ, 0, sizeof(TIME_$RTEQ));
+    ARCH_HOST_VA_BASE = (uintptr_t)itimer_arena - ITIMER_DB_BASE;
+    PROC1_$CURRENT = 3;
+    PROC1_$AS_ID = 5;
+    remove_calls = add_calls = signal_calls = 0;
+    mock_abs_clock = (clock_t){ 0, 0 };
+    mock_cput = (clock_t){ 0, 0 };
+}
 
 /* ==========================================================================
  * Tests
@@ -298,25 +295,258 @@ TEST(shift_round_trip)
     ASSERT_EQ(src.low, back.low);
 }
 
+/* ==========================================================================
+ * time_$get_itimer_internal (0xE58C74)
+ * ========================================================================== */
+
+/* 0xE58CAC: a queue element whose flags bit 0 is clear reports two zeroes. */
+TEST(get_internal_not_in_use_returns_zeros)
+{
+    clock_t interval = { 0x11111111, 0x2222 };
+    clock_t value = { 0x33333333, 0x4444 };
+
+    itimer_setup();
+    itimer_entry_for(0, 5)->flags = 0;               /* not in use */
+    itimer_entry_for(0, 5)->interval_high = 0x99;
+    itimer_entry_for(0, 5)->expire_high = 0x99;
+
+    time_$get_itimer_internal(0, &interval, &value);
+
+    ASSERT_EQ(0, interval.high);
+    ASSERT_EQ(0, interval.low);
+    ASSERT_EQ(0, value.high);
+    ASSERT_EQ(0, value.low);
+}
+
 /*
- * TIME_$GET_ITIMER (0xE58F06): the caller's buffers are handed straight to
- * time_$get_itimer_internal and, for which == 1, doubled in place.
+ * The armed case: the interval comes out of +0x14 verbatim and the value is
+ * the +0x0C expiry minus the wall clock (0xE58CEA).
+ */
+TEST(get_internal_real_returns_remaining_time)
+{
+    clock_t interval = { 0, 0 };
+    clock_t value = { 0, 0 };
+    time_queue_elem_t *entry;
+
+    itimer_setup();
+    entry = itimer_entry_for(0, 5);
+    entry->flags = ITIMER_FLAG_IN_USE;
+    entry->interval_high = 0x00000003;
+    entry->interval_low = 0x0001;
+    entry->expire_high = 0x00001000;
+    entry->expire_low = 0x0000;
+    mock_abs_clock = (clock_t){ 0x00000400, 0x0000 };
+
+    time_$get_itimer_internal(0, &interval, &value);
+
+    ASSERT_EQ(0x00000003, interval.high);
+    ASSERT_EQ(0x0001, interval.low);
+    ASSERT_EQ(0x00000C00, value.high);
+    ASSERT_EQ(0x0000, value.low);
+    /* the database itself is not modified */
+    ASSERT_EQ(0x00001000, entry->expire_high);
+}
+
+/* A deadline already in the past comes back as zero (0xE58CF6). */
+TEST(get_internal_expired_value_is_zeroed)
+{
+    clock_t interval = { 0, 0 };
+    clock_t value = { 0, 0 };
+
+    itimer_setup();
+    itimer_entry_for(0, 5)->flags = ITIMER_FLAG_IN_USE;
+    itimer_entry_for(0, 5)->interval_high = 0x00000007;
+    itimer_entry_for(0, 5)->expire_high = 0x00000100;
+    mock_abs_clock = (clock_t){ 0x00000400, 0x0000 };
+
+    time_$get_itimer_internal(0, &interval, &value);
+
+    ASSERT_EQ(0x00000007, interval.high);   /* the interval is still reported */
+    ASSERT_EQ(0, value.high);
+    ASSERT_EQ(0, value.low);
+}
+
+/*
+ * which != 0 reads the process CPU clock instead (0xE58CD8), and indexes the
+ * virtual half of the database, 0x658 bytes on.
+ */
+TEST(get_internal_virtual_uses_cput_and_second_half)
+{
+    clock_t interval = { 0, 0 };
+    clock_t value = { 0, 0 };
+
+    itimer_setup();
+    /* the real half at the same as_id must NOT be the one read */
+    itimer_entry_for(0, 5)->flags = ITIMER_FLAG_IN_USE;
+    itimer_entry_for(0, 5)->interval_high = 0xDEAD;
+
+    itimer_entry_for(1, 5)->flags = ITIMER_FLAG_IN_USE;
+    itimer_entry_for(1, 5)->interval_high = 0x00000005;
+    itimer_entry_for(1, 5)->expire_high = 0x00000080;
+    mock_cput = (clock_t){ 0x00000020, 0x0000 };
+
+    time_$get_itimer_internal(1, &interval, &value);
+
+    ASSERT_EQ(0x00000005, interval.high);
+    ASSERT_EQ(0x00000060, value.high);
+}
+
+/* ==========================================================================
+ * time_$set_itimer_internal (0xE58D14)
+ * ========================================================================== */
+
+/* 0xE58D7E: the top word of either high longword reaching 0x8000 is fatal. */
+TEST(set_internal_rejects_too_large_value)
+{
+    clock_t interval = { 0x00000001, 0x0000 };
+    clock_t value = { 0x80000000, 0x0000 };
+    clock_t ointerval = { 0, 0 };
+    clock_t ovalue = { 0, 0 };
+    status_$t status = status_$ok;
+
+    itimer_setup();
+
+    time_$set_itimer_internal(0, &interval, &value, &ointerval, &ovalue,
+                              &status);
+
+    ASSERT_EQ(status_$time_relative_time_is_too_large, status);
+    ASSERT_EQ(0, remove_calls);
+    ASSERT_EQ(0, add_calls);
+}
+
+TEST(set_internal_rejects_too_large_interval)
+{
+    clock_t interval = { 0xFFFF0000, 0x0000 };
+    clock_t value = { 0x00000001, 0x0000 };
+    clock_t ointerval = { 0, 0 };
+    clock_t ovalue = { 0, 0 };
+    status_$t status = status_$ok;
+
+    itimer_setup();
+
+    time_$set_itimer_internal(0, &interval, &value, &ointerval, &ovalue,
+                              &status);
+
+    ASSERT_EQ(status_$time_relative_time_is_too_large, status);
+    ASSERT_EQ(0, add_calls);
+}
+
+/* 0xE58DD8: a zero it_value dequeues and clears the expiry, nothing is armed. */
+TEST(set_internal_zero_value_disarms)
+{
+    clock_t interval = { 0x00000009, 0x0000 };
+    clock_t value = { 0, 0 };
+    clock_t ointerval = { 0, 0 };
+    clock_t ovalue = { 0, 0 };
+    status_$t status = -1;
+    time_queue_elem_t *entry;
+
+    itimer_setup();
+    entry = itimer_entry_for(0, 5);
+    entry->flags = ITIMER_FLAG_IN_USE;
+    entry->interval_high = 0x00000002;
+    entry->interval_low = 0x0001;
+    entry->expire_high = 0x00000500;
+    mock_abs_clock = (clock_t){ 0x00000100, 0x0000 };
+
+    time_$set_itimer_internal(0, &interval, &value, &ointerval, &ovalue,
+                              &status);
+
+    /* the previous setting was reported first (0xE58D9E) */
+    ASSERT_EQ(0x00000002, ointerval.high);
+    ASSERT_EQ(0x0001, ointerval.low);
+    ASSERT_EQ(0x00000400, ovalue.high);
+
+    ASSERT_EQ(1, remove_calls);
+    ASSERT_EQ((uintptr_t)&TIME_$RTEQ, (uintptr_t)remove_queue);
+    ASSERT_EQ((uintptr_t)entry, (uintptr_t)remove_elem);
+    ASSERT_EQ(0, add_calls);
+    ASSERT_EQ(0, entry->expire_high);
+    ASSERT_EQ(0, entry->expire_low);
+    ASSERT_EQ(status_$ok, status);
+}
+
+/* 0xE58E10: a zero reload interval arms a one-shot, flags == 4. */
+TEST(set_internal_one_shot_flags)
+{
+    clock_t interval = { 0, 0 };
+    clock_t value = { 0x00000050, 0x0000 };
+    clock_t ointerval = { 0, 0 };
+    clock_t ovalue = { 0, 0 };
+    status_$t status = -1;
+
+    itimer_setup();
+    mock_abs_clock = (clock_t){ 0x00000007, 0x0003 };
+
+    time_$set_itimer_internal(0, &interval, &value, &ointerval, &ovalue,
+                              &status);
+
+    ASSERT_EQ(1, remove_calls);
+    ASSERT_EQ(1, add_calls);
+    ASSERT_EQ((uintptr_t)&TIME_$RTEQ, (uintptr_t)add_queue);
+    ASSERT_EQ(0x00000050, add_when.high);
+    ASSERT_EQ(0, add_is_absolute);           /* 0xE58E42 clr.w -(SP) */
+    ASSERT_EQ(0x00000007, add_now.high);     /* TIME_$ABS_CLOCK's value */
+    ASSERT_EQ(0x0003, add_now.low);
+    ASSERT_EQ((uintptr_t)TIME_$SET_ITIMER_REAL_CALLBACK,
+              (uintptr_t)add_callback);
+    ASSERT_EQ(5, (uintptr_t)add_callback_arg);   /* PROC1_$AS_ID */
+    ASSERT_EQ(ITIMER_FLAG_BASE, add_flags);
+    ASSERT_EQ(0, add_interval.high);
+    ASSERT_EQ((uintptr_t)itimer_entry_for(0, 5), (uintptr_t)add_qelem);
+}
+
+/* 0xE58E0C: a non-zero reload interval makes it 4 | 0x12 == 0x16. */
+TEST(set_internal_repeating_flags_and_virtual_queue)
+{
+    clock_t interval = { 0x00000000, 0x0001 };
+    clock_t value = { 0x00000050, 0x0000 };
+    clock_t ointerval = { 0, 0 };
+    clock_t ovalue = { 0, 0 };
+    status_$t status = -1;
+
+    itimer_setup();
+    mock_cput = (clock_t){ 0x00000011, 0x0000 };
+
+    time_$set_itimer_internal(1, &interval, &value, &ointerval, &ovalue,
+                              &status);
+
+    ASSERT_EQ(ITIMER_FLAG_BASE | ITIMER_FLAG_REPEATING, add_flags);
+    /* 0xE58D54..0xE58D6C: the VT queue table is 1-based on PROC1_$CURRENT */
+    ASSERT_EQ((uintptr_t)&TIME_$VTQ[2], (uintptr_t)add_queue);
+    ASSERT_EQ((uintptr_t)&TIME_$VTQ[2], (uintptr_t)remove_queue);
+    ASSERT_EQ((uintptr_t)TIME_$SET_ITIMER_VIRT_CALLBACK,
+              (uintptr_t)add_callback);
+    ASSERT_EQ(0x00000011, add_now.high);     /* PROC1_$GET_CPUT8's value */
+    ASSERT_EQ((uintptr_t)itimer_entry_for(1, 5), (uintptr_t)add_qelem);
+    ASSERT_EQ(0x0001, add_interval.low);
+}
+
+/* ==========================================================================
+ * TIME_$GET_ITIMER (0xE58F06) / TIME_$SET_ITIMER (0xE58E58)
+ * ========================================================================== */
+
+/*
+ * The caller's buffers are handed straight to time_$get_itimer_internal and,
+ * for which == 1, doubled in place.
  */
 TEST(get_itimer_virtual_doubles_in_place)
 {
     uint16_t which = 1;
-    clock_t value = { 0, 0 };
     clock_t interval = { 0, 0 };
+    clock_t value = { 0, 0 };
 
-    get_internal_calls = 0;
-    get_internal_value_out = (clock_t){ 0x00000010, 0x8000 };
-    get_internal_interval_out = (clock_t){ 0x00000003, 0x0001 };
+    itimer_setup();
+    itimer_entry_for(1, 5)->flags = ITIMER_FLAG_IN_USE;
+    itimer_entry_for(1, 5)->interval_high = 0x00000003;
+    itimer_entry_for(1, 5)->interval_low = 0x0001;
+    itimer_entry_for(1, 5)->expire_high = 0x00000020;
+    itimer_entry_for(1, 5)->expire_low = 0x8000;
+    mock_cput = (clock_t){ 0x00000010, 0x0000 };
 
-    TIME_$GET_ITIMER(&which, &value, &interval);
+    TIME_$GET_ITIMER(&which, &interval, &value);
 
-    ASSERT_EQ(1, get_internal_calls);
-    ASSERT_EQ(1, get_internal_which);
-    /* 0x10*2 + carry(low >= 0x8000) */
+    /* remaining = 0x20:8000 - 0x10:0000, doubled: 0x10*2 + carry(low >= 0x8000) */
     ASSERT_EQ(0x00000021, value.high);
     ASSERT_EQ(0x0000, value.low);
     ASSERT_EQ(0x00000006, interval.high);
@@ -326,14 +556,18 @@ TEST(get_itimer_virtual_doubles_in_place)
 TEST(get_itimer_real_leaves_clock_form)
 {
     uint16_t which = 0;
-    clock_t value = { 0, 0 };
     clock_t interval = { 0, 0 };
+    clock_t value = { 0, 0 };
 
-    get_internal_calls = 0;
-    get_internal_value_out = (clock_t){ 0x00000010, 0x8000 };
-    get_internal_interval_out = (clock_t){ 0x00000003, 0x0001 };
+    itimer_setup();
+    itimer_entry_for(0, 5)->flags = ITIMER_FLAG_IN_USE;
+    itimer_entry_for(0, 5)->interval_high = 0x00000003;
+    itimer_entry_for(0, 5)->interval_low = 0x0001;
+    itimer_entry_for(0, 5)->expire_high = 0x00000010;
+    itimer_entry_for(0, 5)->expire_low = 0x8000;
+    mock_abs_clock = (clock_t){ 0, 0 };
 
-    TIME_$GET_ITIMER(&which, &value, &interval);
+    TIME_$GET_ITIMER(&which, &interval, &value);
 
     ASSERT_EQ(0x00000010, value.high);
     ASSERT_EQ(0x8000, value.low);
@@ -342,34 +576,34 @@ TEST(get_itimer_real_leaves_clock_form)
 }
 
 /*
- * TIME_$SET_ITIMER (0xE58E58): incoming values are halved, the caller's
- * old-value buffers are filled by the internal routine and then doubled in
- * place.
+ * Incoming values are halved, the caller's old-value buffers are filled from
+ * the database and then doubled in place.
  */
 TEST(set_itimer_virtual_halves_in_doubles_out)
 {
     uint16_t which = 1;
-    clock_t value = { 0x00000021, 0x0000 };
     clock_t interval = { 0x00000006, 0x0002 };
-    clock_t ovalue = { 0, 0 };
+    clock_t value = { 0x00000021, 0x0000 };
     clock_t ointerval = { 0, 0 };
+    clock_t ovalue = { 0, 0 };
     status_$t status = -1;
 
-    set_internal_calls = 0;
-    set_internal_ovalue_out = (clock_t){ 0x00000100, 0x8000 };
-    set_internal_ointerval_out = (clock_t){ 0x00000002, 0x0001 };
+    itimer_setup();
+    itimer_entry_for(1, 5)->flags = ITIMER_FLAG_IN_USE;
+    itimer_entry_for(1, 5)->interval_high = 0x00000002;
+    itimer_entry_for(1, 5)->interval_low = 0x0001;
+    itimer_entry_for(1, 5)->expire_high = 0x00000110;
+    mock_cput = (clock_t){ 0x00000010, 0x0000 };
 
-    TIME_$SET_ITIMER(&which, &value, &interval, &ovalue, &ointerval, &status);
+    TIME_$SET_ITIMER(&which, &interval, &value, &ointerval, &ovalue, &status);
 
-    ASSERT_EQ(1, set_internal_calls);
-    ASSERT_EQ(1, set_internal_which);
     /* halved on the way in */
-    ASSERT_EQ(0x00000010, set_internal_value.high);
-    ASSERT_EQ(0x8000, set_internal_value.low);
-    ASSERT_EQ(0x00000003, set_internal_interval.high);
-    ASSERT_EQ(0x0001, set_internal_interval.low);
+    ASSERT_EQ(0x00000010, add_when.high);
+    ASSERT_EQ(0x8000, add_when.low);
+    ASSERT_EQ(0x00000003, add_interval.high);
+    ASSERT_EQ(0x0001, add_interval.low);
     /* doubled on the way out */
-    ASSERT_EQ(0x00000201, ovalue.high);
+    ASSERT_EQ(0x00000200, ovalue.high);
     ASSERT_EQ(0x0000, ovalue.low);
     ASSERT_EQ(0x00000004, ointerval.high);
     ASSERT_EQ(0x0002, ointerval.low);
@@ -381,24 +615,30 @@ TEST(set_itimer_virtual_halves_in_doubles_out)
 TEST(set_itimer_real_passes_through)
 {
     uint16_t which = 0;
-    clock_t value = { 0x00000021, 0x0003 };
     clock_t interval = { 0x00000006, 0x0002 };
-    clock_t ovalue = { 0, 0 };
+    clock_t value = { 0x00000021, 0x0003 };
     clock_t ointerval = { 0, 0 };
+    clock_t ovalue = { 0, 0 };
     status_$t status = -1;
 
-    set_internal_calls = 0;
-    set_internal_ovalue_out = (clock_t){ 0x00000100, 0x8000 };
-    set_internal_ointerval_out = (clock_t){ 0x00000002, 0x0001 };
+    itimer_setup();
+    itimer_entry_for(0, 5)->flags = ITIMER_FLAG_IN_USE;
+    itimer_entry_for(0, 5)->interval_high = 0x00000002;
+    itimer_entry_for(0, 5)->interval_low = 0x0001;
+    itimer_entry_for(0, 5)->expire_high = 0x00000100;
+    itimer_entry_for(0, 5)->expire_low = 0x8000;
+    mock_abs_clock = (clock_t){ 0, 0 };
 
-    TIME_$SET_ITIMER(&which, &value, &interval, &ovalue, &ointerval, &status);
+    TIME_$SET_ITIMER(&which, &interval, &value, &ointerval, &ovalue, &status);
 
-    ASSERT_EQ(0, set_internal_which);
-    ASSERT_EQ(0x00000021, set_internal_value.high);
-    ASSERT_EQ(0x0003, set_internal_value.low);
-    /* no conversion on the way out either */
+    /* no conversion on the way in */
+    ASSERT_EQ(0x00000021, add_when.high);
+    ASSERT_EQ(0x0003, add_when.low);
+    ASSERT_EQ(0x00000006, add_interval.high);
+    /* nor on the way out */
     ASSERT_EQ(0x00000100, ovalue.high);
     ASSERT_EQ(0x8000, ovalue.low);
+    ASSERT_EQ(0x00000002, ointerval.high);
 }
 
 /* ==========================================================================
@@ -530,6 +770,15 @@ int main(void)
     RUN_TEST(itimer_to_clock_direction_and_borrow);
     RUN_TEST(itimer_to_clock_shift_is_logical);
     RUN_TEST(shift_round_trip);
+    RUN_TEST(get_internal_not_in_use_returns_zeros);
+    RUN_TEST(get_internal_real_returns_remaining_time);
+    RUN_TEST(get_internal_expired_value_is_zeroed);
+    RUN_TEST(get_internal_virtual_uses_cput_and_second_half);
+    RUN_TEST(set_internal_rejects_too_large_value);
+    RUN_TEST(set_internal_rejects_too_large_interval);
+    RUN_TEST(set_internal_zero_value_disarms);
+    RUN_TEST(set_internal_one_shot_flags);
+    RUN_TEST(set_internal_repeating_flags_and_virtual_queue);
     RUN_TEST(get_itimer_virtual_doubles_in_place);
     RUN_TEST(get_itimer_real_leaves_clock_form);
     RUN_TEST(set_itimer_virtual_halves_in_doubles_out);

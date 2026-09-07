@@ -155,8 +155,8 @@ static void setup(void)
     memcpy(template_bytes(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345", 32);
 
     memset(&app_receive_rec, 0, sizeof(app_receive_rec));
-    app_receive_rec.reply = reply_hdr();
-    app_receive_rec.data = template_bytes();
+    app_receive_rec.reply = ARCH_PTR_TO_VA(reply_hdr());
+    app_receive_rec.data = ARCH_PTR_TO_VA(template_bytes());
     app_receive_rec.data_pages[0] = 0x9000;
     app_receive_rec.hdr_f06 = 0xAAAABBBB;
     app_receive_rec.hdr_f12 = 0xCCCCDDDD;

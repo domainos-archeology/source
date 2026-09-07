@@ -1,523 +1,600 @@
 /*
  * RING_$SENDP - Token ring packet transmission
  *
- * This file contains the packet transmission function for the ring module.
- * It handles DMA setup, congestion control, retries, and error reporting.
+ * Original address: 0x00E75916, 1226 bytes.
+ *
+ * Traced block by block from the listing.  The overall shape is:
+ *
+ *   0xE75916  prologue; unit_data = RING_$DATA.units[unit] (stride 0x244),
+ *             stats = RING_$STATS[unit] (stride 0x3C, formed as
+ *             unit*64 - unit*4), *result_flags = 0
+ *   0xE7595A  three refusals: unit not initialised, data too long, the
+ *             controller's mode register not ready
+ *   0xE759AA  retry budget, the two "no retry" inputs, the header checksum
+ *   0xE75A22  transmit_retry: arm the DMA and start the transmitter
+ *   0xE75A4A  normal arm: 0x6000, then spin until RING_$DATA.poll_timeout
+ *             has elapsed, then two absolute-deadline TIME_$WAIT2 calls
+ *   0xE75B24  force-start arm: 0x7000 plus one relative TIME_$WAIT2
+ *   0xE75B72  abort with 0x4000; a second relative wait if still busy
+ *   0xE75C18  process_status: read the transmit CSR and decode it
+ *   0xE75D90  retry gate, then TIME_$WAIT and back to transmit_retry
+ *   0xE75DC2  transmit_done: publish last_success / biphase_flag
+ *
+ * Frame (link.w A6,-0x48):
+ *   -0x10  the 16-byte data descriptor, copied from the caller's; its first
+ *          longword is the DMA address handed to ring_$setup_tx_dma
+ *   -0x18  in the poll loop the current time; from 0xE75C52 on, the retry
+ *          delay.  The two are never live at the same time - 0xE75C52
+ *          "clr.l (-0x18,A6) / move.w #0x1f4,(-0x14,A6)" rewrites all six
+ *          bytes - so they are separate locals here.
+ *   -0x20  the poll/wait deadline
+ *   -0x28  the time the current attempt started
+ *   -0x2c  the status TIME_$WAIT2 / TIME_$WAIT return, never examined
+ *   -0x30  the eventcount value being waited for
+ *   -0x38  the data length actually programmed
+ *   -0x44  unit_data
+ *
+ * Register roles:
+ *   D2  "no retry": hdr->flags bit 7 OR send_opts bit 0 (0xE759BC-0xE759CC)
+ *   D4  force_start, set by the force-start arm (0xE75B44 "st D4b")
+ *   D5  network activity, set by the two "st D5b" sites; 0xE75DC2 stores its
+ *       ONE'S COMPLEMENT into stats->last_success
+ *   D6  the retry budget
+ *   D7  the eventcount target, then (low word only) the transmit CSR
+ *
+ * A note on the result word: every flag store is a byte operation on the word
+ * at (A3).  "bset.b #n,(A3)" addresses the EVEN byte, which on m68k is the
+ * high half, so it is bit n+8 of the word; "bset.b #n,(0x1,A3)" is bit n.
+ * The masks below are written as word masks for that reason (bead source-x1es).
  */
 
 #include "ring/ring_internal.h"
 #include "misc/crash_system.h"
 #include "time/time.h"
 #include "mmu/mmu.h"
+#include "parity/parity.h"
+#include "cal/cal.h"   /* ADD48 / SUB48 */
 
 /*
- * Hardware status register bits
+ * Transmit CSR bits, as tested by the status decode at 0xE75C18.
  */
-#define RING_HW_STATUS_BUSY         0x2000
-#define RING_HW_STATUS_COMPLETE     0x0014
-#define RING_HW_STATUS_BIPHASE      0x0800
-#define RING_HW_STATUS_ESB          0x0400
-#define RING_HW_STATUS_PARITY       0x0040
-#define RING_HW_STATUS_NOTACK       0x0001
-#define RING_HW_STATUS_DELAYED      0x0220
-#define RING_HW_STATUS_NORESP       0x0080
-#define RING_HW_STATUS_CONGESTED    0x0018
-#define RING_HW_STATUS_ACCEPTED     0x0004
-#define RING_HW_STATUS_REJECT       0x0002
-#define RING_HW_STATUS_NOTOKEN      0x0010
+#define RING_XMIT_CSR_COMPLETE      0x0014  /* the whole word, 0xE75C38 */
+#define RING_XMIT_CSR_MODEM         0x0C00  /* 0xE75C5E andi.w #0xc00     */
+#define RING_XMIT_CSR_BIPHASE       0x0800  /* 0xE75C64 btst #11          */
+#define RING_XMIT_CSR_ESB           0x0400  /* 0xE75C76 btst #10          */
+#define RING_XMIT_CSR_BUS           0x0040  /* 0xE75C8C btst #6           */
+#define RING_XMIT_CSR_ORUN          0x0001  /* 0xE75CD2 btst #0           */
+#define RING_XMIT_CSR_NORTN         0x0220  /* 0xE75CE6 andi.w #0x220     */
+#define RING_XMIT_CSR_APAR          0x0080  /* 0xE75CF8 tst.b D7b         */
+#define RING_XMIT_CSR_PKTERR        0x0018  /* 0xE75D12, both bits set    */
+#define RING_XMIT_CSR_ACCEPTED      0x0004  /* 0xE75D28 btst #2           */
+#define RING_XMIT_CSR_WACK          0x0002  /* 0xE75D34 btst #1           */
+#define RING_XMIT_CSR_NOTOKEN       0x0010  /* 0xE75D4C btst #4           */
+#define RING_XMIT_CSR_UNEXPECTED    0x0008  /* 0xE75D80 btst #3           */
+
+/* The transmitter's mode/ready register (hw_regs+0x06). */
+#define RING_MODE_READY             0x2000  /* 0xE7599A btst #13          */
+#define RING_MODE_ALT               0x4000  /* 0xE75BFC btst #14          */
+
+/* Commands written to the transmit CSR. */
+#define RING_XMIT_CMD_START         0x6000  /* 0xE75A4A */
+#define RING_XMIT_CMD_FORCE_START   0x7000  /* 0xE75B40 */
+#define RING_XMIT_CMD_ABORT         0x4000  /* 0xE75B72 */
+
+/* Values written to the mode register when congestion is first seen. */
+#define RING_MODE_CONGESTED_ALT     0x6800  /* 0xE75C02 */
+#define RING_MODE_CONGESTED         0x2800  /* 0xE75C0A */
+
+/*
+ * Result-word bits, as word masks (see the note above the includes).
+ */
+#define RING_SENDP_RES_NOT_READY    0x0010  /* bset.b #4,(0x1,A3) */
+#define RING_SENDP_RES_ESB          0x0004  /* bset.b #2,(0x1,A3) */
+#define RING_SENDP_RES_BIPHASE      0x0020  /* bset.b #5,(0x1,A3) */
+#define RING_SENDP_RES_NO_RETURN    0x0040  /* bset.b #6,(0x1,A3) */
+#define RING_SENDP_RES_BUS_ERR      0x0080  /* bset.b #7,(0x1,A3) */
+#define RING_SENDP_RES_OVERRUN      0x0100  /* bset.b #0,(A3)     */
+#define RING_SENDP_RES_RETRIED      0x0200  /* bset.b #1,(A3)     */
+#define RING_SENDP_RES_DELAYED      0x0400  /* bset.b #2,(A3)     */
+#define RING_SENDP_RES_CONGESTED    0x0800  /* bset.b #3,(A3)     */
+#define RING_SENDP_RES_NACK         0x2000  /* bset.b #5,(A3)     */
+#define RING_SENDP_RES_WACK         0x4000  /* bset.b #6,(A3)     */
+#define RING_SENDP_RES_OK           0x8000  /* bset.b #7,(A3)     */
+
+/*
+ * The two Pascal by-reference delay-type constants that live behind the rts:
+ *
+ *   gsk read 0x00E75DDE
+ *   00e75dde  4e 75 00 01 00 00 ...
+ *             ^rts  ^0xE75DE0
+ *                         ^0xE75DE2
+ *
+ * 0xE75ADC "pea (0x302,PC)" and 0xE75B1E "pea (0x2c0,PC)" both reach
+ * 0x00E75DE0 (= 1, an ABSOLUTE deadline), while 0xE75B5E "pea (0x282,PC)",
+ * 0xE75B96 "pea (0x24a,PC)" and 0xE75DB0 "pea (0x30,PC)" reach 0x00E75DE2
+ * (= 0, a RELATIVE delay).
+ */
+static const uint16_t ring_$c_delay_absolute = 1;   /* 0x00E75DE0 */
+static const uint16_t ring_$c_delay_relative = 0;   /* 0x00E75DE2 */
+
+/*
+ * Read and write the bottom 32 bits of the 48-bit value at A6-0x18.
+ *
+ * 0xE75D42 "move.l #0x1f4,(-0x16,A6)" and 0xE75D76 "move.l #0xfa,(-0x16,A6)"
+ * write a LONGWORD two bytes into the clock, i.e. across the low half of its
+ * high longword and all of its low word.  Going through the fields keeps that
+ * correct on a little-endian host.
+ */
+static void ring_$set_delay_low32(clock_t *c, uint32_t value)
+{
+    c->high = (c->high & 0xFFFF0000u) | (value >> 16);
+    c->low = (uint16_t)value;
+}
+
+/*
+ * Read the bottom 32 bits of the 48-bit value at A6-0x28, which 0xE75AFE
+ * "and.l (-0x26,A6),D0" uses as the source of the backoff jitter.
+ */
+static uint32_t ring_$get_clock_low32(const clock_t *c)
+{
+    return ((c->high & 0x0000FFFFu) << 16) | (uint32_t)c->low;
+}
 
 /*
  * RING_$SENDP - Send a packet on the token ring
  *
- * Transmits a packet on the specified ring unit. Handles:
- *   - Hardware busy/congestion conditions
- *   - DMA setup for header and data
- *   - Retry logic for transient failures
- *   - Statistics updates
- *
- * Original address: 0x00E75916
- *
- * Assembly analysis:
- *   - param_1 is a pointer to unit number (short)
- *   - Multiplies unit by 0x244 for unit data offset
- *   - Multiplies unit by 0x3C for stats offset
- *   - Checks initialized flag at +0x60 in unit data
- *   - Gets hw_regs pointer from +0x1C in unit data
- *   - Implements retry loop with congestion backoff
- *
- * @param unit_ptr      Pointer to unit number
- * @param hdr_pa        Header physical address
- * @param hdr_va        Header virtual address (contains header data)
- * @param data_info     Data buffer info (8 bytes: PA + length info)
- * @param data_len      Data length
- * @param send_flags    Send flags (input/output)
- * @param result_flags  Output: result flags (2 bytes)
- * @param status_ret    Output: Status code
+ * @param unit_ptr      Pointer to the unit number word            (0x08)
+ * @param hdr_pa        Header DMA address                         (0x0C)
+ * @param hdr           The header being sent; its msg_type,
+ *                      flags and chksum fields are all used       (0x10)
+ * @param hdr_len       Header byte count, passed BY ADDRESS to
+ *                      HDR_CHKSUM ("pea (0x14,A6)" at 0xE75A00)   (0x14)
+ * @param data_desc     Four longwords describing the payload; only
+ *                      the first is used after the copy           (0x16)
+ * @param unused_1a     A longword parameter the body never reads  (0x1A)
+ * @param data_len      Payload byte count, 0 for a header-only
+ *                      packet                                     (0x1E)
+ * @param send_opts     A word whose bit 0 forbids retrying
+ *                      (0xE759C6 "btst.b D4,(0x1,A1)", D4 == 0)   (0x20)
+ * @param result_flags  Output: the result word                    (0x24)
+ * @param status_ret    Output: status code                        (0x28)
  */
-void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, void *hdr_va,
-                 uint64_t data_info, uint16_t data_len,
-                 uint16_t *send_flags, uint16_t *result_flags,
+void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, ring_$pkt_hdr_t *hdr,
+                 uint16_t hdr_len, const uint32_t *data_desc,
+                 uint32_t unused_1a, uint16_t data_len,
+                 const uint16_t *send_opts, uint16_t *result_flags,
                  status_$t *status_ret)
 {
     uint16_t unit;
-    ring_unit_t *unit_data;
-    ring_$stats_t *stats;
-    int16_t *hw_regs;
-    int32_t tx_ec_val;
-    status_$t local_status;
-    clock_t abs_time;
-    clock_t timeout;
-    clock_t deadline;
-    uint16_t delay_type;
-    uint16_t hw_status;
-    int16_t retry_count;
-    int8_t success = 0;
-    int8_t force_start = 0;
-    uint16_t local_data_len;
-    uint32_t local_data_pa;
-    uint32_t *data_info_ptr;
-    uint32_t data_buf[4];  /* Local copy of data info */
-    uint8_t *result_bytes = (uint8_t *)result_flags;
+    ring_unit_t *unit_data;             /* A6-0x44 */
+    ring_$stats_t *stats;               /* A2 */
+    ring_hw_regs_t *hw;                 /* A4 */
 
+    int32_t tx_ec_target;               /* D7, before the CSR read */
+    uint16_t hw_status;                 /* D7 low word, after 0xE75C26 */
+    int16_t retry_budget;               /* D6 */
+    int8_t force_start;                 /* D4 */
+    int8_t activity;                    /* D5 */
+    int8_t no_retry;                    /* D2 */
+
+    clock_t attempt_start;              /* A6-0x28 */
+    clock_t deadline;                   /* A6-0x20 */
+    clock_t poll_now;                   /* A6-0x18, phase 1 */
+    clock_t retry_delay;                /* A6-0x18, phase 2 */
+    status_$t wait_status;              /* A6-0x2C */
+    uint32_t ec_target_cell;            /* A6-0x30 */
+    uint16_t dma_data_len;              /* A6-0x38 */
+    uint32_t data_buf[4];               /* A6-0x10 */
+
+    const uint16_t *wait_delay_type;
+    clock_t *wait_delay;
+
+    (void)unused_1a;
+
+    /* 0xE75930..0xE75954 */
     unit = *unit_ptr;
     unit_data = &RING_$DATA.units[unit];
     stats = &RING_$STATS[unit];
 
-    /* Clear result flags */
-    result_bytes[0] = 0;
-    result_bytes[1] = 0;
+    /* 0xE75958 */
+    *result_flags = 0;
 
     /*
-     * Check if unit is initialized.
-     * The initialized flag is at offset 0x60 and is -1 when initialized.
+     * 0xE7595A "tst.b (0x60,A1) / bmi": the unit must be initialised.  This
+     * arm branches to the epilogue at 0xE75DD6, skipping the transmit_done
+     * stores entirely.
      */
     if (unit_data->initialized >= 0) {
-        /*
-         * Unit not initialized - cannot transmit.
-         * 0x00E7595E `bmi` falls through to 0x00E75960 `bset.b #0x4,(0x1,A3)`
-         * and 0x00E7596A `move.l #0x100002,(A4)`, then branches straight to
-         * the epilogue at 0x00E75DD6 - skipping the transmit_done stores.
-         */
-        result_bytes[1] |= 0x10;
+        *result_flags |= RING_SENDP_RES_NOT_READY;      /* 0xE75960 */
         *status_ret = status_$io_controller_not_in_system;
         return;
     }
 
-    /*
-     * Check data length against maximum.
-     */
+    /* 0xE75974 "cmp.w (0x51a,A5),D0w / bls" */
     if (data_len > RING_$DATA.max_data_len) {
         *status_ret = status_$network_data_length_too_large;
         return;
     }
 
-    /* Default to transmit failed */
+    /* 0xE75988: the default outcome is "transmit failed" */
     *status_ret = status_$network_transmit_failed;
 
-    /* Get hardware registers */
-    hw_regs = (int16_t *)unit_data->hw_regs;
+    /* 0xE75992 */
+    hw = unit_data->hw_regs;
 
-    /*
-     * Check if hardware is busy.
-     * hw_regs[3] & 0x2000 indicates busy state.
-     */
-    if ((hw_regs[3] & RING_HW_STATUS_BUSY) == 0) {
-        /* Hardware is busy - set flag */
-        result_bytes[1] |= 0x10;
+    /* 0xE75996 "move.w (0x6,A4),D2w / btst.l #0xd,D2 / bne" */
+    if ((hw->mode & RING_MODE_READY) == 0) {
+        *result_flags |= RING_SENDP_RES_NOT_READY;      /* 0xE759A0 */
         return;
     }
 
     /*
-     * Retry budget.  0x00E759AA `moveq #0x14,D6`; 0x00E759AC
-     * `tst.b (0x34,A2)` / `bpl` skips 0x00E759B2 `moveq #0xa,D6`, so the
-     * budget drops to 10 only when the PREVIOUS send finished without a hard
-     * error (last_success, +0x34).
+     * 0xE759AA: twenty attempts normally, ten if the PREVIOUS send ended
+     * without a hard error ("tst.b (0x34,A2) / bpl" skips the moveq #0xa).
      */
-    retry_count = 0x14;  /* 20 retries default */
+    retry_budget = 0x14;
     if (stats->last_success < 0) {
-        retry_count = 10;
+        retry_budget = 0x0A;
     }
 
-    /* 0x00E759CE `addq.l #0x1,(0x2,A2)` and 0x00E759D2
-     * `move.b D4b,(0x3a,A2)` with D4b still zero. */
+    /* 0xE759B4 */
+    force_start = 0;
+    activity = 0;
+
+    /*
+     * 0xE759BC-0xE759CC: either the header's own flags bit 7 or bit 0 of the
+     * caller's option word suppresses the retry that would otherwise follow
+     * the "delayed"/"no response"/"packet error" arms.  The btst uses D4 as
+     * the bit number and D4 is still zero here.
+     */
+    no_retry = ((int8_t)hdr->flags < 0) ? (int8_t)-1 : 0;
+    if ((*send_opts & 0x0001) != 0) {
+        no_retry = (int8_t)-1;
+    }
+
+    /* 0xE759CE / 0xE759D2 */
     stats->xmit_call++;
     stats->retry_pending = 0;
 
-    /*
-     * Setup local data buffer info.
-     * data_info is 64 bits containing PA and other info.
-     */
-    data_info_ptr = (uint32_t *)&data_info;
+    /* 0xE759D6 */
     if (data_len == 0) {
-        local_data_len = 0;
-        local_data_pa = hdr_pa;
+        dma_data_len = 0;
+        data_buf[0] = hdr_pa;                           /* 0xE759DE */
     } else {
-        local_data_len = data_len;
-        local_data_pa = data_info_ptr[0];
-        data_buf[0] = data_info_ptr[0];
-        data_buf[1] = data_info_ptr[1];
+        dma_data_len = data_len;
+        /* 0xE759E8-0xE759F6: four "move.l (A0)+,(A1)+" */
+        data_buf[0] = data_desc[0];
+        data_buf[1] = data_desc[1];
+        data_buf[2] = data_desc[2];
+        data_buf[3] = data_desc[3];
     }
 
     /*
-     * Calculate header checksum if enabled.
+     * 0xE759F8: NETWORK_$DO_CHKSUM (0x00E24C46).  HDR_CHKSUM is handed the
+     * ADDRESS of the hdr_len parameter slot ("pea (0x14,A6)"), which is
+     * exactly &hdr_len here.
      */
     if (NETWORK_$DO_CHKSUM < 0) {
-        /*
-         * 0x00E759FE-0x00E75A12: `pea (0x14,A6)` gives HDR_CHKSUM the ADDRESS
-         * of the caller's fourth argument, and the callee reads its first
-         * WORD as the header byte count -- on m68k that is the top 16 bits of
-         * data_info.  The width is spelled out rather than taking the address
-         * of the 64-bit local, which would read the wrong half on a
-         * little-endian host.  (source-bwuv covers this frame's argument
-         * model, which is still approximate.)
-         */
-        uint16_t hdr_len_w = (uint16_t)(data_info >> 48);
-
-        *((uint8_t *)hdr_va + 0xd) = HDR_CHKSUM(hdr_va, &hdr_len_w);
+        hdr->chksum = HDR_CHKSUM(hdr, &hdr_len);        /* 0xE75A12 */
     } else {
-        *((uint8_t *)hdr_va + 0xd) = 1;
+        hdr->chksum = 1;                                /* 0xE75A1C */
     }
 
-    /*
-     * Main transmit loop with retry logic.
-     */
 transmit_retry:
-    /*
-     * Get current transmit event count + 1.
-     * We'll wait for this value to detect completion.
-     */
-    tx_ec_val = unit_data->tx_ec.value + 1;
+    /* 0xE75A22 */
+    tx_ec_target = (int32_t)unit_data->tx_ec.value + 1;
 
-    /*
-     * Setup transmit DMA.
-     * Header length is in the low 16 bits of hdr_va data.
-     */
-    ring_$setup_tx_dma(hdr_pa, (int16_t)(data_info & 0xFFFF),
-                       local_data_pa, local_data_len);
+    /* 0xE75A2C-0xE75A3A */
+    ring_$setup_tx_dma(hdr_pa, (int16_t)hdr_len, data_buf[0],
+                       (int16_t)dma_data_len);
 
-    /*
-     * Choose the transmission mode.  0x00E75A42 `tst.b (0x3a,A2)` / `bmi.w`
-     * selects the force-start arm at 0x00E75B24.
-     */
+    /* 0xE75A42 "tst.b (0x3a,A2) / bmi.w 0xE75B24" */
     if (stats->retry_pending < 0) {
         /*
-         * Congested mode - use force start with timeout.
+         * Force-start arm, 0xE75B24.  TIME_$ABS_CLOCK writes the GLOBAL
+         * RING_$DATA.force_start_timeout and SUB48 then subtracts the time
+         * this attempt started, so the global ends up holding how long the
+         * attempt has been running.
          */
-        TIME_$ABS_CLOCK(&abs_time);
+        TIME_$ABS_CLOCK(&RING_$DATA.force_start_timeout);
+        SUB48(&RING_$DATA.force_start_timeout, &attempt_start);
 
-        /* Start transmit with force */
-        hw_regs[0] = 0x7000;
-        force_start = -1;
+        hw->xmit_csr = RING_XMIT_CMD_FORCE_START;       /* 0xE75B40 */
+        force_start = (int8_t)-1;                       /* 0xE75B44 "st D4b" */
 
-        /*
-         * Wait for completion or timeout.
-         */
-        delay_type = 0;  /* Relative delay */
-        int32_t local_ec_val = tx_ec_val;
-        int8_t wait_result = TIME_$WAIT2(&delay_type, &RING_$DATA.xmit_timeout1,
-                                         &unit_data->tx_ec, (uint32_t *)&local_ec_val,
-                                         &local_status);
+        wait_delay_type = &ring_$c_delay_relative;      /* 0xE75B5E */
+        wait_delay = &RING_$DATA.xmit_timeout1;         /* 0xE75B5A */
+        goto shared_wait;
+    }
 
-        if (wait_result >= 0) {
-            /* Timeout - try to abort */
-            hw_regs[0] = 0x4000;
+    /* 0xE75A4A: normal arm */
+    hw->xmit_csr = RING_XMIT_CMD_START;
 
-            if ((hw_regs[0] & RING_HW_STATUS_BUSY) == 0) {
-                goto check_completion;
-            }
+    /* 0xE75A4E */
+    TIME_$ABS_CLOCK(&attempt_start);
 
-            /* Still busy - wait more */
-            local_ec_val = tx_ec_val;
-            TIME_$WAIT2(&delay_type, &RING_$DATA.xmit_timeout2,
-                       &unit_data->tx_ec, (uint32_t *)&local_ec_val, &local_status);
+    /* 0xE75A5A: deadline = attempt_start + RING_$DATA.poll_timeout */
+    deadline = attempt_start;
+    ADD48(&deadline, &RING_$DATA.poll_timeout);
 
-            if ((hw_regs[0] & RING_HW_STATUS_BUSY) != 0) {
-                /* Still busy after the second wait: 0x00E75BAA `bne` to
-                 * 0x00E75BCC `move.l #0x31000e,(A4)`. */
-                *status_ret = status_$ring_controller_hardware_error;
-                goto transmit_done;
-            }
+    /*
+     * 0xE75A78-0xE75AA2: spin until either the transmit eventcount reaches
+     * the target or the deadline has passed.  SUB48 ends in "spl", so
+     * "bpl" (D0 == 0) means the difference went negative, i.e. the deadline
+     * is still ahead.
+     */
+    for (;;) {
+        if (tx_ec_target <= (int32_t)unit_data->tx_ec.value) {
+            goto process_status;                        /* 0xE75A80 */
         }
-    } else {
-        /*
-         * Normal mode - start transmit and poll.
-         */
-        hw_regs[0] = 0x6000;
-
-        /* Get absolute time for deadline calculation */
-        TIME_$ABS_CLOCK(&abs_time);
-        deadline = abs_time;
-
-        /*
-         * Poll for completion.
-         *
-         * TODO(source-bwuv): the deadline test is missing.  The image spins at
-         * 0x00E75A78-0x00E75AA2: `cmp.l (0x10,A1),D7` / `ble 0x00E75C18`, then
-         * TIME_$ABS_CLOCK into A6-0x18 and SUB48(A6-0x20, A6-0x18) at
-         * 0x00E75A98 with `tst.b D0b` / `bpl 0x00E75A78`, i.e. it loops until
-         * the 48-bit deadline seeded at 0x00E75A66 from RING_$DATA+0x590 has
-         * passed.  Everything from here to 0x00E75B72 is still a sketch.
-         */
-        do {
-            if (tx_ec_val <= unit_data->tx_ec.value) {
-                goto process_status;
-            }
-            TIME_$ABS_CLOCK(&timeout);
+        TIME_$ABS_CLOCK(&poll_now);                     /* 0xE75A84 */
+        if (SUB48(&poll_now, &deadline) < 0) {          /* 0xE75A98 */
             break;
-        } while (1);
-
-        /* Polling timed out - switch to wait mode */
-        RING_$XMIT_WAITED++;
-
-        delay_type = 0;
-        int32_t local_ec_val2 = tx_ec_val;
-        int8_t wait_result = TIME_$WAIT2(&delay_type, &RING_$DATA.wait_timeout,
-                                         &unit_data->tx_ec, (uint32_t *)&local_ec_val2,
-                                         &local_status);
-        if (wait_result >= 0) {
-            /* Timeout - retry with force start */
-            force_start = -1;
-            goto transmit_retry;
         }
     }
 
-check_completion:
-    if (tx_ec_val <= unit_data->tx_ec.value) {
+    /* 0xE75AA4: deadline = attempt_start + RING_$DATA.wait_timeout */
+    deadline = attempt_start;
+    ADD48(&deadline, &RING_$DATA.wait_timeout);
+
+    RING_$XMIT_WAITED++;                                /* 0xE75AC0 */
+
+    wait_delay_type = &ring_$c_delay_absolute;          /* 0xE75ADC */
+    wait_delay = &deadline;
+    ec_target_cell = (uint32_t)tx_ec_target;            /* 0xE75AC4 */
+    if (TIME_$WAIT2((uint16_t *)wait_delay_type, wait_delay,
+                    &unit_data->tx_ec, &ec_target_cell, &wait_status) < 0) {
+        goto process_status;                            /* 0xE75AEC */
+    }
+
+    /*
+     * 0xE75AF0-0xE75B22: a second absolute wait, with 0..7 added to the
+     * HIGH longword of the deadline - i.e. a jitter of up to seven times
+     * 65536 ticks - taken from the bottom 32 bits of attempt_start.
+     */
+    deadline = attempt_start;
+    deadline.high += (ring_$get_clock_low32(&attempt_start) & 7u);
+
+    wait_delay_type = &ring_$c_delay_absolute;          /* 0xE75B1E */
+    wait_delay = &deadline;
+
+shared_wait:
+    /* 0xE75B46 / 0xE75B62: the one call all three setups fall into */
+    ec_target_cell = (uint32_t)tx_ec_target;
+    if (TIME_$WAIT2((uint16_t *)wait_delay_type, wait_delay,
+                    &unit_data->tx_ec, &ec_target_cell, &wait_status) < 0) {
+        goto process_status;                            /* 0xE75B6E */
+    }
+
+    /* 0xE75B72: ask the transmitter to give up */
+    hw->xmit_csr = RING_XMIT_CMD_ABORT;
+
+    /* 0xE75B76 */
+    if ((hw->xmit_csr & RING_MODE_READY) != 0) {
+        /* 0xE75B7E: still running - one more relative wait */
+        wait_delay_type = &ring_$c_delay_relative;      /* 0xE75B96 */
+        wait_delay = &RING_$DATA.xmit_timeout2;         /* 0xE75B92 */
+        ec_target_cell = (uint32_t)tx_ec_target;        /* 0xE75B7E */
+        (void)TIME_$WAIT2((uint16_t *)wait_delay_type, wait_delay,
+                          &unit_data->tx_ec, &ec_target_cell, &wait_status);
+
+        /* 0xE75BA4 */
+        if ((hw->xmit_csr & RING_MODE_READY) != 0) {
+            goto hardware_error;                        /* 0xE75BAA */
+        }
+    }
+
+    /* 0xE75BAC */
+    if (tx_ec_target <= (int32_t)unit_data->tx_ec.value) {
         goto process_status;
     }
 
-    /* Clear DMA channel and check for retry */
+    /* 0xE75BB6 */
     ring_$clear_dma_channel(2, unit);
 
-    /*
-     * 0x00E75BC6 `tst.b (0x3a,A2)` / `bpl` - a retry that was already pending
-     * means the controller never came back, so report it.  This arm shares
-     * 0x00E75BCC with the "still busy" exit above.
-     */
+    /* 0xE75BC6: a retry was already pending, so the controller is stuck */
     if (stats->retry_pending < 0) {
-        *status_ret = status_$ring_controller_hardware_error;
+hardware_error:
+        *status_ret = status_$ring_controller_hardware_error;  /* 0xE75BCC */
         goto transmit_done;
     }
 
-    /* 0x00E75BDA `tst.b D4b` / `bmi.w 0x00E75DC2`. */
+    /* 0xE75BDA: the force start has already been tried once */
     if (force_start < 0) {
         goto transmit_done;
     }
 
-    /* 0x00E75BE0 `addq.w #0x1,(0x1a,A2)`. */
-    stats->xmit_tim++;
+    stats->xmit_tim++;                                  /* 0xE75BE0 */
 
     /*
-     * 0x00E75BE4-0x00E75BEE: `move.b (0x36,A2),D0b` / `not.b D0b` /
-     * `and.b (0x38,A2),D0b` / `bpl` - enter degraded mode the first time
-     * biphase_flag is true while congestion_flag is still false.
+     * 0xE75BE4-0xE75BEE: "move.b (0x36,A2),D0b / not.b D0b /
+     * and.b (0x38,A2),D0b / bpl" - enter congested mode the first time the
+     * biphase flag is set while the congestion flag is still clear.
      */
-    if ((int8_t)(~stats->congestion_flag & stats->biphase_flag) < 0) {
-        stats->congestion_flag = -1;            /* 0x00E75BF0 `st (0x36,A2)` */
-        result_bytes[0] |= 0x08;                /* 0x00E75BF4 `bset.b #0x3,(A3)` */
+    if ((int8_t)((uint8_t)~(uint8_t)stats->congestion_flag &
+                 (uint8_t)stats->biphase_flag) < 0) {
+        stats->congestion_flag = (int8_t)-1;            /* 0xE75BF0 */
+        *result_flags |= RING_SENDP_RES_CONGESTED;      /* 0xE75BF4 */
 
-        /* Reconfigure hardware mode (0x00E75BF8 `move.w (0x6,A4),D0w` /
-         * `btst.l #0xe,D0`). */
-        if ((hw_regs[3] & 0x4000) == 0) {
-            hw_regs[3] = 0x2800;
+        /* 0xE75BF8 */
+        if ((hw->mode & RING_MODE_ALT) != 0) {
+            hw->mode = RING_MODE_CONGESTED_ALT;         /* 0xE75C02 */
         } else {
-            hw_regs[3] = 0x6800;
+            hw->mode = RING_MODE_CONGESTED;             /* 0xE75C0A */
         }
     }
 
-    /* 0x00E75C10 `st (0x3a,A2)` then 0x00E75C14 `bra.w 0x00E75A22` - this arm
-     * always retries; it never falls into the status decode. */
-    stats->retry_pending = -1;
+    /* 0xE75C10: this arm always retries; it never decodes the status */
+    stats->retry_pending = (int8_t)-1;
     goto transmit_retry;
 
 process_status:
-    /*
-     * Switch to CPU access mode for reading status.
-     */
+    /* 0xE75C18: a Pascal function whose result the caller discards */
     MMU_$MCR_CHANGE(4);
 
-    hw_status = hw_regs[0];
+    hw_status = hw->xmit_csr;                           /* 0xE75C26 */
 
-    /* Clear DMA channel */
-    ring_$clear_dma_channel(2, unit);
+    ring_$clear_dma_channel(2, unit);                   /* 0xE75C28 */
 
-    /*
-     * Check for successful completion (status == 0x14).
-     */
-    if (hw_status == RING_HW_STATUS_COMPLETE) {
-        result_bytes[0] |= 0x80;  /* Success flag */
-        stats->xmitcnt++;
-        success = -1;
-        NETWORK_$ACTIVITY_FLAG = -1;
-        goto transmit_done;
+    /* 0xE75C38: the whole word, not a mask */
+    if (hw_status == RING_XMIT_CSR_COMPLETE) {
+        *result_flags |= RING_SENDP_RES_OK;             /* 0xE75C3E */
+        stats->xmitcnt++;                               /* 0xE75C42 */
+        activity = (int8_t)-1;                          /* 0xE75C46 */
+        NETWORK_$ACTIVITY_FLAG = activity;              /* 0xE75C48 */
+        goto report_ok;                                 /* 0xE75C4E */
     }
 
-    /*
-     * Initialize timeout for potential retry.
-     */
-    timeout.high = 0;
-    timeout.low = 500;
+    /* 0xE75C52: the default retry delay, 500 ticks */
+    retry_delay.high = 0;
+    retry_delay.low = 0x01F4;
 
-    /*
-     * Check for biphase/ESB errors.
-     */
-    if ((hw_status & (RING_HW_STATUS_BIPHASE | RING_HW_STATUS_ESB)) != 0) {
-        if ((hw_status & RING_HW_STATUS_BIPHASE) != 0) {
-            result_bytes[1] |= 0x20;
-            RING_$XMIT_BIPHASE++;
+    /* 0xE75C5C */
+    if ((hw_status & RING_XMIT_CSR_MODEM) != 0) {
+        if ((hw_status & RING_XMIT_CSR_BIPHASE) != 0) {
+            *result_flags |= RING_SENDP_RES_BIPHASE;    /* 0xE75C6A */
+            RING_$XMIT_BIPHASE++;                       /* 0xE75C70 */
         }
-        if ((hw_status & RING_HW_STATUS_ESB) != 0) {
-            result_bytes[1] |= 0x04;
-            RING_$XMIT_ESB++;
+        if ((hw_status & RING_XMIT_CSR_ESB) != 0) {
+            *result_flags |= RING_SENDP_RES_ESB;        /* 0xE75C7C */
+            RING_$XMIT_ESB++;                           /* 0xE75C82 */
         }
-        stats->xmit_modem++;
+        stats->xmit_modem++;                            /* 0xE75C88 */
     }
 
-    /*
-     * Check for parity error.
-     */
-    if ((hw_status & RING_HW_STATUS_PARITY) != 0) {
-        /* Parity error - check if address comparison matches */
-        /* This involves PARITY_$CHK_IO call in original */
-        result_bytes[1] |= 0x80;
-        stats->xmit_bus++;
-        goto retry_check;
-    }
-
-    /*
-     * Check for not-acknowledged.
-     */
-    if ((hw_status & RING_HW_STATUS_NOTACK) != 0) {
-        result_bytes[0] |= 0x01;
-        stats->xmit_orun++;
-        goto retry_check;
-    }
-
-    /*
-     * Check for delayed response.
-     */
-    if ((hw_status & RING_HW_STATUS_DELAYED) != 0) {
-        result_bytes[0] |= 0x04;
-        stats->xmit_nortn++;
-        goto retry_or_done;
-    }
-
-    /*
-     * Check for no response.
-     */
-    if ((hw_status & RING_HW_STATUS_NORESP) != 0) {
-        result_bytes[1] |= 0x40;
-        stats->xmit_apar++;
-        goto retry_or_done;
-    }
-
-    /*
-     * Mark as successful for remaining cases.
-     */
-    success = -1;
-    NETWORK_$ACTIVITY_FLAG = -1;
-
-    /*
-     * Check for congestion (both bits 3 and 4 set).
-     */
-    if ((hw_status & RING_HW_STATUS_CONGESTED) == RING_HW_STATUS_CONGESTED) {
-        result_bytes[1] |= 0x40;
-        stats->xmit_error++;
-        goto retry_or_done;
-    }
-
-    /*
-     * Check for accepted.
-     */
-    if ((hw_status & RING_HW_STATUS_ACCEPTED) != 0) {
-        result_bytes[0] |= 0x80;
-        stats->xmitcnt++;
-        *status_ret = status_$ok;
-        goto transmit_done;
-    }
-
-    /*
-     * Check for reject.
-     */
-    if ((hw_status & RING_HW_STATUS_REJECT) != 0) {
-        result_bytes[0] |= 0x40;
-        stats->xmit_wack++;
-        timeout.low = 500;
-        goto retry_check;
-    }
-
-    /*
-     * Check for no token.
-     */
-    if ((hw_status & RING_HW_STATUS_NOTOKEN) != 0) {
-        /* Check bit 3 also */
-        if ((hw_status & 0x08) == 0) {
-            RING_$UNEXPECTED_XMIT_STAT = hw_status;
+    /* 0xE75C8C */
+    if ((hw_status & RING_XMIT_CSR_BUS) != 0) {
+        /*
+         * 0xE75C92-0xE75CB0: both DMA addresses are turned into page frame
+         * numbers ("lsr.l #0x8" then "lsr.l #0x2") and offered to
+         * PARITY_$CHK_IO; a result of 2 means the parity error was ours.
+         */
+        if (PARITY_$CHK_IO(hdr_pa >> 10, data_buf[0] >> 10) == 2) {
+            *status_ret = status_$network_memory_parity_error_during_transmit;
+            goto transmit_done;                         /* 0xE75CC0 */
         }
-        result_bytes[1] |= 0x40;
-        goto retry_or_done;
+        *result_flags |= RING_SENDP_RES_BUS_ERR;        /* 0xE75CC4 */
+        stats->xmit_bus++;                              /* 0xE75CCA */
+        goto retry;                                     /* 0xE75CCE */
     }
 
-    /*
-     * Other status - check destination type.
-     */
-    result_bytes[0] |= 0x20;
-    if (*send_flags == 0 || *send_flags > 4) {
-        stats->xmit_nack++;
-        timeout.low = 250;
-        goto retry_check;
+    /* 0xE75CD2 */
+    if ((hw_status & RING_XMIT_CSR_ORUN) != 0) {
+        *result_flags |= RING_SENDP_RES_OVERRUN;        /* 0xE75CD8 */
+        stats->xmit_orun++;                             /* 0xE75CDC */
+        goto retry;                                     /* 0xE75CE0 */
     }
 
-    /* Success */
-    stats->xmitcnt++;
-    *status_ret = status_$ok;
-    goto transmit_done;
+    /* 0xE75CE4 */
+    if ((hw_status & RING_XMIT_CSR_NORTN) != 0) {
+        *result_flags |= RING_SENDP_RES_DELAYED;        /* 0xE75CEC */
+        stats->xmit_nortn++;                            /* 0xE75CF0 */
+        goto retry_if_allowed;                          /* 0xE75CF4 */
+    }
 
-retry_or_done:
-    if (success < 0) {
+    /* 0xE75CF8 "tst.b D7b / bpl": bit 7 of the CSR's low byte */
+    if ((hw_status & RING_XMIT_CSR_APAR) != 0) {
+        *result_flags |= RING_SENDP_RES_NO_RETURN;      /* 0xE75CFC */
+        stats->xmit_apar++;                             /* 0xE75D02 */
+        goto retry_if_allowed;                          /* 0xE75D06 */
+    }
+
+    /* 0xE75D0A: everything from here on counts as network activity */
+    activity = (int8_t)-1;
+    NETWORK_$ACTIVITY_FLAG = activity;
+
+    /* 0xE75D12: both bits of 0x18 set */
+    if ((hw_status & RING_XMIT_CSR_PKTERR) == RING_XMIT_CSR_PKTERR) {
+        *result_flags |= RING_SENDP_RES_NO_RETURN;      /* 0xE75D1C */
+        stats->xmit_error++;                            /* 0xE75D22 */
+        goto retry_if_allowed;                          /* 0xE75D26 */
+    }
+
+    /* 0xE75D28 */
+    if ((hw_status & RING_XMIT_CSR_ACCEPTED) != 0) {
+        *result_flags |= RING_SENDP_RES_OK;             /* 0xE75D2E */
+        goto count_and_report_ok;                       /* 0xE75D32 */
+    }
+
+    /* 0xE75D34 */
+    if ((hw_status & RING_XMIT_CSR_WACK) != 0) {
+        *result_flags |= RING_SENDP_RES_WACK;           /* 0xE75D3A */
+        stats->xmit_wack++;                             /* 0xE75D3E */
+        ring_$set_delay_low32(&retry_delay, 0x1F4);     /* 0xE75D42 */
+        goto retry;                                     /* 0xE75D4A */
+    }
+
+    /* 0xE75D4C */
+    if ((hw_status & RING_XMIT_CSR_NOTOKEN) == 0) {
+        *result_flags |= RING_SENDP_RES_NACK;           /* 0xE75D52 */
+
+        /*
+         * 0xE75D56-0xE75D64: a known message type (1..4) is treated as
+         * delivered; anything else - including 0 - is a "no acknowledge".
+         */
+        if (hdr->msg_type != 0 && hdr->msg_type <= 4) {
+count_and_report_ok:
+            stats->xmitcnt++;                           /* 0xE75D66 */
+report_ok:
+            *status_ret = status_$ok;                   /* 0xE75D6E */
+            goto transmit_done;
+        }
+
+        stats->xmit_nack++;                             /* 0xE75D72 */
+        ring_$set_delay_low32(&retry_delay, 0xFA);      /* 0xE75D76 */
+        goto retry;                                     /* 0xE75D7E */
+    }
+
+    /* 0xE75D80 */
+    if ((hw_status & RING_XMIT_CSR_UNEXPECTED) == 0) {
+        RING_$UNEXPECTED_XMIT_STAT = hw_status;         /* 0xE75D86 */
+    }
+    *result_flags |= RING_SENDP_RES_NO_RETURN;          /* 0xE75D8A */
+
+retry_if_allowed:
+    /* 0xE75D90 */
+    if (no_retry < 0) {
         goto transmit_done;
     }
 
-retry_check:
-    retry_count--;
-    if (retry_count == 0) {
+retry:
+    /* 0xE75D94 */
+    retry_budget--;
+    if (retry_budget == 0) {
         goto transmit_done;
     }
 
-    /* Check if destination allows retry (bit 1 of byte 4 in send_flags) */
-    if ((((uint8_t *)send_flags)[4] & 0x02) != 0) {
+    /* 0xE75D98 "btst.b #0x1,(0x4,A0)" - the header's own no-retry bit */
+    if ((hdr->flags & 0x02) != 0) {
         goto transmit_done;
     }
 
-    /* 0x00E75DA4 `clr.b (0x3a,A2)`. */
-    stats->retry_pending = 0;
+    stats->retry_pending = 0;                           /* 0xE75DA4 */
 
-    /* Wait before retry */
-    delay_type = 0;
-    TIME_$WAIT(&delay_type, &timeout, &local_status);
+    /* 0xE75DA8-0xE75DB4 */
+    TIME_$WAIT((uint16_t *)&ring_$c_delay_relative, &retry_delay,
+               &wait_status);
 
-    goto transmit_retry;
+    goto transmit_retry;                                /* 0xE75DBE */
 
 transmit_done:
     /*
-     * 0x00E75DC2 `not.b D5b` is UNCONDITIONAL, and 0x00E75DC4
-     * `move.b D5b,(0x34,A2)` sets the condition codes the following `bpl`
-     * tests.  D5 is set only by the two `st D5b` sites (0x00E75C46 and
-     * 0x00E75D0A), so last_success ends up true exactly when neither fired.
+     * 0xE75DC2 "not.b D5b" is UNCONDITIONAL and 0xE75DC4 sets the condition
+     * codes the following "bpl" tests, so last_success ends up true exactly
+     * when neither "st D5b" fired.
      */
-    success = (int8_t)~success;
-    stats->last_success = success;
+    activity = (int8_t)~(uint8_t)activity;
+    stats->last_success = activity;
 
-    if (success < 0) {
-        result_bytes[0] |= 0x02;    /* 0x00E75DCA `bset.b #0x1,(A3)` */
+    if (activity < 0) {
+        *result_flags |= RING_SENDP_RES_RETRIED;        /* 0xE75DCA */
         /*
-         * 0x00E75DCE `clr.b (0x38,A2)` is dead in the original: the very next
-         * instruction stores D4 over it on both paths.  Preserved as written.
+         * 0xE75DCE "clr.b (0x38,A2)" is dead in the original - the very next
+         * instruction stores D4 over it on both paths.  Kept as written.
          */
         stats->biphase_flag = 0;
     }
 
-    /* 0x00E75DD2 `move.b D4b,(0x38,A2)` - the force-start flag, not a byte of
-     * send_flags. */
+    /* 0xE75DD2: the force-start flag, not a byte of any argument */
     stats->biphase_flag = force_start;
 }

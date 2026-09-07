@@ -204,15 +204,20 @@ retry_send:
             goto done;
         }
 
-        /* Compute timeout deadline:
-         * TIME_$CLOCKH + per-process timeout base (A5+8) + send overhead (local_c6)
-         *
-         * TODO(source-0i3): The per-process timeout base is accessed via A5+8. This is an
-         * A5-relative global in the original Pascal runtime. For now we use 0
-         * as a placeholder - the actual value would come from the process-specific
-         * data area. This needs arch-specific abstraction.
+        /* Compute the response deadline.  0x00E611C6:
+         *   clr.l   D1
+         *   andi.l  #0xffff,D0            ; D0 = send overhead, zero-extended
+         *   move.w  (0x8,A5),D1w          ; D1 = REM_FILE_$COMPLETION_TIME
+         *   add.l   D1,D0
+         *   add.l   (0x00e2b0d4).l,D0     ; + TIME_$CLOCKH
+         * A5 is the REM_FILE module base 0x00E823FC (inherited from the
+         * caller; see rem_file/rem_file_data.c), so A5+0x08 is the module
+         * global REM_FILE_$COMPLETION_TIME, not per-process data.  Both
+         * words are zero-extended before the adds.
          */
-        timeout_deadline = (int32_t)TIME_$CLOCKH + 0 /* *(uint16_t *)(A5+8) */ + (uint32_t)send_c6;
+        timeout_deadline = (int32_t)((uint32_t)TIME_$CLOCKH +
+                                     (uint32_t)REM_FILE_$COMPLETION_TIME +
+                                     (uint32_t)(uint16_t)send_c6);
 
         /* Wait loop for response */
         do {
@@ -410,12 +415,12 @@ retry_send:
 
         /* Check for busy response (first word of response = 0xFFFF) */
         if (resp_i16[0] == -1) {
-            /* Server is busy - increment per-process busy counter (A5+4)
-             * and wait 2 ticks before retrying.
-             *
-             * TODO(source-0i3): The assembly does addq.l #1,(0x4,A5) which increments
-             * a per-process counter. This needs arch-specific abstraction.
+            /* Server is busy - count the retry and wait 2 ticks.
+             * 0x00E6141C: addq.l #0x1,(0x4,A5).  A5 is the REM_FILE module
+             * base, so this is the module global REM_FILE_$BUSY_RETRY_COUNT.
              */
+            REM_FILE_$BUSY_RETRY_COUNT++;
+
             /* 0x00E61420-0x00E61442: wait on the tick eventcount only.
              *   0x00E61436  move.l #0xe2b0d4,-(SP)  ecs[0]  = &TIME_$CLOCKH
              *   0x00E61434  move.l (SP),-(SP)       ecs[1]  = copy of the

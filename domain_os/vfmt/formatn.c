@@ -8,12 +8,13 @@
  *   0x00e6b074 - Main implementation
  *   0x00e825e4 - Thunk that sets A0 to function table pointer
  *
- * The thunk at 0x00e825e4 is the syscall entry point which:
- *   1. Loads A0 with a pointer to the function table
+ * The cell at 0x00e825e4 is a 16-byte procedure-variable descriptor whose
+ * first ten bytes are a trampoline:
+ *   1. Loads A0 with the address of its own 16-byte descriptor
  *   2. Jumps to the main implementation at 0x00e6b074
  *
  * Assembly at 0x00e825e4:
- *   lea (-0x2,PC),A0       ; A0 = 0x00e825e2 (function table)
+ *   lea (-0x2,PC),A0       ; A0 = 0x00e825e4, the descriptor itself
  *   jmp 0x00e6b074.l       ; Jump to main implementation
  *
  * Assembly at 0x00e6b074:
@@ -43,14 +44,22 @@
  * This allows the formatting functions to be vectored through a table.
  */
 typedef struct {
-    char reserved[10];           /* +0x00: Reserved bytes */
-    void (*main_func)(const char *, char *, int16_t *, int16_t *, void *);
-} vfmt_table_t;
+    char reserved[10];           /* +0x00: the lea/jmp trampoline */
+    void (*main_func)(const char *, char *, const int16_t *, int16_t *, void *);
+    uint16_t unused;             /* +0x0e: zero in the image */
+} vfmt_descriptor_t;
 
-/* Default function table pointing to VFMT_$MAIN */
-static vfmt_table_t vfmt_table = {
+/*
+ * The descriptor as the image has it (`gsk read 0xe825e4 16`):
+ *
+ *   00e825e4  41 fa ff fe 4e f9 00 e6  b0 74 00 e6 ab 2a 00 00
+ *
+ * i.e. lea (-0x2,PC),A0 / jmp 0x00e6b074 / VFMT_$MAIN / 0.
+ */
+static const vfmt_descriptor_t vfmt_$formatn_descriptor_00e825e4 = {
     .reserved = {0},
-    .main_func = VFMT_$MAIN
+    .main_func = VFMT_$MAIN,
+    .unused = 0
 };
 
 /*
@@ -89,56 +98,4 @@ void VFMT_$FORMATN(const char *format, char *buf, int16_t *max_len,
     VFMT_$MAIN(format, buf, max_len, out_len, (void *)ap);
 
     va_end(ap);
-}
-
-/*
- * VFMT_$WRITE - Write formatted output to console
- *
- * Formats a string and writes it directly to the console/terminal.
- * This is a convenience wrapper around VFMT_$FORMATN that outputs
- * to the system console.
- *
- * Original address: 0x00e6afe2
- */
-void VFMT_$WRITE(const char *format, ...)
-{
-    char buf[256];
-    int16_t max_len = 256;
-    int16_t out_len = 0;
-    va_list ap;
-
-    va_start(ap, format);
-    VFMT_$MAIN(format, buf, &max_len, &out_len, (void *)ap);
-    va_end(ap);
-
-    /*
-     * TODO(source-bu8): Output buf[0..out_len] to console
-     * This would typically call TERM_$WRITE or similar.
-     */
-}
-
-/*
- * VFMT_$WRITEN - Write formatted output with length limit
- *
- * Like VFMT_$WRITE but with a maximum output length.
- *
- * Original address: 0x00e6b0a4
- */
-void VFMT_$WRITEN(const char *format, int16_t max_len, ...)
-{
-    char buf[256];
-    int16_t actual_max;
-    int16_t out_len = 0;
-    va_list ap;
-
-    actual_max = (max_len < 256) ? max_len : 256;
-
-    va_start(ap, max_len);
-    VFMT_$MAIN(format, buf, &actual_max, &out_len, (void *)ap);
-    va_end(ap);
-
-    /*
-     * TODO(source-bu8): Output buf[0..out_len] to console
-     * This would typically call TERM_$WRITE or similar.
-     */
 }

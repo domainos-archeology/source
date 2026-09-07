@@ -253,7 +253,12 @@ dcte_t *IO_$GET_DCTE(uint16_t *ctypep, uint16_t *cnump, status_$t *status_ret);
  *   status_ret   - status (set to status_$ok on entry)
  *
  * Original address: 0x00E328E0
- * TODO: no C implementation yet (only declared here for OS_$INIT).
+ * TODO(source-s6ru): NOT EMITTED.  330 bytes at 0x00E328E0..0x00E32A29;
+ * this header carries only the prototype, so OS_$INIT's call does not link.
+ * Missing: the ML_$LOCK initialisation of the I/O exclusion locks, the DMA
+ * init call, the per-controller init table walk, and the IO_$DCTE_LIST walk
+ * that calls each DCTE's csrsytr entry and (when *verbose_flag < 0) prints a
+ * line per device.  Tracked in the io link inventory as source-s6ru.
  */
 void IO_$INIT(void *param1, char *verbose_flag, status_$t *status_ret);
 

@@ -25,6 +25,7 @@
 #include "base/base.h"
 #include "ec/ec.h"
 #include "term/term.h"   /* dtte_t (SIO_$INIT_DTTE, SIO_$INIT_DESC) */
+#include "time/time.h"   /* time_queue_elem_t (the embedded delay element) */
 
 /*
  * ============================================================================
@@ -158,13 +159,15 @@ _Static_assert(sizeof(sio_params_t) == 0x16, "sio_params_t size");
 typedef struct sio_desc {
     m68k_ptr_t  context;        /* 0x00: Device context/handle */
     m68k_ptr_t  owner;          /* 0x04: Owner handle (passed to callbacks) */
-    m68k_ptr_t  reserved_08;    /* 0x08: Reserved */
-    m68k_ptr_t  reserved_0c;    /* 0x0C: Reserved */
-    m68k_ptr_t  reserved_10;    /* 0x10: Reserved */
-    m68k_ptr_t  reserved_14;    /* 0x14: Reserved */
-    m68k_ptr_t  reserved_18;    /* 0x18: Reserved */
-    m68k_ptr_t  reserved_1c;    /* 0x1C: Reserved */
-    m68k_ptr_t  reserved_20;    /* 0x20: Reserved */
+    /*
+     * 0x08: the descriptor's own 0x1A-byte time-queue element, used for the
+     * transmit delay that SIO_$I_TSTART arms.  0x00E1C8C4 "pea (0x8,A0)"
+     * passes exactly this address to TIME_$Q_ADD_CALLBACK as its `qelem`
+     * argument, so the storage is per-port and not the single global the
+     * earlier decompilation invented.
+     */
+    time_queue_elem_t delay_qelem;  /* 0x08 .. 0x21 */
+    uint16_t    reserved_22;    /* 0x22: Reserved */
     m68k_ptr_t  txbuf;          /* 0x24: Transmit buffer pointer */
     m68k_ptr_t  rcv_handler;    /* 0x28: Default receive handler */
     m68k_ptr_t  drain_handler;  /* 0x2C: Buffer drained handler */
@@ -193,13 +196,8 @@ typedef struct sio_desc {
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(sio_desc_t, context) == 0x00, "sio_desc_t.context");
 _Static_assert(__builtin_offsetof(sio_desc_t, owner) == 0x04, "sio_desc_t.owner");
-_Static_assert(__builtin_offsetof(sio_desc_t, reserved_08) == 0x08, "sio_desc_t.reserved_08");
-_Static_assert(__builtin_offsetof(sio_desc_t, reserved_0c) == 0x0C, "sio_desc_t.reserved_0c");
-_Static_assert(__builtin_offsetof(sio_desc_t, reserved_10) == 0x10, "sio_desc_t.reserved_10");
-_Static_assert(__builtin_offsetof(sio_desc_t, reserved_14) == 0x14, "sio_desc_t.reserved_14");
-_Static_assert(__builtin_offsetof(sio_desc_t, reserved_18) == 0x18, "sio_desc_t.reserved_18");
-_Static_assert(__builtin_offsetof(sio_desc_t, reserved_1c) == 0x1C, "sio_desc_t.reserved_1c");
-_Static_assert(__builtin_offsetof(sio_desc_t, reserved_20) == 0x20, "sio_desc_t.reserved_20");
+_Static_assert(__builtin_offsetof(sio_desc_t, delay_qelem) == 0x08, "sio_desc_t.delay_qelem");
+_Static_assert(__builtin_offsetof(sio_desc_t, reserved_22) == 0x22, "sio_desc_t.reserved_22");
 _Static_assert(__builtin_offsetof(sio_desc_t, txbuf) == 0x24, "sio_desc_t.txbuf");
 _Static_assert(__builtin_offsetof(sio_desc_t, rcv_handler) == 0x28, "sio_desc_t.rcv_handler");
 _Static_assert(__builtin_offsetof(sio_desc_t, drain_handler) == 0x2C, "sio_desc_t.drain_handler");
@@ -428,12 +426,13 @@ void SIO_$I_DCD_CHANGE(sio_desc_t *desc, int8_t dcd_state);
  * Parameters:
  *   desc - SIO descriptor
  *
- * Returns:
- *   Result varies based on transmit state
+ * A Pascal PROCEDURE: none of the eight call sites (0x00E1C6A8, 0x00E1C6C6,
+ * 0x00E1C6F2, 0x00E1C76E, 0x00E1C9C0, 0x00E1C9EE, 0x00E1D152 and the one in
+ * SIO2681_$SET_BREAK) reserves a result slot, so there is no return value.
  *
  * Original address: 0x00e1c7a8
  */
-uint16_t SIO_$I_TSTART(sio_desc_t *desc);
+void SIO_$I_TSTART(sio_desc_t *desc);
 
 /*
  * SIO_$I_INHIBIT_RCV - Control receive inhibit state

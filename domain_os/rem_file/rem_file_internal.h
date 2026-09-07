@@ -208,6 +208,20 @@ extern ml_$exclusion_t REM_FILE_$SOCK_LOCK;   /* 0xE24B3C: socket access lock */
  */
 extern uint32_t REM_FILE_$STALE_LINK_COUNT;
 
+/*
+ * 0xE82400 (A5+0x04): longword, bumped once per "server busy" reply that
+ * REM_FILE_$SEND_REQUEST has to retry (`addq.l #1,(0x4,A5)` at 0x00E6141C).
+ */
+extern uint32_t REM_FILE_$BUSY_RETRY_COUNT;
+
+/*
+ * 0xE82404 (A5+0x08): word, image value 0x0014 (20 ticks).  The base
+ * completion allowance REM_FILE_$SEND_REQUEST adds to TIME_$CLOCKH and to
+ * the per-request send overhead to get the response deadline
+ * (`move.w (0x8,A5),D1w` at 0x00E611CE, zero-extended).
+ */
+extern uint16_t REM_FILE_$COMPLETION_TIME;
+
 /* 0xE64592: the status constant CRASH_SYSTEM is handed when the diskless
  * partner node dies (0x000F0004). */
 extern status_$t REM_FILE_$COMMS_PROBLEM_STATUS;

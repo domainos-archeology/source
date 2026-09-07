@@ -190,7 +190,7 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
     TIME_$ABS_CLOCK((clock_t *)&sock_rec.src_addr);
 
     /* 0x00E765F2 */
-    queued = SOCK_$PUT(socket_id, (void *)&sock_rec, 0, 0, unit);
+    queued = SOCK_$PUT(socket_id, &sock_rec, 0, 0, unit);
     if (queued < 0) {
         return 0;                                   /* 0x00E76638 */
     }

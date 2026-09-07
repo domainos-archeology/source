@@ -196,10 +196,26 @@ static int16_t          the_port = 0;
 static boolean          mac_bcast;
 static status_$t        st;
 
+/*
+ * The two packet records now carry target virtual addresses rather than C
+ * pointers (bead source-ronb), so the arena base has to sit below every
+ * object the tests round-trip through them.
+ */
+static void va_base_setup(void)
+{
+    uintptr_t lo = (uintptr_t)&header;
+
+    if ((uintptr_t)&idp_state < lo) lo = (uintptr_t)&idp_state;
+    if ((uintptr_t)&pkt < lo)       lo = (uintptr_t)&pkt;
+    if ((uintptr_t)&port0 < lo)     lo = (uintptr_t)&port0;
+    ARCH_HOST_VA_BASE = lo - 0x10000u;
+}
+
 static void setup(void)
 {
     int i;
 
+    va_base_setup();
     memset(&idp_state, 0, sizeof(idp_state));
     memset(&pkt, 0, sizeof(pkt));
     memset(&header, 0, sizeof(header));
@@ -232,7 +248,7 @@ static void setup(void)
     }
 
     pkt.d.data_len = 0x00110022;
-    pkt.d.header = &header;
+    pkt.d.header = ARCH_PTR_TO_VA(&header);
     pkt.d.iov = 0x33445566;
     pkt.d.mac_src_hi = 0x778899AA;
     pkt.d.mac_src_lo = 0xBBCC;
@@ -363,7 +379,8 @@ static void test_error_record_is_initialised(void)
     run();
     ASSERT_EQ(1, err_send_calls);
     ASSERT_EQ(0x00110022, ((xns_$pkt_desc_t *)err_send_pkt)->data_len);
-    ASSERT_PTR(&header, ((xns_$pkt_desc_t *)err_send_pkt)->header);
+    ASSERT_PTR(&header,
+               ARCH_VA_TO_PTR(((xns_$pkt_desc_t *)err_send_pkt)->header));
     ASSERT_EQ((int8_t)-1, ((xns_$pkt_desc_t *)err_send_pkt)->from_net);
 }
 
@@ -374,12 +391,12 @@ static void test_local_delivery_record(void)
     run();
     ASSERT_EQ(1, demux_calls);
     ASSERT_EQ(0x00110022, demux_rec_copy.data_len);
-    ASSERT_PTR(&header, demux_rec_copy.header);
+    ASSERT_PTR(&header, ARCH_VA_TO_PTR(demux_rec_copy.header));
     ASSERT_EQ(0x33445566, demux_rec_copy.iov);
     ASSERT_EQ((int8_t)-1, demux_rec_copy.from_net);
     ASSERT_EQ(0x778899AA, demux_rec_copy.mac_src_hi);
     ASSERT_EQ(0xBBCC, demux_rec_copy.mac_src_lo);
-    ASSERT_PTR(XNS_CHANNEL_PTR(3), demux_rec_copy.channel);
+    ASSERT_PTR(XNS_CHANNEL_PTR(3), ARCH_VA_TO_PTR(demux_rec_copy.channel));
     ASSERT_EQ(0x0A0B, demux_rec_copy.port_info);
     ASSERT_EQ(0x5A5B, demux_rec_copy._unknown_34);
     for (i = 0; i < 0x10; i++) {
@@ -522,7 +539,7 @@ static void test_forward_record_contents(void)
     run();
     ASSERT_EQ(1, sock_put_calls);
     ASSERT_EQ(XNS_SOCK_PKT_F_IDP, sock_put_copy.flags);
-    ASSERT_PTR(&header, sock_put_copy.header);
+    ASSERT_PTR(&header, ARCH_VA_TO_PTR(sock_put_copy.header));
     ASSERT_EQ(0x778899AA, sock_put_copy.mac_src_hi);
     ASSERT_EQ(0xBBCC, sock_put_copy.mac_src_lo);
     /* the longword at descriptor +0x2C: pkt_len in the high half */
@@ -543,7 +560,9 @@ static void test_forward_record_contents(void)
 static void test_channel_demux_stores_flags(void)
 {
     xns_$pkt_desc_t rec;
-    xns_$channel_t chan;
+    /* static so its address is in the same arena as everything else the VA
+     * round trip covers (a stack address need not be within 4GB of it) */
+    static xns_$channel_t chan;
     uint16_t port_type = 0x3333;
     uint16_t port_socket = 0x4444;
     boolean bcast;
@@ -552,8 +571,9 @@ static void test_channel_demux_stores_flags(void)
 
     memset(&rec, 0, sizeof(rec));
     memset(&chan, 0, sizeof(chan));
-    rec.header = &header;
-    rec.channel = &chan;
+    va_base_setup();
+    rec.header = ARCH_PTR_TO_VA(&header);
+    rec.channel = ARCH_PTR_TO_VA(&chan);
     rec.data_len = 0x00110022;
     rec.pkt_len = 0xDDEE;
     rec.mac_src_hi = 0x778899AA;
@@ -593,7 +613,9 @@ static void test_channel_demux_stores_flags(void)
 static void test_channel_demux_unbound(void)
 {
     xns_$pkt_desc_t rec;
-    xns_$channel_t chan;
+    /* static so its address is in the same arena as everything else the VA
+     * round trip covers (a stack address need not be within 4GB of it) */
+    static xns_$channel_t chan;
     uint16_t port_type = 0;
     uint16_t port_socket = 0;
     boolean bcast = false;
@@ -601,8 +623,9 @@ static void test_channel_demux_unbound(void)
 
     memset(&rec, 0, sizeof(rec));
     memset(&chan, 0, sizeof(chan));
-    rec.header = &header;
-    rec.channel = &chan;
+    va_base_setup();
+    rec.header = ARCH_PTR_TO_VA(&header);
+    rec.channel = ARCH_PTR_TO_VA(&chan);
     chan.user_socket = XNS_NO_SOCKET;
 
     sock_put_calls = 0;

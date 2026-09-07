@@ -109,7 +109,7 @@ void PKT_$PING_SERVER(void)
 
         /* 0x00E12C6A "movea.l (-0x30,A6),A0" - the reply record APP_$RECEIVE
          * left at +0x00 is what PKT parses as the request header. */
-        req_hdr     = (pkt_$internet_hdr_t *)recv.reply;
+        req_hdr     = (pkt_$internet_hdr_t *)ARCH_VA_TO_PTR(recv.reply);
         data_len    = req_hdr->data_len;        /* 0x00E12C6E "(0x4,A0)" */
         dest_node   = req_hdr->src_node;        /* 0x00E12C74 "(0xe,A0)" */
         dest_sock   = req_hdr->src_sock;        /* 0x00E12C7A "(0x12,A0)" */
@@ -137,7 +137,7 @@ void PKT_$PING_SERVER(void)
          * ever reads template_buf back - the reply template comes from
          * PKT_$DATA->ping_req_hdr - but the copy is part of the original.
          */
-        OS_$DATA_COPY(recv.data, template_buf,
+        OS_$DATA_COPY(ARCH_VA_TO_PTR(recv.data), template_buf,
                       (uint32_t)tpl_len);
 
         /*
@@ -145,7 +145,7 @@ void PKT_$PING_SERVER(void)
          * 0x00E12CB4  andi.w #-0x400,D0w      a WORD and: only bits 0..9 die
          * 0x00E12CB8  move.l D0,(-0x44,A6)
          */
-        hdr_page = ARCH_PTR_TO_VA(recv.data) & 0xFFFFFC00u;
+        hdr_page = recv.data & 0xFFFFFC00u;
         NETBUF_$RTN_HDR(&hdr_page);             /* 0x00E12CC0 */
 
         /* 0x00E12CC8 "tst.l (-0x28,A6)" - the first data page slot. */

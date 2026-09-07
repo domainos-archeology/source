@@ -261,6 +261,26 @@ extern uint8_t FIM_FRAME_SIZE_TABLE[];
  */
 
 /*
+ * FIM_$GET_FIM_ADDR - Return the current AS's user-mode fault handler
+ *
+ * TRAP #0 subcode 0x01.  Returns FIM_$USER_FIM_ADDR[PROC1_$AS_ID].
+ *
+ * Address: 0x00e0aa04
+ */
+void *FIM_$GET_FIM_ADDR(void);
+
+/*
+ * FIM_$INSTALL - Install a user-mode fault handler for the current AS
+ *
+ * TRAP #1 subcode 0x02.  `new_addr` is a by-reference longword holding the
+ * new handler address; the previous handler is returned.  Installing the
+ * first handler for an address space clears FIM_$QUIT_INH for that AS.
+ *
+ * Address: 0x00e0a9c2
+ */
+void *FIM_$INSTALL(void **new_addr);
+
+/*
  * FIM_$ADVANCE_SIGNAL_DELIVERY - Advance signal delivery mechanism
  *
  * Updates the quit value for the current address space from the quit
@@ -654,7 +674,12 @@ extern void JMP_TO_BUS_ERR(void);
  * fault.
  *
  * Address: 0x00E223A2
- * TODO(source-refr): not yet emitted anywhere in the tree.
+ * Defined in fim/fim_data.c.  TODO(source-refr): fim/sau2/fim.s and
+ * fim/sau2/bus_err.s still reach the array through
+ * `.equ FIM_TRACE_STS, 0x00E223A2` rather than through this symbol, because
+ * the sibling table FIM_$TRACE_BIT (0x00E21890) and the rest of the code-
+ * region gap 0x00E2188E..0x00E218CA are not transcribed in fim/sau2/fim.s.
+ * That bead covers emitting the gap and switching both .s files over.
  */
 extern status_$t FIM_$TRACE_STS[];
 
@@ -687,15 +712,16 @@ _Static_assert(sizeof(fim_fault_desc_t) == 8, "fim_fault_desc_t must be 8 bytes"
 #define FIM_FAULT_CLASS_OTHER   0xA000  /* Everything else in the FIM_$COM table */
 
 /*
- * status_$t values FIM_$BUS_ERR reports.
- * TODO(source-46ym): the official Apollo names for the module 0x12 (fault)
- * and module 0x07 (MMU) codes below are not yet known.
+ * status_$t values FIM_$BUS_ERR reports.  The names follow the SR10.4
+ * status-code database (stcodes/stcode.db.10.4), which gives the message
+ * text quoted beside each code; module 0x12 is the fault module and module
+ * 0x07 is the MMU.
  */
-#define status_$fault_protection_violation  0x00120011  /* MMU protection violation */
-#define status_$fault_bus_timeout           0x0012000C  /* No device answered */
+#define status_$fault_access_violation      0x00120011  /* "access violation" */
+#define status_$fault_bus_time_out          0x0012000C  /* "bus time-out" */
 #define status_$fault_process_quit          0x00120010  /* "process quit" */
-#define status_$mmu_memory_error_4          0x00070004
-#define status_$mmu_memory_error_5          0x00070005
-#define status_$mmu_memory_error_6          0x00070006
+#define status_$mmu_ptt_parity_error        0x00070004  /* "ptt parity error" */
+#define status_$mmu_pft_parity_error        0x00070005  /* "pft parity error" */
+#define status_$mmu_timeout                 0x00070006  /* "mmu timeout" */
 
 #endif /* FIM_H */

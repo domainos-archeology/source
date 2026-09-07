@@ -185,8 +185,8 @@ void APP_$RECEIVE(uint16_t sock_num, void *result, status_$t *status_ret)
         return;
     }
     memset(r, 0, sizeof(*r));
-    r->reply = MOCK_REPLY_VA;
-    r->data  = MOCK_DATA_VA;
+    r->reply = ARCH_PTR_TO_VA(MOCK_REPLY_VA);
+    r->data  = ARCH_PTR_TO_VA(MOCK_DATA_VA);
     r->data_pages[0] = 0x1000;
     r->data_pages[1] = 0x2000;
     r->hdr_f06 = 0;                 /* src_node_or */
@@ -382,10 +382,10 @@ static void run_request(const asknode_request_t *req, uint16_t len)
 TEST(record_layouts)
 {
     /*
-     * app_$receive_rec_t carries two real pointers so that host mocks can
-     * hand back host addresses; its m68k size and offsets are pinned by the
-     * _Static_asserts in app/app.h.  What must hold on both is the field
-     * order the function depends on.
+     * app_$receive_rec_t.reply and .data are target virtual addresses, so
+     * the record lays out identically on the host and its _Static_asserts in
+     * app/app.h now run unguarded.  The field order the function depends on
+     * is checked here as well.
      */
     ASSERT_TRUE(offsetof(app_$receive_rec_t, reply) <
                 offsetof(app_$receive_rec_t, data));
@@ -869,6 +869,17 @@ TEST(failed_receive_returns_early)
 
 int main(void)
 {
+    uintptr_t lo;
+
+    /*
+     * app_$receive_rec_t.reply and .data hold 32-bit target virtual
+     * addresses, so the mock records the server dereferences have to sit in
+     * an arena the ARCH_HOST_VA_BASE round trip can reach.
+     */
+    lo = (uintptr_t)&mock_reply_hdr;
+    if ((uintptr_t)mock_payload < lo) lo = (uintptr_t)mock_payload;
+    ARCH_HOST_VA_BASE = lo - 0x1000u;
+
     printf("Running ASKNODE_$SERVER tests...\n\n");
 
     RUN_TEST(record_layouts);

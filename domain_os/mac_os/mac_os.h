@@ -28,6 +28,7 @@
 #define MAC_OS_H
 
 #include "base/base.h"
+#include "ml/ml.h"
 
 /*
  * ============================================================================
@@ -128,6 +129,23 @@ typedef struct mac_os_$channel_t {
                                 /*   Bit 1 (0x002): Channel open */
                                 /*   Bits 2-7: Owner AS_ID << 2 */
 } mac_os_$channel_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(mac_os_$channel_t, socket) == 0x08,
+               "mac_os_$channel_t.socket");
+_Static_assert(__builtin_offsetof(mac_os_$channel_t, flags) == 0x12,
+               "mac_os_$channel_t.flags");
+_Static_assert(sizeof(mac_os_$channel_t) == 20, "mac_os_$channel_t must be 20 bytes");
+#endif
+
+/* mac_os_$channel_t.flags bits, as the word at entry offset 0x12 */
+#define MAC_OS_CHANNEL_PROMISCUOUS  0x0100  /* set from mac_$open_params_t.flags bit 7 */
+#define MAC_OS_CHANNEL_IN_USE       0x0200  /* btst #9 in MAC_$CLOSE (0x00E0BAA8) */
+#define MAC_OS_CHANNEL_OWNER_MASK   0xFC00  /* owner AS id, shifted left by 10 */
+#define MAC_OS_CHANNEL_OWNER_SHIFT  10
+
+/* Value MAC_$CLOSE writes into .socket to mark the channel free */
+#define MAC_OS_CHANNEL_NO_SOCKET    0xE1
 
 /*
  * Port info entry (8 bytes)
@@ -295,13 +313,15 @@ typedef struct mac_os_$buf_desc_t {
  *         them all before setting hdr_prebuilt.
  *
  * xns/idp_send.c builds one of these at A6-0x88 (source-tvrs, closed).
- * TODO(source-5lqz): 0x08..0x17 is copied verbatim by MAC_$SEND
- * (0x00E0BBC2 "moveq #0x5" = 6 longwords from the user's record) but no
- * driver seen so far reads it.
+ * TODO(source-txfx): 0x08..0x17 is copied verbatim by MAC_$SEND
+ * (0x00E0BBC2 "moveq #0x5" + dbf = 6 longwords from the user's record, so
+ * bytes 0x00..0x17 move as one block) but no code found so far reads it.
+ * The bead records the hypothesis that the whole 24 bytes are one
+ * variable-length link address rather than an 8-byte one plus 16 spare.
  */
 typedef struct mac_os_$send_pkt_t {
     mac_os_$link_addr_t link_addr;      /* 0x00: filled in by MAC_OS_$ARP */
-    uint8_t     _unknown_08[0x10];      /* 0x08: see the TODO above */
+    uint8_t     _unknown_08[0x10];      /* 0x08: see the TODO(source-txfx) above */
     int8_t      is_broadcast;           /* 0x18: Pascal boolean, 0xFF = true */
     uint8_t     _pad_19[3];             /* 0x19 */
     mac_os_$buf_desc_t hdr_desc;        /* 0x1C: header buffer chain */
@@ -341,8 +361,17 @@ _Static_assert(sizeof(mac_os_$send_pkt_t) == 0x4C, "mac_os_$send_pkt_t must be 0
  */
 
 extern mac_os_$port_pkt_table_t MAC_OS_$PORT_PKT_TABLES[MAC_OS_MAX_PORTS];
+/*
+ * MAC_OS_$CHANNEL_TABLE - per-channel receive state, 10 entries of 20 bytes
+ * Address: 0x00E23130 (MAC_OS_$DATA + 0x7A0); see mac_os/mac_os_data.c for
+ * how the base is pinned.
+ */
 extern mac_os_$channel_t MAC_OS_$CHANNEL_TABLE[MAC_OS_MAX_CHANNELS];
-extern void *MAC_OS_$EXCLUSION;
+/*
+ * MAC_OS_$EXCLUSION - lock guarding MAC_OS_$CHANNEL_TABLE
+ * Address: 0x00E231F8 (MAC_OS_$DATA + 0x868)
+ */
+extern ml_$exclusion_t MAC_OS_$EXCLUSION;
 extern mac_os_$port_info_t MAC_OS_$PORT_INFO_TABLE[MAC_OS_MAX_PORTS];
 
 /*

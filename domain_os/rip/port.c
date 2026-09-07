@@ -35,21 +35,24 @@ typedef struct xns_idp_$open_params_t {
 } xns_idp_$open_params_t;
 
 /*
- * Structure for SOCK_$PUT data (assembled from IDP packet)
+ * The record RIP_$STD_DEMUX hands SOCK_$PUT is a sock_$pkt_info_t, not a
+ * private layout (bead source-dxxz).  The frame local starts at A6-0x40 and
+ * every store lands on one of that record's fields:
  *
- * This is the data structure passed to SOCK_$PUT when queuing
- * RIP packets for processing by the RIP server.
+ *   00e15a52  move.l (0x1c,A0),(-0x40,A6)   +0x00  hdr
+ *   00e15a3c  move.l (0x26,A0),(-0x3c,A6)   +0x04  src_addr
+ *   00e15a42  move.w (0x2a,A0),(-0x38,A6)   +0x08  src_port
+ *   00e15a4a  move.w (0x2c,A0),D0w / move.l D0,(-0x34,A6)
+ *                                            +0x0C  dst_addr, zero-extended
+ *   00e15a36  move.w #0x2,(-0x30,A6)        +0x10  flags = SOCK_PKT_FLAG_XNS
+ *   00e15a74  clr.w (-0x2e,A6)              +0x12  n_hops = 0
+ *   00e15a5e  move.w (0x36,A0),(-0x16,A6)   +0x2A  data_len
+ *   00e15a58  move.w (0x1a,A0),(-0x14,A6)   +0x2C  hdr_len
+ *   00e15a6c  four "move.l (A1)+,(A2)+"     +0x30  data_pages[4] from pkt+0x38
+ *
+ * The hops array at +0x14..+0x29 is left as the frame found it, which is why
+ * the function reserves 0x40 bytes and writes only these fields.
  */
-typedef struct rip_$demux_data_t {
-    uint32_t    src_network;        /* 0x00: Source network address */
-    uint32_t    dest_network;       /* 0x04: Destination network address */
-    uint16_t    dest_socket;        /* 0x08: Destination socket */
-    uint32_t    pkt_length;         /* 0x0A: Packet data length (extended to 32-bit) */
-    uint16_t    _reserved;          /* 0x0E: Reserved/padding */
-    uint16_t    checksum;           /* 0x10: Checksum from IDP header */
-    uint16_t    rip_length;         /* 0x12: RIP data length */
-    uint8_t     rip_data[16];       /* 0x14: RIP packet data */
-} rip_$demux_data_t;
 
 /* Status code returned on successful packet queue */
 #define status_$sock_packet_queued      0x3B0016
@@ -141,43 +144,47 @@ void RIP_$STD_DEMUX(idp_$packet_t *pkt, uint16_t *param_2, uint16_t *param_3,
                     void *param_4, status_$t *status_ret)
 {
     int8_t result;
-    rip_$demux_data_t local_data;
+    sock_$pkt_info_t rec;           /* A6-0x40 */
+    int i;
 
-    /* Extract destination info */
-    local_data.dest_network = pkt->dest_network;
-    local_data.dest_socket = pkt->dest_socket;
-    local_data.pkt_length = (uint32_t)pkt->pkt_length;
+    (void)param_4;                  /* the 0x14 argument is never read */
 
-    /* Extract source info */
-    local_data.src_network = pkt->src_network;
-    local_data.checksum = pkt->checksum;
-    local_data.rip_length = pkt->rip_length;
+    /* 0xE15A36: the frame arrived over XNS ("standard") routing */
+    rec.flags = SOCK_PKT_FLAG_XNS;
 
-    /* Reserved/padding set to zero */
-    local_data._reserved = 0;
+    /* 0xE15A3C / 0xE15A42 */
+    rec.src_addr = pkt->dest_network;
+    rec.src_port = pkt->dest_socket;
 
-    /* Copy RIP data (16 bytes from offset 0x38) */
-    local_data.rip_data[0] = pkt->rip_data[0];
-    local_data.rip_data[1] = pkt->rip_data[1];
-    local_data.rip_data[2] = pkt->rip_data[2];
-    local_data.rip_data[3] = pkt->rip_data[3];
-    local_data.rip_data[4] = pkt->rip_data[4];
-    local_data.rip_data[5] = pkt->rip_data[5];
-    local_data.rip_data[6] = pkt->rip_data[6];
-    local_data.rip_data[7] = pkt->rip_data[7];
-    local_data.rip_data[8] = pkt->rip_data[8];
-    local_data.rip_data[9] = pkt->rip_data[9];
-    local_data.rip_data[10] = pkt->rip_data[10];
-    local_data.rip_data[11] = pkt->rip_data[11];
-    local_data.rip_data[12] = pkt->rip_data[12];
-    local_data.rip_data[13] = pkt->rip_data[13];
-    local_data.rip_data[14] = pkt->rip_data[14];
-    local_data.rip_data[15] = pkt->rip_data[15];
+    /* 0xE15A48: "clr.l D0 / move.w (0x2c,A0),D0w" - a zero-extended word */
+    rec.dst_addr = (uint32_t)pkt->pkt_length;
 
-    /* Queue packet to RIP socket (socket 8) */
-    result = SOCK_$PUT(RIP_SOCKET, (void *)&local_data, 0, *param_2, *param_3);
+    /* 0xE15A52 / 0xE15A58 / 0xE15A5E */
+    rec.hdr = pkt->src_network;
+    rec.hdr_len = pkt->checksum;
+    rec.data_len = pkt->rip_length;
 
-    /* If successful (result >= 0), set status indicating packet queued */
+    /*
+     * 0xE15A64-0xE15A72: four "move.l (A1)+,(A2)+" from pkt+0x38.  The
+     * source is a byte array in the header record, so each longword is
+     * rebuilt big-endian here rather than memcpy'd: that keeps the VALUE the
+     * m68k would have loaded on a little-endian host too.
+     */
+    for (i = 0; i < 4; i++) {
+        rec.data_pages[i] =
+            ((uint32_t)pkt->rip_data[i * 4 + 0] << 24) |
+            ((uint32_t)pkt->rip_data[i * 4 + 1] << 16) |
+            ((uint32_t)pkt->rip_data[i * 4 + 2] << 8) |
+            ((uint32_t)pkt->rip_data[i * 4 + 3]);
+    }
+
+    /* 0xE15A74 */
+    rec.n_hops = 0;
+
+    /* 0xE15A8E: SOCK_$PUT(8, &rec, 0, *param_2, *param_3) */
+    result = SOCK_$PUT(RIP_SOCKET, &rec, 0, *param_2, *param_3);
+
+    /* 0xE15A98 "tst.b D0b / bmi" - a negative result skips the store */
     if (result >= 0) {
         *status_ret = status_$sock_packet_queued;
     }

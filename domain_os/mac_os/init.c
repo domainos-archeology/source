@@ -45,7 +45,7 @@ void MAC_OS_$INIT(void)
     uint16_t node_lo;
 
     /* Initialize the exclusion lock */
-    ML_$EXCLUSION_INIT((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
+    ML_$EXCLUSION_INIT(&MAC_OS_$EXCLUSION);
 
     /* Get the route port pointer array */
     route_portp = (void **)0xE26EE8;

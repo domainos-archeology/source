@@ -58,6 +58,10 @@ void MAC_OS_$SEND(int16_t *channel, mac_os_$send_pkt_t *pkt_desc,
     status_$t buffer_status;    /* A6-0x24 */
     uint32_t data_buf_handle;   /* A6-0x30: data page (ppn << 10) */
 
+    /* Uplevel state of the nested MAC_OS_$COPY_BUFFER_DATA */
+    mac_os_$buf_desc_t *copy_chain;  /* A6-0x1c: current chain entry */
+    int16_t copy_offset;             /* A6-0x36: offset within that entry */
+
     *bytes_sent = 0;
     *status_ret = status_$ok;
     header_ptr = 0;
@@ -143,9 +147,17 @@ buffer_error:
     }
     /* Large packet (> 0x400) - needs both buffers */
 
-    /* Reset buffer tracking for copy */
+    /*
+     * Reset buffer tracking for the copy.  0x00E0B6AE:
+     *   move.l A0,(-0x1c,A6)     ; A0 = &pkt_desc->hdr_desc
+     *   clr.w  (-0x36,A6)
+     * These two frame slots are the uplevel variables MAC_OS_$COPY_BUFFER_DATA
+     * reads and writes through its static link, so they are passed to it by
+     * address below.
+     */
     overflow_length = 0;
-    /* buffer_chain is pkt_desc+0x1C */
+    copy_chain = &pkt_desc->hdr_desc;
+    copy_offset = 0;
 
     /* 0x00E0B6B8: pea (-0x2c,A6) then pea (-0x34,A6) - phys first, VA second */
     NETBUF_$GET_HDR(&header_phys, &header_ptr);
@@ -167,7 +179,8 @@ buffer_error:
         }
 
         /* Copy data to header buffer */
-        MAC_OS_$COPY_BUFFER_DATA(&header_ptr, overflow_length);
+        MAC_OS_$COPY_BUFFER_DATA(&header_ptr, overflow_length,
+                                 &copy_chain, &copy_offset);
     }
 
     if (use_data_buf < 0) {
@@ -185,7 +198,8 @@ buffer_error:
         *(uint32_t *)((uint8_t *)pkt_desc + 0x3C) = data_buf_handle;
 
         /* Copy remaining data to data buffer */
-        MAC_OS_$COPY_BUFFER_DATA(&data_ptr, total_length);
+        MAC_OS_$COPY_BUFFER_DATA(&data_ptr, total_length,
+                                 &copy_chain, &copy_offset);
 
         /* Return the VA */
         NETBUF_$RTNVA(&data_ptr);

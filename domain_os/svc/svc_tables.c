@@ -64,8 +64,8 @@
 #include "stop/stop.h"
 
 /*
- * SVC_$INVALID_SYSCALL, SVC_$UNIMPLEMENTED and the not-yet-identified
- * handlers FUN_00e0aa04 / FUN_00e0a9c2 are declared in svc/svc_internal.h.
+ * SVC_$INVALID_SYSCALL and SVC_$UNIMPLEMENTED are declared in
+ * svc/svc_internal.h.
  */
 
 /*
@@ -79,7 +79,7 @@
  */
 void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE] = {
     /* 0x00 */ PROC2_$DELETE,
-    /* 0x01 */ FUN_00e0aa04,              /* TODO(source-cry): returns FIM addr for AS */
+    /* 0x01 */ FIM_$GET_FIM_ADDR,
     /* 0x02 */ SVC_$INVALID_SYSCALL,
     /* 0x03 */ DTTY_$RELOAD_FONT,
     /* 0x04 */ FILE_$UNLOCK_ALL,
@@ -125,7 +125,7 @@ void *SVC_$TRAP0_TABLE[SVC_TRAP0_TABLE_SIZE] = {
 void *SVC_$TRAP1_TABLE[SVC_TRAP1_TABLE_SIZE] = {
     /* 0x00 */ SVC_$INVALID_SYSCALL,
     /* 0x01 */ SVC_$INVALID_SYSCALL,
-    /* 0x02 */ FUN_00e0a9c2,              /* TODO(source-cry): sets FIM user address */
+    /* 0x02 */ FIM_$INSTALL,
     /* 0x03 */ NETWORK_$READ_SERVICE,
     /* 0x04 */ PROC1_$GET_CPUT,
     /* 0x05 */ SET_LITES_LOC,

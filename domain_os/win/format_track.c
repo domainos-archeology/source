@@ -9,10 +9,11 @@
  * with GO = 3, waits for the drive's eventcount or a 0x28-tick clock
  * timeout, and checks the resulting drive status - up to five times
  * (`moveq #0x4,D2` + `dbf`, 0x00E196C8 / 0x00E19744).  On persistent failure
- * it invalidates the request's volume and records the status in the request.
+ * it clears the requesting process's pending-I/O byte and records the status
+ * in the request.
  *
  * This is the Winchester twin of FLP_FORMAT_TRACK (0x00E3DD5C); the two share
- * the volume-invalidation idiom byte for byte.
+ * that same pending-I/O idiom byte for byte.
  *
  * Original address: 0x00E196AA
  * Size: 204 bytes
@@ -104,11 +105,12 @@ void WIN_$FORMAT_TRACK(void *dev_entry, win_$request_t *req)
     }
 
     /*
-     * 0x00E1974C-0x00E19768.  The request's volume number is 1-based against
-     * the disk subsystem's per-volume table, and the byte cleared is that
-     * entry's +0x18.  The identical five instructions appear in WIN_$DO_IO
-     * (0x00E1994A) and FLP_FORMAT_TRACK (0x00E3DDB0).
+     * 0x00E1974C-0x00E19768.  The byte cleared is +0x18 of the requesting
+     * process's disk slot, i.e. disk_$per_proc_t.io_pending; the index is the
+     * process id the request carries at +0x1E.  The identical five
+     * instructions appear in WIN_$DO_IO (0x00E1994A) and FLP_FORMAT_TRACK
+     * (0x00E3DDB0 / 0x00E3DFBC).
      */
-    WIN_VOLUME_MOUNTED(req->volume) = 0;
+    WIN_IO_PENDING(req->proc_id) = 0;
     req->status = status;
 }

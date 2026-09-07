@@ -44,7 +44,7 @@ void SIO2681_$INIT(int16_t *int_vec_ptr, int16_t *chip_num_ptr,
 {
     volatile uint8_t *base_addr;
     int16_t chip_num;
-    int16_t table_offset;
+    sio2681_ptrs_entry_t *ptrs;
     status_$t status;
 
     chip_num = *chip_num_ptr;
@@ -63,8 +63,8 @@ void SIO2681_$INIT(int16_t *int_vec_ptr, int16_t *chip_num_ptr,
      * i.e. A1 = 0xFFB000 - 0x20 + chip_num * 0x20, so chip 1 sits at
      * 0xFFB000 and chip 2 at 0xFFB020.
      */
-    base_addr = (volatile uint8_t *)(SIO2681_BASE_ADDR - 0x20
-                                     + ((uint16_t)chip_num << 5));
+    base_addr = (volatile uint8_t *)ARCH_VA_TO_PTR(SIO2681_BASE_ADDR - 0x20 +
+                                                   ((uint16_t)chip_num << 5));
 
     /* Initialize chip structure */
     chip_struct->regs = base_addr;
@@ -76,62 +76,52 @@ void SIO2681_$INIT(int16_t *int_vec_ptr, int16_t *chip_num_ptr,
     base_addr[SIO2681_REG_IMR] = 0;
 
     /*
-     * Calculate table offset for channel pointers.
-     * Table indexed by chip_num << 4 (16 bytes per chip entry).
+     * 0xE333F4..0xE33428: the one per-chip record.  D0 = chip_num * 0x10 is
+     * an index off 0x00E2DF80 and every write is at a NEGATIVE displacement
+     * from it, so entry n is at 0x00E2DF80 + 0x10*(n-1): the table is
+     * 1-based, like the register base above.
      */
-    table_offset = (int16_t)chip_num << 4;
+    ptrs = &SIO2681_$PTRS[chip_num - 1];
+
+    /* 0xE33428 "move.l A3,(-0x8,A4,D0w*0x1)" */
+    ptrs->chip = chip_struct;
+    /* 0xE3342C "move.l (0x10,A6),(-0x10,A4,D0w*0x1)" */
+    ptrs->chan_a = chan_a_struct;
 
     /*
-     * Register chip and channel A in global tables.
-     *
-     * TODO(source-jvc9): the image has ONE table here, not three.  The
-     * assembly writes `move.l A3,(-0x8,A4,D0w*0x1)` (0x00E33428),
-     * `move.l (0x10,A6),(-0x10,A4,D0w*0x1)` (0x00E3342C) and
-     * `move.l (0x1c,A6),(-0xc,A3,D0w*0x1)` (0x00E3346E) with
-     * A3 = A4 = 0x00E2DF80 (Ghidra label SIO2681_$PTRS) and D0 = chip_num*0x10,
-     * i.e. a 1-based array of 16-byte {chan_a, chan_b, chip, unused} records
-     * whose entry 1 IS the label.  SIO2681_$CHANNELS (claimed 0x00E2DF70) and
-     * SIO2681_$CHIPS (claimed 0x00E2DF78) are fabricated, overlap each other,
-     * and land inside SIO2681_$DATA's storage.  The same bead covers
-     * SIO2681_$INT_VECTORS, which is really the 2-entry table at 0x00E351EC
-     * ({0x00E2DFA0, 0x00E2DFB0} = SIO2681_$INT1_RTE / SIO2681_$INT2_RTE) read
-     * as `move.l (-0x4,A5,D0w*0x1)` with A5 = 0x00E351EC (0x00E334F0).
+     * Initialize Channel A structure, 0xE33432..0xE3345C, in the order the
+     * original writes the fields.
      */
-    SIO2681_$CHIPS[chip_num] = chip_struct;
-    SIO2681_$CHANNELS[(chip_num << 1)] = chan_a_struct;
-
-    /*
-     * Initialize Channel A structure
-     */
-    chan_a_struct->regs = base_addr;  /* Channel A at base */
-    chan_a_struct->sio_desc = *chan_a_callback;
-    chan_a_struct->flags = 0x0002;    /* Flags: not channel B indicator used elsewhere */
-    chan_a_struct->int_bit = 0;       /* TxRDY is bit 0 for channel A */
-    chan_a_struct->peer = chan_b_struct;
-    chan_a_struct->chip = chip_struct;
-    chan_a_struct->tx_int_mask = 0;
-    chan_a_struct->reserved_14 = 0;
-    chan_a_struct->baud_support = 0;
+    chan_a_struct->regs = base_addr;            /* 0xE33436 move.l A1,(A4)   */
+    chan_a_struct->sio_desc = *chan_a_callback; /* 0xE3343C -> (0xc,A4)      */
+    chan_a_struct->tx_int_mask = 0x0002;        /* 0xE33440 move.w #2,(0x18) */
+    chan_a_struct->int_bit = 0;                 /* 0xE33446 clr.w (0x12,A4)  */
+    chan_a_struct->peer = chan_b_struct;        /* 0xE3344A -> (0x8,A4)      */
+    chan_a_struct->chip = chip_struct;          /* 0xE33450 -> (0x4,A4)      */
+    chan_a_struct->flags = 0;                   /* 0xE33454 clr.w (0x10,A4)  */
+    chan_a_struct->reserved_14 = 0;             /* 0xE33458 clr.l (0x14,A4)  */
+    chan_a_struct->baud_support = 0;            /* 0xE3345C clr.w (0x1a,A4)  */
 
     /* Issue reset/enable command to channel A */
     base_addr[SIO2681_REG_CRA] = SIO2681_CR_RX_ENABLE | SIO2681_CR_TX_ENABLE;  /* 0x05 */
 
-    /* Register channel B in global table */
-    SIO2681_$CHANNELS[(chip_num << 1) + 1] = chan_b_struct;
+    /* 0xE3346E "move.l (0x1c,A6),(-0xc,A3,D0w*0x1)" */
+    ptrs->chan_b = chan_b_struct;
 
     /*
-     * Initialize Channel B structure
-     * Channel B registers are at base + 0x10
+     * Initialize Channel B structure, 0xE33474..0xE334A4.  Its registers are
+     * at base + 0x10 (0xE33474 "lea (0x10,A1),A3"), and the 0x18/0x12 pair is
+     * the mirror image of channel A's.
      */
-    chan_b_struct->regs = base_addr + 0x10;
-    chan_b_struct->sio_desc = *chan_b_callback;
-    chan_b_struct->flags = 0x0000;    /* No special flags for B */
-    chan_b_struct->int_bit = 4;       /* TxRDY is bit 4 for channel B */
-    chan_b_struct->peer = chan_a_struct;
-    chan_b_struct->chip = chip_struct;
-    chan_b_struct->tx_int_mask = 0;
-    chan_b_struct->reserved_14 = 0;
-    chan_b_struct->baud_support = 0;
+    chan_b_struct->regs = base_addr + 0x10;     /* 0xE3347C move.l A3,(A4)   */
+    chan_b_struct->sio_desc = *chan_b_callback; /* 0xE33482 -> (0xc,A4)      */
+    chan_b_struct->tx_int_mask = 0;             /* 0xE33486 clr.w (0x18,A4)  */
+    chan_b_struct->int_bit = 4;                 /* 0xE3348A move.w #4,(0x12) */
+    chan_b_struct->peer = chan_a_struct;        /* 0xE33490 -> (0x8,A4)      */
+    chan_b_struct->chip = chip_struct;          /* 0xE33496 -> (0x4,A4)      */
+    chan_b_struct->flags = 0;                   /* 0xE3349C clr.w (0x10,A4)  */
+    chan_b_struct->reserved_14 = 0;             /* 0xE334A0 clr.l (0x14,A4)  */
+    chan_b_struct->baud_support = 0;            /* 0xE334A4 clr.w (0x1a,A4)  */
 
     /* Issue reset/enable command to channel B */
     (base_addr + 0x10)[SIO2681_REG_CRA] = SIO2681_CR_RX_ENABLE | SIO2681_CR_TX_ENABLE;
@@ -144,21 +134,26 @@ void SIO2681_$INIT(int16_t *int_vec_ptr, int16_t *chip_num_ptr,
     SIO2681_$SET_LINE(chan_b_struct, chan_b_params, 0x3FFF, &status);
 
     /*
-     * Set up interrupt vector.
-     * The vector table is indexed by int_vec_ptr (from chip_num).
-     * Interrupt vectors are at 0x60 + (vec_num * 4).
+     * 0xE334DE..0xE334F0: install this chip's interrupt stub.
      *
-     * Assembly shows:
-     *   move.w (A0),D1w  ; int_vec from param
-     *   lsl.w #2,D1w     ; *4 for vector table offset
+     *   move.w (A2),D0w                        ; chip_num
+     *   lsl.w #0x2,D0w                         ; chip_num * 4
+     *   move.w (A0),D1w                        ; the vector number
+     *   movea.l #0x64,A1
+     *   lsl.w #0x2,D1w
      *   move.l (-0x4,A5,D0w*0x1),(-0x4,A1,D1w*0x1)
      *
-     * This copies from SIO2681_$INT_VECTORS[chip_num] to interrupt vector table.
+     * with A5 = 0x00E351EC.  The source index is 1-based on chip_num, and the
+     * destination is 0x64 - 4 + vec*4 == the m68k exception vector table
+     * entry `vec`, i.e. the vector number is 1-based against 0x64, the level-1
+     * autovector (vector 25).
      */
     {
         int16_t vec_num = *int_vec_ptr;
-        m68k_ptr_t *int_vec_table = (m68k_ptr_t *)0x60;
-        int_vec_table[vec_num] = (m68k_ptr_t)SIO2681_$INT_VECTORS[chip_num];
+        m68k_ptr_t *vector_table = (m68k_ptr_t *)ARCH_VA_TO_PTR(0x64);
+
+        vector_table[vec_num - 1] =
+            ARCH_PTR_TO_VA((const void *)SIO2681_$INT_VECTORS[chip_num - 1]);
     }
 
     /* Enable interrupts (write final IMR value) */

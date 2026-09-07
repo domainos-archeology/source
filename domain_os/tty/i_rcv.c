@@ -29,7 +29,8 @@
 /*
  * Constant status cell passed by reference at 0x00E1BA92:
  *   pea (0x264,PC)  ->  0x00E1BA94 + 0x264 = 0x00E1BCF8
- * The cell at 0x00E1BCF8 holds 0x000B0008.
+ * The cell at 0x00E1BCF8 holds 0x000B0008, which the SR10.4 status database
+ * names "manual stop: type G<ret>G *+2<ret> to continue" (module 0x0b = term).
  */
 static const status_$t crash_status_00e1bcf8 = 0x000B0008;
 

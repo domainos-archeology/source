@@ -72,8 +72,14 @@ void NETWORK_$RING_INFO(void *net_handle, ring_info_t *ring_info,
         src = (uint32_t *)(resp_buf + RING_INFO_RESP_OFFSET);
         dst = (uint32_t *)ring_info;
 
-        /* Copy 30 longs (120 bytes) */
-        for (i = RING_INFO_LONGS; i >= 0; i--) {
+        /*
+         * Copy 30 longs (120 bytes).
+         *   moveq #0x1d,D0                    ; 0x00E103E6
+         *   move.l (A0)+,(A1)+                ; 0x00E103E8
+         *   dbf    D0w,0x00E103E8
+         * dbf runs the body count+1 times, so 0x1d = 29 gives 30 longs.
+         */
+        for (i = 0; i < RING_INFO_LONGS; i++) {
             *dst++ = *src++;
         }
 

@@ -154,7 +154,22 @@ void DISK_$SORT(void *dev_entry, void **queue_ptr)
                         }
 
                         if ((int16_t)(check_sector - start_sector) >= coalesce_limit) {
-                            /* TODO(source-pxn): Coalesce by calling FUN_00e3c370 */
+                            /*
+                             * TODO(source-pxn): NOT EMITTED.  The original
+                             * calls the nested procedure now named
+                             * disk_$sort_swap_entries (0x00E3C370, 116
+                             * bytes) here and at 0x00E3C48C / 0x00E3C560.
+                             * It takes no arguments: it reaches DISK_$SORT's
+                             * frame through the static link
+                             * ("movea.l (A6),A0" at 0x00E3C378) and rewrites
+                             * the five request-list pointers at parent
+                             * A6-0x04, -0x08, -0x0C, -0x10 and -0x14,
+                             * exchanging the two nodes at -0x0C and -0x10.
+                             * Flattening it needs those five locals of
+                             * DISK_$SORT (0x00E3C3E4, 436 bytes) identified
+                             * first, so that the helper can take them by
+                             * reference as a static function in this file.
+                             */
                             break;
                         }
 

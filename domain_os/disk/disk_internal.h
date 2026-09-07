@@ -241,6 +241,43 @@ _Static_assert(__builtin_offsetof(disk_$volume_t, part_volx) == 0x36,
  * Descriptor for volume `idx`.  The index multiply is done in 16-bit word
  * arithmetic (lsl.w/add.w), matching the original.
  */
+/*
+ * disk_$dev_ops_t - the driver entry vector a volume's dev_info points at
+ *
+ * disk_$volume_t.dev_info (+0x18) holds the address of a device descriptor
+ * whose first longword is the address of this vector.  Only the entry the
+ * disk module itself reaches by offset is named:
+ *
+ *   00e3db80  movea.l (0x18,A2),A1      ; A1 = vol->dev_info
+ *   00e3db84  movea.l (A1),A0           ; A0 = *dev_info = the vector
+ *   00e3db86  move.l  (0xc,A0),D2       ; D2 = the revalidate entry
+ *
+ * The entries below 0x0C are reached through other paths and are left
+ * unnamed rather than guessed.
+ */
+typedef struct disk_$dev_ops_t {
+    uint32_t    _entry_00;          /* 0x00 */
+    uint32_t    _entry_04;          /* 0x04 */
+    uint32_t    _entry_08;          /* 0x08 */
+    uint32_t    revalidate;         /* 0x0C: called by DISK_$REVALID */
+} disk_$dev_ops_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(disk_$dev_ops_t, revalidate) == 0x0C,
+               "disk_$dev_ops_t.revalidate");
+#endif
+
+/*
+ * DISK_$REVALID - dispatch a media-change revalidate to the driver
+ *
+ * Takes the volume descriptor itself, not an index: DISK_$REVALIDATE hands
+ * it DISK_VOL(vol_idx) (0x00E6C07A `pea (-0x48,A0,D0w*0x1)` with
+ * A0 = 0x00E7A290 and D0 = vol_idx * 0x48).
+ *
+ * Original address: 0x00E3DB74
+ */
+void DISK_$REVALID(struct disk_$volume_t *vol);
+
 #define DISK_VOL(idx) \
     ((disk_$volume_t *)(DISK_VOLUME_BASE + \
                         (int16_t)((idx) * DISK_VOLUME_SIZE) + \
@@ -616,16 +653,18 @@ void disk_$get_qblks_internal(int16_t count, int8_t mode, void *first_out, void 
 /*
  * disk_$rtn_qblks_internal - Return disk queue blocks
  *
- * Internal function to return previously allocated queue blocks.
+ * Puts a chain of queue blocks back on the module free list and wakes the
+ * queued read requests the returned blocks can satisfy.
  *
  * Parameters:
- *   vol_idx - Volume index
- *   blocks  - Pointer to blocks to return
- *   param_3 - Additional parameter
+ *   count - number of blocks in the chain
+ *   first - first block of the chain; when it is DMOD_RESERVE_BLOCK the
+ *           write-mode reserve is what is coming back
+ *   last  - last block of the chain, whose free_next link is rewritten
  *
  * Original address: 0x00e3c01a
  */
-void disk_$rtn_qblks_internal(int16_t vol_idx, void *blocks, void *param_3);
+void disk_$rtn_qblks_internal(int16_t count, void *first, void *last);
 
 /*
  * disk_$wait_io - Wait for disk I/O completion

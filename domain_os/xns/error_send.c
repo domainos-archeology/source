@@ -107,17 +107,29 @@ typedef struct xns_$error_send_frame_t {
  * exactly a mac_os_$buf_desc_t {length, address, next}, and both
  * 0x00E17880 and 0x00E17978 form its address with `lea (0x18,A0),Ax`.
  *
- * The three fields are lifted out by name rather than by aliasing the record,
- * because xns_$pkt_desc_t.header is declared as a C pointer: the record is
- * 0x48 bytes only on a 32-bit target, so an alias would read the wrong bytes
- * on the host (bead source-ronb).
+ * Since bead source-ronb the three fields really do lay out as that
+ * descriptor on the host as well (xns_$pkt_desc_t.header is a target VA, not
+ * a C pointer, and the record is packed), which the asserts below check.
+ * The head is still returned BY VALUE rather than as a pointer into the
+ * record: taking the address of a member of a packed struct is what
+ * -Waddress-of-packed-member exists to stop, and nothing ever writes through
+ * this descriptor.
  */
+_Static_assert(offsetof(mac_os_$buf_desc_t, length) == 0x00,
+               "buf_desc.length at +0x00");
+_Static_assert(offsetof(xns_$pkt_desc_t, header) - offsetof(xns_$pkt_desc_t, data_len) ==
+               offsetof(mac_os_$buf_desc_t, address),
+               "buf_desc.address lines up with pkt_desc.header");
+_Static_assert(offsetof(xns_$pkt_desc_t, iov) - offsetof(xns_$pkt_desc_t, data_len) ==
+               offsetof(mac_os_$buf_desc_t, next),
+               "buf_desc.next lines up with pkt_desc.iov");
+
 static mac_os_$buf_desc_t xns_$pkt_head_desc(const xns_$pkt_desc_t *packet_info)
 {
     mac_os_$buf_desc_t head;
 
     head.length  = (int32_t)packet_info->data_len;
-    head.address = ARCH_PTR_TO_VA(packet_info->header);
+    head.address = packet_info->header;     /* already a target VA */
     head.next    = packet_info->iov;
     return head;
 }

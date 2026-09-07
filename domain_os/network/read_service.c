@@ -41,6 +41,6 @@ void NETWORK_$READ_SERVICE(uint32_t *result_ptr)
          * Return 0 in high word, remote pool in low word.
          * Original code uses separate word writes for big-endian layout.
          */
-        *result_ptr = (uint32_t)NETWORK_$REMOTE_POOL;
+        *result_ptr = (uint32_t)(uint16_t)NETWORK_$REMOTE_POOL;
     }
 }

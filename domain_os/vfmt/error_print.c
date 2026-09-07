@@ -37,8 +37,23 @@
 /*
  * ERROR_$PRINT - Print formatted error message
  *
- * This is implemented as a direct call to VFMT_$WRITE since that's
- * what the original thunk ultimately calls.
+ * Flattening of the procedure-variable dispatch.  Verified against the
+ * image: the descriptor at 0x00E825F4 is
+ *
+ *   00e825f4  41 fa ff fe   lea (-0x2,%pc),%a0   ; A0 = 0x00E825F4
+ *   00e825f8  4e f9 00 e6 b0 a4  jmp VFMT_$WRITEN ; the thunk, 0x00E6B0A4
+ *   00e825fe  00 e6 af e2   installed routine    = VFMT_$WRITE
+ *   00e82602  00 00         unused
+ *
+ * and the thunk (vfmt/sau2/writen.s) calls that routine with exactly two
+ * arguments: the caller's first stack argument (the format pointer) and the
+ * *address* of the caller's second stack argument.  So the whole chain is
+ *
+ *   ERROR_$PRINT(format, a1, a2, ...) -> VFMT_$WRITE(format, &a1)
+ *
+ * which is what the va_list below stands in for: on m68k a va_list is the
+ * address of the next stack argument, so `ap` after va_start(ap, format) is
+ * the same pointer the thunk computes with `pea (0xc,%sp)`.
  *
  * Parameters:
  *   format - Format string (Domain/OS VFMT format, not printf)
@@ -52,14 +67,7 @@ void ERROR_$PRINT(const char *format, ...)
     va_list args;
     va_start(args, format);
 
-    /*
-     * In the original code, this calls through the procedure variable
-     * mechanism to VFMT_$WRITE. We call VFMT_$WRITE directly here.
-     *
-     * TODO(source-bu8): The original may have passed args differently - verify
-     * by checking actual call sites in the assembly.
-     */
-    VFMT_$WRITE(format, args);
+    VFMT_$WRITE(format, (void *)args);
 
     va_end(args);
 }

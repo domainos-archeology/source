@@ -120,7 +120,11 @@ void NET_IO_$COPY_PACKET(uint32_t *hdr_src_p, uint16_t hdr_len,
  * OS_$INIT stores the result in NETWORK_$DISKLESS.
  *
  * Original address: 0x00E31C14
- * TODO: no C implementation yet.
+ * TODO(source-8qa7): NOT EMITTED.  132 bytes at 0x00E31C14..0x00E31C97;
+ * only the prototype exists, so OS_$INIT's call does not link.  Missing:
+ * the boot-device code classification (2/3, 6, 8) and the diskless-path
+ * store of the boot-info low word.  Tracked in the net_io link inventory
+ * as source-8qa7.
  */
 char NET_IO_$BOOT_DEVICE(short boot_device, short param);
 
@@ -132,7 +136,10 @@ char NET_IO_$BOOT_DEVICE(short boot_device, short param);
  * at 0x12(A6); result returned in D0.w.
  *
  * Original address: 0x00E5A4A4
- * TODO: no C implementation yet; called from RING_$INIT and ROUTE_$SERVICE.
+ * TODO(source-8qa7): NOT EMITTED.  538 bytes at 0x00E5A4A4..0x00E5A6B9;
+ * only the prototype exists, so the RING_$INIT and ROUTE_$SERVICE calls do
+ * not link.  Missing: the whole port-table allocation, driver binding and
+ * queue setup body.  Tracked in the net_io link inventory as source-8qa7.
  */
 int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
                             void *driver, uint16_t queue_length,

@@ -77,8 +77,8 @@ void MSG_$$RCV_INTERNAL(uint16_t socket,
         return;
     }
 
-    payload = (const uint8_t *)rec.data;             /* 0xE59584 */
-    reply = (const msg_$reply_hdr_t *)rec.reply;     /* 0xE59588 */
+    payload = (const uint8_t *)ARCH_VA_TO_PTR(rec.data);   /* 0xE59584 */
+    reply = (const msg_$reply_hdr_t *)ARCH_VA_TO_PTR(rec.reply); /* 0xE59588 */
 
     /* 0xE5958C - 0xE595C0 */
     *dest_net  = rec.hdr_f06;
@@ -120,7 +120,7 @@ void MSG_$$RCV_INTERNAL(uint16_t socket,
         ((msg_$reply_hdr_t *)reply)->template_len =
             (uint16_t)(reply->template_len - 0x10);
         payload += 0x10;
-        rec.data = (void *)payload;          /* 0xE59618 add.l D1,(-0x2c,A6) */
+        rec.data = ARCH_PTR_TO_VA(payload);  /* 0xE59618 add.l D1,(-0x2c,A6) */
     }
 
     /* 0xE5961C: bls, so the compare is unsigned */
@@ -131,14 +131,14 @@ void MSG_$$RCV_INTERNAL(uint16_t socket,
     *template_len_ret = template_len;                    /* 0xE59628 */
 
     /* 0xE59638 */
-    OS_$DATA_COPY((const char *)rec.data, (char *)template,
+    OS_$DATA_COPY((const char *)ARCH_VA_TO_PTR(rec.data), (char *)template,
                   (uint32_t)template_len);
 
     /*
      * 0xE59642: the netbuf page is the CURRENT rec.data rounded down to 1KB
      * - the original masks only the low word, which clears bits 0..9.
      */
-    netbuf_page = ARCH_PTR_TO_VA(rec.data) & 0xFFFFFC00u;
+    netbuf_page = rec.data & 0xFFFFFC00u;
     netbuf = (const uint8_t *)ARCH_VA_TO_PTR(netbuf_page);
 
     *ec_param1_ret = *(const uint16_t *)(netbuf + NETBUF_HDR_EC_PARAM1);

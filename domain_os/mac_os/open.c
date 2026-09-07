@@ -76,7 +76,7 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
     }
 
     /* Enter exclusion region */
-    ML_$EXCLUSION_START((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
+    ML_$EXCLUSION_START(&MAC_OS_$EXCLUSION);
 
     /* Find an available channel (one without IN_USE flag set) */
     channel = 0;
@@ -212,7 +212,7 @@ cleanup:
         chan_entry->callback = NULL;
     }
 
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
+    ML_$EXCLUSION_STOP(&MAC_OS_$EXCLUSION);
 #else
     /* Non-M68K implementation stub */
     (void)port_num;

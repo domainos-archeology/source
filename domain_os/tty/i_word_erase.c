@@ -28,9 +28,9 @@
  * characters as word separators for the word-erase function.
  * The bitmap is indexed as: byte[(0xFF - ch) >> 3], bit[ch & 7].
  *
- * TODO(source-qvt): This bitmap is initialized at runtime. The initial values
- * at 0xe2ddb4 are all zeros; the actual separator set is configured
- * during TTY initialization. Need to identify the initialization code.
+ * The table is statically initialized in the image, not built at runtime:
+ * byte[0x1b] = 0x01 and byte[0x1e] = 0x37 give the separator set
+ * { BS, HT, LF, FF, CR, space }.  See tty/tty_data.c for the decoding.
  *
  * Original address: 0x00e2ddb4 (A5 base)
  */

@@ -79,20 +79,31 @@
 #define status_$network_server_out_of_queued_buffers    0x00110026
 
 /*
- * Network service flags (bits in NETWORK_$ALLOWED_SERVICE)
+ * Network service flags.
  *
- * These flags control which network services are enabled:
+ * These are bits of the SERVICE WORD, which is the HIGH half of the
+ * NETWORK_$ALLOWED_SERVICE longword at 0xE24C3E: every access in the image
+ * is `move.w ...,(0x342,A5)` or `btst.b #n,(0x343,A5)` with A5 = 0xE248FC,
+ * and 0x343 is byte 1 of that longword.  As a longword bit number, flag bit
+ * n is bit n+16.
+ *
  *   Bit 0 (0x01): Paging service enabled
  *   Bit 1 (0x02): File service enabled
  *   Bit 2 (0x04): Network service active
  *   Bit 3 (0x08): Routing enabled (auto-set if routing ports exist)
  *   Bit 4 (0x10): Reserved
- *   Bit 18 (0x40000): Extended service info flag
  */
 #define NETWORK_SERVICE_PAGING      0x0001
 #define NETWORK_SERVICE_FILE        0x0002
 #define NETWORK_SERVICE_ACTIVE      0x0004
 #define NETWORK_SERVICE_ROUTING     0x0008
+#define NETWORK_SERVICE_RESERVED_4  0x0010
+
+/*
+ * NETWORK_SERVICE_EXTENDED as a longword mask: NETWORK_$READ_SERVICE tests it
+ * with `btst.b #0x2,(0x343,A1)` (0x00E71D8A), i.e. NETWORK_SERVICE_ACTIVE of
+ * the service word, which is bit 18 of the longword.
+ */
 #define NETWORK_SERVICE_EXTENDED    0x40000
 
 /*
@@ -111,8 +122,32 @@
 extern uint32_t NETWORK_$MOTHER_NODE;       /* 0xE24C0C - mother node ID */
 extern int16_t NETWORK_$REQUEST_SERVER_CNT;  /* 0xE24C1C (+0x320) */
 extern int16_t NETWORK_$PAGE_SERVER_CNT;     /* 0xE24C1E (+0x322) */
+/*
+ * NETWORK_$ALLOWED_SERVICE - one longword at 0xE24C3E (A5+0x342) covering
+ * two independently written halves:
+ *
+ *   bits 16..31  the service word (NETWORK_SERVICE_* above); its low byte,
+ *                0xE24C3F, is NETWORK_$CAPABLE_FLAGS
+ *   bits  0..15  NETWORK_$REMOTE_POOL, the remote buffer pool size that
+ *                NETWORK_$SET_SERVICE op 3 stores at A5+0x344 (0x00E0F526)
+ *
+ * NETWORK_$READ_SERVICE hands the whole longword out when the service is
+ * active (`move.l (0x342,A1),(A0)` at 0x00E71D92), which is why the two
+ * halves must share storage rather than being separate variables.
+ */
 extern uint32_t NETWORK_$ALLOWED_SERVICE;    /* 0xE24C3E (+0x342) - 32-bit */
-extern int16_t NETWORK_$REMOTE_POOL;         /* 0xE24C40 (+0x344) */
+
+/* The service word, bits 16..31 of the longword above. */
+#define NETWORK_$SERVICE_FLAGS  ((uint16_t)(NETWORK_$ALLOWED_SERVICE >> 16))
+#define NETWORK_$SET_SERVICE_FLAGS(w)                                        \
+    (NETWORK_$ALLOWED_SERVICE = (NETWORK_$ALLOWED_SERVICE & 0x0000FFFFu) |   \
+                                ((uint32_t)(uint16_t)(w) << 16))
+
+/* The remote pool size, bits 0..15 (0xE24C40, A5+0x344). */
+#define NETWORK_$REMOTE_POOL    ((int16_t)(uint16_t)NETWORK_$ALLOWED_SERVICE)
+#define NETWORK_$SET_REMOTE_POOL(w)                                          \
+    (NETWORK_$ALLOWED_SERVICE = (NETWORK_$ALLOWED_SERVICE & 0xFFFF0000u) |   \
+                                (uint32_t)(uint16_t)(w))
 extern int8_t NETWORK_$ACTIVITY_FLAG;        /* 0xE24C42 (+0x346) */
 extern char NETWORK_$DO_CHKSUM;
 /*
@@ -156,11 +191,15 @@ extern uint16_t NETWORK_$PAGOUT_RQST_CNT;     /* 0xE24C3C */
  * NETWORK_$CAPABLE_FLAGS - Network capability flags (bit 0 = network capable)
  *
  * Original address: 0xE24C3F, which is byte 1 of the NETWORK_$ALLOWED_SERVICE
- * longword at 0xE24C3E: bit n here is bit (16 + n) there.  network_data.c
- * makes the two names share storage wherever the toolchain allows it; see the
- * comment beside its definition.
+ * longword at 0xE24C3E: bit n here is bit (16 + n) there.  It is therefore
+ * not storage of its own but a view of that longword, spelled here as a shift
+ * so that it reads the same bits on any byte order.
+ *
+ * Read-only: no code in the image writes the byte.  NETWORK_$SET_SERVICE
+ * (0x00E2F5FC) writes the whole longword; REM_FILE_$SEND_REQUEST
+ * (0x00E63A3E) and REM_FILE_$SERVER (0x00E637FA) only test bits in it.
  */
-extern uint8_t NETWORK_$CAPABLE_FLAGS;
+#define NETWORK_$CAPABLE_FLAGS ((uint8_t)(NETWORK_$ALLOWED_SERVICE >> 16))
 
 /* Bit 16 of NETWORK_$ALLOWED_SERVICE == bit 0 of NETWORK_$CAPABLE_FLAGS */
 #define NETWORK_SERVICE_CAPABLE     0x00010000
@@ -450,10 +489,15 @@ void NETWORK_$REQUEST_SERVER(void);
  * ring_info_t - Token Ring network status information
  *
  * Structure returned by NETWORK_$RING_INFO containing status about
- * the token ring network. Total size is 122 bytes (30 longs + 1 word).
+ * the token ring network.  The size is pinned by the copy loop at
+ * 0x00E103E6..0x00E103EE (moveq #0x1d + dbf = 30 longs, then one word):
+ * 122 bytes.
  *
- * TODO(source-qvt): Determine the exact layout of this structure from network
- * protocol analysis.
+ * TODO(source-4omb): field layout unrecovered.  The kernel never interprets
+ * the bytes -- NETWORK_$RING_INFO copies them out of the response buffer and
+ * its only caller, ASKNODE_$INTERNET_INFO (0x00E645EA), forwards them to the
+ * requester -- so the layout comes from the ASKNODE wire protocol, not from
+ * the image.  Modelled as an opaque byte array until it is recovered.
  */
 typedef struct ring_info_t {
     uint8_t     data[122];      /* Raw ring info data */
@@ -530,7 +574,9 @@ void network_$fetch_diskless_info(int16_t cmd, uint32_t node);
  * NETWORK_$INIT - Initialize the network subsystem
  *
  * Original address: 0x00E2F684
- * TODO: no C implementation yet (declared for OS_$INIT).
+ * TODO(source-sdx1): NOT EMITTED.  358 bytes at 0x00E2F684..0x00E2F7F1;
+ * only the prototype exists, so OS_$INIT's call does not link.  Tracked in
+ * the network link inventory as source-sdx1.
  */
 void NETWORK_$INIT(void);
 
@@ -538,7 +584,9 @@ void NETWORK_$INIT(void);
  * NETWORK_$LOAD - Late network initialization (after PROC2_$INIT)
  *
  * Original address: 0x00E2F7F2
- * TODO: no C implementation yet (declared for OS_$INIT).
+ * TODO(source-sdx1): NOT EMITTED.  86 bytes at 0x00E2F7F2..0x00E2F847;
+ * only the prototype exists, so OS_$INIT's call does not link.  Tracked in
+ * the network link inventory as source-sdx1.
  */
 void NETWORK_$LOAD(void);
 
@@ -547,7 +595,9 @@ void NETWORK_$LOAD(void);
  * processes during OS_$SHUTDOWN.
  *
  * Original address: 0x00E71E78
- * TODO: no C implementation yet (declared for OS_$SHUTDOWN).
+ * TODO(source-sdx1): NOT EMITTED.  74 bytes at 0x00E71E78..0x00E71EC1;
+ * only the prototype exists, so OS_$SHUTDOWN's call does not link.  Tracked
+ * in the network link inventory as source-sdx1.
  */
 void NETWORK_$DISMISS_REQUEST_SERVERS(void);
 

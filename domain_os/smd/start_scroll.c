@@ -4,6 +4,14 @@
  * Initiates a hardware scroll operation on the display.
  *
  * Original address: 0x00E272A8 (trampoline), 0x00E15C68 (implementation)
+ *
+ * Resolved (bead source-a2ip): the original is hand-written assembly - no
+ * link/unlk, a bare "move.l A5,-(SP)" thunk, arguments read off SP at
+ * (0x8,SP)/(0xc,SP), a dispatch base handed in through A0 by the trampoline,
+ * and a call made by jumping INTO the dispatch block with "jsr (0x150,A5)" -
+ * so it now lives in smd/sau2/scroll.s.  What follows is a portable model of
+ * the same behaviour, compiled only when ARCH_M68K is not defined so the two
+ * do not collide at link time (the same convention as smd/start_blt.c).
  */
 
 #include "smd/smd_internal.h"
@@ -68,6 +76,8 @@
  *   movea.l (SP)+,A5             ; Restore A5
  *   rts
  */
+#if !defined(ARCH_M68K)
+
 void SMD_$START_SCROLL(smd_display_hw_t *hw, SMD_HW_REG_PTR ctrl_regs)
 {
     uint16_t blt_ctl;
@@ -98,3 +108,5 @@ void SMD_$START_SCROLL(smd_display_hw_t *hw, SMD_HW_REG_PTR ctrl_regs)
     /* Write to BLT control register to start the operation */
     ctrl_regs[0] = blt_ctl;
 }
+
+#endif /* !ARCH_M68K */

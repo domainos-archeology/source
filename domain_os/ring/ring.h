@@ -729,20 +729,29 @@ void RING_$STOP(uint16_t *unit_ptr, status_$t *status_ret);
  * Transmits a packet over the token ring network. Handles retries,
  * timeout management, and error reporting.
  *
- * @param unit_ptr      Pointer to unit number
- * @param hdr_pa        Header physical address
- * @param hdr_va        Header virtual address
- * @param data_info     Data buffer info (PA in high 32 bits, VA in low)
- * @param data_len      Data length
- * @param send_flags    Send flags output
- * @param result_flags  Result flags output
- * @param status_ret    Output: status code
+ * Ten arguments; the frame offsets are those of the original.
+ *
+ * @param unit_ptr      Pointer to the unit number word              (0x08)
+ * @param hdr_pa        Header DMA address                           (0x0C)
+ * @param hdr           The header being sent - msg_type, flags and
+ *                      chksum are all read or written               (0x10)
+ * @param hdr_len       Header byte count; HDR_CHKSUM is handed the
+ *                      ADDRESS of this slot (0xE75A00 "pea (0x14,A6)")
+ *                                                                   (0x14)
+ * @param data_desc     Four longwords describing the payload, copied
+ *                      wholesale into the frame (0xE759EC-0xE759F6)  (0x16)
+ * @param unused_1a     A longword parameter the body never reads     (0x1A)
+ * @param data_len      Payload byte count; 0 means header only       (0x1E)
+ * @param send_opts     Word whose bit 0 forbids retrying             (0x20)
+ * @param result_flags  Output: the result word (see ring/sendp.c)    (0x24)
+ * @param status_ret    Output: status code                           (0x28)
  *
  * Original address: 0x00E75916
  */
-void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, void *hdr_va,
-                 uint64_t data_info, uint16_t data_len,
-                 uint16_t *send_flags, uint16_t *result_flags,
+void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, ring_$pkt_hdr_t *hdr,
+                 uint16_t hdr_len, const uint32_t *data_desc,
+                 uint32_t unused_1a, uint16_t data_len,
+                 const uint16_t *send_opts, uint16_t *result_flags,
                  status_$t *status_ret);
 
 /*

@@ -52,7 +52,7 @@
  *
  * Original address: 0x00e6ab2a
  */
-void VFMT_$MAIN(const char *format, char *buf, int16_t *max_len,
+void VFMT_$MAIN(const char *format, char *buf, const int16_t *max_len,
                 int16_t *out_len, void *args);
 
 /*
@@ -71,27 +71,32 @@ void VFMT_$FORMATN(const char *format, char *buf, int16_t *max_len,
                    int16_t *out_len, ...);
 
 /*
- * VFMT_$WRITE - Write formatted output to console
+ * VFMT_$WRITE - Format and write to the console
  *
- * Formats a string and writes it directly to the console/terminal.
+ * Formats into a 200-byte buffer and writes the result to terminal line 1
+ * in chunks of at most 100 characters.  `args` is the address of the
+ * caller's argument list, not a value: the routine is reached through the
+ * VFMT_$WRITEN procedure-variable thunk (vfmt/sau2/writen.s), which
+ * computes that address from its own caller's stack.
  *
  * Original address: 0x00e6afe2
  */
-void VFMT_$WRITE(const char *format, ...);
+void VFMT_$WRITE(const char *format, void *args);
 
 /*
- * VFMT_$WRITEN - Write formatted output with length limit
+ * VFMT_$WRITEN - Procedure-variable dispatch thunk (hand-written assembly)
  *
- * Like VFMT_$WRITE but with a maximum output length.
+ * Takes the descriptor address in A0, not on the stack, so it has no C
+ * calling convention and no C prototype.  See vfmt/sau2/writen.s.
  *
  * Original address: 0x00e6b0a4
  */
-void VFMT_$WRITEN(const char *format, int16_t max_len, ...);
 
 /*
  * ERROR_$PRINT - Print formatted error message
  *
- * This is a procedure variable thunk that wraps VFMT_$WRITE.
+ * A 16-byte procedure-variable descriptor at 0x00e825f4 whose installed
+ * routine is VFMT_$WRITE; calls reach it through the VFMT_$WRITEN thunk.
  * Used throughout the kernel to print error messages to the console.
  *
  * Parameters:

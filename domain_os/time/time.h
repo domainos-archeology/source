@@ -60,12 +60,26 @@
 #define status_$time_queue_element_not_in_use       0x000D0009
 #define status_$time_queue_element_not_found        0x000D000A
 #define status_$time_cpu_time_limit_exceeded        0x000D000B
+#define status_$time_adjustment_out_of_range        0x000D000C
+#define status_$time_queue_element_already_in_use   0x000D000D
+#define status_$time_relative_time_is_too_large     0x000D000E
 
 /*
  * ============================================================================
  * Time Queue Structures
  * ============================================================================
  */
+
+/*
+ * time_$callback_arg_t - what a TIME_$Q_ADD_CALLBACK callback is handed
+ *
+ * TIME_$Q_SCAN_QUEUE's deferred path (0x00E16F4C..0x00E16F84) builds a local
+ * holding &elem->callback_arg and passes the ADDRESS of that local, so the
+ * callback's single argument is a "uint32_t **" whose target is the
+ * callback_arg longword.  SIO_$I_TSTART's direct-restart path builds the same
+ * two-level chain by hand (0x00E1C8F6..0x00E1C904).
+ */
+typedef uint32_t **time_$callback_arg_t;
 
 /*
  * Time queue header structure - 12 bytes
@@ -548,30 +562,46 @@ void TIME_$ADVANCE_CALLBACK(void *arg);
  */
 
 /*
+ * The two buffer arguments are in Unix `struct itimerval` order: the RELOAD
+ * INTERVAL first, the VALUE (time until the next expiry) second.  This is not
+ * a guess - the roles are pinned inside time_$set_itimer_internal
+ * (0x00E58D14):
+ *
+ *   - the second argument (0x0A) is handed to TIME_$Q_ADD_CALLBACK as its
+ *     `interval` (0x00E58E28 pushes it eighth) and is read back from the
+ *     queue element's interval field at +0x14 by time_$get_itimer_internal
+ *     (0x00E58CB4), so it is `it_interval`;
+ *   - the third argument (0x0E) is the `when` (0x00E58E44 pushes it second),
+ *     is the one whose being zero DISARMS the timer (0x00E58DD8 tst.l (A3)),
+ *     and is what get returns after subtracting the current clock
+ *     (0x00E58CEA SUB48), so it is `it_value`.
+ */
+
+/*
  * TIME_$SET_ITIMER - Set interval timer
  *
  * @param which: Pointer to timer type (0 = real, 1 = virtual)
- * @param value: Pointer to new value
- * @param interval: Pointer to new interval
- * @param ovalue: Pointer to receive old value
- * @param ointerval: Pointer to receive old interval
+ * @param interval: Pointer to the new reload interval (it_interval)
+ * @param value: Pointer to the new time-to-expiry (it_value); zero disarms
+ * @param ointerval: Pointer to receive the old reload interval
+ * @param ovalue: Pointer to receive the old time-to-expiry
  * @param status: Status return
  *
  * Original address: 0x00e58e58
  */
-void TIME_$SET_ITIMER(uint16_t *which, clock_t *value, clock_t *interval,
-                      clock_t *ovalue, clock_t *ointerval, status_$t *status);
+void TIME_$SET_ITIMER(uint16_t *which, clock_t *interval, clock_t *value,
+                      clock_t *ointerval, clock_t *ovalue, status_$t *status);
 
 /*
  * TIME_$GET_ITIMER - Get interval timer
  *
- * @param which: Pointer to timer ID
- * @param value: Pointer to receive current value
- * @param interval: Pointer to receive interval
+ * @param which: Pointer to timer type (0 = real, 1 = virtual)
+ * @param interval: Pointer to receive the reload interval (it_interval)
+ * @param value: Pointer to receive the remaining time (it_value)
  *
  * Original address: 0x00e58f06
  */
-void TIME_$GET_ITIMER(uint16_t *which, clock_t *value, clock_t *interval);
+void TIME_$GET_ITIMER(uint16_t *which, clock_t *interval, clock_t *value);
 
 /*
  * TIME_$SET_CPU_LIMIT - Set CPU time limit

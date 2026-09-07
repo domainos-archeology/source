@@ -274,8 +274,8 @@ static void reset_state(void)
     recv_calls = 0;
     recv_hdr.data_len = 0x20;
     recv_hdr.request_id = TEST_REQ_ID;
-    recv_template.reply = &recv_hdr;
-    recv_template.data = ARCH_VA_TO_PTR(0x0004AB57);
+    recv_template.reply = ARCH_PTR_TO_VA(&recv_hdr);
+    recv_template.data = 0x0004AB57;
     recv_template.data_pages[0] = 0;
 
     rtn_hdr_calls = 0;
@@ -454,7 +454,7 @@ TEST(ping_answered)
 
     reset_state();
     ec_wait_script[0] = 0;
-    recv_template.data = ARCH_VA_TO_PTR(0x0004AB57);
+    recv_template.data = 0x0004AB57;
     recv_template.data_pages[0] = 0x1234;
 
     ASSERT_EQ((int8_t)0xFF, PKT_$LIKELY_TO_ANSWER(&addr, &status));
@@ -466,7 +466,7 @@ TEST(ping_answered)
     /* 0x00E12B10 "andi.w #-0x400,D0w" only clears bits 0..9. */
     ASSERT_EQ(1, rtn_hdr_calls);
     ASSERT_EQ(0x0004A800, rtn_hdr_value);
-    ASSERT_EQ(0x0004AB57, ARCH_PTR_TO_VA(recv_template.data)); /* the record is untouched */
+    ASSERT_EQ(0x0004AB57, recv_template.data); /* the record is untouched */
 
     /* 0x00E12B24: only dumped when the first buffer slot is non-zero, and
      * the length is the header's data_len word. */
@@ -573,6 +573,13 @@ TEST(receive_failure_retries)
 
 int main(void)
 {
+    /*
+     * app_$receive_rec_t.reply holds a 32-bit target virtual address, so the
+     * mock header has to sit in an arena the round trip can reach.  The .data
+     * field is a literal VA the test picks, so it needs no arena.
+     */
+    ARCH_HOST_VA_BASE = (uintptr_t)&recv_hdr - 0x1000u;
+
     printf("PKT_$LIKELY_TO_ANSWER tests\n");
 
     RUN_TEST(builds_the_rip_destination_record);

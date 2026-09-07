@@ -24,6 +24,7 @@
  */
 
 #include "route/route_internal.h"
+#include "arch/arch.h"
 #include "rip/rip.h"
 #include "sock/sock.h"
 
@@ -167,10 +168,21 @@ void ROUTE_$CLOSE_PORT(void *port_info, status_$t *status_ret)
         ROUTE_$CLEANUP_WIRED();
 
         /*
-         * Clear the driver/callback pointer at offset 0x44
-         * Original: *(port+0x44) = NULL via indirect pointer
+         * 0x00E69F9A:
+         *   movea.l (0x44,A3),A0
+         *   clr.b   (A0)
+         * +0x44 is route_$port_t.driver_stats, the address of this port's
+         * route_$port_stats_t.  The instruction clears the *high byte of the
+         * flags word* in that block -- the byte ROUTE_$READ_USER_STATS hands
+         * back -- not the pointer itself.  Done as a word mask so it does not
+         * depend on the byte order.
          */
-        /* TODO(source-qvt): Identify this field - appears to be a callback pointer */
+        {
+            route_$port_stats_t *stats =
+                (route_$port_stats_t *)ARCH_VA_TO_PTR(port->driver_stats);
+
+            stats->flags &= 0x00FF;
+        }
     }
 
     /*

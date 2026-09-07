@@ -9,6 +9,7 @@
 #define WIN_INTERNAL_H
 
 #include "win/win.h"
+#include "disk/disk.h"   /* disk_$per_proc_t: the pending-I/O byte the driver clears */
 
 #include "time/time.h"
 #include "dma/dma.h"   /* check_dma_error */
@@ -79,34 +80,24 @@ status_$t FUN_00e194b4(uint16_t param_1, uint16_t cylinder);
 void FUN_00e19186(uint16_t unit, char status, uint16_t *out);
 
 /*
- * The disk subsystem's per-volume record table.
+ * The pending-I/O byte the WIN driver clears as it retires a request.
  *
- * DISK's A5 is 0x00E7A1E8, so its A5 + 0x378 is 0x00E7A560, and
- * DISK_$WRITE_MULTI addresses one record with `lea (0x0,A5,D0w*0x1),A3` plus
- * `(0x378,A3)` / `(0x384,A3)` (0x00E3CE3E / 0x00E3CE46) where D0 = 0x1C *
- * index -- a 0x1C-byte record, entry n at 0x00E7A560 + 0x1C * n.
+ * It is disk_$per_proc_t.io_pending (disk/disk.h): DISK_$DATA + 0x378 holds a
+ * 0x1C-byte slot per process, and both WIN_$FORMAT_TRACK (0x00E19764) and
+ * WIN_$DO_IO (0x00E1994A) reach the slot's +0x18 byte with the same five
+ * instructions,
  *
- * WIN_$FORMAT_TRACK (0x00E19764) and WIN_$DO_IO (0x00E1994A) invalidate a
- * volume with `clr.b (-0x4,A1,D1w*0x1)`, A1 = 0x00E7A560 and D1 = 0x1C *
- * req->volume -- that is entry (volume - 1) + 0x18, so a request's volume
- * number is 1-BASED against this table.  FLP_FORMAT_TRACK (0x00E3DDB0) and
- * 0x00E3DFBC use the identical five instructions.
+ *   move.b (0x1e,A0),D1b        ; the request's process id
+ *   lsl.w #0x2,D1w / move.w D1w,D7w / neg.w D1w / lsl.w #0x3,D7w
+ *   movea.l #0xe7a560,A1
+ *   add.w D7w,D1w               ; D1 = id * 0x1C
+ *   clr.b (-0x4,A1,D1w*0x1)
  *
- * TODO(source-8uxv): only this one byte is named; the 0x1C-byte record itself
- * has not been recovered and belongs in disk/disk.h.
+ * 0xE7A560 - 4 is 0x00E7A55C, which is (DISK_$DATA + 0x378) + 0x18: the index
+ * is the 0-based process id the request carries at +0x1E, NOT a volume number
+ * (the earlier "1-based volume table" reading came from taking 0x00E7A560 for
+ * the array base).  FLP_FORMAT_TRACK 0x00E3DDB0 and 0x00E3DFBC are identical.
  */
-#if defined(ARCH_M68K)
-#define WIN_VOLUME_TABLE ((volatile uint8_t *)0x00E7A560)
-#else
-#define WIN_VOLUME_TABLE_SIZE 0x1C0
-extern uint8_t WIN_$VOLUME_TABLE[WIN_VOLUME_TABLE_SIZE];
-#define WIN_VOLUME_TABLE (WIN_$VOLUME_TABLE)
-#endif
-
-#define WIN_VOLUME_ENTRY_SIZE 0x1C
-
-/* entry (volume - 1) + 0x18 */
-#define WIN_VOLUME_MOUNTED(volume)                                             \
-    (WIN_VOLUME_TABLE[(uint32_t)(volume) * WIN_VOLUME_ENTRY_SIZE - 4])
+#define WIN_IO_PENDING(proc_id) (DISK_$PER_PROC[(proc_id)].io_pending)
 
 #endif /* WIN_INTERNAL_H */

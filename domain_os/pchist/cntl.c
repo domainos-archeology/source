@@ -7,6 +7,15 @@
 #include "pchist/pchist_internal.h"
 #include "mst/mst.h"
 #include "math/math.h"
+#include "mst/mst.h"
+#include "arch/arch.h"
+
+/*
+ * Constant cell in this module's code region, passed by address with
+ * `pea (0xac,PC)` at 0x00E5CEFC: the maximum number of pages
+ * MST_$WIRE_AREA may add to PCHIST_$WIRE_PAGES.
+ */
+static const int16_t pchist_$max_wire_pages_00e5cfaa = 3;
 
 /*
  * Alignment flag for command 3
@@ -183,10 +192,34 @@ void PCHIST_$CNTL(
     PCHIST_$HISTOGRAM.enabled = 1;
 
     /*
-     * Wire the histogram buffer pages
-     * This ensures the buffer stays in memory during profiling
+     * Wire the histogram buffer pages so the sampler can touch them from an
+     * interrupt.  0x00E5CEF6:
+     *
+     *   pea     (0xe8604e).l          ; arg5 = &PCHIST_$WIRED_COUNT
+     *   pea     (0xac,PC)             ; arg4 = &pchist_$max_wire_pages
+     *                                 ;        (cell 0x00E5CFAA, value 3)
+     *   pea     (0xe85c18).l          ; arg3 = &PCHIST_$WIRE_PAGES[1]
+     *   lea     (0x934,A2),A0
+     *   move.l  A0,(-0x28,A6) ; pea (-0x28,A6)
+     *                                 ; arg2 = &end VA   (0x00E8604C)
+     *   lea     (0x50c,A2),A1
+     *   move.l  A1,(-0x2c,A6) ; pea (-0x2c,A6)
+     *                                 ; arg1 = &start VA (0x00E85C24)
+     *   jsr     MST_$WIRE_AREA
+     *
+     * A2 is 0x00E85718, so the wired range is A2+0x50C .. A2+0x934, i.e.
+     * PCHIST_$HISTOGRAM and the 0x428 bytes it occupies.  Both VAs are
+     * passed by address, through locals, exactly as here.
      */
-    /* TODO(source-qvt): MST_$WIRE_AREA call */
+    {
+        uint32_t hist_start_va = ARCH_PTR_TO_VA(&PCHIST_$HISTOGRAM);
+        uint32_t hist_end_va   = hist_start_va + (uint32_t)sizeof(PCHIST_$HISTOGRAM);
+
+        MST_$WIRE_AREA(&hist_start_va, &hist_end_va,
+                       &PCHIST_$WIRE_PAGES[1],
+                       &pchist_$max_wire_pages_00e5cfaa,
+                       &PCHIST_$WIRED_COUNT);
+    }
 
     /* Enable histogram collection */
     PCHIST_$CONTROL.histogram_enabled = -1;  /* 0xFF = enabled */

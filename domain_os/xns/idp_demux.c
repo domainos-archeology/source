@@ -107,7 +107,8 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
     *status_ret = status_$ok;               /* 0x00E184C0 clr.l (A0) */
     XNS_PACKETS_RECV() += 1;                /* 0x00E184C2 addq.l #1,(0x4,A5) */
 
-    header = pkt->d.header;                 /* 0x00E184CC movea.l (0x20,A1),A2 */
+    /* 0x00E184CC movea.l (0x20,A1),A2 - the field holds a target VA */
+    header = (xns_$idp_header_t *)ARCH_VA_TO_PTR(pkt->d.header);
 
     /*
      * 0x00E184D0..0x00E184E0: a frame whose IDP source host is the
@@ -214,7 +215,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
          */
         rec.mac_src_hi = pkt->d.mac_src_hi;     /* 0x00E1860A */
         rec.mac_src_lo = pkt->d.mac_src_lo;     /* 0x00E18610 */
-        rec.channel = chan;                     /* 0x00E1861A */
+        rec.channel = ARCH_PTR_TO_VA(chan);     /* 0x00E1861A */
         rec.data_len = pkt->d.data_len;         /* 0x00E18626 */
         rec.header = pkt->d.header;             /* 0x00E18628 */
         rec.iov = pkt->d.iov;                   /* 0x00E1862A */
@@ -279,7 +280,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
         fwd.data_len = ((uint32_t)pkt->d.pkt_len << 16) |
                        (uint32_t)pkt->d._unknown_2e;
 
-        fwd.header = header;                    /* 0x00E186C8 move.l A2 */
+        fwd.header = ARCH_PTR_TO_VA(header);    /* 0x00E186C8 move.l A2 */
 
         /* 0x00E186CC `move.w (0x1E,A0)': low word of the length at +0x1C. */
         fwd.header_len = (uint16_t)pkt->d.data_len;
@@ -360,7 +361,8 @@ void XNS_IDP_$DEMUX(xns_$pkt_desc_t *rec, uint16_t *port_type,
     /* 0x00E18BA2: the flags word at record +0x10 starts out as "IDP". */
     out.flags = XNS_SOCK_PKT_F_IDP;
 
-    header = rec->header;                   /* 0x00E18BA8 move.l (0x1C,A0),D0 */
+    /* 0x00E18BA8 move.l (0x1C,A0),D0 */
+    header = (xns_$idp_header_t *)ARCH_VA_TO_PTR(rec->header);
 
     /*
      * 0x00E18BB2..0x00E18BC4: destination host is the all-ones broadcast
@@ -388,7 +390,7 @@ void XNS_IDP_$DEMUX(xns_$pkt_desc_t *rec, uint16_t *port_type,
      */
     out.data_len = (uint32_t)rec->pkt_len;
 
-    out.header = header;                    /* 0x00E18BEE */
+    out.header = ARCH_PTR_TO_VA(header);    /* 0x00E18BEE */
 
     /* 0x00E18BF2 `move.w (0x1A,A0)': low word of the length at +0x18. */
     out.header_len = (uint16_t)rec->data_len;
@@ -402,7 +404,8 @@ void XNS_IDP_$DEMUX(xns_$pkt_desc_t *rec, uint16_t *port_type,
 
     out.reserved_12 = 0;                    /* 0x00E18C0E clr.w (-0x2E,A6) */
 
-    chan = rec->channel;                    /* 0x00E18C12 movea.l (0x30,A0),A3 */
+    /* 0x00E18C12 movea.l (0x30,A0),A3 */
+    chan = (xns_$channel_t *)ARCH_VA_TO_PTR(rec->channel);
 
     /* 0x00E18C16: no user socket bound to this channel. */
     if (chan->user_socket == XNS_NO_SOCKET) {

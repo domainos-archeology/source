@@ -47,7 +47,40 @@ typedef struct route_$driver_info_t {
     uint16_t    _unknown4;      /* 0x04 */
     uint8_t     _unknown6;      /* 0x06 */
     uint8_t     flags;          /* 0x07: ROUTE_$VALIDATE_PORT reads this byte */
+    uint8_t     _unknown8[0x1C];/* 0x08 */
+    uint32_t    set_service;    /* 0x24: driver entry point NETWORK_$SET_SERVICE
+                                 *       calls after every successful update
+                                 *       ("movea.l (0x24,A1),A0 / jsr (A0)" at
+                                 *       0x00E0F5E4).  Held as a target VA, so
+                                 *       reach it with ARCH_VA_TO_PTR. */
 } route_$driver_info_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(route_$driver_info_t, max_data_len) == 0x02,
+               "route_$driver_info_t.max_data_len");
+_Static_assert(offsetof(route_$driver_info_t, flags) == 0x07,
+               "route_$driver_info_t.flags");
+_Static_assert(offsetof(route_$driver_info_t, set_service) == 0x24,
+               "route_$driver_info_t.set_service");
+#endif
+
+/*
+ * route_$set_service_fn_t - the driver entry at route_$driver_info_t+0x24
+ *
+ * NETWORK_$SET_SERVICE (0x00E0F5CA) pushes, right to left:
+ *   subq.l #0x2,SP            ; word result slot; the result is discarded
+ *   pea (-0x90,A6)            ; arg 5, an uninitialised local
+ *   pea (-0x9a,A6)            ; arg 4, an uninitialised local
+ *   move.w #0x88,-(SP)        ; arg 3, by value
+ *   pea (-0x88,A6)            ; arg 2, the two-word record {0, service}
+ *   pea (0xe2e0d0).l          ; arg 1, &ROUTE_$PORT_ARRAY[0].socket
+ * The types of arguments 4 and 5 are unproven: the caller neither
+ * initialises nor reads them.
+ */
+typedef int16_t (*route_$set_service_fn_t)(uint16_t *socket_ptr,
+                                           const uint16_t *service_rec,
+                                           uint16_t request,
+                                           void *out4, void *out5);
 
 typedef struct route_$port_t {
     uint32_t    network;            /* 0x00: Network address */

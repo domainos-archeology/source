@@ -307,7 +307,7 @@ static void format_number(const char *spec, int16_t spec_len, void *value_p,
  *
  * Processes a format string with arguments and produces formatted output.
  */
-void VFMT_$MAIN(const char *format, char *buf, int16_t *max_len,
+void VFMT_$MAIN(const char *format, char *buf, const int16_t *max_len,
                 int16_t *out_len, void *args)
 {
     vfmt_ctx_t ctx;

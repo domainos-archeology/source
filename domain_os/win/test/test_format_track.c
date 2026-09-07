@@ -31,7 +31,8 @@
 /* Module data and the globals WIN reaches                             */
 /* ------------------------------------------------------------------ */
 uint8_t  WIN_$DATA[WIN_DATA_SIZE];
-uint8_t  WIN_$VOLUME_TABLE[WIN_VOLUME_TABLE_SIZE];
+/* The disk subsystem's per-process slot array; WIN clears one byte of it. */
+disk_$per_proc_t DISK_$PER_PROC[DISK_PER_PROC_ENTRIES];
 uint32_t TIME_$CLOCKH;
 
 static uint8_t regs[0x10];
@@ -160,7 +161,7 @@ static void setup(void)
     int i;
 
     memset(WIN_$DATA, 0, sizeof(WIN_$DATA));
-    memset(WIN_$VOLUME_TABLE, 0xAA, sizeof(WIN_$VOLUME_TABLE));
+    memset(DISK_$PER_PROC, 0xAA, sizeof(DISK_$PER_PROC));
     memset(regs, 0, sizeof(regs));
     memset(dev_entry, 0, sizeof(dev_entry));
     memset(&req, 0, sizeof(req));
@@ -182,7 +183,7 @@ static void setup(void)
     /* the cylinder word the device entry carries at +0x1C */
     *(uint16_t *)(dev_entry + 0x1C) = 0x0321;
 
-    req.volume = 3;
+    req.proc_id = 3;
     req.status = status_$ok;
 
     /* the request the driver thinks it is working on, to see it cleared */
@@ -207,7 +208,7 @@ static void test_success_runs_exactly_one_pass(void)
     CHECK_EQ(1, check_calls);
     CHECK_EQ(status_$ok, req.status);
     /* the volume byte must be untouched on success */
-    CHECK_EQ(0xAA, WIN_VOLUME_MOUNTED(req.volume));
+    CHECK_EQ((int8_t)0xAA, WIN_IO_PENDING(req.proc_id));
 }
 
 /*
@@ -276,9 +277,13 @@ static void test_five_attempts_then_gives_up(void)
     CHECK_EQ(5, seek_calls);
     CHECK_EQ(5, check_calls);
     CHECK_EQ(status_$disk_not_ready, req.status);
-    /* entry (volume - 1) + 0x18 == table + 0x1C*volume - 4 */
-    CHECK_EQ(0x00, WIN_VOLUME_TABLE[3 * WIN_VOLUME_ENTRY_SIZE - 4]);
-    CHECK_EQ(0xAA, WIN_VOLUME_TABLE[2 * WIN_VOLUME_ENTRY_SIZE - 4]);
+    /*
+     * slot 3's io_pending byte, i.e. (DISK_$DATA + 0x378) + 0x1C*3 + 0x18,
+     * which is what "clr.b (-0x4,A1,D1w)" with A1 = 0xE7A560 reaches.  Its
+     * neighbours are untouched.
+     */
+    CHECK_EQ(0x00, DISK_$PER_PROC[3].io_pending);
+    CHECK_EQ((int8_t)0xAA, DISK_$PER_PROC[2].io_pending);
 }
 
 /*
@@ -300,7 +305,7 @@ static void test_seek_failure_skips_the_command_and_retries(void)
     CHECK_EQ(0, wait_calls);
     CHECK_EQ(0, check_calls);
     CHECK_EQ(status_$disk_seek_error, req.status);
-    CHECK_EQ(0x00, WIN_VOLUME_MOUNTED(req.volume));
+    CHECK_EQ(0x00, WIN_IO_PENDING(req.proc_id));
 }
 
 /*
@@ -318,7 +323,7 @@ static void test_recovery_on_the_third_pass(void)
     CHECK_EQ(3, seek_calls);
     CHECK_EQ(3, check_calls);
     CHECK_EQ(status_$ok, req.status);
-    CHECK_EQ(0xAA, WIN_VOLUME_MOUNTED(req.volume));
+    CHECK_EQ((int8_t)0xAA, WIN_IO_PENDING(req.proc_id));
 }
 
 /*

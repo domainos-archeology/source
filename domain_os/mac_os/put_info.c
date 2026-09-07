@@ -51,7 +51,7 @@ void MAC_OS_$PUT_INFO(mac_os_$port_info_t *info, int16_t *port_num, status_$t *s
     route_portp = (void **)0xE26EE8;
 
     /* Enter exclusion region */
-    ML_$EXCLUSION_START((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
+    ML_$EXCLUSION_START(&MAC_OS_$EXCLUSION);
 
     /* Check for conflicts with other ports */
     for (other_port = 0; other_port < MAC_OS_MAX_PORTS; other_port++) {
@@ -125,7 +125,7 @@ void MAC_OS_$PUT_INFO(mac_os_$port_info_t *info, int16_t *port_num, status_$t *s
     }
 
 done:
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
+    ML_$EXCLUSION_STOP(&MAC_OS_$EXCLUSION);
 #else
     /* Non-M68K implementation stub */
     (void)info;

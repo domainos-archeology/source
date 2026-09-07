@@ -34,13 +34,12 @@
 extern uint32_t SIO_$SPIN_LOCK;
 
 /*
- * SIO_DELAY_RESTART_QUEUE_ELEM - Queue element storage for delay restart
- *
- * Used by TIME_$Q_ADD_CALLBACK for transmit delays.
- *
- * Original address: 0x00e2dddc
+ * There is no global delay queue element.  0x00E1C8C4 "pea (0x8,A0)" hands
+ * TIME_$Q_ADD_CALLBACK the DESCRIPTOR's own element (sio_desc_t.delay_qelem),
+ * and 0x00E2DDDC - which an earlier decompilation named
+ * SIO_DELAY_RESTART_QUEUE_ELEM - is the SIO module data base, whose first six
+ * bytes are the zero interval "pea (A5)" passes at 0x00E1C8C8.
  */
-extern time_queue_elem_t SIO_DELAY_RESTART_QUEUE_ELEM;
 
 /*
  * ============================================================================
@@ -91,18 +90,18 @@ extern time_queue_elem_t SIO_DELAY_RESTART_QUEUE_ELEM;
 /*
  * SIO_DELAY_RESTART - Callback for transmit delay completion
  *
- * Called by the time subsystem when a transmit delay expires.
- * Restarts transmission.
+ * Called by the time subsystem when a transmit delay expires; clears the
+ * delay-active and transmit-active bits and restarts transmission.
  *
  * Parameters:
- *   args - Pointer to array containing SIO descriptor pointer
+ *   arg - the standard two-level TIME callback argument (see
+ *         time_$callback_arg_t): **arg is the descriptor's virtual address
  *
- * Returns:
- *   Result from SIO_$I_TSTART
+ * A Pascal procedure - 0x00E1C908 calls it with no result slot.
  *
  * Original address: 0x00e1c690
  */
-uint16_t SIO_DELAY_RESTART(sio_desc_t **args);
+void SIO_DELAY_RESTART(time_$callback_arg_t arg);
 
 /*
  * sio_$set_break - Set or clear break state on serial line

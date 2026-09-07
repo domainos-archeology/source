@@ -106,8 +106,13 @@ void VOLX_$MOUNT(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
         if (write_prot_val < 0) {
             vtoc_status = status_$ok;
         } else {
-            /* Return a different status for write-protected volume */
-            vtoc_status = 0x14ffff;  /* TODO(source-qvt): Identify this status code */
+            /*
+             * 0x00E6B22E: move.l #0x14ffff,(-0x24,A6).  The SR10.4 status
+             * database calls 0x0014FFFF "Warning: disk is write protected";
+             * the 0xFFFF subcode is the warning form, so the mount still
+             * succeeds and the caller is told the volume is read-only.
+             */
+            vtoc_status = status_$volume_disk_is_write_protected;
         }
     }
 
@@ -126,11 +131,11 @@ void VOLX_$MOUNT(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
         DIR_$ADD_MOUNT(&parent_uid_val, &dir_uid, &local_status);
 
         if (local_status == status_$directory_is_full) {
-            local_status = status_$stream_cant_stream_this_object_type;
+            local_status = status_$volx_volume_table_full;
             goto dismount_vtoc;
         }
         if (local_status == status_$name_already_exists) {
-            local_status = status_$stream_no_more_streams;
+            local_status = status_$volx_directory_in_use;
         }
         if (local_status != status_$ok) {
             goto dismount_vtoc;

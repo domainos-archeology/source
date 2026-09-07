@@ -163,11 +163,13 @@
 
         /* status_$t values */
         .equ    STATUS_MST_GUARD_FAULT,  0x0004000A /* mst guard page touched */
-        .equ    STATUS_FAULT_PROTECTION, 0x00120011 /* MMU protection violation */
-        .equ    STATUS_FAULT_BUS_TIMEOUT,0x0012000C /* No device answered */
-        .equ    STATUS_MMU_ERR_4,        0x00070004
-        .equ    STATUS_MMU_ERR_5,        0x00070005
-        .equ    STATUS_MMU_ERR_6,        0x00070006
+        /* Names and texts from the SR10.4 status database
+         * (stcodes/stcode.db.10.4); module 0x12 = fault, module 0x07 = MMU. */
+        .equ    STATUS_FAULT_ACCESS_VIOLATION, 0x00120011 /* "access violation" */
+        .equ    STATUS_FAULT_BUS_TIME_OUT,     0x0012000C /* "bus time-out" */
+        .equ    STATUS_MMU_PTT_PARITY_ERROR,   0x00070004 /* "ptt parity error" */
+        .equ    STATUS_MMU_PFT_PARITY_ERROR,   0x00070005 /* "pft parity error" */
+        .equ    STATUS_MMU_TIMEOUT,            0x00070006 /* "mmu timeout" */
 
         /* BSD signal numbers placed in the fault descriptor */
         .equ    SIGBUS,             10
@@ -358,7 +360,7 @@ FIM_$BUS_ERR:
 .bus_err_check_prot:
         btst    #7,%d1
         beq.b   .bus_err_check_timeout
-        move.l  #STATUS_FAULT_PROTECTION,%d0
+        move.l  #STATUS_FAULT_ACCESS_VIOLATION,%d0
         move.w  #SIGSEGV,%d1
         /* fall through */
 
@@ -413,11 +415,11 @@ FIM_$BUS_ERR:
         /* Status constants, addressed PC-relatively above.
          * Assembly (0x00E21A66, 0x00E21A6A, 0x00E21A6E): */
 .bus_err_sts_4:
-        .long   STATUS_MMU_ERR_4
+        .long   STATUS_MMU_PTT_PARITY_ERROR
 .bus_err_sts_5:
-        .long   STATUS_MMU_ERR_5
+        .long   STATUS_MMU_PFT_PARITY_ERROR
 .bus_err_sts_6:
-        .long   STATUS_MMU_ERR_6
+        .long   STATUS_MMU_TIMEOUT
 
 /* --------------------------------------------------------------------
  * Plain bus timeout: hand off to whoever armed BUS_ERROR_SWITCH.
@@ -433,7 +435,7 @@ FIM_$BUS_ERR:
 
 .bus_err_no_switch:
         move.w  #SIGBUS,%d1
-        move.l  #STATUS_FAULT_BUS_TIMEOUT,%d0
+        move.l  #STATUS_FAULT_BUS_TIME_OUT,%d0
         bra.w   .bus_err_deliver
 
 /* --------------------------------------------------------------------

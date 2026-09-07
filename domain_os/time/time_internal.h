@@ -45,6 +45,14 @@
 #define ITIMER_DB_BASE          0xE297F0
 #define ITIMER_DB_ENTRY_SIZE    0x1C  /* 28 bytes */
 
+/*
+ * Distance from the real half of TIME_$ITIMER_DB to the virtual half.  Both
+ * time_$get_itimer_internal (0x00E58C90 mulu.w #0x658,D1) and
+ * time_$set_itimer_internal (0x00E58DB0) form the per-`which` base with a
+ * single multiply, so the two halves are one array indexed [which][as_id].
+ */
+#define ITIMER_DB_WHICH_STRIDE  0x658
+
 /* Offsets within itimer entry */
 #define ITIMER_REAL_INTERVAL_HIGH   0x0C
 #define ITIMER_REAL_INTERVAL_LOW    0x10
@@ -131,20 +139,78 @@ void time_$itimer_to_clock(clock_t *dst_clock, const clock_t *src_itimer);
 void time_$clock_to_itimer(clock_t *dst_itimer, const clock_t *src_clock);
 
 /*
- * time_$get_itimer_internal - Get raw itimer values
- * 0x00E58C74.  TODO(source-gvvn): not decompiled yet.
+ * time_$itimer_entry - address of TIME_$ITIMER_DB[which][as_id]
+ *
+ * Both internal entry points build the address the same way, with two
+ * word-scaled `lea`s off a longword base:
+ *
+ *   00e58c8a  movea.l #0xe297f0,A1
+ *   00e58c90  mulu.w #0x658,D1              ; D1 = which * 0x658
+ *   00e58c94  lea (0x0,A1,D1w*0x1),A1
+ *   00e58c98  move.w (0x00e2060a).l,D1w     ; PROC1_$AS_ID
+ *   00e58c9e  lsl.w #0x2,D1w                ; D1 = id*4
+ *   00e58ca0  move.w D1w,D2w
+ *   00e58ca2  neg.w D1w                     ; D1 = -id*4
+ *   00e58ca4  lsl.w #0x3,D2w                ; D2 = id*32
+ *   00e58ca6  add.w D2w,D1w                 ; D1 = id*28 = id*0x1C
+ *   00e58ca8  lea (0x0,A1,D1w*0x1),A1
+ *
+ * Both index registers are used as SIGN-EXTENDED WORDS, which is why the two
+ * products are truncated to int16_t here.  (0x00E58DA8..0x00E58DC8 in
+ * time_$set_itimer_internal is the same sequence with A4/D0.)
+ *
+ * The entries are 0x1C bytes: a 0x1A-byte time_queue_elem_t plus two bytes of
+ * padding.
  */
-void time_$get_itimer_internal(uint16_t which, clock_t *value, clock_t *interval);
+static inline time_queue_elem_t *time_$itimer_entry(uint16_t which,
+                                                    uint16_t as_id)
+{
+    int16_t which_offset = (int16_t)(which * ITIMER_DB_WHICH_STRIDE);
+    int16_t as_offset = (int16_t)(as_id * ITIMER_DB_ENTRY_SIZE);
+
+    return (time_queue_elem_t *)ARCH_VA_TO_PTR(ITIMER_DB_BASE +
+                                               which_offset + as_offset);
+}
 
 /*
- * time_$set_itimer_internal - Set itimer with clock_t values
- * 0x00E58D14, six parameters at 0x08 which(w), 0x0A value, 0x0E interval,
- * 0x12 ovalue, 0x16 ointerval, 0x1A status.
- * TODO(source-gvvn): not decompiled yet.
+ * time_$itimer_active - the queue element's "in use" bit
+ *
+ * 0x00E58CAC "btst.b #0x0,(0x13,A1)": byte 0x13 is the LOW byte of the
+ * time_queue_elem_t.flags word at 0x12 (big-endian), so bit 0 of that byte is
+ * bit 0 of the word.
  */
-void time_$set_itimer_internal(uint16_t which, clock_t *value, clock_t *interval,
-                               clock_t *ovalue, clock_t *ointerval,
-                               status_$t *status);
+#define ITIMER_FLAG_IN_USE      0x0001
+
+/*
+ * The flags word time_$set_itimer_internal hands TIME_$Q_ADD_CALLBACK:
+ * "moveq #0x4,D0 / or.w D2w,D0w" at 0x00E58E2A, where D2 is 0x12 when the
+ * reload interval is non-zero (0x00E58E0C) and 0 otherwise (0x00E58E10).
+ */
+#define ITIMER_FLAG_BASE        0x0004
+#define ITIMER_FLAG_REPEATING   0x0012
+
+/*
+ * time_$get_itimer_internal - read TIME_$ITIMER_DB[which][PROC1_$AS_ID]
+ *
+ * 0x00E58C74, 160 bytes.  Three parameters at 0x08 which(w), 0x0A interval,
+ * 0x0E value.  Its callers reserve a two-byte Pascal result slot at 0x12
+ * (0x00E58D92 / 0x00E58F1A "subq.l #0x2,SP") and then pop all 0xC bytes
+ * without reading it; the body never writes it either, so the result is not
+ * modelled.
+ */
+void time_$get_itimer_internal(uint16_t which, clock_t *interval,
+                               clock_t *value);
+
+/*
+ * time_$set_itimer_internal - arm/disarm TIME_$ITIMER_DB[which][PROC1_$AS_ID]
+ *
+ * 0x00E58D14, 324 bytes.  Six parameters at 0x08 which(w), 0x0A interval,
+ * 0x0E value, 0x12 ointerval, 0x16 ovalue, 0x1A status, plus the same unused
+ * two-byte result slot at 0x1E.
+ */
+void time_$set_itimer_internal(uint16_t which, clock_t *interval,
+                               clock_t *value, clock_t *ointerval,
+                               clock_t *ovalue, status_$t *status);
 
 /*
  * TIME_$TIMER_HANDLER - Hardware timer interrupt entry point
@@ -153,13 +219,10 @@ void TIME_$TIMER_HANDLER(void);
 
 /*
  * The three timer callbacks below are reached through TIME_$Q_SCAN_QUEUE's
- * deferred path (0x00E16F4C..0x00E16F84): the scanner builds a local holding
- * &elem->callback_arg and passes the ADDRESS of that local, so the callback's
- * single argument is a "uint32_t **" whose target is the callback_arg
- * longword.  All three then read its low word as the address-space id
+ * deferred path; time_$callback_arg_t is declared in time/time.h.  All three
+ * read the callback_arg's low word as the address-space id
  * (movea.l (A0),A2 / move.w (0x2,A2),D0w).
  */
-typedef uint32_t **time_$callback_arg_t;
 
 /*
  * TIME_$SET_ITIMER_REAL_CALLBACK - Callback for real interval timer

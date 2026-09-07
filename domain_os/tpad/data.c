@@ -8,6 +8,7 @@
  */
 
 #include "tpad/tpad_internal.h"
+#include "smd/smd.h"
 
 /*
  * Packet byte accessor macros.
@@ -17,34 +18,20 @@
 #define PACKET_SBYTE(p, n)   (((int8_t *)(p))[n])
 
 /*
- * smd_$loc_event_internal - Internal locator event function
+ * The locator events this file raises go straight to SMD_$LOC_EVENT
+ * (0x00E6E9A0), declared in smd/smd.h.  The two call sites are 0x00E69794
+ * and 0x00E697AE; both push
  *
- * Sends locator (mouse/trackpad) event to display manager.
- * Note: The public smd_$loc_event_internal in smd.h has a different signature
- * for user-space. This is the internal kernel interface.
+ *   subq.l #0x2,SP              ; result slot (the routine returns a byte)
+ *   move.w <buttons>,-(SP)      ; arg 4
+ *   move.l (0x160,A5),-(SP)     ; arg 3, the packed cursor position
+ *   move.w (0x17c,A5),-(SP)     ; arg 2, the display unit
+ *   st -(SP)  /  clr.w -(SP)    ; arg 1, the event type byte
  *
- * Parameters:
- *   edge_hit - 0xff if edge was hit, 0 otherwise
- *   unit - display unit number
- *   pos - cursor position (y in high word, x in low word)
- *   button_state - current button/stylus state
- *
- * Original address: 0x00E6E9A0
+ * so the first argument is a Pascal boolean-shaped byte in a word slot:
+ * 0xFF for the edge event, 0 for the ordinary one.  The result is discarded
+ * at both sites.
  */
-static void smd_$loc_event_internal(uint8_t edge_hit, int16_t unit, int32_t pos, int16_t button_state)
-{
-    /* TODO(source-qvt): This should call the actual smd_$loc_event_internal implementation.
-     * For now, we stub it out. The actual implementation handles:
-     * - Locking the SMD request lock
-     * - Queueing locator events
-     * - Updating cursor position tracking
-     * - Notifying waiters
-     */
-    (void)edge_hit;
-    (void)unit;
-    (void)pos;
-    (void)button_state;
-}
 
 /*
  * Process mouse data packet.
@@ -481,10 +468,10 @@ void TPAD_$DATA(uint32_t *packet)
         delta_x = tpad_$delta_x < 0 ? -tpad_$delta_x : tpad_$delta_x;
         delta_y = tpad_$delta_y < 0 ? -tpad_$delta_y : tpad_$delta_y;
         if (delta_x + delta_y >= config->punch_impact) {
-            smd_$loc_event_internal(0xff, tpad_$unit, cursor_pos, edge_type);
+            (void)SMD_$LOC_EVENT((int8_t)0xff, tpad_$unit, cursor_pos, edge_type);
         }
     }
 
     /* Send normal locator event */
-    smd_$loc_event_internal(0, tpad_$unit, cursor_pos, tpad_$button_state);
+    (void)SMD_$LOC_EVENT(0, tpad_$unit, cursor_pos, tpad_$button_state);
 }

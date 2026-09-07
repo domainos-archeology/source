@@ -1,125 +1,113 @@
 /*
- * MAC_OS_$COPY_BUFFER_DATA - Copy data from buffer chain
+ * mac_os/copy_buffer_data.c - MAC_OS_$COPY_BUFFER_DATA
  *
- * Copies data from a linked list of buffers into a destination buffer.
- * This is a nested Pascal procedure that accesses the caller's stack
- * frame to track buffer chain state.
+ * Copies the next `length` bytes of the caller's buffer chain into a
+ * destination address, advancing through the chain as buffers are used up.
  *
  * Original address: 0x00E0B522
- * Original size: 132 bytes
+ * Size: 132 bytes
+ *
+ * This is a nested Pascal procedure of MAC_OS_$SEND (0x00E0B5A8).  It reads
+ * the parent frame through the static link:
+ *
+ *   00e0b52e  movea.l (A6),A2            ; A2 = MAC_OS_$SEND's frame pointer
+ *   ...       movea.l (-0x1c,A2),A0      ; the current chain entry
+ *   ...       move.w  (-0x36,A2),D0w     ; the offset within that entry
+ *
+ * and it writes both back, so the two uplevel variables are threaded here as
+ * explicit by-reference parameters rather than copied by value.  MAC_OS_$SEND
+ * initialises them at 0x00E0B6AE / 0x00E0B6B2 (chain = &pkt_desc->hdr_desc,
+ * offset = 0) just before the first call.
+ *
+ * Assembly (0x00E0B522):
+ *   link.w   A6,-0x10
+ *   movem.l  {A2 D5 D4 D3 D2},-(SP)
+ *   move.w   (0xc,A6),D0w        ; length
+ *   movea.l  (A6),A2             ; static link -> MAC_OS_$SEND frame
+ *   movea.l  (0x8,A6),A0         ; dest_ptr
+ *   move.w   D0w,D3w             ; D3 = bytes still to copy
+ *   move.l   (A0),D4             ; D4 = *dest_ptr, read ONCE
+ *   bra.b    check
+ * loop:
+ *   move.w   D3w,D5w ; ext.l D5                    ; want = remaining
+ *   move.w   (-0x36,A2),D0w ; ext.l D0             ; offset
+ *   movea.l  (-0x1c,A2),A0
+ *   move.l   (A0),D1 ; sub.l D0,D1                 ; avail = entry.length - offset
+ *   cmp.l    D1,D5 ; ble.b +2 ; move.l D1,D5       ; want = min(want, avail)
+ *   move.w   (-0x36,A2),D1w ; ext.l D1
+ *   movea.l  (-0x1c,A2),A0
+ *   add.l    (0x4,A0),D1                           ; src = entry.address + offset
+ *   move.l   D1,(-0xc,A6)
+ *   move.w   D5w,D2w ; ext.l D2
+ *   move.l   D2,-(SP) ; move.l D4,-(SP) ; move.l D1,-(SP)
+ *   jsr      OS_$DATA_COPY                         ; (src, dest, count)
+ *   lea      (0xc,SP),SP
+ *   add.l    D2,D4                                 ; dest += count
+ *   sub.w    D5w,D3w
+ *   bne.b    next_entry
+ *   add.w    D5w,(-0x36,A2)                        ; done: offset += count
+ *   bra.b    check
+ * next_entry:
+ *   clr.w    (-0x36,A2)
+ *   movea.l  (-0x1c,A2),A0
+ *   move.l   (0x8,A0),(-0x1c,A2)                   ; chain = chain->next
+ * check:
+ *   tst.w    D3w ; beq.b done
+ *   tst.l    (-0x1c,A2) ; bne.b loop
+ * done:
+ *   movem.l  (-0x24,A6),{D2 D3 D4 D5 A2}
+ *   unlk     A6
+ *   rts
+ *
+ * Two details worth keeping:
+ *
+ *  - The running destination address lives only in D4.  It is loaded from
+ *    *dest_ptr at entry and never stored back, so the caller's pointer is
+ *    unchanged on return.  MAC_OS_$SEND relies on that.
+ *  - The "advance the chain" arm runs when bytes remain (`bne`), and the
+ *    "bump the offset" arm when the request has been satisfied.  A buffer
+ *    that is exactly consumed by the last chunk therefore leaves the offset
+ *    at the end of that entry rather than moving to the next one.
  */
 
 #include "mac_os/mac_os_internal.h"
+#include "os/os.h"
+#include "arch/arch.h"
 
-/*
- * MAC_OS_$COPY_BUFFER_DATA
- *
- * This function copies data from a buffer chain to a destination.
- * It is implemented as a nested Pascal procedure that accesses
- * variables in the caller's (MAC_OS_$SEND's) stack frame:
- *   - offset -0x1C from caller's A6: pointer to current buffer in chain
- *   - offset -0x36 from caller's A6: current offset within buffer
- *
- * The function iterates through buffers, copying up to 'length' bytes,
- * advancing through the buffer chain as needed.
- *
- * Parameters:
- *   dest_ptr   - Pointer to destination pointer (updated during copy)
- *   length     - Number of bytes to copy
- *
- * Note: Due to the nested procedure nature, this implementation
- * cannot exactly match the original without assembly language or
- * compiler-specific extensions. This C version uses a simplified
- * approach that achieves the same functional result.
- *
- * Assembly notes:
- *   - Accesses parent frame via (A6) to get saved A6
- *   - Uses OS_$DATA_COPY for actual byte copying
- *   - Updates buffer chain pointer when current buffer exhausted
- */
-
-/*
- * For proper implementation, the caller (MAC_OS_$SEND) must set up
- * a context structure that this function can access. In the original
- * code, this was done via the Pascal nested procedure mechanism.
- *
- * The context needs:
- *   - current_buffer: pointer to current buffer in chain
- *   - current_offset: offset within current buffer
- *
- * Since we can't access the parent's stack frame in portable C,
- * the caller must pass this context explicitly or use a global.
- * For now, we implement this as if it had proper context access.
- */
-
-/*
- * Buffer chain entry structure (used by callers):
- *   [0]: size (4 bytes) - size of data in this buffer
- *   [1]: data (4 bytes) - pointer to buffer data
- *   [2]: next (4 bytes) - pointer to next buffer, or NULL
- */
-
-void MAC_OS_$COPY_BUFFER_DATA(uint32_t *dest_ptr, int16_t length)
+void MAC_OS_$COPY_BUFFER_DATA(uint32_t *dest_ptr, int16_t length,
+                              mac_os_$buf_desc_t **chain, int16_t *offset)
 {
-    /*
-     * NOTE: This function relies on accessing the caller's stack frame
-     * in the original implementation. In this C version, we assume
-     * the caller has set up global or thread-local state that we can
-     * access. In practice, this function would need to be rewritten
-     * along with its caller to use proper parameter passing.
-     *
-     * The original assembly:
-     *   - Gets parent A6 from (A6)
-     *   - Accesses buffer chain at (-0x1C, parent_A6)
-     *   - Accesses offset at (-0x36, parent_A6)
-     *   - Calls OS_$DATA_COPY for each chunk
-     *   - Updates chain pointer and offset as needed
-     *
-     * For compilation purposes, we provide a stub that would need
-     * to be completed with architecture-specific code.
-     */
-#if defined(ARCH_M68K)
-    /*
-     * This is a nested Pascal procedure - accessing parent frame.
-     * The implementation would require inline assembly to access
-     * the caller's stack frame variables.
-     *
-     * Pseudo-code for the algorithm:
-     *
-     * while (length > 0 && current_buffer != NULL) {
-     *     int32_t available = current_buffer->size - current_offset;
-     *     int32_t to_copy = (length < available) ? length : available;
-     *
-     *     OS_$DATA_COPY(current_buffer->data + current_offset, *dest_ptr, to_copy);
-     *     *dest_ptr += to_copy;
-     *     length -= to_copy;
-     *
-     *     if (length == 0) {
-     *         current_offset += to_copy;
-     *     } else {
-     *         current_offset = 0;
-     *         current_buffer = current_buffer->next;
-     *     }
-     * }
-     */
+    int16_t remaining;      /* D3w */
+    uint32_t dest;          /* D4 */
+    int32_t want;           /* D5 */
+    int32_t avail;          /* D1 */
+    uint32_t src;           /* D1, then the local at A6-0xc */
+    int32_t count;          /* D2 */
 
-    /* For now, this is a stub that compiles but needs proper implementation */
-    (void)dest_ptr;
-    (void)length;
-#else
-    /* Non-M68K implementation stub */
-    (void)dest_ptr;
-    (void)length;
-#endif
+    remaining = length;
+    dest = *dest_ptr;
+
+    while (remaining != 0 && *chain != NULL) {
+        want = remaining;
+
+        avail = (*chain)->length - (int32_t)*offset;
+        if (want > avail) {
+            want = avail;
+        }
+
+        src = (*chain)->address + (uint32_t)(int32_t)*offset;
+
+        count = (int32_t)(int16_t)want;
+        OS_$DATA_COPY(ARCH_VA_TO_PTR(src), ARCH_VA_TO_PTR(dest), (uint32_t)count);
+
+        dest += (uint32_t)count;
+        remaining = (int16_t)(remaining - (int16_t)want);
+
+        if (remaining == 0) {
+            *offset = (int16_t)(*offset + (int16_t)want);
+        } else {
+            *offset = 0;
+            *chain = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR((*chain)->next);
+        }
+    }
 }
-
-/*
- * TODO(source-qvt): Implement proper buffer chain copying.
- *
- * The correct implementation requires either:
- * 1. Inline assembly to access parent stack frame
- * 2. Restructuring MAC_OS_$SEND to pass buffer state explicitly
- * 3. Using a global/thread-local context structure
- *
- * Option 2 or 3 is recommended for portability.
- */

@@ -27,7 +27,7 @@ int16_t NETWORK_$PAGE_SERVER_CNT;     /* 0xE24C1E (+0x322) */
  * Service configuration
  */
 uint32_t NETWORK_$ALLOWED_SERVICE;    /* 0xE24C3E (+0x342) */
-int16_t NETWORK_$REMOTE_POOL;         /* 0xE24C40 (+0x344) */
+/* NETWORK_$REMOTE_POOL is bits 0..15 of NETWORK_$ALLOWED_SERVICE; see network.h. */
 
 /*
  * Mode flags
@@ -68,28 +68,10 @@ uint16_t NETWORK_$PAGOUT_RQST_CNT;      /* 0xE24C3C */
 /*
  * Network capability flags (0xE24C3F)
  *
- * In the binary this is not a variable of its own: 0xE24C3F is byte 1 of the
- * NETWORK_$ALLOWED_SERVICE longword at 0xE24C3E, so
- *   NETWORK_$CAPABLE_FLAGS bit n  ==  NETWORK_$ALLOWED_SERVICE bit (16 + n)
- * on the big-endian m68k.  NETWORK_$SET_SERVICE writes the whole longword and
- * REM_FILE_$SEND_REQUEST / ASKNODE_$INTERNET_INFO read the byte, so the two
- * names must denote the same storage.
- *
- * A macro would be the portable spelling, but rem_file/rem_file_internal.h
- * re-declares NETWORK_$CAPABLE_FLAGS as an object, so the sharing is done
- * with an assembler symbol equate instead.  That needs an ELF toolchain and a
- * big-endian target; anywhere else the byte becomes a separate variable and
- * the aliasing is a documented constraint (a write through one name is not
- * visible through the other).  TODO(source-yh2): drop the duplicate
- * declaration in rem_file_internal.h and the two names can share a macro.
+ * No storage is defined here.  0xE24C3F is byte 1 of the
+ * NETWORK_$ALLOWED_SERVICE longword above, so NETWORK_$CAPABLE_FLAGS is a
+ * macro in network/network.h that extracts bits 16..23 of this variable.
  */
-#if defined(__GNUC__) && defined(__ELF__) && \
-    defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-__asm__(".globl NETWORK_$CAPABLE_FLAGS\n\t"
-        ".set NETWORK_$CAPABLE_FLAGS, NETWORK_$ALLOWED_SERVICE + 1");
-#else
-uint8_t NETWORK_$CAPABLE_FLAGS;
-#endif
 
 /*
  * Network failure record (0xE24BF4, 16 bytes)

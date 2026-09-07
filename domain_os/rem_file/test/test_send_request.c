@@ -60,7 +60,11 @@ uint16_t PROC1_$AS_ID;
 uint32_t NODE_$ME = 0x12345678;
 
 /* Network globals */
-uint8_t NETWORK_$CAPABLE_FLAGS = 0;
+uint32_t NETWORK_$ALLOWED_SERVICE = 0;
+/* Mirrors network/network.h: the capability byte is 0xE24C3F, byte 1 of the
+ * NETWORK_$ALLOWED_SERVICE longword.  This test does not include the real
+ * headers, so the view is restated here. */
+#define NETWORK_$CAPABLE_FLAGS ((uint8_t)(NETWORK_$ALLOWED_SERVICE >> 16))
 int8_t NETWORK_$DISKLESS = 0;
 uint32_t NETWORK_$MOTHER_NODE = 0;
 
@@ -213,7 +217,7 @@ TEST(process_type_normal_no_exit) {
  * Test: Network not capable and non-local node should trigger early exit
  */
 TEST(network_not_capable_remote_node) {
-    NETWORK_$CAPABLE_FLAGS = 0;
+    NETWORK_$ALLOWED_SERVICE = 0;
     uint32_t addr_info[2] = {0, 0xAAAAAAAA};  /* Different from NODE_$ME */
     NODE_$ME = 0x12345678;
 
@@ -224,7 +228,7 @@ TEST(network_not_capable_remote_node) {
  * Test: Network not capable but local node should NOT trigger early exit
  */
 TEST(network_not_capable_local_node) {
-    NETWORK_$CAPABLE_FLAGS = 0;
+    NETWORK_$ALLOWED_SERVICE = 0;
     NODE_$ME = 0x12345678;
     uint32_t addr_info[2] = {0, 0x12345678};  /* Same as NODE_$ME */
 
@@ -236,7 +240,7 @@ TEST(network_not_capable_local_node) {
  * Test: Network capable should NOT trigger early exit even for remote node
  */
 TEST(network_capable_remote_node) {
-    NETWORK_$CAPABLE_FLAGS = 1;
+    NETWORK_$ALLOWED_SERVICE = 1u << 16;
     uint32_t addr_info[2] = {0, 0xAAAAAAAA};
 
     ASSERT_TRUE(!((NETWORK_$CAPABLE_FLAGS & 1) == 0 && addr_info[1] != NODE_$ME));

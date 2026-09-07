@@ -116,8 +116,8 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, uint32_t hdr
      *
      * Note that pkt_info.hdr is set from the CALLER's hdr_va, not from the
      * copy NET_IO_$COPY_PACKET just made in copy_hdr_va, and only the first
-     * of the four copied payload pages is recorded.  Preserved as-is; see
-     * the TODO below.
+     * of the four copied payload pages is recorded.  That is what the image
+     * does (0x00E87CD0-0x00E87CE2) and it is preserved as-is.
      */
     pkt_info.hdr      = hdr_va;                         /* +0x00 */
     pkt_info.data_pages[0] = *src_pages;                /* +0x30 */

@@ -14,17 +14,14 @@
  * @param status_array  Output: Array of status codes per transfer
  * @param status        Output: Overall status code
  *
- * TODO(source-pxn): This is a complex function that:
- * 1. Validates all buffer alignments (must be page-aligned)
- * 2. Wires all buffers for DMA access
- * 3. Allocates queue blocks via DISK_$GET_QBLKS
- * 4. Sets up each transfer with disk address and buffer
- * 5. Copies info blocks for write operations
- * 6. Calls DISK_$WRITE_MULTI or DISK_$READ_MULTI
- * 7. Collects results and copies info blocks for read operations
- * 8. Unwires all buffers
- * 9. Returns queue blocks via DISK_$RTN_QBLKS
- * 10. Fills remaining status array entries with disk_io_abandoned
+ * TODO(source-pxn): PARTIALLY EMITTED.  DISK_$AS_XFER_MULTI is 694 bytes at
+ * 0x00E6B962..0x00E6BC17.  What this file already reproduces: the buffer
+ * alignment checks, the wiring loop, the CACHE_$FLUSH_VIRTUAL, the
+ * DISK_$GET_QBLKS call, the DISK_$WRITE_MULTI / DISK_$READ_MULTI dispatch,
+ * the unwire loop, the DISK_$RTN_QBLKS return and the abandoned-status fill.
+ * What is missing is step 4/5/7 -- the per-transfer queue-block fill (see
+ * the second TODO(source-pxn) below) -- which needs the queue block record
+ * modelled beyond the few DISK_QBLK_* offsets in disk/disk_internal.h.
  */
 
 #include "cache/cache.h"
@@ -103,8 +100,16 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
     /* Allocate queue blocks */
     DISK_$GET_QBLKS(count, &qblk_head, &qblk_tail);
 
-    /* TODO(source-pxn): Set up queue blocks with addresses and info */
-    /* This requires understanding the queue block structure */
+    /*
+     * TODO(source-pxn): NOT EMITTED.  The per-transfer queue-block fill of
+     * DISK_$AS_XFER_MULTI (0x00E6B962, 694 bytes) is missing here: the walk
+     * over the chain DISK_$GET_QBLKS just returned that stores each disk
+     * address, buffer address and info-block pointer into its block, and,
+     * for writes, copies the caller's 32-byte info block into it.  The
+     * matching read-side copy-back after the transfer is missing too.  Both
+     * need the queue block record modelled past the DISK_QBLK_* offsets that
+     * disk/disk_internal.h has today.
+     */
 
     /* Perform I/O */
     if (op_type == 1) {

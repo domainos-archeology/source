@@ -237,7 +237,8 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
             int16_t resp_id;
             uint16_t dump_len;
             asknode_who_response_t response;
-            asknode_$reply_hdr_t *reply = (asknode_$reply_hdr_t *)rcv.reply;
+            asknode_$reply_hdr_t *reply =
+                (asknode_$reply_hdr_t *)ARCH_VA_TO_PTR(rcv.reply);
 
             /*
              * 0x00E6662E-0x00E6667E, in the original's order: the reply
@@ -259,10 +260,11 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
             resp_id = reply->reply_id;
 
             /* 0x00E6664E-0x00E6665E: source is the record's data pointer */
-            OS_$DATA_COPY((char *)rcv.data, (char *)&response, pkt_len);
+            OS_$DATA_COPY((char *)ARCH_VA_TO_PTR(rcv.data),
+                          (char *)&response, pkt_len);
 
             /* 0x00E66662 */
-            NETBUF_$RTN_HDR((uint32_t *)&rcv.data);
+            NETBUF_$RTN_HDR(&rcv.data);
 
             /* 0x00E6666E-0x00E6667E */
             PKT_$DUMP_DATA(rcv.data_pages, dump_len);

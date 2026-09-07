@@ -12,7 +12,15 @@
 
 void DISK_$REVALIDATE(int16_t vol_idx)
 {
-    /* The original passes the descriptor of volume vol_idx - 1:
-     * 0xe7a248 + vol*0x48 - 0x48 == DISK_VOL(vol_idx - 1). */
-    DISK_$REVALID((int16_t)(uintptr_t)DISK_VOL(vol_idx - 1));
+    /*
+     * 0x00E6C06A:
+     *   movea.l #0xe7a290,A0
+     *   move.w  D2w,D0w ; lsl.w #0x3,D0w
+     *   move.w  D0w,D1w ; lsl.w #0x3,D1w ; add.w D1w,D0w   ; D0 = vol * 0x48
+     *   pea     (-0x48,A0,D0w*0x1)
+     * 0xE7A290 - 0x48 = 0xE7A248 = DISK_VOLUME_BASE + DISK_VOL_DESC_OFFSET,
+     * so the address handed over is DISK_VOL(vol_idx) -- the descriptor of
+     * this volume, not of the one before it.
+     */
+    DISK_$REVALID(DISK_VOL(vol_idx));
 }

@@ -196,10 +196,11 @@ error_exit:
             *(win_$request_t **)(win_data + WIN_REQ_PTR_OFFSET);
 
         /*
-         * 0x00E19934-0x00E1994A: invalidate the request's volume.  Same five
-         * instructions as WIN_$FORMAT_TRACK 0x00E19750-0x00E19764.
+         * 0x00E19934-0x00E1994A: clear the requesting process's pending-I/O
+         * byte.  Same five instructions as WIN_$FORMAT_TRACK
+         * 0x00E19750-0x00E19764.
          */
-        WIN_VOLUME_MOUNTED(cur_req->volume) = 0;
+        WIN_IO_PENDING(cur_req->proc_id) = 0;
 
         /* 0x00E1994E `move.l D2,(0xc,A0)`. */
         cur_req->status = status;

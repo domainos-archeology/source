@@ -167,6 +167,12 @@ typedef struct xns_$channel_t {
 } xns_$channel_t;
 
 /*
+ * PACKED: mac_src_hi sits at +0x26 and mac_src_lo at +0x2A, both two bytes off
+ * a longword boundary.  m68k aligns 32-bit fields to two bytes, so the record
+ * needs no padding there on the target; a host that aligns uint32_t to four
+ * would insert some, which is why the record is packed.  Packing changes no
+ * m68k layout.
+ *
  * Packet descriptor handed to a channel's demux callback (0x48 bytes).
  *
  * XNS_IDP_$OS_DEMUX builds this record in its own frame at A6-0x88 and
@@ -182,7 +188,17 @@ typedef struct xns_$channel_t {
 typedef struct xns_$pkt_desc_t {
   uint8_t  _unknown_00[0x18];       /* 0x00: not written by XNS_IDP_$OS_DEMUX */
   uint32_t data_len;                /* 0x18: IDP data length (mac +0x1C) */
-  xns_$idp_header_t *header;        /* 0x1C: IDP header (mac +0x20) */
+  uint32_t header;                  /* 0x1C: IDP header (mac +0x20).  A target
+                                     *       VA, not a C pointer: a real
+                                     *       pointer is eight bytes on a
+                                     *       64-bit host and would push every
+                                     *       later field out of place.  Use
+                                     *       ARCH_VA_TO_PTR / ARCH_PTR_TO_VA.
+                                     *       With its two neighbours it also
+                                     *       forms the mac_os_$buf_desc_t at
+                                     *       +0x18 that XNS_ERROR_$SEND takes
+                                     *       the address of (0x00E17880
+                                     *       "lea (0x18,A0),A0"). */
   uint32_t iov;                     /* 0x20: buffer chain (mac +0x24) */
   boolean  from_net;                /* 0x24: `st' - packet came off the net */
   uint8_t  _unknown_25;             /* 0x25 */
@@ -190,7 +206,9 @@ typedef struct xns_$pkt_desc_t {
   uint16_t mac_src_lo;              /* 0x2A: MAC source, low 2 bytes (mac +0x2E) */
   uint16_t pkt_len;                 /* 0x2C: NOT written by XNS_IDP_$OS_DEMUX */
   uint16_t _unknown_2e;             /* 0x2E */
-  struct xns_$channel_t *channel;   /* 0x30: receiving channel (its demux field) */
+  uint32_t channel;                 /* 0x30: receiving channel, again a target
+                                     *       VA (0x00E1861A stores A4, the
+                                     *       channel's own address) */
   /*
    * 0x34..0x47 arrives as one 20-byte block (XNS_IDP_$OS_DEMUX copies five
    * longwords from mac +0x38 with `moveq #0x4,D2` + `dbf` at 0x00E1852C).
@@ -225,7 +243,7 @@ typedef struct xns_$pkt_desc_t {
       uint8_t  mac_info[0x10];      /* 0x38: from mac +0x3C (16 bytes) */
     };
   };
-} xns_$pkt_desc_t;
+} __attribute__((packed)) xns_$pkt_desc_t;   /* see the note below */
 
 /*
  * MAC-layer receive descriptor passed to XNS_IDP_$OS_DEMUX.
@@ -240,7 +258,7 @@ typedef struct xns_$pkt_desc_t {
 typedef struct xns_$mac_rcv_t {
   uint32_t _unknown_00;             /* 0x00: not touched by XNS_IDP_$OS_DEMUX */
   xns_$pkt_desc_t d;                /* 0x04 */
-} xns_$mac_rcv_t;
+} __attribute__((packed)) xns_$mac_rcv_t;
 
 /*
  * Packet record queued on a socket by SOCK_$PUT (0x40 bytes).
@@ -251,7 +269,9 @@ typedef struct xns_$mac_rcv_t {
  * whose first longword is the packet pointer.
  */
 typedef struct xns_$sock_pkt_t {
-  xns_$idp_header_t *header;        /* 0x00: the IDP packet */
+  uint32_t header;                  /* 0x00: the IDP packet, a target VA for
+                                     *       the same reason as
+                                     *       xns_$pkt_desc_t.header */
   uint32_t mac_src_hi;              /* 0x04: MAC source, high 4 bytes */
   uint16_t mac_src_lo;              /* 0x08: MAC source, low 2 bytes */
   uint16_t _unknown_0a;             /* 0x0A: never written */
@@ -338,18 +358,10 @@ typedef struct xns_$idp_state_t {
 /*
  * Layout assertions.  Every offset below was read directly out of the
  * disassembly; see the comments on the individual structures.
+ *
+ * The two packet records hold no C pointers (bead source-ronb), so their
+ * layout is the same on the host and these checks run unguarded.
  */
-#if defined(ARCH_M68K)
-_Static_assert(sizeof(xns_$port_state_t) == 0x0C, "xns_$port_state_t is 0x0C bytes");
-_Static_assert(sizeof(xns_$channel_t) == 0x48, "xns_$channel_t is 0x48 bytes");
-_Static_assert(offsetof(xns_$channel_t, demux) == 0x00, "channel demux at +0x00");
-_Static_assert(offsetof(xns_$channel_t, connected_port) == 0x34, "channel connected_port at +0x34");
-_Static_assert(offsetof(xns_$channel_t, user_socket) == 0x36, "channel user_socket at +0x36");
-_Static_assert(offsetof(xns_$channel_t, xns_socket) == 0x38, "channel xns_socket at +0x38");
-_Static_assert(offsetof(xns_$channel_t, flags) == 0x3A, "channel flags at +0x3A");
-_Static_assert(offsetof(xns_$channel_t, port_active) == 0x3C, "channel port_active at +0x3C");
-_Static_assert(offsetof(xns_$channel_t, state) == 0x44, "channel state at +0x44");
-
 _Static_assert(sizeof(xns_$pkt_desc_t) == 0x48, "xns_$pkt_desc_t is 0x48 bytes");
 _Static_assert(offsetof(xns_$pkt_desc_t, data_len) == 0x18, "pkt_desc data_len at +0x18");
 _Static_assert(offsetof(xns_$pkt_desc_t, header) == 0x1C, "pkt_desc header at +0x1C");
@@ -380,6 +392,21 @@ _Static_assert(offsetof(xns_$sock_pkt_t, reserved_12) == 0x12, "sock_pkt reserve
 _Static_assert(offsetof(xns_$sock_pkt_t, port_info) == 0x2A, "sock_pkt port_info at +0x2A");
 _Static_assert(offsetof(xns_$sock_pkt_t, header_len) == 0x2C, "sock_pkt header_len at +0x2C");
 _Static_assert(offsetof(xns_$sock_pkt_t, mac_info) == 0x30, "sock_pkt mac_info at +0x30");
+
+/*
+ * The rest still contain native pointers or an embedded ml_$exclusion_t, so
+ * they only lay out to the binary on the 32-bit target.
+ */
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(xns_$port_state_t) == 0x0C, "xns_$port_state_t is 0x0C bytes");
+_Static_assert(sizeof(xns_$channel_t) == 0x48, "xns_$channel_t is 0x48 bytes");
+_Static_assert(offsetof(xns_$channel_t, demux) == 0x00, "channel demux at +0x00");
+_Static_assert(offsetof(xns_$channel_t, connected_port) == 0x34, "channel connected_port at +0x34");
+_Static_assert(offsetof(xns_$channel_t, user_socket) == 0x36, "channel user_socket at +0x36");
+_Static_assert(offsetof(xns_$channel_t, xns_socket) == 0x38, "channel xns_socket at +0x38");
+_Static_assert(offsetof(xns_$channel_t, flags) == 0x3A, "channel flags at +0x3A");
+_Static_assert(offsetof(xns_$channel_t, port_active) == 0x3C, "channel port_active at +0x3C");
+_Static_assert(offsetof(xns_$channel_t, state) == 0x44, "channel state at +0x44");
 
 _Static_assert(offsetof(xns_$idp_state_t, packets_received) == 0x004, "state packets_received at +0x004");
 _Static_assert(offsetof(xns_$idp_state_t, packets_dropped) == 0x008, "state packets_dropped at +0x008");

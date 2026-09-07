@@ -39,7 +39,7 @@ void MAC_OS_$PROC2_CLEANUP(uint16_t as_id)
     status_$t dummy_status;
 
     /* Enter exclusion region */
-    ML_$EXCLUSION_START((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
+    ML_$EXCLUSION_START(&MAC_OS_$EXCLUSION);
 
     /* Check each channel */
     for (channel = 0; channel < MAC_OS_MAX_CHANNELS; channel++) {
@@ -105,7 +105,7 @@ void MAC_OS_$PROC2_CLEANUP(uint16_t as_id)
         chan->callback = NULL;
     }
 
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)MAC_OS_$EXCLUSION);
+    ML_$EXCLUSION_STOP(&MAC_OS_$EXCLUSION);
 #else
     /* Non-M68K implementation stub */
     (void)as_id;
