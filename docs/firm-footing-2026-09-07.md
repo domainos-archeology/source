@@ -94,3 +94,39 @@ translation beads (about 35). The 367 undefined references (137 unique symbols) 
   instruction address in a comment and in Ghidra.
 - Never commit an agent's work on its own report: rerun the gates, spot-check
   the riskiest claims with `gsk`, then commit.
+
+## Addendum, 2026-09-08: whole-tree completeness review
+
+The independent review of waves 8-17 passed, but a bytes-per-C-line
+ranking (Ghidra function size over non-comment C lines) then exposed a
+defect class the audit had not caught: functions silently abbreviated
+with no TODO.  Every emitted function was walked block by block against
+its disassembly by read-only Fable forks:
+
+| tier | files | defective |
+|---|---|---|
+| over 150 bytes, ratio 6 and up | 81 | 33 |
+| over 150 bytes, ratio under 6 | 257 | 118 |
+| under 150 bytes | 318 | 42 |
+
+Recurring defect shapes: dropped control-flow arms; invented early
+returns, guards and status mappings; NULL or private copies for
+`pea (d,PC)` constant cells; flattened NAME_$UNLOCK_DIR status tails;
+mis-laid DO_OP and rem_file request/reply records; callee output records
+split into adjacent locals; big-endian-only byte casts; loop counts,
+walk direction, bit positions (byte ops on the high byte of a word) and
+byte booleans declared as words.  All of it was beaded, fixed by Opus
+owner agents, verified by Fable forks against the image and committed in
+25 local commits.  Gates on HEAD: 0 diagnostics from a clean build, no
+duplicate globals, 271 host tests passing, 381 undefined-reference lines
+at link (up from 367 because more callees are now declared).
+
+Quality-gate change: `make clean && make` is now required; incremental
+builds hid a prototype mismatch across headers.
+
+Still open: the deferred translation beads, seven research beads
+(ring_info_t bytes, MEM record head words, RINGLOG_$CNTL block,
+route_$port_t 0x4C..0x57, the 2LONG1 counters, app header direction),
+the per-process-data design (source-0i3) awaiting review, and a few P3
+convention items (audit_data_t host pointers, PROC1_$TYPE base,
+0xE825DC's two names, AST_$TRUNCATE's remote DTM copy-back).
