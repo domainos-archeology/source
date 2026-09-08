@@ -35,21 +35,11 @@
  */
 
 /*
- * mac_$copy_to_buffers - Copy packet data to user buffers
- *
- * Copies data from a packet into a chain of user-provided buffers.
- * Uses parent's stack frame for buffer chain tracking.
- *
- * Parameters:
- *   src_ptr    - Pointer to source data pointer
- *   length     - Number of bytes to copy
- *
- * This is a nested procedure that accesses the caller's stack frame
- * for buffer chain state (offset -0x5C for current buffer, -0x72 for offset).
- *
- * Original address: 0x00E0BD2C
+ * mac_$copy_to_buffers (0x00E0BD2C) is a nested Pascal procedure of
+ * MAC_$RECEIVE and reaches its parent's frame through a static link, so it is
+ * emitted as a file-static function inside mac/receive.c rather than declared
+ * here.
  */
-void mac_$copy_to_buffers(void *src_ptr, int16_t length);
 
 /*
  * ============================================================================

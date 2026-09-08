@@ -1,137 +1,132 @@
 /*
- * NETWORK_$GET_PKT_SIZE - Get maximum packet size for destination
+ * NETWORK_$GET_PKT_SIZE - pick the packet size to use for a destination
  *
- * Determines the appropriate packet size to use when communicating with
- * a network destination. The function returns:
- *   - max_size for local node (loopback) destinations
- *   - 0x400 (minimum) for all other destinations
+ * Asks RIP where the destination lives and answers with the caller's size when
+ * the destination is this node, and with the 0x400 floor otherwise.  The
+ * result is finally clamped to the caller's size and up to 0x400.
  *
- * The logic checks if the destination is the local node (NODE_$ME), either
- * directly or via the loopback flag. If so, the caller's requested max_size
- * is returned (clamped to >= 0x400). For all other destinations, including
- * remote nodes on local ports or routed destinations, the minimum packet
- * size of 0x400 is used to ensure compatibility.
- *
- * Original address: 0x00E0FA00
+ * Original address: 0x00E0FA00, size 230 bytes (0x00E0FA00-0x00E0FAE5).
+ * A5 = 0x00E248FC (the NETWORK_ module data base).
  */
 
 #include "network/network_internal.h"
 #include "route/route.h"
 #include "rip/rip.h"
+#include "node/node.h"      /* NODE_$ME (0x00E245A4) */
 
-/*
- * Minimum/default packet size
- */
+/* Minimum/default packet size */
 #define PKT_SIZE_MIN    0x400
 
 /*
- * NETWORK_$GET_PKT_SIZE - Get maximum packet size for destination
+ * NETWORK_$GET_PKT_SIZE
  *
- * @param dest_addr     Pointer to destination address structure:
- *                        +0x00: network port/type (4 bytes)
- *                        +0x04: node ID (4 bytes - low 20 bits used)
- * @param max_size      Caller's requested maximum packet size
+ * Parameters (0x08, 0x0C off A6):
+ *   dest_addr - a two-longword destination {network, node}
+ *   max_size  - the caller's requested maximum, by value as a word
  *
- * @return Packet size to use:
- *         - max_size (clamped to >= 0x400) for local node destinations
- *         - 0x400 for all remote destinations
+ * Returns the size to use, in D0.
  */
 uint16_t NETWORK_$GET_PKT_SIZE(uint32_t *dest_addr, uint16_t max_size)
 {
-    uint16_t result;
-    uint16_t rip_result;
-    uint16_t port_num;
-    status_$t status;
-    uint8_t nexthop_info[16];   /* Next hop address buffer (10 bytes used) */
-    uint32_t local_addr[3];     /* Local copy of address for route lookup */
-    uint32_t node_id;
-    uint8_t metric;
-    route_$port_t *port_ptr;
+    uint16_t            result;         /* D0 */
+    int16_t             rip_result;     /* D1 */
+    int16_t             port_num;       /* A6-0x32 */
+    status_$t           status;         /* A6-0x2c */
+    rip_$nexthop_t      nexthop;        /* A6-0x20 */
+    rip_$dest_addr_t    dest;           /* A6-0x10 */
+    uint32_t            node;           /* A6-0x28 */
+    uint32_t            network;
+    route_$port_t      *port_ptr;
 
-    /* Initialize result to caller's requested max_size */
     result = max_size;
 
-    /* If already at minimum size, no optimization needed */
+    /* 0x00E0FA16: a request already at the floor is answered immediately */
     if (max_size == PKT_SIZE_MIN) {
-        goto done_clamp;
+        goto clamp;
     }
 
-    /* Extract the network port type from destination */
-    local_addr[0] = dest_addr[0];
-
     /*
-     * Only process if using ROUTE_$PORT or unspecified (0).
-     * Other port types indicate a different routing path.
+     * 0x00E0FA1C-0x00E0FA2A: only this internet's own network number, or 0,
+     * is worth a route lookup.
      */
-    if (local_addr[0] != ROUTE_$PORT && local_addr[0] != 0) {
+    network = dest_addr[0];
+    if (network != ROUTE_$PORT && network != 0) {
         result = PKT_SIZE_MIN;
-        goto done_clamp;
+        goto clamp;
     }
 
-    /* Determine the node ID to use for route lookup */
+    /* 0x00E0FA2C-0x00E0FA40 */
     if (NETWORK_$LOOPBACK_FLAG < 0) {
-        /* Loopback mode: use local node regardless of destination */
-        node_id = NODE_$ME;
+        node = NODE_$ME;
     } else {
-        /* Normal mode: use the destination node ID */
-        node_id = dest_addr[1];
+        node = dest_addr[1];
     }
 
     /*
-     * Build the address structure for RIP lookup.
-     * The structure is 10 bytes: 4-byte port + 6-byte address.
-     * We use the masked node_id (low 20 bits) as part of the address.
+     * 0x00E0FA42-0x00E0FA54: build the destination RIP is asked about.
+     *   move.l D0,(-0x10,A6)            dest.network
+     *   andi.l #-0x100000,(-0xa,A6)     dest.host_lo &= 0xFFF00000
+     *   move.l (-0x28,A6),D1
+     *   or.l   D1,(-0xa,A6)             dest.host_lo |= node
+     * Only those two fields are written: dest.host_hi (A6-0x0c) and the top
+     * twelve bits of dest.host_lo keep whatever the stack held, and
+     * dest.socket is never touched.  That is the image's behaviour; the tree
+     * used to leave the whole host address unwritten (bead source-zbqh).
      */
+    dest.network = network;
+    dest.host_lo = (dest.host_lo & 0xFFF00000u) | node;
 
-    /* Find the next hop for this destination */
-    metric = RIP_$FIND_NEXTHOP(&local_addr[0], 0, &port_num, nexthop_info, &status);
+    /*
+     * 0x00E0FA56-0x00E0FA72: five arguments plus a word result slot.
+     *   pea (-0x2c,A6)   status
+     *   pea (-0x20,A6)   nexthop
+     *   pea (-0x32,A6)   port number
+     *   clr.w -(SP)      flags, false
+     *   pea (-0x10,A6)   the destination
+     */
+    rip_result = RIP_$FIND_NEXTHOP(&dest, 0, &port_num, &nexthop, &status);
 
-    /* Save the result based on status */
-    rip_result = metric;
+    /*
+     * 0x00E0FA74-0x00E0FA82: D0 keeps the RIP result unless the lookup failed,
+     * and D1 keeps the result unconditionally for the test below.
+     */
+    result = (uint16_t)rip_result;
     if (status != status_$ok) {
-        /* No route found - will use minimum size if not local */
-        rip_result = PKT_SIZE_MIN;
+        result = PKT_SIZE_MIN;
+    }
+
+    /* 0x00E0FA84-0x00E0FA92: talking to ourselves - the caller's size stands */
+    if (node == NODE_$ME) {
+        result = max_size;
+        goto clamp;
+    }
+
+    /* 0x00E0FA94: an indirect route always drops to the floor */
+    if (rip_result != 0) {
+        result = PKT_SIZE_MIN;
+        goto clamp;
     }
 
     /*
-     * If destination is the local node, return the requested max_size.
-     * This applies regardless of routing status - local traffic can
-     * use larger packets.
+     * 0x00E0FA98-0x00E0FAC6.  A direct route on a port whose "active" word is
+     * 1 leaves D0 alone and writes status_$network_request_denied_by_local_node
+     * into the LOCAL status cell - which nothing ever reads, since the routine
+     * returns only D0.  Any other port drops to the floor; the
+     * "movea.l (0x48,A0),A0" at 0x00E0FAB6 loads the driver record into a
+     * register that is then never used.
      */
-    if (node_id == NODE_$ME) {
-        /* result stays as max_size */
-        goto done_clamp;
+    port_ptr = ROUTE_$PORTP[port_num];
+    if (port_ptr->active == 1) {
+        status = status_$network_request_denied_by_local_node;
+        goto clamp;
     }
-
-    /*
-     * For non-local destinations, check the route type.
-     */
-    if (metric == 0) {
-        /*
-         * Direct route (metric 0) - check port type.
-         * Even for direct routes, non-local ports use minimum size.
-         */
-        result = rip_result;
-        port_ptr = ROUTE_$PORTP[port_num];
-
-        if (port_ptr->active != ROUTE_PORT_TYPE_LOCAL) {
-            /* Non-local port: use minimum packet size */
-            result = PKT_SIZE_MIN;
-        }
-        /* For local ports, result = rip_result (0 or 0x400), clamped below */
-        goto done_clamp;
-    }
-
-    /* Indirect route (metric > 0): use minimum size */
     result = PKT_SIZE_MIN;
 
-done_clamp:
-    /* Clamp result to be at most max_size */
+clamp:
+    /* 0x00E0FACC-0x00E0FADA, both comparisons unsigned */
     if (result > max_size) {
         result = max_size;
     }
-
-    /* Ensure minimum packet size of 0x400 */
     if (result <= PKT_SIZE_MIN) {
         result = PKT_SIZE_MIN;
     }

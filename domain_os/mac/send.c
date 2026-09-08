@@ -16,7 +16,7 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
     uint16_t chan;
     uint32_t chan_offset;
     uint16_t flags;
-    uint8_t owner_asid;
+    uint16_t owner_asid;
     uint16_t port_num;
     status_$t cleanup_status;
     status_$t os_status;
@@ -36,7 +36,7 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
 
     /*
      * Validate channel number and ownership.
-     * Channel must be < 10, flag bit 9 (0x200) must be set (channel open),
+     * Channel must be < 10, flag bit 9 (MAC_OS_CHANNEL_IN_USE) must be set,
      * and owner ASID (bits 2-7 of flags >> 2) must match current ASID.
      */
     if (chan >= MAC_MAX_CHANNELS) {
@@ -50,14 +50,19 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
     /* Read flags from channel entry at offset 0x7B2 */
     flags = *(uint16_t *)(MAC_$DATA_BASE + 0x7B2 + chan_offset);
 
-    /* Check if channel is open (bit 9 / 0x200) */
-    if ((flags & 0x200) == 0) {
+    /* 0x00E0BB48: move.w (0x7b2,A0),D1w / btst.l #0x9,D1 - word bit 9 */
+    if ((flags & MAC_OS_CHANNEL_IN_USE) == 0) {
         *status_ret = status_$mac_channel_not_open;
         return;
     }
 
-    /* Check ownership: bits 2-7 >> 2 gives owner ASID */
-    owner_asid = (flags & 0xFC) >> 2;
+    /*
+     * 0x00E0BB52: move.w #0xfc,D2w / and.b (0x7b2,A0),D2b / lsr.w #0x2,D2w.
+     * The and.b works on the flags word's HIGH byte, so the owner is word
+     * bits 10..15, not bits 2..7.
+     */
+    owner_asid = (uint16_t)((flags & MAC_OS_CHANNEL_OWNER_MASK)
+                            >> MAC_OS_CHANNEL_OWNER_SHIFT);
     if (owner_asid != PROC1_$AS_ID) {
         *status_ret = status_$mac_channel_not_open;
         return;

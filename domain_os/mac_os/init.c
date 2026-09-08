@@ -1,141 +1,141 @@
 /*
- * MAC_OS_$INIT - Initialize the MAC_OS subsystem
+ * MAC_OS_$INIT - Initialise the MAC_OS subsystem
  *
- * Initializes the exclusion lock, clears all packet type tables,
- * initializes channel table, and sets up initial port configurations.
+ * Initialises the exclusion lock, clears every port's packet-type table,
+ * publishes the port info records, seeds each configured port's own link and
+ * XNS addresses from NODE_$ME, and resets all ten channel slots.
  *
- * Original address: 0x00E2F4FC
- * Original size: 306 bytes
+ * Original address: 0x00E2F4FC, size 306 bytes (0x00E2F4FC-0x00E2F62D).
+ * A5 is not used here; the module base 0x00E22990 is loaded as an immediate.
  */
 
 #include "mac_os/mac_os_internal.h"
+#include "route/route.h"    /* ROUTE_$PORTP, route_$port_t */
+#include "node/node.h"      /* NODE_$ME (0x00E245A4) */
 
 /*
- * MAC_OS_$INIT
+ * The XNS host address MAC_OS_$INIT builds for each port:
  *
- * Initializes the MAC_OS subsystem:
- * 1. Initialize the exclusion lock
- * 2. For each port (0-7):
- *    - Initialize port info pointer
- *    - Clear packet type count
- *    - Initialize channel callback pointer
- *    - If port has a route port with driver info, set up ARP entry
- * 3. For each channel (0-9):
- *    - Clear in-use and open flags
- *    - Set socket to NO_SOCKET (0xE1)
- *    - Clear callback and driver_info pointers
+ *   0x00E2F5C4  move.w #0x800,(0x24,A1)    host_hi   = 0x0800
+ *   0x00E2F5CA  ori.w  #0x1e00,D0w         }  host_lo = (0x1E00 | node_hi) << 16
+ *   0x00E2F5CE  move.w D0w,(0x26,A1)       }            | node_lo
+ *   0x00E2F5D2  move.w (0xc,A2),(0x28,A1)  }
+ *   0x00E2F5D8  move.w #-0x1,(0x2a,A1)     socket    = 0xFFFF
  *
- * Assembly notes:
- *   - Uses A5 as base pointer to MAC_OS_$DATA (0xE22990)
- *   - First loop (D2=7, 8 iterations) handles ports
- *   - Second loop (D0=9, 10 iterations) handles channels
- *   - ROUTE_$PORTP is at 0xE26EE8 (array of 8 pointers)
- *   - NODE_$ME is at 0xE245A4 (local node address)
+ * i.e. the Apollo 08-00-1E-0n-nn-nn address built out of this node's id.
  */
+#define MAC_OS_XNS_HOST_HI          0x0800
+#define MAC_OS_XNS_HOST_LO_PREFIX   0x1E00
+#define MAC_OS_XNS_SOCKET_NIL       0xFFFF
+
 void MAC_OS_$INIT(void)
 {
-    int16_t port;
-    int16_t channel;
-    mac_os_$port_pkt_table_t *port_table;
-    mac_os_$channel_t *chan;
-    void **route_portp;
-    void *route_port;
-    void *driver_info;
-    uint32_t node_me;
-    uint16_t node_lo;
+    int16_t         port;
+    int16_t         channel;
+    route_$port_t  *route_port;
+    void           *driver_info;
+    uint16_t        node_hi;
+    uint16_t        node_lo;
 
-    /* Initialize the exclusion lock */
+    /* 0x00E2F504-0x00E2F514: ML_$EXCLUSION_INIT(base + 0x868) */
     ML_$EXCLUSION_INIT(&MAC_OS_$EXCLUSION);
 
-    /* Get the route port pointer array */
-    route_portp = (void **)0xE26EE8;
-
-    /* Initialize each port's packet type table and channel callback */
+    /* 0x00E2F516-0x00E2F5F2: "moveq #0x7,D2" ... "dbf D2w" -> 8 ports */
     for (port = 0; port < MAC_OS_MAX_PORTS; port++) {
-        port_table = &MAC_OS_$PORT_PKT_TABLES[port];
-        chan = &MAC_OS_$CHANNEL_TABLE[port];
-
         /*
-         * Point this port's MAC_OS_$PORTP_TABLE slot at its
-         * MAC_OS_$PORT_TABLE entry.
-         *
-         *   00e2f54c  lea (0x89c,A0),A3      ; A0 = A5 + port*8
-         *   00e2f550  move.l A3,(0x87c,A4)   ; A4 = A5 + port*4
+         * 0x00E2F54C: lea (0x89c,A0),A3 / move.l A3,(0x87c,A4)
+         * A0 walks base + 8*port, A4 walks base + 4*port.
          */
         MAC_OS_$PORTP_TABLE[port] = &MAC_OS_$PORT_TABLE[port];
 
-        /* Clear packet type count */
-        port_table->entry_count = 0;
+        /* 0x00E2F558: clr.w (A1), A1 walking base + 0xF4*port */
+        MAC_OS_$PORT_PKT_TABLES[port].entry_count = 0;
 
-        /* Initialize channel entry with default values */
-        /* Original: move.l #0x1,(0x89c,A1) */
+        /* 0x00E2F55E / 0x00E2F566 */
         MAC_OS_$PORT_TABLE[port].version = 1;
-        MAC_OS_$PORT_TABLE[port].config = 0;
+        MAC_OS_$PORT_TABLE[port].config  = 0;
 
-        /* Check if this port has a route port configured */
-        route_port = route_portp[port];
+        /* 0x00E2F56A-0x00E2F572: ROUTE_$PORTP[port] */
+        route_port = ROUTE_$PORTP[port];
         if (route_port == NULL) {
             continue;
         }
 
-        /* Check if route port has driver info */
-        driver_info = *(void **)((uint8_t *)route_port + ROUTE_PORT_DRIVER_INFO_OFFSET);
+        /* 0x00E2F578-0x00E2F580: route_port->driver_info */
+        driver_info = (void *)ARCH_VA_TO_PTR(route_port->driver_info);
         if (driver_info == NULL) {
             continue;
         }
 
-        /* Store MTU from driver info */
-        /* Original: move.w (0x4,A0),(0x8a2,A1) */
-        MAC_OS_$PORT_TABLE[port].mtu = *(uint16_t *)((uint8_t *)driver_info + 4);
+        /* 0x00E2F582: move.w (0x4,A0),(0x8a2,A1) */
+        MAC_OS_$PORT_TABLE[port].mtu =
+            *(uint16_t *)((uint8_t *)driver_info + MAC_OS_DRIVER_MTU_OFFSET);
 
-        /* Call the NOP placeholder function */
+        /* 0x00E2F588: jsr MAC_OS_$NOP */
         MAC_OS_$NOP();
 
-        /* Set up ARP table entry for this port */
-        /* Initialize with local node address for IP/ARP resolution */
-        /* Original code sets up an ARP entry structure at route_port */
+        /*
+         * 0x00E2F5A2-0x00E2F5B8:
+         *   move.l (NODE_$ME),D0 / clr.w D0w / swap D0 / andi.l #0xf,D0
+         * is the high word of NODE_$ME masked to four bits, and
+         *   move.w (NODE_$ME+2),(0xc,A2)
+         * is its low word.  Bit operations rather than byte reads so the two
+         * halves come out the same on a little-endian host.
+         */
+        node_hi = (uint16_t)((NODE_$ME >> 16) & 0x000F);
+        node_lo = (uint16_t)(NODE_$ME & 0xFFFF);
+
+        /* 0x00E2F590: move.l #0x10001,(0x4,A0) */
+        *(uint32_t *)((uint8_t *)route_port + ROUTE_PORT_LINK_ID_OFFSET) =
+            0x00010001u;
+
+        /*
+         * 0x00E2F59C-0x00E2F5B8: the port's own two-word link address, the
+         * same {count, words} record MAC_OS_$ARP builds.
+         */
         {
-            uint32_t *arp_entry = (uint32_t *)route_port;
+            mac_os_$link_addr_t *link_addr = (mac_os_$link_addr_t *)
+                ((uint8_t *)route_port + ROUTE_PORT_LINK_ADDR_OFFSET);
 
-            /* Set version/type */
-            arp_entry[1] = 0x10001;  /* Version 1, type 1 */
-            *(uint16_t *)((uint8_t *)route_port + 8) = 2;
-
-            /* Extract node address components */
-            node_me = *(uint32_t *)0xE245A4;
-            node_lo = (uint16_t)((node_me >> 16) & 0xF);
-
-            /* Store node address for ARP */
-            *(uint16_t *)((uint8_t *)route_port + 10) = node_lo;
-            *(uint16_t *)((uint8_t *)route_port + 12) = *(uint16_t *)0xE245A6;
-
-            /* Set up default ARP entry */
-            arp_entry[8] = arp_entry[0];
-            *(uint16_t *)((uint8_t *)route_port + 0x24) = 0x0800;  /* IP type */
-            *(uint16_t *)((uint8_t *)route_port + 0x26) = node_lo | 0x1E00;
-            *(uint16_t *)((uint8_t *)route_port + 0x28) = *(uint16_t *)((uint8_t *)route_port + 12);
-            *(uint16_t *)((uint8_t *)route_port + 0x2A) = 0xFFFF;  /* Broadcast marker */
+            link_addr->n_words = 2;
+            link_addr->addr[0] = node_hi;
+            link_addr->addr[1] = node_lo;
         }
+
+        /*
+         * 0x00E2F5C0-0x00E2F5D8: the port's own XNS endpoint.  host_lo is
+         * written as the two words 0x26 and 0x28; one 32-bit store of the
+         * same value lands the same bytes.
+         */
+        route_port->xns_addr.network = route_port->network;
+        route_port->xns_addr.host_hi = MAC_OS_XNS_HOST_HI;
+        route_port->xns_addr.host_lo =
+            ((uint32_t)(uint16_t)(MAC_OS_XNS_HOST_LO_PREFIX | node_hi) << 16)
+            | (uint32_t)node_lo;
+        route_port->xns_addr.socket  = MAC_OS_XNS_SOCKET_NIL;
     }
 
-    /* Initialize each channel entry */
+    /* 0x00E2F5F6-0x00E2F620: "moveq #0x9,D0" ... "dbf D0w" -> 10 channels */
     for (channel = 0; channel < MAC_OS_MAX_CHANNELS; channel++) {
-        chan = &MAC_OS_$CHANNEL_TABLE[channel];
+        mac_os_$channel_t *chan = &MAC_OS_$CHANNEL_TABLE[channel];
 
-        /* Clear the in-use flag (bit 0 of flags) */
-        chan->flags &= ~MAC_OS_FLAG_PROMISCUOUS;
+        /*
+         * 0x00E2F5FE / 0x00E2F604: bclr.b #0x0 and #0x1 on the byte at
+         * channel offset 0x12.  That byte is the flags word's HIGH half, so
+         * these clear word bits 8 and 9 - MAC_OS_CHANNEL_PROMISCUOUS and
+         * MAC_OS_CHANNEL_IN_USE - not bits 0 and 1 (bead source-b6p8).
+         */
+        chan->flags &= (uint16_t)~MAC_OS_CHANNEL_PROMISCUOUS;
+        chan->flags &= (uint16_t)~MAC_OS_CHANNEL_IN_USE;
 
-        /* Clear the open flag (bit 1 of flags) */
-        chan->flags &= ~MAC_OS_FLAG_OPEN;
+        /* 0x00E2F60A */
+        chan->socket = MAC_OS_CHANNEL_NO_SOCKET;
 
-        /* Set socket to "no socket" value */
-        chan->socket = MAC_OS_NO_SOCKET;
-
-        /* Clear line number */
+        /* 0x00E2F610 */
         chan->line_number = 0;
 
-        /* Clear driver info and callback pointers */
+        /* 0x00E2F614 / 0x00E2F618 */
         chan->driver_info = NULL;
-        chan->callback = NULL;
+        chan->callback    = NULL;
     }
 }

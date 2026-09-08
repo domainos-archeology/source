@@ -34,7 +34,20 @@
 /* Size of each log entry in bytes */
 #define RINGLOG_ENTRY_SIZE      0x2E    /* 46 bytes */
 
-/* Total size of ring buffer data (index + entries) */
+/*
+ * RINGLOG_$DATA is 0x11FC bytes (SAU2 map: "D53 EA3E38 RINGLOG_$DATA ...
+ * size = 11FC") and RINGLOG_$CNTL copies all of it out with
+ * "move.w #0x47e,D0w / move.l (A0)+,(A1)+ / dbf" - 0x47F longwords
+ * (0x00E72318).
+ *
+ * The entries are NOT offset past the index word: RINGLOG_$LOGIT computes
+ * "movea.l #0xea3e38,A0 / muls.w D3w,D1 (D1 = 0x2E) / lea (0x0,A0,D1*0x1),A2"
+ * (0x00E1A2E4) and RINGLOG_$CNTL's clear loop indexes the same way
+ * (0x00E7229A).  Entry 0 therefore shares its first word with the index, and
+ * no writer ever touches an entry's bytes 0x00..0x01 - except the last word of
+ * the 13-word packet copy, which lands in the NEXT entry's shared word.
+ */
+#define RINGLOG_DATA_SIZE       0x11FC
 #define RINGLOG_BUFFER_SIZE     (2 + (RINGLOG_MAX_ENTRIES * RINGLOG_ENTRY_SIZE))
 
 /*
@@ -58,11 +71,22 @@
 #define RINGLOG_SOCK_MBX        9       /* MBX socket */
 
 /*
- * Log entry flag bits (at offset 0x0B in entry)
+ * Log entry flag bits.  They live in the LOW NIBBLE of the byte at entry
+ * offset 0x0B; the high nibble of that byte is the top four bits of the
+ * 20-bit node id packed at 0x09..0x0B (see ringlog_$entry_t).
+ *
+ *   0x00E1A2FA  andi.b #-0x9,(0xb,A2)   clear INBOUND, preserving the rest
+ *   0x00E1A302  or.b   D1b,(0xb,A2)     set it from header_info[0] bit 7
+ *   0x00E1A306  bset.b #0x2,(0xb,A2)    VALID
+ *   0x00E1A314  andi.b #-0x3,(0xb,A2)   clear SEND
+ *   0x00E1A31C  or.b   D1b,(0xb,A2)     set it when pkt->kind == 1
+ * and RINGLOG_$CNTL clears VALID with "andi.w #-0x5,(0xa,A0,D1*0x1)"
+ * (0x00E722A6), a WORD operation on 0x0A whose low byte is 0x0B.
  */
 #define RINGLOG_FLAG_VALID      0x04    /* Entry is valid */
 #define RINGLOG_FLAG_SEND       0x02    /* Entry is for a send (vs receive) */
 #define RINGLOG_FLAG_INBOUND    0x08    /* Packet was inbound */
+#define RINGLOG_FLAG_MASK       0x0F    /* the nibble the flags occupy */
 
 /*
  * ============================================================================

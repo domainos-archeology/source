@@ -61,7 +61,7 @@ void network_$do_request(void *net_handle, void *cmd_buf, int16_t cmd_len,
     uint32_t data_bufs[6];      /* Buffer for received data pointers */
     uint16_t data_len;
     int16_t *cmd_ptr;
-    int16_t *resp_ptr;
+    network_$reply_hdr_t *reply;
     uint32_t target_node;
 
     retry_count = 0;
@@ -138,12 +138,17 @@ void network_$do_request(void *net_handle, void *cmd_buf, int16_t cmd_len,
              * Response type (first word of resp_buf) must equal
              * command type (first word of cmd_buf) + 1.
              */
+            /*
+             * 0x00E0F9CC-0x00E0F9E6.  Both the type word AND the status
+             * longword come out of the REPLY BUFFER (A4 = the 0x1A parameter);
+             * the status is the unaligned longword at resp_buf + 2, not
+             * anything in resp_info (bead source-54rh).
+             */
             cmd_ptr = (int16_t *)cmd_buf;
-            resp_ptr = (int16_t *)resp_buf;
+            reply = (network_$reply_hdr_t *)resp_buf;
 
-            if (*resp_ptr == *cmd_ptr + 1) {
-                /* Valid response - extract status from response info */
-                *status_ret = *((status_$t *)((int16_t *)resp_info + 1));
+            if (reply->reply_type == *cmd_ptr + 1) {
+                *status_ret = reply->status;
             } else {
                 /* Unexpected response type */
                 *status_ret = status_$network_unexpected_reply_type;
@@ -160,8 +165,15 @@ void network_$do_request(void *net_handle, void *cmd_buf, int16_t cmd_len,
          * Check if we've exceeded the maximum retry count.
          * Don't give up if the target is our mother node.
          */
+        /*
+         * 0x00E0F95A-0x00E0F964:
+         *   clr.l D1 / move.w D6w,D0w / move.w D2w,D1w / ext.l D0 / cmp.l D1,D0
+         * retry_count is SIGN-extended and max_retries ZERO-extended before
+         * the 32-bit compare; the default C promotions of int16_t and uint16_t
+         * do exactly that, so neither operand is cast here.
+         */
         target_node = *((uint32_t *)net_handle + 1);
-        if (retry_count >= (int16_t)max_retries && target_node != NETWORK_$MOTHER_NODE) {
+        if (retry_count >= max_retries && target_node != NETWORK_$MOTHER_NODE) {
             *status_ret = status_$network_remote_node_failed_to_respond;
             PKT_$NOTE_VISIBLE(target_node, 0);
             break;

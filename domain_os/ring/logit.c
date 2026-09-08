@@ -1,110 +1,70 @@
 /*
- * RINGLOG_$LOGIT - Log a packet event
+ * RINGLOG_$LOGIT - append one packet event to the ring log
  *
- * Records a packet send/receive event to the ring log circular buffer.
+ * Original address: 0x00E1A20C, size 504 bytes (0x00E1A20C-0x00E1A403).
+ * A5 = 0x00E2C32C (the RINGLOG_ module data base); the buffer is
+ * RINGLOG_$DATA at 0x00EA3E38.
  *
- * Original address: 0x00E1A20C
+ * Returns the entry index it used, or -1 if the event was filtered out.
  */
 
 #include "ring/ring_internal.h"
 #include "ring/ringlog_internal.h"
 
+/* 0x00E1A36E / 0x00E1A386: the 24-bit mask applied on the receive path */
+#define RINGLOG_NODE_SRC_MASK   0x00FFFFFFu
+
 /*
- * RINGLOG_$LOGIT - Log a packet event
+ * RINGLOG_$LOGIT
  *
- * This function logs packet send/receive events to a circular buffer for
- * debugging and monitoring. The function implements several filtering
- * mechanisms to avoid logging unwanted packets.
- *
- * Algorithm:
- * 1. Check if the packet's network ID matches the filter (if filter active)
- * 2. Determine the socket type from the packet structure
- * 3. Check socket type filters (NIL, WHO, MBX)
- * 4. Acquire spinlock and allocate next entry in circular buffer
- * 5. Fill in the log entry with packet information
- * 6. Release spinlock
- *
- * The packet info structure layout depends on whether this is a send (type=1)
- * or receive operation:
- *
- * For sends (pkt_info[0x0c] == 1):
- *   - offset 0x00: local network ID
- *   - offset 0x08: remote network ID
- *   - offset 0x0c: packet type flag (1 = send)
- *   - offset 0x16: packet type
- *   - offset 0x18: header length
- *   - offset 0x19: socket index
- *   - offset 0x1a: socket type (short)
- *   - offset 0x1b: socket byte
- *   - offset 0x1e+: socket type table
- *
- * For receives:
- *   - offset 0x00: local network ID
- *   - offset 0x16: packet type
- *   - offset 0x2e: additional info
- *   - offset 0x34: remote network ID (24-bit at offset 0x34)
- *   - offset 0x38: socket type (short)
- *   - offset 0x39: socket byte 2
- *   - offset 0x3a: field_0c (4 bytes)
- *   - offset 0x40: network ID (24-bit)
- *   - offset 0x44: socket type alt
- *   - offset 0x45: socket byte 1
- *
- * Parameters:
- *   header_info - Pointer to header info; bit 7 of byte 0 indicates inbound
- *   pkt_info    - Pointer to packet information structure
- *
- * Returns:
- *   Entry index (0-99) if logged successfully
- *   -1 if packet was filtered out or logging not active
+ * Parameters (0x08, 0x0C off A6):
+ *   header_info - a byte cell; only bit 7 of byte 0 is read
+ *   pkt_info    - the packet record being logged
  */
 int16_t RINGLOG_$LOGIT(uint8_t *header_info, void *pkt_info)
 {
-    uint32_t *pkt = (uint32_t *)pkt_info;
-    uint8_t *pkt_bytes = (uint8_t *)pkt_info;
-    int16_t result = -1;
-    int16_t socket_type;
-    int8_t is_send;
-    int16_t entry_idx;
-    int entry_offset;
-    ringlog_entry_t *entry;
-    ml_$spin_token_t token;
-    int16_t i;
-    uint8_t *src;
+    const uint8_t      *pkt = (const uint8_t *)pkt_info;
+    int16_t             result = -1;
+    uint16_t            kind;
+    int16_t             socket_type;
+    int16_t             entry_idx;
+    ringlog_$entry_t   *entry;
+    ml_$spin_token_t    token;
+    uint16_t            word_off;
+    int16_t             i;
+    uint32_t            node;
 
-    /* Check network ID filter */
-    if (RINGLOG_$ID != 0) {
-        /* Filter is active - check if packet matches */
-        if (RINGLOG_$ID != pkt[0] && RINGLOG_$ID != pkt[2]) {
-            return -1;
-        }
+    /*
+     * 0x00E1A21E-0x00E1A230: when RINGLOG_$ID is set, the packet must name it
+     * either at +0x00 or at +0x08.
+     */
+    if (RINGLOG_$ID != 0 &&
+        RINGLOG_$ID != ringlog_$pkt_long(pkt, 0x00) &&
+        RINGLOG_$ID != ringlog_$pkt_long(pkt, 0x08)) {
+        return -1;
     }
 
-    /* Determine packet type (send vs receive) */
-    is_send = pkt_bytes[0x0c];
-
-    /* Get socket type based on packet type */
-    if (is_send == 1) {
-        /* Send packet: socket type at offset 0x1a */
-        socket_type = *(int16_t *)&pkt_bytes[0x1a];
+    /* 0x00E1A234-0x00E1A24A: the record kind, zero-extended from pkt[0x0C] */
+    kind = pkt[0x0C];
+    if (kind == 1) {
+        socket_type = ringlog_$pkt_word(pkt, 0x1A);
     } else {
-        /* Receive packet: socket type at offset 0x44 */
-        socket_type = *(int16_t *)&pkt_bytes[0x44];
+        socket_type = ringlog_$pkt_word(pkt, 0x44);
     }
 
-    /* If socket type > 11, look it up in a table */
-    if (socket_type > 0x0b) {
-        if (is_send == 1) {
-            /* For sends: socket table lookup using index at offset 0x19 */
-            uint8_t sock_idx = pkt_bytes[0x19];
-            socket_type = *(int16_t *)&pkt_bytes[0x1e + (sock_idx * 2)];
+    /* 0x00E1A24C-0x00E1A26C: above 0x0B the socket is looked up elsewhere */
+    if (socket_type > 0x0B) {
+        if (kind == 1) {
+            socket_type = ringlog_$pkt_word(pkt, 0x1E + 2 * (uint16_t)pkt[0x19]);
         } else {
-            /* For receives: socket type at offset 0x38 */
-            socket_type = *(int16_t *)&pkt_bytes[0x38];
+            socket_type = ringlog_$pkt_word(pkt, 0x38);
         }
     }
 
-    /* Apply socket type filters */
+    /*
+     * 0x00E1A26E-0x00E1A294.  Each filter byte is a Domain boolean: negative
+     * means "do not filter this socket type".
+     */
     if (RINGLOG_$NIL_SOCK >= 0 && socket_type == RINGLOG_SOCK_NIL) {
         return -1;
     }
@@ -115,106 +75,121 @@ int16_t RINGLOG_$LOGIT(uint8_t *header_info, void *pkt_info)
         return -1;
     }
 
-    /* Acquire spinlock for buffer access */
+    /* 0x00E1A296-0x00E1A2E0: claim the next slot under the spin lock */
     token = ML_$SPIN_LOCK(&RINGLOG_$CTL.spinlock);
 
-    /* Check if this is the first entry after clear/wrap */
     if (RINGLOG_$CTL.first_entry_flag < 0) {
-        RINGLOG_$BUF.current_index = 0;
+        ringlog_$set_index(0);
     }
     RINGLOG_$CTL.first_entry_flag = 0;
 
-    /* Get current entry index and advance */
-    entry_idx = RINGLOG_$BUF.current_index;
-    RINGLOG_$BUF.current_index++;
-
-    /* Wrap around at end of buffer */
-    if (RINGLOG_$BUF.current_index > 99) {
-        RINGLOG_$BUF.current_index = 0;
+    entry_idx = ringlog_$get_index();
+    ringlog_$set_index((int16_t)(ringlog_$get_index() + 1));
+    if (ringlog_$get_index() > 99) {
+        ringlog_$set_index(0);
     }
 
-    /* Release spinlock */
     ML_$SPIN_UNLOCK(&RINGLOG_$CTL.spinlock, token);
 
-    /* Calculate entry pointer */
+    /* 0x00E1A2E2-0x00E1A2F2: entry = RINGLOG_$DATA + 0x2E * index */
     result = entry_idx;
-    entry = &RINGLOG_$BUF.entries[entry_idx];
+    entry  = ringlog_$entry(entry_idx);
 
-    /* Set flags byte */
-    /* Clear inbound flag (bit 3), then set from header_info bit 7 */
-    uint8_t flags = 0;
-    flags |= (header_info[0] >> 7) << 3;  /* Inbound flag */
-    flags |= RINGLOG_FLAG_VALID;           /* Mark as valid */
+    /*
+     * 0x00E1A2F6-0x00E1A31E: the flag nibble in the byte at entry + 0x0B.
+     * Each bit is set with an explicit and/or pair that preserves the other
+     * bits - including the four node-id bits in the byte's high nibble - so
+     * the byte is never simply overwritten (bead source-c121).
+     */
+    {
+        uint8_t *flags_byte = &entry->packed[RINGLOG_PACKED_OFF_08 + 3];
 
-    /* Set send flag based on packet type */
-    if (is_send == 1) {
-        flags |= RINGLOG_FLAG_SEND;
+        /* andi.b #-0x9 / lsl.b #0x3 / or.b : bit 3 from header_info[0] bit 7 */
+        *flags_byte = (uint8_t)((*flags_byte & (uint8_t)~RINGLOG_FLAG_INBOUND) |
+                                (uint8_t)(((header_info[0] >> 7) & 1) << 3));
+
+        /* bset.b #0x2 */
+        *flags_byte |= RINGLOG_FLAG_VALID;
+
+        /* seq / lsr.b #0x7 / andi.b #-0x3 / add.b / or.b : bit 1 from kind==1 */
+        *flags_byte = (uint8_t)((*flags_byte & (uint8_t)~RINGLOG_FLAG_SEND) |
+                                (uint8_t)((kind == 1 ? 1u : 0u) << 1));
     }
 
-    /* Store flags (at offset 0x0B within entry, which is byte 3 of local_network_id_flags) */
-    uint8_t *entry_bytes = (uint8_t *)entry;
-    entry_bytes[0x0b] = flags;
+    /*
+     * 0x00E1A320-0x00E1A330:
+     *   andi.l #-0xfffff1,(0x8,A2)   long@0x08 &= 0xFF00000F
+     *   move.l (A3),D1 / lsl.l #0x4 / or.l D1,(0x8,A2)
+     */
+    ringlog_$put_packed(entry, RINGLOG_PACKED_OFF_08,
+                        (ringlog_$get_packed(entry, RINGLOG_PACKED_OFF_08) & 0xFF00000Fu) |
+                        (ringlog_$pkt_long(pkt, 0x00) << 4));
 
-    /* Store local network ID (shifted left 4 bits) */
-    /* Preserve low 4 bits, store network ID in upper 28 bits */
-    entry->local_network_id_flags = (entry->local_network_id_flags & 0x0000000F) |
-                                     (pkt[0] << 4);
+    /* 0x00E1A332: move.w (0x16,A3),(0x14,A2) */
+    entry->pkt_type = ringlog_$pkt_uword(pkt, 0x16);
 
-    /* Store packet type from offset 0x16 */
-    entry->packet_type = *(uint16_t *)&pkt_bytes[0x16];
-
-    /* Copy packet data (13 words = 26 bytes) starting from calculated offset */
-    /* The offset is based on header length field at pkt[6] (byte offset 0x18) */
-    uint8_t hdr_len = pkt_bytes[0x18];
-    int data_offset = (((hdr_len + 0x1e) >> 1) + 1) * 2;
-    src = &pkt_bytes[data_offset];
-
-    /* Copy 13 words (26 bytes) to entry->packet_data (but structure has 24 bytes) */
-    /* Actually copy to offset 0x16 which extends past packet_data */
+    /*
+     * 0x00E1A338-0x00E1A364: thirteen words ("moveq #0xc,D1" + dbf) starting
+     * at pkt + 2 * ((pkt[0x18] + 0x1E) >> 1).  The last of them lands at
+     * entry + 0x2E, in the next entry's shared word; that is what the image
+     * does.
+     */
+    word_off = (uint16_t)(((uint32_t)pkt[0x18] + 0x1E) >> 1);
     for (i = 0; i < 13; i++) {
-        *(uint16_t *)&entry_bytes[0x16 + i*2] = *(uint16_t *)&src[i*2 - 2];
+        entry->pkt_words[i] = ringlog_$pkt_uword(pkt, (uint16_t)(2 * word_off + 2 * i));
     }
 
-    /* Fill in remaining fields based on send vs receive */
-    if ((flags & RINGLOG_FLAG_SEND) == 0) {
-        /* Receive packet */
-        /* Remote network ID from offset 0x34 (24-bit, shifted << 8) */
-        uint32_t remote_id = pkt[0x0d] & 0x00FFFFFF;  /* pkt[0x0d] = offset 0x34 */
-        entry->remote_network_id = (entry->remote_network_id & 0x00000FFF) |
-                                    (remote_id << 12);
+    /* 0x00E1A366: btst.b #0x1,(0xb,A2) - the SEND flag just written */
+    if ((entry->packed[RINGLOG_PACKED_OFF_08 + 3] & RINGLOG_FLAG_SEND) == 0) {
+        /*
+         * Receive path, 0x00E1A36E-0x00E1A3B8.
+         *   move.l #0xffffff,D5 / and.l (0x34,A3),D5
+         *   andi.l #-0xfffff01,(0x6,A2)   long@0x06 &= 0xF00000FF
+         *   lsl.l #0x8,D5 / or.l D5,(0x6,A2)
+         */
+        node = ringlog_$pkt_long(pkt, 0x34) & RINGLOG_NODE_SRC_MASK;
+        ringlog_$put_packed(entry, RINGLOG_PACKED_OFF_06,
+                            (ringlog_$get_packed(entry, RINGLOG_PACKED_OFF_06) & 0xF00000FFu) |
+                            (node << 8));
 
-        /* Local network ID field from offset 0x40 (24-bit, shifted << 12) */
-        uint32_t local_id = pkt[0x10] & 0x00FFFFFF;  /* pkt[0x10] = offset 0x40 */
-        /* Store in different field - using packed format */
-        /* This is stored in bits overlapping remote_network_id low bits */
-        entry->remote_network_id = (entry->remote_network_id & 0xFFFFF000) |
-                                    ((local_id >> 12) & 0xFFF);
+        /*
+         *   move.l #0xffffff,D5 / and.l (0x40,A3),D5
+         *   andi.l #0xfff,(0x4,A2)        long@0x04 &= 0x00000FFF
+         *   lsl.l #0x8,D5 / lsl.l #0x4,D5 / or.l D5,(0x4,A2)
+         */
+        node = ringlog_$pkt_long(pkt, 0x40) & RINGLOG_NODE_SRC_MASK;
+        ringlog_$put_packed(entry, RINGLOG_PACKED_OFF_04,
+                            (ringlog_$get_packed(entry, RINGLOG_PACKED_OFF_04) & 0x00000FFFu) |
+                            (node << 12));
 
-        /* Socket bytes */
-        entry->sock_byte2 = pkt_bytes[0x39];
-        entry->sock_byte1 = pkt_bytes[0x45];
+        /* 0x00E1A3A0 / 0x00E1A3A6 */
+        entry->sock_byte_03 = pkt[0x39];
+        entry->sock_byte_02 = pkt[0x45];
 
-        /* Additional fields */
-        entry->field_10 = *(uint32_t *)&pkt_bytes[0x2e];
-        entry->field_0c = *(uint32_t *)&pkt_bytes[0x3a];
+        /* 0x00E1A3AC / 0x00E1A3B2 */
+        entry->field_10 = ringlog_$pkt_long(pkt, 0x2E);
+        entry->field_0c = ringlog_$pkt_long(pkt, 0x3A);
     } else {
-        /* Send packet */
-        /* Clear extra fields for sends */
+        /*
+         * Send path, 0x00E1A3BA-0x00E1A3F8.  Note the two node values are NOT
+         * masked to 24 bits here, unlike the receive path above.
+         */
         entry->field_0c = 0;
         entry->field_10 = 0;
 
-        /* Remote network ID from pkt[0] (local node sending to) */
-        entry->remote_network_id = (entry->remote_network_id & 0x00000FFF) |
-                                    ((pkt[0] & 0x00FFFFFF) << 12);
+        ringlog_$put_packed(entry, RINGLOG_PACKED_OFF_06,
+                            (ringlog_$get_packed(entry, RINGLOG_PACKED_OFF_06) & 0xF00000FFu) |
+                            (ringlog_$pkt_long(pkt, 0x00) << 8));
 
-        /* Local network ID from pkt[2] */
-        entry->remote_network_id = (entry->remote_network_id & 0xFFFFF000) |
-                                    ((pkt[2] >> 12) & 0xFFF);
+        ringlog_$put_packed(entry, RINGLOG_PACKED_OFF_04,
+                            (ringlog_$get_packed(entry, RINGLOG_PACKED_OFF_04) & 0x00000FFFu) |
+                            (ringlog_$pkt_long(pkt, 0x08) << 12));
 
-        /* Socket bytes for send */
-        entry->sock_byte1 = pkt_bytes[0x1b];
-        uint8_t sock_idx = pkt_bytes[0x19];
-        entry->sock_byte2 = pkt_bytes[0x1f + sock_idx * 2];
+        /* 0x00E1A3E6 */
+        entry->sock_byte_02 = pkt[0x1B];
+
+        /* 0x00E1A3EC-0x00E1A3F4: pkt[0x1F + 2 * pkt[0x19]] */
+        entry->sock_byte_03 = pkt[0x1F + 2 * (uint16_t)pkt[0x19]];
     }
 
     return result;

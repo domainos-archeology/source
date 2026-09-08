@@ -1,308 +1,290 @@
 /*
- * MAC_$RECEIVE - Receive a packet from a MAC channel
+ * MAC_$RECEIVE - take the next packet off a MAC channel's socket
  *
- * Receives the next packet from the channel's socket queue.
- * Copies packet data into the provided buffer chain.
+ * Validates the channel and its owner, pops one packet with SOCK_$GET, copies
+ * the link address and arrival time into the caller's descriptor, and then
+ * scatters the header and payload into the caller's buffer chain.
  *
- * Original address: 0x00E0BDB0
- * Original size: 558 bytes
+ * Original address: 0x00E0BDB0, size 558 bytes (0x00E0BDB0-0x00E0BFDD).
+ * A5 = 0x00E22990 (MAC_OS_$DATA).
+ *
+ * No hardware is touched, so the body is portable (bead source-1irc; it used
+ * to sit under "#if defined(ARCH_M68K)").
  */
 
 #include "mac/mac_internal.h"
 
 /*
- * mac_$copy_to_buffers - Copy packet data to user buffers
+ * mac_$copy_to_buffers (0x00E0BD2C, 132 bytes) - the nested Pascal procedure
+ * that pours `length` bytes from one source VA into the caller's buffer chain.
  *
- * This is a nested procedure (Pascal-style) that accesses the parent's
- * stack frame for buffer chain state. We implement it as a static helper.
- *
- * Original address: 0x00E0BD2C
- * Original size: 132 bytes
+ * It takes two stack arguments plus a static link:
+ *   (0x08,A6)  a cell holding the SOURCE VA.  The value is READ ONCE into D3
+ *              ("move.l (A0),D3" at 0x00E0BD3E) and advanced only in D3; the
+ *              cell itself is never written back, so the caller's
+ *              sock_$pkt_info_t.hdr keeps pointing at the start of the header
+ *              for the NETBUF_$RTN_PKT that follows (bead source-1irc).
+ *   (0x0C,A6)  the word length
+ *   (A6)       the static link, through which it reads and writes the parent's
+ *              A6-0x5c (current chain entry) and A6-0x72 (offset within it).
+ * Those two uplevel slots are passed explicitly here.
  */
-static void copy_to_buffers(
-    uint32_t *src_va_ptr, /* Cell holding the source target VA (updated) */
-    int16_t length,      /* Number of bytes to copy */
-    mac_$buffer_t **cur_buf,  /* Pointer to current buffer (updated) */
-    int16_t *buf_offset  /* Pointer to offset in current buffer (updated) */
-)
+static void mac_$copy_to_buffers(const uint32_t *src_va_ptr, int16_t length,
+                                 mac_os_$buf_desc_t **cur_buf,
+                                 int16_t *buf_offset)
 {
-    uint8_t *src = (uint8_t *)ARCH_VA_TO_PTR(*src_va_ptr);
-    int16_t remaining = length;
-    int16_t chunk_size;
-    int32_t buf_remaining;
+    uint32_t    src = *src_va_ptr;      /* D3 */
+    int16_t     remaining = length;     /* D4 */
 
-    while (remaining > 0 && *cur_buf != NULL) {
-        /* Calculate how much space is left in current buffer */
-        buf_remaining = (*cur_buf)->size - *buf_offset;
+    /* 0x00E0BD9C: the loop runs while remaining != 0 AND there is a buffer */
+    while (remaining != 0 && *cur_buf != NULL) {
+        int32_t chunk;          /* D5 */
+        int32_t buf_remaining;  /* D1 */
+        uint32_t dest;
 
-        /* Copy the smaller of: remaining data or buffer space */
-        chunk_size = (remaining < buf_remaining) ? remaining : (int16_t)buf_remaining;
+        /* 0x00E0BD44-0x00E0BD5A: chunk = min(remaining, entry->length - off) */
+        chunk = (int32_t)remaining;
+        buf_remaining = (*cur_buf)->length - (int32_t)*buf_offset;
+        if (chunk > buf_remaining) {
+            chunk = buf_remaining;
+        }
 
-        /* Copy data to buffer at current offset */
-        OS_$DATA_COPY(src,
-                      (uint8_t *)((*cur_buf)->data) + *buf_offset,
-                      chunk_size);
+        /* 0x00E0BD5C-0x00E0BD6A: dest = entry->address + off */
+        dest = (uint32_t)((int32_t)*buf_offset + (int32_t)(*cur_buf)->address);
 
-        src += chunk_size;
-        remaining -= chunk_size;
+        /* 0x00E0BD6E-0x00E0BD7E: OS_$DATA_COPY(src, dest, chunk) */
+        OS_$DATA_COPY((char *)ARCH_VA_TO_PTR(src),
+                      (char *)ARCH_VA_TO_PTR(dest),
+                      (int)chunk);
 
+        /* 0x00E0BD82: the SOURCE advances by the same count, in D3 only */
+        src += (uint32_t)chunk;
+
+        /* 0x00E0BD84-0x00E0BD9A */
+        remaining = (int16_t)(remaining - (int16_t)chunk);
         if (remaining == 0) {
-            /* All data copied, update offset in current buffer */
-            *buf_offset += chunk_size;
+            *buf_offset = (int16_t)(*buf_offset + (int16_t)chunk);
         } else {
-            /* Buffer full, move to next buffer */
             *buf_offset = 0;
-            *cur_buf = (*cur_buf)->next;
+            *cur_buf = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR((*cur_buf)->next);
         }
     }
-
-    *src_va_ptr = ARCH_PTR_TO_VA(src);
 }
 
-void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc, status_$t *status_ret)
+/*
+ * MAC_$RECEIVE
+ *
+ * Parameters (0x08, 0x0C, 0x10 off A6):
+ *   channel    - pointer to the channel number
+ *   pkt_desc   - the caller's receive descriptor
+ *   status_ret - status return
+ */
+void MAC_$RECEIVE(uint16_t *channel, mac_$recv_pkt_t *pkt_desc,
+                  status_$t *status_ret)
 {
-    uint16_t chan;
-    uint32_t chan_offset;
-    uint16_t flags;
-    uint8_t owner_asid;
-    uint16_t socket_num;
-    status_$t cleanup_status;
+    uint16_t            chan_num;
+    mac_os_$channel_t  *chan;
+    uint16_t            flags;
+    status_$t           cleanup_status;
+    uint8_t             cleanup_buf[24];    /* A6-0x58 */
 
     /*
      * A6-0x40: the record SOCK_$GET fills in.  Every field this routine
      * touches lands on a sock_$pkt_info_t offset: hdr 0x00 (-0x40),
      * src_addr 0x04 (-0x3c), src_port 0x08 (-0x38), dst_addr 0x0c (-0x34),
-     * flags 0x10 (the byte at -0x2f), n_hops 0x12 (-0x2e), hops 0x14
-     * (-0x2c), data_len 0x2a (-0x16), hdr_len 0x2c (-0x14) and data_pages
-     * 0x30 (-0x10).
+     * flags 0x10 (the byte at -0x2f), n_hops 0x12 (-0x2e), hops 0x14 (-0x2c),
+     * data_len 0x2a (-0x16), hdr_len 0x2c (-0x14) and data_pages 0x30 (-0x10).
      */
-    sock_$pkt_info_t pkt_info;
-    uint32_t secondary_buf;  /* A6-0x6c: VA of the payload page */
+    sock_$pkt_info_t    pkt_info;
+    uint32_t            data_va;        /* A6-0x6c */
+    uint16_t            header_len;
+    uint16_t            data_len;
+    int32_t             total_buf_size;
+    mac_os_$buf_desc_t *chain_head;     /* A2 */
+    mac_os_$buf_desc_t *cur_buf;        /* A6-0x5c */
+    int16_t             buf_offset;     /* A6-0x72 */
+    uint16_t            i;
 
-    /* Buffer info from packet header */
-    uint16_t header_len;
-    uint16_t data_len;
-    uint32_t data_ppn;  /* Physical page number for data buffer */
-    uint32_t data_va;   /* Virtual address for data buffer */
-
-    /* Buffer chain tracking */
-    mac_$buffer_t *buf_ptr;
-    mac_$buffer_t *cur_buf;
-    int16_t buf_offset;
-    int32_t total_buf_size;
-
-    uint8_t cleanup_buf[24];  /* FIM cleanup handler context */
-
+    /* 0x00E0BDC6 / 0x00E0BDC8 */
     *status_ret = status_$ok;
-    secondary_buf = 0;
+    data_va = 0;
 
-#if defined(ARCH_M68K)
-    chan = *channel;
-
-    /*
-     * Validate channel number.
-     * Channel must be < 10.
-     */
-    if (chan >= MAC_MAX_CHANNELS) {
+    /* 0x00E0BDCC: an unsigned compare, so a channel >= 10 is rejected */
+    chan_num = *channel;
+    if (chan_num >= MAC_MAX_CHANNELS) {
         *status_ret = status_$mac_channel_not_open;
         return;
     }
 
-    /* Calculate channel table offset: chan * 20 */
-    chan_offset = (uint32_t)chan * 20;
+    /* 0x00E0BDD2-0x00E0BDE0 */
+    chan  = &MAC_OS_$CHANNEL_TABLE[chan_num];
+    flags = chan->flags;
 
-    /* Read flags from channel entry at offset 0x7B2 */
-    flags = *(uint16_t *)(MAC_$DATA_BASE + 0x7B2 + chan_offset);
-
-    /* Check if channel is open (bit 9 / 0x200) */
-    if ((flags & 0x200) == 0) {
+    /* 0x00E0BDE4: btst.l #0x9,D1 on the whole word */
+    if ((flags & MAC_OS_CHANNEL_IN_USE) == 0) {
         *status_ret = status_$mac_channel_not_open;
         return;
     }
 
     /*
-     * Check ownership:
-     * - If bit 8 (0x100) set, shared access allowed
-     * - Otherwise, owner ASID (bits 2-7 >> 2) must match current ASID
+     * 0x00E0BDEA-0x00E0BE00.  A promiscuous channel skips the owner test;
+     * otherwise the owner recorded in the flags word's top six bits must be
+     * this address space.
+     *   move.w #0xfc,D2w / and.b (0x7b2,A2),D2b / lsr.w #0x2,D2w
+     * works on the flags word's HIGH byte, i.e. word bits 10..15.
      */
-    if ((flags & 0x100) == 0) {
-        owner_asid = (flags & 0xFC) >> 2;
-        if (owner_asid != PROC1_$AS_ID) {
+    if ((flags & MAC_OS_CHANNEL_PROMISCUOUS) == 0) {
+        uint16_t owner_asid =
+            (uint16_t)((flags & MAC_OS_CHANNEL_OWNER_MASK) >> MAC_OS_CHANNEL_OWNER_SHIFT);
+
+        if (owner_asid != (uint16_t)PROC1_$AS_ID) {
             *status_ret = status_$mac_channel_not_open;
             return;
         }
     }
 
-    /* Get socket number from channel entry at offset 0x7A8 */
-    socket_num = *(uint16_t *)(MAC_$DATA_BASE + 0x7A8 + chan_offset);
-
-    /* Check if socket is allocated */
-    if (socket_num == MAC_NO_SOCKET) {
+    /* 0x00E0BE0C-0x00E0BE1A */
+    if (chan->socket == MAC_NO_SOCKET) {
         *status_ret = status_$mac_no_socket_allocated;
         return;
     }
 
     /*
-     * Get next packet from socket.
-     * SOCK_$GET returns negative on success.
+     * 0x00E0BE1E-0x00E0BE3E: SOCK_$GET(chan->socket, &pkt_info) with a
+     * discarded word result; a non-negative answer means the queue was empty.
      */
-    if (SOCK_$GET(socket_num, &pkt_info) >= 0) {
+    if (SOCK_$GET(chan->socket, &pkt_info) >= 0) {
         *status_ret = status_$mac_no_packet_available_to_receive;
         return;
     }
 
-    /*
-     * Extract packet info from the retrieved packet.
-     * Set arp_flag (broadcast indicator) from bit 0 of flags byte.
-     */
-    /* 0x00E0BE42: btst.b #0,(-0x2f,A6) / sne - bit 0 of the flags word */
-    pkt_desc->arp_flag = (pkt_info.flags & 1) ? -1 : 0;
-
-    /* 0x00E0BE52: move.w (-0x2e,A6),(A3) */
-    pkt_desc->num_packet_types = (int16_t)pkt_info.n_hops;
+    /* 0x00E0BE42-0x00E0BE4E: btst.b #0,(-0x2f,A6) / sne - flags word bit 0 */
+    pkt_desc->is_local = (pkt_info.flags & SOCK_PKT_FLAG_LOCAL) ? (int8_t)-1 : 0;
 
     /*
-     * 0x00E0BE5C: both pointers walk FORWARD ("addq.l #0x2,A0" and
-     * "addq.l #0x2,A1"), copying n_hops words from the record's hop array
-     * into pkt_desc + 0x02.
+     * 0x00E0BE52-0x00E0BE6C: the hop count and that many words, copied
+     * forward into the descriptor's link address.  Neither loop bounds the
+     * count.
      */
-    {
-        int16_t i;
-        int16_t count = pkt_desc->num_packet_types;
-
-        for (i = 0; i < count; i++) {
-            pkt_desc->packet_types[i] = pkt_info.hops[i];
-        }
+    pkt_desc->link_addr.n_words = pkt_info.n_hops;
+    for (i = 0; i < pkt_info.n_hops; i++) {
+        pkt_desc->link_addr.addr[i] = pkt_info.hops[i];
     }
 
-    /* 0x00E0BE6E - 0x00E0BE7A */
-    *(uint32_t *)((uint8_t *)pkt_desc + 0x2A) = pkt_info.src_addr;
-    *(int16_t *)((uint8_t *)pkt_desc + 0x2E) = (int16_t)pkt_info.src_port;
-    *(uint32_t *)((uint8_t *)pkt_desc + 0x30) = pkt_info.dst_addr;
+    /* 0x00E0BE6E-0x00E0BE7A */
+    pkt_desc->time_high  = pkt_info.src_addr;
+    pkt_desc->time_low   = pkt_info.src_port;
+    pkt_desc->frame_type = pkt_info.dst_addr;
 
-    /*
-     * Set up cleanup handler for fault recovery.
-     */
+    /* 0x00E0BE80-0x00E0BE96 */
     cleanup_status = FIM_$CLEANUP(cleanup_buf);
     if (cleanup_status != status_$cleanup_handler_set) {
-        /* Cleanup triggered - return buffers and exit */
         /*
-         * 0x00E0BFB4: pea (-0x40,A6) / pea (-0x6c,A6) / pea (-0x10,A6).
-         * The third argument is the record's payload page array, not NULL;
-         * the first cast restates its 32-bit header VA cell.
+         * 0x00E0BFB4-0x00E0BFD2: the fault unwind.  It returns the buffers and
+         * stores the fault status, but does NOT release the cleanup handler
+         * and never pops the call's arguments (unlk restores SP).
          */
-        NETBUF_$RTN_PKT(&pkt_info.hdr, &secondary_buf,
+        NETBUF_$RTN_PKT(&pkt_info.hdr, &data_va,
                         pkt_info.data_pages, (int16_t)pkt_info.data_len);
         *status_ret = cleanup_status;
         return;
     }
 
     /*
-     * Walk the user's buffer chain to calculate total available space.
-     * Also validate each buffer entry.
+     * 0x00E0BE9A-0x00E0BEDC: walk the caller's chain, summing the lengths as a
+     * LONGWORD this time.  A negative length, or a positive length with a null
+     * address, is rejected.
      */
-    buf_ptr = (mac_$buffer_t *)((uint8_t *)pkt_desc + 0x1C);  /* buffers field */
-    cur_buf = buf_ptr;
+    /*
+     * 0x00E0BE9E: lea (0x1c,A3),A2.  Reached by displacement rather than by
+     * &pkt_desc->buffers because mac_$recv_pkt_t is packed (its time_high sits
+     * on an odd word boundary) and taking a member's address would advertise
+     * byte alignment.
+     */
+    chain_head     = (mac_os_$buf_desc_t *)
+                     ((uint8_t *)pkt_desc + offsetof(mac_$recv_pkt_t, buffers));
+    cur_buf        = chain_head;
     total_buf_size = 0;
 
     while (cur_buf != NULL) {
-        /* Validate buffer: size must not be negative */
-        if (cur_buf->size < 0) {
+        if (cur_buf->length < 0) {
+            *status_ret = status_$mac_illegal_buffer_spec;
+            goto cleanup_and_return;
+        }
+        if (cur_buf->length > 0 && cur_buf->address == 0) {
             *status_ret = status_$mac_illegal_buffer_spec;
             goto cleanup_and_return;
         }
 
-        /* Validate: if size > 0, data pointer must be non-null */
-        if (cur_buf->size > 0 && cur_buf->data == NULL) {
-            *status_ret = status_$mac_illegal_buffer_spec;
-            goto cleanup_and_return;
-        }
-
-        total_buf_size += cur_buf->size;
-        cur_buf = cur_buf->next;
+        total_buf_size += cur_buf->length;
+        cur_buf = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR(cur_buf->next);
     }
 
     /*
-     * Get header and data lengths from packet buffer.
-     * header_len at offset -0x14, data_len at offset -0x16
+     * 0x00E0BEDE-0x00E0BEFC: both lengths are ZERO-extended into longwords
+     * before the sum is compared with the chain's capacity.
      */
-    header_len = pkt_info.hdr_len;   /* record +0x2c, "move.w (-0x14,A6)" */
-    data_len = pkt_info.data_len;    /* record +0x2a, "move.w (-0x16,A6)" */
+    header_len = pkt_info.hdr_len;      /* record + 0x2C */
+    data_len   = pkt_info.data_len;     /* record + 0x2A */
 
-    /* Check if buffers are large enough */
-    if (total_buf_size < (int32_t)(header_len + data_len)) {
+    if ((int32_t)((uint32_t)header_len + (uint32_t)data_len) > total_buf_size) {
         *status_ret = status_$mac_received_packet_too_big;
         goto cleanup_and_return;
     }
 
     /*
-     * If there's data in a secondary buffer, get its virtual address.
+     * 0x00E0BEFE-0x00E0BF26: map the payload page in.  On failure the VA cell
+     * is cleared so the NETBUF_$RTN_PKT below does not unmap anything.
      */
     if (data_len != 0) {
-        /* 0x00E0BF0C: move.l (-0x10,A6),-(SP) - the page VA, by value */
-        data_ppn = pkt_info.data_pages[0];
-        NETBUF_$GETVA(data_ppn, &secondary_buf, status_ret);
+        NETBUF_$GETVA(pkt_info.data_pages[0], &data_va, status_ret);
         if (*status_ret != status_$ok) {
-            secondary_buf = 0;
+            data_va = 0;
             goto cleanup_and_return;
         }
     }
 
-    /*
-     * Copy data to user buffers.
-     * First copy header data, then body data.
-     */
-    cur_buf = buf_ptr;
+    /* 0x00E0BF28-0x00E0BF2C */
+    cur_buf    = chain_head;
     buf_offset = 0;
 
+    /* 0x00E0BF30-0x00E0BF44 */
     if (header_len != 0) {
-        /* 0x00E0BF3C: pea (-0x40,A6) - the helper advances the record's own
-         * header cell, so it must be passed by reference. */
-        copy_to_buffers(&pkt_info.hdr, header_len, &cur_buf, &buf_offset);
+        mac_$copy_to_buffers(&pkt_info.hdr, (int16_t)header_len,
+                             &cur_buf, &buf_offset);
     }
 
+    /* 0x00E0BF46-0x00E0BF5A */
     if (data_len != 0) {
-        /* 0x00E0BF52: pea (-0x6c,A6) - likewise the payload VA cell. */
-        copy_to_buffers(&secondary_buf, data_len, &cur_buf, &buf_offset);
+        mac_$copy_to_buffers(&data_va, (int16_t)data_len,
+                             &cur_buf, &buf_offset);
     }
 
     /*
-     * Clear remaining buffer sizes to indicate end of data.
+     * 0x00E0BF5C-0x00E0BF84.  If the last buffer was only partly filled its
+     * length is CUT DOWN to the number of bytes actually written and that
+     * entry is stepped over; every remaining entry is then zeroed.
+     *   tst.w (-0x72,A6) / ble -> the while test
+     *   move.w (-0x72,A6),D2w / ext.l D2 / move.l D2,(A0)   entry->length
+     *   bra -> advance
      */
+    if (buf_offset > 0) {
+        cur_buf->length = (int32_t)buf_offset;
+        cur_buf = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR(cur_buf->next);
+    }
     while (cur_buf != NULL) {
-        cur_buf->size = 0;
-        cur_buf = cur_buf->next;
+        cur_buf->length = 0;
+        cur_buf = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR(cur_buf->next);
     }
 
+    /* 0x00E0BF86 */
     *status_ret = status_$ok;
 
 cleanup_and_return:
-    /* Return packet buffers to the pool - 0x00E0BF8C, same shape as above */
-    NETBUF_$RTN_PKT(&pkt_info.hdr, &secondary_buf,
+    /* 0x00E0BF8C-0x00E0BFA6 */
+    NETBUF_$RTN_PKT(&pkt_info.hdr, &data_va,
                     pkt_info.data_pages, (int16_t)pkt_info.data_len);
 
-    /* Release cleanup handler */
+    /* 0x00E0BFA8 */
     FIM_$RLS_CLEANUP(cleanup_buf);
-
-#else
-    /* Non-M68K implementation stub */
-    (void)chan;
-    (void)chan_offset;
-    (void)flags;
-    (void)owner_asid;
-    (void)socket_num;
-    (void)cleanup_status;
-    (void)pkt_info;
-    (void)secondary_buf;
-    (void)header_len;
-    (void)data_len;
-    (void)data_ppn;
-    (void)data_va;
-    (void)buf_ptr;
-    (void)cur_buf;
-    (void)buf_offset;
-    (void)total_buf_size;
-    (void)cleanup_buf;
-    *status_ret = status_$mac_channel_not_open;
-#endif
 }

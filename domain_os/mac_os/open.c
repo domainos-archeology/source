@@ -42,9 +42,8 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
     int16_t channel;
     int16_t new_count;
     int16_t i;
-    void *route_port;
+    route_$port_t *route_port;
     void *driver_info;
-#if defined(ARCH_M68K)
     mac_os_$port_pkt_table_t *port_table;
     mac_os_$channel_t *chan;
     uint32_t *pkt_type_ptr;
@@ -55,15 +54,15 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
 
     port = *port_num;
 
-    /* Look up route port structure */
-    route_port = ((void **)0xE26EE8)[port];
+    /* 0x00E0B262-0x00E0B274: ROUTE_$PORTP[port] */
+    route_port = ROUTE_$PORTP[port];
     if (route_port == NULL) {
         *status_ret = status_$mac_port_op_not_implemented;
         return;
     }
 
-    /* Get driver info from route port (offset 0x48) */
-    driver_info = *(void **)((uint8_t *)route_port + ROUTE_PORT_DRIVER_INFO_OFFSET);
+    /* 0x00E0B276-0x00E0B280: route_port->driver_info */
+    driver_info = (void *)ARCH_VA_TO_PTR(route_port->driver_info);
     if (driver_info == NULL) {
         *status_ret = status_$mac_port_op_not_implemented;
         return;
@@ -78,11 +77,22 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
     /* Enter exclusion region */
     ML_$EXCLUSION_START(&MAC_OS_$EXCLUSION);
 
-    /* Find an available channel (one without IN_USE flag set) */
+    /*
+     * 0x00E0B2A2-0x00E0B2CA: find a channel whose IN_USE bit is clear.  The
+     * bound test comes AFTER the slot test, so slot 10 - one past the ten real
+     * channels - is examined before the table is declared full:
+     *   clr.w D2w / movea.l A5,A0 / bra 0x00E0B2C2
+     *   0x00E0B2A8  cmpi.w #0xa,D2w / bcs 0x00E0B2BC
+     *   0x00E0B2AE  status 0x003A0002
+     *   0x00E0B2BC  addq.w #0x1,D2w / lea (0x14,A0),A0
+     *   0x00E0B2C2  move.w (0x7b2,A0),D0w / btst.l #0x9,D0 / bne 0x00E0B2A8
+     * In the image slot 10 is the head of MAC_OS_$EXCLUSION; the C table has a
+     * sentinel slot there (MAC_OS_CHANNEL_TABLE_SLOTS).
+     */
     channel = 0;
     chan = MAC_OS_$CHANNEL_TABLE;
-    while ((chan->flags & MAC_OS_FLAG_IN_USE) != 0) {
-        if (channel >= MAC_OS_MAX_CHANNELS - 1) {
+    while ((chan->flags & MAC_OS_CHANNEL_IN_USE) != 0) {
+        if (channel >= MAC_OS_MAX_CHANNELS) {
             *status_ret = status_$mac_no_channels_available;
             goto cleanup;
         }
@@ -138,26 +148,46 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
         /* params offset 0x50 contains callback */
         chan_entry->callback = *(void **)((uint8_t *)params + 0x50);
 
-        /* Set OPEN flag (bit 1) */
-        chan_entry->flags |= MAC_OS_FLAG_OPEN;
-
-        /* Clear non-ASID bits, keep only bits 0-1 (open/promisc) */
-        chan_entry->flags &= 0x03;
-
-        /* Set owner ASID in bits 2-7 */
-        chan_entry->flags |= (uint16_t)(PROC1_$AS_ID << MAC_OS_FLAG_ASID_SHIFT);
+        /*
+         * 0x00E0B36C-0x00E0B382.  All three operations work on the BYTE at
+         * channel offset 0x12, which is the flags word's HIGH half:
+         *   bset.b #0x1,(0x7b2,A0)     -> set word bit 9 (IN_USE)
+         *   andi.b #0x3,(0x7b2,A0)     -> keep word bits 8 and 9 only; the
+         *                                 low byte of the word is untouched
+         *   move.b (PROC1_$AS_ID+1),D1b / lsl.b #0x2,D1b / or.b D1b,(0x7b2,A0)
+         *                              -> word bits 10..15 = AS_ID & 0x3F
+         */
+        chan_entry->flags |= MAC_OS_CHANNEL_IN_USE;
+        chan_entry->flags &= (uint16_t)(MAC_OS_CHANNEL_PROMISCUOUS |
+                                        MAC_OS_CHANNEL_IN_USE | 0x00FF);
+        chan_entry->flags |= (uint16_t)((PROC1_$AS_ID & 0x3F)
+                                        << MAC_OS_CHANNEL_OWNER_SHIFT);
 
         /* Store port number */
         chan_entry->port_index = port;
 
-        /* Store line number from route port (offset 0x30) */
-        chan_entry->line_number = *(uint16_t *)((uint8_t *)route_port + ROUTE_PORT_LINE_NUM_OFFSET);
+        /* 0x00E0B38E: move.w (0x30,A3),(0x7ae,A0) */
+        chan_entry->line_number = route_port->socket;
 
         /* Store driver info pointer */
         chan_entry->driver_info = driver_info;
 
         /* Determine header size based on network type (offset 0x2E of route_port) */
-        net_type = *(uint16_t *)((uint8_t *)route_port + ROUTE_PORT_NET_TYPE_OFFSET);
+        /*
+         * 0x00E0B39A-0x00E0B3DA.  The jump table at 0x00E0B3AE holds, in the
+         * image's own bytes,
+         *   00e0b3ae  00 0c 00 22 00 22 00 0c  00 1a 00 14
+         * i.e. targets 0x00E0B3AE plus the word:
+         *   0 -> 0x00E0B3BA  move.w #0x1c,(0x7b0,A0)   header size 0x1C
+         *   1 -> 0x00E0B3D0  status 0x003A0001
+         *   2 -> 0x00E0B3D0  status 0x003A0001
+         *   3 -> 0x00E0B3BA  header size 0x1C
+         *   4 -> 0x00E0B3C8  move.w #0xe,(0x7b0,A0)    header size 0x0E
+         *   5 -> 0x00E0B3C2  clr.w (0x7b0,A0)          header size 0
+         * and "cmpi.w #0x6,D0w / bcc 0x00E0B3D0" sends 6 and above to the
+         * same error.
+         */
+        net_type = route_port->port_type;
         switch (net_type) {
         case MAC_OS_NET_TYPE_ETHERNET:
         case MAC_OS_NET_TYPE_3:
@@ -180,12 +210,20 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
 
     /* Call driver open callback */
     /* Parameters passed: line_number, params, status_ret */
+    /*
+     * 0x00E0B3DC-0x00E0B3F2: three arguments plus a discarded word result.
+     *   subq.l #0x2,SP
+     *   move.l (0x10,A6),-(SP)     arg 3, status_ret
+     *   move.l D7,-(SP)            arg 2, params
+     *   move.w (0x30,A3),-(SP)     arg 1, route_port->socket (the line number)
+     *   movea.l (0x3c,A4),A1 / jsr (A1) / lea (0xc,SP),SP
+     */
     {
-        void (*driver_open)(uint16_t, void *, void *, status_$t *);
-        uint16_t line_num = *(uint16_t *)((uint8_t *)route_port + ROUTE_PORT_LINE_NUM_OFFSET);
+        int16_t (*driver_open)(uint16_t, mac_os_$open_params_t *, status_$t *);
+        uint16_t line_num = route_port->socket;
 
         driver_open = *(void **)((uint8_t *)driver_info + MAC_OS_DRIVER_OPEN_OFFSET);
-        (*driver_open)(line_num, params, params, status_ret);
+        (void)(*driver_open)(line_num, params, status_ret);
     }
 
 cleanup:
@@ -206,17 +244,11 @@ cleanup:
         /* Return MTU from driver info+4 in params */
         *(uint32_t *)params = (uint32_t)*(uint16_t *)((uint8_t *)driver_info + 4);
     } else {
-        /* Failure - clear channel's OPEN flag */
+        /* 0x00E0B43E: bclr.b #0x1,(0x7b2,A0) - word bit 9, IN_USE */
         mac_os_$channel_t *chan_entry = &MAC_OS_$CHANNEL_TABLE[channel];
-        chan_entry->flags &= ~MAC_OS_FLAG_OPEN;
+        chan_entry->flags &= (uint16_t)~MAC_OS_CHANNEL_IN_USE;
         chan_entry->callback = NULL;
     }
 
     ML_$EXCLUSION_STOP(&MAC_OS_$EXCLUSION);
-#else
-    /* Non-M68K implementation stub */
-    (void)port_num;
-    (void)params;
-    *status_ret = status_$mac_port_op_not_implemented;
-#endif
 }

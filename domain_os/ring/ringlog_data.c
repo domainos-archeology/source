@@ -1,34 +1,22 @@
 /*
  * Ring log module global data
  *
- * This file defines the global data structures used by the ring log module.
- * These correspond to memory-mapped data at specific addresses on the
- * original m68k platform.
+ * RINGLOG_ has two objects in the SAU2 map:
+ *   D    E2C32C  RINGLOG_          size = 3C    the control block
+ *   D53  EA3E38  RINGLOG_$DATA     size = 11FC  the circular buffer
  */
 
 #include "ring/ring_internal.h"
 #include "ring/ringlog_internal.h"
 
 /*
- * ============================================================================
- * Global Data Structures
- * ============================================================================
- */
-
-/*
- * Ring log control structure.
- * Located at 0xE2C32C on original platform.
+ * Ring log control structure, 0x00E2C32C, 0x3C bytes.
  *
- * Initial values set based on the memory dump at 0xE2C32C:
- * - wired_pages: all zeros
- * - spinlock: 0
- * - filter_id: 0
- * - wire_count: 0
- * - mbx_sock_filter: -1 (0xFF) - filtering disabled
- * - who_sock_filter: -1 (0xFF) - filtering disabled
- * - nil_sock_filter: -1 (0xFF) - filtering disabled
- * - logging_active: 0 - logging not active
- * - first_entry_flag: -1 (0xFF) - need to reset index on first entry
+ * Initial values are the image's:
+ *   wired_pages / spinlock / filter_id / wire_count  zero
+ *   mbx_sock_filter, who_sock_filter, nil_sock_filter  -1 (no filtering)
+ *   logging_active   0
+ *   first_entry_flag -1 (reset the index before the first entry)
  */
 ringlog_ctl_t RINGLOG_$CTL = {
     .wired_pages = {0},
@@ -47,13 +35,9 @@ ringlog_ctl_t RINGLOG_$CTL = {
 };
 
 /*
- * Ring log buffer.
- * Located at 0xEA3E38 on original platform.
- *
- * Contains the current entry index followed by 100 log entries.
- * Initially empty (index 0, all entries zeroed).
+ * RINGLOG_$DATA, 0x00EA3E38, 0x11FC bytes: the next-entry index word followed
+ * by 100 entries of 0x2E bytes that START AT OFFSET ZERO, so entry 0's first
+ * word IS the index.  Kept as a byte pool because the 0x2E stride is an
+ * explicit constant in the code (see ring/ringlog_internal.h).
  */
-ringlog_buffer_t RINGLOG_$BUF = {
-    .current_index = 0,
-    .entries = {{0}},
-};
+ringlog_$data_t RINGLOG_$DATA;

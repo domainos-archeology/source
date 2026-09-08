@@ -288,7 +288,14 @@ TEST(both_packet_descriptors_start_with_the_link_address)
     ASSERT_EQ(0x00, (int)offsetof(mac_os_$rcv_pkt_t, net_type));
     ASSERT_EQ(0x02, (int)offsetof(mac_os_$rcv_pkt_t, src_id));
     ASSERT_EQ(0x18, (int)offsetof(mac_os_$rcv_pkt_t, is_local));
-    ASSERT_EQ(0x40, (int)sizeof(mac_os_$rcv_pkt_t));
+    /*
+     * The receive record runs to 0x4C like the send one: MAC_$DEMUX copies
+     * FOUR longwords out of it starting at +0x3C ("lea (0x3c,A2),A0" plus
+     * four "move.l (A0)+,(A1)+" at 0x00E0BCC2), so data_pa is an array of
+     * four and the record does not stop at 0x40.
+     */
+    ASSERT_EQ(0x3C, (int)offsetof(mac_os_$rcv_pkt_t, data_pa));
+    ASSERT_EQ(0x4C, (int)sizeof(mac_os_$rcv_pkt_t));
 }
 
 /*

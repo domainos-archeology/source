@@ -5,7 +5,7 @@
  * exists, increments its reference count. Otherwise, allocates a new
  * slot and stores the network ID with refcount 1.
  *
- * The network index (1-63) is encoded into bits 4-9 of the info word.
+ * The network index (1-64) is encoded into bits 4-9 of the info word.
  *
  * Original address: 0x00E0F1E0
  * Original size: 156 bytes
@@ -21,7 +21,7 @@
  *   00e0f1fc    andi.w #-0x3f1,(A0)        ; Clear bits 4-9 (0xFC0F = ~0x3F0)
  *   00e0f200    bra.b 0x00e0f264           ; Jump to ok status
  *
- *   ; Search loop: D3=index (1-63), D2=counter (63 down to 0), D1=first_free
+ *   ; Search loop: D3=index (1-64), D2=counter (63 down to 0), D1=first_free
  *   00e0f202    clr.w D1w                  ; first_free = 0
  *   00e0f204    moveq #0x3f,D2             ; counter = 63
  *   00e0f206    moveq #0x1,D3              ; index = 1
@@ -104,7 +104,6 @@
 
 void NETWORK_$INSTALL_NET(uint32_t net_id, uint32_t *info_ptr, status_$t *status)
 {
-    uint16_t index;
     uint16_t first_free;
     uint16_t i;
 
@@ -119,12 +118,18 @@ void NETWORK_$INSTALL_NET(uint32_t net_id, uint32_t *info_ptr, status_$t *status
     /* Search for existing entry or first free slot */
     first_free = 0;
 
-    for (i = 1; i < NETWORK_TABLE_SIZE; i++) {
+    /*
+     * 0x00E0F204-0x00E0F240: "moveq #0x3f,D2" plus "dbf D2w" is 64 passes and
+     * the index D3 starts at 1, so the slots visited are 1..64 - the tree used
+     * to stop at 63 (bead source-ovis).
+     */
+    for (i = 1; i <= NETWORK_MAX_NET_INDEX; i++) {
         /* Check if this entry matches */
         if (NETWORK_$NET_TABLE[i].net_id == net_id) {
             /* Found matching entry - encode index and increment refcount */
+            /* 0x00E0F212: the index is taken as a byte, then shifted */
             *info_ptr = (*info_ptr & ~NETWORK_INDEX_MASK_L) |
-                        ((uint32_t)i << NETWORK_INDEX_SHIFT_L);
+                        ((uint32_t)(uint8_t)i << NETWORK_INDEX_SHIFT_L);
             NETWORK_$NET_TABLE[i].refcount++;
             *status = status_$ok;
             return;
@@ -144,9 +149,14 @@ void NETWORK_$INSTALL_NET(uint32_t net_id, uint32_t *info_ptr, status_$t *status
         return;
     }
 
-    /* Allocate new entry in first free slot */
+    /*
+     * Allocate a new entry in the first free slot.  0x00E0F248 takes only the
+     * LOW BYTE of the index ("move.b D1b,D4b") before shifting it left four
+     * places, so index 64 sets bit 10 of the info word rather than staying
+     * inside the 0x3F0 field; that overflow is reproduced, not corrected.
+     */
     *info_ptr = (*info_ptr & ~NETWORK_INDEX_MASK_L) |
-                ((uint32_t)first_free << NETWORK_INDEX_SHIFT_L);
+                ((uint32_t)(uint8_t)first_free << NETWORK_INDEX_SHIFT_L);
     NETWORK_$NET_TABLE[first_free].net_id = net_id;
     NETWORK_$NET_TABLE[first_free].refcount = 1;
     *status = status_$ok;

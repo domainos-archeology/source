@@ -1,135 +1,126 @@
 /*
- * MAC_OS_$PUT_INFO - Store port information
+ * MAC_OS_$PUT_INFO - store a port's version/config record
  *
- * Stores port version/configuration information after validating
- * that the network parameters don't conflict with existing ports.
+ * Rejects any record whose version is not 1, refuses a configuration that
+ * duplicates another port's XNS address, and otherwise copies the eight-byte
+ * record into MAC_OS_$PORT_TABLE.
  *
- * Original address: 0x00E0C228
- * Original size: 296 bytes
+ * Original address: 0x00E0C228, size 296 bytes (0x00E0C228-0x00E0C34F).
+ * A5 = 0x00E22990 (MAC_OS_$DATA).
+ *
+ * Nothing here is architecture specific, so the body is portable
+ * (bead source-ht0n; it used to sit under "#if defined(ARCH_M68K)" and reach
+ * ROUTE_$PORTP through the raw address 0xE26EE8).
  */
 
 #include "mac_os/mac_os_internal.h"
 
 /*
+ * The comparison the duplicate check makes, at record + 0x20 with a 12-byte
+ * stride (0x00E0C2B6-0x00E0C2E6): one longword then four words.  Those are
+ * route_$port_t.xns_addr's bytes, but the walk is a byte-displacement one
+ * because the count that drives it (record + 0x06) is still inside
+ * route_$port_t._unknown0 and route/route.h has not named it.
+ */
+#define MAC_OS_PORT_ADDR_COUNT_OFFSET   0x06    /* word: how many addresses */
+#define MAC_OS_PORT_ADDR_OFFSET         0x20    /* first address record */
+#define MAC_OS_PORT_ADDR_STRIDE         0x0C    /* "lea (0xc,A2),A2" / "moveq #0xc,D4" */
+
+static int mac_os_$port_addr_equal(const uint8_t *a, const uint8_t *b)
+{
+    return *(const uint32_t *)(a + 0x00) == *(const uint32_t *)(b + 0x00) &&
+           *(const uint16_t *)(a + 0x04) == *(const uint16_t *)(b + 0x04) &&
+           *(const uint16_t *)(a + 0x06) == *(const uint16_t *)(b + 0x06) &&
+           *(const uint16_t *)(a + 0x08) == *(const uint16_t *)(b + 0x08) &&
+           *(const uint16_t *)(a + 0x0A) == *(const uint16_t *)(b + 0x0A);
+}
+
+/*
  * MAC_OS_$PUT_INFO
  *
- * This function validates and stores port configuration information.
- * It checks that the network configuration doesn't duplicate any
- * existing port's configuration by comparing network addresses.
- *
- * Parameters:
- *   info       - Port info structure:
- *                0x00: Version (must be 1)
- *                0x04: Configuration data
- *   port_num   - Pointer to port number (0-7)
- *   status_ret - Pointer to receive status code
- *
- * Assembly notes:
- *   - Uses A5 = 0xE22990 (MAC_OS_$DATA base)
- *   - Port info stored at base + 0x89C + port * 8
- *   - Validates against all other ports' configurations
- *   - Compares fields at offsets 0x20, 0x24, 0x26, 0x28, 0x2A of route_port
+ * Parameters (0x08, 0x0C, 0x10 off A6):
+ *   info       - the eight-byte mac_os_$port_info_t to install
+ *   port_num   - pointer to the port number (0..7)
+ *   status_ret - status return
  */
-void MAC_OS_$PUT_INFO(mac_os_$port_info_t *info, int16_t *port_num, status_$t *status_ret)
+void MAC_OS_$PUT_INFO(mac_os_$port_info_t *info, int16_t *port_num,
+                      status_$t *status_ret)
 {
-#if defined(ARCH_M68K)
-    int16_t port;
-    int16_t other_port;
-    void **route_portp;
-    void *route_port;
-    void *other_route_port;
+    int16_t         other_port;
+    int16_t         port;
+    const uint8_t  *port_rec;
+    const uint8_t  *other_rec;
+    int16_t         a;
+    int16_t         b;
+    int16_t         port_count;
+    int16_t         other_count;
 
+    /* 0x00E0C23E */
     *status_ret = status_$ok;
 
-    /* Validate version field (must be 1) */
+    /* 0x00E0C244-0x00E0C252: the version check runs BEFORE the lock is taken */
     if (info->version != 1) {
         *status_ret = status_$mac_invalid_port_version;
         return;
     }
 
-    port = *port_num;
-    route_portp = (void **)0xE26EE8;
-
-    /* Enter exclusion region */
+    /* 0x00E0C256 */
     ML_$EXCLUSION_START(&MAC_OS_$EXCLUSION);
 
-    /* Check for conflicts with other ports */
+    /* 0x00E0C262-0x00E0C30C: "moveq #0x7,D0" plus dbf - all eight ports */
     for (other_port = 0; other_port < MAC_OS_MAX_PORTS; other_port++) {
-        int16_t entry_idx;
-        int16_t num_entries;
-
-        /* Skip self */
+        /* 0x00E0C26E: skip the port being configured */
+        port = *port_num;
         if (other_port == port) {
             continue;
         }
 
-        /* Get route port for the port being configured */
-        route_port = route_portp[port];
-        if (route_port == NULL) {
+        /*
+         * 0x00E0C276-0x00E0C28C.  Both ROUTE_$PORTP slots are dereferenced
+         * unconditionally; the image makes no null test here (bead
+         * source-ht0n).
+         */
+        port_rec  = (const uint8_t *)ROUTE_$PORTP[port];
+        other_rec = (const uint8_t *)ROUTE_$PORTP[other_port];
+
+        /* 0x00E0C28E: the outer count comes from the port being configured */
+        port_count = *(const int16_t *)(port_rec + MAC_OS_PORT_ADDR_COUNT_OFFSET);
+        if (port_count - 1 < 0) {
             continue;
         }
 
-        /* Get other port's route port */
-        other_route_port = route_portp[other_port];
-        if (other_route_port == NULL) {
-            continue;
-        }
+        /* 0x00E0C29C: the inner count comes from the other port, read once */
+        other_count = *(const int16_t *)(other_rec + MAC_OS_PORT_ADDR_COUNT_OFFSET);
 
-        /* Compare network configurations */
-        /* The original compares entries at offsets 0x20, 0x24, 0x26, 0x28, 0x2A */
-        /* which appear to be network address fields */
-        num_entries = *(int16_t *)((uint8_t *)route_port + 6);
-        if (num_entries <= 0) {
-            continue;
-        }
+        for (a = 0; a < port_count; a++) {
+            /* 0x00E0C2A6: the inner loop is skipped when other_count is 0 */
+            for (b = 0; b < other_count; b++) {
+                const uint8_t *addr_a = port_rec + MAC_OS_PORT_ADDR_OFFSET +
+                                        (int32_t)a * MAC_OS_PORT_ADDR_STRIDE;
+                const uint8_t *addr_b = other_rec + MAC_OS_PORT_ADDR_OFFSET +
+                                        (int32_t)b * MAC_OS_PORT_ADDR_STRIDE;
 
-        for (entry_idx = 0; entry_idx < num_entries; entry_idx++) {
-            int16_t other_entry_idx;
-            int16_t other_num_entries;
-            uint8_t *cfg_ptr;
-
-            other_num_entries = *(int16_t *)((uint8_t *)other_route_port + 6);
-            if (other_num_entries <= 0) {
-                continue;
-            }
-
-            cfg_ptr = (uint8_t *)route_port;
-
-            for (other_entry_idx = 0; other_entry_idx < other_num_entries; other_entry_idx++) {
-                uint8_t *other_cfg_ptr = (uint8_t *)other_route_port;
-
-                /* Compare 5 fields: offset 0x20 (4 bytes), 0x24, 0x26, 0x28, 0x2A (2 bytes each) */
-                if (*(uint32_t *)(cfg_ptr + 0x20) == *(uint32_t *)(other_cfg_ptr + 0x20) &&
-                    *(uint16_t *)(cfg_ptr + 0x24) == *(uint16_t *)(other_cfg_ptr + 0x24) &&
-                    *(uint16_t *)(cfg_ptr + 0x26) == *(uint16_t *)(other_cfg_ptr + 0x26) &&
-                    *(uint16_t *)(cfg_ptr + 0x28) == *(uint16_t *)(other_cfg_ptr + 0x28) &&
-                    *(uint16_t *)(cfg_ptr + 0x2A) == *(uint16_t *)(other_cfg_ptr + 0x2A)) {
-                    /* Duplicate configuration found */
+                if (mac_os_$port_addr_equal(addr_a, addr_b)) {
+                    /*
+                     * 0x00E0C2E8-0x00E0C2F2: the duplicate path branches
+                     * straight to the epilogue at 0x00E0C346 and therefore
+                     * RETURNS WITH MAC_OS_$EXCLUSION STILL HELD.  That is the
+                     * image's behaviour, not a transcription slip.
+                     */
                     *status_ret = status_$mac_XXX_unknown_2;
-                    /* Note: Original doesn't unlock before return - may be a bug */
-                    goto done;
+                    return;
                 }
-
-                other_cfg_ptr += 0x0C;  /* Next entry in other port */
             }
-
-            cfg_ptr += 0x0C;  /* Next entry in this port */
         }
     }
 
-    /* Copy port info to storage */
-    /* Original uses OS_$DATA_COPY to copy 8 bytes */
-    {
-        mac_os_$port_info_t *dest = &MAC_OS_$PORT_TABLE[port];
-        OS_$DATA_COPY(info, dest, 8);
-    }
+    /*
+     * 0x00E0C310-0x00E0C338: OS_$DATA_COPY(info, &MAC_OS_$PORT_TABLE[port], 8).
+     * The length is pushed as a longword with "pea (0x8).w".
+     */
+    port = *port_num;
+    OS_$DATA_COPY((char *)info, (char *)&MAC_OS_$PORT_TABLE[port], 8);
 
-done:
+    /* 0x00E0C33C */
     ML_$EXCLUSION_STOP(&MAC_OS_$EXCLUSION);
-#else
-    /* Non-M68K implementation stub */
-    (void)info;
-    (void)port_num;
-    *status_ret = status_$mac_port_op_not_implemented;
-#endif
 }

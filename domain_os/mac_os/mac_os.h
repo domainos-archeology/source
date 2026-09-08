@@ -42,6 +42,22 @@
 /* Maximum number of channels */
 #define MAC_OS_MAX_CHANNELS     10
 
+/*
+ * MAC_OS_$OPEN's free-channel scan tests one slot PAST the ten real ones
+ * before it gives up:
+ *   0x00E0B2C2  move.w (0x7b2,A0),D0w      test slot n
+ *   0x00E0B2C6  btst.l #0x9,D0
+ *   0x00E0B2CA  bne  -> 0x00E0B2A8
+ *   0x00E0B2A8  cmpi.w #0xa,D2w            only NOW is the index checked
+ *   0x00E0B2AC  bcs  -> 0x00E0B2BC         n < 10: step to n + 1 and retest
+ * so when slots 0..9 are all in use the loop advances to n = 10, reads
+ * A5 + 0x7A0 + 10 * 0x14 = A5 + 0x868 - the first word of MAC_OS_$EXCLUSION -
+ * and only rejects the channel if bit 9 happens to be set there.  The C table
+ * carries an eleventh slot so that read has real storage; in the image it
+ * overlays the lock.
+ */
+#define MAC_OS_CHANNEL_TABLE_SLOTS  (MAC_OS_MAX_CHANNELS + 1)
+
 /* Maximum number of packet type entries per port */
 #define MAC_OS_MAX_PKT_TYPES    20
 
@@ -98,9 +114,32 @@
 typedef struct mac_os_$pkt_type_entry_t {
     uint32_t    range_low;      /* 0x00: Minimum packet type (inclusive) */
     uint32_t    range_high;     /* 0x04: Maximum packet type (inclusive) */
-    uint16_t    reserved;       /* 0x08: Reserved */
-    uint16_t    channel_index;  /* 0x0A: Channel to route packets to */
+    uint16_t    channel_index;  /* 0x08: Channel to route packets to */
+    uint16_t    reserved;       /* 0x0A: never read or written by this image */
 } mac_os_$pkt_type_entry_t;
+
+/*
+ * channel_index sits at entry offset 0x08, not 0x0A.  Every user indexes the
+ * entry array off the TABLE base (which is 4 bytes ahead of entries[0]), so
+ * the displacement in the assembly is 0x0C:
+ *   MAC_OS_$OPEN         0x00E0B340  move.l (A1)+,(0x4,A0)   ; range_low
+ *                        0x00E0B344  move.l (A1)+,(0x8,A0)   ; range_high
+ *                        0x00E0B348  move.w D2w,(0xc,A0)     ; channel_index
+ *   MAC_OS_$DEMUX        0x00E0B870  move.w (0xc,A2,D1*0x1),D1w
+ *   MAC_OS_$CLOSE        0x00E0B4D0  move.w (0xc,A1),D1w
+ *   MAC_OS_$PROC2_CLEANUP 0x00E0C07A cmp.w (0xc,A1),D4w
+ * with A0/A1/A2 = &table and D1 = 12 * index.
+ */
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(mac_os_$pkt_type_entry_t, range_low)     == 0x00,
+               "mac_os_$pkt_type_entry_t.range_low");
+_Static_assert(offsetof(mac_os_$pkt_type_entry_t, range_high)    == 0x04,
+               "mac_os_$pkt_type_entry_t.range_high");
+_Static_assert(offsetof(mac_os_$pkt_type_entry_t, channel_index) == 0x08,
+               "mac_os_$pkt_type_entry_t.channel_index");
+_Static_assert(sizeof(mac_os_$pkt_type_entry_t) == 0x0C,
+               "mac_os_$pkt_type_entry_t must be 12 bytes");
+#endif
 
 /*
  * Per-port packet type table (0xF4 = 244 bytes)
@@ -124,10 +163,15 @@ typedef struct mac_os_$channel_t {
     uint16_t    callback_data;  /* 0x0C: Saved callback data */
     uint16_t    line_number;    /* 0x0E: Line number */
     uint16_t    header_size;    /* 0x10: Header size for this network type */
-    uint16_t    flags;          /* 0x12: Channel flags */
-                                /*   Bit 9 (0x200): Channel in use */
-                                /*   Bit 1 (0x002): Channel open */
-                                /*   Bits 2-7: Owner AS_ID << 2 */
+    uint16_t    flags;          /* 0x12: Channel flags.  Every site reaches
+                                 * this word through the BYTE at entry offset
+                                 * 0x12, which big-endian m68k makes its HIGH
+                                 * half, so a "bclr.b #n" there is word bit
+                                 * n + 8:
+                                 *   Bit  8 (0x0100): promiscuous
+                                 *   Bit  9 (0x0200): channel in use
+                                 *   Bits 10-15:      owner AS_ID
+                                 */
 } mac_os_$channel_t;
 
 #if defined(ARCH_M68K)
@@ -138,7 +182,23 @@ _Static_assert(__builtin_offsetof(mac_os_$channel_t, flags) == 0x12,
 _Static_assert(sizeof(mac_os_$channel_t) == 20, "mac_os_$channel_t must be 20 bytes");
 #endif
 
-/* mac_os_$channel_t.flags bits, as the word at entry offset 0x12 */
+/*
+ * mac_os_$channel_t.flags bits, as the word at entry offset 0x12.
+ *
+ * The byte at A5 + 0x7B2 + 0x14*channel is that word's high half, so every
+ * byte-sized operation on it names a bit eight higher in the word:
+ *   MAC_OS_$INIT          0x00E2F5FE  bclr.b #0x0,(0x7b2,A0)  -> 0x0100
+ *                         0x00E2F604  bclr.b #0x1,(0x7b2,A0)  -> 0x0200
+ *   MAC_OS_$OPEN          0x00E0B36C  bset.b #0x1,(0x7b2,A0)  -> 0x0200
+ *                         0x00E0B372  andi.b #0x3,(0x7b2,A0)  -> keep 0x0300
+ *                         0x00E0B380  or.b   D1b,(0x7b2,A0)   -> asid << 10
+ *   MAC_$OPEN             0x00E0BA30  andi.b #-0x2,(0x7b2,A0) -> clear 0x0100
+ *                         0x00E0BA36  or.b   D1b,(0x7b2,A0)   -> set 0x0100
+ *   MAC_OS_$CLOSE         0x00E0B500  bclr.b #0x1,(0x7b2,A2)  -> 0x0200
+ *   MAC_OS_$PROC2_CLEANUP 0x00E0C020  bclr.b #0x1,(0x7b2,A2)  -> 0x0200
+ * while the two readers use word operations and say bit 9 outright
+ * ("move.w (0x7b2,A0),D0w / btst.l #0x9,D0" at 0x00E0B2C2 and 0x00E0C004).
+ */
 #define MAC_OS_CHANNEL_PROMISCUOUS  0x0100  /* set from mac_$open_params_t.flags bit 7 */
 #define MAC_OS_CHANNEL_IN_USE       0x0200  /* btst #9 in MAC_$CLOSE (0x00E0BAA8) */
 #define MAC_OS_CHANNEL_OWNER_MASK   0xFC00  /* owner AS id, shifted left by 10 */
@@ -273,7 +333,7 @@ typedef struct mac_os_$link_addr_t {
 } mac_os_$link_addr_t;
 
 /*
- * mac_os_$rcv_pkt_t - the 0x40-byte record a port driver builds for
+ * mac_os_$rcv_pkt_t - the 0x4C-byte record a port driver builds for
  * MAC_OS_$DEMUX.  It is the same Pascal record as mac_os_$send_pkt_t: the
  * link address at 0x00..0x17, a boolean at 0x18, a buffer chain at 0x1C,
  * the frame type at 0x30, the payload length at 0x38 and the payload pages
@@ -323,7 +383,14 @@ typedef struct mac_os_$rcv_pkt_t {
     uint32_t    frame_type;     /* 0x30 */
     uint32_t    channel;        /* 0x34: mac_os_$channel_t * of the receiver */
     uint32_t    data_len;       /* 0x38: payload byte count */
-    uint32_t    data_pa;        /* 0x3C: payload DMA address */
+    uint32_t    data_pa[4];     /* 0x3C: payload DMA addresses.  MAC_$DEMUX
+                                 * copies all four with "lea (0x3c,A2),A0" and
+                                 * four "move.l (A0)+,(A1)+" (0x00E0BCC2), the
+                                 * same four slots mac_os_$send_pkt_t.data_pages
+                                 * holds, so the record runs to 0x4C.
+                                 * ring_$receive_packet writes only the first
+                                 * (0x00E7654A) and builds the record in a
+                                 * 0x50-byte frame slot at A6-0x50. */
 } __attribute__((packed)) mac_os_$rcv_pkt_t;
 
 #if defined(ARCH_M68K)
@@ -340,7 +407,7 @@ _Static_assert(offsetof(mac_os_$rcv_pkt_t, frame_type) == 0x30, "rcv_pkt.frame_t
 _Static_assert(offsetof(mac_os_$rcv_pkt_t, channel)    == 0x34, "rcv_pkt.channel");
 _Static_assert(offsetof(mac_os_$rcv_pkt_t, data_len)   == 0x38, "rcv_pkt.data_len");
 _Static_assert(offsetof(mac_os_$rcv_pkt_t, data_pa)    == 0x3C, "rcv_pkt.data_pa");
-_Static_assert(sizeof(mac_os_$rcv_pkt_t) == 0x40, "mac_os_$rcv_pkt_t must be 0x40 bytes");
+_Static_assert(sizeof(mac_os_$rcv_pkt_t) == 0x4C, "mac_os_$rcv_pkt_t must be 0x4C bytes");
 #endif
 
 
@@ -452,7 +519,7 @@ extern mac_os_$port_pkt_table_t MAC_OS_$PORT_PKT_TABLES[MAC_OS_MAX_PORTS];
  * Address: 0x00E23130 (MAC_OS_$DATA + 0x7A0); see mac_os/mac_os_data.c for
  * how the base is pinned.
  */
-extern mac_os_$channel_t MAC_OS_$CHANNEL_TABLE[MAC_OS_MAX_CHANNELS];
+extern mac_os_$channel_t MAC_OS_$CHANNEL_TABLE[MAC_OS_CHANNEL_TABLE_SLOTS];
 /*
  * MAC_OS_$EXCLUSION - lock guarding MAC_OS_$CHANNEL_TABLE
  * Address: 0x00E231F8 (MAC_OS_$DATA + 0x868)

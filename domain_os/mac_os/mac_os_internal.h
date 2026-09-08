@@ -15,6 +15,7 @@
 #include "fim/fim.h"
 #include "netbuf/netbuf.h"
 #include "proc1/proc1.h"
+#include "route/route.h"   /* ROUTE_$PORTP, route_$port_t */
 
 /*
  * ============================================================================
@@ -31,12 +32,12 @@
 /* Channel entry size in bytes */
 #define MAC_OS_CHANNEL_SIZE         0x14
 
-/* Channel flags */
-#define MAC_OS_FLAG_IN_USE          0x0200  /* Bit 9: Channel is in use */
-#define MAC_OS_FLAG_OPEN            0x0002  /* Bit 1: Channel is open */
-#define MAC_OS_FLAG_PROMISCUOUS     0x0001  /* Bit 0: Promiscuous mode */
-#define MAC_OS_FLAG_ASID_MASK       0x00FC  /* Bits 2-7: AS_ID << 2 */
-#define MAC_OS_FLAG_ASID_SHIFT      2
+/*
+ * Channel flags live on mac_os_$channel_t.flags and are spelled
+ * MAC_OS_CHANNEL_* in mac_os/mac_os.h.  The MAC_OS_FLAG_* names that used to
+ * sit here (0x0001 promiscuous / 0x0002 open / 0x00FC asid) were off by eight
+ * bits: every writer works on the word's HIGH byte (bead source-b6p8).
+ */
 
 /*
  * ============================================================================
@@ -49,6 +50,19 @@
 #define ROUTE_PORT_DRIVER_INFO_OFFSET   0x48    /* Pointer to driver info */
 #define ROUTE_PORT_NET_TYPE_OFFSET      0x2E    /* Network type (2 bytes) */
 #define ROUTE_PORT_LINE_NUM_OFFSET      0x30    /* Line number (2 bytes) */
+
+/*
+ * The two fields MAC_OS_$INIT fills in that route/route.h has not named yet.
+ * They sit inside route_$port_t._unknown0 (0x04..0x1F), so reach them through
+ * a byte displacement rather than a struct member.
+ *
+ *   0x00E2F590  move.l #0x10001,(0x4,A0)   ROUTE_PORT_LINK_ID_OFFSET
+ *   0x00E2F59C  move.w #0x2,(0x8,A2)       ROUTE_PORT_LINK_ADDR_OFFSET, the
+ *   0x00E2F5B4  move.w D1w,(0xa,A2)        mac_os_$link_addr_t {2, node_hi,
+ *   0x00E2F5B8  move.w (NODE_$ME+2),(0xc,A2)                     node_lo}
+ */
+#define ROUTE_PORT_LINK_ID_OFFSET       0x04    /* two words, both 1 */
+#define ROUTE_PORT_LINK_ADDR_OFFSET     0x08    /* mac_os_$link_addr_t */
 
 /*
  * ============================================================================

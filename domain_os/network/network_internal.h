@@ -50,9 +50,18 @@ typedef struct network_table_entry_t {
   uint32_t net_id;   /* Network identifier */
 } network_table_entry_t;
 
-#define NETWORK_TABLE_SIZE 64
+/*
+ * The table is indexed 1..64: NETWORK_$INSTALL_NET runs "moveq #0x3f,D2 /
+ * moveq #0x1,D3 / ... / dbf D2w" (0x00E0F204-0x00E0F240), 64 iterations with
+ * the index starting at 1, and reaches slot n at A5 + 0x38 + 8*n
+ * (0x00E0F224 / 0x00E0F25A).  Slot 0 exists in storage - the base A5 + 0x38
+ * IS slot 0's refcount - but is never used, so the C array carries 65 entries
+ * and keeps the original's 1-based indexing.
+ */
+#define NETWORK_MAX_NET_INDEX 64
+#define NETWORK_TABLE_SIZE (NETWORK_MAX_NET_INDEX + 1)
 
-/* Network table - 64 entries indexed by network index */
+/* Network table - slots 1..64, slot 0 unused */
 extern network_table_entry_t NETWORK_$NET_TABLE[NETWORK_TABLE_SIZE];
 
 /* Extract network index from a network address value */
@@ -74,6 +83,27 @@ extern int16_t NETWORK_$RETRY_TIMEOUT; /* 0xE24C18 - timeout for retries */
 extern void *NETWORK_$LOCK;
 
 /* SOCK_$SOCKET_PTR is exported from sock/sock.h (bead source-3uo). */
+
+/*
+ * network_$reply_hdr_t - the head of the reply buffer network_$do_request
+ * validates.
+ *
+ * 0x00E0F9CC-0x00E0F9E6, with A4 = the reply buffer and A0 = the request:
+ *   move.w (A4),D0w / ext.l D0
+ *   move.w (A0),D1w / ext.l D1 / addq.l #0x1,D1
+ *   cmp.l D1,D0 / bne -> status_$network_unexpected_reply_type
+ *   move.l (0x2,A4),(A3)        the reply's own status
+ * The longword sits on an odd word boundary, so the record is packed.
+ */
+typedef struct network_$reply_hdr_t {
+    int16_t     reply_type;     /* 0x00: must be request_type + 1 */
+    status_$t   status;         /* 0x02: UNALIGNED longword */
+} __attribute__((packed)) network_$reply_hdr_t;
+
+_Static_assert(offsetof(network_$reply_hdr_t, status) == 0x02,
+               "network_$reply_hdr_t.status");
+_Static_assert(sizeof(network_$reply_hdr_t) == 6,
+               "network_$reply_hdr_t must be 6 bytes");
 
 /*
  * network_$send_request - Send a network request packet

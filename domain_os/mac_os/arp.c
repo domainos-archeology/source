@@ -19,12 +19,13 @@
  * determine how to construct the MAC address.
  *
  * Parameters:
- *   addr_info  - Address information structure:
- *                0x04: Ethernet type (2 bytes)
- *                0x06: High word of address (2 bytes)
- *                0x08: Low word of address (2 bytes)
+ *   addr_info  - Address record; the three words this routine reads are the
+ *                rip_$dest_addr_t host address:
+ *                0x04: host_hi   ("cmpi.w #0x800,(0x4,A1)" 0x00E0C18E)
+ *                0x06: high half of host_lo ("move.w (0x6,A1),D0w" 0x00E0C196)
+ *                0x08: low half of host_lo  ("move.w (0x8,A1),(0x4,A2)")
  *   port_num   - Port number (0-7)
- *   mac_addr   - Pointer to receive MAC address (3 uint16_t values)
+ *   mac_addr   - the mac_os_$link_addr_t to fill in
  *   flags      - Pointer to receive flags:
  *                0x00 = unicast
  *                0xFF = broadcast/multicast
@@ -38,108 +39,122 @@
 void MAC_OS_$ARP(void *addr_info, int16_t port_num, uint16_t *mac_addr,
                  uint8_t *flags, status_$t *status_ret)
 {
-#if defined(ARCH_M68K)
-    void *route_port;
-    uint16_t net_type;
-    uint16_t ether_type;
-    uint16_t addr_high;
-    uint16_t addr_low;
+    route_$port_t       *route_port;
+    mac_os_$link_addr_t *link_addr = (mac_os_$link_addr_t *)mac_addr;
+    const uint8_t       *addr = (const uint8_t *)addr_info;
+    uint16_t             net_type;
+    uint16_t             host_hi;
+    uint16_t             host_lo_hi;
+    uint16_t             host_lo_lo;
+    int                  i;
 
+    /* 0x00E0C0EA: clr.l (A0) */
     *status_ret = status_$ok;
 
-    /* Get route port structure */
-    route_port = ((void **)0xE26EE8)[port_num];
+    /* 0x00E0C0EE-0x00E0C10C: ROUTE_$PORTP[port_num] */
+    route_port = ROUTE_$PORTP[port_num];
     if (route_port == NULL) {
         *status_ret = status_$mac_port_op_not_implemented;
         return;
     }
 
-    /* Initialize flags to unicast */
+    /* 0x00E0C110: clr.b (A3) */
     *flags = 0;
 
-    /* Get address fields */
-    ether_type = *(uint16_t *)((uint8_t *)addr_info + 4);
-    addr_high = *(uint16_t *)((uint8_t *)addr_info + 6);
-    addr_low = *(uint16_t *)((uint8_t *)addr_info + 8);
+    host_hi    = *(const uint16_t *)(addr + 0x04);
+    host_lo_hi = *(const uint16_t *)(addr + 0x06);
+    host_lo_lo = *(const uint16_t *)(addr + 0x08);
 
-    /* Check for broadcast address (all 0xFFFF) */
-    if (addr_low == 0xFFFF && ether_type == 0xFFFF && addr_high == 0xFFFF) {
-        /* Broadcast address */
+    net_type = route_port->port_type;
+
+    /*
+     * 0x00E0C114-0x00E0C128: the broadcast test compares the three words in
+     * the order +0x08, +0x04, +0x06 against 0xFFFF.
+     */
+    if (host_lo_lo == 0xFFFF && host_hi == 0xFFFF && host_lo_hi == 0xFFFF) {
+        /* 0x00E0C12A: st (A3) */
         *flags = 0xFF;
 
-        net_type = *(uint16_t *)((uint8_t *)route_port + ROUTE_PORT_NET_TYPE_OFFSET);
+        /*
+         * The jump table at 0x00E0C142 (targets are that address plus the
+         * table word): 0 and 3 -> 0x00E0C14E, 4 and 5 -> 0x00E0C156,
+         * 1 and 2 -> 0x00E0C216, and "cmpi.w #0x6 / bcc" sends anything from
+         * 6 upward to 0x00E0C216 as well.
+         */
         switch (net_type) {
         case MAC_OS_NET_TYPE_ETHERNET:
         case MAC_OS_NET_TYPE_3:
-            /* Ethernet broadcast: just 2 bytes */
-            mac_addr[0] = 2;  /* Address length */
-            break;
+            /* 0x00E0C14E: the count alone; no address words are written */
+            link_addr->n_words = 2;
+            return;
 
         case MAC_OS_NET_TYPE_TOKEN_RING:
         case MAC_OS_NET_TYPE_FDDI:
-            /* Token ring/FDDI broadcast: 3 bytes, all 0xFFFF */
-            mac_addr[0] = 3;  /* Address length */
-            mac_addr[1] = 0xFFFF;
-            mac_addr[2] = 0xFFFF;
-            mac_addr[3] = 0xFFFF;
-            break;
+            /* 0x00E0C156-0x00E0C164: count 3 and three words of 0xFFFF */
+            link_addr->n_words = 3;
+            for (i = 0; i < 3; i++) {
+                link_addr->addr[i] = 0xFFFF;
+            }
+            return;
 
         default:
+            /* 0x00E0C216 */
             *status_ret = status_$mac_port_op_not_implemented;
-            break;
+            return;
         }
-        return;
     }
 
-    /* Unicast address resolution */
-    net_type = *(uint16_t *)((uint8_t *)route_port + ROUTE_PORT_NET_TYPE_OFFSET);
-
+    /*
+     * The unicast jump table at 0x00E0C182: 0 and 3 -> 0x00E0C18E,
+     * 4 -> 0x00E0C1FC, 5 -> 0x00E0C1C4, 1 and 2 (and >= 6) -> 0x00E0C216.
+     */
     switch (net_type) {
     case MAC_OS_NET_TYPE_ETHERNET:
     case MAC_OS_NET_TYPE_3:
-        /* Ethernet: check for IP type (0x0800) with 0x1E00 prefix */
-        if (ether_type == MAC_OS_ETHERTYPE_IP && (addr_high & 0xFF00) == 0x1E00) {
-            mac_addr[0] = 2;  /* Address length */
-            mac_addr[1] = addr_high & 0x000F;  /* Low nibble */
-            mac_addr[2] = addr_low;
+        /*
+         * 0x00E0C18E-0x00E0C1C2: only an Apollo 08-00-1E-0n-nn-nn host
+         * address resolves; the node id is the low nibble of host_lo's high
+         * half plus its low half.
+         */
+        if (host_hi == MAC_OS_ETHERTYPE_IP && (host_lo_hi & 0xFF00) == 0x1E00) {
+            link_addr->n_words = 2;
+            link_addr->addr[0] = (uint16_t)(host_lo_hi & 0x000F);
+            link_addr->addr[1] = host_lo_lo;
             return;
         }
-        /* Non-IP or non-standard address */
+        /* 0x00E0C1BA */
         *status_ret = status_$mac_arp_address_not_found;
         return;
 
     case MAC_OS_NET_TYPE_TOKEN_RING:
-        /* Token ring: 3-byte address */
-        mac_addr[0] = 3;
+        /* 0x00E0C1FC: sets the count and falls into the shared copy below */
+        link_addr->n_words = 3;
         break;
 
     case MAC_OS_NET_TYPE_FDDI:
-        /* FDDI: 3-byte address with special prefix */
-        mac_addr[0] = 3;
-        if (ether_type == MAC_OS_ETHERTYPE_IP && (addr_high & 0xFF00) == 0x1E00) {
-            /* Convert IP-style address to FDDI format */
-            mac_addr[1] = 0x5000;
-            mac_addr[2] = (addr_high & 0xFF) | 0x7800;
-            mac_addr[3] = addr_low;
+        /* 0x00E0C1C4 */
+        link_addr->n_words = 3;
+        if (host_hi == MAC_OS_ETHERTYPE_IP && (host_lo_hi & 0xFF00) == 0x1E00) {
+            /* 0x00E0C1DE-0x00E0C1FA */
+            link_addr->addr[0] = 0x5000;
+            link_addr->addr[1] = (uint16_t)((host_lo_hi & 0x00FF) | 0x7800);
+            link_addr->addr[2] = host_lo_lo;
             return;
         }
+        /* 0x00E0C1DC: otherwise it branches into the shared copy at 0xE0C200 */
         break;
 
     default:
+        /* 0x00E0C216 */
         *status_ret = status_$mac_port_op_not_implemented;
         return;
     }
 
-    /* Copy address directly for non-IP types */
-    mac_addr[1] = ether_type;
-    mac_addr[2] = addr_high;
-    mac_addr[3] = addr_low;
-#else
-    /* Non-M68K implementation stub */
-    (void)addr_info;
-    (void)port_num;
-    (void)mac_addr;
-    *flags = 0;
-    *status_ret = status_$mac_port_op_not_implemented;
-#endif
+    /*
+     * 0x00E0C200-0x00E0C214: three words copied straight across, from
+     * addr_info + 0x04 to link_addr->addr[0].
+     */
+    for (i = 0; i < 3; i++) {
+        link_addr->addr[i] = *(const uint16_t *)(addr + 0x04 + 2 * i);
+    }
 }

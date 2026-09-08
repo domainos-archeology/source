@@ -81,9 +81,17 @@ typedef struct rip_$xns_addr_t {
     uint8_t  host[6];
 } rip_$xns_addr_t;
 
+/* The {network, host_hi, host_lo} view of the same 10 bytes */
+typedef struct rip_$nexthop_t {
+    uint32_t network;
+    uint16_t host_hi;
+    uint32_t host_lo;
+} __attribute__((packed)) rip_$nexthop_t;
+
 /* ASKNODE request type constants */
-#define ASKNODE_REQ_BOOT_TIME 0x02
-#define ASKNODE_REQ_TIMEZONE  0x08
+#define ASKNODE_REQ_BOOT_TIME  0x02
+#define ASKNODE_REQ_TIMEZONE   0x08
+#define ASKNODE_REQ_ROUTE_PORT 0x37
 
 /* ============================================================================
  * Mock globals
@@ -470,12 +478,13 @@ TEST(cmd37_source_node_in_host) {
     /* Verify the source address passed to RIP_$UPDATE_INT */
     ASSERT_EQ(new_port, mock_rip.last_source.network);
 
-    /* host[2..5] should contain node address in the low 20 bits */
-    uint32_t host_low =
-        ((uint32_t)mock_rip.last_source.host[2] << 24) |
-        ((uint32_t)mock_rip.last_source.host[3] << 16) |
-        ((uint32_t)mock_rip.last_source.host[4] << 8) |
-        ((uint32_t)mock_rip.last_source.host[5]);
+    /*
+     * The image builds this field as ONE longword at source + 0x06
+     * ("andi.l #-0x100000,(-0xa,A6)" / "or.l D1,(-0xa,A6)" at 0x00E33740),
+     * so read it back as one longword rather than as four bytes.
+     */
+    uint32_t host_low;
+    memcpy(&host_low, (uint8_t *)&mock_rip.last_source + 6, sizeof(host_low));
 
     /* The low 20 bits should match the node address */
     ASSERT_EQ(node & 0x000FFFFF, host_low & 0x000FFFFF);

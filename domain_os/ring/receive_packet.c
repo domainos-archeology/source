@@ -141,7 +141,7 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
         mac_rec.net_type = 2;                       /* 0x00E76528 */
         mac_rec.src_id = hdr->src_id;               /* 0x00E76532: 2 words */
         mac_rec.frame_type = hdr->route_info;       /* 0x00E76542 */
-        mac_rec.data_pa = *data_pa_p;               /* 0x00E7654A */
+        mac_rec.data_pa[0] = *data_pa_p;               /* 0x00E7654A */
         mac_rec.body_len = (int32_t)(uint32_t)(uint16_t)*hdr_len_p
                            - (int32_t)RING_HDR_SIZE;    /* 0x00E76556 */
         mac_rec.body = (uint32_t)(uintptr_t)*hdr_p + RING_HDR_SIZE; /* 0x00E76564 */

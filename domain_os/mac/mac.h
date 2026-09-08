@@ -83,17 +83,44 @@ typedef struct mac_$packet_type_t {
  * Size: 0x54+ bytes
  */
 typedef struct mac_$open_params_t {
-  mac_$packet_type_t
-      packet_types[MAC_MAX_PACKET_TYPES]; /* 0x00-0x4F: Packet type filters */
+  union {
+    /* input: the packet-type ranges the caller wants routed to the channel */
+    mac_$packet_type_t packet_types[MAC_MAX_PACKET_TYPES]; /* 0x00-0x4F */
+    /*
+     * output: MAC_$OPEN writes its three results over the FIRST entry, the
+     * way a Pascal variant record would (0x00E0BA56-0x00E0BA60):
+     *   move.l A0,(A2)          the registered EC2 event count
+     *   move.l (-0x58,A6),(0x4,A2)  the MTU MAC_OS_$OPEN left in its local
+     *   move.w D2w,(0x8,A2)     the channel number
+     */
+    struct {
+      uint32_t ec2_handle;  /* 0x00: EC2_$REGISTER_EC1 result, as a target VA */
+      uint32_t mtu;         /* 0x04: driver MTU */
+      uint16_t channel_num; /* 0x08: channel number 0..9 */
+    } result;
+  } u;
   int16_t num_packet_types; /* 0x50: Number of packet types (1-10) */
   int16_t socket_count;     /* 0x52: Number of sockets to allocate */
-  uint8_t flags;            /* 0x54: Flags (bit 7: promiscuous mode) */
-  /* Output fields - populated by MAC_OS_$OPEN and MAC_$OPEN */
-  uint8_t pad_55[3];    /* 0x55: Padding for alignment */
-  void *ec2_handle;     /* 0x58: EC2 event count handle */
-  uint32_t os_handle;   /* 0x5C: OS-level MAC handle */
-  uint16_t channel_num; /* 0x60: Channel number (0-9) */
+  uint8_t flags;            /* 0x54: byte; bit 7 = promiscuous.  MAC_$OPEN
+                             * reads it as a byte and shifts it down seven
+                             * places ("move.b (0x54,A2),D1b / lsr.b #0x7,D1b"
+                             * at 0x00E0BA2A). */
 } mac_$open_params_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(mac_$open_params_t, u.result.ec2_handle) == 0x00,
+               "mac_$open_params_t.result.ec2_handle");
+_Static_assert(offsetof(mac_$open_params_t, u.result.mtu) == 0x04,
+               "mac_$open_params_t.result.mtu");
+_Static_assert(offsetof(mac_$open_params_t, u.result.channel_num) == 0x08,
+               "mac_$open_params_t.result.channel_num");
+_Static_assert(offsetof(mac_$open_params_t, num_packet_types) == 0x50,
+               "mac_$open_params_t.num_packet_types");
+_Static_assert(offsetof(mac_$open_params_t, socket_count) == 0x52,
+               "mac_$open_params_t.socket_count");
+_Static_assert(offsetof(mac_$open_params_t, flags) == 0x54,
+               "mac_$open_params_t.flags");
+#endif
 
 /*
  * MAC channel handle structure
@@ -134,30 +161,40 @@ typedef struct mac_$buffer_t {
 typedef mac_os_$send_pkt_t mac_$send_pkt_t;
 
 /*
- * Receive packet descriptor
- * Describes a received packet
+ * mac_$recv_pkt_t - the descriptor the caller of MAC_$RECEIVE supplies.
+ *
+ * Its head is the same shape as mac_os_$rcv_pkt_t: a mac_os_$link_addr_t at
+ * 0x00, the "packet is local" boolean at 0x18, and the arrival time and frame
+ * type at 0x2A/0x2E/0x30.  Where the driver record carries the payload length
+ * at 0x1C, this one carries the FIRST buffer descriptor of the caller's
+ * receive chain - MAC_$RECEIVE takes "lea (0x1c,A3),A2" (0x00E0BE9E) as the
+ * head of a {length, address, next} list.
+ *
+ * MAC_$RECEIVE writes: 0x18 (0x00E0BE4E), 0x00 and 0x02.. (0x00E0BE52 and the
+ * word loop at 0x00E0BE60), 0x2A (0x00E0BE6E), 0x2E (0x00E0BE74) and 0x30
+ * (0x00E0BE7A).  It reads and rewrites the chain lengths from 0x1C onward.
+ * Nothing beyond 0x33 is touched.
  */
 typedef struct mac_$recv_pkt_t {
-  int16_t num_packet_types; /* 0x00: Number of packet type entries */
-  uint16_t packet_types[MAC_MAX_PACKET_TYPES]; /* 0x02: Packet type values */
-  uint8_t pad_16[4];                           /* 0x16: Unknown */
-  int8_t arp_flag;   /* 0x1A: Broadcast flag (negative = multicast/broadcast) */
-  uint8_t pad_1b[3]; /* 0x1B: Padding */
-  int16_t field_1e;  /* 0x1E: Unknown */
-  uint32_t field_20; /* 0x20: Pointer (header info?) */
-  uint8_t pad_24[6]; /* 0x24: Unknown */
-  uint32_t field_2a; /* 0x2A: Unknown */
-  int16_t field_2e;  /* 0x2E: Unknown */
-  uint32_t field_30; /* 0x30: Unknown */
-  void *channel_ptr; /* 0x34: Pointer to channel info */
-  uint8_t pad_38[2]; /* 0x38: Unknown */
-  int16_t field_3a;  /* 0x3A: Unknown */
-  uint32_t field_3c; /* 0x3C: Unknown */
-  uint32_t field_40; /* 0x40: Unknown */
-  uint32_t field_44; /* 0x44: Unknown */
-  uint32_t field_48; /* 0x48: Unknown */
-  mac_$buffer_t *buffers; /* 0x1C: Receive buffers (in recv path) */
-} mac_$recv_pkt_t;
+  mac_os_$link_addr_t link_addr;  /* 0x00: {word count, up to 11 words} */
+  int8_t   is_local;              /* 0x18: Domain boolean, set from
+                                   *       sock_$pkt_info_t.flags bit 0 */
+  uint8_t  _pad_19[3];            /* 0x19 */
+  mac_os_$buf_desc_t buffers;     /* 0x1C: head of the caller's buffer chain */
+  uint8_t  _pad_28[2];            /* 0x28 */
+  uint32_t time_high;             /* 0x2A: UNALIGNED longword */
+  uint16_t time_low;              /* 0x2E */
+  uint32_t frame_type;            /* 0x30 */
+} __attribute__((packed)) mac_$recv_pkt_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(mac_$recv_pkt_t, is_local)   == 0x18, "mac_$recv_pkt_t.is_local");
+_Static_assert(offsetof(mac_$recv_pkt_t, buffers)    == 0x1C, "mac_$recv_pkt_t.buffers");
+_Static_assert(offsetof(mac_$recv_pkt_t, time_high)  == 0x2A, "mac_$recv_pkt_t.time_high");
+_Static_assert(offsetof(mac_$recv_pkt_t, time_low)   == 0x2E, "mac_$recv_pkt_t.time_low");
+_Static_assert(offsetof(mac_$recv_pkt_t, frame_type) == 0x30, "mac_$recv_pkt_t.frame_type");
+_Static_assert(sizeof(mac_$recv_pkt_t) == 0x34, "mac_$recv_pkt_t must be 0x34 bytes");
+#endif
 
 /*
  * MAC channel table entry (internal)
@@ -212,10 +249,10 @@ extern void *mac_$arp_table;
  *   params     - Channel configuration parameters
  *   status_ret - Pointer to receive status code
  *
- * On success:
- *   - params->ec2_handle contains event count for receive notification
- *   - params->os_handle contains OS-level handle
- *   - params->channel_num contains allocated channel number
+ * On success the first three longwords of params are overwritten:
+ *   - params->u.result.ec2_handle - event count for receive notification
+ *   - params->u.result.mtu        - the port driver's MTU
+ *   - params->u.result.channel_num - the channel that was allocated
  *
  * Status codes:
  *   status_$ok - Success
@@ -284,7 +321,7 @@ void MAC_$SEND(uint16_t *channel, mac_$send_pkt_t *pkt_desc,
  *
  * Original address: 0x00E0BC4E
  */
-void MAC_$DEMUX(void *pkt_info, int16_t *port_info, char *flags,
+void MAC_$DEMUX(void *pkt_info, int16_t *port_num, int8_t *demux_flag,
                 status_$t *status_ret);
 
 /*

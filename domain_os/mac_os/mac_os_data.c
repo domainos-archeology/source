@@ -37,8 +37,14 @@
  * MAC_OS_$CHANNEL_TABLE - per-channel receive state
  *
  * Address: 0x00E23130 (MAC_OS_$DATA + 0x7A0)
+ *
+ * Eleven slots, not ten: MAC_OS_$OPEN's scan reads slot 10 before it decides
+ * the table is full (see MAC_OS_CHANNEL_TABLE_SLOTS in mac_os/mac_os.h).  In
+ * the image that slot's storage is the head of MAC_OS_$EXCLUSION; here it is
+ * a sentinel of its own, which keeps the read in bounds without changing what
+ * the ten real slots contain.
  */
-mac_os_$channel_t MAC_OS_$CHANNEL_TABLE[MAC_OS_MAX_CHANNELS];
+mac_os_$channel_t MAC_OS_$CHANNEL_TABLE[MAC_OS_CHANNEL_TABLE_SLOTS];
 
 /*
  * MAC_OS_$EXCLUSION - the lock held while the channel table is updated

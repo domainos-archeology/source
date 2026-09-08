@@ -123,13 +123,7 @@ extern uint16_t ring_dcte_ctype_net;
 extern status_$t Network_hardware_error;
 
 /* Internal counters */
-#define RING_$RCV_INT_CNT       (RING_$CTL.rcv_int_cnt)
-#define RING_$WAKEUP_CNT        (RING_$CTL.wakeup_cnt)
-#define RING_$ABORT_CNT         (RING_$CTL.abort_cnt)
-#define RING_$BUSY_ON_RCV_INT   (RING_$CTL.busy_on_rcv_int)
-#define RING_$XMIT_WAITED       (RING_$CTL.xmit_waited)
-#define RING_$BAD_DATA_CNT      (RING_$CTL.bad_data_cnt)
-#define RING_$UNEXPECTED_XMIT_STAT (RING_$CTL.unexpected_xmit_stat)
+/* The RING_$CTL counter aliases moved to ring/ring.h. */
 
 /*
  * RING_$XMIT_BIPHASE (0x00E261BC), RING_$XMIT_ESB (0x00E261BE),

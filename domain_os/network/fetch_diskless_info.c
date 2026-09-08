@@ -1,26 +1,19 @@
 /*
- * network_$fetch_diskless_info - Fetch info from network for diskless boot
+ * network_$fetch_diskless_info - ask another node for boot-time information
  *
- * Queries ASKNODE_$INTERNET_INFO for node-specific data and processes
- * the result based on the command type:
+ * Sends one ASKNODE_$INTERNET_INFO request and folds the answer into local
+ * state: the clock for request 2, the timezone record for request 8, and a
+ * hint plus a routing entry for request 0x37.  Any error on a request other
+ * than 0x37 crashes the system.
  *
- *   cmd=2  (ASKNODE_REQ_BOOT_TIME): Update TIME_$CLOCKH from remote node's clock
- *   cmd=8  (ASKNODE_REQ_TIMEZONE):  Update CAL_$TIMEZONE (12-byte copy of timezone record)
- *   cmd=0x37: Update routing table if route port changed:
- *             - Build UID with node address in low 20 bits
- *             - Call HINT_$ADDI to register hint
- *             - Build XNS source address and call RIP_$UPDATE_INT
- *               with hop_count=1, port_index=0, flags=0
+ * Original address: 0x00E3366C, size 262 bytes (0x00E3366C-0x00E33771).
  *
- * On error for cmd != 0x37: calls CRASH_SYSTEM.
- * cmd=0x37 tolerates errors gracefully (network may not be available).
- *
- * Parameters:
- *   cmd   - Command type (2=time, 8=timezone, 0x37=routing)
- *   node  - Network node address (NETWORK_$MOTHER_NODE typically)
- *
- * Original address: 0x00E3366C
- * Size: 262 bytes
+ * Frame map (link A6,-0x224):
+ *   A6-0x224  status
+ *   A6-0x220  the 8-byte UID handed to HINT_$ADDI
+ *   A6-0x218  the 8-byte hint value {network, node}
+ *   A6-0x210  the 0x200-byte ASKNODE response buffer
+ *   A6-0x010  the 10-byte rip_$xns_addr_t handed to RIP_$UPDATE_INT
  */
 
 #include "network/network_internal.h"
@@ -31,148 +24,137 @@
 #include "rip/rip.h"
 #include "route/route.h"
 #include "time/time.h"
+#include "uid/uid.h"
+
+/*
+ * The response buffer ASKNODE_$INTERNET_INFO is given, and the length the
+ * caller declares for it.  0x200 is the word at 0x00E33772, the "pea (0xf2,PC)"
+ * operand at 0x00E3367E:
+ *   00e33770  4e 75 02 00 00 00 00 00
+ */
+#define NETWORK_DISKLESS_RESP_SIZE  0x200
+
+/*
+ * network_$diskless_resp_len - the constant cell at 0x00E33772 (word 0x0200).
+ */
+static const uint16_t network_$diskless_resp_len = NETWORK_DISKLESS_RESP_SIZE;
+
+/*
+ * network_$diskless_req_zero - the constant cell at 0x00E33774, four bytes of
+ * zero, which the image passes as BOTH the req_len (argument 3) and the param
+ * (argument 4): "pea (0xf0,PC)" pushes it once and "move.l (SP),-(SP)"
+ * duplicates the pointer.  Only four bytes exist there - 0x00E33778 is already
+ * the next routine's "link" - so the uid_t argument is a four-byte cell in
+ * this call, and it is const because ASKNODE never writes it.
+ */
+static const int32_t network_$diskless_req_zero = 0;
 
 void network_$fetch_diskless_info(int16_t cmd, uint32_t node)
 {
-    status_$t status;
+    status_$t   status;                                     /* A6-0x224 */
+    uid_t       hint_uid;                                   /* A6-0x220 */
+    uint32_t    hint_value[2];                              /* A6-0x218 */
+    uint32_t    result[NETWORK_DISKLESS_RESP_SIZE / 4];     /* A6-0x210 */
 
     /*
-     * Response buffer for ASKNODE_$INTERNET_INFO.
-     * Layout varies by cmd but has a common pattern:
-     *   +0x00: first response word (not used directly here)
-     *   +0x04: response status code
-     *   +0x08: command-specific data begins
+     * 0x00E33676-0x00E33696: seven by-reference arguments and no result slot
+     * ("lea (0x1c,SP),SP").
      */
-    uint32_t result[6]; /* 24 bytes - enough for timezone (12 bytes at offset 8) */
+    ASKNODE_$INTERNET_INFO((uint16_t *)&cmd,
+                           &node,
+                           (int32_t *)&network_$diskless_req_zero,
+                           (uid_t *)&network_$diskless_req_zero,
+                           (uint16_t *)&network_$diskless_resp_len,
+                           result,
+                           &status);
 
     /*
-     * Constants passed by reference to ASKNODE_$INTERNET_INFO.
-     * In the original code, these are PC-relative read-only data
-     * at 0xE33772 (resp_len = 0x0200) and 0xE33774 (req_len = 0, param = nil).
+     * 0x00E3369A-0x00E336B8.  The call's own status is tested first; when it
+     * is clean the reply's status (result + 0x04) replaces it.  Request 0x37
+     * tolerates a failure, everything else crashes.
      */
-    uint16_t resp_len = 0x0200;  /* 512 bytes max response */
-    int32_t req_len = 0;         /* no extra request data */
-    uid_t param = { 0, 0 };      /* nil UID */
-
-    /* Query the specified node for the requested information */
-    ASKNODE_$INTERNET_INFO(
-        (uint16_t *)&cmd,   /* request type */
-        &node,              /* target node ID */
-        &req_len,           /* request length = 0 */
-        &param,             /* request param = nil UID */
-        &resp_len,          /* response length limit = 512 */
-        result,             /* result buffer */
-        &status             /* output status */
-    );
-
-    /*
-     * Error handling:
-     *   1. Check ASKNODE call status
-     *   2. If OK, check response status embedded at result[1] (offset 4)
-     *   3. For cmd != 0x37, any error is fatal (CRASH_SYSTEM)
-     *   4. cmd=0x37 tolerates errors (diskless boot may not have network)
-     */
-    if (status != status_$ok || (status = (status_$t)result[1], status != status_$ok)) {
-        if (cmd != 0x37) {
+    if (status != status_$ok ||
+        (status = (status_$t)result[1], status != status_$ok)) {
+        if (cmd != ASKNODE_REQ_ROUTE_PORT) {
             CRASH_SYSTEM(&status);
         }
     }
 
+    /* 0x00E336BA-0x00E336CE: an explicit three-way compare, not a table */
     switch (cmd) {
 
-    case ASKNODE_REQ_BOOT_TIME: /* 0x02 */
-        /*
-         * result[3] (offset 12) contains the remote node's clock high word.
-         * Store it as TIME_$CLOCKH for time synchronization during diskless boot.
-         */
+    case ASKNODE_REQ_BOOT_TIME:     /* 0x02 */
+        /* 0x00E336D2: move.l (-0x204,A6),(0x00e2b0d4).l - reply + 0x0C */
         TIME_$CLOCKH = result[3];
         break;
 
-    case ASKNODE_REQ_TIMEZONE: /* 0x08 */
+    case ASKNODE_REQ_TIMEZONE:      /* 0x08 */
         /*
-         * result[2..4] (offset 8, 12 bytes) contains the cal_$timezone_rec_t
-         * from the remote node. Copy it directly into CAL_$TIMEZONE.
-         *
-         * Assembly uses 3 longword moves: (A0)+→(A1)+, (A0)+→(A1)+, (A0)+→(A1)+
-         * from result+8 to CAL_$TIMEZONE (12 bytes = sizeof(cal_$timezone_rec_t)
-         * without boot_volx).
+         * 0x00E336DE-0x00E336EE: twelve bytes from reply + 0x08 into
+         * CAL_$TIMEZONE (0x00E7B030), as three longword moves.
          */
         {
-            uint32_t *src = &result[2];
             uint32_t *dst = (uint32_t *)&CAL_$TIMEZONE;
-            dst[0] = src[0];
-            dst[1] = src[1];
-            dst[2] = src[2];
+
+            dst[0] = result[2];
+            dst[1] = result[3];
+            dst[2] = result[4];
         }
         break;
 
-    case 0x37: /* Routing update */
+    case ASKNODE_REQ_ROUTE_PORT:       /* 0x37 */
         /*
-         * Only process if status is OK and the route port has changed.
-         * result[2] (offset 8) contains the remote node's route port.
+         * 0x00E336F0-0x00E33700: only a clean reply counts, and only when the
+         * network the remote node named differs from ours.
          */
         if (status == status_$ok && ROUTE_$PORT != result[2]) {
-            uint32_t response_port = result[2];
+            uint32_t reply_network = result[2];         /* reply + 0x08 */
+            /*
+             * A6-0x10.  The union gives the record the two views the image
+             * uses: RIP_$UPDATE_INT is declared to take a rip_$xns_addr_t,
+             * while the two stores below are a longword at +0x00 and a masked
+             * longword at +0x06, which is the rip_$nexthop_t spelling.
+             */
+            union {
+                rip_$xns_addr_t xns;
+                rip_$nexthop_t  fields;
+            } source;
 
             /*
-             * Build a UID with UID_$NIL as the base, setting the low 20 bits
-             * of uid.low to the node address. Since UID_$NIL is all zeros,
-             * this effectively sets uid = {0, node}.
+             * 0x00E33702-0x00E3371C: UID_$NIL with its low twenty bits
+             * replaced by the node id.
              */
-            uid_t local_uid;
-            local_uid.high = UID_$NIL.high;
-            local_uid.low = (UID_$NIL.low & 0xFFF00000) | node;
+            hint_uid = UID_$NIL;
+            hint_uid.low = (hint_uid.low & 0xFFF00000u) | node;
+
+            /* 0x00E33720 / 0x00E33724 */
+            hint_value[1] = node;
+            hint_value[0] = reply_network;
+
+            /* 0x00E3372A-0x00E33738 */
+            HINT_$ADDI(&hint_uid, hint_value);
 
             /*
-             * Build hint data: [route_port, node_address]
-             * HINT_$ADDI registers this UID → location mapping.
+             * 0x00E3373A-0x00E3374E: the routing source address.  Only
+             * source.network and the low twenty bits of the longword at
+             * source + 0x06 are written; source + 0x04 and the top twelve bits
+             * of source + 0x06 keep whatever the stack held.  Spelled as a
+             * rip_$nexthop_t so the andi/or land on a longword the way the
+             * image's do, rather than on six separate bytes.
              */
-            uint32_t hint_data[2];
-            hint_data[0] = response_port;
-            hint_data[1] = node;
-
-            HINT_$ADDI(&local_uid, hint_data);
-
-            /*
-             * Build an XNS source address for the routing update.
-             * Set network to the response port. For the host address,
-             * set the low 20 bits to the node address.
-             *
-             * Note: In the original assembly, the first 2 bytes of host[]
-             * are uninitialized stack memory. Only host[2..5] (the last 4
-             * bytes, treated as a uint32_t) are explicitly set via AND/OR.
-             */
-            rip_$xns_addr_t source;
-            source.network = response_port;
-            /* Initialize host bytes that the original code leaves unset */
-            source.host[0] = 0;
-            source.host[1] = 0;
-            /*
-             * Original assembly: andi.l #0xFFF00000,(-0xa,A6) / or.l D1,(-0xa,A6)
-             * This operates on host[2..5] as a 32-bit value.
-             * Since the stack is uninitialized, the AND preserves whatever
-             * was in the top 12 bits. We zero them for portability.
-             */
-            {
-                uint32_t host_low;
-                host_low = node; /* & 0x000FFFFF implicit: node is 20-bit */
-                source.host[2] = (uint8_t)(host_low >> 24);
-                source.host[3] = (uint8_t)(host_low >> 16);
-                source.host[4] = (uint8_t)(host_low >> 8);
-                source.host[5] = (uint8_t)(host_low);
-            }
+            source.fields.network = reply_network;
+            source.fields.host_lo = (source.fields.host_lo & 0xFFF00000u) | node;
 
             /*
-             * Update routing table: add a direct route (hop_count=1)
-             * to the response_port network via our source address.
-             * port_index=0, flags=0 (standard routes).
+             * 0x00E33750-0x00E33768: five arguments plus a word result slot,
+             * and the image never pops them (unlk restores SP).
              */
-            RIP_$UPDATE_INT(response_port, &source, 1, 0, 0, &status);
+            RIP_$UPDATE_INT(reply_network, &source.xns, 1, 0, 0, &status);
         }
         break;
 
     default:
-        /* Other command types: no action */
+        /* 0x00E336CE: every other request type does nothing further */
         break;
     }
 }
