@@ -13,15 +13,13 @@
  * 5. Under DIR_$MUTEX exclusion, add entry to mount table (max 8)
  * 6. Invalidate any cached directory entries matching the mounted dir
  *
- * The mount table is stored in the per-node data area (A5-relative):
- *   A5+0x1558: mount count (32-bit)
- *   A5+0x155A: mount count (16-bit, high word of above)
- *   A5+0x155C+i*8: mount point UIDs (source directory)
- *   A5+0x159C+i*8: mount target UIDs
- *   A5+0x15DC+i*4: node IDs
+ * The mount table lives in the DIR module data area (A5 = 0xE7DC00) as
+ * three ONE-BASED parallel tables - see DIR_MOUNT_UID_TAB_OFF in
+ * dir/dir_internal.h.
  *
- * The cache invalidation loop walks 0x6F (111) entries at stride 0x28
- * starting from A5+0x400, comparing UIDs at offset +8 within each entry.
+ * The cache invalidation loop is `moveq #0x6e,D0` + `dbf` (0x00E53398),
+ * i.e. 0x6F = 111 iterations, over records of 0x28 bytes starting at
+ * A5+0x400; it compares the uid at record+0x08 and clears record+0x00.
  *
  * Called by DIR_$DO_OP case 0x5A. Audit code 0x1C.
  *
@@ -45,11 +43,12 @@
 #define DIR_CATTR_MOUNT         0x0080
 
 
-/* Cache entry layout (offsets relative to A5) */
-#define DIR_CACHE_UID_BASE      0x400   /* First cache entry UID offset */
-#define DIR_CACHE_MATCH_OFF     0x408   /* UID-to-match offset within cache */
-#define DIR_CACHE_STRIDE        0x28    /* Cache entry size */
-#define DIR_CACHE_COUNT         0x6F    /* Number of cache entries - 1 (111) */
+/* Cache record layout (record base = A5 + 0x28*j, j = 0..110) */
+#define DIR_CACHE_UID_BASE      0x400   /* record+0x00: the cached uid  */
+#define DIR_CACHE_MATCH_OFF     0x408   /* record+0x08: the uid matched */
+#define DIR_CACHE_STRIDE        0x28    /* record size                  */
+/* `moveq #0x6e,D0` + `dbf` at 0x00E53398 = 0x6E + 1 iterations. */
+#define DIR_CACHE_COUNT         (0x6E + 1)
 
 void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
                            uint32_t node_id, status_$t *status_ret)
@@ -57,8 +56,6 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
     uint32_t handle;
     char *a5 = (char *)__A5_BASE();
     file_$obj_loc_t desc;   /* A6-0x40, the object-location descriptor */
-    uid_t resolved_uid;     /* auStack_44 - resolved UID from handle open */
-    int16_t i;
     int32_t count;
     ast_$common_attr_t cattr;   /* A6-0x20, 0x18 bytes */
 
@@ -77,24 +74,29 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
      * Check for duplicate mount entry (idempotent).
      * Walk existing mount table entries.
      */
+    /* 0x00E532A0-0x00E532E2.  `move.w (0x155a,A5),D0w` reads the count's
+     * low word, `subq.w #1` + `bmi` skips an empty table, and the `dbf`
+     * runs count times over the 1-based entries 1..count. */
     {
-        int16_t n = *(int16_t *)(a5 + DIR_MOUNT_COUNT16_OFF) - 1;
-        char *src_ptr = a5 + 8;
-        char *node_ptr = a5;
+        int16_t remaining = (int16_t)(DIR_MOUNT_COUNT16(a5) - 1);
+        int16_t n;
 
-        for (i = n; i >= 0; i--) {
-            if (node_id == *(uint32_t *)(node_ptr + DIR_MOUNT_NODE_BASE)) {
-                if (*(uint32_t *)(src_ptr + 0x1554) == dir_uid->high &&
-                    *(uint32_t *)(src_ptr + 0x1558) == dir_uid->low) {
-                    if (*(uint32_t *)(src_ptr + 0x1594) == mount_uid->high &&
-                        *(uint32_t *)(src_ptr + 0x1598) == mount_uid->low) {
-                        /* Already mounted - idempotent success */
+        for (n = 1; remaining >= 0; n++, remaining--) {
+            if (node_id ==
+                *(uint32_t *)(a5 + DIR_MOUNT_NODE_TAB_OFF + n * 4)) {
+                if (*(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8) ==
+                        dir_uid->high &&
+                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8 + 4) ==
+                        dir_uid->low) {
+                    if (*(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8) ==
+                            mount_uid->high &&
+                        *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8 + 4) ==
+                            mount_uid->low) {
+                        /* 0x00E532D8: already mounted - nothing to do. */
                         goto cleanup;
                     }
                 }
             }
-            src_ptr += 8;
-            node_ptr += 4;
         }
     }
 
@@ -132,21 +134,27 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
         goto cleanup;
     }
 
-    /* Store the new mount entry */
+    /* 0x00E53362: the bumped count becomes the new entry's 1-based index. */
     *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF) = count;
 
-    /* Store source (mount point) UID */
-    *(uint32_t *)(a5 + count * 8 + 0x1554) = dir_uid->high;
-    *(uint32_t *)(a5 + count * 8 + 0x1558) = dir_uid->low;
+    /* 0x00E53366-0x00E53372: source (mount point) UID. */
+    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + count * 8) = dir_uid->high;
+    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + count * 8 + 4) = dir_uid->low;
 
-    /* Store target (mounted volume root) UID */
+    /* Each of the two stores below re-reads the count out of the module
+     * block (0x00E53376 / 0x00E5338A) rather than reusing D0. */
     {
         int32_t cur_count = *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF);
-        *(uint32_t *)(a5 + cur_count * 8 + 0x1594) = mount_uid->high;
-        *(uint32_t *)(a5 + cur_count * 8 + 0x1598) = mount_uid->low;
 
-        /* Store node ID */
-        *(uint32_t *)(a5 + cur_count * 4 + DIR_MOUNT_NODE_BASE) = node_id;
+        /* 0x00E53382: target (mounted volume root) UID. */
+        *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + cur_count * 8) =
+            mount_uid->high;
+        *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + cur_count * 8 + 4) =
+            mount_uid->low;
+
+        cur_count = *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF);
+        /* 0x00E53394: `move.l D2,(0x15d8,A2)` with A2 = A5 + count*4. */
+        *(uint32_t *)(a5 + DIR_MOUNT_NODE_TAB_OFF + cur_count * 4) = node_id;
     }
 
     /*
@@ -157,7 +165,7 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
     {
         int16_t j;
         char *entry = a5;
-        for (j = DIR_CACHE_COUNT; j >= 0; j--) {
+        for (j = 0; j < DIR_CACHE_COUNT; j++) {
             if (*(uint32_t *)(entry + DIR_CACHE_MATCH_OFF) == dir_uid->high &&
                 *(uint32_t *)(entry + DIR_CACHE_MATCH_OFF + 4) == dir_uid->low) {
                 *(uint32_t *)(entry + DIR_CACHE_UID_BASE) = UID_$NIL.high;

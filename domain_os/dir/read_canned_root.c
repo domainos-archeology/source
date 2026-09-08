@@ -8,7 +8,7 @@
  * output buffer format.
  *
  * Entry names are case-folded (uppercase to lowercase) using a bitmap
- * table (PTR_DAT_00e4cd84) to determine which characters should be
+ * table (DIR_$CASE_FOLD_BITMAP) to determine which characters should be
  * lowercased.
  *
  * This function accesses the parent's stack frame (Pascal convention):
@@ -26,7 +26,7 @@
  * TODO(source-qgq): This function uses deeply nested Pascal frame accesses that are
  * difficult to fully flatten. The entry reformatting loop (0x30-byte
  * input records to variable-size output records) needs verification
- * against the assembly. The case-folding bitmap at PTR_DAT_00e4cd84
+ * against the assembly. The case-folding bitmap at DIR_$CASE_FOLD_BITMAP
  * is referenced PC-relative and should be documented as a data table.
  */
 
@@ -41,7 +41,7 @@
 
 /* M_DIU_LLW - Unsigned long division returning quotient */
 
-/* PTR_DAT_00e4cd84 - Case folding bitmap
+/* DIR_$CASE_FOLD_BITMAP - Case folding bitmap
  * Each bit position corresponds to a character code.
  * If the bit is set, the character at (0x5F - char_code) should be lowercased.
  */
@@ -79,7 +79,7 @@ void dir_$read_canned_root(void)
      *    d. Update count_ret
      *    e. Break if continuation is 0 or no entries returned
      *
-     * The case folding uses PTR_DAT_00e4cd84 bitmap:
+     * The case folding uses DIR_$CASE_FOLD_BITMAP bitmap:
      *   offset = 0x5F - char_code
      *   if offset >= 0:
      *     byte_idx = offset >> 3

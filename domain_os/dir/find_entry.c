@@ -166,12 +166,21 @@ done_search:
             }
         }
 
-        /* Interior page - descend to child */
+        /* Interior page - descend to child.
+         *
+         * 0x00E4CB1A-0x00E4CB44.  `moveq #0x12,D3` at 0x00E4CB1C sets the
+         * base offset for the NEXT iteration - only the root page has the
+         * variable-length area whose length lives at page+0x14, so every
+         * page below it indexes from a plain 0x12.  The entry that is read
+         * here still comes from A3, i.e. from the CURRENT page's base
+         * offset (`move.w (-0x2,A3,D0*0x1),D0w` at 0x00E4CB26), which is
+         * why the assignment must not be folded into the read. */
         {
             int16_t child_offset;
-            base_offset = 0x12;
+
             offset_array = (int16_t *)(page_data + base_offset);
             child_offset = *(int16_t *)((uint8_t *)offset_array + mid * 2 - 2);
+            base_offset = 0x12;
             *entry_ret = page_data + child_offset;
             page_data = (uint8_t *)dir_$map_page(handle,
                 *(uint16_t *)(page_data + child_offset + 2));

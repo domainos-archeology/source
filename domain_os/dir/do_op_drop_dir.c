@@ -38,7 +38,6 @@
 
 /* 0x00E4BC24, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
  * super-user bypass is suppressed).  `pea (-0x6c48,PC)` at 0x00E5286A. */
-static const boolean dir_$drop_dir_ignore_super_00e4bc24 = true;
 
 /* 0x00E51B64, longword 0x00000040: the required rights mask (delete).
  * `pea (-0xd04,PC)` at 0x00E52866. */
@@ -46,7 +45,6 @@ static const uint32_t dir_$drop_dir_rights_00e51b64 = 0x00000040;
 
 /* 0x00E4B444, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
  * directory).  `pea (-0x7420,PC)` at 0x00E52862. */
-static const int16_t dir_$drop_dir_acl_opts_00e4b444 = 1;
 
 void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
                          status_$t *status_ret)
@@ -149,9 +147,9 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
         /* Same volume, local object - check ACL rights */
         int16_t acl_result;
         acl_result = ACL_$RIGHTS(&target_uid,
-                                 (boolean *)&dir_$drop_dir_ignore_super_00e4bc24,
+                                 (boolean *)&DIR_$CONST_TRUE_B,
                                  (uint32_t *)&dir_$drop_dir_rights_00e51b64,
-                                 (int16_t *)&dir_$drop_dir_acl_opts_00e4b444,
+                                 (int16_t *)&DIR_$CONST_ONE_W,
                                  status_ret);
 
         if (acl_result == 0x40) {
@@ -248,11 +246,10 @@ done:
 
     ACL_$EXIT_SUPER();
 
-    /* Fall back to legacy implementation if bad directory */
+    /* 0x00E529CC-0x00E529DE: four longwords are pushed - the status
+     * pointer, the ADDRESS of this routine's own name_len word parameter
+     * (`pea (0x10,A6)`), the name and the uid. */
     if (*status_ret == status_$naming_bad_directory) {
-        /* DIR_$OLD_DROP_DIRU takes a pointer to name_len; on m68k the
-         * 4-byte pea pushes the address of the 2-byte name_len stack
-         * parameter, which the callee reads as two 16-bit words. */
-        DIR_$OLD_DROP_DIRU(uid, name, &name_len, &name_len, status_ret);
+        DIR_$OLD_DROP_DIRU(uid, name, &name_len, status_ret);
     }
 }

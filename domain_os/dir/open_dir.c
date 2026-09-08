@@ -36,11 +36,9 @@
 /* 0x00E4BC24, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
  * super-user bypass is suppressed).  `pea (0x19a,PC)` at 0x00E4BA88.
  * The word at 0x00E4BC24 reads 0xFF00; only the first byte is used. */
-static const boolean dir_$open_dir_ignore_super_00e4bc24 = true;
 
 /* 0x00E4B444, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
  * directory).  `pea (-0x636,PC)` at 0x00E4BA78. */
-static const int16_t dir_$open_dir_acl_opts_00e4b444 = 1;
 
 void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
                    void *handle_ret, status_$t *status_ret)
@@ -93,14 +91,17 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
     if (rights != 0) {
         uint32_t rights32 = (uint32_t)(uint16_t)rights;
         ACL_$RIGHTS(uid_ptr,
-                    (boolean *)&dir_$open_dir_ignore_super_00e4bc24,
+                    (boolean *)&DIR_$CONST_TRUE_B,
                     &rights32,
-                    (int16_t *)&dir_$open_dir_acl_opts_00e4b444,
+                    (int16_t *)&DIR_$CONST_ONE_W,
                     status_ret);
         if (*status_ret != status_$ok) {
             NAME_CONVERT_ACL_STATUS(status_ret);
-            /* Clear high bit of status */
-            *(uint8_t *)status_ret &= 0x7F;
+            /* 0x00E4BAA6: `bclr.b #0x7,(A2)` clears bit 7 of the FIRST byte
+             * of the big-endian status longword, i.e. bit 31 of the whole
+             * status - not "the low byte" a byte-pointer cast would reach on
+             * a little-endian host. */
+            *status_ret &= 0x7FFFFFFF;
             if (*status_ret == file_$object_not_found) {
                 /* ACL object not found - convert to naming error */
                 *status_ret = status_$naming_directory_object_not_found;

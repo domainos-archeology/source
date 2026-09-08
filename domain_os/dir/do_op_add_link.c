@@ -28,7 +28,8 @@
  *   name       - Entry name
  *   name_len   - Length of name
  *   file_uid   - UID of file to link
- *   flags      - 0 for add, 0xFF (negative) for add hard link
+ *   is_hard_link - Domain boolean BYTE: 0 for a plain add, 0xFF for a
+ *                  hard link (`move.b (0x16,A6),D2b` at 0x00E5045E)
  *   status_ret - Output: status code
  *
  * Original address: 0x00E5044A
@@ -94,7 +95,8 @@ static const int16_t dir_$add_link_acl_opts_00e505c4 = -1;
 #define DIR_MAX_HARD_LINKS      0xFFF5
 
 void dir_$do_op_add_link(uid_t *uid, void *name, uint16_t name_len,
-                         uid_t *file_uid, uint16_t flags, status_$t *status_ret)
+                         uid_t *file_uid, boolean is_hard_link,
+                         status_$t *status_ret)
 {
     uint8_t result[ADDRES_TOTAL_SIZE];
     status_$t status;
@@ -148,10 +150,12 @@ void dir_$do_op_add_link(uid_t *uid, void *name, uint16_t name_len,
          * is not found, mark flags bit 7 and continue. This allows adding
          * directory entries that reference objects not yet visible locally.
          *
-         * flags >= 0 means regular add (caller passed 0).
-         * flags < 0 means hard link (caller passed 0xFF).
+         * 0x00E504CA `tst.b D2b` / `bmi`: the parameter is the BOOLEAN BYTE
+         * at A6+0x16.  A non-negative byte is a plain add (DIR_$DO_OP's
+         * opcode 0x2A pushes `clr.w`); a negative one is a hard link
+         * (opcode 0x2C pushes `st`).
          */
-        if ((int16_t)flags >= 0 && status == file_$object_not_found) {
+        if (is_hard_link >= 0 && status == file_$object_not_found) {
             result[ADDRES_FLAGS] |= 0x80;
             status = status_$ok;
             goto check_entry;

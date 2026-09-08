@@ -174,15 +174,23 @@ void dir_$alloc_split_page(dir_insert_ctx_t *ctx, uint8_t flag,
                 local_uid.high = *(uint32_t *)handle;
                 local_uid.low = *(uint32_t *)(handle + 4);
 
-                uint32_t seg_bitmap[8];  /* 32-byte bitmap buffer */
-                status_$t seg_status;
+                uint32_t seg_bitmap[8];  /* A6-0x38, 32-byte bitmap buffer */
+                status_$t seg_status;    /* A6-0x3C */
+                /* A6-0x4C: `move.l (-0x4c,A6),-(SP)` at 0x00E4EC9E pushes a
+                 * frame cell this routine never writes, so the third
+                 * argument is whatever the frame happened to hold.  Kept as
+                 * an uninitialised local rather than silently substituting
+                 * a zero.
+                 * TODO: source-dchv - decide whether a caller leaves a
+                 * meaningful value there or this is an original bug. */
+                uint32_t seg_map_arg3;
 
                 /* AST_$GET_SEG_MAP: get 1 segment's bitmap (32 pages).
-                 * offset = seg_map_index * 32768 (seg_map_index << 15).
-                 * Original: jsr AST_$GET_SEG_MAP at 0x00E4ECB2 */
+                 * offset = seg_map_index * 32768 (`lsl.l #0x8` + `lsl.l #0x7`
+                 * at 0x00E4ECA8).  0x00E4EC88-0x00E4ECB2. */
                 AST_$GET_SEG_MAP(&local_uid,
                                  (uint32_t)seg_map_index << 15,
-                                 0, 1, 0x20, 2,
+                                 seg_map_arg3, 1, 0x20, 2,
                                  seg_bitmap, &seg_status);
                 if (seg_status != status_$ok) {
                     *status_ret = seg_status;

@@ -297,7 +297,7 @@ TEST(nonzero_link_count_checks_acl_then_sets_attribute)
     status_$t status;
     char name[] = "hardlink";
 
-    dir_$do_op_add_link(&dir_uid, name, 8, &file_uid, 0xFF00, &status);
+    dir_$do_op_add_link(&dir_uid, name, 8, &file_uid, true, &status);
 
     ASSERT_EQ(status_$ok, status);
     ASSERT_EQ(1, mock_acl_rights_called);
@@ -320,7 +320,7 @@ TEST(acl_modify_but_no_link_returns_insufficient_rights)
     status_$t status;
     char name[] = "badlink";
 
-    dir_$do_op_add_link(&dir_uid, name, 7, &file_uid, 0xFF00, &status);
+    dir_$do_op_add_link(&dir_uid, name, 7, &file_uid, true, &status);
 
     ASSERT_EQ(status_$naming_insufficient_rights, status);
     ASSERT_EQ(1, mock_acl_rights_called);
@@ -343,7 +343,7 @@ TEST(too_many_hard_links)
     status_$t status;
     char name[] = "toomany";
 
-    dir_$do_op_add_link(&dir_uid, name, 7, &file_uid, 0xFF00, &status);
+    dir_$do_op_add_link(&dir_uid, name, 7, &file_uid, true, &status);
 
     ASSERT_EQ(status_$naming_too_many_hard_links, status);
     ASSERT_EQ(0, mock_set_attr_called);
@@ -363,7 +363,7 @@ TEST(link_count_just_below_limit_succeeds)
     status_$t status;
     char name[] = "oklink";
 
-    dir_$do_op_add_link(&dir_uid, name, 6, &file_uid, 0xFF00, &status);
+    dir_$do_op_add_link(&dir_uid, name, 6, &file_uid, true, &status);
 
     ASSERT_EQ(status_$ok, status);
     ASSERT_EQ(1, mock_set_attr_called);
@@ -401,8 +401,9 @@ TEST(object_not_found_hard_link_fails)
     status_$t status;
     char name[] = "notfound";
 
-    /* flags = 0xFF00 → hard link (negative as int16_t) */
-    dir_$do_op_add_link(&dir_uid, name, 8, &file_uid, 0xFF00, &status);
+    /* The 5th argument is a Domain boolean BYTE (`move.b (0x16,A6),D2b`
+     * at 0x00E5045E); 0xFF selects the hard-link path. */
+    dir_$do_op_add_link(&dir_uid, name, 8, &file_uid, true, &status);
 
     ASSERT_EQ(file_$object_not_found, status);
     ASSERT_EQ(0, mock_set_attr_called);
@@ -442,7 +443,7 @@ TEST(acl_other_error_converts_status)
     status_$t status;
     char name[] = "aclerr";
 
-    dir_$do_op_add_link(&dir_uid, name, 6, &file_uid, 0xFF00, &status);
+    dir_$do_op_add_link(&dir_uid, name, 6, &file_uid, true, &status);
 
     ASSERT_EQ(0x000E0099, status);
     ASSERT_EQ(1, mock_convert_acl_called);
@@ -482,7 +483,7 @@ TEST(insufficient_rights_status_checks_rights_mask)
     status_$t status;
     char name[] = "insuff";
 
-    dir_$do_op_add_link(&dir_uid, name, 6, &file_uid, 0xFF00, &status);
+    dir_$do_op_add_link(&dir_uid, name, 6, &file_uid, true, &status);
 
     /* Has both rights bits → proceed to link count check → succeeds */
     ASSERT_EQ(status_$ok, status);
@@ -502,7 +503,7 @@ TEST(no_right_status_with_modify_only_returns_naming_error)
     status_$t status;
     char name[] = "noright";
 
-    dir_$do_op_add_link(&dir_uid, name, 7, &file_uid, 0xFF00, &status);
+    dir_$do_op_add_link(&dir_uid, name, 7, &file_uid, true, &status);
 
     ASSERT_EQ(status_$naming_insufficient_rights, status);
     ASSERT_EQ(0, mock_set_attr_called);

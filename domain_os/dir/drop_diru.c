@@ -1,7 +1,5 @@
 /*
- * DIR_$DROP_DIRU - Drop/delete a directory
- *
- * Removes a directory entry from its parent.
+ * DIR_$DROP_DIRU - Drop (delete) a subdirectory entry
  *
  * Original address: 0x00E52AB4
  * Original size: 178 bytes
@@ -10,72 +8,65 @@
 #include "dir/dir_internal.h"
 
 /*
- * DIR_$DROP_DIRU - Drop/delete a directory
+ * DIR_$DROP_DIRU (0x00E52AB4)
  *
- * Removes a directory entry from its parent directory. The directory
- * being dropped must be empty.
+ * Builds a DIR_OP_DROP_DIRU request and sends it through DIR_$DO_OP,
+ * falling back to DIR_$OLD_DROP_DIRU (0x00E5734C).
  *
- * Parameters:
- *   parent_uid - UID of parent directory
- *   name       - Name of directory to drop
- *   name_len   - Pointer to name length
- *   status_ret - Output: status code
+ * Frame: `link.w A6,-0x1b0` - request base A6-0x1A8, reply A6-0x18
+ * (0x14 bytes), received-length word A6-0x1AA.
+ *
+ * Parameters (A6+0x08..A6+0x14):
+ *   parent_uid - UID of the parent directory
+ *   name       - name of the directory to drop
+ *   name_len   - pointer to the name length
+ *   status_ret - out: status code
  */
 void DIR_$DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
                     status_$t *status_ret)
 {
-    struct {
-        uint8_t   op;
-        uint8_t   padding[3];
-        uid_t     uid;          /* Parent directory UID */
-        uint16_t  reserved;
-        uint8_t   gap[0x80];
-        uint16_t  path_len;     /* Name length */
-        char      name_data[255];
-    } request;
+    dir_$do_op_request_t request;
     Dir_$OpResponse response;
-    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
-     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
-     * (source-32ld). */
+    /* A6-0x1AA: DIR_$DO_OP's `received_len` out-parameter (source-32ld). */
     uint16_t do_op_rcvd_len;
     status_$t status;
     uint16_t len;
     int16_t i;
 
-    /* Get name length */
+    /* 0x00E52AD2-0x00E52ADA */
     len = *name_len;
-
-    /* Validate name length */
     if (len == 0 || len > DIR_MAX_LEAF_LEN) {
         *status_ret = status_$naming_invalid_leaf;
         return;
     }
 
-    /* Copy name into request buffer */
-    request.path_len = len;
-    for (i = 0; i < len; i++) {
-        request.name_data[i] = name[i];
+    /* 0x00E52AE4: length at request+0x8E. */
+    request.body.name.path_len = len;
+    /* 0x00E52AEC-0x00E52AFA: name bytes at request+0x90. */
+    for (i = 0; i < (int16_t)len; i++) {
+        request.body.name.name[i] = name[i];
     }
 
-    /* Build the request */
+    /* 0x00E52AFE-0x00E52B0E */
     request.op = DIR_OP_DROP_DIRU;
     request.uid.high = parent_uid->high;
     request.uid.low = parent_uid->low;
-    request.reserved = DAT_00e7fc82;
+    request.version = DIR_$OP_REC(DIR_OP_DROP_DIRU >> 1).version;
 
-    /* Send the request - size includes name length */
-    DIR_$DO_OP(&request.op, len + DAT_00e7fc86, 0x14, &response, &do_op_rcvd_len);
+    /* 0x00E52B14-0x00E52B2E */
+    DIR_$DO_OP(&request,
+               (int16_t)(DIR_$OP_REC(DIR_OP_DROP_DIRU >> 1).base_size + len),
+               0x14, &response, &do_op_rcvd_len);
+
+    /* 0x00E52B36 */
     status = response.status;
 
-    /* Check for fallback conditions */
     if (status == file_$bad_reply_received_from_remote_node ||
         status == status_$naming_bad_directory) {
-        /* Fall back to old implementation
-         * Note: OLD_DROP_DIRU has different parameter layout */
-        DIR_$OLD_DROP_DIRU(parent_uid, name,
-                          (uint16_t *)((uint32_t)name_len >> 16),
-                          (uint16_t *)name_len, status_ret);
+        /* 0x00E52B4A-0x00E52B52: four longwords. */
+        DIR_$OLD_DROP_DIRU(parent_uid, name, name_len, status_ret);
     } else {
+        /* 0x00E52B5A */
         *status_ret = status;
     }
 }

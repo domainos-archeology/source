@@ -32,9 +32,7 @@
  * Original address: 0x00E53728
  * Original size: 752 bytes
  *
- * TODO(source-qgq): This is a complex function with many Ghidra decompiler artifacts
- * (extraout_A0 return values from dir_$map_page). The page structure needs
- * further analysis. The validation logic has three phases:
+ * The validation logic has three phases:
  *   Phase 1: Walk backward finding the first valid page range
  *   Phase 2: Walk forward checking page cross-references
  *   Phase 3: Cleanup orphan pages and truncate
@@ -59,11 +57,18 @@
 uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag,
                               status_$t *status_ret)
 {
-    char *a5 = (char *)__A5_BASE();
     uint16_t total_pages;
+    /* D6: the walk bound, total_pages - 1.  Phase 2 (`cmp.w D6w,D4w` /
+     * `bcs` at 0x00E53952) and phase 3 (`cmp.w D6w,D2w` / `bcs` at
+     * 0x00E539D0) both compare against THIS, not against total_pages. */
+    uint16_t page_limit;
     uint16_t last_page;
     uint16_t cur_page;
     uint16_t start_page;
+    /* A6-0x3E: set at 0x00E53948 whenever the walk finds a mismatch; the
+     * `tst.b (-0x3e,A6)` / `bpl` at 0x00E53958 skips the whole copy loop
+     * when the walk ended without one. */
+    char mismatch_seen;
     uint32_t tracking_uid_high;
     uint32_t tracking_uid_low;
     char seen_forward;          /* local_3e */
@@ -75,7 +80,8 @@ uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag,
     /* Get total page count from the directory handle metadata */
     /* handle[2].high >> 10 gives the page count */
     total_pages = (uint16_t)((*(uint32_t *)((char *)handle + 0x10)) >> 10);
-    last_page = total_pages - 1;
+    page_limit = (uint16_t)(total_pages - 1);
+    last_page = page_limit;
     cur_page = last_page;
 
     /* Initialize tracking UID to UID_$NIL */
@@ -104,10 +110,7 @@ uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag,
             if ((last_page & 0xFFFF) == cur_page) {
                 break;  /* Reached start of scan with no valid range */
             }
-            seen_forward = -1;
-            seen_backward = -1;
-            last_page = cur_page;
-            goto phase2;
+            goto phase2_init;
         }
 
         /* Check if this page's UID matches the tracking UID */
@@ -118,10 +121,7 @@ uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag,
             if ((last_page & 0xFFFF) == cur_page) {
                 break;
             }
-            seen_forward = -1;
-            seen_backward = -1;
-            last_page = cur_page;
-            goto phase2;
+            goto phase2_init;
         }
 
         /* Page is valid and matches - continue backward */
@@ -149,6 +149,16 @@ uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag,
     }
     goto do_truncate;
 
+phase2_init:
+    /* 0x00E53810-0x00E5381C: both direction flags start TRUE, the mismatch
+     * flag starts FALSE, and `move.w D4w,D5w` copies the phase-1 walker
+     * into the bound.  Phase 2 walks `last_page` (D4) and compares page
+     * references against `cur_page` (D5); both start on the same page. */
+    mismatch_seen = 0;
+    seen_forward = -1;
+    seen_backward = -1;
+    last_page = cur_page;
+
 phase2:
     /*
      * Phase 2: Walk forward from the break point, checking page
@@ -157,8 +167,15 @@ phase2:
      * This validates that pages that reference each other via their
      * index fields actually have matching UIDs.
      */
-    if (total_pages <= (uint16_t)last_page) {
-        goto phase3;
+    /* 0x00E53952: `cmp.w D6w,D4w` / `bcs` - the loop runs while the walker
+     * is strictly below total_pages - 1. */
+    if (last_page >= page_limit) {
+        /* 0x00E53958: without a mismatch the copy loop is skipped
+         * entirely and start_page is never established. */
+        if (mismatch_seen >= 0) {
+            goto do_purify;
+        }
+        goto cleanup_start;
     }
 
     {
@@ -197,7 +214,9 @@ phase2:
         /* Check page type for B-tree vs flat structure */
         if ((*(uint16_t *)fwd_data & 0x1000) == 0) {
             /* Flat structure - check next page reference */
-            if (total_pages <= fwd_page) {
+            /* 0x00E53920: cmp.w D6w,D4w / bcc - skip when fwd_page >= page_limit
+             * (unsigned), D6 = page_limit = total_pages - 1. */
+            if (fwd_page >= page_limit) {
                 goto phase2;
             }
             if (cur_page < *(uint16_t *)((char *)ref_data + 0x0C)) {
@@ -244,16 +263,19 @@ phase2:
     }
 
 cleanup_start:
+    /* 0x00E53948: `st (-0x3e,A6)` before the branch to 0x00E5395E. */
+    mismatch_seen = -1;
     /*
      * Phase 3: Clean up orphan pages.
      * Walk forward from the start point, and for each page that
      * references a page with a matching UID, copy the current page
      * data over it and zero out the UID to mark it as cleaned.
      */
+    /* 0x00E5395E: `move.w D5w,D2w` */
     start_page = cur_page;
 
-phase3:
-    while (start_page < total_pages) {
+    /* 0x00E539D0: `cmp.w D6w,D2w` / `bcs` */
+    while (start_page < page_limit) {
         void *src_data;
         void *dst_data;
         uint16_t ref_idx;
@@ -290,10 +312,13 @@ phase3:
         }
     }
 
+do_purify:
     /* Purify the directory (flush changes) */
     {
         uint32_t result;
-        result = AST_$PURIFY(handle, 2, 0, (uint32_t *)(a5 - 8), 0, status_ret);
+        /* 0x00E539DC: move.l (-0x8,A5),-(SP) pushes the CONTENTS of the
+         * A5-8 cell = &DIR_$CONST_ZERO_L (0x00E4B33C). */
+        result = AST_$PURIFY(handle, 2, 0, &DIR_$CONST_ZERO_L, 0, status_ret);
         if (*status_ret != status_$ok) {
             return result;
         }
@@ -305,7 +330,7 @@ do_truncate:
 
 error_internal:
     if (crash_flag < 0) {
-        CRASH_SYSTEM(*(status_$t **)(a5 - 4));
+        CRASH_SYSTEM(DIR_$CRASH_STATUS);   /* move.l (-0x4,A5),-(SP) */
     }
     *status_ret = status_$naming_internal_error;
     return 0;

@@ -27,16 +27,7 @@ void DIR_$SET_DEF_PROTECTION(uid_t *dir_uid, uid_t *acl_type,
                              void *prot_buf, uid_t *prot_uid,
                              status_$t *status_ret)
 {
-    struct {
-        uint8_t   op;
-        uint8_t   padding[3];
-        uid_t     uid;          /* Directory UID */
-        uint16_t  reserved;
-        uint8_t   gap[0x80];
-        uid_t     type;         /* ACL type */
-        uint32_t  prot[11];     /* Protection data (44 bytes) */
-        uid_t     prot_id;      /* Protection UID */
-    } request;
+    dir_$do_op_request_t request;
     Dir_$OpResponse response;
     /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
      * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
@@ -50,23 +41,29 @@ void DIR_$SET_DEF_PROTECTION(uid_t *dir_uid, uid_t *acl_type,
     request.op = DIR_OP_SET_DEF_PROTECTION;
     request.uid.high = dir_uid->high;
     request.uid.low = dir_uid->low;
-    request.reserved = DAT_00e7fcea;
-    request.type.high = acl_type->high;
-    request.type.low = acl_type->low;
+    request.version = DIR_$OP_REC(DIR_OP_SET_DEF_PROTECTION >> 1).version;
+    /* 0x00E520DE: the ACL type uid at +0x8E. */
+    request.body.set_def_prot.acl_type_uid.high = acl_type->high;
+    request.body.set_def_prot.acl_type_uid.low = acl_type->low;
 
     /* Copy protection data into request */
     src = (uint32_t *)prot_buf;
-    dst = request.prot;
+    /* 0x00E520EA-0x00E520F2: `moveq #0xa,D0` + `dbf` = eleven longwords
+     * (44 bytes) at +0x96. */
+    dst = request.body.set_def_prot.prot;
     for (i = 0; i < 11; i++) {
         *dst++ = *src++;
     }
 
     /* Copy protection UID */
-    request.prot_id.high = prot_uid->high;
-    request.prot_id.low = prot_uid->low;
+    /* 0x00E520F6: the ACL uid at +0xC2. */
+    request.body.set_def_prot.acl_uid.high = prot_uid->high;
+    request.body.set_def_prot.acl_uid.low = prot_uid->low;
 
     /* Send the request */
-    DIR_$DO_OP(&request.op, DAT_00e7fcee, 0x14, &response, &do_op_rcvd_len);
+    DIR_$DO_OP(&request,
+               (int16_t)DIR_$OP_REC(DIR_OP_SET_DEF_PROTECTION >> 1).base_size,
+               0x14, &response, &do_op_rcvd_len);
     status = response.status;
 
     /* Check for fallback conditions */

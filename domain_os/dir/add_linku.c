@@ -1,8 +1,6 @@
 /*
  * DIR_$ADD_LINKU - Add a soft/symbolic link
  *
- * Creates a symbolic link pointing to a pathname.
- *
  * Original address: 0x00E5068E
  * Original size: 258 bytes
  */
@@ -10,93 +8,96 @@
 #include "dir/dir_internal.h"
 
 /*
- * DIR_$ADD_LINKU - Add a soft/symbolic link
+ * DIR_$ADD_LINKU (0x00E5068E)
  *
- * Creates a symbolic link entry in a directory that points to
- * another pathname (which may or may not exist).
+ * Builds a DIR_OP_ADD_LINKU request and sends it through DIR_$DO_OP,
+ * falling back to DIR_$OLD_ADD_LINKU (0x00E576EA).
  *
- * Parameters:
- *   dir_uid    - UID of directory for link
- *   name       - Name for the link
- *   name_len   - Pointer to name length (max 255)
- *   target     - Target pathname
- *   target_len - Pointer to target length (max 1023)
- *   status_ret - Output: status code
+ * Frame: `link.w A6,-0x1b8` - request base A6-0x1B0, reply A6-0x18
+ * (0x14 bytes), received-length word A6-0x1B2.
+ *
+ * The request body carries the link name inline but only the *pointer*
+ * to the target text (0x00E5071A `move.l (0x14,A6),(-0x11e,A6)`); the
+ * image never copies the target bytes into the buffer.
+ *
+ * Parameters (A6+0x08..A6+0x1C):
+ *   dir_uid    - UID of the directory to hold the link
+ *   name       - name for the link
+ *   name_len   - pointer to the name length (1..0xFF)
+ *   target     - target pathname text
+ *   target_len - pointer to the target length (1..0x3FF)
+ *   status_ret - out: status code
  */
 void DIR_$ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
                     void *target, uint16_t *target_len, status_$t *status_ret)
 {
-    struct {
-        uint8_t   op;
-        uint8_t   padding[3];
-        uid_t     uid;          /* Directory UID */
-        uint16_t  reserved;
-        uint8_t   gap[0x80];
-        uint16_t  path_len;     /* Name length */
-        uint32_t  target_ptr;   /* Target pathname pointer */
-        char      name_data[255 + 1024]; /* Name + target data */
-    } request;
+    dir_$do_op_request_t request;
     Dir_$OpResponse response;
-    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
-     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
-     * (source-32ld). */
+    /* A6-0x1B2: DIR_$DO_OP's `received_len` out-parameter (source-32ld). */
     uint16_t do_op_rcvd_len;
     status_$t status;
     uint16_t len, tlen;
     int16_t i;
-    uint32_t total_size;
+    int32_t total_size;
 
-    /* Get lengths */
+    /* 0x00E506B0 */
     len = (uint16_t)*name_len;
-    tlen = *target_len;
 
-    /* Validate name length */
+    /* 0x00E506B2 / 0x00E506B4 */
     if (len == 0 || len > DIR_MAX_LEAF_LEN) {
         *status_ret = status_$naming_invalid_leaf;
         return;
     }
 
-    /* Validate target length and total size */
+    /* 0x00E506C6 / 0x00E506CA */
+    tlen = *target_len;
     if (tlen == 0 || tlen > DIR_MAX_LINK_LEN) {
         *status_ret = status_$naming_invalid_link;
         return;
     }
 
-    /* Check total packet size won't exceed limit */
-    total_size = (uint32_t)DAT_00e7fc8e + (uint32_t)tlen + (uint32_t)len + 0x8e;
+    /* 0x00E506D0-0x00E506EE: the wire length the request would need,
+     * (name_len + target_len) + base_size + 0x8E, capped at 0x500. */
+    total_size = (int32_t)len + (int32_t)tlen;
+    total_size += (int32_t)(int16_t)DIR_$OP_REC(DIR_OP_ADD_LINKU >> 1).base_size;
+    total_size += 0x8e;
     if (total_size > 0x500) {
         *status_ret = status_$naming_invalid_link;
         return;
     }
 
-    /* Copy name into request buffer */
-    request.path_len = len;
-    for (i = 0; i < len; i++) {
-        request.name_data[i] = name[i];
+    /* 0x00E506FC: name length at request+0x8E. */
+    request.body.add_link.path_len = len;
+    /* 0x00E50704-0x00E50712: name bytes at request+0x96. */
+    for (i = 0; i < (int16_t)len; i++) {
+        request.body.add_link.name[i] = name[i];
     }
 
-    /* Copy target into request buffer after name */
-    /* Note: target starts at name_data + len */
-    for (i = 0; i < (int16_t)tlen; i++) {
-        request.name_data[len + i] = ((char *)target)[i];
-    }
+    /* 0x00E50716: the target length word is re-read from the caller's
+     * cell; 0x00E5071A stores the caller's target POINTER at +0x92. */
+    request.body.add_link.target_len = *target_len;
+    request.body.add_link.target_ptr = ARCH_PTR_TO_VA(target);
 
-    /* Build the request */
+    /* 0x00E50720-0x00E50730 */
     request.op = DIR_OP_ADD_LINKU;
     request.uid.high = dir_uid->high;
     request.uid.low = dir_uid->low;
-    request.reserved = DAT_00e7fc8a;
+    request.version = DIR_$OP_REC(DIR_OP_ADD_LINKU >> 1).version;
 
-    /* Send the request - size includes name and target length */
-    DIR_$DO_OP(&request.op, len + DAT_00e7fc8e, 0x14, &response, &do_op_rcvd_len);
+    /* 0x00E50736-0x00E50750 */
+    DIR_$DO_OP(&request,
+               (int16_t)(DIR_$OP_REC(DIR_OP_ADD_LINKU >> 1).base_size + len),
+               0x14, &response, &do_op_rcvd_len);
+
+    /* 0x00E50758 */
     status = response.status;
 
-    /* Check for fallback conditions */
     if (status == file_$bad_reply_received_from_remote_node ||
         status == status_$naming_bad_directory) {
-        /* Fall back to old implementation */
+        /* 0x00E5076C-0x00E5077A */
         DIR_$OLD_ADD_LINKU(dir_uid, name, name_len, target, target_len, status_ret);
     } else {
+        /* 0x00E50782 */
         *status_ret = status;
     }
 }

@@ -57,7 +57,6 @@
 /* 0x00E4BC24, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
  * super-user bypass is suppressed).  `pea (-0x4dc0,PC)` at 0x00E509E2 and
  * `pea (-0x4e7c,PC)` at 0x00E50A9E. */
-static const boolean dir_$add_bak_ignore_super_00e4bc24 = true;
 
 /* 0x00E50C5C, longword 0x00000002: the required rights mask.
  * `pea (0x27c,PC)` at 0x00E509DE and `pea (0x1c0,PC)` at 0x00E50A9A. */
@@ -211,11 +210,14 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
 
         /* Check ACL rights on original */
         ACL_$RIGHTS(&orig_uid,
-                    (boolean *)&dir_$add_bak_ignore_super_00e4bc24,
+                    (boolean *)&DIR_$CONST_TRUE_B,
                     (uint32_t *)&dir_$add_bak_rights_00e50c5c,
                     (int16_t *)&dir_$add_bak_acl_opts_00e50c5a, status_ret);
+        /* 0x00E509F8-0x00E50A06: `cmpi.l #0x230004,(A1)` - "wrong type -
+         * operation illegal on system objects" takes the not-a-file path;
+         * every other failure is converted and returned. */
         if (*status_ret != status_$ok) {
-            if (*status_ret == status_$file_object_not_found) {
+            if (*status_ret == status_$acl_wrong_type) {
                 goto not_a_file;
             }
             NAME_CONVERT_ACL_STATUS(status_ret);
@@ -255,15 +257,19 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
 
                 /* Check ACL rights on old backup */
                 ACL_$RIGHTS(&old_bak_uid,
-                            (boolean *)&dir_$add_bak_ignore_super_00e4bc24,
+                            (boolean *)&DIR_$CONST_TRUE_B,
                             (uint32_t *)&dir_$add_bak_rights_00e50c5c,
                             (int16_t *)&dir_$add_bak_acl_opts_00e50c5a,
                             status_ret);
                 if (*status_ret != status_$ok) {
-                    /* Clear high bit and check for wrong_type */
+                    /* 0x00E50AB8: `bclr.b #0x7,(A1)` clears bit 31 of the
+                     * status longword. */
                     *status_ret &= 0x7FFFFFFF;
+                    /* 0x00E50AC0: only "object not found" carries on; every
+                     * other failure re-enters the SAME decision the first
+                     * ACL_$RIGHTS uses (`bra.w 0x00e509fc` at 0x00E50AC8). */
                     if (*status_ret != status_$file_object_not_found) {
-                        if (*status_ret == status_$file_object_not_found) {
+                        if (*status_ret == status_$acl_wrong_type) {
                             goto not_a_file;
                         }
                         NAME_CONVERT_ACL_STATUS(status_ret);

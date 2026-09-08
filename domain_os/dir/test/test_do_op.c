@@ -64,7 +64,7 @@ int8_t   AUDIT_$ENABLED = 0;            /* >= 0: auditing off */
  * DIR_$OP_REPLY_SIZE are DIR_$OP_REC(half).reply_version / .reply_size, so
  * the one biased table is all that has to exist here (bead source-wk2f). */
 dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];
-uint32_t DAT_00e4b33c;   /* 0x00E4B33C is a longword (dir_internal.h) */
+uint32_t DIR_$CONST_ZERO_L;   /* 0x00E4B33C is a longword (dir_internal.h) */
 uid_t    ACL_$DIRIN_ACL = { 0x00000603u, 0x00000000u };  /* 0xE1745C */
 status_$t Naming_bad_request_header_ver_err;
 status_$t *PTR_Naming_bad_request_header_ver_err_00e7dbfc;
@@ -259,8 +259,8 @@ void dir_$do_op_add_entry(uid_t *uid, uint16_t type, void *name,
   (void)uid_data;(void)target_len;(void)target_data;(void)result; OK(st); }
 
 void dir_$do_op_add_link(uid_t *uid, void *name, uint16_t name_len,
-                         uid_t *file_uid, uint16_t flags, status_$t *st)
-{ (void)uid;(void)name;(void)name_len;(void)file_uid;(void)flags; OK(st); }
+                         uid_t *file_uid, boolean is_hard_link, status_$t *st)
+{ (void)uid;(void)name;(void)name_len;(void)file_uid;(void)is_hard_link; OK(st); }
 
 void dir_$do_op_add_mount(uid_t *uid, uid_t *mount_uid, uint32_t node_id,
                           status_$t *st)
@@ -283,11 +283,11 @@ void dir_$do_op_delete(uid_t *uid, void *name, uint16_t name_len,
   (void)entry_uid_ret;(void)result_uid; OK(st); }
 
 void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
-                          uint16_t name_flags, void *cont, uint16_t max_entries,
-                          uint32_t max_size, uint32_t buf_size, void *size_ret,
+                          uint16_t name_flags, void *cont, uint32_t max_entries,
+                          uint32_t max_size, void *buf_ptr, void *size_ret,
                           void *offset_ret, void *count_ret, status_$t *st)
 { (void)uid;(void)version;(void)name;(void)name_flags;(void)cont;(void)max_entries;
-  (void)max_size;(void)buf_size;(void)size_ret;(void)offset_ret;(void)count_ret; OK(st); }
+  (void)max_size;(void)buf_ptr;(void)size_ret;(void)offset_ret;(void)count_ret; OK(st); }
 
 void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len, status_$t *st)
 { (void)uid;(void)name;(void)name_len; OK(st); }

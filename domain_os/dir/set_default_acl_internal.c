@@ -194,7 +194,7 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
     /* If flush_flag is negative, flush the page (0x00E52F34) */
     if ((int8_t)flush_flag < 0) {
         FILE_$FW_PARTIAL((uid_t *)(uintptr_t)handle,
-                         (uint32_t *)&DAT_00e4b33c,
+                         (uint32_t *)&DIR_$CONST_ZERO_L,
                          (int32_t *)&DAT_00e52040 /* const; only read by callee */, status_ret);
         if (*status_ret != status_$ok) {
             goto audit;

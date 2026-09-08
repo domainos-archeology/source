@@ -108,7 +108,7 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     }
 
     /* Local directory - read info block */
-    DIR_$OLD_READ_INFOBLK(dir_uid, info_buf, &DAT_00e56096,
+    DIR_$OLD_READ_INFOBLK(dir_uid, info_buf, &DIR_$INFOBLK_MAX_LEN,
                           &info_len, status_ret);
     if (*status_ret != status_$ok) {
         return;

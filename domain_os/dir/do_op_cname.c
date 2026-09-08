@@ -59,7 +59,6 @@
 
 /* 0x00E4BC24, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
  * super-user bypass is suppressed).  `pea (-0x5df4,PC)` at 0x00E51A16. */
-static const boolean dir_$cname_ignore_super_00e4bc24 = true;
 
 /* 0x00E51B64, longword 0x00000040: the required rights mask (rename).
  * `pea (0x150,PC)` at 0x00E51A12. */
@@ -172,7 +171,7 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
             {
                 uint32_t rights_result;
                 rights_result = ACL_$RIGHTS(&entry_uid,
-                                            (boolean *)&dir_$cname_ignore_super_00e4bc24,
+                                            (boolean *)&DIR_$CONST_TRUE_B,
                                             (uint32_t *)&dir_$cname_rights_00e51b64,
                                             (int16_t *)&dir_$cname_acl_opts_00e505c4,
                                             status_ret);

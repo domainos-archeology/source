@@ -26,9 +26,11 @@
  *   name       - Starting entry name (for continuation)
  *   name_flags - Entry flags
  *   cont       - Continuation pointer (in/out)
- *   max_entries - Maximum entries to return
+ *   max_entries - maximum entries, a LONGWORD (`move.l (0x18,A6),D5`
+ *                 at 0x00E4D968, compared with `cmp.l (A4),D5`)
  *   max_size   - Maximum response buffer size (bytes)
- *   buf_size   - Total buffer size parameter
+ *   buf_ptr    - the caller's entry buffer (`movea.l (0x20,A6),A1`
+ *                at 0x00E4DA9A); DIR_$DO_OP passes request+0x9A
  *   size_ret   - Output: actual data size (bytes)
  *   offset_ret - Output: offset to last entry
  *   count_ret  - Output: number of entries returned
@@ -47,9 +49,9 @@
 
 #include "dir/dir_internal.h"
 
-/* DAT_00e4dffa - Attribute parameter for FILE_$GET_ATTRIBUTES (0x0090) */
+/* DIR_$READU_ATTR_SIZE - Attribute parameter for FILE_$GET_ATTRIBUTES (0x0090) */
 
-/* DAT_00e4dffc - NUL byte used as 1-char name for dir_$find_entry("\0", 1) */
+/* DIR_$READU_NUL_NAME - NUL byte used as 1-char name for dir_$find_entry("\0", 1) */
 
 /* dir_$next_page - Advance to the next page in B-tree traversal */
 void dir_$next_page(void *handle, int16_t depth, void *extra, uint16_t *page_ret);
@@ -58,8 +60,8 @@ void dir_$next_page(void *handle, int16_t depth, void *extra, uint16_t *page_ret
 
 void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                           uint16_t name_flags, void *cont_ptr,
-                          uint16_t max_entries, uint32_t max_size,
-                          uint32_t buf_size, void *size_ret_ptr,
+                          uint32_t max_entries, uint32_t max_size,
+                          void *buf_ptr, void *size_ret_ptr,
                           void *offset_ret_ptr, void *count_ret_ptr,
                           status_$t *status_ret)
 {
@@ -171,7 +173,7 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                     goto exit_cleanup;
                 }
 
-                last_entry = (uint16_t *)((char *)buf_size + word_idx * 2);
+                last_entry = (uint16_t *)((char *)buf_ptr + word_idx * 2);
                 word_idx += (entry_size >> 1);
                 *count_ret = *count_ret + 1;
 
@@ -202,8 +204,8 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                         *(uint32_t *)(last_entry + 2) = root->high;
                         *(uint32_t *)(last_entry + 4) = root->low;
                     } else {
-                        FILE_$GET_ATTRIBUTES(uid, &DAT_00e4b444,
-                                             &DAT_00e4dffa, &attr_buf1,
+                        FILE_$GET_ATTRIBUTES(uid, &DIR_$CONST_ONE_W,
+                                             &DIR_$READU_ATTR_SIZE, &attr_buf1,
                                              attr_buf2, status_ret);
                         if (*status_ret != status_$ok) goto exit_cleanup;
                         /* Parent UID is at offset 0x60-0x5c from attr_buf2 base */
@@ -259,7 +261,7 @@ start_named_search:
 
         /* For page 0 with entry_idx < 3, find the first entry via dir_$find_entry */
         if (page_idx == 0 && (int16_t)entry_idx < 3) {
-            dir_$find_entry((void *)local_handle, &DAT_00e4dffc, 1,
+            dir_$find_entry((void *)local_handle, &DIR_$READU_NUL_NAME, 1,
                             0x20, &find_entry_ret, extra_array + 2, &depth);
             page_idx = extra_array[depth * 2];
             entry_idx = extra_array[depth * 2 + 1];
@@ -319,7 +321,7 @@ start_named_search:
 
             /* Get name pointer for this entry */
             entry_name = entry_ptr + DIR_$NAME_OFFSET_TABLE[(*entry_ptr & 7)];
-            last_entry = (uint16_t *)((char *)buf_size + word_idx * 2);
+            last_entry = (uint16_t *)((char *)buf_ptr + word_idx * 2);
             word_idx += (entry_size >> 1);
             *count_ret = *count_ret + 1;
 
@@ -345,30 +347,38 @@ start_named_search:
                 }
                 *((uint8_t *)last_entry + (int16_t)last_entry[10] + 0x16) = '\0';
 
-                /* Format type-specific fields */
+                /* Format type-specific fields.  Jump table at 0x00E4DE7E,
+                 * bounded by `cmpi.w #0x5,D0w` / `bcc` at 0x00E4DE6C: types
+                 * 0 and 1 land on the CRASH_SYSTEM default at 0x00E4DF48,
+                 * type 2 on 0x00E4DE88, type 3 on 0x00E4DEFC and type 4 on
+                 * 0x00E4DF2A. */
                 switch (*entry_ptr & 7) {
                 case 2: /* File/directory entry */
                     last_entry[1] = 1;
                     *(uint32_t *)(last_entry + 2) = *(uint32_t *)(entry_ptr + 4);
                     *(uint32_t *)(last_entry + 4) = *(uint32_t *)(entry_ptr + 8);
-                    /* Check UID remapping table */
+                    /* 0x00E4DEAA-0x00E4DEFA: substitute a mounted volume's
+                     * root uid.  The scan walks the ONE-BASED mount tables
+                     * (see DIR_MOUNT_UID_TAB_OFF): `lea (0x1554,A0),A2`
+                     * with A0 = A5 + 8 + 8k is UID_TAB[k+1], and the
+                     * replacement uses `lsl.l #0x3` on the 1-based index to
+                     * reach TGT_TAB[n]. */
                     {
-                        uint16_t remap_count = *(int16_t *)(a5 + 0x155A) - 1;
-                        if ((int32_t)((uint32_t)remap_count << 16) >= 0) {
-                            int16_t ri = 1;
-                            char *remap_base = a5;
-                            do {
-                                if (*(uint32_t *)(last_entry + 2) == *(uint32_t *)(remap_base + 0x155C) &&
-                                    *(uint32_t *)(last_entry + 4) == *(uint32_t *)(remap_base + 0x1560)) {
-                                    remap_base = a5 + ri * 8;
-                                    *(uint32_t *)(last_entry + 2) = *(uint32_t *)(remap_base + 0x1594);
-                                    *(uint32_t *)(last_entry + 4) = *(uint32_t *)(remap_base + 0x1598);
-                                    break;
-                                }
-                                ri++;
-                                remap_count--;
-                                remap_base += 8;
-                            } while (remap_count != 0xFFFF);
+                        int16_t remaining =
+                            (int16_t)(DIR_MOUNT_COUNT16(a5) - 1);
+                        int16_t n;
+
+                        for (n = 1; remaining >= 0; n++, remaining--) {
+                            if (*(uint32_t *)(last_entry + 2) ==
+                                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8) &&
+                                *(uint32_t *)(last_entry + 4) ==
+                                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8 + 4)) {
+                                *(uint32_t *)(last_entry + 2) =
+                                    *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8);
+                                *(uint32_t *)(last_entry + 4) =
+                                    *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8 + 4);
+                                break;
+                            }
                         }
                     }
                     break;
@@ -409,7 +419,13 @@ start_named_search:
                     }
                 }
 
-                /* Format type-specific fields */
+                /* Format type-specific fields.  Jump table at 0x00E4DDB6,
+                 * bounded by `cmpi.w #0x5,D6w` / `bcc` at 0x00E4DDA4: types
+                 * 0 and 1 land on the CRASH_SYSTEM default at 0x00E4DF48,
+                 * type 2 on 0x00E4DDC0 (which falls into the `clr.l (0xc,A0)`
+                 * at 0x00E4DE04 that type 4 also uses), type 3 on 0x00E4DDD6
+                 * and type 4 on 0x00E4DDF2.  This short form does NOT do the
+                 * mount substitution the long form does. */
                 switch (*entry_ptr & 7) {
                 case 2: /* File/directory entry */
                     last_entry[0] = 1;
@@ -480,7 +496,7 @@ exit_cleanup:
     if (last_entry == (uint16_t *)0) {
         *offset_ret = 0;
     } else {
-        *offset_ret = (int32_t)((char *)last_entry - (char *)buf_size);
+        *offset_ret = (int32_t)((char *)last_entry - (char *)buf_ptr);
     }
 
     dir_$release_handle(&local_handle);

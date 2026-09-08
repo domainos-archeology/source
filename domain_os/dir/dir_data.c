@@ -76,13 +76,18 @@ int16_t DIR_$NAME_OFFSET_TABLE[8] = { 0, 4, 16, 20, 12, 0, 0, 0 };
 
 /*
  * The five module globals between DIR_$LK_WAITS (0x00E7FC2C) and DIR_$OP_TAB
- * (0x00E7FC42).  DIR_$INIT clears all of them.  Zero in the image.
+ * (0x00E7FC42) are fields of the A5 block, not separate objects, and are
+ * reached through the DIR_$LOCK_FREE / DIR_$LOCK_IN_USE / DIR_$HANDLE_FREE /
+ * DIR_$HANDLE_IN_USE / DIR_$LINK_BUF_OWNER accessors in dir/dir_internal.h:
+ *
+ *   0x00E7FC30 (A5+0x2030)  head of the dir_$lock_entry_t free list
+ *   0x00E7FC34 (A5+0x2034)  lock-entry in-use bitmap  (DIR_$LOCK_OBJ)
+ *   0x00E7FC38 (A5+0x2038)  head of the dir_$handle_t free list
+ *   0x00E7FC3C (A5+0x203C)  handle in-use bitmap      (DIR_$ALLOC_HANDLE)
+ *   0x00E7FC40 (A5+0x2040)  DIR_$LINK_BUF_MUTEX owner (dir_$do_op_cname)
+ *
+ * All are zero in the image; DIR_$INIT (0x00E3140C) fills the first four in.
  */
-void    *DAT_00e7fc30 = NULL;   /* 0x00E7FC30 handle-entry free list head   */
-uint32_t DAT_00e7fc34 = 0;      /* 0x00E7FC34                               */
-void    *DAT_00e7fc38 = NULL;   /* 0x00E7FC38 request-buffer free list head */
-uint32_t DAT_00e7fc3c = 0;      /* 0x00E7FC3C active-slot bitmap, 32 slots  */
-uint16_t DAT_00e7fc40 = 0;      /* 0x00E7FC40 link-buffer mutex owner       */
 
 /*
  * DIR_$OP_TAB - 0x00E7FC42, the per-operation parameter table (see the record
@@ -173,14 +178,28 @@ char DAT_00e7fd20[4] = { '.', 'b', 'a', 'k' };
  * addresses the code uses.  All are zero in the image.
  */
 
-/* 0x00E7F280: the directory handle pool, 0x30 bytes per entry.  DIR_$CLEANUP
- * walks it as `&DAT_00e7f280 + i * 0x30` for the 32 slots DAT_00e7fc3c's
- * bitmap covers; the pool ends where DAT_00e7f470 begins. */
-uint8_t DAT_00e7f280[0x00E7F470 - 0x00E7F280];
+/*
+ * 0x00E7F280 (A5+0x1680) is dir_$lock_entry_t[32] and 0x00E7F480 (A5+0x1880)
+ * is dir_$handle_t[32]; both are declared in dir/dir_internal.h and reached
+ * as DIR_$LOCK_TAB / DIR_$HANDLE_TAB.  The three cells the tree used to call
+ * DAT_00e7f470 / DAT_00e7f4b0 / DAT_00e7fbf4 are interior `next` fields of
+ * those arrays, which is why DIR_$INIT clears them one by one after building
+ * the chains:
+ *
+ *   0x00E7F470 = A5+0x1870 = DIR_$LOCK_TAB[31].u.next    (0x00E3149E)
+ *   0x00E7F4B0 = A5+0x18B0 = DIR_$HANDLE_TAB[0].next     (0x00E314A6)
+ *   0x00E7FBF4 = A5+0x1FF4 = DIR_$HANDLE_TAB[31].next    (0x00E314A2)
+ *
+ * and 0x00E7F4BC = A5+0x18BC = &DIR_$HANDLE_TAB[1], the value DIR_$INIT
+ * stores as the handle free-list head, not a pool of its own.
+ */
 
-uint32_t DAT_00e7f470 = 0;   /* 0x00E7F470, cleared by DIR_$INIT */
-uint32_t DAT_00e7f4b0 = 0;   /* 0x00E7F4B0, cleared by DIR_$INIT */
-uint32_t DAT_00e7fbf4 = 0;   /* 0x00E7FBF4, cleared by DIR_$INIT */
+/*
+ * 0x00E7DBFC (A5-0x4): the module block's pointer to the status constant the
+ * DIR CRASH_SYSTEM sites push (`move.l (-0x4,A5),-(SP)`).  Image bytes at
+ * 0x00E7DBF8: `00 e4 b3 3c 00 e4 b2 30`.
+ */
+status_$t *const DIR_$CRASH_STATUS = &Naming_bad_request_header_ver_err;
 
 /*
  * ============================================================================
@@ -197,19 +216,26 @@ uint32_t DAT_00e7fbf4 = 0;   /* 0x00E7FBF4, cleared by DIR_$INIT */
 status_$t Naming_bad_request_header_ver_err = 0x000E0025;
 
 /* 0x00E4B33C, after the `rts` at 0x00E4B33A.  Bytes 00 00 00 00. */
-uint32_t DAT_00e4b33c = 0;
+uint32_t DIR_$CONST_ZERO_L = 0;
 
 /* 0x00E4B444, after the `rts` at 0x00E4B442.  Bytes 00 01. */
-uint16_t DAT_00e4b444 = 1;
+uint16_t DIR_$CONST_ONE_W = 1;
 
-/* 0x00E4B448, two filler bytes (20 48) after DAT_00e4b444.
+/* 0x00E4BC24, byte 0xFF (followed by a 0x00 filler byte).  ACL_$RIGHTS'
+ * `ignore_super` argument - TRUE, i.e. the super-user bypass is suppressed.
+ * Every DIR call site reaches this ONE cell with `pea (d,PC)`:
+ * dir_$open_dir 0x00E4BA88, dir_$do_op_add_bak 0x00E509E2 / 0x00E50A9E,
+ * dir_$do_op_cname, dir_$do_op_drop_dir, dir_$get_entry_cached. */
+boolean DIR_$CONST_TRUE_B = true;
+
+/* 0x00E4B448, two filler bytes (20 48) after DIR_$CONST_ONE_W.
  * Bytes 00 00 80 00. */
 uint32_t DAT_00e4b448 = 0x00008000;
 
 /* 0x00E4DFFA / 0x00E4DFFC, after the `rts` at 0x00E4DFF8.
  * Bytes 00 90 | 00. */
-int16_t DAT_00e4dffa = 0x0090;
-uint8_t DAT_00e4dffc = 0x00;
+int16_t DIR_$READU_ATTR_SIZE = 0x0090;
+uint8_t DIR_$READU_NUL_NAME = 0x00;
 
 /* 0x00E50830, after the `rts` at 0x00E5082E.  Bytes 00 05. */
 uint16_t DAT_00e50830 = 5;
@@ -222,8 +248,8 @@ int16_t ACL_TYPE_DIR = 1;
 
 /* 0x00E56094..0x00E560A4, after the `rts` at 0x00E56092.  Bytes
  * 00 90 | 00 28 | 00 04 | 00 | 00 01 16 00 | 01 | 00 00 00 | 00 | 00 01. */
-int16_t  DAT_00e56094 = 0x0090;
-int16_t  DAT_00e56096 = 0x0028;
+int16_t  DIR_$ATTR_REC_SIZE_W = 0x0090;
+int16_t  DIR_$INFOBLK_MAX_LEN = 0x0028;
 uint16_t DAT_00e56098 = 0x0004;
 uint8_t  DAT_00e5609a = 0x00;
 uint32_t DAT_00e5609e = 0x00010000;
@@ -234,7 +260,7 @@ uint8_t  DAT_00e560a2 = 0x00;
 uint32_t DAT_00e564e2 = 0x00000400;
 
 /* 0x00E5716A, after the `rts` at 0x00E57168.  Bytes 00 06. */
-uint16_t DAT_00e5716a = 6;
+uint16_t DIR_$PROT_TYPE_ACL = 6;
 
 /* 0x00E57CDC, after the `rts` at 0x00E57CDA.  Bytes 00 0E 00 25 - the same
  * status value as Naming_bad_request_header_ver_err, in OLD_DIR's own pool. */

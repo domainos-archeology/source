@@ -263,7 +263,7 @@ have_attrs:                                             /* 0x00E513AE */
      * iteration (`lea (-0x58,A6),A1` is the dbf target at 0x00E5142E).
      */
     if (sub_type == 2 || sub_type == 1) {
-        for (i = (int16_t)(*(int16_t *)(a5 + DIR_MOUNT_COUNT16_OFF) - 1);
+        for (i = (int16_t)(DIR_MOUNT_COUNT16(a5) - 1);
              i >= 0; i--) {
             const uint32_t *src =
                 (const uint32_t *)(a5 + 8 + 0x1554 + (int32_t)i * 8);

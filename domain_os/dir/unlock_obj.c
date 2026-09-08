@@ -48,7 +48,7 @@ void DIR_$UNLOCK_OBJ(void *handle)
 
     /* If write mode and dirty flag set, purify (flush) */
     if (mode == 2 && (int8_t)h[0x20] < 0) {
-        AST_$PURIFY(handle, 0, 0, &DAT_00e4b33c, 0, &local_status);
+        AST_$PURIFY(handle, 0, 0, &DIR_$CONST_ZERO_L, 0, &local_status);
         if (local_status != status_$ok) {
             CRASH_SYSTEM(&local_status);
         }

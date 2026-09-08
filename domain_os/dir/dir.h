@@ -99,9 +99,11 @@ void DIR_$INIT(void);
  *
  * Original address: 0x00E4D356
  */
+/* `flags` is a LONGWORD BY VALUE: 0x00E4D3B0 copies the parameter slot at
+ * A6+0x28 straight into the request at +0xAC without dereferencing it. */
 void DIR_$RESOLVE(void *pathname, uint16_t *path_len, uid_t *start_uid,
                   uid_t *resolved_uid, uint16_t *param5, uint16_t *param6,
-                  uint16_t *param7, uint16_t *param8, void *flags,
+                  uint16_t *param7, uint16_t *param8, uint32_t flags,
                   uint16_t *link_count, status_$t *status_ret);
 
 /*
@@ -681,11 +683,13 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
 typedef struct __attribute__((packed)) dir_$old_entry_t {
     uint16_t type;      /* 0x00: 1 = file, 3 = link */
     uid_t    uid;       /* 0x02: the object UID */
+    uint32_t extra;     /* 0x0A: `move.l (0x20,A0),(0xa,A4)` at 0x00E57EC0 */
 } dir_$old_entry_t;
 
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(dir_$old_entry_t, uid) == 0x02, "dir_$old_entry_t.uid");
-_Static_assert(sizeof(dir_$old_entry_t) == 0x0A, "sizeof dir_$old_entry_t");
+_Static_assert(__builtin_offsetof(dir_$old_entry_t, extra) == 0x0A, "dir_$old_entry_t.extra");
+_Static_assert(sizeof(dir_$old_entry_t) == 0x0E, "sizeof dir_$old_entry_t");
 #endif
 
 void DIR_$OLD_GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,

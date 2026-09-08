@@ -151,7 +151,7 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
 
                         if (ch < 0x60) {
                             int16_t byte_idx = diff >> 3;
-                            if ((*((uint8_t *)&PTR_DAT_00e4cd84 + (int16_t)byte_idx) &
+                            if ((*((uint8_t *)&DIR_$CASE_FOLD_BITMAP + (int16_t)byte_idx) &
                                  (1 << (remote_name[j - 1] & 7))) != 0) {
                                 remote_name[j - 1] = remote_name[j - 1] + 0x20;
                             }

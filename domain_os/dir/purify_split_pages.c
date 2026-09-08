@@ -29,14 +29,23 @@ void dir_$purify_split_pages(dir_insert_ctx_t *ctx, status_$t *status_ret)
      * Original M68K: outer from index 1 to page_count-1, inner from
      * outer+1 to page_count, swap if inner > outer (unsigned). */
     {
+        /* 0x00E4EAAA: `move.w (-0xa6,A2),D0w` / `subq.w #0x2` / `bmi` -
+         * page_count - 1 outer iterations, i = 1 .. page_count - 1. */
         int16_t outer_count = page_count - 2;
         if (outer_count >= 0) {
             int16_t i = 1;
             do {
-                int16_t j = i + 1;
-                int16_t inner_count = page_count - j;
+                /* 0x00E4EAB8: D2w = D1w + 1.  D2 is the outer index's NEXT
+                 * value and is never touched by the inner loop, which walks
+                 * its own pointer A1 - so the outer index advances by one,
+                 * not to the end of the inner range. */
+                int16_t next_i = (int16_t)(i + 1);
+                int16_t inner_count = (int16_t)(page_count - next_i);
                 if (inner_count >= 0) {
+                    int16_t j = next_i;
                     do {
+                        /* 0x00E4EAD4: `cmp.w (-0x4a,A0),D5w` / `bls` -
+                         * an UNSIGNED comparison. */
                         if ((uint16_t)ctx->split_pages[j] >
                             (uint16_t)ctx->split_pages[i]) {
                             int16_t temp = ctx->split_pages[i];
@@ -47,7 +56,8 @@ void dir_$purify_split_pages(dir_insert_ctx_t *ctx, status_$t *status_ret)
                         inner_count--;
                     } while (inner_count != -1);
                 }
-                i = j;  /* Original: move.w D2w,D1w after inner loop */
+                /* 0x00E4EAEE: `move.w D2w,D1w` */
+                i = next_i;
                 outer_count--;
             } while (outer_count != -1);
         }

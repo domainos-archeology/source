@@ -23,15 +23,7 @@
 void DIR_$VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
                               status_$t *status_ret)
 {
-    struct {
-        uint8_t   op;
-        uint8_t   padding[3];
-        uid_t     root_uid;
-        uint16_t  reserved;
-        uint8_t   gap[0x88];
-        uint16_t  len;
-        char      name_data[255];
-    } request;
+    dir_$do_op_request_t request;
     Dir_$OpResponse response;
     /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
      * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
@@ -51,19 +43,24 @@ void DIR_$VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
     }
 
     /* Copy name into request buffer */
-    request.len = len;
+    request.body.name.path_len = len;
     for (i = 0; i < len; i++) {
-        request.name_data[i] = name[i];
+        request.body.name.name[i] = name[i];
     }
 
     /* Build the request */
+    /* 0x00E503E0-0x00E503F4.  The subject uid is the CONSTANT
+     * NAME_$ROOT_UID (`movea.l #0xe8029c,A0` at 0x00E503E6), not a caller
+     * argument. */
     request.op = DIR_OP_VALIDATE_ROOT_ENTRY;
-    request.root_uid.high = NAME_$ROOT_UID.high;
-    request.root_uid.low = NAME_$ROOT_UID.low;
-    request.reserved = DAT_00e7fcda;
+    request.uid.high = NAME_$ROOT_UID.high;
+    request.uid.low = NAME_$ROOT_UID.low;
+    request.version = DIR_$OP_REC(DIR_OP_VALIDATE_ROOT_ENTRY >> 1).version;
 
     /* Send the request - size includes name length */
-    DIR_$DO_OP(&request.op, len + DAT_00e7fcde, 0x14, &response, &do_op_rcvd_len);
+    DIR_$DO_OP(&request,
+               (int16_t)(DIR_$OP_REC(DIR_OP_VALIDATE_ROOT_ENTRY >> 1).base_size + len),
+               0x14, &response, &do_op_rcvd_len);
     status = response.status;
 
     /* Check for fallback conditions */

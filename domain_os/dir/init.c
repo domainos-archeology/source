@@ -1,61 +1,92 @@
 /*
- * DIR_$INIT - Initialize the directory subsystem
- *
- * Called during system boot to initialize directory services.
- * Clears global flags, initializes event counters, slot indices,
- * buffer pointers, free lists, mutexes, and calls DIR_$OLD_INIT.
+ * DIR_$INIT - build the DIR module's lock and handle tables at boot
  *
  * Original address: 0x00E3140C
- * Original size: 232 bytes
+ * Original size:    232 bytes (0x00E3140C..0x00E314F4)
+ * SAU2 map:         "I E3140C DIR size = E8" in the boot-time init segment,
+ *                   exported as DIR_$INIT.
+ *
+ * The routine's own A5 is 0x00E3503C (`lea (0xe3503c).l,A5` at 0x00E31414,
+ * the map's "D E3503C OLD_DIR size = 4"); it is loaded and never used.  The
+ * DIR module block is reached absolutely with `movea.l #0xe7dc00,A0` at
+ * 0x00E3141A, i.e. through DIR_$BLOCK_ABS here.
+ *
+ * It clears the two in-use bitmaps, then in one 32-iteration loop numbers and
+ * chains both tables - dir_$lock_entry_t[32] at A5+0x1680 and
+ * dir_$handle_t[32] at A5+0x1880 - and initialises each slot's event counter.
+ * Afterwards it breaks the three chain ends the free lists must not follow,
+ * publishes the two list heads, initialises the two mutexes and the
+ * wait-for-handle event counter, and calls DIR_$OLD_INIT.
+ *
+ * Note the image never touches A5+0x2040 (DIR_$LINK_BUF_OWNER); it is zero in
+ * the image and only DIR_$CLEANUP and dir_$do_op_cname write it.
  */
 
 #include "dir/dir_internal.h"
 
-/*
- * DIR_$INIT - Initialize the directory subsystem
- *
- * Performs the following initialization:
- * 1. Clears global flags and bitmaps
- * 2. Loops 32 times initializing event counters and slot data
- * 3. Sets up free list heads for handle entries and request buffers
- * 4. Initializes exclusion mutexes
- * 5. Calls DIR_$OLD_INIT for legacy initialization
- *
- * The directory subsystem uses 32 slots for concurrent directory
- * operations, each with an event counter and associated data.
- */
 void DIR_$INIT(void)
 {
-    int16_t i;
+    char *blk = DIR_$BLOCK_ABS;     /* 0x00E3141A: movea.l #0xe7dc00,A0 */
 
-    /* Clear active slots bitmaps */
-    DAT_00e7fc3c = 0;
-    DAT_00e7fc34 = 0;
+    int16_t  count;                 /* D2: `moveq #0x1f,D2` + dbf        */
+    uint16_t i;                     /* D3: slot number                   */
 
-    /* Clear counters/flags */
-    DAT_00e7f470 = 0;
-    DAT_00e7fbf4 = 0;
-    DAT_00e7f4b0 = 0;
+    dir_$lock_entry_t *lock_tab   = DIR_LOCK_TAB_OF(blk);
+    dir_$handle_t     *handle_tab = DIR_HANDLE_TAB_OF(blk);
 
-    /* Initialize 32 event counters and associated slot data */
-    for (i = 0; i < 32; i++) {
+    /* 0x00E31420 / 0x00E31424: both bitmaps are cleared as longwords. */
+    DIR_HANDLE_IN_USE_OF(blk) = 0;
+    DIR_LOCK_IN_USE_OF(blk)   = 0;
+
+    /*
+     * 0x00E3144C-0x00E31494.  The image keeps three cursors that step by
+     * 0x3C (D5, D6 and (-0x8,A6)), two that step by 0x10 (A2, A3/A4) and one
+     * that steps by 0xC (D4, the event-counter array); they are written here
+     * as the single index D3 carries.
+     */
+    i     = 0;
+    count = 0x1F;
+    do {
+        /* 0x00E3144C: EC_$INIT(&DIR_$WAIT_ECS[i]), stride 0xC from 0xE2C058. */
         EC_$INIT(&DIR_$WAIT_ECS[i]);
-    }
 
-    /* Initialize the wait-for-handle event counter */
+        /* 0x00E31458: move.w D3w,(0x18b8,A0) - handle slot number. */
+        handle_tab[i].slot_index = i;
+
+        /* 0x00E3145E/0x00E31466: lea (0x18bc,A1),A0 / move.l A0,(0x18b0,A1). */
+        handle_tab[i].next = ARCH_PTR_TO_VA(&handle_tab[i + 1]);
+
+        /* 0x00E3146A/0x00E3146E: lea (0x1690,A4),A0 / move.l A0,(0x1680,A3). */
+        lock_tab[i].u.next = ARCH_PTR_TO_VA(&lock_tab[i + 1]);
+
+        /* 0x00E31472: move.w D3w,(0x168e,A2) - lock entry slot number. */
+        lock_tab[i].index = i;
+
+        i++;                        /* 0x00E31476 */
+        count--;
+    } while (count != -1);          /* 0x00E31494 */
+
+    /*
+     * 0x00E3149E-0x00E314A6.  The loop ran one link past each table, and
+     * handle slot 0 is the emergency handle DIR_$ALLOC_HANDLE hands out
+     * directly (0x00E4B8DA) rather than taking from the free list, so it is
+     * unchained too.  The image clears them in this order.
+     */
+    lock_tab[DIR_SLOT_COUNT - 1].u.next = 0;        /* clr.l (0x1870,A0) */
+    handle_tab[DIR_SLOT_COUNT - 1].next = 0;        /* clr.l (0x1ff4,A0) */
+    handle_tab[0].next                  = 0;        /* clr.l (0x18b0,A0) */
+
+    /* 0x00E314AA/0x00E314B2: the two free-list heads. */
+    DIR_LOCK_FREE_OF(blk)   = ARCH_PTR_TO_VA(&lock_tab[0]);   /* 0x00E7F280 */
+    DIR_HANDLE_FREE_OF(blk) = ARCH_PTR_TO_VA(&handle_tab[1]); /* 0x00E7F4BC */
+
+    /* 0x00E314BA: 0xE2C1F0 */
+    ML_$EXCLUSION_INIT(&DIR_$MUTEX);
+    /* 0x00E314C8: 0xE2C1D8 */
+    ML_$EXCLUSION_INIT(&DIR_$LINK_BUF_MUTEX);
+    /* 0x00E314D6: 0xE2C048 */
     EC_$INIT(&DIR_$WT_FOR_HDNL_EC);
 
-    /* Set up free list heads */
-    DAT_00e7fc30 = NULL;  /* Handle entry free list */
-    DAT_00e7fc38 = NULL;  /* Request buffer free list */
-
-    /* Clear link buffer mutex owner */
-    DAT_00e7fc40 = 0;
-
-    /* Initialize exclusion mutexes */
-    ML_$EXCLUSION_INIT(&DIR_$MUTEX);
-    ML_$EXCLUSION_INIT(&DIR_$LINK_BUF_MUTEX);
-
-    /* Call legacy initialization */
+    /* 0x00E314E4 */
     DIR_$OLD_INIT();
 }

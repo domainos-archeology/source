@@ -182,7 +182,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         did_map = 0;
 
         /* Copy info block from temp to original */
-        DIR_$OLD_READ_INFOBLK(&temp_uid, info_buf, &DAT_00e56096,
+        DIR_$OLD_READ_INFOBLK(&temp_uid, info_buf, &DIR_$INFOBLK_MAX_LEN,
                               info_len, status_ret);
         if (*status_ret == status_$ok) {
             DIR_$OLD_WRITE_INFOBLK(&local_dir, info_buf, info_len, status_ret);
@@ -219,11 +219,10 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
                 }
             } else if (entry_type == 3) {
                 /* Link entry - read link then re-add */
-                DIR_$OLD_READ_LINKU((int16_t)(uintptr_t)&temp_uid,
-                                    (int16_t)(uintptr_t)entry_name,
+                DIR_$OLD_READ_LINKU(&temp_uid, entry_name,
                                     (uint16_t *)&entry_name_len,
-                                    (int16_t)(uintptr_t)entry_link_buf,
-                                    link_len, &entry_uid, &status);
+                                    entry_link_buf,
+                                    (uint16_t *)link_len, &entry_uid, &status);
                 if (status == status_$ok) {
                     DIR_$OLD_ADD_LINKU(&local_dir, entry_name, &entry_name_len,
                                        entry_link_buf, (uint16_t *)link_len,
@@ -267,7 +266,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
                  * 0x90-byte attribute buffer are two separate frame
                  * objects, not two windows onto info_buf. */
                 FILE_$GET_ATTRIBUTES(&local_dir, &DAT_00e56098,
-                                     &DAT_00e56094, &attr_loc_rec,
+                                     &DIR_$ATTR_REC_SIZE_W, &attr_loc_rec,
                                      attr_out, &status);
                 if (status == status_$ok) {
                     /* Restore parent UID at offset 0x0E in mapped buffer.

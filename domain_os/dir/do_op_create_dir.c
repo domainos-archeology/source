@@ -85,7 +85,7 @@ void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
         }
 
         /* Set refcount to zero to mark for deletion */
-        FILE_$SET_REFCNT(new_uid, &DAT_00e4b33c, &status);
+        FILE_$SET_REFCNT(new_uid, &DIR_$CONST_ZERO_L, &status);
 
         /* Clear the result UID */
         new_uid->high = UID_$NIL.high;

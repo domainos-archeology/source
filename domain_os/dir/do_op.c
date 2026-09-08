@@ -217,6 +217,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
         case 0x2A: /* Add entry */
             if (*((uint32_t *)(req + 0x98)) == 0) {
                 /* Simple add */
+                /* 0x00E4C2EC: `clr.w -(SP)` - the boolean byte is 0. */
                 dir_$do_op_add_link(&local_uid, req + 0x9c,
                              *((uint16_t *)(req + 0x8e)),
                              (uid_t *)(req + 0x90),
@@ -238,10 +239,11 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             break;
 
         case 0x2C: /* Add hard link */
+            /* 0x00E4C364: `st -(SP)` - the boolean byte is 0xFF. */
             dir_$do_op_add_link(&local_uid, req + 0x98,
                          *((uint16_t *)(req + 0x8e)),
                          (uid_t *)(req + 0x90),
-                         0xFF, &resp->status);
+                         true, &resp->status);
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 AUDIT_$LOG_DIR_OP(0x1F, resp->status, &local_uid,
                              (uid_t *)(req + 0x90),
@@ -286,16 +288,17 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                  * 0xE4C444-0xE4C46E, pushed right to left:
                  *   pea (0x4,A3)          status_ret
                  *   move.w (0x90,A2)      new_name_len
-                 *   pea (0x8e,A4)         new_name, A4 = req + DAT_00e7fc66
-                 *                         + old_name_len (0xE4C44E)
+                 *   pea (0x8e,A4)         new_name, A4 = req + old_name_len
+                 *                         + DIR_$OP_TAB[4].base_size
+                 *                         (`move.w (0x2066,A5),D0w` 0xE4C44E)
                  *   move.w (0x8e,A2)      old_name_len
                  *   pea (0x92,A2)         old_name
                  *   move.w (0xe,A2)       request version word
                  *   pea (-0x10,A6)        &local_uid
                  */
                 uint16_t old_name_len = *((uint16_t *)(req + 0x8e));
-                int16_t new_name_offset =
-                    (int16_t)(DAT_00e7fc66 + old_name_len);
+                int16_t new_name_offset = (int16_t)
+                    (DIR_$OP_REC(0x32 >> 1).base_size + old_name_len);
                 uint8_t *new_name = req + new_name_offset + 0x8e;
 
                 dir_$do_op_cname(&local_uid,
@@ -308,7 +311,9 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
             }
             if ((int8_t)AUDIT_$ENABLED < 0) {
                 uint16_t old_name_len2 = *((uint16_t *)(req + 0x8e));
-                int16_t new_name_offset2 = old_name_len2 + DAT_00e7fc66;
+                /* 0xE4C480: the audit call recomputes the same offset. */
+                int16_t new_name_offset2 = (int16_t)
+                    (old_name_len2 + DIR_$OP_REC(0x32 >> 1).base_size);
                 AUDIT_$LOG_CNAME_OP(0x18, resp->status, &local_uid,
                              old_name_len2,
                              *((uint16_t *)(req + 0x90)),
@@ -377,7 +382,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
         case 0x3C: /* Add link */
             dir_$do_op_add_entry(&local_uid, 2, req + 0x96,
                          *((uint16_t *)(req + 0x8e)),
-                         4, 0, &DAT_00e4b33c,
+                         4, 0, &DIR_$CONST_ZERO_L,
                          *((uint16_t *)(req + 0x90)),
                          *((uint32_t *)(req + 0x92)),
                          result_buf, &resp->status);
@@ -449,10 +454,17 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                              &resp->cookie,          /* pea (0x14,A3) */
                              *((uint32_t *)(req + 0x92)),
                              max_size,
-                             *((uint32_t *)(req + 0x9a)),
-                             resp_bytes + 0x18,
+                             /* 0x00E4C6E0: `move.l (0x9a,A2),-(SP)` - the
+                              * caller's entry buffer, as a target VA. */
+                             ARCH_VA_TO_PTR(*((uint32_t *)(req + 0x9a))),
+                             /* 0xE4C6DC/0xE4C6D8/0xE4C6D4: the last three
+                              * `pea`s before the status one are +0x1C, then
+                              * +0x20, then +0x18 - and the FIRST pea executed
+                              * is the LAST parameter, so the order below is
+                              * +0x1C, +0x20, +0x18. */
                              resp_bytes + 0x1c,
                              resp_bytes + 0x20,
+                             resp_bytes + 0x18,
                              &resp->status);
             }
             break;
@@ -476,6 +488,13 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                          (uint8_t *)resp + 0x14,   /* len_ret */
                          (uint8_t *)resp + 0x16,   /* uid_ret/net_ret */
                          &resp->status);
+            /* 0xE4C75A-0xE4C76A: on success the handler's own reply length
+             * word (response+0x14) is ADDED to the caller's received_len;
+             * a non-zero status branches straight to the retry check at
+             * 0xE4C9BE and leaves received_len alone. */
+            if (resp->status == status_$ok) {
+                *received_len = (uint16_t)(*received_len + resp->_20_2_);
+            }
             break;
 
         case 0x48: /* Fix directory */

@@ -457,14 +457,15 @@ TEST(sub_type_gate)
 
 /*
  * 0x00E51416-0x00E5144C: a directory that is the source of a mount cannot be
- * deleted.  The count is the 16-bit cell at A5+0x155A and the rows start at
- * A5+8+0x1554.
+ * deleted.  `move.w (0x155a,A5),D0w` reads the LOW half of the longword
+ * count at A5+0x1558 (see DIR_MOUNT_COUNT16 in dir/dir_internal.h), so the
+ * count is planted as that longword; the rows start at A5+8+0x1554.
  */
 TEST(mount_source_directory_is_refused)
 {
     reset();
     ca_out.sub_type = 2;
-    *(int16_t *)(a5_area + DIR_MOUNT_COUNT16_OFF) = 3;
+    *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF) = 3;
     {
         uint32_t *row = (uint32_t *)(a5_area + 8 + 0x1554 + 2 * 8);
         row[0] = ENTRY_UID.high;
@@ -476,14 +477,14 @@ TEST(mount_source_directory_is_refused)
     /* A row that does not match lets the delete proceed. */
     reset();
     ca_out.sub_type = 2;
-    *(int16_t *)(a5_area + DIR_MOUNT_COUNT16_OFF) = 3;
+    *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF) = 3;
     ASSERT_EQ(status_$ok, (uint32_t)call(false, false, true));
     ASSERT_EQ(1, ar_calls);
 
     /* A non-directory never consults the table. */
     reset();
     ca_out.sub_type = 0;
-    *(int16_t *)(a5_area + DIR_MOUNT_COUNT16_OFF) = 3;
+    *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF) = 3;
     {
         uint32_t *row = (uint32_t *)(a5_area + 8 + 0x1554 + 8);
         row[0] = ENTRY_UID.high;

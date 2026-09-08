@@ -34,17 +34,14 @@
  *   target_uid   - Output: target UID
  *   status_ret   - Output: status code
  *
- * Note: The legacy calling convention passes some params as split addresses.
- * In this implementation we treat them as full pointers since we're on a
- * flat address space.
+ * All seven parameters are longword POINTERS - the frame at 0x00E577F4
+ * dereferences every one of them.
  */
-void DIR_$OLD_READ_LINKU(int16_t dir_uid_low, int16_t name_low, uint16_t *name_len,
-                         int16_t target_low, int16_t *target_len,
+void DIR_$OLD_READ_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
+                         void *target_arg, uint16_t *target_len,
                          uid_t *target_uid, status_$t *status_ret)
 {
-    uid_t *dir_uid = (uid_t *)(uintptr_t)dir_uid_low;
-    char *name = (char *)(uintptr_t)name_low;
-    char *target = (char *)(uintptr_t)target_low;
+    char *target = (char *)target_arg;
     uint8_t parsed_name[32];
     uint16_t parsed_len;
     char local_buf[256];

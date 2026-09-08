@@ -130,8 +130,10 @@ TEST(response_layout)
     ASSERT_EQ(PAYLOAD_OFF + 0x16, offsetof(Dir_$OpResponse, resolve.param7));
     ASSERT_EQ(PAYLOAD_OFF + 0x18, offsetof(Dir_$OpResponse, resolve.param8));
     ASSERT_EQ(PAYLOAD_OFF + 0x1A, offsetof(Dir_$OpResponse, resolve.link_count));
-    /* DIR_$DO_OP addresses as far as (0x40,A3), i.e. 0x2C past the payload. */
-    ASSERT_EQ(PAYLOAD_OFF + 0x30, sizeof(Dir_$OpResponse));
+    /* DIR_$DO_OP addresses as far as (0x40,A3), i.e. 0x2C past the payload,
+     * and DIR_$GET_DEF_PROTECTION (0x00E51E00) reads a full UID there while
+     * asking DIR_$DO_OP for a 0x48-byte reply, so the record runs to 0x47. */
+    ASSERT_EQ(PAYLOAD_OFF + 0x34, sizeof(Dir_$OpResponse));
 
     if (LAYOUT_IS_TARGET_EXACT) {
         ASSERT_EQ(0x08, offsetof(Dir_$OpResponse, f18));
@@ -141,7 +143,12 @@ TEST(response_layout)
         ASSERT_EQ(0x1A, offsetof(Dir_$OpResponse, f1a));
         ASSERT_EQ(0x1E, offsetof(Dir_$OpResponse, _24_4_));
         ASSERT_EQ(0x2E, offsetof(Dir_$OpResponse, resolve.link_count));
-        ASSERT_EQ(0x44, sizeof(Dir_$OpResponse));
+        ASSERT_EQ(0x14, offsetof(Dir_$OpResponse, entry.word));
+        ASSERT_EQ(0x16, offsetof(Dir_$OpResponse, entry.uid));
+        ASSERT_EQ(0x1E, offsetof(Dir_$OpResponse, entry.extra));
+        /* DIR_$GET_DEF_PROTECTION asks for a 0x48-byte reply and reads a
+         * full uid out of reply+0x40 (0x00E51D9E / 0x00E51E00). */
+        ASSERT_EQ(0x48, sizeof(Dir_$OpResponse));
     }
 }
 
@@ -220,7 +227,7 @@ TEST(resolve_reads_reply_at_the_right_offsets)
     put16(PL(0x1A), 0x0909);        /* link_count        (record +0x2E) */
 
     DIR_$RESOLVE(path, &path_len, &start, &resolved,
-                 &p5, &p6, &p7, &p8, NULL, &links, &status);
+                 &p5, &p6, &p7, &p8, 0, &links, &status);
 
     ASSERT_EQ(1, mock_do_op_calls);
     ASSERT_EQ(0x34, mock_do_op_resp_size);
@@ -255,7 +262,7 @@ TEST(resolve_stops_on_non_negative_more_byte)
     put32(PL(0x02), 0xDEAD0001);
 
     DIR_$RESOLVE(path, &path_len, &start, &resolved,
-                 &p5, &p6, &p7, &p8, NULL, &links, &status);
+                 &p5, &p6, &p7, &p8, 0, &links, &status);
 
     ASSERT_EQ(1, mock_do_op_calls);
     ASSERT_EQ(1, start.high);       /* untouched */
@@ -284,7 +291,7 @@ TEST(resolve_loops_on_negative_loop_byte)
     mock_reply[PL(0x01)] = 0xFF;    /* loop: keep going */
 
     DIR_$RESOLVE(path, &path_len, &start, &resolved,
-                 &p5, &p6, &p7, &p8, NULL, &links, &status);
+                 &p5, &p6, &p7, &p8, 0, &links, &status);
 
     ASSERT_EQ(3, mock_do_op_calls);
 }

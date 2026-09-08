@@ -10,9 +10,10 @@
  *   - Symbolic links (type 3): reads link target via dir_$do_op_read_linku
  *   - Normal entries (type 2/3): descends into the resolved UID
  *
- * Includes timeout protection for non-server processes: if resolution
- * takes more than 0x15 clock ticks after the first two components,
- * sets the "loop" flag and returns.
+ * Includes a timeout guard that applies ONLY to processes whose
+ * PROC1_$TYPE entry is 9 (`seq D5b` at 0x00E4D12E, `tst.b D5b` / `bpl` at
+ * 0x00E4D1A0): from the second component on, if TIME_$CLOCKH has advanced
+ * by more than 0x14 ticks the "loop" flag is set and the walk returns.
  *
  * Also detects and breaks cross-node root cycles: if after the second
  * component the parent UID points to NAME_$ROOT_UID on a different node,
@@ -44,9 +45,6 @@
  * as uint32_t. The dir_internal.h includes time/time.h indirectly. */
 #include "time/time.h"
 
-/* dir_$get_parent_uid - Resolve parent UID of a directory */
-void dir_$get_parent_uid(uid_t *uid, status_$t *status_ret);
-
 /* DIR_$IS_RETRYABLE_STATUS - declared in dir_internal.h with status_$t parameter */
 
 void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
@@ -58,11 +56,14 @@ void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
                         status_$t *status_ret)
 {
     uid_t *dir_uid = (uid_t *)result;
-    char *path = (char *)path_data;  /* 1-based pathname */
+    /* The pathname arrives as a target VA (`move.l (0x8e,A2),-(SP)` in
+     * DIR_$DO_OP's case 0x58 at 0x00E4C8CA); every access below is
+     * path[index - 1], so the string is 1-based. */
+    char *path = (char *)ARCH_VA_TO_PTR(path_data);
     uint16_t pos;
     uint16_t comp_len;
     uint16_t depth;
-    int8_t is_server_proc;
+    int8_t is_type9_proc;
     uint32_t start_time;
     uint16_t entry_type;
     uid_t entry_uid;
@@ -79,9 +80,16 @@ void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
     /* Record start time for timeout detection */
     start_time = TIME_$CLOCKH;
 
-    /* Check if current process is a server (type 9) */
-    is_server_proc = (((uint16_t *)PROC1_$TYPE)[(int16_t)(PROC1_$CURRENT)] == 9)
-                     ? (int8_t)-1 : 0;
+    /* 0x00E4D11A-0x00E4D12E: `cmpi.w #0x9,(-0x2,A1,D0w*1)` with
+     * A1 = 0xE2612C and D0w = 2 * PROC1_$CURRENT, i.e. the word at
+     * 0xE2612A + 2*PROC1_$CURRENT - the same cell every other PROC1_$TYPE
+     * site in the tree reaches as PROC1_$TYPE[PROC1_$CURRENT] off the
+     * 0xE2612A base proc1.h declares (dir/lock_obj.c 0x00E4AFBC,
+     * dir/alloc_handle.c 0x00E4B898, dir/do_op.c 0x00E4C05E).
+     * `seq` makes the Domain boolean. */
+    is_type9_proc =
+        (((uint16_t *)PROC1_$TYPE)[(int16_t)PROC1_$CURRENT] == 9)
+            ? (int8_t)-1 : 0;
 
     /* Main resolution loop */
     while (*cont <= path_len) {
@@ -118,9 +126,12 @@ void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
         /* This is a real component */
         depth++;
 
-        /* Timeout check for non-server processes after 2nd component */
-        if (is_server_proc >= 0 && depth >= 2) {
-            if (TIME_$CLOCKH - start_time > 0x14) {
+        /* 0x00E4D1A0: `tst.b D5b` / `bpl` skips the check unless the
+         * boolean is negative, i.e. unless the process IS type 9.
+         * 0x00E4D1A4: `cmpi.w #0x1,D2w` / `bls` skips it for the first
+         * component.  0x00E4D1B2: `cmpi.l #0x14,D0` / `bgt`. */
+        if (is_type9_proc < 0 && depth > 1) {
+            if ((int32_t)(TIME_$CLOCKH - start_time) > 0x14) {
                 *flags2 = 0xFF;
                 goto check_exit;
             }

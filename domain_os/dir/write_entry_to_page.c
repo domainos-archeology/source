@@ -27,8 +27,16 @@
  *   offset 0x10: start-of-free-space offset (decremented by aligned_size)
  *   offset 0x14: root page header extra size (only on root pages)
  *
+ * Only THREE of the parameters below are real arguments in the image -
+ * `flag` is the byte at A6+0x08, `page_ptr_ref` the longword at A6+0x0A and
+ * `count` the word at A6+0x0E.  `name_len`, `aligned_size` and
+ * `src_name_loc` are uplevel values read out of the PARENT frame
+ * (`move.l (A6),D3` at 0x00E4F114, then (-0x12,D3), (0x0A,D3) and (0x0E,D3));
+ * `ctx` is the grandparent frame (`movea.l (-0x4,A0),A3` at 0x00E4F118).
+ * The flattening makes all six explicit.
+ *
  * Parameters:
- *   ctx          - Shared insertion context (parent frame variables)
+ *   ctx          - Shared insertion context (grandparent frame variables)
  *   flag         - If negative (0xFF), use split_pages[page_count+2] for
  *                  internal page child pointer; if >= 0, use [page_count+1]
  *   page_ptr_ref - Pointer to page data pointer (e.g., &ctx->new_page)
@@ -103,9 +111,16 @@ void dir_$write_entry_to_page(dir_insert_ctx_t *ctx, uint8_t flag,
         goto name_copy;
     }
 
-    /* LEAF PAGE - set entry type from context */
-    entry[0] = (entry[0] & 0xF8) | (uint8_t)(ctx->entry_type & 7);
+    /* LEAF PAGE - set entry type from context.  0x00E4F172-0x00E4F17A:
+     * `andi.b #-0x8,(A2)` then `move.b (0x13,A3),D4b` / `or.b D4b,(A2)` -
+     * the WHOLE byte at ctx+0x13 (the low half of the entry_type word at
+     * ctx+0x12) is OR'ed in, so bits 3..7 of it survive into the entry. */
+    entry[0] = (uint8_t)((entry[0] & 0xF8) | (uint8_t)ctx->entry_type);
 
+    /* 0x00E4F17C-0x00E4F190: `subq.w #0x1,D0w` / `cmpi.w #0x4,D0w` / `bcc`
+     * admits types 1..4 only; the jump table at 0x00E4F194 sends them to
+     * 0x00E4F19C (CRASH_SYSTEM), 0x00E4F1AA, 0x00E4F1BC and 0x00E4F1D8,
+     * and every arm rejoins the shared tail at 0x00E4F214. */
     switch (entry[0] & 7) {
     case 1:
         /* Type 1 is invalid for leaf pages */
@@ -113,7 +128,8 @@ void dir_$write_entry_to_page(dir_insert_ctx_t *ctx, uint8_t flag,
         break;
 
     case 2: {
-        /* Type 2 - File reference: 8-byte UID + 4 bytes cleared */
+        /* 0x00E4F1AA-0x00E4F1BA, then the shared `clr.w (0x2,A2)` at
+         * 0x00E4F1D2 that type 3 falls into. */
         uint32_t *uid_ptr = (uint32_t *)ctx->uid;
         *(uint32_t *)(entry + 4) = uid_ptr[0];
         *(uint32_t *)(entry + 8) = uid_ptr[1];
@@ -125,7 +141,7 @@ void dir_$write_entry_to_page(dir_insert_ctx_t *ctx, uint8_t flag,
     }
 
     case 3: {
-        /* Type 3 - Hard link: 8-byte UID + 4-byte extra + 4 bytes cleared */
+        /* 0x00E4F1BC-0x00E4F1D6 */
         uint32_t *uid_ptr = (uint32_t *)ctx->uid;
         *(uint32_t *)(entry + 4) = uid_ptr[0];
         *(uint32_t *)(entry + 8) = uid_ptr[1];
@@ -137,7 +153,7 @@ void dir_$write_entry_to_page(dir_insert_ctx_t *ctx, uint8_t flag,
     }
 
     case 4:
-        /* Type 4 - Soft link: link_len + overflow_page + 6 bytes cleared */
+        /* 0x00E4F1D8-0x00E4F1EC */
         *(uint16_t *)(entry + 2) = (uint16_t)ctx->link_len;
         *(int16_t *)(entry + 4) = ctx->overflow_page;
         *(uint32_t *)(entry + 6) = 0;
@@ -168,7 +184,11 @@ name_copy:
                 } while (remaining != 0xFFFF);
             }
         } else {
-            /* Cross-page copy: name is on another page encoded in src_name_loc */
+            /* 0x00E4F24C-0x00E4F274: FIVE word arguments plus the Pascal
+             * result slot.  The sixth argument below is the uplevel
+             * ctx->handle the original reaches through the frame chain
+             * (`movea.l (A6),A0` / `movea.l (A0),A0` / `movea.l (-0x4,A0),A2`
+             * at 0x00E4F044 in the callee), made explicit by the flattening. */
             dir_$copy_name_cross_page(
                 ctx->handle,
                 (int16_t)(src_name_loc >> 10),        /* source page number */

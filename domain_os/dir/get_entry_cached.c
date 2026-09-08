@@ -47,7 +47,6 @@ static const uint32_t dir_$get_entry_rights_00e4cff6 = 0x00000001;
 
 /* 0x00E4B444, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
  * directory).  `pea (-0x1ab4,PC)` at 0x00E4CEF6. */
-static const int16_t dir_$get_entry_acl_opts_00e4b444 = 1;
 
 /* ACL rights parameters for cache hit path */
 
@@ -162,7 +161,7 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
     ACL_$RIGHTS(uid,
                 (boolean *)&dir_$get_entry_ignore_super_00e4cff4,
                 (uint32_t *)&dir_$get_entry_rights_00e4cff6,
-                (int16_t *)&dir_$get_entry_acl_opts_00e4b444, status_ret);
+                (int16_t *)&DIR_$CONST_ONE_W, status_ret);
     if (*status_ret == status_$ok) {
         return;
     }

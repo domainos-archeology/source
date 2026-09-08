@@ -19,12 +19,11 @@
 static int16_t dir_$set_protection_prot_type = 6;
 
 /*
- * Constant longword cell at 0xE4B33C, passed by reference as FILE_$PRIV_LOCK's
- * `acl_ctx` argument with `pea (-0x6fe0,PC)` at 0x00E5231A.  The image holds
- * 0x00000000, i.e. "no ACL context"; FILE_$PRIV_LOCK loads the pointer it
- * addresses at 0x00E5EDDE, so this too can never be NULL.
+ * `pea (-0x6fe0,PC)` at 0x00E5231A resolves to 0x00E4B33C - the NIL longword
+ * the whole DIR module shares as FILE_$PRIV_LOCK's `acl_ctx` argument.  It is
+ * DIR_$CONST_ZERO_L in dir/dir_data.c, not a copy local to this file;
+ * FILE_$PRIV_LOCK loads the pointer it addresses at 0x00E5EDDE.
  */
-static void *dir_$set_protection_acl_ctx = NULL;
 
 /*
  * DIR_$SET_PROTECTION - Set protection on a file
@@ -58,26 +57,10 @@ static void *dir_$set_protection_acl_ctx = NULL;
  *   status_ret - Output: status code
  */
 
-/* Offsets inside the 0xC4-byte server request, all relative to A6-0xE8. */
-typedef struct __attribute__((packed, aligned(2))) dir_$set_prot_request_t {
-    uint8_t   header[3];    /* 0x00: never written */
-    uint8_t   op;           /* 0x03: `move.b #0x52,(-0xe5,A6)` at 0x00E5224A */
-    uid_t     uid;          /* 0x04: 0x00E52252 */
-    uint16_t  pad_0c;       /* 0x0C: never written */
-    uint16_t  version;      /* 0x0E: 0x00E5225A, from DIR module base +0x20E2 */
-    uint8_t   gap[0x7E];    /* 0x10: never written */
-    uint32_t  prot[11];     /* 0x8E: 0x00E52262, 11 longwords */
-    uid_t     acl;          /* 0xBA: 0x00E5226E */
-    int16_t   type;         /* 0xC2: 0x00E52278, `move.w (A2),(-0x26,A6)` */
-} dir_$set_prot_request_t;
-
-_Static_assert(offsetof(dir_$set_prot_request_t, op)      == 0x03, "set_prot req.op");
-_Static_assert(offsetof(dir_$set_prot_request_t, uid)     == 0x04, "set_prot req.uid");
-_Static_assert(offsetof(dir_$set_prot_request_t, version) == 0x0E, "set_prot req.version");
-_Static_assert(offsetof(dir_$set_prot_request_t, prot)    == 0x8E, "set_prot req.prot");
-_Static_assert(offsetof(dir_$set_prot_request_t, acl)     == 0xBA, "set_prot req.acl");
-_Static_assert(offsetof(dir_$set_prot_request_t, type)    == 0xC2, "set_prot req.type");
-_Static_assert(sizeof(dir_$set_prot_request_t)            == 0xC4, "sizeof set_prot req");
+/* The 0xC4-byte server request is the shared dir_$do_op_request_t with the
+ * `set_prot` body variant (see dir/dir_internal.h): op at +0x03, uid at
+ * +0x04, version at +0x0E, then prot[11] at +0x8E, the ACL uid at +0xBA and
+ * the type word at +0xC2. */
 
 /* Protection types the local fallback path knows how to apply
  * (0x00E522B0-0x00E522C0). */
@@ -104,7 +87,7 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
     status_$t       lock_status;    /* A6-0x0F8 */
     uint32_t        dtv_buf[2];     /* A6-0x0F4 */
     uint32_t        lock_handle;    /* A6-0x0EC */
-    dir_$set_prot_request_t request; /* A6-0x0E8 */
+    dir_$do_op_request_t request;   /* A6-0x0E8 */
     Dir_$OpResponse response;       /* A6-0x020 */
     uid_t           temp_acl;       /* A6-0x008 */
     status_$t       status;
@@ -117,17 +100,17 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
     request.op = DIR_OP_SET_PROTECTION;
     request.uid.high = file_uid->high;
     request.uid.low  = file_uid->low;
-    request.version  = DAT_00e7fce2;
+    request.version  = DIR_$OP_REC(DIR_OP_SET_PROTECTION >> 1).version;
 
     src = (const uint32_t *)prot_buf;
-    dst = request.prot;
+    dst = request.body.set_prot.prot;
     for (i = 0x0A; i >= 0; i--) {
         *dst++ = *src++;
     }
 
-    request.acl.high = acl_uid->high;
-    request.acl.low  = acl_uid->low;
-    request.type     = *prot_type;
+    request.body.set_prot.acl_uid.high = acl_uid->high;
+    request.body.set_prot.acl_uid.low  = acl_uid->low;
+    request.body.set_prot.prot_type    = *prot_type;
 
     /*
      * 0x00E5227C-0x00E52294.  The fifth argument is the frame word at
@@ -142,7 +125,9 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
      * keep the C defined.
      */
     do_op_rcvd_len = 0;
-    DIR_$DO_OP(&request, DAT_00e7fce6, 0x14, &response, &do_op_rcvd_len);
+    DIR_$DO_OP(&request,
+               (int16_t)DIR_$OP_REC(DIR_OP_SET_PROTECTION >> 1).base_size,
+               0x14, &response, &do_op_rcvd_len);
 
     /* 0x00E52298-0x00E522AA */
     status = response.status;
@@ -178,7 +163,7 @@ void DIR_$SET_PROTECTION(uid_t *file_uid, void *prot_buf, uid_t *acl_uid,
     /* 0x00E5230A-0x00E52346: lock the file for the protection update. */
     FILE_$PRIV_LOCK(file_uid, PROC1_$AS_ID, 0, DIR_SET_PROT_LOCK_MODE, 0,
                     DIR_SET_PROT_LOCK_FLAGS, 0x0000, 0, 0, 0,
-                    &dir_$set_protection_acl_ctx, DIR_SET_PROT_LOCK_WAIT,
+                    (void **)&DIR_$CONST_ZERO_L, DIR_SET_PROT_LOCK_WAIT,
                     &lock_handle, &lock_result, status_ret);
     if (*status_ret != status_$ok) {
         return;

@@ -54,36 +54,17 @@ void DIR_$GET_ENTRYU_FUN_00e4d460(uid_t *local_uid, char *name,
      * 0x8E + name_len + DIR_$GET_ENTRYU_REQ_LEN = 0x90 + name_len, exactly
      * through the end of the name.
      */
-    struct __attribute__((packed, aligned(2))) {
-        uint8_t   pad0[3];      /* +0x00: untouched request header bytes */
-        uint8_t   op;           /* +0x03 */
-        uid_t     uid;          /* +0x04 */
-        uint8_t   pad0c[2];     /* +0x0C: untouched */
-        uint16_t  parm;         /* +0x0E */
-        uint8_t   gap[0x7E];    /* +0x10..0x8D: untouched */
-        uint16_t  path_len;     /* +0x8E */
-        char      name_data[255];   /* +0x90 */
-    } request;
+    dir_$do_op_request_t request;
     Dir_$OpResponse response;
     /*
-     * Fields DIR_$GET_ENTRYU_FUN writes back through entry_ret (A3+0x14).
-     * Sources are all in the response payload:
-     *   +0x00 <- response+0x14   move.w (-0x14,A6),(A0)      0x00E4D4D8
-     *   +0x02 <- response+0x16   move.l (A0)+,(0x2,A1)       0x00E4D4E4
-     *   +0x06 <- response+0x1A   move.l (A0)+,(0x6,A1)       0x00E4D4E8
-     *   +0x0A <- response+0x1E   move.l (-0xa,A6),(0xa,A0)   0x00E4D4F0
-     *
-     * TODO(source-qgq): the four fields are copied verbatim at
-     * 0x00E4D4D4..0x00E4D4F4; their meaning is not recovered - f02/f06 are
-     * plausibly a UID pair, but no consumer of entry_ret has been decompiled
-     * yet to confirm it.
+     * DIR_$GET_ENTRYU_FUN writes back through entry_ret (A3+0x14) the same
+     * three fields the reply carries, in the dir_$old_entry_t layout:
+     *   +0x00 <- reply+0x14   move.w (-0x14,A6),(A0)      0x00E4D4D8
+     *   +0x02 <- reply+0x16   move.l (A0)+,(0x2,A1)       0x00E4D4E4
+     *   +0x06 <- reply+0x1A   move.l (A0)+,(0x6,A1)       0x00E4D4E8
+     *   +0x0A <- reply+0x1E   move.l (-0xa,A6),(0xa,A0)   0x00E4D4F0
      */
-    struct __attribute__((packed, aligned(2))) dir_$get_entryu_ret {
-        uint16_t f00;
-        uint32_t f02;
-        uint32_t f06;
-        uint32_t f0a;
-    } *entry = (struct dir_$get_entryu_ret *)entry_ret;
+    dir_$old_entry_t *entry = (dir_$old_entry_t *)entry_ret;
     /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument
      * (pea (-0x1ba,A6) at 0x00E4D4AC, the two bytes immediately below the
      * request buffer); it is REM_FILE_$SEND_REQUEST's `received_len`
@@ -91,30 +72,28 @@ void DIR_$GET_ENTRYU_FUN_00e4d460(uid_t *local_uid, char *name,
     uint16_t do_op_rcvd_len;
     int16_t i;
 
-    _Static_assert(__builtin_offsetof(__typeof__(request), op) == 0x03,
+    _Static_assert(__builtin_offsetof(dir_$do_op_request_t, op) == 0x03,
                    "get_entryu request.op");
-    _Static_assert(__builtin_offsetof(__typeof__(request), uid) == 0x04,
-                   "get_entryu request.uid");
-    _Static_assert(__builtin_offsetof(__typeof__(request), parm) == 0x0E,
-                   "get_entryu request.parm");
-    _Static_assert(__builtin_offsetof(__typeof__(request), path_len) == 0x8E,
+    _Static_assert(__builtin_offsetof(dir_$do_op_request_t, version) == 0x0E,
+                   "get_entryu request.version");
+    _Static_assert(__builtin_offsetof(dir_$do_op_request_t, body.name.path_len) == 0x8E,
                    "get_entryu request.path_len");
-    _Static_assert(__builtin_offsetof(__typeof__(request), name_data) == 0x90,
+    _Static_assert(__builtin_offsetof(dir_$do_op_request_t, body.name.name) == 0x90,
                    "get_entryu request.name_data");
-    _Static_assert(__builtin_offsetof(struct dir_$get_entryu_ret, f0a) == 0x0A,
-                   "get_entryu entry_ret.f0a");
+    _Static_assert(__builtin_offsetof(dir_$old_entry_t, extra) == 0x0A,
+                   "get_entryu entry_ret.extra");
 
     /* Copy name into request buffer (0x00E4D472..0x00E4D490) */
-    request.path_len = name_len;
+    request.body.name.path_len = name_len;
     for (i = 0; i < (int16_t)name_len; i++) {
-        request.name_data[i] = name[i];
+        request.body.name.name[i] = name[i];
     }
 
     /* Build the request (0x00E4D494..0x00E4D4AA) */
     request.op = DIR_OP_GET_ENTRYU_OP;
     request.uid.high = local_uid->high;
     request.uid.low = local_uid->low;
-    request.parm = DIR_$GET_ENTRYU_REQ_PARM;
+    request.version = DIR_$GET_ENTRYU_REQ_PARM;
 
     /*
      * Send the request.  Argument order and the two constants are taken
@@ -132,9 +111,9 @@ void DIR_$GET_ENTRYU_FUN_00e4d460(uid_t *local_uid, char *name,
 
     /* On success copy the entry fields out (0x00E4D4D2..0x00E4D4F6) */
     if (response.status == status_$ok) {
-        entry->f00 = response._20_2_;
-        entry->f02 = response._22_4_;
-        entry->f06 = response.f1a;
-        entry->f0a = response._24_4_;
+        entry->type = response.entry.word;
+        entry->uid.high = response.entry.uid.high;
+        entry->uid.low = response.entry.uid.low;
+        entry->extra = response.entry.extra;
     }
 }

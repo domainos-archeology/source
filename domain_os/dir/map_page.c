@@ -21,7 +21,7 @@
 
 #include "dir/dir_internal.h"
 
-/* DAT_00e4b444 and DAT_00e4b448 - MST remap parameters */
+/* DIR_$CONST_ONE_W and DAT_00e4b448 - MST remap parameters */
 
 void *dir_$map_page(void *handle, int16_t page_idx)
 {
@@ -78,7 +78,7 @@ void *dir_$map_page(void *handle, int16_t page_idx)
     status_$t status;
     uint32_t result;
     void *mapped_addr;
-    mapped_addr = MST_$REMAP_PRIVI(&DAT_00e4b444,
+    mapped_addr = MST_$REMAP_PRIVI(&DIR_$CONST_ONE_W,
                                     (uint32_t *)(slot_ptr + 0x24),
                                     &DAT_00e4b448,
                                     &map_addr,

@@ -1,9 +1,6 @@
 /*
  * DIR_$RESOLVE - Resolve a pathname relative to a directory
  *
- * Resolves a pathname string starting from a base directory UID.
- * Returns the resolved object's UID and type information.
- *
  * Original address: 0x00E4D356
  * Original size: 266 bytes
  */
@@ -11,125 +8,103 @@
 #include "dir/dir_internal.h"
 
 /*
- * Request structure for RESOLVE operation
- */
-typedef struct {
-    uint8_t   op;           /* Operation code: DIR_OP_RESOLVE (0x58) */
-    uint8_t   padding[3];
-    uid_t     start_uid;    /* Starting directory UID */
-    uint16_t  reserved;     /* Reserved field */
-    uint16_t  path_len;     /* Pathname length */
-    uid_t     base_uid;     /* Base UID (copy of start_uid) */
-    uid_t     resolved;     /* Resolved UID output location */
-    uint16_t  param5;       /* Resolution parameter 5 */
-    uint16_t  param6;       /* Resolution parameter 6 */
-    uint16_t  param7;       /* Resolution parameter 7 */
-    uint16_t  param8;       /* Resolution parameter 8 */
-    void     *flags;        /* Resolution flags */
-    /* Pathname data follows */
-} Dir_$ResolveRequest;
-
-/*
- * DIR_$RESOLVE - Resolve a pathname relative to a directory
+ * DIR_$RESOLVE (0x00E4D356)
  *
- * Iteratively resolves a pathname by calling DIR_$DO_OP with RESOLVE
- * operations. Handles symlinks and continuation by looping until
- * resolution is complete or an error occurs.
+ * Builds a DIR_OP_RESOLVE request and sends it through DIR_$DO_OP, looping
+ * while the reply asks for another round.  There is no legacy fallback.
  *
- * Parameters:
- *   pathname    - The pathname to resolve
- *   path_len    - Pointer to pathname length (max 1023)
- *   start_uid   - Starting directory UID (in/out - updated on partial resolution)
- *   resolved_uid - Output: UID of resolved object
- *   param5-8    - Various resolution parameters (updated on output)
- *   flags       - Resolution flags
- *   link_count  - Output: link nesting count
- *   status_ret  - Output: status code
+ * Frame: `link.w A6,-0x1f4` - request base A6-0x1F0, reply A6-0x40
+ * (0x34 bytes), received-length word A6-0x1F2.
+ *
+ * The pathname itself is NOT copied into the request: 0x00E4D3BA stores the
+ * caller's pointer at +0x8E.  The subject uid is written twice, once into
+ * the request header at +0x04 and once into the body at +0x94, and BOTH are
+ * rewritten on every loop iteration (the loop head is 0x00E4D3C0).
+ *
+ * Parameters (A6+0x08..A6+0x30):
+ *   pathname     - pathname text (its address goes into the request)
+ *   path_len     - pointer to the pathname length (1..0x3FF)
+ *   start_uid    - in/out: directory to resolve from
+ *   resolved_uid - in/out: the resolved object
+ *   param5..8    - in/out words
+ *   flags        - resolution flags longword, by value, copied to +0xAC
+ *   link_count   - out: cleared on entry, reloaded from reply+0x2E
+ *   status_ret   - out: status code
  */
 void DIR_$RESOLVE(void *pathname, uint16_t *path_len, uid_t *start_uid,
                   uid_t *resolved_uid, uint16_t *param5, uint16_t *param6,
-                  uint16_t *param7, uint16_t *param8, void *flags,
+                  uint16_t *param7, uint16_t *param8, uint32_t flags,
                   uint16_t *link_count, status_$t *status_ret)
 {
-    struct {
-        uint8_t   op;
-        uint8_t   padding[3];
-        uid_t     uid1;
-        uint8_t   gap1[0x80];
-        uint16_t  plen;
-        uid_t     uid2;
-        uid_t     uid3;
-        uint16_t  p5;
-        uint16_t  p6;
-        uint16_t  p7;
-        uint16_t  p8;
-        void     *fl;
-    } request;
+    dir_$do_op_request_t request;
     Dir_$OpResponse response;
-    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
-     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
-     * (source-32ld). */
+    /* A6-0x1F2: DIR_$DO_OP's `received_len` out-parameter (source-32ld). */
     uint16_t do_op_rcvd_len;
-    uint16_t len;
+    uint16_t plen;
 
-    /* Initialize link count output */
+    /* 0x00E4D388: `clr.w (A0)` on the link-count cell. */
     *link_count = 0;
 
-    /* Validate pathname length */
-    len = *path_len;
-    if (len == 0 || len > DIR_MAX_PATH_LEN) {
-        *status_ret = status_$naming_invalid_pathname;
+    /* 0x00E4D38E-0x00E4D396: 1..0x3FF, unsigned. */
+    plen = *path_len;
+    if (plen == 0 || plen > DIR_MAX_LINK_LEN) {
+        *status_ret = status_$naming_invalid_link;
         return;
     }
 
-    /* Build initial request */
+    /* 0x00E4D3A4-0x00E4D3BA: the parts that are written once. */
     request.op = DIR_OP_RESOLVE;
-    request.plen = len;
-    /* Reserved field */
-    request.fl = flags;
+    request.version = DIR_$OP_REC(DIR_OP_RESOLVE >> 1).version;
+    request.body.resolve.flags = flags;
+    request.body.resolve.path_len = plen;
+    request.body.resolve.path_ptr = ARCH_PTR_TO_VA(pathname);
 
-    /* Resolution loop - continues until complete or error */
     do {
-        /* Copy UIDs to request */
-        request.uid1.high = start_uid->high;
-        request.uid1.low = start_uid->low;
-        request.uid2.high = start_uid->high;
-        request.uid2.low = start_uid->low;
-        request.uid3.high = resolved_uid->high;
-        request.uid3.low = resolved_uid->low;
-        request.p5 = *param5;
-        request.p6 = *param6;
-        request.p7 = *param7;
-        request.p8 = *param8;
+        /* 0x00E4D3C0: the loop head.  The subject uid goes into the request
+         * header at +0x04 ... */
+        request.uid.high = start_uid->high;
+        request.uid.low = start_uid->low;
+        /* 0x00E4D3CA: ... and again into the body at +0x94. */
+        request.body.resolve.start_uid.high = start_uid->high;
+        request.body.resolve.start_uid.low = start_uid->low;
+        /* 0x00E4D3D4 */
+        request.body.resolve.resolved_uid.high = resolved_uid->high;
+        request.body.resolve.resolved_uid.low = resolved_uid->low;
+        /* 0x00E4D3DE-0x00E4D3EE */
+        request.body.resolve.param5 = *param5;
+        request.body.resolve.param6 = *param6;
+        request.body.resolve.param7 = *param7;
+        request.body.resolve.param8 = *param8;
 
-        /* 0xE4D3F2: clr.b (-0x2c,A6) - response offset 0x14, the
-         * "resolution incomplete" byte, not the header byte at 0x02. */
+        /* 0x00E4D3F2: `clr.b (-0x2c,A6)` - reply+0x14, the "more" byte. */
         response.resolve.more = 0;
 
-        /* Send the request */
-        DIR_$DO_OP(&request.op, DAT_00e7fcfe, 0x34, &response, &do_op_rcvd_len);
+        /* 0x00E4D3F6-0x00E4D40A */
+        DIR_$DO_OP(&request,
+                   (int16_t)DIR_$OP_REC(DIR_OP_RESOLVE >> 1).base_size,
+                   0x34, &response, &do_op_rcvd_len);
 
-        /* Store status */
+        /* 0x00E4D412 */
         *status_ret = response.status;
 
-        /* 0xE4D418: tst.b (-0x2c,A6) / bpl - response offset 0x14. */
+        /* 0x00E4D418: `tst.b (-0x2c,A6)` / `bpl` - a non-negative "more"
+         * byte ends the walk, whatever the status says. */
         if (response.resolve.more >= 0) {
             return;
         }
 
-        /* 0xE4D41E-0xE4D44A: every output comes out of the resolve variant of
-         * the reply record; the offsets are 0x16, 0x1E, 0x26, 0x28, 0x2A, 0x2C
-         * and 0x2E respectively. */
+        /* 0x00E4D41E-0x00E4D44A */
         start_uid->high = response.resolve.start_uid.high;
         start_uid->low = response.resolve.start_uid.low;
         resolved_uid->high = response.resolve.resolved_uid.high;
         resolved_uid->low = response.resolve.resolved_uid.low;
+        *link_count = response.resolve.link_count;
         *param5 = response.resolve.param5;
         *param6 = response.resolve.param6;
         *param7 = response.resolve.param7;
         *param8 = response.resolve.param8;
-        *link_count = response.resolve.link_count;
 
-        /* 0xE4D44E: tst.b (-0x2b,A6) / bmi - response offset 0x15. */
+        /* 0x00E4D44E: `tst.b (-0x2b,A6)` / `bmi` - reply+0x15, the "loop"
+         * byte; negative means go round again. */
     } while (response.resolve.loop < 0);
 }

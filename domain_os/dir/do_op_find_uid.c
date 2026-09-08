@@ -20,7 +20,7 @@
  * If the add fails with name_already_exists, removes and retries.
  *
  * Entry name case folding (uppercase to lowercase) is applied to remote
- * results using the PTR_DAT_00e4cd84 bitmap.
+ * results using the DIR_$CASE_FOLD_BITMAP bitmap.
  *
  * Parameters:
  *   uid        - Directory UID to search
@@ -50,7 +50,7 @@
 
 /* Case folding bitmap */
 
-/* DAT_00e4dffc - NUL byte name for dir_$find_entry */
+/* DIR_$READU_NUL_NAME - NUL byte name for dir_$find_entry */
 
 void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
                          void *name_ret, void *len_ret, void *uid_ret,
@@ -77,14 +77,12 @@ void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
     void *find_ret;
     status_$t local_status;
 
-    /* Remote lookup result buffer */
-    uint8_t result_buf[2];
-    uint16_t result_name_len;
-    uint8_t result_name[32];
-    uint8_t result_extra[8];
-    uint32_t result_node_id;
-    uint32_t result_uid_high;
-    uint32_t result_uid_low;
+    /* A6-0x48: the ONE record REM_NAME_$FIND_UID / REM_NAME_$FIND_NETWORK
+     * fill in (`pea (-0x48,A6)` at 0x00E4E632 and 0x00E4E65A). */
+    dir_$find_uid_result_t result;
+    /* A6-0x86: a two-byte cell of its own, dir_$do_op_add_entry's tenth
+     * argument (`pea (-0x86,A6)` at 0x00E4E6AC and 0x00E4E706). */
+    uint8_t add_entry_arg10[2];
     uint8_t drop_buf[16];
 
     ACL_$ENTER_SUPER();
@@ -101,27 +99,27 @@ void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
     search_uid_low = target_uid->low;
 
     {
-        uint16_t remap_count = *(int16_t *)(a5 + 0x155A) - 1;
-        if ((int32_t)((uint32_t)remap_count << 16) >= 0) {
-            int16_t ri = 1;
-            char *remap_base = a5;
-            do {
-                if (target_uid->high == *(uint32_t *)(remap_base + 8 + 0x1594) &&
-                    target_uid->low == *(uint32_t *)(remap_base + 8 + 0x1598)) {
-                    char *slot = a5 + ri * 8;
-                    search_uid_high = *(uint32_t *)(slot + 0x1554);
-                    search_uid_low = *(uint32_t *)(slot + 0x1558);
-                    break;
-                }
-                ri++;
-                remap_count--;
-                remap_base += 8;
-            } while (remap_count != 0xFFFF);
+        /* The mount tables are ONE-BASED - see DIR_MOUNT_UID_TAB_OFF. */
+        int16_t remaining =
+            (int16_t)(DIR_MOUNT_COUNT16(a5) - 1);
+        int16_t n;
+
+        for (n = 1; remaining >= 0; n++, remaining--) {
+            if (target_uid->high ==
+                    *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8) &&
+                target_uid->low ==
+                    *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8 + 4)) {
+                search_uid_high =
+                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8);
+                search_uid_low =
+                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8 + 4);
+                break;
+            }
         }
     }
 
     /* Find the first entry in the B-tree */
-    dir_$find_entry((void *)local_handle[0], &DAT_00e4dffc, 1,
+    dir_$find_entry((void *)local_handle[0], &DIR_$READU_NUL_NAME, 1,
                     0x20, &find_ret, extra_array + 2, &depth);
 
     /* Map the starting page */
@@ -216,28 +214,28 @@ found_entry:
                 /* find_net: query remote nodes */
                 uint32_t net_mask = target_uid->low & 0xFFFFF;
                 REM_NAME_$FIND_NETWORK(uid, &net_mask,
-                                       result_buf, status_ret);
+                                       &result, status_ret);
             } else {
                 /* find_uid: query remote */
-                REM_NAME_$FIND_UID(uid, target_uid, result_buf, status_ret);
+                REM_NAME_$FIND_UID(uid, target_uid, &result, status_ret);
             }
 
             if (*status_ret == status_$ok) {
                 /* Case-fold the returned name (uppercase -> lowercase) */
                 {
-                    uint16_t ci = result_name_len - 1;
+                    uint16_t ci = result.name_len - 1;
                     if ((int32_t)((uint32_t)ci << 16) >= 0) {
                         int16_t j = 1;
                         do {
-                            uint8_t ch = result_name[j - 1];
+                            uint8_t ch = result.name[j - 1];
                             uint16_t char_val = (uint16_t)ch;
                             int16_t offset = 0x5F - char_val;
 
                             if (char_val < 0x60 && offset >= 0) {
                                 uint16_t byte_idx = (uint16_t)offset >> 3;
-                                if ((*(&PTR_DAT_00e4cd84 + byte_idx) &
+                                if ((*(&DIR_$CASE_FOLD_BITMAP + byte_idx) &
                                     (1 << (ch & 7))) != 0) {
-                                    result_name[j - 1] = ch + 0x20;
+                                    result.name[j - 1] = ch + 0x20;
                                 }
                             }
                             j++;
@@ -246,32 +244,33 @@ found_entry:
                     }
                 }
 
-                /* Add entry to local directory cache */
-                dir_$do_op_add_entry(uid, 0, result_name, result_name_len,
-                                     3, result_node_id, result_extra,
+                /* 0x00E4E6A8-0x00E4E6CE: eleven arguments; the tenth is the
+                 * A6-0x86 cell, NOT the REM_NAME result record. */
+                dir_$do_op_add_entry(uid, 0, result.name, result.name_len,
+                                     3, result.node_id, result.extra,
                                      0, (uint32_t)(uintptr_t)dir_$find_entry,
-                                     result_buf, &local_status);
+                                     add_entry_arg10, &local_status);
 
                 if (local_status == status_$name_already_exists) {
                     /* Remove stale entry and retry */
-                    dir_$do_op_drop_entry(uid, 0, result_name, result_name_len,
+                    dir_$do_op_drop_entry(uid, 0, result.name, result.name_len,
                                           3, drop_buf, &local_status);
-                    dir_$do_op_add_entry(uid, 0, result_name, result_name_len,
-                                         3, result_node_id, result_extra,
+                    dir_$do_op_add_entry(uid, 0, result.name, result.name_len,
+                                         3, result.node_id, result.extra,
                                          0, (uint32_t)(uintptr_t)dir_$find_entry,
-                                         result_buf, &local_status);
+                                         add_entry_arg10, &local_status);
                 }
 
                 /* Return results */
                 if (flag < 0) {
-                    *extra_ret = result_node_id;
+                    *extra_ret = result.node_id;
                 } else {
-                    *name_len_ret = result_name_len;
+                    *name_len_ret = result.name_len;
                     uint16_t ci = *name_len_ret - 1;
                     if ((int32_t)((uint32_t)ci << 16) >= 0) {
                         int16_t j = 1;
                         do {
-                            *(uint8_t *)(name_buf + j - 1) = result_name[j - 1];
+                            *(uint8_t *)(name_buf + j - 1) = result.name[j - 1];
                             j++;
                             ci--;
                         } while (ci != 0xFFFF);

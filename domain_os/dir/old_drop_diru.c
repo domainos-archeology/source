@@ -25,12 +25,13 @@
  * 9. If remote: drop via REM_FILE, else: delete object locally
  * 10. Fix root entry and clean up
  *
- * Parameters:
- *   parent_uid - UID of parent directory
- *   name       - Name of directory to drop (also used as param_2/name ptr)
- *   name_high  - High part of name length (legacy calling convention)
- *   name_low   - Low part of name length (legacy calling convention)
- *   status_ret - Output: status code
+ * Frame: `link.w A6,-0x80`, A5 = 0xE7FD24 (the shared NAME/DIR block).
+ *
+ * Parameters (A6+0x08..A6+0x14) - FOUR of them:
+ *   parent_uid - UID of the parent directory
+ *   name       - name of the directory to drop
+ *   name_len   - pointer to the name length
+ *   status_ret - out: status code
  */
 /*
  * Constant cells for the two ACL_$RIGHTS calls (0x00E573A6 and 0x00E573D2),
@@ -57,23 +58,20 @@ static const uint32_t dir_$old_drop_diru_dir_rights_00e5755e = 0x00000040;
  * 0x00E573C2. */
 static const int16_t dir_$old_drop_diru_acl_opts_00e54b26 = 1;
 
-void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
-                        uint16_t *name_low, status_$t *status_ret)
+void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
+                        status_$t *status_ret)
 {
-    /* Local variables matching Ghidra decompilation */
-    int16_t entry_type;           /* local_6c - entry type from GET_ENTRYU */
-    uint32_t entry_uid_high;      /* uStack_6a */
-    uint32_t entry_uid_low;       /* uStack_66 */
-    uid_t dir_uid;                /* local_54 - UID of directory to drop */
+    /* A6-0x68: the record DIR_$OLD_GET_ENTRYU fills in. */
+    dir_$old_entry_t entry;
+    uid_t dir_uid;                /* A6-0x50: UID of the directory to drop */
     /* A6-0x48: the 0x20-byte object-location record.  The directory UID
      * goes in at +0x08 (0x00E5749C) and bit 6 of the flags byte at +0x1D is
      * cleared (0x00E574A4 `bclr.b #6,(-0x2b,A6)`). */
     file_$obj_loc_t location_buf;
-    uint8_t entry_data[48];       /* entry buffer from GET_ENTRYU */
     uint32_t handle;              /* local_78 */
     uint32_t loc_buf1;            /* 0x00e574b2 pea (-0x70,A6) - never touched */
     uint32_t loc_buf2;            /* 0x00e574ae pea (-0x6c,A6) - aote+0x08 out */
-    uint8_t parsed_name[32];      /* auStack_24 */
+    char    parsed_name[32];      /* auStack_24 */
     uint16_t parsed_len[2];       /* local_7c */
     status_$t local_status;
     int16_t rights_result;
@@ -82,15 +80,15 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
     /* A6-0x7A: FILE_$DELETE_OBJ's word output (0x00E57516) */
     uint16_t delete_out;
 
-    /* Step 1: Look up the entry */
-    DIR_$OLD_GET_ENTRYU(parent_uid, name, name_high,
-                        &entry_type, status_ret);
+    /* Step 1: 0x00E5736A-0x00E57376 */
+    DIR_$OLD_GET_ENTRYU(parent_uid, name, name_len, &entry, status_ret);
     if (*status_ret != status_$ok) {
+        /* 0x00E57380 leaves via 0x00E57554 - WITHOUT ACL_$EXIT_SUPER. */
         return;
     }
 
-    /* Step 2: Check entry type - reject links (type 3) */
-    if (entry_type == 3) {
+    /* Step 2: 0x00E57384 `cmpi.w #0x3,(-0x68,A6)` */
+    if (entry.type == 3) {
         *status_ret = status_$naming_invalid_link_operation;
         return;
     }
@@ -105,26 +103,32 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
         return;
     }
 
-    /* Extract UID from entry data */
-    /* The entry structure has UID at offsets matching uStack_6a/uStack_66 */
-    dir_uid.high = entry_uid_high;
-    dir_uid.low = entry_uid_low;
+    /* 0x00E573B4: the entry record's UID is copied out to A6-0x50. */
+    dir_uid.high = entry.uid.high;
+    dir_uid.low = entry.uid.low;
 
     /* Step 4: Check ACL rights on the directory to be dropped */
-    rights_result = ACL_$RIGHTS(&dir_uid,
+    rights_result = (int16_t)ACL_$RIGHTS(&dir_uid,
                                 (boolean *)&dir_$old_drop_diru_ignore_super_00e5716c,
                                 (uint32_t *)&dir_$old_drop_diru_dir_rights_00e5755e,
                                 (int16_t *)&dir_$old_drop_diru_acl_opts_00e54b26,
                                 status_ret);
+    /* 0x00E573DC-0x00E573E8: a returned word of 0x40 stores 0x00230002 and
+     * branches to 0x00E57400 - the `beq` there is decided by the flags the
+     * `move.l #0x230002,(A2)` left (non-zero), so control FALLS INTO the
+     * NAME_CONVERT_ACL_STATUS tail at 0x00E57402 rather than returning the
+     * raw status. */
     if (rights_result == 0x40) {
         *status_ret = status_$insufficient_rights_to_perform_operation;
+        NAME_CONVERT_ACL_STATUS(status_ret);
         return;
     }
-    /* Allow through if rights check returned no_right or insufficient_rights */
+    /* 0x00E573EA-0x00E573FC: these two ACL statuses are treated as success. */
     if (*status_ret == status_$no_right_to_perform_operation ||
         *status_ret == status_$insufficient_rights_to_perform_operation) {
         *status_ret = status_$ok;
     }
+    /* 0x00E573FE `tst.l (A2)` */
     if (*status_ret != status_$ok) {
         NAME_CONVERT_ACL_STATUS(status_ret);
         return;
@@ -137,12 +141,17 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
         return;
     }
 
-    /* Step 6: Check directory is empty */
-    /* Assembly: tst.w (0x16,A0) - test entry count at offset 0x16 of handle */
-    is_empty = (*((int16_t *)(handle + 0x16)) == 0) ? (int8_t)-1 : 0;
-    if (is_empty < 0) {
-        /* Clear the entry count field */
-        *((uint16_t *)(handle + 0x18)) = 0;
+    /* Step 6: 0x00E57426-0x00E5743A.  A0 is loaded from the handle cell
+     * BEFORE the status test, so the mapped directory is addressed even on
+     * the failure path; `tst.w (0x16,A0)` / `seq` makes the Domain boolean
+     * "the directory is empty", and only then is (0x18,A0) cleared. */
+    {
+        uint8_t *dir_page = (uint8_t *)ARCH_VA_TO_PTR(handle);
+
+        is_empty = (*(int16_t *)(dir_page + 0x16) == 0) ? (int8_t)-1 : 0;
+        if (is_empty < 0) {
+            *(uint16_t *)(dir_page + 0x18) = 0;
+        }
     }
 
     /* Release directory lock */
@@ -159,16 +168,19 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
         return;
     }
 
-    /* Step 7: Set default ACLs to NIL */
-    DIR_$OLD_SET_DEFAULT_ACL(&dir_uid, &ACL_$DIR_ACL,
-                             &ACL_$NIL, status_ret);
+    /* Step 7: 0x00E57454-0x00E5748C.  The FILE ACL is cleared first
+     * (`move.l #0xe17444` at 0x00E5745C) and the DIR ACL second
+     * (`move.l #0xe1744c` at 0x00E5747E); the third argument is the
+     * address of UID_$NIL (0xE1737C), not ACL_$NIL (0xE17384). */
+    DIR_$OLD_SET_DEFAULT_ACL(&dir_uid, &ACL_$FILE_ACL,
+                             &UID_$NIL, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;
     }
 
-    DIR_$OLD_SET_DEFAULT_ACL(&dir_uid, &ACL_$FILE_ACL,
-                             &ACL_$NIL, status_ret);
+    DIR_$OLD_SET_DEFAULT_ACL(&dir_uid, &ACL_$DIR_ACL,
+                             &UID_$NIL, status_ret);
     if ((int16_t)*status_ret != 0) {
         ACL_$EXIT_SUPER();
         return;
@@ -188,7 +200,7 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
     /* 0x00E574CE `tst.b (-0x2b,A6)` / bpl: the record's flags byte at +0x1D */
     if (location_buf.flags < 0) {
         /* Remote directory - use REM_FILE to drop */
-        valid = name_$validate_leaf(name, *name_high, parsed_name, parsed_len);
+        valid = name_$validate_leaf(name, *name_len, parsed_name, parsed_len);
         if (valid < 0) {
             REM_FILE_$DROP_HARD_LINKU(&location_buf.loc_info, parent_uid,
                                       parsed_name, parsed_len[0], 0, status_ret);
@@ -201,7 +213,7 @@ void DIR_$OLD_DROP_DIRU(uid_t *parent_uid, char *name, uint16_t *name_high,
         FILE_$DELETE_OBJ(&dir_uid, (int8_t)0xFF, &delete_out, status_ret);
         if (*status_ret == status_$ok) {
             /* Fix root entry */
-            name_$old_drop_entry(parent_uid, name, *name_high, 0, &dir_uid, status_ret);
+            name_$old_drop_entry(parent_uid, name, *name_len, 0, &dir_uid, status_ret);
         }
     }
 
