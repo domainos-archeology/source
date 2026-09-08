@@ -51,8 +51,13 @@ smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT] SMD_DISPLAY_INFO_SEC
  * Original address: 0x00E273D6, 6 bytes.  It is the object that immediately
  * follows SMD_DISPLAY_INFO's single entry, which is how that table's length
  * is pinned down.
+ *
+ * Placed in the SMD_WIRED code segment rather than .bss so that
+ * smd/sau2/blink_cursor_1.s's `lea (0x18e,PC),A1' at 0xE27248 - the image's
+ * own PC-relative reference to SMD_TIME_$COM + 2 - stays in R_68K_PC16 range
+ * (source-xlo9); see SMD_TIME_$COM_SECTION in smd/smd_internal.h.
  */
-smd_time_com_t SMD_TIME_$COM;
+smd_time_com_t SMD_TIME_$COM SMD_TIME_$COM_SECTION;
 
 /*
  * Display unit record initialisers, original address 0x00E173D4.

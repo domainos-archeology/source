@@ -161,11 +161,23 @@ SECTIONS {
          */
         */smd/sau2/disp1_int.o(.text)       /* SMD_$DISP1_INT      0xE26F20 */
         */smd/sau2/cursor_thunks.o(.text)   /* SMD_$XOR_CURSOR     0xE2720E */
-        */smd/blink_cursor_1.o(.text)       /* SMD_$BLINK_CURSOR_1 0xE2722C */
+        */smd/sau2/blink_cursor_1.o(.text)  /* SMD_$BLINK_CURSOR_1 0xE2722C */
+                                            /* SMD_$BLINK_CURSOR   0xE27280 */
         */smd/interrupt_init.o(.text)       /* SMD_$INTERRUPT_INIT 0xE27284 */
         */smd/sau2/scroll.o(.text)          /* SMD_$START_SCROLL   0xE272A8 */
         */smd/sau2/start_blt.o(.text)       /* SMD_$START_BLT      0xE272BC */
         *(.text.smd_display_info)           /* SMD_$DISPLAY_COM    0xE27376 */
+        /*
+         * SMD_TIME_$COM (0xE273D6, 6 bytes) closes the segment, immediately
+         * after SMD_$DISPLAY_COM's single 0x60-byte entry, and
+         * smd/sau2/blink_cursor_1.s reaches its `cursor_painted' byte the way
+         * the image does, with `lea (SMD_TIME_$COM+2:w,PC),A1' at 0xE27248 -
+         * an R_68K_PC16 displacement of only +0x18E.  Its definition carries
+         * SMD_TIME_$COM_SECTION (smd/smd_internal.h) so it is gathered here
+         * instead of landing in .bss, where that relocation overflowed
+         * (source-xlo9).
+         */
+        *(.text.smd_time_com)               /* SMD_TIME_$COM       0xE273D6 */
 
         *(.text .text.*)
     }

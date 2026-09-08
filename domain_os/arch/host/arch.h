@@ -87,6 +87,21 @@ static inline uint32_t ARCH_PTR_TO_VA_FN(const void *p)
 #define ARCH_PTR_TO_VA(p)  ARCH_PTR_TO_VA_FN((const void *)(p))
 
 /*
+ * ARCH_VECTOR / ARCH_AUTOVECTOR - CPU exception vector table entries
+ *
+ * See arch/m68k/arch.h.  There is no vector table on the host, so the entries
+ * are elements of an ordinary array a test program defines for itself:
+ *
+ *   void *arch_$vector_table[ARCH_VECTOR_COUNT];
+ *
+ * (the same arrangement as arch/host/intr.h's __host_intr_disable_count).
+ */
+#define ARCH_VECTOR_COUNT      256
+extern void *arch_$vector_table[ARCH_VECTOR_COUNT];
+#define ARCH_VECTOR(n)         (arch_$vector_table[(n)])
+#define ARCH_AUTOVECTOR(level) ARCH_VECTOR(24u + (level))
+
+/*
  * A5 Global Data Pointer - NOT AVAILABLE on host
  *
  * Code that uses __A5_BASE() must be guarded with #if defined(ARCH_M68K)

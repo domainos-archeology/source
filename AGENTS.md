@@ -149,7 +149,7 @@ bd sync               # Sync with git
 **MANDATORY WORKFLOW:**
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - in `domain_os/`: `make` (m68k build, `-Werror`; only unresolved-symbol link errors are expected) and `make test` (host build + run of every `<subsystem>/test/test_*.c`)
+2. **Run quality gates** (if code changed) - in `domain_os/`: `make clean && make` (m68k build from a clean tree, `-Werror`; only unresolved-symbol link errors are expected - incremental builds have hidden prototype mismatches across headers) and `make test` (host build + run of every `<subsystem>/test/test_*.c`)
 3. **Update issue status** - Close finished work, update in-progress items
 4. **COMMIT LOCALLY** - This is MANDATORY:
    ```bash

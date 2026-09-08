@@ -1209,6 +1209,24 @@ extern uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE +
 #define SMD_DISPLAY_INFO_SECTION
 #endif
 
+/*
+ * SMD_TIME_$COM_SECTION - the same technique for SMD_TIME_$COM (0xE273D6, 6
+ * bytes), the object that closes the SMD_WIRED segment immediately after
+ * SMD_DISPLAY_INFO's single 0x60-byte entry.
+ *
+ * smd/sau2/blink_cursor_1.s reaches its `cursor_painted' byte the way the
+ * image does, with `43 fa 01 8e  lea (0x18e,PC),A1' at 0xE27248 (0xE2724A +
+ * 0x18E = 0xE273D8 = SMD_TIME_$COM + 2).  Left in ordinary `.bss' that
+ * R_68K_PC16 relocation overflows exactly as SMD_DISPLAY_INFO's did
+ * (source-xlo9), so it gets a section of its own that sau2.ld emits directly
+ * after `.text.smd_display_info'.
+ */
+#if defined(ARCH_M68K)
+#define SMD_TIME_$COM_SECTION  __attribute__((section(".text.smd_time_com")))
+#else
+#define SMD_TIME_$COM_SECTION
+#endif
+
 extern smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 
 /*

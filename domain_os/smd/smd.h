@@ -624,9 +624,21 @@ void SMD_$READ_CRSR_BITMAP(void *bitmap, int16_t *cursor_num, uint16_t *width,
 /*
  * SMD_$BLINK_CURSOR_1 - Blink cursor (variant 1)
  *
- * Original address: 0x00E2722C
+ * Original address: 0x00E2722C (0x54 bytes).  Hand-written assembly, emitted
+ * as smd/sau2/blink_cursor_1.s: no frame, an "ori #0x700,SR" / "move (SP)+,SR"
+ * IPL-7 bracket around the body with the caller's SR pushed below the movem'd
+ * registers, and A5 loaded twice from two different `lea (d,PC)` and never
+ * read (bead source-vk6g).  Reached through smd_globals_t.blink_func.
  */
 void SMD_$BLINK_CURSOR_1(void);
+
+/*
+ * SMD_$BLINK_CURSOR - the SAU2 map's 4-byte entry at 0x00E27280, a plain
+ * "bsr.b SMD_$BLINK_CURSOR_1 / rts" thunk that nothing in the image calls.
+ * Emitted with the routine it wraps, in smd/sau2/blink_cursor_1.s, so the
+ * SMD_WIRED block stays contiguous through SMD_$INTERRUPT_INIT (0x00E27284).
+ */
+void SMD_$BLINK_CURSOR(void);
 
 /*
  * SMD_$BLINK_CURSOR_CALLBACK - Cursor blink callback

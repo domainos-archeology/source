@@ -20,6 +20,10 @@
  *   - Busy-wait primitive:
  *       ARCH_SPIN_TICK()        - one non-elidable delay-loop iteration
  *
+ *   - Exception vector table entries:
+ *       ARCH_VECTOR(n)          - lvalue for vector n's handler address
+ *       ARCH_AUTOVECTOR(level)  - lvalue for interrupt level 1..7's vector
+ *
  *   - Global data pointer:
  *       __A5_BASE()  (or a stub for non-M68K)
  *

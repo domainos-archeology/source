@@ -30,7 +30,7 @@ void SMD_$UNLOAD_FONT(uint16_t *slot_ptr, status_$t *status_ret)
     uint16_t slot;
     smd_font_entry_t *font_table;
     smd_font_v1_t *font;
-    uint16_t hdm_size;
+    uint16_t *hdm_size;
 
     /* 0x00e6dd2a-0x00e6dd36 */
     asid = PROC1_$AS_ID;
@@ -67,14 +67,23 @@ void SMD_$UNLOAD_FONT(uint16_t *slot_ptr, status_$t *status_ret)
      * argument to SMD_$FREE_HDM - the size is not copied into a local.
      */
     if (font->version == SMD_FONT_VERSION_3) {
-        hdm_size = *(uint16_t *)((uint8_t *)font + 0x42);
+        /* 0x00e6dd84 "pea (0x42,A4)" -> &smd_font_v3_t.hdm_size */
+        /* Reached by offset rather than &font3->hdm_size because
+         * smd_font_v3_t is a packed record and GCC will not hand out the
+         * address of a packed member; 0x42 is even, so the word is
+         * naturally aligned anyway. */
+        hdm_size = (uint16_t *)((uint8_t *)font +
+                                __builtin_offsetof(smd_font_v3_t, hdm_size));
     } else {
-        hdm_size = font->hdm_size;
+        /* 0x00e6dd90 "pea (0x6,A4)" -> &smd_font_v1_t.hdm_size */
+        hdm_size = &font->hdm_size;
     }
 
-    /* 0x00e6dd94: FREE_HDM(size, pos, status); the position is the font table
-     * entry's own hdm_pos field ("pea (-0x4,A3)"). */
-    SMD_$FREE_HDM(&hdm_size, &font_table[slot - 1].hdm_pos, status_ret);
+    /* 0x00e6dd94: FREE_HDM(size, pos, status); the size argument is that
+     * pointer INTO the font header ("pea (0x42,A4)" / "pea (0x6,A4)"), not the
+     * address of a local copy, and the position is the font table entry's
+     * own hdm_pos field ("pea (-0x4,A3)"). */
+    SMD_$FREE_HDM(hdm_size, &font_table[slot - 1].hdm_pos, status_ret);
 
     /* 0x00e6dd98 */
     font_table[slot - 1].font_ptr = NULL;

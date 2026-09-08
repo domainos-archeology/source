@@ -9,8 +9,18 @@
 
 #include "smd/smd_internal.h"
 
-/* Lock data for display acquisition */
-static const uint32_t clear_window_lock_data = 0x00E84958;
+/*
+ * The lock word SMD_$ACQ_DISPLAY is handed.  It is a cell of this module's
+ * own pointer block at 0x00E84958 (image bytes "00 01 00 00"), reached by
+ * "pea (0x24,A5)" at 0x00E706F2 with A5 = 0x00E84934 - the address the gate
+ * at 0x00E8495C leaves in A0 ("lea (-0x2a,PC),A0").  SMD_$ACQ_DISPLAY reads
+ * it as a word ("cmpi.w #0x1,(A2)" at 0x00E6EB92), so only the leading
+ * 00 01 is live; the trailing 00 00 is the cell's second word, which nothing
+ * reads.  The file used to declare a longword whose VALUE was 0x00E84958 and
+ * pass ITS address, so the callee compared the high half of the address
+ * (0x00E8) against 1.
+ */
+static const int16_t smd_$clear_window_lock_data = 1;
 
 /*
  * SMD_$CLEAR_WINDOW - Clear rectangular window
@@ -47,7 +57,7 @@ static const uint32_t clear_window_lock_data = 0x00E84958;
  *   00e706e8    move.l (A0),D7                  ; D7 = packed y coords
  *   00e706ea    movea.l (-0x18,A6),A2           ; A2 = ctx.display_base
  *   00e706ee    movea.l (-0x14,A6),A3           ; A3 = ctx.ctrl_regs
- *   00e706f2    pea (0x24,A5)                   ; push lock data
+ *   00e706f2    pea (0x24,A5)                   ; &smd_$clear_window_lock_data
  *   00e706f6    movea.l (0x18,A5),A0            ; A0 = ACQ_DISPLAY ptr
  *   00e706fa    jsr (A0)                        ; call ACQ_DISPLAY
  *   00e706fc    addq.w #0x4,SP
@@ -107,7 +117,7 @@ void SMD_$CLEAR_WINDOW(smd_rect_t *rect, status_$t *status_ret)
     y2 = (uint16_t)rect->y2;
 
     /* Acquire display for exclusive access */
-    control = SMD_$ACQ_DISPLAY((void *)&clear_window_lock_data);
+    control = SMD_$ACQ_DISPLAY((int16_t *)&smd_$clear_window_lock_data);
 
     /* Set pattern for clearing */
     ctx.ctrl_regs->pattern = SMD_BLT_PATTERN_CLEAR;

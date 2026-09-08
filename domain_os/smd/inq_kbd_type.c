@@ -60,10 +60,24 @@ void SMD_$INQ_KBD_TYPE(uint16_t *buf_size, uint8_t *buffer, uint16_t *length,
         copy_len = *buf_size;
     }
 
-    /* Copy result to caller's buffer */
+    /*
+     * Copy result to caller's buffer.
+     *
+     *   00e6e15e    subq.w #0x1,D0w        ; dbf count = copy_len - 1
+     *   00e6e160    bmi.b 0x00e6e170       ; nothing to copy
+     *   00e6e162    moveq #0x1,D1          ; Pascal 1-based index
+     *   00e6e164    move.b (-0x79,A6,D1w*0x1),(-0x1,A2,D1w*0x1)
+     *   00e6e16a    addq.w #0x1,D1w
+     *   00e6e16c    dbf D0w,0x00e6e164
+     *
+     * local_buf is at (-0x78,A6) and the caller's buffer at (A2), so with the
+     * index running 1..copy_len the two biased displacements (-0x79 and -0x1)
+     * address element i-1 of each: it is a straight buffer[i] = local_buf[i]
+     * copy, not a skip of the first byte.
+     */
     if (copy_len > 0) {
-        for (i = 0; i < copy_len; i++) {
-            buffer[i] = local_buf[i + 1];  /* Skip first byte */
+        for (i = 1; i <= (int16_t)copy_len; i++) {
+            buffer[i - 1] = local_buf[i - 1];
         }
     }
 

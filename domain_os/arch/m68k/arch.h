@@ -50,6 +50,21 @@
 #define ARCH_PTR_TO_VA(p)  ((uint32_t)(uintptr_t)(p))
 
 /*
+ * ARCH_VECTOR / ARCH_AUTOVECTOR - CPU exception vector table entries
+ *
+ * The SAU2 68020 runs with VBR = 0, so the exception vector table is the
+ * first 1KB of physical memory and vector n is the longword at n * 4.
+ * ARCH_AUTOVECTOR(level) names the level-1..7 autovector entries, which are
+ * vectors 25..31 (0x64..0x7C); SMD_$INTERRUPT_INIT's "move.l A0,(0x70).l"
+ * at 0x00E272A0 is ARCH_AUTOVECTOR(4).
+ *
+ * Both expand to an lvalue holding a routine address, so an installer writes
+ * ARCH_AUTOVECTOR(n) = &handler;
+ */
+#define ARCH_VECTOR(n)         (*(void *volatile *)((uintptr_t)(n) * 4u))
+#define ARCH_AUTOVECTOR(level) ARCH_VECTOR(24u + (level))
+
+/*
  * M68K Global Register Variables
  *
  * The A5 register is used as the global data pointer in Domain/OS.
