@@ -30,26 +30,49 @@
 /* NODE_$ME is declared in network/network.h */
 
 /*
- * Constant cells for the ACL_$RIGHTS call, pooled just past
- * FILE_$UNLOCK_PROC and addressed with `pea (d,PC)`
- * (PC = instruction address + 2).
+ * Constant cells pooled just past FILE_$UNLOCK_PROC's `rts` and addressed
+ * with `pea (d,PC)` (the PC used is the extension word, i.e. the instruction
+ * address + 2).  Image bytes, `gsk read 0xE60FD0 8`:
+ *
+ *   00e60fd0  00 00 00 00 00 00 00 08
+ *
+ * so 0x00E60FD0 is a zero byte/word, 0x00E60FD2 a zero word and 0x00E60FD4
+ * the longword 0x00000008.
  */
 
-/* 0x00E60FD0, byte 0x00: ACL_$RIGHTS' ignore_super argument (FALSE - the
- * super-user bypass applies).  `pea (0x116,PC)` at 0x00E60EB8. */
-static const boolean file_$unlock_proc_ignore_super_00e60fd0 = false;
-
-/* 0x00E60FD4, longword 0x00000008: the required rights mask.
- * `pea (0x11e,PC)` at 0x00E60EB4. */
-static const uint32_t file_$unlock_proc_rights_00e60fd4 = 0x00000008;
+/*
+ * 0x00E60FD0, byte 0x00.  ONE cell serving two callees, both of which read
+ * it as a Domain boolean byte:
+ *
+ *   `pea (0x156,PC)` at 0x00E60E78 -> 0x00E60E7A + 0x156 = 0x00E60FD0
+ *        PROC2_$FIND_ASID's second argument.  The callee tests it
+ *        `movea.l (0xc,A6),A0` / `tst.b (A0)` / `bpl` at 0x00E40756, so
+ *        FALSE asks for the plain ASID and skips the UPID indirection.
+ *        The tree used to pass nil here, which the callee would have
+ *        dereferenced.  (source-77ju)
+ *
+ *   `pea (0x116,PC)` at 0x00E60EB8 -> 0x00E60EBA + 0x116 = 0x00E60FD0
+ *        ACL_$RIGHTS' ignore_super argument (FALSE - the super-user bypass
+ *        applies).
+ */
+static boolean file_$unlock_proc_false_00e60fd0 = false;
 
 /* 0x00E60FD2, word 0x0000: ACL_$RIGHTS' option flags.
- * `pea (0x120,PC)` at 0x00E60EB0. */
-static const int16_t file_$unlock_proc_acl_opts_00e60fd2 = 0;
+ * `pea (0x120,PC)` at 0x00E60EB0 -> 0x00E60EB2 + 0x120. */
+static int16_t file_$unlock_proc_acl_opts_00e60fd2 = 0;
 
-/* Per-process lock count table */
-#define PROC_LOT_COUNT(asid) \
-    (*(uint16_t *)((uint8_t *)0xEA3DC4 + (asid) * 2))
+/* 0x00E60FD4, longword 0x00000008: the required rights mask.
+ * `pea (0x11e,PC)` at 0x00E60EB4 -> 0x00E60EB6 + 0x11E. */
+static uint32_t file_$unlock_proc_rights_00e60fd4 = 0x00000008;
+
+/*
+ * The per-process lock count is reached at 0x00E60EDC-0x00E60EE8 with
+ * `movea.l #0xea202c,A0` / `add.w D0w,D0w` / `lea (0x0,A0,D0w*0x1),A1` /
+ * `move.w (0x1d98,A1),D0w`, i.e. 0xEA202C + asid*2 + 0x1D98 =
+ * 0xEA3DC4 + asid*2 - which is FILE_$PROC_LOT_COUNT(asid) in
+ * file/file_internal.h (the absolute cell on ARCH_M68K, FILE_$LOCK_TABLE2 on
+ * a host build).  This file used to open-code the absolute address.
+ */
 
 /*
  * FILE_$UNLOCK_PROC - Unlock a file on behalf of a process
@@ -75,16 +98,21 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
         asid = PROC1_$AS_ID;
     } else {
         /* Find ASID for specified process */
-        asid = PROC2_$FIND_ASID(proc_uid, NULL, status_ret);
+        /* 0x00E60E76-0x00E60E88: three arguments, the middle one the zero
+         * byte cell at 0x00E60FD0. */
+        asid = PROC2_$FIND_ASID(proc_uid, (int8_t *)&file_$unlock_proc_false_00e60fd0,
+                                status_ret);
 
         if (*status_ret != status_$ok) {
-            /* If not found locally, check if it's this node */
+            /* 0x00E60E8E-0x00E60EA4: not found.  If the UID's node field names
+             * THIS node the search is over - 0x00E60EA0 branches to
+             * 0x00E60FC4, which is the `clr.l (A2)` the remote loop's tail
+             * shares. */
             if ((proc_uid->low & 0xFFFFF) == NODE_$ME) {
-                /* Process on this node - return success */
                 *status_ret = status_$ok;
                 return;
             }
-            /* Remote process - use asid=0 for remote search */
+            /* 0x00E60EA4 `clr.w D2w`: search the lock table for the node. */
             asid = 0;
         }
     }
@@ -96,11 +124,13 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
         /* 0x00E60EAE-0x00E60EBE.  None of these four arguments may be NULL:
          * ACL_$RIGHTS dereferences all of them. */
         ACL_$RIGHTS(file_uid,
-                    (boolean *)&file_$unlock_proc_ignore_super_00e60fd0,
-                    (uint32_t *)&file_$unlock_proc_rights_00e60fd4,
-                    (int16_t *)&file_$unlock_proc_acl_opts_00e60fd2,
+                    &file_$unlock_proc_false_00e60fd0,
+                    &file_$unlock_proc_rights_00e60fd4,
+                    &file_$unlock_proc_acl_opts_00e60fd2,
                     status_ret);
         if (*status_ret != status_$ok) {
+            /* 0x00E60ECC-0x00E60ED2: the failing status is handed to
+             * OS_PROC_SHUTWIRED and then returned unchanged. */
             OS_PROC_SHUTWIRED(status_ret);
             return;
         }
@@ -113,7 +143,10 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
         /*
          * Local process - iterate through its lock table
          */
-        count = PROC_LOT_COUNT(asid) - 1;
+        /* 0x00E60EE8-0x00E60EF0: `subq.w #1` then `bmi` - an empty table
+         * returns with the status untouched (it is still whatever
+         * PROC2_$FIND_ASID or ACL_$RIGHTS left, i.e. zero). */
+        count = (int16_t)FILE_$PROC_LOT_COUNT(asid) - 1;
         if (count < 0) {
             return;
         }
@@ -134,10 +167,20 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
                                     dtv_out,
                                     status_ret);
 
+            /* 0x00E60F16-0x00E60F1C */
             if (*status_ret != file_$object_not_locked_by_this_process) {
                 return;
             }
         }
+
+        /*
+         * 0x00E60F26 `bra.w 0x00E60FC6`: when the `dbf` counter runs out the
+         * image returns with the status STILL 0x000F0005 - it does not clear
+         * it.  The tree used to fall through to a trailing
+         * `*status_ret = status_$ok`, which reported success for a file that
+         * was never found in the process's table.  (source-77ju)
+         */
+        return;
     } else {
         /*
          * Remote process - iterate through lock entries looking for matching node
@@ -187,22 +230,26 @@ void FILE_$UNLOCK_PROC(uid_t *proc_uid, uid_t *file_uid, uint16_t *lock_mode,
                                                 dtv_out,
                                                 status_ret);
 
+                        /* 0x00E60FAC-0x00E60FB4: only 0x000F0005 is turned
+                         * into "keep going". */
                         if (*status_ret == file_$object_not_locked_by_this_process) {
                             *status_ret = status_$ok;
                         }
                     }
                 }
             }
+            /* 0x00E60FB6-0x00E60FB8: any non-zero status ends the walk. */
         } while (*status_ret == status_$ok);
 
         /*
-         * Map "not locked" to success (finished iteration)
+         * 0x00E60FBC-0x00E60FC4: exactly ONE status is forgiven here -
+         * 0x000F000C, the code FILE_$READ_LOCK_ENTRYI reports when the walk
+         * runs off the end of the table.  Every other status is returned as
+         * it stands; there is no trailing `clr.l (A2)` in the image.
+         * (source-77ju)
          */
         if (*status_ret == file_$obj_not_locked_by_this_process) {
             *status_ret = status_$ok;
-            return;
         }
     }
-
-    *status_ret = status_$ok;
 }
