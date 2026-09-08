@@ -38,9 +38,13 @@ void SMD_$GET_IDM_EVENT(uint16_t *event_type, smd_idm_event_t *idm_data,
     /* Get event from underlying queue */
     SMD_$GET_UNIT_EVENT(event_type, (void *)&unit_event, status_ret);
 
-    /* Copy base event data (first 10 bytes) */
-    idm_data->timestamp = unit_event.timestamp;
-    idm_data->field_04 = unit_event.field_04;
+    /* Copy base event data (first 10 bytes).  smd_unit_event_t's first
+     * longword is the packed cursor position and its second is the
+     * timestamp; smd_idm_event_t's field names still carry the old,
+     * one-longword-shifted spelling (bead source-v5vu renamed only the unit
+     * record, which is the one SMD_$GET_UNIT_EVENT fills). */
+    idm_data->timestamp = unit_event.pos;
+    idm_data->field_04 = unit_event.timestamp;
     idm_data->field_08 = unit_event.field_08;
 
     /* Handle event type-specific data conversion */

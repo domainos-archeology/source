@@ -777,17 +777,26 @@ _Static_assert(__builtin_offsetof(smd_idm_event_t, field_08) == 0x08, "smd_idm_e
  * Unit event data structure (14 bytes)
  * Returned by SMD_$GET_UNIT_EVENT
  */
+/*
+ * SMD_$GET_UNIT_EVENT copies the queue entry's first four fields into this
+ * record at the SAME offsets (0x00E6EEEA-0x00E6EEFC), so the first longword
+ * is the entry's packed cursor position and the second is its timestamp -
+ * the names here used to be shifted by one longword (bead source-v5vu).
+ * The 0x0C word is written only by the jump-table arms that have data for
+ * it; on the arms that fall straight through to 0x00E6EF68 it is left
+ * holding whatever was on the stack.
+ */
 typedef struct smd_unit_event_t {
-  uint32_t timestamp;      /* 0x00: Event timestamp */
-  uint32_t field_04;       /* 0x04: Unknown */
+  uint32_t pos;            /* 0x00: packed cursor position (y<<16 | x) */
+  uint32_t timestamp;      /* 0x04: TIME_$CLOCK value */
   uint16_t field_08;       /* 0x08: Unknown */
   uint16_t unit;           /* 0x0A: Display unit */
   uint16_t button_or_char; /* 0x0C: Button state or character */
 } smd_unit_event_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
-_Static_assert(__builtin_offsetof(smd_unit_event_t, timestamp) == 0x00, "smd_unit_event_t.timestamp");
-_Static_assert(__builtin_offsetof(smd_unit_event_t, field_04) == 0x04, "smd_unit_event_t.field_04");
+_Static_assert(__builtin_offsetof(smd_unit_event_t, pos) == 0x00, "smd_unit_event_t.pos");
+_Static_assert(__builtin_offsetof(smd_unit_event_t, timestamp) == 0x04, "smd_unit_event_t.timestamp");
 _Static_assert(__builtin_offsetof(smd_unit_event_t, field_08) == 0x08, "smd_unit_event_t.field_08");
 _Static_assert(__builtin_offsetof(smd_unit_event_t, unit) == 0x0A, "smd_unit_event_t.unit");
 _Static_assert(__builtin_offsetof(smd_unit_event_t, button_or_char) == 0x0C, "smd_unit_event_t.button_or_char");

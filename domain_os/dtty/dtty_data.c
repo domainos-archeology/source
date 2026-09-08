@@ -29,6 +29,18 @@ uint16_t DTTY_$DISP_TYPE = 0;
 uint16_t DTTY_$CTRL = 0;
 
 /*
+ * Module-local flag bytes at 0x00E2E010 and 0x00E2E012.
+ *
+ * DTTY_$INIT is the only code in this image that touches either
+ * (`clr.b (0x4,A2)` at 0x00E34BF6 and `st (0x6,A2)` at 0x00E34BF2 with
+ * A2 = 0xE2E00C); the SAU2 map gives the DTTY data segment at E2E00C a size
+ * of 0xC and names no symbol at these two offsets, so the names here are
+ * module-local (bead source-4km0).
+ */
+int8_t DTTY_FLAG_04 = 0;
+int8_t DTTY_FLAG_06 = 0;
+
+/*
  * Display TTY active flag
  * 0xFF = use display TTY, 0x00 = disabled
  * Original address: 0x00E2E014

@@ -60,6 +60,63 @@ typedef union smd_$pos_t {
 
 /*
  * ============================================================================
+ * Pointing-Device Data Packet
+ * ============================================================================
+ * One entry of the terminal driver's tpad queue.  TERM_$ENQUEUE_TPAD hands
+ * TPAD_$DATA the address of a 16-byte slot: 0x00E7248E "lsl.w #0x4,D0w" then
+ * 0x00E72490 "pea (0x4,A3,D0w*0x1)".
+ *
+ * Field evidence, all from TPAD_$DATA's own accesses:
+ *   0x00  elapsed     `cmpi.l #0x1e848,(A1)` 0x00E6951C and
+ *                     `cmpi.l #0x7a12,(A1)` 0x00E695D6, both with UNSIGNED
+ *                     branches (bls / shi); cleared with `clr.l (A1)` at
+ *                     0x00E6975E once the packet has been consumed.
+ *   0x04  clock_high  `move.l (0x4,A1),(0x164,A5)` 0x00E6967E
+ *   0x08  clock_low   `move.w (0x8,A1),(0x168,A5)` 0x00E69684
+ *                     Together the 48-bit Domain clock: its low 32 bits are
+ *                     read as one longword at +0x06 (0x00E69640).
+ *   0x0A  dev_id      `move.b (0xa,A1),D0b` 0x00E691DC
+ *   0x0B  flags       `and.b (0xb,A1),..`   0x00E691F0 / 0x00E6921C /
+ *                     0x00E692A4 / 0x00E693BA / 0x00E693DC
+ *   0x0C  b0          `move.b (0xc,A1),..`  0x00E69228 (mouse dx),
+ *                     0x00E69372 (bitpad x low), 0x00E693E0 (touchpad)
+ *   0x0D  b1          `move.b (0xd,A1),..`  0x00E692AC (mouse dy),
+ *                     0x00E6936E (bitpad x high), 0x00E693F6 (touchpad)
+ *   0x0E  b2          `move.b (0xe,A1),D5b` 0x00E69386 (bitpad y low)
+ *   0x0F  b3          `move.b (0xf,A1),D3b` 0x00E69382 (bitpad y high)
+ *
+ * Packed so the 48-bit clock keeps its six-byte m68k layout on a host where
+ * a uint32/uint16 pair would otherwise be padded to eight.
+ */
+typedef struct __attribute__((packed)) tpad_$data_packet_t {
+    uint32_t    elapsed;        /* 0x00: microseconds since the last packet */
+    uint32_t    clock_high;     /* 0x04: upper 32 bits of the 48-bit clock */
+    uint16_t    clock_low;      /* 0x08: lower 16 bits of the 48-bit clock */
+    uint8_t     dev_id;         /* 0x0a: 0xDF mouse, 0x01 bitpad, else touchpad */
+    uint8_t     flags;          /* 0x0b: buttons / overflow bits */
+    uint8_t     b0;             /* 0x0c: device-specific data byte */
+    uint8_t     b1;             /* 0x0d: device-specific data byte */
+    uint8_t     b2;             /* 0x0e: device-specific data byte */
+    uint8_t     b3;             /* 0x0f: device-specific data byte */
+} tpad_$data_packet_t;
+
+_Static_assert(__builtin_offsetof(tpad_$data_packet_t, clock_high) == 0x04,
+               "tpad_$data_packet_t.clock_high");
+_Static_assert(__builtin_offsetof(tpad_$data_packet_t, clock_low) == 0x08,
+               "tpad_$data_packet_t.clock_low");
+_Static_assert(__builtin_offsetof(tpad_$data_packet_t, dev_id) == 0x0A,
+               "tpad_$data_packet_t.dev_id");
+_Static_assert(__builtin_offsetof(tpad_$data_packet_t, flags) == 0x0B,
+               "tpad_$data_packet_t.flags");
+_Static_assert(__builtin_offsetof(tpad_$data_packet_t, b0) == 0x0C,
+               "tpad_$data_packet_t.b0");
+_Static_assert(__builtin_offsetof(tpad_$data_packet_t, b3) == 0x0F,
+               "tpad_$data_packet_t.b3");
+_Static_assert(sizeof(tpad_$data_packet_t) == 0x10,
+               "tpad_$data_packet_t is one 16-byte queue slot");
+
+/*
+ * ============================================================================
  * Per-Unit Device Configuration
  * ============================================================================
  * Each display unit can have independent pointing device settings.
@@ -163,7 +220,7 @@ void TPAD_$INIT(void);
  *
  * Original address: 0x00E691BC
  */
-void TPAD_$DATA(uint32_t *packet);
+void TPAD_$DATA(tpad_$data_packet_t *packet);
 
 /*
  * TPAD_$SET_MODE - Set pointing device mode

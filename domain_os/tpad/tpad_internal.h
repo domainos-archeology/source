@@ -57,6 +57,18 @@ extern int16_t tpad_$unit_num_for_init;
 /* Get pointer to unit configuration (1-indexed) */
 #define TPAD_$UNIT_CONFIG(unit) (&tpad_$unit_configs[(unit) - 1])
 
+/*
+ * The packed cursor position TPAD_$DATA hands SMD_$LOC_EVENT.
+ *
+ * `move.l (0x160,A5),-(SP)` at 0x00E6978A and 0x00E697A4 pushes the two
+ * words cursor_y (0x160) and cursor_x (0x162) as one big-endian longword, so
+ * Y is the high half.  Assembled with shifts rather than read through a
+ * longword pointer so a little-endian host produces the same value.
+ */
+#define TPAD_CURSOR_POS()                                                     \
+    ((uint32_t)(((uint32_t)(uint16_t)tpad_$cursor_y << 16) |                  \
+                (uint32_t)(uint16_t)tpad_$cursor_x))
+
 /* Validate unit number (returns true if valid) */
 #define TPAD_$VALID_UNIT(unit) ((unit) > 0 && (unit) <= SMD_$N_DEVICES())
 

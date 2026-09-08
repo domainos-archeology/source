@@ -27,13 +27,42 @@
  */
 
 /*
+ * DTTY module data block, 0x00E2E00C .. 0x00E2E017 (the SAU2 map's "D
+ * E2E00C DTTY size = C").  DTTY_$INIT reaches all of it through
+ * `movea.l #0xe2e00c,A2` at 0x00E34BE4:
+ *
+ *   +0x00  0x00E2E00C  DTTY_$DISP_TYPE  word, `move.w D0w,(A2)`
+ *   +0x02  0x00E2E00E  DTTY_$CTRL       word, map symbol
+ *   +0x04  0x00E2E010  DTTY_FLAG_04     byte, `clr.b (0x4,A2)` 0x00E34BF6
+ *   +0x06  0x00E2E012  DTTY_FLAG_06     byte, `st (0x6,A2)`    0x00E34BF2
+ *   +0x08  0x00E2E014  DTTY_$USE_DTTY   byte, map symbol
+ *
+ * The two flag bytes have no symbol in the map, so they are module-local
+ * names here.  They are written by DTTY_$INIT and by nothing else in this
+ * image (`gsk xrefs to 00e2e010` / `00e2e012` each list exactly that one
+ * WRITE), which is why they were missing from the C until bead source-4km0.
+ */
+extern int8_t DTTY_FLAG_04;   /* 0x00E2E010 */
+extern int8_t DTTY_FLAG_06;   /* 0x00E2E012 */
+
+/*
  * Hardware-specific display status registers
  *
  * These memory locations contain display status bits.
  * Bit 0 indicates display hardware presence.
+ *
+ * DTTY_$INIT reads them with `move.w (0x00fc0066).l,D0w` (0x00E34C20) and
+ * `move.w (0x00fdebe6).l,D0w` (0x00E34C3A).  The accessors go through
+ * ARCH_VA_TO_PTR - the identity cast on m68k - so a host test can point
+ * ARCH_HOST_VA_BASE at an arena and supply the register value.
  */
 #define DISP_15_STATUS_ADDR     0x00FC0066  /* 15" display status */
 #define DISP_19_STATUS_ADDR     0x00FDEBE6  /* 19" display status */
+
+#define DTTY_DISP_STATUS_15() \
+    (*(volatile uint16_t *)ARCH_VA_TO_PTR(DISP_15_STATUS_ADDR))
+#define DTTY_DISP_STATUS_19() \
+    (*(volatile uint16_t *)ARCH_VA_TO_PTR(DISP_19_STATUS_ADDR))
 
 /*
  * Display unit number for SMD association
