@@ -62,8 +62,13 @@ int8_t dir_$old_find_entry(uint32_t handle, uint8_t *name, uint16_t name_len,
             /* Check if entry has a name (length byte at offset 0x11 is non-zero) */
             if (*(char *)(entry + 0x11) != 0) {
                 uint16_t entry_name_len = (uint16_t)(uint8_t)*(entry + 0x10);
-                /* Compare names using NAMEQ */
-                if (NAMEQ(name, &name_len, entry - 0x16 + 0x30, &entry_name_len) < 0) {
+                /*
+                 * Compare names using NAMEQ.  0x00E54BE8 pushes
+                 * `pea (-0x16,A2)` and A2 is this entry, so the name the
+                 * comparison sees starts 0x16 bytes BELOW the entry - there
+                 * is no further +0x30 (bead source-4hfp).
+                 */
+                if (NAMEQ(name, &name_len, entry - 0x16, &entry_name_len) < 0) {
                     /* Found in inline area */
                     *chain_level = 0;
                     *slot_idx = i;

@@ -505,6 +505,26 @@ _Static_assert(__builtin_offsetof(dir_page_hdr_t, heap_base) == 0x10, "dir_page_
 #endif
 
 /*
+ * dir_$page_path_t - one level of the root-to-leaf path dir_$find_entry
+ * records in its `extra` buffer
+ *
+ * dir_$remove_entry (0x00E50FC8) gives find_entry the buffer at A6-0x30 and
+ * then indexes it as `(-0x34,A6,D0*1)` with D0 = level*4 (0x00E510AC), and its
+ * nested helper reads both halves the same way (`(-0x34,A3,D3*1)` /
+ * `(-0x32,A3,D3*1)` at 0x00E50D7A / 0x00E50E14).  The base is therefore
+ * A6-0x34 and the array is 1-BASED: level N lives at buffer[N-1].
+ * dir_insert_ctx_t models the same pairs as path_page[]/path_entry[].
+ */
+typedef struct dir_$page_path_t {
+    uint16_t    page_no;        /* +0x00 */
+    uint16_t    entry_idx;      /* +0x02 */
+} dir_$page_path_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(dir_$page_path_t) == 4, "sizeof dir_$page_path_t");
+#endif
+
+/*
  * dir_insert_ctx_t - Shared context for dir_$insert_entry and helper functions
  *
  * In the original M68K code, this data lived in dir_$add_entry's stack frame
@@ -1247,10 +1267,11 @@ void dir_$write_def_prot(uint32_t handle, void *acl_type,
                          void *prot_data, void *src_acl_uid, char flush_flag,
                          status_$t *status_ret);
 
-/* dir_$remove_entry_from_page - Remove entry from its directory page
- * Original address: 0x00E50D5E
- */
-void dir_$remove_entry_from_page(int16_t slot_idx, status_$t *status_ret);
+/* dir_$remove_entry_from_page (0x00E50D5E) is a nested Pascal subprocedure of
+ * dir_$remove_entry: 0x00E5108E hands it the parent frame in A1 and it reaches
+ * every one of its working cells through that static link.  It is flattened
+ * into a file static in dir/remove_entry.c with explicit uplevel arguments, so
+ * it is deliberately NOT declared here. */
 
 /* dir_$set_default_acl_internal - Set default ACL on directory page
  *
@@ -1313,6 +1334,12 @@ uint32_t dir_$truncate_pages(void *handle, uint16_t new_page_count,
  *
  * Looks up a directory entry by name using B-tree binary search.
  * Returns negative (char < 0) if found, non-negative if not found.
+ *
+ * `flags` is really the CAPACITY of the `extra` path buffer, in
+ * dir_$page_path_t elements: 0x00E4CAE0 compares it against the level about
+ * to be recorded and calls CRASH_SYSTEM past it (0x00E4CB00).  The path is
+ * 1-based - level N is written at extra+(N-1)*4 (0x00E4CAEE / 0x00E4CAF4) -
+ * and `depth_ret` comes back holding the deepest level reached.
  *
  * Original address: 0x00E4C9E4
  * Size: 390 bytes
@@ -1879,9 +1906,11 @@ extern int16_t  DIR_$ATTR_REC_SIZE_W;
 extern uint32_t DAT_00e5609e;
 extern uint8_t DAT_00e560a2;
 extern uint8_t DAT_00e5609a;
-/* 0x00E564E2, longword 0x00000400: FILE_$FW_PARTIAL byte_count
- * (`move.l (A1),D2` at 0x00E5E6BC). */
-extern uint32_t DAT_00e564e2;
+/* DIR_$SET_DEF_ACL_FLUSH_LEN - 0x00E564E2, longword 0x00000400 (one page):
+ * the FILE_$FW_PARTIAL byte_count (`move.l (A1),D2` at 0x00E5E6BC) that
+ * DIR_$OLD_SET_DEFAULT_ACL hands over at 0x00E56446 (`pea (0x9a,PC)`).  It is
+ * the only reference to the cell.  Image bytes: 00 00 04 00. */
+extern uint32_t DIR_$SET_DEF_ACL_FLUSH_LEN;
 /* 0x00E5716A, word 0x0006: FILE_$SET_PROT prot_type
  * (`move.w (A4),D2w` at 0x00E5DF56). */
 /* 0x00E5716A, word 0x0006: FILE_$SET_PROT's protection type - "the
@@ -2108,6 +2137,41 @@ void dir_$purify_split_pages(dir_insert_ctx_t *ctx, status_$t *status_ret);
 void dir_$finalize_split(dir_insert_ctx_t *ctx, status_$t *status_ret);
 
 /*
+ * dir_$rep_entry_t - the record REM_NAME_$GET_ENTRY (0x00E4AD18) fills
+ *
+ * Recovered from DIR_$OLD_VALIDATE_ROOT_ENTRY's frame at A6-0x58
+ * (0x00E58102), which is the only consumer in this tree.  The fields it
+ * touches:
+ *   +0x02  the case-mapped name's length - UNMAP_CASE's in-length VAR
+ *          argument at 0x00E581AE (`pea (-0x56,A6)`)
+ *   +0x04  the case-mapped name itself - UNMAP_CASE's input at 0x00E581B2
+ *          (`pea (-0x54,A6)`); 0x20 bytes, the size the max-out-length cell
+ *          0x00E544AE names
+ *   +0x24  the object UID, compared against the local entry's at 0x00E58126
+ *          and handed to name_$old_add_entry at 0x00E581C4
+ *   +0x2C  the entry's extra longword, compared at 0x00E58138 and passed as
+ *          name_$old_add_entry's flags at 0x00E581C0
+ * The record runs A6-0x58..A6-0x29, i.e. 0x30 bytes.
+ */
+/* Every field already lands on its natural boundary, so the record needs no
+ * packing; the _Static_asserts below pin the offsets to the image's. */
+typedef struct dir_$rep_entry_t {
+    uint16_t hdr;               /* 0x00: not read by this caller */
+    uint16_t name_len;          /* 0x02 */
+    uint8_t  name[0x20];        /* 0x04 */
+    uid_t    uid;               /* 0x24 */
+    uint32_t extra;             /* 0x2C */
+} dir_$rep_entry_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(dir_$rep_entry_t, name_len) == 0x02, "dir_$rep_entry_t.name_len");
+_Static_assert(__builtin_offsetof(dir_$rep_entry_t, name) == 0x04, "dir_$rep_entry_t.name");
+_Static_assert(__builtin_offsetof(dir_$rep_entry_t, uid) == 0x24, "dir_$rep_entry_t.uid");
+_Static_assert(__builtin_offsetof(dir_$rep_entry_t, extra) == 0x2C, "dir_$rep_entry_t.extra");
+_Static_assert(sizeof(dir_$rep_entry_t) == 0x30, "sizeof dir_$rep_entry_t");
+#endif
+
+/*
  * ============================================================================
  * Constants in the DIR code region passed by reference (Pascal VAR args)
  * ============================================================================
@@ -2127,6 +2191,18 @@ extern uint32_t DAT_00e4b448;   /* 0xE4B448: longword 0x00008000 - MST_$REMAP_PR
                                  * so the cell is four bytes (bead source-wk2f). */
 extern const int32_t DAT_00e52040; /* 0xE52040: 0x00000400 - one page; FILE_$FW_PARTIAL byte
                                       count / FILE_$TRUNCATE length (defined in dir_data.c) */
+
+/*
+ * DIR_$OLD_LINK_TEXT_MAX - 0xE577F2, the word 0x0100 (256) sitting between the
+ * `rts` of DIR_$OLD_ADD_LINKU (0x00E577F0) and the `link` of
+ * DIR_$OLD_READ_LINKU (0x00E577F4).  Both routines reach it PC-relative and
+ * hand it over as the max_out_len VAR parameter of the case mappers:
+ *   0x00E57732  pea (0xbe,PC)    -> MAP_CASE   (DIR_$OLD_ADD_LINKU)
+ *   0x00E578D4  pea (-0xe4,PC)   -> UNMAP_CASE (DIR_$OLD_READ_LINKU)
+ * It is the size of the 256-byte link-text buffer both frames carry.
+ * Image bytes: 01 00.  (Ghidra label was DAT_00e577f2.)
+ */
+extern int16_t DIR_$OLD_LINK_TEXT_MAX;
 
 /*
  * DIR_$ADD_ENTRY_INTERNAL's two A5 cells - `move.w (0x2042,A5)` at

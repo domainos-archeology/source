@@ -27,9 +27,9 @@ static const boolean dir_$set_def_acl_ignore_super_00e54b28 = false;
  * `pea (0x2ec,PC)` at 0x00E561F0. */
 static const uint32_t dir_$set_def_acl_rights_00e564de = 0x00000008;
 
-/* 0x00E54B26, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
- * directory).  `pea (-0x16c8,PC)` at 0x00E561EC. */
-static const int16_t dir_$set_def_acl_acl_opts_00e54b26 = 1;
+/* The fourth ACL_$RIGHTS argument, `pea (-0x16c8,PC)` at 0x00E561EC, is the
+ * word 0x0001 at 0x00E54B26 - the same cell the ACL_$DEFAULT_ACL call at
+ * 0x00E562EA uses, declared as ACL_TYPE_DIR in name/name.h. */
 
 /*
  * DIR_$OLD_SET_DEFAULT_ACL - Legacy set default ACL
@@ -76,7 +76,7 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     ACL_$RIGHTS(dir_uid,
                 (boolean *)&dir_$set_def_acl_ignore_super_00e54b28,
                 (uint32_t *)&dir_$set_def_acl_rights_00e564de,
-                (int16_t *)&dir_$set_def_acl_acl_opts_00e54b26, status_ret);
+                &ACL_TYPE_DIR, status_ret);
     if (*status_ret != status_$ok) {
         NAME_CONVERT_ACL_STATUS(status_ret);
         return;
@@ -118,15 +118,23 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     if (info_len < 0x10) {
         if (acl_type->high == ACL_$DIR_ACL.high &&
             acl_type->low == ACL_$DIR_ACL.low) {
+            /* 0x00E562BE-0x00E562E8 */
             ACL_$DEFAULT_ACL(&default_acl, &NAME_$CONST_ZERO_W);
             info_buf[2] = default_acl.high; /* file ACL */
             info_buf[3] = default_acl.low;
+            /* 0x00E562DA: the slot this call is about to fill starts NIL */
+            info_buf[0] = ACL_$NIL.high;    /* dir ACL */
+            info_buf[1] = ACL_$NIL.low;
         } else {
+            /* 0x00E562EA-0x00E56312 */
             ACL_$DEFAULT_ACL(&default_acl, &ACL_TYPE_DIR);
             info_buf[0] = default_acl.high; /* dir ACL */
             info_buf[1] = default_acl.low;
+            /* 0x00E56306 */
+            info_buf[2] = ACL_$NIL.high;    /* file ACL */
+            info_buf[3] = ACL_$NIL.low;
         }
-        info_len = 0x10;
+        info_len = 0x10;                    /* 0x00E56314: moveq #0x10,D3 */
     }
 
     /* Set the appropriate ACL based on type */
@@ -192,7 +200,8 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
     }
     if (*status_ret != status_$file_object_not_found) {
         /* Error - set high bit */
-        *status_ret |= 0x80000000;  /* or.b #0x80 into the first (MSB) byte on m68k */
+        /* 0x00E564D0: bset.b #0x7,(A2) - bit 31 of the status longword */
+        *status_ret |= 0x80000000;
         return;
     }
     *status_ret = file_$objects_on_different_volumes;
@@ -206,15 +215,20 @@ write_infoblk:
     }
 
     /* Flush partial */
-    FILE_$FW_PARTIAL(dir_uid, &NAME_$CONST_ZERO_L, &DAT_00e564e2, status_ret);
+    FILE_$FW_PARTIAL(dir_uid, &NAME_$CONST_ZERO_L,
+                     &DIR_$SET_DEF_ACL_FLUSH_LEN, status_ret);
     if (*status_ret != status_$ok) {
         /* Error - set high bit */
-        *status_ret |= 0x80000000;  /* or.b #0x80 into the first (MSB) byte on m68k */
+        /* 0x00E564D0: bset.b #0x7,(A2) - bit 31 of the status longword */
+        *status_ret |= 0x80000000;
         return;
     }
 
-    /* Check if old ACL needs cleanup */
-    if ((int16_t)old_acl.high == 0) {
+    /*
+     * 0x00E5645E: `move.b (-0x78,A6),D0b` zero-extends the FIRST byte of the
+     * old ACL UID's high longword and tests that, not the low word.
+     */
+    if ((uint8_t)(old_acl.high >> 24) == 0) {
         return;
     }
 
@@ -237,9 +251,13 @@ write_infoblk:
         /* 0x00e564b0 pea (-0xb2,A6): a result cell of its own, not loc_buf1. */
         AST_$TRUNCATE(&old_acl, 0, 3, &trunc_result, &loc_status);
         if (loc_status != status_$ok) {
+            /* 0x00E564CE: move.l D0,(A2) then bset.b #0x7,(A2) */
             *status_ret = loc_status;
+            *status_ret |= 0x80000000;
         }
     } else {
+        /* 0x00E56494 bne -> the same 0x00E564CE tail */
         *status_ret = loc_status;
+        *status_ret |= 0x80000000;
     }
 }

@@ -47,6 +47,13 @@ ml_$exclusion_t DIR_$LINK_BUF_MUTEX;
 const int32_t DAT_00e52040 = 0x00000400;
 
 /*
+ * DIR_$OLD_LINK_TEXT_MAX - the word 0x0100 at 0xE577F2, shared by
+ * DIR_$OLD_ADD_LINKU (MAP_CASE) and DIR_$OLD_READ_LINKU (UNMAP_CASE) as the
+ * output-buffer size.  See dir/dir_internal.h.
+ */
+int16_t DIR_$OLD_LINK_TEXT_MAX = 0x0100;
+
+/*
  * ============================================================================
  * The DIR module block (map: "D E7DBF8 DIR size = 212C", 0x00E7DBF8..0x00E7FD24)
  * ============================================================================
@@ -257,7 +264,7 @@ uint8_t  DAT_00e560a2 = 0x00;
 
 /* 0x00E564E2, a longword in DIR_$OLD_SET_DEFAULT_ACL's pool: the 0x400-byte
  * length handed to FILE_$FW_PARTIAL.  Bytes 00 00 04 00. */
-uint32_t DAT_00e564e2 = 0x00000400;
+uint32_t DIR_$SET_DEF_ACL_FLUSH_LEN = 0x00000400;
 
 /* 0x00E5716A, after the `rts` at 0x00E57168.  Bytes 00 06. */
 uint16_t DIR_$PROT_TYPE_ACL = 6;

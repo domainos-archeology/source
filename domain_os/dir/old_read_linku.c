@@ -1,12 +1,10 @@
 /*
  * DIR_$OLD_READ_LINKU - Legacy read symbolic link
  *
- * Reads the target of a symbolic link from a directory entry.
- * Sets output uid to NIL, validates the leaf name, enters super mode,
- * finds the entry, and reads the link data.
- *
  * Original address: 0x00E577F4
- * Original size: 304 bytes
+ * Original size: 304 bytes (0x00E577F4-0x00E57923)
+ *
+ * Re-derived from the disassembly (bead source-wghx).  A5 = 0x00E7FD24.
  */
 
 #include "dir/dir_internal.h"
@@ -14,104 +12,98 @@
 /*
  * DIR_$OLD_READ_LINKU - Legacy read symbolic link
  *
- * The process is:
- * 1. Set target_uid to UID_$NIL
- * 2. Validate the leaf name
- * 3. Enter super mode / acquire directory lock
- * 4. Find the entry by name
- * 5. Read the link type from the entry
- *    - Type 1: direct UID (copy from entry)
- *    - Type 3: text link (read via dir_$old_read_link_data into local buf,
- *              then UNMAP_CASE to caller's buffer)
- * 6. Release lock and exit super mode
- *
- * Parameters:
- *   dir_uid_low  - Low part of directory UID pointer (legacy calling convention)
- *   name_low     - Low part of name pointer (legacy calling convention)
- *   name_len     - Pointer to name length
- *   target_low   - Low part of target buffer pointer
- *   target_len   - Pointer to target buffer length
- *   target_uid   - Output: target UID
- *   status_ret   - Output: status code
- *
- * All seven parameters are longword POINTERS - the frame at 0x00E577F4
- * dereferences every one of them.
+ * Seven longword parameters, all pointers:
+ *   dir_uid    - (0x08,A6) UID of the directory to search
+ *   name       - (0x0c,A6) name of the entry
+ *   name_len   - (0x10,A6) pointer to the name length word
+ *   target     - (0x14,A6) caller's buffer for the link text
+ *   target_len - (0x18,A6) pointer to the target length word; UNMAP_CASE
+ *                writes the produced length straight into it (0x00E578D0)
+ *   target_uid - (0x1c,A6) -> A4, output: UID for a type-1 entry
+ *   status_ret - (0x20,A6) -> A3, output: status code
  */
 void DIR_$OLD_READ_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
-                         void *target_arg, uint16_t *target_len,
+                         void *target, uint16_t *target_len,
                          uid_t *target_uid, status_$t *status_ret)
 {
-    char *target = (char *)target_arg;
-    uint8_t parsed_name[32];
-    uint16_t parsed_len;
-    char local_buf[256];
-    uint16_t local_buf_len;
-    uint32_t handle;
-    int32_t entry;
-    uint16_t param5, param6;
-    int8_t valid;
-    int8_t found;
-    int8_t truncated;
-    int16_t max_out_len;
-    int16_t out_len;
-    status_$t local_status;
+    /* link.w A6,-0x138 */
+    int8_t    truncated;            /* A6-0x136 */
+    uint16_t  parsed_len;           /* A6-0x134 */
+    uint16_t  link_len;             /* A6-0x132 */
+    uint16_t  slot_idx;             /* A6-0x130 */
+    uint16_t  chain_level;          /* A6-0x12e */
+    uint32_t  handle;               /* A6-0x12c */
+    int32_t   entry_ptr;            /* A6-0x128 */
+    status_$t unlock_status;        /* A6-0x124 */
+    uint8_t   parsed_name[32];      /* A6-0x120 .. A6-0x101 */
+    char      link_buf[256];        /* A6-0x100 .. A6-0x01 */
+    char     *entry;                /* A2 */
+    uint16_t  entry_type;
+    int8_t    leaf_ok;
+    int8_t    found;
 
-    /* Set target_uid to NIL */
-    target_uid->high = UID_$NIL.high;
-    target_uid->low = UID_$NIL.low;
+    /* 0x00E57806-0x00E57812 */
+    *target_uid = UID_$NIL;
 
-    /* Validate and parse the leaf name */
-    valid = name_$validate_leaf(name, *name_len, parsed_name, &parsed_len);
-    if (valid >= 0) {
-        *status_ret = status_$naming_invalid_leaf;
-        return;
+    /* 0x00E57816-0x00E57834 */
+    leaf_ok = name_$validate_leaf(name, *name_len, parsed_name, &parsed_len);
+    if (leaf_ok >= 0) {
+        *status_ret = status_$naming_invalid_leaf;   /* 0x00E57836 */
+        return;                                      /* no ACL_$EXIT_SUPER */
     }
 
-    /* Enter super mode / acquire directory lock */
+    /* 0x00E57840: 0x00010004 => lock_mode 1, acl_rights 4 */
     NAME_$LOCK_DIR(dir_uid, &handle, 1, 4, status_ret);
-    if ((int16_t)*status_ret != 0) {
-        ACL_$EXIT_SUPER();
+    if ((int16_t)*status_ret != 0) {    /* 0x00E57858: tst.w (2,A3) */
+        ACL_$EXIT_SUPER();              /* 0x00E57914 */
         return;
     }
 
-    /* Find the entry by name */
+    /* 0x00E57860 */
     found = dir_$old_find_entry(handle, parsed_name, parsed_len,
-                         &entry, &param5, &param6);
+                                &entry_ptr, &slot_idx, &chain_level);
+    /* 0x00E57882: `movea.l (-0x128,A6),A2` - a 32-bit target address. */
+    entry = (char *)ARCH_VA_TO_PTR(entry_ptr);
     if (found >= 0) {
-        /* Entry not found */
-        *status_ret = status_$naming_name_not_found;
+        *status_ret = status_$naming_name_not_found;    /* 0x00E578FA */
     } else {
-        /* Read link type from entry at offset 0x27 */
-        uint8_t link_type = *((uint8_t *)(entry + 0x27));
+        /* 0x00E5788A: zero-extended entry type byte at entry+0x27 */
+        entry_type = *(uint8_t *)(entry + 0x27);
 
-        if (link_type == 1) {
-            /* Type 1: direct UID - copy from entry at offset 0x28 */
-            target_uid->high = *((uint32_t *)(entry + 0x28));
-            target_uid->low = *((uint32_t *)(entry + 0x2c));
-            /* 0x000E0006 is "not a link" in the SR10.4 status database - a
-             * type-1 entry names an object, not a link (source-qgq). */
-            *status_ret = status_$naming_not_a_link;
-        } else if (link_type == 3) {
-            /* Type 3: text link - read via dir_$old_read_link_data into local buffer */
-            dir_$old_read_link_data(handle, (void *)(uintptr_t)(entry + 0x28),
-                         (uint8_t *)local_buf, &local_buf_len);
-            /* Unmap case from local buffer to caller's target buffer */
-            max_out_len = 0x0100;  /* 256 */
-            UNMAP_CASE(local_buf, (int16_t *)&local_buf_len,
-                       target, &max_out_len, &out_len,
+        if (entry_type == 1) {
+            /* 0x00E578A2: a hard entry names an object, not a link */
+            target_uid->high = *(uint32_t *)(entry + 0x28);
+            target_uid->low  = *(uint32_t *)(entry + 0x2c);
+            *status_ret = status_$naming_not_a_link;    /* 0x000E0006 */
+        } else if (entry_type == 3) {
+            /* 0x00E578B4: pull the link text out of the overflow blocks */
+            dir_$old_read_link_data(handle, entry + 0x28,
+                                    (uint8_t *)link_buf, &link_len);
+
+            /*
+             * 0x00E578CC: un-map the case straight into the caller's buffer.
+             * The max_out_len VAR argument is the shared word at 0x00E577F2
+             * (`pea (-0xe4,PC)`) and the produced length is written into the
+             * caller's target_len.
+             */
+            UNMAP_CASE(link_buf, (int16_t *)&link_len, (char *)target,
+                       &DIR_$OLD_LINK_TEXT_MAX, (int16_t *)target_len,
                        (uint8_t *)&truncated);
-            if (truncated < 0) {
+            if (truncated < 0) {                        /* 0x00E578EC: bpl */
                 *status_ret = status_$naming_invalid_link;
             }
         }
-        /* link_type == 0: no action (status remains ok) */
+        /* entry_type 0 and everything else: 0x00E578A0 falls to the tail */
     }
 
-    /* Release directory lock */
-    NAME_$UNLOCK_DIR(&local_status);
+    /*
+     * 0x00E57900-0x00E57910: unlock into a local; it replaces status_ret only
+     * when status_ret's low word is still zero.
+     */
+    NAME_$UNLOCK_DIR(&unlock_status);
     if ((int16_t)*status_ret == 0) {
-        *status_ret = local_status;
+        *status_ret = unlock_status;
     }
 
-    ACL_$EXIT_SUPER();
+    ACL_$EXIT_SUPER();                  /* 0x00E57914 */
 }

@@ -56,9 +56,13 @@ void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
         if (*status_ret == status_$ok) {
             dir_$old_unlink_entry(dir_uid, handle, parsed_name, parsed_len,
                                   1, result, status_ret);
+            /*
+             * 0x00E56A76-0x00E56A86: the unlock reports into its own cell and
+             * replaces the caller's status only when the caller's LOW WORD is
+             * still zero (`tst.w (0x2,A3)` / `bne`).
+             */
             NAME_$UNLOCK_DIR(&unlock_status);
-            /* Propagate unlock status only if unlink succeeded (low 16 bits == 0) */
-            if ((*status_ret & 0xFFFF) == 0) {
+            if ((int16_t)*status_ret == 0) {
                 *status_ret = unlock_status;
             }
         }
