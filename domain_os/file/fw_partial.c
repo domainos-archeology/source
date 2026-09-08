@@ -71,8 +71,23 @@ void FILE_$FW_PARTIAL(uid_t *file_uid, uint32_t *start_offset,
      * Loop through pages until all bytes are processed or error occurs.
      */
     while (remaining > 0) {
-        /* Purify current page */
-        AST_$PURIFY(file_uid, purify_flags, (int16_t)page_num, NULL, 0, status_ret);
+        /*
+         * 0x00E5E6E6-0x00E5E6FE: AST_$PURIFY over a discarded word result
+         * slot.  Arguments, right to left:
+         *    pea (A3)                 status       = status_ret
+         *    clr.w -(SP)              unused       = 0
+         *    pea (-0xd0,PC)           segment_list = &file_$nil_cell
+         *                             (PC = 0x00E5E6EE, so 0x00E5E61E)
+         *    move.w D4w,-(SP)         segment      = page_num
+         *    move.w (-0xa,A6),-(SP)   flags        = purify_flags
+         *    pea (A2)                 uid          = file_uid
+         * The segment list is the shared zero longword described in
+         * file/file_data.c, not nil; AST_$PURIFY does not read through it for
+         * either flags value used here (neither 0x0003 nor 0x8003 sets bit 4,
+         * the gate at 0x00E05700).
+         */
+        AST_$PURIFY(file_uid, purify_flags, (int16_t)page_num,
+                    &file_$nil_cell, 0, status_ret);
 
         if (*status_ret != status_$ok) {
             /* Error occurred - stop processing */

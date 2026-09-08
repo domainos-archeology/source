@@ -58,6 +58,10 @@ static int mock_purify_called;
 static uint16_t mock_purify_flags[MAX_PURIFY_CALLS];
 static int16_t mock_purify_segment[MAX_PURIFY_CALLS];
 static status_$t mock_purify_status[MAX_PURIFY_CALLS];
+static uint32_t *mock_purify_seglist[MAX_PURIFY_CALLS];
+
+/* The shared zero longword at 0x00E5E61E, owned by file/file_data.c. */
+uint32_t file_$nil_cell = 0;
 
 static void reset_mocks(void)
 {
@@ -69,6 +73,7 @@ static void reset_mocks(void)
         mock_purify_flags[i] = 0;
         mock_purify_segment[i] = -1;
         mock_purify_status[i] = status_$ok;
+        mock_purify_seglist[i] = NULL;
     }
 }
 
@@ -86,10 +91,11 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
                      uint32_t *segment_list, uint16_t unused,
                      status_$t *status)
 {
-    (void)uid; (void)segment_list; (void)unused;
+    (void)uid; (void)unused;
     if (mock_purify_called < MAX_PURIFY_CALLS) {
         mock_purify_flags[mock_purify_called] = flags;
         mock_purify_segment[mock_purify_called] = segment;
+        mock_purify_seglist[mock_purify_called] = segment_list;
         *status = mock_purify_status[mock_purify_called];
     } else {
         *status = status_$ok;
@@ -116,6 +122,11 @@ TEST(single_page_range)
     ASSERT_EQ(1, mock_purify_called);
     ASSERT_EQ(0, mock_purify_segment[0]);
     ASSERT_EQ(FW_PARTIAL_REMOTE, mock_purify_flags[0]);
+    /*
+     * 0x00E5E6EC "pea (-0xd0,PC)" = 0x00E5E61E, the shared zero longword -
+     * not nil.  (source-uu9e)
+     */
+    ASSERT_EQ((uintptr_t)&file_$nil_cell, (uintptr_t)mock_purify_seglist[0]);
     ASSERT_EQ(status_$ok, status);
 }
 

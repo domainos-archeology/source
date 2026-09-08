@@ -48,17 +48,22 @@ void ACL_$CONVERT_TO_9ACL(void *type, uid_t *source_uid, uid_t *dir_uid,
         /* Check if source is UID_$NIL */
         if (source_uid->high == UID_$NIL.high &&
             source_uid->low == UID_$NIL.low) {
-            /* Copy default protection to workspace offsets */
-            uint32_t *def_prot = (uint32_t *)default_prot;
-            uint32_t *workspace = (uint32_t *)ACL_$WORKSPACE;
+            /*
+             * 0x00E48D88-0x00E48D9A.  A0 is the workspace and A1 the caller's
+             * default protection UID, reloaded between the two pairs:
+             *   move.l (A1)+,(0x2,A0)   acl_uid.high
+             *   move.l (A1)+,(0x6,A0)   acl_uid.low
+             *   movea.l D3,A1
+             *   move.l (A1)+,(0x1a,A0)  initial_acl_uid.high
+             *   move.l (A1)+,(0x1e,A0)  initial_acl_uid.low
+             * so both eight-byte UIDs of the image get the same value - at
+             * +0x02 and +0x1A, not at +0x00 and +0x18.  (source-9j7d)
+             */
+            acl_$image_t *image = (acl_$image_t *)ACL_$WORKSPACE;
+            const uid_t *def_prot = (const uid_t *)default_prot;
 
-            /* Copy to offset 0x02 (user SID) */
-            workspace[0] = def_prot[0];  /* offset 0x02 */
-            workspace[1] = def_prot[1];  /* offset 0x06 */
-
-            /* Copy to offset 0x1A */
-            workspace[6] = def_prot[0];  /* offset 0x1A */
-            workspace[7] = def_prot[1];  /* offset 0x1E */
+            image->acl_uid = *def_prot;
+            image->initial_acl_uid = *def_prot;
         }
 
         /* Check flag_buf to determine how to proceed */

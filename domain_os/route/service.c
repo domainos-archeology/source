@@ -44,6 +44,9 @@
 #include "xns_idp/xns_idp.h"
 #include "app/app.h"
 #include "sock/sock.h"
+#include "proc1/proc1.h"
+#include "time/time.h"
+#include "misc/crash_system.h"
 #include "arch/arch.h"
 
 /*
@@ -133,11 +136,34 @@ static const uint16_t RIP_HOP_COUNT_ZERO = 0x0000;      /* 0x00E6A5D8 */
 static const boolean RIP_OP_NON_STD = (boolean)0xFF;    /* 0x00E6A5DA */
 
 /*
- * 0x00E6A02C: four zero bytes, passed as the attach_service callback's
- * "service_rec" argument (0x00E6A436 "pea (-0x40c,PC)").  Two words, matching
- * route_$set_service_fn_t's {opcode, service} record.
+ * 0x00E6A02C: four zero bytes in the ROUTE_ code segment, with no symbol in
+ * the SAU2 link map.  TWO routines take its address PC-relative:
+ *   0x00E6A436  pea (-0x40c,PC)   ROUTE_$SERVICE, the attach_service
+ *                                 callback's "service_rec" argument
+ *   0x00E69FEA  pea (0x40,PC)     ROUTE_$ANNOUNCE_NET, PKT_$SEND_INTERNET's
+ *                                 "data" argument (with a length of zero, so
+ *                                 the callee never reads through it)
+ * so it is ONE shared cell, declared in route/route_internal.h rather than
+ * duplicated as a private static in each file.  (source-l8qy)
  */
-static const uint16_t ROUTE_$NULL_SERVICE_REC[2] = { 0x0000, 0x0000 };
+const uint16_t route_$null_service_rec[2] = { 0x0000, 0x0000 };
+
+/*
+ * route_$init_routing's two literal arguments.
+ *
+ *   PROC_FLAG_ROUTING        0x00E69D4A "move.l #0x1000000c,-(SP)"
+ *   SOCK_ALLOC_QUEUE_LIMIT   0x00E69D88 "move.w #0x400,-(SP)", the low word
+ *                            of SOCK_$ALLOCATE's third argument
+ */
+#define PROC_FLAG_ROUTING       0x1000000C
+#define SOCK_ALLOC_QUEUE_LIMIT  0x0400
+
+/*
+ * 0x00E69E3C: the CRASH_SYSTEM cell route_$init_routing takes the address of
+ * with "pea (0x8e,PC)" at 0x00E69DAC (PC = 0x00E69DAE).  The image bytes are
+ * 00 2b 00 0e - status 0x002B000E, "unable to create through-traffic queue".
+ */
+static const status_$t route_$cant_create_thru_queue_00e69e3c = 0x002B000E;
 
 /*
  * =============================================================================
@@ -271,6 +297,163 @@ static void route_$close_port(route_$short_port_t *port_info,
 
     /* 0x00E69FA0 */
     port->active = 0;
+}
+
+
+/*
+ * =============================================================================
+ * route_$init_routing - the nested procedure at 0x00E69CCC
+ * =============================================================================
+ *
+ * ROUTE_$SERVICE reaches it with `bsr.w 0x00e69ccc` twice (0x00E6A4DC and
+ * 0x00E6A512) and pushes two word slots, popped with `addq.w #0x4,SP`:
+ *
+ *   (0x08,A6)  the port index, "move.w D2w,-(SP)".  The procedure never reads
+ *              it; it is passed all the same and is reproduced as a parameter.
+ *   (0x0a,A6)  a boolean in the HIGH byte of its word slot: `st -(SP)` at
+ *              0x00E6A4D8 for the STD arm, `clr.w -(SP)` at 0x00E6A50E for the
+ *              other.  The procedure reads it as "move.b (0xa,A6),D0b" and
+ *              branches on the sign (0x00E69CD4/0x00E69CDA).
+ *
+ * It then walks back into its parent's frame with `movea.l (A6),A2`
+ * (0x00E69CD8) and uses exactly one uplevel cell, ROUTE_$SERVICE's status_ret
+ * argument at (0x10,A2): it is handed to PROC1_$CREATE_P (0x00E69D46), tested
+ * (0x00E69D66) and handed to CRASH_SYSTEM (0x00E69D6E).  The procedure has no
+ * status of its own, so a failure here is what ROUTE_$SERVICE's caller sees.
+ *
+ * A5 is inherited from ROUTE_$SERVICE (loaded there at 0x00E6A038 with
+ * 0x00E825DC) and is the target of the single "move.l (0x00e2b0e4).l,(A5)"
+ * store at 0x00E69DEA.
+ *
+ * Its own frame is `link.w A6,-0x14`; the only named cell is the socket
+ * number at A6-0x0A.
+ */
+static void route_$init_routing(int16_t port_index, boolean is_std_port,
+                                status_$t *status_ret)
+{
+    int16_t i;                          /* D0w, the dbf counter */
+    uint32_t *data_ptr;                 /* A0 */
+    uint16_t socket;                    /* A6-0x0A, then D2w */
+    sock_$sock_t *sock;                 /* A2, after the static link is done */
+    int32_t ec_val;                     /* D0 */
+    int8_t result;                      /* D0b */
+
+    (void)port_index;                   /* pushed at 0x00E6A4DA / 0x00E6A510 */
+
+    /*
+     * 0x00E69CDC-0x00E69D0E.  Each arm bumps its own counter and then demands
+     * that THAT counter has just reached 2 while the other one is still below
+     * 2, so the body runs exactly once per counter and only after the other
+     * kind of routing port has already been counted at most once.  Both
+     * compares are "cmp.w <cell>,D1w" with D1 = 2, i.e. 2 - cell: the first
+     * exits on "bne" (cell != 2) and the second on "ble" (2 <= cell).
+     */
+    if (is_std_port < 0) {
+        ROUTE_$STD_N_ROUTING_PORTS++;                   /* 0x00E69CDC */
+        if (ROUTE_$STD_N_ROUTING_PORTS != 2) {          /* 0x00E69CE4 */
+            return;
+        }
+        if (ROUTE_$N_ROUTING_PORTS >= 2) {              /* 0x00E69CEE */
+            return;
+        }
+    } else {
+        ROUTE_$N_ROUTING_PORTS++;                       /* 0x00E69CF6 */
+        if (ROUTE_$N_ROUTING_PORTS != 2) {              /* 0x00E69CFE */
+            return;
+        }
+        if (ROUTE_$STD_N_ROUTING_PORTS >= 2) {          /* 0x00E69D08 */
+            return;
+        }
+    }
+
+    /*
+     * 0x00E69D12-0x00E69D1E: "move.w #0x80,D0w" then a dbf loop of
+     * "clr.l (A0)+", i.e. 0x81 longwords from 0x00E87DA8.
+     */
+    data_ptr = ROUTE_$Q_DEPTH;
+    for (i = 0x80; i >= 0; i--) {
+        *data_ptr++ = 0;
+    }
+
+    /* 0x00E69D22-0x00E69D40 */
+    EC_$INIT((ec_$eventcount_t *)&ROUTE_$CONTROL_EC);
+    ec_val = EC_$READ((ec_$eventcount_t *)&ROUTE_$CONTROL_EC);
+    ROUTE_$CONTROL_ECVAL = ec_val + 1;
+
+    /*
+     * 0x00E69D46-0x00E69D60: the status handed to PROC1_$CREATE_P is the
+     * PARENT's status_ret, not a local.
+     */
+    ROUTE_$PID = PROC1_$CREATE_P((void *)ROUTE_$PROCESS,
+                                 PROC_FLAG_ROUTING,
+                                 status_ret);
+
+    /* 0x00E69D66-0x00E69D78 */
+    if (*status_ret != status_$ok) {
+        CRASH_SYSTEM(status_ret);
+        return;
+    }
+
+    /*
+     * 0x00E69D7C: bsr route_$wire_routing_area.  The helper at 0x00E69BCE is
+     * not a port-count update -- it wires the routing area
+     * (RTWIRED_PROC_START 0x00E87000 .. 0x00E88228) through MST_$WIRE_AREA
+     * the first time routing comes up.
+     */
+    route_$wire_routing_area();
+
+    /* 0x00E69D80 */
+    ROUTE_$NETBUF_ALLOC = 0x40;
+
+    /*
+     * 0x00E69D88-0x00E69DA0.  The two longword arguments are assembled from
+     * four words: 0x400, then ROUTE_$NETBUF_ALLOC, then two copies of the
+     * word already on the stack, so the pair reads 0x00400040 / 0x00400400.
+     */
+    result = SOCK_$ALLOCATE(&socket,
+                            ((uint32_t)ROUTE_$NETBUF_ALLOC << 16) |
+                                (uint32_t)ROUTE_$NETBUF_ALLOC,
+                            ((uint32_t)ROUTE_$NETBUF_ALLOC << 16) |
+                                SOCK_ALLOC_QUEUE_LIMIT);
+    if (result >= 0) {
+        /* 0x00E69DAC: pea (0x8e,PC) -> 0x00E69E3C */
+        CRASH_SYSTEM(&route_$cant_create_thru_queue_00e69e3c);
+        return;
+    }
+
+    /*
+     * 0x00E69DB8-0x00E69DCC.  "movea.l #0xe28db4,A0 / lea (0,A0,D1*4),A1 /
+     * movea.l (-0x4,A1),A2" is SOCK_$EVENT_COUNTERS[socket - 1], the
+     * descriptor for `socket`.  "bclr.b #0x7,(0x16,A2)" clears bit 15 of the
+     * flags word, SOCK_FLAG_OPEN.
+     */
+    sock = (sock_$sock_t *)SOCK_$EVENT_COUNTERS[socket - 1];
+    sock->flags = (uint16_t)(sock->flags & (uint16_t)~SOCK_FLAG_OPEN);
+
+    /* 0x00E69DD2-0x00E69DE4 */
+    ec_val = EC_$READ(&sock->ec);
+    ROUTE_$SOCK_ECVAL = ec_val + 1;
+    ROUTE_$SOCK = socket;
+
+    /*
+     * 0x00E69DEA: "move.l (0x00e2b0e4).l,(A5)" - A5 is ROUTE_$SERVICE's,
+     * loaded there with 0x00E825DC.
+     */
+    ROUTE_$LAST_UPDATE_TIME = TIME_$CURRENT_CLOCKH;
+
+    /* 0x00E69DF0-0x00E69E20 */
+    ROUTE_$Q_OFLO = 0;             /* 0xE87FCC */
+    ROUTE_$TOO_FAR = 0;            /* 0xE87FC0 */
+    ROUTE_$MISROUTE = 0;           /* 0xE87FC4 */
+    ROUTE_$PKTS_ROUTED = 0;        /* 0xE87FC8 */
+    ROUTE_$DLEN_ERR = 0;           /* 0xE87FBC */
+    ROUTE_$STD_TOO_FAR = 0;        /* 0xE87FB0 */
+    ROUTE_$STD_MISROUTE = 0;       /* 0xE87FB4 */
+    ROUTE_$STD_PKTS_ROUTED = 0;    /* 0xE87FB8 */
+    ROUTE_$STD_DLEN_ERR = 0;       /* 0xE87FAC */
+
+    /* 0x00E69E26 */
+    EC_$ADVANCE((ec_$eventcount_t *)&ROUTE_$CONTROL_EC);
 }
 
 /*
@@ -577,7 +760,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
                  *   pea (-0x60,A6)     an uninitialised local
                  *   pea (A0)           status_ret (A0 still holds it)
                  */
-                (void)attach_fn(&port->socket, ROUTE_$NULL_SERVICE_REC, 0,
+                (void)attach_fn(&port->socket, route_$null_service_rec, 0,
                                 &attach_out, status_ret);
             }
         }
@@ -605,7 +788,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
             (((uint32_t)PORT_STATUS_DISABLE_STD >> (old_status & 0x1F)) & 1) &&
             (((uint32_t)PORT_STATUS_ROUTING_MASK >> (port_info->status & 0x1F)) & 1)) {
             if (RIP_$STD_IDP_CHANNEL != -1) {
-                ROUTE_$INIT_ROUTING(port_index, (int8_t)0xFF);
+                route_$init_routing(port_index, (boolean)0xFF, status_ret);
             } else {
                 /* 0x00E6A4E4 */
                 *status_ret = status_$internet_network_port_not_open;
@@ -616,7 +799,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
         if (*status_ret == status_$ok &&
             (((uint32_t)PORT_STATUS_DISABLE_N >> (old_status & 0x1F)) & 1) &&
             (((uint32_t)PORT_STATUS_N_ROUTING_MASK >> (port_info->status & 0x1F)) & 1)) {
-            ROUTE_$INIT_ROUTING(port_index, 0);
+            route_$init_routing(port_index, 0, status_ret);
         }
 
         /*

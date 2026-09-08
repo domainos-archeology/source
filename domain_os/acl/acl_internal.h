@@ -794,6 +794,54 @@ extern ml_$exclusion_t ACL_$EXCLUSION_LOCK; /* 0xE2C014 */
 extern uint8_t ACL_$WORKSPACE[ACL_WORKSPACE_SIZE];  /* 0xE7CF54 */
 
 /*
+ * acl_$image_t - the head of the ACL image acl_$image_internal builds in that
+ * workspace, and the only part of it any caller edits by hand.
+ *
+ * Recovered from acl_$image_internal's default-image arm (0x00E47D62 -
+ * 0x00E47DDC, A1 = the image buffer):
+ *
+ *   0x00E47D64  move.w #0x34,(A0)          the length it reports back
+ *   0x00E47DB4  move.w #0x5,(A1)           version
+ *   0x00E47D80/88  ACL_$DIR_ACL (0xE1744C) or ACL_$FILE_ACL (0xE17444)
+ *   0x00E47D8E  move.l (A2)+,(0x2,A1)      that UID, +0x02..+0x09
+ *   0x00E47D92  move.l (A2)+,(0x6,A1)
+ *   0x00E47D96  clr.w (0xe,A1)
+ *   0x00E47D9A  UID_$NIL (0xE1737C)
+ *   0x00E47DA0  move.l (A2)+,(0x12,A1)     +0x12..+0x19
+ *   0x00E47DA8  lea (0x2,A1),A2
+ *   0x00E47DAC  move.l (A2)+,(0x1a,A1)     a SECOND copy of +0x02..+0x09
+ *   0x00E47DB0  move.l (A2)+,(0x1e,A1)
+ *   0x00E47DC8  clr.l (0xa,A1) / clr.w (0x10,A1) / clr.l (0x22,A1) /
+ *               clr.w (0x26,A1) / clr.b (0x28,A1) / clr.b (0x29,A1)
+ *   0x00E47DB8  moveq #0xb,D0 / lea (0x2,A1),A0 / clr.w (0x28,A0) /
+ *               addq.l #0x2,A0 / dbf  - twelve words at +0x2A..+0x41
+ *
+ * ACL_$CONVERT_TO_9ACL overwrites BOTH eight-byte UIDs with the caller's
+ * default protection when the source UID is nil (0x00E48D8C-0x00E48D9A), so
+ * the record exists to pin those two offsets.  (source-9j7d)
+ */
+typedef struct __attribute__((packed)) acl_$image_t {
+    uint16_t    version;            /* 0x00: 5, or 0 on the empty arm */
+    uid_t       acl_uid;            /* 0x02: the manager UID */
+    uint32_t    reserved_0a;        /* 0x0A */
+    uint16_t    reserved_0e;        /* 0x0E */
+    uint16_t    reserved_10;        /* 0x10 */
+    uid_t       subsys_uid;         /* 0x12: UID_$NIL in the default image */
+    uid_t       initial_acl_uid;    /* 0x1A: a second copy of acl_uid */
+    uint32_t    reserved_22;        /* 0x22 */
+    uint16_t    reserved_26;        /* 0x26 */
+    uint8_t     reserved_28;        /* 0x28 */
+    uint8_t     reserved_29;        /* 0x29 */
+    uint16_t    rights[12];         /* 0x2A: the dbf loop's twelve words */
+} acl_$image_t;
+
+_Static_assert(offsetof(acl_$image_t, acl_uid)         == 0x02, "acl_image.acl_uid");
+_Static_assert(offsetof(acl_$image_t, subsys_uid)      == 0x12, "acl_image.subsys_uid");
+_Static_assert(offsetof(acl_$image_t, initial_acl_uid) == 0x1A, "acl_image.initial_acl_uid");
+_Static_assert(offsetof(acl_$image_t, rights)          == 0x2A, "acl_image.rights");
+_Static_assert(sizeof(acl_$image_t) == 0x42, "acl_$image_t must be 0x42 bytes");
+
+/*
  * Default ACL UIDs (referenced in acl.h, defined here for internal use)
  * These are loaded from RGYC during initialization.
  */

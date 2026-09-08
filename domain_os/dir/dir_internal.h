@@ -900,6 +900,61 @@ int8_t dir_$old_find_entry(uint32_t handle, uint8_t *name, uint16_t name_len,
  */
 uint16_t dir_$old_hash_name(uint8_t *name, uint16_t name_len, uint16_t num_buckets);
 
+/*
+ * audit_$resolve_data_t - the contiguous data region audit_$log_resolve_op
+ * hands AUDIT_$LOG_EVENT.
+ *
+ * The routine builds it as two adjacent frame objects at A6-0x418 (the two
+ * longwords copied out of the resolve result, 0x00E4BFBC-0x00E4BFC0) and
+ * A6-0x410 (the pathname buffer, 0x00E4BFCA), and then computes the length as
+ * the distance between them: "lea (-0x418,A6),A1 / lea (-0x410,A0),A2 /
+ * move.l A2,D1 / sub.l A1,D1 / addq.l #0x1,D1" at 0x00E4BFE4-0x00E4BFF0,
+ * i.e. path_len + 9.  Spelling the two as one record is what makes that
+ * arithmetic true on any host instead of depending on how the compiler
+ * happens to order two locals.  (source-0o3n)
+ *
+ * The buffer runs from A6-0x410 up to the event UID at A6-0x10, so 0x400
+ * bytes; the terminating NUL is written at path[path_len] with no bound check
+ * of its own (0x00E4BFDC "lea (0x0,A6,D2*0x1),A0 / clr.b (-0x410,A0)").
+ */
+typedef struct audit_$resolve_data_t {
+    uid_t   result_uid;         /* 0x00: A6-0x418 */
+    char    path[0x400];        /* 0x08: A6-0x410 */
+} audit_$resolve_data_t;
+
+_Static_assert(offsetof(audit_$resolve_data_t, path) == 0x08,
+               "audit_$resolve_data_t.path");
+_Static_assert(sizeof(audit_$resolve_data_t) == 0x408,
+               "audit_$resolve_data_t must be 0x408 bytes");
+
+/*
+ * dir_$old_link_refs_t - the 8-byte block dir_$old_delete_entry lifts out of
+ * an old-format directory entry before clearing it.
+ *
+ * The image copies the block with two longword moves into its frame
+ * (0x00E5560C-0x00E55610 from entry+0x12, 0x00E55644-0x00E55648 from
+ * entry+0x368) and then reads two WORDS out of the copy: A6-0x0E (the block's
+ * +0x02) and A6-0x0C (its +0x04).  Those are entry+0x14 / +0x16 for the
+ * inline case and entry+0x36A / +0x36C for the overflow case.  Spelling the
+ * block as a record keeps those word reads word reads on every host - the
+ * tree used to derive them from 32-bit loads, which only works big-endian.
+ * (source-v76f)
+ */
+typedef struct dir_$old_link_refs_t {
+    uint16_t    reserved_00;    /* +0x00: entry+0x12 / +0x368, copied but
+                                 *        never read back */
+    uint16_t    block1;         /* +0x02: entry+0x14 / +0x36A */
+    uint16_t    block2;         /* +0x04: entry+0x16 / +0x36C */
+    uint16_t    reserved_06;    /* +0x06: entry+0x18 / +0x36E, likewise */
+} dir_$old_link_refs_t;
+
+_Static_assert(offsetof(dir_$old_link_refs_t, block1) == 0x02,
+               "dir_$old_link_refs_t.block1");
+_Static_assert(offsetof(dir_$old_link_refs_t, block2) == 0x04,
+               "dir_$old_link_refs_t.block2");
+_Static_assert(sizeof(dir_$old_link_refs_t) == 8,
+               "dir_$old_link_refs_t must be 8 bytes");
+
 /* dir_$old_delete_entry - Delete/clear a directory entry
  *
  * Removes an entry from the directory buffer. Handles both inline

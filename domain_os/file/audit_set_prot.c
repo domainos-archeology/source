@@ -35,55 +35,52 @@
  *   - Protection type
  *   - Success/failure indicator
  */
+/*
+ * 0x00E5DD06: the audit record's length, 0x003E, as a constant CELL in the
+ * code segment.  The routine does not compute it - it takes its address with
+ * "pea (0x1c,PC)" at 0x00E5DCE8 (PC = 0x00E5DCEA) and hands the pointer
+ * straight to AUDIT_$LOG_EVENT.  Image bytes: 00 3e.  (source-l8qy)
+ */
+static const uint16_t file_$audit_set_prot_len_00e5dd06 =
+    sizeof(file_$audit_set_prot_data_t);
+
 void FILE_$AUDIT_SET_PROT(uid_t *file_uid, void *acl_data, void *prot_info,
                           uint16_t prot_type, status_$t status)
 {
-    uid_t event_uid;
-    uint16_t event_flags;
-    uint32_t status_code;
-    char audit_data[62];  /* 44 bytes ACL + 8 bytes file_uid + 8 bytes prot_info + 2 bytes prot_type */
-    uint16_t data_len;
+    uid_t event_uid;                        /* A6-0x10 */
+    uint16_t event_flags;                   /* A6-0x56 */
+    file_$audit_set_prot_data_t data;       /* A6-0x50 */
     int16_t i;
-    uint32_t *src;
-    char *dst;
+    const uint32_t *src;
 
-    /* Set up event UID - FILE subsystem audit event for set protection */
+    /* 0x00E5DC9E / 0x00E5DCA6 */
     event_uid.high = FILE_AUDIT_EVENT_SET_PROT;
     event_uid.low = 0;
 
-    /* Copy ACL data (44 bytes) */
-    src = (uint32_t *)acl_data;
-    dst = audit_data;
-    for (i = 0; i < 11; i++) {
-        *(uint32_t *)dst = src[i];
-        dst += 4;
+    /* 0x00E5DCAE-0x00E5DCB6: eleven longwords, "moveq #0xa" then dbf */
+    src = (const uint32_t *)acl_data;
+    for (i = 0; i <= 0xA; i++) {
+        ((uint32_t *)data.acl_data)[i] = src[i];
     }
 
-    /* Copy file UID (8 bytes) */
-    *(uint32_t *)dst = file_uid->high;
-    dst += 4;
-    *(uint32_t *)dst = file_uid->low;
-    dst += 4;
+    /* 0x00E5DCBA-0x00E5DCC2 */
+    data.file_uid = *file_uid;
 
-    /* Copy protection info (8 bytes) */
-    *(uint32_t *)dst = ((uint32_t *)prot_info)[0];
-    dst += 4;
-    *(uint32_t *)dst = ((uint32_t *)prot_info)[1];
-    dst += 4;
+    /* 0x00E5DCC6-0x00E5DCCE */
+    ((uint32_t *)data.prot_info)[0] = ((const uint32_t *)prot_info)[0];
+    ((uint32_t *)data.prot_info)[1] = ((const uint32_t *)prot_info)[1];
 
-    /* Store protection type (2 bytes) */
-    *(uint16_t *)dst = prot_type;
-    dst += 2;
+    /* 0x00E5DCD2 */
+    data.prot_type = prot_type;
 
-    /* Set event flags - non-zero if operation failed */
+    /* 0x00E5DCD6-0x00E5DCE6 */
     event_flags = (status != status_$ok) ? 1 : 0;
 
-    /* Convert status to uint32_t */
-    status_code = (uint32_t)status;
-
-    /* Calculate data length */
-    data_len = (uint16_t)(dst - audit_data);
-
-    /* Log the audit event */
-    AUDIT_$LOG_EVENT(&event_uid, &event_flags, &status_code, audit_data, &data_len);
+    /*
+     * 0x00E5DCE8-0x00E5DCFC.  The status pointer is the ADDRESS of this
+     * routine's own status argument slot ("pea (0x16,A6)"), and the length is
+     * the shared constant cell, not a computed value.
+     */
+    AUDIT_$LOG_EVENT(&event_uid, &event_flags, &status, (char *)&data,
+                     &file_$audit_set_prot_len_00e5dd06);
 }

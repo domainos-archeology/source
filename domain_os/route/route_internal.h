@@ -94,19 +94,20 @@ extern boolean ROUTE_$ROUTING;
  */
 
 /*
- * ROUTE_$INIT_ROUTING - Initialize routing subsystem
+ * route_$null_service_rec - the four zero bytes at 0x00E6A02C.
  *
- * Called when routing is being enabled on a port. Increments the
- * appropriate port counter and initializes the routing subsystem
- * when the total routing ports reaches 2.
- *
- * @param port_index   Port index (0-7) being initialized
- * @param port_type    Port type flag: negative = increment STD counter,
- *                     non-negative = increment N counter
- *
- * Original address: 0x00E69CCC
+ * Defined in route/service.c; see the comment there for the two PC-relative
+ * call sites that share it (0x00E6A436 and 0x00E69FEA).
  */
-void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type);
+extern const uint16_t route_$null_service_rec[2];
+
+/*
+ * ROUTE_$INIT_ROUTING (0x00E69CCC) is a NESTED procedure of ROUTE_$SERVICE:
+ * both call sites are `bsr.w` (0x00E6A4DC, 0x00E6A512) and it reaches its
+ * parent's status_ret through `movea.l (A6),A2 / (0x10,A2)` (0x00E69CD8,
+ * 0x00E69D46).  It is therefore a file static, route_$init_routing, in
+ * route/service.c - not a subsystem entry point (bead source-sc3x).
+ */
 
 /*
  * ROUTE_$CLOSE_PORT (0x00E69EC2) is a NESTED procedure of ROUTE_$SERVICE: it

@@ -126,6 +126,25 @@ _Static_assert(sizeof(pkt_$info_t) == 0x20, "pkt_$info_t must be 32 bytes");
 #endif
 
 /*
+ * pkt_$sar_result_t - PKT_$SAR_INTERNET's TENTH argument.
+ *
+ * The routine touches exactly one cell of it, the word at +0x08 on the
+ * no-answer exit ("movea.l (0x24,A6),A0 / move.w D3w,(0x8,A0)" at
+ * 0x00E7205E-0x00E72062).  Nothing else in the routine reads or writes the
+ * record, and its callers hand over a scratch local (0x00E4A512
+ * "pea (-0x28,A6)" in rem_name_$send_request), so only that word is known.
+ * The record is laid out like pkt_$info_t - +0x08 is the retry count in both
+ * - but only the attempts word is asserted here.
+ */
+typedef struct pkt_$sar_result_t {
+    uint8_t     reserved_00[8]; /* 0x00: never touched by PKT_$SAR_INTERNET */
+    uint16_t    attempts;       /* 0x08: number of send attempts made */
+} pkt_$sar_result_t;
+
+_Static_assert(offsetof(pkt_$sar_result_t, attempts) == 0x08,
+               "pkt_$sar_result_t.attempts");
+
+/*
  * ============================================================================
  * The internet packet header PKT builds and parses
  * ============================================================================
@@ -499,7 +518,7 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_
  * @param req_tpl_len   Request template length
  * @param req_data      Request data buffer
  * @param req_data_len  Request data length
- * @param resp_buf      Response buffer; its word at +0x08 also RECEIVES the
+ * @param resp_buf      pkt_$sar_result_t; its word at +0x08 RECEIVES the
  *                      number of attempts made, "movea.l (0x24,A6),A0 /
  *                      move.w D3w,(0x8,A0)" at 0x00E7205E-0x00E72062 (the
  *                      no-answer exit).  May not be nil.
@@ -517,7 +536,8 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
                        void *pkt_info, int16_t timeout,
                        void *req_template, uint16_t req_tpl_len,
                        void *req_data, uint16_t req_data_len,
-                       void *resp_buf, char *resp_tpl_buf, uint16_t resp_tpl_max,
+                       pkt_$sar_result_t *resp_buf,
+                       char *resp_tpl_buf, uint16_t resp_tpl_max,
                        uint16_t *resp_tpl_len, void *resp_data_buf, uint16_t resp_data_max,
                        uint16_t *resp_data_len, status_$t *status_ret);
 

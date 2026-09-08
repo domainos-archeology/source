@@ -61,7 +61,7 @@ uint16_t REM_FILE_$MAX_PROJ_LIST = 8;       /* 0xE61718 */
 
 static status_$t mock_re_sids_status;
 static status_$t mock_proj_status;
-static int16_t   mock_in_subsys = 0;
+static boolean   mock_in_subsys = 0;
 
 static void *mock_re_sids_arg1;
 static void *mock_re_sids_arg2;
@@ -103,7 +103,7 @@ void ACL_$GET_PROJ_LIST(uid_t *proj_acls, int16_t *max_count,
     *status_ret = mock_proj_status;
 }
 
-int16_t ACL_$IN_SUBSYS(void) { return mock_in_subsys; }
+boolean ACL_$IN_SUBSYS(void) { return mock_in_subsys; }
 
 void OS_$DATA_COPY(const void *src, void *dst, uint32_t len)
 {
@@ -221,7 +221,7 @@ TEST(a_nonzero_proj_list_status_low_word_stops_before_the_send)
 TEST(in_subsys_sets_bit_2_of_record_byte_0x21)
 {
     reset();
-    mock_in_subsys = 0x00FF;            /* the low BYTE is 0xFF = "yes" */
+    mock_in_subsys = (boolean)0xFF;     /* the BYTE the image returns */
     call(0x20);
     ASSERT_EQ(0x04, va_arena.op_buf.re_sids[0x0D]);
 

@@ -37,24 +37,7 @@
 
 #define SOCK_DESC_SIZE          0x1C    /* Size of socket descriptor (28 bytes) */
 
-/*
- * Socket Flags (at descriptor offset 0x16)
- *
- * The flags word encodes both status flags and the socket number:
- *   Bits 0-12:  Socket number (0x1FFF mask)
- *   Bit 13:     Socket allocated (SOCK_FLAG_ALLOCATED)
- *   Bit 14:     User-mode socket (SOCK_FLAG_USER_MODE)
- *   Bit 15:     Socket open/ready (SOCK_FLAG_OPEN)
- */
-#define SOCK_FLAG_NUMBER_MASK   0x1FFF  /* Bits 0-12: socket number */
-#define SOCK_FLAG_ALLOCATED     0x2000  /* Bit 13: socket is allocated */
-#define SOCK_FLAG_USER_MODE     0x4000  /* Bit 14: user-mode socket */
-#define SOCK_FLAG_OPEN          0x8000  /* Bit 15: socket is open */
-
-/* Byte-level flag access (for bset/bclr instructions) */
-#define SOCK_BFLAG_ALLOCATED    0x20    /* Bit 5 of high byte = bit 13 */
-#define SOCK_BFLAG_USER_MODE    0x40    /* Bit 6 of high byte = bit 14 */
-#define SOCK_BFLAG_OPEN         0x80    /* Bit 7 of high byte = bit 15 */
+/* The sock_$sock_t.flags masks live in sock/sock.h with the record. */
 
 /*
  * Socket Table Offsets (relative to sock_table_base)

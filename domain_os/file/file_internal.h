@@ -450,6 +450,34 @@ void FILE_$PRIV_UNLOCK_ALL(uint16_t *asid_ptr);
  * (bead source-3uo). */
 
 /*
+ * file_$audit_set_prot_data_t - the 0x3E-byte audit record FILE_$AUDIT_SET_PROT
+ * assembles in its frame and hands to AUDIT_$LOG_EVENT.
+ *
+ * Built at A6-0x50 by four moves (0x00E5DCAE-0x00E5DCD2):
+ *   0x00E5DCB2  moveq #0xa / move.l (A0)+,(A1)+ / dbf   11 longwords of ACL
+ *   0x00E5DCBE  move.l (A0)+,(-0x24,A6) / (-0x20,A6)    the file UID
+ *   0x00E5DCCA  move.l (A0)+,(-0x1c,A6) / (-0x18,A6)    the protection info
+ *   0x00E5DCD2  move.w D0w,(-0x14,A6)                   the protection type
+ * A6-0x50 .. A6-0x12 is 0x3E bytes, which is exactly the constant the routine
+ * hands over as the length - see file_$audit_set_prot_len.  (source-l8qy)
+ */
+typedef struct __attribute__((packed)) file_$audit_set_prot_data_t {
+    uint8_t     acl_data[44];   /* 0x00: A6-0x50 */
+    uid_t       file_uid;       /* 0x2C: A6-0x24 */
+    uint8_t     prot_info[8];   /* 0x34: A6-0x1C */
+    uint16_t    prot_type;      /* 0x3C: A6-0x14 */
+} file_$audit_set_prot_data_t;
+
+_Static_assert(offsetof(file_$audit_set_prot_data_t, file_uid)  == 0x2C,
+               "file_$audit_set_prot_data_t.file_uid");
+_Static_assert(offsetof(file_$audit_set_prot_data_t, prot_info) == 0x34,
+               "file_$audit_set_prot_data_t.prot_info");
+_Static_assert(offsetof(file_$audit_set_prot_data_t, prot_type) == 0x3C,
+               "file_$audit_set_prot_data_t.prot_type");
+_Static_assert(sizeof(file_$audit_set_prot_data_t) == 0x3E,
+               "file_$audit_set_prot_data_t must be 0x3E bytes");
+
+/*
  * FILE_$VERIFY_LOCK_HOLDER - Verify lock holder is still valid
  *
  * Checks if the lock holder is still holding the lock. If the lock

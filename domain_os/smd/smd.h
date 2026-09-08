@@ -1166,12 +1166,18 @@ void SMD_$EOF_WAIT(status_$t *status_ret);
  * If the current process has no associated display unit, returns
  * immediately without waiting.
  *
- * Returns:
- *   Result from SMD_$REL_DISPLAY, or 0 if no display associated
+ * NO RESULT.  The routine never loads a return value: on the no-unit path D0
+ * happens to hold the zero the "move.w (0x48,A5,D0w*0x1),D0w" at 0x00E6FBAA
+ * tested (with PROC1_$AS_ID*2 still in its high half), and on the other path
+ * it holds whatever SMD_$REL_DISPLAY's trailing EC_$ADVANCE (0x00E6EC5E)
+ * left behind.  The trap-0 dispatch table stores it as a `void *`
+ * (svc/svc_tables.c entry 0x08), so nothing in the tree reads a value from
+ * it either.  The old `uint16_t ... return 0` was an invention.
+ * (source-lpk8)
  *
  * Original address: 0x00E6FB96
  */
-uint16_t SMD_$OP_WAIT_U(void);
+void SMD_$OP_WAIT_U(void);
 
 /*
  * SMD_$SIGNAL - Send signal to display manager

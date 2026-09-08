@@ -1279,8 +1279,8 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
         uint16_t req_buf[12];   /* Request buffer (0x18 bytes) */
         uint32_t pkt_info[8];   /* A6-0xB8: the 30-byte PKT_$DEFAULT_INFO copy */
         /*
-         * A6-0xD8: PKT_$SAR_INTERNET's tenth argument, a second packet-info
-         * record of the same shape that the callee WRITES.  When a request
+         * A6-0xD8: PKT_$SAR_INTERNET's tenth argument, a pkt_$sar_result_t
+         * the callee WRITES.  When a request
          * times out with no reply it stores the attempt counter there:
          * "movea.l (0x24,A6),A0 / move.w D3w,(0x8,A0)" at
          * 0x00E7205E-0x00E72062, just before setting status 0x00110007.
@@ -1288,7 +1288,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
          * to exist so the callee's store lands in this frame and not
          * through a nil pointer.  (source-0fks)
          */
-        uint32_t sar_resp_info[8];
+        pkt_$sar_result_t sar_resp_info;
         uint16_t resp_tpl_len;      /* A6-0x146 */
         /*
          * A6-0x142, PKT_$SAR_INTERNET's sixteenth argument: the length of the
@@ -1417,7 +1417,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
             PKT_$SAR_INTERNET(port, *node_id, 4, pkt_info, 6,
                               req_buf, 0x18,
                               &ASKNODE_$EMPTY_DATA, 0,  /* No request data */
-                              sar_resp_info, (char *)result, *resp_len,
+                              &sar_resp_info, (char *)result, *resp_len,
                               &resp_tpl_len, (uint16_t *)((char *)result + 10),
                               data_len,
                               &resp_data_len, status);

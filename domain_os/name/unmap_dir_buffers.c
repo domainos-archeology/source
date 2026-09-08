@@ -30,37 +30,44 @@
 
 void name_$unmap_dir_buffers(int16_t asid, name_$mapped_info_t *mapped_info)
 {
-    char *info = (char *)mapped_info;
-    int32_t unmap_size;
-    status_$t status;
+    int32_t unmap_size;                 /* D2 */
+    status_$t status;                   /* A6-0x0C */
 
-    /* Only unmap if the mapping is active (high bit set) */
-    if (*info < 0) {
-        uint32_t first_base = *(uint32_t *)(info + 4);
-        uint32_t second_base = *(uint32_t *)(info + 12);
+    /* 0x00E5856C: tst.b (A2) / bpl - a Domain boolean */
+    if (mapped_info->active < 0) {
+        uint32_t first_base = mapped_info->first_base;
+        uint32_t second_base = mapped_info->second_base;
 
-        /* Check if the two halves are contiguous */
+        /* 0x00E58572-0x00E5858E: are the two halves contiguous? */
         if (first_base + 0x8000 == second_base) {
             unmap_size = 0x10000;
         } else {
             unmap_size = 0x8000;
         }
 
-        /* Unmap the first (or only) region */
-        MST_$UNMAP_PRIVI(1, (uid_t *)&UID_$NIL, first_base, unmap_size, asid, &status);
-        if (((uint32_t)status >> 16) != 0) {
+        /* 0x00E58590-0x00E585AE */
+        MST_$UNMAP_PRIVI(1, &UID_$NIL, first_base, unmap_size, asid, &status);
+
+        /*
+         * 0x00E585B2: "tst.w (-0xa,A6)" with the status longword based at
+         * A6-0x0C, i.e. the LOW word of the status - the subsystem/module
+         * half at A6-0x0C is not looked at.  (source-ujs1)
+         */
+        if ((uint16_t)status != 0) {
             CRASH_SYSTEM(&status);
         }
 
-        /* If two separate regions, unmap the second one too */
+        /* 0x00E585C4-0x00E585EE: two separate regions need a second unmap */
         if (unmap_size == 0x8000) {
-            MST_$UNMAP_PRIVI(1, (uid_t *)&UID_$NIL, second_base, 0x8000, asid, &status);
-            if (((uint32_t)status >> 16) != 0) {
+            MST_$UNMAP_PRIVI(1, &UID_$NIL, second_base, 0x8000, asid, &status);
+
+            /* 0x00E585F2: the same low-word test */
+            if ((uint16_t)status != 0) {
                 CRASH_SYSTEM(&status);
             }
         }
 
-        /* Mark mapping as inactive */
-        *info = 0;
+        /* 0x00E58602: clr.b (A2) */
+        mapped_info->active = 0;
     }
 }

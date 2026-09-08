@@ -41,8 +41,11 @@
  * passed as PKT_$SEND_INTERNET's "data" ("pea (0x40,PC)" at 0x00E69FEA,
  * whose target is 0x00E69FEC + 0x40).  data_len is zero, so PKT_$SEND_INTERNET
  * never dereferences it (0x00E12686 "tst.w D6w / ble").
+ *
+ * ROUTE_$SERVICE takes the address of the SAME cell with "pea (-0x40c,PC)"
+ * at 0x00E6A436, so this file shares route_$null_service_rec rather than
+ * defining a private static of its own.  (source-l8qy)
  */
-static const uint32_t route_$announce_no_data = 0;
 
 /*
  * =============================================================================
@@ -101,7 +104,7 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network)
         packet_id,                      /* 8  request_id                     */
         (void *)&ROUTE_$ANNOUNCE_TEMPLATE, /* 9  template   pea (0x4,A5)      */
         2,                              /* 10 template_len                   */
-        (void *)&route_$announce_no_data, /* 11 data        pea (0x40,PC)     */
+        (void *)route_$null_service_rec, /* 11 data  pea (0x40,PC) = 0xE6A02C */
         0,                              /* 12 data_len                       */
         &retry_hint,                    /* 13 retry_hint    A6-0x30          */
         &timeout_out,                   /* 14 timeout_out   A6-0x2E          */

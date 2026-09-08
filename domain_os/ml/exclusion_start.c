@@ -44,8 +44,17 @@ void ML_$EXCLUSION_START(ml_$exclusion_t *excl)
          * Someone else is in the region - we need to wait.
          * Increment the event count and wait for it.
          */
+        /*
+         * 0x00E20E10 "ori #0x700,SR".  The image RAISES the interrupt mask
+         * and NEVER lowers it again: there is no SR restore anywhere between
+         * here and the "rts" at 0x00E20E32, on either path.  PROC1_$EC_WAITN
+         * is what eventually leaves the caller running with interrupts
+         * enabled again.  Do not add a restore here - it would change the
+         * interrupt state the caller is handed.  (source-l8qy)
+         */
         uint16_t sr;
         DISABLE_INTERRUPTS(sr);
+        (void)sr;               /* saved, and deliberately never restored */
 
         excl->f4++;
         wait_vals[0] = excl->f4;
@@ -53,6 +62,9 @@ void ML_$EXCLUSION_START(ml_$exclusion_t *excl)
 
         PROC1_$EC_WAITN(pcb, ec_list, wait_vals, 1);
 
-        /* PROC1_$EC_WAITN returns with interrupts enabled */
+        /*
+         * PROC1_$EC_WAITN returns with interrupts enabled; the routine falls
+         * straight into its "rts" (0x00E20E2C-0x00E20E32 restore only A3/A4).
+         */
     }
 }

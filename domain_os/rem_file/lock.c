@@ -157,7 +157,7 @@ void REM_FILE_$LOCK(void *location_block, uint16_t lock_mode, uint16_t lock_type
 
         /* 0x00E61B22-0x00E61B30.  `bset.b #0x0,(-0x158,A6)` sets bit 0 of the
          * byte at +0x18, which is the HIGH byte of that word - bit 8. */
-        if ((int8_t)ACL_$IN_SUBSYS() < 0) {   /* `tst.b D0b / bpl` at 0x00E61B28 */
+        if (ACL_$IN_SUBSYS() < 0) {           /* `tst.b D0b / bpl` at 0x00E61B28 */
             request.ext.flags |= 0x0100;
         }
 

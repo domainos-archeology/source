@@ -49,7 +49,12 @@ boolean rem_name_$send_request(uint32_t net, uint32_t node, void *request,
      * i.e. exactly 15 words, from the module block at A5.
      */
     uint16_t config[15];
-    uint8_t out_buf[40];        /* A6-0x28 */
+    /*
+     * A6-0x28: PKT_$SAR_INTERNET's tenth argument.  The callee only writes
+     * its attempts word at +0x08 on the no-answer exit (0x00E7205E);
+     * rem_name_$send_request never reads it back.
+     */
+    pkt_$sar_result_t out_buf;  /* A6-0x28 */
     uint8_t out1[4];            /* A6-0x4C */
     uint16_t out2;              /* A6-0x52: response data length out */
     status_$t internal_status;  /* A6-0x50 */
@@ -66,7 +71,7 @@ boolean rem_name_$send_request(uint32_t net, uint32_t node, void *request,
     /* Send the packet */
     PKT_$SAR_INTERNET(net, node, 10, config, rem_name_$data.service_delay,
                       request, req_size, (void *)pkt_callback_data, 0,
-                      out_buf, response, resp_size, resp_len_ret,
+                      &out_buf, response, resp_size, resp_len_ret,
                       out1, 0, &out2, &internal_status);
 
     if (internal_status != status_$ok) {

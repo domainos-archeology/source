@@ -24,43 +24,46 @@
 #include "misc/crash_system.h"
 
 /*
- * Error status for socket allocation failure
+ * pkt_$sar_no_socket_status - the CRASH_SYSTEM operand of the failed
+ * SOCK_$ALLOCATE, "pea (0x288,PC)" at 0x00E71EF6 -> 0x00E71EF8 + 0x288 =
+ * 0x00E72180.  The image bytes there are 00 11 00 05, i.e.
+ * status_$network_receive_process_failed_to_start; SR10.4 renames the same
+ * code "no available socket", which is what this call site means.
  */
-static status_$t sock_alloc_error = 0x0011000C;  /* No socket available */
+static status_$t pkt_$sar_no_socket_status =
+    status_$network_receive_process_failed_to_start;
 
 void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_sock,
                        void *pkt_info, int16_t timeout,
                        void *req_template, uint16_t req_tpl_len,
                        void *req_data, uint16_t req_data_len,
-                       void *resp_buf, char *resp_tpl_buf, uint16_t resp_tpl_max,
+                       pkt_$sar_result_t *resp_buf,
+                       char *resp_tpl_buf, uint16_t resp_tpl_max,
                        uint16_t *resp_tpl_len, void *resp_data_buf, uint16_t resp_data_max,
                        uint16_t *resp_data_len, status_$t *status_ret)
 {
-    int8_t result;
-    uint16_t sock_num;
-    int16_t request_id;
-    int16_t retry_num;
-    uint16_t max_retries;
-    int32_t wait_val;
-    int32_t timeout_val;
-    int32_t quit_check_val;
-    ec_$eventcount_t *sock_ec;
-    void *recv_pkt;
-    status_$t local_status;
-    uint16_t len_out[2];
-    int16_t recv_id;
-    uint16_t recv_tpl_len;
-    uint16_t copy_len;
-    uint32_t recv_ppn;
-    uint32_t data_buffers[10];
-    uint32_t addr_info[2];
-    int16_t wait_result;
-    int8_t got_response;
+    int8_t result;                  /* D0b */
+    uint16_t sock_num;              /* A6-0x60, then D5 */
+    int16_t request_id;             /* D4 */
+    int16_t retry_num;              /* D3 */
+    uint16_t max_retries;           /* A6-0x52 */
+    int32_t wait_val;               /* D6 */
+    int32_t timeout_val;            /* A6-0x40 */
+    int32_t quit_check_val;         /* A6-0x44 */
+    ec_$eventcount_t *sock_ec;      /* A6-0x3C */
+    pkt_$net_addr_t addr_info;      /* A6-0x38 .. A6-0x31 */
+    uint16_t retry_hint;            /* A6-0x54, PKT_$SEND_INTERNET output */
+    uint16_t rtt_hint;              /* A6-0x56, PKT_$SEND_INTERNET output */
+    app_$receive_rec_t rec;         /* A6-0x30 */
+    const app_$reply_hdr_t *reply;  /* A0 */
+    int16_t recv_id;                /* D2 */
+    uint16_t copy_len;              /* D1, then D0 */
+    int16_t wait_result;            /* D0w */
 
-    /* Allocate a socket for receiving response */
+    /* 0x00E71ED4 - 0x00E71EEE */
     result = SOCK_$ALLOCATE(&sock_num, 0x20001, 0x10400);
     if (result >= 0) {
-        CRASH_SYSTEM(&sock_alloc_error);
+        CRASH_SYSTEM(&pkt_$sar_no_socket_status);
     }
 
     /*
@@ -73,10 +76,10 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
      */
     sock_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
 
-    /* Generate request ID */
+    /* 0x00E71F18 */
     request_id = PKT_$NEXT_ID();
 
-    /* Get initial wait value (00e71f24 move.l (A1),D6 / 00e71f2c addq.l #1,D6) */
+    /* 0x00E71F24 / 0x00E71F2C: move.l (A1),D6 / addq.l #1,D6 */
     wait_val = sock_ec->value + 1;
 
     /*
@@ -87,52 +90,59 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
      */
     quit_check_val = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
 
-    /* Set up address info for visibility tracking */
-    addr_info[0] = routing_key;
-    addr_info[1] = dest_node;
+    /*
+     * 0x00E71F40 - 0x00E71F46: the two argument longwords are copied into an
+     * adjacent pair of locals so their address can be handed to
+     * PKT_$LIKELY_TO_ANSWER later ("pea (-0x38,A6)" at 0x00E7204E).
+     */
+    addr_info.network = routing_key;
+    addr_info.node = dest_node;
 
     retry_num = 1;
 
-    /* Get max retries from pkt_info (offset 0x08), 0 means use 0xFFFF */
-    if (*(int16_t *)((char *)pkt_info + 8) == 0) {
+    /*
+     * 0x00E71F4C - 0x00E71F66: a zero retry limit in the caller's packet-info
+     * record means "not set yet"; the first PKT_$SEND_INTERNET fills it in
+     * from its retry_hint output.
+     */
+    if (((pkt_$info_t *)pkt_info)->retry_limit == 0) {
         max_retries = 0xFFFF;
     } else {
-        max_retries = *(uint16_t *)((char *)pkt_info + 8);
+        max_retries = ((pkt_$info_t *)pkt_info)->retry_limit;
     }
 
-    got_response = 0;
-
-    /* Main send/receive loop */
+    /* Main send/receive loop (0x00E71F66) */
     for (;;) {
-        /* Send the request */
+        /* 0x00E71F66 - 0x00E71FA8 */
         PKT_$SEND_INTERNET(routing_key, dest_node, dest_sock,
                            (int32_t)-1, NODE_$ME, sock_num,
-                           pkt_info, request_id,
+                           pkt_info, (uint16_t)request_id,
                            req_template, req_tpl_len,
-                           req_data, req_data_len,
-                           &len_out[1], &len_out[0], status_ret);
+                           req_data, (int16_t)req_data_len,
+                           &retry_hint, &rtt_hint, status_ret);
 
+        /* 0x00E71FB4 */
         if (*status_ret != status_$ok) {
-            goto cleanup;
+            goto close_socket;
         }
 
-        /* Update max_retries on first send */
+        /* 0x00E71FBE - 0x00E71FC6 */
         if (max_retries == 0xFFFF) {
-            max_retries = len_out[1];
+            max_retries = retry_hint;
         }
 
         /*
          * Calculate timeout.  The sum is formed in a word and then zero
          * extended before being added to the clock:
-         * 00e71fac  move.w (-0x56,A6),D0w    ; len_out[0]
+         * 00e71fac  move.w (-0x56,A6),D0w    ; rtt_hint
          * 00e71fba  add.w (0x16,A6),D0w      ; + timeout
          * 00e71fca  andi.l #0xffff,D0
          * 00e71fd0  add.l (0x00e2b0d4).l,D0  ; + TIME_$CLOCKH
          */
         timeout_val = (int32_t)(TIME_$CLOCKH +
-                                (uint32_t)(uint16_t)(timeout + len_out[0]));
+                                (uint32_t)(uint16_t)(timeout + rtt_hint));
 
-        /* Wait for response or timeout */
+        /* Wait for response or timeout (0x00E71FE8) */
         for (;;) {
             /*
              * Both arrays go on the stack by value; arguments are pushed
@@ -165,92 +175,111 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
                 FIM_$QUIT_VALUE[PROC1_$AS_ID] =
                     (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
                 *status_ret = 0x120010;  /* Quit status */
-                goto cleanup_no_visibility;
+                goto check_visible;
             }
 
-            /* Response received - increment wait value for next wait */
+            /* 0x00E720A8: response queued, bump the awaited socket value */
             wait_val++;
 
-            /* Receive the response */
-            APP_$RECEIVE(sock_num, &recv_pkt, status_ret);
+            /* 0x00E720AA - 0x00E720BA */
+            APP_$RECEIVE(sock_num, &rec, status_ret);
 
+            /* 0x00E720BE: an error just goes back to waiting */
             if (*status_ret == status_$ok) {
-                /* Extract response template length */
-                recv_tpl_len = *(uint16_t *)((char *)recv_pkt + 2);
+                /* 0x00E720C4 */
+                reply = (const app_$reply_hdr_t *)ARCH_VA_TO_PTR(rec.reply);
 
-                /* Copy template to caller's buffer */
-                copy_len = recv_tpl_len;
+                /* 0x00E720C8 - 0x00E720DA: bls, so the compare is unsigned */
+                copy_len = reply->template_len;
                 if (copy_len > resp_tpl_max) {
                     copy_len = resp_tpl_max;
                 }
                 *resp_tpl_len = copy_len;
-                OS_$DATA_COPY(*(char **)((char *)recv_pkt + 0x28), resp_tpl_buf, (uint32_t)copy_len);
 
-                /* Get response ID */
-                recv_id = *(int16_t *)((char *)recv_pkt + 6);
+                /*
+                 * 0x00E720DC - 0x00E720F0: the source is the record's data
+                 * pointer at +0x04, not the reply header.
+                 */
+                OS_$DATA_COPY(ARCH_VA_TO_PTR(rec.data), resp_tpl_buf,
+                              (uint32_t)copy_len);
 
-                /* Return header buffer */
-                recv_ppn = (*(uint32_t *)((char *)recv_pkt + 0x28)) & 0xFFFFFC00;
-                NETBUF_$RTN_HDR(&recv_ppn);
+                /* 0x00E720F4 */
+                recv_id = (int16_t)reply->request_id;
 
-                /* Handle data buffers */
-                data_buffers[0] = *(uint32_t *)((char *)recv_pkt + 0x2C);
-                if (data_buffers[0] == 0) {
-                    *resp_data_len = 0;
+                /* 0x00E720FC: &rec.data, unmasked */
+                NETBUF_$RTN_HDR(&rec.data);
+
+                /* 0x00E72108 */
+                if (rec.data_pages[0] == 0) {
+                    *resp_data_len = 0;         /* 0x00E72150 */
                 } else {
-                    /* Copy data to caller's buffer */
-                    uint16_t data_len = *(uint16_t *)((char *)recv_pkt + 4);
-                    copy_len = data_len;
+                    /* 0x00E7210E - 0x00E72120: bls, unsigned */
+                    copy_len = reply->data_len;
                     if (copy_len > resp_data_max) {
                         copy_len = resp_data_max;
                     }
                     *resp_data_len = copy_len;
-                    PKT_$DAT_COPY(data_buffers, copy_len, (char *)resp_data_buf);
-                    PKT_$DUMP_DATA(data_buffers, data_len);
+
+                    /* 0x00E72122 - 0x00E72134 */
+                    PKT_$DAT_COPY(rec.data_pages, (int16_t)copy_len,
+                                  (char *)resp_data_buf);
+
+                    /*
+                     * 0x00E72138 - 0x00E7214C: the length is re-read from the
+                     * reply header, so the full received length is released
+                     * even when the caller's buffer clamped the copy.
+                     */
+                    PKT_$DUMP_DATA(rec.data_pages, (int16_t)reply->data_len);
                 }
 
-                /* Check if response matches our request */
+                /* 0x00E72152 */
                 if (recv_id == request_id) {
-                    got_response = (int8_t)0xFF;
-                    goto cleanup;
+                    goto check_visible;
                 }
             }
-
-            /* Wrong ID or error - continue waiting */
         }
 
-        /* Timeout - check if we should retry */
+        /* 0x00E72020 - 0x00E7202C: the compare is done in longs */
         if ((int32_t)retry_num == (int32_t)max_retries) {
-            /* Max retries reached */
+            /* 0x00E7202E: more than two attempts means the node went quiet */
             if (retry_num > 2) {
-                PKT_$NOTE_VISIBLE(dest_node, 0);
+                PKT_$NOTE_VISIBLE(dest_node, 0);   /* 0x00E72036 clr.w -(SP) */
             }
-            *(int16_t *)((char *)pkt_info + 8) = retry_num;
-            *status_ret = status_$network_remote_node_failed_to_respond;
-            goto cleanup_no_visibility;
+            goto no_answer;
         }
 
-        /* After 2 retries, check if node is likely to answer */
+        /* 0x00E72046 - 0x00E7205C */
         if (retry_num == 2) {
-            result = PKT_$LIKELY_TO_ANSWER(addr_info, status_ret);
+            result = PKT_$LIKELY_TO_ANSWER(&addr_info, status_ret);
             if (result >= 0) {
                 /* Node unlikely to answer */
-                *(int16_t *)((char *)pkt_info + 8) = retry_num;
-                *status_ret = status_$network_remote_node_failed_to_respond;
-                goto cleanup_no_visibility;
+                goto no_answer;
             }
         }
 
-        retry_num++;
+        retry_num++;                            /* 0x00E72070 */
     }
 
-cleanup:
-    /* Update visibility based on result */
+no_answer:
+    /*
+     * 0x00E7205E - 0x00E72066: the attempt count is reported through the
+     * TENTH argument, "movea.l (0x24,A6),A0 / move.w D3w,(0x8,A0)" - not
+     * through the packet-info record the retry limit was read from.
+     */
+    resp_buf->attempts = (uint16_t)retry_num;
+    *status_ret = status_$network_remote_node_failed_to_respond;
+
+check_visible:
+    /*
+     * 0x00E72158 - 0x00E7216A.  The two error exits reach the "bne" at
+     * 0x00E7215A with the flags of their own non-zero status store, so only
+     * a clean status runs the call.
+     */
     if (*status_ret == status_$ok) {
-        PKT_$NOTE_VISIBLE(dest_node, (int8_t)0xFF);
+        PKT_$NOTE_VISIBLE(dest_node, (boolean)0xFF);  /* 0x00E7215E st -(SP) */
     }
 
-cleanup_no_visibility:
-    /* Close the socket */
+close_socket:
+    /* 0x00E7216C */
     SOCK_$CLOSE(sock_num);
 }

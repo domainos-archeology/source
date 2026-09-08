@@ -111,12 +111,18 @@ void ACL_$DOWN(void);
 /*
  * ACL_$IN_SUBSYS - Check if in subsystem context
  *
+ * Returns a Domain BOOLEAN BYTE: "sgt D0b" at 0x00E470BA writes only D0's low
+ * byte, so the rest of the register still holds PROC1_$CURRENT * 2 from
+ * 0x00E470B0 and is not part of the answer.  Both callers read it as a byte -
+ * REM_FILE_$RN_DO_OP "tst.b D0b / bpl" at 0x00E615AC and REM_FILE_$LOCK the
+ * same at 0x00E61B28.  (source-lpk8)
+ *
  * Returns:
- *   Non-zero (-1) if subsystem level > 0, 0 otherwise
+ *   true (0xFF) if the subsystem level is greater than zero, false otherwise
  *
  * Original address: 0x00E47098
  */
-int16_t ACL_$IN_SUBSYS(void);
+boolean ACL_$IN_SUBSYS(void);
 
 /*
  * ACL_$ENTER_SUPER - Enter superuser mode

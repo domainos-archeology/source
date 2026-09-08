@@ -321,7 +321,8 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
                        void *pkt_info, int16_t timeout,
                        void *req_template, uint16_t req_tpl_len,
                        void *req_data, uint16_t req_data_len,
-                       void *resp_buf, char *resp_tpl_buf, uint16_t resp_tpl_max,
+                       pkt_$sar_result_t *resp_buf,
+                       char *resp_tpl_buf, uint16_t resp_tpl_max,
                        uint16_t *resp_tpl_len, void *resp_data_buf,
                        uint16_t resp_data_max, uint16_t *resp_data_len,
                        status_$t *status_ret)

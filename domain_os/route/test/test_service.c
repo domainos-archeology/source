@@ -161,17 +161,87 @@ void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index,
     decrement_calls++;
 }
 
-static int init_routing_calls;
-static int16_t init_routing_port[8];
-static int8_t init_routing_type[8];
+/*
+ * route_$init_routing (0x00E69CCC) is a file static inside route/service.c
+ * (bead source-sc3x), so it runs for real.  Its two counters are the only
+ * visible effect until BOTH kinds of routing port have been counted, so the
+ * tests below watch the counters instead of a call log.  The routine's own
+ * callees are scripted here.
+ */
+int16_t ROUTE_$STD_N_ROUTING_PORTS;
+int16_t ROUTE_$N_ROUTING_PORTS;
+uint32_t ROUTE_$Q_DEPTH[0x81];
+uint32_t ROUTE_$CONTROL_EC;
+uint32_t ROUTE_$CONTROL_ECVAL;
+uint32_t ROUTE_$SOCK_ECVAL;
+uint16_t ROUTE_$SOCK;
+uint16_t ROUTE_$PID;
+uint16_t ROUTE_$NETBUF_ALLOC;
+uint32_t ROUTE_$LAST_UPDATE_TIME;
+uint32_t ROUTE_$Q_OFLO;
+uint32_t ROUTE_$TOO_FAR;
+uint32_t ROUTE_$MISROUTE;
+uint32_t ROUTE_$PKTS_ROUTED;
+uint32_t ROUTE_$DLEN_ERR;
+uint32_t ROUTE_$STD_TOO_FAR;
+uint32_t ROUTE_$STD_MISROUTE;
+uint32_t ROUTE_$STD_PKTS_ROUTED;
+uint32_t ROUTE_$STD_DLEN_ERR;
+uint32_t TIME_$CURRENT_CLOCKH;
+uint8_t sock_table_base[SOCK_TABLE_SIZE];
 
-void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type)
+void ROUTE_$PROCESS(void) { }
+
+static int ec_init_calls;
+static int ec_advance_calls;
+static ec_$eventcount_t *ec_advance_seen;
+static int32_t ec_read_value;
+
+void EC_$INIT(ec_$eventcount_t *ec) { (void)ec; ec_init_calls++; }
+int32_t EC_$READ(ec_$eventcount_t *ec) { (void)ec; return ec_read_value; }
+void EC_$ADVANCE(ec_$eventcount_t *ec) { ec_advance_seen = ec; ec_advance_calls++; }
+
+static int create_p_calls;
+static void *create_p_entry;
+static uint32_t create_p_type;
+static status_$t *create_p_status_seen;
+static status_$t create_p_status_out;
+static uint16_t create_p_pid;
+
+uint16_t PROC1_$CREATE_P(void *funcptr, uint32_t type, status_$t *status_ret)
 {
-    if (init_routing_calls < 8) {
-        init_routing_port[init_routing_calls] = port_index;
-        init_routing_type[init_routing_calls] = port_type;
-    }
-    init_routing_calls++;
+    create_p_calls++;
+    create_p_entry = funcptr;
+    create_p_type = type;
+    create_p_status_seen = status_ret;
+    *status_ret = create_p_status_out;
+    return create_p_pid;
+}
+
+static int sock_alloc_calls;
+static uint32_t sock_alloc_arg2;
+static uint32_t sock_alloc_arg3;
+static uint16_t sock_alloc_num;
+static int8_t sock_alloc_result;
+static sock_$sock_t test_sock_desc;
+
+int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages,
+                      uint32_t max_queue)
+{
+    sock_alloc_calls++;
+    sock_alloc_arg2 = proto_bufpages;
+    sock_alloc_arg3 = max_queue;
+    *sock_ret = sock_alloc_num;
+    return sock_alloc_result;
+}
+
+static int crash_calls;
+static status_$t crash_status_seen;
+
+void CRASH_SYSTEM(const status_$t *status)
+{
+    crash_calls++;
+    crash_status_seen = *status;
 }
 
 /* --- RIP ---------------------------------------------------------------- */
@@ -382,8 +452,48 @@ static void reset_state(void)
     wire_calls = 0;
     announce_calls = 0;
     decrement_calls = 0;
-    init_routing_calls = 0;
     rip_update_calls = 0;
+
+    /* route_$init_routing's own state */
+    ROUTE_$STD_N_ROUTING_PORTS = 0;
+    ROUTE_$N_ROUTING_PORTS = 0;
+    memset(ROUTE_$Q_DEPTH, 0xEE, sizeof(ROUTE_$Q_DEPTH));
+    ROUTE_$CONTROL_ECVAL = 0;
+    ROUTE_$SOCK_ECVAL = 0;
+    ROUTE_$SOCK = 0;
+    ROUTE_$PID = 0;
+    ROUTE_$NETBUF_ALLOC = 0;
+    ROUTE_$LAST_UPDATE_TIME = 0;
+    ROUTE_$Q_OFLO = 0xEEEEEEEE;
+    ROUTE_$TOO_FAR = 0xEEEEEEEE;
+    ROUTE_$MISROUTE = 0xEEEEEEEE;
+    ROUTE_$PKTS_ROUTED = 0xEEEEEEEE;
+    ROUTE_$DLEN_ERR = 0xEEEEEEEE;
+    ROUTE_$STD_TOO_FAR = 0xEEEEEEEE;
+    ROUTE_$STD_MISROUTE = 0xEEEEEEEE;
+    ROUTE_$STD_PKTS_ROUTED = 0xEEEEEEEE;
+    ROUTE_$STD_DLEN_ERR = 0xEEEEEEEE;
+    TIME_$CURRENT_CLOCKH = 0x11223344;
+    memset(&test_sock_desc, 0, sizeof(test_sock_desc));
+    test_sock_desc.flags = 0xFFFF;
+    SOCK_$EVENT_COUNTERS[0] = &test_sock_desc.ec;   /* slot for socket 1 */
+    ec_init_calls = 0;
+    ec_advance_calls = 0;
+    ec_advance_seen = NULL;
+    ec_read_value = 0x40;
+    create_p_calls = 0;
+    create_p_entry = NULL;
+    create_p_type = 0;
+    create_p_status_seen = NULL;
+    create_p_status_out = status_$ok;
+    create_p_pid = 0x1234;
+    sock_alloc_calls = 0;
+    sock_alloc_arg2 = 0;
+    sock_alloc_arg3 = 0;
+    sock_alloc_num = 1;
+    sock_alloc_result = -1;
+    crash_calls = 0;
+    crash_status_seen = 0;
     memset(rip_hop_value, 0xEE, sizeof(rip_hop_value));
     rip_send_calls = 0;
     create_port_calls = 0;
@@ -901,9 +1011,9 @@ TEST(entering_routing_needs_the_std_channel)
 
     call_service();
 
-    ASSERT_EQ(1, init_routing_calls);
-    ASSERT_EQ(1, init_routing_port[0]);
-    ASSERT_EQ((int8_t)0xFF, init_routing_type[0]);
+    /* The STD arm bumped its own counter and nothing else. */
+    ASSERT_EQ(1, ROUTE_$STD_N_ROUTING_PORTS);
+    ASSERT_EQ(0, ROUTE_$N_ROUTING_PORTS);
     ASSERT_EQ(status_$ok, call_status);
 
     reset_state();
@@ -916,7 +1026,8 @@ TEST(entering_routing_needs_the_std_channel)
 
     call_service();
 
-    ASSERT_EQ(0, init_routing_calls);
+    ASSERT_EQ(0, ROUTE_$STD_N_ROUTING_PORTS);
+    ASSERT_EQ(0, ROUTE_$N_ROUTING_PORTS);
     ASSERT_EQ(status_$internet_network_port_not_open, call_status);
 }
 
@@ -933,10 +1044,206 @@ TEST(entering_n_routing_has_no_channel_test)
 
     call_service();
 
-    ASSERT_EQ(1, init_routing_calls);
-    ASSERT_EQ(1, init_routing_port[0]);
-    ASSERT_EQ(0, init_routing_type[0]);
+    /* The non-standard arm bumped the other counter. */
+    ASSERT_EQ(1, ROUTE_$N_ROUTING_PORTS);
+    ASSERT_EQ(0, ROUTE_$STD_N_ROUTING_PORTS);
     ASSERT_EQ(status_$ok, call_status);
+}
+
+
+/* ==========================================================================
+ * route_$init_routing, the nested procedure at 0x00E69CCC (bead source-sc3x)
+ * ========================================================================== */
+
+/* Drive the STD arm (0x00E6A4DC "st -(SP) / bsr.w 0x00e69ccc"). */
+static void drive_std_arm(void)
+{
+    op_word = SERVICE_OP_SET_STATUS;
+    ROUTE_$PORT_ARRAY[1].network = 1;
+    ROUTE_$PORT_ARRAY[1].active = 2;      /* in PORT_STATUS_DISABLE_STD */
+    ROUTE_$PORT_ARRAY[1].active = 2;
+    request.status = 4;                   /* in PORT_STATUS_ROUTING_MASK */
+    attach_driver(1);
+    RIP_$STD_IDP_CHANNEL = 3;
+    call_service();
+}
+
+/* Drive the non-standard arm (0x00E6A512 "clr.w -(SP) / bsr.w 0x00e69ccc"). */
+static void drive_n_arm(void)
+{
+    op_word = SERVICE_OP_SET_STATUS;
+    ROUTE_$PORT_ARRAY[1].network = 1;
+    ROUTE_$PORT_ARRAY[1].active = 2;      /* in PORT_STATUS_DISABLE_N */
+    request.status = 3;                   /* in PORT_STATUS_N_ROUTING_MASK */
+    attach_driver(1);
+    RIP_$STD_IDP_CHANNEL = -1;
+    call_service();
+}
+
+/*
+ * 0x00E69CDC-0x00E69D0E.  The body runs only when the counter the arm just
+ * incremented is exactly 2 AND the other one is below 2.  Each arm tests only
+ * its own pair, so both orders have to be checked.
+ */
+TEST(init_routing_counter_rule)
+{
+    /* First STD port: counter reaches 1, nothing else happens. */
+    reset_state();
+    drive_std_arm();
+    ASSERT_EQ(1, ROUTE_$STD_N_ROUTING_PORTS);
+    ASSERT_EQ(0, create_p_calls);
+
+    /* Second STD port with the other counter at 0: the body runs. */
+    reset_state();
+    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    drive_std_arm();
+    ASSERT_EQ(2, ROUTE_$STD_N_ROUTING_PORTS);
+    ASSERT_EQ(1, create_p_calls);
+
+    /* Second STD port while the other counter is already 2: "ble" exits. */
+    reset_state();
+    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    ROUTE_$N_ROUTING_PORTS = 2;
+    drive_std_arm();
+    ASSERT_EQ(2, ROUTE_$STD_N_ROUTING_PORTS);
+    ASSERT_EQ(0, create_p_calls);
+
+    /* Third STD port: the counter passes 2, "bne" exits. */
+    reset_state();
+    ROUTE_$STD_N_ROUTING_PORTS = 2;
+    drive_std_arm();
+    ASSERT_EQ(3, ROUTE_$STD_N_ROUTING_PORTS);
+    ASSERT_EQ(0, create_p_calls);
+
+    /* The same three rules on the non-standard arm. */
+    reset_state();
+    ROUTE_$N_ROUTING_PORTS = 1;
+    drive_n_arm();
+    ASSERT_EQ(2, ROUTE_$N_ROUTING_PORTS);
+    ASSERT_EQ(1, create_p_calls);
+
+    reset_state();
+    ROUTE_$N_ROUTING_PORTS = 1;
+    ROUTE_$STD_N_ROUTING_PORTS = 2;
+    drive_n_arm();
+    ASSERT_EQ(2, ROUTE_$N_ROUTING_PORTS);
+    ASSERT_EQ(0, create_p_calls);
+
+    reset_state();
+    ROUTE_$N_ROUTING_PORTS = 2;
+    drive_n_arm();
+    ASSERT_EQ(3, ROUTE_$N_ROUTING_PORTS);
+    ASSERT_EQ(0, create_p_calls);
+
+    /*
+     * The other counter at exactly 1 is still below 2, so the body runs -
+     * this is the "one port of each kind" case the routine is written for.
+     */
+    reset_state();
+    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    ROUTE_$N_ROUTING_PORTS = 1;
+    drive_std_arm();
+    ASSERT_EQ(1, create_p_calls);
+}
+
+/* 0x00E69D12-0x00E69E2C: what the body actually does. */
+TEST(init_routing_body)
+{
+    reset_state();
+    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    ec_read_value = 0x40;
+    drive_std_arm();
+
+    /* 0x00E69D12: 0x81 longwords cleared at 0x00E87DA8 */
+    ASSERT_EQ(0, ROUTE_$Q_DEPTH[0]);
+    ASSERT_EQ(0, ROUTE_$Q_DEPTH[0x80]);
+
+    /* 0x00E69D22-0x00E69D40 */
+    ASSERT_EQ(1, ec_init_calls);
+    ASSERT_EQ(0x41, ROUTE_$CONTROL_ECVAL);
+
+    /* 0x00E69D46-0x00E69D60: entry, flags and the PARENT's status cell */
+    ASSERT_EQ(1, create_p_calls);
+    ASSERT_EQ((uintptr_t)ROUTE_$PROCESS, (uintptr_t)create_p_entry);
+    ASSERT_EQ(0x1000000C, create_p_type);
+    ASSERT_EQ((uintptr_t)&call_status, (uintptr_t)create_p_status_seen);
+    ASSERT_EQ(0x1234, ROUTE_$PID);
+
+    /* 0x00E69D7C / 0x00E69D80 */
+    ASSERT_EQ(1, wire_calls);
+    ASSERT_EQ(0x40, ROUTE_$NETBUF_ALLOC);
+
+    /* 0x00E69D88-0x00E69DA0: the two longwords built from four words */
+    ASSERT_EQ(1, sock_alloc_calls);
+    ASSERT_EQ(0x00400040, sock_alloc_arg2);
+    ASSERT_EQ(0x00400400, sock_alloc_arg3);
+
+    /* 0x00E69DCC: bclr #7 of the flags high byte = SOCK_FLAG_OPEN */
+    ASSERT_EQ(0x7FFF, test_sock_desc.flags);
+
+    /* 0x00E69DD2-0x00E69DE4 */
+    ASSERT_EQ(0x41, ROUTE_$SOCK_ECVAL);
+    ASSERT_EQ(1, ROUTE_$SOCK);
+
+    /* 0x00E69DEA: the (A5) store */
+    ASSERT_EQ(0x11223344, ROUTE_$LAST_UPDATE_TIME);
+
+    /* 0x00E69DF0-0x00E69E20 */
+    ASSERT_EQ(0, ROUTE_$Q_OFLO);
+    ASSERT_EQ(0, ROUTE_$TOO_FAR);
+    ASSERT_EQ(0, ROUTE_$MISROUTE);
+    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
+    ASSERT_EQ(0, ROUTE_$DLEN_ERR);
+    ASSERT_EQ(0, ROUTE_$STD_TOO_FAR);
+    ASSERT_EQ(0, ROUTE_$STD_MISROUTE);
+    ASSERT_EQ(0, ROUTE_$STD_PKTS_ROUTED);
+    ASSERT_EQ(0, ROUTE_$STD_DLEN_ERR);
+
+    /* 0x00E69E26 */
+    ASSERT_EQ(1, ec_advance_calls);
+    ASSERT_EQ((uintptr_t)&ROUTE_$CONTROL_EC, (uintptr_t)ec_advance_seen);
+
+    ASSERT_EQ(0, crash_calls);
+    ASSERT_EQ(status_$ok, call_status);
+}
+
+/*
+ * 0x00E69D66-0x00E69D78: a failed PROC1_$CREATE_P leaves its status in the
+ * PARENT's status_ret and crashes with that same cell, so ROUTE_$SERVICE's
+ * caller sees the failure too.
+ */
+TEST(init_routing_reports_create_failure_through_the_parent_status)
+{
+    reset_state();
+    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    create_p_status_out = 0x000D0007;
+    drive_std_arm();
+
+    ASSERT_EQ(1, crash_calls);
+    ASSERT_EQ(0x000D0007, crash_status_seen);
+    ASSERT_EQ(0x000D0007, call_status);
+    ASSERT_EQ(0, sock_alloc_calls);
+    /* the parent then takes its own error path: the old status is restored */
+    ASSERT_EQ(2, ROUTE_$PORT_ARRAY[1].active);
+}
+
+/*
+ * 0x00E69DAC: a failed SOCK_$ALLOCATE crashes with the cell at 0x00E69E3C,
+ * 0x002B000E ("unable to create through-traffic queue"), and leaves the
+ * parent's status alone.
+ */
+TEST(init_routing_socket_failure_crashes_with_0x2b000e)
+{
+    reset_state();
+    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    sock_alloc_result = 0;              /* bpl: allocation failed */
+    drive_std_arm();
+
+    ASSERT_EQ(1, crash_calls);
+    ASSERT_EQ(0x002B000E, crash_status_seen);
+    ASSERT_EQ(status_$ok, call_status);
+    ASSERT_EQ(0, ec_advance_calls);
+    ASSERT_EQ(0, ROUTE_$SOCK);
 }
 
 /* ==========================================================================
@@ -1033,7 +1340,8 @@ TEST(unchanged_status_skips_the_arm)
     call_service();
 
     ASSERT_EQ(0, decrement_calls);
-    ASSERT_EQ(0, init_routing_calls);
+    ASSERT_EQ(0, ROUTE_$STD_N_ROUTING_PORTS);
+    ASSERT_EQ(0, ROUTE_$N_ROUTING_PORTS);
     ASSERT_EQ(0, idp_add_calls);
     ASSERT_EQ(3, ROUTE_$PORT_ARRAY[1].active);
     /* The tail still runs. */
@@ -1100,6 +1408,10 @@ int main(void)
     RUN_TEST(idp_registration_on_leaving_status_one);
     RUN_TEST(entering_routing_needs_the_std_channel);
     RUN_TEST(entering_n_routing_has_no_channel_test);
+    RUN_TEST(init_routing_counter_rule);
+    RUN_TEST(init_routing_body);
+    RUN_TEST(init_routing_reports_create_failure_through_the_parent_status);
+    RUN_TEST(init_routing_socket_failure_crashes_with_0x2b000e);
     RUN_TEST(restore_only_on_a_non_zero_status);
     RUN_TEST(no_restore_when_status_is_ok_and_new_status_is_not_one);
     RUN_TEST(entering_status_one_runs_the_close_side_cleanup);

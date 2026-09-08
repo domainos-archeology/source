@@ -56,7 +56,14 @@
  *   index      - Pointer to iteration index:
  *                - Input: Starting index (0 means start at 1)
  *                - Output: Next index to use, or 0xFFFF if done
- *   info_out   - Output buffer for lock info (34 bytes)
+ *   info_out   - Output buffer for lock info (34 bytes).  The routine builds
+ *                the record in a LOCAL at A6-0x28 and blits it out at
+ *                0x00E60BAE ("moveq #0x7 / move.l (A1)+,(A3)+ / dbf" then one
+ *                "move.w (A1)+,(A3)+"), on EVERY exit that reaches 0x00E60BA6
+ *                - including the not-found exit at 0x00E60ACE, which arrives
+ *                there with the local still holding whatever the frame had.
+ *                Only the two early returns at 0x00E60996 and 0x00E609AC skip
+ *                the copy.  (source-x07q)
  *   status_ret - Output: status code
  *
  * Status codes:
@@ -68,17 +75,31 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
                              file_lock_info_internal_t *info_out,
                              status_$t *status_ret)
 {
-    uint32_t uid_high = file_uid->high;
-    uint32_t uid_low = file_uid->low;
-    int8_t is_per_asid = 0;  /* True if querying per-ASID table */
-    uint16_t start_index;
-    uint16_t found_entry = 0;
-    uint16_t volx = 0;
-    int16_t asid = 0;
-    status_$t local_status;
-    uint16_t volx_table[3];
+    uid_t local_uid;                    /* A6-0x30 */
+    uint32_t uid_high;
+    uint32_t uid_low;
+    int8_t is_per_asid = 0;             /* A6-0x40 */
+    uint16_t start_index;               /* D5w */
+    uint16_t found_entry = 0;           /* A6-0x36 */
+    int16_t volx = 0;                   /* D4w */
+    int16_t asid = 0;                   /* D6w */
+    status_$t local_status;             /* A6-0x34 */
+    int16_t volx_out;                   /* A6-0x3C */
+    uint16_t byte0_word;                /* A6-0x4E */
     uint8_t byte0, byte1;
     int16_t short1;
+    /*
+     * A6-0x28: the record is built HERE and only copied out at 0x00E60BAE.
+     * Its initial contents are whatever the frame held, which is what the
+     * not-found exit hands back.
+     */
+    file_lock_info_internal_t info;
+
+    /* 0x00E6094A-0x00E60952: the UID is copied into the frame first */
+    local_uid.high = file_uid->high;
+    local_uid.low = file_uid->low;
+    uid_high = local_uid.high;
+    uid_low = local_uid.low;
 
     /* Start index: if 0 passed, start at 1 */
     start_index = *index;
@@ -90,8 +111,9 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
      * Check first byte of UID to determine query type
      */
     byte0 = (uint8_t)(uid_high >> 24);
+    byte0_word = byte0;                 /* 0x00E6096A move.w D0w,(-0x4e,A6) */
 
-    if (byte0 == 0) {
+    if (byte0_word == 0) {
         /*
          * First byte is 0 - check for per-ASID table query
          * Per-ASID: byte[0]=0, byte[1]=1, short[1] (bytes 2-3) >= 0 and < 0x3A
@@ -107,17 +129,22 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
         /*
          * Non-zero first byte: Map volume UID to volume index
          */
-        DISK_$LVUID_TO_VOLX(file_uid, (int16_t *)&volx_table[0], &local_status);
+        /*
+         * 0x00E60970-0x00E60982: the UID handed over is the frame COPY
+         * ("pea (-0x30,A6)"), not the caller's record.
+         */
+        DISK_$LVUID_TO_VOLX(&local_uid, &volx_out, &local_status);
 
+        volx = volx_out;                /* 0x00E60986 move.w (-0x3c,A6),D4w */
+
+        /* 0x00E6098A-0x00E60996: no record copy, no index write */
         if (local_status != 0) {
             *status_ret = local_status;
             return;
         }
 
-        volx = volx_table[0];
-
-        /* Reject queries to boot volume */
-        if (volx == CAL_$BOOT_VOLX) {
+        /* 0x00E6099A-0x00E609AC: reject queries to the boot volume */
+        if (volx == (int16_t)CAL_$BOOT_VOLX) {
             *status_ret = 0x140002;  /* Query not allowed */
             return;
         }
@@ -213,26 +240,26 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
         file_lock_entry_detail_t *entry = FILE_$LOT_ENTRY(found_entry);
 
         /* File UID: +0x0C and +0x10, read at (-0x10,An)/(-0xc,An) */
-        info_out->file_uid.high = entry->uid_high;
-        info_out->file_uid.low = entry->uid_low;
+        info.file_uid.high = entry->uid_high;
+        info.file_uid.low = entry->uid_low;
 
         /* Lock side: bit 7 of flags2 (+0x1B, (-0x1,An)) */
-        info_out->side = (entry->flags2 >> 7) & 1;
+        info.side = (entry->flags2 >> 7) & 1;
 
         /* Lock mode: bits 3-6 of flags2 */
-        info_out->mode = (entry->flags2 & 0x78) >> 3;
+        info.mode = (entry->flags2 & 0x78) >> 3;
 
         /* Sequence number */
         if (is_per_asid < 0) {
             /* Per-ASID: use refcount byte (+0x18, (-0x4,An)) */
-            info_out->sequence = entry->refcount;
+            info.sequence = entry->refcount;
         } else {
             /* Global: use sequence field (+0x16, (-0x6,An)) */
-            info_out->sequence = entry->sequence;
+            info.sequence = entry->sequence;
         }
 
         /* Context: +0x00, read at (-0x1c,An) */
-        info_out->context = entry->context;
+        info.context = entry->context;
 
         /*
          * Node/port information depends on remote flag (bit 2 of flags2)
@@ -246,10 +273,10 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
              * owner_node = NODE_$ME (we are the owner)
              * remote_info = ROUTE_$PORT
              */
-            info_out->holder_node = entry->node_low;
-            info_out->holder_port = entry->node_high;
-            info_out->owner_node = NODE_$ME;
-            info_out->remote_info = ROUTE_$PORT;
+            info.holder_node = entry->node_low;
+            info.holder_port = entry->node_high;
+            info.owner_node = NODE_$ME;
+            info.remote_info = ROUTE_$PORT;
         } else {
             /*
              * Local lock: local node is holder
@@ -257,10 +284,10 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
              * owner_node = entry.node_low (who locked it)
              * remote_info = entry.node_high
              */
-            info_out->holder_node = NODE_$ME;
-            info_out->holder_port = ROUTE_$PORT;
-            info_out->owner_node = entry->node_low;
-            info_out->remote_info = entry->node_high;
+            info.holder_node = NODE_$ME;
+            info.holder_port = ROUTE_$PORT;
+            info.owner_node = entry->node_low;
+            info.remote_info = entry->node_high;
         }
 
         ML_$UNLOCK(5);
@@ -269,13 +296,22 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
          * For global queries with non-zero uid_low, verify lock holder
          * Skip verification for per-ASID queries (uid_low is always the ASID pattern)
          */
-        if (byte0 == 0 && uid_low != 0) {
-            /* Per-ASID query with specific UID - no verification needed */
+        if (byte0_word == 0 && uid_low != 0) {
+            /*
+             * 0x00E60B80-0x00E60B8A: skip the verification, still copy out.
+             * Only FILE_$VERIFY_LOCK_HOLDER ever overwrites the status cell
+             * seeded with 0x000F000C at 0x00E609E4, so this path reports
+             * "no more lock entries" even though it hands back a filled
+             * record and an advanced index.  Reproduced as found.
+             */
             goto done;
         }
 
-        /* Verify lock holder is still valid */
-        FILE_$VERIFY_LOCK_HOLDER(info_out, &local_status);
+        /*
+         * 0x00E60B8C-0x00E60B98: the verifier is handed the LOCAL record
+         * ("pea (-0x28,A6)"), which is why it may rewrite it before the copy.
+         */
+        FILE_$VERIFY_LOCK_HOLDER(&info, &local_status);
 
         /*
          * If verification returns "not locked by this process",
@@ -284,6 +320,11 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *file_uid, uint16_t *index,
     } while (local_status == file_$object_not_locked_by_this_process);
 
 done:
+    /*
+     * 0x00E60BA6-0x00E60BC4, in this order: the status, then the 34-byte
+     * record (8 longwords and one word), then the index.
+     */
     *status_ret = local_status;
+    *info_out = info;
     *index = start_index;
 }

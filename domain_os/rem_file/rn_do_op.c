@@ -85,7 +85,7 @@ void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buffer,
     /* 0x00E615A6-0x00E615BA.  ACL_$IN_SUBSYS returns a Domain boolean, so a
      * negative result is "yes"; `bset.b #0x2,(0x21,A1)` is bit 2 of the byte
      * at record offset 0x21, i.e. re_sids[0x0D]. */
-    if ((int8_t)ACL_$IN_SUBSYS() < 0) {   /* `tst.b D0b / bpl` at 0x00E615AC */
+    if (ACL_$IN_SUBSYS() < 0) {           /* `tst.b D0b / bpl` at 0x00E615AC */
         op_buf->re_sids[0x0D] |= 0x04;
     }
 

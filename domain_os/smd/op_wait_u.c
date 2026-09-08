@@ -19,19 +19,22 @@
  * If the current process has no associated display unit, returns
  * immediately without waiting.
  *
- * Returns:
- *   0 always (for compatibility)
+ * The routine has NO result.  Nothing between the "move.w
+ * (0x48,A5,D0w*0x1),D0w" at 0x00E6FBAA and the "rts" at 0x00E6FBC4 loads D0:
+ * on the no-unit path it still holds that zero (over PROC1_$AS_ID*2 in its
+ * high half) and on the other path it holds whatever SMD_$REL_DISPLAY's
+ * trailing EC_$ADVANCE left there.  The tree used to declare a uint16_t
+ * result and return a hard 0, which is a value the image never computes.
+ * (source-lpk8)
  */
-uint16_t SMD_$OP_WAIT_U(void)
+void SMD_$OP_WAIT_U(void)
 {
-    /* Check if current process has an associated display unit */
+    /* 0x00E6FBA2-0x00E6FBAE */
     if (SMD_GLOBALS.asid_to_unit[PROC1_$AS_ID] != 0) {
-        /* Acquire display lock (blocks until operations complete) */
+        /* 0x00E6FBB0-0x00E6FBB8: acquire, which blocks until the unit is free */
         SMD_$ACQ_DISPLAY((int16_t *)&SMD_ACQ_LOCK_DATA);
 
-        /* Immediately release */
+        /* 0x00E6FBBA */
         SMD_$REL_DISPLAY();
     }
-
-    return 0;
 }
