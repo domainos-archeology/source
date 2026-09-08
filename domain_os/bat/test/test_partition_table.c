@@ -477,6 +477,101 @@ TEST(dismount_negative_flags_clears_total_blocks)
     ASSERT_EQ(0, bat_$mounted[TEST_VOL]);
 }
 
+/*
+ * 0x00E3B986..0x00E3B990: BAT_$DISMOUNT reads the clock ONCE and stores it
+ * into the label's +0xB0 and +0xC0.  It does NOT touch +0xBC
+ * (dismount_time), which only BAT_$MOUNT writes (0x00E3B7D0).
+ *
+ *   0x00E3B986  move.l (0x00e2b0e4).l,D0
+ *   0x00E3B98C  move.l D0,(0xb0,A0)
+ *   0x00E3B990  move.l D0,(0xc0,A0)
+ *   0x00E3B994  clr.w (0xce,A0)
+ */
+TEST(dismount_stamps_current_time_not_dismount_time)
+{
+    status_$t status;
+    bat_$label_t *label = label_of();
+
+    reset_world();
+    bat_$mounted[TEST_VOL] = (int8_t)0xFF;
+
+    TIME_$CURRENT_CLOCKH = 0xC0FFEE01;
+    label->mount_time_high = 0xDEAD0000;
+    label->dismount_time   = 0xDEAD00BC;
+    label->current_time    = 0xDEAD00C0;
+    label->salvage_flag    = 1;
+
+    BAT_$DISMOUNT(TEST_VOL, 0, &status);
+    ASSERT_EQ(status_$ok, status);
+
+    ASSERT_EQ(0xC0FFEE01, label->mount_time_high);   /* +0xB0 written */
+    ASSERT_EQ(0xC0FFEE01, label->current_time);      /* +0xC0 written */
+    ASSERT_EQ(0xDEAD00BC, label->dismount_time);     /* +0xBC untouched */
+    ASSERT_EQ(0, label->salvage_flag);               /* 0x00E3B994 */
+}
+
+/*
+ * 0x00E3B7B6..0x00E3B7C4: BAT_$MOUNT keeps the label's top 12 bits and ORs
+ * in the WHOLE NODE_$ME longword -- `or.l D6,(0xb4,A0)` applies no mask, so
+ * a node id with bits set above bit 19 does reach the preserved field.
+ */
+TEST(mount_ors_node_me_without_masking)
+{
+    status_$t status;
+    bat_$label_t *label = label_of();
+
+    reset_world();
+    label->version = 1;
+
+    /*
+     * Bit 23 is set in NODE_$ME and CLEAR in the preserved top 12 bits, so
+     * masking NODE_$ME to 20 bits would lose it.
+     */
+    NODE_$ME = 0x00812345;
+    label->mount_time_low = 0x30000000;
+
+    BAT_$MOUNT(TEST_VOL, (int8_t)0x80, &status);
+    ASSERT_EQ(status_$ok, status);
+
+    ASSERT_EQ(0x30812345u, label->mount_time_low);
+}
+
+/*
+ * 0x00E3B7AA `tst.l (0x3e,A0)` treats the (step_blocks, bat_step) pair at
+ * label +0x3E as ONE longword and 0x00E3B7B2 `move.l D6,(0x3e,A0)` with
+ * D6 = 3 defaults it, leaving step_blocks 0 and bat_step 3.
+ */
+TEST(mount_defaults_the_step_longword_to_three)
+{
+    status_$t status;
+    bat_$label_t *label = label_of();
+    bat_$volume_t *vol = &bat_$volumes[TEST_VOL];
+
+    reset_world();
+    label->version = 1;
+    label->step_blocks = 0;
+    label->bat_step = 0;
+
+    BAT_$MOUNT(TEST_VOL, (int8_t)0x80, &status);
+    ASSERT_EQ(status_$ok, status);
+    ASSERT_EQ(0, label->step_blocks);
+    ASSERT_EQ(3, label->bat_step);
+    /* The header copy carried the defaulted pair into the volume record. */
+    ASSERT_EQ(0, vol->step_blocks);
+    ASSERT_EQ(3, vol->bat_step);
+
+    /* A non-zero pair is left alone, even when step_blocks alone is zero. */
+    reset_world();
+    label = label_of();
+    label->version = 1;
+    label->step_blocks = 0;
+    label->bat_step = 7;
+
+    BAT_$MOUNT(TEST_VOL, (int8_t)0x80, &status);
+    ASSERT_EQ(status_$ok, status);
+    ASSERT_EQ(7, label->bat_step);
+}
+
 /* ============================================================================
  * Round trip
  * ============================================================================ */
@@ -596,6 +691,9 @@ int main(void)
     RUN_TEST(dismount_copies_exactly_0x83_longwords);
     RUN_TEST(dismount_old_format_skips_partition_copy);
     RUN_TEST(dismount_negative_flags_clears_total_blocks);
+    RUN_TEST(dismount_stamps_current_time_not_dismount_time);
+    RUN_TEST(mount_ors_node_me_without_masking);
+    RUN_TEST(mount_defaults_the_step_longword_to_three);
     RUN_TEST(mount_writes_one_flag_byte);
     RUN_TEST(mount_chunk_geometry_from_dvtbl);
     RUN_TEST(mount_dismount_round_trip);

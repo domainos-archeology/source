@@ -1,10 +1,19 @@
 /*
- * BAT_$ALLOCATE - Allocate disk blocks
+ * BAT_$ALLOCATE - allocate disk blocks from a volume's BAT bitmap
  *
- * Allocates blocks from the volume's free block pool by searching the
- * BAT bitmap for free bits and clearing them.
+ * Original address: 0x00E3B0D6 (1088 bytes, 0x00E3B0D6..0x00E3B515)
  *
- * Original address: 0x00E3B0D6
+ * The routine walks the BAT bitmap looking for set bits (a set bit means
+ * "block free") and clears the ones it hands back.  It searches in three
+ * nested extents, from the inside out:
+ *
+ *   allocation chunk   [chunk_start, chunk_end)      - one track
+ *   partition          [partition_start, partition_end)
+ *   volume             [0, total_blocks)
+ *
+ * plus a stride: `step_remaining` counts down and only a bit reached with
+ * the counter at or below zero is actually taken, which spreads
+ * consecutive allocations `step_blocks` apart.
  */
 
 #include "bat/bat_internal.h"
@@ -12,312 +21,368 @@
 /*
  * BAT_$ALLOCATE
  *
- * Parameters:
- *   vol_idx    - Volume index (0-6)
- *   hint       - Hint block number for locality
- *   count      - Number of blocks to allocate (low 16 bits) and flags (high 16 bits)
- *                High word: 0 = use free pool, non-0 = use reserved pool
- *   blocks_out - Output array receiving allocated block numbers
- *   status     - Output status code
+ * Argument block (link.w A6,-0x44 at 0x00E3B0D6):
  *
- * Assembly analysis (1088 bytes, complex allocation algorithm):
- *   - Takes ML_LOCK_BAT for thread safety
- *   - Validates volume is mounted and enough blocks available
- *   - Calculates search ranges based on hint and partition structure
- *   - Uses two-phase search: first within allocation chunk, then wrap around
- *   - For each potential block, loads BAT bitmap block if needed
- *   - Clears bits for allocated blocks and updates partition counts
- *   - Updates free_blocks or reserved_blocks based on allocation type
+ *   (0x08,A6)  word  vol_idx
+ *   (0x0a,A6)  long  hint
+ *   (0x0e,A6)  word  alloc_count     - 0x00E3B134, 0x00E3B156, 0x00E3B38E
+ *   (0x10,A6)  word  use_reserved    - 0x00E3B120, 0x00E3B4EC
+ *   (0x12,A6)  long  blocks_out      - 0x00E3B28A
+ *   (0x16,A6)  long  status          - 0x00E3B104, 0x00E3B284
+ *
+ * The two words at 0x0e and 0x10 are SEPARATE 16-bit parameters, not the
+ * halves of one longword: the image tests 0x10 on its own at 0x00E3B120
+ * (`tst.w`) and compares 0x0e on its own at 0x00E3B38E (`cmp.w`).  Every
+ * call site pushes them as one `move.l` immediate only because both fit
+ * in one instruction; on big-endian m68k the high half of that longword
+ * lands at 0x0e (alloc_count) and the low half at 0x10 (use_reserved).
  */
-void BAT_$ALLOCATE(int16_t vol_idx, uint32_t hint, uint32_t count,
-                   uint32_t *blocks_out, status_$t *status)
+void BAT_$ALLOCATE(int16_t vol_idx, uint32_t hint, int16_t alloc_count,
+                   int16_t use_reserved, uint32_t *blocks_out,
+                   status_$t *status)
 {
     bat_$volume_t *vol;
-    int16_t alloc_count;        /* Number of blocks requested */
-    int16_t use_reserved;       /* Use reserved pool flag */
-    uint32_t rel_block;         /* Current block relative to first_data_block */
-    uint32_t bat_block;         /* Current BAT bitmap block */
-    uint32_t word_offset;       /* Word offset within BAT block */
-    uint32_t bit_offset;        /* Bit offset within word */
-    uint32_t bitmap_word;       /* Current bitmap word value */
-    int16_t allocated;          /* Count of blocks allocated */
-    int32_t step_remaining;     /* Steps remaining before skipping */
-    int16_t partition_idx;      /* Current partition index */
-    uint32_t partition_end;     /* End of current partition range */
-    uint32_t chunk_end;         /* End of current allocation chunk */
-    uint32_t chunk_start;       /* Start of current allocation chunk */
-    uint32_t next_chunk_start;  /* Start of next chunk for wrap-around */
-    int8_t phase;               /* Search phase (0 = in chunk, 1 = wrap) */
-    uint32_t *out_ptr;          /* Output pointer */
 
-    ML_$LOCK(ML_LOCK_BAT);
+    /* Frame cells, named by their (disp,A6) slot. */
+    status_$t   set_status;         /* (-0x04,A6): DBUF_$SET_BUFF's own status */
+    uint32_t    bitmap_word = 0;    /* (-0x08,A6) */
+    int32_t     step_remaining;     /* (-0x0c,A6) */
+    uint32_t    partition_end;      /* (-0x10,A6) */
+    uint32_t    partition_start;    /* (-0x14,A6) */
+    uint32_t    chunk_end;          /* (-0x18,A6) */
+    int16_t     allocated;          /* (-0x26,A6) */
+    int16_t     partition_idx;      /* (-0x2c,A6) */
+    int8_t      rescan_chunk;       /* (-0x2e,A6) */
+    uint32_t   *out_ptr;            /* (-0x40,A6) */
 
-    /* Check if volume is mounted */
+    /* Register-resident state. */
+    uint32_t    rel_block;          /* D3: block relative to first_data_block */
+    uint16_t    word_offset;        /* D4: longword index inside the BAT block */
+    uint32_t    bat_block;          /* D5: BAT bitmap block number */
+    uint32_t    chunk_start;        /* D6 */
+    uint16_t    bit_offset;         /* D2w */
+
+    ML_$LOCK(ML_LOCK_BAT);                          /* 0x00E3B0EA */
+
+    /* 0x00E3B0FE..0x00E3B10E */
     if (bat_$mounted[vol_idx] >= 0) {
         *status = bat_$not_mounted;
         goto done;
     }
 
-    vol = &bat_$volumes[vol_idx];
+    vol = &bat_$volumes[vol_idx];                   /* 0x00E3B112 */
 
-    /* Extract count and reserved flag from combined parameter */
-    alloc_count = (int16_t)(count & 0xFFFF);
-    use_reserved = (int16_t)((count >> 16) & 0xFFFF);
-
-    /* Check if enough blocks available */
-    if (use_reserved == 0) {
-        /* Using free pool */
-        /*
-         * 0x00E3B140 `move.b (0xd3f,A0),D3b` / 0x00E3B14A `tst.b (0xd3f,A0)`
-         * read the flag as a single byte; only its sign is used.
-         */
-        int8_t vol_flag = bat_$volume_flags[vol_idx];
-        if (vol_flag >= 0) {
-            /* Old format: need alloc_count + 0xB blocks */
-            if ((int32_t)alloc_count > (int32_t)(vol->free_blocks - 0xB)) {
-                *status = status_$disk_is_full;
-                goto done;
-            }
-        } else {
-            /* New format: just need alloc_count blocks */
-            if ((int32_t)alloc_count > (int32_t)vol->free_blocks) {
-                *status = status_$disk_is_full;
-                goto done;
-            }
+    /*
+     * 0x00E3B120..0x00E3B16C: is the requested pool big enough?
+     *
+     * The image evaluates both free-pool tests and picks between them with
+     * the volume's format flag:
+     *
+     *   0x00E3B13E  sgt D1b                 ; alloc_count > free_blocks - 0xB
+     *   0x00E3B140  move.b (0xd3f,A0),D3b   ; bat_$volume_flags[vol_idx]
+     *   0x00E3B144  not.b D3b
+     *   0x00E3B146  and.b D3b,D1b
+     *   0x00E3B148  bmi.b 0x00e3b162        ; old format and short: full
+     *   0x00E3B14A  tst.b (0xd3f,A0)
+     *   0x00E3B14E  bpl.b 0x00e3b170        ; old format and long enough: go
+     *   0x00E3B150  cmp.l (-0x230,A2),D0    ; new format: the plain test
+     *
+     * so an old-format volume keeps a 0xB-block cushion and a new-format
+     * one does not.  Both comparisons are signed (`sgt` / `ble`) on the
+     * sign-extended alloc_count word.
+     */
+    if (use_reserved != 0) {
+        if ((int32_t)alloc_count > (int32_t)vol->reserved_blocks) {
+            *status = status_$disk_is_full;
+            goto done;
+        }
+    } else if (bat_$volume_flags[vol_idx] >= 0) {
+        if ((int32_t)alloc_count > (int32_t)(vol->free_blocks - 0xB)) {
+            *status = status_$disk_is_full;
+            goto done;
         }
     } else {
-        /* Using reserved pool */
-        if ((int32_t)alloc_count > (int32_t)vol->reserved_blocks) {
+        if ((int32_t)alloc_count > (int32_t)vol->free_blocks) {
             *status = status_$disk_is_full;
             goto done;
         }
     }
 
-    /* Calculate starting block relative to first_data_block */
+    /* 0x00E3B170..0x00E3B18A: clamp the hint into [0, total_blocks). */
     if (hint < vol->first_data_block) {
         rel_block = 0;
     } else {
         rel_block = hint - vol->first_data_block;
     }
-
-    /* Clamp to valid range */
     if (rel_block >= vol->total_blocks) {
         rel_block = vol->total_blocks - 1;
     }
 
-    /* Initialize search state */
-    step_remaining = vol->step_blocks - 1;
+    /* 0x00E3B18C..0x00E3B196 */
+    step_remaining = (int32_t)BAT_STEP_LONG(vol) - 1;
     allocated = 0;
 
-    /* Calculate partition range containing hint block */
+    /*
+     * 0x00E3B19A..0x00E3B1FA: locate the partition holding the block.
+     *
+     * 0x00E3B19A `move.l D3,D2` reloads D2 from the CLAMPED relative block
+     * and 0x00E3B1A2 adds first_data_block back, so the partition search
+     * uses the clamped absolute block, not the raw hint the caller passed.
+     */
     {
-        uint32_t part_base = vol->partition_size + vol->partition_start_offset;
-        if (hint + vol->first_data_block < part_base) {
+        uint32_t abs_block = rel_block + vol->first_data_block;
+        uint32_t pso = (uint32_t)vol->partition_start_offset;
+        uint32_t first_end = pso + vol->partition_size;
+
+        if (abs_block < first_end) {
+            /* 0x00E3B1B4..0x00E3B1C4 */
             partition_idx = 0;
-            partition_end = part_base - vol->first_data_block;
-            next_chunk_start = 0;
+            partition_start = 0;
+            partition_end = first_end - vol->first_data_block;
         } else {
-            int32_t part_offset = M$DIS$LLL((hint + vol->first_data_block) -
-                                             vol->partition_start_offset,
-                                             vol->partition_size);
-            partition_idx = (int16_t)part_offset;
-            next_chunk_start = M$MIS$LLW(vol->partition_size, partition_idx);
-            partition_end = vol->partition_size + next_chunk_start;
-            next_chunk_start -= vol->first_data_block;
+            /* 0x00E3B1C6..0x00E3B1FA */
+            partition_idx = (int16_t)M$DIS$LLL((long)(abs_block - pso),
+                                               (long)vol->partition_size);
+            partition_start = (pso + (uint32_t)M$MIS$LLW(
+                                          (long)vol->partition_size,
+                                          (short)partition_idx))
+                              - vol->first_data_block;
+            partition_end = partition_start + vol->partition_size;
         }
     }
 
-    /* Calculate allocation chunk range */
+    /* 0x00E3B1FC..0x00E3B23A: locate the allocation chunk holding it. */
     if (rel_block < vol->alloc_chunk_offset) {
         chunk_start = 0;
         chunk_end = vol->alloc_chunk_offset;
     } else {
-        int32_t chunk_idx = M$DIS$LLL(rel_block - vol->alloc_chunk_offset,
-                                       vol->alloc_chunk_size);
-        chunk_start = M$MIS$LLL(chunk_idx, vol->alloc_chunk_size);
-        chunk_start += vol->alloc_chunk_offset;
+        chunk_start = (uint32_t)M$MIS$LLL(
+                          M$DIS$LLL((long)(rel_block - vol->alloc_chunk_offset),
+                                    (long)vol->alloc_chunk_size),
+                          (long)vol->alloc_chunk_size)
+                      + vol->alloc_chunk_offset;
         chunk_end = chunk_start + vol->alloc_chunk_size;
     }
 
-    /* Clamp ranges to volume size */
-    if (chunk_end > vol->total_blocks) {
+    /* 0x00E3B23C..0x00E3B252: neither extent may run past the volume. */
+    if (vol->total_blocks < chunk_end) {
         chunk_end = vol->total_blocks;
     }
-    if (partition_end > vol->total_blocks) {
+    if (vol->total_blocks < partition_end) {
         partition_end = vol->total_blocks;
     }
 
-    /* Calculate bitmap position */
-    bat_block = vol->bat_block_start + (rel_block >> 13);
-    word_offset = (rel_block >> 5) & 0xFF;
-    bit_offset = rel_block & 0x1F;
+    /*
+     * 0x00E3B254..0x00E3B292: bitmap cursor.  Each BAT block holds 0x100
+     * longwords = 0x2000 bits, hence the >> 13 / >> 5 / & 0x1F split.
+     */
+    bat_block   = vol->bat_block_start + (rel_block >> 13);
+    word_offset = (uint16_t)((rel_block >> 5) & 0xFF);
+    bit_offset  = (uint16_t)(rel_block & 0x1F);
 
-    phase = -1;  /* Start in chunk search phase */
+    rescan_chunk = -1;                              /* 0x00E3B26C st */
 
-    /* Pre-load bitmap word if buffer cached */
+    /*
+     * 0x00E3B270..0x00E3B282.  The image leaves (-0x08,A6) undefined when
+     * no buffer is cached; the initialiser above stands in for that slot
+     * and is only observable on a path the loop head immediately reloads.
+     */
     if (bat_$cached_buffer != NULL) {
         bitmap_word = ((uint32_t *)bat_$cached_buffer)[word_offset];
     }
 
-    *status = status_$ok;
-    out_ptr = blocks_out;
+    *status = status_$ok;                           /* 0x00E3B288 */
+    out_ptr = blocks_out;                           /* 0x00E3B290 */
 
-    /* Main allocation loop */
-search_loop:
-    /* Load BAT bitmap block if needed */
+search_loop:                                        /* 0x00E3B294 */
     if (bat_block != bat_$cached_block || bat_$cached_vol != vol_idx) {
-        /* Flush current cached block */
-        if (bat_$cached_buffer != NULL) {
-            DBUF_$SET_BUFF(bat_$cached_buffer, bat_$cached_dirty, status);
+        if (bat_$cached_buffer != NULL) {           /* 0x00E3B2A4 */
+            /*
+             * 0x00E3B2AC `pea (-0x4,A6)` - the release status goes to a
+             * frame cell of its own, NOT to the caller's status word.
+             */
+            DBUF_$SET_BUFF(bat_$cached_buffer, (uint16_t)bat_$cached_dirty,
+                           &set_status);
         }
 
-        /* Load new BAT bitmap block */
-        bat_$cached_buffer = DBUF_$GET_BLOCK(vol_idx, bat_block,
-                                              (void *)&BAT_$UID,
-                                              bat_block, 0, status);
-        if (*status != status_$ok) {
+        /* 0x00E3B2C2..0x00E3B2E2 */
+        /*
+         * TODO: 0x00E3B2C8 pushes `clr.l`, which DBUF_$GET_BLOCK reads back
+         * as the two WORDS at its (0x16,A6) and (0x18,A6) (0x00E3A5CE /
+         * 0x00E3A5D2).  The single `uint32_t` parameter below emits the same
+         * four bytes on m68k, so the call is byte-correct; splitting the
+         * callee's prototype is bead source-ve50.
+         */
+        bat_$cached_buffer = DBUF_$GET_BLOCK((uint16_t)vol_idx,
+                                             (int32_t)bat_block, &BAT_$UID,
+                                             bat_block, 0, status);
+        if (*status != status_$ok) {                /* 0x00E3B2EA */
             bat_$cached_buffer = NULL;
             bat_$cached_vol = 0;
             goto done;
         }
 
-        bat_$cached_vol = vol_idx;
-        bat_$cached_dirty = BAT_BUF_CLEAN;
+        bat_$cached_vol   = vol_idx;                /* 0x00E3B2FA */
+        bat_$cached_block = bat_block;              /* 0x00E3B300 */
+        bat_$cached_dirty = BAT_BUF_CLEAN;          /* 0x00E3B304 */
         bitmap_word = ((uint32_t *)bat_$cached_buffer)[word_offset];
-        bat_$cached_block = bat_block;
     }
 
-    /* Check if current word is all zeros (no free blocks) */
     if (bitmap_word == 0) {
-        /* Skip to next word */
-        rel_block += (32 - bit_offset);
-        step_remaining -= (32 - bit_offset);
-        bit_offset = 32;
+        /*
+         * 0x00E3B31E..0x00E3B334: no free block in this longword, skip the
+         * rest of it in one go and jump straight to the extent tests.
+         */
+        uint32_t skip = 0x20u - (uint32_t)bit_offset;
+
+        rel_block += skip;
+        step_remaining -= (int32_t)skip;
+        bit_offset = 0x20;
     } else {
-        /* Check if current bit is set (block is free) */
-        if (bitmap_word & (1U << bit_offset)) {
-            if (step_remaining < 1) {
-                /* Allocate this block */
-                bitmap_word &= ~(1U << bit_offset);
+        /* 0x00E3B33A `btst.l D2,D0` tests bit (bit_offset mod 32). */
+        if ((bitmap_word & (1UL << (bit_offset & 0x1F))) != 0) {
+            if (step_remaining > 0) {               /* 0x00E3B33E bgt */
+                /*
+                 * 0x00E3B39E: a free block was passed over because of the
+                 * stride, so the chunk is worth a second sweep.
+                 */
+                rescan_chunk = -1;
+            } else {
+                /* 0x00E3B344..0x00E3B35C: take the block. */
+                bitmap_word &= ~(1UL << (bit_offset & 0x1F));
                 ((uint32_t *)bat_$cached_buffer)[word_offset] = bitmap_word;
                 bat_$cached_dirty = BAT_BUF_DIRTY;
 
-                /* Record allocated block */
+                /* 0x00E3B362..0x00E3B372 */
                 *out_ptr = vol->first_data_block + rel_block;
                 allocated++;
                 out_ptr++;
 
-                /* Update partition free count */
+                /* 0x00E3B376..0x00E3B386 */
                 vol->partitions[partition_idx].free_count--;
 
-                /* Check if done */
-                if (allocated >= alloc_count) {
+                if (allocated >= alloc_count) {     /* 0x00E3B38E bge */
                     goto allocation_done;
                 }
 
-                /* Reset step counter for next allocation */
-                step_remaining = vol->step_blocks;
-            } else {
-                phase = -1;  /* Found free block, reset phase */
+                /* 0x00E3B396: rearm the stride for the next block. */
+                step_remaining = (int32_t)BAT_STEP_LONG(vol);
             }
         }
 
-        /* Move to next bit */
+        /* 0x00E3B3A2..0x00E3B3A6 */
         bit_offset++;
         rel_block++;
         step_remaining--;
     }
 
-    /* Check if still within current chunk */
+    /* 0x00E3B3AA: still inside the allocation chunk? */
     if (rel_block < chunk_end) {
-        /* Check if need to advance to next word */
-        if (bit_offset >= 32) {
+        /* 0x00E3B4C0..0x00E3B4E8: step the bitmap cursor to the next word. */
+        if (bit_offset >= 0x20) {
             word_offset++;
-            if (word_offset >= 256) {
+            if (word_offset == 0x100) {             /* 0x00E3B4CA */
                 bat_block++;
                 word_offset = 0;
             } else {
                 bitmap_word = ((uint32_t *)bat_$cached_buffer)[word_offset];
             }
-            bit_offset -= 32;
+            bit_offset -= 0x20;
         }
         goto search_loop;
     }
 
-    /* End of chunk - check if need to switch phases or partitions */
-    if (phase < 0) {
-        /* Phase 0: Search in chunk completed, switch to wrap-around */
-        phase = 0;
-        rel_block = next_chunk_start;
-    } else {
-        /* Check if current partition is exhausted */
-        if (rel_block >= partition_end) {
-            /* Check if partition has any free blocks */
-            if (vol->partitions[partition_idx].free_count == 0) {
-                /* Move to next partition */
-                partition_idx++;
-                if (partition_idx < vol->num_partitions) {
-                    next_chunk_start = partition_end;
-                    partition_end += vol->partition_size;
-                } else {
-                    /* Wrap to first partition */
-                    rel_block = 0;
-                    partition_idx = 0;
-                    next_chunk_start = 0;
-                    partition_end = (vol->partition_size + vol->partition_start_offset) -
-                                    vol->first_data_block;
-                }
-                next_chunk_start = rel_block;
-                if (partition_end > vol->total_blocks) {
-                    partition_end = vol->total_blocks;
-                }
+    /* 0x00E3B3B2: the chunk is exhausted. */
+    if (rescan_chunk < 0) {
+        /*
+         * 0x00E3B3B8 `move.l D6,D3` restarts at the chunk's own START, not
+         * at any partition or next-chunk boundary, and clears the flag so
+         * the restart happens only once per free block passed over.
+         */
+        rel_block = chunk_start;
+        rescan_chunk = 0;
+        goto clamp_chunk_end;                       /* 0x00E3B3BE */
+    }
+
+    if (rel_block >= partition_end) {               /* 0x00E3B3C2 bcs */
+        /* 0x00E3B3CA..0x00E3B3DA */
+        if (vol->partitions[partition_idx].free_count != 0) {
+            /*
+             * 0x00E3B3E0: the partition still reports free blocks, so sweep
+             * it again from its start rather than moving on.
+             */
+            rel_block = partition_start;
+        } else {
+            partition_idx++;                        /* 0x00E3B3E6 */
+
+            if ((int32_t)partition_idx < (int32_t)vol->num_partitions) {
+                /* 0x00E3B414..0x00E3B420 */
+                partition_start = partition_end;
+                partition_end = partition_start + vol->partition_size;
+            } else {
+                /* 0x00E3B3FA..0x00E3B412: wrap to the first partition. */
+                rel_block = 0;
+                partition_idx = 0;
+                partition_start = 0;
+                partition_end = ((uint32_t)vol->partition_start_offset +
+                                 vol->partition_size) - vol->first_data_block;
+            }
+
+            /* 0x00E3B426..0x00E3B430 */
+            if (partition_end > vol->total_blocks) {
+                partition_end = vol->total_blocks;
             }
         }
 
-        /* Check if within allocation chunk offset range */
+        /* 0x00E3B432: pick the chunk containing the new block. */
         if (rel_block < vol->alloc_chunk_offset) {
-            chunk_start = 0;
+            chunk_start = 0;                        /* 0x00E3B468 */
             chunk_end = vol->alloc_chunk_offset;
-            goto recalc_chunk;
+        } else {
+            chunk_start = (uint32_t)M$MIS$LLL(
+                              M$DIS$LLL(
+                                  (long)(rel_block - vol->alloc_chunk_offset),
+                                  (long)vol->alloc_chunk_size),
+                              (long)vol->alloc_chunk_size)
+                          + vol->alloc_chunk_offset;
+            chunk_end = chunk_start + vol->alloc_chunk_size;  /* 0x00E3B476 */
         }
-
-        /* Calculate next chunk */
-        {
-            int32_t chunk_idx = M$DIS$LLL(rel_block - vol->alloc_chunk_offset,
-                                           vol->alloc_chunk_size);
-            chunk_start = M$MIS$LLL(chunk_idx, vol->alloc_chunk_size);
-            chunk_start += vol->alloc_chunk_offset;
-        }
-
-recalc_chunk:
-        next_chunk_start = chunk_end;
+    } else if (rel_block >= vol->total_blocks) {    /* 0x00E3B462 bcs */
+        chunk_start = 0;                            /* 0x00E3B468 */
+        chunk_end = vol->alloc_chunk_offset;
+    } else {
+        /*
+         * 0x00E3B472: inside the partition the next chunk simply begins at
+         * the old chunk's end - no division, and chunk_end is recomputed
+         * from that start at 0x00E3B476.
+         */
+        chunk_start = chunk_end;
         chunk_end = chunk_start + vol->alloc_chunk_size;
     }
 
-    /* Clamp chunk end */
-    if (chunk_end > vol->total_blocks) {
+clamp_chunk_end:                                    /* 0x00E3B480 */
+    if (vol->total_blocks < chunk_end) {
         chunk_end = vol->total_blocks;
     }
 
-    /* Recalculate bitmap position */
-    bat_block = vol->bat_block_start + (rel_block >> 13);
-    word_offset = (rel_block >> 5) & 0xFF;
-    bit_offset = rel_block & 0x1F;
+    /* 0x00E3B48E..0x00E3B4BC */
+    bat_block   = vol->bat_block_start + (rel_block >> 13);
+    word_offset = (uint16_t)((rel_block >> 5) & 0xFF);
+    bit_offset  = (uint16_t)(rel_block & 0x1F);
 
     if (bat_block == bat_$cached_block) {
         bitmap_word = ((uint32_t *)bat_$cached_buffer)[word_offset];
     }
-
     goto search_loop;
 
-allocation_done:
-    /* Update free/reserved block count */
-    if (use_reserved == 0) {
-        vol->free_blocks -= allocated;
+allocation_done:                                    /* 0x00E3B4EC */
+    /* `ext.l D1` on the allocated-count word, so the subtraction is signed. */
+    if (use_reserved != 0) {
+        vol->reserved_blocks -= (uint32_t)(int32_t)allocated;
     } else {
-        vol->reserved_blocks -= allocated;
+        vol->free_blocks -= (uint32_t)(int32_t)allocated;
     }
 
-done:
+done:                                               /* 0x00E3B500 */
     ML_$UNLOCK(ML_LOCK_BAT);
 }

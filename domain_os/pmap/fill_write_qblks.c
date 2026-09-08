@@ -264,10 +264,14 @@ void pmap_$fill_write_qblks(int32_t *pages, uint32_t *qblk, int16_t count)
         allocate:
             ML_$UNLOCK(PMAP_LOCK_ID);
 
-            /* Allocate disk block(s): count = (extra_count << 16) | 1
-             * The high word is the extra count, low word is 1 (requesting 1 + extra blocks) */
-            BAT_$ALLOCATE(vol_type, hint_addr,
-                         ((uint32_t)extra_count << 16) | 1,
+            /*
+             * Allocate extra_count blocks out of the RESERVED pool: the
+             * word at (0x0e,A6) is alloc_count and the word at (0x10,A6)
+             * is use_reserved (0x00E3B120 / 0x00E3B38E), which is the
+             * high and low half respectively of the `(n << 16) | 1`
+             * longword the image pushes here.
+             */
+            BAT_$ALLOCATE(vol_type, hint_addr, extra_count, 1,
                          alloc_blocks, status);
 
             if (status[0] != 0) {

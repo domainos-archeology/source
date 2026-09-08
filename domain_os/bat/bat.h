@@ -229,18 +229,26 @@ _Static_assert(sizeof(bat_$label_t) >=
 /*
  * BAT_$ALLOCATE - Allocate disk blocks
  *
- * Allocates blocks from the volume's free block pool. Searches the BAT
- * bitmap starting near the hint block and allocates up to count blocks.
+ * Allocates blocks from the volume's free (or reserved) block pool.
+ * Searches the BAT bitmap starting near the hint block.
  *
- * @param vol_idx    Volume index (0-6)
- * @param hint       Hint block number for locality
- * @param count      Number of blocks to allocate (low 16 bits) and flags (high 16 bits)
- *                   High word: 0 = normal allocation, 1 = reserved allocation
- * @param blocks_out Output array receiving allocated block numbers
- * @param status     Output status code
+ * alloc_count and use_reserved are two separate 16-bit parameters, at
+ * (0x0e,A6) and (0x10,A6): 0x00E3B120 tests the second on its own with
+ * `tst.w` and 0x00E3B38E compares the first on its own with `cmp.w`.  A
+ * caller that pushes them with one `move.l #0x10000` is passing
+ * alloc_count 1 and use_reserved 0, because on big-endian m68k the high
+ * half of that longword lands at 0x0e.
+ *
+ * @param vol_idx      Volume index (1-6)
+ * @param hint         Hint block number for locality
+ * @param alloc_count  Number of blocks to allocate
+ * @param use_reserved 0 = free pool, non-zero = reserved pool
+ * @param blocks_out   Output array receiving allocated block numbers
+ * @param status       Output status code
  */
-void BAT_$ALLOCATE(int16_t vol_idx, uint32_t hint, uint32_t count,
-                   uint32_t *blocks_out, status_$t *status);
+void BAT_$ALLOCATE(int16_t vol_idx, uint32_t hint, int16_t alloc_count,
+                   int16_t use_reserved, uint32_t *blocks_out,
+                   status_$t *status);
 
 /*
  * BAT_$FREE - Free disk blocks

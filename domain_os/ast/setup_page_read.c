@@ -79,7 +79,7 @@ void ast_$setup_page_read(aste_t *aste, uint32_t *segmap, uint16_t start_page,
         }
 
         ML_$UNLOCK(PMAP_LOCK_ID);
-        BAT_$ALLOCATE(vol_idx, hint, (uint32_t)count << 16, disk_addrs, status);
+        BAT_$ALLOCATE(vol_idx, hint, (int16_t)count, 0, disk_addrs, status);
         ML_$LOCK(PMAP_LOCK_ID);
 
         if (*status != status_$ok) {

@@ -112,7 +112,7 @@ uint32_t BAT_$ALLOC_FM(int16_t vol_idx, status_$t *status)
     ML_$UNLOCK(ML_LOCK_BAT);
 
     /* Allocate one block using the hint */
-    BAT_$ALLOCATE(vol_idx, hint, 0x10000, &block, status);
+    BAT_$ALLOCATE(vol_idx, hint, 1, 0, &block, status);
 
     return block;
 }

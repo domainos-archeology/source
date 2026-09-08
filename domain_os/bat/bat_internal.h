@@ -226,6 +226,26 @@ _Static_assert(__builtin_offsetof(bat_$volume_t, alloc_chunk_size) == 0x22C,
 _Static_assert(__builtin_offsetof(bat_$volume_t, alloc_chunk_offset) == 0x230,
                "bat_$volume_t.alloc_chunk_offset ((-0x4,An), 0x00E3B874)");
 
+/*
+ * The (step_blocks, bat_step) pair at +0x12 is read and written as ONE
+ * longword by the routines that set the allocation stride:
+ *
+ *   0x00E3B18C  move.l (-0x222,A2),D4          ; BAT_$ALLOCATE, initial value
+ *   0x00E3B396  move.l (-0x222,A2),(-0xc,A6)   ; BAT_$ALLOCATE, reload
+ *   0x00E3B7AA  tst.l (0x3e,A0)                ; BAT_$MOUNT, label copy
+ *   0x00E3B7B2  move.l D6,(0x3e,A0)            ; BAT_$MOUNT, default = 3
+ *
+ * BAT_$GET_BAT_STEP reads only its low half (move.w (-0x220,A1) at
+ * 0x00E3BB72), which on big-endian m68k is bat_step.  Spelled as a
+ * shift/or so the tree neither assumes m68k byte order nor takes an
+ * unaligned longword access at an offset that is only word aligned.
+ */
+#define BAT_STEP_LONG(vol) \
+    (((uint32_t)(vol)->step_blocks << 16) | (uint32_t)(vol)->bat_step)
+
+#define BAT_LABEL_STEP_LONG(label) \
+    (((uint32_t)(label)->step_blocks << 16) | (uint32_t)(label)->bat_step)
+
 /* The partition table copy must end exactly where alloc_chunk_size begins. */
 _Static_assert(__builtin_offsetof(bat_$volume_t, num_partitions) +
                BAT_PART_TABLE_LONGWORDS * 4 ==
@@ -400,6 +420,30 @@ extern uid_t BAT_$UID;        /* BAT bitmap UID */
     (part)->vtoce_block[0] = ((block) >> 16) & 0xFF; \
     (part)->vtoce_block[1] = ((block) >> 8) & 0xFF; \
     (part)->vtoce_block[2] = (block) & 0xFF; \
+} while (0)
+
+/*
+ * The partition record's second longword (entry +0x04) as one value:
+ * status in the high byte, VTOCE block in the low 24 bits.
+ *
+ * BAT_$ALLOC_VTOCE rewrites the chain head with an UNMASKED or:
+ *
+ *   0x00E3B08E  andi.l #-0x1000000,(-0x204,A1)   ; keep the status byte
+ *   0x00E3B096  move.l (A3),D0                   ; the new block, unmasked
+ *   0x00E3B098  or.l D0,(-0x204,A1)
+ *
+ * BAT_$ADD_PART_VTOCE (0x00E3AE86-0x00E3AEA4) does the same: the
+ * `and.l (-0x204,A0),D2` at 0x00E3AE94 masks the OLD chain value for the
+ * function result, then `andi.l #-0x1000000` / `or.l (0xa,A6)` ORs the new
+ * block in unmasked.  The two routines do not differ.
+ */
+#define BAT_PART_CHAIN_LONG(part) \
+    (((uint32_t)(part)->status << 24) | BAT_GET_VTOCE_BLOCK(part))
+
+#define BAT_SET_PART_CHAIN_LONG(part, value) do { \
+    uint32_t _v = (uint32_t)(value); \
+    (part)->status = (uint8_t)(_v >> 24); \
+    BAT_SET_VTOCE_BLOCK((part), _v); \
 } while (0)
 
 /*

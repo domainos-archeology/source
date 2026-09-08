@@ -106,15 +106,29 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
         label->volume_trouble |= 0x1000;
     }
 
-    /* Initialize step_blocks if zero */
-    if (*(uint32_t *)&label->step_blocks == 0) {
+    /*
+     * 0x00E3B7AA..0x00E3B7B4: the (step_blocks, bat_step) pair at label
+     * +0x3E is tested and defaulted as ONE longword, `tst.l (0x3e,A0)` /
+     * `move.l D6,(0x3e,A0)` with D6 = 3, which leaves step_blocks 0 and
+     * bat_step 3 on a big-endian machine.
+     */
+    if (BAT_LABEL_STEP_LONG(label) == 0) {
         label->step_blocks = 0;
         label->bat_step = 3;
     }
 
-    /* Update mount node info */
+    /*
+     * 0x00E3B7B6..0x00E3B7C6: keep the label's top 12 bits and OR in
+     * NODE_$ME.  The image applies NO mask to NODE_$ME:
+     *
+     *   0x00E3B7B6  andi.l #-0x100000,(0xb4,A0)
+     *   0x00E3B7BE  move.l (0x00e245a4).l,D6      ; NODE_$ME, whole longword
+     *   0x00E3B7C4  or.l D6,(0xb4,A0)
+     *
+     * so a node id with bits above 20 set does reach the preserved field.
+     */
     label->mount_time_low &= 0xFFF00000;
-    label->mount_time_low |= (NODE_$ME & 0x000FFFFF);
+    label->mount_time_low |= NODE_$ME;
 
     /* Record boot time and current time */
     label->boot_time = TIME_$BOOT_TIME;

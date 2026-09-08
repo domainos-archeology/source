@@ -1,10 +1,10 @@
 /*
- * BAT_$FREE - Free disk blocks
+ * BAT_$FREE - return disk blocks to a volume's pool
  *
- * Returns blocks to the volume's free block pool by setting bits
- * in the BAT bitmap.
+ * Original address: 0x00E3B516 (482 bytes, 0x00E3B516..0x00E3B6F7)
  *
- * Original address: 0x00E3B516
+ * Sets the bit for each block in the BAT bitmap ("free") and bumps the
+ * volume and partition counters.
  */
 
 #include "bat/bat_internal.h"
@@ -12,147 +12,167 @@
 /*
  * BAT_$FREE
  *
- * Parameters:
- *   blocks   - Array of block addresses to free
- *   count    - Number of blocks to free
- *   vol_idx  - Volume index (0-6)
- *   reserved - If non-zero, return blocks to reserved pool instead of free pool
- *   status   - Output status code
+ * Argument block (link.w A6,-0x34 at 0x00E3B516):
  *
- * Assembly analysis:
- *   - Takes ML_LOCK_BAT for thread safety
- *   - Iterates through each block in the array
- *   - For block 0: handles as special case (reserved pool manipulation)
- *   - For other blocks: validates range, calculates bitmap position
- *   - Loads appropriate BAT bitmap block if not cached
- *   - Sets the corresponding bit to mark block as free
- *   - Updates partition free count based on partition index
- *   - Updates free_blocks or reserved_blocks counter
+ *   (0x08,A6)  long  blocks       - 0x00E3B582
+ *   (0x0c,A6)  word  count        - 0x00E3B526
+ *   (0x0e,A6)  word  vol_idx      - 0x00E3B540, 0x00E3B5EE, 0x00E3B624
+ *   (0x10,A6)  word  reserved     - 0x00E3B594, 0x00E3B6A4
+ *   (0x12,A6)  long  status       - 0x00E3B53A
  */
 void BAT_$FREE(uint32_t *blocks, int16_t count, int16_t vol_idx,
                int16_t reserved, status_$t *status)
 {
     bat_$volume_t *vol;
-    status_$t local_status;
-    int16_t i;
-    uint32_t block;
-    uint32_t rel_block;     /* Block relative to first_data_block */
-    uint32_t bat_block;     /* BAT bitmap block number */
-    uint32_t word_offset;   /* Word offset within BAT block (0-255) */
-    uint32_t bit_offset;    /* Bit offset within word (0-31) */
-    uint32_t *bitmap_word;
-    int16_t partition_idx;
+    status_$t local_status;         /* (-0x08,A6) */
+    uint16_t  remaining;            /* (-0x2e,A6): the dbf-style counter */
+    uint32_t *cursor;               /* (-0x34,A6) */
+    uint32_t  block;                /* D3 */
+    uint32_t  rel_block;            /* D0 */
+    uint32_t  bat_block;            /* D2, then reused for the bitmap word */
+    uint32_t  bitmap_word;          /* D2 after 0x00E3B662 */
+    uint16_t  word_offset;          /* D6 */
+    uint16_t  bit_offset;           /* D5 */
+    int16_t   partition_idx;        /* D0w */
 
-    ML_$LOCK(ML_LOCK_BAT);
+    ML_$LOCK(ML_LOCK_BAT);                          /* 0x00E3B52A */
 
-    local_status = status_$ok;
-    *status = status_$ok;
+    local_status = status_$ok;                      /* 0x00E3B536 */
+    *status = status_$ok;                           /* 0x00E3B53E */
 
-    /* Check if volume is mounted */
+    /* 0x00E3B548..0x00E3B564: not mounted unlocks and returns at once. */
     if (bat_$mounted[vol_idx] >= 0) {
         ML_$UNLOCK(ML_LOCK_BAT);
         *status = bat_$not_mounted;
         return;
     }
 
-    vol = &bat_$volumes[vol_idx];
+    vol = &bat_$volumes[vol_idx];                   /* 0x00E3B568 */
 
-    /* Process each block in the array */
-    for (i = count - 1; i >= 0; i--) {
-        block = blocks[i];
+    /*
+     * 0x00E3B574..0x00E3B57A: `subq.w #0x1,D0w` then `bmi` - a count of
+     * zero or less skips the loop entirely.
+     */
+    if ((int16_t)(count - 1) < 0) {
+        goto unlock;
+    }
 
-        /* Handle block 0 specially - used for reserved pool management */
+    /*
+     * 0x00E3B57E..0x00E3B588 set up a DESCENDING counter but an ASCENDING
+     * cursor: 0x00E3B588 stores `blocks` itself and 0x00E3B6C2
+     * `addq.l #0x4,(-0x34,A6)` walks it forward, so the array is visited
+     * blocks[0] first.  The order is observable - the load-failure break at
+     * 0x00E3B644 leaves the tail of the array untouched, and the BAT block
+     * cache is primed by whichever block came first.
+     */
+    remaining = (uint16_t)(count - 1);
+    cursor = blocks;
+
+    for (;;) {                                      /* 0x00E3B58C */
+        block = *cursor;                            /* 0x00E3B590 */
+
         if (block == 0) {
+            /*
+             * 0x00E3B594..0x00E3B5AC: a zero entry is not a block, it is a
+             * request to hand one block back from the reserved pool to the
+             * free pool.  Ignored outright when freeing into the reserved
+             * pool.
+             */
             if (reserved == 0) {
-                /* Move one block from reserved to free */
                 if (vol->reserved_blocks == 0) {
-                    *status = bat_$error;
+                    *status = bat_$error;           /* 0x00E3B68A */
                 } else {
                     vol->free_blocks++;
                     vol->reserved_blocks--;
                 }
             }
-            continue;
+            goto next_block;
         }
 
-        /* Calculate relative block number */
+        /* 0x00E3B5B0..0x00E3B5C8 */
         rel_block = block - vol->first_data_block;
-
-        /* Validate block is within valid range */
         if ((int32_t)rel_block < 0 || rel_block >= vol->total_blocks) {
             *status = bat_$invalid_block;
-            continue;
+            goto next_block;
         }
 
-        /*
-         * Calculate BAT bitmap position:
-         * - Each BAT block covers 8192 blocks (256 words * 32 bits)
-         * - bat_block = bat_block_start + (rel_block >> 13)
-         * - word_offset = (rel_block >> 5) & 0xFF
-         * - bit_offset = rel_block & 0x1F
-         */
-        bat_block = vol->bat_block_start + (rel_block >> 13);
-        word_offset = (rel_block >> 5) & 0xFF;
-        bit_offset = rel_block & 0x1F;
+        /* 0x00E3B5CC..0x00E3B5E0 */
+        bit_offset  = (uint16_t)(rel_block & 0x1F);
+        word_offset = (uint16_t)((rel_block >> 5) & 0xFF);
+        bat_block   = vol->bat_block_start + (rel_block >> 13);
 
-        /* Load BAT bitmap block if not already cached */
+        /* 0x00E3B5E4..0x00E3B64E */
         if (bat_block != bat_$cached_block || bat_$cached_vol != vol_idx) {
-            /* Flush current cached block if dirty */
             if (bat_$cached_buffer != NULL) {
-                DBUF_$SET_BUFF(bat_$cached_buffer, bat_$cached_dirty, &local_status);
+                /* 0x00E3B5FC `pea (-0x8,A6)`: the shared local status. */
+                DBUF_$SET_BUFF(bat_$cached_buffer, (uint16_t)bat_$cached_dirty,
+                               &local_status);
             }
 
-            /* Load new BAT bitmap block */
-            bat_$cached_buffer = DBUF_$GET_BLOCK(vol_idx, bat_block,
-                                                  (void *)&BAT_$UID,
-                                                  bat_block, 0, &local_status);
-            if (local_status != status_$ok) {
+            bat_$cached_buffer = DBUF_$GET_BLOCK((uint16_t)vol_idx,
+                                                 (int32_t)bat_block, &BAT_$UID,
+                                                 bat_block, 0, &local_status);
+            if (local_status != status_$ok) {       /* 0x00E3B636 */
                 bat_$cached_buffer = NULL;
                 bat_$cached_vol = 0;
-                break;
+                goto unlock;                        /* 0x00E3B644 */
             }
 
-            bat_$cached_vol = vol_idx;
-            bat_$cached_block = bat_block;
+            bat_$cached_vol   = vol_idx;            /* 0x00E3B648 */
+            bat_$cached_block = bat_block;          /* 0x00E3B64E */
         }
 
-        /* Mark buffer as dirty */
-        bat_$cached_dirty = BAT_BUF_DIRTY;
+        bat_$cached_dirty = BAT_BUF_DIRTY;          /* 0x00E3B652 */
 
-        /* Get pointer to bitmap word */
-        bitmap_word = (uint32_t *)bat_$cached_buffer + word_offset;
+        /* 0x00E3B658..0x00E3B662 */
+        bitmap_word = ((uint32_t *)bat_$cached_buffer)[word_offset];
 
-        /* Calculate partition index for this block */
-        if (block < vol->partition_start_offset) {
-            partition_idx = 0;
+        /*
+         * 0x00E3B666..0x00E3B684: the partition index is derived from the
+         * ABSOLUTE block, not from rel_block.
+         */
+        if (block < (uint32_t)vol->partition_start_offset) {
+            partition_idx = 0;                      /* 0x00E3B670 */
         } else {
-            partition_idx = (int16_t)M$DIS$LLL(block - vol->partition_start_offset,
-                                                vol->partition_size);
+            partition_idx = (int16_t)M$DIS$LLL(
+                (long)(block - (uint32_t)vol->partition_start_offset),
+                (long)vol->partition_size);
         }
 
-        /* Check if block is already free (bit set = free) */
-        if (*bitmap_word & (1U << bit_offset)) {
-            *status = bat_$error;
-            continue;
+        /* 0x00E3B686: a set bit means the block was already free. */
+        if ((bitmap_word & (1UL << (bit_offset & 0x1F))) != 0) {
+            *status = bat_$error;                   /* 0x00E3B68A */
+            goto next_block;
         }
 
-        /* Set bit to mark block as free */
-        *bitmap_word |= (1U << bit_offset);
+        /* 0x00E3B696..0x00E3B6A0 */
+        bitmap_word |= (1UL << (bit_offset & 0x1F));
+        ((uint32_t *)bat_$cached_buffer)[word_offset] = bitmap_word;
 
-        /* Update counters */
+        /* 0x00E3B6A4..0x00E3B6B0 */
         if (reserved == 0) {
             vol->free_blocks++;
         } else {
             vol->reserved_blocks++;
         }
 
-        /* Update partition free count */
+        /* 0x00E3B6B4..0x00E3B6BE */
         vol->partitions[partition_idx].free_count++;
+
+    next_block:                                     /* 0x00E3B6C2 */
+        cursor++;
+        if (remaining-- == 0) {                     /* 0x00E3B6C6 subq/bcc */
+            break;
+        }
     }
 
+unlock:                                             /* 0x00E3B6CE */
     ML_$UNLOCK(ML_LOCK_BAT);
 
-    /* Propagate any error from buffer operations */
+    /*
+     * 0x00E3B6DC..0x00E3B6EA: a buffer error is reported only when the
+     * caller's status is still clean.
+     */
     if (local_status != status_$ok && *status == status_$ok) {
         *status = local_status;
     }

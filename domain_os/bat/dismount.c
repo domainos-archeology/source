@@ -12,8 +12,20 @@
 /*
  * BAT_$DISMOUNT
  *
+ * Argument block (link.w A6,-0x14 at 0x00E3B8BE):
+ *
+ *   (0x08,A6)  word  vol_idx     - 0x00E3B8CC
+ *   (0x0a,A6)  BYTE  flags       - 0x00E3B8D0 move.b (0xa,A6),D3b
+ *   (0x0c,A6)  long  status      - 0x00E3B8D6
+ *
+ * TODO: argument 2 is a Domain byte boolean, not a word -- 0x00E3B8D0 reads
+ * it with `move.b` at the even offset and the caller at 0x00E386DE pushes it
+ * with `st -(SP)`.  It stays `int16_t` here because both callers live in
+ * vtoc/ and encode the byte in the high half of a word; retyping it means
+ * changing them in the same pass.  Tracked by bead source-xlyv.
+ *
  * Parameters:
- *   vol_idx - Volume index (0-6)
+ *   vol_idx - Volume index (1-6)
  *   flags   - If negative, don't write label; otherwise write updated stats
  *   status  - Output status code
  *
@@ -113,10 +125,18 @@ void BAT_$DISMOUNT(int16_t vol_idx, int16_t flags, status_$t *status)
         }
     }
 
-    /* Update timestamps */
+    /*
+     * 0x00E3B986..0x00E3B990: ONE clock reading is stored into TWO cells,
+     * the label's +0xB0 and its +0xC0 -- not into dismount_time at +0xBC,
+     * which BAT_$MOUNT stamps (0x00E3B7D0) and BAT_$DISMOUNT leaves alone.
+     *
+     *   0x00E3B986  move.l (0x00e2b0e4).l,D0
+     *   0x00E3B98C  move.l D0,(0xb0,A0)
+     *   0x00E3B990  move.l D0,(0xc0,A0)
+     */
     current_time = TIME_$CURRENT_CLOCKH;
     label->mount_time_high = current_time;
-    label->dismount_time = current_time;
+    label->current_time = current_time;
 
     /* Clear salvage flag - volume is clean */
     label->salvage_flag = 0;

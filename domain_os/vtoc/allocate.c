@@ -192,7 +192,7 @@ rescan_bucket:                                          /* 0xE38A5C */
     if (bkt->next_bucket == 0) {                        /* 0xE38A9A */
         if (vol->cur_bkt_block == 0) {                  /* 0xE38A9E */
             /* 0xE38AA2: no partially filled bucket block, get a fresh one */
-            BAT_$ALLOCATE((int16_t)vol_idx, block, 0x10000, &block, status);
+            BAT_$ALLOCATE((int16_t)vol_idx, block, 1, 0, &block, status);
             if (*status != status_$ok) {                /* 0xE38AC6 */
                 goto cleanup_bkt_buf;
             }
@@ -355,7 +355,7 @@ scan_old_block:                                         /* 0xE38D1A */
     }
 
     /* 0xE38D6A: extend the chain with a fresh VTOC block */
-    BAT_$ALLOCATE((int16_t)vol_idx, alloc_block, 0x10000, &block, status);
+    BAT_$ALLOCATE((int16_t)vol_idx, alloc_block, 1, 0, &block, status);
     if (*status != status_$ok) {                        /* 0xE38D8E */
         goto cleanup_blk_buf;
     }

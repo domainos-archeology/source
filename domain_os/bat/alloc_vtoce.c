@@ -72,9 +72,17 @@ void *BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
                                                 partition_size);
         }
 
-        /* Validate partition index and free space */
-        if (partition_idx >= vol->num_partitions ||
-            vol->partitions[partition_idx].free_count <= threshold) {
+        /*
+         * 0x00E3AF3A..0x00E3AF4C.  The range test is signed
+         * (`cmp.l D1,D0` / `bge`) and the space test is UNSIGNED and
+         * strict: 0x00E3AF46 `cmp.l (-0x208,A0),D3` computes
+         * threshold - free_count and 0x00E3AF4A `bls` KEEPS the partition
+         * when threshold <= free_count.  So the hint is rejected only when
+         * free_count is strictly below the threshold; a partition sitting
+         * exactly on it is still usable.
+         */
+        if ((int32_t)partition_idx >= (int32_t)vol->num_partitions ||
+            vol->partitions[partition_idx].free_count < threshold) {
             partition_idx = -1;  /* Invalid, will search */
         }
     }
@@ -112,13 +120,21 @@ void *BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
             remaining--;
         }
 
-        /* If no partition found, use partition 0 */
-        if (partition_idx == 0) {
+        /*
+         * 0x00E3AFB2..0x00E3AFD6.  The `bne` at 0x00E3AFB4 tests only
+         * whether the chosen index is NON-ZERO, so it takes the
+         * multiply branch for ANY nonzero value including the -1 that
+         * survives a search over zero partitions; only index 0 zeroes the
+         * hint.  (The type-2 break at 0x00E3AF8E jumps straight onto that
+         * `bne`, reusing the condition codes `move.w D0w,D5w` left, which
+         * is the same test.)
+         */
+        if (partition_idx != 0) {
+            hint = (uint32_t)M$MIS$LLW((long)partition_size,
+                                       (short)partition_idx);
+            hint += (uint32_t)vol->partition_start_offset;
+        } else {
             hint = 0;
-        } else if (partition_idx > 0) {
-            /* Calculate hint block from partition index */
-            hint = M$MIS$LLW(partition_size, partition_idx);
-            hint += vol->partition_start_offset;
         }
     }
 
@@ -130,7 +146,7 @@ void *BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
     if (vtoce_block == 0) {
         /* Need to allocate new VTOCE block */
         ML_$UNLOCK(ML_LOCK_BAT);
-        BAT_$ALLOCATE(vol_idx, hint, 0x10000, block_out, status);
+        BAT_$ALLOCATE(vol_idx, hint, 1, 0, block_out, status);
         ML_$LOCK(ML_LOCK_BAT);
 
         if (*status != status_$ok) {
@@ -166,19 +182,27 @@ void *BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
         vtoce->magic = VTOCE_MAGIC;
         vtoce->self_block = *block_out;
 
-        *new_vtoce = -1;  /* True (0xFF) */
+        *new_vtoce = -1;  /* 0x00E3B08A `st (A4)` */
 
-        /* Update partition VTOCE chain */
-        BAT_SET_VTOCE_BLOCK(part, *block_out);
+        /*
+         * 0x00E3B08E..0x00E3B098: keep the status byte, OR the new block
+         * in over the low 24 bits WITHOUT masking it first.
+         */
+        BAT_SET_PART_CHAIN_LONG(part,
+            (BAT_PART_CHAIN_LONG(part) & 0xFF000000u) | *block_out);
     }
 
     /* Increment entry count in VTOCE */
     vtoce->entry_count++;
 
-    /* If VTOCE is full (3 entries), update chain to next VTOCE */
+    /*
+     * 0x00E3B0A0..0x00E3B0B6: the block is now full, so the partition's
+     * chain head advances to this block's successor - again an unmasked
+     * or over the preserved status byte.
+     */
     if (vtoce->entry_count == VTOCE_ENTRIES_PER_BLOCK) {
-        /* Move next_vtoce to partition chain head */
-        BAT_SET_VTOCE_BLOCK(part, vtoce->next_vtoce);
+        BAT_SET_PART_CHAIN_LONG(part,
+            (BAT_PART_CHAIN_LONG(part) & 0xFF000000u) | vtoce->next_vtoce);
     }
 
     /* 0xE3B0B8: move.l A0,(-0x14,A6) - the buffer stays locked for the caller */

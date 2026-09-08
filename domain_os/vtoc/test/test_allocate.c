@@ -141,10 +141,11 @@ void DBUF_$SET_BUFF(void *buffer, uint16_t flags, status_$t *status)
 static int      bat_allocate_count;
 static uint32_t bat_allocate_result;
 
-void BAT_$ALLOCATE(int16_t vol_idx, uint32_t hint, uint32_t count,
-                   uint32_t *blocks_out, status_$t *status)
+void BAT_$ALLOCATE(int16_t vol_idx, uint32_t hint, int16_t alloc_count,
+                   int16_t use_reserved, uint32_t *blocks_out,
+                   status_$t *status)
 {
-    (void)vol_idx; (void)hint; (void)count;
+    (void)vol_idx; (void)hint; (void)alloc_count; (void)use_reserved;
     bat_allocate_count++;
     *blocks_out = bat_allocate_result;
     *status = status_$ok;
