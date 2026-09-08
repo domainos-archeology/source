@@ -845,9 +845,18 @@ _Static_assert(sizeof(ast_$common_attr_t) == 0x18, "sizeof ast_$common_attr_t");
 
 /*
  * The full 0x90-byte record AST_$GET_ATTRIBUTES fills (aote+0x0C onwards).
- * Kept opaque for now; only its size matters to callers.
+ * Kept opaque for now; only its size and this one offset matter to callers.
  */
 #define AST_ATTR_REC_SIZE       0x90
+
+/*
+ * record+0x14: the object's length in bytes (aote+0x20).  It is the field
+ * AST_$GET_COMMON_ATTRIBUTES copies to ast_$common_attr_t.length
+ * (0x00E04A30) and the one AUDIT_$OPEN_LOG reads as the audit log's current
+ * size (`move.l (-0xa4,A6),(0x98,A5)` at 0x00E71770, with the 0x90-byte
+ * buffer at A6-0xB8).
+ */
+#define AST_ATTR_OFF_LENGTH     0x14
 
 /*
  * ast_$acl_attr_t - the 0x38-byte record AST_$GET_ACL_ATTRIBUTES fills from

@@ -105,7 +105,8 @@ void audit_$add_to_hash(uid_t *uid, status_$t *status_ret)
     node->next = NULL;
 
     /* Hash the UID to find the bucket */
-    bucket = UID_$HASH(uid, &AUDIT_HASH_MODULO);
+    /* 0x00E712EA: `pea (-0x228,PC)` -> the shared 0x00E710C4 cell. */
+    bucket = UID_$HASH(uid, (uint16_t *)&audit_$hash_modulus);
 
     /* Find the end of the bucket's linked list */
     bucket_ptr = &AUDIT_$DATA.hash_buckets[bucket];

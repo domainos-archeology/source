@@ -161,7 +161,7 @@ static void name_$set_dir(uid_t *uidp, uid_t *dir_uid_slot,
         event_flags = (*status_ret != status_$ok) ? 1 : 0;
 
         /* 0x00E58776-0x00E58786, pushed right to left. */
-        AUDIT_$LOG_EVENT(&event_uid, &event_flags, (uint32_t *)status_ret,
+        AUDIT_$LOG_EVENT(&event_uid, &event_flags, status_ret,
                          (char *)uidp,
                          (uint16_t *)&name_$set_dir_audit_len_00e58798);
     }

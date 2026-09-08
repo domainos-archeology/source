@@ -23,6 +23,7 @@ int8_t AUDIT_$ENABLED = 0;
  * VTOC_$MOUNT pushes 0x00E85648 at 0x00E3874C and VTOC_$DISMOUNT pushes
  * 0x00E85640 at 0x00E38894.
  */
+uid_t AUDIT_$SET_SID_EU     = { 0x00040007u, 0x00000000u };  /* 0x00E85668 */
 uid_t AUDIT_$DISMOUNT_LV_EU = { 0x0004000Eu, 0x00000000u };  /* 0x00E85640 */
 uid_t AUDIT_$MOUNT_LV_EU    = { 0x0004000Du, 0x00000000u };  /* 0x00E85648 */
 
@@ -44,10 +45,3 @@ int8_t AUDIT_$CORRUPTED = 0;
  *   - Server process state
  */
 audit_data_t AUDIT_$DATA;
-
-/*
- * AUDIT_HASH_MODULO - Hash table bucket count
- *
- * Used by UID_$HASH to compute bucket indices.
- */
-int16_t AUDIT_HASH_MODULO = AUDIT_HASH_TABLE_SIZE;

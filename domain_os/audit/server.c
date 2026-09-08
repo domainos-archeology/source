@@ -12,15 +12,22 @@
 #include "time/time.h"
 #include "file/file.h"
 
+/*
+ * Frame (link.w A6,-0x28):
+ *   A6-0x26  word  the EC_$WAITN count (1 or 2)
+ *   A6-0x24  long  status for FILE_$FW_FILE and PROC1_$UNBIND
+ *   A6-0x20  the eventcount pointer array: [0] at -0x20, [1] at -0x1C
+ *   A6-0x10  the wait-value array:         [0] at -0x10, [1] at -0x0C
+ * The two arrays are 0x10 bytes apart, so the Pascal source very likely
+ * declared four slots each; only elements 0 and 1 are ever written or read.
+ */
 void AUDIT_$SERVER(void)
 {
     int16_t wait_count;
     status_$t local_status;
-    ec_$eventcount_t *event_counts[1];
-    int32_t *clock_ptr;
-    int32_t wait_values[1];
-    int32_t timeout_time;
-    uint16_t wake_reason;
+    ec_$eventcount_t *event_counts[2];   /* A6-0x20, A6-0x1C */
+    int32_t wait_values[2];              /* A6-0x10, A6-0x0C */
+    int16_t wake_reason;
 
     /* 0xE710DC: mark this process as suspended (1-based array) */
     AUDIT_$DATA.suspend_count[PROC1_$CURRENT - 1] = 1;
@@ -28,9 +35,13 @@ void AUDIT_$SERVER(void)
     /* Mark server as running */
     AUDIT_$DATA.server_running = (uint8_t)-1;
 
-    /* Set up event count array for waiting */
+    /*
+     * 0x00E710E6-0x00E710F2: both eventcount pointers are laid down once,
+     * before the loop.  Slot 1 is the literal 0xE2B0D4 = TIME_$CLOCKH, the
+     * system clock eventcount used as the periodic-flush timer.
+     */
     event_counts[0] = AUDIT_$DATA.event_count;
-    clock_ptr = &TIME_$CLOCKH;
+    event_counts[1] = (ec_$eventcount_t *)&TIME_$CLOCKH;
 
     /* Enter super mode for file access */
     ACL_$ENTER_SUPER();
@@ -45,11 +56,13 @@ void AUDIT_$SERVER(void)
         if ((AUDIT_$DATA.flags & AUDIT_FLAG_TIMEOUT) != 0) {
             /* Periodic flush is enabled */
             if (AUDIT_$DATA.timeout == 0) {
-                /* Use default timeout (8 minutes = 0x1E0 4-second units) */
-                timeout_time = TIME_$CLOCKH + AUDIT_DEFAULT_TIMEOUT;
+                /* 0x00E7114A: default timeout, TIME_$CLOCKH + 0x1E0. */
+                wait_values[1] = (int32_t)(TIME_$CLOCKH + AUDIT_DEFAULT_TIMEOUT);
             } else {
-                /* Use configured timeout (multiply by 4 for 4-second units) */
-                timeout_time = TIME_$CLOCKH + (AUDIT_$DATA.timeout * 4);
+                /* 0x00E7113E: `ext.l` then `lsl.l #0x2` - a SIGNED word
+                 * scaled by 4, added to TIME_$CLOCKH. */
+                wait_values[1] = (int32_t)(TIME_$CLOCKH +
+                                           (uint32_t)((int32_t)AUDIT_$DATA.timeout * 4));
             }
             wait_count = 2;  /* Wait on event count OR timeout */
         }
@@ -59,11 +72,7 @@ void AUDIT_$SERVER(void)
         /* Wait for event count to advance or timeout */
         wait_values[0] = AUDIT_$DATA.event_count->value + 1;
 
-        wake_reason = EC_$WAITN(
-            (ec_$eventcount_t **)event_counts,
-            wait_values,
-            wait_count
-        );
+        wake_reason = (int16_t)EC_$WAITN(event_counts, wait_values, wait_count);
 
         ML_$EXCLUSION_START((ml_$exclusion_t *)((char *)AUDIT_$DATA.event_count + 0x0C));
 

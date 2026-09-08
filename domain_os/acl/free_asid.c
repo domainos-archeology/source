@@ -22,10 +22,13 @@
 #include "acl/acl_internal.h"
 
 /*
- * Default project list values (constant data at 0x00E74D9C)
- * These are copied to newly-freed ASIDs.
+ * The default 12-byte project-list cell, pushed by the `lea (0xb8,PC),A3` at
+ * 0x00E74CE2 (extension word at 0x00E74CE4, so the cell is 0x00E74D9C) and
+ * copied a longword at a time into ACL_$PROJ_LISTS[asid].
+ *
+ * Image bytes at 0x00E74D9C: 00 00 00 0d  00 00 00 0d  00 00 00 0d.
  */
-static const acl_proj_list_t DEFAULT_PROJ_LIST = {0, 0, 0};
+static const acl_proj_list_t DEFAULT_PROJ_LIST = { 0x0000000Du, 0x0000000Du, 0x0000000Du };
 
 void ACL_$FREE_ASID(int16_t asid, status_$t *status_ret)
 {
@@ -45,7 +48,7 @@ void ACL_$FREE_ASID(int16_t asid, status_$t *status_ret)
     current->login_sid = UID_$NIL;
 
     /*
-     * Set project list to defaults
+     * 0x00E74CE0-0x00E74CEF: set the project list to the image constant.
      */
     *proj = DEFAULT_PROJ_LIST;
 

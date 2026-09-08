@@ -154,7 +154,7 @@ static uid_t     audit_data;
 static uint16_t  audit_len;
 
 void AUDIT_$LOG_EVENT(uid_t *event_uid, uint16_t *event_flags,
-                      uint32_t *status, char *data, const uint16_t *data_len)
+                      status_$t *status, char *data, const uint16_t *data_len)
 {
     audit_calls++;
     audit_event_uid = *event_uid;

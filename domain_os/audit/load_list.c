@@ -13,9 +13,25 @@
 #include "file/file.h"
 #include "mst/mst.h"
 
-/* Path to audit list file */
-static const char list_path[] = "//node_data/audit/audit_list";
-static int16_t list_path_len = 28;
+/*
+ * The constant cells at 0x00E71494-0x00E714B4, with their image bytes:
+ *
+ *   00e71494  00 1b               the path length, 27
+ *   00e71496  00 01               FILE_$LOCK's lock_index AND lock_mode, and
+ *                                 FILE_$UNLOCK's lock_mode - one shared cell
+ *                                 (`pea (0x132,PC)` + `move.l (SP),-(SP)` at
+ *                                 0x00E71362, and `pea (0x1a,PC)` at
+ *                                 0x00E7147A)
+ *   00e71498  00 00               FILE_$LOCK's rights cell
+ *   00e7149a  60 6e 6f 64 65 ...  "`node_data/audit/audit_list"
+ *
+ * The path starts with a BACKQUOTE, Domain/OS' shorthand for the calling
+ * node's own //node_data, not with "//".  27 characters, no terminator.
+ */
+static const char list_path[] = "`node_data/audit/audit_list";   /* 0x00E7149A */
+static const int16_t list_path_len = 0x001B;                     /* 0x00E71494 */
+static const int16_t list_lock_one  = 0x0001;                    /* 0x00E71496 */
+static const int16_t list_lock_zero = 0x0000;                    /* 0x00E71498 */
 
 int8_t audit_$load_list(status_$t *status_ret)
 {
@@ -25,12 +41,12 @@ int8_t audit_$load_list(status_$t *status_ret)
     uint32_t mapped_size;
     uid_t *uid_array;
     int16_t i;
-    uint16_t lock_index = 0;
-    uint16_t lock_mode = 0;
-    uint8_t rights = 0;
+    /* A6-0x18: FILE_$LOCK's 8-byte lock_info output (0x00E7135A) */
+    uint8_t lock_info[8];
 
-    /* Try to resolve the list file */
-    NAME_$RESOLVE((char *)list_path, &list_path_len, &list_uid, status_ret);
+    /* 0x00E71326-0x00E7133C */
+    NAME_$RESOLVE((char *)list_path, (int16_t *)&list_path_len,
+                  &list_uid, status_ret);
 
     if (*status_ret == status_$naming_name_not_found) {
         /* No audit list file - selective auditing disabled */
@@ -42,8 +58,16 @@ int8_t audit_$load_list(status_$t *status_ret)
         return result;
     }
 
-    /* Lock the file for reading */
-    FILE_$LOCK(&list_uid, &lock_index, &lock_mode, &rights, 0, status_ret);
+    /*
+     * 0x00E71358-0x00E71372.  lock_index and lock_mode are the SAME cell -
+     * the compiler pushed 0x00E71496 once and duplicated the stack slot with
+     * `move.l (SP),-(SP)` - and rights is the separate zero cell.
+     */
+    FILE_$LOCK(&list_uid,
+               (const uint16_t *)&list_lock_one,
+               (const uint16_t *)&list_lock_one,
+               (const uint8_t *)&list_lock_zero,
+               lock_info, status_ret);
 
     if (*status_ret != status_$ok) {
         return result;
@@ -64,7 +88,9 @@ int8_t audit_$load_list(status_$t *status_ret)
     );
 
     if (*status_ret != status_$ok) {
-        FILE_$UNLOCK(&list_uid, &lock_mode, status_ret);
+        /* 0x00E713B4 branches straight to the unlock at 0x00E71476, past
+         * the unmap. */
+        FILE_$UNLOCK(&list_uid, (uint16_t *)&list_lock_one, status_ret);
         return result;
     }
 
@@ -113,8 +139,8 @@ unmap:
     /* Unmap the file */
     MST_$UNMAP_PRIVI(1, &UID_$NIL, (uint32_t)(uintptr_t)header, mapped_size, 0, status_ret);
 
-    /* Unlock the file */
-    FILE_$UNLOCK(&list_uid, &lock_mode, status_ret);
+    /* 0x00E71476-0x00E71486: the mode cell is the same 0x00E71496 = 1. */
+    FILE_$UNLOCK(&list_uid, (uint16_t *)&list_lock_one, status_ret);
 
     return result;
 }

@@ -165,9 +165,17 @@ typedef struct audit_event_record_t {
     uid_t    event_uid;         /* 0x2E: Event UID */
     uint32_t status;            /* 0x36: Event status */
     clock_t  timestamp;         /* 0x3A: Event timestamp */
-    int16_t  process_id;        /* 0x40: Process ID (level 1) */
-    int16_t  upid_high;         /* 0x42: UPID high word */
-    int16_t  upid_low;          /* 0x44: UPID low word */
+    /*
+     * 0x40..0x45: the three words PROC2_$GET_MY_UPIDS (0x00E73968) fills.
+     * Its own frame is (upid A6+0x08, upgid A6+0x0C, uppid A6+0x10), and
+     * AUDIT_$LOG_EVENT_S pushes (0x42,A3), (0x44,A3), (0x40,A3) at
+     * 0x00E71012-0x00E7101A -- so the record order is upid, uppid, upgid.
+     * With no ASID the routine instead stores PROC1_$CURRENT in `upid` and
+     * clears the other two as one longword (0x00E7102A-0x00E71034).
+     */
+    int16_t  upid;              /* 0x40 */
+    int16_t  uppid;             /* 0x42 */
+    int16_t  upgid;             /* 0x44 */
     /* Variable-length data follows at 0x46 */
 } audit_event_record_t;
 
@@ -185,9 +193,9 @@ _Static_assert(__builtin_offsetof(audit_event_record_t, node_id) == 0x2A, "audit
 _Static_assert(__builtin_offsetof(audit_event_record_t, event_uid) == 0x2E, "audit_event_record_t.event_uid");
 _Static_assert(__builtin_offsetof(audit_event_record_t, status) == 0x36, "audit_event_record_t.status");
 _Static_assert(__builtin_offsetof(audit_event_record_t, timestamp) == 0x3A, "audit_event_record_t.timestamp");
-_Static_assert(__builtin_offsetof(audit_event_record_t, process_id) == 0x40, "audit_event_record_t.process_id");
-_Static_assert(__builtin_offsetof(audit_event_record_t, upid_high) == 0x42, "audit_event_record_t.upid_high");
-_Static_assert(__builtin_offsetof(audit_event_record_t, upid_low) == 0x44, "audit_event_record_t.upid_low");
+_Static_assert(__builtin_offsetof(audit_event_record_t, upid) == 0x40, "audit_event_record_t.upid");
+_Static_assert(__builtin_offsetof(audit_event_record_t, uppid) == 0x42, "audit_event_record_t.uppid");
+_Static_assert(__builtin_offsetof(audit_event_record_t, upgid) == 0x44, "audit_event_record_t.upgid");
 _Static_assert(sizeof(audit_event_record_t) == 0x46, "audit_event_record_t size");
 #endif
 
@@ -236,7 +244,10 @@ typedef struct audit_data_t {
     void    *write_ptr;             /* 0x90-0x93: Current write position */
     uint32_t bytes_remaining;       /* 0x94-0x97: Bytes left in buffer */
     uint32_t file_offset;           /* 0x98-0x9B: Current file offset */
-    uint8_t  dirty;                 /* 0x9C: Buffer has unwritten data */
+    /* 0x9C: buffer has unwritten data.  A Domain boolean: AUDIT_$SERVER
+     * reads it with `tst.b (0x9c,A5)` + `bpl` at 0x00E711B8, so it must be
+     * SIGNED for the "< 0" test to fire on 0xFF. */
+    int8_t   dirty;
     uint8_t  pad1[3];               /* 0x9D-0x9F: Padding */
 
     /* Audit list information */
@@ -442,6 +453,14 @@ void audit_$free(void *ptr);
 /*
  * Hash modulus for audit list (value: 37)
  */
-extern int16_t AUDIT_HASH_MODULO;
+/*
+ * The UID_$HASH modulus, the word 0x0025 (37) at 0x00E710C4.  It is NOT a
+ * data-segment global: it sits in the AUDIT_ CODE segment between
+ * AUDIT_$LOG_EVENT_S' `rts` (0x00E710C2) and AUDIT_$SERVER (0x00E710C6), and
+ * both of its users reach it PC-relative -- `pea (0x20e,PC)` at 0x00E70EB4
+ * and `pea (-0x228,PC)` at 0x00E712EA.  Defined in audit/log_event_s.c, the
+ * routine it follows.
+ */
+extern const int16_t audit_$hash_modulus;
 
 #endif /* AUDIT_INTERNAL_H */

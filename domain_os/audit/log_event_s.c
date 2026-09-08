@@ -14,9 +14,9 @@
  *   0x2E: uid_t event_uid         - Event UID
  *   0x36: uint32_t status         - Event status
  *   0x3A: clock_t timestamp       - Event timestamp
- *   0x40: int16_t process_id      - Level 1 process ID
- *   0x42: int16_t upid_high       - UPID high word
- *   0x44: int16_t upid_low        - UPID low word
+ *   0x40: int16_t upid            - Unix pid, or PROC1_$CURRENT with no ASID
+ *   0x42: int16_t uppid           - Unix parent pid
+ *   0x44: int16_t upgid           - Unix process-group id
  *   0x46: char[] data             - Variable-length data (null-terminated)
  */
 
@@ -30,8 +30,17 @@
 
 /* External declarations - NODE_$ME is declared in file/file_internal.h */
 
+/*
+ * 0x00E710C4: the word 0x0025 (37), the UID_$HASH modulus.  It lives in the
+ * AUDIT_ CODE segment, in the two bytes between this routine's `rts`
+ * (0x00E710C2) and AUDIT_$SERVER (0x00E710C6), and both users reach it
+ * PC-relative: `pea (0x20e,PC)` here and `pea (-0x228,PC)` in
+ * audit_$add_to_hash (0x00E712EA).  It is not a data-segment global.
+ */
+const int16_t audit_$hash_modulus = AUDIT_HASH_TABLE_SIZE;
+
 void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
-                        void *sid, uint32_t *status,
+                        void *sid, status_$t *status,
                         char *data, const uint16_t *data_len)
 {
     int16_t pid;
@@ -81,7 +90,9 @@ void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
         if (AUDIT_$DATA.list_count != 0) {
             /* Check if event UID is in the audit list */
             if (should_log >= 0) {
-                bucket = UID_$HASH(event_uid, &AUDIT_HASH_MODULO);
+                /* 0x00E70EB4: `pea (0x20e,PC)` -> the 0x00E710C4 cell. */
+                bucket = (int16_t)UID_$HASH(event_uid,
+                                            (uint16_t *)&audit_$hash_modulus);
 
                 for (node = AUDIT_$DATA.hash_buckets[bucket]; node != NULL; node = node->next) {
                     if (node->uid_high == event_uid->high &&
@@ -185,13 +196,21 @@ void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
     /* Get timestamp */
     TIME_$CLOCK(&record->timestamp);
 
-    /* Get process IDs */
+    /*
+     * 0x00E7100A-0x00E71034.  PROC2_$GET_MY_UPIDS' parameters are
+     * (upid, upgid, uppid) and the pushes are (0x42,A3), (0x44,A3),
+     * (0x40,A3), so argument 1 is &upid (record+0x40), argument 2 is &upgid
+     * (record+0x44) and argument 3 is &uppid (record+0x42).
+     */
     if (PROC1_$AS_ID == 0) {
-        record->process_id = PROC1_$CURRENT;
-        record->upid_high = 0;
-        record->upid_low = 0;
+        record->upid = PROC1_$CURRENT;
+        /* 0x00E71032: `clr.l (0x42,A3)` clears both words at once. */
+        record->uppid = 0;
+        record->upgid = 0;
     } else {
-        PROC2_$GET_MY_UPIDS(&record->upid_high, &record->upid_low, &record->process_id);
+        PROC2_$GET_MY_UPIDS((uint16_t *)&record->upid,
+                            (uint16_t *)&record->upgid,
+                            (uint16_t *)&record->uppid);
     }
 
     /* Copy data */
@@ -203,7 +222,7 @@ void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
     /* Advance write pointer */
     AUDIT_$DATA.write_ptr = (char *)AUDIT_$DATA.write_ptr + record_size;
     AUDIT_$DATA.bytes_remaining -= record_size;
-    AUDIT_$DATA.dirty = (uint8_t)-1;
+    AUDIT_$DATA.dirty = (int8_t)-1;
 
 done:
     if (local_status != status_$ok) {

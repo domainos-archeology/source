@@ -143,7 +143,7 @@ void AUDIT_$INHERIT_AUDIT(int16_t *child_pid, status_$t *status_ret);
  * Original address: 0x00E70DF6
  */
 void AUDIT_$LOG_EVENT(uid_t *event_uid, uint16_t *event_flags,
-                      uint32_t *status, char *data,
+                      status_$t *status, char *data,
                       const uint16_t *data_len);
 
 /*
@@ -177,7 +177,7 @@ void AUDIT_$LOG_EVENT(uid_t *event_uid, uint16_t *event_flags,
  * Original address: 0x00E70E40
  */
 void AUDIT_$LOG_EVENT_S(uid_t *event_uid, uint16_t *event_flags,
-                        void *sid, uint32_t *status,
+                        void *sid, status_$t *status,
                         char *data, const uint16_t *data_len);
 
 /*
@@ -296,7 +296,8 @@ void audit_$log_prot_op(status_$t status, uid_t *uid, void *prot_data,
  * Event UIDs.  These are 8-byte cells in the image's audit event-UID table
  * at 0x00E85600: {word event_class, word subtype, longword 0}.
  */
-/* Event UID for SID change audit events */
+/* 0x00E85668: class 4, subtype 7 - a process changed its SIDs.  Pushed by
+ * ACL_$SET_RE_ALL_SIDS (0x00E48542) and ACL_$SET_RES_ALL_SIDS (0x00E4877A). */
 extern uid_t AUDIT_$SET_SID_EU;
 
 /* 0x00E85640: class 4, subtype 0x0E - logical volume dismounted */

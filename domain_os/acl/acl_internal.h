@@ -39,6 +39,25 @@
 #define ACL_MAX_PROJECTS    8
 
 /*
+ * The ACL_ module's data segment.  ACL_$INIT zeroes it whole:
+ *   00e310aa  lea (0xe935cc).l,A0
+ *   00e310b0  move.l A0,D0
+ *   00e310b2  sub.l #0xe88834,D0
+ *   00e310b8  move.l D0,-(SP) / move.l #0xe88834,-(SP) / jsr OS_$DATA_ZERO
+ * and the SAU2 link map agrees: `D69 E88834 ACL_$DATA size = AD98`, with
+ * 0xE935CC the start of the next segment, FILE_$LOT_DATA.  The individual C
+ * objects that live inside it overlap in the image (ACL_$ACL_CACHE's 31st
+ * 0x400-byte slot covers ACL_$ORIGINAL_SIDS[0], which is never used because
+ * process numbers start at 1), so the length is the segment size and NOT a
+ * sum of sizeofs.
+ */
+#define ACL_DATA_BASE       0x00E88834U
+#define ACL_DATA_END        0x00E935CCU
+#define ACL_DATA_SIZE       (ACL_DATA_END - ACL_DATA_BASE)
+_Static_assert(ACL_DATA_SIZE == 0xAD98U,
+               "ACL_$DATA segment size (SAU2 link map: E88834, size AD98)");
+
+/*
  * The ML resource-lock id the ACL cache runs under.  acl_$eval_rights brackets
  * its whole ACL-image path with `move.w #0xa,-(SP)` + ML_$LOCK / ML_$UNLOCK
  * (0x00E467C6, 0x00E467F4, 0x00E4683E, 0x00E46888).
@@ -108,6 +127,82 @@ static inline boolean acl_$uid_eq(const uid_t *a, const uid_t *b)
 {
     return (a->high == b->high && a->low == b->low) ? true : false;
 }
+
+/*
+ * A whole 36-byte SID block compare, the shape ACL_$SET_RE_ALL_SIDS
+ * (0x00E4845C, 0x00E484F0) and ACL_$SET_RES_ALL_SIDS (0x00E48706) use:
+ * `moveq #0x8,D1 / cmpm.l (A2)+,(A1)+ / dbne D1w,...` - nine longwords, so
+ * the trailing `pad` word takes part in the comparison.  Returns a Domain
+ * boolean.
+ */
+static inline boolean acl_$sid_block_eq(const acl_sid_block_t *a,
+                                        const acl_sid_block_t *b)
+{
+    const uint32_t *pa = (const uint32_t *)a;
+    const uint32_t *pb = (const uint32_t *)b;
+    int i;
+
+    for (i = 0; i < 9; i++) {
+        if (pa[i] != pb[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/*
+ * The audit data block ACL_$SET_RE_ALL_SIDS builds in its frame at A6-0x90
+ * and hands to AUDIT_$LOG_EVENT_S as (data, data_len).  Its length is the
+ * word 0x0090 at 0x00E48558, pushed by the `pea (0x26,PC)` at 0x00E48530,
+ * which is exactly four consecutive SID blocks; `sid` is a pointer to the
+ * second one (`pea (-0x6c,A6)` at 0x00E4853A).
+ */
+typedef struct acl_$set_re_sids_audit_t {
+    acl_sid_block_t old_original;   /* A6-0x90 */
+    acl_sid_block_t old_current;    /* A6-0x6C */
+    acl_sid_block_t new_original;   /* A6-0x48 */
+    acl_sid_block_t new_current;    /* A6-0x24 */
+} acl_$set_re_sids_audit_t;
+
+_Static_assert(__builtin_offsetof(acl_$set_re_sids_audit_t, old_original) == 0x00,
+               "acl_$set_re_sids_audit_t.old_original (A6-0x90)");
+_Static_assert(__builtin_offsetof(acl_$set_re_sids_audit_t, old_current) == 0x24,
+               "acl_$set_re_sids_audit_t.old_current (A6-0x6C)");
+_Static_assert(__builtin_offsetof(acl_$set_re_sids_audit_t, new_original) == 0x48,
+               "acl_$set_re_sids_audit_t.new_original (A6-0x48)");
+_Static_assert(__builtin_offsetof(acl_$set_re_sids_audit_t, new_current) == 0x6C,
+               "acl_$set_re_sids_audit_t.new_current (A6-0x24)");
+_Static_assert(sizeof(acl_$set_re_sids_audit_t) == 0x90,
+               "audit data length word at 0x00E48558");
+
+/*
+ * The same record for ACL_$SET_RES_ALL_SIDS, which also carries the SAVED
+ * block.  Length is the word 0x00D8 at 0x00E48790 (`pea (0x26,PC)` at
+ * 0x00E48768); `sid` points at old_current (`pea (-0xb4,A6)`).
+ */
+typedef struct acl_$set_res_sids_audit_t {
+    acl_sid_block_t old_original;   /* A6-0xD8 */
+    acl_sid_block_t old_current;    /* A6-0xB4 */
+    acl_sid_block_t old_saved;      /* A6-0x90 */
+    acl_sid_block_t new_original;   /* A6-0x6C */
+    acl_sid_block_t new_current;    /* A6-0x48 */
+    acl_sid_block_t new_saved;      /* A6-0x24 */
+} acl_$set_res_sids_audit_t;
+
+_Static_assert(__builtin_offsetof(acl_$set_res_sids_audit_t, old_original) == 0x00,
+               "acl_$set_res_sids_audit_t.old_original (A6-0xD8)");
+_Static_assert(__builtin_offsetof(acl_$set_res_sids_audit_t, old_current) == 0x24,
+               "acl_$set_res_sids_audit_t.old_current (A6-0xB4)");
+_Static_assert(__builtin_offsetof(acl_$set_res_sids_audit_t, old_saved) == 0x48,
+               "acl_$set_res_sids_audit_t.old_saved (A6-0x90)");
+_Static_assert(__builtin_offsetof(acl_$set_res_sids_audit_t, new_original) == 0x6C,
+               "acl_$set_res_sids_audit_t.new_original (A6-0x6C)");
+_Static_assert(__builtin_offsetof(acl_$set_res_sids_audit_t, new_current) == 0x90,
+               "acl_$set_res_sids_audit_t.new_current (A6-0x48)");
+_Static_assert(__builtin_offsetof(acl_$set_res_sids_audit_t, new_saved) == 0xB4,
+               "acl_$set_res_sids_audit_t.new_saved (A6-0x24)");
+_Static_assert(sizeof(acl_$set_res_sids_audit_t) == 0xD8,
+               "audit data length word at 0x00E48790");
 
 /* ast_$acl_attr_t.acl_data is a raw byte array in ast/ast.h; this is the
  * protection record the ACL subsystem reads out of it. */
@@ -524,6 +619,28 @@ void acl_$cache_list_remove(int16_t *head, acl_$cache_link_t *links, int16_t slo
  */
 int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
                             acl_$prot_data_t *prot, status_$t *status_ret);
+
+
+/*
+ * acl_$prim_create_internal (0x00E4519C, 1864 bytes; was FUN_00e4519c).
+ * Module-local - the ACL_ code segment starts at 0xE44C3C and the SAU2 map
+ * exports no symbol at 0xE4519C - and reached with `bsr.w` from
+ * ACL_$PRIM_CREATE (0x00E47ACA).
+ *
+ * Frame, from the callee's own reads:
+ *   A6+0x08  acl_data      (A4)
+ *   A6+0x0C  acl_header    pointer, copied to A6-0x14 and dereferenced
+ *                          at 0x00E451C0 (`lea (0x12,A0),A2`)
+ *   A6+0x10  data_len      word (`tst.w`, signed)
+ *   A6+0x12  subsys_uid    pointer to the caller's acl_data+2
+ *   A6+0x16  flag          BYTE (D5)
+ *   A6+0x18  image         the mapped 0x400-byte page, copied to A6-0x10
+ *   A6+0x1C  image_len_ret out: WORD, 0x34 + entries*0x2C (0x00E458CE-0x00E458D8)
+ *   A6+0x20  status
+ */
+void acl_$prim_create_internal(void *acl_header, void *acl_data, int16_t data_len,
+                               void *subsys_uid, int16_t flag, void *image,
+                               int16_t *image_len_ret, status_$t *status_ret);
 
 
 /*

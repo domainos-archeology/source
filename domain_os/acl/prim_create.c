@@ -26,16 +26,16 @@
 #include "ast/ast.h"
 #include "file/file.h"
 #include "mst/mst.h"
-
-/* Forward declarations for external functions */
-void REM_FILE_$ACL_CREATE(void *local_data, void *acl_data, int32_t type,
-                          uid_t *dir_uid, uid_t *file_uid_ret, status_$t *status_ret);
-void acl_$prim_create_internal(int32_t type, void *acl_data, int16_t data_len,
-                               void *offset, int16_t flag, void *mapped_addr,
-                               void *local_buf, status_$t *status_ret);
+#include "rem_file/rem_file.h"   /* REM_FILE_$ACL_CREATE */
 
 /* ACL magic value for validation */
 #define ACL_MAGIC_VALUE 0xFEDCA983
+
+/*
+ * 0x00E47B74: longword 0, pushed by the `pea (0x38,PC)` at 0x00E47B3A as
+ * AST_$PURIFY's segment-list argument.  Image bytes: 00 00 00 00.
+ */
+static const uint32_t acl_$prim_create_purify_segments = 0x00000000u;
 
 void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
                       void *type, uid_t *file_uid_ret, status_$t *status_ret)
@@ -49,6 +49,12 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
     /* A6-0x20: the 0x20-byte object-location record */
     file_$obj_loc_t loc_rec;
     void *mapped_addr;
+    /* A6-0x68: MST_$MAPS' map-info output longword (0x00E47A78).  Written by
+     * the callee and never read again. */
+    uint32_t mst_map_info;
+    /* A6-0x72: acl_$prim_create_internal's image-length output word
+     * (0x00E47AB4).  Written by the callee and never read again. */
+    int16_t internal_image_len;
     int16_t expected_len;
     int16_t num_entries;
     int i;
@@ -77,11 +83,11 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
     if ((acl_attr.obj_flags[ACL_ATTR_FLAGS_LO] & ACL_ATTR_FLAG_LOCAL) == 0 &&
         loc_rec.flags < 0) {
         /* Remote creation */
-        /* The 32-bit "type" argument is passed through unchanged (it is a
-         * pointer on the m68k; uintptr_t preserves the full value). */
-        /* 0x00E479DC pea's the location record base + 0x10. */
+        /* 0x00E479D0-0x00E479E4.  D4 is ACL_$PRIM_CREATE's own A6+0x14
+         * argument, handed straight through as REM_FILE_$ACL_CREATE's
+         * acl_header pointer; 0x00E479DC pea's the location record + 0x10. */
         REM_FILE_$ACL_CREATE(&loc_rec.loc_info, acl_data,
-                             (int32_t)(uintptr_t)type, dir_uid, file_uid_ret,
+                             type, dir_uid, file_uid_ret,
                              status_ret);
         return;
     }
@@ -118,15 +124,16 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
      * as Pascal BOOLEAN bytes (0xFF == true); the word 0xFF6A this call used
      * to pass for argument 2 was never what the callee reads. */
     mapped_addr = MST_$MAPS(PROC1_$AS_ID, true, file_uid_ret, 0, 0x400, 0x16, 0, true,
-                            NULL, status_ret);
+                            &mst_map_info, status_ret);
     if ((*status_ret & 0xFFFF) != 0) {
         goto cleanup_error;
     }
 
     if (acl_attr.obj_flags[ACL_ATTR_OBJ_TYPE] == 0) {   /* 0x00E47AAA */
         /* Call internal creation helper */
-        acl_$prim_create_internal((int32_t)(uintptr_t)type, acl_data, *data_len, (uint8_t *)acl_data + 2,
-                                  0, mapped_addr, NULL, status_ret);
+        acl_$prim_create_internal(type, acl_data, *data_len,
+                                  (uint8_t *)acl_data + 2, 0, mapped_addr,
+                                  &internal_image_len, status_ret);
     } else {
         /* Direct copy of ACL data */
         int16_t word_count = *data_len;
@@ -162,7 +169,11 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
     }
 
     /* Purify the AST entry */
-    AST_$PURIFY(file_uid_ret, 2, 0, NULL, 0, status_ret);
+    /* 0x00E47B34-0x00E47B4C.  `move.l #0x20000` fills flags = 2 and
+     * segment = 0; `pea (0x38,PC)` is the zero longword at 0x00E47B74. */
+    (void)AST_$PURIFY(file_uid_ret, 2, 0,
+                      (uint32_t *)&acl_$prim_create_purify_segments,
+                      0, status_ret);
     if ((*status_ret & 0xFFFF) != 0) {
         goto cleanup_error;
     }
