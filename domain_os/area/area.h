@@ -668,20 +668,23 @@ void AREA_$TOUCH(area_$handle_t *handle_ptr, uint16_t bste_idx,
                  status_$t *status_p);
 
 /*
- * AREA_$ASSOC - Associate area with AST entry
+ * AREA_$ASSOC - Associate one area page with a physical page
  *
- * Associates an area with an Address Space Table entry.
+ * Five Pascal parameters; the prologue at 0x00E096B0/0x00E096B4 and the
+ * two calls it makes fix the shape (see area/touch.c for the walk).
  *
- * @param gen           Area generation
- * @param area_id       Area ID
- * @param aste_idx      AST entry index
- * @param param_4       Unknown parameter
- * @param status_ret    Output: status code
+ * @param area_id       A6+0x08 word - area id, range-checked against
+ *                      AREA_$N_AREAS
+ * @param bste_idx      A6+0x0A word - area-relative block index, passed BY
+ *                      ADDRESS to area_$find_entry_by_uid (`pea (0xa,A6)`)
+ * @param page          A6+0x0C word - page within that block
+ * @param ppn           A6+0x0E long - forwarded to AST_$ASSOC_AREA
+ * @param status_ret    A6+0x12 long - Output: status code
  *
  * Original address: 0x00E096A2
  */
-void AREA_$ASSOC(uint16_t gen, int16_t area_id, uint32_t aste_idx,
-                 int16_t param_4, status_$t *status_ret);
+void AREA_$ASSOC(int16_t area_id, uint16_t bste_idx, int16_t page,
+                 uint32_t ppn, status_$t *status_ret);
 
 /*
  * AREA_$THREAD_BSTES - Thread BSTE entries for area

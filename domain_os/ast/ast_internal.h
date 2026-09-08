@@ -35,7 +35,13 @@
 
 /* Internal AST functions (VTOC_$SEARCH_VOLUMES comes from vtoc/vtoc.h) */
 extern void AST_$LOOKUP_WITH_HINTS(void *uid_info, uint32_t *vol_ptr, void *attrs, status_$t *status);
-extern void AST_$DEACTIVATE_SEGMENT(aste_t *aste, uint32_t flags, status_$t *status);
+/*
+ * AST_$DEACTIVATE_SEGMENT (0x00E01950) - module-local; see
+ * ast/deactivate_segment.c.  Four Pascal parameters: the ASTE, two single
+ * BYTE flags (A6+0x0C and A6+0x0E), and the status cell.
+ */
+void AST_$DEACTIVATE_SEGMENT(aste_t *aste, int8_t purge, int8_t keep,
+                             status_$t *status);
 
 /*
  * AST_$SET_ATTR_DISPATCH (0x00E04B00) is a Pascal procedure nested inside

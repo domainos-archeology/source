@@ -162,7 +162,8 @@ done:
  */
 static aste_t* try_free_aste(aste_t *aste, status_$t *status)
 {
-    AST_$DEACTIVATE_SEGMENT(aste, 0, status);
+    /* 0x00E01F86 `clr.l -(SP)` covers both byte flags at once */
+    AST_$DEACTIVATE_SEGMENT(aste, 0, 0, status);
 
     return (*status == status_$ok) ? aste : NULL;
 }

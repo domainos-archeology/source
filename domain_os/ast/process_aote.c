@@ -80,8 +80,18 @@ uint16_t ast_$process_aote(aote_t *aote, uint8_t flags1, uint16_t flags2,
         }
 
         /* Process/free the ASTE */
-        AST_$DEACTIVATE_SEGMENT(aste, ((uint32_t)flags1 << 24) | ((uint32_t)flags2 & 0xFF00),
-                     status);
+        /*
+         * 0x00E01B48-0x00E01B50 pushes `pea (A2)` (status), `move.b D3b`
+         * (flags2) and `move.b D2b` (flags1): two separate BYTE arguments,
+         * not one longword.  flags2 is modelled in this file as the whole
+         * stack word (Pascal true is 0xFF00), so the byte the callee reads
+         * is its high half.
+         *
+         * TODO: make flags1/flags2/flags3 int8_t here and drop the shift
+         * (bead source-o7gq).
+         */
+        AST_$DEACTIVATE_SEGMENT(aste, (int8_t)flags1, (int8_t)(flags2 >> 8),
+                                status);
 
         if (*status != status_$ok) {
             if (*status == status_$ast_segment_not_deactivatable) {

@@ -1,19 +1,17 @@
 /*
- * AST_$DEACTIVATE_SEGMENT - Deactivate and cleanup a segment (ASTE)
+ * AST_$DEACTIVATE_SEGMENT - Deactivate and clean up one segment (ASTE)
  *
- * Deactivates an ASTE by flushing its pages and removing it from
- * the segment map. Uses ML_$LOCK/ML_$UNLOCK for synchronization
- * and PMAP_$FLUSH to manage physical page mapping.
+ * Flushes the segment's pages, writes its segment map back, and unlinks the
+ * ASTE from its AOTE's list.
  *
- * Parameters:
- *   aste   - ASTE to deactivate
- *   flags  - Deactivation flags (high byte and low byte have different meanings)
- *            High byte (param_2 byte 0): purge mode
- *            Low byte (param_2 byte 2): skip update mode
- *   status - Output: status code
+ * The SAU2 link map gives this address no symbol (the AST_ segment's
+ * exported names skip from AST_$ADD_ASTES at 0xE0118C to AST_$GET_DISM_SEQN
+ * at 0xE01388 and on to AST_$UPDATE at 0xE016D0), so it is module-local -
+ * which is why it never loads A5 for itself and reaches the AST_ module
+ * block through the A5 its AST_ caller already holds (0x00E01ABE
+ * `pea (0x428,A5)`).  Every one of its five callers is inside AST_.
  *
- * Original address: 0x00E01950
- * Original size: 386 bytes
+ * Original address: 0x00E01950 .. 0x00E01AD0 (386 bytes)
  */
 
 #include "ast/ast_internal.h"
@@ -25,7 +23,15 @@
  * NETLOG_$OK_TO_LOG - netlog/netlog.h
  */
 
-/* Status codes */
+/*
+ * Process types that may NOT deactivate a dirty remote segment.
+ *
+ * 0x00E0199A `cmpi.w #0x8,D1w` / `beq` (error) and 0x00E019A0
+ * `cmpi.w #0x9,D1w` / `bne` (proceed): types 8 and 9 are rejected and every
+ * other type is allowed.  (source-jddw: the tree had this inverted.)
+ */
+#define PROC1_TYPE_NO_DEACTIVATE_A  8
+#define PROC1_TYPE_NO_DEACTIVATE_B  9
 
 /*
  * ast_$deactivate_segment_log - the nested NETLOG helper at 0x00E01872
@@ -55,103 +61,129 @@
 static void ast_$deactivate_segment_log(const aste_t *aste,
                                         const uint32_t *segmap_row);
 
-void AST_$DEACTIVATE_SEGMENT(aste_t *aste, uint32_t flags, status_$t *status)
+/*
+ * AST_$DEACTIVATE_SEGMENT
+ *
+ * Parameters (prologue 0x00E01958-0x00E01960):
+ *   aste    A6+0x08 long - the ASTE to deactivate
+ *   purge   A6+0x0C byte - true (negative) selects PMAP_$FLUSH mode 3
+ *                          instead of 1 (0x00E019F2 `tst.b D2b` / `bpl`)
+ *   keep    A6+0x0E byte - AND-ed with `purge` at 0x00E01A20; when the
+ *                          result is negative the segment map write-back
+ *                          step is skipped entirely
+ *   status  A6+0x10 long - output status
+ *
+ * Both flag arguments are single BYTES, each occupying the high half of its
+ * stack word: the call sites push them with `move.b Dnb,-(SP)` (0x00E01B4A
+ * and 0x00E01B4C in ast_$process_aote) or `st -(SP)` / `clr.w -(SP)`
+ * (0x00E05E2A/0x00E05E28 in AST_$TRUNCATE); AST_$ALLOCATE_ASTE's three sites
+ * push a single `clr.l -(SP)` covering both (0x00E01F86).
+ *
+ * Original address: 0x00E01950
+ */
+void AST_$DEACTIVATE_SEGMENT(aste_t *aste, int8_t purge, int8_t keep,
+                             status_$t *status)
 {
-    uint8_t flags_byte0 = (flags >> 24) & 0xFF;  /* High byte */
-    uint8_t flags_byte2 = (flags >> 8) & 0xFF;   /* Third byte */
     uint16_t aste_flags;
     uint32_t segmap_offset;
     uint16_t flush_mode;
+    uint32_t *segmap_row;
     aote_t *aote;
 
+    /* 0x00E01968: in transition already? */
+    if ((int16_t)aste->flags < 0) {
+        goto not_deactivatable;
+    }
+
+    /* 0x00E0196E: still wired/referenced? */
+    if (aste->wire_count != 0) {
+        goto not_deactivatable;
+    }
+
+    /* 0x00E01974-0x00E01986: `sne`/`sne`/`and.b`/`bpl` - both bits set? */
     aste_flags = aste->flags;
-
-    /*
-     * Check if ASTE can be deactivated:
-     * - Not already in transition (bit 15)
-     * - Reference count is 0 (offset 0x11)
-     * - Not a system segment that requires OS process
-     */
-    if ((int16_t)aste_flags < 0) {
-        /* In transition */
-        *status = status_$ast_segment_not_deactivatable;
-        return;
-    }
-
-    if (*(uint8_t *)((char *)aste + 0x11) != 0) {
-        /* Reference count non-zero */
-        *status = status_$ast_segment_not_deactivatable;
-        return;
-    }
-
-    /* Check for wired+dirty system segment - requires OS process */
-    if (((aste_flags & 0x2000) != 0) && ((aste_flags & 0x0800) != 0)) {
-        int16_t proc_type = PROC1_$TYPE[PROC1_$CURRENT];
-        if (proc_type != 8 && proc_type != 9) {
-            *status = status_$ast_segment_not_deactivatable;
-            return;
+    if ((aste_flags & ASTE_FLAG_DIRTY) != 0 &&
+        (aste_flags & ASTE_FLAG_REMOTE) != 0) {
+        /*
+         * 0x00E01988-0x00E019A4.  PROC1_$TYPE is the word array based at
+         * 0xE2612A, indexed by PROC1_$CURRENT (`(-0x2,A1,D0w)` with
+         * A1 = 0xE2612C and D0 = current*2).  Types 8 and 9 are refused;
+         * anything else falls through to the deactivation.
+         */
+        uint16_t proc_type = PROC1_$TYPE[PROC1_$CURRENT];
+        if (proc_type == PROC1_TYPE_NO_DEACTIVATE_A ||
+            proc_type == PROC1_TYPE_NO_DEACTIVATE_B) {
+            goto not_deactivatable;
         }
     }
 
-    /* Mark ASTE as in-transition */
-    aste->flags |= 0x8000;
-
-    /* Calculate segment map offset */
-    segmap_offset = (uint32_t)aste->seg_index * 0x80;
+    /* 0x00E019B0: claim the in-transition bit */
+    aste->flags |= ASTE_FLAG_IN_TRANS;
 
     /*
-     * Log if enabled.  0x00E019D4 passes the row base, which is
-     * SEGMAP_BASE (0xED4F80) + seg_index * 0x80, i.e. a 32-entry row.
+     * 0x00E019B6-0x00E019C8: A3 = 0xED5000 + seg_index*0x80, and every use
+     * below is `(-0x80,A3)`, i.e. the row base 0xED4F80 + seg_index*0x80.
      */
+    segmap_offset = (uint32_t)aste->seg_index * 0x80;
+    segmap_row = (uint32_t *)((char *)SEGMAP_BASE + segmap_offset - 0x80);
+
+    /* 0x00E019CC-0x00E019DC */
     if (NETLOG_$OK_TO_LOG < 0) {
-        ast_$deactivate_segment_log(
-            aste, (const uint32_t *)(SEGMAP_BASE + segmap_offset));
+        ast_$deactivate_segment_log(aste, segmap_row);
     }
 
-    /* Release AST lock for I/O */
+    /* 0x00E019DE: release the AST lock across the I/O */
     ML_$UNLOCK(AST_LOCK_ID);
 
-    /* Determine flush mode */
+    /* 0x00E019EC-0x00E019F6 */
     flush_mode = 1;
-    if ((int8_t)flags_byte0 < 0) {
+    if (purge < 0) {
         flush_mode = 3;
     }
 
-    /* Flush segment pages */
-    PMAP_$FLUSH(aste, (uint32_t *)(0xED4F80 + segmap_offset), 0, 0x20, flush_mode, status);
+    /*
+     * 0x00E019FC-0x00E01A16.  Six Pascal arguments, but the assembler emits
+     * only five pushes: `pea (0x20).w` at 0x00E01A04 supplies BOTH constant
+     * word arguments at once, the 0 that lands at A6+0x10 (start_page) and
+     * the 0x20 at A6+0x12 (count).  PMAP_$FLUSH itself reads them as two
+     * separate words (0x00E137BC `move.w (0x10,A6),D4w` and 0x00E1377A
+     * `move.w (0x12,A6),D5w`), and its other caller at 0x00E057E6 pushes
+     * them as two `move.w`s, so this really is a six-argument call.
+     */
+    PMAP_$FLUSH(aste, segmap_row, 0, 0x20, flush_mode, status);
 
+    /* 0x00E01A1A */
     if (*status != status_$ok) {
         goto error_exit;
     }
 
-    /* If not skipping update */
-    if ((int8_t)(flags_byte0 & flags_byte2) >= 0) {
-        /* Update ASTE or deactivate area based on type */
-        if ((aste_flags & 0x1000) != 0) {
-            /* Area segment */
+    /* 0x00E01A20-0x00E01A24: `move.b D2b,D0b` / `and.b D3b,D0b` / `bmi` */
+    if ((int8_t)(purge & keep) >= 0) {
+        /* 0x00E01A2A: the flags word is re-read here, not cached */
+        if ((aste->flags & ASTE_FLAG_AREA) != 0) {
+            /* 0x00E01A34-0x00E01A3E */
             AREA_$DEACTIVATE_ASTE(aste, status);
         } else {
-            /* Normal segment - update segment map */
-            ast_$update_aste(aste, (segmap_entry_t *)(0xED4F80 + segmap_offset),
-                            0, status);
+            /* 0x00E01A42-0x00E01A52 */
+            ast_$update_aste(aste, (segmap_entry_t *)segmap_row, 0, status);
         }
 
+        /* 0x00E01A56 */
         if (*status != status_$ok) {
             goto error_exit;
         }
     }
 
-    /* Reacquire AST lock */
+    /* 0x00E01A5A */
     ML_$LOCK(AST_LOCK_ID);
 
-    /* If not an area segment, unlink from AOTE's ASTE list */
-    if ((aste_flags & 0x1000) == 0) {
+    /* 0x00E01A6C: re-read again */
+    if ((aste->flags & ASTE_FLAG_AREA) == 0) {
+        /* 0x00E01A76-0x00E01A9A: unlink the ASTE from its AOTE's list */
         aote = aste->aote;
         if (aote->aste_list == aste) {
-            /* ASTE is at head of list */
             aote->aste_list = aste->next;
         } else {
-            /* Find ASTE in list and unlink */
             aste_t *prev = aote->aste_list;
             while (prev->next != aste) {
                 prev = prev->next;
@@ -159,22 +191,30 @@ void AST_$DEACTIVATE_SEGMENT(aste_t *aste, uint32_t flags, status_$t *status)
             prev->next = aste->next;
         }
 
-        /* Decrement AOTE's ASTE count */
-        *(int16_t *)((char *)aote + 0xBC) -= 1;
+        /* 0x00E01A9C */
+        aote->status_flags--;
     }
 
     return;
 
 error_exit:
-    /* Set high bit on status to indicate error */
-    *(uint8_t *)status |= 0x80;
+    /*
+     * 0x00E01AA2 `bset.b #0x7,(A2)` sets bit 7 of the FIRST byte of the
+     * status longword, i.e. bit 31 of the value - the "this is a warning"
+     * marker.  A byte-pointer store would pick the wrong end on a
+     * little-endian host.
+     */
+    *status = (status_$t)((uint32_t)*status | 0x80000000u);
 
-    /* Reacquire lock and clear in-transition flag */
+    /* 0x00E01AA6-0x00E01AC6 */
     ML_$LOCK(AST_LOCK_ID);
-    aste->flags &= 0x7FFF;
-
-    /* Signal completion */
+    aste->flags &= (uint16_t)~ASTE_FLAG_IN_TRANS;
     EC_$ADVANCE(&AST_$AST_IN_TRANS_EC);
+    return;
+
+not_deactivatable:
+    /* 0x00E019A6 */
+    *status = status_$ast_segment_not_deactivatable;
 }
 
 static void ast_$deactivate_segment_log(const aste_t *aste,
@@ -210,7 +250,7 @@ static void ast_$deactivate_segment_log(const aste_t *aste,
     }
 
     /* 0x00E018E0: btst.l #0xc on aste->flags */
-    if ((aste->flags & 0x1000) != 0) {
+    if ((aste->flags & ASTE_FLAG_AREA) != 0) {
         /* 0x00E018E6: only the FIRST longword of ANON_$UID is copied */
         log_uid[0] = ANON_$UID.high;
         /* 0x00E018F8: a zero-extended word from aote+0x2A */
