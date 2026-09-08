@@ -164,10 +164,13 @@ uint16_t FILE_$LOCK_CVT_TABLE[12] = {
  */
 
 /*
- * Lock hash table (58 entries)
+ * Lock hash table (FILE_LOT_HASH_BUCKETS = 251 entries)
  * Original address: FILE_$LOCK_CONTROL + 0xC8 (0xE821F0)
+ *
+ * FILE_$LOCK_INIT clears 251 words here (0x00E327BE) and UID_$HASH is called
+ * with the 251 modulus cell, so the remainder indexes 0 .. 250.
  */
-uint16_t FILE_$LOT_HASHTAB[FILE_LOCK_TABLE_ENTRIES];
+uint16_t FILE_$LOT_HASHTAB[FILE_LOT_HASH_BUCKETS];
 
 /*
  * Lock sequence counter
@@ -210,3 +213,28 @@ uint16_t FILE_$LOT_PENDING;
  * Original address: FILE_$LOCK_CONTROL + 0x2D0 (0xE823F8)
  */
 int8_t FILE_$LOT_FULL;
+
+/*
+ * ============================================================================
+ * In-code constant cells
+ * ============================================================================
+ */
+
+/*
+ * Lock-hash-table modulus handed to UID_$HASH by reference.
+ *
+ * ONE word in the FILE_ code segment at 0x00E5EA28 (image bytes: 00 FB = 251),
+ * reached with `pea (d,PC)` from all four hashing sites:
+ *   0x00E5E8FE  pea (0x128,PC)     FILE_$DELETE_INT        (source-ifam)
+ *   0x00E60528  pea (-0x1b02,PC)   FILE_$LOCAL_READ_LOCK   (source-e05a)
+ *   0x00E5F18C  pea (-0x766,PC)    FILE_$PRIV_LOCK
+ *   0x00E5FD5A  pea (-0x1334,PC)   FILE_$PRIV_UNLOCK
+ *
+ * 251 is also the number of words FILE_$LOCK_INIT clears at
+ * FILE_$LOCK_CONTROL + 0xC8 (0x00E327BE `move.w #0xfa,D0w`), so the hash
+ * remainder indexes FILE_$LOT_HASHTAB[0 .. 250].
+ *
+ * The cell sits in read-only code space in the image, but UID_$HASH's
+ * prototype takes a plain `uint16_t *`, so it is not declared const here.
+ */
+uint16_t file_$lot_hash_modulus = FILE_LOT_HASH_BUCKETS;

@@ -30,7 +30,18 @@
  *   acl_data     - ACL data buffer (44 bytes)
  *   attr_type    - Protection attribute type
  *   prot_type    - Protection type being set
- *   subsys_flag  - Subsystem data flag (negative to allow override)
+ *   subsys_flag  - Subsystem data flag, a Domain BOOLEAN byte (negative =
+ *                  true = allow the locksmith override below).
+ *
+ *                  0x00E5DD1E reads it with `move.b (0x14,A6),D3b`, the HIGH
+ *                  (even) half of the word slot at A6+0x14 - the half a byte
+ *                  push lands in - and 0x00E5DE6A tests it `tst.b` / `bpl`.
+ *                  It is re-pushed to REM_FILE_$FILE_SET_PROT as a byte
+ *                  (`move.b D3b,-(SP)` at 0x00E5DDC6), and the REM_FILE_
+ *                  server pushes it as a byte too (`move.b (-0x42c,A2),-(SP)`
+ *                  at 0x00E634BA), so it is one byte end to end - the tree
+ *                  used to declare it int16_t and hand the callee the LOW
+ *                  byte.  (source-w7lk)
  *   status_ret   - Output status code
  *
  * Flow:
@@ -42,7 +53,7 @@
  * 6. Log audit event if auditing is enabled
  */
 void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
-                        uint16_t prot_type, int16_t subsys_flag,
+                        uint16_t prot_type, boolean subsys_flag,
                         status_$t *status_ret)
 {
     int8_t same_volume_result = 0;
@@ -131,7 +142,8 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
                                 acl_data,
                                 attr_type,
                                 exsid,
-                                (uint8_t)subsys_flag,
+                                /* 0x00E5DDC6 `move.b D3b,-(SP)` */
+                                (uint8_t)(subsys_flag & 0xFF),
                                 &attr_result,
                                 status_ret);
 
@@ -175,15 +187,44 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
         }
 
         /*
-         * Check if subsystem data permission was denied but we can override.
+         * 0x00E5DE6A-0x00E5DE9A: the caller asked to set subsystem data and
+         * was refused; decide whether to forgive the refusal.
+         *
+         *   00e5de6a  tst.b  D3b
+         *   00e5de6c  bpl.b  0x00e5de9c        ; not asked for -> leave it
+         *   00e5de6e  cmpi.l #0x230010,(A4)
+         *   00e5de74  bne.b  0x00e5de9c        ; a different error -> leave it
+         *   00e5de76  jsr    ACL_$GET_LOCAL_LOCKSMITH
+         *   00e5de7c  tst.w  D0w
+         *   00e5de7e  seq    D2b               ; TRUE when the call returned 0
+         *   00e5de80  tst.b  D2b
+         *   00e5de82  bmi.b  0x00e5de9a        ; returned 0 -> CLEAR
+         *   00e5de84  move.w PROC1_$CURRENT,D2w
+         *   00e5de92  cmpi.w #0x9,PROC1_$TYPE[D2]
+         *   00e5de98  beq.b  0x00e5de9c        ; type IS 9 -> leave it
+         *   00e5de9a  clr.l  (A4)              ; CLEAR
+         *
+         * So the status is cleared when the call returned 0 OR when the
+         * current process is NOT type 9.  The tree had the second disjunct
+         * inverted (it cleared when the type WAS 9).  (source-w7lk)
+         *
+         * Note the opposite sense of the two ACL_$GET_LOCAL_LOCKSMITH tests
+         * in this routine: 0x00E5DE5C uses `sne` (deny when non-zero) and
+         * 0x00E5DE7E uses `seq` (forgive when zero) - both mean "zero is the
+         * locksmith".
          */
         if (subsys_flag < 0 &&
             *status_ret == status_$acl_no_right_to_set_subsystem_data) {
+            boolean is_locksmith;       /* D2, from `seq D2b` */
+
             locksmith_result = ACL_$GET_LOCAL_LOCKSMITH();
-            if (locksmith_result == 0 ||
-                PROC1_$TYPE[(int16_t)PROC1_$CURRENT] == PROC1_TYPE_SERVER) {
-                /* Can override - clear error */
-                *status_ret = status_$ok;
+            is_locksmith = (locksmith_result == 0) ? -1 : 0;
+
+            if (is_locksmith < 0) {
+                *status_ret = status_$ok;               /* 0x00E5DE9A */
+            } else if (PROC1_$TYPE[(int16_t)PROC1_$CURRENT]
+                           != PROC1_TYPE_SERVER) {
+                *status_ret = status_$ok;               /* 0x00E5DE9A */
             }
         }
 

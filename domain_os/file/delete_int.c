@@ -30,8 +30,14 @@
 /* File lock ID */
 #define FILE_LOCK_ID    5
 
-/* Hash table size for lock table - at 0xe5ea28, value is 58 */
-static const uint16_t FILE_LOCK_HASH_SIZE = 58;
+/*
+ * The UID_$HASH modulus is NOT a local literal: 0x00E5E8FE is
+ * `pea (0x128,PC)`, i.e. the word at 0x00E5E8FE + 2 + 0x128 = 0x00E5EA28,
+ * whose image bytes are 00 FB = 251 (`gsk read 0xE5EA28 2`).  That is the same
+ * cell FILE_$LOCAL_READ_LOCK, FILE_$PRIV_LOCK and FILE_$PRIV_UNLOCK use, and
+ * the same 251 words FILE_$LOCK_INIT clears in the lock map, so it is defined
+ * once as `file_$lot_hash_modulus` in file/file_data.c.  (source-ifam)
+ */
 
 /* Internal helper functions for per-UID locking during delete */
 /* FILE_$UID_LOCK_ACQUIRE at 0x00E5D0A8 - declared in file_internal.h */
@@ -74,7 +80,9 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
      * Hash the file UID to find the lock table bucket.
      * UID_$HASH returns: high 16 bits = quotient, low 16 bits = remainder (index)
      */
-    hash_index = (int16_t)UID_$HASH(file_uid, (uint16_t *)&FILE_LOCK_HASH_SIZE);
+    /* 0x00E5E8FE-0x00E5E90C: pea &file_$lot_hash_modulus / pea (A2) / jsr
+     * UID_$HASH / move.w D0w,D4w - only the low word (the remainder) is kept. */
+    hash_index = (int16_t)UID_$HASH(file_uid, &file_$lot_hash_modulus);
 
     /* Take the file lock */
     ML_$LOCK(FILE_LOCK_ID);

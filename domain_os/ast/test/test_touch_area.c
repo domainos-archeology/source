@@ -82,8 +82,10 @@ ec_$eventcount_t ast_pmap_in_trans_ec;
 
 /* Globals the body reads outside the two tested paths. */
 uid_t     ANON_$UID = { 0x11112222u, 0x33334444u };
-uid_t     AREA_$PARTNER = { 0, 0 };
-int16_t   AREA_$PARTNER_PKT_SIZE;
+/* The AREA_ module data block is one object (source-vm49); AREA_$PARTNER and
+ * AREA_$PARTNER_PKT_SIZE are #define aliases onto its fields, so defining
+ * AREA_$GLOBALS supplies both. */
+area_$globals_t AREA_$GLOBALS;
 int8_t    NETLOG_$OK_TO_LOG;
 uint16_t  PROC1_$CURRENT;
 uint32_t  PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];

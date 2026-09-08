@@ -122,7 +122,11 @@ TEST(empty_list_returns_immediately)
     ASSERT_EQ(status_$ok, status);   /* status is initialised before the empty check */
 }
 
-TEST(single_batch_is_sorted)
+/*
+ * 0x00E5E80C-0x00E5E82A: the exchange runs when batch[j] > batch[i], so the
+ * batch AST_$PURIFY receives is DESCENDING unsigned.  (source-87da)
+ */
+TEST(single_batch_is_sorted_descending)
 {
     uid_t uid = { 1, 2 };
     uint32_t pages[5] = { 50, 10, 30, 20, 40 };
@@ -137,11 +141,45 @@ TEST(single_batch_is_sorted)
     ASSERT_EQ(5, mock_purify_count[0]);
     ASSERT_EQ(FW_PAGES_REMOTE, mock_purify_flags[0]);
     for (i = 0; i < 5; i++) {
-        ASSERT_EQ((i + 1) * 10, mock_purify_batch[0][i]);
+        ASSERT_EQ((5 - i) * 10, mock_purify_batch[0][i]);
     }
     /* The caller's list is not modified (sorting happens on a copy) */
     ASSERT_EQ(50, pages[0]);
     ASSERT_EQ(status_$ok, status);
+}
+
+/* The comparison is `cmp.l`/`bls`, i.e. UNSIGNED: 0x80000000 outranks 1. */
+TEST(sort_is_unsigned)
+{
+    uid_t uid = { 1, 2 };
+    uint32_t pages[4] = { 1u, 0x80000000u, 2u, 0xFFFFFFFFu };
+    uint16_t count = 4;
+    status_$t status;
+
+    reset_mocks();
+    FILE_$FW_PAGES(&uid, pages, &count, &status);
+
+    ASSERT_EQ(1, mock_purify_called);
+    ASSERT_EQ(0xFFFFFFFFu, mock_purify_batch[0][0]);
+    ASSERT_EQ(0x80000000u, mock_purify_batch[0][1]);
+    ASSERT_EQ(2u, mock_purify_batch[0][2]);
+    ASSERT_EQ(1u, mock_purify_batch[0][3]);
+}
+
+/* A batch of one takes the 0x00E5E7C4 `beq` and skips the sort entirely. */
+TEST(single_page_batch_skips_sort)
+{
+    uid_t uid = { 1, 2 };
+    uint32_t pages[1] = { 0x1234 };
+    uint16_t count = 1;
+    status_$t status;
+
+    reset_mocks();
+    FILE_$FW_PAGES(&uid, pages, &count, &status);
+
+    ASSERT_EQ(1, mock_purify_called);
+    ASSERT_EQ(1, mock_purify_count[0]);
+    ASSERT_EQ(0x1234, mock_purify_batch[0][0]);
 }
 
 TEST(fifty_pages_split_into_32_and_18)
@@ -162,12 +200,12 @@ TEST(fifty_pages_split_into_32_and_18)
     ASSERT_EQ(2, mock_purify_called);
     ASSERT_EQ(32, mock_purify_count[0]);
     ASSERT_EQ(18, mock_purify_count[1]);
-    /* first batch held pages 49..18, sorted ascending */
-    ASSERT_EQ(18, mock_purify_batch[0][0]);
-    ASSERT_EQ(49, mock_purify_batch[0][31]);
-    /* second batch held pages 17..0 */
-    ASSERT_EQ(0, mock_purify_batch[1][0]);
-    ASSERT_EQ(17, mock_purify_batch[1][17]);
+    /* first batch held entries 1..32 of the list = pages 49..18, descending */
+    ASSERT_EQ(49, mock_purify_batch[0][0]);
+    ASSERT_EQ(18, mock_purify_batch[0][31]);
+    /* second batch held entries 33..50 = pages 17..0, descending */
+    ASSERT_EQ(17, mock_purify_batch[1][0]);
+    ASSERT_EQ(0, mock_purify_batch[1][17]);
 }
 
 TEST(exactly_32_pages_is_one_batch)
@@ -235,7 +273,9 @@ int main(void)
 {
     printf("FILE_$FW_PAGES tests\n");
     RUN_TEST(empty_list_returns_immediately);
-    RUN_TEST(single_batch_is_sorted);
+    RUN_TEST(single_batch_is_sorted_descending);
+    RUN_TEST(sort_is_unsigned);
+    RUN_TEST(single_page_batch_skips_sort);
     RUN_TEST(fifty_pages_split_into_32_and_18);
     RUN_TEST(exactly_32_pages_is_one_batch);
     RUN_TEST(locked_file_uses_local_flags);

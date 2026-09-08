@@ -81,19 +81,10 @@ static area_$entry_t mock_area_table[AREA_MAX_ENTRIES];
  * Module globals normally defined in area/area_data.c
  * ========================================================================== */
 
-area_$entry_t   *AREA_$FREE_LIST = NULL;
-int16_t          AREA_$N_FREE = 0;
-int16_t          AREA_$N_AREAS = 0;
-int16_t          AREA_$PARTNER_PKT_SIZE = 0;
-int16_t          AREA_$CR_DUP = 0;
-int16_t          AREA_$DEL_DUP = 0;
-uid_t            AREA_$PARTNER = { 0, 0 };
-uint32_t         AREA_$NEXT_CALLER_ID = 0;
-area_$uid_hash_t *AREA_$UID_HASH_FREE = NULL;
-area_$uid_hash_t *AREA_$UID_HASH[AREA_UID_HASH_BUCKETS];
-area_$uid_hash_t  AREA_$UID_HASH_POOL[AREA_UID_HASH_BUCKETS];
-area_$entry_t    *AREA_$ASID_LIST[AREA_MAX_ENTRIES];
-ec_$eventcount_t  AREA_$IN_TRANS_EC;
+/* The whole AREA_ module data block is one object now (source-vm49);
+ * the map-named cells are #define aliases onto its fields, so defining
+ * AREA_$GLOBALS supplies every one of them. */
+area_$globals_t AREA_$GLOBALS;
 
 /* ==========================================================================
  * Mocked callees

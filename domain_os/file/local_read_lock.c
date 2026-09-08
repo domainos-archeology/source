@@ -48,8 +48,14 @@ void FILE_$LOCAL_READ_LOCK(uid_t *file_uid, file_lock_info_internal_t *info_out,
     int16_t entry_idx;
     file_lock_entry_detail_t *entry;
 
-    /* Compute hash bucket for the file UID */
-    hash_index = UID_$HASH(file_uid, NULL);
+    /*
+     * 0x00E60528-0x00E60538: `pea (-0x1b02,PC)` addresses the word at
+     * 0x00E6052A - 0x1B02 = 0x00E5EA28 (image bytes 00 FB = 251), the shared
+     * lock-hash modulus cell `file_$lot_hash_modulus` (file/file_data.c); the
+     * second argument is that cell, not nil.  Only D0's low word - the
+     * remainder - is kept (`move.w D0w,D2w`).  (source-e05a)
+     */
+    hash_index = (int16_t)(UID_$HASH(file_uid, &file_$lot_hash_modulus) & 0xFFFF);
 
     /* Default status: not found */
     *status_ret = file_$object_not_locked_by_this_process;

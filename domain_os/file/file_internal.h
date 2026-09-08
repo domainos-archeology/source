@@ -288,9 +288,18 @@ _Static_assert(sizeof(file_$lock_hint_t) == 8, "sizeof lock hint");
 
 /*
  * Lock hash table (array of head pointers)
- * Located at FILE_$LOCK_CONTROL + 0xC8
+ * Located at FILE_$LOCK_CONTROL + 0xC8 (0xE821F0, SAU2 map name).
+ * FILE_LOT_HASH_BUCKETS = 251 entries; see file/file.h.
  */
-extern uint16_t FILE_$LOT_HASHTAB[];
+extern uint16_t FILE_$LOT_HASHTAB[FILE_LOT_HASH_BUCKETS];
+
+/*
+ * file_$lot_hash_modulus - the single in-code word at 0x00E5EA28 (00 FB = 251)
+ * that FILE_$DELETE_INT (0x00E5E8FE), FILE_$LOCAL_READ_LOCK (0x00E60528),
+ * FILE_$PRIV_LOCK (0x00E5F18C) and FILE_$PRIV_UNLOCK (0x00E5FD5A) each pass to
+ * UID_$HASH by reference with `pea (d,PC)`.  Defined in file/file_data.c.
+ */
+extern uint16_t file_$lot_hash_modulus;
 
 /*
  * External lock control variables (in file_lock_control_t)

@@ -74,12 +74,10 @@ static int current_failed = 0;
  * Module globals normally defined in area/area_data.c
  * ========================================================================== */
 
-area_$entry_t   *AREA_$FREE_LIST = NULL;
-int16_t          AREA_$N_FREE = 0;
-int16_t          AREA_$N_AREAS = 0;
-area_$uid_hash_t *AREA_$UID_HASH_FREE = NULL;
-area_$uid_hash_t *AREA_$UID_HASH[AREA_UID_HASH_BUCKETS];
-area_$entry_t    *AREA_$ASID_LIST[AREA_MAX_ENTRIES];
+/* The whole AREA_ module data block is one object now (source-vm49);
+ * the map-named cells are #define aliases onto its fields, so defining
+ * AREA_$GLOBALS supplies every one of them. */
+area_$globals_t AREA_$GLOBALS;
 
 /* ==========================================================================
  * Mocked callees

@@ -12,7 +12,7 @@
  * 1. Checks if page count is 0 (early exit)
  * 2. Calls FILE_$DELETE_INT to check lock status
  * 3. Processes pages in batches of up to 32
- * 4. Sorts each batch using bubble sort (for sequential I/O optimization)
+ * 4. Orders each batch DESCENDING by unsigned page entry (0x00E5E80C `bls`)
  * 5. Calls AST_$PURIFY for each batch
  *
  * The page_list entries are uint32_t where:
@@ -32,28 +32,41 @@
 #define FW_PAGES_REMOTE 0x8012   /* Include remote sync */
 
 /*
- * Internal: Sort page list using bubble sort
+ * Internal: order the batch, DESCENDING by unsigned page entry.
  *
- * Sorts an array of uint32 page entries in ascending order.
- * Used to optimize disk I/O by writing pages sequentially.
+ * 0x00E5E7BE-0x00E5E84A.  Selection/exchange sort over the 1-based local
+ * array; the comparison at 0x00E5E80C-0x00E5E814 is
+ *
+ *      move.l (-0x84,A1),D0        ; D0 = batch[j]
+ *      cmp.l  (-0x84,A3),D0        ; D0 - batch[i]
+ *      bls.b  skip                 ; skip when batch[j] <= batch[i] (unsigned)
+ *
+ * so the exchange runs when batch[j] > batch[i]: the batch handed to
+ * AST_$PURIFY is in DESCENDING unsigned order, not ascending.  (source-87da)
+ *
+ * The outer `dbf D4w` count is set from D0 = count - 2 at 0x00E5E7C8, so the
+ * outer loop runs exactly count-1 times with i = 1 .. count-1; the inner
+ * `dbf D2w` count is count - j, so j runs (i+1) .. count.  The image reaches
+ * both operands through cursors that are only ever advanced by 4, so the
+ * indices below are written 1-based to match.
  */
-static void sort_pages(uint32_t *pages, uint16_t count)
+static void sort_pages_descending(uint32_t *pages, uint16_t count)
 {
     uint16_t i, j;
     uint32_t temp;
 
-    if (count <= 1) {
+    /* 0x00E5E7C2: subq.w #1,D0w / beq -> skip the whole sort when count == 1 */
+    if (count == 1) {
         return;
     }
 
-    /* Bubble sort - simple and sufficient for small batches */
-    for (i = 0; i < count - 1; i++) {
-        for (j = i + 1; j < count; j++) {
-            if (pages[j] < pages[i]) {
-                /* Swap */
-                temp = pages[i];
-                pages[i] = pages[j];
-                pages[j] = temp;
+    for (i = 1; i <= (uint16_t)(count - 1); i++) {
+        for (j = (uint16_t)(i + 1); j <= count; j++) {
+            if (pages[j - 1] > pages[i - 1]) {
+                /* 0x00E5E816-0x00E5E82A */
+                temp = pages[i - 1];
+                pages[i - 1] = pages[j - 1];
+                pages[j - 1] = temp;
             }
         }
     }
@@ -63,22 +76,21 @@ void FILE_$FW_PAGES(uid_t *file_uid, uint32_t *page_list, uint16_t *page_count,
                     status_$t *status_ret)
 {
     int8_t was_locked;
-    uint8_t delete_result[6];  /* Result buffer from DELETE_INT */
-    uint16_t purify_flags;
-    uint16_t start_index;
-    uint16_t total_pages;
-    uint16_t batch_size;
+    uint8_t delete_result[6];  /* Result buffer from DELETE_INT; A6-0x90 */
+    uint16_t purify_flags;     /* A6-0x86 */
+    uint16_t start_index;      /* D6 */
+    uint16_t batch_size;       /* D5 */
+    uint16_t next_index;       /* D1 -> D6 */
     uint16_t i;
-    uint32_t batch[FW_BATCH_SIZE];  /* Local copy for sorting */
+    uint32_t batch[FW_BATCH_SIZE];  /* A6-0x80 .. A6-0x04, 32 longwords */
 
-    /* Check for empty page list */
+    /* 0x00E5E72C-0x00E5E73A: empty page list */
     if (*page_count == 0) {
         *status_ret = status_$ok;
         return;
     }
 
-    total_pages = *page_count;
-    start_index = 1;  /* Page indices are 1-based in the list */
+    start_index = 1;  /* 0x00E5E740 moveq #1,D6 - the list is 1-based */
 
     /*
      * Check if file is locked by calling FILE_$DELETE_INT with flags=0.
@@ -99,28 +111,37 @@ void FILE_$FW_PAGES(uid_t *file_uid, uint32_t *page_list, uint16_t *page_count,
      * Process pages in batches of up to 32.
      */
     do {
-        /* Calculate batch size */
-        if ((total_pages - start_index + 1) < FW_BATCH_SIZE) {
-            batch_size = (total_pages - start_index) + 1;
+        /*
+         * 0x00E5E76A-0x00E5E788: `*page_count` is re-read from the var
+         * parameter on every batch, and the "how many are left" test is a
+         * LONGWORD compare against 32 (`moveq #0x20,D2` / `cmp.l D2,D1` /
+         * `ble`), so the equality case takes the ble arm and still yields 32.
+         */
+        if ((int32_t)((uint32_t)*page_count - (uint32_t)start_index + 1)
+                <= (int32_t)FW_BATCH_SIZE) {
+            batch_size = (uint16_t)(*page_count - start_index + 1);
         } else {
             batch_size = FW_BATCH_SIZE;
         }
 
+        /* 0x00E5E78A-0x00E5E790: D1 = start + size, D0 = D1 - 1 (last index) */
+        next_index = (uint16_t)(start_index + batch_size);
+
         /*
-         * Copy pages to local batch array.
-         * The original code uses 1-based indexing for the page list.
+         * 0x00E5E792-0x00E5E7BC: copy pages start_index .. next_index-1 of the
+         * 1-based caller list into batch[0 ..].  The `bcs` at 0x00E5E794 skips
+         * the copy when (next_index - 1) < start_index, i.e. when batch_size
+         * is 0; the `dbf` otherwise runs batch_size times.
          */
         for (i = 0; i < batch_size; i++) {
             batch[i] = page_list[start_index + i - 1];
         }
 
         /*
-         * Sort the batch for sequential I/O optimization.
-         * Skip if only one page (no sorting needed).
+         * 0x00E5E7BE-0x00E5E84A: order the batch descending (see above).
+         * The image skips the sort only for a batch of exactly one.
          */
-        if (batch_size > 1) {
-            sort_pages(batch, batch_size);
-        }
+        sort_pages_descending(batch, batch_size);
 
         /*
          * Purify the batch.
@@ -134,14 +155,19 @@ void FILE_$FW_PAGES(uid_t *file_uid, uint32_t *page_list, uint16_t *page_count,
          */
         AST_$PURIFY(file_uid, purify_flags, 0, batch, batch_size, status_ret);
 
-        /* Check for error */
+        /*
+         * 0x00E5E86C-0x00E5E874: `tst.w (0x2,A1)` - only the LOW word of the
+         * status longword is tested.  Use a mask rather than a byte cast so a
+         * little-endian host sees the same word.
+         */
         if ((*status_ret & 0xFFFF) != status_$ok) {
-            /* Error or EOF - stop processing */
             break;
         }
 
-        /* Move to next batch */
-        start_index += batch_size;
+        /* 0x00E5E7C0 already loaded D6 = next_index; 0x00E5E876-0x00E5E87E
+         * re-reads *page_count and loops while next_index <= *page_count
+         * (unsigned `bls`). */
+        start_index = next_index;
 
-    } while (start_index <= total_pages);
+    } while (start_index <= *page_count);
 }

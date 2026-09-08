@@ -8,6 +8,7 @@
  */
 
 #include "peb/peb_internal.h"
+#include "arch/arch.h"
 #include "mmu/mmu.h"
 #include "fim/fim.h"
 
@@ -22,10 +23,51 @@ peb_fp_state_t PEB_$WIRED_DATA_START[PEB_MAX_PROCESSES];
  * is defined there (peb/sau2/int.s); peb/peb_data.c carries host storage. */
 
 /*
- * Probe data and hardware address pointer for PEB detection
- * Original addresses: 0x00E31DCE (probe data, word 0x0001),
- * 0x00E31DD0 (hw addr ptr, PTR_PEB_CTL_00e31dd0 - declared in peb_internal.h)
+ * ----------------------------------------------------------------------------
+ * The two `pea (d,PC)` constant cells io_$probe is given
+ * ----------------------------------------------------------------------------
+ *
+ * 0x00E31D7E `pea (0x4e,PC)`  -> 0x00E31D80 + 0x4E = 0x00E31DCE
+ * 0x00E31D7A `pea (0x54,PC)`  -> 0x00E31D7C + 0x54 = 0x00E31DD0
+ *
+ * and the image bytes there (`gsk read 0xE31DCE 8`) are
+ *
+ *   00e31dce  00 01              word  0x0001
+ *   00e31dd0  00 ff 70 00        long  0x00FF7000
+ *
+ * Both are passed by address, so they are named file-statics carrying those
+ * values - not a raw literal pointer and not a `PTR_` placeholder object.
+ * (source-fzke)
  */
+
+/* 0x00E31DCE: the probe's device-type selector. */
+static uint16_t peb_probe_type = 0x0001;
+
+/* 0x00E31DD0: the address io_$probe pokes, the PEB control register at
+ * 0xFF7000 that the MMU_$INSTALL immediately above has just mapped. */
+static uint32_t peb_probe_addr = 0x00FF7000;
+
+/* 0x00E31D76 `pea (-0x4,A6)`: io_$probe's four-byte scratch result. */
+#define PEB_PROBE_RESULT_BYTES  4
+
+/*
+ * MMU_$INSTALL constants (0x00E31D5E-0x00E31D6C, 0x00E31DAC-0x00E31DBA).
+ */
+#define PEB_CTL_PPN         0x2C        /* pea (0x2c).w  */
+#define PEB_CTL_VA          0xFF7000    /* move.l #0xff7000 */
+#define PEB_WCS_PPN         0x2E        /* pea (0x2e).w  */
+#define PEB_WCS_VA          0xFF7800    /* move.l #0xff7800 */
+#define PEB_MMU_FLAGS       0x16        /* pea (0x16).w  */
+
+/*
+ * Exception vectors PEB_$INIT installs (both `move.l #handler,(vector).l`).
+ */
+#define PEB_FLINE_VECTOR    0x0000002C  /* 0x00E31D30: line-F emulator */
+#define PEB_INT_VECTOR      0x00000070  /* 0x00E31D9C: PEB interrupt */
+
+/* 0x00E31D3E `moveq #0x39,D0` / 0x00E31D48 `moveq #0x6,D1`: 58 slots of
+ * seven longwords each (0x1C bytes, `lea (0x1c,A0),A0`). */
+#define PEB_FP_STATE_LONGS  7
 
 /*
  * PEB_$INIT - Initialize PEB subsystem
@@ -73,7 +115,7 @@ void PEB_$INIT(void)
 
         /* Install FIM F-line handler at vector 0x2C (F-line exception) */
         /* Vector 0x2C = interrupt vector for F-line (0xB * 4 = 0x2C) */
-        *(void (**)(void))0x0000002C = FIM_$FLINE;
+        *(void (**)(void))ARCH_VA_TO_PTR(PEB_FLINE_VECTOR) = FIM_$FLINE;
         return;
     }
 
@@ -81,43 +123,47 @@ void PEB_$INIT(void)
     /* Zero all 58 process slots (28 bytes each = 7 longwords) */
     p = (uint32_t *)PEB_$WIRED_DATA_START;
     for (i = 0; i < PEB_MAX_PROCESSES; i++) {
-        for (j = 0; j < 7; j++) {
+        for (j = 0; j < PEB_FP_STATE_LONGS; j++) {
             *p++ = 0;
         }
     }
 
     /* Install MMU mapping for PEB control register at 0xFF7000 */
     /* PPN 0x2C maps to VA 0xFF7000 with flags 0x16 */
-    MMU_$INSTALL(0x2C, 0xFF7000, 0x16);
+    MMU_$INSTALL(PEB_CTL_PPN, PEB_CTL_VA, PEB_MMU_FLAGS);
 
     /* Probe for PEB hardware */
     {
-        uint8_t probe_result[4];
+        uint8_t probe_result[PEB_PROBE_RESULT_BYTES];
         int8_t found;
 
-        /* Note: The probe function checks if hardware responds at the given address */
-        /* Parameters appear to be: probe data, hw address pointer, result buffer */
-        found = io_$probe((void *)0xE31DCE, &PTR_PEB_CTL_00e31dd0, probe_result);
+        /*
+         * 0x00E31D76-0x00E31D8E: three arguments, all by address - the type
+         * word at 0x00E31DCE, the address longword at 0x00E31DD0 and the
+         * frame scratch at A6-0x4.  The result is a Domain boolean tested
+         * `tst.b D0b` / `bmi`.
+         */
+        found = io_$probe(&peb_probe_type, &peb_probe_addr, probe_result);
 
         if (found < 0) {
             /* PEB hardware found - install interrupt handler and WCS mapping */
 
             /* Install PEB interrupt handler at vector 0x70 */
             /* Vector 0x70 = interrupt level for PEB */
-            *(void (**)(void))0x00000070 = PEB_$INT;
+            *(void (**)(void))ARCH_VA_TO_PTR(PEB_INT_VECTOR) = PEB_$INT;
 
             /* Mark PEB as installed */
             PEB_$INSTALLED = 0xFF;
 
             /* Install MMU mapping for WCS at 0xFF7800 */
             /* PPN 0x2E maps to VA 0xFF7800 with flags 0x16 */
-            MMU_$INSTALL(0x2E, 0xFF7800, 0x16);
+            MMU_$INSTALL(PEB_WCS_PPN, PEB_WCS_VA, PEB_MMU_FLAGS);
 
             /* Clear PEB control register to initialize hardware */
             PEB_CTL = 0;
         } else {
             /* PEB hardware not found - remove the control register mapping */
-            MMU_$REMOVE(0x2C);
+            MMU_$REMOVE(PEB_CTL_PPN);
         }
     }
 }

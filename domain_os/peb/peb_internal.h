@@ -25,13 +25,16 @@
  * Constant pointer cells in the code segment
  * ============================================================================
  * These 32-bit cells are passed by address to io_$probe / MST_$WIRE_AREA.
- *   0x00E31DD0: PTR_PEB_CTL_00e31dd0               = 0x00FF7000 (PEB_CTL)
  *   0x00E322DC: PTR_PEB_$WIRED_DATA_START_00e322dc = 0x00E84E80
  *   0x00E322E0: PTR_PEB_$WIRED_DATA_END_00e322e0   = 0x00E854D8
  *   0x00E322E4: PTR_PEB_$TOUCH_00e322e4            = 0x00E70810
  *   0x00E322E8: PTR_PEB_$WIRED_CODE_END_00e322e8   = 0x00E70A3E
+ *
+ * The pair PEB_$INIT hands io_$probe - the word at 0x00E31DCE and the
+ * longword at 0x00E31DD0 - are file-statics in peb/init.c, its only user
+ * (source-fzke); the `PTR_PEB_CTL_00e31dd0` placeholder that used to stand
+ * for 0x00E31DD0 here has been removed.
  */
-extern void *PTR_PEB_CTL_00e31dd0;
 extern void *PTR_PEB_$WIRED_DATA_START_00e322dc;
 extern void *PTR_PEB_$WIRED_DATA_END_00e322e0;
 extern void *PTR_PEB_$TOUCH_00e322e4;

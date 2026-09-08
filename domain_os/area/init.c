@@ -1,190 +1,166 @@
 /*
  * AREA_$INIT - Initialize the area subsystem
  *
- * This function initializes the area management subsystem during system boot.
- * It sets up the area table, free lists, per-ASID area lists, UID hash table,
- * and diskless node support structures.
+ * Original address: 0x00E2F3A8, size 340 bytes (SAU2 map: `I  E2F3A8  AREA_
+ * size = 154`, one routine).
  *
- * Original address: 0x00E2F3A8
+ * Called once during system startup.  Everything it touches is a field of the
+ * AREA_ module data block at 0xE1E118 (`D  E1E118  AREA_  size = 5E8`); see
+ * area/area.h for the recovered record and its offset assertions.  This file
+ * used to reach the block through `(uint32_t *)AREA_GLOBALS_BASE` and raw byte
+ * displacements, which put the three diskless page cells at +0x08/+0x0C/+0x10
+ * instead of +0x00/+0x04/+0x08.  (source-vm49)
  */
 
 #include "area/area_internal.h"
 #include "misc/crash_system.h"
 
 /*
- * Module-local data at AREA_GLOBALS_BASE (0xE1E118)
- * These are accessed via the A5 register in the original code.
- *
- * Offset layout from base:
- *   +0x000: First area entry (inline data)
- *   +0x048: AREA_$IN_TRANS_EC (event count for in-transition waits)
- *   +0x068: Per-ASID extended segment table list (11 entries)
- *   +0x0E8: Start of inline bitmap/page data
- *   +0x450: UID hash table free list head
- *   +0x454: UID hash table buckets (11 entries, indexed by hash)
- *   +0x480: UID hash table entry pool
- *   +0x4D8: Per-ASID area list heads (58 entries)
- *   +0x5C4: Area ID counter
- *   +0x5C8: AREA_$FREE_LIST
- *   +0x5CC: AREA_$PARTNER
- *   +0x5D0: Mother node ID (for diskless)
- *   +0x5D6: Diskless page allocation base (0x540)
- *   +0x5D8: Reserved
- *   +0x5DA: Reserved
- *   +0x5DC: AREA_$DEL_DUP
- *   +0x5DE: AREA_$CR_DUP
- *   +0x5E0: AREA_$N_FREE
- *   +0x5E2: AREA_$N_AREAS
- *   +0x5E4: AREA_$PARTNER_PKT_SIZE
+ * Loop trip counts, all `moveq #N,Dn` + `dbf` = N+1 iterations:
+ *   0x00E2F3CE  moveq #0x39  -> 58   seg_table_list[] and asid_list[]
+ *   0x00E2F3EC  moveq #0xa   -> 11   uid_hash[] and uid_hash_pool[]
+ *   0x00E2F448  moveq #0x2   -> 3    diskless RPMAP pages
+ *   0x00E2F4D4  moveq #0x3f  -> 64   seg_table_pool[]
  */
+#define AREA_INIT_ASID_SLOTS        AREA_MAX_ENTRIES            /* 58 */
+#define AREA_INIT_HASH_SLOTS        AREA_UID_HASH_BUCKETS       /* 11 */
+#define AREA_INIT_RPMAP_PAGES       AREA_DISKLESS_PAGE_COUNT    /* 3  */
+#define AREA_INIT_POOL_SLOTS        AREA_SEG_TABLE_POOL_COUNT   /* 64 */
 
-/* Number of per-ASID list slots */
-#define ASID_LIST_COUNT     58
+/* 0x00E2F3B6 `move.w #0x540,(0x5d6,A0)`: the maximum size of the area table. */
+#define AREA_FORMAT_MAX_ENTRIES     0x540
 
-/* Number of UID hash buckets */
-#define UID_HASH_BUCKETS    11
+/* 0x00E2F4A8 `move.w #-0x1,(0xa,A0)`: an RPMAP cache slot marked empty. */
+#define AREA_RPMAP_SLOT_EMPTY       0xFFFF
 
-/* Number of UID hash entries in pool */
-#define UID_HASH_POOL_SIZE  11
+/* 0x00E2F48A / 0x00E2F4AC `pea (0x16).w`: the MMU_$INSTALL flag word used for
+ * both the RPMAP cache pages here and the PEB control page elsewhere. */
+#define AREA_RPMAP_MMU_FLAGS        0x16
 
-/* Number of diskless area slots (for nodes booting over network) */
-#define DISKLESS_AREA_COUNT 3
+/* 0x00E2F4D8 `clr.b (0x153,A0)`: byte +0x03 of each 0x0C-byte pool record
+ * (the array starts at globals+0x150). */
+#define AREA_SEG_TABLE_POOL_FLAG    0x03
 
-/* Diskless area base virtual address */
-#define DISKLESS_VA_BASE    0x00EE5000
-
-/* Bitmap array for tracking area segment allocation */
-#define AREA_BITMAP_COUNT   58
-
-/* Extended segment table count */
-#define SEG_TABLE_COUNT     64
-
-/*
- * AREA_$INIT - Initialize the area subsystem
- *
- * Assembly analysis:
- * - Clears per-ASID area lists and segment table lists
- * - Initializes UID hash table with free pool
- * - For diskless nodes, allocates wired pages for area backing
- * - Clears segment bitmap tracking array
- * - Initializes duplicate operation counters
- */
 void AREA_$INIT(void)
 {
     int i;
-    status_$t status;
-    uint32_t *globals = (uint32_t *)AREA_GLOBALS_BASE;
+    status_$t status;                   /* A6-0x10 */
+    uint32_t page_va;                   /* A6-0x0C */
+
+    /* 0x00E2F3B0-0x00E2F3CC: the scalar cells at the top of the block. */
+    AREA_$FORMAT.max_entries = AREA_FORMAT_MAX_ENTRIES;   /* +0x5D6 */
+    AREA_$FREE_LIST          = NULL;                      /* +0x5C8 */
+    AREA_$N_AREAS            = 0;                         /* +0x5E2 */
+    AREA_$N_FREE             = 0;                         /* +0x5E0 */
+    AREA_$NEXT_CALLER_ID     = 0;                         /* +0x5C4 */
 
     /*
-     * Set diskless page allocation offset (0x540)
-     * Offset +0x5D6 from base = (0x5D6 / 4) = entry [0x175]
-     * This is stored as a 16-bit value at offset 0x5D6
+     * 0x00E2F3CE-0x00E2F3EA: one `dbf` clears BOTH 58-longword arrays, the
+     * per-ASID area list heads at +0x4D8 and the per-ASID extended
+     * segment-table list heads at +0x68.
      */
-    *(int16_t *)((char *)globals + 0x5D6) = 0x540;
-
-    /* Clear free list, area count, and N_FREE */
-    AREA_$FREE_LIST = NULL;     /* +0x5C8 */
-    AREA_$N_AREAS = 0;          /* +0x5E2 */
-    AREA_$N_FREE = 0;           /* +0x5E0 */
-
-    /* Clear area ID counter at +0x5C4 */
-    *(uint32_t *)((char *)globals + 0x5C4) = 0;
-
-    /*
-     * Clear per-ASID area lists (+0x4D8) and segment table lists (+0x68)
-     * Loop count: 0x39 + 1 = 58 iterations
-     */
-    for (i = 0; i < ASID_LIST_COUNT; i++) {
-        /* Clear per-ASID area list head at +0x4D8 + i*4 */
-        ((uint32_t *)((char *)globals + 0x4D8))[i] = 0;
-        /* Clear per-ASID segment table list at +0x68 + i*4 */
-        ((uint32_t *)((char *)globals + 0x68))[i] = 0;
+    for (i = 0; i < AREA_INIT_ASID_SLOTS; i++) {
+        AREA_$ASID_LIST[i]                  = NULL;     /* 0x00E2F3DC */
+        AREA_$GLOBALS.seg_table_list[i]     = NULL;     /* 0x00E2F3E0 */
     }
 
     /*
-     * Initialize UID hash table
-     * - Clear per-bucket entry counts at +0x454 + i*4
-     * - Link hash pool entries (+0x480) into buckets (+0x488...)
-     * Loop count: 0xA + 1 = 11 iterations
+     * 0x00E2F3EC-0x00E2F40C: clear the 11 hash buckets and thread the 11 pool
+     * records into a free list, each pointing at its successor.  The `dbf`
+     * target is 0x00E2F3F8, one instruction past `movea.l A2,A0`, so A0 (the
+     * pool cursor) is set once and then advances by 8 while A2 (the bucket
+     * cursor) advances by 4.
      */
-    for (i = 0; i < UID_HASH_BUCKETS; i++) {
-        /* Clear hash bucket entry count */
-        ((uint32_t *)((char *)globals + 0x454))[i] = 0;
-        /* Link pool entry to next pool entry */
-        ((uint32_t *)((char *)globals + 0x480))[i * 2] =
-            (uint32_t)((char *)globals + 0x488 + i * 8);
+    for (i = 0; i < AREA_INIT_HASH_SLOTS; i++) {
+        AREA_$UID_HASH[i]                = NULL;                        /* 0x00E2F3F8 */
+        AREA_$UID_HASH_POOL[i].next      = &AREA_$UID_HASH_POOL[i + 1]; /* 0x00E2F400 */
     }
 
-    /* Set up hash table entry pool at +0x4D0 (initially empty) */
-    *(uint32_t *)((char *)globals + 0x4D0) = 0;
+    /*
+     * 0x00E2F414: the last link written above pointed one record past the
+     * pool; `clr.l (0x4d0,A3)` (globals+0x4D0 = &uid_hash_pool[10]) nils it,
+     * terminating the free list.
+     */
+    AREA_$UID_HASH_POOL[AREA_INIT_HASH_SLOTS - 1].next = NULL;
 
-    /* Set free list head to first pool entry */
-    *(uint32_t *)((char *)globals + 0x450) = (uint32_t)((char *)globals + 0x480);
+    /* 0x00E2F418-0x00E2F422: the free-list head is the first pool record. */
+    AREA_$UID_HASH_FREE = &AREA_$UID_HASH_POOL[0];
 
-    /* Clear the high half of the 8-byte partner node address (0x00E2F426). */
-    AREA_$PARTNER.high = 0;     /* +0x5CC */
+    /* 0x00E2F426: clear the high half of the 8-byte partner node address. */
+    AREA_$PARTNER.high = 0;
 
     /*
-     * Set mother node ID for diskless nodes (0x00E2F42A-0x00E2F43C).
-     * If NETWORK_$DISKLESS < 0, we're a diskless node - use mother node
-     * Otherwise, set to 0 (local node)
+     * 0x00E2F42A-0x00E2F43E: only a diskless node has a partner.
+     * NETWORK_$DISKLESS is a Domain boolean, tested `tst.b` / `bpl`.
      */
     if (NETWORK_$DISKLESS < 0) {
-        AREA_$PARTNER.low = NETWORK_$MOTHER_NODE;   /* +0x5D0 */
+        AREA_$PARTNER.low = NETWORK_$MOTHER_NODE;   /* 0x00E2F432 */
     } else {
-        AREA_$PARTNER.low = 0;
+        AREA_$PARTNER.low = 0;                      /* 0x00E2F43C */
     }
 
     /*
-     * For diskless nodes, allocate wired pages for area backing
-     * Allocates 3 pages at VA 0xEE4C00, 0xEE5000, 0xEE5400
+     * 0x00E2F440-0x00E2F4C4: a diskless node wires three pages and maps them
+     * as the RPMAP cache window at AREA_RPMAP_CACHE_VA.
+     *
+     * The cursors:
+     *   A2 = globals + 4, and WP_$CALLOC gets `pea (-0x4,A2)`, so the page
+     *        cell filled on pass i is globals + i*4 - i.e. rpmap_page[i],
+     *        at +0x00, +0x04 and +0x08.  MMU_$INSTALL then re-reads that same
+     *        cell with `move.l (-0x4,A2),-(SP)`.  (source-vm49)
+     *   D4 = 0xEE4C00 + 0x400 on entry, and the VA installed is D4 - 0x400,
+     *        so the window starts at 0xEE4C00 and steps by 0x400.
+     *   A3 = globals + 0x0C, the biased cursor for rpmap_cache[i]; every field
+     *        write is at A3 + 4 .. A3 + 0x0D, i.e. record + 0x00 .. + 0x09.
      */
     if (NETWORK_$DISKLESS < 0) {
-        uint32_t va = DISKLESS_VA_BASE;
-        uint8_t *init_ptr = (uint8_t *)globals + 0x0C;  /* Initialization data */
+        uint32_t va = AREA_RPMAP_CACHE_VA + AREA_RPMAP_PAGE_SIZE;   /* D4 */
 
-        for (i = 0; i < DISKLESS_AREA_COUNT; i++) {
-            uint32_t page_ptr;
-            uint32_t page_va = va - 0x400;
+        for (i = 0; i < AREA_INIT_RPMAP_PAGES; i++) {
+            /* 0x00E2F45E-0x00E2F46C */
+            WP_$CALLOC(&AREA_$GLOBALS.rpmap_page[i], &status);
 
-            /* Allocate a wired page */
-            WP_$CALLOC(&page_ptr, &status);
+            /* 0x00E2F46E-0x00E2F47E */
             if (status != status_$ok) {
                 CRASH_SYSTEM(&status);
             }
 
-            /* Store page pointer */
-            *(uint32_t *)(init_ptr + i * 4 - 4) = page_ptr;
+            /* 0x00E2F480-0x00E2F488: the VA is computed into A1 and also
+             * stored to the (write-only) local at A6-0x0C. */
+            page_va = va - AREA_RPMAP_PAGE_SIZE;
 
-            /* Install page in MMU with flags 0x16 */
-            MMU_$INSTALL(page_ptr, page_va, 0x16);
+            /* 0x00E2F48A-0x00E2F49A: MMU_$INSTALL(page, va, flags), the page
+             * number read back out of the cell WP_$CALLOC just filled. */
+            MMU_$INSTALL(AREA_$GLOBALS.rpmap_page[i], page_va,
+                         AREA_RPMAP_MMU_FLAGS);
 
-            /* Initialize diskless area entry data */
-            uint8_t *entry_ptr = init_ptr + i * 0x0C;
-            *(uint32_t *)(entry_ptr + 4) = 0;   /* Clear field */
-            *(int16_t *)(entry_ptr + 8) = 0;    /* Clear field */
-            *(int16_t *)(entry_ptr + 10) = -1;  /* Set to -1 (0xFFFF) */
-            *(uint8_t *)(entry_ptr + 12) = 0;   /* Clear byte */
-            *(uint8_t *)(entry_ptr + 13) = 0;   /* Clear byte */
+            /* 0x00E2F49E-0x00E2F4B4 */
+            AREA_$GLOBALS.rpmap_cache[i].seq     = 0;
+            AREA_$GLOBALS.rpmap_cache[i].word_04 = 0;
+            AREA_$GLOBALS.rpmap_cache[i].word_06 = AREA_RPMAP_SLOT_EMPTY;
+            AREA_$GLOBALS.rpmap_cache[i].byte_08 = 0;
+            AREA_$GLOBALS.rpmap_cache[i].byte_09 = 0;
 
-            va += 0x400;
+            /* 0x00E2F4BA */
+            va += AREA_RPMAP_PAGE_SIZE;
         }
     }
 
-    /* Clear reserved words at +0x5DA and +0x5D8 */
-    *(int16_t *)((char *)globals + 0x5DA) = 0;
-    *(int16_t *)((char *)globals + 0x5D8) = 0;
+    /* 0x00E2F4C6-0x00E2F4D2: the two AREA_$FORMAT words after max_entries. */
+    AREA_$FORMAT.word_06 = 0;       /* +0x5DA */
+    AREA_$FORMAT.word_04 = 0;       /* +0x5D8 */
 
     /*
-     * Clear segment tracking bitmap
-     * Loop count: 0x3F + 1 = 64 iterations
-     * Each entry is 12 bytes apart, clearing byte at offset +0x153
+     * 0x00E2F4D4-0x00E2F4E2: clear byte +0x03 of each of the 64 0x0C-byte
+     * records at globals+0x150.  Nothing else in the image touches this
+     * region, so it is kept as bytes.
+     * TODO: identify the record type (bead source-tqkk).
      */
-    for (i = 0; i < SEG_TABLE_COUNT; i++) {
-        *((uint8_t *)globals + 0x153 + i * 12) = 0;
+    for (i = 0; i < AREA_INIT_POOL_SLOTS; i++) {
+        AREA_$GLOBALS.seg_table_pool[i][AREA_SEG_TABLE_POOL_FLAG] = 0;
     }
 
-    /* Clear duplicate operation counters */
-    AREA_$CR_DUP = 0;           /* +0x5DE */
-    AREA_$DEL_DUP = 0;          /* +0x5DC */
+    /* 0x00E2F4E4-0x00E2F4F0: the dedup counters. */
+    AREA_$CR_DUP  = 0;      /* +0x5DE */
+    AREA_$DEL_DUP = 0;      /* +0x5DC */
 }

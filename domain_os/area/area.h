@@ -40,9 +40,24 @@
 #define AREA_MAX_ENTRIES        0x3A        /* 58 entries */
 
 /*
- * Area module globals base address
+ * Area module globals base address (the A5 every AREA_ routine loads)
  */
 #define AREA_GLOBALS_BASE       0xE1E118
+
+/*
+ * Number of RPMAP-cache pages a diskless node wires in AREA_$INIT.
+ * 0x00E2F448 `moveq #0x2,D2` + `dbf` = 3 iterations, mapping 0xEE4C00,
+ * 0xEE5000 and 0xEE5400 (AREA_$RPMAP_CACHE in the SAU2 map is at 0xEE4C00).
+ */
+#define AREA_DISKLESS_PAGE_COUNT    3
+
+/* First virtual address of the RPMAP cache window (0x00E2F44E `movea.l
+ * #0xee4c00,A3` then `lea (0x400,A3),A3`, and the loop subtracts 0x400 back
+ * off before each MMU_$INSTALL). */
+#define AREA_RPMAP_CACHE_VA         0x00EE4C00
+
+/* Page size the loop steps by (0x00E2F4BA `addi.l #0x400,D4`). */
+#define AREA_RPMAP_PAGE_SIZE        0x400
 
 /*
  * Area entry flags (in flags field at offset 0x2E)
@@ -169,37 +184,197 @@ _Static_assert(offsetof(area_$uid_hash_t, first_entry) == 0x04, "hash first_entr
 
 /*
  * ============================================================================
- * Module Global Variables (at AREA_GLOBALS_BASE + offset)
+ * The AREA_ module data block
  * ============================================================================
+ *
+ * Every AREA_ routine begins `lea (0xe1e118).l,A5` and then reaches its data
+ * with a displacement off A5, so all of it is ONE Pascal module block, not a
+ * set of loose globals.  The SR10.2 SAU2 link map gives the extent and four
+ * interior names:
+ *
+ *   D    E1E118  AREA_                      size = 5E8
+ *        E1E150  AREA_$RPMAP_IN_TRANS_EC    (+0x038)
+ *        E1E160  AREA_$IN_TRANS_EC          (+0x048)
+ *        E1E170  AREA_$PITE_IN_TRANS_EC     (+0x058)
+ *        E1E6E0  AREA_$FREE_LIST            (+0x5C8)
+ *        E1E6E4  AREA_$PARTNER              (+0x5CC)
+ *        E1E6EC  AREA_$FORMAT               (+0x5D4)
+ *        E1E6F4  AREA_$DEL_DUP              (+0x5DC)
+ *        E1E6F6  AREA_$CR_DUP               (+0x5DE)
+ *        E1E6F8  AREA_$N_FREE               (+0x5E0)
+ *        E1E6FA  AREA_$N_AREAS              (+0x5E2)
+ *        E1E6FC  AREA_$PARTNER_PKT_SIZE     (+0x5E4)
+ *
+ * The remaining fields are recovered from AREA_$INIT (0x00E2F3A8) and the
+ * RPMAP cache manager at 0x00E07370; the block tiles exactly, with no gaps
+ * between +0x000 and +0x5E6.  (source-vm49)
  */
 
 /*
- * AREA_$FREE_LIST - Head of free area entry list
- * Offset: +0x5C8 from AREA_GLOBALS_BASE
+ * One entry of the three-slot RPMAP page cache.
+ *
+ * AREA_$INIT initialises three of these at globals+0x10 with a stride of 0x0C
+ * (0x00E2F45A `lea (0xc,A4),A3` then `lea (0xc,A3),A3`), writing (A3+0x4),
+ * (A3+0x8), (A3+0xA) = 0xFFFF, (A3+0xC) and (A3+0xD) - i.e. A3 is held
+ * BIASED four bytes below the record, the usual Domain Pascal array-cursor
+ * form.  The manager at 0x00E07370 holds the same biased cursor
+ * (`lea (0xc,A5),A1`, fields at (0x4,A0) and (0xa,A0)) and writes slot i with
+ * `move.l (0x5c0,A5),(0x4,A5,D3w*0x1)` where D3 = i * 0x0C and i is 1-based.
  */
-extern area_$entry_t *AREA_$FREE_LIST;
+typedef struct area_$rpmap_cache_t {
+    uint32_t    seq;            /* 0x00: stamped from AREA_$GLOBALS.rpmap_seq */
+    uint16_t    word_04;        /* 0x04: cleared by AREA_$INIT */
+    uint16_t    word_06;        /* 0x06: AREA_$INIT sets 0xFFFF ("empty") */
+    uint8_t     byte_08;        /* 0x08: cleared by AREA_$INIT */
+    uint8_t     byte_09;        /* 0x09: cleared by AREA_$INIT */
+    uint8_t     reserved_0a[2]; /* 0x0A: never read or written */
+} area_$rpmap_cache_t;
 
 /*
- * AREA_$N_FREE - Count of free area entries
- * Offset: +0x5E0 from AREA_GLOBALS_BASE
+ * AREA_$FORMAT (map symbol at 0xE1E6EC = globals+0x5D4), four words.
+ *
+ * AREA_$INIT writes +0x02 = 0x540 (0x00E2F3B6) and clears +0x04 and +0x06
+ * (0x00E2F4CC/0x00E2F4D0).  area_$alloc_resources clamps its request against
+ * +0x02 (globals+0x5D6), so that word is the maximum number of area_$entry_t
+ * records the table may ever hold.
  */
-extern int16_t AREA_$N_FREE;
+typedef struct area_$format_t {
+    uint16_t    word_00;        /* 0x00 (+0x5D4): never touched by AREA_$INIT */
+    uint16_t    max_entries;    /* 0x02 (+0x5D6): 0x540 = 1344 */
+    uint16_t    word_04;        /* 0x04 (+0x5D8): cleared by AREA_$INIT */
+    uint16_t    word_06;        /* 0x06 (+0x5DA): cleared by AREA_$INIT */
+} area_$format_t;
 
 /*
- * AREA_$N_AREAS - Highest area ID currently in use
- * Offset: +0x5E2 from AREA_GLOBALS_BASE
+ * Number of 12-byte records in the block's opaque middle region.
+ * AREA_$INIT clears one byte in each (0x00E2F4D4 `moveq #0x3f,D0` = 64
+ * iterations, `clr.b (0x153,A0)` / `lea (0xc,A0),A0`), and the 64 * 0x0C =
+ * 0x300 bytes tile globals+0x150 .. globals+0x44F exactly, between the
+ * 58-longword seg-table list array that ends at +0x150 and uid_hash_free at
+ * +0x450.
  */
-extern int16_t AREA_$N_AREAS;
+#define AREA_SEG_TABLE_POOL_COUNT   64
+#define AREA_SEG_TABLE_POOL_STRIDE  0x0C
+
+/* The whole AREA_ module data block. */
+typedef struct area_$globals_t {
+    /*
+     * 0x000: the three physical pages AREA_$INIT wires for the RPMAP cache at
+     * 0xEE4C00 (AREA_$RPMAP_CACHE in the map).  WP_$CALLOC fills cell i
+     * (`pea (-0x4,A2)` with A2 = globals+4+i*4) and MMU_$INSTALL reads it back
+     * (`move.l (-0x4,A2),-(SP)`), so the cells are +0x00, +0x04 and +0x08 -
+     * NOT +0x08/+0x0C/+0x10.  (source-vm49)
+     */
+    uint32_t                rpmap_page[AREA_DISKLESS_PAGE_COUNT]; /* 0x000 */
+    uint32_t                reserved_00c;       /* 0x00C: the biased cursor's
+                                                 * landing pad; never read */
+    area_$rpmap_cache_t     rpmap_cache[AREA_DISKLESS_PAGE_COUNT]; /* 0x010 */
+    uint8_t                 reserved_034[4];    /* 0x034 */
+
+    /* 0x038/0x048/0x058: the three map-named eventcounts, on a 0x10 stride
+     * (ec_$eventcount_t is 0x0C bytes, so each carries 4 bytes of padding). */
+    ec_$eventcount_t        rpmap_in_trans_ec;  /* 0x038 */
+    uint8_t                 pad_044[4];         /* 0x044 */
+    ec_$eventcount_t        in_trans_ec;        /* 0x048 */
+    uint8_t                 pad_054[4];         /* 0x054 */
+    ec_$eventcount_t        pite_in_trans_ec;   /* 0x058 */
+    uint8_t                 pad_064[4];         /* 0x064 */
+
+    /* 0x068: per-ASID extended-segment-table list heads.  AREA_$INIT clears
+     * all 58 (0x00E2F3CE `moveq #0x39,D0`); AREA_$TRANSFER indexes it with
+     * `lsl.w #0x2` on the ASID (0x00E08256-0x00E08258). */
+    struct area_$seg_table_t *seg_table_list[AREA_MAX_ENTRIES];   /* 0x068 */
+
+    /* 0x150: 64 records of 0x0C bytes.  AREA_$INIT clears byte +0x03 of each
+     * and nothing else in the image reads or writes the region, so it is kept
+     * as bytes rather than given a speculative type.
+     * TODO: identify these records (bead source-tqkk). */
+    uint8_t                 seg_table_pool[AREA_SEG_TABLE_POOL_COUNT]
+                                          [AREA_SEG_TABLE_POOL_STRIDE]; /* 0x150 */
+
+    struct area_$uid_hash_t *uid_hash_free;                       /* 0x450 */
+    struct area_$uid_hash_t *uid_hash[AREA_UID_HASH_BUCKETS];     /* 0x454 */
+    struct area_$uid_hash_t  uid_hash_pool[AREA_UID_HASH_BUCKETS];/* 0x480 */
+    struct area_$entry_t    *asid_list[AREA_MAX_ENTRIES];         /* 0x4D8 */
+
+    /* 0x5C0: monotonic stamp the RPMAP cache manager increments and copies
+     * into a slot's `seq` (0x00E073D0/0x00E073DE). */
+    uint32_t                rpmap_seq;          /* 0x5C0 */
+    uint32_t                next_caller_id;     /* 0x5C4 */
+    struct area_$entry_t   *free_list;          /* 0x5C8 */
+    uid_t                   partner;            /* 0x5CC */
+    area_$format_t          format;             /* 0x5D4 */
+    int16_t                 del_dup;            /* 0x5DC */
+    int16_t                 cr_dup;             /* 0x5DE */
+    int16_t                 n_free;             /* 0x5E0 */
+    int16_t                 n_areas;            /* 0x5E2 */
+    int16_t                 partner_pkt_size;   /* 0x5E4 */
+    uint8_t                 reserved_5e6[2];    /* 0x5E6: block tail */
+} area_$globals_t;
+
+extern area_$globals_t AREA_$GLOBALS;
+
+#if defined(ARCH_M68K)
+/* Every offset used by AREA_$INIT (0x00E2F3A8) and the RPMAP manager
+ * (0x00E07370), plus the four the SAU2 link map names.  The block size is the
+ * map segment size: `D  E1E118  AREA_  size = 5E8`. */
+_Static_assert(sizeof(area_$rpmap_cache_t) == 0x0C, "area_$rpmap_cache_t size");
+_Static_assert(offsetof(area_$rpmap_cache_t, seq)     == 0x00, "rpmap_cache.seq");
+_Static_assert(offsetof(area_$rpmap_cache_t, word_04) == 0x04, "rpmap_cache.word_04");
+_Static_assert(offsetof(area_$rpmap_cache_t, word_06) == 0x06, "rpmap_cache.word_06");
+_Static_assert(offsetof(area_$rpmap_cache_t, byte_08) == 0x08, "rpmap_cache.byte_08");
+_Static_assert(offsetof(area_$rpmap_cache_t, byte_09) == 0x09, "rpmap_cache.byte_09");
+_Static_assert(sizeof(area_$format_t) == 0x08, "area_$format_t size");
+_Static_assert(offsetof(area_$format_t, max_entries) == 0x02, "format.max_entries");
+
+_Static_assert(offsetof(area_$globals_t, rpmap_page)        == 0x000, "globals.rpmap_page");
+_Static_assert(offsetof(area_$globals_t, rpmap_cache)       == 0x010, "globals.rpmap_cache");
+_Static_assert(offsetof(area_$globals_t, rpmap_in_trans_ec) == 0x038, "globals.rpmap_in_trans_ec");
+_Static_assert(offsetof(area_$globals_t, in_trans_ec)       == 0x048, "globals.in_trans_ec");
+_Static_assert(offsetof(area_$globals_t, pite_in_trans_ec)  == 0x058, "globals.pite_in_trans_ec");
+_Static_assert(offsetof(area_$globals_t, seg_table_list)    == 0x068, "globals.seg_table_list");
+_Static_assert(offsetof(area_$globals_t, seg_table_pool)    == 0x150, "globals.seg_table_pool");
+_Static_assert(offsetof(area_$globals_t, uid_hash_free)     == 0x450, "globals.uid_hash_free");
+_Static_assert(offsetof(area_$globals_t, uid_hash)          == 0x454, "globals.uid_hash");
+_Static_assert(offsetof(area_$globals_t, uid_hash_pool)     == 0x480, "globals.uid_hash_pool");
+_Static_assert(offsetof(area_$globals_t, asid_list)         == 0x4D8, "globals.asid_list");
+_Static_assert(offsetof(area_$globals_t, rpmap_seq)         == 0x5C0, "globals.rpmap_seq");
+_Static_assert(offsetof(area_$globals_t, next_caller_id)    == 0x5C4, "globals.next_caller_id");
+_Static_assert(offsetof(area_$globals_t, free_list)         == 0x5C8, "globals.free_list");
+_Static_assert(offsetof(area_$globals_t, partner)           == 0x5CC, "globals.partner");
+_Static_assert(offsetof(area_$globals_t, format)            == 0x5D4, "globals.format");
+_Static_assert(offsetof(area_$globals_t, del_dup)           == 0x5DC, "globals.del_dup");
+_Static_assert(offsetof(area_$globals_t, cr_dup)            == 0x5DE, "globals.cr_dup");
+_Static_assert(offsetof(area_$globals_t, n_free)            == 0x5E0, "globals.n_free");
+_Static_assert(offsetof(area_$globals_t, n_areas)           == 0x5E2, "globals.n_areas");
+_Static_assert(offsetof(area_$globals_t, partner_pkt_size)  == 0x5E4, "globals.partner_pkt_size");
+_Static_assert(sizeof(area_$globals_t) == 0x5E8, "AREA_ map segment size = 5E8");
+#endif
 
 /*
- * AREA_$PARTNER_PKT_SIZE - Packet size for area partner operations
- * Offset: +0x5E4 from AREA_GLOBALS_BASE
+ * ============================================================================
+ * Module Global Variables (fields of AREA_$GLOBALS)
+ * ============================================================================
+ *
+ * The names the SAU2 link map gives interior cells of the block are kept as
+ * aliases so callers read the same way the map reads.
  */
-extern int16_t AREA_$PARTNER_PKT_SIZE;
+
+/* AREA_$FREE_LIST - head of the free area-entry list (0xE1E6E0, +0x5C8) */
+#define AREA_$FREE_LIST         (AREA_$GLOBALS.free_list)
+
+/* AREA_$N_FREE - free entries remaining (0xE1E6F8, +0x5E0) */
+#define AREA_$N_FREE            (AREA_$GLOBALS.n_free)
+
+/* AREA_$N_AREAS - highest area ID in use (0xE1E6FA, +0x5E2) */
+#define AREA_$N_AREAS           (AREA_$GLOBALS.n_areas)
+
+/* AREA_$PARTNER_PKT_SIZE - partner packet size (0xE1E6FC, +0x5E4) */
+#define AREA_$PARTNER_PKT_SIZE  (AREA_$GLOBALS.partner_pkt_size)
 
 /*
- * AREA_$PARTNER - Node address of the diskless partner ("mother node")
- * Offset: +0x5CC from AREA_GLOBALS_BASE (0xE1E6E4), 8 bytes.
+ * AREA_$PARTNER - node address of the diskless partner ("mother node"),
+ * 0xE1E6E4 (+0x5CC), 8 bytes.
  *
  * AREA_$INIT (0x00E2F426-0x00E2F43C) clears the high longword and stores
  * NETWORK_$MOTHER_NODE into the low longword when NETWORK_$DISKLESS is set,
@@ -212,71 +387,50 @@ extern int16_t AREA_$PARTNER_PKT_SIZE;
  * 0x00E078E2): a zero low half means "no partner, this node has its own
  * disk".
  */
-extern uid_t AREA_$PARTNER;
-
-#if defined(ARCH_M68K)
-/* The record spans globals+0x5CC..+0x5D3; area_$internal_create tests the
- * second longword at +0x5D0. */
-_Static_assert(sizeof(AREA_$PARTNER) == 8, "AREA_$PARTNER is an 8-byte record");
-_Static_assert(offsetof(uid_t, low) == 4, "AREA_$PARTNER low half at +0x5D0");
-#endif
+#define AREA_$PARTNER           (AREA_$GLOBALS.partner)
 
 /*
- * AREA_$NEXT_CALLER_ID - Monotonic counter handed out as area_$entry_t.caller_id
- * Offset: +0x5C4 from AREA_GLOBALS_BASE (0xE1E6DC)
- * Cleared by AREA_$INIT at 0x00E2F3C8; read and post-incremented by
- * area_$internal_create at 0x00E078A6/0x00E078AC.
+ * AREA_$NEXT_CALLER_ID - monotonic counter handed out as
+ * area_$entry_t.caller_id (0xE1E6DC, +0x5C4).  Cleared by AREA_$INIT at
+ * 0x00E2F3C8; read and post-incremented by area_$internal_create at
+ * 0x00E078A6/0x00E078AC.
  */
-extern uint32_t AREA_$NEXT_CALLER_ID;
+#define AREA_$NEXT_CALLER_ID    (AREA_$GLOBALS.next_caller_id)
+
+/* AREA_$UID_HASH_FREE - head of the free UID hash-chain records (+0x450) */
+#define AREA_$UID_HASH_FREE     (AREA_$GLOBALS.uid_hash_free)
+
+/* AREA_$UID_HASH - remote-UID hash table (+0x454), 11 buckets, indexed by
+ * M$OIU$WLW(remote_uid, AREA_UID_HASH_BUCKETS) */
+#define AREA_$UID_HASH          (AREA_$GLOBALS.uid_hash)
+
+/* AREA_$UID_HASH_POOL - storage for the 11 hash-chain records (+0x480) */
+#define AREA_$UID_HASH_POOL     (AREA_$GLOBALS.uid_hash_pool)
+
+/* AREA_$RPMAP_IN_TRANS_EC - map symbol 0xE1E150 (+0x038) */
+#define AREA_$RPMAP_IN_TRANS_EC (AREA_$GLOBALS.rpmap_in_trans_ec)
+
+/* AREA_$IN_TRANS_EC - map symbol 0xE1E160 (+0x048) */
+#define AREA_$IN_TRANS_EC       (AREA_$GLOBALS.in_trans_ec)
+
+/* AREA_$PITE_IN_TRANS_EC - map symbol 0xE1E170 (+0x058) */
+#define AREA_$PITE_IN_TRANS_EC  (AREA_$GLOBALS.pite_in_trans_ec)
+
+/* AREA_$CR_DUP / AREA_$DEL_DUP - dedup counters (0xE1E6F6 / 0xE1E6F4) */
+#define AREA_$CR_DUP            (AREA_$GLOBALS.cr_dup)
+#define AREA_$DEL_DUP           (AREA_$GLOBALS.del_dup)
+
+/* AREA_$FORMAT - map symbol 0xE1E6EC (+0x5D4) */
+#define AREA_$FORMAT            (AREA_$GLOBALS.format)
 
 /*
- * AREA_$UID_HASH_FREE - Head of the free list of UID hash-chain records
- * Offset: +0x450 from AREA_GLOBALS_BASE (0xE1E568)
- * AREA_$INIT threads the 11 pool records at +0x480 onto it (0x00E2F422).
- */
-extern area_$uid_hash_t *AREA_$UID_HASH_FREE;
-
-/*
- * AREA_$UID_HASH - Remote-UID hash table used by AREA_$CREATE_FROM
- * Offset: +0x454 from AREA_GLOBALS_BASE (0xE1E56C), 11 buckets
- * Indexed by M$OIU$WLW(remote_uid, AREA_UID_HASH_BUCKETS).
- */
-extern area_$uid_hash_t *AREA_$UID_HASH[AREA_UID_HASH_BUCKETS];
-
-/*
- * AREA_$UID_HASH_POOL - Storage for the 11 hash-chain records
- * Offset: +0x480 from AREA_GLOBALS_BASE (0xE1E598)
- */
-extern area_$uid_hash_t AREA_$UID_HASH_POOL[AREA_UID_HASH_BUCKETS];
-
-/*
- * AREA_$IN_TRANS_EC - Event count for area-in-transition waits
- * Offset: +0x48 from AREA_GLOBALS_BASE
- */
-extern ec_$eventcount_t AREA_$IN_TRANS_EC;
-
-/*
- * AREA_$CR_DUP - Count of duplicate area creates (dedup hits)
- * Offset: +0x5DE from AREA_GLOBALS_BASE
- */
-extern int16_t AREA_$CR_DUP;
-
-/*
- * AREA_$DEL_DUP - Count of duplicate area deletes
- * Offset: +0x5DC from AREA_GLOBALS_BASE
- */
-extern int16_t AREA_$DEL_DUP;
-
-/*
- * AREA_$ASID_LIST - Per-ASID area list heads
- * Offset: +0x4D8 from AREA_GLOBALS_BASE (0xE1E5F0), AREA_MAX_ENTRIES entries
- *
+ * AREA_$ASID_LIST - per-ASID area list heads (0xE1E5F0, +0x4D8).
  * AREA_$INIT clears 58 longwords here (moveq #0x39 + dbf at 0x00E2F3CE).
  * area_$internal_create indexes it with `lsl.w #0x2` on the ASID and
  * `lea (0x0,A5,D0w*0x1)` at 0x00E0785A-0x00E07862, i.e. a *word* scale.
  */
 #define AREA_ASID_LIST_BASE     (AREA_GLOBALS_BASE + 0x4D8)
-extern area_$entry_t *AREA_$ASID_LIST[AREA_MAX_ENTRIES];
+#define AREA_$ASID_LIST         (AREA_$GLOBALS.asid_list)
 
 /*
  * ============================================================================

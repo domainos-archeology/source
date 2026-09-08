@@ -38,14 +38,20 @@ void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,
                          uint16_t name_len, uid_t *file_uid,
                          uint32_t flags, status_$t *status_ret)
 {
-    int8_t valid;
-    uint16_t parsed_len;
-    uint32_t handle;
-    status_$t unlock_status;
-    uint8_t parsed_name[32];
-    uint32_t location;
-    uint32_t loc_low;
-    uint8_t result[4];
+    int8_t valid;                   /* D0 from name_$validate_leaf */
+    uint16_t parsed_len;            /* A6-0x3E */
+    uint32_t handle;                /* A6-0x3C */
+    status_$t unlock_status;        /* A6-0x38 */
+    uint8_t parsed_name[32];        /* A6-0x30 */
+    /*
+     * 0x00E5670A-0x00E56718 fills A6-0x10 and A6-0x0C, then hands HINT_$ADDI
+     * `pea (-0x10,A6)` - ONE 8-byte record, not two independent locals whose
+     * adjacency the C standard does not promise.  It is a hint_addr_t: the
+     * first longword is the caller's location word and the second the node
+     * the file lives on.  (source-0o3n)
+     */
+    hint_addr_t location;           /* A6-0x10 */
+    uint8_t result[4];              /* A6-0x34 */
 
     valid = name_$validate_leaf(name, name_len, parsed_name, &parsed_len);
     if (valid < 0) {
@@ -55,9 +61,15 @@ void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,
             dir_$old_add_entry_ext(dir_uid, handle, parsed_name, parsed_len,
                          1, file_uid, flags, 0xFF, result, status_ret);
             if (*status_ret == status_$ok) {
-                location = flags;
-                loc_low = file_uid->low & 0xFFFFF;
-                HINT_$ADDI(file_uid, &location);
+                /* 0x00E5670A `move.l D2,(-0x10,A6)`: D2 is the A6+0x18
+                 * parameter, the caller's location word. */
+                location.flags = flags;
+                /* 0x00E5670E-0x00E56718 `move.l #0xfffff,D0` /
+                 * `and.l (0x4,A4),D0` / `move.l D0,(-0xc,A6)`: the low 20
+                 * bits of the file UID are the node id. */
+                location.node_id = file_uid->low & 0xFFFFF;
+                /* 0x00E5671C-0x00E56722: both arguments by address. */
+                HINT_$ADDI(file_uid, (uint32_t *)&location);
             }
             NAME_$UNLOCK_DIR(&unlock_status);
             if (unlock_status != status_$ok) {

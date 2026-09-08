@@ -54,8 +54,14 @@ void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_r
     file_lock_entry_detail_t *entry;
     int8_t found = 0;
 
-    /* Compute hash bucket for the file UID */
-    hash_index = UID_$HASH(&request->file_uid, NULL);
+    /*
+     * 0x00E60832: `pea (-0x1e0c,PC)` = the word at 0x00E60834 - 0x1E0C =
+     * 0x00E5EA28 (image bytes 00 FB = 251), the shared lock-hash modulus cell
+     * `file_$lot_hash_modulus`; the second argument is that cell, not nil.
+     * Only D0's low word (the remainder) is kept (`move.w D0w,D2w`).
+     */
+    hash_index = (int16_t)(UID_$HASH(&request->file_uid,
+                                     &file_$lot_hash_modulus) & 0xFFFF);
 
     /* Default status: not locked by this process */
     *status_ret = file_$object_not_locked_by_this_process;

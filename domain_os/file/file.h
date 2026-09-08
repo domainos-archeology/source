@@ -78,6 +78,18 @@ _Static_assert(sizeof(file_$obj_loc_t)                == 0x20, "sizeof obj_loc")
 /* Number of entries in the lock table (hash buckets) */
 #define FILE_LOCK_TABLE_ENTRIES     58
 
+/*
+ * Number of buckets in the lock hash table (FILE_$LOCK_CONTROL + 0xC8,
+ * a.k.a. FILE_$LOT_HASHTAB at 0xE821F0).
+ *
+ * FILE_$LOCK_INIT clears 0xFB words there (0x00E327BE `move.w #0xfa,D0w` /
+ * `clr.w (0xc8,A0)` / `dbf` = 251 iterations), and the same 251 is the
+ * modulus every UID_$HASH call site passes by reference from the in-code
+ * cell at 0x00E5EA28 (`file_$lot_hash_modulus`), so a hash remainder can be
+ * any of 0 .. 250.
+ */
+#define FILE_LOT_HASH_BUCKETS       251
+
 /* Number of lock entry slots linked by FILE_$LOCK_INIT's free-list loop
  * (`move.w #0x6ff,D0w` at 0x00E32784 -> 0x700 dbf iterations).  Entries are
  * numbered 1..FILE_LOCK_ENTRY_COUNT; see FILE_$LOT_ENTRY(). */
@@ -223,7 +235,7 @@ typedef struct file_lock_control_t {
     uint8_t     reserved1[0xb8];    /* 0x00: Reserved/unknown */
     uid_t       base_uid;           /* 0xB8: Base UID (derived from UID_$NIL + NODE_$ME) */
     uid_t       generated_uid;      /* 0xC0: UID generated at init */
-    uint16_t    lock_map[251];      /* 0xC8: Lock mapping table (cleared at init).
+    uint16_t    lock_map[FILE_LOT_HASH_BUCKETS];      /* 0xC8: Lock mapping table (cleared at init).
                                      * FILE_$LOCK_INIT clears 0xFB words from
                                      * +0xC8 (00e327be `move.w #0xfa,D0w` /
                                      * `clr.w (0xc8,A0)` / `dbf`), so the array
@@ -1689,13 +1701,20 @@ void FILE_$LOCAL_LOCK_VERIFY(lock_verify_request_t *request, status_$t *status_r
  *   acl_data    - ACL data buffer (44 bytes)
  *   attr_type   - Protection attribute type
  *   prot_type   - Protection type being set
- *   subsys_flag - Subsystem data flag (negative to allow override)
+ *   subsys_flag - Subsystem data flag, a Domain BOOLEAN byte (negative =
+ *                 true = allow the locksmith override).  The routine reads it
+ *                 with `move.b (0x14,A6),D3b` (0x00E5DD1E) - the high, even
+ *                 half of the word slot, which is where a byte push lands -
+ *                 and both call sites push a byte: `clr.w -(SP)` from
+ *                 FILE_$SET_PROT (0x00E5E030, both halves zero) and
+ *                 `move.b (-0x42c,A2),-(SP)` from the REM_FILE_ server
+ *                 (0x00E634BA).  (source-w7lk)
  *   status_ret  - Output status code
  *
  * Original address: 0x00E5DD08
  */
 void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
-                        uint16_t prot_type, int16_t subsys_flag,
+                        uint16_t prot_type, boolean subsys_flag,
                         status_$t *status_ret);
 
 #endif /* FILE_H */

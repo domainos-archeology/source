@@ -59,8 +59,9 @@
  */
 
 /* 0x00E5EA28: word 0x00FB = 251, the lock hash table modulus handed to
- * UID_$HASH at 0x00E5F18C. */
-static uint16_t file_$lot_hash_modulus = 251;
+ * UID_$HASH at 0x00E5F18C.  The image holds ONE such cell, shared with
+ * FILE_$DELETE_INT and FILE_$LOCAL_READ_LOCK; it is defined in
+ * file/file_data.c and declared in file/file_internal.h. */
 
 /* 0x00E5E61E: longword 0, the "no segment list" argument AST_$PURIFY gets at
  * 0x00E5F21E. */

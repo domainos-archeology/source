@@ -40,8 +40,8 @@
  *   acl_uid    - ACL UID (8 bytes) with flags encoded in low word
  *   status_ret - Output status code
  *
- * The acl_uid parameter encodes special flags in the low word:
- *   Bits 4-11 (masked with 0xFF0 >> 4): If bit 4 is set, use default protection
+ * The acl_uid parameter carries a selector in the HIGH word of its `low`
+ * longword; bit 24 of `low` asks for the object's default protection.
  *
  * Flow:
  * 1. Check if default protection mode is requested
@@ -62,6 +62,7 @@ void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, void *acl_data,
 {
     uint16_t type_val;
     uint16_t attr_id;
+    uint16_t default_selector;  /* D0: the (low >> 20) & 0xFF selector */
     int16_t i;
     uint32_t *src;
     uint32_t *dst;
@@ -77,17 +78,38 @@ void FILE_$SET_PROT(uid_t *file_uid, uint16_t *prot_type, void *acl_data,
     type_val = *prot_type;
 
     /*
-     * Check if default protection mode is requested.
-     * Flag is in bits 4-11 of low word of acl_uid->low, bit 4 set indicates default mode.
-     * Assembly: and.w (0x4,A2),D0w with #0xff0, then lsr.w #4, then btst #4
+     * 0x00E5DF52-0x00E5DF62: is the default protection being asked for?
+     *
+     *   move.w #0xff0,D0w
+     *   and.w  (0x4,A2),D0w      ; A2 = acl_uid, so (0x4,A2) is the HIGH WORD
+     *                            ; of acl_uid->low on this big-endian target
+     *   lsr.w  #0x4,D0w
+     *   btst.l #0x4,D0
+     *   beq.b  0x00e5dfa8
+     *
+     * `(0x4,A2)` is a WORD read at the start of the `low` longword, i.e.
+     * (low >> 16) & 0xFFFF - not (low & 0xFFFF).  Masking with 0x0FF0 and
+     * shifting right four leaves (low >> 20) & 0xFF, whose bit 4 is bit 24 of
+     * `low`.  The tree used to test bit 8.  (source-kzmp)
+     *
+     * Written with shifts rather than a byte-pointer cast so a little-endian
+     * host reads the same bit.
      */
-    if ((((acl_uid->low & 0xFF0) >> 4) & 0x10) != 0) {
+    default_selector = (uint16_t)((uint16_t)((acl_uid->low >> 16) & 0xFFFFu)
+                                  & 0x0FF0u);
+    default_selector = (uint16_t)(default_selector >> 4);
+
+    if ((default_selector & (1u << 4)) != 0) {
         /*
          * Default protection mode - need to get current protection
          * and potentially switch to type 6 if none exists.
          */
+        /* 0x00E5DF64-0x00E5DF72: copy the UID, then
+         * `andi.b #-0x10,(-0x10,A6)` clears the low four bits of the FIRST
+         * byte of `low` - bits 24..27 - which is the nibble the selector was
+         * read out of. */
         local_uid_high = acl_uid->high;
-        local_uid_low = acl_uid->low & 0xF0FFFFFF;  /* Clear upper nibble: andi.b #-0x10,(-0x10,A6) */
+        local_uid_low = acl_uid->low & 0xF0FFFFFFu;
 
         /*
          * Inlined FILE_$GET_DEFAULT_PROT (originally at 0x00E5DEF4)
@@ -188,7 +210,9 @@ set_protection:
         goto invalid_arg;
     }
 
-    /* Call internal set protection function */
+    /* 0x00E5E02C-0x00E5E042.  `clr.w -(SP)` at 0x00E5E030 zeroes both halves
+     * of the subsys_flag slot, so the callee's `move.b (0x14,A6)` reads 0
+     * (false). */
     FILE_$SET_PROT_INT(file_uid, local_acl, attr_id, type_val, 0, status_ret);
     return;
 

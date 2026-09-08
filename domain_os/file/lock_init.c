@@ -132,11 +132,11 @@ void FILE_$LOCK_INIT(void)
     }
 
     /*
-     * The standalone FILE_$LOT_HASHTAB aliases the first 58 words of lock_map
-     * at 0xE821F0 in the m68k image; on a host build they are distinct objects,
-     * so keep them in step.
+     * The standalone FILE_$LOT_HASHTAB aliases all 251 words of lock_map at
+     * 0xE821F0 in the m68k image (the SAU2 map names +0xC8 FILE_$LOT_HASHTAB);
+     * on a host build they are distinct objects, so keep them in step.
      */
-    for (i = 0; i < FILE_LOCK_TABLE_ENTRIES; i++) {
+    for (i = 0; i < FILE_LOT_HASH_BUCKETS; i++) {
         FILE_$LOT_HASHTAB[i] = 0;
     }
 
