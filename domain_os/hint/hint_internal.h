@@ -72,19 +72,8 @@
  * ============================================================================
  */
 
-/*
- * Hint address pair - network location hint
- *
- * Stores a (flags, node_id) pair indicating where a file might be located.
- */
-typedef struct hint_addr_t {
-  uint32_t flags;   /* 0x00: Flags/status for this hint */
-  uint32_t node_id; /* 0x04: Node ID where file might be located */
-} hint_addr_t;
-
-/* Layout recovered from the disassembly -- see the field comments above. */
-_Static_assert(__builtin_offsetof(hint_addr_t, flags) == 0x00, "hint_addr_t.flags");
-_Static_assert(__builtin_offsetof(hint_addr_t, node_id) == 0x04, "hint_addr_t.node_id");
+/* hint_addr_t: moved to hint/hint.h - callers outside HINT_ build one for
+ * HINT_$ADDI / HINT_$GET_HINTS (bead source-0o3n). */
 
 /*
  * Hint slot - single entry within a hash bucket
@@ -193,9 +182,17 @@ typedef struct hint_globals_t {
    * A5 + 12*i - 0xC .. -0x4 (00e49d34/00e49d38, 00e49dc8), i.e. cache[i-1]. */
   hint_cache_entry_t cache[HINT_CACHE_SIZE]; /* 0x00: Local cache (24 bytes) */
   uid_t hintfile_uid;        /* 0x18: UID of the hint file (00e31248) */
-  hint_file_t *hintfile_ptr; /* 0x20: Mapped hint file (00e312c0) */
-  uint16_t cache_index;      /* 0x24: Round-robin cache slot, 1..2 (00e31402) */
-  uint16_t bucket_index;     /* 0x26: Round-robin slot in bucket, 1..3 (00e49afa) */
+  /* 0x20: the mapped hint file, held as a 32-bit target VA (the image stores
+   * MST_$MAPS' A0 result with "move.l A0,(0x20,A1)" at 0x00E312C0 and reads
+   * it back with "movea.l (0x20,A1),A0" at 0x00E312F4).  A uint32_t rather
+   * than a hint_file_t * so the record keeps its 0x28-byte m68k layout on a
+   * 64-bit host; reach it with ARCH_VA_TO_PTR. */
+  uint32_t hintfile_ptr;
+  /* Both indices are compared as signed words ("cmpi.w #0x2,(0x24,A5)" /
+   * "ble" at 0x00E49DE8, "cmpi.w #0x3,(0x26,A5)" at 0x00E49AF4), so they are
+   * signed here too. */
+  int16_t cache_index;       /* 0x24: Round-robin cache slot, 1..2 (00e31402) */
+  int16_t bucket_index;      /* 0x26: Round-robin slot in bucket, 1..3 (00e49afa) */
 } hint_globals_t;
 
 /* Layout recovered from the disassembly.  HINT_$INIT writes the hint-file UID
@@ -204,14 +201,13 @@ typedef struct hint_globals_t {
  * and HINT_$add_internal cycles the bucket index at (0x26,A5) (00e49afa).
  * The earlier layout had cache_index/bucket_index at 0x18/0x1A, which
  * collided with hintfile_uid. */
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(hint_globals_t, cache) == 0x00, "hint_globals_t.cache");
 _Static_assert(__builtin_offsetof(hint_globals_t, hintfile_uid) == 0x18, "hint_globals_t.hintfile_uid");
 _Static_assert(__builtin_offsetof(hint_globals_t, hintfile_ptr) == 0x20, "hint_globals_t.hintfile_ptr");
 _Static_assert(__builtin_offsetof(hint_globals_t, cache_index) == 0x24, "hint_globals_t.cache_index");
 _Static_assert(__builtin_offsetof(hint_globals_t, bucket_index) == 0x26, "hint_globals_t.bucket_index");
+/* SAU2 link map: "D    E7DB50  HINT_   size = 28". */
 _Static_assert(sizeof(hint_globals_t) == 0x28, "hint_globals_t size");
-#endif
 
 /*
  * ============================================================================
@@ -233,23 +229,28 @@ _Static_assert(sizeof(hint_globals_t) == 0x28, "hint_globals_t size");
 /* Exclusion lock for hint operations (at 0xE2C034) */
 #define HINT_$EXCLUSION_LOCK (*(ml_$exclusion_t *)0xE2C034)
 
+/* Whole HINT_ data segment (SAU2 map: "D    E7DB50  HINT_   size = 28") */
+#define HINT_$GLOBALS ((hint_globals_t *)HINT_GLOBALS_BASE)
+
 /* Local cache array (at 0xE7DB50) */
 #define HINT_$CACHE ((hint_cache_entry_t *)0xE7DB50)
 
 /* Cache index (at 0xE7DB74) */
-#define HINT_$CACHE_INDEX (*(uint16_t *)0xE7DB74)
+#define HINT_$CACHE_INDEX (*(int16_t *)0xE7DB74)
 
 /* Bucket round-robin index (at 0xE7DB76) */
-#define HINT_$BUCKET_INDEX (*(uint16_t *)0xE7DB76)
+#define HINT_$BUCKET_INDEX (*(int16_t *)0xE7DB76)
 
 #else
 /* Non-m68k: extern declarations */
+extern hint_globals_t HINT_$GLOBALS_BLOCK;
+#define HINT_$GLOBALS (&HINT_$GLOBALS_BLOCK)
 extern hint_file_t *HINT_$HINTFILE_PTR;
 extern uid_t HINT_$HINTFILE_UID;
 extern ml_$exclusion_t HINT_$EXCLUSION_LOCK;
 extern hint_cache_entry_t HINT_$CACHE[];
-extern uint16_t HINT_$CACHE_INDEX;
-extern uint16_t HINT_$BUCKET_INDEX;
+extern int16_t HINT_$CACHE_INDEX;
+extern int16_t HINT_$BUCKET_INDEX;
 #endif
 
 /*

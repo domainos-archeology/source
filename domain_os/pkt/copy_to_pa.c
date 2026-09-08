@@ -1,21 +1,25 @@
 /*
- * PKT_$COPY_TO_PA - Copy data to physical address buffers
+ * PKT_$COPY_TO_PA - Copy caller data into network data buffers
  *
- * Copies data from a virtual address to network buffer pages.
- * Allocates necessary buffer pages and maps them.
- * Uses FIM cleanup handlers to ensure buffers are returned on error.
+ * Copies "len" bytes from a virtual address into a chain of NETBUF data
+ * buffers, filling buffers_out[] with one buffer address (ppn << 10) per
+ * PKT_CHUNK_SIZE (0x400) byte chunk.
  *
- * The assembly shows:
- * 1. Set up FIM cleanup handler
- * 2. Loop while remaining length > 0
- * 3. Allocate buffer via NETBUF_$GET_DAT
- * 4. Get virtual address via NETBUF_$GETVA
- * 5. Copy data using OS_$DATA_COPY
- * 6. Return virtual address via NETBUF_$RTNVA
- * 7. Advance pointers
- * 8. Release cleanup handler on success
+ * The whole body runs under a FIM cleanup handler, so the function has two
+ * entries: the normal fall-through and the re-entry FIM_$CLEANUP makes when a
+ * fault unwinds into it.  On that second entry the routine returns the VA it
+ * still holds mapped *and* every data buffer it had already allocated, then
+ * re-signals the fault to the next handler.
  *
- * Original address: 0x00E1251C
+ * Address ranges (SR10.2 SAU2 image):
+ *   0x00E1251C-0x00E12556  prologue, locals cleared, FIM_$CLEANUP
+ *   0x00E12558-0x00E125E6  copy loop
+ *   0x00E125E8-0x00E125F8  normal exit (FIM_$RLS_CLEANUP, *status_ret = 0)
+ *   0x00E125FA-0x00E1260A  cleanup: return the mapped VA if one is held
+ *   0x00E1260C-0x00E1262E  cleanup: NETBUF_$RTN_DAT over the buffers taken
+ *   0x00E12632-0x00E1264C  cleanup: FIM_$SIGNAL, *status_ret = status, exit
+ *
+ * Original address: 0x00E1251C (306 bytes)
  */
 
 #include "pkt/pkt_internal.h"
@@ -25,69 +29,87 @@ void PKT_$COPY_TO_PA(char *src_va, uint16_t len, uint32_t *buffers_out,
                      status_$t *status_ret)
 {
     uint16_t chunk_size;
-    int16_t remaining;
-    char *buf_va;
-    char *src_ptr;
-    uint32_t *buf_ptr;
-    int16_t buf_count;
-    status_$t status;
-    uint8_t cleanup_context[24];  /* FIM cleanup context */
+    int16_t remaining;   /* D2w */
+    uint32_t buf_va;     /* A6-0x20 */
+    char *src_ptr;       /* A6-0x1c */
+    uint32_t *buf_ptr;   /* A2 */
+    int16_t buf_count;   /* A6-0x28 */
+    int16_t i;
+    status_$t status;                /* A6-0x24 */
+    uint8_t cleanup_context[24];     /* A6-0x18 */
 
+    /* 0x00E1252A-0x00E1253E */
     *buffers_out = 0;
-    buf_va = NULL;
+    buf_va = 0;
+    buf_count = 0;
     src_ptr = src_va;
 
-    /* Set up cleanup handler */
+    /* 0x00E1253E-0x00E12554 */
     status = FIM_$CLEANUP(cleanup_context);
 
     if (status == status_$cleanup_handler_set) {
-        /* Normal path - cleanup handler is now set */
-        remaining = (int16_t)len;
-        buf_ptr = buffers_out;
-        buf_count = 0;
+        /* --- normal path, 0x00E12558-0x00E125F8 --- */
+        remaining = (int16_t)len;          /* 0x00E12558 move.w (0xc,A6),D2w */
+        buf_ptr = buffers_out;             /* 0x00E12560 lea (A0),A2 */
 
-        while (remaining > 0) {
-            buf_count++;
-            buf_ptr++;
+        while (remaining > 0) {            /* 0x00E12562 / 0x00E125E4 */
+            buf_count++;                   /* 0x00E12568 addq.w #0x1,(-0x28,A6) */
+            buf_ptr++;                     /* 0x00E1256C addq.l #0x4,A2 */
 
-            /* Allocate a buffer */
+            /* 0x00E1256E-0x00E12578: by reference, fills the slot */
             NETBUF_$GET_DAT(buf_ptr - 1);
 
-            /* Get virtual address for the buffer */
-            NETBUF_$GETVA(*(buf_ptr - 1), (uint32_t *)&buf_va, &status);
-            if (status != status_$ok) {
-                CRASH_SYSTEM(&status);
-                break;
+            /* 0x00E1257A-0x00E1258C: buffer address by value */
+            NETBUF_$GETVA(*(buf_ptr - 1), &buf_va, &status);
+            if (status != status_$ok) {    /* 0x00E12590 tst.l (-0x24,A6) */
+                CRASH_SYSTEM(&status);     /* 0x00E12596 */
+                break;                     /* 0x00E125A2 bra done */
             }
 
-            /* Determine chunk size */
+            /* 0x00E125A4-0x00E125AC: chunk = min(0x400, remaining) */
             chunk_size = PKT_CHUNK_SIZE;
-            if ((int16_t)remaining < PKT_CHUNK_SIZE) {
-                chunk_size = remaining;
+            if (remaining < PKT_CHUNK_SIZE) {
+                chunk_size = (uint16_t)remaining;
             }
 
-            /* Copy data to buffer */
-            OS_$DATA_COPY(src_ptr, buf_va, (uint32_t)chunk_size);
+            /* 0x00E125AE-0x00E125C2 */
+            OS_$DATA_COPY(src_ptr, ARCH_VA_TO_PTR(buf_va), (uint32_t)chunk_size);
 
-            /* Return virtual address mapping */
-            NETBUF_$RTNVA((uint32_t *)&buf_va);
-            buf_va = NULL;
+            /* 0x00E125C6-0x00E125D2 */
+            NETBUF_$RTNVA(&buf_va);
+            buf_va = 0;
 
-            /* Advance source pointer */
+            /* 0x00E125D6-0x00E125E0 */
             src_ptr += PKT_CHUNK_SIZE;
             remaining -= PKT_CHUNK_SIZE;
         }
 
-        /* Release cleanup handler */
+        /* 0x00E125E8-0x00E125F6 */
         FIM_$RLS_CLEANUP(cleanup_context);
         *status_ret = status_$ok;
     } else {
-        /* Cleanup path - error occurred or cleanup was triggered */
-        if (buf_va != NULL) {
-            NETBUF_$RTNVA((uint32_t *)&buf_va);
+        /* --- cleanup path, 0x00E125FA-0x00E12642 --- */
+
+        /* 0x00E125FA-0x00E1260A: unmap the VA still held, if any */
+        if (buf_va != 0) {
+            NETBUF_$RTNVA(&buf_va);
         }
 
-        /* Signal the fault */
+        /*
+         * 0x00E1260C-0x00E1262E: give back every data buffer already taken.
+         *   move.w (-0x28,A6),D0w / subq.w #0x1,D0w / bmi
+         *   lea (0x4,A0),A2
+         *   loop: move.l (-0x4,A2),-(SP) / jsr NETBUF_$RTN_DAT / addq.l #4,A2
+         *         dbf D2w,loop
+         * dbf with D2 = buf_count-1 runs buf_count times, one per slot.
+         */
+        buf_ptr = buffers_out + 1;
+        for (i = (int16_t)(buf_count - 1); i >= 0; i--) {
+            NETBUF_$RTN_DAT(*(buf_ptr - 1));
+            buf_ptr++;
+        }
+
+        /* 0x00E12632-0x00E12642 */
         FIM_$SIGNAL(status);
         *status_ret = status;
     }

@@ -17,6 +17,32 @@
 
 /*
  * ============================================================================
+ * Types
+ * ============================================================================
+ */
+
+/*
+ * Hint address pair - one network location hint.
+ *
+ * A (flags, node_id) pair saying where a file might be.  This is the element
+ * type of the array HINT_$ADDI, HINT_$ADD and HINT_$GET_HINTS pass around;
+ * callers outside HINT_ build one on the stack (name_$old_add_entry at
+ * 0x00E5670A-0x00E56718 writes A6-0x10 and A6-0x0C as one 8-byte record and
+ * then hands HINT_$ADDI `pea (-0x10,A6)`), so the type has to be declared
+ * here rather than in hint/hint_internal.h.  (bead source-0o3n)
+ */
+typedef struct hint_addr_t {
+  uint32_t flags;   /* 0x00: Flags/status for this hint */
+  uint32_t node_id; /* 0x04: Node ID where file might be located */
+} hint_addr_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(hint_addr_t, flags) == 0x00, "hint_addr_t.flags");
+_Static_assert(__builtin_offsetof(hint_addr_t, node_id) == 0x04, "hint_addr_t.node_id");
+_Static_assert(sizeof(hint_addr_t) == 8, "hint_addr_t size");
+
+/*
+ * ============================================================================
  * Initialization and Shutdown
  * ============================================================================
  */
