@@ -100,7 +100,10 @@ translation beads (about 35). The 367 undefined references (137 unique symbols) 
 The independent review of waves 8-17 passed, but a bytes-per-C-line
 ranking (Ghidra function size over non-comment C lines) then exposed a
 defect class the audit had not caught: functions silently abbreviated
-with no TODO.  Every emitted function was walked block by block against
+with no TODO.  The ranking placed 674 of the 1317 source files by the
+address in their header comment (the other 643 cite it in a form the
+ranking script did not recognise and were NOT reviewed; see below).
+Every one of the 656 placed functions was walked block by block against
 its disassembly by read-only Fable forks:
 
 | tier | files | defective |
@@ -123,6 +126,16 @@ at link (up from 367 because more callees are now declared).
 
 Quality-gate change: `make clean && make` is now required; incremental
 builds hid a prototype mismatch across headers.
+
+**Not reviewed (correction, 2026-09-08):** 647 source files never
+entered the ranking, concentrated in proc2 (78), ast (58), disk (43),
+proc1 (41), time (40), tty (34), mmap (29), mmu (21), sio (18), term
+(17), cal, ec, rem_name, name, mst, kbd, pmap, vtoc and smaller
+subsystems.  226 of them hold a function of 150 bytes or more (99 KB of
+image code).  Given the defect rates above they should be re-emitted
+from the disassembly rather than verified; the list is
+scratchpad/unreviewed.txt for this session and can be regenerated from
+the header addresses.
 
 Still open: the deferred translation beads, seven research beads
 (ring_info_t bytes, MEM record head words, RINGLOG_$CNTL block,
