@@ -46,6 +46,15 @@ static int tests_run = 0;
         }                                                                     \
     } while (0)
 
+#define ASSERT_TRUE(cond)                                                     \
+    do {                                                                      \
+        if (!(cond)) {                                                        \
+            printf("FAILED\n    %s at line %d\n", #cond, __LINE__);           \
+            tests_failed++;                                                   \
+            return;                                                           \
+        }                                                                     \
+    } while (0)
+
 /* ==========================================================================
  * Globals and mocks the code under test links against
  * ========================================================================== */
@@ -74,14 +83,23 @@ void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)  { (void)excl; excl_stop_calls++;
 
 /* --- route helpers ------------------------------------------------------ */
 
-static int close_port_calls;
-static status_$t close_port_status;
+/*
+ * route_$close_port is a file static inside route/service.c now (bead
+ * source-kc3d), so it is exercised for real rather than mocked; the
+ * helpers it calls (ROUTE_$FIND_PORT, ROUTE_$SHORT_PORT, RIP_$UPDATE_D,
+ * ROUTE_$DECREMENT_PORT, SOCK_$CLOSE, ROUTE_$CLEANUP_WIRED) are mocked
+ * below like every other callee.
+ */
+static int sock_close_calls;
+static uint16_t sock_close_socket;
+static int cleanup_wired_calls;
 
-void ROUTE_$CLOSE_PORT(void *port_info, status_$t *status_ret)
+void ROUTE_$CLEANUP_WIRED(void) { cleanup_wired_calls++; }
+
+void SOCK_$CLOSE(uint16_t sock)
 {
-    (void)port_info;
-    close_port_calls++;
-    *status_ret = close_port_status;
+    sock_close_calls++;
+    sock_close_socket = sock;
 }
 
 static int short_port_calls;
@@ -254,6 +272,9 @@ void XNS_IDP_$OS_DELETE_PORT(uint16_t *channel, uint16_t *port,
 /* --- the driver record and its three entries ---------------------------- */
 
 static route_$driver_info_t test_driver;
+/* route_$port_t.driver_stats points at one of these; route_$close_port
+ * clears the high byte of its flags word (0x00E69F9A). */
+static route_$port_stats_t test_stats;
 
 static int leave_calls;
 static uint16_t *leave_socket_seen;
@@ -317,7 +338,7 @@ static void reset_state(void)
      * for addresses at or above the base, so take the lowest of them.
      */
     {
-        uintptr_t addrs[4];
+        uintptr_t addrs[5];
         uintptr_t lowest;
         size_t n;
 
@@ -325,8 +346,9 @@ static void reset_state(void)
         addrs[1] = (uintptr_t)test_leave_fn;
         addrs[2] = (uintptr_t)test_enter_fn;
         addrs[3] = (uintptr_t)test_attach_fn;
+        addrs[4] = (uintptr_t)&test_stats;
         lowest = addrs[0];
-        for (n = 1; n < 4; n++) {
+        for (n = 1; n < 5; n++) {
             if (addrs[n] < lowest) {
                 lowest = addrs[n];
             }
@@ -339,6 +361,7 @@ static void reset_state(void)
         ROUTE_$PORTP[i] = &ROUTE_$PORT_ARRAY[i];
     }
     memset(&test_driver, 0, sizeof(test_driver));
+    memset(&test_stats, 0, sizeof(test_stats));
     memset(&request, 0, sizeof(request));
 
     ROUTE_$PORT = 0;
@@ -348,8 +371,9 @@ static void reset_state(void)
 
     excl_start_calls = 0;
     excl_stop_calls = 0;
-    close_port_calls = 0;
-    close_port_status = status_$ok;
+    sock_close_calls = 0;
+    sock_close_socket = 0;
+    cleanup_wired_calls = 0;
     short_port_calls = 0;
     memset(short_port_src_seen, 0, sizeof(short_port_src_seen));
     memset(short_port_dst_seen, 0, sizeof(short_port_dst_seen));
@@ -394,21 +418,80 @@ static void attach_driver(int idx)
  * ========================================================================== */
 
 /*
- * 0x00E6A056-0x00E6A064: bit 3 runs the close-port procedure and leaves
- * through the unlock at 0x00E6A274 without the RIP/reply tail.
+ * 0x00E6A056-0x00E6A064: bit 3 runs the nested close-port procedure and
+ * leaves through the unlock at 0x00E6A274 without the RIP/reply tail.
+ * ROUTE_$FIND_PORT is made to fail so the arm stops at 0x00E69EF2 and the
+ * test observes only the entry/exit shape.
  */
 TEST(close_port_bit_returns_early)
 {
     reset_state();
     op_word = SERVICE_OP_CLOSE_PORT;
+    find_port_result = -1;
     call_service();
 
-    ASSERT_EQ(1, close_port_calls);
+    ASSERT_EQ(1, find_port_calls);
     ASSERT_EQ(1, excl_start_calls);
     ASSERT_EQ(1, excl_stop_calls);
     ASSERT_EQ(0, rip_send_calls);
     ASSERT_EQ(0, short_port_calls);
-    ASSERT_EQ(status_$ok, call_status);
+    ASSERT_EQ(status_$internet_unknown_network_port, call_status);
+}
+
+/*
+ * source-kc3d.  The nested procedure reads the caller's frame, not its own
+ * arguments:
+ *
+ *   0x00E69ECE / 0x00E69EDA  ROUTE_$FIND_PORT's arguments are port_info's
+ *                            PORT TYPE word (+0x06) and its sign-extended
+ *                            socket word (+0x08), NOT a network
+ *   0x00E69F42 / 0x00E69F62  the short_port it fills and hands to
+ *                            RIP_$UPDATE_D is ROUTE_$SERVICE's own local
+ *   0x00E69F66               the hop count is the 0x0010 cell at
+ *                            0x00E69FB0, not zero
+ */
+TEST(close_port_uses_the_parents_frame)
+{
+    route_$port_t *port;
+
+    reset_state();
+    port = &ROUTE_$PORT_ARRAY[1];
+    port->network   = 0x00ABCDEF;
+    port->active    = 4;
+    port->port_type = ROUTE_PORT_TYPE_ROUTING;
+    port->socket    = 0x0031;
+    port->driver_stats = ARCH_PTR_TO_VA(&test_stats);
+    test_stats.flags = 0xFF00;
+
+    request.port_type = 2;                  /* port_info+0x06 */
+    request.socket    = 0x1234;             /* port_info+0x08 */
+
+    op_word = SERVICE_OP_CLOSE_PORT;
+    find_port_result = 1;
+    ROUTE_$N_USER_PORTS = 3;
+    call_service();
+
+    /* 0x00E69ED2/0x00E69EDE: the type word and the sign-extended socket. */
+    ASSERT_EQ(2, find_port_net_seen);
+    ASSERT_EQ(0x1234, find_port_sock_seen);
+
+    /* 0x00E69F42: the parent's short_port local, not one of its own. */
+    ASSERT_EQ(1, short_port_calls);
+    ASSERT_TRUE(short_port_src_seen[0] == port);
+
+    /* 0x00E69F66 -> 0x00E69FB0, the hop-count 0x0010 cell. */
+    ASSERT_EQ(1, rip_update_calls);
+    ASSERT_EQ(0x0010, rip_hop_value[0]);
+
+    /* 0x00E69F7A-0x00E69F9E: the type-2 tail. */
+    ASSERT_EQ(1, sock_close_calls);
+    ASSERT_EQ(0x0031, sock_close_socket);
+    ASSERT_EQ(2, ROUTE_$N_USER_PORTS);
+    ASSERT_EQ(1, cleanup_wired_calls);
+    ASSERT_EQ(0x0000, test_stats.flags);    /* high byte cleared */
+
+    /* 0x00E69FA0 */
+    ASSERT_EQ(0, port->active);
 }
 
 /* 0x00E6A066-0x00E6A0B4: the three user-port rejections, in order. */
@@ -999,6 +1082,7 @@ int main(void)
     printf("ROUTE_$SERVICE tests\n");
 
     RUN_TEST(close_port_bit_returns_early);
+    RUN_TEST(close_port_uses_the_parents_frame);
     RUN_TEST(user_port_validation);
     RUN_TEST(port0_reannounce_stores_xns_network);
     RUN_TEST(port0_reannounce_skipped_outside_the_mask);

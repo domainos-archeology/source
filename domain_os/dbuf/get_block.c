@@ -22,19 +22,26 @@
  *   5. If all buffers are busy, waits for one to become free
  *
  * Parameters:
- *   vol_idx     - Volume index (0-7)
- *   block       - Disk block number to read
- *   uid         - Expected UID for validation
- *   block_hint  - Block hint/type for allocation
- *   flags       - Flags (bit 4: update UID, bit 5: allow stopped)
- *   status      - Receives status code
+ *   vol_idx     - Volume index (0-7), word at (0x08,A6)
+ *   block       - Disk block number to read, longword at (0x0a,A6)
+ *   uid         - Expected UID for validation, (0x0e,A6)
+ *   block_hint  - Block hint/type for allocation, longword at (0x12,A6)
+ *   block_type  - WORD at (0x16,A6), kept in D4 and stored as a byte in
+ *                 the entry's type field
+ *   flags       - WORD at (0x18,A6), kept in D5; DBUF_GET_NO_READ and
+ *                 DBUF_GET_OK_IF_STOPPED are the only bits examined
+ *   status      - Receives status code, (0x1a,A6)
+ *
+ * 0x00E3A5CE / 0x00E3A5D2 read parameters 5 and 6 as two separate WORDS
+ * (`move.w (0x16,A6),D4w`, `move.w (0x18,A6),D5w`), which is why they are
+ * two parameters here rather than one longword.
  *
  * Returns:
  *   Pointer to buffer data, or NULL on error
  */
 void *DBUF_$GET_BLOCK(uint16_t vol_idx, int32_t block, uid_t *uid,
-                      uint32_t block_hint, uint32_t flags,
-                      status_$t *status)
+                      uint32_t block_hint, uint16_t block_type,
+                      uint16_t flags, status_$t *status)
 {
     uint16_t token;
     uint32_t wait_value;
@@ -53,9 +60,10 @@ void *DBUF_$GET_BLOCK(uint16_t vol_idx, int32_t block, uid_t *uid,
     /* Optional logging */
     if (NETLOG_$OK_TO_LOG < 0) {
         /* NETLOG_$LOG_IT takes the UID as a uint32_t pair */
+        /* 0x00E3A5E4-0x00E3A5FE: the word logged here is D4, block_type. */
         NETLOG_$LOG_IT(0x10, (uint32_t *)uid, (int16_t)(block_hint >> 5),
                        (uint16_t)(block_hint & 0x1F),
-                       (uint16_t)flags, vol_idx, 0, 0);
+                       block_type, vol_idx, 0, 0);
     }
 
 retry:
@@ -70,7 +78,8 @@ retry:
      */
     entry = dbuf_$head;
     while (entry != NULL) {
-        update_flag = (uint8_t)(flags >> 16);
+        /* 0x00E3A654 `move.b D4b,(0xd,A4)`: the low byte of block_type. */
+        update_flag = (uint8_t)block_type;
 
         /* Check if this entry matches our request */
         if (entry->block == block && DBUF_GET_VOL(entry) == vol_idx) {
@@ -84,8 +93,8 @@ retry:
             /* Increment reference count */
             entry->ref_count++;
 
-            /* Update UID if flag 0x10 is set */
-            if (flags & 0x10) {
+            /* 0x00E3A640 `btst.l #0x4,D5` */
+            if (flags & DBUF_GET_NO_READ) {
                 entry->uid.high = uid->high;
                 entry->uid.low = uid->low;
                 entry->hint = block_hint;
@@ -202,13 +211,14 @@ retry:
     victim->uid.high = uid->high;
     victim->uid.low = uid->low;
     victim->hint = block_hint;
-    victim->type = (uint8_t)(flags >> 16);
+    /* 0x00E3A780 `move.b D4b,(0xd,A4)` */
+    victim->type = (uint8_t)block_type;
     victim->flags |= DBUF_ENTRY_BUSY;
 
     ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
 
-    /* If flag 0x10 is set, skip disk read (caller will fill buffer) */
-    if (flags & 0x10) {
+    /* 0x00E3A79C `btst.l #0x4,D5`: skip the disk read, the caller fills it */
+    if (flags & DBUF_GET_NO_READ) {
         goto finish_setup;
     }
 
@@ -223,8 +233,9 @@ retry:
     DISK_$READ(vol_idx, block, victim->ppn, (uint32_t *)&local_uid, status);
 
     if (*status != status_$ok) {
-        /* Check if error can be ignored (flag 0x20 and stopped status) */
-        if ((flags & 0x20) && *status == status_$storage_module_stopped) {
+        /* 0x00E3A7D0 `btst.l #0x5,D5` + 0x00E3A7D6 cmpi.l #0x8001b */
+        if ((flags & DBUF_GET_OK_IF_STOPPED) &&
+            *status == status_$storage_module_stopped) {
             /* Continue despite error */
             goto finish_setup;
         }

@@ -117,7 +117,7 @@ void VTOC_$ALLOCATE(vtoc_$lookup_req_t *loc, void *new_vtoce_p,
     vol = VTOC_VOL(vol_idx);                            /* 0xE3893A-0xE3893E */
 
     bkt_buf = DBUF_$GET_BLOCK(vol_idx, block, &VTOC_BKT_$UID,
-                              block, 0, status);        /* 0xE38942 */
+                              block, 0, 0, status);     /* 0xE38942 */
     if (*status != status_$ok) {                        /* 0xE3896C */
         goto done;
     }
@@ -162,7 +162,7 @@ void VTOC_$ALLOCATE(vtoc_$lookup_req_t *loc, void *new_vtoce_p,
                 break;
             }
             cur_buf = DBUF_$GET_BLOCK(vol_idx, next_block, &VTOC_BKT_$UID,
-                                      next_block, 0, status);   /* 0xE38A22 */
+                                      next_block, 0, 0, status); /* 0xE38A22 */
             if (*status != status_$ok) {                /* 0xE38A46 */
                 goto cleanup_bkt_buf;
             }
@@ -224,8 +224,9 @@ rescan_bucket:                                          /* 0xE38A5C */
 
     /* 0xE38B2C-0xE38B58: flag 0x10 tells DBUF the block has no valid
      * contents yet, so it is not read from disk first. */
-    bkt_buf = DBUF_$GET_BLOCK(vol_idx, block, &VTOC_BKT_$UID, block,
-                              (new_bkt_block < 0) ? 0x10 : 0, status);
+    bkt_buf = DBUF_$GET_BLOCK(vol_idx, block, &VTOC_BKT_$UID, block, 0,
+                              (new_bkt_block < 0) ? DBUF_GET_NO_READ : 0,
+                              status);
     if (*status != status_$ok) {                        /* 0xE38B64 */
         goto cleanup_prev_buf;
     }
@@ -321,7 +322,7 @@ old_format:                                             /* 0xE38CD4 */
     vol = VTOC_VOL(vol_idx);                            /* 0xE38CD4-0xE38CDC */
 
     blk_buf = DBUF_$GET_BLOCK(vol_idx, block, &VTOC_$UID,
-                              block, 0, status);        /* 0xE38CE0 */
+                              block, 0, 0, status);     /* 0xE38CE0 */
     if (*status != status_$ok) {                        /* 0xE38D06 */
         goto done;
     }
@@ -363,7 +364,7 @@ scan_old_block:                                         /* 0xE38D1A */
     prev_buf = blk_buf;                                 /* 0xE38D98 */
 
     blk_buf = DBUF_$GET_BLOCK(vol_idx, block, &VTOC_$UID,
-                              block, 0x10, status);     /* 0xE38D9C */
+                              block, 0, DBUF_GET_NO_READ, status); /* 0xE38D9C */
     /* NOTE: the original checks no status here; it zeroes whatever A0 holds
      * (0xE38DBC dbf #0xff -> 256 longwords = the whole 1024-byte block). */
     dst = (uint32_t *)blk_buf;
@@ -377,7 +378,7 @@ scan_old_block:                                         /* 0xE38D1A */
 old_next_block:                                         /* 0xE38DDA */
     DBUF_$SET_BUFF(blk_buf, VTOC_BUF_RELEASE, status);  /* 0xE38DDA */
     blk_buf = DBUF_$GET_BLOCK(vol_idx, block, &VTOC_$UID,
-                              block, 0, status);        /* 0xE38DF0 */
+                              block, 0, 0, status);     /* 0xE38DF0 */
     if (*status != status_$ok) {                        /* 0xE38E14 */
         /* 0xE38E16 branches straight to the unlock: blk_buf is already
          * released and nothing else is held on this path. */

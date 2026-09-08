@@ -20,21 +20,6 @@
 #include "xns_idp/xns_idp.h"
 
 /*
- * Structure for XNS_IDP_$OS_OPEN parameters (0x10 bytes)
- *
- * This structure is used to open an XNS/IDP channel. The channel allows
- * receiving packets destined for a specific port.
- *
- * Note: Partially understood structure; more fields may exist.
- */
-typedef struct xns_idp_$open_params_t {
-    uint16_t    socket;         /* 0x00: Socket number (high word of first long) */
-    uint16_t    flags;          /* 0x02: Flags (low word: 0x0002 = ?) */
-    uint32_t    port;           /* 0x04: Port identifier */
-    void        (*demux)(void); /* 0x08: Demultiplexer callback function */
-} xns_idp_$open_params_t;
-
-/*
  * The record RIP_$STD_DEMUX hands SOCK_$PUT is a sock_$pkt_info_t, not a
  * private layout (bead source-dxxz).  The frame local starts at A6-0x40 and
  * every store lands on one of that record's fields:
@@ -65,47 +50,50 @@ typedef struct xns_idp_$open_params_t {
  * On success, the channel number is stored in RIP_$STD_IDP_CHANNEL.
  * On failure, the channel number is not modified.
  *
- * Assembly analysis (0x00E15AAE):
- *   - Builds open_params on stack at -0x28(A6)
- *   - Sets flags = 0x10002 (socket 1, flags 2?)
- *   - Sets port = ROUTE_$PORT (from 0xE2E0A0)
- *   - Sets demux = RIP_$STD_DEMUX (0xE15A2C)
- *   - Calls XNS_IDP_$OS_OPEN
- *   - If status == 0, saves channel from params+2 to RIP_$STD_IDP_CHANNEL
+ * Assembly (0x00E15AAE), record base A6-0x28:
+ *
+ *   00e15aae  link.w  A6,-0x2c
+ *   00e15aba  move.l  #0x10002,(-0x28,A6)          ; +0x00 socket 1, flags 2
+ *   00e15ac2  move.l  (0x00e2e0a0).l,(-0x20,A6)    ; +0x08 network = ROUTE_$PORT
+ *   00e15aca  move.l  #0xe15a2c,(-0x24,A6)         ; +0x04 demux = RIP_$STD_DEMUX
+ *   00e15ad2  pea     (-0x2c,A6)                   ; status
+ *   00e15ad6  pea     (-0x28,A6)                   ; the option record
+ *   00e15ada  jsr     0x00e17f02.l                 ; XNS_IDP_$OS_OPEN
+ *   00e15ae2  tst.l   (-0x2c,A6)
+ *   00e15ae8  move.w  (-0x26,A6),(0xc64,A5)        ; +0x02, the channel index
+ *
+ * The record is xns_$os_open_opt_t (xns/xns.h), so the DEMUX vector is the
+ * longword at +0x04 and the network at +0x08 - the other way round from the
+ * anonymous struct this file used to declare, which also made the call
+ * type-incompatible with the prototype.
+ *
+ * Only +0x00..+0x0B are written.  XNS_IDP_$OS_OPEN goes on to read the
+ * source address at +0x0C (0x00E18008) and the destination at +0x18
+ * (0x00E18052), so it sees whatever this frame happened to contain; that is
+ * reproduced here by leaving those members uninitialised.
  *
  * Original address: 0x00E15AAE
  */
 void RIP_$STD_OPEN(void)
 {
     status_$t status;
+    xns_$os_open_opt_t open_params;
 
-    /*
-     * Build open parameters structure
-     *
-     * The first longword is 0x10002:
-     *   - High word (0x0001) = socket number
-     *   - Low word (0x0002) = flags
-     *
-     * This is stored differently in the decompilation - the socket/flags
-     * are packed into the first 4 bytes.
-     */
-    struct {
-        uint16_t    socket;         /* Socket 1 */
-        uint16_t    flags;          /* Flags 0x0002 */
-        uint32_t    port;           /* Port identifier */
-        void        (*demux)(void); /* Demultiplexer callback */
-    } open_params;
+    /* 0x00E15ABA: one longword, 0x00010002. */
+    open_params.socket        = 0x0001;
+    open_params.flags_channel = 0x0002;
 
-    open_params.socket = 0x0001;
-    open_params.flags = 0x0002;
-    open_params.port = ROUTE_$PORT;
-    open_params.demux = (void (*)(void))RIP_$STD_DEMUX;
+    /* 0x00E15ACA: the demux vector, a code address moved as one longword. */
+    open_params.demux = ARCH_PTR_TO_VA((void *)RIP_$STD_DEMUX);
+
+    /* 0x00E15AC2 */
+    open_params.network = ROUTE_$PORT;
 
     XNS_IDP_$OS_OPEN(&open_params, &status);
 
     if (status == status_$ok) {
-        /* Store the channel number (at offset 2 in params = flags field) */
-        RIP_$STD_IDP_CHANNEL = open_params.flags;
+        /* 0x00E15AE8: the OUT channel index is the word at +0x02. */
+        RIP_$STD_IDP_CHANNEL = (int16_t)open_params.flags_channel;
     }
 }
 

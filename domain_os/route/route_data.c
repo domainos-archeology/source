@@ -157,13 +157,15 @@ int16_t ROUTE_$N_WIRED_PAGES;
 int16_t ROUTE_$N_USER_PORTS;
 /* Four 0x90-byte records at 0xE87FD6..0xE88216; see route_internal.h. */
 route_$user_stat_t ROUTE_$USER_STAT[ROUTE_$MAX_USER_STATS];
-int16_t ROUTE_$NET_SERVICE_ON = 0;      /* NETWORK_OP_OR_BITS */
-int16_t ROUTE_$NET_SERVICE_OFF = 1;     /* NETWORK_OP_AND_NOT_BITS */
-/* Contents of 0xE878A0: 00 00 20 48.  RINGLOG_$LOGIT reads only byte 0
- * (its bit 7 is the log entry's "inbound" flag). */
+/*
+ * The three ROUTE_$PROCESS constant cells that used to be defined here
+ * (0x00E8789C, 0x00E8789E, 0x00E878A4) are file statics in route/process.c:
+ * they live in the CODE segment and only that routine reaches them.
+ *
+ * Contents of 0x00E878A0: 00 00 20 48.  RINGLOG_$LOGIT reads only byte 0
+ * (its bit 7 is the log entry's "inbound" flag).
+ */
 uint8_t RINGLOG_$ROUTE_FORWARD[4] = { 0x00, 0x00, 0x20, 0x48 };
-/* Contents of 0xE878A4 */
-const status_$t ROUTE_$SOCK_EMPTY_STATUS = 0x00110006;
 uint32_t RTWIRED_$CALLBACK_DATA = 0;
 uint16_t ROUTE_$PID;
 int8_t ROUTE_$USER_CHECKSUM;

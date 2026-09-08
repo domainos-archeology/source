@@ -67,12 +67,10 @@ extern int8_t PMAP_$SHUTTING_DOWN_FLAG;
  *   0xE23380  = record + 0x1C  ws_hdr_t.ws_timestamp
  *
  * pmap_$ws_scan_callback reuses them as the global scan counter and the two
- * scan timestamps.
+ * scan timestamps.  They are reached by name at that one use site
+ * (pmap/ws_scan_callback.c); the DAT_ aliases that used to stand in for them
+ * here are gone (bead source-ffh1).
  */
-#define DAT_00e23366 (MMAP_WSL[MMAP_WSL_POOL_WIRED].owner)
-#define DAT_00e2336c (MMAP_WSL[MMAP_WSL_POOL_WIRED].scan_pos)
-#define DAT_00e2337c (MMAP_WSL[MMAP_WSL_POOL_WIRED].pri_timestamp)
-#define DAT_00e23380 (MMAP_WSL[MMAP_WSL_POOL_WIRED].ws_timestamp)
 
 /*
  * Current working-set scan slot, PMAP_ module block + 0x7A0 (A5 = 0xE24D44).

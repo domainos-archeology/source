@@ -77,9 +77,11 @@ void ML_$LOCK(int16_t id) { (void)id; }
 void ML_$UNLOCK(int16_t id) { (void)id; }
 
 void *DBUF_$GET_BLOCK(uint16_t vol_idx, int32_t block, uid_t *uid,
-                      uint32_t block_hint, uint32_t flags, status_$t *status)
+                      uint32_t block_hint, uint16_t block_type,
+                      uint16_t flags, status_$t *status)
 {
-    (void)vol_idx; (void)block; (void)uid; (void)block_hint; (void)flags;
+    (void)vol_idx; (void)block; (void)uid; (void)block_hint;
+    (void)block_type; (void)flags;
     *status = mock_get_status;
     return mock_block;
 }

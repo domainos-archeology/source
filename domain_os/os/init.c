@@ -774,8 +774,8 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
         map_desc |= 0x00000001u;
 
         /* 0x00E33E9E-0x00E33EBE: read the logical-volume label */
-        lv_label = DBUF_$GET_BLOCK((uint16_t)vol_idx, 0, &LV_LABEL_$UID, 0, 0,
-                                   &status);
+        lv_label = DBUF_$GET_BLOCK((uint16_t)vol_idx, 0, &LV_LABEL_$UID, 0,
+                                   0, 0, &status);
         if (status != status_$ok) {
             CRASH_SYSTEM(&status);
         }

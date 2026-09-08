@@ -153,7 +153,7 @@ void *BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
             goto done;
         }
 
-        alloc_flags = 0x10;  /* New block flag */
+        alloc_flags = DBUF_GET_NO_READ;  /* 0x00E3B040 `move.w D2w`, D2 = 0x10 */
     } else {
         /* Use existing VTOCE block */
         *block_out = vtoce_block;
@@ -163,13 +163,14 @@ void *BAT_$ALLOC_VTOCE(int16_t vol_idx, uint32_t hint, uint32_t *block_out,
     /* Get VTOCE block into buffer */
     vtoce = (bat_$vtoce_block_t *)DBUF_$GET_BLOCK(vol_idx, *block_out,
                                                    (void *)&VTOC_$UID,
-                                                   *block_out, alloc_flags, status);
+                                                   *block_out, 0, alloc_flags,
+                                                   status);
     if (*status != status_$ok) {
         goto done;
     }
 
     /* Initialize new VTOCE block if allocated */
-    if (alloc_flags == 0x10) {
+    if (alloc_flags == DBUF_GET_NO_READ) {
         int16_t i;
         uint32_t *ptr = (uint32_t *)vtoce;
 

@@ -53,7 +53,8 @@ void VTOC_$MOUNT(int16_t vol_idx, uint16_t param_2, uint8_t param_3, char param_
     ML_$LOCK(VTOC_LOCK_ID);
 
     /* Read the volume label block (block 0) */
-    label_block = (uint32_t *)DBUF_$GET_BLOCK(vol_idx, 0, &LV_LABEL_$UID, 0, 0, status_ret);
+    label_block = (uint32_t *)DBUF_$GET_BLOCK(vol_idx, 0, &LV_LABEL_$UID, 0, 0, 0,
+                                              status_ret);
 
     if (*status_ret == status_$ok) {
         /* Calculate per-volume data offset */
@@ -139,7 +140,8 @@ void VTOC_$MOUNT(int16_t vol_idx, uint16_t param_2, uint8_t param_3, char param_
     /* If mount status not set (invalid config), dismount and return error */
     if (vtoc_$data.mounted[vol_idx] >= 0) {
         VTOC_$DISMOUNT(vol_idx, 0xFF, status_ret);
-        BAT_$DISMOUNT(vol_idx, 0xFFC4, status_ret);
+        /* 0x00E386DE `st -(SP)`: one byte, true. */
+        BAT_$DISMOUNT(vol_idx, true, status_ret);
         *status_ret = status_$VTOC_uid_mismatch;
     }
 

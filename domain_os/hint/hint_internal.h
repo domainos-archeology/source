@@ -37,7 +37,24 @@
  */
 
 /* Hint file hash table size (64 buckets) */
+/*
+ * The hash MASK: HINT_$add_internal reduces the key with
+ * `andi.w #0x3f,D0w` (0x00E49A5E), so a bucket index is 0..63.
+ */
 #define HINT_HASH_SIZE 64 /* 0x40 */
+
+/*
+ * Buckets actually PRESENT in the record: 65, not 64.
+ *
+ * HINT_$clear_hintfile's outer loop is `moveq #0x40,D0` + `dbf D0w`
+ * (0x00E311E0 / 0x00E3121E), i.e. 0x41 = 65 iterations, stepping the bucket
+ * cursor by 0x54 each time (0x00E31218 `addi.l #0x54,D5`).  It therefore
+ * clears bucket slots 0..64, one more than the hash can select.  Declaring
+ * the array 64 wide made that last iteration an out-of-bounds write, so the
+ * record is 65 wide here and slot 64 is simply never looked up (bead
+ * source-nrfl).
+ */
+#define HINT_HASH_SLOTS 65 /* 0x41 */
 #define HINT_HASH_MASK 0x3F
 
 /* Slots per hash bucket */
@@ -133,12 +150,19 @@ _Static_assert(__builtin_offsetof(hint_file_header_t, net_info) == 0x08, "hint_f
 /*
  * Complete hint file structure
  *
- * The hint file contains a header followed by 64 hash buckets.
- * Total size: 12 + (64 * 84) = 5388 bytes
+ * A 12-byte header followed by HINT_HASH_SLOTS hash buckets.
+ * Total size: 12 + (65 * 84) = 5472 bytes (0x1560).
+ *
+ * The bucket cursor the image uses is NOT &buckets[b]: HINT_$add_internal
+ * computes `hintfile + 0x54*b` (0x00E49A5C `moveq #0x54,D2` / `muls.w D0w,D2`
+ * / 0x00E49A6C `lea (0x0,A1,D2*0x1),A1`) and then reaches slot i, 1-based, at
+ * `+0x1C*i - 0x10` (0x00E49A76 / 0x00E49A8A).  For b = 0, i = 1 that is
+ * hintfile + 0x0C, so the -0x10 bias is exactly what puts the first bucket
+ * past the 12-byte header; the two spellings agree offset for offset.
  */
 typedef struct hint_file_t {
-  hint_file_header_t header;             /* 0x00: 12 bytes */
-  hint_bucket_t buckets[HINT_HASH_SIZE]; /* 0x0C: 64 * 84 = 5376 bytes */
+  hint_file_header_t header;              /* 0x00: 12 bytes */
+  hint_bucket_t buckets[HINT_HASH_SLOTS]; /* 0x0C: 65 * 84 = 5460 bytes */
 } hint_file_t;
 
 /* HINT_$add_internal reaches slot i of bucket b at
@@ -147,7 +171,9 @@ typedef struct hint_file_t {
  * just past the 12-byte header, and the slot index is Pascal 1-based. */
 _Static_assert(__builtin_offsetof(hint_file_t, header) == 0x00, "hint_file_t.header");
 _Static_assert(__builtin_offsetof(hint_file_t, buckets) == 0x0C, "hint_file_t.buckets");
-_Static_assert(sizeof(hint_file_t) == 0x150C, "hint_file_t size (12 + 64*84)");
+_Static_assert(sizeof(hint_file_t) == 0x1560, "hint_file_t size (12 + 65*84)");
+_Static_assert(HINT_HASH_SLOTS == HINT_HASH_SIZE + 1,
+               "HINT_$clear_hintfile clears one bucket more than the hash selects");
 
 /*
  * Local hint cache entry

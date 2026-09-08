@@ -60,10 +60,12 @@ status_$t VOLX_$SHUTDOWN(void)
             /* Remove mount point if parent_uid is set */
             if (entry->parent_uid.high != UID_$NIL.high ||
                 entry->parent_uid.low != UID_$NIL.low) {
-                static uint32_t unused_param = 0;
-
+                /*
+                 * 0x00E6B548 `pea (-0x46,PC)` -> 0x00E6B504, the same zero
+                 * longword VOLX_$DISMOUNT passes (volx_internal.h).
+                 */
                 DIR_$DROP_MOUNT(&entry->parent_uid, &entry->dir_uid,
-                                &unused_param, &drop_status);
+                                &volx_$drop_mount_lv, &drop_status);
 
                 if (local_status == status_$ok) {
                     local_status = drop_status;

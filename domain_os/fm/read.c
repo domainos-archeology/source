@@ -95,8 +95,14 @@ void FM_$READ(fm_$file_ref_t *file_ref, uint32_t block_addr, uint16_t level,
     local_uid.low = uid_ptr->low;
 
     /* Get the disk block into a buffer */
+    /*
+     * `flags` here is DBUF_$GET_BLOCK's block_type word, parameter 5: the
+     * callee stores it as a byte in the buffer entry's type field
+     * (0x00E3A780 `move.b D4b,(0xd,A4)`).  The flags word, parameter 6, is
+     * zero on this path.
+     */
     buffer = DBUF_$GET_BLOCK(vol_idx, block_num, &local_uid, param4,
-                             (uint32_t)flags << 16, status);
+                             flags, 0, status);
     if (*status != status_$ok) {
         goto done;
     }

@@ -109,17 +109,12 @@ extern boolean ROUTE_$ROUTING;
 void ROUTE_$INIT_ROUTING(int16_t port_index, int8_t port_type);
 
 /*
- * ROUTE_$CLOSE_PORT - Close and remove a routing port
- *
- * Called from ROUTE_$SERVICE when bit 3 (0x08) is set. Closes a
- * routing port, cleaning up all associated resources.
- *
- * @param port_info    Port information structure
- * @param status_ret   Output: status code
- *
- * Original address: 0x00E69EC2
+ * ROUTE_$CLOSE_PORT (0x00E69EC2) is a NESTED procedure of ROUTE_$SERVICE: it
+ * is entered with `bsr.w` and no pushed arguments and reads its parent's
+ * frame through `movea.l (A6),A2`.  It is therefore a file static,
+ * route_$close_port, in route/service.c - not a subsystem entry point (bead
+ * source-kc3d).
  */
-void ROUTE_$CLOSE_PORT(void *port_info, status_$t *status_ret);
 
 /* ROUTE_$DECREMENT_PORT (0x00E69E40) is declared in route/route.h
  * (RIP_$PORT_CLOSE calls it). */
@@ -232,19 +227,15 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
 /* ROUTE_$USER_STAT (0xE87FD6): see route/route.h. */
 
 /*
- * Constant cells in the routing code segment, all passed by reference
- * (pea (d,PC)) by ROUTE_$PROCESS:
- *   0xE8789C  NETWORK_$SET_SERVICE opcode 0 "or bits"   (pea (0x45E,PC) @0xE8743C)
- *   0xE8789E  NETWORK_$SET_SERVICE opcode 1 "and not"   (pea (0x76,PC)  @0xE87826)
- *   0xE878A0  RINGLOG_$LOGIT header info; only byte 0 is read, and only its
- *             bit 7 (the "inbound" flag), at 0x00E1A2F6  (pea (0x292,PC) @0xE8760C)
- *   0xE878A4  status_$network_buffer_queue_is_empty, handed to CRASH_SYSTEM
- *             when SOCK_$GET returns false             (pea (0x3E6,PC) @0xE874BC)
+ * The constant cells at 0x00E8789C..0x00E878A7 sit in the ROUTE_ CODE
+ * segment between ROUTE_$PROCESS' `rts` (0x00E8789A) and the next routine's
+ * `link.w` (0x00E878A8), carry no symbol in the SAU2 link map, and are
+ * reached only PC-relative from inside ROUTE_$PROCESS.  Three of them are
+ * therefore file statics in route/process.c (net_service_or_bits,
+ * net_service_and_not_bits, sock_empty_status); the fourth,
+ * RINGLOG_$ROUTE_FORWARD at 0x00E878A0, belongs to ring/ringlog.h because
+ * RINGLOG_$LOGIT is its consumer.
  */
-#define ROUTE_$NET_SERVICE_ON   (*(int16_t *)0xE8789C)
-#define ROUTE_$NET_SERVICE_OFF  (*(int16_t *)0xE8789E)
-/* RINGLOG_$ROUTE_FORWARD (0xE878A0) is declared in ring/ringlog.h. */
-#define ROUTE_$SOCK_EMPTY_STATUS (*(const status_$t *)0xE878A4)
 
 /* Send callback/data pointer (4 bytes of zeros at 0xE870D8) */
 
@@ -278,9 +269,6 @@ extern uint32_t ROUTE_$WIRED_PAGES[ROUTE_$MAX_WIRED_PAGES];
 /* The forwarding counters and ROUTE_$Q_DEPTH are declared in route/route.h. */
 extern int16_t ROUTE_$N_WIRED_PAGES;
 extern int16_t ROUTE_$N_USER_PORTS;
-extern int16_t ROUTE_$NET_SERVICE_ON;
-extern int16_t ROUTE_$NET_SERVICE_OFF;
-extern const status_$t ROUTE_$SOCK_EMPTY_STATUS;
 extern uint16_t ROUTE_$PID;
 extern int8_t ROUTE_$USER_CHECKSUM;
 extern uint32_t ROUTE_$SERVICE_ID;

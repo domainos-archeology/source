@@ -154,16 +154,27 @@ _Static_assert(sizeof(SMD_$CURSOR_PTABLE) == 0x10,
  */
 
 /*
- * ml_$exclusion_t_00e2e520 - 0x00E2E520, the last object in the map segment
+ * smd_$trk_rect_mutex - 0x00E2E520, the last object in the map segment
  * "D35 E2E3FC SMD_$WIRED_DATA loaded at 12FBFC, size = 13C".  It follows
  * SMD_DISPLAY_UNITS (0x00E2E3FC, 0x124 bytes) exactly, and its 0x12 bytes end
- * at 0x00E2E532, inside the segment's 0x13C.  Zero in the image; SMD_$INIT
- * calls ML_$EXCLUSION_INIT on it.
+ * at 0x00E2E532, inside the segment's 0x13C.  Zero in the image.
+ *
+ * The SAU2 link map gives the segment a name but lists no symbol inside it,
+ * so the cell keeps a descriptive tree name.  Its six users, from
+ * `gsk xrefs to 0xE2E520`, are all tracking-rectangle or cursor work under
+ * one lock:
+ *
+ *   SMD_$INIT                    0x00E34E9A  ML_$EXCLUSION_INIT
+ *   SHOW_CURSOR                  0x00E6E2CC / 0x00E6E312
+ *   smd_$add_trk_rects_internal  0x00E6E506 / 0x00E6E570
+ *   SMD_$CLR_TRK_RECT            0x00E6E6F0 / 0x00E6E724
+ *   SMD_$DEL_TRK_RECT            0x00E6E652 / 0x00E6E736
+ *   SMD_$DM_COND_EVENT_WAIT      0x00E6F022
  */
-ml_$exclusion_t ml_$exclusion_t_00e2e520 = { 0 };
+ml_$exclusion_t smd_$trk_rect_mutex = { 0 };
 #if defined(ARCH_M68K)
-_Static_assert(sizeof(ml_$exclusion_t_00e2e520) == 0x12,
-               "ml_$exclusion_t_00e2e520: 0x00E2E520..0x00E2E532");
+_Static_assert(sizeof(smd_$trk_rect_mutex) == 0x12,
+               "smd_$trk_rect_mutex: 0x00E2E520..0x00E2E532");
 #endif
 
 /*

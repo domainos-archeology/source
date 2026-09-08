@@ -100,7 +100,17 @@ TEST(hintfile_layout)
     ASSERT_EQ(0x1C, sizeof(hint_slot_t));
     ASSERT_EQ(0x54, sizeof(hint_bucket_t));
     ASSERT_EQ(0x0C, __builtin_offsetof(hint_file_t, buckets));
-    ASSERT_EQ(0x150C, sizeof(hint_file_t));
+    /*
+     * source-nrfl: 65 buckets, not 64.  HINT_$clear_hintfile's outer loop is
+     * `moveq #0x40,D0` (0x00E311E0) + `dbf D0w` (0x00E3121E) = 0x41
+     * iterations at a 0x54 stride, so the record has to reach
+     * 0x0C + 65*0x54 = 0x1560 for that last iteration to be in bounds, even
+     * though `andi.w #0x3f` (0x00E49A5E) never selects bucket 64.
+     */
+    ASSERT_EQ(65, HINT_HASH_SLOTS);
+    ASSERT_EQ(64, HINT_HASH_SIZE);
+    ASSERT_EQ(0x1560, sizeof(hint_file_t));
+    ASSERT_EQ(0x0C + 65 * 0x54, sizeof(hint_file_t));
 
     ASSERT_EQ(0x00, __builtin_offsetof(hint_slot_t, uid_low_masked));
     ASSERT_EQ(0x04, __builtin_offsetof(hint_slot_t, addrs[0]));

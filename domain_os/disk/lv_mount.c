@@ -136,7 +136,13 @@ int16_t DISK_$LV_MOUNT(uid_t *lv_uid, status_$t *status_ret)
             pv_entry->lv_start == 0) {
 
             /* 0x00E6CB10: read the PV label block */
-            pv_label = DISK_$GET_BLOCK(pv_idx, 0, &PV_LABEL_$UID, 0, 0, &status);
+            /*
+             * 0x00E6CB02: one `clr.l` covers DISK_$GET_BLOCK's two
+             * argument WORDS at (0x16,A6) and (0x18,A6) - block_type 0
+             * and flags 0.
+             */
+            pv_label = DISK_$GET_BLOCK(pv_idx, 0, &PV_LABEL_$UID, 0, 0, 0,
+                                       &status);
             if (status != status_$ok) {
                 goto done;
             }
@@ -164,7 +170,7 @@ int16_t DISK_$LV_MOUNT(uid_t *lv_uid, status_$t *status_ret)
                 /* 0x00E6CB6C: read the LV label block */
                 lv_label = (bat_$label_t *)
                     DISK_$GET_BLOCK(pv_idx, (int32_t)lv_block, &LV_LABEL_$UID,
-                                    0, 0, &status);
+                                    0, 0, 0, &status);   /* 0x00E6CB62 clr.l */
                 if (status != status_$ok) {
                     goto done;
                 }

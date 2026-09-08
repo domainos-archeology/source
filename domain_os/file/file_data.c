@@ -12,7 +12,18 @@
  * Lock control block
  * Original address: 0xE82128
  */
-file_lock_control_t FILE_$LOCK_CONTROL;
+/*
+ * The one lock-control block at 0x00E82128 (map: "D E82128 FILE_ size = 2D4",
+ * with OS_DATA_SHUTWIRED at its base).  Everything the tree used to spell as
+ * a separate FILE_$LOT_* / FILE_$DEFAULT_SIZE / FILE_$LOCK_ILLEGAL_MASK
+ * object is a field of it - see the macros in file/file.h (bead
+ * source-q4qz).  The two fields that are non-zero in the image are given
+ * here; the rest are zero, which is what FILE_$LOCK_INIT then overwrites.
+ */
+file_lock_control_t FILE_$LOCK_CONTROL = {
+    .default_size      = 0x1010100F,    /* 0x2C0 */
+    .lock_illegal_mask = 0x00E8,        /* 0x2C8 */
+};
 
 /*
  * Lock table (58 entries × 300 bytes)
@@ -164,55 +175,14 @@ uint16_t FILE_$LOCK_CVT_TABLE[12] = {
  */
 
 /*
- * Lock hash table (FILE_LOT_HASH_BUCKETS = 251 entries)
- * Original address: FILE_$LOCK_CONTROL + 0xC8 (0xE821F0)
- *
- * FILE_$LOCK_INIT clears 251 words here (0x00E327BE) and UID_$HASH is called
- * with the 251 modulus cell, so the remainder indexes 0 .. 250.
+ * FILE_$LOT_HASHTAB, FILE_$LOT_SEQN, FILE_$DEFAULT_SIZE,
+ * FILE_$LOCK_ILLEGAL_MASK, FILE_$LOT_HIGH, FILE_$LOT_FREE,
+ * FILE_$LOT_PENDING and FILE_$LOT_FULL used to be defined here as objects of
+ * their own AS WELL AS being fields of FILE_$LOCK_CONTROL, so the m68k build
+ * had two cells wherever the image has one.  They are now macros over the
+ * struct's fields (file/file.h), and FILE_$LOCK_CONTROL above carries the two
+ * non-zero initial values.
  */
-uint16_t FILE_$LOT_HASHTAB[FILE_LOT_HASH_BUCKETS];
-
-/*
- * Lock sequence counter
- * Original address: FILE_$LOCK_CONTROL + 0x2C4 (0xE823EC)
- */
-uint32_t FILE_$LOT_SEQN;
-
-/*
- * Default initial file size
- * Original address: FILE_$LOCK_CONTROL + 0x2C0 (0xE823E8)
- */
-uint32_t FILE_$DEFAULT_SIZE = 0x1010100F;
-
-/*
- * Lock illegal modes mask
- * Original address: FILE_$LOCK_CONTROL + 0x2C8 (0xE823F0)
- */
-uint16_t FILE_$LOCK_ILLEGAL_MASK = 0x00E8;
-
-/*
- * Highest allocated lock entry index
- * Original address: FILE_$LOCK_CONTROL + 0x2CC (0xE823F4)
- */
-uint16_t FILE_$LOT_HIGH;
-
-/*
- * Head of free lock entry list
- * Original address: FILE_$LOCK_CONTROL + 0x2CE (0xE823F6)
- */
-uint16_t FILE_$LOT_FREE;
-
-/*
- * Count of lock entries whose remote negotiation is outstanding
- * Original address: FILE_$LOCK_CONTROL + 0x2CA (0xE823F2)
- */
-uint16_t FILE_$LOT_PENDING;
-
-/*
- * Lock table full flag (Domain boolean: 0xFF = true)
- * Original address: FILE_$LOCK_CONTROL + 0x2D0 (0xE823F8)
- */
-int8_t FILE_$LOT_FULL;
 
 /*
  * ============================================================================

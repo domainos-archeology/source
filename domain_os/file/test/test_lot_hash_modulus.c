@@ -139,7 +139,7 @@ static void reset_mocks(void)
     mock_hash_result = 0;
     mock_ml_lock_calls = 0;
     mock_ml_unlock_calls = 0;
-    memset(FILE_$LOT_HASHTAB, 0, sizeof(FILE_$LOT_HASHTAB));
+    /* FILE_$LOT_HASHTAB is FILE_$LOCK_CONTROL.lock_map (bead source-q4qz). */
     memset(&FILE_$LOCK_CONTROL, 0, sizeof(FILE_$LOCK_CONTROL));
 }
 
@@ -160,6 +160,15 @@ TEST(hash_tables_are_251_buckets)
     ASSERT_EQ(251, sizeof(FILE_$LOT_HASHTAB) / sizeof(FILE_$LOT_HASHTAB[0]));
     ASSERT_EQ(251, sizeof(FILE_$LOCK_CONTROL.lock_map) /
                    sizeof(FILE_$LOCK_CONTROL.lock_map[0]));
+    /*
+     * source-q4qz: one object, not two.  The SAU2 map puts
+     * FILE_$LOT_HASHTAB at 0x00E821F0 = FILE_$LOCK_CONTROL + 0xC8, so the
+     * two names must denote the same storage.
+     */
+    ASSERT_EQ((uintptr_t)(void *)FILE_$LOT_HASHTAB,
+              (uintptr_t)(void *)FILE_$LOCK_CONTROL.lock_map);
+    ASSERT_EQ(0xC8, (const char *)FILE_$LOT_HASHTAB -
+                    (const char *)&FILE_$LOCK_CONTROL);
     ASSERT_EQ(0xC8, __builtin_offsetof(file_lock_control_t, lock_map));
 }
 
@@ -240,13 +249,13 @@ TEST(remainder_250_is_in_range)
 
     reset_mocks();
     mock_hash_result = 250;
-    FILE_$LOCK_CONTROL.lock_map[250] = 0;   /* empty chain */
+    FILE_$LOCK_CONTROL.lock_map[250] = 0;   /* empty chain; == FILE_$LOT_HASHTAB[250] */
     (void)FILE_$DELETE_INT(&uid, 0, &result, &status);
     ASSERT_EQ(status_$ok, status);
 
     reset_mocks();
     mock_hash_result = 250;
-    FILE_$LOT_HASHTAB[250] = 0;             /* empty chain */
+    FILE_$LOT_HASHTAB[250] = 0;             /* the same word, by its map name */
     memset(&info, 0, sizeof(info));
     FILE_$LOCAL_READ_LOCK(&uid, &info, &status);
     ASSERT_EQ(file_$object_not_locked_by_this_process, status);

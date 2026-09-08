@@ -41,7 +41,7 @@ void VTOC_$DISMOUNT(uint16_t vol_idx, uint8_t flags, status_$t *status_ret)
         if ((int8_t)flags >= 0) {
             /* Read the volume label block */
             label_block = (uint32_t *)DBUF_$GET_BLOCK(vol_idx, 0, &LV_LABEL_$UID,
-                                                      0, 0, status_ret);
+                                                      0, 0, 0, status_ret);
 
             if (*status_ret == status_$ok) {
                 /* Calculate per-volume data offset */
@@ -88,7 +88,11 @@ void VTOC_$DISMOUNT(uint16_t vol_idx, uint8_t flags, status_$t *status_ret)
         OS_DISK_PROC(vol_idx);
 
         /* Dismount the BAT */
-        BAT_$DISMOUNT(vol_idx, (uint16_t)((uint8_t)flags << 8) | 0x26, status_ret);
+        /*
+         * 0x00E3882A `move.b D3b,-(SP)`: this routine's own byte argument,
+         * forwarded unchanged as one byte.
+         */
+        BAT_$DISMOUNT(vol_idx, (boolean)flags, status_ret);
 
         /* Update volume UID to nil if successful */
         if (*status_ret == status_$ok) {

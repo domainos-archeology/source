@@ -287,11 +287,10 @@ _Static_assert(sizeof(file_$lock_hint_t) == 8, "sizeof lock hint");
 #define FILE_PROC_LOCK_MAX_ENTRIES  150     /* 0x96 entries per process */
 
 /*
- * Lock hash table (array of head pointers)
- * Located at FILE_$LOCK_CONTROL + 0xC8 (0xE821F0, SAU2 map name).
- * FILE_LOT_HASH_BUCKETS = 251 entries; see file/file.h.
+ * FILE_$LOT_HASHTAB is FILE_$LOCK_CONTROL.lock_map - the 251 words at
+ * FILE_$LOCK_CONTROL + 0xC8 (0xE821F0, the SAU2 map's own name for the
+ * address).  It is a macro in file/file.h, not an object of its own.
  */
-extern uint16_t FILE_$LOT_HASHTAB[FILE_LOT_HASH_BUCKETS];
 
 /*
  * file_$lot_hash_modulus - the single in-code word at 0x00E5EA28 (00 FB = 251)
@@ -305,14 +304,10 @@ extern uint16_t file_$lot_hash_modulus;
  * External lock control variables (in file_lock_control_t)
  */
 
-/* FILE_$LOT_FREE - Head of free lock entry list (at offset 0x2CE) */
-/* Already declared in file.h */
-
-/* Highest allocated lock entry index (at offset 0x2CC) */
-extern uint16_t FILE_$LOT_HIGH;
-
-/* Lock sequence counter (at offset 0x2C4) */
-extern uint32_t FILE_$LOT_SEQN;
+/*
+ * FILE_$LOT_FREE (+0x2CE), FILE_$LOT_HIGH (+0x2CC) and FILE_$LOT_SEQN
+ * (+0x2C4) are macros over FILE_$LOCK_CONTROL fields; see file/file.h.
+ */
 
 /* Lock mode compatibility tables */
 extern uint16_t FILE_$LOCK_MODE_TABLE[];      /* At offset 0x58 (24 entries) */
@@ -320,14 +315,14 @@ extern uint16_t FILE_$LOCK_COMPAT_TABLE[];    /* At offset 0x28 (12 entries) */
 extern uint16_t FILE_$LOCK_MAP_TABLE[];       /* At offset 0x40 (12 entries) */
 extern uint16_t FILE_$LOCK_REQ_TABLE[];       /* At offset 0x88 (12 entries) */
 extern uint16_t FILE_$LOCK_CVT_TABLE[];       /* At offset 0xA0 (12 entries) */
-extern uint16_t FILE_$LOCK_ILLEGAL_MASK;      /* At offset 0x2C8 - illegal modes */
+/* FILE_$LOCK_ILLEGAL_MASK is FILE_$LOCK_CONTROL.lock_illegal_mask (+0x2C8). */
 
 /*
  * Count of lock entries whose remote negotiation is still outstanding.
  * FILE_$PRIV_LOCK bumps it at 0x00E5F954 and drops it again at 0x00E5FA8C,
- * 0x00E5FAB4 and 0x00E5FAE2.  Word at FILE_$LOCK_CONTROL + 0x2CA (0xE823F2).
+ * 0x00E5FAB4 and 0x00E5FAE2.  Word at FILE_$LOCK_CONTROL + 0x2CA (0xE823F2),
+ * spelled as a macro in file/file.h.
  */
-extern uint16_t FILE_$LOT_PENDING;
 
 /*
  * Lock conflict matrix, 8 entries, at FILE_$LOCK_CONTROL + 0x18 (0xE82140).
@@ -337,8 +332,9 @@ extern uint16_t FILE_$LOT_PENDING;
  */
 extern uint16_t FILE_$LOCK_CONFLICT_TABLE[8];
 
-/* Domain booleans: 0xFF is true, tested with tst.b/bmi. */
-extern int8_t   FILE_$LOT_FULL;               /* At offset 0x2D0 - table full flag */
+/* Domain booleans: 0xFF is true, tested with tst.b/bmi.
+ * FILE_$LOT_FULL is FILE_$LOCK_CONTROL.flag_2d0 (+0x2D0), read as a SIGNED
+ * byte; see the macro in file/file.h. */
 
 /*
  * ----------------------------------------------------------------------------
@@ -381,8 +377,7 @@ extern int8_t   FILE_$LOT_FULL;               /* At offset 0x2D0 - table full fl
  * before source-9dc2 established what the compared field is. */
 extern uint16_t FILE_$LOCK_MODE_MAP[];
 
-/* Default initial file size */
-extern uint32_t FILE_$DEFAULT_SIZE;
+/* FILE_$DEFAULT_SIZE is FILE_$LOCK_CONTROL.default_size (+0x2C0). */
 
 /* AUDIT_$ENABLED comes from audit/audit.h, NETLOG_$OK_TO_LOG from netlog/netlog.h */
 

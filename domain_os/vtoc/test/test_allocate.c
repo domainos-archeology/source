@@ -89,7 +89,13 @@ typedef struct {
     int32_t     block;
     uid_t      *uid;
     uint32_t    block_hint;
-    uint32_t    flags;
+    /*
+     * source-ve50: DBUF_$GET_BLOCK's parameters 5 and 6 are two separate
+     * WORDS (0x00E3A5CE / 0x00E3A5D2), so record both.  Every VTOC_$ALLOCATE
+     * call site passes block_type 0.
+     */
+    uint16_t    block_type;
+    uint16_t    flags;
 } get_block_call_t;
 
 static get_block_call_t gb_calls[MAX_BUFS];
@@ -99,7 +105,8 @@ static void    *gb_result[MAX_BUFS];
 static status_$t gb_status[MAX_BUFS];
 
 void *DBUF_$GET_BLOCK(uint16_t vol_idx, int32_t block, uid_t *uid,
-                      uint32_t block_hint, uint32_t flags, status_$t *status)
+                      uint32_t block_hint, uint16_t block_type,
+                      uint16_t flags, status_$t *status)
 {
     int i = gb_count;
 
@@ -108,6 +115,7 @@ void *DBUF_$GET_BLOCK(uint16_t vol_idx, int32_t block, uid_t *uid,
         gb_calls[i].block = block;
         gb_calls[i].uid = uid;
         gb_calls[i].block_hint = block_hint;
+        gb_calls[i].block_type = block_type;
         gb_calls[i].flags = flags;
     }
     gb_count++;
@@ -364,6 +372,7 @@ static int test_old_format_duplicate_uid(void)
     CHECK_EQ(77, gb_calls[0].block);
     CHECK(gb_calls[0].uid == &VTOC_$UID);
     CHECK_EQ(0u, gb_calls[0].flags);
+    CHECK_EQ(0u, gb_calls[0].block_type);   /* the (0x16,A6) word */
     /* one release, code 8, of the block we were handed */
     CHECK_EQ(1, sb_count);
     CHECK(sb_calls[0].buffer == buf_a);
@@ -706,7 +715,8 @@ static int test_full_bucket_allocates_new_block(void)
     CHECK_EQ(1, vol->cur_bkt_idx);
     /* 0xE38B36: the block is fetched with flag 0x10 (no read from disk) */
     CHECK_EQ(2, gb_count);
-    CHECK_EQ(0x10u, gb_calls[1].flags);
+    CHECK_EQ(0x10u, gb_calls[1].flags);     /* the (0x18,A6) word */
+    CHECK_EQ(0u, gb_calls[1].block_type);   /* the (0x16,A6) word */
     /* 0xE38B70-0xE38B86: 254 longwords cleared, then magic + self block.
      * Slot 0 of bucket 0 is where the new entry lands, so check a slot the
      * allocation does not touch. */

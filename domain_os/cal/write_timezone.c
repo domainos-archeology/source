@@ -36,7 +36,8 @@ void CAL_$WRITE_TIMEZONE(cal_$timezone_rec_t *tz_in, status_$t *status) {
     if (NETWORK_$DISKLESS >= 0) {
         PROC1_$SET_LOCK(CAL_LOCK_ID);
 
-        buffer = DBUF_$GET_BLOCK(vol_idx, 0, &LV_LABEL_$UID, 0, 0, &local_status);
+        buffer = DBUF_$GET_BLOCK(vol_idx, 0, &LV_LABEL_$UID, 0, 0, 0,
+                                 &local_status);
         if (local_status != status_$ok) {
             PROC1_$CLR_LOCK(CAL_LOCK_ID);
             *status = local_status;

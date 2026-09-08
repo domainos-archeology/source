@@ -133,4 +133,20 @@ _Static_assert(sizeof(volx_$entry_t) == VOLX_ENTRY_SIZE, "VOLX_ENTRY_SIZE");
 _Static_assert(sizeof(volx_$entry_t) * VOLX_MAX_VOLUMES == 0xC0,
                "VOLX_ table extent: D  E82604  VOLX_  size = C0");
 
+/*
+ * volx_$drop_mount_lv - the zero longword at 0x00E6B504.
+ *
+ * DIR_$DROP_MOUNT's third argument is a logical-volume number cell.  Both
+ * VOLX_ callers hand it the SAME constant cell, which sits in the VOLX_
+ * code segment between the routine that ends at 0x00E6B4FE and
+ * VOLX_$SHUTDOWN's `link.w` at 0x00E6B508 and holds 00 00 00 00:
+ *
+ *   VOLX_$DISMOUNT  0x00E6B4A8  pea (0x5a,PC)   -> 0x00E6B4AA + 0x5A
+ *   VOLX_$SHUTDOWN  0x00E6B548  pea (-0x46,PC)  -> 0x00E6B54A - 0x46
+ *
+ * Neither caller reads it back.  It was two separate function-local statics
+ * in the tree, which is one object too many (bead source-9oyx).
+ */
+extern uint32_t volx_$drop_mount_lv;
+
 #endif /* VOLX_INTERNAL_H */

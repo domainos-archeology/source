@@ -207,15 +207,13 @@ search_loop:                                        /* 0x00E3B294 */
 
         /* 0x00E3B2C2..0x00E3B2E2 */
         /*
-         * TODO: 0x00E3B2C8 pushes `clr.l`, which DBUF_$GET_BLOCK reads back
-         * as the two WORDS at its (0x16,A6) and (0x18,A6) (0x00E3A5CE /
-         * 0x00E3A5D2).  The single `uint32_t` parameter below emits the same
-         * four bytes on m68k, so the call is byte-correct; splitting the
-         * callee's prototype is bead source-ve50.
+         * 0x00E3B2C8 pushes one `clr.l`, which DBUF_$GET_BLOCK reads back as
+         * the two WORDS at its (0x16,A6) and (0x18,A6) (0x00E3A5CE /
+         * 0x00E3A5D2) - block_type 0 and flags 0.
          */
         bat_$cached_buffer = DBUF_$GET_BLOCK((uint16_t)vol_idx,
                                              (int32_t)bat_block, &BAT_$UID,
-                                             bat_block, 0, status);
+                                             bat_block, 0, 0, status);
         if (*status != status_$ok) {                /* 0x00E3B2EA */
             bat_$cached_buffer = NULL;
             bat_$cached_vol = 0;

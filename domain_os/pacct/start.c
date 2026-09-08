@@ -83,21 +83,21 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
         uint32_t dtv_out;
 
         /* Unmap buffer if mapped */
-        if (DAT_00e81804 != NULL) {
-            MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(DAT_00e81804), DAT_00e81800, 0, status_ret);
+        if (pacct_map_ptr != NULL) {
+            MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(pacct_map_ptr), pacct_map_offset, 0, status_ret);
         }
 
         /* Clear buffer state */
-        DAT_00e81804 = NULL;
-        DAT_00e81800 = 0;
-        DAT_00e817f8 = 0;
+        pacct_map_ptr = NULL;
+        pacct_map_offset = 0;
+        pacct_buf_remaining = 0;
 
         /* Unlock the old file */
         /* 0x00E5A7FA-0x00E5A812: `move.l (0x8,A5)` slot, `move.l #0x40000`
          * = mode word 4 + asid word 0, then three `clr.l`. */
         /* 0x00E5A7FA `pea (A3)`: the status goes to the caller's status_ret,
          * not to a local. */
-        (void)FILE_$PRIV_UNLOCK(&pacct_owner, (int32_t)DAT_00e817f4, 4, 0,
+        (void)FILE_$PRIV_UNLOCK(&pacct_owner, (int32_t)pacct_lock_handle, 4, 0,
                                 0, 0, 0, 0, &dtv_out, status_ret);
     }
 
@@ -110,7 +110,7 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
      * compiler passes its address, not a null pointer. */
     FILE_$PRIV_LOCK(file_uid, 0, 1, 4, 0, 0x0008, 0x0000,
                     0, 0, 0, &pacct_$start_nil_acl_ctx,
-                    0, &DAT_00e817f4, &rights_out, status_ret);
+                    0, &pacct_lock_handle, &rights_out, status_ret);
 
     if (*status_ret != status_$ok) {
         return;
@@ -140,10 +140,10 @@ void PACCT_$START(uid_t *file_uid, uint32_t unused, status_$t *status_ret)
     file_len = *(uint32_t *)(file_info + 0x14);
 
     /* Initialize accounting state */
-    DAT_00e81808 = file_len;    /* Current file position = file length */
-    DAT_00e81804 = NULL;        /* No mapping yet */
-    DAT_00e817fc = NULL;        /* No write pointer yet */
-    DAT_00e817f8 = 0;           /* No buffer space yet */
+    pacct_file_pos = file_len;    /* Current file position = file length */
+    pacct_map_ptr = NULL;        /* No mapping yet */
+    pacct_write_ptr = NULL;        /* No write pointer yet */
+    pacct_buf_remaining = 0;           /* No buffer space yet */
 
     /* Set accounting file owner */
     pacct_owner.high = file_uid->high;

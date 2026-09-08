@@ -51,7 +51,7 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status)
 
     /* Read volume label (block 0) */
     label = (bat_$label_t *)DBUF_$GET_BLOCK(vol_idx, 0, (void *)&LV_LABEL_$UID,
-                                             0, 0, status);
+                                             0, 0, 0, status);
     if (*status != status_$ok) {
         goto done;
     }

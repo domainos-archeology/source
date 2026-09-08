@@ -15,31 +15,32 @@
  * Argument block (link.w A6,-0x14 at 0x00E3B8BE):
  *
  *   (0x08,A6)  word  vol_idx     - 0x00E3B8CC
- *   (0x0a,A6)  BYTE  flags       - 0x00E3B8D0 move.b (0xa,A6),D3b
+ *   (0x0a,A6)  BYTE  skip_label  - 0x00E3B8D0 move.b (0xa,A6),D3b
  *   (0x0c,A6)  long  status      - 0x00E3B8D6
  *
- * TODO: argument 2 is a Domain byte boolean, not a word -- 0x00E3B8D0 reads
- * it with `move.b` at the even offset and the caller at 0x00E386DE pushes it
- * with `st -(SP)`.  It stays `int16_t` here because both callers live in
- * vtoc/ and encode the byte in the high half of a word; retyping it means
- * changing them in the same pass.  Tracked by bead source-xlyv.
+ * Argument 2 is a Domain byte boolean.  It is read with `move.b` at the EVEN
+ * offset 0x0A - the high half of the two-byte slot the m68k stack keeps for
+ * a byte push - and tested with `tst.b D3b` at 0x00E3B92E; the two callers
+ * push exactly one byte (`st -(SP)` at 0x00E386DE, `move.b D3b,-(SP)` at
+ * 0x00E3882A).  There is no second byte of information in that slot.
  *
  * Parameters:
- *   vol_idx - Volume index (1-6)
- *   flags   - If negative, don't write label; otherwise write updated stats
- *   status  - Output status code
+ *   vol_idx    - Volume index (1-6)
+ *   skip_label - If true (negative), release the volume without writing the
+ *                label back; otherwise write the updated statistics
+ *   status     - Output status code
  *
  * Assembly analysis:
  *   - Takes ML_LOCK_BAT for thread safety
  *   - If cached buffer belongs to this volume, flush and clear it
  *   - Validates volume is mounted
  *   - Clears mount status
- *   - If flags >= 0, updates volume label with current statistics
+ *   - If skip_label is false, updates volume label with current statistics
  *   - Copies partition info back to label for new format volumes
  *   - Updates timestamps and clears salvage flag
  *   - Ignores write-protected and storage-stopped errors
  */
-void BAT_$DISMOUNT(int16_t vol_idx, int16_t flags, status_$t *status)
+void BAT_$DISMOUNT(int16_t vol_idx, boolean skip_label, status_$t *status)
 {
     bat_$label_t *label;
     bat_$volume_t *vol;
@@ -69,8 +70,8 @@ void BAT_$DISMOUNT(int16_t vol_idx, int16_t flags, status_$t *status)
 
     vol = &bat_$volumes[vol_idx];
 
-    /* If flags is negative, just clear volume without updating label */
-    if (flags < 0) {
+    /* 0x00E3B92E `tst.b D3b`: true means clear the volume and stop here */
+    if (skip_label < 0) {
         vol->total_blocks = 0;
         *status = status_$ok;
         goto done;
@@ -78,7 +79,7 @@ void BAT_$DISMOUNT(int16_t vol_idx, int16_t flags, status_$t *status)
 
     /* Read volume label to update it */
     label = (bat_$label_t *)DBUF_$GET_BLOCK(vol_idx, 0, (void *)&LV_LABEL_$UID,
-                                             0, 0, status);
+                                             0, 0, 0, status);
     if (*status != status_$ok) {
         goto done;
     }

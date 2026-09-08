@@ -31,6 +31,6 @@ void PACCT_$INIT(void)
     pacct_owner.low = UID_$NIL.low;
 
     /* Clear state variables */
-    DAT_00e81804 = NULL;    /* map_ptr = 0 */
-    DAT_00e817f8 = 0;       /* buf_remaining = 0 */
+    pacct_map_ptr = NULL;    /* map_ptr = 0 */
+    pacct_buf_remaining = 0;       /* buf_remaining = 0 */
 }

@@ -198,5 +198,5 @@ void SMD_$INIT(void)
     SMD_GLOBALS.blank_timeout = 0xD69; /* 3433 */
 
     /* 0x00E34E9A pea (0xe2e520).l / jsr ML_$EXCLUSION_INIT */
-    ML_$EXCLUSION_INIT(&ml_$exclusion_t_00e2e520);
+    ML_$EXCLUSION_INIT(&smd_$trk_rect_mutex);
 }

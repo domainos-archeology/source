@@ -14,6 +14,7 @@
 
 #include "base/base.h"
 #include "rip/rip.h"   /* rip_$dest_addr_t: route_$port_t.xns_addr */
+#include "mac_os/mac_os.h" /* mac_os_$link_addr_t: route_$port_t.link_addr */
 
 /*
  * Port structure (0x5C = 92 bytes)
@@ -122,7 +123,38 @@ typedef void (*route_$port_status_fn_t)(uint16_t *socket_ptr,
 
 typedef struct route_$port_t {
     uint32_t    network;            /* 0x00: Network address */
-    uint8_t     _unknown0[0x1C];    /* 0x04: Unknown fields */
+    /*
+     * 0x04 and 0x06 are two words, and MAC_OS_$INIT sets BOTH to 1 with one
+     * store - `move.l #0x10001,(0x4,A0)` at 0x00E2F590, A0 being the port
+     * ROUTE_$PORTP[i] points at.
+     *
+     * n_net_addrs is proven: MAC_OS_$PUT_INFO bounds two nested loops with
+     * it - `move.w (0x6,A0),D2w / subq.w #0x1,D2w / bmi` at 0x00E0C28E and
+     * the same on the other port at 0x00E0C29C - and each loop walks
+     * 12-byte records starting at port+0x20, stepping with
+     * `lea (0xc,A2),A2` (0x00E0C2F4) and `add.l #0xc` (0x00E0C2FE).  Those
+     * records are the xns_addr field below.
+     *
+     * n_link_addrs has no proven reader in this image.  It is named from
+     * the record's shape: exactly one 24-byte mac_os_$link_addr_t sits at
+     * +0x08, the way exactly one 12-byte rip_$dest_addr_t sits at +0x20,
+     * and the two counts are initialised together.
+     * TODO: find a reader of +0x04 (bead source-p046 follow-up).
+     */
+    uint16_t    n_link_addrs;       /* 0x04: 1 at init (0x00E2F590) */
+    uint16_t    n_net_addrs;        /* 0x06: 1 at init; MAC_OS_$PUT_INFO's
+                                     *       loop bound (0x00E0C28E) */
+    /*
+     * 0x08..0x1F: this port's own link-level address.  MAC_OS_$INIT builds
+     * it as the two-word Apollo ring node id:
+     *   0x00E2F59C  move.w #0x2,(0x8,A2)        n_words = 2
+     *   0x00E2F5B4  move.w D1w,(0xa,A2)         addr[0] = (NODE_$ME >> 16) & 0xF
+     *   0x00E2F5B8  move.w (0x00e245a6).l,(0xc,A2)  addr[1] = NODE_$ME low word
+     * which is the same two-word form MAC_OS_$ARP writes for net_type 0 and
+     * 3 (see mac_os_$link_addr_t).  The record is 0x18 bytes, so it ends
+     * exactly where xns_addr begins.
+     */
+    mac_os_$link_addr_t link_addr;  /* 0x08..0x1F */
     rip_$dest_addr_t xns_addr;      /* 0x20: this port's own XNS endpoint
                                      *       {network, 6-byte host, socket}.
                                      *       RIP_$SEND_TO_PORT copies all 12
@@ -197,6 +229,11 @@ typedef struct route_$port_t {
 /* Port entry size must match the original 0x5C-byte stride */
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(route_$port_t, network)       == 0x00, "route_$port_t.network");
+_Static_assert(offsetof(route_$port_t, n_link_addrs)  == 0x04, "route_$port_t.n_link_addrs");
+_Static_assert(offsetof(route_$port_t, n_net_addrs)   == 0x06, "route_$port_t.n_net_addrs");
+_Static_assert(offsetof(route_$port_t, link_addr)     == 0x08, "route_$port_t.link_addr");
+_Static_assert(sizeof(((route_$port_t *)0)->link_addr) == 0x18,
+               "route_$port_t.link_addr is one mac_os_$link_addr_t, 0x08..0x1F");
 _Static_assert(offsetof(route_$port_t, xns_addr)      == 0x20, "route_$port_t.xns_addr");
 _Static_assert(offsetof(route_$port_t, active)        == 0x2C, "route_$port_t.active");
 _Static_assert(offsetof(route_$port_t, port_type)     == 0x2E, "route_$port_t.port_type");
@@ -417,19 +454,22 @@ _Static_assert(sizeof(route_$short_port_t) == 12,
 #endif
 
 /*
- * ROUTE_$FIND_PORT - Find port index by network/socket
+ * ROUTE_$FIND_PORT - Find port index by port type / socket
  *
- * Searches the port array for a port matching the given network
- * and socket identifiers.
+ * Walks ROUTE_$PORTP[0..7] and returns the index of the first entry whose
+ * active word is non-zero and whose PORT TYPE and socket both match.  The
+ * first argument is a port type, not a network address: 0x00E15B1E compares
+ * it against port+0x2E (route_$port_t.port_type) and 0x00E15B24 compares the
+ * second against the sign-extended port+0x30 (route_$port_t.socket).
  *
- * @param network   Network identifier to match
+ * @param port_type Port type to match, 1 = local, 2 = routing (port+0x2E)
  * @param socket    Socket identifier to match (sign-extended to 32-bit)
  *
  * @return Port index (0-7) if found, -1 if not found
  *
  * Original address: 0x00E15AF8
  */
-int16_t ROUTE_$FIND_PORT(uint16_t network, int32_t socket);
+int16_t ROUTE_$FIND_PORT(uint16_t port_type, int32_t socket);
 
 /*
  * ROUTE_$FIND_PORTP - Find port structure by network/socket

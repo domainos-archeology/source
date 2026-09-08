@@ -203,14 +203,15 @@ char CAL_$VERIFY(int *a, void *b, char *c, status_$t *d)
     *d = status_$ok;
     return 0;
 }
-void *DBUF_$GET_BLOCK(uint16_t a, int32_t b, uid_t *c, uint32_t d, uint32_t e,
-                      status_$t *f)
+void *DBUF_$GET_BLOCK(uint16_t a, int32_t b, uid_t *c, uint32_t d,
+                      uint16_t e, uint16_t e2, status_$t *f)
 {
     (void)a;
     (void)b;
     (void)c;
     (void)d;
     (void)e;
+    (void)e2;
     *f = status_$ok;
     return NULL;
 }

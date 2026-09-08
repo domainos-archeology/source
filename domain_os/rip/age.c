@@ -1,14 +1,14 @@
 /*
  * RIP_$AGE - Age routing table entries
  *
- * This function is called periodically to age routing table entries.
- * Routes transition through states based on their expiration times:
+ * Called periodically to age routing table entries.  Routes transition
+ * through states based on their expiration times:
  *
  *   VALID -> AGING -> EXPIRED -> UNUSED
  *
  * After aging, routing updates are sent to propagate changes.
  *
- * Original address: 0x00E155C0
+ * Original address: 0x00E155C0 (214 bytes)
  */
 
 #include "rip/rip_internal.h"
@@ -16,118 +16,127 @@
 /*
  * RIP_$AGE - Age routing table entries
  *
- * Algorithm:
- * 1. Acquire RIP lock
- * 2. For each entry in the routing table (64 entries):
- *    For each route slot (2 per entry: standard and non-standard):
- *      - If state is non-zero (not unused) and time has expired:
- *        - State 1 (VALID): If metric != 0, transition to AGING
- *        - State 2 (AGING): Set metric to infinity (0x11), mark recent changes,
- *                           transition to EXPIRED
- *        - State 3 (EXPIRED): Transition to UNUSED
- * 3. Release RIP lock
- * 4. Send routing updates for both standard and non-standard routes
+ * 1. Acquire the RIP lock (0x00E155CE bsr.w 0x00E154A4)
+ * 2. For each of the 64 entries (0x00E155D2 moveq #0x3f), for each of its two
+ *    route slots (0x00E155DC moveq #0x1):
+ *      - skip the slot when the state nibble is 0 (unused)
+ *      - skip it when TIME_$CLOCKH <= expiration, signed
+ *      - state 1 (VALID):   metric != 0 -> re-arm the timer, state := AGING
+ *        state 2 (AGING):   metric := infinity, raise the change flag,
+ *                           re-arm the timer, state := EXPIRED
+ *        anything else:     state := UNUSED
+ * 3. Release the lock (0x00E15672 bsr.w 0x00E154C4)
+ * 4. RIP_$SEND_UPDATES(false) then RIP_$SEND_UPDATES(true)
  *
- * The timeout period is RIP_ROUTE_TIMEOUT (0x168 = 360 ticks, approximately 6 minutes).
+ * TWO details the obvious transcription gets wrong, both from bead
+ * source-9oyx:
+ *
+ * SLOT ORDER.  The inner loop's `bne.b` at 0x00E155E2 tests the condition
+ * codes left by `clr.w D2w` (0x00E155DE) on the first pass and by
+ * `addq.w #0x1,D2w` (0x00E15664) on the second, so the FIRST slot visited is
+ * the one at `lea (0x17c,A2)` - entry+0x18, routes[1] - and the SECOND is
+ * `lea (0x168,A2)` - entry+0x04, routes[0].  D4 is `st` for the first and
+ * `clr.b` for the second, which is what selects std_recent_changes
+ * (0x00E15642 `st (0xc86,A5)`) versus recent_changes (0x00E15648
+ * `st (0xc88,A5)`).
+ *
+ * CLOCK RE-READS.  TIME_$CLOCKH is kept in A0 as an ADDRESS
+ * (0x00E155D4 `movea.l #0xe2b0d4,A0`) and dereferenced afresh at each use:
+ * the comparison at 0x00E15600, the VALID re-arm at 0x00E15620 and the
+ * AGING re-arm at 0x00E1564C.  A tick that lands between two of them gives
+ * a route an expiry one tick later than the comparison that selected it,
+ * and the loop is long enough (128 slots under a spin lock) for that to be
+ * observable.  Reproduced by reading the global at each of the three
+ * points rather than caching it.
+ *
+ * The timeout period is RIP_ROUTE_TIMEOUT (0x168 = 360 ticks, about 6
+ * minutes).
  */
 void RIP_$AGE(void)
 {
-    int entry_idx;          /* Current entry index (0-63) */
-    int route_idx;          /* Current route index (0=standard, 1=non-standard) */
-    rip_$entry_t *entry;    /* Current entry pointer */
-    rip_$route_t *route;    /* Current route pointer */
-    uint8_t state;          /* Route state (top 2 bits of flags) */
-    uint32_t current_time;  /* Current clock value */
+    int entry_idx;          /* D0: 63 downto 0 */
+    int slot;               /* which of the two slots this pass handles */
+    rip_$entry_t *entry;    /* A1, stepped by 0x2C at 0x00E1566A */
+    rip_$route_t *route;    /* A2/A3 */
+    uint8_t state;          /* D5: the flags byte's top two bits */
+    boolean is_std;         /* D4 */
 
-    /* Acquire RIP lock */
+    /* 0x00E155CE */
     RIP_$LOCK();
 
-    /* Get current time once for consistency */
-    current_time = TIME_$CLOCKH;
-
-    /* Iterate through all entries */
+    /* 0x00E155D2-0x00E155DA */
     entry = &RIP_$DATA.entries[0];
     for (entry_idx = RIP_TABLE_SIZE - 1; entry_idx >= 0; entry_idx--) {
 
-        /* Iterate through both route slots */
-        for (route_idx = 0; route_idx < RIP_ROUTES_PER_ENTRY; route_idx++) {
-            /* Get route pointer (slot 0 at offset 0x04, slot 1 at offset 0x18) */
-            route = &entry->routes[route_idx];
+        for (slot = 0; slot < RIP_ROUTES_PER_ENTRY; slot++) {
+            /*
+             * 0x00E155E2-0x00E155F0.  Pass 0 takes the `lea (0x17c,A2)`
+             * arm with D4 true, pass 1 the `lea (0x168,A2)` arm with D4
+             * false - routes[1] before routes[0].
+             */
+            if (slot == 0) {
+                is_std = true;                  /* 0x00E155E4 st D4b */
+                route  = &entry->routes[1];     /* 0x00E155E6 lea (0x17c,A2) */
+            } else {
+                is_std = false;                 /* 0x00E155EC clr.b D4b */
+                route  = &entry->routes[0];     /* 0x00E155EE lea (0x168,A2) */
+            }
 
-            /* Get state from top 2 bits of flags */
-            state = (route->flags >> RIP_STATE_SHIFT) & 0x03;
-
-            /* Skip unused routes */
+            /* 0x00E155F4-0x00E155FE */
+            state = (uint8_t)((route->flags & RIP_STATE_MASK) >> RIP_STATE_SHIFT);
             if (state == RIP_STATE_UNUSED) {
                 continue;
             }
 
-            /* Check if route has expired */
-            if ((int32_t)current_time <= (int32_t)route->expiration) {
-                continue;  /* Not expired yet */
+            /*
+             * 0x00E15600-0x00E15604: `move.l (A0),D3 / cmp.l (A2),D3 / ble`
+             * - a fresh read of TIME_$CLOCKH, compared signed.
+             */
+            if ((int32_t)TIME_$CLOCKH <= (int32_t)route->expiration) {
+                continue;
             }
 
-            /* Handle based on current state */
-            switch (state) {
-            case RIP_STATE_VALID:
+            /* 0x00E15606-0x00E15614: the three-way dispatch. */
+            if (state == RIP_STATE_VALID) {
                 /*
-                 * Valid route expired - transition to AGING if metric is non-zero.
-                 * Routes with metric 0 are direct routes that shouldn't age.
+                 * 0x00E15616-0x00E15636.  A metric of 0 is a direct route
+                 * and does not age.
                  */
                 if (route->metric != 0) {
-                    /* Set new expiration time */
-                    route->expiration = current_time + RIP_ROUTE_TIMEOUT;
-                    /* Transition to AGING state */
-                    route->flags = (route->flags & ~RIP_STATE_MASK) |
-                                   (RIP_STATE_AGING << RIP_STATE_SHIFT);
+                    /* 0x00E15620: TIME_$CLOCKH read again. */
+                    route->expiration = TIME_$CLOCKH + RIP_ROUTE_TIMEOUT;
+                    /* 0x00E1562A andi.b #0x3f / 0x00E15630 ori.b #-0x80 */
+                    route->flags = (uint8_t)((route->flags & ~RIP_STATE_MASK) |
+                                             (RIP_STATE_AGING << RIP_STATE_SHIFT));
                 }
-                break;
-
-            case RIP_STATE_AGING:
-                /*
-                 * Aging route expired - transition to EXPIRED.
-                 * Set metric to infinity and mark that we have changes to advertise.
-                 */
+            } else if (state == RIP_STATE_AGING) {
+                /* 0x00E15638 */
                 route->metric = RIP_INFINITY;
 
-                /* Mark recent changes flag based on route type */
-                if (route_idx == 1) {
-                    /* Non-standard route (index 1) */
-                    RIP_$DATA.std_recent_changes = 0xFF;
+                /* 0x00E1563E-0x00E1564A */
+                if (is_std < 0) {
+                    RIP_$DATA.std_recent_changes = 0xFF;   /* 0x00E15642 */
                 } else {
-                    /* Standard route (index 0) */
-                    RIP_$DATA.recent_changes = 0xFF;
+                    RIP_$DATA.recent_changes = 0xFF;       /* 0x00E15648 */
                 }
 
-                /* Set new expiration time */
-                route->expiration = current_time + RIP_ROUTE_TIMEOUT;
-                /* Transition to EXPIRED state */
-                route->flags |= RIP_STATE_MASK;  /* State 3 = 0xC0 */
-                break;
-
-            case RIP_STATE_EXPIRED:
-                /*
-                 * Expired route expired again - clear the entry.
-                 * Set state to UNUSED so the slot can be reused.
-                 */
-                route->flags &= ~RIP_STATE_MASK;  /* State 0 = unused */
-                break;
+                /* 0x00E1564C: TIME_$CLOCKH read a third time. */
+                route->expiration = TIME_$CLOCKH + RIP_ROUTE_TIMEOUT;
+                /* 0x00E15656 ori.b #-0x40: 0x80 -> 0xC0, i.e. EXPIRED. */
+                route->flags |= RIP_STATE_MASK;
+            } else {
+                /* 0x00E1565E andi.b #0x3f: back to UNUSED. */
+                route->flags &= (uint8_t)~RIP_STATE_MASK;
             }
         }
 
-        entry++;  /* Move to next entry */
+        entry++;                                /* 0x00E1566A lea (0x2c,A1),A1 */
     }
 
-    /* Release RIP lock */
+    /* 0x00E15672 */
     RIP_$UNLOCK();
 
-    /*
-     * Send routing updates for any changes.
-     * Call twice: once for standard routes (0), once for non-standard (0xFF).
-     *
-     * Note: The assembly shows pushing 0 and 0xFF (as -1 sign-extended to word),
-     * which corresponds to the two route types.
-     */
-    RIP_$SEND_UPDATES(0);       /* Standard routes */
-    RIP_$SEND_UPDATES(0xFF);    /* Non-standard routes */
+    /* 0x00E15676-0x00E1568A: `clr.w -(SP)` then `st -(SP)`. */
+    RIP_$SEND_UPDATES(false);
+    RIP_$SEND_UPDATES(true);
 }

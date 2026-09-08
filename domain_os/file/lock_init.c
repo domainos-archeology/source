@@ -121,7 +121,6 @@ void FILE_$LOCK_INIT(void)
      * are reproduced.
      */
     FILE_$LOCK_CONTROL.lot_free = 1;
-    FILE_$LOT_FREE = 1;
 
     /*
      * Step 4b: 0x00E327BE-0x00E327CA clears 0xFB = 251 words from
@@ -132,24 +131,20 @@ void FILE_$LOCK_INIT(void)
     }
 
     /*
-     * The standalone FILE_$LOT_HASHTAB aliases all 251 words of lock_map at
-     * 0xE821F0 in the m68k image (the SAU2 map names +0xC8 FILE_$LOT_HASHTAB);
-     * on a host build they are distinct objects, so keep them in step.
+     * FILE_$LOT_HASHTAB IS lock_map - the map's name for
+     * FILE_$LOCK_CONTROL + 0xC8 - so the loop above is the whole of the
+     * clear.  The tree used to carry a second object of that name and clear
+     * it here as well (bead source-q4qz).
      */
-    for (i = 0; i < FILE_LOT_HASH_BUCKETS; i++) {
-        FILE_$LOT_HASHTAB[i] = 0;
-    }
 
     /* Step 5: 0x00E327CE-0x00E327DA, EC_$INIT(0xE2C028). */
     EC_$INIT(&FILE_$UID_LOCK_EC);
 
     /* 0x00E327E2: free-list head written a second time. */
     FILE_$LOCK_CONTROL.lot_free = 1;
-    FILE_$LOT_FREE = 1;
 
     /* 0x00E327E8: `move.w #0x1,(0x2cc,A0)` - highest allocated entry index. */
     FILE_$LOCK_CONTROL.flag_2cc = 1;
-    FILE_$LOT_HIGH = 1;
 
     /* 0x00E327EE-0x00E327F8: `pea (0xc0,A0)` / UID_$GEN (jsr 0x00E1A018). */
     UID_$GEN(&FILE_$LOCK_CONTROL.generated_uid);

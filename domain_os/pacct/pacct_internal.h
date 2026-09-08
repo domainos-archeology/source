@@ -61,14 +61,29 @@ _Static_assert(sizeof(pacct_state_t) == 0x20, "pacct_state_t size");
  */
 extern pacct_state_t pacct_state;
 
-/* Aliases for individual fields (matching Ghidra decompiler output) */
+/*
+ * Short names for the fields of the one accounting state block, which the
+ * image reaches as A5-relative displacements off 0x00E817EC:
+ *
+ *   (A5)      0x00E817EC  owner          PACCT_$ON 0x00E5A9AA
+ *   (0x8,A5)  0x00E817F4  lock_handle    PACCT_$START 0x00E5A812
+ *   (0xc,A5)  0x00E817F8  buf_remaining  PACCT_$LOG 0x00E5AC22
+ *   (0x10,A5) 0x00E817FC  write_ptr      PACCT_$LOG 0x00E5ACA4
+ *   (0x14,A5) 0x00E81800  map_offset     PACCT_$LOG 0x00E5AC6E
+ *   (0x18,A5) 0x00E81804  map_ptr        PACCT_$SHUTDN 0x00E5A6EE
+ *   (0x1c,A5) 0x00E81808  file_pos       PACCT_$LOG 0x00E5ACC4
+ *
+ * These replace the DAT_<address> spellings the decompiler produced (bead
+ * source-ffh1); the SAU2 map names only the segment,
+ * "D E817EC PACCT size = 20", not the fields inside it.
+ */
 #define pacct_owner         pacct_state.owner
-#define DAT_00e817f4        pacct_state.lock_handle
-#define DAT_00e817f8        pacct_state.buf_remaining
-#define DAT_00e817fc        pacct_state.write_ptr
-#define DAT_00e81800        pacct_state.map_offset
-#define DAT_00e81804        pacct_state.map_ptr
-#define DAT_00e81808        pacct_state.file_pos
+#define pacct_lock_handle   pacct_state.lock_handle
+#define pacct_buf_remaining pacct_state.buf_remaining
+#define pacct_write_ptr     pacct_state.write_ptr
+#define pacct_map_offset    pacct_state.map_offset
+#define pacct_map_ptr       pacct_state.map_ptr
+#define pacct_file_pos      pacct_state.file_pos
 
 /*
  * ============================================================================

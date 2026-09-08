@@ -216,12 +216,17 @@ void ASKNODE_$SERVER(asknode_$server_ctx_t *ctx, int32_t *routing_info)
             }
         }
 
-        /* 0x00E65B80 - 0x00E65B9E */
-        should_propagate =
-            (reply.hdr.status == status_$ok) &&
-            ((int16_t)(request.param1 >> 16) > 0) &&
-            (dest_node != NODE_$ME) &&
-            ((rx_flags & 0x0004) == 0) ? (int8_t)0xFF : 0;
+        /*
+         * 0x00E65B80 - 0x00E65B9E.  The image builds this as a chain of
+         * Domain booleans in D2 - each `sXX` yields 0x00 or 0xFF and the
+         * terms are combined with `and.b` - and the decision at 0x00E65E4A
+         * is `tst.b D2b` / `bpl`, i.e. a SIGN test.  Written the same way
+         * here so the bit pattern, not just the truth value, matches.
+         */
+        should_propagate  = ASKNODE_BOOL(reply.hdr.status == status_$ok);
+        should_propagate &= ASKNODE_BOOL((int16_t)(request.param1 >> 16) > 0);
+        should_propagate &= ASKNODE_BOOL(dest_node != NODE_$ME);
+        should_propagate &= ASKNODE_BOOL((rx_flags & 0x0004) == 0);
 
         ctx->request_type = 0;                              /* 0x00E65BA0 */
 
@@ -271,12 +276,21 @@ void ASKNODE_$SERVER(asknode_$server_ctx_t *ctx, int32_t *routing_info)
         request.count--;                                    /* 0x00E65C42 */
         ctx->clock_lo   = request.param3;                   /* 0x00E65C46 */
 
-        /* 0x00E65C4C - 0x00E65C72 */
-        should_propagate =
-            (reply.hdr.status == status_$ok) &&
-            (request.count > 0) &&
-            ((request.node_id != NODE_$ME) || (request.forwarded != 0)) &&
-            ((rx_flags & 0x0004) == 0) ? (int8_t)0xFF : 0;
+        /*
+         * 0x00E65C4C - 0x00E65C72.  Same byte chain as the WHO_LOCAL arm
+         * above, except that the "not me" term is combined with the
+         * forwarded flag by `or.b (-0x258,A6),D0b` at 0x00E65C66 - a
+         * BITWISE or of the raw forwarded BYTE, not a logical one.  The
+         * final `tst.b D2b` / `bpl` at 0x00E65E4A tests the sign, so a
+         * forwarded byte that is non-zero but positive (anything other
+         * than a proper Domain true) leaves the whole chain positive and
+         * the request is NOT propagated.
+         */
+        should_propagate  = ASKNODE_BOOL(reply.hdr.status == status_$ok);
+        should_propagate &= ASKNODE_BOOL(request.count > 0);
+        should_propagate &= (int8_t)(ASKNODE_BOOL(request.node_id != NODE_$ME) |
+                                     request.forwarded);
+        should_propagate &= ASKNODE_BOOL((rx_flags & 0x0004) == 0);
 
         ctx->request_type = ASKNODE_REQ_WHO_REMOTE;         /* 0x00E65C74 */
 

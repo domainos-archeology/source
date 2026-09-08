@@ -43,6 +43,7 @@
 #include "hint/hint.h"
 #include "xns_idp/xns_idp.h"
 #include "app/app.h"
+#include "sock/sock.h"
 #include "arch/arch.h"
 
 /*
@@ -76,6 +77,19 @@
 #define PORT_STATUS_DISABLE_STD     0x0E  /* 0x00E6A3C2 / 0x00E6A4BA: 1,2,3 */
 #define PORT_STATUS_N_ROUTING_MASK  0x28  /* 0x00E6A3DA / 0x00E6A50A: 3,5 */
 #define PORT_STATUS_DISABLE_N       0x16  /* 0x00E6A3E8 / 0x00E6A4FA: 1,2,4 */
+
+/*
+ * Port types route_$close_port accepts: `moveq #0x6,D1 / btst.l D0,D1` at
+ * 0x00E69F08, i.e. types 1 and 2.
+ */
+#define PORT_TYPE_VALID_MASK        0x06
+
+/*
+ * Old-status values that make route_$close_port drop the port from the
+ * routing counters: `moveq #0x28,D1 / btst.l D0,D1` at 0x00E69F2E, i.e.
+ * statuses 3 and 5.
+ */
+#define PORT_STATE_DECREMENT_MASK   0x28
 
 /* Largest queue length a user port may ask for (0x00E6A09A cmpi.w #0x20) */
 #define MAX_USER_PORT_QUEUE_LENGTH  0x20
@@ -127,6 +141,140 @@ static const uint16_t ROUTE_$NULL_SERVICE_REC[2] = { 0x0000, 0x0000 };
 
 /*
  * =============================================================================
+ * route_$close_port - the nested procedure at 0x00E69EC2
+ * =============================================================================
+ *
+ * ROUTE_$SERVICE reaches it with `bsr.w 0x00e69ec2` (0x00E6A05E) and pushes
+ * NOTHING.  The callee walks back into its parent's frame with
+ * `movea.l (A6),A2` (0x00E69ECA) and reads four things from it:
+ *
+ *   (0x0c,A2)   ROUTE_$SERVICE's port_info argument  (0x00E69ECE, 0x00E69EDA,
+ *               0x00E69F00)
+ *   (0x10,A2)   ROUTE_$SERVICE's status_ret argument (0x00E69EF2, 0x00E69F0E,
+ *               0x00E69F5A)
+ *   (-0x48,A2)  ROUTE_$SERVICE's short_port local     (0x00E69F42, 0x00E69F62)
+ *   (-0x62,A2)  ROUTE_$SERVICE's old_status local     (0x00E69F2A)
+ *
+ * The last one is read on a path where ROUTE_$SERVICE has not written it:
+ * the close-port arm at 0x00E6A056 runs before anything stores to A6-0x62
+ * (the first such store is at 0x00E6A448, in the status arm).  The value
+ * tested is therefore whatever the frame happened to contain, and this
+ * translation reproduces that by taking it as a parameter and letting the
+ * caller pass its own uninitialised local.
+ *
+ * Its own frame is `link.w A6,-0x18`, whose only named cell is the 12-byte
+ * `source` at A6-0x10 that it hands to RIP_$UPDATE_D.
+ */
+static void route_$close_port(route_$short_port_t *port_info,
+                              status_$t *status_ret,
+                              uint16_t old_status,
+                              route_$short_port_t *short_port)
+{
+    int16_t port_index;
+    route_$port_t *port;
+    rip_$xns_addr_t source;             /* its own A6-0x10 */
+
+    /*
+     * 0x00E69ECC-0x00E69EEA.  The first argument is the port TYPE word at
+     * port_info+0x06, not a network: ROUTE_$FIND_PORT compares it against
+     * port+0x2E (0x00E15B1E) and its second argument against the
+     * sign-extended port+0x30 (0x00E15B24).
+     */
+    port_index = ROUTE_$FIND_PORT(port_info->port_type,
+                                  (int32_t)(int16_t)port_info->socket);
+
+    /* 0x00E69EEC-0x00E69EFC */
+    if (port_index == -1) {
+        *status_ret = status_$internet_unknown_network_port;
+        return;
+    }
+
+    /*
+     * 0x00E69F00-0x00E69F18: `moveq #0x6,D1 / btst.l D0,D1` over the same
+     * port-type word, i.e. types 1 and 2 only.
+     */
+    if (((1u << (port_info->port_type & 0x1F)) & PORT_TYPE_VALID_MASK) == 0) {
+        *status_ret = status_$internet_illegal_port_type;
+        return;
+    }
+
+    /* 0x00E69F1C-0x00E69F26 */
+    port = &ROUTE_$PORT_ARRAY[port_index];
+
+    /*
+     * 0x00E69F2A-0x00E69F40: `move.w (-0x62,A2),D0w / moveq #0x28,D1 /
+     * btst.l D0,D1` - the PARENT's old_status local, not this port's status
+     * word, and unwritten on this path (see the note above).  When the bit
+     * is set the port is dropped from the routing counters with
+     * ROUTE_$DECREMENT_PORT(true, port_index, 0) - `st -(SP)` at
+     * 0x00E69F3A pushes the byte true.
+     */
+    if (((1u << (old_status & 0x1F)) & PORT_STATE_DECREMENT_MASK) != 0) {
+        ROUTE_$DECREMENT_PORT(true, port_index, 0);
+    }
+
+    /* 0x00E69F42-0x00E69F4C: fills the PARENT's short_port local. */
+    ROUTE_$SHORT_PORT(port, short_port);
+
+    /*
+     * 0x00E69F4E-0x00E69F58: the source address is the port's network
+     * followed by six bytes of whatever this frame held, with the low 20
+     * bits of the longword at A6-0xA masked off.
+     *
+     *   00e69f4e  move.l (A3),(-0x10,A6)
+     *   00e69f52  andi.l #-0x100000,(-0xa,A6)
+     */
+    source.network = port->network;
+    {
+        uint32_t host_tail = ((uint32_t)source.host[2] << 24) |
+                             ((uint32_t)source.host[3] << 16) |
+                             ((uint32_t)source.host[4] << 8) |
+                             (uint32_t)source.host[5];
+        host_tail &= 0xFFF00000;
+        source.host[2] = (uint8_t)(host_tail >> 24);
+        source.host[3] = (uint8_t)(host_tail >> 16);
+        source.host[4] = (uint8_t)(host_tail >> 8);
+        source.host[5] = (uint8_t)host_tail;
+    }
+
+    /*
+     * 0x00E69F5A-0x00E69F76.  The two `pea (d,PC)` cells resolve into the
+     * same constants ROUTE_$SERVICE uses (the m68k PC for `pea (d,PC)` is
+     * the instruction address + 2):
+     *   0x00E69F66 -> 0x00E69F68 + 0x48 = 0x00E69FB0 = RIP_HOP_COUNT_16
+     *   0x00E69F5E -> 0x00E69F60 + 0x4E = 0x00E69FAE = RIP_OP_STD
+     */
+    RIP_$UPDATE_D(&port->network, &source, &RIP_HOP_COUNT_16,
+                  (const uint8_t *)short_port, &RIP_OP_STD, status_ret);
+
+    /* 0x00E69F7A-0x00E69F9E */
+    if (port->port_type == ROUTE_PORT_TYPE_ROUTING) {
+        SOCK_$CLOSE(port->socket);          /* 0x00E69F84 */
+        ROUTE_$N_USER_PORTS--;              /* 0x00E69F90 */
+        ROUTE_$CLEANUP_WIRED();             /* 0x00E69F96 */
+
+        /*
+         * 0x00E69F9A: `movea.l (0x44,A3),A0 / clr.b (A0)`.  +0x44 is
+         * route_$port_t.driver_stats, the address of this port's
+         * route_$port_stats_t, and the byte cleared is the HIGH byte of
+         * that block's flags word - the "in use" boolean
+         * NET_IO_$CREATE_PORT sets with `st (A1)` at 0x00E5A682.  Done as
+         * a word mask so it does not depend on the host's byte order.
+         */
+        {
+            route_$port_stats_t *stats =
+                (route_$port_stats_t *)ARCH_VA_TO_PTR(port->driver_stats);
+
+            stats->flags &= 0x00FF;
+        }
+    }
+
+    /* 0x00E69FA0 */
+    port->active = 0;
+}
+
+/*
+ * =============================================================================
  * Implementation
  * =============================================================================
  */
@@ -156,18 +304,29 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
     ML_$EXCLUSION_START(&ROUTE_$SERVICE_MUTEX);
 
     /*
-     * 0x00E6A056-0x00E6A064.  ROUTE_$CLOSE_PORT (0x00E69EC2) is a nested
-     * Pascal procedure: the image reaches it with "bsr.w" and pushes nothing,
-     * and the callee picks the caller's arguments up through the saved frame
-     * pointer ("movea.l (A6),A2" at 0x00E69ECA, then (0xc,A2) and (0x10,A2)).
-     * It is still a separate translation unit here, so the two arguments it
-     * reads that way are passed explicitly.
-     * TODO: fold ROUTE_$CLOSE_PORT into this file as a static that shares
-     * this frame - it also reads the caller's local at A6-0x62 (bead
-     * source-kc3d).
+     * 0x00E6A056-0x00E6A064.  route_$close_port (0x00E69EC2) is a nested
+     * Pascal procedure of this routine: `bsr.w` with nothing pushed, and the
+     * callee reads this frame through the saved frame pointer.  The four
+     * values it takes that way are passed explicitly here - including
+     * old_status, which this routine has NOT written on this path (its first
+     * store is at 0x00E6A448), so the value the image tests is whatever the
+     * frame held.
      */
     if (*operation & SERVICE_OP_CLOSE_PORT) {
-        ROUTE_$CLOSE_PORT(port_info, status_ret);
+        /*
+         * old_status is deliberately read before it is written: that is what
+         * 0x00E69F2A does with (-0x62,A2).  The warning is suppressed rather
+         * than "fixed" with an initialiser, because giving it a value would
+         * be an invention, not a transcription.
+         */
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#endif
+        route_$close_port(port_info, status_ret, old_status, &short_port);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
         /* 0x00E6A062 branches into the unlock at 0x00E6A274 */
         ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
         return;

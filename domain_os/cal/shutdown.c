@@ -9,7 +9,8 @@
 void CAL_$SHUTDOWN(status_$t *status) {
     void *buffer;
 
-    buffer = DBUF_$GET_BLOCK(CAL_$BOOT_VOLX, 0, &LV_LABEL_$UID, 0, 0, status);
+    buffer = DBUF_$GET_BLOCK(CAL_$BOOT_VOLX, 0, &LV_LABEL_$UID, 0, 0, 0,
+                             status);
     if (*status == status_$ok) {
         // Write current time to both locations
         *(uint *)((char *)buffer + 0xB0) = TIME_$CLOCKH;

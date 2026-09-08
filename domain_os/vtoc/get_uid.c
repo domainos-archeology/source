@@ -73,7 +73,8 @@ void VTOC_$GET_UID(int16_t *vol_idx_ptr, uint16_t *vtoc_idx_ptr, uint32_t *entry
         }
 
         /* Get the block */
-        buf = (uint32_t *)DBUF_$GET_BLOCK(vol_idx, block, &local_uid, block, 0, status_ret);
+        buf = (uint32_t *)DBUF_$GET_BLOCK(vol_idx, block, &local_uid, block, 0, 0,
+                                          status_ret);
         if (*status_ret != status_$ok) {
             goto cleanup;
         }

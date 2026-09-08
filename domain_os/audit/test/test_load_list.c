@@ -132,7 +132,13 @@ void ML_$EXCLUSION_START(ml_$exclusion_t *e) { excl_start_calls++; (void)e; }
 void ML_$EXCLUSION_STOP(ml_$exclusion_t *e)  { excl_stop_calls++;  (void)e; }
 
 static int clear_calls;
-void audit_$clear_hash_table(void) { clear_calls++; }
+static status_$t *clear_status_arg;
+static status_$t *load_status_cell;
+void audit_$clear_hash_table(status_$t *status_ret)
+{
+    clear_calls++;
+    clear_status_arg = status_ret;
+}
 
 static int   add_calls;
 static uid_t add_uids[8];
@@ -192,8 +198,10 @@ static int8_t run_load(status_$t resolve_st, uint16_t version,
     unlock_mode_arg = NULL;
     excl_start_calls = excl_stop_calls = 0;
     clear_calls = add_calls = advance_calls = 0;
+    clear_status_arg = NULL;
     memset(add_uids, 0, sizeof(add_uids));
 
+    load_status_cell = &status;
     r = audit_$load_list(&status);
     if (status_out != NULL) {
         *status_out = status;
@@ -274,6 +282,13 @@ TEST(loads_the_header_and_entries)
 
     ASSERT_EQ((int8_t)-1, r);            /* 0x00E71454: st D2b */
     ASSERT_EQ(1, clear_calls);
+    /*
+     * source-fxlx: the nested procedure forwards audit_$load_list's OWN
+     * status_ret (its A6+0x08, read through A2 at 0x00E71294), so the
+     * pointer it hands audit_$alloc must be the very cell the caller
+     * passed in.
+     */
+    ASSERT_TRUE(clear_status_arg == load_status_cell);
     ASSERT_EQ(0x0003, AUDIT_$DATA.flags);
     ASSERT_EQ(0x01020304u, AUDIT_$DATA.list_uid.high);
     ASSERT_EQ(0x05060708u, AUDIT_$DATA.list_uid.low);

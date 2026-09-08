@@ -116,10 +116,20 @@ _Static_assert(offsetof(asknode_request_t, node_id)   == 0x04, "asknode_request_
 _Static_assert(offsetof(asknode_request_t, param1)    == 0x08, "asknode_request_t.param1");
 _Static_assert(offsetof(asknode_request_t, param2)    == 0x0C, "asknode_request_t.param2");
 _Static_assert(offsetof(asknode_request_t, forwarded) == 0x10, "asknode_request_t.forwarded");
+
 _Static_assert(offsetof(asknode_request_t, count)     == 0x12, "asknode_request_t.count");
 _Static_assert(offsetof(asknode_request_t, param3)    == 0x14, "asknode_request_t.param3");
 _Static_assert(sizeof(asknode_request_t) == 0x18, "asknode_request_t must be 0x18 bytes");
 #endif
+
+/*
+ * A Domain boolean built the way the m68k `sXX` instructions build one:
+ * 0xFF for true, 0x00 for false, as a SIGNED byte so that the "< 0" and
+ * `bmi`/`bpl` tests the image performs on it behave the same.  Used by
+ * ASKNODE_$SERVER to reproduce the `and.b`/`or.b` propagate chain at
+ * 0x00E65B80 and 0x00E65C4C byte for byte.
+ */
+#define ASKNODE_BOOL(cond) ((int8_t)((cond) ? -1 : 0))
 
 /*
  * asknode_response_t - Network response structure

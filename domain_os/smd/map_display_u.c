@@ -20,6 +20,16 @@
  *                                  holding 0x0006 (MST_$MAP's mode)
  *   0x00E6F93C pea (0x3a,PC)    -> 0x00E6F93E + 0x3A = 0x00E6F978 again
  * (contents read with gsk).
+ *
+ * MST_$MAP's arguments 2 and 5 really are the SAME cell, not two adjacent
+ * ones: `gsk xrefs to 0xE6F978` lists both 0x00E6F928 and 0x00E6F93C, and
+ * 0x00E6F97A has no references at all, so the cell is one longword spanning
+ * 0x00E6F978..0x00E6F97B.  Both arguments are pointers to a longword in
+ * MST_$MAP's own frame reads - `movea.l (0xc,A6),A4 / move.l (A4)` at
+ * 0x00E438AA and `movea.l (0x18,A6),A2 / move.l (A2)` at 0x00E4389E - which
+ * is why one four-byte zero serves both.  (Checked for bead source-9oyx,
+ * which suspected three distinct cells; there are two, 0x00E6F976 and
+ * 0x00E6F978, plus the shared byte at 0x00E6E45A.)
  */
 static const uint32_t smd_$map_zero = 0;         /* 0x00E6F978 */
 static const uint16_t smd_$map_mode = 6;         /* 0x00E6F976 */

@@ -493,8 +493,16 @@ extern void *DISK_$EC;
 void DISK_$INIT(void);
 
 /* Buffer operations */
+/*
+ * DISK_$GET_BLOCK (0x00E3BB80) - DBUF_$GET_BLOCK under the disk lock.
+ *
+ * 0x00E3BB94-0x00E3BBB2 forwards all six arguments verbatim, the two
+ * separate WORDS at (0x16,A6) and (0x18,A6) among them, so its frame is
+ * DBUF_$GET_BLOCK's frame.  See dbuf/dbuf.h for the two words' meaning.
+ */
 void *DISK_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *expected_uid,
-                      uint16_t param_4, uint16_t param_5, status_$t *status);
+                      uint32_t block_hint, uint16_t block_type,
+                      uint16_t flags, status_$t *status);
 void DISK_$SET_BUFF(void *buffer, uint16_t flags, void *param_3);
 void DISK_$INVALIDATE(uint16_t vol_idx);
 
@@ -521,6 +529,7 @@ void DISK_$SORT(void *dev_entry, void **queue_ptr);
  * two are the same four-byte cell.
  */
 void DISK_$GET_QBLKS(int16_t count, int32_t *qblk_head, uint32_t *qblk_tail);
+
 void DISK_$RTN_QBLKS(int16_t count, int32_t qblk_head, uint32_t qblk_tail);
 
 /*

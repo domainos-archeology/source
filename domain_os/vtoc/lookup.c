@@ -56,7 +56,7 @@ void VTOC_$LOOKUP(vtoc_$lookup_req_t *req, status_$t *status_ret)
                 if (vtoc_$data.format[vol_idx] < 0) {
                     /* New format - bucket lookup */
                     buf = (uint32_t *)DBUF_$GET_BLOCK(vol_idx, block, &VTOC_BKT_$UID,
-                                                      block, 0, status_ret);
+                                                      block, 0, 0, status_ret);
                     if (*status_ret != status_$ok) {
                         goto check_found;
                     }
@@ -96,7 +96,7 @@ void VTOC_$LOOKUP(vtoc_$lookup_req_t *req, status_$t *status_ret)
                 } else {
                     /* Old format - linear search through VTOC blocks */
                     buf = (uint32_t *)DBUF_$GET_BLOCK(vol_idx, block, &VTOC_$UID,
-                                                      block, 0, status_ret);
+                                                      block, 0, 0, status_ret);
                     if (*status_ret != status_$ok) {
                         goto check_found;
                     }

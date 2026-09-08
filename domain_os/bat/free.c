@@ -111,7 +111,8 @@ void BAT_$FREE(uint32_t *blocks, int16_t count, int16_t vol_idx,
 
             bat_$cached_buffer = DBUF_$GET_BLOCK((uint16_t)vol_idx,
                                                  (int32_t)bat_block, &BAT_$UID,
-                                                 bat_block, 0, &local_status);
+                                                 bat_block, 0, 0,
+                                                 &local_status);
             if (local_status != status_$ok) {       /* 0x00E3B636 */
                 bat_$cached_buffer = NULL;
                 bat_$cached_vol = 0;

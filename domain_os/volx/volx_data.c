@@ -12,3 +12,10 @@
 #include "volx/volx_internal.h"
 
 volx_$entry_t volx_$table_storage[VOLX_MAX_VOLUMES];
+
+/*
+ * The zero longword at 0x00E6B504 that both VOLX_$DISMOUNT (0x00E6B4A8) and
+ * VOLX_$SHUTDOWN (0x00E6B548) pass as DIR_$DROP_MOUNT's lv_num argument.
+ * One cell in the image, so one object here.
+ */
+uint32_t volx_$drop_mount_lv = 0;

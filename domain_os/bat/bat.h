@@ -327,11 +327,19 @@ void BAT_$MOUNT(int16_t vol_idx, int8_t salvage_ok, status_$t *status);
  * Flushes and releases BAT data structures for a volume.
  * Updates the volume label with current statistics if requested.
  *
- * @param vol_idx    Volume index (0-6)
- * @param flags      If negative, don't write label; otherwise write updated stats
- * @param status     Output status code
+ * Argument 2 is a Domain BYTE boolean, not a word: 0x00E3B8D0 reads it with
+ * `move.b (0xa,A6),D3b` at the even offset and tests it with `tst.b D3b` at
+ * 0x00E3B92E, and both callers push a single byte - `st -(SP)` at
+ * 0x00E386DE (VTOC_$MOUNT's failed-mount path) and `move.b D3b,-(SP)` at
+ * 0x00E3882A (VTOC_$DISMOUNT forwarding its own byte argument).
+ *
+ * @param vol_idx      Volume index (0-6)
+ * @param skip_label   Domain boolean.  True (negative) means release the
+ *                     volume without writing the label back; false means
+ *                     write the updated statistics.
+ * @param status       Output status code
  */
-void BAT_$DISMOUNT(int16_t vol_idx, int16_t flags, status_$t *status);
+void BAT_$DISMOUNT(int16_t vol_idx, boolean skip_label, status_$t *status);
 
 /*
  * BAT_$N_FREE - Get free block count

@@ -19,9 +19,20 @@ void HINT_$clear_hintfile(void)
     int16_t slot_idx;
     int16_t addr_idx;
     status_$t status;
+    /*
+     * 0x00E311A2 `pea (-0x10,A6)` is AST_$TRUNCATE's fourth argument, a
+     * one-BYTE Domain boolean out-cell: the callee writes it with
+     * `move.b D3b,(A0)` at 0x00E05C70 and `st (A1)` at 0x00E05DB6.  A byte
+     * is the right width, and nothing here reads it back.
+     */
     uint8_t truncate_result;
 
-    /* Truncate the hint file to zero length */
+    /*
+     * 0x00E3119C-0x00E311BA: AST_$TRUNCATE(&uid, 0L, 0, &byte_out, &status).
+     * The `lea (0x14,SP),SP` that pops the call accounts for 2 (result slot)
+     * + 4 + 4 + 2 + 4 + 4 = 0x14, which is what fixes the third argument as
+     * a word and the second as a longword.
+     */
     AST_$TRUNCATE(&HINT_$HINTFILE_UID, 0, 0, &truncate_result, &status);
 
     hintfile = HINT_$HINTFILE_PTR;
@@ -30,24 +41,36 @@ void HINT_$clear_hintfile(void)
     hintfile->header.version = HINT_FILE_VERSION;  /* 7 = initialized */
     hintfile->header.net_port = 0;
 
-    /* Copy network info from ROUTE_$PORTP + 0x2E */
-    {
-        uint32_t *net_info = (uint32_t *)((uint8_t *)ROUTE_$PORTP[0] + 0x2E);
-        hintfile->header.net_info = *net_info;
-    }
+    /*
+     * 0x00E311D2-0x00E311DE: ONE longword out of ROUTE_$PORTP[0]+0x2E, which
+     * is route_$port_t.port_type followed by route_$port_t.socket.  Built
+     * from the two words rather than read through a longword cast, so the
+     * value is the m68k one on a little-endian host too.
+     */
+    hintfile->header.net_info =
+        ((uint32_t)ROUTE_$PORTP[0]->port_type << 16) | ROUTE_$PORTP[0]->socket;
 
-    /* Clear all hash buckets */
-    for (bucket_idx = HINT_HASH_SIZE; bucket_idx >= 0; bucket_idx--) {
+    /*
+     * Clear all hash buckets.  0x00E311E0 `moveq #0x40,D0` / 0x00E3121E
+     * `dbf D0w` is 65 iterations over a 0x54-byte stride, so slots 0..64 are
+     * cleared even though the hash only ever selects 0..63 - hence
+     * HINT_HASH_SLOTS rather than HINT_HASH_SIZE (bead source-nrfl).
+     */
+    for (bucket_idx = HINT_HASH_SLOTS - 1; bucket_idx >= 0; bucket_idx--) {
         bucket = &hintfile->buckets[bucket_idx];
 
-        for (slot_idx = HINT_SLOTS_PER_BUCKET; slot_idx >= 0; slot_idx--) {
+        /* 0x00E311E6 `moveq #0x2,D1` + `dbf`: three slots, stride 0x1C. */
+        for (slot_idx = HINT_SLOTS_PER_BUCKET - 1; slot_idx >= 0; slot_idx--) {
             slot = &bucket->slots[slot_idx];
 
-            /* Clear the UID key */
+            /* 0x00E311F0 `clr.l (-0x10,A1)`: the slot's UID key. */
             slot->uid_low_masked = 0;
 
-            /* Clear all address entries */
-            for (addr_idx = HINT_ADDRS_PER_SLOT; addr_idx >= 0; addr_idx--) {
+            /*
+             * 0x00E311F4 `moveq #0x2,D3` + `dbf`: three 8-byte address
+             * pairs, cleared as 0x00E311FC / 0x00E31200 `clr.l`.
+             */
+            for (addr_idx = HINT_ADDRS_PER_SLOT - 1; addr_idx >= 0; addr_idx--) {
                 slot->addrs[addr_idx].flags = 0;
                 slot->addrs[addr_idx].node_id = 0;
             }

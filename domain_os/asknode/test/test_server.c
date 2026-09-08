@@ -716,6 +716,41 @@ TEST(who_remote_target_selection)
     ASSERT_EQ(0x2E, mock_reply_type_of_last_send());
 }
 
+/*
+ * source-ap1f: 0x00E65C66 `or.b (-0x258,A6),D0b` ORs the RAW forwarded byte
+ * into the propagate chain, and the decision at 0x00E65E4A is `tst.b D2b` /
+ * `bpl` - a sign test.  A forwarded byte that is non-zero but POSITIVE
+ * therefore leaves the chain positive and the request is not propagated,
+ * where a logical "!= 0" would have propagated it.
+ */
+TEST(who_remote_propagate_uses_the_forwarded_bytes_sign)
+{
+    asknode_request_t req;
+
+    /* A proper Domain true (0xFF) propagates. */
+    memset(&req, 0, sizeof(req));
+    req.version      = 3;
+    req.request_type = ASKNODE_REQ_WHO_REMOTE;
+    req.node_id      = NODE_$ME;
+    req.param1       = 0x00055555;
+    req.forwarded    = (int8_t)0xFF;
+    req.count        = 2;
+    req.param3       = 0x0BADF00D;
+    run_request(&req, 0x18);
+    ASSERT_EQ(3, ctx.version);              /* context filled in */
+    ASSERT_EQ(0x2D, ctx.request_type);
+
+    /*
+     * 0x01 is non-zero but positive: `or.b` leaves the chain byte at 0x01
+     * and `bpl` skips the propagation.
+     */
+    reset_mocks();
+    memset(&ctx, 0, sizeof(ctx));
+    req.forwarded = 0x01;
+    run_request(&req, 0x18);
+    ASSERT_EQ(0, ctx.version);              /* context never filled in */
+}
+
 /* ROUTE_$VALIDATE_PORT's answers become the reply status (0x00E65B62). */
 TEST(validate_port_status_mapping)
 {
@@ -893,6 +928,7 @@ int main(void)
     RUN_TEST(who_request_flag_bit2_stops_propagation);
     RUN_TEST(who_request_suppressed_by_record_flag);
     RUN_TEST(who_remote_target_selection);
+    RUN_TEST(who_remote_propagate_uses_the_forwarded_bytes_sign);
     RUN_TEST(validate_port_status_mapping);
     RUN_TEST(record_failure_sends_nothing);
     RUN_TEST(time_sync_sends_nothing);

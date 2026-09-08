@@ -83,7 +83,13 @@ void DISK_$LV_UID(int16_t vol_idx, int16_t lv_num, uid_t *uid_ret,
     }
 
     /* Read PV label block */
-    block_ptr = DISK_$GET_BLOCK(vol_idx, 0, &PV_LABEL_$UID, 0, 0x20, &status);
+    /*
+     * 0x00E6CCD0 `pea (0x20).w` pushes the longword 0x00000020, which
+     * DISK_$GET_BLOCK reads back as its two argument WORDS: block_type 0
+     * and flags 0x20 = DBUF_GET_OK_IF_STOPPED.
+     */
+    block_ptr = DISK_$GET_BLOCK(vol_idx, 0, &PV_LABEL_$UID, 0, 0,
+                                DBUF_GET_OK_IF_STOPPED, &status);
     if (status != status_$ok && status != status_$storage_module_stopped) {
         goto done;
     }
@@ -103,7 +109,9 @@ void DISK_$LV_UID(int16_t vol_idx, int16_t lv_num, uid_t *uid_ret,
     }
 
     /* Read LV label block */
-    block_ptr = DISK_$GET_BLOCK(vol_idx, lv_daddr, &LV_LABEL_$UID, 0, 0x20, &status);
+    /* 0x00E6CD3A `pea (0x20).w`, as above. */
+    block_ptr = DISK_$GET_BLOCK(vol_idx, lv_daddr, &LV_LABEL_$UID, 0, 0,
+                                DBUF_GET_OK_IF_STOPPED, &status);
     if (status == status_$ok || status == status_$storage_module_stopped) {
         /* Extract UID from LV label */
         lv_uid.high = *(uint32_t *)((uint8_t *)block_ptr + LV_LABEL_UID_HIGH_OFFSET);

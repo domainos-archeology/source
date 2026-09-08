@@ -62,12 +62,28 @@ void DBUF_$INIT(void);
  * from disk. May block if all buffers are in use.
  *
  * Parameters:
- *   vol_idx     - Volume index (0-7)
- *   block       - Block number to read
- *   uid         - Pointer to expected UID for validation
- *   block_hint  - Block hint/type for allocation (encodes level info)
- *   flags       - Flags (bit 4: update UID from parameter, bit 5: allow stopped)
- *   status      - Receives status code
+ *   vol_idx     - Volume index (0-7), the WORD at (0x08,A6)
+ *   block       - Block number to read, the longword at (0x0a,A6)
+ *   uid         - Pointer to expected UID for validation, (0x0e,A6)
+ *   block_hint  - Block hint/type for allocation (encodes level info),
+ *                 the longword at (0x12,A6)
+ *   block_type  - The WORD at (0x16,A6).  Stored as a BYTE in the buffer
+ *                 entry's type field (0x00E3A654 / 0x00E3A780
+ *                 `move.b D4b,(0xd,A4)`) and logged as a word by
+ *                 NETLOG_$LOG_IT (0x00E3A5EA).
+ *   flags       - The WORD at (0x18,A6).  Only two bits are read:
+ *                 bit 4 (0x0010) "caller fills the buffer, skip the disk
+ *                 read and refresh the entry's uid/hint/type"
+ *                 (0x00E3A640, 0x00E3A79C `btst.l #0x4,D5`) and bit 5
+ *                 (0x0020) "tolerate status_$storage_module_stopped"
+ *                 (0x00E3A7D0 `btst.l #0x5,D5`).
+ *   status      - Receives status code, (0x1a,A6)
+ *
+ * Parameters 5 and 6 are two separate 16-bit values, not one longword: the
+ * prologue reads them with `move.w (0x16,A6),D4w` and
+ * `move.w (0x18,A6),D5w` at 0x00E3A5CE / 0x00E3A5D2.  Every caller in the
+ * image happens to push a stack image that a single big-endian longword
+ * would also produce, which is how the two came to be modelled as one.
  *
  * Returns:
  *   Pointer to the buffer data (1024 bytes), or NULL on error.
@@ -76,8 +92,14 @@ void DBUF_$INIT(void);
  * Original address: 0x00e3a5b0
  */
 void *DBUF_$GET_BLOCK(uint16_t vol_idx, int32_t block, uid_t *uid,
-                      uint32_t block_hint, uint32_t flags,
-                      status_$t *status);
+                      uint32_t block_hint, uint16_t block_type,
+                      uint16_t flags, status_$t *status);
+
+/*
+ * DBUF_$GET_BLOCK's `flags` word (parameter 6, the word at (0x18,A6)).
+ */
+#define DBUF_GET_NO_READ       0x0010  /* 0x00E3A640 `btst.l #0x4,D5` */
+#define DBUF_GET_OK_IF_STOPPED 0x0020  /* 0x00E3A7D0 `btst.l #0x5,D5` */
 
 /*
  * DBUF_$SET_BUFF - Release/update a disk buffer

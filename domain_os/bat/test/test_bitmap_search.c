@@ -86,11 +86,12 @@ void ML_$LOCK(int16_t id) { (void)id; }
 void ML_$UNLOCK(int16_t id) { (void)id; }
 
 void *DBUF_$GET_BLOCK(uint16_t vol_idx, int32_t block, uid_t *uid,
-                      uint32_t block_hint, uint32_t flags, status_$t *status)
+                      uint32_t block_hint, uint16_t block_type,
+                      uint16_t flags, status_$t *status)
 {
     uint32_t index;
 
-    (void)vol_idx; (void)block_hint; (void)flags;
+    (void)vol_idx; (void)block_hint; (void)block_type; (void)flags;
 
     mock_get_calls++;
     if (mock_get_fail_after != 0 && (uint32_t)mock_get_calls >= mock_get_fail_after) {

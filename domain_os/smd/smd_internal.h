@@ -561,7 +561,7 @@ _Static_assert(__builtin_offsetof(smd_glyph_metrics_t, bitmap_row) == 0x06, "smd
  * only unit that exists (unit 1) the record lives at
  * 0x00E2E414 .. 0x00E2E51F, immediately after the two standalone eventcounts
  * SMD_EC_1 (0x00E2E3FC) and SMD_EC_2 (0x00E2E408) and immediately before
- * ml_$exclusion_t_00e2e520.
+ * smd_$trk_rect_mutex.
  *
  * Field evidence (all offsets below are from the record base, i.e. A3-0xF4):
  *   0x00  SMD_$INIT 0x00E34DC2 movea.l (-0xf4,A3),A4       -> hw pointer
@@ -1346,7 +1346,7 @@ extern int16_t SMD_ONE_LOCK_DATA;
  * SMD_DISPLAY_UNITS inside the map segment "D35 E2E3FC SMD_$WIRED_DATA
  * loaded at 12FBFC, size = 13C": 0x00E2E3FC + 0x124 = 0x00E2E520, and the
  * segment ends at 0x00E2E538. */
-extern ml_$exclusion_t ml_$exclusion_t_00e2e520;
+extern ml_$exclusion_t smd_$trk_rect_mutex;
 
 /* SMD_$DISP1_INT - display-1 BLT/scroll interrupt handler.
  * Original address: 0x00E26F20, emitted as smd/sau2/disp1_int.s.

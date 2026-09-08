@@ -49,11 +49,31 @@ static const char msg_peb_disabled[] = "  a      lh  PEB is disabled   ";
 static const char msg_68881_disabled[] = "68881 savearea   68881 is disab";
 
 /*
- * Pointers for wiring PEB code and data areas
- * Original addresses: 0x00E322E4 (code), 0x00E322DC (data)
- * (PTR_PEB_$TOUCH_00e322e4 / PTR_PEB_$WIRED_DATA_START_00e322dc are declared
- * in peb/peb_internal.h)
+ * The four longword cells at 0x00E322DC..0x00E322EB, which PEB_$LOAD_WCS
+ * hands to MST_$WIRE_AREA by address.  They sit in the PEB_UNWIRED code
+ * segment (map: "I E31D0C PEB_UNWIRED size = 5F8", i.e. 0x00E31D0C ..
+ * 0x00E32303) after PEB_$LOAD_WCS' body, carry no symbol of their own, and
+ * every reference to them is PC-relative from inside this routine
+ * (0x00E32216, 0x00E3221A, 0x00E32244, 0x00E32248) - so they are file
+ * statics here.
+ *
+ * Their CONTENTS are named in the SAU2 link map, which is where these names
+ * come from.  Image bytes at 0x00E322DC:
+ *   00 e8 4e 80  00 e8 54 d8  00 e7 08 10  00 e7 0a 3e
+ *
+ *   0x00E84E80  "D E84E80 PEB_WIRED size = 658" / PEB_$WIRED_DATA_START
+ *               (also PEB_$REGS)
+ *   0x00E854D8  PEB_$WIRED_DATA_END, which the map also lists as
+ *               AUDIT_$DATA_START - the wired PEB data ends exactly where
+ *               the AUDIT segment begins
+ *   0x00E70810  "I E70810 PEB_WIRED size = 22C" / PEB_$WIRED_PROC_START,
+ *               the same address as PEB_$TOUCH
+ *   0x00E70A3E  PEB_$WIRED_PROC_END
  */
+static const uint32_t peb_$wired_data_start = 0x00E84E80u; /* 0x00E322DC: PEB_$WIRED_DATA_START */
+static const uint32_t peb_$wired_data_end   = 0x00E854D8u; /* 0x00E322E0: PEB_$WIRED_DATA_END   */
+static const uint32_t peb_$wired_proc_start = 0x00E70810u; /* 0x00E322E4: PEB_$WIRED_PROC_START */
+static const uint32_t peb_$wired_proc_end   = 0x00E70A3Eu; /* 0x00E322E8: PEB_$WIRED_PROC_END   */
 
 /* External function prototypes provided by file/file.h, mst/mst.h, name/name.h */
 
@@ -338,17 +358,18 @@ void PEB_$LOAD_WCS(void)
          * &start_va, &end_va, page-list array, &max_pages (word), &count (word).
          *
          * 0x00E3220A: &wire_count1, &0x00E3229A (10), wired_pages,
-         *             &0x00E322E8 (0x00E70A3E), &0x00E322E4 (0x00E70810).
+         *             &0x00E322E8 (PEB_$WIRED_PROC_END, 0x00E70A3E),
+         *             &0x00E322E4 (PEB_$WIRED_PROC_START, 0x00E70810).
          * 0x00E3222C: &wire_count2, &wire_remaining (10 - wire_count1),
          *             &wired_pages[wire_count1] (`pea (-0x28,A6,D1w*1)` with
-         *             D1 = wire_count1 << 2), &0x00E322E0 (0x00E854D8),
-         *             &0x00E322DC (0x00E84E80).
+         *             D1 = wire_count1 << 2),
+         *             &0x00E322E0 (PEB_$WIRED_DATA_END, 0x00E854D8),
+         *             &0x00E322DC (PEB_$WIRED_DATA_START, 0x00E84E80).
          */
-        MST_$WIRE_AREA(&PTR_PEB_$TOUCH_00e322e4, &PTR_PEB_$WIRED_CODE_END_00e322e8,
+        MST_$WIRE_AREA(&peb_$wired_proc_start, &peb_$wired_proc_end,
                        wired_pages, &peb_wire_max_pages, &wire_count1);
         wire_remaining = 10 - wire_count1;
-        MST_$WIRE_AREA(&PTR_PEB_$WIRED_DATA_START_00e322dc,
-                       &PTR_PEB_$WIRED_DATA_END_00e322e0,
+        MST_$WIRE_AREA(&peb_$wired_data_start, &peb_$wired_data_end,
                        &wired_pages[wire_count1], &wire_remaining, &wire_count2);
 
         /* Enable PEB and mark as loaded */

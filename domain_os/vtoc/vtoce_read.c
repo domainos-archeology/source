@@ -52,7 +52,8 @@ void VTOCE_$READ(vtoc_$lookup_req_t *req, vtoce_$result_t *result, status_$t *st
     }
 
     /* Get the VTOC block */
-    buf = (uint32_t *)DBUF_$GET_BLOCK(vol_idx, block, &VTOC_$UID, block, 0, status_ret);
+    buf = (uint32_t *)DBUF_$GET_BLOCK(vol_idx, block, &VTOC_$UID, block, 0, 0,
+                                          status_ret);
 
     if (*status_ret != status_$ok) {
         goto done;

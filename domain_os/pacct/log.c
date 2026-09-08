@@ -197,13 +197,13 @@ void PACCT_$LOG(boolean *fork_flag, boolean *su_flag, int16_t *exit_status,
 
     /* Check if we need to map a new buffer region.  0x00E5AC66
      * `cmpi.l #0x80,(0xc,A5)` / 0x00E5AC6E `bge` is a SIGNED comparison. */
-    if ((int32_t)DAT_00e817f8 < PACCT_RECORD_SIZE) {
+    if ((int32_t)pacct_buf_remaining < PACCT_RECORD_SIZE) {
         /* Unmap existing buffer if any */
-        if (DAT_00e81804 != NULL) {
-            MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(DAT_00e81804), DAT_00e81800, 0, &status);
-            DAT_00e81804 = NULL;
-            DAT_00e81800 = 0;
-            DAT_00e817f8 = 0;
+        if (pacct_map_ptr != NULL) {
+            MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(pacct_map_ptr), pacct_map_offset, 0, &status);
+            pacct_map_ptr = NULL;
+            pacct_map_offset = 0;
+            pacct_buf_remaining = 0;
         }
 
         /* Map new 32KB region at current file position */
@@ -216,38 +216,38 @@ void PACCT_$LOG(boolean *fork_flag, boolean *su_flag, int16_t *exit_status,
          * plain booleans.
          */
         map_result = MST_$MAPS(0, true,             /* 0x00E5ACC0 `st -(SP)` */
-                               &pacct_owner, DAT_00e81808,
+                               &pacct_owner, pacct_file_pos,
                                PACCT_BUFFER_SIZE, 0x16,
-                               0, true, &DAT_00e81800, &status);
+                               0, true, &pacct_map_offset, &status);
 
         if (status != status_$ok) {
-            DAT_00e81804 = NULL;
-            DAT_00e817f8 = 0;
+            pacct_map_ptr = NULL;
+            pacct_buf_remaining = 0;
             goto exit_super;
         }
 
         /* Set up buffer pointers */
-        DAT_00e817f8 = DAT_00e81800;
-        DAT_00e817fc = map_result;
-        DAT_00e81804 = map_result;
+        pacct_buf_remaining = pacct_map_offset;
+        pacct_write_ptr = map_result;
+        pacct_map_ptr = map_result;
     }
 
     /* Copy record to buffer (32 longwords = 128 bytes) */
     {
         uint32_t *src = (uint32_t *)&record;
-        uint32_t *dst = DAT_00e817fc;
+        uint32_t *dst = pacct_write_ptr;
         for (i = 0; i < 32; i++) {
             *dst++ = *src++;
         }
     }
 
     /* Update buffer pointers */
-    DAT_00e817f8 -= PACCT_RECORD_SIZE;
-    DAT_00e817fc += 32;             /* 32 longwords = 128 bytes */
-    DAT_00e81808 += PACCT_RECORD_SIZE;
+    pacct_buf_remaining -= PACCT_RECORD_SIZE;
+    pacct_write_ptr += 32;             /* 32 longwords = 128 bytes */
+    pacct_file_pos += PACCT_RECORD_SIZE;
 
     /* Update file length */
-    FILE_$SET_LEN(&pacct_owner, &DAT_00e81808, &status);
+    FILE_$SET_LEN(&pacct_owner, &pacct_file_pos, &status);
 
 exit_super:
     ACL_$EXIT_SUPER();

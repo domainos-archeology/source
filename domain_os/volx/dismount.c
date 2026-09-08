@@ -124,10 +124,12 @@ void VOLX_$DISMOUNT(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
     /* Remove mount point if parent_uid is set */
     if (entry->parent_uid.high != UID_$NIL.high ||
         entry->parent_uid.low != UID_$NIL.low) {
-        static uint32_t unused_param = 0;
-
-        DIR_$DROP_MOUNT(&entry->parent_uid, &entry_uid_val, &unused_param,
-                        &local_status);
+        /*
+         * 0x00E6B4A8 `pea (0x5a,PC)` -> 0x00E6B504, the same zero longword
+         * VOLX_$SHUTDOWN passes (volx_internal.h).
+         */
+        DIR_$DROP_MOUNT(&entry->parent_uid, &entry_uid_val,
+                        &volx_$drop_mount_lv, &local_status);
         if (local_status != status_$ok) {
             *status = local_status;
             return;

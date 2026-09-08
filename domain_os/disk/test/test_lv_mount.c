@@ -93,12 +93,13 @@ static int set_buff_calls;
 static uint16_t last_set_buff_flags;
 
 void *DISK_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *expected_uid,
-                      uint16_t param_4, uint16_t param_5,
-                      status_$t *status)
+                      uint32_t block_hint, uint16_t block_type,
+                      uint16_t flags, status_$t *status)
 {
     int i;
 
-    (void)vol_idx; (void)param_4; (void)param_5; (void)expected_uid;
+    (void)vol_idx; (void)block_hint; (void)block_type; (void)flags;
+    (void)expected_uid;
     *status = get_block_status;
     if (get_block_status != status_$ok) {
         return NULL;

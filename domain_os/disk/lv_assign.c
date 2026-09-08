@@ -134,7 +134,10 @@ uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
     vol->mount_state = DISK_MOUNT_BUSY;
 
     /* Read PV label block (daddr=0) to get LV map */
-    pv_block = DISK_$GET_BLOCK(vol_idx, 0, &PV_LABEL_$UID, 0, 0, &local_status);
+    /* 0x00E6CE80/0x00E6CE82: two `clr.l` - block_hint 0, then the two
+     * argument WORDS both zero. */
+    pv_block = DISK_$GET_BLOCK(vol_idx, 0, &PV_LABEL_$UID, 0, 0, 0,
+                               &local_status);
     if (local_status != status_$ok) {
         goto done;
     }

@@ -109,7 +109,11 @@ int8_t audit_$load_list(status_$t *status_ret)
     /* Clear existing hash table */
     ML_$EXCLUSION_START((ml_$exclusion_t *)((char *)AUDIT_$DATA.event_count + 0x0C));
 
-    audit_$clear_hash_table();
+    /*
+     * 0x00E713EA `bsr.w`: a nested procedure, entered with no pushed
+     * arguments, that forwards this frame's status_ret to audit_$alloc.
+     */
+    audit_$clear_hash_table(status_ret);
 
     /* Copy header information */
     AUDIT_$DATA.flags = header->flags;

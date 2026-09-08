@@ -132,10 +132,8 @@ uint32_t ROUTE_$Q_OFLO;
 uint16_t ROUTE_$NETBUF_ALLOC;
 int16_t  ROUTE_$N_WIRED_PAGES;
 int16_t  ROUTE_$N_USER_PORTS;
-int16_t  ROUTE_$NET_SERVICE_ON = 0;
-int16_t  ROUTE_$NET_SERVICE_OFF = 1;
+
 uint8_t  RINGLOG_$ROUTE_FORWARD[4] = { 0x00, 0x00, 0x20, 0x48 };
-const status_$t ROUTE_$SOCK_EMPTY_STATUS = status_$network_buffer_queue_is_empty;
 uint32_t RTWIRED_$CALLBACK_DATA;
 uint16_t ROUTE_$PID;
 int8_t   ROUTE_$USER_CHECKSUM;
@@ -537,7 +535,9 @@ TEST(startup_and_shutdown)
     ROUTE_$PROCESS();
 
     ASSERT_EQ(2, mock_set_service_calls);
-    ASSERT_EQ(ROUTE_$NET_SERVICE_OFF, mock_last_service_op);   /* last is "off" */
+    /* 0x00E8789E, the "and not" opcode cell: the file static in
+     * route/process.c, visible because the test includes that file. */
+    ASSERT_EQ(net_service_and_not_bits, mock_last_service_op);
     ASSERT_EQ(0, ROUTE_$ROUTING);                              /* cleared on exit */
     ASSERT_EQ(0, ROUTE_$LAST_UPDATE_TIME);
     ASSERT_EQ(0xFFFF, ROUTE_$SOCK);

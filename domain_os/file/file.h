@@ -240,14 +240,31 @@ typedef struct file_lock_control_t {
                                      * +0xC8 (00e327be `move.w #0xfa,D0w` /
                                      * `clr.w (0xc8,A0)` / `dbf`), so the array
                                      * ends at 0x2BD. */
-    uint8_t     reserved_2be[14];   /* 0x2BE: Untouched by FILE_$LOCK_INIT */
-    uint16_t    flag_2cc;           /* 0x2CC: Flag (set to 1 at init) */
+    uint8_t     reserved_2be[2];    /* 0x2BE: Untouched by FILE_$LOCK_INIT */
+    /*
+     * 0x2C0..0x2D0 are the module's lock-table scalars.  Every one of them
+     * used to have a standalone object of its own in file/file_data.c as
+     * well as a slot here, which is one cell too many for each (bead
+     * source-q4qz); they are now single fields with FILE_$<NAME> macros
+     * over them.  The SAU2 link map confirms two of the addresses directly:
+     * "E821F0 FILE_$LOT_HASHTAB" is +0xC8 and "E823F6 FILE_$LOT_FREE" is
+     * +0x2CE, both inside "D E82128 FILE_ size = 2D4".
+     */
+    uint32_t    default_size;       /* 0x2C0: FILE_$DEFAULT_SIZE */
+    uint32_t    lot_seqn;           /* 0x2C4: FILE_$LOT_SEQN */
+    uint16_t    lock_illegal_mask;  /* 0x2C8: FILE_$LOCK_ILLEGAL_MASK */
+    uint16_t    lot_pending;        /* 0x2CA: FILE_$LOT_PENDING */
+    uint16_t    flag_2cc;           /* 0x2CC: FILE_$LOT_HIGH, set to 1 at init */
     uint16_t    lot_free;           /* 0x2CE: FILE_$LOT_FREE - head of free list */
-    uint8_t     flag_2d0;           /* 0x2D0: Flag (cleared at init) */
+    uint8_t     flag_2d0;           /* 0x2D0: FILE_$LOT_FULL, cleared at init */
 } file_lock_control_t;
 
 /* Remaining documented offsets (bead source-pewa). */
 _Static_assert(__builtin_offsetof(file_lock_control_t, reserved_2be) == 0x2BE, "file_lock_control_t.reserved_2be");
+_Static_assert(__builtin_offsetof(file_lock_control_t, default_size) == 0x2C0, "file_lock_control_t.default_size");
+_Static_assert(__builtin_offsetof(file_lock_control_t, lot_seqn) == 0x2C4, "file_lock_control_t.lot_seqn");
+_Static_assert(__builtin_offsetof(file_lock_control_t, lock_illegal_mask) == 0x2C8, "file_lock_control_t.lock_illegal_mask");
+_Static_assert(__builtin_offsetof(file_lock_control_t, lot_pending) == 0x2CA, "file_lock_control_t.lot_pending");
 
 /* Layout recovered from the disassembly -- see the field comments above. */
 _Static_assert(__builtin_offsetof(file_lock_control_t, reserved1) == 0x00, "file_lock_control_t.reserved1");
@@ -273,8 +290,25 @@ extern file_lock_table_entry_t FILE_$LOCK_TABLE[];
 /* UID lock eventcount */
 extern ec_$eventcount_t FILE_$UID_LOCK_EC;
 
-/* Free list head (alias into control block) */
-extern uint16_t FILE_$LOT_FREE;
+/*
+ * The lock-table scalars are FIELDS of FILE_$LOCK_CONTROL, not objects of
+ * their own: in the image they are the words and longwords at
+ * 0x00E823E8..0x00E823F8 inside "D E82128 FILE_ size = 2D4", and the SAU2
+ * map places FILE_$LOT_FREE at 0x00E823F6 = +0x2CE exactly.  Spelled as
+ * macros so there is one cell per image cell (bead source-q4qz).
+ *
+ * FILE_$LOT_HASHTAB is the same thing for the 251-word table at +0xC8: the
+ * map names 0x00E821F0 FILE_$LOT_HASHTAB, and FILE_$LOCK_INIT clears exactly
+ * those words (0x00E327BE `move.w #0xfa,D0w` / `clr.w (0xc8,A0)` / `dbf`).
+ */
+#define FILE_$LOT_HASHTAB         (FILE_$LOCK_CONTROL.lock_map)
+#define FILE_$DEFAULT_SIZE        (FILE_$LOCK_CONTROL.default_size)
+#define FILE_$LOT_SEQN            (FILE_$LOCK_CONTROL.lot_seqn)
+#define FILE_$LOCK_ILLEGAL_MASK   (FILE_$LOCK_CONTROL.lock_illegal_mask)
+#define FILE_$LOT_PENDING         (FILE_$LOCK_CONTROL.lot_pending)
+#define FILE_$LOT_HIGH            (FILE_$LOCK_CONTROL.flag_2cc)
+#define FILE_$LOT_FREE            (FILE_$LOCK_CONTROL.lot_free)
+#define FILE_$LOT_FULL            (*(int8_t *)&FILE_$LOCK_CONTROL.flag_2d0)
 
 /*
  * ============================================================================

@@ -67,8 +67,21 @@
  */
 #define AUDIT_MAX_PROCESSES     64
 
-/* Hash table size for audit list UIDs */
+/*
+ * Hash table size for audit list UIDs -- the UID_$HASH modulus, 37.
+ *
+ * The bucket ARRAY the image indexes is one slot wider than the modulus:
+ * audit_$add_to_hash reaches bucket b at `(0xb0,A5) + b*4` (0x00E712FE-
+ * 0x00E71302) with b = UID_$HASH's remainder, i.e. 0..36, while
+ * audit_$clear_hash_table clears 37 longwords starting at A5+0xB4
+ * (0x00E712A0-0x00E712AE), i.e. slots 1..37.  Slot 37 is therefore touched
+ * only by the clear loop and slot 0 only by the insert/lookup paths.  See
+ * the off-by-one note in audit/hash_table.c.
+ */
 #define AUDIT_HASH_TABLE_SIZE   37
+
+/* Longwords actually reserved for the bucket array: slots 0..37. */
+#define AUDIT_HASH_TABLE_SLOTS  38
 
 /* Maximum data size for audit event records */
 #define AUDIT_MAX_DATA_SIZE     0x800   /* 2048 bytes */
@@ -257,11 +270,19 @@ typedef struct audit_data_t {
     int16_t  list_count;            /* 0xAC-0xAD: Number of UIDs in list */
     int16_t  pad2;                  /* 0xAE-0xAF: Padding */
 
-    /* Hash table for audit list UIDs */
-    audit_hash_node_t *hash_buckets[AUDIT_HASH_TABLE_SIZE]; /* 0xB0-0x143 */
+    /*
+     * Hash table for audit list UIDs.  0xB0-0x147.
+     *
+     * 38 longwords, not 37: audit_$clear_hash_table's loop runs from
+     * A5+0xB4 to A5+0x144 inclusive (0x00E712A8 `clr.l (0xb0,A0)` with
+     * A0 = A5+4 and `dbf #0x24`), so the last slot the image writes is
+     * index 37.  Nothing between 0xB0 and 0x198 is reached by any other
+     * displacement in the AUDIT_ segment.
+     */
+    audit_hash_node_t *hash_buckets[AUDIT_HASH_TABLE_SLOTS]; /* 0xB0-0x147 */
 
     /* Padding to reach offset 0x198 */
-    uint8_t  pad3[84];              /* 0x144-0x197 */
+    uint8_t  pad3[80];              /* 0x148-0x197 */
 
     /* Event counter and synchronization */
     ec_$eventcount_t *event_count;  /* 0x198-0x19B: Wired event counter */
@@ -270,7 +291,25 @@ typedef struct audit_data_t {
     /* Audit server process */
     int16_t  server_pid;            /* 0x1A0-0x1A1: Server process ID */
     uint8_t  server_running;        /* 0x1A2: Server is running */
+    uint8_t  pad4;                  /* 0x1A3 */
+
+    /*
+     * audit_$alloc's bump allocator (0x00E7120C).  `alloc(0)` resets
+     * pool_next to the fixed VA 0x00EC4800 (0x00E7121E) and, the first time
+     * only, sets pool_limit to the same value (0x00E71226-0x00E7122C);
+     * `alloc(n)` returns the old pool_next, advances it by n, and while
+     * pool_next >= pool_limit wires another 0x400-byte page in at
+     * pool_limit (0x00E71244-0x00E7126C).
+     */
+    uint8_t *pool_next;             /* 0x1A4-0x1A7 */
+    uint8_t *pool_limit;            /* 0x1A8-0x1AB */
 } audit_data_t;
+
+/*
+ * The base VA audit_$alloc resets its pool to -- the immediate at
+ * 0x00E7121E.
+ */
+#define AUDIT_POOL_BASE_VA  0x00EC4800u
 
 /* Layout recovered from the disassembly -- see the field comments above. */
 #if defined(ARCH_M68K)
@@ -289,13 +328,15 @@ _Static_assert(__builtin_offsetof(audit_data_t, timeout) == 0xAA, "audit_data_t.
 _Static_assert(__builtin_offsetof(audit_data_t, list_count) == 0xAC, "audit_data_t.list_count");
 _Static_assert(__builtin_offsetof(audit_data_t, pad2) == 0xAE, "audit_data_t.pad2");
 _Static_assert(__builtin_offsetof(audit_data_t, hash_buckets) == 0xB0, "audit_data_t.hash_buckets");
-_Static_assert(__builtin_offsetof(audit_data_t, pad3) == 0x144, "audit_data_t.pad3");
+_Static_assert(__builtin_offsetof(audit_data_t, pad3) == 0x148, "audit_data_t.pad3");
 _Static_assert(__builtin_offsetof(audit_data_t, event_count) == 0x198, "audit_data_t.event_count");
 _Static_assert(__builtin_offsetof(audit_data_t, lock_id) == 0x19C, "audit_data_t.lock_id");
 _Static_assert(__builtin_offsetof(audit_data_t, server_pid) == 0x1A0, "audit_data_t.server_pid");
 _Static_assert(__builtin_offsetof(audit_data_t, server_running) == 0x1A2, "audit_data_t.server_running");
-_Static_assert(sizeof(audit_data_t) == 0x1A4,
-               "audit_data_t: fields end at 0x1A2, longword aligned to 0x1A4");
+_Static_assert(__builtin_offsetof(audit_data_t, pool_next) == 0x1A4, "audit_data_t.pool_next");
+_Static_assert(__builtin_offsetof(audit_data_t, pool_limit) == 0x1A8, "audit_data_t.pool_limit");
+_Static_assert(sizeof(audit_data_t) == 0x1AC,
+               "audit_data_t: fields end at 0x1AB (audit_$alloc's pool_limit)");
 #endif
 
 /*
@@ -407,11 +448,19 @@ void audit_$close_log(status_$t *status_ret);
 /*
  * audit_$clear_hash_table - Clear the audit list hash table
  *
- * Frees all hash nodes and clears bucket pointers.
+ * A NESTED PROCEDURE of audit_$load_list in the image: it is entered with
+ * `bsr.w` and no pushed arguments, does `movea.l (A6),A2` at 0x00E71290 to
+ * reach its parent's frame, and forwards the parent's own first argument
+ * (A2+0x08 = audit_$load_list's status_ret) to audit_$alloc.  Flattened here
+ * with that uplevel reference made an explicit parameter, per the
+ * nested-Pascal rule in CLAUDE.md.
+ *
+ * Parameters:
+ *   status_ret - audit_$load_list's status_ret, forwarded to audit_$alloc
  *
  * Original address: 0x00E7128A
  */
-void audit_$clear_hash_table(void);
+void audit_$clear_hash_table(status_$t *status_ret);
 
 /*
  * audit_$add_to_hash - Add a UID to the audit list hash table

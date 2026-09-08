@@ -14,6 +14,12 @@
 #include "audit/audit_internal.h"
 
 /*
+ * TODO: audit_$alloc below is a stand-in, not a transcription.  The image
+ * (0x00E7120C) is a bump allocator over AUDIT_$DATA.pool_next /
+ * .pool_limit starting at the fixed VA AUDIT_POOL_BASE_VA, wiring one
+ * 0x400-byte page at a time with WP_$CALLOC (0x00E070EC) + MMU_$INSTALL
+ * (0x00E24048).  Tracked by bead source-3ad7.
+ *
  * Simple memory pool for hash nodes.
  * In the original implementation, this used wired memory allocation.
  * For simplicity, we use a static pool here.
@@ -64,18 +70,40 @@ void audit_$free(void *ptr)
 /*
  * audit_$clear_hash_table - Clear the audit list hash table
  *
- * Resets all bucket pointers to NULL and resets the memory pool.
+ * Resets the memory pool and clears the bucket pointers.
+ *
+ * In the image this is a nested procedure of audit_$load_list: it takes no
+ * pushed arguments, reaches its parent's frame with `movea.l (A6),A2`
+ * (0x00E71290) and forwards the parent's status_ret -- the longword at
+ * A2+0x08, audit_$load_list's own first argument -- to audit_$alloc
+ * (0x00E71294).  Flattened here with that uplevel reference passed
+ * explicitly.
+ *
+ * OFF-BY-ONE, PRESERVED AS FOUND.  The clear loop is
+ *
+ *     00e712a0  movea.l A5,A0
+ *     00e712a2  moveq   #0x24,D0
+ *     00e712a4  addq.l  #0x4,A0        ; A0 = A5 + 4
+ *     00e712a6  movea.l A0,A0
+ *     00e712a8  clr.l   (0xb0,A0)      ; first store is A5 + 0xB4
+ *     00e712ac  addq.l  #0x4,A0
+ *     00e712ae  dbf     D0w,0x00e712a8 ; 0x25 = 37 iterations
+ *
+ * so it clears the longwords at A5+0xB4 .. A5+0x144, i.e. bucket slots
+ * 1..37.  audit_$add_to_hash and AUDIT_$LOG_EVENT_S index the same array
+ * with UID_$HASH's remainder (0x00E17376 `divu.w` + `swap`), which is
+ * 0..36 for the modulus 37.  Slot 0 is therefore never cleared and slot 37
+ * is cleared but never used.  Reproduced exactly.
  */
-void audit_$clear_hash_table(void)
+void audit_$clear_hash_table(status_$t *status_ret)
 {
-    int i;
-    status_$t status;
+    int16_t i;
 
-    /* Reset memory pool */
-    audit_$alloc(0, &status);
+    /* 0x00E71292-0x00E7129E: audit_$alloc(0, parent's status_ret). */
+    audit_$alloc(0, status_ret);
 
-    /* Clear all bucket pointers */
-    for (i = 0; i < AUDIT_HASH_TABLE_SIZE; i++) {
+    /* 0x00E712A0-0x00E712AE: slots 1..37, see the note above. */
+    for (i = 1; i <= AUDIT_HASH_TABLE_SIZE; i++) {
         AUDIT_$DATA.hash_buckets[i] = NULL;
     }
 }

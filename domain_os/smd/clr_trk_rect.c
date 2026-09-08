@@ -9,7 +9,7 @@
 #include "smd/smd_internal.h"
 #include "ml/ml.h"
 
-/* Exclusion lock for tracking rectangle operations: ml_$exclusion_t_00e2e520
+/* Exclusion lock for tracking rectangle operations: smd_$trk_rect_mutex
  * (declared in smd/smd_internal.h) */
 
 /*
@@ -66,13 +66,13 @@
 void SMD_$CLR_TRK_RECT(status_$t *status_ret)
 {
     /* Begin exclusion - protect tracking rect data */
-    ML_$EXCLUSION_START(&ml_$exclusion_t_00e2e520);
+    ML_$EXCLUSION_START(&smd_$trk_rect_mutex);
 
     /* Clear all tracking rectangles */
     SMD_GLOBALS.tracking_rect_count = 0;
 
     /* End exclusion */
-    ML_$EXCLUSION_STOP(&ml_$exclusion_t_00e2e520);
+    ML_$EXCLUSION_STOP(&smd_$trk_rect_mutex);
 
     /* Set cursor pending flag to force cursor update */
     SMD_GLOBALS.cursor_pending_flag = (uint8_t)0xFF;

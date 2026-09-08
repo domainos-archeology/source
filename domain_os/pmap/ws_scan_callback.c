@@ -79,15 +79,24 @@ void PMAP_$WS_SCAN_CALLBACK(int *param)
         }
     }
 
-    /* Check for global scan timing */
-    if (DAT_00e23380 + 8 < TIME_$CLOCKH) {
-        DAT_00e2337c = TIME_$CLOCKH;
-        DAT_00e23380 = TIME_$CLOCKH;
+    /*
+     * Check for global scan timing.  The four cells the image touches here
+     * are fields of the WIRED pool's ws_hdr_t, MMAP_WSL[MMAP_WSL_POOL_WIRED]
+     * at 0xE232B0 + 5 * 0x24 = 0xE23364 (see pmap/pmap_internal.h):
+     *
+     *   0xE23380  record + 0x1C  ws_timestamp   - the global scan clock
+     *   0xE2337C  record + 0x18  pri_timestamp
+     *   0xE23366  record + 0x02  owner          - the global scan counter
+     *   0xE2336C  record + 0x08  scan_pos
+     */
+    if (MMAP_WSL[MMAP_WSL_POOL_WIRED].ws_timestamp + 8 < TIME_$CLOCKH) {
+        MMAP_WSL[MMAP_WSL_POOL_WIRED].pri_timestamp = TIME_$CLOCKH;
+        MMAP_WSL[MMAP_WSL_POOL_WIRED].ws_timestamp  = TIME_$CLOCKH;
 
-        DAT_00e23366++;
-        if (PMAP_$WS_INTERVAL <= DAT_00e23366) {
-            DAT_00e23366 = 0;
-            DAT_00e2336c = MMAP_$WSL_WIRED_CNT;
+        MMAP_WSL[MMAP_WSL_POOL_WIRED].owner++;
+        if (PMAP_$WS_INTERVAL <= MMAP_WSL[MMAP_WSL_POOL_WIRED].owner) {
+            MMAP_WSL[MMAP_WSL_POOL_WIRED].owner = 0;
+            MMAP_WSL[MMAP_WSL_POOL_WIRED].scan_pos = MMAP_$WSL_WIRED_CNT;
 
             /* Perform global working set scan on slot 5 */
             MMAP_$WS_SCAN(5, 0, 0x3FFFFF, 0x3FFFFF);

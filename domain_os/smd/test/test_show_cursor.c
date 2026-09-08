@@ -124,7 +124,7 @@ smd_globals_t SMD_GLOBALS;
 uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
 smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 smd_time_com_t SMD_TIME_$COM;
-ml_$exclusion_t ml_$exclusion_t_00e2e520;
+ml_$exclusion_t smd_$trk_rect_mutex;
 uint16_t PROC1_$AS_ID;
 
 static smd_display_hw_t test_hw;
@@ -162,13 +162,13 @@ int8_t smd_$validate_unit(uint16_t unit)
 
 void ML_$EXCLUSION_START(ml_$exclusion_t *excl)
 {
-    CHECK(excl == &ml_$exclusion_t_00e2e520);
+    CHECK(excl == &smd_$trk_rect_mutex);
     excl_start_calls++;
 }
 
 void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
 {
-    CHECK(excl == &ml_$exclusion_t_00e2e520);
+    CHECK(excl == &smd_$trk_rect_mutex);
     excl_stop_calls++;
 }
 

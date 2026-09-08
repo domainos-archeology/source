@@ -99,8 +99,12 @@ void FM_$WRITE(fm_$file_ref_t *file_ref, uint32_t block_addr, uint16_t level,
     local_uid.low = uid_ptr->low;
 
     /* Get the disk block into a buffer */
+    /*
+     * `get_flags` here is DBUF_$GET_BLOCK's block_type word, parameter 5;
+     * the flags word, parameter 6, is zero on this path.
+     */
     buffer = DBUF_$GET_BLOCK(vol_idx, block_num, &local_uid, param4,
-                             (uint32_t)get_flags << 16, status);
+                             get_flags, 0, status);
     if (*status != status_$ok) {
         goto done;
     }

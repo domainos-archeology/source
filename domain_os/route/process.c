@@ -44,6 +44,35 @@
  *   XNS_$IDP_STATE                xns/xns.h
  */
 
+/*
+ * The constant cells this routine passes by reference.  They sit in the
+ * ROUTE_ CODE segment immediately after ROUTE_$PROCESS' own `rts`
+ * (0x00E8789A) and before the next routine's `link.w` (0x00E878A8), they
+ * carry no symbol in the SAU2 link map, and every reference to them is
+ * PC-relative from inside this function - so they are file statics here
+ * rather than data-segment globals.  Image bytes at 0x00E8789C:
+ *
+ *   00e8789c  00 00               net_service_or_bits
+ *   00e8789e  00 01               net_service_and_not_bits
+ *   00e878a0  00 00 20 48         RINGLOG_$ROUTE_FORWARD (ring/ringlog.h)
+ *   00e878a4  00 11 00 06         sock_empty_status
+ */
+
+/* NETWORK_$SET_SERVICE opcode 0, "or these service bits in".
+ * `pea (0x45e,PC)` at 0x00E8743C. */
+static const int16_t net_service_or_bits = 0x0000;      /* 0x00E8789C */
+
+/* NETWORK_$SET_SERVICE opcode 1, "and not these service bits".
+ * `pea (0x76,PC)` at 0x00E87826. */
+static const int16_t net_service_and_not_bits = 0x0001; /* 0x00E8789E */
+
+/*
+ * status_$network_buffer_queue_is_empty (OS / network, code 6 - "buffer
+ * queue is empty").  Handed to CRASH_SYSTEM when SOCK_$GET reports it
+ * dequeued nothing; `pea (0x3e6,PC)` at 0x00E874BC.
+ */
+static const status_$t sock_empty_status = 0x00110006;  /* 0x00E878A4 */
+
 void ROUTE_$PROCESS(void)
 {
     ec_$wait_ecs_t          ecs;
@@ -94,7 +123,8 @@ void ROUTE_$PROCESS(void)
     ROUTE_$ROUTING = true;
 
     /* 0x00E87434 - 0x00E87446 */
-    NETWORK_$SET_SERVICE(&ROUTE_$NET_SERVICE_ON, &ROUTE_$SERVICE_ID, &status);
+    NETWORK_$SET_SERVICE((int16_t *)&net_service_or_bits,
+                         &ROUTE_$SERVICE_ID, &status);
 
     /* 0x00E8744A: the value of TIME_$CLOCKH, not its address */
     next_broadcast = TIME_$CLOCKH;
@@ -148,11 +178,11 @@ void ROUTE_$PROCESS(void)
         /*
          * SOCK_$GET returns true when it dequeued a packet.  A false return
          * on an event-count wakeup is a kernel inconsistency; the original
-         * hands CRASH_SYSTEM the constant cell at 0xE878A4
+         * hands CRASH_SYSTEM the constant cell at 0x00E878A4
          * (status_$network_buffer_queue_is_empty).
          */
         if (SOCK_$GET(ROUTE_$SOCK, &rcv) >= 0) {            /* 0x00E874B8: bmi */
-            CRASH_SYSTEM(&ROUTE_$SOCK_EMPTY_STATUS);        /* 0x00E874BC */
+            CRASH_SYSTEM(&sock_empty_status);               /* 0x00E874BC */
         }
 
         /* sock_$pkt_info_t.hdr is a target VA (sock/sock.h), not a pointer */
@@ -413,8 +443,8 @@ void ROUTE_$PROCESS(void)
         ROUTE_$ROUTING = false;                             /* clr.b, 0x00E87812 */
         ROUTE_$LAST_UPDATE_TIME = 0;                        /* 0x00E87818 */
 
-        NETWORK_$SET_SERVICE(&ROUTE_$NET_SERVICE_OFF, &ROUTE_$SERVICE_ID,
-                             &status);
+        NETWORK_$SET_SERVICE((int16_t *)&net_service_and_not_bits,
+                             &ROUTE_$SERVICE_ID, &status);
 
         /* 0x00E87834 - 0x00E87850 */
         closing_sock = ROUTE_$SOCK;
