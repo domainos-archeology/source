@@ -16,8 +16,8 @@
  * moved here from name/name.h (bead source-3uo); the bodies moved from
  * name/rem_name.c to rem_name/, one file per function (bead source-ev4k).
  *
- * REM_NAME_$REGISTER_SERVER (0xE4A4AE) takes no parameters; its callers in
- * rip/server.c push two ignored arguments.
+ * REM_NAME_$REGISTER_SERVER (0xE4A4AE) is passed two pointers that its body
+ * never reads; see its declaration below.
  *
  * There are two categories:
  * 1. Low-level functions that take explicit net/node parameters
@@ -40,10 +40,26 @@ boolean REM_NAME_SERVER_LOCAL(void);
  * REM_NAME_$REGISTER_SERVER - Register contact with naming server
  *
  * Updates the last-heard-from timestamp and sets the server contacted flag.
+ * The body (0x00E4A4AE..0x00E4A4C6, 26 bytes) is only
+ *
+ *   lea (0xe7dbb8).l,A0                     ; the REM_NAME data area
+ *   move.l (0x00e2b0d4).l,(0x28,A0)         ; record +0x28 <- TIME_$CLOCKH
+ *   st (0x3c,A0)                            ; record +0x3C <- true
+ *
+ * so neither argument is read - but every call site pushes both, so the
+ * prototype carries them.  The arguments identify the server that was heard
+ * from, as a (network, node) pair passed by reference:
+ *
+ *   0x00E69152/0x00E69158 RIP_$ANNOUNCE_NS pushes #0xE245A4 (NODE_$ME) then
+ *     #0xE2E0A0 (ROUTE_$PORT, aliased NETWORK_$ME in the SAU2 map).  The last
+ *     push is argument 1, so the call is (&ROUTE_$PORT, &NODE_$ME).
+ *   0x00E68DF2/0x00E68DF6 RIP_$PROCESS_REQUEST's ring path pushes
+ *     (&reg_network, &reg_node_id).
+ *   0x00E68E04/0x00E68E08 its internet path pushes (&src_node_or, &src_node).
  *
  * Original address: 0x00e4a4ae
  */
-void REM_NAME_$REGISTER_SERVER(void);
+void REM_NAME_$REGISTER_SERVER(uint32_t *net, uint32_t *node);
 
 /*
  * REM_NAME_$GET_ENTRY_BY_NAME - Look up entry by name (low-level)

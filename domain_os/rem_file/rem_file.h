@@ -53,11 +53,16 @@ void REM_FILE_$TRUNCATE(uid_t *vol_uid, uid_t *uid, uint32_t new_size,
  * @param uid         Object UID
  * @param start       Starting page offset
  * @param count       Number of pages to invalidate
- * @param flags       Invalidation flags
+ * @param flags       Invalidation flag - a single byte.  The builder reads it
+ *                    with "move.b (0x18,A6),D0b" (0x00E623EE), i.e. the high
+ *                    byte of the argument slot, and stores one byte at
+ *                    request+0x14 (0x00E62412).
  * @param status      Output status code
+ *
+ * Original address: 0x00E623D8
  */
 void REM_FILE_$INVALIDATE(uid_t *vol_uid, uid_t *uid, uint32_t start,
-                          uint32_t count, int16_t flags, status_$t *status);
+                          uint32_t count, boolean flags, status_$t *status);
 
 /*
  * REM_FILE_$FILE_SET_ATTRIB - Set attribute on remote file
@@ -360,15 +365,16 @@ void REM_FILE_$DROP_HARD_LINKU(void *addr_info, uid_t *dir_uid,
  * @param addr_info      Address info for remote node
  * @param file_uid       File UID
  * @param acl_type       ACL type
- * @param bulk_data_out  Output buffer for ACL data
- * @param acl_len_out    Output ACL length
- * @param acl_header_out Output ACL header (11 uint32s)
+ * @param acl_image_out  Output buffer for the bulk ACL image, at most 0x400
+ *                       bytes (0x00E627EC)
+ * @param acl_len_out    Output ACL length (reply+0x0A)
+ * @param acl_header_out Output ACL header (11 uint32s, reply+0x0C)
  * @param status         Output status code
  *
  * Original address: 0x00E627A8
  */
 void REM_FILE_$ACL_IMAGE(void *addr_info, uid_t *file_uid,
-                         uint8_t acl_type, void *bulk_data_out,
+                         uint8_t acl_type, void *acl_image_out,
                          uint16_t *acl_len_out, void *acl_header_out,
                          status_$t *status);
 

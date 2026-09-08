@@ -96,6 +96,10 @@
  * Simplified wrapper for ASKNODE_$INTERNET_INFO that queries the local node.
  * The request type is specified in *req_type.
  *
+ * The routing/request-length and reply-length arguments come from the two-cell
+ * constant pool at 0x00E645BE..0x00E645C3 (0x0098 and 0xFFFFFFFF); see
+ * asknode/info.c.
+ *
  * @param req_type      Pointer to request type code
  * @param node_id       Pointer to node ID (ignored, always uses local)
  * @param param         Request-specific parameter
@@ -108,22 +112,24 @@ void ASKNODE_$INFO(uint16_t *req_type, uint32_t *node_id,
                    uid_t *param, uint32_t *result, status_$t *status);
 
 /*
- * ASKNODE_$GET_INFO - Get node information with explicit params
+ * ASKNODE_$GET_INFO - Get node information, caller-supplied reply limit
  *
- * Another wrapper for ASKNODE_$INTERNET_INFO with additional control
- * over the parameters passed.
+ * The same wrapper as ASKNODE_$INFO except that the caller supplies
+ * ASKNODE_$INTERNET_INFO's fifth argument (the reply-length limit) instead of
+ * taking it from the constant pool; the third argument still comes from
+ * 0x00E645C0 ("pea (-0x1a,PC)" at 0x00E645D8).  See asknode/get_info.c.
  *
  * @param req_type      Pointer to request type code
  * @param node_id       Pointer to node ID
- * @param param1        First request-specific parameter
- * @param param2        Second request-specific parameter (length/count)
+ * @param param         Request-specific parameter (often a UID)
+ * @param resp_len      Pointer to the reply-length limit
  * @param result        Output buffer for result data
  * @param status        Output status code
  *
  * Original address: 0x00E645C4
  */
 void ASKNODE_$GET_INFO(uint16_t *req_type, uint32_t *node_id,
-                       uid_t *param1, uint16_t *param2,
+                       uid_t *param, uint16_t *resp_len,
                        uint32_t *result, status_$t *status);
 
 /*

@@ -42,10 +42,10 @@
  *
  * Assembly breakdown:
  *   00e6914e: link.w A6,-0xc               ; Local frame: 12 bytes
- *   00e69152: move.l #0xe245a4,-(SP)       ; Push NODE_$ME address
- *   00e69158: move.l #0xe2e0a0,-(SP)       ; Push ROUTE_$PORT_ARRAY address
+ *   00e69152: move.l #0xe245a4,-(SP)       ; argument 2: &NODE_$ME
+ *   00e69158: move.l #0xe2e0a0,-(SP)       ; argument 1: &ROUTE_$PORT
  *   00e6915e: jsr REM_NAME_$REGISTER_SERVER
- *   00e69164: addq.w #8,SP
+ *   00e69164: addq.w #8,SP                 ; two longword arguments popped
  *   00e69166: jsr PKT_$NEXT_ID             ; Get packet sequence ID
  *   00e6916c: move.w D0w,(-0xa,A6)         ; Store packet ID in local
  *   00e69170-00e691b8: Build and send internet packet
@@ -60,12 +60,17 @@ void RIP_$ANNOUNCE_NS(void)
     /*
      * Step 1: Register the routing port with the name service
      *
-     * The original pushes &ROUTE_$PORT_ARRAY (0xE2E0A0) and &NODE_$ME
-     * (0xE245A4) before the call, but REM_NAME_$REGISTER_SERVER (0xE4A4AE)
-     * never reads its arguments (it only stamps TIME_$CLOCKH and sets the
-     * server-contacted flag), so the call takes no parameters in C.
+     * Two longword arguments are pushed and popped again by the "addq.w #0x8"
+     * at 0x00E69164: &NODE_$ME (0xE245A4) at 0x00E69152 and &ROUTE_$PORT
+     * (0xE2E0A0) at 0x00E69158.  The last push is argument 1, so the call is
+     * (&ROUTE_$PORT, &NODE_$ME) - the (network, node) pair naming the server
+     * we are registering.  REM_NAME_$REGISTER_SERVER (0x00E4A4AE) reads
+     * neither, but the call site passes them, so the C call does too.
+     *
+     * 0xE2E0A0 is ROUTE_$PORT in the SAU2 map (aliased NETWORK_$ME there);
+     * ROUTE_$PORT_ARRAY starts at the same address.
      */
-    REM_NAME_$REGISTER_SERVER();
+    REM_NAME_$REGISTER_SERVER(&ROUTE_$PORT, &NODE_$ME);
 
     /*
      * Step 2: Get a unique packet ID for the announcement

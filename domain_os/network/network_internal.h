@@ -38,8 +38,9 @@
  *   - 4 bytes: reference count (number of uses of this network)
  *   - 4 bytes: network ID (the actual network identifier)
  *
- * A network address contains the network index in bits 4-9 (mask 0x3F0).
- * Extract with: (addr & 0x3F0) >> 4
+ * A network address is a longword and carries the network index in bits 4-9
+ * of its HIGH word (bits 20-25 of the whole longword, mask 0x3F0 applied to
+ * the high half).  Extract with NETWORK_GET_INDEX below.
  *
  * Data layout in m68k memory:
  *   0xE24934: refcount[0], refcount[1], ... (each 8 bytes apart)
@@ -64,11 +65,22 @@ typedef struct network_table_entry_t {
 /* Network table - slots 1..64, slot 0 unused */
 extern network_table_entry_t NETWORK_$NET_TABLE[NETWORK_TABLE_SIZE];
 
-/* Extract network index from a network address value */
+/*
+ * Extract the network index from a network address value.
+ *
+ * NETWORK_$GET_NET masks the HIGH word of its 4-byte first argument:
+ * "and.w (0x8,A6),D0w" at 0x00E0F2E4 with D0 preloaded with 0x3F0
+ * (0x00E0F2DC), then "lsr.w #0x4" (0x00E0F2E8).  The argument really is a
+ * longword - the only caller, ast_$force_activate_segment, pushes its own
+ * longword parameter with "move.l (0xc,A6),-(SP)" at 0x00E021FA and separately
+ * masks the low 20 bits of the same value (0x00E021E6).  So the index lives in
+ * bits 20..25 of the longword, i.e. bits 4..9 of its high half.
+ */
 #define NETWORK_INDEX_MASK 0x3F0
 #define NETWORK_INDEX_SHIFT 4
 #define NETWORK_GET_INDEX(addr)                                                \
-  (((addr) & NETWORK_INDEX_MASK) >> NETWORK_INDEX_SHIFT)
+  ((uint16_t)(((uint16_t)((addr) >> 16) & NETWORK_INDEX_MASK) >>               \
+              NETWORK_INDEX_SHIFT))
 
 /*
  * Network globals

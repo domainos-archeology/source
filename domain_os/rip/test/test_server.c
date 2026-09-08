@@ -162,6 +162,8 @@ static int         hint_add_net_calls;
 static uint32_t    hint_add_net_arg;
 
 static int         register_server_calls;
+static uint32_t    register_server_net;   /* *argument 1 at the call */
+static uint32_t    register_server_node;  /* *argument 2 at the call */
 
 static int         broadcast_calls;
 static boolean     broadcast_flags;
@@ -276,8 +278,12 @@ void HINT_$ADD_NET(uint32_t net_port)
     hint_add_net_arg = net_port;
 }
 
-void REM_NAME_$REGISTER_SERVER(void)
+void REM_NAME_$REGISTER_SERVER(uint32_t *net, uint32_t *node)
 {
+    /* Both arguments are read here only so the test can see which frame
+     * cells the call site passed; the real callee ignores them. */
+    register_server_net = *net;
+    register_server_node = *node;
     register_server_calls++;
 }
 
@@ -381,6 +387,8 @@ static void reset_mocks(void)
     update_int_calls = 0;
     hint_add_net_calls = 0;
     register_server_calls = 0;
+    register_server_net = 0xDEADBEEFu;
+    register_server_node = 0xDEADBEEFu;
     broadcast_calls = 0;
     brk_calls = 0;
     brk_network = 0; brk_dest_node = 0; brk_src_node_or = 0; brk_src_node = 0;
@@ -1039,11 +1047,20 @@ TEST(name_register_std_requires_packet_type_be)
     /* "move.b (-0x1b,A6),D1b / cmpi.w #0xbe,D1w / bne" at 0x00E68DD0 */
     arm_xns_packet(RIP_CMD_NAME_REGISTER, 0);
     hdr_in_page()->packet_type = 0xBE;
+    hdr_in_page()->src_network = 0x00ABCDEFu;
 
     RIP_$SERVER();
 
     ASSERT_EQ(1, register_server_calls);
     ASSERT_EQ(0, RIP_$STATS.unknown_commands);
+
+    /*
+     * "pea (-0x538,A6)" (0x00E68DF2, reg_node_id) then "pea (-0x4e0,A6)"
+     * (0x00E68DF6, reg_network): the last push is argument 1, so argument 1
+     * is the network the packet came from (0x00E68DDA copies
+     * header.src_network into it).
+     */
+    ASSERT_EQ(0x00ABCDEFu, register_server_net);
 }
 
 TEST(name_register_std_wrong_packet_type_counts)
@@ -1061,11 +1078,21 @@ TEST(name_register_internet_always_registers)
 {
     /* 0x00E68E04: no packet-type check on this side */
     arm_internet_packet(RIP_CMD_NAME_REGISTER, 0);
+    brk_src_node_or = 0x00012345u;
+    brk_src_node    = 0x00067890u;
 
     RIP_$SERVER();
 
     ASSERT_EQ(1, register_server_calls);
     ASSERT_EQ(0, RIP_$STATS.unknown_commands);
+
+    /*
+     * "pea (-0x4f8,A6)" (0x00E68E04, src_node) then "pea (-0x4f4,A6)"
+     * (0x00E68E08, src_node_or), so argument 1 is src_node_or and argument 2
+     * is src_node.
+     */
+    ASSERT_EQ(0x00012345u, register_server_net);
+    ASSERT_EQ(0x00067890u, register_server_node);
 }
 
 /* ========================================================================== */

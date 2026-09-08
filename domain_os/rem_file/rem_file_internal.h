@@ -95,6 +95,27 @@
 #define REM_FILE_REQ_MAGIC              0x80
 
 /*
+ * Fixed request-record lengths - the literal word each builder pushes as
+ * REM_FILE_$SEND_REQUEST's third argument.  Each is the size of the record
+ * based at that builder's A6-0x170, including trailing bytes the builder
+ * never stores (the frame is not cleared, so those go out as-is).
+ */
+#define REM_FILE_SET_ATTRIBUTE_REQ_LEN  0x42  /* 0x00E61A96 */
+#define REM_FILE_LOCAL_VERIFY_REQ_LEN   0x2E  /* 0x00E61E80 */
+#define REM_FILE_PURIFY_REQ_LEN         0x14  /* 0x00E622D6 */
+#define REM_FILE_SET_DEF_ACL_REQ_LEN    0x20  /* 0x00E6235C */
+#define REM_FILE_INVALIDATE_REQ_LEN     0x16  /* 0x00E6243E */
+#define REM_FILE_DELETE_AREA_REQ_LEN    0x1C  /* 0x00E6271C */
+#define REM_FILE_GROW_AREA_REQ_LEN      0x1C  /* 0x00E6278E */
+#define REM_FILE_ACL_IMAGE_REQ_LEN      0x14  /* 0x00E62806 */
+
+/*
+ * The bulk-payload ceiling REM_FILE_$ACL_IMAGE offers the transport
+ * ("move.w #0x400,-(SP)" at 0x00E627EC).
+ */
+#define REM_FILE_ACL_IMAGE_BULK_MAX     0x400
+
+/*
  * Request header (common to all remote file operations)
  *
  * Wire format as sent by REM_FILE_$SEND_REQUEST:

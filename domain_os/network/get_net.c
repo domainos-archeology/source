@@ -12,9 +12,11 @@
  *   00e0f2d0    pea (A5)
  *   00e0f2d2    lea (0xe248fc).l,A5        ; Network data base
  *   00e0f2d8    movea.l (0xc,A6),A0        ; A0 = net_id_out
- *   00e0f2dc    move.w #0x3f0,D0w          ; Mask for bits 4-9
+ *   00e0f2dc    move.w #0x3f0,D0w          ; Mask for bits 4-9 of the high word
  *   00e0f2e0    movea.l (0x10,A6),A1       ; A1 = status
- *   00e0f2e4    and.w (0x8,A6),D0w         ; D0 = net_addr & 0x3F0
+ *   00e0f2e4    and.w (0x8,A6),D0w         ; D0 = (net_addr >> 16) & 0x3F0
+ *                                            ; (0x8,A6) is the HIGH word of
+ *                                            ; the longword first argument
  *   00e0f2e8    lsr.w #0x4,D0w             ; D0 = index (0-63)
  *   00e0f2ea    bne.b 0x00e0f2f0           ; If index != 0, continue
  *   00e0f2ec    clr.l (A0)                 ; *net_id_out = 0
@@ -46,7 +48,11 @@ void NETWORK_$GET_NET(uint32_t net_addr, uint32_t *net_id_out, status_$t *status
 {
     uint16_t index;
 
-    /* Extract network index from bits 4-9 */
+    /*
+     * Extract the network index.  "and.w (0x8,A6),D0w" at 0x00E0F2E4 masks the
+     * HIGH word of the longword argument, so the index is bits 4..9 of
+     * net_addr >> 16 (bits 20..25 of the whole longword).
+     */
     index = NETWORK_GET_INDEX(net_addr);
 
     if (index == 0) {

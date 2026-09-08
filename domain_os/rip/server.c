@@ -810,19 +810,25 @@ arm_name_register:
                        | ((uint32_t)f.header_tail[0] << 8)
                        |  (uint32_t)f.header_tail[1]) & 0xFFFFF;
 
-        /* "pea (-0x538,A6) / pea (-0x4e0,A6)" then the shared jsr */
-        REM_NAME_$REGISTER_SERVER();                     /* 0x00E68E0C */
+        /*
+         * "pea (-0x538,A6)" (0x00E68DF2) then "pea (-0x4e0,A6)" (0x00E68DF6),
+         * then the shared jsr.  The last push is argument 1, so this is
+         * (&reg_network, &reg_node_id).  The callee reads neither and the
+         * arguments are never popped - "unlk A6" at 0x00E68E1C discards them.
+         */
+        REM_NAME_$REGISTER_SERVER(&f.reg_network, &f.reg_node_id); /* 0x00E68E0C */
         return;                                          /* 0x00E68E12 */
     }
 
     /*
-     * 0x00E68E04-0x00E68E12: the internet path pushes &src_node_or and
-     * &src_node.  REM_NAME_$REGISTER_SERVER (0x00E4A4AE) reads neither - it
+     * 0x00E68E04-0x00E68E12: the internet path pushes &src_node (A6-0x4F8,
+     * 0x00E68E04) then &src_node_or (A6-0x4F4, 0x00E68E08), so argument 1 is
+     * &src_node_or.  REM_NAME_$REGISTER_SERVER (0x00E4A4AE) reads neither - it
      * only stamps TIME_$CLOCKH into the name-server record and sets the
      * "server contacted" flag - and the arguments are never popped because
      * "unlk A6" discards them.
      */
-    REM_NAME_$REGISTER_SERVER();
+    REM_NAME_$REGISTER_SERVER(&f.src_node_or, &f.src_node);
     return;
 
 unknown_command_std:
