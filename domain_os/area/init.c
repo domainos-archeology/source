@@ -37,10 +37,6 @@
  * both the RPMAP cache pages here and the PEB control page elsewhere. */
 #define AREA_RPMAP_MMU_FLAGS        0x16
 
-/* 0x00E2F4D8 `clr.b (0x153,A0)`: byte +0x03 of each 0x0C-byte pool record
- * (the array starts at globals+0x150). */
-#define AREA_SEG_TABLE_POOL_FLAG    0x03
-
 void AREA_$INIT(void)
 {
     int i;
@@ -147,17 +143,17 @@ void AREA_$INIT(void)
     }
 
     /* 0x00E2F4C6-0x00E2F4D2: the two AREA_$FORMAT words after max_entries. */
-    AREA_$FORMAT.word_06 = 0;       /* +0x5DA */
-    AREA_$FORMAT.word_04 = 0;       /* +0x5D8 */
+    AREA_$FORMAT.seg_table_count = 0;   /* +0x5DA */
+    AREA_$FORMAT.seg_table_next  = 0;   /* +0x5D8 */
 
     /*
      * 0x00E2F4D4-0x00E2F4E2: clear byte +0x03 of each of the 64 0x0C-byte
-     * records at globals+0x150.  Nothing else in the image touches this
-     * region, so it is kept as bytes.
-     * TODO: identify the record type (bead source-tqkk).
+     * records at globals+0x150 - the `allocated` flag of every
+     * area_$seg_table_t in the pool area_$alloc_seg_table (0x00E09D2E) hands
+     * out.  No other field of a pool record is initialised here.
      */
     for (i = 0; i < AREA_INIT_POOL_SLOTS; i++) {
-        AREA_$GLOBALS.seg_table_pool[i][AREA_SEG_TABLE_POOL_FLAG] = 0;
+        AREA_$GLOBALS.seg_table_pool[i].allocated = 0;
     }
 
     /* 0x00E2F4E4-0x00E2F4F0: the dedup counters. */

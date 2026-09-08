@@ -13,7 +13,7 @@
 
 #include "disk/disk_internal.h"
 
-void DISK_$RTN_QBLKS(int16_t count, int32_t qblk_head, uint32_t qblk_tail)
+void DISK_$RTN_QBLKS(int16_t count, uint32_t qblk_head, uint32_t qblk_tail)
 {
     /* disk_$rtn_qblks_internal is declared in disk_internal.h with void* parameters.
      * Cast to match the declared signature. */

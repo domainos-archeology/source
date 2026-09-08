@@ -114,7 +114,7 @@ static int      recv_calls;
  * 32 bits on a 64-bit host.
  */
 static struct {
-    rem_file_$reply_hdr_t reply_hdr;
+    app_$reply_hdr_t reply_hdr;
     union {
         rem_file_$response_t rec;
         uint8_t              raw[0x200];
@@ -222,10 +222,10 @@ void APP_$RECEIVE(uint16_t sock_num, void *result, status_$t *status_ret)
     }
     step = &recv_script[recv_calls++];
 
-    mock_reply_hdr.f_00         = 0;
+    mock_reply_hdr.magic        = 0;
     mock_reply_hdr.template_len = step->template_len;
     mock_reply_hdr.data_len     = step->data_len;
-    mock_reply_hdr.reply_id     = step->reply_id;
+    mock_reply_hdr.request_id     = step->reply_id;
 
     rec->reply = ARCH_PTR_TO_VA(&mock_reply_hdr);
     rec->data  = ARCH_PTR_TO_VA(mock_reply_payload);

@@ -118,12 +118,18 @@ TEST(constants_name_the_right_bits) {
     ASSERT_EQ(0xFC00u, MAC_OS_CHANNEL_OWNER_MASK);
     ASSERT_EQ(10u,     MAC_OS_CHANNEL_OWNER_SHIFT);
     /*
-     * The channel entry's own offsets (flags at 0x12, socket at 0x08) are
-     * asserted in mac_os/mac_os.h under ARCH_M68K; they cannot be checked here
-     * because mac_os_$channel_t still holds two host-width pointers.
-     * TODO: hold callback and driver_info as 32-bit target VAs (bead
-     * source-ytxx).
+     * source-ytxx: callback and driver_info are 32-bit target VAs now, so the
+     * whole entry holds its image layout on the host too.
      */
+    ASSERT_EQ(0x14u, sizeof(mac_os_$channel_t));
+    ASSERT_EQ(0x00u, offsetof(mac_os_$channel_t, callback));
+    ASSERT_EQ(0x04u, offsetof(mac_os_$channel_t, driver_info));
+    ASSERT_EQ(0x08u, offsetof(mac_os_$channel_t, socket));
+    ASSERT_EQ(0x0Au, offsetof(mac_os_$channel_t, port_index));
+    ASSERT_EQ(0x0Cu, offsetof(mac_os_$channel_t, callback_data));
+    ASSERT_EQ(0x0Eu, offsetof(mac_os_$channel_t, line_number));
+    ASSERT_EQ(0x10u, offsetof(mac_os_$channel_t, header_size));
+    ASSERT_EQ(0x12u, offsetof(mac_os_$channel_t, flags));
 }
 
 TEST(channel_slots_are_reset) {
@@ -133,8 +139,8 @@ TEST(channel_slots_are_reset) {
     for (i = 0; i < MAC_OS_MAX_CHANNELS; i++) {
         MAC_OS_$CHANNEL_TABLE[i].socket      = 0x1234;
         MAC_OS_$CHANNEL_TABLE[i].line_number = 0x5678;
-        MAC_OS_$CHANNEL_TABLE[i].driver_info = driver_info;
-        MAC_OS_$CHANNEL_TABLE[i].callback    = driver_info;
+        MAC_OS_$CHANNEL_TABLE[i].driver_info = ARCH_PTR_TO_VA(driver_info);
+        MAC_OS_$CHANNEL_TABLE[i].callback    = ARCH_PTR_TO_VA(driver_info);
     }
 
     MAC_OS_$INIT();
@@ -142,8 +148,8 @@ TEST(channel_slots_are_reset) {
     for (i = 0; i < MAC_OS_MAX_CHANNELS; i++) {
         ASSERT_EQ(MAC_OS_CHANNEL_NO_SOCKET, MAC_OS_$CHANNEL_TABLE[i].socket);
         ASSERT_EQ(0u, MAC_OS_$CHANNEL_TABLE[i].line_number);
-        ASSERT_EQ((uintptr_t)NULL, (uintptr_t)MAC_OS_$CHANNEL_TABLE[i].driver_info);
-        ASSERT_EQ((uintptr_t)NULL, (uintptr_t)MAC_OS_$CHANNEL_TABLE[i].callback);
+        ASSERT_EQ(0u, MAC_OS_$CHANNEL_TABLE[i].driver_info);
+        ASSERT_EQ(0u, MAC_OS_$CHANNEL_TABLE[i].callback);
     }
 }
 

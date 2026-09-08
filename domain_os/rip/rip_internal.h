@@ -8,6 +8,7 @@
 #ifndef RIP_INTERNAL_H
 #define RIP_INTERNAL_H
 
+#include "app/app.h"   /* app_$reply_hdr_t, app_$receive_rec_t */
 #include "rip/rip.h"
 #include "ml/ml.h"
 #include "proc1/proc1.h"
@@ -300,26 +301,13 @@ void RIP_$STD_DEMUX(idp_$packet_t *pkt, uint16_t *param_2, uint16_t *param_3,
 /* RIP_$STD_IDP_CHANNEL: see rip/rip.h */
 
 /*
- * rip_$init_reply_hdr_t - the reply header APP_$RECEIVE hands back at
- * app_$receive_rec_t.reply, as RIP_$INIT reads it
- * (`movea.l (-0x30,A6),A0` at 0x00E2FD1A).
- *
- * It is the same 0x18-byte application reply header msg/, asknode/ and
- * rem_file/ each carry their own copy of; RIP only reads two words.
- * TODO: unify the four copies into one app/-owned record (bead source-di1a).
+ * The reply header APP_$RECEIVE hands back at app_$receive_rec_t.reply
+ * (`movea.l (-0x30,A6),A0` at 0x00E2FD1A) is the shared eight-byte
+ * app_$reply_hdr_t (app/app.h).  RIP_$INIT reads two of its four words:
+ *   prefix.data_len    `move.w (0x4,A0),(-0x76,A6)`  0x00E2FD1E
+ *   prefix.request_id  `move.w (0x6,A0),D3w`         0x00E2FD28
+ * (source-ca0z)
  */
-typedef struct rip_$init_reply_hdr_t {
-    uint16_t    f_00;           /* 0x00: not read */
-    uint16_t    template_len;   /* 0x02: not read */
-    uint16_t    data_len;       /* 0x04: "move.w (0x4,A0),(-0x76,A6)"
-                                 *       0x00E2FD1E */
-    int16_t     reply_id;       /* 0x06: "move.w (0x6,A0),D3w"  0x00E2FD28 */
-} __attribute__((packed)) rip_$init_reply_hdr_t;
-
-_Static_assert(__builtin_offsetof(rip_$init_reply_hdr_t, data_len) == 0x04,
-               "rip_$init_reply_hdr_t.data_len");
-_Static_assert(__builtin_offsetof(rip_$init_reply_hdr_t, reply_id) == 0x06,
-               "rip_$init_reply_hdr_t.reply_id");
 
 /*
  * RIP_$INIT_REQUEST - the 4-byte cell at 0x00E3502C that RIP_$INIT sends as

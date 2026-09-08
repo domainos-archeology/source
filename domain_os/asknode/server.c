@@ -133,7 +133,7 @@ void ASKNODE_$SERVER(asknode_$server_ctx_t *ctx, int32_t *routing_info)
     rx = (asknode_$reply_hdr_t *)ARCH_VA_TO_PTR(rcv.reply);
 
     /* 0x00E659B0: hand back the payload pages straight away */
-    PKT_$DUMP_DATA(rcv.data_pages, rx->data_len);
+    PKT_$DUMP_DATA(rcv.data_pages, rx->prefix.data_len);
 
     /* 0x00E659C6 */
     src_node_or = (int32_t)rcv.hdr_f06;
@@ -144,12 +144,12 @@ void ASKNODE_$SERVER(asknode_$server_ctx_t *ctx, int32_t *routing_info)
     dest_node   = rx->node_id;
     src_socket  = rx->src_socket;
     rx_flags    = rx->f14;
-    request_id  = rx->reply_id;
+    request_id  = rx->prefix.request_id;
 
     /* 0x00E659EE: copy at most 0x18 bytes of request out of the payload */
     copy_len = 0x18;
-    if (rx->length < copy_len) {
-        copy_len = rx->length;
+    if (rx->prefix.template_len < copy_len) {
+        copy_len = rx->prefix.template_len;
     }
     OS_$DATA_COPY((char *)ARCH_VA_TO_PTR(rcv.data), (char *)&request,
                   (int32_t)copy_len);

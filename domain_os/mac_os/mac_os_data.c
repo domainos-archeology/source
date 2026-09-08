@@ -82,3 +82,17 @@ mac_os_$port_info_t *MAC_OS_$PORTP_TABLE[MAC_OS_MAX_PORTS];
  * Address: 0x00E2322C
  */
 mac_os_$port_info_t MAC_OS_$PORT_TABLE[MAC_OS_MAX_PORTS];
+
+/*
+ * MAC_OS_$BROADCAST_NEXTHOP - block + 0x8E0 (0x00E23270), 10 bytes of the
+ * twelve that run to the end of the block.  Reproduced from the image:
+ *
+ *   00e23270  00 00 00 00  ff ff  ff ff ff ff  00 00
+ *
+ * MAC_$SEND is its only reader (0x00E0BBA6 `pea (0x8e0,A5)`).
+ */
+const rip_$nexthop_t MAC_OS_$BROADCAST_NEXTHOP = {
+    .network = 0x00000000u,
+    .host_hi = 0xFFFFu,
+    .host_lo = 0xFFFFFFFFu
+};

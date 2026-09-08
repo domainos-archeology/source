@@ -83,7 +83,7 @@ void AST_$TOUCH_AREA(uint16_t area_id, uint16_t seg_index, int16_t page,
      */
     network_$page_request_t req;
     clock_t clk;               /* (-0x3c,A6): all three timestamp outputs */
-    int32_t qblk_head;         /* (-0x30,A6) */
+    uint32_t qblk_head;        /* (-0x30,A6) */
     uint32_t qblk_tail;        /* (-0x2c,A6) */
     int16_t alloc_count;       /* D2 */
     int16_t pages_read[1];     /* (-0x58,A6): DISK_$READ_MULTI result */

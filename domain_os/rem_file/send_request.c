@@ -125,7 +125,7 @@ void REM_FILE_$SEND_REQUEST(void *addr_info, void *request, int16_t request_len,
     uint8_t   cleanup_rec[88];  /* A6-0x88, FIM_$CLEANUP handler record */
     app_$receive_rec_t rcv;     /* A6-0x30 */
 
-    const rem_file_$reply_hdr_t *reply;  /* A0 at 0x00E6125A */
+    const app_$reply_hdr_t *reply;  /* A0 at 0x00E6125A */
     int32_t   copy_len;         /* D3/D4 */
     int32_t   resp_max_l;       /* D2, the sign-extended response_max */
 
@@ -288,9 +288,9 @@ await_event:                                             /* 0x00E611E0 */
     }
 
     /* 0x00E6125A-0x00E61266: unpack the reply header. */
-    reply = (const rem_file_$reply_hdr_t *)ARCH_VA_TO_PTR(rcv.reply);
+    reply = (const app_$reply_hdr_t *)ARCH_VA_TO_PTR(rcv.reply);
     *bulk_len = (int16_t)reply->data_len;                /* 0x00E61262 */
-    reply_id  = (int16_t)reply->reply_id;                /* 0x00E61266 */
+    reply_id  = (int16_t)reply->request_id;                /* 0x00E61266 */
 
     /* 0x00E6126C-0x00E6128C: copy_len = min(reply->template_len, response_max).
      * template_len is zero-extended, response_max sign-extended, and the

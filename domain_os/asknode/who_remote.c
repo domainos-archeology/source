@@ -285,16 +285,16 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
              */
 
             /* 0x00E66632 */
-            dump_len = reply->data_len;
+            dump_len = reply->prefix.data_len;
 
             /* 0x00E66638: length, clamped to 0x200 */
-            pkt_len = reply->length;
+            pkt_len = reply->prefix.template_len;
             if (pkt_len > 0x200) {
                 pkt_len = 0x200;
             }
 
             /* 0x00E66648 */
-            resp_id = reply->reply_id;
+            resp_id = reply->prefix.request_id;
 
             /* 0x00E6664E-0x00E6665E: source is the record's data pointer */
             OS_$DATA_COPY((char *)ARCH_VA_TO_PTR(rcv.data),

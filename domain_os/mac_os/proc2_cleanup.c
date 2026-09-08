@@ -85,7 +85,8 @@ void MAC_OS_$PROC2_CLEANUP(uint16_t as_id)
          */
         {
             mac_os_$cleanup_close_fn_t driver_close = (mac_os_$cleanup_close_fn_t)
-                *(void **)((uint8_t *)chan->driver_info + MAC_OS_DRIVER_CLOSE_OFFSET);
+                *(void **)((uint8_t *)ARCH_VA_TO_PTR(chan->driver_info)
+                          + MAC_OS_DRIVER_CLOSE_OFFSET);
 
             if (driver_close != NULL) {
                 (void)(*driver_close)(chan->line_number, &chan->callback_data,
@@ -129,8 +130,8 @@ void MAC_OS_$PROC2_CLEANUP(uint16_t as_id)
         }
 
         /* Clear channel entry */
-        chan->driver_info = NULL;
-        chan->callback = NULL;
+        chan->driver_info = 0;
+        chan->callback = 0;
     }
 
     ML_$EXCLUSION_STOP(&MAC_OS_$EXCLUSION);

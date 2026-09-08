@@ -135,7 +135,7 @@ void MAC_OS_$INIT(void)
         chan->line_number = 0;
 
         /* 0x00E2F614 / 0x00E2F618 */
-        chan->driver_info = NULL;
-        chan->callback    = NULL;
+        chan->driver_info = 0;
+        chan->callback    = 0;
     }
 }

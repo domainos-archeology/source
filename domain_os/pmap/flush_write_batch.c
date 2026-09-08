@@ -95,7 +95,7 @@ void pmap_$flush_write_batch(int16_t *batch_count_p, uint32_t *batch_vpns,
      * For portability to wider architectures, we store the raw DISK API
      * return values and immediately convert to proper pointer types.
      */
-    int32_t qblk_head_raw;
+    uint32_t qblk_head_raw;
     uint32_t qblk_tail_raw;
     uint8_t *qblk_head;
     status_$t write_status;

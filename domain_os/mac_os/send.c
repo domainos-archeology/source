@@ -53,15 +53,30 @@ void MAC_OS_$SEND(int16_t *channel, mac_os_$send_pkt_t *pkt_desc,
     uint8_t                     cleanup_info[24];   /* A6-0x18 */
 
     /*
-     * A6-0x44 and A6-0x3e.  The image reads BOTH of these again on the
-     * FIM_$CLEANUP unwind path (0x00E0B7E2), where they still hold whatever
-     * the aborted first pass left in the frame.  Plain C has no way to model a
-     * longjmp-preserved frame, so they start at zero here; the difference only
-     * shows when a fault unwinds before 0x00E0B61C ran.
-     * TODO: model the FIM_$CLEANUP frame carry-over (bead source-gs4e).
+     * A6-0x44 and A6-0x3e: FRAME SLOTS, DELIBERATELY NOT INITIALISED.
+     *
+     * `link.w A6,-0x48` at 0x00E0B5A8 reserves them and the prologue clears
+     * only the two buffer pointers at A6-0x2c / A6-0x28 (0x00E0B5C2 /
+     * 0x00E0B5C6).  needs_buffers is first written at 0x00E0B61C, AFTER
+     * FIM_$CLEANUP has been established at 0x00E0B5F8, and total_length is
+     * first written inside the chain walk.
+     *
+     * Both are read again on the FIM_$CLEANUP unwind return at 0x00E0B7E2
+     * (`tst.b (-0x44,A6)`) and 0x00E0B7EA (`move.w (-0x3e,A6),-(SP)`), where
+     * the m68k frame still holds whatever the aborted pass last stored - or,
+     * if the fault beat 0x00E0B61C, whatever the stack happened to contain.
+     * Initialising them to zero here would make the C skip a NETBUF_$RTN_PKT
+     * the image can perform, so they are left uninitialised, exactly as the
+     * image leaves them.
+     *
+     * `volatile` is what makes that faithful rather than merely undefined:
+     * FIM_$CLEANUP's second return is a non-local jump back into this frame,
+     * so the compiler must re-read the storage at every use instead of
+     * carrying a value across the call, which is precisely what the m68k code
+     * does.  (source-gs4e)
      */
-    int8_t      needs_buffers = 0;      /* A6-0x44: ~pkt_desc->hdr_prebuilt */
-    int16_t     total_length  = 0;      /* A6-0x3e */
+    volatile int8_t  needs_buffers;     /* A6-0x44: ~pkt_desc->hdr_prebuilt */
+    volatile int16_t total_length;      /* A6-0x3e */
 
     int8_t      use_header_buf;         /* D3 */
     int8_t      use_data_buf;           /* D4 */
@@ -91,7 +106,7 @@ void MAC_OS_$SEND(int16_t *channel, mac_os_$send_pkt_t *pkt_desc,
      * 0x00E0B5E4-0x00E0B5F6.  The driver record pointer is dereferenced
      * unconditionally; only the send entry itself is tested.
      */
-    driver_info = chan->driver_info;
+    driver_info = ARCH_VA_TO_PTR(chan->driver_info);
     driver_send = (mac_os_$driver_send_fn_t)
         *(void **)((uint8_t *)driver_info + MAC_OS_DRIVER_SEND_OFFSET);
     if (driver_send == NULL) {

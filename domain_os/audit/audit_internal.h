@@ -491,15 +491,6 @@ void audit_$add_to_hash(uid_t *uid, status_$t *status_ret);
  */
 void *audit_$alloc(uint16_t size, status_$t *status_ret);
 
-/*
- * audit_$free - Free memory to audit memory pool
- *
- * Parameters:
- *   ptr - Pointer to memory to free (may be NULL)
- *
- * Original address: (part of 0x00E7120C with size=0)
- */
-void audit_$free(void *ptr);
 
 /*
  * Hash modulus for audit list (value: 37)

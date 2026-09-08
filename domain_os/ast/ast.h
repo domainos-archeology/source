@@ -1011,6 +1011,5 @@ status_$t ast_$validate_uid(uid_t *uid, uint32_t flags);
  * VTOC_$SEARCH_VOLUMES reads it at 0x00E0244E.  Always a word access.
  */
 extern uint16_t ast_$vol_info_count;
-#define DAT_00e1e0a0 ast_$vol_info_count
 
 #endif /* AST_H */

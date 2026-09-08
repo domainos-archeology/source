@@ -266,19 +266,19 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
              */
 
             /* 0x00E6625C: keep the payload byte count for PKT_$DUMP_DATA */
-            dump_len = reply->data_len;
+            dump_len = reply->prefix.data_len;
 
             /* 0x00E66262-0x00E6626A: the responding node id, read here */
             node_list[*count] = (int32_t)reply->node_id;
 
             /* 0x00E66270: reply length, clamped to 0x200 */
-            pkt_len = reply->length;
+            pkt_len = reply->prefix.template_len;
             if (pkt_len > 0x200) {
                 pkt_len = 0x200;
             }
 
             /* 0x00E66280 */
-            resp_id = reply->reply_id;
+            resp_id = reply->prefix.request_id;
 
             /*
              * 0x00E66286-0x00E66296: the copy source is the record's DATA

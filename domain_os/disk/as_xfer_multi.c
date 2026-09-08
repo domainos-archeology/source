@@ -54,7 +54,7 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
      * fills in (0x00E6BA7C).  Both are longword VALUES - 0x00E6BB10 /
      * 0x00E6BB7A push their contents, not their addresses.
      */
-    int32_t qblk_head = 0;
+    uint32_t qblk_head = 0;
     uint32_t qblk_tail = 0;
 
     vol_idx = *vol_idx_ptr;

@@ -121,7 +121,7 @@ static boolean  update_flags[2];
  * bits on a 64-bit host. */
 static struct {
     uint8_t                 pad[0x400];
-    rip_$init_reply_hdr_t   reply_hdr;
+    app_$reply_hdr_t        reply_hdr;
     uint8_t                 payload[0x400];
 } va_arena;
 
@@ -198,10 +198,10 @@ void APP_$RECEIVE(uint16_t sock_num, void *result, status_$t *status_ret)
     recv_calls++;
     memset(rec, 0, sizeof(*rec));
 
-    va_arena.reply_hdr.f_00         = 0;
+    va_arena.reply_hdr.magic        = 0;
     va_arena.reply_hdr.template_len = 0x20;
     va_arena.reply_hdr.data_len     = 0x40;
-    va_arena.reply_hdr.reply_id     = mock_reply_id;
+    va_arena.reply_hdr.request_id     = mock_reply_id;
 
     rec->reply         = ARCH_PTR_TO_VA(&va_arena.reply_hdr);
     rec->data          = ARCH_PTR_TO_VA(va_arena.payload);

@@ -13,6 +13,7 @@
 #include "pkt/pkt.h"
 #include "misc/crash_system.h"
 #include "ml/ml.h"
+#include "app/app.h"   /* app_$reply_hdr_t */
 #include "msg/msg.h"
 #include "network/network.h"
 #include "proc1/proc1.h"
@@ -174,12 +175,16 @@ void MSG_$$SEND(int16_t port_num, uint32_t routing_key, uint32_t dest_node,
  * m68k's 2-byte alignment.
  */
 typedef struct msg_$reply_hdr_t {
-  uint16_t _f00;          /* 0x00: not read by the receive path */
-  uint16_t template_len;  /* 0x02: cmp.w D2w / move.w (0x2,A2) 0x00E5961C;
-                           *       decremented by 0x10 when the 16-byte
-                           *       internet address is consumed (0x00E59612) */
-  uint16_t data_len;      /* 0x04: 0x00E59666 / 0x00E5968A */
-  uint16_t msg_type;      /* 0x06: 0x00E595C0 */
+  /*
+   * 0x00..0x07: the shared APP reply prefix (app/app.h).  MSG reads
+   *   prefix.template_len  0x00E5961C `cmp.w D2w` / `move.w (0x2,A2)`;
+   *                        decremented by 0x10 when the 16-byte internet
+   *                        address is consumed (0x00E59612)
+   *   prefix.data_len      0x00E59666 / 0x00E5968A
+   *   prefix.request_id    0x00E595C0 - MSG's "message type"
+   * and never reads prefix.magic.
+   */
+  app_$reply_hdr_t prefix;
   uint32_t dest_node;     /* 0x08: 0x00E595A0 */
   uint16_t dest_sock;     /* 0x0C: 0x00E595A8 */
   uint32_t src_node;      /* 0x0E: 0x00E595B0 (unaligned longword) */
@@ -189,9 +194,8 @@ typedef struct msg_$reply_hdr_t {
   uint8_t  proto_subtype; /* 0x16: 0x00E595E6 */
 } __attribute__((packed)) msg_$reply_hdr_t;
 
-_Static_assert(offsetof(msg_$reply_hdr_t, template_len) == 0x02, "msg reply.template_len");
-_Static_assert(offsetof(msg_$reply_hdr_t, data_len) == 0x04, "msg reply.data_len");
-_Static_assert(offsetof(msg_$reply_hdr_t, msg_type) == 0x06, "msg reply.msg_type");
+_Static_assert(offsetof(msg_$reply_hdr_t, prefix) == 0x00, "msg reply.prefix");
+_Static_assert(sizeof(app_$reply_hdr_t) == 0x08, "msg reply prefix size");
 _Static_assert(offsetof(msg_$reply_hdr_t, dest_node) == 0x08, "msg reply.dest_node");
 _Static_assert(offsetof(msg_$reply_hdr_t, dest_sock) == 0x0C, "msg reply.dest_sock");
 _Static_assert(offsetof(msg_$reply_hdr_t, src_node) == 0x0E, "msg reply.src_node");

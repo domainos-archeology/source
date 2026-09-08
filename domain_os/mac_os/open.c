@@ -146,7 +146,8 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
 
         /* Store callback function pointer */
         /* params offset 0x50 contains callback */
-        chan_entry->callback = *(void **)((uint8_t *)params + 0x50);
+        chan_entry->callback =
+            ARCH_PTR_TO_VA(*(void **)((uint8_t *)params + 0x50));
 
         /*
          * 0x00E0B36C-0x00E0B382.  All three operations work on the BYTE at
@@ -170,7 +171,7 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
         chan_entry->line_number = route_port->socket;
 
         /* Store driver info pointer */
-        chan_entry->driver_info = driver_info;
+        chan_entry->driver_info = ARCH_PTR_TO_VA(driver_info);
 
         /* Determine header size based on network type (offset 0x2E of route_port) */
         /*
@@ -247,7 +248,7 @@ cleanup:
         /* 0x00E0B43E: bclr.b #0x1,(0x7b2,A0) - word bit 9, IN_USE */
         mac_os_$channel_t *chan_entry = &MAC_OS_$CHANNEL_TABLE[channel];
         chan_entry->flags &= (uint16_t)~MAC_OS_CHANNEL_IN_USE;
-        chan_entry->callback = NULL;
+        chan_entry->callback = 0;
     }
 
     ML_$EXCLUSION_STOP(&MAC_OS_$EXCLUSION);

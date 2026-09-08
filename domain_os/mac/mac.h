@@ -200,6 +200,12 @@ _Static_assert(sizeof(mac_$recv_pkt_t) == 0x34, "mac_$recv_pkt_t must be 0x34 by
  * MAC channel table entry (internal)
  * Size: 20 bytes (0x14)
  * Base address: 0xE22990 + 0x7A8 = 0xE23138
+ *
+ * NOTE: this is the SAME table as mac_os_$channel_t (mac_os/mac_os.h), seen
+ * from eight bytes further in - socket_num here is that record's .socket at
+ * entry offset 0x08, port_num its .port_index at 0x0A and flags its .flags at
+ * 0x12.  Nothing in the tree uses this view any more; MAC_$SEND used to and
+ * now indexes MAC_OS_$CHANNEL_TABLE instead (source-d6vh).
  */
 typedef struct mac_$channel_entry_t {
   uint16_t socket_num; /* 0x00 (offset 0x7A8): Socket number or 0xE1 */
@@ -225,11 +231,13 @@ typedef struct mac_$channel_entry_t {
 /* Channel table (10 entries of 20 bytes each) */
 #define MAC_$CHANNEL_TABLE ((mac_$channel_entry_t *)(MAC_$DATA_BASE + 0x7A8))
 
-/* ARP table */
-#define MAC_$ARP_TABLE ((void *)(MAC_$DATA_BASE + 0x8E0))
+/*
+ * The cell at MAC_$DATA_BASE + 0x8E0 is not a table: it is one constant
+ * rip_$nexthop_t holding the broadcast address, and it is modelled as
+ * MAC_OS_$BROADCAST_NEXTHOP in mac_os/mac_os.h (source-d6vh).
+ */
 #else
 extern mac_$channel_entry_t mac_$channel_table[MAC_MAX_CHANNELS];
-extern void *mac_$arp_table;
 #endif
 
 /*

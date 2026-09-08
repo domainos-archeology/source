@@ -43,7 +43,7 @@
  *   00e598e2..00e598fe  available = min(*max_len - copied, clamped data_len)
  *   00e59912  jsr PKT_$DAT_COPY(rec.data_pages, available,
  *                                data_buf + *data_len)
- *   00e59926  jsr PKT_$DUMP_DATA(rec.data_pages, reply->data_len)
+ *   00e59926  jsr PKT_$DUMP_DATA(rec.data_pages, reply->prefix.data_len)
  *   00e5992e  add.w D2w,(A4)            ; *data_len += available
  *   00e59930..00e59940  NETBUF_$RTN_HDR(rec.data rounded down to 1KB)
  */
@@ -112,7 +112,7 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
     *dest_sock = reply->dest_sock;
     *src_node  = reply->src_node;
     *src_sock  = reply->src_sock;
-    *msg_type  = reply->msg_type;
+    *msg_type  = reply->prefix.request_id;
 
     /*
      * 0xE5985C - 0xE59886.  Note the order differs from
@@ -135,14 +135,14 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
         for (i = 0; i <= 0xF; i++) {
             hw_addr->inet_addr[i] = payload[i];
         }
-        ((msg_$reply_hdr_t *)reply)->template_len =
-            (uint16_t)(reply->template_len - 0x10);
+        ((msg_$reply_hdr_t *)reply)->prefix.template_len =
+            (uint16_t)(reply->prefix.template_len - 0x10);
         payload += 0x10;
         rec.data = ARCH_PTR_TO_VA(payload);
     }
 
     /* 0xE598B4: bls, unsigned */
-    copy_len = reply->template_len;
+    copy_len = reply->prefix.template_len;
     if (copy_len > *max_len) {
         copy_len = *max_len;
     }
@@ -155,7 +155,7 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
     /* 0xE598DC */
     if (rec.data_pages[0] != 0) {
         /* 0xE598E2: clamp the payload length to *max_len as well */
-        overflow_len = reply->data_len;
+        overflow_len = reply->prefix.data_len;
         if (overflow_len > *max_len) {
             overflow_len = *max_len;
         }
@@ -177,7 +177,7 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
                       data_buf + *data_len);
 
         /* 0xE59926: the FULL payload length, not the clamped one */
-        PKT_$DUMP_DATA(rec.data_pages, (int16_t)reply->data_len);
+        PKT_$DUMP_DATA(rec.data_pages, (int16_t)reply->prefix.data_len);
 
         *data_len = (uint16_t)(*data_len + (uint16_t)available);
     }

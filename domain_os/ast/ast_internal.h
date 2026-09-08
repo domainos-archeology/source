@@ -186,7 +186,7 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
  * Internal global variables
  */
 
-/* ast_$vol_info_count / DAT_00e1e0a0: declared in ast/ast.h --
+/* ast_$vol_info_count: declared in ast/ast.h --
  * VTOC_$SEARCH_VOLUMES reads it at 0x00E0244E (bead source-3uo). */
 
 /*

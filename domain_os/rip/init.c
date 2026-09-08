@@ -151,10 +151,10 @@ void RIP_$INIT(void)
         /* 0x00E2FD16-0x00E2FD30 */
         route_port = rcv.hdr_f06;               /* rcv+0x18 */
         {
-            const rip_$init_reply_hdr_t *reply =
-                (const rip_$init_reply_hdr_t *)ARCH_VA_TO_PTR(rcv.reply);
+            const app_$reply_hdr_t *reply =
+                (const app_$reply_hdr_t *)ARCH_VA_TO_PTR(rcv.reply);
             resp_len = reply->data_len;         /* reply+0x04 */
-            reply_id = (int16_t)reply->reply_id; /* reply+0x06 */
+            reply_id = (int16_t)reply->request_id; /* reply+0x06 */
         }
         /* `andi.w #-0x400,D0w` masks only the low word, which is the same as
          * masking the longword with 0xFFFFFC00. */

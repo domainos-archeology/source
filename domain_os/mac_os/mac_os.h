@@ -29,6 +29,7 @@
 
 #include "base/base.h"
 #include "ml/ml.h"
+#include "rip/rip.h"   /* rip_$nexthop_t: MAC_OS_$BROADCAST_NEXTHOP */
 
 /*
  * ============================================================================
@@ -156,8 +157,17 @@ typedef struct mac_os_$port_pkt_table_t {
  * Tracks the state of each MAC_OS channel.
  */
 typedef struct mac_os_$channel_t {
-    void        *callback;      /* 0x00: Receive callback function pointer */
-    void        *driver_info;   /* 0x04: Driver info structure pointer */
+    /*
+     * 0x00 and 0x04 hold target VIRTUAL ADDRESSES, not host pointers, so the
+     * entry is 20 bytes on any host (source-ytxx).  Reach them with
+     * ARCH_VA_TO_PTR / ARCH_PTR_TO_VA, exactly as route_$driver_info_t is
+     * handled.  The image loads and calls them as longwords:
+     *   0x00E0B882  tst.l (0x7a0,A2)          the callback, tested for NIL
+     *   0x00E0B8AE  movea.l (0x7a0,A2),A0     ... then jsr (A0)
+     *   0x00E0B5E4  movea.l (0x7a4,A3),A0     the driver record
+     */
+    uint32_t    callback;       /* 0x00: VA of the receive callback */
+    uint32_t    driver_info;    /* 0x04: VA of the driver info record */
     uint16_t    socket;         /* 0x08: Socket number (0xE1 = no socket) */
     uint16_t    port_index;     /* 0x0A: Port number (0-7) */
     uint16_t    callback_data;  /* 0x0C: Saved callback data */
@@ -174,13 +184,24 @@ typedef struct mac_os_$channel_t {
                                  */
 } mac_os_$channel_t;
 
-#if defined(ARCH_M68K)
+/* No host pointers in the record, so these hold on every target. */
+_Static_assert(__builtin_offsetof(mac_os_$channel_t, callback) == 0x00,
+               "mac_os_$channel_t.callback");
+_Static_assert(__builtin_offsetof(mac_os_$channel_t, driver_info) == 0x04,
+               "mac_os_$channel_t.driver_info");
 _Static_assert(__builtin_offsetof(mac_os_$channel_t, socket) == 0x08,
                "mac_os_$channel_t.socket");
+_Static_assert(__builtin_offsetof(mac_os_$channel_t, port_index) == 0x0A,
+               "mac_os_$channel_t.port_index");
+_Static_assert(__builtin_offsetof(mac_os_$channel_t, callback_data) == 0x0C,
+               "mac_os_$channel_t.callback_data");
+_Static_assert(__builtin_offsetof(mac_os_$channel_t, line_number) == 0x0E,
+               "mac_os_$channel_t.line_number");
+_Static_assert(__builtin_offsetof(mac_os_$channel_t, header_size) == 0x10,
+               "mac_os_$channel_t.header_size");
 _Static_assert(__builtin_offsetof(mac_os_$channel_t, flags) == 0x12,
                "mac_os_$channel_t.flags");
 _Static_assert(sizeof(mac_os_$channel_t) == 20, "mac_os_$channel_t must be 20 bytes");
-#endif
 
 /*
  * mac_os_$channel_t.flags bits, as the word at entry offset 0x12.
@@ -513,6 +534,24 @@ _Static_assert(sizeof(mac_os_$send_pkt_t) == 0x4C, "mac_os_$send_pkt_t must be 0
  * MAC_OS_$CHANNEL_TABLE.  The map gives the segment base no interior symbol,
  * so this stays a tree name.
  */
+/*
+ * MAC_OS_$BROADCAST_NEXTHOP - the constant next-hop record at
+ * MAC_OS_$DATA + 0x8E0 (0x00E23270), the last object in the module block
+ * (`D E22990 MAC_OS size = 8EC`).
+ *
+ * MAC_$SEND hands it to MAC_OS_$ARP as the address to resolve
+ * (0x00E0BBA6 `pea (0x8e0,A5)`), and the image bytes are
+ *
+ *   00e23270  00 00 00 00  ff ff  ff ff ff ff  00 00
+ *
+ * i.e. network 0 and an all-ones host address, which is exactly what
+ * MAC_OS_$ARP's broadcast test looks for (0x00E0C18E `cmpi.w #0x800,(0x4,A1)`
+ * fails, then the all-ones comparison succeeds and it answers with the
+ * broadcast link address and sets the caller's flag byte).  The map gives it
+ * no symbol, so the name is a tree name.
+ */
+extern const rip_$nexthop_t MAC_OS_$BROADCAST_NEXTHOP;
+
 extern mac_os_$port_pkt_table_t MAC_OS_$PORT_PKT_TABLES[MAC_OS_MAX_PORTS];
 /*
  * MAC_OS_$CHANNEL_TABLE - per-channel receive state, 10 entries of 20 bytes

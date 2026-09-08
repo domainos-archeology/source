@@ -33,7 +33,7 @@ int16_t ast_$read_area_pages(aste_t *aste, uint32_t *segmap, uint32_t *ppn_array
                               status_$t *status)
 {
     aote_t *aote;
-    int32_t qblk_head;
+    uint32_t qblk_head;
     uint32_t qblk_tail;
     int16_t pages_read;
     int16_t allocated;

@@ -33,7 +33,7 @@
  *   00e5965c  tst.l (-0x28,A6) / beq    ; no payload pages -> *data_len_ret=0
  *   00e59666  cmp.w (0x4,A2),D3w / bls  ; clamp to data_max (unsigned)
  *   00e5967e  jsr PKT_$DAT_COPY(rec.data_pages, len, data)
- *   00e59692  jsr PKT_$DUMP_DATA(rec.data_pages, reply->data_len)
+ *   00e59692  jsr PKT_$DUMP_DATA(rec.data_pages, reply->prefix.data_len)
  *   00e5969e  jsr NETBUF_$RTN_HDR(&netbuf_page)
  *
  * Note that the header is returned on the no-payload path too: the branch at
@@ -87,7 +87,7 @@ void MSG_$$RCV_INTERNAL(uint16_t socket,
     *dest_sock = reply->dest_sock;
     *src_node  = reply->src_node;
     *src_sock  = reply->src_sock;
-    *msg_type  = reply->msg_type;
+    *msg_type  = reply->prefix.request_id;
 
     /* 0xE595C4 - 0xE595EE: the hardware-address record */
     hw_addr->proto_family = reply->proto_family;
@@ -117,16 +117,16 @@ void MSG_$$RCV_INTERNAL(uint16_t socket,
         for (i = 0; i <= 0xF; i++) {         /* moveq #0xf + dbf = 16 */
             hw_addr->inet_addr[i] = payload[i];
         }
-        ((msg_$reply_hdr_t *)reply)->template_len =
-            (uint16_t)(reply->template_len - 0x10);
+        ((msg_$reply_hdr_t *)reply)->prefix.template_len =
+            (uint16_t)(reply->prefix.template_len - 0x10);
         payload += 0x10;
         rec.data = ARCH_PTR_TO_VA(payload);  /* 0xE59618 add.l D1,(-0x2c,A6) */
     }
 
     /* 0xE5961C: bls, so the compare is unsigned */
     template_len = template_max;
-    if (template_len > reply->template_len) {
-        template_len = reply->template_len;
+    if (template_len > reply->prefix.template_len) {
+        template_len = reply->prefix.template_len;
     }
     *template_len_ret = template_len;                    /* 0xE59628 */
 
@@ -150,8 +150,8 @@ void MSG_$$RCV_INTERNAL(uint16_t socket,
     } else {
         /* 0xE59666: bls, unsigned */
         data_len = data_max;
-        if (data_len > reply->data_len) {
-            data_len = reply->data_len;
+        if (data_len > reply->prefix.data_len) {
+            data_len = reply->prefix.data_len;
         }
         *data_len_ret = data_len;                        /* 0xE59670 */
 
@@ -159,7 +159,7 @@ void MSG_$$RCV_INTERNAL(uint16_t socket,
         PKT_$DAT_COPY(rec.data_pages, (int16_t)data_len, (char *)data);
 
         /* 0xE59692: the FULL payload length, not the clamped one */
-        PKT_$DUMP_DATA(rec.data_pages, (int16_t)reply->data_len);
+        PKT_$DUMP_DATA(rec.data_pages, (int16_t)reply->prefix.data_len);
     }
 
     /* 0xE5969E: reached on both paths */

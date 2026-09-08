@@ -141,10 +141,10 @@ static void reset_mocks(void)
     SOCK_$EVENT_COUNTERS[4] = &mock_socket_ec;
 
     /* the reply header the receive path reads */
-    mock_reply_hdr.magic    = 0x0118;
-    mock_reply_hdr.length   = sizeof(asknode_who_response_t);
-    mock_reply_hdr.data_len = 0;
-    mock_reply_hdr.reply_id = 0x1234;   /* PKT_$NEXT_ID below */
+    mock_reply_hdr.prefix.magic    = 0x0118;
+    mock_reply_hdr.prefix.template_len   = sizeof(asknode_who_response_t);
+    mock_reply_hdr.prefix.data_len = 0;
+    mock_reply_hdr.prefix.request_id = 0x1234;   /* PKT_$NEXT_ID below */
 
     mock_open_result = (int8_t)0xFF;
     mock_open_flags = 0;

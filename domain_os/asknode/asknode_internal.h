@@ -172,14 +172,18 @@ _Static_assert(sizeof(asknode_response_t) == 0x10, "asknode_response_t must be 1
  * Domain-internet path (0x00E00980-0x00E009AC).
  */
 typedef struct asknode_$reply_hdr_t {
-  uint16_t magic;         /* 0x00: 0x0118 (0x00E00984) */
-  uint16_t length;        /* 0x02: reply byte count, clamped to 0x200 by
-                           *       ASKNODE_$WHO_NOTOPO (0x00E66270) */
-  uint16_t data_len;      /* 0x04: payload byte count handed to
-                           *       PKT_$DUMP_DATA (saved at 0x00E6625C,
-                           *       pushed at 0x00E662A8) */
-  int16_t  reply_id;      /* 0x06: matched against the request id
-                           *       (0x00E66280 / 0x00E662C6) */
+  /*
+   * 0x00..0x07: the shared APP reply prefix (app/app.h).  ASKNODE reads all
+   * four words:
+   *   prefix.magic         0x0118, written at 0x00E00984
+   *   prefix.template_len  the reply byte count, clamped to 0x200 by
+   *                        ASKNODE_$WHO_NOTOPO (0x00E66270)
+   *   prefix.data_len      payload byte count handed to PKT_$DUMP_DATA
+   *                        (saved at 0x00E6625C, pushed at 0x00E662A8)
+   *   prefix.request_id    matched against the request id
+   *                        (0x00E66280 / 0x00E662C6)
+   */
+  app_$reply_hdr_t prefix;
   uint32_t sender_node;   /* 0x08: NODE_$ME of the sender (0x00E009C6) */
   uint16_t f0c;           /* 0x0C */
   uint32_t node_id;       /* 0x0E: the responding node id
@@ -194,8 +198,7 @@ typedef struct asknode_$reply_hdr_t {
 } __attribute__((packed)) asknode_$reply_hdr_t;
 
 #if defined(ARCH_M68K)
-_Static_assert(offsetof(asknode_$reply_hdr_t, data_len)    == 0x04, "reply_hdr.data_len");
-_Static_assert(offsetof(asknode_$reply_hdr_t, reply_id)    == 0x06, "reply_hdr.reply_id");
+_Static_assert(offsetof(asknode_$reply_hdr_t, prefix)      == 0x00, "reply_hdr.prefix");
 _Static_assert(offsetof(asknode_$reply_hdr_t, sender_node) == 0x08, "reply_hdr.sender_node");
 _Static_assert(offsetof(asknode_$reply_hdr_t, node_id)     == 0x0E, "reply_hdr.node_id");
 _Static_assert(offsetof(asknode_$reply_hdr_t, src_socket)  == 0x12, "reply_hdr.src_socket");

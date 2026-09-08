@@ -280,27 +280,25 @@ TEST(format_words)
     AREA_$INIT();
 
     ASSERT_EQ(0x540, AREA_$FORMAT.max_entries);
-    ASSERT_EQ(0, AREA_$FORMAT.word_04);
-    ASSERT_EQ(0, AREA_$FORMAT.word_06);
+    ASSERT_EQ(0, AREA_$FORMAT.seg_table_next);
+    ASSERT_EQ(0, AREA_$FORMAT.seg_table_count);
     /* +0x5D4 itself is never written */
     ASSERT_EQ(0xA5A5, AREA_$FORMAT.word_00);
 }
 
-/* 0x00E2F4D4-0x00E2F4E2: 64 records, byte +0x03 of each. */
+/* 0x00E2F4D4-0x00E2F4E2: 64 records, the `allocated` byte of each.  Nothing
+ * else in a pool record is touched, so the poison stays put. */
 TEST(seg_table_pool_flag_bytes)
 {
-    int i, j;
+    int i;
 
     reset();
     AREA_$INIT();
 
     for (i = 0; i < AREA_SEG_TABLE_POOL_COUNT; i++) {
-        ASSERT_EQ(0, AREA_$GLOBALS.seg_table_pool[i][AREA_SEG_TABLE_POOL_FLAG]);
-        for (j = 0; j < AREA_SEG_TABLE_POOL_STRIDE; j++) {
-            if (j != AREA_SEG_TABLE_POOL_FLAG) {
-                ASSERT_EQ(0xA5, AREA_$GLOBALS.seg_table_pool[i][j]);
-            }
-        }
+        ASSERT_EQ(0, AREA_$GLOBALS.seg_table_pool[i].allocated);
+        ASSERT_EQ((int16_t)0xA5A5, AREA_$GLOBALS.seg_table_pool[i].area_id);
+        ASSERT_EQ(0xA5, AREA_$GLOBALS.seg_table_pool[i].table_index);
     }
 }
 

@@ -17,9 +17,9 @@
  * then walk the `next` chain (+0x04) until both the area id (+0x00, a word)
  * and the table index (+0x02, a BYTE zero-extended to a word) match.
  *
- * This is deliberately NOT a call to area_$lookup_seg_table (0x00E09D2E):
- * that routine takes ML lock 0x12 and allocates a fresh table when none is
- * found, which is not what these two loops do.
+ * This is deliberately NOT a call to area_$alloc_seg_table (0x00E09D2E):
+ * that routine takes ML lock 0x12 and unconditionally allocates a fresh
+ * table off the pool, which is not what these two loops do.
  */
 static area_$seg_table_t *find_seg_table(int16_t asid, int16_t area_id,
                                          uint16_t table_idx)

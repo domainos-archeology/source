@@ -141,9 +141,9 @@ static void setup(void)
     /* MSG_$SOCK_OWNERS[n] is MSG_$DATA->ownership[n - 1] */
     MSG_$SOCK_OWNERS[TEST_SOCK][(0x3F - TEST_ASID) >> 3] |= 1u << (TEST_ASID & 7);
 
-    reply_hdr()->template_len = 8;
-    reply_hdr()->data_len = 0x20;
-    reply_hdr()->msg_type = 0x00A5;
+    reply_hdr()->prefix.template_len = 8;
+    reply_hdr()->prefix.data_len = 0x20;
+    reply_hdr()->prefix.request_id = 0x00A5;
     reply_hdr()->dest_node = 0x11112222;
     reply_hdr()->dest_sock = 0x3333;
     reply_hdr()->src_node = 0x44445555;
@@ -319,14 +319,14 @@ TEST(internal_peels_the_internet_address)
     memset(&hw, 0, sizeof(hw));
     reply_hdr()->proto_type = MSG_PROTO_TYPE_INET;
     reply_hdr()->proto_subtype = MSG_PROTO_SUBTYPE_INET;
-    reply_hdr()->template_len = 0x18;      /* 16 address bytes + 8 template */
+    reply_hdr()->prefix.template_len = 0x18;      /* 16 address bytes + 8 template */
 
     call_internal(32, 32, &hw, &tlen, &dlen, &ec1, &ec2);
 
     ASSERT_EQ('A', hw.inet_addr[0]);
     ASSERT_EQ('P', hw.inet_addr[15]);
     ASSERT_EQ(8, tlen);                    /* 0x18 - 0x10 */
-    ASSERT_EQ(8, reply_hdr()->template_len);   /* written back in place */
+    ASSERT_EQ(8, reply_hdr()->prefix.template_len);   /* written back in place */
     ASSERT_EQ('Q', template_out[0]);       /* the copy starts past the addr */
 }
 

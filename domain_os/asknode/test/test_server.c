@@ -358,10 +358,10 @@ static void run_request(const asknode_request_t *req, uint16_t len)
     memset(&ctx, 0, sizeof(ctx));
     routing_info = 0;
 
-    mock_reply_hdr.magic       = 0x0118;
-    mock_reply_hdr.length      = len;
-    mock_reply_hdr.data_len    = 0x40;
-    mock_reply_hdr.reply_id    = 0x1234;
+    mock_reply_hdr.prefix.magic       = 0x0118;
+    mock_reply_hdr.prefix.template_len      = len;
+    mock_reply_hdr.prefix.data_len    = 0x40;
+    mock_reply_hdr.prefix.request_id    = 0x1234;
     mock_reply_hdr.sender_node = 0x00099999;
     mock_reply_hdr.node_id     = 0x000AAAAA;
     mock_reply_hdr.src_socket  = 0x0009;
@@ -401,8 +401,8 @@ TEST(record_layouts)
     ASSERT_EQ(0x18, offsetof(asknode_$server_ctx_t, request_id));
     ASSERT_EQ(0x1A, offsetof(asknode_$server_ctx_t, socket));
 
-    ASSERT_EQ(0x04, offsetof(asknode_$reply_hdr_t, data_len));
-    ASSERT_EQ(0x06, offsetof(asknode_$reply_hdr_t, reply_id));
+    ASSERT_EQ(0x04, offsetof(asknode_$reply_hdr_t, prefix.data_len));
+    ASSERT_EQ(0x06, offsetof(asknode_$reply_hdr_t, prefix.request_id));
     ASSERT_EQ(0x0E, offsetof(asknode_$reply_hdr_t, node_id));
     ASSERT_EQ(0x12, offsetof(asknode_$reply_hdr_t, src_socket));
 }
@@ -638,10 +638,10 @@ TEST(who_request_flag_bit2_stops_propagation)
     memset(&ctx, 0, sizeof(ctx));
     routing_info = 0;
 
-    mock_reply_hdr.magic       = 0x0118;
-    mock_reply_hdr.length      = 0x18;
-    mock_reply_hdr.data_len    = 0x40;
-    mock_reply_hdr.reply_id    = 0x1234;
+    mock_reply_hdr.prefix.magic       = 0x0118;
+    mock_reply_hdr.prefix.template_len      = 0x18;
+    mock_reply_hdr.prefix.data_len    = 0x40;
+    mock_reply_hdr.prefix.request_id    = 0x1234;
     mock_reply_hdr.sender_node = 0x00099999;
     mock_reply_hdr.node_id     = 0x000AAAAA;
     mock_reply_hdr.src_socket  = 0x0009;

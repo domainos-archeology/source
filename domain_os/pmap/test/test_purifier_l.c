@@ -155,9 +155,9 @@ void MMAP_$UNAVAIL_REMOV(uint32_t vpn, boolean f) { (void)vpn; (void)f; }
 void MMAP_$GET_IMPURE(uint16_t w, uint32_t *v, int8_t a, uint16_t m,
                       uint32_t *s, uint16_t *r)
 { (void)w; (void)v; (void)a; (void)m; *s = 0; *r = 0; }
-void DISK_$GET_QBLKS(int16_t c, int32_t *h, uint32_t *t)
+void DISK_$GET_QBLKS(int16_t c, uint32_t *h, uint32_t *t)
 { (void)c; *h = 0; *t = 0; }
-void DISK_$RTN_QBLKS(int16_t c, int32_t h, uint32_t t) { (void)c; (void)h; (void)t; }
+void DISK_$RTN_QBLKS(int16_t c, uint32_t h, uint32_t t) { (void)c; (void)h; (void)t; }
 void DISK_$WRITE_MULTI(int8_t f, void *l, status_$t *st) { (void)f; (void)l; *st = 0; }
 void NETLOG_$LOG_IT(uint16_t k, uint32_t *u, uint16_t a, uint16_t b,
                     uint16_t c, uint16_t d, uint16_t e, uint16_t f)

@@ -12,60 +12,99 @@
  */
 
 #include "audit/audit_internal.h"
+#include "mmu/mmu.h"    /* MMU_$INSTALL - audit_$alloc wires its own pages */
+#include "wp/wp.h"      /* WP_$CALLOC */
 
 /*
- * TODO: audit_$alloc below is a stand-in, not a transcription.  The image
- * (0x00E7120C) is a bump allocator over AUDIT_$DATA.pool_next /
- * .pool_limit starting at the fixed VA AUDIT_POOL_BASE_VA, wiring one
- * 0x400-byte page at a time with WP_$CALLOC (0x00E070EC) + MMU_$INSTALL
- * (0x00E24048).  Tracked by bead source-3ad7.
+ * audit_$alloc (0x00E7120C) - the AUDIT_ module's bump allocator
  *
- * Simple memory pool for hash nodes.
- * In the original implementation, this used wired memory allocation.
- * For simplicity, we use a static pool here.
- */
-#define AUDIT_MAX_HASH_NODES    AUDIT_MAX_LIST_ENTRIES
-
-static audit_hash_node_t hash_node_pool[AUDIT_MAX_HASH_NODES];
-static int16_t hash_node_next = 0;
-
-/*
- * audit_$alloc - Allocate memory for hash nodes
+ * Two modes, selected by the word at (0x8,A6):
  *
- * Allocates a block from the hash node pool.
+ *   size == 0   0x00E7121E `move.l #0xec4800,(0x1a4,A5)` resets pool_next to
+ *               AUDIT_POOL_BASE_VA.  0x00E71226-0x00E7122C sets pool_limit to
+ *               the same VA ONLY when it is still zero, so the pages wired by
+ *               earlier calls stay wired across a reset.  Returns NIL
+ *               (0x00E71232 `clr.l D2`) and does not touch status_ret.
+ *
+ *   size != 0   0x00E71238 saves the old pool_next as the result, 0x00E7123C
+ *               `ext.l D1` sign-extends the size word and 0x00E7123E adds it
+ *               to pool_next.  Then, while pool_next is at or past pool_limit
+ *               (0x00E71274-0x00E7127C `cmp.l` + `bcc`, an UNSIGNED compare),
+ *               one 0x400-byte page is wired in at pool_limit:
+ *                 0x00E7124A  WP_$CALLOC(&ppn, status_ret)
+ *                 0x00E71252  `tst.l (A2)` - bail out on a bad status, still
+ *                             returning the block that was handed out
+ *                 0x00E71262  MMU_$INSTALL(ppn, pool_limit, 0x16)
+ *                 0x00E7126C  pool_limit += 0x400
+ *
+ * NOTE, PRESERVED AS FOUND: neither path ever stores status_$ok.  status_ret
+ * is written only by WP_$CALLOC, so a call that needs no new page leaves the
+ * caller's status cell exactly as it found it - which is why
+ * audit_$add_to_hash's `tst.l (A4)` at 0x00E712DA is meaningful only because
+ * its own caller cleared the cell first.
+ *
+ * The declared parameter is `uint16_t size`, but the image sign-extends the
+ * word, so the addition is spelled with an int16_t cast to reproduce
+ * 0x00E7123C exactly.  (source-3ad7)
  */
+
+/* 0x00E71256 `pea (0x16).w` - the same MMU_$INSTALL flag word AREA_$INIT and
+ * the PEB control page use. */
+#define AUDIT_POOL_MMU_FLAGS    0x16
+
+/* 0x00E7126C `addi.l #0x400,(0x1a8,A5)` - one page per WP_$CALLOC. */
+#define AUDIT_POOL_PAGE_SIZE    0x400
+
 void *audit_$alloc(uint16_t size, status_$t *status_ret)
 {
-    audit_hash_node_t *node;
+    uint8_t *result;
+    uint32_t ppn;
 
+    /* 0x00E7121C `bne.b` - the reset arm. */
     if (size == 0) {
-        /* Size 0 is a reset request (used before loading new list) */
-        hash_node_next = 0;
-        *status_ret = status_$ok;
-        return NULL;
+        AUDIT_$DATA.pool_next = (uint8_t *)ARCH_VA_TO_PTR(AUDIT_POOL_BASE_VA);
+
+        /* 0x00E71226 `tst.l (0x1a8,A5)` / `bne.b`: first call only. */
+        if (AUDIT_$DATA.pool_limit == NULL) {
+            AUDIT_$DATA.pool_limit = AUDIT_$DATA.pool_next;
+        }
+
+        return NULL;                            /* 0x00E71232 `clr.l D2` */
     }
 
-    if (hash_node_next >= AUDIT_MAX_HASH_NODES) {
-        *status_ret = status_$audit_excessive_event_types;
-        return NULL;
+    /* 0x00E71238-0x00E7123E: hand out the old cursor, then advance it by the
+     * SIGN-EXTENDED size word. */
+    result = AUDIT_$DATA.pool_next;
+    AUDIT_$DATA.pool_next += (int16_t)size;
+
+    /* 0x00E71274-0x00E7127C: `bcc` is an unsigned >=, and the test runs
+     * before the first body (0x00E71242 `bra.b`). */
+    while (ARCH_PTR_TO_VA(AUDIT_$DATA.pool_next) >=
+           ARCH_PTR_TO_VA(AUDIT_$DATA.pool_limit)) {
+
+        WP_$CALLOC(&ppn, status_ret);           /* 0x00E7124A */
+
+        /* 0x00E71252-0x00E71254: leave with the block already handed out. */
+        if (*status_ret != status_$ok) {
+            return result;
+        }
+
+        MMU_$INSTALL(ppn, ARCH_PTR_TO_VA(AUDIT_$DATA.pool_limit),
+                     AUDIT_POOL_MMU_FLAGS);     /* 0x00E71262 */
+
+        AUDIT_$DATA.pool_limit += AUDIT_POOL_PAGE_SIZE;  /* 0x00E7126C */
     }
 
-    node = &hash_node_pool[hash_node_next++];
-    *status_ret = status_$ok;
-    return node;
+    return result;                              /* 0x00E7127E `move.l D2,D0` */
 }
 
 /*
- * audit_$free - Free memory to the pool
- *
- * In our simple implementation, freeing is a no-op.
- * Memory is reclaimed when the pool is reset.
+ * There is no audit_$free in the image: 0x00E7120C is the only allocator
+ * entry point and neither of its two callers (0x00E7129A, 0x00E712D2) has a
+ * free-shaped argument.  Blocks are reclaimed only by the `alloc(0)` reset
+ * audit_$clear_hash_table performs.  The prototype still sitting in
+ * audit/audit_internal.h has no definition on purpose.  (source-3ad7)
  */
-void audit_$free(void *ptr)
-{
-    /* No-op in this implementation */
-    (void)ptr;
-}
 
 /*
  * audit_$clear_hash_table - Clear the audit list hash table

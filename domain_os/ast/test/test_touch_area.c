@@ -223,14 +223,14 @@ int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,
     return 0;
 }
 
-void DISK_$GET_QBLKS(int16_t count, int32_t *qblk_head, uint32_t *qblk_tail)
+void DISK_$GET_QBLKS(int16_t count, uint32_t *qblk_head, uint32_t *qblk_tail)
 {
     (void)count;
     *qblk_head = 0;
     *qblk_tail = 0;
 }
 
-void DISK_$RTN_QBLKS(int16_t count, int32_t qblk_head, uint32_t qblk_tail)
+void DISK_$RTN_QBLKS(int16_t count, uint32_t qblk_head, uint32_t qblk_tail)
 {
     (void)count; (void)qblk_head; (void)qblk_tail;
 }

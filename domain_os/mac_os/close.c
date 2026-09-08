@@ -58,7 +58,8 @@ void MAC_OS_$CLOSE(int16_t *channel, status_$t *status_ret)
      * make; bead source-10zs.)
      */
     driver_close = (mac_os_$driver_close_fn_t)
-        *(void **)((uint8_t *)chan->driver_info + MAC_OS_DRIVER_CLOSE_OFFSET);
+        *(void **)((uint8_t *)ARCH_VA_TO_PTR(chan->driver_info)
+                  + MAC_OS_DRIVER_CLOSE_OFFSET);
     if (driver_close == NULL) {
         *status_ret = status_$mac_port_op_not_implemented;
     } else {
@@ -104,8 +105,8 @@ void MAC_OS_$CLOSE(int16_t *channel, status_$t *status_ret)
     chan->flags &= (uint16_t)~MAC_OS_CHANNEL_IN_USE;
 
     /* 0x00E0B506 / 0x00E0B50A */
-    chan->driver_info = NULL;
-    chan->callback    = NULL;
+    chan->driver_info = 0;
+    chan->callback    = 0;
 
     /* 0x00E0B50E */
     ML_$EXCLUSION_STOP(&MAC_OS_$EXCLUSION);

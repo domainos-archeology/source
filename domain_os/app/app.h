@@ -33,6 +33,45 @@
  */
 
 /*
+ * app_$reply_hdr_t - the eight-byte prefix of the application reply record
+ * app_$receive_rec_t.reply points at.
+ *
+ * APP_$RECEIVE builds it on the Domain internet path at
+ * 0x00E00980-0x00E009AC, through A0 = rec.reply:
+ *   0x00E00984  move.w #0x118,(A0)              magic
+ *   0x00E009AC  move.w (0x12,A1),(0x2,A0)       template_len, off the
+ *                                               received header + 0x12
+ *   0x00E009A6  move.w (-0x16,A6),(0x4,A0)      data_len, the payload byte
+ *                                               count APP_$RECEIVE computed
+ *   0x00E009A0  move.w (0x16,A1),(0x6,A0)       request_id, off the received
+ *                                               header + 0x16
+ * On the XNS path the reply is the received header + 0x1E (0x00E008A8) and
+ * the same four words are already in the packet.
+ *
+ * Every protocol that calls APP_$RECEIVE reads these four words at these
+ * offsets and then continues into its own tail:
+ *   msg_$reply_hdr_t       (msg/msg_internal.h)      tail to 0x17
+ *   asknode_$reply_hdr_t   (asknode/asknode_internal.h) tail to 0x15
+ *   rem_file/ and rip/     use this record by itself
+ * MSG spells the +0x06 word "message type" and ASKNODE spells it "reply id";
+ * they are the same cell, matched against the request id the sender chose.
+ * (source-ca0z)
+ */
+typedef struct app_$reply_hdr_t {
+    uint16_t    magic;          /* 0x00: 0x0118 (0x00E00984); only asknode
+                                 *       ever looks at it */
+    uint16_t    template_len;   /* 0x02: reply/template byte count */
+    uint16_t    data_len;       /* 0x04: bulk payload byte count */
+    int16_t     request_id;     /* 0x06: the id the reply is matched on */
+} __attribute__((packed)) app_$reply_hdr_t;
+
+_Static_assert(offsetof(app_$reply_hdr_t, magic)        == 0x00, "app_reply.magic");
+_Static_assert(offsetof(app_$reply_hdr_t, template_len) == 0x02, "app_reply.template_len");
+_Static_assert(offsetof(app_$reply_hdr_t, data_len)     == 0x04, "app_reply.data_len");
+_Static_assert(offsetof(app_$reply_hdr_t, request_id)   == 0x06, "app_reply.request_id");
+_Static_assert(sizeof(app_$reply_hdr_t) == 8, "app_$reply_hdr_t must be 8 bytes");
+
+/*
  * app_$receive_rec_t - the 44-byte result record APP_$RECEIVE fills in
  *
  * APP_$RECEIVE (0x00E00800) takes the record in A2 and drives it from the

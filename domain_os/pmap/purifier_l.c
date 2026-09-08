@@ -351,7 +351,7 @@ void PMAP_$PURIFIER_L(void)
 
                     /* 0x00E13CA4 */
                     DISK_$GET_QBLKS((int16_t)page_count,
-                                    (int32_t *)&qblk_main,
+                                    (uint32_t *)&qblk_main,
                                     (uint32_t *)qblk_alt);
 
                     /* 0x00E13CBE */
@@ -427,7 +427,7 @@ void PMAP_$PURIFIER_L(void)
 
                     /* 0x00E13DD0 */
                     DISK_$RTN_QBLKS((int16_t)page_count,
-                                    (int32_t)(uintptr_t)qblk_main,
+                                    (uint32_t)(uintptr_t)qblk_main,
                                     (uint32_t)(uintptr_t)qblk_alt[0]);
 
                     if (batch_advanced < 0) {       /* 0x00E13DE4 */

@@ -18,7 +18,12 @@
  * An area handle combines generation (high word) and area ID (low word).
  *
  * Lock: ML_LOCK_AREA (0x0E) for area table operations
- *       ML_LOCK_AST (0x14) for AST operations within area functions
+ *       ML_LOCK_AST (0x12) for AST operations within area functions
+ *          (AREA_$COPY 0x00E09298/0x00E092FE, area_$alloc_seg_table
+ *           0x00E09D46/0x00E09E28 - all push #0x12)
+ *       ML_LOCK_PMAP (0x14) for the page-map operations AREA_$TOUCH
+ *          (0x00E0964A/0x00E0968E), AREA_$ASSOC (0x00E096E4) and
+ *          AREA_$TRANSFER (0x00E08176) take
  */
 
 #ifndef AREA_H
@@ -231,27 +236,119 @@ typedef struct area_$rpmap_cache_t {
 } area_$rpmap_cache_t;
 
 /*
- * AREA_$FORMAT (map symbol at 0xE1E6EC = globals+0x5D4), four words.
+ * AREA_$FORMAT (map symbol at 0xE1E6EC = globals+0x5D4), four words.  The map
+ * names no symbol between it and AREA_$DEL_DUP at 0xE1E6F4 (= globals+0x5DC),
+ * so all four words belong to this record.
  *
  * AREA_$INIT writes +0x02 = 0x540 (0x00E2F3B6) and clears +0x04 and +0x06
  * (0x00E2F4CC/0x00E2F4D0).  area_$alloc_resources clamps its request against
  * +0x02 (globals+0x5D6), so that word is the maximum number of area_$entry_t
  * records the table may ever hold.
+ *
+ * The last two words are the seg-table pool's bookkeeping, recovered from
+ * area_$alloc_seg_table (0x00E09D2E):
+ *   +0x04 (globals+0x5D8)  the index of the next free pool record.  Read at
+ *         0x00E09D6A to form the bitmap page VA (0xEE6400 + idx * 0x400) and
+ *         again at 0x00E09DA8 to form the record address; rewritten by the
+ *         free-slot scan at 0x00E09DEE, or forced to 64 at 0x00E09E00 when
+ *         the pool is full.
+ *   +0x06 (globals+0x5DA)  the number of records handed out.  0x00E09D52
+ *         `cmpi.w #0x40` refuses the allocation (returning NIL) when it has
+ *         reached 64, and 0x00E09DA4 `addq.w #0x1` bumps it.
  */
 typedef struct area_$format_t {
     uint16_t    word_00;        /* 0x00 (+0x5D4): never touched by AREA_$INIT */
     uint16_t    max_entries;    /* 0x02 (+0x5D6): 0x540 = 1344 */
-    uint16_t    word_04;        /* 0x04 (+0x5D8): cleared by AREA_$INIT */
-    uint16_t    word_06;        /* 0x06 (+0x5DA): cleared by AREA_$INIT */
+    uint16_t    seg_table_next; /* 0x04 (+0x5D8): next free seg_table_pool[] */
+    uint16_t    seg_table_count;/* 0x06 (+0x5DA): seg_table_pool[] records in use */
 } area_$format_t;
 
 /*
- * Number of 12-byte records in the block's opaque middle region.
+ * area_$seg_slot_t - one four-byte cell of an area's segment map.
+ *
+ * area_$entry_t.seg_bitmap[] is two of these (entry+0x18 and entry+0x1C) and
+ * the overflow tables an area_$seg_table_t owns are arrays of them; both
+ * AREA_$COPY cursors step by four bytes (0x00E0936A/0x00E0936E
+ * `addq.l #0x4`) and the overflow offset is scaled by four as well
+ * (0x00E0921C `lsl.w #0x2,D0w`).
+ *
+ * The field offsets are area_$get_aste's (0x00E09A6A), which is handed one
+ * of these cells as its second argument:
+ *   +0x00  the eight "segment allocated" bits - 0x00E09B88 `move.b (A4),D0b`
+ *          followed by `btst.l D3,D0` with D3 = seg_index & 7, and the same
+ *          byte is what AREA_$COPY tests at 0x00E09284.
+ *   +0x01  a state byte - 0x00E09A96 `lea (0x1,A1),A2` then 0x00E09AA0
+ *          `btst.b #0x6,(A2)` (the "in transition" wait), and 0x00E09B06
+ *          `bset.b #0x6,(0x1,A0)`.
+ *   +0x02  the 1-based ASTE index - 0x00E09AAE `move.w (0x2,A0),D0w`, which
+ *          0x00E09AB2-0x00E09AC0 scales by 0x14 into the ASTE table at
+ *          0xEC5400.
+ *
+ * Naming the byte gives the same address on either endianness; casting the
+ * longword to `uint8_t *` would not.
+ */
+typedef struct area_$seg_slot_t {
+    uint8_t  bits;              /* 0x00: eight "segment allocated" flags */
+    uint8_t  state;             /* 0x01: bit 6 = ASTE in transition */
+    uint16_t aste_index;        /* 0x02: 1-based index into ASTE_BASE */
+} area_$seg_slot_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(area_$seg_slot_t) == 4, "area_$seg_slot_t size");
+_Static_assert(offsetof(area_$seg_slot_t, bits)       == 0x00, "seg_slot.bits");
+_Static_assert(offsetof(area_$seg_slot_t, state)      == 0x01, "seg_slot.state");
+_Static_assert(offsetof(area_$seg_slot_t, aste_index) == 0x02, "seg_slot.aste_index");
+#endif
+
+/*
+ * Extended segment table entry for areas with > 16 segments
+ * Used by AREA_$COPY and segment threading operations.
+ *
+ * All five fields are written by area_$alloc_seg_table (0x00E09DBE .. 
+ * 0x00E09E18); `allocated` is the pool's in-use flag, set with `st` and read
+ * back by the free-slot scan's `tst.b` / `bmi`, so it is a Domain boolean.
+ */
+typedef struct area_$seg_table_t {
+    int16_t area_id;            /* 0x00: Area ID */
+    uint8_t table_index;        /* 0x02: Table index (0-255) */
+    int8_t  allocated;          /* 0x03: pool in-use flag (0x00E09DBE `st`) */
+    struct area_$seg_table_t *next;  /* 0x04: Next in ASID list */
+    area_$seg_slot_t *bitmap_ptr;    /* 0x08: Pointer to the overflow slots */
+} area_$seg_table_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(area_$seg_table_t) == 0x0C,  /* AREA_SEG_TABLE_POOL_STRIDE */
+               "area_$seg_table_t size");
+_Static_assert(offsetof(area_$seg_table_t, area_id)     == 0x00, "seg_table.area_id");
+_Static_assert(offsetof(area_$seg_table_t, table_index) == 0x02, "seg_table.table_index");
+_Static_assert(offsetof(area_$seg_table_t, allocated)   == 0x03, "seg_table.allocated");
+_Static_assert(offsetof(area_$seg_table_t, next)        == 0x04, "seg_table.next");
+_Static_assert(offsetof(area_$seg_table_t, bitmap_ptr)  == 0x08, "seg_table.bitmap_ptr");
+#endif
+
+/*
+ * The seg-table pool: 64 area_$seg_table_t records at globals+0x150.
+ *
  * AREA_$INIT clears one byte in each (0x00E2F4D4 `moveq #0x3f,D0` = 64
  * iterations, `clr.b (0x153,A0)` / `lea (0xc,A0),A0`), and the 64 * 0x0C =
  * 0x300 bytes tile globals+0x150 .. globals+0x44F exactly, between the
  * 58-longword seg-table list array that ends at +0x150 and uid_hash_free at
  * +0x450.
+ *
+ * area_$alloc_seg_table (0x00E09D2E) is what gives the region its type.  It
+ * forms the record address as globals + index*0x0C + 0x150 - 0x00E09DA8
+ * reads the cursor at globals+0x5D8, 0x00E09DAC-0x00E09DB4 multiplies it by
+ * twelve (`lsl.l #0x2` then `add.l D1,D1` / `add.l D1,D0`), 0x00E09DB6
+ * `lea (0x0,A5,D0*0x1),A1` and 0x00E09DBA `lea (0x150,A1),A0` - and then
+ * fills exactly the area_$seg_table_t fields:
+ *   0x00E09DBE  st (0x3,A0)            allocated = TRUE
+ *   0x00E09E06  move.l D5,(0x8,A0)     bitmap_ptr = the fresh 0x400 page
+ *   0x00E09E0A  move.w D2,(A0)         area_id
+ *   0x00E09E0C  move.b D3,(0x2,A0)     table_index
+ *   0x00E09E18  move.l (0x68,A1),(0x4,A0)   next = seg_table_list[asid]
+ * The free-slot scan at 0x00E09DE8 `tst.b (0x153,A1)` (with A1 stepping by
+ * 0x0C) reads back the same +0x03 byte as a Domain boolean, which is what
+ * AREA_$INIT's clear initialises.  (source-tqkk)
  */
 #define AREA_SEG_TABLE_POOL_COUNT   64
 #define AREA_SEG_TABLE_POOL_STRIDE  0x0C
@@ -285,12 +382,11 @@ typedef struct area_$globals_t {
      * `lsl.w #0x2` on the ASID (0x00E08256-0x00E08258). */
     struct area_$seg_table_t *seg_table_list[AREA_MAX_ENTRIES];   /* 0x068 */
 
-    /* 0x150: 64 records of 0x0C bytes.  AREA_$INIT clears byte +0x03 of each
-     * and nothing else in the image reads or writes the region, so it is kept
-     * as bytes rather than given a speculative type.
-     * TODO: identify these records (bead source-tqkk). */
-    uint8_t                 seg_table_pool[AREA_SEG_TABLE_POOL_COUNT]
-                                          [AREA_SEG_TABLE_POOL_STRIDE]; /* 0x150 */
+    /* 0x150: the pool area_$alloc_seg_table (0x00E09D2E) hands out, indexed
+     * by the cursor in format.seg_table_next.  AREA_$INIT clears every
+     * record's `allocated` byte; the allocator sets it with `st` and the
+     * free-slot scan tests it. */
+    area_$seg_table_t       seg_table_pool[AREA_SEG_TABLE_POOL_COUNT];  /* 0x150 */
 
     struct area_$uid_hash_t *uid_hash_free;                       /* 0x450 */
     struct area_$uid_hash_t *uid_hash[AREA_UID_HASH_BUCKETS];     /* 0x454 */
@@ -326,6 +422,10 @@ _Static_assert(offsetof(area_$rpmap_cache_t, byte_08) == 0x08, "rpmap_cache.byte
 _Static_assert(offsetof(area_$rpmap_cache_t, byte_09) == 0x09, "rpmap_cache.byte_09");
 _Static_assert(sizeof(area_$format_t) == 0x08, "area_$format_t size");
 _Static_assert(offsetof(area_$format_t, max_entries) == 0x02, "format.max_entries");
+_Static_assert(offsetof(area_$format_t, seg_table_next)  == 0x04, "format.seg_table_next");
+_Static_assert(offsetof(area_$format_t, seg_table_count) == 0x06, "format.seg_table_count");
+_Static_assert(sizeof(((area_$globals_t *)0)->seg_table_pool) == 0x300,
+               "globals.seg_table_pool spans +0x150..+0x44F");
 
 _Static_assert(offsetof(area_$globals_t, rpmap_page)        == 0x000, "globals.rpmap_page");
 _Static_assert(offsetof(area_$globals_t, rpmap_cache)       == 0x010, "globals.rpmap_cache");

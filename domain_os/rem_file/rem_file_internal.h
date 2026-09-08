@@ -8,6 +8,7 @@
 #ifndef REM_FILE_INTERNAL_H
 #define REM_FILE_INTERNAL_H
 
+#include "app/app.h"       /* app_$reply_hdr_t, app_$receive_rec_t */
 #include "rem_file/rem_file.h"
 #include "base/base.h"
 #include "time/time.h"
@@ -314,29 +315,14 @@ extern char REM_FILE_$DISKLESS_CRASH_MSG[];
 extern uint8_t REM_FILE_$DATA[];
 
 /*
- * rem_file_$reply_hdr_t - the reply header APP_$RECEIVE hands back at
- * app_$receive_rec_t.reply (0x00E6125A `movea.l (-0x30,A6),A0`).
- *
- * It is the same 0x18-byte application reply header msg/ and asknode/ read
- * (msg_$reply_hdr_t, asknode_$reply_hdr_t): the template byte count at +0x02,
- * the payload byte count at +0x04 and the request id at +0x06.  REM_FILE only
- * reads those three words.
- * TODO: the three subsystems should share one record owned by app/ or pkt/
- * (bead source-di1a).
+ * The reply header APP_$RECEIVE hands back at app_$receive_rec_t.reply
+ * (0x00E6125A `movea.l (-0x30,A6),A0`) is the shared eight-byte
+ * app_$reply_hdr_t (app/app.h).  REM_FILE reads three of its four words:
+ *   prefix.template_len  0x00E6126E, the reply header length
+ *   prefix.data_len      0x00E61262, the bulk payload length
+ *   prefix.request_id    0x00E61266, matched against pkt_id
+ * and never looks at prefix.magic.  (source-ca0z)
  */
-typedef struct rem_file_$reply_hdr_t {
-    uint16_t    f_00;           /* 0x00: not read by REM_FILE */
-    uint16_t    template_len;   /* 0x02: 0x00E6126E, the reply header length */
-    uint16_t    data_len;       /* 0x04: 0x00E61262, the bulk payload length */
-    int16_t     reply_id;       /* 0x06: 0x00E61266, matched against pkt_id */
-} __attribute__((packed)) rem_file_$reply_hdr_t;
-
-_Static_assert(__builtin_offsetof(rem_file_$reply_hdr_t, template_len) == 0x02,
-               "rem_file_$reply_hdr_t.template_len");
-_Static_assert(__builtin_offsetof(rem_file_$reply_hdr_t, data_len) == 0x04,
-               "rem_file_$reply_hdr_t.data_len");
-_Static_assert(__builtin_offsetof(rem_file_$reply_hdr_t, reply_id) == 0x06,
-               "rem_file_$reply_hdr_t.reply_id");
 
 /*
  * Per-address-space retry count (accessed via A5-relative addressing)

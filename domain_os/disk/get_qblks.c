@@ -32,7 +32,7 @@
 
 #include "disk/disk_internal.h"
 
-void DISK_$GET_QBLKS(int16_t count, int32_t *qblk_head, uint32_t *qblk_tail)
+void DISK_$GET_QBLKS(int16_t count, uint32_t *qblk_head, uint32_t *qblk_tail)
 {
-    disk_$get_qblks_internal(count, 0, (uint32_t *)qblk_head, qblk_tail);
+    disk_$get_qblks_internal(count, 0, qblk_head, qblk_tail);
 }
