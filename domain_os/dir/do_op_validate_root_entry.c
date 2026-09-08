@@ -32,35 +32,30 @@
 
 #include "dir/dir_internal.h"
 
-#ifndef status_$naming_cache_entry_stale
-#endif
-#ifndef status_$naming_cache_entry_stale_and_updated
-#endif
-
 void dir_$do_op_validate_root_entry(void *name, uint16_t name_len,
                                     status_$t *status_ret)
 {
-    uint16_t slot_info[2];
-    uint16_t extra_buf[2];
-    uint32_t local_handle;
-    void *entry_ptr;
-    uint32_t local_uid_high;    /* -0x50 */
-    uint32_t local_uid_low;     /* -0x4C */
+    /* A6-0x60: dir_$find_entry's depth_ret (`pea (-0x60,A6)`, 0x00E50208). */
+    int16_t  find_depth;
+    /* A6-0x5E: dir_$find_entry's path buffer.  Its capacity argument is 0
+     * (`clr.w -(SP)` at 0x00E50214), so no level is ever recorded in it. */
+    dir_$page_path_t find_path[1];
+    uint32_t local_handle;      /* A6-0x5C */
+    void    *entry_ptr;         /* A6-0x58 */
+    uint32_t local_uid_high;    /* A6-0x50 */
+    uint32_t local_uid_low;     /* A6-0x4C */
     uint32_t local_extra;       /* D2 */
 
     /*
-     * Remote entry buffer layout (from REM_NAME_$GET_ENTRY):
-     * The entry buffer is at -0x48 (36 bytes).
-     * Within it, at offset 0x24 from the buffer start (-0x24 from A6):
-     *   remote_uid.high at -0x24
-     *   remote_uid.low  at -0x20
-     *   remote_extra    at -0x1C
+     * A6-0x48: ONE dir_$rep_entry_t, the record REM_NAME_$GET_ENTRY fills
+     * (`pea (-0x48,A6)` at 0x00E50268).  The consumers reach two of its
+     * fields (source-knhm):
+     *   (-0x24,A6) uid    = rep + 0x24  (0x00E5028C, 0x00E50324, 0x00E5037E)
+     *   (-0x1C,A6) extra  = rep + 0x2C  (0x00E5029A, 0x00E50328, 0x00E50366)
      */
-    uint8_t remote_entry_buf[36];
-    uid_t remote_uid;           /* -0x24: uid from remote entry */
-    uint32_t remote_extra;      /* -0x1C: extra/generation from remote entry */
-    uint8_t remove_buf[8];      /* -0x18: buffer for remove_entry result */
-    uint32_t hint_data[2];      /* -0x10, -0x0C: hint update data */
+    dir_$rep_entry_t rep;
+    uint8_t  remove_buf[8];     /* A6-0x18: dir_$remove_entry's uid_ret */
+    uint32_t hint_data[2];      /* A6-0x10 / A6-0x0C: HINT_$ADDI's argument */
 
     ACL_$ENTER_SUPER();
 
@@ -74,7 +69,7 @@ void dir_$do_op_validate_root_entry(void *name, uint16_t name_len,
     {
         char found;
         found = dir_$find_entry((void *)(uintptr_t)local_handle, name, name_len, 0,
-                                &entry_ptr, extra_buf, slot_info);
+                                &entry_ptr, find_path, &find_depth);
         if (found < 0) {
             uint8_t *ep = (uint8_t *)entry_ptr;
 
@@ -95,27 +90,34 @@ void dir_$do_op_validate_root_entry(void *name, uint16_t name_len,
             dir_$release_handle(&local_handle);
 
             /* Query the authoritative replicated root */
+            /* 0x00E50266-0x00E50278: the name-length argument is the
+             * ADDRESS of this routine's own parameter slot (`pea (0xc,A6)`),
+             * and the whole 0x30-byte record is filled by one call. */
             REM_NAME_$GET_ENTRY(&NAME_$CANNED_REP_ROOT_UID, name,
-                                &name_len, remote_entry_buf, status_ret);
+                                &name_len, &rep, status_ret);
             if (*status_ret != status_$ok) {
                 goto cleanup;
             }
 
             /* Compare local vs remote UIDs */
-            if (local_uid_high == remote_uid.high &&
-                local_uid_low == remote_uid.low) {
-                /* UIDs match - check extra data */
-                if (local_extra == remote_extra) {
+            /* 0x00E50288-0x00E50298: `cmpm.l` over the two longwords. */
+            if (local_uid_high == rep.uid.high &&
+                local_uid_low == rep.uid.low) {
+                /* UIDs match - check extra data (0x00E5029A). */
+                if (local_extra == rep.extra) {
                     /* Entry is fully current */
                     goto cleanup;
                 }
                 /* Extra differs - fall through to update */
             } else {
                 /* UIDs differ - check if local is a valid newer version */
+                /* 0x00E502A4-0x00E502D4.  The two byte tests read the FIRST
+                 * byte of each uid's high longword (`move.b (-0x50,A6)` /
+                 * `move.b (-0x24,A6)`), i.e. its most significant byte. */
                 if ((uint8_t)(local_uid_high >> 24) != 0 &&
-                    (uint8_t)(remote_uid.high >> 24) != 0 &&
-                    (local_uid_low & 0xFFFFF) == (remote_uid.low & 0xFFFFF) &&
-                    local_uid_high > remote_uid.high) {
+                    (uint8_t)(rep.uid.high >> 24) != 0 &&
+                    (local_uid_low & 0xFFFFF) == (rep.uid.low & 0xFFFFF) &&
+                    local_uid_high > rep.uid.high) {
                     /* Local version is newer (bhi = unsigned higher), keep it */
                     goto cleanup;
                 }
@@ -137,8 +139,12 @@ void dir_$do_op_validate_root_entry(void *name, uint16_t name_len,
             }
 
             /* Add the new entry with remote data (type 3, with extra) */
+            /* 0x00E5031A-0x00E5033A.  link_len is 0 (`clr.w` at 0x00E50322)
+             * so the link_data pointer is never dereferenced; the image's
+             * `pea (-0x393c,PC)` resolves to 0x00E4C9E4, dir_$find_entry's
+             * own entry point, which the compiler emitted as a dummy. */
             dir_$add_entry(local_handle, name, name_len, 3,
-                           remote_extra, &remote_uid, 0,
+                           rep.extra, &rep.uid, 0,
                            dir_$find_entry, status_ret);
             if (*status_ret == status_$ok) {
                 *status_ret = status_$naming_cache_entry_stale_and_updated;
@@ -155,9 +161,10 @@ cleanup:
 
     /* If we updated the entry, update hints */
     if (*status_ret == status_$naming_cache_entry_stale_and_updated) {
-        hint_data[0] = remote_extra;
-        hint_data[1] = remote_uid.low & 0xFFFFF;
-        HINT_$ADDI(&remote_uid, hint_data);
+        /* 0x00E50366-0x00E50382 */
+        hint_data[0] = rep.extra;
+        hint_data[1] = rep.uid.low & 0xFFFFF;
+        HINT_$ADDI(&rep.uid, hint_data);
     }
 
     ACL_$EXIT_SUPER();

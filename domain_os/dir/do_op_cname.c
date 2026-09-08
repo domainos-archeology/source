@@ -77,7 +77,7 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
      * caller builds (0x00E4C466 `move.w (0xe,A2),-(SP)`). */
     (void)req_version;
 
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     uint32_t local_handle;
     void *entry_ptr;
     uint16_t extra_buf[2];
@@ -151,9 +151,9 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
 
             /* Check directory lock list - prevent rename of locked entries */
             {
-                int16_t lock_count = *(int16_t *)(a5 + 0x155A);
+                int16_t lock_count = DIR_MOUNT_COUNT16(blk);
                 int16_t i = lock_count - 1;
-                char *lock_base = a5;
+                char *lock_base = blk;
                 if (i >= 0) {
                     do {
                         if (entry_uid.high == *(uint32_t *)(lock_base + 0x155C) &&
@@ -209,7 +209,7 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
 
             /* Acquire link buffer mutex */
             ML_$EXCLUSION_START(&DIR_$LINK_BUF_MUTEX);
-            *(int16_t *)(a5 + 0x2040) = PROC1_$CURRENT;
+            DIR_LINK_BUF_OWNER_OF(blk) = PROC1_$CURRENT;
 
             if (*(int16_t *)(ep + 4) == -1) {
                 /* Inline link data: starts at entry + name_len + 0x0C */
@@ -225,7 +225,7 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
             /* Copy link data to the link buffer (A5-relative) */
             {
                 int16_t remaining = link_len - 1;
-                char *dest = a5;
+                char *dest = blk;
                 if (remaining >= 0) {
                     do {
                         *dest = *link_data;
@@ -236,7 +236,7 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
                 }
             }
             /* Now link_data points to A5 (the link buffer copy) */
-            link_data = a5;
+            link_data = blk;
             break;
 
         default:
@@ -250,8 +250,8 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
                    entry_extra, &entry_uid, link_len, link_data, status_ret);
 
     /* Release link buffer mutex if we acquired it */
-    if (PROC1_$CURRENT == *(int16_t *)(a5 + 0x2040)) {
-        *(int16_t *)(a5 + 0x2040) = 0;
+    if (PROC1_$CURRENT == DIR_LINK_BUF_OWNER_OF(blk)) {
+        DIR_LINK_BUF_OWNER_OF(blk) = 0;
         ML_$EXCLUSION_STOP(&DIR_$LINK_BUF_MUTEX);
     }
 

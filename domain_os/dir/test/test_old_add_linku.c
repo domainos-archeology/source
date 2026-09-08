@@ -129,11 +129,11 @@ static uint16_t  ale_name_len_seen;
 static status_$t ale_status;
 void dir_$old_add_link_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                              uint16_t name_len, void *target,
-                             uint16_t target_len, uint8_t flags,
+                             uint16_t target_len, boolean is_root,
                              uint8_t *result, status_$t *status_ret)
 {
     ale_calls++;
-    ale_flag_seen = flags;
+    ale_flag_seen = (uint8_t)is_root;
     ale_target_len_seen = target_len;
     ale_name_len_seen = name_len;
     (void)dir_uid; (void)handle; (void)name; (void)target;

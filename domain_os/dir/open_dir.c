@@ -44,8 +44,8 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
                    void *handle_ret, status_$t *status_ret)
 {
     uid_t *uid_ptr = (uid_t *)uid;
-    uint32_t **hp = (uint32_t **)handle_ret;
-    uint8_t *handle;
+    dir_$handle_t **hp = (dir_$handle_t **)handle_ret;
+    dir_$handle_t *handle;
     void *page_data;
     uint8_t recovery_flag;
     int16_t effective_mode;
@@ -64,16 +64,16 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
     }
 
     /* Allocate handle slot */
-    handle = (uint8_t *)DIR_$ALLOC_HANDLE();
-    *hp = (uint32_t *)handle;
+    handle = (dir_$handle_t *)DIR_$ALLOC_HANDLE();
+    *hp = handle;
     if (handle == NULL) {
         *status_ret = status_$naming_directory_locked;
         return;
     }
 
-    /* Copy UID into handle (offsets 0x00 and 0x04) */
-    *(uint32_t *)(handle + 0x00) = uid_ptr->high;
-    *(uint32_t *)(handle + 0x04) = uid_ptr->low;
+    /* Copy the UID into the handle */
+    handle->uid.high = uid_ptr->high;
+    handle->uid.low  = uid_ptr->low;
 
     /* Lock the directory object */
     DIR_$LOCK_OBJ(handle, effective_mode, status_ret);
@@ -118,19 +118,19 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
     }
 
     /* If directory is small (size <= 0x400), no validation needed */
-    if (*(uint32_t *)(handle + 0x10) <= 0x400) {
+    if (handle->length <= DIR_PAGE_SIZE) {
         return;
     }
 
     /* Compute last page index */
     {
-        uint32_t total_size = *(uint32_t *)(handle + 0x10);
+        uint32_t total_size = handle->length;
         uint32_t last_page = (total_size >> 10) - 1;
 
         /* Check if last page is dirty via AST_$GET_SEG_MAP */
         seg_zero = 0;
-        local_uid.high = *(uint32_t *)(handle + 0x00);
-        local_uid.low = *(uint32_t *)(handle + 0x04);
+        local_uid.high = handle->uid.high;
+        local_uid.low  = handle->uid.low;
 
         AST_$GET_SEG_MAP(&local_uid,
                          (uint32_t)((uint16_t)last_page) << 10,
@@ -154,7 +154,7 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
         /* Page is dirty - need to validate */
 
         /* If currently in read mode (1), upgrade to write mode (2) for recovery */
-        if (*(int16_t *)(handle + 0x0A) == 1) {
+        if (handle->lock_mode == 1) {
             DIR_$UNLOCK_OBJ(handle);
             DIR_$UNMAP_PAGES(handle);
 
@@ -173,7 +173,7 @@ void dir_$open_dir(void *uid, int16_t mode, int16_t rights,
         }
 
         /* Validate pages: crash_flag = ~recovery_flag */
-        DIR_$VALIDATE_PAGES(handle, (char)~recovery_flag, status_ret);
+        dir_$validate_pages(handle, (char)~recovery_flag, status_ret);
         if (*status_ret != status_$ok) {
             /* In recovery mode, suppress naming_internal_error */
             if ((int8_t)recovery_flag < 0 &&

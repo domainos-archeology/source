@@ -34,15 +34,12 @@
 
 #include "dir/dir_internal.h"
 
-/* Character classification bitmap for case unmapping at 0x00e4cd84
- * TODO(source-qgq): Replace with proper reference */
-
 void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
                        uint16_t *type_ret, uid_t *uid_ret,
                        uint32_t *extra_ret, uint8_t *found_ret,
                        status_$t *status_ret)
 {
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;         /* 0x00E4CB6A inherits A5 = 0x00E7DC00 */
     uint32_t local_handle;
     uint8_t *entry_ptr;
     /* A6-0x4E: dir_$find_entry's depth_ret, cleared with `clr.w (A0)`
@@ -51,12 +48,18 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
     uint8_t find_extra2[2];       /* A6-0x4C: dir_$find_entry's extra array */
     uint8_t find_extra3[2];       /* A6-0x4A: dir_$do_op_add_entry's result */
     status_$t add_status;         /* A6-0x40: dir_$do_op_add_entry's status */
-    int16_t local_type;
-    int16_t remote_name_len;
-    uint8_t remote_name[32];
-    uint32_t remote_uid_high;
-    uint32_t remote_uid_low;
-    uint32_t remote_extra;
+    /*
+     * A6-0x38: ONE dir_$rep_entry_t, the record REM_NAME_$GET_ENTRY fills
+     * (`pea (-0x38,A6)` at 0x00E4CCBA).  Every consumer below addresses a
+     * field of this record, not a separate local (source-org1):
+     *   (-0x38,A6) hdr       0x00E4CCDA cmpi.w #0x1 / 0x00E4CD48 -> type_ret
+     *   (-0x36,A6) name_len  0x00E4CCE4, 0x00E4CD2E
+     *   (-0x34,A6) name      0x00E4CCF4 / 0x00E4CD0A (A6-0x35 + a 1-based
+     *                        index), 0x00E4CD32
+     *   (-0x14,A6) uid       0x00E4CD22, 0x00E4CD4C
+     *   (-0x0C,A6) extra     0x00E4CD26, 0x00E4CD5E
+     */
+    dir_$rep_entry_t rep;
 
     *found_ret = 0;
 
@@ -89,23 +92,30 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
             *found_ret = 0xFF;
 
             /* Check UID remap table */
+            /*
+             * 0x00E4CC0C-0x00E4CC50: walk the one-based mount table.  The
+             * count word at (0x155a,A5) is the LOW half of the longword at
+             * (0x1558,A5), so it is read through DIR_MOUNT_COUNT16.  Entry n
+             * lives at A5 + 0x1554 + n*8 (source uid) and A5 + 0x1594 + n*8
+             * (target uid), which is what the `lea (0x1554,A0)` /
+             * `lea (0x1594,A3)` pairs form.
+             */
             {
-                int16_t remap_count = *(int16_t *)(a5 + 0x155A) - 1;
+                int16_t remap_count = DIR_MOUNT_COUNT16(blk) - 1;
                 if (remap_count >= 0) {
-                    int16_t ri = 1;
-                    char *rp = a5;
+                    int16_t n = 1;
                     do {
-                        if (uid_ret->high == *(uint32_t *)(rp + 0x155C) &&
-                            uid_ret->low == *(uint32_t *)(rp + 0x1560)) {
+                        if (uid_ret->high == DIR_MOUNT_UID_OF(blk, n).high &&
+                            uid_ret->low  == DIR_MOUNT_UID_OF(blk, n).low) {
+                            /* 0x00E4CC2E: clr.b (A1) */
                             *found_ret = 0;
-                            rp = a5 + ri * 8;
-                            uid_ret->high = *(uint32_t *)(rp + 0x1594);
-                            uid_ret->low  = *(uint32_t *)(rp + 0x1598);
+                            /* 0x00E4CC42: the target uid replaces it */
+                            uid_ret->high = DIR_MOUNT_TGT_OF(blk, n).high;
+                            uid_ret->low  = DIR_MOUNT_TGT_OF(blk, n).low;
                             break;
                         }
-                        ri++;
+                        n++;
                         remap_count--;
-                        rp += 8;
                     } while (remap_count != -1);
                 }
             }
@@ -136,24 +146,32 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
             /* Release handle before remote query */
             dir_$release_handle(&local_handle);
 
-            /* Query remote nodes */
-            REM_NAME_$GET_ENTRY(uid, name, &name_len,
-                                &local_type, status_ret);
+            /* 0x00E4CCB8-0x00E4CCCA: the whole 0x30-byte record is filled
+             * by one call. */
+            REM_NAME_$GET_ENTRY(uid, name, &name_len, &rep, status_ret);
 
-            if (*status_ret == status_$ok && local_type == 1) {
-                /* Remote entry found - unmap case on the name */
-                int16_t remaining = remote_name_len - 1;
+            /* 0x00E4CCD4 / 0x00E4CCDA: both the status and rep.hdr == 1. */
+            if (*status_ret == status_$ok && rep.hdr == 1) {
+                /* Remote entry found - unmap case on the name in place.
+                 * 0x00E4CCE4-0x00E4CD10, a 1-based `dbf` loop. */
+                int16_t remaining = (int16_t)rep.name_len - 1;
                 if (remaining >= 0) {
                     int16_t j = 1;
                     do {
-                        uint16_t ch = (uint16_t)(uint8_t)remote_name[j - 1];
-                        int16_t diff = 0x5F - ch;
+                        uint16_t ch = (uint16_t)rep.name[j - 1];
+                        /* 0x00E4CCF2-0x00E4CCFA: `sub.w D3w,D4w` sets the
+                         * carry when ch > 0x5F, which skips the test. */
+                        int16_t diff = (int16_t)(0x5F - ch);
 
                         if (ch < 0x60) {
-                            int16_t byte_idx = diff >> 3;
-                            if ((*((uint8_t *)&DIR_$CASE_FOLD_BITMAP + (int16_t)byte_idx) &
-                                 (1 << (remote_name[j - 1] & 7))) != 0) {
-                                remote_name[j - 1] = remote_name[j - 1] + 0x20;
+                            /* 0x00E4CCFC-0x00E4CD02: bit (ch & 7) of
+                             * DIR_$CASE_FOLD_BITMAP[(0x5F - ch) >> 3]. */
+                            int16_t byte_idx = (int16_t)(diff >> 3);
+                            if (((&DIR_$CASE_FOLD_BITMAP)[byte_idx] &
+                                 (1u << (rep.name[j - 1] & 7))) != 0) {
+                                /* 0x00E4CD08-0x00E4CD0A: `add.b #0x20`. */
+                                rep.name[j - 1] =
+                                    (uint8_t)(rep.name[j - 1] + 0x20);
                             }
                         }
                         j++;
@@ -169,15 +187,17 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
                  * is a 32-bit VA cell, hence the cast.
                  * 0x00E4CD14 pushes a *separate* status cell at A6-0x40,
                  * not find_entry's depth word. */
-                dir_$do_op_add_entry(uid, 0, remote_name, remote_name_len,
-                                     3, remote_extra, &remote_uid_high, 0,
+                dir_$do_op_add_entry(uid, 0, rep.name, rep.name_len,
+                                     3, rep.extra, &rep.uid, 0,
                                      (uint32_t)(uintptr_t)dir_$find_entry,
                                      find_extra3, &add_status);
 
-                *type_ret = local_type;
-                uid_ret->high = remote_uid_high;
-                uid_ret->low  = remote_uid_low;
-                *extra_ret = remote_extra;
+                /* 0x00E4CD44-0x00E4CD5E: every result comes out of the
+                 * same record. */
+                *type_ret = rep.hdr;
+                uid_ret->high = rep.uid.high;
+                uid_ret->low  = rep.uid.low;
+                *extra_ret = rep.extra;
                 goto release_and_exit;
             }
         }

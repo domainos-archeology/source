@@ -92,13 +92,14 @@ void DIR_$OLD_CNAMEU(uid_t *dir_uid, char *old_name, uint16_t *old_name_len,
                                    new_parsed_len, entry_type,
                                    entry + 0x28,
                                    *(uint32_t *)(entry + 0x20),
-                                   0xFF, add_result, status_ret);
+                                   true, add_result, status_ret);
             *(uint8_t *)(entry + 0x24) &= (uint8_t)~0x80u;
         } else {
-            /* 0x00E57628: non-root, flags word 0 */
+            /* 0x00E57628: non-root; `clr.w -(SP)` at 0x00E57630 zeroes the
+             * whole 2-byte slot, so the boolean byte is false. */
             dir_$old_add_entry(dir_uid, dir_base, new_parsed, new_parsed_len,
                                entry_type, entry + 0x28,
-                               0, add_result, status_ret);
+                               false, add_result, status_ret);
         }
 
         if ((int16_t)*status_ret == 0) {    /* 0x00E5768E: tst.w (2,A3) */

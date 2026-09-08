@@ -1,13 +1,14 @@
 /*
  * dir_$truncate_pages - Truncate/resize directory pages
  *
- * Truncates a directory to the specified number of pages by calling
- * AST_$INVALIDATE to invalidate the excess pages. Clears the dirty
- * flag at handle+0x0E and zeros the status.
+ * Truncates a directory to the given number of pages by calling
+ * AST_$INVALIDATE on the excess.  Clears dir_$handle_t.split_busy (the
+ * `clr.b (0xe,A2)` at 0x00E4E94C, the flag dir_$alloc_split_page sets) and
+ * zeros the status.
  *
- * The number of pages to invalidate is computed as:
- *   (handle[4] >> 10) - new_page_count
- * where handle[4] is the directory size in bytes (at offset 0x10).
+ * The number of pages to invalidate is
+ *   (dir_$handle_t.length >> 10) - new_page_count
+ * (`lsr.l #0x8` then `lsr.l #0x2` on the longword at handle+0x10).
  *
  * Parameters:
  *   handle         - Directory handle (pointer to handle structure)
@@ -29,18 +30,18 @@
 uint32_t dir_$truncate_pages(void *handle, uint16_t new_page_count,
                              status_$t *status_ret)
 {
-    uint32_t *h = (uint32_t *)handle;
-    uid_t local_uid;
-    status_$t local_status;
-    uint32_t total_pages;
+    dir_$handle_t *h = (dir_$handle_t *)handle;     /* A2 */
+    uid_t local_uid;            /* A6-0x10 */
+    status_$t local_status;     /* A6-0x14 */
+    uint32_t total_pages;       /* D3 */
     int32_t pages_to_remove;
 
-    /* Copy UID from handle (first 8 bytes) */
-    local_uid.high = h[0];
-    local_uid.low = h[1];
+    /* 0x00E4E92A-0x00E4E92E: the UID is copied into a frame cell first. */
+    local_uid.high = h->uid.high;
+    local_uid.low  = h->uid.low;
 
-    /* Compute total pages from directory size at handle+0x10 */
-    total_pages = h[4] >> 10;
+    /* 0x00E4E91C-0x00E4E926 */
+    total_pages = h->length >> 10;
 
     /* Compute pages to remove */
     pages_to_remove = (int16_t)(total_pages - new_page_count);
@@ -49,8 +50,8 @@ uint32_t dir_$truncate_pages(void *handle, uint16_t new_page_count,
     AST_$INVALIDATE(&local_uid, (uint32_t)new_page_count,
                     (uint32_t)pages_to_remove, (int16_t)-1, &local_status);
 
-    /* Clear dirty flag at handle+0x0E */
-    *((uint8_t *)handle + 0x0E) = 0;
+    /* 0x00E4E94C `clr.b (0xe,A2)` */
+    h->split_busy = 0;
 
     /* Clear status */
     *status_ret = status_$ok;

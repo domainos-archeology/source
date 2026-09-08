@@ -1,7 +1,7 @@
 /*
  * dir_$read_canned_root - Read entries from the canned replicated root
  *
- * Originally a nested Pascal subprocedure of DIR_$DIR_READU_FUN_00e4e1a8.
+ * Originally a nested Pascal subprocedure of dir_$dir_readu_fallback.
  * Reads directory entries from the canned replicated root directory by
  * calling REM_NAME_$DIR_READU in batches (up to 8 entries per batch),
  * then reformats the returned 0x30-byte entry records into the caller's
@@ -54,7 +54,7 @@
  * frames via A6 chain, we preserve the original calling convention comment
  * and provide the implementation as faithfully as possible.
  *
- * In practice, this function is ONLY called from DIR_$DIR_READU_FUN_00e4e1a8
+ * In practice, this function is ONLY called from dir_$dir_readu_fallback
  * when the directory is NAME_$CANNED_REP_ROOT_UID.
  */
 void dir_$read_canned_root(void)
@@ -91,5 +91,5 @@ void dir_$read_canned_root(void)
     /* Assembly-faithful implementation would require accessing the
      * caller's frame pointer chain, which is inherently M68K-specific.
      * This function should be regenerated as inline code within
-     * DIR_$DIR_READU_FUN_00e4e1a8 if retargetability is needed. */
+     * dir_$dir_readu_fallback if retargetability is needed. */
 }

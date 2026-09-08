@@ -39,6 +39,37 @@
  *   dir_uid    - UID of directory to fix
  *   status_ret - Output: status code
  */
+/*
+ * Constant cells in the OLD DIR code region, between this routine's `rts`
+ * at 0x00E56092 and DIR_$OLD_READ_INFOBLK's `link` at 0x00E560A6.  Each is
+ * reached with a `pea (d,PC)` from this routine and has no other reader in
+ * the image, so each is a file static here (source-ka0m).  The two cells
+ * with two or more readers, 0x00E56094 (DIR_$ATTR_REC_SIZE_W) and
+ * 0x00E56096 (DIR_$INFOBLK_MAX_LEN), stay module globals.
+ *
+ *   0x00E56098  word 00 04        FILE_$GET_ATTRIBUTES' flags word
+ *                                 (`pea (0x354,PC)` at 0x00E55D42)
+ *   0x00E5609A  long 00 00 01 16  DIR_$OLD_DIR_READU's buffer size; the
+ *                                 callee dereferences it (0x00E57CBC) and
+ *                                 dir_$old_read_entries compares a running
+ *                                 byte offset against it (`cmp.l (0x14,A6),D6`
+ *                                 at 0x00E57A9C).  `pea (0x136,PC)` at
+ *                                 0x00E55F62.  It is a LONGWORD, not a byte.
+ *   0x00E5609E  long 00 01 00 00  MST_$UNMAP's map_info (`move.l (A0),-(SP)`
+ *                                 at 0x00E4474A).  `pea (0x56,PC)` at
+ *                                 0x00E56046.
+ *   0x00E560A2  long 00 00 00 01  DIR_$OLD_DIR_READU's entry limit; the
+ *                                 callee dereferences it (0x00E57CC2) and
+ *                                 dir_$old_read_entries compares the running
+ *                                 entry count against it (`cmp.l (A3),D1`
+ *                                 at 0x00E57B24).  `pea (0x13a,PC)` at
+ *                                 0x00E55F66.  Also a LONGWORD.
+ */
+static const uint16_t dir_$old_fix_attr_flags_00e56098   = 0x0004;
+static const uint32_t dir_$old_fix_readu_bufsize_00e5609a = 0x00000116;
+static const uint32_t dir_$old_fix_unmap_info_00e5609e   = 0x00010000;
+static const uint32_t dir_$old_fix_readu_limit_00e560a2  = 0x00000001;
+
 void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
 {
     uid_t local_dir;
@@ -191,8 +222,10 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
         /* Replay all entries */
         continuation = 1;
         while (1) {
+            /* 0x00E55F58-0x00E55F72 */
             DIR_$OLD_DIR_READU(&temp_uid, &continuation,
-                               &DAT_00e560a2, &DAT_00e5609a,
+                               (void *)&dir_$old_fix_readu_limit_00e560a2,
+                               (void *)&dir_$old_fix_readu_bufsize_00e5609a,
                                read_entries, &count, status_ret);
             if (*status_ret != status_$ok || count == 0) {
                 break;
@@ -265,7 +298,8 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
                 /* 0x00E55D3A/0x00E55D36: the location record and the
                  * 0x90-byte attribute buffer are two separate frame
                  * objects, not two windows onto info_buf. */
-                FILE_$GET_ATTRIBUTES(&local_dir, &DAT_00e56098,
+                FILE_$GET_ATTRIBUTES(&local_dir,
+                                     (void *)&dir_$old_fix_attr_flags_00e56098,
                                      &DIR_$ATTR_REC_SIZE_W, &attr_loc_rec,
                                      attr_out, &status);
                 if (status == status_$ok) {
@@ -311,7 +345,8 @@ cleanup:
          * 0x00E5604A pea's that cell; MST_$UNMAP dereferences it
          * (`movea.l (0xc,A6),A1; move.l (A1),-(SP)` at 0x00E4474A). */
         unmap_addr = (uint32_t)(uintptr_t)mapped_ptr;
-        MST_$UNMAP(&temp_uid, &unmap_addr, &DAT_00e5609e, &status);
+        MST_$UNMAP(&temp_uid, &unmap_addr,
+                   (uint32_t *)&dir_$old_fix_unmap_info_00e5609e, &status);
     }
     if (did_lock < 0) {
         FILE_$SET_REFCNT(&temp_uid, &NAME_$CONST_ZERO_L, &status);

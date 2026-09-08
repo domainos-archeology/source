@@ -78,8 +78,10 @@ void name_$old_add_link_local(uid_t *dir_uid, int16_t acl_rights, char *name,
     }
 
     /* 0x00E5663A-0x00E5665C */
+    /* `clr.w -(SP)` at 0x00E56642 zeroes the 2-byte slot holding the
+     * replace boolean, so it is false (source-j8qj). */
     dir_$old_add_entry(dir_uid, handle, leaf, leaf_len, DIR_ENTRY_TYPE_OBJECT,
-                       file_uid, 0, (uint8_t *)&add_result, status_ret);
+                       file_uid, false, (uint8_t *)&add_result, status_ret);
 
     /*
      * 0x00E56660-0x00E56670: the unlock reports into its OWN cell and only

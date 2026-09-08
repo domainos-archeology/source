@@ -91,9 +91,6 @@ void dir_$find_uid_internal(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
      * (source-32ld). */
     uint16_t do_op_rcvd_len;
 
-    /* Per-process data base pointer (M68K A5 register) */
-    char *a5 = (char *)__A5_BASE();
-
     dir_$find_uid_request_t request;
     dir_$find_uid_response_t op_resp;
 
@@ -111,7 +108,9 @@ void dir_$find_uid_internal(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
     request.cmd = 0x46;                             /* 'F' = Find UID */
     request.dir_uid_high = dir_uid->high;
     request.dir_uid_low = dir_uid->low;
-    request.version = *(uint16_t *)(a5 + 0x20b2);  /* Protocol version */
+    /* 0x00E4E7BE `move.w (0x20b2,A5),(-0x1aa,A6)` reads 0x00E7FCB2,
+     * DIR_$OP_TAB[14].version (op 0x46 >> 1 = 0x23, record 0x23 - 21). */
+    request.version = DIR_$OP_REC(DIR_OP_FIND_UID >> 1).version;
     request.target_uid_high = target_uid->high;
     request.target_uid_low = target_uid->low;
     request.flag = (uint8_t)flag;
@@ -125,7 +124,8 @@ void dir_$find_uid_internal(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
      * request base (0x00E4E7E2 `pea (-0x1b8,A6)`): REM_FILE_$SEND_REQUEST's
      * `received_len` out-parameter (source-32ld). */
     DIR_$DO_OP(&request,
-               *(int16_t *)(a5 + 0x20b6),  /* req_size */
+               /* 0x00E4E7DE reads 0x00E7FCB6, the same record's base_size. */
+               (int16_t)DIR_$OP_REC(DIR_OP_FIND_UID >> 1).base_size,
                0x11a,                       /* resp_size */
                &op_resp,
                &do_op_rcvd_len);

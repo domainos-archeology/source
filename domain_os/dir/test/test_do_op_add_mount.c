@@ -81,8 +81,9 @@ void AST_$GET_COMMON_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags,
     *status = mock_cattr_status;
 }
 
-#undef __A5_BASE
-#define __A5_BASE() ((void *)a5_area)
+/* Point the whole DIR module block at our own buffer (source-yv13). */
+#undef DIR_$BLOCK_BASE
+#define DIR_$BLOCK_BASE ((void *)a5_area)
 
 #include "../do_op_add_mount.c"
 #include "../do_op_drop_mount.c"

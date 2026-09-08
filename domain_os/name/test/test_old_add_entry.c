@@ -109,7 +109,7 @@ void NAME_$UNLOCK_DIR(status_$t *status_ret)
 
 void dir_$old_add_entry_ext(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                             uint16_t name_len, uint16_t type, void *uid_data,
-                            uint32_t extra, uint8_t replace_flag,
+                            uint32_t extra, boolean replace_flag,
                             uint8_t *result, status_$t *status_ret)
 {
     (void)dir_uid; (void)name; (void)name_len; (void)uid_data; (void)result;
@@ -117,7 +117,7 @@ void dir_$old_add_entry_ext(uid_t *dir_uid, uint32_t handle, uint8_t *name,
     mock_add_handle  = handle;
     mock_add_type    = type;
     mock_add_extra   = extra;
-    mock_add_replace = replace_flag;
+    mock_add_replace = (uint8_t)replace_flag;
     *status_ret = mock_add_status;
 }
 

@@ -49,7 +49,7 @@ static const uint32_t dir_$drop_dir_rights_00e51b64 = 0x00000040;
 void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
                          status_$t *status_ret)
 {
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     uint32_t parent_handle;
     uint32_t child_handle;
     void *parent_h;
@@ -109,19 +109,23 @@ void dir_$do_op_drop_dir(uid_t *uid, void *name, uint16_t name_len,
     target_uid.high = *(uint32_t *)(entry_ptr + 4);
     target_uid.low = *(uint32_t *)(entry_ptr + 8);
 
-    /* Check directory lock list - prevent deletion of open directories */
+    /*
+     * A directory that is the source of a mount cannot be dropped.  The
+     * cursor starts at A5+0x155C, which is mount table entry 1 (the tables
+     * are ONE-BASED - see DIR_MOUNT_UID_TAB_OFF), and steps by 8.
+     */
     {
-        int16_t lock_count = *(int16_t *)(a5 + 0x155A);
+        int16_t lock_count = DIR_MOUNT_COUNT16(blk);
         uint16_t i = lock_count - 1;
         if ((int16_t)i >= 0) {
-            char *lock_base = a5 + 0x155C;
+            int32_t n = 1;
             do {
-                if (target_uid.high == *(uint32_t *)(lock_base) &&
-                    target_uid.low == *(uint32_t *)(lock_base + 4)) {
+                if (target_uid.high == DIR_MOUNT_UID_OF(blk, n).high &&
+                    target_uid.low  == DIR_MOUNT_UID_OF(blk, n).low) {
                     *status_ret = status_$naming_directory_locked;
                     goto done;
                 }
-                lock_base += 8;
+                n++;
                 i--;
             } while (i != 0xFFFF);
         }

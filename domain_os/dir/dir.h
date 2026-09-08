@@ -112,18 +112,23 @@ void DIR_$RESOLVE(void *pathname, uint16_t *path_len, uid_t *start_uid,
  * Searches a directory for an entry with the specified UID and returns
  * its name.
  *
- * Parameters:
- *   dir_uid     - UID of directory to search
- *   target_uid  - UID to find
- *   name_buf_len - Pointer to max buffer length
- *   name_buf    - Output: name of found entry
- *   param5      - Additional parameters
- *   status_ret  - Output: status code
+ * Parameters (A6+0x08..A6+0x1C):
+ *   dir_uid      - UID of directory to search       (+0x08 -> arg 1)
+ *   target_uid   - UID to find                      (+0x0C -> arg 2)
+ *   name_buf_len - pointer to the buffer size word; the WORD is loaded and
+ *                  passed by value (`movea.l (0x10,A6),A0` /
+ *                  `move.w (A0),-(SP)` at 0x00E4E898)   (+0x10 -> arg 4)
+ *   name_buf     - out: name of the found entry     (+0x14 -> arg 5)
+ *   name_len_ret - out: the length actually written; this is
+ *                  dir_$find_uid_internal's SIXTH argument
+ *                  (`move.l (0x18,A6),-(SP)` at 0x00E4E890, source-c34p)
+ *   status_ret   - out: status code                 (+0x1C -> arg 8)
  *
  * Original address: 0x00E4E87C
  */
 void DIR_$FIND_UID(uid_t *dir_uid, uid_t *target_uid, uint16_t *name_buf_len,
-                   char *name_buf, void *param5, status_$t *status_ret);
+                   char *name_buf, int16_t *name_len_ret,
+                   status_$t *status_ret);
 
 /*
  * DIR_$FIND_NET - Find network node for a directory entry
@@ -722,9 +727,16 @@ void dir_$old_unlink_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
  * Original address: 0x00E55220
  * Size: 486 bytes
  */
+/* The seventh parameter is a Domain BOOLEAN BYTE, not a word.  The callee
+ * reads it with `move.b (0x1c,A6),D4b` (0x00E55238) and tests it with
+ * `tst.b D4b` / `bmi` (0x00E55270), a SIGNED test; the only image caller,
+ * dir_$old_add_entry_ext, pushes it with `move.b (0x20,A6),-(SP)`
+ * (0x00E5541E), which lands in the EVEN (high) byte of the 2-byte slot.
+ * source-j8qj. */
 void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                         uint16_t name_len, uint16_t type, void *uid_data,
-                        uint16_t flags, uint8_t *result, status_$t *status_ret);
+                        boolean replace_flag, uint8_t *result,
+                        status_$t *status_ret);
 
 /* dir_$old_add_entry_ext - Add entry to directory with extra field
  *
@@ -737,7 +749,7 @@ void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
  */
 void dir_$old_add_entry_ext(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                             uint16_t name_len, uint16_t type, void *uid_data,
-                            uint32_t extra, uint8_t replace_flag,
+                            uint32_t extra, boolean replace_flag,
                             uint8_t *result, status_$t *status_ret);
 
 #endif /* DIR_H */

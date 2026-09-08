@@ -1,8 +1,14 @@
 /*
  * DIR_$FIX_DIR - Fix/repair a directory
  *
- * Attempts to repair a corrupted directory structure by sending
- * a FIX_DIR operation to the directory server.
+ * Builds a DIR_OP_FIX_DIR (0x48) request and sends it through DIR_$DO_OP.
+ * The request has no body at all - DIR_$OP_TAB[15].base_size is 0x0000
+ * (0x00E7FCBE) - so only the header fields at +0x03, +0x04 and +0x0E are
+ * written.  On a "bad reply"/"bad directory" reply it retries with the
+ * pre-DO_OP protocol via DIR_$OLD_FIX_DIR.
+ *
+ * Frame: `link.w A6,-0xac` (0x00E53E84) - request base A6-0xA8, reply base
+ * A6-0x18, DIR_$DO_OP's received_len cell A6-0xAA.
  *
  * Original address: 0x00E53E84
  * Original size: 116 bytes
@@ -11,50 +17,47 @@
 #include "dir/dir_internal.h"
 
 /*
- * Request structure for FIX_DIR operation
- */
-typedef struct {
-    uint8_t   op;           /* Operation code: DIR_OP_FIX_DIR (0x48) */
-    uint8_t   padding[3];
-    uid_t     uid;          /* Directory UID to fix */
-    uint16_t  reserved;     /* Reserved field */
-} Dir_$FixDirRequest;
-
-/*
- * DIR_$FIX_DIR - Fix/repair a directory
- *
- * Sends a FIX_DIR request to the directory server. If the server returns
- * an error indicating it doesn't support the new protocol, falls back
- * to the old DIR_$OLD_FIX_DIR implementation.
- *
- * Parameters:
- *   dir_uid    - UID of directory to fix
- *   status_ret - Output: status code
+ * Parameters (A6+0x08..A6+0x0C):
+ *   dir_uid    - UID of the directory to fix; held in A2 across the call
+ *   status_ret - out: status code; held in A3 across the call
  */
 void DIR_$FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
 {
-    Dir_$FixDirRequest request;
+    dir_$do_op_request_t request;
     Dir_$OpResponse response;
-    /* A6-relative 2-byte cell passed as DIR_$DO_OP's fifth argument;
-     * it is REM_FILE_$SEND_REQUEST's `received_len` out-parameter
-     * (source-32ld). */
+    /* A6-0xAA: DIR_$DO_OP's fifth argument, REM_FILE_$SEND_REQUEST's
+     * `received_len` out-parameter (source-32ld). */
     uint16_t do_op_rcvd_len;
+    status_$t status;
 
-    /* Build the request */
+    /* 0x00E53E9A: `move.b #0x48,(-0xa5,A6)` - the opcode at request+0x03. */
     request.op = DIR_OP_FIX_DIR;
+
+    /* 0x00E53EA2 / 0x00E53EA6: the directory UID at request+0x04. */
     request.uid.high = dir_uid->high;
     request.uid.low = dir_uid->low;
-    request.reserved = DAT_00e7fcba;
 
-    /* Send the request */
-    DIR_$DO_OP(&request.op, DAT_00e7fcbe, 0x14, &response, &do_op_rcvd_len);
+    /* 0x00E53EAA: `move.w (0x20ba,A5),(-0x9a,A6)` - DIR_$OP_TAB[15].version
+     * (0x00E7FCBA) into request+0x0E. */
+    request.version = DIR_$OP_REC(DIR_OP_FIX_DIR >> 1).version;
 
-    /* Check for fallback conditions */
-    if (response.status == file_$bad_reply_received_from_remote_node ||
-        response.status == status_$naming_bad_directory) {
-        /* Fall back to old implementation */
+    /* 0x00E53EB0-0x00E53EC0: DIR_$OP_TAB[15].base_size (0x00E7FCBE, 0x0000)
+     * as the body size and a 0x14-byte reply. */
+    DIR_$DO_OP(&request,
+               (int16_t)DIR_$OP_REC(DIR_OP_FIX_DIR >> 1).base_size,
+               0x14, &response, &do_op_rcvd_len);
+
+    /* 0x00E53ECC: the whole longword at reply+0x04 is read into D0 once. */
+    status = response.status;
+
+    /* 0x00E53ED0 / 0x00E53ED8: `cmpi.l #0xf0003,D0` and `cmpi.l #0xe000d,D0`. */
+    if (status == file_$bad_reply_received_from_remote_node ||
+        status == status_$naming_bad_directory) {
+        /* 0x00E53EE0-0x00E53EE4: the old protocol gets the caller's own
+         * uid pointer and status pointer. */
         DIR_$OLD_FIX_DIR(dir_uid, status_ret);
     } else {
-        *status_ret = response.status;
+        /* 0x00E53EEC: `move.l D0,(A3)`. */
+        *status_ret = status;
     }
 }

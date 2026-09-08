@@ -12,7 +12,7 @@
 /*
  * 0x00E544AE, word 0x0020: the 32-byte output-buffer size the UNMAP_CASE call
  * at 0x00E5819E gets (`pea (-0x3cfa,PC)` at 0x00E581A6).  It is the same cell
- * name/ knows as DAT_00e544ae; a file static keeps DIR out of NAME's internal
+ * name/ knows as 0x00E544AE; a file static keeps DIR out of NAME's internal
  * header.  Image bytes: 00 20.
  */
 static int16_t dir_$validate_root_name_max_00e544ae = 0x0020;

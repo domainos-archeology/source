@@ -46,9 +46,27 @@
 /* `cmpi.w #0x9,(-0x2,A0,D0w*0x1)` at 0x00E4B4CA against PROC1_$TYPE. */
 #define DIR_PROC_TYPE_NS_HELPER     9
 
+/*
+ * 0x00E4B5AA-0x00E4B5B4 (and the identical copy at 0x00E4B62C-0x00E4B636):
+ * `lea (0x20,A2),A1` then four `move.l (A0)+,(A1)+`.  The 16 bytes of a
+ * name_$mapped_info_t land on handle+0x20..0x2F field for field, which is
+ * why the two records share a layout.
+ */
+static void dir_$copy_mapped_info(dir_$handle_t *h,
+                                  const name_$mapped_info_t *info)
+{
+    h->mapped       = info->active;         /* 0x20 <- 0x00 */
+    h->_0x21        = info->pad_01;         /* 0x21 <- 0x01 */
+    h->cache0_group = info->reserved_02;    /* 0x22 <- 0x02 */
+    h->cache0_base  = info->first_base;     /* 0x24 <- 0x04 */
+    h->_0x28        = info->reserved_08;    /* 0x28 <- 0x08 */
+    h->cache1_group = info->entry_count;    /* 0x2A <- 0x0A */
+    h->cache1_base  = info->second_base;    /* 0x2C <- 0x0C */
+}
+
 void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
 {
-    uint8_t *h = (uint8_t *)handle;
+    dir_$handle_t *h = (dir_$handle_t *)handle;   /* A2 */
     status_$t local_status;
     uint32_t map_size;
 
@@ -59,8 +77,8 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
     ast_$common_attr_t cattr;
 
     /* 0x00E4B45C-0x00E4B466: the handle's UID goes to descriptor+0x08. */
-    desc.uid.high = *(uint32_t *)(h + 0x00);
-    desc.uid.low  = *(uint32_t *)(h + 0x04);
+    desc.uid.high = h->uid.high;
+    desc.uid.low  = h->uid.low;
     /* 0x00E4B46A `bclr.b #0x6,(-0x3b,A6)` = descriptor+0x1D. */
     desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
@@ -113,7 +131,10 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
     /* 0x00E4B528: a non-zero block count is stale; clear attribute 0x0B. */
     if (cattr.blocks != 0) {
         uint32_t zero = 0;                                       /* 0x00E4B52E */
-        AST_$SET_ATTRIBUTE((uid_t *)&desc, 0x0B, &zero, status_ret);
+        /* 0x00E4B53E `pea (A2)` - the argument is the HANDLE, whose first
+         * eight bytes are the object's UID; it is NOT the location
+         * descriptor (source-f3ye). */
+        AST_$SET_ATTRIBUTE(&h->uid, 0x0B, &zero, status_ret);
         if (*status_ret != status_$ok) {
             goto error_clear;
         }
@@ -122,40 +143,34 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
     /* 0x00E4B550-0x00E4B560: the directory's byte length; zero means one
      * 0x400-byte page. */
     if (cattr.length == 0) {
-        *(uint32_t *)(h + 0x10) = DIR_PAGE_SIZE;
+        h->length = DIR_PAGE_SIZE;
     } else {
-        *(uint32_t *)(h + 0x10) = cattr.length;
+        h->length = cattr.length;
     }
 
     /* 0x00E4B566 `move.w (-0x56,A6),(0x3a,A2)`: descriptor+0x02, i.e.
      * file_$obj_loc_t.volume, which AST_$GET_ATTRIBUTES filled from
      * aote+0x9E.  dir_$do_op_delete compares an object's own .volume against
      * this word at 0x00E5138C. */
-    *(int16_t *)(h + DIR_HANDLE_VOLUME_OFF) = (int16_t)desc.volume;
+    h->volume = (int16_t)desc.volume;
 
     /* Check for well-known directory UIDs and use cached mapping info */
 
     /* Check NODE_UID */
-    if (*(uint32_t *)(h + 0x00) == NAME_$NODE_UID.high &&
-        *(uint32_t *)(h + 0x04) == NAME_$NODE_UID.low) {
-        *(int16_t *)(h + 0x0C) = 1;
-        uint32_t *info = (uint32_t *)&NAME_$NODE_MAPPED_INFO;
-        *(uint32_t *)(h + 0x20) = info[0];
-        *(uint32_t *)(h + 0x24) = info[1];
-        *(uint32_t *)(h + 0x28) = info[2];
-        *(uint32_t *)(h + 0x2C) = info[3];
+    if (h->uid.high == NAME_$NODE_UID.high &&
+        h->uid.low == NAME_$NODE_UID.low) {
+        h->dir_kind = 1;
+        /* 0x00E4B5AA-0x00E4B5B4: four longwords land on handle+0x20, i.e.
+         * the mapped flag, the two cache slots and the byte at 0x21. */
+        dir_$copy_mapped_info(h, &NAME_$NODE_MAPPED_INFO);
         goto success;
     }
 
     /* Check COM_UID */
-    if (*(uint32_t *)(h + 0x00) == NAME_$COM_UID.high &&
-        *(uint32_t *)(h + 0x04) == NAME_$COM_UID.low) {
-        *(int16_t *)(h + 0x0C) = 2;
-        uint32_t *info = (uint32_t *)&NAME_$COM_MAPPED_INFO;
-        *(uint32_t *)(h + 0x20) = info[0];
-        *(uint32_t *)(h + 0x24) = info[1];
-        *(uint32_t *)(h + 0x28) = info[2];
-        *(uint32_t *)(h + 0x2C) = info[3];
+    if (h->uid.high == NAME_$COM_UID.high &&
+        h->uid.low == NAME_$COM_UID.low) {
+        h->dir_kind = 2;
+        dir_$copy_mapped_info(h, &NAME_$COM_MAPPED_INFO);
         goto success;
     }
 
@@ -163,17 +178,13 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
     {
         uid_t *wdir_uid = &NAME_$DATA.wdir_uid[PROC1_$AS_ID];
 
-        if (*(uint32_t *)(h + 0x00) == wdir_uid->high &&
-            *(uint32_t *)(h + 0x04) == wdir_uid->low) {
+        if (h->uid.high == wdir_uid->high &&
+            h->uid.low == wdir_uid->low) {
             /* mapped info slot: base + (PROC1_$AS_ID << 4) */
             name_$mapped_info_t *wdir_info = &NAME_$DATA.wdir_mapped_info[PROC1_$AS_ID];
             if (wdir_info->active < 0) {
-                *(int16_t *)(h + 0x0C) = 3;
-                uint32_t *info = (uint32_t *)wdir_info;
-                *(uint32_t *)(h + 0x20) = info[0];
-                *(uint32_t *)(h + 0x24) = info[1];
-                *(uint32_t *)(h + 0x28) = info[2];
-                *(uint32_t *)(h + 0x2C) = info[3];
+                h->dir_kind = 3;
+                dir_$copy_mapped_info(h, wdir_info);
                 goto success;
             }
         }
@@ -183,53 +194,52 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
     {
         uid_t *ndir_uid = &NAME_$DATA.ndir_uid[PROC1_$AS_ID];
 
-        if (*(uint32_t *)(h + 0x00) == ndir_uid->high &&
-            *(uint32_t *)(h + 0x04) == ndir_uid->low) {
+        if (h->uid.high == ndir_uid->high &&
+            h->uid.low == ndir_uid->low) {
             /* mapped info slot: base + (PROC1_$AS_ID << 4) */
             name_$mapped_info_t *ndir_info = &NAME_$DATA.ndir_mapped_info[PROC1_$AS_ID];
             if (ndir_info->active >= 0) {
                 goto generic_map;
             }
-            *(int16_t *)(h + 0x0C) = 4;
-            uint32_t *info = (uint32_t *)ndir_info;
-            *(uint32_t *)(h + 0x20) = info[0];
-            *(uint32_t *)(h + 0x24) = info[1];
-            *(uint32_t *)(h + 0x28) = info[2];
-            *(uint32_t *)(h + 0x2C) = info[3];
+            h->dir_kind = 4;
+            dir_$copy_mapped_info(h, ndir_info);
             goto success;
         }
     }
 
 generic_map:
-    /* Generic directory - map via MST_$MAPS */
-    *(int16_t *)(h + 0x0C) = 0;
+    /* Generic directory - map via MST_$MAPS (0x00E4B63A). */
+    h->dir_kind = 0;
     {
-        uint32_t mapped_addr;
-
         /* 0x00E4B656 `st -(SP)` and 0x00E4B644 `st -(SP)` push arguments 2
          * and 8 as Pascal BOOLEAN bytes (0xFF == true); the word 0xFFFF this
          * call used to pass for argument 2 was never what the callee reads. */
-        MST_$MAPS(PROC1_$AS_ID, true, handle, 0, 0x10000, 0x16, 0,
-                  true, &map_size, status_ret);
-        /* TODO(source-qgq): MST_$MAPS returns address in A0 on m68k; assigned to handle+0x24 */
-        mapped_addr = *(uint32_t *)(h + 0x24);
+        /* 0x00E4B668 `move.l A0,(0x24,A2)`: the mapped address MST_$MAPS
+         * leaves in A0 is stored into cache slot 0's base (source-f3ye). */
+        h->cache0_base = ARCH_PTR_TO_VA(
+            MST_$MAPS(PROC1_$AS_ID, true, &h->uid, 0, 0x10000, 0x16, 0,
+                      true, &map_size, status_ret));
 
+        /* 0x00E4B670: the status is tested AFTER the store. */
         if (*status_ret != status_$ok) {
             goto error_clear;
         }
 
+        /* 0x00E4B674-0x00E4B680 */
         if (map_size != 0x10000) {
             CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
         }
 
-        h[0x20] = 0xFF;     /* Mapped flag */
-        *(uint16_t *)(h + 0x22) = 0;  /* Cache slot 0 group (none) */
-        *(uint16_t *)(h + 0x2A) = 1;  /* Only 1 slot used */
-        *(uint32_t *)(h + 0x2C) = *(uint32_t *)(h + 0x24) + 0x8000;
+        h->mapped = true;               /* 0x00E4B686 `st (0x20,A2)` */
+        h->cache0_group = 0;            /* 0x00E4B68A `clr.w (0x22,A2)` */
+        h->cache1_group = 1;            /* 0x00E4B68E `move.w #0x1,(0x2a,A2)` */
+        /* 0x00E4B694-0x00E4B69E: slot 1 covers the upper half of the
+         * 0x10000-byte mapping. */
+        h->cache1_base = h->cache0_base + 0x8000;
     }
 
 success:
-    *(uint16_t *)(h + 0x1E) = 0;
+    h->cur_slot = 0;        /* 0x00E4B6A2 `clr.w (0x1e,A2)` */
     return;
 
 error:
@@ -237,5 +247,5 @@ error:
         return;
     }
 error_clear:
-    h[0x20] = 0;  /* Clear mapped flag */
+    h->mapped = 0;          /* 0x00E4B6AC `clr.b (0x20,A2)` */
 }

@@ -31,7 +31,7 @@ void DIR_$OLD_ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
 {
     /* link.w A6,-0x138 */
     int8_t            truncated;        /* A6-0x138 */
-    uint8_t           is_root;          /* A6-0x136 - Domain boolean, 0xFF/0x00 */
+    boolean           is_root;          /* A6-0x136 - Domain boolean, 0xFF/0x00 */
     int16_t           mapped_len;       /* A6-0x134 */
     start_path_type_t path_type;        /* A6-0x132 */
     int16_t           consumed;         /* A6-0x130 */
@@ -77,7 +77,7 @@ void DIR_$OLD_ADD_LINKU(uid_t *dir_uid, char *name, int16_t *name_len,
      * into a Domain boolean.  Nothing branches on it here.
      */
     is_root = (dir_uid->high == NAME_$ROOT_UID.high &&
-               dir_uid->low  == NAME_$ROOT_UID.low) ? (uint8_t)0xFF : (uint8_t)0x00;
+               dir_uid->low  == NAME_$ROOT_UID.low) ? true : false;
 
     /* 0x00E5778C: 0x00040002 => lock_mode 4, acl_rights 2 */
     NAME_$LOCK_DIR(dir_uid, &handle, 4, 2, status_ret);

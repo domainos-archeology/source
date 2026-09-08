@@ -182,10 +182,10 @@ void dir_$create_dir_obj(uid_t *parent_uid, void *page0_data, uid_t *dir_acl_uid
         }
     } else {
         /* FILE ACL is NIL - just write the page */
-        /* DAT_00e52040 is a const (0x400, one page); FILE_$FW_PARTIAL only reads
+        /* DIR_$ONE_PAGE_L is a const (0x400, one page); FILE_$FW_PARTIAL only reads
          * *byte_count, so casting away const is safe here. */
         FILE_$FW_PARTIAL(new_uid_ret, (uint32_t *)&DIR_$CONST_ZERO_L,
-                         (int32_t *)&DAT_00e52040, &local_status);
+                         (int32_t *)&DIR_$ONE_PAGE_L, &local_status);
     }
 
 release_handle:

@@ -119,7 +119,7 @@ void dir_$do_op_delete(uid_t *dir_uid, void *name, uint16_t name_len,
                        boolean allow_link, uid_t *entry_uid_ret,
                        uid_t *deleted_uid_ret, status_$t *status_ret)
 {
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     void     *handle;                   /* A6-0x88 */
     uint8_t  *entry;                    /* A6-0x84 */
     file_$obj_loc_t   loc;              /* A6-0x60 */
@@ -263,11 +263,11 @@ have_attrs:                                             /* 0x00E513AE */
      * iteration (`lea (-0x58,A6),A1` is the dbf target at 0x00E5142E).
      */
     if (sub_type == 2 || sub_type == 1) {
-        for (i = (int16_t)(DIR_MOUNT_COUNT16(a5) - 1);
+        for (i = (int16_t)(DIR_MOUNT_COUNT16(blk) - 1);
              i >= 0; i--) {
-            const uint32_t *src =
-                (const uint32_t *)(a5 + 8 + 0x1554 + (int32_t)i * 8);
-            if (src[0] == loc.uid.high && src[1] == loc.uid.low) {
+            /* A5 + 8 + 0x1554 + i*8 is mount table entry i + 1. */
+            const uid_t *src = &DIR_MOUNT_UID_OF(blk, (int32_t)i + 1);
+            if (src->high == loc.uid.high && src->low == loc.uid.low) {
                 *status_ret = status_$naming_directory_locked;
                 goto release_and_out;
             }

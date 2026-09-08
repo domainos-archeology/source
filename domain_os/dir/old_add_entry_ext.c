@@ -14,7 +14,10 @@
  *   type         - Entry type code
  *   uid_data     - UID data for entry
  *   extra        - Extra value to store at entry offset 0x20
- *   replace_flag - Replace flag (passed through)
+ *   replace_flag - Domain boolean byte at A6+0x20; forwarded to
+ *                  dir_$old_add_entry with `move.b (0x20,A6),-(SP)`
+ *                  (0x00E5541E), which lands in the EVEN (high) byte of
+ *                  the callee's 2-byte slot at its A6+0x1C (source-j8qj)
  *   result       - Output: pointer to new entry (indirect)
  *   status_ret   - Output: status code
  *
@@ -26,14 +29,16 @@
 
 void dir_$old_add_entry_ext(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                             uint16_t name_len, uint16_t type, void *uid_data,
-                            uint32_t extra, uint8_t replace_flag,
+                            uint32_t extra, boolean replace_flag,
                             uint8_t *result, status_$t *status_ret)
 {
-    /* Call the base add entry function, passing replace_flag in
-     * the flags position (CONCAT11 in assembly merges bytes) */
+    /* 0x00E55416-0x00E5543A: the eight arguments are re-pushed unchanged,
+     * with replace_flag pushed as a BYTE. */
     dir_$old_add_entry(dir_uid, handle, name, name_len, type, uid_data,
-                       (uint16_t)replace_flag, result, status_ret);
+                       replace_flag, result, status_ret);
 
+    /* 0x00E55442: `tst.w (0x2,A2)` - only the LOW word of the status is
+     * tested, i.e. the status subsystem/module halves are ignored. */
     if ((int16_t)*status_ret == 0) {
         /* Store extra value at offset 0x20 of the new entry.
          * result is an indirect pointer: *result points to the entry */

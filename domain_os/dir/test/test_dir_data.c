@@ -80,8 +80,8 @@ TEST(the_named_records_line_up_with_their_addresses)
 
     ASSERT_EQ(0x0000, DIR_$OP_REC(0x44 >> 1).version);
     ASSERT_EQ(0x0002, DIR_$OP_REC(0x44 >> 1).base_size);
-    ASSERT_EQ(0x000c, DAT_00e7fd06);
-    ASSERT_EQ(0x000c, DAT_00e7fd0e);
+    ASSERT_EQ(0x000c, DIR_$OP_REC(0x5A >> 1).base_size);
+    ASSERT_EQ(0x000c, DIR_$OP_REC(0x5C >> 1).base_size);
 }
 
 /*
@@ -100,14 +100,14 @@ TEST(do_ops_a5_displacements_are_the_reply_fields)
 /* 0x00E7FD12..0x00E7FD24, the segment's last 0x12 bytes. */
 TEST(the_segment_tail_holds_its_image_bytes)
 {
-    ASSERT_EQ(0x12, (int)(sizeof(DAT_00e7fd12) + sizeof(DAT_00e7fd14)
-                          + sizeof(DAT_00e7fd18) + sizeof(DAT_00e7fd1c)
-                          + sizeof(DAT_00e7fd20)));
-    ASSERT_EQ(0x0000, DAT_00e7fd12);
-    ASSERT_EQ(0x00020001u, DAT_00e7fd14);
-    ASSERT_EQ(0x00010001u, DAT_00e7fd18);
-    ASSERT_EQ(0x00000001u, DAT_00e7fd1c);
-    ASSERT_EQ(0, memcmp(DAT_00e7fd20, ".bak", 4));
+    ASSERT_EQ(0x12, (int)(sizeof(DIR_$SEG_TAIL_PAD) + sizeof(DIR_$READU_COOKIE_FIRST)
+                          + sizeof(DIR_$READU_COOKIE_DOTDOT) + sizeof(DIR_$READU_COOKIE_DOT)
+                          + sizeof(DIR_$BAK_SUFFIX)));
+    ASSERT_EQ(0x0000, DIR_$SEG_TAIL_PAD);
+    ASSERT_EQ(0x00020001u, DIR_$READU_COOKIE_FIRST);
+    ASSERT_EQ(0x00010001u, DIR_$READU_COOKIE_DOTDOT);
+    ASSERT_EQ(0x00000001u, DIR_$READU_COOKIE_DOT);
+    ASSERT_EQ(0, memcmp(DIR_$BAK_SUFFIX, ".bak", 4));
 }
 
 int main(void)

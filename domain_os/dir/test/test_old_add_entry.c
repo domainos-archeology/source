@@ -104,15 +104,19 @@ static int8_t mock_find_overflow_result;
 static uint16_t mock_find_overflow_bucket;
 static uint16_t mock_find_overflow_sub_slot;
 static int mock_find_overflow_called;
+/* 0x00E5533C `move.b D4b,-(SP)`: the replace flag reaches this callee as a
+ * BYTE, unchanged (source-j8qj). */
+static int8_t mock_find_overflow_flags;
 
 static int8_t dir_$old_find_overflow_slot(test_handle_t handle, uint16_t hash,
                                            int8_t flags, uint16_t *bucket_out,
                                            uint16_t *sub_slot_out)
 {
     mock_find_overflow_called = 1;
+    mock_find_overflow_flags = flags;
     *bucket_out = mock_find_overflow_bucket;
     *sub_slot_out = mock_find_overflow_sub_slot;
-    (void)handle; (void)hash; (void)flags;
+    (void)handle; (void)hash;
     return mock_find_overflow_result;
 }
 
@@ -120,6 +124,7 @@ static void reset_mocks(void)
 {
     mock_find_entry_result = 0;
     mock_find_entry_called = 0;
+    mock_find_overflow_flags = 0x5A;
     mock_find_inline_result = 0;
     mock_find_inline_slot = 0;
     mock_find_inline_called = 0;
@@ -142,7 +147,7 @@ static void reset_mocks(void)
 static void dir_$old_add_entry(uid_t *dir_uid, test_handle_t handle,
                                 uint8_t *name, uint16_t name_len,
                                 uint16_t type, void *uid_data,
-                                uint16_t flags, uint8_t *result,
+                                boolean replace_flag, uint8_t *result,
                                 status_$t *status_ret)
 {
     char *dir_base = (char *)handle;
@@ -151,7 +156,6 @@ static void dir_$old_add_entry(uid_t *dir_uid, test_handle_t handle,
     uint16_t slot_idx;
     uint16_t chain_level;
     uint16_t hash;
-    int8_t flag_byte = (int8_t)(flags >> 8);
 
     *(uintptr_t *)result = 0;
 
@@ -162,7 +166,7 @@ static void dir_$old_add_entry(uid_t *dir_uid, test_handle_t handle,
         return;
     }
 
-    if (flag_byte >= 0 &&
+    if (replace_flag >= 0 &&
         *(int16_t *)(dir_base + 0x16) == *(int16_t *)(dir_base + 0x18)) {
         *status_ret = status_$directory_is_full;
         return;
@@ -210,7 +214,7 @@ static void dir_$old_add_entry(uid_t *dir_uid, test_handle_t handle,
 
     hash = dir_$old_hash_name(name, name_len, *(uint16_t *)(dir_base + 0x02));
 
-    found = dir_$old_find_overflow_slot(handle, hash, flag_byte,
+    found = dir_$old_find_overflow_slot(handle, hash, replace_flag,
                                          &slot_idx, &chain_level);
 
     if (found < 0) {
@@ -289,13 +293,13 @@ TEST(duplicate_name)
     status_$t status = 0;
 
     dir_$old_add_entry(&dir_uid, handle_val(), name, 4, 1,
-                       uid_data, 0, (uint8_t *)&result, &status);
+                       uid_data, false, (uint8_t *)&result, &status);
 
     ASSERT_EQ(status_$name_already_exists, status);
     ASSERT_EQ(1, mock_find_entry_called);
 }
 
-/* Test: directory full when flags >= 0 and entry_count == max */
+/* Test: directory full when replace_flag >= 0 and entry_count == max */
 TEST(directory_full_no_replace)
 {
     setup_dir_buf();
@@ -312,7 +316,7 @@ TEST(directory_full_no_replace)
     status_$t status = 0;
 
     dir_$old_add_entry(&dir_uid, handle_val(), name, 4, 1,
-                       uid_data, 0, (uint8_t *)&result, &status);
+                       uid_data, false, (uint8_t *)&result, &status);
 
     ASSERT_EQ(status_$directory_is_full, status);
     ASSERT_EQ(0, mock_find_inline_called);
@@ -334,7 +338,7 @@ TEST(inline_add_success)
     status_$t status = 0xFFFF;
 
     dir_$old_add_entry(&dir_uid, handle_val(), name, 5, 7,
-                       uid_data, 0, (uint8_t *)&result, &status);
+                       uid_data, false, (uint8_t *)&result, &status);
 
     ASSERT_EQ(status_$ok, status);
 
@@ -381,7 +385,7 @@ TEST(overflow_add_success)
     status_$t status = 0xFFFF;
 
     dir_$old_add_entry(&dir_uid, handle_val(), name, 2, 4,
-                       uid_data, 0, (uint8_t *)&result, &status);
+                       uid_data, false, (uint8_t *)&result, &status);
 
     ASSERT_EQ(status_$ok, status);
 
@@ -424,7 +428,7 @@ TEST(all_full)
     status_$t status = 0;
 
     dir_$old_add_entry(&dir_uid, handle_val(), name, 4, 1,
-                       uid_data, 0, (uint8_t *)&result, &status);
+                       uid_data, false, (uint8_t *)&result, &status);
 
     ASSERT_EQ(status_$directory_is_full, status);
     ASSERT_EQ(1, mock_find_inline_called);
@@ -445,7 +449,7 @@ TEST(result_cleared_on_error)
     status_$t status = 0;
 
     dir_$old_add_entry(&dir_uid, handle_val(), name, 4, 1,
-                       uid_data, 0, (uint8_t *)&result, &status);
+                       uid_data, false, (uint8_t *)&result, &status);
 
     ASSERT_EQ(0, result);
 }
@@ -466,7 +470,7 @@ TEST(empty_name)
     status_$t status = 0;
 
     dir_$old_add_entry(&dir_uid, handle_val(), name, 0, 2,
-                       uid_data, 0, (uint8_t *)&result, &status);
+                       uid_data, false, (uint8_t *)&result, &status);
 
     ASSERT_EQ(status_$ok, status);
 
@@ -494,7 +498,7 @@ TEST(max_length_name)
     status_$t status = 0;
 
     dir_$old_add_entry(&dir_uid, handle_val(), name, 32, 1,
-                       uid_data, 0, (uint8_t *)&result, &status);
+                       uid_data, false, (uint8_t *)&result, &status);
 
     ASSERT_EQ(status_$ok, status);
 
@@ -504,7 +508,7 @@ TEST(max_length_name)
     }
 }
 
-/* Test: replace mode (flags high byte < 0) bypasses entry_count == max check */
+/* Test: replace mode (replace_flag < 0) bypasses entry_count == max check */
 TEST(replace_mode_bypasses_full_check)
 {
     setup_dir_buf();
@@ -523,15 +527,78 @@ TEST(replace_mode_bypasses_full_check)
     status_$t status = 0;
 
     dir_$old_add_entry(&dir_uid, handle_val(), name, 4, 1,
-                       uid_data, 0x8000, (uint8_t *)&result, &status);
+                       uid_data, true, (uint8_t *)&result, &status);
 
     ASSERT_EQ(status_$ok, status);
     ASSERT_EQ(1, mock_find_inline_called);
 }
 
+/*
+ * source-j8qj: the seventh parameter is a Domain BOOLEAN BYTE.  The callee
+ * reads it with `move.b (0x1c,A6),D4b` (0x00E55238), tests it with
+ * `tst.b D4b` / `bpl` (0x00E55270) - a SIGNED test - and forwards the same
+ * byte to dir_$old_find_overflow_slot with `move.b D4b,-(SP)`
+ * (0x00E5533C).  These two tests pin both halves of that.
+ */
+TEST(replace_flag_is_a_signed_byte)
+{
+    ASSERT_EQ(1, (int)(sizeof(boolean) == 1));
+    /* Domain true is 0xFF, which must read back NEGATIVE. */
+    ASSERT_EQ(1, (int)(true < 0));
+    ASSERT_EQ(1, (int)(false == 0));
+    /* Any byte with bit 7 set selects replace mode; the image only ever
+     * tests the sign, never equality with 0xFF. */
+    ASSERT_EQ(1, (int)((boolean)0x80 < 0));
+    ASSERT_EQ(1, (int)((boolean)0x7F >= 0));
+}
+
+TEST(replace_flag_reaches_find_overflow_slot_unchanged)
+{
+    setup_dir_buf();
+    reset_mocks();
+    mock_find_entry_result = 0;
+    /* No free inline slot, so the overflow path runs. */
+    mock_find_inline_result = 0;
+    mock_find_overflow_result = (int8_t)0xFF;
+    mock_find_overflow_bucket = 3;
+    mock_find_overflow_sub_slot = 1;
+
+    uid_t dir_uid = {0, 0};
+    uint8_t name[] = "AB";
+    uint32_t uid_data[2] = {0, 0};
+    uintptr_t result = 0;
+    status_$t status = 0xFFFF;
+
+    dir_$old_add_entry(&dir_uid, handle_val(), name, 2, 4,
+                       uid_data, true, (uint8_t *)&result, &status);
+
+    ASSERT_EQ(1, mock_find_overflow_called);
+    ASSERT_EQ((int8_t)true, mock_find_overflow_flags);
+    ASSERT_EQ(status_$ok, status);
+
+    /* And false goes through just as unchanged. */
+    setup_dir_buf();
+    reset_mocks();
+    mock_find_entry_result = 0;
+    mock_find_inline_result = 0;
+    mock_find_overflow_result = (int8_t)0xFF;
+    mock_find_overflow_bucket = 3;
+    mock_find_overflow_sub_slot = 1;
+    result = 0;
+    status = 0xFFFF;
+
+    dir_$old_add_entry(&dir_uid, handle_val(), name, 2, 4,
+                       uid_data, false, (uint8_t *)&result, &status);
+
+    ASSERT_EQ(1, mock_find_overflow_called);
+    ASSERT_EQ((int8_t)false, mock_find_overflow_flags);
+}
+
 int main(void)
 {
     printf("dir_$old_add_entry tests:\n");
+    RUN_TEST(replace_flag_is_a_signed_byte);
+    RUN_TEST(replace_flag_reaches_find_overflow_slot_unchanged);
 
     RUN_TEST(duplicate_name);
     RUN_TEST(directory_full_no_replace);

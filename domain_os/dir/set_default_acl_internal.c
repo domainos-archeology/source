@@ -35,7 +35,7 @@
 
 #include "dir/dir_internal.h"
 
-/* DAT_00e52040 - 0x00000400 constant used as FILE_$FW_PARTIAL byte count */
+/* DIR_$ONE_PAGE_L - 0x00000400 constant used as FILE_$FW_PARTIAL byte count */
 
 void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
                                    void *src_acl_uid, char flush_flag,
@@ -195,7 +195,7 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
     if ((int8_t)flush_flag < 0) {
         FILE_$FW_PARTIAL((uid_t *)(uintptr_t)handle,
                          (uint32_t *)&DIR_$CONST_ZERO_L,
-                         (int32_t *)&DAT_00e52040 /* const; only read by callee */, status_ret);
+                         (int32_t *)&DIR_$ONE_PAGE_L /* const; only read by callee */, status_ret);
         if (*status_ret != status_$ok) {
             goto audit;
         }

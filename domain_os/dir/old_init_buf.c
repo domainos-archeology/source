@@ -35,7 +35,7 @@
 #include "dir/dir_internal.h"
 
 /*
- * Header template constants (from DAT_00e5453c, 10 bytes at 0x00E5453C):
+ * Header template constants (from 0x00E5453C, 10 bytes at 0x00E5453C):
  *   00 01 00 2b 00 12 01 ad 00 03
  */
 #define DIR_OLD_BUF_VERSION         1
@@ -60,7 +60,7 @@ void dir_$old_init_buf(void *buffer)
 
     /*
      * Step 1: Write header fields (equivalent to 10-byte template copy
-     * from DAT_00e5453c at offsets 0x00-0x09)
+     * from 0x00E5453C at offsets 0x00-0x09)
      * Assembly: lea (0x7e,PC),A1; move.l/move.l/move.w
      */
     *(uint16_t *)(buf + 0x00) = DIR_OLD_BUF_VERSION;

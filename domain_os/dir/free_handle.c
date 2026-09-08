@@ -1,14 +1,11 @@
 /*
  * DIR_$FREE_HANDLE - Free directory handle slot
  *
- * Returns a handle slot to the free list. Clears the active bit
- * in the bitmap, adds to the free chain (unless slot index 0,
- * which is the emergency slot), and advances the wait event
- * counter to wake any processes waiting for a handle.
- *
- * Handle fields used:
- *   +0x30: Next pointer in free list (4 bytes)
- *   +0x38: Slot index (2 bytes)
+ * Returns a handle slot to the free list.  Clears the slot's bit in the
+ * in-use bitmap at A5+0x203C, pushes the handle on the free list at
+ * A5+0x2038 (unless it is slot 0, the reserve slot DIR_$ALLOC_HANDLE hands
+ * out separately), and advances DIR_$WT_FOR_HDNL_EC to wake anybody
+ * waiting for a handle.
  *
  * Parameters:
  *   handle - Pointer to handle to free
@@ -21,27 +18,24 @@
 
 void DIR_$FREE_HANDLE(void *handle)
 {
-    char *base = (char *)__A5_BASE();
-    uint8_t *h = (uint8_t *)handle;
-    uint16_t slot_idx;
+    char          *blk = DIR_$BLOCK;
+    dir_$handle_t *h = (dir_$handle_t *)handle;     /* A2 */
+    uint16_t       slot_idx;                        /* D1 */
 
-    ML_$EXCLUSION_START(&DIR_$MUTEX);
+    ML_$EXCLUSION_START(&DIR_$MUTEX);               /* 0x00E4B98A */
 
-    /* Get slot index and clear its bit in the active bitmap */
-    slot_idx = *(uint16_t *)(h + 0x38);
-    {
-        uint32_t bit = 1u << (slot_idx & 0x1F);
-        *(uint32_t *)(base + 0x203C) &= ~bit;
-    }
+    /* 0x00E4B998-0x00E4B9A2 */
+    slot_idx = h->slot_index;
+    DIR_HANDLE_IN_USE_OF(blk) &= ~(1u << ((uint32_t)slot_idx & 0x1F));
 
-    /* Add to free list (but not slot 0 - the emergency slot) */
+    /* 0x00E4B9A6-0x00E4B9B0: slot 0 is the reserve slot, which is never
+     * chained on the free list. */
     if (slot_idx != 0) {
-        *(uint32_t *)(h + 0x30) = *(uint32_t *)(base + 0x2038);
-        *(uint32_t *)(base + 0x2038) = (uint32_t)(uintptr_t)handle;
+        h->next = DIR_HANDLE_FREE_OF(blk);
+        DIR_HANDLE_FREE_OF(blk) = ARCH_PTR_TO_VA(h);
     }
 
-    /* Wake any waiting processes */
-    EC_$ADVANCE(&DIR_$WT_FOR_HDNL_EC);
+    EC_$ADVANCE(&DIR_$WT_FOR_HDNL_EC);              /* 0x00E4B9B4 */
 
-    ML_$EXCLUSION_STOP(&DIR_$MUTEX);
+    ML_$EXCLUSION_STOP(&DIR_$MUTEX);                /* 0x00E4B9C2 */
 }

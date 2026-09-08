@@ -1,5 +1,5 @@
 /*
- * DIR_$VALIDATE_PAGES - Validate and compact directory pages
+ * dir_$validate_pages - Validate and compact directory pages
  *
  * Validates the structural integrity of directory pages by walking them
  * backward from the last page. Checks that consecutive pages have
@@ -54,7 +54,7 @@
 #define PAGE_NEXT_INDEX(p)      (*(uint16_t *)((char *)(p) + 12))
 #define PAGE_BTREE_OFF(p)       (*(int16_t *)((char *)(p) + 0x14))
 
-uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag,
+uint32_t dir_$validate_pages(void *handle, char crash_flag,
                               status_$t *status_ret)
 {
     uint16_t total_pages;
@@ -77,9 +77,9 @@ uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag,
 
     *status_ret = status_$ok;
 
-    /* Get total page count from the directory handle metadata */
-    /* handle[2].high >> 10 gives the page count */
-    total_pages = (uint16_t)((*(uint32_t *)((char *)handle + 0x10)) >> 10);
+    /* dir_$handle_t.length is the directory's byte length; >> 10 is its
+     * page count. */
+    total_pages = (uint16_t)(((const dir_$handle_t *)handle)->length >> 10);
     page_limit = (uint16_t)(total_pages - 1);
     last_page = page_limit;
     cur_page = last_page;

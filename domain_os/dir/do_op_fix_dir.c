@@ -66,14 +66,14 @@
  */
 #define DIR_TYPE_SIZE_TABLE_OFF 0x2000
 
-/* DAT_00e52040 - truncation size parameter (value = 0x00000400, one page)
+/* DIR_$ONE_PAGE_L - truncation size parameter (value = 0x00000400, one page)
  * In the original binary, this is a 32-bit constant at address 0x00E52040.
  */
-/* DAT_00e52040 is declared in dir_internal.h and defined in dir_data.c */
+/* DIR_$ONE_PAGE_L is declared in dir_internal.h and defined in dir_data.c */
 
 void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
 {
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     uint32_t orig_handle = 0;
     uint32_t new_handle = 0;
     uid_t new_dir_uid;
@@ -203,7 +203,7 @@ void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
                             }
 
                             /* Look up per-type header size */
-                            int16_t hdr_size = *(int16_t *)(a5
+                            int16_t hdr_size = *(int16_t *)(blk
                                 + DIR_TYPE_SIZE_TABLE_OFF
                                 + (int16_t)(etype * 2));
                             int16_t entry_size = (uint8_t)entry[1] + hdr_size;
@@ -333,7 +333,7 @@ next_page:
      * Truncate original to zero, copy pages from new to original,
      * restore ACL UIDs, then truncate to correct size.
      */
-    FILE_$TRUNCATE((uid_t *)(uintptr_t)orig_handle, (uint32_t *)&DAT_00e52040, status_ret);
+    FILE_$TRUNCATE((uid_t *)(uintptr_t)orig_handle, (uint32_t *)&DIR_$ONE_PAGE_L, status_ret);
     if (*status_ret != status_$ok) {
         goto done;
     }
@@ -410,7 +410,10 @@ done:
     /* If we created a temporary directory, decrement its reference count */
     if (new_dir_uid.high != UID_$NIL.high ||
         new_dir_uid.low != UID_$NIL.low) {
-        FILE_$SET_REFCNT(&new_dir_uid, (uint32_t *)(a5 - 8), &temp_status);
+        /* 0x00E53E62 `move.l (-0x8,A5),-(SP)` pushes the VALUE of the
+         * module's pointer cell at A5-0x8, which holds 0x00E4B33C -
+         * &DIR_$CONST_ZERO_L (see DIR_PURIFY_ARG_OFF in dir_internal.h). */
+        FILE_$SET_REFCNT(&new_dir_uid, &DIR_$CONST_ZERO_L, &temp_status);
     }
 
     ACL_$EXIT_SUPER();

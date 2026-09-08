@@ -40,11 +40,13 @@ ml_$exclusion_t DIR_$MUTEX;
 ml_$exclusion_t DIR_$LINK_BUF_MUTEX;
 
 /*
- * DAT_00e52040 - one-page length constant (0x00000400) embedded in the
- * code segment at 0xE52040 and passed by reference to FILE_$FW_PARTIAL and
- * FILE_$TRUNCATE.
+ * DIR_$ONE_PAGE_L - 0x00E52040, the longword 0x00000400 (one page) in the
+ * DIR code region.  Four `pea (d,PC)` sites read it (0x00E52026,
+ * 0x00E52532, 0x00E52F3A and 0x00E53D2E), handing it over as
+ * FILE_$FW_PARTIAL's byte count and FILE_$TRUNCATE's length.  Image bytes:
+ * 00 00 04 00.  (Ghidra labelled the cell by its address, 0x00E52040.)
  */
-const int32_t DAT_00e52040 = 0x00000400;
+const int32_t DIR_$ONE_PAGE_L = 0x00000400;
 
 /*
  * DIR_$OLD_LINK_TEXT_MAX - the word 0x0100 at 0xE577F2, shared by
@@ -148,7 +150,7 @@ _Static_assert(sizeof(DIR_$OP_TAB) == 0xD0,
  * the longword constants below, which the compiler placed on a longword
  * boundary.  Nothing reads it.
  */
-uint16_t DAT_00e7fd12 = 0x0000;
+uint16_t DIR_$SEG_TAIL_PAD = 0x0000;
 
 /*
  * 0x00E7FD14 / 0x00E7FD18 / 0x00E7FD1C: the three directory-read continuation
@@ -163,9 +165,9 @@ uint16_t DAT_00e7fd12 = 0x0000;
  *   0x00E7FD14  the first real entry, the value the cursor moves to once both
  *               pseudo-entries have been emitted (0x00E4DA26 loop exit)
  */
-uint32_t DAT_00e7fd14 = 0x00020001;
-uint32_t DAT_00e7fd18 = 0x00010001;
-uint32_t DAT_00e7fd1c = 0x00000001;
+uint32_t DIR_$READU_COOKIE_FIRST = 0x00020001;
+uint32_t DIR_$READU_COOKIE_DOTDOT = 0x00010001;
+uint32_t DIR_$READU_COOKIE_DOT = 0x00000001;
 
 /*
  * 0x00E7FD20: the four characters ".bak".  No instruction in the image reads
@@ -173,7 +175,7 @@ uint32_t DAT_00e7fd1c = 0x00000001;
  * OLD_DIR routine forms (0x2120,A5) or (-0x4,A5) -- so it is a constant the
  * Pascal source declared whose only use was compiled away.
  */
-char DAT_00e7fd20[4] = { '.', 'b', 'a', 'k' };
+char DIR_$BAK_SUFFIX[4] = { '.', 'b', 'a', 'k' };
 
 /*
  * ============================================================================
@@ -189,7 +191,7 @@ char DAT_00e7fd20[4] = { '.', 'b', 'a', 'k' };
  * 0x00E7F280 (A5+0x1680) is dir_$lock_entry_t[32] and 0x00E7F480 (A5+0x1880)
  * is dir_$handle_t[32]; both are declared in dir/dir_internal.h and reached
  * as DIR_$LOCK_TAB / DIR_$HANDLE_TAB.  The three cells the tree used to call
- * DAT_00e7f470 / DAT_00e7f4b0 / DAT_00e7fbf4 are interior `next` fields of
+ * 0x00E7F470 / 0x00E7F4B0 / 0x00E7FBF4 are interior `next` fields of
  * those arrays, which is why DIR_$INIT clears them one by one after building
  * the chains:
  *
@@ -235,32 +237,33 @@ uint16_t DIR_$CONST_ONE_W = 1;
  * dir_$do_op_cname, dir_$do_op_drop_dir, dir_$get_entry_cached. */
 boolean DIR_$CONST_TRUE_B = true;
 
-/* 0x00E4B448, two filler bytes (20 48) after DIR_$CONST_ONE_W.
- * Bytes 00 00 80 00. */
-uint32_t DAT_00e4b448 = 0x00008000;
+/* 0x00E4B448 (bytes 00 00 80 00, one cache group's size) follows
+ * DIR_$CONST_ONE_W.  dir_$map_page is its only reader, so it lives there as
+ * a file static (source-ka0m). */
 
 /* 0x00E4DFFA / 0x00E4DFFC, after the `rts` at 0x00E4DFF8.
  * Bytes 00 90 | 00. */
 int16_t DIR_$READU_ATTR_SIZE = 0x0090;
 uint8_t DIR_$READU_NUL_NAME = 0x00;
 
-/* 0x00E50830, after the `rts` at 0x00E5082E.  Bytes 00 05. */
-uint16_t DAT_00e50830 = 5;
-
-/* 0x00E50C5A, after the `rts` at 0x00E50C58.  Bytes 00 00. */
-uint16_t DAT_00e50c5a = 0;
+/* 0x00E50830 (bytes 00 05) is FILE_$SET_PROT's prot_type for
+ * dir_$add_bak_default_prot and 0x00E50C5A (bytes 00 00) is
+ * DIR_$DROP_HARD_LINKU's flags word for DIR_$DROPU.  Both are single-reader
+ * code-region cells and now live as file statics next to their call sites,
+ * dir/add_bak_default_prot.c and dir/dropu.c (source-p25p, source-ka0m). */
 
 /* 0x00E54B26, after the `rts` at 0x00E54B24.  Bytes 00 01. */
 int16_t ACL_TYPE_DIR = 1;
 
-/* 0x00E56094..0x00E560A4, after the `rts` at 0x00E56092.  Bytes
- * 00 90 | 00 28 | 00 04 | 00 | 00 01 16 00 | 01 | 00 00 00 | 00 | 00 01. */
+/*
+ * 0x00E56094..0x00E560A5, after the `rts` at 0x00E56092.  Image bytes:
+ *   00 90 | 00 28 | 00 04 | 00 00 01 16 | 00 01 00 00 | 00 00 00 01
+ * Only the first two words have more than one reader, so only they are
+ * module globals; 0x00E56098, 0x00E5609A, 0x00E5609E and 0x00E560A2 are
+ * file statics in dir/old_fix_dir.c, its sole reader (source-ka0m).
+ */
 int16_t  DIR_$ATTR_REC_SIZE_W = 0x0090;
 int16_t  DIR_$INFOBLK_MAX_LEN = 0x0028;
-uint16_t DAT_00e56098 = 0x0004;
-uint8_t  DAT_00e5609a = 0x00;
-uint32_t DAT_00e5609e = 0x00010000;
-uint8_t  DAT_00e560a2 = 0x00;
 
 /* 0x00E564E2, a longword in DIR_$OLD_SET_DEFAULT_ACL's pool: the 0x400-byte
  * length handed to FILE_$FW_PARTIAL.  Bytes 00 00 04 00. */

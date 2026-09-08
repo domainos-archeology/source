@@ -1,30 +1,14 @@
 /*
- * DIR_$UNLOCK_OBJ - Unlock/release lock on directory handle
+ * DIR_$UNLOCK_OBJ - Release the lock on a directory handle
  *
- * Releases the read or write lock on a directory. If the lock mode
- * is 2 (write) and the "dirty" flag (offset 0x20) is set, calls
- * AST_$PURIFY to flush changes before releasing.
+ * Releases the read or write lock the handle holds.  A write lock on a
+ * handle whose `mapped` flag is set is purified (flushed) first.
  *
- * Decrements reader count (mode 1) or clears writer flag (mode 2).
- * If the waiter queue is empty and count reaches 0, returns the
- * lock entry to the free list. Otherwise, if there are waiters
- * and count reaches 0, advances the first waiter's event counter
- * to wake it up.
- *
- * Parameters:
- *   handle - Pointer to handle structure
- *
- * Handle fields used:
- *   +0x0A: Lock mode (2 bytes)
- *   +0x20: Dirty flag (1 byte, bit 7)
- *   +0x34: Lock entry pointer (4 bytes)
- *   +0x38: Event counter index (2 bytes)
- *
- * Lock entry fields:
- *   +0x00: Free list next (4 bytes)
- *   +0x08: Waiter queue head (4 bytes)
- *   +0x0C: Lock count (2 bytes)
- *   +0x0E: Slot index (2 bytes)
+ * Reader release decrements dir_$lock_entry_t.lock_count, writer release
+ * puts it back to 0; both crash if the count does not match the mode.  Once
+ * the count reaches 0 the entry either wakes the first queued handle, or -
+ * if nobody is queued - goes back on the free list at A5+0x2030 and its bit
+ * is cleared in the in-use bitmap at A5+0x2034.
  *
  * Original address: 0x00E4B234
  * Original size: 264 bytes
@@ -34,68 +18,75 @@
 
 void DIR_$UNLOCK_OBJ(void *handle)
 {
-    uint8_t *h = (uint8_t *)handle;
-    int16_t mode;
-    uint32_t *lock_entry;
-    status_$t local_status;
+    char              *blk = DIR_$BLOCK;    /* the caller's A5 */
+    dir_$handle_t     *h = (dir_$handle_t *)handle;      /* A2 */
+    dir_$lock_entry_t *lock_entry;                       /* A3 */
+    int16_t            mode;                             /* D0 */
+    status_$t          local_status;                     /* A6-0x08 */
 
-    mode = *(int16_t *)(h + 0x0A);
+    mode = h->lock_mode;    /* 0x00E4B240 */
 
-    /* No-op if not locked */
+    /* 0x00E4B244: an unlocked handle is a no-op. */
     if (mode == 0) {
         return;
     }
 
-    /* If write mode and dirty flag set, purify (flush) */
-    if (mode == 2 && (int8_t)h[0x20] < 0) {
-        AST_$PURIFY(handle, 0, 0, &DIR_$CONST_ZERO_L, 0, &local_status);
+    /*
+     * 0x00E4B248-0x00E4B27E: a write lock on a mapped handle is flushed
+     * first.  The `clr.l -(SP)` at 0x00E4B260 covers BOTH the flags word and
+     * the segment word, and `pea (0xde,PC)` at 0x00E4B25C resolves to
+     * 0x00E4B33C - DIR_$CONST_ZERO_L, the "no segment list" longword.
+     */
+    if (mode == 2 && h->mapped < 0) {
+        AST_$PURIFY(&h->uid, 0, 0, &DIR_$CONST_ZERO_L, 0, &local_status);
         if (local_status != status_$ok) {
-            CRASH_SYSTEM(&local_status);
+            CRASH_SYSTEM(&local_status);        /* 0x00E4B274 */
         }
     }
 
-    ML_$EXCLUSION_START(&DIR_$MUTEX);
+    ML_$EXCLUSION_START(&DIR_$MUTEX);           /* 0x00E4B280 */
 
-    lock_entry = *(uint32_t **)(h + 0x34);
+    lock_entry = (dir_$lock_entry_t *)ARCH_VA_TO_PTR(h->lock_entry);
 
-    if (*(int16_t *)(h + 0x0A) == 1) {
-        /* Reader mode: decrement count */
-        if (*(int16_t *)((char *)lock_entry + 0x0C) < 1) {
+    /* 0x00E4B292-0x00E4B2CE: the lock_mode word is re-read from the handle
+     * here rather than reusing D0. */
+    if (h->lock_mode == 1) {
+        /* 0x00E4B29A `tst.w (0xc,A3)` / `bgt`: a reader release needs a
+         * count of at least 1. */
+        if (lock_entry->lock_count < 1) {
             CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
         }
-        *(int16_t *)((char *)lock_entry + 0x0C) -= 1;
-    } else if (*(int16_t *)(h + 0x0A) == 2) {
-        /* Writer mode: clear (must be -1) */
-        if (*(int16_t *)((char *)lock_entry + 0x0C) != -1) {
+        lock_entry->lock_count -= 1;            /* 0x00E4B2AC */
+    } else if (h->lock_mode == 2) {
+        /* 0x00E4B2BA: a writer release needs exactly -1. */
+        if (lock_entry->lock_count != -1) {
             CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
         }
-        *(int16_t *)((char *)lock_entry + 0x0C) = 0;
+        lock_entry->lock_count = 0;             /* 0x00E4B2CE */
     }
 
-    /* Check waiter queue */
-    if (lock_entry[2] != 0) {
-        /* Waiters present - if lock count is now 0, wake first waiter */
-        if (*(int16_t *)((char *)lock_entry + 0x0C) == 0) {
-            uint32_t first_waiter = lock_entry[2];
-            int16_t ec_idx = *(int16_t *)(first_waiter + 0x38);
-            EC_$ADVANCE((ec_$eventcount_t *)
-                        ((char *)&DIR_$WAIT_ECS + (int16_t)(ec_idx * 0xC)));
+    if (lock_entry->waiters != 0) {             /* 0x00E4B2D2 */
+        /* 0x00E4B2DE-0x00E4B300: with the lock now free, wake the first
+         * queued handle through its own slot eventcount. */
+        if (lock_entry->lock_count == 0) {
+            dir_$handle_t *first = (dir_$handle_t *)
+                ARCH_VA_TO_PTR(lock_entry->waiters);
+            EC_$ADVANCE(&DIR_$WAIT_ECS[first->slot_index]);
         }
     } else {
-        /* No waiters - if count is 0, free the lock entry */
-        if (*(int16_t *)((char *)lock_entry + 0x0C) == 0) {
-            char *base = (char *)__A5_BASE();
-            lock_entry[0] = *(uint32_t *)(base + 0x2030);
-            *(uint32_t *)(base + 0x2030) = *(uint32_t *)(h + 0x34);
+        /* 0x00E4B304-0x00E4B31E: nobody queued, so return the entry. */
+        if (lock_entry->lock_count == 0) {
+            /* The link overwrites the first UID longword; `next` and `uid`
+             * alias by design. */
+            lock_entry->u.next = DIR_LOCK_FREE_OF(blk);
+            DIR_LOCK_FREE_OF(blk) = h->lock_entry;
 
-            /* Clear bit in bitmap */
-            uint32_t bit = 1u << (*(uint16_t *)((char *)lock_entry + 0x0E) & 0x1F);
-            *(uint32_t *)(base + 0x2034) &= ~bit;
+            DIR_LOCK_IN_USE_OF(blk) &=
+                ~(1u << ((uint32_t)lock_entry->index & 0x1F));
         }
     }
 
-    /* Clear lock entry pointer */
-    *(uint32_t *)(h + 0x34) = 0;
+    h->lock_entry = 0;                          /* 0x00E4B322 */
 
-    ML_$EXCLUSION_STOP(&DIR_$MUTEX);
+    ML_$EXCLUSION_STOP(&DIR_$MUTEX);            /* 0x00E4B326 */
 }

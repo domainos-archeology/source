@@ -66,13 +66,14 @@ static const uint32_t dir_$add_bak_rights_00e50c5c = 0x00000002;
  * `pea (0x27e,PC)` at 0x00E509DA and `pea (0x1c2,PC)` at 0x00E50A96. */
 static const int16_t dir_$add_bak_acl_opts_00e50c5a = 0;
 
-/* DAT_00e50830 - Protection type parameter for FILE_$SET_PROT */
+/* 0x00E50830 (word 0x0005, FILE_$SET_PROT's prot_type) is read only by
+ * dir_$add_bak_default_prot and is a file static there (source-p25p). */
 
 void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name_len,
                          void *uid_data, uid_t *result_uid, status_$t *status_ret)
 {
     uid_t *backup_uid = (uid_t *)uid_data;
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     int32_t bak_name_len;
     char rollback_flag;
     uint32_t local_handle;
@@ -139,7 +140,10 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
         int16_t svar = (int16_t)bak_name_len;
         int16_t j = 1;
         do {
-            bak_name[(int16_t)(svar - 4 + j)] = *(uint8_t *)(a5 + j + 0x211F);
+            /* 0x00E50A34 `(0x211f,A5,Dn)` with a 1-based Dn, i.e.
+             * DIR_$BAK_SUFFIX[j - 1]. */
+            bak_name[(int16_t)(svar - 4 + j)] =
+                (uint8_t)DIR_$BAK_SUFFIX[j - 1];
             j++;
             remaining--;
         } while (remaining != -1);

@@ -69,9 +69,10 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
      * caller's new_dir_uid (A3) - there is no local copy. */
     dir_$old_create_obj(parent_uid, handle, 1, new_dir_uid, status_ret);
     if (*status_ret == status_$ok) {        /* 0x00E57262: tst.l (A4) */
-        /* 0x00E57268: type word 1, flags word 0 */
+        /* 0x00E57268: type word 1; `clr.w -(SP)` at 0x00E57270 zeroes the
+         * 2-byte slot holding the replace boolean, so it is false. */
         dir_$old_add_entry(parent_uid, handle, parsed_name, parsed_len,
-                           1, new_dir_uid, 0, add_result, status_ret);
+                           1, new_dir_uid, false, add_result, status_ret);
         if (*status_ret != status_$ok) {    /* 0x00E5728E: tst.l (A4) */
             /*
              * 0x00E57292-0x00E572EA: back the new object out.  Both

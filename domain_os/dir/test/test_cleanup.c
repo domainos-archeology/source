@@ -97,7 +97,7 @@ void DIR_$OLD_CLEANUP(void) { old_cleanup_calls++; }
 static int            vp_calls;
 static void          *vp_handle;
 static char           vp_flag;
-uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag, status_$t *status_ret)
+uint32_t dir_$validate_pages(void *handle, char crash_flag, status_$t *status_ret)
 {
     vp_calls++;
     vp_handle = handle;
@@ -141,8 +141,9 @@ void *dir_$map_page(void *handle, int16_t page_idx)
 
 /* ------------------------------------------------------------------ */
 
-#undef __A5_BASE
-#define __A5_BASE() ((void *)A5_AREA)
+/* Point the whole DIR module block at our own buffer (source-yv13). */
+#undef DIR_$BLOCK_BASE
+#define DIR_$BLOCK_BASE ((void *)A5_AREA)
 
 #include "../cleanup.c"
 

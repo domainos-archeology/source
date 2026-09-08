@@ -61,7 +61,7 @@ void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
     uint16_t *name_len_ret = (uint16_t *)len_ret;
     uint32_t *extra_ret = (uint32_t *)uid_ret;
 
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     uint32_t local_handle[4];
     uint32_t search_uid_high;
     uint32_t search_uid_low;
@@ -101,18 +101,18 @@ void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
     {
         /* The mount tables are ONE-BASED - see DIR_MOUNT_UID_TAB_OFF. */
         int16_t remaining =
-            (int16_t)(DIR_MOUNT_COUNT16(a5) - 1);
+            (int16_t)(DIR_MOUNT_COUNT16(blk) - 1);
         int16_t n;
 
         for (n = 1; remaining >= 0; n++, remaining--) {
             if (target_uid->high ==
-                    *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8) &&
+                    DIR_MOUNT_TGT_OF(blk, n).high &&
                 target_uid->low ==
-                    *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8 + 4)) {
+                    DIR_MOUNT_TGT_OF(blk, n).low) {
                 search_uid_high =
-                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8);
+                    DIR_MOUNT_UID_OF(blk, n).high;
                 search_uid_low =
-                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8 + 4);
+                    DIR_MOUNT_UID_OF(blk, n).low;
                 break;
             }
         }

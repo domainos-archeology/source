@@ -54,21 +54,21 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
                            uint16_t *type_ret, uid_t *uid_ret,
                            uint32_t *extra_ret, status_$t *status_ret)
 {
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     uint8_t *name_bytes = (uint8_t *)name;
     uint8_t found_ret;
     uint32_t dtv_data[2];  /* 6 bytes: 4-byte + 2-byte */
     uint16_t dtv_word;
 
-    /* Names longer than 17 chars bypass the cache */
-    if (name_len > 0x11) {
-        *(int32_t *)(a5 + 0x2010) += 1;  /* Increment bypass counter */
+    /* 0x00E4CD9E: names longer than 17 bytes bypass the cache entirely. */
+    if (name_len > DIR_ENTRY_CACHE_MAX_NAME) {
+        DIR_ENTRY_CACHE_TOO_LONG_NAME_OF(blk) += 1;
         dir_$lookup_entry(uid, name, name_len, type_ret, uid_ret,
                           extra_ret, &found_ret, status_ret);
         return;
     }
 
-    *(int32_t *)(a5 + 0x2018) += 1;  /* Increment lookup counter */
+    DIR_ENTRY_CACHE_TRIES_OF(blk) += 1;
 
     /* Get DTV (directory tree version) for comparison.
      * 0x00E4CDCC pushes the enclosing frame's UID *pointer*
@@ -98,19 +98,22 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
     /* Lock the directory mutex for cache access */
     ML_$EXCLUSION_START(&DIR_$MUTEX);
 
-    /* Cache entry base: A5 + (hash % 111) * 0x28 */
-    int cache_idx = (uint32_t)hash_val % 0x6F;
-    char *cache_entry = a5 + cache_idx * 0x28;
+    /* 0x00E4CE32-0x00E4CE42: the slot is hash % 111 and the record base is
+     * A5 + 0x400 + slot * 0x28. */
+    int cache_idx = (uint32_t)hash_val % DIR_ENTRY_CACHE_SLOTS;
+    dir_$entry_cache_t *cache_entry = &DIR_ENTRY_CACHE_OF(blk, cache_idx);
 
-    /* Check cache hit: compare name length, UID, DTV, and name bytes */
-    uint8_t cached_name_len = (uint8_t)(*(uint8_t *)(cache_entry + 0x416) >> 2);
+    /* 0x00E4CE3E-0x00E4CE4A: `and.b #0xfc` then `lsr.w #0x2`. */
+    uint8_t cached_name_len =
+        (uint8_t)((cache_entry->len_flags & DIR_ENTRY_CACHE_LEN_MASK)
+                  >> DIR_ENTRY_CACHE_LEN_SHIFT);
     if (cached_name_len != name_len) {
         goto cache_miss;
     }
 
-    /* Compare directory UID (8 bytes) */
-    if (*(uint32_t *)(cache_entry + 0x400) != uid->high ||
-        *(uint32_t *)(cache_entry + 0x404) != uid->low) {
+    /* 0x00E4CE54-0x00E4CE66: `cmpm.l` over the two UID longwords. */
+    if (cache_entry->dir_uid.high != uid->high ||
+        cache_entry->dir_uid.low != uid->low) {
         goto cache_miss;
     }
 
@@ -119,7 +122,9 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
         int16_t remaining = name_len - 1;
         uint32_t i = 1;
         do {
-            if (*(char *)(cache_entry + i + 0x416) != (char)name_bytes[i - 1]) {
+            /* 0x00E4CE82-0x00E4CE8A: `(0x416,A0)` with A0 = A4 + i, i.e.
+             * the 1-based name byte at record+0x17 + (i - 1). */
+            if ((char)cache_entry->name[i - 1] != (char)name_bytes[i - 1]) {
                 goto cache_miss;
             }
             i++;
@@ -130,7 +135,7 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
     /* Compare DTV (6 bytes at cache offset 0x410) */
     {
         int16_t *p1 = (int16_t *)dtv_data;
-        int16_t *p2 = (int16_t *)(cache_entry + 0x410);
+        int16_t *p2 = (int16_t *)cache_entry->dtv;
         int16_t count = 2;
         int16_t v1, v2;
         do {
@@ -143,15 +148,16 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
 
     /* Cache hit */
     *type_ret = 1;
-    uid_ret->high = *(uint32_t *)(cache_entry + 0x408);
-    uid_ret->low  = *(uint32_t *)(cache_entry + 0x40C);
+    uid_ret->high = cache_entry->entry_uid.high;
+    uid_ret->low  = cache_entry->entry_uid.low;
     *extra_ret = 0;
-    *(int32_t *)(a5 + 0x201C) += 1;  /* Increment hit counter */
+    DIR_ENTRY_CACHE_HITS_OF(blk) += 1;
 
-    /* Check if cache entry has the "ACL checked" flag (bit 8) */
-    if ((*(uint16_t *)(cache_entry + 0x416) & 0x100) != 0) {
+    /* 0x00E4CED4-0x00E4CEDC: `btst.l #0x8` on the WORD at record+0x16 is
+     * bit 0 of the len_flags BYTE. */
+    if ((cache_entry->len_flags & DIR_ENTRY_CACHE_ACL_OK) != 0) {
         /* ACL already checked - done */
-        *(int32_t *)(a5 + 0x2014) += 1;  /* Increment ACL-cached counter */
+        DIR_ENTRY_CACHE_SKIPPED_ACL_OF(blk) += 1;
         ML_$EXCLUSION_STOP(&DIR_$MUTEX);
         return;
     }
@@ -188,34 +194,39 @@ cache_miss:
 
     ML_$EXCLUSION_START(&DIR_$MUTEX);
 
-    /* Copy UID to cache */
-    *(uint32_t *)(cache_entry + 0x400) = uid->high;
-    *(uint32_t *)(cache_entry + 0x404) = uid->low;
+    /* 0x00E4CF70-0x00E4CF78 */
+    cache_entry->dir_uid.high = uid->high;
+    cache_entry->dir_uid.low  = uid->low;
 
-    /* Copy result UID to cache */
-    *(uint32_t *)(cache_entry + 0x408) = uid_ret->high;
-    *(uint32_t *)(cache_entry + 0x40C) = uid_ret->low;
+    /* 0x00E4CF7C-0x00E4CF84 */
+    cache_entry->entry_uid.high = uid_ret->high;
+    cache_entry->entry_uid.low  = uid_ret->low;
 
-    /* Copy DTV to cache */
-    *(uint32_t *)(cache_entry + 0x410) = dtv_data[0];
-    *(uint16_t *)(cache_entry + 0x414) = *(uint16_t *)((char *)dtv_data + 4);
+    /* 0x00E4CF88-0x00E4CF8E: a longword then a word. */
+    *(uint32_t *)cache_entry->dtv = dtv_data[0];
+    cache_entry->dtv[2] = *(uint16_t *)((char *)dtv_data + 4);
 
-    /* Store name length (shifted left 2 bits) and name bytes */
-    *(uint8_t *)(cache_entry + 0x416) = *(uint8_t *)(cache_entry + 0x416) & 3;
-    *(uint8_t *)(cache_entry + 0x416) = ((uint8_t)name_len << 2) |
-                                         *(uint8_t *)(cache_entry + 0x416);
+    /* 0x00E4CF94-0x00E4CFA0: keep the two flag bits, drop in the length. */
+    cache_entry->len_flags = (uint8_t)(cache_entry->len_flags & 0x03);
+    cache_entry->len_flags = (uint8_t)(((uint8_t)name_len
+                                        << DIR_ENTRY_CACHE_LEN_SHIFT)
+                                       | cache_entry->len_flags);
 
-    /* Store min_rights flag in bit 0 */
-    *(uint8_t *)(cache_entry + 0x416) = *(uint8_t *)(cache_entry + 0x416) & 0xFE;
-    *(uint8_t *)(cache_entry + 0x416) = (uint8_t)(-((min_rights & 1) != 0)) >> 7 |
-                                         *(uint8_t *)(cache_entry + 0x416);
+    /* 0x00E4CFA4-0x00E4CFB2: `btst.l #0x0,D2` / `sne` / `lsr.b #0x7` turns
+     * bit 0 of ACL_$MIN_RIGHTS' result into a 0/1 flag in bit 0. */
+    cache_entry->len_flags =
+        (uint8_t)(cache_entry->len_flags & (uint8_t)~DIR_ENTRY_CACHE_ACL_OK);
+    cache_entry->len_flags = (uint8_t)
+        (((uint8_t)(-(int)((min_rights & 1) != 0)) >> 7)
+         | cache_entry->len_flags);
 
     /* Copy name bytes to cache */
     if (name_len != 0) {
         int16_t remaining = name_len - 1;
         uint16_t i = 1;
         do {
-            *(uint8_t *)(cache_entry + i + 0x416) = name_bytes[i - 1];
+            /* 0x00E4CFD2: `(0x416,A0)` with A0 = A4 + i. */
+            cache_entry->name[i - 1] = name_bytes[i - 1];
             i++;
             remaining--;
         } while (remaining != -1);

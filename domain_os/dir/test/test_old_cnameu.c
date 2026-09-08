@@ -139,14 +139,15 @@ static uint8_t   ae_bit_during;
 static status_$t ae_status;
 void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                         uint16_t name_len, uint16_t type, void *uid_data,
-                        uint16_t flags, uint8_t *result, status_$t *status_ret)
+                        boolean replace_flag, uint8_t *result,
+                        status_$t *status_ret)
 {
     ae_calls++;
     ae_type_seen = type;
     ae_len_seen = name_len;
     ae_uid_seen = uid_data;
     ae_bit_during = (uint8_t)(entry_rec[0x24] & 0x80);
-    (void)dir_uid; (void)handle; (void)name; (void)flags;
+    (void)dir_uid; (void)handle; (void)name; (void)replace_flag;
     *(uint32_t *)result = 0;
     *status_ret = ae_status;
 }
@@ -161,7 +162,7 @@ static uint8_t   aee_bit_during;
 static status_$t aee_status;
 void dir_$old_add_entry_ext(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                             uint16_t name_len, uint16_t type, void *uid_data,
-                            uint32_t extra, uint8_t replace_flag,
+                            uint32_t extra, boolean replace_flag,
                             uint8_t *result, status_$t *status_ret)
 {
     aee_calls++;
@@ -169,7 +170,7 @@ void dir_$old_add_entry_ext(uid_t *dir_uid, uint32_t handle, uint8_t *name,
     aee_len_seen = name_len;
     aee_uid_seen = uid_data;
     aee_extra_seen = extra;
-    aee_replace_seen = replace_flag;
+    aee_replace_seen = (uint8_t)replace_flag;
     aee_bit_during = (uint8_t)(entry_rec[0x24] & 0x80);
     (void)dir_uid; (void)handle; (void)name;
     *(uint32_t *)result = 0;

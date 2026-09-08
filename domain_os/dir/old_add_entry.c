@@ -9,7 +9,7 @@
  * 1. Clear *result output pointer
  * 2. Call dir_$old_find_entry to check if name already exists
  *    - If found: return status_$name_already_exists (0xE0003)
- * 3. If flags >= 0 and entry_count == max inline entries, fail
+ * 3. If replace_flag >= 0 and entry_count == max inline entries, fail
  * 4. Try inline entry area first via dir_$old_find_free_inline_slot:
  *    - Entry at handle + slot * 0x30, stride 0x30 (48 bytes)
  *    - Copy name (space-padded to 32 chars)
@@ -30,7 +30,11 @@
  *   name_len   - Length of name
  *   type       - Entry type code
  *   uid_data   - Pointer to 8-byte UID to store in entry
- *   flags      - Operation flags (high byte: negative = replace mode)
+ *   replace_flag - Domain boolean, read as a BYTE at A6+0x1C
+ *                  (`move.b (0x1c,A6),D4b` at 0x00E55238) and tested with
+ *                  `tst.b`/`bmi` at 0x00E55270: negative = replace mode.
+ *                  It is also handed straight to dir_$old_find_overflow_slot
+ *                  as that routine's third argument (source-j8qj).
  *   result     - Output: pointer to new entry (written as int32_t*)
  *   status_ret - Output: status code
  *
@@ -42,7 +46,8 @@
 
 void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                         uint16_t name_len, uint16_t type, void *uid_data,
-                        uint16_t flags, uint8_t *result, status_$t *status_ret)
+                        boolean replace_flag, uint8_t *result,
+                        status_$t *status_ret)
 {
     char *dir_base = (char *)(uintptr_t)handle;
     uint32_t *uid_ptr = (uint32_t *)uid_data;
@@ -50,7 +55,6 @@ void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
     uint16_t slot_idx;
     uint16_t chain_level;
     uint16_t hash;
-    int8_t flag_byte = (int8_t)(flags >> 8);  /* high byte of flags word */
 
     /* Clear result pointer */
     *(int32_t *)result = 0;
@@ -63,9 +67,10 @@ void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
         return;
     }
 
-    /* Check if we can add: either replace mode (flags < 0) or
-     * there's room (entry_count != max_inline_count) */
-    if (flag_byte >= 0 &&
+    /* Check if we can add: either replace mode (replace_flag < 0) or
+     * there's room (entry_count != max_inline_count).  0x00E55270:
+     * `tst.b D4b` / `bpl` falls through to the count comparison. */
+    if (replace_flag >= 0 &&
         *(int16_t *)(dir_base + 0x16) == *(int16_t *)(dir_base + 0x18)) {
         *status_ret = status_$directory_is_full;
         return;
@@ -128,7 +133,7 @@ void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
     /* Inline area full - try overflow area */
     hash = dir_$old_hash_name(name, name_len, *(uint16_t *)(dir_base + 0x02));
 
-    found = dir_$old_find_overflow_slot(handle, hash, flag_byte,
+    found = dir_$old_find_overflow_slot(handle, hash, replace_flag,
                                          &slot_idx, &chain_level);
 
     if (found < 0) {

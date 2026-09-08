@@ -28,7 +28,7 @@
 void dir_$do_op_drop_mount(uid_t *mount_uid, uint32_t node_id,
                            status_$t *status_ret)
 {
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     int16_t remaining;
     int16_t n;
 
@@ -36,57 +36,57 @@ void dir_$do_op_drop_mount(uid_t *mount_uid, uint32_t node_id,
     ML_$EXCLUSION_START(&DIR_$MUTEX);
 
     /* 0x00E53404: `move.w (0x155a,A5),D0w` / `subq.w #1` / `bmi`. */
-    remaining = (int16_t)(DIR_MOUNT_COUNT16(a5) - 1);
+    remaining = (int16_t)(DIR_MOUNT_COUNT16(blk) - 1);
 
     for (n = 1; remaining >= 0; n++, remaining--) {
         int matched;
 
         /* 0x00E53418-0x00E53426: the target uid first ... */
         matched = (mount_uid->high ==
-                       *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8) &&
+                       DIR_MOUNT_TGT_OF(blk, n).high &&
                    mount_uid->low ==
-                       *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8 + 4));
+                       DIR_MOUNT_TGT_OF(blk, n).low);
         if (!matched) {
             /* 0x00E53428: ... otherwise the node id. */
             matched = (node_id ==
-                       *(uint32_t *)(a5 + DIR_MOUNT_NODE_TAB_OFF + n * 4));
+                       DIR_MOUNT_NODE_OF(blk, n));
         }
 
         if (matched) {
             /* 0x00E5342E: `cmpi.l #0x1,(0x1558,A5)` / `ble` - a table with
              * one entry left only has its count dropped. */
-            if (*(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF) > 1) {
+            if (DIR_MOUNT_COUNT_OF(blk) > 1) {
                 int32_t last;
 
                 /* 0x00E53444: `clr.l (0x1554,A0)` clears only the HIGH
                  * longword of this slot's source uid; 0x00E5346C
                  * overwrites it again a few instructions later. */
-                *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8) = 0;
+                DIR_MOUNT_UID_OF(blk, n).high = 0;
 
                 /* 0x00E53448-0x00E5345A: the count is re-read for every
                  * one of the three moves. */
-                last = *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF);
-                *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8) =
-                    *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + last * 8);
-                *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8 + 4) =
-                    *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + last * 8 + 4);
+                last = DIR_MOUNT_COUNT_OF(blk);
+                DIR_MOUNT_TGT_OF(blk, n).high =
+                    DIR_MOUNT_TGT_OF(blk, last).high;
+                DIR_MOUNT_TGT_OF(blk, n).low =
+                    DIR_MOUNT_TGT_OF(blk, last).low;
 
                 /* 0x00E5345E-0x00E53470 */
-                last = *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF);
-                *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8) =
-                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + last * 8);
-                *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8 + 4) =
-                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + last * 8 + 4);
+                last = DIR_MOUNT_COUNT_OF(blk);
+                DIR_MOUNT_UID_OF(blk, n).high =
+                    DIR_MOUNT_UID_OF(blk, last).high;
+                DIR_MOUNT_UID_OF(blk, n).low =
+                    DIR_MOUNT_UID_OF(blk, last).low;
 
                 /* 0x00E53474-0x00E53486: `(0x15d8,A4) = (0x15d8,A3)` with
                  * A4 = A5 + n*4 and A3 = A5 + count*4. */
-                last = *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF);
-                *(uint32_t *)(a5 + DIR_MOUNT_NODE_TAB_OFF + n * 4) =
-                    *(uint32_t *)(a5 + DIR_MOUNT_NODE_TAB_OFF + last * 4);
+                last = DIR_MOUNT_COUNT_OF(blk);
+                DIR_MOUNT_NODE_OF(blk, n) =
+                    DIR_MOUNT_NODE_OF(blk, last);
             }
 
             /* 0x00E5348C */
-            *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF) -= 1;
+            DIR_MOUNT_COUNT_OF(blk) -= 1;
             break;                      /* 0x00E53490 */
         }
     }

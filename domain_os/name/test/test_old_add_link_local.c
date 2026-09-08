@@ -110,14 +110,15 @@ static status_$t m_dir_add_status;
 
 void dir_$old_add_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                         uint16_t name_len, uint16_t type, void *uid_data,
-                        uint16_t flags, uint8_t *result, status_$t *status_ret)
+                        boolean replace_flag, uint8_t *result,
+                        status_$t *status_ret)
 {
     (void)dir_uid; (void)uid_data;
     m_dir_add_calls++;
     m_dir_add_handle = handle;
     m_dir_add_type   = type;
     m_dir_add_len    = name_len;
-    m_dir_add_flags  = flags;
+    m_dir_add_flags  = (uint16_t)(uint8_t)replace_flag;
     memcpy(m_dir_add_name, name, sizeof(m_dir_add_name));
     *(uint32_t *)(void *)result = 0xABCD1234u;
     *status_ret = m_dir_add_status;

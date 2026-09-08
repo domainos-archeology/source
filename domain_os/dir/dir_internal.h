@@ -328,6 +328,20 @@ typedef struct __attribute__((packed, aligned(2))) dir_$req_set_default_acl_t {
     uid_t    acl_uid;                   /* +0x96  0x00E53058 */
 } dir_$req_set_default_acl_t;
 
+/* ops 0x5A ADD_MOUNT (DIR_$ADD_MOUNT 0x00E534B8) and 0x5C DROP_MOUNT
+ * (DIR_$DROP_MOUNT 0x00E53518), both base_size 0x0C (DIR_$OP_TAB[24] and
+ * [25], 0x00E7FD06 / 0x00E7FD0E).  0x8E + 0x0C = 0x9A, the end of the
+ * record.  Both builders write the request base at A6-0xB8, the uid at
+ * A6-0x2A (= +0x8E) and the longword at A6-0x22 (= +0x96):
+ *   ADD_MOUNT  0x00E534E0/0x00E534E4 uid, 0x00E534E8 NODE_$ME
+ *   DROP_MOUNT 0x00E53540/0x00E53544 uid, 0x00E5354C *lv_num
+ * DIR_$DO_OP's cases 0x5A and 0x5C read exactly these two cells back as
+ * `(uid_t *)(req + 0x8e)` and `*(uint32_t *)(req + 0x96)`. */
+typedef struct __attribute__((packed, aligned(2))) dir_$req_mount_t {
+    uid_t    mount_uid;                 /* +0x8E */
+    uint32_t node_id;                   /* +0x96 */
+} dir_$req_mount_t;
+
 /* Largest body any of the variants above needs. */
 #define DIR_REQ_BODY_MAX    (4 + 2 * DIR_MAX_LEAF_LEN)
 
@@ -353,6 +367,7 @@ typedef struct __attribute__((packed, aligned(2))) dir_$do_op_request_t {
         dir_$req_set_def_prot_t     set_def_prot;
         dir_$req_resolve_t          resolve;
         dir_$req_set_default_acl_t  set_default_acl;
+        dir_$req_mount_t            mount;
         uint8_t                     raw[DIR_REQ_BODY_MAX];
     } body;                     /* 0x8E */
 } dir_$do_op_request_t;
@@ -428,6 +443,10 @@ _Static_assert(__builtin_offsetof(dir_$do_op_request_t, body.set_default_acl.acl
                "set_default_acl type uid at +0x8E");
 _Static_assert(__builtin_offsetof(dir_$do_op_request_t, body.set_default_acl.acl_uid) == 0x96,
                "set_default_acl acl uid at +0x96");
+_Static_assert(__builtin_offsetof(dir_$do_op_request_t, body.mount.mount_uid) == 0x8E,
+               "mount uid at +0x8E");
+_Static_assert(__builtin_offsetof(dir_$do_op_request_t, body.mount.node_id) == 0x96,
+               "mount node_id at +0x96");
 
 /*
  * Dir_$OpAddHardLinkuRequest - Request structure for ADD_HARD_LINKU
@@ -661,68 +680,42 @@ extern dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];
 /* The record for op_half = opcode >> 1, with the table's 21-record bias. */
 #define DIR_$OP_REC(half) (DIR_$OP_TAB[(half) - DIR_$OP_TAB_BASE_INDEX])
 
-/* The two words of each record, by the address Ghidra labels them with. */
-#define DAT_00e7fc4a     (DIR_$OP_TAB[ 1].version)  /* 0x00E7FC4A */
-#define DAT_00e7fc4e     (DIR_$OP_TAB[ 1].base_size)  /* 0x00E7FC4E */
-#define DAT_00e7fc52     (DIR_$OP_TAB[ 2].version)  /* 0x00E7FC52 */
-#define DAT_00e7fc56     (DIR_$OP_TAB[ 2].base_size)  /* 0x00E7FC56 */
-#define DAT_00e7fc62     (DIR_$OP_TAB[ 4].version)  /* 0x00E7FC62 */
-#define DAT_00e7fc66     (DIR_$OP_TAB[ 4].base_size)  /* 0x00E7FC66 */
-#define DAT_00e7fc6a     (DIR_$OP_TAB[ 5].version)  /* 0x00E7FC6A */
-#define DAT_00e7fc6e     (DIR_$OP_TAB[ 5].base_size)  /* 0x00E7FC6E */
-#define DAT_00e7fc72     (DIR_$OP_TAB[ 6].version)  /* 0x00E7FC72 */
-#define DAT_00e7fc76     (DIR_$OP_TAB[ 6].base_size)  /* 0x00E7FC76 */
-#define DAT_00e7fc7a     (DIR_$OP_TAB[ 7].version)  /* 0x00E7FC7A */
-#define DAT_00e7fc7e     (DIR_$OP_TAB[ 7].base_size)  /* 0x00E7FC7E */
-#define DAT_00e7fc82     (DIR_$OP_TAB[ 8].version)  /* 0x00E7FC82 */
-#define DAT_00e7fc86     (DIR_$OP_TAB[ 8].base_size)  /* 0x00E7FC86 */
-#define DAT_00e7fc8a     (DIR_$OP_TAB[ 9].version)  /* 0x00E7FC8A */
-#define DAT_00e7fc8e     (DIR_$OP_TAB[ 9].base_size)  /* 0x00E7FC8E */
-#define DAT_00e7fc92     (DIR_$OP_TAB[10].version)  /* 0x00E7FC92 */
-#define DAT_00e7fc96     (DIR_$OP_TAB[10].base_size)  /* 0x00E7FC96 */
-#define DAT_00e7fc9a     (DIR_$OP_TAB[11].version)  /* 0x00E7FC9A */
-#define DAT_00e7fc9e     (DIR_$OP_TAB[11].base_size)  /* 0x00E7FC9E */
+/*
+ * Every reader spells a record's two client words as
+ * DIR_$OP_REC(opcode >> 1).version and .base_size; the Ghidra placeholder
+ * aliases that used to sit here have been removed (source-ka0m).
+ */
 
-/* 0x00E7FC42 is DIR_$OP_TAB itself, record 0's version word. */
-#define DAT_00e7fc42     (DIR_$OP_TAB[ 0].version)   /* 0x00E7FC42 */
 /* GET_ENTRYU (op 0x44) params.  Same record+0 / record+4 pair as the DAT_
  * cells above, but reached through A5 = 0xE7DC00 rather than by absolute
  * address: DIR_$GET_ENTRYU_FUN_00e4d460 reads (0x20aa,A5) at 0x00E4D4A6 and
  * (0x20ae,A5) at 0x00E4D4B8.  Named for what they are used for. */
 extern uint16_t DIR_$GET_ENTRYU_REQ_PARM;  /* word at 0xE7FCAA -> request+0x0E */
 extern uint16_t DIR_$GET_ENTRYU_REQ_LEN;   /* word at 0xE7FCAE, added to name_len */
-#define DAT_00e7fcba     (DIR_$OP_TAB[15].version)   /* FIX_DIR params */  /* 0x00E7FCBA */
-#define DAT_00e7fcbe     (DIR_$OP_TAB[15].base_size)  /* 0x00E7FCBE */
-#define DAT_00e7fcca     (DIR_$OP_TAB[17].version)   /* SET_DEFAULT_ACL params */  /* 0x00E7FCCA */
-#define DAT_00e7fcce     (DIR_$OP_TAB[17].base_size)  /* 0x00E7FCCE */
-#define DAT_00e7fcd2     (DIR_$OP_TAB[18].version)   /* GET_DEFAULT_ACL params */  /* 0x00E7FCD2 */
-#define DAT_00e7fcd6     (DIR_$OP_TAB[18].base_size)  /* 0x00E7FCD6 */
-#define DAT_00e7fcda     (DIR_$OP_TAB[19].version)   /* VALIDATE_ROOT_ENTRY params */  /* 0x00E7FCDA */
-#define DAT_00e7fcde     (DIR_$OP_TAB[19].base_size)  /* 0x00E7FCDE */
-#define DAT_00e7fce2     (DIR_$OP_TAB[20].version)   /* SET_PROTECTION params */  /* 0x00E7FCE2 */
-#define DAT_00e7fce6     (DIR_$OP_TAB[20].base_size)  /* 0x00E7FCE6 */
-#define DAT_00e7fcea     (DIR_$OP_TAB[21].version)   /* SET_DEF_PROTECTION params */  /* 0x00E7FCEA */
-#define DAT_00e7fcee     (DIR_$OP_TAB[21].base_size)  /* 0x00E7FCEE */
-#define DAT_00e7fcf2     (DIR_$OP_TAB[22].version)   /* GET_DEF_PROTECTION params */  /* 0x00E7FCF2 */
-#define DAT_00e7fcf6     (DIR_$OP_TAB[22].base_size)  /* 0x00E7FCF6 */
-#define DAT_00e7fcfa     (DIR_$OP_TAB[23].version)   /* RESOLVE params */  /* 0x00E7FCFA */
-#define DAT_00e7fcfe     (DIR_$OP_TAB[23].base_size)  /* 0x00E7FCFE */
-#define DAT_00e7fd02     (DIR_$OP_TAB[24].version)   /* ADD_MOUNT params - my_host_id word */  /* 0x00E7FD02 */
-#define DAT_00e7fd06     (DIR_$OP_TAB[24].base_size)   /* ADD_MOUNT request size */  /* 0x00E7FD06 */
-
-#define DAT_00e7fd0a     (DIR_$OP_TAB[25].version)   /* DROP_MOUNT params - my_host_id word */  /* 0x00E7FD0A */
-#define DAT_00e7fd0e     (DIR_$OP_TAB[25].base_size)   /* DROP_MOUNT request size */  /* 0x00E7FD0E */
+/* 0x00E7FCBA / 0x00E7FCBE are DIR_$OP_TAB[15]'s version and base_size --
+ * FIX_DIR (op 0x48 >> 1 = 0x24, record 0x24 - 21 = 15).  DIR_$FIX_DIR reaches
+ * them as (0x20ba,A5) and (0x20be,A5) (0x00E53EAA / 0x00E53EBC); they are now
+ * spelled DIR_$OP_REC(DIR_OP_FIX_DIR >> 1).version / .base_size. */
+/* 0x00E7FD02/06 are DIR_$OP_TAB[24] (ADD_MOUNT, op 0x5A >> 1 = 0x2D, record
+ * 0x2D - 21 = 24) and 0x00E7FD0A/0E are record 25 (DROP_MOUNT).  DIR_$ADD_MOUNT
+ * reads (0x2102,A5) / (0x2106,A5) at 0x00E534D6 / 0x00E534FC and
+ * DIR_$DROP_MOUNT (0x210a,A5) / (0x210e,A5) at 0x00E53536 / 0x00E5355C; both
+ * are now spelled DIR_$OP_REC(op >> 1).version / .base_size. */
 /*
  * The last 0x12 bytes of the DIR segment, 0x00E7FD12..0x00E7FD24, defined in
  * dir/dir_data.c.  dir_$do_op_dir_readu reads the three longwords through
  * A5 = 0x00E7DC00 as (0x2114,A5) / (0x2118,A5) / (0x211c,A5); the pad word
  * and the ".bak" string have no reader in the image.
  */
-extern uint16_t DAT_00e7fd12;   /* 0x00E7FD12 alignment fill */
-extern uint32_t DAT_00e7fd14;   /* 0x00E7FD14 first-real-entry cookie */
-extern uint32_t DAT_00e7fd18;   /* 0x00E7FD18 ".." pseudo-entry cookie */
-extern uint32_t DAT_00e7fd1c;   /* 0x00E7FD1C "." pseudo-entry cookie */
-extern char     DAT_00e7fd20[4];/* 0x00E7FD20 ".bak" */
+extern uint16_t DIR_$SEG_TAIL_PAD;      /* 0x00E7FD12 alignment fill, no reader */
+extern uint32_t DIR_$READU_COOKIE_FIRST;/* 0x00E7FD14 first-real-entry cookie */
+extern uint32_t DIR_$READU_COOKIE_DOTDOT;/* 0x00E7FD18 ".." pseudo-entry cookie */
+extern uint32_t DIR_$READU_COOKIE_DOT;  /* 0x00E7FD1C "." pseudo-entry cookie */
+/* 0x00E7FD20, the four characters ".bak".  dir_$do_op_add_bak copies them
+ * with a 1-BASED index (`(0x211f,A5,Dn)` at 0x00E50A34), so the cell the
+ * displacement names is one byte below the string. */
+extern char     DIR_$BAK_SUFFIX[4];     /* 0x00E7FD20 */
+#define DIR_BAK_SUFFIX_OFF      0x2120  /* A5 displacement of DIR_$BAK_SUFFIX */
 
 /*
  * ============================================================================
@@ -818,14 +811,14 @@ void DIR_$GET_ENTRYU_FUN_00e4d460(uid_t *local_uid, char *name,
                                    status_$t *status_ret);
 
 /*
- * DIR_$DIR_READU_FUN_00e4e1a8 - Internal directory read helper
+ * dir_$dir_readu_fallback - Internal directory read helper
  *
  * Originally a nested Pascal subprocedure of DIR_$DIR_READU.
  * Flattened to take explicit parameters from the parent function.
  *
  * Original address: 0x00E4E1A8
  */
-void DIR_$DIR_READU_FUN_00e4e1a8(uid_t *dir_uid, int32_t *continuation,
+void dir_$dir_readu_fallback(uid_t *dir_uid, int32_t *continuation,
                                   uint16_t *max_entries, int32_t *count_ret,
                                   void *flags, int32_t *eof_ret,
                                   status_$t *status_ret);
@@ -937,9 +930,14 @@ void dir_$old_delete_entry(uint32_t handle, uint16_t slot_idx,
  * Original address: 0x00E5545C
  * Size: 384 bytes
  */
+/* The seventh parameter is a Domain BOOLEAN BYTE: DIR_$OLD_ADD_LINKU pushes
+ * it with `move.b (-0x136,A6),-(SP)` at 0x00E577A6 and this routine forwards
+ * it to dir_$old_add_entry the same way (`move.b (0x1c,A6),-(SP)` at
+ * 0x00E5558C), landing in the EVEN (high) byte of a 2-byte slot. */
 void dir_$old_add_link_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
                              uint16_t name_len, void *target, uint16_t target_len,
-                             uint8_t flags, uint8_t *result, status_$t *status_ret);
+                             boolean is_root, uint8_t *result,
+                             status_$t *status_ret);
 
 /* dir_$old_read_link_data - Read link target data from overflow blocks
  *
@@ -1027,7 +1025,7 @@ uint16_t FUN_00e54e62(uint32_t handle, uint16_t hash_hint);
 /* dir_$old_init_buf - Initialize directory buffer
  *
  * Initializes a directory buffer structure. Copies 10-byte template from
- * DAT_00e5453c, sets UID_$NIL, initializes entry arrays (18 entries at
+ * 0x00E5453C, sets UID_$NIL, initializes entry arrays (18 entries at
  * stride 0x30, 43 entries at offset 0x3AA), and clears flag fields.
  *
  * Original address: 0x00E544B0
@@ -1060,7 +1058,14 @@ void DIR_$UPDATE_HINT(uid_t *uid, uint32_t hint1, uint32_t hint2,
 /* audit_$log_resolve_op carries the audit_$ prefix, so its prototype lives in
  * audit/audit.h (bead source-3uo); the body is dir/audit_log_resolve_op.c. */
 
-/* DIR_$VALIDATE_PAGES - Validate and compact directory pages
+/* dir_$validate_pages - Validate and compact directory pages
+ *
+ * MODULE-LOCAL.  The SAU2 map exports no symbol at 0x00E53728 - the DIR
+ * code segment's interior symbols jump straight from DIR_$CLEANUP
+ * (0x00E53578) to DIR_$FIX_DIR (0x00E53E84) - and it has exactly two
+ * callers, dir_$open_dir (0x00E4BBB8) and DIR_$CLEANUP (0x00E536C4), so it
+ * carries the lowercase dir_$ prefix this tree uses for module-local Pascal
+ * procedures (source-egrz).
  *
  * Validates structural integrity of directory pages by walking them
  * backward from the last page. Checks UID consistency, removes orphan
@@ -1071,7 +1076,7 @@ void DIR_$UPDATE_HINT(uid_t *uid, uint32_t hint1, uint32_t hint2,
  * Original address: 0x00E53728
  * Size: 752 bytes
  */
-uint32_t DIR_$VALIDATE_PAGES(void *handle, char crash_flag, status_$t *status_ret);
+uint32_t dir_$validate_pages(void *handle, char crash_flag, status_$t *status_ret);
 
 /* dir_$open_dir - Open/lock directory handle
  *
@@ -1196,6 +1201,19 @@ void dir_$remove_entry(void *handle, void *name, int16_t name_len,
 #define DIR_MOUNT_TGT_TAB_OFF   0x1594  /* uid_t[],    entry n at +n*8 */
 #define DIR_MOUNT_NODE_TAB_OFF  0x15D8  /* uint32_t[], entry n at +n*4 */
 #define DIR_MOUNT_MAX           8       /* count must stay below this */
+
+/*
+ * Accessors for the three one-based tables and the count.  `n` is the
+ * 1-based entry number the image forms as A5 + n*stride + table_base.
+ */
+#define DIR_MOUNT_COUNT_OF(blk) \
+    (*(int32_t *)DIR_BLOCK_AT(blk, DIR_MOUNT_COUNT_OFF))
+#define DIR_MOUNT_UID_OF(blk, n) \
+    (*(uid_t *)DIR_BLOCK_AT(blk, DIR_MOUNT_UID_TAB_OFF + (int32_t)(n) * 8))
+#define DIR_MOUNT_TGT_OF(blk, n) \
+    (*(uid_t *)DIR_BLOCK_AT(blk, DIR_MOUNT_TGT_TAB_OFF + (int32_t)(n) * 8))
+#define DIR_MOUNT_NODE_OF(blk, n) \
+    (*(uint32_t *)DIR_BLOCK_AT(blk, DIR_MOUNT_NODE_TAB_OFF + (int32_t)(n) * 4))
 
 /* dir_$release_wire - Release wired page and reset cache state
  *
@@ -1411,9 +1429,8 @@ void dir_$old_read_entries(uid_t *uid, void *param_2, uint32_t param_3,
  * ============================================================================
  */
 
-/* Directory operation parameter tables for SET_ACL */
-#define DAT_00e7fcc2     (DIR_$OP_TAB[16].version)   /* SET_ACL type field */  /* 0x00E7FCC2 */
-#define DAT_00e7fcc6     (DIR_$OP_TAB[16].base_size)   /* SET_ACL request size */  /* 0x00E7FCC6 */
+/* SET_ACL's record is DIR_$OP_REC(DIR_OP_SET_ACL >> 1) = DIR_$OP_TAB[16],
+ * 0x00E7FCC2 / 0x00E7FCC6. */
 
 /*
  * ============================================================================
@@ -1442,6 +1459,76 @@ void dir_$old_read_entries(uid_t *uid, void *param_2, uint32_t param_3,
 #define DIR_PURIFY_ARG_OFF      (-0x8)       /* AST_$PURIFY segment-list pointer  */
 #define DIR_LOCK_TAB_OFF        0x1680       /* dir_$lock_entry_t[32]            */
 #define DIR_HANDLE_TAB_OFF      0x1880       /* dir_$handle_t[32]                */
+/*
+ * dir_$entry_cache_t - the per-UID lookup cache dir_$get_entry_cached
+ * (0x00E4CD90) keeps in the module block at A5+0x400.
+ *
+ * The routine forms the record address as `lea (0x0,A5,D3),A4` with
+ * D3 = hash * 0x28 (0x00E4CE36-0x00E4CE42) and then reaches every field
+ * through a +0x400 displacement off A4, so the array itself starts at
+ * A5+0x400 with a 0x28 stride.  111 slots (`divu.w #0x6f`) * 0x28 = 0x1158,
+ * so the table runs 0x00E7E000..0x00E7F157 and stops exactly where
+ * DIR_$MTTAB (0x00E7F158, A5+0x1558) begins.
+ *
+ * Names longer than 17 bytes never enter the cache (`cmpi.w #0x11,(0x10,A3)`
+ * / `ble` at 0x00E4CD9E), which is what lets the 0x11-byte name area fit in
+ * the 0x28-byte record.
+ */
+#define DIR_ENTRY_CACHE_OFF         0x400   /* 0x00E7E000 */
+#define DIR_ENTRY_CACHE_SLOTS       111     /* `divu.w #0x6f` modulus */
+#define DIR_ENTRY_CACHE_MAX_NAME    0x11    /* `cmpi.w #0x11` */
+
+typedef struct __attribute__((packed, aligned(2))) dir_$entry_cache_t {
+    uid_t    dir_uid;       /* +0x00  0x00E4CE54 / 0x00E4CF74 */
+    uid_t    entry_uid;     /* +0x08  0x00E4CEBC / 0x00E4CF80 */
+    uint16_t dtv[3];        /* +0x10  three words, 0x00E4CEA6 / 0x00E4CF88 */
+    /*
+     * +0x16: the name length in bits 2..7 and two flags in bits 0..1.
+     * The image writes it as `andi.b #0x3` + `or.b (len << 2)` and then
+     * `andi.b #-0x2` + `or.b (min_rights & 1)` (0x00E4CF94-0x00E4CFB2), and
+     * reads the flag back as bit 8 of the WORD at +0x16 (`btst.l #0x8` at
+     * 0x00E4CED8), i.e. bit 0 of THIS byte on a big-endian machine.
+     */
+    uint8_t  len_flags;     /* +0x16 */
+    uint8_t  name[DIR_ENTRY_CACHE_MAX_NAME];   /* +0x17, 1-based in the image */
+} dir_$entry_cache_t;
+
+#define DIR_ENTRY_CACHE_LEN_SHIFT   2
+#define DIR_ENTRY_CACHE_LEN_MASK    0xFC
+/* Bit 0 of len_flags: the cached entry already passed the ACL check. */
+#define DIR_ENTRY_CACHE_ACL_OK      0x01
+
+_Static_assert(sizeof(dir_$entry_cache_t) == 0x28,
+               "dir_$entry_cache_t stride 0x28");
+_Static_assert(__builtin_offsetof(dir_$entry_cache_t, entry_uid) == 0x08, "+0x08");
+_Static_assert(__builtin_offsetof(dir_$entry_cache_t, dtv) == 0x10, "+0x10");
+_Static_assert(__builtin_offsetof(dir_$entry_cache_t, len_flags) == 0x16, "+0x16");
+_Static_assert(__builtin_offsetof(dir_$entry_cache_t, name) == 0x17, "+0x17");
+_Static_assert(DIR_ENTRY_CACHE_OFF + DIR_ENTRY_CACHE_SLOTS * 0x28 == 0x1558,
+               "the entry cache ends where DIR_$MTTAB begins");
+
+/*
+ * The four DIR_$ENTRY_CACHE_* counters the SAU2 map names at
+ * 0x00E7FC10..0x00E7FC1F, all longwords, all bumped by
+ * dir_$get_entry_cached (0x00E4CD90).
+ */
+#define DIR_ENTRY_CACHE_TOO_LONG_NAME_OFF   0x2010  /* 0x00E7FC10 */
+#define DIR_ENTRY_CACHE_SKIPPED_ACL_OFF     0x2014  /* 0x00E7FC14 */
+#define DIR_ENTRY_CACHE_TRIES_OFF           0x2018  /* 0x00E7FC18 */
+#define DIR_ENTRY_CACHE_HITS_OFF            0x201C  /* 0x00E7FC1C */
+
+/*
+ * The four longword counters the SAU2 map names, immediately below the
+ * lock free-list head (0x00E7FC20..0x00E7FC2F):
+ *   E7FC20 DIR_$HNDL_WAITS   DIR_$ALLOC_HANDLE's "waited for a slot" count
+ *   E7FC24 DIR_$LK_TIMEOUTS  DIR_$LOCK_OBJ 0x00E4B1DC, the EC_$WAIT timeout
+ *   E7FC28 DIR_$LK_WAIT_2    DIR_$LOCK_OBJ 0x00E4B110, waits past the first
+ *   E7FC2C DIR_$LK_WAITS     DIR_$LOCK_OBJ 0x00E4B114, every wait
+ */
+#define DIR_HNDL_WAITS_OFF      0x2020       /* DIR_$HNDL_WAITS  0x00E7FC20 */
+#define DIR_LK_TIMEOUTS_OFF     0x2024       /* DIR_$LK_TIMEOUTS 0x00E7FC24 */
+#define DIR_LK_WAIT_2_OFF       0x2028       /* DIR_$LK_WAIT_2   0x00E7FC28 */
+#define DIR_LK_WAITS_OFF        0x202C       /* DIR_$LK_WAITS    0x00E7FC2C */
 #define DIR_LOCK_FREE_OFF       0x2030       /* head of the lock free list       */
 #define DIR_LOCK_IN_USE_OFF     0x2034       /* lock-entry in-use bitmap         */
 #define DIR_HANDLE_FREE_OFF     0x2038       /* head of the handle free list     */
@@ -1462,10 +1549,17 @@ typedef struct dir_$lock_entry_t {
         uint32_t next;                  /* 0x00 free-list link VA (DIR_$INIT) */
         uid_t    uid;                   /* 0x00 locked object's UID (in use)  */
     } u;
-    /* TODO(source-ak1g): the next two names come from dir/lock_obj.c's
-     * existing comments, not from a fresh read of DIR_$LOCK_OBJ 0x00E4B5F4. */
-    uint32_t  waiters;                  /* 0x08 waiter queue head            */
-    int16_t   lock_count;               /* 0x0C                              */
+    /*
+     * Both names verified against DIR_$LOCK_OBJ (0x00E4AFA8):
+     *   +0x08 is the head of a queue of dir_$handle_t linked through their
+     *         own +0x30 - `move.l A3,(0x8,A2)` / `move.l A3,(0x30,A0)` at
+     *         0x00E4B0F0 / 0x00E4B102, walked again at 0x00E4B1B2.
+     *   +0x0C is a WORD holding -1 for a writer (`move.w #-0x1,(0xc,A2)`,
+     *         0x00E4B0D8) and the reader count otherwise (`add.w D0w,(0xc,A2)`
+     *         with D0 == 1, 0x00E4B0A4); DIR_$UNLOCK_OBJ decrements it.
+     */
+    uint32_t  waiters;                  /* 0x08 waiter queue head, a VA     */
+    int16_t   lock_count;               /* 0x0C -1 = writer, N = N readers  */
     uint16_t  index;                    /* 0x0E slot number, 0..31           */
 } dir_$lock_entry_t;
 
@@ -1491,6 +1585,7 @@ _Static_assert(__builtin_offsetof(dir_$lock_entry_t, index) == 0x0E, "+0x0E");
  *   0x08 owner        DIR_$CLEANUP 0x00E535B0; DIR_$ALLOC_HANDLE stores
  *                     PROC1_$CURRENT there at 0x00E4B958
  *   0x0A lock_mode    DIR_$LOCK_OBJ 0x00E4AFD6 (1 = read, 2 = write)
+ *   0x0C dir_kind     well-known directory selector, DIR_$VALIDATE_HANDLE
  *   0x0E split_busy   set 0xFF by dir_$alloc_split_page (0x00E4EB40),
  *                     cleared by dir_$truncate_pages (0x00E4E90A) and
  *                     DIR_$ALLOC_HANDLE (0x00E4B86E); tested here with
@@ -1512,7 +1607,10 @@ typedef struct dir_$handle_t {
     uid_t     uid;                  /* 0x00 */
     int16_t   owner;                /* 0x08 owning PROC1_$CURRENT, 0 = free */
     int16_t   lock_mode;            /* 0x0A */
-    uint8_t   _0x0c[2];             /* 0x0C */
+    /* 0x0C: which well-known directory this handle names.  DIR_$VALIDATE_HANDLE
+     * writes it as a WORD: 0 generic, 1 NODE, 2 COM, 3 WDIR, 4 NDIR
+     * (0x00E4B57E, 0x00E5059E, 0x00E4B5EC, 0x00E4B622, 0x00E4B63A). */
+    int16_t   dir_kind;             /* 0x0C */
     int8_t    split_busy;           /* 0x0E Domain boolean, 0xFF = true */
     uint8_t   _0x0f;                /* 0x0F */
     uint32_t  length;               /* 0x10 */
@@ -1520,9 +1618,22 @@ typedef struct dir_$handle_t {
     uint32_t  buf;                  /* 0x18 VA of the 0x400-byte page buffer */
     int16_t   max_slots;            /* 0x1C */
     int16_t   cur_slot;             /* 0x1E */
-    uint8_t   mapped;               /* 0x20 */
+    int8_t    mapped;               /* 0x20 Domain boolean, 0xFF = mapped */
     uint8_t   _0x21;                /* 0x21 */
-    uint8_t   page_cache[0x0E];     /* 0x22 two 8-byte dir_$map_page entries */
+    /*
+     * 0x22..0x2F: dir_$map_page's two-slot LRU.  The image indexes it as
+     * `(0x22,A0,D1w)` / `(0x24,A0,D1w)` with D1 = cur_slot << 3
+     * (0x00E4B35A / 0x00E4B372), so the stride is 8 with the group word at
+     * +0 and the mapped base longword at +2.  Written out as two named
+     * pairs because those absolute offsets happen to be naturally aligned:
+     * the handle table base 0x00E7F480 and the 0x3C stride are both
+     * longword multiples, so 0x24 and 0x2C are longword-aligned.
+     */
+    uint16_t  cache0_group;         /* 0x22 page_idx >> 5 of slot 0 */
+    uint32_t  cache0_base;          /* 0x24 mapped VA of slot 0's group */
+    uint16_t  _0x28;                /* 0x28 */
+    uint16_t  cache1_group;         /* 0x2A */
+    uint32_t  cache1_base;          /* 0x2C */
     uint32_t  next;                 /* 0x30 VA of the next free dir_$handle_t */
     uint32_t  lock_entry;           /* 0x34 VA of a dir_$lock_entry_t         */
     uint16_t  slot_index;           /* 0x38 */
@@ -1532,6 +1643,7 @@ typedef struct dir_$handle_t {
 _Static_assert(sizeof(dir_$handle_t) == 0x3C, "dir_$handle_t stride 0x3C");
 _Static_assert(__builtin_offsetof(dir_$handle_t, owner) == 0x08, "+0x08");
 _Static_assert(__builtin_offsetof(dir_$handle_t, lock_mode) == 0x0A, "+0x0A");
+_Static_assert(__builtin_offsetof(dir_$handle_t, dir_kind) == 0x0C, "+0x0C");
 _Static_assert(__builtin_offsetof(dir_$handle_t, split_busy) == 0x0E, "+0x0E");
 _Static_assert(__builtin_offsetof(dir_$handle_t, length) == 0x10, "+0x10");
 _Static_assert(__builtin_offsetof(dir_$handle_t, wired_page) == 0x14, "+0x14");
@@ -1539,7 +1651,10 @@ _Static_assert(__builtin_offsetof(dir_$handle_t, buf) == 0x18, "+0x18");
 _Static_assert(__builtin_offsetof(dir_$handle_t, max_slots) == 0x1C, "+0x1C");
 _Static_assert(__builtin_offsetof(dir_$handle_t, cur_slot) == 0x1E, "+0x1E");
 _Static_assert(__builtin_offsetof(dir_$handle_t, mapped) == 0x20, "+0x20");
-_Static_assert(__builtin_offsetof(dir_$handle_t, page_cache) == 0x22, "+0x22");
+_Static_assert(__builtin_offsetof(dir_$handle_t, cache0_group) == 0x22, "+0x22");
+_Static_assert(__builtin_offsetof(dir_$handle_t, cache0_base) == 0x24, "+0x24");
+_Static_assert(__builtin_offsetof(dir_$handle_t, cache1_group) == 0x2A, "+0x2A");
+_Static_assert(__builtin_offsetof(dir_$handle_t, cache1_base) == 0x2C, "+0x2C");
 _Static_assert(__builtin_offsetof(dir_$handle_t, next) == 0x30, "+0x30");
 _Static_assert(__builtin_offsetof(dir_$handle_t, lock_entry) == 0x34, "+0x34");
 _Static_assert(__builtin_offsetof(dir_$handle_t, slot_index) == 0x38, "+0x38");
@@ -1550,10 +1665,22 @@ _Static_assert(DIR_LOCK_TAB_OFF + DIR_SLOT_COUNT * 0x10 == DIR_HANDLE_TAB_OFF,
                "lock table ends where the handle table begins (0x00E7F480)");
 
 /*
- * Accessors for the block.  On the m68k these resolve through the live A5;
- * a host test overrides __A5_BASE() with a buffer of its own (see
- * dir/test/test_cleanup.c).  Every one carries the absolute address the
- * image uses so the mapping stays checkable.
+ * dir_$map_page's slot-indexed view of the pair above.  `slot` is
+ * dir_$handle_t.cur_slot (0 or 1) and the stride is 8 bytes.
+ */
+#define DIR_HANDLE_CACHE_STRIDE  8
+#define DIR_HANDLE_CACHE_GROUP(h, slot) \
+    (*(uint16_t *)((char *)&(h)->cache0_group + \
+                   (int32_t)(slot) * DIR_HANDLE_CACHE_STRIDE))
+#define DIR_HANDLE_CACHE_BASE(h, slot) \
+    (*(uint32_t *)((char *)&(h)->cache0_base + \
+                   (int32_t)(slot) * DIR_HANDLE_CACHE_STRIDE))
+
+/*
+ * Accessors for the block.  Each takes the block base explicitly; the
+ * DIR_$BLOCK / DIR_$BLOCK_ABS macros below supply the one the image uses.
+ * Every accessor carries the absolute address the image reaches so the
+ * mapping stays checkable.
  */
 #define DIR_BLOCK_AT(blk, off)  ((char *)(blk) + (off))
 
@@ -1571,36 +1698,82 @@ _Static_assert(DIR_LOCK_TAB_OFF + DIR_SLOT_COUNT * 0x10 == DIR_HANDLE_TAB_OFF,
     (*(uint32_t *)DIR_BLOCK_AT(blk, DIR_HANDLE_IN_USE_OFF))
 #define DIR_LINK_BUF_OWNER_OF(blk) \
     (*(int16_t *)DIR_BLOCK_AT(blk, DIR_LINK_BUF_OWNER_OFF))
-
-/* The DIR routines proper, which hold the block base in A5. */
-#define DIR_$LOCK_TAB       DIR_LOCK_TAB_OF(__A5_BASE())
-#define DIR_$HANDLE_TAB     DIR_HANDLE_TAB_OF(__A5_BASE())
-#define DIR_$LOCK_FREE      DIR_LOCK_FREE_OF(__A5_BASE())
-#define DIR_$LOCK_IN_USE    DIR_LOCK_IN_USE_OF(__A5_BASE())
-#define DIR_$HANDLE_FREE    DIR_HANDLE_FREE_OF(__A5_BASE())
-#define DIR_$HANDLE_IN_USE  DIR_HANDLE_IN_USE_OF(__A5_BASE())
-#define DIR_$LINK_BUF_OWNER DIR_LINK_BUF_OWNER_OF(__A5_BASE())
+#define DIR_ENTRY_CACHE_OF(blk, slot) \
+    (((dir_$entry_cache_t *)DIR_BLOCK_AT(blk, DIR_ENTRY_CACHE_OFF))[slot])
+#define DIR_ENTRY_CACHE_TOO_LONG_NAME_OF(blk) \
+    (*(int32_t *)DIR_BLOCK_AT(blk, DIR_ENTRY_CACHE_TOO_LONG_NAME_OFF))
+#define DIR_ENTRY_CACHE_SKIPPED_ACL_OF(blk) \
+    (*(int32_t *)DIR_BLOCK_AT(blk, DIR_ENTRY_CACHE_SKIPPED_ACL_OFF))
+#define DIR_ENTRY_CACHE_TRIES_OF(blk) \
+    (*(int32_t *)DIR_BLOCK_AT(blk, DIR_ENTRY_CACHE_TRIES_OFF))
+#define DIR_ENTRY_CACHE_HITS_OF(blk) \
+    (*(int32_t *)DIR_BLOCK_AT(blk, DIR_ENTRY_CACHE_HITS_OFF))
+#define DIR_HNDL_WAITS_OF(blk) \
+    (*(uint32_t *)DIR_BLOCK_AT(blk, DIR_HNDL_WAITS_OFF))
+#define DIR_LK_TIMEOUTS_OF(blk) \
+    (*(uint32_t *)DIR_BLOCK_AT(blk, DIR_LK_TIMEOUTS_OFF))
+#define DIR_LK_WAIT_2_OF(blk) \
+    (*(uint32_t *)DIR_BLOCK_AT(blk, DIR_LK_WAIT_2_OFF))
+#define DIR_LK_WAITS_OF(blk) \
+    (*(uint32_t *)DIR_BLOCK_AT(blk, DIR_LK_WAITS_OFF))
+/*
+ * A5+0x15FE: a ONE-BASED per-process word array - DIR_$LOCK_OBJ forms its
+ * address as `lea (0x0,A5,D1w),A1` with D1 = PROC1_$CURRENT*2 and then
+ * reads `(0x15fe,A1)` (0x00E4B124-0x00E4B128), i.e. A5 + 0x15FE + pid*2.
+ * Bit 1 shortens the lock timeout from 0x1E0 ticks to 8.  The array sits
+ * between DIR_$MTTAB's node table (which ends at A5+0x15FB) and the lock
+ * table at A5+0x1680.
+ */
+#define DIR_PROC_FLAGS_OFF      0x15FE
+#define DIR_PROC_FLAGS_OF(blk, pid) \
+    (*(uint16_t *)DIR_BLOCK_AT(blk, DIR_PROC_FLAGS_OFF + (int32_t)(pid) * 2))
+/* Bit 1 of a per-process flags word: use the short lock timeout. */
+#define DIR_PROC_FLAG_SHORT_LOCK_WAIT   0x0002
 
 /*
- * DIR_$INIT (0x00E3140C) is compiled into a different module - the map's
- * "I E3140C DIR size = E8" in the boot-time init segment - so its own A5 is
- * 0x00E3503C (loaded at 0x00E31414 and then never used) and it reaches this
- * block absolutely with `movea.l #0xe7dc00,A0` at 0x00E3141A.  A host build
- * has no such address, so DIR_$BLOCK_ABS falls back to the same overridable
- * __A5_BASE() hook the DIR routines use.
+ * DIR_$BLOCK_BASE - the one hook that says where the module block lives.
+ *
+ * On the target it is a constant: every DIR routine establishes the base
+ * itself with `lea (0xe7dc00).l,A5` (DIR_$DO_OP at 0x00E4C030, DIR_$CLEANUP
+ * at 0x00E53580), and DIR_$INIT - which is compiled into the boot-time init
+ * segment, the map's "I E3140C DIR size = E8", and whose own A5 is
+ * 0x00E3503C - reaches the same block absolutely with
+ * `movea.l #0xe7dc00,A0` at 0x00E3141A.  Both spellings therefore name the
+ * same address, so DIR_$BLOCK and DIR_$BLOCK_ABS are the same thing and are
+ * kept apart only to record which instruction each site used.
+ *
+ * A host build has no such address.  A test defines DIR_$BLOCK_BASE before
+ * including this header to point the whole module at a buffer of its own
+ * (see dir/test/test_cleanup.c); left undefined it is NULL, which the
+ * m68k-only code paths never dereference.  source-yv13.
  */
+#ifndef DIR_$BLOCK_BASE
 #if defined(ARCH_M68K)
-#define DIR_$BLOCK_ABS      ((char *)(uintptr_t)DIR_A5_BASE_VA)
+#define DIR_$BLOCK_BASE     ((void *)(uintptr_t)DIR_A5_BASE_VA)
 #else
-#define DIR_$BLOCK_ABS      ((char *)__A5_BASE())
+#define DIR_$BLOCK_BASE     ((void *)0)
 #endif
+#endif
+
+/* The DIR routines proper, which hold the block base in A5. */
+#define DIR_$BLOCK          ((char *)DIR_$BLOCK_BASE)
+#define DIR_$LOCK_TAB       DIR_LOCK_TAB_OF(DIR_$BLOCK)
+#define DIR_$HANDLE_TAB     DIR_HANDLE_TAB_OF(DIR_$BLOCK)
+#define DIR_$LOCK_FREE      DIR_LOCK_FREE_OF(DIR_$BLOCK)
+#define DIR_$LOCK_IN_USE    DIR_LOCK_IN_USE_OF(DIR_$BLOCK)
+#define DIR_$HANDLE_FREE    DIR_HANDLE_FREE_OF(DIR_$BLOCK)
+#define DIR_$HANDLE_IN_USE  DIR_HANDLE_IN_USE_OF(DIR_$BLOCK)
+#define DIR_$LINK_BUF_OWNER DIR_LINK_BUF_OWNER_OF(DIR_$BLOCK)
+
+/* DIR_$INIT's absolute `movea.l #0xe7dc00,A0`. */
+#define DIR_$BLOCK_ABS      ((char *)DIR_$BLOCK_BASE)
 
 /*
  * 0x00E7DBFC (A5-0x4): the module's pointer to the status constant every
  * CRASH_SYSTEM site in DIR pushes -- `move.l (-0x4,A5),-(SP)` at 0x00E5365A,
  * 0x00E53678 and 0x00E536D4.  Image bytes at 0x00E7DBF8 are
  * `00 e4 b3 3c 00 e4 b2 30`, so A5-0x8 holds &DIR_$CONST_ZERO_L (AST_$PURIFY's
- * segment-list argument in DIR_$VALIDATE_PAGES) and A5-0x4 holds
+ * segment-list argument in dir_$validate_pages) and A5-0x4 holds
  * &Naming_bad_request_header_ver_err (0x00E4B230).
  */
 extern status_$t *const DIR_$CRASH_STATUS;
@@ -1900,12 +2073,12 @@ void dir_$do_op_drop_mount(uid_t *mount_uid, uint32_t node_id, status_$t *status
  * clamps its returned length to (`move.w (A3),D0w` / `cmp.w (A2),D0w` /
  * `bge` at 0x00E560F2).  Passed by reference by every caller. */
 extern int16_t  DIR_$INFOBLK_MAX_LEN;
-extern uint16_t DAT_00e56098;
 /* 0x00E56094, word 0x0090: FILE_$GET_ATTRIBUTES' record size. */
 extern int16_t  DIR_$ATTR_REC_SIZE_W;
-extern uint32_t DAT_00e5609e;
-extern uint8_t DAT_00e560a2;
-extern uint8_t DAT_00e5609a;
+/* 0x00E56098, 0x00E5609A, 0x00E5609E and 0x00E560A2 each have exactly one
+ * reader, DIR_$OLD_FIX_DIR, and are file statics in dir/old_fix_dir.c.  The
+ * two at 0x00E5609A and 0x00E560A2 are LONGWORDS (0x00000116 and
+ * 0x00000001), not bytes as the DAT_ declarations used to say. */
 /* DIR_$SET_DEF_ACL_FLUSH_LEN - 0x00E564E2, longword 0x00000400 (one page):
  * the FILE_$FW_PARTIAL byte_count (`move.l (A1),D2` at 0x00E5E6BC) that
  * DIR_$OLD_SET_DEFAULT_ACL hands over at 0x00E56446 (`pea (0x9a,PC)`).  It is
@@ -2180,16 +2353,17 @@ _Static_assert(sizeof(dir_$rep_entry_t) == 0x30, "sizeof dir_$rep_entry_t");
  * that use them; Ghidra labels them DAT_<address>.  They are declared with
  * the access width used by the code.
  */
-extern uint16_t DAT_00e50830;   /* 0xE50830: 0x0005 - FILE_$SET_PROT protection type (add_bak) */
-extern uint16_t DAT_00e50c5a;   /* 0xE50C5A: 0x0000 - ACL option flags / DROP_HARD_LINKU flags */
+/* 0x00E50830 (FILE_$SET_PROT's prot_type, word 5) and 0x00E50C5A
+ * (DIR_$DROP_HARD_LINKU's flags, word 0) each have exactly one reader, so
+ * they are file statics in dir/add_bak_default_prot.c and dir/dropu.c
+ * (source-p25p, source-ka0m). */
 extern int16_t  DIR_$READU_ATTR_SIZE;   /* 0xE4DFFA: word 0x0090 - FILE_$GET_ATTRIBUTES size_ptr
                                  * (`cmpi.w #0x90,(A0)` at 0x00E5D9F6) */
 extern uint8_t  DIR_$READU_NUL_NAME;   /* 0xE4DFFC: NUL byte used as the 1-char name "\0" */
 extern uint8_t  DIR_$CASE_FOLD_BITMAP; /* 0xE4CD84: case-folding character bitmap (07 ff ff fe ...) */
-extern uint32_t DAT_00e4b448;   /* 0xE4B448: longword 0x00008000 - MST_$REMAP_PRIVI
-                                 * length parameter.  It is read as a longword,
-                                 * so the cell is four bytes (bead source-wk2f). */
-extern const int32_t DAT_00e52040; /* 0xE52040: 0x00000400 - one page; FILE_$FW_PARTIAL byte
+/* 0x00E4B448 (longword 0x00008000, MST_$REMAP_PRIVI's config2/config3) has
+ * dir_$map_page as its only reader and is a file static there. */
+extern const int32_t DIR_$ONE_PAGE_L; /* 0xE52040: 0x00000400 - one page; FILE_$FW_PARTIAL byte
                                       count / FILE_$TRUNCATE length (defined in dir_data.c) */
 
 /*
@@ -2200,7 +2374,7 @@ extern const int32_t DAT_00e52040; /* 0xE52040: 0x00000400 - one page; FILE_$FW_
  *   0x00E57732  pea (0xbe,PC)    -> MAP_CASE   (DIR_$OLD_ADD_LINKU)
  *   0x00E578D4  pea (-0xe4,PC)   -> UNMAP_CASE (DIR_$OLD_READ_LINKU)
  * It is the size of the 256-byte link-text buffer both frames carry.
- * Image bytes: 01 00.  (Ghidra label was DAT_00e577f2.)
+ * Image bytes: 01 00.  (Ghidra labelled the cell by its address, 0x00E577F2.)
  */
 extern int16_t DIR_$OLD_LINK_TEXT_MAX;
 

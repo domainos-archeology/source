@@ -16,7 +16,7 @@
  *     last page for the page whose header page number matches the wired
  *     buffer's, copies the mapped page over that buffer, invalidates the
  *     buffer and unwires it;
- *   - runs DIR_$VALIDATE_PAGES with crash_flag = true;
+ *   - runs dir_$validate_pages with crash_flag = true;
  *   - releases the handle with dir_$release_handle.
  *
  * When the loop is done it drops DIR_$LINK_BUF_MUTEX if this process owns it
@@ -114,7 +114,7 @@ void DIR_$CLEANUP(void)
                          * nothing left half-split, which cannot happen while
                          * max_slots says a page is still wired.  The same
                          * equality ends the scan (rather than crashing) in
-                         * DIR_$VALIDATE_PAGES at 0x00E537B4.
+                         * dir_$validate_pages at 0x00E537B4.
                          */
                         if ((kind != 0 && kind != 1) ||
                             version == 0 ||
@@ -169,10 +169,10 @@ void DIR_$CLEANUP(void)
                 /*
                  * 0x00E536B8-0x00E536C6.  subq.l #2,SP is the Pascal result
                  * slot, `st -(SP)` pushes the boolean true that makes
-                 * DIR_$VALIDATE_PAGES crash rather than report an internal
+                 * dir_$validate_pages crash rather than report an internal
                  * error, and `lea (0xc,SP),SP` pops 0x0C bytes.
                  */
-                DIR_$VALIDATE_PAGES(h, (char)0xFF, &status);
+                dir_$validate_pages(h, (char)0xFF, &status);
             } else {
                 /*
                  * 0x00E536CC-0x00E536DE: with no split in progress the

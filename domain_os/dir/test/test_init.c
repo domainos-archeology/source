@@ -88,8 +88,9 @@ void DIR_$OLD_INIT(void) { old_init_calls++; }
 
 /* ------------------------------------------------------------------ */
 
-#undef __A5_BASE
-#define __A5_BASE() ((void *)A5_AREA)
+/* Point the whole DIR module block at our own buffer (source-yv13). */
+#undef DIR_$BLOCK_BASE
+#define DIR_$BLOCK_BASE ((void *)A5_AREA)
 
 #include "../init.c"
 
@@ -196,8 +197,8 @@ TEST(the_chained_tables_stay_inside_the_block)
      * handle slot) before both are cleared, so nothing outside the block is
      * ever written.  Everything above A5+0x2044 is still untouched fill.
      */
-    ASSERT_EQ(0xFFu, *((uint8_t *)__A5_BASE() + 0x2044));
-    ASSERT_EQ(0xFFu, *((uint8_t *)__A5_BASE() + 0x2000));
+    ASSERT_EQ(0xFFu, *((uint8_t *)DIR_$BLOCK_BASE + 0x2044));
+    ASSERT_EQ(0xFFu, *((uint8_t *)DIR_$BLOCK_BASE + 0x2000));
     /* And the block head below A5 is untouched too. */
     ASSERT_EQ(0xFFu, block_store[0]);
 }

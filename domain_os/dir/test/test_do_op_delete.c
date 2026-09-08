@@ -238,8 +238,9 @@ void FILE_$DELETE_OBJ(uid_t *file_uid, int8_t force, void *param_3,
 /* Code under test                                                      */
 /* ------------------------------------------------------------------ */
 
-#undef __A5_BASE
-#define __A5_BASE() ((void *)a5_area)
+/* Point the whole DIR module block at our own buffer (source-yv13). */
+#undef DIR_$BLOCK_BASE
+#define DIR_$BLOCK_BASE ((void *)a5_area)
 
 #include "../do_op_delete.c"
 

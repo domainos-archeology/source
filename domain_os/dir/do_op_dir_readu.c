@@ -71,7 +71,7 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
     int32_t *offset_ret = (int32_t *)offset_ret_ptr;
     int32_t *count_ret = (int32_t *)count_ret_ptr;
 
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     int16_t local_name_len;
     int32_t word_idx;       /* Running output word index */
     uint16_t *last_entry;   /* Pointer to last written entry */
@@ -130,8 +130,8 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
         }
         if (local_name_len == 0) {
             /* Check if continuation matches a special A5-relative value */
-            if (*(int32_t *)cont == *(int32_t *)(a5 + 0x211C)) {
-                *(int32_t *)cont = *(int32_t *)(a5 + 0x2114);
+            if (*(int32_t *)cont == (int32_t)DIR_$READU_COOKIE_DOT) {
+                *(int32_t *)cont = (int32_t)DIR_$READU_COOKIE_FIRST;
             }
         }
     } else {
@@ -140,10 +140,10 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
             /* Named continuation */
             if (local_name_len == 1 && name[0] == '.') {
                 /* "." -> dot continuation */
-                *(int32_t *)cont = *(int32_t *)(a5 + 0x2118);
+                *(int32_t *)cont = (int32_t)DIR_$READU_COOKIE_DOTDOT;
             } else if (local_name_len == 2 && name[0] == '.' && name[1] == '.') {
                 /* ".." -> parent continuation */
-                *(int32_t *)cont = *(int32_t *)(a5 + 0x2114);
+                *(int32_t *)cont = (int32_t)DIR_$READU_COOKIE_FIRST;
             } else {
                 goto start_named_search;
             }
@@ -153,12 +153,12 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
 
     /* Check for dot/dotdot virtual entries */
     if (local_name_len == 0) {
-        if (*(int32_t *)cont == *(int32_t *)(a5 + 0x211C) ||
-            *(int32_t *)cont == *(int32_t *)(a5 + 0x2118)) {
+        if (*(int32_t *)cont == (int32_t)DIR_$READU_COOKIE_DOT ||
+            *(int32_t *)cont == (int32_t)DIR_$READU_COOKIE_DOTDOT) {
             /* Emit "." and ".." virtual entries */
             do {
                 uint16_t virt_name_len;
-                if (*(int32_t *)cont == *(int32_t *)(a5 + 0x211C)) {
+                if (*(int32_t *)cont == (int32_t)DIR_$READU_COOKIE_DOT) {
                     virt_name_len = 1;  /* "." */
                 } else {
                     virt_name_len = 2;  /* ".." */
@@ -195,7 +195,7 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                 last_entry[1] = 1;
 
                 /* Resolve UID for ".." */
-                if (*(int32_t *)cont == *(int32_t *)(a5 + 0x2118)) {
+                if (*(int32_t *)cont == (int32_t)DIR_$READU_COOKIE_DOTDOT) {
                     /* ".." entry - get parent UID */
                     if (uid->high == NAME_$NODE_UID.high &&
                         uid->low == NAME_$NODE_UID.low) {
@@ -225,7 +225,7 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                 /* Advance continuation */
                 cont[0] = cont[0] + 1;
 
-            } while (*(int32_t *)cont != *(int32_t *)(a5 + 0x2114));
+            } while (*(int32_t *)cont != (int32_t)DIR_$READU_COOKIE_FIRST);
         }
     }
 
@@ -365,18 +365,18 @@ start_named_search:
                      * reach TGT_TAB[n]. */
                     {
                         int16_t remaining =
-                            (int16_t)(DIR_MOUNT_COUNT16(a5) - 1);
+                            (int16_t)(DIR_MOUNT_COUNT16(blk) - 1);
                         int16_t n;
 
                         for (n = 1; remaining >= 0; n++, remaining--) {
                             if (*(uint32_t *)(last_entry + 2) ==
-                                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8) &&
+                                    DIR_MOUNT_UID_OF(blk, n).high &&
                                 *(uint32_t *)(last_entry + 4) ==
-                                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8 + 4)) {
+                                    DIR_MOUNT_UID_OF(blk, n).low) {
                                 *(uint32_t *)(last_entry + 2) =
-                                    *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8);
+                                    DIR_MOUNT_TGT_OF(blk, n).high;
                                 *(uint32_t *)(last_entry + 4) =
-                                    *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8 + 4);
+                                    DIR_MOUNT_TGT_OF(blk, n).low;
                                 break;
                             }
                         }

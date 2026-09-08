@@ -91,12 +91,27 @@ static uint32_t old_find_net_return_value = 0;
  * For testing, we only need the two words at offsets 0x20b2 and 0x20b6. */
 static char mock_a5_data[0x20c0];
 
-static void *mock_a5_base(void) {
-    return mock_a5_data;
-}
+/*
+ * Point the whole DIR module block at our own buffer (source-yv13), and
+ * overlay DIR_$OP_TAB on it at the offset the image uses: DIR_$OP_TAB is
+ * 0x00E7FC42, i.e. A5+0x2042, so record 14 (opcode 0x46 >> 1 = 0x23, minus
+ * the table's 21-record bias) lands on A5+0x20B2 / A5+0x20B6 - exactly the
+ * two cells reset_mocks() below fills in.
+ */
+#undef DIR_$BLOCK_BASE
+#define DIR_$BLOCK_BASE ((void *)mock_a5_data)
 
-/* Override __A5_BASE for testing */
-#define __A5_BASE mock_a5_base
+#define DIR_OP_FIND_UID             0x46
+#define DIR_$OP_TAB_BASE_INDEX      21
+typedef struct dir_$op_tab_entry_t {
+    uint16_t version;        /* +0x00 */
+    uint16_t reply_version;  /* +0x02 */
+    uint16_t base_size;      /* +0x04 */
+    uint16_t reply_size;     /* +0x06 */
+} dir_$op_tab_entry_t;
+#define DIR_$OP_TAB \
+    ((dir_$op_tab_entry_t *)((char *)DIR_$BLOCK_BASE + 0x2042))
+#define DIR_$OP_REC(half) (DIR_$OP_TAB[(half) - DIR_$OP_TAB_BASE_INDEX])
 
 /* ===== Mock Functions ===== */
 

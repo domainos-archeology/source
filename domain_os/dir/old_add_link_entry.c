@@ -24,7 +24,8 @@
  *   name_len   - Length of name
  *   target     - Link target text
  *   target_len - Length of target text
- *   flags      - Flags byte (passed through to dir_$old_add_entry)
+ *   is_root    - Domain boolean byte, passed straight through as
+ *                dir_$old_add_entry's replace_flag (0x00E5558C)
  *   result     - Output: result buffer
  *   status_ret - Output: status code
  *

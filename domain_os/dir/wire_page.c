@@ -5,16 +5,10 @@
  * Records the wired page info in the handle. Crashes if called
  * when a page is already wired (max_slots must be 2).
  *
- * After wiring, determines which cache slot the page belongs to
- * based on the 32KB-aligned base address, and sets max_slots to
- * the slot index (0 or 1).
- *
- * Handle fields used:
- *   +0x14: Wired page handle (4 bytes) - set by MST_$WIRE return
- *   +0x18: Wired page address (4 bytes)
- *   +0x1C: max_slots / current slot index (2 bytes)
- *   +0x24: Cache slot 0 base address (4 bytes)
- *   +0x2C: Cache slot 1 base address (4 bytes)
+ * After wiring, works out which of dir_$map_page's two cache slots covers
+ * the page (by matching its 0x8000-aligned group base against the slots'
+ * bases) and records that slot number in dir_$handle_t.max_slots, which is
+ * how dir_$map_page knows not to evict it.
  *
  * Parameters:
  *   handle    - Pointer to handle structure
@@ -28,35 +22,34 @@
 
 void DIR_$WIRE_PAGE(void *handle, void *page_data)
 {
-    uint8_t *h = (uint8_t *)handle;
-    uint32_t addr = (uint32_t)(uintptr_t)page_data;
-    uint32_t wire_handle;
-    status_$t local_status;
+    dir_$handle_t *h = (dir_$handle_t *)handle;         /* A2 */
+    uint32_t       addr = ARCH_PTR_TO_VA(page_data);    /* D2 */
+    status_$t      local_status;                        /* A6-0x08 */
 
-    /* Must not already have a page wired (max_slots == 2 means none wired) */
-    if (*(int16_t *)(h + 0x1C) != 2) {
+    /* 0x00E4B7C6: max_slots == 2 means no page is wired yet. */
+    if (h->max_slots != 2) {
         CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
     }
 
-    /* Record page address */
-    *(uint32_t *)(h + 0x18) = addr;
+    h->buf = addr;      /* 0x00E4B7DA `move.l D2,(0x18,A2)` */
 
-    /* Wire the page */
-    wire_handle = MST_$WIRE(addr, &local_status);
-    *(uint32_t *)(h + 0x14) = wire_handle;
+    /* 0x00E4B7DE-0x00E4B7EC: the wire handle comes back in D0. */
+    h->wired_page = MST_$WIRE(addr, &local_status);
 
+    /* 0x00E4B7F0: the status is tested AFTER the store. */
     if (local_status != status_$ok) {
         CRASH_SYSTEM(&local_status);
     }
 
-    /* Determine which cache slot this page belongs to */
+    /* 0x00E4B802-0x00E4B828: `andi.l #-0x8000,D0` rounds down to the
+     * group base, which must match one of the two cache slots. */
     {
-        uint32_t group_base = addr & 0xFFFF8000;
+        uint32_t group_base = addr & 0xFFFF8000u;
 
-        if (group_base == *(uint32_t *)(h + 0x24)) {
-            *(int16_t *)(h + 0x1C) = 0;
-        } else if (group_base == *(uint32_t *)(h + 0x2C)) {
-            *(int16_t *)(h + 0x1C) = 1;
+        if (group_base == h->cache0_base) {
+            h->max_slots = 0;       /* 0x00E4B810 `clr.w (0x1c,A2)` */
+        } else if (group_base == h->cache1_base) {
+            h->max_slots = 1;       /* 0x00E4B81C */
         } else {
             CRASH_SYSTEM(&Naming_bad_request_header_ver_err);
         }

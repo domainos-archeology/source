@@ -54,7 +54,7 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
                            uint32_t node_id, status_$t *status_ret)
 {
     uint32_t handle;
-    char *a5 = (char *)__A5_BASE();
+    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     file_$obj_loc_t desc;   /* A6-0x40, the object-location descriptor */
     int32_t count;
     ast_$common_attr_t cattr;   /* A6-0x20, 0x18 bytes */
@@ -78,19 +78,19 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
      * low word, `subq.w #1` + `bmi` skips an empty table, and the `dbf`
      * runs count times over the 1-based entries 1..count. */
     {
-        int16_t remaining = (int16_t)(DIR_MOUNT_COUNT16(a5) - 1);
+        int16_t remaining = (int16_t)(DIR_MOUNT_COUNT16(blk) - 1);
         int16_t n;
 
         for (n = 1; remaining >= 0; n++, remaining--) {
             if (node_id ==
-                *(uint32_t *)(a5 + DIR_MOUNT_NODE_TAB_OFF + n * 4)) {
-                if (*(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8) ==
+                DIR_MOUNT_NODE_OF(blk, n)) {
+                if (DIR_MOUNT_UID_OF(blk, n).high ==
                         dir_uid->high &&
-                    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + n * 8 + 4) ==
+                    DIR_MOUNT_UID_OF(blk, n).low ==
                         dir_uid->low) {
-                    if (*(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8) ==
+                    if (DIR_MOUNT_TGT_OF(blk, n).high ==
                             mount_uid->high &&
-                        *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + n * 8 + 4) ==
+                        DIR_MOUNT_TGT_OF(blk, n).low ==
                             mount_uid->low) {
                         /* 0x00E532D8: already mounted - nothing to do. */
                         goto cleanup;
@@ -127,7 +127,7 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
     /* Add mount entry under mutex protection */
     ML_$EXCLUSION_START(&DIR_$MUTEX);
 
-    count = *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF) + 1;
+    count = DIR_MOUNT_COUNT_OF(blk) + 1;
     if (count >= DIR_MOUNT_MAX) {
         ML_$EXCLUSION_STOP(&DIR_$MUTEX);
         *status_ret = status_$directory_is_full;
@@ -135,26 +135,26 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
     }
 
     /* 0x00E53362: the bumped count becomes the new entry's 1-based index. */
-    *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF) = count;
+    DIR_MOUNT_COUNT_OF(blk) = count;
 
     /* 0x00E53366-0x00E53372: source (mount point) UID. */
-    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + count * 8) = dir_uid->high;
-    *(uint32_t *)(a5 + DIR_MOUNT_UID_TAB_OFF + count * 8 + 4) = dir_uid->low;
+    DIR_MOUNT_UID_OF(blk, count).high = dir_uid->high;
+    DIR_MOUNT_UID_OF(blk, count).low = dir_uid->low;
 
     /* Each of the two stores below re-reads the count out of the module
      * block (0x00E53376 / 0x00E5338A) rather than reusing D0. */
     {
-        int32_t cur_count = *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF);
+        int32_t cur_count = DIR_MOUNT_COUNT_OF(blk);
 
         /* 0x00E53382: target (mounted volume root) UID. */
-        *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + cur_count * 8) =
+        DIR_MOUNT_TGT_OF(blk, cur_count).high =
             mount_uid->high;
-        *(uint32_t *)(a5 + DIR_MOUNT_TGT_TAB_OFF + cur_count * 8 + 4) =
+        DIR_MOUNT_TGT_OF(blk, cur_count).low =
             mount_uid->low;
 
-        cur_count = *(int32_t *)(a5 + DIR_MOUNT_COUNT_OFF);
+        cur_count = DIR_MOUNT_COUNT_OF(blk);
         /* 0x00E53394: `move.l D2,(0x15d8,A2)` with A2 = A5 + count*4. */
-        *(uint32_t *)(a5 + DIR_MOUNT_NODE_TAB_OFF + cur_count * 4) = node_id;
+        DIR_MOUNT_NODE_OF(blk, cur_count) = node_id;
     }
 
     /*
@@ -164,7 +164,7 @@ void dir_$do_op_add_mount(uid_t *dir_uid, uid_t *mount_uid,
      */
     {
         int16_t j;
-        char *entry = a5;
+        char *entry = blk;
         for (j = 0; j < DIR_CACHE_COUNT; j++) {
             if (*(uint32_t *)(entry + DIR_CACHE_MATCH_OFF) == dir_uid->high &&
                 *(uint32_t *)(entry + DIR_CACHE_MATCH_OFF + 4) == dir_uid->low) {

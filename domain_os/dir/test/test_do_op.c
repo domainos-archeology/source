@@ -60,7 +60,7 @@ uint32_t NODE_$ME = 0x00012345;
 uint16_t PROC1_$CURRENT = 4;
 uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
 int8_t   AUDIT_$ENABLED = 0;            /* >= 0: auditing off */
-/* DAT_00e7fc66 is DIR_$OP_TAB[4].base_size and DIR_$OP_VERSION /
+/* 0x00E7FC66 is DIR_$OP_TAB[4].base_size and DIR_$OP_VERSION /
  * DIR_$OP_REPLY_SIZE are DIR_$OP_REC(half).reply_version / .reply_size, so
  * the one biased table is all that has to exist here (bead source-wk2f). */
 dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];

@@ -1,24 +1,18 @@
 /*
- * DIR_$ALLOC_HANDLE - Allocate directory handle slot
+ * DIR_$ALLOC_HANDLE - Allocate a directory handle slot
  *
- * Allocates a handle from the free list. If no handles are available,
- * waits on DIR_$WT_FOR_HDNL_EC (unless the process is a server
- * process type 9, in which case it returns NULL immediately).
+ * Takes the head of the handle free list at A5+0x2038 and marks the slot in
+ * the in-use bitmap at A5+0x203C.  When the list is empty:
+ *   - a naming-server helper (PROC1_$TYPE == 9) gives up at once and
+ *     returns NULL;
+ *   - a process that already holds a handle may fall back on the RESERVE
+ *     slot, handle table entry 0 at A5+0x1880, provided bit 0 of the in-use
+ *     bitmap is still clear (the image spells that test as a byte operation
+ *     on A5+0x203F, the bitmap's least significant byte);
+ *   - everyone else counts a wait in DIR_$HNDL_WAITS and blocks on
+ *     DIR_$WT_FOR_HDNL_EC, then retries from the top.
  *
- * If no free handle is available and the current process already owns
- * a handle (checked via bitmap + owner matching), and the "extra" bit
- * (bit 0 at offset 0x203F) is not set, reuses offset 0x1880 as an
- * emergency handle and sets the extra bit.
- *
- * Initializes the handle fields:
- *   +0x08: Owner process ID (PROC1_$CURRENT)
- *   +0x0A: Lock mode (cleared to 0)
- *   +0x0E: Flags (cleared to 0)
- *   +0x20: Mapped flag (cleared to 0)
- *   +0x1C: max_slots (set to 2)
- *   +0x34: Lock entry pointer (cleared to 0)
- *
- * Returns: handle pointer (NULL if unavailable for server processes)
+ * Returns: the handle, or NULL.
  *
  * Original address: 0x00E4B86E
  * Original size: 274 bytes
@@ -26,80 +20,81 @@
 
 #include "dir/dir_internal.h"
 
+/* `cmpi.w #0x9,(-0x2,A0,D0w*0x1)` at 0x00E4B8A0 against PROC1_$TYPE. */
+#define DIR_PROC_TYPE_NS_HELPER     9
+
+/* Bit 0 of DIR_$HANDLE_IN_USE marks handle table slot 0, the reserve slot
+ * `lea (0x1880,A5),A2` hands out at 0x00E4B8E2. */
+#define DIR_HANDLE_RESERVE_BIT      0x00000001u
+
 void *DIR_$ALLOC_HANDLE(void)
 {
-    char *base = (char *)__A5_BASE();
-    uint8_t *handle = NULL;
+    char          *blk = DIR_$BLOCK;
+    dir_$handle_t *handle = NULL;       /* A2 */
 
     while (1) {
-        ML_$EXCLUSION_START(&DIR_$MUTEX);
+        ML_$EXCLUSION_START(&DIR_$MUTEX);       /* 0x00E4B878 */
 
-        handle = *(uint8_t **)(base + 0x2038);
+        /* 0x00E4B886 */
+        handle = (dir_$handle_t *)ARCH_VA_TO_PTR(DIR_HANDLE_FREE_OF(blk));
 
         if (handle != NULL) {
-            /* Got a handle from free list */
-            uint16_t slot_idx = *(uint16_t *)(handle + 0x38);
-
-            /* Set bit in active bitmap */
-            *(uint32_t *)(base + 0x203C) |= (1u << (slot_idx & 0x1F));
-
-            /* Remove from free list */
-            *(uint32_t *)(base + 0x2038) = *(uint32_t *)(handle + 0x30);
-
+            /* 0x00E4B92E-0x00E4B93A: mark it busy and unlink it. */
+            DIR_HANDLE_IN_USE_OF(blk) |=
+                1u << ((uint32_t)handle->slot_index & 0x1F);
+            DIR_HANDLE_FREE_OF(blk) = handle->next;
             break;
         }
 
-        /* No free handle */
-
-        /* Server processes (type 9) don't wait.
-         * 0xE4B898: `cmpi.w #0x9,(-0x2,A0,D0w*1)` with A0 = 0xE2612C and
-         * D0 = PROC1_$CURRENT*2, i.e. PROC1_$TYPE[PROC1_$CURRENT] with the
-         * 0xE2612A base that proc1.h declares. */
-        if (PROC1_$TYPE[PROC1_$CURRENT] == 9) {
+        /*
+         * 0x00E4B892-0x00E4B8A6: a naming-server helper never waits for a
+         * handle.
+         */
+        if (PROC1_$TYPE[PROC1_$CURRENT] == DIR_PROC_TYPE_NS_HELPER) {
             goto done;
         }
 
-        /* Check if current process already owns a handle */
+        /* 0x00E4B8AA-0x00E4B8D2: does this process already hold a handle? */
         {
-            int16_t count = 0x1F;
-            uint16_t idx = 0;
-            char *scan = base;
-            boolean found = false;
+            int16_t  count = DIR_SLOT_COUNT - 1;    /* D1, the dbf counter */
+            uint16_t idx = 0;                       /* D2 */
+            boolean  found = false;                 /* D0 */
 
             do {
-                /* 0xE4B8B8: the bitmap is re-read on every iteration. */
-                uint32_t bitmap = *(uint32_t *)(base + 0x203C);
-                if ((bitmap & (1u << (idx & 0x1F))) != 0) {
-                    if (*(int16_t *)(scan + 0x1888) == (int16_t)PROC1_$CURRENT) {
-                        found = true;   /* 0xE4B8C8: st D0b */
+                /* 0x00E4B8B8: the bitmap is re-read on every iteration. */
+                if ((DIR_HANDLE_IN_USE_OF(blk) &
+                     (1u << ((uint32_t)idx & 0x1F))) != 0) {
+                    /* 0x00E4B8C0: `(0x1888,A1)` with A1 = A5 + idx*0x3C is
+                     * handle table entry idx's owner word. */
+                    if (DIR_HANDLE_TAB_OF(blk)[idx].owner ==
+                        (int16_t)PROC1_$CURRENT) {
+                        found = true;   /* 0x00E4B8C8 `st D0b` */
                         break;
                     }
                 }
                 idx++;
-                scan += 0x3C;
                 count--;
             } while (count != -1);
 
-            if (found < 0) {    /* 0xE4B8D6: tst.b D0b / bpl */
-                /* We own a handle - try emergency slot if not already used */
-                if ((*(uint8_t *)(base + 0x203F) & 1) == 0) {
-                    handle = (uint8_t *)(base + 0x1880);
-                    *(uint8_t *)(base + 0x203F) |= 1;
+            if (found < 0) {    /* 0x00E4B8D6 `tst.b D0b` / `bpl` */
+                /* 0x00E4B8DA-0x00E4B8EC: hand out the reserve slot once. */
+                if ((DIR_HANDLE_IN_USE_OF(blk) & DIR_HANDLE_RESERVE_BIT) == 0) {
+                    handle = &DIR_HANDLE_TAB_OF(blk)[0];
+                    DIR_HANDLE_IN_USE_OF(blk) |= DIR_HANDLE_RESERVE_BIT;
                     goto done;
                 }
             }
         }
 
-        /* Wait for a handle to become available */
+        /* 0x00E4B8EE-0x00E4B92A: wait for somebody to free a handle. */
         {
-            /* 0xE4B8EE */
             int32_t wait_val = (int32_t)DIR_$WT_FOR_HDNL_EC.value + 1;
-            *(uint32_t *)(base + 0x2020) += 1;      /* 0xE4B8FA */
+            DIR_HNDL_WAITS_OF(blk) += 1;            /* 0x00E4B8FA */
 
-            ML_$EXCLUSION_STOP(&DIR_$MUTEX);        /* 0xE4B8FE */
+            ML_$EXCLUSION_STOP(&DIR_$MUTEX);        /* 0x00E4B8FE */
 
             /*
-             * 0xE4B90C-0xE4B926: EC_$WAIT takes two 3-element arrays BY
+             * 0x00E4B90C-0x00E4B926: EC_$WAIT takes two 3-element arrays BY
              * VALUE (24 bytes on the stack, popped with `lea (0x18,SP),SP`).
              * Only slot 0 is used here: ecs = { &DIR_$WT_FOR_HDNL_EC, NULL,
              * NULL }, vals = { wait_val, 0, 0 }.  The returned index is
@@ -108,19 +103,20 @@ void *DIR_$ALLOC_HANDLE(void)
             EC_$WAIT((ec_$wait_ecs_t){{ &DIR_$WT_FOR_HDNL_EC, NULL, NULL }},
                      (ec_$wait_vals_t){{ wait_val, 0, 0 }});
         }
-        /* 0xE4B92A: loop back to the ML_$EXCLUSION_START at 0xE4B878 */
+        /* 0x00E4B92A: `bra.w 0x00e4b878` - back to the mutex acquire. */
     }
 
 done:
-    ML_$EXCLUSION_STOP(&DIR_$MUTEX);
+    ML_$EXCLUSION_STOP(&DIR_$MUTEX);                /* 0x00E4B940 */
 
+    /* 0x00E4B950-0x00E4B972 */
     if (handle != NULL) {
-        *(int16_t *)(handle + 0x08) = PROC1_$CURRENT;
-        *(int16_t *)(handle + 0x0A) = 0;
-        handle[0x0E] = 0;
-        handle[0x20] = 0;
-        *(int16_t *)(handle + 0x1C) = 2;
-        *(uint32_t *)(handle + 0x34) = 0;
+        handle->owner      = (int16_t)PROC1_$CURRENT;   /* 0x00E4B958 */
+        handle->lock_mode  = 0;                         /* 0x00E4B960 */
+        handle->split_busy = 0;                         /* 0x00E4B964 byte */
+        handle->mapped     = 0;                         /* 0x00E4B968 byte */
+        handle->max_slots  = 2;                         /* 0x00E4B96C */
+        handle->lock_entry = 0;                         /* 0x00E4B972 */
     }
 
     return handle;
