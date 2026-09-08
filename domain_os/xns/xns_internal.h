@@ -42,10 +42,26 @@ extern uint8_t *XNS_IDP_BASE;
 #define XNS_OFF_PACKETS_RECV 0x004
 #define XNS_OFF_PACKETS_DROP 0x008
 #define XNS_OFF_PORT_NETWORK 0x010
+/*
+ * The registered local host addresses, six bytes each, at state +0x20
+ * (xns_$idp_state_t.addrs).  XNS_IDP_$OS_OPEN copies the FIRST entry into a
+ * connected channel's source host with three word moves at
+ * 0x00E180F4-0x00E18108, and xns_$is_broadcast_addr walks the array with
+ * "lea (A5),A1 / addq.l #6,A1" reading (0x20,A1) (0x22,A1) (0x24,A1).
+ */
+#define XNS_OFF_ADDRS 0x020
+#define XNS_ADDR_SIZE 6
 #define XNS_OFF_LOCAL_SOCKET 0x020
 #define XNS_OFF_LOCAL_HOST_HI 0x022
 #define XNS_OFF_LOCAL_HOST_LO 0x024
-#define XNS_OFF_REG_ADDR_BASE 0x026 /* First registered address entry */
+/*
+ * XNS_OFF_REG_ADDR_BASE used to name 0x026 as the "first registered address
+ * entry".  The array actually starts at 0x020 with a six-byte stride
+ * (XNS_OFF_ADDRS above), so 0x026 is the SECOND entry; the name is kept only
+ * because nothing referenced it and removing it silently would lose the
+ * correction.
+ */
+#define XNS_OFF_REG_ADDR_BASE (XNS_OFF_ADDRS + XNS_ADDR_SIZE) /* addrs[1] */
 #define XNS_OFF_PORTS 0x040         /* xns_$port_state_t ports[8], stride 0x0C */
 /*
  * The channel array starts at state +0xA0 with a 0x48 stride.  Verified in
@@ -109,10 +125,53 @@ extern uint8_t *XNS_IDP_BASE;
 #define XNS_PORT_STATE_SIZE 0x0C
 
 /*
- * Internal error socket channel
- * Used by XNS_ERROR_$SEND for sending error packets.
+ * XNS_ERROR module data - the whole D segment "XNS_ERROR" at 0x00E2B29C,
+ * size 0x78 (SAU2 link map).  XNS_ERROR_$SEND, xns_$maybe_open_error_socket,
+ * xns_$maybe_close_error_socket and xns_$pkt_bufs_in_netbuf_pool all set
+ * A5 to that address, so every displacement they use is a field here.
+ *
+ * The link map names two interior symbols: CLIENT_REF_COUNT at 0x00E2B310
+ * (A5+0x74, module-local - no `$' in the name) and XNS_ERROR_$STD_IDP_CHANNEL
+ * at 0x00E2B312 (A5+0x76).  Both are WORDS: 0x00E178CC "tst.w (0x74,A5)",
+ * 0x00E178F6 "addq.w #0x1,(0x74,A5)", 0x00E178F0 "move.w (-0x26,A6),(0x76,A5)"
+ * and 0x00E17946 "move.w #-0x1,(0x76,A5)".
+ *
+ * The head of the segment IS the request record XNS_IDP_$OS_SEND is given:
+ * 0x00E17BAC pushes "pea (A5)" as that argument.  Only +0x18..+0x24 is ever
+ * written (0x00E17B2C-0x00E17B38); the address block at +0x00..+0x17 is left
+ * alone because the error channel builds its own IDP header.
  */
-extern int32_t XNS_ERROR_$STD_IDP_CHANNEL;
+typedef struct xns_error_$data_t {
+  xns_$os_send_rec_t send_rec;        /* 0x00: the OS_SEND request record */
+  uint8_t  _unknown_48[0x24];         /* 0x48 */
+  int32_t  buf_va_high;               /* 0x6C (A5+0x6C) */
+  int32_t  buf_va_low;                /* 0x70 (A5+0x70) */
+  int16_t  client_ref_count;          /* 0x74, map: CLIENT_REF_COUNT */
+  int16_t  std_idp_channel;           /* 0x76, map: XNS_ERROR_$STD_IDP_CHANNEL */
+} xns_error_$data_t;
+/*
+ * NOT packed: the natural layout already matches.  xns_$os_send_rec_t is
+ * itself packed (alignment 1) so send_rec occupies 0x00..0x47 exactly,
+ * _unknown_48 runs to 0x6B, and the two longwords land on 0x6C / 0x70
+ * without padding.  Leaving the outer record unpacked is what lets
+ * "&XNS_ERROR_$DATA.send_rec" be taken without -Waddress-of-packed-member.
+ */
+
+_Static_assert(offsetof(xns_error_$data_t, buf_va_high)      == 0x6C, "xns_error.buf_va_high");
+_Static_assert(offsetof(xns_error_$data_t, buf_va_low)       == 0x70, "xns_error.buf_va_low");
+_Static_assert(offsetof(xns_error_$data_t, client_ref_count) == 0x74, "xns_error.client_ref_count");
+_Static_assert(offsetof(xns_error_$data_t, std_idp_channel)  == 0x76, "xns_error.std_idp_channel");
+_Static_assert(sizeof(xns_error_$data_t) == 0x78,
+               "the XNS_ERROR segment is 0x78 bytes (SAU2 link map)");
+
+extern xns_error_$data_t XNS_ERROR_$DATA;
+
+/*
+ * XNS_ERROR_$CLIENT_MUTEX (0x00E26268, SAU2 link map) - guards
+ * client_ref_count and std_idp_channel.  Pushed by its literal address at
+ * 0x00E178BE / 0x00E178FA / 0x00E1791C / 0x00E1794C.
+ */
+extern ml_$exclusion_t XNS_ERROR_$CLIENT_MUTEX;
 
 /*
  * Internal helper function declarations
@@ -206,18 +265,6 @@ int8_t xns_$is_broadcast_addr(void *addr);
  * Original address: 0x00E17850
  */
 int8_t xns_$is_local_addr(void *addr);
-
-/*
- * xns_$copy_packet_data - Copy packet data to user buffer
- *
- * Copies received packet data to the user's receive buffer(s).
- *
- * @param iov_chain     I/O vector chain pointer
- * @param length        Number of bytes to copy
- *
- * Original address: 0x00E18C5E
- */
-void xns_$copy_packet_data(void *iov_chain, uint16_t length);
 
 /*
  * Inline accessor macros for channel state

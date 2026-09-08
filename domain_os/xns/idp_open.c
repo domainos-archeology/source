@@ -12,179 +12,181 @@
 #include "xns/xns_internal.h"
 
 /*
- * XNS_IDP_$OPEN - Open an IDP channel (user-level)
+ * XNS_IDP_$OPEN - Open an IDP channel (user-level), 0x00E187AC
  *
- * Opens a new IDP channel for user-mode communication. This is a
- * higher-level wrapper around XNS_IDP_$OS_OPEN that:
- *   1. Validates the version field
- *   2. Validates socket number isn't reserved
- *   3. Validates flag combinations
- *   4. Allocates a user socket
- *   5. Calls XNS_IDP_$OS_OPEN
- *   6. Registers an event count
+ * Validates the caller's request, allocates an OS socket for it, builds the
+ * xns_$os_open_opt_t record XNS_IDP_$OS_OPEN wants, and publishes the
+ * socket's event count back to the caller.
  *
- * @param options       Pointer to open options structure (xns_$idp_open_opt_t)
+ * @param options       xns_$idp_open_opt_t; +0x04 and +0x08 are OUTPUTS on
+ *                      the way back (see xns/xns.h)
  * @param status_ret    Output: status code
- *
- * Original address: 0x00E187AC
  */
 void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
 {
-    uint8_t *base = XNS_IDP_BASE;
-    int16_t socket = options->socket;
-    uint8_t flags = options->flags;
-    uint16_t user_socket;
-    int16_t channel;
-    status_$t local_status;
+    uint8_t  *base = XNS_IDP_BASE;
+    uint16_t  user_socket;              /* D2 */
+    uint16_t  channel;
+    uint8_t  *chan;
+    sock_$sock_t *sock;                 /* A4 */
+    xns_$os_open_opt_t os_opt;          /* A6-0x28 */
+    status_$t os_status;                /* A6-0x2C */
+    int i;
 
-    /* OS-level open parameters */
-    struct {
-        int16_t socket;
-        int16_t channel_ret;
-        code_ptr_t demux_callback;
-        void *user_data;
-        uint8_t dest_addr[24];
-    } os_open_opt;
+    *status_ret = status_$ok;                           /* 0x00E187C2 */
 
-    *status_ret = status_$ok;
-
-    /* Validate version field */
-    if (options->version != 1) {
+    if (options->version != 1) {                        /* 0x00E187C4 */
         *status_ret = status_$xns_version_mismatch;
         return;
     }
 
-    /* Validate socket number isn't reserved */
-    if (socket == -1 || socket == XNS_SOCKET_ROUTER ||
-        socket == XNS_SOCKET_ERROR || socket == XNS_SOCKET_RIP) {
+    /* 0x00E187D4-0x00E187EE: the four sockets user code may not claim. */
+    if (options->socket == -1 || options->socket == XNS_SOCKET_ROUTER ||
+        options->socket == XNS_SOCKET_ERROR || options->socket == XNS_SOCKET_RIP) {
         *status_ret = status_$xns_reserved_socket;
         return;
     }
 
-    /* Check if socket is already in use (if non-zero) */
-    if (socket != 0) {
-        int8_t in_use = xns_$find_socket(socket);
-        if (in_use < 0) {
+    if (options->socket != 0) {                         /* 0x00E187FA */
+        if (xns_$find_socket(options->socket) < 0) {    /* 0x00E1880C */
             *status_ret = status_$xns_socket_in_use;
             return;
         }
     }
 
-    /* Validate flag combinations */
-    if (flags & XNS_OPEN_FLAG_BIND_LOCAL) {
-        if (flags & XNS_OPEN_FLAG_NO_ALLOC) {
+    if (options->flags & XNS_OPEN_FLAG_BIND_LOCAL) {    /* 0x00E1881A */
+        if (options->flags & XNS_OPEN_FLAG_NO_ALLOC) {  /* 0x00E18822 */
             *status_ret = status_$xns_incompatible_flags;
             return;
         }
-        if (flags & XNS_OPEN_FLAG_CONNECT) {
+        if (options->flags & XNS_OPEN_FLAG_CONNECT) {   /* 0x00E18834 */
             *status_ret = status_$xns_connect_bind_conflict;
             return;
         }
     }
 
-    if (flags & XNS_OPEN_FLAG_CONNECT) {
-        if (flags & XNS_OPEN_FLAG_NO_ALLOC) {
+    if (options->flags & XNS_OPEN_FLAG_CONNECT) {       /* 0x00E18846 */
+        if (options->flags & XNS_OPEN_FLAG_NO_ALLOC) {  /* 0x00E1884E */
             *status_ret = status_$xns_incompatible_flags2;
             return;
         }
-
-        /* Connected mode requires non-broadcast destination */
-        if ((options->dest_host_hi == 0xFFFF &&
-             options->dest_host_mid == 0xFFFF &&
-             options->dest_host_lo == 0xFFFF) ||
-            (options->src_host_hi == 0xFFFF &&
-             options->src_host_mid == 0xFFFF &&
-             options->src_host_lo == 0xFFFF)) {
+        /*
+         * 0x00E18860-0x00E1888E: an all-ones DESTINATION host (+0x18..+0x1D)
+         * is rejected, and so is an all-ones SOURCE host (+0x0C..+0x11).  The
+         * words are compared in the order +0x1C, +0x18, +0x1A then +0x10,
+         * +0x0C, +0x0E.
+         */
+        if ((options->dest_host_lo == 0xFFFF &&
+             options->dest_host_hi == 0xFFFF &&
+             options->dest_host_mid == 0xFFFF) ||
+            (options->src_host_lo == 0xFFFF &&
+             options->src_host_hi == 0xFFFF &&
+             options->src_host_mid == 0xFFFF)) {
             *status_ret = status_$xns_connect_to_broadcast;
             return;
         }
     }
 
-    /* Allocate user socket (unless NO_ALLOC flag) */
-    if (!(flags & XNS_OPEN_FLAG_NO_ALLOC)) {
-        if (options->buffer_size == 0) {
-            *status_ret = status_$xns_no_buffer_size;
+    if (options->flags & XNS_OPEN_FLAG_NO_ALLOC) {      /* 0x00E18892 */
+        user_socket = XNS_NO_SOCKET;                    /* 0x00E1889A */
+    } else {
+        if (options->buffer_size == 0) {                /* 0x00E188A0 */
+            *status_ret = status_$xns_no_buffer_size;   /* 0x00E188EE */
             return;
         }
 
-        int8_t result = SOCK_$ALLOCATE_USER(&user_socket,
-                                             options->buffer_size,
-                                             options->buffer_size,
-                                             options->buffer_size,
-                                             0x400);
-        if (result >= 0) {
+        /*
+         * 0x00E188A6-0x00E188BC.  The pushes are 0x400, buffer_size, and then
+         * TWO copies of the word already on the stack ("move.w (SP),-(SP)"
+         * twice), so SOCK_$ALLOCATE_USER sees the depth three times.
+         */
+        if (SOCK_$ALLOCATE_USER(&user_socket, options->buffer_size,
+                                options->buffer_size, options->buffer_size,
+                                0x400) >= 0) {          /* 0x00E188C4 `bmi' */
             *status_ret = status_$xns_no_os_sockets;
             return;
         }
 
         /*
-         * TODO(source-0rv): the flag clear is missing.  The image does
-         * `bclr.b #0x7,(off,An)` on the socket record's flags byte, which is
-         * bit 15 of the containing word - the sock subsystem's record has not
-         * been recovered far enough to name it, so nothing is emitted rather
-         * than guessing an offset.
+         * 0x00E188D2-0x00E188E6.  SOCK_$SOCKET_PTR is a 1-BASED array of
+         * socket-descriptor pointers at 0x00E28DB4: the index arithmetic is
+         * "A0 = 0xE28DB4 / D0 = sock << 2 / A1 = A0 + D0 / A4 = (-0x4,A1)",
+         * i.e. SOCK_$SOCKET_PTR[sock - 1].  "bclr.b #0x7,(0x16,A4)" then
+         * clears bit 15 of that descriptor's flags word.
          */
-    } else {
-        user_socket = XNS_NO_SOCKET;
+        sock = (sock_$sock_t *)SOCK_$SOCKET_PTR[user_socket - 1];
+        sock->flags &= (uint16_t)~0x8000u;
     }
 
-    /* Set up OS-level open parameters */
-    os_open_opt.socket = socket;
-    os_open_opt.demux_callback = (code_ptr_t)XNS_IDP_$DEMUX;
-    os_open_opt.channel_ret = options->priority;
+    /* 0x00E188F8-0x00E1892E: build the OS-level record. */
+    os_opt.socket = options->socket;                    /* 0x00E188F8 */
+    os_opt.demux = (uint32_t)(uintptr_t)&XNS_IDP_$DEMUX; /* 0x00E188FE */
+    /* 0x00E18906 "move.w (0x20,A2),(-0x26,A6)" - the whole word, whose low
+     * byte is the open-flag byte XNS_IDP_$OS_OPEN reads back. */
+    os_opt.flags_channel = (uint16_t)(((uint16_t)options->flags_hi << 8) |
+                                      options->flags);
 
-    if (flags & XNS_OPEN_FLAG_BIND_LOCAL) {
-        os_open_opt.user_data = options->user_data;
+    if (options->flags & XNS_OPEN_FLAG_BIND_LOCAL) {    /* 0x00E1890C */
+        os_opt.network = options->network;              /* 0x00E18914 */
     }
 
-    if (flags & XNS_OPEN_FLAG_CONNECT) {
-        /* Copy destination address (24 bytes starting at dest_network) */
-        uint8_t *src = (uint8_t *)&options->dest_network;
-        uint8_t *dst = os_open_opt.dest_addr;
-        int16_t i;
+    if (options->flags & XNS_OPEN_FLAG_CONNECT) {       /* 0x00E1891A */
+        /*
+         * 0x00E18922 "lea (0x8,A2),A0 / lea (-0x1c,A6),A1 / moveq #0x17,D0 /
+         * move.b (A0)+,(A1)+ / dbf" - 24 bytes from the caller's +0x08 onto
+         * the OS record's +0x0C, i.e. source address then destination
+         * address.
+         */
+        const uint8_t *src = (const uint8_t *)&options->channel_ret;
+        uint8_t *dst = (uint8_t *)&os_opt.src_network;
+
         for (i = 0; i < 24; i++) {
             dst[i] = src[i];
         }
     }
 
-    /* Call OS-level open */
-    XNS_IDP_$OS_OPEN(&os_open_opt, &local_status);
-    *status_ret = local_status;
+    XNS_IDP_$OS_OPEN(&os_opt, &os_status);              /* 0x00E1893A */
+    *status_ret = os_status;                            /* 0x00E18940 */
 
-    if (local_status != status_$ok) {
-        /* Clean up on error */
-        if (user_socket != XNS_NO_SOCKET) {
-            SOCK_$CLOSE(user_socket);
+    if (os_status != status_$ok) {                      /* 0x00E18944 */
+        if (user_socket != XNS_NO_SOCKET) {             /* 0x00E18946 */
+            SOCK_$CLOSE(user_socket);                   /* 0x00E18950 */
         }
         return;
     }
 
-    /* Register cleanup handler */
-    PROC2_$SET_CLEANUP(0x0E);  /* XNS cleanup type */
+    PROC2_$SET_CLEANUP(0x0E);                           /* 0x00E1895E */
 
-    /* Store user socket in channel state */
-    channel = os_open_opt.channel_ret;
-    {
-        uint16_t iVar1 = channel * XNS_CHANNEL_SIZE;
+    /*
+     * 0x00E18966-0x00E18990.  The channel index the OS record now carries is
+     * turned into a channel base with WORD arithmetic ("lsl.w #0x3" twice and
+     * an "add.w"), so the multiply is modulo 65536.
+     */
+    channel = os_opt.flags_channel;
+    chan = base + (uint16_t)(channel * XNS_CHANNEL_SIZE);
 
-        ML_$EXCLUSION_START((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
-        *(uint16_t *)(base + iVar1 + XNS_CHAN_OFF_USER_SOCKET) = user_socket;
-        ML_$EXCLUSION_STOP((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
-    }
+    ML_$EXCLUSION_START(XNS_LOCK_PTR());                /* 0x00E1896A */
+    *(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET) = user_socket;  /* 0x00E18982 */
+    ML_$EXCLUSION_STOP(XNS_LOCK_PTR());                 /* 0x00E1898A */
 
-    /* Return channel index */
-    options->dest_network = channel;  /* Reuse dest_network field for return */
+    /*
+     * 0x00E18992 "move.w (-0x26,A6),(0x8,A2)" - a WORD, into the caller's
+     * +0x08.  That word is the high half of the source network the caller
+     * supplied, so a connected open gets its source network clobbered with
+     * the channel index on the way out.
+     */
+    options->channel_ret = (int16_t)channel;
 
-    /* Register event count */
-    if (user_socket != XNS_NO_SOCKET) {
-        /*
-         * TODO(source-0rv): the first argument is NULL because the socket
-         * record it should point at is the same unrecovered sock structure as
-         * above.  The image passes the address of that record's eventcount.
-         */
-        options->user_data = EC2_$REGISTER_EC1(NULL /* &sock[user_socket].ec */,
-                                               status_ret);
-    }
+    /*
+     * 0x00E18998-0x00E189B6.  QUIRK, reproduced as found: this is
+     * UNCONDITIONAL.  When the NO_ALLOC arm ran, user_socket is 0xE1 and the
+     * index arithmetic reaches SOCK_$SOCKET_PTR[0xE0], well past the 0xE0
+     * descriptors SOCK_$INIT sets up, so an event count is registered on
+     * whatever pointer happens to sit there.
+     */
+    options->network = (uint32_t)(uintptr_t)
+        EC2_$REGISTER_EC1((ec_$eventcount_t *)SOCK_$SOCKET_PTR[user_socket - 1],
+                          status_ret);
 }
 
 /*

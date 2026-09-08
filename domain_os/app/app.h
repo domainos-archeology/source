@@ -17,6 +17,7 @@
 #define APP_H
 
 #include "base/base.h"
+#include "xns/xns.h"   /* xns_$pkt_desc_t */
 
 /*
  * ============================================================================
@@ -125,26 +126,29 @@ void APP_$RECEIVE(uint16_t sock_num, void *result, status_$t *status_ret);
 /*
  * APP_$DEMUX - Demultiplex received packet
  *
- * Routes a received packet to the appropriate handler based on the
- * socket type. This function is called by the XNS IDP layer when
- * a packet arrives for the standard application protocol.
+ * The channel demux vector APP_$STD_OPEN installs (its address is taken at
+ * 0x00E00BBA).  XNS_IDP_$OS_DEMUX calls it through xns_$channel_t.demux at
+ * 0x00E18658 with five longword arguments, so the signature is the
+ * xns_$demux_fn_t one: the packet descriptor it built, the receiving ROUTE
+ * port's type and socket words, the MAC broadcast boolean, and a status cell.
  *
- * If the packet cannot be delivered to the target socket (e.g., socket
- * buffer full), it attempts to queue it to the overflow socket instead.
- *
- * After processing, the header and data buffers are returned to the pool.
+ * If the packet cannot be delivered to the socket named in the application
+ * header, and that socket was APP_SOCK_TYPE_FILE, it is retried on
+ * APP_SOCK_TYPE_OVERFLOW; if nothing takes it, the header and data buffers
+ * are returned to the pool.
  *
  * Parameters:
- *   pkt_info   - Pointer to packet info structure from XNS_IDP
- *   ec_ptr1    - Event count pointer 1
- *   ec_ptr2    - Event count pointer 2
- *   flags      - Processing flags
- *   status_ret - Output: status code
+ *   pkt            - the descriptor XNS_IDP_$OS_DEMUX built
+ *   port_type      - the ROUTE port's type word   (SOCK_$PUT argument 4)
+ *   port_socket    - the ROUTE port's socket word (SOCK_$PUT argument 5)
+ *   mac_broadcast  - Domain boolean, the frame arrived as a MAC broadcast
+ *   status_ret     - Output: status code, only ever cleared (0x00E00AAC)
  *
  * Original address: 0x00E00A90
  */
-void APP_$DEMUX(void *pkt_info, uint16_t *ec_ptr1, uint16_t *ec_ptr2,
-                int8_t *flags, status_$t *status_ret);
+void APP_$DEMUX(xns_$pkt_desc_t *pkt, uint16_t *port_type,
+                uint16_t *port_socket, boolean *mac_broadcast,
+                status_$t *status_ret);
 
 /*
  * APP_$STD_OPEN - Open standard application channel

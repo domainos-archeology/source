@@ -1,7 +1,8 @@
 /*
- * XNS IDP Receive Operations
+ * XNS IDP Receive
  *
- * Implementation of XNS_IDP_$RECEIVE for receiving IDP packets.
+ * XNS_IDP_$RECEIVE (0x00E18CE2) and its nested procedure
+ * xns_$copy_packet_data (0x00E18C5E).
  *
  * Original address: 0x00E18CE2
  */
@@ -9,180 +10,270 @@
 #include "xns/xns_internal.h"
 
 /*
- * XNS_IDP_$RECEIVE - Receive a packet (user-level)
+ * XNS_IDP_$RECEIVE's frame, as far as its nested procedure reaches into it.
  *
- * Receives an IDP packet from the specified channel. The packet data
- * is copied to the caller's buffer(s) via an iov chain.
+ * xns_$copy_packet_data (0x00E18C5E) is a Pascal nested procedure: it takes
+ * two arguments of its own but reads the parent through the static link
+ * ("movea.l (A6),A2" at 0x00E18C6A, so A2 is XNS_IDP_$RECEIVE's frame
+ * pointer).  The only two slots it touches are:
  *
- * @param channel_ptr   Pointer to channel number
- * @param recv_params   Receive parameters structure:
- *                      +0x18: iov chain for data
- *                      +0x1C: header buffer
- *                      +0x26: output: MAC info (6 bytes)
- *                      +0x2C: output: packet type
- * @param status_ret    Output: status code
+ *   A6-0x5C  the current buffer descriptor (0x00E18C80, 0x00E18C94,
+ *            0x00E18CC4)
+ *   A6-0x76  how many bytes of that descriptor are already filled
+ *            (0x00E18C7A, 0x00E18C8E, 0x00E18CBA, 0x00E18CC0)
  *
- * Original address: 0x00E18CE2
+ * Both are carried explicitly here.  The descriptor is a real pointer, not a
+ * target VA: the parent seeds it with "lea (0x18,A3),A2" (0x00E18DCE), the
+ * address of a field of its own second argument.  Only the LINKS between
+ * descriptors are VAs.
  */
-void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, void *recv_params, status_$t *status_ret)
+typedef struct xns_$idp_receive_frame_t {
+    mac_os_$buf_desc_t *iov;        /* A6-0x5C */
+    int16_t             partial;    /* A6-0x76 */
+} xns_$idp_receive_frame_t;
+
+/*
+ * xns_$copy_packet_data (0x00E18C5E) - nested procedure of XNS_IDP_$RECEIVE
+ *
+ * Copies `length' bytes starting at the VA held in *src_cell into the
+ * caller's buffer chain, picking up where the previous call left off.  A
+ * descriptor is only advanced past when it has been filled: the last partly
+ * used one stays current and `partial' says how far into it the next copy
+ * starts.
+ *
+ * @param parent    the two parent-frame slots (see above)
+ * @param src_cell  A6+0x08: the ADDRESS of a longword holding the source VA
+ *                  ("movea.l (0x8,A6),A0 / move.l (A0),D3" 0x00E18C6C)
+ * @param length    A6+0x0C: a word ("move.w (0xc,A6),D0w" 0x00E18C66)
+ */
+static void xns_$copy_packet_data(xns_$idp_receive_frame_t *parent,
+                                  const uint32_t *src_cell, int16_t length)
 {
-    uint8_t *base = XNS_IDP_BASE;
-    uint8_t *params = (uint8_t *)recv_params;
-    uint16_t channel = *channel_ptr;
-    int iVar1;
-    uint8_t cleanup_buf[24];
-    status_$t local_status;
+    uint32_t src_va;        /* D3 */
+    int16_t  remaining;     /* D4 */
+    int32_t  chunk;         /* D5 */
+    int32_t  copied;        /* D2 */
+
+    src_va    = *src_cell;                          /* 0x00E18C70 */
+    remaining = length;                             /* 0x00E18C72 */
 
     /*
-     * A6-0x40: the record SOCK_$GET fills in.  The fields this routine
-     * touches sit at the sock_$pkt_info_t offsets: hdr 0x00 (-0x40),
-     * src_addr 0x04 (-0x3c), src_port 0x08 (-0x38), data_len 0x2a (-0x16),
-     * hdr_len 0x2c (-0x14) and data_pages 0x30 (-0x10).
+     * 0x00E18C74 "bra.b 0x00E18CD0" enters at the loop test, which is the
+     * pair 0x00E18CD0 "beq" (nothing left to copy) and 0x00E18CD2
+     * "tst.l (-0x5c,A2) / bne" (a descriptor is still available).
      */
-    sock_$pkt_info_t sock_result;
+    while (remaining != 0 && parent->iov != NULL) {
+        mac_os_$buf_desc_t *iov = parent->iov;
+        uint32_t dst_va;
 
-    /* A6-0x70: "clr.l (-0x70,A6)" at 0x00E18CFA */
-    uint32_t extra_buf = 0;
+        /* 0x00E18C76-0x00E18C8C: clamp to what is left of this descriptor. */
+        chunk = remaining;
+        if (chunk > iov->length - (int32_t)parent->partial) {
+            chunk = iov->length - (int32_t)parent->partial;
+        }
 
-    *status_ret = status_$ok;
+        /* 0x00E18C8E-0x00E18C9C: dst = descriptor address + partial. */
+        dst_va = (uint32_t)((int32_t)parent->partial + (int32_t)iov->address);
 
-    /* Validate channel number and access */
+        copied = chunk;                             /* 0x00E18CA0 ext.l D2 */
+        OS_$DATA_COPY(ARCH_VA_TO_PTR(src_va), ARCH_VA_TO_PTR(dst_va),
+                      (uint32_t)copied);            /* 0x00E18CAA */
+
+        src_va += (uint32_t)copied;                 /* 0x00E18CB4 */
+        remaining = (int16_t)(remaining - (int16_t)chunk);  /* 0x00E18CB6 */
+
+        if (remaining == 0) {
+            /* 0x00E18CBA: this descriptor stays current, partly filled. */
+            parent->partial = (int16_t)(parent->partial + (int16_t)chunk);
+        } else {
+            /* 0x00E18CC0-0x00E18CCC: it is full, move to the next. */
+            parent->partial = 0;
+            parent->iov = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR(iov->next);
+        }
+    }
+}
+
+/*
+ * XNS_IDP_$RECEIVE - receive a packet (user-level), 0x00E18CE2
+ *
+ * @param channel_ptr   the channel index, read as a word
+ * @param recv_params   xns_$idp_recv_t: the caller's buffer chain going in,
+ *                      the packet's addresses and type coming back
+ * @param status_ret    Output: status code
+ */
+void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, xns_$idp_recv_t *recv_params,
+                      status_$t *status_ret)
+{
+    uint8_t  *base = XNS_IDP_BASE;
+    uint8_t  *chan;
+    uint16_t  channel;
+    sock_$pkt_info_t rec;               /* A6-0x40, what SOCK_$GET fills in */
+    uint32_t  data_va;                  /* A6-0x70 */
+    status_$t cleanup_status;           /* A6-0x74 */
+    uint8_t   cleanup_buf[24];          /* A6-0x58 */
+    xns_$idp_receive_frame_t frame;     /* A6-0x5C and A6-0x76 */
+    mac_os_$buf_desc_t *head;
+    int32_t   capacity;                 /* D0 */
+    int i;
+
+    channel = *channel_ptr;                             /* 0x00E18CF0 */
+    *status_ret = status_$ok;                           /* 0x00E18CF8 */
+    data_va = 0;                                        /* 0x00E18CFA */
+
+    /* 0x00E18CFE "cmpi.w #0x10,(A0)" / `bcc' - an UNSIGNED compare. */
     if (channel >= XNS_MAX_CHANNELS) {
         *status_ret = status_$xns_bad_channel;
         return;
     }
 
-    iVar1 = channel * XNS_CHANNEL_SIZE;
+    /* 0x00E18D04-0x00E18D0E: the channel base is formed with WORD
+     * arithmetic, so the multiply is modulo 65536. */
+    chan = base + (uint16_t)(channel * XNS_CHANNEL_SIZE);
 
-    /* Check channel is active */
-    if (*(int16_t *)(base + iVar1 + XNS_CHAN_OFF_STATE) >= 0) {
+    if (*(int16_t *)(chan + XNS_CHAN_OFF_STATE) >= 0) { /* 0x00E18D12 `bpl' */
         *status_ret = status_$xns_bad_channel;
         return;
     }
 
-    /* Check access: either broadcast receive flag set, or AS_ID matches */
-    if (!(*(uint8_t *)(base + iVar1 + XNS_CHAN_OFF_FLAGS) & 0x80)) {
-        /* Not broadcast - check AS_ID */
-        uint16_t chan_as_id = (*(uint16_t *)(base + iVar1 + XNS_CHAN_OFF_FLAGS) &
-                               XNS_CHAN_FLAG_AS_ID_MASK) >> XNS_CHAN_FLAG_AS_ID_SHIFT;
-        if (chan_as_id != PROC1_$AS_ID) {
+    /*
+     * 0x00E18D18 "tst.b (0xda,A2)" / `bmi' tests bit 15 of the flags word -
+     * an OS channel opened with XNS_OPEN_FLAG_NO_ALLOC - and skips the
+     * ownership check for it.  Written as a word mask so the host build
+     * looks at the same bit.
+     */
+    if ((*(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) & 0x8000u) == 0) {
+        uint16_t chan_as_id =
+            (uint16_t)((*(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) &
+                        XNS_CHAN_FLAG_AS_ID_MASK) >> XNS_CHAN_FLAG_AS_ID_SHIFT);
+
+        if (chan_as_id != PROC1_$AS_ID) {               /* 0x00E18D28 */
             *status_ret = status_$xns_bad_channel;
             return;
         }
     }
 
-    /* Check that user socket is allocated */
-    {
-        uint16_t user_socket = *(uint16_t *)(base + iVar1 + XNS_CHAN_OFF_USER_SOCKET);
-        if (user_socket == XNS_NO_SOCKET) {
-            *status_ret = status_$xns_no_socket;
-            return;
-        }
-
-        /* Try to get a packet from the socket */
-        int8_t result = SOCK_$GET(user_socket, &sock_result);
-        if (result >= 0) {
-            *status_ret = status_$xns_no_data;
-            return;
-        }
+    if (*(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET) == XNS_NO_SOCKET) {
+        *status_ret = status_$xns_no_socket;            /* 0x00E18D42 */
+        return;
     }
 
-    /* Packet received - copy data to caller */
-    {
-        int16_t *header = (int16_t *)sock_result.hdr;   /* movea.l (-0x40,A6),A0 */
+    /* 0x00E18D4C: a word result slot, then &rec and the socket number. */
+    if (SOCK_$GET(*(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET), &rec) >= 0) {
+        *status_ret = status_$xns_no_data;              /* 0x00E18D66 */
+        return;
+    }
 
-        /* Copy source address to recv_params if "no header build" mode */
-        if (*(uint8_t *)(base + iVar1 + XNS_CHAN_OFF_FLAGS) & 0x08) {
-            uint8_t *src = (uint8_t *)header + 6;
-            uint8_t *dst = params;
-            int16_t i;
-            for (i = 0; i < 24; i++) {
-                *dst++ = *src++;
-            }
-            /* Copy packet type */
-            *(uint16_t *)(params + 0x2C) = *(uint8_t *)((uint8_t *)header + 5);
+    /*
+     * 0x00E18D70 "btst.b #0x3,(0xda,A2)" is bit 3 of the flags word's HIGH
+     * byte, i.e. word bit 11 - the channel builds its own IDP header, so the
+     * caller wants the received one's addresses handed back.
+     */
+    if (*(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) & XNS_CHAN_FLAG_BUILD_HEADER) {
+        const uint8_t *hdr = (const uint8_t *)ARCH_VA_TO_PTR(rec.hdr);
+        uint8_t *dst = (uint8_t *)recv_params;
+
+        /* 0x00E18D7C-0x00E18D8A: 24 bytes from the header's +0x06. */
+        for (i = 0; i < 24; i++) {
+            dst[i] = hdr[offsetof(xns_$idp_header_t, dest_network) + i];
         }
+        /* 0x00E18D8E-0x00E18D96: the packet type, zero-extended. */
+        recv_params->packet_type =
+            (uint16_t)hdr[offsetof(xns_$idp_header_t, packet_type)];
+    }
 
-        /* Copy MAC info */
-        *(uint32_t *)(params + 0x26) = sock_result.src_addr;   /* 0x00E18D9E */
-        *(uint16_t *)(params + 0x2A) = sock_result.src_port;   /* 0x00E18DA4 */
+    recv_params->mac_src_hi = rec.src_addr;             /* 0x00E18D9E */
+    recv_params->mac_src_lo = rec.src_port;             /* 0x00E18DA4 */
 
-        /* Set up cleanup handler */
-        local_status = FIM_$CLEANUP(cleanup_buf);
-        if (local_status != status_$cleanup_handler_set) {
-            /*
-             * 0x00E18EE4: pea (-0x40,A6) / pea (-0x70,A6) / pea (-0x10,A6).
-             * The first cast restates the record's 32-bit header VA cell,
-             * the same treatment sock/close.c gives NETBUF_$RTN_HDR.
-             */
-            NETBUF_$RTN_PKT((uint32_t *)&sock_result.hdr, &extra_buf,
-                            sock_result.data_pages, (int16_t)sock_result.data_len);
-            *status_ret = local_status;
-            return;
-        }
+    cleanup_status = FIM_$CLEANUP(cleanup_buf);         /* 0x00E18DAE */
+    if (cleanup_status != status_$cleanup_handler_set) {
+        /* 0x00E18EE4-0x00E18F00: give the packet back and report. */
+        NETBUF_$RTN_PKT(&rec.hdr, &data_va, rec.data_pages,
+                        (int16_t)rec.data_len);
+        *status_ret = cleanup_status;
+        return;
+    }
 
-        /* Validate receive buffer */
-        if (*(void **)(params + 0x1C) == NULL) {
+    if (recv_params->iov.address == 0) {                /* 0x00E18DC8 */
+        *status_ret = status_$xns_illegal_buffer_spec;
+        goto cleanup;
+    }
+
+    /*
+     * 0x00E18DCE "lea (0x18,A3),A2": the chain head is the descriptor
+     * embedded in the caller's record.  Formed off the record base rather
+     * than as "&recv_params->iov" because the record is packed.
+     */
+    head = (mac_os_$buf_desc_t *)((uint8_t *)recv_params +
+                                  offsetof(xns_$idp_recv_t, iov));
+
+    /* 0x00E18DD2-0x00E18E0C: total the chain's capacity, rejecting a
+     * negative length or a positive length with no address. */
+    frame.iov = head;
+    capacity = 0;
+    while (frame.iov != NULL) {
+        int32_t len = frame.iov->length;                /* 0x00E18DDE */
+
+        if (len < 0) {                                  /* 0x00E18DE0 `bmi' */
             *status_ret = status_$xns_illegal_buffer_spec;
             goto cleanup;
         }
-
-        /* Check buffer size */
-        {
-            int32_t *iov = (int32_t *)(params + 0x18);
-            int32_t total_size = 0;
-            int32_t *iov_ptr = iov;
-
-            while (iov_ptr != NULL) {
-                int32_t len = iov_ptr[0];
-                if (len < 0 || (len > 0 && iov_ptr[1] == 0)) {
-                    *status_ret = status_$xns_illegal_buffer_spec;
-                    goto cleanup;
-                }
-                total_size += len;
-                iov_ptr = (int32_t *)iov_ptr[2];
-            }
-
-            if (total_size < (int32_t)(sock_result.hdr_len + sock_result.data_len)) {
-                *status_ret = status_$xns_buffer_too_small;
-                goto cleanup;
-            }
-
-            /* Get virtual address for extra data if needed */
-            if (sock_result.data_len != 0) {
-                /* 0x00E18E34: the page VA is pushed BY VALUE */
-                NETBUF_$GETVA(sock_result.data_pages[0], &extra_buf, status_ret);
-                if (*status_ret != status_$ok) {
-                    extra_buf = 0;
-                    goto cleanup;
-                }
-            }
-
-            /* Copy data to iov chain */
-            iov_ptr = iov;
-
-            if (sock_result.hdr_len != 0) {
-                /* 0x00E18E66: pea (-0x40,A6) - the record's header VA cell */
-                xns_$copy_packet_data(&sock_result.hdr, sock_result.hdr_len);
-            }
-
-            if (sock_result.data_len != 0) {
-                xns_$copy_packet_data(&extra_buf, sock_result.data_len);
-            }
-
-            /* Clear remaining iov entries */
-            while (iov_ptr != NULL) {
-                iov_ptr[0] = 0;
-                iov_ptr = (int32_t *)iov_ptr[2];
-            }
-
-            *status_ret = status_$ok;
+        if (len > 0 && frame.iov->address == 0) {       /* 0x00E18DE4/0x00E18DE8 */
+            *status_ret = status_$xns_illegal_buffer_spec;
+            goto cleanup;
         }
+        capacity += frame.iov->length;                  /* 0x00E18DFC */
+        frame.iov = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR(frame.iov->next);
+    }
+
+    /* 0x00E18E0E-0x00E18E1E: both lengths are zero-extended words. */
+    if ((int32_t)((uint32_t)rec.hdr_len + (uint32_t)rec.data_len) > capacity) {
+        *status_ret = status_$xns_buffer_too_small;
+        goto cleanup;
+    }
+
+    if (rec.data_len != 0) {                            /* 0x00E18E2E */
+        /* 0x00E18E3C: the first payload page is pushed BY VALUE. */
+        NETBUF_$GETVA(rec.data_pages[0], &data_va, status_ret);
+        if (*status_ret != status_$ok) {                /* 0x00E18E4E */
+            data_va = 0;                                /* 0x00E18E52 */
+            goto cleanup;
+        }
+    }
+
+    frame.iov = head;                                   /* 0x00E18E58 */
+    frame.partial = 0;                                  /* 0x00E18E5C */
+
+    if (rec.hdr_len != 0) {                             /* 0x00E18E60 */
+        /* 0x00E18E6C "pea (-0x40,A6)": the record's own header VA cell. */
+        xns_$copy_packet_data(&frame, &rec.hdr, (int16_t)rec.hdr_len);
+    }
+    if (rec.data_len != 0) {                            /* 0x00E18E76 */
+        xns_$copy_packet_data(&frame, &data_va, (int16_t)rec.data_len);
+    }
+
+    /*
+     * 0x00E18E8C-0x00E18EB4.  The descriptor the copy stopped inside is
+     * shortened to the number of bytes actually put in it, and every
+     * descriptor after it is emptied, so the caller can walk the chain and
+     * see exactly how much arrived.
+     *
+     * Note that 0x00E18E98 writes through the cursor without testing it: a
+     * positive `partial' can only be left behind while a descriptor is still
+     * current, so the image never checks.
+     */
+    if (frame.partial > 0) {                            /* 0x00E18E8C `ble' */
+        frame.iov->length = (int32_t)frame.partial;     /* 0x00E18E9C */
+        frame.iov = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR(frame.iov->next);
+    }
+    while (frame.iov != NULL) {                         /* 0x00E18EB0 */
+        frame.iov->length = 0;                          /* 0x00E18EA4 */
+        frame.iov = (mac_os_$buf_desc_t *)ARCH_VA_TO_PTR(frame.iov->next);
+    }
+
+    *status_ret = status_$ok;                           /* 0x00E18EBA */
 
 cleanup:
-        /* 0x00E18EBC */
-        NETBUF_$RTN_PKT((uint32_t *)&sock_result.hdr, &extra_buf,
-                        sock_result.data_pages, (int16_t)sock_result.data_len);
-        FIM_$RLS_CLEANUP(cleanup_buf);
-    }
+    /* 0x00E18EBC-0x00E18EE2 */
+    NETBUF_$RTN_PKT(&rec.hdr, &data_va, rec.data_pages, (int16_t)rec.data_len);
+    FIM_$RLS_CLEANUP(cleanup_buf);
 }

@@ -430,32 +430,143 @@ typedef struct xns_$idp_stats_t {
 } xns_$idp_stats_t;
 
 /*
- * XNS IDP Open Options
+ * XNS IDP Open Options - the record XNS_IDP_$OPEN (0x00E187AC) is handed.
  *
- * Structure passed to XNS_IDP_$OPEN and XNS_IDP_$OS_OPEN.
+ * Every offset below is a displacement off A2 in that routine:
+ *   0x00  "cmpi.w #0x1,(A2)"                 0x00E187C4  version, must be 1
+ *   0x02  "move.w (0x2,A2),D0w"              0x00E187D4  the XNS socket
+ *   0x04  "move.l (0x4,A2),(-0x20,A6)"       0x00E18914  listen network,
+ *         copied into the OS record's +0x08 only when the bind flag is set;
+ *         "move.l A0,(0x4,A2)"               0x00E189B6  overwritten on the
+ *         way out with EC2_$REGISTER_EC1's result
+ *   0x08  24 bytes copied to the OS record's +0x0C when the connect flag is
+ *         set ("lea (0x8,A2),A0 / lea (-0x1c,A6),A1 / moveq #0x17,D0 /
+ *         move.b (A0)+,(A1)+ / dbf" 0x00E18922-0x00E1892E), i.e. the SOURCE
+ *         address followed by the DESTINATION address;
+ *         "move.w (-0x26,A6),(0x8,A2)"       0x00E18992  the first WORD of
+ *         that block is overwritten on the way out with the channel index
+ *   0x0C..0x11 "cmp.w (0x10,A2) / (0xc,A2) / (0xe,A2)"  0x00E18876-0x00E18886
+ *         the source host, rejected when it is all ones
+ *   0x18..0x1D "cmp.w (0x1c,A2) / (0x18,A2) / (0x1a,A2)" 0x00E18864-0x00E18874
+ *         the destination host, rejected when it is all ones
+ *   0x20  "move.w (0x20,A2),(-0x26,A6)"      0x00E18906  the whole WORD goes
+ *         to the OS record's +0x02; its LOW byte is the open-flag byte that
+ *         XNS_IDP_$OS_OPEN reads back as "btst.b #n,(0x3,A1)", so the two
+ *         halves are modelled separately
+ *   0x21  "btst.b #0x1,(0x21,A2)"            0x00E1881A  the open flags
+ *   0x22  "tst.w (0x22,A2)"                  0x00E188A0  the socket depth
+ *         handed to SOCK_$ALLOCATE_USER
+ *
+ * PACKED so the host build reproduces the m68k layout (m68k aligns 32-bit
+ * scalars on two-byte boundaries).
  */
 typedef struct xns_$idp_open_opt_t {
-  int16_t version; /* 0x00: Version (must be 1) */
-  int16_t socket;  /* 0x02: XNS socket number (0 = assign dynamically) */
-  void *user_data; /* 0x04: User callback data */
-  /* For connected mode: destination address */
-  uint32_t dest_network;  /* 0x08: Destination network (0 = unconnected) */
-  uint16_t dest_host_hi;  /* 0x0C: Destination host high word */
-  uint16_t dest_host_mid; /* 0x0E: Destination host middle word */
-  uint16_t dest_host_lo;  /* 0x10: Destination host low word */
-  /* For local binding: source address */
-  uint32_t src_network;  /* 0x14: Source network (0 = any) */
-  uint16_t src_host_hi;  /* 0x18: Source host high word */
-  uint16_t src_host_mid; /* 0x1A: Source host middle word */
-  uint16_t src_host_lo;  /* 0x1C: Source host low word */
-  int16_t channel_ret;   /* 0x1E: Returned: channel index (OS_OPEN) or unused */
-  int16_t priority;      /* 0x20: Channel priority/index (OPEN) */
-  uint8_t flags; /* 0x21: Open flags (bits 1,2,3 = bind/connect/noalloc) */
-  uint8_t _pad;  /* 0x22: Padding */
-  int16_t buffer_size; /* 0x22: Receive buffer size */
+  int16_t  version;          /* 0x00: version, must be 1 */
+  int16_t  socket;           /* 0x02: XNS socket number (0 = assign one) */
+  uint32_t network;          /* 0x04: IN  the network to listen on;
+                              *       OUT EC2_$REGISTER_EC1's result */
+  int16_t  channel_ret;      /* 0x08: OUT the channel index (0x00E18992).
+                              *       IN  the high half of src_network */
+  uint16_t src_network_lo;   /* 0x0A */
+  uint16_t src_host_hi;      /* 0x0C */
+  uint16_t src_host_mid;     /* 0x0E */
+  uint16_t src_host_lo;      /* 0x10 */
+  uint16_t src_socket;       /* 0x12 */
+  uint32_t dest_network;     /* 0x14 */
+  uint16_t dest_host_hi;     /* 0x18 */
+  uint16_t dest_host_mid;    /* 0x1A */
+  uint16_t dest_host_lo;     /* 0x1C */
+  uint16_t dest_socket;      /* 0x1E */
+  uint8_t  flags_hi;         /* 0x20: high half of the flag word the OS record
+                              *       is given; never examined by either
+                              *       routine */
+  uint8_t  flags;            /* 0x21: open flags (XNS_OPEN_FLAG_*) */
+  int16_t  buffer_size;      /* 0x22: OS socket depth */
 } xns_$idp_open_opt_t;
+/*
+ * NOT packed: the natural layout already reproduces every offset above (the
+ * _Static_asserts that follow prove it), and the caller supplies this record -
+ * taking the address of one of its fields must not draw
+ * -Waddress-of-packed-member.
+ */
 
-/* Open flags */
+_Static_assert(offsetof(xns_$idp_open_opt_t, network)     == 0x04, "idp_open_opt.network");
+_Static_assert(offsetof(xns_$idp_open_opt_t, channel_ret) == 0x08, "idp_open_opt.channel_ret");
+_Static_assert(offsetof(xns_$idp_open_opt_t, src_host_hi) == 0x0C, "idp_open_opt.src_host_hi");
+_Static_assert(offsetof(xns_$idp_open_opt_t, dest_network)== 0x14, "idp_open_opt.dest_network");
+_Static_assert(offsetof(xns_$idp_open_opt_t, dest_host_hi)== 0x18, "idp_open_opt.dest_host_hi");
+_Static_assert(offsetof(xns_$idp_open_opt_t, flags_hi)    == 0x20, "idp_open_opt.flags_hi");
+_Static_assert(offsetof(xns_$idp_open_opt_t, flags)       == 0x21, "idp_open_opt.flags");
+_Static_assert(offsetof(xns_$idp_open_opt_t, buffer_size) == 0x22, "idp_open_opt.buffer_size");
+_Static_assert(sizeof(xns_$idp_open_opt_t) == 0x24, "xns_$idp_open_opt_t must be 0x24 bytes");
+
+/*
+ * The 24 bytes at +0x08 are one contiguous block, and so are the 24 bytes at
+ * the OS record's +0x0C; the byte copy at 0x00E18922 moves one onto the
+ * other.
+ */
+_Static_assert(offsetof(xns_$idp_open_opt_t, dest_socket) + 2 -
+               offsetof(xns_$idp_open_opt_t, channel_ret) == 24,
+               "the connect block is 24 bytes");
+
+/*
+ * XNS IDP OS-level Open Options - the record XNS_IDP_$OS_OPEN (0x00E17F02)
+ * is handed, and the record XNS_IDP_$OPEN builds at A6-0x28 for it.
+ *
+ * Displacements off D6/A1 in XNS_IDP_$OS_OPEN:
+ *   0x00  "tst.w (A0)"                    0x00E17F2E  the requested socket,
+ *         written back with the allocated one at 0x00E18128
+ *   0x02  "move.w D2w,(0x2,A0)"           0x00E181A4  OUT the channel index.
+ *         IN the flag word whose low byte is read as
+ *         "btst.b #0x1,(0x3,A1)"          0x00E17F7A
+ *   0x04  "move.l (0x4,A1),(0xa0,A0)"     0x00E18174  the channel's demux
+ *         vector, copied as a LONGWORD
+ *   0x08  "cmpi.l #-0x1,(0x8,A1)"         0x00E17F82  the network to listen
+ *         on, -1 meaning "every port"
+ *   0x0C  the SOURCE address: all-zero test at 0x00E18008-0x00E18024 and
+ *         "pea (0xc,A1)" into xns_$is_broadcast_addr at 0x00E1802A
+ *   0x18  the DESTINATION address: "pea (0x18,A1)" into RIP_$FIND_NEXTHOP at
+ *         0x00E18052 and copied to the channel's +0xA4 at 0x00E180C4
+ */
+typedef struct xns_$os_open_opt_t {
+  int16_t  socket;           /* 0x00: IN/OUT XNS socket number */
+  uint16_t flags_channel;    /* 0x02: IN the flag word (low byte = the flags);
+                              *       OUT the channel index */
+  uint32_t demux;            /* 0x04: the demux vector, a code ADDRESS moved
+                              *       as one longword into the channel */
+  uint32_t network;          /* 0x08: network to listen on (-1 = all ports) */
+  uint32_t src_network;      /* 0x0C */
+  uint16_t src_host_hi;      /* 0x10 */
+  uint16_t src_host_mid;     /* 0x12 */
+  uint16_t src_host_lo;      /* 0x14 */
+  uint16_t src_socket;       /* 0x16 */
+  uint32_t dest_network;     /* 0x18 */
+  uint16_t dest_host_hi;     /* 0x1C */
+  uint16_t dest_host_mid;    /* 0x1E */
+  uint16_t dest_host_lo;     /* 0x20 */
+  uint16_t dest_socket;      /* 0x22 */
+} xns_$os_open_opt_t;
+/*
+ * NOT packed: the natural layout already reproduces every offset above (the
+ * _Static_asserts that follow prove it), and XNS_IDP_$OPEN builds this record at A6-0x28 -
+ * taking the address of one of its fields must not draw
+ * -Waddress-of-packed-member.
+ */
+
+_Static_assert(offsetof(xns_$os_open_opt_t, flags_channel) == 0x02, "os_open_opt.flags_channel");
+_Static_assert(offsetof(xns_$os_open_opt_t, demux)         == 0x04, "os_open_opt.demux");
+_Static_assert(offsetof(xns_$os_open_opt_t, network)       == 0x08, "os_open_opt.network");
+_Static_assert(offsetof(xns_$os_open_opt_t, src_network)   == 0x0C, "os_open_opt.src_network");
+_Static_assert(offsetof(xns_$os_open_opt_t, src_socket)    == 0x16, "os_open_opt.src_socket");
+_Static_assert(offsetof(xns_$os_open_opt_t, dest_network)  == 0x18, "os_open_opt.dest_network");
+_Static_assert(offsetof(xns_$os_open_opt_t, dest_socket)   == 0x22, "os_open_opt.dest_socket");
+_Static_assert(sizeof(xns_$os_open_opt_t) == 0x24, "xns_$os_open_opt_t must be 0x24 bytes");
+_Static_assert(offsetof(xns_$os_open_opt_t, dest_socket) + 2 -
+               offsetof(xns_$os_open_opt_t, src_network) == 24,
+               "the connect block is 24 bytes");
+
+/* Open flags - the byte at xns_$idp_open_opt_t +0x21 / the low half of
+ * xns_$os_open_opt_t.flags_channel. */
 #define XNS_OPEN_FLAG_BIND_LOCAL 0x02 /* Bind to specific local port */
 #define XNS_OPEN_FLAG_CONNECT 0x04    /* Connected mode */
 #define XNS_OPEN_FLAG_NO_ALLOC                                                 \
@@ -509,6 +620,45 @@ typedef struct xns_$idp_send_t {
   uint8_t _unknown_2e[0x1A];      /* 0x2E: not read by XNS_IDP_$SEND */
 } __attribute__((packed)) xns_$idp_send_t;
 
+/*
+ * xns_$idp_recv_t - the record XNS_IDP_$RECEIVE (0x00E18CE2) is given
+ *
+ * Displacements off A3 in that routine:
+ *   0x00  24 bytes written from the received IDP header + 6, i.e. the
+ *         destination address followed by the source address, when the
+ *         channel asked for a header build ("lea (0x6,A0),A1 /
+ *         movea.l (0xc,A6),A3 / moveq #0x17,D1 / move.b (A1)+,(A3)+ / dbf"
+ *         at 0x00E18D7C-0x00E18D8A)
+ *   0x18  the head of the caller's buffer chain, and the descriptor whose
+ *         +0x1C (its address) must be non-zero ("tst.l (0x1c,A3)" at
+ *         0x00E18DC8).  The chain is walked through each node's +0x08 and
+ *         every unused node's length is zeroed on the way out
+ *         (0x00E18E8C-0x00E18EB4)
+ *   0x26  "move.l (-0x3c,A6),(0x26,A3)"  0x00E18D9E  sock_$pkt_info_t.src_addr
+ *   0x2A  "move.w (-0x38,A6),(0x2a,A3)"  0x00E18DA4  sock_$pkt_info_t.src_port
+ *   0x2C  "move.w D1w,(0x2c,A3)"         0x00E18D96  the IDP packet type,
+ *         zero-extended from the received header's +0x05
+ *
+ * The tail is padded out to the 0x48 bytes of xns_$idp_send_t, whose first
+ * 0x18 bytes have the same meaning.
+ */
+typedef struct xns_$idp_recv_t {
+  xns_$net_addr_t dest_addr;      /* 0x00: destination network/host/socket */
+  xns_$net_addr_t src_addr;       /* 0x0C: source network/host/socket */
+  mac_os_$buf_desc_t iov;         /* 0x18: {length, address, next} */
+  uint8_t  _unknown_24[2];        /* 0x24 */
+  uint32_t mac_src_hi;            /* 0x26: MAC source, high 4 bytes */
+  uint16_t mac_src_lo;            /* 0x2A: MAC source, low 2 bytes */
+  uint16_t packet_type;           /* 0x2C */
+  uint8_t  _unknown_2e[0x1A];     /* 0x2E */
+} __attribute__((packed)) xns_$idp_recv_t;
+
+_Static_assert(offsetof(xns_$idp_recv_t, iov)         == 0x18, "idp_recv.iov");
+_Static_assert(offsetof(xns_$idp_recv_t, mac_src_hi)  == 0x26, "idp_recv.mac_src_hi");
+_Static_assert(offsetof(xns_$idp_recv_t, mac_src_lo)  == 0x2A, "idp_recv.mac_src_lo");
+_Static_assert(offsetof(xns_$idp_recv_t, packet_type) == 0x2C, "idp_recv.packet_type");
+_Static_assert(sizeof(xns_$idp_recv_t) == 0x48, "xns_$idp_recv_t must be 0x48 bytes");
+
 #if defined(ARCH_M68K)
 _Static_assert(offsetof(xns_$idp_send_t, dest_addr)   == 0x00, "idp_send.dest_addr");
 _Static_assert(offsetof(xns_$idp_send_t, src_addr)    == 0x0C, "idp_send.src_addr");
@@ -560,6 +710,17 @@ _Static_assert(sizeof(xns_$idp_send_t) == 0x48, "xns_$idp_send_t must be 0x48 by
 #define status_$xns_too_many_addrs                   0x3B001D  /* host address table full */
 
 /*
+ * Status codes for the XNS Error Protocol (module 0x39, "OS / XNS Error
+ * Protocol").  The comment after each line is the exact text the 10.2
+ * status-code database gives for that code.  Only the first three are
+ * produced by XNS_ERROR_$SEND (0x00E17A88, 0x00E17AB8, 0x00E17AD2).
+ */
+#define status_$xns_error_source_is_broadcast   0x390001  /* source is broadcast address */
+#define status_$xns_error_illegal_buffer_spec   0x390002  /* illegal buffer specification */
+#define status_$xns_error_packet_type_error     0x390003  /* packet type error */
+#define status_$xns_error_cannot_open_idp       0x390004  /* cannot open to XNS IDP */
+
+/*
  * XNS Error Protocol codes (param to XNS_ERROR_$SEND)
  */
 /* Errors detected at the destination host (0x00xx) */
@@ -580,6 +741,43 @@ _Static_assert(sizeof(xns_$idp_send_t) == 0x48, "xns_$idp_send_t must be 0x48 by
 
 /* The error-parameter cell at 0x00E18726 is a plain zero word. */
 #define XNS_ERROR_PARAM_NONE 0x0000
+
+/*
+ * xns_$error_pkt_t - the packet XNS_ERROR_$SEND builds (0x4C bytes)
+ *
+ * The header buffer NETBUF_$GET_HDR hands back is filled in at
+ * 0x00E17B3C-0x00E17BA0, and xns_$setup_error_header (0x00E17960) has already
+ * appended up to 0x2A bytes of the offending packet starting at +0x22
+ * ("move.w #0x2a,(-0x36,A2)" / "moveq #0x22,D3").  0x22 + 0x2A == 0x4C, which
+ * is the constant the length is computed from ("moveq #0x4c,D1 /
+ * sub.l D0,D1" at 0x00E17B26).
+ *
+ * The address swap is done inside this record: 0x00E17B52
+ * "lea (0x34,A2),A1 / lea (0x6,A0),A3" plus three "move.l (A1)+,(A3)+" copies
+ * twelve bytes from +0x34 - i.e. orig[0x12], the offending packet's IDP
+ * SOURCE address - onto the new header's DESTINATION address.
+ */
+typedef struct xns_$error_pkt_t {
+  xns_$idp_header_t idp;        /* 0x00: the error packet's own IDP header */
+  uint16_t error_code;          /* 0x1E: 0x00E17B9E "move.w (A3),(0x1e,A0)" */
+  uint16_t error_param;         /* 0x20: 0x00E17B96 "move.w (A1),(0x20,A0)" */
+  uint8_t  orig[0x2A];          /* 0x22: the head of the offending packet */
+} xns_$error_pkt_t;
+/*
+ * NOT packed: the natural layout already reproduces every offset above (the
+ * _Static_asserts that follow prove it), and the packet lives in a netbuf header page -
+ * taking the address of one of its fields must not draw
+ * -Waddress-of-packed-member.
+ */
+
+_Static_assert(offsetof(xns_$error_pkt_t, error_code)  == 0x1E, "error_pkt.error_code");
+_Static_assert(offsetof(xns_$error_pkt_t, error_param) == 0x20, "error_pkt.error_param");
+_Static_assert(offsetof(xns_$error_pkt_t, orig)        == 0x22, "error_pkt.orig");
+_Static_assert(sizeof(xns_$error_pkt_t) == 0x4C, "xns_$error_pkt_t must be 0x4C bytes");
+
+/* The offset inside orig[] of the offending packet's IDP source address:
+ * record +0x34 (0x00E17B52) minus the 0x22 the copy starts at. */
+#define XNS_ERROR_ORIG_SRC_ADDR_OFFSET 0x12
 
 /* Global reference to XNS IDP state (for M68K direct access) */
 #if defined(ARCH_M68K)
@@ -653,7 +851,7 @@ void XNS_IDP_$SEND(uint16_t *channel, xns_$idp_send_t *send_params,
  *
  * Original address: 0x00E18CE2
  */
-void XNS_IDP_$RECEIVE(uint16_t *channel, void *recv_params,
+void XNS_IDP_$RECEIVE(uint16_t *channel, xns_$idp_recv_t *recv_params,
                       status_$t *status_ret);
 
 /*
@@ -709,7 +907,7 @@ void XNS_IDP_$REGISTER_ADDR(uint16_t *addr, int16_t *port,
  *
  * Original address: 0x00E17F02
  */
-void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret);
+void XNS_IDP_$OS_OPEN(xns_$os_open_opt_t *options, status_$t *status_ret);
 
 /*
  * XNS_IDP_$OS_CLOSE - Close an IDP channel (OS-level)
@@ -926,7 +1124,7 @@ int16_t XNS_IDP_$HOP_AND_SUM(uint16_t current_sum, int16_t hop_offset);
  *
  * Original address: 0x00E17A2E
  */
-void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code,
+void XNS_ERROR_$SEND(xns_$pkt_desc_t *packet_info, uint16_t *error_code,
                      uint16_t *error_param, uint16_t *result_ret,
                      status_$t *status_ret);
 

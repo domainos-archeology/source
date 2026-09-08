@@ -12,267 +12,315 @@
 #include "xns/xns_internal.h"
 
 /*
- * XNS_IDP_$OS_OPEN - Open an IDP channel (OS-level)
+ * XNS_IDP_$OS_OPEN - Open an IDP channel (OS-level), 0x00E17F02
  *
- * Opens a new IDP channel for kernel-level use. This function:
- *   1. Validates the socket number is available
- *   2. Finds a free channel slot
- *   3. Handles port binding (if requested)
- *   4. Sets up connected mode (if requested)
- *   5. Assigns the socket number (dynamic if 0)
+ * Walks the channel table for a free slot, optionally binds the channel to
+ * one or every ROUTE port, optionally resolves a connected destination, and
+ * finally stamps the socket number, the demux vector and the owning AS_ID
+ * into the slot.
  *
- * Open options flags (at offset +3 of options):
- *   Bit 1 (0x02): Bind to specific local port
- *   Bit 2 (0x04): Connected mode (specific destination)
- *   Bit 3 (0x08): No socket allocation (internal use)
+ * The option record is xns_$os_open_opt_t; see xns/xns.h for how every field
+ * was recovered.  Note that its +0x02 word is an input (the open flags, in
+ * its low byte) that becomes an output (the channel index) at 0x00E181A4.
  *
- * @param options       Pointer to open options structure:
- *                      +0x00: socket number (0 = dynamic)
- *                      +0x02: channel index return (for OS_OPEN)
- *                      +0x03: flags byte
- *                      +0x04: demux callback
- *                      +0x08: local port (if bind flag set)
- *                      +0x0C-0x17: destination address (if connect flag)
- *                      +0x18-0x23: source address (if connect flag)
+ * @param options       the open options; +0x00 and +0x02 are written back
  * @param status_ret    Output: status code
- *
- * Original address: 0x00E17F02
  */
-void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret)
+void XNS_IDP_$OS_OPEN(xns_$os_open_opt_t *options, status_$t *status_ret)
 {
-    int16_t *opt = (int16_t *)options;
-    uint8_t *base = XNS_IDP_BASE;
-    int16_t socket = opt[0];
-    uint8_t flags = *((uint8_t *)options + 3);
-    uint16_t channel;
-    uint8_t *chan_base;
-    int16_t port;
-    int8_t local_addr_ok = 0;
+    uint8_t  *base = XNS_IDP_BASE;
+    uint8_t   flags;                    /* the byte at options +0x03 */
+    /*
+     * D2, the channel index.
+     *
+     * QUIRK, reproduced as found: it is not cleared until 0x00E17F56, yet the
+     * "IDP socket in use" exit at 0x00E17F46 branches to 0x00E181A0, which
+     * lands in the CLEANUP arm and indexes the channel table with it.  On
+     * that one path D2 still holds whatever the CALLER left in it, so the
+     * bclr/clr at 0x00E181BA/0x00E181C0 scribble on an unpredictable slot.
+     * Leaving `channel' indeterminate here is the faithful reading; nothing
+     * in the image constrains the value.
+     */
+    uint16_t  channel;
+    uint8_t  *chan;                     /* A0 / A4: base + channel * 0x48 */
+    boolean   use_local_source;         /* D3 from 0x00E17FFC on */
+    int16_t   port;                     /* D3 in the bind arm, D4 later */
+    int       i;
 
-    *status_ret = status_$ok;
+    /*
+     * `channel' is deliberately given the contents of its own unwritten slot,
+     * read through a volatile pointer.  That is as close as C gets to "the
+     * value the caller left in D2", which is what the socket-in-use arm
+     * below actually uses; see the declaration.
+     */
+    channel = *(volatile uint16_t *)&channel;
 
-    /* Check channel limit */
+    *status_ret = status_$ok;                           /* 0x00E17F18 */
+
+    /* 0x00E17F1A "cmpi.w #0x10,(0x534,A5)" / `bcs' - an UNSIGNED compare. */
     if (XNS_OPEN_COUNT() >= XNS_MAX_CHANNELS) {
         *status_ret = status_$xns_idp_socket_table_full;
+        /* 0x00E17F28 "bra.w 0x00E181CE" - straight to the epilogue, because
+         * the exclusion lock has not been taken yet. */
         return;
     }
 
-    /* Validate socket number (if non-zero) */
-    if (socket != 0) {
-        int8_t in_use = xns_$find_socket(socket);
-        if (in_use < 0) {
+    if (options->socket != 0) {                         /* 0x00E17F2E */
+        /* 0x00E17F32 "subq.l #0x2,SP" is the Pascal result slot; the answer
+         * also comes back in D0. */
+        if (xns_$find_socket(options->socket) < 0) {    /* 0x00E17F3C */
             *status_ret = status_$xns_socket_in_use;
-            return;
-        }
-    }
-
-    /* Acquire exclusion lock */
-    ML_$EXCLUSION_START((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
-
-    /* Find a free channel slot */
-    channel = 0;
-    chan_base = base;
-    while (*(int16_t *)(chan_base + XNS_CHAN_OFF_STATE) < 0) {
-        /* Channel is active (bit 15 set) */
-        if (channel >= XNS_MAX_CHANNELS) {
-            *status_ret = status_$xns_channel_table_full;
+            /*
+             * 0x00E17F46 "bra.w 0x00E181A0" - the `bne' there sees the flags
+             * of the store just made, so it always falls into the cleanup arm
+             * at 0x00E181AA.  That arm ends with an ML_$EXCLUSION_STOP for a
+             * lock this path never took.  Both halves are reproduced.
+             */
             goto cleanup_error;
         }
-        channel++;
-        chan_base = base + channel * XNS_CHANNEL_SIZE;
     }
 
-    /* Handle bind-to-local-port flag */
-    if (flags & XNS_OPEN_FLAG_BIND_LOCAL) {
-        int32_t local_port = *(int32_t *)(opt + 4);  /* offset +0x08 */
+    ML_$EXCLUSION_START(XNS_LOCK_PTR());                /* 0x00E17F4E */
 
-        if (local_port == -1) {
-            /* Bind to all ports */
-            local_addr_ok = 0;
-            for (port = 0; port < XNS_MAX_PORTS; port++) {
-                xns_$add_port(channel, port, status_ret);
-                if (*status_ret == status_$ok) {
-                    local_addr_ok = -1;  /* At least one succeeded */
+    /*
+     * 0x00E17F56-0x00E17F76: find the first slot whose state word is not
+     * negative.  The bound check sits INSIDE the loop body, after the state
+     * test, so a table that is full to the brim reads one word past the last
+     * channel (base + 0x564) before deciding.
+     */
+    channel = 0;                                        /* 0x00E17F56 */
+    chan = base;                                        /* 0x00E17F58 */
+    while (*(int16_t *)(chan + XNS_CHAN_OFF_STATE) < 0) {   /* 0x00E17F72 */
+        if (channel >= XNS_MAX_CHANNELS) {              /* 0x00E17F5C `bcs' */
+            *status_ret = status_$xns_channel_table_full;
+            goto cleanup_error;                         /* 0x00E17F68 */
+        }
+        channel += 1;                                   /* 0x00E17F6C */
+        chan += XNS_CHANNEL_SIZE;                       /* 0x00E17F6E */
+    }
+
+    /* 0x00E17F7A "btst.b #0x1,(0x3,A1)" - the flags are the LOW byte of the
+     * +0x02 word, and nothing rewrites that word before 0x00E181A4. */
+    flags = (uint8_t)options->flags_channel;
+
+    if (flags & XNS_OPEN_FLAG_BIND_LOCAL) {
+        if ((int32_t)options->network == -1) {          /* 0x00E17F82 */
+            boolean any_bound = false;                  /* 0x00E17F8C `clr.b D3b' */
+            int16_t p = 0;                              /* 0x00E17F90 `clr.w D5w' */
+
+            /* 0x00E17F8E "moveq #0x7,D4" + `dbf' at 0x00E17FA6 = 8 passes. */
+            for (i = 0; i < XNS_MAX_PORTS; i++) {
+                xns_$add_port(channel, p, status_ret);  /* 0x00E17F98 */
+                if (*status_ret == status_$ok) {        /* 0x00E17F9E */
+                    any_bound = true;                   /* 0x00E17FA2 `st D3b' */
+                }
+                p += 1;                                 /* 0x00E17FA4 */
+            }
+
+            if (any_bound < 0) {                        /* 0x00E17FAA `bpl' */
+                /*
+                 * 0x00E17FB0 / 0x00E17FB8: at least one port took the
+                 * channel, so the two "this port is simply not there" codes
+                 * the last port left behind are forgiven.
+                 */
+                if (*status_ret == status_$internet_network_port_not_open ||
+                    *status_ret == status_$mac_port_op_not_implemented) {
+                    *status_ret = status_$ok;           /* 0x00E17FC0 */
+                    goto after_bind;                    /* 0x00E17FC2 */
                 }
             }
-            /* If at least one port bound and status is recoverable error, clear it */
-            if (local_addr_ok < 0 &&
-                (*status_ret == status_$internet_network_port_not_open ||
-                 *status_ret == status_$mac_port_op_not_implemented)) {
-                *status_ret = status_$ok;
-            }
-            if (*status_ret != status_$ok) {
-                goto cleanup_error;
-            }
         } else {
-            /*
-             * Bind to specific port.  0x00E17FC4: pea (-0x16,A6) then
-             * pea (0x8,A1) - the network id is the longword at options+0x08.
-             */
-            int16_t port_num;                   /* A6-0x16 */
-            MAC_$NET_TO_PORT_NUM((int32_t *)((uint8_t *)options + 8), &port_num);
-            port = port_num;
-            if (port == -1) {
+            int16_t port_num;                           /* A6-0x16 */
+
+            /* 0x00E17FC4 "pea (-0x16,A6)" then "pea (0x8,A1)": the network id
+             * is the longword at options +0x08. */
+            MAC_$NET_TO_PORT_NUM((int32_t *)&options->network, &port_num);
+            port = port_num;                            /* 0x00E17FD4 */
+            if (port == -1) {                           /* 0x00E17FD8 */
                 *status_ret = status_$xns_listen_network_not_connected;
                 goto cleanup_error;
             }
-            xns_$add_port(channel, port, status_ret);
-            if (*status_ret != status_$ok) {
-                goto cleanup_error;
-            }
+            xns_$add_port(channel, port, status_ret);   /* 0x00E17FEE */
+        }
+
+        if (*status_ret != status_$ok) {                /* 0x00E17FF4 */
+            goto cleanup_error;                         /* 0x00E17FF6 */
         }
     }
 
-    /* Handle connected mode flag */
-    if (flags & XNS_OPEN_FLAG_CONNECT) {
-        uint8_t *dest_addr = (uint8_t *)options + 0x18;  /* Destination at offset 0x18 */
+after_bind:
+    use_local_source = false;                           /* 0x00E17FFC `clr.b D3b' */
 
-        /* Check if destination is broadcast (all zeros or all ones = error) */
-        if (*(int32_t *)(dest_addr) == 0 &&
-            *(int16_t *)(dest_addr + 0x0B) == 0 &&
-            *(int16_t *)(dest_addr + 4) == 0 &&
-            *(int16_t *)(dest_addr + 6) == 0 &&
-            *(int16_t *)(dest_addr + 8) == 0) {
-            local_addr_ok = -1;  /* Use local address */
+    if (flags & XNS_OPEN_FLAG_CONNECT) {                /* 0x00E17FFE btst #2 */
+        int16_t  nexthop_port;                          /* A6-0x16 */
+        uint8_t  nexthop[16];                           /* A6-0x10 */
+        boolean  arp_is_broadcast;                      /* A6-0x20 */
+
+        /*
+         * 0x00E18008-0x00E18024: the all-zero test is on the SOURCE address
+         * at options +0x0C - the longword +0x0C, then the words +0x16, +0x10,
+         * +0x12 and +0x14, in that order.  An all-zero source means "fill it
+         * in for me".
+         */
+        if (options->src_network == 0 && options->src_socket == 0 &&
+            options->src_host_hi == 0 && options->src_host_mid == 0 &&
+            options->src_host_lo == 0) {
+            use_local_source = true;                    /* 0x00E18026 `st D3b' */
         } else {
-            /* Check if destination is in our address table */
-            int8_t is_local = xns_$is_broadcast_addr(dest_addr);
-            if (is_local >= 0) {
+            /* 0x00E1802A "pea (0xc,A1)" - again the SOURCE address. */
+            if (xns_$is_broadcast_addr(&options->src_network) >= 0) {
                 *status_ret = status_$xns_source_must_be_this_node;
-                goto cleanup_error;
+                goto cleanup_error;                     /* 0x00E1803E */
             }
         }
 
-        /* Find next hop to destination */
-        {
-            int16_t nexthop_port;               /* A6-0x16 */
-            uint8_t nexthop_info[16];           /* A6-0x10 */
-            int8_t  arp_is_broadcast;           /* A6-0x20 */
+        /*
+         * 0x00E18042-0x00E1805C.  Pushed right to left: the DESTINATION
+         * address at options +0x18, a TRUE byte ("st -(SP)"), &nexthop_port,
+         * &nexthop and status_ret, under a word result slot.
+         */
+        (void)RIP_$FIND_NEXTHOP(&options->dest_network, true, &nexthop_port,
+                                nexthop, status_ret);
+        port = nexthop_port;                            /* 0x00E18060 */
+        if (*status_ret != status_$ok) {                /* 0x00E18064 */
+            goto cleanup_error;
+        }
+        if (port == -1) {                               /* 0x00E1806E */
+            *status_ret = status_$xns_network_unreachable;
+            goto cleanup_error;
+        }
 
-            /* 0x00E18042 */
-            RIP_$FIND_NEXTHOP(dest_addr, 0xFF, &nexthop_port, nexthop_info,
-                              status_ret);
-            if (*status_ret != status_$ok) {
-                goto cleanup_error;
+        /*
+         * 0x00E1807E-0x00E180A4: resolve the next hop's link address into the
+         * channel's own 0x18-byte MAC info block at +0xBC.  The fourth
+         * argument is a local broadcast-flag byte MAC_OS_$ARP writes; it is
+         * never NULL.
+         */
+        chan = base + channel * XNS_CHANNEL_SIZE;       /* 0x00E18092 A4 */
+        MAC_OS_$ARP(nexthop, port, (uint16_t *)(chan + XNS_CHAN_OFF_MAC_INFO),
+                    (uint8_t *)&arp_is_broadcast, status_ret);
+        if (*status_ret != status_$ok) {                /* 0x00E180A8 */
+            goto cleanup_error;
+        }
+
+        xns_$add_port(channel, port, status_ret);       /* 0x00E180B4 */
+        if (*status_ret != status_$ok) {                /* 0x00E180BA */
+            goto cleanup_error;
+        }
+
+        /* 0x00E180C4-0x00E180D2: twelve bytes of destination address, then
+         * the port the connection goes out of. */
+        for (i = 0; i < 12; i++) {
+            (chan + XNS_CHAN_OFF_DEST_NETWORK)[i] =
+                ((const uint8_t *)&options->dest_network)[i];
+        }
+        *(int16_t *)(chan + XNS_CHAN_OFF_CONN_PORT) = port;
+
+        if (use_local_source < 0) {                     /* 0x00E180D6 */
+            /*
+             * 0x00E180DA-0x00E180EE: the local network number is the longword
+             * the PORT TABLE entry points at - "lea (0,A5,port*0xC),A0 /
+             * movea.l (0x44,A0),A3 / move.l (A3),(0xb0,A1)".  A5+0x44+port*12
+             * is xns_$port_state_t.net_addr_ptr of that port, NOT
+             * ROUTE_$PORTP[port]->network.
+             */
+            uint32_t net_va = *(uint32_t *)(base +
+                (uint32_t)(int32_t)port * XNS_PORT_STATE_SIZE +
+                XNS_PORT_OFF_INFO);
+            const uint32_t *net_ptr = (const uint32_t *)ARCH_VA_TO_PTR(net_va);
+
+            *(uint32_t *)(chan + XNS_CHAN_OFF_SRC_NETWORK) = *net_ptr;
+
+            /*
+             * 0x00E180F2-0x00E18108: three words from the state's first
+             * registered address (A5+0x20) into the channel's source host.
+             */
+            for (i = 0; i < XNS_ADDR_SIZE; i++) {
+                (chan + XNS_CHAN_OFF_SRC_HOST)[i] = (base + XNS_OFF_ADDRS)[i];
             }
 
-            port = nexthop_port;
-            if (port == -1) {
-                *status_ret = status_$xns_network_unreachable;
-                goto cleanup_error;
-            }
-
-            /* Perform ARP to get MAC address */
-            {
-                int iVar1 = channel * XNS_CHANNEL_SIZE;
-                /*
-                 * 0x00E1807E: the fourth argument is the address of a local
-                 * broadcast-flag byte ("pea (-0x20,A6)"), which MAC_OS_$ARP
-                 * writes with "clr.b (A3)" / "st (A3)"; it is never NULL.
-                 * The third is the channel's link-address word array at
-                 * channel + 0xBC ("pea (0xbc,A4)").
-                 */
-                MAC_OS_$ARP(nexthop_info, port,
-                            (uint16_t *)(base + iVar1 + XNS_CHAN_OFF_MAC_INFO),
-                            (uint8_t *)&arp_is_broadcast, status_ret);
-                if (*status_ret != status_$ok) {
-                    goto cleanup_error;
-                }
-            }
-
-            /* Add the port to this channel */
-            xns_$add_port(channel, port, status_ret);
-            if (*status_ret != status_$ok) {
-                goto cleanup_error;
-            }
-
-            /* Copy destination address to channel state */
-            {
-                uint8_t *chan = base + channel * XNS_CHANNEL_SIZE;
-                *(uint32_t *)(chan + XNS_CHAN_OFF_DEST_NETWORK) = *(uint32_t *)(dest_addr);
-                *(uint32_t *)(chan + XNS_CHAN_OFF_DEST_NETWORK + 4) = *(uint32_t *)(dest_addr + 4);
-                *(uint32_t *)(chan + XNS_CHAN_OFF_DEST_NETWORK + 8) = *(uint32_t *)(dest_addr + 8);
-                *(int16_t *)(chan + XNS_CHAN_OFF_CONN_PORT) = port;
-
-                if (local_addr_ok < 0) {
-                    /* Use routing port's network address as source */
-                    route_$port_t *rport = ROUTE_$PORTP[port];
-                    *(uint32_t *)(chan + XNS_CHAN_OFF_SRC_NETWORK) = rport->network;
-
-                    /* Copy local host address */
-                    *(uint16_t *)(chan + XNS_CHAN_OFF_SRC_HOST) = *(uint16_t *)(base + XNS_OFF_LOCAL_SOCKET);
-                    *(uint16_t *)(chan + XNS_CHAN_OFF_SRC_HOST + 2) = *(uint16_t *)(base + XNS_OFF_LOCAL_HOST_HI);
-                    *(uint16_t *)(chan + XNS_CHAN_OFF_SRC_HOST + 4) = *(uint16_t *)(base + XNS_OFF_LOCAL_HOST_LO);
-
-                    /* Source port = our socket */
-                    *(uint16_t *)(chan + XNS_CHAN_OFF_SRC_PORT) =
-                        *(uint16_t *)(chan + XNS_CHAN_OFF_XNS_SOCKET);
-                } else {
-                    /* Use provided source address */
-                    uint8_t *src_addr = (uint8_t *)options + 0x0C;
-                    *(uint32_t *)(chan + XNS_CHAN_OFF_SRC_NETWORK) = *(uint32_t *)(src_addr);
-                    *(uint32_t *)(chan + XNS_CHAN_OFF_SRC_HOST) = *(uint32_t *)(src_addr + 4);
-                    *(uint32_t *)(chan + XNS_CHAN_OFF_SRC_HOST + 4) = *(uint32_t *)(src_addr + 8);
-                }
+            /*
+             * 0x00E1810A "move.w (0xd8,A1),(0xba,A1)".  QUIRK, reproduced as
+             * found: the channel's XNS socket is not written until
+             * 0x00E1816A, so this copies the value LEFT OVER from whoever
+             * used the slot last, not the socket about to be assigned.
+             */
+            *(uint16_t *)(chan + XNS_CHAN_OFF_SRC_PORT) =
+                *(uint16_t *)(chan + XNS_CHAN_OFF_XNS_SOCKET);
+        } else {
+            /* 0x00E18112-0x00E18120: twelve bytes of caller-supplied source. */
+            for (i = 0; i < 12; i++) {
+                (chan + XNS_CHAN_OFF_SRC_NETWORK)[i] =
+                    ((const uint8_t *)&options->src_network)[i];
             }
         }
     }
 
-    /* Assign socket number */
-    if (socket == 0) {
-        /* Assign dynamic socket number */
-        socket = XNS_NEXT_SOCKET();
-        opt[0] = socket;
-
+    if (options->socket == 0) {                         /* 0x00E18124 */
+        /*
+         * 0x00E18128-0x00E1814C.  The socket handed out is the CURRENT value
+         * of the allocator, which the PREVIOUS call already checked; the loop
+         * then advances past every socket that is in use so the next caller
+         * gets a free one.
+         */
+        options->socket = (int16_t)XNS_NEXT_SOCKET();   /* 0x00E18128 */
         do {
-            XNS_NEXT_SOCKET() += 1;
-            if (XNS_NEXT_SOCKET() >= 0xFFFE) {
-                XNS_NEXT_SOCKET() = XNS_FIRST_DYNAMIC_PORT;
+            XNS_NEXT_SOCKET() += 1;                     /* 0x00E1812C */
+            /* 0x00E18130 "cmpi.w #-0x2,(0x536,A5)" / `bls' - an UNSIGNED
+             * compare against 0xFFFE, so the wrap happens only at 0xFFFF. */
+            if (XNS_NEXT_SOCKET() > 0xFFFE) {
+                XNS_NEXT_SOCKET() = XNS_FIRST_DYNAMIC_PORT;   /* 0x00E18138 */
             }
-        } while (xns_$find_socket(XNS_NEXT_SOCKET()) < 0);
+        } while (xns_$find_socket((int16_t)XNS_NEXT_SOCKET()) < 0); /* 0x00E1814C */
     }
 
-    /* Set up channel state */
+    XNS_OPEN_COUNT() += 1;                              /* 0x00E1814E */
+
+    chan = base + channel * XNS_CHANNEL_SIZE;           /* 0x00E1815E */
+
+    /* 0x00E18162 "bset.b #0x7,(0xe4,A0)" - a byte operation on the HIGH half
+     * of the state word, i.e. bit 15.  Written as a word mask so the host
+     * build touches the same bit. */
+    *(uint16_t *)(chan + XNS_CHAN_OFF_STATE) |= 0x8000u;
+
+    *(int16_t *)(chan + XNS_CHAN_OFF_XNS_SOCKET) = options->socket; /* 0x00E1816A */
+    *(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET) = XNS_NO_SOCKET; /* 0x00E1816E */
+
+    /* 0x00E18174 "move.l (0x4,A1),(0xa0,A0)" - one longword. */
+    *(uint32_t *)(chan + XNS_CHAN_OFF_DEMUX) = options->demux;
+
+    /*
+     * 0x00E1817A-0x00E1819A.  The first three operations are BYTE operations
+     * on the HIGH half of the flags word, so open-flag bit n ends up in word
+     * bit n+11; the AS_ID then goes into bits 5..10 with word operations.
+     */
     {
-        uint8_t *chan = base + channel * XNS_CHANNEL_SIZE;
+        uint16_t *chan_flags = (uint16_t *)(chan + XNS_CHAN_OFF_FLAGS);
+        uint8_t   as_id = (uint8_t)PROC1_$AS_ID;        /* 0x00E1818C */
 
-        XNS_OPEN_COUNT() += 1;
-
-        /* Mark channel as active */
-        *(uint8_t *)(chan + XNS_CHAN_OFF_STATE) |= 0x80;
-
-        /* Set socket number */
-        *(uint16_t *)(chan + XNS_CHAN_OFF_XNS_SOCKET) = socket;
-
-        /* Set user socket to "none" */
-        *(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET) = XNS_NO_SOCKET;
-
-        /* Set demux callback */
-        *(uint32_t *)(chan + XNS_CHAN_OFF_DEMUX) = *(uint32_t *)(opt + 2);  /* +0x04 */
-
-        /* Set flags */
-        *(uint8_t *)(chan + XNS_CHAN_OFF_FLAGS) &= 0x07;
-        *(uint8_t *)(chan + XNS_CHAN_OFF_FLAGS) |= (flags << 3);
-
-        /* Set owning AS_ID */
-        {
-            uint8_t as_id = (uint8_t)PROC1_$AS_ID;
-            *(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) &= ~XNS_CHAN_FLAG_AS_ID_MASK;
-            *(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) |= (as_id << XNS_CHAN_FLAG_AS_ID_SHIFT);
-        }
+        *chan_flags &= 0x07FF;                          /* 0x00E1817A andi.b #7 */
+        *chan_flags |= (uint16_t)(((uint16_t)(uint8_t)(flags << 3)) << 8);
+        *chan_flags &= (uint16_t)~XNS_CHAN_FLAG_AS_ID_MASK;  /* 0x00E18192 */
+        *chan_flags |= (uint16_t)(as_id << XNS_CHAN_FLAG_AS_ID_SHIFT);
     }
 
-    /* Return channel index */
-    opt[1] = channel;
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
+    if (*status_ret != status_$ok) {                    /* 0x00E1819E */
+        goto cleanup_error;
+    }
+
+    /* 0x00E181A4 "move.w D2w,(0x2,A0)" - the whole word, flags included. */
+    options->flags_channel = channel;
+
+    ML_$EXCLUSION_STOP(XNS_LOCK_PTR());                 /* 0x00E181C8 */
     return;
 
 cleanup_error:
-    /* Clear channel state on error */
-    chan_base = base + channel * XNS_CHANNEL_SIZE;
-    *(uint8_t *)(chan_base + XNS_CHAN_OFF_STATE) &= 0x7F;
-    *(uint32_t *)(chan_base + XNS_CHAN_OFF_DEMUX) = 0;
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
+    /* 0x00E181AA-0x00E181C0 */
+    chan = base + channel * XNS_CHANNEL_SIZE;
+    /* 0x00E181BA "bclr.b #0x7,(0xe4,A0)" - again bit 15 of the state word. */
+    *(uint16_t *)(chan + XNS_CHAN_OFF_STATE) &= (uint16_t)~0x8000u;
+    *(uint32_t *)(chan + XNS_CHAN_OFF_DEMUX) = 0;
+    ML_$EXCLUSION_STOP(XNS_LOCK_PTR());                 /* 0x00E181C8 */
 }
 
 /*

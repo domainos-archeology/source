@@ -112,21 +112,89 @@ uint32_t NETBUF_$RTNVA(uint32_t *va_ptr_in)
     return 0;
 }
 
-void NETBUF_$GET_HDR(uint32_t *pa_out, uint32_t *va_out) { *pa_out = 0; *va_out = 0; }
-void NETBUF_$RTN_HDR(uint32_t *va_in) { (void)va_in; }
+static int      get_hdr_calls;
+static uint32_t get_hdr_pa;
+static uint32_t get_hdr_va;
+static int      rtn_hdr_calls;
+static uint32_t rtn_hdr_va;
 
-status_$t FIM_$CLEANUP(void *buf) { (void)buf; return status_$cleanup_handler_set; }
-void FIM_$RLS_CLEANUP(void *buf) { (void)buf; }
+void NETBUF_$GET_HDR(uint32_t *pa_out, uint32_t *va_out)
+{
+    get_hdr_calls++;
+    *pa_out = get_hdr_pa;
+    *va_out = get_hdr_va;
+}
 
-int8_t xns_$is_local_addr(void *addr) { (void)addr; return 0; }
+void NETBUF_$RTN_HDR(uint32_t *va_in) { rtn_hdr_calls++; rtn_hdr_va = *va_in; }
+
+static int   excl_start_calls;
+static int   excl_stop_calls;
+static void *excl_last;
+
+void ML_$EXCLUSION_START(ml_$exclusion_t *e) { excl_start_calls++; excl_last = e; }
+void ML_$EXCLUSION_STOP(ml_$exclusion_t *e)  { excl_stop_calls++;  excl_last = e; }
+
+static status_$t cleanup_result;
+static int       rls_cleanup_calls;
+
+status_$t FIM_$CLEANUP(void *buf) { (void)buf; return cleanup_result; }
+void FIM_$RLS_CLEANUP(void *buf) { (void)buf; rls_cleanup_calls++; }
+
+static int    is_local_calls;
+static void  *is_local_arg[4];
+static int8_t is_local_result[4];
+
+int8_t xns_$is_local_addr(void *addr)
+{
+    int8_t answer = (is_local_calls < 4) ? is_local_result[is_local_calls] : 0;
+
+    if (is_local_calls < 4) {
+        is_local_arg[is_local_calls] = addr;
+    }
+    is_local_calls++;
+    return answer;
+}
 
 uint32_t NODE_$ME = 0x0000ABCD;
 
-void XNS_IDP_$OS_OPEN(void *options, status_$t *status_ret) { (void)options; *status_ret = status_$ok; }
-void XNS_IDP_$OS_CLOSE(int16_t *channel, status_$t *status_ret) { (void)channel; *status_ret = status_$ok; }
+static int                os_open_calls;
+static xns_$os_open_opt_t os_open_seen;
+static uint16_t           os_open_channel;
+static status_$t          os_open_status;
+
+void XNS_IDP_$OS_OPEN(xns_$os_open_opt_t *options, status_$t *status_ret)
+{
+    os_open_calls++;
+    os_open_seen = *options;
+    options->flags_channel = os_open_channel;
+    *status_ret = os_open_status;
+}
+
+static int     os_close_calls;
+static int16_t os_close_channel;
+
+void XNS_IDP_$OS_CLOSE(int16_t *channel, status_$t *status_ret)
+{
+    os_close_calls++;
+    os_close_channel = *channel;
+    *status_ret = status_$ok;
+}
+
+static int                 os_send_calls;
+static const int16_t      *os_send_channel;
+static xns_$os_send_rec_t *os_send_rec;
+static xns_$os_send_rec_t  os_send_rec_copy;
+
 void XNS_IDP_$OS_SEND(int16_t *channel, xns_$os_send_rec_t *send_rec,
                       int16_t *len_sent_ret, status_$t *status_ret)
-{ (void)channel; (void)send_rec; (void)len_sent_ret; *status_ret = status_$ok; }
+{
+    os_send_calls++;
+    os_send_channel = channel;
+    os_send_rec = send_rec;
+    os_send_rec_copy = *send_rec;
+    *len_sent_ret = 0;
+    *status_ret = status_$ok;
+}
 
 /* The code under test, for real. */
 #include "../error_send.c"
@@ -158,6 +226,29 @@ static void setup(void)
     getva_calls = 0;
     rtnva_calls = 0;
     rtnva_va = 0;
+    get_hdr_calls = 0;
+    rtn_hdr_calls = 0;
+    excl_start_calls = 0;
+    excl_stop_calls = 0;
+    is_local_calls = 0;
+    is_local_result[0] = 0;
+    is_local_result[1] = 0;
+    is_local_result[2] = 0;
+    is_local_result[3] = 0;
+    os_open_calls = 0;
+    os_open_channel = 0x0007;
+    os_open_status = status_$ok;
+    os_close_calls = 0;
+    os_send_calls = 0;
+    rls_cleanup_calls = 0;
+    cleanup_result = status_$cleanup_handler_set;
+
+    /* The module data starts each test as the image has it. */
+    memset(&XNS_ERROR_$DATA, 0, sizeof(XNS_ERROR_$DATA));
+    XNS_ERROR_$DATA.buf_va_high = 0x00D94C00;
+    XNS_ERROR_$DATA.buf_va_low  = 0x00D64C00;
+    XNS_ERROR_$DATA.client_ref_count = 0;
+    XNS_ERROR_$DATA.std_idp_channel = -1;
     for (i = 0; i < 8; i++) {
         getva_result[i] = 0;
     }
@@ -197,6 +288,9 @@ static void setup(void)
     for (i = 0; i < 0x40; i++) { p[i] = (uint8_t)(0x90 + i); }
     p = (uint8_t *)va_ptr(buf3_va);
     for (i = 0; i < 0x40; i++) { p[i] = (uint8_t)(0xD0 + i); }
+
+    get_hdr_pa = 0x00001234;            /* a non-zero netbuf handle */
+    get_hdr_va = hdrbuf_va;
 }
 
 static status_$t frame_status;
@@ -406,6 +500,270 @@ static void test_zero_head_address_copies_nothing(void)
     ASSERT_EQ(0x22, 0x4C - f.remaining, "XNS_ERROR_$SEND would send 0x22 bytes");
 }
 
+/* ============================================================================
+ * XNS_ERROR_$SEND itself (0x00E17A2E) - bead source-ga8r
+ * ============================================================================ */
+
+static uint16_t err_code;
+static uint16_t err_param;
+static uint16_t err_result;
+static status_$t err_status;
+
+/*
+ * The offending packet has to look plausible: its descriptor must claim at
+ * least the 0x1E bytes of an IDP header (0x00E17A74) and carry a non-zero
+ * header address (0x00E17A7E).  Making the head long enough for the whole
+ * 0x2A window keeps the copy to a single call.
+ */
+static void make_offending_packet(void)
+{
+    pkt.data_len = 0x40;
+    pkt.header = buf0_va;
+    pkt.iov = 0;
+    /* Not an error packet itself (0x00E17AC4 reads the header's +0x05). */
+    ((uint8_t *)va_ptr(buf0_va))[5] = 1;
+}
+
+static void call_send(void)
+{
+    err_code = 0x0202;
+    err_param = 0x0011;
+    err_result = 0xFFFF;
+    err_status = 0x5A5A5A5A;
+    XNS_ERROR_$SEND(&pkt, &err_code, &err_param, &err_result, &err_status);
+}
+
+/*
+ * 0x00E17B3C-0x00E17BA0, every field of the error packet at its own offset.
+ * The address swap at 0x00E17B52 copies the packet's +0x34 - which is
+ * orig[0x12], the offending packet's IDP SOURCE address - onto +0x06.
+ */
+static void test_error_packet_header_offsets(void)
+{
+    const uint8_t *out;
+    const uint8_t *orig;
+    const xns_$error_pkt_t *epkt;
+    int i;
+
+    make_offending_packet();
+    call_send();
+
+    ASSERT_EQ(status_$ok, err_status, "status");
+    ASSERT_EQ(1, os_send_calls, "the packet was sent");
+
+    out = (const uint8_t *)va_ptr(hdrbuf_va);
+    orig = (const uint8_t *)va_ptr(buf0_va);
+    epkt = (const xns_$error_pkt_t *)va_ptr(hdrbuf_va);
+
+    /*
+     * The scalar fields are read through the record, not byte by byte: the
+     * tree models a wire header's integers as native integers, so only the
+     * genuinely byte-sized fields and the byte-copied address blocks have a
+     * fixed order on a little-endian host.
+     */
+    ASSERT_EQ(0xFFFF, epkt->idp.checksum, "checksum (0x00E17B3E move.w #-1)");
+    ASSERT_EQ(0x4C, epkt->idp.length,
+              "length - the whole 0x4C window was used (0x00E17B42)");
+    ASSERT_EQ(0x00, out[0x04], "transport control (0x00E17B48)");
+    ASSERT_EQ(0x03, out[0x05], "packet type 3 (0x00E17B4C)");
+
+    /* 0x00E17B52: twelve bytes from the packet's own +0x34 to its +0x06. */
+    for (i = 0; i < 12; i++) {
+        ASSERT_EQ(orig[0x12 + i], out[0x06 + i],
+                  "destination address is the offending source address");
+        ASSERT_EQ(out[0x34 + i], out[0x06 + i], "copied from +0x34");
+    }
+
+    ASSERT_EQ(0x00, out[0x12], "source network cleared (0x00E17B66)");
+    ASSERT_EQ(0x00, out[0x13], "source network cleared");
+    ASSERT_EQ(0x00, out[0x14], "source network cleared");
+    ASSERT_EQ(0x00, out[0x15], "source network cleared");
+
+    /* 0x00E17B6A-0x00E17B8E, NODE_$ME == 0x0000ABCD. */
+    ASSERT_EQ(0x08, out[0x16], "source host 08:00:1E:..");
+    ASSERT_EQ(0x00, out[0x17], "source host");
+    ASSERT_EQ(0x1E, out[0x18], "((NODE_$ME >> 16) & 0xF) | 0x1E00, high byte");
+    ASSERT_EQ(0x00, out[0x19], "low byte");
+    ASSERT_EQ(0xAB, out[0x1A], "the low word of NODE_$ME");
+    ASSERT_EQ(0xCD, out[0x1B], "the low word of NODE_$ME");
+
+    ASSERT_EQ(XNS_SOCKET_ERROR, epkt->idp.src_socket,
+              "source socket 3 at +0x1C (0x00E17B60)");
+    ASSERT_EQ(0x1C, offsetof(xns_$error_pkt_t, idp.src_socket),
+              "and the cell really is +0x1C, not +0x0E");
+
+    ASSERT_EQ(0x0202, epkt->error_code, "the error CODE (0x00E17B9E)");
+    ASSERT_EQ(0x1E, offsetof(xns_$error_pkt_t, error_code), "at +0x1E");
+    ASSERT_EQ(0x0011, epkt->error_param, "the error PARAMETER (0x00E17B96)");
+    ASSERT_EQ(0x20, offsetof(xns_$error_pkt_t, error_param), "at +0x20");
+
+    /* 0x00E17B2C-0x00E17B38: the request record is the module data itself. */
+    ASSERT_EQ((uintptr_t)&XNS_ERROR_$DATA.send_rec, (uintptr_t)os_send_rec,
+              "the record handed to XNS_IDP_$OS_SEND is at A5+0x00");
+    ASSERT_EQ(0x4C, os_send_rec_copy.hdr_desc.length, "descriptor length");
+    ASSERT_EQ(hdrbuf_va, os_send_rec_copy.hdr_desc.address, "descriptor address");
+    ASSERT_EQ(0, os_send_rec_copy.hdr_desc.next, "descriptor end of chain");
+    ASSERT_EQ((uint8_t)true, (uint8_t)os_send_rec_copy.hdr_prebuilt,
+              "the header is already built");
+    ASSERT_EQ((uintptr_t)&XNS_ERROR_$DATA.std_idp_channel,
+              (uintptr_t)os_send_channel,
+              "the channel argument is the cell at A5+0x76");
+    ASSERT_EQ(0, err_result, "the result word was cleared and reported");
+}
+
+/*
+ * 0x00E17B22-0x00E17B2C: the length is 0x4C minus whatever
+ * xns_$setup_error_header could NOT append.
+ */
+static void test_short_packet_shortens_the_error_packet(void)
+{
+    const xns_$error_pkt_t *epkt;
+
+    make_offending_packet();
+    pkt.data_len = 0x20;                /* only 0x20 bytes to append */
+    call_send();
+
+    epkt = (const xns_$error_pkt_t *)va_ptr(hdrbuf_va);
+    ASSERT_EQ(0x22 + 0x20, os_send_rec_copy.hdr_desc.length,
+              "0x4C minus the 0x0A that were never copied");
+    ASSERT_EQ(0x42, epkt->idp.length, "and the IDP length word agrees");
+}
+
+/*
+ * 0x00E178AA-0x00E1790E and 0x00E17910-0x00E1795E: the channel is opened on
+ * the first client and closed on the last, both under
+ * XNS_ERROR_$CLIENT_MUTEX.
+ */
+static void test_error_socket_is_reference_counted(void)
+{
+    make_offending_packet();
+    call_send();
+
+    ASSERT_EQ(1, os_open_calls, "the channel was opened");
+    ASSERT_EQ(XNS_SOCKET_ERROR, os_open_seen.socket, "socket 3");
+    ASSERT_EQ(XNS_OPEN_FLAG_NO_ALLOC, os_open_seen.flags_channel,
+              "the flag word is 0x0008");
+    ASSERT_EQ(0, os_open_seen.demux, "no demux vector");
+    ASSERT_EQ(1, os_close_calls, "and closed again");
+    ASSERT_EQ(0x0007, os_close_channel, "the channel XNS_IDP_$OS_OPEN gave");
+    ASSERT_EQ(0, XNS_ERROR_$DATA.client_ref_count, "back to no clients");
+    ASSERT_EQ(-1, XNS_ERROR_$DATA.std_idp_channel, "and the cell is reset");
+    ASSERT_EQ(2, excl_start_calls, "the mutex was taken twice");
+    ASSERT_EQ(2, excl_stop_calls, "and released twice");
+    ASSERT_EQ((uintptr_t)&XNS_ERROR_$CLIENT_MUTEX, (uintptr_t)excl_last,
+              "it is XNS_ERROR_$CLIENT_MUTEX");
+    ASSERT_EQ(1, rls_cleanup_calls, "the cleanup handler was released");
+}
+
+/*
+ * 0x00E178CC / 0x00E178F6: a second client while one is already inside does
+ * NOT reopen, but does bump the count.
+ */
+static void test_second_client_does_not_reopen(void)
+{
+    XNS_ERROR_$DATA.client_ref_count = 1;
+    XNS_ERROR_$DATA.std_idp_channel = 0x0042;
+
+    make_offending_packet();
+    call_send();
+
+    ASSERT_EQ(0, os_open_calls, "no second open");
+    ASSERT_EQ(0, os_close_calls, "and no close either");
+    ASSERT_EQ(1, XNS_ERROR_$DATA.client_ref_count, "up then down again");
+    ASSERT_EQ(0x0042, XNS_ERROR_$DATA.std_idp_channel, "the channel is kept");
+}
+
+/* 0x00E178EC: a failed open reports the status and skips the increment. */
+static void test_failed_open_is_reported(void)
+{
+    os_open_status = status_$xns_channel_table_full;
+
+    make_offending_packet();
+    call_send();
+
+    ASSERT_EQ(status_$xns_channel_table_full, err_status, "status");
+    ASSERT_EQ(0, XNS_ERROR_$DATA.client_ref_count, "the count did not move");
+    ASSERT_EQ(0, os_send_calls, "nothing was sent");
+    ASSERT_EQ(0, get_hdr_calls, "no header buffer was taken");
+    ASSERT_EQ(0, rls_cleanup_calls,
+              "and the cleanup handler is left registered (0x00E17AF4)");
+}
+
+/* 0x00E17A74 / 0x00E17A7E: the offending packet has to be big enough and
+ * have a header. */
+static void test_undersized_or_headerless_packet(void)
+{
+    make_offending_packet();
+    pkt.data_len = XNS_IDP_HEADER_SIZE - 1;
+    call_send();
+    ASSERT_EQ(status_$xns_error_illegal_buffer_spec, err_status, "too short");
+    ASSERT_EQ(0, os_open_calls, "nothing was opened");
+
+    setup();
+    make_offending_packet();
+    pkt.header = 0;
+    call_send();
+    ASSERT_EQ(status_$xns_error_illegal_buffer_spec, err_status, "no header");
+}
+
+/*
+ * 0x00E17A94 / 0x00E17AA2: the SOURCE address at the header's +0x12 and the
+ * DESTINATION at +0x06 are both examined, and either being a broadcast is
+ * refused.
+ */
+static void test_broadcast_source_or_destination(void)
+{
+    make_offending_packet();
+    is_local_result[0] = -1;
+    call_send();
+    ASSERT_EQ(status_$xns_error_source_is_broadcast, err_status, "source");
+    ASSERT_EQ(2, is_local_calls, "both calls always run");
+    ASSERT_EQ((uintptr_t)((const uint8_t *)va_ptr(buf0_va) + 0x12),
+              (uintptr_t)is_local_arg[0], "first argument is header + 0x12");
+    ASSERT_EQ((uintptr_t)((const uint8_t *)va_ptr(buf0_va) + 0x06),
+              (uintptr_t)is_local_arg[1], "second argument is header + 0x06");
+
+    setup();
+    make_offending_packet();
+    is_local_result[1] = -1;
+    call_send();
+    ASSERT_EQ(status_$xns_error_source_is_broadcast, err_status, "destination");
+}
+
+/* 0x00E17AC4: an error packet never gets an error packet back. */
+static void test_error_packets_are_not_answered(void)
+{
+    make_offending_packet();
+    ((uint8_t *)va_ptr(buf0_va))[5] = XNS_IDP_TYPE_ERROR;
+    call_send();
+
+    ASSERT_EQ(status_$xns_error_packet_type_error, err_status, "status");
+    ASSERT_EQ(0, os_open_calls, "nothing was opened");
+}
+
+/*
+ * 0x00E17BCA-0x00E17BEA: when FIM_$CLEANUP reports anything but
+ * status_$cleanup_handler_set the routine unwinds - it hands back the header
+ * buffer if it had one and closes the error socket if it had opened one -
+ * then reports what FIM_$CLEANUP said.
+ *
+ * Only the status can be observed from C: the two flags this arm consults
+ * are locals that are still at their entry values when the handler was never
+ * armed in the first place.
+ */
+static void test_cleanup_handler_reports_its_status(void)
+{
+    cleanup_result = status_$xns_no_data;   /* any non-"handler set" code */
+
+    make_offending_packet();
+    call_send();
+
+    ASSERT_EQ(status_$xns_no_data, err_status, "the status is passed through");
+    ASSERT_EQ(0, os_send_calls, "nothing was sent");
+    ASSERT_EQ(0, rtn_hdr_calls, "no header had been taken yet");
+    ASSERT_EQ(0, os_close_calls, "and no socket had been opened yet");
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -421,6 +779,16 @@ int main(void)
     RUN_TEST(test_netbuf_pool_path_pages_and_returns);
     RUN_TEST(test_no_rtnva_when_the_first_copy_finishes_the_window);
     RUN_TEST(test_zero_head_address_copies_nothing);
+
+    RUN_TEST(test_error_packet_header_offsets);
+    RUN_TEST(test_short_packet_shortens_the_error_packet);
+    RUN_TEST(test_error_socket_is_reference_counted);
+    RUN_TEST(test_second_client_does_not_reopen);
+    RUN_TEST(test_failed_open_is_reported);
+    RUN_TEST(test_undersized_or_headerless_packet);
+    RUN_TEST(test_broadcast_source_or_destination);
+    RUN_TEST(test_error_packets_are_not_answered);
+    RUN_TEST(test_cleanup_handler_reports_its_status);
 
     printf("%d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed ? 1 : 0;

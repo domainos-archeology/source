@@ -132,7 +132,7 @@ int8_t xns_$is_broadcast_addr(void *addr)
     return is_bcast_result;
 }
 
-void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code,
+void XNS_ERROR_$SEND(xns_$pkt_desc_t *packet_info, uint16_t *error_code,
                      uint16_t *error_param, uint16_t *result_ret,
                      status_$t *status_ret)
 {

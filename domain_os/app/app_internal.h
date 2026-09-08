@@ -152,24 +152,6 @@ _Static_assert(__builtin_offsetof(app_pkt_hdr_t, _reserved) == 0x17, "app_pkt_hd
 _Static_assert(sizeof(app_pkt_hdr_t) == 0x18, "app_pkt_hdr_t size");
 
 /*
- * XNS IDP open parameters
- *
- * Parameters passed to XNS_IDP_$OS_OPEN
- */
-typedef struct xns_idp_open_params_t {
-  uint32_t protocol;   /* 0x00: Protocol (high word) and flags (low) */
-  void *demux_handler; /* 0x04: Demultiplex handler function */
-  uint32_t net_info;   /* 0x08: Network info from ROUTE_$PORTP */
-} xns_idp_open_params_t;
-
-/* Layout recovered from the disassembly -- see the field comments above. */
-#if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(xns_idp_open_params_t, protocol) == 0x00, "xns_idp_open_params_t.protocol");
-_Static_assert(__builtin_offsetof(xns_idp_open_params_t, demux_handler) == 0x04, "xns_idp_open_params_t.demux_handler");
-_Static_assert(__builtin_offsetof(xns_idp_open_params_t, net_info) == 0x08, "xns_idp_open_params_t.net_info");
-#endif
-
-/*
  * ============================================================================
  * Global Variable Declarations
  * ============================================================================

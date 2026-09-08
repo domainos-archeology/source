@@ -1,85 +1,129 @@
 /*
- * XNS Error Protocol Send Function
+ * XNS Error Protocol Send
  *
- * Implementation of XNS_ERROR_$SEND for sending XNS Error Protocol packets.
- * The XNS Error Protocol is used to report undeliverable packets back to
- * the sender.
+ * XNS_ERROR_$SEND (0x00E17A2E) and the four helpers that share its module
+ * data area: xns_$is_local_addr lives in xns/idp_helpers.c, the other three
+ * are static here because nothing outside the module calls them.
+ *
+ *   xns_$maybe_open_error_socket   0x00E178AA
+ *   xns_$maybe_close_error_socket  0x00E17910
+ *   xns_$pkt_bufs_in_netbuf_pool   0x00E17876
+ *   xns_$setup_error_header        0x00E17960 (nested in XNS_ERROR_$SEND)
+ *
+ * The XNS Error Protocol reports an undeliverable packet back to whoever
+ * sent it: the reply carries the first 0x2A bytes of the offending packet
+ * behind an error code and parameter.
  *
  * Original address: 0x00E17A2E
  */
 
 #include "xns/xns_internal.h"
 
-/* Internal state for error socket */
-int32_t XNS_ERROR_$STD_IDP_CHANNEL = 0;
-
 /*
- * The request record XNS_ERROR_$SEND hands to XNS_IDP_$OS_SEND.  It is not a
- * local: A5 is 0x00E2B29C for this module and the call at 0x00E17BB0 passes
- * "pea (A5)", so the record IS the module's data base.  Only +0x18..+0x24 is
- * written (0x00E17B2C-0x00E17B38); the address block at +0x00..+0x17 is
- * never touched because the error channel builds its own IDP header.
+ * The XNS_ERROR module data segment, 0x00E2B29C (SAU2 link map, size 0x78).
+ * Every routine in this file starts with "lea (0xe2b29c).l,A5", so each A5
+ * displacement below is a field of this object.
+ *
+ * Initial contents, straight out of the image (0x00E2B29C..0x00E2B313):
+ *   +0x6C  00 D9 4C 00     buf_va_high
+ *   +0x70  00 D6 4C 00     buf_va_low
+ *   +0x74  00 00           client_ref_count
+ *   +0x76  FF FF           std_idp_channel
+ * everything else is zero.
  */
-static xns_$os_send_rec_t xns_error_send_params;
+xns_error_$data_t XNS_ERROR_$DATA = {
+    .buf_va_high      = 0x00D94C00,
+    .buf_va_low       = 0x00D64C00,
+    .client_ref_count = 0,
+    .std_idp_channel  = -1,
+};
 
 /*
- * Static helper: xns_$maybe_open_error_socket
+ * XNS_ERROR_$CLIENT_MUTEX, 0x00E26268 (SAU2 link map).  All sixteen bytes of
+ * the image are zero; ML_$EXCLUSION_INIT is what puts it into its unlocked
+ * state.
+ */
+ml_$exclusion_t XNS_ERROR_$CLIENT_MUTEX;
+
+/*
+ * xns_$maybe_open_error_socket (0x00E178AA)
  *
- * Opens the error protocol socket if not already open.
- *
- * Original address: 0x00E178AA
+ * Reference-counted open of the error protocol's IDP channel, under
+ * XNS_ERROR_$CLIENT_MUTEX.  The channel is opened only on the transition
+ * from zero clients, but the count is bumped on EVERY successful call.
  */
 static void xns_$maybe_open_error_socket(status_$t *status_ret)
 {
-    if (XNS_ERROR_$STD_IDP_CHANNEL == 0) {
-        struct {
-            int16_t socket;
-            int16_t channel_ret;
-            code_ptr_t demux_callback;
-            void *user_data;
-        } open_opt;
+    xns_$os_open_opt_t open_opt;        /* A6-0x28 */
 
-        open_opt.socket = XNS_SOCKET_ERROR;
-        open_opt.demux_callback = NULL;
-        open_opt.user_data = NULL;
+    *status_ret = status_$ok;                           /* 0x00E178BC clr.l (A2) */
 
-        XNS_IDP_$OS_OPEN(&open_opt, status_ret);
-        if (*status_ret == status_$ok) {
-            XNS_ERROR_$STD_IDP_CHANNEL = open_opt.channel_ret;
+    ML_$EXCLUSION_START(&XNS_ERROR_$CLIENT_MUTEX);      /* 0x00E178BE */
+
+    if (XNS_ERROR_$DATA.client_ref_count == 0) {        /* 0x00E178CC tst.w (0x74,A5) */
+        /*
+         * 0x00E178D2 "move.l #0x30008,(-0x28,A6)" writes both halves of the
+         * record's first longword at once: socket 3 (the error protocol's
+         * well-known socket) and the flag word 0x0008, whose low byte is
+         * XNS_OPEN_FLAG_NO_ALLOC.  0x00E178DA "clr.l (-0x24,A6)" then clears
+         * the demux vector; nothing else in the record is initialised because
+         * neither the bind nor the connect flag is set.
+         */
+        open_opt.socket        = XNS_SOCKET_ERROR;
+        open_opt.flags_channel = XNS_OPEN_FLAG_NO_ALLOC;
+        open_opt.demux         = 0;
+
+        XNS_IDP_$OS_OPEN(&open_opt, status_ret);        /* 0x00E178E4 */
+
+        if (*status_ret != status_$ok) {                /* 0x00E178EC tst.l (A2) */
+            /* 0x00E178EE "bne.b 0x00E178FA" skips the increment. */
+            ML_$EXCLUSION_STOP(&XNS_ERROR_$CLIENT_MUTEX);
+            return;
         }
-    } else {
-        *status_ret = status_$ok;
+
+        /* 0x00E178F0 "move.w (-0x26,A6),(0x76,A5)": the record's +0x02 now
+         * holds the channel index XNS_IDP_$OS_OPEN wrote there. */
+        XNS_ERROR_$DATA.std_idp_channel = (int16_t)open_opt.flags_channel;
     }
+
+    XNS_ERROR_$DATA.client_ref_count += 1;              /* 0x00E178F6 */
+
+    ML_$EXCLUSION_STOP(&XNS_ERROR_$CLIENT_MUTEX);       /* 0x00E178FA */
 }
 
 /*
- * Static helper: xns_$maybe_close_error_socket
+ * xns_$maybe_close_error_socket (0x00E17910)
  *
- * Closes the error protocol socket if open.
- *
- * Original address: 0x00E17910
+ * The mirror of the above: drop one client and close the channel when the
+ * last one goes away.
  */
 static void xns_$maybe_close_error_socket(void)
 {
-    if (XNS_ERROR_$STD_IDP_CHANNEL != 0) {
-        status_$t status;
-        int16_t channel = XNS_ERROR_$STD_IDP_CHANNEL;
-        XNS_IDP_$OS_CLOSE(&channel, &status);
-        XNS_ERROR_$STD_IDP_CHANNEL = 0;
-    }
-}
+    status_$t close_status;             /* A6-0x04 */
 
-/*
- * The directly-addressable window for buffer-descriptor addresses, at the
- * module data base + 0x6C and + 0x70 (0x00E2B308 / 0x00E2B30C).  Neither cell
- * has any other reference in the image; both hold their initial values, so
- * the window is [0x00D64C00, 0x00D94C00) -- the network buffer pool.
- * xns_$pkt_bufs_in_netbuf_pool compares against them with SIGNED longword
- * compares (0x00E1788C `cmp.l (0x70,A5),D1` / `blt`, 0x00E17892
- * `cmp.l (0x6c,A5),D1` / `blt`), so the C keeps them signed too.
- */
-int32_t XNS_ERROR_$BUF_VA_LOW  = 0x00D64C00;    /* 0x00E2B30C, A5+0x70 */
-int32_t XNS_ERROR_$BUF_VA_HIGH = 0x00D94C00;    /* 0x00E2B308, A5+0x6C */
+    ML_$EXCLUSION_START(&XNS_ERROR_$CLIENT_MUTEX);      /* 0x00E1791C */
+
+    if (XNS_ERROR_$DATA.client_ref_count == 0) {        /* 0x00E1792A tst.w (0x74,A5) */
+        /*
+         * QUIRK, reproduced as found: 0x00E1792E "beq.b 0x00E17958" branches
+         * PAST the ML_$EXCLUSION_STOP straight to the epilogue
+         * ("movea.l (-0x8,A6),A5 / unlk / rts"), so an unbalanced call leaves
+         * XNS_ERROR_$CLIENT_MUTEX held for good.
+         */
+        return;
+    }
+
+    XNS_ERROR_$DATA.client_ref_count -= 1;              /* 0x00E17930 */
+
+    if (XNS_ERROR_$DATA.client_ref_count == 0) {        /* 0x00E17934 bne.b 0x00E1794C */
+        /* 0x00E17936 "pea (-0x4,A6)" then 0x00E1793A "pea (0x76,A5)" - the
+         * channel cell itself is the argument. */
+        XNS_IDP_$OS_CLOSE(&XNS_ERROR_$DATA.std_idp_channel, &close_status);
+        XNS_ERROR_$DATA.std_idp_channel = -1;           /* 0x00E17946 */
+    }
+
+    ML_$EXCLUSION_STOP(&XNS_ERROR_$CLIENT_MUTEX);       /* 0x00E1794C */
+}
 
 /*
  * XNS_ERROR_$SEND's frame, as far as its nested procedure reaches into it.
@@ -135,13 +179,13 @@ static mac_os_$buf_desc_t xns_$pkt_head_desc(const xns_$pkt_desc_t *packet_info)
 }
 
 /*
- * Static helper: xns_$pkt_bufs_in_netbuf_pool (0x00E17876)
+ * xns_$pkt_bufs_in_netbuf_pool (0x00E17876)
  *
  * Walks the received packet's buffer-descriptor chain and returns TRUE only
  * if EVERY descriptor's address lies in the network-buffer window
- * [XNS_ERROR_$BUF_VA_LOW, XNS_ERROR_$BUF_VA_HIGH).  It copies nothing; the
- * tree used to carry it under the name xns_$copy_header with a body that
- * returned packet_info[0x2D] (bead source-mck5).
+ * [buf_va_low, buf_va_high).  Both bounds are module data cells that nothing
+ * else in the image writes, so the window is the constant
+ * [0x00D64C00, 0x00D94C00) they are loaded with.
  *
  * The chain head is the descriptor embedded in the packet record at +0x18
  * (0x00E17880 `lea (0x18,A0),A0`), i.e. {data_len, header, iov}; the links
@@ -169,11 +213,11 @@ static boolean xns_$pkt_bufs_in_netbuf_pool(const xns_$pkt_desc_t *packet_info)
     while (node != NULL) {
         int32_t va = (int32_t)node->address;    /* 0x00E17888 */
 
-        if (va < XNS_ERROR_$BUF_VA_LOW) {       /* 0x00E1788C / `blt` */
+        if (va < XNS_ERROR_$DATA.buf_va_low) {  /* 0x00E1788C / `blt` */
             all_in_pool = false;                /* 0x00E17898 `clr.b D0b` */
             break;
         }
-        if (va >= XNS_ERROR_$BUF_VA_HIGH) {     /* 0x00E17892 / `blt` to next */
+        if (va >= XNS_ERROR_$DATA.buf_va_high) { /* 0x00E17892 / `blt` to next */
             all_in_pool = false;
             break;
         }
@@ -184,7 +228,7 @@ static boolean xns_$pkt_bufs_in_netbuf_pool(const xns_$pkt_desc_t *packet_info)
 }
 
 /*
- * Static helper: xns_$setup_error_header (0x00E17960)
+ * xns_$setup_error_header (0x00E17960)
  *
  * Appends up to 0x2A bytes of the offending packet to the error packet being
  * built, starting at offset 0x22 of the new header buffer (the IDP header the
@@ -280,99 +324,98 @@ static void xns_$setup_error_header(xns_$error_send_frame_t *parent)
 }
 
 /*
- * XNS_ERROR_$SEND - Send an XNS Error Protocol packet
+ * XNS_ERROR_$SEND - send an XNS Error Protocol packet (0x00E17A2E)
  *
- * Sends an error response packet for a received packet that could
- * not be processed. Error packets contain:
- *   - The first 42 bytes of the original packet (IDP header + 12 data bytes)
- *   - Error code and parameter
+ * @param packet_info   the offending packet, as XNS_IDP_$OS_DEMUX built it
+ * @param error_code    the XNS_ERROR_* code, read as a word (0x00E17B9E)
+ * @param error_param   the error parameter, read as a word (0x00E17B96)
+ * @param result_ret    output: the word XNS_IDP_$OS_SEND reports; cleared to
+ *                      zero on entry (0x00E17A44 `clr.w (A0)`)
+ * @param status_ret    output: status code
  *
- * Error packet format (after IDP header):
- *   +0x1E: Error code (2 bytes)
- *   +0x20: Error parameter (2 bytes)
- *   +0x22: Original packet data (42 bytes minimum)
- *
- * @param packet_info   Original packet information structure:
- *                      +0x18: header length
- *                      +0x1C: header pointer
- * @param error_code    Pointer to error code
- * @param error_param   Pointer to error parameter
- * @param result_ret    Output: unused result
- * @param status_ret    Output: status code
- *
- * Original address: 0x00E17A2E
+ * NOTE, reproduced as found: every error exit branches to 0x00E17BEE, the
+ * bare `movem/unlk/rts` epilogue.  Only the success path reaches the
+ * FIM_$RLS_CLEANUP at 0x00E17BC2, so a rejected packet leaves the cleanup
+ * handler this routine established still registered.
  */
-void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_param,
-                     uint16_t *result_ret, status_$t *status_ret)
+void XNS_ERROR_$SEND(xns_$pkt_desc_t *packet_info, uint16_t *error_code,
+                     uint16_t *error_param, uint16_t *result_ret,
+                     status_$t *status_ret)
 {
-    uint8_t *pkt = (uint8_t *)packet_info;
-    int32_t header_len;
-    int16_t *orig_header;
-    int16_t *error_header;
-    uint32_t netbuf_handle = 0;     /* A6-0x2c: header buffer physical address
-                                     *          (clr.l (-0x2c,A6) @0xE17A3C) */
-    uint8_t cleanup_buf[24];
-    status_$t local_status;
-    int16_t packet_offset;
-    xns_$error_send_frame_t frame;  /* the slots the nested procedure reads */
+    uint32_t  netbuf_handle;            /* A6-0x2C */
+    status_$t cleanup_status;           /* A6-0x20 */
+    status_$t open_status;              /* A6-0x1C */
+    uint8_t   cleanup_buf[24];          /* A6-0x18 */
+    boolean   socket_opened;            /* A6-0x3A */
+    int8_t    src_is_bcast;             /* A6-0x4A */
+    xns_$error_send_frame_t frame;      /* the slots the nested procedure reads */
+    const uint8_t *orig;                /* A2, first use: the offending header */
+    xns_$error_pkt_t *pkt;              /* A2, second use: the new packet */
+    int32_t   packet_len;               /* D1 at 0x00E17B26 */
+    int i;
 
-    *result_ret = 0;
-    *status_ret = status_$ok;
+    netbuf_handle = 0;                  /* 0x00E17A3C `clr.l (-0x2c,A6)` */
+    *result_ret = 0;                    /* 0x00E17A44 `clr.w (A0)` */
+    *status_ret = status_$ok;           /* 0x00E17A4A `clr.l (A1)` */
+    socket_opened = false;              /* 0x00E17A4C `clr.b (-0x3a,A6)` */
 
-    /* 0x00E17A6A `move.l (0x8,A6),(-0x34,A6)` happens further down, but the
-     * nested procedure only ever runs after that point. */
-    frame.packet_info   = (xns_$pkt_desc_t *)packet_info;
-    frame.packet_info_2 = (xns_$pkt_desc_t *)packet_info;
-    frame.status_ret    = status_ret;
+    frame.packet_info = packet_info;    /* A6+0x08, the argument itself */
+    frame.status_ret  = status_ret;     /* A6+0x18, likewise */
 
-    /* Set up cleanup handler */
-    local_status = FIM_$CLEANUP(cleanup_buf);
-    if (local_status != status_$cleanup_handler_set) {
-        /* Cleanup failed - return original packet if allocated */
-        if (netbuf_handle != 0) {
-            NETBUF_$RTN_HDR(&frame.netbuf_va);   /* 0x00E17BD0 */
+    cleanup_status = FIM_$CLEANUP(cleanup_buf);         /* 0x00E17A54 */
+    if (cleanup_status != status_$cleanup_handler_set) {
+        /* 0x00E17BCA: the cleanup handler fired. */
+        if (netbuf_handle != 0) {                       /* 0x00E17BCA tst.l */
+            NETBUF_$RTN_HDR(&frame.netbuf_va);          /* 0x00E17BD0 */
         }
-        *status_ret = local_status;
-        return;
-    }
-
-    /* Validate original packet */
-    header_len = *(int32_t *)(pkt + 0x18);
-    orig_header = *(int16_t **)(pkt + 0x1C);
-
-    if (header_len < XNS_IDP_HEADER_SIZE || orig_header == NULL) {
-        *status_ret = status_$xns_illegal_buffer_spec;
-        return;
-    }
-
-    /* Check source address isn't broadcast */
-    {
-        int8_t src_bc = xns_$is_local_addr((uint8_t *)orig_header + 0x12);
-        int8_t dest_bc = xns_$is_local_addr((uint8_t *)orig_header + 0x06);
-
-        if ((src_bc | dest_bc) < 0) {
-            *status_ret = status_$xns_illegal_buffer_spec;
-            return;
+        if (socket_opened < 0) {                        /* 0x00E17BDC tst.b / bpl */
+            xns_$maybe_close_error_socket();            /* 0x00E17BE2 */
         }
-    }
-
-    /* Don't send error for error packets */
-    if (*(uint8_t *)((uint8_t *)orig_header + 5) == XNS_IDP_TYPE_ERROR) {
-        *status_ret = status_$xns_illegal_buffer_spec;
+        *status_ret = cleanup_status;                   /* 0x00E17BEA */
         return;
     }
 
-    /* Open error socket if needed */
-    xns_$maybe_open_error_socket(&local_status);
-    *status_ret = local_status;
-    if (*status_ret != status_$ok) {
+    frame.packet_info_2 = packet_info;  /* 0x00E17A6A `move.l (0x8,A6),(-0x34,A6)` */
+
+    /* 0x00E17A74 `cmpi.l #0x1e,(0x18,A1)` is a SIGNED compare. */
+    if ((int32_t)packet_info->data_len < XNS_IDP_HEADER_SIZE ||
+        packet_info->header == 0) {                     /* 0x00E17A7E */
+        *status_ret = status_$xns_error_illegal_buffer_spec;
         return;
     }
 
-    /* Get a network buffer for the error packet */
-    /* 0x00E17AFC: pea (-0x28,A6) then pea (-0x2c,A6) - phys first, VA second */
-    NETBUF_$GET_HDR(&netbuf_handle, &frame.netbuf_va);
-    error_header = (int16_t *)ARCH_VA_TO_PTR(frame.netbuf_va); /* movea.l (-0x28,A6),A2 */
+    orig = (const uint8_t *)ARCH_VA_TO_PTR(packet_info->header);   /* 0x00E17A92 */
+
+    /*
+     * 0x00E17A94 / 0x00E17AA2: the offending packet's IDP SOURCE address
+     * (header +0x12) and DESTINATION address (header +0x06).  The two results
+     * are OR-ed together (0x00E17AAC) and the sign bit of the result decides.
+     */
+    src_is_bcast = xns_$is_local_addr((void *)(orig + offsetof(xns_$idp_header_t, src_network)));
+    if ((int8_t)(src_is_bcast |
+                 xns_$is_local_addr((void *)(orig + offsetof(xns_$idp_header_t, dest_network)))) < 0) {
+        *status_ret = status_$xns_error_source_is_broadcast;
+        return;
+    }
+
+    /* 0x00E17AC2-0x00E17ACC: never answer an error packet with an error. */
+    if ((uint16_t)orig[offsetof(xns_$idp_header_t, packet_type)] == XNS_IDP_TYPE_ERROR) {
+        *status_ret = status_$xns_error_packet_type_error;
+        return;
+    }
+
+    xns_$maybe_open_error_socket(&open_status);         /* 0x00E17AE0 */
+    *status_ret = open_status;                          /* 0x00E17AEA */
+    if (*status_ret != status_$ok) {                    /* 0x00E17AF2 */
+        return;
+    }
+
+    socket_opened = true;                               /* 0x00E17AF8 `st` */
+
+    /* 0x00E17AFC "pea (-0x28,A6)" then "pea (-0x2c,A6)": the handle is the
+     * first argument, the VA the second. */
+    NETBUF_$GET_HDR(&netbuf_handle, &frame.netbuf_va);  /* 0x00E17B04 */
+    pkt = (xns_$error_pkt_t *)ARCH_VA_TO_PTR(frame.netbuf_va);  /* 0x00E17B0C */
 
     /*
      * 0x00E17B10-0x00E17B1E.  The first call classifies the packet's buffers
@@ -380,8 +423,7 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
      * nested procedure, which reads that slot to decide how to fetch the
      * bytes it appends to the error packet.
      */
-    frame.in_netbuf_pool =
-        xns_$pkt_bufs_in_netbuf_pool((const xns_$pkt_desc_t *)packet_info);
+    frame.in_netbuf_pool = xns_$pkt_bufs_in_netbuf_pool(packet_info);
     xns_$setup_error_header(&frame);
 
     /*
@@ -389,56 +431,65 @@ void XNS_ERROR_$SEND(void *packet_info, uint16_t *error_code, uint16_t *error_pa
      * xns_$setup_error_header LEFT UNCOPIED, i.e. 0x22 plus the bytes it
      * appended.  A6-0x36 is a frame slot, not a field of the packet record.
      */
-    packet_offset = (int16_t)(0x4C - frame.remaining);
+    packet_len = (int32_t)0x4C - (int32_t)frame.remaining;
 
-    xns_error_send_params.hdr_desc.length  = packet_offset;   /* 0x00E17B2C */
-    xns_error_send_params.hdr_desc.address = frame.netbuf_va; /* 0x00E17B30 */
-    xns_error_send_params.hdr_desc.next    = 0;               /* 0x00E17B34 */
-    xns_error_send_params.hdr_prebuilt     = true;            /* 0x00E17B38 `st' */
+    XNS_ERROR_$DATA.send_rec.hdr_desc.length  = packet_len;         /* 0x00E17B2C */
+    XNS_ERROR_$DATA.send_rec.hdr_desc.address = frame.netbuf_va;    /* 0x00E17B30 */
+    XNS_ERROR_$DATA.send_rec.hdr_desc.next    = 0;                  /* 0x00E17B34 */
+    XNS_ERROR_$DATA.send_rec.hdr_prebuilt     = true;               /* 0x00E17B38 `st` */
 
-    /* Set checksum to "compute" */
-    error_header[0] = -1;
+    pkt->idp.checksum = 0xFFFF;                                     /* 0x00E17B3E */
 
-    /* Set length */
-    error_header[1] = (uint16_t)xns_error_send_params.hdr_desc.length;
+    /* 0x00E17B42 "move.w (0x1a,A5),(0x2,A0)" - the LOW word of the longword
+     * just stored at A5+0x18. */
+    pkt->idp.length = (uint16_t)XNS_ERROR_$DATA.send_rec.hdr_desc.length;
 
-    /* Set transport control and packet type */
-    *(uint8_t *)((uint8_t *)error_header + 4) = 0;
-    *(uint8_t *)((uint8_t *)error_header + 5) = XNS_IDP_TYPE_ERROR;
+    pkt->idp.transport_ctl = 0;                                     /* 0x00E17B48 */
+    pkt->idp.packet_type   = XNS_IDP_TYPE_ERROR;                    /* 0x00E17B4C */
 
-    /* Swap source and destination - destination becomes original source */
-    *(uint32_t *)(error_header + 3) = *(uint32_t *)(orig_header + 0x1A / 2);
-    *(uint32_t *)(error_header + 5) = *(uint32_t *)(orig_header + 0x1C / 2);
-    *(uint32_t *)(error_header + 7) = *(uint32_t *)(orig_header + 0x1E / 2);
-
-    /* Set source address - use error socket (port 3) */
-    error_header[0x0E / 2] = XNS_SOCKET_ERROR;
-
-    /* Clear source network/host (will be filled by send) */
-    *(uint32_t *)(error_header + 9) = 0;
-    error_header[0x0B] = 0x800;
-
-    /* Extract local node info for source */
-    {
-        uint32_t node = NODE_$ME;
-        uint16_t host_hi = ((node >> 16) & 0x0F) | 0x1E00;
-        uint16_t host_lo = node & 0xFFFF;
-        error_header[0x0C] = host_hi;
-        error_header[0x0D] = host_lo;
+    /*
+     * 0x00E17B52-0x00E17B5E: three longword moves from the NEW packet's +0x34
+     * to its +0x06.  +0x34 is orig[0x12], i.e. the offending packet's IDP
+     * source address as xns_$setup_error_header copied it in, so this is the
+     * address swap: the error goes back to whoever sent the packet.
+     */
+    for (i = 0; i < 12; i++) {
+        ((uint8_t *)pkt)[offsetof(xns_$idp_header_t, dest_network) + i] =
+            pkt->orig[XNS_ERROR_ORIG_SRC_ADDR_OFFSET + i];
     }
 
-    /* Set error code and parameter */
-    error_header[0x10 / 2] = *error_code;
-    error_header[0x0F] = *error_param;
+    pkt->idp.src_socket  = XNS_SOCKET_ERROR;                        /* 0x00E17B60 */
+    pkt->idp.src_network = 0;                                       /* 0x00E17B66 */
 
-    /* Send the error packet */
-    /* 0x00E17BA2-0x00E17BB0: arg1 is (0x76,A5), arg2 the record at (A5) */
-    XNS_IDP_$OS_SEND((int16_t *)&XNS_ERROR_$STD_IDP_CHANNEL,
-                     &xns_error_send_params, (int16_t *)result_ret, status_ret);
+    /*
+     * 0x00E17B6A-0x00E17B8E: the source host is the Apollo Ethernet address
+     * 08:00:1E:0n:nn:nn built out of NODE_$ME - "move.w #0x800", then
+     * ((NODE_$ME >> 16) & 0x0F) | 0x1E00, then the low word of NODE_$ME.
+     * Written out as wire bytes so the host build agrees with the target.
+     */
+    {
+        uint32_t node    = NODE_$ME;
+        uint16_t host_w0 = 0x0800;
+        uint16_t host_w1 = (uint16_t)(((node >> 16) & 0x0F) | 0x1E00);
+        uint16_t host_w2 = (uint16_t)(node & 0xFFFF);
 
-    /* Close error socket */
-    xns_$maybe_close_error_socket();
+        pkt->idp.src_host[0] = (uint8_t)(host_w0 >> 8);
+        pkt->idp.src_host[1] = (uint8_t)host_w0;
+        pkt->idp.src_host[2] = (uint8_t)(host_w1 >> 8);
+        pkt->idp.src_host[3] = (uint8_t)host_w1;
+        pkt->idp.src_host[4] = (uint8_t)(host_w2 >> 8);
+        pkt->idp.src_host[5] = (uint8_t)host_w2;
+    }
 
-    /* Release cleanup handler */
-    FIM_$RLS_CLEANUP(cleanup_buf);
+    pkt->error_param = *error_param;    /* 0x00E17B96, argument 3 -> +0x20 */
+    pkt->error_code  = *error_code;     /* 0x00E17B9E, argument 2 -> +0x1E */
+
+    /* 0x00E17BA2-0x00E17BB0: "pea (0x76,A5)" is the channel cell, "pea (A5)"
+     * the request record at the head of the module data. */
+    XNS_IDP_$OS_SEND(&XNS_ERROR_$DATA.std_idp_channel,
+                     &XNS_ERROR_$DATA.send_rec,
+                     (int16_t *)result_ret, status_ret);
+
+    xns_$maybe_close_error_socket();                    /* 0x00E17BBA */
+    FIM_$RLS_CLEANUP(cleanup_buf);                      /* 0x00E17BC2 */
 }
