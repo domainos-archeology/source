@@ -152,6 +152,7 @@ uint32_t ROUTE_$MISROUTE;
 uint32_t ROUTE_$PKTS_ROUTED;
 uint32_t ROUTE_$Q_OFLO;
 uint16_t ROUTE_$NETBUF_ALLOC;
+uint32_t ROUTE_$START_TIME;
 int16_t ROUTE_$N_WIRED_PAGES;
 int16_t ROUTE_$N_USER_PORTS;
 /* Four 0x90-byte records at 0xE87FD6..0xE88216; see route_internal.h. */

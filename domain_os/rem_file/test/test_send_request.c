@@ -1,375 +1,746 @@
 /*
- * rem_file/test/test_send_request.c - Unit tests for REM_FILE_$SEND_REQUEST
+ * rem_file/test/test_send_request.c - unit tests for REM_FILE_$SEND_REQUEST
+ * (0x00E60FD8)
  *
- * Tests the early-exit paths, request header struct layout, and
- * response validation logic. Network I/O is not tested since it
- * requires a full kernel environment.
+ * The real rem_file/send_request.c is #included below and every routine it
+ * calls is mocked here.  What is checked is the set of stores the 2026-09-07
+ * re-emission recovered (bead source-ldrp):
+ *
+ *   - the two early exits, 0x000F0001 for a type-9 process (0x00E61002) and
+ *     0x000F0004 for a non-local address without the network capability
+ *     (0x00E6102A)
+ *   - request->msg_type = 1 (0x00E6105C)
+ *   - the socket-table index, SOCK_$EVENT_COUNTERS[sock - 1] (0x00E610B8)
+ *   - the retry-exhausted and send-failure 0x000F0004 (0x00E611BC)
+ *   - the quit exit: 0x00120010 with bit 31 set (0x00E614A4/AA)
+ *   - the no-answer exit 0x00110007 (0x00E6150C)
+ *   - the reply-opcode check: status from response+4 when
+ *     response[3] == request[3] + 1, else 0x000F0003 (0x00E6146C/78)
+ *   - *packet_id at every exit that reaches 0x00E61512
+ *   - the bulk_len rules: min(reply, response_max - received) with bulk_max
+ *     0, min(reply, bulk_max) otherwise, and 0 written back when bulk_max is
+ *     0 (0x00E61338 / 0x00E61354 / 0x00E613C6)
  */
 
 #include <stdio.h>
-#include <assert.h>
-#include <stdint.h>
 #include <string.h>
 
-/* Minimal type stubs for native compilation */
-typedef long status_$t;
+#include "rem_file/rem_file_internal.h"
+#include "arch/arch.h"
 
-/* Test result tracking */
-static int tests_passed = 0;
+/* ============================================================================
+ * Test framework
+ * ============================================================================ */
+
+static int tests_run = 0;
 static int tests_failed = 0;
+static int current_failed = 0;
 
-#define TEST(name) static void test_##name(void)
-#define RUN_TEST(name) do { \
-    printf("  Running %s... ", #name); \
-    test_##name(); \
-    tests_passed++; \
-    printf("PASSED\n"); \
-} while(0)
+#define TEST(name)      static void test_##name(void)
+#define RUN_TEST(name)  do {                                                  \
+        printf("  %-52s ", #name);                                            \
+        current_failed = 0;                                                   \
+        tests_run++;                                                          \
+        test_##name();                                                        \
+        if (current_failed == 0) { printf("PASSED\n"); }                      \
+    } while (0)
 
-#define ASSERT_EQ(expected, actual) do { \
-    if ((expected) != (actual)) { \
-        printf("FAILED\n    Expected: 0x%lx, Got: 0x%lx at line %d\n", \
-               (unsigned long)(expected), (unsigned long)(actual), __LINE__); \
-        tests_failed++; \
-        return; \
-    } \
-} while(0)
+#define ASSERT_EQ(expected, actual) do {                                      \
+        unsigned long _e = (unsigned long)(expected);                         \
+        unsigned long _a = (unsigned long)(actual);                           \
+        if (_e != _a) {                                                       \
+            if (current_failed == 0) { printf("FAILED\n"); }                  \
+            printf("      line %d: expected 0x%lx, got 0x%lx\n",              \
+                   __LINE__, _e, _a);                                         \
+            current_failed = 1; tests_failed++;                               \
+            return;                                                           \
+        }                                                                     \
+    } while (0)
 
-#define ASSERT_TRUE(cond) do { \
-    if (!(cond)) { \
-        printf("FAILED\n    Condition false at line %d\n", __LINE__); \
-        tests_failed++; \
-        return; \
-    } \
-} while(0)
+/* ============================================================================
+ * The code under test
+ * ============================================================================ */
 
-/*
- * Mock globals and stubs
- */
+#include "../send_request.c"
 
-/* Error codes */
-#define file_$object_not_found                      0x000F0001
-#define file_$comms_problem_with_remote_node         0x000F0004
-#define file_$bad_reply_received_from_remote_node    0x000F0003
+/* ============================================================================
+ * Globals the unit reads
+ * ============================================================================ */
 
-/* Process globals */
-#define PROC1_MAX_PROCESSES 256
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
-uint16_t PROC1_$CURRENT;
-uint16_t PROC1_$AS_ID;
-uint32_t NODE_$ME = 0x12345678;
+uint16_t  PROC1_$TYPE[PROC1_MAX_PROCESSES];
+uint16_t  PROC1_$CURRENT;
+uint16_t  PROC1_$AS_ID;
+uint32_t  NETWORK_$ALLOWED_SERVICE;      /* NETWORK_$CAPABLE_FLAGS is bits 16..23 */
+int8_t    NETWORK_$DISKLESS;
+uint32_t  NETWORK_$MOTHER_NODE;
+uint32_t  NODE_$ME;
+uint32_t  TIME_$CLOCKH;
+uint8_t   REM_FILE_$DATA[0x1E];
+uint32_t  REM_FILE_$BUSY_RETRY_COUNT;
+uint16_t  REM_FILE_$COMPLETION_TIME = 20;
+uint8_t   sock_table_base[SOCK_TABLE_SIZE];
+uint32_t  FIM_$QUIT_VALUE[64];
+ec_$eventcount_t FIM_$QUIT_EC[64];
 
-/* Network globals */
-uint32_t NETWORK_$ALLOWED_SERVICE = 0;
-/* Mirrors network/network.h: the capability byte is 0xE24C3F, byte 1 of the
- * NETWORK_$ALLOWED_SERVICE longword.  This test does not include the real
- * headers, so the view is restated here. */
-#define NETWORK_$CAPABLE_FLAGS ((uint8_t)(NETWORK_$ALLOWED_SERVICE >> 16))
-int8_t NETWORK_$DISKLESS = 0;
-uint32_t NETWORK_$MOTHER_NODE = 0;
+/* ============================================================================
+ * Mocks
+ * ============================================================================ */
 
-/*
- * Request header struct matching rem_file_internal.h
- * Test that msg_type is at offset 0 and magic/opcode follow at 2/3.
- */
+static ec_$eventcount_t mock_sock_ec;
+
+/* Scripted EC_$WAIT results, consumed one per call. */
+#define MAX_WAIT_SCRIPT 32
+static int16_t  wait_script[MAX_WAIT_SCRIPT];
+static int      wait_script_len;
+static int      wait_calls;
+
+/* Scripted APP_$RECEIVE outcomes, consumed one per call. */
 typedef struct {
-    uint16_t msg_type;  /* Offset 0: Set to 1 by SEND_REQUEST */
-    uint8_t magic;      /* Offset 2: 0x80 */
-    uint8_t opcode;     /* Offset 3: operation code */
-} test_request_hdr_t;
+    status_$t status;
+    uint16_t  template_len;     /* reply hdr +0x02 */
+    uint16_t  data_len;         /* reply hdr +0x04 */
+    int16_t   reply_id;         /* reply hdr +0x06 */
+    uint32_t  bulk_handle;      /* rcv.data_pages[0] */
+} recv_step_t;
+
+#define MAX_RECV_SCRIPT 8
+static recv_step_t recv_script[MAX_RECV_SCRIPT];
+static int      recv_script_len;
+static int      recv_calls;
+
+/*
+ * Everything the unit reaches through a 32-bit VA lives in one arena, and
+ * ARCH_HOST_VA_BASE is set just below it in main(), so ARCH_PTR_TO_VA fits in
+ * 32 bits on a 64-bit host.
+ */
+static struct {
+    rem_file_$reply_hdr_t reply_hdr;
+    union {
+        rem_file_$response_t rec;
+        uint8_t              raw[0x200];
+    } reply_payload;
+    uint8_t  bulk_payload[0x400];
+} va_arena;
+
+#define mock_reply_hdr      va_arena.reply_hdr
+#define mock_reply_payload  va_arena.reply_payload.raw
+#define mock_reply_rec      va_arena.reply_payload.rec
+#define mock_bulk_payload   va_arena.bulk_payload
+
+static int16_t  mock_next_id = 0x4321;
+static int8_t   mock_alloc_result = -1;   /* 0xFF = success */
+static int8_t   mock_likely_result = -1;  /* negative = "probably answering" */
+static status_$t mock_send_status;
+static uint16_t mock_send_timeout;
+
+static int      mock_close_calls;
+static uint16_t mock_closed_sock;
+static int      mock_note_visible_calls;
+static boolean  mock_note_visible_last;
+static int      mock_crash_calls;
+static status_$t mock_crash_status;
+static int      mock_dump_calls;
+static int      mock_rtn_dat_calls;
+static uint32_t mock_last_copy_len;
+static uint8_t *mock_last_copy_dst;
+
+int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages,
+                      uint32_t max_queue)
+{
+    (void)proto_bufpages; (void)max_queue;
+    *sock_ret = 5;
+    return mock_alloc_result;
+}
+
+void SOCK_$CLOSE(uint16_t sock_num)
+{
+    mock_close_calls++;
+    mock_closed_sock = sock_num;
+}
+
+int16_t PKT_$NEXT_ID(void) { return mock_next_id; }
+
+void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node,
+                        uint16_t dest_sock, int32_t src_node_or,
+                        uint32_t src_node, uint16_t src_sock,
+                        void *pkt_info, uint16_t request_id,
+                        void *template, uint16_t template_len,
+                        void *data, int16_t data_len,
+                        uint16_t *retry_hint, uint16_t *timeout_out,
+                        status_$t *status_ret)
+{
+    (void)routing_key; (void)dest_node; (void)dest_sock; (void)src_node_or;
+    (void)src_node; (void)src_sock; (void)pkt_info; (void)request_id;
+    (void)template; (void)template_len; (void)data; (void)data_len;
+
+    *retry_hint  = 5;
+    *timeout_out = mock_send_timeout;
+    *status_ret  = mock_send_status;
+}
+
+void PKT_$NOTE_VISIBLE(uint32_t node_id, boolean is_visible)
+{
+    (void)node_id;
+    mock_note_visible_calls++;
+    mock_note_visible_last = is_visible;
+}
+
+void PKT_$DUMP_DATA(uint32_t *buffers, int16_t len)
+{
+    (void)buffers; (void)len;
+    mock_dump_calls++;
+}
+
+boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
+{
+    (void)addr_info; (void)status_ret;
+    return mock_likely_result;
+}
+
+int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
+{
+    (void)ecs; (void)vals;
+    if (wait_calls < wait_script_len) {
+        return wait_script[wait_calls++];
+    }
+    wait_calls++;
+    return 1;   /* fall back to "the deadline fired" so nothing spins */
+}
+
+void APP_$RECEIVE(uint16_t sock_num, void *result, status_$t *status_ret)
+{
+    app_$receive_rec_t *rec = (app_$receive_rec_t *)result;
+    const recv_step_t *step;
+
+    (void)sock_num;
+    memset(rec, 0, sizeof(*rec));
+
+    if (recv_calls >= recv_script_len) {
+        recv_calls++;
+        *status_ret = status_$network_buffer_queue_is_empty;
+        return;
+    }
+    step = &recv_script[recv_calls++];
+
+    mock_reply_hdr.f_00         = 0;
+    mock_reply_hdr.template_len = step->template_len;
+    mock_reply_hdr.data_len     = step->data_len;
+    mock_reply_hdr.reply_id     = step->reply_id;
+
+    rec->reply = ARCH_PTR_TO_VA(&mock_reply_hdr);
+    rec->data  = ARCH_PTR_TO_VA(mock_reply_payload);
+    rec->data_pages[0] = step->bulk_handle;
+
+    *status_ret = step->status;
+}
+
+void NETBUF_$RTN_HDR(uint32_t *va_ptr) { (void)va_ptr; }
+void NETBUF_$RTN_DAT(uint32_t addr) { (void)addr; mock_rtn_dat_calls++; }
+uint32_t NETBUF_$RTNVA(uint32_t *va_ptr) { return *va_ptr; }
+
+void NETBUF_$GETVA(uint32_t ppn_shifted, uint32_t *va_out, status_$t *status)
+{
+    (void)ppn_shifted;
+    *va_out = ARCH_PTR_TO_VA(mock_bulk_payload);
+    *status = status_$ok;
+}
+
+void OS_$DATA_COPY(const void *src, void *dst, uint32_t len)
+{
+    mock_last_copy_len = len;
+    mock_last_copy_dst = (uint8_t *)dst;
+    if (len != 0) {
+        memmove(dst, src, len);
+    }
+}
+
+status_$t FIM_$CLEANUP(void *handler)
+{
+    (void)handler;
+    return status_$cleanup_handler_set;
+}
+
+void FIM_$RLS_CLEANUP(void *cleanup_data) { (void)cleanup_data; }
+void FIM_$SIGNAL(status_$t status) { (void)status; }
+
+void CRASH_SYSTEM(const status_$t *status_p)
+{
+    mock_crash_calls++;
+    mock_crash_status = *status_p;
+}
+
+int32_t EC_$READ(ec_$eventcount_t *ec) { return ec->value; }
 
 /* ============================================================================
- * Struct layout tests
+ * Fixtures
  * ============================================================================ */
 
-/*
- * Test: msg_type field is at offset 0 (2 bytes)
- */
-TEST(request_hdr_msg_type_offset) {
-    test_request_hdr_t hdr;
-    ASSERT_EQ(0, (size_t)&hdr.msg_type - (size_t)&hdr);
-    ASSERT_EQ(2, sizeof(hdr.msg_type));
-}
+static uint32_t addr_info[2];
+static uint8_t  request_buf[0x40];
+static uint8_t  response_buf[REM_FILE_RESPONSE_BUF_SIZE];
+static uint8_t  bulk_buf[0x400];
+static uint16_t received_len;
+static int16_t  bulk_len;
+static uint16_t packet_id;
+static status_$t st;
 
-/*
- * Test: magic field is at offset 2
- */
-TEST(request_hdr_magic_offset) {
-    test_request_hdr_t hdr;
-    ASSERT_EQ(2, (size_t)&hdr.magic - (size_t)&hdr);
-}
-
-/*
- * Test: opcode field is at offset 3
- */
-TEST(request_hdr_opcode_offset) {
-    test_request_hdr_t hdr;
-    ASSERT_EQ(3, (size_t)&hdr.opcode - (size_t)&hdr);
-}
-
-/*
- * Test: total header size is 4 bytes
- */
-TEST(request_hdr_size) {
-    ASSERT_EQ(4, sizeof(test_request_hdr_t));
-}
-
-/*
- * Test: Wire format matches server expectation
- * Server reads: frame.msg_version (offset 0-1), frame.opcode (offset 3)
- * SEND_REQUEST writes *(uint16_t *)request = 1, so bytes 0-1 = 0x0001 (big-endian)
- */
-TEST(wire_format_msg_type) {
-    test_request_hdr_t hdr;
-    memset(&hdr, 0, sizeof(hdr));
-
-    /* Simulate what SEND_REQUEST does: *req_u16 = 1 */
-    *(uint16_t *)&hdr = 1;
-    hdr.magic = 0x80;
-    hdr.opcode = 0x0C;
-
-    uint8_t *bytes = (uint8_t *)&hdr;
-    /* On big-endian (m68k native): bytes[0]=0x00, bytes[1]=0x01 */
-    /* On little-endian (host):     bytes[0]=0x01, bytes[1]=0x00 */
-    /* Either way, the uint16_t value at offset 0 is 1 */
-    ASSERT_EQ(1, *(uint16_t *)bytes);
-    ASSERT_EQ(0x80, bytes[2]);
-    ASSERT_EQ(0x0C, bytes[3]);
-}
-
-/* ============================================================================
- * Response validation tests
- * ============================================================================ */
-
-/*
- * Test: Valid response has opcode = request opcode + 1
- */
-TEST(response_opcode_valid) {
-    uint8_t request[8] = {0};
-    uint8_t response[8] = {0};
-
-    request[3] = 0x0C;   /* Request opcode */
-    response[3] = 0x0D;  /* Response opcode = request + 1 */
-
-    /* The validation check from send_request.c */
-    ASSERT_TRUE((uint32_t)response[3] == (uint32_t)request[3] + 1);
-}
-
-/*
- * Test: Invalid response has wrong opcode
- */
-TEST(response_opcode_invalid) {
-    uint8_t request[8] = {0};
-    uint8_t response[8] = {0};
-
-    request[3] = 0x0C;   /* Request opcode */
-    response[3] = 0x0E;  /* Wrong response opcode */
-
-    ASSERT_TRUE((uint32_t)response[3] != (uint32_t)request[3] + 1);
-}
-
-/*
- * Test: Busy response is first word == 0xFFFF
- */
-TEST(busy_response_detection) {
-    int16_t response[4] = {0};
-    response[0] = -1;  /* 0xFFFF = busy */
-
-    ASSERT_EQ(-1, response[0]);
-}
-
-/*
- * Test: Non-busy response
- */
-TEST(non_busy_response) {
-    int16_t response[4] = {0};
-    response[0] = 1;  /* msg_type = 1 = normal */
-
-    ASSERT_TRUE(response[0] != -1);
-}
-
-/* ============================================================================
- * Early exit condition tests (logic only, no actual SEND_REQUEST call)
- * ============================================================================ */
-
-/*
- * Test: Process type 9 should trigger early exit
- */
-TEST(process_type_9_early_exit) {
-    PROC1_$CURRENT = 5;
-    PROC1_$TYPE[5] = 9;
-
-    /* The check from send_request.c */
-    ASSERT_TRUE(PROC1_$TYPE[PROC1_$CURRENT] == 9);
-}
-
-/*
- * Test: Non-type-9 process should not trigger early exit
- */
-TEST(process_type_normal_no_exit) {
+static void reset(void)
+{
+    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
     PROC1_$CURRENT = 3;
-    PROC1_$TYPE[3] = 7;
-
-    ASSERT_TRUE(PROC1_$TYPE[PROC1_$CURRENT] != 9);
-}
-
-/*
- * Test: Network not capable and non-local node should trigger early exit
- */
-TEST(network_not_capable_remote_node) {
-    NETWORK_$ALLOWED_SERVICE = 0;
-    uint32_t addr_info[2] = {0, 0xAAAAAAAA};  /* Different from NODE_$ME */
-    NODE_$ME = 0x12345678;
-
-    ASSERT_TRUE((NETWORK_$CAPABLE_FLAGS & 1) == 0 && addr_info[1] != NODE_$ME);
-}
-
-/*
- * Test: Network not capable but local node should NOT trigger early exit
- */
-TEST(network_not_capable_local_node) {
-    NETWORK_$ALLOWED_SERVICE = 0;
-    NODE_$ME = 0x12345678;
-    uint32_t addr_info[2] = {0, 0x12345678};  /* Same as NODE_$ME */
-
-    /* Should NOT trigger the early exit (local node is always OK) */
-    ASSERT_TRUE(!((NETWORK_$CAPABLE_FLAGS & 1) == 0 && addr_info[1] != NODE_$ME));
-}
-
-/*
- * Test: Network capable should NOT trigger early exit even for remote node
- */
-TEST(network_capable_remote_node) {
-    NETWORK_$ALLOWED_SERVICE = 1u << 16;
-    uint32_t addr_info[2] = {0, 0xAAAAAAAA};
-
-    ASSERT_TRUE(!((NETWORK_$CAPABLE_FLAGS & 1) == 0 && addr_info[1] != NODE_$ME));
-}
-
-/*
- * Test: Diskless mother node gets connection state 2
- */
-TEST(diskless_mother_conn_state) {
-    NETWORK_$DISKLESS = -1;  /* Negative = diskless */
-    NETWORK_$MOTHER_NODE = 0xBBBBBBBB;
-    uint32_t addr_info[2] = {0, 0xBBBBBBBB};  /* Same as mother node */
-
-    int16_t conn_state;
-    if (NETWORK_$DISKLESS < 0 && addr_info[1] == NETWORK_$MOTHER_NODE) {
-        conn_state = 2;  /* CONN_STATE_DISKLESS_MOTHER */
-    } else {
-        conn_state = 0;
-    }
-
-    ASSERT_EQ(2, conn_state);
-}
-
-/*
- * Test: Non-diskless node gets connection state 0
- */
-TEST(non_diskless_conn_state) {
+    PROC1_$AS_ID   = 2;
+    NETWORK_$ALLOWED_SERVICE = 0x00010000u;     /* capability bit 0 set */
     NETWORK_$DISKLESS = 0;
-    uint32_t addr_info[2] = {0, 0xBBBBBBBB};
+    NETWORK_$MOTHER_NODE = 0;
+    NODE_$ME = 0x11112222u;
+    TIME_$CLOCKH = 1000;
+    REM_FILE_$BUSY_RETRY_COUNT = 0;
 
-    int16_t conn_state;
-    if (NETWORK_$DISKLESS < 0 && addr_info[1] == NETWORK_$MOTHER_NODE) {
-        conn_state = 2;
-    } else {
-        conn_state = 0;
-    }
+    memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
+    memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
 
-    ASSERT_EQ(0, conn_state);
+    mock_sock_ec.value = 7;
+    memset(sock_table_base, 0, sizeof(sock_table_base));
+    /* socket 5's descriptor lives at SOCK_$EVENT_COUNTERS[5 - 1] */
+    SOCK_$EVENT_COUNTERS[4] = &mock_sock_ec;
+
+    wait_script_len = 0; wait_calls = 0;
+    recv_script_len = 0; recv_calls = 0;
+
+    mock_next_id = 0x4321;
+    mock_alloc_result = -1;
+    mock_likely_result = -1;
+    mock_send_status = status_$ok;
+    mock_send_timeout = 4;
+    mock_close_calls = 0;
+    mock_closed_sock = 0xFFFF;
+    mock_note_visible_calls = 0;
+    mock_note_visible_last = 0;
+    mock_crash_calls = 0;
+    mock_crash_status = 0;
+    mock_dump_calls = 0;
+    mock_rtn_dat_calls = 0;
+    mock_last_copy_len = 0xFFFFFFFFu;
+    mock_last_copy_dst = NULL;
+
+    memset(request_buf, 0, sizeof(request_buf));
+    memset(response_buf, 0, sizeof(response_buf));
+    memset(bulk_buf, 0, sizeof(bulk_buf));
+    memset(mock_reply_payload, 0xC3, sizeof(mock_reply_payload));
+    memset(mock_bulk_payload, 0xB7, sizeof(mock_bulk_payload));
+
+    /* request opcode 0x10; a good reply carries 0x11 */
+    request_buf[2] = REM_FILE_REQ_MAGIC;
+    request_buf[3] = REM_FILE_OP_NEIGHBORS;
+
+    addr_info[0] = 0x0A0A0A0Au;
+    addr_info[1] = 0x33334444u;
+
+    received_len = 0xEEEE;
+    bulk_len = 0x7777;
+    packet_id = 0xEEEE;
+    st = 0x7FFFFFFF;
+}
+
+static void call(uint16_t response_max, void *bulk_data, int16_t bulk_max)
+{
+    REM_FILE_$SEND_REQUEST(addr_info, request_buf, 0x18,
+                           NULL, 0,
+                           response_buf, response_max,
+                           &received_len, bulk_data, bulk_max,
+                           &bulk_len, &packet_id, &st);
+}
+
+/* A single successful exchange: the wait reports the socket, the receive
+ * hands back a matching reply. */
+static void script_one_good_reply(uint16_t template_len, uint16_t data_len,
+                                  uint32_t bulk_handle)
+{
+    wait_script[0] = 0;
+    wait_script_len = 1;
+
+    recv_script[0].status       = status_$ok;
+    recv_script[0].template_len = template_len;
+    recv_script[0].data_len     = data_len;
+    recv_script[0].reply_id     = mock_next_id;
+    recv_script[0].bulk_handle  = bulk_handle;
+    recv_script_len = 1;
+
+    /* The reply the copy brings across.  Named fields only - the host is
+     * little-endian, so raw wire bytes would not read back as a longword. */
+    mock_reply_rec.pkt_flag = 0;
+    mock_reply_rec.magic    = REM_FILE_REQ_MAGIC;
+    mock_reply_rec.opcode   = (uint8_t)(REM_FILE_OP_NEIGHBORS + 1);
+    mock_reply_rec.status   = 0x00002222;
 }
 
 /* ============================================================================
- * Split request logic tests
+ * Early exits
  * ============================================================================ */
 
-/*
- * Test: Request <= 0x200 fits in single packet
- */
-TEST(single_packet_no_split) {
-    int16_t request_len = 0x100;
-    ASSERT_TRUE(request_len <= 0x200);
+TEST(type_9_process_is_refused)
+{
+    reset();
+    PROC1_$TYPE[PROC1_$CURRENT] = 9;
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(0x000F0001, st);          /* file_$object_not_found, 0x00E61002 */
+    ASSERT_EQ(0, mock_close_calls);     /* the exit is before the socket */
+    ASSERT_EQ(0xEEEE, packet_id);       /* and before *packet_id */
 }
 
-/*
- * Test: Request > 0x200 requires split
- */
-TEST(large_request_needs_split) {
-    int16_t request_len = 0x300;
-    ASSERT_TRUE(request_len > 0x200);
+TEST(not_capable_and_not_local_is_refused)
+{
+    reset();
+    NETWORK_$ALLOWED_SERVICE = 0;       /* capability bit 0 clear */
+    addr_info[1] = NODE_$ME + 1;
+    call(0x40, NULL, 0);
 
-    /* Split parameters */
-    int16_t send_hdr_len = 0x200;
-    int16_t send_data_len = request_len - 0x200;
-
-    ASSERT_EQ(0x200, send_hdr_len);
-    ASSERT_EQ(0x100, send_data_len);
+    ASSERT_EQ(0x000F0004, st);          /* 0x00E6102A */
+    ASSERT_EQ(0, mock_close_calls);
 }
 
-/*
- * Test: Split flag set when bulk_max > 0
- */
-TEST(split_flag_with_bulk) {
-    int16_t extra_len = 0;
-    uint16_t response_max = 0x100;
-    uint16_t split_flag;
+TEST(not_capable_but_local_proceeds)
+{
+    reset();
+    NETWORK_$ALLOWED_SERVICE = 0;
+    addr_info[1] = NODE_$ME;
+    script_one_good_reply(0x20, 0, 0);
+    call(0x40, NULL, 0);
 
-    /* With no extra but small response: no split */
-    if (extra_len == 0 && (int16_t)response_max <= 0x200) {
-        split_flag = 0;
-    } else {
-        split_flag = 1;
-    }
-    ASSERT_EQ(0, split_flag);
-
-    /* With extra data: split needed */
-    extra_len = 0x50;
-    if (extra_len == 0 && (int16_t)response_max <= 0x200) {
-        split_flag = 0;
-    } else {
-        split_flag = 1;
-    }
-    ASSERT_EQ(1, split_flag);
+    ASSERT_EQ(0x00002222, st);          /* the server's own status */
+    ASSERT_EQ(1, mock_close_calls);
 }
 
 /* ============================================================================
- * Main
+ * Socket allocation
  * ============================================================================ */
 
-int main(void) {
-    printf("Testing REM_FILE_$SEND_REQUEST logic:\n\n");
+TEST(socket_allocation_failure_crashes_with_0x110005)
+{
+    reset();
+    mock_alloc_result = 0;              /* non-negative = failure */
+    script_one_good_reply(0x20, 0, 0);
+    call(0x40, NULL, 0);
 
-    printf("  --- Struct Layout ---\n");
-    RUN_TEST(request_hdr_msg_type_offset);
-    RUN_TEST(request_hdr_magic_offset);
-    RUN_TEST(request_hdr_opcode_offset);
-    RUN_TEST(request_hdr_size);
-    RUN_TEST(wire_format_msg_type);
+    ASSERT_EQ(1, mock_crash_calls);
+    ASSERT_EQ(0x00110005, mock_crash_status);   /* the cell at 0xE61530 */
+}
 
-    printf("\n  --- Response Validation ---\n");
-    RUN_TEST(response_opcode_valid);
-    RUN_TEST(response_opcode_invalid);
-    RUN_TEST(busy_response_detection);
-    RUN_TEST(non_busy_response);
+TEST(split_request_with_extra_data_crashes_with_0x110001)
+{
+    reset();
+    script_one_good_reply(0x20, 0, 0);
+    /* request_len > 0x200 and extra_len != 0 */
+    {
+        uint16_t nonzero = 1;
+        REM_FILE_$SEND_REQUEST(addr_info, request_buf, 0x201,
+                               &nonzero, 1,
+                               response_buf, 0x40,
+                               &received_len, NULL, 0,
+                               &bulk_len, &packet_id, &st);
+    }
+    ASSERT_EQ(1, mock_crash_calls);
+    ASSERT_EQ(0x00110001, mock_crash_status);   /* the cell at 0xE61534 */
+}
 
-    printf("\n  --- Early Exit Conditions ---\n");
-    RUN_TEST(process_type_9_early_exit);
-    RUN_TEST(process_type_normal_no_exit);
-    RUN_TEST(network_not_capable_remote_node);
-    RUN_TEST(network_not_capable_local_node);
-    RUN_TEST(network_capable_remote_node);
-    RUN_TEST(diskless_mother_conn_state);
-    RUN_TEST(non_diskless_conn_state);
+TEST(socket_event_counter_is_indexed_from_one)
+{
+    reset();
+    /* Put a decoy at [5]; the unit must use [5 - 1]. */
+    SOCK_$EVENT_COUNTERS[5] = NULL;
+    script_one_good_reply(0x20, 0, 0);
+    call(0x40, NULL, 0);
 
-    printf("\n  --- Split Request Logic ---\n");
-    RUN_TEST(single_packet_no_split);
-    RUN_TEST(large_request_needs_split);
-    RUN_TEST(split_flag_with_bulk);
+    /* If the unit had used [sock] it would have dereferenced NULL. */
+    ASSERT_EQ(0x00002222, st);
+    ASSERT_EQ(5, mock_closed_sock);
+}
 
-    printf("\n%d tests passed, %d tests failed\n",
-           tests_passed, tests_failed);
+/* ============================================================================
+ * The request header and the packet id
+ * ============================================================================ */
 
-    return tests_failed > 0 ? 1 : 0;
+TEST(msg_type_is_stamped_into_the_caller_request)
+{
+    reset();
+    script_one_good_reply(0x20, 0, 0);
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(1, ((rem_file_request_hdr_t *)request_buf)->msg_type);
+    ASSERT_EQ(REM_FILE_REQ_MAGIC, request_buf[2]);      /* untouched */
+    ASSERT_EQ(REM_FILE_OP_NEIGHBORS, request_buf[3]);
+}
+
+TEST(packet_id_is_written_at_every_socket_exit)
+{
+    reset();
+    script_one_good_reply(0x20, 0, 0);
+    call(0x40, NULL, 0);
+    ASSERT_EQ(0x4321, packet_id);
+}
+
+/* ============================================================================
+ * Status outcomes
+ * ============================================================================ */
+
+TEST(send_failure_reports_comms_problem)
+{
+    reset();
+    mock_send_status = 0x00110004;      /* transmit failed */
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(0x000F0004, st);          /* 0x00E611BC */
+    ASSERT_EQ(1, mock_close_calls);
+    ASSERT_EQ(0x4321, packet_id);
+}
+
+TEST(retry_exhausted_reports_comms_problem_and_notes_invisible)
+{
+    reset();
+    /* Every wait reports the timer, and the quit value never moves, so the
+     * retry counter climbs by 12 a time until it passes 0x3C. */
+    mock_likely_result = -1;            /* keep probing "yes" -> state 3 */
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(0x000F0004, st);
+    ASSERT_EQ(1, mock_close_calls);
+    ASSERT_EQ(0x4321, packet_id);
+    /* the last visibility note is `false` (0x00E61140) */
+    ASSERT_EQ(0, (uint8_t)mock_note_visible_last);
+}
+
+TEST(quit_sets_0x120010_with_bit_31)
+{
+    reset();
+    wait_script[0] = 1;                 /* the timer fires */
+    wait_script_len = 1;
+    /* make the quit eventcount disagree with the snapshot */
+    FIM_$QUIT_VALUE[PROC1_$AS_ID] = 0;
+    FIM_$QUIT_EC[PROC1_$AS_ID].value = 9;
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(0x80120010u, (uint32_t)st);
+    ASSERT_EQ(9, FIM_$QUIT_VALUE[PROC1_$AS_ID]);
+    ASSERT_EQ(1, mock_close_calls);
+}
+
+TEST(no_answer_reports_0x110007)
+{
+    reset();
+    /* two timer expiries: the first moves state 0 -> 1, the second probes */
+    wait_script[0] = 1;
+    wait_script[1] = 1;
+    wait_script_len = 2;
+    mock_likely_result = 0;             /* non-negative = "not answering" */
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(0x00110007, st);          /* 0x00E6150C */
+    ASSERT_EQ(1, mock_close_calls);
+    ASSERT_EQ(0x4321, packet_id);
+}
+
+TEST(opcode_mismatch_reports_0xF0003)
+{
+    reset();
+    script_one_good_reply(0x20, 0, 0);
+    mock_reply_rec.opcode = REM_FILE_OP_NEIGHBORS + 2;  /* not opcode + 1 */
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(0x000F0003, st);          /* 0x00E61478 */
+}
+
+TEST(matching_opcode_takes_the_status_from_response_plus_4)
+{
+    reset();
+    script_one_good_reply(0x20, 0, 0);
+    mock_reply_rec.status = 0x000F0010;
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(0x000F0010, st);          /* 0x00E6146C */
+}
+
+TEST(busy_reply_retries_and_bumps_the_counter)
+{
+    reset();
+    /* first exchange: a busy reply (first word 0xFFFF); then let the retry
+     * time out so the call finishes. */
+    wait_script[0] = 0;
+    wait_script[1] = 1;
+    wait_script[2] = 1;
+    wait_script_len = 3;
+
+    recv_script[0].status       = status_$ok;
+    recv_script[0].template_len = 0x20;
+    recv_script[0].data_len     = 0;
+    recv_script[0].reply_id     = mock_next_id;
+    recv_script[0].bulk_handle  = 0;
+    recv_script_len = 1;
+
+    mock_reply_rec.pkt_flag = 0xFFFF;           /* the busy marker */
+    mock_likely_result = 0;
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(1, REM_FILE_$BUSY_RETRY_COUNT);   /* 0x00E6141C */
+    /* The reply moved the state to CONFIRMED (0x00E613F8), which is what the
+     * timeout arm at 0x00E614DC falls through on - so no PKT_$LIKELY_TO_ANSWER
+     * probe ever happens and the call ends on the retry budget. */
+    ASSERT_EQ(0x000F0004, st);
+    ASSERT_EQ(2, mock_note_visible_calls);      /* true, then false */
+    ASSERT_EQ(0, (uint8_t)mock_note_visible_last);
+}
+
+/* ============================================================================
+ * received_len and the bulk rules
+ * ============================================================================ */
+
+TEST(received_len_is_clipped_to_response_max)
+{
+    reset();
+    script_one_good_reply(0x100, 0, 0);         /* reply says 0x100 bytes */
+    call(0x40, NULL, 0);                        /* caller allows 0x40 */
+
+    ASSERT_EQ(0x40, received_len);              /* 0x00E6128C */
+    ASSERT_EQ(0x40, mock_last_copy_len);
+}
+
+TEST(received_len_keeps_the_reply_length_when_it_fits)
+{
+    reset();
+    script_one_good_reply(0x20, 0, 0);
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(0x20, received_len);
+}
+
+TEST(bulk_len_is_the_reply_field_when_no_pages_arrive)
+{
+    reset();
+    script_one_good_reply(0x20, 0x30, 0);       /* data_len 0x30, handle 0 */
+    call(0x40, NULL, 0);
+
+    /* Nothing clamps it: the bulk block is skipped when data_pages[0] == 0
+     * (0x00E612EA), so *bulk_len keeps the reply's own field. */
+    ASSERT_EQ(0x30, bulk_len);
+}
+
+TEST(bulk_len_is_clipped_to_bulk_max_when_a_buffer_is_given)
+{
+    reset();
+    script_one_good_reply(0x20, 0x300, 1);      /* a page handle arrives */
+    call(0x40, bulk_buf, 0x80);
+
+    ASSERT_EQ(0x80, bulk_len);                  /* 0x00E61354 */
+    ASSERT_EQ(0x80, mock_last_copy_len);
+    ASSERT_EQ((unsigned long)(size_t)bulk_buf, (unsigned long)(size_t)mock_last_copy_dst);
+}
+
+TEST(bulk_len_is_zeroed_when_the_payload_is_appended_to_the_reply)
+{
+    reset();
+    script_one_good_reply(0x20, 0x10, 1);
+    call(0x40, NULL, 0);                        /* bulk_max == 0 */
+
+    /* the payload is copied to response + received_len, clipped to
+     * response_max - received_len, and *bulk_len is then cleared */
+    ASSERT_EQ(0, bulk_len);                     /* 0x00E613C6 */
+    ASSERT_EQ(0x10, mock_last_copy_len);
+    ASSERT_EQ((unsigned long)(size_t)(response_buf + 0x20),
+              (unsigned long)(size_t)mock_last_copy_dst);
+}
+
+TEST(appended_payload_is_clipped_to_the_room_left_in_the_reply_buffer)
+{
+    reset();
+    script_one_good_reply(0x38, 0x100, 1);      /* reply fills 0x38 of 0x40 */
+    call(0x40, NULL, 0);
+
+    /* room left is 0x40 - 0x38 = 8 */
+    ASSERT_EQ(8, mock_last_copy_len);           /* 0x00E61338 */
+    ASSERT_EQ(0, bulk_len);
+}
+
+TEST(oversized_bulk_reply_is_dumped_and_the_wait_resumes)
+{
+    reset();
+    wait_script[0] = 0;
+    wait_script[1] = 1;
+    wait_script[2] = 1;
+    wait_script_len = 3;
+
+    recv_script[0].status       = status_$ok;
+    recv_script[0].template_len = 0x20;
+    recv_script[0].data_len     = 0x401;        /* > 0x400 */
+    recv_script[0].reply_id     = mock_next_id;
+    recv_script[0].bulk_handle  = 1;
+    recv_script_len = 1;
+
+    mock_likely_result = 0;
+    call(0x40, NULL, 0);
+
+    ASSERT_EQ(1, mock_dump_calls);              /* 0x00E612D8 */
+    ASSERT_EQ(0x401, bulk_len);                 /* stored before the check */
+    ASSERT_EQ(0x00110007, st);                  /* the retry then times out */
+}
+
+TEST(mismatched_reply_id_keeps_waiting)
+{
+    reset();
+    wait_script[0] = 0;
+    wait_script[1] = 1;
+    wait_script[2] = 1;
+    wait_script_len = 3;
+
+    recv_script[0].status       = status_$ok;
+    recv_script[0].template_len = 0x20;
+    recv_script[0].data_len     = 0;
+    recv_script[0].reply_id     = (int16_t)(mock_next_id + 1);
+    recv_script[0].bulk_handle  = 0;
+    recv_script_len = 1;
+
+    mock_likely_result = 0;
+    call(0x40, NULL, 0);
+
+    /* the stale reply never became the answer */
+    ASSERT_EQ(0x00110007, st);
+    ASSERT_EQ(0, mock_note_visible_calls);
+}
+
+/* ============================================================================
+ * main
+ * ============================================================================ */
+
+int main(void)
+{
+    /* the netbuf pointers the unit follows are 32-bit VAs */
+    ARCH_HOST_VA_BASE = (uintptr_t)&va_arena - 0x10;
+
+    printf("REM_FILE_$SEND_REQUEST tests\n");
+
+    RUN_TEST(type_9_process_is_refused);
+    RUN_TEST(not_capable_and_not_local_is_refused);
+    RUN_TEST(not_capable_but_local_proceeds);
+    RUN_TEST(socket_allocation_failure_crashes_with_0x110005);
+    RUN_TEST(split_request_with_extra_data_crashes_with_0x110001);
+    RUN_TEST(socket_event_counter_is_indexed_from_one);
+    RUN_TEST(msg_type_is_stamped_into_the_caller_request);
+    RUN_TEST(packet_id_is_written_at_every_socket_exit);
+    RUN_TEST(send_failure_reports_comms_problem);
+    RUN_TEST(retry_exhausted_reports_comms_problem_and_notes_invisible);
+    RUN_TEST(quit_sets_0x120010_with_bit_31);
+    RUN_TEST(no_answer_reports_0x110007);
+    RUN_TEST(opcode_mismatch_reports_0xF0003);
+    RUN_TEST(matching_opcode_takes_the_status_from_response_plus_4);
+    RUN_TEST(busy_reply_retries_and_bumps_the_counter);
+    RUN_TEST(received_len_is_clipped_to_response_max);
+    RUN_TEST(received_len_keeps_the_reply_length_when_it_fits);
+    RUN_TEST(bulk_len_is_the_reply_field_when_no_pages_arrive);
+    RUN_TEST(bulk_len_is_clipped_to_bulk_max_when_a_buffer_is_given);
+    RUN_TEST(bulk_len_is_zeroed_when_the_payload_is_appended_to_the_reply);
+    RUN_TEST(appended_payload_is_clipped_to_the_room_left_in_the_reply_buffer);
+    RUN_TEST(oversized_bulk_reply_is_dumped_and_the_wait_resumes);
+    RUN_TEST(mismatched_reply_id_keeps_waiting);
+
+    printf("\n%d tests, %d failures\n", tests_run, tests_failed);
+    return tests_failed == 0 ? 0 : 1;
 }

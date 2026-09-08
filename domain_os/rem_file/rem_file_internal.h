@@ -113,10 +113,40 @@ typedef struct {
 } rem_file_request_hdr_t;
 
 /*
- * Response buffer size
- * Must be at least 0xE4 (228) bytes to accommodate the largest response structures
+ * REM_FILE_RESPONSE_BUF_SIZE - the reply buffer size, 0xBE bytes.
+ *
+ * Every rem_file client declares the buffer at A6-0xC0 and hands
+ * REM_FILE_$SEND_REQUEST the literal 0xBE as `response_max`
+ * ("move.w #0xbe,-(SP)" - 26 call sites, e.g. 0x00E619E8 in TRUNCATE,
+ * 0x00E62224 in NEIGHBORS, 0x00E62B3C in SET_ACL).  REM_FILE_$CREATE_TYPE is
+ * the only one whose buffer sits elsewhere in the frame (A6-0xE8); its length
+ * is still 0xBE.
+ *
+ * A reply field's record offset is therefore its A6 displacement plus 0xC0:
+ * "move.l (-0xb8,A6)" is response+0x08.  The tree used to assume the buffer
+ * started at A6-0xE4, which put every recovered field 0x24 bytes too far
+ * along (bead source-r2te).
  */
-#define REM_FILE_RESPONSE_BUF_SIZE  0xE4
+#define REM_FILE_RESPONSE_BUF_SIZE  0xBE
+
+/*
+ * rem_file_$response_t - the fixed head every reply carries.  It is the same
+ * shape REM_FILE_$SERVER builds on the far side (rem_file_server_resp_t):
+ * the opcode at +0x03 is the request opcode plus one, and the server's own
+ * status is the longword at +0x04 that REM_FILE_$SEND_REQUEST copies into the
+ * caller's status (0x00E6146C).  Payloads start at +0x08.
+ */
+typedef struct rem_file_$response_t {
+    uint16_t    pkt_flag;       /* 0x00 */
+    uint8_t     magic;          /* 0x02 */
+    uint8_t     opcode;         /* 0x03 */
+    status_$t   status;         /* 0x04 */
+    uint8_t     data[REM_FILE_RESPONSE_BUF_SIZE - 8];  /* 0x08 */
+} rem_file_$response_t;
+
+_Static_assert(__builtin_offsetof(rem_file_$response_t, opcode) == 0x03, "rem_file_$response_t.opcode");
+_Static_assert(__builtin_offsetof(rem_file_$response_t, status) == 0x04, "rem_file_$response_t.status");
+_Static_assert(__builtin_offsetof(rem_file_$response_t, data) == 0x08, "rem_file_$response_t.data");
 
 /*
  * File status code for communication failures
@@ -249,10 +279,43 @@ extern char REM_FILE_$DISKLESS_CRASH_MSG[];
  * declared here was removed (bead source-3uo). */
 
 /*
- * PKT info template data at 0xE2E380
- * Used as a packet info parameter for PKT_$SEND_INTERNET.
+ * REM_FILE_$DATA - the client-side packet-info template at 0x00E2E380,
+ * 0x1E bytes, handed to PKT_$SEND_INTERNET by REM_FILE_$SEND_REQUEST
+ * (`move.l #0xe2e380,-(SP)` at 0x00E61178) and copied into a local by
+ * REM_FILE_$UNLOCK_ALL (0x00E61C9C).
+ *
+ * The SAU2 10.2 map names the whole wired segment after it:
+ *   D33 E2E380  REM_FILE_$DATA   loaded at 12FB80, size = 7C
+ * so REM_FILE_$SERVER_PKT_INFO (0x00E2E39E) and
+ * REM_FILE_$DISKLESS_CRASH_MSG (0x00E2E3BC) are interior objects of the same
+ * segment; only its first object carries the exported name.
  */
-extern uint8_t DAT_00e2e380[];
+extern uint8_t REM_FILE_$DATA[];
+
+/*
+ * rem_file_$reply_hdr_t - the reply header APP_$RECEIVE hands back at
+ * app_$receive_rec_t.reply (0x00E6125A `movea.l (-0x30,A6),A0`).
+ *
+ * It is the same 0x18-byte application reply header msg/ and asknode/ read
+ * (msg_$reply_hdr_t, asknode_$reply_hdr_t): the template byte count at +0x02,
+ * the payload byte count at +0x04 and the request id at +0x06.  REM_FILE only
+ * reads those three words.
+ * TODO: the three subsystems should share one record owned by app/ or pkt/
+ * (bead source-di1a).
+ */
+typedef struct rem_file_$reply_hdr_t {
+    uint16_t    f_00;           /* 0x00: not read by REM_FILE */
+    uint16_t    template_len;   /* 0x02: 0x00E6126E, the reply header length */
+    uint16_t    data_len;       /* 0x04: 0x00E61262, the bulk payload length */
+    int16_t     reply_id;       /* 0x06: 0x00E61266, matched against pkt_id */
+} __attribute__((packed)) rem_file_$reply_hdr_t;
+
+_Static_assert(__builtin_offsetof(rem_file_$reply_hdr_t, template_len) == 0x02,
+               "rem_file_$reply_hdr_t.template_len");
+_Static_assert(__builtin_offsetof(rem_file_$reply_hdr_t, data_len) == 0x04,
+               "rem_file_$reply_hdr_t.data_len");
+_Static_assert(__builtin_offsetof(rem_file_$reply_hdr_t, reply_id) == 0x06,
+               "rem_file_$reply_hdr_t.reply_id");
 
 /*
  * Per-address-space retry count (accessed via A5-relative addressing)
@@ -289,6 +352,102 @@ void REM_FILE_$SEND_REQUEST(void *addr_info, void *request, int16_t request_len,
                             uint16_t *received_len, void *bulk_data, int16_t bulk_max,
                             int16_t *bulk_len, uint16_t *packet_id,
                             status_$t *status_ret);
+
+/*
+ * rem_file_$rn_op_buf_t - the request buffer REM_FILE_$RN_DO_OP is handed
+ * (0x00E61538, the record reached through A1 = (0xC,A6)).
+ *
+ * The head is the ordinary REM_FILE request header; 0x14..0x8D is the
+ * security context ACL_$GET_RE_ALL_SIDS and ACL_$GET_PROJ_LIST fill in place
+ * (0x00E6154E-0x00E61590), and everything from 0x8E on is interpreted
+ * differently for each of the four DIR opcodes RN_DO_OP knows about, so it is
+ * modelled as a union of per-opcode views.  Every offset below is the literal
+ * A1 displacement in the listing.
+ *
+ * The 0x122 and 0x108 request-length caps at 0x00E615E0 / 0x00E61626 are the
+ * ends of the two inline areas: 0xB0 + 0x72 = 0x122 for the 0x58 view and
+ * 0x96 + dest_off + len <= 0x108 for the 0x3C view.
+ */
+typedef struct rem_file_$rn_op_buf_t {
+    uint16_t    msg_type;           /* 0x00: stamped by REM_FILE_$SEND_REQUEST */
+    uint8_t     magic;              /* 0x02: 0x80 (0x00E615BE) */
+    uint8_t     op_code;            /* 0x03: a DIR_$SERVER opcode */
+    uint8_t     op_data[0x10];      /* 0x04: opcode-specific */
+    uint8_t     re_sids[0x14];      /* 0x14: ACL_$GET_RE_ALL_SIDS arg 4.
+                                     *       Byte 0x0D (record offset 0x21)
+                                     *       gets bit 2 set when the caller is
+                                     *       in a subsystem (0x00E615B4). */
+    uint8_t     sids[0x24];         /* 0x28: ACL_$GET_RE_ALL_SIDS arg 2 */
+    uint8_t     proj_list[0x40];    /* 0x4C: ACL_$GET_PROJ_LIST arg 1 */
+    int16_t     proj_count;         /* 0x8C: ACL_$GET_PROJ_LIST arg 3 */
+    /* The tail begins at 0x8E, which is only 2-aligned, so the union is
+     * packed (the m68k ABI aligns longwords to 2 anyway; a 64-bit host does
+     * not). */
+    union __attribute__((packed, aligned(2))) {
+        /* 0x58 SERVER_OP_DIR_LIST (0x00E615D2, 0x00E6167E) */
+        struct {
+            uint32_t data_va;       /* 0x8E: source of the outbound data */
+            uint16_t data_len;      /* 0x92: its byte count */
+            uint8_t  _pad_94[0x18]; /* 0x94 */
+            uint32_t reply_va;      /* 0xAC: where the bulk reply goes */
+            uint8_t  inline_data[0x72]; /* 0xB0: the copy target when the
+                                         *       data fits in the request */
+        } __attribute__((packed)) list;
+        /* 0x3C SERVER_OP_DIR_GET_ENTRY (0x00E61618) and
+         * 0x3E SERVER_OP_DIR_READ_LINK (0x00E616BC) */
+        struct {
+            uint16_t dest_off;      /* 0x8E: added to 0x96 to get the copy
+                                     *       target (0x00E6163E) */
+            uint16_t data_len;      /* 0x90 */
+            uint32_t data_va;       /* 0x92 */
+        } __attribute__((packed)) entry;
+        /* 0x42 SERVER_OP_DIR_READ_DIR (0x00E61696) */
+        struct {
+            uint8_t  _pad_8e[8];    /* 0x8E */
+            uint32_t reply_max;     /* 0x96: clamped to 0x400, UNSIGNED */
+            uint32_t reply_va;      /* 0x9A */
+        } __attribute__((packed)) read_dir;
+    } tail;
+} rem_file_$rn_op_buf_t;
+
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, op_code) == 0x03, "rn_op_buf.op_code");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, re_sids) == 0x14, "rn_op_buf.re_sids");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, sids) == 0x28, "rn_op_buf.sids");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, proj_list) == 0x4C, "rn_op_buf.proj_list");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, proj_count) == 0x8C, "rn_op_buf.proj_count");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, tail.list.data_va) == 0x8E, "rn_op_buf.list.data_va");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, tail.list.data_len) == 0x92, "rn_op_buf.list.data_len");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, tail.list.reply_va) == 0xAC, "rn_op_buf.list.reply_va");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, tail.list.inline_data) == 0xB0, "rn_op_buf.list.inline_data");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, tail.entry.dest_off) == 0x8E, "rn_op_buf.entry.dest_off");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, tail.entry.data_len) == 0x90, "rn_op_buf.entry.data_len");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, tail.entry.data_va) == 0x92, "rn_op_buf.entry.data_va");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, tail.read_dir.reply_max) == 0x96, "rn_op_buf.read_dir.reply_max");
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_buf_t, tail.read_dir.reply_va) == 0x9A, "rn_op_buf.read_dir.reply_va");
+_Static_assert(sizeof(rem_file_$rn_op_buf_t) == 0x122, "rn_op_buf size");
+
+/*
+ * rem_file_$rn_op_resp_t - the reply buffer REM_FILE_$RN_DO_OP is handed
+ * (A0 = (0x14,A6)).  Only the status is named: it is tested as its LOW WORD
+ * at +0x06 (`tst.w (0x6,A0)` at 0x00E61574 and 0x00E6159E) and written whole
+ * at 0x00E61708.
+ */
+typedef struct rem_file_$rn_op_resp_t {
+    uint8_t     head[4];            /* 0x00 */
+    status_$t   status;             /* 0x04 */
+} rem_file_$rn_op_resp_t;
+
+_Static_assert(__builtin_offsetof(rem_file_$rn_op_resp_t, status) == 0x04, "rn_op_resp.status");
+
+/*
+ * The four DIR_$SERVER opcodes REM_FILE_$RN_DO_OP gives special treatment.
+ * They are the same four REM_FILE_$SERVER has to juggle a netbuf for; see
+ * rem_file/server.c's SERVER_OP_DIR_* names.
+ */
+#define REM_FILE_RN_OP_DIR_GET_ENTRY    0x3C
+#define REM_FILE_RN_OP_DIR_READ_LINK    0x3E
+#define REM_FILE_RN_OP_DIR_READ_DIR     0x42
+#define REM_FILE_RN_OP_DIR_LIST         0x58
 
 /*
  * REM_FILE_$RN_DO_OP - Remote network do operation

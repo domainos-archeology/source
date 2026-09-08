@@ -26,6 +26,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
     int8_t is_local;
     int32_t routing_port;
     int16_t port_idx;
+    int16_t nexthop_metric;
     uint16_t sock_num;
     ec_$eventcount_t *socket_ec;
     int32_t wait_val;
@@ -68,16 +69,37 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         }
     }
 
-    /* Find next hop for routing */
+    /*
+     * Find next hop for routing (0x00E66056 - 0x00E66098).
+     *
+     * The destination record is built in place at A6-0x50 and only two of
+     * its fields are written:
+     *
+     *   00e66056  move.l D5,(-0x50,A6)           network  := routing_port
+     *   00e6605a  andi.l #-0x100000,(-0x4a,A6)   host_lo  &= 0xFFF00000
+     *   00e66062  ori.l  #0x1,(-0x4a,A6)         host_lo  |= 1
+     *
+     * A6-0x4A is six bytes into the record, i.e. rip_$dest_addr_t.host_lo -
+     * the Apollo node id lives in its low 20 bits (rip/rip.h).  The mask/or
+     * pair is a read-modify-write of an uninitialised frame slot: the
+     * original keeps whatever the top 12 bits happened to be and puts node 1
+     * in the rest.  host_hi (+0x04) and socket (+0x0A) are never written at
+     * all, which is why the record is left uninitialised here too.
+     */
     {
-        uint16_t nexthop_port;
-        uint8_t nexthop_addr[16];
-        int32_t addr_info[2];
+        rip_$dest_addr_t dest;
+        rip_$nexthop_t   nexthop;       /* A6-0x40, 10 bytes written back */
 
-        addr_info[0] = routing_port;
-        addr_info[1] = 1;  /* flags */
+        dest.network = (uint32_t)routing_port;
+        dest.host_lo = (dest.host_lo & 0xFFF00000u) | 1u;
 
-        RIP_$FIND_NEXTHOP(addr_info, 0, &port_idx, nexthop_addr, local_status);
+        /*
+         * 0x00E6607E: five arguments and a 0x14-byte cleanup (2 result + 4 +
+         * 2 + 4 + 4 + 4).  The result stays in D0 across the status test
+         * below and is what 0x00E660A0 examines.
+         */
+        nexthop_metric = RIP_$FIND_NEXTHOP(&dest, 0, &port_idx, &nexthop,
+                                           local_status);
     }
 
     if (local_status[0] != 0) {
@@ -85,8 +107,14 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         return;
     }
 
-    /* If querying local or direct route, add local node to list */
-    if (is_local < 0 || port_idx == 0) {
+    /*
+     * 0x00E6609C - 0x00E660BC: the local node goes into the list when this
+     * IS the local query, or when RIP_$FIND_NEXTHOP reported a DIRECT route.
+     * "tst.w D0w / seq / tst.b / bpl" at 0x00E660A0 tests the RETURN VALUE
+     * (the metric, zero for a route on our own network), not the port index
+     * the call also wrote.
+     */
+    if (is_local < 0 || nexthop_metric == 0) {
         *count = 1;
         node_list[0] = NODE_$ME;
         local_node = 0;
@@ -108,17 +136,35 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
     socket_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
     wait_val = EC_$READ(socket_ec) + 1;
 
-    /* Build WHO request packet */
+    /*
+     * Build the WHO request packet at A6-0x288 (0x00E6610E - 0x00E66138).
+     * It is an asknode_request_t (asknode_internal.h); only four of its
+     * fields are written, and the rest of the 0x18 bytes the send is told to
+     * take are whatever the frame held:
+     *
+     *   00e6610e  move.l #0x30045,(-0x288,A6)   version 3, request_type 0x45
+     *   00e66116  move.l NODE_$ME,(-0x280,A6)   +0x08  param1
+     *   00e66134  move.l (A1),(-0x27c,A6)       +0x0C  param2
+     *   00e66138  move.l #0x5b8d8,(-0x274,A6)   +0x14  param3
+     *
+     * -0x280 is +0x08 and -0x274 is +0x14 of that base, so node_id (+0x04)
+     * and the forwarded/count words (+0x10, +0x12) are never touched.
+     */
     {
-        uint32_t request[6];
+        asknode_request_t request;
         uint32_t pkt_info[8];
         uint16_t retry_hint;    /* A6-0x2BA */
 
-        request[0] = 0x00030045;  /* Version 3, request type 0x45 (WHO) */
-        request[1] = NODE_$ME;
-        /* Get port info from ROUTE_$PORTP */
-        request[2] = *(uint32_t *)(*((void **)&ROUTE_$PORTP + port_idx));
-        request[3] = 0x5B8D8;  /* Magic constant (timeout related) */
+        /* one move.l covers both words at +0x00 */
+        request.version = 3;
+        request.request_type = ASKNODE_REQ_TIME_SYNC;   /* 0x45 */
+        request.param1 = NODE_$ME;
+        /*
+         * 0x00E6611E - 0x00E66134: the network of the port RIP_$FIND_NEXTHOP
+         * chose, ROUTE_$PORTP[port_idx]->network.
+         */
+        request.param2 = ROUTE_$PORTP[port_idx]->network;
+        request.param3 = 0x5B8D8;  /* Magic constant (timeout related) */
 
         pkt_id = PKT_$NEXT_ID();
 
@@ -130,13 +176,18 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
             for (i = 0; i < 7; i++) *dst++ = *src++;
             *(uint16_t *)dst = *(uint16_t *)src;
         }
-        pkt_info[2] = 0;  /* Clear flags */
+        /*
+         * 0x00E66158 is "clr.w (-0x68,A6)", a WORD at pkt_info+0x08 - not
+         * the longword the tree used to clear.  The word above it, at +0x0A,
+         * keeps the value the PKT_$DEFAULT_INFO copy just put there.
+         */
+        *(uint16_t *)((uint8_t *)pkt_info + 8) = 0;
         *(uint16_t *)pkt_info = 0x90;  /* Packet length */
 
         /* Send WHO query */
         PKT_$SEND_INTERNET(routing_port, local_node, 4, -1, NODE_$ME,
                            sock_num, pkt_info, pkt_id,
-                           request, 0x18,
+                           &request, 0x18,
                            &ASKNODE_$EMPTY_DATA, 0,  /* No data */
                            &retry_hint, &resp_timeout, local_status);
     }

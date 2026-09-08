@@ -707,9 +707,11 @@ static void server_set_prot_attrib(rem_file_server_frame_t *f)
     ACL_$EXIT_SUPER();
 
     if (opcode == REM_FILE_OP_FILE_SET_PROT) {
+        /* 0x00E634BA `move.b (-0x42c,A2),-(SP)`: subsys_flag is a BYTE, not
+         * the word this used to read (bead source-w7lk). */
         FILE_$SET_PROT_INT(&f->request.uid, REQ_P(f, -0x428),
                            REQ_W(f, -0x42A), prot_type,
-                           (int16_t)REQ_W(f, -0x42C), &f->response.status);
+                           (boolean)REQ_B(f, -0x42C), &f->response.status);
     } else {
         /* 0x00E634D6-0x00E634F6: six pushes - uid, attr word (-0x42A),
          * value (-0x424), rights word (-0x426), option word (-0x42C),
@@ -857,7 +859,7 @@ void REM_FILE_$SERVER(void)
 
         f.tmp_index = depth;
         if (depth <= 8) {
-            ((uint32_t *)&NETWORK_$FILE_BACKLOG)[depth]++;
+            NETWORK_$FILE_BACKLOG[depth]++;
         } else {
             NETWORK_$FILE_BACKLOG_OVERFLOW++;
         }

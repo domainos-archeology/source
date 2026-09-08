@@ -9,15 +9,22 @@
  */
 
 #include "rem_file/rem_file_internal.h"
+#include "vtoc/vtoc.h"
 
 /*
  * Create type context structure (passed as param_1)
  */
 typedef struct {
-    uint32_t reserved[2];       /* Offset 0x00: Reserved */
-    uid_t parent_uid;           /* Offset 0x08: Parent UID */
-    void *addr_info;            /* Offset 0x10: Address info pointer */
+    uint32_t reserved[2];       /* 0x00 */
+    uid_t    parent_uid;        /* 0x08: "lea (0x8,A2),A0"  0x00E61794 */
+    uint32_t addr_info[2];      /* 0x10: the {network, node} address record
+                                 *       ITSELF - the sends are handed its
+                                 *       address ("pea (0x10,A2)" at
+                                 *       0x00E61776 and 0x00E61812) */
 } rem_file_create_type_ctx_t;
+
+_Static_assert(__builtin_offsetof(rem_file_create_type_ctx_t, parent_uid) == 0x08, "create_type_ctx.parent_uid");
+_Static_assert(__builtin_offsetof(rem_file_create_type_ctx_t, addr_info) == 0x10, "create_type_ctx.addr_info");
 
 /*
  * Create type phase 1 request structure
@@ -49,11 +56,32 @@ typedef struct {
 /*
  * Create type response structure
  */
-typedef struct {
-    uint8_t padding[REM_FILE_RESPONSE_BUF_SIZE - 0xE4];
-    uid_t session_uid;          /* Session UID (from phase 1) */
-    uint8_t phase2_data[0x90];  /* Phase 2 response data */
+/*
+ * The reply buffer.  REM_FILE_$CREATE_TYPE is the only client whose buffer is
+ * NOT at A6-0xC0 - it sits at A6-0xE8 - so a field's record offset is its A6
+ * displacement plus 0xE8.
+ */
+typedef union {
+    /* Phase 1's reply: the session UID at response+0x08. */
+    struct {
+        uint8_t  head[0x08];
+        uid_t    session_uid;   /* 0x08: "lea (-0xe0,A6),A0"  0x00E617A0 */
+    } phase1;
+    /* Phase 2's reply.  Its two payloads overlap phase 1's UID. */
+    struct {
+        uint8_t  head[0x0C];
+        uint32_t data_out[36];  /* 0x0C: "lea (-0xdc,A6),A0" + 36 longs
+                                 *                            0x00E6184C */
+        uint32_t header_out[8]; /* 0x9C: "lea (-0x4c,A6),A0" + 8 longs
+                                 *                            0x00E61836 */
+        uint16_t tail_bc;       /* 0xBC */
+    } phase2;
+    uint8_t raw[REM_FILE_RESPONSE_BUF_SIZE];
 } rem_file_create_type_resp_t;
+
+_Static_assert(__builtin_offsetof(rem_file_create_type_resp_t, phase1.session_uid) == 0x08, "create_type_resp.session_uid");
+_Static_assert(__builtin_offsetof(rem_file_create_type_resp_t, phase2.data_out) == 0x0C, "create_type_resp.data_out");
+_Static_assert(__builtin_offsetof(rem_file_create_type_resp_t, phase2.header_out) == 0x9C, "create_type_resp.header_out");
 
 /*
  * Output header structure (8 uint32s = 32 bytes)
@@ -79,7 +107,7 @@ void REM_FILE_$CREATE_TYPE(void *ctx_ptr, uint16_t flags, uid_t *type_uid,
     rem_file_create_type_header_out_t *header_out = (rem_file_create_type_header_out_t *)header_out_ptr;
     rem_file_create_type_p1_req_t req1;
     rem_file_create_type_p2_req_t req2;
-    uint8_t response[REM_FILE_RESPONSE_BUF_SIZE];
+    rem_file_create_type_resp_t response;   /* A6-0xE8 */
     uint16_t received_len;
     uint16_t packet_id;
     uint16_t zero = 0;
@@ -90,9 +118,9 @@ void REM_FILE_$CREATE_TYPE(void *ctx_ptr, uint16_t flags, uid_t *type_uid,
     req1.magic = 0x80;
     req1.opcode = REM_FILE_OP_GENERATE_UID;  /* 0x24, 0x00E61742 */
 
-    REM_FILE_$SEND_REQUEST(ctx->addr_info, &req1, 0x10,
+    REM_FILE_$SEND_REQUEST(&ctx->addr_info, &req1, 0x10,
                            &zero, 0,
-                           response, REM_FILE_RESPONSE_BUF_SIZE,
+                           &response, REM_FILE_RESPONSE_BUF_SIZE,
                            &received_len, &zero, 0,
                            (int16_t *)&zero, &packet_id,
                            status);
@@ -102,12 +130,10 @@ void REM_FILE_$CREATE_TYPE(void *ctx_ptr, uint16_t flags, uid_t *type_uid,
     }
 
     /* Phase 2: Send create type data */
-    rem_file_create_type_resp_t *resp = (rem_file_create_type_resp_t *)response;
-
     req2.magic = 0x80;
     req2.opcode = REM_FILE_OP_CREATE_TYPE;   /* 0x7E, 0x00E61788 */
     req2.parent_uid = ctx->parent_uid;
-    req2.session_uid = resp->session_uid;
+    req2.session_uid = response.phase1.session_uid;
     req2.type_uid = *type_uid;
     req2.parent_uid2 = ctx->parent_uid;
 
@@ -120,34 +146,34 @@ void REM_FILE_$CREATE_TYPE(void *ctx_ptr, uint16_t flags, uid_t *type_uid,
     req2.flags = flags;
     req2.flags2 = flags2;
 
-    REM_FILE_$SEND_REQUEST(ctx->addr_info, &req2, 0x5C,
+    REM_FILE_$SEND_REQUEST(&ctx->addr_info, &req2, 0x5C,
                            &zero, 0,
-                           response, REM_FILE_RESPONSE_BUF_SIZE,
+                           &response, REM_FILE_RESPONSE_BUF_SIZE,
                            &received_len, &zero, 0,
                            (int16_t *)&zero, &packet_id,
                            status);
 
     /* Treat duplicate UID as success */
-    if (*status == status_$ok || *status == 0x00020007) {  /* status_$vtoc_duplicate_uid */
-        /* Copy address info to header output */
-        uint32_t *addr_info_words = (uint32_t *)ctx->addr_info;
-        header_out->data[6] = addr_info_words[0];
-        header_out->data[7] = addr_info_words[1];
+    /* 0x00E6181E-0x00E61828 */
+    if (*status == status_$ok || *status == status_$vtoc_duplicate_uid) {
+        /* 0x00E6182A-0x00E61832: the caller's own address record is written
+         * back INTO the reply buffer at response+0xAC / +0xB0 - which is
+         * header_out[4] and [5] of the block copied out next, so those two
+         * longwords survive the copy unchanged. */
+        response.phase2.header_out[4] = ctx->addr_info[0];
+        response.phase2.header_out[5] = ctx->addr_info[1];
 
-        /* Copy response header data (8 uint32s from offset -0x4C) */
-        resp = (rem_file_create_type_resp_t *)response;
-        uint32_t *resp_header = (uint32_t *)(response + REM_FILE_RESPONSE_BUF_SIZE - 0x50);
+        /* 0x00E61836-0x00E61844: 8 longwords from response+0x9C. */
         for (i = 0; i < 8; i++) {
-            header_out->data[i] = resp_header[i];
+            header_out->data[i] = response.phase2.header_out[i];
         }
 
-        /* Set high bit of byte at offset 0x1D */
+        /* 0x00E61846 */
         ((uint8_t *)header_out)[0x1D] |= 0x80;
 
-        /* Copy response data (36 uint32s from offset -0xDC) */
-        uint32_t *resp_data = (uint32_t *)(response + REM_FILE_RESPONSE_BUF_SIZE - 0xE0);
+        /* 0x00E6184C-0x00E6185C: 36 longwords from response+0x0C. */
         for (i = 0; i < 36; i++) {
-            data_out->data[i] = resp_data[i];
+            data_out->data[i] = response.phase2.data_out[i];
         }
     }
 }

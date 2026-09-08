@@ -26,10 +26,15 @@ typedef struct {
  * ACL image response structure
  */
 typedef struct {
-    uint8_t padding[REM_FILE_RESPONSE_BUF_SIZE - 0xB6];
-    uint16_t acl_len;       /* ACL length */
-    uint32_t acl_header[11]; /* ACL header data (44 bytes) */
+    uint8_t  head[0x0A];     /* 0x00: pkt_flag/magic/opcode/status + 2 bytes */
+    uint16_t acl_len;        /* 0x0A: "move.w (-0xb6,A6),(A0)"  0x00E6281E */
+    uint32_t acl_header[11]; /* 0x0C: "lea (-0xb4,A6),A1" + 11 longs
+                              *       (dbf #0xA)           0x00E62822 */
 } rem_file_acl_image_resp_t;
+
+/* Reply offsets are the A6 displacement plus 0xC0 (the buffer is at A6-0xC0). */
+_Static_assert(__builtin_offsetof(rem_file_acl_image_resp_t, acl_len) == 0x0A, "acl_image_resp.acl_len");
+_Static_assert(__builtin_offsetof(rem_file_acl_image_resp_t, acl_header) == 0x0C, "acl_image_resp.acl_header");
 
 void REM_FILE_$ACL_IMAGE(void *addr_info, uid_t *file_uid,
                          uint8_t acl_type, void *bulk_data_out,

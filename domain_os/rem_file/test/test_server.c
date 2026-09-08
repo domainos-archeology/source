@@ -62,9 +62,8 @@ uint32_t  NETWORK_$ALLOWED_SERVICE;   /* NETWORK_$CAPABLE_FLAGS is bits 16..23 *
 int8_t    NETWORK_$DISKLESS;
 int8_t    NETWORK_$REALLY_DISKLESS;
 uint32_t  NETWORK_$MOTHER_NODE;
-uint32_t  NETWORK_$FILE_BACKLOG;
+uint32_t  NETWORK_$FILE_BACKLOG[NETWORK_FILE_BACKLOG_BUCKETS];
 uint32_t  network_file_backlog_tail[16];    /* buckets 1..8 plus slack */
-uint32_t  NETWORK_$FILE_BACKLOG_OVERFLOW;
 uint8_t  *NETWORK_$SERVICE_INFO_PTR;
 uint32_t  NODE_$ME;
 uint32_t  TIME_$CLOCKH;
@@ -284,7 +283,7 @@ void FILE_$READ_LOCK_ENTRYI(uid_t *u, uint16_t *idx,
 void FILE_$DELETE(uid_t *u, status_$t *st) { (void)u; *st = status_$ok; }
 
 void FILE_$SET_PROT_INT(uid_t *u, void *a, uint16_t t, uint16_t p,
-                        int16_t s, status_$t *st)
+                        boolean s, status_$t *st)
 { (void)u; (void)a; (void)t; (void)p; (void)s; *st = status_$ok; }
 
 void FILE_$SET_ATTRIBUTE(uid_t *u, int16_t id, void *v, uint16_t rights,
@@ -410,8 +409,7 @@ static void reset_world(void)
     memset(service_info, 0, sizeof(service_info));
     memset(network_file_backlog_tail, 0, sizeof(network_file_backlog_tail));
 
-    NETWORK_$FILE_BACKLOG = 0;
-    NETWORK_$FILE_BACKLOG_OVERFLOW = 0;
+    memset(NETWORK_$FILE_BACKLOG, 0, sizeof(NETWORK_$FILE_BACKLOG));
     NETWORK_$SERVICE_INFO_PTR = service_info;
     NETWORK_$ALLOWED_SERVICE = (uint32_t)NETWORK_CAP_FILE_SERVER << 16;
     NETWORK_$DISKLESS = 0;
@@ -527,14 +525,20 @@ TEST(backlog_histogram_indexes_by_depth_byte)
     reset_world();
     service_info[0x15] = 3;
     REM_FILE_$SERVER();
-    ASSERT_EQ(1, (&NETWORK_$FILE_BACKLOG)[3]);
+    ASSERT_EQ(1, NETWORK_$FILE_BACKLOG[3]);
     ASSERT_EQ(0, NETWORK_$FILE_BACKLOG_OVERFLOW);
 
+    /*
+     * Depth 8 and the "deeper than 8" branch land on the SAME longword:
+     * 0x00E63644 bumps 0xE24BD0 + 4*depth and 0x00E6364E bumps 0xE24BF0,
+     * which is 0xE24BD0 + 4*8.  NETWORK_$FILE_BACKLOG_OVERFLOW is therefore
+     * bucket 8, not a cell of its own (network/network.h).
+     */
     reset_world();
     service_info[0x15] = 8;
     REM_FILE_$SERVER();
-    ASSERT_EQ(1, (&NETWORK_$FILE_BACKLOG)[8]);
-    ASSERT_EQ(0, NETWORK_$FILE_BACKLOG_OVERFLOW);
+    ASSERT_EQ(1, NETWORK_$FILE_BACKLOG[8]);
+    ASSERT_EQ(1, NETWORK_$FILE_BACKLOG_OVERFLOW);
 
     reset_world();
     service_info[0x15] = 9;

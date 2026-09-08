@@ -584,7 +584,23 @@ void DISK_$SPIN_DOWN(void);
 /* DISK_$REVALID takes a disk_$volume_t *, so it is declared in
  * disk/disk_internal.h; nothing outside disk/ calls it. */
 void DISK_$WRITE_PROTECT(int16_t mode, int16_t vol_idx, status_$t *status);
-void DISK_$GET_STATS(int16_t dev_type, int16_t controller, uint8_t *has_stats, void *stats);
+/*
+ * DISK_$GET_STATS (0x00E3DB9C) takes FIVE arguments, not four: its frame is
+ * (0x8,A6) word, (0xA,A6) word, (0xC,A6) word, (0xE,A6) long, (0x12,A6) long
+ * and every caller cleans up 0x10 bytes (2 result + 2 + 2 + 2 + 4 + 4).  The
+ * first two words are matched against a controller table entry's +0x04 and
+ * +0x06, i.e. dcte_t.ctype and dcte_t.cnum (0x00E3DBE0 / 0x00E3DBE6); the
+ * third is handed to the driver's own statistics routine (0x00E3DBF6).
+ * The stats buffer is 22 bytes: DISK_$GET_STATS itself preloads it with five
+ * longwords and a word from A5+0x180 (0x00E3DBC4-0x00E3DBCE).
+ *
+ * ASKNODE_$INTERNET_INFO calls it three ways: (0,0,0) for the summary
+ * (0x00E647FA), (0,*param,*(param+2)) for one drive (0x00E6484A) and
+ * (4,0,unit) for each of four units (0x00E6491C).
+ */
+#define DISK_STATS_SIZE 0x16
+void DISK_$GET_STATS(int16_t ctype, int16_t cnum, int16_t unit,
+                     uint8_t *has_stats, void *stats);
 void DISK_$UNASSIGN(uint16_t *vol_idx_ptr, status_$t *status);
 void DISK_$UNASSIGN_ALL(void);
 void DISK_$REVALIDATE(int16_t vol_idx);
@@ -627,6 +643,47 @@ void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
                    void *buffer, uint32_t *info, status_$t *status);
 void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *buffer_ptr,
                              uint32_t count, status_$t *status);
+/*
+ * disk_$mnt_info_t - the record DISK_$GET_MNT_INFO fills in (disk/get_mnt_info.c
+ * documents the field origins).  ASKNODE_$INTERNET_INFO passes 0x2A as its
+ * size (the constant cell at 0x00E658BA) and reads dev_type, unit_id and the
+ * flags byte back out (0x00E64D00-0x00E64DC4).
+ */
+typedef struct disk_$mnt_info_t {
+    uint32_t vol_start;         /* 0x00: volume address range start */
+    uint32_t vol_end;           /* 0x04: volume address range end */
+    uint16_t dev_type;          /* 0x08: device type (dev_info +4) */
+    uint16_t unit_id;           /* 0x0A: unit id (descriptor +0x9A) */
+    uint16_t bat_step;          /* 0x0C: descriptor +0xA2 */
+    uint16_t sectors_per_track; /* 0x0E: descriptor +0x9C, first word */
+    uint16_t heads;             /* 0x10: descriptor +0x9E */
+    uint16_t sectors_per_block; /* 0x12: 1 << sector_size_code */
+    uint16_t n_partitions;      /* 0x14 */
+    uint16_t part_info[8];      /* 0x16..0x25 */
+    uint16_t interleave;        /* 0x26: descriptor +0xB2 */
+    /*
+     * 0x28 is a BYTE everywhere: DISK_$GET_MNT_INFO sets and clears bit 6 of
+     * it with bset.b/bclr.b (0x00E6BEBC / 0x00E6BECA) and
+     * ASKNODE_$INTERNET_INFO tests the enclosing word's bit 15 and bit 14
+     * (0x00E64D00 "tst.w"; 0x00E64DA4 "btst.l #0xE"), which are bits 7 and 6
+     * of this byte.
+     */
+    uint8_t  flags;             /* 0x28 */
+    uint8_t  _pad_29;           /* 0x29 */
+} __attribute__((packed)) disk_$mnt_info_t;
+
+#define DISK_MNT_FLAG_LOGICAL_VOLUME 0x40   /* bit 6 (0x00E6BEBC) */
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(disk_$mnt_info_t, dev_type)   == 0x08, "disk_$mnt_info_t.dev_type");
+_Static_assert(offsetof(disk_$mnt_info_t, unit_id)    == 0x0A, "disk_$mnt_info_t.unit_id");
+_Static_assert(offsetof(disk_$mnt_info_t, part_info)  == 0x16, "disk_$mnt_info_t.part_info");
+_Static_assert(offsetof(disk_$mnt_info_t, interleave) == 0x26, "disk_$mnt_info_t.interleave");
+_Static_assert(offsetof(disk_$mnt_info_t, flags)      == 0x28, "disk_$mnt_info_t.flags");
+_Static_assert(sizeof(disk_$mnt_info_t) == 0x2A, "disk_$mnt_info_t must be 0x2A bytes");
+#endif
+
+/* param_2 is the record size the caller declares - ASKNODE passes 0x2A. */
 void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
                         status_$t *status);
 

@@ -4,11 +4,11 @@
  * Copies key fields from a full port structure (0x5C bytes) into a
  * compact 12-byte format suitable for passing to other functions.
  *
- * Output format (12 bytes):
+ * Output format (12 bytes, one route_$short_port_t):
  *   +0x00: network (4 bytes) - from port_struct+0x00
- *   +0x04: host ID (4 bytes) - from port_struct+0x2C
- *   +0x08: network2 (2 bytes) - from port_struct+0x30
- *   +0x0A: socket (2 bytes) - from port_struct+0x36
+ *   +0x04: status (2 bytes) + port_type (2 bytes) - one move.l from +0x2C
+ *   +0x08: socket (2 bytes) - from port_struct+0x30
+ *   +0x0A: queue_length/socket2 (2 bytes) - from port_struct+0x36
  *
  * Original address: 0x00E69C08
  *
@@ -32,18 +32,18 @@ void ROUTE_$SHORT_PORT(route_$port_t *port_struct, route_$short_port_t *short_in
     short_info->network = port_struct->network;
     
     /*
-     * Copy host_id from port structure offset 0x2C.
-     * This is a 4-byte field that spans:
-     *   - active status (2 bytes at 0x2C)
-     *   - port_type/network (2 bytes at 0x2E)
-     * The original code treats this as a single 32-bit value.
+     * 0x00E69C16 "move.l (0x2c,A0),(0x4,A1)" copies port+0x2C and port+0x2E
+     * as one longword; the record calls the two halves status and port_type
+     * (see route_$short_port_t), so copy them as the two words they are
+     * rather than through a 32-bit view that would swap on a little-endian
+     * host.
      */
-    short_info->host_id = (((uint32_t)port_struct->active) << 16) |
-                          ((uint32_t)port_struct->port_type);
+    short_info->status = port_struct->active;
+    short_info->port_type = port_struct->port_type;
     
     /* Copy socket from port structure offset 0x30 */
-    short_info->network2 = port_struct->socket;
+    short_info->socket = port_struct->socket;
     
     /* Copy secondary socket from port structure offset 0x36 */
-    short_info->socket = port_struct->socket2;
+    short_info->queue_length = port_struct->socket2;
 }

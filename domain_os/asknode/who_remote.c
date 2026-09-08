@@ -69,8 +69,12 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
         req_version = 3;
     }
 
-    /* Determine target node */
-    int32_t target_node = NODE_$ME;
+    /*
+     * 0x00E663D2 / 0x00E663DA: the request's target node starts as NODE_$ME
+     * and PKT_$SEND_INTERNET's destination as *node_id; the remote form
+     * overwrites the first and the local form the second.
+     */
+    int32_t target_node = (int32_t)NODE_$ME;
     int32_t target_node_param = *node_id;
 
     /* Determine routing port */
@@ -97,8 +101,12 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
         }
     }
 
-    /* Open socket 5 for receiving WHO responses */
-    if (SOCK_$OPEN(ASKNODE_WHO_SOCKET, 0x200000, 0) >= 0) {
+    /*
+     * Open socket 5 for receiving WHO responses.  The flag longword is
+     * 0x00200020 ("move.l #0x200020,-(SP)" at 0x00E66434) - the same value
+     * ASKNODE_$WHO_NOTOPO hands SOCK_$ALLOCATE - not 0x200000.
+     */
+    if (SOCK_$OPEN(ASKNODE_WHO_SOCKET, 0x200020, 0) >= 0) {
         *status = status_$network_conflict_with_another_node_listing;
         return;
     }
@@ -108,31 +116,57 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     ec_$eventcount_t *socket_ec = SOCK_$EVENT_COUNTERS[ASKNODE_WHO_SOCKET - 1];
     int32_t wait_val;
 
-    /* Build request based on local/remote */
-    uint32_t request[6];
-    int16_t req_type;
+    /*
+     * Build the request at A6-0x268 (0x00E663BC - 0x00E664BC).  It is an
+     * asknode_request_t (asknode_internal.h) and, like every Pascal variant
+     * record here, the two forms overlay different shapes on the same words:
+     *
+     *   +0x00 version        2 when ASKNODE_$PROTOCOL_VERSION == 3, else 3
+     *   +0x02 request_type   0 (simple WHO) or 0x2D (remote WHO)
+     *   +0x04 node_id        NODE_$ME (0x00E663D2), overwritten with
+     *                        *node_id in the remote form (0x00E664B8)
+     *   simple form:
+     *   +0x08 a WORD holding max_nodes, or max_nodes - 1 when this is the
+     *         local query (0x00E6648A / 0x00E66490)
+     *   remote form:
+     *   +0x08 long NODE_$ME     (0x00E6649E)
+     *   +0x0C long ROUTE_$PORT  (0x00E664A6)
+     *   +0x10 byte 0xFF, "st"   (0x00E664B4) - the forwarded flag
+     *   +0x12 word max_nodes    (0x00E664AE)
+     *   +0x14 long 0x4000       (0x00E664BC)
+     *
+     * The tree used to write these one slot lower and as longwords
+     * throughout, which shifted every field of the remote form.
+     */
+    asknode_request_t request;
 
-    if (is_local < 0 || routing_port == 0 || routing_port == (int32_t)ROUTE_$PORT) {
-        /* Local or direct query */
-        req_type = 0;  /* Simple WHO */
-        request[1] = 0;  /* No specific target */
+    request.version = req_version;
+    request.node_id = (uint32_t)target_node;
+
+    if (is_local < 0 || routing_port == 0 ||
+        routing_port == (int32_t)ROUTE_$PORT) {
+        /* Simple WHO: the responder enumerates for us. */
+        request.request_type = ASKNODE_REQ_WHO;      /* 0 */
 
         if (is_local < 0) {
+            /* 0x00E6647A - 0x00E6648A */
             pkt_len = 0x90;
             target_node_param = 2;
-            request[2] = max_nodes - 1;
+            *(uint16_t *)((uint8_t *)&request + 0x08) =
+                (uint16_t)(max_nodes - 1);
         } else {
-            request[2] = max_nodes;
+            /* 0x00E66490 */
+            *(uint16_t *)((uint8_t *)&request + 0x08) = (uint16_t)max_nodes;
         }
     } else {
-        /* Remote query via gateway */
-        req_type = 0x2D;  /* Remote WHO */
-        request[1] = NODE_$ME;  /* Reply to us */
-        request[2] = ROUTE_$PORT;
-        request[3] = max_nodes;
-        request[4] = -1;  /* flags */
-        target_node = *node_id;
-        request[5] = 0x4000;  /* timeout */
+        /* Remote WHO through a gateway. */
+        request.request_type = ASKNODE_REQ_WHO_REMOTE;   /* 0x2D */
+        request.param1 = NODE_$ME;      /* +0x08: where to reply */
+        request.param2 = ROUTE_$PORT;   /* +0x0C */
+        request.count = max_nodes;      /* +0x12 */
+        request.forwarded = (int8_t)0xFF;
+        request.node_id = (uint32_t)*node_id;   /* +0x04, after the default */
+        request.param3 = 0x4000;        /* +0x14: timeout */
     }
 
     /* Generate packet ID */
@@ -150,22 +184,25 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     }
     *(uint16_t *)pkt_info = pkt_len;
 
-    /* Build request header */
-    request[0] = (req_version << 16) | req_type;
-
     /* Send WHO query */
     uint16_t retry_hint;        /* A6-0x28A */
     uint16_t resp_timeout;      /* A6-0x288, read into D7 at 0x00E6652C */
     status_$t send_status;
     PKT_$SEND_INTERNET(routing_port, target_node_param, 4, -1, NODE_$ME,
                        ASKNODE_WHO_SOCKET, pkt_info, pkt_id,
-                       request, 0x18,
+                       &request, 0x18,
                        &ASKNODE_$EMPTY_DATA, 0,  /* No data */
                        &retry_hint, &resp_timeout, &local_status);
 
+    /*
+     * 0x00E66530: a failed send branches to 0x00E66714, the common tail that
+     * closes the socket and writes *count and *status - it does not have an
+     * exit of its own.
+     */
     if (local_status != 0) {
-        *status = local_status;
         SOCK_$CLOSE(ASKNODE_WHO_SOCKET);
+        *count = initial_count;
+        *status = local_status;
         return;
     }
 
@@ -300,19 +337,27 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
                     node_list[pos - 1] = response.node_id;
                 }
             } else {
-                /* Sequential response - check for duplicates */
+                /*
+                 * Sequential response (0x00E666E4 - 0x00E6670A).  The scan
+                 * for an already-listed node branches to 0x00E66714 - the
+                 * function's EXIT - not to the loop condition: a node that
+                 * answers twice ENDS the whole listing, it is not merely
+                 * skipped.  That is how the broadcast form knows it has been
+                 * all the way round the ring.
+                 */
                 int16_t i;
-                int found = 0;
-                for (i = 0; i < initial_count; i++) {
+                int duplicate = 0;
+                for (i = 0; i < (int16_t)initial_count; i++) {
                     if (node_list[i] == (int32_t)response.node_id) {
-                        found = 1;
+                        duplicate = 1;
                         break;
                     }
                 }
-                if (!found) {
-                    initial_count++;
-                    node_list[initial_count - 1] = response.node_id;
+                if (duplicate) {
+                    break;
                 }
+                initial_count++;
+                node_list[initial_count - 1] = response.node_id;
             }
         }
     }

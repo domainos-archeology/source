@@ -515,7 +515,9 @@ int16_t PROC2_$FIND_INDEX(uid_t *proc_uid, status_$t *status_ret);
  * PROC2_$GET_ASID - Get address space ID for process
  * Original address: 0x00e40702
  */
-void PROC2_$GET_ASID(uid_t *proc_uid, status_$t *status_ret);
+/* Returns the ASID in D0; ASKNODE_$INTERNET_INFO keeps it
+ * ("move.w D0w,(-0x138,A6)" at 0x00E6539A). */
+uint16_t PROC2_$GET_ASID(uid_t *proc_uid, status_$t *status_ret);
 
 /*
  * PROC2_$FIND_ASID - Find process by UID and return ASID/UPID
@@ -572,8 +574,16 @@ void PROC2_$NAME_TO_UID(char *name, int16_t *name_len, uid_t *uid_ret,
  * PROC2_$INFO - Get process info by PID
  * Original address: 0x00e407b4
  */
-void PROC2_$INFO(int16_t *pid, int16_t *offset, void *info, uint16_t *info_len,
-                 status_$t *status_ret);
+/*
+ * The first two arguments are the other way round from the old spelling:
+ * (0x8,A6) is the word PROC2_$INFO scans the process table for
+ * ("tst.w (A0)" at 0x00E407CC, "cmp.w (A0),D1w" at 0x00E407E8) and
+ * (0xC,A6) is the word it hands to its per-process helper (0x00E40814).
+ * ASKNODE_$INTERNET_INFO passes a constant zero for the first and the
+ * caller's PID for the second (0x00E64BC8-0x00E64BDA).
+ */
+void PROC2_$INFO(int16_t *scan_key, int16_t *pid, void *info,
+                 uint16_t *info_len, status_$t *status_ret);
 
 /*
  * PROC2_$GET_INFO - Get process info by UID

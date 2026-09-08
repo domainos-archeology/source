@@ -47,40 +47,48 @@
  *   00e70a3a    rts
  *
  * Parameters:
- *   info_flags - Pointer to receive info flags byte
+ *   info_flags - Pointer to the WORD the flags live in: 0x00E709F0
+ *                clears it with clr.w and every bset.b addresses the
+ *                byte at offset 0, i.e. its high half on m68k.
  *   info_byte  - Pointer to receive additional info byte
  */
-void PEB_$GET_INFO(uint8_t *info_flags, uint8_t *info_byte)
+void PEB_$GET_INFO(uint16_t *info_flags, uint8_t *info_byte)
 {
-    /* Clear the info flags (both bytes if treated as word) */
-    *info_flags = 0;
-    *(info_flags + 1) = 0;
+    /* 0x00E709F0: clr.w (A0) - the whole word, both bytes. */
 
-    /* Set flag bits based on PEB state */
+    *info_flags = 0;
+
+    /*
+     * Every flag is set with bset.b on the byte at offset 0 of that word
+     * (0x00E709FA, 0x00E70A06, 0x00E70A12, 0x00E70A1E, 0x00E70A2A), i.e.
+     * the HIGH byte of the big-endian word: bit n of that byte is bit n+8
+     * of the word, so the byte masks are shifted left by 8 here and the
+     * word keeps the image's value on any host byte order.
+     */
 
     /* Bit 7: WCS microcode loaded */
     if (PEB_$WCS_LOADED < 0) {
-        *info_flags |= PEB_INFO_WCS_LOADED;
+        *info_flags |= (uint16_t)(PEB_INFO_WCS_LOADED << 8);
     }
 
     /* Bit 6: MC68881 save mode */
     if (PEB_$M68881_SAVE_FLAG < 0) {
-        *info_flags |= PEB_INFO_M68881_MODE;
+        *info_flags |= (uint16_t)(PEB_INFO_M68881_MODE << 8);
     }
 
     /* Bit 5: Save pending flag */
     if (PEB_$SAVEP_FLAG < 0) {
-        *info_flags |= PEB_INFO_SAVEP_FLAG;
+        *info_flags |= (uint16_t)(PEB_INFO_SAVEP_FLAG << 8);
     }
 
     /* Bit 3: Unknown flag (flag_1d) */
     if (PEB_GLOBALS.flag_1d < 0) {
-        *info_flags |= PEB_INFO_UNKNOWN_08;
+        *info_flags |= (uint16_t)(PEB_INFO_UNKNOWN_08 << 8);
     }
 
     /* Bit 4: Unknown flag (flag_21) */
     if (PEB_GLOBALS.flag_21 < 0) {
-        *info_flags |= PEB_INFO_UNKNOWN_10;
+        *info_flags |= (uint16_t)(PEB_INFO_UNKNOWN_10 << 8);
     }
 
     /* Copy the info byte */

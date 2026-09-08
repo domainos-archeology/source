@@ -270,6 +270,26 @@ dcte_t *IO_$GET_DCTE(uint16_t *ctypep, uint16_t *cnump, status_$t *status_ret);
 void IO_$INIT(void *param1, char *verbose_flag, status_$t *status_ret);
 
 /*
+ * IO_$GET_CONFIG - report which optional controllers are present
+ *
+ * Clears all four words and then sets bits in the LOW byte of each
+ * (i.e. bits 0..7 of the word on m68k) according to what IO_$FIND_CTLR
+ * (0x00E1A404) reports:
+ *
+ *   config1 bit 0 / bit 1   two controller probes (0x00E72354 / 0x00E7236E)
+ *   config2 bit 0           a third probe          (0x00E7238E)
+ *   config3                 cleared, never set     (0x00E72398)
+ *   config4 bit 0           a flag byte at 0xE2C8B8 (0x00E723AC)
+ *
+ * ASKNODE_$INTERNET_INFO's request-0x27 arm passes reply+0x22, +0x24, +0x26
+ * and +0x28 (0x00E64D3C-0x00E64D48).
+ *
+ * Original address: 0x00E72334 (134 bytes)
+ */
+void IO_$GET_CONFIG(uint16_t *config1, uint16_t *config2,
+                    uint16_t *config3, uint16_t *config4);
+
+/*
  * io_$probe - Hardware probe helper
  *
  * Probes for a controller by writing a signature and reading it back.

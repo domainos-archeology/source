@@ -16,6 +16,7 @@
 #define RIP_H
 
 #include "base/base.h"
+#include "ml/ml.h"   /* ml_$exclusion_t: rip_$data_t's three locks */
 
 /* Forward declaration for opaque entry type */
 struct rip_$entry_t;
@@ -73,14 +74,164 @@ _Static_assert(offsetof(rip_$nexthop_t, host_lo) == 6, "rip_$nexthop_t.host_lo")
  *
  * Located at 0xE262AC, tracks packet processing statistics.
  */
+/*
+ * The counter widths and offsets come from the instructions that touch them,
+ * not from guesswork:
+ *   0x00E68AD6  addq.l #0x1,(0x00E262AE).l   packets_received, a LONG at +0x02
+ *   0x00E68B16  addq.w #0x1,(0x00E262B4).l   errors, a WORD at +0x08
+ *   0x00E68DFC  addq.w #0x1,(0x00E262B6).l   unknown_commands, a WORD at +0x0A
+ *   0x00E68E14  addq.w #0x1,(0x00E262B6).l   the same word
+ * and ASKNODE_$INTERNET_INFO's request-0x41 arm reads the per-network packet
+ * counters:
+ *   0x00E6526E  move.l (0x00E262B8).l,(0x16,A1)      local network, +0x0C
+ *   0x00E652F2  move.l (0x10,A4,D4*0x4),(0x16,A1)    A4 = RIP_$STATS,
+ *                                                    D4 = the RIP_$INFO index
+ * which makes the record 0x10 + 64*4 = 0x110 bytes, the size the older
+ * comment here guessed at.
+ */
 typedef struct rip_$stats_t {
     uint16_t    _reserved0;         /* 0x00: Reserved */
     uint32_t    packets_received;   /* 0x02: Total packets received */
     uint16_t    _reserved1;         /* 0x06: Reserved */
-    uint32_t    errors;             /* 0x08: Packet errors */
-    uint16_t    unknown_commands;   /* 0x0C: Unknown command types */
-    /* ... more fields follow to ~0x110 bytes */
-} rip_$stats_t;
+    uint16_t    errors;             /* 0x08: Packet errors */
+    uint16_t    unknown_commands;   /* 0x0A: Unknown command types */
+    uint32_t    local_net_pkts;     /* 0x0C: packets for the local network */
+    uint32_t    net_pkts[64];       /* 0x10: one counter per RIP_$INFO slot */
+} __attribute__((packed)) rip_$stats_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(rip_$stats_t, packets_received) == 0x02, "rip_$stats_t.packets_received");
+_Static_assert(offsetof(rip_$stats_t, errors)           == 0x08, "rip_$stats_t.errors");
+_Static_assert(offsetof(rip_$stats_t, unknown_commands) == 0x0A, "rip_$stats_t.unknown_commands");
+_Static_assert(offsetof(rip_$stats_t, local_net_pkts)   == 0x0C, "rip_$stats_t.local_net_pkts");
+_Static_assert(offsetof(rip_$stats_t, net_pkts)         == 0x10, "rip_$stats_t.net_pkts");
+_Static_assert(sizeof(rip_$stats_t) == 0x110, "rip_$stats_t must be 0x110 bytes");
+#endif
+
+/*
+ * ============================================================================
+ * Routing table (moved here from rip/rip_internal.h)
+ * ============================================================================
+ *
+ * ASKNODE_$INTERNET_INFO's request-0x41 arm (0x00E6529C-0x00E65320) walks
+ * RIP_$INFO itself, so the table constants and the entry layout have to be
+ * reachable from outside the RIP subsystem.
+ */
+
+/* Number of entries in the routing table (hash table size) */
+#define RIP_TABLE_SIZE          64
+#define RIP_TABLE_MASK          0x3F
+
+/* Route timeout value in clock ticks (360 = 6 minutes at 1 tick/sec) */
+#define RIP_ROUTE_TIMEOUT       0x168
+
+/* Route states (stored in top 2 bits of flags field) */
+#define RIP_STATE_UNUSED        0   /* Slot is empty */
+#define RIP_STATE_VALID         1   /* Route is active */
+#define RIP_STATE_AGING         2   /* Route is being aged out */
+#define RIP_STATE_EXPIRED       3   /* Route has expired */
+
+#define RIP_STATE_SHIFT         6
+#define RIP_STATE_MASK          0xC0
+
+/* RIP infinity metric (unreachable) */
+#define RIP_INFINITY            0x11
+
+/* Number of route slots per entry (standard route + non-standard route) */
+#define RIP_ROUTES_PER_ENTRY    2
+
+/* Priority level for RIP lock */
+#define RIP_LOCK_PRIORITY       0x0E
+
+/*
+ * Route entry structure (0x14 = 20 bytes)
+ *
+ * Holds routing information for reaching a network via a specific next hop.
+ * Each routing table entry has two route slots: one for standard routes
+ * and one for non-standard routes.
+ */
+typedef struct rip_$route_t {
+    uint32_t            expiration;     /* 0x00: Expiration time (TIME_$CLOCKH ticks) */
+    rip_$xns_addr_t     nexthop;        /* 0x04: Next hop address (10 bytes) */
+    uint8_t             port;           /* 0x0E: Port number */
+    uint8_t             metric;         /* 0x0F: Hop count (0x11 = infinity) */
+    uint8_t             flags;          /* 0x10: state in bits 6-7.  This is a
+                                         *       BYTE: every RIP function uses
+                                         *       byte operations on it -
+                                         *       "and.b (0x10,A2),D5b" with
+                                         *       0xC0 at 0x00E155F8 and
+                                         *       0x00E872E8, "andi.b #0x3f" at
+                                         *       0x00E1562A, "ori.b #-0x80" /
+                                         *       "ori.b #-0x40" at 0x00E15630 /
+                                         *       0x00E15656 */
+    uint8_t             _pad_11;        /* 0x11 */
+    uint16_t            _pad_12;        /* 0x12: padding to 0x14 bytes */
+} rip_$route_t;
+
+/*
+ * Routing table entry structure (0x2c = 44 bytes)
+ *
+ * Each entry represents a destination network with two possible routes:
+ * - routes[0]: Standard route (for standard IDP traffic)
+ * - routes[1]: Non-standard route (for non-standard traffic types)
+ */
+typedef struct rip_$entry_t {
+    uint32_t        network;            /* 0x00: Destination network address */
+    rip_$route_t    routes[RIP_ROUTES_PER_ENTRY]; /* 0x04: Route entries */
+} rip_$entry_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(rip_$route_t, nexthop) == 0x04, "rip_$route_t.nexthop");
+_Static_assert(offsetof(rip_$route_t, port)    == 0x0E, "rip_$route_t.port");
+_Static_assert(offsetof(rip_$route_t, metric)  == 0x0F, "rip_$route_t.metric");
+_Static_assert(offsetof(rip_$route_t, flags)   == 0x10, "rip_$route_t.flags");
+_Static_assert(sizeof(rip_$route_t) == 0x14, "rip_$route_t must be 0x14 bytes");
+_Static_assert(offsetof(rip_$entry_t, routes)  == 0x04, "rip_$entry_t.routes");
+_Static_assert(sizeof(rip_$entry_t) == 0x2C, "rip_$entry_t must be 0x2C bytes");
+#endif
+
+/*
+ * RIP subsystem data structure
+ *
+ * This is the main data block for the RIP subsystem, located at 0xE26258.
+ * All offsets are relative to this base address.
+ *
+ * The structure contains:
+ * - Routing port information at offset 0x00
+ * - Three exclusion locks for different subsystems
+ * - Routing table entries with reference counts
+ * - Broadcast control parameters at offset 0xC68
+ */
+typedef struct rip_$data_t {
+    uint32_t            route_port;         /* 0x00: Route port (set during diskless init) */
+    uint8_t             _reserved0[0x0C];   /* 0x04: Reserved/unknown */
+    ml_$exclusion_t     xns_error_mutex;    /* 0x10: XNS error client mutex (18 bytes) */
+    uint8_t             _pad0[0x06];        /* 0x22: Padding to offset 0x28 */
+    ml_$exclusion_t     route_service_mutex;/* 0x28: Route service mutex (18 bytes) */
+    uint8_t             _pad0a[0x06];       /* 0x3A: Padding to offset 0x40 */
+    ml_$exclusion_t     exclusion;          /* 0x40: RIP exclusion lock (18 bytes) */
+    uint8_t             _pad1[0x0A];        /* 0x52: Padding to offset 0x5C */
+    uint32_t            _reserved1;         /* 0x5C: Reserved */
+    uint32_t            direct_hits;        /* 0x60: Direct route hit counter */
+    uint32_t            ref_counts[RIP_TABLE_SIZE]; /* 0x64: Per-entry reference counts */
+    rip_$entry_t        entries[RIP_TABLE_SIZE];    /* 0x164: Routing table entries */
+    uint8_t             _reserved2[0x862];  /* Padding to 0xC68 */
+    uint8_t             bcast_control[30];  /* 0xC68: Broadcast control params */
+    uint8_t             _pad3[0x1C];        /* Padding to 0xC86 */
+    uint8_t             std_recent_changes; /* 0xC86: Standard route changes flag */
+    uint8_t             _pad4;              /* 0xC87: Padding */
+    uint8_t             recent_changes;     /* 0xC88: Non-standard route changes flag */
+} rip_$data_t;
+
+extern rip_$data_t RIP_$DATA;
+extern rip_$stats_t RIP_$STATS;
+
+/*
+ * RIP_$INFO - Base of the routing table entries (0xE263BC).
+ * This is RIP_$DATA.entries (offset 0x164 of the RIP data block).
+ */
+#define RIP_$INFO               (RIP_$DATA.entries)
+
 
 /*
  * RIP_$NET_LOOKUP - Look up network in routing table

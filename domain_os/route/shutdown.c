@@ -59,63 +59,50 @@ static const uint16_t SHUTDOWN_OP_OTHER = 0x0002;    /* For other port types */
 void ROUTE_$SHUTDOWN(void)
 {
     int16_t i;
-    int16_t port_count;
-    route_$port_t *port;
-    route_$short_port_t short_info;
-    status_$t status;
+    int16_t port_count;                 /* D3w */
+    route_$port_t *port;                /* A2 */
+    route_$short_port_t short_info;     /* A6-0x38 */
+    status_$t status;                   /* A6-0x3C */
     uint16_t shutdown_type;
     const uint16_t *operation;
     
     port_count = 0;
     
-    /* Iterate through all 8 ports */
+    /* 0x00E6A5E4-0x00E6A64C: dbf with D2 = 7 runs the body 8 times */
     for (i = 0; i < ROUTE_MAX_PORTS; i++) {
         port = &ROUTE_$PORT_ARRAY[i];
         
-        /* Skip inactive ports */
-        if (port->active == 0) {
-            continue;
+        /*
+         * 0x00E6A5F0 "tst.w (0x2c,A2)" / "beq.b 0x00E6A646": an inactive port
+         * skips to the loop step, which still bumps the counter, so
+         * port_count is the port index, not the number of ports shut down.
+         */
+        if (port->active != 0) {
+            /* 0x00E6A5F6-0x00E6A600 */
+            ROUTE_$SHORT_PORT(port, &short_info);
+            
+            /* 0x00E6A602-0x00E6A610 */
+            if (port->port_type == ROUTE_PORT_TYPE_ROUTING ||
+                port->port_type == ROUTE_PORT_TYPE_LOCAL) {
+                /* 0x00E6A61A: the constant word 0x0008 at 0x00E6A65A */
+                operation = &SHUTDOWN_OP_ROUTING;
+            } else {
+                /*
+                 * 0x00E6A620-0x00E6A630: the shutdown type goes into the
+                 * record's status word at +0x04 (frame slot A6-0x34, i.e.
+                 * short_info + 4) - 2 for the first port, 1 afterwards.
+                 */
+                shutdown_type = (port_count == 0) ? 2 : 1;
+                short_info.status = shutdown_type;
+                /* 0x00E6A63A: the constant word 0x0002 at 0x00E6A65C */
+                operation = &SHUTDOWN_OP_OTHER;
+            }
+            
+            /* 0x00E6A63E */
+            ROUTE_$SERVICE(operation, &short_info, &status);
         }
         
-        /* Extract short port info for ROUTE_$SERVICE */
-        ROUTE_$SHORT_PORT(port, &short_info);
-        
-        /* Determine operation code based on port type */
-        if (port->port_type == ROUTE_PORT_TYPE_ROUTING ||
-            port->port_type == ROUTE_PORT_TYPE_LOCAL) {
-            /*
-             * Port types 1 (local) and 2 (routing) use the 0x0008 operation.
-             */
-            operation = &SHUTDOWN_OP_ROUTING;
-        } else {
-            /*
-             * Other port types use the 0x0002 operation.
-             * The short_info buffer has a shutdown_type field at offset 0x04
-             * (overlapping with host_id) that indicates:
-             *   - 2 for the first port shutdown
-             *   - 1 for subsequent port shutdowns
-             *
-             * Note: This modifies short_info.host_id's high word. The original
-             * code writes to offset -0x34 from frame pointer, which corresponds
-             * to short_info offset 0x04 (network2 field in our structure).
-             * Actually, looking at stack layout:
-             *   -0x38: short_info start (12 bytes)
-             *   -0x34: short_info + 4 = host_id
-             * So it's setting the high 16 bits of host_id to shutdown_type.
-             */
-            shutdown_type = (port_count == 0) ? 2 : 1;
-            /* Store in the appropriate location in short_info */
-            /* The original code stores at offset 4 (as a word), overwriting
-             * part of host_id. This appears to be intentional for passing
-             * extra info to ROUTE_$SERVICE. */
-            short_info.host_id = (short_info.host_id & 0x0000FFFF) | 
-                                 ((uint32_t)shutdown_type << 16);
-            operation = &SHUTDOWN_OP_OTHER;
-        }
-        
-        /* Call ROUTE_$SERVICE to shutdown this port */
-        ROUTE_$SERVICE((void *)operation, &short_info, &status);
-        
+        /* 0x00E6A646: unconditional, inactive ports included */
         port_count++;
     }
 }

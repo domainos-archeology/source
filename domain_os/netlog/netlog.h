@@ -138,6 +138,11 @@ extern uint16_t NETLOG_$SOCK;           /* 0xE248F8: Socket number */
  *   - Updates kinds filter
  *   - Recalculates OK_TO_LOG flags
  *
+ * The SAU2 link map gives 0x00E71914 two names - NETLOG_$PROC_START and
+ * NETLOG_$CNTL - because it is also the NETLOG module's entry point.
+ * ASKNODE_$INTERNET_INFO's request-0x25 arm calls it under the first
+ * spelling (0x00E64C44); it is the same code.
+ *
  * Original address: 0x00E71914
  */
 void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,

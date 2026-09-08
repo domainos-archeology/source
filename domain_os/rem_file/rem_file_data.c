@@ -48,11 +48,15 @@ uint16_t REM_FILE_$COMPLETION_TIME = 20;
  */
 
 /*
- * DAT_00e2e380 - packet-info template for the client side, 0x00E2E380,
+ * REM_FILE_$DATA - packet-info template for the client side, 0x00E2E380,
  * 0x1E bytes (REM_FILE_$SERVER_PKT_INFO starts at 0x00E2E39E).  It differs
- * from the server template only in its first word.
+ * from the server template only in its first word.  The map exports the name
+ * for the whole 0x7C segment; this is its first object, and the only one
+ * whose address the code takes symbolically (`move.l #0xe2e380,-(SP)` in
+ * REM_FILE_$SEND_REQUEST at 0x00E61178, `lea (0xe2e380).l,A0` in
+ * REM_FILE_$UNLOCK_ALL at 0x00E61C9C).
  */
-uint8_t DAT_00e2e380[0x1E] = {
+uint8_t REM_FILE_$DATA[0x1E] = {
     0x00, 0x10, 0x00, 0x02, 0x00, 0x02, 0x80, 0x31,
     0xff, 0xff, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -124,3 +128,5 @@ status_$t REM_FILE_$COMMS_PROBLEM_STATUS = 0x000F0004;
  */
 ml_$exclusion_t REM_FILE_$SOCK_LOCK = { 0 };
 
+/* NET_ASM cell at 0xE245A0; see rem_file/rem_file.h. */
+uint16_t REM_FILE_$2LONG1;

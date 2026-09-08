@@ -380,7 +380,14 @@ uint8_t PEB_$TOUCH(uint32_t *addr);
  *
  * Original address: 0x00E709E8 (84 bytes)
  */
-void PEB_$GET_INFO(uint8_t *info_flags, uint8_t *info_byte);
+/*
+ * The first argument is a WORD, not a byte: PEB_$GET_INFO clears it with
+ * "clr.w (A0)" (0x00E709F0) and then sets bits with bset.b on the byte at
+ * offset 0, i.e. the HIGH half of that word on m68k.  The PEB_INFO_* masks
+ * above are byte masks; ASKNODE_$INTERNET_INFO stores the whole word
+ * (0x00E64CA8-0x00E64CB0).
+ */
+void PEB_$GET_INFO(uint16_t *info_flags, uint8_t *info_byte);
 
 /*
  * PEB_$PROC_CLEANUP - Clean up PEB state for process termination

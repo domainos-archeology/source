@@ -25,16 +25,33 @@ typedef struct {
     uint8_t check_flag;         /* Check flag */
     uint8_t flag2;              /* Flag 2 */
     uint8_t flag3;              /* Flag 3 */
-    uint8_t padding;            /* Padding to align */
+    uint8_t padding;            /* 0x7B */
 } rem_file_acl_check_rights_req_t;
+
+/* Request offsets are the A6 displacement plus 0x170 (0x00E62A0A-0x00E62A5E);
+ * total length 0x7C (`move.w #0x7c,-(SP)` at 0x00E62A86). */
+_Static_assert(__builtin_offsetof(rem_file_acl_check_rights_req_t, file_uid) == 0x04, "acl_check_rights_req.file_uid");
+_Static_assert(__builtin_offsetof(rem_file_acl_check_rights_req_t, flags) == 0x0C, "acl_check_rights_req.flags");
+_Static_assert(__builtin_offsetof(rem_file_acl_check_rights_req_t, flags2) == 0x0E, "acl_check_rights_req.flags2");
+_Static_assert(__builtin_offsetof(rem_file_acl_check_rights_req_t, sid_data) == 0x10, "acl_check_rights_req.sid_data");
+_Static_assert(__builtin_offsetof(rem_file_acl_check_rights_req_t, perm_data) == 0x34, "acl_check_rights_req.perm_data");
+_Static_assert(__builtin_offsetof(rem_file_acl_check_rights_req_t, access_mask) == 0x74, "acl_check_rights_req.access_mask");
+_Static_assert(__builtin_offsetof(rem_file_acl_check_rights_req_t, check_flag) == 0x78, "acl_check_rights_req.check_flag");
+_Static_assert(__builtin_offsetof(rem_file_acl_check_rights_req_t, flag2) == 0x79, "acl_check_rights_req.flag2");
+_Static_assert(__builtin_offsetof(rem_file_acl_check_rights_req_t, flag3) == 0x7A, "acl_check_rights_req.flag3");
+_Static_assert(sizeof(rem_file_acl_check_rights_req_t) == 0x7C, "acl_check_rights_req size");
 
 /*
  * ACL check rights response structure
  */
 typedef struct {
-    uint8_t padding[REM_FILE_RESPONSE_BUF_SIZE - 0xB4];
-    uint32_t result;            /* Check result */
+    uint8_t  head[0x0C];        /* 0x00 */
+    uint32_t result;            /* 0x0C: "move.l (-0xb4,A6),(A0)" 0x00E62A9A */
 } rem_file_acl_check_rights_resp_t;
+
+/* Reply offsets are the A6 displacement plus 0xC0 (buffer at A6-0xC0). */
+_Static_assert(__builtin_offsetof(rem_file_acl_check_rights_resp_t, result) == 0x0C,
+               "acl_check_rights_resp.result");
 
 void REM_FILE_$ACL_CHECK_RIGHTS(void *addr_info, void *sid_data,
                                  void *perm_data, uid_t *file_uid,

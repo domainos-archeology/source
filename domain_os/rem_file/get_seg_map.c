@@ -31,16 +31,18 @@ typedef struct {
  * Get segment map response structure - small response (0x0C bytes)
  */
 typedef struct {
-    uint8_t padding[REM_FILE_RESPONSE_BUF_SIZE - 0xBC];
-    uint32_t seg_bitmap;        /* Segment bitmap for current segment */
+    uint8_t head[0x08];         /* 0x00 */
+    uint32_t seg_bitmap;        /* 0x08: "tst.l (-0xb8,A6)" 0x00E62024 and
+                                 *       "move.l (-0xb8,A6),D1" 0x00E62036;
+                                 *       the buffer is at A6-0xC0 */
 } rem_file_get_seg_map_resp_small_t;
 
 /*
  * Get segment map response structure - full response (0x28 bytes)
  */
 typedef struct {
-    uint8_t padding[REM_FILE_RESPONSE_BUF_SIZE - 0xB8];
-    uint32_t seg_data[1];       /* Start of segment data array */
+    uint8_t head[0x08];         /* 0x00 */
+    uint32_t seg_data[1];       /* 0x08: "move.l (-0xb8,A0),(A1)+" 0x00E61FF0 */
 } rem_file_get_seg_map_resp_full_t;
 
 void REM_FILE_$GET_SEG_MAP(void *addr_info, uid_t *file_uid,

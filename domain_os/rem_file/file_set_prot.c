@@ -17,22 +17,35 @@ typedef struct {
     uint16_t msg_type;          /* Set to 1 by SEND_REQUEST */
     uint8_t magic;              /* 0x80 */
     uint8_t opcode;             /* 0x80 = File set prot */
-    uid_t file_uid;             /* File UID (8 bytes) */
-    uint32_t prot_data1[13];    /* Protection data block 1 (52 bytes) */
-    uint32_t prot_data2[25];    /* Protection data block 2 (100 bytes) */
-    uint8_t flag;               /* Flag byte */
-    uint8_t padding;
-    uint16_t flags;             /* Flags */
+    uid_t file_uid;             /* 0x04: (0xc,A6)             0x00E62B9E */
+    uint8_t flag;               /* 0x0C: D0b = the BYTE at (0x1a,A6)
+                                 *             0x00E62BBA */
+    uint8_t _pad_0d;            /* 0x0D */
+    uint16_t flags;             /* 0x0E: D1 = (0x14,A6)       0x00E62BB6 */
+    uint32_t prot_data1[13];    /* 0x10: 13 longs from (0x10,A6)  0x00E62BAA */
+    uint32_t prot_data2[25];    /* 0x44: 25 longs from (0x16,A6)  0x00E62B8E */
 } rem_file_file_set_prot_req_t;
+
+/* Request offsets are the A6 displacement plus 0x170. */
+_Static_assert(__builtin_offsetof(rem_file_file_set_prot_req_t, flag) == 0x0C, "set_prot_req.flag");
+_Static_assert(__builtin_offsetof(rem_file_file_set_prot_req_t, flags) == 0x0E, "set_prot_req.flags");
+_Static_assert(__builtin_offsetof(rem_file_file_set_prot_req_t, prot_data1) == 0x10, "set_prot_req.prot_data1");
+_Static_assert(__builtin_offsetof(rem_file_file_set_prot_req_t, prot_data2) == 0x44, "set_prot_req.prot_data2");
+_Static_assert(sizeof(rem_file_file_set_prot_req_t) == 0xA8, "set_prot_req size");
 
 /*
  * File set protection response structure
  */
 typedef struct {
-    uint8_t padding[REM_FILE_RESPONSE_BUF_SIZE - 0x84];
-    uint32_t mtime_high;        /* Modification time high */
-    uint16_t mtime_low;         /* Modification time low */
+    uint8_t  head[0x40];        /* 0x00 */
+    uint32_t mtime_high;        /* 0x40: "move.l (-0x80,A6),(A2)"  0x00E62C04 */
+    uint16_t mtime_low;         /* 0x44: "move.w (-0x7c,A6),(0x4,A2)"  0x00E62C08 */
+    uint8_t  rest[REM_FILE_RESPONSE_BUF_SIZE - 0x46];
 } rem_file_file_set_prot_resp_t;
+
+/* Reply offsets are the A6 displacement plus 0xC0 (buffer at A6-0xC0). */
+_Static_assert(__builtin_offsetof(rem_file_file_set_prot_resp_t, mtime_high) == 0x40, "file_set_prot_resp.mtime_high");
+_Static_assert(__builtin_offsetof(rem_file_file_set_prot_resp_t, mtime_low) == 0x44, "file_set_prot_resp.mtime_low");
 
 void REM_FILE_$FILE_SET_PROT(void *addr_info, uid_t *file_uid,
                               void *prot_data1, uint16_t flags,

@@ -238,6 +238,28 @@ uint32_t MST_$TOUCH(uint32_t virtual_addr, status_$t *status_ret,
 void *MST_$MAP(uid_t *uid, uint32_t *start_ptr, uint32_t *length_ptr,
                uint16_t *mode_ptr, uint32_t *extend_ptr,
                uint8_t *concur_ptr, void *map_info, status_$t *status_ret);
+/*
+ * MST_$MAP_AT (0x00E42F54) - map an object at a caller-supplied address.
+ *
+ * Nine var parameters; the widths come from the routine's own forwarding
+ * prologue at 0x00E42F62-0x00E42FA0, which dereferences each one before
+ * pushing it on to 0x00E43182:
+ *
+ *   +0x08 va          `movea.l (0x8,A6),A0` / `move.l (A0),-(SP)`   longword
+ *   +0x0C uid         pushed as a pointer (`move.l (0xc,A6),-(SP)`)
+ *   +0x10 start       `movea.l (0x10,A6),A4` / `move.l (A4),-(SP)`  longword
+ *   +0x14 length      `movea.l (0x14,A6),A3` / `move.l (A3),-(SP)`  longword
+ *   +0x18 mode        `movea.l (0x18,A6),A1` / `move.w (A1),-(SP)`  WORD
+ *   +0x1C extend      `movea.l (0x1c,A6),A2` / `move.l (A2),-(SP)`  longword
+ *   +0x20 concurrency `movea.l (0x20,A6),A0` / `move.b (A0),-(SP)`  BYTE
+ *   +0x24 map_info    pushed as a pointer
+ *   +0x28 status      pushed as a pointer
+ *
+ * The parameter types stay `void *` because callers hand it differently
+ * shaped scratch cells; the list above is what the callee actually reads.
+ * FLOP_$BOOT's `concurrency` cell is the 0x00 byte at 0x00E32538, NOT the
+ * 0xFF byte at 0x00E32542 that MST_$MAP gets (source-y89n).
+ */
 void MST_$MAP_AT(void *start, uid_t *uid, void *param1, void *param2, void *param3,
                  void *param4, void *param5, void *result, status_$t *status);
 /*
@@ -408,7 +430,13 @@ void MST_$GET_UID_ASID(uint16_t *asid_p, uint32_t *va_ptr, uid_t *uid_out,
 void MST_$GET_VA_INFO(uint16_t *asid_p, uint32_t *va_ptr, uid_t *uid_out,
                       uint32_t *adjusted_va, void *param_5, int8_t *active_flag,
                       int8_t *modified_flag, status_$t *status_ret);
-void MST_$GET_PRIVATE_SIZE(void);
+/*
+ * MST_$GET_PRIVATE_SIZE (0x00E44AAE) takes four by-reference arguments, not
+ * none: ASKNODE_$INTERNET_INFO's request-0x4B arm pushes
+ * &asid, &reply+0x08, &reply+0x0C and &status (0x00E65424-0x00E65434).
+ */
+void MST_$GET_PRIVATE_SIZE(uint16_t *asid_p, uint32_t *size_ret,
+                           uint32_t *size2_ret, status_$t *status_ret);
 
 /* Touch-ahead control */
 void MST_$PRIV_SET_TOUCH_AHEAD_CNT(void);

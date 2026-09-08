@@ -41,9 +41,12 @@
  */
 static const int8_t proc2_$false_00e3e952 = 0;
 
-void PROC2_$GET_ASID(uid_t *proc_uid, status_$t *status_ret)
+uint16_t PROC2_$GET_ASID(uid_t *proc_uid, status_$t *status_ret)
 {
-    /* 0x00E4071A */
-    (void)PROC2_$FIND_ASID(proc_uid, (int8_t *)&proc2_$false_00e3e952,
-                           status_ret);
+    /* 0x00E4071A.  PROC2_$FIND_ASID leaves the ASID in D0 and this routine
+     * returns straight afterwards, so the value is its result too -
+     * ASKNODE_$INTERNET_INFO keeps it ("move.w D0w,(-0x138,A6)" at
+     * 0x00E6539A). */
+    return PROC2_$FIND_ASID(proc_uid, (int8_t *)&proc2_$false_00e3e952,
+                            status_ret);
 }

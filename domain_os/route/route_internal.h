@@ -202,77 +202,11 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
 #define ROUTE_$WIRED_PAGES      ((uint32_t *)0xE87D80)
 
 /*
- * Routing statistics area (0x81 longwords, cleared by ROUTE_$INIT_ROUTING).
- * Entries 0..0x80 are indexed by the queue depth seen when a packet was
- * queued, which is why the SR10.2 SAU2 link map calls the array
- * ROUTE_$Q_DEPTH; the named counters that follow (0xE87FAC..) are cleared
- * individually.  Every name in this block comes from that map
- * (sau2-maps/domain_os.10.2.map); the previous descriptive spellings are
- * given after each one.
+ * The ROUTE_$Q_DEPTH / ROUTE_$Q_OFLO / ROUTE_$NETBUF_ALLOC block and the
+ * eight forwarding counters that used to live here moved to route/route.h:
+ * ASKNODE_$INTERNET_INFO's request-0x3F and request-0x43 arms report all of
+ * them (0x00E650C6-0x00E65146, 0x00E65328-0x00E65352).
  */
-#define ROUTE_$Q_DEPTH          ((uint32_t *)0xE87DA8)  /* was ROUTE_$PACKET_STATS */
-#define ROUTE_$STD_DLEN_ERR    (*(uint32_t *)0xE87FAC)  /* was ..._STAT_OVERSIZED_STD */
-#define ROUTE_$STD_TOO_FAR     (*(uint32_t *)0xE87FB0)  /* was ..._STAT_DROPPED_STD_HOP */
-#define ROUTE_$STD_MISROUTE    (*(uint32_t *)0xE87FB4)  /* was ..._STAT_DROPPED_STD_ROUTE */
-#define ROUTE_$STD_PKTS_ROUTED (*(uint32_t *)0xE87FB8)  /* was ..._STAT_FORWARDED_STD */
-#define ROUTE_$DLEN_ERR        (*(uint32_t *)0xE87FBC)  /* was ..._STAT_OVERSIZED_N */
-#define ROUTE_$TOO_FAR         (*(uint32_t *)0xE87FC0)  /* was ..._STAT_DROPPED_N_HOP */
-#define ROUTE_$MISROUTE        (*(uint32_t *)0xE87FC4)  /* was ..._STAT_DROPPED_N_ROUTE */
-#define ROUTE_$PKTS_ROUTED     (*(uint32_t *)0xE87FC8)  /* was ..._STAT_FORWARDED_N */
-
-/*
- * ROUTE_$Q_OFLO - count of packets addressed to the routing socket that were
- * thrown away because that socket's queue was already full.  (Named
- * ..._USER_PORT_COUNT in the tree before the map sweep.)
- *
- * Cleared with the other forwarding counters by ROUTE_$INIT_ROUTING
- * ("clr.l (0x00E87FCC).l" at 0x00E69DF0) and bumped by one from the two
- * receive paths, each time only when the socket the packet was addressed to
- * is ROUTE_$SOCK (0xE26F18) and the enqueue reported "queue full":
- *
- *   0x00E756C6  ring_$process_rx_packet: SOCK_$PUT_INT_INT (0x00E161F8)
- *               returned 1 (0x00E7565A), the socket in D4 is neither 2 nor 1,
- *               and it matches ROUTE_$SOCK (cmp.w at 0x00E756BE).
- *   0x00E0E45E  FUN_00E0E238: SOCK_$PUT (0x00E1614E) returned false
- *               (0x00E0E3E4), the socket in D3 is not 2, it matches
- *               ROUTE_$SOCK, and ROUTE_$SOCK is not -1 (0x00E0E446 -
- *               0x00E0E45C); otherwise a per-module counter at (0xA8,A5) is
- *               bumped instead.
- *
- * ASKNODE_$INTERNET_INFO copies it into two different reply records
- * ("move.l (0x00E87FCC).l,(0x12,A1)" at 0x00E65106 and
- * "move.l (0x00E87FCC).l,(0xA,A1)" at 0x00E65330).  /etc/rtstat prints it as
- * "queue oflo" and describes it as the number of through-traffic packets
- * lost because the through-traffic queue was already full, which is exactly
- * what these two sites count.
- */
-#define ROUTE_$Q_OFLO          (*(uint32_t *)0xE87FCC)
-
-/*
- * ROUTE_$NETBUF_ALLOC - the number of netbuf pages the routing socket asks
- * SOCK_$ALLOCATE for, and hence the number of ROUTE_$Q_DEPTH buckets that
- * carry meaning.  (Named ..._USER_PORT_MAX in the tree before the map sweep;
- * it is not a port count.)
- *
- * ROUTE_$INIT_ROUTING stores 0x40 into it ("move.w #0x40,(0x00E87FD0).l" at
- * 0x00E69D80) and immediately hands the cell to SOCK_$ALLOCATE
- * ("move.w (0x00E87FD0).l,-(SP)" at 0x00E69D8C followed by two
- * "move.w (SP),-(SP)" copies at 0x00E69D92/0x00E69D94, so the same 0x40 lands
- * in three of SOCK_$ALLOCATE's four word arguments).  SOCK_$ALLOCATE passes
- * the two it keeps in D3/D4 straight to
- * NETBUF_$ADD_PAGES(hdr_count, dat_count) at 0x00E15F02, so the cell is the
- * header-page and data-page count of that allocation.
- *
- * ROUTE_$PROCESS zeroes it on shutdown, right after SOCK_$FREE
- * ("clr.w (0x250,A5)" at 0x00E87852; A5 = ROUTE_$WIRED_PAGES = 0xE87D80, so
- * 0x250+0xE87D80 = 0xE87FD0) - no netbufs are held once the socket is gone.
- *
- * ASKNODE_$INTERNET_INFO reports it as a word (0x00E650F6 into (0x10,A1),
- * 0x00E65328 into (0x8,A1)) and then uses it as the loop bound when copying
- * ROUTE_$Q_DEPTH into the reply: "move.w (0x8,A1),D0w" at 0x00E6533E feeding
- * the dbf at 0x00E6534E copies ROUTE_$NETBUF_ALLOC+1 buckets.
- */
-#define ROUTE_$NETBUF_ALLOC    (*(uint16_t *)0xE87FD0)
 
 /*
  * Count of currently wired pages.  The SAU2 link map does name this cell
@@ -341,17 +275,7 @@ extern char ROUTE_$WIRED_AREA_END_SYM[];
 
 extern const status_$t ROUTE_$UNKNOWN_PORT_STATUS;
 extern uint32_t ROUTE_$WIRED_PAGES[ROUTE_$MAX_WIRED_PAGES];
-extern uint32_t ROUTE_$Q_DEPTH[0x81];
-extern uint32_t ROUTE_$STD_DLEN_ERR;
-extern uint32_t ROUTE_$STD_TOO_FAR;
-extern uint32_t ROUTE_$STD_MISROUTE;
-extern uint32_t ROUTE_$STD_PKTS_ROUTED;
-extern uint32_t ROUTE_$DLEN_ERR;
-extern uint32_t ROUTE_$TOO_FAR;
-extern uint32_t ROUTE_$MISROUTE;
-extern uint32_t ROUTE_$PKTS_ROUTED;
-extern uint32_t ROUTE_$Q_OFLO;
-extern uint16_t ROUTE_$NETBUF_ALLOC;
+/* The forwarding counters and ROUTE_$Q_DEPTH are declared in route/route.h. */
 extern int16_t ROUTE_$N_WIRED_PAGES;
 extern int16_t ROUTE_$N_USER_PORTS;
 extern int16_t ROUTE_$NET_SERVICE_ON;

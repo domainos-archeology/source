@@ -99,6 +99,56 @@ uint16_t ASKNODE_$PROTOCOL_VERSION;
 uint32_t ASKNODE_$EMPTY_DATA;
 uint32_t PKT_$DEFAULT_INFO[8];
 
+/* Data the arms recovered in bead source-yjtx read. */
+uint32_t NETWORK_$PAGING_BACKLOG[NETWORK_PAGING_BACKLOG_BUCKETS];
+uint32_t NETWORK_$FILE_BACKLOG[NETWORK_FILE_BACKLOG_BUCKETS];
+network_$failure_rec_t NETWORK_$FAILURE_REC;
+int8_t   NETWORK_$ACTIVITY_FLAG;
+uint16_t NETWORK_$RCV_READ_AHEAD;
+uint16_t NETWORK_$SET_ATTRIB_CALL_CNT;
+uint16_t NETWORK_$ATTRIB_RQST_CNT;
+uint16_t NETWORK_$2LONG1;
+uint16_t REM_FILE_$2LONG1;
+
+ring_$swdiag_t RING_$SWDIAG_DATA;
+uint32_t RING_$SWDIAG_NODEID;
+uint32_t RING_$SWDIAG_GOODRCV_CNT;
+uint32_t RING_$SWDIAG_RCVCNT;
+uint16_t RING_$RCV_BIPHASE;
+uint16_t RING_$RCV_ESB;
+uint16_t RING_$XMIT_BIPHASE;
+uint16_t RING_$XMIT_ESB;
+uint16_t RING_$PAGING_OVERFLOW;
+uint16_t RING_$FILE_OVERFLOW;
+uint16_t RING_$OVERFLOW_OVERFLOW;
+uint16_t RING_$DELIVERY_FAILED;
+
+route_$port_t  route_ports[8];
+route_$port_t *ROUTE_$PORTP[8];
+int16_t  ROUTE_$N_ROUTING_PORTS;
+int16_t  ROUTE_$STD_N_ROUTING_PORTS;
+uint32_t ROUTE_$START_TIME;
+uint16_t ROUTE_$NETBUF_ALLOC;
+uint32_t ROUTE_$Q_OFLO;
+uint32_t ROUTE_$Q_DEPTH[0x81];
+uint32_t ROUTE_$PKTS_ROUTED;
+uint32_t ROUTE_$MISROUTE;
+uint32_t ROUTE_$TOO_FAR;
+uint32_t ROUTE_$DLEN_ERR;
+uint32_t ROUTE_$STD_PKTS_ROUTED;
+uint32_t ROUTE_$STD_MISROUTE;
+uint32_t ROUTE_$STD_TOO_FAR;
+uint32_t ROUTE_$STD_DLEN_ERR;
+
+rip_$data_t  RIP_$DATA;
+rip_$stats_t RIP_$STATS;
+
+uint32_t MMU_$SYSTEM_REV;
+int8_t   GPU_$PRESENT;
+uint32_t PROM_$MACHINE_ID;
+os_$boot_device_t OS_$BOOT_DEVICE;
+int16_t  CAL_$BOOT_VOLX;
+
 /* ==========================================================================
  * Mock state
  * ========================================================================== */
@@ -115,6 +165,26 @@ static uint8_t  *reply_bytes = (uint8_t *)reply;
 static uid_t     mock_node_uid;
 static uid_t     mock_root_uid;
 static int       mock_disk_get_stats_calls;
+static uid_t     mock_node_data_uid;
+static int16_t   mock_disk_ctype;
+static int16_t   mock_disk_cnum;
+static int16_t   mock_disk_unit;
+static int       mock_signal_os_calls;
+static int       mock_signal_pgroup_calls;
+static int16_t   mock_signal_number;
+static uint16_t  mock_ringlog_cmd;
+static int       mock_ringlog_calls;
+static int       mock_netlog_calls;
+static int16_t   mock_netlog_cmd;
+static uint32_t  mock_netlog_kinds;
+static status_$t mock_ringlog_status;
+static int16_t   mock_find_port_result;
+static route_$port_t *mock_short_port_arg;
+static int       mock_short_port_calls;
+static uint16_t  mock_proc_info_len;
+static int16_t   mock_proc_info_scan_key;
+static int16_t   mock_proc_info_pid;
+static int       mock_proc_info_calls;
 
 static void reset_mocks(void)
 {
@@ -135,7 +205,49 @@ static void reset_mocks(void)
     mock_node_uid.low = 0;
     mock_root_uid.high = 0;
     mock_root_uid.low = 0;
+    mock_node_data_uid.high = 0;
+    mock_node_data_uid.low = 0;
     mock_disk_get_stats_calls = 0;
+    mock_disk_ctype = -1;
+    mock_disk_cnum = -1;
+    mock_disk_unit = -1;
+    mock_signal_os_calls = 0;
+    mock_signal_pgroup_calls = 0;
+    mock_signal_number = 0;
+    mock_ringlog_cmd = 0;
+    mock_ringlog_calls = 0;
+    mock_netlog_calls = 0;
+    mock_netlog_cmd = 0;
+    mock_netlog_kinds = 0;
+    mock_ringlog_status = 0;
+    mock_find_port_result = -1;
+    mock_short_port_arg = (route_$port_t *)0;
+    mock_short_port_calls = 0;
+    mock_proc_info_len = 0;
+    mock_proc_info_scan_key = -1;
+    mock_proc_info_pid = -1;
+    mock_proc_info_calls = 0;
+
+    memset(NETWORK_$PAGING_BACKLOG, 0, sizeof(NETWORK_$PAGING_BACKLOG));
+    memset(NETWORK_$FILE_BACKLOG, 0, sizeof(NETWORK_$FILE_BACKLOG));
+    memset(&NETWORK_$FAILURE_REC, 0, sizeof(NETWORK_$FAILURE_REC));
+    memset(&RING_$SWDIAG_DATA, 0, sizeof(RING_$SWDIAG_DATA));
+    memset(ROUTE_$Q_DEPTH, 0, sizeof(ROUTE_$Q_DEPTH));
+    memset(&RIP_$DATA, 0, sizeof(RIP_$DATA));
+    memset(&RIP_$STATS, 0, sizeof(RIP_$STATS));
+    memset(route_ports, 0, sizeof(route_ports));
+    {
+        int i;
+        for (i = 0; i < 8; i++) {
+            ROUTE_$PORTP[i] = &route_ports[i];
+        }
+    }
+    NETWORK_$ACTIVITY_FLAG = 0;
+    ROUTE_$NETBUF_ALLOC = 0;
+    ROUTE_$Q_OFLO = 0;
+    ROUTE_$N_ROUTING_PORTS = 0;
+    ROUTE_$STD_N_ROUTING_PORTS = 0;
+    ROUTE_$START_TIME = 0;
 }
 
 /* ==========================================================================
@@ -145,10 +257,17 @@ static void reset_mocks(void)
 void NAME_$GET_NODE_UID(uid_t *node_uid) { *node_uid = mock_node_uid; }
 void NAME_$GET_ROOT_UID(uid_t *root_uid) { *root_uid = mock_root_uid; }
 
-void DISK_$GET_STATS(int16_t dev_type, int16_t controller, uint8_t *has_stats,
-                     void *stats)
+void NAME_$GET_NODE_DATA_UID(uid_t *uid) { *uid = mock_node_data_uid; }
+
+void DISK_$GET_STATS(int16_t ctype, int16_t cnum, int16_t unit,
+                     uint8_t *has_stats, void *stats)
 {
-    (void)dev_type; (void)controller; (void)stats;
+    mock_disk_ctype = ctype;
+    mock_disk_cnum = cnum;
+    mock_disk_unit = unit;
+    /* The real routine always preloads the buffer; make each unit's bytes
+     * distinguishable so the request-0x10 packing can be checked. */
+    memset(stats, (uint8_t)(0x10 + unit), DISK_STATS_SIZE);
     mock_disk_get_stats_calls++;
     *has_stats = 0;
 }
@@ -169,7 +288,12 @@ void PROC2_$GET_INFO(uid_t *proc_uid, void *info, uint16_t *info_len,
 
 void PROC2_$SIGNAL_PGROUP_OS(uid_t *pgroup_uid, int16_t *signal,
                              uint32_t *flags, status_$t *status_ret)
-{ (void)pgroup_uid; (void)signal; (void)flags; *status_ret = 0; }
+{
+    (void)pgroup_uid; (void)flags;
+    mock_signal_pgroup_calls++;
+    mock_signal_number = *signal;
+    *status_ret = 0;
+}
 
 void GET_BUILD_TIME(char *buf, int16_t *len_p) { (void)buf; *len_p = 0; }
 
@@ -210,6 +334,153 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
     *resp_data_len = 0;
     *status_ret = 0;
 }
+
+/* ---- callees the arms recovered in bead source-yjtx reach ---------------- */
+
+void PROC2_$LIST2(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
+                  int32_t *start_index, uint8_t *more_flag,
+                  int32_t *last_index)
+{
+    (void)uid_list; (void)start_index; (void)more_flag; (void)last_index;
+    *count = *max_count;
+}
+
+void PROC2_$ZOMBIE_LIST(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
+                        int32_t *start_index, uint8_t *more_flag,
+                        int32_t *last_index)
+{
+    (void)uid_list; (void)start_index; (void)more_flag; (void)last_index;
+    *count = *max_count;
+}
+
+void PROC2_$INFO(int16_t *scan_key, int16_t *pid, void *info,
+                 uint16_t *info_len, status_$t *status_ret)
+{
+    (void)info;
+    mock_proc_info_calls++;
+    mock_proc_info_scan_key = *scan_key;
+    mock_proc_info_pid = *pid;
+    mock_proc_info_len = *info_len;
+    *status_ret = 0;
+}
+
+void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid, uint16_t *upgid,
+                      uint16_t *uppid, status_$t *status_ret)
+{
+    (void)proc_uid;
+    *upid = 0x1111; *upgid = 0x2222; *uppid = 0x3333;
+    *status_ret = 0;
+}
+
+uint16_t PROC2_$GET_PID(uid_t *proc_uid, status_$t *status_ret)
+{ (void)proc_uid; *status_ret = 0; return 0x0042; }
+
+uint16_t PROC2_$GET_ASID(uid_t *proc_uid, status_$t *status_ret)
+{ (void)proc_uid; *status_ret = 0; return 0x0007; }
+
+void PROC2_$SIGNAL_OS(uid_t *proc_uid, int16_t *signal, uint32_t *param,
+                      status_$t *status_ret)
+{
+    (void)proc_uid; (void)param;
+    mock_signal_os_calls++;
+    mock_signal_number = *signal;
+    *status_ret = 0;
+}
+
+void PROC1_$GET_LIST(int16_t *count_ret, proc_list_entry_t *list_ret)
+{ (void)list_ret; *count_ret = 0; }
+
+void PROC1_$GET_LOADAV(uint32_t *loadav)
+{ loadav[0] = 0x11111111u; loadav[1] = 0x22222222u; loadav[2] = 0x33333333u; }
+
+void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret)
+{
+    (void)param;
+    mock_ringlog_calls++;
+    mock_ringlog_cmd = *cmd_ptr;
+    *status_ret = mock_ringlog_status;
+}
+
+void NETLOG_$CNTL(int16_t *cmd, uint32_t *node, uint16_t *sock,
+                  uint32_t *kinds, status_$t *status_ret)
+{
+    (void)node; (void)sock;
+    mock_netlog_calls++;
+    mock_netlog_cmd = *cmd;
+    mock_netlog_kinds = *kinds;
+    *status_ret = 0;
+}
+
+void IO_$GET_CONFIG(uint16_t *c1, uint16_t *c2, uint16_t *c3, uint16_t *c4)
+{ *c1 = 1; *c2 = 2; *c3 = 3; *c4 = 4; }
+
+uint16_t SMD_$N_DEVICES(void) { return 0; }
+
+void SMD_$INQ_DISP_UID(uint16_t *unit, uid_t *uid, status_$t *status_ret)
+{ (void)unit; uid->high = 0; uid->low = 0; *status_ret = 0; }
+
+void SMD_$INQ_DISP_INFO(uint16_t *unit, smd_disp_info_result_t *info,
+                        status_$t *status_ret)
+{ (void)unit; memset(info, 0, sizeof(*info)); *status_ret = 0; }
+
+void PEB_$GET_INFO(uint16_t *info_flags, uint8_t *info_byte)
+{ *info_flags = 0; *info_byte = 0; }
+
+void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
+                        status_$t *status)
+{
+    (void)vol_idx_ptr; (void)param_2;
+    memset(info, 0, 0x2A);
+    *status = 0;
+}
+
+int16_t ROUTE_$FIND_PORT(uint16_t network, int32_t socket)
+{ (void)network; (void)socket; return mock_find_port_result; }
+
+void ROUTE_$SHORT_PORT(route_$port_t *port_struct, route_$short_port_t *out)
+{
+    (void)out;
+    mock_short_port_calls++;
+    mock_short_port_arg = port_struct;
+}
+
+void NET_IO_$DEVICE_STAT(uint16_t network, uint16_t index, uint16_t max_len,
+                         void *id_ret, void *stat_buf, uint16_t *stat_len_ret,
+                         status_$t *status_ret)
+{
+    (void)network; (void)index; (void)max_len; (void)stat_buf;
+    memset(id_ret, 0, 8);
+    *stat_len_ret = 0;
+    *status_ret = 0;
+}
+
+void NET_IO_$DEVICE_STAT2(uint16_t network, uint16_t index, uint16_t max_len,
+                          void *id_ret, void *stat_buf, uint16_t *stat_len_ret,
+                          status_$t *status_ret)
+{
+    NET_IO_$DEVICE_STAT(network, index, max_len, id_ret, stat_buf,
+                        stat_len_ret, status_ret);
+}
+
+void MMAP_$GET_WS_INDEX(uint16_t pid, uint16_t *wsl_index, status_$t *status)
+{ (void)pid; *wsl_index = 1; *status = 0; }
+
+void MMAP_$GET_WS_SIZ(uint16_t wsl_index, uint32_t *page_count,
+                      uint32_t *field_40, uint32_t *max_pages,
+                      status_$t *status)
+{
+    (void)wsl_index;
+    *page_count = 0xAAAAAAAAu;
+    *field_40   = 0xBBBBBBBBu;
+    *max_pages  = 0xCCCCCCCCu;
+    *status = 0;
+}
+
+void MST_$GET_PRIVATE_SIZE(uint16_t *asid_p, uint32_t *size_ret,
+                           uint32_t *size2_ret, status_$t *status_ret)
+{ (void)asid_p; *size_ret = 0; *size2_ret = 0; *status_ret = 0; }
+
+void OS_$GET_REV_INFO(void *buf) { memset(buf, 0, 12); }
 
 /* ==========================================================================
  * The translation unit under test
@@ -304,7 +575,14 @@ TEST(stats_copies_whole_mem_rec_to_reply_0x72)
     }
 }
 
-/* The copy is exactly 0x56 bytes: neither +0x71 nor +0xC8 is touched. */
+/*
+ * The copy is exactly 0x56 bytes: it does not reach back over the byte below
+ * it, and it does not run past its end.  Byte 0x71 belongs to the 22-byte
+ * disk-statistics block the same arm writes at reply+0x5C (0x00E647FC), so it
+ * carries the mock's fill (0x10 for unit 0) rather than the 0x5A background -
+ * seeing 0x5A there would mean the disk call had been dropped, and seeing a
+ * memory-record byte would mean the copy started too low.
+ */
 TEST(stats_mem_rec_copy_does_not_overrun)
 {
     fill_mem_rec();
@@ -312,7 +590,8 @@ TEST(stats_mem_rec_copy_does_not_overrun)
 
     run_local(0x06, NULL);
 
-    ASSERT_EQ(0x5A, reply_bytes[0x71]);
+    ASSERT_EQ(0x10, reply_bytes[0x5C]);          /* first disk-stats byte */
+    ASSERT_EQ(0x10, reply_bytes[0x71]);          /* last disk-stats byte */
     ASSERT_EQ(0x5A, reply_bytes[0x72 + 0x56]);
     ASSERT_EQ(0x5A, reply_bytes[0x72 + 0x57]);
 }
@@ -408,6 +687,265 @@ TEST(unknown_request_writes_status_ret_not_the_reply_status)
     ASSERT_EQ(0x08, reply_word_at(0x02));
 }
 
+/*
+ * The Pascal by-reference constant pool at 0x00E658AE..0x00E658CD:
+ *   00e658ae  00 39 00 00 00 00 ff ff  ff ff 00 00 00 2a 00 02
+ *   00e658be  00 01 00 04 00 03 00 00  01 f8 00 13 00 3e 00 00
+ * Each cell is a file-static in internet_info.c; this test is what pins the
+ * emitted values to that dump.
+ */
+TEST(constant_cells_match_the_code_segment_pool)
+{
+    ASSERT_EQ(0x0039, asknode_$c_max_procs);              /* 0x00E658AE */
+    ASSERT_EQ(0x00000000u, asknode_$c_local_route_nexthop);    /* 0x00E658B0 */
+    ASSERT_EQ(0xFFFFFFFFu, asknode_$c_local_route_expiration); /* 0x00E658B4 */
+    ASSERT_EQ(0x0000, asknode_$c_local_route_metric);     /* 0x00E658B8 */
+    ASSERT_EQ(0x002A, asknode_$c_mnt_info_size);          /* 0x00E658BA */
+    ASSERT_EQ(0x0002, asknode_$c_disp_unit_2);            /* 0x00E658BC */
+    ASSERT_EQ(0x0001, asknode_$c_disp_unit_1);            /* 0x00E658BE */
+    ASSERT_EQ(0x0004, asknode_$c_ringlog_stop);           /* 0x00E658C0 */
+    ASSERT_EQ(0x0003, asknode_$c_ringlog_clear);          /* 0x00E658C2 */
+    ASSERT_EQ(0x0000, asknode_$c_zero);                   /* 0x00E658C4 */
+    ASSERT_EQ(0x01F8, asknode_$c_proc_info_len);          /* 0x00E658C6 */
+    ASSERT_EQ(0x0013, asknode_$c_signal);                 /* 0x00E658C8 */
+    ASSERT_EQ(0x003E, asknode_$c_max_procs2);             /* 0x00E658CA */
+}
+
+/*
+ * 0x00E64FC6-0x00E64FCE: the whole arm is one longword move.  Before bead
+ * source-yjtx this request fell through to the default arm.
+ */
+TEST(request_0x37_returns_the_route_port)
+{
+    status_$t status;
+
+    ROUTE_$PORT = 0x0BADF00Du;
+    status = run_local(0x37, NULL);
+
+    ASSERT_EQ(0u, status);
+    ASSERT_EQ(0x0BADF00Du, reply[2]);
+    ASSERT_EQ(0x38, reply_word_at(0x02));   /* request + 1 */
+}
+
+/*
+ * 0x00E64F1E-0x00E64F38 + 0x00E65382: the 16-byte failure record reaches
+ * reply+0x08, and the "failure recorded" flag at record+0x02 is cleared
+ * first when the network is active ("clr.b (0x00E24BF6).l" at 0x00E64F26).
+ */
+TEST(request_0x2f_copies_the_failure_record_and_clears_the_flag)
+{
+    NETWORK_$FAILURE_REC.word0        = 0x1234;
+    NETWORK_$FAILURE_REC.flag         = (int8_t)0xFF;
+    NETWORK_$FAILURE_REC.byte3        = 0x77;
+    NETWORK_$FAILURE_REC.node_id      = 0xAABBCCDDu;
+    NETWORK_$FAILURE_REC.timestamp    = 0x01020304u;
+    NETWORK_$FAILURE_REC.failure_type = 3;
+
+    NETWORK_$ACTIVITY_FLAG = 0;             /* idle: the flag survives */
+    run_local(0x2F, NULL);
+    ASSERT_EQ((uint8_t)0xFF, reply_bytes[0x0A]);
+    ASSERT_EQ((int8_t)0xFF, NETWORK_$FAILURE_REC.flag);
+
+    reset_mocks();
+    NETWORK_$FAILURE_REC.flag         = (int8_t)0xFF;
+    NETWORK_$FAILURE_REC.node_id      = 0xAABBCCDDu;
+    NETWORK_$FAILURE_REC.failure_type = 3;
+    NETWORK_$ACTIVITY_FLAG = (int8_t)0xFF;  /* active: it is cleared */
+    run_local(0x2F, NULL);
+    ASSERT_EQ(0, NETWORK_$FAILURE_REC.flag);
+    ASSERT_EQ(0x00, reply_bytes[0x0A]);
+    {
+        uint32_t node, type;
+        memcpy(&node, reply_bytes + 0x0C, 4);
+        memcpy(&type, reply_bytes + 0x14, 4);
+        ASSERT_EQ(0xAABBCCDDu, node);
+        ASSERT_EQ(3u, type);
+    }
+}
+
+/*
+ * 0x00E65328-0x00E65352: dbf runs the copy loop one more time than the count
+ * in D0, so ROUTE_$NETBUF_ALLOC + 1 buckets reach reply+0x0E.  Bucket
+ * ROUTE_$NETBUF_ALLOC + 1 must stay untouched.
+ */
+TEST(request_0x43_copies_netbuf_alloc_plus_one_buckets)
+{
+    unsigned i;
+
+    ROUTE_$NETBUF_ALLOC = 5;
+    ROUTE_$Q_OFLO = 0x11223344u;
+    for (i = 0; i < 8; i++) {
+        ROUTE_$Q_DEPTH[i] = 0xD0000000u + i;
+    }
+    memset(reply_bytes, 0x5A, sizeof(reply));
+
+    run_local(0x43, NULL);
+
+    ASSERT_EQ(5, reply_word_at(0x08));
+    {
+        uint32_t v;
+        memcpy(&v, reply_bytes + 0x0A, 4);
+        ASSERT_EQ(0x11223344u, v);
+        for (i = 0; i <= 5; i++) {
+            memcpy(&v, reply_bytes + 0x0E + i * 4, 4);
+            ASSERT_EQ(0xD0000000u + i, v);
+        }
+        memcpy(&v, reply_bytes + 0x0E + 6 * 4, 4);
+        ASSERT_EQ(0x5A5A5A5Au, v);
+    }
+}
+
+/*
+ * 0x00E64BB0-0x00E64BC4: a pid outside 1..0x40 is refused with 0x000A0001 in
+ * the REPLY's status word, and PROC2_$INFO is never reached.  A pid inside
+ * the range reaches it with the constant cells as its first and fourth
+ * arguments.
+ */
+TEST(request_0x21_range_checks_the_pid)
+{
+    uid_t param;
+    status_$t status;
+
+    memset(&param, 0, sizeof(param));
+    /* the pid is the WORD at param+0x00 ("move.w (A3),D3w" at 0x00E64BB0),
+     * so it is written by byte offset rather than through uid_t.high. */
+    ((uint16_t *)&param)[0] = 0x41;
+    status = run_local(0x21, &param);
+    ASSERT_EQ(0u, status);
+    ASSERT_EQ((uint32_t)status_$illegal_process_id, reply[1]);
+    ASSERT_EQ(0, mock_proc_info_calls);
+
+    reset_mocks();
+    memset(&param, 0, sizeof(param));
+    ((uint16_t *)&param)[0] = 5;
+    status = run_local(0x21, &param);
+    ASSERT_EQ(0u, status);
+    ASSERT_EQ(0u, reply[1]);
+    ASSERT_EQ(1, mock_proc_info_calls);
+    ASSERT_EQ(0, mock_proc_info_scan_key);      /* 0x00E658C4 */
+    ASSERT_EQ(5, mock_proc_info_pid);
+    ASSERT_EQ(0x01F8, mock_proc_info_len);      /* 0x00E658C6 */
+}
+
+/*
+ * 0x00E64F8E-0x00E64FC2: the jump table at 0x00E64FA6 has four entries;
+ * selectors 0 and 1 signal one process, 2 and 3 a process group, and
+ * anything >= 4 falls out of range at 0x00E64F98 into the default arm, which
+ * writes the CALLER'S status.
+ */
+TEST(request_0x35_dispatches_on_the_selector_longword)
+{
+    uid_t param[2];
+    status_$t status;
+
+    memset(param, 0, sizeof(param));
+    param[1].low = 1;                           /* the longword at param+0x0C */
+    status = run_local(0x35, param);
+    ASSERT_EQ(0u, status);
+    ASSERT_EQ(1, mock_signal_os_calls);
+    ASSERT_EQ(0, mock_signal_pgroup_calls);
+    ASSERT_EQ(0x13, mock_signal_number);        /* 0x00E658C8 */
+
+    reset_mocks();
+    memset(param, 0, sizeof(param));
+    param[1].low = 3;
+    status = run_local(0x35, param);
+    ASSERT_EQ(0u, status);
+    ASSERT_EQ(0, mock_signal_os_calls);
+    ASSERT_EQ(1, mock_signal_pgroup_calls);
+    ASSERT_EQ(0x13, mock_signal_number);
+
+    reset_mocks();
+    memset(param, 0, sizeof(param));
+    param[1].low = 4;
+    status = run_local(0x35, param);
+    ASSERT_EQ(status_$network_unknown_request_type, status);
+    ASSERT_EQ(0, mock_signal_os_calls);
+    ASSERT_EQ(0, mock_signal_pgroup_calls);
+    ASSERT_EQ(0u, reply[1]);
+}
+
+/*
+ * 0x00E64916-0x00E64956: four DISK_$GET_STATS calls with controller type 4,
+ * controller 0 and the unit as the third word, each 22 bytes packed 22 bytes
+ * apart from reply+0x08.
+ */
+TEST(request_0x10_packs_four_disk_records)
+{
+    unsigned unit;
+
+    memset(reply_bytes, 0x5A, sizeof(reply));
+    run_local(0x10, NULL);
+
+    ASSERT_EQ(4, mock_disk_get_stats_calls);
+    ASSERT_EQ(4, mock_disk_ctype);
+    ASSERT_EQ(0, mock_disk_cnum);
+    ASSERT_EQ(3, mock_disk_unit);               /* the last call */
+    for (unit = 0; unit < 4; unit++) {
+        unsigned base = 0x08 + unit * 0x16;
+        ASSERT_EQ((uint8_t)(0x10 + unit), reply_bytes[base]);
+        ASSERT_EQ((uint8_t)(0x10 + unit), reply_bytes[base + 0x15]);
+    }
+    /* nothing past the fourth record */
+    ASSERT_EQ(0x5A, reply_bytes[0x08 + 4 * 0x16]);
+}
+
+/*
+ * 0x00E64C00-0x00E64C4A: the ring-log command is chosen by the parameter
+ * block's first word, and the network log is only started when the ring log
+ * reported success.  Both write the CALLER'S status ("pea (A4)").
+ */
+TEST(request_0x25_drives_both_logs)
+{
+    uid_t param[2];
+    status_$t status;
+
+    memset(param, 0, sizeof(param));
+    /* first word 0 -> RINGLOG_CMD_CLEAR (3); NETLOG cmd at param+0x02 */
+    ((uint16_t *)param)[1] = 2;             /* param+0x02 */
+    ((uint32_t *)param)[2] = 0;             /* param+0x08 */
+    memcpy((uint8_t *)param + 0x0A, "\xDE\xAD\xBE\xEF", 4);
+    status = run_local(0x25, param);
+    ASSERT_EQ(0u, status);
+    ASSERT_EQ(1, mock_ringlog_calls);
+    ASSERT_EQ(3, mock_ringlog_cmd);
+    ASSERT_EQ(1, mock_netlog_calls);
+    ASSERT_EQ(2, mock_netlog_cmd);
+    {
+        uint32_t expect;
+        memcpy(&expect, (uint8_t *)param + 0x0A, 4);
+        ASSERT_EQ(expect, mock_netlog_kinds);
+    }
+
+    reset_mocks();
+    memset(param, 0, sizeof(param));
+    ((uint16_t *)param)[0] = 1;             /* non-zero -> RINGLOG_CMD_STOP */
+    run_local(0x25, param);
+    ASSERT_EQ(4, mock_ringlog_cmd);
+
+    /* a failed ring-log call stops the arm before NETLOG (0x00E64C26) */
+    reset_mocks();
+    memset(param, 0, sizeof(param));
+    mock_ringlog_status = 0x00110001;
+    status = run_local(0x25, param);
+    ASSERT_EQ(0x00110001u, status);
+    ASSERT_EQ(1, mock_ringlog_calls);
+    ASSERT_EQ(0, mock_netlog_calls);
+}
+
+/*
+ * The cmpi chain at 0x00E6463E-0x00E64786 has no 0x45 entry, so the
+ * time-sync request the SERVER answers is unknown here and takes the default
+ * arm.  The tree used to give it a silent no-op arm.
+ */
+TEST(request_0x45_is_not_in_the_dispatch_chain)
+{
+    status_$t status = run_local(0x45, NULL);
+    ASSERT_EQ(status_$network_unknown_request_type, status);
+    ASSERT_EQ(0u, reply[1]);
+    ASSERT_EQ(0x46, reply_word_at(0x02));
+}
+
 int main(void)
 {
     printf("ASKNODE_$INTERNET_INFO tests\n");
@@ -418,6 +956,15 @@ int main(void)
     RUN_TEST(stats_real_pages_word_follows_the_copy);
     RUN_TEST(node_uid_reply_carries_the_uid_complements);
     RUN_TEST(unknown_request_writes_status_ret_not_the_reply_status);
+    RUN_TEST(constant_cells_match_the_code_segment_pool);
+    RUN_TEST(request_0x37_returns_the_route_port);
+    RUN_TEST(request_0x2f_copies_the_failure_record_and_clears_the_flag);
+    RUN_TEST(request_0x43_copies_netbuf_alloc_plus_one_buckets);
+    RUN_TEST(request_0x21_range_checks_the_pid);
+    RUN_TEST(request_0x35_dispatches_on_the_selector_longword);
+    RUN_TEST(request_0x10_packs_four_disk_records);
+    RUN_TEST(request_0x25_drives_both_logs);
+    RUN_TEST(request_0x45_is_not_in_the_dispatch_chain);
     printf("\n%d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed != 0;
 }

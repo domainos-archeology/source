@@ -9,15 +9,23 @@
  */
 
 #include "rem_file/rem_file_internal.h"
+#include "vtoc/vtoc.h"
 
 /*
  * Create type context structure (passed as param_1)
  */
 typedef struct {
-    uint32_t reserved[2];       /* Offset 0x00: Reserved */
-    uid_t parent_uid;           /* Offset 0x08: Parent UID */
-    void *addr_info;            /* Offset 0x10: Address info pointer */
+    uint32_t reserved[2];       /* 0x00 */
+    uid_t    parent_uid;        /* 0x08: "lea (0x8,A2),A0"  0x00E618D8 */
+    uint32_t addr_info[2];      /* 0x10: the {network, node} address record
+                                 *       ITSELF - the send is handed its
+                                 *       address ("pea (0x10,A2)" at
+                                 *       0x00E618C0 and 0x00E61956), not a
+                                 *       pointer stored there */
 } rem_file_create_type_ctx_t;
+
+_Static_assert(__builtin_offsetof(rem_file_create_type_ctx_t, parent_uid) == 0x08, "create_type_ctx.parent_uid");
+_Static_assert(__builtin_offsetof(rem_file_create_type_ctx_t, addr_info) == 0x10, "create_type_ctx.addr_info");
 
 /*
  * Create type pre-SR10 phase 1 request structure
@@ -49,9 +57,15 @@ typedef struct {
  * Create type pre-SR10 response structure
  */
 typedef struct {
-    uint8_t padding[REM_FILE_RESPONSE_BUF_SIZE - 0xB8];
-    uid_t session_uid;          /* Session UID */
+    uint8_t head[0x08];         /* 0x00; the UID is at response+0x08
+                                 * ("lea (-0xb8,A6),A0" at 0x00E618EA and
+                                 * 0x00E6191E, buffer at A6-0xC0) */
+    uid_t   session_uid;        /* 0x08 */
+    uint8_t rest[REM_FILE_RESPONSE_BUF_SIZE - 0x10];
 } rem_file_create_presr10_resp_t;
+
+_Static_assert(__builtin_offsetof(rem_file_create_presr10_resp_t, session_uid) == 0x08,
+               "create_presr10_resp.session_uid");
 
 void REM_FILE_$CREATE_TYPE_PRESR10(void *ctx_ptr, uint16_t flags,
                                     int16_t type_index, uid_t *session_uid_out,
@@ -60,7 +74,7 @@ void REM_FILE_$CREATE_TYPE_PRESR10(void *ctx_ptr, uint16_t flags,
     rem_file_create_type_ctx_t *ctx = (rem_file_create_type_ctx_t *)ctx_ptr;
     rem_file_create_presr10_p1_req_t req1;
     rem_file_create_presr10_p2_req_t req2;
-    uint8_t response[REM_FILE_RESPONSE_BUF_SIZE];
+    rem_file_create_presr10_resp_t response;    /* A6-0xC0 */
     uint16_t received_len;
     uint16_t packet_id;
     uint16_t zero = 0;
@@ -69,9 +83,9 @@ void REM_FILE_$CREATE_TYPE_PRESR10(void *ctx_ptr, uint16_t flags,
     req1.magic = 0x80;
     req1.opcode = REM_FILE_OP_GENERATE_UID;        /* 0x24, 0x00E6188C */
 
-    REM_FILE_$SEND_REQUEST(ctx->addr_info, &req1, 0x10,
+    REM_FILE_$SEND_REQUEST(&ctx->addr_info, &req1, 0x10,
                            &zero, 0,
-                           response, REM_FILE_RESPONSE_BUF_SIZE,
+                           &response, REM_FILE_RESPONSE_BUF_SIZE,
                            &received_len, &zero, 0,
                            (int16_t *)&zero, &packet_id,
                            status);
@@ -81,12 +95,11 @@ void REM_FILE_$CREATE_TYPE_PRESR10(void *ctx_ptr, uint16_t flags,
     }
 
     /* Phase 2: Send create type request */
-    rem_file_create_presr10_resp_t *resp = (rem_file_create_presr10_resp_t *)response;
 
     req2.magic = 0x80;
     req2.opcode = REM_FILE_OP_CREATE_TYPE_PRESR10; /* 0x26, 0x00E618E4 */
     req2.parent_uid = ctx->parent_uid;
-    req2.session_uid = resp->session_uid;
+    req2.session_uid = response.session_uid;
     req2.flags = flags;
     req2.flags2 = 3;
 
@@ -95,17 +108,17 @@ void REM_FILE_$CREATE_TYPE_PRESR10(void *ctx_ptr, uint16_t flags,
     req2.type_index = type_index - 1;
 
     /* Copy session UID to output before phase 2 request */
-    *session_uid_out = resp->session_uid;
+    *session_uid_out = response.session_uid;
 
-    REM_FILE_$SEND_REQUEST(ctx->addr_info, &req2, 0x1C,
+    REM_FILE_$SEND_REQUEST(&ctx->addr_info, &req2, 0x1C,
                            &zero, 0,
-                           response, REM_FILE_RESPONSE_BUF_SIZE,
+                           &response, REM_FILE_RESPONSE_BUF_SIZE,
                            &received_len, &zero, 0,
                            (int16_t *)&zero, &packet_id,
                            status);
 
     /* Treat duplicate UID as success */
-    if (*status == 0x00020007) {  /* status_$vtoc_duplicate_uid */
+    if (*status == status_$vtoc_duplicate_uid) {   /* 0x00E61962 */
         *status = status_$ok;
     }
 }

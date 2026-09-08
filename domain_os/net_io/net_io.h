@@ -403,4 +403,25 @@ extern net_io_unwired_t NET_IO_UNWIRED;
 #define status_$net_io_no_user_buffer_queues    0x2B000B  /* "no more buffer queues for user networks" */
 #define status_$net_io_max_user_ports_open      0x2B000F  /* "max number of USER ports already open" */
 
+
+/*
+ * NET_IO_$DEVICE_STAT (0x00E5A39C) / NET_IO_$DEVICE_STAT2 (0x00E5A420)
+ *
+ * Both take the same seven arguments; the frame of the first is
+ * (0x8,A6) word, (0xA,A6) word, (0xC,A6) word, (0xE,A6) long, (0x12,A6) long,
+ * (0x16,A6) long, (0x1A,A6) long and its callers clean up 0x18 bytes.
+ * ROUTE_$FIND_PORTP maps (network, index) to a port; if there is none the
+ * routine copies a canned 8-byte reply and returns
+ * status_$internet_unknown_network_port (0x00E5A3DE).
+ *
+ * ASKNODE_$INTERNET_INFO's request-0x3D and request-0x5B arms call them with
+ * max_len = 0x80 (0x00E651BE-0x00E651FE).
+ */
+void NET_IO_$DEVICE_STAT(uint16_t network, uint16_t index, uint16_t max_len,
+                         void *id_ret, void *stat_buf, uint16_t *stat_len_ret,
+                         status_$t *status_ret);
+void NET_IO_$DEVICE_STAT2(uint16_t network, uint16_t index, uint16_t max_len,
+                          void *id_ret, void *stat_buf, uint16_t *stat_len_ret,
+                          status_$t *status_ret);
+
 #endif /* NET_IO_H */

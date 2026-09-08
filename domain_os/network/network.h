@@ -161,9 +161,17 @@ extern int8_t NETWORK_$REALLY_DISKLESS;      /* 0xE24C4A (+0x34E) */
 extern int8_t NETWORK_$DISKLESS;             /* 0xE24C4C (+0x350) - diskless mode */
 extern uid_t NETWORK_$PAGING_FILE_UID;
 
-/* Network statistics */
-extern uint32_t NETWORK_$PAGING_BACKLOG;      /* 0xE24BAC */
-extern uint32_t NETWORK_$FILE_BACKLOG;        /* 0xE24BD0 */
+/*
+ * Network statistics.
+ *
+ * Both backlog symbols name a nine-longword histogram, not a single counter:
+ * NETWORK_$PAGING_BACKLOG runs 0xE24BAC..0xE24BCF and NETWORK_$FILE_BACKLOG
+ * 0xE24BD0..0xE24BF3, ending exactly where NETWORK_$FAILURE_REC begins, and
+ * ASKNODE_$INTERNET_INFO's request-0x29 arm copies nine longwords out of each
+ * ("moveq #0x8,D3 / move.l (A0)+,(A2)+ / dbf" at 0x00E64DEE and 0x00E64E08).
+ */
+#define NETWORK_PAGING_BACKLOG_BUCKETS  9
+extern uint32_t NETWORK_$PAGING_BACKLOG[NETWORK_PAGING_BACKLOG_BUCKETS]; /* 0xE24BAC */
 
 /*
  * 0xE24BD0 is the base of a nine-entry histogram of the file-server request
@@ -172,9 +180,26 @@ extern uint32_t NETWORK_$FILE_BACKLOG;        /* 0xE24BD0 */
  * than eight in the overflow cell (0x00E63628-0x00E6364E).
  */
 #define NETWORK_FILE_BACKLOG_BUCKETS    9
-extern uint32_t NETWORK_$FILE_BACKLOG_OVERFLOW;  /* 0xE24BF0 */
+extern uint32_t NETWORK_$FILE_BACKLOG[NETWORK_FILE_BACKLOG_BUCKETS];  /* 0xE24BD0 */
+/*
+ * The overflow cell is the last bucket (0xE24BD0 + 8*4 = 0xE24BF0); the SAU2
+ * link map has no separate symbol there, so it is spelled as that bucket
+ * rather than as storage of its own.
+ */
+#define NETWORK_$FILE_BACKLOG_OVERFLOW  (NETWORK_$FILE_BACKLOG[8])
 extern uint8_t *NETWORK_$SERVICE_INFO_PTR;       /* 0xE28DB8 */
 extern uint16_t NETWORK_$RCV_READ_AHEAD;      /* 0xE24C26 */
+
+/*
+ * NETWORK_$2LONG1 (0xE245A2) - one of the four cells of the NET_ASM assembly data
+ * module (SAU2 map: `D E2459C NET_ASM size = C`, holding HINT_$HINTFILE_PTR,
+ * REM_FILE_$2LONG1, NETWORK_$2LONG1 and NODE_$ME).  It is a word counter:
+ * ASKNODE_$INTERNET_INFO's request-0x29 arm reports it with move.w
+ * (0x00E64E2E).
+ * TODO: recover what the counter counts (bead source-t74x).
+ */
+extern uint16_t NETWORK_$2LONG1;
+
 extern uint16_t NETWORK_$MULT_PAGIN_RQST_CNT; /* 0xE24C28 */
 extern uint16_t NETWORK_$BAD_CHKSUM_CNT;      /* 0xE24C2A */
 extern uint16_t NETWORK_$READ_VIOL_CNT;       /* 0xE24C2C */

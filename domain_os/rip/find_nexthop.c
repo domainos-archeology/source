@@ -16,7 +16,16 @@
  * entries.  The port "active" word at +0x2C holds the port status.
  */
 #define ROUTE_PORT_COUNT        ROUTE_$MAX_PORTS
-#define ROUTE_PORT_ACTIVE_MASK  0x3C    /* Bits 2-5 indicate active port types */
+/*
+ * route_$port_t.active (+0x2C) is a BIT NUMBER, not a mask.  The image does
+ * "moveq #0x3c,D6 / move.w (0x2c,A0),D5w / btst.l D5,D6" (0x00E156E2 -
+ * 0x00E156EA), so the port qualifies when `active` selects a set bit of the
+ * constant 0x3C - i.e. when active is 2, 3, 4 or 5.  btst with a data
+ * register numbers bits modulo 32, so the test is
+ * "(1 << (active & 0x1F)) & 0x3C" (bead source-xrdt; the same idiom appears
+ * in rip/send.c and route/process.c with 0x28 / 0x30).
+ */
+#define ROUTE_PORT_ROUTE_SET    0x3C
 
 /*
  * XNS address helper: copy 10 bytes (4 byte network + 6 byte host)
@@ -81,12 +90,13 @@ int16_t RIP_$FIND_NEXTHOP(void *addr_info, boolean flags, int16_t *port_ret,
 
     /*
      * Check local port table for direct connectivity.
-     * Port flags bits 2-5 (mask 0x3C) indicate active port types.
+     * `active` is a bit number selecting into the set 0x3C - see the
+     * ROUTE_PORT_ROUTE_SET comment above.
      */
     port_entry = &ROUTE_$PORT_ARRAY[0];
     for (port_idx = 0; port_idx < ROUTE_PORT_COUNT; port_idx++) {
-        /* Check if port is active (any of bits 2-5 set) */
-        if ((port_entry->active & ROUTE_PORT_ACTIVE_MASK) != 0) {
+        /* 0x00E156E2-0x00E156EA */
+        if (((1u << (port_entry->active & 0x1F)) & ROUTE_PORT_ROUTE_SET) != 0) {
             /* Check for network match */
             if (port_entry->network == dest_network) {
                 /* Direct connectivity via this port */

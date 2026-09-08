@@ -285,8 +285,23 @@ typedef struct sock_$pkt_info_t {
  * Both readers test bit 1 with a byte btst on the LOW half of the word:
  * ROUTE_$PROCESS "btst.b #1,(0x11,rec)" at 0x00E874EA and RIP_$SERVER
  * "btst.b #0x1,(-0x5f,A6)" at 0x00E68A28.
+ *
+ * The port demux routines build the word the same way - "move.w #0x2,(rec+0x10)"
+ * followed by byte bsets on the word's LOW half at rec+0x11, so a "bset.b #n"
+ * there is word bit n:
+ *   MAC_$DEMUX 0x00E0BC62  move.w #0x2,(-0x30,A6)
+ *              0x00E0BC6E  bset.b #0x0,(-0x2f,A6)   from rcv_pkt.is_local
+ *              0x00E0BC7C  bset.b #0x2,(-0x2f,A6)   from its own third argument
+ *   APP_$DEMUX 0x00E00ADA  move.w #0x2,(-0x30,A6)
+ *              0x00E00AE4  bset.b #0x2,(-0x2f,A6)   from its own fourth argument
+ * Nothing in this image reads bit 0 or bit 2 back.
  */
+#define SOCK_PKT_FLAG_LOCAL 0x0001  /* the frame was originated by this node */
 #define SOCK_PKT_FLAG_XNS 0x0002    /* frame arrived over XNS ("standard") routing */
+#define SOCK_PKT_FLAG_DEMUX_BOOL 0x0004 /* the boolean the port demux was handed;
+                                         * RING_$RECEIVE_PACKET takes it from bit
+                                         * 3 of the ring header byte at +0x07
+                                         * ("btst.l #0x3,D3 / sne" 0x00E7650E) */
 
 /* No pointer fields, so the layout holds on the host too. */
 _Static_assert(offsetof(sock_$pkt_info_t, hdr)        == 0x00, "sock_$pkt_info_t.hdr");

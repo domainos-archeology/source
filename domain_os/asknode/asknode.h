@@ -59,7 +59,30 @@
                                              * entry 0x45 (0x00E65C7E) */
 #define ASKNODE_REQ_WHO_REMOTE      0x2D    /* Remote WHO query (0x00E65BA8) */
 #define ASKNODE_REQ_LOG_READ        0x31    /* Read log entries (0x00E65D24) */
+#define ASKNODE_REQ_NET_STATS       0x29    /* Network/ring counters (0x00E64DE2) */
+#define ASKNODE_REQ_PROC_PID        0x2B    /* UID -> PID (0x00E64F06) */
+#define ASKNODE_REQ_FAILURE_REC     0x2F    /* NETWORK_$FAILURE_REC (0x00E64F1E) */
+#define ASKNODE_REQ_PROC1_LIST      0x33    /* PROC1 bound-process list (0x00E64F78) */
+#define ASKNODE_REQ_SIGNAL2         0x35    /* Signal, selector in param+0x0C
+                                             * (0x00E64F8E) */
+#define ASKNODE_REQ_ROUTE_PORT      0x37    /* ROUTE_$PORT (0x00E64FC6) */
+#define ASKNODE_REQ_PORT_LIST       0x39    /* All open routing ports (0x00E64FD2) */
+#define ASKNODE_REQ_PORT_INFO       0x3B    /* One port, short form (0x00E65088) */
+#define ASKNODE_REQ_DEVICE_STAT     0x3D    /* NET_IO_$DEVICE_STAT (0x00E6514A) */
+#define ASKNODE_REQ_ROUTE_STATS     0x3F    /* Routing counters (0x00E650C6) */
+#define ASKNODE_REQ_NET_ROUTE       0x41    /* Route to one network (0x00E6524C) */
+#define ASKNODE_REQ_QUEUE_DEPTH     0x43    /* ROUTE_$Q_DEPTH histogram (0x00E65328) */
+#define ASKNODE_REQ_BOOT_DEVICE     0x47    /* OS_$BOOT_DEVICE (0x00E65356) */
+#define ASKNODE_REQ_LOADAV          0x49    /* PROC1_$GET_LOADAV (0x00E6536C) */
+#define ASKNODE_REQ_PROC_WS_INFO    0x4B    /* Working-set sizes (0x00E6538C) */
+#define ASKNODE_REQ_REV_INFO        0x4D    /* OS_$GET_REV_INFO (0x00E6543E) */
+#define ASKNODE_REQ_ZOMBIE_LIST     0x4F    /* PROC2_$ZOMBIE_LIST (0x00E649C2) */
 #define ASKNODE_REQ_DISK_INFO       0x51    /* Get specific disk info */
+#define ASKNODE_REQ_DISPLAY_LIST    0x55    /* SMD display table (0x00E6544C) */
+#define ASKNODE_REQ_PROC_LIST2      0x57    /* PROC2_$LIST2 (0x00E649EC) */
+#define ASKNODE_REQ_ZOMBIE_LIST2    0x59    /* PROC2_$ZOMBIE_LIST, reply form 2
+                                             * (0x00E64A0C) */
+#define ASKNODE_REQ_DEVICE_STAT2    0x5B    /* NET_IO_$DEVICE_STAT2 (0x00E6514A) */
 
 /*
  * ============================================================================

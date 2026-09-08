@@ -371,7 +371,14 @@ typedef struct ring_global_t {
     uint16_t        wakeup_cnt;             /* 0x5BA: RING_$WAKEUP_CNT */
     uint16_t        abort_cnt;              /* 0x5BC: RING_$ABORT_CNT */
     uint16_t        busy_on_rcv_int;        /* 0x5BE: RING_$BUSY_ON_RCV_INT */
-    uint32_t        send_null_cnt;          /* 0x5C0: RING_$SEND_NULL_CNT */
+    /*
+     * 0x5C0 is a WORD, not a longword: the SAU2 link map puts
+     * RING_$CLOBBERED_HDR at 0xE869C2 (RING_$CTL + 0x5C2) and
+     * ASKNODE_$INTERNET_INFO's request-0x29 arm reads both of them with
+     * move.w (0x00E64E5A / 0x00E64E62 / 0x00E64E6A).
+     */
+    uint16_t        send_null_cnt;          /* 0x5C0: RING_$SEND_NULL_CNT */
+    uint16_t        clobbered_hdr;          /* 0x5C2: RING_$CLOBBERED_HDR */
     uint16_t        xmit_waited;            /* 0x5C4: RING_$XMIT_WAITED */
     uint16_t        _r5c6;                  /* 0x5C6 */
     void          (*rcv_proc[RING_MAX_UNITS])(void); /* 0x5C8: RING_$RCV0 / RING_$RCV1 */
@@ -1054,9 +1061,32 @@ void RING_$PROC2_CLEANUP(void *param1);
 #if defined(ARCH_M68K)
 #define RING_$FILE_OVERFLOW     (*(uint16_t *)0xE24596)
 #define RING_$OVERFLOW_OVERFLOW (*(uint16_t *)0xE24594)
+/*
+ * RING_$DELIVERY_FAILED (0xE24598) - the third counter of this group; the
+ * SAU2 link map names it and ASKNODE_$INTERNET_INFO's request-0x29 arm
+ * reports all three together ("move.w (0x00E24598).l,(0x58,A1)" at
+ * 0x00E64E26).
+ */
+#define RING_$DELIVERY_FAILED   (*(uint16_t *)0xE24598)
 #else
 extern uint16_t RING_$FILE_OVERFLOW;
 extern uint16_t RING_$OVERFLOW_OVERFLOW;
+extern uint16_t RING_$DELIVERY_FAILED;
 #endif
+
+/*
+ * RING_$CTL counter aliases (moved here from ring/ring_internal.h so that
+ * ASKNODE_$INTERNET_INFO's request-0x29 arm can reach them - it reports every
+ * one of them, 0x00E64E5A-0x00E64E9A).
+ */
+#define RING_$RCV_INT_CNT       (RING_$CTL.rcv_int_cnt)
+#define RING_$WAKEUP_CNT        (RING_$CTL.wakeup_cnt)
+#define RING_$ABORT_CNT         (RING_$CTL.abort_cnt)
+#define RING_$BUSY_ON_RCV_INT   (RING_$CTL.busy_on_rcv_int)
+#define RING_$XMIT_WAITED       (RING_$CTL.xmit_waited)
+#define RING_$BAD_DATA_CNT      (RING_$CTL.bad_data_cnt)
+#define RING_$SEND_NULL_CNT     (RING_$CTL.send_null_cnt)
+#define RING_$CLOBBERED_HDR     (RING_$CTL.clobbered_hdr)
+#define RING_$UNEXPECTED_XMIT_STAT (RING_$CTL.unexpected_xmit_stat)
 
 #endif /* RING_H */

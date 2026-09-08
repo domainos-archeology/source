@@ -23,8 +23,23 @@ typedef struct {
     uint32_t perm_data[16];     /* Permission data (64 bytes) */
     uid_t acl_uid;              /* ACL UID (8 bytes) */
     uint32_t acl_header[11];    /* ACL header (44 bytes) */
-    uint16_t extra_flags;       /* Extra flags */
+    uint16_t extra_flags;       /* 0xA8: D0 = (0x22,A6)   0x00E62B1E */
 } rem_file_set_acl_req_t;
+
+/*
+ * Request offsets are the A6 displacement plus 0x170; verified against
+ * 0x00E62ABE-0x00E62B1E, total length 0xAA (`move.w #0xaa,-(SP)` at
+ * 0x00E62B4A).
+ */
+_Static_assert(__builtin_offsetof(rem_file_set_acl_req_t, file_uid) == 0x04, "set_acl_req.file_uid");
+_Static_assert(__builtin_offsetof(rem_file_set_acl_req_t, flags) == 0x0C, "set_acl_req.flags");
+_Static_assert(__builtin_offsetof(rem_file_set_acl_req_t, flags2) == 0x0E, "set_acl_req.flags2");
+_Static_assert(__builtin_offsetof(rem_file_set_acl_req_t, sid_data) == 0x10, "set_acl_req.sid_data");
+_Static_assert(__builtin_offsetof(rem_file_set_acl_req_t, perm_data) == 0x34, "set_acl_req.perm_data");
+_Static_assert(__builtin_offsetof(rem_file_set_acl_req_t, acl_uid) == 0x74, "set_acl_req.acl_uid");
+_Static_assert(__builtin_offsetof(rem_file_set_acl_req_t, acl_header) == 0x7C, "set_acl_req.acl_header");
+_Static_assert(__builtin_offsetof(rem_file_set_acl_req_t, extra_flags) == 0xA8, "set_acl_req.extra_flags");
+_Static_assert(sizeof(rem_file_set_acl_req_t) == 0xAA, "set_acl_req size");
 
 void REM_FILE_$SET_ACL(void *addr_info, uid_t *file_uid, uid_t *acl_uid,
                        void *acl_header, void *sid_data, void *perm_data,

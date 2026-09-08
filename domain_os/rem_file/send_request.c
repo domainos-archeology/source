@@ -1,66 +1,95 @@
 /*
- * REM_FILE_$SEND_REQUEST - Core network request handler
+ * rem_file/send_request.c - REM_FILE_$SEND_REQUEST (0x00E60FD8, 1368 bytes)
  *
- * Sends a remote file operation request to a remote node and waits
- * for a response. Handles retransmission, timeouts, busy responses,
- * and node visibility tracking.
+ * The one transport every REM_FILE_$* client stub goes through: it stamps the
+ * message type into the caller's request record, allocates a reply socket,
+ * sends the request to socket 2 on the remote node, waits for the matching
+ * reply, copies the reply header (and any bulk payload) back to the caller and
+ * closes the socket again.
  *
- * Protocol flow:
- *   1. Set msg_type = 1 at start of request buffer
- *   2. Allocate a socket, generate packet ID
- *   3. Send/retry loop (max 60 retries):
- *      - PKT_$SEND_INTERNET to dest_sock=2
- *      - EC_$WAIT on socket EC + TIME_$CLOCKH with computed timeout
- *      - On socket event: APP_$RECEIVE, copy header, handle bulk data
- *      - On timeout: check quit signal, probe node visibility
- *      - On busy response (first word 0xFFFF): delay 2 ticks, retry
- *   4. Validate response[3] == request[3] + 1
- *   5. Extract status from response+4
- *   6. Cleanup: SOCK_$CLOSE, output packet_id
+ * Re-emitted block for block against the listing for bead source-ldrp; every
+ * store the earlier transcription dropped is cited by address below.
  *
- * Connection states:
- *   0 = initial (no timeout yet)
- *   1 = first timeout occurred
- *   2 = diskless mother node (never gives up)
- *   3 = confirmed visible (got at least one response or PKT_$LIKELY_TO_ANSWER)
+ * Frame: `link.w A6,-0xd8` + a nine-register movem (0x24 bytes), so the
+ * epilogue is `movem.l (-0xfc,A6)` (0x00E61526).
  *
- * Original address: 0x00E60FD8
- * Size: 1368 bytes
+ * Arguments (A6 displacements taken straight from the listing):
+ *   0x08 addr_info      long, {network, node}; node is addr_info[1]
+ *   0x0C request        long
+ *   0x10 request_len    word  (D2 at 0x00E60FE0)
+ *   0x12 extra_data     long  (0x00E61128)
+ *   0x16 extra_len      word  (D3 at 0x00E60FE4)
+ *   0x18 response       long
+ *   0x1C response_max   word
+ *   0x1E received_len   long, word out (0x00E6128C)
+ *   0x22 bulk_data      long  (0x00E6133C)
+ *   0x26 bulk_max       word
+ *   0x28 bulk_len       long, word in/out
+ *   0x2C packet_id      long, word out (0x00E61522)
+ *   0x30 status_ret     long
+ *
+ * A5 is the REM_FILE module base 0x00E823FC, inherited from the caller (this
+ * routine never loads it); A5+0x04 is REM_FILE_$BUSY_RETRY_COUNT and A5+0x08
+ * REM_FILE_$COMPLETION_TIME.  See rem_file/rem_file_data.c.
  */
 
 #include "rem_file/rem_file_internal.h"
-#include "file/file.h"
-#include "os/os.h"
+#include "arch/arch.h"
 #include "app/app.h"
-#include "netbuf/netbuf.h"
+#include "ec/ec.h"
+#include "file/file.h"
 #include "fim/fim.h"
+#include "netbuf/netbuf.h"
+#include "os/os.h"
 #include "misc/crash_system.h"
 
 /*
- * Static error status values used for CRASH_SYSTEM calls.
- * 0x00E61530 (PC+0x494 from 0xE6109A): socket allocation failure
- * 0x00E61534 (PC+0x43C from 0xE610F6): extra_data with split request
+ * The two `pea (d,PC)` status cells this function hands CRASH_SYSTEM.  Both
+ * sit in the code region right after the `rts` at 0x00E6152E; the map exports
+ * no symbol for them.  `gsk read 0xE61528 16`:
+ *
+ *   00e61528  1c fc ff 04 4e 5e 4e 75  00 11 00 05 00 11 00 01
+ *                                      ^0xE61530   ^0xE61534
  */
-static const status_$t crash_status_sock_alloc = 0x000F0004;
-static const status_$t crash_status_split_extra = 0x000F0004;
+
+/* 0x00E61530, bytes 00 11 00 05.  Reached from `pea (0x494,PC)` at
+ * 0x00E6109A (extension word 0x00E6109C + 0x494).  The SR10.2 status table
+ * calls 0x00110005 "no available socket", which is what this call site means;
+ * the tree's single name for the code comes from the SR10.4 table. */
+static const status_$t rem_file_$no_socket_status =
+    status_$network_receive_process_failed_to_start;
+
+/* 0x00E61534, bytes 00 11 00 01 - "buffer error".  Reached from
+ * `pea (0x43c,PC)` at 0x00E610F6 (extension word 0x00E610F8 + 0x43C). */
+static const status_$t rem_file_$buffer_error_status = status_$network_buffer_error;
 
 /*
- * Maximum retry count before giving up
+ * Retry budget (0x00E61130 "cmpi.w #0x3c,(-0xca,A6)").  A plain timeout adds
+ * 12 (0x00E61252, 0x00E614CC) and a "server busy" reply adds 1 (0x00E61446).
  */
-#define SEND_REQUEST_MAX_RETRIES    60  /* 0x3C */
+#define SEND_REQUEST_RETRY_BUDGET   0x3C
+
+/* The largest request that still fits in the packet template (0x00E610EC),
+ * and the response-size threshold that forces a data page (0x00E61066). */
+#define SEND_REQUEST_MAX_TEMPLATE   0x200
+
+/* The largest bulk payload the reply may carry (0x00E612C2). */
+#define SEND_REQUEST_MAX_BULK       0x400
 
 /*
- * Maximum request size that fits in a single packet header
+ * Connection states (the word at A6-0xBE).
+ *   0  nothing heard yet
+ *   1  one timeout seen; the next one probes with PKT_$LIKELY_TO_ANSWER
+ *   2  diskless mother node - never give up, never probe
+ *   3  the node is known to be answering
  */
-#define SEND_REQUEST_MAX_SINGLE     0x200  /* 512 bytes */
+#define SEND_REQUEST_STATE_INITIAL          0
+#define SEND_REQUEST_STATE_FIRST_TIMEOUT    1
+#define SEND_REQUEST_STATE_MOTHER           2
+#define SEND_REQUEST_STATE_CONFIRMED        3
 
-/*
- * Connection state tracking
- */
-#define CONN_STATE_INITIAL          0
-#define CONN_STATE_FIRST_TIMEOUT    1
-#define CONN_STATE_DISKLESS_MOTHER  2
-#define CONN_STATE_CONFIRMED        3
+/* The remote file server's well-known socket (0x00E6118C "move.w #0x2,-(SP)"). */
+#define SEND_REQUEST_SERVER_SOCKET  2
 
 void REM_FILE_$SEND_REQUEST(void *addr_info, void *request, int16_t request_len,
                             void *extra_data, int16_t extra_len,
@@ -69,390 +98,354 @@ void REM_FILE_$SEND_REQUEST(void *addr_info, void *request, int16_t request_len,
                             int16_t *bulk_len, uint16_t *packet_id,
                             status_$t *status_ret)
 {
-    uint32_t *addr_words = (uint32_t *)addr_info;
-    uint16_t *req_u16 = (uint16_t *)request;
-    int16_t *resp_i16 = (int16_t *)response;
-    uint8_t *req_u8 = (uint8_t *)request;
+    const uint32_t *addr = (const uint32_t *)addr_info;   /* (0x8,A6) */
+    uint8_t *request_b = (uint8_t *)request;
+    uint8_t *response_b = (uint8_t *)response;
 
-    int16_t sock_num;           /* local_d4: allocated socket number */
-    int16_t pkt_id;             /* local_d2: outgoing packet ID */
-    int16_t resp_pkt_id;        /* local_d0: received packet ID */
-    int16_t retry_count;        /* local_ce: retry counter */
-    int16_t send_hdr_len;       /* local_cc: header portion length */
-    int16_t send_data_len;      /* local_ca: extra data portion length */
-    uint16_t send_overhead;     /* auStack_c8: PKT_$SEND_INTERNET len_out */
-    uint16_t send_c6;           /* local_c6: PKT_$SEND_INTERNET extra out */
-    uint16_t split_flag;        /* local_c4: 1 if large packet / bulk data */
-    int16_t conn_state;         /* local_c2: connection state */
-    int32_t sock_ec_wait_val;   /* local_c0: next EC value to wait for */
-    int32_t quit_saved;         /* local_bc: saved quit value */
-    int32_t timeout_deadline;   /* local_b8: timeout clock target */
-    status_$t local_status;     /* local_b4: temporary status */
-    ec_$eventcount_t *sock_ec;  /* local_b0: socket event counter pointer */
-    void *send_data_ptr;        /* local_ac: extra data pointer for send */
-    char *bulk_va;              /* local_a8: bulk data virtual address */
-    char *bulk_dest;            /* local_a4: destination for bulk copy */
-    uint32_t hdr_page;          /* local_a0: header page address for RTN_HDR */
-    uint32_t bulk_handle;       /* local_9c: bulk data buffer handle */
-    uint8_t cleanup_buf[88];    /* auStack_8c: FIM_$CLEANUP handler buffer */
+    int16_t   sock_num;         /* A6-0xD0 */
+    int16_t   pkt_id;           /* A6-0xCE */
+    int16_t   reply_id;         /* A6-0xCC */
+    int16_t   retry_count;      /* A6-0xCA */
+    int16_t   template_len;     /* A6-0xC8 */
+    int16_t   send_data_len;    /* A6-0xC6 */
+    uint16_t  retry_hint;       /* A6-0xC4, PKT_$SEND_INTERNET output */
+    uint16_t  timeout_out;      /* A6-0xC2, PKT_$SEND_INTERNET output */
+    int16_t   conn_state;       /* A6-0xBE */
+    int16_t   want_data_page;   /* A6-0xC0 */
+    void     *send_data_ptr;    /* A6-0xA8, a caller pointer */
+    ec_$eventcount_t *sock_ec;  /* A6-0xAC */
+    int32_t   sock_wait_val;    /* A6-0xBC */
+    int32_t   quit_saved;       /* A6-0xB8 */
+    int32_t   deadline;         /* A6-0xB4 */
+    status_$t local_status;     /* A6-0xB0 */
+    uint32_t  bulk_va;          /* A6-0xA4, NETBUF_$GETVA output (a VA) */
+    void     *bulk_dest;        /* A6-0xA0, a caller pointer */
+    uint32_t  hdr_va;           /* A6-0x9C, NETBUF_$RTN_HDR argument */
+    uint32_t  bulk_handle;      /* A6-0x98 */
+    uint8_t   cleanup_rec[88];  /* A6-0x88, FIM_$CLEANUP handler record */
+    app_$receive_rec_t rcv;     /* A6-0x30 */
 
-    /* APP_$RECEIVE result: local_34 through local_2c */
-    uint32_t recv_hdr_ptr;      /* local_34: pointer to received header */
-    char *recv_data_ptr;        /* local_30: pointer to received data */
-    uint32_t recv_data_bufs[10]; /* local_2c: data buffer array */
+    const rem_file_$reply_hdr_t *reply;  /* A0 at 0x00E6125A */
+    int32_t   copy_len;         /* D3/D4 */
+    int32_t   resp_max_l;       /* D2, the sign-extended response_max */
 
-    /* Early exit: process type 9 (special processes) cannot do remote ops */
+    /* 0x00E60FE8-0x00E61008: a type-9 (server) process may not do remote
+     * file operations. */
     if (PROC1_$TYPE[PROC1_$CURRENT] == 9) {
-        *status_ret = file_$object_not_found;
-        return;
+        *status_ret = file_$object_not_found;            /* 0x00E61002 */
+        goto function_exit;                              /* bra 0x00E61526 */
     }
 
-    /* Early exit: network not capable and target is not local node */
-    if ((NETWORK_$CAPABLE_FLAGS & 1) == 0 && addr_words[1] != NODE_$ME) {
-        *status_ret = file_$comms_problem_with_remote_node;
-        return;
+    /* 0x00E6100C-0x00E61030: without the network capability bit only the
+     * local node may be addressed. */
+    if ((NETWORK_$CAPABLE_FLAGS & 1) == 0 && addr[1] != NODE_$ME) {
+        *status_ret = file_$comms_problem_with_remote_node;  /* 0x00E6102A */
+        goto function_exit;
     }
 
-    /* Determine initial connection state */
-    if (NETWORK_$DISKLESS < 0 && addr_words[1] == NETWORK_$MOTHER_NODE) {
-        conn_state = CONN_STATE_DISKLESS_MOTHER;
+    /* 0x00E61034-0x00E61054 */
+    if (NETWORK_$DISKLESS < 0 && addr[1] == NETWORK_$MOTHER_NODE) {
+        conn_state = SEND_REQUEST_STATE_MOTHER;
     } else {
-        conn_state = CONN_STATE_INITIAL;
+        conn_state = SEND_REQUEST_STATE_INITIAL;
     }
 
-    /* Set msg_type = 1 at start of request buffer */
-    *req_u16 = 1;
+    /* 0x00E61058: stamp the message type into the caller's request record. */
+    ((rem_file_request_hdr_t *)request)->msg_type = 1;    /* 0x00E6105C */
 
-    /* Determine if we need a split packet (bulk data present or large response) */
-    if (extra_len == 0 && (int16_t)response_max <= 0x200) {
-        split_flag = 0;
+    /* 0x00E61060-0x00E61076: a data page is needed when the caller expects
+     * bulk data or a reply larger than the template. */
+    if (extra_len != 0 || (int16_t)response_max > SEND_REQUEST_MAX_TEMPLATE) {
+        want_data_page = 1;
     } else {
-        split_flag = 1;
+        want_data_page = 0;
     }
 
-    /* Allocate a socket: protocol=3, bufpages=split_flag|0x0400 */
-    {
-        int8_t result;
-        result = SOCK_$ALLOCATE((uint16_t *)&sock_num, 0x30001,
-                                ((uint32_t)split_flag << 16) | 0x0400);
-        if (result >= 0) {
-            CRASH_SYSTEM(&crash_status_sock_alloc);
-        }
+    /* 0x00E6107A-0x00E610A4.  SOCK_$ALLOCATE's third argument is a packed
+     * word pair: the high word (want_data_page) is the netbuf DATA page count
+     * and the low word (0x400) the maximum accepted packet data length; the
+     * compiler pushes the two halves separately.  The second argument's
+     * 0x30001 is queue depth 3 / one header page.
+     *
+     * The result is a Domain boolean: 0xFF means the socket was allocated, so
+     * a NON-negative result is the failure ("tst.b D0b / bmi" at 0x00E61096).
+     */
+    if (SOCK_$ALLOCATE((uint16_t *)&sock_num, 0x00030001,
+                       ((uint32_t)(uint16_t)want_data_page << 16) | 0x0400) >= 0) {
+        CRASH_SYSTEM(&rem_file_$no_socket_status);       /* 0x00E6109A */
     }
 
-    /* Get socket event counter pointer and initial wait value */
-    sock_ec = SOCK_$EVENT_COUNTERS[sock_num];
-    sock_ec_wait_val = sock_ec->value + 1;
+    /* 0x00E610A6-0x00E610C8.  The table base 0xE28DB4 is indexed with a -4
+     * displacement, i.e. SOCK_$EVENT_COUNTERS[sock_num - 1] is socket
+     * sock_num's descriptor (see sock/sock.h). */
+    sock_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
+    sock_wait_val = sock_ec->value + 1;
 
-    /* Save current quit value for this address space */
+    /* 0x00E610CA-0x00E610DC */
     quit_saved = FIM_$QUIT_VALUE[PROC1_$AS_ID];
 
-    /* Generate packet ID */
-    pkt_id = PKT_$NEXT_ID();
+    pkt_id = PKT_$NEXT_ID();                             /* 0x00E610DE */
+    retry_count = 0;                                     /* 0x00E610E8 */
 
-    /* Initialize retry counter */
-    retry_count = 0;
-
-    /* Set up send parameters - handle request splitting if needed */
-    if (request_len <= SEND_REQUEST_MAX_SINGLE) {
-        /* Request fits in single packet */
-        send_hdr_len = request_len;
+    /* 0x00E610EC-0x00E6112E: a request longer than the template is split, the
+     * tail riding along as the packet's data.  A split request may not also
+     * carry caller-supplied extra data. */
+    if (request_len > SEND_REQUEST_MAX_TEMPLATE) {
+        if (extra_len != 0) {
+            CRASH_SYSTEM(&rem_file_$buffer_error_status); /* 0x00E610F6 */
+        }
+        template_len  = SEND_REQUEST_MAX_TEMPLATE;
+        send_data_len = (int16_t)(request_len - SEND_REQUEST_MAX_TEMPLATE);
+        send_data_ptr = request_b + SEND_REQUEST_MAX_TEMPLATE;
+    } else {
+        template_len  = request_len;
         send_data_len = extra_len;
         send_data_ptr = extra_data;
-    } else {
-        /* Request too large for single header - split at 0x200 */
-        if (extra_len != 0) {
-            /* Cannot have both split request and extra data */
-            CRASH_SYSTEM(&crash_status_split_extra);
-        }
-        send_hdr_len = SEND_REQUEST_MAX_SINGLE;
-        send_data_len = request_len - SEND_REQUEST_MAX_SINGLE;
-        send_data_ptr = (uint8_t *)request + SEND_REQUEST_MAX_SINGLE;
     }
 
-    /* Main send/retry loop */
-retry_send:
-    do {
-        /* Check retry limit */
-        if (retry_count > SEND_REQUEST_MAX_RETRIES && conn_state != CONN_STATE_DISKLESS_MOTHER) {
-            PKT_$NOTE_VISIBLE(addr_words[1], 0);
-            break;  /* Fall through to comms_problem */
+send_request:                                            /* 0x00E61130 */
+    /* 0x00E61130-0x00E61154: out of retries.  The diskless mother node is
+     * exempt - a diskless node has nowhere else to go. */
+    if (retry_count > SEND_REQUEST_RETRY_BUDGET &&
+        conn_state != SEND_REQUEST_STATE_MOTHER) {
+        PKT_$NOTE_VISIBLE(addr[1], false);               /* 0x00E61140 */
+        *status_ret = file_$comms_problem_with_remote_node;  /* 0x00E611BC */
+        goto close_socket;
+    }
+
+    /* 0x00E61156-0x00E611A0: fifteen arguments plus a 2-byte Pascal result
+     * slot; the caller pops 0x34 bytes. */
+    PKT_$SEND_INTERNET(addr[0], addr[1],
+                       SEND_REQUEST_SERVER_SOCKET,
+                       -1,
+                       NODE_$ME,
+                       (uint16_t)sock_num,
+                       REM_FILE_$DATA,                   /* 0x00E61178 */
+                       (uint16_t)pkt_id,
+                       request,
+                       (uint16_t)template_len,
+                       send_data_ptr,
+                       send_data_len,
+                       &retry_hint,                      /* A6-0xC4 */
+                       &timeout_out,                     /* A6-0xC2 */
+                       &local_status);
+
+    /* 0x00E611A4-0x00E611C2.  D0 is loaded from the timeout output BEFORE the
+     * status is tested, and is only used on the success path. */
+    if (local_status != status_$ok) {
+        if (conn_state == SEND_REQUEST_STATE_MOTHER) {
+            goto send_request;                           /* 0x00E611B4 */
         }
+        *status_ret = file_$comms_problem_with_remote_node;  /* 0x00E611BC */
+        goto close_socket;
+    }
 
-        /* Send the packet to dest_sock=2 (file server socket) */
-        PKT_$SEND_INTERNET(addr_words[0], addr_words[1],
-                           2,              /* dest_sock */
-                           -1,             /* src_node_or = use default */
-                           NODE_$ME,       /* src_node */
-                           sock_num,       /* src_sock */
-                           DAT_00e2e380,   /* pkt_info template */
-                           pkt_id,         /* request ID */
-                           request,        /* template = request header */
-                           send_hdr_len,   /* template length */
-                           send_data_ptr,  /* data = extra */
-                           send_data_len,  /* data length */
-                           &send_overhead, /* len_out */
-                           &send_c6,       /* extra_out */
-                           &local_status);
+    /* 0x00E611C6-0x00E611DA: deadline = TIME_$CLOCKH + REM_FILE_$COMPLETION_TIME
+     * + the per-request timeout PKT_$SEND_INTERNET produced.  Both words are
+     * zero-extended before the adds. */
+    deadline = (int32_t)((uint32_t)TIME_$CLOCKH +
+                         (uint32_t)REM_FILE_$COMPLETION_TIME +
+                         (uint32_t)timeout_out);
 
-        if (local_status != status_$ok) {
-            /* Send failed */
-            if (conn_state == CONN_STATE_DISKLESS_MOTHER) {
-                goto retry_send;
-            }
-            *status_ret = file_$comms_problem_with_remote_node;
-            goto done;
-        }
+await_event:                                             /* 0x00E611E0 */
+    for (;;) {
+        int16_t which;
 
-        /* Compute the response deadline.  0x00E611C6:
-         *   clr.l   D1
-         *   andi.l  #0xffff,D0            ; D0 = send overhead, zero-extended
-         *   move.w  (0x8,A5),D1w          ; D1 = REM_FILE_$COMPLETION_TIME
-         *   add.l   D1,D0
-         *   add.l   (0x00e2b0d4).l,D0     ; + TIME_$CLOCKH
-         * A5 is the REM_FILE module base 0x00E823FC (inherited from the
-         * caller; see rem_file/rem_file_data.c), so A5+0x08 is the module
-         * global REM_FILE_$COMPLETION_TIME, not per-process data.  Both
-         * words are zero-extended before the adds.
+        /* 0x00E611E0-0x00E61200: six longwords, no result slot.
+         *   ecs  = { sock_ec, &TIME_$CLOCKH, NIL }
+         *   vals = { sock_wait_val, deadline, 0 }
          */
-        timeout_deadline = (int32_t)((uint32_t)TIME_$CLOCKH +
-                                     (uint32_t)REM_FILE_$COMPLETION_TIME +
-                                     (uint32_t)(uint16_t)send_c6);
+        which = EC_$WAIT((ec_$wait_ecs_t){{ sock_ec,
+                                            (ec_$eventcount_t *)&TIME_$CLOCKH,
+                                            NULL }},
+                         (ec_$wait_vals_t){{ sock_wait_val, deadline, 0 }});
 
-        /* Wait loop for response */
-        do {
-            while (1) {
-                /* EC_$WAIT: 0x00E611E0-0x00E61200.
-                 *
-                 * The caller pushes six longwords; the callee reads the
-                 * first three as the eventcount array and the last three
-                 * as the value array (both by value):
-                 *   0x00E611F6  move.l (-0xac,A6),-(SP)   ecs[0] = sock_ec
-                 *   0x00E611F0  move.l #0xe2b0d4,-(SP)    ecs[1] = &TIME_$CLOCKH
-                 *   0x00E611EA  move.l #0x0,-(SP)         ecs[2] = NIL
-                 *   0x00E611E6  move.l (-0xbc,A6),-(SP)   vals[0] = sock_ec_wait_val
-                 *   0x00E611E2  move.l (-0xb4,A6),-(SP)   vals[1] = timeout_deadline
-                 *   0x00E611E0  clr.l -(SP)               vals[2] = 0
-                 *
-                 * Returns the 0-based index: 0 = socket event, 1 = timer.
-                 */
-                int16_t which;
+        if (which == 0) {
+            break;                                       /* 0x00E61206 */
+        }
+        if (which == 1) {
+            goto timer_fired;                            /* 0x00E6120C */
+        }
+        /* 0x00E61210: anything else re-waits. */
+    }
 
-                which = EC_$WAIT((ec_$wait_ecs_t){{ sock_ec,
-                                                    (ec_$eventcount_t *)&TIME_$CLOCKH,
-                                                    NULL }},
-                                 (ec_$wait_vals_t){{ sock_ec_wait_val,
-                                                     timeout_deadline,
-                                                     0 }});
+    /* --- the socket event: 0x00E61212 ------------------------------------ */
+    sock_wait_val++;                                     /* 0x00E61212 */
+    APP_$RECEIVE((uint16_t)sock_num, &rcv, &local_status);   /* 0x00E61224 */
 
-                if (which == 0) {
-                    /* Socket event */
-                    break;
-                }
-
-                if (which == 1) {
-                    /* Timeout on quit EC or similar - check quit signal */
-                    int16_t quit_offset = PROC1_$AS_ID * 12;
-                    int32_t *quit_ec_base = (int32_t *)&FIM_$QUIT_EC;
-
-                    if (quit_saved != quit_ec_base[quit_offset / 4]) {
-                        /* Quit was signalled: set status with high bit */
-                        *status_ret = 0x00120010;
-                        *(uint8_t *)status_ret |= 0x80;
-                        /* Update saved quit value */
-                        FIM_$QUIT_VALUE[PROC1_$AS_ID] = quit_ec_base[quit_offset / 4];
-                        goto done;
-                    }
-
-                    /* Timeout without quit - add 12 to retry count */
-                    retry_count += 12;
-
-                    if (conn_state == CONN_STATE_INITIAL) {
-                        conn_state = CONN_STATE_FIRST_TIMEOUT;
-                        goto retry_send;
-                    }
-                    if (conn_state == CONN_STATE_FIRST_TIMEOUT) {
-                        /* Probe if node is still reachable */
-                        int8_t likely = PKT_$LIKELY_TO_ANSWER(addr_info, status_ret);
-                        if (likely >= 0) {
-                            /* Node not responding */
-                            *status_ret = status_$network_remote_node_failed_to_respond;
-                            goto done;
-                        }
-                        conn_state = CONN_STATE_CONFIRMED;
-                        goto retry_send;
-                    }
-                    /* CONN_STATE_DISKLESS_MOTHER or CONN_STATE_CONFIRMED - just retry */
-                    goto retry_send;
-                }
-                /* which == other: shouldn't happen, loop again */
-            }
-
-            /* Socket event received - advance wait value and try receive */
-            sock_ec_wait_val++;
-            APP_$RECEIVE(sock_num, &recv_hdr_ptr, &local_status);
-
-            /* If queue is empty, keep waiting */
-            if (local_status == status_$network_buffer_queue_is_empty) {
-                continue;
-            }
-
-            if (local_status != status_$ok) {
-                /* Receive error - return any pending bulk data buffer */
-                if (bulk_handle != 0) {
-                    NETBUF_$RTN_DAT(bulk_handle);
-                }
-                retry_count += 12;
-                goto retry_send;
-            }
-
-            /* Successfully received packet. Parse the header:
-             * recv_hdr_ptr points to header structure:
-             *   +0x00: (uint32_t) misc
-             *   +0x02: (uint16_t) header copy length
-             *   +0x04: (int16_t)  bulk data length (stored to *bulk_len)
-             *   +0x06: (int16_t)  response packet ID
-             */
-            *bulk_len = *(int16_t *)(recv_hdr_ptr + 4);
-            resp_pkt_id = *(int16_t *)(recv_hdr_ptr + 6);
-
-            /* Determine copy length (min of header length and response_max) */
-            {
-                uint16_t copy_len = *(uint16_t *)(recv_hdr_ptr + 2);
-                if ((int16_t)response_max < (int16_t)copy_len) {
-                    copy_len = response_max;
-                }
-                *received_len = copy_len;
-
-                /* Copy response header to caller's response buffer.
-                 * recv_data_ptr (local_30) contains the data pointer.
-                 * The sign-extension of copy_len is used for the length arg. */
-                OS_$DATA_COPY(recv_data_ptr, (char *)response,
-                              (uint32_t)(int32_t)(int16_t)copy_len);
-            }
-
-            /* Return the header buffer page */
-            hdr_page = (uint32_t)recv_data_ptr & 0xFFFFFC00;
-            NETBUF_$RTN_HDR(&hdr_page);
-
-            /* Check if bulk data length exceeds limit */
-            if (*bulk_len >= 0x401) {
-                local_status = status_$network_data_length_too_large;
-                PKT_$DUMP_DATA(recv_data_bufs, *bulk_len);
-                /* Continue waiting (goes back to inner do-while) */
-                continue;
-            }
-            break;
-        } while (1);
-
-        /* Process bulk data */
-        bulk_handle = recv_data_bufs[0];
+    if (local_status == status_$network_buffer_queue_is_empty) {
+        goto await_event;                                /* 0x00E61238 */
+    }
+    if (local_status != status_$ok) {
+        /* 0x00E6123E-0x00E61256.  bulk_handle is read here even on the first
+         * pass, when the frame slot A6-0x98 still holds whatever the caller
+         * left there - an original hazard, preserved. */
         if (bulk_handle != 0) {
-            NETBUF_$GETVA(bulk_handle, (uint32_t *)&bulk_va, &local_status);
-            if (local_status != status_$ok) {
-                CRASH_SYSTEM(&local_status);
-            }
+            NETBUF_$RTN_DAT(bulk_handle);                /* 0x00E61248 */
+        }
+        retry_count = (int16_t)(retry_count + 12);       /* 0x00E61252 */
+        goto send_request;
+    }
 
-            if (bulk_max == 0) {
-                /* No separate bulk buffer - append to response buffer */
-                int32_t avail;
-                bulk_dest = (char *)response + (int16_t)*received_len;
-                avail = (int32_t)(int16_t)response_max - (int32_t)(int16_t)*received_len;
-                if (*bulk_len < (int16_t)avail) {
-                    avail = (int32_t)*bulk_len;
-                }
-                *bulk_len = (int16_t)avail;
-            } else {
-                /* Separate bulk data buffer provided */
-                bulk_dest = (char *)bulk_data;
-                if (bulk_max < *bulk_len) {
-                    *bulk_len = bulk_max;
-                }
-            }
+    /* 0x00E6125A-0x00E61266: unpack the reply header. */
+    reply = (const rem_file_$reply_hdr_t *)ARCH_VA_TO_PTR(rcv.reply);
+    *bulk_len = (int16_t)reply->data_len;                /* 0x00E61262 */
+    reply_id  = (int16_t)reply->reply_id;                /* 0x00E61266 */
 
-            if (*bulk_len > 0) {
-                /* Set up FIM cleanup handler for safe copy */
-                local_status = FIM_$CLEANUP(cleanup_buf);
-                if (local_status == status_$cleanup_handler_set) {
-                    /* Normal path - copy bulk data */
-                    OS_$DATA_COPY(bulk_va, bulk_dest,
-                                  (uint32_t)(int32_t)*bulk_len);
-                    FIM_$RLS_CLEANUP(cleanup_buf);
-                } else {
-                    /* Cleanup was triggered - release buffers and signal */
-                    uint32_t ppn = NETBUF_$RTNVA((uint32_t *)&bulk_va);
-                    NETBUF_$RTN_DAT(ppn);
-                    FIM_$SIGNAL(local_status);
-                    /* FIM_$SIGNAL does not return */
-                }
-            }
+    /* 0x00E6126C-0x00E6128C: copy_len = min(reply->template_len, response_max).
+     * template_len is zero-extended, response_max sign-extended, and the
+     * compare is a signed longword compare. */
+    copy_len   = (int32_t)(uint32_t)reply->template_len;
+    resp_max_l = (int32_t)(int16_t)response_max;
+    if (copy_len > resp_max_l) {
+        copy_len = resp_max_l;
+    }
+    *received_len = (uint16_t)(int16_t)copy_len;         /* 0x00E6128C */
+    copy_len = (int32_t)(int16_t)copy_len;               /* ext.l D4, 0x00E6128E */
 
-            if (bulk_max == 0) {
-                /* Clear bulk_len since data was merged into response */
-                *bulk_len = 0;
-            }
+    /* 0x00E61292-0x00E612A2 */
+    OS_$DATA_COPY(ARCH_VA_TO_PTR(rcv.data), response, (uint32_t)copy_len);
 
-            /* Return the bulk data VA mapping and buffer */
-            {
-                uint32_t ppn = NETBUF_$RTNVA((uint32_t *)&bulk_va);
-                NETBUF_$RTN_DAT(ppn);
-            }
+    /* 0x00E612A6-0x00E612BC: round the payload VA down to its 1KB page and
+     * give the header buffer back.  `andi.w #-0x400,D5w` only touches the low
+     * word, which is the same as masking the longword with 0xFFFFFC00. */
+    hdr_va = rcv.data & 0xFFFFFC00u;
+    NETBUF_$RTN_HDR(&hdr_va);
+
+    /* 0x00E612BE-0x00E612E0: a bulk payload larger than 0x400 is refused and
+     * its pages dumped; the wait resumes. */
+    if (*bulk_len > SEND_REQUEST_MAX_BULK) {
+        local_status = status_$network_data_length_too_large;  /* 0x00E612C8 */
+        PKT_$DUMP_DATA(rcv.data_pages, *bulk_len);       /* 0x00E612D8 */
+        goto await_event;                                /* 0x00E612E0 */
+    }
+
+    /* 0x00E612E4-0x00E612EA */
+    bulk_handle = rcv.data_pages[0];
+    if (bulk_handle != 0) {
+        /* 0x00E612EE-0x00E61314 */
+        NETBUF_$GETVA(bulk_handle, &bulk_va, &local_status);
+        if (local_status != status_$ok) {
+            CRASH_SYSTEM(&local_status);                 /* 0x00E6130E */
         }
 
-        /* Check if response packet ID matches our request */
-        if (pkt_id != resp_pkt_id) {
-            /* Stale/mismatched response - keep waiting */
-            continue;
-        }
-
-        /* Response matched our request */
-
-        /* Update node visibility if this was first response */
-        if (conn_state == CONN_STATE_FIRST_TIMEOUT || conn_state == CONN_STATE_INITIAL) {
-            conn_state = CONN_STATE_CONFIRMED;
-            PKT_$NOTE_VISIBLE(addr_words[1], -1);  /* 0xFF = visible */
-        }
-
-        /* Check for busy response (first word of response = 0xFFFF) */
-        if (resp_i16[0] == -1) {
-            /* Server is busy - count the retry and wait 2 ticks.
-             * 0x00E6141C: addq.l #0x1,(0x4,A5).  A5 is the REM_FILE module
-             * base, so this is the module global REM_FILE_$BUSY_RETRY_COUNT.
-             */
-            REM_FILE_$BUSY_RETRY_COUNT++;
-
-            /* 0x00E61420-0x00E61442: wait on the tick eventcount only.
-             *   0x00E61436  move.l #0xe2b0d4,-(SP)  ecs[0]  = &TIME_$CLOCKH
-             *   0x00E61434  move.l (SP),-(SP)       ecs[1]  = copy of the
-             *                                       zero just pushed = NIL
-             *   0x00E6142E  move.l #0x0,-(SP)       ecs[2]  = NIL
-             *   0x00E6142C  move.l D5,-(SP)         vals[0] = TIME_$CLOCKH+2
-             *   0x00E61422  clr.l -(SP)             vals[1] = 0
-             *   0x00E61420  clr.l -(SP)             vals[2] = 0
-             */
-            EC_$WAIT((ec_$wait_ecs_t){{ (ec_$eventcount_t *)&TIME_$CLOCKH,
-                                        NULL, NULL }},
-                     (ec_$wait_vals_t){{ (int32_t)(TIME_$CLOCKH + 2), 0, 0 }});
-            retry_count += 1;
-            goto retry_send;
-        }
-
-        /* Validate response opcode: response[3] should be request[3] + 1 */
-        if ((uint32_t)((uint8_t *)response)[3] == (uint32_t)req_u8[3] + 1) {
-            /* Valid response - extract status from response at offset +4 */
-            *status_ret = *(status_$t *)((uint8_t *)response + 4);
+        if (bulk_max == 0) {
+            /* 0x00E6131C-0x00E6133A: no separate bulk buffer, so the payload
+             * is appended to the reply buffer and clipped to what is left of
+             * response_max. */
+            bulk_dest = response_b + copy_len;
+            resp_max_l -= copy_len;
+            if (resp_max_l > (int32_t)*bulk_len) {
+                resp_max_l = (int32_t)*bulk_len;
+            }
+            *bulk_len = (int16_t)resp_max_l;             /* 0x00E61338 */
         } else {
-            /* Bad response opcode mismatch */
-            *status_ret = file_$bad_reply_received_from_remote_node;
+            /* 0x00E6133C-0x00E61354: word compare against bulk_max. */
+            bulk_dest = bulk_data;
+            if (*bulk_len > bulk_max) {
+                *bulk_len = bulk_max;
+            }
         }
-        goto done;
 
-    } while (conn_state == CONN_STATE_DISKLESS_MOTHER);
+        /* 0x00E61356-0x00E613BA */
+        if (*bulk_len > 0) {
+            local_status = FIM_$CLEANUP(cleanup_rec);    /* 0x00E6135E */
+            if (local_status == status_$cleanup_handler_set) {
+                OS_$DATA_COPY(ARCH_VA_TO_PTR(bulk_va), bulk_dest,
+                              (uint32_t)(int32_t)*bulk_len);
+                FIM_$RLS_CLEANUP(cleanup_rec);           /* 0x00E61392 */
+            } else {
+                NETBUF_$RTN_DAT(NETBUF_$RTNVA(&bulk_va));  /* 0x00E6139A */
+                FIM_$SIGNAL(local_status);               /* 0x00E613B4 */
+            }
+        }
 
-    /* Retry limit exceeded (or non-diskless-mother broke out of loop) */
-    *status_ret = file_$comms_problem_with_remote_node;
+        /* 0x00E613BC-0x00E613C6: the appended-payload case reports a bulk
+         * length of zero, because the caller already has it in `response`. */
+        if (bulk_max == 0) {
+            *bulk_len = 0;
+        }
 
-done:
-    SOCK_$CLOSE(sock_num);
-    *packet_id = (uint16_t)pkt_id;
+        /* 0x00E613C8-0x00E613DC */
+        NETBUF_$RTN_DAT(NETBUF_$RTNVA(&bulk_va));
+    }
+
+    /* 0x00E613DE-0x00E613E6: a reply for some other request is discarded. */
+    if (pkt_id != reply_id) {
+        goto await_event;
+    }
+
+    /* 0x00E613EA-0x00E61410: the node has answered. */
+    if (conn_state == SEND_REQUEST_STATE_FIRST_TIMEOUT ||
+        conn_state == SEND_REQUEST_STATE_INITIAL) {
+        conn_state = SEND_REQUEST_STATE_CONFIRMED;
+        PKT_$NOTE_VISIBLE(addr[1], true);                /* 0x00E6140A */
+    }
+
+    /* 0x00E61412-0x00E6144A: a reply whose first word is 0xFFFF means the
+     * server was busy.  Count it, sleep two ticks and send again. */
+    if (*(int16_t *)response == -1) {
+        REM_FILE_$BUSY_RETRY_COUNT++;                    /* 0x00E6141C */
+
+        /* 0x00E61420-0x00E61442.  ecs[1] is `move.l (SP),-(SP)`, a copy of
+         * the zero just pushed, so the list is { &TIME_$CLOCKH, NIL, NIL }. */
+        EC_$WAIT((ec_$wait_ecs_t){{ (ec_$eventcount_t *)&TIME_$CLOCKH,
+                                    NULL, NULL }},
+                 (ec_$wait_vals_t){{ (int32_t)(TIME_$CLOCKH + 2), 0, 0 }});
+
+        retry_count = (int16_t)(retry_count + 1);        /* 0x00E61446 */
+        goto send_request;
+    }
+
+    /* 0x00E6144E-0x00E6147E: the reply opcode must be the request opcode plus
+     * one (see the REM_FILE_OP_* table).  Both bytes are zero-extended to a
+     * longword before the compare. */
+    if ((uint32_t)response_b[3] == (uint32_t)request_b[3] + 1) {
+        /* 0x00E6146C: the server's own status is the longword at response+4. */
+        *status_ret = *(const status_$t *)(response_b + 4);
+    } else {
+        *status_ret = file_$bad_reply_received_from_remote_node;  /* 0x00E61478 */
+    }
+    goto close_socket;
+
+timer_fired:                                             /* 0x00E61482 */
+    /* 0x00E61482-0x00E6149E: the wait also ends when the process is quit.
+     * FIM_$QUIT_EC is a 12-byte-per-address-space array and the eventcount
+     * value is its head longword. */
+    if (quit_saved != FIM_$QUIT_EC[PROC1_$AS_ID].value) {
+        /* 0x00E614A0-0x00E614C8 */
+        *status_ret = status_$fault_process_quit;        /* 0x00E614A4 */
+        /* 0x00E614AA `bset.b #0x7,(A1)` sets bit 7 of the status's first
+         * (most significant) byte, i.e. bit 31 of the longword. */
+        *status_ret = (status_$t)((uint32_t)*status_ret | 0x80000000u);
+        FIM_$QUIT_VALUE[PROC1_$AS_ID] = FIM_$QUIT_EC[PROC1_$AS_ID].value;
+        goto close_socket;
+    }
+
+    /* 0x00E614CA-0x00E614DC */
+    retry_count = (int16_t)(retry_count + 12);
+    if (conn_state == SEND_REQUEST_STATE_INITIAL) {
+        conn_state = SEND_REQUEST_STATE_FIRST_TIMEOUT;   /* 0x00E614E0 */
+        goto send_request;
+    }
+    if (conn_state != SEND_REQUEST_STATE_FIRST_TIMEOUT) {
+        goto send_request;                               /* 0x00E614DC */
+    }
+
+    /* 0x00E614EA-0x00E6150C: after a second timeout ask whether the node is
+     * answering anything at all.  PKT_$LIKELY_TO_ANSWER returns a Domain
+     * boolean, so a non-negative result means "no". */
+    if (PKT_$LIKELY_TO_ANSWER(addr_info, status_ret) >= 0) {
+        *status_ret = status_$network_remote_node_failed_to_respond;
+        goto close_socket;
+    }
+    conn_state = SEND_REQUEST_STATE_CONFIRMED;           /* 0x00E614FE */
+    goto send_request;
+
+close_socket:                                            /* 0x00E61512 */
+    SOCK_$CLOSE((uint16_t)sock_num);
+    *packet_id = (uint16_t)pkt_id;                       /* 0x00E61522 */
+
+function_exit:                                           /* 0x00E61526 */
+    return;
 }

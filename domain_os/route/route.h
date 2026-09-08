@@ -47,7 +47,28 @@ typedef struct route_$driver_info_t {
     uint16_t    _unknown4;      /* 0x04 */
     uint8_t     _unknown6;      /* 0x06 */
     uint8_t     flags;          /* 0x07: ROUTE_$VALIDATE_PORT reads this byte */
-    uint8_t     _unknown8[0x1C];/* 0x08 */
+    uint8_t     _unknown8[0x0C];/* 0x08 */
+    /*
+     * The three driver entries ROUTE_$SERVICE calls while a port changes
+     * status.  All three are held as target VAs (like set_service below), so
+     * the record keeps its m68k size on a 64-bit host; reach them with
+     * ARCH_VA_TO_PTR.  Each may be zero, and ROUTE_$SERVICE tests for that
+     * before calling.
+     */
+    uint32_t    leave_status_1; /* 0x14: called when the port is leaving
+                                 *       status 1 ("movea.l (0x14,A3),A0 /
+                                 *       jsr (A0)" at 0x00E6A416), shape
+                                 *       route_$port_status_fn_t */
+    uint32_t    enter_status_1; /* 0x18: called once the port has reached
+                                 *       status 1 ("movea.l (0x18,A3),A0 /
+                                 *       jsr (A0)" at 0x00E6A53A), same shape */
+    uint32_t    attach_service; /* 0x1C: called right after leave_status_1
+                                 *       succeeds ("movea.l (0x1c,A3),A1 /
+                                 *       jsr (A1)" at 0x00E6A43E) with the
+                                 *       same five arguments and word result
+                                 *       slot as set_service below, i.e.
+                                 *       route_$set_service_fn_t */
+    uint32_t    _unknown20;     /* 0x20 */
     uint32_t    set_service;    /* 0x24: driver entry point NETWORK_$SET_SERVICE
                                  *       calls after every successful update
                                  *       ("movea.l (0x24,A1),A0 / jsr (A0)" at
@@ -60,6 +81,12 @@ _Static_assert(offsetof(route_$driver_info_t, max_data_len) == 0x02,
                "route_$driver_info_t.max_data_len");
 _Static_assert(offsetof(route_$driver_info_t, flags) == 0x07,
                "route_$driver_info_t.flags");
+_Static_assert(offsetof(route_$driver_info_t, leave_status_1) == 0x14,
+               "route_$driver_info_t.leave_status_1");
+_Static_assert(offsetof(route_$driver_info_t, enter_status_1) == 0x18,
+               "route_$driver_info_t.enter_status_1");
+_Static_assert(offsetof(route_$driver_info_t, attach_service) == 0x1C,
+               "route_$driver_info_t.attach_service");
 _Static_assert(offsetof(route_$driver_info_t, set_service) == 0x24,
                "route_$driver_info_t.set_service");
 #endif
@@ -82,6 +109,17 @@ typedef int16_t (*route_$set_service_fn_t)(uint16_t *socket_ptr,
                                            uint16_t request,
                                            void *out4, void *out5);
 
+/*
+ * route_$port_status_fn_t - the driver entries at route_$driver_info_t+0x14
+ * and +0x18.  ROUTE_$SERVICE pushes exactly two longwords and pops them with
+ * "addq.w #0x8,SP" (0x00E6A40E-0x00E6A41C, 0x00E6A532-0x00E6A540), so there
+ * is no result slot:
+ *   pea (0x30,A2)           ; arg 1, &port->socket
+ *   move.l (0x10,A6),-(SP)  ; arg 2, the caller's status_$t *
+ */
+typedef void (*route_$port_status_fn_t)(uint16_t *socket_ptr,
+                                        status_$t *status_ret);
+
 typedef struct route_$port_t {
     uint32_t    network;            /* 0x00: Network address */
     uint8_t     _unknown0[0x1C];    /* 0x04: Unknown fields */
@@ -99,8 +137,27 @@ typedef struct route_$port_t {
                                      *       0x00E87258 */
     uint16_t    port_type;          /* 0x2E: Port type (1=local, 2=routing) */
     uint16_t    socket;             /* 0x30: Socket identifier */
-    uint8_t     _unknown1[0x04];    /* 0x32: Unknown fields */
-    uint16_t    socket2;            /* 0x36: Secondary socket */
+    uint16_t    _unknown1a;         /* 0x32 */
+    /*
+     * 0x34 and 0x36 are read two ways and the boundary is not settled, so
+     * they are spelled as words and each user says which it touches (the same
+     * treatment as the 0x4C block below):
+     *
+     *   ROUTE_$SHORT_PORT copies the WORD at +0x36 into its fourth slot
+     *   ("move.w (0x36,A0),(0xa,A1)" at 0x00E69C22).
+     *
+     *   ROUTE_$READ_USER_STATS reads the WORD at +0x36 as a signed bucket
+     *   count ("move.w (0x36,A1),D4w / bmi" at 0x00E6A6C4, then "dbf" for
+     *   count+1 longwords) AND the LONGWORD at +0x34 as the same count
+     *   ("move.l (0x34,A1),D0 / addq.l #1 / lsl.l #2" at 0x00E6A6E4), so
+     *   +0x36 is that longword's low half.
+     *
+     * Words keep both views expressible without a byte cast, so they behave
+     * the same on a little-endian host.
+     */
+    uint16_t    queue_len_hi;       /* 0x34: high half of the +0x34 longword */
+    uint16_t    socket2;            /* 0x36: ROUTE_$SHORT_PORT's fourth word;
+                                     *       also that longword's low half */
     uint8_t     port_ec[0x0C];      /* 0x38: Port event count (ec_$eventcount_t, 12 bytes) */
     uint32_t    driver_stats;       /* 0x44: Driver statistics block pointer (32-bit
                                      *       address; ROUTE_$SEND_USER_PORT:
@@ -109,7 +166,31 @@ typedef struct route_$port_t {
                                      *       target address (same treatment as
                                      *       driver_stats above), reached with
                                      *       ARCH_VA_TO_PTR */
-    uint8_t     _unknown2[0x0C];    /* 0x4C: Unknown fields */
+    /*
+     * 0x4C..0x57.  Two writers and one reader disagree about the field
+     * boundaries here, so the block is spelled as words and each user says
+     * which ones it touches:
+     *
+     *   NET_IO_$CREATE_PORT (net_io/create_port.c) stores longwords through
+     *   a byte pointer at +0x4C (the value 2, 0x00E5A582), +0x50 (the port's
+     *   creation time, 0x00E5A58E) and +0x54 (zero, 0x00E5A586).
+     *
+     *   ASKNODE_$INTERNET_INFO's request-0x3D / request-0x5B arm reads a
+     *   LONGWORD at +0x4E ("move.l (0x4e,A0),(0x8,A1)" at 0x00E65184) and a
+     *   WORD at +0x52 ("move.w (0x52,A0),(0xc,A1)" at 0x00E6518A), i.e. it
+     *   straddles the two longwords above.
+     *
+     * Words keep both views expressible without a byte cast, so the reads
+     * behave the same on a little-endian host.
+     * TODO: recover the real field boundaries (bead source-i54r).
+     */
+    uint16_t    _unknown2a;         /* 0x4C */
+    uint16_t    _unknown2b;         /* 0x4E: high half of ASKNODE's +0x4E long */
+    uint16_t    _unknown2c;         /* 0x50: low half of that long */
+    uint16_t    _unknown2d;         /* 0x52: ASKNODE's +0x52 word */
+    uint32_t    stat_long_54;       /* 0x54: cleared by NET_IO_$CREATE_PORT;
+                                     *       first half of the 8-byte block
+                                     *       ASKNODE copies to reply+0x0E */
     uint32_t    forward_count;      /* 0x58: Packets forwarded to this port (ROUTE_$PROCESS) */
 } route_$port_t;
 
@@ -120,10 +201,17 @@ _Static_assert(offsetof(route_$port_t, xns_addr)      == 0x20, "route_$port_t.xn
 _Static_assert(offsetof(route_$port_t, active)        == 0x2C, "route_$port_t.active");
 _Static_assert(offsetof(route_$port_t, port_type)     == 0x2E, "route_$port_t.port_type");
 _Static_assert(offsetof(route_$port_t, socket)        == 0x30, "route_$port_t.socket");
+_Static_assert(offsetof(route_$port_t, queue_len_hi)  == 0x34, "route_$port_t.queue_len_hi");
+_Static_assert(offsetof(route_$port_t, socket2)       == 0x36, "route_$port_t.socket2");
 _Static_assert(offsetof(route_$port_t, socket2)       == 0x36, "route_$port_t.socket2");
 _Static_assert(offsetof(route_$port_t, port_ec)       == 0x38, "route_$port_t.port_ec");
 _Static_assert(offsetof(route_$port_t, driver_stats)  == 0x44, "route_$port_t.driver_stats");
 _Static_assert(offsetof(route_$port_t, driver_info)   == 0x48, "route_$port_t.driver_info");
+_Static_assert(offsetof(route_$port_t, _unknown2a)   == 0x4C, "route_$port_t._unknown2a");
+_Static_assert(offsetof(route_$port_t, _unknown2b)   == 0x4E, "route_$port_t._unknown2b");
+_Static_assert(offsetof(route_$port_t, _unknown2c)   == 0x50, "route_$port_t._unknown2c");
+_Static_assert(offsetof(route_$port_t, _unknown2d)   == 0x52, "route_$port_t._unknown2d");
+_Static_assert(offsetof(route_$port_t, stat_long_54) == 0x54, "route_$port_t.stat_long_54");
 _Static_assert(offsetof(route_$port_t, forward_count) == 0x58, "route_$port_t.forward_count");
 _Static_assert(sizeof(route_$port_t) == 0x5C, "route_$port_t must be 0x5C bytes");
 #endif
@@ -289,15 +377,44 @@ extern route_$port_t *ROUTE_$PORTP[];
 /*
  * Short port info structure (12 bytes)
  *
- * Compact representation of port information used for passing
- * port data between functions.
+ * Compact representation of port information.  ROUTE_$SHORT_PORT fills one
+ * from a route_$port_t and ROUTE_$SERVICE reads its request out of one, so
+ * the two views must agree; ROUTE_$SERVICE's field reads pin the boundaries
+ * that ROUTE_$SHORT_PORT's single "move.l (0x2c,A0),(0x4,A1)" (0x00E69C16)
+ * leaves ambiguous:
+ *
+ *   +0x04 word   compared against port->active   (0x00E6A3A8, 0x00E6A44C)
+ *   +0x06 word   compared against 1 and 2, i.e. a port type
+ *                (0x00E6A072, 0x00E6A150, 0x00E6A19C)
+ *   +0x08 word   passed to ROUTE_$FIND_PORT as the socket (0x00E6A1B6)
+ *   +0x0A word   the user-port queue length (0x00E6A09A, 0x00E6A13E)
+ *
+ * so +0x04..+0x07 is not one "host id" longword but port->active followed by
+ * port->port_type, exactly as they sit at port+0x2C/+0x2E.
  */
 typedef struct route_$short_port_t {
-    uint32_t    network;            /* 0x00: Network address */
-    uint32_t    host_id;            /* 0x04: Host ID (from port+0x2c) */
-    uint16_t    network2;           /* 0x08: Secondary network (from port+0x30) */
-    uint16_t    socket;             /* 0x0A: Socket (from port+0x36) */
+    uint32_t    network;            /* 0x00: Network address (port+0x00) */
+    uint16_t    status;             /* 0x04: Port status/active (port+0x2C) */
+    uint16_t    port_type;          /* 0x06: Port type, 1=local 2=routing
+                                     *       (port+0x2E) */
+    uint16_t    socket;             /* 0x08: Socket identifier (port+0x30) */
+    uint16_t    queue_length;       /* 0x0A: Secondary socket (port+0x36); the
+                                     *       user-port queue length on the way
+                                     *       in to ROUTE_$SERVICE */
 } route_$short_port_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(route_$short_port_t, status) == 0x04,
+               "route_$short_port_t.status");
+_Static_assert(offsetof(route_$short_port_t, port_type) == 0x06,
+               "route_$short_port_t.port_type");
+_Static_assert(offsetof(route_$short_port_t, socket) == 0x08,
+               "route_$short_port_t.socket");
+_Static_assert(offsetof(route_$short_port_t, queue_length) == 0x0A,
+               "route_$short_port_t.queue_length");
+_Static_assert(sizeof(route_$short_port_t) == 12,
+               "route_$short_port_t must be 12 bytes");
+#endif
 
 /*
  * ROUTE_$FIND_PORT - Find port index by network/socket
@@ -336,11 +453,11 @@ route_$port_t *ROUTE_$FIND_PORTP(uint16_t network, int32_t socket);
  * Copies key fields from a full port structure into a compact 12-byte
  * format suitable for passing to other functions.
  *
- * Output format (12 bytes):
+ * Output format (12 bytes, one route_$short_port_t):
  *   +0x00: network (4 bytes) - from port_struct+0x00
- *   +0x04: host ID (4 bytes) - from port_struct+0x2C
- *   +0x08: network2 (2 bytes) - from port_struct+0x30
- *   +0x0A: socket (2 bytes) - from port_struct+0x36
+ *   +0x04: status + port_type (4 bytes) - one move.l from port_struct+0x2C
+ *   +0x08: socket (2 bytes) - from port_struct+0x30
+ *   +0x0A: queue_length/socket2 (2 bytes) - from port_struct+0x36
  *
  * @param port_struct   Source port structure pointer
  * @param short_info    Output: 12-byte compact port info
@@ -378,13 +495,20 @@ void ROUTE_$GET_EC(void *port_info, int16_t *ec_type, void **ec_ret,
  * Handles routing service requests for a specific port. This is the
  * central function for managing route operations.
  *
- * @param operation     Service operation code/type
- * @param port_info     12-byte compact port info (from ROUTE_$SHORT_PORT)
+ * @param operation     Pointer to the 16-bit operation SET.  Every test is
+ *                      "btst.b #n,(0x1,A3)" (0x00E6A056 onwards), i.e. bit n
+ *                      of the word's low byte; callers pass the address of a
+ *                      constant word (ROUTE_$SHUTDOWN's 0x0008 at 0x00E6A65A
+ *                      and 0x0002 at 0x00E6A65C).
+ * @param port_info     12-byte request/reply record; ROUTE_$SERVICE reads the
+ *                      request out of it and overwrites it with
+ *                      ROUTE_$SHORT_PORT's answer on the way out.
  * @param status_ret    Output: status code
  *
  * Original address: 0x00E6A030
  */
-void ROUTE_$SERVICE(void *operation, void *port_info, status_$t *status_ret);
+void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
+                    status_$t *status_ret);
 
 /*
  * ROUTE_$SHUTDOWN - Shutdown all routing ports
@@ -407,15 +531,37 @@ void ROUTE_$SHUTDOWN(void);
  * Looks up the port by socket number (assuming network type 2),
  * then copies statistics data from the port's driver structure.
  *
+ * FIVE argument slots, read off the prologue (frame is "link.w A6,-0x14", so
+ * arguments start at A6+0x08):
+ *
+ *   +0x08 socket_ptr   longword  movea.l (0x8,A6),A0   0x00E6A670
+ *   +0x0C stats_buf    longword  movea.l (0xc,A6),A2   0x00E6A6AA
+ *   +0x10 reserved     WORD      never referenced
+ *   +0x12 length_ret   longword  move.l (0x12,A6),D2   0x00E6A666
+ *   +0x16 status_ret   longword  move.l (0x16,A6),D3   0x00E6A66A
+ *
+ * The gap is a real argument, not padding: NET_IO_$DEVICE_STAT pushes five
+ * arguments plus a discarded word result slot into this driver slot
+ * (0x00E5A3FE - 0x00E5A414), the third being "move.w (0xc,A6),-(SP)" - a word
+ * forwarded from its own caller.  Neither driver that fills the slot reads
+ * it: ROUTE_$READ_USER_STATS ignores A6+0x10 and so does RING_$GET_STATS
+ * (0x00E76950), which has the identical frame.  Its meaning is unrecovered.
+ *
+ * The call site also reserves a word function result that this routine never
+ * writes - its epilogue is a plain rts.
+ *
  * @param socket_ptr    Pointer to socket number (uint16_t)
  * @param stats_buf     Output buffer for statistics data
+ * @param reserved      Word argument the dispatcher forwards but no driver
+ *                      reads
  * @param length_ret    Output: number of bytes written to stats_buf
  * @param status_ret    Output: status code (status_$ok or error)
  *
  * Original address: 0x00E6A65E
  */
 void ROUTE_$READ_USER_STATS(uint16_t *socket_ptr, uint8_t *stats_buf,
-                            int16_t *length_ret, status_$t *status_ret);
+                            uint16_t reserved, int16_t *length_ret,
+                            status_$t *status_ret);
 
 /*
  * ROUTE_$PROCESS - Process routing updates
@@ -527,7 +673,26 @@ int16_t ROUTE_$VALIDATE_PORT(int32_t routing_key, int8_t is_local);
  * cannot create (0x00E5A4F6); both are the same "not legal for this port
  * type" condition. */
 #define status_$route_illegal_op_for_port_type  0x2B0009
+/* "routing not allowed at port with 0 network ID" (stcodes 2b0011).
+ * ROUTE_$SERVICE returns it when the effective network is zero and the
+ * effective status needs one ("move.l #0x2b0011,(A0)" at 0x00E6A262). */
+#define status_$route_no_routing_zero_network   0x2B0011
 #define status_$route_invalid_ec_type           0x2B0012
+/* "routing service type not recognized" (stcodes 2b0006).  ROUTE_$SERVICE
+ * raises it for a status word outside 1..5 ("move.l #0x2b0006,(A0)" at
+ * 0x00E6A212). */
+#define status_$route_service_type_bad          0x2B0006
+/*
+ * 0x2B0013 and 0x2B0014 are past the end of the "OS / internet routing"
+ * module in both the SR10.2 and the SR10.4 status databases (which stop at
+ * 0x2B0011), so their message text is unrecovered.  Both are raised only by
+ * ROUTE_$SERVICE's user-port argument check: 0x2B0013 when the create bit is
+ * missing ("move.l #0x2b0013,(A0)" at 0x00E6A092) and 0x2B0014 when the
+ * requested queue length exceeds 0x20 ("move.l #0x2b0014,(A0)" at
+ * 0x00E6A0A6).  The names below are descriptive, not from the database.
+ */
+#define status_$route_create_flag_required      0x2B0013
+#define status_$route_queue_length_too_large    0x2B0014
 
 
 /*
@@ -562,11 +727,98 @@ extern uint16_t ROUTE_$SOCK;
  * Original addresses: 0xE87FB0, 0xE87FB4
  */
 #if defined(ARCH_M68K)
-#define ROUTE_$STD_TOO_FAR (*(uint32_t *)0xE87FB0)
-#define ROUTE_$STD_MISROUTE (*(uint32_t *)0xE87FB4)
+/*
+ * Routing statistics area (0x81 longwords, cleared by ROUTE_$INIT_ROUTING).
+ * Entries 0..0x80 are indexed by the queue depth seen when a packet was
+ * queued, which is why the SR10.2 SAU2 link map calls the array
+ * ROUTE_$Q_DEPTH; the named counters that follow (0xE87FAC..) are cleared
+ * individually.  Every name in this block comes from that map
+ * (sau2-maps/domain_os.10.2.map); the previous descriptive spellings are
+ * given after each one.
+ */
+#define ROUTE_$Q_DEPTH          ((uint32_t *)0xE87DA8)  /* was ROUTE_$PACKET_STATS */
+#define ROUTE_$STD_DLEN_ERR    (*(uint32_t *)0xE87FAC)  /* was ..._STAT_OVERSIZED_STD */
+#define ROUTE_$STD_TOO_FAR     (*(uint32_t *)0xE87FB0)  /* was ..._STAT_DROPPED_STD_HOP */
+#define ROUTE_$STD_MISROUTE    (*(uint32_t *)0xE87FB4)  /* was ..._STAT_DROPPED_STD_ROUTE */
+#define ROUTE_$STD_PKTS_ROUTED (*(uint32_t *)0xE87FB8)  /* was ..._STAT_FORWARDED_STD */
+#define ROUTE_$DLEN_ERR        (*(uint32_t *)0xE87FBC)  /* was ..._STAT_OVERSIZED_N */
+#define ROUTE_$TOO_FAR         (*(uint32_t *)0xE87FC0)  /* was ..._STAT_DROPPED_N_HOP */
+#define ROUTE_$MISROUTE        (*(uint32_t *)0xE87FC4)  /* was ..._STAT_DROPPED_N_ROUTE */
+#define ROUTE_$PKTS_ROUTED     (*(uint32_t *)0xE87FC8)  /* was ..._STAT_FORWARDED_N */
+
+/*
+ * ROUTE_$Q_OFLO - count of packets addressed to the routing socket that were
+ * thrown away because that socket's queue was already full.  (Named
+ * ..._USER_PORT_COUNT in the tree before the map sweep.)
+ *
+ * Cleared with the other forwarding counters by ROUTE_$INIT_ROUTING
+ * ("clr.l (0x00E87FCC).l" at 0x00E69DF0) and bumped by one from the two
+ * receive paths, each time only when the socket the packet was addressed to
+ * is ROUTE_$SOCK (0xE26F18) and the enqueue reported "queue full":
+ *
+ *   0x00E756C6  ring_$process_rx_packet: SOCK_$PUT_INT_INT (0x00E161F8)
+ *               returned 1 (0x00E7565A), the socket in D4 is neither 2 nor 1,
+ *               and it matches ROUTE_$SOCK (cmp.w at 0x00E756BE).
+ *   0x00E0E45E  FUN_00E0E238: SOCK_$PUT (0x00E1614E) returned false
+ *               (0x00E0E3E4), the socket in D3 is not 2, it matches
+ *               ROUTE_$SOCK, and ROUTE_$SOCK is not -1 (0x00E0E446 -
+ *               0x00E0E45C); otherwise a per-module counter at (0xA8,A5) is
+ *               bumped instead.
+ *
+ * ASKNODE_$INTERNET_INFO copies it into two different reply records
+ * ("move.l (0x00E87FCC).l,(0x12,A1)" at 0x00E65106 and
+ * "move.l (0x00E87FCC).l,(0xA,A1)" at 0x00E65330).  /etc/rtstat prints it as
+ * "queue oflo" and describes it as the number of through-traffic packets
+ * lost because the through-traffic queue was already full, which is exactly
+ * what these two sites count.
+ */
+#define ROUTE_$Q_OFLO          (*(uint32_t *)0xE87FCC)
+
+/*
+ * ROUTE_$NETBUF_ALLOC - the number of netbuf pages the routing socket asks
+ * SOCK_$ALLOCATE for, and hence the number of ROUTE_$Q_DEPTH buckets that
+ * carry meaning.  (Named ..._USER_PORT_MAX in the tree before the map sweep;
+ * it is not a port count.)
+ *
+ * ROUTE_$INIT_ROUTING stores 0x40 into it ("move.w #0x40,(0x00E87FD0).l" at
+ * 0x00E69D80) and immediately hands the cell to SOCK_$ALLOCATE
+ * ("move.w (0x00E87FD0).l,-(SP)" at 0x00E69D8C followed by two
+ * "move.w (SP),-(SP)" copies at 0x00E69D92/0x00E69D94, so the same 0x40 lands
+ * in three of SOCK_$ALLOCATE's four word arguments).  SOCK_$ALLOCATE passes
+ * the two it keeps in D3/D4 straight to
+ * NETBUF_$ADD_PAGES(hdr_count, dat_count) at 0x00E15F02, so the cell is the
+ * header-page and data-page count of that allocation.
+ *
+ * ROUTE_$PROCESS zeroes it on shutdown, right after SOCK_$FREE
+ * ("clr.w (0x250,A5)" at 0x00E87852; A5 = ROUTE_$WIRED_PAGES = 0xE87D80, so
+ * 0x250+0xE87D80 = 0xE87FD0) - no netbufs are held once the socket is gone.
+ *
+ * ASKNODE_$INTERNET_INFO reports it as a word (0x00E650F6 into (0x10,A1),
+ * 0x00E65328 into (0x8,A1)) and then uses it as the loop bound when copying
+ * ROUTE_$Q_DEPTH into the reply: "move.w (0x8,A1),D0w" at 0x00E6533E feeding
+ * the dbf at 0x00E6534E copies ROUTE_$NETBUF_ALLOC+1 buckets.
+ */
+#define ROUTE_$NETBUF_ALLOC    (*(uint16_t *)0xE87FD0)
+
+/*
+ * ROUTE_$START_TIME (0xE825DC) - TIME_$CURRENT_CLOCKH when routing started.
+ * The SAU2 link map names it; ASKNODE_$INTERNET_INFO's request-0x3F arm
+ * copies it into the reply ("move.l (0x00E825DC).l,(0xc,A1)" at 0x00E650EE).
+ */
+#define ROUTE_$START_TIME      (*(uint32_t *)0xE825DC)
 #else
+extern uint32_t ROUTE_$Q_DEPTH[0x81];
+extern uint32_t ROUTE_$STD_DLEN_ERR;
 extern uint32_t ROUTE_$STD_TOO_FAR;
 extern uint32_t ROUTE_$STD_MISROUTE;
+extern uint32_t ROUTE_$STD_PKTS_ROUTED;
+extern uint32_t ROUTE_$DLEN_ERR;
+extern uint32_t ROUTE_$TOO_FAR;
+extern uint32_t ROUTE_$MISROUTE;
+extern uint32_t ROUTE_$PKTS_ROUTED;
+extern uint32_t ROUTE_$Q_OFLO;
+extern uint16_t ROUTE_$NETBUF_ALLOC;
+extern uint32_t ROUTE_$START_TIME;
 #endif
 
 /*

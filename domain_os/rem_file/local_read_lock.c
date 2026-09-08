@@ -24,7 +24,9 @@ typedef struct {
  * Contains lock entry data (8 uint32s + 1 uint16 = 34 bytes)
  */
 typedef struct {
-    uint8_t padding[REM_FILE_RESPONSE_BUF_SIZE - 0xB8];
+    uint8_t head[0x08];     /* 0x00; the payload starts at response+0x08
+                             * ("lea (-0xb8,A6),A0" at 0x00E61F0A, buffer at
+                             * A6-0xC0) */
     uint32_t lock_data[8];  /* Lock entry data */
     uint16_t lock_extra;    /* Extra lock info */
 } rem_file_local_read_lock_resp_t;
@@ -52,26 +54,29 @@ void REM_FILE_$LOCAL_READ_LOCK(void *addr_info, uid_t *file_uid,
                            (int16_t *)&zero, &packet_id,
                            status);
 
-    /* Copy lock data from response if successful */
+    /* 0x00E61F06-0x00E61F1A: 8 longwords plus a word - 34 bytes - from
+     * response+0x08, but only when the transport succeeded. */
     if (*status == status_$ok) {
         rem_file_local_read_lock_resp_t *resp = (rem_file_local_read_lock_resp_t *)response;
         uint32_t *out = (uint32_t *)lock_entry_out;
 
-        /* Copy 8 uint32s + 1 uint16 */
         for (i = 0; i < 8; i++) {
             out[i] = resp->lock_data[i];
         }
         ((uint16_t *)out)[16] = resp->lock_extra;
     }
 
-    /* Handle different response lengths - clear trailing fields */
-    if (received_len == 0x22) {
-        /* Clear fields at offset 0x1A and 0x1E */
-        ((uint32_t *)lock_entry_out)[0x1A / 4] = 0;
-        ((uint32_t *)lock_entry_out)[0x1E / 4] = 0;
-    }
-    if (received_len == 0x26) {
-        /* Clear field at offset 0x1E only */
-        ((uint32_t *)lock_entry_out)[0x1E / 4] = 0;
+    /* 0x00E61F1C-0x00E61F32.  The two clears are UNALIGNED longwords at BYTE
+     * offsets 0x1A and 0x1E of the caller's record ("clr.l (0x1a,A3)" /
+     * "clr.l (0x1e,A3)"), and they run whatever the status was. */
+    {
+        uint8_t *out_b = (uint8_t *)lock_entry_out;
+        if (received_len == 0x22) {
+            out_b[0x1A] = 0; out_b[0x1B] = 0; out_b[0x1C] = 0; out_b[0x1D] = 0;
+            out_b[0x1E] = 0; out_b[0x1F] = 0; out_b[0x20] = 0; out_b[0x21] = 0;
+        }
+        if (received_len == 0x26) {
+            out_b[0x1E] = 0; out_b[0x1F] = 0; out_b[0x20] = 0; out_b[0x21] = 0;
+        }
     }
 }

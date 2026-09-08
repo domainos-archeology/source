@@ -1,121 +1,115 @@
 /*
  * ROUTE_$READ_USER_STATS - Read user-visible routing statistics
  *
- * This function retrieves routing statistics for a user-mode port.
- * It looks up the port by socket number (assuming network type 2 = routing),
- * then copies statistics data from the port's driver structure to the
- * caller's buffer.
+ * The USER driver's "get stats" entry (net_io_$driver_t +0x0C).  Looks the
+ * port up by socket number, then copies its route_$port_stats_t out: the
+ * in-use byte, the two counters at +0x02 and +0x06, and one queue-depth
+ * bucket per possible socket queue depth.
  *
- * @param socket_ptr    Pointer to socket number (uint16_t)
- * @param stats_buf     Output buffer for statistics data
- * @param length_ret    Output: number of bytes written to stats_buf
- * @param status_ret    Output: status code (status_$ok or error)
+ * FIVE argument slots; the third is a word at A6+0x10 that this routine never
+ * reads.  See the prototype comment in route/route.h.
  *
- * The statistics format appears to be:
- *   - 1 byte: flags/type
- *   - 4 bytes: field 1
- *   - 4 bytes: field 2
- *   - N * 4 bytes: additional data (count based on port+0x34)
+ * Address ranges (SR10.2 SAU2 image):
+ *   0x00E6A65E-0x00E6A684  prologue and the ROUTE_$FIND_PORT call
+ *   0x00E6A686-0x00E6A698  the not-found arm
+ *   0x00E6A69A-0x00E6A6C2  port address, stats pointer, the fixed ten bytes
+ *   0x00E6A6C4-0x00E6A6DC  the queue-depth bucket copy
+ *   0x00E6A6DE-0x00E6A6F6  the byte count and the success status
+ *   0x00E6A6F8-0x00E6A700  epilogue
  *
- * Original address: 0x00E6A65E
+ * Original address: 0x00E6A65E (164 bytes)
  */
 
 #include "route/route_internal.h"
+#include "arch/arch.h"
 
-/*
- * Port structure offsets used:
- *   0x34: count of additional data longs (minus 1)
- *   0x36: copy control value
- *   0x44: pointer to driver/stats structure
- *
- * Driver/stats structure layout:
- *   +0x00: 1 byte flags
- *   +0x02: 4 bytes data 1
- *   +0x06: 4 bytes data 2
- *   +0x0A: variable length data (4 bytes each)
- *
- * That block is route_$port_stats_t (route/route.h), the body of one of the
- * four ROUTE_$USER_STAT records at 0xE87FD6 that NET_IO_$CREATE_PORT hands
- * out (see route/route_internal.h).  The offsets are kept literal here
- * because the assembly copies bytes, not fields.
- */
-
-/* Base statistics structure size (flags + 2 longs) */
+/* The fixed head of a route_$port_stats_t: the flags word plus the two
+ * counters, i.e. everything before queue_depth[0]. */
 #define STATS_BASE_SIZE     10
 
+_Static_assert(__builtin_offsetof(route_$port_stats_t, queue_depth) ==
+                   STATS_BASE_SIZE,
+               "the bucket array starts at +0x0A (move.l (0xa,A1),(0xa,A0))");
+
 void ROUTE_$READ_USER_STATS(uint16_t *socket_ptr, uint8_t *stats_buf,
-                            int16_t *length_ret, status_$t *status_ret)
+                            uint16_t reserved, int16_t *length_ret,
+                            status_$t *status_ret)
 {
-    int16_t port_index;
-    route_$port_t *port;
-    uint8_t *driver_stats;
-    int16_t copy_count;
+    int16_t port_index;                 /* D0w */
+    route_$port_t *port;                /* D1 */
+    route_$port_stats_t *stats;         /* A0, from port->driver_stats */
+    int16_t bucket_count;               /* D4w */
     int16_t i;
-    uint32_t socket_ext;
+    uint32_t length_count;              /* the longword read at port+0x34 */
+
+    /* A6+0x10 is an argument slot the image never reads. */
+    (void)reserved;
 
     /*
-     * Look up the port by socket number
-     * Network type is always 2 (ROUTE_PORT_TYPE_ROUTING) for user stats
-     * Socket is zero-extended to 32 bits
+     * 0x00E6A66E-0x00E6A684.  "clr.l D0 / move.w (A0),D0w" zero-extends the
+     * socket word, and the network is the constant 2.  "subq.l #0x2,SP"
+     * reserves the callee's word result, which arrives in D0.
      */
-    socket_ext = (uint32_t)*socket_ptr;
-    port_index = ROUTE_$FIND_PORT(ROUTE_PORT_TYPE_ROUTING, (int32_t)socket_ext);
+    port_index = ROUTE_$FIND_PORT(ROUTE_PORT_TYPE_ROUTING,
+                                  (int32_t)(uint32_t)*socket_ptr);
 
+    /* 0x00E6A686-0x00E6A698 */
     if (port_index == -1) {
-        /* Port not found */
         *length_ret = 0;
         *status_ret = status_$internet_unknown_network_port;
         return;
     }
 
-    /*
-     * Get pointer to port structure
-     */
+    /* 0x00E6A69A-0x00E6A6A8 */
     port = &ROUTE_$PORT_ARRAY[port_index];
 
-    /*
-     * Get pointer to driver stats structure at port+0x44
-     * This is an indirect pointer - the port structure contains a pointer
-     * to another structure that holds the actual statistics
-     */
-    driver_stats = *(uint8_t **)((uint8_t *)port + 0x44);
+    /* 0x00E6A6B0: the stats block is reached through the +0x44 target VA */
+    stats = (route_$port_stats_t *)ARCH_VA_TO_PTR(port->driver_stats);
 
     /*
-     * Copy base statistics (10 bytes):
-     *   - 1 byte flags at offset 0
-     *   - 4 bytes at offset 2
-     *   - 4 bytes at offset 6
+     * 0x00E6A6B4-0x00E6A6C0: one byte then two longwords.  The image copies
+     * the flags word's FIRST BYTE only ("move.b (A0),(A2)"), leaving the
+     * caller's second byte untouched, then the two counters at +0x02 and
+     * +0x06 with a pair of "(A1)+" moves.
      */
-    stats_buf[0] = driver_stats[0];
-    *(uint32_t *)(stats_buf + 2) = *(uint32_t *)(driver_stats + 2);
-    *(uint32_t *)(stats_buf + 6) = *(uint32_t *)(driver_stats + 6);
+    stats_buf[0] = (uint8_t)(stats->flags >> 8);
+    {
+        route_$port_stats_t *out = (route_$port_stats_t *)stats_buf;
+
+        out->deep_queue_puts = stats->deep_queue_puts;
+        out->failed_puts = stats->failed_puts;
+    }
 
     /*
-     * Copy additional data based on count at port+0x36
-     * The value at port+0x36 is (count - 1), so loop while >= 0
+     * 0x00E6A6C4-0x00E6A6DC: "move.w (0x36,A1),D4w / bmi" - a SIGNED word
+     * test, so a negative count copies nothing.  "dbf D0w" with D0 = count
+     * runs count+1 times, one longword bucket per pass.
      */
-    copy_count = *(int16_t *)((uint8_t *)port + 0x36);
-    if (copy_count >= 0) {
-        uint8_t *src = driver_stats;
-        uint8_t *dst = stats_buf;
+    bucket_count = (int16_t)port->socket2;
+    if (bucket_count >= 0) {
+        route_$port_stats_t *out = (route_$port_stats_t *)stats_buf;
 
-        for (i = copy_count; i >= 0; i--) {
-            *(uint32_t *)(dst + 10) = *(uint32_t *)(src + 10);
-            dst += 4;
-            src += 4;
+        /*
+         * Both pointers advance by 4 each pass from a base of +0x0A, so pass
+         * i copies bucket i.  The image bounds-checks nothing; the count is
+         * the port's queue length, which ROUTE_$SERVICE caps at 0x20 and
+         * queue_depth[] is sized 0x21 to match.
+         */
+        for (i = 0; i <= bucket_count; i++) {
+            out->queue_depth[i] = stats->queue_depth[i];
         }
     }
 
     /*
-     * Calculate total bytes written
-     * Formula: (count_at_0x34 + 1) * 4 + 10
-     * This gives base size (10) plus variable data
+     * 0x00E6A6DE-0x00E6A6F2.  The image computes
+     *   (stats_buf + 10) + (longword at port+0x34 + 1) * 4 - stats_buf
+     * and stores the low word, i.e. STATS_BASE_SIZE + (count + 1) * 4.  The
+     * longword at +0x34 is the same count as the word at +0x36, which is its
+     * low half (see route_$port_t).
      */
-    {
-        int32_t count = *(int32_t *)((uint8_t *)port + 0x34);
-        int32_t total_size = ((count + 1) * 4) + STATS_BASE_SIZE;
-        *length_ret = (int16_t)total_size;
-    }
+    length_count = ((uint32_t)port->queue_len_hi << 16) | port->socket2;
+    *length_ret = (int16_t)(STATS_BASE_SIZE + (length_count + 1) * 4);
 
+    /* 0x00E6A6F4-0x00E6A6F6 */
     *status_ret = status_$ok;
 }

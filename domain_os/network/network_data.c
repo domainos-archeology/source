@@ -50,8 +50,8 @@ uid_t NETWORK_$PAGING_FILE_UID;
 /*
  * Statistics counters
  */
-uint32_t NETWORK_$PAGING_BACKLOG;       /* 0xE24BAC */
-uint32_t NETWORK_$FILE_BACKLOG;         /* 0xE24BD0 */
+uint32_t NETWORK_$PAGING_BACKLOG[NETWORK_PAGING_BACKLOG_BUCKETS]; /* 0xE24BAC */
+uint32_t NETWORK_$FILE_BACKLOG[NETWORK_FILE_BACKLOG_BUCKETS];     /* 0xE24BD0 */
 uint16_t NETWORK_$RCV_READ_AHEAD;       /* 0xE24C26 */
 uint16_t NETWORK_$MULT_PAGIN_RQST_CNT;  /* 0xE24C28 */
 uint16_t NETWORK_$BAD_CHKSUM_CNT;       /* 0xE24C2A */
@@ -122,14 +122,14 @@ int8_t NETWORK_$LOOPBACK_FLAG;
  */
 char NETWORK_$DO_CHKSUM;
 
+/* NET_ASM cell at 0xE245A2; see network/network.h. */
+uint16_t NETWORK_$2LONG1;
+
 /*
- * NETWORK_$FILE_BACKLOG_OVERFLOW - the overflow counter at the end of the
- * NETWORK_$FILE_BACKLOG record (0xE24BD0 + 0x20); the record runs up to
- * NETWORK_$FAILURE_REC at 0xE24BF4, so this longword is its last field.
- *
- * Original address: 0xE24BF0
+ * NETWORK_$FILE_BACKLOG_OVERFLOW is the last bucket of NETWORK_$FILE_BACKLOG
+ * (0xE24BD0 + 0x20 = 0xE24BF0), not storage of its own - see the macro in
+ * network/network.h.
  */
-uint32_t NETWORK_$FILE_BACKLOG_OVERFLOW;
 
 /*
  * NETWORK_$SERVICE_INFO_PTR - pointer to the network service-info record.

@@ -44,7 +44,7 @@ void REM_FILE_$RESERVE(uid_t *vol_uid, uid_t *uid, uint32_t start,
  * @param status      Output status code
  */
 void REM_FILE_$TRUNCATE(uid_t *vol_uid, uid_t *uid, uint32_t new_size,
-                        uint16_t flags, uint8_t *result, status_$t *status);
+                        uint8_t flags, uint8_t *result, status_$t *status);
 
 /*
  * REM_FILE_$INVALIDATE - Invalidate pages in a remote file
@@ -176,8 +176,12 @@ void REM_FILE_$SET_ATTRIBUTE(void *vol_uid, uid_t *file_uid,
  * @param wait_flag      Wait flag
  * @param extended       Extended lock flag (negative for extended)
  * @param lock_key       Lock key
- * @param packet_id_out  Output packet ID
- * @param status_word    Output status word
+ * @param lock_key_out   (0x1A,A6) Output: the reply word at response+0xBC,
+ *                       written only on the extended path (0x00E61C34)
+ * @param packet_id_out  (0x1E,A6) Output: the packet id REM_FILE_$SEND_REQUEST
+ *                       produced, written on both paths (0x00E61BF4).  The
+ *                       two output words used to be named the other way round
+ *                       (bead source-1q0c).
  * @param lock_result    Output lock result
  * @param status         Output status code
  *
@@ -185,8 +189,9 @@ void REM_FILE_$SET_ATTRIBUTE(void *vol_uid, uid_t *file_uid,
  */
 void REM_FILE_$LOCK(void *location_block, uint16_t lock_mode, uint16_t lock_type,
                     uint16_t flags, uint16_t wait_flag, int8_t extended,
-                    uint32_t lock_key, uint16_t *packet_id_out, uint16_t *status_word,
-                    void *lock_result, status_$t *status);
+                    uint32_t lock_key, uint16_t *lock_key_out,
+                    uint16_t *packet_id_out, void *lock_result,
+                    status_$t *status);
 
 /*
  * REM_FILE_$UNLOCK - Unlock a remote file
@@ -530,5 +535,15 @@ void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buf,
  * Original address: 0x00E63586
  */
 void REM_FILE_$SERVER(void);
+
+/*
+ * REM_FILE_$2LONG1 (0xE245A0) - one of the four cells of the NET_ASM assembly data
+ * module (SAU2 map: `D E2459C NET_ASM size = C`, holding HINT_$HINTFILE_PTR,
+ * REM_FILE_$2LONG1, NETWORK_$2LONG1 and NODE_$ME).  It is a word counter:
+ * ASKNODE_$INTERNET_INFO's request-0x29 arm reports it with move.w
+ * (0x00E64E46).
+ * TODO: recover what the counter counts (bead source-t74x).
+ */
+extern uint16_t REM_FILE_$2LONG1;
 
 #endif /* REM_FILE_H */

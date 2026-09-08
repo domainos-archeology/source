@@ -1,27 +1,39 @@
 /*
  * ROUTE_$SERVICE - Main routing service entry point
  *
- * This function handles various routing service operations controlled by
- * bit flags in the operation parameter:
+ * Applies one routing-service request to one port.  The operation argument is
+ * a 16-bit Pascal SET; every test in the image is "btst.b #n,(0x1,A3)", i.e.
+ * bit n of the set word's low byte:
  *
- *   - Bit 0 (0x01): Update network address
- *   - Bit 1 (0x02): Update port status
- *   - Bit 2 (0x04): Create new port (vs find existing)
- *   - Bit 3 (0x08): Close port operation
- *   - Bit 5 (0x20): User port with validation (queue length check)
+ *   bit 0 (0x01)  set the port's network address
+ *   bit 1 (0x02)  set the port's status
+ *   bit 2 (0x04)  create a new port instead of finding an existing one
+ *   bit 3 (0x08)  close the port (handled entirely by the nested procedure)
+ *   bit 5 (0x20)  user port; validates port type, create bit and queue length
  *
- * The function manages the lifecycle of routing ports including:
- *   - Creating new ports via NET_IO_$CREATE_PORT
- *   - Finding existing ports via ROUTE_$FIND_PORT
- *   - Updating RIP routing tables when networks change
- *   - Managing IDP channel registrations
- *   - Handling port status transitions
+ * Address ranges (SR10.2 SAU2 image), walked end to end:
+ *   0x00E6A030-0x00E6A054  prologue, *status_ret = 0, ML_$EXCLUSION_START
+ *   0x00E6A056-0x00E6A064  bit 3: close port, then unlock and return
+ *   0x00E6A066-0x00E6A0B4  bit 5: user-port argument validation
+ *   0x00E6A0B6-0x00E6A128  port 0 RIP re-announce (includes the port+0x20
+ *                          store at 0x00E6A0D4)
+ *   0x00E6A12A-0x00E6A1AE  bit 2 set: NET_IO_$CREATE_PORT
+ *   0x00E6A1B0-0x00E6A1EA  bit 2 clear: ROUTE_$FIND_PORT
+ *   0x00E6A1EC-0x00E6A21A  bit 1: status range check
+ *   0x00E6A21C-0x00E6A282  port pointer, zero-network check
+ *   0x00E6A284-0x00E6A392  bit 0: network change, three RIP pairs
+ *   0x00E6A394-0x00E6A3FA  bit 1: routing-counter decrements
+ *   0x00E6A3FC-0x00E6A446  driver callbacks when the port leaves status 1
+ *   0x00E6A448-0x00E6A4AC  status store and IDP channel registration
+ *   0x00E6A4AE-0x00E6A516  routing initialisation for the new status
+ *   0x00E6A518-0x00E6A594  status-0-only cleanup, else restore the old status
+ *   0x00E6A596-0x00E6A5D6  unlock, RIP updates, reply record, epilogue
  *
- * Original address: 0x00E6A030
+ * A5 is loaded with 0x00E825DC at 0x00E6A038 but ROUTE_$SERVICE never uses it
+ * itself; the module-local procedures it reaches with bsr (ROUTE_$ANNOUNCE_NET
+ * at 0x00E69FF2) do.
  *
- * Called from:
- *   - ROUTE_$READ_USER_STATS at 0x00E6A63E
- *   - Various XNS network functions
+ * Original address: 0x00E6A030 (1448 bytes)
  */
 
 #include "route/route_internal.h"
@@ -31,194 +43,150 @@
 #include "hint/hint.h"
 #include "xns_idp/xns_idp.h"
 #include "app/app.h"
-
-/* NET_IO_$CREATE_PORT is declared in net_io/net_io.h (included above) */
-
-/*
- * =============================================================================
- * Status Codes
- * =============================================================================
- */
-
-#define status_$route_invalid_port_status   0x2B0006    /* Invalid port status value */
-/* 0x2B0009 is status_$route_illegal_op_for_port_type in route/route.h. */
-#define status_$route_must_have_network     0x2B0011    /* Port must have network address */
-#define status_$route_create_flag_required  0x2B0013    /* Create flag required for user ports */
-#define status_$route_queue_length_too_large 0x2B0014   /* Queue length exceeds maximum */
+#include "arch/arch.h"
 
 /*
  * =============================================================================
  * Operation Flag Bits
  * =============================================================================
+ *
+ * The image tests bit n of the low byte of the operation word with
+ * "btst.b #n,(0x1,A3)"; testing the whole word against 1<<n is the same
+ * thing for n < 8 and does not depend on the host's byte order.
  */
-
-#define SERVICE_OP_SET_NETWORK      0x01    /* Bit 0: Set network address */
-#define SERVICE_OP_SET_STATUS       0x02    /* Bit 1: Set port status */
-#define SERVICE_OP_CREATE_PORT      0x04    /* Bit 2: Create new port */
-#define SERVICE_OP_CLOSE_PORT       0x08    /* Bit 3: Close port */
-#define SERVICE_OP_USER_PORT        0x20    /* Bit 5: User port with validation */
+#define SERVICE_OP_SET_NETWORK      0x0001  /* Bit 0: set network address */
+#define SERVICE_OP_SET_STATUS       0x0002  /* Bit 1: set port status */
+#define SERVICE_OP_CREATE_PORT      0x0004  /* Bit 2: create new port */
+#define SERVICE_OP_CLOSE_PORT       0x0008  /* Bit 3: close port */
+#define SERVICE_OP_USER_PORT        0x0020  /* Bit 5: user port validation */
 
 /*
  * =============================================================================
- * Port Type and Status Masks
+ * Port status bit masks
  * =============================================================================
+ *
+ * Each is the D-register literal of a "btst.l Dn,Dm" over the status word,
+ * i.e. a set of status VALUES 0..31.  Cited by the address of the moveq that
+ * loads it.
  */
+#define PORT_STATUS_VALID_MASK      0x3E  /* 0x00E6A21C: statuses 1..5 */
+#define PORT_STATUS_NEED_NETWORK    0x38  /* 0x00E6A258: statuses 3,4,5 */
+#define PORT0_ANNOUNCE_MASK         0x3C  /* 0x00E6A0BC: statuses 2..5 */
+#define PORT_STATUS_ROUTING_MASK    0x30  /* 0x00E6A3B4 / 0x00E6A4C8: 4,5 */
+#define PORT_STATUS_DISABLE_STD     0x0E  /* 0x00E6A3C2 / 0x00E6A4BA: 1,2,3 */
+#define PORT_STATUS_N_ROUTING_MASK  0x28  /* 0x00E6A3DA / 0x00E6A50A: 3,5 */
+#define PORT_STATUS_DISABLE_N       0x16  /* 0x00E6A3E8 / 0x00E6A4FA: 1,2,4 */
 
-/* Port types 1 and 2 are valid - bits 1 and 2 = 0x06 */
-#define PORT_TYPE_VALID_MASK        0x06
-
-/* Status values 1,2,3,4,5 are valid - bits 1-5 = 0x3E */
-#define PORT_STATUS_VALID_MASK      0x3E
-
-/* Status bits 3,4,5 require network address - 0x38 */
-#define PORT_STATUS_NEED_NETWORK    0x38
-
-/* Status bits 2,3,4 for transition checks */
-#define PORT_STATUS_ACTIVE_MASK     0x1C
-
-/* Status bits 4,5 for routing enabled - 0x30 */
-#define PORT_STATUS_ROUTING_MASK    0x30
-
-/* Status bits 1,2,3 for routing disable check - 0x0E */
-#define PORT_STATUS_DISABLE_STD     0x0E
-
-/* Status bits 3,5 for N-routing check - 0x28 */
-#define PORT_STATUS_N_ROUTING_MASK  0x28
-
-/* Status bits 1,2,4 for N-routing disable - 0x16 */
-#define PORT_STATUS_DISABLE_N       0x16
-
-/* Maximum queue length for user ports */
+/* Largest queue length a user port may ask for (0x00E6A09A cmpi.w #0x20) */
 #define MAX_USER_PORT_QUEUE_LENGTH  0x20
 
-/*
- * =============================================================================
- * External Data
- * =============================================================================
- */
-
-/*
- * NET_IO_$NIL_DRIVER / NET_IO_$USER_DRIVER: net_io/net_io.h
- * RIP_$STD_IDP_CHANNEL: rip/rip.h
- * APP_$STD_IDP_CHANNEL: app/app.h
- */
+/* The status value that means "port closed"; the image compares against the
+ * literal 1 at 0x00E6A3FC, 0x00E6A452 and 0x00E6A520. */
+#define PORT_STATUS_CLOSED          1
 
 /*
  * =============================================================================
- * Service Request Structure
- * =============================================================================
- */
-
-/*
- * Service request structure passed as param_2.
- * Layout:
- *   +0x00: network address (4 bytes)
- *   +0x04: port status (2 bytes)
- *   +0x06: port type (2 bytes): 1=nil driver, 2=user driver
- *   +0x08: socket/network ID (2 bytes)
- *   +0x0A: queue length (2 bytes) - only for user ports
- */
-typedef struct route_service_request_t {
-    uint32_t    network;        /* 0x00: Network address */
-    uint16_t    status;         /* 0x04: Port status */
-    uint16_t    port_type;      /* 0x06: Port type (1=nil, 2=user) */
-    int16_t     socket;         /* 0x08: Socket/network ID */
-    uint16_t    queue_length;   /* 0x0A: Queue length for user ports */
-} route_service_request_t;
-
-/*
- * =============================================================================
- * Forward Declarations
+ * PC-relative constant cells
  * =============================================================================
  *
- * Most functions are declared in the included headers:
- *   - ROUTE_$ANNOUNCE_NET in route/route_internal.h
- *   - HINT_$ADD_NET in hint/hint.h
- *   - NET_IO_$CREATE_PORT in net_io/net_io.h
- *   - RIP_$UPDATE_D in rip/rip.h
- *   - RIP_$SEND_UPDATES in rip/rip.h
+ * Every RIP_$UPDATE_D argument the image passes as "pea (d,PC)" is a named
+ * cell in the ROUTE_UNWIRED code segment.  Bytes read out of the image:
+ *
+ *   0x00E69FAE  00 00      op byte 0x00 - add a standard route
+ *   0x00E69FB0  00 10      hop-count word 0x0010
+ *   0x00E6A5D8  00 00      hop-count word 0x0000
+ *   0x00E6A5DA  ff 00      op byte 0xFF - add a non-standard route
+ *   0x00E6A02C  00 00 00 00
+ *
+ * The two op cells are read as single bytes by RIP_$UPDATE_D (its flags
+ * argument is a boolean pointer), which is why each is spelled as a byte.
+ *
+ * Which cell each of the six RIP_$UPDATE_D calls passes, taken from the pea
+ * displacements (the m68k PC for "pea (d,PC)" is the instruction address + 2):
+ *
+ *   port 0 re-announce   0x00E6A0F6 -> hop 0x00E6A5D8, 0x00E6A0EE -> op 0x00E69FAE
+ *                        0x00E6A116 -> hop 0x00E6A5D8, 0x00E6A10E -> op 0x00E6A5DA
+ *   old-network removal  0x00E6A2CA -> hop 0x00E69FB0, 0x00E6A2C2 -> op 0x00E69FAE
+ *                        0x00E6A2EA -> hop 0x00E69FB0, 0x00E6A2E2 -> op 0x00E6A5DA
+ *   new-network add      0x00E6A35C -> hop 0x00E6A5D8, 0x00E6A354 -> op 0x00E69FAE
+ *                        0x00E6A37E -> hop 0x00E6A5D8, 0x00E6A376 -> op 0x00E6A5DA
+ *
+ * so the middle pair is the only one that carries a hop count of 0x10.
  */
+static const boolean RIP_OP_STD = 0x00;                 /* 0x00E69FAE */
+static const uint16_t RIP_HOP_COUNT_16 = 0x0010;        /* 0x00E69FB0 */
+static const uint16_t RIP_HOP_COUNT_ZERO = 0x0000;      /* 0x00E6A5D8 */
+static const boolean RIP_OP_NON_STD = (boolean)0xFF;    /* 0x00E6A5DA */
 
 /*
- * =============================================================================
- * RIP Operation Flags
- * =============================================================================
- *
- * These are passed as pointers to single-byte flags:
- *   - RIP_OP_ADD (0x00): Add route entry
- *   - RIP_OP_DELETE (0xFF): Delete route entry
- *
- * Original addresses:
- *   - DAT_00e69fae = 0x00 (add)
- *   - DAT_00e6a5da = 0xFF (delete)
- *   - DAT_00e69fb0 = 0x00 (add, alternate location)
- *   - DAT_00e6a5d8 = 0x0000 (hop count of 0)
+ * 0x00E6A02C: four zero bytes, passed as the attach_service callback's
+ * "service_rec" argument (0x00E6A436 "pea (-0x40c,PC)").  Two words, matching
+ * route_$set_service_fn_t's {opcode, service} record.
  */
-static const int8_t RIP_OP_ADD = 0x00;
-static const int8_t RIP_OP_DELETE = (int8_t)0xFF;
-static const uint16_t RIP_HOP_COUNT_ZERO = 0x0000;
+static const uint16_t ROUTE_$NULL_SERVICE_REC[2] = { 0x0000, 0x0000 };
 
 /*
  * =============================================================================
  * Implementation
  * =============================================================================
  */
-
-/*
- * ROUTE_$SERVICE - Main service entry point
- *
- * @param operation_p   Pointer to operation flags structure (flags at offset +1)
- * @param request_p     Pointer to service request structure
- * @param status_ret    Output: status code
- */
-void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
+void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
+                    status_$t *status_ret)
 {
-    uint8_t *operation = (uint8_t *)operation_p;
-    route_service_request_t *request = (route_service_request_t *)request_p;
-    int16_t port_index;
-    route_$port_t *port;
-    route_$short_port_t short_port;     /* -0x48 */
-    rip_$xns_addr_t source;             /* -0x10: source XNS address for RIP_$UPDATE_D */
-    uint16_t old_status;
-    int16_t port_list[2];
-    status_$t local_status;
-    void *driver;
-    uint16_t queue_length;
+    int16_t port_index;                 /* D2w */
+    route_$port_t *port;                /* A1/A2, saved in D4 at 0x00E6A22A */
+    route_$short_port_t short_port;     /* A6-0x48 */
+    rip_$xns_addr_t source;             /* A6-0x10 */
+    status_$t rip_status;               /* A6-0x54 */
+    status_$t idp_status;               /* A6-0x50 */
+    uint16_t idp_port;                  /* A6-0x66 */
+    uint16_t old_status;                /* A6-0x62 */
+    uint16_t queue_length;              /* A6-0x68 */
+    void *driver;                       /* A6-0x5C */
+    uint16_t attach_out;                /* A6-0x60, never read by the caller */
+    route_$driver_info_t *driver_info;  /* A3, after it stops holding the ops */
+    uint32_t effective_network;
+    uint16_t check_status;
     int i;
-    uint8_t op_flags;
 
-    /* Get operation flags from offset +1 */
-    op_flags = operation[1];
-
-    /* Initialize status to success */
+    /* 0x00E6A042-0x00E6A046 */
     *status_ret = status_$ok;
 
-    /* Acquire the service mutex */
+    /* 0x00E6A048-0x00E6A054 */
     ML_$EXCLUSION_START(&ROUTE_$SERVICE_MUTEX);
 
     /*
-     * Bit 3 (0x08): Close port operation
-     * This is handled separately and returns early
+     * 0x00E6A056-0x00E6A064.  ROUTE_$CLOSE_PORT (0x00E69EC2) is a nested
+     * Pascal procedure: the image reaches it with "bsr.w" and pushes nothing,
+     * and the callee picks the caller's arguments up through the saved frame
+     * pointer ("movea.l (A6),A2" at 0x00E69ECA, then (0xc,A2) and (0x10,A2)).
+     * It is still a separate translation unit here, so the two arguments it
+     * reads that way are passed explicitly.
+     * TODO: fold ROUTE_$CLOSE_PORT into this file as a static that shares
+     * this frame - it also reads the caller's local at A6-0x62 (bead
+     * source-kc3d).
      */
-    if (op_flags & SERVICE_OP_CLOSE_PORT) {
-        ROUTE_$CLOSE_PORT(request, status_ret);
+    if (*operation & SERVICE_OP_CLOSE_PORT) {
+        ROUTE_$CLOSE_PORT(port_info, status_ret);
+        /* 0x00E6A062 branches into the unlock at 0x00E6A274 */
         ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
         return;
     }
 
-    /*
-     * Bit 5 (0x20): User port validation
-     * Requires port type 2 and create flag, with queue length <= 32
-     */
-    if (op_flags & SERVICE_OP_USER_PORT) {
-        if (request->port_type != 2) {
+    /* 0x00E6A066-0x00E6A0B4 */
+    if (*operation & SERVICE_OP_USER_PORT) {
+        if (port_info->port_type != ROUTE_PORT_TYPE_ROUTING) {
+            /* 0x00E6A07E */
             *status_ret = status_$route_illegal_op_for_port_type;
-        } else if (!(op_flags & SERVICE_OP_CREATE_PORT)) {
+        } else if (!(*operation & SERVICE_OP_CREATE_PORT)) {
+            /* 0x00E6A092 */
             *status_ret = status_$route_create_flag_required;
-        } else if (request->queue_length > MAX_USER_PORT_QUEUE_LENGTH) {
+        } else if (port_info->queue_length > MAX_USER_PORT_QUEUE_LENGTH) {
+            /* 0x00E6A09A "cmpi.w #0x20,(0xa,A0) / bls": unsigned */
             *status_ret = status_$route_queue_length_too_large;
         }
 
+        /* 0x00E6A0AC-0x00E6A0B4 */
         if (*status_ret != status_$ok) {
             ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
             return;
@@ -226,60 +194,78 @@ void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
     }
 
     /*
-     * If port 0 has certain status bits set (0x3C = bits 2,3,4,5),
-     * announce routing updates for port 0
+     * 0x00E6A0B6-0x00E6A128: when port 0's status is one of 2..5, re-announce
+     * its network to RIP.
      */
-    if (((1 << (ROUTE_$PORT_ARRAY[0].active & 0x1f)) & 0x3C) != 0) {
+    if (((uint32_t)PORT0_ANNOUNCE_MASK >> (ROUTE_$PORT_ARRAY[0].active & 0x1F)) & 1) {
+        /* 0x00E6A0C6-0x00E6A0D0 */
         ROUTE_$SHORT_PORT(&ROUTE_$PORT_ARRAY[0], &short_port);
+
+        /*
+         * 0x00E6A0D2-0x00E6A0DA: the port's own XNS endpoint network word at
+         * port+0x20 is refreshed from port->network before the announcement.
+         * ("move.l (A2),D1 / move.l D1,(0x20,A2) / move.l D1,(-0x10,A6)")
+         */
+        ROUTE_$PORT_ARRAY[0].xns_addr.network = ROUTE_$PORT_ARRAY[0].network;
         source.network = ROUTE_$PORT_ARRAY[0].network;
 
-        /* Clear the 6 host bytes of the source address (3 clr.w at -0xC..-0x8) */
+        /* 0x00E6A0DC-0x00E6A0E8: three clr.w over A6-0xC..A6-0x7 */
         for (i = 0; i < 6; i++) {
             source.host[i] = 0;
         }
 
-        /* Announce route additions to RIP */
-        RIP_$UPDATE_D(&ROUTE_$PORT_ARRAY[0].network, &source, &RIP_HOP_COUNT_ZERO,
-                      (uint8_t *)&short_port, &RIP_OP_ADD, status_ret);
-        RIP_$UPDATE_D(&ROUTE_$PORT_ARRAY[0].network, &source, &RIP_HOP_COUNT_ZERO,
-                      (uint8_t *)&short_port, &RIP_OP_DELETE, status_ret);
+        /* 0x00E6A0EA-0x00E6A106 */
+        RIP_$UPDATE_D(&ROUTE_$PORT_ARRAY[0].network, &source,
+                      &RIP_HOP_COUNT_ZERO, (const uint8_t *)&short_port,
+                      &RIP_OP_STD, status_ret);
+        /* 0x00E6A10A-0x00E6A126 */
+        RIP_$UPDATE_D(&ROUTE_$PORT_ARRAY[0].network, &source,
+                      &RIP_HOP_COUNT_ZERO, (const uint8_t *)&short_port,
+                      &RIP_OP_NON_STD, status_ret);
     }
 
-    /*
-     * Bit 2 (0x04): Create new port
-     * If not set, find existing port by network/socket
-     */
-    if (op_flags & SERVICE_OP_CREATE_PORT) {
-        /* Determine queue length */
-        if (op_flags & SERVICE_OP_USER_PORT) {
-            queue_length = request->queue_length;
+    if (*operation & SERVICE_OP_CREATE_PORT) {
+        /* 0x00E6A132-0x00E6A14A */
+        if (*operation & SERVICE_OP_USER_PORT) {
+            queue_length = port_info->queue_length;
         } else {
-            queue_length = 10;  /* Default queue length */
+            queue_length = 10;
         }
 
-        /* Select driver based on port type */
-        if (request->port_type == 1) {
+        /* 0x00E6A14C-0x00E6A168 */
+        if (port_info->port_type == ROUTE_PORT_TYPE_LOCAL) {
             driver = NET_IO_$NIL_DRIVER;
         } else {
             driver = NET_IO_$USER_DRIVER;
         }
 
-        /* Create the port */
-        port_index = NET_IO_$CREATE_PORT(request->port_type, 0, driver,
-                                          queue_length, status_ret);
+        /*
+         * 0x00E6A16A-0x00E6A18C.  "subq.l #0x2,SP" reserves the word function
+         * result slot; the value is taken from D0 afterwards.
+         */
+        port_index = NET_IO_$CREATE_PORT(port_info->port_type, 0, driver,
+                                         queue_length, status_ret);
+
+        /* 0x00E6A18E-0x00E6A196 */
         if (*status_ret != status_$ok) {
             ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
             return;
         }
 
-        /* For user ports, increment counter and wire routing area */
-        if (request->port_type == 2) {
+        /* 0x00E6A198-0x00E6A1AE */
+        if (port_info->port_type == ROUTE_PORT_TYPE_ROUTING) {
             ROUTE_$N_USER_PORTS++;
             route_$wire_routing_area();
         }
     } else {
-        /* Find existing port by network/socket */
-        port_index = ROUTE_$FIND_PORT(request->port_type, (int32_t)request->socket);
+        /*
+         * 0x00E6A1B0-0x00E6A1CA: the socket word is sign-extended to a
+         * longword before the push ("move.w (0x8,A0),D1w / ext.l D1").
+         */
+        port_index = ROUTE_$FIND_PORT(port_info->port_type,
+                                      (int32_t)(int16_t)port_info->socket);
+
+        /* 0x00E6A1CC-0x00E6A1EA: the unlock happens before the status store */
         if (port_index == -1) {
             ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
             *status_ret = status_$internet_unknown_network_port;
@@ -287,239 +273,243 @@ void ROUTE_$SERVICE(void *operation_p, void *request_p, status_$t *status_ret)
         }
     }
 
-    /*
-     * Bit 1 (0x02): Set port status
-     * Validate the new status value
-     */
-    if (op_flags & SERVICE_OP_SET_STATUS) {
-        /* Status must be in valid range (bits 1-5 = values 1-5) */
-        if (((1 << (request->status & 0x1f)) & PORT_STATUS_VALID_MASK) == 0) {
+    /* 0x00E6A1EC-0x00E6A21A */
+    if (*operation & SERVICE_OP_SET_STATUS) {
+        if ((((uint32_t)PORT_STATUS_VALID_MASK >> (port_info->status & 0x1F)) & 1) == 0) {
             ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
-            *status_ret = status_$route_invalid_port_status;
+            *status_ret = status_$route_service_type_bad;
             return;
         }
     }
 
-    /* Get pointer to port structure */
+    /* 0x00E6A21C-0x00E6A22C: D3 = 0x5C * port_index, D4 keeps the pointer */
     port = &ROUTE_$PORT_ARRAY[port_index];
 
-    /*
-     * Get the effective network address for validation
-     * Use requested network if setting it, otherwise use current
-     */
-    uint32_t effective_network;
-    if (op_flags & SERVICE_OP_SET_NETWORK) {
-        effective_network = request->network;
+    /* 0x00E6A22E-0x00E6A240 */
+    if (*operation & SERVICE_OP_SET_NETWORK) {
+        effective_network = port_info->network;
     } else {
         effective_network = port->network;
     }
 
-    /*
-     * If network address is zero and status requires network,
-     * return error (unless creating with specific status)
-     */
     if (effective_network == 0) {
-        uint16_t check_status;
-        if (op_flags & SERVICE_OP_SET_STATUS) {
-            check_status = request->status;
+        /* 0x00E6A242-0x00E6A256 */
+        if (*operation & SERVICE_OP_SET_STATUS) {
+            check_status = port_info->status;
         } else {
             check_status = port->active;
         }
 
-        /* Status bits 3,4,5 require non-zero network */
-        if (((1 << (check_status & 0x1f)) & PORT_STATUS_NEED_NETWORK) != 0) {
-            *status_ret = status_$route_must_have_network;
-            ROUTE_$SHORT_PORT(port, (route_$short_port_t *)request);
+        /* 0x00E6A258-0x00E6A272 */
+        if (((uint32_t)PORT_STATUS_NEED_NETWORK >> (check_status & 0x1F)) & 1) {
+            *status_ret = status_$route_no_routing_zero_network;
+            ROUTE_$SHORT_PORT(port, port_info);
+            /* falls into the unlock at 0x00E6A274 */
             ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
             return;
         }
     }
 
-    /*
-     * Bit 0 (0x01): Set network address
-     * Handle network address changes with RIP notifications
-     */
-    if ((op_flags & SERVICE_OP_SET_NETWORK) && (port->network != request->network)) {
-        /* If port had a network address, remove old routes */
+    /* 0x00E6A284-0x00E6A298 */
+    if ((*operation & SERVICE_OP_SET_NETWORK) &&
+        port->network != port_info->network) {
+
+        /* 0x00E6A29C-0x00E6A2FC */
         if (port->network != 0) {
             ROUTE_$SHORT_PORT(port, &short_port);
             source.network = port->network;
-
-            /* Clear the 6 host bytes of the source address */
-            for (i = 0; i < 6; i++) {
-                source.host[i] = 0;
-            }
-
-            /* Notify RIP of old route deletion */
-            RIP_$UPDATE_D(&port->network, &source, &RIP_HOP_COUNT_ZERO,
-                          (uint8_t *)&short_port, &RIP_OP_ADD, &local_status);
-            RIP_$UPDATE_D(&port->network, &source, &RIP_HOP_COUNT_ZERO,
-                          (uint8_t *)&short_port, &RIP_OP_DELETE, &local_status);
-        }
-
-        /* For port 0, announce network to mother and add hint */
-        if (port_index == 0) {
-            ROUTE_$ANNOUNCE_NET(request->network);
-            HINT_$ADD_NET(request->network);
-        }
-
-        /* Update port's network address */
-        port->network = request->network;
-        /* Also update the cached copy at offset 0x20 */
-        *(uint32_t *)((uint8_t *)port + 0x20) = request->network;
-
-        /* If new network is non-zero, announce new routes */
-        if (request->network != 0) {
-            ROUTE_$SHORT_PORT(port, &short_port);
-            source.network = request->network;
-
-            /* Clear the 6 host bytes of the source address */
             for (i = 0; i < 6; i++) {
                 source.host[i] = 0;
             }
 
             /*
-             * Notify RIP of new route addition.  The original passes the
-             * request structure itself (move.l (0xc,A6)) whose first
-             * longword is the network address.
+             * 0x00E6A2BE-0x00E6A2DA and 0x00E6A2DE-0x00E6A2FA.  This pair is
+             * the one that passes the hop-count cell at 0x00E69FB0 (0x0010),
+             * not the zero cell the other two pairs use.
              */
-            RIP_$UPDATE_D(&request->network, &source, &RIP_HOP_COUNT_ZERO,
-                          (uint8_t *)&short_port, &RIP_OP_ADD, &local_status);
-            RIP_$UPDATE_D(&request->network, &source, &RIP_HOP_COUNT_ZERO,
-                          (uint8_t *)&short_port, &RIP_OP_DELETE, &local_status);
+            RIP_$UPDATE_D(&port->network, &source, &RIP_HOP_COUNT_16,
+                          (const uint8_t *)&short_port, &RIP_OP_STD,
+                          &rip_status);
+            RIP_$UPDATE_D(&port->network, &source, &RIP_HOP_COUNT_16,
+                          (const uint8_t *)&short_port, &RIP_OP_NON_STD,
+                          &rip_status);
+        }
+
+        /* 0x00E6A2FE-0x00E6A31A */
+        if (port_index == 0) {
+            ROUTE_$ANNOUNCE_NET(port_info->network);
+            HINT_$ADD_NET(port_info->network);
+        }
+
+        /* 0x00E6A31C-0x00E6A324 */
+        port->network = port_info->network;
+        port->xns_addr.network = port->network;
+
+        /* 0x00E6A326-0x00E6A390 */
+        if (port_info->network != 0) {
+            ROUTE_$SHORT_PORT(port, &short_port);
+            source.network = port_info->network;
+            for (i = 0; i < 6; i++) {
+                source.host[i] = 0;
+            }
+
+            /*
+             * 0x00E6A350-0x00E6A36E and 0x00E6A372-0x00E6A390.  Argument 1 is
+             * the request record's own address ("move.l (0xc,A6),-(SP)"),
+             * whose first longword is the network just stored.
+             */
+            RIP_$UPDATE_D(&port_info->network, &source, &RIP_HOP_COUNT_ZERO,
+                          (const uint8_t *)&short_port, &RIP_OP_STD,
+                          &rip_status);
+            RIP_$UPDATE_D(&port_info->network, &source, &RIP_HOP_COUNT_ZERO,
+                          (const uint8_t *)&short_port, &RIP_OP_NON_STD,
+                          &rip_status);
         }
     }
 
-    /*
-     * Bit 1 (0x02): Set port status
-     * Handle status transitions with appropriate notifications
-     */
-    if (op_flags & SERVICE_OP_SET_STATUS) {
+    /* 0x00E6A394-0x00E6A3AC */
+    if ((*operation & SERVICE_OP_SET_STATUS) &&
+        port->active != port_info->status) {
+
+        /* 0x00E6A3B0 */
         old_status = port->active;
 
-        if (old_status != request->status) {
-            /*
-             * Handle transition from routing states (4,5) to non-routing (1,2,3)
-             * This decrements the STD routing counter
-             */
-            if (((1 << (old_status & 0x1f)) & PORT_STATUS_ROUTING_MASK) != 0 &&
-                ((1 << (request->status & 0x1f)) & PORT_STATUS_DISABLE_STD) != 0) {
-                ROUTE_$DECREMENT_PORT(0, port_index, 0xFF);  /* STD type */
+        /* 0x00E6A3B4-0x00E6A3D4: leaving a routing status for a non-routing
+         * one gives back the standard routing port count. */
+        if ((((uint32_t)PORT_STATUS_ROUTING_MASK >> (old_status & 0x1F)) & 1) &&
+            (((uint32_t)PORT_STATUS_DISABLE_STD >> (port_info->status & 0x1F)) & 1)) {
+            /* "subq.l #0x2,SP" reserves a discarded word result slot */
+            ROUTE_$DECREMENT_PORT(0, port_index, (int8_t)0xFF);
+        }
+
+        /* 0x00E6A3D6-0x00E6A3FA: the same for the non-standard count */
+        if ((((uint32_t)PORT_STATUS_N_ROUTING_MASK >> (old_status & 0x1F)) & 1) &&
+            (((uint32_t)PORT_STATUS_DISABLE_N >> (port_info->status & 0x1F)) & 1)) {
+            ROUTE_$DECREMENT_PORT(0, port_index, 0);
+        }
+
+        /*
+         * 0x00E6A3FC-0x00E6A446: a port leaving the closed status runs the
+         * driver's two open-side entries.  A3 stops being the operation
+         * pointer here; the image does not test another operation bit after
+         * 0x00E6A396.
+         */
+        if (old_status == PORT_STATUS_CLOSED) {
+            driver_info = (route_$driver_info_t *)ARCH_VA_TO_PTR(port->driver_info);
+
+            /* 0x00E6A408-0x00E6A41C */
+            if (driver_info->leave_status_1 != 0) {
+                route_$port_status_fn_t leave_fn =
+                    (route_$port_status_fn_t)ARCH_VA_TO_PTR(driver_info->leave_status_1);
+
+                leave_fn(&port->socket, status_ret);
             }
 
-            /*
-             * Handle transition from N-routing states (3,5) to non-N-routing (1,2,4)
-             * This decrements the N routing counter
-             */
-            if (((1 << (old_status & 0x1f)) & PORT_STATUS_N_ROUTING_MASK) != 0 &&
-                ((1 << (request->status & 0x1f)) & PORT_STATUS_DISABLE_N) != 0) {
-                ROUTE_$DECREMENT_PORT(0, port_index, 0);  /* N type */
+            /* 0x00E6A41E-0x00E6A444 */
+            if (*status_ret == status_$ok && driver_info->attach_service != 0) {
+                route_$set_service_fn_t attach_fn =
+                    (route_$set_service_fn_t)ARCH_VA_TO_PTR(driver_info->attach_service);
+
+                /*
+                 * Five arguments plus a discarded word result slot:
+                 *   pea (0x30,A2)      &port->socket
+                 *   pea (-0x40c,PC)    the zero record at 0x00E6A02C
+                 *   clr.w -(SP)        request word 0
+                 *   pea (-0x60,A6)     an uninitialised local
+                 *   pea (A0)           status_ret (A0 still holds it)
+                 */
+                (void)attach_fn(&port->socket, ROUTE_$NULL_SERVICE_REC, 0,
+                                &attach_out, status_ret);
             }
+        }
 
-            /*
-             * Special handling for status 1 (inactive/nil)
-             * Call driver's offline and detach callbacks
-             */
-            if (old_status == 1) {
-                void *driver_info = *(void **)((uint8_t *)port + 0x48);
-                void (*offline_callback)(route_$port_t *, status_$t *);
-                void (*detach_callback)(route_$port_t *, void *, uint16_t, uint16_t);
+        /* 0x00E6A448-0x00E6A450 */
+        port->active = port_info->status;
 
-                offline_callback = *(void (**)(route_$port_t *, status_$t *))
-                                    ((uint8_t *)driver_info + 0x14);
-                if (offline_callback != NULL) {
-                    offline_callback((route_$port_t *)((uint8_t *)port + 0x30), status_ret);
-                }
-
-                if (*status_ret == status_$ok) {
-                    detach_callback = *(void (**)(route_$port_t *, void *, uint16_t, uint16_t))
-                                       ((uint8_t *)driver_info + 0x1C);
-                    if (detach_callback != NULL) {
-                        detach_callback((route_$port_t *)((uint8_t *)port + 0x30),
-                                        NULL, 0, 0);
-                    }
-                }
+        /* 0x00E6A452-0x00E6A4AC */
+        if (old_status == PORT_STATUS_CLOSED && *status_ret == status_$ok) {
+            if (RIP_$STD_IDP_CHANNEL != -1) {
+                idp_port = (uint16_t)port_index;
+                XNS_IDP_$OS_ADD_PORT((uint16_t *)&RIP_$STD_IDP_CHANNEL,
+                                     &idp_port, &idp_status);
             }
-
-            /* Update the port status */
-            port->active = request->status;
-
-            /*
-             * Special handling when transitioning TO status 1 with success
-             * Register port with IDP channels
-             */
-            if (old_status == 1 && *status_ret == status_$ok) {
-                if (RIP_$STD_IDP_CHANNEL != -1) {
-                    port_list[0] = port_index;
-                    XNS_IDP_$OS_ADD_PORT(&RIP_$STD_IDP_CHANNEL, port_list, &local_status);
-                }
-                /* cmpi.w #-1 on the 16-bit channel word (declared uint16_t in app/app.h) */
-                if ((int16_t)APP_$STD_IDP_CHANNEL != -1) {
-                    port_list[0] = port_index;
-                    XNS_IDP_$OS_ADD_PORT(&APP_$STD_IDP_CHANNEL, port_list, &local_status);
-                }
+            /* "cmpi.w #-0x1,(0x00e1dc20).l" is a signed word compare */
+            if ((int16_t)APP_$STD_IDP_CHANNEL != -1) {
+                idp_port = (uint16_t)port_index;
+                XNS_IDP_$OS_ADD_PORT((uint16_t *)&APP_$STD_IDP_CHANNEL,
+                                     &idp_port, &idp_status);
             }
+        }
 
-            /*
-             * Handle transition from non-routing (1,2,3) to routing states (4,5)
-             * Initialize routing for this port
-             */
-            if (*status_ret == status_$ok &&
-                ((1 << (old_status & 0x1f)) & PORT_STATUS_DISABLE_STD) != 0 &&
-                ((1 << (request->status & 0x1f)) & PORT_STATUS_ROUTING_MASK) != 0) {
-                if (RIP_$STD_IDP_CHANNEL == -1) {
-                    *status_ret = status_$internet_network_port_not_open;
-                } else {
-                    ROUTE_$INIT_ROUTING(port_index, 0xFF);  /* STD routing */
-                }
-            }
-
-            /*
-             * Handle transition from non-N-routing (1,2,4) to N-routing states (3,5)
-             * Initialize N-routing for this port
-             */
-            if (*status_ret == status_$ok &&
-                ((1 << (old_status & 0x1f)) & PORT_STATUS_DISABLE_N) != 0 &&
-                ((1 << (request->status & 0x1f)) & PORT_STATUS_N_ROUTING_MASK) != 0) {
-                ROUTE_$INIT_ROUTING(port_index, 0);  /* N routing */
-            }
-
-            /*
-             * On success, if new status is 1 (nil/inactive), clean up
-             */
-            if (*status_ret == status_$ok && port->active == 1) {
-                void *driver_info = *(void **)((uint8_t *)port + 0x48);
-                void (*online_callback)(route_$port_t *, status_$t *);
-
-                online_callback = *(void (**)(route_$port_t *, status_$t *))
-                                   ((uint8_t *)driver_info + 0x18);
-                if (online_callback != NULL) {
-                    online_callback((route_$port_t *)((uint8_t *)port + 0x30), status_ret);
-                }
-
-                /* Unregister from IDP channels */
-                if (RIP_$STD_IDP_CHANNEL != -1) {
-                    port_list[0] = port_index;
-                    XNS_IDP_$OS_DELETE_PORT(&RIP_$STD_IDP_CHANNEL, port_list, &local_status);
-                }
-                if (APP_$STD_IDP_CHANNEL != -1) {
-                    port_list[0] = port_index;
-                    XNS_IDP_$OS_DELETE_PORT(&APP_$STD_IDP_CHANNEL, port_list, &local_status);
-                }
+        /* 0x00E6A4AE-0x00E6A4EC */
+        if (*status_ret == status_$ok &&
+            (((uint32_t)PORT_STATUS_DISABLE_STD >> (old_status & 0x1F)) & 1) &&
+            (((uint32_t)PORT_STATUS_ROUTING_MASK >> (port_info->status & 0x1F)) & 1)) {
+            if (RIP_$STD_IDP_CHANNEL != -1) {
+                ROUTE_$INIT_ROUTING(port_index, (int8_t)0xFF);
             } else {
-                /* On failure, restore original status */
-                port->active = old_status;
+                /* 0x00E6A4E4 */
+                *status_ret = status_$internet_network_port_not_open;
+            }
+        }
+
+        /* 0x00E6A4EE-0x00E6A516 */
+        if (*status_ret == status_$ok &&
+            (((uint32_t)PORT_STATUS_DISABLE_N >> (old_status & 0x1F)) & 1) &&
+            (((uint32_t)PORT_STATUS_N_ROUTING_MASK >> (port_info->status & 0x1F)) & 1)) {
+            ROUTE_$INIT_ROUTING(port_index, 0);
+        }
+
+        /*
+         * 0x00E6A518-0x00E6A594.  Three outcomes, and only the first restores
+         * the old status:
+         *   status != 0                      -> 0x00E6A590, port->active =
+         *                                       old_status
+         *   status == 0 and active != 1      -> 0x00E6A596, nothing restored
+         *   status == 0 and active == 1      -> the close-side cleanup below
+         */
+        if (*status_ret != status_$ok) {
+            /* 0x00E6A590 */
+            port->active = old_status;
+        } else if (port->active == PORT_STATUS_CLOSED) {
+            driver_info = (route_$driver_info_t *)ARCH_VA_TO_PTR(port->driver_info);
+
+            /* 0x00E6A52C-0x00E6A540 */
+            if (driver_info->enter_status_1 != 0) {
+                route_$port_status_fn_t enter_fn =
+                    (route_$port_status_fn_t)ARCH_VA_TO_PTR(driver_info->enter_status_1);
+
+                enter_fn(&port->socket, status_ret);
+            }
+
+            /* 0x00E6A542-0x00E6A58C */
+            if (RIP_$STD_IDP_CHANNEL != -1) {
+                idp_port = (uint16_t)port_index;
+                XNS_IDP_$OS_DELETE_PORT((uint16_t *)&RIP_$STD_IDP_CHANNEL,
+                                        &idp_port, &idp_status);
+            }
+            if ((int16_t)APP_$STD_IDP_CHANNEL != -1) {
+                idp_port = (uint16_t)port_index;
+                XNS_IDP_$OS_DELETE_PORT((uint16_t *)&APP_$STD_IDP_CHANNEL,
+                                        &idp_port, &idp_status);
             }
         }
     }
 
-    /* Release the mutex */
+    /* 0x00E6A596-0x00E6A5A2 */
     ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
 
-    /* Send RIP updates for both routing types */
-    RIP_$SEND_UPDATES(0);           /* Type 0 updates */
-    RIP_$SEND_UPDATES(0xFF);        /* Type 0xFF updates */
+    /*
+     * 0x00E6A5A4-0x00E6A5BA.  Both calls reserve a discarded word result slot
+     * ("subq.l #0x2,SP"), so RIP_$SEND_UPDATES is a Pascal function whose
+     * result this caller throws away.
+     */
+    RIP_$SEND_UPDATES(0);
+    RIP_$SEND_UPDATES((boolean)0xFF);
 
-    /* Copy port info back to request structure */
-    ROUTE_$SHORT_PORT(port, (route_$short_port_t *)request);
+    /*
+     * 0x00E6A5BC-0x00E6A5CA: the reply record.  The image re-forms the port
+     * address from the saved 0x5C*port_index in D3 rather than from D4.
+     */
+    ROUTE_$SHORT_PORT(&ROUTE_$PORT_ARRAY[port_index], port_info);
 }
