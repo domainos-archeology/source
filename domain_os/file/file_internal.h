@@ -301,6 +301,30 @@ _Static_assert(sizeof(file_$lock_hint_t) == 8, "sizeof lock hint");
 extern uint16_t file_$lot_hash_modulus;
 
 /*
+ * file_$nil_cell - the single in-code longword of zeroes at 0x00E5E61E that
+ * FILE_$PURIFY, FILE_$FW_FILE and FILE_$PRIV_UNLOCK pass as AST_$PURIFY's
+ * segment list and FILE_$LOCK, FILE_$LOCK_D and FILE_$CHANGE_LOCK_D pass as
+ * FILE_$PRIV_LOCK's ACL context, all with `pea (d,PC)`.  See file/file_data.c
+ * for the six displacements.  Nothing reads through it on those paths.
+ */
+extern uint32_t file_$nil_cell;
+
+/*
+ * file_$zero_bytes - the two in-code zero bytes at 0x00E5D380 that
+ * FILE_$SET_ATTRIBUTE (0x00E5D348) and FILE_$PRIV_LOCK's CHECK_RIGHTS helper
+ * (0x00E5EE1C) pass as ACL_$RIGHTS' `ignore_super` and FILE_$SET_DTM
+ * (0x00E5E2AE) passes as FILE_$SET_DTM_F's flags.  All three read byte 0.
+ */
+extern uint8_t file_$zero_bytes[2];
+
+/*
+ * file_$truncate_nil_context - the in-code zero longword at 0x00E73FAC that
+ * FILE_$SET_LEN (0x00E73F98) and FILE_$TRUNCATE (0x00E73FD2) both pass as
+ * FILE_$TRUNCATE_D's domain-context argument.
+ */
+extern uint32_t file_$truncate_nil_context;
+
+/*
  * External lock control variables (in file_lock_control_t)
  */
 

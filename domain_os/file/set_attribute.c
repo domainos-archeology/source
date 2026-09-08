@@ -38,8 +38,10 @@
 /*
  * 0x00E5D380: byte 0, ACL_$RIGHTS' `ignore_super` argument
  * (`pea (0x36,PC)` at 0x00E5D348).  FALSE, so the super-user bypass applies.
+ * The image holds ONE such cell, shared with FILE_$PRIV_LOCK's CHECK_RIGHTS
+ * helper and FILE_$SET_DTM; it is defined in file/file_data.c as
+ * file_$zero_bytes.
  */
-static const boolean file_$set_attr_ignore_super = false;
 
 void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
                          uint16_t rights, int16_t options,
@@ -136,7 +138,7 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
         /* 0x00E5D358 `tst.w D0w`: only the low word of the longword result
          * is examined, so rights_result stays 16 bits wide. */
         rights_result = (int16_t)ACL_$RIGHTS(file_uid,
-                                             (boolean *)&file_$set_attr_ignore_super,
+                                             (boolean *)&file_$zero_bytes[0],
                                              &rights_mask, &option_flags,
                                              status_ret);
         if (rights_result == 0) {

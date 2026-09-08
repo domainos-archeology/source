@@ -64,8 +64,9 @@
  * file/file_data.c and declared in file/file_internal.h. */
 
 /* 0x00E5E61E: longword 0, the "no segment list" argument AST_$PURIFY gets at
- * 0x00E5F21E. */
-static uint32_t file_$purify_nil_list = 0;
+ * 0x00E5F21E.  The image holds ONE such cell, shared with FILE_$PURIFY,
+ * FILE_$FW_FILE, FILE_$PRIV_UNLOCK and the three lock wrappers; it is defined
+ * in file/file_data.c as file_$nil_cell. */
 
 /* 0x00E5EE84: longword 0xFFFFFFFF, the required-rights mask ACL_$RIGHTS and
  * ACL_$RIGHTS_CHECK get (0x00E5EDFC / 0x00E5EE18). */
@@ -76,8 +77,9 @@ static uint32_t file_$acl_rights_all = 0xFFFFFFFFu;
 static int16_t file_$acl_zero_word = 0;
 
 /* 0x00E5D380: byte 0, ACL_$RIGHTS' `ignore_super` argument (0x00E5EE1C).
- * FALSE, so the super-user bypass applies. */
-static const boolean file_$acl_ignore_super = false;
+ * FALSE, so the super-user bypass applies.  The image holds ONE such cell,
+ * shared with FILE_$SET_ATTRIBUTE and FILE_$SET_DTM; it is defined in
+ * file/file_data.c as file_$zero_bytes. */
 
 /* Attribute id 0x0B, the "lock holder node" attribute CHECK_CONFLICTS writes
  * through AST_$SET_ATTRIBUTE at 0x00E5F0CA. */
@@ -514,7 +516,7 @@ remote_done:                                            /* 0x00E5FA50 */
 
     if ((f.uid_is_null >= 0) && (f.req_mode != 4) && (f.req_mode != 0x0B)) {
         /* 0x00E5F216 */
-        (void)AST_$PURIFY(file_uid, 0x8000, 0, &file_$purify_nil_list, 0,
+        (void)AST_$PURIFY(file_uid, 0x8000, 0, &file_$nil_cell, 0,
                           status_ret);
         if (*status_ret != 0) {
             return;
@@ -903,7 +905,7 @@ static void priv_lock_check_rights(priv_lock_frame_t *f,
                                     &check_flag, status);
     } else {
         /* 0x00E5EE12 */
-        granted = ACL_$RIGHTS(f->file_uid, (boolean *)&file_$acl_ignore_super,
+        granted = ACL_$RIGHTS(f->file_uid, (boolean *)&file_$zero_bytes[0],
                               &file_$acl_rights_all,
                               &file_$acl_zero_word, status);
     }

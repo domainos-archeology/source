@@ -27,6 +27,7 @@
  */
 #define status_$no_right_to_perform_operation            0x00230001
 #define status_$insufficient_rights_to_perform_operation 0x00230002
+#define status_$acl_exit_super_unbalanced                0x00230003  /* "exit_super called more often than enter_super" */
 #define status_$acl_wrong_type                           0x00230004  /* "wrong type - operation illegal on system objects" */
 #define status_$acl_no_right_to_set_subsystem_data       0x00230010  /* "no right to set subsystem data or subsystem manager" */
 #define status_$acl_unimplemented_call                   0x0023001C  /* "attempt to issue unimplemented ACL call" */

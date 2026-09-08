@@ -1,7 +1,7 @@
 /*
  * NET_$SEND - Send data on network
  *
- * Looks up the appropriate device handler and calls its SEND routine.
+ * Looks up the driver's svc_write entry and calls it.
  *
  * Original address: 0x00E5A334
  * Original size: 104 bytes
@@ -9,44 +9,25 @@
 
 #include "net/net_internal.h"
 
-/*
- * Device-specific SEND handler type
- */
-typedef void (*net_send_handler_t)(int16_t *port, void *param3, int16_t param4,
-                                    void *param5, void *param6, int16_t param7,
-                                    void *param8, status_$t *status_ret);
-
-void NET_$SEND(int16_t *net_id, int16_t *port, void *param3, int16_t *param4,
-               void *param5, void *param6, int16_t *param7, void *param8,
-               status_$t *status_ret)
+void NET_$SEND(int16_t *net_id, int16_t *port, uint32_t param3,
+               int16_t *param4, uint32_t param5, uint32_t param6,
+               int16_t *param7, uint32_t param8, status_$t *status_ret)
 {
-#if defined(ARCH_M68K)
-    net_handler_t handler;
+    net_io_$driver_fn_t handler;
 
-    /*
-     * Find the SEND handler for this network/port.
-     */
-    handler = NET_$FIND_HANDLER(*net_id, *port, NET_HANDLER_OFF_SEND, status_ret);
+    /* 0x00E5A33C-0x00E5A364 */
+    handler = NET_$FIND_HANDLER(*net_id, (uint16_t)*port,
+                                NET_HANDLER_OFF_SEND, status_ret);
 
+    /* 0x00E5A36C tst.l (A3) */
     if (*status_ret != status_$ok) {
         return;
     }
 
     /*
-     * Call the device-specific SEND handler.
+     * 0x00E5A370-0x00E5A390: eight arguments and NO result slot; param4 and
+     * param7 are each dereferenced to one word.
      */
-    ((net_send_handler_t)handler)(port, param3, *param4, param5, param6,
-                                   *param7, param8, status_ret);
-
-#else
-    (void)net_id;
-    (void)port;
-    (void)param3;
-    (void)param4;
-    (void)param5;
-    (void)param6;
-    (void)param7;
-    (void)param8;
-    *status_ret = status_$network_operation_not_defined_on_hardware;
-#endif
+    ((net_$svc_xfer_fn_t)handler)(port, param3, *param4, param5, param6,
+                                  *param7, param8, status_ret);
 }

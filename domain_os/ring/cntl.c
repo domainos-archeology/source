@@ -47,8 +47,12 @@ void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret)
     case RINGLOG_CMD_START:             /* 0 */
     case RINGLOG_CMD_CLEAR:             /* 3 */
     case RINGLOG_CMD_START_FILTERED:    /* 5 */
-        /* 0x00E7228A */
-        RINGLOG_$STOP_LOGGING();
+        /*
+         * 0x00E7228A.  The nested procedure borrows this frame's word at
+         * (-0x2,A6) - the same cell the clear loop below uses - so it is
+         * handed over explicitly.
+         */
+        RINGLOG_$STOP_LOGGING(&i);
 
         /* 0x00E7228E: clr.w (0x00ea3e38).l */
         ringlog_$set_index(0);
@@ -106,7 +110,7 @@ void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret)
     case RINGLOG_CMD_STOP_COPY:         /* 1 */
     case RINGLOG_CMD_STOP:              /* 4 */
         /* 0x00E72304 */
-        RINGLOG_$STOP_LOGGING();
+        RINGLOG_$STOP_LOGGING(&i);
         break;
 
     case RINGLOG_CMD_SET_NIL_SOCK:      /* 6 */

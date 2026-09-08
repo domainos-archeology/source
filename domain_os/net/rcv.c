@@ -1,7 +1,7 @@
 /*
  * NET_$RCV - Receive data from network
  *
- * Looks up the appropriate device handler and calls its RCV routine.
+ * Looks up the driver's svc_read entry and calls it.
  *
  * Original address: 0x00E5A2CC
  * Original size: 104 bytes
@@ -9,44 +9,25 @@
 
 #include "net/net_internal.h"
 
-/*
- * Device-specific RCV handler type
- */
-typedef void (*net_rcv_handler_t)(int16_t *port, void *param3, int16_t param4,
-                                   void *param5, void *param6, int16_t param7,
-                                   void *param8, status_$t *status_ret);
-
-void NET_$RCV(int16_t *net_id, int16_t *port, void *param3, int16_t *param4,
-              void *param5, void *param6, int16_t *param7, void *param8,
-              status_$t *status_ret)
+void NET_$RCV(int16_t *net_id, int16_t *port, uint32_t param3,
+              int16_t *param4, uint32_t param5, uint32_t param6,
+              int16_t *param7, uint32_t param8, status_$t *status_ret)
 {
-#if defined(ARCH_M68K)
-    net_handler_t handler;
+    net_io_$driver_fn_t handler;
 
-    /*
-     * Find the RCV handler for this network/port.
-     */
-    handler = NET_$FIND_HANDLER(*net_id, *port, NET_HANDLER_OFF_RCV, status_ret);
+    /* 0x00E5A2D4-0x00E5A2FC */
+    handler = NET_$FIND_HANDLER(*net_id, (uint16_t)*port,
+                                NET_HANDLER_OFF_RCV, status_ret);
 
+    /* 0x00E5A304 tst.l (A3) */
     if (*status_ret != status_$ok) {
         return;
     }
 
     /*
-     * Call the device-specific RCV handler.
+     * 0x00E5A308-0x00E5A328: eight arguments and NO result slot; param4 and
+     * param7 are each dereferenced to one word.
      */
-    ((net_rcv_handler_t)handler)(port, param3, *param4, param5, param6,
+    ((net_$svc_xfer_fn_t)handler)(port, param3, *param4, param5, param6,
                                   *param7, param8, status_ret);
-
-#else
-    (void)net_id;
-    (void)port;
-    (void)param3;
-    (void)param4;
-    (void)param5;
-    (void)param6;
-    (void)param7;
-    (void)param8;
-    *status_ret = status_$network_operation_not_defined_on_hardware;
-#endif
 }

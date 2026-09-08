@@ -208,3 +208,58 @@ uint16_t FILE_$LOCK_CVT_TABLE[12] = {
  * prototype takes a plain `uint16_t *`, so it is not declared const here.
  */
 uint16_t file_$lot_hash_modulus = FILE_LOT_HASH_BUCKETS;
+
+/*
+ * The four zero bytes at 0x00E5E61E - the gap between the end of FILE_$PURIFY
+ * (0x00E5E61E) and the entry of FILE_$FW_FILE (0x00E5E622).  Image bytes:
+ *
+ *   00e5e61e  00 00 00 00
+ *
+ * ONE cell, reached with `pea (d,PC)` from six call sites in two different
+ * argument roles.  As AST_$PURIFY's segment-list pointer:
+ *   0x00E5E606  pea (0x16,PC)      FILE_$PURIFY
+ *   0x00E5E664  pea (-0x48,PC)     FILE_$FW_FILE
+ *   0x00E60182  pea (-0x1b66,PC)   FILE_$PRIV_UNLOCK
+ * and as FILE_$PRIV_LOCK's ACL-context pointer:
+ *   0x00E5EB4C  pea (-0x530,PC)    FILE_$LOCK
+ *   0x00E5EA52  pea (-0x436,PC)    FILE_$LOCK_D
+ *   0x00E5EAD8  pea (-0x4bc,PC)    FILE_$CHANGE_LOCK_D
+ *
+ * Neither callee reads through the pointer on any of these paths: AST_$PURIFY
+ * only touches its segment list when bit 4 of its flags word is set
+ * (0x00E05700 btst.l #0x4,D5), and none of these three callers sets it.  The
+ * cell is one longword on the target, so it is spelled uint32_t and the
+ * ACL-context callers cast; that keeps its size the image's on any host.
+ */
+uint32_t file_$nil_cell = 0;
+
+/*
+ * The two zero bytes at 0x00E5D380 - the gap ahead of FILE_$PRIV_CREATE
+ * (0x00E5D382).  Image bytes:
+ *
+ *   00e5d380  00 00
+ *
+ * ONE cell, three `pea (d,PC)` references, and every one of them reads only
+ * the FIRST byte:
+ *   0x00E5D348  FILE_$SET_ATTRIBUTE            ACL_$RIGHTS' ignore_super
+ *   0x00E5EE1C  pea (-0x1a9e,PC)               the same argument in
+ *               FILE_$PRIV_LOCK's CHECK_RIGHTS helper (0x00E5ED92)
+ *   0x00E5E2AE  pea (-0xf30,PC)                FILE_$SET_DTM_F's flags byte,
+ *               which FILE_$SET_DTM_F reads with "tst.b (A1)" at 0x00E5E216
+ *
+ * Spelled as bytes so element 0 is the byte AT 0x00E5D380 on either byte
+ * order, rather than a word whose "first" byte moves with the host.
+ */
+uint8_t file_$zero_bytes[2] = { 0, 0 };
+
+/*
+ * The four zero bytes at 0x00E73FAC, ahead of the routine at 0x00E73FB0.
+ * Image bytes:
+ *
+ *   00e73fac  00 00 00 00
+ *
+ * Both users pass it as FILE_$TRUNCATE_D's domain-context argument:
+ *   0x00E73F98  pea (0x12,PC)      FILE_$SET_LEN
+ *   0x00E73FD2  pea (...)          FILE_$TRUNCATE
+ */
+uint32_t file_$truncate_nil_context = 0;

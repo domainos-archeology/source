@@ -26,7 +26,7 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
 
     /* Mark volume as dismounting */
     vol_mask = (uint16_t)(1 << (vol_index & 0x1F));
-    DAT_00e1e0a0 |= vol_mask;
+    ast_$vol_info_count |= vol_mask;
 
     /* Increment dismount sequence */
     AST_$DISM_SEQN++;
@@ -94,7 +94,7 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
 
 done:
     /* Clear dismount flag */
-    DAT_00e1e0a0 &= ~vol_mask;
+    ast_$vol_info_count &= ~vol_mask;
 
     PROC1_$INHIBIT_END();
 

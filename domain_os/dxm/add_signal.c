@@ -49,7 +49,7 @@
  *   lea     (-0x10,A6),A0        ; A0 = &local
  *   move.l  A0,(-0x14,A6)        ; local_ptr = &local
  *   pea     (-0x14,A6)           ; Push &local_ptr
- *   pea     PTR_DXM_$ADD_SIGNAL_CALLBACK ; Push callback ptr address
+ *   pea     (0x14,PC)            ; 0x00E172CC, the callback-address cell
  *   pea     (0x604,A5)           ; Push &DXM_$UNWIRED_Q
  *   bsr.w   DXM_$ADD_CALLBACK
  *   movem.l (-0x20,A6),{D2 D3 A5}
@@ -83,10 +83,12 @@ void DXM_$ADD_SIGNAL(uint16_t routine, uint16_t proc_index, uint16_t signal,
      * Queue the signal callback.  data_size is the literal 10
      * (`move.w #0xa,-(SP)` at 0x00E172A6) and check_dup is this function's
      * own boolean parameter (`move.b (0x12,A6),-(SP)` at 0x00E172A2); they
-     * are two distinct Pascal parameters, not a packed longword.
+     * are two distinct Pascal parameters, not a packed longword.  The
+     * callback argument is the ADDRESS of the in-code cell at 0x00E172CC
+     * ("pea (0x14,PC)" at 0x00E172B6), which holds 0x00E72184.
      */
     DXM_$ADD_CALLBACK(&DXM_$UNWIRED_Q,
-                      &PTR_DXM_$ADD_SIGNAL_CALLBACK,
+                      &DXM_$ADD_SIGNAL_CALLBACK_CELL,
                       (void **)&data_ptr,
                       10,
                       check_dup,

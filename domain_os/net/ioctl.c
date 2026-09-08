@@ -1,7 +1,7 @@
 /*
  * NET_$IOCTL - Network I/O control
  *
- * Looks up the appropriate device handler and calls its IOCTL routine.
+ * Looks up the driver's svc_ioctl entry and calls it.
  *
  * Original address: 0x00E5A270
  * Original size: 92 bytes
@@ -9,41 +9,24 @@
 
 #include "net/net_internal.h"
 
-/*
- * Device-specific IOCTL handler type
- */
-typedef void (*net_ioctl_handler_t)(int16_t *port, void *param3,
-                                     status_$t *status_ret);
-
-void NET_$IOCTL(int16_t *net_id, int16_t *port, void *param3, void *param4,
-                void *param5, status_$t *status_ret)
+void NET_$IOCTL(int16_t *net_id, int16_t *port, uint32_t param3,
+                int16_t *param4, uint32_t param5, status_$t *status_ret)
 {
-#if defined(ARCH_M68K)
-    net_handler_t handler;
+    net_io_$driver_fn_t handler;
 
-    (void)param4;
-    (void)param5;
+    /* 0x00E5A278-0x00E5A2A0 */
+    handler = NET_$FIND_HANDLER(*net_id, (uint16_t)*port,
+                                NET_HANDLER_OFF_IOCTL, status_ret);
 
-    /*
-     * Find the IOCTL handler for this network/port.
-     */
-    handler = NET_$FIND_HANDLER(*net_id, *port, NET_HANDLER_OFF_IOCTL, status_ret);
-
+    /* 0x00E5A2A8 tst.l (A3) */
     if (*status_ret != status_$ok) {
         return;
     }
 
     /*
-     * Call the device-specific IOCTL handler.
+     * 0x00E5A2AC-0x00E5A2C0: the same five arguments and discarded word
+     * result slot NET_$OPEN pushes.
      */
-    ((net_ioctl_handler_t)handler)(port, param3, status_ret);
-
-#else
-    (void)net_id;
-    (void)port;
-    (void)param3;
-    (void)param4;
-    (void)param5;
-    *status_ret = status_$network_operation_not_defined_on_hardware;
-#endif
+    (void)((net_$svc_ctl_fn_t)handler)(port, param3, *param4, param5,
+                                       status_ret);
 }

@@ -75,7 +75,7 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
 
     /* Check if volume is being dismounted */
     uint8_t vol_index = *((uint8_t *)(obj_info + 7));
-    if (vol_index < 0x10 && (DAT_00e1e0a0 & (1 << vol_index)) != 0) {
+    if (vol_index < 0x10 && (ast_$vol_info_count & (1 << vol_index)) != 0) {
         ast_$release_aote(aote);
         goto done;
     }

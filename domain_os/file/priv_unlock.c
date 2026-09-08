@@ -90,9 +90,6 @@
  * FILE_$DELETE_INT and FILE_$LOCAL_READ_LOCK; it is defined in
  * file/file_data.c and declared in file/file_internal.h. */
 
-/* 0x00E5E61E: longword 0, the "no segment list" argument AST_$PURIFY gets at
- * 0x00E60182. */
-static uint32_t file_$purify_nil_list = 0;
 
 /* Attribute ids written through AST_$SET_ATTRIBUTE. */
 #define FILE_ATTR_DELETE_PENDING    0x07    /* 0x00E5FFD0 */
@@ -447,7 +444,7 @@ retry:                                                  /* 0x00E5FD9C */
         /* 0x00E6017A: the longword 0x80000000 pushed at A6+0x0C reaches
          * AST_$PURIFY as flags = 0x8000 and segment = 0. */
         AST_$PURIFY(file_uid, FILE_PURIFY_FLAGS, 0,
-                    &file_$purify_nil_list, 0, &local_status);
+                    &file_$nil_cell, 0, &local_status);
 
         /* 0x00E60198: no other lock survives and the entry was local. */
         if ((saw_other < 0) && (desc.flags >= 0)) {

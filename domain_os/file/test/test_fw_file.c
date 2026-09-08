@@ -44,6 +44,15 @@ static int tests_failed = 0;
  */
 #define ROUTE_H
 
+/*
+ * The shared in-code zero longword at 0x00E5E61E, normally defined in
+ * file/file_data.c.  FILE_$FW_FILE hands its ADDRESS to AST_$PURIFY as the
+ * segment list ("pea (-0x48,PC)" at 0x00E5E664), so the test needs the
+ * storage even though nothing reads through it.
+ */
+#include <stdint.h>
+uint32_t file_$nil_cell = 0;
+
 #include "../fw_file.c"
 
 /* ============================================================================
@@ -125,7 +134,11 @@ TEST(unlocked_file_purifies_with_remote)
     ASSERT_EQ(&test_uid, mock_purify_uid);
     ASSERT_EQ(FW_PURIFY_WITH_REMOTE, mock_purify_flags);
     ASSERT_EQ(0, mock_purify_segment);
-    ASSERT_EQ(NULL, mock_purify_page_list);
+    /*
+     * The segment list is the shared in-code zero longword at 0x00E5E61E
+     * ("pea (-0x48,PC)" at 0x00E5E664), NOT nil.
+     */
+    ASSERT_EQ(&file_$nil_cell, mock_purify_page_list);
     ASSERT_EQ(0, mock_purify_page_count);
     ASSERT_EQ(status_$ok, status);
 }

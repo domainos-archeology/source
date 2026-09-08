@@ -30,6 +30,7 @@
 void ROUTE_$CLEANUP_WIRED(void)
 {
     int16_t i;
+    int16_t count;      /* D2, snapshotted before the loop */
 
     /*
      * Only cleanup if:
@@ -46,13 +47,28 @@ void ROUTE_$CLEANUP_WIRED(void)
     }
 
     /*
-     * Iterate through all wired pages and unwire them.
-     * Loop from 0 to N_WIRED_PAGES-1.
+     * 0x00E69B94-0x00E69BBA: unwire ROUTE_$WIRED_PAGES[0 .. count-1],
+     * ASCENDING.
+     *
+     *   00e69b94  move.w (0x00e87fd2).l,D0w   ; D0 = ROUTE_$N_WIRED_PAGES
+     *   00e69b9a  subq.w #0x1,D0w             ; count - 1
+     *   00e69b9c  bmi.b                       ; a count of 0 skips the loop
+     *   00e69b9e  movea.l #0xe87d80,A0        ; the array base
+     *   00e69ba4  move.w D0w,D2w              ; the dbf counter
+     *   00e69ba6  lea (0x4,A0),A2             ; A2 = &pages[1]
+     *   00e69bac  move.l (-0x4,A2),-(SP)      ; pages[i], by value
+     *   00e69bb8  addq.l #0x4,A2              ; forward one element
+     *   00e69bba  dbf D2w
+     *
+     * The cursor starts one element PAST the base and every read is at
+     * -4 from it, so the first page unwired is element 0 and the walk runs
+     * upward; the dbf makes the body run count times.
      */
-    for (i = ROUTE_$N_WIRED_PAGES - 1; i >= 0; i--) {
+    count = ROUTE_$N_WIRED_PAGES;
+    for (i = 0; i < count; i++) {
         WP_$UNWIRE(ROUTE_$WIRED_PAGES[i]);
     }
 
-    /* Reset wired page count */
+    /* 0x00E69BBE: reset the wired page count */
     ROUTE_$N_WIRED_PAGES = 0;
 }

@@ -76,7 +76,7 @@ void DXM_$SCAN_QUEUE(dxm_queue_t *queue)
     uint16_t token;
     dxm_entry_t *entry;
     dxm_$callback_fn_t callback;
-    void *data_ptr;
+    uint8_t *data_ptr;      /* A6-0x0C: the address of entry->data */
 
     for (;;) {
         /* Lock the queue */
@@ -89,27 +89,42 @@ void DXM_$SCAN_QUEUE(dxm_queue_t *queue)
             return;
         }
 
-        /* Get the entry at head position */
-        entry = (dxm_entry_t *)((char *)queue->entries +
-                                ((int16_t)queue->head << 4));
+        /*
+         * 0x00E17178-0x00E17180: the entry at the head position.  The index
+         * is scaled with a WORD shift ("lsl.w #0x4,D0w") and then used as a
+         * sign-extended word index ("lea (0x0,A0,D0w*0x1),A0"), which is
+         * spelled out here rather than relying on int-width arithmetic.
+         */
+        entry = (dxm_entry_t *)((uint8_t *)queue->entries +
+                                (int32_t)(int16_t)(uint16_t)
+                                    ((uint16_t)queue->head << 4));
 
         /*
-         * Extract callback and save data pointer.  The entry holds a
-         * 4-byte code address (source-wy9y); dxm_$callback_fn() turns it
-         * back into something callable on the host.
+         * 0x00E17184: the entry holds a 4-byte code address (source-wy9y);
+         * dxm_$callback_fn() turns it back into something callable on the
+         * host.
          */
         callback = dxm_$callback_fn(entry->callback);
+
+        /*
+         * 0x00E17186-0x00E1718A: "lea (0x4,A0),A1 / move.l A1,(-0xc,A6)".
+         * The frame local holds the ADDRESS of the queue slot's data, not a
+         * copy of it, and 0x00E171AA hands the callback the address OF THAT
+         * LOCAL ("pea (-0xc,A6)").  So the callback is given a pointer to a
+         * pointer, and through it it can read and write the twelve data
+         * bytes still sitting in the queue entry - the slot has already been
+         * released by the head advance below, but its bytes are untouched
+         * until DXM_$ADD_CALLBACK reuses it.
+         */
         data_ptr = entry->data;
 
-        /* Advance head pointer with wraparound */
+        /* 0x00E1718E-0x00E17196: advance head with wraparound */
         queue->head = (queue->head + 1) & queue->mask;
 
-        /* Unlock the queue before calling callback */
+        /* 0x00E17198-0x00E171A8: unlock before calling the callback */
         ML_$SPIN_UNLOCK(&queue->lock, token);
 
-        /* Call the callback with pointer to data
-         * Note: Original passes pointer to local containing data_ptr,
-         * giving callback access to the 12 bytes of data */
+        /* 0x00E171AA-0x00E171B0 */
         callback(&data_ptr);
     }
 }

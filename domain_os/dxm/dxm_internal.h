@@ -21,11 +21,14 @@
  */
 
 /*
- * Cell holding DXM_$ADD_SIGNAL_CALLBACK's address
- * Used as callback address when adding signal callbacks; DXM_$ADD_SIGNAL
- * pushes its ADDRESS (`pea PTR_DXM_$ADD_SIGNAL_CALLBACK` at 0x00E172AA).
+ * Cell holding DXM_$ADD_SIGNAL_CALLBACK's address (0x00E72184)
+ *
+ * Used as the callback address when adding signal callbacks; DXM_$ADD_SIGNAL
+ * pushes its ADDRESS ("pea (0x14,PC)" at 0x00E172B6).  See dxm/dxm_data.c for
+ * the image bytes.
+ *
  * Original address: 0x00E172CC
  */
-extern dxm_$callback_t PTR_DXM_$ADD_SIGNAL_CALLBACK;
+extern dxm_$callback_t DXM_$ADD_SIGNAL_CALLBACK_CELL;
 
 #endif /* DXM_INTERNAL_H */

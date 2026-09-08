@@ -40,7 +40,9 @@
 #define status_$audit_excessive_event_types         0x00300003
 #define status_$audit_invalid_action_code           0x00300007
 #define status_$audit_permission_denied             0x00300008
-#define status_$audit_file_not_found                0x0030000C
+/* SR10.2 status text for 0x0030000C: "could not find audit event list"
+ * (module 0x30 = OS / audit trail manager). */
+#define status_$audit_could_not_find_audit_event_list 0x0030000C
 #define status_$audit_event_logging_already_started 0x0030000E
 #define status_$audit_event_logging_already_stopped 0x0030000F
 #define status_$audit_event_list_not_current_format 0x00300010

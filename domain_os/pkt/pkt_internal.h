@@ -30,7 +30,9 @@
  * Constants
  */
 #define PKT_MAX_MISSING_NODES 10 /* Maximum tracked missing nodes */
-#define PKT_MAX_SHORT_ID 64000   /* Maximum short packet ID before wrap */
+/* Maximum short packet ID before wrap; 0xFA00, the "cmpi.w #-0x600" operand
+ * at 0x00E124B4 read as unsigned. */
+#define PKT_MAX_SHORT_ID 64000
 #define PKT_CHUNK_SIZE 0x400     /* 1KB chunk size for data buffers */
 #define PKT_MAX_DATA_CHUNKS 4    /* Maximum data buffer chunks */
 #define PKT_MAX_HEADER 0x3B8     /* Maximum header size (952 bytes) */
@@ -74,7 +76,15 @@ typedef struct pkt_$data_t {
    * Image value at 0x00E24CF6 is 0x0001.
    */
   uint16_t ping_req_hdr;
-  int16_t short_id;        /* 0x5C: Short packet ID counter (1-64000) */
+  /*
+   * 0x5C: short packet ID counter, cycling 1..64000.
+   *
+   * UNSIGNED: PKT_$NEXT_ID wraps it with "cmpi.w #-0x600,(0x5c,A5) / bls"
+   * (0x00E124B4), and `bls` is the unsigned low-or-same branch, so the test
+   * is (uint16)short_id > 0xFA00.  A signed word could never exceed 64000 and
+   * the counter would run on into negative ids instead of wrapping.
+   */
+  uint16_t short_id;
   uint16_t pad_5e;         /* 0x5E: Padding */
   int32_t long_id;         /* 0x60: Long packet ID counter */
 

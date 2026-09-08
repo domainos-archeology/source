@@ -17,48 +17,55 @@
 /*
  * RING_$IOCTL - I/O control
  *
+ * Five frame slots; see ring/ring.h for the full map and for why slot 0x16
+ * is the status return.  Slots 0x10 (a word) and 0x12 (a longword) are never
+ * read by this routine.
+ *
  * @param unit_ptr      Pointer to unit number
- * @param cmd           Pointer to command word
- *                      cmd[0] = command (0 = set tmask)
+ * @param cmd           cmd[0] = command (0 = set tmask)
  *                      cmd[1] = parameter (tmask value for cmd 0)
- * @param param         Additional parameter (unused)
+ * @param reserved      Never read (0x0088 from NETWORK_$SET_SERVICE)
+ * @param param4        Never read
  * @param status_ret    Output: status code
  */
-void RING_$IOCTL(uint16_t *unit_ptr, int16_t *cmd, void *param,
-                 status_$t *status_ret)
+void RING_$IOCTL(uint16_t *unit_ptr, int16_t *cmd, uint16_t reserved,
+                 void *param4, status_$t *status_ret)
 {
     uint16_t unit_num;
+    int16_t mask;
 
-    (void)param;
+    (void)reserved;
+    (void)param4;
 
     unit_num = *unit_ptr;
 
     /*
-     * Validate unit number.
+     * 0x00E76B46-0x00E76B52: validate unit number (cmpi.w #0x1 / bls, so
+     * the test is unsigned and 0 and 1 pass).
      */
     if (unit_num > 1) {
-        *status_ret = status_$ring_invalid_unit_num;
+        *status_ret = status_$ring_invalid_unit_num;    /* 0x00310002 */
         return;
     }
 
     /*
-     * Dispatch based on command.
+     * 0x00E76B54-0x00E76B6A: dispatch on cmd[0].
      */
     switch (cmd[0]) {
     case 0:
         /*
-         * Command 0: Set transmit mask.
-         * The new mask value is in cmd[1].
+         * Command 0: set the transmit mask.  The image copies cmd[1] into
+         * the frame temporary at A6-0x2 (0x00E76B58) and pushes that word
+         * together with the unit word (0x00E76B5E-0x00E76B62).
          */
-        ring_$set_hw_mask(unit_num, (uint16_t)cmd[1]);
-        *status_ret = status_$ok;
+        mask = cmd[1];
+        ring_$set_hw_mask(unit_num, (uint16_t)mask);
+        *status_ret = status_$ok;                       /* 0x00E76B68 clr.l */
         break;
 
     default:
-        /*
-         * Unknown command.
-         */
-        *status_ret = status_$ring_not_implemented;
+        /* 0x00E76B6C: unknown command */
+        *status_ret = status_$ring_not_implemented;     /* 0x00310001 */
         break;
     }
 }

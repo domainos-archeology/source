@@ -839,18 +839,37 @@ void RING_$GET_STATS(uint16_t *unit_ptr, void *stats_buf, uint16_t unused,
 /*
  * RING_$IOCTL - I/O control for ring unit
  *
- * Performs I/O control operations on a ring unit.
- * Currently supports setting the transmit mask.
+ * The ring driver record's slot 0x24 (0xE8693C -> 0x00E76B2C), which is the
+ * entry NETWORK_$SET_SERVICE calls after a successful service update
+ * ("movea.l (0x24,A1),A0 / jsr (A0)" at 0x00E0F5E4).  It therefore has the
+ * five-argument shape route/route.h spells as route_$set_service_fn_t; the
+ * caller reserves a word result slot at 0x00E0F5CA which RING_$IOCTL never
+ * writes, so the C function stays void.
  *
- * @param unit_ptr      Pointer to unit number
- * @param cmd           Command (0 = set tmask)
- * @param param         Command parameter
+ * Frame slots, from the link at 0x00E76B2C:
+ *   (0x08) unit_ptr    read as one word (0x00E76B46 cmpi.w #0x1,(A2))
+ *   (0x0c) cmd         two words are read, at +0 and +2
+ *   (0x10) reserved    a WORD, never read - NETWORK_$SET_SERVICE pushes
+ *                      0x0088 here (0x00E0F5D4 move.w #0x88,-(SP))
+ *   (0x12) param4      a longword, never read - the caller passes an
+ *                      uninitialised local (0x00E0F5D0 pea (-0x9a,A6))
+ *   (0x16) status_ret  0x00E76B42 movea.l (0x16,A6),A3
+ *
+ * Slot 0x16 settles what route_$set_service_fn_t leaves open: its fifth
+ * argument is the status return.
+ *
+ * @param unit_ptr      Pointer to unit number; must be 0 or 1
+ * @param cmd           cmd[0] = command (0 = set tmask), cmd[1] = its
+ *                      parameter
+ * @param reserved      Never read
+ * @param param4        Never read
  * @param status_ret    Output: status code
  *
  * Original address: 0x00E76B2C
+ * Original size: 80 bytes
  */
-void RING_$IOCTL(uint16_t *unit_ptr, int16_t *cmd, void *param,
-                 status_$t *status_ret);
+void RING_$IOCTL(uint16_t *unit_ptr, int16_t *cmd, uint16_t reserved,
+                 void *param4, status_$t *status_ret);
 
 /*
  * RING_$SET_TMASK - Set transmit mask

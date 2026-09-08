@@ -98,11 +98,17 @@
  */
 typedef struct ringlog_ctl_t {
     /*
-     * Wired page addresses for the ring buffer.
-     * Up to some number of pages can be wired to keep buffer in physical memory.
-     * Index 0 is unused; entries 1..wire_count contain wired addresses.
+     * Wired page addresses for the ring buffer, kept so the log buffer stays
+     * resident.  The array is used from element 0: RINGLOG_$CNTL hands
+     * MST_$WIRE_AREA the record base itself as the page list
+     * ("pea (A1)" at 0x00E722C6, A1 = 0xE2C32C), and
+     * RINGLOG_$STOP_LOGGING's unwire loop reads
+     * "(-0x4,A3,D0w*0x1)" with A3 = 0xE2C32C and D0 = index*4 for
+     * index 1..wire_count (0x00E721F8-0x00E7220E), i.e. entries
+     * [0..wire_count-1].  RINGLOG_$CNTL's limit cell at 0x00E7232C caps the
+     * count at 10.
      */
-    uint32_t    wired_pages[10];        /* 0x00: Wired page addresses (indices 1-9 used) */
+    uint32_t    wired_pages[10];        /* 0x00: Wired page addresses [0..9] */
 
     /*
      * Spinlock for buffer access.
@@ -117,8 +123,10 @@ typedef struct ringlog_ctl_t {
     uint32_t    filter_id;              /* 0x2C: RINGLOG_$ID filter (at 0xE2C358) */
 
     /*
-     * Number of wired pages.
-     * Pages wired_pages[1] through wired_pages[wire_count] are wired.
+     * Number of wired pages: wired_pages[0] through wired_pages[wire_count-1]
+     * are wired.  MST_$WIRE_AREA is given "pea (0x30,A1)" as its fifth
+     * argument (0x00E722BE) and RINGLOG_$STOP_LOGGING both bounds its loop
+     * with it and clears it (0x00E721E6, 0x00E72218).
      */
     int16_t     wire_count;             /* 0x30: Number of wired pages (at 0xE2C35C) */
 
@@ -236,12 +244,21 @@ void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret);
 /*
  * RINGLOG_$STOP_LOGGING - Internal: Stop logging and unwire buffer
  *
- * Stops logging, unwires any wired memory pages, and resets the
- * logging state. Called internally by RINGLOG_$CNTL.
+ * Stops logging, unwires wired_pages[0..wire_count-1] and resets the wire
+ * count.  Called only by RINGLOG_$CNTL (0x00E7228A, 0x00E72304); the SAU2
+ * link map gives the address no symbol of its own, so it is a nested
+ * procedure of RINGLOG_$CNTL.
+ *
+ * It keeps its loop index in the caller's frame word at (-0x2,A6), reached
+ * through "movea.l (A6),A2" at 0x00E721DA.  That uplevel reference is
+ * flattened into the parameter below.
+ *
+ * Parameters:
+ *   parent_index - the caller's (-0x2,A6) word
  *
  * Original address: 0x00E721CC
  */
-void RINGLOG_$STOP_LOGGING(void);
+void RINGLOG_$STOP_LOGGING(int16_t *parent_index);
 
 /*
  * RINGLOG_$ROUTE_FORWARD - the 4-byte RINGLOG_$LOGIT header-info cell the

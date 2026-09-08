@@ -9,9 +9,6 @@
 #include "file/file_internal.h"
 #include "uid/uid.h"
 
-/* Status code for invalid argument */
-#define file_$invalid_arg    0x000F0014
-
 /*
  * FILE_$CREATE_IT
  *

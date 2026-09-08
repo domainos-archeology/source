@@ -17,13 +17,6 @@
 #include "file/file_internal.h"
 
 /*
- * 0x00E5E61E: the longword the compiler passes with `pea (-0x530,PC)` /
- * `pea (-0x436,PC)` / `pea (-0x4bc,PC)` as FILE_$PRIV_LOCK's ACL-context
- * argument.  It holds NIL.
- */
-static void *file_$priv_lock_nil_acl_ctx = NULL;
-
-/*
  * FILE_$LOCK - Lock a file
  *
  * Parameters:
@@ -66,7 +59,7 @@ void FILE_$LOCK(uid_t *file_uid, const uint16_t *lock_index,
                     0,                    /* rem_key */
                     0,                    /* rem_node */
                     0,                    /* rem_extra */
-                    &file_$priv_lock_nil_acl_ctx,   /* 0x00E5EB4C pea (-0x530,PC) */
+                    (void **)&file_$nil_cell,   /* 0x00E5EB4C pea (-0x530,PC) */
                     0,                    /* rem_wait */
                     &local_8,             /* slot_io */
                     &result,              /* rights_out */

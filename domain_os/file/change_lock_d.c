@@ -19,13 +19,6 @@
 #include "file/file_internal.h"
 
 /*
- * 0x00E5E61E: the longword the compiler passes with `pea (-0x530,PC)` /
- * `pea (-0x436,PC)` / `pea (-0x4bc,PC)` as FILE_$PRIV_LOCK's ACL-context
- * argument.  It holds NIL.
- */
-static void *file_$priv_lock_nil_acl_ctx = NULL;
-
-/*
  * FILE_$CHANGE_LOCK_D - Change an existing lock's mode
  *
  * Parameters:
@@ -69,7 +62,7 @@ void FILE_$CHANGE_LOCK_D(uid_t *file_uid, uint16_t *lock_index, uint16_t *lock_m
                         0,                /* rem_key */
                         0,                /* rem_node */
                         0,                /* rem_extra */
-                        &file_$priv_lock_nil_acl_ctx, /* 0x00E5EAD8 pea (-0x4bc,PC) */
+                        (void **)&file_$nil_cell, /* 0x00E5EAD8 pea (-0x4bc,PC) */
                         0,                /* rem_wait */
                         slot_io,          /* 0x00E5EAD2 pushes the caller's pointer */
                         &result,          /* rights_out */

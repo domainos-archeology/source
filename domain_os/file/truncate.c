@@ -15,8 +15,13 @@
 
 #include "file/file_internal.h"
 
-/* Constant zero for domain context parameter */
-static const uint32_t zero_context = 0;
+/*
+ * 0x00E73FAC: the longword of zeroes FILE_$TRUNCATE_D gets as its
+ * domain-context argument.  The image holds ONE such cell, shared by
+ * FILE_$SET_LEN (`pea (0x12,PC)` at 0x00E73F98) and FILE_$TRUNCATE
+ * (0x00E73FD2); it is defined in file/file_data.c as
+ * file_$truncate_nil_context.
+ */
 
 /*
  * FILE_$TRUNCATE - Truncate a file
@@ -34,5 +39,5 @@ static const uint32_t zero_context = 0;
  */
 void FILE_$TRUNCATE(uid_t *file_uid, uint32_t *new_size, status_$t *status_ret)
 {
-    FILE_$TRUNCATE_D(file_uid, new_size, (uint32_t *)&zero_context, status_ret);
+    FILE_$TRUNCATE_D(file_uid, new_size, &file_$truncate_nil_context, status_ret);
 }

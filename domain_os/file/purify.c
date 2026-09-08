@@ -19,21 +19,22 @@
  *   file_uid   - UID of file to purify
  *   status_ret - Output status code
  *
- * Flow:
- * 1. Call AST_$PURIFY with:
- *    - uid = file_uid
- *    - flags = 0 (basic purify)
- *    - segment = 0 (all segments)
- *    - segment_list = NULL (empty constant)
- *    - unused = 0
- *    - status = status_ret
+ * Flow (0x00E5E5FE-0x00E5E610), the six arguments pushed right to left over a
+ * discarded word result slot:
+ *    subq.l #0x2,SP           the word AST_$PURIFY returns; discarded
+ *    move.l (0xc,A6),-(SP)    status  = status_ret
+ *    clr.w -(SP)              unused  = 0
+ *    pea (0x16,PC)            segment_list = &file_$nil_cell (0x00E5E61E)
+ *    clr.l -(SP)              flags = 0 and segment = 0, cleared together
+ *    move.l (0x8,A6),-(SP)    uid     = file_uid
  */
 void FILE_$PURIFY(uid_t *file_uid, status_$t *status_ret)
 {
     /*
-     * Call AST_$PURIFY with basic flags.
-     * The segment_list parameter is NULL (no specific segments),
-     * and the unused parameter is 0.
+     * The segment-list argument is NOT nil: it is the address of the shared
+     * longword-of-zeroes at 0x00E5E61E (see file/file_data.c).  AST_$PURIFY
+     * does not read through it unless bit 4 of its flags word is set
+     * (0x00E05700), which this call does not do.
      */
-    AST_$PURIFY(file_uid, 0, 0, NULL, 0, status_ret);
+    AST_$PURIFY(file_uid, 0, 0, &file_$nil_cell, 0, status_ret);
 }

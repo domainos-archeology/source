@@ -584,8 +584,8 @@ TEST(purify_gets_the_pc_relative_nil_list_and_0x8000)
     ASSERT_EQ(0x8000, mock_purify_flags);
     ASSERT_EQ(0, mock_purify_segment);
     ASSERT_EQ(0, mock_purify_unused);
-    ASSERT_EQ(1, mock_purify_list == &file_$purify_nil_list);
-    ASSERT_EQ(0, file_$purify_nil_list);
+    ASSERT_EQ(1, mock_purify_list == &file_$nil_cell);
+    ASSERT_EQ(0, file_$nil_cell);
 }
 
 /* ============================================================================

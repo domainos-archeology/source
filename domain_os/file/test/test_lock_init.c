@@ -92,8 +92,11 @@ static void poison_world(void)
     memset(FILE_$LOCK_ENTRIES, 0xA5, sizeof(FILE_$LOCK_ENTRIES));
     memset(FILE_$LOCK_TABLE, 0xA5, sizeof(FILE_$LOCK_TABLE));
     memset(FILE_$LOCK_TABLE2, 0xA5, sizeof(FILE_$LOCK_TABLE2));
+    /*
+     * FILE_$LOT_HASHTAB is FILE_$LOCK_CONTROL.lock_map (bead source-q4qz),
+     * so one memset covers both names.
+     */
     memset(&FILE_$LOCK_CONTROL, 0xA5, sizeof(FILE_$LOCK_CONTROL));
-    memset(FILE_$LOT_HASHTAB, 0xA5, sizeof(FILE_$LOT_HASHTAB));
     FILE_$LOT_E9F9C4 = 0xA5A5;
     FILE_$LOT_FULL   = (int8_t)0xA5;
 

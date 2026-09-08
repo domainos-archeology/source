@@ -96,10 +96,17 @@ dxm_$callback_fn_t dxm_$callback_fn(dxm_$callback_t cell)
 /*
  * Cell holding DXM_$ADD_SIGNAL_CALLBACK's address
  *
- * DXM_$ADD_SIGNAL pushes the ADDRESS of this cell
- * (`pea PTR_DXM_$ADD_SIGNAL_CALLBACK` at 0x00E172AA), so the cell itself
- * holds the 4-byte code address.
+ * DXM_$ADD_SIGNAL pushes the ADDRESS of this cell ("pea (0x14,PC)" at
+ * 0x00E172B6; 0x00E172B8 + 0x14 = 0x00E172CC), so the cell itself holds the
+ * 4-byte code address.  Image bytes:
+ *
+ *   00e172c8  4e 5e 4e 75 00 e7 21 84
+ *                         ^^^^^^^^^^^  = 0x00E72184, DXM_$ADD_SIGNAL_CALLBACK
+ *
+ * The cell is the last longword of the DXM_WIRED_ code segment (SAU2 map:
+ * "I E16FE0 DXM_WIRED_ size = 2F0", i.e. 0xE16FE0..0xE172CF) and has no
+ * symbol of its own there, so the descriptive name is the tree's.
  *
  * Original address: 0x00E172CC
  */
-DXM_$DEFINE_CALLBACK_CELL(PTR_DXM_$ADD_SIGNAL_CALLBACK, DXM_$ADD_SIGNAL_CALLBACK);
+DXM_$DEFINE_CALLBACK_CELL(DXM_$ADD_SIGNAL_CALLBACK_CELL, DXM_$ADD_SIGNAL_CALLBACK);

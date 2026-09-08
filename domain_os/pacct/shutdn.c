@@ -27,19 +27,19 @@ void PACCT_$SHUTDN(void)
     }
 
     /* Unmap buffer if currently mapped */
-    if (DAT_00e81804 != NULL) {
-        MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(DAT_00e81804), DAT_00e81800, 0, &status);
+    if (pacct_map_ptr != NULL) {
+        MST_$UNMAP_PRIVI(1, &UID_$NIL, ARCH_PTR_TO_VA(pacct_map_ptr), pacct_map_offset, 0, &status);
     }
 
     /* Clear buffer state */
-    DAT_00e81804 = NULL;    /* map_ptr = NULL */
-    DAT_00e81800 = 0;       /* map_offset = 0 */
-    DAT_00e817f8 = 0;       /* buf_remaining = 0 */
+    pacct_map_ptr = NULL;    /* map_ptr = NULL */
+    pacct_map_offset = 0;       /* map_offset = 0 */
+    pacct_buf_remaining = 0;       /* buf_remaining = 0 */
 
     /* Unlock the accounting file */
     /* `move.l (0x8,A5)` slot, `move.l #0x40000` = mode word 4 + asid word 0,
      * then three `clr.l`. */
-    (void)FILE_$PRIV_UNLOCK(&pacct_owner, (int32_t)DAT_00e817f4, 4, 0,
+    (void)FILE_$PRIV_UNLOCK(&pacct_owner, (int32_t)pacct_lock_handle, 4, 0,
                             0, 0, 0, 0, &dtv_out, &status);
 
     /* Disable accounting by setting owner to nil */

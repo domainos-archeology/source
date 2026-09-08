@@ -302,7 +302,8 @@ void VTOCE_$NEW_TO_OLD(void *new_vtoce, char *flags, void *old_vtoce);
 /*
  * VTOC_$SEARCH_VOLUMES - Search volumes for an object
  *
- * Searches volumes 1-5 for an object via VTOC_$LOOKUP.
+ * Tries VTOC_$LOOKUP on volume indices 1..6 in turn ("moveq #0x5,D2" plus a
+ * dbf at 0x00E01C06 / 0x00E01C3E, with the index starting at 1).
  * Used during force-activation path for root objects.
  *
  * @param uid_info  Pointer to UID info structure

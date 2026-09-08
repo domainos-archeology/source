@@ -64,7 +64,7 @@ void PROC2_$SIGNAL_PGROUP_OS(uid_t *uid, int16_t *signal, uint32_t *param,
     (void)uid; (void)signal; (void)param; (void)st;
 }
 
-/* Referenced by dxm/dxm_data.c's PTR_DXM_$ADD_SIGNAL_CALLBACK cell. */
+/* Referenced by dxm/dxm_data.c's DXM_$ADD_SIGNAL_CALLBACK_CELL cell. */
 void DXM_$ADD_SIGNAL_CALLBACK(void *data) { (void)data; }
 
 /* ------------------------------------------------------------------ */
@@ -227,6 +227,42 @@ static void test_drains_in_order(void)
 }
 
 /*
+ * The callback's argument is the address of a frame local that holds the
+ * address of the queue slot's data - "lea (0x4,A0),A1 / move.l A1,(-0xc,A6)"
+ * at 0x00E17186 and "pea (-0xc,A6)" at 0x00E171AA.  The callee therefore sees
+ * the twelve bytes still sitting in the queue entry and can write them in
+ * place, which this pins down: it must be the array itself, not a copy.
+ */
+static uint8_t *aliased_arg;
+
+static void cb_alias(void *arg)
+{
+    uint8_t **data_cell = (uint8_t **)arg;
+
+    aliased_arg = *data_cell;
+    /* write straight through the pointer into the queue entry */
+    (*data_cell)[11] = 0x5A;
+}
+
+static void test_callback_gets_the_queue_slot_itself(void)
+{
+    reset();
+
+    put(2, DXM_$CALLBACK_CELL(cb_alias), 0xDEADBEEFu);
+    slot_mem[2].data[11] = 0;
+    q.head = 2;
+    q.tail = 3;
+    aliased_arg = NULL;
+
+    DXM_$SCAN_QUEUE(&q);
+
+    assert(aliased_arg == &slot_mem[2].data[0]);
+    assert(slot_mem[2].data[11] == 0x5A);
+
+    printf("test_callback_gets_the_queue_slot_itself: PASSED\n");
+}
+
+/*
  * The head wraps with the mask (`and.w (0x4,A2),D0w` at 0x00E17192), so a
  * queue whose head is at the last slot and whose tail has wrapped to 1
  * drains slot 3 then slot 0.
@@ -261,6 +297,7 @@ int main(void)
     test_callback_registry();
     test_empty_queue();
     test_drains_in_order();
+    test_callback_gets_the_queue_slot_itself();
     test_head_wraps_with_mask();
 
     printf("\nAll tests PASSED!\n");
