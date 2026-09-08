@@ -126,8 +126,8 @@ static void audit_alloc_reset_state(void)
     wp_calloc_calls   = 0;
     mmu_install_calls = 0;
     wp_calloc_status  = status_$ok;
-    AUDIT_$DATA.pool_next  = NULL;
-    AUDIT_$DATA.pool_limit = NULL;
+    AUDIT_$DATA.pool_next  = 0;
+    AUDIT_$DATA.pool_limit = 0;
 }
 
 #include "../hash_table.c"
@@ -226,8 +226,8 @@ TEST(alloc_zero_resets_the_cursor)
     p = audit_$alloc(0, &status);
 
     ASSERT_TRUE(p == NULL);
-    ASSERT_EQ(AUDIT_POOL_BASE_VA, ARCH_PTR_TO_VA(AUDIT_$DATA.pool_next));
-    ASSERT_EQ(AUDIT_POOL_BASE_VA, ARCH_PTR_TO_VA(AUDIT_$DATA.pool_limit));
+    ASSERT_EQ(AUDIT_POOL_BASE_VA, AUDIT_$DATA.pool_next);
+    ASSERT_EQ(AUDIT_POOL_BASE_VA, AUDIT_$DATA.pool_limit);
     ASSERT_EQ(0x55667788, status);
 }
 
@@ -244,13 +244,13 @@ TEST(alloc_zero_keeps_an_established_limit)
     audit_$alloc(0x0C, &status);        /* wires one page, limit -> +0x400 */
 
     ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x400,
-              ARCH_PTR_TO_VA(AUDIT_$DATA.pool_limit));
+              AUDIT_$DATA.pool_limit);
 
     audit_$alloc(0, &status);
 
-    ASSERT_EQ(AUDIT_POOL_BASE_VA, ARCH_PTR_TO_VA(AUDIT_$DATA.pool_next));
+    ASSERT_EQ(AUDIT_POOL_BASE_VA, AUDIT_$DATA.pool_next);
     ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x400,
-              ARCH_PTR_TO_VA(AUDIT_$DATA.pool_limit));
+              AUDIT_$DATA.pool_limit);
 }
 
 /*
@@ -269,13 +269,13 @@ TEST(alloc_hands_out_the_old_cursor_and_wires_a_page)
     first = audit_$alloc(0x0C, &status);
 
     ASSERT_EQ(AUDIT_POOL_BASE_VA, ARCH_PTR_TO_VA(first));
-    ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x0C, ARCH_PTR_TO_VA(AUDIT_$DATA.pool_next));
+    ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x0C, AUDIT_$DATA.pool_next);
     ASSERT_EQ(1, wp_calloc_calls);
     ASSERT_EQ(1, mmu_install_calls);
     ASSERT_EQ(0x1000u, mmu_install_ppn[0]);
     ASSERT_EQ(AUDIT_POOL_BASE_VA, mmu_install_va[0]);
     ASSERT_EQ(0x16u, mmu_install_flags[0]);
-    ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x400, ARCH_PTR_TO_VA(AUDIT_$DATA.pool_limit));
+    ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x400, AUDIT_$DATA.pool_limit);
 
     /* The next block is contiguous and needs no further page. */
     second = audit_$alloc(0x0C, &status);
@@ -299,7 +299,7 @@ TEST(alloc_wires_every_page_the_request_crosses)
     ASSERT_EQ(2, wp_calloc_calls);
     ASSERT_EQ(AUDIT_POOL_BASE_VA,         mmu_install_va[0]);
     ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x400, mmu_install_va[1]);
-    ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x800, ARCH_PTR_TO_VA(AUDIT_$DATA.pool_limit));
+    ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x800, AUDIT_$DATA.pool_limit);
 }
 
 /*
@@ -319,7 +319,7 @@ TEST(alloc_sign_extends_the_size_word)
     p = audit_$alloc((uint16_t)-4, &status);
 
     ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x0C, ARCH_PTR_TO_VA(p));
-    ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x08, ARCH_PTR_TO_VA(AUDIT_$DATA.pool_next));
+    ASSERT_EQ(AUDIT_POOL_BASE_VA + 0x08, AUDIT_$DATA.pool_next);
     ASSERT_EQ(0, wp_calloc_calls);
 }
 
@@ -342,7 +342,7 @@ TEST(alloc_returns_the_block_when_wiring_fails)
     ASSERT_EQ(0x00120007, status);
     ASSERT_EQ(1, wp_calloc_calls);
     ASSERT_EQ(0, mmu_install_calls);
-    ASSERT_EQ(AUDIT_POOL_BASE_VA, ARCH_PTR_TO_VA(AUDIT_$DATA.pool_limit));
+    ASSERT_EQ(AUDIT_POOL_BASE_VA, AUDIT_$DATA.pool_limit);
 }
 
 int main(void)

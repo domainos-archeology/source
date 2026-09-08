@@ -70,10 +70,10 @@ static int      truncate_calls;
 static uid_t   *truncate_uid;
 static uint32_t truncate_size;
 static uint16_t truncate_flags;
-static uint8_t *truncate_result_cell;
+static boolean *truncate_result_cell;
 
 void AST_$TRUNCATE(uid_t *uid, uint32_t new_size, uint16_t flags,
-                   uint8_t *result, status_$t *status)
+                   boolean *result, status_$t *status)
 {
     truncate_calls++;
     truncate_uid = uid;

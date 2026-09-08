@@ -307,16 +307,23 @@ _Static_assert(offsetof(area_$seg_slot_t, aste_index) == 0x02, "seg_slot.aste_in
  * All five fields are written by area_$alloc_seg_table (0x00E09DBE .. 
  * 0x00E09E18); `allocated` is the pool's in-use flag, set with `st` and read
  * back by the free-slot scan's `tst.b` / `bmi`, so it is a Domain boolean.
+ *
+ * `next` and `bitmap_ptr` are the record's two 32-bit target virtual
+ * addresses; they are spelled uint32_t (and dereferenced through
+ * ARCH_VA_TO_PTR) rather than as host pointers so the record stays twelve
+ * bytes on a 64-bit host and the layout asserts below can be unconditional.
+ * (source-efc9)
  */
 typedef struct area_$seg_table_t {
-    int16_t area_id;            /* 0x00: Area ID */
-    uint8_t table_index;        /* 0x02: Table index (0-255) */
-    int8_t  allocated;          /* 0x03: pool in-use flag (0x00E09DBE `st`) */
-    struct area_$seg_table_t *next;  /* 0x04: Next in ASID list */
-    area_$seg_slot_t *bitmap_ptr;    /* 0x08: Pointer to the overflow slots */
+    int16_t  area_id;           /* 0x00: Area ID */
+    uint8_t  table_index;       /* 0x02: Table index (0-255) */
+    int8_t   allocated;         /* 0x03: pool in-use flag (0x00E09DBE `st`) */
+    uint32_t next;              /* 0x04: VA of the next record in the ASID
+                                 *       list (0x00E09E18) */
+    uint32_t bitmap_ptr;        /* 0x08: VA of the overflow slots
+                                 *       (0x00E09E06) */
 } area_$seg_table_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(sizeof(area_$seg_table_t) == 0x0C,  /* AREA_SEG_TABLE_POOL_STRIDE */
                "area_$seg_table_t size");
 _Static_assert(offsetof(area_$seg_table_t, area_id)     == 0x00, "seg_table.area_id");
@@ -324,7 +331,6 @@ _Static_assert(offsetof(area_$seg_table_t, table_index) == 0x02, "seg_table.tabl
 _Static_assert(offsetof(area_$seg_table_t, allocated)   == 0x03, "seg_table.allocated");
 _Static_assert(offsetof(area_$seg_table_t, next)        == 0x04, "seg_table.next");
 _Static_assert(offsetof(area_$seg_table_t, bitmap_ptr)  == 0x08, "seg_table.bitmap_ptr");
-#endif
 
 /*
  * The seg-table pool: 64 area_$seg_table_t records at globals+0x150.

@@ -61,14 +61,13 @@ _Static_assert(__builtin_offsetof(rem_file_$truncate_resp_t, dtm_low) == 0x0C, "
 #define TRUNCATE_REPLY_WITH_DTM     0x10
 
 void REM_FILE_$TRUNCATE(uid_t *vol_uid, uid_t *uid, uint32_t new_size,
-                        uint8_t flags, uint8_t *result, status_$t *status)
+                        uint8_t flags, clock_t *dtm_out, status_$t *status)
 {
     rem_file_$truncate_req_t  request;      /* A6-0x170 */
     rem_file_$truncate_resp_t response;     /* A6-0xC0  */
     uint16_t received_len;                  /* A6-0x176 */
     uint16_t packet_id;                     /* A6-0x174 */
     int16_t  nil_word = 0;                  /* A6-0x172 */
-    clock_t *dtm_out = (clock_t *)result;   /* A2 = (0x16,A6) */
 
     request.magic    = REM_FILE_REQ_MAGIC;      /* 0x00E61990 */
     request.opcode   = REM_FILE_OP_TRUNCATE;    /* 0x00E61996 */

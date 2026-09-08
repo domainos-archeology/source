@@ -180,7 +180,7 @@ void AST_$GET_DTV(uid_t *uid, uint32_t unused, uint32_t *dtv, status_$t *status)
 }
 
 void AST_$TRUNCATE(uid_t *uid, uint32_t new_size, uint16_t flags,
-                   uint8_t *result, status_$t *status)
+                   boolean *result, status_$t *status)
 {
     (void)uid; (void)new_size; (void)flags;
     mock_truncate_calls++;

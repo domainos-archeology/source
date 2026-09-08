@@ -141,9 +141,30 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap, uint32_t *p
                                      uint16_t start_page, uint16_t count, uint8_t flags,
                                      status_$t *status);
 
-/* Process AOTE flags/flush - returns completion flags */
-uint16_t ast_$process_aote(aote_t *aote, uint8_t flags1, uint16_t flags2,
-                           uint16_t flags3, status_$t *status);
+/*
+ * ast_$process_aote (0x00E01AD2) - process/deactivate one AOTE.
+ *
+ * All three flag arguments are single Domain BOOLEAN bytes, not words: the
+ * prologue reads them with `move.b (0xc,A6),D2b` (0x00E01ADA),
+ * `move.b (0xe,A6),D3b` (0x00E01ADE) and `move.b (0x10,A6),D4b`
+ * (0x00E01AE2), and each is tested with `tst.b` / `bmi` (0x00E01B00,
+ * 0x00E01B3E, 0x00E01B78).  The callers push them one byte at a time -
+ * `st -(SP)` / `clr.w -(SP)` / `move.b (0xa,A6),-(SP)` at 0x00E01DD8,
+ * 0x00E06138-0x00E06140, 0x00E05BFC-0x00E05C00 and 0x00E06A9C-0x00E06AA4 -
+ * so the frame is aote (0x08), flags1 (0x0C), flags2 (0x0E), flags3 (0x10)
+ * and status (0x12).  (source-o7gq)
+ *
+ *   flags1  TRUE = skip the AST_$PURIFY pass, and AST_$DEACTIVATE_SEGMENT's
+ *           `purge` argument (0x00E01B4C `move.b D2b,-(SP)`)
+ *   flags2  TRUE = deactivate even a type-2 object with attribute bit 1 set,
+ *           and AST_$DEACTIVATE_SEGMENT's `keep` argument (0x00E01B4A
+ *           `move.b D3b,-(SP)`)
+ *   flags3  TRUE = wait for an in-transition ASTE instead of giving up
+ *
+ * Returns the busy/in-transition byte computed at 0x00E01AF0-0x00E01AFC.
+ */
+uint16_t ast_$process_aote(aote_t *aote, boolean flags1, boolean flags2,
+                           boolean flags3, status_$t *status);
 
 /* Free/release AOTE */
 void ast_$release_aote(aote_t *aote);
@@ -288,7 +309,6 @@ extern void *net_info_flags;
 
 /* Volume reference tracking */
 extern int16_t vol_ref_counts[];        /* Per-volume reference counts */
-extern uint16_t vol_dismount_mask;      /* Bitmask of dismounting volumes */
 extern ec_$eventcount_t vol_dismount_ec; /* Dismount completion eventcount */
 
 /* ASTE allocation functions */

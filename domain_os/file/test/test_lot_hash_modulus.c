@@ -115,7 +115,7 @@ void FILE_$SET_ATTRIBUTE(uid_t *file_uid, int16_t attr_id, void *value,
 }
 
 void AST_$TRUNCATE(uid_t *uid, uint32_t new_size, uint16_t flags,
-                   uint8_t *result, status_$t *status)
+                   boolean *result, status_$t *status)
 {
     (void)uid; (void)new_size; (void)flags;
     *result = 0;

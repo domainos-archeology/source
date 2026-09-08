@@ -1359,13 +1359,16 @@ void FILE_$RESERVE(uid_t *file_uid, uint32_t *start_byte,
  *   file_uid    - UID of file to invalidate
  *   start_page  - Pointer to starting page number
  *   page_count  - Pointer to number of pages to invalidate
- *   flags       - Pointer to flags byte
+ *   flags       - Pointer to a Domain BOOLEAN byte; 0x00E75186
+ *                 `move.b (A2),(-0x16,A6)` copies it and 0x00E751B4
+ *                 `move.b (-0x16,A6),-(SP)` hands it to AST_$INVALIDATE,
+ *                 whose fourth argument is a boolean.  (source-fan2)
  *   status_ret  - Output status code
  *
  * Original address: 0x00E75158
  */
 void FILE_$INVALIDATE(uid_t *file_uid, uint32_t *start_page,
-                      uint32_t *page_count, uint8_t *flags,
+                      uint32_t *page_count, boolean *flags,
                       status_$t *status_ret);
 
 /*

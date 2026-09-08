@@ -302,9 +302,16 @@ typedef struct audit_data_t {
      * `alloc(n)` returns the old pool_next, advances it by n, and while
      * pool_next >= pool_limit wires another 0x400-byte page in at
      * pool_limit (0x00E71244-0x00E7126C).
+     *
+     * Both cells hold 32-bit target virtual addresses and are spelled
+     * uint32_t (dereferenced through ARCH_VA_TO_PTR) rather than as host
+     * pointers, so audit_data_t keeps its 0x1AC-byte image size on a 64-bit
+     * host and the layout asserts below can be unconditional.  The `bcc`
+     * comparison at 0x00E71274 is an unsigned compare of these two VAs.
+     * (source-efc9)
      */
-    uint8_t *pool_next;             /* 0x1A4-0x1A7 */
-    uint8_t *pool_limit;            /* 0x1A8-0x1AB */
+    uint32_t pool_next;             /* 0x1A4-0x1A7 */
+    uint32_t pool_limit;            /* 0x1A8-0x1AB */
 } audit_data_t;
 
 /*
@@ -313,7 +320,15 @@ typedef struct audit_data_t {
  */
 #define AUDIT_POOL_BASE_VA  0x00EC4800u
 
-/* Layout recovered from the disassembly -- see the field comments above. */
+/*
+ * Layout recovered from the disassembly -- see the field comments above.
+ *
+ * Still asserted on m68k only: buffer_base (0x88), write_ptr (0x90),
+ * event_count (0x198) and the 38 hash_buckets slots (0xB0) are host pointers,
+ * so the record is wider than 0x1AC on a 64-bit host even now that pool_next
+ * and pool_limit are 32-bit VAs.  (source-efc9 converted the pool cells;
+ * source-9h07 tracks the rest.)
+ */
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(audit_data_t, suspend_count) == 0x00, "audit_data_t.suspend_count");
 _Static_assert(__builtin_offsetof(audit_data_t, log_file_uid) == 0x80, "audit_data_t.log_file_uid");

@@ -6,9 +6,12 @@
  *
  * Parameters:
  *   aote - The AOTE to process
- *   flags1 - Processing flags (negative = skip purify)
- *   flags2 - Additional flags (negative = allow deactivation of system objects)
- *   flags3 - Wait flags (negative = wait for in-transition)
+ *   flags1 - Domain BOOLEAN byte at A6+0x0C (0x00E01ADA `move.b (0xc,A6),D2b`);
+ *            TRUE = skip purify
+ *   flags2 - Domain BOOLEAN byte at A6+0x0E (0x00E01ADE `move.b (0xe,A6),D3b`);
+ *            TRUE = allow deactivation of system objects
+ *   flags3 - Domain BOOLEAN byte at A6+0x10 (0x00E01AE2 `move.b (0x10,A6),D4b`);
+ *            TRUE = wait for in-transition
  *   status - Output status
  *
  * Returns: Non-zero status bits on failure
@@ -31,8 +34,8 @@
 #define AST_AOTH_BASE ast_aoth_base
 #endif
 
-uint16_t ast_$process_aote(aote_t *aote, uint8_t flags1, uint16_t flags2,
-                           uint16_t flags3, status_$t *status)
+uint16_t ast_$process_aote(aote_t *aote, boolean flags1, boolean flags2,
+                           boolean flags3, status_$t *status)
 {
     uint8_t busy_or_intrans;
     aste_t *aste;
@@ -50,8 +53,9 @@ uint16_t ast_$process_aote(aote_t *aote, uint8_t flags1, uint16_t flags2,
         return (uint16_t)busy_or_intrans;
     }
 
-    /* Check if this is a system object that can't be deactivated */
-    if ((int16_t)flags2 >= 0) {
+    /* Check if this is a system object that can't be deactivated
+     * (0x00E01B00 `tst.b D3b` / `bmi`) */
+    if (flags2 >= 0) {
         /* Object type at offset 0x0D */
         uint8_t obj_type = *((uint8_t *)aote + 0x0D);
         if (obj_type == 2) {  /* System object */
@@ -74,7 +78,7 @@ uint16_t ast_$process_aote(aote_t *aote, uint8_t flags1, uint16_t flags2,
         aste = aote->aste_list;
 
         /* Check if ASTE is in-transition and we should wait */
-        if ((int16_t)aste->flags < 0 && (int16_t)flags3 < 0) {
+        if ((int16_t)aste->flags < 0 && flags3 < 0) {
             AST_$WAIT_FOR_AST_INTRANS();
             continue;
         }
@@ -83,15 +87,9 @@ uint16_t ast_$process_aote(aote_t *aote, uint8_t flags1, uint16_t flags2,
         /*
          * 0x00E01B48-0x00E01B50 pushes `pea (A2)` (status), `move.b D3b`
          * (flags2) and `move.b D2b` (flags1): two separate BYTE arguments,
-         * not one longword.  flags2 is modelled in this file as the whole
-         * stack word (Pascal true is 0xFF00), so the byte the callee reads
-         * is its high half.
-         *
-         * TODO: make flags1/flags2/flags3 int8_t here and drop the shift
-         * (bead source-o7gq).
+         * not one longword.  (source-o7gq)
          */
-        AST_$DEACTIVATE_SEGMENT(aste, (int8_t)flags1, (int8_t)(flags2 >> 8),
-                                status);
+        AST_$DEACTIVATE_SEGMENT(aste, flags1, flags2, status);
 
         if (*status != status_$ok) {
             if (*status == status_$ast_segment_not_deactivatable) {
@@ -104,8 +102,8 @@ uint16_t ast_$process_aote(aote_t *aote, uint8_t flags1, uint16_t flags2,
         AST_$FREE_ASTE(aste);
     }
 
-    /* If flags1 < 0, skip purification */
-    if ((int8_t)flags1 < 0) {
+    /* If flags1 is TRUE, skip purification (0x00E01B78 `tst.b D2b` / `bmi`) */
+    if (flags1 < 0) {
         goto remove_from_hash;
     }
 

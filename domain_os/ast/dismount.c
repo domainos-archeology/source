@@ -69,7 +69,11 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
                     *(uint32_t *)((char *)aote + 0x14) != NETWORK_$PAGING_FILE_UID.low) {
 
                     /* Flush cached data */
-                    ast_$process_aote(aote, flags, 0xFFFF, 0xFFE0, &local_status);
+                    /* 0x00E06A9C-0x00E06AA4: `st -(SP)` (flags3), `st -(SP)`
+                     * (flags2), `move.b (0xa,A6),-(SP)` (flags1) - three
+                     * single bytes.  (source-o7gq) */
+                    ast_$process_aote(aote, (boolean)flags, -1, -1,
+                                      &local_status);
 
                     if (local_status != status_$ok) {
                         ML_$UNLOCK(AST_LOCK_ID);

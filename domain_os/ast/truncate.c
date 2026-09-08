@@ -9,7 +9,9 @@
  *   uid - Pointer to object UID
  *   new_size - New size in bytes
  *   flags - Operation flags (bit 0: truncate to 0, bit 1: extend)
- *   result - Output: result byte
+ *   result - Output: a Domain BOOLEAN byte.  0x00E05C6A-0x00E05C70
+ *            `clr.b D3b` / `move.b D3b,(A0)` clears it on entry and
+ *            0x00E05DB6 `st (A1)` sets it on the local path.
  *   status - Status return
  *
  * Original address: 0x00e05c40
@@ -20,7 +22,7 @@
 #include "rem_file/rem_file.h"
 
 void AST_$TRUNCATE(uid_t *uid, uint32_t new_size, uint16_t flags,
-                   uint8_t *result, status_$t *status)
+                   boolean *result, status_$t *status)
 {
     aote_t *aote;
     aste_t *aste;
@@ -30,6 +32,14 @@ void AST_$TRUNCATE(uid_t *uid, uint32_t new_size, uint16_t flags,
     int8_t truncate_to_zero;
     int8_t extend;
     int8_t retry;
+    /*
+     * A6-0x40: the six-byte clock cell REM_FILE_$TRUNCATE fills in.
+     * 0x00E06250 `pea (-0x40,A6)` passes THIS local as the remote call's
+     * fifth argument - not the caller's `result` byte - and 0x00E062A6 /
+     * 0x00E062B2 copy it back into the AOTE as `move.l (-0x40,A6),(0x40,A2)`
+     * / `move.w (-0x3c,A6),(0x44,A2)` and the same pair at +0x28/+0x2C.
+     */
+    clock_t remote_dtm;
 
     /* Copy UID locally (mask off high bit of low word) */
     local_uid.high = uid->high;
@@ -75,7 +85,23 @@ retry_loop:
         vol_uid.high = *(uint32_t *)((char *)aote + 0xAC);
         vol_uid.low = *(uint32_t *)((char *)aote + 0xB0);
         ML_$UNLOCK(AST_LOCK_ID);
-        REM_FILE_$TRUNCATE(&vol_uid, uid, new_size, flags, result, &local_status);
+        /*
+         * 0x00E0624A-0x00E06262, right to left:
+         *   subq.l #0x2,SP           ; discarded word result slot
+         *   move.l (0x16,A6),-(SP)   ; the CALLER's status pointer
+         *   pea (-0x40,A6)           ; &remote_dtm, not `result`
+         *   move.b D7b,-(SP)         ; flags, one byte
+         *   move.l (0xc,A6),-(SP)    ; new_size
+         *   pea (-0x8,A6)            ; &local_uid
+         *   pea (-0xc8,A6)           ; &vol_uid
+         *
+         * TODO(source-2ih2): the remote path also reports through the
+         * caller's status pointer directly and copies remote_dtm into the
+         * AOTE at +0x28/+0x2C and +0x40/+0x44 (0x00E06270-0x00E062CC);
+         * neither is modelled here yet.
+         */
+        REM_FILE_$TRUNCATE(&vol_uid, uid, new_size, flags, &remote_dtm,
+                           &local_status);
         goto done;
     }
 
@@ -111,7 +137,10 @@ retry_loop:
 
     /* Flush if needed */
     if (truncate_to_zero < 0) {
-        ast_$process_aote(aote, -1, 0, 0xFFE0, &local_status);
+        /* 0x00E06138-0x00E06142 (and the same at 0x00E061DE): `st -(SP)`
+         * (flags3), `clr.w -(SP)` (flags2), `st -(SP)` (flags1).
+         * (source-o7gq) */
+        ast_$process_aote(aote, -1, 0, -1, &local_status);
     }
 
     /* Clear in-transition flag */

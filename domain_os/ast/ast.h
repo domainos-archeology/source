@@ -942,10 +942,27 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
                      uint32_t *segment_list, uint16_t unused,
                      status_$t *status);
 void AST_$COND_FLUSH(uid_t *uid, uint32_t *timestamp, status_$t *status);
+/*
+ * AST_$TRUNCATE (0x00E05C40).  The fourth argument is a pointer to a Domain
+ * BOOLEAN byte, not a word and not unsigned: the routine clears it with
+ * `clr.b D3b` / `move.b D3b,(A0)` (0x00E05C6A-0x00E05C70) and sets it with
+ * `st (A1)` (0x00E05DB6), i.e. it writes 0x00 or 0xFF and every reader tests
+ * it with `tst.b` / `bmi`.  The frame is uid (0x08), new_size (0x0C, a
+ * longword), flags (0x10, a word - `move.w (0x10,A6),D0w` at 0x00E05C4E),
+ * result (0x12) and status (0x16).  (source-00m7)
+ */
 void AST_$TRUNCATE(uid_t *uid, uint32_t new_size, uint16_t flags,
-                   uint8_t *result, status_$t *status);
+                   boolean *result, status_$t *status);
+/*
+ * AST_$INVALIDATE (0x00E0662E).  The fourth argument is a Domain BOOLEAN
+ * byte: the routine reads it with `move.b (0x14,A6),D3b` (0x00E06644) and
+ * tests it with `tst.b` / `bmi` to choose the waiting variant, and callers
+ * push a single byte: FILE_$INVALIDATE 0x00E751B4 and REM_FILE_$SERVER
+ * 0x00E63F36 both `move.b <byte>,-(SP)`, and DIR_$REMOVE_ENTRY pushes TRUE
+ * with `st -(SP)` at 0x00E50DF8.  (source-fan2)
+ */
 void AST_$INVALIDATE(uid_t *uid, uint32_t start_page, uint32_t count,
-                     int16_t flags, status_$t *status);
+                     boolean flags, status_$t *status);
 void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count,
                   status_$t *status);
 void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status);

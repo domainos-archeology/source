@@ -85,7 +85,7 @@ static int mock_truncate_calls;
 static uid_t mock_truncate_uid;
 static uint32_t mock_truncate_len;
 static uint16_t mock_truncate_flags;
-static uint8_t *mock_truncate_out;
+static boolean *mock_truncate_out;
 static status_$t *mock_truncate_status_ptr;
 static status_$t mock_truncate_status;
 
@@ -138,7 +138,7 @@ void ast_$purify_aote(aote_t *aote, uint16_t flags, status_$t *status)
 }
 
 void AST_$TRUNCATE(uid_t *uid, uint32_t len, uint16_t flags,
-                   uint8_t *out, status_$t *status)
+                   boolean *out, status_$t *status)
 {
     mock_truncate_calls++;
     mock_truncate_uid = *uid;

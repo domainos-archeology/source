@@ -128,8 +128,12 @@ after_store:
     if (ROUTE_$PORT_ARRAY[0].port_type == 0) {
         uint16_t external_service;      /* D0w */
         uint16_t service_rec[2];        /* A6-0x88 */
-        int16_t  drv_out4;              /* A6-0x9a, never initialised or read */
-        uint32_t drv_out5;              /* A6-0x90, never initialised or read */
+        int16_t   drv_out4;             /* A6-0x9a, never initialised or read */
+        status_$t drv_status;           /* A6-0x90; NETWORK_$SET_SERVICE never
+                                         * initialises or reads it, but the
+                                         * driver writes its status there -
+                                         * see route_$set_service_fn_t
+                                         * (source-hi9m) */
         route_$driver_info_t *drv;
         route_$set_service_fn_t set_service_fn;
 
@@ -170,6 +174,6 @@ after_store:
         set_service_fn = (route_$set_service_fn_t)ARCH_VA_TO_PTR(drv->set_service);
 
         (void)set_service_fn(&ROUTE_$PORT_ARRAY[0].socket, service_rec,
-                             0x88, &drv_out4, &drv_out5);
+                             0x88, &drv_out4, &drv_status);
     }
 }

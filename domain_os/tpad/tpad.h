@@ -171,6 +171,30 @@ typedef struct tpad_$globals_t {
 } tpad_$globals_t;
 
 /*
+ * The record is 0x20 bytes with the 48-bit clock at +0x04: TPAD_$DATA reads
+ * it back as `move.l (0x164,A5),D3` / `move.w (0x168,A5),D4w` and stores it
+ * with `move.l (0x4,A1),(0x164,A5)` / `move.w (0x8,A1),(0x168,A5)`, i.e. the
+ * globals sit at +0x160 of the config array and last_clock is six bytes.
+ * Checked on every target now that clock_t carries a packed spelling.
+ * (source-no75)
+ */
+_Static_assert(sizeof(tpad_$globals_t) == 0x20, "tpad_$globals_t size");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, cursor_y)     == 0x00, "tpad_globals.cursor_y");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, cursor_x)     == 0x02, "tpad_globals.cursor_x");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, last_clock)   == 0x04, "tpad_globals.last_clock");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, touchpad_max) == 0x0A, "tpad_globals.touchpad_max");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, dev_type)     == 0x0C, "tpad_globals.dev_type");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, raw_y)        == 0x0E, "tpad_globals.raw_y");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, raw_x)        == 0x10, "tpad_globals.raw_x");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, button_state) == 0x12, "tpad_globals.button_state");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, delta_y)      == 0x14, "tpad_globals.delta_y");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, delta_x)      == 0x16, "tpad_globals.delta_x");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, accum_y)      == 0x18, "tpad_globals.accum_y");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, accum_x)      == 0x1A, "tpad_globals.accum_x");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, unit)         == 0x1C, "tpad_globals.unit");
+_Static_assert(__builtin_offsetof(tpad_$globals_t, re_origin_flag) == 0x1E, "tpad_globals.re_origin_flag");
+
+/*
  * ============================================================================
  * Constants
  * ============================================================================

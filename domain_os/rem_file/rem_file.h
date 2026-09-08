@@ -40,11 +40,18 @@ void REM_FILE_$RESERVE(uid_t *vol_uid, uid_t *uid, uint32_t start,
  * @param uid         Object UID
  * @param new_size    New file size
  * @param flags       Truncation flags
- * @param result      Output result byte
+ * @param dtm_out     Output: the object's new DTM as a six-byte clock_t.
+ *                    0x00E6198C `movea.l (0x16,A6),A2` holds it and both
+ *                    exits write six bytes through it - 0x00E61A14
+ *                    `move.l (-0xb8,A6),(A2)` / 0x00E61A18
+ *                    `move.w (-0xb4,A6),(0x4,A2)` from the reply, or
+ *                    0x00E61A20-0x00E61A22 `pea (A2)` / TIME_$CLOCK.
+ *                    AST_$TRUNCATE hands it a local, not its own boolean
+ *                    result byte (0x00E06250 `pea (-0x40,A6)`).  (source-00m7)
  * @param status      Output status code
  */
 void REM_FILE_$TRUNCATE(uid_t *vol_uid, uid_t *uid, uint32_t new_size,
-                        uint8_t flags, uint8_t *result, status_$t *status);
+                        uint8_t flags, clock_t *dtm_out, status_$t *status);
 
 /*
  * REM_FILE_$INVALIDATE - Invalidate pages in a remote file

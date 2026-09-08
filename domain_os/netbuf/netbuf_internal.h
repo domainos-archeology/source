@@ -105,7 +105,6 @@ extern uint32_t netbuf_va_base;
 #define NETBUF_$VA_BASE netbuf_va_base
 #endif
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(netbuf_globals_t, delay_time) == 0x300, "netbuf.delay_time");
 _Static_assert(offsetof(netbuf_globals_t, spin_lock) == 0x308, "netbuf.spin_lock");
 _Static_assert(offsetof(netbuf_globals_t, dat_lim) == 0x31C, "netbuf.dat_lim");
@@ -117,13 +116,12 @@ _Static_assert(offsetof(netbuf_globals_t, va_base) == 0x330, "netbuf.va_base");
 _Static_assert(offsetof(netbuf_globals_t, hdr_alloc) == 0x334, "netbuf.hdr_alloc");
 _Static_assert(offsetof(netbuf_globals_t, pad_336) == 0x336, "netbuf.pad_336");
 /*
- * Whole-segment size from the SAU2 map ("NETBUF_ size = 338").  Guarded with
- * the offset asserts because the record is not packed and clock_t
- * ({uint32,uint16}, base/base.h) is padded out to 8 bytes by a host ABI that
- * aligns 32-bit scalars to 4, which shifts everything from 0x306 on.
+ * Whole-segment size from the SAU2 map ("NETBUF_ size = 338").  Checked on
+ * every target: clock_t carries an explicit packed spelling (base/base.h), so
+ * delay_time occupies 0x300..0x305 on a 64-bit host too and nothing after it
+ * shifts.  (source-no75)
  */
 _Static_assert(sizeof(netbuf_globals_t) == 0x338, "netbuf_globals_t must be 0x338 bytes");
-#endif
 
 /* Convenience macros for global access */
 #define NETBUF_$VA_SLOTS (NETBUF_GLOBALS->va_slots)

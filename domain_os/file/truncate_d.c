@@ -45,7 +45,7 @@ void FILE_$TRUNCATE_D(uid_t *file_uid, uint32_t *new_size,
                       uint32_t *domain_ctx, status_$t *status_ret)
 {
     uint16_t rights_out;
-    uint8_t result;
+    boolean result;
 
     /*
      * Check write permission (mode 2)

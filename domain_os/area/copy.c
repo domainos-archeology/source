@@ -32,7 +32,8 @@ static area_$seg_table_t *find_seg_table(int16_t asid, int16_t area_id,
             (uint16_t)tbl->table_index == table_idx) {
             break;
         }
-        tbl = tbl->next;
+        /* 0x00E091F2 `movea.l (0x4,A2),A2` - the VA of the next record */
+        tbl = (area_$seg_table_t *)ARCH_VA_TO_PTR(tbl->next);
     }
 
     return tbl;
@@ -241,8 +242,8 @@ uint32_t AREA_$COPY(int16_t gen, uint16_t area_id, int16_t new_asid,
             table_offset = (int16_t)(M$OIS$WLW((int32_t)byte_idx - 2, 0x100) << 2);
 
             /* 0x00E0921E-0x00E09228 */
-            src_slot = (area_$seg_slot_t *)((char *)tbl->bitmap_ptr
-                                            + table_offset);
+            src_slot = (area_$seg_slot_t *)
+                ((char *)ARCH_VA_TO_PTR(tbl->bitmap_ptr) + table_offset);
 
             /* 0x00E0922C-0x00E0925A */
             tbl = find_seg_table(dst_entry->owner_asid, (int16_t)new_area_id,
@@ -253,8 +254,8 @@ uint32_t AREA_$COPY(int16_t gen, uint16_t area_id, int16_t new_asid,
             }
 
             /* 0x00E0926E-0x00E09272 */
-            dst_slot = (area_$seg_slot_t *)((char *)tbl->bitmap_ptr
-                                            + table_offset);
+            dst_slot = (area_$seg_slot_t *)
+                ((char *)ARCH_VA_TO_PTR(tbl->bitmap_ptr) + table_offset);
         }
 
         /* 0x00E0927A: `moveq #0x7,D5` + the dbf at 0x00E09362 = 8 passes */

@@ -177,7 +177,7 @@ static int      trunc_calls;
 static uint32_t trunc_size_seen;
 static uint16_t trunc_flags_seen;
 void AST_$TRUNCATE(uid_t *uid, uint32_t new_size, uint16_t flags,
-                   uint8_t *result, status_$t *status)
+                   boolean *result, status_$t *status)
 {
     trunc_calls++;
     trunc_size_seen = new_size;

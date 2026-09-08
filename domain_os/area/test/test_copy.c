@@ -605,6 +605,79 @@ TEST(missing_seg_table_crashes)
 }
 
 /* ==========================================================================
+ * The overflow segment-table record (source-efc9)
+ *
+ * area_$seg_table_t.next and .bitmap_ptr hold 32-bit target virtual
+ * addresses, not host pointers: area_$alloc_seg_table stores them with
+ * `move.l D5,(0x8,A0)` (0x00E09E06) and `move.l (0x68,A1),(0x4,A0)`
+ * (0x00E09E18), and AREA_$COPY walks the chain with `movea.l (0x4,A2),A2`
+ * (0x00E091F2) and reaches the slots with `movea.l (0x8,A2),A0`
+ * (0x00E0921E).  Spelling both as uint32_t keeps the record twelve bytes
+ * wide on this 64-bit host, which is what lets the pool tile
+ * AREA_$GLOBALS+0x150..+0x44F exactly.
+ * ========================================================================== */
+
+TEST(seg_table_record_is_twelve_bytes)
+{
+    ASSERT_EQ(0x0C, sizeof(area_$seg_table_t));
+    ASSERT_EQ(0x00, offsetof(area_$seg_table_t, area_id));
+    ASSERT_EQ(0x02, offsetof(area_$seg_table_t, table_index));
+    ASSERT_EQ(0x03, offsetof(area_$seg_table_t, allocated));
+    ASSERT_EQ(0x04, offsetof(area_$seg_table_t, next));
+    ASSERT_EQ(0x08, offsetof(area_$seg_table_t, bitmap_ptr));
+
+    /* 64 of them tile globals+0x150 .. globals+0x44F (0x00E2F4D4's 64-pass
+     * clear, `lea (0xc,A0),A0`). */
+    ASSERT_EQ(0x300, sizeof(AREA_$GLOBALS.seg_table_pool));
+}
+
+/*
+ * find_seg_table (0x00E091C6-0x00E091F4) follows the `next` VA, and the
+ * record it stops on hands out its slots through the `bitmap_ptr` VA.  Point
+ * the host VA window at an arena so both cells hold real 32-bit values.
+ */
+TEST(seg_table_chain_is_walked_through_the_va_cells)
+{
+    static area_$seg_table_t arena[3];
+    static area_$seg_slot_t  slots[8];
+    area_$seg_table_t       *found;
+    uintptr_t                saved_base = ARCH_HOST_VA_BASE;
+
+    /* Put the arena 0x1000 into the window so no VA comes out zero (nil). */
+    ARCH_HOST_VA_BASE = (uintptr_t)arena - 0x1000u;
+
+    memset(arena, 0, sizeof(arena));
+    memset(slots, 0, sizeof(slots));
+
+    arena[0].area_id = 0x11; arena[0].table_index = 0;
+    arena[1].area_id = 0x22; arena[1].table_index = 5;
+    arena[2].area_id = 0x11; arena[2].table_index = 5;
+
+    arena[0].next = ARCH_PTR_TO_VA(&arena[1]);
+    arena[1].next = ARCH_PTR_TO_VA(&arena[2]);
+    arena[2].next = 0;                          /* nil terminator */
+    arena[2].bitmap_ptr = ARCH_PTR_TO_VA(&slots[0]);
+
+    /* Every stored VA must be a nonzero 32-bit value, not a truncated
+     * host pointer. */
+    ASSERT_EQ(0x1000u + sizeof(area_$seg_table_t), arena[0].next);
+    ASSERT_EQ(0x1000u + 2 * sizeof(area_$seg_table_t), arena[1].next);
+    ASSERT_TRUE(arena[2].bitmap_ptr != 0);
+
+    AREA_$GLOBALS.seg_table_list[4] = &arena[0];
+
+    found = find_seg_table(4, 0x11, 5);
+    ASSERT_TRUE(found == &arena[2]);
+    ASSERT_TRUE(ARCH_VA_TO_PTR(found->bitmap_ptr) == (void *)&slots[0]);
+
+    /* A table index nothing carries walks the whole chain and returns nil. */
+    ASSERT_TRUE(find_seg_table(4, 0x11, 9) == NULL);
+
+    AREA_$GLOBALS.seg_table_list[4] = NULL;
+    ARCH_HOST_VA_BASE = saved_base;
+}
+
+/* ==========================================================================
  * Main
  * ========================================================================== */
 
@@ -626,6 +699,8 @@ int main(void)
     RUN_TEST(stack_segments_are_skipped);
     RUN_TEST(reversed_area_walks_backwards);
     RUN_TEST(missing_seg_table_crashes);
+    RUN_TEST(seg_table_record_is_twelve_bytes);
+    RUN_TEST(seg_table_chain_is_walked_through_the_va_cells);
 
     printf("\nResults: %d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed > 0 ? 1 : 0;

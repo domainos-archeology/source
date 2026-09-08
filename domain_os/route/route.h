@@ -102,13 +102,21 @@ _Static_assert(offsetof(route_$driver_info_t, set_service) == 0x24,
  *   move.w #0x88,-(SP)        ; arg 3, by value
  *   pea (-0x88,A6)            ; arg 2, the two-word record {0, service}
  *   pea (0xe2e0d0).l          ; arg 1, &ROUTE_$PORT_ARRAY[0].socket
- * The types of arguments 4 and 5 are unproven: the caller neither
- * initialises nor reads them.
+ * NETWORK_$SET_SERVICE neither initialises nor reads arguments 4 and 5, but
+ * the driver on the other end settles argument 5: RING_$IOCTL (0x00E76B2C)
+ * is the entry it reaches through slot 0x24, and it takes that slot as its
+ * status return - 0x00E76B42 `movea.l (0x16,A6),A3`, then
+ * 0x00E76B4C `move.l #0x310002,(A3)`, 0x00E76B68 `clr.l (A3)` and
+ * 0x00E76B6C `move.l #0x310001,(A3)`.  ROUTE_$SERVICE agrees: at
+ * 0x00E6A42E `pea (A0)` it passes its own caller's status_$t * in that position.
+ * Argument 4 is still unproven - RING_$IOCTL never reads (0x12,A6).
+ * (source-hi9m)
  */
 typedef int16_t (*route_$set_service_fn_t)(uint16_t *socket_ptr,
                                            const uint16_t *service_rec,
                                            uint16_t request,
-                                           void *out4, void *out5);
+                                           void *out4,
+                                           status_$t *status_ret);
 
 /*
  * route_$port_status_fn_t - the driver entries at route_$driver_info_t+0x14

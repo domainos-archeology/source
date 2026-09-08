@@ -193,7 +193,8 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t location,
     {
         uint8_t vol_idx = aote->vol_index;             /* 0x00E0228C */
         if (vol_idx <= 0x0F) {
-            uint16_t vol_flags = *((uint16_t *)(0xE1E0A0));  /* A5+0x420 */
+            /* 0x00E02294 `move.w (0x420,A5),D1w` */
+            uint16_t vol_flags = ast_$vol_info_count;
             if ((vol_flags & (1 << vol_idx)) != 0) {
                 goto bad_volume;                       /* 0x00E0229A -> 0x00E022CE */
             }
@@ -220,7 +221,8 @@ after_location_stored:                                 /* 0x00E022B4 */
         /* Load VTOCE for local objects */
         uint8_t vol_idx = aote->vol_index;             /* 0x00E022BE */
         if (vol_idx <= 0x0F) {
-            uint16_t vol_flags = *((uint16_t *)(0xE1E0A0));
+            /* 0x00E022C6 `move.w (0x420,A5),D1w` */
+            uint16_t vol_flags = ast_$vol_info_count;
             if ((vol_flags & (1 << vol_idx)) != 0) {
                 goto bad_volume;                       /* 0x00E022CC -> 0x00E022CE */
             }
@@ -245,7 +247,8 @@ relock_and_check:
     if (aote->remote_flag >= 0) {                      /* 0x00E0230E */
         uint8_t vol_idx = aote->vol_index;             /* 0x00E02318 */
         if (vol_idx <= 0x0F) {
-            uint16_t vol_flags = *((uint16_t *)(0xE1E0A0));
+            /* 0x00E02320 `move.w (0x420,A5),D1w` */
+            uint16_t vol_flags = ast_$vol_info_count;
             if ((vol_flags & (1 << vol_idx)) != 0) {
                 *status = ast_$validate_uid(uid, 0x30F00);
             }

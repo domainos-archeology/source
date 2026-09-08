@@ -50,7 +50,9 @@ static const int16_t file_$invalidate_acl_opts_00e751e8 = 0;
  *   file_uid    - UID of file to invalidate
  *   start_page  - Pointer to starting page number
  *   page_count  - Pointer to number of pages to invalidate
- *   flags       - Pointer to flags byte (controls invalidation behavior)
+ *   flags       - Pointer to a Domain BOOLEAN byte, passed straight through
+ *                 to AST_$INVALIDATE (0x00E75186 `move.b (A2),(-0x16,A6)`,
+ *                 0x00E751B4 `move.b (-0x16,A6),-(SP)`)
  *   status_ret  - Output status code
  *
  * Required rights:
@@ -62,13 +64,13 @@ static const int16_t file_$invalidate_acl_opts_00e751e8 = 0;
  *   (other status from AST_$INVALIDATE)
  */
 void FILE_$INVALIDATE(uid_t *file_uid, uint32_t *start_page,
-                      uint32_t *page_count, uint8_t *flags,
+                      uint32_t *page_count, boolean *flags,
                       status_$t *status_ret)
 {
     uid_t local_uid;
     uint32_t start_val;
     uint32_t count_val;
-    uint8_t flags_val;
+    boolean flags_val;
     status_$t status;
 
     /* Copy UID to local buffer */
@@ -92,16 +94,20 @@ void FILE_$INVALIDATE(uid_t *file_uid, uint32_t *start_page,
 
     if (status == status_$ok) {
         /*
-         * Permission granted - invalidate the pages
-         * AST_$INVALIDATE signature:
-         *   AST_$INVALIDATE(uid, start_page, count, flags, status)
+         * Permission granted - invalidate the pages.
          *
-         * The flags parameter is passed as a 16-bit value with:
-         *   - Low byte: 0xE7 (constant from assembly)
-         *   - High byte: flags_val from parameter
+         * 0x00E751AE-0x00E751C4:
+         *   subq.l #0x2,SP              ; discarded word result slot
+         *   pea (-0xc,A6)               ; status
+         *   move.b (-0x16,A6),-(SP)     ; flags, ONE byte
+         *   move.l (-0x10,A6),-(SP)     ; page_count
+         *   move.l (-0x14,A6),-(SP)     ; start_page
+         *   pea (-0x8,A6)               ; &local_uid
+         *   jsr 0x00e0662e.l            ; AST_$INVALIDATE
+         * The byte is pushed unchanged; there is no 0xE7 low half.
+         * (source-fan2)
          */
-        int16_t combined_flags = (int16_t)((flags_val << 8) | 0xE7);
-        AST_$INVALIDATE(&local_uid, start_val, count_val, combined_flags, &status);
+        AST_$INVALIDATE(&local_uid, start_val, count_val, flags_val, &status);
     } else {
         /*
          * Permission denied - release wired pages

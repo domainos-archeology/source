@@ -153,8 +153,16 @@ int8_t FILE_$DELETE_INT(uid_t *file_uid, uint16_t flags, uint8_t *result, status
                 truncate_flags = 3;  /* Delete with force */
             }
 
-            /* Call AST_$TRUNCATE to actually delete the file */
-            AST_$TRUNCATE(file_uid, 0, truncate_flags, result, status_ret);
+            /*
+             * Call AST_$TRUNCATE to actually delete the file.  Its fourth
+             * argument is a Domain BOOLEAN byte (0x00E05C70 `move.b D3b,(A0)`
+             * / 0x00E05DB6 `st (A1)`); FILE_$DELETE_INT hands it the caller's
+             * out-cell unchanged, which several callers still spell as an
+             * unsigned byte pair.  (source-00m7; the cell's own type is
+             * tracked by source-8q7h.)
+             */
+            AST_$TRUNCATE(file_uid, 0, truncate_flags, (boolean *)result,
+                          status_ret);
 
             /* Re-acquire ML lock 5 */
             ML_$LOCK(FILE_LOCK_ID);

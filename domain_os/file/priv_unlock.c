@@ -141,7 +141,7 @@ boolean FILE_$PRIV_UNLOCK(uid_t *file_uid, int32_t lock_slot,
     /* --- frame ------------------------------------------------------- */
     uint16_t   *hash_bucket;                /* A6-0xFC */
     boolean     saw_other;                  /* A6-0xDC */
-    uint8_t     unlock_result;              /* A6-0xD8 */
+    boolean     unlock_result;              /* A6-0xD8 */
     boolean     not_pending;                /* A6-0xD6 */
     boolean     other_exclusive;            /* A6-0xD4 */
     boolean     did_unlock;                 /* A6-0xD0 */

@@ -136,7 +136,7 @@
 typedef struct rem_file_server_frame_t {
     void       *lock_acl_cell;      /* 0x000: -0x4E4, holds &req.arg[0x30] */
     uint8_t     pad_004[0x0C];      /* 0x004 */
-    uint8_t     trunc_result[2];    /* 0x010: -0x4D4, AST_$TRUNCATE result */
+    boolean     trunc_result[2];    /* 0x010: -0x4D4, AST_$TRUNCATE result */
     uint16_t    lock_scan_index;    /* 0x012: -0x4D2 */
     uint16_t    pad_014;            /* 0x014 */
     uint16_t    pkt_dest_sock;      /* 0x016: -0x4CE, rcv+0x12 */
@@ -586,7 +586,7 @@ static void server_truncate_delete(rem_file_server_frame_t *f)
         if (do_delete < 0) {
             FILE_$DELETE(file_uid, &f->response.status);
         } else {
-            uint8_t trunc_result[8];
+            boolean trunc_result[8];
 
             AST_$TRUNCATE(file_uid, REQ_L(f, -0x42A), 0, trunc_result,
                           &f->response.status);
@@ -1309,7 +1309,7 @@ release_netbuf:                                     /* 0x00E639DC */
 
     case REM_FILE_OP_INVALIDATE:                      /* 0x00E63F30 */
         AST_$INVALIDATE(&f.request.uid, REQ_L(&f, -0x42C), REQ_L(&f, -0x428),
-                        (int16_t)REQ_B(&f, -0x424), &f.response.status);
+                        (boolean)REQ_B(&f, -0x424), &f.response.status);
         goto reply_len_default;
 
     case REM_FILE_OP_RESERVE:                         /* 0x00E63F50 */

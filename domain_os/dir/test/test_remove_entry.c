@@ -117,7 +117,7 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
 static int      inval_calls;
 static uint32_t inval_page_seen;
 void AST_$INVALIDATE(uid_t *uid, uint32_t start_page, uint32_t count,
-                     int16_t flags, status_$t *status)
+                     boolean flags, status_$t *status)
 {
     inval_calls++;
     inval_page_seen = start_page;
@@ -129,7 +129,7 @@ static int       trunc_calls;
 static uint32_t  trunc_size_seen;
 static status_$t trunc_status;
 void AST_$TRUNCATE(uid_t *uid, uint32_t new_size, uint16_t flags,
-                   uint8_t *result, status_$t *status)
+                   boolean *result, status_$t *status)
 {
     trunc_calls++;
     trunc_size_seen = new_size;

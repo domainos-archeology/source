@@ -129,10 +129,21 @@ _Static_assert(__builtin_offsetof(uid_t, low) == 0x04, "uid_t.low");
 // Represents time in 4-microsecond ticks since epoch (250,000 ticks/sec)
 // Constant 0x3D090 = 250,000 (ticks per second)
 // Constant 0xD090 = 0x3D090 & 0xFFFF (low word for multiplication)
-typedef struct {
+//
+// The record is SIX bytes wide in the image (TIME_$CLOCK writes it as
+// "move.l Dn,(An)+" / "move.w Dn,(An)", and every embedded copy - e.g.
+// tpad_$globals_t+0x04, audit_data_t+0x3A, ring_$unit_t+0x568 - sits on a
+// six-byte stride).  m68k-elf-gcc already gives it size 6 / alignment 2, but
+// a 64-bit host would pad it to 8 with alignment 4 and every record that
+// embeds it would then have a host layout different from the image, so the
+// packed spelling is stated explicitly.  (source-no75)
+typedef struct __attribute__((packed, aligned(2))) {
   uint high;  // upper 32 bits
   ushort low; // lower 16 bits
 } clock_t;
+
+_Static_assert(sizeof(clock_t) == 6, "clock_t is six bytes in the image");
+_Static_assert(_Alignof(clock_t) == 2, "clock_t is word-aligned");
 
 // =============================================================================
 // Boolean type (Domain/OS style)

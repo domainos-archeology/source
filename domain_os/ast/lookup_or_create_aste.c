@@ -17,16 +17,23 @@
 
 #include "ast/ast_internal.h"
 
-/* Volume reference counts at A5+0x412 */
+/*
+ * Volume reference counts at A5+0x412.
+ *
+ * The dismount bit set at A5+0x420 is ast_$vol_info_count (ast/ast.h,
+ * defined by ast/ast_data.c); this file used to reach it through a hardcoded
+ * 0xE1E0A0 pointer.  Both reads here are word reads - 0x00E02588
+ * `move.w (0x420,A5),D0w` and 0x00E02816 `move.w (0x420,A5),D1w`.
+ * (source-stvi)
+ */
 #if defined(ARCH_M68K)
 #define VOL_REF_COUNTS    ((int16_t *)0xE1E092)
-#define VOL_DISMOUNT_MASK (*(uint16_t *)0xE1E0A0)
 #define VOL_DISMOUNT_EC   ((ec_$eventcount_t *)0xE1E088)
 #else
 #define VOL_REF_COUNTS    vol_ref_counts
-#define VOL_DISMOUNT_MASK vol_dismount_mask
 #define VOL_DISMOUNT_EC   (&vol_dismount_ec)
 #endif
+#define VOL_DISMOUNT_MASK ast_$vol_info_count
 
 aste_t *ast_$lookup_or_create_aste(aote_t *aote, uint16_t segment,
                                     status_$t *status)

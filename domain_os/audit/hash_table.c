@@ -57,15 +57,15 @@
 
 void *audit_$alloc(uint16_t size, status_$t *status_ret)
 {
-    uint8_t *result;
+    uint32_t result_va;
     uint32_t ppn;
 
     /* 0x00E7121C `bne.b` - the reset arm. */
     if (size == 0) {
-        AUDIT_$DATA.pool_next = (uint8_t *)ARCH_VA_TO_PTR(AUDIT_POOL_BASE_VA);
+        AUDIT_$DATA.pool_next = AUDIT_POOL_BASE_VA;
 
         /* 0x00E71226 `tst.l (0x1a8,A5)` / `bne.b`: first call only. */
-        if (AUDIT_$DATA.pool_limit == NULL) {
+        if (AUDIT_$DATA.pool_limit == 0) {
             AUDIT_$DATA.pool_limit = AUDIT_$DATA.pool_next;
         }
 
@@ -74,28 +74,27 @@ void *audit_$alloc(uint16_t size, status_$t *status_ret)
 
     /* 0x00E71238-0x00E7123E: hand out the old cursor, then advance it by the
      * SIGN-EXTENDED size word. */
-    result = AUDIT_$DATA.pool_next;
-    AUDIT_$DATA.pool_next += (int16_t)size;
+    result_va = AUDIT_$DATA.pool_next;
+    AUDIT_$DATA.pool_next += (uint32_t)(int32_t)(int16_t)size;
 
     /* 0x00E71274-0x00E7127C: `bcc` is an unsigned >=, and the test runs
      * before the first body (0x00E71242 `bra.b`). */
-    while (ARCH_PTR_TO_VA(AUDIT_$DATA.pool_next) >=
-           ARCH_PTR_TO_VA(AUDIT_$DATA.pool_limit)) {
+    while (AUDIT_$DATA.pool_next >= AUDIT_$DATA.pool_limit) {
 
         WP_$CALLOC(&ppn, status_ret);           /* 0x00E7124A */
 
         /* 0x00E71252-0x00E71254: leave with the block already handed out. */
         if (*status_ret != status_$ok) {
-            return result;
+            return ARCH_VA_TO_PTR(result_va);
         }
 
-        MMU_$INSTALL(ppn, ARCH_PTR_TO_VA(AUDIT_$DATA.pool_limit),
+        MMU_$INSTALL(ppn, AUDIT_$DATA.pool_limit,
                      AUDIT_POOL_MMU_FLAGS);     /* 0x00E71262 */
 
         AUDIT_$DATA.pool_limit += AUDIT_POOL_PAGE_SIZE;  /* 0x00E7126C */
     }
 
-    return result;                              /* 0x00E7127E `move.l D2,D0` */
+    return ARCH_VA_TO_PTR(result_va);           /* 0x00E7127E `move.l D2,D0` */
 }
 
 /*

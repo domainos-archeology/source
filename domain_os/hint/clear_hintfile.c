@@ -25,7 +25,7 @@ void HINT_$clear_hintfile(void)
      * `move.b D3b,(A0)` at 0x00E05C70 and `st (A1)` at 0x00E05DB6.  A byte
      * is the right width, and nothing here reads it back.
      */
-    uint8_t truncate_result;
+    boolean truncate_result;
 
     /*
      * 0x00E3119C-0x00E311BA: AST_$TRUNCATE(&uid, 0L, 0, &byte_out, &status).

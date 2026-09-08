@@ -43,7 +43,9 @@ void AST_$COND_FLUSH(uid_t *uid, uint32_t *timestamp, status_$t *status)
         if (aote_time != timestamp[0] ||
             aote_sub != *(uint16_t *)((char *)timestamp + 4)) {
             /* Timestamps differ - flush the object */
-            ast_$process_aote(aote, -1, 0, 0xFF00 | 0xE0, &local_status);
+            /* 0x00E05BFC-0x00E05C02: `st -(SP)` (flags3), `clr.w -(SP)`
+             * (flags2), `st -(SP)` (flags1).  (source-o7gq) */
+            ast_$process_aote(aote, -1, 0, -1, &local_status);
 
             if (local_status == status_$ok) {
                 ast_$release_aote(aote);

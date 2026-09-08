@@ -9,7 +9,8 @@
  *   uid - Pointer to object UID
  *   start_page - Starting page number
  *   count - Number of pages to invalidate
- *   flags - Operation flags (negative = wait for completion)
+ *   flags - Domain BOOLEAN, read as one byte at 0x00E06644
+ *           (`move.b (0x14,A6),D3b`); TRUE (negative) = wait for completion
  *   status - Status return
  *
  * Original address: 0x00e0662e
@@ -20,7 +21,7 @@
 #include "rem_file/rem_file.h"
 
 void AST_$INVALIDATE(uid_t *uid, uint32_t start_page, uint32_t count,
-                     int16_t flags, status_$t *status)
+                     boolean flags, status_$t *status)
 {
     aote_t *aote;
     int8_t is_remote;
@@ -86,7 +87,7 @@ void AST_$INVALIDATE(uid_t *uid, uint32_t start_page, uint32_t count,
     /* If remote object and no error, propagate invalidation */
     if (is_remote < 0 && *status == status_$ok) {
         REM_FILE_$INVALIDATE(&vol_uid, uid, start_page, count,
-                             (int8_t)flags, status);
+                             flags, status);
     }
 
 done:

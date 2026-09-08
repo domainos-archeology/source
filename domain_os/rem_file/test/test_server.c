@@ -307,12 +307,12 @@ void AST_$GET_SEG_MAP(uid_t *ui, uint32_t off, uint32_t un, uint32_t sc,
                       uint32_t ms, uint16_t fl, uint32_t *out, status_$t *st)
 { (void)ui; (void)off; (void)un; (void)sc; (void)ms; (void)fl; (void)out;
   *st = status_$ok; }
-void AST_$INVALIDATE(uid_t *u, uint32_t sp, uint32_t c, int16_t fl,
+void AST_$INVALIDATE(uid_t *u, uint32_t sp, uint32_t c, boolean fl,
                      status_$t *st)
 { (void)u; (void)sp; (void)c; (void)fl; *st = status_$ok; }
 void AST_$RESERVE(uid_t *u, uint32_t sb, uint32_t bc, status_$t *st)
 { (void)u; (void)sb; (void)bc; *st = status_$ok; }
-void AST_$TRUNCATE(uid_t *u, uint32_t sz, uint16_t fl, uint8_t *res,
+void AST_$TRUNCATE(uid_t *u, uint32_t sz, uint16_t fl, boolean *res,
                    status_$t *st)
 { (void)u; (void)sz; (void)fl; (void)res; mock_truncate_calls++;
   *st = status_$ok; }
