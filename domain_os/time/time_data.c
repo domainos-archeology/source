@@ -173,3 +173,15 @@ ec_$eventcount_t TIME_$FAST_CLOCK_EC = {
 };
 _Static_assert(sizeof(TIME_$FAST_CLOCK_EC) == 0x0C,
                "TIME_$FAST_CLOCK_EC: 0x00E2B0C8..0x00E2B0D4 (TIME_$CLOCKH_EC)");
+
+/*
+ * Unnamed TIME_ data-segment cells, see time_internal.h.
+ *
+ * `gsk read 0x00E2A7AC 16`: all zero.  time_$zero_interval occupies
+ * 0xE2A7AC..0xE2A7B2; the two handles are at 0xE2A7B4 and 0xE2A7B8.
+ */
+clock_t time_$zero_interval = { 0, 0 };
+void *time_$fast_clock_ec_handle = NULL;
+void *time_$clock_ec_handle = NULL;
+_Static_assert(sizeof(time_$zero_interval) == 6,
+               "time_$zero_interval: 0x00E2A7AC..0x00E2A7B2");

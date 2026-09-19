@@ -1,71 +1,38 @@
 /*
- * TIME_$Q_ENTER_ELEM - Enter an element into a time queue
+ * TIME_$Q_ENTER_ELEM - Insert a prepared element into a time queue
  *
- * Inserts a queue element in sorted order by expiration time.
- * Uses a spin lock to protect queue manipulation.
+ * Frame (0x00E16D6C): 0x08 queue (A2), 0x0C now (A3), 0x10 elem, 0x14 status.
  *
- * Parameters:
- *   queue - Queue to add to
- *   when - Expiration time (for insertion sorting)
- *   elem - Queue element to insert
- *   status - Status return
+ *   00e16d74  *status = 0                      ; before the lock
+ *   00e16d7a  token = ML_$SPIN_LOCK(&queue->lock)
+ *   00e16d8a  time_$q_insert_sorted(queue, elem); tst.b D0b / bpl
+ *   00e16d9a  tst.b (0x8,A2) / bpl             ; VT queue: IN_VT_INT, else IN_RT_INT
+ *   00e16dae  bmi                              ; inside that handler -> skip
+ *   00e16db0  time_$q_setup_timer(queue, now)
+ *   00e16dba  ML_$SPIN_UNLOCK
  *
- * Original address: 0x00e16d64
- *
- * Assembly:
- *   00e16d64    link.w A6,-0x4
- *   00e16d68    movem.l {  A3 A2},-(SP)
- *   00e16d6c    movea.l (0x8,A6),A2       ; queue
- *   00e16d70    movea.l (0xc,A6),A3       ; when
- *   00e16d74    movea.l (0x14,A6),A0      ; status
- *   00e16d78    clr.l (A0)                ; *status = 0
- *   00e16d7a    pea (0x4,A2)              ; &queue->tail (spin lock)
- *   00e16d7e    jsr ML_$SPIN_LOCK
- *   00e16d84    addq.w #0x4,SP
- *   00e16d86    move.w D0w,(-0x2,A6)      ; save token
- *   00e16d8a    move.l (0x10,A6),-(SP)    ; elem
- *   00e16d8e    pea (A2)                  ; queue
- *   00e16d90    bsr.w time_$q_insert_sorted   ; Insert into sorted position
- *   00e16d94    addq.w #0x8,SP
- *   00e16d96    tst.b D0b                 ; Check if at head
- *   00e16d98    bpl.b skip_timer_setup
- *   ; ... timer setup code if at head ...
- *   00e16dba    ; ML_$SPIN_UNLOCK
+ * Original address: 0x00e16d64, 112 bytes
  */
 
 #include "time/time_internal.h"
 
-void TIME_$Q_ENTER_ELEM(time_queue_t *queue, clock_t *when,
+void TIME_$Q_ENTER_ELEM(time_queue_t *queue, clock_t *now,
                         time_queue_elem_t *elem, status_$t *status)
 {
-    uint16_t token;
-    int8_t at_head;
+    ml_$spin_token_t token;         /* A6-0x02 */
+    int8_t in_int;
 
-    *status = status_$ok;
+    *status = status_$ok;                                   /* 0x00E16D78 */
 
-    /* Acquire spin lock on queue */
-    token = ML_$SPIN_LOCK((uint16_t *)&queue->tail);
+    token = ML_$SPIN_LOCK(&queue->lock);
 
-    /* Insert element in sorted order by expiration time */
-    at_head = time_$q_insert_sorted(queue, elem);
-
-    /*
-     * If element was inserted at the head of the queue,
-     * we may need to reprogram the timer hardware.
-     * Check interrupt flags to see if we're in an interrupt context.
-     */
-    if (at_head < 0) {  /* Negative means at head */
-        if (queue->flags < 0) {  /* flags & 0x80 = VT queue */
-            if (IN_VT_INT == 0) {
-                time_$q_setup_timer(queue, when);
-            }
-        } else {
-            if (IN_RT_INT == 0) {
-                time_$q_setup_timer(queue, when);
-            }
+    /* 0x00E16D90: true (negative) when elem became the head */
+    if (time_$q_insert_sorted(queue, elem) < 0) {
+        in_int = (queue->flags < 0) ? (int8_t)IN_VT_INT : (int8_t)IN_RT_INT;
+        if (in_int >= 0) {
+            time_$q_setup_timer(queue, now);                /* 0x00E16DB4 */
         }
     }
 
-    /* Release spin lock */
-    ML_$SPIN_UNLOCK((uint16_t *)&queue->tail, token);
+    ML_$SPIN_UNLOCK(&queue->lock, token);                   /* 0x00E16DC4 */
 }

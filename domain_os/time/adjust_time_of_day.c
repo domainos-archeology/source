@@ -1,198 +1,193 @@
 /*
- * TIME_$ADJUST_TIME_OF_DAY - Adjust time of day gradually
+ * TIME_$ADJUST_TIME_OF_DAY - Adjust the time of day gradually
  *
- * Adjusts the system time gradually rather than jumping.
- * This is the Domain/OS equivalent of adjtime().
+ * The Domain/OS equivalent of adjtime(): the requested delta is converted
+ * to 4-microsecond ticks, rounded to a multiple of the skew step, and armed
+ * as TIME_$CURRENT_SKEW / TIME_$CURRENT_TICK / TIME_$CURRENT_DELTA for the
+ * timer interrupt to work off.  The calendar chip is rewritten with the
+ * adjusted time of day, and the delta that was pending before the call is
+ * returned split into seconds and microseconds.
  *
- * Parameters:
- *   delta - Pointer to adjustment delta (seconds, microseconds)
- *   old_delta - Pointer to receive previous adjustment (may be NULL)
- *   status - Status return
+ * Parameters (frame 0x00E168E6..0x00E168EE):
+ *   0x08 delta     - {seconds, microseconds} to add (A2)
+ *   0x0C old_delta - receives the previously pending {seconds, microseconds}
+ *                    (A3); written unconditionally, never checked for nil
+ *   0x10 status    - status return (A0)
  *
- * Original address: 0x00e168de
+ * Original address: 0x00e168de, 458 bytes
  *
- * The function:
- * 1. Converts delta to ticks
- * 2. Calculates skew value for gradual adjustment
- * 3. Updates TIME_$CURRENT_TICK and TIME_$CURRENT_SKEW
- * 4. Updates hardware RTC
- *
- * Assembly:
- *   00e168e6  movea.l (0x8,A6),A2 / movea.l (0xc,A6),A3
- *   00e168ee  movea.l (0x10,A6),A0 / clr.l (A0)
- *   00e168f4  abs(delta[0]) / cmpi.l #0x1f40 / bls  ; UNSIGNED bound, 8000
- *   00e16902  0xd000c
- *   00e1690c  jsr M$MIS$LLL(delta[0], 0x3d090)      ; * 250000
- *   00e1691c  move.l (0x4,A2),D1 / bpl / addq.l #0x3 / asr.l #0x2
- *   00e16932  cmpi.l #0x3d090 / bls -> 0xa7 else 0x686
- *   00e16944  tst.l D2 / bpl / neg.w D3w
- *   00e16950  jsr M$OIS$WLW / M$DIS$LLW / M$MIS$LLW ; round to a multiple
- *   00e1697e  clr.w D3w                             ; a zero delta has no skew
- *   00e16982  D4 = skew + 0x1047
- *   00e1698a  jsr TIME_$GET_TIME_OF_DAY(-0x18)
- *   00e16992  ori #0x700,SR                         ; raise, nothing saved
- *   00e16996..00e169a8  skew, tick and delta; D3 takes the OLD delta
- *   00e169ae  andi #-0x701,SR                       ; force IPL 0
- *   00e169b2  tst.l D2 / beq                        ; a zero delta skips the
- *                                                   ; time-of-day adjustment
- *   00e169b6  move.l (A2),D2                        ; D2 is reused here
- *   00e169e8..00e16a20  the clock is rebuilt and the RTC rewritten on EVERY
- *                       non-error path, delta or no delta
- *   00e16a30  jsr CAL_$DECODE_TIME
- *   00e16a44  jsr CAL_$WEEKDAY
- *   00e16a6e  jsr CAL_$WRITE_CALENDAR
- *   00e16a80  jsr M$DIS$LLL(old, 0x3d090)  -> old_delta[0]
- *   00e16a92  jsr M$OIS$LLL(old, 0x3d090) / lsl.l #0x2 -> old_delta[1]
- *
- * old_delta (A3) is loaded at entry and written unconditionally; the original
- * never checks it for nil.
+ * Frame locals:
+ *   -0x3C  unix_secs   longword handed to CAL_$SEC_TO_CLOCK
+ *   -0x32  weekday     word from CAL_$WEEKDAY
+ *   -0x28  new_clock   clock_t
+ *   -0x20  usec_ticks  6-byte record: cleared word at -0x20, longword at -0x1E
+ *   -0x18  tv          {seconds at -0x18, microseconds at -0x14}
+ *   -0x10  decoded     6 words: year, month, day, hour, minute, second
  */
 
 #include "time/time_internal.h"
-
-/* Maximum adjustment allowed (8000 seconds) */
-#define MAX_ADJUST_SECONDS 8000
-
-/* Ticks per second */
-#define TICKS_PER_SECOND 250000
-
-/* Skew divisors for slow/fast adjustment */
-#define SKEW_DIVISOR_SLOW 0x00A7   /* 167 - for small adjustments */
-#define SKEW_DIVISOR_FAST 0x0686   /* 1670 - for large adjustments */
-
-/* Status code for adjustment too large: "OS / time manager: bus time-out"
- * is 0x0012000C; this one is subsystem 0x0D and the database has no text
- * past 0x000D000B, so the constant is reproduced literally (0x00E16902). */
+#include "math/math.h"
 
 void TIME_$ADJUST_TIME_OF_DAY(int32_t *delta, int32_t *old_delta, status_$t *status)
 {
-    int32_t delta_secs;
-    int32_t delta_usecs;
-    int32_t delta_ticks;
-    int32_t abs_ticks;
-    int16_t skew;
-    int16_t divisor;
-    int32_t old_delta_ticks;
-    uint32_t unix_secs;
-    uint32_t usec_ticks_count;
+    int32_t magnitude;          /* D0 at 0x00E168F4, D1 at 0x00E1692C */
+    int32_t usec_ticks_in;      /* D1 at 0x00E1691C */
+    int32_t delta_ticks;        /* D2 */
+    int16_t skew;               /* D3w */
+    int16_t remainder;          /* D0w at 0x00E16958 */
+    int32_t quotient;           /* D0 at 0x00E16968 */
+    int16_t tick;               /* D4w */
+    int32_t old_delta_ticks;    /* D3 from 0x00E169A2 on */
+    int32_t usec_ticks_count;   /* D0 at 0x00E16A0A */
+    uint32_t tv[2];             /* A6-0x18 */
+    uint unix_secs;             /* A6-0x3C */
     clock_t new_clock;          /* A6-0x28 */
     clock_t usec_ticks;         /* A6-0x20 */
-    int16_t decoded[6];         /* A6-0x10: year, month, day, hour, min, sec */
+    int16_t decoded[6];         /* A6-0x10 */
     int16_t weekday;            /* A6-0x32 */
-    uint32_t tv[2];             /* A6-0x18 */
 
+    /* 0x00E168EE..0x00E168F2: clr.l (A0) */
     *status = status_$ok;
 
-    delta_secs = delta[0];
-    delta_usecs = delta[1];
-
-    /* Check if delta is within allowed range */
-    abs_ticks = delta_secs;
-    if (abs_ticks < 0) {
-        abs_ticks = -abs_ticks;
+    /*
+     * 0x00E168F4..0x00E16908: |delta seconds| compared UNSIGNED against
+     * 0x1F40 (8000): `cmpi.l #0x1f40,D0 / bls`.  -2^31 negates to itself
+     * and therefore fails the bound.
+     */
+    magnitude = delta[0];
+    if (magnitude < 0) {
+        magnitude = -magnitude;
     }
-    if (abs_ticks > MAX_ADJUST_SECONDS) {
-        *status = status_$time_adjustment_out_of_range;
-        return;
+    if ((uint32_t)magnitude > (uint32_t)MAX_ADJUST_SECONDS) {
+        *status = status_$time_adjustment_out_of_range;    /* 0x000D000C */
+        return;                                             /* bra.w 0x00e16a9e */
     }
 
-    /* Convert delta to ticks */
-    delta_ticks = (delta_secs * TICKS_PER_SECOND) + (delta_usecs / 4);
+    /*
+     * 0x00E1690C..0x00E16928: ticks = seconds * 250000 (M$MIS$LLL) +
+     * microseconds div 4, the division truncating toward zero
+     * (bpl / addq.l #0x3 / asr.l #0x2).
+     */
+    usec_ticks_in = delta[1];
+    if (usec_ticks_in < 0) {
+        usec_ticks_in += 3;
+    }
+    usec_ticks_in >>= 2;
+    delta_ticks = (int32_t)M$MIS$LLL(delta[0], TICKS_PER_SECOND) + usec_ticks_in;
 
+    /* 0x00E1692A: beq.b 0x00e1697e - a zero delta gets no skew */
     if (delta_ticks != 0) {
-        /* Calculate absolute value for divisor selection */
-        abs_ticks = delta_ticks;
-        if (abs_ticks < 0) {
-            abs_ticks = -abs_ticks;
+        /*
+         * 0x00E1692C..0x00E16940: |ticks| compared UNSIGNED against 250000
+         * picks the skew step: 0xA7 (167) for up to one second, 0x686
+         * (1670) beyond.
+         */
+        magnitude = delta_ticks;
+        if (magnitude < 0) {
+            magnitude = -magnitude;
         }
-
-        /* Select divisor based on magnitude */
-        if (abs_ticks <= TICKS_PER_SECOND) {
-            divisor = SKEW_DIVISOR_SLOW;
+        if ((uint32_t)magnitude > (uint32_t)TICKS_PER_SECOND) {
+            skew = SKEW_DIVISOR_FAST;
         } else {
-            divisor = SKEW_DIVISOR_FAST;
+            skew = SKEW_DIVISOR_SLOW;
         }
 
-        /* Negate divisor if delta is negative */
+        /* 0x00E16944..0x00E16948: tst.l D2 / bpl / neg.w D3w */
         if (delta_ticks < 0) {
-            divisor = -divisor;
+            skew = (int16_t)-skew;
         }
 
-        /* Check for zero remainder after division */
-        skew = delta_ticks % divisor;
-        if (skew != 0) {
-            /* Adjust delta_ticks to be exact multiple of divisor */
-            int32_t quotient = delta_ticks / divisor;
-            delta_ticks = quotient * divisor;
+        /*
+         * 0x00E1694A..0x00E16978: if ticks mod skew (M$OIS$WLW) is not
+         * zero, round ticks toward zero to a multiple of skew with
+         * M$DIS$LLW then M$MIS$LLW.
+         */
+        remainder = M$OIS$WLW(delta_ticks, skew);
+        if (remainder != 0) {
+            quotient = (int32_t)M$DIS$LLW(delta_ticks, skew);
+            delta_ticks = (int32_t)M$MIS$LLW(quotient, skew);
         }
-
-        if (delta_ticks == 0) {
-            divisor = 0;
-        }
-    } else {
-        divisor = 0;
     }
 
-    skew = divisor;
+    /* 0x00E1697A..0x00E1697E: tst.l D2 / bne / clr.w D3w */
+    if (delta_ticks == 0) {
+        skew = 0;
+    }
 
-    /* Get current time of day */
+    /* 0x00E16980..0x00E16982: D4w = skew + 0x1047 */
+    tick = (int16_t)(skew + TIME_INITIAL_TICK);
+
+    /* 0x00E16986..0x00E16990: TIME_$GET_TIME_OF_DAY(&tv) */
     TIME_$GET_TIME_OF_DAY(tv);
 
-    /* 0xE16992: a bare "ori #0x700,SR" - nothing is saved */
+    /* 0x00E16992: ori #0x700,SR - raised, nothing saved */
     SET_IPL7();
-
-    TIME_$CURRENT_SKEW = (uint16_t)skew;                    /* 0xE16996 */
-    TIME_$CURRENT_TICK = (uint16_t)(TIME_INITIAL_TICK + skew); /* 0xE1699C */
-    old_delta_ticks = (int32_t)TIME_$CURRENT_DELTA;         /* 0xE169A2 */
-    TIME_$CURRENT_DELTA = (uint32_t)delta_ticks;            /* 0xE169A8 */
-
-    /* 0xE169AE: "andi #-0x701,SR" forces IPL 0; it does not restore */
+    TIME_$CURRENT_SKEW = (uint16_t)skew;                    /* 0x00E16996 */
+    TIME_$CURRENT_TICK = (uint16_t)tick;                    /* 0x00E1699C */
+    old_delta_ticks = (int32_t)TIME_$CURRENT_DELTA;         /* 0x00E169A2 */
+    TIME_$CURRENT_DELTA = (uint32_t)delta_ticks;            /* 0x00E169A8 */
+    /* 0x00E169AE: andi #0xf8ff,SR - FORCES IPL 0, not a restore */
     SET_IPL0();
 
-    /* If delta is non-zero, adjust current time */
+    /* 0x00E169B2: tst.l D2 / beq.b 0x00e169e8 */
     if (delta_ticks != 0) {
-        tv[0] += delta_secs;
-        tv[1] += delta_usecs;
+        /* 0x00E169B6..0x00E169C0: add the raw delta to the time of day */
+        tv[0] += (uint32_t)delta[0];
+        tv[1] += (uint32_t)delta[1];
 
-        /* Normalize microseconds */
+        /* 0x00E169C4: bpl on the result of the microsecond add */
         if ((int32_t)tv[1] < 0) {
+            /* 0x00E169C6..0x00E169D2 */
             tv[1] += 1000000;
-            tv[0]--;
-        } else if (tv[1] >= 1000000) {
-            tv[1] -= 1000000;
-            tv[0]++;
+            tv[0] -= 1;
+        } else {
+            /* 0x00E169D4..0x00E169E4: cmp.l (-0x14,A6),D0 / bgt (signed) */
+            if (!(1000000 > (int32_t)tv[1])) {
+                tv[1] -= 1000000;
+                tv[0] += 1;
+            }
         }
     }
 
     /*
-     * 0xE169E8: the clock is rebuilt and written to the RTC on every
-     * non-error path, whether or not the delta was zero.
+     * 0x00E169E8..0x00E16A04: on EVERY non-error path, delta or no delta,
+     * rebuild the clock from the (possibly adjusted) time of day.  Seconds
+     * are rebased from the Unix epoch to the Apollo one.
      */
-    unix_secs = tv[0] - 0x12CEA600;  /* Convert to Apollo epoch */
+    unix_secs = tv[0] - APOLLO_EPOCH_OFFSET;
     CAL_$SEC_TO_CLOCK(&unix_secs, &new_clock);
 
     /*
-     * 0xE16A06/0xE16A14: the word at +0 is cleared and the 32-bit tick count
-     * is stored at +2, straddling the record's high/low split, so counts
-     * above 0xFFFF reach `high`.  The divide is SIGNED and rounds toward
-     * zero (bpl / addq.l #3 / asr.l #2).
+     * 0x00E16A06..0x00E16A26: clr.w (-0x20,A6) then the 32-bit tick count
+     * at (-0x1e,A6), straddling the record's high/low split; the divide by
+     * 4 is signed and truncates toward zero.  ADD48(&new_clock, &usec_ticks).
      */
-    usec_ticks_count = (uint32_t)((int32_t)tv[1] / 4);
-    usec_ticks.high = usec_ticks_count >> 16;
-    usec_ticks.low = (uint16_t)(usec_ticks_count & 0xFFFFu);
+    usec_ticks_count = (int32_t)tv[1];
+    if (usec_ticks_count < 0) {
+        usec_ticks_count += 3;
+    }
+    usec_ticks_count >>= 2;
+    usec_ticks.high = (uint32_t)usec_ticks_count >> 16;
+    usec_ticks.low = (uint16_t)((uint32_t)usec_ticks_count & 0xFFFFu);
     ADD48(&new_clock, &usec_ticks);
 
-    /* 0xE16A30 */
+    /* 0x00E16A28..0x00E16A36 */
     CAL_$DECODE_TIME(&new_clock, decoded);
 
-    /* 0xE16A44 */
+    /* 0x00E16A38..0x00E16A4E */
     weekday = CAL_$WEEKDAY(&decoded[0], &decoded[1], &decoded[2]);
 
-    /* 0xE16A6E */
+    /* 0x00E16A52..0x00E16A74: year, month, day, weekday, hour, minute, second */
     CAL_$WRITE_CALENDAR(&decoded[0], &decoded[1], &decoded[2], &weekday,
                         &decoded[3], &decoded[4], &decoded[5]);
 
-    /* 0xE16A78 - 0xE16A9A: written unconditionally, no nil check */
-    old_delta[0] = old_delta_ticks / TICKS_PER_SECOND;
-    old_delta[1] = (old_delta_ticks % TICKS_PER_SECOND) * 4;
+    /*
+     * 0x00E16A78..0x00E16A9A: the previously pending delta goes back as
+     * {ticks div 250000, (ticks mod 250000) * 4}; the last call's argument
+     * bytes are never popped (unlk reclaims them).
+     */
+    old_delta[0] = (int32_t)M$DIS$LLL(old_delta_ticks, TICKS_PER_SECOND);
+    old_delta[1] = (int32_t)((uint32_t)M$OIS$LLL(old_delta_ticks, TICKS_PER_SECOND) << 2);
+
+    /* 0x00E16A9E: movem.l (-0x50,A6),{D2 D3 D4 A2 A3} / unlk / rts */
 }

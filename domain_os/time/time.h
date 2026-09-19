@@ -21,6 +21,7 @@
 
 #include "base/base.h"
 #include "di/di.h"
+#include "ec/ec.h"
 
 /*
  * ============================================================================
@@ -44,6 +45,36 @@
 
 /* Timer constant: initial tick value */
 #define TIME_INITIAL_TICK   0x1047
+
+/*
+ * Timer register access.
+ *
+ * The three clock readers in the TIME_ASM segment (TIME_$CLOCK 0x00E2AFD6,
+ * TIME_$ABS_CLOCK 0x00E2B026, TIME_$GET_TIME_OF_DAY 0x00E2B06A) all do
+ *   lea (0xffac00).l,A0 / movep.w (0x5,A0),D0w / btst.b #0,(0x3,A0)
+ * i.e. a byte read of 0xFFAC05 and 0xFFAC07 (movep assembles the word from
+ * the two odd bytes) and a byte read of 0xFFAC03.  On m68k the macros are the
+ * volatile MMIO accesses; on a host build the test supplies
+ * time_$timer_read_reg()/time_$timer_write_reg() so the real functions can be
+ * driven against a modelled timer (same shape as CAL_$RTC_READ in cal/cal.h).
+ */
+#if defined(ARCH_M68K)
+#define TIME_$TIMER_READ(off) \
+    (*(volatile uint8_t *)(uintptr_t)(TIME_TIMER_BASE + (off)))
+#define TIME_$TIMER_WRITE(off, val) \
+    (*(volatile uint8_t *)(uintptr_t)(TIME_TIMER_BASE + (off)) = (uint8_t)(val))
+#else
+uint8_t time_$timer_read_reg(uint16_t offset);
+void time_$timer_write_reg(uint16_t offset, uint8_t value);
+#define TIME_$TIMER_READ(off) time_$timer_read_reg((uint16_t)(off))
+#define TIME_$TIMER_WRITE(off, val) \
+    time_$timer_write_reg((uint16_t)(off), (uint8_t)(val))
+#endif
+
+/* `movep.w (0x5,A0),D0w`: high byte from +5, low byte from +7 */
+#define TIME_$READ_RTE_TIMER() \
+    ((uint16_t)(((uint16_t)TIME_$TIMER_READ(TIME_TIMER_RTE_HI) << 8) | \
+                (uint16_t)TIME_$TIMER_READ(TIME_TIMER_RTE_LO)))
 
 /*
  * TIME status codes.  Names from the SR10.4 status-code database,
@@ -71,35 +102,66 @@
  */
 
 /*
- * time_$callback_arg_t - what a TIME_$Q_ADD_CALLBACK callback is handed
+ * time_$callback_arg_t - what a queue element's callback is handed
  *
- * TIME_$Q_SCAN_QUEUE's deferred path (0x00E16F4C..0x00E16F84) builds a local
- * holding &elem->callback_arg and passes the ADDRESS of that local, so the
- * callback's single argument is a "uint32_t **" whose target is the
- * callback_arg longword.  SIO_$I_TSTART's direct-restart path builds the same
- * two-level chain by hand (0x00E1C8F6..0x00E1C904).
+ * The callback's single argument is the ADDRESS of a longword cell; what the
+ * cell holds depends on which of TIME_$Q_SCAN_QUEUE's two paths fires it:
+ *
+ *   - direct (flags bits 2 and 3 both clear, 0x00E16FA0..0x00E16FAE): the
+ *     cell is a frame local holding the ELEMENT address (`move.l D2,(-0x8,A6)
+ *     / pea (-0x8,A6) / jsr (A0)`), so *arg is the time_queue_elem_t and
+ *     TIME_$ADVANCE_CALLBACK reads its callback_arg at (0x8,A1);
+ *   - deferred (bit 2 -> DXM_$UNWIRED_Q, bit 3 -> DXM_$WIRED_Q,
+ *     0x00E16F42..0x00E16F84): DXM_$ADD_CALLBACK copies the 4 bytes at
+ *     &elem->callback_arg into the queue entry and later calls the callback
+ *     with the entry's data address, so *arg is the CALLBACK_ARG value (the
+ *     itimer / cpu-limit callbacks read an as_id at (0x2,A2) through it).
+ *
+ * SIO_$I_TSTART's direct-restart path builds the first shape by hand
+ * (0x00E1C8F6..0x00E1C904).
  */
 typedef uint32_t **time_$callback_arg_t;
 
 /*
  * Time queue header structure - 12 bytes
  *
- * Used for both the RTE queue and VT queues.
+ * Used for both the RTE queue and VT queues.  TIME_$Q_INIT_QUEUE (0x00E16C5E)
+ * clears (A0) and (0x4,A0) and stores the byte at (0x8,A0) and the word at
+ * (0xA,A0); every other TIME_Q_ routine passes `pea (0x4,An)` to
+ * ML_$SPIN_LOCK / ML_$SPIN_UNLOCK, so +4 is the queue's spin lock, not a
+ * tail pointer (the list is singly linked through time_queue_elem_t.next).
  */
 typedef struct time_queue_t {
-    uint32_t head;          /* 0x00: First element pointer */
-    uint32_t tail;          /* 0x04: Last element pointer */
-    uint8_t  flags;         /* 0x08: Queue flags (0xFF = all queues) */
+    uint32_t head;          /* 0x00: First element (32-bit VA, 0 = empty) */
+    uint32_t lock;          /* 0x04: ML_$SPIN_LOCK cell (ml_$spinlock_t) */
+    int8_t   flags;         /* 0x08: Domain boolean: true (0xFF) = virtual
+                             *       timer queue, false = the real-time queue
+                             *       (tst.b (0x8,A2) / bpl at 0x00E16C0E) */
     uint8_t  pad;           /* 0x09: Padding */
-    uint16_t queue_id;      /* 0x0A: Queue identifier */
+    uint16_t queue_id;      /* 0x0A: Queue identifier (the PID for a VT queue,
+                             *       handed to PROC1_$SET_VT at 0x00E16C1E) */
 } time_queue_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
 _Static_assert(__builtin_offsetof(time_queue_t, head) == 0x00, "time_queue_t.head");
-_Static_assert(__builtin_offsetof(time_queue_t, tail) == 0x04, "time_queue_t.tail");
+_Static_assert(__builtin_offsetof(time_queue_t, lock) == 0x04, "time_queue_t.lock");
 _Static_assert(__builtin_offsetof(time_queue_t, flags) == 0x08, "time_queue_t.flags");
 _Static_assert(__builtin_offsetof(time_queue_t, pad) == 0x09, "time_queue_t.pad");
 _Static_assert(__builtin_offsetof(time_queue_t, queue_id) == 0x0A, "time_queue_t.queue_id");
+_Static_assert(sizeof(time_queue_t) == 0x0C, "time_queue_t: TIME_$INIT steps 0xC per queue");
+
+/*
+ * time_queue_elem_t.flags bits.  Every test is `btst.b #n,(0x13,Ax)` - byte
+ * 0x13 is the LOW byte of the big-endian word at 0x12, so bit n of that byte
+ * is bit n of the word.
+ */
+#define TIME_QELEM_IN_QUEUE   0x0001  /* set by insert (0x00E16B4A), cleared by
+                                       * remove (0x00E16BC8) and scan (0x00E16EE4) */
+#define TIME_QELEM_REPEAT     0x0002  /* scan re-inserts at expiry + interval
+                                       * (0x00E16EEA) */
+#define TIME_QELEM_UNWIRED    0x0004  /* fire through DXM_$UNWIRED_Q (0x00E16F3A) */
+#define TIME_QELEM_WIRED      0x0008  /* fire through DXM_$WIRED_Q (0x00E16F20) */
+#define TIME_QELEM_CHECK_DUP  0x0010  /* DXM_$ADD_CALLBACK's check_dup (0x00E16F0C) */
 
 /*
  * Time queue element structure - 26 bytes (0x1A)
@@ -297,19 +359,16 @@ void TIME_$SET_TIME_OF_DAY(uint32_t *tv, status_$t *status);
 void TIME_$ADJUST_TIME_OF_DAY(int32_t *delta, int32_t *old_delta, status_$t *status);
 
 /*
- * TIME_$ADVANCE - Schedule a callback after a delay
+ * TIME_$ADVANCE - Schedule an eventcount advance on the real-time queue
  *
- * Parameters:
- *   delay_type - Pointer to delay type
- *   delay - Pointer to delay clock value
- *   ec - Event counter or callback context
- *   callback_arg - Argument for callback
- *   status - Status return
+ * Frame at 0x00E16488..0x00E1646C: 0x08 is_absolute (word, by reference),
+ * 0x0C when, 0x10 ec (stored as the element's callback_arg and advanced by
+ * TIME_$ADVANCE_CALLBACK), 0x14 elem, 0x18 status.
  *
  * Original address: 0x00e16454
  */
-void TIME_$ADVANCE(uint16_t *delay_type, clock_t *delay, void *ec,
-                   void *callback_arg, status_$t *status);
+void TIME_$ADVANCE(uint16_t *is_absolute, clock_t *when, ec_$eventcount_t *ec,
+                   time_queue_elem_t *elem, status_$t *status);
 
 /*
  * TIME_$CANCEL - Cancel a scheduled callback
@@ -449,9 +508,14 @@ void TIME_$Q_INIT(void);
 /*
  * TIME_$Q_INIT_QUEUE - Initialize a time queue
  *
+ * Frame at 0x00E16C62: `move.b (0x8,A6),D0b` reads the HIGH byte of the
+ * first argument's word slot (a Domain boolean pushed with `st -(SP)` /
+ * `clr.l -(SP)` by TIME_$INIT), then the word at 0x0A and the pointer at
+ * 0x0C.
+ *
  * Original address: 0x00e16c5e
  */
-void TIME_$Q_INIT_QUEUE(uint8_t flags, uint16_t queue_id, time_queue_t *queue);
+void TIME_$Q_INIT_QUEUE(boolean is_vt, uint16_t queue_id, time_queue_t *queue);
 
 /*
  * TIME_$Q_FLUSH_QUEUE - Flush all elements from a queue
@@ -515,9 +579,14 @@ void TIME_$Q_REMOVE_ELEM(time_queue_t *queue, time_queue_elem_t *elem,
 /*
  * TIME_$Q_SCAN_QUEUE - Scan queue and fire expired callbacks
  *
+ * Frame at 0x00E16E9C: 0x08 queue (A3), 0x0C now (D3), 0x10 status (A4).
+ * The third argument is only ever handed on as DXM_$ADD_CALLBACK's
+ * status_ret (`pea (A4)` at 0x00E16F42 / 0x00E16F64); the direct-call path
+ * never writes it.
+ *
  * Original address: 0x00e16e94
  */
-void TIME_$Q_SCAN_QUEUE(time_queue_t *queue, clock_t *now, void *arg);
+void TIME_$Q_SCAN_QUEUE(time_queue_t *queue, clock_t *now, status_$t *status);
 
 /*
  * ============================================================================

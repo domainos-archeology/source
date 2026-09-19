@@ -176,8 +176,8 @@ void TIME_$READ_CAL(clock_t *clock, uint32_t *time)
      *   2. Delay for MSM5832 data output setup time
      *   3. Read data from read register, complement, mask to 4 bits
      *
-     * Control values: 0xC5 (addr 12, Y10), 0xB5 (addr 11, Y1), ...
-     *   down to 0x05 (addr 0, S1).
+     * Control values: 0xC5 (addr 12, Y10), 0xB5 (addr 11, Y1), 0xA5, 0x95,
+     *   0x85, 0x75, 0x65, 0x55, 0x45, 0x35, 0x25, 0x15, 0x05 (addr 0, S1).
      *
      * Data is inverted through the Apollo interface hardware,
      * so we complement the read value to recover the true BCD digit.

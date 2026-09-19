@@ -1,18 +1,14 @@
 /*
- * TIME_$Q_INIT - Initialize queue subsystem
+ * TIME_$Q_INIT - Initialize the time-queue module
  *
- * This is a stub that does nothing (the actual init work is done
- * by TIME_$Q_INIT_QUEUE for each queue).
+ * A single `rts` (0x00E16C5C, 2 bytes): the module has nothing to set up.
+ * Called by TIME_$INIT at 0x00E2FE7A.
  *
  * Original address: 0x00e16c5c
- *
- * Assembly shows this is just 2 bytes at 0xe16c5c that falls through
- * to TIME_$Q_INIT_QUEUE, but in the original it was a separate entry point.
  */
 
 #include "time/time_internal.h"
 
 void TIME_$Q_INIT(void)
 {
-    /* Nothing to do - each queue is initialized separately */
 }

@@ -53,12 +53,12 @@
  */
 #define ITIMER_DB_WHICH_STRIDE  0x658
 
-/* Offsets within itimer entry */
-#define ITIMER_REAL_INTERVAL_HIGH   0x0C
-#define ITIMER_REAL_INTERVAL_LOW    0x10
-#define ITIMER_VIRT_ELEM_OFFSET     0x658
-#define ITIMER_VIRT_INTERVAL_HIGH   0x664
-#define ITIMER_VIRT_INTERVAL_LOW    0x668
+/*
+ * The entries are addressed through time_$itimer_entry() below and their
+ * fields through time_queue_elem_t.  (Earlier ITIMER_*_INTERVAL_* byte
+ * offsets 0x0C/0x10 and 0x664/0x668 named the element's EXPIRY words, not
+ * its interval at 0x14/0x18 - bead source-e4a2; they are gone.)
+ */
 
 /* CPU limit database base */
 #define CPU_LIMIT_DB_BASE       0xE29198
@@ -93,6 +93,27 @@
 extern ec_$eventcount_t TIME_$FAST_CLOCK_EC;
 
 /*
+ * Unnamed cells of the TIME_ data segment (map: D E29198 TIME_ size 1628),
+ * between TIME_$RTEQ (0xE2A7A0, 12 bytes) and TIME_$SYS_FREQ (0xE2A7BC):
+ *
+ *   0xE2A7AC  time_$zero_interval      6 bytes, all zero in the image; the
+ *             one-shot interval TIME_$ADVANCE passes by reference
+ *             (`pea (0x1614,A5)` at 0x00E16474, A5 = 0xE29198).
+ *   0xE2A7B4  time_$fast_clock_ec_handle  (0x161C,A5) - TIME_$GET_EC's
+ *             cached EC2_$REGISTER_EC1 result for TIME_$FAST_CLOCK_EC
+ *   0xE2A7B8  time_$clock_ec_handle       (0x1620,A5) - the same for
+ *             TIME_$CLOCKH_EC (0x00E2B0D4)
+ *
+ * The handles are 32-bit VAs in the image (EC2_$REGISTER_EC1 returns its
+ * result in A0 and TIME_$GET_EC stores it with `move.l A0,(0x1620,A5)`);
+ * they are kept as the host pointer type the EC2 routine returns because
+ * nothing but TIME_$GET_EC ever looks at them.
+ */
+extern clock_t time_$zero_interval;
+extern void *time_$fast_clock_ec_handle;
+extern void *time_$clock_ec_handle;
+
+/*
  * Pascal by-reference constant cells at 0x00E58B52 / 0x00E58B54, shared by
  * TIME_$SET_CPU_LIMIT_CALLBACK (pea (0x20,PC) / pea (0x26,PC)) and
  * TIME_$SET_CPU_LIMIT (pea (-0x4f8,PC) / pea (-0x4f2,PC)).
@@ -107,19 +128,27 @@ extern const status_$t time_$c_cpu_limit_fault;
  */
 
 /*
- * time_$q_insert_sorted - Insert element into queue in sorted order
+ * time_$q_insert_sorted - Insert element into queue in expiry order
  *
- * Returns negative if element was inserted at head.
+ * 0x00E16AE8, 130 bytes; the first (unnamed) procedure of the TIME_Q_ module.
+ * Frame: 0x08 queue (A4), 0x0C elem.  Crashes the system with
+ * status_$time_queue_element_already_in_use when the element's
+ * TIME_QELEM_IN_QUEUE bit is already set.  Returns a Domain boolean in D0:
+ * true (0xFF, `seq D0b` at 0x00E16B54) when the element became the new head.
  */
 int8_t time_$q_insert_sorted(time_queue_t *queue, time_queue_elem_t *elem);
 
 /*
- * time_$q_setup_timer - Setup hardware timer for next queue element
+ * time_$q_setup_timer - Program the hardware timer for the queue's head
+ *
+ * 0x00E16BDA, 126 bytes.  Frame: 0x08 queue (A2), 0x0C now.
  */
-void time_$q_setup_timer(time_queue_t *queue, clock_t *when);
+void time_$q_setup_timer(time_queue_t *queue, clock_t *now);
 
 /*
- * time_$q_remove_internal - Internal queue removal (no locking)
+ * time_$q_remove_internal - Unlink an element (caller holds the queue lock)
+ *
+ * 0x00E16B70, 106 bytes.  Frame: 0x08 queue (A2), 0x0C elem, 0x10 status.
  */
 void time_$q_remove_internal(time_queue_t *queue, time_queue_elem_t *elem,
                              status_$t *status);

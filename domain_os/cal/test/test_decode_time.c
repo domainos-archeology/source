@@ -10,6 +10,7 @@
 /* Implementation(s) under test */
 #include "math/mod.c"
 #include "math/div.c"
+#include "../cal_data.c"        /* CAL_$DAYS_PER_MONTH */
 #include "../sec_to_clock.c"
 #include "../clock_to_sec.c"
 #include "../decode_time.c"

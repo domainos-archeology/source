@@ -113,6 +113,18 @@ void ML_$SPIN_UNLOCK(void *lockp, ml_$spin_token_t token)
     if (token != 0x0055) { printf("BAD TOKEN "); tests_failed++; }
 }
 
+/*
+ * time/q_add_callback.c stores the callback through DXM_$CALLBACK_CELL,
+ * which on the host is a registry call (dxm/dxm.h).  The registry itself is
+ * not under test, so it is stubbed the way tty/test/test_tty_data.c does.
+ */
+#include "dxm/dxm.h"
+
+dxm_$callback_t dxm_$callback_cell(dxm_$callback_fn_t fn)
+{
+    return (dxm_$callback_t)(fn != NULL);
+}
+
 #include "../q_add_callback.c"
 #include "../q_reenter_elem.c"
 

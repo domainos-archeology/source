@@ -69,9 +69,9 @@ static uint8_t cpu_limit_arena[PROC2_UID_TABLE_SIZE * CPU_LIMIT_DB_ENTRY_SIZE];
 
 static clock_t mock_cput;
 
-void PROC1_$GET_CPUT8(void *time_ret)
+void PROC1_$GET_CPUT8(clock_t *time_ret)
 {
-    *(clock_t *)time_ret = mock_cput;
+    *time_ret = mock_cput;
 }
 
 /* SUB48 is the real 48-bit subtract from cal/; reproduce it here so the test
