@@ -1,43 +1,36 @@
 /*
- * DISK_$INIT - Disk subsystem initialization
+ * DISK_$INIT - Initialise the disk module's eventcounts and locks
  *
- * Initializes the disk subsystem by:
- * 1. Initializing the main disk event counter
- * 2. Initializing per-volume event counters (64 volumes)
- * 3. Initializing exclusion locks for synchronization
+ * 0x00E3C0EA - 0x00E3C14A (98 bytes, A5 = DISK_$DATA at 0xE7A1CC).
+ * Verified against the disassembly on 2026-09-19; the earlier emission
+ * was faithful but called the 0x1C-byte slots "volumes" - they are the
+ * per-process I/O slots (disk_$per_proc_t in disk/disk.h).
+ *
+ * EC_$INIT on the module eventcount at A5+0 (0x00E3C0F8), then on the
+ * io_ec (+0x378) and err_ec (+0x384) of slots 1..64 (`moveq #0x3f` / dbf,
+ * A2 starting at A5+0x1c and stepping 0x1c: 0x00E3C102 - 0x00E3C128),
+ * then ML_$EXCLUSION_INIT on the locks at A5+0xa8 and A5+0x90.
  */
 
 #include "disk/disk_internal.h"
+#include "ec/ec.h"
+#include "ml/ml.h"
 
-/*
- * DISK_$INIT - Initialize the disk subsystem
- */
 void DISK_$INIT(void)
 {
-    int16_t i;
-    uint8_t *vol_ptr;
+    int16_t pid;
 
-    /* Initialize main disk event counter at base */
-    EC_$INIT((void *)DISK_$DATA);
+    /* 0x00E3C0F8 - 0x00E3C100 */
+    EC_$INIT((ec_$eventcount_t *)&DISK_$DATA[DMOD_EVENTCOUNT]);
 
-    /* Initialize per-volume event counters
-     * There are 64 volumes (0x40), each with two event counters
-     * at offsets +0x378 and +0x384 from the volume entry base.
-     * Volume entries start at offset 0x1c and are spaced 0x1c apart.
-     */
-    vol_ptr = DISK_$DATA + 0x1c;  /* First volume entry */
-
-    for (i = 0x3f; i >= 0; i--) {
-        /* Initialize event counter at +0x378 */
-        EC_$INIT((void *)(vol_ptr + 0x378));
-
-        /* Initialize event counter at +0x384 */
-        EC_$INIT((void *)(vol_ptr + 0x384));
-
-        vol_ptr += 0x1c;  /* Next volume entry */
+    /* 0x00E3C102 - 0x00E3C128: slots 1..64 */
+    for (pid = 1; pid <= 64; pid++) {
+        uint8_t *slot = DISK_$DATA + pid * DMOD_PER_PROC_SIZE;
+        EC_$INIT((ec_$eventcount_t *)(slot + DMOD_PER_PROC_IO_EC));
+        EC_$INIT((ec_$eventcount_t *)(slot + DMOD_PER_PROC_ERR_EC));
     }
 
-    /* Initialize exclusion locks */
+    /* 0x00E3C12C - 0x00E3C13C */
     ML_$EXCLUSION_INIT(&ml_$exclusion_t_00e7a274);
     ML_$EXCLUSION_INIT(&ml_$exclusion_t_00e7a25c);
 }

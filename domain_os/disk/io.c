@@ -11,6 +11,10 @@
  *
  * A5 = 0xe7a1cc = DISK_$DATA = DISK_VOLUME_BASE throughout.
  *
+ * Re-verified instruction by instruction against the disassembly on
+ * 2026-09-19 (0x00E3D50E - 0x00E3D954): every arm, constant and argument
+ * order matched; only this note was added.
+ *
  * Operation codes (jump table at 0xe3d574, entries for op 0..4):
  *   0 -> internal read   (DISK_$READ)
  *   1 -> internal write  (DISK_$WRITE, DISK_$AS_WRITE); write-protect checked

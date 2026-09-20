@@ -1,42 +1,29 @@
 /*
- * DISK_$INIT_QUE - Initialize a disk I/O queue
+ * DISK_$INIT_QUE - Initialise a driver's elevator queue
  *
- * Initializes a queue structure for disk I/O operations.
- * The queue structure contains:
- *   +0x00: Head pointer (long)
- *   +0x04: Flags (long)
- *   +0x08: First list pointer
- *   +0x0c: Second list pointer
- *   +0x10: List 1 entry (8 bytes)
- *   +0x18: List 2 entry (8 bytes)
+ * 0x00E3C598 - 0x00E3C5D8 (66 bytes).  Builds the disk_$que_t described in
+ * disk/disk.h: both list heads point at their own sentinel, the direction
+ * bit is set and the cylinder bits of `position` are cleared.  Rewritten
+ * through the record on 2026-09-19 so the sentinel's cylinder word is
+ * stored in the high half of a longword on every host.
  *
- * @param queue  Queue structure to initialize
+ * Argument: (0x8,A6) queue -> disk_$que_t.
  */
 
 #include "disk/disk_internal.h"
 
 void DISK_$INIT_QUE(void *queue)
 {
-    uint32_t *q = (uint32_t *)queue;
+    disk_$que_t *q = (disk_$que_t *)queue;
 
-    /* Set up list pointers to embedded list entries */
-    q[2] = (uint32_t)(uintptr_t)(q + 4);  /* +0x08 -> +0x10 */
-    q[3] = (uint32_t)(uintptr_t)(q + 6);  /* +0x0c -> +0x18 */
-
-    /* Set high bit of flags */
-    *(uint8_t *)((uint8_t *)queue + 4) |= 0x80;
-
-    /* Initialize first list entry */
-    q[4] = 0;                              /* +0x10: next ptr = NULL */
-    *(uint16_t *)((uint8_t *)queue + 0x14) = 0xffff;  /* +0x14: marker */
-
-    /* Initialize second list entry */
-    q[6] = 0;                              /* +0x18: next ptr = NULL */
-    *(uint16_t *)((uint8_t *)queue + 0x1c) = 0xffff;  /* +0x1c: marker */
-
-    /* Clear other flags, preserve high nibble */
-    q[1] &= 0xfff0000f;
-
-    /* Clear head pointer */
-    q[0] = 0;
+    /* 0x00E3C598 - 0x00E3C5D0 */
+    q->list_a = ARCH_PTR_TO_VA(&q->sentinel_a);         /* +0x08 -> +0x10 */
+    q->list_b = ARCH_PTR_TO_VA(&q->sentinel_b);         /* +0x0c -> +0x18 */
+    q->position |= DISK_QUE_DIRECTION_BIT;              /* bset.b #7,(0x4,A0) */
+    q->sentinel_a.next = 0;
+    q->sentinel_a.daddr = (q->sentinel_a.daddr & 0x0000FFFFu) | DISK_QUE_SENTINEL_CYL;
+    q->sentinel_b.next = 0;
+    q->sentinel_b.daddr = (q->sentinel_b.daddr & 0x0000FFFFu) | DISK_QUE_SENTINEL_CYL;
+    q->position &= 0xfff0000fu;                         /* andi.l #0xfff0000f */
+    q->current = 0;
 }

@@ -1,55 +1,60 @@
 /*
- * DISK_$LVUID_TO_VOLX - Convert logical volume UID to volume index
+ * DISK_$LVUID_TO_VOLX - Find the mounted logical volume with a given UID
  *
- * Searches the mounted volume table for a volume with the given
- * logical volume UID and returns its index.
+ * 0x00E6D134 - 0x00E6D1C8 (150 bytes).  Verified against the disassembly
+ * on 2026-09-19; the earlier emission stepped a host pointer through the
+ * table (the image steps 0x48) and is otherwise faithful.  The prologue
+ * loads A5 = 0xE826C4 (the second `DISK_` data block) but never uses it.
  *
- * @param uid_ptr   Pointer to UID (8 bytes)
- * @param vol_idx   Output: Volume index (1-based)
- * @param status    Output: Status code
+ * Arguments:
+ *   (0x8,A6)  uid_ptr  -> uid_t, copied to (-0x8,A6) first
+ *   (0xc,A6)  vol_idx  -> word out
+ *   (0x10,A6) status   -> status_$t out
+ *
+ * Descriptors 1..6 (`moveq #0x5` / dbf) whose state is mounted (3) and
+ * whose lv_start is non-zero are compared on lv_uid (the descriptor's
+ * first two longwords, `cmpm.l` twice).  The result word is D2: the
+ * matching index, or - when no candidate matched - 1 if at least one
+ * candidate was compared (`moveq #0x1,D2` at 0x00E6D18A runs before each
+ * compare) and otherwise the caller's D2.  Modelled as 1 here.
  */
 
 #include "disk/disk_internal.h"
-
-/* Status code */
-
-/* disk_$volume_t and DISK_VOL() come from disk/disk_internal.h */
+#include "ml/ml.h"
 
 void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status)
 {
-    uint32_t uid_hi, uid_lo;
+    uid_t uid;                      /* (-0x8,A6) */
+    status_$t local_status;         /* (-0xc,A6) */
+    int16_t d2 = 1;                 /* D2 */
+    int16_t idx;                    /* D1 */
     int16_t i;
-    int16_t result_idx = 1;  /* Default if not found */
-    disk_$volume_t *entry;
-    status_$t local_status;
 
-    /* Get UID to search for */
-    uid_hi = *(uint32_t *)uid_ptr;
-    uid_lo = *((uint32_t *)uid_ptr + 1);
+    /* 0x00E6D142 - 0x00E6D14A */
+    uid.high = ((const uint32_t *)uid_ptr)[0];
+    uid.low = ((const uint32_t *)uid_ptr)[1];
 
+    /* 0x00E6D14E - 0x00E6D15C */
     ML_$EXCLUSION_START(&MOUNT_LOCK);
-
     local_status = status_$logical_volume_not_found;
 
-    /* Search volumes 1-6 */
-    entry = DISK_VOL(1);  /* Start at volume 1 */
-    for (i = 5; i >= 0; i--) {
-        /* Check if volume is mounted (state == 3) and has LV data */
-        if ((int16_t)entry->mount_state == DISK_MOUNT_MOUNTED &&
-            entry->lv_start != 0) {
-
-            /* Compare UIDs */
-            if (entry->lv_uid.high == uid_hi && entry->lv_uid.low == uid_lo) {
-                local_status = status_$ok;
-                result_idx = 6 - i;  /* Convert loop counter to 1-based index */
+    /* 0x00E6D164 - 0x00E6D1A2 */
+    idx = 1;
+    for (i = 0; i < VOL_TABLE_SCAN_COUNT; i++) {
+        disk_$volume_t *vol = DISK_VOL(idx);
+        if (vol->mount_state == DISK_MOUNT_MOUNTED && vol->lv_start != 0) {
+            d2 = 1;                                             /* 0x00E6D18A */
+            if (vol->lv_uid.high == uid.high && vol->lv_uid.low == uid.low) {
+                local_status = status_$ok;                      /* 0x00E6D194 */
+                d2 = idx;
                 break;
             }
         }
-        entry++;
+        idx++;
     }
 
+    /* 0x00E6D1A6 - 0x00E6D1BC */
     ML_$EXCLUSION_STOP(&MOUNT_LOCK);
-
-    *vol_idx = result_idx;
+    *vol_idx = d2;
     *status = local_status;
 }

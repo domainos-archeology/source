@@ -529,4 +529,30 @@ void disk_$wait_io(uint16_t disk_mask, int32_t *io_wait_val, int32_t *error_wait
  */
 uint32_t AS_IO_SETUP(uint16_t *vol_idx_ptr, uint32_t buffer, status_$t *status);
 
+/*
+ * DISK_$ADD_QUE's request array: 32-bit VA cells at DISK_$DATA + 0xB08,
+ * entry i (1-based) is the i-th request of the sorted chain; entry 0 and
+ * entry count+1 are cleared as terminators (0x00E3C7D2, 0x00E3C8D6).  It
+ * runs to the end of the module block, so 34 cells, i.e. at most 32
+ * requests per DISK_$ADD_QUE call.
+ */
+#define DMOD_QUE_ARRAY          0xB08
+#define DMOD_QUE_ARRAY_ENTRIES  ((DISK_$DATA_SIZE - DMOD_QUE_ARRAY) / 4)
+_Static_assert(DMOD_QUE_ARRAY_ENTRIES == 34, "DISK_$ADD_QUE request array");
+#define DISK_$QUE_ARRAY ((uint32_t *)&DISK_$DATA[DMOD_QUE_ARRAY])
+
+/*
+ * DISK_$GET_STATS' 22-byte statistics template lives at the end of the
+ * device table segment (`D E7AD5C DISK_ size = 198`): 32 * 12 = 0x180 bytes
+ * of disk_device_entry_t followed by this block at +0x180 (0x00E3DBBE
+ * `lea (0x180,A5),A1` with A5 = 0xE7AD5C).
+ */
+#define DISK_DEVICES_STATS_OFFSET 0x180
+_Static_assert(DISK_MAX_DEVICES * DISK_DEVICE_SIZE == DISK_DEVICES_STATS_OFFSET,
+               "DISK_$DEVICES table size");
+/* The 0x16-byte template ends at 0x196; the segment's last two bytes are
+ * not read by DISK_$GET_STATS (its copy is five longwords and a word). */
+_Static_assert(DISK_DEVICES_STATS_OFFSET + DISK_STATS_SIZE <= 0x198,
+               "DISK_ device segment is 0x198 bytes");
+
 #endif /* DISK_INTERNAL_H */

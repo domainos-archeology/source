@@ -11,6 +11,12 @@
  *
  * A5 = 0xe22904 = &IO_$INT_CTRL (saved and restored around the body with
  * pea (A5) / movea.l (-0xc,A6),A5, since the vector entry does not save it).
+ *
+ * Re-verified against the disassembly on 2026-09-19 (0x00E0AABC -
+ * 0x00E0AB06): faithful.  The SAU2 map places it in the `ATBUS_` code
+ * segment (E0AABC, size 118) and A5 in the `D E22904 ATBUS_ size = 2C`
+ * data block, which the tree names io_int_ctrl_t / IO_$INT_CTRL; the file
+ * keeps its disk/ home as listed.
  */
 
 #include "disk/disk_internal.h"

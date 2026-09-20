@@ -1,76 +1,67 @@
 /*
- * DISK_$GET_STATS - Get disk statistics
+ * DISK_$GET_STATS - Ask a registered driver for its statistics
  *
- * Retrieves statistics for a specific device. First copies global
- * disk statistics from 0xe7aedc, then looks up the device-specific
- * statistics function in the jump table and calls it.
+ * 0x00E3DB9C - 0x00E3DC26 (140 bytes, A5 = DISK_$DEVICES at 0xE7AD5C).
+ * Verified against the disassembly on 2026-09-19; the earlier emission
+ * was faithful but named the template and the table by private addresses.
  *
- * The frame is (0x8,A6) word, (0xA,A6) word, (0xC,A6) word, (0xE,A6) long,
- * (0x12,A6) long: FIVE arguments.  The first two words are matched against
- * the device table entry's +0x04 and +0x06 (0x00E3DBE0 / 0x00E3DBE6) and the
- * third is handed straight to the driver's own statistics routine together
- * with the controller number and the buffer ("pea (A2) / move.w (0xC,A6) /
- * move.w D2w / jsr (A3)" at 0x00E3DBF4-0x00E3DBFE).
+ * Arguments:
+ *   (0x8,A6)  ctype      word, matched against entry +0x04 (D0)
+ *   (0xa,A6)  cnum       word, matched against entry +0x06 (D2)
+ *   (0xc,A6)  unit       word, handed to the driver
+ *   (0xe,A6)  has_stats  -> byte, cleared first (0x00E3DBBC)
+ *   (0x12,A6) stats      -> 22-byte buffer
  *
- * @param ctype       Controller type to look up (dcte_t.ctype)
- * @param cnum        Controller number (dcte_t.cnum)
- * @param unit        Unit passed on to the driver routine
- * @param has_stats   Output: Non-zero if stats are available
- * @param stats       Output: Statistics buffer (DISK_STATS_SIZE bytes)
+ * The buffer is preloaded with the template at DISK_$DEVICES + 0x180
+ * (five longwords and a word, 0x00E3DBC4 - 0x00E3DBCE), then the table
+ * is searched (`moveq #0x1f` / dbf, stride 0x0c) for the first registered
+ * entry (jump_table != 0) with matching type and controller.  If that
+ * driver's slot +0x18 is non-null it is called as
+ * get_stats(cnum, unit, stats) and has_stats becomes 0xFF when either of
+ * the first two longwords of the buffer is non-zero (`sne`/`sne`/`or.b`,
+ * 0x00E3DC00 - 0x00E3DC0E).  A match whose slot is null ends the search
+ * with has_stats still 0.
  */
 
 #include "disk/disk_internal.h"
 
-/* Global statistics at 0xe7aedc */
-#define DISK_GLOBAL_STATS  ((uint32_t *)0x00e7aedc)
-
-/* Device registration table */
-#define DISK_DEVICE_TABLE  ((uint8_t *)0x00e7ad5c)
-
 void DISK_$GET_STATS(int16_t ctype, int16_t cnum, int16_t unit,
                      uint8_t *has_stats, void *stats)
 {
-    uint32_t *stats_buf = (uint32_t *)stats;
+    uint32_t *dst = (uint32_t *)stats;
+    const uint32_t *src = (const uint32_t *)((const uint8_t *)DISK_$DEVICES +
+                                             DISK_DEVICES_STATS_OFFSET);
     int16_t i;
-    uint32_t *entry;
-    void *jump_table;
-    void (*get_stats_func)(uint16_t, uint16_t, void *);
 
-    /* Clear has_stats flag */
+    /* 0x00E3DBBC */
     *has_stats = 0;
 
-    /* Copy global statistics (5 longs + 1 word = 22 bytes) */
+    /* 0x00E3DBBE - 0x00E3DBCE: moveq #4 / dbf = five longwords, then a word */
     for (i = 0; i < 5; i++) {
-        stats_buf[i] = DISK_GLOBAL_STATS[i];
+        dst[i] = src[i];
     }
-    *(uint16_t *)&stats_buf[5] = *(uint16_t *)&DISK_GLOBAL_STATS[5];
+    *(uint16_t *)&dst[5] = *(const uint16_t *)&src[5];
 
-    /* Search device table for matching device type and controller */
-    entry = (uint32_t *)DISK_DEVICE_TABLE;
-    for (i = 0x1f; i >= 0; i--) {
-        if (*entry != 0) {
-            uint16_t *entry_info = (uint16_t *)((uint8_t *)entry + 4);
-            if (entry_info[0] == (uint16_t)ctype &&
-                entry_info[1] == (uint16_t)cnum) {
+    /* 0x00E3DBD0 - 0x00E3DC1A */
+    for (i = 0; i < DISK_MAX_DEVICES; i++) {
+        disk_device_entry_t *e = &DISK_$DEVICES[i];
+        disk_jump_table_t *jt;
 
-                /* Found matching device - get stats function */
-                jump_table = (void *)(uintptr_t)*entry;
-                get_stats_func = *(void (**)(uint16_t, uint16_t, void *))
-                                 ((uint8_t *)jump_table + 0x18);
-
-                if (get_stats_func != NULL) {
-                    /* Call device-specific stats function */
-                    get_stats_func((uint16_t)cnum, (uint16_t)unit,
-                                   stats_buf);
-
-                    /* Set has_stats if any stats are non-zero */
-                    if (stats_buf[0] != 0 || stats_buf[1] != 0) {
-                        *has_stats = 0xff;
-                    }
-                }
-                return;
-            }
+        if (e->jump_table == NULL ||
+            e->device_type != (uint16_t)ctype ||
+            e->controller != (uint16_t)cnum) {
+            continue;
         }
-        entry += 3;  /* 12 bytes per entry */
+
+        jt = (disk_jump_table_t *)e->jump_table;
+        if (jt->get_stats == NULL) {                        /* 0x00E3DBF2 */
+            return;
+        }
+
+        /* 0x00E3DBF4 - 0x00E3DC0E */
+        jt->get_stats((uint16_t)cnum, (uint16_t)unit, stats);
+        *has_stats = (uint8_t)((dst[0] != 0 ? 0xFF : 0) |
+                               (dst[1] != 0 ? 0xFF : 0));
+        return;
     }
 }

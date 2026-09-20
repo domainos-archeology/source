@@ -159,7 +159,7 @@ static uint16_t error_que_flag_args[MAX_ERROR_QUE_CALLS];
 /* Control what error result byte 0 is set to for each call */
 static uint8_t error_que_result_byte0[MAX_ERROR_QUE_CALLS];
 
-void DISK_$ERROR_QUE(void *req, uint16_t param_2, void *param_3)
+int16_t DISK_$ERROR_QUE(void *req, uint16_t param_2, int8_t *param_3)
 {
     if (error_que_call_count < MAX_ERROR_QUE_CALLS) {
         error_que_req_args[error_que_call_count] = req;

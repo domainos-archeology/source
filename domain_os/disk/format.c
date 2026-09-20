@@ -1,131 +1,127 @@
 /*
- * DISK_$FORMAT - Format a single track
+ * DISK_$FORMAT - Format one track of an assigned volume
  *
- * Formats a specific track on an assigned volume. Validates that
- * the device supports track-level formatting.
+ * 0x00E3D396 - 0x00E3D50C (376 bytes, A5 = DISK_$DATA at 0xE7A1CC).
+ * Re-emitted from the disassembly on 2026-09-19.  The earlier file
+ * invented a disk_$rtn_qblks_internal call on the invalid-partition path:
+ * the image jumps from 0x00E3D48A straight to the exit with the queue
+ * block still allocated (a leak the original has).  It also read the
+ * partition entry after the bounds test; the image reads it first
+ * (0x00E3D472 before the `cmpi.w #0x8` at 0x00E3D476).
  *
- * @param vol_idx_ptr  Pointer to volume index
- * @param cyl_ptr      Pointer to cylinder number
- * @param head_ptr     Pointer to head/track number
- * @param status       Output: Status code
+ * Arguments:
+ *   (0x8,A6)  vol_idx_ptr -> word volume index (D0)
+ *   (0xc,A6)  cyl_ptr     -> word cylinder (D2)
+ *   (0x10,A6) head_ptr    -> word absolute head number (D3)
+ *   (0x14,A6) status      -> status_$t (A4)
+ *
+ * The head number is split by the volume's head count (+0x9e): the
+ * quotient + 1 selects the partition (part_volx[1..8]), the remainder is
+ * the head within it.  The request is then issued through the PARTITION
+ * volume's driver.
+ *
+ * Frame: (-0x4,A6) err_ec + 1, (-0x8,A6) io_ec + 1, (-0xc,A6) chain tail,
+ * (-0x10,A6) chain head, (-0x1e,A6) the driver's byte.
  */
 
 #include "disk/disk_internal.h"
 #include "arch/arch.h"
 
-/* disk_$volume_t, DISK_VOL(), VALID_VOL_MASK and DISK_MOUNT_ASSIGNED come
- * from disk/disk_internal.h.  The head divisor is the volume's head count at
- * +0x9e (0xe3d45c divu.w (0x9e,A2)) and the partition table is part_volx
- * (+0xb2). */
-
-/* Event counter offsets in process table */
-#define PROC_EC1_OFFSET  0x378
-#define PROC_EC2_OFFSET  0x384
-
-/* Device flags */
-#define DEV_FLAG_NO_TRACK_FORMAT  0x200
-
-/* Process table base */
-#define PROC_TABLE_BASE  ((uint8_t *)0x00e7a544)
+/* 0x00E3D3FE: `btst.l #0x9,D4` on the driver record's word +0x08 - the
+ * same word DISK_$ADD_QUE (0x00E3C732) and DISK_$GET_MNT_INFO
+ * (0x00E6BFDA) treat as the driver flags */
+#define DISK_DEV_FLAG_NO_TRACK_FORMAT  0x0200
+/* 0x00E3D4A8: `ori.b #0x3,(0x1f,A0)` after `andi.b #-0x10` */
+#define DISK_OP_FORMAT_TRACK           0x03
+/* 0x00E3D476: `cmpi.w #0x8,D4w` / bhi - part_volx has entries 1..8 */
+#define DISK_FORMAT_MAX_PARTITION      8
 
 void DISK_$FORMAT(uint16_t *vol_idx_ptr, uint16_t *cyl_ptr, uint16_t *head_ptr,
                   status_$t *status)
 {
-    uint16_t vol_idx;
-    uint16_t cylinder;
-    uint16_t head;
-    uint16_t mount_state;
-    int16_t mount_proc;
-    /* Two four-byte VA cells; disk_$get_qblks_internal stores each with one
-     * `move.l` (0x00E3BF7E, 0x00E3BFB8). */
-    uint32_t buffer_va;
-    uint32_t buffer_param_va;
-    void *buffer;
-    void *buffer_param;
-    int32_t ec1, ec2;
-    disk_$volume_t *vol;
-    void *dev_info;
-    uint16_t dev_flags;
-    uint16_t heads_per_part;
-    uint16_t partition_idx;
-    uint16_t partition_vol;
-    char result[14];
+    uint16_t vol_idx;           /* D0 */
+    uint16_t cylinder;          /* D2 */
+    uint16_t head;              /* D3 */
+    disk_$volume_t *vol;        /* A2 */
+    disk_device_entry_t *dev;   /* A0 = (0x94,A2) */
+    uint32_t head_va;           /* (-0x10,A6) */
+    uint32_t tail_va;           /* (-0xc,A6) */
+    disk_io_req_t *req;         /* A3 */
+    int32_t io_ec_val;          /* (-0x8,A6) */
+    int32_t err_ec_val;         /* (-0x4,A6) */
+    uint8_t *per_proc;
+    uint16_t part_idx;          /* D4: head / num_heads + 1 */
+    uint16_t head_in_part;      /* D0 low word after swap: head % num_heads */
+    uint16_t part_vol;          /* D3 */
+    int8_t queued;              /* (-0x1e,A6) */
 
+    /* 0x00E3D3A8 - 0x00E3D3C6 */
     vol_idx = *vol_idx_ptr;
     cylinder = *cyl_ptr;
     head = *head_ptr;
-
-    /* Validate volume index (must be 1-10) */
-    if ((((uint32_t)1 << (vol_idx & 0x1f)) & VALID_VOL_MASK) == 0) {
-        *status = status_$invalid_volume_index;
+    if ((((uint32_t)VALID_VOL_MASK >> (vol_idx & 0x1f)) & 1u) == 0) {
+        *status = status_$invalid_volume_index;                 /* 0x00E3D48A */
         return;
     }
 
+    /* 0x00E3D3CA - 0x00E3D3F6: A5 + vol_idx * 0x48; +0x94 dev_info,
+     * +0x90 mount_state, +0x92 mount_proc */
     vol = DISK_VOL(vol_idx);
-
-    /* Check mount state and ownership */
-    mount_state = vol->mount_state;
-    mount_proc = vol->mount_proc;
-
-    if (mount_state != DISK_MOUNT_ASSIGNED || mount_proc != PROC1_$CURRENT) {
+    dev = (disk_device_entry_t *)vol->dev_info;
+    if (vol->mount_state != DISK_MOUNT_ASSIGNED ||
+        (uint16_t)vol->mount_proc != PROC1_$CURRENT) {
         *status = status_$volume_not_properly_mounted;
         return;
     }
 
-    /* Get device info and check for track format support */
-    dev_info = vol->dev_info;
-    dev_flags = *(uint16_t *)((uintptr_t)dev_info + 8);
-
-    if ((dev_flags & DEV_FLAG_NO_TRACK_FORMAT) != 0) {
+    /* 0x00E3D3FA - 0x00E3D40A */
+    if ((*(const uint16_t *)((const uint8_t *)dev + 0x08) &
+         DISK_DEV_FLAG_NO_TRACK_FORMAT) != 0) {
         *status = status_$disk_illegal_request_for_device;
         return;
     }
 
-    /* Allocate I/O request buffer */
-    disk_$get_qblks_internal(1, 0, &buffer_va, &buffer_param_va);
-    buffer = ARCH_VA_TO_PTR(buffer_va);
-    buffer_param = ARCH_VA_TO_PTR(buffer_param_va);
+    /* 0x00E3D40E - 0x00E3D420: count 1, mode 0 (one `move.l #0x10000`) */
+    disk_$get_qblks_internal(1, 0, &head_va, &tail_va);
+    req = (disk_io_req_t *)ARCH_VA_TO_PTR(head_va);
 
-    /* Get event counters from process table */
-    ec1 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1_$CURRENT * 0x1c)) + 1;
-    ec2 = *(int32_t *)(PROC_TABLE_BASE + (int16_t)(PROC1_$CURRENT * 0x1c) + 0xc) + 1;
+    /* 0x00E3D424 - 0x00E3D450: eventcount values + 1 for this process */
+    per_proc = DISK_VOLUME_BASE + (int16_t)(PROC1_$CURRENT * DMOD_PER_PROC_SIZE);
+    io_ec_val = *(int32_t *)(per_proc + DMOD_PER_PROC_IO_EC) + 1;
+    err_ec_val = *(int32_t *)(per_proc + DMOD_PER_PROC_ERR_EC) + 1;
 
-    /* Calculate partition index from head number (0xe3d45c) */
-    heads_per_part = vol->num_heads;
-    partition_idx = (head / heads_per_part) + 1;
+    /* 0x00E3D454 - 0x00E3D472: two `divu.w (0x9e,A2)` of the zero-extended
+     * head; quotient + 1 is the partition index, the remainder (swap) the
+     * head within it.  part_volx[part_idx] is fetched BEFORE the range
+     * test. */
+    part_idx = (uint16_t)((uint32_t)head / vol->num_heads) + 1;
+    head_in_part = (uint16_t)((uint32_t)head % vol->num_heads);
+    part_vol = vol->part_volx[part_idx];
 
-    /* Get the partition volume from the partition table (0xe3d46c) */
-    partition_vol = vol->part_volx[partition_idx];
-
-    /* Validate partition index and volume */
-    if (partition_idx > 8 ||
-        (((uint32_t)1 << (partition_vol & 0x1f)) & VALID_VOL_MASK) == 0) {
+    /* 0x00E3D476 - 0x00E3D490: no queue-block return on this path */
+    if (part_idx > DISK_FORMAT_MAX_PARTITION ||
+        (((uint32_t)VALID_VOL_MASK >> (part_vol & 0x1f)) & 1u) == 0) {
         *status = status_$invalid_volume_index;
-        disk_$rtn_qblks_internal(1, buffer, buffer_param);
         return;
     }
 
-    /* Set up I/O request buffer for format */
-    *(uint16_t *)((uintptr_t)buffer + 4) = cylinder;
-    *(uint8_t *)((uintptr_t)buffer + 6) = (uint8_t)(head % heads_per_part);
-    *(uint8_t *)((uintptr_t)buffer + 7) = 1;
+    /* 0x00E3D492 - 0x00E3D4A8: cylinder word at +0x04, head byte at +0x06,
+     * sector byte +0x07 = 1, operation code 3 */
+    req->daddr = ((uint32_t)cylinder << 16) |
+                 ((uint32_t)(head_in_part & 0xff) << 8) | 0x01u;
+    req->op_flags = (uint8_t)((req->op_flags & 0xf0) | DISK_OP_FORMAT_TRACK);
 
-    /* Set format track operation (type 0x03) */
-    *(uint8_t *)((uintptr_t)buffer + 0x1f) &= 0xf0;
-    *(uint8_t *)((uintptr_t)buffer + 0x1f) |= 0x03;
+    /* 0x00E3D4AE - 0x00E3D4CE: through the partition volume's driver */
+    DISK_$DO_IO(DISK_VOL(part_vol), req, req, &queued);
 
-    /* Get partition volume descriptor and perform format I/O.  DISK_$DO_IO
-     * receives the descriptor base (pea (0x7c,A2) in the original). */
-    DISK_$DO_IO(DISK_VOL(partition_vol), buffer, buffer, (void *)result);
-
-    /* Check for error and signal event counters */
-    if (result[0] < 0) {
-        disk_$wait_io((int16_t)(1 << (partition_vol & 0x1f)), &ec1, &ec2);
+    /* 0x00E3D4D2 - 0x00E3D4EC */
+    if (queued < 0) {
+        disk_$wait_io((uint16_t)(1u << (part_vol & 0x1f)), &io_ec_val, &err_ec_val);
     }
 
-    /* Return status from I/O result */
-    *status = *(status_$t *)((uintptr_t)buffer + 0x0c);
+    /* 0x00E3D4F0 */
+    *status = req->status;
 
-    /* Free I/O request buffer */
-    disk_$rtn_qblks_internal(1, buffer, buffer_param);
+    /* 0x00E3D4F4 - 0x00E3D500: result slot discarded */
+    disk_$rtn_qblks_internal(1, req, ARCH_VA_TO_PTR(tail_va));
 }

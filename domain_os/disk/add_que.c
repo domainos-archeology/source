@@ -1,283 +1,419 @@
 /*
- * DISK_$ADD_QUE - Add requests to disk I/O queue
+ * DISK_$ADD_QUE - Add a chain of requests to a driver's elevator queue
  *
- * Adds one or more I/O requests to the disk queue. Performs sorting
- * and request coalescing to optimize disk access patterns.
+ * 0x00E3C716 - 0x00E3C9F8 (740 bytes, `DISK_` module, A5 = DISK_$DATA at
+ * 0xE7A1CC).  Re-emitted from the disassembly on 2026-09-08; the earlier
+ * file had the wrong source for `chunk_len`, counted requests instead of
+ * cylinder runs, and left both merge arms unemitted.
  *
- * This function:
- * 1. Optionally pre-sorts the request list by LBA
- * 2. Acquires the disk lock
- * 3. Counts requests and tracks which ones pass the current disk position
- * 4. Groups consecutive sector requests together
- * 5. Merges requests into the appropriate queue position
+ * The request chain is sorted by absolute disk address (header[7], +0x3c)
+ * unless bit 0 of `flags` says the caller already sorted it; the sorted
+ * chain is then cut into cylinder runs, one entry of the module's
+ * request array (DISK_$DATA + 0xB08) per run, and the runs are spliced
+ * into the queue's two lists around the disk's current cylinder:
  *
- * @param flags       Flags (bit 0: skip initial sort)
- * @param dev_entry   Device entry pointer (volume entry + 0x7c)
- * @param queue       Queue control structure
- * @param req_list    Linked list of requests to add
+ *   direction bit set   (queue->position bit 31, `tst.w (0x4,A0)` < 0):
+ *       list_a (+0x08) ascending  <- runs at or above the current cylinder
+ *       list_b (+0x0c) descending <- the runs below it
+ *   direction bit clear:
+ *       list_a (+0x08) descending <- runs at or below the current cylinder
+ *       list_b (+0x0c) ascending  <- the runs above it
+ *
+ * Both lists end in a sentinel whose cylinder word is 0xFFFF (see
+ * disk_$que_t in disk/disk_internal.h).
+ *
+ * Arguments (0x00E3C724-0x00E3C72E; args are pushed right to left, so
+ * (0x8,A6) is the last push):
+ *   (0x8,A6)  flags     word by value; bit 0 = "chain is already sorted"
+ *   (0xa,A6)  dev       address of the driver record: word +0x08 bit 9
+ *                       means the driver keeps its own queue (fatal here),
+ *                       word +0x0a is its ML_$LOCK resource id
+ *   (0xe,A6)  queue     the disk_$que_t; its first longword is the spin lock
+ *   (0x12,A6) req_list  VA of the first request; the slot is rewritten
+ *                       when the sort moves a new request to the front
+ *
+ * The two merge helpers at 0x00E3C5DA and 0x00E3C690 are nested Pascal
+ * procedures: they take the parent's A5 and, for the ascending one, the
+ * parent's group_end local through the static link (`movea.l (A6),A0`
+ * at 0x00E3C5F0, `(-0x4,A0)`).  They are the static functions below.
  */
 
 #include "disk/disk_internal.h"
 #include "misc/misc.h"
+#include "ml/ml.h"
 
 /*
- * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
- *
- * These are constant longwords in this module's own code region, not
- * shared globals; the cell address is part of each name.  Names come from
- * the SR10.4 status-code database.
+ * 0x00E3C9FA: 00 08 00 2E, passed by `pea (0x2c0,PC)` at 0x00E3C738 to
+ * CRASH_SYSTEM (0x00E3C73C) when the driver record's word +0x08 has bit 9
+ * set.  stcode.db.10.2: 0x0008002E "queued drivers not supported".
  */
-/* 0x00E3C738: pea (0x2c0,PC) -> 0x00E3C9FA, jsr CRASH_SYSTEM at 0x00E3C73C. */
 static const status_$t disk_$queued_drivers_not_supported_00e3c9fa = 0x0008002E;
 
-/* Request block offsets */
-#define REQ_NEXT_OFFSET     0x00   /* VA of the next request (disk_io_req_t.next) */
-#define REQ_CYL_OFFSET      0x04   /* Cylinder (word) */
-#define REQ_HEAD_OFFSET     0x06   /* Head (byte) */
-#define REQ_SECTOR_OFFSET   0x07   /* Sector (byte) */
-#define REQ_COUNT_OFFSET    0x1c   /* Count/group size */
-#define REQ_GROUP_END       0x18   /* VA of the last request in the group
-                                    *   (disk_io_req_t.reserved_18) */
-#define REQ_LBA_OFFSET      0x3c   /* Logical block address */
+/* Driver record words DISK_$ADD_QUE reads (0x00E3C72E, 0x00E3C7B2). */
+#define DISK_QUE_DEV_FLAGS_OFFSET   0x08
+#define DISK_QUE_DEV_FLAG_OWN_QUEUE 0x0200      /* btst.l #0x9 */
+#define DISK_QUE_DEV_LOCK_OFFSET    0x0a
 
-/* Device flags */
-#define DEV_FLAG_SCSI       0x200  /* Uses SCSI addressing */
+static inline uint16_t disk_$que_dev_word(const void *dev, int off)
+{
+    return *(const uint16_t *)((const uint8_t *)dev + off);
+}
 
-/* Queue structure offsets */
-#define QUEUE_LOCK_OFFSET   0x0a   /* Lock ID */
-#define QUEUE_POS_OFFSET    0x04   /* Current position */
-#define QUEUE_HEAD_OFFSET   0x08   /* Queue head */
-#define QUEUE_TAIL_OFFSET   0x0c   /* Queue tail */
+/* The request array: entry i (1-based) is the head of cylinder run i. */
+static inline disk_io_req_t *disk_$que_run(uint16_t i)
+{
+    return (disk_io_req_t *)ARCH_VA_TO_PTR(DISK_$QUE_ARRAY[i]);
+}
 
-/* Queue data at 0xe7a1cc */
-#define QUEUE_DATA_BASE  ((uint8_t *)0x00e7a1cc)
-#define QUEUE_POSITION_ARRAY  (QUEUE_DATA_BASE + 0xb08)
+static inline disk_io_req_t *req_next(const disk_io_req_t *r)
+{
+    return (disk_io_req_t *)ARCH_VA_TO_PTR(r->next);
+}
+
+static inline disk_io_req_t *req_run_end(const disk_io_req_t *r)
+{
+    return (disk_io_req_t *)ARCH_VA_TO_PTR(r->reserved_18);
+}
+
+/* The cylinder word at +0x04 is the high half of daddr. */
+static inline uint16_t req_cyl(const disk_io_req_t *r)
+{
+    return (uint16_t)(r->daddr >> 16);
+}
 
 /*
- * The two request-block link cells this function writes -- the chain link at
- * +0x00 and the group-end link at +0x18 -- are four-byte cells holding target
- * virtual addresses, not host pointers.  disk_io_req_t.daddr (+0x04) and
- * .ppn (+0x14) sit next to them, so a host pointer stored here would overrun
- * a live field on a 64-bit build (bead source-wyn9, 0x00E3BE8A / 0x00E3D50E).
- * ARCH_VA_TO_PTR / ARCH_PTR_TO_VA are identity casts on m68k.
+ * 0x00E3C5DA - 0x00E3C68E (182 bytes): merge runs n, n+1, ... (up to the
+ * zero terminator the parent wrote at array[count + 1]) into the ascending
+ * list whose head cell is `list`.  `group_end` is the parent's (-0x4,A6),
+ * the last request of the whole chain.  When `mark` is true, bit 6 of the
+ * op_flags byte (+0x1f) of the last run end spliced in is set
+ * (0x00E3C618, 0x00E3C680).
  */
-static inline void *req_link(const void *req, int off)
+static void disk_$add_que_merge_ascending(uint32_t *list, uint16_t n, int8_t mark,
+                                          disk_io_req_t *group_end)
 {
-    return ARCH_VA_TO_PTR(*(const uint32_t *)((const uint8_t *)req + off));
+    disk_io_req_t *head;
+    disk_io_req_t *cur;
+    disk_io_req_t *run;
+    disk_io_req_t *prev;
+    uint16_t idx;
+    uint16_t cyl;
+
+    head = (disk_io_req_t *)ARCH_VA_TO_PTR(*list);
+
+    /* 0x00E3C5F4: the list holds only its sentinel - hang the whole
+     * remaining chain in front of it. */
+    if (head->next == 0) {
+        group_end->next = ARCH_PTR_TO_VA(head);                 /* 0x00E3C5FC */
+        *list = DISK_$QUE_ARRAY[n];                             /* 0x00E3C60C */
+        if (mark < 0) {
+            group_end->op_flags |= 0x40;                        /* 0x00E3C618 */
+        }
+        return;
+    }
+
+    /* 0x00E3C620 - 0x00E3C67A */
+    prev = NULL;
+    cur = head;
+    idx = n;
+    run = disk_$que_run(idx);
+    for (;;) {
+        cyl = req_cyl(run);                                     /* 0x00E3C63C */
+        if (cyl > req_cyl(cur)) {                               /* bhi 0x00E3C644 */
+            /* 0x00E3C674: step over the existing run */
+            prev = req_run_end(cur);
+            cur = req_next(prev);
+            continue;
+        }
+        if (prev == NULL) {
+            *list = ARCH_PTR_TO_VA(run);                        /* 0x00E3C64E */
+        } else {
+            prev->next = ARCH_PTR_TO_VA(run);                   /* 0x00E3C652 */
+        }
+        prev = req_run_end(run);                                /* 0x00E3C654 */
+        if (cyl == req_cyl(cur)) {
+            run->reserved_18 = cur->reserved_18;                /* 0x00E3C65E */
+        }
+        prev->next = ARCH_PTR_TO_VA(cur);                       /* 0x00E3C664 */
+        idx++;                                                  /* 0x00E3C666 */
+        run = disk_$que_run(idx);
+        if (run == NULL) {
+            break;
+        }
+    }
+    if (mark < 0) {
+        prev->op_flags |= 0x40;                                 /* 0x00E3C680 */
+    }
 }
 
-static inline void req_set_link(void *req, int off, void *val)
+/*
+ * 0x00E3C690 - 0x00E3C714 (134 bytes): merge runs n, n-1, ..., 1 (down to
+ * the zero terminator at array[0]) into the descending list whose head
+ * cell is `list`.  The cylinder compare is signed here (`blt` at
+ * 0x00E3C6CA), so the 0xFFFF sentinel reads as -1 and every run sorts in
+ * front of it.  No empty-list special case in this helper.
+ */
+static void disk_$add_que_merge_descending(uint32_t *list, uint16_t n, int8_t mark)
 {
-    *(uint32_t *)((uint8_t *)req + off) = ARCH_PTR_TO_VA(val);
+    disk_io_req_t *cur;
+    disk_io_req_t *run;
+    disk_io_req_t *prev;
+    uint16_t idx;
+    int16_t cyl;
+
+    prev = NULL;                                                /* 0x00E3C6A4 */
+    cur = (disk_io_req_t *)ARCH_VA_TO_PTR(*list);               /* 0x00E3C6AA */
+    idx = n;
+    run = disk_$que_run(idx);                                   /* 0x00E3C6C0 */
+    for (;;) {
+        cyl = (int16_t)req_cyl(run);                            /* 0x00E3C6C2 */
+        if (cyl < (int16_t)req_cyl(cur)) {                      /* blt 0x00E3C6CA */
+            /* 0x00E3C6FA: step over the existing run */
+            prev = req_run_end(cur);
+            cur = req_next(prev);
+            continue;
+        }
+        if (prev == NULL) {
+            *list = ARCH_PTR_TO_VA(run);                        /* 0x00E3C6D4 */
+        } else {
+            prev->next = ARCH_PTR_TO_VA(run);                   /* 0x00E3C6D8 */
+        }
+        prev = req_run_end(run);                                /* 0x00E3C6DA */
+        if (cyl == (int16_t)req_cyl(cur)) {
+            run->reserved_18 = cur->reserved_18;                /* 0x00E3C6E4 */
+        }
+        prev->next = ARCH_PTR_TO_VA(cur);                       /* 0x00E3C6EA */
+        idx--;                                                  /* 0x00E3C6EC */
+        run = disk_$que_run(idx);
+        if (run == NULL) {
+            break;
+        }
+    }
+    if (mark < 0) {
+        prev->op_flags |= 0x40;                                 /* 0x00E3C706 */
+    }
 }
 
-/* Internal queue merge functions */
-static void merge_to_front(void *queue, int16_t count, uint8_t flag);
-static void merge_to_back(void *queue, int16_t count, uint8_t flag);
-
-void DISK_$ADD_QUE(uint16_t flags, void *dev_entry, void *queue, void *req_list)
+void DISK_$ADD_QUE(uint16_t flags, void *dev, disk_$que_t *queue, void *req_list)
 {
-    void **dev_info;
-    uint16_t dev_flags;
-    int16_t lock_id;
-    uint16_t lock_token;
-    void *req;
-    void *next;
-    void *prev;
-    void *head;
-    void *group_start = NULL;
-    void *group_end = NULL;
-    uint32_t *position_array;
-    uint32_t current_pos;
-    uint16_t total_count;
-    uint16_t ahead_count;
-    int16_t coalesce_limit;
-    int8_t needs_sort;
+    disk_io_req_t *list;        /* (0x12,A6) */
+    disk_io_req_t *run;         /* A1 in the run loop */
+    disk_io_req_t *req;         /* A0 */
+    disk_io_req_t *group_start; /* A2 */
+    disk_io_req_t *group_end;   /* (-0x4,A6) */
+    disk_io_req_t *prev_a1;     /* D1 in the sort */
+    disk_io_req_t *prev_a0;     /* D2 in the sort */
+    int8_t sorted;              /* D4b */
+    int16_t chunk_len;          /* D6w */
+    uint16_t count;             /* D2w: number of cylinder runs */
+    uint16_t ahead;             /* D5w */
+    uint16_t cur_cyl;           /* D3w */
+    uint16_t below;             /* D4w after 0x00E3C8AA */
+    uint16_t pos;
+    uint16_t i;
+    uint16_t n;
+    ml_$spin_token_t token;     /* (-0x20,A6) */
 
-    /* Get device info and check for queued driver support */
-    dev_info = *(void ***)((uint8_t *)dev_entry + 0x18);
-    dev_flags = *(uint16_t *)((uint8_t *)*dev_info + 8);
+    list = (disk_io_req_t *)req_list;
 
-    if ((dev_flags & DEV_FLAG_SCSI) != 0) {
+    /* 0x00E3C72C - 0x00E3C742 */
+    if ((disk_$que_dev_word(dev, DISK_QUE_DEV_FLAGS_OFFSET) & DISK_QUE_DEV_FLAG_OWN_QUEUE) != 0) {
         CRASH_SYSTEM(&disk_$queued_drivers_not_supported_00e3c9fa);
     }
 
-    /* Get coalesce limit from device entry */
-    coalesce_limit = *(int16_t *)((uint8_t *)dev_entry + 0x1c);
-    needs_sort = -((flags & 1) != 0);
+    /* 0x00E3C744 - 0x00E3C74E: `sne D4b`; the first request's +0x1c word
+     * (the transfer chunk disk_$map_request stored there) is read before
+     * the loop below reuses that word as a run count. */
+    sorted = ((flags & 1) != 0) ? -1 : 0;
+    chunk_len = (int16_t)list->flags;
 
 sort_again:
-    /* Sort request list by LBA if needed */
-    if (needs_sort >= 0) {
-        void *sorted_prev = NULL;
-        head = req_list;
-
-        for (req = head; req != NULL; req = req_link(req, REQ_NEXT_OFFSET)) {
-            prev = req;
-            for (next = req_link(req, REQ_NEXT_OFFSET); next != NULL; next = req_link(prev, REQ_NEXT_OFFSET)) {
-                uint32_t next_lba = *(uint32_t *)((uint8_t *)next + REQ_LBA_OFFSET);
-                uint32_t req_lba = *(uint32_t *)((uint8_t *)req + REQ_LBA_OFFSET);
-
-                if (next_lba < req_lba) {
-                    /* Swap */
-                    void *tmp = req_link(req, REQ_NEXT_OFFSET);
-                    if (sorted_prev != NULL) {
-                        req_set_link(sorted_prev, REQ_NEXT_OFFSET, next);
+    /* 0x00E3C752 - 0x00E3C7AC: exchange sort of the chain by header[7],
+     * unsigned; `list` follows the front request. */
+    if (sorted >= 0) {
+        prev_a1 = NULL;                                         /* D1 */
+        run = list;                                             /* A1 */
+        while (run != NULL) {                                   /* 0x00E3C7A8 */
+            prev_a0 = run;                                      /* 0x00E3C760 */
+            req = req_next(run);
+            while (req != NULL) {                               /* 0x00E3C79E */
+                if (req->header[7] < run->header[7]) {          /* 0x00E3C766 */
+                    disk_io_req_t *run_next = req_next(run);    /* D0 */
+                    disk_io_req_t *tmp;
+                    if (prev_a1 != NULL) {
+                        prev_a1->next = ARCH_PTR_TO_VA(req);    /* 0x00E3C778 */
                     }
-                    req_set_link(req, REQ_NEXT_OFFSET, req_link(next, REQ_NEXT_OFFSET));
-                    if (next == tmp) {
-                        req_set_link(next, REQ_NEXT_OFFSET, req);
+                    run->next = req->next;                      /* 0x00E3C77A */
+                    if (req == run_next) {
+                        req->next = ARCH_PTR_TO_VA(run);        /* 0x00E3C780 */
                     } else {
-                        req_set_link(head, REQ_NEXT_OFFSET, req);
-                        req_set_link(next, REQ_NEXT_OFFSET, tmp);
+                        prev_a0->next = ARCH_PTR_TO_VA(run);    /* 0x00E3C786 */
+                        req->next = ARCH_PTR_TO_VA(run_next);   /* 0x00E3C788 */
                     }
-
-                    if (req == req_list) {
-                        req_list = next;
+                    if (run == list) {
+                        list = req;                             /* 0x00E3C790 */
                     }
-                    tmp = req;
-                    req = next;
-                    next = tmp;
+                    tmp = run;                                  /* 0x00E3C794 */
+                    run = req;
+                    req = tmp;
                 }
-                prev = next;
+                prev_a0 = req;                                  /* 0x00E3C79A */
+                req = req_next(req);
             }
-            sorted_prev = prev;
+            prev_a1 = run;                                      /* 0x00E3C7A4 */
+            run = req_next(run);
         }
     }
 
-    /* Acquire disk lock */
-    lock_id = *(int16_t *)((uint8_t *)dev_entry + QUEUE_LOCK_OFFSET);
-    ML_$LOCK(lock_id);
+    /* 0x00E3C7AE - 0x00E3C7BC */
+    ML_$LOCK((int16_t)disk_$que_dev_word(dev, DISK_QUE_DEV_LOCK_OFFSET));
 
-    /* Initialize counters */
-    total_count = 0;
-    ahead_count = 0;
+    /* 0x00E3C7BE - 0x00E3C7DE */
+    ahead = 0;
+    cur_cyl = (uint16_t)((queue->position & DISK_QUE_POSITION_MASK) >> DISK_QUE_POSITION_SHIFT);
+    count = 0;
+    DISK_$QUE_ARRAY[0] = 0;
+    run = list;
+    group_start = NULL;     /* A2 is never written when the chain is empty;
+                             * 0x00E3C89A then reads whatever A2 held */
+    group_end = NULL;
 
-    /* Get current disk position */
-    current_pos = (*(uint32_t *)((uint8_t *)queue + QUEUE_POS_OFFSET) & 0xffff0) >> 4;
-
-    /* Clear position tracking array */
-    *(uint32_t *)QUEUE_POSITION_ARRAY = 0;
-
-    position_array = (uint32_t *)QUEUE_DATA_BASE;
-
-    /* Walk request list to count and group requests */
-    for (req = req_list; req != NULL; req = req_link(req, REQ_NEXT_OFFSET)) {
-        group_start = req;
-        group_end = req;
-
-        total_count++;
-        position_array++;
-        *position_array = ARCH_PTR_TO_VA(req);
-
-        /* Track first request past current position */
-        if (ahead_count == 0) {
-            uint16_t req_pos = *(uint16_t *)((uint8_t *)req + REQ_CYL_OFFSET);
-            if (current_pos <= req_pos) {
-                ahead_count = total_count;
+    /* 0x00E3C7E2 - 0x00E3C896: one array entry per cylinder run */
+    while (run != NULL) {
+        group_start = run;                                      /* 0x00E3C7E2 */
+        count++;
+        DISK_$QUE_ARRAY[count] = ARCH_PTR_TO_VA(run);           /* 0x00E3C7EE */
+        if (ahead == 0) {                                       /* 0x00E3C7F2 */
+            if (!(cur_cyl > req_cyl(run))) {                    /* bhi 0x00E3C7FA */
+                ahead = count;
             }
         }
-
-        /* Initialize group size to 1 */
-        *(int16_t *)((uint8_t *)req + REQ_COUNT_OFFSET) = 1;
-
-        /* Group consecutive sectors on same cylinder/head */
-        for (next = req_link(req, REQ_NEXT_OFFSET); next != NULL; next = req_link(group_end, REQ_NEXT_OFFSET)) {
-            /* Check if sort order violated - need to re-sort */
-            if (needs_sort < 0) {
-                uint32_t end_lba = *(uint32_t *)((uint8_t *)group_end + REQ_LBA_OFFSET);
-                uint32_t next_lba = *(uint32_t *)((uint8_t *)next + REQ_LBA_OFFSET);
-                if (next_lba < end_lba) {
-                    needs_sort = 0;
-                    ML_$UNLOCK(lock_id);
-                    goto sort_again;
+        run->flags = 1;                                         /* 0x00E3C7FE */
+        group_end = run;                                        /* 0x00E3C804 */
+        req = req_next(run);
+        while (req != NULL) {                                   /* 0x00E3C884 */
+            /* 0x00E3C80C: a pre-sorted chain that is out of order is
+             * sorted after all - drop the lock and start over */
+            if (sorted < 0) {
+                if (group_end->header[7] > req->header[7]) {    /* bls 0x00E3C81C */
+                    sorted = 0;
+                    ML_$UNLOCK((int16_t)disk_$que_dev_word(dev, DISK_QUE_DEV_LOCK_OFFSET));
+                    goto sort_again;                            /* 0x00E3C830 */
                 }
             }
-
-            /* Check if same cylinder */
-            int16_t req_cyl = *(int16_t *)((uint8_t *)req + REQ_CYL_OFFSET);
-            int16_t next_cyl = *(int16_t *)((uint8_t *)next + REQ_CYL_OFFSET);
-            if (req_cyl != next_cyl) {
-                /* Store group end pointer if group > 1 */
-                if (*(int16_t *)((uint8_t *)group_start + REQ_COUNT_OFFSET) != 1) {
-                    req_set_link(group_start, REQ_GROUP_END, group_end);
+            /* 0x00E3C834: cylinder change ends the run */
+            if (req_cyl(req) != req_cyl(run)) {
+                if (group_start->flags != 1) {                  /* 0x00E3C83E */
+                    req_next(group_start)->reserved_18 = ARCH_PTR_TO_VA(group_end); /* 0x00E3C848 */
                 }
-                break;
+                break;                                          /* 0x00E3C84E */
             }
-
-            /* Check if consecutive sector within coalesce limit */
-            uint8_t end_sector = *(uint8_t *)((uint8_t *)group_end + REQ_SECTOR_OFFSET);
-            uint8_t next_sector = *(uint8_t *)((uint8_t *)next + REQ_SECTOR_OFFSET);
-            int16_t sector_diff = (int16_t)next_sector - (int16_t)end_sector;
-
-            if ((int32_t)((uintptr_t)group_end + (int32_t)coalesce_limit) ==
-                *(int32_t *)((uint8_t *)next + REQ_LBA_OFFSET)) {
-                /* Same group - increment count */
-                (*(int16_t *)((uint8_t *)group_start + REQ_COUNT_OFFSET))++;
+            /* 0x00E3C850: contiguous with the group so far? */
+            if ((uint32_t)((int32_t)chunk_len + (int32_t)group_end->header[7]) == req->header[7]) {
+                group_start->flags++;                           /* 0x00E3C862 */
             } else {
-                /* Store group end pointer if group > 1 */
-                if (*(int16_t *)((uint8_t *)group_start + REQ_COUNT_OFFSET) != 1) {
-                    req_set_link(group_start, REQ_GROUP_END, group_end);
+                if (group_start->flags != 1) {                  /* 0x00E3C868 */
+                    req_next(group_start)->reserved_18 = ARCH_PTR_TO_VA(group_end); /* 0x00E3C872 */
                 }
-                /* Start new group */
-                *(int16_t *)((uint8_t *)next + REQ_COUNT_OFFSET) = 1;
-                group_start = next;
+                group_start = req;                              /* 0x00E3C876 */
+                req->flags = 1;
             }
-            group_end = next;
+            group_end = req;                                    /* 0x00E3C87E */
+            req = req_next(req);
         }
-
-        /* Store final group end pointer */
-        req_set_link(req, REQ_GROUP_END, group_end);
+        run->reserved_18 = ARCH_PTR_TO_VA(group_end);           /* 0x00E3C88A */
+        run = req;                                              /* 0x00E3C890 */
     }
 
-    /* Store final group end pointer for last request */
-    if (*(int16_t *)((uint8_t *)group_start + REQ_COUNT_OFFSET) != 1) {
-        req_set_link(group_start, REQ_GROUP_END, group_end);
+    /* 0x00E3C89A - 0x00E3C8A4: close the last group */
+    if (group_start->flags != 1) {
+        req_next(group_start)->reserved_18 = ARCH_PTR_TO_VA(group_end);
     }
 
-    /* Determine merge position based on ahead_count */
-    uint16_t merge_count;
-    if (ahead_count == 0) {
-        merge_count = total_count;
+    /* 0x00E3C8AA - 0x00E3C8CC: the last run at or below cur_cyl */
+    if (ahead == 0) {
+        below = count;                                          /* 0x00E3C8AE */
+    } else if (req_cyl(disk_$que_run(ahead)) == cur_cyl) {      /* 0x00E3C8C0 */
+        below = ahead;
     } else {
-        uint16_t check_pos = *(uint16_t *)(QUEUE_POSITION_ARRAY + ahead_count * 4 + REQ_CYL_OFFSET);
-        if (check_pos == current_pos) {
-            merge_count = ahead_count;
+        below = (uint16_t)(ahead - 1);                          /* 0x00E3C8CA */
+    }
+
+    /* 0x00E3C8CE - 0x00E3C8D6: terminator for the ascending walk */
+    DISK_$QUE_ARRAY[(uint16_t)(count + 1)] = 0;
+
+    /* 0x00E3C8DA - 0x00E3C8E6 */
+    token = ML_$SPIN_LOCK(queue);
+
+    /* 0x00E3C8EA - 0x00E3C8F2: `tst.w (0x4,A0)` - the direction bit */
+    if ((int16_t)(queue->position >> 16) < 0) {
+        /* 0x00E3C8F4 - 0x00E3C962: heading up.  Re-read the position now
+         * that the queue is locked; if it moved, find `ahead` again. */
+        pos = (uint16_t)((queue->position & DISK_QUE_POSITION_MASK) >> DISK_QUE_POSITION_SHIFT);
+        if (pos != cur_cyl) {                                   /* 0x00E3C900 */
+            ahead = 0;
+            if (count != 0) {                                   /* 0x00E3C906 */
+                n = (uint16_t)(count - 1);                      /* D1: dbf count */
+                i = 1;                                          /* 0x00E3C910 */
+                do {
+                    if (!(pos > req_cyl(disk_$que_run(i)))) {   /* bhi 0x00E3C91C */
+                        ahead = i;                              /* 0x00E3C91E */
+                        break;
+                    }
+                    i++;
+                } while (n-- != 0);                             /* dbf 0x00E3C926 */
+            }
+        }
+        /* 0x00E3C92A - 0x00E3C930 */
+        if (ahead != 0) {
+            count = (uint16_t)(ahead - 1);
+        }
+        /* 0x00E3C932 - 0x00E3C946: runs below the head, descending */
+        if (count != 0) {
+            disk_$add_que_merge_descending(&queue->list_b, count, -1);
+        }
+        /* 0x00E3C948 - 0x00E3C962: runs at or above it, ascending */
+        if (ahead != 0) {
+            disk_$add_que_merge_ascending(&queue->list_a, ahead,
+                                          (count == 0) ? -1 : 0, group_end);
+        }
+    } else {
+        /* 0x00E3C964 - 0x00E3C9DE: heading down.  Same re-read; if the
+         * position moved, find `below` again from the top of the array. */
+        pos = (uint16_t)((queue->position & DISK_QUE_POSITION_MASK) >> DISK_QUE_POSITION_SHIFT);
+        if (pos != cur_cyl) {                                   /* 0x00E3C970 */
+            below = 0;
+            if (count != 0) {                                   /* 0x00E3C976 */
+                n = (uint16_t)(count - 1);                      /* D3: dbf count */
+                i = count;                                      /* 0x00E3C980 */
+                do {
+                    if (!(pos < req_cyl(disk_$que_run(i)))) {   /* bcs 0x00E3C994 */
+                        below = i;                              /* 0x00E3C996 */
+                        break;
+                    }
+                    i--;
+                } while (n-- != 0);                             /* dbf 0x00E3C99E */
+            }
+        }
+        /* 0x00E3C9A2 - 0x00E3C9C4: runs above the head, ascending */
+        if (below == 0) {
+            count = 1;                                          /* 0x00E3C9A6 */
+            disk_$add_que_merge_ascending(&queue->list_b, count, -1, group_end);
+        } else if (count == below) {
+            count = 0;                                          /* 0x00E3C9AE */
         } else {
-            merge_count = ahead_count - 1;
+            count = (uint16_t)(below + 1);                      /* 0x00E3C9B4 */
+            if (count != 0) {                                   /* beq 0x00E3C9B6 */
+                disk_$add_que_merge_ascending(&queue->list_b, count, -1, group_end);
+            }
+        }
+        /* 0x00E3C9C6 - 0x00E3C9DE: runs at or below it, descending */
+        if (below != 0) {
+            disk_$add_que_merge_descending(&queue->list_a, below,
+                                           (count == 0) ? -1 : 0);
         }
     }
 
-    /* Clear end of position array */
-    *(uint32_t *)(QUEUE_DATA_BASE + (total_count + 1) * 4 + 0xb0c) = 0;
-
-    /* Acquire spin lock for queue manipulation */
-    lock_token = ML_$SPIN_LOCK(queue);
-
-    /* Determine merge strategy based on current queue state */
-    int16_t queue_pos_flag = *(int16_t *)((uint8_t *)queue + 4);
-
-    if (queue_pos_flag < 0) {
-        /*
-         * TODO(source-pxn): NOT EMITTED.  The front-merge arm of
-         * DISK_$ADD_QUE (0x00E3C716, 740 bytes) is missing: it splices the
-         * new requests ahead of the ones already queued, through the helper
-         * at 0x00E3C690.
-         */
-    } else {
-        /*
-         * TODO(source-pxn): NOT EMITTED.  The back-merge arm is missing: it
-         * appends through the helper at 0x00E3C5DA.  Both helpers are
-         * still FUN_ in Ghidra and both rewrite the queue's head/tail links
-         * in place, so they need tracing before either arm can be emitted.
-         */
-    }
-
-    /* Release spin lock */
-    ML_$SPIN_UNLOCK(queue, lock_token);
+    /* 0x00E3C9E0 - 0x00E3C9F8 */
+    ML_$SPIN_UNLOCK(queue, token);
 }
-
-/*
- * FUN_00e3c690 and FUN_00e3c5da are the two internal merge helpers named in
- * the TODO(source-pxn) markers above.
- */

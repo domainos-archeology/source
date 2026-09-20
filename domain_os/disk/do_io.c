@@ -1,37 +1,31 @@
 /*
- * DISK_$DO_IO - Perform disk I/O operation
+ * DISK_$DO_IO - Hand a request to the volume's driver
  *
- * Dispatches an I/O request to the appropriate device driver
- * by looking up the device's jump table and calling its DO_IO function.
+ * 0x00E3DAA2 - 0x00E3DAD2 (50 bytes).  Verified against the disassembly on
+ * 2026-09-19; the earlier emission was faithful, this one goes through the
+ * records.
  *
- * The dev_entry parameter points to the device data section within
- * a volume entry (at offset +0x7c). At +0x18 within this data is
- * a pointer to device info which contains the jump table.
+ * Arguments:
+ *   (0x8,A6)  vol      the volume descriptor (the +0x7c form, see disk.h);
+ *                      its dev_info (+0x18) is the disk_device_entry_t
+ *                      whose jump_table (+0x00) holds the driver vector
+ *   (0xc,A6)  req      passed through
+ *   (0x10,A6) param_3  passed through (every caller passes `req` again)
+ *   (0x14,A6) result   passed through (DISK_IO hands a byte cell,
+ *                      0x00E3D71A)
  *
- * @param dev_entry  Device entry (volume entry + 0x7c, dev info ptr at +0x18)
- * @param req        I/O request buffer
- * @param param_3    Additional parameter
- * @param result     Result output
+ * The driver's slot +0x10 is called with the same four arguments in the
+ * same order (0x00E3DAB8 - 0x00E3DAC8); D0 is whatever it left there.
  */
 
 #include "disk/disk_internal.h"
 
-void DISK_$DO_IO(void *dev_entry, void *req, void *param_3, void *result)
+void DISK_$DO_IO(void *vol, void *req, void *param_3, void *result)
 {
-    void **dev_info;
-    void *jump_table;
-    void (*do_io_func)(void *, void *, void *, void *);
+    disk_$volume_t *v = (disk_$volume_t *)vol;                      /* A2 */
+    disk_device_entry_t *dev = (disk_device_entry_t *)v->dev_info;  /* A1 = (0x18,A2) */
+    disk_jump_table_t *jt = (disk_jump_table_t *)dev->jump_table;   /* A0 = (A1) */
 
-    /* Get device info pointer from dev_entry at offset +0x18 */
-    dev_info = *(void ***)((uint8_t *)dev_entry + 0x18);
-
-    /* Get jump table pointer from device info */
-    jump_table = *dev_info;
-
-    /* Get DO_IO function pointer from jump table at offset +0x10 */
-    do_io_func = *(void (**)(void *, void *, void *, void *))
-                 ((uint8_t *)jump_table + 0x10);
-
-    /* Call device-specific DO_IO function */
-    do_io_func(dev_entry, req, param_3, result);
+    /* 0x00E3DAB4 - 0x00E3DAC8 */
+    jt->do_io(vol, req, param_3, result);
 }

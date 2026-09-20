@@ -60,6 +60,7 @@
 #define status_$logical_volume_not_found 0x00080010
 #define status_$disk_block_header_error 0x00080011
 #define status_$disk_buffer_not_page_aligned 0x00080013
+#define status_$disk_transfer_not_executed 0x00080029 /* "transfer not executed" */
 #define status_$disk_already_mounted 0x0008001e
 #define status_$memory_parity_error_during_disk_write 0x00080025
 #define status_$volume_in_use 0x0008000b
@@ -381,9 +382,22 @@ typedef struct {
   void *_reserved1; /* +0x00 */
   /* +0x04: shutdown(controller, unit); called by DISK_$SHUTDOWN (0xe3dc36) */
   void (*shutdown)(uint16_t controller, uint16_t unit);
-  void *dinit;      /* +0x08: Device init function */
+  /* +0x08: dinit(unit, controller, vol_idx_ptr, num_blocks_ptr,
+   * sec_per_track_ptr, num_heads_ptr, pvlabel_info); called by
+   * DISK_$MNT_DINIT (0x00E3DA74 - 0x00E3DA96) */
+  void (*dinit)(uint16_t unit, uint16_t controller, void *vol_idx_ptr,
+                void *num_blocks_ptr, void *sec_per_track_ptr,
+                void *num_heads_ptr, void *pvlabel_info);
   void *_reserved3; /* +0x0c */
-  void *do_io;      /* +0x10: I/O function */
+  /* +0x10: do_io(vol, req, param_3, result); called by DISK_$DO_IO
+   * (0x00E3DAB4) with its own four arguments passed through */
+  void (*do_io)(void *vol, void *req, void *param_3, void *result);
+  /* +0x14: error_que(vol, is_timeout, result) - a Pascal function
+   * returning a word; called by DISK_$ERROR_QUE (0x00E3DAE8) */
+  int16_t (*error_que)(void *vol, uint16_t is_timeout, int8_t *result);
+  /* +0x18: get_stats(cnum, unit, stats), may be NULL; called by
+   * DISK_$GET_STATS (0x00E3DBEE - 0x00E3DBFE) */
+  void (*get_stats)(uint16_t cnum, uint16_t unit, void *stats);
 } disk_jump_table_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
@@ -392,6 +406,8 @@ _Static_assert(__builtin_offsetof(disk_jump_table_t, _reserved1) == 0x00, "disk_
 _Static_assert(__builtin_offsetof(disk_jump_table_t, dinit) == 0x08, "disk_jump_table_t.dinit");
 _Static_assert(__builtin_offsetof(disk_jump_table_t, _reserved3) == 0x0C, "disk_jump_table_t._reserved3");
 _Static_assert(__builtin_offsetof(disk_jump_table_t, do_io) == 0x10, "disk_jump_table_t.do_io");
+_Static_assert(__builtin_offsetof(disk_jump_table_t, error_que) == 0x14, "disk_jump_table_t.error_que");
+_Static_assert(__builtin_offsetof(disk_jump_table_t, get_stats) == 0x18, "disk_jump_table_t.get_stats");
 #endif
 
 /*
@@ -506,12 +522,70 @@ void *DISK_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *expected_uid,
 void DISK_$SET_BUFF(void *buffer, uint16_t flags, void *param_3);
 void DISK_$INVALIDATE(uint16_t vol_idx);
 
+/*
+ * disk_$que_t - the elevator queue DISK_$INIT_QUE builds and DISK_$ADD_QUE
+ * fills (0x20 bytes).  Layout from DISK_$INIT_QUE (0x00E3C598-0x00E3C5D0):
+ *
+ *   +0x00 current    cleared (clr.l (A0))
+ *   +0x04 position   bit 31 = scan direction (bset.b #7,(0x4,A0)); bits
+ *                    4..19 = the current cylinder (andi.l #0xfff0000f
+ *                    clears them; ADD_QUE reads (pos & 0xffff0) >> 4)
+ *   +0x08 list_a     VA of the head of list A, initially &sentinel_a
+ *   +0x0c list_b     VA of the head of list B, initially &sentinel_b
+ *   +0x10 sentinel_a { next = 0, daddr high word = 0xFFFF }
+ *   +0x18 sentinel_b { next = 0, daddr high word = 0xFFFF }
+ *
+ * The sentinels are shaped like the first six bytes of a disk_io_req_t
+ * (next at +0, cylinder word at +4) so the merge helpers can walk a list
+ * without a special case for its end.  The two heads and the sentinel
+ * links are 32-bit VA cells, not host pointers.
+ */
+typedef struct disk_$que_sentinel_t {
+    uint32_t    next;           /* +0x00 */
+    uint32_t    daddr;          /* +0x04: the cylinder word DISK_$ADD_QUE
+                                 *   compares (`cmp.w (0x4,An)`) is the HIGH
+                                 *   half, exactly as in disk_io_req_t.daddr;
+                                 *   DISK_$INIT_QUE stores 0xFFFF there and
+                                 *   leaves the low half (+0x06) alone.
+                                 *   Modelled as one longword so a host build
+                                 *   reads it the way the m68k does. */
+} disk_$que_sentinel_t;
+
+#define DISK_QUE_SENTINEL_CYL   0xFFFF0000u
+
+typedef struct disk_$que_t {
+    uint32_t                current;    /* 0x00 */
+    uint32_t                position;   /* 0x04 */
+    uint32_t                list_a;     /* 0x08 */
+    uint32_t                list_b;     /* 0x0c */
+    disk_$que_sentinel_t    sentinel_a; /* 0x10 */
+    disk_$que_sentinel_t    sentinel_b; /* 0x18 */
+} disk_$que_t;
+
+_Static_assert(sizeof(disk_$que_sentinel_t) == 8, "disk_$que_sentinel_t");
+_Static_assert(__builtin_offsetof(disk_$que_t, list_a) == 0x08, "disk_$que_t.list_a");
+_Static_assert(__builtin_offsetof(disk_$que_t, list_b) == 0x0c, "disk_$que_t.list_b");
+_Static_assert(__builtin_offsetof(disk_$que_t, sentinel_a) == 0x10, "disk_$que_t.sentinel_a");
+_Static_assert(__builtin_offsetof(disk_$que_t, sentinel_b) == 0x18, "disk_$que_t.sentinel_b");
+_Static_assert(sizeof(disk_$que_t) == 0x20, "disk_$que_t must be 0x20 bytes");
+
+#define DISK_QUE_DIRECTION_BIT  0x80000000u   /* bit 31 of disk_$que_t.position */
+#define DISK_QUE_POSITION_MASK  0x000ffff0u   /* bits 4..19 */
+#define DISK_QUE_POSITION_SHIFT 4
+
 /* Queue operations */
 void DISK_$INIT_QUE(void *queue);
-void DISK_$ADD_QUE(uint16_t flags, void *dev_entry, void *queue,
+/*
+ * DISK_$ADD_QUE (0x00E3C716): `dev` is the driver record whose word +0x08
+ * bit 9 and word +0x0a (ML_$LOCK id) it reads; `req_list` is the VA of the
+ * first disk_io_req_t of the chain.  See disk/add_que.c.
+ */
+void DISK_$ADD_QUE(uint16_t flags, void *dev, disk_$que_t *queue,
                    void *req_list);
 void DISK_$WAIT_QUE(void *queue, status_$t *status);
-void DISK_$ERROR_QUE(void *req, uint16_t param_2, void *param_3);
+/* DISK_$ERROR_QUE (0x00E3DAD4): hands back the driver's word result;
+ * `result` is a byte cell (bit 7 = error present).  See disk/error_que.c. */
+int16_t DISK_$ERROR_QUE(void *vol, uint16_t is_timeout, int8_t *result);
 void DISK_$SORT(void *dev_entry, void **queue_ptr);
 
 /*
@@ -574,10 +648,14 @@ void DISK_$FORMAT_WHOLE(uint16_t *vol_idx_ptr, status_$t *status);
 /* Device management */
 uint8_t DISK_$REGISTER(uint16_t *type, uint16_t *controller, uint16_t *units,
                        uint16_t *flags, void **jump_table);
-void *DISK_$GET_DRTE(int16_t index);
-void DISK_$MNT_DINIT(uint16_t vol_idx, void **dev_ptr, void *param_3,
-                     void *param_4, void *param_5, void *param_6,
-                     void *param_7);
+/* DISK_$GET_DRTE (0x00E3DA1C): first DISK_$DEVICES entry with a driver whose
+ * device_type / controller match the two words; NULL if none. */
+disk_device_entry_t *DISK_$GET_DRTE(uint16_t *ctype_ptr, uint16_t *cnum_ptr);
+/* DISK_$MNT_DINIT (0x00E3DA64): calls the driver's dinit slot with `unit`,
+ * the entry's controller word and the five pointers.  See disk/mnt_dinit.c. */
+void DISK_$MNT_DINIT(uint16_t unit, void **dev_ptr, void *vol_idx_ptr,
+                     void *num_blocks_ptr, void *sec_per_track_ptr,
+                     void *num_heads_ptr, void *pvlabel_info);
 /*
  * DISK_$SHUTDOWN - Shut a disk device down through its driver
  *
@@ -628,16 +706,21 @@ void DISK_$PV_ASSIGN_N(int16_t *unit_type_ptr, int16_t *device_ptr,
                        uint16_t *vol_idx_ptr, uint32_t *num_blocks_ptr,
                        uint16_t *sec_per_track_ptr, uint16_t *num_heads_ptr,
                        uint32_t *pvlabel_info, status_$t *status);
+/* DISK_$PV_ASSIGN (0x00E6C95C): eight arguments; info_ptr doubles as the
+ * num_blocks cell handed to DISK_$PV_ASSIGN_N.  See disk/pv_assign.c. */
 void DISK_$PV_ASSIGN(int16_t *unit_type_ptr, int16_t *device_ptr,
                      int16_t *unit_ptr, uint16_t *vol_idx_ptr,
-                     int32_t *info_ptr, uint32_t *num_blocks_ptr,
-                     uint16_t *sec_per_track_ptr, status_$t *status);
+                     int32_t *info_ptr, uint16_t *sec_per_track_ptr,
+                     uint16_t *num_heads_ptr, status_$t *status);
 uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
                          int32_t *blocks_avail_ptr, status_$t *status);
 
 /* Async I/O operations */
-void DISK_$AS_READ(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
-                   uint16_t *count_ptr, uint32_t *info, status_$t *status);
+/* Argument 3 of both is the caller's page-aligned buffer VA by value
+ * (0x00E6B87C / 0x00E6B906 `move.l (0x10,A6),-(SP)`); info is the
+ * eight-longword block header (out for a read, in for a write). */
+void DISK_$AS_READ(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr, uint32_t buffer,
+                   uint32_t *info, status_$t *status);
 void DISK_$AS_WRITE(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr, uint32_t buffer,
                     uint32_t *info, status_$t *status);
 void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
@@ -649,7 +732,7 @@ void DISK_$AS_OPTIONS(uint16_t *vol_idx_ptr, uint16_t *options_ptr,
 
 /* Diagnostic and manufacturing operations */
 void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
-                   void *buffer, uint32_t *info, status_$t *status);
+                   uint32_t buffer, uint32_t *info, status_$t *status);
 void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *buffer_ptr,
                              uint32_t count, status_$t *status);
 /*
@@ -683,16 +766,19 @@ typedef struct disk_$mnt_info_t {
 
 #define DISK_MNT_FLAG_LOGICAL_VOLUME 0x40   /* bit 6 (0x00E6BEBC) */
 
-#if defined(ARCH_M68K)
-_Static_assert(offsetof(disk_$mnt_info_t, dev_type)   == 0x08, "disk_$mnt_info_t.dev_type");
-_Static_assert(offsetof(disk_$mnt_info_t, unit_id)    == 0x0A, "disk_$mnt_info_t.unit_id");
-_Static_assert(offsetof(disk_$mnt_info_t, part_info)  == 0x16, "disk_$mnt_info_t.part_info");
-_Static_assert(offsetof(disk_$mnt_info_t, interleave) == 0x26, "disk_$mnt_info_t.interleave");
-_Static_assert(offsetof(disk_$mnt_info_t, flags)      == 0x28, "disk_$mnt_info_t.flags");
+/* Pointer-free, so the layout holds on every host. */
+_Static_assert(__builtin_offsetof(disk_$mnt_info_t, dev_type)   == 0x08, "disk_$mnt_info_t.dev_type");
+_Static_assert(__builtin_offsetof(disk_$mnt_info_t, unit_id)    == 0x0A, "disk_$mnt_info_t.unit_id");
+_Static_assert(__builtin_offsetof(disk_$mnt_info_t, part_info)  == 0x16, "disk_$mnt_info_t.part_info");
+_Static_assert(__builtin_offsetof(disk_$mnt_info_t, interleave) == 0x26, "disk_$mnt_info_t.interleave");
+_Static_assert(__builtin_offsetof(disk_$mnt_info_t, flags)      == 0x28, "disk_$mnt_info_t.flags");
 _Static_assert(sizeof(disk_$mnt_info_t) == 0x2A, "disk_$mnt_info_t must be 0x2A bytes");
-#endif
 
-/* param_2 is the record size the caller declares - ASKNODE passes 0x2A. */
+/* param_2 is the record size the caller declares - ASKNODE passes 0x2A -
+ * and is never read (DISK_$GET_MNT_INFO 0x00E6BE4A touches (0x8,A6),
+ * (0x10,A6) and (0x14,A6) only). */
+/* `info` is a disk_$mnt_info_t; it stays void * here because ASKNODE's
+ * host test mocks this prototype. */
 void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info,
                         status_$t *status);
 
