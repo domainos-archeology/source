@@ -1,88 +1,80 @@
 /*
- * PROC2_$GET_UPIDS - Get Unix PIDs for process
+ * PROC2_$GET_UPIDS - Return a process's Unix ids by UID
  *
- * Returns the Unix-style PIDs for a process, its process group leader,
- * and its parent process.
+ * Re-emitted from the image (0x00E738A8..0x00E73966, 192 bytes).
  *
- * Parameters:
- *   proc_uid - UID of process to query
- *   upid_ret - Pointer to receive process UPID
- *   upgid_ret - Pointer to receive process group UPID
- *   uppid_ret - Pointer to receive parent process UPID
- *   status_ret - Status return
+ * Frame (link.w A6,-0x18; A5 = 0xE86054, unused):
+ *   (0x8,A6)  proc_uid    copied to A6-0x8
+ *   (0xC,A6)  upid_ret    <- D4 = entry+0x16
+ *   (0x10,A6) uppid_ret   <- D3 = P2[entry+0x1E]->upid, or 1 without a parent
+ *   (0x14,A6) upgid_ret   <- D2 = PGROUP_TABLE[entry+0x10].upgid, or 0
+ *   (0x18,A6) status_ret  <- A6-0xC (from PROC2_$FIND_INDEX)
  *
- * Notes:
- *   - If pgroup_idx is 0, returns 1 for upgid (init process)
- *   - If parent_idx is 0, returns 0 for uppid (no parent)
- *   - Parent UPID is looked up via a separate table (8-byte entries)
+ * The three result registers are written only on the success path; when
+ * PROC2_$FIND_INDEX fails (0x00E738E4 bne 0x00E73938) the stores at
+ * 0x00E73948..0x00E73954 still happen with whatever D2/D3/D4 held on
+ * entry, so the outputs are indeterminate in that case.
+ *
+ * NOTE: the second output is the PARENT's upid and the third the process
+ * group id; the old prototype had them the other way round.
  *
  * Original address: 0x00e738a8
  */
 
 #include "proc2/proc2_internal.h"
 
-/*
- * Raw memory access macros for parent-child fields
- */
-#if defined(ARCH_M68K)
-    #define P2_CHILD_BASE(idx)      ((int16_t*)(0xEA551C + ((idx) * 0xE4)))
-    #define P2_PARENT_IDX(idx)      (*(P2_CHILD_BASE(idx) - 0x63))
-    #define P2_PARENT_UPID(idx)     (*(int16_t*)(0xEA944E + (idx) * 8))
-#else
-    static int16_t p2_dummy_field;
-    #define P2_PARENT_IDX(idx)      (p2_dummy_field)
-    #define P2_PARENT_UPID(idx)     (p2_dummy_field)
-#endif
-
-void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid_ret, uint16_t *upgid_ret,
-                      uint16_t *uppid_ret, status_$t *status_ret)
+void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid_ret, uint16_t *uppid_ret,
+                      uint16_t *upgid_ret, status_$t *status_ret)
 {
-    int16_t index;
+    uid_t uid;               /* A6-0x8 */
+    status_$t status;        /* A6-0xC */
+    int16_t index;           /* D0 */
+    uint16_t upid;           /* D4 -- indeterminate on the failure path */
+    uint16_t uppid;          /* D3 */
+    uint16_t upgid;          /* D2 */
     proc2_info_t *entry;
-    status_$t status;
-    uint16_t upid = 0;
-    uint16_t upgid = 0;
-    uint16_t uppid = 0;
-    uid_t uid;
+    proc2_info_t *parent;
 
-    /* Copy UID to local storage */
+    /* 0x00E738B6-0x00E738BE */
     uid.high = proc_uid->high;
     uid.low = proc_uid->low;
 
+    /* 0x00E738C2-0x00E738CE */
     ML_$LOCK(PROC2_LOCK_ID);
 
+    /* 0x00E738D0-0x00E738DE */
     index = PROC2_$FIND_INDEX(&uid, &status);
 
+    /* 0x00E738E0: tst.l (-0xc,A6) -- the whole longword */
     if (status == status_$ok) {
+        /* 0x00E738E6-0x00E738F2 (muls) */
         entry = P2_INFO_ENTRY(index);
 
-        /* Get process's own UPID */
+        /* 0x00E738F6: entry+0x16 */
         upid = entry->upid;
 
-        /* Get process group's UPID */
-        if (entry->pgroup_table_idx == 0) {
-            /* No process group - return 1 (init) */
-            upgid = 1;
+        /* 0x00E738FA-0x00E73918: entry+0x1E */
+        if (entry->parent_pgroup_idx != 0) {
+            parent = P2_INFO_ENTRY((int16_t)entry->parent_pgroup_idx);   /* mulu */
+            uppid = parent->upid;                                        /* 0x00E73912 */
         } else {
-            /* Look up pgroup leader's UPID */
-            proc2_info_t *pgroup_entry = P2_INFO_ENTRY(entry->pgroup_table_idx);
-            upgid = pgroup_entry->upid;
+            uppid = 1;                                                   /* 0x00E73918 */
         }
 
-        /* Get parent's UPID */
-        if (P2_PARENT_IDX(index) == 0) {
-            /* No parent - return 0 */
-            uppid = 0;
+        /* 0x00E7391A-0x00E73936: entry+0x10 */
+        if (entry->pgroup_table_idx != 0) {
+            upgid = PGROUP_ENTRY(entry->pgroup_table_idx)->upgid;        /* 0x00E73930 */
         } else {
-            /* Look up parent's UPID via separate table */
-            uppid = P2_PARENT_UPID(P2_PARENT_IDX(index));
+            upgid = 0;                                                   /* 0x00E73936 */
         }
     }
 
+    /* 0x00E73938-0x00E73944 */
     ML_$UNLOCK(PROC2_LOCK_ID);
 
+    /* 0x00E73944-0x00E7395A: unconditional stores */
     *upid_ret = upid;
-    *upgid_ret = upgid;
     *uppid_ret = uppid;
+    *upgid_ret = upgid;
     *status_ret = status;
 }

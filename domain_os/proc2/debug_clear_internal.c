@@ -1,102 +1,82 @@
 /*
- * DEBUG_CLEAR_INTERNAL - Clear debug relationship for a process
+ * DEBUG_CLEAR_INTERNAL - Detach a process from its debugger
  *
- * Removes a process from its debugger's target list and clears
- * the debug state. If the process is not a zombie, it may be
- * resumed to continue execution.
+ * Re-emitted from the image (0x00E41A24..0x00E41AB8, 150 bytes).
  *
- * From: 0x00e41a24
+ * Frame (link.w A6,-0xC):
+ *   (0x8,A6)  proc_idx  word -> D2
+ *   (0xA,A6)  flag      byte -> D3  (high byte of the word slot)
+ *   A6-0x8    status for XPD_$WRITE / PROC1_$RESUME (never examined)
  *
- * Parameters:
- *   proc_idx - Index of process to stop debugging
- *   flag     - If negative (bit 7 set), write debug data and resume
+ * The entry is addressed as A2 = 0xEA551C + idx*0xE4 = entry + 0xE4:
+ * (-0xBE,A2) = +0x26 debugger_idx, (-0xBA,A2) = +0x2A flags,
+ * (-0xB9,A2) = low byte of flags, (-0x78,A2) = +0x6C cr_rec_2,
+ * (-0x4E,A2) = +0x96 asid, (-0x4A,A2) = +0x9A level1_pid.
  *
- * Original assembly:
- *   00e41a24    link.w A6,-0xc
- *   00e41a28    movem.l {  A5 A2 D3 D2},-(SP)
- *   ...
- *   00e41a54    bsr.w DEBUG_UNLINK_FROM_LIST
- *   00e41a5a    bclr.b #0x4,(-0xb9,A2)     ; clear awaken flag
- *   00e41a60    move.w (-0xba,A2),D0w      ; get flags word
- *   00e41a64    btst.l #0xd,D0             ; test zombie bit
- *   ...
+ * Callers: PROC2_$DELETE 0x00E744BA, PROC2_$WAIT_REAP_CHILD 0x00E3FB68,
+ * PROC2_$WAIT_TRY_ZOMBIE 0x00E3FD54, PROC2_$UNDEBUG 0x00E4188C.
+ *
+ * Original address: 0x00e41a24
  */
 
 #include "proc2/proc2_internal.h"
 
 /*
- * Internal debug flag in flags byte (offset 0x2B from entry)
- * Bit 4 (0x10) indicates guardian should be awakened on debug events.
+ * Constant cells passed by reference to XPD_$WRITE:
+ *   0x00E41ABC  00 00 00 00   `pea (0x3e,PC)`  at 0x00E41A7C -> argument 4,
+ *                             the source longword (zero)
+ *   0x00E41A20  00 00 00 01   `pea (-0x62,PC)` at 0x00E41A80 -> argument 3,
+ *                             the byte count -- the cell DEBUG_SETUP_INTERNAL
+ *                             owns (PROC2_$DEBUG_XPD_WRITE_LEN)
  */
-#define DEBUG_FLAG_AWAKEN_GUARDIAN  0x10
-
-/*
- * Get pointer to extended fields beyond the base proc2_info_t structure.
- */
-#define ENTRY_DEBUG_ADDR(entry) \
-    ((void *)((uint8_t *)(entry) + 0x96))
-
-#define ENTRY_FLAGS_BYTE(entry) \
-    (*((uint8_t *)(entry) + 0x2B))
-
-/*
- * Constant cells the compiler placed in the code region and passes by
- * reference to XPD_$WRITE (cell address = pea instruction address + 2 + d;
- * values read out of the image with gsk):
- *   0x00E41A20 (0x00E41A80 `pea (-0x62,PC)`) - the length longword, 1
- *   0x00E41ABC (0x00E41A7C `pea (0x3e,PC)`)  - the source byte, 0x00
- */
-static const int32_t debug_clear_len = 1;
-static const uint32_t debug_clear_buffer = 0x00000000;
+static const uint32_t proc2_debug_clear_write_value = 0;   /* 0x00E41ABC */
 
 void DEBUG_CLEAR_INTERNAL(int16_t proc_idx, int8_t flag)
 {
-    proc2_info_t *entry;
-    status_$t status[2];  /* XPD_$WRITE may need multiple status values */
+    proc2_info_t *entry;    /* A2 (biased) */
+    status_$t status;       /* A6-0x8 */
 
+    /* 0x00E41A3A-0x00E41A46 */
     entry = P2_INFO_ENTRY(proc_idx);
 
-    /* If not being debugged, nothing to do */
+    /* 0x00E41A4A: tst.w (-0xbe,A2) / beq exit -- not being debugged */
     if (entry->debugger_idx == 0) {
         return;
     }
 
-    /* Unlink from debugger's target list */
+    /* 0x00E41A50-0x00E41A58 (result slot pushed, nothing read) */
     DEBUG_UNLINK_FROM_LIST(proc_idx);
 
-    /* Clear the internal debug awaken flag (bit 4) */
-    ENTRY_FLAGS_BYTE(entry) &= ~DEBUG_FLAG_AWAKEN_GUARDIAN;
+    /* 0x00E41A5A: bclr.b #0x4,(-0xb9,A2) -- flags &= ~0x0010 */
+    entry->flags &= (uint16_t)~0x0010;
 
-    /*
-     * Check if process is a zombie (bit 13 = 0x2000 in flags).
-     * Zombie processes just need their guardian awakened.
-     */
+    /* 0x00E41A60/0x00E41A64: btst.l #0xd,D0 on the flags word -- zombie */
     if ((entry->flags & PROC2_FLAG_ZOMBIE) != 0) {
-        /* Process is zombie - awaken guardian and return */
-        PROC2_$AWAKEN_GUARDIAN(&proc_idx);
-        return;
+        /* 0x00E41A6A: pea (0x8,A6) -- address of the proc_idx argument */
+        PROC2_$AWAKEN_GUARDIAN(&proc_idx);             /* 0x00E41A6E */
+        return;                                        /* 0x00E41A72 */
     }
 
-    /*
-     * Process is not a zombie.
-     * If flag is negative (bit 7 set), write debug clear data and resume.
-     */
+    /* 0x00E41A74: tst.b D3b / bpl exit -- Domain boolean */
     if (flag < 0) {
-        uint32_t offset = entry->cr_rec_2 + 0x90;
-
         /*
-         * 0x00E41A84-0x00E41A90: `movea.l (-0x78,A2),A0; pea (0x90,A0)` -
-         * the target address is a 32-bit VA computed from cr_rec_2 and pushed
-         * BY VALUE, so it goes through ARCH_VA_TO_PTR rather than being a
-         * host pointer of its own.
+         * 0x00E41A78-0x00E41A90, pushes right to left:
+         *   pea (-0x8,A6)           arg 5  &status
+         *   pea 0x00E41ABC          arg 4  &0
+         *   pea 0x00E41A20          arg 3  &1
+         *   movea.l (-0x78,A2),A0 ; pea (0x90,A0)
+         *                           arg 2  VA cr_rec_2 + 0x90, by value
+         *   pea (-0x4e,A2)          arg 1  &entry->asid
          */
-        XPD_$WRITE(ENTRY_DEBUG_ADDR(entry), ARCH_VA_TO_PTR(offset),
-                   &debug_clear_len, &debug_clear_buffer, status);
+        XPD_$WRITE(&entry->asid,
+                   ARCH_VA_TO_PTR(entry->cr_rec_2 + 0x90),
+                   &PROC2_$DEBUG_XPD_WRITE_LEN,
+                   &proc2_debug_clear_write_value, &status);
 
-        /* Clear awaken flag again after XPD write */
-        ENTRY_FLAGS_BYTE(entry) &= ~DEBUG_FLAG_AWAKEN_GUARDIAN;
+        /* 0x00E41A9A: bclr.b #0x4,(-0xb9,A2) again */
+        entry->flags &= (uint16_t)~0x0010;
 
-        /* Resume the process via PROC1 */
-        PROC1_$RESUME(entry->level1_pid, status);
+        /* 0x00E41AA0-0x00E41AAA: PROC1_$RESUME(entry->level1_pid, &status) */
+        PROC1_$RESUME(entry->level1_pid, &status);
     }
 }

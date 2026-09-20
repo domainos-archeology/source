@@ -1,82 +1,90 @@
 /*
- * PROC2_$LIST_PGROUP - List process group members
+ * PROC2_$LIST_PGROUP - List the members of a process group
  *
- * Returns UIDs of all processes belonging to the specified process group.
+ * Re-emitted from the image (0x00E401EA..0x00E402EE, 262 bytes).
  *
- * Parameters:
- *   pgroup_uid - UID of process group
- *   uid_list - Array to receive member UIDs
- *   max_count - Pointer to max entries (capped at 57)
- *   count - Pointer to receive actual count
+ * Frame (link.w A6,-0x2C; A5 = 0xE7BE84):
+ *   (0x8,A6)  pgroup_uid ptr (pushed by value to UID_TO_PGROUP_INDEX)
+ *   (0xC,A6)  uid_list   (0x10,A6) max_count ptr   (0x14,A6) count ptr
+ *   A6-0x18 FIM record  A6-0x1C FIM status  A6-0x22 capped max  A6-0x24 found
+ *
+ * Only reference: the SVC table entry at 0x00E7B9E2.
  *
  * Original address: 0x00e401ea
  */
 
 #include "proc2/proc2_internal.h"
 
-/* Expected status from FIM_$CLEANUP */
-
-void PROC2_$LIST_PGROUP(uid_t *pgroup_uid, uid_t *uid_list, uint16_t *max_count, uint16_t *count)
+void PROC2_$LIST_PGROUP(uid_t *pgroup_uid, uid_t *uid_list, uint16_t *max_count,
+                        uint16_t *count)
 {
-    uint16_t max_entries;
-    uint16_t found_count;
-    int16_t pgroup_idx;
-    int16_t index;
-    proc2_info_t *entry;
-    uid_t *out_ptr;
-    uint8_t fim_context[24];
-    status_$t status;
+    uint8_t fim_context[0x18];   /* A6-0x18 */
+    status_$t status;            /* A6-0x1C */
+    uint16_t max;                /* A6-0x22 */
+    uint16_t n;                  /* A6-0x24 */
+    int16_t pgroup_idx;          /* D0 */
+    int16_t index;               /* D1 */
+    proc2_info_t *entry;         /* A0 (biased) */
+    uid_t *out;                  /* A1 */
+    uint16_t d0;
 
-    max_entries = *max_count;
-    found_count = 0;
-
-    /* Cap at 57 entries */
-    if (max_entries > 57) {
-        max_entries = 57;
+    /* 0x00E401F8-0x00E4020A: n = 0; max = min(*max_count, 57), unsigned */
+    d0 = *max_count;
+    n = 0;
+    if (d0 > 0x39) {
+        d0 = 0x39;
     }
+    max = d0;
 
-    /* Set up FIM cleanup context */
+    /* 0x00E4020E-0x00E4021A */
     status = FIM_$CLEANUP(fim_context);
 
+    /* 0x00E4021E */
     if (status == status_$cleanup_handler_set) {
+        /* 0x00E40228-0x00E40234 */
         ML_$LOCK(PROC2_LOCK_ID);
 
-        /* Get pgroup index from UID */
+        /* 0x00E40236-0x00E40242: result slot; a zero index skips the walk */
         pgroup_idx = PROC2_$UID_TO_PGROUP_INDEX(pgroup_uid);
-
-        out_ptr = uid_list;
-        index = P2_INFO_ALLOC_PTR;
-
         if (pgroup_idx != 0) {
+            /* 0x00E40244-0x00E4024E: D1 = alloc ptr (the beq tests that move) */
+            index = (int16_t)P2_INFO_ALLOC_PTR;
+            out = uid_list;
             while (index != 0) {
-                entry = P2_INFO_ENTRY(index);
+                entry = P2_INFO_ENTRY(index);                /* 0x00E40250-0x00E4025C */
 
-                /* Check if process is in this pgroup:
-                 * - flags high bit set (0x80 in low byte = 0x0080 in word)
-                 * - pgroup_table_idx matches pgroup_idx
-                 */
-                if (((entry->flags & 0x0080) != 0) && (entry->pgroup_table_idx == pgroup_idx)) {
-                    found_count++;
-                    if (found_count <= max_entries) {
-                        out_ptr->high = entry->uid.high;
-                        out_ptr->low = entry->uid.low;
-                        out_ptr++;
+                /* 0x00E40260: tst.b (-0xb9,A0) / bpl = flags & 0x0080;
+                 * 0x00E40266: entry+0x10 == pgroup_idx */
+                if ((entry->flags & 0x0080) != 0 &&
+                    entry->pgroup_table_idx == (uint16_t)pgroup_idx) {
+                    n += 1;                                  /* 0x00E4026C */
+                    out++;                                   /* 0x00E40270 */
+                    /* 0x00E40272-0x00E4027A: n > max (bhi) -> no copy */
+                    if (n <= max) {
+                        out[-1].high = entry->uid.high;      /* 0x00E4027C-0x00E40284 */
+                        out[-1].low = entry->uid.low;
                     }
                 }
-
-                /* Next entry in allocation list */
-                index = entry->next_index;
+                index = (int16_t)entry->next_index;          /* 0x00E40288 */
             }
         }
 
+        /* 0x00E4028E-0x00E402A6 */
         ML_$UNLOCK(PROC2_LOCK_ID);
         FIM_$RLS_CLEANUP(fim_context);
 
-        *count = found_count;
-        if (max_entries < found_count) {
-            *count = max_entries;
+        /* 0x00E402A8-0x00E402C2: *count = n; if (*count < max) max = *count;
+         * if (*count > max) *count = max */
+        *count = n;
+        d0 = *count;
+        if (d0 < max) {
+            max = d0;
+        }
+        if (d0 > max) {
+            *count = max;
         }
     } else {
+        /* 0x00E402C8-0x00E402E4 */
         FIM_$POP_SIGNAL(fim_context);
         ML_$UNLOCK(PROC2_LOCK_ID);
         *count = 0;

@@ -297,8 +297,22 @@ void MST_$MAP_TOP(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
                   uint16_t *area_id_ptr, uint32_t *area_size_ptr,
                   uint8_t *rights_ptr, int32_t *mapped_len,
                   status_$t *status_ret);
+/*
+ * MST_$MAP_INITIAL_AREA (0x00E42E9E) frame:
+ *   +0x08 code_desc   longword
+ *   +0x0C asid        word
+ *   +0x0E parent_uid  pointer
+ *   +0x12 map_param   longword
+ *   +0x16 area_kind   word      (`move.w (0x16,A6),-(SP)` at 0x00E42F08)
+ *   +0x18 touch       boolean   (`move.b (0x18,A6),D4b` at 0x00E42EB4)
+ *   +0x1A status      pointer
+ * PROC2_$CREATE pushes `move.l #0x70000` (area_kind 7, touch false);
+ * PROC2_$COMPLETE_VFORK pushes `st` then `move.w #7` (area_kind 7, touch
+ * true).  The two used to be merged into one longword parameter.
+ */
 void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
-                           uint32_t map_param, uint32_t flags, status_$t *status);
+                           uint32_t map_param, int16_t area_kind, boolean touch,
+                           status_$t *status);
 /*
  * MST_$MAPS - map an object, searching the private space from the top
  *
@@ -427,9 +441,14 @@ void MST_$GET_UID(uint32_t *va_ptr, uid_t *uid_out, uint32_t *adjusted_va,
                   status_$t *status_ret);
 void MST_$GET_UID_ASID(uint16_t *asid_p, uint32_t *va_ptr, uid_t *uid_out,
                        uint32_t *adjusted_va, status_$t *status_ret);
+/*
+ * MST_$GET_VA_INFO (0x00E4404E): the fifth argument is forwarded unchanged
+ * to mst_$va_to_pte as its prot_out word (`move.l (0x18,A6),-(SP)` at
+ * 0x00E44094); active_flag is flags bit 15 (`smi`), modified_flag bit 14.
+ */
 void MST_$GET_VA_INFO(uint16_t *asid_p, uint32_t *va_ptr, uid_t *uid_out,
-                      uint32_t *adjusted_va, void *param_5, int8_t *active_flag,
-                      int8_t *modified_flag, status_$t *status_ret);
+                      uint32_t *adjusted_va, uint16_t *prot_out, boolean *active_flag,
+                      boolean *modified_flag, status_$t *status_ret);
 /*
  * MST_$GET_PRIVATE_SIZE (0x00E44AAE) takes four by-reference arguments, not
  * none: ASKNODE_$INTERNET_INFO's request-0x4B arm pushes

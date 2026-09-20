@@ -14,11 +14,16 @@
 /*
  * TAPE_$BOOT - Check if system booted from tape
  *
- * @param status_ret  Output: status code (always status_$ok)
+ * Re-emitted from the image (0x00E32734..0x00E32742).  The routine takes
+ * TWO arguments: it clears *entry_point and never touches status_ret.
+ *
+ * @param entry_point  Output: cleared
+ * @param status_ret   Unused
  * @return 0 (false) - tape boot not supported
  */
-uint8_t TAPE_$BOOT(status_$t *status_ret)
+int8_t TAPE_$BOOT(uint32_t *entry_point, status_$t *status_ret)
 {
-    *status_ret = status_$ok;
-    return 0;
+    (void)status_ret;       /* (0xC,A6): never read */
+    *entry_point = 0;       /* 0x00E3273C: clr.l (A0) */
+    return 0;               /* 0x00E3273E: clr.b D0b */
 }

@@ -1,91 +1,97 @@
 /*
  * PROC2_$LIST - List process UIDs
  *
- * Returns a list of process UIDs. The first entry is always the
- * system process UID at 0xEA551C. Subsequent entries are processes
- * with flag 0x8000 set and ASID != 1.
+ * Re-emitted from the image (0x00E402F0..0x00E40400, 274 bytes).
  *
- * Parameters:
- *   uid_list - Array to receive process UIDs
- *   max_ull - Pointer to max entries (capped at 57)
- *   ull - Pointer to receive actual count
+ * Under a FIM cleanup handler and the PROC2 lock: uid_list[0] is entry 1's
+ * UID (0xEA551C), then every allocated entry whose flags low byte has bit 7
+ * set (0x0080) and whose ASID is not 1 is appended.  The count reported is
+ * min(total qualifying + 1, capped max).
+ *
+ * Frame (link.w A6,-0x28; A5 = 0xE7BE84):
+ *   (0x8,A6)  uid_list       (0xC,A6) max_count ptr   (0x10,A6) count ptr
+ *   A6-0x18   FIM cleanup record (0x18 bytes)   A6-0x1C  FIM's status
+ *   A6-0x20   capped max     A6-0x22  running count (starts at 1)
+ *
+ * Callers: ASKNODE_$INTERNET_INFO 0x00E6499A, SVC table 0x00E7B6F6.
  *
  * Original address: 0x00e402f0
  */
 
 #include "proc2/proc2_internal.h"
 
-/* The first UID returned is that of process table entry 1 (the system
- * process): movea.l #0xea551c,A0 = P2_INFO_ENTRY(1)->uid */
-
-void PROC2_$LIST(uid_t *uid_list, uint16_t *max_ull, uint16_t *ull)
+void PROC2_$LIST(uid_t *uid_list, uint16_t *max_count, uint16_t *count)
 {
-    uint16_t max_count;
-    uint16_t count;
-    int16_t index;
-    proc2_info_t *entry;
-    uid_t *out_ptr;
-    uint8_t fim_context[24];
-    status_$t status;
+    uint8_t fim_context[0x18];   /* A6-0x18 */
+    status_$t status;            /* A6-0x1C */
+    uint16_t max;                /* A6-0x20 */
+    uint16_t n;                  /* A6-0x22 */
+    int16_t index;               /* D0 */
+    proc2_info_t *entry;         /* A0 (biased) */
+    uid_t *out;                  /* A1 */
+    uint16_t d0;
 
-    max_count = *max_ull;
-    count = 1;  /* Always include system process */
-
-    /* Cap at 57 entries */
-    if (max_count > 57) {
-        max_count = 57;
+    /* 0x00E402FE-0x00E40312: n = 1; max = min(*max_count, 57) (bls, unsigned) */
+    d0 = *max_count;
+    n = 1;
+    if (d0 > 0x39) {
+        d0 = 0x39;
     }
+    max = d0;
 
-    /* Set up FIM cleanup context */
+    /* 0x00E40316-0x00E40322 */
     status = FIM_$CLEANUP(fim_context);
 
-    if (status == 0x00120035) {  /* Expected status */
+    /* 0x00E40326: cmpi.l #0x120035 */
+    if (status == status_$cleanup_handler_set) {
+        /* 0x00E40330-0x00E4033C */
         ML_$LOCK(PROC2_LOCK_ID);
 
-        /* First entry is always the system process UID */
-        if (max_count != 0) {
+        /* 0x00E4033E-0x00E40350: uid_list[0] = entry(1)->uid when max != 0 */
+        if (max != 0) {
             uid_list[0].high = P2_INFO_ENTRY(1)->uid.high;
             uid_list[0].low = P2_INFO_ENTRY(1)->uid.low;
         }
 
-        out_ptr = &uid_list[1];
-        index = P2_INFO_ALLOC_PTR;
-
+        /* 0x00E40354-0x00E4035E: D0 = alloc ptr, A1 = &uid_list[1]; beq
+         * tests the move.w (addq.l to An sets no flags) */
+        index = (int16_t)P2_INFO_ALLOC_PTR;
+        out = &uid_list[1];
         while (index != 0) {
-            entry = P2_INFO_ENTRY(index);
+            entry = P2_INFO_ENTRY(index);                    /* 0x00E40360-0x00E4036C */
 
-            /* Check if process should be listed:
-             * - High bit of flags byte (0x8000 flag) must be set
-             * - ASID must not be 1
-             */
-            if (((entry->flags & 0x8000) != 0) && (entry->asid != 1)) {
-                count++;
-                if (count <= max_count) {
-                    out_ptr->high = entry->uid.high;
-                    out_ptr->low = entry->uid.low;
+            /* 0x00E40370: tst.b (-0xb9,A0) / bpl -- LOW byte bit 7 = 0x0080
+             * 0x00E40376-0x00E4037C: asid == 1 -> skip */
+            if ((entry->flags & 0x0080) != 0 && entry->asid != 1) {
+                n += 1;                                      /* 0x00E4037E */
+                out++;                                       /* 0x00E40382 */
+                /* 0x00E40384-0x00E4038C: n > max (bhi) -> no copy */
+                if (n <= max) {
+                    out[-1].high = entry->uid.high;          /* 0x00E4038E-0x00E40396 */
+                    out[-1].low = entry->uid.low;
                 }
-                out_ptr++;
             }
-
-            /* Next entry in allocation list */
-            index = entry->next_index;
+            index = (int16_t)entry->next_index;              /* 0x00E4039A */
         }
 
+        /* 0x00E403A0-0x00E403B8 */
         ML_$UNLOCK(PROC2_LOCK_ID);
         FIM_$RLS_CLEANUP(fim_context);
 
-        /* Return actual count, capped at max */
-        *ull = count;
-        if (count < max_count) {
-            max_count = count;
+        /* 0x00E403BA-0x00E403D4: *count = n; if (*count < max) max = *count;
+         * if (*count > max) *count = max  (both unsigned) */
+        *count = n;
+        d0 = *count;
+        if (d0 < max) {
+            max = d0;
         }
-        if (max_count < count) {
-            *ull = max_count;
+        if (d0 > max) {
+            *count = max;
         }
     } else {
-        /* Cleanup failed */
+        /* 0x00E403DA-0x00E403F6: the handler fired -- pop it, unlock, 0 */
         FIM_$POP_SIGNAL(fim_context);
         ML_$UNLOCK(PROC2_LOCK_ID);
-        *ull = 0;
+        *count = 0;
     }
 }

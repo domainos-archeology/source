@@ -1,123 +1,113 @@
 /*
- * DEBUG_SETUP_INTERNAL - Set up debug relationship between processes
+ * DEBUG_SETUP_INTERNAL - Attach a target process to a debugger
  *
- * Links a target process to a debugger process. The target is added
- * to the debugger's list of debug targets, and the target's debugger_idx
- * is set to point back to the debugger.
+ * Re-emitted from the image (0x00E4194C..0x00E41A1A, 208 bytes).
  *
- * From: 0x00e4194c
+ * Links `target` at the head of `debugger`'s debug-target list (unlinking
+ * it from any previous debugger first), resets the target's ptrace
+ * options, optionally pokes a longword into the target's creation record
+ * through XPD_$WRITE, and wakes the target's guardian around the change
+ * when the target is in fault mode.
  *
- * Parameters:
- *   target_idx   - Index of process to be debugged
- *   debugger_idx - Index of debugger process
- *   flag         - If negative (bit 7 set), write debug data via XPD
+ * Frame (link.w A6,-0x24):
+ *   (0x8,A6)  target_idx    word  -> D2
+ *   (0xA,A6)  debugger_idx  word  -> D3
+ *   (0xC,A6)  flag          byte  -> D4  (high byte of the word slot;
+ *                                         callers push `st`/`clr.w`)
+ *   A6-0x18   14-byte copy of the ptrace option record
+ *   A6-0x1C   status for XPD_$WRITE (never examined)
  *
- * Original assembly:
- *   00e4194c    link.w A6,-0x24
- *   00e41950    movem.l {  A5 A3 A2 D4 D3 D2},-(SP)
- *   ...
- *   00e41990    move.w D3w,(-0xbe,A2)      ; target->debugger_idx = debugger_idx
- *   00e41994    move.w (-0xc0,A3),(-0xbc,A2)  ; target->next = debugger->first
- *   00e4199a    move.w D2w,(-0xc0,A3)      ; debugger->first = target_idx
- *   ...
+ * Both entries are addressed as A_n = 0xEA551C + idx*0xE4 = entry + 0xE4:
+ * (-0xBE,A2) = +0x26 debugger_idx, (-0xBC,A2) = +0x28 next target,
+ * (-0xC0,A3) = +0x24 first target, (-0xB9,A2) = low byte of flags (+0x2A),
+ * (-0x16,A2) = +0xCE ptrace_opts, (-0x78,A2) = +0x6C cr_rec_2,
+ * (-0x4E,A2) = +0x96 asid.
+ *
+ * Callers: PROC2_$CREATE 0x00E7295A, PROC2_$FORK 0x00E73070,
+ * PROC2_$DEBUG 0x00E416F4, PROC2_$OVERRIDE_DEBUG 0x00E417E2.
+ *
+ * Original address: 0x00e4194c
  */
 
 #include "proc2/proc2_internal.h"
 
 /*
- * Internal debug flag in flags byte (offset 0x2B from entry)
- * Bit 4 (0x10) indicates guardian should be awakened on debug events.
- */
-#define DEBUG_FLAG_AWAKEN_GUARDIAN  0x10
-
-/*
- * Get pointer to extended fields beyond the base proc2_info_t structure.
- * The full entry is 0xE4 bytes but proc2_info_t only defines through 0xBF.
- */
-/*
- * The 14-byte ptrace option record at entry+0xCE is xpd/xpd.h's
- * xpd_$ptrace_opts_t; proc2_info_t declares it as raw bytes so that xpd.h
- * need not be included by proc2.h.
- */
-#define ENTRY_PTRACE_OPTS(entry) \
-    ((xpd_$ptrace_opts_t *)((entry)->ptrace_opts))
-
-#define ENTRY_DEBUG_ADDR(entry) \
-    ((void *)((uint8_t *)(entry) + 0x96))
-
-#define ENTRY_FLAGS_BYTE(entry) \
-    (*((uint8_t *)(entry) + 0x2B))
-
-/* Static data for XPD_$WRITE calls - appears to be small constants */
-/*
  * Constant cells in the code region, passed by reference to XPD_$WRITE
- * (cell address = pea instruction address + 2 + d; values read with gsk):
- *   0x00E41A20 (0x00E419E8 `pea (0x36,PC)`) - the length longword, 1
- *   0x00E41A1C (0x00E419E4 `pea (0x36,PC)`) - the source bytes, 0xFFFFFFFF
+ * (cell = pea address + 2 + displacement; bytes read from the image):
+ *
+ *   0x00E41A1C  ff ff ff ff   `pea (0x36,PC)` at 0x00E419E4  -> argument 4,
+ *                             the source longword
+ *   0x00E41A20  00 00 00 01   `pea (0x36,PC)` at 0x00E419E8  -> argument 3,
+ *                             the byte count.  DEBUG_CLEAR_INTERNAL reuses
+ *                             this same cell (`pea (-0x62,PC)` at 0x00E41A80),
+ *                             so it is defined once here and declared in
+ *                             proc2_internal.h.
  */
-static const int32_t debug_write_len = 1;
-static const uint32_t debug_write_buffer = 0xFFFFFFFFu;
+static const uint32_t proc2_debug_setup_write_value = 0xFFFFFFFFu;   /* 0x00E41A1C */
+const int32_t PROC2_$DEBUG_XPD_WRITE_LEN = 1;                        /* 0x00E41A20 */
 
 void DEBUG_SETUP_INTERNAL(int16_t target_idx, int16_t debugger_idx, int8_t flag)
 {
-    proc2_info_t *target_entry;
-    proc2_info_t *debugger_entry;
-    xpd_$ptrace_opts_t local_opts;
-    status_$t status;
+    proc2_info_t *target_entry;      /* A2 (biased) */
+    proc2_info_t *debugger_entry;    /* A3 (biased) */
+    xpd_$ptrace_opts_t local_opts;   /* A6-0x18 */
+    status_$t status;                /* A6-0x1C */
+    int i;
 
+    /* 0x00E41966-0x00E4197C */
     target_entry = P2_INFO_ENTRY(target_idx);
     debugger_entry = P2_INFO_ENTRY(debugger_idx);
 
-    /*
-     * If target is already being debugged, unlink from the old debugger first.
-     */
+    /* 0x00E41980: tst.w (-0xbe,A2) -- already debugged: unlink first */
     if (target_entry->debugger_idx != 0) {
-        DEBUG_UNLINK_FROM_LIST(target_idx);
+        DEBUG_UNLINK_FROM_LIST(target_idx);            /* 0x00E4198A */
     }
 
-    /*
-     * Set up the debug relationship:
-     * 1. Set target's debugger reference
-     * 2. Insert target at head of debugger's target list
-     */
-    target_entry->debugger_idx = debugger_idx;
+    /* 0x00E41990-0x00E4199A: push target onto the debugger's list head */
+    target_entry->debugger_idx = (uint16_t)debugger_idx;
     target_entry->next_debug_target_idx = debugger_entry->first_debug_target_idx;
-    debugger_entry->first_debug_target_idx = target_idx;
+    debugger_entry->first_debug_target_idx = (uint16_t)target_idx;
 
     /*
-     * If the internal debug flag is set, awaken the guardian.
-     * This notifies the debugger of state changes.
+     * 0x00E4199E: btst.b #0x4,(-0xb9,A2) -- bit 4 of the low byte of the
+     * flags word at +0x2A, i.e. flags & 0x0010 (fault mode).
+     * 0x00E419A6: pea (0x8,A6) -- the address of the target_idx argument.
      */
-    if ((ENTRY_FLAGS_BYTE(target_entry) & DEBUG_FLAG_AWAKEN_GUARDIAN) != 0) {
-        PROC2_$AWAKEN_GUARDIAN(&target_idx);
+    if ((target_entry->flags & 0x0010) != 0) {
+        PROC2_$AWAKEN_GUARDIAN(&target_idx);           /* 0x00E419AA */
     }
 
     /*
-     * Copy ptrace options to local, reset them, then copy back.
-     * This ensures consistent debug state for the newly-attached process.
+     * 0x00E419B0-0x00E419BE: copy 4+4+4+2 = 14 bytes from entry+0xCE to
+     * the local, 0x00E419C4 reset it, 0x00E419CC-0x00E419DA copy it back.
      */
-    local_opts = *ENTRY_PTRACE_OPTS(target_entry);
+    for (i = 0; i < 14; i++) {
+        ((uint8_t *)&local_opts)[i] = target_entry->ptrace_opts[i];
+    }
     XPD_$RESET_PTRACE_OPTS(&local_opts);
-    *ENTRY_PTRACE_OPTS(target_entry) = local_opts;
-
-    /*
-     * If flag is negative (bit 7 set), write debug initialization data.
-     * The offset is computed from cr_rec_2 field + 0x90.
-     */
-    if (flag < 0) {
-        uint32_t offset = target_entry->cr_rec_2 + 0x90;
-        /*
-         * 0x00E419EC-0x00E419F8: `movea.l (-0x78,A2),A0; pea (0x90,A0)` -
-         * the target address is a 32-bit VA pushed BY VALUE.
-         */
-        XPD_$WRITE(ENTRY_DEBUG_ADDR(target_entry), ARCH_VA_TO_PTR(offset),
-                   &debug_write_len, &debug_write_buffer, &status);
+    for (i = 0; i < 14; i++) {
+        target_entry->ptrace_opts[i] = ((uint8_t *)&local_opts)[i];
     }
 
-    /*
-     * Awaken guardian again after setup is complete.
-     */
-    if ((ENTRY_FLAGS_BYTE(target_entry) & DEBUG_FLAG_AWAKEN_GUARDIAN) != 0) {
-        PROC2_$AWAKEN_GUARDIAN(&target_idx);
+    /* 0x00E419DC: tst.b D4b / bpl -- Domain boolean, true when negative */
+    if (flag < 0) {
+        /*
+         * 0x00E419E0-0x00E419F8, pushes right to left:
+         *   pea (-0x1c,A6)          arg 5  &status
+         *   pea 0x00E41A1C          arg 4  &0xFFFFFFFF
+         *   pea 0x00E41A20          arg 3  &1
+         *   movea.l (-0x78,A2),A0 ; pea (0x90,A0)
+         *                           arg 2  VA cr_rec_2 + 0x90, by value
+         *   pea (-0x4e,A2)          arg 1  &target->asid
+         */
+        XPD_$WRITE(&target_entry->asid,
+                   ARCH_VA_TO_PTR(target_entry->cr_rec_2 + 0x90),
+                   &PROC2_$DEBUG_XPD_WRITE_LEN,
+                   &proc2_debug_setup_write_value, &status);
+    }
+
+    /* 0x00E41A02: the same fault-mode test, guardian woken again */
+    if ((target_entry->flags & 0x0010) != 0) {
+        PROC2_$AWAKEN_GUARDIAN(&target_idx);           /* 0x00E41A0E */
     }
 }

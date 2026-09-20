@@ -1,68 +1,58 @@
 /*
- * PROC2_$GET_CR_REC - Get creation record
+ * PROC2_$GET_CR_REC - Get creation record UIDs from an EC2 handle
  *
- * Returns the parent UID and process UID associated with an eventcount.
- * The EC handle is converted to an EC1 address, which is then used to
- * calculate the process table index.
+ * Resolves the caller's EC2 handle to its level-1 eventcount, derives the
+ * process table index from that eventcount's position in PROC2_$EC, and
+ * returns the entry's parent UID and process UID when the entry is bound
+ * (flags 0x0100) or a zombie (0x2000).
  *
  * Parameters:
- *   ec_handle   - EC2 eventcount handle
- *   parent_uid  - Pointer to receive parent UID (8 bytes)
- *   proc_uid    - Pointer to receive process UID (8 bytes)
- *   status_ret  - Pointer to receive status
+ *   ec_handle  (0x08,A6) longword EC2 handle, copied to (-0x8,A6)
+ *   parent_uid (0x0C,A6) A3: out, entry+0x08
+ *   proc_uid   (0x10,A6) A4: out, entry+0x00
+ *   status_ret (0x14,A6) A2: status out
  *
- * Returns uid_not_found if process is not valid or zombie.
- *
- * Original address: 0x00e4015c
+ * Original address: 0x00e4015c (142 bytes)
+ * A5 = 0xE7BE84 (PROC2 module data), not otherwise used.
+ *   0x00E40172..0x00E40184  EC2_$GET_EC1_ADDR(&(-0x8,A6), &(-0x4,A6)) -> A0
+ *   0x00E40186..0x00E40192  idx = (A0 - 0xE2B978) / 0x18 + 1   (divs.w)
+ *   0x00E40194              status tested only AFTER the index arithmetic
+ *   0x00E401AA..0x00E401B8  flags bit 8 or bit 13
+ *   0x00E401C2..0x00E401DE  copies, then clr.l (A2)
  */
 
 #include "proc2/proc2_internal.h"
 
-/* EC1 eventcount entry size for calculating process index */
-#define EC1_ENTRY_SIZE      0x18        /* 24 bytes per entry */
-
 void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_t *parent_uid, uid_t *proc_uid,
                        status_$t *status_ret)
 {
-    ec2_$eventcount_t ec2;
-    ec_$eventcount_t *ec1_addr;
-    status_$t status;
-    int16_t proc_idx;
+    uint32_t handle;            /* (-0x8,A6): the 4 bytes EC2 reads */
+    status_$t status;           /* (-0x4,A6) */
+    ec_$eventcount_t *ec1;      /* A0 */
+    int16_t proc_idx;           /* D0w */
     proc2_info_t *entry;
 
-    /* Copy handle value into ec2 structure */
-    ec2.value = (int32_t)*ec_handle;
-    ec2.awaiters = 0;
+    handle = *ec_handle;
+    ec1 = EC2_$GET_EC1_ADDR((ec2_$eventcount_t *)&handle, &status);
 
-    /* Convert EC2 handle to EC1 address */
-    ec1_addr = EC2_$GET_EC1_ADDR(&ec2, &status);
+    /* (A0 - PROC2_$EC) / sizeof(proc2_ec_entry_t) + 1; the stride is 0x18
+     * on the target (asserted in proc2_internal.h).  Computed before the
+     * status test exactly as the image does. */
+    proc_idx = (int16_t)(((uintptr_t)ec1 - (uintptr_t)PROC2_$EC) /
+                         sizeof(proc2_ec_entry_t)) + 1;
 
-    /* Calculate process index from EC1 address:
-     * index = ((ec1_addr - PROC2_$EC) / EC1_ENTRY_SIZE) + 1   (0xE2B978)
-     */
-    proc_idx = (int16_t)(((uintptr_t)ec1_addr - (uintptr_t)PROC2_$EC) / EC1_ENTRY_SIZE) + 1;
-
-    if (status != status_$ok) {
-        *status_ret = status_$proc2_uid_not_found;
-        return;
+    if (status == status_$ok) {
+        entry = P2_INFO_ENTRY(proc_idx);
+        if ((entry->flags & 0x0100) != 0 ||
+            (entry->flags & PROC2_FLAG_ZOMBIE) != 0) {
+            /* 0x00E401C2..0x00E401DA */
+            *parent_uid = entry->parent_uid;
+            *proc_uid = entry->uid;
+            *status_ret = status_$ok;
+            return;
+        }
     }
 
-    /* Get process entry */
-    entry = P2_INFO_ENTRY(proc_idx);
-
-    /* Check if process is valid (0x100) or zombie (0x2000) */
-    if ((entry->flags & 0x0100) == 0 && (entry->flags & PROC2_FLAG_ZOMBIE) == 0) {
-        *status_ret = status_$proc2_uid_not_found;
-        return;
-    }
-
-    /* Return parent UID (entry offset 0x08; 0xEA5440 + index * 0xE4) */
-    parent_uid->high = entry->parent_uid.high;
-    parent_uid->low = entry->parent_uid.low;
-
-    /* Return process UID */
-    proc_uid->high = entry->uid.high;
-    proc_uid->low = entry->uid.low;
-
-    *status_ret = status_$ok;
+    /* 0x00E401BA */
+    *status_ret = status_$proc2_uid_not_found;
 }

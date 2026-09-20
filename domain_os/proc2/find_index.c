@@ -1,54 +1,56 @@
 /*
  * PROC2_$FIND_INDEX - Find process table index by UID
  *
- * Searches the process info table for a process with the given UID.
- * The table is a linked list traversed via the next_index field.
+ * Walks the allocated list (head P2_INFO_ALLOC_PTR, link entry+0x12)
+ * comparing the eight UID bytes.  Returns the index in D0 (no result
+ * slot: callers do `pea status; move.l uid,-(SP); bsr; addq #8`).
  *
  * Parameters:
- *   proc_uid - UID to search for
- *   status_ret - Status return
+ *   proc_uid   (0x8,A6) UID to look up (copied to (-0x8,A6) first)
+ *   status_ret (0xC,A6) status_$ok, status_$proc2_zombie, or
+ *              status_$proc2_uid_not_found
  *
- * Returns:
- *   Index in process table (1-based), or 0 if not found
+ * Returns: the matching index; when nothing matches, whatever index value
+ * ended the walk (0 -- the last next_index, or P2_INFO_ALLOC_PTR itself).
  *
- * Status codes:
- *   status_$ok - Process found
- *   status_$proc2_uid_not_found - UID not in table
- *   status_$proc2_zombie - Process is zombie
- *
- * Original address: 0x00e4068e
+ * Original address: 0x00e4068e (116 bytes)
+ * A5 = 0xE7BE84; (0x1E0,A5) = 0xE7C064 P2_INFO_ALLOC_PTR.
+ * A1 = 0xEA551C + idx*0xE4 = entry + 0xE4:
+ *   (-0xE4,A1) = +0x00 uid   (-0xBA,A1) = +0x2A flags   (-0xD2,A1) = +0x12 next_index
  */
 
 #include "proc2/proc2_internal.h"
 
 int16_t PROC2_$FIND_INDEX(uid_t *proc_uid, status_$t *status_ret)
 {
-    int16_t index;
+    uid_t key;               /* (-0x8,A6) */
+    int16_t index;           /* D0w */
     proc2_info_t *entry;
 
-    /* Start at the allocation pointer (head of active list) */
-    index = P2_INFO_ALLOC_PTR;
+    /* 0x00E406A4..0x00E406A8 */
+    key = *proc_uid;
 
-    while (index != 0) {
-        entry = P2_INFO_ENTRY(index);
-
-        /* Compare UIDs */
-        if (proc_uid->high == entry->uid.high &&
-            proc_uid->low == entry->uid.low) {
-            /* Found it - check if zombie */
-            if ((entry->flags & PROC2_FLAG_ZOMBIE) != 0) {
-                *status_ret = status_$proc2_zombie;
+    /* 0x00E406AC..0x00E406B0 */
+    index = (int16_t)P2_INFO_ALLOC_PTR;
+    if (index != 0) {
+        do {
+            entry = P2_INFO_ENTRY(index);
+            /* 0x00E406CE..0x00E406D4 cmpm.l x2 */
+            if (entry->uid.high == key.high && entry->uid.low == key.low) {
+                /* 0x00E406D6..0x00E406EA: btst.l #0xd of flags */
+                if ((entry->flags & PROC2_FLAG_ZOMBIE) != 0) {
+                    *status_ret = status_$proc2_zombie;
+                } else {
+                    *status_ret = status_$ok;
+                }
                 return index;
             }
-            *status_ret = status_$ok;
-            return index;
-        }
-
-        /* Follow link to next entry */
-        index = entry->next_index;
+            /* 0x00E406EC..0x00E406F0 */
+            index = (int16_t)entry->next_index;
+        } while (index != 0);
     }
 
-    /* Not found */
+    /* 0x00E406F2 */
     *status_ret = status_$proc2_uid_not_found;
-    return 0;
+    return index;
 }

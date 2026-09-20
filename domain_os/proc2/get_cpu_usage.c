@@ -1,43 +1,43 @@
 /*
- * PROC2_$GET_CPU_USAGE - Get CPU usage for current process
+ * PROC2_$GET_CPU_USAGE - Get CPU usage for the current process
  *
- * Returns CPU usage data from PROC1 with a constant appended.
- * Output is 20 bytes (5 longwords): 4 from PROC1 + constant 0x411c.
+ * Asks PROC1 for the CPU time and two PCB statistics, copies the 20-byte
+ * frame area holding them to *usage, then overwrites the last longword
+ * with the constant 0x411C.
  *
  * Parameters:
- *   usage - Pointer to receive usage data (5 longwords = 20 bytes)
+ *   usage - (0x8,A6) A2: 20-byte output record
  *
- * Original address: 0x00e41d2a
+ * Original address: 0x00e41d2a (74 bytes)
+ * A5 = 0xE7BE84 (PROC2 module data), not otherwise used.
+ *   0x00E41D3C..0x00E41D4E  PROC1_$GET_CPU_USAGE(&(-0x18,A6), &(-0xC,A6), &(-0x10,A6))
+ *                           (pushes right-to-left: arg1 = -0x18, arg2 = -0xC, arg3 = -0x10)
+ *   0x00E41D58..0x00E41D5E  moveq #4 / dbf: five longwords (-0x18..-0x5,A6) -> usage
+ *   0x00E41D62              move.l #0x411c,(0x10,A2)
+ *
+ * Frame layout (-0x18,A6) .. (-0x5,A6):
+ *   -0x18  6-byte CPU time from PROC1 (the low word of the -0x14 longword is
+ *          the tail of it; its high word is never written by PROC1)
+ *   -0x10  stat2 (third argument)
+ *   -0x0C  stat1 (second argument)
+ *   -0x08  never written -- copied as-is, then replaced by 0x411C
  */
 
 #include "proc2/proc2_internal.h"
 
-/* Note: PROC1_$GET_CPU_USAGE actually takes 3 pointer params, not 2 as declared
- * in proc1.h. The correct signature is:
- *   void PROC1_$GET_CPU_USAGE(uint32_t *time_data, uint32_t *extra1, uint32_t *extra2);
- * where time_data receives 6 bytes, extra1 and extra2 each receive 4 bytes.
- */
-typedef void (*proc1_get_cpu_usage_t)(uint32_t *, uint32_t *, uint32_t *);
-
 void PROC2_$GET_CPU_USAGE(uint32_t *usage)
 {
-    uint32_t local_data[6];  /* Local buffer: first 6 bytes from PROC1 */
-    uint32_t extra1;         /* 4 bytes from PROC1 */
-    uint32_t extra2;         /* 4 bytes from PROC1 */
-    int i;
-    proc1_get_cpu_usage_t get_cpu_usage;
+    uint32_t frame[5];        /* (-0x18,A6) .. (-0x5,A6) */
+    int16_t i;
 
-    /* Cast to correct signature */
-    get_cpu_usage = (proc1_get_cpu_usage_t)PROC1_$GET_CPU_USAGE;
+    /* arg1 = frame[0..] (6-byte time), arg2 = frame[3], arg3 = frame[2] */
+    PROC1_$GET_CPU_USAGE(&frame[0], &frame[3], &frame[2]);
 
-    /* Get CPU usage from PROC1 */
-    get_cpu_usage(local_data, &extra1, &extra2);
-
-    /* Copy first 5 longwords (20 bytes) to output */
-    for (i = 0; i < 5; i++) {
-        usage[i] = local_data[i];
+    /* moveq #0x4 / dbf: 5 iterations */
+    for (i = 4; i >= 0; i--) {
+        usage[4 - i] = frame[4 - i];
     }
 
-    /* Overwrite 5th element with constant */
-    usage[4] = 0x411c;
+    /* 0x00E41D62 */
+    usage[4] = 0x411C;
 }

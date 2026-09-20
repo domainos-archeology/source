@@ -1,36 +1,40 @@
 /*
- * PROC2_$BUILD_INFO_INTERNAL - Build combined process info structure
+ * PROC2_$BUILD_INFO_INTERNAL - Build the combined PROC1/PROC2 info record
  *
- * Builds a combined PROC1+PROC2 info record (0xE4 bytes) from a PROC1
- * PID and/or a PROC2 table index.  Called by PROC2_$GET_INFO and
- * PROC2_$INFO.
+ * Re-emitted from the image (0x00E4094C..0x00E40C9E, 852 bytes).
  *
- * Parameters:
- *   proc2_index - Index in PROC2 table (0 for no PROC2 info)
- *   proc1_pid   - PROC1 process ID (0 for no PROC1 info)
- *   info        - Buffer to receive combined info (0xE4 bytes)
- *   status_ret  - Pointer to receive status
+ * Fills a 0xE4-byte info record from a PROC1 pid (the PROC1 half, plus
+ * the SID, priority and CPU-usage data) and/or a PROC2 table index (the
+ * PROC2 half).  Either input may be zero, in which case that half is
+ * cleared instead.  Callers: PROC2_$INFO (0x00E40818) and
+ * PROC2_$GET_INFO (0x00E408EC).
  *
- * Original address: 0x00e4094c (852 bytes)
+ * Frame (link.w A6,-0x8):
+ *   (0x8,A6)  proc2_index  word -> D2
+ *   (0xA,A6)  proc1_pid    word -> D3  (its ADDRESS is passed to the
+ *                                       by-reference PROC1 calls)
+ *   (0xC,A6)  info         -> A2
+ *   (0x10,A6) status_ret   -> A3
  *
- * The PROC2 entry is addressed through A4 = 0xEA551C + index * 0xE4
- * (0x00E40A84-0x00E40A8E), which is entry_base + 0xE4, so every negative
- * displacement (-d,A4) in this function is entry offset 0xE4 - d.  The
- * same convention is used by PROC2_$SET_ACCT_INFO, PROC2_$GET_TTY_DATA
- * and PROC2_$SET_TTY.
+ * The PROC2 entry is addressed through A4 = 0xEA551C + index*0xE4, which
+ * is entry_base + 0xE4, so every (-d,A4) below is entry offset 0xE4 - d.
+ *
+ * Original address: 0x00e4094c
  */
 
 #include "proc2/proc2_internal.h"
-#include "misc/string.h"
 
-/* Status codes */
+/* 0x00E40A06: status stored when the PROC1 pid is the caller's own */
 #define status_$proc2_request_is_for_current_process 0x00190004
 
 /*
- * Combined process info record (0xE4 bytes).
+ * Combined process info record (0xE4 bytes).  Every offset is the (d,A2)
+ * displacement the original uses; A2 is the `info` argument.
  *
- * Every offset below is the (d,A2) displacement used by the original;
- * A2 is the `info` argument (0x00E4095C).
+ * m68k aligns 32-bit fields to 2 bytes, which is what puts the longwords
+ * at 0x56, 0x66, 0x7A, 0xC6 ...; a 4-byte-aligning host lays the record
+ * out differently (packing it would forbid taking the addresses the
+ * by-reference PROC1 calls need), so the offset checks are target-only.
  */
 typedef struct proc_info_combined_t {
     uid_t       parent_uid;     /* 0x00: entry+0x08          (0x00E40AB0) */
@@ -39,7 +43,7 @@ typedef struct proc_info_combined_t {
     uid_t       sid[4];         /* 0x24: ACL_$GET_PID_SID    (0x00E409A0) */
     uint32_t    pad_44;         /* 0x44: cleared             (0x00E40A56) */
     uid_t       proc_uid_2;     /* 0x48: pgroup UID          (0x00E40AC2) */
-    uint8_t     server_flag;    /* 0x50: flags bit 9         (0x00E40BAE) */
+    int8_t      server_flag;    /* 0x50: flags bit 9 (sne)   (0x00E40BAE) */
     uint8_t     pad_51;         /* 0x51 */
     uint16_t    min_priority;   /* 0x52: PROC1_$SET_PRIORITY (0x00E4098A) */
     uint16_t    max_priority;   /* 0x54: PROC1_$SET_PRIORITY (0x00E40986) */
@@ -57,7 +61,7 @@ typedef struct proc_info_combined_t {
     uint16_t    name_len;       /* 0xA4: entry+0xBE          (0x00E40AFC) */
     char        name[32];       /* 0xA6: entry+0x9E          (0x00E40B24) */
     uid_t       tty_uid;        /* 0xC6: entry+0x60          (0x00E40AF0) */
-    uint16_t    pad_ce;         /* 0xCE */
+    uint16_t    pad_ce;         /* 0xCE: never written */
     uint32_t    usage_d0;       /* 0xD0: PROC1_$GET_ANY_CPU_USAGE arg 2 */
     uint16_t    usage_d4;       /* 0xD4: (cleared alone at 0x00E40A6E) */
     uint16_t    pad_d6;         /* 0xD6: never cleared by the null path */
@@ -90,6 +94,7 @@ _Static_assert(__builtin_offsetof(proc_info_combined_t, name_len) == 0xA4, "name
 _Static_assert(__builtin_offsetof(proc_info_combined_t, name) == 0xA6, "name@0xA6");
 _Static_assert(__builtin_offsetof(proc_info_combined_t, tty_uid) == 0xC6, "tty_uid@0xC6");
 _Static_assert(__builtin_offsetof(proc_info_combined_t, usage_d0) == 0xD0, "usage_d0@0xD0");
+_Static_assert(__builtin_offsetof(proc_info_combined_t, usage_d4) == 0xD4, "usage_d4@0xD4");
 _Static_assert(__builtin_offsetof(proc_info_combined_t, usage_d8) == 0xD8, "usage_d8@0xD8");
 _Static_assert(__builtin_offsetof(proc_info_combined_t, usage_dc) == 0xDC, "usage_dc@0xDC");
 _Static_assert(__builtin_offsetof(proc_info_combined_t, const_e0) == 0xE0, "const_e0@0xE0");
@@ -97,10 +102,9 @@ _Static_assert(sizeof(proc_info_combined_t) == 0xE4, "proc_info_combined_t must 
 #endif
 
 /*
- * Nested helpers (0x00E421DE and 0x00E421AA).  Both take (entry, out) by
- * reference and turn the entry's process-group table index into either a
- * synthetic UID or the raw UPGID.  Renamed in Ghidra to
- * PROC2_$ENTRY_PGROUP_UID / PROC2_$ENTRY_PGROUP_UPGID.
+ * Module-local helpers (Ghidra: PROC2_$ENTRY_PGROUP_UID 0x00E421DE and
+ * PROC2_$ENTRY_PGROUP_UPGID 0x00E421AA).  Only this function calls them.
+ * Both take (entry, out) by reference.
  */
 static void proc2_$entry_pgroup_uid(proc2_info_t *entry, uid_t *uid_ret);
 static void proc2_$entry_pgroup_upgid(proc2_info_t *entry, uint16_t *info_ret);
@@ -108,28 +112,31 @@ static void proc2_$entry_pgroup_upgid(proc2_info_t *entry, uint16_t *info_ret);
 void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
                                  void *info, status_$t *status_ret)
 {
-    proc_info_combined_t *out = (proc_info_combined_t *)info;
-    proc2_info_t *entry;
+    proc_info_combined_t *out = (proc_info_combined_t *)info;   /* A2 */
+    proc2_info_t *entry;                                          /* A4 */
     proc2_info_t *other;
     uint16_t flags;
     int16_t other_idx;
     int i;
 
-    /* 0x00E40964 */
+    /* 0x00E40964: clr.l (A3) */
     *status_ret = status_$ok;
 
-    /* 0x00E40966: tst.w D3w / beq */
+    /* 0x00E40966: tst.w D3w / beq.w 0x00E40A0E */
     if (proc1_pid == 0) {
-        /* --- no PROC1 half (0x00E40A0E) --- */
+        /* ---- no PROC1 half: 0x00E40A0E..0x00E40A7A ---- */
 
-        /* 0x00E40A0E: six longwords -> out+0x0C..0x23 */
-        memset(&out->proc1_info, 0, sizeof(out->proc1_info));
+        /* 0x00E40A0E-0x00E40A16: moveq #5 / clr.l (A0)+ / dbf = six
+         * longwords, out+0x0C..0x23 */
+        for (i = 0; i < 6; i++) {
+            ((uint32_t *)&out->proc1_info)[i] = 0;
+        }
 
         /* 0x00E40A1A: clr.l (0x52,A2) clears BOTH priority words */
         out->min_priority = 0;
         out->max_priority = 0;
 
-        /* 0x00E40A1E-0x00E40A52 */
+        /* 0x00E40A1E-0x00E40A52: UID_$NIL into out+0x24/0x2C/0x34/0x3C */
         for (i = 0; i < 4; i++) {
             out->sid[i] = UID_$NIL;
         }
@@ -143,88 +150,93 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
         out->cpu_time[2] = 0;
         out->cpu_time[3] = 0;
 
-        /* 0x00E40A6A/0x00E40A6E: note 0xD6 is deliberately left alone */
+        /* 0x00E40A6A: clr.l (0xd0,A2); 0x00E40A6E: clr.w (0xd4,A2) --
+         * out+0xD6 is deliberately left alone */
         out->usage_d0 = 0;
         out->usage_d4 = 0;
 
-        /* 0x00E40A72: three longwords -> out+0xD8..0xE3 */
+        /* 0x00E40A72-0x00E40A7A: three longwords out+0xD8..0xE3 */
         out->usage_d8 = 0;
         out->usage_dc = 0;
         out->const_e0 = 0;
     } else {
+        /* ---- PROC1 half: 0x00E4096C..0x00E40A0C ---- */
+
         /*
-         * --- PROC1 half (0x00E4096C) ---
-         *
-         * Both by-reference PROC1 calls below pass (0xa,A6): the address of
-         * the proc1_pid PARAMETER slot itself, so they share one variable.
-         * The by-value uses go through D3, which is never reloaded.
+         * Both by-reference PROC1 calls pass (0xa,A6): the address of the
+         * proc1_pid PARAMETER slot itself.  The by-value uses go through
+         * D3, which is never reloaded.
          */
         int16_t proc1_pid_slot = proc1_pid;
 
-        /* 0x00E40976 */
+        /* 0x00E4096C-0x00E40976: PROC1_$GET_INFO(&pid, out+0x0C, status) */
         PROC1_$GET_INFO(&proc1_pid_slot, &out->proc1_info, status_ret);
 
         /* 0x00E40980: tst.w (0x2,A3) -- the LOW word of the status */
         if ((*status_ret & 0xFFFF) != 0) {
-            /* 0x00E409B6: bset.b #0x7,(A3) -- bit 31 of the status */
-            *status_ret |= 0x80000000;
+            /* 0x00E409B6: bset.b #0x7,(A3) -- bit 31; 0x00E409BA: exit */
+            *status_ret |= (status_$t)0x80000000u;
             return;
         }
 
         /*
-         * 0x00E40986-0x00E40992: pushes are (0x54,A2), (0x52,A2), 0, pid,
-         * so min_priority receives out+0x52 and max_priority out+0x54.
+         * 0x00E40986-0x00E40992: pushes (0x54,A2), (0x52,A2), 0, pid --
+         * argument 3 is out+0x52 and argument 4 is out+0x54.
          */
         PROC1_$SET_PRIORITY((uint16_t)proc1_pid, 0,
                             &out->min_priority, &out->max_priority);
 
-        /* 0x00E409A6 */
+        /* 0x00E4099C-0x00E409A6: result slot pushed and ignored */
         ACL_$GET_PID_SID(proc1_pid, out->sid, status_ret);
 
-        /* 0x00E409B0 */
+        /* 0x00E409B0: tst.w (0x2,A3) */
         if ((*status_ret & 0xFFFF) != 0) {
-            *status_ret |= 0x80000000;
+            *status_ret |= (status_$t)0x80000000u;   /* 0x00E409B6 */
             return;
         }
 
         /*
-         * 0x00E409C0-0x00E409DA: A0 = 0xE25D20, index = pid*16, and the
-         * first read is (-0x10,A0,D4w) = 0xE25D10 + pid*16, i.e. the
-         * four longwords of PROC_STATS_BASE[pid].
+         * 0x00E409BE-0x00E409DA: A0 = 0xE25D20, D4 = pid*16; the first
+         * read is (-0x10,A0,D4w) = 0xE25D10 + pid*16 -> out+0x56, then
+         * three more longwords from 0xE25D14 + pid*16 -> out+0x5A..0x65:
+         * the four longwords of PROC_STATS_BASE[pid].
          */
         out->cpu_time[0] = PROC_STATS_BASE[proc1_pid * 4 + 0];
         out->cpu_time[1] = PROC_STATS_BASE[proc1_pid * 4 + 1];
         out->cpu_time[2] = PROC_STATS_BASE[proc1_pid * 4 + 2];
         out->cpu_time[3] = PROC_STATS_BASE[proc1_pid * 4 + 3];
 
-        /* 0x00E409DC-0x00E409EC: arguments pushed 0xD8, 0xDC, 0xD0, &pid */
+        /* 0x00E409DC-0x00E409EC: pushes 0xD8, 0xDC, 0xD0, &pid */
         PROC1_$GET_ANY_CPU_USAGE((uint16_t *)&proc1_pid_slot, &out->usage_d0,
                                  &out->usage_dc, &out->usage_d8);
 
-        /* 0x00E409F6 */
+        /* 0x00E409F6: move.l #0x411c,(0xe0,A2) */
         out->const_e0 = 0x411C;
 
-        /* 0x00E409FE */
+        /* 0x00E409FE: cmp.w PROC1_$CURRENT,D3w */
         if (proc1_pid == (int16_t)PROC1_$CURRENT) {
-            *status_ret = status_$proc2_request_is_for_current_process;
+            *status_ret = status_$proc2_request_is_for_current_process;  /* 0x00E40A06 */
         }
     }
 
-    /* 0x00E40A7C: tst.w D2w / beq -> done */
+    /* 0x00E40A7C: tst.w D2w / beq.w 0x00E40C96 (exit) */
     if (proc2_index == 0) {
         return;
     }
 
-    /* 0x00E40A82 */
+    /* 0x00E40A82-0x00E40A8E */
     entry = P2_INFO_ENTRY(proc2_index);
 
     /* 0x00E40A92: move.w (-0xba,A4),D4w -- entry+0x2A */
     flags = entry->flags;
 
-    /* 0x00E40A96/0x00E40A9C: btst #8 / btst #13 */
-    if ((flags & 0x0100) == 0 && (flags & PROC2_FLAG_ZOMBIE) == 0) {
-        /* --- neither valid nor zombie (0x00E40C28) --- */
-        *status_ret = status_$proc2_not_level_2_process;
+    /*
+     * 0x00E40A96: btst #8 -> 0x00E40AA4 if set;
+     * 0x00E40A9C: btst #13 -> 0x00E40C28 if clear.
+     */
+    if ((flags & PROC2_FLAG_BOUND) == 0 && (flags & PROC2_FLAG_ZOMBIE) == 0) {
+        /* ---- neither bound nor zombie: 0x00E40C28..0x00E40C92 ---- */
+        *status_ret = status_$proc2_not_level_2_process;   /* 0x00E40C28 */
 
         out->parent_uid = UID_$NIL;     /* 0x00E40C34 */
         out->pgroup_uid = UID_$NIL;     /* 0x00E40C40 */
@@ -243,123 +255,122 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
         out->asid = 0;                  /* 0x00E40C84 */
         out->tty_uid = UID_$NIL;        /* 0x00E40C8E */
 
-        /* This path does NOT fall into the common block at 0x00E40BA4. */
+        /* falls into the epilogue at 0x00E40C96, not the common tail */
         return;
     }
 
-    /* 0x00E40AA4: btst #8 again */
-    if ((flags & 0x0100) != 0) {
-        /* --- valid process (0x00E40AAC) --- */
+    /* 0x00E40AA4: btst #8 again / beq.w 0x00E40B38 */
+    if ((flags & PROC2_FLAG_BOUND) != 0) {
+        /* ---- bound process: 0x00E40AAC..0x00E40B36 ---- */
 
-        out->parent_uid = entry->parent_uid;     /* 0x00E40AB0: entry+0x08 */
+        out->parent_uid = entry->parent_uid;     /* 0x00E40AAC-0x00E40AB2: entry+0x08 */
         out->cr_rec = entry->cr_rec;             /* 0x00E40AB6: entry+0x68 */
         out->asid = entry->asid;                 /* 0x00E40ABC: entry+0x96 */
 
-        /* 0x00E40AC2: the helper writes out+0x48 ... */
+        /* 0x00E40AC2-0x00E40ACA: helper writes out+0x48 ... */
         proc2_$entry_pgroup_uid(entry, &out->proc_uid_2);
-        /* 0x00E40AD0: ... and it is then copied to out+0x66 */
+        /* 0x00E40AD0-0x00E40AD8: ... then copied to out+0x66 */
         out->pgroup_uid = out->proc_uid_2;
 
-        /* 0x00E40ADC: the helper writes out+0x74 ... */
+        /* 0x00E40ADC-0x00E40AE4: helper writes out+0x74 ... */
         proc2_$entry_pgroup_upgid(entry, &out->pgroup_info);
         /* 0x00E40AEA: ... and out+0x6E takes a copy */
         out->pgroup_flags = out->pgroup_info;
 
-        /*
-         * 0x00E40AF0: lea (-0x84,A4) = entry+0x60 -- the TTY UID (see
-         * PROC2_$GET_TTY_DATA 0x00E41BEC) -- lands in the info record at
-         * 0xC6, not the accounting UID.
-         */
+        /* 0x00E40AF0-0x00E40AF8: entry+0x60 (tty_uid) -> out+0xC6 */
         out->tty_uid = entry->tty_uid;
 
-        /* 0x00E40AFC: entry+0xBE */
-        if (entry->name_len == 0x21) {          /* '!' = no name */
-            out->name_len = 0;
-        } else if (entry->name_len == 0x22) {   /* '"' = special */
-            out->name_len = 0xFFFF;
+        /* 0x00E40AFC-0x00E40B20: entry+0xBE */
+        if (entry->name_len == 0x21) {          /* '!' */
+            out->name_len = 0;                  /* 0x00E40B04 */
+        } else if (entry->name_len == 0x22) {   /* '"' */
+            out->name_len = 0xFFFF;             /* 0x00E40B12 */
         } else {
-            out->name_len = entry->name_len;
+            out->name_len = entry->name_len;    /* 0x00E40B1A-0x00E40B20 */
         }
 
-        /* 0x00E40B24: 32 bytes from entry+0x9E */
-        memcpy(out->name, entry->name, 32);
+        /* 0x00E40B24-0x00E40B32: moveq #0x1f / dbf = 32 bytes entry+0x9E */
+        for (i = 0; i < 32; i++) {
+            out->name[i] = entry->name[i];
+        }
+        /* 0x00E40B36: bra.b 0x00E40BA4 */
     } else {
-        /* --- zombie (0x00E40B38) --- */
+        /* ---- zombie: 0x00E40B38..0x00E40B9E ---- */
 
-        out->parent_uid = UID_$NIL;     /* 0x00E40B3E */
+        out->parent_uid = UID_$NIL;     /* 0x00E40B38-0x00E40B40 */
         out->cr_rec = 0;                /* 0x00E40B44 */
         out->asid = 0;                  /* 0x00E40B48 */
-        out->pgroup_uid = UID_$NIL;     /* 0x00E40B52 */
-        out->proc_uid_2 = UID_$NIL;     /* 0x00E40B60 */
+        out->pgroup_uid = UID_$NIL;     /* 0x00E40B4C-0x00E40B56 */
+        out->proc_uid_2 = UID_$NIL;     /* 0x00E40B5A-0x00E40B64 */
         out->pgroup_flags = 0;          /* 0x00E40B68 */
         out->pgroup_info = 0;           /* 0x00E40B6C */
-        out->tty_uid = UID_$NIL;        /* 0x00E40B76 */
+        out->tty_uid = UID_$NIL;        /* 0x00E40B70-0x00E40B7A */
 
         /*
-         * 0x00E40B7E/0x00E40B84: the zombie's exit data (entry+0xA4 and
-         * entry+0xA8) is stuffed into the PROC1 info area at out+0x1C and
-         * out+0x20, which is proc1_$info_t.cpu_total.
+         * 0x00E40B7E: move.l (-0x40,A4),(0x1c,A2) -- entry+0xA4 longword
+         * 0x00E40B84: move.w (-0x3c,A4),(0x20,A2) -- entry+0xA8 WORD
+         * out+0x1C is proc1_info+0x10 (cpu_total); six bytes are written.
          */
         for (i = 0; i < 6; i++) {
             out->proc1_info.cpu_total[i] = entry->zombie_usage[i];
         }
 
-        /* 0x00E40B8A: five longwords entry+0xA4 -> out+0xD0..0xE3 */
+        /* 0x00E40B8A-0x00E40B96: moveq #4 / dbf = five longwords
+         * entry+0xA4..0xB7 -> out+0xD0..0xE3 */
         out->usage_d0 = PROC2_ZOMBIE_USAGE(entry, 0);
         out->usage_d4 = (uint16_t)(PROC2_ZOMBIE_USAGE(entry, 1) >> 16);
-        out->pad_d6   = (uint16_t)(PROC2_ZOMBIE_USAGE(entry, 1));
+        out->pad_d6   = (uint16_t)(PROC2_ZOMBIE_USAGE(entry, 1) & 0xFFFF);
         out->usage_d8 = PROC2_ZOMBIE_USAGE(entry, 2);
         out->usage_dc = PROC2_ZOMBIE_USAGE(entry, 3);
         out->const_e0 = PROC2_ZOMBIE_USAGE(entry, 4);
 
-        /* 0x00E40B9A */
-        out->name_len = 0;
-
-        /* 0x00E40B9E */
-        *status_ret = status_$proc2_zombie;
+        out->name_len = 0;                      /* 0x00E40B9A */
+        *status_ret = status_$proc2_zombie;     /* 0x00E40B9E */
     }
 
-    /* --- common tail for the valid and zombie paths (0x00E40BA4) --- */
+    /* ---- common tail for bound and zombie: 0x00E40BA4..0x00E40C26 ---- */
 
-    /* 0x00E40BA4: btst #9 of the flags word / sne -> 0xFF or 0x00 */
+    /* 0x00E40BA4-0x00E40BAE: btst #9 of the flags word / sne -> out+0x50 */
     flags = entry->flags;
-    out->server_flag = (flags & 0x0200) ? 0xFF : 0x00;
+    out->server_flag = (int8_t)((flags & 0x0200) ? 0xFF : 0x00);
 
     /* 0x00E40BB2: entry+0x16 */
     out->upid = entry->upid;
 
-    /* 0x00E40BB8: entry+0x1E is the parent's table index */
+    /* 0x00E40BB8: entry+0x1E, the parent's table index */
     other_idx = (int16_t)entry->parent_pgroup_idx;
     if (other_idx == 0) {
         out->parent_upid = 1;               /* 0x00E40BD8 */
     } else {
-        other = P2_INFO_ENTRY(other_idx);
+        other = P2_INFO_ENTRY(other_idx);   /* 0x00E40BBE-0x00E40BCC (mulu) */
         out->parent_upid = other->upid;     /* 0x00E40BD0: other+0x16 */
     }
 
-    /* 0x00E40BDE: entry+0x26 */
+    /* 0x00E40BDE: entry+0x26, the debugger's table index */
     other_idx = (int16_t)entry->debugger_idx;
     if (other_idx == 0) {
         out->session_upid = 0;              /* 0x00E40BFE */
     } else {
-        other = P2_INFO_ENTRY(other_idx);
+        other = P2_INFO_ENTRY(other_idx);   /* 0x00E40BE4-0x00E40BF2 */
         out->session_upid = other->upid;    /* 0x00E40BF6: other+0x16 */
     }
 
     /*
-     * 0x00E40C04: ten bytes from entry+0x4C, i.e. the accounting UID
-     * written by PROC2_$SET_ACCT_INFO (0x00E41B2C) followed by the
-     * accounting-info length at entry+0x54 (0x00E41B24).
+     * 0x00E40C04-0x00E40C12: moveq #9 / dbf = ten bytes from entry+0x4C:
+     * the accounting UID followed by the accounting-info length word.
      */
     out->acct_uid = entry->acct_uid;
     out->acct_info_len = entry->acct_info_len;
 
-    /* 0x00E40C16: 32 bytes from entry+0x2C -- the accounting info string */
-    memcpy(out->acct_info, entry->acct_info, 32);
+    /* 0x00E40C16-0x00E40C22: moveq #0x1f / dbf = 32 bytes from entry+0x2C */
+    for (i = 0; i < 32; i++) {
+        out->acct_info[i] = entry->acct_info[i];
+    }
+    /* 0x00E40C26: bra.b 0x00E40C96 */
 }
 
 /*
- * proc2_$entry_pgroup_uid - 0x00E421DE
+ * proc2_$entry_pgroup_uid - 0x00E421DE (70 bytes)
  *
  *   00e421ec  tst.w (0x10,A0)              ; entry->pgroup_table_idx
  *   00e421f0  bne.b 0x00e42200
@@ -367,7 +378,7 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
  *   00e421f8  move.l (A2)+,(A1)
  *   00e421fa  move.l (A2)+,(0x4,A1)
  *   00e421fe  bra.b 0x00e4221c
- *   00e42200  clr.w (A1)                   ; uid.high high half = 0
+ *   00e42200  clr.w (A1)                   ; high word of uid.high = 0
  *   00e42202  move.w (0x10,A0),D0w
  *   00e42206  movea.l #0xea551c,A2
  *   00e4220c  lsl.w #0x3,D0w               ; idx * 8
@@ -375,8 +386,7 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
  *   00e42212  move.w (0x3f34,A2),(0x2,A1)  ; PGROUP_TABLE[idx].upgid
  *   00e42218  clr.l (0x4,A1)               ; uid.low = 0
  *
- * The result is a synthetic UID whose high longword is the UPGID and
- * whose low longword is zero.
+ * The result is a synthetic UID: high longword = the UPGID, low = 0.
  */
 static void proc2_$entry_pgroup_uid(proc2_info_t *entry, uid_t *uid_ret)
 {
@@ -391,7 +401,7 @@ static void proc2_$entry_pgroup_uid(proc2_info_t *entry, uid_t *uid_ret)
 }
 
 /*
- * proc2_$entry_pgroup_upgid - 0x00E421AA
+ * proc2_$entry_pgroup_upgid - 0x00E421AA (52 bytes)
  *
  *   00e421b8  tst.w (0x10,A0)
  *   00e421bc  bne.b 0x00e421c2

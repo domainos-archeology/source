@@ -127,9 +127,12 @@ void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry);
 /* Cleanup handlers */
 void PROC2_$CLEANUP_HANDLERS_INTERNAL(proc2_info_t *entry);
 
-/* Signal delivery */
-uint32_t PROC2_$DELIVER_SIGNAL_INTERNAL(int16_t proc_index, int16_t signal,
-                                         int32_t param, status_$t *status_ret);
+/*
+ * Signal delivery.  A Pascal procedure: every caller pushes 2+2+4+4 bytes
+ * and no result slot (e.g. PROC2_$AWAKEN_GUARDIAN 0x00E3E99E..0x00E3E9B0).
+ */
+void PROC2_$DELIVER_SIGNAL_INTERNAL(int16_t proc_index, int16_t signal,
+                                    int32_t param, status_$t *status_ret);
 
 /* Build process info structure */
 void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
@@ -241,7 +244,147 @@ void PROC2_$DETACH_FROM_PARENT(int16_t child_idx, int16_t prev_sibling_idx);
  * Scans the pending signal mask to find the next unblocked signal.
  * Original address: 0x00e3ef38
  */
-int16_t PROC2_$GET_NEXT_PENDING_SIGNAL(proc2_info_t *info);
+int16_t PROC2_$GET_NEXT_PENDING_SIGNAL(proc2_info_t *info);  /* proc2/deliver_pending_internal.c */
 
+
+/*
+ * ============================================================================
+ * Creation record (moved here from proc2/set_valid.c; also used by
+ * proc2/complete_vfork.c, which fills 0x94/0xA8/0xB0/0xB4 at
+ * 0x00E737E4..0x00E73822)
+ * ============================================================================
+ */
+
+/*
+ * Creation record structure (partial - offsets determined from the
+ * disassembly).  It is reached through proc2_info_t.cr_rec_2 (entry+0x6C)
+ * and holds process creation and accounting information.
+ */
+typedef struct cr_rec_t {
+    uint32_t    fields_0x00[0x1d];  /* 0x00-0x73: cleared by the two dbf loops */
+    uint32_t    field_74;           /* 0x74: CPU time related */
+    uint16_t    field_78;           /* 0x78: CPU time related */
+    uint16_t    pad_7a;             /* 0x7A: alignment hole */
+    uint32_t    field_7c;           /* 0x7C: Timing */
+    uint32_t    field_80;           /* 0x80: Timing */
+    uint32_t    field_84;           /* 0x84: Timing */
+    uint8_t     field_88;           /* 0x88: Flag byte */
+    uint8_t     field_89;           /* 0x89: Flag byte */
+    uint8_t     field_8a[4];        /* 0x8A: CPU usage.  Declared as bytes so
+                                     * that the 0x8A offset survives on a
+                                     * host where uint32_t wants 4-byte
+                                     * alignment; m68k needs only 2. */
+    uint8_t     field_8e[2];        /* 0x8E: CPU usage */
+    uint8_t     field_90;           /* 0x90: TRUE when entry->debugger_idx != 0 */
+    uint8_t     pad_91[3];          /* 0x91: Padding */
+    status_$t   status;             /* 0x94: Status */
+    uid_t       proc_uid;           /* 0x98: Process UID */
+    uid_t       parent_uid;         /* 0xA0: Parent UID */
+    uid_t       stack_uid;          /* 0xA8: Stack file UID */
+    uint32_t    addr_lo;            /* 0xB0: Stack file low address */
+    uint32_t    size;               /* 0xB4: Stack file size */
+    int32_t     field_b8;           /* 0xB8: entry->upid, sign-extended */
+    uid_t       debugger_uid;       /* 0xBC: PROC2_$UID[entry->parent_pgroup_idx] */
+    uint8_t     pad_c4;             /* 0xC4: Padding */
+    uint8_t     flags_c5;           /* 0xC5: Flags byte (bit 3 gates 0xBC) */
+    uint16_t    count_c6;           /* 0xC6: Counter (set to 1) */
+    uint8_t     field_c8;           /* 0xC8: Field */
+} cr_rec_t;
+
+_Static_assert(__builtin_offsetof(cr_rec_t, field_74) == 0x74, "cr_rec_t.field_74");   /* 0x00E73578 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_78) == 0x78, "cr_rec_t.field_78");   /* 0x00E7357C */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_7c) == 0x7C, "cr_rec_t.field_7c");   /* 0x00E73580 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_80) == 0x80, "cr_rec_t.field_80");   /* 0x00E73584 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_84) == 0x84, "cr_rec_t.field_84");   /* 0x00E73586 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_8a) == 0x8A, "cr_rec_t.field_8a");
+_Static_assert(__builtin_offsetof(cr_rec_t, field_90) == 0x90, "cr_rec_t.field_90");   /* 0x00E7358A */
+_Static_assert(__builtin_offsetof(cr_rec_t, status) == 0x94, "cr_rec_t.status");       /* 0x00E734CC */
+_Static_assert(__builtin_offsetof(cr_rec_t, proc_uid) == 0x98, "cr_rec_t.proc_uid");   /* 0x00E7354E */
+_Static_assert(__builtin_offsetof(cr_rec_t, parent_uid) == 0xA0, "cr_rec_t.parent_uid"); /* 0x00E73564 */
+_Static_assert(__builtin_offsetof(cr_rec_t, stack_uid) == 0xA8, "cr_rec_t.stack_uid"); /* 0x00E734FE */
+_Static_assert(__builtin_offsetof(cr_rec_t, addr_lo) == 0xB0, "cr_rec_t.addr_lo");     /* 0x00E734BC */
+_Static_assert(__builtin_offsetof(cr_rec_t, size) == 0xB4, "cr_rec_t.size");           /* 0x00E734C4 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_b8) == 0xB8, "cr_rec_t.field_b8");   /* 0x00E7355C */
+_Static_assert(__builtin_offsetof(cr_rec_t, debugger_uid) == 0xBC, "cr_rec_t.debugger_uid"); /* 0x00E735AA */
+_Static_assert(__builtin_offsetof(cr_rec_t, flags_c5) == 0xC5, "cr_rec_t.flags_c5");   /* 0x00E73598 */
+_Static_assert(__builtin_offsetof(cr_rec_t, count_c6) == 0xC6, "cr_rec_t.count_c6");   /* 0x00E73592 */
+_Static_assert(__builtin_offsetof(cr_rec_t, field_c8) == 0xC8, "cr_rec_t.field_c8");   /* 0x00E7358E */
+
+
+/*
+ * ============================================================================
+ * Startup context (shared by PROC2_$FORK 0x00E72D2C and PROC2_$CREATE
+ * 0x00E7286A..0x00E7288C; moved here from proc2/fork.c)
+ * ============================================================================
+ */
+
+/*
+ * Startup context planted below the new process's stack.
+ *
+ * Built at 0x00E72D2C-0x00E72D42:
+ *   ctx+0x00 = ctx + 4          (self pointer)
+ *   ctx+0x04 = *arg2
+ *   ctx+0x08 = *arg1
+ *   ctx+0x0C = new_entry->asid  (a WORD -- the record is 14 bytes)
+ *
+ * The record is placed 0x10 (not sizeof) bytes below
+ * stack_ptr - FIM_$INITIAL_STACK_SIZE (0x00E72D1C-0x00E72D2A).
+ */
+typedef struct startup_context_t {
+    void       *self_ptr;       /* 0x00 */
+    int32_t     user_data;      /* 0x04 */
+    int32_t     entry_point;    /* 0x08 */
+    uint16_t    asid;           /* 0x0C */
+} startup_context_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(startup_context_t, self_ptr) == 0x00,
+               "startup_context_t.self_ptr must be at 0x00");
+_Static_assert(__builtin_offsetof(startup_context_t, user_data) == 0x04,
+               "startup_context_t.user_data must be at 0x04");
+_Static_assert(__builtin_offsetof(startup_context_t, entry_point) == 0x08,
+               "startup_context_t.entry_point must be at 0x08");
+_Static_assert(__builtin_offsetof(startup_context_t, asid) == 0x0C,
+               "startup_context_t.asid must be at 0x0C");
+_Static_assert(sizeof(startup_context_t) == 14,
+               "startup_context_t must be 14 bytes");
+#endif
+
+/*
+ * The original reserves 0x10 bytes for the record even though it is only
+ * 14 bytes long (0x00E72D1C: moveq #0x10,D1).
+ */
+#define STARTUP_CONTEXT_RESERVE 0x10
+
+/*
+ * PROC1_$SET_PRIORITY's second parameter is a Pascal boolean.  The
+ * original pushes it with `st -(SP)` (0x00E7309E), which -- because byte
+ * operations on A7 adjust the stack by two and address the even byte --
+ * puts 0xFF in the HIGH half of the word slot; PROC1_$SET_PRIORITY reads
+ * it back with `move.b (0xa,A6),D3b` at 0x00E15248 and branches on
+ * `tst.b`/`bpl`.  Modelled as an int16_t, that value is 0xFF00, which is
+ * what makes proc1/set_priority.c's `mode < 0` test fire.  The other call
+ * sites push `clr.w -(SP)` == 0.
+ */
+/* proc1/proc1.h now types the parameter as the int8_t the callee reads
+ * (`move.b (0xa,A6),D3b`), so the values are the byte itself. */
+#define PROC1_SET_PRIORITY_SET  ((int8_t)0xFF)
+#define PROC1_SET_PRIORITY_GET  ((int8_t)0)
 
 #endif /* PROC2_INTERNAL_H */
+
+/*
+ * The byte-count longword (value 1) at 0x00E41A20 that both
+ * DEBUG_SETUP_INTERNAL (`pea (0x36,PC)` at 0x00E419E8) and
+ * DEBUG_CLEAR_INTERNAL (`pea (-0x62,PC)` at 0x00E41A80) hand to XPD_$WRITE.
+ * Defined in proc2/debug_setup_internal.c.
+ */
+extern const int32_t PROC2_$DEBUG_XPD_WRITE_LEN;
+
+/*
+ * The longword 0x00004000 at 0x00E735F4 that PROC2_$SET_VALID
+ * (`pea (0x11a,PC)` at 0x00E734D8) and PROC2_$COMPLETE_VFORK
+ * (`pea (-0x20e,PC)` at 0x00E73800) hand to MST_$MAP_AREA_AT as its
+ * third argument.  Defined in proc2/set_valid.c.
+ */
+extern const uint32_t proc2_$map_area_size_00e735f4;

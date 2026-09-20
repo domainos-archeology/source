@@ -1,110 +1,88 @@
 /*
- * PROC2_$DETACH_FROM_PARENT - Detach process from its parent's child list
+ * PROC2_$DETACH_FROM_PARENT - Detach a process from its parent's child list
  *
- * Removes a process from its parent's child list and handles cleanup:
- * 1. Unlinks from parent's sibling chain
- * 2. Clears parent pointer
- * 3. For zombies: cleans up pgroup and adds to free list
- * 4. For non-zombies: sets orphan flag
+ * Re-emitted from the image (0x00E40DF4..0x00E40ECC, 218 bytes).
  *
- * Parameters:
- *   child_idx        - Index of process to detach
- *   prev_sibling_idx - Index of previous sibling (0 if first child)
+ * Unlinks the child from its parent's sibling chain and clears the parent
+ * link.  A zombie is then released: its process-group reference is
+ * dropped, it is unlinked from the allocated list and pushed onto the free
+ * list.  A live process is merely marked orphaned.
+ *
+ * Frame (link.w A6,-0xC):
+ *   (0x8,A6)  child_idx         word -> D2
+ *   (0xA,A6)  prev_sibling_idx  word -> D0 (0 = child is the first child)
+ *   A5 = 0xE7BE84: (0x1E0,A5) P2_INFO_ALLOC_PTR, (0x1E2,A5) P2_FREE_LIST_HEAD
+ *
+ * The child is A2 = 0xEA551C + idx*0xE4 = entry + 0xE4: (-0xC6,A2) = +0x1E
+ * parent, (-0xC4) = +0x20 first child, (-0xC2) = +0x22 next sibling,
+ * (-0xBA) = +0x2A flags, (-0xD2) = +0x12 next_index, (-0xD0) = +0x14 prev.
+ *
+ * Callers: PROC2_$DELETE 0x00E744D2/0x00E746BC, PROC2_$WAIT 0x00E3F92C/
+ * 0x00E3F9A8, PROC2_$MAKE_ORPHAN 0x00E40DCC.
  *
  * Original address: 0x00e40df4
  */
 
 #include "proc2/proc2_internal.h"
 
-/*
- * Raw memory access macros for parent/child relationships
- */
-#if defined(ARCH_M68K)
-    #define P2_BASE                 0xEA551C
-
-    /* Parent index at offset 0x1E */
-    #define P2_DP_PARENT(idx)       (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xC6))
-
-    /* First child at offset 0x20 */
-    #define P2_DP_FIRST_CHILD(idx)  (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xC4))
-
-    /* Next sibling at offset 0x22 */
-    #define P2_DP_NEXT_SIB(idx)     (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xC2))
-
-    /* Flags word at offset 0x2A */
-    #define P2_DP_FLAGS(idx)        (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xBA))
-
-    /* Allocation list pointers */
-    #define P2_DP_ALLOC_PREV(idx)   (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xD0))
-    #define P2_DP_ALLOC_NEXT(idx)   (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xD2))
-
-    /* Entry pointer calculation */
-    #define P2_DP_ENTRY(idx)        ((proc2_info_t*)(P2_BASE + (idx) * 0xE4 - 0xE4))
-#else
-    static int16_t p2_dp_dummy16;
-    #define P2_DP_PARENT(idx)       (p2_dp_dummy16)
-    #define P2_DP_FIRST_CHILD(idx)  (p2_dp_dummy16)
-    #define P2_DP_NEXT_SIB(idx)     (p2_dp_dummy16)
-    #define P2_DP_FLAGS(idx)        (p2_dp_dummy16)
-    #define P2_DP_ALLOC_PREV(idx)   (p2_dp_dummy16)
-    #define P2_DP_ALLOC_NEXT(idx)   (p2_dp_dummy16)
-    #define P2_DP_ENTRY(idx)        ((proc2_info_t*)0)
-#endif
-
-/* Flag bit definitions */
-#define FLAG_ZOMBIE         0x2000  /* Bit 13: Process is a zombie */
-#define FLAG_ORPHAN         0x8000  /* Bit 15: Process is an orphan */
-
 void PROC2_$DETACH_FROM_PARENT(int16_t child_idx, int16_t prev_sibling_idx)
 {
-    int16_t parent_idx;
-    int16_t alloc_prev, alloc_next;
+    proc2_info_t *entry;      /* A2 (biased) */
+    proc2_info_t *other;
 
-    /* Verify parent pointer is valid */
-    parent_idx = P2_DP_PARENT(child_idx);
-    if (parent_idx == 0) {
-        /* Internal error - should have a parent */
-        CRASH_SYSTEM(&PROC2_Internal_Error);
-        return;
-    }
+    /* 0x00E40E02-0x00E40E16 */
+    entry = P2_INFO_ENTRY(child_idx);
 
-    /* Unlink from parent's child list */
-    if (prev_sibling_idx == 0) {
-        /* We're the first child - update parent's first_child pointer */
-        P2_DP_FIRST_CHILD(parent_idx) = P2_DP_NEXT_SIB(child_idx);
-    } else {
-        /* Update previous sibling's next pointer */
-        P2_DP_NEXT_SIB(prev_sibling_idx) = P2_DP_NEXT_SIB(child_idx);
-    }
-
-    /* Clear our parent pointer */
-    P2_DP_PARENT(child_idx) = 0;
-
-    /* Check if zombie or live process */
-    if ((P2_DP_FLAGS(child_idx) & FLAG_ZOMBIE) == 0) {
-        /* Not a zombie - just set orphan flag */
-        P2_DP_FLAGS(child_idx) |= FLAG_ORPHAN;
-    } else {
-        /* Zombie - clean up pgroup and add to free list */
-        PGROUP_CLEANUP_INTERNAL(P2_DP_ENTRY(child_idx), 1);
-
-        /* Unlink from allocation list */
-        alloc_prev = P2_DP_ALLOC_PREV(child_idx);
-        alloc_next = P2_DP_ALLOC_NEXT(child_idx);
-
-        if (alloc_prev == 0) {
-            /* At head of allocation list */
-            P2_INFO_ALLOC_PTR = alloc_next;
+    /* 0x00E40E1A: tst.w (-0xc6,A2) -- entry+0x1E */
+    if (entry->parent_pgroup_idx != 0) {
+        /* 0x00E40E20: tst.w D0w */
+        if (prev_sibling_idx == 0) {
+            /* 0x00E40E24-0x00E40E30: parent->first_child = entry->next_sibling (mulu) */
+            other = P2_INFO_ENTRY((int16_t)entry->parent_pgroup_idx);
+            other->first_child_idx = entry->next_child_sibling;
         } else {
-            /* Update previous entry's next pointer */
-            P2_DP_ALLOC_NEXT(alloc_prev) = alloc_next;
+            /* 0x00E40E38-0x00E40E42: prev->next_sibling = entry->next_sibling (muls) */
+            other = P2_INFO_ENTRY(prev_sibling_idx);
+            other->next_child_sibling = entry->next_child_sibling;
+        }
+        /* 0x00E40E48: clr.w (-0xc6,A2) */
+        entry->parent_pgroup_idx = 0;
+    } else {
+        /*
+         * 0x00E40E4E-0x00E40E58: no parent link -- CRASH_SYSTEM with the
+         * code-region cell at 0x00E40DF0 (00 19 00 13 =
+         * status_$proc2_internal_error, shared with PROC2_$MAKE_ORPHAN's
+         * 0x00E40DA2 reference).  If it returns, execution simply falls
+         * into the zombie test below.
+         */
+        CRASH_SYSTEM(&PROC2_Internal_Error);
+    }
+
+    /* 0x00E40E5A-0x00E40E62: btst.l #0xd on the flags word */
+    if ((entry->flags & PROC2_FLAG_ZOMBIE) != 0) {
+        /* 0x00E40E64-0x00E40E72: PGROUP_CLEANUP_INTERNAL(entry, 1), result slot */
+        PGROUP_CLEANUP_INTERNAL(entry, 1);
+
+        /* 0x00E40E74-0x00E40E94: unlink from the allocated list */
+        if (entry->pad_14 == 0) {
+            P2_INFO_ALLOC_PTR = entry->next_index;          /* 0x00E40E7A */
+        } else {
+            other = P2_INFO_ENTRY((int16_t)entry->pad_14);  /* mulu */
+            other->next_index = entry->next_index;          /* 0x00E40E94 */
         }
 
-        /* Update next entry's prev pointer */
-        P2_DP_ALLOC_PREV(alloc_next) = alloc_prev;
+        /*
+         * 0x00E40E9A-0x00E40EAC: P2[next]->pad_14 = entry->pad_14,
+         * UNCONDITIONALLY (a zero next_index writes entry(0)+0x14).
+         */
+        other = P2_INFO_ENTRY((int16_t)entry->next_index);
+        other->pad_14 = entry->pad_14;
 
-        /* Add to free list */
-        P2_DP_ALLOC_NEXT(child_idx) = P2_FREE_LIST_HEAD;
-        P2_FREE_LIST_HEAD = child_idx;
+        /* 0x00E40EB2-0x00E40EB8: push onto the free list */
+        entry->next_index = P2_FREE_LIST_HEAD;
+        P2_FREE_LIST_HEAD = (uint16_t)child_idx;
+    } else {
+        /* 0x00E40EBE: bset.b #0x7,(-0xba,A2) -- HIGH byte bit 7 = 0x8000 */
+        entry->flags |= 0x8000;
     }
 }

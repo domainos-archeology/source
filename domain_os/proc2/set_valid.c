@@ -95,63 +95,13 @@
  * `tst.b (A4)` / `bpl` at 0x00E43C4E), which is why only the first of the
  * four bytes at 0x00E735F0 (0xFF 0x00 0x20 0x48) matters.
  */
-static const uint32_t proc2_$map_area_size_00e735f4 = 0x00004000;
+/* Shared with PROC2_$COMPLETE_VFORK (`pea (-0x20e,PC)` at 0x00E73800), so
+ * it is defined once here and declared in proc2_internal.h. */
+const uint32_t proc2_$map_area_size_00e735f4 = 0x00004000;
 static const int8_t proc2_$map_area_true_00e735f0 = (int8_t)0xFF;
 
-/*
- * Creation record structure (partial - offsets determined from the
- * disassembly).  It is reached through proc2_info_t.cr_rec_2 (entry+0x6C)
- * and holds process creation and accounting information.
- */
-typedef struct cr_rec_t {
-    uint32_t    fields_0x00[0x1d];  /* 0x00-0x73: cleared by the two dbf loops */
-    uint32_t    field_74;           /* 0x74: CPU time related */
-    uint16_t    field_78;           /* 0x78: CPU time related */
-    uint16_t    pad_7a;             /* 0x7A: alignment hole */
-    uint32_t    field_7c;           /* 0x7C: Timing */
-    uint32_t    field_80;           /* 0x80: Timing */
-    uint32_t    field_84;           /* 0x84: Timing */
-    uint8_t     field_88;           /* 0x88: Flag byte */
-    uint8_t     field_89;           /* 0x89: Flag byte */
-    uint8_t     field_8a[4];        /* 0x8A: CPU usage.  Declared as bytes so
-                                     * that the 0x8A offset survives on a
-                                     * host where uint32_t wants 4-byte
-                                     * alignment; m68k needs only 2. */
-    uint8_t     field_8e[2];        /* 0x8E: CPU usage */
-    uint8_t     field_90;           /* 0x90: TRUE when entry->debugger_idx != 0 */
-    uint8_t     pad_91[3];          /* 0x91: Padding */
-    status_$t   status;             /* 0x94: Status */
-    uid_t       proc_uid;           /* 0x98: Process UID */
-    uid_t       parent_uid;         /* 0xA0: Parent UID */
-    uid_t       stack_uid;          /* 0xA8: Stack file UID */
-    uint32_t    addr_lo;            /* 0xB0: Stack file low address */
-    uint32_t    size;               /* 0xB4: Stack file size */
-    int32_t     field_b8;           /* 0xB8: entry->upid, sign-extended */
-    uid_t       debugger_uid;       /* 0xBC: PROC2_$UID[entry->parent_pgroup_idx] */
-    uint8_t     pad_c4;             /* 0xC4: Padding */
-    uint8_t     flags_c5;           /* 0xC5: Flags byte (bit 3 gates 0xBC) */
-    uint16_t    count_c6;           /* 0xC6: Counter (set to 1) */
-    uint8_t     field_c8;           /* 0xC8: Field */
-} cr_rec_t;
-
-_Static_assert(__builtin_offsetof(cr_rec_t, field_74) == 0x74, "cr_rec_t.field_74");   /* 0x00E73578 */
-_Static_assert(__builtin_offsetof(cr_rec_t, field_78) == 0x78, "cr_rec_t.field_78");   /* 0x00E7357C */
-_Static_assert(__builtin_offsetof(cr_rec_t, field_7c) == 0x7C, "cr_rec_t.field_7c");   /* 0x00E73580 */
-_Static_assert(__builtin_offsetof(cr_rec_t, field_80) == 0x80, "cr_rec_t.field_80");   /* 0x00E73584 */
-_Static_assert(__builtin_offsetof(cr_rec_t, field_84) == 0x84, "cr_rec_t.field_84");   /* 0x00E73586 */
-_Static_assert(__builtin_offsetof(cr_rec_t, field_8a) == 0x8A, "cr_rec_t.field_8a");
-_Static_assert(__builtin_offsetof(cr_rec_t, field_90) == 0x90, "cr_rec_t.field_90");   /* 0x00E7358A */
-_Static_assert(__builtin_offsetof(cr_rec_t, status) == 0x94, "cr_rec_t.status");       /* 0x00E734CC */
-_Static_assert(__builtin_offsetof(cr_rec_t, proc_uid) == 0x98, "cr_rec_t.proc_uid");   /* 0x00E7354E */
-_Static_assert(__builtin_offsetof(cr_rec_t, parent_uid) == 0xA0, "cr_rec_t.parent_uid"); /* 0x00E73564 */
-_Static_assert(__builtin_offsetof(cr_rec_t, stack_uid) == 0xA8, "cr_rec_t.stack_uid"); /* 0x00E734FE */
-_Static_assert(__builtin_offsetof(cr_rec_t, addr_lo) == 0xB0, "cr_rec_t.addr_lo");     /* 0x00E734BC */
-_Static_assert(__builtin_offsetof(cr_rec_t, size) == 0xB4, "cr_rec_t.size");           /* 0x00E734C4 */
-_Static_assert(__builtin_offsetof(cr_rec_t, field_b8) == 0xB8, "cr_rec_t.field_b8");   /* 0x00E7355C */
-_Static_assert(__builtin_offsetof(cr_rec_t, debugger_uid) == 0xBC, "cr_rec_t.debugger_uid"); /* 0x00E735AA */
-_Static_assert(__builtin_offsetof(cr_rec_t, flags_c5) == 0xC5, "cr_rec_t.flags_c5");   /* 0x00E73598 */
-_Static_assert(__builtin_offsetof(cr_rec_t, count_c6) == 0xC6, "cr_rec_t.count_c6");   /* 0x00E73592 */
-_Static_assert(__builtin_offsetof(cr_rec_t, field_c8) == 0xC8, "cr_rec_t.field_c8");   /* 0x00E7358E */
+/* cr_rec_t (the creation record reached through entry+0x6C) is shared with
+ * PROC2_$COMPLETE_VFORK and lives in proc2_internal.h. */
 
 void PROC2_$SET_VALID(void)
 {

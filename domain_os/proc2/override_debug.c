@@ -1,11 +1,18 @@
 /*
  * PROC2_$OVERRIDE_DEBUG - Override debug settings
  *
+ * Re-emitted from the image (0x00E41722..0x00E4180E, 238 bytes) and
+ * verified block by block; the previous text was already faithful.
+ *
  * Attaches the calling process as the debugger of the target process,
  * overriding any existing debug relationship. Unlike DEBUG, this does
- * NOT check if the target is already being debugged.
+ * NOT check if the target is already being debugged (there is no
+ * entry+0x26 test between 0x00E417A4 and 0x00E417B0).
  *
- * If proc_uid is UID_$NIL, debugs the current process's parent.
+ * If proc_uid is UID_$NIL, the caller's parent becomes its debugger.
+ *
+ * Frame (link.w A6,-0x14): (0x8,A6) proc_uid -> A6-0x8, (0xC,A6)
+ * status_ret; A6-0xC status, cleared at 0x00E41730.
  *
  * Parameters:
  *   proc_uid   - UID of process to debug (or UID_$NIL for parent)
@@ -30,11 +37,15 @@ void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret)
     int8_t flag;
     proc2_info_t *entry;
 
+    /* 0x00E41730-0x00E4173C */
     status = status_$ok;
     uid.high = proc_uid->high;
     uid.low = proc_uid->low;
 
+    /* 0x00E41740-0x00E4174C */
     ML_$LOCK(PROC2_LOCK_ID);
+
+    /* 0x00E4174E-0x00E41760: cmpm.l twice against UID_$NIL (0xE1737C) */
 
     if (uid.high == UID_$NIL.high && uid.low == UID_$NIL.low) {
         /*
@@ -59,9 +70,10 @@ void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret)
         debugger_idx = (int16_t)current_entry->parent_pgroup_idx;
         flag = 0;
     } else {
-        /* Find target process by UID */
+        /* 0x00E4178E-0x00E4179C: D2 = PROC2_$FIND_INDEX(&uid, &status) */
         target_idx = PROC2_$FIND_INDEX(&uid, &status);
 
+        /* 0x00E4179E: tst.l (-0xc,A6) / bne done */
         if (status != status_$ok) {
             goto done;
         }
@@ -86,10 +98,11 @@ void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret)
         flag = (int8_t)0xFF;
     }
 
-    /* Set up debug relationship (will unlink from old debugger if needed) */
+    /* 0x00E417E2 */
     DEBUG_SETUP_INTERNAL(target_idx, debugger_idx, flag);
 
 done:
+    /* 0x00E417F2-0x00E41802 */
     ML_$UNLOCK(PROC2_LOCK_ID);
     *status_ret = status;
 }

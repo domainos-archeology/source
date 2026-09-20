@@ -72,7 +72,12 @@
 #define PROC2_FLAG_VFORK 0x0800    /* Same bit as PROC2_FLAG_ALT_ASID: set by
                                     * PROC2_$FORK when *fork_flags == 0 */
 #define PROC2_FLAG_DEBUG 0x0008    /* Process is being debugged */
-#define PROC2_FLAG_SERVER 0x0002   /* Process is a server */
+#define PROC2_FLAG_SERVER 0x0200   /* Process is a server: PROC2_$SET_SERVER
+                                    * 0x00E414B2/0x00E414BA andi.b/or.b on the
+                                    * HIGH byte of +0x2A (bit 1 there = 0x0200);
+                                    * the bit BUILD_INFO reports with btst #9
+                                    * and INIT_ENTRY_INTERNAL propagates.  Was
+                                    * mis-recorded as 0x0002. */
 #define PROC2_FLAG_INIT 0x8000     /* Initial flags value */
 
 /*
@@ -252,9 +257,23 @@ typedef struct proc2_info_t {
   uint32_t pad_88;        /* 0x88: Unknown */
   uint32_t sig_mask_4;    /* 0x8C: Signal mask part 4 */
 
-  uint16_t pad_90; /* 0x90: Unknown */
-  uint16_t pad_92; /* 0x92: Unknown */
-  uint16_t pad_94; /* 0x94: Unknown */
+  /*
+   * 0x90: the status/parameter longword that travels with signal 0x13.
+   * PROC2_$DELIVER_SIGNAL_INTERNAL stores the caller's parameter here
+   * (0x00E3ECC8 `move.l (0xc,A6),(-0x54,A3)`), PROC2_$GET_NEXT_PENDING_SIGNAL
+   * (0x00E3EF50) and PROC2_$DELIVER_PENDING_INTERNAL (0x00E3ED4E) compare it
+   * with status_$fault_process_BLAST, and DELIVER_PENDING_INTERNAL copies it
+   * into FIM_$TRACE_STS[asid] (0x00E3ED66) / DELIVER_FIM into the caller's
+   * status (0x00E3EE4C).
+   */
+  uint32_t sig_status;
+  /*
+   * 0x94: the signal number recorded when a signal interrupts a process
+   * that is in "fault mode" (flags & 0x0010): PROC2_$DELIVER_SIGNAL_INTERNAL
+   * 0x00E3EC2A `move.w D3w,(-0x50,A3)`; PROC2_$ACKNOWLEDGE 0x00E3F434.
+   * (Kept under its historical name; acknowledge.c refers to it.)
+   */
+  uint16_t pad_94;
 
   uint16_t asid;          /* 0x96: Address Space ID (returned by FIND_ASID) */
   uint16_t asid_alt;      /* 0x98: Alternate ASID (when flag 0x800 set) */
@@ -285,7 +304,16 @@ typedef struct proc2_info_t {
     };
   };
 
-  uint8_t pad_bf[0x0F]; /* 0xBF..0xCD: Unknown */
+  uint8_t pad_bf[3]; /* 0xBF..0xC1: Unknown */
+  /*
+   * 0xC2: big-endian longword written by PROC2_$DELIVER_SIGNAL_INTERNAL's
+   * fault-mode arm (0x00E3EC1E `move.l (0xc,A6),(-0x22,A3)` then 0x00E3EC24
+   * `bset.b #0x7,(-0x21,A3)`, i.e. bit 23 of the longword).  Kept as bytes
+   * because 0xC2 is not 4-aligned on the host; use PROC2_FAULT_PARAM_GET /
+   * PROC2_FAULT_PARAM_SET.
+   */
+  uint8_t fault_param[4];
+  uint8_t pad_c6[8]; /* 0xC6..0xCD: Unknown */
 
   /*
    * 0xCE: the 14-byte XPD ptrace option record.  PROC2_$FORK passes
@@ -309,10 +337,25 @@ _Static_assert(__builtin_offsetof(proc2_info_t, sig_blocked_1) == 0x74, "proc2_i
 _Static_assert(__builtin_offsetof(proc2_info_t, sig_blocked_2) == 0x78, "proc2_info_t.sig_blocked_2");
 _Static_assert(__builtin_offsetof(proc2_info_t, sig_mask_3) == 0x7C, "proc2_info_t.sig_mask_3");
 _Static_assert(__builtin_offsetof(proc2_info_t, pad_88) == 0x88, "proc2_info_t.pad_88");
-_Static_assert(__builtin_offsetof(proc2_info_t, pad_90) == 0x90, "proc2_info_t.pad_90");
-_Static_assert(__builtin_offsetof(proc2_info_t, pad_92) == 0x92, "proc2_info_t.pad_92");
+_Static_assert(__builtin_offsetof(proc2_info_t, sig_status) == 0x90, "proc2_info_t.sig_status");
 _Static_assert(__builtin_offsetof(proc2_info_t, pad_94) == 0x94, "proc2_info_t.pad_94");
+_Static_assert(__builtin_offsetof(proc2_info_t, fault_param) == 0xC2, "proc2_info_t.fault_param");
+_Static_assert(__builtin_offsetof(proc2_info_t, pad_c6) == 0xC6, "proc2_info_t.pad_c6");
 #endif
+
+/* The +0xC2 longword as a value (big-endian in the image, shifts on the host). */
+#define PROC2_FAULT_PARAM_GET(entry)                                           \
+  (((uint32_t)(entry)->fault_param[0] << 24) |                                 \
+   ((uint32_t)(entry)->fault_param[1] << 16) |                                 \
+   ((uint32_t)(entry)->fault_param[2] << 8) |                                  \
+   ((uint32_t)(entry)->fault_param[3]))
+#define PROC2_FAULT_PARAM_SET(entry, v)                                        \
+  do {                                                                         \
+    (entry)->fault_param[0] = (uint8_t)((uint32_t)(v) >> 24);                  \
+    (entry)->fault_param[1] = (uint8_t)((uint32_t)(v) >> 16);                  \
+    (entry)->fault_param[2] = (uint8_t)((uint32_t)(v) >> 8);                   \
+    (entry)->fault_param[3] = (uint8_t)((uint32_t)(v));                        \
+  } while (0)
 
 /*
  * Read one of the five big-endian longwords a zombie keeps at entry+0xA4
@@ -426,7 +469,15 @@ _Static_assert(__builtin_offsetof(pgroup_entry_t, leader_count) == 0x02, "pgroup
 _Static_assert(__builtin_offsetof(pgroup_entry_t, upgid) == 0x04, "pgroup_entry_t.upgid");
 _Static_assert(__builtin_offsetof(pgroup_entry_t, session_id) == 0x06, "pgroup_entry_t.session_id");
 
-#define PGROUP_TABLE_SIZE 70 /* Indices 0-69, 0 unused */
+/*
+ * 71 slots, indices 0..70 with 0 unused.  PROC2_$INIT clears slots 1..70
+ * (0x00E3047A `moveq #0x45` / dbf = 70 iterations from 0xEA9454),
+ * PGROUP_FIND_BY_UPGID scans the same 70 (0x00E42236), and
+ * PGROUP_SET_INTERNAL accepts an index up to 0x46 - 1 = 70
+ * (0x00E41F0E `cmpi.w #0x46` / `ble`).  0xEA944C + 71*8 = 0xEA9684 is
+ * exactly the end of PROC2_$DATA (0xEA551C + 0x4168).
+ */
+#define PGROUP_TABLE_SIZE 71
 
 /*
  * Number of process table entries: indices 1..70, index 0 unused (bead
@@ -483,7 +534,14 @@ extern uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
  * PROC2_$INIT - Initialize PROC2 subsystem
  * Original address: 0x00e303d8
  */
-status_$t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret);
+/*
+ * Returns D0: on the tape/floppy-boot exits the entry point those routines
+ * produced (A6-0x1C, 0x00E306D6/0x00E306FE); on the normal exit the second
+ * longword of the mapped /sys/boot_shell header (A6-0x14, 0x00E30884);
+ * on an OS_$BOOT_ERRCHK exit whatever byte that returned.  OS_$INIT stores
+ * it at 0x00E346A0 and never reads it.
+ */
+uint32_t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -602,11 +660,13 @@ void PROC2_$LIST(uid_t *uid_list, uint16_t *max_count, uint16_t *count);
 
 /*
  * PROC2_$LIST2 - List processes (extended)
- * Iterates all 57 slots. Filters: (flags & 0x180) == 0x180
+ * Iterates slots 1..57. Filters: (flags & 0x180) == 0x180 and slot >= *start_index
  * Original address: 0x00e40402
  */
+/* more_flag is a Domain boolean byte: cleared with clr.b at 0x00E40422 and
+ * set with st at 0x00E40504. */
 void PROC2_$LIST2(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
-                  int32_t *start_index, uint8_t *more_flag,
+                  int32_t *start_index, int8_t *more_flag,
                   int32_t *last_index);
 
 /*
@@ -692,7 +752,7 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
  * PROC2_$COMPLETE_FORK - Complete fork in child
  * Original address: 0x00e735f8
  */
-void PROC2_$COMPLETE_FORK(status_$t *status_ret);
+void PROC2_$COMPLETE_FORK(void);   /* TRAP #0 0x19: reads no arguments (0x00E735F8) */
 
 /*
  * PROC2_$COMPLETE_VFORK - Complete vfork in child
@@ -822,15 +882,15 @@ void PROC2_$DELIVER_PENDING_INTERNAL(int16_t index);
  * Original address: 0x00e3edc0
  */
 int8_t PROC2_$DELIVER_FIM(int16_t *signal_ret, status_$t *status,
-                          uint32_t *handler_addr_ret, void *fault_param1,
-                          void *fault_param2, uint32_t *mask_ret,
+                          uint32_t *handler_ret, uint32_t fault_context,
+                          uint32_t fault_frame, uint32_t *mask_ret,
                           int8_t *flag_ret);
 
 /*
  * PROC2_$DELIVER_PENDING - Deliver pending signals
  * Original address: 0x00e3f520
  */
-void PROC2_$DELIVER_PENDING(status_$t *status_ret);
+void PROC2_$DELIVER_PENDING(void);   /* TRAP #0 0x18: reads no arguments (0x00E3F520) */
 
 /*
  * PROC2_$SIGRETURN - Return from signal handler
@@ -1017,7 +1077,8 @@ uint16_t PROC2_$GET_DEBUGGER_PID(void);
  * PROC2_$GET_REGS - Get process registers
  * Original address: 0x00e41d9e
  */
-void PROC2_$GET_REGS(uid_t *proc_uid, void *regs, status_$t *status_ret);
+void PROC2_$GET_REGS(uid_t *proc_uid, void *arg2, void *arg3, void *arg4,
+                     void *arg5, status_$t *status_ret);  /* 6 slots: status at (0x1C,A6) */
 
 /*
  * ============================================================================
@@ -1130,14 +1191,18 @@ void PROC2_$WHO_AM_I(uid_t *proc_uid);
  * PROC2_$GET_UPIDS - Get Unix PIDs for process
  * Original address: 0x00e738a8
  */
-void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid, uint16_t *upgid,
-                      uint16_t *uppid, status_$t *status_ret);
+/* Output order per 0x00E73944..0x00E73954: own upid, PARENT's upid (1 if
+ * none), process group id (0 if none).  uppid before upgid. */
+void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid, uint16_t *uppid,
+                      uint16_t *upgid, status_$t *status_ret);
 
 /*
  * PROC2_$GET_MY_UPIDS - Get my Unix PIDs
  * Original address: 0x00e73968
  */
-void PROC2_$GET_MY_UPIDS(uint16_t *upid, uint16_t *upgid, uint16_t *uppid);
+/* Same output order as PROC2_$GET_UPIDS (0x00E739A8/0x00E739C4/0x00E739E4):
+ * own upid, PARENT's upid (1 if none), process group id (0 if none). */
+void PROC2_$GET_MY_UPIDS(uint16_t *upid, uint16_t *uppid, uint16_t *upgid);
 
 /*
  * PROC2_$DATA - the PROC2 per-process data block.  The SAU2 map has

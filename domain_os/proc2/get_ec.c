@@ -1,39 +1,34 @@
 /*
- * PROC2_$GET_EC - Get process eventcount
+ * PROC2_$GET_EC - Get an EC2 handle for a process's signal-delivery eventcount
  *
- * Returns a registered eventcount for the specified process.
- * The key parameter must be 0 (the only valid eventcount key).
+ * Only key 0 is accepted.  Under the PROC2 lock the UID is looked up and
+ * FIM_$DELIV_EC[entry->asid] is registered with EC2; the registration
+ * result (0 when the lookup failed) and the lookup status are returned.
  *
  * Parameters:
- *   proc_uid  - UID of target process
- *   ec_ret    - Pointer to receive eventcount
- *   status_ret - Pointer to receive status
+ *   proc_uid   (0x08,A6) UID to look up
+ *   key        (0x0C,A6) pointer to word: must be 0
+ *   ec_ret     (0x10,A6) longword out: the EC2 registration
+ *   status_ret (0x14,A6) A2: status out
  *
- * The returned eventcount is from the FIM delivery EC table,
- * registered through EC2_$REGISTER_EC1.
- *
- * Original address: 0x00e400c2
+ * Original address: 0x00e400c2 (154 bytes)
+ * A5 = 0xE7BE84 (PROC2 module data), not otherwise used.
+ *   0x00E400D8  tst.w (A0) -> 0x19000B bad eventcount key
+ *   0x00E400F2..0x00E40100  idx = PROC2_$FIND_INDEX(uid, &(-0x8,A6))
+ *   0x00E40118..0x00E4012E  EC2_$REGISTER_EC1(0xE224C4 + asid*12, &(-0x8,A6)) -> A0
+ *   0x00E4013A  clr.l D2 on the failure path
+ *   0x00E4013C  ML_$UNLOCK(4); then *ec_ret = D2, *status_ret = (-0x8,A6)
  */
 
 #include "proc2/proc2_internal.h"
 
-/* External EC tables and functions */
-#if defined(ARCH_M68K)
-    #define FIM_DELIV_EC_BASE   0xE224C4
-    #define FIM_DELIV_EC(asid)  ((ec_$eventcount_t*)(FIM_DELIV_EC_BASE + (asid) * 12))
-#else
-    #define FIM_DELIV_EC(asid)  (&fim_deliv_ec_table[(asid)])
-#endif
-
-void PROC2_$GET_EC(uid_t *proc_uid, int16_t *key, void **ec_ret, status_$t *status_ret)
+void PROC2_$GET_EC(uid_t *proc_uid, int16_t *key, void **ec_ret,
+                   status_$t *status_ret)
 {
-    int16_t proc_idx;
-    proc2_info_t *entry;
-    ec_$eventcount_t *ec;
-    void *registered_ec;
-    status_$t status;
+    int16_t proc_idx;         /* D2w */
+    status_$t status;         /* (-0x8,A6) */
+    void *registered;         /* D2 */
 
-    /* Only key 0 is valid */
     if (*key != 0) {
         *status_ret = status_$proc2_bad_eventcount_key;
         return;
@@ -41,24 +36,17 @@ void PROC2_$GET_EC(uid_t *proc_uid, int16_t *key, void **ec_ret, status_$t *stat
 
     ML_$LOCK(PROC2_LOCK_ID);
 
-    /* Find the process */
     proc_idx = PROC2_$FIND_INDEX(proc_uid, &status);
-
     if (status == status_$ok) {
-        /* Get the process entry */
-        entry = P2_INFO_ENTRY(proc_idx);
-
-        /* Get EC from FIM delivery table using process's ASID */
-        ec = FIM_DELIV_EC(entry->asid);
-
-        /* Register the EC for external use */
-        registered_ec = EC2_$REGISTER_EC1(ec, &status);
+        /* (-0x4e,A0,D0) = entry+0x96 asid; pea FIM_$DELIV_EC + asid*12 */
+        registered = EC2_$REGISTER_EC1(
+            &FIM_$DELIV_EC[P2_INFO_ENTRY(proc_idx)->asid], &status);
     } else {
-        registered_ec = NULL;
+        registered = NULL;
     }
 
     ML_$UNLOCK(PROC2_LOCK_ID);
 
-    *ec_ret = registered_ec;
+    *ec_ret = registered;
     *status_ret = status;
 }

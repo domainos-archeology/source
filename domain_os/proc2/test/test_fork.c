@@ -242,9 +242,9 @@ void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret)
     n_unbind++;
 }
 
-int16_t PROC1_$TST_LOCK(uint16_t lock_id) { (void)lock_id; return mock_tst_lock; }
+int8_t PROC1_$TST_LOCK(uint16_t lock_id) { (void)lock_id; return mock_tst_lock; }
 
-void PROC1_$SET_PRIORITY(uint16_t pid, int16_t mode,
+void PROC1_$SET_PRIORITY(uint16_t pid, int8_t mode,
                          uint16_t *min_priority, uint16_t *max_priority)
 {
     (void)pid; (void)mode;

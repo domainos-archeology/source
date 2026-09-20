@@ -48,56 +48,8 @@ _Static_assert(sizeof(xpd_$ptrace_opts_t) == 14,
                "the 14 bytes copied at 0x00E73078 are one xpd_$ptrace_opts_t");
 #endif
 
-/*
- * Startup context planted below the new process's stack.
- *
- * Built at 0x00E72D2C-0x00E72D42:
- *   ctx+0x00 = ctx + 4          (self pointer)
- *   ctx+0x04 = *arg2
- *   ctx+0x08 = *arg1
- *   ctx+0x0C = new_entry->asid  (a WORD -- the record is 14 bytes)
- *
- * The record is placed 0x10 (not sizeof) bytes below
- * stack_ptr - FIM_$INITIAL_STACK_SIZE (0x00E72D1C-0x00E72D2A).
- */
-typedef struct startup_context_t {
-    void       *self_ptr;       /* 0x00 */
-    int32_t     user_data;      /* 0x04 */
-    int32_t     entry_point;    /* 0x08 */
-    uint16_t    asid;           /* 0x0C */
-} startup_context_t;
-
-#if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(startup_context_t, self_ptr) == 0x00,
-               "startup_context_t.self_ptr must be at 0x00");
-_Static_assert(__builtin_offsetof(startup_context_t, user_data) == 0x04,
-               "startup_context_t.user_data must be at 0x04");
-_Static_assert(__builtin_offsetof(startup_context_t, entry_point) == 0x08,
-               "startup_context_t.entry_point must be at 0x08");
-_Static_assert(__builtin_offsetof(startup_context_t, asid) == 0x0C,
-               "startup_context_t.asid must be at 0x0C");
-_Static_assert(sizeof(startup_context_t) == 14,
-               "startup_context_t must be 14 bytes");
-#endif
-
-/*
- * The original reserves 0x10 bytes for the record even though it is only
- * 14 bytes long (0x00E72D1C: moveq #0x10,D1).
- */
-#define STARTUP_CONTEXT_RESERVE 0x10
-
-/*
- * PROC1_$SET_PRIORITY's second parameter is a Pascal boolean.  The
- * original pushes it with `st -(SP)` (0x00E7309E), which -- because byte
- * operations on A7 adjust the stack by two and address the even byte --
- * puts 0xFF in the HIGH half of the word slot; PROC1_$SET_PRIORITY reads
- * it back with `move.b (0xa,A6),D3b` at 0x00E15248 and branches on
- * `tst.b`/`bpl`.  Modelled as an int16_t, that value is 0xFF00, which is
- * what makes proc1/set_priority.c's `mode < 0` test fire.  The other call
- * sites push `clr.w -(SP)` == 0.
- */
-#define PROC1_SET_PRIORITY_SET  ((int16_t)0xFF00)
-#define PROC1_SET_PRIORITY_GET  ((int16_t)0)
+/* startup_context_t, STARTUP_CONTEXT_RESERVE and PROC1_SET_PRIORITY_SET/GET are
+ * shared with PROC2_$CREATE and live in proc2_internal.h. */
 
 void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
                  uid_t *uid_ret, uint32_t reserved, uint16_t *upid_ret,

@@ -301,7 +301,7 @@ void NAME_$SET_WDIR(char *a, int16_t *b, status_$t *c)
     (void)b;
     *c = status_$ok;
 }
-status_$t PROC2_$INIT(uint16_t *a, status_$t *b)
+uint32_t PROC2_$INIT(uint16_t *a, status_$t *b)
 {
     (void)a;
     *b = status_$ok;

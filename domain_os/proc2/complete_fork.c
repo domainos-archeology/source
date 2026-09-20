@@ -1,39 +1,24 @@
 /*
  * PROC2_$COMPLETE_FORK - Complete fork in child process
  *
- * Called by the child process after a fork to signal completion.
- * Advances the eventcount that the parent is waiting on.
+ * Advances the current process's fork-completion eventcount so the parent
+ * blocked in PROC2_$FORK can proceed.  TRAP #0 syscall 0x19: takes no
+ * arguments and returns nothing.
  *
- * Parameters:
- *   status_ret - Pointer to receive status (unused in practice)
- *
- * Original address: 0x00e735f8
+ * Original address: 0x00e735f8 (64 bytes)
+ *   0x00E735FE  idx = PROC2_$PID_TO_INDEX[PROC1_$CURRENT]
+ *               (0xEA551C + pid*2 + 0x3EB6)
+ *   0x00E73614  pea (-0x18,A1,D0) with A1 = 0xE2B978, D0 = idx*0x18
+ *               -> PROC2_$EC[idx-1].fork_ec
+ *   0x00E7362A  EC_$ADVANCE
  */
 
 #include "proc2/proc2_internal.h"
 
-/*
- * Per-process eventcount table PROC2_$EC (proc2_internal.h).
- * Each process has an entry with two eventcounts (24 bytes per entry),
- * indexed by process table index (1-based).  The fork completion
- * eventcount is the first one in each entry:
- *   pea (-0x18,A1,D0*1) with A1 = 0xE2B978, D0 = index * 0x18
- */
-
-void PROC2_$COMPLETE_FORK(status_$t *status_ret)
+void PROC2_$COMPLETE_FORK(void)
 {
-    int16_t current_idx;
-    void *ec;
+    int16_t current_idx;    /* D2 */
 
-    /* Get current process's table index */
-    current_idx = P2_PID_TO_INDEX(PROC1_$CURRENT);
-
-    /* Calculate eventcount address:
-     * EC table has 24-byte entries indexed by process table index;
-     * entry (index - 1) holds this process's fork completion EC.
-     */
-    ec = PROC_FORK_EC(current_idx);
-
-    /* Advance the eventcount to signal fork completion */
-    EC_$ADVANCE(ec);
+    current_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+    EC_$ADVANCE(PROC_FORK_EC(current_idx));
 }

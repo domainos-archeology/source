@@ -71,7 +71,7 @@ void UID_$GEN(uid_t *uid_ret)
     uid_ret->low = 0x03040000u + (uint32_t)n_uid_gen;
 }
 
-void PROC1_$SET_PRIORITY(uint16_t pid, int16_t mode, uint16_t *min_priority,
+void PROC1_$SET_PRIORITY(uint16_t pid, int8_t mode, uint16_t *min_priority,
                          uint16_t *max_priority)
 {
     (void)pid; (void)mode; (void)min_priority; (void)max_priority;
@@ -101,7 +101,11 @@ char OS_$BOOT_ERRCHK(const char *format_str, const char *arg_str,
 
 int8_t MMU_$NORMAL_MODE(void) { return 0; }
 
-uint8_t TAPE_$BOOT(status_$t *status_ret) { (void)status_ret; return 0; }
+int8_t TAPE_$BOOT(uint32_t *entry_point, status_$t *status_ret)
+{
+    (void)entry_point; (void)status_ret;
+    return 0;
+}
 
 int8_t FLOP_$BOOT(uint32_t *entry_point, status_$t *status_ret)
 {

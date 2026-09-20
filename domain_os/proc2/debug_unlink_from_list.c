@@ -1,88 +1,84 @@
 /*
- * DEBUG_UNLINK_FROM_LIST - Remove process from debugger's target list
+ * DEBUG_UNLINK_FROM_LIST - Remove a process from its debugger's target list
  *
- * When a process is being debugged, it is linked into the debugger's
- * list of debug targets. This function removes it from that list.
+ * Re-emitted from the image (0x00E418B0..0x00E41944, 150 bytes).
  *
- * The debug target list is a singly-linked list:
- * - debugger->first_debug_target_idx: head of list
- * - target->next_debug_target_idx: next target in list
- * - target->debugger_idx: back-pointer to debugger
+ * The debug target list is singly linked through the process table:
+ *   debugger->first_debug_target_idx (+0x24)  head of the list
+ *   target->next_debug_target_idx    (+0x28)  next target
+ *   target->debugger_idx             (+0x26)  back link to the debugger
  *
- * From: 0x00e418b0
+ * Every entry is addressed as A_n = 0xEA551C + idx*0xE4 = entry + 0xE4, so
+ * (-0xBE,An) = +0x26, (-0xC0,An) = +0x24, (-0xBC,An) = +0x28.
  *
- * Original assembly:
- *   00e418b0    link.w A6,-0x14
- *   00e418b4    movem.l {  A2 D3 D2},-(SP)
- *   00e418b8    move.w (0x8,A6),D0w         ; D0 = proc_idx
- *   00e418bc    movea.l #0xea551c,A0
- *   00e418c2    move.w D0w,D1w
- *   00e418c4    muls.w #0xe4,D1
- *   00e418c8    lea (0x0,A0,D1*0x1),A0      ; A0 = entry for proc_idx
- *   00e418cc    tst.w (-0xbe,A0)            ; test debugger_idx
- *   00e418d0    beq.b return                ; if not being debugged, return
- *   ...                                     ; unlink from debugger's list
- *   00e41932    pea (0x14,PC)               ; push error status
- *   00e41936    jsr CRASH_SYSTEM            ; crash if not found in list
+ * Callers: DEBUG_SETUP_INTERNAL (0x00E4198A), DEBUG_CLEAR_INTERNAL
+ * (0x00E41A54).  Both push a `subq.l #2,SP` result slot that nothing fills.
+ *
+ * Parameters:
+ *   proc_idx - (0x8,A6) process table index of the target
+ *
+ * Original address: 0x00e418b0
  */
 
 #include "proc2/proc2_internal.h"
 #include "misc/crash_system.h"
 
-/* Error status for process not found in debug list */
-static const status_$t Proc2_UID_Not_Found_err = status_$proc2_uid_not_found;
+/*
+ * Constant status cell in the code region, 0x00E41948 (`pea (0x14,PC)` at
+ * 0x00E41932): bytes 00 19 00 01 = status_$proc2_uid_not_found.
+ */
+static const status_$t proc2_debug_unlink_crash_status = status_$proc2_uid_not_found;
 
 void DEBUG_UNLINK_FROM_LIST(int16_t proc_idx)
 {
     proc2_info_t *entry;
     proc2_info_t *debugger_entry;
-    int16_t debugger_idx;
     int16_t current_idx;
     int16_t prev_idx;
 
+    /* 0x00E418B8-0x00E418C8 */
     entry = P2_INFO_ENTRY(proc_idx);
 
-    /* If not being debugged, nothing to do */
+    /* 0x00E418CC: tst.w (-0xbe,A0) / beq -> exit: not being debugged */
     if (entry->debugger_idx == 0) {
         return;
     }
 
-    /* Get the debugger's entry */
-    debugger_idx = entry->debugger_idx;
-    debugger_entry = P2_INFO_ENTRY(debugger_idx);
+    /* 0x00E418D2-0x00E418E0: A1 = the debugger's entry (mulu.w here) */
+    debugger_entry = P2_INFO_ENTRY((int16_t)entry->debugger_idx);
 
-    /* Clear our debugger reference */
+    /* 0x00E418E4: clr.w (-0xbe,A0) */
     entry->debugger_idx = 0;
 
-    /*
-     * Walk the debugger's target list to find and remove this process.
-     * The list is singly-linked through next_debug_target_idx.
-     */
+    /* 0x00E418E8/0x00E418EC: D1 = debugger->first target, D2 = prev = 0 */
+    current_idx = (int16_t)debugger_entry->first_debug_target_idx;
     prev_idx = 0;
-    current_idx = debugger_entry->first_debug_target_idx;
 
+    /* 0x00E4192E: tst.w D1w / bne 0x00E418F0 */
     while (current_idx != 0) {
+        /* 0x00E418F0: cmp.w D1w,D0w */
         if (current_idx == proc_idx) {
-            /* Found it - unlink from list */
+            /* 0x00E418F4: tst.w D2w */
             if (prev_idx == 0) {
-                /* Removing from head of list */
+                /* 0x00E418F8: debugger->first = entry->next */
                 debugger_entry->first_debug_target_idx = entry->next_debug_target_idx;
             } else {
-                /* Removing from middle/end of list */
+                /* 0x00E41900-0x00E41910: prev->next = entry->next */
                 proc2_info_t *prev_entry = P2_INFO_ENTRY(prev_idx);
                 prev_entry->next_debug_target_idx = entry->next_debug_target_idx;
             }
-            return;
+            return;   /* 0x00E418FE / 0x00E41916: bra exit */
         }
 
-        /* Move to next entry in list */
+        /* 0x00E41918-0x00E4192A: prev = current; current = current->next */
         prev_idx = current_idx;
-        current_idx = P2_INFO_ENTRY(current_idx)->next_debug_target_idx;
+        current_idx = (int16_t)P2_INFO_ENTRY(current_idx)->next_debug_target_idx;
     }
 
     /*
-     * Process was not found in debugger's list - this is a fatal error.
-     * The data structures are corrupted.
+     * 0x00E41932-0x00E41936: the target was not on its debugger's list.
+     * CRASH_SYSTEM is called with the constant cell and, if it returns,
+     * the routine simply falls into its epilogue.
      */
-    CRASH_SYSTEM(&Proc2_UID_Not_Found_err);
+    CRASH_SYSTEM(&proc2_debug_unlink_crash_status);
 }

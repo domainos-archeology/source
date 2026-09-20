@@ -1,183 +1,139 @@
 /*
  * PROC2_$DELIVER_SIGNAL_INTERNAL - Internal signal delivery
  *
- * Core internal function for delivering signals to a process. Handles:
- * - Signal mask checking
- * - SIGKILL/SIGCONT special cases (cannot be blocked)
- * - Fault signals
- * - Setting pending signal bits
- * - Waking suspended processes
+ * Core routine that posts a signal to a process table entry.  In order:
+ * wakes a suspended target for 9 / 0x16 / (0x13 with the BLAST status),
+ * interrupts a target in "fault mode" for 9 / (0x13 with BLAST), clears the
+ * stop signals on 0x16, drops signals the target does not accept, records
+ * the 0x13 status, and finally marks the signal pending and hands it to
+ * PROC2_$DELIVER_PENDING_INTERNAL unless the target is suspended.
+ *
+ * A Pascal procedure (callers push 2+2+4+4 bytes, no result slot).
  *
  * Parameters:
- *   proc_index - Index in process table
- *   signal     - Signal number (1-31)
- *   param      - Signal parameter (e.g., fault code, or 0x120019 for SIGCONT from wait)
- *   status_ret - Pointer to receive status
+ *   proc_index - (0x8,A6)  word: process table index
+ *   signal     - (0xA,A6)  word: signal number (1..32)
+ *   param      - (0xC,A6)  longword: signal parameter (a status for 0x13)
+ *   status_ret - (0x10,A6) status out
  *
- * Returns:
- *   Result from DELIVER_PENDING_INTERNAL or PROC1_$RESUME
- *
- * Status codes:
- *   status_$ok - Success
- *   status_$proc2_another_fault_pending - Fault signal when one already pending
- *
- * Original address: 0x00e3eb8c
+ * Original address: 0x00e3eb8c (350 bytes)
+ * A3 = 0xEA551C + proc_index*0xE4 = entry + 0xE4, so
+ *   (-0xBA/-0xB9,A3) = +0x2A/+0x2B flags high/low byte
+ *   (-0xBE,A3) = +0x26 debugger_idx   (-0x4A,A3) = +0x9A level1_pid
+ *   (-0x74,A3) = +0x70 sig_pending    (-0x70,A3) = +0x74 sig_blocked_1
+ *   (-0x6C,A3) = +0x78 sig_blocked_2  (-0x64,A3) = +0x80 sig_mask_2
+ *   (-0x63,A3) = +0x81 byte 1 of sig_mask_2
+ *   (-0x54,A3) = +0x90 sig_status     (-0x50,A3) = +0x94 pad_94
+ *   (-0x22,A3) = +0xC2 fault_param    (-0x21,A3) = +0xC3 byte 1 of it
  */
 
 #include "proc2/proc2_internal.h"
 
-/* Special parameter value indicating SIGCONT from wait */
-#define SIGCONT_FROM_WAIT       0x00120019
+/* 0x00E3EC4C / 0x00E3EC72: andi.l #-0x1980001 */
+#define P2_SIG_STOP_CLEAR_MASK   0xFE67FFFFUL
+/* 0x00E3EC9E: andi.l #0x3d9dffff */
+#define P2_SIG_ALWAYS_POST_MASK  0x3D9DFFFFUL
 
-/* Signal mask for "stoppable" signals (can be blocked for job control) */
-#define STOPPABLE_SIGNAL_MASK   0xFE67FFFF  /* ~(SIGSTOP | SIGTSTP | SIGTTIN | SIGTTOU) */
-
-/* Signal mask for signals that cannot trigger pending delivery */
-#define NO_PENDING_MASK         0x3D9DFFFF
-
-/* Process flag bits in flags field (offset 0x2A-0x2B) */
-#define FLAG_SUSPENDED          0x4000  /* Bit 6 of high byte (0x2B): Process is suspended */
-#define FLAG_FAULT_MODE         0x1000  /* Bit 4 of high byte (0x2B): Process in fault mode */
-#define FLAG_SIGHUP_PENDING     0x0002  /* Bit 1 of low byte (0x2A): SIGHUP pending */
-
-/* Additional fields in proc2_info_t not in main header */
-/* These are stored in the pad areas */
-#define FAULT_PARAM_OFFSET      0x90    /* Fault parameter storage */
-#define FAULT_SIGNAL_OFFSET     0xC2    /* Stored fault signal info */
-#define FAULT_FLAG_OFFSET       0xC3    /* Fault flag byte */
-#define PENDING_SIGNAL_OFFSET   0x94    /* Pending signal number */
-
-uint32_t PROC2_$DELIVER_SIGNAL_INTERNAL(int16_t proc_index, int16_t signal,
-                                         int32_t param, status_$t *status_ret)
+void PROC2_$DELIVER_SIGNAL_INTERNAL(int16_t proc_index, int16_t signal,
+                                    int32_t param, status_$t *status_ret)
 {
-    uint32_t sig_mask;
-    proc2_info_t *entry;
+    proc2_info_t *entry;      /* A3 - 0xE4 */
+    int16_t sig_m1;           /* (-0x12,A6) */
+    uint32_t sig_bit;         /* D4 */
+    int8_t wake;              /* D0b after the two seq's */
 
+    /* 0x00E3EBA0 */
     *status_ret = status_$ok;
 
-    /* Compute signal mask bit (signal numbers are 1-based) */
-    sig_mask = 1U << ((signal - 1) & 0x1F);
+    /* 0x00E3EBA2..0x00E3EBB0: clr.l D4; bset.l D0,D4 (bit number mod 32) */
+    sig_m1 = (int16_t)(signal - 1);
+    sig_bit = 0;
+    sig_bit |= 1UL << ((uint16_t)sig_m1 & 31);
 
     entry = P2_INFO_ENTRY(proc_index);
 
-    /*
-     * Check if process is suspended (flag bit 6 of high byte).
-     * Certain signals must wake the process:
-     * - SIGKILL (9) - Always wakes
-     * - SIGCONT (22) - Always wakes (note: Domain/OS uses 22 for SIGCONT, not BSD's 19)
-     * - SIGCONT (19) with SIGCONT_FROM_WAIT param - Wakes from wait
-     */
-    if ((entry->flags & FLAG_SUSPENDED) != 0) {
-        int should_wake = 0;
-
-        if (signal == SIGKILL || signal == 22) {  /* SIGKILL or SIGCONT */
-            should_wake = 1;
-        } else if (signal == SIGCONT && param == SIGCONT_FROM_WAIT) {
-            should_wake = 1;
+    /* 0x00E3EBC2 btst.b #0x6,(-0xb9,A3): flags 0x0040 -- target suspended */
+    if ((entry->flags & 0x0040) != 0) {
+        /* 0x00E3EBCA..0x00E3EBD8: (signal == 0x16) or (signal == 9), the two
+         * seq bytes OR'd and tested with bmi */
+        wake = (int8_t)((signal == 0x16 ? 0xFF : 0x00) | (signal == 9 ? 0xFF : 0x00));
+        if (wake >= 0) {
+            /* 0x00E3EBDA..0x00E3EBE8 */
+            wake = (signal == 0x13 && param == status_$fault_process_BLAST) ? -1 : 0;
         }
-
-        if (should_wake) {
-            /* Clear suspended flag and resume process */
-            entry->flags &= ~FLAG_SUSPENDED;
+        if (wake < 0) {
+            /* 0x00E3EBEA..0x00E3EBFE */
+            entry->flags &= (uint16_t)~0x0040;
             PROC1_$RESUME(entry->level1_pid, status_ret);
         }
     }
 
-    /*
-     * Check if process is in fault mode (flag bit 4 of high byte).
-     * Only SIGKILL or SIGCONT with SIGCONT_FROM_WAIT can interrupt fault handling.
-     */
-    if ((entry->flags & FLAG_FAULT_MODE) != 0) {
-        if (signal == SIGKILL || (signal == SIGCONT && param == SIGCONT_FROM_WAIT)) {
-            /* Store fault info and resume */
-            *(int32_t*)((char*)entry + FAULT_SIGNAL_OFFSET) = param;
-            *(uint8_t*)((char*)entry + FAULT_FLAG_OFFSET) |= 0x80;
-            *(int16_t*)((char*)entry + PENDING_SIGNAL_OFFSET) = signal;
-
-            /* Clear fault mode flag */
-            entry->flags &= ~FLAG_FAULT_MODE;
-
-            /* Resume the process */
+    /* 0x00E3EC00 btst.b #0x4,(-0xb9,A3): flags 0x0010 -- target in fault mode */
+    if ((entry->flags & 0x0010) != 0) {
+        if (signal == 9 ||
+            (signal == 0x13 && param == status_$fault_process_BLAST)) {
+            /* 0x00E3EC1E move.l param,(-0x22,A3); 0x00E3EC24 bset.b #7,(-0x21,A3) */
+            PROC2_FAULT_PARAM_SET(entry, (uint32_t)param | 0x00800000UL);
+            /* 0x00E3EC2A */
+            entry->pad_94 = (uint16_t)signal;
+            /* 0x00E3EC2E */
+            entry->flags &= (uint16_t)~0x0010;
+            /* 0x00E3EC34..0x00E3EC42: resume and leave */
             PROC1_$RESUME(entry->level1_pid, status_ret);
-            return 0;
+            return;
         }
     }
 
-    /*
-     * For SIGCONT (22), clear certain pending signal bits.
-     * This clears stop signals (SIGSTOP, SIGTSTP, SIGTTIN, SIGTTOU).
-     */
-    if (signal == 22) {  /* SIGCONT */
-        entry->sig_mask_2 &= STOPPABLE_SIGNAL_MASK;
+    /* 0x00E3EC46: signal 0x16 clears the stop signals from the pending set */
+    if (signal == 0x16) {
+        entry->sig_mask_2 &= P2_SIG_STOP_CLEAR_MASK;
     }
 
-    /*
-     * Check if signal is blocked by sig_blocked_1.
-     * If blocked and not special, handle SIGHUP specially or ignore.
-     */
-    if ((sig_mask & ~entry->sig_blocked_1) == 0) {
-        /* Signal is blocked */
-        if (signal == SIGHUP) {
-            /* Mark SIGHUP pending in flags */
-            entry->flags |= FLAG_SIGHUP_PENDING;
+    /* 0x00E3EC54..0x00E3EC6E: not accepted (bit clear in +0x74) */
+    if ((~entry->sig_blocked_1 & sig_bit) == 0) {
+        if (signal == 1) {
+            /* 0x00E3EC64 bset.b #0x1,(-0xba,A3): high byte bit 1 = 0x0200 */
+            entry->flags |= 0x0200;
         }
-        /* Check if process has debugger - if so, continue processing */
         if (entry->debugger_idx == 0) {
-            return 0;
+            return;
         }
     }
 
-    /*
-     * Check if this is a "stoppable" signal that should be ignored
-     * when process is suspended.
-     */
-    if ((sig_mask & STOPPABLE_SIGNAL_MASK) == 0) {
-        /* Clear a flag bit and check if suspended */
-        *(uint8_t*)((char*)entry + 0x81) &= ~0x20;  /* sig_mask_2 high byte */
-        if ((entry->flags & FLAG_SUSPENDED) != 0) {
-            return 0;
+    /* 0x00E3EC70..0x00E3EC86: a stop signal clears pending 0x16 and is not
+     * posted to a suspended target */
+    if ((sig_bit & P2_SIG_STOP_CLEAR_MASK) == 0) {
+        /* 0x00E3EC7A bclr.b #0x5,(-0x63,A3): byte 1 of +0x80, bit 5 = bit 21 */
+        entry->sig_mask_2 &= ~0x00200000UL;
+        if ((entry->flags & 0x0040) != 0) {
+            return;
         }
     }
 
-    /*
-     * Check various signal masks to determine if delivery should proceed.
-     */
-    if ((sig_mask & ~entry->sig_pending) == 0) {
-        /* Signal already pending */
-        goto check_pending_delivery;
-    }
-    if ((sig_mask & ~entry->sig_blocked_2) == 0) {
-        /* Signal blocked by second mask */
-        goto check_pending_delivery;
-    }
-    if ((sig_mask & NO_PENDING_MASK) == 0) {
-        /* Signal in no-pending set */
-        return 0;
+    /* 0x00E3EC88..0x00E3ECA4 */
+    if ((~entry->sig_pending & sig_bit) != 0 &&
+        (~entry->sig_blocked_2 & sig_bit) != 0 &&
+        (sig_bit & P2_SIG_ALWAYS_POST_MASK) == 0) {
+        return;
     }
 
-check_pending_delivery:
-    /*
-     * For SIGCONT (19), check if another fault is already pending.
-     */
-    if (signal == SIGCONT) {
-        if ((~entry->sig_mask_2 & 0x40000) == 0) {
-            /* Fault signal bit not set - no conflict */
-            if (param != SIGCONT_FROM_WAIT) {
-                *status_ret = status_$proc2_another_fault_pending;
-                return 0;
-            }
+    /* 0x00E3ECA6..0x00E3ECCC: signal 0x13 carries a status */
+    if (signal == 0x13) {
+        if ((~entry->sig_mask_2 & sig_bit) == 0 &&
+            param != status_$fault_process_BLAST) {
+            /* 0x00E3ECC0 */
+            *status_ret = status_$proc2_another_fault_pending;
+            return;
         }
-        /* Store fault parameter */
-        *(int32_t*)((char*)entry + FAULT_PARAM_OFFSET) = param;
+        /* 0x00E3ECC8 */
+        entry->sig_status = (uint32_t)param;
     }
 
-    /* Set the pending signal bit */
-    entry->sig_mask_2 |= sig_mask;
+    /* 0x00E3ECCE or.l D4,(-0x64,A3) */
+    entry->sig_mask_2 |= sig_bit;
 
-    /* If process is not suspended, deliver pending signals */
-    if ((entry->flags & FLAG_SUSPENDED) == 0) {
+    /* 0x00E3ECD2..0x00E3ECDE */
+    if ((entry->flags & 0x0040) == 0) {
         PROC2_$DELIVER_PENDING_INTERNAL(proc_index);
     }
-
-    return 0;
 }

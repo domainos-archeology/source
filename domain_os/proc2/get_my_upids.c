@@ -1,61 +1,51 @@
 /*
- * PROC2_$GET_MY_UPIDS - Get Unix PIDs for current process
+ * PROC2_$GET_MY_UPIDS - Return the calling process's Unix ids
  *
- * Returns the current process's UPID, UPGID (process group UPID),
- * and UPPID (parent UPID).
+ * Re-emitted from the image (0x00E73968..0x00E739F4, 142 bytes).
  *
- * Parameters:
- *   upid - Pointer to receive current process UPID
- *   upgid - Pointer to receive process group UPID (1 if no pgroup)
- *   uppid - Pointer to receive parent UPID (0 if no parent)
+ * Frame (link.w A6,-0x10; A5 = 0xE86054, unused):
+ *   (0x8,A6)  upid_ret   -> A3  <- entry+0x16                (0x00E739A8)
+ *   (0xC,A6)  uppid_ret  -> A1  <- P2[entry+0x1E]->upid, or 1 when the
+ *                                  entry has no parent      (0x00E739C4/CA)
+ *   (0x10,A6) upgid_ret  -> A2  <- PGROUP_TABLE[entry+0x10].upgid, or 0
+ *                                  when it is in no group   (0x00E739E4/EA)
+ *
+ * The entry is A0 = 0xEA551C + idx*0xE4 = entry + 0xE4: (-0xCE) = +0x16
+ * upid, (-0xC6) = +0x1E parent index, (-0xD4) = +0x10 pgroup index.  The
+ * group lookup is (0x3F34,A4) with A4 = 0xEA551C + idx*8, i.e. the upgid
+ * word (+4) of the 8-byte pgroup record at 0xEA944C + idx*8.
+ *
+ * NOTE: the second output is the PARENT's upid and the third the process
+ * group id; the old prototype had them the other way round.
  *
  * Original address: 0x00e73968
  */
 
 #include "proc2/proc2_internal.h"
 
-/*
- * Raw memory access macros for parent-child fields
- * P2_PARENT_IDX: parent index at offset 0x1E from entry base
- * P2_PARENT_UPID: parent UPID in separate table (8-byte entries)
- */
-#if defined(ARCH_M68K)
-    #define P2_CHILD_BASE(idx)      ((int16_t*)(0xEA551C + ((idx) * 0xE4)))
-    #define P2_PARENT_IDX(idx)      (*(P2_CHILD_BASE(idx) - 0x63))
-    #define P2_PARENT_UPID(idx)     (*(int16_t*)(0xEA944E + (idx) * 8))
-#else
-    static int16_t p2_dummy_field;
-    #define P2_PARENT_IDX(idx)      (p2_dummy_field)
-    #define P2_PARENT_UPID(idx)     (p2_dummy_field)
-#endif
-
-void PROC2_$GET_MY_UPIDS(uint16_t *upid, uint16_t *upgid, uint16_t *uppid)
+void PROC2_$GET_MY_UPIDS(uint16_t *upid_ret, uint16_t *uppid_ret, uint16_t *upgid_ret)
 {
-    int16_t my_index;
     proc2_info_t *entry;
-    proc2_info_t *pgroup_entry;
+    proc2_info_t *parent;
 
-    /* Get my proc2 index from PID mapping table */
-    my_index = P2_PID_TO_INDEX(PROC1_$CURRENT);
+    /* 0x00E7397E-0x00E739A4 */
+    entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
 
-    entry = P2_INFO_ENTRY(my_index);
+    /* 0x00E739A8: entry+0x16 */
+    *upid_ret = entry->upid;
 
-    /* Return my UPID */
-    *upid = entry->upid;
-
-    /* Return process group UPID */
-    if (entry->pgroup_table_idx == 0) {
-        *upgid = 1;  /* Default UPGID when no pgroup */
+    /* 0x00E739AC-0x00E739CA: entry+0x1E */
+    if (entry->parent_pgroup_idx != 0) {
+        parent = P2_INFO_ENTRY((int16_t)entry->parent_pgroup_idx);   /* mulu */
+        *uppid_ret = parent->upid;                                   /* 0x00E739C4 */
     } else {
-        pgroup_entry = P2_INFO_ENTRY(entry->pgroup_table_idx);
-        *upgid = pgroup_entry->upid;
+        *uppid_ret = 1;                                              /* 0x00E739CA */
     }
 
-    /* Return parent UPID */
-    if (P2_PARENT_IDX(my_index) == 0) {
-        *uppid = 0;  /* No parent */
+    /* 0x00E739CE-0x00E739EA: entry+0x10 */
+    if (entry->pgroup_table_idx != 0) {
+        *upgid_ret = PGROUP_ENTRY(entry->pgroup_table_idx)->upgid;   /* 0x00E739E4 */
     } else {
-        /* Lookup in parent UPID table (8-byte entries) */
-        *uppid = P2_PARENT_UPID(P2_PARENT_IDX(my_index));
+        *upgid_ret = 0;                                              /* 0x00E739EA */
     }
 }
