@@ -1,53 +1,54 @@
 /*
- * PROC1_$SET_TS - Set timeslice for a process
- * Original address: 0x00e14a08
+ * PROC1_$SET_TS - Re-arm a process's timeslice timer
+ * Original address: 0x00e14a08 (104 bytes)
  *
- * Schedules a timeslice timer callback for a process. Uses the kernel's
- * timer queue mechanism to trigger PROC1_$TS_END_CALLBACK when the
- * timeslice expires.
+ * Re-emitted from the disassembly.  A5 = 0x00E254E8; the element is
+ * PROC1_$TS_ELEM[pid].elem at (0x14,A5 + pid*0x1C) and the queue is
+ * TIME_$VTQ[pid - 1] (`pea (-0xc,A0,D3w)' with A0 = 0xE2A4A0, D3 = pid*12).
+ *
+ * Frame: (0x8,A6) pcb, (0xC,A6) timeslice (word).
+ * Locals: (-0xC,A6) a 6-byte clock {0, timeslice}, (-0x4,A6) status.
+ *
+ * 0x00E14A08  link.w A6,-0x10 / movem.l D2-D4/A2/A5,-(SP) / lea A5
+ * 0x00E14A16  A2 = pcb; D1 = timeslice
+ * 0x00E14A20  clr.l (-0xc,A6) / move.w D1,(-0x8,A6)     when = {0, timeslice}
+ * 0x00E14A28  subq.l #2,SP                              Pascal result slot
+ * 0x00E14A2A  pea (-0x4,A6)                             &status
+ * 0x00E14A2E  D2 = pcb->mypid * 0x1C; pea (0x14,A5,D2)  &elem
+ * 0x00E14A40  pea (0x4c,A2)                             &pcb->cpu_total (base)
+ * 0x00E14A44  clr.w -(SP)                               qflags = 0
+ * 0x00E14A46  pea (-0xc,A6)                             &when
+ * 0x00E14A4A  D3 = pcb->mypid * 12; pea (-0xc,A0,D3)    &TIME_$VTQ[mypid-1]
+ * 0x00E14A60  jsr TIME_$Q_REENTER_ELEM                  (no cleanup: unlk)
+ * 0x00E14A66  movem.l / unlk / rts
+ *
+ * The queue's base time is the PCB's own CPU clock (cpu_total:cpu_usage),
+ * so the element expires `timeslice' ticks of CPU time from now.  The
+ * function result and the status are both discarded.
  *
  * Parameters:
- *   pcb - Process control block pointer
- *   timeslice - Timeslice value (in timer ticks)
+ *   pcb       - the process
+ *   timeslice - ticks of CPU time until PROC1_$TS_END_CALLBACK fires
  */
 
 #include "proc1/proc1_internal.h"
 #include "time/time.h"
 
-/* Size of timer queue element (12 bytes) */
-#define TS_QUEUE_ELEM_SIZE  12
-
 void PROC1_$SET_TS(proc1_t *pcb, int16_t timeslice)
 {
-    status_$t status;
-    uint32_t time_high;
-    uint16_t time_low;
+    clock_t when;               /* (-0xC,A6) */
+    status_$t status;           /* (-0x4,A6) */
     uint16_t pid;
-    char *queue_elem;
-    char *callback_info;
 
+    /* 0x00E14A20 / 0x00E14A24 */
+    when.high = 0;
+    when.low = (uint16_t)timeslice;
+
+    /* 0x00E14A2E / 0x00E14A4A: both indices come from pcb->mypid */
     pid = pcb->mypid;
 
-    /* Build time value (6-byte: 4 high + 2 low) */
-    time_high = 0;
-    time_low = timeslice;
-
-    /*
-     * Calculate timer table entry address:
-     * entry = base + pid * 0x1c (28 bytes per entry)
-     * The assembly computes pid * 28 using shifts:
-     * D0 = pid * 4, D1 = pid * 4, D0 = -D0
-     * D1 <<= 3 => pid * 32, D0 += D1 => -4 + 32 = 28
-     *
-     * callback_info points to offset 0x14 within the entry
-     */
-    callback_info = (char*)&TS_TIMER_TABLE[pid] + 0x14;
-
-    /* Calculate queue element address: base + pid * 12 - 0xC */
-    queue_elem = &TS_QUEUE_TABLE[pid * TS_QUEUE_ELEM_SIZE] - 0xC;
-
-    /* Schedule the timer callback */
-    TIME_$Q_REENTER_ELEM((time_queue_t *)queue_elem, (clock_t *)&time_high, 0,
+    /* 0x00E14A28..0x00E14A60 */
+    TIME_$Q_REENTER_ELEM(&TIME_$VTQ[pid - 1], &when, 0,
                          (clock_t *)&pcb->cpu_total,
-                         (time_queue_elem_t *)callback_info, &status);
+                         &PROC1_$TS_ELEM[pid].elem, &status);
 }

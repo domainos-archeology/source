@@ -22,6 +22,12 @@
  *   0x55: pri_max (flags byte)
  *   0x5A: lock depth counter (uint16_t)
  *
+ *
+ * TODO(source-2gk1): the image branches into shared ML code here (CLR_LOCK:
+ * `beq.w 0x00E20EB0 / bra.w 0x00E20EB6' at 0x00E20BAE; SET_LOCK:
+ * `bls.b 0x00E20B56' at 0x00E20AF8).  This file reproduces that shared
+ * run inline, so it is instruction-equivalent but not byte-identical to
+ * the image past that branch.
  * Original address: 0x00e20b92
  */
 
@@ -32,9 +38,9 @@
  * External references
  */
         .extern PROC1_$CURRENT_PCB
-        .extern proc1_$reorder_if_needed
-        .extern proc1_$remove_from_ready_list
-        .extern proc1_$add_ready_body
+        .extern proc1_$reorder_if_needed_int
+        .extern proc1_$remove_from_ready_list_int
+        .extern proc1_$add_ready_body_int
         .extern PROC1_$TRY_TO_SUSPEND
         .extern PROC1_$DISPATCH_INT2
         .extern CRASH_SYSTEM
@@ -77,7 +83,7 @@ proc1_$clr_lock_body:
         bclr.b  #0, (0x43,%a1)
 
 .Ldo_reorder:
-        bsr.w   proc1_$reorder_if_needed
+        bsr.w   proc1_$reorder_if_needed_int
 
         /* Check if all locks are released */
         tst.l   (0x40,%a1)
@@ -90,8 +96,8 @@ proc1_$clr_lock_body:
         beq.s   .Lcheck_suspend         /* bit wasn't set, skip */
 
         /* Deferred removal: remove from ready list and call proc1_$add_ready_body */
-        bsr.w   proc1_$remove_from_ready_list
-        bsr.w   proc1_$add_ready_body
+        bsr.w   proc1_$remove_from_ready_list_int
+        bsr.w   proc1_$add_ready_body_int
 
 .Lcheck_suspend:
         /* Check bit 2 of pri_max (deferred suspend) */

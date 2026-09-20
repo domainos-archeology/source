@@ -20,6 +20,12 @@
  *   0x40: resource_locks_held (uint32_t bitmask)
  *   0x5A: lock depth counter (uint16_t)
  *
+ *
+ * TODO(source-2gk1): the image branches into shared ML code here (CLR_LOCK:
+ * `beq.w 0x00E20EB0 / bra.w 0x00E20EB6' at 0x00E20BAE; SET_LOCK:
+ * `bls.b 0x00E20B56' at 0x00E20AF8).  This file reproduces that shared
+ * run inline, so it is instruction-equivalent but not byte-identical to
+ * the image past that branch.
  * Original address: 0x00e20ae4
  */
 
@@ -31,7 +37,7 @@
  */
         .extern PROC1_$CURRENT_PCB
         .extern PROC1_$READY_PCB
-        .extern proc1_$reorder_if_needed
+        .extern proc1_$reorder_if_needed_int
         .extern CRASH_SYSTEM
 
 /*
@@ -79,7 +85,7 @@ proc1_$set_lock_body:
         /* Not the running process - may need to reorder ready list */
         move    %sr, -(%sp)             /* save SR */
         ori     #0x700, %sr             /* disable interrupts */
-        bsr.w   proc1_$reorder_if_needed
+        bsr.w   proc1_$reorder_if_needed_int
         move    (%sp)+, %sr             /* restore SR */
 
 .Ldone:

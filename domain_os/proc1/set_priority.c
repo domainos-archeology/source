@@ -1,101 +1,124 @@
 /*
- * PROC1_$SET_PRIORITY - Set or get process priority range
- * Original address: 0x00e1523c
+ * PROC1_$SET_PRIORITY - Set or query a process's priority range
+ * Original address: 0x00e1523c (164 bytes; Ghidra's 168 includes the
+ *                   trailing status cell at 0x00E152E0)
  *
- * Sets the minimum and maximum priority values for a process, or
- * retrieves the current values.
+ * Frame: (0x8,A6) pid (word), (0xA,A6) set (boolean BYTE, `move.b'),
+ * (0xC,A6) min, (0x10,A6) max.
+ *
+ * 0x00E1523C  link.w A6,-0x4 / movem.l D2/D3/A2-A4,-(SP)
+ * 0x00E15244  D2 = pid; D3 = set; A2 = min; A3 = max
+ * 0x00E15254  tst.w D2 / beq crash; cmpi.w #0x40 / bls ok
+ * 0x00E1525E  CRASH_SYSTEM(&Illegal_process_id_err)  (`pea (0x80,PC)' ->
+ *             0x00E152E0; addq #4; FALLS THROUGH afterwards)
+ * 0x00E1526A  A4 = PCBS[pid]
+ * 0x00E15278  tst.b D3 / bpl 0x00E152CE                query
+ * 0x00E1527C  (0x56,A4) = clamp(*min)                  inh_count  (min)
+ * 0x00E15288  D0 = (0x58,A4) = clamp(*max)             sw_bsr     (max)
+ * 0x00E15294  ori #0x700,SR                            raise, no save
+ * 0x00E15298  cmp.w (0x52,A4),D0 / blt 0x00E152A8      max < state: clamp
+ * 0x00E1529E  D0 = (0x56,A4); cmp.w (0x52,A4),D0 / ble 0x00E152AC
+ *                                                      min <= state: keep
+ * 0x00E152A8  (0x52,A4) = D0                           state = max or min
+ * 0x00E152AC  D0 = word (0x54,A4) & 0xB; cmpi.w #8 / bne 0x00E152C8
+ * 0x00E152B8  PROC1_$REORDER_READY(pcb) (`pea (A4)'; addq #4)
+ * 0x00E152C2  PROC1_$DISPATCH()
+ * 0x00E152C8  andi #-0x701,SR                          forced IPL 0
+ * 0x00E152CC  bra 0x00E152D6
+ * 0x00E152CE  *min = (0x56,A4); *max = (0x58,A4)
+ * 0x00E152D6  movem.l / unlk / rts
+ *
+ * proc1_$clamp_priority (0x00E15222, `bsr.b', Pascal function):
+ *   D0 = value; if value <= 1 -> 1; else if value >= 0x10 -> 0x10; else
+ *   value (both compares unsigned: `bls' / `bcs').
+ *
+ * The BOUND|SUSPENDED|WAITING test (0xB) against BOUND alone decides
+ * whether the PCB is on the ready list and so worth re-ordering.  Note the
+ * clamp of state is taken only against max first, then min, using the
+ * freshly stored values.
  *
  * Parameters:
- *   pid - Process ID
- *   mode - Operation mode:
- *          mode < 0: Set priorities from min_priority and max_priority
- *          mode >= 0: Get current priorities into min_priority and max_priority
- *   min_priority - Pointer to minimum priority value
- *   max_priority - Pointer to maximum priority value
- *
- * Priority values are clamped to range [1, 16].
+ *   pid          - the process (1..0x40; anything else crashes the system)
+ *   set          - Domain boolean: true = store min/max, false = read them
+ *   min_priority - the minimum state (inh_count)
+ *   max_priority - the maximum state (sw_bsr)
  */
 
 #include "proc1/proc1_internal.h"
 #include "misc/misc.h"
 
-/*
- * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
- *
- * These are constant longwords in this module's own code region, not
- * shared globals; the cell address is part of each name.  Names come from
- * the SR10.4 status-code database.
- */
-/*
- * 0x00E1525E: pea (0x80,PC) -> 0x00E152E0, jsr CRASH_SYSTEM at 0x00E15262.
- * Shared with PROC1_$GET_ANY_CPUT and PROC1_$GET_ANY_CPU_USAGE.
- */
-static const status_$t proc1_$illegal_process_id_00e152e0 = 0x000A0001;
-
-/*
- * clamp_priority - Clamp priority value to valid range [1, 16]
- * This is an inline version of FUN_00e15222
- */
-static uint16_t clamp_priority(uint16_t value)
+/* 0x00E15222: clamp to 1..0x10 with unsigned compares */
+static uint16_t proc1_$clamp_priority(uint16_t value)
 {
-    if (value < 2) {
-        return 1;
+    uint16_t d1;
+
+    /* 0x00E1522A / 0x00E1522C: moveq #1 / cmp.w / bls -> 1 */
+    d1 = 1;
+    if (value <= d1) {
+        return d1;
     }
-    if (value > 15) {
-        return 16;
+    /* 0x00E15230 / 0x00E15232: moveq #0x10 / cmp.w / bcs -> value */
+    d1 = 0x10;
+    if (value < d1) {
+        return value;
     }
-    return value;
+    /* 0x00E15236 */
+    return d1;
 }
 
-void PROC1_$SET_PRIORITY(uint16_t pid, int16_t mode, uint16_t *min_priority, uint16_t *max_priority)
+void PROC1_$SET_PRIORITY(uint16_t pid, int8_t set, uint16_t *min_priority,
+                         uint16_t *max_priority)
 {
-    proc1_t *pcb;
-    uint16_t new_min, new_max;
-    uint16_t saved_sr;
+    proc1_t *pcb;               /* A4 */
+    uint16_t d0;
+    uint16_t flags;
 
-    /* Validate PID */
+    /* 0x00E15254 / 0x00E15258 */
     if (pid == 0 || pid > 0x40) {
-        CRASH_SYSTEM(&proc1_$illegal_process_id_00e152e0);
-        return;
+        /* 0x00E1525E: no return after the crash call in the image */
+        CRASH_SYSTEM(&Illegal_process_id_err);
     }
 
-    /* Get PCB */
+    /* 0x00E1526A..0x00E15274 */
     pcb = PCBS[pid];
 
-    if (mode < 0) {
-        /* Set mode: apply new priority values */
-        new_min = clamp_priority(*min_priority);
-        pcb->inh_count = new_min;  /* Min priority stored at offset 0x56 */
+    /* 0x00E15278: tst.b D3b / bpl */
+    if (set < 0) {
+        /* 0x00E1527C..0x00E15284 */
+        pcb->inh_count = proc1_$clamp_priority(*min_priority);
 
-        new_max = clamp_priority(*max_priority);
-        pcb->sw_bsr = new_max;     /* Max priority stored at offset 0x58 */
+        /* 0x00E15288..0x00E15290 */
+        d0 = proc1_$clamp_priority(*max_priority);
+        pcb->sw_bsr = d0;
 
-        DISABLE_INTERRUPTS(saved_sr);
+        /* 0x00E15294: ori #0x700,SR */
+        SET_IPL7();
 
-        /*
-         * Adjust current state if outside new priority range:
-         * - If current state > max, set to max
-         * - If current state < min, set to min
-         */
-        if (new_max < pcb->state) {
-            pcb->state = new_max;
-        } else if (pcb->state < new_min) {
-            pcb->state = new_min;
+        /* 0x00E15298: cmp.w (0x52,A4),D0w / blt (signed) */
+        if ((int16_t)d0 < (int16_t)pcb->state) {
+            /* 0x00E152A8 */
+            pcb->state = d0;
+        } else {
+            /* 0x00E1529E..0x00E152A6 */
+            d0 = pcb->inh_count;
+            if ((int16_t)d0 > (int16_t)pcb->state) {
+                /* 0x00E152A8 */
+                pcb->state = d0;
+            }
         }
 
-        /*
-         * If process is runnable (bound but not waiting or suspended),
-         * reorder in ready list and dispatch
-         * Check: (flags & 0x0b) == 0x08 means bound but not waiting/suspended
-         */
-        if ((pcb->pri_max & 0x0b) == PROC1_FLAG_BOUND) {
-            PROC1_$REORDER_READY();
+        /* 0x00E152AC..0x00E152B6 */
+        flags = (uint16_t)(((uint16_t)pcb->pri_min << 8) | pcb->pri_max);
+        if ((flags & 0x000B) == 0x0008) {
+            /* 0x00E152B8 / 0x00E152C2 */
+            PROC1_$REORDER_READY(pcb);
             PROC1_$DISPATCH();
         }
 
-        ENABLE_INTERRUPTS(saved_sr);
+        /* 0x00E152C8: andi #-0x701,SR */
+        SET_IPL0();
     } else {
-        /* Get mode: return current priority values */
+        /* 0x00E152CE / 0x00E152D2 */
         *min_priority = pcb->inh_count;
         *max_priority = pcb->sw_bsr;
     }

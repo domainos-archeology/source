@@ -58,7 +58,8 @@ uint16_t MST_$GLOBAL_B_SIZE = 0x0140;     /* 320 segments */
 
 /*
  * Mock MMU M68020 flag.  On ARCH_HOST, mmu/mmu.h maps the M68020 macro to
- * this variable (0xE23D2A on the real machine).
+ * this variable (the word at 0xE23D2E on the real machine; AS_$INIT tests
+ * the sign of its HIGH byte, `tst.b (0xe23d2e).l').
  */
 uint16_t mmu_m68020 = 0;
 
@@ -237,11 +238,22 @@ TEST(init_m68010_no_change) {
     ASSERT_EQ(0, memcmp(&before, &AS_$INFO, sizeof(AS_$INFO)));
 }
 
-/* Test: On an M68020 system (bit 7 of flag byte set) the layout is adjusted */
+/* Test: a set bit in the LOW byte only (0xE23D2F) is not the flag byte */
+TEST(init_low_byte_only_no_change) {
+    as_$info_t before = AS_$INFO;
+
+    mmu_m68020 = 0x0080;
+    AS_$INIT();
+    mmu_m68020 = 0;
+
+    ASSERT_EQ(0, memcmp(&before, &AS_$INFO, sizeof(AS_$INFO)));
+}
+
+/* Test: On an M68020 system (bit 7 of the HIGH byte set) the layout is adjusted */
 TEST(init_m68020_adjusts_layout) {
     as_$info_t before = AS_$INFO;
 
-    mmu_m68020 = 0x80;
+    mmu_m68020 = 0xFF00;
     AS_$INIT();
     mmu_m68020 = 0;
 
@@ -291,6 +303,7 @@ int main(void) {
     RUN_TEST(get_addr_negative_region);
     /* AS_$INIT mutates the global AS_$INFO; run these last */
     RUN_TEST(init_m68010_no_change);
+    RUN_TEST(init_low_byte_only_no_change);
     RUN_TEST(init_m68020_adjusts_layout);
 
     printf("\nResults: %d passed, %d failed\n", tests_passed, tests_failed);

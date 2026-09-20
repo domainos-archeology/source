@@ -97,7 +97,8 @@ void *OS_STACK_BASE[PROC1_MAX_PROCESSES] = { NULL };
 
 /*
  * Process statistics table - 16 bytes per process (4 uint32_t values)
- * Original address: 0xE25D10
+ * Original address: 0xE25D10 (A5 + 0x828); PROC1_$BIND clears entry pid at
+ * +pid*16 (0x00E14DCA..0x00E14DD6).  Map: PROC1_$STATS 0xE25D20 = entry 1.
  */
 uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4] = { 0 };
 
@@ -108,29 +109,15 @@ uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4] = { 0 };
  */
 
 /*
- * Timer callback entry table (28 bytes per process)
- * Original address: 0xE254E8
- *
- * This is a large data block containing:
- * - Load average values at offset 0x00-0x0B
- * - Timer callback entries for each process
- *
- * Note: ts_timer_entry_t is defined in proc1.h
+ * Timeslice timer elements: A5 + 0x14 + pid*0x1C (0xE254FC for pid 0).
+ * Only entries 1..64 are ever used; entry 0 overlaps PROC1_$LOADAV_ELEM in
+ * the image (see the module map in proc1/proc1.h).  Zero in the image.
  */
-ts_timer_entry_t TS_TIMER_TABLE[PROC1_MAX_PROCESSES];
-
-/*
- * Timer queue elements - 12 bytes per process
- * Original address: 0xE2A494
- */
-char TS_QUEUE_TABLE[PROC1_MAX_PROCESSES * 12];
+proc1_ts_slot_t PROC1_$TS_ELEM[PROC1_MAX_PROCESSES];
 
 /*
  * Timeslice values indexed by state
  * Original address: 0xE205D2
- * Array of int16_t values for each priority/state level
- *
- * Note: PROC1_MAX_STATES is defined in proc1.h
  */
 /* Image bytes at 0xE205D2 (gsk read): ffff x7, 7d00 x4, 30d4 x5, ffff x2.
  * Lives in the PROC1_ASM code segment (map: E205D2 PROC1_$TSVV, before
@@ -148,19 +135,18 @@ _Static_assert(sizeof(PROC1_$TSVV) == 0xE205F6 - 0xE205D2, "PROC1_$TSVV extent")
  * ============================================================================
  * Load Average Data
  * ============================================================================
- *
- * Note: Load average data shares the same memory block as timer data
- * starting at 0xE254E8. These are separate variables for clarity.
  */
-int32_t LOADAV_1MIN = 0;                /* 1-minute load average */
-int32_t LOADAV_5MIN = 0;                /* 5-minute load average */
-int32_t LOADAV_15MIN = 0;               /* 15-minute load average */
 
 /*
- * Load average callback entry
- * Uses part of the TS_TIMER_TABLE structure
+ * The three load averages at A5 + 0 (0xE254E8), 8.24 fixed point, cleared by
+ * PROC1_$INIT_LOADAV (0x00E14CA0) and rewritten by PROC1_$LOADAV_CALLBACK.
  */
-/* LOADAV_BASE is a pointer into the timer table, not a separate allocation */
+int32_t PROC1_$LOADAV[PROC1_LOADAV_COUNT] = { 0, 0, 0 };
+
+/*
+ * The load-average timer element at A5 + 0x10 (0xE254F8).
+ */
+time_queue_elem_t PROC1_$LOADAV_ELEM;
 
 /*
  * ============================================================================
@@ -181,10 +167,10 @@ ec_$eventcount_t PROC1_$SUSPEND_EC = { 0 };
  */
 
 /*
- * Virtual timer callback data for TIME_$WRT_VT_TIMER
- * Original address: 0xe14a06
+ * PROC1_$VT_TIMER_DATA - the timer-index word at 0x00E14A06 (bytes 00 02);
+ * see proc1/proc1_internal.h.
  */
-char PROC1_$VT_TIMER_DATA[8] = { 0 };
+const uint16_t PROC1_$VT_TIMER_DATA = 2;
 
 /*
  * ============================================================================
@@ -207,3 +193,9 @@ int8_t DAT_00e20606 = 0;
  * Original address: 0xE20DE8
  */
 status_$t Bad_atomic_operation_err = 0x000A0007;
+
+/*
+ * Illegal_process_id_err - the shared status cell at 0x00E152E0
+ * (00 0a 00 01); see proc1/proc1_internal.h for its five `pea (d,PC)' users.
+ */
+const status_$t Illegal_process_id_err = status_$illegal_process_id;

@@ -1,71 +1,61 @@
 /*
- * AS_$GET_INFO - Get address space information
+ * AS_$GET_INFO - Copy the address-space info record to the caller
+ * Original address: 0x00e583a0 (80 bytes)
  *
- * Reverse engineered from Domain/OS at address 0x00E583A0
+ * Re-emitted from the disassembly.  Reached through the SVC table
+ * (0x00E7B76A).  AS_$INFO is 0xE2B914 and AS_$INFO_SIZE the word at
+ * 0xE2B970.
  *
- * Copies the AS info structure to the caller's buffer.
- * The amount copied is bounded by both the requested size
- * and the actual info size (AS_$INFO_SIZE).
+ * Frame: (0x8,A6) buffer, (0xC,A6) req_size (pointer to a word),
+ * (0x10,A6) actual_size (pointer to a word).
+ *
+ * 0x00E583A0  link.w A6,-0xc / pea (A2)
+ * 0x00E583A6  A1 = req_size; A0 = actual_size
+ * 0x00E583AE  tst.w (A1) / bgt 0x00E583B6
+ * 0x00E583B2  *actual_size = 0; bra exit                 req <= 0: nothing
+ * 0x00E583B6  D0 = *req_size; cmp.w AS_$INFO_SIZE,D0 / bgt
+ * 0x00E583C0  *actual_size = D0; bra 0x00E583CA          req <= size: req
+ * 0x00E583C4  *actual_size = AS_$INFO_SIZE               else the whole record
+ * 0x00E583CA  A1 = &AS_$INFO; A2 = buffer
+ * 0x00E583D4  D0 = *actual_size - 1; bmi exit
+ * 0x00E583DA  D1 = 1; copy byte (-0x1,A1,D1) -> (-0x1,A2,D1); D1++; dbf D0
+ *             (Pascal 1-based index, hence the -1 displacements)
+ * 0x00E583E8  movea.l (-0x10,A6),A2 / unlk / rts
+ *
+ * All three compares are signed (`bgt', `bmi').
  */
 
 #include "as/as_internal.h"
 
 void AS_$GET_INFO(void *buffer, int16_t *req_size, int16_t *actual_size)
 {
-    int16_t copy_size;
-    int16_t i;
-    uint8_t *src;
-    uint8_t *dst;
+    const uint8_t *src = (const uint8_t *)&AS_$INFO;   /* A1 */
+    uint8_t *dst = (uint8_t *)buffer;                   /* A2 */
+    int16_t d0;
+    uint16_t d1;
 
-    /*
-     * Check for invalid request size
-     * Assembly: tst.w (A1); bgt.b valid; clr.w (A0); bra.b done
-     */
-    if (*req_size < 1) {
+    /* 0x00E583AE: tst.w (A1) / bgt */
+    if (*req_size <= 0) {
+        /* 0x00E583B2 */
         *actual_size = 0;
         return;
     }
 
-    /*
-     * Determine actual copy size - minimum of requested and available
-     * Assembly:
-     *   move.w (A1),D0w
-     *   cmp.w (0x00e2b970).l,D0w  ; compare with AS_$INFO_SIZE
-     *   bgt.b use_info_size
-     *   move.w D0w,(A0)           ; use requested size
-     *   bra.b do_copy
-     * use_info_size:
-     *   move.w (0x00e2b970).l,(A0) ; use AS_$INFO_SIZE
-     */
+    /* 0x00E583B6..0x00E583C4 */
     if (*req_size <= AS_$INFO_SIZE) {
-        copy_size = *req_size;
+        *actual_size = *req_size;
     } else {
-        copy_size = AS_$INFO_SIZE;
+        *actual_size = AS_$INFO_SIZE;
     }
-    *actual_size = copy_size;
 
-    /*
-     * Copy bytes from AS_$INFO to caller's buffer
-     * Uses 1-based indexing in original assembly:
-     * Assembly:
-     *   movea.l #0xe2b914,A1      ; source = AS_$INFO
-     *   movea.l (0x8,A6),A2       ; dest = buffer
-     *   move.w (A0),D0w           ; count = actual_size
-     *   subq.w #0x1,D0w           ; adjust for dbf
-     *   bmi.b done
-     *   moveq #0x1,D1             ; index starts at 1
-     * loop:
-     *   move.b (-0x1,A1,D1w*0x1),(-0x1,A2,D1w*0x1)
-     *   addq.w #0x1,D1w
-     *   dbf D0w,loop
-     *
-     * Note: The assembly uses 1-based indexing with -1 offset,
-     * which is equivalent to 0-based indexing.
-     */
-    src = (uint8_t *)&AS_$INFO;
-    dst = (uint8_t *)buffer;
-
-    for (i = 0; i < copy_size; i++) {
-        dst[i] = src[i];
+    /* 0x00E583D4..0x00E583E4: subq.w #1 / bmi / moveq #1 / dbf */
+    d0 = (int16_t)(*actual_size - 1);
+    if (d0 < 0) {
+        return;
+    }
+    d1 = 1;
+    for (; d0 >= 0; d0--) {
+        dst[d1 - 1] = src[d1 - 1];
+        d1++;
     }
 }

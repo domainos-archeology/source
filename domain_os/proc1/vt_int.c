@@ -1,45 +1,45 @@
 /*
- * PROC1_$VT_INT - Virtual timer interrupt handler
- * Original address: 0x00e1491e
+ * PROC1_$VT_INT - Virtual-timer expiry: fold the timer into CPU time
+ * Original address: 0x00e1491e (62 bytes)
  *
- * Called on virtual timer interrupts. Accumulates CPU time for the
- * current process and returns the accumulated CPU time.
+ * Frame: (0x8,A6) cpu_time_out (a 6-byte clock).  Called from
+ * TIME_$VT_INT (0x00E163F4) at interrupt level.
+ * Locals: (-0x8,A6) a 6-byte clock {0, vtimer}.
+ *
+ * 0x00E1491E  link.w A6,-0xc / pea (A2)
+ * 0x00E14924  A2 = PROC1_$CURRENT_PCB (0xE1EAC8)
+ * 0x00E1492A  clr.l (-0x8,A6); (-0x4,A6) = (0x48,A2)  delta = {0, vtimer}
+ * 0x00E14934  ADD48(&pcb->cpu_total, &delta)          (no cleanup)
+ * 0x00E14942  (0x48,A2) = 0                           vtimer = 0
+ * 0x00E14946  A0 = cpu_time_out; (A0) = (0x4c,A2); (0x4,A0) = (0x50,A2)
+ * 0x00E14954  movea.l (-0x10,A6),A2 / unlk / rts
  *
  * Parameters:
- *   cpu_time_out - Pointer to receive CPU time (6 bytes: 4-byte high + 2-byte low)
+ *   cpu_time_out - receives the process's CPU clock after the fold
  */
 
 #include "proc1/proc1_internal.h"
 #include "cal/cal.h"
 
-/*
- * CPU time structure (6 bytes total)
- * This matches the Apollo's 48-bit time format.
- */
-typedef struct {
-    uint32_t high;   /* High 32 bits */
-    uint16_t low;    /* Low 16 bits */
-} cpu_time_t;
-
-void PROC1_$VT_INT(void *cpu_time_arg)
+void PROC1_$VT_INT(clock_t *cpu_time_out)
 {
-    cpu_time_t *cpu_time_out = (cpu_time_t *)cpu_time_arg;
-    proc1_t *pcb;
-    cpu_time_t delta;
+    proc1_t *pcb;               /* A2 */
+    clock_t delta;              /* (-0x8,A6) */
 
+    /* 0x00E14924 */
     pcb = PROC1_$CURRENT_PCB;
 
-    /* Build delta from vtimer value */
+    /* 0x00E1492A / 0x00E1492E */
     delta.high = 0;
-    delta.low = pcb->vtimer;
+    delta.low = (uint16_t)pcb->vtimer;
 
-    /* Add delta to accumulated CPU time (48-bit addition) */
-    ADD48((clock_t *)&pcb->cpu_total, (clock_t *)&delta);
+    /* 0x00E14934..0x00E1493C */
+    ADD48((clock_t *)&pcb->cpu_total, &delta);
 
-    /* Reset virtual timer */
+    /* 0x00E14942 */
     pcb->vtimer = 0;
 
-    /* Return accumulated CPU time */
+    /* 0x00E14946..0x00E1494E */
     cpu_time_out->high = pcb->cpu_total;
     cpu_time_out->low = pcb->cpu_usage;
 }

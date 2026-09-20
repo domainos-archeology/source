@@ -23,6 +23,7 @@
 
 #include "base/base.h"
 #include "ec/ec.h"
+#include "time/time.h"
 #include "proc1/proc1_config.h"
 
 /*
@@ -144,32 +145,61 @@ _Static_assert(sizeof(proc1_t) == 0x68, "proc1_t size");
 #define status_$process_not_bound           0x000A0005
 #define status_$process_not_suspended       0x000A0003
 #define status_$process_already_suspended   0x000A0004
+#define status_$no_stack_space_is_available 0x000A0009
+#define status_$process_not_suspendable     0x000A000A
 
 /*
- * Timer callback entry structure (28 bytes per process)
- * Original address: 0xE254E8
+ * ============================================================================
+ * The PROC1_ module data block: A5 = 0x00E254E8
+ * ============================================================================
+ *
+ * SAU2 map: `D E254E8 PROC1_ size = CC4', so the block runs 0x00E254E8 ..
+ * 0x00E261AC.  Every Pascal PROC1_ routine loads A5 with `lea (0xe254e8).l,A5';
+ * PROC1_$INIT (boot-time segment) reaches it with `movea.l #0xe254e8,A0'.
+ * The cells the C tree models, with the instruction that fixes each one:
+ *
+ *   A5 off  absolute   object
+ *   0x000   0xE254E8   PROC1_$LOADAV[3]        PROC1_$INIT_LOADAV clr.l (A5)/(4,A5)/(8,A5)
+ *   0x010   0xE254F8   PROC1_$LOADAV_ELEM      PROC1_$INIT_LOADAV `pea (0x10,A5)' to
+ *                                              TIME_$Q_ENTER_ELEM; fields at 0x14..0x28
+ *   0x014   0xE254FC   PROC1_$TS_ELEM[]        time_queue_elem_t per pid, 0x1C stride:
+ *                                              PROC1_$INIT_TS_TIMER `pea (0x14,A2)' with
+ *                                              A2 = A5 + pid*0x1C; PROC1_$SET_TS
+ *                                              `pea (0x14,A5,D2w)' with D2 = pid*0x1C
+ *   0x730   0xE25C18   OS_STACK_BASE[]         (0x730,A1) with A1 = A5 + pid*4 (map name)
+ *   0x828   0xE25D10   PROC_STATS_BASE[]       PROC1_$BIND clr.l (0x828,A3).. with
+ *                                              A3 = A5 + pid*16 (map: PROC1_$STATS 0xE25D20
+ *                                              is entry 1)
+ *   0xC38   0xE26120   STACK_FREE_LIST         PROC1_$ALLOC_STACK / PROC1_$FREE_STACK
+ *   0xC3C   0xE26124   STACK_HIGH_WATER
+ *   0xC40   0xE26128   STACK_LOW_WATER
+ *   0xC42   0xE2612A   PROC1_$TYPE[]           (0xC42,A0) with A0 = A5 + pid*2 (map:
+ *                                              PROC1_$TYPE 0xE2612C is entry 1); the
+ *                                              last entry (pid 64) ends the block at 0xCC4
+ *
+ * The timer element for pid p therefore sits at A5 + 0x14 + p*0x1C: slot 0
+ * (A5+0x14..0x30) overlaps PROC1_$LOADAV_ELEM (A5+0x10..0x2A) in the image.
+ * Nothing ever uses slot 0 - PIDs start at 1 - so the two are separate C
+ * objects here; the overlap is recorded, not reproduced.
  */
-typedef struct ts_timer_entry_t {
-    uint32_t field_00;
-    uint32_t field_04;
-    uint32_t field_08;
-    uint32_t field_0c;
-    uint32_t field_10;
-    void     *callback_info;    /* 0x14 */
-    void     (*callback)(void*);/* 0x18 */
-    uint32_t callback_param;    /* 0x1C */
-    uint32_t cpu_time_high;     /* 0x20 */
-    uint16_t cpu_time_low;      /* 0x24 */
-    uint16_t field_26;          /* 0x26 */
-} ts_timer_entry_t;
 
-/* Layout recovered from the disassembly -- see the field comments above. */
+/*
+ * proc1_ts_slot_t - one timeslice timer element with its stride padding.
+ *
+ * The element is an ordinary time_queue_elem_t (0x1A bytes); the table
+ * stride is 0x1C (PROC1_$INIT_TS_TIMER 0x00E14B24..0x00E14B2E computes
+ * pid*4*8 - pid*4).
+ */
+typedef struct proc1_ts_slot_t {
+    time_queue_elem_t elem;     /* 0x00: the queue element handed to TIME */
+    uint16_t          pad_1a;   /* 0x1A: stride padding */
+} proc1_ts_slot_t;
+
+_Static_assert(__builtin_offsetof(proc1_ts_slot_t, elem) == 0x00, "proc1_ts_slot_t.elem");
+/* time_queue_elem_t carries pointers, so the stride only holds on the target */
 #if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(ts_timer_entry_t, callback_info) == 0x14, "ts_timer_entry_t.callback_info");
-_Static_assert(__builtin_offsetof(ts_timer_entry_t, callback_param) == 0x1C, "ts_timer_entry_t.callback_param");
-_Static_assert(__builtin_offsetof(ts_timer_entry_t, cpu_time_high) == 0x20, "ts_timer_entry_t.cpu_time_high");
-_Static_assert(__builtin_offsetof(ts_timer_entry_t, cpu_time_low) == 0x24, "ts_timer_entry_t.cpu_time_low");
-_Static_assert(__builtin_offsetof(ts_timer_entry_t, field_26) == 0x26, "ts_timer_entry_t.field_26");
+_Static_assert(__builtin_offsetof(proc1_ts_slot_t, pad_1a) == 0x1A, "proc1_ts_slot_t.pad_1a");
+_Static_assert(sizeof(proc1_ts_slot_t) == 0x1C, "proc1_ts_slot_t: 0x1C stride");
 #endif
 
 /*
@@ -214,15 +244,17 @@ extern void *OS_STACK_BASE[PROC1_MAX_PROCESSES]; /* 0xE25C18: OS stacks */
 
 /*
  * Process statistics - 16 bytes per process (4 uint32_t values)
- * Original address: 0xE25D10
+ * Original address: 0xE25D10 (A5 + 0x828); entry pid at +pid*16, so the
+ * map's PROC1_$STATS (0xE25D20) is entry 1.
  */
 extern uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
 
 /*
- * Timer data
+ * Timeslice timer elements, one per pid (A5 + 0x14 + pid*0x1C, 0xE254FC).
+ * See the module map above; slot 0 is never used.
  */
-extern ts_timer_entry_t TS_TIMER_TABLE[PROC1_MAX_PROCESSES]; /* 0xE254E8 */
-extern char TS_QUEUE_TABLE[PROC1_MAX_PROCESSES * 12];        /* 0xE2A494 */
+extern proc1_ts_slot_t PROC1_$TS_ELEM[PROC1_MAX_PROCESSES];
+
 /* 0xE205D2: SAU2 map PROC1_$TSVV, one timeslice word per state, 18 entries
  * (0xE205D2..0xE205F6 = PROC1_$SUSPEND_EC); ADVANCE_INT bounds the index with
  * `cmp.l #0x11' at 0xE20780. */
@@ -230,11 +262,17 @@ extern char TS_QUEUE_TABLE[PROC1_MAX_PROCESSES * 12];        /* 0xE2A494 */
 extern int16_t PROC1_$TSVV[PROC1_TSVV_COUNT];
 
 /*
- * Load average data
+ * Load average data: three longwords at A5 + 0 (0xE254E8), copied out as a
+ * block by PROC1_$GET_LOADAV (three `move.l (A0)+,(A1)+' at 0x00E14BCC).
  */
-extern int32_t LOADAV_1MIN;             /* 1-minute load average */
-extern int32_t LOADAV_5MIN;             /* 5-minute load average */
-extern int32_t LOADAV_15MIN;            /* 15-minute load average */
+#define PROC1_LOADAV_COUNT 3
+extern int32_t PROC1_$LOADAV[PROC1_LOADAV_COUNT];
+
+/*
+ * The load-average timer element at A5 + 0x10 (0xE254F8), entered on
+ * TIME_$RTEQ by PROC1_$INIT_LOADAV.
+ */
+extern time_queue_elem_t PROC1_$LOADAV_ELEM;
 
 /*
  * Event count for process suspension
@@ -273,7 +311,14 @@ uint16_t PROC1_$CREATE_P(void *funcptr, uint32_t type, status_$t *status_ret);
  * PROC1_$BIND - Bind a process to a PCB
  * Original address: 0x00e14d1c
  */
-uint16_t PROC1_$BIND(void *proc_startup, void *stack1, void *stack2,
+/*
+ * Frame (0x00E14D1C): 0x08 entry, 0x0C initial_sp, 0x10 stack_base,
+ * 0x14 ws_param (word), 0x16 status.  INIT_STACK is handed &entry and
+ * &initial_sp (`pea (0xc,A6)' at 0x00E14DF4); stack_base is what goes into
+ * OS_STACK_BASE[pid] (0x00E14D84).  PROC1_$CREATE_P passes the same value
+ * for both stack arguments.
+ */
+uint16_t PROC1_$BIND(void *entry, void *initial_sp, void *stack_base,
                      uint16_t ws_param, status_$t *status_p);
 
 /*
@@ -377,8 +422,12 @@ void PROC1_$REMOVE_READY(proc1_t *pcb);
 /*
  * PROC1_$REORDER_READY - Reorder process in ready list
  * Original address: 0x00e207d4
+ *
+ * A four-byte gate (`movea.l (0x4,SP),A1') that falls into
+ * proc1_$reorder_if_needed; every caller pushes the PCB (`pea (A0)' at
+ * 0x00E2F9B4, `pea (A4)' at 0x00E152B8, `pea (A3)' at 0x00E14AC0).
  */
-void PROC1_$REORDER_READY(void);
+void PROC1_$REORDER_READY(proc1_t *pcb);
 
 /*
  * proc1_$remove_from_ready_list - Internal remove helper
@@ -437,7 +486,8 @@ void PROC1_$CLR_LOCK(uint16_t lock_id);
  * PROC1_$TST_LOCK - Test if a lock is held
  * Original address: 0x00e148ca
  */
-int16_t PROC1_$TST_LOCK(uint16_t lock_id);
+/* 0x00E148DE: `sne D1b / move.b D1b,D0b' - a Domain boolean in D0.b */
+int8_t PROC1_$TST_LOCK(uint16_t lock_id);
 
 /*
  * PROC1_$GET_LOCKS - Get locks held by current process
@@ -496,6 +546,12 @@ int8_t PROC1_$INHIBIT_CHECK(proc1_t *pcb);
  * PROC1_$EC_WAITN - Wait on event counts (internal)
  * Original address: 0x00e2065a
  */
+/*
+ * In the image (0x00E2065A) this is register-convention assembly: A1 = pcb,
+ * A4 = &ecs[0], A3 = &vals[0], D0.w = count, result in D0.w (1-based index
+ * of the lowest satisfied eventcount, 0 when none / count when count <= 0).
+ * ec/wait.c and ec/waitn.c call it with the C signature below.
+ */
 uint16_t PROC1_$EC_WAITN(proc1_t *pcb, ec_$eventcount_t **ecs,
                           int32_t *wait_vals, int16_t num_ecs);
 
@@ -512,7 +568,7 @@ uint16_t PROC1_$EC_WAITN(proc1_t *pcb, ec_$eventcount_t **ecs,
  * Parameters:
  *   time_ret - Pointer to receive 48-bit CPU time (shifted left 1)
  */
-void PROC1_$GET_CPUT(void *time_ret);
+void PROC1_$GET_CPUT(clock_t *clock);
 
 /*
  * PROC1_$GET_CPUT8 - Get CPU time for current process (unshifted)
@@ -523,7 +579,7 @@ void PROC1_$GET_CPUT(void *time_ret);
  * Parameters:
  *   time_ret - Pointer to receive 48-bit CPU time value
  */
-void PROC1_$GET_CPUT8(void *time_ret);
+void PROC1_$GET_CPUT8(clock_t *time_ret);
 
 /*
  * PROC1_$GET_CPU_USAGE - Get CPU usage for current process
@@ -534,7 +590,17 @@ void PROC1_$GET_CPUT8(void *time_ret);
  *   stat1_ret - Pointer to receive field_60 from PCB
  *   stat2_ret - Pointer to receive field_64 from PCB
  */
-void PROC1_$GET_CPU_USAGE(void *time_ret, uint32_t *stat1_ret, uint32_t *stat2_ret);
+/* 0x00E208B0: argument 1 is the 6-byte clock; 2 and 3 receive PCB+0x60/+0x64 */
+void PROC1_$GET_CPU_USAGE(clock_t *clock, uint32_t *stat1_ret, uint32_t *stat2_ret);
+
+/*
+ * PROC1_$GET_ANY_CPUT - Get the raw accumulated CPU time of any process
+ * Original address: 0x00e153f8
+ *
+ * Frame: 0x08 cpu_time_ret, 0x0C pid (word).  Copies PCB cpu_total:cpu_usage
+ * as they stand (no doubling, no timer correction); crashes on a bad pid.
+ */
+void PROC1_$GET_ANY_CPUT(clock_t *cpu_time_ret, uint16_t pid);
 
 /*
  * PROC1_$GET_ANY_CPU_USAGE - Get CPU usage for any process
@@ -575,7 +641,13 @@ void PROC1_$INIT_LOADAV(void);
  * Sets min and max priority for process if mode < 0.
  * Original address: 0x00e1523c
  */
-void PROC1_$SET_PRIORITY(uint16_t pid, int16_t mode, uint16_t *min_priority, uint16_t *max_priority);
+/*
+ * Frame (0x00E1523C): 0x08 pid (word), 0x0A set (a Domain boolean BYTE:
+ * `move.b (0xa,A6),D3b'; callers push `clr.w' for a query), 0x0C min,
+ * 0x10 max.  set < 0 stores the clamped min/max into the PCB and
+ * re-orders it; otherwise min/max receive the PCB's current pair.
+ */
+void PROC1_$SET_PRIORITY(uint16_t pid, int8_t set, uint16_t *min_priority, uint16_t *max_priority);
 
 /*
  * PROC1_$SET_TYPE - Set process type
@@ -586,8 +658,11 @@ void PROC1_$SET_TYPE(uint16_t pid, uint16_t type);
 /*
  * PROC1_$GET_TYPE - Get process type
  * Original address: 0x00e15324
+ *
+ * A Pascal procedure with a var result: frame 0x08 pid (word), 0x0A type_ret.
+ * Crashes the system on pid 0 or pid > 64.
  */
-uint16_t PROC1_$GET_TYPE(uint16_t pid);
+void PROC1_$GET_TYPE(uint16_t pid, uint16_t *type_ret);
 
 /*
  * ============================================================================
@@ -599,13 +674,15 @@ uint16_t PROC1_$GET_TYPE(uint16_t pid);
  * PROC1_$SET_VT - Set virtual timer
  * Original address: 0x00e1495c
  */
-void PROC1_$SET_VT(uint16_t pid, uint32_t *time_value, status_$t *status_ret);
+/* 0x00E149A0: `tst.l (A0)' then `move.w (0x4,A0)' - a 6-byte clock */
+void PROC1_$SET_VT(uint16_t pid, clock_t *vt, status_$t *status_ret);
 
 /*
  * PROC1_$VT_INT - Virtual timer interrupt handler
  * Original address: 0x00e1491e
  */
-void PROC1_$VT_INT(void *cpu_time_out);
+/* 0x00E1494A: writes the PCB's 6-byte CPU clock through argument 1 */
+void PROC1_$VT_INT(clock_t *cpu_time_out);
 
 /*
  * PROC1_$SET_TS - Set timeslice value
@@ -635,14 +712,31 @@ void PROC1_$INIT_TS_TIMER(uint16_t pid);
  * Process info structure returned by PROC1_$GET_INFO
  */
 typedef struct proc1_$info_t {
-    int16_t     state;          /* 0x00: Process state */
+    uint16_t    flags;          /* 0x00: the pri_min:pri_max WORD at PCB+0x54
+                                 *       (`move.w (0x54,A3),(A2)' 0x00E14FA6) */
     uint16_t    usr;            /* 0x02: User status register */
     uint32_t    upc;            /* 0x04: User PC */
     uint32_t    usp;            /* 0x08: User stack pointer */
-    uint16_t    usb;            /* 0x0C: User stack base? */
-    uint16_t    pad_0e;         /* 0x0E: Padding */
-    uint8_t     cpu_total[8];   /* 0x10: CPU time (6 bytes used) */
+    uint32_t    usb;            /* 0x0C: user stack base - a LONGWORD:
+                                 *       PROC1_$GET_INFO_INT `move.l A4,(A3)'
+                                 *       0x00E20F60 */
+    union {
+        uint8_t cpu_total[8];   /* 0x10: byte view (proc2 copies zombie usage here) */
+        struct {
+            clock_t  time;      /* 0x10: PCB cpu_total:cpu_usage, doubled by ADD48 */
+            uint16_t state;     /* 0x16: PCB state word, copied by the 8-byte block move */
+        } cpu;
+    };
 } proc1_$info_t;
+
+_Static_assert(__builtin_offsetof(proc1_$info_t, flags) == 0x00, "proc1_$info_t.flags");
+_Static_assert(__builtin_offsetof(proc1_$info_t, usr) == 0x02, "proc1_$info_t.usr");
+_Static_assert(__builtin_offsetof(proc1_$info_t, upc) == 0x04, "proc1_$info_t.upc");
+_Static_assert(__builtin_offsetof(proc1_$info_t, usp) == 0x08, "proc1_$info_t.usp");
+_Static_assert(__builtin_offsetof(proc1_$info_t, usb) == 0x0C, "proc1_$info_t.usb");
+_Static_assert(__builtin_offsetof(proc1_$info_t, cpu_total) == 0x10, "proc1_$info_t.cpu_total");
+_Static_assert(__builtin_offsetof(proc1_$info_t, cpu.state) == 0x16, "proc1_$info_t.cpu.state");
+_Static_assert(sizeof(proc1_$info_t) == 0x18, "proc1_$info_t size");
 
 /*
  * PROC1_$GET_INFO - Get process information
@@ -670,7 +764,7 @@ void PROC1_$GET_INFO(int16_t *pidp, proc1_$info_t *info_ret, status_$t *status_r
  */
 void PROC1_$GET_INFO_INT(uint16_t pid, void *stack_base, void *stack_top,
                          uint16_t *usr_ret, uint32_t *upc_ret,
-                         uint16_t *usb_ret, uint32_t *usp_ret);
+                         uint32_t *usb_ret, uint32_t *usp_ret);
 
 /*
  * Process list entry structure (4 bytes)

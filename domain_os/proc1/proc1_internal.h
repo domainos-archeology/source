@@ -79,6 +79,28 @@ void INIT_STACK(proc1_t *pcb, void **entry_ptr, void **sp_ptr);
  */
 
 /*
+ * proc1_$insert_scan - the LIFO ready-list walk entered at 0x00E20854
+ *
+ * A0 = pos is the entry the walk starts at: PROC1_$READY_PCB from
+ * proc1_$insert_into_ready_list (0x00E2084C), or the moved PCB's former
+ * next from proc1_$reorder_if_needed (`bra.b 0x00E20854' at 0x00E2081E).
+ * Portable C only; on m68k both entries are labels in
+ * proc1/sau2/ready_list.s.
+ */
+#if !defined(ARCH_M68K)
+void proc1_$insert_scan(proc1_t *pcb, proc1_t *pos);
+#endif
+
+/*
+ * proc1_$get_current_cpu_time - the CPU-time helper at 0x00E208D0
+ *
+ * Register-convention assembly in the image (D1 = high, D0.w = low, A1
+ * clobbered), `bsr'd by PROC1_$GET_CPUT, PROC1_$GET_CPUT8 and
+ * PROC1_$GET_CPU_USAGE.  Defined in proc1/get_cput.c.
+ */
+void proc1_$get_current_cpu_time(uint32_t *high_out, uint16_t *low_out);
+
+/*
  * proc1_$set_lock_body - Internal set lock implementation (assembly)
  *
  * Internal entry point for PROC1_$SET_LOCK, called with lock_id in D0.
@@ -115,14 +137,14 @@ void PROC1_$LOADAV_CALLBACK(void);
  */
 
 /*
- * PROC1_$VT_TIMER_DATA - Virtual timer callback data
+ * PROC1_$VT_TIMER_DATA - the timer-index word at 0x00E14A06
  *
- * Data structure used with TIME_$WRT_VT_TIMER for virtual timer
- * management. Exact format TBD.
- *
- * Original address: 0xe14a06
+ * A constant word (image bytes 00 02) in the PROC1_ code segment, reached
+ * by `pea (0x1c,PC)' at PROC1_$SET_VT 0x00E149E8 and handed to
+ * TIME_$WRT_TIMER as its by-reference timer index: channel 2 of the timer
+ * chip at 0xFFAC00 is the virtual (CPU-time) timer.
  */
-extern char PROC1_$VT_TIMER_DATA[];
+extern const uint16_t PROC1_$VT_TIMER_DATA;
 
 /*
  * DAT_00e20606 - the "deferred-interrupt callback in progress" flag.
@@ -151,5 +173,17 @@ extern int8_t DAT_00e20606;
  * `pea (d,PC)` from 0x00E209EE; image bytes at 0x00E20DE8: 00 0a 00 07.
  */
 extern status_$t Bad_atomic_operation_err;
+
+/*
+ * Illegal_process_id_err - the status longword at 0x00E152E0, just ahead of
+ * PROC1_$SET_TYPE.  One cell, reached PC-relative by four routines:
+ *   PROC1_$SET_PRIORITY      `pea (0x80,PC)'   at 0x00E1525E
+ *   PROC1_$SET_TYPE          `pea (-0x26,PC)'  at 0x00E15304
+ *   PROC1_$GET_TYPE          `pea (-0x60,PC)'  at 0x00E1533E
+ *   PROC1_$GET_ANY_CPUT      `pea (-0x12e,PC)' at 0x00E1540C
+ *   PROC1_$GET_ANY_CPU_USAGE `pea (-0x17a,PC)' at 0x00E15458
+ * Image bytes: 00 0a 00 01 (status_$illegal_process_id).
+ */
+extern const status_$t Illegal_process_id_err;
 
 #endif /* PROC1_INTERNAL_H */

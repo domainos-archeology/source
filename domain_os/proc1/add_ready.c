@@ -1,33 +1,27 @@
 /*
- * PROC1_$ADD_READY - Add process to ready list (FIFO)
+ * PROC1_$ADD_READY - Add a process to the ready list (stack-argument gate)
+ * Original address: 0x00e20820 (4 bytes)
  *
- * Public interface to add a process to the ready list.
- * Calls proc1_$add_ready_body which uses FIFO ordering
- * within the same priority level (inserts after equal-priority
- * entries for round-robin fairness).
+ * 0x00E20820  movea.l (0x4,SP),A1            A1 = pcb (argument 1)
+ *             ... falls through into proc1_$add_ready_body (0x00E20824)
  *
- * On m68k, this is a 4-byte wrapper that loads the PCB pointer
- * from the stack into A1, then falls through to add_ready_body:
- *   movea.l (0x4,%sp), %a1
+ * The gate exists so Pascal callers can push the PCB (PROC1_$RESUME
+ * 0x00E147C8, PROC1_$TS_END_CALLBACK 0x00E14ADE, PROC1_$INIT 0x00E2F9C6);
+ * the assembly callers `bsr' the body with A1 already loaded.  There is no
+ * `rts' of its own: the body's rts at 0x00E2087A returns to the caller.
  *
- * Parameters:
- *   pcb - Process to add
- *
- * Original address: 0x00e20820
+ * On m68k the gate is the four bytes ahead of the body in
+ * proc1/sau2/ready_list.s; this C body is the equivalent call for
+ * other targets.
  */
 
 #include "proc1/proc1_internal.h"
 
-/*
- * On m68k (SAU2) the wrapper is the 4-byte assembly stub in
- * sau2/add_ready_body.s that loads A1 from the stack and falls through
- * into proc1_$add_ready_body.  This C version is only used on other
- * architectures.
- */
 #if !defined(ARCH_M68K)
 
 void PROC1_$ADD_READY(proc1_t *pcb)
 {
+    /* 0x00E20820 -> 0x00E20824 */
     proc1_$add_ready_body(pcb);
 }
 

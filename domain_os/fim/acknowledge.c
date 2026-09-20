@@ -1,72 +1,49 @@
 /*
- * FIM_$ACKNOWLEDGE - Advance signal delivery mechanism
+ * FIM_$ACKNOWLEDGE - Acknowledge a quit for the current address space
+ * Original address: 0x00e0a96c (86 bytes)
  *
- * Updates the quit value for the current address space from the quit
- * event counter, clears the quit inhibit flag, and advances the
- * delivery event counter to signal that signal delivery can proceed.
+ * Re-emitted from the disassembly.  The per-AS tables are indexed by
+ * PROC1_$AS_ID (0xE2060A): FIM_$QUIT_EC (0xE22002, 12-byte eventcounts),
+ * FIM_$QUIT_VALUE (0xE222BA, longwords), FIM_$QUIT_INH (0xE2248A, bytes),
+ * FIM_$DELIV_EC (0xE224C4, 12-byte eventcounts).
  *
- * Called during signal acknowledge and signal delivery operations.
+ * 0x00E0A96C  link.w A6,0x0 / move.l D2,-(SP)
+ * 0x00E0A972  D2 = AS_ID * 12                         (lsl #2; D0 = D2*2; add)
+ * 0x00E0A980  D0 = AS_ID * 4
+ * 0x00E0A994  FIM_$QUIT_VALUE[as] = FIM_$QUIT_EC[as].value
+ *             (`move.l (0,A0,D2),(0,A1,D0)' - the eventcount's first
+ *             longword)
+ * 0x00E0A99A  D0 = AS_ID; FIM_$QUIT_INH[as] = 0       (clr.b)
+ * 0x00E0A9AA  EC_$ADVANCE(&FIM_$DELIV_EC[as])         (`pea (0,A1,D2)';
+ *             jsr 0x00E206EE; no cleanup: unlk)
+ * 0x00E0A9BA  move.l (-0x4,A6),D2 / unlk / rts
  *
- * Original address: 0x00e0a96c
+ * PROC1_$AS_ID is re-read for every table (three loads), exactly as the
+ * compiler emitted it.  Callers: 0x00E3EF1A and 0x00E3F3BC (PROC2 signal
+ * acknowledge / delivery).
  *
- * The name comes from the SR10.4 kernel link maps
- * (sr10.4-install/sau7/domain_os.map), which list the FIM_ module's entries
- * in address order: INIT_FF_POOL, DISPOSE_FF, RESTORE_FF, BUILD_DF,
- * ACKNOWLEDGE, INSTALL, GET_FIM_ADDR, INIT_PID, FREE_PID, GET_USER_PC.  In
- * the SAU2 image FIM_$BUILD_DF is 0x00E0A458 and the next four entries are
- * 0x00E0A96C, 0x00E0A9C2 (INSTALL), 0x00E0AA04 (GET_FIM_ADDR) and
- * 0x00E0AA24 (INIT_PID), which pins this one as FIM_$ACKNOWLEDGE.  Until
- * bead source-y6s0 the tree carried it under the descriptive name it had
- * been given here, spelled the way this file used to be named:
- * fim/advance_signal_delivery.c.
+ * The name comes from the SR10.4 link maps, whose FIM_ module lists
+ * BUILD_DF, ACKNOWLEDGE, INSTALL, GET_FIM_ADDR and INIT_PID consecutively
+ * in address order; in the SAU2 image FIM_$BUILD_DF is 0x00E0A458 and this
+ * is the next entry (bead source-y6s0).
  */
 
 #include "fim/fim_internal.h"
-#include "mmu/mmu.h"
-
-/*
- * FIM data structure addresses (M68K specific)
- */
-#if defined(ARCH_M68K)
-    /* FIM_$QUIT_EC - Quit event counter array, indexed by AS_ID * 12 */
-    #define FIM_QUIT_EC_BASE        0xE22002
-    #define FIM_QUIT_EC(asid)       ((ec_$eventcount_t*)(FIM_QUIT_EC_BASE + (asid) * 12))
-
-    /* FIM_$QUIT_VALUE - Quit value array, indexed by AS_ID * 4 */
-    #define FIM_QUIT_VALUE_BASE     0xE222BA
-    #define FIM_QUIT_VALUE(asid)    (*(uint32_t*)(FIM_QUIT_VALUE_BASE + (asid) * 4))
-
-    /* FIM_$QUIT_INH - Quit inhibit flags array, indexed by AS_ID */
-    #define FIM_QUIT_INH_BASE       0xE2248A
-    #define FIM_QUIT_INH(asid)      (*(uint8_t*)(FIM_QUIT_INH_BASE + (asid)))
-
-    /* FIM_$DELIV_EC - Delivery event counter array, indexed by AS_ID * 12 */
-    #define FIM_DELIV_EC_BASE       0xE224C4
-    #define FIM_DELIV_EC(asid)      ((ec_$eventcount_t*)(FIM_DELIV_EC_BASE + (asid) * 12))
-#else
-    /* Non-M68K stubs */
-    static ec_$eventcount_t fim_dummy_ec;
-    static uint32_t fim_dummy_value;
-    static uint8_t fim_dummy_inh;
-    #define FIM_QUIT_EC(asid)       (&fim_dummy_ec)
-    #define FIM_QUIT_VALUE(asid)    (fim_dummy_value)
-    #define FIM_QUIT_INH(asid)      (fim_dummy_inh)
-    #define FIM_DELIV_EC(asid)      (&fim_dummy_ec)
-#endif
+#include "proc1/proc1.h"
+#include "ec/ec.h"
 
 void FIM_$ACKNOWLEDGE(void)
 {
-    int16_t asid;
+    uint16_t as_id;
 
-    /* Get current address space ID */
-    asid = PROC1_$AS_ID;
+    /* 0x00E0A972..0x00E0A994 */
+    as_id = PROC1_$AS_ID;
+    FIM_$QUIT_VALUE[as_id] = (uint32_t)FIM_$QUIT_EC[as_id].value;
 
-    /* Copy current value from quit EC to quit value array */
-    FIM_QUIT_VALUE(asid) = *(uint32_t*)FIM_QUIT_EC(asid);
+    /* 0x00E0A99A..0x00E0A9A6 */
+    as_id = PROC1_$AS_ID;
+    FIM_$QUIT_INH[as_id] = 0;
 
-    /* Clear quit inhibit flag */
-    FIM_QUIT_INH(asid) = 0;
-
-    /* Advance the delivery event counter to allow signal delivery */
-    EC_$ADVANCE(FIM_DELIV_EC(asid));
+    /* 0x00E0A9AA..0x00E0A9B4 */
+    EC_$ADVANCE(&FIM_$DELIV_EC[as_id]);
 }

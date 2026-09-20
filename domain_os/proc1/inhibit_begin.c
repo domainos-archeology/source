@@ -1,42 +1,28 @@
 /*
- * PROC1_$INHIBIT_BEGIN - Begin an inhibit region
+ * PROC1_$INHIBIT_BEGIN - Enter an inhibit region for the current process
+ * Original address: 0x00e20efc (16 bytes)
  *
- * Increments the inhibit counter and sets a flag to prevent
- * the process from being preempted. Used to protect critical
- * sections that shouldn't be interrupted.
+ * 0x00E20EFC  movea.l (-0x2436,PC),A1        A1 = PROC1_$CURRENT_PCB (0xE1EAC8)
+ * 0x00E20F00  addq.w #0x1,(0x5a,A1)          pcb->nesting_depth++
+ * 0x00E20F04  bset.b #0x0,(0x43,A1)          bit 0 of the LOW byte of the
+ *                                            longword at 0x40, i.e. bit 0 of
+ *                                            pcb->resource_locks_held
+ * 0x00E20F0A  rts
  *
- * Must be paired with PROC1_$INHIBIT_END.
- *
- * Original address: 0x00e20efc
+ * Lock 0 of resource_locks_held is the inhibit lock; PROC1_$INHIBIT_END
+ * (0x00E20EA2) clears it again when nesting_depth returns to zero, and
+ * ML_$EXCLUSION_START (0x00E20DF8) sets the same bit.  No SR change.
  */
 
 #include "proc1/proc1_internal.h"
-
-/*
- * The assembly accesses offset 0x5A (nesting_depth) as the inhibit/lock
- * nesting counter and sets bit 0 of byte at offset 0x43 (lowest byte of
- * resource_locks_held on big-endian m68k).
- *
- * Assembly (0x00e20efc):
- *   movea.l PROC1_$CURRENT_PCB, A1
- *   addq.w  #1, (0x5a,A1)          ; increment nesting_depth
- *   bset.b  #0, (0x43,A1)          ; set inhibit flag in resource_locks_held LSB
- */
 
 void PROC1_$INHIBIT_BEGIN(void)
 {
     proc1_t *pcb = PROC1_$CURRENT_PCB;
 
-    /* Increment nesting depth counter (offset 0x5A) */
+    /* 0x00E20F00 */
     pcb->nesting_depth++;
 
-    /*
-     * Set bit 0 of the low byte of resource_locks_held.
-     * On big-endian m68k, byte at offset 0x43 is the LSB.
-     * This flag indicates "inhibited" state.
-     *
-     * We use a bitwise OR on the full word since we're on
-     * a potentially little-endian host.
-     */
-    pcb->resource_locks_held |= 0x01;
+    /* 0x00E20F04: bset.b #0,(0x43,A1) == bit 0 of the 32-bit word at 0x40 */
+    pcb->resource_locks_held |= 1u;
 }

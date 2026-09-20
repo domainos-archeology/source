@@ -888,4 +888,14 @@ _Static_assert(sizeof(fim_fault_desc_t) == 8, "fim_fault_desc_t must be 8 bytes"
 #define status_$fault_bus_time_out          0x0012000C  /* "bus time-out" */
 #define status_$fault_process_quit          0x00120010  /* "process quit" */
 
+/*
+ * FIM_$DELIV_EC - per-AS signal delivery eventcounts, one ec_$eventcount_t
+ * per address space (12 bytes each on m68k).  PROC2_$GET_EC registers
+ * FIM_$DELIV_EC[asid] with EC2 (0x00E40118 `movea.l #0xe224c4,A1` with
+ * D0 = asid*12).
+ *
+ * Address: 0x00E224C4, stride 12, FIM_AS_COUNT elements
+ */
+extern ec_$eventcount_t FIM_$DELIV_EC[];
+
 #endif /* FIM_H */

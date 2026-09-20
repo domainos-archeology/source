@@ -127,7 +127,7 @@ SECTIONS {
         *(.text.proc1_asm_data)                     /* PROC1_$CURRENT       0xE20608 */
         */ec/wait.o(.text)                          /* EC_$WAIT             0xE20610 */
         */ec/waitn.o(.text)                         /* EC_$WAITN            0xE2063E */
-        */proc1/remove_ready.o(.text)               /* PROC1_$REMOVE_READY  0xE206D2 */
+        *(.text.proc1_remove_ready)                 /* PROC1_$REMOVE_READY  0xE206D2 */
         *(.text.ec_advance)                         /* EC_$ADVANCE          0xE206EE */
         *(.text.ec_advance_all)                     /* EC_$ADVANCE_ALL      0xE20702 */
         *(.text.ec_advance_wo_dispatch)             /* EC_$ADVANCE_WO_DISP  0xE20718 */
