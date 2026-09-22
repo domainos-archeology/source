@@ -145,14 +145,14 @@ TEST(reads_label_fields_under_lock)
     ASSERT_EQ(lock_held_at_set, 1);
 
     /* globals refreshed from the label; drift untouched */
-    ASSERT_EQ(CAL_$TIMEZONE.utc_delta, (uint16_t)-300);
+    ASSERT_EQ((uint16_t)CAL_$TIMEZONE.utc_delta, (uint16_t)-300);
     ASSERT_EQ(CAL_$TIMEZONE.tz_name[0], 'E');
     ASSERT_EQ(CAL_$TIMEZONE.tz_name[3], ' ');
     ASSERT_EQ(CAL_$TIMEZONE.drift.high, 0xD1);
     ASSERT_EQ(CAL_$LAST_VALID_TIME, 0x12345678);
 
     /* and copied out */
-    ASSERT_EQ(out.utc_delta, (uint16_t)-300);
+    ASSERT_EQ((uint16_t)out.utc_delta, (uint16_t)-300);
     ASSERT_EQ(out.tz_name[2], 'T');
     ASSERT_EQ(out.drift.high, 0xD1);
     ASSERT_EQ(out.drift.low, 0xD2);

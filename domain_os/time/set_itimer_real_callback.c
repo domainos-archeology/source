@@ -39,19 +39,21 @@ void TIME_$SET_ITIMER_REAL_CALLBACK(time_$callback_arg_t arg)
 {
     uint32_t *callback_arg;
     uint16_t as_id;
-    int16_t as_offset;
-    uint8_t *itimer_entry;
+    time_queue_elem_t *entry;
     status_$t status;
 
     callback_arg = *arg;
     as_id = (uint16_t)*callback_arg;      /* 0xE58A44: move.w (0x2,A2),D0w */
 
-    /* 0xE58A48..0xE58A58: id*32 - id*4 == id*28, sign-extended word index */
-    as_offset = (int16_t)(as_id * ITIMER_DB_ENTRY_SIZE);
-    itimer_entry = (uint8_t *)ARCH_VA_TO_PTR(ITIMER_DB_BASE + as_offset);
+    /* id*32 - id*4 == id*0x1C, sign-extended word index (time_$itimer_entry) */
+    entry = time_$itimer_entry(0, as_id);
 
-    if (*(uint32_t *)(itimer_entry + ITIMER_REAL_INTERVAL_HIGH) != 0 ||
-        *(uint16_t *)(itimer_entry + ITIMER_REAL_INTERVAL_LOW) != 0) {
+    /*
+     * 0x00E58A5C: tst.l (0xc,A0) / tst.w (0x10,A0) - the element's EXPIRY words
+     * (0x0C/0x10 of the real entry), not its interval (bead source-e4a2).
+     * The signal is raised only while a non-zero expiry is recorded.
+     */
+    if (entry->expire_high != 0 || entry->expire_low != 0) {
         PROC2_$SIGNAL_OS(&PROC2_$UID[as_id],   /* 0xE7BE94 + as_id*8 */
                          (int16_t *)&time_$c_itimer_real_signal,
                          (uint32_t *)&time_$c_itimer_real_fault,

@@ -34,9 +34,11 @@
 /*
  * Constant status cell passed by reference at 0x00E1663A:
  *   pea (0x14,PC)  ->  0x00E1663C + 0x14 = 0x00E16650
- * The cell at 0x00E16650 holds 0x000D000D.
+ * The cell at 0x00E16650 holds 0x000D000D (status_$time_queue_element_already_in_use).
+ * TIME_$WAIT2 reaches the same cell with `pea (-0xa4,PC)` at 0x00E166F2, so it
+ * is one shared object, declared in time/time_internal.h.
  */
-static const status_$t wait_crash_status_00e16650 = 0x000D000D;
+const status_$t time_$c_queue_elem_in_use_crash = 0x000D000D;
 
 void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status)
 {
@@ -121,6 +123,6 @@ void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status)
      * flagged here means the queue element was left in a bad state.
      */
     if (elem.flags != 0) {
-        CRASH_SYSTEM(&wait_crash_status_00e16650);
+        CRASH_SYSTEM(&time_$c_queue_elem_in_use_crash);
     }
 }

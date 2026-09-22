@@ -248,7 +248,19 @@ void time_$set_itimer_internal(uint16_t which, clock_t *interval,
                                clock_t *ovalue, status_$t *status);
 
 /*
+ * Pascal by-reference constant cell at 0x00E16650 (0x000D000D), passed to
+ * CRASH_SYSTEM by TIME_$WAIT (pea (0x14,PC) at 0x00E1663A) and TIME_$WAIT2
+ * (pea (-0xa4,PC) at 0x00E166F2).  Defined in time/wait.c.
+ */
+extern const status_$t time_$c_queue_elem_in_use_crash;
+
+/*
  * TIME_$TIMER_HANDLER - Hardware timer interrupt entry point
+ *
+ * 0x00E2B130..0x00E2B280 in the TIME_ASM segment, hand-written (movem all,
+ * IO_$USE_INT_STACK, DI dispatch of TIME_$DI_VT / TIME_$DI_RTE).  Installed
+ * by TIME_$SET_VECTOR into the level-6 autovector.  Not yet transcribed
+ * (no Ghidra function at that address) - bead source-lu78.
  */
 void TIME_$TIMER_HANDLER(void);
 

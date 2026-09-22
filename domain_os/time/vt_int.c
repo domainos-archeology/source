@@ -1,52 +1,40 @@
 /*
- * TIME_$VT_INT - Virtual timer interrupt handler
+ * TIME_$VT_INT - Virtual-timer interrupt body
  *
- * Called when the virtual timer fires. Updates process virtual time
- * and scans the VT queue for the current process.
+ * Runs (through TIME_$DI_VT) when the virtual timer fires: asks PROC1 for
+ * the current process's CPU time, scans that process's VT queue with it,
+ * and clears IN_VT_INT.
  *
- * Original address: 0x00e163e4
+ * Original address: 0x00e163e4, 80 bytes
  *
- * Assembly:
- *   00e163e4    link.w A6,-0x10
- *   00e163e8    pea (A5)
- *   00e163ea    lea (0xe29198).l,A5       ; Base of queue area
- *   00e163f0    pea (-0x8,A6)
- *   00e163f4    jsr 0x00e1491e.l          ; PROC1_$VT_INT
- *   00e163fa    addq.w #0x4,SP
- *   00e163fc    pea (-0xc,A6)
- *   00e16400    pea (-0x8,A6)
- *   00e16404    move.w PROC1_$CURRENT,D0w
- *   00e1640a    lsl.w #0x2,D0w            ; *4
- *   00e1640c    move.w D0w,D1w
- *   00e1640e    add.w D1w,D1w             ; *8
- *   00e16410    add.w D1w,D0w             ; *12
- *   00e16412    lea (0x0,A5,D0w*0x1),A0   ; base + proc*12
- *   00e16416    pea (0x12fc,A0)           ; + VT_QUEUE_OFFSET
- *   00e1641a    jsr TIME_$Q_SCAN_QUEUE
- *   00e16420    clr.b IN_VT_INT
+ *   00e163e8  pea (A5) / lea (0xe29198).l,A5          ; TIME_ data segment
+ *   00e163f0  pea (-0x8,A6) / jsr PROC1_$VT_INT       ; cpu time -> -0x8
+ *   00e163fc  pea (-0xc,A6)                           ; status
+ *   00e16400  pea (-0x8,A6)                           ; now
+ *   00e16404  D0 = PROC1_$CURRENT * 12; lea (0,A5,D0w),A0; pea (0x12fc,A0)
+ *             ; 0xE29198 + 0x12FC + cur*12 = &TIME_$VTQ[cur - 1]
+ *   00e1641a  jsr TIME_$Q_SCAN_QUEUE                  ; args reclaimed by unlk
+ *   00e16420  clr.b (0x00e2af6a).l                    ; IN_VT_INT = 0
+ *   00e16426  movea.l #0x0,A0                         ; A0 = 0 for the DI caller
+ *
+ * Frame: -0x08 cpu time (clock_t), -0x0C status (never read).
  */
 
 #include "time/time_internal.h"
 
 void TIME_$VT_INT(void)
 {
-    clock_t vt_clock;
-    uint32_t arg;
-    time_queue_t *vt_queue;
+    clock_t cpu_time;       /* A6-0x8 */
+    status_$t status;       /* A6-0xC */
 
-    /* Update process virtual time */
-    PROC1_$VT_INT(&vt_clock);
+    /* 0x00E163F0..0x00E163FA */
+    PROC1_$VT_INT(&cpu_time);
 
-    /*
-     * 0xE163EA/0xE16412/0xE16416: A5 = 0xE29198, lea (0,A5,cur*12),A0,
-     * pea (0x12fc,A0).  0xE29198 + 0x12FC + 12 == 0xE2A4A0 == &TIME_$VTQ[0],
-     * so this is element (PROC1_$CURRENT - 1) of the 1-based array.
-     */
-    vt_queue = &TIME_$VTQ[PROC1_$CURRENT - 1];
+    /* 0x00E163FC..0x00E1641A */
+    TIME_$Q_SCAN_QUEUE(&TIME_$VTQ[PROC1_$CURRENT - 1], &cpu_time, &status);
 
-    /* Scan the VT queue and fire expired callbacks */
-    TIME_$Q_SCAN_QUEUE(vt_queue, &vt_clock, &arg);
-
-    /* Clear interrupt-in-progress flag */
+    /* 0x00E16420 */
     IN_VT_INT = 0;
+
+    /* 0x00E16426: movea.l #0x0,A0 - a result no C caller sees */
 }

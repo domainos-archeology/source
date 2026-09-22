@@ -7,29 +7,57 @@
 #include "time/time.h"
 
 /* status_$t and status_$ok are defined in base/base.h */
+/*
+ * 0x150007 is the code CAL_$VERIFY stores at 0x00E68462 when the operator
+ * answers 'n' to the calendar prompt.  Neither the SR10.2 nor the SR10.4
+ * status-code table (~/src/domainos-archeology/stcodes) has text for
+ * module 0x15 code 7 (they stop at 150003 / 150005), so this name is ours.
+ */
 #define status_$cal_refused 0x150007
+/* 150002 "date or time specification invalid" (SR10.2 stcode table) */
 #define status_$cal_date_or_time_invalid 0x150002
 
-// Timezone record structure (12 bytes total at 0x00e7b030)
-typedef struct {
-  short utc_delta;  // offset from UTC in minutes (+0)
-  char tz_name[4];  // timezone name, e.g. "EST" (+2)
-  clock_t drift;    // drift correction (+6)
-  ushort boot_volx; // boot volume index (+12)
+/*
+ * cal_$timezone_rec_t - the 12-byte timezone record
+ *
+ * CAL_$GET_INFO (0x00E68576), CAL_$READ_TIMEZONE (0x00E3E5CE) and
+ * CAL_$WRITE_TIMEZONE (0x00E3E62A) all move it as exactly three longwords,
+ * and NETWORK's diskless fetch copies the same 12 bytes into it.
+ */
+typedef struct cal_$timezone_rec_t {
+  int16_t utc_delta;  /* 0x00: offset from UTC in minutes; sign-extended by
+                       *       `ext.l` at 0x00E68606 before the *60 */
+  char tz_name[4];    /* 0x02: timezone name, e.g. "EST " */
+  clock_t drift;      /* 0x06: drift correction, ADD48'd by CAL_$GET_LOCAL_TIME
+                       *       (`pea (0xe7b036).l` at 0x00E685E2) */
 } cal_$timezone_rec_t;
 
-// Days per month lookup table
+_Static_assert(__builtin_offsetof(cal_$timezone_rec_t, utc_delta) == 0x00, "cal_$timezone_rec_t.utc_delta");
+_Static_assert(__builtin_offsetof(cal_$timezone_rec_t, tz_name) == 0x02, "cal_$timezone_rec_t.tz_name");
+_Static_assert(__builtin_offsetof(cal_$timezone_rec_t, drift) == 0x06, "cal_$timezone_rec_t.drift");
+_Static_assert(sizeof(cal_$timezone_rec_t) == 12, "cal_$timezone_rec_t: three longword moves");
+
+/*
+ * Days per month, the 12 words at 0x00E817AC (map: CAL_$DAYS_PER_MONTH,
+ * inside the CAL_ code segment between CAL_$SEC_TO_CLOCK and
+ * CAL_$CLOCK_TO_SEC).  CAL_$DECODE_TIME copies it into a frame local.
+ */
 extern short CAL_$DAYS_PER_MONTH[12];
 
-// Global timezone data at 0x00e7b030
-extern cal_$timezone_rec_t CAL_$TIMEZONE;
-
-// Boot volume index - separate variable that mirrors CAL_$TIMEZONE.boot_volx
-// This exists as a separate variable because many files use it with extern declarations
-extern int16_t CAL_$BOOT_VOLX;
-
-// Last valid time (high word of clock) at 0x00e7b03c
-extern uint CAL_$LAST_VALID_TIME;
+/*
+ * The OS_CAL_WIRED data segment (map: D E7B030 OS_CAL_WIRED size = 14).
+ * CAL_$READ_TIMEZONE / CAL_$WRITE_TIMEZONE address it through A5 = 0xE7B030:
+ *
+ *   +0x00  CAL_$TIMEZONE         cal_$timezone_rec_t, 12 bytes
+ *   +0x0C  CAL_$LAST_VALID_TIME  longword (`move.l (0xe6,A4),(0xc,A5)`)
+ *   +0x10  CAL_$BOOT_VOLX        word     (`move.w (0x10,A5),(-0xa,A6)`)
+ *
+ * Nothing in the image reaches across the three, so they are three C
+ * objects; the offsets above are the only coupling.
+ */
+extern cal_$timezone_rec_t CAL_$TIMEZONE;   /* 0x00E7B030 */
+extern uint CAL_$LAST_VALID_TIME;           /* 0x00E7B03C */
+extern int16_t CAL_$BOOT_VOLX;              /* 0x00E7B040 */
 
 /*
  * ===========================================================================
@@ -186,8 +214,13 @@ extern void CAL_$SET_DRIFT(clock_t *drift);
 extern void CAL_$READ_TIMEZONE(cal_$timezone_rec_t *tz, status_$t *status);
 extern void CAL_$WRITE_TIMEZONE(cal_$timezone_rec_t *tz, status_$t *status);
 extern void CAL_$SHUTDOWN(status_$t *status);
-extern char CAL_$VERIFY(int *max_allowed_delta, void *param_2, char *param_3,
-                        status_$t *status);
+/*
+ * CAL_$VERIFY (0x00E68380): max_delta by reference, msg_arg passed through
+ * to the "More than %a days" VFMT call, interactive a Domain boolean by
+ * reference, result a Domain boolean (0xFF / 0) - see cal/verify.c.
+ */
+extern char CAL_$VERIFY(int *max_delta, void *msg_arg, char *interactive,
+                        status_$t *status_ret);
 extern void CAL_$WRITE_CALENDAR(int16_t *year, int16_t *month, int16_t *day,
                                 int16_t *weekday, int16_t *hour,
                                 int16_t *minute, int16_t *second);

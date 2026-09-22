@@ -410,7 +410,9 @@ void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status);
  * @param extra_ec: Additional event count to wait on
  * @param count: Pointer to count value for EC wait
  * @param status: Status return
- * @return: -1 if timer triggered, 0 if extra_ec triggered
+ * @return: Domain boolean, TRUE (0xFF) when extra_ec was the eventcount
+ *          satisfied (EC_$WAIT index 0, `seq` at 0x00E166FE), FALSE (0)
+ *          when the timer expired
  *
  * Original address: 0x00e16654
  */
@@ -468,7 +470,11 @@ uint16_t TIME_$VT_TIMER(void);
  *
  * Original address: 0x00e2af8a
  */
-void TIME_$WRT_VT_TIMER(uint16_t value);
+/*
+ * TIME_$WRT_VT_TIMER has no C signature: the value arrives in D0w, A0 is
+ * preserved and A2 clobbered.  It lives in time/sau2/wrt_vt_timer.s and is
+ * only called from PROC1's assembly (0x00E20A64).
+ */
 
 /*
  * TIME_$WRT_TIMER - Write to a hardware timer

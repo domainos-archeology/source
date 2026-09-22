@@ -1,50 +1,43 @@
 /*
- * TIME_$VT_TIMER - Read virtual timer
+ * TIME_$VT_TIMER - Read the virtual timer, or 0 if its interrupt is pending
  *
- * Returns the current virtual timer value from the hardware timer.
- * If an interrupt is pending or we're in the VT interrupt handler,
- * returns 0 instead.
+ * Hand-written assembly in the TIME_ASM segment.  It takes no arguments
+ * and returns its result in D0w, which is the C calling convention, so it
+ * is emitted in C like the clock readers (bead source-6b8c); its callers
+ * (PROC1's dispatcher and PROC1_$VT_INT) are assembly.
  *
- * Original address: 0x00e2af6c
+ * Original address: 0x00e2af6c, 30 bytes
  *
- * Assembly:
- *   00e2af6c    lea (0xffac00).l,A0
- *   00e2af72    movep.w (0x9,A0),D0w      ; Read VT timer (bytes at 0x09, 0x0B)
- *   00e2af76    btst.b #0x1,(0x3,A0)      ; Check VT interrupt pending
- *   00e2af7c    bne.b 0x00e2af86         ; If set, return 0
- *   00e2af7e    tst.b (0x00e2af6a).l     ; Check IN_VT_INT flag
- *   00e2af84    beq.b 0x00e2af88         ; If clear, return timer value
- *   00e2af86    clr.w D0w                 ; Return 0
- *   00e2af88    rts
+ *   00e2af6c  lea (0xffac00).l,A0
+ *   00e2af72  movep.w (0x9,A0),D0w            ; bytes 0xFFAC09 / 0xFFAC0B
+ *   00e2af76  btst.b #0x1,(0x3,A0) / bne -> 0  ; VT interrupt pending
+ *   00e2af7e  tst.b (0x00e2af6a).l / beq -> rts ; IN_VT_INT set -> 0
+ *   00e2af86  clr.w D0w
+ *   00e2af88  rts
+ *
+ * The counter is read BEFORE the two tests; only the returned value is
+ * replaced by zero.  D0's upper word is whatever the caller left there.
  */
 
 #include "time/time_internal.h"
 
-/*
- * Hardware timer access
- *
- * The M68K movep instruction reads/writes alternating bytes:
- * movep.w (0x9,A0),D0w reads bytes at offsets 0x09 and 0x0B
- */
+/* `movep.w (0x9,A0),D0w`: high byte from +9, low byte from +0xB */
+#define TIME_$READ_VT_TIMER() \
+    ((uint16_t)(((uint16_t)TIME_$TIMER_READ(TIME_TIMER_VT_HI) << 8) | \
+                (uint16_t)TIME_$TIMER_READ(TIME_TIMER_VT_LO)))
 
 uint16_t TIME_$VT_TIMER(void)
 {
-    volatile uint8_t *timer_base = (volatile uint8_t *)TIME_TIMER_BASE;
-    uint16_t value;
+    uint16_t value;         /* D0w */
 
-    /*
-     * Read virtual timer using movep equivalent:
-     * High byte from offset 0x09, low byte from offset 0x0B
-     */
-    value = ((uint16_t)timer_base[TIME_TIMER_VT_HI] << 8) |
-             (uint16_t)timer_base[TIME_TIMER_VT_LO];
+    /* 0x00E2AF72 */
+    value = TIME_$READ_VT_TIMER();
 
-    /* Return 0 if VT interrupt is pending or we're in the handler */
-    if ((timer_base[TIME_TIMER_CTRL] & TIME_CTRL_VT_INT) != 0) {
-        return 0;
-    }
-    if (IN_VT_INT != 0) {
-        return 0;
+    /* 0x00E2AF76..0x00E2AF84 */
+    if ((TIME_$TIMER_READ(TIME_TIMER_CTRL) & TIME_CTRL_VT_INT) != 0 ||
+        IN_VT_INT != 0) {
+        /* 0x00E2AF86 */
+        value = 0;
     }
 
     return value;
