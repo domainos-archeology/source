@@ -176,8 +176,9 @@ aote_t* ast_$allocate_aote(void);
  * and handed to VTOCE_$WRITE (0x00E014B8). */
 void ast_$purify_aote(aote_t *aote, boolean flags, status_$t *status);
 
-/* Update ASTE/segment map */
-void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, uint16_t flags,
+/* ast_$update_aste (0x00E01566): `write_now` is ONE BYTE (`move.b (0x10,A6)`
+ * at 0x00E01682) forwarded to FM_$WRITE. */
+void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, boolean write_now,
                       status_$t *status);
 
 /* Invalidate pages with wait */
@@ -250,11 +251,9 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
  */
 #define AST_VOL_INDEX_SLOTS 7
 extern int16_t ast_$vol_indices[AST_VOL_INDEX_SLOTS];
-#define DAT_00e1e092 ast_$vol_indices
 
 /* Clobbered UID storage at 0xE1E110 (AST_ module block + 0x490) */
 extern uid_t ast_$clobbered_uid;
-#define DAT_00e1e110 ast_$clobbered_uid
 
 /* Dismount failed AOTE pointer */
 extern aote_t* AST_$DISMOUNT_FAILED_PTR;
@@ -315,10 +314,24 @@ extern uint32_t ast_$alloc_worst_aot;   /* Worst-case allocation count */
 extern uint32_t ast_$alloc_fail_cnt;    /* Allocation failure count */
 extern uint32_t ast_$alloc_try_cnt;     /* Current try count */
 
-/* Failed UID tracking (for error reporting) */
-extern uint32_t ast_$failed_uid_high;   /* High word of failed UID */
-extern uint32_t ast_$failed_uid_low;    /* Low word of failed UID */
-extern uint32_t ast_$failed_flags;      /* Flags for failed operation */
+/*
+ * AST_$NOT_FOUND (0xE1E0F8, A5+0x478 in the AST_ data segment): the UID and
+ * the caller's flags longword of the last object lookup that failed.  Only
+ * ast_$validate_uid (0x00E00BE8) writes it; nothing in the image reads it
+ * back (post-mortem inspection).
+ */
+typedef struct ast_$not_found_t {
+    uid_t    uid;       /* 0x00: (0x478,A5) high, (0x47C,A5) low */
+    uint32_t flags;     /* 0x08: (0x480,A5) */
+} ast_$not_found_t;
+_Static_assert(sizeof(ast_$not_found_t) == 0x0C, "ast_$not_found_t is 12 bytes");
+
+#if defined(ARCH_M68K)
+#define AST_$NOT_FOUND (*(ast_$not_found_t *)0xE1E0F8)
+#else
+extern ast_$not_found_t ast_$not_found;
+#define AST_$NOT_FOUND ast_$not_found
+#endif
 
 /* Network info flags pointer */
 extern void *net_info_flags;

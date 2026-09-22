@@ -172,7 +172,7 @@ static segmap_entry_t *update_segmap;
 static uint16_t        update_flags;
 static status_$t       update_status;
 
-void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, uint16_t flags,
+void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, boolean flags,
                       status_$t *status)
 {
     update_calls++;

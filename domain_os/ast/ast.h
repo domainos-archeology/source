@@ -992,7 +992,9 @@ void AST_$TRUNCATE(uid_t *uid, uint32_t new_size, uint16_t flags,
  */
 void AST_$INVALIDATE(uid_t *uid, uint32_t start_page, uint32_t count,
                      boolean flags, status_$t *status);
-void AST_$RESERVE(uid_t *uid, uint32_t start_byte, uint32_t byte_count,
+/* AST_$RESERVE (0x00E0677E): the two longwords are PAGE numbers - `lsr.l #5`
+ * at 0x00E067FE turns the last one into a segment. */
+void AST_$RESERVE(uid_t *uid, uint32_t start_page, uint32_t page_count,
                   status_$t *status);
 void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status);
 /*

@@ -129,7 +129,7 @@ void ML_$UNLOCK(int16_t lock_id)
     mock_lock_depth[lock_id & 0x3F]--;
 }
 
-void ast_$purify_aote(aote_t *aote, uint16_t flags, status_$t *status)
+void ast_$purify_aote(aote_t *aote, boolean flags, status_$t *status)
 {
     (void)flags;
     mock_purify_calls++;

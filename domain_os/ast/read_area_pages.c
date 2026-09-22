@@ -1,99 +1,105 @@
 /*
- * ast_$read_area_pages - Read pages from disk for area objects
+ * ast_$read_area_pages - Read a run of a local segment's pages from disk
  *
- * Allocates pages and reads them from disk using multi-block I/O.
- * Used for area objects which have contiguous disk allocation.
+ * Allocates `count` frames (PMAP lock held on entry, released after the
+ * allocation), builds a DISK_$GET_QBLKS chain whose head block carries
+ * the object UID and first page number and whose blocks carry one
+ * (disk address, ppn) pair each, and reads them in one DISK_$READ_MULTI.
+ * A failure status gets bit 31.  With the PMAP lock retaken the chain is
+ * returned, the frames that were not filled are freed, and the calling
+ * process's page-read statistic is bumped.
  *
- * Parameters:
- *   aste - ASTE pointer
- *   segmap - Segment map entries with disk addresses
- *   ppn_array - Output array for allocated PPNs
- *   start_page - Starting page number in segment
- *   count - Number of pages to read
- *   status - Output status
+ * Parameters (frame at 0x00E02AF6, `link.w A6,-0x20`):
+ *   aste       (0x08,A6)  (A3)
+ *   segmap     (0x0C,A6)  (A2) the entries whose low 22 bits are disk addresses
+ *   ppn_array  (0x10,A6)  (D5) receives the frames
+ *   start_page (0x14,A6)  word (D2)
+ *   count      (0x16,A6)  word
+ *   status     (0x18,A6)  (D6)
+ * Locals: (-0xC) tail, (-0x10) head, (-0x12) volume index word,
+ *         (-0x16) pages read, (-0x20) the stat increment.
  *
- * Returns: Number of pages successfully read
+ * Returns D0w = pages read.
  *
- * Original address: 0x00e02af6
+ * Original address: 0x00E02AF6 (348 bytes).  No A5.
  */
 
 #include "ast/ast_internal.h"
+#include "mmap/mmap.h"
+#include "disk/disk.h"
+/*
+ * TODO(source-jtfb): disk_io_req_t is defined in disk/disk_internal.h;
+ * this routine fills the queue blocks DISK_$GET_QBLKS hands out.
+ */
+#include "disk/disk_internal.h"
 
-/* PROC1_$CURRENT from proc1.h via ast_internal.h */
-
-/* Process page read statistics at A5+0x4A0 relative to process table */
-#if defined(ARCH_M68K)
-#define PROC_PAGE_STATS    ((int32_t *)0xE25D18)
-#else
-#define PROC_PAGE_STATS    proc_page_stats
-#endif
-
-int16_t ast_$read_area_pages(aste_t *aste, uint32_t *segmap, uint32_t *ppn_array,
-                              uint16_t start_page, uint16_t count,
-                              status_$t *status)
+int16_t ast_$read_area_pages(aste_t *aste, uint32_t *segmap,
+                             uint32_t *ppn_array, uint16_t start_page,
+                             uint16_t count, status_$t *status)
 {
-    aote_t *aote;
-    uint32_t qblk_head;
-    uint32_t qblk_tail;
-    int16_t pages_read;
-    int16_t allocated;
-    uint16_t vol_idx;
-    uint32_t page_num;
-    int32_t qblk;
+    aote_t *aote;               /* A0 */
+    int16_t allocated;          /* D3 */
+    int16_t pages_read;         /* (-0x16,A6) / D2 */
+    uint16_t vol_idx;           /* (-0x12,A6) */
+    uint32_t qblk_head;         /* (-0x10,A6) / D4 */
+    uint32_t qblk_tail;         /* (-0xC,A6) */
+    disk_io_req_t *req;         /* A1 */
     int16_t i;
 
-    aote = *((aote_t **)((char *)aste + 0x04));
+    /* 0x00E02B12..0x00E02B22: allocate_pages(count, 1, array) */
+    allocated = ast_$allocate_pages((int16_t)count, 1, ppn_array);
 
-    /* Allocate pages - count_flags = (count << 16) | flags */
-    allocated = ast_$allocate_pages(count, 1, ppn_array);
-
+    /* 0x00E02B24..0x00E02B30 */
     ML_$UNLOCK(PMAP_LOCK_ID);
 
-    /* Get volume index */
-    vol_idx = *((uint8_t *)((char *)aote + 0xB8));
+    /* 0x00E02B32..0x00E02B3C: zero-extended volume index */
+    aote = aste->aote;
+    vol_idx = aote->vol_index;
 
-    /* Get queue blocks for disk I/O */
+    /* 0x00E02B40..0x00E02B52: result slot discarded */
     DISK_$GET_QBLKS(allocated, &qblk_head, &qblk_tail);
 
-    /* Set up page number (segment * 32 + start_page) */
-    page_num = (uint32_t)*((uint16_t *)((char *)aste + 0x0C)) * 32 + start_page;
+    /* 0x00E02B56..0x00E02B80: the head block's header: page number
+     * (+0x28), object UID (+0x20/+0x24), and the byte at +0x30 cleared */
+    req = (disk_io_req_t *)ARCH_VA_TO_PTR(qblk_head);
+    req->header[2] = ((uint32_t)aste->segment << 5) + (uint32_t)start_page;
+    req->header[0] = aote->uid.high;
+    req->header[1] = aote->uid.low;
+    req->header[4] &= 0x00FFFFFFu;
 
-    qblk = qblk_head;
-
-    /* Fill in QBLK header */
-    *((uint32_t *)(qblk + 0x28)) = page_num;
-    *((uint32_t *)(qblk + 0x20)) = *((uint32_t *)((char *)aote + 0x10));  /* UID high */
-    *((uint32_t *)(qblk + 0x24)) = *((uint32_t *)((char *)aote + 0x14));  /* UID low */
-    *((uint8_t *)(qblk + 0x30)) = 0;
-
-    /* Fill in each QBLK with PPN and disk address */
-    for (i = allocated - 1; i >= 0; i--) {
-        *((uint32_t *)(qblk + 0x14)) = ppn_array[allocated - 1 - i];
-        *((uint32_t *)(qblk + 0x04)) = *segmap++ & 0x3FFFFF;  /* Disk address */
-        qblk = *((int32_t *)(qblk + 0x08));  /* Next QBLK */
+    /* 0x00E02B84..0x00E02BA6: one block per frame; dbf on allocated - 1 */
+    for (i = 0; i < allocated; i++) {
+        req->ppn = ppn_array[i];
+        req->daddr = *segmap++ & 0x3FFFFF;
+        req = (disk_io_req_t *)ARCH_VA_TO_PTR(req->free_next);   /* (0x8,A1) */
     }
 
-    /* Perform disk read */
-    DISK_$READ_MULTI(vol_idx, -1, -1, qblk_head, qblk_tail, &pages_read, status);
+    /* 0x00E02BAA..0x00E02BC6: DISK_$READ_MULTI(vol, TRUE, TRUE, head, tail,
+     * &pages_read, status); the two `st` are single bytes */
+    DISK_$READ_MULTI(vol_idx, -1, -1, (int32_t)qblk_head, qblk_tail,
+                     &pages_read, status);
 
+    /* 0x00E02BCA..0x00E02BD4 */
     if (*status != status_$ok) {
-        *((uint8_t *)status) |= 0x80;  /* Set error flag */
+        *status |= (status_$t)0x80000000u;
     }
 
+    /* 0x00E02BD8..0x00E02BF6 */
     ML_$LOCK(PMAP_LOCK_ID);
-
-    /* Return queue blocks */
     DISK_$RTN_QBLKS(allocated, qblk_head, qblk_tail);
 
-    /* Free any pages that weren't successfully read */
+    /* 0x00E02BFA..0x00E02C24: free array[pages_read .. allocated-1];
+     * the count is allocated - (pages_read + 1), bmi skips */
     if (allocated != pages_read) {
-        for (i = allocated - pages_read - 1; i >= 0; i--) {
-            MMAP_$FREE(ppn_array[pages_read + 1 + i]);
+        for (i = pages_read; i < allocated; i++) {
+            MMAP_$FREE(ppn_array[i]);
         }
     }
 
-    /* Update process page statistics */
-    PROC_PAGE_STATS[PROC1_$CURRENT] += pages_read;
+    /* 0x00E02C28..0x00E02C42: PROC1_$STATS entry pid, longword +0x08
+     * (A0 = 0xE25D20 is entry 1; -0x8 + pid*16) */
+    PROC_STATS_BASE[PROC1_$CURRENT * 4 + 2] += (uint32_t)(int32_t)pages_read;
 
+    /* 0x00E02C46 */
     return pages_read;
 }

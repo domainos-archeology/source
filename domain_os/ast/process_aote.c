@@ -1,145 +1,137 @@
 /*
- * ast_$process_aote - Process/deactivate an AOTE
+ * ast_$process_aote - Deactivate an object: free its ASTEs, purify it,
+ *                     take it off the hash chain
  *
- * Attempts to deactivate an AOTE by freeing all its ASTEs and
- * purifying the object. Used during dismount and cache cleanup.
+ * Refuses (status "segment is not deactivatable") an AOTE that is in
+ * transition or still referenced, and - unless `keep` is TRUE - a type-2
+ * object with attribute-flags bit 1 set that is local.  Otherwise, with
+ * the AOTE marked in transition, every ASTE on its list is deactivated
+ * with AST_$DEACTIVATE_SEGMENT(purge, keep) and freed; an ASTE that is
+ * itself in transition is waited for when `wait` is TRUE (else
+ * DEACTIVATE_SEGMENT gets it anyway).  Unless `purge` is TRUE the AOTE is
+ * then purified; finally it is unlinked from its hash bucket.  On a
+ * failure the status gets bit 31 (except "not deactivatable", which is
+ * passed through), the in-transition bit is cleared and waiters woken.
  *
- * Parameters:
- *   aote - The AOTE to process
- *   flags1 - Domain BOOLEAN byte at A6+0x0C (0x00E01ADA `move.b (0xc,A6),D2b`);
- *            TRUE = skip purify
- *   flags2 - Domain BOOLEAN byte at A6+0x0E (0x00E01ADE `move.b (0xe,A6),D3b`);
- *            TRUE = allow deactivation of system objects
- *   flags3 - Domain BOOLEAN byte at A6+0x10 (0x00E01AE2 `move.b (0x10,A6),D4b`);
- *            TRUE = wait for in-transition
- *   status - Output status
+ * Parameters (frame at 0x00E01AD2, `link.w A6,-0x10`):
+ *   aote   (0x08,A6)
+ *   purge  (0x0C,A6)  BOOLEAN byte (D2b): skip the purify pass; also
+ *                     DEACTIVATE_SEGMENT's `purge`
+ *   keep   (0x0E,A6)  BOOLEAN byte (D3b): deactivate even a protected
+ *                     type-2 object; also DEACTIVATE_SEGMENT's `keep`
+ *   wait   (0x10,A6)  BOOLEAN byte (D4b): wait for an in-transition ASTE
+ *   status (0x12,A6)  (A2)
  *
- * Returns: Non-zero status bits on failure
+ * Returns D0w: on the refusal exit its low byte is the busy/in-transition
+ * byte computed at 0x00E01AF0..0x00E01AFC; on the other exits D0 is
+ * whatever the last callee left.  Every caller ignores it.
  *
- * Original address: 0x00e01ad2
+ * Original address: 0x00E01AD2 (282 bytes).  A5 is inherited (every
+ * caller is AST code; 0xE1DC80): (0x0,A5,D1w) is the AOTH and (0x428,A5)
+ * AST_$AST_IN_TRANS_EC.
  */
 
 #include "ast/ast_internal.h"
 
-/* External function prototypes */
-
-/* Status codes */
-
-/* Hash table info */
+/* The AOTE hash table, `AOTH` in the SAU2 map. */
 #if defined(ARCH_M68K)
-#define AST_HASH_TABLE_INFO (*(void **)0xE01BEC)
 #define AST_AOTH_BASE ((aote_t **)0xE1DC80)
 #else
-#define AST_HASH_TABLE_INFO ast_hash_table_info
 #define AST_AOTH_BASE ast_aoth_base
 #endif
 
-uint16_t ast_$process_aote(aote_t *aote, boolean flags1, boolean flags2,
-                           boolean flags3, status_$t *status)
-{
-    uint8_t busy_or_intrans;
-    aste_t *aste;
-    uint16_t hash_index;
-    aote_t *hash_entry;
+/*
+ * UID_$HASH's table-size word: `pea (0x5a,PC)` at 0x00E01B90 ->
+ * 0x00E01BEC, image bytes 00 FB (251 buckets).  Shared with
+ * ast_$lookup_aote_by_uid, ast_$force_activate_segment and AST_$LOAD_AOTE.
+ */
+static const uint16_t ast_$aoth_hash_size_00e01bec = 0x00FB;
 
+uint16_t ast_$process_aote(aote_t *aote, boolean purge, boolean keep,
+                           boolean wait, status_$t *status)
+{
+    uint8_t busy;               /* D0b: smi(flags) | sne(ref_count) */
+    aste_t *aste;               /* A3 */
+    uint16_t hash_index;        /* D0w -> D1w */
+    aote_t *prev;               /* A0 */
+
+    /* 0x00E01AEA */
     *status = status_$ok;
 
-    /* Check if AOTE is busy (ref_count != 0) or in-transition */
-    busy_or_intrans = (aote->ref_count != 0) | (aote->flags & AOTE_FLAG_IN_TRANS ? 0xFF : 0);
-
-    if ((int8_t)busy_or_intrans < 0) {
-        /* Already busy or in-transition */
-        *status = status_$ast_segment_not_deactivatable;
-        return (uint16_t)busy_or_intrans;
+    /* 0x00E01AF0..0x00E01AFE: 0xFF when in transition or referenced */
+    busy = (uint8_t)(((int8_t)aote->flags < 0 ? 0xFF : 0x00) |
+                     (aote->ref_count != 0 ? 0xFF : 0x00));
+    if ((int8_t)busy < 0) {
+        goto not_deactivatable;                     /* 0x00E01B1E */
     }
 
-    /* Check if this is a system object that can't be deactivated
-     * (0x00E01B00 `tst.b D3b` / `bmi`) */
-    if (flags2 >= 0) {
-        /* Object type at offset 0x0D */
-        uint8_t obj_type = *((uint8_t *)aote + 0x0D);
-        if (obj_type == 2) {  /* System object */
-            /* Check if it has special attributes (offset 0x0F bit 1) */
-            if ((*((uint8_t *)aote + 0x0F) & 2) != 0) {
-                /* Not remote? */
-                if (*((int8_t *)aote + 0xB9) >= 0) {
-                    *status = status_$ast_segment_not_deactivatable;
-                    return (uint16_t)busy_or_intrans;
-                }
-            }
-        }
+    /* 0x00E01B00..0x00E01B1C: a protected local type-2 object, unless
+     * `keep` says otherwise */
+    if (keep >= 0 && aote->sub_type == 2 && (aote->attr_flags_lo & 0x02) &&
+        aote->remote_flag >= 0) {
+        goto not_deactivatable;
     }
 
-    /* Mark AOTE as in-transition */
+    /* 0x00E01B28 */
     aote->flags |= AOTE_FLAG_IN_TRANS;
 
-    /* Process all ASTEs attached to this AOTE */
+    /* 0x00E01B6E..0x00E01B76 with 0x00E01B30..0x00E01B6C: drain the list */
     while (aote->aste_list != NULL) {
         aste = aote->aste_list;
-
-        /* Check if ASTE is in-transition and we should wait */
-        if ((int16_t)aste->flags < 0 && flags3 < 0) {
+        /* 0x00E01B38..0x00E01B46: in transition and told to wait */
+        if ((int16_t)aste->flags < 0 && wait < 0) {
             AST_$WAIT_FOR_AST_INTRANS();
             continue;
         }
-
-        /* Process/free the ASTE */
-        /*
-         * 0x00E01B48-0x00E01B50 pushes `pea (A2)` (status), `move.b D3b`
-         * (flags2) and `move.b D2b` (flags1): two separate BYTE arguments,
-         * not one longword.  (source-o7gq)
-         */
-        AST_$DEACTIVATE_SEGMENT(aste, flags1, flags2, status);
-
+        /* 0x00E01B48..0x00E01B54: `move.b D3b` / `move.b D2b` - two
+         * single-byte arguments */
+        AST_$DEACTIVATE_SEGMENT(aste, purge, keep, status);
+        /* 0x00E01B58..0x00E01B64 */
         if (*status != status_$ok) {
             if (*status == status_$ast_segment_not_deactivatable) {
-                goto restore_and_return;
+                goto clear_in_trans;                /* 0x00E01BCE */
             }
-            goto set_error_and_return;
+            goto fail;                              /* 0x00E01BCA */
         }
-
-        /* Free the ASTE */
+        /* 0x00E01B66..0x00E01B6C */
         AST_$FREE_ASTE(aste);
     }
 
-    /* If flags1 is TRUE, skip purification (0x00E01B78 `tst.b D2b` / `bmi`) */
-    if (flags1 < 0) {
-        goto remove_from_hash;
+    /* 0x00E01B78..0x00E01B8E: `clr.w -(SP)` is purify_aote's byte flag */
+    if (purge >= 0) {
+        ast_$purify_aote(aote, 0, status);
+        if (*status != status_$ok) {
+            goto fail;
+        }
     }
 
-    /* Purify the AOTE */
-    ast_$purify_aote(aote, 0, status);
-    if (*status != status_$ok) {
-        goto set_error_and_return;
-    }
-
-remove_from_hash:
-    /* Remove AOTE from hash table */
-    /* Hash using the original UID stored at offset 0xA4 */
-    hash_index = UID_$HASH((uid_t *)((char *)aote + 0xA4), (uint16_t *)AST_HASH_TABLE_INFO);
-    hash_entry = AST_AOTH_BASE[hash_index];
-
-    if (hash_entry == aote) {
-        /* AOTE is at head of chain */
+    /* 0x00E01B90..0x00E01BC8: hash on obj_loc.uid (aote+0xA4) and unlink;
+     * the in-transition bit is NOT cleared on this exit */
+    hash_index = (uint16_t)UID_$HASH(&aote->obj_loc_uid,
+                                     (uint16_t *)&ast_$aoth_hash_size_00e01bec);
+    prev = AST_AOTH_BASE[hash_index];
+    if (prev == aote) {
         AST_AOTH_BASE[hash_index] = aote->hash_next;
     } else {
-        /* Find AOTE in chain */
-        while (hash_entry->hash_next != aote) {
-            hash_entry = hash_entry->hash_next;
+        while (prev->hash_next != aote) {
+            prev = prev->hash_next;
         }
-        hash_entry->hash_next = aote->hash_next;
+        prev->hash_next = aote->hash_next;
     }
-    return (uint16_t)busy_or_intrans;
+    return busy;
 
-set_error_and_return:
-    /* Set high bit on status to indicate error */
-    *(uint8_t *)status |= 0x80;
+not_deactivatable:
+    /* 0x00E01B1E..0x00E01B24 */
+    *status = status_$ast_segment_not_deactivatable;
+    return busy;
 
-restore_and_return:
-    /* Clear in-transition flag */
-    aote->flags &= ~AOTE_FLAG_IN_TRANS;
+fail:
+    /* 0x00E01BCA: bset.b #0x7,(A2) = bit 31 of the status */
+    *status |= (status_$t)0x80000000u;
 
-    /* Signal completion */
+clear_in_trans:
+    /* 0x00E01BCE..0x00E01BDC */
+    aote->flags &= (uint8_t)~AOTE_FLAG_IN_TRANS;
     EC_$ADVANCE(&AST_$AST_IN_TRANS_EC);
-    return (uint16_t)busy_or_intrans;
+    return busy;
 }

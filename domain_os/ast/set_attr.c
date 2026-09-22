@@ -15,7 +15,12 @@
  *           0x00E05224/0x00E05228
  *   status - Status return
  *
- * Original address: 0x00e05400
+ * Original address: 0x00E05400 (118 bytes; the batch list's 0x00E05450 is
+ * an interior push).  Frame: (-0x74) status, (-0x70) the UID copy,
+ * (-0x68) the 0x68-byte subject record ACL_$GET_EXSID fills.  `flags` is
+ * read as ONE BYTE (`move.b (0x12,A6),-(SP)` at 0x00E0544C) and handed to
+ * ast_$set_attribute_internal as its boolean.  Verified against the
+ * listing 2026-09-22.
  */
 
 #include "ast/ast_internal.h"
@@ -46,7 +51,7 @@ void AST_$SET_ATTR(uid_t *uid, int16_t attr_id, void *value,
 
     /* Call internal attribute setter */
     ast_$set_attribute_internal(&local_uid, attr_id, value,
-                                flags, (ast_$subject_t *)exsid_buf,
+                                (boolean)flags, (ast_$subject_t *)exsid_buf,
                                 clock, &local_status);
 
     PROC1_$INHIBIT_END();

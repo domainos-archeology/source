@@ -1,115 +1,114 @@
 /*
- * ast_$purify_aote - Purify/write back AOTE attributes
+ * ast_$purify_aote - Write an object's attributes back
  *
- * Writes back modified object attributes to the VTOCE (Volume Table of
- * Contents Entry). Handles both local and remote objects.
+ * Remote object: when the AOTE is TOUCHED and the object is not
+ * read-only (attr_flags_lo bit 0), TOUCHED is cleared and the home node
+ * is asked for fresh attributes with NETWORK_$AST_GET_INFO (AST lock
+ * released around the call); on success the DTU (record +0x24/+0x28) is
+ * copied into aote+0x30/+0x34 under the PMAP lock, on failure TOUCHED is
+ * put back.  The caller's status is never touched on this path.
  *
- * Parameters:
- *   aote - The AOTE to purify
- *   flags - Purification flags (passed to VTOCE_$WRITE)
- *   status - Output status
+ * Local object: TOUCHED stamps the DTU with TIME_$CLOCK and sets DIRTY;
+ * DIRTY copies the 0x90-byte attribute block and writes it with
+ * VTOCE_$WRITE (AST lock released around the call).  "disk write
+ * protected" is swallowed; any other failure sets bit 31 of the status
+ * and restores DIRTY.
  *
- * Original address: 0x00e013a0
+ * Parameters (frame at 0x00E013A0, `link.w A6,-0x9c`):
+ *   aote   (0x8,A6)  (A2)
+ *   flags  (0xC,A6)  ONE BYTE (`move.b (0xc,A6),-(SP)` at 0x00E014B8) handed
+ *                    to VTOCE_$WRITE unchanged
+ *   status (0xE,A6)  (A3), cleared first
+ * Locals: (-0x98) the 0x90-byte attribute record, (-0x9C) GET_INFO's status.
+ *
+ * Original address: 0x00E013A0 (352 bytes).  No A5.
  */
 
 #include "ast/ast_internal.h"
 
-/* External function prototypes */
+/*
+ * NETWORK_$AST_GET_INFO's request-flags word: `pea (0x112,PC)` at
+ * 0x00E013EC -> 0x00E01500, image bytes 00 80.  (ast_$force_activate_segment
+ * and AST_$LOOKUP_WITH_HINTS use a different cell, 0x00E01D64 = 00 08.)
+ */
+static const uint16_t ast_$purify_net_info_flags_00e01500 = 0x0080;
 
-/* Network info flags pointer */
-#if defined(ARCH_M68K)
-#define NET_INFO_FLAGS ((void *)0xE01500)
-#else
-#define NET_INFO_FLAGS net_info_flags
-#endif
-
-/* Status codes */
-
-void ast_$purify_aote(aote_t *aote, uint16_t flags, status_$t *status)
+void ast_$purify_aote(aote_t *aote, boolean flags, status_$t *status)
 {
-    status_$t local_status;
-    uint32_t attrs_buffer[36];  /* 144 bytes for attributes */
-    uint32_t clock_high;
-    uint16_t clock_low;
+    status_$t local_status;         /* (-0x9C,A6) */
+    uint32_t attrs[36];             /* (-0x98,A6) */
+    uint32_t *src;
+    uint32_t *dst;
     int16_t i;
-    uint32_t *src, *dst;
 
+    /* 0x00E013B0 */
     *status = status_$ok;
 
-    /* Check if this is a remote object (bit 7 at offset 0xB9) */
-    if (*((int8_t *)aote + 0xB9) < 0) {
-        /* Remote object - check TOUCHED flag (0x10 at offset 0xBF) */
-        if ((aote->status_flags & 0x10) != 0) {
-            /* Only update if not read-only (bit 0 at offset 0x0F) */
-            if ((*((uint8_t *)aote + 0x0F) & 1) == 0) {
-                /* Clear TOUCHED flag */
-                aote->flags &= ~AOTE_FLAG_TOUCHED;
-
-                /* Get updated info from network */
-                ML_$UNLOCK(AST_LOCK_ID);
-                NETWORK_$AST_GET_INFO((char *)aote + 0x9C, NET_INFO_FLAGS,
-                                      attrs_buffer, &local_status);
-                ML_$LOCK(AST_LOCK_ID);
-
-                if (local_status == status_$ok) {
-                    /* Copy DTS (Data Time Stamp) - at offset 0x30 in AOTE */
-                    /* attrs_buffer[0x24/4] = clock_high, attrs_buffer[0x28/4] = clock_low partial */
-                    ML_$LOCK(PMAP_LOCK_ID);
-                    *((uint32_t *)((char *)aote + 0x30)) = attrs_buffer[0x24 / 4];
-                    *((uint16_t *)((char *)aote + 0x34)) = (uint16_t)attrs_buffer[0x28 / 4];
-                    ML_$UNLOCK(PMAP_LOCK_ID);
-                } else {
-                    /* Restore TOUCHED flag on failure */
-                    aote->flags |= AOTE_FLAG_TOUCHED;
-                }
-            }
+    /* 0x00E013B2 */
+    if (aote->remote_flag < 0) {
+        /* 0x00E013BA..0x00E013CC: move.w (0xbe,A2) / btst.l #4 = flags
+         * bit 4 (TOUCHED); btst.b #0,(0xf,A2) = read-only */
+        if ((aote->flags & AOTE_FLAG_TOUCHED) == 0) {
+            return;
+        }
+        if (aote->attr_flags_lo & 0x01) {
+            return;
+        }
+        /* 0x00E013D0..0x00E0140A */
+        aote->flags &= (uint8_t)~AOTE_FLAG_TOUCHED;
+        ML_$UNLOCK(AST_LOCK_ID);
+        NETWORK_$AST_GET_INFO(&aote->obj_uid,
+                              (uint16_t *)&ast_$purify_net_info_flags_00e01500,
+                              attrs, &local_status);
+        ML_$LOCK(AST_LOCK_ID);
+        /* 0x00E0140C..0x00E01442 */
+        if (local_status == status_$ok) {
+            ML_$LOCK(PMAP_LOCK_ID);
+            aote->dtu_high = attrs[0x24 / 4];               /* (-0x74,A6) */
+            aote->dtu_low = (uint16_t)(attrs[0x28 / 4] >> 16); /* (-0x70,A6) */
+            ML_$UNLOCK(PMAP_LOCK_ID);
+        } else {
+            aote->flags |= AOTE_FLAG_TOUCHED;
         }
         return;
     }
 
-    /* Local object */
-
-    /* Check TOUCHED flag (0x10) */
-    if ((aote->status_flags & 0x10) != 0) {
-        /* Clear TOUCHED flag */
-        aote->flags &= ~AOTE_FLAG_TOUCHED;
-
-        /* Get current time */
+    /* 0x00E01446..0x00E0147E: TOUCHED -> stamp the DTU, mark DIRTY */
+    if (aote->flags & AOTE_FLAG_TOUCHED) {
+        aote->flags &= (uint8_t)~AOTE_FLAG_TOUCHED;
         ML_$LOCK(PMAP_LOCK_ID);
-        TIME_$CLOCK((clock_t *)((char *)aote + 0x30));
+        TIME_$CLOCK((clock_t *)&aote->dtu_high);            /* pea (0x30,A2) */
         ML_$UNLOCK(PMAP_LOCK_ID);
-
-        /* Set DIRTY flag */
         aote->flags |= AOTE_FLAG_DIRTY;
     }
 
-    /* Check DIRTY flag (0x20) */
-    if ((aote->status_flags & 0x20) != 0) {
-        /* Clear DIRTY flag */
-        aote->flags &= ~AOTE_FLAG_DIRTY;
+    /* 0x00E01484..0x00E0148C */
+    if ((aote->flags & AOTE_FLAG_DIRTY) == 0) {
+        return;
+    }
 
-        /* Copy attributes (144 bytes = 36 uint32_t starting at offset 0x0C) */
-        src = (uint32_t *)((char *)aote + 0x0C);
-        dst = attrs_buffer;
-        for (i = 0x23; i >= 0; i--) {
-            *dst++ = *src++;
-        }
+    /* 0x00E0148E..0x00E014A2: moveq #0x23 / dbf = 36 longwords from 0x0C */
+    aote->flags &= (uint8_t)~AOTE_FLAG_DIRTY;
+    src = (uint32_t *)&aote->obj_type;
+    dst = attrs;
+    for (i = 0x23; i >= 0; i--) {
+        *dst++ = *src++;
+    }
 
-        /* Write to VTOCE */
-        ML_$UNLOCK(AST_LOCK_ID);
-        VTOCE_$WRITE((vtoc_$lookup_req_t *)((char *)aote + 0x9C),
-                     (vtoce_$result_t *)attrs_buffer, (uint8_t)flags, status);
-        ML_$LOCK(AST_LOCK_ID);
+    /* 0x00E014A6..0x00E014DA: VTOCE_$WRITE(&obj_loc, &attrs, flags, status)
+     * with the AST lock released */
+    ML_$UNLOCK(AST_LOCK_ID);
+    VTOCE_$WRITE((vtoc_$lookup_req_t *)(void *)&aote->obj_uid,
+                 (vtoce_$result_t *)(void *)attrs, (char)flags, status);
+    ML_$LOCK(AST_LOCK_ID);
 
-        if (*status != status_$ok) {
-            if (*status == status_$disk_write_protected) {
-                /* Ignore write-protected error */
-                *status = status_$ok;
-            } else {
-                /* Set error flag and restore DIRTY */
-                *(uint8_t *)status |= 0x80;
-                aote->flags |= AOTE_FLAG_DIRTY;
-            }
+    /* 0x00E014DC..0x00E014F0 */
+    if (*status != status_$ok) {
+        if (*status == status_$disk_write_protected) {      /* 0x80007 */
+            *status = status_$ok;
+        } else {
+            *status |= (status_$t)0x80000000u;              /* bset.b #7 */
+            aote->flags |= AOTE_FLAG_DIRTY;
         }
     }
 }

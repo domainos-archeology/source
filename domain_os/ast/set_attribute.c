@@ -11,7 +11,10 @@
  *   value - Attribute value
  *   status - Status return
  *
- * Original address: 0x00e05380
+ * Original address: 0x00E05380 (128 bytes).  Frame: (-0x7C) status,
+ * (-0x78) the clock TIME_$CLOCK fills, (-0x70) the UID copy, (-0x68) the
+ * 0x68-byte subject record.  The wait flag is `st -(SP)` = TRUE.  Verified
+ * against the listing 2026-09-22.
  */
 
 #include "ast/ast_internal.h"

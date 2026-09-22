@@ -1,11 +1,20 @@
 /*
- * AST_$ADD_ASTES - Add ASTEs to the system
+ * AST_$ADD_ASTES - Grow the ASTE pool by *count entries
  *
- * Expands the ASTE pool by allocating memory and initializing
- * new ASTE entries. Each ASTE is 20 bytes (0x14), and each also
- * requires a 128-byte (0x80) segment map entry.
+ * Each new ASTE (0x14 bytes) is carved off the top of the ASTE region at
+ * AST_$ASTE_LIMIT and given the next segment index (AST_$SIZE_AST+1
+ * upwards).  Its segment map, a 0x80-byte block of 32 page entries at
+ * 0xED5000 + (seg-1)*0x80, is zeroed too; both pages are mapped on
+ * demand through MMU_$VTOP / WP_$CALLOC / MMU_$INSTALL.  The entry is then
+ * counted as a local ASTE and handed to AST_$FREE_ASTE.  Returns the new
+ * AST_$SIZE_AST.
  *
- * Original address: 0x00e0118c
+ * Original address: 0x00E0118C (508 bytes), A5 = 0xE1DC80 (AST_ block):
+ *   (0x400,A5) AST_$ASTE_LIMIT   (0x470,A5) AST_$SIZE_AST
+ *   (0x476,A5) AST_$ASTE_L_CNT
+ *
+ * Frame: (0x8,A6) count word pointer, (0xC,A6) status pointer,
+ *        (-0x10,A6) local status, (-0x14,A6) ppn, (-0x18,A6) va.
  */
 
 #include "ast/ast_internal.h"
@@ -14,100 +23,124 @@
 
 uint16_t AST_$ADD_ASTES(uint16_t *count, status_$t *status)
 {
-    aste_t *aste_ptr;
-    segmap_entry_t *segmap_ptr;
-    int16_t add_count;
-    int16_t i, j;
-    uint16_t seg_index;
-    uint32_t ppn;
-    uint32_t va;
-    status_$t local_status;
+    status_$t local_status;     /* (-0x10,A6) */
+    uint32_t ppn;               /* (-0x14,A6) */
+    uint32_t va;                /* (-0x18,A6) */
+    int16_t add_count;          /* D4 */
+    int16_t remaining;          /* D3 */
+    uint16_t seg;               /* D2: segment index of the entry */
+    int32_t new_size;           /* D0 */
+    aste_t *aste;               /* A2 */
+    char *segmap_end;           /* D6: 0xED5000 + seg*0x80 */
+    uint32_t segmap_va;         /* D5: segmap_end - 0x80 */
+    uint16_t *clear_ptr;
+    int16_t j;
 
-    aste_ptr = AST_$ASTE_LIMIT;
+    /* 0x00E0119A..0x00E011A0 */
     add_count = (int16_t)*count;
     local_status = status_$ok;
 
-    /* Validate request */
-    if ((int32_t)(add_count + AST_$SIZE_AST) > AST_MAX_ASTE ||
-        (int32_t)(add_count + AST_$SIZE_AST) < AST_MIN_ASTE) {
+    /*
+     * 0x00E011A4..0x00E011C0: zero-extended size plus sign-extended request
+     * must land in [0x50, 0x1F8].
+     */
+    new_size = (int32_t)AST_$SIZE_AST + (int32_t)add_count;
+    if (new_size > AST_MAX_ASTE || new_size < AST_MIN_ASTE) {
+        /* 0x00E0136A */
         local_status = status_$ast_incompatible_request;
-        goto done;
-    }
-
-    /* Ensure initial page is mapped */
-    if (MMU_$VTOP((uint32_t)AST_$ASTE_LIMIT, &local_status) == 0 &&
-        local_status != status_$ok) {
-        WP_$CALLOC(&ppn, &local_status);
+    } else {
+        /*
+         * 0x00E011C4..0x00E01212: map the page at the current limit if
+         * MMU_$VTOP leaves a status; its return value is not examined.
+         */
+        va = ARCH_PTR_TO_VA(AST_$ASTE_LIMIT);
+        (void)MMU_$VTOP(va, &local_status);
         if (local_status != status_$ok) {
-            CRASH_SYSTEM(&local_status);
-        }
-        MMU_$INSTALL(ppn, (uint32_t)aste_ptr, 0x16);
-    }
-
-    ML_$LOCK(AST_LOCK_ID);
-
-    /* Calculate starting segment index */
-    seg_index = AST_$SIZE_AST + 1;
-
-    /* Add each new ASTE */
-    for (i = (add_count + AST_$SIZE_AST) - (AST_$SIZE_AST + 1); i >= 0; i--) {
-        aste_ptr = AST_$ASTE_LIMIT;
-        va = (uint32_t)AST_$ASTE_LIMIT + 0x13;  /* End of entry - 1 */
-        AST_$ASTE_LIMIT = (aste_t*)((char*)AST_$ASTE_LIMIT + sizeof(aste_t));
-
-        /* Calculate segment map address */
-        segmap_ptr = (segmap_entry_t*)((char*)SEGMAP_BASE + ((uint32_t)seg_index << 7));
-
-        ML_$UNLOCK(AST_LOCK_ID);
-
-        /* Ensure page for this ASTE is mapped */
-        if (MMU_$VTOP(va, &local_status) == 0 && local_status != status_$ok) {
             WP_$CALLOC(&ppn, &local_status);
             if (local_status != status_$ok) {
                 CRASH_SYSTEM(&local_status);
             }
-            MMU_$INSTALL(ppn, va, 0x16);
+            MMU_$INSTALL(ppn, va, 0x16);        /* pea (0x16).w */
         }
 
-        /* Clear the ASTE */
-        uint16_t *ptr = (uint16_t*)aste_ptr;
-        for (j = 9; j >= 0; j--) {
-            *ptr++ = 0;
-        }
-
-        /* Ensure segment map page is mapped */
-        va = (uint32_t)((char*)segmap_ptr - 0x80);
-        if (MMU_$VTOP(va, &local_status) == 0 && local_status != status_$ok) {
-            WP_$CALLOC(&ppn, &local_status);
-            if (local_status != status_$ok) {
-                CRASH_SYSTEM(&local_status);
-            }
-            MMU_$INSTALL(ppn, va, 0x16);
-        }
-
-        /* Clear the segment map */
-        ptr = (uint16_t*)((char*)segmap_ptr - 0x80 + 2);
-        for (j = 0x3F; j >= 0; j--) {
-            *(ptr - 1) = 0;
-            ptr++;
-        }
-
-        /* Set segment index in ASTE */
-        aste_ptr->seg_index = seg_index;
-
+        /* 0x00E01216..0x00E01222 */
         ML_$LOCK(AST_LOCK_ID);
 
-        /* Increment local ASTE count and free the entry */
-        AST_$ASTE_L_CNT++;
-        AST_$FREE_ASTE(aste_ptr);
+        /*
+         * 0x00E01224..0x00E01248: D0 = size+1 (first new segment index),
+         * D1 = size + count - D0 = count - 1 in 16 bits; bmi skips the loop.
+         * D6 = 0xED5000 + (seg << 7) with seg zero-extended to 32 bits.
+         */
+        seg = (uint16_t)(AST_$SIZE_AST + 1);
+        remaining = (int16_t)((int16_t)(AST_$SIZE_AST + add_count) -
+                              (int16_t)seg);
+        if (remaining >= 0) {
+            segmap_end = (char *)SEGMAP_BASE + ((uint32_t)seg << 7);
+            do {
+                /* 0x00E0124A..0x00E0125A: take the entry, bump the limit,
+                 * va = address of the entry's last byte */
+                aste = AST_$ASTE_LIMIT;
+                AST_$ASTE_LIMIT = AST_$ASTE_LIMIT + 1;   /* moveq #0x14 / add.l */
+                va = ARCH_PTR_TO_VA(AST_$ASTE_LIMIT) - 1;
 
-        seg_index++;
+                /* 0x00E0125E..0x00E0126A */
+                ML_$UNLOCK(AST_LOCK_ID);
+
+                /* 0x00E0126C..0x00E012B4: map the ASTE's page if needed */
+                (void)MMU_$VTOP(va, &local_status);
+                if (local_status != status_$ok) {
+                    WP_$CALLOC(&ppn, &local_status);
+                    if (local_status != status_$ok) {
+                        CRASH_SYSTEM(&local_status);
+                    }
+                    MMU_$INSTALL(ppn, va, 0x16);
+                }
+
+                /* 0x00E012B8..0x00E012C6: moveq #0x9 / dbf = 10 words, the
+                 * whole 0x14-byte target entry */
+                clear_ptr = (uint16_t *)aste;
+                for (j = 0x9; j >= 0; j--) {
+                    *clear_ptr++ = 0;
+                }
+
+                /* 0x00E012CA..0x00E01316: the segment map block for this
+                 * segment starts 0x80 below D6; map its page if needed */
+                segmap_va = ARCH_PTR_TO_VA(segmap_end - 0x80);
+                (void)MMU_$VTOP(segmap_va, &local_status);
+                if (local_status != status_$ok) {
+                    WP_$CALLOC(&ppn, &local_status);
+                    if (local_status != status_$ok) {
+                        CRASH_SYSTEM(&local_status);
+                    }
+                    MMU_$INSTALL(ppn, segmap_va, 0x16);
+                }
+
+                /* 0x00E0131A..0x00E0132A: moveq #0x3f / dbf = 0x40 words */
+                clear_ptr = (uint16_t *)ARCH_VA_TO_PTR(segmap_va);
+                for (j = 0x3F; j >= 0; j--) {
+                    *clear_ptr++ = 0;
+                }
+
+                /* 0x00E0132E: move.w D2w,(0xe,A2) */
+                aste->seg_index = seg;
+
+                /* 0x00E01332..0x00E0134A */
+                ML_$LOCK(AST_LOCK_ID);
+                AST_$ASTE_L_CNT++;
+                AST_$FREE_ASTE(aste);
+
+                /* 0x00E0134C..0x00E01354: next segment, next map block */
+                seg++;
+                segmap_end += 0x80;
+            } while (remaining-- != 0);
+        }
+
+        /* 0x00E01358..0x00E01368 */
+        AST_$SIZE_AST += add_count;
+        ML_$UNLOCK(AST_LOCK_ID);
     }
 
-    AST_$SIZE_AST += add_count;
-    ML_$UNLOCK(AST_LOCK_ID);
-
-done:
+    /* 0x00E01372..0x00E0137A */
     *status = local_status;
     return AST_$SIZE_AST;
 }

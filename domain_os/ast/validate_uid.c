@@ -1,36 +1,26 @@
 /*
- * ast_$validate_uid - Validate UID and return "not found" status
+ * ast_$validate_uid - Record a failed object lookup and return "not found"
  *
- * This function stores the UID and flags to global storage areas
- * (for debugging/error reporting) and returns a "file object not found"
- * status. Used when an operation fails to find a requested object.
+ * Stores the UID and the caller's flags word in the AST_ block for
+ * post-mortem inspection and returns file_$object_not_found.  Despite
+ * the name it validates nothing.
  *
- * Original address: 0x00e00be8
+ * Original address: 0x00E00BE8 (32 bytes).  A5 is inherited (every caller
+ * is AST or VTOC_$SEARCH_VOLUMES code with A5 = 0xE1DC80): (0x478,A5)
+ * and (0x47C,A5) take the UID, (0x480,A5) the flags - the record the SAU2
+ * link map names AST_$NOT_FOUND (0xE1E0F8).
+ * Frame: (0x8,A6) uid, (0xC,A6) flags longword.
  */
 
 #include "ast/ast_internal.h"
 
-/*
- * Global storage for failed UID lookups (for error reporting)
- * At A5+0x478, A5+0x47C, A5+0x480 in original code
- */
-#if defined(ARCH_M68K)
-#define AST_$FAILED_UID_HIGH (*(uint32_t *)0xE1E0F8)  /* A5+0x478 */
-#define AST_$FAILED_UID_LOW  (*(uint32_t *)0xE1E0FC)  /* A5+0x47C */
-#define AST_$FAILED_FLAGS    (*(uint32_t *)0xE1E100)  /* A5+0x480 */
-#else
-#define AST_$FAILED_UID_HIGH ast_$failed_uid_high
-#define AST_$FAILED_UID_LOW  ast_$failed_uid_low
-#define AST_$FAILED_FLAGS    ast_$failed_flags
-#endif
-
 status_$t ast_$validate_uid(uid_t *uid, uint32_t flags)
 {
-    /* Store the UID and flags to global storage for debugging/error reporting */
-    AST_$FAILED_UID_HIGH = uid->high;
-    AST_$FAILED_UID_LOW = uid->low;
-    AST_$FAILED_FLAGS = flags;
+    /* 0x00E00BEC..0x00E00BF8: two post-increment longwords, then the flags */
+    AST_$NOT_FOUND.uid.high = uid->high;
+    AST_$NOT_FOUND.uid.low = uid->low;
+    AST_$NOT_FOUND.flags = flags;
 
-    /* Return "file object not found" status (0x000F0001) */
+    /* 0x00E00BFE: move.l #0xf0001,D0 */
     return file_$object_not_found;
 }
