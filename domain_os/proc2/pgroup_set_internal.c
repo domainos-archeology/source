@@ -1,187 +1,135 @@
 /*
- * PGROUP_SET_INTERNAL - Set process's process group
+ * PGROUP_SET_INTERNAL - Move a process into a process group
  *
- * Internal helper to set a process's process group. Handles:
- * - Creating new pgroup table entries if needed
- * - Reference count management
- * - Leader count tracking (for orphan detection)
+ * Re-emitted from the image (0x00E41E86..0x00E42022, 414 bytes).
  *
- * Parameters:
- *   entry      - Pointer to the process's proc2_info_t
- *   new_upgid  - The new Unix process group ID (0 to leave current group)
- *   status_ret - Pointer to receive status
+ * Frame (link.w A6,-0x28; A5 = 0xE7BE84):
+ *   (0x8,A6)  entry      -> A2 (unbiased)
+ *   (0xC,A6)  new_upgid  -> D2 (word)
+ *   (0xE,A6)  status_ret -> A3
  *
- * Status codes:
- *   0x00000000: Success
- *   0x00190017: Process group is in a different session
+ * PGROUP_TABLE fields are addressed as (0x3F30,A0) ref_count, (0x3F32)
+ * leader_count, (0x3F34) upgid, (0x3F36) session_id with A0 = 0xEA551C +
+ * idx*8.  Other entries are biased (base + idx*0xE4): (-0xD4) = +0x10
+ * pgroup index, (-0x88) = +0x5C session, (-0xC2) = +0x22 next sibling.
+ *
+ * Callers: INIT_ENTRY_INTERNAL 0x00E733DA, SET_PGROUP 0x00E411DE,
+ * SET_SESSION_ID 0x00E41D04.
  *
  * Original address: 0x00e41e86
  */
 
 #include "proc2/proc2_internal.h"
-#include "misc/misc.h"  /* For CRASH_SYSTEM */
+#include "misc/crash_system.h"
 
 /*
- * Memory access helpers for child iteration and field access.
+ * 0x00E42024 (`pea (0x10e,PC)` at 0x00E41F14): bytes 00 19 00 16 =
+ * status_$proc2_process_using_pgroup_id, the crash status when no free
+ * slot exists.
  */
-#if defined(ARCH_M68K)
-    #define P2_PGROUP_IDX_FIELD(idx)    (*(int16_t*)(0xEA5448 + (idx) * 0xE4))   /* offset 0x10 */
-    #define P2_SESSION_ID_FIELD(idx)    (*(int16_t*)(0xEA5494 + (idx) * 0xE4))   /* offset 0x5C */
-    #define P2_CHILD_SIBLING_IDX(idx)   (*(int16_t*)(0xEA545A + (idx) * 0xE4))   /* offset 0x22 */
-#else
-    #define P2_PGROUP_IDX_FIELD(idx)    (P2_INFO_ENTRY(idx)->pgroup_table_idx)
-    #define P2_SESSION_ID_FIELD(idx)    (P2_INFO_ENTRY(idx)->session_id)
-    #define P2_CHILD_SIBLING_IDX(idx)   (P2_INFO_ENTRY(idx)->next_child_sibling)
-#endif
+static const status_$t proc2_pgroup_table_full_00e42024 = status_$proc2_process_using_pgroup_id;
 
 void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_$t *status_ret)
 {
-    int16_t pgroup_idx;
-    int16_t old_pgroup_idx;
-    int16_t parent_pgroup_idx;
-    int16_t child_idx;
-    int16_t child_pgroup_idx;
-    pgroup_entry_t *pgroup;
-    pgroup_entry_t *old_pgroup;
+    int16_t new_idx;             /* D0 */
     int16_t i;
+    proc2_info_t *other;         /* A0 (biased) */
+    uint16_t child_pgroup;       /* D2 (reused) */
 
-    *status_ret = 0;
+    /* 0x00E41EA0 */
+    *status_ret = status_$ok;
 
-    /* If new_upgid is 0, clear the process group */
+    /* 0x00E41EA2: tst.w D2w / bne */
     if (new_upgid == 0) {
+        /* 0x00E41EA6-0x00E41EB2: PGROUP_CLEANUP_INTERNAL(entry, 2); then
+         * 0x00E41F1E clr.w (0x10,A2); exit */
         PGROUP_CLEANUP_INTERNAL(entry, 2);
         entry->pgroup_table_idx = 0;
         return;
     }
 
-    /* Search for existing pgroup with this UPGID */
-    pgroup_idx = PGROUP_FIND_BY_UPGID(new_upgid);
-
-    if (pgroup_idx == 0) {
+    /* 0x00E41EB4-0x00E41EC0 */
+    new_idx = PGROUP_FIND_BY_UPGID(new_upgid);
+    if (new_idx != 0) {
         /*
-         * No existing pgroup found - allocate a new slot.
-         * Search for a free slot (ref_count == 0).
+         * 0x00E41EC2-0x00E41EE0: sign-extended entry->session_id vs
+         * zero-extended PGROUP[new].session_id, compared as longwords.
          */
-        for (i = 1; i < PGROUP_TABLE_SIZE; i++) {
-            if (PGROUP_ENTRY(i)->ref_count == 0) {
+        if ((int32_t)(int16_t)entry->session_id !=
+            (int32_t)(uint32_t)PGROUP_ENTRY(new_idx)->session_id) {
+            *status_ret = status_$proc2_pgroup_in_different_session;   /* 0x00E41EE2 */
+            return;                                          /* 0x00E41EE8 */
+        }
+        PGROUP_ENTRY(new_idx)->ref_count += 1;               /* 0x00E41EEC */
+    } else {
+        /*
+         * 0x00E41EF2-0x00E41F0A: scan slots 1..70 (moveq #0x45 + dbf) for
+         * ref_count == 0; D0 walks 1.. and ends at 71 when none is free.
+         */
+        new_idx = 1;
+        for (i = 0; i < 70; i++) {
+            if (PGROUP_ENTRY(new_idx)->ref_count == 0) {
                 break;
             }
+            new_idx++;
         }
 
-        /* Check if table is full */
-        if (i >= PGROUP_TABLE_SIZE) {
-            /* Table full - crash the system */
-            static status_$t status_pgroup_table_full = status_$proc2_table_full;
-            CRASH_SYSTEM(&status_pgroup_table_full);
+        /* 0x00E41F0E: cmpi.w #0x46,D0w / ble -- 71 means full */
+        if (new_idx > 0x46) {
+            /* 0x00E41F14-0x00E41F22: crash; if it returns, clear and exit */
+            CRASH_SYSTEM(&proc2_pgroup_table_full_00e42024);
             entry->pgroup_table_idx = 0;
             return;
         }
 
-        pgroup_idx = i;
-
-        /* Initialize the new pgroup entry */
-        pgroup = PGROUP_ENTRY(pgroup_idx);
-        pgroup->ref_count = 1;
-        pgroup->leader_count = 0;
-        pgroup->upgid = new_upgid;
-        pgroup->session_id = entry->session_id;
-    } else {
-        /* Pgroup exists - verify session matches */
-        pgroup = PGROUP_ENTRY(pgroup_idx);
-
-        if ((int16_t)entry->session_id != (int16_t)pgroup->session_id) {
-            *status_ret = status_$proc2_pgroup_in_different_session;
-            return;
-        }
-
-        /* Increment reference count */
-        pgroup->ref_count++;
+        /* 0x00E41F26-0x00E41F42: move.l #0x10000 -> ref_count 1, leader 0 */
+        PGROUP_ENTRY(new_idx)->ref_count = 1;
+        PGROUP_ENTRY(new_idx)->leader_count = 0;
+        PGROUP_ENTRY(new_idx)->upgid = new_upgid;
+        PGROUP_ENTRY(new_idx)->session_id = entry->session_id;
     }
 
-    /* Decrement ref_count on old pgroup if we had one */
-    old_pgroup_idx = entry->pgroup_table_idx;
-    if (old_pgroup_idx != 0) {
-        old_pgroup = PGROUP_ENTRY(old_pgroup_idx);
-        old_pgroup->ref_count--;
+    /* 0x00E41F48-0x00E41F5E: drop the old group's reference */
+    if (entry->pgroup_table_idx != 0) {
+        PGROUP_ENTRY(entry->pgroup_table_idx)->ref_count -= 1;
     }
 
-    /*
-     * Update leader counts based on parent relationship.
-     * If our parent is in the same session but different pgroup,
-     * we affect the leader count.
-     */
-    parent_pgroup_idx = entry->parent_pgroup_idx;
-
-    if (parent_pgroup_idx != 0) {
-        int16_t parent_entry_pgroup = P2_PGROUP_IDX_FIELD(parent_pgroup_idx);
-
-        /* Check if parent is in the same session */
-        if (P2_SESSION_ID_FIELD(parent_pgroup_idx) == entry->session_id) {
-            /*
-             * If old pgroup differs from parent's pgroup,
-             * decrement leader count on old pgroup.
-             */
-            if (old_pgroup_idx != 0 && old_pgroup_idx != parent_entry_pgroup) {
-                old_pgroup = PGROUP_ENTRY(old_pgroup_idx);
-                old_pgroup->leader_count--;
+    /* 0x00E41F62-0x00E41FB6: the parent, if in the same session */
+    if (entry->parent_pgroup_idx != 0) {
+        other = P2_INFO_ENTRY((int16_t)entry->parent_pgroup_idx);   /* mulu */
+        if (entry->session_id == other->session_id) {        /* 0x00E41F7A-0x00E41F82 */
+            /* 0x00E41F84-0x00E41F9C: old group, if any and not the
+             * parent's, loses a leader */
+            if (entry->pgroup_table_idx != 0 &&
+                entry->pgroup_table_idx != other->pgroup_table_idx) {
+                PGROUP_ENTRY(entry->pgroup_table_idx)->leader_count -= 1;
             }
-
-            /*
-             * If new pgroup differs from parent's pgroup,
-             * increment leader count on new pgroup.
-             */
-            if (pgroup_idx != parent_entry_pgroup) {
-                pgroup->leader_count++;
+            /* 0x00E41FA0-0x00E41FB6: new group, if not the parent's, gains one */
+            if ((uint16_t)new_idx != other->pgroup_table_idx) {
+                PGROUP_ENTRY(new_idx)->leader_count += 1;
             }
         }
     }
 
-    /*
-     * Update leader counts for all children.
-     * For each child in the same session:
-     * - If child's pgroup matched our old pgroup, increment their pgroup's leader count
-     * - If child's pgroup matches our new pgroup, decrement their pgroup's leader count
-     */
-    child_idx = entry->first_child_idx;
-
-    while (child_idx != 0) {
-        /* Only consider children in the same session */
-        if (P2_SESSION_ID_FIELD(child_idx) == entry->session_id) {
-            child_pgroup_idx = P2_PGROUP_IDX_FIELD(child_idx);
-
-            /*
-             * If child was in a different pgroup than our old pgroup,
-             * and our old pgroup matched theirs... wait, that's contradictory.
-             * Let me re-read the original logic.
-             *
-             * Original check: if (child_pgroup != 0 && child_pgroup == old_pgroup_idx)
-             *   then increment child's pgroup leader count
-             *
-             * This happens because: if our old pgroup == child's pgroup,
-             * we were previously not a "leader" (same group as child).
-             * Now that we're leaving that group, we become a "leader" relative
-             * to that child's group, so increment their leader count.
-             */
-            if (child_pgroup_idx != 0 && child_pgroup_idx == old_pgroup_idx) {
-                pgroup_entry_t *child_pgroup = PGROUP_ENTRY(child_pgroup_idx);
-                child_pgroup->leader_count++;
+    /* 0x00E41FBA-0x00E42014: every child in the same session */
+    i = (int16_t)entry->first_child_idx;
+    while (i != 0) {
+        other = P2_INFO_ENTRY(i);                            /* muls */
+        if (entry->session_id == other->session_id) {        /* 0x00E41FD0-0x00E41FD8 */
+            child_pgroup = other->pgroup_table_idx;          /* 0x00E41FDA */
+            /* 0x00E41FDE-0x00E41FF2: child in our OLD group -> that group
+             * gains a leader (we are leaving it) */
+            if (child_pgroup != 0 && child_pgroup == entry->pgroup_table_idx) {
+                PGROUP_ENTRY(child_pgroup)->leader_count += 1;
             }
-
-            /*
-             * If child's pgroup matches our new pgroup,
-             * we're now in the same group as the child.
-             * Decrement their pgroup's leader count.
-             */
-            if (pgroup_idx == child_pgroup_idx) {
-                pgroup_entry_t *child_pgroup = PGROUP_ENTRY(child_pgroup_idx);
-                child_pgroup->leader_count--;
+            /* 0x00E41FF6-0x00E4200C: child in our NEW group -> it loses one */
+            if ((uint16_t)new_idx == other->pgroup_table_idx) {
+                PGROUP_ENTRY(other->pgroup_table_idx)->leader_count -= 1;
             }
         }
-
-        /* Move to next sibling */
-        child_idx = P2_CHILD_SIBLING_IDX(child_idx);
+        i = (int16_t)other->next_child_sibling;              /* 0x00E42010 */
     }
 
-    /* Finally, set the new pgroup index */
-    entry->pgroup_table_idx = pgroup_idx;
+    /* 0x00E42016 */
+    entry->pgroup_table_idx = (uint16_t)new_idx;
 }

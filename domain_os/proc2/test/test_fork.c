@@ -174,7 +174,7 @@ void MST_$FORK(uint16_t asid, uint16_t pid, uint32_t flags, status_$t *status)
 
 void MST_$GET_VA_INFO(uint16_t *asid_p, uint32_t *va_ptr, uid_t *uid_out,
                       uint32_t *adjusted_va, void *param_5,
-                      int8_t *active_flag, int8_t *modified_flag,
+                      boolean *active_flag, boolean *modified_flag,
                       status_$t *status_ret)
 {
     (void)asid_p; (void)adjusted_va; (void)param_5;

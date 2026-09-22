@@ -339,7 +339,7 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
 /* ---- callees the arms recovered in bead source-yjtx reach ---------------- */
 
 void PROC2_$LIST2(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
-                  int32_t *start_index, uint8_t *more_flag,
+                  int32_t *start_index, int8_t *more_flag,
                   int32_t *last_index)
 {
     (void)uid_list; (void)start_index; (void)more_flag; (void)last_index;
@@ -347,7 +347,7 @@ void PROC2_$LIST2(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
 }
 
 void PROC2_$ZOMBIE_LIST(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
-                        int32_t *start_index, uint8_t *more_flag,
+                        int32_t *start_index, int8_t *more_flag,
                         int32_t *last_index)
 {
     (void)uid_list; (void)start_index; (void)more_flag; (void)last_index;

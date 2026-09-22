@@ -1,85 +1,59 @@
 /*
- * PROC2_$SET_ACCT_INFO - Set accounting information for current process
+ * PROC2_$SET_ACCT_INFO - Record accounting info for the calling process
  *
- * Sets the accounting info string and accounting UID for the current process.
- * The info string is stored in the process info structure (max 32 bytes).
+ * Re-emitted from the image (0x00E41AC0..0x00E41B54, 150 bytes).
  *
- * Parameters:
- *   info       - Pointer to accounting info string
- *   info_len   - Pointer to length of info string (max 32)
- *   acct_uid   - Pointer to accounting UID (8 bytes)
- *   status_ret - Returns status (always 0)
+ * Frame (link.w A6,-0xC; A5 = 0xE7BE84):
+ *   (0x8,A6)  info       -> A2     (0xC,A6)  info_len ptr -> D2 = *ptr
+ *   (0x10,A6) acct_uid   -> A3     (0x14,A6) status_ret (always status_$ok)
+ *
+ * The caller's entry is A0 = 0xEA551C + idx*0xE4 = entry + 0xE4:
+ * (-0xB9,A3=A0+i) = +0x2B+i, so byte i (1-based) lands at acct_info[i-1];
+ * (-0x90) = +0x54 acct_info_len, (-0x98) = +0x4C acct_uid, and the
+ * closing bclr.b #3 on (-0xB9,A0) is bit 3 of the LOW byte of flags.
+ *
+ * Only reference: the SVC table entry at 0x00E7BA92.
  *
  * Original address: 0x00e41ac0
  */
 
 #include "proc2/proc2_internal.h"
 
-/*
- * Raw memory access macros for accounting fields
- * These are within proc2_info_t but not fully documented
- */
-#if defined(ARCH_M68K)
-    #define P2_ACCT_BASE(idx)          ((uint8_t*)(0xEA551C + ((idx) * 0xE4)))
-
-    /* Offset 0x2B - flags byte 1 */
-    #define P2_ACCT_FLAGS_B1(idx)      (*(uint8_t*)(0xEA5463 + (idx) * 0xE4))
-
-    /* Offset 0x64-0x6B - accounting string area (starts at byte 1) */
-    #define P2_ACCT_STRING(idx)        ((uint8_t*)(0xEA5464 + (idx) * 0xE4))
-
-    /* Offset 0x70 - accounting string length */
-    #define P2_ACCT_LEN(idx)           (*(int16_t*)(0xEA548C + (idx) * 0xE4))
-
-    /* Offset 0x68 - accounting UID (8 bytes) */
-    #define P2_ACCT_UID_HI(idx)        (*(uint32_t*)(0xEA5484 + (idx) * 0xE4))
-    #define P2_ACCT_UID_LO(idx)        (*(uint32_t*)(0xEA5488 + (idx) * 0xE4))
-#else
-    static uint8_t p2_acct_dummy8;
-    static uint8_t p2_acct_string_dummy[32];
-    static int16_t p2_acct_len_dummy;
-    static uint32_t p2_acct_uid_dummy;
-    #define P2_ACCT_FLAGS_B1(idx)      (p2_acct_dummy8)
-    #define P2_ACCT_STRING(idx)        (p2_acct_string_dummy)
-    #define P2_ACCT_LEN(idx)           (p2_acct_len_dummy)
-    #define P2_ACCT_UID_HI(idx)        (p2_acct_uid_dummy)
-    #define P2_ACCT_UID_LO(idx)        (p2_acct_uid_dummy)
-#endif
-
 void PROC2_$SET_ACCT_INFO(uint8_t *info, int16_t *info_len, uid_t *acct_uid,
                           status_$t *status_ret)
 {
-    int16_t cur_idx;
-    int16_t len;
+    proc2_info_t *entry;         /* A0 (biased) */
+    int16_t len;                 /* D2 */
     int16_t i;
 
+    /* 0x00E41ACE-0x00E41ADE */
     ML_$LOCK(PROC2_LOCK_ID);
 
-    /* Get current process index */
-    cur_idx = P2_PID_TO_INDEX(PROC1_$CURRENT);
+    /* 0x00E41AE0-0x00E41B00 (mulu) */
+    entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
 
-    /* Clamp length to max 32 */
+    /* 0x00E41AFE-0x00E41B0A: signed clamp to 32 (ble); negatives pass */
     len = *info_len;
-    if (len > 32) {
-        len = 32;
+    if (len > 0x20) {
+        len = 0x20;
     }
 
-    /* Copy accounting info string (bytes 1 through len) */
+    /* 0x00E41B0C-0x00E41B20: D0 = len - 1; bmi skips; dbf copies len bytes */
     for (i = 0; i < len; i++) {
-        P2_ACCT_STRING(cur_idx)[i] = info[i];
+        entry->acct_info[i] = (char)info[i];
     }
 
-    /* Store length */
-    P2_ACCT_LEN(cur_idx) = len;
+    /* 0x00E41B24: entry+0x54 = len (the clamped, possibly negative word) */
+    entry->acct_info_len = (uint16_t)len;
 
-    /* Store accounting UID (8 bytes) */
-    P2_ACCT_UID_HI(cur_idx) = acct_uid->high;
-    P2_ACCT_UID_LO(cur_idx) = acct_uid->low;
+    /* 0x00E41B28-0x00E41B30: entry+0x4C = *acct_uid */
+    entry->acct_uid.high = acct_uid->high;
+    entry->acct_uid.low = acct_uid->low;
 
-    /* Clear flag bit 3 in flags byte 1 */
-    P2_ACCT_FLAGS_B1(cur_idx) &= 0xF7;
+    /* 0x00E41B34: bclr.b #0x3,(-0xb9,A0) -> flags &= ~0x0008 */
+    entry->flags &= (uint16_t)~PROC2_FLAG_DEBUG;
 
+    /* 0x00E41B3A-0x00E41B4A */
     ML_$UNLOCK(PROC2_LOCK_ID);
-
-    *status_ret = 0;
+    *status_ret = status_$ok;
 }

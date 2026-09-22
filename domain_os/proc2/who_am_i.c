@@ -1,11 +1,16 @@
 /*
- * PROC2_$WHO_AM_I - Get current process UID
+ * PROC2_$WHO_AM_I - Return the calling process's UID
  *
- * Looks up the current process in the PROC2 table and returns its UID.
- * Uses the PID-to-index mapping table to find the PROC2 entry.
+ * Re-emitted from the image (0x00E73862..0x00E738A6, 70 bytes) and
+ * verified; the previous body was faithful.  A5 is loaded with 0xE86054
+ * (PROC2_CREATE_DAT) and never used.
  *
- * Parameters:
- *   proc_uid - Pointer to receive the process UID
+ *   00e73870  move.w PROC1_$CURRENT,D0w ; add.w D0w,D0w
+ *   00e73886  move.w (0x3eb6,A1),D0w    ; P2_PID_TO_INDEX
+ *   00e7388c  muls.w #0xe4,D1 ; lea (-0xe4,A1),A1   ; entry base
+ *   00e73898  move.l (A1)+,(A2) ; move.l (A1)+,(0x4,A2)
+ *
+ * No lock.  Only reference: the SVC table entry at 0x00E7B39E.
  *
  * Original address: 0x00e73862
  */
@@ -14,16 +19,9 @@
 
 void PROC2_$WHO_AM_I(uid_t *proc_uid)
 {
-    int16_t index;
-    proc2_info_t *entry;
+    proc2_info_t *entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
 
-    /* Get PROC2 index from PROC1 PID mapping table */
-    index = P2_PID_TO_INDEX(PROC1_$CURRENT);
-
-    /* Get entry from process info table */
-    entry = P2_INFO_ENTRY(index);
-
-    /* Copy UID to output */
+    /* 0x00E73898-0x00E7389A */
     proc_uid->high = entry->uid.high;
     proc_uid->low = entry->uid.low;
 }

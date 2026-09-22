@@ -1,121 +1,64 @@
 /*
- * PROC2_$WAIT_TRY_LIVE_CHILD - Try to collect status from a live child
+ * PROC2_$WAIT_TRY_LIVE_CHILD - Report a stopped or exited child
  *
- * Checks if a live (non-zombie) child process has stopped or exited
- * and can be waited on. If the child has changed state, collects the
- * status information.
+ * Re-emitted from the image (0x00E3FC5C..0x00E3FD04, 170 bytes).
  *
- * Parameters:
- *   child_idx    - Index of child process to check
- *   options      - Wait options (bit 1 = WUNTRACED)
- *   parent_idx   - Index of parent (waiting) process
- *   prev_idx     - Index of previous sibling in child list
- *   found        - Output: set to -1 if child status collected
- *   result       - Pointer to result buffer
- *   pid_ret      - Pointer to receive child's UPID if found
+ * Frame (link.w A6,-0x8):
+ *   (0x8,A6)  child_idx word -> D2     (0xA,A6)  options word -> D0
+ *   (0xC,A6)  parent_idx word -> D3    (0xE,A6)  prev_idx word (only re-pushed)
+ *   (0x10,A6) found -> A2              (0x14,A6) result -> A3
+ *   (0x18,A6) pid_ret -> D4
+ *
+ *   00e3fc7c  *found = FALSE
+ *   00e3fc8e  low byte bit 6 (0x0040 stopped) set, bit 5 (0x0020 reported)
+ *             clear and options bit 1 set -> set 0x0020, result+0x48 =
+ *             (child+0x94 << 8) | 0x7F, *pid_ret = child+0x16, found
+ *   00e3fcc2  else: child+0x26 != 0 and != parent+0x1C -> leave (not found)
+ *   00e3fcde  flags bit 13 -> REAP_CHILD(child, parent, prev, result, pid), found
+ *
+ * Sole caller: PROC2_$WAIT 0x00E3FF08.
  *
  * Original address: 0x00e3fc5c
  */
 
 #include "proc2/proc2_internal.h"
 
-/* Wait option bits */
-#define WUNTRACED   0x0002
-
-/*
- * Raw memory access macros for wait-related fields
- */
-#if defined(ARCH_M68K)
-    #define P2_BASE                 0xEA551C
-
-    /* Flag byte at offset 0x2B (high byte of flags word at 0x2A) */
-    #define P2_FLAG_BYTE(idx)       (*(uint8_t*)(P2_BASE + (idx) * 0xE4 - 0xB9))
-
-    /* Debug list index at offset 0x26 */
-    #define P2_DBG_LIST(idx)        (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xBE))
-
-    /* Owner session at offset 0x1C */
-    #define P2_OWNER_SESS(idx)      (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xC8))
-
-    /* Flags word at offset 0x2A */
-    #define P2_FLAGS_W(idx)         (*(uint16_t*)(P2_BASE + (idx) * 0xE4 - 0xBA))
-
-    /* UPID at offset 0x32 */
-    #define P2_UPID_W(idx)          (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xCE))
-
-    /* Signal number at offset 0x50 */
-    #define P2_STOP_SIG(idx)        (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0x50))
-#else
-    static uint8_t p2_tc_dummy8;
-    static int16_t p2_tc_dummy16;
-    static uint16_t p2_tc_dummy16u;
-    #define P2_FLAG_BYTE(idx)       (p2_tc_dummy8)
-    #define P2_DBG_LIST(idx)        (p2_tc_dummy16)
-    #define P2_OWNER_SESS(idx)      (p2_tc_dummy16)
-    #define P2_FLAGS_W(idx)         (p2_tc_dummy16u)
-    #define P2_UPID_W(idx)          (p2_tc_dummy16)
-    #define P2_STOP_SIG(idx)        (p2_tc_dummy16)
-#endif
-
-/* Flag bit definitions */
-#define FLAG_STOPPED    0x40    /* Bit 6: Process is stopped */
-#define FLAG_REPORTED   0x20    /* Bit 5: Stop already reported to parent */
-#define FLAG_ZOMBIE     0x2000  /* Bit 13: Process is a zombie */
-
 void PROC2_$WAIT_TRY_LIVE_CHILD(int16_t child_idx, uint16_t options,
                                  int16_t parent_idx, int16_t prev_idx,
-                                 int8_t *found, uint32_t *result,
+                                 int8_t *found, proc2_wait_result_t *result,
                                  int16_t *pid_ret)
 {
-    uint8_t flags;
+    proc2_info_t *child;         /* A0 */
 
+    /* 0x00E3FC7C */
     *found = 0;
 
-    flags = P2_FLAG_BYTE(child_idx);
+    /* 0x00E3FC7E-0x00E3FC8A */
+    child = P2_INFO_ENTRY(child_idx);
 
-    /*
-     * Check if child is stopped but not yet reported.
-     * Flags bit 6 = stopped, bit 5 = already reported
-     */
-    if ((flags & FLAG_STOPPED) != 0 &&
-        (flags & FLAG_REPORTED) == 0 &&
-        (options & WUNTRACED) != 0) {
-        /*
-         * Child is stopped and WUNTRACED option set.
-         * Mark as reported and return stop status.
-         */
-        P2_FLAG_BYTE(child_idx) |= FLAG_REPORTED;
-
-        /* Build stop status: (signal << 8) | 0x7F */
-        int32_t stop_status = (int32_t)P2_STOP_SIG(child_idx);
-        stop_status = (stop_status << 8) | 0x7F;
-        ((uint32_t*)result)[0x12] = stop_status;  /* offset 0x48 */
-
-        *pid_ret = P2_UPID_W(child_idx);
-        *found = -1;
+    /* 0x00E3FC8E-0x00E3FCA2 */
+    if ((child->flags & 0x0040) != 0 && (child->flags & 0x0020) == 0 &&
+        (options & 0x0002) != 0) {
+        child->flags |= 0x0020;                              /* 0x00E3FCA4 */
+        /* 0x00E3FCAA-0x00E3FCB6: ext.l, lsl.l #8, ori.b #0x7f */
+        result->exit_status = (uint32_t)(((int32_t)(int16_t)child->pad_94 << 8) | 0x7F);
+        *pid_ret = (int16_t)child->upid;                     /* 0x00E3FCBC */
+        *found = (int8_t)0xFF;                               /* 0x00E3FCFA */
         return;
     }
 
-    /*
-     * Check if child's debug state prevents us from waiting on it.
-     * If child has a debugger attached that isn't in our session, skip it.
-     */
-    if (P2_DBG_LIST(child_idx) != 0) {
-        if (P2_DBG_LIST(child_idx) != P2_OWNER_SESS(parent_idx)) {
-            return;
-        }
-    }
-
-    /*
-     * Check if child is a zombie that we can reap.
-     * Flags bit 13 = zombie
-     */
-    if ((P2_FLAGS_W(child_idx) & FLAG_ZOMBIE) == 0) {
-        /* Not a zombie - nothing to do */
+    /* 0x00E3FCC2-0x00E3FCDC */
+    if (child->debugger_idx != 0 &&
+        child->debugger_idx != P2_INFO_ENTRY(parent_idx)->self_index) {
         return;
     }
 
-    /* Reap the child and collect its exit status */
+    /* 0x00E3FCDE-0x00E3FCE6 */
+    if ((child->flags & PROC2_FLAG_ZOMBIE) == 0) {
+        return;
+    }
+
+    /* 0x00E3FCE8-0x00E3FCF6 (result slot pushed) */
     PROC2_$WAIT_REAP_CHILD(child_idx, parent_idx, prev_idx, result, pid_ret);
-    *found = -1;
+    *found = (int8_t)0xFF;                                   /* 0x00E3FCFA */
 }

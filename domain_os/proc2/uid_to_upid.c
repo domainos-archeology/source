@@ -1,18 +1,19 @@
 /*
- * PROC2_$UID_TO_UPID - Convert UID to Unix PID
+ * PROC2_$UID_TO_UPID - Look a process's Unix pid up by UID
  *
- * Searches the process allocation list for a matching UID and
- * returns the corresponding UPID.
+ * Re-emitted from the image (0x00E40F6C..0x00E4100A, 160 bytes).
  *
- * Parameters:
- *   proc_uid - Pointer to UID to search for
- *   upid_ret - Pointer to receive UPID
- *   status_ret - Status return
+ * Frame (link.w A6,-0x14; A5 = 0xE7BE84): (0x8,A6) proc_uid copied to
+ * A6-0x8, (0xC,A6) upid_ret <- D2, (0x10,A6) status_ret <- A6-0xC
+ * (cleared at 0x00E40F86).
  *
- * Status codes:
- *   status_$ok - Success
- *   proc2_$uid_not_found - No process with matching UID
- *   proc2_$zombie - Process found but is a zombie
+ * The allocated list is walked comparing entry+0x00 with cmpm.l (two
+ * longwords).  On a match D2 = entry+0x16 and a zombie (btst #13) yields
+ * status_$proc2_zombie; on no match status_$proc2_uid_not_found.  D2 is
+ * written ONLY on a match, so *upid_ret is indeterminate on the not-found
+ * path (reproduced: no initialiser).
+ *
+ * Only reference: the SVC table entry at 0x00E7B8AA.
  *
  * Original address: 0x00e40f6c
  */
@@ -21,47 +22,39 @@
 
 void PROC2_$UID_TO_UPID(uid_t *proc_uid, uint16_t *upid_ret, status_$t *status_ret)
 {
-    uint32_t search_high;
-    uint32_t search_low;
-    int16_t index;
-    proc2_info_t *entry;
-    status_$t status;
-    uint16_t found_upid;
+    uid_t uid;                   /* A6-0x8 */
+    status_$t status;            /* A6-0xC */
+    int16_t index;               /* D0 */
+    proc2_info_t *entry;         /* A0 (biased) */
+    uint16_t upid;               /* D2: only assigned on a match */
 
-    search_high = proc_uid->high;
-    search_low = proc_uid->low;
+    /* 0x00E40F7A-0x00E40F86 */
+    uid.high = proc_uid->high;
+    uid.low = proc_uid->low;
     status = status_$ok;
-    found_upid = 0;
 
+    /* 0x00E40F8A-0x00E40F96 */
     ML_$LOCK(PROC2_LOCK_ID);
 
-    /* Iterate through allocation list */
-    index = P2_INFO_ALLOC_PTR;
+    /* 0x00E40F98: D0 = alloc ptr; beq not-found */
+    index = (int16_t)P2_INFO_ALLOC_PTR;
     while (index != 0) {
-        entry = P2_INFO_ENTRY(index);
-
-        /* Check for matching UID */
-        if (entry->uid.high == search_high && entry->uid.low == search_low) {
-            /* Found it - get UPID */
-            found_upid = entry->upid;
-
-            /* Check if zombie */
-            if ((entry->flags & PROC2_FLAG_ZOMBIE) != 0) {
-                status = status_$proc2_zombie;
+        entry = P2_INFO_ENTRY(index);                        /* 0x00E40FA0-0x00E40FB0 */
+        /* 0x00E40FBA-0x00E40FC0: cmpm.l twice */
+        if (entry->uid.high == uid.high && entry->uid.low == uid.low) {
+            upid = entry->upid;                              /* 0x00E40FC2 */
+            if ((entry->flags & PROC2_FLAG_ZOMBIE) != 0) {   /* 0x00E40FC6-0x00E40FCE */
+                status = status_$proc2_zombie;               /* 0x00E40FD0 */
             }
-            goto done;
+            goto done;                                       /* 0x00E40FD8 */
         }
-
-        /* Next entry in allocation list */
-        index = entry->next_index;
+        index = (int16_t)entry->next_index;                  /* 0x00E40FDA */
     }
-
-    /* Not found */
-    status = status_$proc2_uid_not_found;
+    status = status_$proc2_uid_not_found;                    /* 0x00E40FE0 */
 
 done:
+    /* 0x00E40FE8-0x00E40FFE */
     ML_$UNLOCK(PROC2_LOCK_ID);
-
-    *upid_ret = found_upid;
+    *upid_ret = upid;
     *status_ret = status;
 }

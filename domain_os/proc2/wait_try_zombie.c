@@ -1,141 +1,98 @@
 /*
- * PROC2_$WAIT_TRY_ZOMBIE - Try to collect status from a zombie child
+ * PROC2_$WAIT_TRY_ZOMBIE - Report a child on the debug-target list
  *
- * Checks if a zombie process can be reaped and collects its status.
- * For zombies:
- * - If traced (negative flags), calls PROC2_$WAIT_REAP_CHILD
- * - If zombie bit set but not traced, clears debug and copies exit info
- * - If stopped but not reported, returns stop status
+ * Re-emitted from the image (0x00E3FD06..0x00E3FDCE, 202 bytes).
  *
- * Parameters:
- *   zombie_idx   - Index of zombie process to check
- *   options      - Wait options (unused in this function)
- *   found        - Output: set to -1 if status collected
- *   result       - Pointer to result buffer
- *   pid_ret      - Pointer to receive zombie's UPID if found
+ * Frame (link.w A6,-0x8):
+ *   (0x8,A6)  idx word -> D2       (0xA,A6)  options word: never read
+ *   (0xC,A6)  found -> A4          (0x10,A6) result -> A3
+ *   (0x14,A6) pid_ret -> D3
+ *
+ *   00e3fd1e  *found = FALSE
+ *   00e3fd30  flags bit 13 (zombie):
+ *     00e3fd3a   bit 15 set   -> REAP_CHILD(idx, 0, 0, result, pid) (`clr.l`
+ *                               covers both word arguments), found
+ *     00e3fd4e   bit 15 clear -> DEBUG_CLEAR_INTERNAL(+0x1C, FALSE);
+ *                               result+0x48/+0x4C = child+0x98/+0x9C;
+ *                               result+0x38 = UID_$NIL; *pid = +0x16; found
+ *   00e3fd7a  not a zombie: low byte bit 4 (0x0010) set and bit 5 (0x0020)
+ *             clear -> set 0x0020; result+0x48 = (child+0x94 << 8) | 0x7F;
+ *             result+0x4C = fault param (child+0xC2) with bit 23 cleared
+ *             (bclr.b #7,(0x4d,A3)); result+0x64 = TRUE if bit 23 was set
+ *             (tst.b (-0x21,A2)); result+0x40 = child+0x00; *pid = +0x16; found
+ *   otherwise nothing.
+ *
+ * Sole caller: PROC2_$WAIT 0x00E3FF9E.
  *
  * Original address: 0x00e3fd06
  */
 
 #include "proc2/proc2_internal.h"
 
-/*
- * Raw memory access macros for zombie-related fields
- */
-#if defined(ARCH_M68K)
-    #define P2_BASE                 0xEA551C
-
-    /* Flags word at offset 0x2A */
-    #define P2_ZW_FLAGS(idx)        (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xBA))
-
-    /* Flag byte at offset 0x2B */
-    #define P2_ZW_FLAG_BYTE(idx)    (*(uint8_t*)(P2_BASE + (idx) * 0xE4 - 0xB9))
-
-    /* Self index at offset 0x1C */
-    #define P2_ZW_SELF_IDX(idx)     (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xC8))
-
-    /* UPID at offset 0x32 */
-    #define P2_ZW_UPID(idx)         (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0xCE))
-
-    /* Stop signal at offset 0x50 */
-    #define P2_ZW_STOP_SIG(idx)     (*(int16_t*)(P2_BASE + (idx) * 0xE4 - 0x50))
-
-    /* Exit status (2 longs) at offset 0x98 */
-    #define P2_ZW_EXIT_STATUS(idx)  ((uint32_t*)(P2_BASE + (idx) * 0xE4 - 0x4C))
-
-    /* Exit info at offset 0xDE */
-    #define P2_ZW_EXIT_INFO(idx)    ((uint32_t*)(P2_BASE + (idx) * 0xE4 - 0x22))
-
-    /* UID (2 longs) at offset 0x08 */
-    #define P2_ZW_UID(idx)          ((uint32_t*)(P2_BASE + (idx) * 0xE4 - 0xE4))
-#else
-    static int16_t p2_zw_dummy16;
-    static uint8_t p2_zw_dummy8;
-    static uint32_t p2_zw_dummy32[2];
-    #define P2_ZW_FLAGS(idx)        (p2_zw_dummy16)
-    #define P2_ZW_FLAG_BYTE(idx)    (p2_zw_dummy8)
-    #define P2_ZW_SELF_IDX(idx)     (p2_zw_dummy16)
-    #define P2_ZW_UPID(idx)         (p2_zw_dummy16)
-    #define P2_ZW_STOP_SIG(idx)     (p2_zw_dummy16)
-    #define P2_ZW_EXIT_STATUS(idx)  (p2_zw_dummy32)
-    #define P2_ZW_EXIT_INFO(idx)    (p2_zw_dummy32)
-    #define P2_ZW_UID(idx)          (p2_zw_dummy32)
-#endif
-
-/* Flag bit definitions */
-#define FLAG_ZOMBIE     0x2000  /* Bit 13: Process is a zombie */
-#define FLAG_STOPPED    0x10    /* Bit 4: Process is stopped */
-#define FLAG_REPORTED   0x20    /* Bit 5: Stop already reported */
-
 void PROC2_$WAIT_TRY_ZOMBIE(int16_t zombie_idx, uint16_t options,
-                             int8_t *found, uint32_t *result,
+                             int8_t *found, proc2_wait_result_t *result,
                              int16_t *pid_ret)
 {
-    int16_t flags;
+    proc2_info_t *child;         /* A2 */
+    uint16_t flags;              /* D0 */
+    uint32_t fault_param;
 
+    (void)options;               /* (0xA,A6): never read */
+
+    /* 0x00E3FD1E */
     *found = 0;
 
-    flags = P2_ZW_FLAGS(zombie_idx);
+    /* 0x00E3FD20-0x00E3FD30 */
+    child = P2_INFO_ENTRY(zombie_idx);
+    flags = child->flags;
 
-    /* Check if this is actually a zombie (bit 13 set) */
-    if ((flags & FLAG_ZOMBIE) == 0) {
-        /*
-         * Not a zombie - check if stopped.
-         * This handles the case where process stopped but not zombie.
-         */
-        if ((flags & FLAG_STOPPED) == 0) {
-            return;
+    /* 0x00E3FD34: btst #13 */
+    if ((flags & PROC2_FLAG_ZOMBIE) != 0) {
+        /* 0x00E3FD3A: tst.w D0w / bpl */
+        if ((int16_t)flags < 0) {
+            /* 0x00E3FD3E-0x00E3FD48 */
+            PROC2_$WAIT_REAP_CHILD(zombie_idx, 0, 0, result, pid_ret);
+        } else {
+            /* 0x00E3FD4E-0x00E3FD54 (no result slot) */
+            DEBUG_CLEAR_INTERNAL((int16_t)child->self_index, 0);
+            /* 0x00E3FD58-0x00E3FD60 */
+            result->exit_status = PROC2_ZOMBIE_EXIT_98(child);
+            result->exit_info = PROC2_ZOMBIE_EXIT_9C(child);
+            /* 0x00E3FD64-0x00E3FD6E */
+            result->parent_uid.high = UID_$NIL.high;
+            result->parent_uid.low = UID_$NIL.low;
+            /* 0x00E3FD72-0x00E3FD74 */
+            *pid_ret = (int16_t)child->upid;
         }
-        if ((flags & FLAG_REPORTED) != 0) {
-            /* Already reported to parent */
-            return;
-        }
-
-        /* Mark as reported and return stop status */
-        P2_ZW_FLAG_BYTE(zombie_idx) |= FLAG_REPORTED;
-
-        /* Build stop status: (signal << 8) | 0x7F */
-        int32_t stop_status = (int32_t)P2_ZW_STOP_SIG(zombie_idx);
-        stop_status = (stop_status << 8) | 0x7F;
-        result[0x12] = stop_status;  /* offset 0x48 */
-
-        /* Copy exit info to result offset 0x4C */
-        result[0x13] = P2_ZW_EXIT_INFO(zombie_idx)[0];
-        ((uint8_t*)result)[0x4D] &= 0x7F;  /* Clear high bit */
-
-        /* Check if negative flag set in exit info */
-        if ((int8_t)((uint8_t*)P2_ZW_EXIT_INFO(zombie_idx))[1] < 0) {
-            ((uint8_t*)result)[0x64] = 0xFF;
-        }
-
-        /* Copy UID to result offset 0x40 */
-        result[0x10] = P2_ZW_UID(zombie_idx)[0];
-        result[0x11] = P2_ZW_UID(zombie_idx)[1];
-
-        *pid_ret = P2_ZW_UPID(zombie_idx);
-        *found = -1;
+        *found = (int8_t)0xFF;                               /* 0x00E3FDC4 */
         return;
     }
 
-    /* It's a zombie - check if traced (negative flags word) */
-    if (flags < 0) {
-        /* Traced zombie - use full reap function */
-        PROC2_$WAIT_REAP_CHILD(zombie_idx, 0, 0, result, pid_ret);
-        *found = -1;
-        return;
+    /* 0x00E3FD7A-0x00E3FD84 */
+    if ((flags & 0x0010) == 0 || (flags & 0x0020) != 0) {
+        return;                                              /* 0x00E3FDC6 */
     }
 
-    /* Non-traced zombie - clear debug state and copy exit info directly */
-    DEBUG_CLEAR_INTERNAL(P2_ZW_SELF_IDX(zombie_idx), 0);
+    /* 0x00E3FD86 */
+    child->flags |= 0x0020;
 
-    /* Copy exit status (2 longs) to result offset 0x48 */
-    result[0x12] = P2_ZW_EXIT_STATUS(zombie_idx)[0];
-    result[0x13] = P2_ZW_EXIT_STATUS(zombie_idx)[1];
+    /* 0x00E3FD8C-0x00E3FD98 */
+    result->exit_status = (uint32_t)(((int32_t)(int16_t)child->pad_94 << 8) | 0x7F);
 
-    /* Set UID to NIL */
-    result[0x0E] = UID_$NIL.high;
-    result[0x0F] = UID_$NIL.low;
+    /* 0x00E3FD9C-0x00E3FDA2: copy the longword at +0xC2, clear its bit 23 */
+    fault_param = PROC2_FAULT_PARAM_GET(child);
+    result->exit_info = fault_param & ~0x00800000u;
 
-    *pid_ret = P2_ZW_UPID(zombie_idx);
-    *found = -1;
+    /* 0x00E3FDA8-0x00E3FDAE: bit 7 of byte +0xC3 = bit 23 of the longword */
+    if ((fault_param & 0x00800000u) != 0) {
+        result->flag_64 = (int8_t)0xFF;
+    }
+
+    /* 0x00E3FDB2-0x00E3FDBA: child+0x00 */
+    result->child_uid.high = child->uid.high;
+    result->child_uid.low = child->uid.low;
+
+    /* 0x00E3FDBE-0x00E3FDC0 */
+    *pid_ret = (int16_t)child->upid;
+    *found = (int8_t)0xFF;                                   /* 0x00E3FDC4 */
 }

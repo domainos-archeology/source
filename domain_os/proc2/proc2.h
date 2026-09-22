@@ -54,6 +54,7 @@
 #define status_$proc2_internal_error 0x00190013
 #define status_$proc2_already_orphan 0x00190014
 #define status_$proc2_process_is_group_leader 0x00190015
+#define status_$proc2_wait_found_no_children 0x0019000D  /* PROC2_$WAIT 0x00E40052 */
 #define status_$proc2_process_using_pgroup_id 0x00190016
 #define status_$proc2_pgroup_in_different_session 0x00190017
 
@@ -674,8 +675,9 @@ void PROC2_$LIST2(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
  * Iterates all 57 slots. Filters: (flags & 0x2100) == 0x2100
  * Original address: 0x00e40548
  */
+/* more_flag is a Domain boolean byte (clr.b 0x00E40568 / st 0x00E4064A). */
 void PROC2_$ZOMBIE_LIST(uid_t *uid_list, uint16_t *max_count, uint16_t *count,
-                        int32_t *start_index, uint8_t *more_flag,
+                        int32_t *start_index, int8_t *more_flag,
                         int32_t *last_index);
 
 /*
@@ -977,7 +979,9 @@ void PROC2_$RESUME(uid_t *proc_uid, status_$t *status_ret);
  * Returns PID of waited child or 0 for WNOHANG with no child ready.
  * Original address: 0x00e3fdd0
  */
-int16_t PROC2_$WAIT(uint16_t *options, int16_t *pid, uint32_t *result,
+/* result is the 0x68-byte proc2_wait_result_t (proc2_internal.h); the
+ * record is built in a local and copied out only on success (0x00E3FF28). */
+int16_t PROC2_$WAIT(uint16_t *options, int16_t *pid, void *result,
                     status_$t *status_ret);
 
 /*

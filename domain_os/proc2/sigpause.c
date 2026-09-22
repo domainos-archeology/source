@@ -1,105 +1,78 @@
 /*
- * PROC2_$SIGPAUSE - Pause waiting for signal
+ * PROC2_$SIGPAUSE - Install a temporary mask and wait for a signal
  *
- * Temporarily replaces the signal mask and waits for a signal to be
- * delivered. The process blocks on FIM_$QUIT_EC until a signal arrives.
+ * Re-emitted from the image (0x00E3FA10..0x00E3FB32, 292 bytes).
  *
- * Parameters:
- *   new_mask - Pointer to new signal mask value
- *   result   - Returns old mask value and flag
+ * Frame (link.w A6,-0x1C; A5 = 0xE7BE84):
+ *   (0x8,A6)  new_mask ptr -> D2 = *ptr    (0xC,A6) result -> A2 (two longwords)
+ *   A6-0x8    the one-element EC pointer array {&FIM_$QUIT_EC[AS_ID]}
+ *   A6-0x10   the one-element value array {FIM_$QUIT_VALUE[AS_ID] + 1}
+ *   A4 = the caller's entry (biased, found BEFORE the lock)
+ *
+ *   00e3fa56  move.l (-0x6c,A4),(-0x5c,A4)   ; entry+0x88 = entry+0x78 (saved mask)
+ *   00e3fa5c  move.l D2,(-0x6c,A4)           ; entry+0x78 = *new_mask
+ *   00e3fa60  bset.b #0x6,(-0xba,A4)         ; HIGH byte bit 6 -> flags |= 0x4000
+ *   00e3fa74  result[0] = entry+0x78; result[1] = flags & 0x0400 ? 1 : 0
+ *   00e3fa8e  A6-0x8 = &FIM_$QUIT_EC[AS_ID] (0xE22002 + AS_ID*12)
+ *   loop at 00e3fab8:
+ *     A6-0x10 = FIM_$QUIT_VALUE[AS_ID] + 1          (0xE222BA + AS_ID*4)
+ *     if (entry+0x80 & ~entry+0x78) != 0: lock, DELIVER_PENDING(+0x1C), unlock, exit
+ *     EC_$WAITN(&A6-0x8, &A6-0x10, 1)
+ *     FIM_$QUIT_VALUE[AS_ID] = FIM_$QUIT_EC[AS_ID].value ; back to the loop
+ *
+ * PROC1_$AS_ID is re-read through A2 (= 0xE2060A) on every iteration.
+ * Only reference: the SVC table entry at 0x00E7B5F2.
  *
  * Original address: 0x00e3fa10
  */
 
 #include "proc2/proc2_internal.h"
 
-/*
- * Raw memory access macros for SIGPAUSE fields
- */
-#if defined(ARCH_M68K)
-    #define P2_SP_MASK2(idx)           (*(uint32_t*)(0xEA54B0 + (idx) * 0xE4))
-    #define P2_SP_ALT_MASK(idx)        (*(uint32_t*)(0xEA54C0 + (idx) * 0xE4))
-    #define P2_SP_BLOCKED2(idx)        (*(uint32_t*)(0xEA54B8 + (idx) * 0xE4))
-    #define P2_SP_FLAGS_B(idx)         (*(uint8_t*)(0xEA5462 + (idx) * 0xE4))
-    #define P2_SP_FLAGS_W(idx)         (*(uint16_t*)(0xEA5462 + (idx) * 0xE4))
-    #define P2_SP_SELF_IDX(idx)        (*(int16_t*)(0xEA5454 + (idx) * 0xE4))
-
-    /* FIM arrays */
-    #define FIM_QUIT_EC_ENTRY(asid)    ((ec_$eventcount_t*)(0xE22002 + (asid) * 12))
-    #define FIM_QUIT_VALUE_ENTRY(asid) (*(uint32_t*)(0xE222BA + (asid) * 4))
-#else
-    static uint32_t p2_sp_dummy32;
-    static uint8_t p2_sp_dummy8;
-    static uint16_t p2_sp_dummy_u16;
-    static int16_t p2_sp_dummy16;
-    #define P2_SP_MASK2(idx)           (p2_sp_dummy32)
-    #define P2_SP_ALT_MASK(idx)        (p2_sp_dummy32)
-    #define P2_SP_BLOCKED2(idx)        (p2_sp_dummy32)
-    #define P2_SP_FLAGS_B(idx)         (p2_sp_dummy8)
-    #define P2_SP_FLAGS_W(idx)         (p2_sp_dummy_u16)
-    #define P2_SP_SELF_IDX(idx)        (p2_sp_dummy16)
-    #define FIM_QUIT_EC_ENTRY(asid)    ((ec_$eventcount_t*)0)
-    #define FIM_QUIT_VALUE_ENTRY(asid) (p2_sp_dummy32)
-#endif
-
 void PROC2_$SIGPAUSE(uint32_t *new_mask, uint32_t *result)
 {
-    int16_t cur_idx;
-    uint32_t mask_val;
-    int32_t wait_val;
-    ec_$eventcount_t *ec_array[1];
-    int32_t val_array[1];
+    uint32_t mask_val;               /* D2 */
+    proc2_info_t *entry;             /* A4 */
+    ec_$eventcount_t *ec_list[1];    /* A6-0x8 */
+    int32_t wait_val[1];             /* A6-0x10 */
 
+    /* 0x00E3FA1E-0x00E3FA46 */
     mask_val = *new_mask;
+    entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
 
-    /* Get current process index */
-    cur_idx = P2_PID_TO_INDEX(PROC1_$CURRENT);
-
+    /* 0x00E3FA36/0x00E3FA4A-0x00E3FA54 */
     ML_$LOCK(PROC2_LOCK_ID);
 
-    /* Save current mask2 to alt_mask and set new mask */
-    P2_SP_ALT_MASK(cur_idx) = P2_SP_MASK2(cur_idx);
-    P2_SP_MASK2(cur_idx) = mask_val;
+    /* 0x00E3FA56-0x00E3FA60 */
+    entry->pad_88 = entry->sig_blocked_2;
+    entry->sig_blocked_2 = mask_val;
+    entry->flags |= 0x4000;
 
-    /* Set flag bit 6 (0x40) */
-    P2_SP_FLAGS_B(cur_idx) |= 0x40;
-
+    /* 0x00E3FA66-0x00E3FA72 */
     ML_$UNLOCK(PROC2_LOCK_ID);
 
-    /* Return old mask and flag */
-    result[0] = P2_SP_MASK2(cur_idx);
+    /* 0x00E3FA74-0x00E3FA8A */
+    result[0] = entry->sig_blocked_2;
+    result[1] = ((entry->flags & 0x0400) != 0) ? 1u : 0u;
 
-    if ((P2_SP_FLAGS_W(cur_idx) & 0x0400) != 0) {
-        result[1] = 1;
-    } else {
-        result[1] = 0;
-    }
+    /* 0x00E3FA8E-0x00E3FAA6 */
+    ec_list[0] = &FIM_$QUIT_EC[PROC1_$AS_ID];
 
-    /* Set up eventcount to wait on */
-    ec_array[0] = FIM_QUIT_EC_ENTRY(PROC1_$AS_ID);
+    for (;;) {
+        /* 0x00E3FAB8-0x00E3FAC2 */
+        wait_val[0] = (int32_t)(FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1);
 
-    /* Wait loop - check for unblocked pending signals */
-    while (1) {
-        wait_val = FIM_QUIT_VALUE_ENTRY(PROC1_$AS_ID) + 1;
-        val_array[0] = wait_val;
-
-        /* Check if any blocked signals are now unblocked */
-        if ((P2_SP_BLOCKED2(cur_idx) & ~P2_SP_MASK2(cur_idx)) != 0) {
-            /* Signal arrived - exit wait loop */
-            break;
+        /* 0x00E3FAC6-0x00E3FAD0: (+0x80 & ~+0x78) != 0 -> deliver and leave */
+        if ((entry->sig_mask_2 & ~entry->sig_blocked_2) != 0) {
+            ML_$LOCK(PROC2_LOCK_ID);                                 /* 0x00E3FAD2 */
+            PROC2_$DELIVER_PENDING_INTERNAL((int16_t)entry->self_index);   /* 0x00E3FAE6 */
+            ML_$UNLOCK(PROC2_LOCK_ID);                               /* 0x00E3FAF2 */
+            return;                                                  /* 0x00E3FAF8 */
         }
 
-        /* Wait on the quit eventcount */
-        EC_$WAITN(ec_array, val_array, 1);
+        /* 0x00E3FAFA-0x00E3FB0E */
+        EC_$WAITN(ec_list, wait_val, 1);
 
-        /* Update quit value from eventcount */
-#if defined(ARCH_M68K)
-        FIM_QUIT_VALUE_ENTRY(PROC1_$AS_ID) = *(int32_t*)FIM_QUIT_EC_ENTRY(PROC1_$AS_ID);
-#endif
+        /* 0x00E3FB12-0x00E3FB22: FIM_$QUIT_VALUE[AS_ID] = FIM_$QUIT_EC[AS_ID].value */
+        FIM_$QUIT_VALUE[PROC1_$AS_ID] = (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
     }
-
-    /* Signal arrived - deliver pending signals */
-    ML_$LOCK(PROC2_LOCK_ID);
-    PROC2_$DELIVER_PENDING_INTERNAL(P2_SP_SELF_IDX(cur_idx));
-    ML_$UNLOCK(PROC2_LOCK_ID);
 }

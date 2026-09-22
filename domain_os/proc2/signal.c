@@ -1,127 +1,86 @@
 /*
- * PROC2_$SIGNAL - Send signal to process
+ * PROC2_$SIGNAL - Send a signal to a process
  *
- * Sends a signal to a process after checking permissions.
- * Permission checks:
- *   - Same parent: allowed
- *   - Same session with SIGCONT: allowed
- *   - ACL check via ACL_$CHECK_FAULT_RIGHTS
+ * Re-emitted from the image (0x00E3EFA0..0x00E3F0A4, 262 bytes).
  *
- * Parameters:
- *   proc_uid   - Pointer to target process UID
- *   signal     - Pointer to signal number
- *   param      - Pointer to signal parameter
- *   status_ret - Returns status (0 on success)
+ * Frame (link.w A6,-0x20; A5 = 0xE7BE84):
+ *   (0x8,A6)  proc_uid   copied to A6-0x8
+ *   (0xC,A6)  signal ptr -> A3 (re-read at each use)
+ *   (0x10,A6) param ptr  -> D3 = *ptr, also A6-0xC
+ *   (0x14,A6) status_ret <- A6-0x10
+ *   A4 = the caller's entry (biased, mulu), A2 = the target's (biased,
+ *   muls) -- computed even when FIND_INDEX failed
+ *
+ * Permission (0x00E3F01C..0x00E3F04C): the target's debugger (+0x26) is
+ * the caller (+0x1C); or the target shares the caller's session (+0x5C),
+ * the signal is 0x16 and that session is non-zero; or
+ * ACL_$CHECK_FAULT_RIGHTS(&caller->level1_pid, &target->level1_pid) is
+ * TRUE.  Delivery happens only when the status is exactly zero (a zombie
+ * passes the permission check but is not delivered to).
+ *
+ * The audit call at 0x00E3F088 is unconditional and receives the FINAL
+ * status; it is made after the caller's status has been stored.
+ *
+ * Callers: PROC2_$QUIT 0x00E3F14C, SVC table 0x00E7BA4A.
  *
  * Original address: 0x00e3efa0
  */
 
 #include "proc2/proc2_internal.h"
 
-/* Log signal event (debugging) - currently a no-op */
-static void log_signal_event(int event_type, int16_t target_idx, int16_t signal,
-                            uint32_t param, status_$t status)
-{
-    (void)event_type;
-    (void)target_idx;
-    (void)signal;
-    (void)param;
-    (void)status;
-}
-
-/*
- * Raw memory access for undocumented parent/session fields
- */
-#if defined(ARCH_M68K)
-    #define P2_SIGNAL_BASE(idx)      ((int16_t*)(0xEA551C + ((idx) * 0xE4)))
-    /* offset -0xBE from entry end = field at 0x22 or so - likely parent-related */
-    #define P2_PARENT_FIELD(idx)     (*(P2_SIGNAL_BASE(idx) - 0x5F))
-    /* offset -0xC8 from entry end = field related to child idx */
-    #define P2_CHILD_IDX_FIELD(idx)  (*(P2_SIGNAL_BASE(idx) - 0x64))
-    /* offset -0x88 from entry end = session ID */
-    #define P2_SESSION_ID(idx)       (*(P2_SIGNAL_BASE(idx) - 0x44))
-#else
-    static int16_t p2_signal_dummy;
-    #define P2_PARENT_FIELD(idx)     (p2_signal_dummy)
-    #define P2_CHILD_IDX_FIELD(idx)  (p2_signal_dummy)
-    #define P2_SESSION_ID(idx)       (p2_signal_dummy)
-#endif
-
 void PROC2_$SIGNAL(uid_t *proc_uid, int16_t *signal, uint32_t *param,
                    status_$t *status_ret)
 {
-    int16_t index;
-    int16_t cur_index;
-    proc2_info_t *target_info;
-    proc2_info_t *cur_info;
-    status_$t status;
-    uint32_t param_copy;
-    uid_t uid_copy;
-    int8_t acl_result;
+    uid_t uid;                   /* A6-0x8 */
+    uint32_t param_copy;         /* D3 / A6-0xC */
+    status_$t status;            /* A6-0x10 */
+    int16_t index;               /* D2 */
+    proc2_info_t *target;        /* A2 */
+    proc2_info_t *current;       /* A4 */
 
-    /* Copy inputs before locking */
-    uid_copy = *proc_uid;
+    /* 0x00E3EFAE-0x00E3EFC4 */
+    uid.high = proc_uid->high;
+    uid.low = proc_uid->low;
     param_copy = *param;
 
+    /* 0x00E3EFC8-0x00E3EFD4 */
     ML_$LOCK(PROC2_LOCK_ID);
 
-    index = PROC2_$FIND_INDEX(&uid_copy, &status);
+    /* 0x00E3EFD6-0x00E3EFE4 */
+    index = PROC2_$FIND_INDEX(&uid, &status);
 
-    /* Get current process info */
-    cur_index = P2_PID_TO_INDEX(PROC1_$CURRENT);
-    cur_info = P2_INFO_ENTRY(cur_index);
-    target_info = P2_INFO_ENTRY(index);
+    /* 0x00E3EFE6-0x00E3F00A */
+    current = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    target = P2_INFO_ENTRY(index);
 
-    /* Accept if process found or is zombie */
-    if (status == 0 || status == status_$proc2_zombie) {
-        /*
-         * Permission check:
-         * 1. Same parent as us (sibling) - allowed
-         * 2. Same session and signal is SIGCONT (0x16) and session is valid - allowed
-         * 3. Otherwise, check ACL fault rights
-         */
-        int permission_ok = 0;
-
-        /* Check if same parent */
-        if (P2_PARENT_FIELD(index) == P2_CHILD_IDX_FIELD(cur_index)) {
-            permission_ok = 1;
-        }
-        /* Check same session with SIGCONT */
-        else if (P2_SESSION_ID(index) == P2_SESSION_ID(cur_index) &&
-                 *signal == SIGCONT &&
-                 P2_SESSION_ID(index) != 0) {
-            permission_ok = 1;
-        }
-
-        if (!permission_ok) {
-            /* ACL check - negative result means permission granted */
-            /*
-             * 0x00E3F03A-0x00E3F042, right to left: `pea (-0x4a,A2)` then
-             * `pea (-0x4a,A4)`.  A2/A4 are the target/current entry bases
-             * biased by 0xE4, so -0x4a is entry + 0x9A = level1_pid, and the
-             * first argument is the CURRENT process' pid.
-             */
-            acl_result = ACL_$CHECK_FAULT_RIGHTS(
-                &P2_INFO_ENTRY(cur_index)->level1_pid,
-                &P2_INFO_ENTRY(index)->level1_pid);
-
-            if (acl_result >= 0) {
-                status = status_$proc2_permission_denied;
-                goto done;
+    /* 0x00E3F00E-0x00E3F01A: status 0 or status_$proc2_zombie */
+    if (status == status_$ok || status == status_$proc2_zombie) {
+        /* 0x00E3F01C-0x00E3F024: target+0x26 == caller+0x1C */
+        if (target->debugger_idx != current->self_index) {
+            /* 0x00E3F026-0x00E3F038 */
+            if (!(target->session_id == current->session_id &&
+                  *signal == 0x16 &&
+                  target->session_id != 0)) {
+                /* 0x00E3F03A-0x00E3F04C: pea (-0x4a,A2), pea (-0x4a,A4) ->
+                 * (&caller->level1_pid, &target->level1_pid); bpl -> denied */
+                if (ACL_$CHECK_FAULT_RIGHTS(&current->level1_pid,
+                                            &target->level1_pid) >= 0) {
+                    status = status_$proc2_permission_denied;   /* 0x00E3F06A */
+                    goto done;
+                }
             }
         }
-
-        /* Permission granted - deliver signal if not zombie */
-        if (status == 0) {
+        /* 0x00E3F04E-0x00E3F064: tst.l status / bne; deliver on zero only */
+        if (status == status_$ok) {
             PROC2_$DELIVER_SIGNAL_INTERNAL(index, *signal, param_copy, &status);
         }
     }
 
 done:
+    /* 0x00E3F072-0x00E3F084 */
     ML_$UNLOCK(PROC2_LOCK_ID);
-
     *status_ret = status;
 
-    /* Log the signal event */
-    log_signal_event(1, index, *signal, param_copy, status);
+    /* 0x00E3F088-0x00E3F098: (1, index, *signal, param, status), result slot */
+    PROC2_$LOG_SIGNAL_EVENT(1, index, (uint16_t)*signal, param_copy, status);
 }

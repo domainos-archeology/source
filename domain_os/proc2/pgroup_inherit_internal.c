@@ -10,7 +10,9 @@
  *   from - the entry whose process group is being inherited
  *   to   - the entry receiving it
  *
- * Original address: 0x00e4216e
+ * Original address: 0x00e4216e (the batch entry 0x00E733EC is the call
+ * site in PROC2_$INIT_ENTRY_INTERNAL).  Re-verified against the image;
+ * faithful as written.
  *
  * Assembly:
  *   00e4216e  link.w A6,-0x8

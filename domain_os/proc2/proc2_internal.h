@@ -181,6 +181,59 @@ void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,
 
 /*
  * ============================================================================
+ * PROC2_$WAIT result record (0x68 bytes)
+ * ============================================================================
+ *
+ * Built at A6-0x68 by PROC2_$WAIT (0x00E3FDD0) through its two helpers and
+ * copied to the caller with `moveq #0x19` / dbf = 26 longwords (0x00E3FF30).
+ * Offsets are the (d,A2)/(d,A3) displacements the helpers use:
+ *   0x00  14 longwords copied from the child entry +0x60..+0x97 (REAP 0x00E3FC22)
+ *   0x38  child +0x08 parent_uid (REAP 0x00E3FC16), or UID_$NIL (TRY_ZOMBIE 0x00E3FD64)
+ *   0x40  child +0x00 uid (TRY_ZOMBIE stop arm 0x00E3FDB2)
+ *   0x48  exit status: the longword at child +0x98 (REAP/TRY_ZOMBIE) or
+ *         (stop signal << 8) | 0x7F (the two stop arms)
+ *   0x4C  the longword at child +0x9C (REAP/TRY_ZOMBIE zombie arm) or the
+ *         fault param at child +0xC2 with bit 23 cleared (TRY_ZOMBIE stop arm)
+ *   0x50  five longwords from child +0xA4 (REAP 0x00E3FC04)
+ *   0x64  boolean: fault param bit 23 was set (TRY_ZOMBIE 0x00E3FDAE); cleared
+ *         by PROC2_$WAIT at 0x00E3FDF6 on the CALLER's record
+ *   0x65  boolean: bit 15 of the word at child +0xA0 (REAP 0x00E3FC36, smi)
+ *   0x66  boolean: bit 14 of that word (REAP 0x00E3FC44, sne)
+ */
+typedef struct proc2_wait_result_t {
+    uint8_t     entry_60[0x38];     /* 0x00 */
+    uid_t       parent_uid;         /* 0x38 */
+    uid_t       child_uid;          /* 0x40 */
+    uint32_t    exit_status;        /* 0x48 */
+    uint32_t    exit_info;          /* 0x4C */
+    uint8_t     usage[20];          /* 0x50: five big-endian longwords */
+    int8_t      flag_64;            /* 0x64 */
+    int8_t      flag_65;            /* 0x65 */
+    int8_t      flag_66;            /* 0x66 */
+    uint8_t     pad_67;             /* 0x67 */
+} proc2_wait_result_t;
+
+_Static_assert(__builtin_offsetof(proc2_wait_result_t, parent_uid) == 0x38, "proc2_wait_result_t.parent_uid");
+_Static_assert(__builtin_offsetof(proc2_wait_result_t, child_uid) == 0x40, "proc2_wait_result_t.child_uid");
+_Static_assert(__builtin_offsetof(proc2_wait_result_t, exit_status) == 0x48, "proc2_wait_result_t.exit_status");
+_Static_assert(__builtin_offsetof(proc2_wait_result_t, exit_info) == 0x4C, "proc2_wait_result_t.exit_info");
+_Static_assert(__builtin_offsetof(proc2_wait_result_t, usage) == 0x50, "proc2_wait_result_t.usage");
+_Static_assert(__builtin_offsetof(proc2_wait_result_t, flag_64) == 0x64, "proc2_wait_result_t.flag_64");
+_Static_assert(sizeof(proc2_wait_result_t) == 0x68, "proc2_wait_result_t is 0x68 bytes");
+
+/*
+ * The longwords a zombie leaves at entry +0x98 and +0x9C (over asid_alt /
+ * level1_pid and cleanup_flags / name[0..1]), read as the big-endian
+ * memory they are.
+ */
+#define PROC2_ZOMBIE_EXIT_98(entry) \
+    (((uint32_t)(entry)->asid_alt << 16) | (uint32_t)(entry)->level1_pid)
+#define PROC2_ZOMBIE_EXIT_9C(entry) \
+    (((uint32_t)(entry)->cleanup_flags << 16) | \
+     ((uint32_t)(uint8_t)(entry)->name[0] << 8) | (uint32_t)(uint8_t)(entry)->name[1])
+
+/*
+ * ============================================================================
  * Wait Subsystem Internal Functions
  * ============================================================================
  */
@@ -193,7 +246,7 @@ void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,
  * Original address: 0x00e3fb34
  */
 void PROC2_$WAIT_REAP_CHILD(int16_t child_idx, int16_t parent_idx,
-                            int16_t prev_sibling, uint32_t *result,
+                            int16_t prev_sibling, proc2_wait_result_t *result,
                             int16_t *pid_ret);
 
 /*
@@ -204,7 +257,7 @@ void PROC2_$WAIT_REAP_CHILD(int16_t child_idx, int16_t parent_idx,
  */
 void PROC2_$WAIT_TRY_LIVE_CHILD(int16_t child_idx, uint16_t options,
                                  int16_t parent_idx, int16_t prev_idx,
-                                 int8_t *found, uint32_t *result,
+                                 int8_t *found, proc2_wait_result_t *result,
                                  int16_t *pid_ret);
 
 /*
@@ -214,7 +267,7 @@ void PROC2_$WAIT_TRY_LIVE_CHILD(int16_t child_idx, uint16_t options,
  * Original address: 0x00e3fd06
  */
 void PROC2_$WAIT_TRY_ZOMBIE(int16_t zombie_idx, uint16_t options,
-                             int8_t *found, uint32_t *result,
+                             int8_t *found, proc2_wait_result_t *result,
                              int16_t *pid_ret);
 
 /*

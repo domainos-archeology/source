@@ -1,137 +1,109 @@
 /*
- * PROC2_$SIGNAL_PGROUP_INTERNAL - Internal helper for process group signaling
+ * PROC2_$SIGNAL_PGROUP_INTERNAL - Signal every member of a process group
  *
- * Iterates through all processes in the allocation list, signaling
- * those that belong to the specified process group.
+ * Re-emitted from the image (0x00E3F160..0x00E3F23C, 222 bytes).
  *
- * Permission checking is controlled by the check_perms parameter:
- *   - If check_perms < 0 (0xFF): ACL check required
- *   - If check_perms >= 0 (0): No permission check
+ * Frame (link.w A6,-0x18; A5 inherited from the caller = 0xE7BE84):
+ *   (0x8,A6)  pgroup_idx  word -> D4     (0xA,A6)  signal word -> D3
+ *   (0xC,A6)  param       long -> D6     (0x10,A6) check_perms byte -> D5
+ *   (0x12,A6) status_ret  -> A2
+ *   A6-0x12   "delivered to someone" flag; D7 "saw a zombie" flag;
+ *   A6-0x8    param copy handed to DELIVER; A6-0xC DELIVER's status
+ *   (never examined)
  *
- * SIGCONT (signal 0x16/22) is a special case that bypasses ACL checks
- * if the target is in the same session.
+ * Per allocated entry in the group (+0x10 == idx): a zombie (0x2000) only
+ * sets D7.  Otherwise, with check_perms TRUE, ACL_$CHECK_FAULT_RIGHTS(
+ * &PROC1_$CURRENT, &entry->level1_pid) must be TRUE, or the signal must
+ * be 0x16 and the entry's session (+0x5C) equal the session of the LAST
+ * ENTRY A4 WAS SET TO -- A4 is loaded together with A3 at 0x00E3F1A0 and
+ * never diverges from it, so the comparison at 0x00E3F1DE is the entry
+ * against itself and always succeeds (original quirk, reproduced).  A
+ * failure stores permission_denied in *status_ret but the walk continues.
  *
- * Parameters:
- *   pgroup_idx   - Process group index
- *   signal       - Signal number to send
- *   param        - Signal parameter
- *   check_perms  - If negative, perform permission checking
- *   status_ret   - Returns status (0 on success)
+ * Final status (0x00E3F20A..0x00E3F220): if anyone was delivered to, the
+ * status is left as it stands (0 or permission_denied); else a zombie
+ * gives status_$proc2_zombie, else status_$proc2_uid_not_found (also the
+ * answer for index 0).  The audit call is unconditional.
+ *
+ * Callers: SIGNAL_PGROUP 0x00E3F29E, SIGNAL_PGROUP_OS 0x00E3F314,
+ * PGROUP_DECR_LEADER_COUNT 0x00E42092 / 0x00E420AA.
  *
  * Original address: 0x00e3f160
  */
 
 #include "proc2/proc2_internal.h"
 
-/*
- * Raw memory access for process group index field
- * At offset -0xD4 from entry end = field at 0x10 area - pgroup index
- */
-#if defined(ARCH_M68K)
-    #define P2_PGROUP_BASE(idx)     ((int16_t*)(0xEA551C + ((idx) * 0xE4)))
-    #define P2_PGROUP_IDX(idx)      (*(P2_PGROUP_BASE(idx) - 0x6A))
-    #define P2_FLAGS_FIELD(idx)     (*(uint16_t*)(0xEA5462 + (idx) * 0xE4))
-    #define P2_NEXT_IDX(idx)        (*(int16_t*)(0xEA544A + (idx) * 0xE4))
-    #define P2_SESSION_ID2(idx)     (*(int16_t*)(0xEA5494 + (idx) * 0xE4))
-#else
-    static int16_t p2_pgroup_dummy;
-    static uint16_t p2_flags_dummy;
-    #define P2_PGROUP_IDX(idx)      (p2_pgroup_dummy)
-    #define P2_FLAGS_FIELD(idx)     (p2_flags_dummy)
-    #define P2_NEXT_IDX(idx)        (p2_pgroup_dummy)
-    #define P2_SESSION_ID2(idx)     (p2_pgroup_dummy)
-#endif
-
 void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,
                                     uint32_t param, int8_t check_perms,
                                     status_$t *status_ret)
 {
-    int16_t cur_idx;
-    int8_t signaled_any;
-    int8_t all_zombies;
-    int8_t acl_result;
-    status_$t status;
-    uint32_t param_copy;
+    int16_t index;               /* D2 */
+    proc2_info_t *entry;         /* A3 */
+    proc2_info_t *session_ref;   /* A4: same entry as A3 */
+    int8_t delivered;            /* A6-0x12 */
+    int8_t saw_zombie;           /* D7 */
+    uint32_t param_copy;         /* A6-0x8 */
+    status_$t deliver_status;    /* A6-0xC */
 
-    /* Handle invalid pgroup index */
+    /* 0x00E3F17C: tst.w D4w / beq.w 0x00E3F21C */
     if (pgroup_idx == 0) {
-        *status_ret = status_$proc2_uid_not_found;
-        PROC2_$LOG_SIGNAL_EVENT(2, pgroup_idx, signal, param, *status_ret);
-        return;
+        *status_ret = status_$proc2_uid_not_found;           /* 0x00E3F21C */
+        goto audit;
     }
 
-    *status_ret = 0;
-    signaled_any = 0;
-    all_zombies = 0;
+    /* 0x00E3F182-0x00E3F18A */
+    *status_ret = status_$ok;
+    delivered = 0;
+    saw_zombie = 0;
     param_copy = param;
 
-    /* Iterate through allocation list */
-    cur_idx = P2_INFO_ALLOC_PTR;
+    /* 0x00E3F18E-0x00E3F208 */
+    index = (int16_t)P2_INFO_ALLOC_PTR;
+    while (index != 0) {
+        entry = P2_INFO_ENTRY(index);                        /* 0x00E3F194-0x00E3F1A4 */
+        session_ref = entry;
 
-    while (cur_idx != 0) {
-        /* Check if this process belongs to the target pgroup */
-        if (P2_PGROUP_IDX(cur_idx) == pgroup_idx) {
-
-            /* Check if process is a zombie (flag 0x2000) */
-            if ((P2_FLAGS_FIELD(cur_idx) & PROC2_FLAG_ZOMBIE) != 0) {
-                /* Mark that we encountered a zombie */
-                all_zombies = -1;
+        /* 0x00E3F1A6: entry+0x10 == pgroup_idx */
+        if (entry->pgroup_table_idx == (uint16_t)pgroup_idx) {
+            /* 0x00E3F1AC-0x00E3F1B4: btst #13 */
+            if ((entry->flags & PROC2_FLAG_ZOMBIE) != 0) {
+                saw_zombie = (int8_t)0xFF;                   /* 0x00E3F1B6 */
             } else {
-                /* Process is alive - check permissions if required */
-                int permission_ok = 1;
-
+                int8_t allowed = (int8_t)0xFF;
+                /* 0x00E3F1BA: tst.b D5b / bpl -> deliver */
                 if (check_perms < 0) {
-                    /* ACL check required */
-                    /*
-                     * 0x00E3F1BE-0x00E3F1C8, right to left: `pea (-0x4a,A3)`
-                     * = &entry->level1_pid (entry + 0x9A), then
-                     * `move.l #0xe20608,-(SP)` = &PROC1_$CURRENT.
-                     */
-                    acl_result = ACL_$CHECK_FAULT_RIGHTS(
-                        &PROC1_$CURRENT,
-                        &P2_INFO_ENTRY(cur_idx)->level1_pid);
-
-                    if (acl_result >= 0) {
-                        /* Permission denied - but check SIGCONT special case */
-                        if (signal == SIGCONT &&
-                            P2_SESSION_ID2(cur_idx) == P2_SESSION_ID2(cur_idx)) {
-                            /* Same session with SIGCONT - allowed */
-                            permission_ok = 1;
-                        } else {
-                            permission_ok = 0;
-                            *status_ret = status_$proc2_permission_denied;
+                    /* 0x00E3F1BE-0x00E3F1D2: (&PROC1_$CURRENT, &entry->level1_pid) */
+                    if (ACL_$CHECK_FAULT_RIGHTS(&PROC1_$CURRENT,
+                                                &entry->level1_pid) >= 0) {
+                        /* 0x00E3F1D4-0x00E3F1E2 */
+                        if (!(signal == 0x16 &&
+                              entry->session_id == session_ref->session_id)) {
+                            allowed = 0;
                         }
                     }
                 }
-
-                if (permission_ok) {
-                    /* Deliver the signal */
-                    PROC2_$DELIVER_SIGNAL_INTERNAL(cur_idx, signal, param_copy, &status);
-                    signaled_any = -1;
+                if (allowed < 0) {
+                    /* 0x00E3F1E4-0x00E3F1F8 */
+                    PROC2_$DELIVER_SIGNAL_INTERNAL(index, signal, param_copy, &deliver_status);
+                    delivered = (int8_t)0xFF;
+                } else {
+                    *status_ret = status_$proc2_permission_denied;   /* 0x00E3F1FE */
                 }
             }
         }
-
-        /* Move to next process in allocation list */
-        cur_idx = P2_NEXT_IDX(cur_idx);
+        index = (int16_t)entry->next_index;                  /* 0x00E3F204 */
     }
 
-    /* Determine final status */
-    if (signaled_any < 0) {
-        /* Successfully signaled at least one process */
-        /* status_ret already 0 or set to permission_denied for partial success */
-        goto done;
+    /* 0x00E3F20A-0x00E3F220 */
+    if (delivered >= 0) {
+        if (saw_zombie < 0) {
+            *status_ret = status_$proc2_zombie;              /* 0x00E3F214 */
+        } else {
+            *status_ret = status_$proc2_uid_not_found;       /* 0x00E3F21C */
+        }
     }
 
-    if (all_zombies < 0) {
-        /* All processes in group were zombies */
-        *status_ret = status_$proc2_zombie;
-        goto done;
-    }
-
-    /* No processes found in group */
-    *status_ret = status_$proc2_uid_not_found;
-
-done:
-    PROC2_$LOG_SIGNAL_EVENT(2, pgroup_idx, signal, param, *status_ret);
+audit:
+    /* 0x00E3F222-0x00E3F230: (2, idx, signal, param, *status_ret), result slot */
+    PROC2_$LOG_SIGNAL_EVENT(2, pgroup_idx, (uint16_t)signal, param, *status_ret);
 }

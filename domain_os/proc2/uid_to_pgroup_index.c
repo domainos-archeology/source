@@ -1,51 +1,40 @@
 /*
- * PROC2_$UID_TO_PGROUP_INDEX - Convert process group UID to pgroup table index
+ * PROC2_$UID_TO_PGROUP_INDEX - Map a process-group UID to its table slot
  *
- * For synthetic UIDs (high byte = 0), extracts the UPGID from the UID
- * and looks it up in the pgroup table.
+ * Re-emitted from the image (0x00E42272..0x00E422CA, 90 bytes) and
+ * verified; the previous body was faithful.
  *
- * For real process UIDs, looks up the process and returns its pgroup_table_idx.
+ *   00e4227a  clr.w D2w                     ; result 0
+ *   00e42282  move.b (A2),D0b ; tst.w / bne ; first byte of uid.high
+ *   00e42288  move.w (0x2,A2),(-0xe,A6)     ; synthetic: low word of uid.high
+ *   00e42294  bsr PGROUP_FIND_BY_UPGID      ; (result slot) -> D2
+ *   00e4229a  PROC2_$FIND_INDEX(uid, &status(-0x8)); tst.l / bne exit
+ *   00e422bc  move.w (-0xd4,A1),D2w         ; entry+0x10
  *
- * Parameters:
- *   pgroup_uid - UID to convert (either synthetic pgroup UID or real process UID)
- *
- * Returns:
- *   Pgroup table index (1-69), or 0 if not found
+ * Callers: SIGNAL_PGROUP_OS 0x00E3F30C, LIST_PGROUP 0x00E4023A,
+ * SIGNAL_PGROUP 0x00E3F296.
  *
  * Original address: 0x00e42272
  */
 
 #include "proc2/proc2_internal.h"
 
-/* PGROUP_FIND_BY_UPGID (0x00e42224) is defined in pgroup_find_by_upgid.c */
-
 int16_t PROC2_$UID_TO_PGROUP_INDEX(uid_t *pgroup_uid)
 {
-    int16_t result = 0;
-    uint8_t high_byte;
-    status_$t status;
-    int16_t proc_idx;
+    int16_t result = 0;          /* D2 */
+    uint16_t upgid;              /* A6-0xE */
+    status_$t status;            /* A6-0x8 */
+    int16_t index;
 
-    /* Extract high byte of UID to determine type */
-    high_byte = (pgroup_uid->high >> 24) & 0xFF;
-
-    if (high_byte == 0) {
-        /*
-         * Synthetic pgroup UID: high byte is 0, UPGID stored in word 1
-         * (lower 16 bits of high word)
-         */
-        uint16_t upgid = (uint16_t)(pgroup_uid->high & 0xFFFF);
-        result = PGROUP_FIND_BY_UPGID(upgid);
+    /* 0x00E42280-0x00E42286 */
+    if (((pgroup_uid->high >> 24) & 0xFF) == 0) {
+        upgid = (uint16_t)(pgroup_uid->high & 0xFFFF);      /* 0x00E42288 */
+        result = PGROUP_FIND_BY_UPGID(upgid);                /* 0x00E42294 */
     } else {
-        /*
-         * Real process UID: look up the process and get its pgroup_table_idx
-         */
-        proc_idx = PROC2_$FIND_INDEX(pgroup_uid, &status);
-        if (status == status_$ok) {
-            proc2_info_t *entry = P2_INFO_ENTRY(proc_idx);
-            result = entry->pgroup_table_idx;
+        index = PROC2_$FIND_INDEX(pgroup_uid, &status);     /* 0x00E4229A-0x00E422A4 */
+        if (status == status_$ok) {                          /* 0x00E422A6 */
+            result = (int16_t)P2_INFO_ENTRY(index)->pgroup_table_idx;   /* 0x00E422BC */
         }
     }
-
-    return result;
+    return result;                                           /* 0x00E422C0 */
 }
