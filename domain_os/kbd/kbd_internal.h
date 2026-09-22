@@ -187,4 +187,36 @@ uint8_t kbd_$translate_key(uint8_t key);
  */
 int16_t kbd_$get_mode(uint8_t key);
 
+/*
+ * ---------------------------------------------------------------------------
+ * Appended 2026-09-19 (batch tty2, kbd re-emission)
+ * ---------------------------------------------------------------------------
+ */
+
+/*
+ * kbd_$state_entry_t - one entry of the keyboard state table
+ *
+ * kbd_$state_lookup returns A0 = 0xE2DDE4 + 0xC0 + 2*i: a key byte at +0
+ * (`cmp.b (0xc0,A0),D0b` at 0x00E1CA2C) and an action/next-state byte at +1
+ * (`and.b (0x1,A3),D0b` at 0x00E1CCE6 / 0x00E1CE20: high nibble = action,
+ * low nibble = next state, 0xF = "escape state for this keyboard type").
+ * KBD_$RCV's manual-stop arm writes it back with `or.w #0xf,(A3)`
+ * (0x00E1CD34), which only reaches the low nibble of `next`.
+ */
+typedef struct kbd_$state_entry_t {
+    uint8_t key;        /* +0 */
+    uint8_t next;       /* +1 */
+} kbd_$state_entry_t;
+
+_Static_assert(sizeof(kbd_$state_entry_t) == 2, "kbd_$state_entry_t");
+
+/*
+ * kbd_$handler_fn_t - the shape KBD_$RCV calls state->handler with
+ * (0x00E1CE48..0x00E1CE60): a two-byte Pascal result slot, then the
+ * translated key pushed as a byte (`move.b D0b,-(SP)`, so it occupies the
+ * high half of a word slot) and state->user_data as a longword; the result
+ * is discarded.
+ */
+typedef int16_t (*kbd_$handler_fn_t)(uint32_t user_data, uint8_t key);
+
 #endif /* KBD_INTERNAL_H */

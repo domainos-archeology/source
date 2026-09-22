@@ -1,9 +1,17 @@
+/*
+ * TERM_$HELP_CALLBACK - Help-key callback placeholder
+ *
+ * An empty procedure: the image holds a single `rts` (map: 0x00E7244E, the
+ * word before TERM_$PCHIST_ENABLE at 0x00E72450).
+ *
+ * Original address: 0x00e7244e, 2 bytes
+ *
+ *   00e7244e  rts
+ */
+
 #include "term/term_internal.h"
 
-// Placeholder callback for terminal help functionality.
-//
-// This function is a stub - it does nothing and returns immediately.
-// May be intended as a hook point for help system integration.
-void TERM_$HELP_CALLBACK(void) {
-    return;
+void TERM_$HELP_CALLBACK(void)
+{
+    /* 0x00E7244E: rts */
 }

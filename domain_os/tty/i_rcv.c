@@ -21,6 +21,16 @@
  * Jump table: 0x00e1b9c0, 19 word-sized self-relative entries.
  */
 
+/*
+ * Re-verified instruction by instruction against 0x00E1B92A..0x00E1BCF6
+ * (936 bytes) on 2026-09-19, including the 19-entry jump table at
+ * 0x00E1B9C0 (00 26 00 42 00 5e 01 72 01 80 00 82 00 a0 01 0e 01 36 01 22
+ * 02 2c 01 72 01 4a 00 e0 01 e8 02 02 01 ba 00 c6 02 78): classes 3 and 11
+ * share 0x00E1BB32, class 12 falls into it, class 15 falls into class 18's
+ * body at 0x00E1BC38, and the crash cell at 0x00E1BCF8 is 00 0b 00 08.
+ * Nothing in the body changed; the TTY_$I_XMIT_CHAR calls now pass the
+ * byte itself (the callee takes the address of its byte argument).
+ */
 #include "tty/tty_internal.h"
 #include "time/time.h"
 #include "mmu/mmu.h"
@@ -107,8 +117,8 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
                  * 0x0800 (character 0x08, backspace).  The second call falls
                  * through into the shared tail at 0xE1BB70.
                  */
-                TTY_$I_XMIT_CHAR(tty, 0x0800);
-                TTY_$I_XMIT_CHAR(tty, 0x0800);
+                TTY_$I_XMIT_CHAR(tty, 0x08);
+                TTY_$I_XMIT_CHAR(tty, 0x08);
             }
             break;
 
@@ -164,8 +174,8 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
 
         case TTY_CHAR_CLASS_DISCARD:  /* 0x0C - 0xE1BB0A */
             TTY_$I_ECHO_CHAR(tty, ch);
-            TTY_$I_XMIT_CHAR(tty, 0x0800);
-            TTY_$I_XMIT_CHAR(tty, 0x0800);
+            TTY_$I_XMIT_CHAR(tty, 0x08);
+            TTY_$I_XMIT_CHAR(tty, 0x08);
             /* falls into the case 3 tail at 0xE1BB32 */
             TTY_$I_BREAK_CHAR(tty, ch);
             break;
@@ -232,7 +242,7 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
 
                 /* 0xE1BC8C: tst.b D4b - bit 7 of the saved state_flags */
                 if ((int8_t)(state_flags & 0xff) < 0) {
-                    TTY_$I_XMIT_CHAR(tty, 0x2f00);
+                    TTY_$I_XMIT_CHAR(tty, 0x2f);
                 }
 
                 if ((tty->input_flags & 0x00000001) != 0) {
@@ -268,7 +278,7 @@ void TTY_$I_RCV(tty_desc_t *tty, uint8_t ch)
                  * byte of the argument word and the low byte is whatever the
                  * stack held.  Only the high byte is read by the callee.
                  */
-                TTY_$I_XMIT_CHAR(tty, (uint16_t)(ch << 8));
+                TTY_$I_XMIT_CHAR(tty, ch);
             }
             break;
 

@@ -1,44 +1,50 @@
+/*
+ * TERM_$P2_CLEANUP - Drop a dying process's ownership of terminal lines
+ *
+ * Walks the three per-line records inside TERM_$DATA (0x158, 0x634, 0xB10;
+ * stride 0x4DC) and, wherever the owner UID at record + 0x4C equals
+ * PROC2_$UID[*as_id], overwrites it with UID_$NIL.
+ *
+ * Parameters:
+ *   as_id_ptr - word by reference ((0x8,A6)); the index into PROC2_$UID
+ *
+ * Original address: 0x00e751f0, 96 bytes
+ *
+ *   00e751f8  moveq #2,D0                                ; dbf -> 3 records
+ *   00e751fa  D2 = 0xE7BE94 (PROC2_$UID); D3 = 0xE1737C (UID_$NIL)
+ *   00e7520a  D1 = *as_id << 3                           ; sign-extended word index
+ *   00e7520c  A2 = 0xE2C9F0 + 0x4DC; A1 = A0 = A2
+ *   00e7521c  loop: A2 = D2 + D1; A3 = A1 - 0x338        ; record uid = base + 0x1A4 + i*0x4DC
+ *   00e75226  moveq #1,D4                                ; never used
+ *   00e75228  cmpm.l (A3)+,(A2)+ / bne; cmpm.l / bne     ; 8-byte compare
+ *   00e75230  A2 = D3; (-0x338,A0) = nil.high; (-0x334,A0) = nil.low
+ *   00e7523a  A0 += 0x4DC; A1 += 0x4DC; dbf D0
+ */
+
 #include "term/term_internal.h"
 
-// Per-line terminal data uses 0x4dc byte entries with UID at offset 0x1a4
-// These overlap with TERM_$DATA starting at offset 0
-#define TERM_LINE_DATA_SIZE   0x4dc
-#define TERM_LINE_UID_OFFSET  0x1a4
+#define TERM_LINE_RECORD_STRIDE   0x4DC
+#define TERM_LINE_OWNER_UID       0x1A4     /* TERM_$DATA + 0x158 + 0x4C */
 
-// Cleans up terminal state when a process (P2) exits.
-//
-// Iterates through the terminal line data entries (3 of them, indices 0-2)
-// and checks if any have a UID matching the exiting process. If so,
-// that entry's UID is cleared to UID_$NIL.
-//
-// The parameter points to the process/address space ID used to
-// compute the UID lookup offset.
-void TERM_$P2_CLEANUP(short *param1) {
-    short as_id;
+void TERM_$P2_CLEANUP(short *as_id_ptr)
+{
+    int16_t count;          /* D0w */
+    int16_t uid_offset;     /* D1w */
+    uid_t *proc_uid;        /* A2 at 0x00E7521C */
+    uid_t *owner;           /* A3 */
     int i;
-    int uid_offset;
-    uid_t *entry_uid;
-    uid_t *proc_uid;
-    char *term_base = (char *)&TERM_$DATA;
 
-    as_id = *param1;
-    uid_offset = (short)(as_id << 3);  // as_id * 8 for UID array indexing
+    /* 0x00E7520A..0x00E75212 */
+    uid_offset = (int16_t)(*as_id_ptr << 3);
+    proc_uid = (uid_t *)((uint8_t *)PROC2_$UID + uid_offset);
 
-    // Get pointer to process's UID
-    proc_uid = (uid_t *)((char *)&PROC2_$UID + uid_offset);
-
-    // Iterate through 3 terminal line entries (indices 0, 1, 2)
-    // Each entry is TERM_LINE_DATA_SIZE (0x4dc) bytes with UID at TERM_LINE_UID_OFFSET (0x1a4)
-    for (i = 0; i < 3; i++) {
-        // Calculate pointer to this line's UID field
-        entry_uid = (uid_t *)(term_base + (i * TERM_LINE_DATA_SIZE) + TERM_LINE_UID_OFFSET);
-
-        // Compare UIDs
-        if (entry_uid->high == proc_uid->high &&
-            entry_uid->low == proc_uid->low) {
-            // Clear this entry's UID to nil
-            entry_uid->high = UID_$NIL.high;
-            entry_uid->low = UID_$NIL.low;
+    /* 0x00E7521C..0x00E75242 */
+    for (count = 2, i = 0; count >= 0; count--, i++) {
+        owner = (uid_t *)TERM_$DATA_AT(TERM_LINE_OWNER_UID + i * TERM_LINE_RECORD_STRIDE);
+        if (owner->high == proc_uid->high && owner->low == proc_uid->low) {
+            /* 0x00E75230..0x00E75236 */
+            owner->high = UID_$NIL.high;
+            owner->low = UID_$NIL.low;
         }
     }
 }

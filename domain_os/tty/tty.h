@@ -18,6 +18,7 @@
 #define status_$tty_eof                         0x00350005
 #define status_$tty_invalid_output_buffer_length 0x00350006 /* "invalid output buffer length" */
 #define status_$tty_quit_while_waiting_for_input 0x00350007 /* "quit while waiting for input" */
+#define status_$tty_get_conditional_failed      0x00350008  /* "get conditional failed - no data available" */
 #define status_$tty_input_buffer_overrun        0x00350009  /* "input buffer overrun" */
 #define status_$tty_would_block                 0x0035000a
 
@@ -113,20 +114,31 @@ typedef void (*tty_xon_xoff_handler_t)(uint32_t line_id, boolean stop);
 typedef void (*tty_flow_ctrl_handler_t)(uint32_t line_id, boolean assert_flow,
                                         boolean use_hw_flow);
 
+// status_handler (0x2C0): TTY_$I_ERR 0x00E1BE10..0x00E1BE22 pushes a word
+// result slot, `st` (a true boolean in the high byte of a word slot) and the
+// full 32-bit line_id, then stores D0 as a longword: the handler is a Pascal
+// function returning the line's error status (0x36xxxx SIO codes).
+typedef status_$t (*tty_status_handler_t)(uint32_t line_id, boolean clear);
+
 // =============================================================================
 // TTY Callback Descriptor
 // Each TTY has up to 6 signal callback entries (12 bytes each)
 // =============================================================================
+// The second longword is NOT a code pointer: TTY_$I_INIT fills it from the
+// six status codes at 0x00E351B0 (0x120010 "process quit", 0x12001F
+// "process interrupt", 0x120028 "process suspend from keyboard", 0xB000E
+// "hangup fault", 0, 0) and TTY_$I_DXM_SIGNAL passes its address to
+// PROC2_$SIGNAL_PGROUP_OS as the fault status (0x00E671F2 pea (0x4,A3)).
 typedef struct tty_signal_entry {
-  m68k_ptr_t tty_desc; // 0x00: Back pointer to TTY descriptor
-  m68k_ptr_t callback; // 0x04: Callback function pointer
-  uint16_t signal_num; // 0x08: Signal number
-  uint16_t reserved;   // 0x0A: Reserved/padding
+  m68k_ptr_t tty_desc;    // 0x00: Back pointer to TTY descriptor
+  status_$t fault_status; // 0x04: fault status delivered with the signal
+  uint16_t signal_num;    // 0x08: Signal number
+  uint16_t reserved;      // 0x0A: Reserved/padding (never written)
 } tty_signal_entry_t;
 
 /* Remaining documented offsets (bead source-pewa). */
 _Static_assert(__builtin_offsetof(tty_signal_entry_t, tty_desc) == 0x00, "tty_signal_entry_t.tty_desc");
-_Static_assert(__builtin_offsetof(tty_signal_entry_t, callback) == 0x04, "tty_signal_entry_t.callback");
+_Static_assert(__builtin_offsetof(tty_signal_entry_t, fault_status) == 0x04, "tty_signal_entry_t.fault_status");
 _Static_assert(__builtin_offsetof(tty_signal_entry_t, signal_num) == 0x08, "tty_signal_entry_t.signal_num");
 _Static_assert(__builtin_offsetof(tty_signal_entry_t, reserved) == 0x0A, "tty_signal_entry_t.reserved");
 
@@ -146,11 +158,12 @@ typedef struct tty_desc {
   uint32_t output_flags;   // 0x0C: Output control flags (32-bit word, assembly: move.l (0xC,A0))
 
   // Mode flags (0x10-0x1F)
-  uint32_t reserved_10; // 0x10: Reserved
-  uint32_t input_flags; // 0x14: Input processing flags
-  uint16_t reserved_18; // 0x18: Reserved
-  uint16_t reserved_1A; // 0x1A: Reserved
-  uint32_t echo_flags;  // 0x1C: Echo control flags
+  uint32_t raw_saved_output_flags; // 0x10: output_flags bits parked by TTY_$I_SET_RAW_MODE
+                                   //       (0x00E1BFB0 / 0x00E1C03C), cleared by TTY_$I_INIT
+  uint32_t input_flags;            // 0x14: Input processing flags
+  uint32_t raw_saved_input_flags;  // 0x18: input_flags bits parked by TTY_$I_SET_RAW_MODE
+                                   //       (0x00E1BF9A / 0x00E1C034), cleared by TTY_$I_INIT
+  uint32_t echo_flags;             // 0x1C: Echo control flags
 
   // Function character control (0x20-0x3F)
   uint32_t func_enabled; // 0x20: Bitmask of enabled function chars
@@ -187,7 +200,7 @@ typedef struct tty_desc {
   m68k_ptr_t xmit_callback;     // 0x2B4: Transmit callback function
   tty_xon_xoff_handler_t xon_xoff_handler;   // 0x2B8: XON/XOFF handler
   tty_flow_ctrl_handler_t flow_ctrl_handler; // 0x2BC: Flow control handler
-  m68k_ptr_t status_handler;    // 0x2C0: Status change handler
+  tty_status_handler_t status_handler; // 0x2C0: error status query (see typedef)
 
   // Timestamp of the last completed input line.  TIME_$CLOCK writes a 48-bit
   // clock_t here (0x2C4..0x2C9); see TTY_$I_RCV 0xE1BCE4 and
@@ -237,9 +250,8 @@ typedef struct tty_desc {
 _Static_assert(__builtin_offsetof(tty_desc_t, line_id) == 0x00, "tty_desc_t.line_id");
 _Static_assert(__builtin_offsetof(tty_desc_t, handler_ptr) == 0x04, "tty_desc_t.handler_ptr");
 _Static_assert(__builtin_offsetof(tty_desc_t, output_flags) == 0x0C, "tty_desc_t.output_flags");
-_Static_assert(__builtin_offsetof(tty_desc_t, reserved_10) == 0x10, "tty_desc_t.reserved_10");
-_Static_assert(__builtin_offsetof(tty_desc_t, reserved_18) == 0x18, "tty_desc_t.reserved_18");
-_Static_assert(__builtin_offsetof(tty_desc_t, reserved_1A) == 0x1A, "tty_desc_t.reserved_1A");
+_Static_assert(__builtin_offsetof(tty_desc_t, raw_saved_output_flags) == 0x10, "tty_desc_t.raw_saved_output_flags");
+_Static_assert(__builtin_offsetof(tty_desc_t, raw_saved_input_flags) == 0x18, "tty_desc_t.raw_saved_input_flags");
 _Static_assert(__builtin_offsetof(tty_desc_t, echo_flags) == 0x1C, "tty_desc_t.echo_flags");
 _Static_assert(__builtin_offsetof(tty_desc_t, func_enabled) == 0x20, "tty_desc_t.func_enabled");
 _Static_assert(__builtin_offsetof(tty_desc_t, func_chars) == 0x24, "tty_desc_t.func_chars");
@@ -329,10 +341,11 @@ extern void TTY_$I_FLUSH_OUTPUT(tty_desc_t *tty);
 // @param tty: TTY descriptor
 extern void TTY_$I_OUTPUT_BUFFER_DRAINED(tty_desc_t *tty);
 
-// TTY_$I_ERR - Handle TTY error condition
+// TTY_$I_ERR - Handle a receive error on a TTY line
 // @param tty: TTY descriptor
-// @param fatal: Nonzero if error is fatal
-extern void TTY_$I_ERR(tty_desc_t *tty, char fatal);
+// @param ch: the character received with the error (0 for a pure line error),
+//            a byte in the high half of its word slot (0x00E1BE28)
+extern void TTY_$I_ERR(tty_desc_t *tty, uint8_t ch);
 
 // TTY_$I_INTERRUPT - Handle interrupt (^C)
 // @param tty: TTY descriptor

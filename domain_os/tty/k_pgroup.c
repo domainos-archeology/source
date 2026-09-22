@@ -1,16 +1,13 @@
-// TTY kernel-level process group and session functions
-//
-// TTY_$K_SET_PGROUP - Set process group UID
-// Address: 0x00e67900
-//
-// TTY_$K_INQ_PGROUP - Inquire process group UID
-// Address: 0x00e67942
-//
-// TTY_$K_SET_SESSION_ID - Set session ID
-// Address: 0x00e67986
-//
-// TTY_$K_INQ_SESSION_ID - Inquire session ID
-// Address: 0x00e679c4
+/*
+ * TTY kernel-level process group and session functions (re-verified
+ * 2026-09-22).  All four load A5 = 0x00E8242C, call
+ * tty = TTY_$I_GET_DESC(*line_ptr, status) and return when status != 0.
+ *   TTY_$K_SET_PGROUP     0x00E67900..0x00E67940 (66): two longwords from
+ *                         *uid_ptr -> (0x4c,A0), (0x50,A0)
+ *   TTY_$K_INQ_PGROUP     0x00E67942..0x00E67984 (68): the reverse copy
+ *   TTY_$K_SET_SESSION_ID 0x00E67986..0x00E679C2 (62): word -> (0x54,A0)
+ *   TTY_$K_INQ_SESSION_ID 0x00E679C4..0x00E67A00 (62): word <- (0x54,A0)
+ */
 
 #include "tty/tty_internal.h"
 

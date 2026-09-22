@@ -354,7 +354,14 @@ void SIO2681_$SET_BREAK(sio2681_channel_t *channel, int8_t enable);
  *
  * Original address: 0x00e1d172
  */
-void SIO2681_$TONE(sio2681_channel_t *channel, uint8_t *enable_ptr,
-                   uint32_t param3, uint32_t param4);
+/*
+ * Arity from the prologue at 0x00E1D180: `movea.l (0x8,A6),A0 / move.l
+ * (A0),D2` reads a CELL holding the channel's address, (0xc,A6) is the
+ * enable byte pointer, and (0x10,A6) - a status cell the only caller,
+ * TONE_$ENABLE, pushes with `pea (-0x4,A6)` - is never read.  The call
+ * reclaims 12 bytes (three arguments), not 16.
+ */
+void SIO2681_$TONE(sio2681_channel_t **channel_cell, uint8_t *enable_ptr,
+                   status_$t *status_unused);
 
 #endif /* SIO2681_H */

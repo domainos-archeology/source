@@ -29,6 +29,21 @@
  * Size: 268 bytes
  */
 
+/*
+ * Re-verified against 0x00E1BCFC..0x00E1BE06 (268 bytes), 2026-09-19.
+ * Nested procedure of TTY_$I_ERR: A2 = (A6) is the static link and every
+ * `movea.l (0x8,A2),A0` is the parent's tty, `move.b (0xc,A2)` the parent's
+ * ch byte -- hence the two explicit parameters here.
+ *   0x00E1BD0A  input_flags bit 12 (btst.l #0xc on the longword):
+ *               buf_insert(0xFF) (st), buf_insert(0) (clr.w), buf_insert(ch)
+ *   0x00E1BD48  else buf_insert(0)
+ *   0x00E1BD5E  break_mode == 0 -> return
+ *   0x00E1BD6A  count = input_tail - input_read (+0x100 if negative)
+ *   0x00E1BD8A  count (sign-extended) < min_chars (zero-extended) ->
+ *               break_mode == 3 -> TIME_$CLOCK(&(0x2c4,A0))
+ *   0x00E1BD8E  else input_head = tail == 0x100 ? 1 : tail + 1;
+ *               ADVANCE_EC(input_ec); state bit 4 -> SIGNAL(tty, 0x1A)
+ */
 #include "tty/tty_internal.h"
 #include "time/time.h"
 

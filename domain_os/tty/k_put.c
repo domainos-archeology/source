@@ -93,13 +93,14 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
                                *count - chars_written, 0x40);
         chars_written += written;
 
-        /* Check for pending signal */
+        /* 0x00E67C80: pending signal?  btst.b #0,(0xb,A2) / #1 are bits 0
+         * and 1 of the 16-bit pending_signal word. */
         if (tty->pending_signal != 0) {
-            if ((*(uint8_t *)((char *)tty + 0x0b) & TTY_ERR_CALLBACK) != 0) {
-                /* Call error handler */
-                *status_ret = ((status_$t (*)(short))tty->status_handler)(
-                    (short)tty->line_id);
-            } else if ((*(uint8_t *)((char *)tty + 0x0b) & TTY_ERR_OVERFLOW) != 0) {
+            if ((tty->pending_signal & TTY_ERR_CALLBACK) != 0) {
+                /* 0x00E67C8E: subq/st/move.l (A2)/jsr (0x2c0,A2) - the full
+                 * 32-bit line_id and a true boolean, result longword in D0 */
+                *status_ret = tty->status_handler(tty->line_id, true);
+            } else if ((tty->pending_signal & TTY_ERR_OVERFLOW) != 0) {
                 *status_ret = status_$tty_input_buffer_overrun;
             }
             tty->pending_signal = 0;
@@ -114,7 +115,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
         }
 
         /* Need to wait for buffer space - set up wait */
-        output_ec = (ec_$eventcount_t *)(uintptr_t)tty->output_ec;
+        output_ec = (ec_$eventcount_t *)ARCH_VA_TO_PTR(tty->output_ec);   /* 0x00E67CBE */
         output_wait_val = output_ec->value + 1;
 
         quit_ec = (ec_$eventcount_t *)&FIM_$QUIT_EC[PROC1_$AS_ID];
@@ -125,10 +126,14 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
             continue;  /* Output ready, try again */
         }
 
-        /* Check if non-blocking */
+        /* 0x00E67D0C: non-blocking - record would-block and go back to the
+         * loop test at 0x00E67D82 (bra.b 0x00e67d82), NOT to the exit: with
+         * chars_written still below *count the image calls TTY_$I_PUT_OUTPUT
+         * again, so it spins (lock held, interrupts open) until the output
+         * interrupt drains the ring or a signal is pending.  Reproduced. */
         if ((*(uint16_t *)options & 0x0001) != 0) {
             *status_ret = status_$tty_would_block;
-            goto done;
+            continue;
         }
 
         /* Wait for output buffer drain or quit signal */

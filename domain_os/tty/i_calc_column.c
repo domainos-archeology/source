@@ -19,6 +19,21 @@
  * Returns:
  *   The calculated column position after processing all characters
  *
+ * 0x00E1B4B6..0x00E1B536 (130 bytes), verified against the image:
+ *   0x00E1B4BE  A0 = buf (0x8), D1w = start (0xc), D2w = column (0xe),
+ *               D0 = echo_flags (0x10, longword); D3w = (0x2,A0) = tail
+ *   0x00E1B4D2  bra to the test: the loop runs while pos != tail
+ *   0x00E1B4D4  ch = (0x5,A0,pos)  = data[pos - 1]
+ *   0x00E1B4D8  TAB:  column = ((column & 0xffff) + 7) >> 3 << 3 (32-bit,
+ *               result truncated to the word D2w)
+ *   0x00E1B4EC  BS:   if column != 0, column - 1
+ *   0x00E1B4FA  CR:   column = 0
+ *   0x00E1B504  ch < 0x20 (bcs, unsigned) or ch == 0x7f: +2 only when
+ *               echo_flags bit 4 is set (btst.l #4,D0)
+ *   0x00E1B51A  else +1
+ *   0x00E1B51C  pos == 0x100 ? 1 : pos + 1
+ *   0x00E1B52C  result is the column word in D0w
+ *
  * Original address: 0x00e1b4b6
  * Size: 130 bytes
  */

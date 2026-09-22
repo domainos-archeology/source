@@ -217,6 +217,16 @@ extern term_data_t TERM_$DATA;
  */
 #define DTTE (TERM_$DATA.dtte)
 
+/*
+ * term_$const_word_2 - the literal word 2 at 0x00E667C4, in the OS_TERM code
+ * segment (map: "I E66738 OS_TERM").  It is passed by reference from two
+ * routines and so must be one shared cell: TERM_$CONTROL case 1 hands it to
+ * TTY_$K_SET_FUNC_CHAR as the function number (0x00E6699A pea (-0x1d8,PC))
+ * and TTY_$I_GET_DESC hands it to TERM_$SET_DISCIPLINE as the discipline
+ * (0x00E66792 pea (0x30,PC)).  Image bytes: 00 02.  Defined in term_data.c.
+ */
+extern const uint16_t term_$const_word_2;
+
 // =============================================================================
 // Function declarations
 // =============================================================================
@@ -271,3 +281,19 @@ extern dxm_$callback_t PTR_TERM_$ENQUEUE_TPAD_00e1ce90;
 extern tpad_buffer_t TERM_$TPAD_BUFFER;
 
 #endif /* TERM_H */
+
+/*
+ * ---------------------------------------------------------------------------
+ * Appended 2026-09-22 (batch tty2, term re-emission) - notes only, the
+ * declarations above are unchanged.
+ *
+ * dtte_t: TERM_$GET_EC (0x00E72402 / 0x00E7241E) passes the ADDRESSES of
+ * +0x0C and +0x18 to EC2_$REGISTER_EC1, which takes an ec_$eventcount_t *, so
+ * the input and output eventcounts are 12-byte records embedded in the DTTE
+ * (0x0C..0x17 and 0x18..0x23), not the 4-byte pointers input_ec / output_ec
+ * followed by reserved_10 / reserved_1c.  Bead source-zbdk.
+ *
+ * TERM_$GET_EC's third argument receives EC2_$REGISTER_EC1's handle as one
+ * longword (`move.l A0,(A1)` at 0x00E72442); term/get_ec.c stores it through
+ * the ec2_$eventcount_t * as its first longword.
+ */

@@ -1,22 +1,17 @@
 /*
- * TTY_$I_NEWLINE - Output a newline sequence to the TTY
+ * TTY_$I_NEWLINE - Output a newline sequence
  *
- * Outputs a CR/LF or LF newline sequence depending on the TTY's
- * output flags (offset 0x0F in the descriptor):
- *   - Bit 0 set: output nothing (suppress newline)
- *   - Bit 1 set: output only LF (no CR)
- *   - Otherwise: output CR+LF
+ * 0x00E1B456..0x00E1B4B0 (92 bytes), A2 = tty.  Two booleans start true
+ * (st D0b; move.b D0b,D2b): D0 = "send LF", D2 = "send CR".
+ *   0x00E1B466  output_flags bit 0 (btst.b #0,(0xf,A2)): D0 = 0, skip to
+ *               the CR test (D2 still true)
+ *   0x00E1B472  else output_flags bit 1: D2 = 0
+ *   0x00E1B47C  D0 true -> tty_$i_put_chars(tty, LF @0x00E1B4B2, 0x1000C)
+ *   0x00E1B494  D2 true -> tty_$i_put_chars(tty, CR @0x00E1B4B4, 0x1000C)
+ * Image bytes at 0x00E1B4B2: 0a 00 0d 00.  So: bit 0 -> CR only;
+ * bit 1 -> LF only; neither -> LF then CR; both -> CR only.
  *
- * Uses tty_$i_put_chars with flags=0x1000c (count=12 in high word?
- * Actually: high 16 bits = 0x0001, low 16 = 0x000c; this encodes
- * the put_chars mode and a small count).
- *
- * The data bytes are inline constants:
- *   0x0A (LF) at offset used for LF-only
- *   0x0D (CR) at offset used for CR
- *
- * Parameters:
- *   tty - TTY descriptor
+ * Callers: TTY_$I_KILL_LINE 0x00E1B6EC, TTY_$I_RCV 0x00E1BC04.
  *
  * Original address: 0x00e1b456
  * Size: 92 bytes
@@ -24,31 +19,26 @@
 
 #include "tty/tty_internal.h"
 
-/* Inline constant bytes (PC-relative in original code) */
-static const uint8_t newline_lf[] = { 0x0A };
-static const uint8_t newline_cr[] = { 0x0D };
+static const uint8_t tty_$newline_lf = 0x0a;   /* 0x00E1B4B2 */
+static const uint8_t tty_$newline_cr = 0x0d;   /* 0x00E1B4B4 */
+
+#define TTY_OUTPUT_FLAGS  0x1000c
 
 void TTY_$I_NEWLINE(tty_desc_t *tty)
 {
-    /* Assembly loads byte at offset 0x0F (LSB of 32-bit output_flags on
-     * big-endian).  Now that output_flags is uint32_t, access directly. */
-    uint32_t output_flags = tty->output_flags;
-    char do_cr = -1;  /* true: output CR */
+    boolean send_lf = true;                                /* D0b */
+    boolean send_cr = true;                                /* D2b */
 
-    if ((output_flags & 0x01) != 0) {
-        /* Bit 0 set: suppress newline entirely, but still may do CR */
-        /* (original code: clears D0, skips LF output) */
-    } else {
-        if ((output_flags & 0x02) != 0) {
-            /* Bit 1 set: LF only, no CR */
-            do_cr = 0;
-        }
-        /* Output LF */
-        tty_$i_put_chars(tty, newline_lf, 0x1000c);
+    if ((tty->output_flags & 0x00000001) != 0) {           /* 0x00E1B466 */
+        send_lf = false;
+    } else if ((tty->output_flags & 0x00000002) != 0) {    /* 0x00E1B472 */
+        send_cr = false;
     }
 
-    if (do_cr < 0) {
-        /* Output CR */
-        tty_$i_put_chars(tty, newline_cr, 0x1000c);
+    if (send_lf < 0) {                                     /* 0x00E1B47C tst.b / bpl */
+        tty_$i_put_chars(tty, &tty_$newline_lf, TTY_OUTPUT_FLAGS);
+    }
+    if (send_cr < 0) {                                     /* 0x00E1B494 */
+        tty_$i_put_chars(tty, &tty_$newline_cr, TTY_OUTPUT_FLAGS);
     }
 }

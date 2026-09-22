@@ -186,11 +186,14 @@ void TTY_$I_LOCK(tty_desc_t *tty);
  *
  * Parameters:
  *   tty - TTY descriptor
- *   ch  - Character to transmit
+ *   ch  - Character to transmit.  Pushed as a byte into the high half of a
+ *         word slot (`move.b ..,-(SP)`); the body passes the ADDRESS of that
+ *         byte (pea (0xc,A6), 0x00E1B3BE) to tty_$i_put_chars, so on the
+ *         host it is simply a uint8_t whose address is taken.
  *
  * Original address: 0x00e1b3b4
  */
-void TTY_$I_XMIT_CHAR(tty_desc_t *tty, uint16_t ch);
+void TTY_$I_XMIT_CHAR(tty_desc_t *tty, uint8_t ch);
 
 /*
  * TTY_$I_UNLOCK - Unlock TTY

@@ -193,3 +193,8 @@ int16_t DAT_00e3321e = 2;
  * SIO2681_$INIT's first two arguments. */
 int16_t DAT_00e33220 = 1;
 
+/*
+ * term_$const_word_2 - the literal word 2 at 0x00E667C4 (OS_TERM code
+ * segment); see term/term.h for the two by-reference users.
+ */
+const uint16_t term_$const_word_2 = 2;

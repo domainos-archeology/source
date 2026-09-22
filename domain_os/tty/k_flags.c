@@ -24,6 +24,23 @@
 // TTY_$K_INQ_ECHO_FLAGS - Inquire echo flags
 // Address: 0x00e677e0
 
+/*
+ * Re-verified 2026-09-22 against 0x00E67422..0x00E6781C.  Every routine
+ * loads A5 = 0x00E8242C and begins tty = TTY_$I_GET_DESC(*line_ptr, status);
+ * status != 0 -> return.
+ *   TTY_$K_SET_FLAG (0x00E67422, 106 bytes): *flag_ptr (word) != 0 -> return
+ *     with status untouched; *value_ptr < 0 -> bset.b #4,(0x9,A2) and
+ *     input_read != input_head -> TTY_$I_SIGNAL(tty, 0x1A); else bclr.b #4
+ *   TTY_$K_INQ_FLAGS (0x00E6748C, 70 bytes): clr.w (A1); state bit 4 ->
+ *     bset.b #0,(0x1,A1) = bit 0 of the caller's word
+ *   TTY_$K_SET_INPUT_FLAG / _OUTPUT_FLAG / _ECHO_FLAG (0x00E67656 /
+ *     0x00E676EE / 0x00E67786, 90 bytes each): bset.l D2,D1 on a cleared
+ *     longword = 1 << (*flag_ptr mod 32); *value_ptr < 0 -> or.l into
+ *     input_flags (0x14) / output_flags (0xc) / echo_flags (0x1c), else
+ *     not.l / and.l
+ *   TTY_$K_INQ_INPUT_FLAGS / _OUTPUT_FLAGS / _ECHO_FLAGS (0x00E676B0 /
+ *     0x00E67748 / 0x00E677E0, 62 bytes each): copy the longword out
+ */
 #include "tty/tty_internal.h"
 
 void TTY_$K_SET_FLAG(short *line_ptr, short *flag_ptr, char *value_ptr,

@@ -35,6 +35,38 @@
  * Size: 906 bytes
  */
 
+/*
+ * Re-verified against 0x00E1B00A..0x00E1B392 (906 bytes), 2026-09-19:
+ *   0x00E1B012  D3w = count (0x10,A6), D0w = reserve (0x12,A6): the third
+ *               argument longword is count in its high word, reserve low
+ *   0x00E1B01E  state_flags bit 5 -> return count; bit 2 -> return 0
+ *   0x00E1B03E  free = output_head - output_read - 1 (+0x100 if negative)
+ *               - reserve; local_max = count <= free ? count :
+ *               (free >= 0 ? free : 0)   (signed 32-bit compares)
+ *   0x00E1B076  loop while zero-extended processed < sign-extended local_max
+ *   0x00E1B082  dispatch on the byte: 08, 0d, 0a, 09, 0b, 0c, fe, other
+ *   0x00E1B0BA  BS: put 0x08; column-- if column != 0
+ *   0x00E1B0E2  CR: output_flags bit 3 and column == 0 -> only column = 0;
+ *               bit 0 -> local_max--, put 0x0a, delay[0] > 3 -> delay;
+ *               else put 0x0d, delay[1] > 3 -> delay; column = 0
+ *   0x00E1B15E  LF: bit 1 -> local_max--, put 0x0d, delay[1] > 3 -> delay,
+ *               column = 0; then put 0x0a, delay[0] > 3 -> delay
+ *   0x00E1B1D0  TAB: n = 8 - (column & 7); bit 4 -> local_max -= n - 1,
+ *               dbf n times put 0x20; else put 0x09, delay[2] > 3 -> delay;
+ *               column += n
+ *   0x00E1B24C  VT: put ch, delay[3] > 3 -> delay.  FF: delay[4] (0x00E1B274)
+ *   0x00E1B2A2  0xFE: put 0xFE twice
+ *   0x00E1B2C6  other: spin lock; output_buffer[output_read - 1] = ch
+ *               ((0x3d7,A1)); wrap 0x100 -> 1; ch >= 0x20 -> column++; unlock
+ *   0x00E1B330  spin lock; processed < count (unsigned bcc) and
+ *               (output_read - output_head, +0x100 if negative) >= 0xBF
+ *               (signed blt) -> state_flags bit 0; xmit_callback(line_id);
+ *               unlock; return processed
+ * The nested tty_$i_buf_put_delay (0x00E1AFA2) takes the delay word and, via
+ * the static link, this frame's local_max (-0x14): subq.w #4, then puts
+ * 0xFE, 0x00, delay high byte, delay low byte.  The `cmpi.w #3 / bls` delay
+ * tests are unsigned.
+ */
 #include "tty/tty_internal.h"
 
 /*

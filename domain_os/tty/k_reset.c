@@ -1,6 +1,20 @@
-// TTY_$K_RESET - Reset TTY to default settings
-// Address: 0x00e672de
-// Size: 204 bytes
+/*
+ * TTY_$K_RESET - Reset a line's buffers and ownership
+ * 0x00E672DE..0x00E673A8 (204 bytes), A5 = 0x00E8242C; re-verified 2026-09-22.
+ *   0x00E672F0  tty = TTY_$I_GET_DESC(*line_ptr, status); status != 0 -> return
+ *   0x00E6730C  TTY_$I_LOCK(tty)
+ *   0x00E67316  (-0x8,A6) = sne(input_flags bit 1)  (btst.b #1,(0x17,A2))
+ *   0x00E67322  move.l #0x10001,(0x2ca): input_head = input_read = 1
+ *   0x00E6732A  move.l #0x10100,(0x2ce): input_tail = 1, input_size = 0x100
+ *   0x00E67332  move.l #0x10001,(0x3d2): output_head = output_read = 1
+ *   0x00E6733A  output_tail = 0x100
+ *   0x00E67340  clr.l (0x56): saved_input_flags = column = 0; clr.w (0xa)
+ *   0x00E67348  pgroup_uid = UID_$NIL (0x00E1737C); session_id = 0;
+ *               state_flags = 0; dbf #4: delay[0..4] = 0
+ *   0x00E6736E  xon_xoff_handler -> (line_id, false)
+ *   0x00E67382  flow_ctrl_handler -> (line_id, false, the saved sne byte)
+ *   0x00E67398  TTY_$I_UNLOCK(tty)
+ */
 
 #include "tty/tty_internal.h"
 

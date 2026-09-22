@@ -19,6 +19,17 @@
  * Size: 154 bytes
  */
 
+/*
+ * Re-verified against 0x00E1B716..0x00E1B7AE (154 bytes), 2026-09-22.
+ * A5 is inherited from TTY_$I_RCV (0x00E2DDB4, the TTY data segment whose
+ * first 0x20 bytes are tty_$word_sep_bitmap: byte [0x1b] = 0x01 -> space,
+ * byte [0x1e] = 0x37 -> BS HT LF FF CR).  A3 = &input_tail, A4 = &input_head.
+ *   0x00E1B72C  prev = tail == 1 ? 0x100 : tail - 1; ch = (0x2d1,A2,prev)
+ *   0x00E1B742  D2w = (0xFF - ch) >> 3; btst.b D1,(A5,D2w) tests bit ch & 7
+ *   phase 1 (0x00E1B75E test): separator -> DELETE_CHAR, else fall to phase 2
+ *   phase 2 (0x00E1B79C test): separator -> exit, else DELETE_CHAR
+ * Both loops stop when input_tail == input_head.
+ */
 #include "tty/tty_internal.h"
 
 /*

@@ -1,21 +1,16 @@
 /*
- * TTY_$I_KILL_LINE - Kill (erase) the entire input line
+ * TTY_$I_KILL_LINE - Erase the whole pending input line
  *
- * Erases the current input line from the buffer. Two modes:
+ * 0x00E1B6AC..0x00E1B714 (106 bytes), A2 = tty.  Only caller: TTY_$I_RCV
+ * (0x00E1BB02), for character class 8.
  *
- * If echo_flags bit 2 (CRT kill) is set:
- *   Repeatedly calls TTY_$I_DELETE_CHAR to erase characters
- *   one at a time until the buffer is back to the head position.
- *
- * If echo_flags bit 2 is clear:
- *   Echoes the kill character (func_chars[2], offset 0x26),
- *   optionally outputs a newline (if echo_flags bit 5 is set),
- *   and then resets the tail pointer. If tail == read position
- *   (nothing beyond the canonical boundary), just resets head.
- *   Otherwise resets tail back to head position.
- *
- * Parameters:
- *   tty - TTY descriptor
+ *   0x00E1B6B6  echo_flags bit 2 (btst.b #2,(0x1f,A2)) set:
+ *                 while input_tail != input_head: TTY_$I_DELETE_CHAR(tty)
+ *                 (0x00E1B6C8 test first, 0x00E1B6C0 body)
+ *   0x00E1B6D4  else: TTY_$I_ECHO_CHAR(tty, func_chars[2]) (byte (0x26,A2))
+ *   0x00E1B6E2    echo_flags bit 5 -> TTY_$I_NEWLINE(tty)
+ *   0x00E1B6F2    tail == input_read: tail != input_head -> input_head = tail
+ *   0x00E1B708    tail != input_read: input_tail = input_head
  *
  * Original address: 0x00e1b6ac
  * Size: 106 bytes
@@ -25,30 +20,27 @@
 
 void TTY_$I_KILL_LINE(tty_desc_t *tty)
 {
-    int16_t tail;
+    uint16_t tail;
 
-    if ((*(uint8_t *)((char *)tty + 0x1F) & 0x04) != 0) {
-        /* CRT kill mode: delete chars one at a time */
-        while (tty->input_tail != tty->input_head) {
-            TTY_$I_DELETE_CHAR(tty);
+    if ((tty->echo_flags & 0x00000004) != 0) {             /* 0x00E1B6B6 */
+        while (tty->input_tail != tty->input_head) {       /* 0x00E1B6C8 */
+            TTY_$I_DELETE_CHAR(tty);                       /* 0x00E1B6C2 */
+        }
+        return;
+    }
+
+    TTY_$I_ECHO_CHAR(tty, tty->func_chars[2]);             /* 0x00E1B6D4 */
+
+    if ((tty->echo_flags & 0x00000020) != 0) {             /* 0x00E1B6E2 */
+        TTY_$I_NEWLINE(tty);
+    }
+
+    tail = tty->input_tail;                                /* 0x00E1B6F2 */
+    if (tail == tty->input_read) {
+        if (tail != tty->input_head) {                     /* 0x00E1B6FC */
+            tty->input_head = tail;                        /* 0x00E1B702 */
         }
     } else {
-        /* Non-CRT kill: echo kill char, maybe newline, then reset buffer */
-        TTY_$I_ECHO_CHAR(tty, tty->func_chars[2]);
-
-        if ((*(uint8_t *)((char *)tty + 0x1F) & 0x20) != 0) {
-            TTY_$I_NEWLINE(tty);
-        }
-
-        tail = tty->input_tail;
-        if (tail == tty->input_read) {
-            /* Nothing beyond canonical boundary; if not at head, reset head */
-            if (tail != tty->input_head) {
-                tty->input_head = tail;
-            }
-        } else {
-            /* Reset tail back to head (discard all pending input) */
-            tty->input_tail = tty->input_head;
-        }
+        tty->input_tail = tty->input_head;                 /* 0x00E1B708 */
     }
 }

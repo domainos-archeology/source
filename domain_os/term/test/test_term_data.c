@@ -9,6 +9,9 @@
  * PTR_TTY_$I_RCV cells).
  */
 
+#include <stdio.h>
+#include <string.h>
+
 #include "term/term_internal.h"
 
 /* term_data.c defines one DXM callback cell; neither the registry nor the
@@ -22,8 +25,6 @@ dxm_$callback_t dxm_$callback_cell(dxm_$callback_fn_t fn)
 
 #include "../term_data.c"
 
-#include <stdio.h>
-#include <string.h>
 
 static int tests_run = 0;
 static int tests_failed = 0;

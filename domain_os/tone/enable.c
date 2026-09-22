@@ -1,56 +1,37 @@
 /*
- * TONE_$ENABLE - Enable or disable the tone output
+ * TONE_$ENABLE - Switch the speaker tone on or off
  *
- * This function controls the speaker output via the SIO2681 DUART's
- * output port. It delegates to SIO2681_$TONE which manipulates the
- * output port bit to turn the speaker on or off.
+ * Hands SIO2681_$TONE the ADDRESS of a frame cell holding the address of
+ * the SIO2681 channel-A record inside TERM_$DATA (TONE_$CHANNEL, +0x1268),
+ * the caller's enable-byte pointer, and a status cell nobody reads.
  *
- * Original address: 0x00e1ace8
+ * Parameters:
+ *   enable - pointer to a byte whose bit 7 turns the tone on ((0x8,A6))
  *
- * Assembly analysis:
- *   - Saves A5, sets A5 to 0xE2C9F0 (data segment base)
- *   - Computes A5+0x1268 = 0xE2DC58 (pointer to tone channel)
- *   - Stores this pointer in local variable
- *   - Calls SIO2681_$TONE(&channel_ptr, enable, -, -)
- *   - Restores A5 and returns
+ * Original address: 0x00e1ace8, 46 bytes
  *
- * Data layout:
- *   0xE2C9F0: TERM_$DATA, the OS_TERM_INIT module block (A5)
- *   0xE2DC58: TONE_$CHANNEL, the SIO2681 channel-A record (A5 + 0x1268)
+ *   00e1acee  lea (0xe2c9f0).l,A5                 ; TERM_$DATA
+ *   00e1acf4  pea (-0x4,A6)                       ; status cell (never read)
+ *   00e1acf8  move.l (0x8,A6),-(SP)               ; enable
+ *   00e1acfc  lea (0x1268,A5),A0 / move.l A0,(-0x8,A6)   ; cell = &TONE_$CHANNEL
+ *   00e1ad04  pea (-0x8,A6)                       ; &cell
+ *   00e1ad08  jsr SIO2681_$TONE                   ; args reclaimed by unlk
+ *
+ * SIO2681_$TONE (0x00E1D172) reads its first argument with
+ * `movea.l (0x8,A6),A0 / move.l (A0),D2` - a cell holding the channel
+ * address - and never touches (0x10,A6), the status cell.
  */
 
 #include "tone/tone_internal.h"
 
-/*
- * TONE_$ENABLE - Enable or disable tone
- *
- * Parameters:
- *   enable - Pointer to enable flag (bit 7 = enable tone)
- *            0xFF enables tone, 0x00 disables it
- *
- * The original code passes a pointer-to-pointer to SIO2681_$TONE
- * due to how the Pascal-derived calling convention works with
- * pass-by-reference semantics.
- */
 void TONE_$ENABLE(uint8_t *enable)
 {
-    sio2681_channel_t *channel_ptr;
-    uint32_t unused1;
-    uint32_t unused2;
+    status_$t status;                   /* A6-0x4 */
+    sio2681_channel_t *channel_cell;    /* A6-0x8 */
 
-    /*
-     * 0x00E1ACFC `lea (0x1268,A5),A0` / 0x00E1AD00 `move.l A0,(-0x8,A6)`:
-     * the A6-8 local holds the ADDRESS of the channel record, and
-     * 0x00E1AD04 `pea (-0x8,A6)` hands SIO2681_$TONE a pointer to that
-     * local.  TONE_$CHANNEL is the record itself (tone/tone.h), so the
-     * local is &TONE_$CHANNEL.
-     */
-    channel_ptr = &TONE_$CHANNEL;
+    /* 0x00E1ACFC..0x00E1AD00 */
+    channel_cell = &TONE_$CHANNEL;
 
-    /*
-     * Call SIO2681_$TONE to control the speaker output.
-     * The third and fourth parameters are unused stack space
-     * in the original code.
-     */
-    SIO2681_$TONE(channel_ptr, enable, unused1, unused2);
+    /* 0x00E1ACF4..0x00E1AD08 */
+    SIO2681_$TONE(&channel_cell, enable, &status);
 }

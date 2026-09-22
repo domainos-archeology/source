@@ -79,8 +79,8 @@ static void log_reset(void) { call_log[0] = '\0'; }
 void TTY_$I_ECHO_CHAR(tty_desc_t *tty, uint8_t ch)
 { (void)tty; logf_call("echo(%02x);", ch); }
 
-void TTY_$I_XMIT_CHAR(tty_desc_t *tty, uint16_t ch)
-{ (void)tty; logf_call("xmit(%04x);", ch); }
+void TTY_$I_XMIT_CHAR(tty_desc_t *tty, uint8_t ch)
+{ (void)tty; logf_call("xmit(%02x);", ch); }
 
 void TTY_$I_FLUSH_INPUT(tty_desc_t *tty)
 { (void)tty; logf_call("flush_in;"); }
@@ -335,7 +335,7 @@ TEST(class_eof_emits_bs_twice)
     tty.input_flags = 0x00000001;   /* echo enabled */
     TTY_$I_RCV(&tty, 4);
     ASSERT_EQ(TTY_STATUS_EOF_PEND, tty.state_flags & TTY_STATUS_EOF_PEND);
-    ASSERT_STR("echo(04);xmit(0800);xmit(0800);", call_log);
+    ASSERT_STR("echo(04);xmit(08);xmit(08);", call_log);
 
     /* echo off: flag set, nothing emitted */
     setup(TTY_CHAR_CLASS_EOF);
@@ -429,7 +429,7 @@ TEST(class_discard)
 {
     setup(TTY_CHAR_CLASS_DISCARD);
     TTY_$I_RCV(&tty, 0x0f);
-    ASSERT_STR("echo(0f);xmit(0800);xmit(0800);break(0f);", call_log);
+    ASSERT_STR("echo(0f);xmit(08);xmit(08);break(0f);", call_log);
 }
 
 TEST(class_flushout)
@@ -510,7 +510,7 @@ TEST(class_tab)
     ASSERT_EQ(0x09, tty.input_buffer[0]);
     ASSERT_EQ(2, tty.input_tail);
     ASSERT_EQ(0x0042, tty.saved_input_flags);
-    ASSERT_STR("xmit(0900);", call_log);
+    ASSERT_STR("xmit(09);", call_log);
 }
 
 /* 0xE1BA86: crash only when MMU_$NORMAL_MODE returns a non-negative byte */
@@ -582,7 +582,7 @@ TEST(parity_error_emits_2f)
     setup(TTY_CHAR_CLASS_NORMAL);
     tty.state_flags = TTY_FLAG_PARITY_ERR;
     TTY_$I_RCV(&tty, 'y');
-    ASSERT_STR("xmit(2f00);", call_log);
+    ASSERT_STR("xmit(2f);", call_log);
 
     /* bit 15 must NOT trigger it */
     setup(TTY_CHAR_CLASS_NORMAL);

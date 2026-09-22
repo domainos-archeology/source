@@ -1,10 +1,23 @@
-// TTY kernel-level input break mode functions
-//
-// TTY_$K_SET_INPUT_BREAK_MODE - Set input break mode
-// Address: 0x00e6781e
-//
-// TTY_$K_INQ_INPUT_BREAK_MODE - Inquire input break mode
-// Address: 0x00e678bc
+/*
+ * TTY kernel-level input break mode functions (re-verified 2026-09-22).
+ * Both load A5 = 0x00E8242C (the TTY data segment) and are reached through
+ * the syscall table at 0x00E7B836 / 0x00E7B83A.
+ *
+ * TTY_$K_SET_INPUT_BREAK_MODE, 0x00E6781E..0x00E678BA (158 bytes):
+ *   0x00E67834  tty = TTY_$I_GET_DESC(*line_ptr, status); status != 0 -> exit
+ *   0x00E6784E  two longwords from the caller's record -> (0x38,A3), (0x3c,A3)
+ *               i.e. break_mode, min_chars, reserved_3C
+ *   0x00E67858  record word 0 == 0:
+ *                 tty_$i_set_funcs(tty, DAT_00e82454 (0x28,A5), true (st));
+ *                 crash_char != 0 -> char_class[crash_char] = 0x11
+ *               else:
+ *                 tty_$i_set_funcs(tty, DAT_00e82454, false (clr.w));
+ *                 crash_char != 0 -> char_class[crash_char] = 0x12
+ *
+ * TTY_$K_INQ_INPUT_BREAK_MODE, 0x00E678BC..0x00E678FE (68 bytes):
+ *   tty = GET_DESC(*line_ptr, status); status != 0 -> exit;
+ *   two longwords from (0x38,A0) -> the caller's record (0xc,A6)
+ */
 
 #include "tty/tty_internal.h"
 

@@ -8,6 +8,9 @@
  * Parameters:
  *   ec - Pointer to eventcount to advance
  *
+ * 0x00E1AEF8..0x00E1AF08: link; move.l (0x8,A6),-(SP); jsr EC_$ADVANCE_WITHOUT_DISPATCH
+ * (0x00E20718).  The argument is the eventcount address pushed by value.
+ *
  * Original address: 0x00e1aef8
  * Size: 18 bytes
  */
@@ -17,5 +20,5 @@
 
 void TTY_$I_ADVANCE_EC(m68k_ptr_t ec)
 {
-    EC_$ADVANCE_WITHOUT_DISPATCH((ec_$eventcount_t *)ec);
+    EC_$ADVANCE_WITHOUT_DISPATCH((ec_$eventcount_t *)ARCH_VA_TO_PTR(ec));
 }

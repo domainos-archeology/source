@@ -21,6 +21,36 @@
  * Size: 590 bytes
  */
 
+/*
+ * TTY_$K_GET - re-verified against 0x00E1C3D2..0x00E1C61E (590 bytes),
+ * 2026-09-22.  A5 = 0x00E2DDB4; A4 = options, A3 = count ptr, D3 = chars
+ * read (the result, D0w at 0x00E1C614), (-0x4,A6) = output cursor,
+ * (-0x18) = wait flag (options bit 0), D4 = peek flag (options bit 1: keep
+ * the ring bytes and do not move input_read), (-0x1e) = done, (-0x1c) = the
+ * flag tty_$i_wait sets, D5 = seq(break_mode == 0) i.e. canonical mode.
+ *   0x00E1C3E8  GET_DESC(*line_ptr, status); status != 0 -> return 0
+ *   0x00E1C40C  TTY_$I_LOCK(tty)
+ *   0x00E1C42E  loop: D5 recomputed each pass; cursor = buffer + D3
+ *   0x00E1C444  canonical: input_read == input_head -> nothing to copy;
+ *               else while pos != input_tail and D3 < *count (bcs):
+ *                 ch = ring[pos-1]; !peek -> ring[pos-1] = 0; pos++ (wrap);
+ *                 class 0x0C: D3 == 0 -> status 0x350005; done; stop
+ *                 class 0x03: TTY_$I_SIGNAL(tty, 0x15); stop (done unset)
+ *                 else store, D3++; class 0x0E or 0x0B -> done; stop
+ *   0x00E1C4FC  non-canonical: while pos != input_tail and D3 < *count:
+ *                 store, !peek -> clear, D3++, pos++; then done = (D3 == *count)
+ *   0x00E1C50E  !peek: n = input_tail - input_read (+0x100);
+ *               (ext n - zext D3) < 0x40 and n >= 0x40 and flow handler ->
+ *               spin lock; handler(line_id, false, input_flags bit 1); unlock;
+ *               input_read = pos
+ *   0x00E1C57C  done -> finish; wait-flag byte set -> done;
+ *               D3 >= *count -> status 0x350004; canonical or D3 < min_chars
+ *               -> tty_$i_wait(tty, wait, &flag, D3, status); else done
+ *   0x00E1C5C0  status != 0 -> done; loop while !done
+ *   0x00E1C5D4  pending_signal != 0: bit 0 -> status = status_handler(line_id,
+ *               true); else bit 1 -> status 0x350009; pending_signal = 0
+ *   0x00E1C60E  TTY_$I_UNLOCK(tty); return D3
+ */
 #include "tty/tty_internal.h"
 #include "proc1/proc1.h"
 #include "fim/fim.h"
@@ -44,7 +74,7 @@ ushort TTY_$K_GET(short *line_ptr, void *options, void *buffer,
     char eof_flag;
     uint8_t ch;
     uint16_t char_class;
-    uint16_t token;
+    ml_$spin_token_t token;
     int16_t buffer_count;
 
     /* Get TTY descriptor for this line */
@@ -202,11 +232,13 @@ update_read_pos:
 
     /* Handle any pending signal */
     if (tty->pending_signal != 0) {
-        if ((*(uint8_t *)((char *)tty + 0x0b) & TTY_ERR_CALLBACK) != 0) {
-            /* Call error handler */
-            *status_ret = ((status_$t (*)(short))tty->status_handler)(
-                (short)tty->line_id);
-        } else if ((*(uint8_t *)((char *)tty + 0x0b) & TTY_ERR_OVERFLOW) != 0) {
+        /* btst.b #0,(0xb,A2) = bit 0 of the 16-bit pending_signal (the old
+         * byte-pointer cast read the wrong byte on a little-endian host) */
+        if ((tty->pending_signal & TTY_ERR_CALLBACK) != 0) {
+            /* 0x00E1C5E2: subq/st/move.l (A2)/jsr (0x2c0,A2): the full
+             * 32-bit line_id and a true boolean, result longword in D0 */
+            *status_ret = tty->status_handler(tty->line_id, true);
+        } else if ((tty->pending_signal & TTY_ERR_OVERFLOW) != 0) {
             *status_ret = status_$tty_input_buffer_overrun;
         }
         tty->pending_signal = 0;

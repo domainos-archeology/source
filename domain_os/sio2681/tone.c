@@ -27,22 +27,24 @@
  * structure's OPCR shadow register at offset 0x06.
  *
  * Parameters:
- *   channel    - Channel structure (used to find chip structure)
- *   enable_ptr - Pointer to enable flag (bit 7 = enable tone)
- *   param3     - Reserved (unused)
- *   param4     - Reserved (unused)
+ *   channel_cell  - address of a cell holding the channel's address
+ *                   (0x00E1D180 movea.l (0x8,A6),A0 / move.l (A0),D2)
+ *   enable_ptr    - pointer to the enable flag (bit 7 = enable tone)
+ *   status_unused - (0x10,A6), pushed by TONE_$ENABLE and never read here
  */
-void SIO2681_$TONE(sio2681_channel_t *channel, uint8_t *enable_ptr,
-                   uint32_t param3, uint32_t param4)
+void SIO2681_$TONE(sio2681_channel_t **channel_cell, uint8_t *enable_ptr,
+                   status_$t *status_unused)
 {
+    sio2681_channel_t *channel;
     volatile uint8_t *base_regs;
     sio2681_chip_t *chip;
     uint8_t enable;
     uint8_t opcr_val;
     ml_$spin_token_t token;
 
-    (void)param3;
-    (void)param4;
+    /* 0x00E1D180..0x00E1D184: the channel address is read out of the cell */
+    channel = *channel_cell;
+    (void)status_unused;
 
     /*
      * Get chip structure - the assembly dereferences through the regs pointer

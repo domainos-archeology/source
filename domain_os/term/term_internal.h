@@ -172,4 +172,27 @@ extern uint16_t TERM_$KBD_STRING_LEN;
 
 /* UID_$NIL is declared in base/base.h */
 
+
+/*
+ * ---------------------------------------------------------------------------
+ * Appended 2026-09-22 (batch tty2, term re-emission)
+ * ---------------------------------------------------------------------------
+ *
+ * Two more literal words in the OS_TERM code segment, each passed by
+ * reference from more than one routine and therefore one shared cell each.
+ * Image bytes at 0x00E66896: 00 01 00 00.  Defined in term/read.c.
+ *
+ *   term_$const_word_1  0x00E66896  the word 1: TTY_$K_GET's `options` for a
+ *                       conditional read - TERM_$READ (pea (0x30,PC) at
+ *                       0x00E66864, when the DTTE flags byte is negative) and
+ *                       TERM_$READ_COND (pea (-0x1c,PC) at 0x00E668B0)
+ *   term_$const_word_0  0x00E66898  the word 0: TTY_$K_GET's `options` for a
+ *                       blocking read (TERM_$READ, pea (0x26,PC) at
+ *                       0x00E66870) AND TTY_$K_INQ_FUNC_CHAR's function number
+ *                       for TERM_$INQUIRE option 0 (pea (-0x56a,PC) at
+ *                       0x00E66E00)
+ */
+extern const uint16_t term_$const_word_1;
+extern const uint16_t term_$const_word_0;
+
 #endif /* TERM_INTERNAL_H */

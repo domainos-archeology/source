@@ -1,10 +1,10 @@
-// TTY_$K_FLUSH_INPUT - Flush input buffer (kernel level)
-// Address: 0x00e1c084
-// Size: 98 bytes
-//
-// TTY_$K_FLUSH_OUTPUT - Flush output buffer (kernel level)
-// Address: 0x00e1c0e6
-// Size: 98 bytes
+/*
+ * TTY_$K_FLUSH_INPUT (0x00E1C084..0x00E1C0E4) and TTY_$K_FLUSH_OUTPUT
+ * (0x00E1C0E6..0x00E1C146), 98 bytes each, A5 = 0x00E2DDB4.  Re-verified
+ * 2026-09-22: tty = TTY_$I_GET_DESC(*line_ptr, status); status != 0 ->
+ * return; token = ML_$SPIN_LOCK(&TTY_$SPIN_LOCK) into (-0x6,A6);
+ * TTY_$I_FLUSH_INPUT / _OUTPUT(tty); ML_$SPIN_UNLOCK(&TTY_$SPIN_LOCK, token).
+ */
 
 #include "tty/tty_internal.h"
 
@@ -13,7 +13,7 @@
 void TTY_$K_FLUSH_INPUT(short *line_ptr, status_$t *status)
 {
     tty_desc_t *tty;
-    ushort token;
+    ml_$spin_token_t token;
 
     // Get TTY descriptor for this line
     tty = TTY_$I_GET_DESC(*line_ptr, status);
@@ -34,7 +34,7 @@ void TTY_$K_FLUSH_INPUT(short *line_ptr, status_$t *status)
 void TTY_$K_FLUSH_OUTPUT(short *line_ptr, status_$t *status)
 {
     tty_desc_t *tty;
-    ushort token;
+    ml_$spin_token_t token;
 
     // Get TTY descriptor for this line
     tty = TTY_$I_GET_DESC(*line_ptr, status);
