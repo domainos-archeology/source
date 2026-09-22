@@ -1,83 +1,77 @@
 /*
- * DISK_$PV_ASSIGN - Physical Volume Assignment
+ * DISK_$PV_ASSIGN - Assign a physical volume (the older, eight-argument form)
  *
- * Simplified syscall for assigning a physical volume. This is a wrapper
- * around DISK_$PV_ASSIGN_N that provides a simpler interface.
+ * 0x00E6C95C - 0x00E6C9E6 (140 bytes).  Re-emitted from the disassembly on
+ * 2026-09-19: the earlier prototype had a separate num_blocks argument and
+ * mis-ordered the last three.  The image passes the caller's `info` cell
+ * itself to DISK_$PV_ASSIGN_N as its num_blocks_ptr (`pea (A2)` at
+ * 0x00E6C9AC), so the geometry comes back through the same longword the
+ * option was read from.  The prologue loads A5 = 0xE826C4 but never uses
+ * it.
  *
- * The info_ptr parameter controls behavior:
- *   - info > 0: Standard assignment, return vol_idx only
- *   - info == 0: Return geometry (num_blocks, sec_per_track)
- *   - info < 0: Same as info==0, plus copy PV label info to -info address
+ * Arguments (0x00E6C96A - 0x00E6C986):
+ *   (0x8,A6)  unit_type_ptr     -> word, copied to (-0x22,A6)
+ *   (0xc,A6)  device_ptr        -> word, copied to (-0x20,A6)
+ *   (0x10,A6) unit_ptr          -> word, copied to (-0x1e,A6)
+ *   (0x14,A6) vol_idx_ptr       passed through
+ *   (0x18,A6) info_ptr          -> longword (D3): > 0 assign only,
+ *                                0 also return geometry, < 0 also return
+ *                                the label info to the VA -info
+ *   (0x1c,A6) sec_per_track_ptr passed through
+ *   (0x20,A6) num_heads_ptr     passed through
+ *   (0x24,A6) status            passed through
  *
- * Parameters:
- *   unit_type_ptr   - Pointer to unit type (0=floppy, 1=winchester, 4=optical)
- *   device_ptr      - Pointer to device number
- *   unit_ptr        - Pointer to unit number
- *   vol_idx_ptr     - Output: volume index assigned
- *   info_ptr        - Pointer to info/flags control:
- *                     >0: just assign, vol_idx_ptr receives the volume index
- *                     ==0: return geometry info in num_blocks_ptr/sec_per_track_ptr
- *                     <0: negative of pointer to receive PV label info (6 bytes)
- *   num_blocks_ptr  - I/O: number of blocks on volume (read if info<=0)
- *   sec_per_track_ptr - I/O: sectors per track (read if info<=0)
- *   status          - Output: status code
- *
- * Original address: 0x00e6c95c
+ * The flags word (-0x1a,A6) is 1 for info > 0, 5 for info == 0, 7 for
+ * info < 0 (0x00E6C988 - 0x00E6C998).  After the call, for info < 0, the
+ * first longword and the following word of the 16-byte label record
+ * (-0x10,A6) are stored at VA -info (0x00E6C9CA - 0x00E6C9D8).
  */
 
 #include "disk/disk_internal.h"
 
-/* Flag bits for DISK_$PV_ASSIGN_N */
-#define FLAG_NO_RETURN_VOLIDX    0x01  /* Don't return vol_idx */
-#define FLAG_RETURN_PVLABEL      0x02  /* Return pvlabel_info */
-#define FLAG_RETURN_GEOMETRY     0x04  /* Return num_blocks/geometry */
+/* Bits of the flags word handed to DISK_$PV_ASSIGN_N */
+#define DISK_PV_ASSIGN_FLAG_NO_VOLX     0x0001
+#define DISK_PV_ASSIGN_FLAG_LABEL       0x0002
+#define DISK_PV_ASSIGN_FLAG_GEOMETRY    0x0004
 
 void DISK_$PV_ASSIGN(int16_t *unit_type_ptr, int16_t *device_ptr,
                      int16_t *unit_ptr, uint16_t *vol_idx_ptr,
-                     int32_t *info_ptr, uint32_t *num_blocks_ptr,
-                     uint16_t *sec_per_track_ptr, status_$t *status)
+                     int32_t *info_ptr, uint16_t *sec_per_track_ptr,
+                     uint16_t *num_heads_ptr, status_$t *status)
 {
-    int16_t unit_type;
-    int16_t device;
-    int16_t unit;
-    int32_t info;
-    uint16_t flags;
+    int16_t unit_type;              /* (-0x22,A6) */
+    int16_t device;                 /* (-0x20,A6) */
+    int16_t unit;                   /* (-0x1e,A6) */
+    uint16_t flags;                 /* (-0x1a,A6) */
+    uint32_t label[4];              /* (-0x10,A6): zeroed below where the
+                                     * image leaves frame contents */
+    int32_t info;                   /* D3 */
 
-    /* Local copies for internal call */
-    uint16_t local_num_heads;
-    uint32_t local_pvlabel[4];  /* 16 bytes: pvlabel_info */
-
-    /* Read input parameters */
+    /* 0x00E6C96E - 0x00E6C986 */
     unit_type = *unit_type_ptr;
     device = *device_ptr;
     unit = *unit_ptr;
     info = *info_ptr;
 
-    /* Determine flags based on info value:
-     * info > 0: flags = 1 (return vol_idx only)
-     * info == 0: flags = 5 (return vol_idx + geometry)
-     * info < 0: flags = 7 (return vol_idx + geometry + pvlabel)
-     */
-    flags = 1;  /* Default: return vol_idx only */
+    /* 0x00E6C988 - 0x00E6C998: signed tests (bgt / bpl) */
+    flags = DISK_PV_ASSIGN_FLAG_NO_VOLX;
     if (info <= 0) {
-        flags = FLAG_RETURN_GEOMETRY | FLAG_NO_RETURN_VOLIDX;  /* 5 */
+        flags = DISK_PV_ASSIGN_FLAG_GEOMETRY | DISK_PV_ASSIGN_FLAG_NO_VOLX;
         if (info < 0) {
-            flags |= FLAG_RETURN_PVLABEL;  /* 7 */
+            flags |= DISK_PV_ASSIGN_FLAG_LABEL;
         }
     }
 
-    /* Call extended version */
-    DISK_$PV_ASSIGN_N(&unit_type, &device, &unit, &flags,
-                      vol_idx_ptr, num_blocks_ptr,
-                      sec_per_track_ptr, &local_num_heads,
-                      local_pvlabel, status);
+    /* 0x00E6C99C - 0x00E6C9C6 */
+    label[0] = 0; label[1] = 0; label[2] = 0; label[3] = 0;
+    DISK_$PV_ASSIGN_N(&unit_type, &device, &unit, &flags, vol_idx_ptr,
+                      (uint32_t *)info_ptr, sec_per_track_ptr, num_heads_ptr,
+                      label, status);
 
-    /* If info < 0, copy pvlabel_info to the address specified by -info */
+    /* 0x00E6C9CA - 0x00E6C9D8: longword + word to the VA -info */
     if (info < 0) {
-        uint32_t *dest = (uint32_t *)(-info);
-        /* Copy first 4 bytes (uint32_t) and then 2 bytes (uint16_t) */
-        dest[0] = local_pvlabel[0];
-        /* The 6-byte pvlabel info is stored as 4+2 bytes */
-        *((uint16_t *)(dest + 1)) = (uint16_t)(local_pvlabel[1] >> 16);
+        uint8_t *dest = (uint8_t *)ARCH_VA_TO_PTR((uint32_t)(-info));
+        *(uint32_t *)dest = label[0];
+        *(uint16_t *)(dest + 4) = (uint16_t)(label[1] >> 16);
     }
 }

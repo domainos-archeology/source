@@ -1,155 +1,103 @@
 /*
- * FM_$WRITE - Write a file map entry
+ * FM_$WRITE - Store one file-map entry (128 bytes) into a VTOC or FM block
  *
- * Writes a 128-byte file map entry to either a VTOCE or a file map block.
- * The entry contains 32 block pointers used for indirect block addressing.
+ * 0x00E3A45C - 0x00E3A5AC (338 bytes, A5 = OS_DISK_DATA at 0xE784D0).
+ * Verified against the disassembly on 2026-09-19; the earlier emission
+ * was faithful, this one cites the ranges and types the boolean.
  *
- * Original address: 0x00e3a45c
+ * Arguments:
+ *   (0x8,A6)  file_ref    -> fm_$file_ref_t (A3)
+ *   (0xc,A6)  block_addr  longword (D5): block number << 4 | entry index
+ *   (0x10,A6) level       word (D2)
+ *   (0x12,A6) entry_in    -> 32 longwords (A4)
+ *   (0x16,A6) write_now   BYTE in the high half of the word slot
+ *                          (`move.b (0x16,A6),D0b`): negative = write the
+ *                          block back at once (DBUF flags 0xb), else just
+ *                          mark it dirty (0x9) - 0x00E3A486 - 0x00E3A492
+ *   (0x18,A6) status      -> status_$t (A2)
+ *
+ * Same gating and block lookup as FM_$READ, except that a write-protected
+ * volume (+0x26f + vol_idx) silently succeeds (0x00E3A4C8 - 0x00E3A4D4).
+ * The entry is copied INTO the buffer at the same offsets FM_$READ uses,
+ * then released with the chosen flags.
  */
 
 #include "fm/fm_internal.h"
 
-/*
- * FM_$WRITE
- *
- * Parameters:
- *   file_ref    - File reference (vol_idx at +0x1c, uid at +0x08)
- *   block_addr  - Block address (high 28 bits = block, low 4 bits = entry index)
- *   level       - 0 = write to VTOCE, non-zero = write to file map block
- *   entry_in    - Input buffer containing 128-byte file map entry
- *   flags       - Write flags (bit 7 set = immediate writeback)
- *   status      - Output status code
- */
 void FM_$WRITE(fm_$file_ref_t *file_ref, uint32_t block_addr, uint16_t level,
-               fm_$entry_t *entry_in, char flags, status_$t *status)
+               fm_$entry_t *entry_in, int8_t write_now, status_$t *status)
 {
-    uint8_t vol_idx;
-    uint32_t block_num;
-    uint8_t entry_idx;
-    uid_t *uid_ptr;
-    uid_t local_uid;
-    uint32_t param4;
-    uint16_t get_flags;
-    uint16_t buf_flags;
-    void *buffer;
-    uint32_t *src_ptr;
-    uint32_t *dst_ptr;
+    uint16_t vol_idx;               /* D4 / D3 */
+    uint16_t set_flags;             /* (-0x18,A6) */
+    uint32_t block_num;             /* D5 */
+    uint16_t entry_idx;             /* D6 */
+    uid_t local_uid;                /* (-0x8,A6) */
+    uint32_t hint;                  /* (-0x10,A6) */
+    uint16_t block_type;            /* (-0x1a,A6) */
+    const uid_t *uid_src;           /* A1 */
+    uint8_t *buffer;                /* A3 after the call */
+    uint32_t *dst;
     int i;
 
-    /* Extract volume index from file reference */
+    /* 0x00E3A46A - 0x00E3A4B0 */
     vol_idx = file_ref->vol_idx;
-
-    /* Determine buffer flags based on write flags */
-    if (flags < 0) {
-        /* Bit 7 set: immediate writeback */
-        buf_flags = FM_BUF_WRITEBACK;
-    } else {
-        /* Bit 7 clear: dirty, write later */
-        buf_flags = FM_BUF_DIRTY;
-    }
-
-    /* Extract block number and entry index from block address */
+    set_flags = (write_now < 0) ? FM_BUF_WRITEBACK : FM_BUF_DIRTY;
     block_num = block_addr >> 4;
-    entry_idx = (uint8_t)(block_addr & 0x0F);
-
-    /* Acquire disk lock */
+    entry_idx = (uint16_t)(block_addr & 0x0F);
     ML_$LOCK(FM_LOCK_ID);
 
-    /* Check if volume is mounted */
+    /* 0x00E3A4B2 - 0x00E3A4C4 */
     if (!VTOC_IS_MOUNTED(vol_idx)) {
         *status = status_$VTOC_not_mounted;
         goto done;
     }
 
-    /*
-     * If volume has cached lookups (write-protected/read-only optimization),
-     * silently succeed without actually writing.
-     */
+    /* 0x00E3A4C8 - 0x00E3A4D4 */
     if (vtoc_$data.cach_wp_flag[vol_idx - 1] < 0) {
         *status = status_$ok;
         goto done;
     }
 
-    /*
-     * Set up parameters for DBUF_$GET_BLOCK based on level
-     */
+    /* 0x00E3A4D8 - 0x00E3A512 */
     if (level == 0) {
-        /* Level 0: Writing to VTOCE - use VTOC_$UID */
-        get_flags = 0;
-        uid_ptr = &VTOC_$UID;
-        param4 = block_num;
+        hint = block_num;
+        block_type = 0;
+        uid_src = &VTOC_$UID;
     } else {
-        /*
-         * Level != 0: Writing to file map block - use file's UID
-         *
-         * Calculate param4 based on level:
-         *   param4 = ((level - 1) / 8) * 256 + 32
-         */
-        int level_adj = level - 1;
-        if (level_adj < 0) {
-            level_adj = level + 6;
+        int32_t l = (int32_t)level - 1;
+        if (l < 0) {                    /* 0x00E3A4F2 bpl / addq #7 */
+            l += 7;
         }
-        param4 = (level_adj >> 3) * 0x100 + 0x20;
-        get_flags = 1;
-        uid_ptr = &file_ref->file_uid;
+        hint = (uint32_t)((l >> 3) << 8) + 0x20;
+        block_type = 1;
+        uid_src = &file_ref->file_uid;
     }
+    local_uid.high = uid_src->high;
+    local_uid.low = uid_src->low;
 
-    /* Copy UID to local variable */
-    local_uid.high = uid_ptr->high;
-    local_uid.low = uid_ptr->low;
-
-    /* Get the disk block into a buffer */
-    /*
-     * `get_flags` here is DBUF_$GET_BLOCK's block_type word, parameter 5;
-     * the flags word, parameter 6, is zero on this path.
-     */
-    buffer = DBUF_$GET_BLOCK(vol_idx, block_num, &local_uid, param4,
-                             get_flags, 0, status);
+    /* 0x00E3A516 - 0x00E3A53A */
+    buffer = (uint8_t *)DBUF_$GET_BLOCK(vol_idx, (int32_t)block_num, &local_uid,
+                                        hint, block_type, 0, status);
     if (*status != status_$ok) {
         goto done;
     }
 
-    /*
-     * Calculate pointer to entry within the buffer and copy data
-     */
-    src_ptr = entry_in->blocks;
-
+    /* 0x00E3A53C - 0x00E3A580 */
     if (level != 0) {
-        /* File map block: entries are 0x80 bytes each */
-        dst_ptr = (uint32_t *)((uint8_t *)buffer + (uint32_t)entry_idx * FM_ENTRY_SIZE);
-        /* Copy 32 longwords (128 bytes) from input buffer */
-        for (i = 0; i < 32; i++) {
-            *dst_ptr++ = *src_ptr++;
-        }
+        dst = (uint32_t *)(buffer + ((uint32_t)entry_idx << 7));
+    } else if (VTOC_IS_NEW_FORMAT(vol_idx)) {
+        dst = (uint32_t *)(buffer + entry_idx * FM_VTOCE_NEW_SIZE + FM_VTOCE_NEW_OFFSET);
     } else {
-        /* VTOCE block: offset depends on volume format */
-        if (VTOC_IS_NEW_FORMAT(vol_idx)) {
-            /*
-             * New format: entry at offset 0xD8 within 0x150-byte VTOCE
-             * Note: The copy loop is different in the original for new format -
-             * it copies src to dst (reverse of old format code path)
-             */
-            dst_ptr = (uint32_t *)((uint8_t *)buffer +
-                                   (uint32_t)entry_idx * FM_VTOCE_NEW_SIZE +
-                                   FM_VTOCE_NEW_OFFSET);
-            for (i = 0; i < 32; i++) {
-                *dst_ptr++ = *src_ptr++;
-            }
-        } else {
-            /* Old format: entry at offset 0x44 within 0xCC-byte VTOCE */
-            dst_ptr = (uint32_t *)((uint8_t *)buffer +
-                                   (uint32_t)entry_idx * FM_VTOCE_OLD_SIZE +
-                                   FM_VTOCE_OLD_OFFSET);
-            for (i = 0; i < 32; i++) {
-                *dst_ptr++ = *src_ptr++;
-            }
-        }
+        dst = (uint32_t *)(buffer + entry_idx * FM_VTOCE_OLD_SIZE + FM_VTOCE_OLD_OFFSET);
+    }
+    for (i = 0; i < 32; i++) {
+        dst[i] = entry_in->blocks[i];
     }
 
-    /* Release the buffer with appropriate dirty flags */
-    DBUF_$SET_BUFF(buffer, buf_flags, status);
+    /* 0x00E3A584 - 0x00E3A594 */
+    DBUF_$SET_BUFF(buffer, set_flags, status);
 
 done:
-    /* Release disk lock */
+    /* 0x00E3A598 - 0x00E3A59E */
     ML_$UNLOCK(FM_LOCK_ID);
 }

@@ -36,7 +36,7 @@ void DISK_$LV_UID(int16_t vol_idx, int16_t lv_num, uid_t *uid_ret,
 {
     status_$t status;               /* (-0x10,A6) */
     uid_t lv_uid;                   /* (-0x8,A6): not initialised, see above */
-    uint32_t set_buff_cell;         /* (-0xc,A6) */
+    status_$t set_buff_cell;         /* (-0xc,A6) */
     disk_$volume_t *vol;            /* A2 */
     uint8_t *block;                 /* A3 / A2 */
     uint32_t lv_daddr;              /* D3 */

@@ -50,7 +50,7 @@ uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
     uint16_t saved_state;           /* D6 */
     uint32_t lv_start;              /* D2 after 0x00E6CEA8 */
     int32_t lv_size;                /* (-0x14,A6) */
-    uint32_t set_buff_cell;         /* (-0x8,A6) */
+    status_$t set_buff_cell;         /* (-0x8,A6) */
     uint16_t free_slot;             /* (-0x20,A6) */
     uint32_t d2 = 0;                /* D2: see the header comment */
     uint32_t d5 = 0;                /* D5: blocks_avail, see below */

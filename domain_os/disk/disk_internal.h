@@ -416,9 +416,9 @@ uint16_t disk_$chksum_page(uint32_t *ppn);
  *
  * Parameters:
  *   mount_type     - 0=normal, 1=boot, 2=mount, 4=remount
- *   device_num     - Device number
- *   unit_hi        - Unit high byte
- *   unit_lo        - Unit low byte (device unit)
+ *   unit_type      - Unit type word (0, 1 or 4)
+ *   device         - Device number
+ *   unit           - Unit number (the byte stored at 0xe6c346)
  *   vol_idx_ptr    - Output: volume index assigned
  *   num_blocks_ptr - I/O: number of blocks
  *   sec_per_track_ptr - I/O: sectors per track
@@ -431,8 +431,8 @@ uint16_t disk_$chksum_page(uint32_t *ppn);
  *
  * Original address: 0x00e6c2bc
  */
-int16_t DISK_$PV_MOUNT_INTERNAL(int16_t mount_type, int16_t device_num,
-                                 uint16_t unit_hi, uint16_t unit_lo,
+int16_t DISK_$PV_MOUNT_INTERNAL(int16_t mount_type, int16_t unit_type,
+                                 uint16_t device, uint16_t unit,
                                  uint16_t *vol_idx_ptr, uint32_t *num_blocks_ptr,
                                  uint16_t *sec_per_track_ptr, uint16_t *num_heads_ptr,
                                  void *pvlabel_info, status_$t *status);

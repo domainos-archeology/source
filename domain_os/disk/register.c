@@ -1,65 +1,58 @@
 /*
- * DISK_$REGISTER - Register a disk device driver
+ * DISK_$REGISTER - Register a disk driver in DISK_$DEVICES
  *
- * Registers a disk device driver with the disk subsystem. The driver
- * provides a jump table with function pointers for device-specific
- * operations (init, I/O, etc.).
+ * 0x00E3D9AC - 0x00E3DA1A (112 bytes, A5 = DISK_$DEVICES at 0xE7AD5C).
+ * Verified against the disassembly on 2026-09-19; the earlier emission was
+ * faithful but addressed the table as a private constant.  (The batch
+ * list gives 0xE7AD5C, the table itself.)
  *
- * @param type        Pointer to device type identifier
- * @param controller  Pointer to controller number
- * @param units       Pointer to unit count
- * @param flags       Pointer to device flags
- * @param jump_table  Pointer to pointer to jump table
- * @return 0xFF if registered successfully, 0 if failed
+ * Arguments (all by reference to words, the last to a pointer):
+ *   (0x8,A6)  type        -> word, stored at entry +0x04
+ *   (0xc,A6)  controller  -> word, stored at entry +0x06
+ *   (0x10,A6) units       -> word, stored at entry +0x08
+ *   (0x14,A6) flags       -> word, stored at entry +0x0a
+ *   (0x18,A6) jump_table  -> pointer to the driver vector (A2)
+ * Result: D0b, 0xFF once stored, 0 if the vector lacks a dinit (+0x08)
+ * or do_io (+0x10) entry or the table is full.
+ *
+ * Note that the readers in this tree (DISK_$ADD_QUE 0x00E3C732,
+ * DISK_$FORMAT 0x00E3D3FE, DISK_$GET_MNT_INFO 0x00E6BFDA) treat the
+ * +0x08 word as a flags word; what a driver passes as `units` is
+ * therefore what they see.  See the bead on disk_device_entry_t.
  */
 
 #include "disk/disk_internal.h"
 
-/* Device registration table at 0xe7ad5c */
-#define DISK_DEVICE_TABLE  ((uint32_t *)0x00e7ad5c)
-
 uint8_t DISK_$REGISTER(uint16_t *type, uint16_t *controller, uint16_t *units,
                        uint16_t *flags, void **jump_table)
 {
-    uint16_t dev_type;
-    uint16_t ctlr;
-    uint16_t unit_count;
-    uint16_t dev_flags;
-    void *jtable;
+    uint16_t dev_type = *type;                  /* D2 */
+    uint16_t ctlr = *controller;                /* D3 */
+    uint16_t unit_count = *units;               /* (-0xa,A6) */
+    uint16_t dev_flags = *flags;                /* D4 */
+    disk_jump_table_t *jt = (disk_jump_table_t *)*jump_table;   /* A2 */
+    uint8_t result = 0;                         /* D0b */
     int16_t i;
-    uint32_t *entry;
 
-    /* Extract parameters */
-    dev_type = *type;
-    ctlr = *controller;
-    unit_count = *units;
-    dev_flags = *flags;
-    jtable = *jump_table;
-
-    /*
-     * Validate jump table - must have DINIT (+0x08) and DO_IO (+0x10)
-     * function pointers set.
-     */
-    if (*(uint32_t *)((uint8_t *)jtable + 0x08) == 0 ||
-        *(uint32_t *)((uint8_t *)jtable + 0x10) == 0) {
-        return 0;
+    /* 0x00E3D9DC - 0x00E3D9E6 */
+    if (jt->dinit == NULL || jt->do_io == NULL) {
+        return result;
     }
 
-    /* Search for empty slot in device table */
-    entry = DISK_DEVICE_TABLE;
-    for (i = 0x1f; i >= 0; i--) {
-        if (*entry == 0) {
-            /* Found empty slot - register device */
-            *(uint16_t *)((uint8_t *)entry + 4) = dev_type;
-            *(uint16_t *)((uint8_t *)entry + 6) = ctlr;
-            *(uint16_t *)((uint8_t *)entry + 8) = unit_count;
-            *(uint16_t *)((uint8_t *)entry + 10) = dev_flags;
-            *entry = (uint32_t)(uintptr_t)jtable;
-            return 0xff;
+    /* 0x00E3D9E8 - 0x00E3DA0E: first empty slot of 32 */
+    for (i = 0; i < DISK_MAX_DEVICES; i++) {
+        disk_device_entry_t *e = &DISK_$DEVICES[i];
+        if (e->jump_table != NULL) {
+            continue;
         }
-        entry += 3;  /* 12 bytes = 3 longs */
+        e->device_type = dev_type;
+        e->controller = ctlr;
+        e->unit_count = unit_count;
+        e->flags = dev_flags;
+        e->jump_table = jt;
+        result = 0xFF;                          /* st D0b */
+        break;
     }
 
-    /* No empty slot found */
-    return 0;
+    return result;
 }

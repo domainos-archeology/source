@@ -38,6 +38,7 @@
 #include "misc/crash_system.h"
 #include "netlog/netlog.h"
 #include "disk/disk.h"      /* DISK_$READ, DISK_$WRITE */
+#include "arch/arch.h"
 
 /*
  * Buffer pool limits
@@ -52,79 +53,70 @@
 #define DBUF_ENTRY_SIZE         0x24    /* 36 bytes per entry */
 
 /*
- * Buffer virtual address base
- * Buffers are mapped starting at 0xD50400
+ * Buffer virtual addresses.  DBUF_$INIT walks D6/D7 from 0xD50400 and maps
+ * and records `-0x400` off them (0x00E3AC48 `lea (-0x400,A0),A1`,
+ * 0x00E3AC9E `pea (-0x400,A1)`), so buffer i is at 0xD50000 + i * 0x400 -
+ * DBUF_BLKS / DISK_BUFFERS in the SAU2 map (`D50000  DBUF_BLKS`).
  */
-#define DBUF_VA_BASE            0xD50400
+#define DBUF_BLKS_VA            0xD50000u
+/* 0x00E3AC98 `pea (0x16).w`: the MMU_$INSTALL flags for a buffer page */
+#define DBUF_INSTALL_FLAGS      0x16u
 
 /*
- * Buffer entry flags (stored in flags byte at offset +0x0C)
+ * Buffer entry flags byte (+0x0C) and the word it starts.
  *
- * Bit layout:
- *   7: busy (buffer being read/written)
- *   6: dirty (needs writeback)
- *   5: reserved
- *   4: reserved
- *   3-0: volume index
+ * The routines test the WORD at +0x0C with `tst.w` (bit 15 = busy) and
+ * `btst.l #0xe` (bit 14 = dirty), and the byte with `bset.b/bclr.b #7/#6`,
+ * `andi.b #-0x10` and `moveq #0xf / and.b` (the low nibble is the volume
+ * index).  All of those are bits of the +0x0C byte; the +0x0D byte is the
+ * caller's block type.
  */
-#define DBUF_ENTRY_BUSY         0x80    /* Buffer I/O in progress */
-#define DBUF_ENTRY_DIRTY        0x40    /* Buffer needs writeback */
-#define DBUF_ENTRY_VOL_MASK     0x0F    /* Volume index mask */
+#define DBUF_ENTRY_BUSY         0x80    /* bit 7: I/O in progress */
+#define DBUF_ENTRY_DIRTY        0x40    /* bit 6: needs writeback */
+#define DBUF_ENTRY_VOL_MASK     0x0F    /* bits 0..3: volume index */
 
 /*
- * Additional flags in high byte (0x0D position):
- *   Bit 14 (0x4000 in word at +0x0C): buffer valid/has data
- */
-#define DBUF_ENTRY_VALID        0x4000  /* Buffer contains valid data */
-
-/*
- * Buffer entry structure (0x24 = 36 bytes)
- *
- * Forms a doubly-linked LRU list. Most recently used buffers
- * are at the head; least recently used at the tail.
+ * Buffer entry (0x24 = 36 bytes), a doubly linked LRU list threaded by
+ * dbuf_$head.  next / prev / data are 32-bit target virtual addresses
+ * (`move.l` cells the list code compares with `cmpa.w #0`), not host
+ * pointers, so the record is the same size on every host and the layout
+ * can be asserted unconditionally.
  */
 typedef struct dbuf_$entry_t {
-    struct dbuf_$entry_t *next;     /* 0x00: Next entry in LRU list */
-    struct dbuf_$entry_t *prev;     /* 0x04: Previous entry in LRU list */
-    void        *data;              /* 0x08: Pointer to buffer data (VA) */
-    uint8_t     flags;              /* 0x0C: Flags (busy, dirty, vol_idx) */
-    uint8_t     type;               /* 0x0D: Buffer type/flags */
-    uint16_t    ref_count;          /* 0x0E: Reference count */
-    uint32_t    ppn;                /* 0x10: Physical page number */
-    int32_t     block;              /* 0x14: Disk block number (-1 = invalid) */
-    uid_t       uid;                /* 0x18: UID for validation */
-    uint32_t    hint;               /* 0x20: Block hint/type */
+    uint32_t    next;               /* 0x00: VA of the next (older) entry, 0 at the tail */
+    uint32_t    prev;               /* 0x04: VA of the previous (newer) entry, 0 at the head */
+    uint32_t    data;               /* 0x08: VA of the 1K buffer */
+    uint8_t     flags;              /* 0x0C: busy / dirty / volume index */
+    uint8_t     type;               /* 0x0D: block type byte from DBUF_$GET_BLOCK */
+    uint16_t    ref_count;          /* 0x0E: outstanding DBUF_$GET_BLOCKs */
+    uint32_t    ppn;                /* 0x10: physical page of the buffer */
+    int32_t     block;              /* 0x14: disk address, -1 when empty */
+    uid_t       uid;                /* 0x18: expected object UID */
+    uint32_t    hint;               /* 0x20: caller's block hint */
 } dbuf_$entry_t;
 
-/*
- * DBUF global data structure
- *
- * Located at 0xE78B58
- */
-typedef struct dbuf_$data_t {
-    ec_$eventcount_t eventcount;     /* 0x000: Event count for waiters */
-    uint8_t     reserved_08[8];     /* 0x008: Reserved */
-    dbuf_$entry_t entries[DBUF_MAX_BUFFERS]; /* 0x010: Buffer entries */
-    /* Note: actual size depends on dbuf_$count */
-    /* After entries array: */
-    /* +0x910: spin_lock */
-    /* +0x914: head pointer */
-    /* +0x918: waiters */
-    /* +0x91A: count */
-    /* +0x91C: trouble */
-} dbuf_$data_t;
+_Static_assert(__builtin_offsetof(dbuf_$entry_t, prev) == 0x04, "dbuf_$entry_t.prev");
+_Static_assert(__builtin_offsetof(dbuf_$entry_t, data) == 0x08, "dbuf_$entry_t.data");
+_Static_assert(__builtin_offsetof(dbuf_$entry_t, flags) == 0x0C, "dbuf_$entry_t.flags");
+_Static_assert(__builtin_offsetof(dbuf_$entry_t, type) == 0x0D, "dbuf_$entry_t.type");
+_Static_assert(__builtin_offsetof(dbuf_$entry_t, ref_count) == 0x0E, "dbuf_$entry_t.ref_count");
+_Static_assert(__builtin_offsetof(dbuf_$entry_t, ppn) == 0x10, "dbuf_$entry_t.ppn");
+_Static_assert(__builtin_offsetof(dbuf_$entry_t, block) == 0x14, "dbuf_$entry_t.block");
+_Static_assert(__builtin_offsetof(dbuf_$entry_t, uid) == 0x18, "dbuf_$entry_t.uid");
+_Static_assert(__builtin_offsetof(dbuf_$entry_t, hint) == 0x20, "dbuf_$entry_t.hint");
+_Static_assert(sizeof(dbuf_$entry_t) == DBUF_ENTRY_SIZE, "dbuf_$entry_t is 0x24 bytes");
 
 /*
- * External references to global data
+ * External references to global data (dbuf/dbuf_data.c)
  */
 
 /* DBUF spin lock for buffer pool protection */
 extern uint32_t DBUF_SPIN_LOCK;     /* 0xE79468 (base + 0x910) */
 
-/* Head of LRU buffer list */
-extern dbuf_$entry_t *dbuf_$head;   /* 0xE7946C (base + 0x914) */
+/* VA of the head (most recently used entry) of the LRU list */
+extern uint32_t dbuf_$head;         /* 0xE7946C (base + 0x914) */
 
-/* Number of threads waiting for buffers */
+/* Number of processes waiting in DBUF_$GET_BLOCK */
 extern uint16_t dbuf_$waiters;      /* 0xE79470 (base + 0x918) */
 
 /* Number of buffers in pool */
@@ -146,75 +138,41 @@ extern dbuf_$entry_t DBUF[DBUF_MAX_BUFFERS];  /* 0xE78B68 (base + 0x10) */
 
 /* MMAP_$REAL_PAGES (0xE23CA0) comes from mmap/mmap.h */
 
-/* NIL UID constant (declared in base/base.h) */
-
 /* status_$storage_module_stopped (0x0008001b) comes from disk/disk.h */
 
 /*
- * Helper macros
+ * Helpers
  */
 
-/* Get volume index from buffer entry */
+static inline dbuf_$entry_t *dbuf_$entry_ptr(uint32_t va)
+{
+    return (dbuf_$entry_t *)ARCH_VA_TO_PTR(va);
+}
+
+/* Get volume index from buffer entry (`moveq #0xf / and.b (0xc,An)`) */
 #define DBUF_GET_VOL(entry)     ((entry)->flags & DBUF_ENTRY_VOL_MASK)
 
-/* Set volume index in buffer entry */
-#define DBUF_SET_VOL(entry, vol) \
-    ((entry)->flags = ((entry)->flags & ~DBUF_ENTRY_VOL_MASK) | ((vol) & DBUF_ENTRY_VOL_MASK))
-
-/* Check if buffer is busy */
-#define DBUF_IS_BUSY(entry)     (((entry)->flags & DBUF_ENTRY_BUSY) != 0)
-
-/* Check if buffer is dirty */
-#define DBUF_IS_DIRTY(entry)    (((entry)->flags & DBUF_ENTRY_DIRTY) != 0)
-
-/* Check if buffer has valid data (using word access for bit 14) */
-#define DBUF_IS_VALID(entry)    ((*(uint16_t *)&(entry)->flags & DBUF_ENTRY_VALID) != 0)
-
-/* Get buffer data pointer from entry */
-#define DBUF_DATA(entry)        ((entry)->data)
-
 /*
- * Error status codes for CRASH_SYSTEM
- * These are status values that cause system crash with diagnostic info.
+ * The eight-longword block header the writeback paths hand to DISK_$WRITE.
+ * All three (0x00E3A6DE, 0x00E3A91A, 0x00E3AB38) build it the same way in a
+ * 0x20-byte frame area: uid and hint into the first three longwords
+ * (12 bytes copied by `moveq #0xb / dbf`), the type byte into +0x10 with a
+ * zero byte after it (`move.b Dn,(-0x10,A6)` / `clr.b (-0xf,A6)`), and the
+ * other 18 bytes left as whatever the frame held.  Callers zero the array
+ * where the image leaves stack contents.
  */
-extern const status_$t OS_DBUF_bad_ptr_err;     /* Bad buffer pointer in SET_BUFF */
-extern const status_$t OS_DBUF_bad_free_err;    /* Bad free (ref count already 0) */
-
-/*
- * Internal helper functions
- */
-
-/* Move entry to head of LRU list (most recently used) */
-static inline void dbuf_$move_to_head(dbuf_$entry_t *entry)
+static inline void dbuf_$fill_write_header(const dbuf_$entry_t *e, uint32_t hdr[8])
 {
-    /* Remove from current position */
-    if (entry->prev != NULL) {
-        entry->prev->next = entry->next;
-    }
-    if (entry->next != NULL) {
-        entry->next->prev = entry->prev;
-    }
-
-    /* Insert at head */
-    entry->prev = NULL;
-    entry->next = dbuf_$head;
-    if (dbuf_$head != NULL) {
-        dbuf_$head->prev = entry;
-    }
-    dbuf_$head = entry;
+    hdr[0] = e->uid.high;
+    hdr[1] = e->uid.low;
+    hdr[2] = e->hint;
+    hdr[4] = (hdr[4] & 0x0000FFFFu) | ((uint32_t)e->type << 24);
 }
 
 /*
- * Disk write helper structure
- *
- * Contains the parameters needed for DISK_$WRITE when flushing a buffer.
- * Matches the layout expected by DISK_$WRITE.
+ * Error status codes for CRASH_SYSTEM (in-code cells, dbuf/dbuf_data.c)
  */
-typedef struct dbuf_$write_params_t {
-    uid_t       uid;                /* 0x00: UID */
-    uint32_t    hint;               /* 0x08: Hint */
-    uint8_t     type;               /* 0x0C: Type */
-    uint8_t     reserved;           /* 0x0D: Reserved (0) */
-} dbuf_$write_params_t;
+extern const status_$t OS_DBUF_bad_ptr_err;     /* 0xE3A9E8: bad buffer pointer in SET_BUFF */
+extern const status_$t OS_DBUF_bad_free_err;    /* 0xE3A9E4: ref count already 0 */
 
 #endif /* DBUF_INTERNAL_H */

@@ -72,7 +72,7 @@ void *DISK_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *uid,
     return label;
 }
 
-void DISK_$SET_BUFF(void *buffer, uint16_t flags, void *param_3)
+void DISK_$SET_BUFF(void *buffer, uint16_t flags, status_$t *param_3)
 {
     (void)buffer;
     set_buffs++;

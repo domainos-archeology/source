@@ -1,113 +1,84 @@
 /*
- * DBUF_$UPDATE_VOL - Flush dirty buffers for a volume
+ * DBUF_$UPDATE_VOL - Write every idle dirty buffer of a volume back
  *
- * Writes all dirty buffers for a specific volume (or all volumes) to disk.
- * Used during volume sync operations and before dismount.
+ * 0x00E3AAA2 - 0x00E3ABD8 (312 bytes, A5 = 0xE78B58).  Re-emitted from the
+ * disassembly on 2026-09-19.  Wrong before: the dirty tests were big-endian
+ * word casts and the DISK_$WRITE header had the type byte at +0x0C instead
+ * of +0x10.  The second argument is never read (the frame only loads
+ * (0x8,A6)).
  *
- * Original address: 0x00e3aaa2
+ * Arguments:
+ *   (0x8,A6) vol_idx  word (D2); 0 means every volume
+ *   (0xc,A6) uid_p    not read
+ *
+ * For each of DBUF[0 .. dbuf_$count-1] (A3 = &entry.block, stride 0x24):
+ * skip unless dirty and (vol_idx == 0 or the entry's volume matches);
+ * then under the spin lock re-check the volume, dirty, ref_count == 0 and
+ * not busy, mark busy, drop the lock, write the block back (a failure
+ * sets the volume's DBUF_$TROUBLE bit; the local status is otherwise
+ * unused), re-lock, clear busy, EC_$ADVANCE if anyone waits (with the
+ * lock still held, 0x00E3ABAC), and unlock.
  */
 
 #include "dbuf/dbuf_internal.h"
 
-/*
- * DBUF_$UPDATE_VOL
- *
- * Parameters:
- *   vol_idx - Volume index to flush (0 = all volumes)
- *   uid_p   - Reserved (unused)
- *
- * Notes:
- *   - Iterates through all buffer entries
- *   - For each dirty buffer matching the volume, writes it to disk
- *   - Skips buffers that are busy or have non-zero reference counts
- *   - Does not block on busy buffers; simply skips them
- */
 void DBUF_$UPDATE_VOL(uint16_t vol_idx, void *uid_p)
 {
-    int16_t count;
-    dbuf_$entry_t *entry;
-    uint16_t token;
-    status_$t local_status;
-    dbuf_$write_params_t write_params;
-    int i;
-    uint8_t *src;
-    uint8_t *dst;
+    ml_$spin_token_t token;         /* (-0x26,A6) */
+    status_$t local_status;         /* (-0x24,A6) */
+    uint32_t header[8] = {0};       /* (-0x20,A6) */
+    int16_t n;                      /* D3 */
+    dbuf_$entry_t *e;               /* A3 */
+    int8_t ok;                      /* D1b at 0x00E3AAF4 - 0x00E3AB02 */
+    uint16_t i;
 
-    (void)uid_p;  /* Unused parameter */
+    (void)uid_p;
 
-    count = dbuf_$count - 1;
-    if (count < 0) {
+    /* 0x00E3AAB4 - 0x00E3AABE */
+    n = (int16_t)(dbuf_$count - 1);
+    if (n < 0) {
         return;
     }
 
-    entry = &DBUF[0];
+    for (i = 0; i <= (uint16_t)n; i++) {
+        e = &DBUF[i];
 
-    do {
-        /* Check if buffer is dirty (valid bit set = 0x4000) */
-        if (!DBUF_IS_VALID(entry)) {
-            goto next_entry;
+        /* 0x00E3AAC6 - 0x00E3AADE */
+        if ((e->flags & DBUF_ENTRY_DIRTY) == 0) {
+            continue;
+        }
+        if (vol_idx != 0 && DBUF_GET_VOL(e) != vol_idx) {
+            continue;
         }
 
-        /* Check volume match (if vol_idx != 0) */
-        if (vol_idx != 0 && DBUF_GET_VOL(entry) != vol_idx) {
-            goto next_entry;
-        }
-
-        /* Acquire spin lock to check/set flags atomically */
+        /* 0x00E3AAE2 - 0x00E3AB1E: re-check under the lock */
         token = ML_$SPIN_LOCK(&DBUF_SPIN_LOCK);
-
-        /*
-         * Recheck conditions under lock:
-         * - Volume matches (or vol_idx is 0)
-         * - Buffer is dirty (0x4000)
-         * - No references (ref_count == 0)
-         * - Not busy
-         */
-        if ((vol_idx == 0 || DBUF_GET_VOL(entry) == vol_idx) &&
-            DBUF_IS_VALID(entry) &&
-            entry->ref_count == 0 &&
-            !(entry->flags & DBUF_ENTRY_BUSY)) {
-
-            /* Mark buffer as busy */
-            entry->flags |= DBUF_ENTRY_BUSY;
-            ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
-
-            /* Copy write params from buffer */
-            src = (uint8_t *)&entry->uid;
-            dst = (uint8_t *)&write_params;
-            for (i = 0; i < 12; i++) {
-                *dst++ = *src++;
-            }
-            write_params.type = entry->type;
-            write_params.reserved = 0;
-
-            /* Clear dirty flag */
-            entry->flags &= ~DBUF_ENTRY_DIRTY;
-
-            /* Write buffer to disk */
-            DISK_$WRITE(DBUF_GET_VOL(entry), entry->block, entry->ppn,
-                        (uint32_t *)&write_params, &local_status);
-
-            if (local_status != status_$ok) {
-                /* Mark volume as having trouble */
-                DBUF_$TROUBLE |= (1 << DBUF_GET_VOL(entry));
-            }
-
-            /* Reacquire lock to clear busy flag */
-            token = ML_$SPIN_LOCK(&DBUF_SPIN_LOCK);
-            entry->flags &= ~DBUF_ENTRY_BUSY;
-
-            /* Wake any waiters */
-            if (dbuf_$waiters != 0) {
-                EC_$ADVANCE(&dbuf_$eventcount);
-            }
+        ok = (int8_t)((vol_idx == 0 ? -1 : 0) | (DBUF_GET_VOL(e) == vol_idx ? -1 : 0));
+        if (ok >= 0 ||
+            (e->flags & DBUF_ENTRY_DIRTY) == 0 ||
+            e->ref_count != 0 ||
+            (e->flags & DBUF_ENTRY_BUSY) != 0) {
+            ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);              /* 0x00E3ABB6 */
+            continue;
         }
 
+        /* 0x00E3AB22 - 0x00E3AB8C */
+        e->flags |= DBUF_ENTRY_BUSY;
         ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
+        dbuf_$fill_write_header(e, header);
+        e->flags &= (uint8_t)~DBUF_ENTRY_DIRTY;
+        DISK_$WRITE((int16_t)DBUF_GET_VOL(e), (uint32_t)e->block, e->ppn,
+                    header, &local_status);
+        if (local_status != status_$ok) {
+            DBUF_$TROUBLE |= (uint16_t)(1u << DBUF_GET_VOL(e));
+        }
 
-next_entry:
-        /* Move to next entry */
-        entry = (dbuf_$entry_t *)((char *)entry + DBUF_ENTRY_SIZE);
-        count--;
-    } while (count >= 0);
+        /* 0x00E3AB90 - 0x00E3ABC6 */
+        token = ML_$SPIN_LOCK(&DBUF_SPIN_LOCK);
+        e->flags &= (uint8_t)~DBUF_ENTRY_BUSY;
+        if (dbuf_$waiters != 0) {
+            EC_$ADVANCE(&dbuf_$eventcount);
+        }
+        ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
+    }
 }

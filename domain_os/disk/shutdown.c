@@ -1,27 +1,25 @@
 /*
- * DISK_$SHUTDOWN - Shut a disk device down through its driver
+ * DISK_$SHUTDOWN - Shut a drive down through its driver
  *
- * Fetches the device's jump table and, if it has a shutdown entry at +0x04,
- * calls it with the device's controller number and the unit number.
+ * 0x00E3DC28 - 0x00E3DC50 (42 bytes).  Verified against the disassembly on
+ * 2026-09-19; the earlier emission was faithful.
  *
- * Original address: 0x00e3dc28
- * Size: 42 bytes
+ * Arguments:
+ *   (0x8,A6) dev_info  -> disk_device_entry_t (A2)
+ *   (0xc,A6) unit      word by value
  *
- * The original is a Pascal function whose (unused) two-byte result slot the
- * callers reserve and discard; it never assigns a result, so nothing is
- * returned here.
+ * The driver's slot +0x04 is called as shutdown(controller, unit) - the
+ * entry's controller word (+0x06) and this routine's unit
+ * (0x00E3DC3C - 0x00E3DC46) - and skipped when the slot is empty.
  */
 
 #include "disk/disk_internal.h"
 
 void DISK_$SHUTDOWN(disk_device_entry_t *dev_info, uint16_t unit)
 {
-    disk_jump_table_t *jump_table;
+    disk_jump_table_t *jt = (disk_jump_table_t *)dev_info->jump_table;  /* 0x00E3DC34 */
 
-    jump_table = (disk_jump_table_t *)dev_info->jump_table;   /* 0xe3dc34 */
-
-    if (jump_table->shutdown != NULL) {                        /* 0xe3dc36 */
-        /* 0xe3dc3c-0xe3dc46: the driver entry takes (controller, unit) */
-        jump_table->shutdown(dev_info->controller, unit);
+    if (jt->shutdown != NULL) {                                         /* 0x00E3DC36 */
+        jt->shutdown(dev_info->controller, unit);
     }
 }

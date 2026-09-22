@@ -45,7 +45,7 @@ uint32_t DBUF_SPIN_LOCK;
  *
  * Original address: 0xE7946C
  */
-dbuf_$entry_t *dbuf_$head;
+uint32_t dbuf_$head;
 
 /*
  * dbuf_$waiters - count of processes blocked in DBUF_$GET_BLOCK,

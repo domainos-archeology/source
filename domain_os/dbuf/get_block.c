@@ -1,299 +1,220 @@
 /*
- * DBUF_$GET_BLOCK - Get a disk block into a buffer
+ * DBUF_$GET_BLOCK - Look a disk block up in the buffer cache, reading it in
  *
- * Retrieves a disk block into a memory buffer, reading from disk if necessary.
- * Uses an LRU cache with spin lock protection.
+ * 0x00E3A5B0 - 0x00E3A8B4 (774 bytes, A5 = 0xE78B58, the DBUF data block).
+ * Re-emitted from the disassembly on 2026-09-19.  Wrong before: the victim
+ * search walked FORWARD from the head (the image walks backward from the
+ * tail through `prev`, 0x00E3A6A2-0x00E3A6BC, so the least recently used
+ * free buffer is taken); after a read or writeback the code returned the
+ * buffer directly with ref_count = 1 (the image goes back to the search
+ * at 0x00E3A618 and lets the cache hit path claim it); the dirty test was
+ * a big-endian word cast; and the header handed to DISK_$READ /
+ * DISK_$WRITE was a two-longword local, not the eight-longword frame area.
  *
- * Original address: 0x00e3a5b0
+ * Arguments (see dbuf/dbuf.h for the two-word tail):
+ *   (0x8,A6)  vol_idx     word (D6)
+ *   (0xa,A6)  block       longword disk address (D2)
+ *   (0xe,A6)  uid         -> uid_t (A2)
+ *   (0x12,A6) block_hint  longword (D3)
+ *   (0x16,A6) block_type  word (D4), stored as a byte
+ *   (0x18,A6) flags       word (D5): DBUF_GET_NO_READ, DBUF_GET_OK_IF_STOPPED
+ *   (0x1a,A6) status      -> status_$t (A3)
+ * Result: A0 = the buffer's VA (A2), or NULL after a failed read.
+ *
+ * Frame: (-0x2e,A6) spin token, (-0x24,A6) eventcount value + 1,
+ * (-0x20,A6) the eight-longword header area.
+ *
+ * Control flow, by label:
+ *   retry  (0x00E3A608) take the spin lock
+ *   search (0x00E3A618) snapshot the eventcount, scan the LRU list
+ *   settle (0x00E3A836) after a transfer: lock, clear busy; with no
+ *          waiters fall straight back into `search` still holding the
+ *          lock, otherwise unlock, EC_$ADVANCE and `retry`
+ *   wait   (0x00E3A872) count as a waiter, EC_$WAIT, `retry`
  */
 
 #include "dbuf/dbuf_internal.h"
 
-/* NETLOG_$OK_TO_LOG / NETLOG_$LOG_IT come from netlog/netlog.h */
+/* 0x00E3A5FA: `move.w #0x10,-(SP)` - the NETLOG record kind */
+#define DBUF_NETLOG_KIND_GET_BLOCK  0x10
 
-/*
- * DBUF_$GET_BLOCK
- *
- * This function implements an LRU buffer cache. It:
- *   1. Searches for the requested block in the cache
- *   2. If found, moves it to the head (MRU) and returns it
- *   3. If not found, finds a free buffer (or flushes an old one)
- *   4. Reads the block from disk into the buffer
- *   5. If all buffers are busy, waits for one to become free
- *
- * Parameters:
- *   vol_idx     - Volume index (0-7), word at (0x08,A6)
- *   block       - Disk block number to read, longword at (0x0a,A6)
- *   uid         - Expected UID for validation, (0x0e,A6)
- *   block_hint  - Block hint/type for allocation, longword at (0x12,A6)
- *   block_type  - WORD at (0x16,A6), kept in D4 and stored as a byte in
- *                 the entry's type field
- *   flags       - WORD at (0x18,A6), kept in D5; DBUF_GET_NO_READ and
- *                 DBUF_GET_OK_IF_STOPPED are the only bits examined
- *   status      - Receives status code, (0x1a,A6)
- *
- * 0x00E3A5CE / 0x00E3A5D2 read parameters 5 and 6 as two separate WORDS
- * (`move.w (0x16,A6),D4w`, `move.w (0x18,A6),D5w`), which is why they are
- * two parameters here rather than one longword.
- *
- * Returns:
- *   Pointer to buffer data, or NULL on error
- */
 void *DBUF_$GET_BLOCK(uint16_t vol_idx, int32_t block, uid_t *uid,
                       uint32_t block_hint, uint16_t block_type,
                       uint16_t flags, status_$t *status)
 {
-    uint16_t token;
-    uint32_t wait_value;
-    dbuf_$entry_t *entry;
-    dbuf_$entry_t *victim;
-    dbuf_$write_params_t write_params;
-    uid_t local_uid;
-    uint32_t local_hint;
-    int i;
-    uint8_t *src;
-    uint8_t *dst;
-    uint8_t update_flag;
+    ml_$spin_token_t token;         /* (-0x2e,A6) */
+    int32_t wait_value;             /* (-0x24,A6) */
+    uint32_t header[8] = {0};       /* (-0x20,A6); zeroed where the image
+                                     * leaves frame contents */
+    dbuf_$entry_t *e;               /* A4 */
+    dbuf_$entry_t *h;
+    uint32_t result;                /* A2 */
 
+    /* 0x00E3A5DA */
     *status = status_$ok;
 
-    /* Optional logging */
+    /* 0x00E3A5DC - 0x00E3A604 */
     if (NETLOG_$OK_TO_LOG < 0) {
-        /* NETLOG_$LOG_IT takes the UID as a uint32_t pair */
-        /* 0x00E3A5E4-0x00E3A5FE: the word logged here is D4, block_type. */
-        NETLOG_$LOG_IT(0x10, (uint32_t *)uid, (int16_t)(block_hint >> 5),
-                       (uint16_t)(block_hint & 0x1F),
+        NETLOG_$LOG_IT(DBUF_NETLOG_KIND_GET_BLOCK, (uint32_t *)uid,
+                       (uint16_t)(block_hint >> 5), (uint16_t)(block_hint & 0x1F),
                        block_type, vol_idx, 0, 0);
     }
 
 retry:
-    /* Acquire spin lock */
+    /* 0x00E3A608 - 0x00E3A614 */
     token = ML_$SPIN_LOCK(&DBUF_SPIN_LOCK);
 
-    /* Calculate wait value for event count */
+search:
+    /* 0x00E3A618 - 0x00E3A61C */
     wait_value = dbuf_$eventcount.value + 1;
 
-    /*
-     * Search for the block in the buffer cache
-     */
-    entry = dbuf_$head;
-    while (entry != NULL) {
-        /* 0x00E3A654 `move.b D4b,(0xd,A4)`: the low byte of block_type. */
-        update_flag = (uint8_t)block_type;
-
-        /* Check if this entry matches our request */
-        if (entry->block == block && DBUF_GET_VOL(entry) == vol_idx) {
-            /* Found matching buffer */
-
-            /* If buffer is busy (I/O in progress), wait for it */
-            if (entry->flags & DBUF_ENTRY_BUSY) {
-                goto wait_for_buffer;
+    /* 0x00E3A620 - 0x00E3A6A0: cache lookup, head to tail */
+    e = dbuf_$entry_ptr(dbuf_$head);
+    for (;;) {
+        if (e->block == block && DBUF_GET_VOL(e) == vol_idx) {
+            /* 0x00E3A634: `tst.w (0xc,A4)` - busy is bit 15 of the word */
+            if ((e->flags & DBUF_ENTRY_BUSY) != 0) {
+                goto wait;
             }
-
-            /* Increment reference count */
-            entry->ref_count++;
-
-            /* 0x00E3A640 `btst.l #0x4,D5` */
-            if (flags & DBUF_GET_NO_READ) {
-                entry->uid.high = uid->high;
-                entry->uid.low = uid->low;
-                entry->hint = block_hint;
-                entry->type = update_flag;
+            e->ref_count++;                                     /* 0x00E3A63C */
+            if ((flags & DBUF_GET_NO_READ) != 0) {              /* 0x00E3A640 */
+                e->uid.high = uid->high;
+                e->uid.low = uid->low;
+                e->hint = block_hint;
+                e->type = (uint8_t)block_type;
             }
-
-            /* Move to head of LRU list if not already there */
-            if (entry->prev != NULL) {
-                /* Remove from current position */
-                entry->prev->next = entry->next;
-                if (entry->next != NULL) {
-                    entry->next->prev = entry->prev;
+            /* 0x00E3A658 - 0x00E3A67C: unlink and push to the head */
+            if (e->prev != 0) {
+                dbuf_$entry_ptr(e->prev)->next = e->next;
+                if (e->next != 0) {
+                    dbuf_$entry_ptr(e->next)->prev = e->prev;
                 }
-                /* Insert at head */
-                dbuf_$head->prev = entry;
-                entry->next = dbuf_$head;
-                entry->prev = NULL;
-                dbuf_$head = entry;
+                h = dbuf_$entry_ptr(dbuf_$head);
+                h->prev = ARCH_PTR_TO_VA(e);
+                e->next = dbuf_$head;
+                e->prev = 0;
+                dbuf_$head = ARCH_PTR_TO_VA(e);
             }
-
-            /* Release spin lock and return buffer */
+            /* 0x00E3A680 - 0x00E3A692 */
+            result = e->data;
             ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
-            return entry->data;
+            goto done;
         }
-
-        entry = entry->next;
-    }
-
-    /*
-     * Block not found in cache - need to allocate a buffer.
-     * Search for an unreferenced buffer (ref_count == 0).
-     * Start from the tail (LRU end) of the list.
-     */
-    victim = dbuf_$head;
-    while (victim != NULL) {
-        /* Skip if ref_count > 0 or buffer is busy */
-        if (victim->ref_count == 0 && !(victim->flags & DBUF_ENTRY_BUSY)) {
+        if (e->next == 0) {
             break;
         }
-        victim = victim->next;
+        e = dbuf_$entry_ptr(e->next);
     }
 
-    /* No free buffer found - need to wait */
-    if (victim == NULL) {
-        goto wait_for_buffer;
-    }
-
-    /*
-     * Check if victim buffer is dirty and needs writeback
-     */
-    if (DBUF_IS_VALID(victim)) {
-        /* Mark buffer as busy for writeback */
-        victim->flags |= DBUF_ENTRY_BUSY;
-        ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
-
-        /* Copy write params from victim buffer */
-        src = (uint8_t *)&victim->uid;
-        dst = (uint8_t *)&write_params;
-        for (i = 0; i < 12; i++) {
-            *dst++ = *src++;
+    /* 0x00E3A6A2 - 0x00E3A6BC: e is the tail; walk back to the first
+     * entry that is neither referenced nor busy */
+    for (;;) {
+        if (e->ref_count == 0 && (e->flags & DBUF_ENTRY_BUSY) == 0) {
+            break;
         }
-        write_params.type = victim->type;
-        write_params.reserved = 0;
+        if (e->prev == 0) {
+            goto wait;
+        }
+        e = dbuf_$entry_ptr(e->prev);
+    }
 
-        /* Clear dirty flag */
-        victim->flags &= ~DBUF_ENTRY_DIRTY;
-
-        /* Write dirty buffer to disk
-         * DISK_$WRITE params: vol_idx, daddr, ppn, block header, status
-         */
-        DISK_$WRITE(DBUF_GET_VOL(victim), victim->block, victim->ppn,
-                    (uint32_t *)&write_params, status);
-
+    /* 0x00E3A6BE - 0x00E3A6C6: `btst.l #0xe` on the word = dirty */
+    if ((e->flags & DBUF_ENTRY_DIRTY) != 0) {
+        /* 0x00E3A6C8 - 0x00E3A736: write the victim back */
+        e->flags |= DBUF_ENTRY_BUSY;
+        ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
+        dbuf_$fill_write_header(e, header);
+        e->flags &= (uint8_t)~DBUF_ENTRY_DIRTY;
+        DISK_$WRITE((int16_t)DBUF_GET_VOL(e), (uint32_t)e->block, e->ppn,
+                    header, status);
         if (*status != status_$ok) {
-            /* Mark volume as having trouble but continue */
-            DBUF_$TROUBLE |= (1 << DBUF_GET_VOL(victim));
+            DBUF_$TROUBLE |= (uint16_t)(1u << DBUF_GET_VOL(e));
             *status = status_$ok;
         }
-
-        /* Reacquire lock and clear busy flag */
-        token = ML_$SPIN_LOCK(&DBUF_SPIN_LOCK);
-        victim->flags &= ~DBUF_ENTRY_BUSY;
-
-        /* Wake any waiters */
-        if (dbuf_$waiters != 0) {
-            ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
-            EC_$ADVANCE(&dbuf_$eventcount);
-        } else {
-            ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
-        }
-
-        /* Retry from the beginning */
-        goto retry;
+        goto settle;
     }
 
-    /*
-     * Found a clean, unreferenced buffer - use it for our block.
-     * Move to head of LRU list.
-     */
-    if (victim->prev != NULL) {
-        victim->prev->next = victim->next;
-        if (victim->next != NULL) {
-            victim->next->prev = victim->prev;
+    /* 0x00E3A73A - 0x00E3A75E: push the clean victim to the head */
+    if (e->prev != 0) {
+        dbuf_$entry_ptr(e->prev)->next = e->next;
+        if (e->next != 0) {
+            dbuf_$entry_ptr(e->next)->prev = e->prev;
         }
-        dbuf_$head->prev = victim;
-        victim->next = dbuf_$head;
-        victim->prev = NULL;
-        dbuf_$head = victim;
+        h = dbuf_$entry_ptr(dbuf_$head);
+        h->prev = ARCH_PTR_TO_VA(e);
+        e->next = dbuf_$head;
+        e->prev = 0;
+        dbuf_$head = ARCH_PTR_TO_VA(e);
     }
 
-    /* Set up buffer for new block */
-    DBUF_SET_VOL(victim, vol_idx);
-    victim->block = block;
-    victim->uid.high = uid->high;
-    victim->uid.low = uid->low;
-    victim->hint = block_hint;
-    /* 0x00E3A780 `move.b D4b,(0xd,A4)` */
-    victim->type = (uint8_t)block_type;
-    victim->flags |= DBUF_ENTRY_BUSY;
-
+    /* 0x00E3A762 - 0x00E3A794: claim it.  `or.b D6b` ORs the whole low
+     * byte of vol_idx in, not just its low nibble. */
+    e->flags = (uint8_t)((e->flags & 0xF0) | (uint8_t)vol_idx);
+    e->block = block;
+    e->uid.high = uid->high;
+    e->uid.low = uid->low;
+    e->hint = block_hint;
+    e->type = (uint8_t)block_type;
+    e->flags |= DBUF_ENTRY_BUSY;
     ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
 
-    /* 0x00E3A79C `btst.l #0x4,D5`: skip the disk read, the caller fills it */
-    if (flags & DBUF_GET_NO_READ) {
-        goto finish_setup;
+    /* 0x00E3A79C */
+    if ((flags & DBUF_GET_NO_READ) != 0) {
+        goto settle;
     }
 
-    /* Copy UID to local for disk read */
-    local_uid.high = uid->high;
-    local_uid.low = uid->low;
-    local_hint = block_hint;
-
-    /* Read block from disk
-     * DISK_$READ params: vol_idx, daddr, ppn, block header, status
-     */
-    DISK_$READ(vol_idx, block, victim->ppn, (uint32_t *)&local_uid, status);
-
-    if (*status != status_$ok) {
-        /* 0x00E3A7D0 `btst.l #0x5,D5` + 0x00E3A7D6 cmpi.l #0x8001b */
-        if ((flags & DBUF_GET_OK_IF_STOPPED) &&
-            *status == status_$storage_module_stopped) {
-            /* Continue despite error */
-            goto finish_setup;
-        }
-
-        /* Clear buffer and return error */
-        DBUF_SET_VOL(victim, 0);
-        victim->block = -1;
-
-        token = ML_$SPIN_LOCK(&DBUF_SPIN_LOCK);
-        victim->flags &= ~DBUF_ENTRY_BUSY;
-
-        if (dbuf_$waiters != 0) {
-            ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
-            EC_$ADVANCE(&dbuf_$eventcount);
-        } else {
-            ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
-        }
-
-        /* Set error bit and return NULL.
-         * Original: bset.b #7,(A3) on the most significant byte of the
-         * big-endian 32-bit status */
-        *status |= 0x80000000;
-        return NULL;
+    /* 0x00E3A7A4 - 0x00E3A7CE: read it in; the header area carries the
+     * caller's uid and hint */
+    header[0] = uid->high;
+    header[1] = uid->low;
+    header[2] = block_hint;
+    DISK_$READ((int16_t)vol_idx, (uint32_t)block, e->ppn, header, status);
+    if (*status == status_$ok) {
+        goto settle;
+    }
+    /* 0x00E3A7D0 - 0x00E3A7DC */
+    if ((flags & DBUF_GET_OK_IF_STOPPED) != 0 &&
+        *status == status_$storage_module_stopped) {
+        goto settle;
     }
 
-finish_setup:
-    /* Clear busy flag and increment ref count */
+    /* 0x00E3A7DE - 0x00E3A834: give the buffer up, flag the status */
+    e->flags &= 0xF0;
+    e->block = -1;
     token = ML_$SPIN_LOCK(&DBUF_SPIN_LOCK);
-    victim->flags &= ~DBUF_ENTRY_BUSY;
-
-    /* Wake any waiters */
+    e->flags &= (uint8_t)~DBUF_ENTRY_BUSY;
     if (dbuf_$waiters != 0) {
         ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
         EC_$ADVANCE(&dbuf_$eventcount);
     } else {
         ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
     }
+    *status |= (status_$t)0x80000000;                           /* bset.b #7,(A3) */
+    result = 0;
+    goto done;
 
-    victim->ref_count = 1;
-    return victim->data;
+settle:
+    /* 0x00E3A836 - 0x00E3A86E */
+    token = ML_$SPIN_LOCK(&DBUF_SPIN_LOCK);
+    e->flags &= (uint8_t)~DBUF_ENTRY_BUSY;
+    if (dbuf_$waiters == 0) {
+        goto search;                                            /* lock kept */
+    }
+    ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
+    EC_$ADVANCE(&dbuf_$eventcount);
+    goto retry;
 
-wait_for_buffer:
-    /* Increment waiter count */
+wait:
+    /* 0x00E3A872 - 0x00E3A8A6: ecs = { &ec, 0, 0 }, vals = { wait, 0, 0 }
+     * (`move.l (SP),-(SP)` duplicates the zero) */
     dbuf_$waiters++;
     ML_$SPIN_UNLOCK(&DBUF_SPIN_LOCK, token);
-
-    /* Wait for a buffer to become available
-     * EC_$WAIT takes array of 3 EC pointers and pointer to wait value
-     */
-    /* 0xE3A886-0xE3A898: both 3-element arrays are pushed by value.
-     * ecs = { &dbuf_$eventcount, NULL, NULL }, vals = { wait_value, 0, 0 }.
-     * (The second NULL comes from `move.l (SP),-(SP)` duplicating the first.) */
     EC_$WAIT((ec_$wait_ecs_t){ { &dbuf_$eventcount, NULL, NULL } },
-             (ec_$wait_vals_t){ { (int32_t)wait_value, 0, 0 } });
-
-    /* Decrement waiter count */
+             (ec_$wait_vals_t){ { wait_value, 0, 0 } });
     dbuf_$waiters--;
-
-    /* Retry */
     goto retry;
+
+done:
+    /* 0x00E3A8AA */
+    return ARCH_VA_TO_PTR(result);
 }

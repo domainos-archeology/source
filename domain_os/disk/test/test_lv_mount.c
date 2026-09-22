@@ -115,7 +115,7 @@ void *DISK_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *expected_uid,
     return NULL;
 }
 
-void DISK_$SET_BUFF(void *buffer, uint16_t flags, void *param_3)
+void DISK_$SET_BUFF(void *buffer, uint16_t flags, status_$t *param_3)
 {
     (void)buffer;
     set_buff_calls++;

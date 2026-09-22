@@ -1,204 +1,187 @@
 /*
- * DISK_$SORT - Sort I/O request queue by disk address
+ * DISK_$SORT - Sort a request chain by disk address and pull near sectors up
  *
- * Sorts a linked list of I/O requests by their logical block address
- * to optimize disk head movement (elevator algorithm).
+ * 0x00E3C3E4 - 0x00E3C596 (436 bytes) plus the nested procedure at
+ * 0x00E3C370 - 0x00E3C3E2 (116 bytes, disk_$sort_swap_entries).
+ * Re-emitted from the disassembly on 2026-09-19.  Wrong before: the
+ * coalescing pass (0x00E3C4B8 - 0x00E3C586) was a read-only scan with the
+ * swap left unemitted, and the sort loops were a different exchange sort.
  *
- * The device info at dev_entry+0x18 contains flags at offset +8 that
- * indicate whether to sort by LBA (at +0x3c) or by address (at +4).
+ * Arguments:
+ *   (0x8,A6) vol        the volume descriptor (+0x7c form, A2): dev_info
+ *                       (+0x18) -> driver record whose word +0x08 bit 9
+ *                       selects the sort key, and bat_step (+0x26)
+ *   (0xc,A6) queue_ptr  -> VA of the first request (A3); read once into
+ *                       the frame and written back at 0x00E3C58A
  *
- * After sorting, the function also performs request coalescing for
- * sequential accesses on the same cylinder and head.
+ * Frame (the five list cursors the nested procedure reaches through the
+ * static link):
+ *   -0x14 head      -0x0c cur      -0x08 prev_cur
+ *   -0x10 nxt       -0x04 prev_nxt
  *
- * @param dev_entry   Device entry pointer (volume entry + 0x7c)
- * @param queue_ptr   Pointer to queue head pointer
+ * Pass 1 (0x00E3C406 or 0x00E3C460): for each `cur`, every later `nxt`
+ * with a smaller key (unsigned `bcc`) is swapped with it; the key is
+ * header[7] (+0x3c, the absolute disk address) unless the driver's bit 9
+ * is set, in which case it is daddr (+0x04).
+ *
+ * Pass 2 (0x00E3C4B8), skipped when bat_step == 1: walking `cur` behind
+ * `prev_cur`, a `cur` on the same cylinder and head as `prev_cur` and
+ * fewer than bat_step sectors after it makes the scan continue down the
+ * chain for the first later request on that cylinder/head whose sector
+ * distance from `prev_cur` is at least bat_step; that request is swapped
+ * with `cur` (0x00E3C560).  Any cylinder/head change ends the inner scan.
  */
 
 #include "disk/disk_internal.h"
 
-/* Request block offsets */
-#define REQ_NEXT_OFFSET     0x00   /* VA of the next request (disk_io_req_t.next) */
-#define REQ_ADDR_OFFSET     0x04   /* Address (for SCSI sorting) */
-#define REQ_CYL_OFFSET      0x04   /* Cylinder (word) */
-#define REQ_HEAD_OFFSET     0x06   /* Head (byte) */
-#define REQ_SECTOR_OFFSET   0x07   /* Sector (byte) */
-#define REQ_LBA_OFFSET      0x3c   /* LBA for non-SCSI sorting */
+/* 0x00E3C400: `btst.l #0x9` on the driver record's word +0x08 */
+#define DISK_SORT_DEV_FLAG_BY_DADDR   0x0200
 
-/* Device flags */
-#define DEV_FLAG_SCSI       0x200  /* Use address instead of LBA for sort */
+static inline disk_io_req_t *req_at(uint32_t va)
+{
+    return (disk_io_req_t *)ARCH_VA_TO_PTR(va);
+}
+
+static inline uint16_t req_cyl(uint32_t va)
+{
+    return (uint16_t)(req_at(va)->daddr >> 16);
+}
+
+static inline uint16_t req_head(uint32_t va)
+{
+    return (uint16_t)((req_at(va)->daddr >> 8) & 0xFF);
+}
+
+static inline uint16_t req_sector(uint32_t va)
+{
+    return (uint16_t)(req_at(va)->daddr & 0xFF);
+}
 
 /*
- * The request chain link at +0x00 is a four-byte cell holding a target
- * virtual address, not a host pointer: the original moves it with `move.l`
- * and disk_io_req_t.daddr (+0x04) sits immediately above it.  Read and write
- * it through these two accessors so a 64-bit host build does not overrun
- * daddr (bead source-wyn9; cells cited at 0x00E3BE8A / 0x00E3D50E).
- * ARCH_VA_TO_PTR / ARCH_PTR_TO_VA are identity casts on m68k.
+ * 0x00E3C370 - 0x00E3C3E2: exchange the requests `cur` and `nxt` within
+ * the chain.  Nested procedure: every operand is a parent frame slot
+ * ((-0x14,A0) head, (-0xc,A0) cur, (-0x8,A0) prev_cur, (-0x10,A0) nxt,
+ * (-0x4,A0) prev_nxt with A0 = the parent's A6).  Afterwards `cur` names
+ * the request now in cur's old place (the old nxt) and `nxt` the old cur.
  */
-static inline void *req_next(const void *req)
+static void disk_$sort_swap_entries(uint32_t *head, uint32_t *cur,
+                                    uint32_t *prev_cur, uint32_t *nxt,
+                                    uint32_t *prev_nxt)
 {
-    return ARCH_VA_TO_PTR(*(const uint32_t *)((const uint8_t *)req +
-                                              REQ_NEXT_OFFSET));
+    uint32_t cur_next;              /* D0 at 0x00E3C38E */
+    uint32_t old_cur;               /* D0 at 0x00E3C3BC */
+
+    /* 0x00E3C37A - 0x00E3C384 */
+    if (*cur == *head) {
+        *head = *nxt;
+    }
+    /* 0x00E3C38A - 0x00E3C3A0 */
+    cur_next = req_at(*cur)->next;
+    req_at(*prev_cur)->next = *nxt;
+    req_at(*cur)->next = req_at(*nxt)->next;
+    /* 0x00E3C3A2 - 0x00E3C3B8: adjacent, or with requests between */
+    if (cur_next == *nxt) {
+        req_at(*nxt)->next = *cur;
+    } else {
+        req_at(*nxt)->next = cur_next;
+        req_at(*prev_nxt)->next = *cur;
+    }
+    /* 0x00E3C3BC - 0x00E3C3D6 */
+    old_cur = *cur;
+    if (*prev_cur == *cur) {
+        *prev_cur = *nxt;
+    }
+    *cur = *nxt;
+    *nxt = old_cur;
 }
 
-static inline void req_set_next(void *req, void *val)
+void DISK_$SORT(void *vol, void **queue_ptr)
 {
-    *(uint32_t *)((uint8_t *)req + REQ_NEXT_OFFSET) = ARCH_PTR_TO_VA(val);
-}
+    disk_$volume_t *v = (disk_$volume_t *)vol;                  /* A2 */
+    const uint8_t *dev = (const uint8_t *)v->dev_info;          /* 0x00E3C3F8 */
+    uint32_t head;                  /* (-0x14,A6) */
+    uint32_t cur;                   /* (-0xc,A6) */
+    uint32_t prev_cur;              /* (-0x8,A6) */
+    uint32_t nxt;                   /* (-0x10,A6) */
+    uint32_t prev_nxt;              /* (-0x4,A6) */
+    uint16_t dist;                  /* D0w in pass 2 */
 
-/* Forward declaration for swap helper */
-static void swap_requests(void);
+    /* 0x00E3C3F4 */
+    head = ARCH_PTR_TO_VA(*queue_ptr);
 
-void DISK_$SORT(void *dev_entry, void **queue_ptr)
-{
-    void **dev_info;
-    uint16_t dev_flags;
-    void *head;
-    void *prev;
-    void *curr;
-    void *next;
-    void *prev_sorted;
-    int16_t coalesce_limit;
-    uint32_t curr_key, next_key;
-
-    head = *queue_ptr;
-    prev_sorted = head;
-
-    /* Get device info to check flags */
-    dev_info = *(void ***)((uint8_t *)dev_entry + 0x18);
-    dev_flags = *(uint16_t *)((uint8_t *)*dev_info + 8);
-
-    /* Sort the queue using bubble sort */
-    if ((dev_flags & DEV_FLAG_SCSI) == 0) {
-        /* Sort by LBA (at offset +0x3c) */
-        for (curr = head; curr != NULL; curr = req_next(curr)) {
-            prev = curr;
-            for (next = req_next(curr); next != NULL; next = req_next(prev)) {
-                next_key = *(uint32_t *)((uint8_t *)next + REQ_LBA_OFFSET);
-                curr_key = *(uint32_t *)((uint8_t *)curr + REQ_LBA_OFFSET);
-
-                if (next_key < curr_key) {
-                    /* Swap curr and next */
-                    void *tmp = req_next(curr);
-                    if (prev_sorted != NULL) {
-                        req_set_next(prev_sorted, next);
-                    }
-                    req_set_next(curr, req_next(next));
-                    if (next == tmp) {
-                        req_set_next(next, curr);
-                    } else {
-                        req_set_next(head, curr);
-                        req_set_next(next, tmp);
-                    }
-
-                    if (curr == head) {
-                        head = next;
-                    }
-                    /* Swap pointers */
-                    tmp = curr;
-                    curr = next;
-                    next = tmp;
+    /* 0x00E3C3FC - 0x00E3C4B6: pass 1 */
+    if ((*(const uint16_t *)(dev + 0x08) & DISK_SORT_DEV_FLAG_BY_DADDR) == 0) {
+        /* 0x00E3C406: key = header[7] */
+        cur = head;
+        prev_cur = cur;
+        while (cur != 0) {
+            prev_nxt = cur;
+            nxt = req_at(cur)->next;
+            while (nxt != 0) {
+                if (req_at(nxt)->header[7] < req_at(cur)->header[7]) {  /* bcc 0x00E3C430 */
+                    disk_$sort_swap_entries(&head, &cur, &prev_cur, &nxt, &prev_nxt);
                 }
-                prev = next;
+                prev_nxt = nxt;
+                nxt = req_at(nxt)->next;
             }
-            prev_sorted = prev;
+            prev_cur = cur;
+            cur = req_at(cur)->next;
         }
     } else {
-        /* Sort by address (at offset +4) for SCSI */
-        for (curr = head; curr != NULL; curr = req_next(curr)) {
-            prev = curr;
-            for (next = req_next(curr); next != NULL; next = req_next(prev)) {
-                next_key = *(uint32_t *)((uint8_t *)next + REQ_ADDR_OFFSET);
-                curr_key = *(uint32_t *)((uint8_t *)curr + REQ_ADDR_OFFSET);
-
-                if (next_key < curr_key) {
-                    /* Swap curr and next */
-                    void *tmp = req_next(curr);
-                    if (prev_sorted != NULL) {
-                        req_set_next(prev_sorted, next);
-                    }
-                    req_set_next(curr, req_next(next));
-                    if (next == tmp) {
-                        req_set_next(next, curr);
-                    } else {
-                        req_set_next(head, curr);
-                        req_set_next(next, tmp);
-                    }
-
-                    if (curr == head) {
-                        head = next;
-                    }
-                    /* Swap pointers */
-                    tmp = curr;
-                    curr = next;
-                    next = tmp;
+        /* 0x00E3C460: key = daddr */
+        cur = head;
+        prev_cur = cur;
+        while (cur != 0) {
+            prev_nxt = cur;
+            nxt = req_at(cur)->next;
+            while (nxt != 0) {
+                if (req_at(nxt)->daddr < req_at(cur)->daddr) {          /* bcc 0x00E3C48A */
+                    disk_$sort_swap_entries(&head, &cur, &prev_cur, &nxt, &prev_nxt);
                 }
-                prev = next;
+                prev_nxt = nxt;
+                nxt = req_at(nxt)->next;
             }
-            prev_sorted = prev;
+            prev_cur = cur;
+            cur = req_at(cur)->next;
         }
     }
 
-    /* Coalesce sequential requests */
-    coalesce_limit = *(int16_t *)((uint8_t *)dev_entry + 0x26);
-    if (coalesce_limit != 1) {
-        void *run_start = head;
-
-        while (run_start != NULL) {
-            next = req_next(run_start);
-            if (next != NULL) {
-                int16_t start_cyl = *(int16_t *)((uint8_t *)run_start + REQ_CYL_OFFSET);
-                uint8_t start_head = *(uint8_t *)((uint8_t *)run_start + REQ_HEAD_OFFSET);
-                uint8_t start_sector = *(uint8_t *)((uint8_t *)run_start + REQ_SECTOR_OFFSET);
-
-                int16_t next_cyl = *(int16_t *)((uint8_t *)next + REQ_CYL_OFFSET);
-                uint8_t next_head = *(uint8_t *)((uint8_t *)next + REQ_HEAD_OFFSET);
-                uint8_t next_sector = *(uint8_t *)((uint8_t *)next + REQ_SECTOR_OFFSET);
-
-                /* Check if same cylinder, head, and within coalesce limit */
-                if (start_cyl == next_cyl &&
-                    start_head == next_head &&
-                    (int16_t)(next_sector - start_sector) < coalesce_limit) {
-
-                    /* Continue checking subsequent requests */
-                    void *check = req_next(next);
-                    while (check != NULL) {
-                        int16_t check_cyl = *(int16_t *)((uint8_t *)check + REQ_CYL_OFFSET);
-                        uint8_t check_head = *(uint8_t *)((uint8_t *)check + REQ_HEAD_OFFSET);
-                        uint8_t check_sector = *(uint8_t *)((uint8_t *)check + REQ_SECTOR_OFFSET);
-
-                        if (start_cyl != check_cyl ||
-                            start_head != check_head) {
+    /* 0x00E3C4B8 - 0x00E3C586: pass 2, unless bat_step == 1 */
+    if (v->bat_step != 1) {
+        prev_cur = head;
+        cur = req_at(head)->next;                               /* 0x00E3C57E */
+        while (cur != 0) {
+            /* 0x00E3C4D0 - 0x00E3C516: same cylinder and head, and
+             * fewer than bat_step sectors after prev_cur (signed `bge`) */
+            if (req_cyl(prev_cur) == req_cyl(cur) &&
+                req_head(prev_cur) == req_head(cur)) {
+                dist = (uint16_t)(req_sector(cur) - req_sector(prev_cur));
+                if ((int16_t)dist < (int16_t)v->bat_step) {
+                    /* 0x00E3C566 - 0x00E3C572 */
+                    prev_nxt = cur;
+                    nxt = req_at(cur)->next;
+                    while (nxt != 0) {
+                        /* 0x00E3C51A - 0x00E3C55E */
+                        if (req_cyl(prev_cur) != req_cyl(nxt) ||
+                            req_head(prev_cur) != req_head(nxt)) {
                             break;
                         }
-
-                        if ((int16_t)(check_sector - start_sector) >= coalesce_limit) {
-                            /*
-                             * TODO(source-pxn): NOT EMITTED.  The original
-                             * calls the nested procedure now named
-                             * disk_$sort_swap_entries (0x00E3C370, 116
-                             * bytes) here and at 0x00E3C48C / 0x00E3C560.
-                             * It takes no arguments: it reaches DISK_$SORT's
-                             * frame through the static link
-                             * ("movea.l (A6),A0" at 0x00E3C378) and rewrites
-                             * the five request-list pointers at parent
-                             * A6-0x04, -0x08, -0x0C, -0x10 and -0x14,
-                             * exchanging the two nodes at -0x0C and -0x10.
-                             * Flattening it needs those five locals of
-                             * DISK_$SORT (0x00E3C3E4, 436 bytes) identified
-                             * first, so that the helper can take them by
-                             * reference as a static function in this file.
-                             */
-                            break;
+                        dist = (uint16_t)(req_sector(nxt) - req_sector(prev_cur));
+                        if ((int16_t)dist >= (int16_t)v->bat_step) {
+                            disk_$sort_swap_entries(&head, &cur, &prev_cur, &nxt, &prev_nxt);
+                            break;                              /* 0x00E3C564 */
                         }
-
-                        check = req_next(check);
+                        prev_nxt = nxt;
+                        nxt = req_at(nxt)->next;
                     }
                 }
             }
-            run_start = next;
+            /* 0x00E3C574 - 0x00E3C586 */
+            prev_cur = cur;
+            cur = req_at(cur)->next;
         }
     }
 
-    *queue_ptr = head;
+    /* 0x00E3C58A */
+    *queue_ptr = ARCH_VA_TO_PTR(head);
 }

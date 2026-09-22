@@ -1,26 +1,20 @@
 /*
- * DISK_$REVALIDATE - Revalidate a volume after media change
+ * DISK_$REVALIDATE - Revalidate a volume by index
  *
- * Calls DISK_$REVALID with the volume's device info pointer.
+ * 0x00E6C060 - 0x00E6C08A (44 bytes).  Verified against the disassembly on
+ * 2026-09-19; the earlier emission was faithful.  (The batch list gives
+ * 0x00E6C06A, which is the `movea.l #0xe7a290,A0` inside this function.)
  *
- * @param vol_idx  Volume index
+ * Argument: (0x8,A6) vol_idx, word by value (D2).
+ *
+ * 0x00E6C06A - 0x00E6C07A: 0xE7A290 + vol_idx * 0x48 - 0x48, i.e.
+ * DISK_VOLUME_BASE + 0x7c + vol_idx * 0x48 = DISK_VOL(vol_idx), handed to
+ * DISK_$REVALID by reference.
  */
 
 #include "disk/disk_internal.h"
 
-/* disk_$volume_t and DISK_VOL() come from disk/disk_internal.h */
-
 void DISK_$REVALIDATE(int16_t vol_idx)
 {
-    /*
-     * 0x00E6C06A:
-     *   movea.l #0xe7a290,A0
-     *   move.w  D2w,D0w ; lsl.w #0x3,D0w
-     *   move.w  D0w,D1w ; lsl.w #0x3,D1w ; add.w D1w,D0w   ; D0 = vol * 0x48
-     *   pea     (-0x48,A0,D0w*0x1)
-     * 0xE7A290 - 0x48 = 0xE7A248 = DISK_VOLUME_BASE + DISK_VOL_DESC_OFFSET,
-     * so the address handed over is DISK_VOL(vol_idx) -- the descriptor of
-     * this volume, not of the one before it.
-     */
     DISK_$REVALID(DISK_VOL(vol_idx));
 }

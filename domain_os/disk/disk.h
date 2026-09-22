@@ -103,7 +103,7 @@
  *
  * NOTE: the two "unit" fields the old macros disagreed about are distinct.
  *   dev_unit (+0x98, -0x2c) is the device unit number passed to
- *     DISK_$PV_MOUNT_INTERNAL as `unit_lo` (stored at 0xe6c346) and used by
+ *     DISK_$PV_MOUNT_INTERNAL as `unit` (stored at 0xe6c346) and used by
  *     DISK_$DISMOUNT (0xe6d084) and DISK_$LV_ASSIGN (0xe6cf32) to recognise
  *     descriptors that share one physical drive.
  *   unit_id (+0x9a, -0x2a) is stored from *vol_idx_ptr (0xe6c39c) or from the
@@ -145,6 +145,10 @@ typedef struct disk_$volume_t {
                                      *   divisor/multiplier that turns a disk
                                      *   address into a cylinder number. */
     uint16_t    bat_step;           /* 0x26 (-0x22 / +0xa2): the BAT step, the
+                                     *   word DISK_$SORT compares sector
+                                     *   distances against (0x00E3C512,
+                                     *   0x00E3C55A; == 1 skips its second
+                                     *   pass).  Older note follows:
                                      *   word at +0x40 of the logical-volume
                                      *   label.  DISK_$LV_MOUNT stores it into
                                      *   the new LV descriptor (0xe6cbea) and
@@ -379,7 +383,9 @@ _Static_assert(sizeof(disk_device_entry_t) == 0x0C, "disk_device_entry_t size");
  *   +0x10: DO_IO - Perform I/O operation
  */
 typedef struct {
-  void *_reserved1; /* +0x00 */
+  /* +0x00: spin_down(&entry.controller), a word function; called by
+   * DISK_$SPIN_DOWN (0x00E3DB24 - 0x00E3DB30), may be NULL */
+  int16_t (*spin_down)(uint16_t *controller_ptr);
   /* +0x04: shutdown(controller, unit); called by DISK_$SHUTDOWN (0xe3dc36) */
   void (*shutdown)(uint16_t controller, uint16_t unit);
   /* +0x08: dinit(unit, controller, vol_idx_ptr, num_blocks_ptr,
@@ -402,7 +408,7 @@ typedef struct {
 
 /* Layout recovered from the disassembly -- see the field comments above. */
 #if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(disk_jump_table_t, _reserved1) == 0x00, "disk_jump_table_t._reserved1");
+_Static_assert(__builtin_offsetof(disk_jump_table_t, spin_down) == 0x00, "disk_jump_table_t.spin_down");
 _Static_assert(__builtin_offsetof(disk_jump_table_t, dinit) == 0x08, "disk_jump_table_t.dinit");
 _Static_assert(__builtin_offsetof(disk_jump_table_t, _reserved3) == 0x0C, "disk_jump_table_t._reserved3");
 _Static_assert(__builtin_offsetof(disk_jump_table_t, do_io) == 0x10, "disk_jump_table_t.do_io");
@@ -519,7 +525,9 @@ void DISK_$INIT(void);
 void *DISK_$GET_BLOCK(int16_t vol_idx, int32_t daddr, void *expected_uid,
                       uint32_t block_hint, uint16_t block_type,
                       uint16_t flags, status_$t *status);
-void DISK_$SET_BUFF(void *buffer, uint16_t flags, void *param_3);
+/* DISK_$SET_BUFF (0x00E3BBD4): DBUF_$SET_BUFF under ML lock 15; the third
+ * argument is the status cell DBUF_$SET_BUFF fills. */
+void DISK_$SET_BUFF(void *buffer, uint16_t flags, status_$t *status);
 void DISK_$INVALIDATE(uint16_t vol_idx);
 
 /*
@@ -582,7 +590,9 @@ void DISK_$INIT_QUE(void *queue);
  */
 void DISK_$ADD_QUE(uint16_t flags, void *dev, disk_$que_t *queue,
                    void *req_list);
-void DISK_$WAIT_QUE(void *queue, status_$t *status);
+/* DISK_$WAIT_QUE (0x00E3CABA): the exported gate onto disk_$wait_io - sets
+ * A5 = DISK_$DATA and forwards the three arguments.  See disk/wait_que.c. */
+void DISK_$WAIT_QUE(uint16_t disk_mask, int32_t *io_wait_val, int32_t *error_wait_val);
 /* DISK_$ERROR_QUE (0x00E3DAD4): hands back the driver's word result;
  * `result` is a byte cell (bit 7 = error present).  See disk/error_que.c. */
 int16_t DISK_$ERROR_QUE(void *vol, uint16_t is_timeout, int8_t *result);
@@ -696,7 +706,10 @@ void DISK_$GET_ERROR_INFO(void *buffer);
 void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status);
 
 /* Volume assignment operations */
-int16_t DISK_$PV_MOUNT(int16_t dev, int16_t bus, int16_t ctlr,
+/* DISK_$PV_MOUNT (0x00E6C9E8): a procedure whose D0 is whatever
+ * DISK_$PV_MOUNT_INTERNAL(2, unit_type, device, unit, ...) left; VOLX reads
+ * it as the volume index.  See disk/pv_mount.c. */
+int16_t DISK_$PV_MOUNT(int16_t unit_type, int16_t device, int16_t unit,
                        status_$t *status);
 int16_t DISK_$LV_MOUNT(uid_t *lv_uid, status_$t *status_ret);
 void DISK_$LV_UID(int16_t vol_idx, int16_t lv_num, uid_t *uid_ret,
@@ -733,8 +746,10 @@ void DISK_$AS_OPTIONS(uint16_t *vol_idx_ptr, uint16_t *options_ptr,
 /* Diagnostic and manufacturing operations */
 void DISK_$DIAG_IO(int16_t *op_ptr, uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
                    uint32_t buffer, uint32_t *info, status_$t *status);
-void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *buffer_ptr,
-                             uint32_t count, status_$t *status);
+/* DISK_$READ_MFG_BADSPOTS (0x00E6B7E4): daddr by reference, the page VA by
+ * value (0x00E6B804 `pea (A3)` pushes the value of (0x10,A6)). */
+void DISK_$READ_MFG_BADSPOTS(uint16_t *vol_idx_ptr, uint32_t *daddr_ptr,
+                             uint32_t buffer, status_$t *status);
 /*
  * disk_$mnt_info_t - the record DISK_$GET_MNT_INFO fills in (disk/get_mnt_info.c
  * documents the field origins).  ASKNODE_$INTERNET_INFO passes 0x2A as its

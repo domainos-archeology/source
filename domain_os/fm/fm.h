@@ -110,7 +110,9 @@ void FM_$READ(fm_$file_ref_t *file_ref, uint32_t block_addr, uint16_t level,
  *
  * Original address: 0x00e3a45c
  */
+/* write_now is a Domain boolean byte (the high half of its word slot):
+ * negative = write the block back at once, else mark it dirty. */
 void FM_$WRITE(fm_$file_ref_t *file_ref, uint32_t block_addr, uint16_t level,
-               fm_$entry_t *entry_in, char flags, status_$t *status);
+               fm_$entry_t *entry_in, int8_t write_now, status_$t *status);
 
 #endif /* FM_H */
