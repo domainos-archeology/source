@@ -11,7 +11,11 @@
  *   acl     - Output record (0x38 bytes)
  *   status  - Status return
  *
- * Original address: 0x00e04aaa
+ * Original address: 0x00E04AAA (86 bytes; the batch list's 0x00E04ACA is
+ * the inner push).  A5 = 0xE1DC80 is loaded but unused.  Frame:
+ * `link.w A6,-0x90` = the attribute record; (0x8,A6) loc_rec, (0xC,A6)
+ * flags word, (0xE,A6) acl (A2), (0x12,A6) status.  Verified against the
+ * listing 2026-09-19: the three copies below are the whole body.
  */
 
 #include "ast/ast_internal.h"

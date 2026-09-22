@@ -247,7 +247,7 @@ static void ast_$allocate_pages_log(const mmape_t *pmape, uint16_t seg,
      * 0x00E00CF0-0x00E00D36 (the two arms push an identical argument list):
      *   kind   #4
      *   uid    the eight bytes selected above
-     *   param3 (-0x8,A4)  = aste->timestamp
+     *   param3 (-0x8,A4)  = aste->segment
      *   param4 (0x1,A2)   = pmape->seg_offset, zero-extended
      *   param5 D2w        = the LOW word of the ppn
      *   param6 (-0xe,A3)  = the parent's `allocated`
@@ -255,7 +255,7 @@ static void ast_$allocate_pages_log(const mmape_t *pmape, uint16_t seg,
      *   param8 0
      */
     NETLOG_$LOG_IT(4, (uint32_t *)(uintptr_t)uid_ptr,
-                   aste->timestamp,
+                   aste->segment,
                    (uint16_t)pmape->seg_offset,
                    (uint16_t)ppn,
                    allocated,

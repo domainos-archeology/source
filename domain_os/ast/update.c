@@ -41,7 +41,7 @@ void AST_$UPDATE(void)
                 if ((int16_t)aste->flags >= 0 &&
                     (aste->flags & ASTE_FLAG_DIRTY) != 0 &&
                     aste->wire_count == 0 &&
-                    aste->timestamp <= AST_$UPDATE_TIMESTAMP) {
+                    aste->segment <= AST_$UPDATE_TIMESTAMP) {
 
                     /* Mark as in-transition */
                     aste->flags |= ASTE_FLAG_IN_TRANS;
@@ -67,8 +67,8 @@ void AST_$UPDATE(void)
                     }
 
                     aste_count++;
-                    if (aste_count > 0x1F && aste->timestamp != 0) {
-                        AST_$UPDATE_TIMESTAMP = aste->timestamp - 1;
+                    if (aste_count > 0x1F && aste->segment != 0) {
+                        AST_$UPDATE_TIMESTAMP = aste->segment - 1;
                         goto done;
                     }
                 }

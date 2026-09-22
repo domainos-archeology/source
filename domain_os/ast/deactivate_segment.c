@@ -263,7 +263,7 @@ static void ast_$deactivate_segment_log(const aste_t *aste,
 
     /* 0x00E01940 */
     NETLOG_$LOG_IT(1, log_uid,
-                   aste->timestamp,
+                   aste->segment,
                    aste->page_count,
                    aste->seg_index,
                    0, 0,

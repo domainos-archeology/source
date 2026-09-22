@@ -1,71 +1,61 @@
 /*
- * ast_$lookup_aote_by_uid - Look up an AOTE by its UID
+ * ast_$lookup_aote_by_uid - Find an object's AOTE on the hash chain
  *
- * Searches the AOTE hash table for an entry matching the given UID.
- * If found and not in-transition, returns the AOTE pointer.
- * If found but in-transition, waits for transition to complete.
- * Returns NULL if not found.
+ * Hashes the UID, walks the chain and returns the entry whose UID
+ * (aote+0x10) matches.  A matching entry that is in transition (flags bit
+ * 7) is waited for, after which the walk restarts from the chain head.
+ * Returns NULL when no entry matches.
  *
- * Original address: 0x00e0209e
+ * Original address: 0x00E0209E (92 bytes), A5 = 0xE1DC80: the AOTH is
+ * `(0x0,A5,D3w)` with D3w = hash * 4.
  */
 
 #include "ast/ast_internal.h"
 
-/* Hash function for UID lookup */
-
-/* Table info for UID hashing - at address 0xE01BEC in original */
-#if defined(ARCH_M68K)
-#define AST_HASH_TABLE_INFO (*(void **)0xE01BEC)
-#else
-#define AST_HASH_TABLE_INFO ast_hash_table_info
-#endif
-
-/*
- * AOTE hash table (256 entries)
- * Located at AST globals base (0xE1DC80)
- */
+/* The AOTE hash table, `AOTH` in the SAU2 map. */
 #if defined(ARCH_M68K)
 #define AST_AOTH_BASE ((aote_t **)0xE1DC80)
 #else
 #define AST_AOTH_BASE ast_aoth_base
 #endif
 
+/*
+ * UID_$HASH's table-size word: `pea (-0x4c6,PC)` at 0x00E020B0 ->
+ * 0x00E01BEC, image bytes 00 FB (251 buckets).  The same cell is used by
+ * ast_$force_activate_segment, AST_$LOAD_AOTE, ast_$process_aote and
+ * AST_$LOOKUP_WITH_HINTS.
+ * TODO(source-s1h0): the image holds this literal ONCE; the four private copies
+ * should become one definition in ast_data.c once the asta2 batch lands.
+ */
+static const uint16_t ast_$aoth_hash_size_00e01bec = 0x00FB;
+
 aote_t *ast_$lookup_aote_by_uid(uid_t *uid)
 {
-    uint16_t hash_index;
-    aote_t *aote;
+    uint16_t hash_index;        /* D2w */
+    aote_t *aote;               /* A0 */
 
-    /* Hash the UID to get the bucket index
-     * Note: AST_HASH_TABLE_INFO points to a structure where first field is table size */
-    hash_index = UID_$HASH(uid, (uint16_t *)AST_HASH_TABLE_INFO);
+    /* 0x00E020B0..0x00E020C2 */
+    hash_index = (uint16_t)UID_$HASH(uid,
+                                     (uint16_t *)&ast_$aoth_hash_size_00e01bec);
 
-    while (1) {
-        /* Get the head of the hash chain */
-        aote = AST_AOTH_BASE[hash_index];
-
-        /* Walk the hash chain */
-        while (aote != NULL) {
-            /* Compare UIDs (at offset 0x10 and 0x14 in AOTE) */
-            uint32_t *aote_uid = (uint32_t *)((char *)aote + 0x10);
-
-            if (aote_uid[0] == uid->high && aote_uid[1] == uid->low) {
-                /* UID matches - check if in-transition */
-                /* Offset 0xBF is the flags byte, bit 7 is in-transition */
-                if ((*((int8_t *)((char *)aote + 0xBF))) >= 0) {
-                    /* Not in transition, return it */
-                    return aote;
-                }
-                /* In transition - wait and retry */
-                AST_$WAIT_FOR_AST_INTRANS();
-                break;  /* Start over from hash lookup */
+    /* 0x00E020E0: the chain head */
+    aote = AST_AOTH_BASE[hash_index];
+    while (aote != NULL) {
+        /* 0x00E020C6..0x00E020D4: two cmpm.l over aote+0x10 */
+        if (aote->uid.high == uid->high && aote->uid.low == uid->low) {
+            /* 0x00E020D6: tst.b (0xbf,A0) */
+            if ((int8_t)aote->flags >= 0) {
+                return aote;                            /* 0x00E020F0 */
             }
-            /* Move to next in chain */
-            aote = aote->hash_next;
+            /* 0x00E020DC..0x00E020E0: wait, then restart from the head */
+            AST_$WAIT_FOR_AST_INTRANS();
+            aote = AST_AOTH_BASE[hash_index];
+            continue;
         }
-
-        /* If we fell through without finding, return NULL */
-        if (aote == NULL) {
-            return NULL;
-        }
+        /* 0x00E020E6 */
+        aote = aote->hash_next;
     }
+
+    /* 0x00E020EE */
+    return NULL;
 }

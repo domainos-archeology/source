@@ -12,7 +12,7 @@
  *     static link at 0x00E00CC0 - the parent's `allocated` counter
  *     ((-0xe,A3)) and its `min_count` argument ((0xa,A3));
  *   - the ASTE cursor A4 is 0xEC5400 + seg*0x14, so (-0x10,A4) is the
- *     `aote` field and (-0x8,A4) the `timestamp` field of ASTE_BASE[seg-1];
+ *     `aote` field and (-0x8,A4) the `segment` field of ASTE_BASE[seg-1];
  *     the tree subtracted a further 0x10 / 0x08;
  *   - NETLOG_$LOG_IT gets (4, uid, timestamp, pmape->seg_offset,
  *     ppn LOW word, allocated, min_count, 0);
@@ -258,7 +258,7 @@ static void reset_mocks(void)
     *segmap_entry_of(TEST_SEG, TEST_PAGE) = SEGMAP_FLAG_IN_USE | TEST_PPN;
 
     test_astes[TEST_SEG - 1].aote = &test_aote;
-    test_astes[TEST_SEG - 1].timestamp = 0xBEEF;
+    test_astes[TEST_SEG - 1].segment = 0xBEEF;
     test_astes[TEST_SEG - 1].page_count = 9;
 
     test_aote.uid.high = 0x11112222;
@@ -435,7 +435,7 @@ TEST(log_page_argument_list_local_object)
     /* the AOTE's own UID at aote+0x10 */
     ASSERT_EQ(0x11112222u, log_uid_high[0]);
     ASSERT_EQ(0x33334444u, log_uid_low[0]);
-    /* (-0x8,A4) = ASTE_BASE[seg-1].timestamp */
+    /* (-0x8,A4) = ASTE_BASE[seg-1].segment */
     ASSERT_EQ(0xBEEF, log_p3[0]);
     /* (0x1,A2) = pmape->seg_offset */
     ASSERT_EQ(TEST_PAGE, log_p4[0]);

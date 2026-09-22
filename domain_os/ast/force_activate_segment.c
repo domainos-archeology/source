@@ -1,284 +1,287 @@
 /*
- * ast_$force_activate_segment - Force lookup/create AOTE for an object
+ * ast_$force_activate_segment - Activate an object: find or build its AOTE
  *
- * Looks up or creates an AOTE for the given UID. If the object doesn't
- * exist in the cache, allocates a new AOTE and loads the object info.
+ * Takes a fresh AOTE, then re-checks the hash chain if any other AOTE was
+ * created while allocating (AST_$AOTE_SEQN moved): a matching entry that
+ * is not in transition is returned after giving the fresh one back.
+ * Otherwise the fresh AOTE is initialised from `uid` and `location`,
+ * threaded onto the hash chain and, with the AST lock released, its
+ * attributes are fetched: by volume search (force), by hint search
+ * (location unknown), from the partner (remote) or from the VTOC
+ * (local, followed by VTOCE_$READ).  A volume that is dismounting turns
+ * the result into ast_$validate_uid's verdict.  With the lock retaken,
+ * success clears the in-transition bit; failure unlinks and releases the
+ * AOTE and returns NULL.
  *
- * Parameters:
- *   uid      - Object UID to activate
- *   location - the object's location word (A6+0x0C, a longword).  Bit 31 set
- *              means remote: bits 0..19 are the node id and bits 20..30 the
- *              network number.  Bit 31 clear means local: the low byte is the
- *              logical volume index.  Zero means "location unknown", which
- *              selects the hint search instead of a direct VTOC lookup.  The
- *              encoding and the nine reads of this argument are documented on
- *              aote_t.location in ast/ast.h and on the prototype in
- *              ast/ast_internal.h (bead source-sy5u).
- *   status   - Output status
- *   force    - Force flag (negative = force activation)
+ * Parameters (frame at 0x00E020FA, `link.w A6,-0x18`):
+ *   uid      (0x08,A6)  object UID (D5)
+ *   location (0x0C,A6)  the location word; bit 31 = remote (bits 0..19
+ *                       node, 20..30 network), else the low byte is the
+ *                       volume index; zero = unknown.  Read nine times,
+ *                       and its ADDRESS is handed to AST_$LOOKUP_WITH_HINTS,
+ *                       which writes the resolved location back.
+ *   status   (0x10,A6)  (A4)
+ *   force    (0x14,A6)  a single byte (D2b): TRUE = search every volume
  *
- * Returns: Pointer to AOTE (or NULL on error)
+ * Returns the AOTE in A0, or NULL.
  *
- * Bead source-xntu turned every AOTE access in this routine into a named
- * aote_t field; the 0xA4..0xB7 region was recovered from the stores below
- * and is written up on aote_t.obj_loc_uid / obj_loc_net / obj_loc_node /
- * obj_loc_res_18 in ast/ast.h.  aote_t 0x9C..0xBB is the object's embedded
- * file_$obj_loc_t, so `aote->obj_uid.low` below is that record's block_hint
- * at aote+0xA0 rather than half of a UID.
+ * A5 is inherited (no `lea` here; every caller is AST code): 0x434 is
+ * AST_$AOTE_SEQN, 0x420 ast_$vol_info_count, 0x428 AST_$AST_IN_TRANS_EC,
+ * and (0x0,A5,D3w) indexes the AOTH at 0xE1DC80.
  *
- * Original address: 0x00e020fa
+ * Original address: 0x00E020FA (658 bytes).
  */
 
 #include "ast/ast_internal.h"
 
-/* Network info flags */
+/* The AOTE hash table, `AOTH` in the SAU2 map. */
 #if defined(ARCH_M68K)
-#define AST_HASH_TABLE_INFO  ((void *)0xE01BEC)
-#define NET_INFO_FLAGS       ((void *)0xE01D64)
-#define AST_AOTH_BASE        ((aote_t **)0xE1DC80)
-#define AST_$AOTE_SEQN       (*(uint32_t *)0xE1E0B4)
+#define AST_AOTH_BASE ((aote_t **)0xE1DC80)
 #else
-#define AST_HASH_TABLE_INFO  ast_hash_table_info
-#define NET_INFO_FLAGS       net_info_flags
-#define AST_AOTH_BASE        ast_aoth_base
-#define AST_$AOTE_SEQN       ast_$aote_seqn
+#define AST_AOTH_BASE ast_aoth_base
 #endif
+
+/*
+ * UID_$HASH's table-size word: `pea (-0x52e,PC)` at 0x00E02118 ->
+ * 0x00E01BEC, image bytes 00 FB (251 buckets).  The same cell is used by
+ * ast_$lookup_aote_by_uid, ast_$process_aote and AST_$LOOKUP_WITH_HINTS.
+ */
+static const uint16_t ast_$aoth_hash_size_00e01bec = 0x00FB;
+
+/*
+ * NETWORK_$AST_GET_INFO's request-flags word: `pea (-0x512,PC)` at
+ * 0x00E02274 -> 0x00E01D64, image bytes 00 08.  Shared with
+ * AST_$LOOKUP_WITH_HINTS (0x00E01CF2).
+ */
+static const uint16_t ast_$net_info_flags_00e01d64 = 0x0008;
 
 aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t location,
                                     status_$t *status, int8_t force)
 {
-    aote_t *aote;
-    aote_t *existing;
-    uint32_t seqn_before;
-    uint16_t hash_index;
+    aote_t *aote;               /* A3: the fresh AOTE */
+    aote_t *existing;           /* A2 */
+    aote_t *prev;               /* A0 in the unlink loop */
+    uint32_t seqn_before;       /* D3 */
+    uint16_t hash_index;        /* D4w */
+    uint16_t vol_idx;           /* D0w */
 
+    /* 0x00E0210E..0x00E02116 */
     seqn_before = AST_$AOTE_SEQN;
-
-    /* Allocate a new AOTE */
     aote = ast_$allocate_aote();
 
-    /* Hash the UID */
-    hash_index = UID_$HASH(uid, (uint16_t *)AST_HASH_TABLE_INFO);
+    /* 0x00E02118..0x00E02126 */
+    hash_index = (uint16_t)UID_$HASH(uid,
+                                     (uint16_t *)&ast_$aoth_hash_size_00e01bec);
 
-    /* Check if another AOTE was created for this UID while we were allocating */
+    /*
+     * 0x00E02128..0x00E02168: if the sequence number moved, look for an
+     * AOTE another activation may have made for this UID.  A match that
+     * is in transition is waited for and the whole test repeated.
+     */
     while (seqn_before != AST_$AOTE_SEQN) {
-        /* Search hash chain for existing entry */
         existing = AST_AOTH_BASE[hash_index];
         while (existing != NULL) {
-            /* 0x00E02138-0x00E02146: `lea (0x10,A2),A0` and two `cmpm.l`. */
+            /* 0x00E02138..0x00E02146: two cmpm.l over aote+0x10 */
             if (existing->uid.high == uid->high &&
                 existing->uid.low == uid->low) {
-                /* Found existing - check if in-transition */
-                if ((int8_t)existing->flags >= 0) {   /* 0x00E02148: tst.b (0xbf,A2) */
-                    /* Not in transition - release our AOTE and return existing */
+                /* 0x00E02148: tst.b (0xbf,A2) */
+                if ((int8_t)existing->flags >= 0) {
+                    /* 0x00E02154..0x00E0215E */
                     ast_$release_aote(aote);
                     *status = status_$ok;
                     return existing;
                 }
-                /* In transition - wait */
+                /* 0x00E0214E..0x00E02152 */
                 AST_$WAIT_FOR_AST_INTRANS();
                 break;
             }
-            existing = existing->hash_next;
+            existing = existing->hash_next;                 /* 0x00E02162 */
         }
         if (existing == NULL) {
             break;
         }
     }
 
-    /* Initialize the new AOTE */
+    /* 0x00E0216A */
     AST_$AOTE_SEQN++;
 
     /*
-     * 0x00E0216E-0x00E02180: one bset and three bclr, so bits 0..3 of the
-     * flags byte are carried over from the recycled AOTE rather than cleared.
+     * 0x00E0216E..0x00E02180: one bset and three bclr on the flags byte;
+     * bits 0..3 carry over from the recycled AOTE.
      */
-    aote->flags |= AOTE_FLAG_IN_TRANS;                  /* 0x00E0216E: bset.b #7 */
-    aote->flags &= (uint8_t)~AOTE_FLAG_BUSY;            /* 0x00E02174: bclr.b #6 */
-    aote->flags &= (uint8_t)~AOTE_FLAG_DIRTY;           /* 0x00E0217A: bclr.b #5 */
-    aote->flags &= (uint8_t)~AOTE_FLAG_TOUCHED;         /* 0x00E02180: bclr.b #4 */
-    aote->ref_count = 0;                                /* 0x00E02186 */
-    aote->status_flags = 0;                             /* 0x00E0218A */
-    aote->hash_next = NULL;                             /* 0x00E0218E */
-    aote->aste_list = NULL;                             /* 0x00E02190 */
-    /* 0x00E02194: the location word is cached in the AOTE as-is. */
+    aote->flags |= AOTE_FLAG_IN_TRANS;
+    aote->flags &= (uint8_t)~AOTE_FLAG_BUSY;
+    aote->flags &= (uint8_t)~AOTE_FLAG_DIRTY;
+    aote->flags &= (uint8_t)~AOTE_FLAG_TOUCHED;
+    /* 0x00E02186..0x00E02194 */
+    aote->ref_count = 0;
+    aote->status_flags = 0;
+    aote->hash_next = NULL;
+    aote->aste_list = NULL;
     aote->location = location;
 
-    /* 0x00E0219C-0x00E021A0: the caller's UID, two post-increment moves. */
+    /* 0x00E0219A..0x00E021A0: the caller's UID */
     aote->uid.high = uid->high;
     aote->uid.low = uid->low;
 
-    /*
-     * 0x00E021A4: `clr.b (0x9c,A3)` clears only the FIRST byte of the
-     * embedded file_$obj_loc_t, i.e. the high byte of its reserved_00 word.
-     * Expressed as a mask so the meaning does not depend on byte order.
-     */
+    /* 0x00E021A4: clr.b (0x9c,A3) - only the first byte of the embedded
+     * file_$obj_loc_t (the high byte of its reserved_00 word) */
     aote->obj_uid.high &= 0x00FFFFFFu;
 
-    /* 0x00E021AA-0x00E021AE: obj_loc.uid := the caller's UID. */
+    /* 0x00E021A8..0x00E021AE: obj_loc.uid := the caller's UID */
     aote->obj_loc_uid.high = uid->high;
     aote->obj_loc_uid.low = uid->low;
 
     /*
-     * 0x00E021B2-0x00E021C6: bit 31 of the location word becomes bit 7 of
-     * obj_loc.flags (aote+0xB9), the other bits of that byte are preserved
-     * and bit 6 is cleared unconditionally.  `tst.w (0xc,A6)` reads the HIGH
-     * word of the longword on this big-endian machine, so the test is the
-     * sign of the whole longword, not of its low half.
+     * 0x00E021B2..0x00E021C6: `tst.w (0xc,A6)` / `smi` tests the sign of
+     * the location's HIGH word, i.e. bit 31; it becomes bit 7 of
+     * obj_loc.flags (aote+0xB9) with the other bits kept, then bit 6 is
+     * cleared.
      */
-    aote->remote_flag =
-        (int8_t)((aote->remote_flag & 0x7F) |
-                 (((int32_t)location < 0) ? 0x80 : 0x00));
+    aote->remote_flag = (int8_t)((aote->remote_flag & 0x7F) |
+                                 (((int32_t)location < 0) ? 0x80 : 0x00));
     aote->remote_flag &= (int8_t)~0x40;
 
+    /* 0x00E021CC..0x00E02204 */
     if ((int32_t)location < 0) {
-        /* Remote object - 0x00E021E2-0x00E02204 */
-        aote->vol_index = 0;                            /* 0x00E021E2 */
-        /* 0x00E021E6-0x00E021F0: obj_loc.node := location & 0xFFFFF */
+        /* remote: no volume; node id = low 20 bits; ask NETWORK for the
+         * network id of this location (pushes: status, &obj_loc_net,
+         * location) */
+        aote->vol_index = 0;
         aote->obj_loc_node = location & 0xFFFFF;
-        /* 0x00E021F6-0x00E021FE: obj_loc.loc_info := the network id */
         NETWORK_$GET_NET(location, &aote->obj_loc_net, status);
     } else {
-        /* Local object - 0x00E021D2-0x00E021DC */
+        /* local: the low byte of the location is the volume index */
         aote->vol_index = (uint8_t)(location & 0x7FFFFFFF);
     }
 
-    /* Insert into hash chain */
-    hash_index = hash_index << 2;  /* Convert to byte offset */
-    aote->hash_next = AST_AOTH_BASE[hash_index >> 2];
-    AST_AOTH_BASE[hash_index >> 2] = aote;
+    /* 0x00E02208..0x00E02210: push onto the head of the bucket */
+    aote->hash_next = AST_AOTH_BASE[hash_index];
+    AST_AOTH_BASE[hash_index] = aote;
 
-    /* Release AST lock for I/O */
+    /* 0x00E02214..0x00E02220 */
     ML_$UNLOCK(AST_LOCK_ID);
 
-    /*
-     * Load object info.  0x00E02222: a location word whose low 31 bits are
-     * zero means the object's whereabouts are unknown, so the volume search
-     * or the hint search runs instead of a direct lookup.
-     */
+    /* 0x00E02222..0x00E0222C: a location with no low bits is unknown */
     if ((location & 0x7FFFFFFF) == 0) {
+        /* 0x00E0222E */
         if (force < 0) {
-            /* 0x00E02238 */
+            /* 0x00E02232..0x00E0223C -> 0x00E022A8 */
             VTOC_$SEARCH_VOLUMES(&aote->obj_uid, status);
-            goto check_lookup_status;                  /* 0x00E0223C -> 0x00E022A8 */
+            goto check_lookup_status;
         }
         /*
-         * 0x00E02244 pushes the ADDRESS of the location word: on success
-         * AST_$LOOKUP_WITH_HINTS writes the resolved remote location back
-         * through it (0x00E01D08 sets bit 31, 0x00E01D2A merges the network
-         * number and the node id).
+         * 0x00E0223E..0x00E02250: pushes status, &attrs (aote+0x0C),
+         * &location, &obj_loc (aote+0x9C).  On success the hint search
+         * writes the resolved remote location back through &location.
          */
         AST_$LOOKUP_WITH_HINTS(&aote->obj_uid, &location,
                                &aote->obj_type, status);
-        if (*status != status_$ok) {                   /* 0x00E02254 */
-            goto relock_and_check;
+        if (*status != status_$ok) {                       /* 0x00E02254 */
+            goto relock;
         }
-        if (aote->remote_flag < 0) {                   /* 0x00E0225A */
-            /* 0x00E02260: re-cache the location the hint search resolved. */
-            aote->location = location;
-            goto after_location_stored;                /* 0x00E02266 -> 0x00E022B4 */
+        if (aote->remote_flag < 0) {                       /* 0x00E0225A */
+            aote->location = location;                     /* 0x00E02260 */
+            goto after_location_stored;
         }
-        goto store_location_from_hint;                 /* falls into 0x00E022AE */
+        goto store_block_hint;                             /* -> 0x00E022AE */
     }
 
-    /* 0x00E02268: the location is known. */
+    /* 0x00E02268: the location is known */
     if (aote->remote_flag < 0) {
-        /* Remote - 0x00E0227C, no status test before 0x00E022B4 */
-        NETWORK_$AST_GET_INFO(&aote->obj_uid, NET_INFO_FLAGS,
+        /* 0x00E0226E..0x00E02286: pushes status, &attrs, &flags word,
+         * &obj_loc; no status test before 0x00E022B4 */
+        NETWORK_$AST_GET_INFO(&aote->obj_uid,
+                              (uint16_t *)&ast_$net_info_flags_00e01d64,
                               &aote->obj_type, status);
-        goto after_location_stored;                    /* 0x00E02286 */
+        goto after_location_stored;
     }
 
-    /* Local - check volume status (0x00E02288) */
-    {
-        uint8_t vol_idx = aote->vol_index;             /* 0x00E0228C */
-        if (vol_idx <= 0x0F) {
-            /* 0x00E02294 `move.w (0x420,A5),D1w` */
-            uint16_t vol_flags = ast_$vol_info_count;
-            if ((vol_flags & (1 << vol_idx)) != 0) {
-                goto bad_volume;                       /* 0x00E0229A -> 0x00E022CE */
-            }
-        }
+    /*
+     * 0x00E02288..0x00E0229A: a local volume index of at most 15 whose bit
+     * is set in ast_$vol_info_count is dismounting (`btst.l D0,D1` /
+     * `bhi`: C is clear from the preceding cmp, so bhi means "bit set").
+     */
+    vol_idx = aote->vol_index;
+    if (vol_idx <= 0xF && (ast_$vol_info_count & (1u << vol_idx)) != 0) {
+        goto bad_volume;
     }
+    /* 0x00E0229C..0x00E022A2 */
     VTOC_$LOOKUP((vtoc_$lookup_req_t *)(void *)&aote->obj_uid, status);
 
-check_lookup_status:                                   /* 0x00E022A8 */
+check_lookup_status:
+    /* 0x00E022A8..0x00E022AC */
     if (*status != status_$ok) {
-        goto relock_and_check;
+        goto relock;
     }
-store_location_from_hint:                              /* 0x00E022AE */
-    /*
-     * For a located local object the location word becomes obj_loc.block_hint
-     * (aote+0xA0, the low half of the `obj_uid` longword pair).
-     */
+
+store_block_hint:
+    /* 0x00E022AE: for a located local object the location word becomes
+     * obj_loc.block_hint (aote+0xA0) */
     aote->location = aote->obj_uid.low;
 
-after_location_stored:                                 /* 0x00E022B4 */
+after_location_stored:
+    /* 0x00E022B4: remote objects have no VTOCE to read */
     if (aote->remote_flag < 0) {
-        goto relock_and_check;
+        goto relock;
     }
-    {
-        /* Load VTOCE for local objects */
-        uint8_t vol_idx = aote->vol_index;             /* 0x00E022BE */
-        if (vol_idx <= 0x0F) {
-            /* 0x00E022C6 `move.w (0x420,A5),D1w` */
-            uint16_t vol_flags = ast_$vol_info_count;
-            if ((vol_flags & (1 << vol_idx)) != 0) {
-                goto bad_volume;                       /* 0x00E022CC -> 0x00E022CE */
-            }
-        }
+    /* 0x00E022BA..0x00E022CC: same dismount test (`bls` = bit clear) */
+    vol_idx = aote->vol_index;
+    if (vol_idx <= 0xF && (ast_$vol_info_count & (1u << vol_idx)) != 0) {
+        goto bad_volume;
     }
+    /* 0x00E022E0..0x00E022F0: pushes status, &attrs, &obj_loc */
     VTOCE_$READ((vtoc_$lookup_req_t *)(void *)&aote->obj_uid,
                 (vtoce_$result_t *)(void *)&aote->obj_type, status);
-
-    /* Clear per-boot fields if object has them */
-    if ((aote->attr_flags_lo & 2) != 0) {              /* 0x00E022F4 */
-        aote->blocks = 0;                              /* 0x00E022FC */
+    /* 0x00E022F4..0x00E022FC: attr_flags_lo bit 1 -> blocks := 0 */
+    if (aote->attr_flags_lo & 0x02) {
+        aote->blocks = 0;
     }
-    goto relock_and_check;
+    goto relock;
 
-bad_volume:                                            /* 0x00E022CE */
+bad_volume:
+    /* 0x00E022CE..0x00E022DC: pushes 0x30F00, uid */
     *status = ast_$validate_uid(uid, 0x30F00);
 
-relock_and_check:
+relock:
+    /* 0x00E02300..0x00E0230C */
     ML_$LOCK(AST_LOCK_ID);
 
-    /* Re-check volume status after relock */
-    if (aote->remote_flag >= 0) {                      /* 0x00E0230E */
-        uint8_t vol_idx = aote->vol_index;             /* 0x00E02318 */
-        if (vol_idx <= 0x0F) {
-            /* 0x00E02320 `move.w (0x420,A5),D1w` */
-            uint16_t vol_flags = ast_$vol_info_count;
-            if ((vol_flags & (1 << vol_idx)) != 0) {
-                *status = ast_$validate_uid(uid, 0x30F00);
-            }
+    /* 0x00E0230E..0x00E02336: the volume may have started dismounting
+     * while the lock was released */
+    if (aote->remote_flag >= 0) {
+        vol_idx = aote->vol_index;
+        if (vol_idx <= 0xF && (ast_$vol_info_count & (1u << vol_idx)) != 0) {
+            *status = ast_$validate_uid(uid, 0x30F00);
         }
     }
 
+    /* 0x00E02338..0x00E0233A */
     if (*status == status_$ok) {
-        /* Success - clear in-transition */
-        aote->flags &= (uint8_t)~AOTE_FLAG_IN_TRANS;   /* 0x00E02370 */
+        /* 0x00E02370..0x00E02380 */
+        aote->flags &= (uint8_t)~AOTE_FLAG_IN_TRANS;
         EC_$ADVANCE(&AST_$AST_IN_TRANS_EC);
         return aote;
     }
 
-    /* Error - check for specific error code */
-    if (*status == 0x20006) {  /* file_$object_not_found variant */
-        *status = ast_$validate_uid(uid, 0x20006);
+    /* 0x00E0233C..0x00E0234E: "UID not found" is re-judged by
+     * ast_$validate_uid (pushes status, uid) */
+    if (*status == 0x20006) {
+        *status = ast_$validate_uid(uid, *status);
     }
 
-    /* Remove from hash chain */
-    existing = AST_AOTH_BASE[hash_index >> 2];
-    if (existing == aote) {
-        AST_AOTH_BASE[hash_index >> 2] = aote->hash_next;
+    /* 0x00E02350..0x00E02364: unlink from the bucket */
+    prev = AST_AOTH_BASE[hash_index];
+    if (prev == aote) {
+        AST_AOTH_BASE[hash_index] = aote->hash_next;
     } else {
-        while (existing->hash_next != aote) {
-            existing = existing->hash_next;
+        while (prev->hash_next != aote) {
+            prev = prev->hash_next;
         }
-        existing->hash_next = aote->hash_next;
+        prev->hash_next = aote->hash_next;
     }
 
-    /* Release the AOTE */
+    /* 0x00E02366..0x00E0236E */
     ast_$release_aote(aote);
     return NULL;
 }

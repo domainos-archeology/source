@@ -43,7 +43,7 @@
  *   00e135d4  move.w D2w,-(SP)         ; param5 = vpn (low word)
  *   00e135d6  move.w (0x10,A6),-(SP)   ; param4 = page_idx
  *   00e135da  movea.l (0x8,A2),A0
- *   00e135de  move.w (0xc,A0),-(SP)    ; param3 = aste->timestamp (+0x0C)
+ *   00e135de  move.w (0xc,A0),-(SP)    ; param3 = aste->segment (+0x0C)
  *   00e135e2  movea.l (0x8,A2),A1
  *   00e135e6  movea.l (0x4,A1),A3      ; aste->aote
  *   00e135ea  pea (0x10,A3)            ; param2 = &aote->uid (+0x10)
@@ -81,7 +81,7 @@ void pmap_$update_seg_map(aste_t *aste, uint16_t flags,
         if (NETLOG_$OK_TO_LOG < 0) {
             /* 0x00E135F2 */
             NETLOG_$LOG_IT(5, &aste->aote->uid.high,
-                           aste->timestamp,
+                           aste->segment,
                            page_idx,
                            (uint16_t)vpn,
                            0, 0, 0);

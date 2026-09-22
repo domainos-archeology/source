@@ -255,7 +255,7 @@ static void reset_mocks(void)
     the_aste()->wire_count = 0;
     the_aste()->page_count = 3;
     the_aste()->seg_index = TEST_SEG;
-    the_aste()->timestamp = 0x5A5A;
+    the_aste()->segment = 0x5A5A;
     the_aste()->aote = &test_aote;
     the_aste()->next = NULL;
 

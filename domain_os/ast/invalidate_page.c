@@ -1,10 +1,18 @@
 /*
- * AST_$INVALIDATE_PAGE - Invalidate a single page mapping
+ * AST_$INVALIDATE_PAGE - Drop one installed page from a segment map entry
  *
- * Removes a page from the MMU mappings and updates the segment map
- * to indicate the page is no longer resident.
+ * If the entry says the page is wired in the MMU (bit 29) that mapping
+ * is removed; then the installed bit (30) is cleared, the entry's low 23
+ * bits are replaced by the MMAPE's disk address, the frame is given back
+ * with MMAP_$FREE_REMOVE and the ASTE's page count goes down.
  *
- * Original address: 0x00e00f16
+ * Parameters (frame at 0x00E00F16, `link.w A6,-0x4`):
+ *   aste          (0x8,A6)  (A2)
+ *   segmap_entry  (0xC,A6)  (A1)
+ *   ppn           (0x10,A6) longword (D2); its MMAPE is 0xEB4800 + ppn*16
+ *                 addressed through the -0x2000 bias
+ *
+ * Original address: 0x00E00F16 (102 bytes).  No A5.
  */
 
 #include "ast/ast_internal.h"
@@ -13,26 +21,27 @@
 
 void AST_$INVALIDATE_PAGE(aste_t *aste, uint32_t *segmap_entry, uint32_t ppn)
 {
-    mmape_t *pmape;
+    mmape_t *mmape;             /* A3 - 0x2000 */
 
-    /* Calculate MMAPE address: 0xEB4800 + ppn * 16 */
-    pmape = (mmape_t *)((uintptr_t)MMAPE_BASE + 0x2000 + ppn * sizeof(mmape_t));
+    /* 0x00E00F26..0x00E00F30 */
+    mmape = &MMAPE_BASE[ppn];
 
-    /* If page was installed in MMU, remove it */
-    if ((*segmap_entry & SEGMAP_FLAG_INSTALLED) != 0) {
-        *segmap_entry &= ~SEGMAP_FLAG_INSTALLED;
+    /* 0x00E00F34..0x00E00F4C: btst.l #0xd on the high word = bit 29;
+     * bclr.b #0x5,(A1) clears it */
+    if (*segmap_entry & SEGMAP_WIRED) {
+        *segmap_entry &= ~SEGMAP_WIRED;
         MMU_$REMOVE(ppn);
     }
 
-    /* Clear the in-use flag */
-    *segmap_entry &= ~SEGMAP_FLAG_IN_USE;
+    /* 0x00E00F4E..0x00E00F60: bclr.b #0x6 = bit 30; keep the top nine
+     * bits, take the MMAPE's disk address */
+    *segmap_entry &= ~SEGMAP_VALID;
+    *segmap_entry &= 0xFF800000u;
+    *segmap_entry |= mmape->disk_addr;
 
-    /* Update segment map entry with disk address from PMAPE */
-    *segmap_entry = (*segmap_entry & 0xFF800000) | pmape->disk_addr;
+    /* 0x00E00F62..0x00E00F68 */
+    MMAP_$FREE_REMOVE(mmape, ppn);
 
-    /* Free the page and remove from MMAP (0xEB2800 + ppn * 16) */
-    MMAP_$FREE_REMOVE((mmape_t *)((uintptr_t)MMAPE_BASE + ppn * sizeof(mmape_t)), ppn);
-
-    /* Decrement page count */
+    /* 0x00E00F6E: subq.b #0x1,(0x10,A2) */
     aste->page_count--;
 }

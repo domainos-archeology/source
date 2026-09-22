@@ -45,6 +45,7 @@
 /* PMAP status codes (module 0x05) */
 #define status_$pmap_bad_assoc 0x00050006
 #define status_$pmap_page_null 0x00050008
+#define status_$pmap_pages_wired 0x00050007  /* pages wired (ast_$invalidate_with_wait) */
 #define status_$pmap_read_concurrency_violation 0x0005000A
 
 /* OS status codes (module 0x03) */
@@ -65,9 +66,21 @@ struct aste_t;
 typedef struct aste_t {
   struct aste_t *next; /* 0x00: Next ASTE in chain (or free list) */
   struct aote_t *aote; /* 0x04: Pointer to owning AOTE */
-  uint16_t segment;    /* 0x08: First segment number << 5 (or page offset) */
-  uint16_t unknown_0a; /* 0x0A: Unknown */
-  uint16_t timestamp;  /* 0x0C: Timestamp for LRU */
+  /*
+   * 0x08: the segment's file-map block address, a LONGWORD.
+   * ast_$lookup_or_create_aste passes `pea (0x8,A2)` as VTOCE_$LOOKUP_FM's
+   * phys_block output (0x00E026C6) and then `move.l (0x8,A2),-(SP)` as
+   * FM_$READ's block address (0x00E02720).  Before 2026-09-19 the tree
+   * called this `segment` (word) + `unknown_0a`.
+   */
+  uint32_t fm_block;
+  /*
+   * 0x0C: the SEGMENT NUMBER within the object.  ast_$lookup_or_create_aste
+   * stores its argument here (`move.w D3w,(0xc,A2)` 0x00E02614),
+   * ast_$lookup_aste compares against it (0x00E02524) and AST_$LOCATE_ASTE
+   * checks the hint with it (0x00E0708E).  Was misnamed `timestamp`.
+   */
+  uint16_t segment;
   uint16_t seg_index;  /* 0x0E: Segment index (for segment map lookup) */
   uint8_t page_count;  /* 0x10: Number of pages mapped */
   uint8_t wire_count;  /* 0x11: Wire/reference count */
@@ -78,9 +91,8 @@ typedef struct aste_t {
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(aste_t, next) == 0x00, "aste_t.next");
 _Static_assert(__builtin_offsetof(aste_t, aote) == 0x04, "aste_t.aote");
-_Static_assert(__builtin_offsetof(aste_t, segment) == 0x08, "aste_t.segment");
-_Static_assert(__builtin_offsetof(aste_t, unknown_0a) == 0x0A, "aste_t.unknown_0a");
-_Static_assert(__builtin_offsetof(aste_t, timestamp) == 0x0C, "aste_t.timestamp");
+_Static_assert(__builtin_offsetof(aste_t, fm_block) == 0x08, "aste_t.fm_block");
+_Static_assert(__builtin_offsetof(aste_t, segment) == 0x0C, "aste_t.segment");
 _Static_assert(__builtin_offsetof(aste_t, seg_index) == 0x0E, "aste_t.seg_index");
 _Static_assert(__builtin_offsetof(aste_t, page_count) == 0x10, "aste_t.page_count");
 _Static_assert(__builtin_offsetof(aste_t, wire_count) == 0x11, "aste_t.wire_count");
@@ -682,8 +694,12 @@ aste_t *AST_$LOCATE_ASTE(locate_request_t *request);
  */
 void AST_$PAGE_ZERO(uint32_t ppn);
 void AST_$INVALIDATE_PAGE(aste_t *aste, uint32_t *segmap_entry, uint32_t ppn);
+/*
+ * AST_$FREE_PAGES (0x00E0400C): argument 4 ((0x10,A6), D3) is the volume
+ * index BAT_$FREE receives (0x00E0411C); zero keeps the disk blocks.
+ */
 void AST_$FREE_PAGES(aste_t *aste, int16_t start_page, int16_t end_page,
-                     int16_t flags);
+                     int16_t vol_index);
 void AST_$RELEASE_PAGES(aste_t *aste, int8_t return_to_pool);
 void AST_$FETCH_PMAP_PAGE(void *uid_info, uint32_t *output_buf, uint16_t flags,
                           status_$t *status);
@@ -755,8 +771,12 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn,
 
 /*
  * Function prototypes - Copy operations
+ *
+ * AST_$COPY_AREA (0x00E03A30): argument 2 ((0xa,A6)) is not unused - it is
+ * the word handed to MMAP_$INSTALL_PAGES as its pid at 0x00E03F62.
+ * `buffer` is a 32-page virtual window: its VA goes to MMU_$INSTALL_LIST.
  */
-void AST_$COPY_AREA(uint16_t partner_index, uint16_t unused, aste_t *src_aste,
+void AST_$COPY_AREA(uint16_t partner_index, uint16_t pid, aste_t *src_aste,
                     aste_t *dst_aste, uint16_t start_seg, char *buffer,
                     status_$t *status);
 
@@ -938,8 +958,17 @@ uint8_t AST_$SET_DTS(uint16_t flags, uid_t *uid, uint32_t *dtv,
  * Function prototypes - Object operations
  */
 void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info);
+/*
+ * AST_$PURIFY (0x00E0567A).  `flags` word: bit 0 = one segment (`segment`),
+ * bit 1 = update/deactivate pass and remote purify, bit 2 = no remote
+ * purify, bit 3 = stop after 0x40 pages and report 0x3EFFF when any were
+ * flushed, bit 4 = the pages named in `page_list[list_count]` (each entry
+ * is segment << 5 | page), bit 15 = PMAP_$FLUSH flag 4; bits 5..14 are
+ * refused with "incompatible request".  Argument 5 ((0x14,A6)) is the list
+ * count, not unused.  The word result is only defined on that refusal.
+ */
 uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
-                     uint32_t *segment_list, uint16_t unused,
+                     uint32_t *page_list, uint16_t list_count,
                      status_$t *status);
 void AST_$COND_FLUSH(uid_t *uid, uint32_t *timestamp, status_$t *status);
 /*
@@ -974,7 +1003,7 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status);
  * (0x00E06B66).
  */
 void AST_$GET_SEG_MAP(uid_t *uid, uint32_t start_offset,
-                      uint32_t unused, uint32_t seg_count, uint32_t map_size,
+                      uint32_t location, uint32_t seg_count, uint32_t map_size,
                       uint16_t flags, uint32_t *output, status_$t *status);
 
 /*

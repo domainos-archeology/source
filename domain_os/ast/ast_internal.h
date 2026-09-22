@@ -172,21 +172,37 @@ void ast_$release_aote(aote_t *aote);
 /* Allocate new AOTE */
 aote_t* ast_$allocate_aote(void);
 
-/* Purify/flush AOTE */
-void ast_$purify_aote(aote_t *aote, uint16_t flags, status_$t *status);
+/* ast_$purify_aote (0x00E013A0): `flags` is ONE BYTE read from (0xc,A6)
+ * and handed to VTOCE_$WRITE (0x00E014B8). */
+void ast_$purify_aote(aote_t *aote, boolean flags, status_$t *status);
 
 /* Update ASTE/segment map */
 void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, uint16_t flags,
                       status_$t *status);
 
 /* Invalidate pages with wait */
-status_$t ast_$invalidate_with_wait(uint16_t end_page);
+/*
+ * ast_$invalidate_with_wait (0x00E062FA) - nested procedure of
+ * AST_$INVALIDATE; the parent's aote (-0x14), start page (0xC), is_remote
+ * (-0x1A) and the (-0xC) cell it clears are passed explicitly.
+ */
+status_$t ast_$invalidate_with_wait(uint32_t end_page, aote_t *aote,
+                                    uint32_t start_page, int8_t is_remote,
+                                    uint32_t *parent_scratch);
 
 /* Invalidate pages without wait */
-void ast_$invalidate_no_wait(uint16_t end_page);
+/* ast_$invalidate_no_wait (0x00E064B0) - nested procedure of AST_$INVALIDATE;
+ * the parent's aote (-0x14) and start page (0xC) are passed explicitly. */
+void ast_$invalidate_no_wait(uint32_t end_page, aote_t *aote,
+                             uint32_t start_page);
 
-/* Flush installed pages */
-void ast_$flush_installed_pages(void);
+/*
+ * ast_$flush_installed_pages (0x00E03FBC) - nested procedure of
+ * AST_$FREE_PAGES; the parent's (0x8,A6) ASTE, (-0x100,A6) page array and
+ * (-0x116,A6) count word are passed explicitly (see the .c).
+ */
+void ast_$flush_installed_pages(aste_t *aste, uint32_t *ppn_array,
+                                uint16_t *installed_count);
 
 /*
  * Set attribute on object (0x00E05214).
@@ -307,9 +323,9 @@ extern uint32_t ast_$failed_flags;      /* Flags for failed operation */
 /* Network info flags pointer */
 extern void *net_info_flags;
 
-/* Volume reference tracking */
-extern int16_t vol_ref_counts[];        /* Per-volume reference counts */
-extern ec_$eventcount_t vol_dismount_ec; /* Dismount completion eventcount */
+/* Volume reference tracking: ast_$vol_indices (A5+0x412) and AST_$DISM_EC
+ * (A5+0x408) above are the cells; the old vol_ref_counts /
+ * vol_dismount_ec aliases had no definition and are gone. */
 
 /* ASTE allocation functions */
 extern aste_t *AST_$ALLOCATE_ASTE(void);
@@ -319,8 +335,7 @@ extern void AST_$WAIT_FOR_AST_INTRANS(void);
 /* Process info for statistics - include proc1.h for PROC1_$CURRENT, etc. */
 #include "proc1/proc1.h"
 
-/* Per-process page/network stats */
-extern int32_t proc_page_stats[];
-extern int32_t proc_net_stats[];
+/* The per-process read statistics are PROC_STATS_BASE[pid*4 + 2] (disk)
+ * and [pid*4 + 3] (network) in proc1/proc1.h. */
 
 #endif /* AST_INTERNAL_H */
