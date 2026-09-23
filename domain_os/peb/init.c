@@ -40,8 +40,10 @@ peb_fp_state_t PEB_$WIRED_DATA_START[PEB_MAX_PROCESSES];
  * (source-fzke)
  */
 
-/* 0x00E31DCE: the probe's device-type selector. */
-static uint16_t peb_probe_type = 0x0001;
+/* 0x00E31DCE: the probe's device-type selector.  Shared: PEB_$LOAD_WCS
+ * passes the same cell as its FILE_$LOCK / FILE_$UNLOCK mode word
+ * (0x00E320E8, 0x00E321EA), so it is declared in peb_internal.h. */
+uint16_t peb_$const_word_1 = 0x0001;
 
 /* 0x00E31DD0: the address io_$probe pokes, the PEB control register at
  * 0xFF7000 that the MMU_$INSTALL immediately above has just mapped. */
@@ -143,7 +145,7 @@ void PEB_$INIT(void)
          * frame scratch at A6-0x4.  The result is a Domain boolean tested
          * `tst.b D0b` / `bmi`.
          */
-        found = io_$probe(&peb_probe_type, &peb_probe_addr, probe_result);
+        found = io_$probe(&peb_$const_word_1, &peb_probe_addr, probe_result);
 
         if (found < 0) {
             /* PEB hardware found - install interrupt handler and WCS mapping */

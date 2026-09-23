@@ -22,6 +22,8 @@
 #ifndef SIO_H
 #define SIO_H
 
+#include "misc/string.h"   /* memcpy: the 0x16-byte parameter block copies */
+
 #include "base/base.h"
 #include "ec/ec.h"
 #include "term/term.h"   /* dtte_t (SIO_$INIT_DTTE, SIO_$INIT_DESC) */
@@ -32,14 +34,27 @@
  * SIO Status Codes (module 0x36)
  * ============================================================================
  */
-#define status_$sio_invalid_param           0x00360002  /* Invalid parameter value */
-#define status_$sio_parity_error            0x00360004  /* Parity error detected */
-#define status_$sio_framing_error           0x00360005  /* Framing error detected */
-#define status_$sio_overrun_error           0x00360006  /* Receive overrun error */
-#define status_$sio_break_detected          0x00360007  /* Break condition detected */
-#define status_$sio_hardware_error          0x00360009  /* Hardware error */
-#define status_$sio_quit_signalled          0x0036000a  /* Quit signal received */
-#define status_$sio_dtr_drop                0x0036000b  /* DTR dropped (unused in code) */
+/*
+ * Names from the SR10.2 status database ("OS / serial I/O"):
+ *   360001 invalid option              360006 data carrier detect (dcd) changed
+ *   360002 illegal parameter value     360007 clear to send (cts) changed
+ *   360003 invalid handle              360008 incompatible speed request
+ *   360004 character framing error     360009 input buffer overrun
+ *   360005 character parity error      36000a quit while waiting
+ * 0x36000B has no entry in the database; SIO_$I_ERR (0x00E67DF2) can still
+ * produce it (from a pending bit its own mask clears first).
+ */
+#define status_$sio_invalid_option          0x00360001
+#define status_$sio_invalid_param           0x00360002  /* illegal parameter value */
+#define status_$sio_invalid_handle          0x00360003
+#define status_$sio_framing_error           0x00360004  /* character framing error */
+#define status_$sio_parity_error            0x00360005  /* character parity error */
+#define status_$sio_dcd_changed             0x00360006  /* data carrier detect (dcd) changed */
+#define status_$sio_cts_changed             0x00360007  /* clear to send (cts) changed */
+#define status_$sio_incompatible_speed      0x00360008  /* incompatible speed request */
+#define status_$sio_input_overrun           0x00360009  /* input buffer overrun */
+#define status_$sio_quit_while_waiting      0x0036000a  /* quit while waiting */
+#define status_$sio_code_0b                 0x0036000b  /* not in the SR10.2 database */
 
 /*
  * ============================================================================
@@ -51,39 +66,77 @@
 #define SIO_TSTART_DELAY_MARKER     0xFE    /* Marker for delay sequence */
 #define SIO_TSTART_DELAY_CMD        0x00    /* Delay command byte */
 
-/* Flow control flag bits at offset +0x53 */
-#define SIO_CTRL_SOFT_FLOW          0x01    /* Software flow control (XON/XOFF) */
-#define SIO_CTRL_CTS_FLOW           0x02    /* CTS hardware flow control */
-#define SIO_CTRL_DCD_HANGUP         0x04    /* Hangup on DCD loss */
-#define SIO_CTRL_RECV_ERROR         0x08    /* Receive error notification */
+/*
+ * The interrupt-level routines reach several descriptor fields with byte
+ * instructions on the LOW byte of a wider field (big-endian, so bit n of
+ * the byte is bit n of the field):
+ *
+ *   (0x4F,An) low byte of params.flags1  (+0x4C)
+ *   (0x53,An) low byte of params.flags2  (+0x50)
+ *   (0x57,An) low byte of params.field_08 (+0x54)
+ *   (0x67,An) low byte of pending_int    (+0x64)
+ *   (0x75,An) low byte of state          (+0x74)
+ *
+ * The masks below are therefore applied to the whole field.
+ */
 
-/* Interrupt enable mask bits at offset +0x57 */
+/* params.flags1 (+0x4C) bit 0: SIO_$I_INHIBIT_RCV clears it to inhibit,
+ * sets it to release, then hands the block to set_params with mask 0x20. */
+#define SIO_FLAGS1_RCV_ENABLED      0x01
+
+/* params.flags2 (+0x50) */
+#define SIO_CTRL_SOFT_FLOW          0x01    /* software flow control (XON/XOFF) */
+#define SIO_CTRL_CTS_FLOW           0x02    /* CTS hardware flow control */
+#define SIO_CTRL_DCD_HANGUP         0x04    /* call dcd_handler on DCD loss */
+#define SIO_CTRL_RECV_ERROR         0x08    /* receive error notification */
+
+/* params.field_08 (+0x54): change-notification enables */
 #define SIO_INT_DCD_CHANGE          0x08    /* DCD change notification */
 #define SIO_INT_CTS_CHANGE          0x10    /* CTS change notification */
 
-/* Status flag bits at offset +0x67 */
-#define SIO_STAT_DCD_NOTIFY         0x08    /* DCD change pending notification */
-#define SIO_STAT_CTS_NOTIFY         0x10    /* CTS change pending notification */
-#define SIO_STAT_RECV_ERROR         0x20    /* Receive error pending */
+/*
+ * pending_int (+0x64): SIO_$I_ERR maps bits 0..5 to status codes in the
+ * order framing (bit 1), parity (bit 0), overrun (bit 2), dcd (bit 3), cts
+ * (bit 4), 0x36000B (bit 5); SIO_$I_DCD_CHANGE / SIO_$I_CTS_CHANGE set
+ * bits 3 / 4.
+ */
+#define SIO_PEND_PARITY             0x01    /* -> status_$sio_parity_error */
+#define SIO_PEND_FRAMING            0x02    /* -> status_$sio_framing_error */
+#define SIO_PEND_OVERRUN            0x04    /* -> status_$sio_input_overrun */
+#define SIO_PEND_DCD_CHANGED        0x08    /* -> status_$sio_dcd_changed */
+#define SIO_PEND_CTS_CHANGED        0x10    /* -> status_$sio_cts_changed */
+#define SIO_PEND_BIT5               0x20    /* -> status_$sio_code_0b */
+#define SIO_STAT_DCD_NOTIFY         SIO_PEND_DCD_CHANGED
+#define SIO_STAT_CTS_NOTIFY         SIO_PEND_CTS_CHANGED
+#define SIO_STAT_RECV_ERROR         SIO_PEND_BIT5
+#define SIO_ERR_MASK_ALL            0x1F    /* SIO_$I_ERR, check_all < 0 */
+#define SIO_ERR_MASK_SIGNALS        0x18    /* SIO_$I_ERR, check_all >= 0 */
 
-/* Transmit state flag bits at offset +0x75 */
+/* state (+0x74), low byte (bits 0..7) */
 #define SIO_XMIT_ACTIVE             0x01    /* Transmit in progress */
 #define SIO_XMIT_CTS_BLOCKED        0x02    /* Blocked by CTS */
-#define SIO_XMIT_INHIBITED          0x04    /* Transmit inhibited */
+#define SIO_XMIT_INHIBITED          0x04    /* Transmit inhibited (XOFF) */
 #define SIO_XMIT_DEFER_INHIBIT      0x20    /* Deferred transmit inhibit */
 #define SIO_XMIT_DEFER_PENDING      0x40    /* Deferred operation pending */
 #define SIO_XMIT_DEFER_COMPLETE     0x80    /* Deferred operation complete */
 
-/* State flags at offset +0x74 */
-#define SIO_STATE_DELAY_ACTIVE      0x10    /* Delay timer active */
-#define SIO_STATE_BREAK_ACTIVE      0x20    /* Break active */
-#define SIO_STATE_BREAK_PENDING     0x40    /* Break pending */
+/*
+ * state (+0x74), low byte, bits 3 and 4.  Both lie inside the 0x1F mask
+ * SIO_$I_TSTART tests first (0x00E1C7B6 `moveq #0x1f / and.w (0x74,A0)`):
+ * sio_$set_break sets and clears bit 3 with `bset.b/bclr.b #3,(0x75,An)`
+ * (0x00E67EAE / 0x00E67EB6); SIO_$I_TSTART sets bit 4 with `ori.w #0x10`
+ * on the whole word (0x00E1C8A8) and SIO_DELAY_RESTART clears it together
+ * with bit 0 (`and.w #0xFFEE`, 0x00E1C69A).  No routine in the image
+ * touches the high byte of state.
+ */
+#define SIO_STATE_BREAK_ACTIVE      0x08    /* Break active (blocks transmit) */
+#define SIO_STATE_DELAY_ACTIVE      0x10    /* Delay timer active (blocks transmit) */
 
 /* Parameter change mask bits */
 #define SIO_PARAM_BAUD              0x0003  /* Baud rate (bits 0-1) */
-#define SIO_PARAM_CHAR_SIZE         0x0004  /* Character size */
-#define SIO_PARAM_STOP_BITS         0x0008  /* Stop bits */
-#define SIO_PARAM_PARITY            0x0010  /* Parity */
+#define SIO_PARAM_PARITY            0x0004  /* params.parity    (SIO_$K_SET_PARAM 0x00E68252 tests +0x14) */
+#define SIO_PARAM_STOP_BITS         0x0008  /* params.stop_bits (0x00E6827A, +0x12) */
+#define SIO_PARAM_CHAR_SIZE         0x0010  /* params.char_size (0x00E682A6, +0x10) */
 #define SIO_PARAM_SOFT_FLOW         0x0020  /* Software flow control */
 #define SIO_PARAM_CTS_FLOW          0x0040  /* CTS flow control */
 #define SIO_PARAM_RTS_ASSERT        0x0200  /* RTS assertion */
@@ -130,8 +183,8 @@ _Static_assert(__builtin_offsetof(sio_txbuf_t, data) == 0x06, "sio_txbuf_t.data"
  * packed.  Packing changes no m68k layout. */
 typedef struct sio_params {
     uint32_t    flags1;         /* 0x00: Control flags (flow control, etc.) */
-    uint32_t    flags2;         /* 0x04: Extended flags */
-    uint32_t    break_mask;     /* 0x08: Break character mask */
+    uint32_t    flags2;         /* 0x04: Extended flags (SIO_CTRL_*) */
+    uint32_t    break_mask;     /* 0x08: change-notification enables (SIO_INT_*) */
     uint32_t    baud_rate;      /* 0x0C: Baud rate setting */
     int16_t     char_size;      /* 0x10: Character size (0-3) */
     int16_t     stop_bits;      /* 0x12: Stop bits (1-3) */
@@ -177,7 +230,10 @@ typedef struct sio_desc {
     m68k_ptr_t  output_char;    /* 0x3C: Output character function */
     m68k_ptr_t  set_params;     /* 0x40: Set parameters function */
     m68k_ptr_t  inq_params;     /* 0x44: Inquire parameters function */
-    m68k_ptr_t  reserved_48;    /* 0x48: Reserved */
+    m68k_ptr_t  set_break;      /* 0x48: driver set-break entry (vtable+0x20;
+                                 * the SIO2681 table at 0x00E3517C holds
+                                 * SIO2681_$SET_BREAK at 0x00E3519C).  Only
+                                 * sio_$set_break calls it, 0x00E67ED0. */
 
     /* Parameter block - 0x16 bytes */
     sio_params_t params;        /* 0x4C: Current parameters */
@@ -185,8 +241,7 @@ typedef struct sio_desc {
 
     uint32_t    pending_int;    /* 0x64: Pending interrupts */
     ec_$eventcount_t ec;        /* 0x68: Event count (12 bytes) */
-    uint16_t    state;          /* 0x74: State flags */
-    /* Note: offset 0x75 is the transmit state byte, accessed separately */
+    uint16_t    state;          /* 0x74: State flags (SIO_XMIT_* and SIO_STATE_*, all in the low byte) */
     uint16_t    reserved_76;    /* 0x76: Reserved */
 } sio_desc_t;
 
@@ -207,7 +262,7 @@ _Static_assert(__builtin_offsetof(sio_desc_t, data_rcv) == 0x38, "sio_desc_t.dat
 _Static_assert(__builtin_offsetof(sio_desc_t, output_char) == 0x3C, "sio_desc_t.output_char");
 _Static_assert(__builtin_offsetof(sio_desc_t, set_params) == 0x40, "sio_desc_t.set_params");
 _Static_assert(__builtin_offsetof(sio_desc_t, inq_params) == 0x44, "sio_desc_t.inq_params");
-_Static_assert(__builtin_offsetof(sio_desc_t, reserved_48) == 0x48, "sio_desc_t.reserved_48");
+_Static_assert(__builtin_offsetof(sio_desc_t, set_break) == 0x48, "sio_desc_t.set_break");
 _Static_assert(__builtin_offsetof(sio_desc_t, params) == 0x4C, "sio_desc_t.params");
 _Static_assert(__builtin_offsetof(sio_desc_t, reserved_62) == 0x62, "sio_desc_t.reserved_62");
 _Static_assert(__builtin_offsetof(sio_desc_t, pending_int) == 0x64, "sio_desc_t.pending_int");
@@ -215,6 +270,28 @@ _Static_assert(__builtin_offsetof(sio_desc_t, ec) == 0x68, "sio_desc_t.ec");
 _Static_assert(__builtin_offsetof(sio_desc_t, state) == 0x74, "sio_desc_t.state");
 _Static_assert(__builtin_offsetof(sio_desc_t, reserved_76) == 0x76, "sio_desc_t.reserved_76");
 #endif
+
+/*
+ * Shapes of the handler cells the interrupt-level routines call through
+ * (all reached via ARCH_VA_TO_PTR on the m68k_ptr_t field):
+ *   data_rcv    (+0x38): word result slot, (owner, word 0)      0x00E1C71C
+ *   dcd_handler (+0x30): no result slot, (owner)                 0x00E1C75C
+ *   set_params  (+0x40): no result slot, (context, &params, mask, &status)
+ *                                                                0x00E1C978
+ */
+typedef int16_t (*sio_data_rcv_fn_t)(m68k_ptr_t owner, uint8_t ch);
+typedef void (*sio_dcd_handler_fn_t)(m68k_ptr_t owner);
+typedef void (*sio_set_params_fn_t)(m68k_ptr_t context, sio_params_t *params,
+                                    uint32_t change_mask, status_$t *status_ret);
+/* inq_params (+0x44): no result slot, (context, params_ret, mask, &status),
+ * 0x00E68364.  set_break (+0x48): word result slot that is never read,
+ * (context, enable byte), 0x00E67ECA-0x00E67ED4 in sio_$set_break; the
+ * SIO2681 entry is SIO2681_$SET_BREAK(channel, int8_t).  rcv_handler (+0x28) has the data_rcv shape (0x00E1C678):
+ * the second argument is a BYTE in a word slot - the character in
+ * SIO_$I_RCV, a cleared word in the CTS/DCD notifications. */
+typedef void (*sio_inq_params_fn_t)(m68k_ptr_t context, sio_params_t *params,
+                                    uint32_t mask, status_$t *status_ret);
+typedef void (*sio_set_break_fn_t)(m68k_ptr_t context, int8_t enable);
 
 /* Verify structure size (should be 0x78 = 120 bytes).  The record holds
  * pointer fields, so the layout only matches on the 32-bit target; host
@@ -383,11 +460,12 @@ void SIO_$I_RCV(sio_desc_t *desc, uint8_t char_data, uint32_t error_flags);
  *   desc - SIO descriptor
  *
  * Returns:
- *   Non-zero if transmit is active after call
+ *   Domain boolean (`sne D0b` at 0x00E1C6D0): true if a transmission is
+ *   active after the restart
  *
  * Original address: 0x00e1c6b4
  */
-int8_t SIO_$I_XMIT_DONE(sio_desc_t *desc);
+boolean SIO_$I_XMIT_DONE(sio_desc_t *desc);
 
 /*
  * SIO_$I_CTS_CHANGE - CTS signal change handler
@@ -458,12 +536,13 @@ void SIO_$I_INHIBIT_RCV(sio_desc_t *desc, int8_t inhibit, int8_t update_xmit);
  *   desc - SIO descriptor
  *   inhibit - Inhibit state (negative = inhibit)
  *
- * Returns:
- *   New transmit state
+ * A procedure: D0 is left holding whatever SIO_$I_TSTART or the argument
+ * byte left in it, and the only reference to the routine is the pointer
+ * cell at 0x00E2CA3C in TERM_$DATA.
  *
- * Original address: 0x00e1c9ce
+ * Original address: 0x00e1c9ce (44 bytes)
  */
-int8_t SIO_$I_INHIBIT_XMIT(sio_desc_t *desc, int8_t inhibit);
+void SIO_$I_INHIBIT_XMIT(sio_desc_t *desc, int8_t inhibit);
 
 /*
  * SIO_$I_GET_DESC - Get SIO descriptor for terminal line
@@ -475,7 +554,9 @@ int8_t SIO_$I_INHIBIT_XMIT(sio_desc_t *desc, int8_t inhibit);
  *   status_ret - Status return
  *
  * Returns:
- *   SIO descriptor pointer (in A0 register on m68k)
+ *   SIO descriptor pointer in A0.  On both failure paths (real-line lookup
+ *   failed, or no descriptor for the line) the image returns the frame slot
+ *   (-0x4,A6) without ever having written it; the C returns NULL there.
  *
  * Original address: 0x00e667c6
  */
@@ -521,23 +602,23 @@ void SIO_$K_TIMED_BREAK(int16_t *line_ptr, uint16_t *duration_ptr,
                         status_$t *status_ret);
 
 /*
- * SIO_$K_SIGNAL_WAIT - Wait for modem signal change
+ * SIO_$K_SIGNAL_WAIT - Wait until a modem signal in *signals_ptr is up
  *
- * Waits for specified modem signals to change state.
- * Returns when signal matches or quit signaled.
+ * Loops: the driver's inq_params refreshes the DESCRIPTOR's own parameter
+ * block (0x00E68042 pushes desc+0x4C) with mask 0x180, and the loop ends
+ * when params.flags1 & *signals_ptr is non-zero; otherwise EC_$WAITN on
+ * the descriptor's eventcount and the quit eventcount, and a quit ends
+ * it with status_$sio_quit_while_waiting.
  *
- * Parameters:
- *   line_ptr - Pointer to terminal line number
- *   signals_ptr - Pointer to signal mask to wait for
- *   status_ret - Status return
+ * A procedure reached only through SVC_$TRAP0_TABLE[0x7C]: no caller
+ * reserves a result slot and D0 is not set on every path (it holds
+ * SIO_$I_GET_DESC's A0 copy or the last `and.l`), so no value is
+ * returned.
  *
- * Returns:
- *   Signals that matched (in registers)
- *
- * Original address: 0x00e67fbe
+ * Original address: 0x00e67fbe (238 bytes)
  */
-uint32_t SIO_$K_SIGNAL_WAIT(int16_t *line_ptr, uint32_t *signals_ptr,
-                            status_$t *status_ret);
+void SIO_$K_SIGNAL_WAIT(int16_t *line_ptr, uint32_t *signals_ptr,
+                        status_$t *status_ret);
 
 /*
  * SIO_$K_SET_PARAM - Set serial port parameters

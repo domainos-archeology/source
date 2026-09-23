@@ -1,16 +1,14 @@
 /*
- * IIC (I2C - Inter-Integrated Circuit) Bus Interface - Internal Header
+ * IIC (Internet Interface Controller) - Internal Header
  *
- * Internal definitions for the IIC subsystem. Since this subsystem is
- * completely stubbed (IIC hardware not present), there are no internal
- * data structures or functions.
+ * The SAU2 image's IIC module (0xE70A54, size 0xA0) is stubbed out: no
+ * internal data structures or helpers exist in the image, so this header
+ * only pulls in the public one.
  */
 
 #ifndef IIC_INTERNAL_H
 #define IIC_INTERNAL_H
 
 #include "iic/iic.h"
-
-/* No internal definitions - subsystem is stubbed */
 
 #endif /* IIC_INTERNAL_H */

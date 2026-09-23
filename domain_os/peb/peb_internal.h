@@ -22,19 +22,20 @@
 
 /*
  * ============================================================================
- * Constant pointer cells in the code segment
+ * Constant cells in the code segment
  * ============================================================================
  * The four longwords at 0x00E322DC..0x00E322EB that PEB_$LOAD_WCS passes to
- * MST_$WIRE_AREA by address are file statics in peb/load_wcs.c - they live
- * in the PEB_UNWIRED code segment and only that routine reaches them
- * (bead source-f3dk).  Their contents are the map symbols
- * PEB_$WIRED_DATA_START / PEB_$WIRED_DATA_END / PEB_$WIRED_PROC_START
- * (= PEB_$TOUCH) / PEB_$WIRED_PROC_END.
+ * MST_$WIRE_AREA by address, and every string and word it hands out, are
+ * file statics in peb/load_wcs.c - they live in the PEB_UNWIRED code segment
+ * and only that routine reaches them (bead source-f3dk).
  *
- * The pair PEB_$INIT hands io_$probe - the word at 0x00E31DCE and the
- * longword at 0x00E31DD0 - are file-statics in peb/init.c, its only user
- * (source-fzke).
+ * One cell is shared between two routines of the segment: the word 0x0001
+ * at 0x00E31DCE is PEB_$INIT's io_$probe type selector (0x00E31D7E) and
+ * PEB_$LOAD_WCS's FILE_$LOCK / FILE_$UNLOCK mode (0x00E320E8, 0x00E321EA).
+ * It is defined once, in peb/init.c, as peb_$const_word_1.  The longword
+ * at 0x00E31DD0 that follows it belongs to PEB_$INIT alone (source-fzke).
  */
+extern uint16_t peb_$const_word_1;
 
 /*
  * ============================================================================
@@ -213,9 +214,11 @@ static inline peb_fp_state_t *peb_get_fp_state(int16_t asid) {
  * ============================================================================
  */
 
+/* 0x00E244E6, inside the PEB_ASM module (peb/sau2/int.s). */
 extern status_$t PEB_interrupt;
+/* 0x00E70950 (bytes 80 24 00 01), in the PEB_WIRED code segment; reached by
+ * both PEB_$TOUCH (0x00E70864) and peb_$cleanup_internal (0x00E7099C). */
 extern status_$t PEB_FPU_Is_Hung_Err;
-extern status_$t PEB_WCS_Verify_Failed_Err;
 
 /*
  * ============================================================================
@@ -224,48 +227,11 @@ extern status_$t PEB_WCS_Verify_Failed_Err;
  */
 
 /*
- * PEB_$LOAD_WCS_CHECK_ERR - Check for WCS load errors
- *
- * Called after each WCS operation to check for errors.
- * If an error occurred, prints a warning and may disable the PEB.
- *
- * Parameters:
- *   msg - Error message to print if error occurred
- *
- * Returns:
- *   0 if no error, -1 if error occurred
- *
- * Original address: 0x00E31EC8 (144 bytes)
+ * PEB_$LOAD_WCS_CHECK_ERR (0x00E31EC8), peb_$write_wcs (0x00E31DD4) and
+ * peb_$read_wcs (0x00E31E4E) are module-local to PEB_$LOAD_WCS (CHECK_ERR is
+ * a nested Pascal function reading its frame) and are static in
+ * peb/load_wcs.c.
  */
-int8_t PEB_$LOAD_WCS_CHECK_ERR(const char *msg);
-
-/*
- * peb_$write_wcs - Write a WCS entry
- *
- * Writes microcode data to a WCS address. Sets the WCS page
- * select bits in the control register before writing.
- *
- * Parameters:
- *   addr - WCS address (0-based, includes page in upper bits)
- *   data - Pointer to 8-byte WCS entry data
- *
- * Original address: 0x00E31DD4 (122 bytes)
- */
-void peb_$write_wcs(uint16_t addr, peb_wcs_entry_t *data);
-
-/*
- * peb_$read_wcs - Read a WCS entry
- *
- * Reads microcode data from a WCS address. Sets the WCS page
- * select bits in the control register before reading.
- *
- * Parameters:
- *   addr - WCS address (0-based, includes page in upper bits)
- *   data - Pointer to receive 8-byte WCS entry data
- *
- * Original address: 0x00E31E4E (122 bytes)
- */
-void peb_$read_wcs(uint16_t addr, peb_wcs_entry_t *data);
 
 /*
  * peb_$cleanup_internal - Internal cleanup helper

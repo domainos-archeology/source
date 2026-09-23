@@ -203,11 +203,11 @@ TEST(channel_words_18_and_12)
     setup();
     run_init(1, 1);
 
-    ASSERT_EQ(0x0002, chan_a.tx_int_mask);
+    ASSERT_EQ(0x0002, chan_a.chan_flags);
     ASSERT_EQ(0x0000, chan_a.int_bit);
     ASSERT_EQ(0x0000, chan_a.flags);
 
-    ASSERT_EQ(0x0000, chan_b.tx_int_mask);
+    ASSERT_EQ(0x0000, chan_b.chan_flags);
     ASSERT_EQ(0x0004, chan_b.int_bit);
     ASSERT_EQ(0x0000, chan_b.flags);
 

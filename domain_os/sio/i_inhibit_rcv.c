@@ -1,77 +1,83 @@
 /*
- * SIO_$I_INHIBIT_RCV - Control receive inhibit state
+ * SIO_$I_INHIBIT_RCV - Receive inhibit (XOFF/XON towards the remote)
  *
- * Controls software flow control (XON/XOFF) for receive operations.
- * When inhibited, sends XOFF to the remote end. When released,
- * sends XON.
+ * With software flow control configured (params.flags2 bit 0), clears
+ * params.flags1 bit 0 to inhibit or sets it to release and hands the
+ * parameter block to the driver's set_params with change mask 0x20.
+ * When update_xmit is true, the transmit state's deferred-inhibit bits are
+ * adjusted and the transmitter is restarted.
  *
- * If update_xmit is set, also updates the transmit state machine
- * to handle deferred transmit inhibit operations.
+ * Original address: 0x00E1C94A, 132 bytes (SAU2 map: SIO module)
  *
- * Original address: 0x00e1c94a
+ *   00e1c94a    link.w A6,-0x4
+ *   00e1c94e    movem.l {A2 D3 D2},-(SP)
+ *   00e1c952    movea.l (0x8,A6),A2            ; desc
+ *   00e1c956    move.b (0xc,A6),D2b            ; inhibit
+ *   00e1c95a    move.b (0xe,A6),D3b            ; update_xmit
+ *   00e1c95e    btst.b #0x0,(0x53,A2)          ; params.flags2 & SOFT_FLOW
+ *   00e1c964    beq.b 0x00e1c990
+ *   00e1c966    tst.b D2b
+ *   00e1c968    bpl.b 0x00e1c972
+ *   00e1c96a    bclr.b #0x0,(0x4f,A2)          ; flags1 &= ~1
+ *   00e1c970    bra.b 0x00e1c978
+ *   00e1c972    bset.b #0x0,(0x4f,A2)          ; flags1 |= 1
+ *   00e1c978    pea (-0x4,A6)                  ; &status
+ *   00e1c97c    pea (0x20).w                   ; mask 0x20 by value
+ *   00e1c980    pea (0x4c,A2)                  ; &params
+ *   00e1c984    move.l (A2),-(SP)              ; context
+ *   00e1c986    movea.l (0x40,A2),A0
+ *   00e1c98a    jsr (A0)                       ; set_params(context, &params, 0x20, &status)
+ *   00e1c98c    lea (0x10,SP),SP
+ *   00e1c990    tst.b D3b
+ *   00e1c992    bpl.b 0x00e1c9c4
+ *   00e1c994    tst.b D2b
+ *   00e1c996    bpl.b 0x00e1c9ac
+ *   00e1c998    bclr.b #0x5,(0x75,A2)          ; state &= ~DEFER_INHIBIT
+ *   00e1c99e    tst.b (0x75,A2)
+ *   00e1c9a2    bmi.b 0x00e1c9be               ; DEFER_COMPLETE set -> skip
+ *   00e1c9a4    bset.b #0x6,(0x75,A2)          ; state |= DEFER_PENDING
+ *   00e1c9aa    bra.b 0x00e1c9be
+ *   00e1c9ac    tst.b (0x75,A2)
+ *   00e1c9b0    bpl.b 0x00e1c9b8
+ *   00e1c9b2    bset.b #0x5,(0x75,A2)          ; state |= DEFER_INHIBIT
+ *   00e1c9b8    bclr.b #0x6,(0x75,A2)          ; state &= ~DEFER_PENDING
+ *   00e1c9be    pea (A2)
+ *   00e1c9c0    bsr.w 0x00e1c7a8               ; SIO_$I_TSTART(desc)
+ *   00e1c9c4    movem.l (-0x10,A6),{D2 D3 A2}
+ *   00e1c9ca    unlk A6
+ *   00e1c9cc    rts
  */
 
 #include "sio/sio_internal.h"
 
-/* Accessor macros for byte-level access */
-#define SIO_DESC_CTRL(desc)        (*(uint8_t *)((char *)(desc) + 0x53))
-#define SIO_DESC_FLOW_CTRL(desc)   (*(uint8_t *)((char *)(desc) + 0x4f))
-#define SIO_DESC_XMIT_STATE(desc)  (*(uint8_t *)((char *)(desc) + 0x75))
-
 void SIO_$I_INHIBIT_RCV(sio_desc_t *desc, int8_t inhibit, int8_t update_xmit)
 {
-    status_$t status;
+    status_$t status;               /* (-0x4,A6) */
 
-    /*
-     * Check if software flow control is enabled
-     */
-    if ((SIO_DESC_CTRL(desc) & SIO_CTRL_SOFT_FLOW) != 0) {
+    /* 0x00E1C95E-0x00E1C98C */
+    if ((desc->params.flags2 & SIO_CTRL_SOFT_FLOW) != 0) {
         if (inhibit < 0) {
-            /* Inhibit - clear flow control bit (send XOFF) */
-            SIO_DESC_FLOW_CTRL(desc) &= ~0x01;
+            desc->params.flags1 &= ~(uint32_t)SIO_FLAGS1_RCV_ENABLED;
         } else {
-            /* Release - set flow control bit (send XON) */
-            SIO_DESC_FLOW_CTRL(desc) |= 0x01;
+            desc->params.flags1 |= SIO_FLAGS1_RCV_ENABLED;
         }
-
-        /*
-         * Call set_params to update hardware with new flow state
-         * Parameter mask 0x20 = software flow control setting
-         */
-        ((void (*)(uint32_t, void *, uint32_t, status_$t *))desc->set_params)(
-            desc->context,
-            &desc->params,
-            0x20,
-            &status
-        );
+        ((sio_set_params_fn_t)ARCH_VA_TO_PTR(desc->set_params))(
+            desc->context, &desc->params, SIO_PARAM_SOFT_FLOW, &status);
     }
 
-    /*
-     * If update_xmit is set, handle deferred transmit state
-     */
+    /* 0x00E1C990-0x00E1C9C0 */
     if (update_xmit < 0) {
         if (inhibit < 0) {
-            /*
-             * Inhibiting receive - clear deferred inhibit flag
-             * If transmit not currently deferred complete, set defer pending
-             */
-            SIO_DESC_XMIT_STATE(desc) &= ~SIO_XMIT_DEFER_INHIBIT;
-
-            if ((SIO_DESC_XMIT_STATE(desc) & SIO_XMIT_DEFER_COMPLETE) == 0) {
-                SIO_DESC_XMIT_STATE(desc) |= SIO_XMIT_DEFER_PENDING;
+            desc->state &= (uint16_t)~SIO_XMIT_DEFER_INHIBIT;
+            if ((desc->state & SIO_XMIT_DEFER_COMPLETE) == 0) {
+                desc->state |= SIO_XMIT_DEFER_PENDING;
             }
         } else {
-            /*
-             * Releasing inhibit - if transmit is deferred complete,
-             * set deferred inhibit flag
-             */
-            if ((SIO_DESC_XMIT_STATE(desc) & SIO_XMIT_DEFER_COMPLETE) != 0) {
-                SIO_DESC_XMIT_STATE(desc) |= SIO_XMIT_DEFER_INHIBIT;
+            if ((desc->state & SIO_XMIT_DEFER_COMPLETE) != 0) {
+                desc->state |= SIO_XMIT_DEFER_INHIBIT;
             }
-            SIO_DESC_XMIT_STATE(desc) &= ~SIO_XMIT_DEFER_PENDING;
+            desc->state &= (uint16_t)~SIO_XMIT_DEFER_PENDING;
         }
-
-        /* Try to restart transmission */
         SIO_$I_TSTART(desc);
     }
 }

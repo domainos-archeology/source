@@ -67,6 +67,7 @@ typedef int32_t status_$t;   /* 32-bit on m68k; keep it 32-bit on 64-bit hosts s
 #define status_$ok 0
 #define status_$invalid_line_number 0x000b0007
 #define status_$requested_line_or_operation_not_implemented 0x000b000d
+#define status_$async_fault_while_waiting_for_input 0x000b0006 /* SR10.2 text: "asynchronous fault occurred while waiting for input" (SIO_$K_TIMED_BREAK 0x00E67F7E) */
 #define status_$term_invalid_option 0x000b0004
 
 // TTY status codes (module 0x35) live in tty/tty.h, their owning module.

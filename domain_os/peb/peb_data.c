@@ -1,8 +1,8 @@
 #include "peb/peb_internal.h"
 
 status_$t PEB_interrupt = status_$peb_interrupt;
+/* 0x00E70950: 80 24 00 01 - shared by PEB_$TOUCH and peb_$cleanup_internal. */
 status_$t PEB_FPU_Is_Hung_Err = status_$peb_fpu_is_hung | 0x80000000;
-status_$t PEB_WCS_Verify_Failed_Err = status_$peb_wcs_verify_failed;
 
 /*
  * Host-build storage for the two exported PEB feature flags declared in

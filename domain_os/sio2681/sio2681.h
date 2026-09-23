@@ -176,11 +176,24 @@
  */
 typedef struct sio2681_chip {
     volatile uint8_t *regs;     /* 0x00: Base address of chip registers */
-    uint16_t    config1;        /* 0x04: Configuration word 1 */
-    uint16_t    config2;        /* 0x06: Configuration word 2 */
+    uint16_t    config1;        /* 0x04: loaded from config[0] by SIO2681_$INIT;
+                                 * its HIGH byte (the byte at +4) is the ACR
+                                 * shadow: bit 7 is the baud-rate set
+                                 * (sio2681_set_baud_rate 0x00E1D1EE, tested
+                                 * as the word's sign in SIO2681_$SET_LINE) */
+    uint16_t    config2;        /* 0x06: loaded from config[2]; its HIGH byte
+                                 * (the byte at +6) is the output-port shadow
+                                 * written to SOPBC/ROPBC (SET_LINE 0x00E1D4C0,
+                                 * SIO2681_$TONE 0x00E1D1B2) */
     uint8_t     imr_shadow;     /* 0x08: Shadow copy of IMR (write-only reg) */
     uint8_t     reserved_09[3]; /* 0x09: Padding */
 } sio2681_chip_t;
+
+/* The byte at +4 / +6 is the high half of the word (big-endian). */
+#define SIO2681_CHIP_ACR(chip)        ((uint8_t)((chip)->config1 >> 8))
+#define SIO2681_CHIP_SET_ACR(chip, v) ((chip)->config1 = (uint16_t)(((chip)->config1 & 0x00FF) | ((uint16_t)(uint8_t)(v) << 8)))
+#define SIO2681_CHIP_OPR(chip)        ((uint8_t)((chip)->config2 >> 8))
+#define SIO2681_CHIP_SET_OPR(chip, v) ((chip)->config2 = (uint16_t)(((chip)->config2 & 0x00FF) | ((uint16_t)(uint8_t)(v) << 8)))
 
 /* Layout recovered from the disassembly -- see the field comments above. */
 #if defined(ARCH_M68K)
@@ -205,11 +218,17 @@ typedef struct sio2681_channel {
     struct sio2681_chip *chip;  /* 0x04: Pointer to parent chip structure */
     struct sio2681_channel *peer; /* 0x08: Pointer to other channel */
     sio_desc_t  *sio_desc;      /* 0x0C: SIO descriptor for callbacks */
-    uint16_t    flags;          /* 0x10: Channel flags */
-    uint16_t    int_bit;        /* 0x12: Interrupt bit position (0 or 4) */
-    uint32_t    reserved_14;    /* 0x14: Reserved */
-    uint16_t    tx_int_mask;    /* 0x18: Transmit interrupt mask bit */
-    uint16_t    baud_support;   /* 0x1A: Supported baud rates mask */
+    uint16_t    flags;          /* 0x10: zeroed by SIO2681_$INIT; SIO2681_$INT
+                                 * (0x00E1CFC4 / 0x00E1D020) tests it non-zero
+                                 * to send a 0x20 fill instead of running the
+                                 * SIO transmit-done path.  No writer found. */
+    uint16_t    int_bit;        /* 0x12: TxRDY bit position in ISR/IMR (A 0, B 4) */
+    uint32_t    reserved_14;    /* 0x14: zeroed by INIT, ORed into flags1 by INQ_LINE */
+    uint16_t    chan_flags;     /* 0x18: A = 2, B = 0 at INIT.  Byte ops on the
+                                 * low byte (0x19): bit 1 = "this is channel A"
+                                 * (SET_LINE 0x00E1D45E, INQ_LINE 0x00E725E0);
+                                 * bit 0 cleared by SET_LINE 0x00E1D292 */
+    uint16_t    baud_support;   /* 0x1A: baud_bits[] entry of the current tx rate */
 } sio2681_channel_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
@@ -221,20 +240,22 @@ _Static_assert(__builtin_offsetof(sio2681_channel_t, sio_desc) == 0x0C, "sio2681
 _Static_assert(__builtin_offsetof(sio2681_channel_t, flags) == 0x10, "sio2681_channel_t.flags");
 _Static_assert(__builtin_offsetof(sio2681_channel_t, int_bit) == 0x12, "sio2681_channel_t.int_bit");
 _Static_assert(__builtin_offsetof(sio2681_channel_t, reserved_14) == 0x14, "sio2681_channel_t.reserved_14");
-_Static_assert(__builtin_offsetof(sio2681_channel_t, tx_int_mask) == 0x18, "sio2681_channel_t.tx_int_mask");
+_Static_assert(__builtin_offsetof(sio2681_channel_t, chan_flags) == 0x18, "sio2681_channel_t.chan_flags");
 _Static_assert(__builtin_offsetof(sio2681_channel_t, baud_support) == 0x1A, "sio2681_channel_t.baud_support");
 _Static_assert(sizeof(sio2681_channel_t) == 0x1C, "sio2681_channel_t size");
 #endif
 
-/* Channel flags */
-#define SIO2681_FLAG_CHANNEL_B      0x02    /* This is channel B (vs A) */
+/* chan_flags (+0x18) bits */
+#define SIO2681_CHAN_FLAG_A         0x02    /* channel A (INIT stores 2 for A, 0 for B) */
+#define SIO2681_CHAN_FLAG_BIT0      0x01    /* cleared by every SIO2681_$SET_LINE */
 
 /*
  * ============================================================================
  * Status Codes
  * ============================================================================
  */
-#define status_$sio2681_invalid_baud    0x00360008  /* Invalid baud rate */
+/* 0x00360008 "incompatible speed request" is status_$sio_incompatible_speed
+ * in sio/sio.h (SIO2681_$SET_LINE 0x00E1D2DE). */
 
 /*
  * ============================================================================
@@ -269,18 +290,22 @@ void SIO2681_$INIT(int16_t *int_vec_ptr, int16_t *chip_num_ptr,
                    sio_params_t *chan_b_params,
                    sio2681_chip_t *chip_struct, uint16_t *config);
 
+struct sio2681_ptrs_entry;      /* sio2681_internal.h */
+
 /*
  * SIO2681_$INT - Interrupt handler for SIO2681
  *
- * Called when the 2681 generates an interrupt. Dispatches to appropriate
- * handlers for receive, transmit, and modem status changes.
+ * Called by the SIO2681_$INTn_RTE stubs with the chip's SIO2681_$PTRS
+ * entry (channel A, channel B, chip, saved PC).  Loops over ISR & IMR
+ * until it reads zero, dispatching receive, transmit and input-change
+ * conditions to the SIO layer.
  *
  * Parameters:
- *   chip - Pointer to chip structure
+ *   entry - the chip's sio2681_ptrs_entry_t (sio2681_internal.h)
  *
  * Original address: 0x00e1ceec
  */
-void SIO2681_$INT(sio2681_chip_t *chip);
+void SIO2681_$INT(struct sio2681_ptrs_entry *entry);
 
 /*
  * SIO2681_$SET_LINE - Set line parameters

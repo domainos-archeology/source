@@ -1,54 +1,44 @@
 /*
- * SIO2681_$XMIT - Transmit a character
+ * SIO2681_$XMIT - Load a character into a channel's transmitter
  *
- * Writes a character to the transmit holding register and enables
- * the transmit interrupt if not already enabled.
+ * Writes the byte to THR and, if the channel's TxRDY bit is not yet in
+ * the IMR shadow, sets it there and in the chip's IMR.
  *
- * Original address: 0x00e1d4fc
+ * Original address: 0x00E1D4FC, 66 bytes (SAU2 map: SIO_IO segment)
+ *
+ *   00e1d4fc    link.w A6,-0x4
+ *   00e1d500    movem.l {A2 D2},-(SP)
+ *   00e1d504    movea.l (0x8,A6),A0            ; channel
+ *   00e1d508    movea.l (0x4,A0),A1            ; chip
+ *   00e1d50c    movea.l (A0),A2 ; move.b (0xc,A6),(0x7,A2)   ; THR = ch (byte in a word slot)
+ *   00e1d514    clr.w D1w ; clr.w D0w
+ *   00e1d518    move.w (0x12,A0),D2w           ; int_bit
+ *   00e1d51c    move.b (0x8,A1),D1b            ; imr_shadow
+ *   00e1d520    bset.l D2,D0                   ; D0 = 1 << int_bit
+ *   00e1d522    move.w D1w,D2w ; and.w D0w,D2w ; bne 0x00e1d534   ; already enabled
+ *   00e1d528    or.w D1w,D0w ; move.b D0b,(0x8,A1)   ; imr_shadow |= bit
+ *   00e1d52e    movea.l (A1),A2 ; move.b D0b,(0xb,A2) ; IMR = imr_shadow
+ *   00e1d534    movem.l (-0xc,A6),{D2 A2} ; unlk ; rts
  */
 
 #include "sio2681/sio2681_internal.h"
 
-/*
- * SIO2681_$XMIT - Write character to transmitter
- *
- * This function is called to transmit a single character. It writes
- * to the THR and ensures the TxRDY interrupt is enabled so we get
- * notified when the character has been sent.
- *
- * Assembly analysis:
- *   - Writes character to THR at offset 0x07 of channel regs
- *   - Calculates interrupt bit from channel's int_bit field
- *   - If bit not already set in IMR shadow, sets it and writes IMR
- *
- * Parameters:
- *   channel - Channel structure
- *   ch      - Character to transmit
- */
 void SIO2681_$XMIT(sio2681_channel_t *channel, uint8_t ch)
 {
-    sio2681_chip_t *chip;
-    uint8_t int_bit;
-    uint8_t imr_val;
+    sio2681_chip_t *chip = channel->chip;
+    uint16_t bit;
+    uint16_t imr;
 
-    chip = channel->chip;
-
-    /* Write character to Transmit Holding Register */
+    /* 0x00E1D50C-0x00E1D50E */
     channel->regs[SIO2681_REG_THRA] = ch;
 
-    /*
-     * Calculate the TxRDY interrupt bit for this channel.
-     * Channel A uses bit 0, Channel B uses bit 4.
-     * The int_bit field contains the bit position (0 or 4).
-     */
-    int_bit = 1 << (channel->int_bit & 0x1F);
-
-    /* Check if TxRDY interrupt is already enabled */
-    imr_val = chip->imr_shadow;
-    if ((imr_val & int_bit) == 0) {
-        /* Enable TxRDY interrupt */
-        imr_val |= int_bit;
-        chip->imr_shadow = imr_val;
-        chip->regs[SIO2681_REG_IMR] = imr_val;
+    /* 0x00E1D514-0x00E1D526: bset.l numbers bits modulo 32 */
+    imr = chip->imr_shadow;
+    bit = (uint16_t)(1u << (channel->int_bit & 0x1F));
+    if ((imr & bit) == 0) {
+        /* 0x00E1D528-0x00E1D530: only the low byte of the word reaches memory */
+        imr |= bit;
+        chip->imr_shadow = (uint8_t)imr;
+        chip->regs[SIO2681_REG_IMR] = (uint8_t)imr;
     }
 }

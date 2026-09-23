@@ -104,20 +104,24 @@ extern uint32_t SIO_$SPIN_LOCK;
 void SIO_DELAY_RESTART(time_$callback_arg_t arg);
 
 /*
- * sio_$set_break - Set or clear break state on serial line
+ * sio_$set_break - Set or clear the break state of a line
  *
- * Under spin lock, modifies the line status flags at offset 0x75:
- *   enable < 0: clear bit 0, set bit 3 (break active)
- *   enable >= 0: clear bit 3 (break inactive)
- * Then calls through the output_start vtable entry (offset 0x48).
+ * Under SIO_$SPIN_LOCK: enable < 0 clears SIO_XMIT_ACTIVE and sets
+ * SIO_STATE_BREAK_ACTIVE, enable >= 0 clears SIO_STATE_BREAK_ACTIVE (byte
+ * ops on (0x75,An), the low byte of state).  Then calls the driver's
+ * set_break entry (+0x48) with (context, enable).
+ *
+ * Module-local (no map symbol); the only callers are the two in
+ * SIO_$K_TIMED_BREAK.  The lock is reached through the caller's A5 - see
+ * sio/set_break.c.
  *
  * Parameters:
  *   desc   - SIO descriptor
- *   enable - Negative to enable break, non-negative to disable
+ *   enable - Domain boolean: negative to raise break, else drop it
  *
- * Original address: 0x00e67e86
+ * Original address: 0x00e67e86 (90 bytes)
  */
-void sio_$set_break(sio_desc_t *desc, uint8_t enable);
+void sio_$set_break(sio_desc_t *desc, int8_t enable);
 
 /*
  * SIO_$INIT_DESC / SIO_$INIT_DTTE / SIO_$INIT_DRAIN_HANDLER / SIO_$INIT_LINE

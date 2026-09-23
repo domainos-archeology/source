@@ -1,15 +1,13 @@
 /*
- * IIC_$EXISTS - Check if IIC hardware exists
+ * IIC_$EXISTS - Is the internet interface controller present?
  *
- * Checks whether the IIC bus controller hardware is present in the system.
- * In this system configuration, the IIC hardware is not present.
+ * Stub in this SAU2 image: always returns false.  The `link.w A6,-0x4`
+ * reserves a local the stub never uses.
  *
- * Original address: 00e70ab0
- * Original size: 10 bytes
+ * Original address: 0x00E70AB0, size 10 bytes (SAU2 map: IIC module)
  *
- * Assembly:
  *   00e70ab0    link.w A6,-0x4
- *   00e70ab4    clr.b D0b            ; return false (0)
+ *   00e70ab4    clr.b D0b                 ; result = false
  *   00e70ab6    unlk A6
  *   00e70ab8    rts
  */
@@ -18,5 +16,6 @@
 
 boolean IIC_$EXISTS(void)
 {
-    return false;  /* IIC hardware not present */
+    /* 0x00E70AB4 */
+    return false;
 }

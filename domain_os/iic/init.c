@@ -1,13 +1,10 @@
 /*
- * IIC_$INIT - Initialize the IIC subsystem
+ * IIC_$INIT - Initialize the internet interface controller
  *
- * Performs initialization of the IIC bus controller. In this system
- * configuration, the IIC hardware is not present, so this is a no-op stub.
+ * Stub in this SAU2 image: the entry point is a bare `rts`.
  *
- * Original address: 00e70a54
- * Original size: 2 bytes (just RTS)
+ * Original address: 0x00E70A54, size 2 bytes (SAU2 map: IIC module)
  *
- * Assembly:
  *   00e70a54    rts
  */
 
@@ -15,6 +12,5 @@
 
 void IIC_$INIT(void)
 {
-    /* No-op stub - IIC hardware not present in this system */
-    return;
+    /* 0x00E70A54: rts */
 }

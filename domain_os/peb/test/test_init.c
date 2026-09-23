@@ -165,7 +165,7 @@ static void reset(void)
     ec_init_arg = NULL;
 
     /* the constant cells must survive a run unchanged */
-    peb_probe_type = 0x0001;
+    peb_$const_word_1 = 0x0001;
     peb_probe_addr = 0x00FF7000;
 
     /* route target VAs (the 0x2C / 0x70 vectors) into our own arena */
@@ -185,7 +185,7 @@ static void *vector_at(uint32_t va)
 TEST(probe_constant_cell_values)
 {
     reset();
-    ASSERT_EQ(0x0001, peb_probe_type);          /* 0x00E31DCE: 00 01 */
+    ASSERT_EQ(0x0001, peb_$const_word_1);          /* 0x00E31DCE: 00 01 */
     ASSERT_EQ(0x00FF7000, peb_probe_addr);      /* 0x00E31DD0: 00 ff 70 00 */
 }
 
@@ -196,12 +196,12 @@ TEST(io_probe_gets_both_cells_by_address)
     PEB_$INIT();
 
     ASSERT_EQ(1, probe_calls);
-    ASSERT_PTR_EQ(&peb_probe_type, probe_type_arg);
+    ASSERT_PTR_EQ(&peb_$const_word_1, probe_type_arg);
     ASSERT_PTR_EQ(&peb_probe_addr, probe_addr_arg);
     ASSERT_EQ(0x0001, *(const uint16_t *)probe_type_arg);
     ASSERT_EQ(0x00FF7000, *(const uint32_t *)probe_addr_arg);
     /* the cells are not modified by the run */
-    ASSERT_EQ(0x0001, peb_probe_type);
+    ASSERT_EQ(0x0001, peb_$const_word_1);
     ASSERT_EQ(0x00FF7000, peb_probe_addr);
 }
 

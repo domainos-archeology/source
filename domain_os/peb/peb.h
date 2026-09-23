@@ -115,6 +115,18 @@ _Static_assert(__builtin_offsetof(peb_fp_state_t, instr_counter) == 0x18, "peb_f
 /* WCS (Writable Control Store) base address */
 #define PEB_WCS_BASE ((volatile uint16_t *)0xFF7800)
 
+/* Byte 0x3FC of the PEB_CTL page (0x00FF73FC): PEB_$LOAD_WCS reads it once
+ * after enabling the board (0x00E3226A) and discards the value. */
+#define PEB_CTL_PAGE_BYTE_3FC (*(volatile uint8_t *)0xFF73FC)
+
+/*
+ * PEB register page at virtual address 0x7000: PEB_$LOAD_REGS and
+ * PEB_$UNLOAD_REGS address the board's data/status/control registers as
+ * byte offsets from this base (a local holds #0x7000 in both routines,
+ * 0x00E5AE6A / 0x00E5AEB0), and PEB_$TOUCH's range check is 0x7000..0x73FF.
+ */
+#define PEB_REG_PAGE_7000 ((volatile uint8_t *)0x7000)
+
 /* Global PEB data area base (contains flags and state) */
 #define PEB_GLOBALS_BASE 0xE24C78
 
@@ -126,6 +138,7 @@ extern volatile uint16_t *peb_ctl_reg;
 extern volatile uint8_t *peb_status_byte;
 extern volatile uint32_t *peb_private_base;
 extern volatile uint16_t *peb_wcs_base;
+extern volatile uint8_t *peb_reg_page_7000;
 extern uint32_t peb_globals_base;
 extern uint32_t peb_wired_data_addr;
 
@@ -134,6 +147,8 @@ extern uint32_t peb_wired_data_addr;
 #define PEB_PRIVATE_BASE peb_private_base
 #define PEB_STATUS_OFFSET 0xF4
 #define PEB_WCS_BASE peb_wcs_base
+#define PEB_CTL_PAGE_BYTE_3FC (((volatile uint8_t *)peb_ctl_reg)[0x3FC])
+#define PEB_REG_PAGE_7000 peb_reg_page_7000
 #define PEB_GLOBALS_BASE peb_globals_base
 #define PEB_WIRED_DATA_ADDR peb_wired_data_addr
 #endif
