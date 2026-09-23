@@ -67,22 +67,32 @@ typedef struct msg_$time_s {
 /* Initialize MSG subsystem */
 void MSG_$INIT(void);
 
-/* Open a message socket */
-void MSG_$OPEN(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
+/*
+ * Open a message socket - the two-argument SVC form (0x00E59198).
+ * Returns `seq D0b` on a local status: 0xFF (true) when the open succeeded.
+ */
+boolean MSG_$OPEN(msg_$socket_t *socket, int16_t *depth);
 
 /* Open a message socket (internal) */
 void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
 
-/* Close a message socket */
-void MSG_$CLOSE(msg_$socket_t *socket, status_$t *status_ret);
+/*
+ * Close a message socket - the one-argument SVC form (0x00E593D2).
+ * The status MSG_$CLOSEI produces goes to a local (`pea (-0x4,A6)`) and is
+ * never handed back.
+ */
+void MSG_$CLOSE(msg_$socket_t *socket);
 
 /* Close a message socket (internal) */
 void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret);
 
-/* Allocate a specific socket number (returns true on success) */
-int8_t MSG_$ALLOCATE(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
+/*
+ * Allocate a message socket - the two-argument SVC form (0x00E592CA).
+ * Returns `seq D0b` on a local status: 0xFF (true) when a socket was found.
+ */
+boolean MSG_$ALLOCATE(msg_$socket_t *socket, int16_t *depth);
 
-/* Allocate a specific socket number (internal) */
+/* Allocate a free user socket (internal) */
 void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret);
 
 /*

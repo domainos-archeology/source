@@ -10,6 +10,11 @@
  * Original addresses:
  *   MSG_$WAIT:  0x00E59BA4 (28 bytes)
  *   MSG_$WAITI: 0x00E59BC0 (282 bytes)
+ * Both in the map's MSG_UNWIRED object at 0xE5911C (size 0x100C).
+ * Re-verified instruction by instruction against 0x00E59BA4-0x00E59BBE and
+ * 0x00E59BC0-0x00E59CD8: the two-argument SVC form with its local status
+ * and `seq D0b`, the zero-extended timeout word, the three-way EC_$WAIT and
+ * its 0/1/2/other dispatch (other leaves the status untouched).
  */
 
 #include "msg/msg_internal.h"

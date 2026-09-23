@@ -41,23 +41,22 @@ ring_global_t RING_$CTL;
 ring_$stats_t RING_$DATA[RING_MAX_UNITS];
 
 /*
- * Network UID for ring interface.
- * This is the public UID that identifies the ring network.
+ * RING_$NETWORK_UID - the ring network's UID.
+ *
+ * SAU2 map: `E1747C RING_$NETWORK_UID`, one of the canned UIDs in the
+ * OS_WIRED uid table (OS_PG_FILE_$UID 0xE173CC .. ).  Image bytes at
+ * 0x00E1747C: 00 00 07 00 00 00 00 00, i.e. { high = 0x00000700, low = 0 }.
+ * It is a constant in the code image; RING_$INIT copies it into
+ * RING_$CTL.network_uid (`movea.l #0xe1747c,A1 / move.l (A1)+,(0x560,A0) /
+ * move.l (A1)+,(0x564,A0)` at 0x00E2FAFA-0x00E2FB10, A0 = 0xE86400).
+ *
+ * Earlier versions of this file split it into a "template" plus a separate
+ * `ring_$network_uid_storage` at 0xE86960 - that address is RING_$CTL +
+ * 0x560, not a second cell.
+ *
+ * Original address: 0x00E1747C
  */
-uid_t RING_$NETWORK_UID;
-
-/*
- * Template UID for initialization.
- * Located at 0x00E1747C on original platform.
- * Copied to RING_$NETWORK_UID during init.
- */
-uid_t RING_$NETWORK_UID_TEMPLATE = UID_CONST(0x00000700, 0);
-
-/*
- * Global network UID storage (referenced by RING_$INIT).
- * Located at 0x00E86960 on original platform.
- */
-uid_t ring_$network_uid_storage;
+uid_t RING_$NETWORK_UID = UID_CONST(0x00000700, 0);
 
 /* The route port array (0x00E2E0A0) is ROUTE_$PORT_ARRAY in route/route_data.c */
 

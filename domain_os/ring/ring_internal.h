@@ -103,11 +103,8 @@ extern volatile uint16_t ring_$dma_chan1_count_cell;
  * ============================================================================
  */
 
-/* Ring network UID (copy for initialization), at 0x00E1747C */
-extern uid_t RING_$NETWORK_UID_TEMPLATE;
-
-/* Global network UID storage written by RING_$INIT, at 0x00E86960 */
-extern uid_t ring_$network_uid_storage;
+/* RING_$NETWORK_UID (0x00E1747C) is declared in ring/ring.h; RING_$INIT copies
+ * it into RING_$CTL.network_uid (0xE86960 = RING_$CTL + 0x560). */
 
 /* Device type for ring controller */
 extern uint16_t ring_dcte_ctype_net;

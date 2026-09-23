@@ -1,139 +1,98 @@
 /*
- * XNS IDP Checksum Functions
+ * xns/idp_checksum.c - XNS_IDP_$CHECKSUM / XNS_IDP_$HOP_AND_SUM, portable model
  *
- * Implementation of the XNS IDP checksum algorithm. The XNS checksum
- * uses one's complement addition with end-around carry, followed by
- * a left rotation of the result after each word is added.
+ * Original addresses (map segment `D E2B850 XNS_IDP_ASM size = 4C`):
+ *   XNS_IDP_$CHECKSUM:    0x00E2B850 (34 bytes)
+ *   XNS_IDP_$HOP_AND_SUM: 0x00E2B872 (40 bytes)
  *
- * Original addresses:
- *   XNS_IDP_$CHECKSUM:   0x00E2B850
- *   XNS_IDP_$HOP_AND_SUM: 0x00E2B872
+ * On m68k both routines are hand-written assembly - no link frame, the
+ * arguments read straight off the stack at (4,SP)/(8,SP) and (4,SP)/(6,SP),
+ * `rts` with the result in D0.w - and are emitted verbatim in
+ * xns/sau2/idp_checksum.s (byte-identical to the image), so this file
+ * compiles to nothing there.  On every other target it reproduces the same
+ * arithmetic, and the host tests exercise it.
+ *
+ * XNS_IDP_$CHECKSUM (0x00E2B850-0x00E2B870):
+ *   moveq #0,D0 / movea.l (4,SP),A0 / move.w (8,SP),D1 / subq.w #1,D1
+ *   loop: add.w (A0)+,D0 / bcc +2 / addq.w #1,D0 / rol.w #1,D0 / dbf D1,loop
+ *   cmp.w #-1,D0 / bne +2 / moveq #0,D0 / rts
+ *
+ * XNS_IDP_$HOP_AND_SUM (0x00E2B872-0x00E2B898):
+ *   move.w (6,SP),D1 / subq.w #3,D1 / asr.w #1,D1 / and.w #0xf,D1
+ *   move.w #0x100,D0 / tst.w D1 / beq +2 / rol.w D1,D0
+ *   add.w (4,SP),D0 / bcc +2 / addq.w #1,D0
+ *   cmp.w #-1,D0 / bne +2 / moveq #0,D0 / rts
  */
 
 #include "xns/xns_internal.h"
 
+#if !defined(ARCH_M68K)
+
 /*
- * XNS_IDP_$CHECKSUM - Calculate IDP checksum
+ * XNS_IDP_$CHECKSUM - Calculate the IDP checksum
  *
- * Computes the XNS IDP checksum using the following algorithm:
- *   1. Initialize sum to 0
- *   2. For each 16-bit word in the data:
- *      a. Add word to sum using one's complement addition (add carry back)
- *      b. Rotate sum left by 1 bit
- *   3. If result is 0xFFFF, return 0 (0xFFFF means "no checksum")
+ * One's-complement sum with end-around carry, rotated left one bit after
+ * every word.  `subq.w #1` + `dbf` runs word_count times (word_count == 0
+ * runs 0x10000 times, as on the target).  0xFFFF ("no checksum") becomes 0.
  *
- * Assembly analysis (0x00E2B850):
- *   moveq #0x0,D0              ; sum = 0
- *   movea.l (0x4,SP),A0        ; A0 = data pointer
- *   move.w (0x8,SP),D1w        ; D1 = word_count
- *   subq.w #0x1,D1w            ; D1 = word_count - 1 (for dbf)
- * loop:
- *   add.w (A0)+,D0w            ; sum += *data++
- *   bcc.b skip                 ; if no carry, skip
- *   addq.w #0x1,D0w            ; sum += 1 (end-around carry)
- * skip:
- *   rol.w #0x1,D0w             ; sum = rotate_left(sum, 1)
- *   dbf D1w,loop               ; loop while D1 >= 0
- *   cmp.w #-0x1,D0w            ; if sum == 0xFFFF
- *   bne.b done
- *   moveq #0x0,D0              ; sum = 0
- * done:
- *   rts
+ * @param data          Pointer to the words to sum
+ * @param word_count    Number of 16-bit words
  *
- * @param data          Pointer to data (must be word-aligned)
- * @param word_count    Number of 16-bit words to checksum
- *
- * @return Checksum value, or 0 if computed checksum is 0xFFFF
+ * @return Checksum, in D0.w
  */
 uint16_t XNS_IDP_$CHECKSUM(uint16_t *data, int16_t word_count)
 {
-    uint16_t sum = 0;
-    int16_t count = word_count - 1;
+    uint16_t sum = 0;                                /* moveq #0,D0        */
+    uint16_t count = (uint16_t)(word_count - 1);     /* subq.w #1,D1       */
 
     do {
-        uint16_t word = *data++;
-        uint16_t new_sum = sum + word;
-
-        /* Handle one's complement carry (end-around carry) */
-        if (new_sum < sum) {
-            new_sum++;
+        uint32_t wide = (uint32_t)sum + *data++;     /* add.w (A0)+,D0     */
+        sum = (uint16_t)wide;
+        if (wide & 0x10000u) {                       /* bcc / addq.w #1    */
+            sum++;
         }
+        sum = (uint16_t)((sum << 1) | (sum >> 15));  /* rol.w #1,D0        */
+    } while (count-- != 0);                          /* dbf D1             */
 
-        /* Rotate left by 1 bit */
-        sum = (new_sum << 1) | (new_sum >> 15);
-        count--;
-    } while (count >= 0);
-
-    /* 0xFFFF is reserved to mean "no checksum", so return 0 instead */
-    if (sum == 0xFFFF) {
+    if (sum == 0xFFFF) {                             /* cmp.w #-1 / moveq  */
         sum = 0;
     }
-
     return sum;
 }
 
 /*
- * XNS_IDP_$HOP_AND_SUM - Calculate hop count contribution to checksum
+ * XNS_IDP_$HOP_AND_SUM - Fold an incremented hop count into a checksum
  *
- * When forwarding an IDP packet, the hop count is incremented. This
- * function computes the checksum adjustment needed to account for the
- * hop count change without recomputing the entire checksum.
+ * Adds 0x100 rotated left by ((hop_offset - 3) >> 1) & 0xF to current_sum
+ * with end-around carry; 0xFFFF becomes 0.
  *
- * The algorithm:
- *   1. Calculate rotation count based on hop offset position in packet
- *      rotation = ((hop_offset - 3) >> 1) & 0x0F
- *   2. Compute 0x100 rotated left by that amount
- *   3. Add to current sum with end-around carry
- *   4. Handle 0xFFFF -> 0 conversion
+ * @param current_sum   The packet's current checksum
+ * @param hop_offset    Word offset of the hop-count byte's word
  *
- * Assembly analysis (0x00E2B872):
- *   move.w (0x6,SP),D1w        ; D1 = hop_offset
- *   subq.w #0x3,D1w            ; D1 = hop_offset - 3
- *   asr.w #0x1,D1w             ; D1 = (hop_offset - 3) / 2
- *   and.w #0xf,D1w             ; D1 = D1 & 0x0F
- *   move.w #0x100,D0w          ; D0 = 0x100
- *   tst.w D1w                  ; if D1 == 0
- *   beq.b skip_rot             ; skip rotation
- *   rol.w D1,D0w               ; D0 = rotate_left(0x100, D1)
- * skip_rot:
- *   add.w (0x4,SP),D0w         ; D0 = D0 + current_sum
- *   bcc.b no_carry             ; if no carry, skip
- *   addq.w #0x1,D0w            ; D0 += 1 (end-around carry)
- * no_carry:
- *   cmp.w #-0x1,D0w            ; if D0 == 0xFFFF
- *   bne.b done
- *   moveq #0x0,D0              ; D0 = 0
- * done:
- *   rts
- *
- * @param current_sum   Current checksum value
- * @param hop_offset    Offset to hop count field (typically 5 for transport_ctl)
- *
- * @return Updated checksum value
+ * @return Updated checksum, in D0.w
  */
 int16_t XNS_IDP_$HOP_AND_SUM(uint16_t current_sum, int16_t hop_offset)
 {
-    /* Calculate rotation count from hop offset */
-    uint16_t rotation = ((hop_offset - 3) >> 1) & 0x0F;
+    uint16_t rotation = (uint16_t)(((int16_t)(hop_offset - 3) >> 1) & 0x0F);
+    uint16_t contribution = 0x100;                   /* move.w #0x100,D0   */
+    uint32_t wide;
+    uint16_t sum;
 
-    /* Start with 0x100 (the increment to hop count) */
-    uint16_t contribution = 0x100;
-
-    /* Rotate left by the computed amount (unless zero) */
-    if (rotation != 0) {
-        contribution = (contribution << rotation) | (contribution >> (16 - rotation));
+    if (rotation != 0) {                             /* tst.w / beq        */
+        contribution = (uint16_t)((contribution << rotation)
+                                  | (contribution >> (16 - rotation)));
     }
 
-    /* Add to current sum with end-around carry */
-    int16_t new_sum = (int16_t)(current_sum + contribution);
-    if ((uint16_t)new_sum < current_sum) {
-        new_sum++;
+    wide = (uint32_t)contribution + current_sum;     /* add.w (4,SP),D0    */
+    sum = (uint16_t)wide;
+    if (wide & 0x10000u) {                           /* bcc / addq.w #1    */
+        sum++;
     }
 
-    /* 0xFFFF -> 0 conversion */
-    if (new_sum == -1) {
-        new_sum = 0;
+    if (sum == 0xFFFF) {                             /* cmp.w #-1 / moveq  */
+        sum = 0;
     }
-
-    return new_sum;
+    return (int16_t)sum;
 }
+
+#endif /* !ARCH_M68K */

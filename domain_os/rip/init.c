@@ -12,6 +12,13 @@
  *
  * Frame: `link.w A6,-0x90` + a seven-register movem (0x1C bytes), so the
  * epilogue is `movem.l (-0xac,A6)` (0x00E2FDE0).
+ *
+ * Re-verified instruction by instruction against 0x00E2FBD0-0x00E2FDE8
+ * (2026-09-22): the three ML_$EXCLUSION_INITs through the literal base, the
+ * fifteen PKT_$SEND_INTERNET pushes and both constant cells, the D3 load
+ * before the status test, the six-longword EC_$WAIT with its NIL terminator
+ * and `seq`, the app_$receive_rec_t offsets, and the two RIP_$UPDATE_INT
+ * calls (0x14 bytes each: byte `flags` pushed as a word).
  */
 
 #include "rip/rip_internal.h"

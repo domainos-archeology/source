@@ -1,273 +1,275 @@
 /*
- * RIP_$TABLE and RIP_$TABLE_D - Routing table access functions
+ * RIP_$TABLE_D and RIP_$TABLE - Routing table entry access
  *
- * These functions provide read/write access to routing table entries.
- * RIP_$TABLE_D is the detailed version with full port identification.
- * RIP_$TABLE is a simplified wrapper for common use cases.
+ * RIP_$TABLE_D reads or writes one 44-byte routing table entry, with the
+ * route's port identified by the port record's (port_type, socket) pair.
+ * RIP_$TABLE is the compact SVC form over it: 16-byte records, ports
+ * identified by index, always the standard route slot.
  *
  * Original addresses:
- *   RIP_$TABLE_D: 0x00E68E2C
- *   RIP_$TABLE:   0x00E68F90
+ *   RIP_$TABLE_D: 0x00E68E2C (356 bytes)
+ *   RIP_$TABLE:   0x00E68F90 (242 bytes)
+ * Both in the map's RIP_UNWIRED object at 0xE68864 (size 0x958).
+ * Re-emitted from the disassembly 0x00E68E2C-0x00E68F8E and
+ * 0x00E68F90-0x00E69080.
  */
 
 #include "rip/rip_internal.h"
 #include "misc/string.h"
 
 /*
+ * The route-type boolean RIP_$TABLE passes to RIP_$TABLE_D on both paths:
+ * `pea (0xce,PC)` at 0x00E68FB2 and `pea (0x12,PC)` at 0x00E6906E both
+ * resolve to 0x00E69082, the zero word after RIP_$TABLE's `rts`
+ * (`gsk read 0x00E69080 8`: 4e 75 00 00 4e 56 ff f8).  False = the
+ * standard route slot.
+ */
+static const boolean rip_$table_std_route = 0;     /* 0x00E69082 */
+
+/*
  * RIP_$TABLE_D - Direct table entry access
  *
- * Reads or writes a routing table entry with full detail, including
- * port network and socket identification.
+ * Parameters (five, at (0x8,A6)..(0x18,A6)):
+ *   op_flag    - Domain boolean, by reference: negative = read, else write
+ *   route_type - Domain boolean, by reference: negative = routes[1] (the
+ *                non-standard slot), else routes[0]
+ *   index      - pointer to the entry index word; MASKED IN PLACE to 0..63
+ *                (`and.w D0w,(A3)` at 0x00E68E54 / 0x00E68F6A)
+ *   buffer     - the rip_$table_d_buf_t record
+ *   status_ret - status, cleared on entry (0x00E68E46)
  *
- * Parameters:
- *   op_flag    - If *op_flag < 0, read; else write
- *   route_type - If *route_type < 0, non-standard route; else standard route
- *   index      - Pointer to entry index (0-63, masked to 6 bits)
- *   buffer     - Data buffer for read/write
- *   status_ret - Status return (0 = success)
- *
- * Read operation:
- *   Copies the entry at index to buffer, then looks up port info
- *   to fill in port_network and port_socket fields.
- *
- * Write operation:
- *   Uses ROUTE_$FIND_PORT to find the port index from buffer's
- *   port_network/port_socket, then writes the entry.
- *   Returns status_$internet_unknown_network_port if port not found.
+ * The write path builds the entry in an UNINITIALISED 44-byte local and
+ * copies all of it into the table (0x00E68F6C-0x00E68F82): the route slot
+ * the caller did not select is whatever the stack held, except that when
+ * the index word is >= 0x40 (signed) that other slot's flags byte is
+ * masked with 0x3F first (0x00E68EEA-0x00E68F02).  Reproduced as found.
  */
 void RIP_$TABLE_D(boolean *op_flag, boolean *route_type, uint16_t *index,
                   rip_$table_d_buf_t *buffer, status_$t *status_ret)
 {
-    rip_$entry_t local_entry;
-    rip_$route_t *route_ptr;
-    route_$port_t *port_info;
-    uint16_t masked_index;
-    int8_t port_idx;
-    int i;
+    rip_$entry_t   local_entry;     /* (-0x30,A6): NOT initialised          */
+    rip_$route_t  *route;           /* A0 / A4: &local_entry.routes[0 or 1] */
+    route_$port_t *port;            /* A4 in the read path                  */
+    int16_t        port_idx;        /* D0: ROUTE_$FIND_PORT result          */
 
-    *status_ret = 0;
+    /* 0x00E68E44-0x00E68E46 */
+    *status_ret = status_$ok;
 
+    /* 0x00E68E4C-0x00E68E4E: `tst.b (A4) / bpl` */
     if (*op_flag < 0) {
         /*
-         * READ OPERATION
-         *
-         * 1. Mask index to valid range (0-63)
-         * 2. Copy entire entry to local buffer
-         * 3. Select route based on route_type
-         * 4. Copy route data to output buffer
-         * 5. Look up port info if port is valid
+         * READ (0x00E68E52-0x00E68EE2)
          */
-        masked_index = *index & RIP_TABLE_MASK;
+        /* 0x00E68E52-0x00E68E54: *index &= 0x3F, written back. */
+        *index &= RIP_TABLE_MASK;
 
-        /* Copy 44 bytes (11 longwords) from table to local entry */
-        memcpy(&local_entry, &RIP_$INFO[masked_index], sizeof(rip_$entry_t));
+        /* 0x00E68E56-0x00E68E6E: 0xE263BC + index * 0x2C, eleven longwords
+         * into the local. */
+        memcpy(&local_entry, &RIP_$INFO[*index], sizeof(rip_$entry_t));
 
-        /* Output destination network */
+        /* 0x00E68E72: buffer->dest_network (+4) = entry.network */
         buffer->dest_network = local_entry.network;
 
-        /* Select route based on route_type flag */
+        /* 0x00E68E78-0x00E68E82: routes[1] at -0x18, routes[0] at -0x2C. */
         if (*route_type < 0) {
-            route_ptr = &local_entry.routes[1];  /* Non-standard route */
+            route = &local_entry.routes[1];
         } else {
-            route_ptr = &local_entry.routes[0];  /* Standard route */
+            route = &local_entry.routes[0];
         }
 
-        /* Copy nexthop address (10 bytes) */
-        buffer->nexthop_network = route_ptr->nexthop.network;
-        memcpy(buffer->nexthop_host, route_ptr->nexthop.host, 6);
+        /* 0x00E68E86-0x00E68E92: 4 + 4 + 2 bytes of nexthop to buffer + 8. */
+        buffer->nexthop_network = route->nexthop.network;
+        memcpy(buffer->nexthop_host, route->nexthop.host, 6);
 
-        /* Copy expiration */
-        buffer->expiration = route_ptr->expiration;
+        /* 0x00E68E94: buffer->expiration (+0) = route.expiration */
+        buffer->expiration = route->expiration;
 
-        /* Copy metric (stored as uint16_t, only low byte significant) */
-        buffer->metric = route_ptr->metric;
+        /* 0x00E68E96-0x00E68E9C: metric byte, zero-extended to the word. */
+        buffer->metric = (uint16_t)route->metric;
 
-        /* Extract state from upper 2 bits of flags */
-        buffer->state = (route_ptr->flags >> RIP_STATE_SHIFT) & 0x03;
+        /* 0x00E68EA0-0x00E68EAA: state = (flags & 0xC0) >> 6. */
+        buffer->state = (uint16_t)((route->flags & 0xC0) >> RIP_STATE_SHIFT);
 
-        /* Look up port info if port index is valid (0-7) */
-        if (route_ptr->port < ROUTE_$MAX_PORTS) {
-            port_info = ROUTE_$PORTP[route_ptr->port];
-            buffer->port_network = port_info->network;
-            buffer->port_socket = port_info->socket;
+        /* 0x00E68EAE-0x00E68EB8: port byte, `cmpi.w #0x7 / bhi`. */
+        if ((uint16_t)route->port <= 7) {
+            /* 0x00E68EBA-0x00E68ED0: ROUTE_$PORTP[port] (0xE26EE8 + port*4),
+             * then the port record's type word (+0x2E) and socket (+0x30). */
+            port = ROUTE_$PORTP[route->port];
+            buffer->port_network = port->port_type;
+            buffer->port_socket  = port->socket;
         } else {
-            /* Invalid port - return special marker value */
+            /* 0x00E68EDA: one longword 0x00010000 over both words. */
             buffer->port_network = 0x0001;
-            buffer->port_socket = 0x0000;
+            buffer->port_socket  = 0x0000;
         }
     } else {
         /*
-         * WRITE OPERATION
-         *
-         * 1. Find port index from port_network/port_socket
-         * 2. If not found, return error status
-         * 3. Select route based on route_type
-         * 4. Copy data from buffer to route
-         * 5. Write entry back to table
+         * WRITE (0x00E68EE6-0x00E68F82)
          */
-
-        /* Select route based on route_type flag */
+        /* 0x00E68EE6-0x00E68F0C: pick the slot; an index word >= 0x40
+         * (signed compare) masks the OTHER slot's flags byte in the
+         * uninitialised local. */
         if (*route_type < 0) {
-            route_ptr = &local_entry.routes[1];  /* Non-standard route */
-            /* Handle index overflow for non-standard routes */
-            if ((int16_t)*index > RIP_TABLE_MASK) {
-                /* Original code masks a byte in the entry for some reason */
-                /* This appears to be an artifact of the Pascal implementation */
+            if ((int16_t)*index >= 0x40) {
+                local_entry.routes[0].flags &= 0x3F;    /* (-0x1c,A6) */
             }
+            route = &local_entry.routes[1];             /* (-0x18,A6) */
         } else {
-            route_ptr = &local_entry.routes[0];  /* Standard route */
-            /* Handle index overflow for standard routes */
-            if ((int16_t)*index > RIP_TABLE_MASK) {
-                /* Similar handling for standard routes */
+            if ((int16_t)*index >= 0x40) {
+                local_entry.routes[1].flags &= 0x3F;    /* (-0x8,A6) */
             }
+            route = &local_entry.routes[0];             /* (-0x2c,A6) */
         }
 
-        /* Find port index by network/socket */
-        port_idx = ROUTE_$FIND_PORT(buffer->port_network, buffer->port_socket);
+        /* 0x00E68F0E-0x00E68F22: ROUTE_$FIND_PORT(port_network word,
+         * port_socket sign-extended to a longword). */
+        port_idx = ROUTE_$FIND_PORT(buffer->port_network,
+                                    (int32_t)(int16_t)buffer->port_socket);
 
-        if (port_idx == (int8_t)-1) {
-            /* Port not found - return error */
-            *status_ret = status_$internet_unknown_network_port;
+        /* 0x00E68F24: the result byte is stored into the slot BEFORE it is
+         * checked. */
+        route->port = (uint8_t)port_idx;
+
+        /* 0x00E68F28-0x00E68F3A: 0xFF means no such port. */
+        if ((uint8_t)port_idx == 0xFF) {
+            *status_ret = status_$internet_unknown_network_port;   /* 0x2B0003 */
             return;
         }
 
-        /* Copy entry from table to local buffer first */
-        masked_index = *index & RIP_TABLE_MASK;
-        memcpy(&local_entry, &RIP_$INFO[masked_index], sizeof(rip_$entry_t));
-
-        /* Re-select route_ptr after memcpy */
-        if (*route_type < 0) {
-            route_ptr = &local_entry.routes[1];
-        } else {
-            route_ptr = &local_entry.routes[0];
-        }
-
-        /* Update destination network */
+        /* 0x00E68F3C: entry.network = buffer->dest_network */
         local_entry.network = buffer->dest_network;
 
-        /* Update route data */
-        route_ptr->nexthop.network = buffer->nexthop_network;
-        memcpy(route_ptr->nexthop.host, buffer->nexthop_host, 6);
-        route_ptr->expiration = buffer->expiration;
-        route_ptr->port = (uint8_t)port_idx;
-        route_ptr->metric = (uint8_t)buffer->metric;
+        /* 0x00E68F42-0x00E68F4E: 4 + 4 + 2 bytes of nexthop from buffer + 8. */
+        route->nexthop.network = buffer->nexthop_network;
+        memcpy(route->nexthop.host, buffer->nexthop_host, 6);
 
-        /* Update state in flags (preserve lower 6 bits, set upper 2) */
-        route_ptr->flags = (route_ptr->flags & 0x3F) |
-                           ((buffer->state & 0x03) << RIP_STATE_SHIFT);
+        /* 0x00E68F50: expiration */
+        route->expiration = buffer->expiration;
 
-        /* Write entry back to table */
-        memcpy(&RIP_$INFO[masked_index], &local_entry, sizeof(rip_$entry_t));
+        /* 0x00E68F52: metric = low byte of buffer->metric (+0x17). */
+        route->metric = (uint8_t)buffer->metric;
+
+        /* 0x00E68F58-0x00E68F64: flags = (flags & 0x3F) | (state byte << 6). */
+        route->flags &= 0x3F;
+        route->flags |= (uint8_t)((uint8_t)buffer->state << RIP_STATE_SHIFT);
+
+        /* 0x00E68F68-0x00E68F6A: *index &= 0x3F, written back. */
+        *index &= RIP_TABLE_MASK;
+
+        /* 0x00E68F6C-0x00E68F82: the whole local, eleven longwords, into
+         * 0xE263BC + index * 0x2C. */
+        memcpy(&RIP_$INFO[*index], &local_entry, sizeof(rip_$entry_t));
     }
+
+    /* 0x00E68F86-0x00E68F8E */
 }
 
 /*
- * RIP_$TABLE - Simplified table entry access
+ * RIP_$TABLE - Compact table entry access
  *
- * Wrapper around RIP_$TABLE_D that provides a more compact interface.
- * Always uses standard routes (route_type = 0).
+ * Parameters (three, at (0x8,A6)..(0x10,A6)):
+ *   op_flag - Domain boolean, by reference: negative = read, else write
+ *   index   - pointer to the entry index word (masked in place by TABLE_D)
+ *   buffer  - the 16-byte rip_$table_buf_t record
  *
- * Parameters:
- *   op_flag - If *op_flag < 0, read; else write
- *   index   - Entry index (for reads via TABLE_D)
- *   buffer  - Compact data buffer
- *
- * Read operation:
- *   Calls TABLE_D to read the entry, then reformats into compact buffer.
- *   The port_index is determined by looking up the port_network/port_socket
- *   from the TABLE_D result.
- *
- * Write operation:
- *   Only accepts port_index < 8. Uses port_index to look up the port
- *   structure and get network/socket, then calls TABLE_D.
+ * The intermediate rip_$table_d_buf_t at (-0x20,A6) is uninitialised.  On
+ * the read path every field consumed is one TABLE_D wrote; on the write
+ * path nexthop_host[0..1] and the top twelve bits of nexthop_host[2..5]
+ * are never written and go to TABLE_D as whatever the stack held.
+ * Reproduced as found.
  */
 void RIP_$TABLE(boolean *op_flag, uint16_t *index, rip_$table_buf_t *buffer)
 {
-    rip_$table_d_buf_t table_d_buf;
-    route_$port_t *port_info;
-    status_$t status;
-    int8_t route_type_flag = 0;  /* Always use standard routes */
+    rip_$table_d_buf_t d_buf;       /* (-0x20,A6): NOT initialised */
+    status_$t          status;      /* (-0x24,A6): never read      */
+    route_$port_t     *port;        /* A4                          */
+    uint32_t           host_low;    /* the longword at d_buf + 0xE */
 
+    /* 0x00E68FA4-0x00E68FA6: `tst.b (A2) / bpl` */
     if (*op_flag < 0) {
         /*
-         * READ OPERATION
-         *
-         * 1. Call TABLE_D to read the full entry
-         * 2. Reformat into compact buffer format
+         * READ (0x00E68FA8-0x00E69006)
          */
-        RIP_$TABLE_D(op_flag, &route_type_flag, index, &table_d_buf, &status);
+        /* 0x00E68FA8-0x00E68FBC: RIP_$TABLE_D(op_flag, &0 (0x00E69082),
+         * index, &d_buf, &status). */
+        RIP_$TABLE_D(op_flag, (boolean *)&rip_$table_std_route, index,
+                     &d_buf, &status);
 
-        /* Output destination network */
-        buffer->dest_network = table_d_buf.dest_network;
+        /* 0x00E68FC0: buffer->dest_network = d_buf.dest_network (+4) */
+        buffer->dest_network = d_buf.dest_network;
 
-        /*
-         * Extract lower 20 bits of nexthop host address.
-         * The nexthop_host is 6 bytes; we take bytes [2-5] (the lower 4 bytes)
-         * and mask to 20 bits.
-         */
-        buffer->nexthop_host_low = ((uint32_t)table_d_buf.nexthop_host[2] << 24 |
-                                    (uint32_t)table_d_buf.nexthop_host[3] << 16 |
-                                    (uint32_t)table_d_buf.nexthop_host[4] << 8 |
-                                    (uint32_t)table_d_buf.nexthop_host[5]) & 0xFFFFF;
+        /* 0x00E68FC4-0x00E68FCE: the longword at d_buf + 0xE, i.e.
+         * nexthop_host[2..5] big-endian, masked to 20 bits. */
+        host_low = ((uint32_t)d_buf.nexthop_host[2] << 24)
+                 | ((uint32_t)d_buf.nexthop_host[3] << 16)
+                 | ((uint32_t)d_buf.nexthop_host[4] << 8)
+                 |  (uint32_t)d_buf.nexthop_host[5];
+        buffer->nexthop_host_low = host_low & 0xFFFFF;
 
-        /* Output expiration */
-        buffer->expiration = table_d_buf.expiration;
+        /* 0x00E68FD2: expiration (+0) */
+        buffer->expiration = d_buf.expiration;
 
-        /* Look up port index from network/socket */
+        /* 0x00E68FD8-0x00E68FEC: ROUTE_$FIND_PORT(port_network word,
+         * port_socket sign-extended); the result byte is the port index. */
         buffer->port_index = (uint8_t)ROUTE_$FIND_PORT(
-            table_d_buf.port_network, table_d_buf.port_socket);
+            d_buf.port_network, (int32_t)(int16_t)d_buf.port_socket);
 
-        /* Copy metric */
-        buffer->metric = (uint8_t)table_d_buf.metric;
+        /* 0x00E68FF0: metric = low byte of d_buf.metric (+0x17). */
+        buffer->metric = (uint8_t)d_buf.metric;
 
-        /* Encode state in upper 2 bits of state_flags */
-        buffer->state_flags = (buffer->state_flags & 0x3F) |
-                              ((table_d_buf.state & 0x03) << 6);
+        /* 0x00E68FF6-0x00E69002: state_flags = (state_flags & 0x3F) |
+         * (low byte of d_buf.state (+0x19) << 6). */
+        buffer->state_flags &= 0x3F;
+        buffer->state_flags |= (uint8_t)((uint8_t)d_buf.state << 6);
     } else {
         /*
-         * WRITE OPERATION
-         *
-         * 1. Check that port_index is valid (< 8)
-         * 2. Look up port info to get network/socket
-         * 3. Reformat compact buffer to TABLE_D format
-         * 4. Call TABLE_D to write
+         * WRITE (0x00E69008-0x00E69074)
          */
-        if (buffer->port_index >= ROUTE_$MAX_PORTS) {
-            /* Invalid port index - silently ignore */
+        /* 0x00E69008-0x00E69012: port_index byte, `cmpi.w #0x7 / bhi` -
+         * an invalid index is silently ignored. */
+        if ((uint16_t)buffer->port_index > 7) {
             return;
         }
 
-        /* Get port info from port index */
-        port_info = ROUTE_$PORTP[buffer->port_index];
+        /* 0x00E69014-0x00E6901A */
+        d_buf.expiration   = buffer->expiration;
+        d_buf.dest_network = buffer->dest_network;
 
-        /* Build TABLE_D buffer */
-        table_d_buf.expiration = buffer->expiration;
-        table_d_buf.dest_network = buffer->dest_network;
+        /* 0x00E6901E-0x00E69030: the low 20 bits of the longword at
+         * d_buf + 0xE are replaced, the top 12 kept (uninitialised). */
+        host_low = ((uint32_t)d_buf.nexthop_host[2] << 24)
+                 | ((uint32_t)d_buf.nexthop_host[3] << 16)
+                 | ((uint32_t)d_buf.nexthop_host[4] << 8)
+                 |  (uint32_t)d_buf.nexthop_host[5];
+        host_low = (host_low & 0xFFF00000u) | (buffer->nexthop_host_low & 0xFFFFF);
+        d_buf.nexthop_host[2] = (uint8_t)(host_low >> 24);
+        d_buf.nexthop_host[3] = (uint8_t)(host_low >> 16);
+        d_buf.nexthop_host[4] = (uint8_t)(host_low >> 8);
+        d_buf.nexthop_host[5] = (uint8_t)host_low;
 
-        /*
-         * Reconstruct nexthop from port info and compact buffer.
-         * The nexthop network comes from port structure.
-         * The nexthop host lower bytes come from the compact buffer.
-         */
-        table_d_buf.nexthop_network = port_info->network;
-        table_d_buf.port_network = port_info->network;
-        table_d_buf.port_socket = port_info->socket;
+        /* 0x00E69034-0x00E6903A: metric byte, zero-extended. */
+        d_buf.metric = (uint16_t)buffer->metric;
 
-        /* Reconstruct nexthop host from stored lower 20 bits */
-        table_d_buf.nexthop_host[0] = 0;
-        table_d_buf.nexthop_host[1] = 0;
-        table_d_buf.nexthop_host[2] = (buffer->nexthop_host_low >> 24) & 0x0F;
-        table_d_buf.nexthop_host[3] = (buffer->nexthop_host_low >> 16) & 0xFF;
-        table_d_buf.nexthop_host[4] = (buffer->nexthop_host_low >> 8) & 0xFF;
-        table_d_buf.nexthop_host[5] = buffer->nexthop_host_low & 0xFF;
+        /* 0x00E6903E-0x00E69048: state = (state_flags & 0xC0) >> 6. */
+        d_buf.state = (uint16_t)((buffer->state_flags & 0xC0) >> 6);
 
-        /* Copy metric */
-        table_d_buf.metric = buffer->metric;
+        /* 0x00E6904C-0x00E69056: the port RECORD, 0xE2E0A0 + index * 0x5C
+         * (ROUTE_$PORT_ARRAY, not the pointer table). */
+        port = &ROUTE_$PORT_ARRAY[buffer->port_index];
 
-        /* Extract state from upper 2 bits */
-        table_d_buf.state = (buffer->state_flags >> 6) & 0x03;
+        /* 0x00E6905A: nexthop_network (+8) = port->network */
+        d_buf.nexthop_network = port->network;
 
-        /* Call TABLE_D to write */
-        RIP_$TABLE_D(op_flag, &route_type_flag, index, &table_d_buf, &status);
+        /* 0x00E6905E: one longword from port + 0x2E over port_network and
+         * port_socket (+0x12, +0x14). */
+        d_buf.port_network = port->port_type;
+        d_buf.port_socket  = port->socket;
+
+        /* 0x00E69064-0x00E69074: RIP_$TABLE_D(op_flag, &0, index, &d_buf,
+         * &status). */
+        RIP_$TABLE_D(op_flag, (boolean *)&rip_$table_std_route, index,
+                     &d_buf, &status);
     }
+
+    /* 0x00E69078-0x00E69080 */
 }

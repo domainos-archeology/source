@@ -17,6 +17,12 @@
  * block against the disassembly for bead source-4nvz; every A6 displacement
  * the original uses is a named field of rip_$server_frame_t below.
  *
+ * Re-verified instruction by instruction on 2026-09-22 against
+ * 0x00E68864-0x00E68878 (RIP_$PACKET_LENGTH), 0x00E6887A-0x00E688C6
+ * (RIP_$SEND_UPDATES), 0x00E688C8-0x00E68A06 (RIP_$PROCESS_REQUEST) and
+ * 0x00E68A08-0x00E68E24 (RIP_$SERVER): frame displacements, every push
+ * order, the two preserved defects and the constant cells all hold.
+ *
  * The frame's two 32-bit virtual addresses (payload_va and hdr_va) go through
  * ARCH_PTR_TO_VA / ARCH_VA_TO_PTR: on m68k both are the identity cast, and a
  * host test can point ARCH_HOST_VA_BASE at its own arena so a 64-bit pointer

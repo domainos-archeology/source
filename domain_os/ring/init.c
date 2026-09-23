@@ -24,8 +24,8 @@
 
 /*
  * External data referenced by this function:
- *   RING_$NETWORK_UID_TEMPLATE (0x00E1747C), ring_$network_uid_storage
- *   (0x00E86960) - ring/ring_internal.h
+ *   RING_$NETWORK_UID (0x00E1747C, ring/ring.h) -> RING_$CTL.network_uid
+ *   (0x00E86960 = RING_$CTL + 0x560)
  *   ROUTE_$PORT_ARRAY (0x00E2E0A0, 0x5C bytes per entry) - route/route.h
  */
 
@@ -69,11 +69,12 @@ status_$t RING_$INIT(void *device_info)
     unit_data = &RING_$CTL.units[unit_num];
 
     /*
-     * Copy the network UID template to the global storage.
-     * This is done on each init, so all units share the same UID.
+     * 0x00E2FAFA-0x00E2FB10: copy RING_$NETWORK_UID (the constant at
+     * 0x00E1747C) into RING_$CTL.network_uid (+0x560).  Done on every
+     * init, so all units share the same UID.
      */
-    ring_$network_uid_storage.high = RING_$NETWORK_UID_TEMPLATE.high;
-    ring_$network_uid_storage.low = RING_$NETWORK_UID_TEMPLATE.low;
+    RING_$CTL.network_uid.high = RING_$NETWORK_UID.high;
+    RING_$CTL.network_uid.low = RING_$NETWORK_UID.low;
 
     /*
      * Store the device info pointer in the unit structure.

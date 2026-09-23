@@ -89,6 +89,8 @@ _Static_assert(sizeof(ec2_waiter_t) == 0x0C, "ec2_waiter_t size");
 /*
  * Status codes
  */
+#define status_$ec2_internal_table_exhausted            0x00180001
+#define status_$ec2_internal_error                      0x00180002
 #define status_$ec2_bad_event_count                     0x00180004
 #define status_$ec2_async_fault_while_waiting           0x00180003
 #define status_$ec2_unable_to_allocate_level_1_eventcount  0x00180005
@@ -388,20 +390,22 @@ int32_t EC2_$READ(ec2_$eventcount_t *ec);
 void EC2_$ADVANCE(ec2_$eventcount_t *ec, status_$t *status_ret);
 
 /*
- * EC2_$WAIT - Wait on multiple EC2s
+ * EC2_$WAIT - Wait on a list of level-2 eventcounts
  *
  * Parameters:
- *   ec - Array of EC2 pointers
- *   wait_vals - Array of wait values
- *   count - Pointer to count of ECs
- *   status_ret - Status return
+ *   ecs        - array of EC2 handles: each longword is either the address
+ *                of an ec2_$eventcount_t or an EC2 index (the scan at
+ *                0x00E4240A reads `(-0x4,A2)` and steps the cursor by 4)
+ *   wait_vals  - parallel array of wait values
+ *   count      - pointer to the list length word (at most 0x80)
+ *   status_ret - status return
  *
  * Returns:
- *   Index of satisfied EC2
+ *   1-based index of the satisfied entry, or 0 on a quit / bad count.
  *
  * Original address: 0x00e42358
  */
-int16_t EC2_$WAIT(ec2_$eventcount_t *ec, int32_t *wait_vals,
+int16_t EC2_$WAIT(ec2_$eventcount_t **ecs, int32_t *wait_vals,
                   int16_t *count, status_$t *status_ret);
 
 /*

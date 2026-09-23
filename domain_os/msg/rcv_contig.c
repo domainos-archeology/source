@@ -8,6 +8,12 @@
  * Original addresses:
  *   MSG_$RCV_CONTIG:  0x00E59756 (80 bytes)
  *   MSG_$RCV_CONTIGI: 0x00E597A6 (426 bytes)
+ * Both in the map's MSG_UNWIRED object at 0xE5911C (size 0x100C).
+ * Re-verified instruction by instruction against 0x00E59756-0x00E597A4 and
+ * 0x00E597A6-0x00E5994E: the record offsets (rec at A6-0x30: reply +0x00,
+ * data +0x04, data_pages +0x08, hdr_f06 +0x18, hdr_f12 +0x1C, flags_lo
+ * +0x28), the unsigned `bls` clamps, the signed `ble` min() and the
+ * low-word-only `andi.w #-0x400,D2w` (equivalent to & 0xFFFFFC00) all hold.
  */
 
 #include "msg/msg_internal.h"

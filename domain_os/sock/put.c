@@ -12,6 +12,15 @@
  *   SOCK_$PUT_INT_INT: 0x00E161F8
  *
  * Original source: Pascal, converted to C
+ *
+ * Re-verified instruction by instruction against 0x00E1614E-0x00E1618E,
+ * 0x00E16190-0x00E161F6 and 0x00E161F8-0x00E1633E (2026-09-22): the
+ * argument frames (socket word at 0x8, record at 0xA, flags byte at 0xE),
+ * the 0x18A0 view-pointer slot (slot 0 doubles as the spin lock), the
+ * `tst.w / ble`, `cmpi.w #0xe0 / bls` socket range, the bit-13 / bit-15 /
+ * `cmp.w (0x18,A0) / bls` admission tests, the unsigned queue_count <
+ * max_queue test, every netbuf-header store, the n_hops `dbf` copy, the
+ * tail linking and the four-page `cmp.l / ble` copy loop.
  */
 
 #include "sock/sock_internal.h"

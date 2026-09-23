@@ -8,6 +8,10 @@
  * Original addresses:
  *   MSG_$SAR:  0x00E59D52 (126 bytes)
  *   MSG_$SARI: 0x00E59DD4 (478 bytes)
+ * Both in the map's MSG_UNWIRED object at 0xE5911C (size 0x100C).
+ * Re-verified instruction by instruction against 0x00E59D52-0x00E59DCE and
+ * 0x00E59DD4-0x00E59FB0 (the 18-argument frame, the MSG_$$SEND push order,
+ * the three-way EC_$WAIT and its 0/1/2/other dispatch, the receive locals).
  */
 
 #include "msg/msg_internal.h"
@@ -211,23 +215,25 @@ void MSG_$SAR(int16_t *timeout,
               uint16_t *rcv_data_len_ret,
               status_$t *status_ret)
 {
-    uint8_t pkt_info[30];           /* A6-0x40 */
+    pkt_$info_t pkt_info;           /* A6-0x40: only 30 of its 32 bytes */
     msg_$hw_addr_t hw_addr;         /* A6-0x20 */
     int i;
 
-    /* 0xE59D5E: 7 longwords then a word out of msg_$data_t.send_template */
-    for (i = 0; i < 30; i++) {
-        pkt_info[i] = MSG_$DATA->send_template[i];
+    /* 0xE59D5E: 7 longwords then a word out of msg_$data_t.send_template
+     * (0x1E bytes; the record's last word is never copied and is left
+     * whatever the stack held). */
+    for (i = 0; i < 0x1E; i++) {
+        ((uint8_t *)&pkt_info)[i] = MSG_$DATA->send_template[i];
     }
 
-    /* 0xE59D6E: the caller's flags word overwrites the template's first */
-    pkt_info[0] = (uint8_t)(*flags >> 8);
-    pkt_info[1] = (uint8_t)(*flags & 0xFF);
+    /* 0xE59D6E-0xE59D72: the caller's flags word overwrites the template's
+     * first word - the same idiom as MSG_$SEND (0x00E59A50). */
+    pkt_info.flags = *flags;
 
     MSG_$SARI(timeout,
               (uint32_t *)&MSG_$SAR_TIMEOUT,    /* 0xE59DB6 */
               dest_node, dest_sock,
-              pkt_info,
+              &pkt_info,
               send_template, send_template_len,
               send_data, send_data_len,
               xmit_status_ret,
