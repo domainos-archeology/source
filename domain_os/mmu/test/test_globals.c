@@ -97,29 +97,11 @@ static void reset_globals(void)
 }
 
 /*
- * MMU_$INIT (0xE23D38): on a 68020 it writes the mask and BOTH shift words.
- * The shift words are separate 16-bit globals, not bytes inside the mask.
+ * MMU_$INIT (0xE23D38) is hand-written assembly - it saves A5 by hand,
+ * addresses its data block PC-relative and patches CACHE_$CLEAR's first
+ * word with its own `rts' opcode - so it lives in mmu/sau2/init.s and is
+ * not host-testable here.
  */
-static void test_init_sets_020_shifts(void)
-{
-    reset_globals();
-    mmu_m68020 = 0xFF00;        /* boolean lives in the high byte */
-    MMU_$INIT();
-    ASSERT_EQ(0x3FFC00, VA_TO_PTT_OFFSET_MASK);
-    ASSERT_EQ(1, MMU_$VA_SHIFT);
-    ASSERT_EQ(6, MMU_$PTT_SHIFT);
-}
-
-/* On a 68010 MMU_$INIT leaves the shipped defaults alone. */
-static void test_init_leaves_010_defaults(void)
-{
-    reset_globals();
-    mmu_m68020 = 0;
-    MMU_$INIT();
-    ASSERT_EQ(0x0FFC00, VA_TO_PTT_OFFSET_MASK);
-    ASSERT_EQ(3, MMU_$VA_SHIFT);
-    ASSERT_EQ(8, MMU_$PTT_SHIFT);
-}
 
 /*
  * "tst.w M68020" (MMU_$INIT) sees the whole word, while "move.b M68020,Dn"
@@ -193,8 +175,6 @@ int main(void)
 {
     printf("Running MMU global-layout tests...\n\n");
 
-    RUN_TEST(init_sets_020_shifts);
-    RUN_TEST(init_leaves_010_defaults);
     RUN_TEST(flag_word_vs_byte_test);
     RUN_TEST(ptov_uses_high_byte_flag);
     RUN_TEST(mcr_change_paths);
@@ -204,6 +184,5 @@ int main(void)
 }
 
 /* The real implementations under test. */
-#include "../init.c"
 #include "../ptov.c"
 #include "../mcr_change.c"

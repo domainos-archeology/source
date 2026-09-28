@@ -25,8 +25,12 @@
 #include "ml/ml.h"
 
 /* MMAP status codes (module 0x06) */
+#define status_$mmap_bad_avail 0x00060004
+#define status_$mmap_inconsistent_mmape 0x00060008
 #define status_$mmap_illegal_wsl_index 0x00060009
 #define status_$mmap_illegal_pid 0x0006000a
+#define status_$mmap_ws_lists_exhausted 0x0006000b
+#define status_$mmap_bad_reclaim 0x0006000d
 #define status_$mmap_contig_pages_unavailable 0x0006000e
 
 /* Forward declarations */
@@ -488,7 +492,7 @@ extern uint16_t *mmap_pte_base;
 
 /* Add a page to a working set list */
 void mmap_$add_to_wsl(mmape_t *page, uint32_t vpn, uint16_t wsl_index,
-                      int8_t insert_at_head);
+                      boolean at_tail);
 
 /* Add multiple pages to a working set list */
 void mmap_$add_pages_to_wsl(uint32_t *vpn_array, uint16_t count,
@@ -513,7 +517,7 @@ void MMAP_$SET_WS_PRI(void);
 
 /* Get working set size info */
 void MMAP_$GET_WS_SIZ(uint16_t wsl_index, uint32_t *page_count,
-                      uint32_t *field_40, uint32_t *max_pages,
+                      uint32_t *field_14, uint32_t *max_pages,
                       status_$t *status);
 
 /* Get WSL index for a process ID */
@@ -555,13 +559,20 @@ void MMAP_$WIRE(uint32_t vpn);
 void MMAP_$UNWIRE(uint32_t vpn);
 
 /* Install a list of pages into a WSL */
-void MMAP_$INSTALL_LIST(uint32_t *vpn_array, uint16_t count, int8_t use_wired);
+void MMAP_$INSTALL_LIST(uint32_t *vpn_array, uint16_t count, boolean use_wired);
 
 /* Install pages for a specific process */
 void MMAP_$INSTALL_PAGES(uint32_t *vpn_array, uint16_t count, uint16_t pid);
 
-/* Free pages from an array */
-void MMAP_$FREE_PAGES(uint32_t *vpn_array, uint16_t count);
+/*
+ * MMAP_$FREE_PAGES - Move an array of installed pages to the free pool.
+ *
+ * Three arguments in the image (0x00E0CE56): (0x8,A6) a word the callee
+ * never reads - ast_$flush_installed_pages pushes PROC1_$CURRENT there
+ * (0x00E03FDE) - then the VPN array at (0xA,A6) and the count word at
+ * (0xE,A6).  Bead source-8yhy.
+ */
+void MMAP_$FREE_PAGES(uint16_t pid, uint32_t *vpn_array, uint16_t count);
 
 /* Release pages for a process */
 void MMAP_$RELEASE_PAGES(uint16_t pid, uint32_t *vpn_array, uint16_t count);
@@ -577,12 +588,12 @@ void MMAP_$SET_WS_INDEX(uint16_t pid, uint16_t *wsl_index);
 
 /* Scan working set for page replacement */
 uint32_t MMAP_$WS_SCAN(uint16_t wsl_index, int16_t mode, uint32_t pages_needed,
-                       uint32_t param4);
+                       uint32_t unused);
 
 /* Get impure pages from a WSL */
-void MMAP_$GET_IMPURE(uint16_t wsl_index, uint32_t *vpn_array, int8_t all_pages,
-                      uint16_t max_pages, uint32_t *scanned,
-                      uint16_t *returned);
+void MMAP_$GET_IMPURE(uint16_t wsl_index, uint32_t *vpn_array,
+                      boolean all_pages, uint16_t max_pages,
+                      uint32_t *scanned, uint16_t *returned);
 
 /* Allocate pages from a specific WSL */
 void mmap_$alloc_pages_from_wsl(ws_hdr_t *wsl, uint32_t *vpn_array,
@@ -599,7 +610,7 @@ void MMAP_$ALLOC_CONTIG(uint16_t count, uint32_t *pages_alloced,
                         status_$t *status);
 
 /* Reclaim pages into a WSL */
-void MMAP_$RECLAIM(uint32_t *vpn_array, uint16_t count, int8_t use_wired);
+void MMAP_$RECLAIM(uint32_t *vpn_array, uint16_t count, boolean use_wired);
 
 /* Initialize MMAP subsystem */
 void MMAP_$INIT(void *param);

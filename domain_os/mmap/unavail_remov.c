@@ -1,24 +1,25 @@
 /*
- * MMAP_$UNAVAIL_REMOV - Remove unavailable page from its WSL
+ * MMAP_$UNAVAIL_REMOV - Unlink a page from its working-set list
  *
- * Simple wrapper that removes a page from its current working set list.
+ * Original address: 0x00E0CC30 (52 bytes; `E0CC30 MMAP_$UNAVAIL_REMOV` in
+ * the SAU2 map).  Callers: 0x00E13884, 0x00E13D60, 0x00E14358 (the PMAP
+ * purifiers), each pushing `st -(SP)` after the VPN.
  *
- * Pascal signature recovered from 0x00E0CC30:
- *   procedure mmap_$unavail_remov(vpn: integer32; flag: boolean);
- * The frame only reads (0x8,A6) - the VPN.  The boolean at (0xC,A6) is
- * pushed as TRUE (`st -(SP)`) by all three call sites (0x00E13884,
- * 0x00E13D60, 0x00E14358) and is never examined by the callee; it is kept
- * in the C signature so the stack shape matches the original.
+ * Frame (0x00E0CC30-0x00E0CC3E): `link.w A6,#-4`, D2/A2/A5 saved, A5 = the
+ * MMAP_ block (0xE23284).  Arguments, (0x8,A6) being argument 1:
+ *   (0x8,A6)  vpn          longword (D2)
+ *   (0xC,A6)  unused_flag  boolean, pushed TRUE by every caller and never
+ *                          read here; kept so the stack shape matches
  *
- * Original address: 0x00e0cc30
+ * 0x00E0CC42-0x00E0CC4C  A2 = 0xEB4800 + vpn*0x10
+ * 0x00E0CC50-0x00E0CC56  mmap_$remove_from_wsl(page, vpn)
  */
 
 #include "mmap/mmap_internal.h"
 
 void MMAP_$UNAVAIL_REMOV(uint32_t vpn, boolean unused_flag)
 {
-    (void)unused_flag;  /* 0x00E0CC30 never reads (0xC,A6) */
+    (void)unused_flag; /* (0xC,A6) is never read */
 
-    mmape_t *page = MMAPE_FOR_VPN(vpn);
-    mmap_$remove_from_wsl(page, vpn);
+    mmap_$remove_from_wsl(MMAPE_FOR_VPN(vpn), vpn);          /* 0x00E0CC56 */
 }

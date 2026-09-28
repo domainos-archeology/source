@@ -6,6 +6,11 @@
  * parameters, then releases the lock.
  *
  * Original address: 0x00e07138
+ *
+ * 0x00E07138 - 0x00E07174 (62 bytes).  Verified against the disassembly
+ * 2026-09-27; faithful.  Arguments (0x8,A6) count word, (0xa,A6) ppn_arr;
+ * under ML lock 0x14, ast_$allocate_pages(count, count, ppn_arr) - the
+ * count word is pushed twice (`move.w (SP),-(SP)' at 0x00E0715A).
  */
 
 #include "wp/wp_internal.h"

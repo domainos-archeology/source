@@ -31,7 +31,7 @@ void PROC2_$GET_CPU_USAGE(uint32_t *usage)
     int16_t i;
 
     /* arg1 = frame[0..] (6-byte time), arg2 = frame[3], arg3 = frame[2] */
-    PROC1_$GET_CPU_USAGE(&frame[0], &frame[3], &frame[2]);
+    PROC1_$GET_CPU_USAGE((clock_t *)&frame[0], &frame[3], &frame[2]);
 
     /* moveq #0x4 / dbf: 5 iterations */
     for (i = 4; i >= 0; i--) {

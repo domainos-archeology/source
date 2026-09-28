@@ -1,72 +1,72 @@
 /*
- * MMU_$INSTALL_LIST - Install mappings for a list of pages
+ * MMU_$INSTALL_LIST - Install a run of pages at consecutive virtual addresses
  *
- * Installs multiple contiguous virtual-to-physical mappings
- * efficiently in a single critical section.
+ * 0x00E23FDE - 0x00E24046 (106 bytes, hand-written `MMU_ASM`).  Re-emitted
+ * from the disassembly on 2026-09-22.  Wrong before: an invented
+ * `count == 0` early return (the image runs `subq.w #1` / `dbf`, so a zero
+ * count installs 65536 pages), the CSR was restored from a saved copy
+ * (the image re-reads MMU_$PID_PRIV, 0x00E24038), and the per-page packed
+ * value was advanced with a longword add (the image uses `add.w #0x10`,
+ * 0x00E2402C, so the carry never leaves the low word).
  *
- * Parameters:
- *   count - Number of pages to map
- *   ppn_array - Array of physical page numbers
- *   va - Starting virtual address
- *   flags - Packed flags: byte 1 = ASID, byte 3 = protection
- *           Use MMU_FLAGS(asid, prot) macro to construct
+ * Arguments (after the ten-register movem, 0x2c off SP):
+ *   (0x2c,SP) count      word (D7)
+ *   (0x2e,SP) ppn_array  -> longwords, low word used (A5)
+ *   (0x32,SP) va         longword (A4)
+ *   (0x36,SP) flags      longword: byte +1 = asid, byte +3 = prot
  *
- * Original address: 0x00e23fde
+ * D5 = ((va << MMU_$PTT_SHIFT) with prot in the low byte) ror 5, then asid
+ * in the low byte, ror 7; on a 68010 (M68020 word zero) the low word is
+ * shifted right 2; the low nibble is cleared.  Interrupts off (SR saved in
+ * D6), CSR = MMU_$PID_PRIV | 2, then for each page mmu_$installi(D2 = ppn,
+ * A4 = va, D4 = D5), D5w += 0x10, A4 += 0x400.
+ *
+ * The m68k build assembles mmu/sau2/install_list.s (byte-checked against the
+ * image); this file is the host-side model of that routine, compiled only
+ * for the host build so the unit tests can drive it.
  */
 
 #include "mmu/mmu_internal.h"
 
+#if !defined(ARCH_M68K)
+
 void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va, uint32_t flags)
 {
-    uint16_t saved_sr;
-    uint16_t old_csr;
-    uint32_t packed_base;
-    uint32_t packed_info;
-    int16_t i;
-    uint8_t prot;
-    uint8_t asid;
+    uint16_t saved_sr;              /* D6 */
+    uint32_t packed;                /* D5 */
+    uint16_t n;                     /* D7 */
+    uint8_t prot = (uint8_t)(flags & 0xFF);          /* (0x39,SP) */
+    uint8_t asid = (uint8_t)((flags >> 16) & 0xFF);  /* (0x37,SP) */
 
-    if (count == 0) return;
+    /* 0x00E23FEA - 0x00E23FF0 */
+    n = (uint16_t)(count - 1);
 
-    /* Extract ASID and protection from packed flags */
-    asid = (flags >> 16) & 0xFF;
-    prot = flags & 0xFF;
-
-    /* Pack ASID and protection for the base address */
-    packed_base = va;
-
-    /* 0xE23FF2: move.w MMU_$PTT_SHIFT,D1w / 0xE23FF6: lsl.l D1,D5 */
-    packed_base <<= (MMU_$PTT_SHIFT & 0x3F);
-
-    packed_base = (packed_base & 0xFFFFFF00) | prot;
-    packed_base = (packed_base >> 5) | (packed_base << 27);
-    packed_base = (packed_base & 0xFFFFFF00) | asid;
-    packed_base = (packed_base >> 7) | (packed_base << 25);
-
-    /* 0xE24004: tst.w M68020 / bne - whole-word test */
+    /* 0x00E23FF2 - 0x00E24010 */
+    packed = va << (MMU_$PTT_SHIFT & 0x3F);
+    packed = (packed & 0xFFFFFF00u) | prot;
+    packed = (packed >> 5) | (packed << 27);
+    packed = (packed & 0xFFFFFF00u) | asid;
+    packed = (packed >> 7) | (packed << 25);
     if (!M68020_IS_020_W()) {
-        packed_base = (packed_base & 0xFFFF0000) | ((packed_base & 0xFFFF) >> 2);
+        packed = (packed & 0xFFFF0000u) | ((packed & 0xFFFF) >> 2);
     }
+    packed &= 0xFFFFFFF0u;
 
-    packed_base &= ~0x0F;
-
-    /* Disable interrupts and enable PTT access */
+    /* 0x00E24012 - 0x00E24024 */
     DISABLE_INTERRUPTS(saved_sr);
+    MMU_CSR = MMU_$PID_PRIV | CSR_PTT_ACCESS_BIT;
 
-    old_csr = MMU_$PID_PRIV;
-    MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
-
-    /* Install each mapping */
-    packed_info = packed_base;
-    for (i = count - 1; i >= 0; i--) {
-        mmu_$installi((uint16_t)*ppn_array, va, packed_info);
-
+    /* 0x00E24026 - 0x00E24034: dbf = n + 1 pages */
+    do {
+        mmu_$installi((uint16_t)*ppn_array, va, packed);
         ppn_array++;
-        packed_info += 0x10;  /* Increment protection/offset field */
-        va += 0x400;          /* Next 1KB page */
-    }
+        packed = (packed & 0xFFFF0000u) | ((packed + 0x10) & 0xFFFF);
+        va += 0x400;
+    } while (n-- != 0);
 
-    /* Restore CSR and interrupts */
-    MMU_CSR = old_csr;
+    /* 0x00E24038 - 0x00E24040 */
+    MMU_CSR = MMU_$PID_PRIV;
     ENABLE_INTERRUPTS(saved_sr);
 }
+
+#endif /* !ARCH_M68K */

@@ -1,69 +1,91 @@
 /*
- * MMAP_$RELEASE_PAGES - Release pages for a process
+ * MMAP_$RELEASE_PAGES - Drop a process's pages from its working set onto
+ * the global pools
  *
- * Processes an array of page numbers and releases those belonging
- * to the specified process. Each page is moved to an appropriate
- * free list based on its type (pure/impure/dirty).
+ * Original address: 0x00E0CFF8 (292 bytes; `E0CFF8 MMAP_$RELEASE_PAGES` in
+ * the SAU2 map).  Single caller: 0x00E07032.
  *
- * Original address: 0x00e0cff8
+ * Frame (0x00E0CFF8-0x00E0D000): `link.w A6,#-0x14`, D2-D7/A2-A5 saved,
+ * A5 = the MMAP_ block (0xE23284).  Arguments, (0x8,A6) being argument 1:
+ *   (0x8,A6)  pid        word (D0)
+ *   (0xA,A6)  vpn_array  longword array pointer
+ *   (0xE,A6)  count      word (D1)
+ *
+ * 0x00E0D006-0x00E0D016  wsl_index (D2) = MMAP_PID_TO_WSL[pid]
+ * 0x00E0D01A-0x00E0D01C  count == 0 skips everything
+ * 0x00E0D040-0x00E0D10E  `dbf' on count-1 = count iterations, A4 = 0xEC5400
+ *                        (the aste table) for the whole loop:
+ *   0x00E0D04E-0x00E0D066  skip unless page->wsl_index == wsl_index, flags1
+ *                          bit 7 (IN_WSL) set and wire_count == 0
+ *   0x00E0D06A-0x00E0D074  mmap_$remove_from_wsl(page, vpn)
+ *   0x00E0D076-0x00E0D090  dirty = `sne' of PFT second word bit 14
+ *                          (MODIFIED) OR `sne' of flags2 bit 6 (MODIFIED)
+ *   0x00E0D092-0x00E0D0A8  clean: pool 1 when flags1 bit 6 set, else 2
+ *   0x00E0D0AA-0x00E0D0F2  dirty: with flags2 bit 7 (ON_DISK) set, `tst.w
+ *                          (0x28,A0) / sne' on MMAP_$SEG_ASTE_FOR(segment)
+ *                          ->aote (the high word of dtm_high); clear,
+ *                          `tst.b (0xb9,A0) / smi' (remote_flag < 0); true
+ *                          -> pool 4, false -> pool 3
+ *   0x00E0D0F8-0x00E0D108  mmap_$add_to_wsl(page, vpn, pool, true)
  */
 
 #include "mmap/mmap_internal.h"
 
 void MMAP_$RELEASE_PAGES(uint16_t pid, uint32_t *vpn_array, uint16_t count)
 {
-    uint16_t wsl_index = MMAP_PID_TO_WSL[pid];
+    uint16_t wsl_index = MMAP_PID_TO_WSL[pid];               /* 0x00E0D016 */
+    uint16_t i;
 
-    for (uint16_t i = 0; i < count; i++) {
+    if (count == 0) {                                        /* 0x00E0D01A */
+        return;
+    }
+
+    for (i = 0; i < count; i++) {                            /* 0x00E0D040 */
         uint32_t vpn = vpn_array[i];
         mmape_t *page = MMAPE_FOR_VPN(vpn);
+        uint16_t pool;                                       /* (-0x8,A6) */
+        boolean dirty;
 
-        /* Only release if page belongs to this process's WSL,
-         * is in a WSL, and has no wire count */
-        if (page->wsl_index != wsl_index) continue;
-        if (!(page->flags1 & MMAPE_FLAG1_IN_WSL)) continue;
-        if (page->wire_count != 0) continue;
-
-        /* Remove from current WSL */
-        mmap_$remove_from_wsl(page, vpn);
-
-        /* Determine destination list based on page type */
-        uint16_t dest_type;
-        uint16_t *pmape = PMAPE_FOR_VPN(vpn);
-
-        if ((pmape[1] & PMAPE_FLAG_MODIFIED) || (page->flags2 & MMAPE_FLAG2_MODIFIED)) {
-            /*
-             * Page is dirty - ask the owning object whether the write has to
-             * be flushed.  A4 holds 0xEC5400 for the whole loop (loaded at
-             * 00e0d034); both arms index it by seg * 0x14 and read the
-             * longword at -0x10, i.e. SEG_ASTE(seg)->aote:
-             *
-             *   00e0d0b0-00e0d0ba  seg * 0x14 (ON_DISK arm)
-             *   00e0d0bc  lea (0x0,A4,D0w),A1
-             *   00e0d0c0  movea.l (-0x10,A1),A0
-             *   00e0d0c4  tst.w (0x28,A0) / sne  ; high word of aote->dtm_high
-             *   00e0d0cc-00e0d0d6  seg * 0x14 (not-ON_DISK arm)
-             *   00e0d0d8  lea (0x0,A4,D0w),A1
-             *   00e0d0dc  movea.l (-0x10,A1),A0
-             *   00e0d0e0  tst.b (0xb9,A0) / smi  ; aote->remote_flag < 0
-             */
-            aote_t *aote = MMAP_$SEG_ASTE_FOR(page->segment)->aote;
-
-            boolean needs_flush;
-            if (page->flags2 & MMAPE_FLAG2_ON_DISK) {
-                needs_flush = (aote->dtm_high >> 16) != 0;
-            } else {
-                needs_flush = aote->remote_flag < 0;
-            }
-
-            dest_type = needs_flush ? MMAP_PAGE_TYPE_DIRTY_FL : MMAP_PAGE_TYPE_DIRTY_NF;
-        } else if (page->flags1 & MMAPE_FLAG1_IMPURE) {
-            dest_type = MMAP_PAGE_TYPE_PURE;
-        } else {
-            dest_type = MMAP_PAGE_TYPE_IMPURE;
+        if (page->wsl_index != wsl_index) {                  /* 0x00E0D054 */
+            continue;
+        }
+        if (!(page->flags1 & MMAPE_FLAG1_IN_WSL)) {          /* 0x00E0D05A */
+            continue;
+        }
+        if (page->wire_count != 0) {                         /* 0x00E0D062 */
+            continue;
         }
 
-        /* Add to appropriate free list */
-        mmap_$add_to_wsl(page, vpn, dest_type, -1);
+        mmap_$remove_from_wsl(page, vpn);                    /* 0x00E0D070 */
+
+        dirty = (PMAPE_FOR_VPN(vpn)[1] & PMAPE_FLAG_MODIFIED) ? true : false; /* 0x00E0D084 */
+        if (page->flags2 & MMAPE_FLAG2_MODIFIED) {           /* 0x00E0D086 */
+            dirty = true;
+        }
+
+        if (dirty >= 0) {                                    /* 0x00E0D090 */
+            if (page->flags1 & MMAPE_FLAG1_IMPURE) {         /* 0x00E0D092 */
+                pool = MMAP_WSL_POOL_PURE;                   /* 0x00E0D09A */
+            } else {
+                pool = MMAP_WSL_POOL_IMPURE;                 /* 0x00E0D0A2 */
+            }
+        } else {
+            aote_t *aote = MMAP_$SEG_ASTE_FOR(page->segment)->aote;
+            boolean needs_flush;
+
+            if (page->flags2 & MMAPE_FLAG2_ON_DISK) {        /* 0x00E0D0AA */
+                needs_flush = ((aote->dtm_high >> 16) != 0) ? true : false; /* 0x00E0D0C4 */
+            } else {
+                needs_flush = (aote->remote_flag < 0) ? true : false; /* 0x00E0D0E0 */
+            }
+
+            if (needs_flush < 0) {                           /* 0x00E0D0E6 */
+                pool = MMAP_WSL_POOL_DIRTY_RMT;              /* 0x00E0D0EA */
+            } else {
+                pool = MMAP_WSL_POOL_DIRTY_LOCAL;            /* 0x00E0D0F2 */
+            }
+        }
+
+        mmap_$add_to_wsl(page, vpn, pool, true);             /* 0x00E0D104 */
     }
 }

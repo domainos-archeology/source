@@ -27,6 +27,10 @@
  *
  * Note that the trailing `addq.w #0x4,SP` for the ML_$UNLOCK call is folded
  * into the `unlk`: the stack is discarded wholesale on return.
+ *
+ * 0x00E071B0 - 0x00E071E8 (58 bytes).  Verified against the disassembly
+ * 2026-09-27; faithful: MMAP_$WIRE((0x8,A6)) under ML lock 0x14, A5
+ * saved/loaded with 0xE1DC80 and unused.
  */
 
 #include "wp/wp_internal.h"

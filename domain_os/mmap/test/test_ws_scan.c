@@ -72,7 +72,6 @@ static int tests_failed = 0;
 
 static mmape_t  mmape_store[TEST_PAGES];
 static uint32_t pft_store[TEST_PAGES];
-static uint16_t pte_store[TEST_PTES];
 
 /*
  * The MMAP_ module data block (`D E23284 MMAP_ size = AA8').  Every cell the
@@ -80,10 +79,17 @@ static uint16_t pte_store[TEST_PTES];
  * is a field of this one object, so the test allocates the block itself.
  */
 mmap_globals_t MMAP_GLOBALS_STORAGE;
+const status_$t mmap_$illegal_wsl_index_00e0c9e0 = status_$mmap_illegal_wsl_index;
 
 mmape_t  *mmap_mmape_base = mmape_store;
 uint32_t *mmu_pft_base    = pft_store;
-uint16_t *mmap_pte_base   = pte_store;
+/*
+ * The 0xED4F80 segment map (pmap/pmap.h): MMAP_$WS_SCAN reaches it as
+ * 0xED5000 + segment*0x80 + seg_offset*4 with a -0x80 displacement, i.e.
+ * PMAP_SEGMAP[segment][seg_offset] with a 1-based segment.
+ */
+static pmap_segmap_row_t segmap_store[TEST_SEGMENTS + 1];
+pmap_segmap_row_t *pmap_segmap = segmap_store;
 
 /*
  * The 0xEC5400 table and the AOTEs it points at.  MMAP_$SEG_ASTE_FOR(seg)
@@ -141,7 +147,7 @@ static void reset_module(uint8_t flags2)
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     memset(mmape_store, 0, sizeof(mmape_store));
     memset(pft_store, 0, sizeof(pft_store));
-    memset(pte_store, 0, sizeof(pte_store));
+    memset(segmap_store, 0, sizeof(segmap_store));
     memset(MMAP_$SEG_ASTE, 0, sizeof(MMAP_$SEG_ASTE));
     memset(aote_store, 0, sizeof(aote_store));
 

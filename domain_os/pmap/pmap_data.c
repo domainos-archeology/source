@@ -253,14 +253,6 @@ time_queue_elem_t PMAP_$WS_TIMER_ELEMENTS[PMAP_WS_SLOTS];
 uint16_t PMAP_$WS_RANDOM_SEED = 0x004D;
 
 /*
- * DAT_00e254e4 - the working-set slot pmap_$t_purif_callback is currently
- * scanning, block + 0x7A0.  Image value 0x0005, the first user slot.
- *
- * Original address: 0xE254E4
- */
-uint16_t DAT_00e254e4 = 5;
-
-/*
  * ============================================================================
  * In-code status constants
  * ============================================================================

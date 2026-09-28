@@ -15,6 +15,10 @@
  *   (0x750,A5) = 0xE25494 = PMAP_$PAGES_EC
  *   (0x75c,A5) = 0xE254A0 = PMAP_$R_PURIFIER_EC
  *   (0x78a,A5) = 0xE254CE = PMAP_$MID_THRESH (a 16-bit word)
+ *
+ * Re-verified against the disassembly 2026-09-27 (0x00E1416C - 0x00E143AE):
+ * every arm and argument order matched; the one change is the PFT
+ * modified-bit clear, which indexed the entry as a big-endian word pair.
  */
 
 #include "pmap/pmap_internal.h"
@@ -155,10 +159,12 @@ void PMAP_$PURIFIER_R(void)
                     PMAP_SEGMAP[seg][page_idx].flags |= PMAP_SEGMAP_WRITING;
 
                     /*
-                     * 0x00E142F0: clear the MMU modified bit unconditionally
-                     * (no test, unlike PMAP_$PURIFIER_L).
+                     * 0x00E142F0: `andi.w #-0x4001,(0x2,A3,D0*0x1)` - bit 14
+                     * of the PFT entry's LOW word, cleared unconditionally
+                     * (no test, unlike PMAP_$PURIFIER_L).  Expressed on the
+                     * longword so the host build clears the same bit.
                      */
-                    PMAPE_FOR_VPN(vpn)[1] &= (uint16_t)~PFT_FLAG_MODIFIED;
+                    *PFT_FOR_PPN(vpn) &= ~(uint32_t)PFT_FLAG_MODIFIED;
 
                     /*
                      * 0x00E142F6-0x00E14300: remember which pool the page

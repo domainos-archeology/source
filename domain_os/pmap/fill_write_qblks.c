@@ -1,335 +1,243 @@
 /*
- * pmap_$fill_write_qblks - Fill disk queue blocks with page write descriptors
+ * pmap_$fill_write_qblks - Fill a chain of disk queue blocks for a page batch
  *
- * Populates a linked list of disk queue blocks (qblks) with the information
- * needed to write dirty pages to disk. For each page in the input array:
+ * 0x00E1327E - 0x00E1359A (798 bytes).  Re-emitted from the disassembly
+ * 2026-09-27 through the records the code addresses: the earlier emission
+ * was structurally faithful but reached the ASTE table, the AOTE and the
+ * MMAPE through raw offsets and cleared the segmap's INSTALLED bit through
+ * a byte-pointer cast (0x00E1356E `bclr.b #5,(A2)` is bit 29 of the
+ * longword).  Called only by PMAP_$PURIFIER_L (0x00E13CC8).
  *
- * 1. Looks up the page's MMAPE entry to find its segment and page index
- * 2. Fills in the queue block with:
- *    - UID of the owning object (or ANON_$UID for anonymous pages)
- *    - Block-in-segment offset
- *    - Current timestamp
- *    - Volume type info
- * 3. If the page has no disk address (disk_addr == 0):
- *    - Searches neighboring pages in the same segment for a nearby address
- *    - Falls back to AOTE base address if no neighbor found
- *    - Allocates a disk block via BAT_$ALLOCATE
- *    - Assigns the allocated block to the page and any adjacent unallocated pages
- *    - Marks the AOTE as needing flush
- * 4. Copies the disk address into the queue block
- * 5. Logs the write via NETLOG_$LOG_IT if enabled
- * 6. Removes MMU mapping if DISK_$DO_CHKSUM is set and checksum bit is on
+ * Arguments:
+ *   (0x8,A6)  pages  -> count longword VPNs (A1 walks it, (-0xC4,A6))
+ *   (0xc,A6)  qblk   VA of the first queue block; the chain is followed
+ *                    through the block's first longword (0x00E13556)
+ *   (0x10,A6) count  word; `subq.w #1` / `bcc' loop, so 0 does nothing
  *
- * Parameters:
- *   pages    - Array of VPN (virtual page numbers) to write
- *   qblk     - Pointer to first disk queue block (linked list via offset 0x00)
- *   count    - Number of pages to process
- *
- * Original address: 0x00e1327e
- * Size: 798 bytes
+ * Per page (0x00E132AE - 0x00E1358E), with A2 = the MMAPE (0xEB4800 +
+ * vpn * 16, fields at -0x2000), A3 = 0xEC5400 + seg * 0x14 (= the 1-based
+ * ASTE table entry, aste_t is 0x14 bytes) and the block header at +0x20:
+ *   header[0..1]  the object UID: ANON_$UID.high / aote+0x2A word for an
+ *                 anonymous page (flags2 bit 7), else aote->uid
+ *   +0x31 byte    aote->sub_type (0 for anonymous)
+ *   op_flags      aote->vol_index (aote+0x24 high word for anonymous)
+ *   header[2]     aste->segment << 5 | page index
+ *   header[3]     TIME_$CURRENT_CLOCKH
+ *   +0x30..+0x3B  zero (byte 0x31 written before)
+ * A page with no disk address (mmape.disk_addr & 0x3FFFFF == 0) gets one:
+ * every later page of the batch on the same segment without an address
+ * is collected (0x00E1338E - 0x00E133E8), a hint is looked up under the
+ * PMAP lock from the nearest neighbour in the segment map that has one
+ * (backward then forward, VALID entries through their MMAPE, 0x00E13400 -
+ * 0x00E13490) or from aste->fm_block >> 4, BAT_$ALLOCATE(vol, hint, n, 1)
+ * is called (a failure crashes) and the addresses are stored into the
+ * collected MMAPEs; aste->flags bit 13 (ASTE_FLAG_DIRTY, `bset.b #5' on
+ * the high byte) is set.  Then daddr and ppn are
+ * stored, the write is NETLOGged (kind 3), and if DISK_$DO_CHKSUM is on
+ * and the page is INSTALLED it is removed from the MMU.
  */
 
 #include "pmap/pmap_internal.h"
 #include "ast/ast.h"
 #include "bat/bat.h"
+#include "disk/disk.h"
 #include "misc/misc.h"
+#include "mmap/mmap.h"
+#include "mmu/mmu.h"
 #include "netlog/netlog.h"
+#include "time/time.h"
+#include "uid/uid.h"
 
-/* ANON_$UID (anon/anon.h) is used for pages with no owning object */
+/* mmape_t.disk_addr keeps the block address in its low 22 bits */
+#define PMAP_DADDR_MASK         0x003FFFFFu
+/* 0x00E13548: NETLOG record kind for a page write */
+#define PMAP_NETLOG_KIND_WRITE  3
+/* 0x00E134FE: `bset.b #5,(-0x2,A1)` with A1 = aste + 0x14 -> bit 5 of the byte at
+ * aste + 0x12, the HIGH byte of the 16-bit flags word = bit 13 = ASTE_FLAG_DIRTY */
+#define PMAP_ASTE_FLAG_ALLOCATED ASTE_FLAG_DIRTY
 
-/* AOTE table - array of pointers to AOTE structures, indexed by segment * 0x14 */
-#if defined(ARCH_M68K)
-    #define AOTE_TABLE_PTR_BASE  0xEC53F0
-    /* Segment map base for indexed access */
-    #define SEGMAP_INDEXED_BASE  0xED4F80
-#else
-    /* aote_table_ptr_base, segmap_indexed_base: pmap_internal.h */
-    #define AOTE_TABLE_PTR_BASE  ((uintptr_t)aote_table_ptr_base)
-    #define SEGMAP_INDEXED_BASE  ((uintptr_t)segmap_indexed_base)
-#endif
+/* Queue block longword indexes (disk_io_req_t offsets / 4) */
+#define QB_DADDR    1       /* +0x04 */
+#define QB_PPN      5       /* +0x14 */
+#define QB_OPFLAGS  7       /* +0x1C..+0x1F: op_flags is the low byte */
+#define QB_HDR      8       /* +0x20: header[0] */
 
-/* MMAPE base address for raw pointer arithmetic */
-#if defined(ARCH_M68K)
-    #define MMAPE_RAW_BASE  0xEB2800
-#else
-    /* mmape_raw_base: pmap_internal.h */
-    #define MMAPE_RAW_BASE  ((uintptr_t)mmape_raw_base)
-#endif
+/* The entry for `seg' of the 1-based ASTE table (0xEC53F0 + seg * 0x14) */
+static inline aste_t *pmap_$aste_for_segment(uint16_t seg)
+{
+    return &ASTE_BASE[(int16_t)seg - 1];
+}
+
+/* A neighbour's block address: the entry's own low 22 bits, or its
+ * MMAPE's when the entry is VALID (0x00E13410 / 0x00E13458). */
+static inline uint32_t pmap_$neighbour_daddr(uint32_t entry)
+{
+    if ((entry & PMAP_SEGMAP_L_VALID) != 0) {
+        return MMAPE_FOR_VPN(entry & PMAP_SEGMAP_L_VPN_MASK)->disk_addr & PMAP_DADDR_MASK;
+    }
+    return entry & PMAP_DADDR_MASK;
+}
 
 void pmap_$fill_write_qblks(int32_t *pages, uint32_t *qblk, int16_t count)
 {
-    int32_t *page_ptr;
-    int16_t remaining;
-    int16_t page_index;
-    int mmape_offset;
-    int aote_slot;
-    uint8_t page_idx;
-    uint16_t seg_idx;
-    uint8_t flags2;
-    int32_t aote_ptr;
-    uint16_t vol_type;
-    uint32_t *segmap_entry;
-    uint32_t disk_addr;
-    uint32_t hint_addr;
-    int16_t extra_count;
-    int16_t scan_remaining;
-    int32_t *scan_ptr;
-    status_$t status[2];
-    uint32_t *saved_segmap;
-    uint32_t alloc_blocks[18];
+    uint32_t *qb;                   /* (-0x9C,A6): current block */
+    int32_t *page_ptr;              /* (-0xC4,A6) */
+    int16_t remaining;              /* (-0xAC,A6) */
+    int16_t page_index;             /* (-0xA8,A6): 1-based */
+    uint32_t vpn;
+    mmape_t *page;                  /* (-0xB0,A6) */
+    aste_t *aste;                   /* (-0xB4,A6) */
+    aote_t *aote;                   /* A0 / A4 */
+    uint16_t seg;
+    uint16_t page_idx;              /* D4 */
+    uint16_t vol;                   /* D5 */
+    uint32_t *seg_entry;            /* (-0x90,A6) */
+    uint32_t daddr;                 /* D2 */
+    mmape_t *needs_addr[16];        /* (-0x88,A6) + 4n */
+    uint32_t blocks[16];            /* (-0x48,A6) */
+    status_$t status[4];            /* (-0x98,A6) */
+    int16_t n_needed;               /* D3 */
+    int16_t k, j;
 
-    /* Stack-based array for tracking extra pages that need disk addresses.
-     * These entries are stored relative to the frame pointer in the original
-     * m68k code, using negative offsets from the stack pointer. */
-    int32_t extra_mmape_ptrs[16];
-
-    uint32_t *cur_qblk = qblk;
-    remaining = count - 1;
-
+    /* 0x00E13286 - 0x00E132AA */
+    qb = qblk;
+    remaining = (int16_t)(count - 1);
     if (remaining < 0) {
         return;
     }
-
     page_index = 1;
     page_ptr = pages;
 
     do {
-        int32_t vpn = *page_ptr;
-        page_ptr++;
+        /* 0x00E132AE - 0x00E132DC */
+        vpn = (uint32_t)*page_ptr;
+        page = MMAPE_FOR_VPN(vpn);
+        seg = page->segment;
+        aste = pmap_$aste_for_segment(seg);
+        page_idx = page->seg_offset;
 
-        mmape_offset = vpn * 0x10;
-
-        /* Get segment index from MMAPE (offset 0x02 = segment field) */
-        seg_idx = *(uint16_t *)(MMAPE_RAW_BASE + mmape_offset + 2);
-        aote_slot = (int16_t)(seg_idx * 0x14);
-
-        /* Get page index from MMAPE (offset 0x01 = seg_offset field) */
-        page_idx = *(uint8_t *)(MMAPE_RAW_BASE + mmape_offset + 1);
-
-        /* Get flags2 from MMAPE (offset 0x09) - check if page is remote (bit 7) */
-        flags2 = *(uint8_t *)(MMAPE_RAW_BASE + mmape_offset + 9);
-
-        if (-((int8_t)flags2 < 0) < 0) {
-            /* Remote page (flags2 bit 7 set) - use ANON_$UID */
-            cur_qblk[8] = *(uint32_t *)&ANON_$UID;  /* ANON_$UID.high */
-
-            /* Get AOTE pointer */
-            aote_ptr = *(int32_t *)(AOTE_TABLE_PTR_BASE + aote_slot);
-
-            /* Use AOTE offset 0x2a as block count */
-            cur_qblk[9] = (uint32_t)*(uint16_t *)(aote_ptr + 0x2a);
-
-            /* Clear byte at offset 0x31 in qblk */
-            *(uint8_t *)((uintptr_t)cur_qblk + 0x31) = 0;
-
-            /* Volume type from AOTE offset 0x24 */
-            vol_type = *(uint16_t *)(aote_ptr + 0x24);
+        /* 0x00E132E0 - 0x00E13330: the object identity for the header */
+        if ((int8_t)page->flags2 < 0) {
+            qb[QB_HDR + 0] = ANON_$UID.high;                        /* 0x00E13316 */
+            aote = aste->aote;
+            qb[QB_HDR + 1] = aote->dtm_high & 0xFFFFu;              /* the word at aote+0x2A */
+            qb[QB_HDR + 4] = 0;                                     /* clr.b (0x31,A1) */
+            vol = (uint16_t)(aote->unknown_24 >> 16);               /* the word at aote+0x24 */
         } else {
-            /* Local page - get UID from AOTE */
-            aote_ptr = *(int32_t *)(AOTE_TABLE_PTR_BASE + aote_slot);
-
-            /* Copy 8-byte UID from AOTE offset 0x10 */
-            cur_qblk[8] = *(uint32_t *)(aote_ptr + 0x10);
-            cur_qblk[9] = *(uint32_t *)(aote_ptr + 0x14);
-
-            /* Copy byte from AOTE offset 0x0d */
-            *(uint8_t *)((uintptr_t)cur_qblk + 0x31) = *(uint8_t *)(aote_ptr + 0x0d);
-
-            /* Volume type from AOTE offset 0xb8 (single byte) */
-            vol_type = (uint16_t)*(uint8_t *)(aote_ptr + 0xb8);
+            aote = aste->aote;
+            qb[QB_HDR + 0] = aote->uid.high;
+            qb[QB_HDR + 1] = aote->uid.low;
+            qb[QB_HDR + 4] = (uint32_t)aote->sub_type << 16;        /* move.b (0xd,A0),(0x31,A1) */
+            vol = aote->vol_index;
         }
 
-        /* Block-in-segment = AOTE_seg_size * 0x20 + page_idx */
-        cur_qblk[10] = (uint32_t)*(uint16_t *)(AOTE_TABLE_PTR_BASE + aote_slot + 8) * 0x20
-                       + (uint32_t)page_idx;
+        /* 0x00E13334 - 0x00E1335E */
+        qb[QB_HDR + 2] = ((uint32_t)aste->segment << 5) + page_idx;
+        qb[QB_HDR + 3] = TIME_$CURRENT_CLOCKH;
+        qb[QB_HDR + 4] &= 0x00FF0000u;                              /* clr.b (0x30) and 0x32..0x33 */
+        qb[QB_HDR + 5] = 0;                                         /* 0x34..0x37 */
+        qb[QB_HDR + 6] = 0;                                         /* 0x38..0x3B */
+        qb[QB_OPFLAGS] = (qb[QB_OPFLAGS] & 0xFFFFFF00u) | (vol & 0xFF); /* move.b D5b,(0x1f,A1) */
 
-        /* Timestamp */
-        cur_qblk[0xb] = TIME_$CURRENT_CLOCKH;
+        /* 0x00E13362 - 0x00E1337C: the segment map entry (base 0xED4F80) */
+        seg_entry = (uint32_t *)&PMAP_SEGMAP[seg][page_idx];
 
-        /* Clear first byte at offset 0x30 */
-        *(uint8_t *)(cur_qblk + 0xc) = 0;
-
-        /* Zero out 10 bytes starting at offset 0x32 */
-        {
-            int16_t zero_count = 9;
-            uint8_t *zero_ptr = (uint8_t *)((uintptr_t)cur_qblk + 0x32);
-            do {
-                *zero_ptr = 0;
-                zero_count--;
-                zero_ptr++;
-            } while (zero_count != -1);
-        }
-
-        /* Store volume type at offset 0x1f */
-        *(uint8_t *)((uintptr_t)cur_qblk + 0x1f) = (uint8_t)vol_type;
-
-        /* Compute segmap entry pointer:
-         * segmap_base + segment*0x80 + page_idx*4 - 0x80
-         * = 0xED4F80 + segment*0x80 + page_idx*4 */
-        segmap_entry = (uint32_t *)(SEGMAP_INDEXED_BASE +
-                                    (uint32_t)seg_idx * 0x80 +
-                                    (int16_t)((uint16_t)page_idx << 2));
-        saved_segmap = segmap_entry;
-
-        /* Check if page has a disk address (disk_addr field, offset 0x0C in MMAPE) */
-        disk_addr = *(uint32_t *)(MMAPE_RAW_BASE + mmape_offset + 0x0C) & 0x3FFFFF;
-
-        if (disk_addr == 0) {
-            /* Page has no disk address - need to allocate one */
-
-            /* Count extra pages in the same segment that also need disk addresses */
-            extra_count = 0;
-            scan_remaining = count - page_index;
-
-            if (scan_remaining >= 0) {
-                int extra_idx = 0;
-                scan_ptr = pages + page_index;
-
+        /* 0x00E13380 - 0x00E1338A */
+        if ((page->disk_addr & PMAP_DADDR_MASK) == 0) {
+            /* 0x00E1338E - 0x00E133E8: this page and every later one of
+             * the batch on the same segment without an address */
+            n_needed = 0;
+            j = (int16_t)(count - page_index);
+            if (j >= 0) {
+                int32_t *scan = pages + page_index;
                 do {
-                    int other_mmape_offset = scan_ptr[-1] * 0x10;
-
-                    /* Check if same segment and no disk address */
-                    if (*(int16_t *)(MMAPE_RAW_BASE + other_mmape_offset + 2) ==
-                        *(int16_t *)(MMAPE_RAW_BASE + mmape_offset + 2) &&
-                        (*(uint32_t *)(MMAPE_RAW_BASE + other_mmape_offset + 0x0C) & 0x3FFFFF) == 0) {
-                        extra_count++;
-                        extra_mmape_ptrs[extra_idx] = MMAPE_RAW_BASE + other_mmape_offset;
-                        extra_idx++;
+                    mmape_t *other = MMAPE_FOR_VPN((uint32_t)scan[-1]);
+                    if (other->segment == page->segment &&
+                        (other->disk_addr & PMAP_DADDR_MASK) == 0) {
+                        needs_addr[n_needed] = other;
+                        n_needed++;
                     }
-
-                    scan_ptr++;
-                    scan_remaining--;
-                } while (scan_remaining != -1);
+                    scan++;
+                } while (j-- != 0);
             }
 
-            /* Search for a nearby disk address hint */
-            hint_addr = 0;
-
+            /* 0x00E133EC - 0x00E133FE */
+            daddr = 0;
             ML_$LOCK(PMAP_LOCK_ID);
 
-            /* Search backward through segment map entries before this page */
-            {
-                int16_t search_count = (int16_t)page_idx - 1;
-                uint32_t *search_ptr = segmap_entry;
+            /* 0x00E13400 - 0x00E13438: backward over the earlier pages */
+            k = (int16_t)(page_idx - 1);
+            if (k >= 0) {
+                uint32_t *p = seg_entry;
+                do {
+                    p--;
+                    daddr = pmap_$neighbour_daddr(*p);
+                    if (daddr != 0) {
+                        break;
+                    }
+                } while (k-- != 0);
+            }
 
-                if (search_count >= 0) {
+            /* 0x00E1343C - 0x00E13484: forward over the later pages */
+            if (daddr == 0) {
+                k = (int16_t)(0x1F - (page_idx + 1));
+                if (k >= 0) {
+                    uint32_t *p = seg_entry;
                     do {
-                        uint16_t *half_ptr = (uint16_t *)((uintptr_t)search_ptr - 2);
-                        search_ptr--;
-
-                        if ((*search_ptr & 0x40000000) == 0) {
-                            /* Direct entry - use disk address */
-                            hint_addr = *search_ptr;
-                        } else {
-                            /* Indirect entry - look up via VPN in MMAPE */
-                            hint_addr = *(uint32_t *)(
-                                (uint32_t)*half_ptr * 0x10 + MMAPE_RAW_BASE + 0x0C);
+                        p++;
+                        daddr = pmap_$neighbour_daddr(*p);
+                        if (daddr != 0) {
+                            break;
                         }
-                        hint_addr &= 0x3FFFFF;
-                    } while (hint_addr == 0 && (search_count--, search_count != -1));
+                    } while (k-- != 0);
+                }
+                /* 0x00E13484 - 0x00E13490 */
+                if (daddr == 0) {
+                    daddr = aste->fm_block >> 4;
                 }
             }
 
-            if (hint_addr == 0) {
-                /* Search forward through segment map entries after this page */
-                int16_t search_count = 0x1F - ((int16_t)page_idx + 1);
-                uint32_t *search_ptr = saved_segmap;
-
-                if (search_count >= 0) {
-                    do {
-                        uint32_t *next_ptr = search_ptr + 1;
-
-                        if ((*next_ptr & 0x40000000) == 0) {
-                            hint_addr = *next_ptr;
-                        } else {
-                            hint_addr = *(uint32_t *)(
-                                (uint32_t)*(uint16_t *)((uintptr_t)search_ptr + 6) * 0x10
-                                + MMAPE_RAW_BASE + 0x0C);
-                        }
-                        hint_addr &= 0x3FFFFF;
-
-                        if (hint_addr != 0) goto allocate;
-
-                        search_count--;
-                        search_ptr = next_ptr;
-                    } while (search_count != -1);
-                }
-
-                if (hint_addr == 0) {
-                    /* Fall back to AOTE base disk address (offset -0x0C from AOTE slot) */
-                    hint_addr = *(uint32_t *)(AOTE_TABLE_PTR_BASE + aote_slot + 4) >> 4;
-                }
-            }
-
-        allocate:
+            /* 0x00E13492 - 0x00E134CE: BAT_$ALLOCATE(vol, hint, n, 1,
+             * blocks, status); `move.w #1` is use_reserved */
             ML_$UNLOCK(PMAP_LOCK_ID);
-
-            /*
-             * Allocate extra_count blocks out of the RESERVED pool: the
-             * word at (0x0e,A6) is alloc_count and the word at (0x10,A6)
-             * is use_reserved (0x00E3B120 / 0x00E3B38E), which is the
-             * high and low half respectively of the `(n << 16) | 1`
-             * longword the image pushes here.
-             */
-            BAT_$ALLOCATE(vol_type, hint_addr, extra_count, 1,
-                         alloc_blocks, status);
-
-            if (status[0] != 0) {
+            BAT_$ALLOCATE(vol, daddr, n_needed, 1, blocks, status);
+            if (status[0] != status_$ok) {
                 CRASH_SYSTEM(status);
             }
 
-            /* Assign allocated blocks to extra pages */
-            {
-                int16_t assign_count = extra_count - 1;
-                int assign_alloc_idx = 0;
-                int assign_extra_idx = 0;
-
-                if (assign_count >= 0) {
-                    do {
-                        int32_t extra_mmape = extra_mmape_ptrs[assign_extra_idx];
-                        uint32_t *daddr_ptr = (uint32_t *)(extra_mmape + 0x0C);
-
-                        /* Clear existing disk address bits and set new one */
-                        *daddr_ptr &= 0xFFC00000;
-                        *daddr_ptr |= alloc_blocks[assign_alloc_idx];
-
-                        assign_count--;
-                        assign_alloc_idx++;
-                        assign_extra_idx++;
-                    } while (assign_count != -1);
+            /* 0x00E134D0 - 0x00E134F6 */
+            k = (int16_t)(n_needed - 1);
+            if (k >= 0) {
+                for (j = 0; j <= k; j++) {
+                    needs_addr[j]->disk_addr &= ~PMAP_DADDR_MASK;
+                    needs_addr[j]->disk_addr |= blocks[j];
                 }
             }
 
-            /* Mark AOTE as needing flush (set bit 5 at AOTE slot offset -2) */
-            *(uint8_t *)(AOTE_TABLE_PTR_BASE + aote_slot + 0x0E) |= 0x20;
+            /* 0x00E134FA */
+            aste->flags |= PMAP_ASTE_FLAG_ALLOCATED;
         }
 
-        /* Copy disk address from MMAPE to queue block */
-        cur_qblk[1] = *(uint32_t *)(MMAPE_RAW_BASE + mmape_offset + 0x0C) & 0x3FFFFF;
+        /* 0x00E13504 - 0x00E1351E */
+        qb[QB_DADDR] = page->disk_addr & PMAP_DADDR_MASK;
+        qb[QB_PPN] = vpn;
 
-        /* Store VPN in queue block */
-        cur_qblk[5] = vpn;
-
-        /* Log the write if NETLOG is enabled */
+        /* 0x00E13524 - 0x00E1354E */
         if (NETLOG_$OK_TO_LOG < 0) {
-            NETLOG_$LOG_IT(3,
-                          (void *)&cur_qblk[8],                     /* UID pointer */
-                          (int16_t)((uint32_t)cur_qblk[10] >> 5),   /* segment */
-                          (int16_t)page_idx,                         /* page index */
-                          (int16_t)vpn,                              /* VPN */
-                          0, 0, 0);
+            NETLOG_$LOG_IT(PMAP_NETLOG_KIND_WRITE, &qb[QB_HDR],
+                           (uint16_t)(qb[QB_HDR + 2] >> 5), page_idx,
+                           (uint16_t)vpn, 0, 0, 0);
         }
 
-        /* Advance to next queue block */
-        cur_qblk = (uint32_t *)*cur_qblk;
-
-        /* If checksumming is enabled and checksum bit is set in segmap, handle it */
-        if (DISK_$DO_CHKSUM < 0 && (*saved_segmap & 0x20000000) != 0) {
-            *(uint8_t *)saved_segmap &= 0xDF;  /* Clear checksum bit */
+        /* 0x00E13552 - 0x00E13580 */
+        qb = (uint32_t *)ARCH_VA_TO_PTR(qb[0]);
+        if (DISK_$DO_CHKSUM < 0 && (*seg_entry & PMAP_SEGMAP_L_INSTALLED) != 0) {
+            *seg_entry &= ~PMAP_SEGMAP_L_INSTALLED;
             MMU_$REMOVE(vpn);
         }
 
+        /* 0x00E13582 - 0x00E1358E */
         page_index++;
-        remaining--;
-    } while (remaining != (int16_t)-1);
+        page_ptr++;
+    } while (remaining-- != 0);
 }

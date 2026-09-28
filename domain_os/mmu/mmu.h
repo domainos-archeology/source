@@ -207,7 +207,9 @@ _Static_assert(sizeof(mmu_globals_t) == 0x0A, "mmu_globals_t must be 10 bytes");
 #define VA_TO_PTT_OFFSET_MASK (*(uint32_t *)0xE23D30)
 #define MMU_$VA_SHIFT (*(uint16_t *)0xE23D34)
 #define MMU_$PTT_SHIFT (*(uint16_t *)0xE23D36)
-#define MMU_SYSREV (*(uint8_t *)0xE2426F)
+/* The byte MMU_$SET_SYSREV stores (0x00E24276 `move.b ...,(0x3,A0)` with
+ * A0 = 0xE2426E): the LOW byte of the MMU_$SYSTEM_REV longword. */
+#define MMU_SYSREV (*(uint8_t *)0xE24271)
 
 /* Cache control MCR shadow (for 68010) */
 #define MCR_SHADOW (*(uint8_t *)0xE242D2)

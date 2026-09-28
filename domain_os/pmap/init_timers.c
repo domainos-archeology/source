@@ -1,105 +1,83 @@
 /*
- * PMAP_$INIT_TIMERS - Initialize PMAP purifier and update timers
+ * PMAP_$INIT_TIMERS - Enter the purifier and update timers on the real-time queue
  *
- * Sets up two periodic timer callbacks in the real-time event queue (TIME_$RTEQ):
+ * 0x00E2F880 - 0x00E2F956 (216 bytes, the small second `PMAP_` code segment
+ * at 0xE2F880).  Re-emitted from the disassembly 2026-09-27.  Wrong before:
+ * the purifier interval was written as {0x7270E, 0}; the image clears the
+ * WORD at element +0x14 and stores the LONGWORD 0x0007270E at +0x16
+ * (0x00E2F8BA / 0x00E2F8BE), i.e. a 48-bit clock of {high 7, low 0x270E}.
+ * The update timer's interval really is {0xE5, 0} (a longword at +0x14 and
+ * a cleared word at +0x18, 0x00E2F918 / 0x00E2F920).
  *
- * 1. Purifier timer (PMAP_$T_PURIF_CALLBACK):
- *    - Fires every 0x7270e ticks (~29 seconds at 4us/tick)
- *    - Scans working set lists and triggers page replacement
- *    - Timer flags: 0x1a
- *
- * 2. Update timer (PMAP_$UPDATE_CALLBACK):
- *    - Fires every 0xe5 ticks (~0.9ms at 4us/tick)
- *    - Calls AST_$UPDATE to process deferred page state changes
- *    - Timer flags: 0x16
- *
- * Both timers are configured to first fire at TIME_$CLOCKH + 0xe5 ticks
- * from initialization time.
- *
- * Data layout at 0xE24D44:
- *   0xE24D44: Update timer queue element (time_queue_elem_t, 0x1A bytes)
- *   0xE24D5E: 6 bytes padding
- *   0xE24D64: Purifier timer queue element (time_queue_elem_t, 0x1A bytes)
- *
- * Original address: 0x00e2f880
- * Size: 216 bytes
+ * A0 = 0xE24D44, the PMAP data block: the update timer element is the
+ * block's first 0x1A bytes and the purifier element starts at +0x20
+ * (0xE24D64).  Both fire first at TIME_$CLOCKH + 0xE5 ({clock+0xE5, 0}
+ * at +0x0C/+0x10) with flags 0x1A / 0x16 at +0x12, and are entered on
+ * TIME_$RTEQ (0xE2A7A0) with the `when' cell {TIME_$CLOCKH, 0} at
+ * (-0xC,A6)/(-0x8,A6).  A non-zero status from either TIME_$Q_ENTER_ELEM
+ * crashes with that status.
  */
 
 #include "pmap/pmap_internal.h"
 #include "misc/misc.h"
 
-/* Timer queue element data - two elements stored at fixed addresses.
- * These are labeled DAT_00e24d44 (update) and DAT_00e24d64 (purifier) in Ghidra. */
 #if defined(ARCH_M68K)
     #define PMAP_UPDATE_TIMER_ELEM   ((time_queue_elem_t *)0xE24D44)
     #define PMAP_PURIFIER_TIMER_ELEM ((time_queue_elem_t *)0xE24D64)
 #else
-    /* pmap_update_timer_elem, pmap_purifier_timer_elem: pmap_internal.h */
     #define PMAP_UPDATE_TIMER_ELEM   (&pmap_update_timer_elem)
     #define PMAP_PURIFIER_TIMER_ELEM (&pmap_purifier_timer_elem)
 #endif
 
-/* Callback function pointers - declared in pmap.h */
-/* void PMAP_$T_PURIF_CALLBACK(void);  - at 0xE143CC */
-/* void PMAP_$UPDATE_CALLBACK(void);   - at 0xE143B2 */
-
-/* Purifier timer interval: ~29 seconds */
-#define PMAP_PURIFIER_INTERVAL  0x7270E
-
-/* Update timer interval: ~0.9ms */
-#define PMAP_UPDATE_INTERVAL    0xE5
-
-/* Timer flags */
-#define PMAP_PURIFIER_TIMER_FLAGS  0x1A
-#define PMAP_UPDATE_TIMER_FLAGS    0x16
+/* 0x00E2F894 / 0x00E2F8FA: the two flag words */
+#define PMAP_PURIFIER_TIMER_FLAGS   0x1A
+#define PMAP_UPDATE_TIMER_FLAGS     0x16
+/* 0x00E2F8AC: first firing, and the update timer's interval (0x00E2F918) */
+#define PMAP_TIMER_FIRST_DELAY      0xE5
+/* 0x00E2F8BE: the purifier interval, 0x0007270E over the 48-bit clock */
+#define PMAP_PURIFIER_INTERVAL_HIGH 0x00000007u
+#define PMAP_PURIFIER_INTERVAL_LOW  0x270Eu
 
 void PMAP_$INIT_TIMERS(void)
 {
-    uint32_t current_time;
-    uint32_t first_fire_time;
-    status_$t status;
-    uint32_t when_high;
-    uint16_t when_low;
+    uint32_t now;               /* D2 */
+    uint32_t first;             /* D3 */
+    clock_t when;               /* (-0xC,A6) */
+    status_$t status;           /* (-0x14,A6) */
+    time_queue_elem_t *e;
 
-    current_time = TIME_$CLOCKH;
+    /* 0x00E2F88E - 0x00E2F8C2 */
+    now = TIME_$CLOCKH;
+    e = PMAP_PURIFIER_TIMER_ELEM;
+    e->flags = PMAP_PURIFIER_TIMER_FLAGS;
+    e->callback = ARCH_PTR_TO_VA(PMAP_$T_PURIF_CALLBACK);
+    when.high = now;
+    when.low = 0;
+    first = now + PMAP_TIMER_FIRST_DELAY;
+    e->expire_high = first;
+    e->expire_low = 0;
+    e->interval_high = PMAP_PURIFIER_INTERVAL_HIGH;     /* clr.w +0x14 / move.l +0x16 */
+    e->interval_low = PMAP_PURIFIER_INTERVAL_LOW;
 
-    /* Set up the purifier timer element */
-    PMAP_PURIFIER_TIMER_ELEM->flags = PMAP_PURIFIER_TIMER_FLAGS;
-    PMAP_PURIFIER_TIMER_ELEM->callback = (uint32_t)(uintptr_t)PMAP_$T_PURIF_CALLBACK;
-
-    /* First fire time = current time + 0xE5 */
-    when_high = current_time;
-    when_low = 0;
-    first_fire_time = current_time + PMAP_UPDATE_INTERVAL;
-
-    PMAP_PURIFIER_TIMER_ELEM->expire_high = first_fire_time;
-    PMAP_PURIFIER_TIMER_ELEM->expire_low = 0;
-    PMAP_PURIFIER_TIMER_ELEM->interval_low = 0;
-    PMAP_PURIFIER_TIMER_ELEM->interval_high = PMAP_PURIFIER_INTERVAL;
-
-    TIME_$Q_ENTER_ELEM(&TIME_$RTEQ, (clock_t *)&when_high,
-                       PMAP_PURIFIER_TIMER_ELEM, &status);
-
+    /* 0x00E2F8C6 - 0x00E2F8F2 */
+    TIME_$Q_ENTER_ELEM(&TIME_$RTEQ, &when, e, &status);
     if (status != status_$ok) {
         CRASH_SYSTEM(&status);
     }
 
-    /* Set up the update timer element */
-    PMAP_UPDATE_TIMER_ELEM->flags = PMAP_UPDATE_TIMER_FLAGS;
-    PMAP_UPDATE_TIMER_ELEM->callback = (uint32_t)(uintptr_t)PMAP_$UPDATE_CALLBACK;
+    /* 0x00E2F8F4 - 0x00E2F920 */
+    e = PMAP_UPDATE_TIMER_ELEM;
+    e->flags = PMAP_UPDATE_TIMER_FLAGS;
+    e->callback = ARCH_PTR_TO_VA(PMAP_$UPDATE_CALLBACK);
+    when.high = now;
+    when.low = 0;
+    e->expire_high = first;
+    e->expire_low = 0;
+    e->interval_high = PMAP_TIMER_FIRST_DELAY;
+    e->interval_low = 0;
 
-    /* Reuse the same first fire time */
-    when_high = current_time;
-    when_low = 0;
-
-    PMAP_UPDATE_TIMER_ELEM->expire_high = first_fire_time;
-    PMAP_UPDATE_TIMER_ELEM->expire_low = 0;
-    PMAP_UPDATE_TIMER_ELEM->interval_high = PMAP_UPDATE_INTERVAL;
-    PMAP_UPDATE_TIMER_ELEM->interval_low = 0;
-
-    TIME_$Q_ENTER_ELEM(&TIME_$RTEQ, (clock_t *)&when_high,
-                       PMAP_UPDATE_TIMER_ELEM, &status);
-
+    /* 0x00E2F924 - 0x00E2F94E */
+    TIME_$Q_ENTER_ELEM(&TIME_$RTEQ, &when, e, &status);
     if (status != status_$ok) {
         CRASH_SYSTEM(&status);
     }

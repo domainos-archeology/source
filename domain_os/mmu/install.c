@@ -1,85 +1,61 @@
 /*
- * MMU_$INSTALL - Install a virtual-to-physical mapping
+ * MMU_$INSTALL - Install one page, global bit left as mmu_$installi sets it
  *
- * Creates a mapping from a virtual address to a physical page.
- * The flags parameter contains packed ASID and protection bits.
- * Sets the global bit if the ASID indicates a shared mapping.
+ * 0x00E24048 - 0x00E2409A (84 bytes, hand-written `MMU_ASM`).  Callers:
+ * PEB_$INIT, PEB_$ASSOC, MST_$INIT, mst_$init_table_page and others.
  *
- * Parameters:
- *   ppn - Physical page number
- *   va - Virtual address
- *   flags - Packed flags: byte 1 = ASID, byte 3 = protection
- *           Use MMU_FLAGS(asid, prot) macro to construct
+ * The m68k build assembles mmu/sau2/install.s (byte-checked against the
+ * image); this file is the host-side model of that routine, compiled only
+ * for the host build so the unit tests can drive it.
  *
- * Original address: 0x00e24048
+ * Arguments (after the nine-register movem, 0x28 off SP):
+ *   (0x28,SP) ppn    longword (D2), low word used
+ *   (0x2c,SP) va     longword (A4)
+ *   (0x30,SP) flags  longword: byte +1 = asid, byte +3 = prot
+ *
+ * The packed word is built exactly as in MMU_$INSTALL_PRIVATE
+ * (0x00E24054-0x00E24072): (va << MMU_$PTT_SHIFT) with prot in the low
+ * byte, ror 5, asid in the low byte, ror 7; on a 68010 (M68020 word zero,
+ * 0x00E24068) the low word is shifted right 2; `and.w #0xfff0' clears the
+ * low nibble.  SR saved in D6, IPL 7, CSR := MMU_$PID_PRIV | 2
+ * (0x00E24076-0x00E24084), mmu_$installi (0x00E2408A), CSR := MMU_$PID_PRIV
+ * re-read from the cell (0x00E2408C), SR restored.  Unlike
+ * MMU_$INSTALL_PRIVATE nothing touches the entry afterwards, so the global
+ * bit mmu_$installi sets for ASID 0 stays set.
  */
 
 #include "mmu/mmu_internal.h"
 
+#if !defined(ARCH_M68K)
+
 void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
 {
-    uint16_t saved_sr;
-    uint32_t packed_info;
-    uint8_t prot;
-    uint8_t asid;
+    uint16_t saved_sr;              /* D6 */
+    uint32_t packed;                /* D4 */
+    uint8_t prot = (uint8_t)(flags & 0xFF);          /* (0x33,SP) */
+    uint8_t asid = (uint8_t)((flags >> 16) & 0xFF);  /* (0x31,SP) */
 
-    /*
-     * Extract ASID and protection from packed flags.
-     * On big-endian M68K, a 32-bit value 0xAABBCCDD has:
-     *   byte 1 (offset +1) = BB = asid
-     *   byte 3 (offset +3) = DD = prot
-     *
-     * So flags = (asid << 16) | prot, meaning:
-     *   asid = (flags >> 16) & 0xFF
-     *   prot = flags & 0xFF
-     */
-    asid = (flags >> 16) & 0xFF;
-    prot = flags & 0xFF;
-
-    /*
-     * Build the packed_info value that mmu_$installi expects.
-     * This encodes VA bits, ASID, and protection for PMAPE storage.
-     *
-     * The assembly does:
-     * 1. D4 = va << shift
-     * 2. D4.b = prot; ror.l #5,D4
-     * 3. D4.b = asid; ror.l #7,D4
-     * 4. (68010 only) D4.w >>= 2
-     * 5. D4 &= ~0x0F
-     */
-    packed_info = va;
-
-    /* Shift VA by the PTT shift value.
-     * 0xE24056: move.w MMU_$PTT_SHIFT,D1w / 0xE2405A: lsl.l D1,D4 */
-    packed_info <<= (MMU_$PTT_SHIFT & 0x3F);
-
-    /* Insert protection in low byte, then rotate right 5 */
-    packed_info = (packed_info & 0xFFFFFF00) | prot;
-    packed_info = (packed_info >> 5) | (packed_info << 27);
-
-    /* Insert ASID in low byte, then rotate right 7 */
-    packed_info = (packed_info & 0xFFFFFF00) | asid;
-    packed_info = (packed_info >> 7) | (packed_info << 25);
-
-    /* For 68010, need additional shift of low word */
-    /* 0xE24068: tst.w M68020 / bne - whole-word test */
+    /* 0x00E24054 - 0x00E24072 */
+    packed = va << (MMU_$PTT_SHIFT & 0x3F);
+    packed = (packed & 0xFFFFFF00u) | prot;
+    packed = (packed >> 5) | (packed << 27);
+    packed = (packed & 0xFFFFFF00u) | asid;
+    packed = (packed >> 7) | (packed << 25);
     if (!M68020_IS_020_W()) {
-        packed_info = (packed_info & 0xFFFF0000) | ((packed_info & 0xFFFF) >> 2);
+        packed = (packed & 0xFFFF0000u) | ((packed & 0xFFFF) >> 2);
     }
+    packed &= 0xFFFFFFF0u;
 
-    /* Mask off low nibble */
-    packed_info &= ~0x0F;
-
-    /* Disable interrupts and enable PTT access */
+    /* 0x00E24076 - 0x00E24084 */
     DISABLE_INTERRUPTS(saved_sr);
+    MMU_CSR = MMU_$PID_PRIV | CSR_PTT_ACCESS_BIT;
 
-    uint16_t old_csr = MMU_$PID_PRIV;
-    MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
+    /* 0x00E2408A */
+    mmu_$installi((uint16_t)ppn, va, packed);
 
-    /* Call internal installer */
-    mmu_$installi((uint16_t)ppn, va, packed_info);
-
-    /* Restore CSR and interrupts */
-    MMU_CSR = old_csr;
+    /* 0x00E2408C - 0x00E24094 */
+    MMU_CSR = MMU_$PID_PRIV;
     ENABLE_INTERRUPTS(saved_sr);
 }
+
+#endif /* !ARCH_M68K */

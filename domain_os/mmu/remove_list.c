@@ -1,35 +1,35 @@
 /*
- * MMU_$REMOVE_LIST - Remove mappings for a list of physical pages
+ * MMU_$REMOVE_LIST - Unlink an array of physical pages
  *
- * Removes virtual-to-physical mappings for an array of physical
- * page numbers. More efficient than calling MMU_$REMOVE repeatedly
- * because it only disables interrupts once.
+ * 0x00E23D92 - 0x00E23DCA (58 bytes, hand-written `MMU_ASM`).  Re-emitted
+ * 2026-09-27: the earlier C had an invented `count == 0` return; the
+ * image does `subq.w #1` / `dbf`, so a zero count removes 65536 pages.
  *
- * Original address: 0x00e23d92
+ * The m68k build assembles mmu/sau2/remove_list.s (byte-checked); this is
+ * the host-side model.
+ *
+ * Arguments: (0x20,SP) ppn_array -> A4 (longwords, low word used),
+ * (0x24,SP) count word -> D7.  SR in D6, IPL 7, CSR := MMU_$PID_PRIV | 2,
+ * mmu_$remove_internal per page, CSR := MMU_$PID_PRIV, SR restored.
  */
 
 #include "mmu/mmu_internal.h"
 
+#if !defined(ARCH_M68K)
+
 void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count)
 {
-    uint16_t saved_sr;
-    uint16_t old_csr;
-    int16_t i;
+    uint16_t saved_sr;              /* D6 */
+    uint16_t n = (uint16_t)(count - 1); /* D7 */
 
-    if (count == 0) return;
-
-    DISABLE_INTERRUPTS(saved_sr);
-
-    /* Enable PTT access */
-    old_csr = MMU_$PID_PRIV;
-    MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
-
-    /* Remove each mapping */
-    for (i = count - 1; i >= 0; i--) {
-        mmu_$remove_internal((uint16_t)ppn_array[i]);
-    }
-
-    /* Restore CSR and interrupts */
-    MMU_CSR = old_csr;
-    ENABLE_INTERRUPTS(saved_sr);
+    DISABLE_INTERRUPTS(saved_sr);                       /* 0x00E23DA0 */
+    MMU_CSR = MMU_$PID_PRIV | CSR_PTT_ACCESS_BIT;       /* 0x00E23DA6 */
+    do {                                                /* 0x00E23DB4 - 0x00E23DB8 */
+        mmu_$remove_internal((uint16_t)*ppn_array);
+        ppn_array++;
+    } while (n-- != 0);
+    MMU_CSR = MMU_$PID_PRIV;                            /* 0x00E23DBC */
+    ENABLE_INTERRUPTS(saved_sr);                        /* 0x00E23DC4 */
 }
+
+#endif /* !ARCH_M68K */

@@ -1,46 +1,45 @@
 /*
- * MMU_$PTOV - Translate physical page number to virtual address
+ * MMU_$PTOV - Physical page number to virtual address
  *
- * Returns the virtual address that maps to the given physical page.
- * Uses the ASID table and PMAPE to reconstruct the VA.
+ * 0x00E241B8 - 0x00E241F2 (60 bytes, hand-written `MMU_ASM`).  Re-emitted
+ * from the disassembly on 2026-09-22: the 68010 path shifted the low word
+ * left 2 as a longword; the image's `lsl.w #0x2,D0w` (0x00E241EA) drops
+ * anything carried out of bit 15.
  *
- * Original address: 0x00e241b8
+ * Argument: (0x4,SP) ppn, longword (D1).
+ *   D1w = ppn << 2 (word); D0 = PFT[D1w] (longword, D1w sign-extended as
+ *   the index); if (D0w & 0xfff) == 0 return 0.
+ *   D0 &= 0xF0000; D0w = ASID_TABLE[ppn];
+ *   68020 (high byte of M68020): return D0 << 6
+ *   68010: D0w <<= 2; return D0 << 4
+ *
+ * The m68k build assembles mmu/sau2/ptov.s (byte-checked against the
+ * image); this file is the host-side model of that routine, compiled only
+ * for the host build so the unit tests can drive it.
  */
 
 #include "mmu/mmu_internal.h"
 
+#if !defined(ARCH_M68K)
+
 uint32_t MMU_$PTOV(uint32_t ppn)
 {
-    uint32_t *pmape;
-    uint32_t pmape_val;
-    uint16_t asid_val;
-    uint32_t result;
+    uint16_t idx = (uint16_t)(ppn << 2);                            /* D1w */
+    uint32_t v = *(uint32_t *)((char *)PFT_BASE + (int16_t)idx);    /* 0x00E241C4 */
 
-    /* Get PMAPE entry */
-    pmape = PMAPE_FOR_PPN(ppn);
-    pmape_val = *pmape;
-
-    /* Check if there's a valid mapping */
-    if ((pmape_val & PMAPE_LINK_MASK) == 0) {
-        /* No mapping */
+    if ((v & 0x0FFF) == 0) {                                        /* 0x00E241C8 */
         return 0;
     }
 
-    /* Get the ASID/VA info */
-    asid_val = ASID_FOR_PPN(ppn);
+    /* 0x00E241CE - 0x00E241DC */
+    v &= 0x000F0000u;
+    v |= *(uint16_t *)((char *)ASID_TABLE_BASE + (int16_t)(idx >> 1));
 
-    /* Reconstruct the virtual address
-     * The format differs between 68010 and 68020+ */
-    result = (pmape_val & 0x000F0000) | asid_val;
-
-    /* 0xE241E0: move.b M68020,D1b / 0xE241E4: beq - HIGH byte only */
-    if (M68020_IS_020_B()) {
-        /* 68020+: shift left by 6 */
-        result <<= 6;
-    } else {
-        /* 68010: shift VA portion left by 2, then shift all left by 4 */
-        result = ((result & 0xFFFF0000) | ((result & 0xFFFF) << 2)) << 4;
+    if (M68020_IS_020_B()) {                                        /* 0x00E241E0 */
+        return v << 6;
     }
-
-    return result;
+    v = (v & 0xFFFF0000u) | (((v & 0xFFFF) << 2) & 0xFFFF);         /* 0x00E241EA */
+    return v << 4;
 }
+
+#endif /* !ARCH_M68K */

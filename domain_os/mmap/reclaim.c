@@ -1,12 +1,33 @@
 /*
- * MMAP_$RECLAIM - Reclaim pages into a working set list
+ * MMAP_$RECLAIM - Pull pages back off the global pools into the wired pool
+ * or the current process's working set
  *
- * Reclaims pages that were previously removed from a WSL (e.g.,
- * during page-out) back into the working set. Only pages that
- * are in the low-numbered pools (0-4) and are marked as in-WSL
- * are reclaimed.
+ * Original address: 0x00E0D914 (210 bytes; `E0D914 MMAP_$RECLAIM` in the
+ * SAU2 map).  Callers: 0x00E031DA, 0x00E03600.
  *
- * Original address: 0x00e0d914
+ * Frame (0x00E0D914-0x00E0D91C): `link.w A6,#-0x14`, D2-D5/A2-A5 saved,
+ * A5 = the MMAP_ block (0xE23284).  Arguments, (0x8,A6) being argument 1:
+ *   (0x8,A6)  vpn_array  longword array pointer
+ *   (0xC,A6)  count      word (D0)
+ *   (0xE,A6)  use_wired  boolean, byte in the high half of its word slot
+ *
+ * 0x00E0D926-0x00E0D93C  wsl_index (D2) = 5 when use_wired < 0, else
+ *                        MMAP_PID_TO_WSL[PROC1_$CURRENT]
+ * 0x00E0D940-0x00E0D944  reclaimed (D1.b) = false; count == 0 skips the loop
+ * 0x00E0D958-0x00E0D9A6  `dbf' on count-1 = count iterations:
+ *   0x00E0D964-0x00E0D970  skip unless page->wsl_index <= 4 (one of the
+ *                          global pools, unsigned `bhi') and flags1 bit 7
+ *                          (IN_WSL) is set
+ *   0x00E0D972-0x00E0D982  wsl_index == 0 (the free pool) ->
+ *                          CRASH_SYSTEM(&mmap_$bad_reclaim_00e0d9e6)
+ *   0x00E0D984-0x00E0D9A2  mmap_$remove_from_wsl(page, vpn);
+ *                          mmap_$add_to_wsl(page, vpn, wsl_index, true);
+ *                          reclaimed = true
+ * 0x00E0D9AA-0x00E0D9D8  if anything was reclaimed and page_count >
+ *                        max_pages ((0x30,A2) vs (0x3C,A2)):
+ *                        mmap_$trim_wsl(wsl_index, page_count - max_pages)
+ *                        (2-byte result slot never read) and
+ *                        MMAP_$WS_OVERFLOW++
  */
 
 #include "mmap/mmap_internal.h"
@@ -14,55 +35,52 @@
 #include "proc1/proc1.h"
 
 /*
- * Status cells passed to CRASH_SYSTEM by `pea (d,PC)`.
- *
- * These are constant longwords in this module's own code region, not
- * shared globals; the cell address is part of each name.  Names come from
- * the SR10.4 status-code database.
+ * 0x00E0D978: pea (0x6c,PC) -> 0x00E0D9E6, jsr CRASH_SYSTEM at 0x00E0D97C.
+ * Image bytes 00 06 00 0d = "bad reclaim"; only this routine uses the cell.
  */
-/* 0x00E0D978: pea (0x6c,PC) -> 0x00E0D9E6, jsr CRASH_SYSTEM at 0x00E0D97C. */
-static const status_$t mmap_$bad_reclaim_00e0d9e6 = 0x0006000D;
+static const status_$t mmap_$bad_reclaim_00e0d9e6 = status_$mmap_bad_reclaim;
 
-void MMAP_$RECLAIM(uint32_t *vpn_array, uint16_t count, int8_t use_wired)
+void MMAP_$RECLAIM(uint32_t *vpn_array, uint16_t count, boolean use_wired)
 {
-    uint16_t wsl_index;
+    uint16_t wsl_index;   /* D2 */
+    boolean reclaimed;    /* D1.b */
+    uint16_t i;
 
-    if (use_wired < 0) {
-        wsl_index = WSL_INDEX_WIRED;
+    if (use_wired < 0) {                                     /* 0x00E0D926 */
+        wsl_index = MMAP_WSL_POOL_WIRED;                     /* 0x00E0D92C */
     } else {
-        wsl_index = MMAP_PID_TO_WSL[PROC1_$CURRENT];
+        wsl_index = MMAP_PID_TO_WSL[PROC1_$CURRENT];         /* 0x00E0D930 */
     }
 
-    boolean reclaimed_any = false;
+    reclaimed = false;                                       /* 0x00E0D940 */
 
-    for (uint16_t i = 0; i < count; i++) {
-        uint32_t vpn = vpn_array[i];
-        mmape_t *page = MMAPE_FOR_VPN(vpn);
+    if (count != 0) {                                        /* 0x00E0D942 */
+        for (i = 0; i < count; i++) {                        /* 0x00E0D958 */
+            uint32_t vpn = vpn_array[i];
+            mmape_t *page = MMAPE_FOR_VPN(vpn);
 
-        /* Only reclaim pages that are in pools 0-4 and marked as in-WSL */
-        if (page->wsl_index >= WSL_INDEX_MIN_USER) continue;
-        if (!(page->flags1 & MMAPE_FLAG1_IN_WSL)) continue;
+            if (page->wsl_index > MMAP_WSL_POOL_DIRTY_RMT) { /* 0x00E0D964 */
+                continue;
+            }
+            if (!(page->flags1 & MMAPE_FLAG1_IN_WSL)) {      /* 0x00E0D96C */
+                continue;
+            }
+            if (page->wsl_index == MMAP_WSL_POOL_FREE) {     /* 0x00E0D972 */
+                CRASH_SYSTEM(&mmap_$bad_reclaim_00e0d9e6);   /* 0x00E0D97C */
+            }
 
-        /* Validate page is not in the free pool */
-        if (page->wsl_index == WSL_INDEX_FREE_POOL) {
-            CRASH_SYSTEM(&mmap_$bad_reclaim_00e0d9e6);
+            mmap_$remove_from_wsl(page, vpn);                /* 0x00E0D98A */
+            mmap_$add_to_wsl(page, vpn, wsl_index, true);    /* 0x00E0D99A */
+            reclaimed = true;                                /* 0x00E0D9A2 */
         }
-
-        /* Remove from current pool */
-        mmap_$remove_from_wsl(page, vpn);
-
-        /* Add to target WSL */
-        mmap_$add_to_wsl(page, vpn, wsl_index, -1);
-
-        reclaimed_any = true;
     }
 
-    /* Check for working set overflow */
-    if (reclaimed_any) {
-        ws_hdr_t *wsl = WSL_FOR_INDEX(wsl_index);
-        if (wsl->max_pages < wsl->page_count) {
-            mmap_$trim_wsl(wsl_index, wsl->page_count - wsl->max_pages);
-            MMAP_$WS_OVERFLOW++;
+    if (reclaimed < 0) {                                     /* 0x00E0D9AA */
+        ws_hdr_t *wsl = &MMAP_$WSL[wsl_index];               /* 0x00E0D9AE */
+
+        if (wsl->page_count > wsl->max_pages) {              /* 0x00E0D9BC */
+            mmap_$trim_wsl(wsl_index, wsl->page_count - wsl->max_pages); /* 0x00E0D9D4 */
+            MMAP_$WS_OVERFLOW++;                             /* 0x00E0D9D8 */
         }
     }
 }

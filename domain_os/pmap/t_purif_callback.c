@@ -1,101 +1,102 @@
 /*
- * PMAP_$T_PURIF_CALLBACK - Timer-based purifier callback
+ * PMAP_$T_PURIF_CALLBACK - Timer callback: age or purge one working set
  *
- * Periodic callback that scans working sets and purges idle pages.
- * This function cycles through working set slots 5-69 and performs
- * scans to age pages and identify candidates for purging.
+ * 0x00E143CC - 0x00E144F4 (298 bytes, A5 = 0xE24D44).  Re-emitted from the
+ * disassembly 2026-09-27.  Wrong before: the "partial scan" mode was passed
+ * to MMAP_$WS_SCAN as 0x00FF; the image pushes it with `st -(SP)`
+ * (0x00E144C4), a byte in the HIGH half of the word, which MMAP_$WS_SCAN
+ * tests with `tst.b / bpl` - so the word is 0xFF00 (negative).  The WSL
+ * record is now addressed as ws_hdr_t.
  *
- * Original address: 0x00e143cc
+ * Each firing advances the scan slot (0xE254E4) round 5..0x45 (PMAP_$CURRENT_SLOT; no map symbol, tree name), bumps
+ * PMAP_$T_PUR_SCANS, and for MMAP_WSL[slot]:
+ *   - unless flags bit 5 (bit 13 of the first word) is set, max_pages :=
+ *     MMAP_$PAGEABLE_PAGES - min(MMAP_$PAGEABLE_PAGES / 4, 0x800)
+ *   - with pages, and ws_timestamp <= now - 0x1CA (signed): under the
+ *     PMAP lock either MMAP_$PURGE (never scanned and pri_timestamp older
+ *     than the cutoff) or scan_pos := page_count and MMAP_$WS_SCAN(slot,
+ *     mode, 0x3FFFFF, 0x3FFFFF), full (mode 0, owner reset, ws_timestamp
+ *     := now) when flags bit 6 is set, owner > PMAP_$WS_INTERVAL, or the
+ *     priority stamp is newer than both the ws stamp and now - 0x26;
+ *     partial (mode 0xFF00) otherwise; then EC_$ADVANCE(PMAP_$PAGES_EC).
  */
 
 #include "pmap/pmap_internal.h"
+#include "ec/ec.h"
+#include "mmap/mmap.h"
 
-/* Working set list base and offsets */
-#if defined(ARCH_M68K)
-    #define WSL_BASE            0xE232B0
-#else
-    /* wsl_base: pmap_internal.h */
-    #define WSL_BASE            ((uintptr_t)wsl_base)
-#endif
-
-/* WSL entry structure offsets within each 0x24-byte entry */
-#define WSL_FLAGS_OFFSET        0x00    /* Flags word */
-#define WSL_INTERVAL_OFFSET     0x02    /* Scan interval counter */
-#define WSL_PAGE_COUNT_OFFSET   0x04    /* Page count */
-#define WSL_PREV_COUNT_OFFSET   0x08    /* Previous page count */
-#define WSL_WS_LIMIT_OFFSET     0x10    /* Working set limit */
-#define WSL_PREV_SCAN_OFFSET    0x18    /* Previous scan time */
-#define WSL_LAST_SCAN_OFFSET    0x1C    /* Last scan time */
+#define PMAP_TP_SLOT_LAST       0x45        /* 0x00E143DA */
+#define PMAP_TP_SLOT_FIRST      5           /* 0x00E143E2 */
+#define PMAP_TP_MAX_LIMIT       0x800       /* 0x00E1441E */
+#define PMAP_TP_IDLE_CUTOFF     0x1CA       /* 0x00E14442 */
+#define PMAP_TP_RECENT_CUTOFF   0x26        /* 0x00E1449E */
+#define PMAP_TP_SCAN_ALL        0x3FFFFF    /* 0x00E144B0 / 0x00E144BC */
+#define PMAP_TP_MODE_FULL       0           /* clr.w -(SP) */
+#define PMAP_TP_MODE_PARTIAL    ((int16_t)0xFF00)  /* st -(SP) */
+#define WS_HDR_FLAG_BIT5        0x20        /* bit 13 of the first word */
+#define WS_HDR_FLAG_BIT6        0x40        /* bit 14 of the first word */
 
 void PMAP_$T_PURIF_CALLBACK(void)
 {
-    int32_t current_time;
-    int wsl_offset;
+    ws_hdr_t *ws;               /* A2 */
+    uint32_t now;               /* D2 */
+    int32_t cutoff;             /* D3 */
+    uint32_t limit;
 
-    current_time = TIME_$CLOCKH;
-
-    /* Cycle through slots 5-69 (wraps from 0x45=69 back to 5) */
-    if (DAT_00e254e4 == 0x45) {
-        DAT_00e254e4 = 5;
+    /* 0x00E143DA - 0x00E143EE */
+    if (PMAP_$CURRENT_SLOT == PMAP_TP_SLOT_LAST) {
+        PMAP_$CURRENT_SLOT = PMAP_TP_SLOT_FIRST;
     } else {
-        DAT_00e254e4++;
+        PMAP_$CURRENT_SLOT++;
     }
-
     PMAP_$T_PUR_SCANS++;
 
-    /* Calculate WSL entry offset: slot * 0x24 bytes */
-    wsl_offset = (int16_t)(DAT_00e254e4 * 0x24);
+    /* 0x00E143F2 - 0x00E1440A: 0xE232B0 + slot * 0x24 */
+    ws = &MMAP_WSL[PMAP_$CURRENT_SLOT];
+    now = TIME_$CLOCKH;
 
-    /* Check WSL flags - if bit 13 not set, update working set limit */
-    if ((*(uint16_t *)(WSL_BASE + wsl_offset) & 0x2000) == 0) {
-        uint32_t limit = MMAP_$PAGEABLE_PAGES >> 2;
-        if (limit > 0x800) {
-            limit = 0x800;
+    /* 0x00E1440E - 0x00E14434 */
+    if ((ws->flags & WS_HDR_FLAG_BIT5) == 0) {
+        limit = MMAP_$PAGEABLE_PAGES >> 2;
+        if (limit > PMAP_TP_MAX_LIMIT) {
+            limit = PMAP_TP_MAX_LIMIT;
         }
-        *(uint32_t *)(WSL_BASE + wsl_offset + WSL_WS_LIMIT_OFFSET) =
-            MMAP_$PAGEABLE_PAGES - limit;
+        ws->max_pages = MMAP_$PAGEABLE_PAGES - limit;
     }
 
-    /* Check if slot has pages and needs scanning */
-    if (*(int32_t *)(WSL_BASE + wsl_offset + WSL_PAGE_COUNT_OFFSET) != 0 &&
-        *(int32_t *)(WSL_BASE + wsl_offset + WSL_LAST_SCAN_OFFSET) <= current_time - 0x1CA) {
+    /* 0x00E14438 - 0x00E1444C: signed `blt' */
+    if (ws->page_count == 0) {
+        return;
+    }
+    cutoff = (int32_t)(now - PMAP_TP_IDLE_CUTOFF);
+    if (cutoff < (int32_t)ws->ws_timestamp) {
+        return;
+    }
 
-        ML_$LOCK(PMAP_LOCK_ID);
-
-        /* Check if last scan time is 0 and prev scan is old enough */
-        if (*(int32_t *)(WSL_BASE + wsl_offset + WSL_LAST_SCAN_OFFSET) == 0 &&
-            *(int32_t *)(WSL_BASE + wsl_offset + WSL_PREV_SCAN_OFFSET) < current_time - 0x1CA) {
-            /* Slot is completely idle - purge it */
-            MMAP_$PURGE(DAT_00e254e4);
+    /* 0x00E14450 */
+    ML_$LOCK(PMAP_LOCK_ID);
+    /* 0x00E1445E - 0x00E14478 */
+    if (ws->ws_timestamp == 0 && (int32_t)ws->pri_timestamp < cutoff) {
+        MMAP_$PURGE(PMAP_$CURRENT_SLOT);
+    } else {
+        int16_t mode;
+        /* 0x00E1447A - 0x00E144A6 */
+        ws->scan_pos = ws->page_count;
+        if ((ws->flags & WS_HDR_FLAG_BIT6) != 0 ||
+            ws->owner > PMAP_$WS_INTERVAL ||
+            ((int32_t)ws->pri_timestamp > (int32_t)ws->ws_timestamp &&
+             (int32_t)(now - PMAP_TP_RECENT_CUTOFF) > (int32_t)ws->pri_timestamp)) {
+            /* 0x00E144A8 - 0x00E144BA */
+            ws->owner = 0;
+            ws->ws_timestamp = now;
+            mode = PMAP_TP_MODE_FULL;
         } else {
-            /* Save current page count as previous */
-            *(uint32_t *)(WSL_BASE + wsl_offset + WSL_PREV_COUNT_OFFSET) =
-                *(uint32_t *)(WSL_BASE + wsl_offset + WSL_PAGE_COUNT_OFFSET);
-
-            /* Decide whether to do a full or partial scan */
-            uint16_t do_full_scan;
-
-            if ((*(uint16_t *)(WSL_BASE + wsl_offset) & 0x4000) == 0 &&
-                *(uint16_t *)(WSL_BASE + wsl_offset + WSL_INTERVAL_OFFSET) <= PMAP_$WS_INTERVAL &&
-                (*(int32_t *)(WSL_BASE + wsl_offset + WSL_PREV_SCAN_OFFSET) <=
-                     *(int32_t *)(WSL_BASE + wsl_offset + WSL_LAST_SCAN_OFFSET) ||
-                 current_time - 0x26 <= *(int32_t *)(WSL_BASE + wsl_offset + WSL_PREV_SCAN_OFFSET))) {
-                /* Partial scan - only age without full scan */
-                do_full_scan = 0xFF;  /* -1 in signed context */
-            } else {
-                /* Full scan - reset interval and update timestamps */
-                *(uint16_t *)(WSL_BASE + wsl_offset + WSL_INTERVAL_OFFSET) = 0;
-                *(int32_t *)(WSL_BASE + wsl_offset + WSL_LAST_SCAN_OFFSET) = current_time;
-                do_full_scan = 0;
-            }
-
-            /* Perform the working set scan */
-            MMAP_$WS_SCAN(DAT_00e254e4, do_full_scan, 0x3FFFFF, 0x3FFFFF);
+            /* 0x00E144BC - 0x00E144C4 */
+            mode = PMAP_TP_MODE_PARTIAL;
         }
-
-        ML_$UNLOCK(PMAP_LOCK_ID);
-
-        /* Signal that pages may be available */
-        EC_$ADVANCE(&PMAP_$PAGES_EC);
+        MMAP_$WS_SCAN(PMAP_$CURRENT_SLOT, mode, PMAP_TP_SCAN_ALL, PMAP_TP_SCAN_ALL);
     }
+    /* 0x00E144D4 - 0x00E144E6 */
+    ML_$UNLOCK(PMAP_LOCK_ID);
+    EC_$ADVANCE(&PMAP_$PAGES_EC);
 }

@@ -1,96 +1,82 @@
 /*
- * MMU_$VTOP - Translate virtual address to physical page number
+ * MMU_$VTOP - Virtual address to physical page number
  *
- * Performs a reverse lookup in the MMU structures to find the
- * physical page number that maps to the given virtual address.
- * This uses the PTT and PMAPE hash chain to find the mapping.
+ * 0x00E2410E - 0x00E241B6 (170 bytes, hand-written `MMU_ASM`).  Verified
+ * against the disassembly 2026-09-27; the earlier C was faithful.  The
+ * m68k build assembles mmu/sau2/vtop.s (byte-checked); this is the
+ * host-side model.
  *
- * Original address: 0x00e2410e
+ * Arguments: (0x10,SP) va, (0x14,SP) status -> 0 on a hit, 0x00070001
+ * (status_$mmu_miss) on a miss.  Result D0 = ppn, or 0.
+ *
+ * D5 = ((va << MMU_$VA_SHIFT) with PROC1_$AS_ID in the low word) ror 7,
+ * swapped: its low word is the key.  Under a saved-SR IPL-7 bracket with
+ * PTT access on, the ring at the PTT entry is walked from its head: an
+ * entry whose high word matches the key under 0xfe0f is a hit, and so is
+ * one matching under 0x000f with bit 12 (GLOBAL) set; the walk stops when
+ * the link comes back to the head.
  */
 
 #include "mmu/mmu_internal.h"
+#include "proc1/proc1.h"
+
+#if !defined(ARCH_M68K)
 
 uint32_t MMU_$VTOP(uint32_t va, status_$t *status)
 {
     uint16_t saved_sr;
-    uint16_t old_csr;
-    uint32_t va_key;
-    uint16_t *ptt;
-    uint16_t head_ppn;
-    uint16_t ppn;
-    uint16_t first_ppn;
-    uint32_t pmape_val;
-    uint16_t pmape_high;
+    uint32_t d5;                    /* D5 */
+    uint16_t key;
+    uint16_t *ptt;                  /* A1 */
+    uint16_t d0, d4;                /* D0w, D4w: entry index * 4 */
+    uint32_t d3;                    /* D3 */
+    uint16_t d1;
 
-    /* Build the match key from the VA
-     * The key encodes VA bits and current ASID for matching */
-    va_key = va;
-    /* 0xE24124: move.w MMU_$VA_SHIFT,D0w / 0xE24128: lsl.l D0,D5 */
-    va_key <<= (MMU_$VA_SHIFT & 0x3F);
+    /* 0x00E24112 - 0x00E24132 */
+    ptt = (uint16_t *)((char *)PTT_BASE + (va & VA_TO_PTT_OFFSET_MASK));
+    d5 = va << (MMU_$VA_SHIFT & 0x3F);
+    d5 = (d5 & 0xFFFF0000u) | PROC1_$AS_ID;
+    d5 = (d5 >> 7) | (d5 << 25);
+    key = (uint16_t)(d5 >> 16);
 
-    /* Insert current ASID */
-    va_key = (va_key & 0xFFFF0000) | PROC1_$AS_ID;
-
-    /* Rotate to match PMAPE format */
-    va_key = (va_key >> 7) | (va_key << 25);
-    va_key = (va_key >> 16) & 0xFFFF;
-
-    /* Get PTT entry for this VA */
-    ptt = PTT_FOR_VA(va);
-
-    /* Disable interrupts and enable PTT access */
+    /* 0x00E24134 - 0x00E24146 */
     DISABLE_INTERRUPTS(saved_sr);
+    MMU_CSR = MMU_$PID_PRIV | CSR_PTT_ACCESS_BIT;
 
-    old_csr = MMU_$PID_PRIV;
-    MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
-
-    /* Get head of hash chain */
-    head_ppn = *ptt & PTT_PPN_MASK;
-
-    if (head_ppn == 0) {
-        /* No mapping exists */
-        MMU_CSR = old_csr;
-        ENABLE_INTERRUPTS(saved_sr);
-        *status = status_$mmu_miss;
-        return 0;
+    /* 0x00E24148 - 0x00E24150 */
+    d0 = (uint16_t)(*ptt & 0x0FFF);
+    if (d0 != 0) {
+        d0 = (uint16_t)(d0 << 2);
+        d4 = d0;
+        for (;;) {
+            /* 0x00E2415C - 0x00E24182 */
+            d3 = *(uint32_t *)((char *)PFT_BASE + (int16_t)d0);
+            d1 = (uint16_t)((d3 >> 16) ^ key);
+            if ((d1 & 0xFE0F) == 0) {
+                goto hit;
+            }
+            if ((d1 & 0x000F) == 0 && (d3 & PMAPE_FLAG_GLOBAL) != 0) {
+                goto hit;
+            }
+            d0 = (uint16_t)((d3 & 0x0FFF) << 2);
+            if (d0 == d4) {
+                break;
+            }
+        }
     }
 
-    /* Search the hash chain */
-    ppn = head_ppn;
-    first_ppn = head_ppn << 2;  /* Save for loop termination */
-
-    do {
-        pmape_val = *PMAPE_FOR_PPN(ppn);
-        pmape_high = (uint16_t)(pmape_val >> 16);
-
-        /* Check for match:
-         * - Compare ASID and VA bits (mask 0xFE0F)
-         * - Or if low nibble matches and global bit is set */
-        uint16_t diff = pmape_high ^ (uint16_t)va_key;
-
-        if ((diff & 0xFE0F) == 0) {
-            /* Match found */
-            MMU_CSR = old_csr;
-            ENABLE_INTERRUPTS(saved_sr);
-            *status = status_$ok;
-            return ppn;
-        }
-
-        if ((diff & 0x0F) == 0 && (pmape_val & PMAPE_FLAG_GLOBAL)) {
-            /* Global match (ASID doesn't matter) */
-            MMU_CSR = old_csr;
-            ENABLE_INTERRUPTS(saved_sr);
-            *status = status_$ok;
-            return ppn;
-        }
-
-        /* Follow hash chain */
-        ppn = pmape_val & PMAPE_LINK_MASK;
-    } while ((ppn << 2) != first_ppn);
-
-    /* Not found in chain */
-    MMU_CSR = old_csr;
+    /* 0x00E24184 - 0x00E2419E */
+    MMU_CSR = MMU_$PID_PRIV;
     ENABLE_INTERRUPTS(saved_sr);
     *status = status_$mmu_miss;
     return 0;
+
+hit:
+    /* 0x00E241A0 - 0x00E241B6 */
+    MMU_CSR = MMU_$PID_PRIV;
+    ENABLE_INTERRUPTS(saved_sr);
+    *status = status_$ok;
+    return (uint16_t)(d0 >> 2);
 }
+
+#endif /* !ARCH_M68K */

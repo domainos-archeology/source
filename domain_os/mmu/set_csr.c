@@ -1,19 +1,24 @@
 /*
- * MMU_$SET_CSR - Set CSR privilege bits
+ * MMU_$SET_CSR - Set the ASID byte of MMU_$PID_PRIV and write the CSR
  *
- * Updates the MMU Control/Status Register privilege bits.
- * This is used to change the current privilege level.
+ * 0x00E241F4 - 0x00E24202 (16 bytes, hand-written `MMU_ASM`).  Re-emitted
+ * 2026-09-27: the earlier C stored the argument's HIGH byte; the image
+ * stores `(5,SP)` - the LOW byte of the word argument - into the HIGH
+ * byte of MMU_$PID_PRIV (`move.b (0x5,SP),(A0)` with A0 = 0xE23D2C),
+ * then writes the whole word to the CSR.
  *
- * Original address: 0x00e241f4
+ * The m68k build assembles mmu/sau2/set_csr.s (byte-checked); this is the
+ * host-side model.
  */
 
 #include "mmu/mmu_internal.h"
 
+#if !defined(ARCH_M68K)
+
 void MMU_$SET_CSR(uint16_t csr_val)
 {
-    /* Update the high byte of MMU_$PID_PRIV with the new CSR value */
-    MMU_$PID_PRIV = (csr_val & 0xFF00) | (MMU_$PID_PRIV & 0x00FF);
-
-    /* Write to hardware CSR */
-    MMU_CSR = MMU_$PID_PRIV;
+    MMU_$PID_PRIV = (uint16_t)(((csr_val & 0xFF) << 8) | (MMU_$PID_PRIV & 0x00FF)); /* 0x00E241F8 */
+    MMU_CSR = MMU_$PID_PRIV;                                                     /* 0x00E241FC */
 }
+
+#endif /* !ARCH_M68K */

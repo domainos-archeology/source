@@ -50,3 +50,27 @@ mem_range_t DUMP_$ADDRS[DUMP_ADDRS_RANGES] = {
     { 0x00100000, 0x0017FC00 },
     { 0, 0 },
 };
+
+/*
+ * Constant status cell in the MMAP_ code segment, shared by MMAP_$AVAIL
+ * (0x00E0CC8C) and MMAP_$UNWIRE (0x00E0CD42):
+ *
+ *   00e0ccb8  00 06 00 04
+ */
+const status_$t mmap_$bad_avail_00e0ccb8 = status_$mmap_bad_avail;
+
+/*
+ * Constant status cell shared by MMAP_$FREE_WSL (0x00E0D170) and
+ * MMAP_$SET_WS_INDEX (0x00E0D1E4):
+ *
+ *   00e0d1c4  00 06 00 0a
+ */
+const status_$t mmap_$illegal_pid_00e0d1c4 = status_$mmap_illegal_pid;
+
+/*
+ * Constant status cell shared by MMAP_$SET_WS_PRI, MMAP_$PURGE (0x00E0D134),
+ * MMAP_$SET_WS_INDEX (0x00E0D22E) and MMAP_$WS_SCAN:
+ *
+ *   00e0c9e0  00 06 00 09
+ */
+const status_$t mmap_$illegal_wsl_index_00e0c9e0 = status_$mmap_illegal_wsl_index;

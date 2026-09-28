@@ -1,76 +1,65 @@
 /*
- * PMAP_$INIT_WS_SCAN - Initialize working set scanning for a process
+ * PMAP_$INIT_WS_SCAN - Give a process its working-set index and scan timer
  *
- * Sets up periodic working set scanning for a process. Creates a
- * timer callback that will periodically scan the working set and
- * age pages for the clock page replacement algorithm.
+ * 0x00E145F0 - 0x00E146B2 (196 bytes, A5 = 0xE24D44).  Re-emitted from the
+ * disassembly 2026-09-27.  Wrong before: the timer element was taken from
+ * a 0x1A-stride array (the image steps 0x1C: `idx * 0x1C` from A5 + 0x24,
+ * 0x00E14626 - 0x00E14632), the queue was a PMAP-private array (the image
+ * uses 0xE2A4A0 - 0xC + idx * 0xC, i.e. TIME_$VTQ[idx - 1]), the expiry
+ * was 0 (the image stores {3, 0xD090} = 250000, 0x00E1465E - 0x00E1466A)
+ * and the interval was a copy of that same 48-bit value, not 250000 in
+ * the high longword.
  *
- * Parameters:
- *   index - Working set index (0-63)
- *   param - Initial parameter value
- *
- * Original address: 0x00e145f0
+ * Arguments: (0x8,A6) index word (the pid, D2), (0xa,A6) param word (the
+ * WSL index, D3).  MMAP_$SET_WS_INDEX(index, &param) first; a param of 5
+ * (the wired pool) gets no timer.
  */
 
 #include "pmap/pmap_internal.h"
+#include "mmap/mmap.h"
 
-/*
- * Timer queue and element arrays for working set scanning
- * (PMAP_$WS_TIMER_QUEUES / PMAP_$WS_TIMER_ELEMENTS, pmap_internal.h).
- * Each working set slot has its own timer queue and element.
- */
-
-/* Verify structure sizes match original layout */
-_Static_assert(sizeof(time_queue_t) == 0x0C,
-               "time_queue_t size must be 0x0C bytes");
-_Static_assert(sizeof(time_queue_elem_t) == 0x1A,
-               "time_queue_elem_t size must be 0x1A bytes");
-
-/* Working set scan callback PMAP_$WS_SCAN_CALLBACK - declared in pmap.h */
+/* 0x00E14658: element flags */
+#define PMAP_WS_TIMER_FLAGS     0x1A
+/* 0x00E14662: `move.l #0x3d090,(0x32,A2)` after `clr.w (0x30,A2)` -
+ * the 48-bit clock {3, 0xD090} = 250000 */
+#define PMAP_WS_TIMER_HIGH      0x00000003u
+#define PMAP_WS_TIMER_LOW       0xD090u
+/* 0x00E1461A: the wired pool never gets a scan timer */
+#define PMAP_WS_INDEX_WIRED     5
 
 void PMAP_$INIT_WS_SCAN(uint16_t index, int16_t param)
 {
-    uint16_t local_param;
-    status_$t status;
-    time_queue_t *queue;
-    time_queue_elem_t *elem;
+    uint16_t local_param;       /* (-0xE,A6) */
+    status_$t status;           /* (-0xC,A6) */
+    clock_t when;               /* (-0x8,A6) */
+    time_queue_t *queue;        /* 0xE2A4A0 - 0xC + index * 0xC */
+    time_queue_elem_t *e;       /* A2 + 0x24 */
 
+    /* 0x00E14606 - 0x00E14618: result slot discarded */
     local_param = (uint16_t)param;
-
-    /* Set up working set index */
     MMAP_$SET_WS_INDEX(index, &local_param);
 
-    /* Skip timer setup for slot 5 (special slot) */
-    if (param == 5) {
+    /* 0x00E1461A */
+    if (param == PMAP_WS_INDEX_WIRED) {
         return;
     }
 
-    /* Get pointers to this slot's queue and element */
-    queue = &PMAP_$WS_TIMER_QUEUES[index];
-    elem = &PMAP_$WS_TIMER_ELEMENTS[index];
+    /* 0x00E14622 - 0x00E14650 */
+    queue = &TIME_$VTQ[index - 1];
+    e = PMAP_WS_TIMER_ELEM(index);
+    TIME_$Q_REMOVE_ELEM(queue, e, &status);
 
-    /* Remove any existing timer entry */
-    TIME_$Q_REMOVE_ELEM(queue, elem, &status);
+    /* 0x00E14654 - 0x00E14682 */
+    e->flags = PMAP_WS_TIMER_FLAGS;
+    e->expire_high = PMAP_WS_TIMER_HIGH;
+    e->expire_low = PMAP_WS_TIMER_LOW;
+    e->interval_high = e->expire_high;                  /* move.l (0x30,A2),(0x38,A2) */
+    e->interval_low = e->expire_low;                    /* move.w (0x34,A2),(0x3c,A2) */
+    e->callback = ARCH_PTR_TO_VA(PMAP_$WS_SCAN_CALLBACK);
+    e->callback_arg = (uint32_t)index;
 
-    /* Set up new timer entry */
-    /* Flags: 0x1A (repeating timer) */
-    elem->flags = 0x1A;
-
-    /* Initial expiration time: 0 (fire immediately on next scan) */
-    elem->expire_high = 0;
-    elem->expire_low = 0;
-
-    /* Interval: 250000 microseconds (250ms) */
-    elem->interval_high = 250000;
-    elem->interval_low = 0;
-
-    /* Set callback function and parameter */
-    elem->callback = (uint32_t)(uintptr_t)PMAP_$WS_SCAN_CALLBACK;
-    elem->callback_arg = (uint32_t)index;
-
-    /* Enter timer in queue */
-    {
-        clock_t when = { 0, 0 };
-        TIME_$Q_ENTER_ELEM(queue, &when, elem, &status);
-    }
+    /* 0x00E14686 - 0x00E146A4 */
+    when.high = 0;
+    when.low = 0;
+    TIME_$Q_ENTER_ELEM(queue, &when, e, &status);
 }

@@ -1,80 +1,41 @@
 /*
- * MMU_$REMOVE - Remove a mapping for a physical page
+ * MMU_$REMOVE - Unlink one physical page from the reverse map
  *
- * Removes the virtual-to-physical mapping for the given physical
- * page number (PPN). This updates the PTT and PMAPE hash chain.
+ * 0x00E23D64 - 0x00E23D90 (46 bytes, hand-written `MMU_ASM`), and the
+ * register-called mmu_$remove_internal at 0x00E23DCC that it and
+ * MMU_$REMOVE_LIST `bsr'.  Re-emitted 2026-09-27.
  *
- * Original address: 0x00e23d64
+ * The m68k build assembles mmu/sau2/remove.s and mmu/sau2/internal.s
+ * (byte-checked against the image); this file is the host-side model of
+ * the two routines, compiled only for the host build so the unit tests
+ * can drive it.
+ *
+ * MMU_$REMOVE: (0x14,SP) ppn longword -> D2.  SR saved on the stack,
+ * IPL 7, CSR := MMU_$PID_PRIV | 2, mmu_$remove_internal(D2), CSR :=
+ * MMU_$PID_PRIV (re-read, not a saved copy), SR restored.
+ *
+ * mmu_$remove_internal: D2 = ppn; A3 := its PFT entry, then falls into
+ * mmu_$remove_pmape (mmu/internal.c).
  */
 
 #include "mmu/mmu_internal.h"
 
-/* Internal helper: remove mapping with interrupts already disabled
- * (declared in mmu_internal.h) */
+#if !defined(ARCH_M68K)
 
 void MMU_$REMOVE(uint32_t ppn)
 {
     uint16_t saved_sr;
-    uint16_t old_csr;
 
-    DISABLE_INTERRUPTS(saved_sr);
-
-    /* Enable PTT access */
-    old_csr = MMU_$PID_PRIV;
-    MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
-
-    /* Remove the mapping */
-    mmu_$remove_internal((uint16_t)ppn);
-
-    /* Restore CSR and interrupts */
-    MMU_CSR = old_csr;
-    ENABLE_INTERRUPTS(saved_sr);
+    DISABLE_INTERRUPTS(saved_sr);                       /* 0x00E23D6C */
+    MMU_CSR = MMU_$PID_PRIV | CSR_PTT_ACCESS_BIT;       /* 0x00E23D72 */
+    mmu_$remove_internal((uint16_t)ppn);                /* 0x00E23D80 */
+    MMU_CSR = MMU_$PID_PRIV;                            /* 0x00E23D82 */
+    ENABLE_INTERRUPTS(saved_sr);                        /* 0x00E23D8A */
 }
 
-/*
- * mmu_$remove_internal - Internal remove helper
- *
- * Removes a PPN from the hash chain and clears its PMAPE entry.
- * Must be called with interrupts disabled and PTT access enabled.
- *
- * Original address: 0x00e23dcc
- */
 void mmu_$remove_internal(uint16_t ppn)
 {
-    uint32_t *pmape = PFT_FOR_PPN(ppn);
-    uint16_t asid_entry = ASID_FOR_PPN(ppn);
-    uint32_t pmape_val = *pmape;
-    uint16_t link = pmape_val & PFT_LINK_MASK;
-
-    if (link == 0) {
-        /* Not in any hash chain */
-        return;
-    }
-
-    /* Find the PTT entry for this mapping */
-    uint16_t *ptt = (uint16_t*)((uint32_t)PTT_BASE + ((uint32_t)asid_entry << 6));
-
-    uint16_t prev_offset = 0;
-
-    if (link != ppn) {
-        /* We're not at the head of the chain - find our predecessor */
-        uint16_t curr = link;
-        do {
-            prev_offset = curr << 2;
-            uint16_t next = *(uint16_t*)((char*)PFT_BASE + prev_offset + 2) & PFT_LINK_MASK;
-            curr = next;
-        } while (curr != ppn);
-
-        /* Update predecessor's link to skip us */
-        uint16_t *prev_link = (uint16_t*)((char*)PFT_BASE + prev_offset + 2);
-        uint16_t prev_val = *prev_link;
-        /* Copy our link to predecessor, preserving flags */
-        *prev_link = ((pmape_val ^ prev_val) & 0x8FFF) ^ prev_val;
-    }
-
-    /* Update PTT entry */
-    *ptt = prev_offset >> 2;
-
-    /* Clear PMAPE entry, preserving only reference/modified bits */
-    *pmape &= 0x6000;
+    mmu_$remove_pmape(ppn);                             /* 0x00E23DCC falls into 0x00E23DD8 */
 }
+
+#endif /* !ARCH_M68K */

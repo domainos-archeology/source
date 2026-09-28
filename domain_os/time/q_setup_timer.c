@@ -57,7 +57,7 @@ void time_$q_setup_timer(time_queue_t *queue, clock_t *now)
          * 0x00E16C14: a two-byte Pascal result slot is reserved and never
          * read (the frame is dropped by unlk).
          */
-        PROC1_$SET_VT(queue->queue_id, (uint32_t *)&delay, &status);
+        PROC1_$SET_VT(queue->queue_id, &delay, &status);
     } else if ((delay.high >> 5) != 0) {
         /* 0x00E16C2A: more than 21 bits of ticks - saturate */
         TIME_$WRT_TIMER((uint16_t *)&time_$c_timer_aux,

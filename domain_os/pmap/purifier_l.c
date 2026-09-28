@@ -34,6 +34,12 @@
  * Original address: 0x00e13a9c
  * Size: 1742 bytes
  * A5 (module base) = 0x00E24D44
+ *
+ * Re-verified against the disassembly 2026-09-27 (0x00E13A9C - 0x00E14166):
+ * the drain gate, both working-set walks, the random pick, the interval
+ * hysteresis and the log/shutdown periods all matched.  Changed: the PFT
+ * modified bit is cleared on the longword (it was a big-endian word index)
+ * and the ASTE-table access is spelled as ASTE_BASE[seg - 1].aote.
  */
 
 #include "pmap/pmap_internal.h"
@@ -81,9 +87,7 @@ static const uint16_t pmap_l_relative_delay_type = 0;   /* 0x00E1416A */
  */
 static aote_t *pmap_$aote_for_segment(uint16_t seg)
 {
-    int16_t disp = (int16_t)(seg * 0x14);
-
-    return *(aote_t **)((uint8_t *)ASTE_BASE - 0x10 + disp);
+    return ASTE_BASE[(int16_t)seg - 1].aote;     /* 0xEC53F0 + seg * 0x14 */
 }
 
 /*
@@ -299,7 +303,7 @@ void PMAP_$PURIFIER_L(void)
                         mmape_t *page = MMAPE_FOR_VPN(vpn);
                         uint16_t seg = page->segment;
                         uint8_t  page_idx = page->seg_offset;
-                        uint16_t *pmape = PMAPE_FOR_VPN(vpn);
+                        uint32_t *pft = PFT_FOR_PPN(vpn);
                         aote_t *aote = NULL;
 
                         /*
@@ -325,8 +329,8 @@ void PMAP_$PURIFIER_L(void)
                         PMAP_SEGMAP[seg][page_idx].flags |= PMAP_SEGMAP_WRITING;
 
                         /* 0x00E13C38-0x00E13C4A: PFT low word, bit 14 */
-                        if ((pmape[1] & PFT_FLAG_MODIFIED) != 0) {
-                            pmape[1] &= (uint16_t)~PFT_FLAG_MODIFIED;
+                        if ((*pft & PFT_FLAG_MODIFIED) != 0) {      /* the LOW word's bit 14, on the longword */
+                            *pft &= ~(uint32_t)PFT_FLAG_MODIFIED;
 
                             /* 0x00E13C52: same flags2 test again */
                             if ((int8_t)page->flags2 >= 0) {

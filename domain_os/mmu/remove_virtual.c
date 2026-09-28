@@ -1,109 +1,107 @@
 /*
- * MMU_$REMOVE_VIRTUAL - Remove virtual address mappings
+ * MMU_$REMOVE_VIRTUAL - Unlink an address space's pages at a run of VAs
  *
- * Scans the PTT looking for mappings that match the given virtual
- * address range and ASID, removes them, and returns the PPNs that
- * were removed.
+ * 0x00E23E38 - 0x00E23F0A (212 bytes, hand-written `MMU_ASM`).  Re-emitted
+ * 2026-09-27.  Wrong before: the head removal was done inline with the
+ * PTT pointed at the removed entry's successor (the image hands every
+ * match to mmu_$unlink_from_hash, which points the PTT at the
+ * PREDECESSOR), the 32-page grouping of the CSR/SR bracket was lost, and
+ * the match key was an approximation.
  *
- * Original address: 0x00e23e38
+ * The m68k build assembles mmu/sau2/remove_virtual.s (byte-checked); this
+ * is the host-side model.
+ *
+ * Arguments: (0x28,SP) va, (0x2c,SP) count word, (0x2e,SP) asid word,
+ * (0x30,SP) ppn_array (a longword per page found), (0x34,SP)
+ * removed_count -> word.
+ *
+ * D4 = ((va << MMU_$VA_SHIFT) with asid in the low word) ror 7, then
+ * swapped: its low word is the key compared against each PFT entry's
+ * high word under 0xfe0f.  A2 walks the PTT from the entry for va in
+ * 0x400 steps, wrapping from 0x800000 to 0x700000 and incrementing D4.
+ * D7 = count - 1: the inner `dbeq' processes pages while (D7 & 0x1f) != 0
+ * (decrementing D7), the bracket is dropped, and the outer `dbf'
+ * decrements D7 again and continues until it wraps.
  */
 
 #include "mmu/mmu_internal.h"
 
+#if !defined(ARCH_M68K)
+
 void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
                          uint32_t *ppn_array, uint16_t *removed_count)
 {
-    uint16_t saved_sr;
-    uint16_t old_csr;
-    uint16_t *ptt_entry;
-    uint32_t match_key;
-    int16_t remaining;
-    uint32_t *output_ptr;
+    uint16_t saved_sr;              /* D6 */
+    uint32_t d4;                    /* D4: key in the low word */
+    uint32_t ptt_off;               /* A2 - 0x700000 */
+    uint16_t d7;                    /* D7 */
+    uint32_t *out = ppn_array;      /* A4 */
+    uint16_t head, d1, d2;          /* D5, D1, D2 */
+    uint32_t d3;                    /* D3 */
+    uint16_t *ptt;
+    uint32_t *e;
 
-    if (count == 0) {
-        *removed_count = 0;
-        return;
-    }
+    /* 0x00E23E42 - 0x00E23E6C */
+    ptt_off = va & VA_TO_PTT_OFFSET_MASK;
+    d4 = va << (MMU_$VA_SHIFT & 0x3F);
+    d4 = (d4 & 0xFFFF0000u) | asid;
+    d4 = (d4 >> 7) | (d4 << 25);
+    d4 = (d4 >> 16) | (d4 << 16);
+    d7 = (uint16_t)(count - 1);
 
-    /* Calculate PTT entry address */
-    ptt_entry = PTT_FOR_VA(va);
-
-    /* Build the match key from ASID and VA bits */
-    /* The key format encodes the ASID and high VA bits for comparison */
-    /* 0xE23E54: move.w MMU_$VA_SHIFT,D0w / 0xE23E58: lsl.l D0,D4 */
-    uint32_t va_shifted = va << (MMU_$VA_SHIFT & 0x3F);
-    match_key = ((uint32_t)(asid << 9) | ((uint32_t)asid >> 7)) >> 16;
-
-    remaining = count - 1;
-    output_ptr = ppn_array;
-
-    do {
-        /* Enable PTT access with interrupts disabled */
+    for (;;) {
+        /* 0x00E23E6E - 0x00E23E86 */
         DISABLE_INTERRUPTS(saved_sr);
-        old_csr = MMU_$PID_PRIV;
-        MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
-
-        do {
-            uint16_t head_ppn = *ptt_entry & PTT_PPN_MASK;
-
-            if (head_ppn != 0) {
-                uint16_t first_ppn = head_ppn;
-                uint16_t ppn = head_ppn;
-                uint16_t prev_offset = 0;
-
-                /* Search hash chain for matching ASID */
-                do {
-                    uint32_t *pmape = PFT_FOR_PPN(ppn);
-                    uint32_t pmape_val = *pmape;
-                    uint16_t pmape_high = (uint16_t)(pmape_val >> 16);
-
-                    /* Check if ASID matches (compare high bits) */
-                    if (((pmape_high ^ (uint16_t)match_key) & 0xFE0F) == 0) {
-                        /* Match found - remove this entry */
-                        /* Update hash chain */
-                        uint16_t next_ppn = pmape_val & PFT_LINK_MASK;
-
-                        if (ppn == first_ppn) {
-                            /* Removing head of chain */
-                            *ptt_entry = next_ppn;
-                        } else {
-                            /* Removing from middle/end of chain */
-                            uint16_t *prev_link = (uint16_t*)((char*)PFT_BASE + prev_offset + 2);
-                            uint16_t prev_val = *prev_link;
-                            /* Copy link from removed entry, clear head bit */
-                            prev_val &= ~PFT_FLAG_HEAD;
-                            *prev_link = ((pmape_val ^ prev_val) & 0x8FFF) ^ prev_val;
-                        }
-
-                        /* Clear PMAPE, preserving ref/mod bits */
-                        *pmape &= 0x6000;
-
-                        /* Record the removed PPN */
-                        *output_ptr++ = ppn;
+        MMU_CSR = MMU_$PID_PRIV | CSR_PTT_ACCESS_BIT;
+        for (;;) {
+            /* 0x00E23E88 - 0x00E23EB2: walk the ring at this PTT entry */
+            ptt = (uint16_t *)((char *)PTT_BASE + ptt_off);
+            head = (uint16_t)(*ptt & 0x0FFF);
+            if (head != 0) {
+                d1 = 0;
+                d2 = head;
+                for (;;) {
+                    e = (uint32_t *)((char *)PFT_BASE + (int16_t)(uint16_t)(d2 << 2));
+                    d3 = *e;
+                    if ((((d3 >> 16) ^ d4) & 0xFE0F) == 0) {
+                        /* 0x00E23EB4 - 0x00E23EC4 */
+                        mmu_$unlink_from_hash(d2, d1, d3, ptt, e);
+                        *out++ = d2;
                         break;
                     }
-
-                    prev_offset = ppn << 2;
-                    ppn = pmape_val & PFT_LINK_MASK;
-                } while (ppn != first_ppn);
+                    d1 = (uint16_t)(d2 << 2);
+                    d2 = (uint16_t)(d3 & 0x0FFF);
+                    if (d2 == head) {
+                        break;
+                    }
+                }
             }
-
-            /* Move to next PTT entry (1KB pages) */
-            ptt_entry = (uint16_t*)((char*)ptt_entry + 0x400);
-
-            /* Wrap around PTT if needed */
-            if ((uint32_t)ptt_entry >= 0x800000) {
-                match_key++;
-                ptt_entry = PTT_BASE;
+            /* 0x00E23ECC - 0x00E23EDE: next PTT entry, wrapping */
+            ptt_off += 0x400;
+            if (ptt_off + 0x700000u >= 0x800000u) {
+                d4 += 1;
+                ptt_off = 0;
             }
-
-        } while ((remaining & 0x1F) != 0 && --remaining >= 0);
-
-        /* Restore CSR and interrupts */
-        MMU_CSR = old_csr;
+            /* 0x00E23EE0 - 0x00E23EE6: dbeq on (D7 & 0x1f) */
+            if ((d7 & 0x1F) == 0) {
+                break;
+            }
+            d7--;
+            if (d7 == 0xFFFF) {
+                break;
+            }
+        }
+        /* 0x00E23EEA - 0x00E23EF4 */
+        MMU_CSR = MMU_$PID_PRIV;
         ENABLE_INTERRUPTS(saved_sr);
+        if (d7 == 0) {
+            break;
+        }
+        d7--;
+    }
 
-    } while (--remaining >= 0);
-
-    *removed_count = (uint16_t)((uint32_t)((char*)output_ptr - (char*)ppn_array) >> 2);
+    /* 0x00E23EF8 - 0x00E23F04 */
+    *removed_count = (uint16_t)((uint32_t)(out - ppn_array));
 }
+
+#endif /* !ARCH_M68K */

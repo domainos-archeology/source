@@ -80,50 +80,15 @@ extern int8_t PMAP_$SHUTTING_DOWN_FLAG;
  *   00e143e2  move.w #0x5,(0x7a0,A5)
  *   00e143ea  addq.w #0x1,(0x7a0,A5)
  * The SAU2 map names nothing past PMAP_$SHUTTING_DOWN_FLAG (0xE254DA) in the
- * `D E24D44 PMAP_ size = 7A4` segment, so the DAT_ spelling stays.
- * Image value 0x0005.
+ * `D E24D44 PMAP_ size = 7A4` segment.  Image value 0x0005.
  */
-extern uint16_t DAT_00e254e4;   /* 0xE254E4: current scan slot (5-69) */
+/* Declared in pmap/pmap.h as PMAP_$CURRENT_SLOT (a tree name: the map has no
+ * symbol at 0xE254E4); its one definition is in pmap/pmap_data.c. */
 extern uint16_t PMAP_$WS_RANDOM_SEED;   /* 0xE254E2: random seed for page
                                          * selection (word; initial value 0x004D) */
 
-/*
- * ============================================================================
- * Segment map (0xED4F80)
- * ============================================================================
- *
- * One 4-byte entry per page of a segment, 32 pages (0x80 bytes) per
- * segment.  PMAP_$PURIFIER_L reaches an entry with
- *   lea 0xED5000 + seg*0x80 + page*4, A0 ; bset.b #7,(-0x80,A0)
- * (0x00E13BEA-0x00E13C32), i.e. the array base is 0xED4F80 and the segment
- * index is 1-based, exactly as in pmap_$fill_write_qblks.
- */
-typedef struct pmap_segmap_entry_t {
-    uint8_t  flags;         /* 0x00: bit 7 = write in progress */
-    uint8_t  reserved[3];   /* 0x01: rest of the 4-byte entry */
-} pmap_segmap_entry_t;
-
-/* Remaining documented offsets (bead source-pewa). */
-_Static_assert(__builtin_offsetof(pmap_segmap_entry_t, flags) == 0x00, "pmap_segmap_entry_t.flags");
-_Static_assert(__builtin_offsetof(pmap_segmap_entry_t, reserved) == 0x01, "pmap_segmap_entry_t.reserved");
-
-#define PMAP_SEGMAP_WRITING     0x80    /* bset.b #7 at 0x00E13C32 */
-#define PMAP_SEGMAP_PAGES_PER_SEG 32    /* 0x80 bytes / 4 bytes per entry */
-
-typedef pmap_segmap_entry_t pmap_segmap_row_t[PMAP_SEGMAP_PAGES_PER_SEG];
-
-#if defined(ARCH_M68K)
-_Static_assert(sizeof(pmap_segmap_entry_t) == 4, "segmap entry is 4 bytes");
-_Static_assert(sizeof(pmap_segmap_row_t) == 0x80, "segmap row is 0x80 bytes");
-#endif
-
-#if defined(ARCH_M68K)
-/* 1-based: PMAP_SEGMAP[seg][page] == 0xED4F80 + seg*0x80 + page*4 */
-#define PMAP_SEGMAP ((pmap_segmap_row_t *)0xED4F80)
-#else
-extern pmap_segmap_row_t *pmap_segmap;
-#define PMAP_SEGMAP pmap_segmap
-#endif
+/* Segment map (0xED4F80): pmap_segmap_entry_t / PMAP_SEGMAP moved to pmap/pmap.h
+ * because mmap_$trim_wsl (0x00E0C850) reads and clears its entries too. */
 
 /*
  * ============================================================================
@@ -338,5 +303,21 @@ void PMAP_$INIT_TIMERS(void);
  * NETWORK_$DISKLESS   - network/network.h
  * ANON_$UID           - anon/anon.h
  */
+
+
+/*
+ * PMAP_$INIT_WS_SCAN reaches the working-set timer element for process
+ * `idx` as 0xE24D68 + idx * 0x1C (`lea (0x24,A5,D4w*0x1)` with A5 =
+ * 0xE24D44 and D4 = idx * 0x1C, 0x00E14626-0x00E14632): the stride is
+ * 0x1C, two bytes more than time_queue_elem_t, and the array is 1-based
+ * (65 elements of 0x1C end exactly at PMAP_$IDLE_INTERVAL, 0xE25484).  The
+ * queue it pairs with is TIME_$VTQ[idx - 1] (0xE2A4A0 - 0xC + idx * 0xC),
+ * not a PMAP-owned array.  Appended 2026-09-27; the storage below keeps
+ * its old shape until pmap_data.c is re-emitted (see the bead).
+ */
+#define PMAP_WS_TIMER_ELEM_STRIDE 0x1C
+#define PMAP_WS_TIMER_ELEM(idx) \
+    ((time_queue_elem_t *)((uint8_t *)PMAP_$WS_TIMER_ELEMENTS + \
+                           (uint32_t)(idx) * PMAP_WS_TIMER_ELEM_STRIDE))
 
 #endif /* PMAP_INTERNAL_H */

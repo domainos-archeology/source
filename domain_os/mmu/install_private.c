@@ -1,66 +1,61 @@
 /*
- * MMU_$INSTALL_PRIVATE - Install a private mapping
+ * MMU_$INSTALL_PRIVATE - Install one page without the global bit
  *
- * Creates a mapping without the global bit set, meaning this
- * mapping is private to a single address space. After installing,
- * it clears the global bit in the PMAPE entry.
+ * 0x00E23F82 - 0x00E23FDC (92 bytes, hand-written `MMU_ASM`).  Re-emitted
+ * from the disassembly on 2026-09-22.  Wrong before: the global bit was
+ * cleared through a byte-pointer cast into the PFT entry, and the CSR was
+ * restored from a saved copy (the image re-reads MMU_$PID_PRIV,
+ * 0x00E23FCE).
  *
- * Parameters:
- *   ppn - Physical page number
- *   va - Virtual address
- *   flags - Packed flags: byte 1 = ASID, byte 3 = protection
- *           Use MMU_FLAGS(asid, prot) macro to construct
+ * Arguments (after the nine-register movem, 0x28 off SP):
+ *   (0x28,SP) ppn    longword (D2), low word used
+ *   (0x2c,SP) va     longword (A4)
+ *   (0x30,SP) flags  longword: byte +1 = asid, byte +3 = prot
  *
- * Original address: 0x00e23f82
+ * The packed word is built exactly as in MMU_$INSTALL_LIST; after
+ * mmu_$installi (which leaves A3 = the PFT entry of ppn) the entry's low
+ * word has bit 12 cleared (`andi.w #-0x1001,(0x2,A3)`, 0x00E23FC8).
+ *
+ * The m68k build assembles mmu/sau2/install_private.s (byte-checked against the
+ * image); this file is the host-side model of that routine, compiled only
+ * for the host build so the unit tests can drive it.
  */
 
 #include "mmu/mmu_internal.h"
 
+#if !defined(ARCH_M68K)
+
 void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint32_t flags)
 {
-    uint16_t saved_sr;
-    uint16_t old_csr;
-    uint32_t packed_info;
-    uint32_t *pmape;
-    uint8_t prot;
-    uint8_t asid;
+    uint16_t saved_sr;              /* D6 */
+    uint32_t packed;                /* D4 */
+    uint8_t prot = (uint8_t)(flags & 0xFF);          /* (0x33,SP) */
+    uint8_t asid = (uint8_t)((flags >> 16) & 0xFF);  /* (0x31,SP) */
 
-    /* Extract ASID and protection from packed flags */
-    asid = (flags >> 16) & 0xFF;
-    prot = flags & 0xFF;
-
-    /* Pack ASID and protection (same as MMU_$INSTALL) */
-    packed_info = va;
-
-    /* 0xE23F90: move.w MMU_$PTT_SHIFT,D1w / 0xE23F94: lsl.l D1,D4 */
-    packed_info <<= (MMU_$PTT_SHIFT & 0x3F);
-
-    packed_info = (packed_info & 0xFFFFFF00) | prot;
-    packed_info = (packed_info >> 5) | (packed_info << 27);
-    packed_info = (packed_info & 0xFFFFFF00) | asid;
-    packed_info = (packed_info >> 7) | (packed_info << 25);
-
-    /* 0xE23FA2: tst.w M68020 / bne - whole-word test */
+    /* 0x00E23F8E - 0x00E23FAC */
+    packed = va << (MMU_$PTT_SHIFT & 0x3F);
+    packed = (packed & 0xFFFFFF00u) | prot;
+    packed = (packed >> 5) | (packed << 27);
+    packed = (packed & 0xFFFFFF00u) | asid;
+    packed = (packed >> 7) | (packed << 25);
     if (!M68020_IS_020_W()) {
-        packed_info = (packed_info & 0xFFFF0000) | ((packed_info & 0xFFFF) >> 2);
+        packed = (packed & 0xFFFF0000u) | ((packed & 0xFFFF) >> 2);
     }
+    packed &= 0xFFFFFFF0u;
 
-    packed_info &= ~0x0F;
-
-    /* Disable interrupts and enable PTT access */
+    /* 0x00E23FB0 - 0x00E23FBE */
     DISABLE_INTERRUPTS(saved_sr);
+    MMU_CSR = MMU_$PID_PRIV | CSR_PTT_ACCESS_BIT;
 
-    old_csr = MMU_$PID_PRIV;
-    MMU_CSR = old_csr | CSR_PTT_ACCESS_BIT;
+    /* 0x00E23FC4 */
+    mmu_$installi((uint16_t)ppn, va, packed);
 
-    /* Call internal installer */
-    mmu_$installi((uint16_t)ppn, va, packed_info);
+    /* 0x00E23FC8: bit 12 of the entry's low word */
+    *PFT_FOR_PPN((uint16_t)ppn) &= ~(uint32_t)PFT_FLAG_GLOBAL;
 
-    /* Clear the global bit - this mapping is private */
-    pmape = PMAPE_FOR_PPN(ppn);
-    *(uint16_t*)((char*)pmape + 2) &= ~PMAPE_FLAG_GLOBAL;
-
-    /* Restore CSR and interrupts */
-    MMU_CSR = old_csr;
+    /* 0x00E23FCE - 0x00E23FD6 */
+    MMU_CSR = MMU_$PID_PRIV;
     ENABLE_INTERRUPTS(saved_sr);
 }
+
+#endif /* !ARCH_M68K */
