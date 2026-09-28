@@ -62,3 +62,30 @@
 - [Header ownership follows the map segment](header-ownership-rule.md) — the SAU2 module, not the name prefix, decides which `<sub>/<sub>.h` a declaration belongs in.
 - [Header-hygiene gates](gate-scripts-header-hygiene.md) — the two scans, why ugrep lies about `\$`, and why a clean rebuild is mandatory after moving includes.
 - [The MEM_ module block at 0xE22930](mem-module-block.md) — 1-based board counts at +0x0A/+0x0C, page id is bits 21..16, MEM_$MEM_REC is 0x56 bytes.
+- [ACL SID audit paths, ACL_$DATA and the AUDIT_$INIT constants](acl-audit-sid-paths.md) — the snapshot/act/log shape, LOG_EVENT_S' argument order, and why ACL_$INIT's zero length is a segment size.
+- [The DIR module block at A5=0xE7DC00](dir-module-block-tables.md) — the 0x10/0x3C tables, the five scalars, and why DIR_$INIT's A5 is not the block.
+- [ASKNODE_$INTERNET_INFO's 42 local arms](asknode-internet-info-arms.md) — the arm map, the 0xE658AE constant pool, and the rip/route/ring/network/disk/peb/proc2 layout fixes it forced.
+- [ROUTE_$SERVICE and the HINT cache](route-service-and-hint-cache.md) — the 12-byte request record, driver-info callbacks, the 3-outcome status restore, the 2-entry cache bound.
+- [FILE/VOLX/AREA/FLOP/PEB recoveries, 2026-09-07](file-volx-area-flop-peb-pass.md) — the one 251 cell at 0xE5EA28, the AREA_ block map, FLOP_$BOOT's cells, SET_PROT's bit 24.
+- [MST/SMD/DTTY/TPAD fidelity pass, 2026-09-07](mst-smd-dtty-tpad-pass.md) — 1-based MSTE pages, EC_$WAIT's by-value arrays, the DTTY block and strings, the tpad 48-bit clock.
+- [BAT bitmap search ABIs](bat-bitmap-search.md) — BAT_$ALLOCATE's 6 params and rescan flag, BAT_$FREE's ascending walk, the alloc_vtoce threshold, and the two unmasked ORs.
+- [rem_file client reply buffer and layouts](rem-file-client-buffer-and-layouts.md) — the 0xBE buffer at A6-0xC0, offset = A6 disp + 0xC0, and every corrected request/reply record.
+- [MMU_ASM to mmu/sau2 and PMAP recoveries](mmu-asm-and-pmap-notes.md) — byte-check recipe, register ABIs, immediate-source .short trap, 48-bit timer intervals, 0x1C ws-timer stride, segmap longword bits.
+- [DISK elevator queue and AS_IO ABIs](disk-que-and-as-io-notes.md) — ADD_QUE run lists, sentinel cyl in the HIGH half of a longword, buffer-by-value AS_* args, DISMOUNT last-PV-wins.
+- [SEND_REQUEST / RN_DO_OP / RIP_$INIT](send-request-and-rn-do-op.md) — the status exits, the 0x58-vs-0x3C tail union, and RIP_$INIT's two constant cells.
+
+### Recurring fidelity defect classes (aliased cells, nested procs, dbf overruns)
+- See [aliased-cells-and-nested-procs.md](aliased-cells-and-nested-procs.md):
+  one image cell modelled as two C objects (FILE_$LOT_*, pmap DAT_ aliases,
+  volx's duplicated DROP_MOUNT cell), nested Pascal procedures that read the
+  parent frame (audit_$clear_hash_table, route_$close_port and its
+  never-written old_status), and `moveq #N`/`dbf` loops that clear one entry
+  more than the hash can select (hint_file_t is 65 buckets, audit's table
+  clears slots 1..37)
+- [NETWORK / ASKNODE / REM_NAME argument and constant cells](network-asknode-remname-cells.md) — GET_NET's HIGH-word index, the 0xE645BE/0xE645C0 pool, REGISTER_SERVER's two ignored args, last-push-is-arg-1.
+- [DIR_$OLD_* unlock tails and the find_entry path buffer](dir-old-unlock-tails.md) — the TWO NAME_$UNLOCK_DIR tail shapes with every site, CREATE_DIRU's NAME_$LOCK_* save/restore, and host casts for 32-bit handle/entry words.
+- [TIME clock readers, ADJUST_TIME_OF_DAY and the host-alignment trap](time-clock-readers-and-adjust.md) — ABS_CLOCK jumps into CLOCK's tail, TIME_$CLOCKH is an EC value, unsigned adjust bounds, time_queue_elem_t is 0x1C on the host.
+- [PROC1 create/bind/alloc_stack/EC_WAITN ABIs](proc1-create-bind-waitn.md) — packed CREATE_P arg (stack<<16|type), BIND births BOUND|SUSPENDED, WAITN returns the lowest satisfied index, host-only stride asserts.
+- [PROC2 re-emission passes, 2026-09-19](proc2-create-debug-pass.md) — MAP_INITIAL_AREA 7 params, shared cells, CREATE status bug, PGROUP_TABLE 71, GET_UPIDS order, FLAG_SERVER=0x0200, DECR_LEADER nested proc + signal 0x16, WAIT record, high-byte flag traps.
+- [Running the test gate by hand](test-loop-gate.md) — find-based loop, `timeout 20` per test, and the .dSYM/Contents glob trap.
+- [KBD / TERM / TONE tty2 pass](kbd-term-tty2-pass.md) — KBD state-table entries and manual-stop arm, SET_REAL_LINE_DISCIPLINE writes an sio_desc_t, shared OS_TERM word cells, SIO2681_$TONE takes a channel cell.
