@@ -28,6 +28,25 @@
  * reference as its lock_ptr_out argument (pea (0x3c,A5,D6w*1) at 0xE548AC). */
 uint32_t NAME_$LOCK_SLOT[NAME_$MAX_LOCK_PROCS];
 
+/* A5+0x000 (0xE7FD24): the "any byte of a leaf" set, see name/name.h. */
+uint8_t NAME_$LEAF_CHAR_SET[NAME_$LEAF_SET_SIZE] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x7f, 0xff, 0xff, 0xff, 0xef, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0x7f, 0xfe, 0x00, 0x00, 0x00, 0x00
+};
+
+/* A5+0x020 (0xE7FD44): the "first byte of a leaf" set, 28 bytes (a
+ * `set of chr(32)..chr(255)`).  NAME_$LOCK_SLOT starts right after it at
+ * A5+0x3C, so name_$validate_leaf's bound-0xFF index reaches set bytes
+ * 28..31 (first byte below 0x20) inside NAME_$LOCK_SLOT[0]. */
+uint8_t NAME_$LEAF_FIRST_CHAR_SET[NAME_$LEAF_FIRST_SET_SIZE] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x3f, 0xff, 0xff, 0xfe, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0x3f, 0xfe
+};
+
 /* A5+0x13E (0xE7FE62): lock mode currently requested/held (0xE54894). */
 int16_t NAME_$LOCK_MODE[NAME_$MAX_LOCK_PROCS];
 
@@ -73,10 +92,6 @@ int16_t NAME_$CONST_ZERO_W = 0;
  * 00 00 00 00. */
 uint32_t NAME_$CONST_ZERO_L = 0;
 
-/* 0x00E544AE: the word 0x0020, immediately after an `rts` at 0x00E544AC.
- * NAME_$VALIDATE_LEAF hands its address to MAP_CASE as the maximum output
- * length (32 characters).  Image bytes: 00 20. */
-int16_t DAT_00e544ae = 0x0020;
 
 /*
  * Naming_Internal_Err - 0x00E5855C, the status cell NAME_$MAP_DIR pea's to

@@ -1,333 +1,267 @@
 /*
- * UNMAP_CASE - Convert Domain/OS case-mapped pathname to Unix-style
+ * UNMAP_CASE - Convert a Domain/OS case-mapped pathname back to Unix form
+ * (0x00E540D4, 734 bytes; SAU2 map: OLD_DIR segment, symbol UNMAP_CASE)
  *
- * This function reverses the case mapping performed by MAP_CASE:
- *   - Bare UPPERCASE A-Z -> lowercase (was originally lowercase)
- *   - '\' -> '../' with preceding '/' separator if needed
- *   - ':' escape prefix -> decode next char(s):
- *       - ':' + uppercase letter -> keep uppercase (preserves original case)
- *       - ':' + lowercase letter -> uppercase it (robustness path)
- *       - ':' + digit 0-9 -> special char mapping:
- *           :0->! :1-># :2->% :3->& :4->+
- *           :5->- :6->? :7->= :8->@ :9->^
- *       - ':_' -> space
- *       - ':|' -> backslash
- *       - ':$' -> '$'
- *       - ':#XX' -> hex decode (two hex digits -> byte value)
- *       - ':' at end of input -> output ':' literally
- *       - ':' + other -> output char as-is
+ * Reverses MAP_CASE.  Per input byte (0x00E5410C-0x00E543A2):
+ *   - '\'                       -> "../", preceded by '/' unless the output is
+ *                                  empty or already ends in '/'
+ *   - 'A'..'Z'                  -> lower case
+ *   - ':' as the LAST byte      -> ':' and stop scanning
+ *   - ':' + c, c in the 0xE54404 set ['A'..'Z','`','~',':','.'] -> c
+ *   - ':' + 'a'..'z'            -> upper case
+ *   - ':' + '0'..'9'            -> "!#%&+-?=@^"[digit]
+ *   - ':' + '_' / '|' / '$'     -> ' ' / '\' / '$'
+ *   - ':' + '#' [h1 [h2]]       -> the byte h1h2; a non-hex h1 counts as 0 and
+ *                                  h2 is STILL consumed; a non-hex h2 leaves
+ *                                  h1 << 4
+ *   - ':' + anything else       -> that byte
+ *   - anything else             -> unchanged
+ * Afterwards the 1-based count is turned into a length, a NUL is stored when
+ * there is room, and the truncated flag is cleared.
  *
- * At end: decrements out_len by 1 (internal 1-based -> external length),
- * null-terminates if room, sets truncated=0.
+ * Frame (A6+):
+ *   0x08 name         (long)  -> D4, bytes indexed 1-based via A4
+ *   0x0C name_len     (long)  -> A2, pointer to the input length word
+ *   0x10 output       (long)  -> A1
+ *   0x14 max_out_len  (long)  -> A3 when needed
+ *   0x18 out_len      (long)  -> A0; the 1-based output count lives in *out_len
+ *   0x1C truncated    (long)  -> A3 at entry/exit
  *
- * Originally written in Pascal, compiled for m68k. The original assembly
- * uses bitmap lookup tables at 0xe543c6-0xe54410 for character classification
- * (uppercase, lowercase, digits, hex digits). These are Pascal compiler
- * optimizations for set membership tests. In C, we use equivalent range
- * checks for portability.
- *
- * Parameters:
- *   name        - Input pathname buffer (Domain/OS case-mapped)
- *   name_len    - Pointer to input length (int16_t)
- *   output      - Output buffer for Unix-style result
- *   max_out_len - Pointer to maximum output buffer size (int16_t)
- *   out_len     - Pointer to output length (int16_t, set on return)
- *   truncated   - Pointer to truncation flag (uint8_t, 0xFF if truncated, 0x00 if complete)
- *
- * Original address: 0x00e540d4
- * Size: 734 bytes
+ * Character classes are Pascal sets, stored as bit tables in the code
+ * segment (0x00E543C6-0x00E54413) and tested with the compiler's
+ * `moveq #bound,Dn / sub.w ch,Dn / bcs / lsr.w #3 / btst.b ch,(table,Dn)`
+ * idiom, which unmap_$in_set reproduces byte for byte.
  */
 
 #include "file/file_internal.h"
 
 /*
- * Helper: check if character is uppercase A-Z
- *
- * Replaces bitmap lookup table at DAT_00e543e0 which contains the
- * Pascal SET [A..Z] encoded as a bit array.
+ * unmap_$in_set - Pascal set membership as compiled at e.g. 0x00E54164:
+ * ch > bound is "not a member" (the `bcs`); otherwise byte (bound-ch)>>3,
+ * bit ch&7 (`btst.b Dn,(mem)` numbers bits modulo 8).
  */
-static int is_upper(uint8_t ch)
+static int unmap_$in_set(const uint8_t *set, uint16_t bound, uint8_t ch)
 {
-    return (ch >= 'A' && ch <= 'Z');
+    uint16_t d;
+
+    if (ch > bound) {
+        return 0;
+    }
+    d = (uint16_t)(bound - ch);
+    return (set[d >> 3] >> (ch & 7)) & 1;
 }
 
-/*
- * Helper: check if character is lowercase a-z
- *
- * Replaces bitmap lookup table at DAT_00e543f4 which contains the
- * Pascal SET [a..z] encoded as a bit array.
- */
-static int is_lower(uint8_t ch)
-{
-    return (ch >= 'a' && ch <= 'z');
-}
+/* 0x00E543C6, 14 bytes, bound 0x6F: ['a'..'f'] (0x00E54300, 0x00E54360). */
+static const uint8_t unmap_$set_hex_lower[14] = {
+    0x00, 0x7e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
 
-/*
- * Helper: check if character is a digit 0-9
- *
- * Replaces bitmap lookup table at DAT_00e543ec which contains the
- * Pascal SET [0..9] encoded as a bit array.
- */
-static int is_digit(uint8_t ch)
-{
-    return (ch >= '0' && ch <= '9');
-}
+/* 0x00E543D4, 10 bytes, bound 0x4F: ['A'..'F'] (0x00E5431A, 0x00E5437A). */
+static const uint8_t unmap_$set_hex_upper[10] = {
+    0x00, 0x7e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00
+};
 
-/*
- * Helper: check if character is uppercase letter A-Z (used for initial
- * char-after-colon test)
- *
- * Replaces bitmap lookup table at DAT_00e54404 which tests the same
- * set as DAT_00e543e0 but is referenced at a different PC-relative offset.
- */
-static int is_upper_letter(uint8_t ch)
-{
-    return (ch >= 'A' && ch <= 'Z');
-}
+/* 0x00E543E0, 12 bytes, bound 0x5F: ['A'..'Z'] (0x00E54170). */
+static const uint8_t unmap_$set_upper[12] = {
+    0x07, 0xff, 0xff, 0xfe, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00
+};
+
+/* 0x00E543EC, 8 bytes, bound 0x3F: ['0'..'9'] (0x00E541DA, 0x00E542E6,
+ * 0x00E54346). */
+static const uint8_t unmap_$set_digit[8] = {
+    0x03, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+/* 0x00E543F4, 16 bytes, bound 0x7F: ['a'..'z'] (0x00E541C0). */
+static const uint8_t unmap_$set_lower[16] = {
+    0x07, 0xff, 0xff, 0xfe, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+/* 0x00E54404, 16 bytes, bound 0x7F: ['A'..'Z', '`', '~', ':', '.'] - the
+ * bytes MAP_CASE escapes with ':' and passes through unchanged (0x00E541AC). */
+static const uint8_t unmap_$set_escaped_literal[16] = {
+    0x40, 0x00, 0x00, 0x01, 0x07, 0xff, 0xff, 0xfe,
+    0x04, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+/* 0x00E541FE jump table targets, ':0'..':9' (0x00E54212-0x00E54286). */
+static const char unmap_$digit_escape[10] = {
+    0x21, 0x23, 0x25, 0x26, 0x2B, 0x2D, 0x3F, 0x3D, 0x40, 0x5E
+};
 
 void UNMAP_CASE(char *name, int16_t *name_len, char *output,
                 int16_t *max_out_len, int16_t *out_len, uint8_t *truncated)
 {
-    int16_t in_len = *name_len;
-    int16_t max_out = *max_out_len;
-    uint8_t ch;
-    uint8_t next_ch;
+    int16_t  i;         /* D1w: 1-based input index */
+    uint8_t  ch;        /* D0b */
+    uint8_t  c2;        /* D2b/D3b: the byte after ':' / a hex digit */
+    uint16_t val;       /* D0w on the hex path */
+    int16_t  n;
 
-    /*
-     * Original assembly uses 1-based indexing (Pascal convention):
-     *   D1 = current input position (1-based)
-     *   (A0) = output count (1-based, decremented by 1 at end)
-     *
-     * In C we track:
-     *   ii = input index (0-based)
-     *   oi = output position count (1-based, matching the assembly's behavior)
-     *
-     * Using 1-based oi here because the assembly's end-of-function logic
-     * decrements by 1 and null-terminates at position oi (0-based),
-     * so the final length = oi - 1.
-     */
-    int16_t ii;
-    int16_t oi; /* 1-based output count, matching assembly */
-
-    if (in_len == 0) {
+    /* 0x00E540EC-0x00E540F8: only an EXACTLY zero length is the empty case;
+     * a negative length skips the loop and goes through the epilogue. */
+    if (*name_len == 0) {
         *truncated = 0;
         *out_len = 0;
-        return;
+        return;                                     /* 0x00E543BC */
     }
 
-    *truncated = 0xFF;
-    oi = 1;
+    *truncated = 0xFF;                              /* 0x00E54100 */
+    *out_len = 1;                                   /* 0x00E54102 */
+    i = 1;                                          /* 0x00E54106 */
 
-    for (ii = 0; ii < in_len; ii++) {
-        if (oi > max_out) {
-            /* Output buffer full - truncated */
-            *out_len = oi;
-            return;
+    /* 0x00E543A0: `cmp.w (A2),D1w / ble` - loop while i <= *name_len. */
+    while (i <= *name_len) {
+        /* 0x00E5410C-0x00E54114: out of room -> exit, flag left at 0xFF. */
+        if (*out_len > *max_out_len) {
+            return;                                 /* 0x00E543BC */
         }
 
-        ch = (uint8_t)name[ii];
+        ch = (uint8_t)name[i - 1];                  /* 0x00E5411A */
 
-        /* Backslash: emit '../' with optional preceding '/' */
-        if (ch == 0x5C) {
-            /* If output is not empty and last char is not '/', prepend '/' */
-            if (oi > 1 && output[oi - 2] != '/') {
-                output[oi - 1] = 0x2F;  /* '/' */
-                oi++;
+        if (ch == 0x5C) {                           /* 0x00E5411E */
+            /* 0x00E54124-0x00E54138: separator unless empty or already '/'. */
+            if (*out_len > 1) {
+                n = *out_len;
+                if ((uint8_t)output[n - 2] != 0x2F) {
+                    output[n - 1] = 0x2F;
+                    *out_len = (int16_t)(*out_len + 1);
+                }
             }
-
-            /* Need room for '../' (3 chars but we only add 2 to oi since
-             * the main loop increment handles 1) */
-            if (oi + 2 > max_out) {
-                *out_len = oi;
-                return;
+            /* 0x00E5413A-0x00E54146: room for two more? (longword compare) */
+            if ((int32_t)*out_len + 2 > (int32_t)*max_out_len) {
+                return;                             /* 0x00E543BC */
             }
-
-            {
-                int16_t pos = oi;
-                output[pos - 1] = 0x2E;  /* '.' */
-                output[pos]     = 0x2E;  /* '.' */
-                output[pos + 1] = 0x2F;  /* '/' */
-            }
-            oi += 2;
+            n = *out_len;                           /* 0x00E5414A */
+            output[n - 1] = 0x2E;
+            output[n]     = 0x2E;
+            output[n + 1] = 0x2F;
+            *out_len = (int16_t)(*out_len + 2);     /* 0x00E5415E */
             goto advance;
         }
 
-        /* Check if character is uppercase A-Z (bare uppercase -> lowercase) */
-        if (is_upper(ch)) {
-            ch += 0x20;  /* Convert to lowercase */
-            output[oi - 1] = ch;
+        /* 0x00E54164-0x00E5417E: bare upper case -> lower. */
+        if (unmap_$in_set(unmap_$set_upper, 0x5F, ch)) {
+            ch = (uint8_t)(ch + 0x20);
+            goto emit_ch;
+        }
+
+        if (ch != 0x3A) {                           /* 0x00E54182 */
+            goto emit_ch;
+        }
+
+        /* 0x00E5418A-0x00E54196: ':' as the last byte -> ':' and stop. */
+        if (i == *name_len) {
+            n = *out_len;
+            output[n - 1] = (char)ch;
+            *out_len = (int16_t)(*out_len + 1);
+            goto epilogue;                          /* bra.w 0x00E543A6 */
+        }
+
+        i = (int16_t)(i + 1);                       /* 0x00E5419A */
+        ch = (uint8_t)name[i - 1];                  /* 0x00E5419E */
+        c2 = ch;
+
+        /* 0x00E541A2-0x00E541B4: escaped literal -> as is. */
+        if (unmap_$in_set(unmap_$set_escaped_literal, 0x7F, c2)) {
+            goto emit_ch;
+        }
+        /* 0x00E541B8-0x00E541CE: ':' + lower -> upper. */
+        if (unmap_$in_set(unmap_$set_lower, 0x7F, c2)) {
+            ch = (uint8_t)(ch - 0x20);
+            goto emit_ch;
+        }
+        /* 0x00E541D2-0x00E541FA: ':' + digit -> table. */
+        if (unmap_$in_set(unmap_$set_digit, 0x3F, c2)) {
+            val = (uint16_t)(c2 - 0x30);
+            if (val >= 10) {                        /* 0x00E541EC bcc: never */
+                goto advance;
+            }
+            n = *out_len;
+            output[n - 1] = unmap_$digit_escape[val];
             goto advance;
         }
 
-        /* Colon escape prefix */
-        if (ch == 0x3A) {
-            /* Colon at end of input: output ':' literally */
-            if (ii + 1 >= in_len) {
-                output[oi - 1] = 0x3A;
-                oi++;
-                break;
-            }
-
-            /* Consume next character */
-            ii++;
-            next_ch = (uint8_t)name[ii];
-
-            /*
-             * Check if next char is an uppercase letter (DAT_00e54404 bitmap).
-             * If so, it was originally uppercase - keep it as-is.
-             */
-            if (is_upper_letter(next_ch)) {
-                ch = next_ch;
-                output[oi - 1] = ch;
-                goto advance;
-            }
-
-            /*
-             * Check if next char is a lowercase letter (DAT_00e543f4 bitmap).
-             * If so, convert to uppercase (robustness path).
-             */
-            if (is_lower(next_ch)) {
-                ch = next_ch - 0x20;
-                output[oi - 1] = ch;
-                goto advance;
-            }
-
-            /*
-             * Check if next char is a digit 0-9 (DAT_00e543ec bitmap).
-             * Digits map to special characters.
-             */
-            if (is_digit(next_ch)) {
-                /* Jump table for :0 through :9 */
-                switch (next_ch) {
-                case '0':
-                    output[oi - 1] = 0x21;  /* '!' */
-                    break;
-                case '1':
-                    output[oi - 1] = 0x23;  /* '#' */
-                    break;
-                case '2':
-                    output[oi - 1] = 0x25;  /* '%' */
-                    break;
-                case '3':
-                    output[oi - 1] = 0x26;  /* '&' */
-                    break;
-                case '4':
-                    output[oi - 1] = 0x2B;  /* '+' */
-                    break;
-                case '5':
-                    output[oi - 1] = 0x2D;  /* '-' */
-                    break;
-                case '6':
-                    output[oi - 1] = 0x3F;  /* '?' */
-                    break;
-                case '7':
-                    output[oi - 1] = 0x3D;  /* '=' */
-                    break;
-                case '8':
-                    output[oi - 1] = 0x40;  /* '@' */
-                    break;
-                case '9':
-                    output[oi - 1] = 0x5E;  /* '^' */
-                    break;
-                default:
-                    /* Should not reach here since is_digit was true */
-                    break;
-                }
-                goto advance;
-            }
-
-            /* Special escape sequences */
-            if (next_ch == 0x5F) {
-                /* ':_' -> space */
-                output[oi - 1] = 0x20;
-            } else if (next_ch == 0x7C) {
-                /* ':|' -> backslash */
-                output[oi - 1] = 0x5C;
-            } else if (next_ch == 0x24) {
-                /* ':$' -> '$' */
-                output[oi - 1] = 0x24;
-            } else if (next_ch == 0x23) {
-                /*
-                 * ':#XX' -> hex decode
-                 *
-                 * Original assembly at 0x00e542cc:
-                 *   clr.w D0 (bVar2 = 0)
-                 *   If at end of input, skip to advance
-                 *   Otherwise consume up to 2 hex digits
-                 */
-                uint8_t value = 0;
-
-                if (ii >= in_len - 1) {
-                    /* '#' at end of colon-escape, no hex digits follow */
-                    goto advance;
-                }
-
-                /* First hex digit */
-                ii++;
-                {
-                    uint8_t h1 = (uint8_t)name[ii];
-                    if (is_digit(h1)) {
-                        value = h1 - 0x30;
-                    } else if (is_lower(h1)) {
-                        value = h1 - 0x61 + 10;
-                    } else if (is_upper(h1)) {
-                        value = h1 - 0x41 + 10;
-                    } else {
-                        /* Not a hex digit - output value as-is */
-                        output[oi - 1] = value;
-                        goto advance;
-                    }
-                }
-
-                /* Second hex digit */
-                if (ii >= in_len - 1) {
-                    /* Only one hex digit available */
-                    output[oi - 1] = value;
-                    goto advance;
-                }
-
-                ii++;
-                value <<= 4;
-                {
-                    uint8_t h2 = (uint8_t)name[ii];
-                    if (is_digit(h2)) {
-                        value = (h2 + value) - 0x30;
-                    } else if (is_lower(h2)) {
-                        value = (h2 + value) - 0x61 + 10;
-                    } else if (is_upper(h2)) {
-                        value = (h2 + value) - 0x41 + 10;
-                    }
-                    /* If not a hex digit, value stays as high nibble only */
-                }
-
-                output[oi - 1] = value;
-            } else {
-                /* ':' + other -> output the char as-is */
-                output[oi - 1] = next_ch;
-            }
+        /* 0x00E5428A-0x00E542A4 */
+        if (c2 == 0x5F) {
+            n = *out_len;
+            output[n - 1] = 0x20;                   /* 0x00E542AA */
             goto advance;
         }
+        if (c2 == 0x7C) {
+            n = *out_len;
+            output[n - 1] = 0x5C;                   /* 0x00E542B6 */
+            goto advance;
+        }
+        if (c2 == 0x24) {
+            n = *out_len;
+            output[n - 1] = 0x24;                   /* 0x00E542C2 */
+            goto advance;
+        }
+        if (c2 != 0x23) {
+            val = ch;                               /* D0b still holds c2 */
+            goto emit_val;                          /* 0x00E5438E */
+        }
 
-        /* Default: output character unchanged */
-        output[oi - 1] = ch;
+        /* ':#' hex escape, 0x00E542CC-0x00E5438A. */
+        val = 0;                                    /* 0x00E542CC clr.w D0w */
+        if (i >= *name_len) {                       /* 0x00E542CE bge */
+            goto advance;                           /* nothing stored */
+        }
+        i = (int16_t)(i + 1);                       /* 0x00E542D4 */
+        c2 = (uint8_t)name[i - 1];                  /* 0x00E542D8 */
+        if (unmap_$in_set(unmap_$set_digit, 0x3F, c2)) {
+            val = (uint16_t)(c2 - 0x30);            /* 0x00E542F0 */
+        } else if (unmap_$in_set(unmap_$set_hex_lower, 0x6F, c2)) {
+            val = (uint16_t)(c2 - 0x61 + 0x0A);     /* 0x00E5430A, 0x00E5432A */
+        } else if (unmap_$in_set(unmap_$set_hex_upper, 0x4F, c2)) {
+            val = (uint16_t)(c2 - 0x41 + 0x0A);     /* 0x00E54324, 0x00E5432A */
+        }
+        /* a non-hex first digit leaves val = 0 and falls into the second
+         * digit anyway (0x00E54322 ble -> 0x00E5432E) */
 
-    advance:
-        /* In the assembly, sVar5 = sVar4 here (input position tracking).
-         * In C, ii already tracks the consumed input position since we
-         * increment ii directly when consuming multi-char escapes. */
-        oi++;
+        if (i >= *name_len) {                       /* 0x00E5432E bge */
+            goto emit_val;
+        }
+        i = (int16_t)(i + 1);                       /* 0x00E54332 */
+        val = (uint16_t)(val << 4);                 /* 0x00E54334 */
+        c2 = (uint8_t)name[i - 1];                  /* 0x00E54336 */
+        if (unmap_$in_set(unmap_$set_digit, 0x3F, c2)) {
+            val = (uint16_t)(val + c2 - 0x30);      /* 0x00E54350 */
+        } else if (unmap_$in_set(unmap_$set_hex_lower, 0x6F, c2)) {
+            val = (uint16_t)(val + c2 - 0x61 + 0x0A);   /* 0x00E5436A, 0x00E5438A */
+        } else if (unmap_$in_set(unmap_$set_hex_upper, 0x4F, c2)) {
+            val = (uint16_t)(val + c2 - 0x41 + 0x0A);   /* 0x00E54384, 0x00E5438A */
+        }
+        /* a non-hex second digit leaves the shifted first one (0x00E54382) */
+
+emit_val:
+        /* 0x00E5438E-0x00E54390: store the low byte of D0. */
+        n = *out_len;
+        output[n - 1] = (char)(uint8_t)val;
+        goto advance;
+
+emit_ch:
+        /* 0x00E54396-0x00E54398 */
+        n = *out_len;
+        output[n - 1] = (char)ch;
+
+advance:
+        /* 0x00E5439C-0x00E5439E */
+        i = (int16_t)(i + 1);
+        *out_len = (int16_t)(*out_len + 1);
     }
 
-    /*
-     * Post-processing (assembly at 0x00e543a6):
-     *   subq.w #0x1,(A0)  - decrement output count (1-based -> length)
-     *   null-terminate if room
-     *   clear truncated flag
-     */
-    oi--;
-    *out_len = oi;
-    if (oi < max_out) {
-        output[oi] = '\0';
+epilogue:
+    /* 0x00E543A6-0x00E543BA: count -> length, NUL if room, flag cleared. */
+    *out_len = (int16_t)(*out_len - 1);
+    n = *out_len;
+    if (n < *max_out_len) {
+        output[n] = 0;
     }
     *truncated = 0;
 }

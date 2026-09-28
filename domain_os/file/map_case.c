@@ -1,34 +1,42 @@
 /*
- * MAP_CASE - Convert Unix-style pathname to Domain/OS case-mapped representation
+ * MAP_CASE - Convert a Unix-style pathname to the Domain/OS case-mapped form
+ * (0x00E53EF8, 476 bytes; SAU2 map: OLD_DIR segment, symbol MAP_CASE)
  *
- * This function maps Unix pathnames to Domain/OS case convention:
- *   - lowercase a-z -> uppercase (subtract 0x20)
- *   - UPPERCASE A-Z -> ':' + char (escape to preserve original case)
- *   - '.' at start of component:
- *       - '.' or '..' (followed by '/' or end) -> pass through
- *       - '.' followed by other chars -> ':' + '.'
- *   - '`' or '~' at start of component -> ':' + char
- *   - space -> ':_'
- *   - '\' -> ':|'
- *   - ':' -> '::' (escape the escape char)
- *   - control chars (1-31) and >= 0x7F -> ':#XX' (hex escape, lowercase hex digits)
- *   - '/' -> pass through, resets component start tracking
- *   - other printable -> pass through
+ * Per input character (0x00E53F30-0x00E540C0, one `dbf` pass per byte):
+ *   - first byte of a component that is '`' or '~'       -> ':' + char
+ *   - first byte of a component that is '.':
+ *       '.' at end or before '/'                          -> '.'
+ *       '..' at end or before '/'                         -> '.'  (the second
+ *                                                             '.' is handled
+ *                                                             on its own pass)
+ *       any other '.'                                     -> ':' + '.'
+ *   - 'A'..'Z'                                            -> ':' + char,
+ *                                                             WITHOUT a room check
+ *   - 'a'..'z'                                            -> char - 0x20
+ *   - 0x01..0x1F, 0x7F..0xFF                              -> ':' '#' hi lo
+ *   - ':'                                                 -> ':' ':'
+ *   - ' '                                                 -> ':' '_'
+ *   - '\'                                                 -> ':' '|'
+ *   - anything else (including NUL and '/')               -> char; '/' marks
+ *                                                             the next byte as
+ *                                                             a component start
  *
- * Originally written in Pascal, compiled for m68k. Uses 1-based indexing
- * internally (Pascal string convention). The C implementation uses 0-based
- * indexing but preserves the same semantics.
+ * Frame (A6+):
+ *   0x08 name         (long)  -> D5, input bytes, indexed 1-based via A4
+ *   0x0C name_len     (long)  -> A3, pointer to the input length word
+ *   0x10 output       (long)  -> A1
+ *   0x14 max_out_len  (long)  -> A2, pointer to the output capacity word
+ *   0x18 out_len      (long)  -> A0, the output count lives in *out_len
+ *   0x1C truncated    (long)  -> A4 at entry/exit, byte flag
  *
- * Parameters:
- *   name       - Input pathname buffer
- *   name_len   - Pointer to input length (int16_t)
- *   output     - Output buffer for case-mapped result
- *   max_out_len - Pointer to maximum output buffer size (int16_t)
- *   out_len    - Pointer to output length (int16_t, set on return)
- *   truncated  - Pointer to truncation flag (uint8_t, 0xFF if truncated, 0x00 if complete)
+ * Registers: D2w = 1-based input index, D3w = dbf counter (len-1), D4w =
+ * 1-based index of the first byte of the current component.  The output
+ * count is kept in memory at (A0) and *max_out_len / *name_len are re-read
+ * from memory at every use, which the C reproduces.
  *
- * Original address: 0x00e53ef8
- * Size: 476 bytes
+ * The truncated flag is set to 0xFF at 0x00E53F22 and only cleared by the
+ * normal exit at 0x00E540C4; every "no room" exit branches to 0x00E540CA and
+ * leaves it set.
  */
 
 #include "file/file_internal.h"
@@ -36,189 +44,165 @@
 void MAP_CASE(char *name, int16_t *name_len, char *output,
               int16_t *max_out_len, int16_t *out_len, uint8_t *truncated)
 {
-    int16_t in_len = *name_len;
-    int16_t max_out = *max_out_len;
-    int16_t oi;  /* output index (0-based) */
-    int16_t ii;  /* input index (0-based) */
-    int16_t component_start; /* 0-based index of first char in current path component */
-    uint8_t ch;
+    int16_t  i;                 /* D2w: 1-based input index */
+    int16_t  count;             /* D3w: dbf counter */
+    int16_t  comp_start;        /* D4w: 1-based index of the component's first byte */
+    uint8_t  ch;                /* D0b */
+    uint8_t  lo;
+    int16_t  n;
 
-    *out_len = 0;
+    *out_len = 0;                                   /* 0x00E53F10 clr.w (A0) */
 
-    if (in_len <= 0) {
-        *truncated = 0;
-        return;
+    /* 0x00E53F16 tst.w (A3) / ble.w 0x00E540C4 */
+    if (*name_len <= 0) {
+        goto done;
     }
 
-    *truncated = 0xFF;
-    oi = 0;
-    component_start = 0;
+    comp_start = 1;                                 /* 0x00E53F20 moveq #1,D4 */
+    *truncated = 0xFF;                              /* 0x00E53F22 st (A4) */
 
-    /*
-     * Original assembly uses 1-based indexing (Pascal convention):
-     *   sVar5 (D2) = current input position (1-based)
-     *   sVar6 (D4) = component start position (1-based)
-     *   *param_5 (A0) = output position (1-based count)
-     *
-     * In this C version we use 0-based indexing throughout.
-     */
+    /* 0x00E53F24-0x00E53F28: D0 = len - 1; a negative count exits (cannot
+     * happen after the test above, reproduced anyway). */
+    count = (int16_t)(*name_len - comp_start);
+    if (count < 0) {
+        goto done;
+    }
+    i = comp_start;                                 /* 0x00E53F2E */
 
-    for (ii = 0; ii < in_len; ii++) {
-        if (oi >= max_out) {
-            /* Output buffer full - truncated */
-            *out_len = oi;
-            return;
+    /* 0x00E53F30-0x00E540C0: dbf loop, count+1 passes. */
+    for (;;) {
+        /* 0x00E53F30-0x00E53F34: no room at all -> truncated exit. */
+        if (*out_len >= *max_out_len) {
+            goto truncated_exit;
         }
 
-        ch = (uint8_t)name[ii];
+        ch = (uint8_t)name[i - 1];                  /* 0x00E53F3A */
 
-        /* Check for special prefix characters at start of component */
-        if (ii == component_start && (ch == 0x60 || ch == 0x2e || ch == 0x7e)) {
-            if (ch != 0x2e) {
-                /* Backtick (0x60) or tilde (0x7e) at start of component: escape with ':' */
-                goto escape_with_colon;
+        /* 0x00E53F3E-0x00E53F56: component-start specials. */
+        if (i == comp_start && (ch == 0x60 || ch == 0x2E || ch == 0x7E)) {
+            if (ch != 0x2E) {                       /* 0x00E53F58 */
+                goto escape_checked;
             }
-
-            /* Dot at start of component */
-            if (ii + 1 >= in_len || name[ii + 1] == '/') {
-                /* Single '.' at end or before '/' - pass through */
-                oi++;
-                *out_len = oi;
-                output[oi - 1] = 0x2e;
-                continue;
+            /* 0x00E53F60-0x00E53F6A: '.' at end, or before '/'. */
+            if (i == *name_len || (uint8_t)name[i] == 0x2F) {
+                *out_len = (int16_t)(*out_len + 1);         /* 0x00E53F6C */
+                output[*out_len - 1] = 0x2E;                /* 0x00E53F70 */
+                goto next;
             }
-
-            if (name[ii + 1] == '.' &&
-                (ii + 2 >= in_len || name[ii + 2] == '/')) {
-                /* '..' at end or before '/' - pass through the first dot */
-                oi++;
-                *out_len = oi;
-                output[oi - 1] = ch;
-                continue;
+            /* 0x00E53F7A: '.' followed by something other than '.'. */
+            if ((uint8_t)name[i] != 0x2E) {
+                goto escape_checked;
             }
-
-            /* '.' followed by other chars - escape with ':' */
-            goto escape_with_colon;
+            /* 0x00E53F84-0x00E53F98: '..' at end, or before '/'. */
+            if ((int32_t)i + 1 != (int32_t)*name_len &&
+                (uint8_t)name[i + 1] != 0x2F) {
+                goto escape_checked;
+            }
+            *out_len = (int16_t)(*out_len + 1);             /* 0x00E53F9C */
+            n = *out_len;
+            output[n - 1] = ch;                             /* 0x00E54066 */
+            goto next;
         }
 
-        /* Uppercase A-Z: escape with ':' prefix */
+        /* 0x00E53FA6-0x00E53FB0: 'A'..'Z' -> ':' + ch with NO room check
+         * (branches straight to 0x00E5405C). */
         if (ch >= 0x41 && ch <= 0x5A) {
-            goto emit_colon_char;
+            goto escape_unchecked;
         }
 
-        /* Lowercase a-z: convert to uppercase */
+        /* 0x00E53FB4-0x00E53FC6: 'a'..'z' -> upper. */
         if (ch >= 0x61 && ch <= 0x7A) {
-            oi++;
-            *out_len = oi;
-            ch -= 0x20;
-            output[oi - 1] = ch;
-            continue;
+            *out_len = (int16_t)(*out_len + 1);
+            ch = (uint8_t)(ch - 0x20);
+            n = *out_len;
+            output[n - 1] = ch;                             /* 0x00E53FA0 */
+            goto next;
         }
 
-        /*
-         * Control characters (0x01-0x1F) and high-bit characters (0x7F-0xFF):
-         * encode as ':#XX' with lowercase hex digits.
-         *
-         * Original assembly:
-         *   scc D1 (set if ch >= 1)
-         *   sls D6 (set if ch <= 0x1F)
-         *   and D6,D1 -> bmi (test bit 7 of result)
-         * This tests: (ch >= 1 && ch <= 0x1F)
-         * Then also: ch >= 0x7F (via separate compare, bhi to same target)
-         * Note: 0xFF is included (the original bhi 0x00e54036 after cmpi.b #-0x1
-         * would NOT branch for 0xFF, so 0xFF IS included in hex encoding)
-         */
+        /* 0x00E53FC8-0x00E53FE2: `scc`/`sls`/`and.b`/`bmi` = 1 <= ch <= 0x1F;
+         * otherwise ch < 0x7F skips, and the `cmpi.b #-0x1 / bhi` can never
+         * branch, so 0x7F..0xFF are hex-escaped too. */
         if ((ch >= 0x01 && ch <= 0x1F) || ch >= 0x7F) {
-            /* Need 4 bytes for ':#XX' */
-            if (oi + 4 > max_out) {
-                *out_len = oi;
-                return;
+            /* 0x00E53FE4-0x00E53FF0: room for four bytes? (longword compare) */
+            if ((int32_t)*out_len + 4 > (int32_t)*max_out_len) {
+                goto truncated_exit;
             }
-            oi += 4;
-            *out_len = oi;
-            output[oi - 4] = 0x3A;  /* ':' */
-            output[oi - 3] = 0x23;  /* '#' */
-
-            /*
-             * High nibble: unconditionally adds 0x30.
-             * Original assembly (0x00e54012): addi.b #0x30,D0b
-             * This produces '0'-'9' for nibbles 0-9, and ':'-'?' for
-             * nibbles 10-15. Not standard hex, but matches the original.
-             */
-            output[oi - 2] = (ch >> 4) + 0x30;
-
-            /*
-             * Low nibble: conditional - digits get 0x30, values >= 10 get 0x57
-             * (producing lowercase hex 'a'-'f').
-             * Original assembly (0x00e5401e-0x00e5402e):
-             *   cmpi.w #0x9,D0w / bgt -> addi.b #0x57 / else addi.b #0x30
-             */
-            {
-                uint8_t lo = ch & 0x0F;
-                if (lo < 10) {
-                    output[oi - 1] = lo + 0x30;
-                } else {
-                    output[oi - 1] = lo + 0x57;
-                }
+            *out_len = (int16_t)(*out_len + 4);             /* 0x00E53FF4 */
+            n = *out_len;
+            output[n - 4] = 0x3A;                           /* 0x00E53FF8 ':' */
+            output[n - 3] = 0x23;                           /* 0x00E53FFE '#' */
+            /* 0x00E54004-0x00E54016: high nibble always gets +0x30, so
+             * nibbles 10..15 come out as ':'..'?' - original quirk kept. */
+            output[n - 2] = (char)(uint8_t)((ch >> 4) + 0x30);
+            /* 0x00E5401A-0x00E5402E: low nibble, > 9 gets +0x57 ('a'..'f'). */
+            lo = (uint8_t)(ch & 0x0F);
+            if (lo > 9) {
+                output[n - 1] = (char)(uint8_t)(lo + 0x57);
+            } else {
+                output[n - 1] = (char)(uint8_t)(lo + 0x30);
             }
-            continue;
+            goto next;
         }
 
-        /* Colon: escape as '::' */
+        /* 0x00E54036-0x00E5404C: dispatch on the byte. */
         if (ch == 0x3A) {
-            goto escape_with_colon;
+            goto escape_checked;                            /* ':' -> "::" */
         }
-
-        /* Space: escape as ':_' */
         if (ch == 0x20) {
-            if (oi + 2 > max_out) {
-                *out_len = oi;
-                return;
+            /* 0x00E5406C-0x00E5408A: ' ' -> ":_" */
+            if ((int32_t)*out_len + 2 > (int32_t)*max_out_len) {
+                goto truncated_exit;
             }
-            oi += 2;
-            *out_len = oi;
-            output[oi - 2] = 0x3A;  /* ':' */
-            output[oi - 1] = 0x5F;  /* '_' */
-            continue;
+            *out_len = (int16_t)(*out_len + 2);
+            n = *out_len;
+            output[n - 2] = 0x3A;
+            output[n - 1] = 0x5F;
+            goto next;
         }
-
-        /* Backslash: escape as ':|' */
         if (ch == 0x5C) {
-            if (oi + 2 > max_out) {
-                *out_len = oi;
-                return;
+            /* 0x00E5408C-0x00E540AA: '\' -> ":|" */
+            if ((int32_t)*out_len + 2 > (int32_t)*max_out_len) {
+                goto truncated_exit;
             }
-            oi += 2;
-            *out_len = oi;
-            output[oi - 2] = 0x3A;  /* ':' */
-            output[oi - 1] = 0x7C;  /* '|' */
-            continue;
+            *out_len = (int16_t)(*out_len + 2);
+            n = *out_len;
+            output[n - 2] = 0x3A;
+            output[n - 1] = 0x7C;
+            goto next;
         }
 
-        /* All other printable characters: pass through */
-        oi++;
-        *out_len = oi;
-        output[oi - 1] = ch;
-
-        /* '/' resets the component start tracker */
+        /* 0x00E540AC-0x00E540BC: pass through; '/' starts a new component. */
+        *out_len = (int16_t)(*out_len + 1);
+        n = *out_len;
+        output[n - 1] = (char)ch;
         if (ch == 0x2F) {
-            component_start = ii + 1;
+            comp_start = (int16_t)(i + 1);
         }
-        continue;
+        goto next;
 
-    escape_with_colon:
-        /* Emit ':' + char, checking buffer space first */
-        if (oi + 2 > max_out) {
-            *out_len = oi;
-            return;
+escape_checked:
+        /* 0x00E5404E-0x00E5405A: room for two bytes? */
+        if ((int32_t)*out_len + 2 > (int32_t)*max_out_len) {
+            goto truncated_exit;
         }
-    emit_colon_char:
-        oi += 2;
-        *out_len = oi;
-        output[oi - 2] = 0x3A;  /* ':' */
-        output[oi - 1] = ch;
-        continue;
+escape_unchecked:
+        /* 0x00E5405C-0x00E54066: ':' + ch */
+        *out_len = (int16_t)(*out_len + 2);
+        n = *out_len;
+        output[n - 2] = 0x3A;
+        output[n - 1] = (char)ch;
+
+next:
+        /* 0x00E540BE-0x00E540C0: addq.w #1,D2w / dbf D3w */
+        i = (int16_t)(i + 1);
+        count = (int16_t)(count - 1);
+        if (count == -1) {
+            break;
+        }
     }
 
-    *truncated = 0;
+done:
+    *truncated = 0;                                 /* 0x00E540C4-0x00E540C8 */
+truncated_exit:
+    return;                                         /* 0x00E540CA */
 }

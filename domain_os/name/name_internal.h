@@ -49,11 +49,6 @@
 
 /* Internal path strings for validation - defined in validate.c */
 
-/*
- * Constants in the NAME code region passed by reference (Pascal VAR args)
- */
-extern int16_t DAT_00e544ae;    /* 0xE544AE: 0x0020 - MAP_CASE max output length (32) */
-
 /* Crash message string at 0x00E5855C used by name_$map_dir */
 /* 0x00e5855c: a status_$t constant cell (0x000E0025) that NAME_$MAP_DIR
  * pea's to CRASH_SYSTEM at 0x00e5852a, not a string. */

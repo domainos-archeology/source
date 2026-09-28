@@ -1,94 +1,129 @@
 /*
- * name_$validate_leaf - Validate and parse directory leaf name
+ * name_$validate_leaf - Case-map and validate one directory leaf name
+ * (0x00E54414, 154 bytes; SAU2 map: OLD_DIR segment at E53EF8, no symbol -
+ * module-local, tree name kept)
  *
- * Validates a directory entry name:
- * - Length must be <= 32 characters
- * - First character cannot be backslash (\)
- * - All characters must be in the valid character set (A5-relative bitmap)
+ * Runs MAP_CASE over the name into the caller's buffer and then checks the
+ * mapped result against two Pascal character sets kept in the OLD_DIR module
+ * data area (A5 = 0xE7FD24, inherited from the DIR_$OLD_* caller):
+ *   A5+0x00  NAME_$LEAF_CHAR_SET        every byte of the name
+ *   A5+0x20  NAME_$LEAF_FIRST_CHAR_SET  the first byte only
+ * Returns 0xFF when the name is acceptable, else 0.
  *
- * Also applies case mapping to normalize the name.
+ * Frame (A6+): 0x08 name (long), 0x0C name_len (word -> D3w; its ADDRESS is
+ * what MAP_CASE gets, `pea (0xc,A6)` at 0x00E5443C), 0x0E parsed -> A2,
+ * 0x12 parsed_len -> A3.  Local: -0x0A MAP_CASE's truncated flag.
  *
- * Parameters:
- *   name       - Input name string
- *   name_len   - Length of input name
- *   parsed     - Output: case-mapped name
- *   parsed_len - Output: length of parsed name
- *
- * Returns:
- *   0xFF (true) if valid, 0 (false) if invalid
- *
- * Original address: 0x00e54414
- * Size: 154 bytes
+ * Rejections, in order (each `b.. 0x00E544A2` leaves D2b = 0):
+ *   0x00E5442A  name_len > 32
+ *   0x00E5444C  MAP_CASE reported truncation (flag byte negative)
+ *   0x00E54452  mapped length 0
+ *   0x00E54456  mapped length > 32
+ *   0x00E5445C  first mapped byte is '\'
+ *   0x00E54472  first byte not in the first-char set
+ *   0x00E54494  any byte 2..len not in the char set
  */
 
 #include "name/name_internal.h"
-#include "dir/dir.h"
-#include "misc/string.h"
 
-/* DAT_00e544ae (MAP_CASE max output length, 0x0020) is declared in name_internal.h */
+/* 0xE544AE, word 0x0020: MAP_CASE's maximum output length, the word right
+ * after this routine's `rts` (`pea (0x76,PC)` at 0x00E54436). */
+static const int16_t name_$leaf_max_len_00e544ae = 0x0020;
 
-/* Valid character bitmap - accessed via A5+0x00 (full charset) and A5+0x20 (first char) */
-/* These bitmaps are 32 bytes each, with bit N set if char (0xFF - N) is valid */
+/*
+ * Pascal set membership as compiled at 0x00E54462-0x00E54476: with the set
+ * bound fixed at 0xFF there is no range test; the byte is
+ * (0xFF - ch) >> 3 (so 0..31) and the bit is ch & 7 (`btst.b Dn,(mem)`
+ * numbers bits modulo 8).
+ */
+static int name_$leaf_in_set(const uint8_t *set, uint8_t ch)
+{
+    return (set[(uint16_t)(0xFF - ch) >> 3] >> (ch & 7)) & 1;
+}
+
+/*
+ * The first-character set at A5+0x20 is a 28-byte `set of chr(32)..chr(255)`
+ * (NAME_$LEAF_FIRST_SET_SIZE) and NAME_$LOCK_SLOT starts right after it at
+ * A5+0x3C.  The test at 0x00E54462-0x00E54476 indexes it with the bound-0xFF
+ * formula and no lower-bound check, so set bytes 28..31 - consulted only for
+ * ch < 0x20 - are the four bytes of NAME_$LOCK_SLOT[0], big-endian.
+ * Reproduced rather than tidied: this is what the image does.
+ */
+static uint8_t name_$leaf_first_set_byte(uint16_t idx)
+{
+    if (idx < NAME_$LEAF_FIRST_SET_SIZE) {
+        return NAME_$LEAF_FIRST_CHAR_SET[idx];
+    }
+    return (uint8_t)(NAME_$LOCK_SLOT[0] >> (24 - 8 * (idx - NAME_$LEAF_FIRST_SET_SIZE)));
+}
 
 int8_t name_$validate_leaf(char *name, uint16_t name_len,
                            uint8_t *parsed, uint16_t *parsed_len)
 {
-    int8_t result[10];
-    int16_t i;
-    uint16_t out_len;
-    uint8_t ch;
-    uint16_t bit_idx;
-    uint16_t byte_idx;
+    int8_t   result;                        /* D2b */
+    int8_t   truncated;                     /* A6-0x0A */
+    int16_t  len_slot = (int16_t)name_len;  /* the (0xc,A6) argument slot */
+    uint16_t len;                           /* D1w */
+    uint8_t  ch;
+    uint16_t idx;
+    int16_t  count;
+    int16_t  i;
 
-    /* Check length limit */
-    if (name_len > 32) {
-        return 0;
+    result = 0;                                             /* 0x00E54428 */
+
+    if (name_len > 0x20) {                                  /* 0x00E5442A bhi */
+        goto done;
     }
 
-    /* Apply case mapping */
-    MAP_CASE(name, (int16_t *)&name_len, (char *)parsed, &DAT_00e544ae,
-             (int16_t *)parsed_len, (uint8_t *)result);
+    /* 0x00E54430-0x00E54448: MAP_CASE(name, &name_len, parsed, &0x20,
+     * parsed_len, &truncated) */
+    MAP_CASE(name, &len_slot, (char *)parsed,
+             (int16_t *)&name_$leaf_max_len_00e544ae,
+             (int16_t *)parsed_len, (uint8_t *)&truncated);
 
-    /* Check if case mapping succeeded */
-    if (result[0] < 0) {
-        return 0;
+    if (truncated < 0) {                                    /* 0x00E5444C bmi */
+        goto done;
     }
 
-    out_len = *parsed_len;
-    if (out_len == 0) {
-        return 0;
+    len = *parsed_len;                                      /* 0x00E54452 */
+    if (len == 0) {
+        goto done;
+    }
+    if (len > 0x20) {                                       /* 0x00E54456 bhi */
+        goto done;
+    }
+    if (parsed[0] == 0x5C) {                                /* 0x00E5445C */
+        goto done;
     }
 
-    /* Check length again after mapping */
-    if (out_len > 32) {
-        return 0;
-    }
-
-    /* First character cannot be backslash */
-    if (parsed[0] == '\\') {
-        return 0;
-    }
-
-    /* Validate first character against A5+0x20 bitmap
-     * The bitmap has bit set for valid characters, indexed by (0xFF - char) */
+    /* 0x00E54462-0x00E54476: first byte against A5+0x20 */
     ch = parsed[0];
-    bit_idx = (0xFF - ch) & 0x07;
-    byte_idx = (0xFF - ch) >> 3;
-
-    /* TODO(source-0i3): Access A5+0x20+byte_idx bitmap
-     * For now, assume valid ASCII alphanumeric and common chars */
-    /* if ((valid_first_char_bitmap[byte_idx] & (1 << bit_idx)) == 0) return 0; */
-
-    /* Validate remaining characters against A5+0x00 bitmap */
-    for (i = 1; i < (int16_t)out_len; i++) {
-        ch = parsed[i];
-        bit_idx = ch & 0x07;
-        byte_idx = (0xFF - ch) >> 3;
-
-        /* TODO(source-0i3): Access A5+byte_idx bitmap
-         * For now, assume valid */
-        /* if ((valid_char_bitmap[byte_idx] & (1 << bit_idx)) == 0) return 0; */
+    idx = (uint16_t)(0xFF - ch) >> 3;
+    if (((name_$leaf_first_set_byte(idx) >> (ch & 7)) & 1) == 0) {
+        goto done;
     }
 
-    return (int8_t)0xFF;
+    /* 0x00E54478-0x00E5447C: D1 = len - 2; negative (len == 1) -> accept */
+    count = (int16_t)(len - 2);
+    if (count < 0) {
+        goto accept;
+    }
+
+    /* 0x00E54480-0x00E5449C: bytes 2..len (1-based) against A5+0x00,
+     * dbf count = len-2 so len-1 passes */
+    i = 2;
+    do {
+        ch = parsed[i - 1];
+        if (!name_$leaf_in_set(NAME_$LEAF_CHAR_SET, ch)) {
+            goto done;                                      /* 0x00E54498 */
+        }
+        i = (int16_t)(i + 1);
+        count = (int16_t)(count - 1);
+    } while (count != -1);
+
+accept:
+    result = (int8_t)-1;                                    /* 0x00E544A0 st D2b */
+
+done:
+    return result;                                          /* 0x00E544A2 */
 }

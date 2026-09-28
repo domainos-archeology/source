@@ -1,85 +1,85 @@
 /*
- * rem_name/read_rep.c - REM_NAME_$READ_REP (0x00E4AB44)
+ * rem_name/read_rep.c - REM_NAME_$READ_REP (0x00E4AB44, 232 bytes)
  *
- * Part of the REM_NAME module (SAU2 map, I 0xE4A408 size 0xB20).
- * Split out of the single name/rem_name.c (bead source-ev4k); the body
- * below is unchanged.
+ * Part of the REM_NAME module (SAU2 map: I 0xE4A408 size 0xB20,
+ * D 0xE7DBB8 size 0x40; A5 = 0xE7DBB8, `lea (0xe7dbb8).l,A5` at 0x00E4AB4C).
+ *
+ * Read up to max_entries 0x12-byte replica records starting at start_index
+ * from the name server on (net, node) through a NETBUF header page.  Unlike
+ * READ_DIR, a "last entry in replicated root" status is carried on as is.
+ *
+ * Frame (A6+): 0x08 net, 0x0C node, 0x10 dir_uid, 0x14 start_index (WORD,
+ * D2w), 0x16 rep_ret -> D5, 0x1A max_entries (word) -> D3w,
+ * 0x1C count_ret -> A2, 0x20 status_ret -> D6.
+ * Locals (A6-): -0x38 request (A3), -0x44 reply page VA (D4/D7), -0x48 its
+ * physical address, -0x4E reply length word.
  */
 
 #include "rem_name/rem_name_internal.h"
 
-/*
- * REM_NAME_$READ_REP - Read replication information
- *
- * Reads replica location entries from a remote naming server.
- *
- * Original address: 0x00e4ab44
- * Original size: 232 bytes
- */
 void REM_NAME_$READ_REP(uint32_t net, uint32_t node, uid_t *dir_uid,
-                        uint32_t start_index, void *rep_ret,
+                        uint16_t start_index, void *rep_ret,
                         uint16_t max_entries, uint16_t *count_ret,
                         status_$t *status_ret)
 {
-    struct {
-        uint32_t opcode;
-        uid_t    dir_uid;
-        uint16_t flags;
-        uint8_t  reserved[0x24];
-        uint32_t start_index;
-    } request;
+    rem_name_$read_req_t     request;               /* A6-0x38 */
+    uint32_t                 page_phys;             /* A6-0x48 */
+    uint32_t                 page_va;               /* A6-0x44 */
+    int16_t                  reply_len;             /* A6-0x4E */
+    rem_name_$read_reply_t  *reply;                 /* A1 */
+    const rem_name_$rep_entry_t *src;               /* A4 = A0 + 6 */
+    rem_name_$rep_entry_t   *dst;                   /* A1 */
+    int16_t                  count;                 /* D0w */
+    int16_t                  i;
 
-    /* A6-0x58: NETBUF_$GET_HDR's physical-address output (a longword) */
-    uint32_t netbuf_phys;
-    uint8_t *response;
-    uint32_t response_ptr;
-    int16_t resp_len;
-    uint8_t out_param[6];
-    uint16_t entry_count;
-    uint16_t i;
-    uint8_t *src;
-    uint32_t *dst;
+    /* 0x00E4AB66-0x00E4AB7E */
+    NETBUF_$GET_HDR(&page_phys, &page_va);
+    reply = (rem_name_$read_reply_t *)ARCH_VA_TO_PTR(page_va);
 
-    NETBUF_$GET_HDR(&netbuf_phys, &response_ptr);
-    response = (uint8_t *)response_ptr;
+    *count_ret = 0;                                             /* 0x00E4AB80 */
 
-    *count_ret = 0;
-
-    request.opcode = REM_NAME_OP_READ_REP;
+    /* 0x00E4AB82-0x00E4ABA2 */
+    request.opcode   = REM_NAME_OP_READ_REP;
     request.dir_uid.high = dir_uid->high;
-    request.dir_uid.low = dir_uid->low;
-    request.flags = 1;
-    request.start_index = start_index;
+    request.dir_uid.low  = dir_uid->low;
+    request.one      = 1;
+    request.start_index = (uint32_t)start_index;
 
-    if (!rem_name_$send_request(net, node, &request, 0x36, 0, 0x0e,
-                                 response, 0x200, &resp_len, status_ret)) {
+    /* 0x00E4ABA6-0x00E4ABCE: 0x36 bytes, opcode word 0x0E, 0x200-byte page */
+    if (rem_name_$send_request(net, node, &request, 0x36, 0, 0x0E,
+                               reply, REM_NAME_READ_REPLY_SIZE,
+                               &reply_len, status_ret) >= 0) {
+        /* 0x00E4ABD0-0x00E4ABD8 */
         if (*status_ret != status_$naming_last_entry_in_replicated_root_returned) {
-            NETBUF_$RTN_HDR(&response_ptr);
-            return;
+            goto done;
         }
     }
 
-    entry_count = *(uint16_t *)(response + 0x16);
-    if (entry_count == 0) {
-        NETBUF_$RTN_HDR(&response_ptr);
-        return;
+    /* 0x00E4ABDA-0x00E4ABEA */
+    if (reply->count == 0) {
+        goto done;
     }
+    count = (int16_t)(reply->count - 1);
 
-    src = response + 0x18;
+    /* 0x00E4ABEC-0x00E4AC14: one 0x12-byte record per pass, source at
+     * reply+0x12+6 stepping 0x12, destination rep_ret + (count-1)*0x12
+     * (`lea (-0x12,A3,D1w*0x1),A1` with D1 = count*0x12). */
+    src = (const rem_name_$rep_entry_t *)reply->data;
+    do {
+        /* `cmp.w (A2),D3w / bls`: stop once max_entries <= *count_ret */
+        if (max_entries <= *count_ret) {
+            goto done;
+        }
+        *count_ret = (uint16_t)(*count_ret + 1);                /* 0x00E4ABF0 */
+        dst = (rem_name_$rep_entry_t *)rep_ret + (*count_ret - 1);
+        for (i = 0; i < 4; i++) {
+            dst->words[i] = src->words[i];                      /* 0x00E4AC06.. */
+        }
+        dst->tail = src->tail;                                  /* 0x00E4AC0E */
+        src++;                                                  /* 0x00E4AC10 */
+        count = (int16_t)(count - 1);                           /* 0x00E4AC14 dbf */
+    } while (count != -1);
 
-    for (i = 0; i < entry_count && *count_ret < max_entries; i++) {
-        (*count_ret)++;
-        dst = (uint32_t *)((uint8_t *)rep_ret + (*count_ret - 1) * REP_ENTRY_SIZE);
-
-        /* Copy 18-byte replica entry (4 longs + 1 word) */
-        dst[0] = *(uint32_t *)(src + 0);
-        dst[1] = *(uint32_t *)(src + 4);
-        dst[2] = *(uint32_t *)(src + 8);
-        dst[3] = *(uint32_t *)(src + 12);
-        *(uint16_t *)(dst + 4) = *(uint16_t *)(src + 16);
-
-        src += REP_ENTRY_SIZE;
-    }
-
-    NETBUF_$RTN_HDR(&response_ptr);
+done:
+    NETBUF_$RTN_HDR(&page_va);                                  /* 0x00E4AC18 */
 }

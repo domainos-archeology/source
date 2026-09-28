@@ -1,24 +1,31 @@
 /*
- * UID_$GEN - Generate a new unique identifier
+ * UID_$GEN - Generate a new unique identifier (0x00E1A018, 226 bytes;
+ * SAU2 map: `I E1A018 UID_ size = E4`, data `D E2C008 UID_ size = C`)
  *
- * Generates a globally unique 64-bit identifier. Uses the system clock
- * for the high word and a node ID + counter for the low word.
- * Thread-safe via spin lock.
+ * A5 = 0xE2C008 (`lea (0xe2c008).l,A5` at 0x00E1A020):
+ *   A5+0x0  UID_$GENERATOR_STATE  the last UID handed out (high = clock,
+ *                                 low = counter nibble in bits 28..31 over
+ *                                 the 20-bit node id)
+ *   A5+0x8  UID_$GENERATOR_LOCK   spin lock word
  *
- * The algorithm:
- * 1. Get current clock value minus 0xF0 (offset for uniqueness window)
- * 2. Acquire spin lock
- * 3. If clock > stored value, use clock as new high word
- * 4. Otherwise, wait until clock advances to avoid duplicates
- * 5. Copy current state to output
- * 6. Increment counter in low byte (bits 4-7 of low word byte 0)
- * 7. If counter overflows, increment high word
- * 8. Release spin lock
+ * Under the spin lock: if TIME_$CLOCKH - 0xF0 is above the stored clock it
+ * becomes the new high word; otherwise the routine waits, with the lock
+ * dropped, until the state's counter nibble differs from a reference nibble
+ * (see the note on D2 below) or the state's high word differs from the
+ * absolute clock's.  Then the state is copied out, the counter nibble is
+ * bumped (carrying into the high word when it wraps), and the lock is freed.
  *
- * Parameters:
- *   uid_ret - Pointer to receive the generated UID
+ * Frame (A6+): 0x08 uid_ret.  Locals (A6-): -0x8 the copied-out UID,
+ * -0x14 TIME_$ABS_CLOCK's 6-byte result.  D2 = clock - 0xF0, later the
+ * reference nibble; D3 = lock token (word, zero-extended).
  *
- * Original address: 0x00e1a018
+ * NOTE, PRESERVED AS FOUND: the reference nibble D2 is computed at
+ * 0x00E1A04C from the low WORD of the abs-clock local (A6-0x10) BEFORE the
+ * first TIME_$ABS_CLOCK call fills it, and is never recomputed - so on the
+ * image it is derived from whatever the frame held at entry.  C cannot read
+ * an uninitialised local, so the slot is zeroed here and the derivation is
+ * kept; the wait loop's exit condition therefore differs from the image
+ * whenever the stale word was non-zero in bits 12..15.  Bead source-ilw0.
  */
 
 #include "uid/uid_internal.h"
@@ -27,82 +34,74 @@
 
 void UID_$GEN(uid_t *uid_ret)
 {
-    uint32_t clock_val;
-    uint16_t token;
-    clock_t abs_clock;
-    uint32_t local_high;
-    uint32_t local_low;
-    uint8_t counter_nibble;
+    uint32_t         clock_val;             /* D2 */
+    uint32_t         ref_nibble;            /* D2 after 0x00E1A04C */
+    uint32_t         state_nibble;          /* D1 */
+    ml_$spin_token_t token;                 /* D3 */
+    clock_t          abs_clock = { 0, 0 };  /* A6-0x14; see the note above */
+    uid_t            local;                 /* A6-0x8 */
+    uint8_t          counter_byte;
 
-    /* Get current clock minus offset */
-    clock_val = TIME_$CLOCKH - 0xF0;
+    /* 0x00E1A026-0x00E1A02C */
+    clock_val = TIME_$CLOCKH - 0xF0u;
 
-    /* Acquire spin lock */
+    /* 0x00E1A032-0x00E1A040 */
     token = ML_$SPIN_LOCK(&UID_$GENERATOR_LOCK);
 
-    /* Check if clock has advanced past stored value */
+    /* 0x00E1A042 `cmp.l (A5),D2 / bls`: unsigned clock_val > state.high */
     if (clock_val > UID_$GENERATOR_STATE.high) {
-        /* Clock advanced - use it as new timestamp */
-        UID_$GENERATOR_STATE.high = clock_val;
+        UID_$GENERATOR_STATE.high = clock_val;                  /* 0x00E1A046 */
     } else {
-        /*
-         * Clock hasn't advanced enough - we need to wait to avoid
-         * generating duplicate UIDs. The counter nibble (bits 4-7
-         * of byte 0 of the low word) is used to generate multiple
-         * UIDs per clock tick.
-         */
-        do {
+        /* 0x00E1A04A-0x00E1A052: D2 = (word at A6-0x10) >> 12 */
+        ref_nibble = (uint32_t)abs_clock.low >> 12;
+
+        for (;;) {
+            /* 0x00E1A054-0x00E1A05E */
             TIME_$ABS_CLOCK(&abs_clock);
 
-            /* Check if we're still in the same time window */
+            /* 0x00E1A060-0x00E1A066 */
             if (UID_$GENERATOR_STATE.high != abs_clock.high) {
-                break;  /* High word changed, we can proceed */
+                break;
+            }
+            /* 0x00E1A068-0x00E1A076: (state.low byte 0 & 0xF0) >> 4 */
+            state_nibble = ((UID_$GENERATOR_STATE.low >> 24) & 0xF0u) >> 4;
+            if (state_nibble != ref_nibble) {
+                break;
             }
 
-            /*
-             * Check counter nibble (bits 4-7 of low word's byte 0)
-             * vs clock low bits shifted.
-             * The counter occupies the upper nibble of byte 0 (big-endian).
-             */
-            if (((UID_$GENERATOR_STATE.low >> 24) & 0xF0) >> 4 !=
-                (abs_clock.low >> 12) & 0xF) {
-                break;  /* Counter space available */
-            }
-
-            /* Need to wait - release lock, spin, reacquire */
+            /* 0x00E1A078-0x00E1A086: drop the lock while waiting */
             ML_$SPIN_UNLOCK(&UID_$GENERATOR_LOCK, token);
 
+            /* 0x00E1A088-0x00E1A0A2: spin until the nibble moves */
             do {
                 TIME_$ABS_CLOCK(&abs_clock);
-            } while (((UID_$GENERATOR_STATE.low >> 24) & 0xF0) >> 4 ==
-                     (abs_clock.low >> 12) & 0xF);
+                state_nibble = ((UID_$GENERATOR_STATE.low >> 24) & 0xF0u) >> 4;
+            } while (state_nibble == ref_nibble);
 
+            /* 0x00E1A0A4-0x00E1A0B4: retake the lock and re-check */
             token = ML_$SPIN_LOCK(&UID_$GENERATOR_LOCK);
-        } while (1);
+        }
     }
 
-    /* Copy current state to local variables */
-    local_high = UID_$GENERATOR_STATE.high;
-    local_low = UID_$GENERATOR_STATE.low;
+    /* 0x00E1A0B6-0x00E1A0BC: copy the state out */
+    local.high = UID_$GENERATOR_STATE.high;
+    local.low  = UID_$GENERATOR_STATE.low;
 
-    /*
-     * Increment counter in the upper nibble of byte 0 (big-endian).
-     * This is bits 28-31 of the low word on big-endian.
-     * Add 0x10 to byte 0 (which is the high byte on big-endian).
-     */
-    counter_nibble = (UID_$GENERATOR_STATE.low >> 24) + 0x10;
-    UID_$GENERATOR_STATE.low = (UID_$GENERATOR_STATE.low & 0x00FFFFFF) |
-                               ((uint32_t)counter_nibble << 24);
+    /* 0x00E1A0C0-0x00E1A0C2: `add.b #0x10,(0x4,A5)` - byte 0 of the low
+     * longword, i.e. bits 24..31 */
+    counter_byte = (uint8_t)((UID_$GENERATOR_STATE.low >> 24) + 0x10u);
+    UID_$GENERATOR_STATE.low = (UID_$GENERATOR_STATE.low & 0x00FFFFFFu) |
+                               ((uint32_t)counter_byte << 24);
 
-    /* If counter nibble overflowed (upper nibble became 0), increment high */
-    if ((counter_nibble & 0xF0) == 0) {
-        UID_$GENERATOR_STATE.high++;
+    /* 0x00E1A0C6-0x00E1A0D2: a wrapped nibble carries into the high word */
+    if (((counter_byte & 0xF0u) >> 4) == 0) {
+        UID_$GENERATOR_STATE.high = UID_$GENERATOR_STATE.high + 1;
     }
 
-    /* Release spin lock */
+    /* 0x00E1A0D4-0x00E1A0DC */
     ML_$SPIN_UNLOCK(&UID_$GENERATOR_LOCK, token);
 
-    /* Return the UID we generated */
-    uid_ret->high = local_high;
-    uid_ret->low = local_low;
+    /* 0x00E1A0E2-0x00E1A0EC */
+    uid_ret->high = local.high;
+    uid_ret->low  = local.low;
 }

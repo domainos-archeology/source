@@ -119,10 +119,12 @@ void NAME_$DROP(char *path, int16_t *path_len, uid_t *file_uid, status_$t *statu
     int16_t filename_len;
     uid_t dir_uid;
 
-    /* Resolve directory and get filename position */
+    /* 0x00E4A2C8-0x00E4A2EE: resolve directory and leaf; `tst.b D0b / bpl`
+     * skips the drop when the resolver returns false. */
     if (name_$resolve_dir_and_leaf(path, *path_len, &filename_idx, &filename_len,
-                                   &dir_uid, status_ret)) {
-        /* Drop the entry from the directory */
+                                   &dir_uid, status_ret) < 0) {
+        /* 0x00E4A2F0-0x00E4A306: DIR_$DROPU(&dir_uid, path+idx-1, &len,
+         * file_uid, status_ret) */
         DIR_$DROPU(&dir_uid, path + (filename_idx - 1), &filename_len, file_uid, status_ret);
     }
 }

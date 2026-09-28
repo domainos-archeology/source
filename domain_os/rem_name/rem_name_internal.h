@@ -129,6 +129,83 @@ extern rem_name_data_t rem_name_$data;  /* 0xE7DBB8 */
 #define REP_ENTRY_SIZE      0x12
 
 /*
+ * Request of READ_DIR (A6-0x38, 0x00E4A9C2) and READ_REP (A6-0x38,
+ * 0x00E4AB84): opcode, uid, word 1, and the zero-extended start index as a
+ * longword at 0x32 (`andi.l #0xffff,D2 / move.l D2,(0x32,A0)`).
+ */
+typedef struct __attribute__((packed, aligned(2))) rem_name_$read_req_t {
+    uint32_t    opcode;         /* 0x00: 0x0001000B (READ_DIR) / 0x0001000D (READ_REP) */
+    uid_t       dir_uid;        /* 0x04 */
+    uint16_t    one;            /* 0x0C: 1 */
+    uint8_t     unset[0x24];    /* 0x0E: never stored */
+    uint32_t    start_index;    /* 0x32 */
+} rem_name_$read_req_t;
+
+_Static_assert(__builtin_offsetof(rem_name_$read_req_t, start_index) == 0x32, "read_req.start_index");
+_Static_assert(sizeof(rem_name_$read_req_t) == 0x36, "sizeof rem_name_$read_req_t");
+
+/*
+ * Reply header - the first 0x12 bytes of every response buffer.
+ * rem_name_$send_request accepts a reply when at least 0x12 bytes came back
+ * (`cmpi.w #0x12,(A3)` 0x00E4A550), the word at +0x02 equals the expected
+ * opcode (0x00E4A55C) and the longword at +0x0E is zero (0x00E4A564).
+ */
+typedef struct __attribute__((packed, aligned(2))) rem_name_$reply_hdr_t {
+    uint16_t    word_00;        /* 0x00 */
+    uint16_t    opcode;         /* 0x02 */
+    uint8_t     unused_04[10];  /* 0x04 */
+    status_$t   status;         /* 0x0E */
+} rem_name_$reply_hdr_t;
+
+_Static_assert(__builtin_offsetof(rem_name_$reply_hdr_t, opcode) == 0x02, "rem_name_$reply_hdr_t.opcode");
+_Static_assert(__builtin_offsetof(rem_name_$reply_hdr_t, status) == 0x0E, "rem_name_$reply_hdr_t.status");
+_Static_assert(sizeof(rem_name_$reply_hdr_t) == 0x12, "sizeof rem_name_$reply_hdr_t");
+
+/*
+ * Reply of the three GET_ENTRY_BY_* requests and GET_INFO: the header, then
+ * at +0x12 the entry (REM_NAME_$GET_ENTRY_BY_NAME reads the type at
+ * (-0x15e,A6), name_len at (-0x15c,A6), the name at (-0x15a,A6) and 12
+ * bytes at (-0x13a,A6) with the buffer at (-0x170,A6)).  GET_INFO copies
+ * 22 bytes from the same +0x12.  The buffer is 0x16A bytes.
+ */
+#define REM_NAME_REPLY_SIZE     0x16A
+
+typedef struct __attribute__((packed, aligned(2))) rem_name_$entry_reply_t {
+    rem_name_$reply_hdr_t hdr;      /* 0x00 */
+    int16_t     type;               /* 0x12 */
+    uint16_t    name_len;           /* 0x14 */
+    char        name[32];           /* 0x16 */
+    uint8_t     data[12];           /* 0x36: uid + extra */
+    uint8_t     rest[REM_NAME_REPLY_SIZE - 0x42];
+} rem_name_$entry_reply_t;
+
+_Static_assert(__builtin_offsetof(rem_name_$entry_reply_t, type)     == 0x12, "rem_name_$entry_reply_t.type");
+_Static_assert(__builtin_offsetof(rem_name_$entry_reply_t, name_len) == 0x14, "rem_name_$entry_reply_t.name_len");
+_Static_assert(__builtin_offsetof(rem_name_$entry_reply_t, name)     == 0x16, "rem_name_$entry_reply_t.name");
+_Static_assert(__builtin_offsetof(rem_name_$entry_reply_t, data)     == 0x36, "rem_name_$entry_reply_t.data");
+_Static_assert(sizeof(rem_name_$entry_reply_t) == REM_NAME_REPLY_SIZE, "sizeof rem_name_$entry_reply_t");
+
+/*
+ * Reply of READ_DIR / READ_REP, received into a 0x200-byte NETBUF header
+ * page: the header, then the entry count at +0x16 (`tst.w (0x16,A3)`
+ * 0x00E4AA2A) and the packed entries from +0x18 (`lea (0x18,A3),A1`
+ * 0x00E4AA24; READ_REP: `lea (0x12,A1),A0` + `lea (0x6,A0),A4`).
+ */
+#define REM_NAME_READ_REPLY_SIZE    0x200
+
+typedef struct __attribute__((packed, aligned(2))) rem_name_$read_reply_t {
+    rem_name_$reply_hdr_t hdr;      /* 0x00 */
+    uint16_t    word_12;            /* 0x12 */
+    uint16_t    word_14;            /* 0x14 */
+    uint16_t    count;              /* 0x16 */
+    uint8_t     data[REM_NAME_READ_REPLY_SIZE - 0x18];  /* 0x18 */
+} rem_name_$read_reply_t;
+
+_Static_assert(__builtin_offsetof(rem_name_$read_reply_t, count) == 0x16, "rem_name_$read_reply_t.count");
+_Static_assert(__builtin_offsetof(rem_name_$read_reply_t, data)  == 0x18, "rem_name_$read_reply_t.data");
+_Static_assert(sizeof(rem_name_$read_reply_t) == REM_NAME_READ_REPLY_SIZE, "sizeof rem_name_$read_reply_t");
+
+/*
  * rem_name_$send_request (0x00E4A4C8) - the module's RPC helper.  It has no
  * symbol of its own in the SAU2 map; the lowercase name is ours.  Module
  * local: only rem_name/ calls it.

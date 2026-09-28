@@ -221,6 +221,24 @@ extern int16_t ACL_TYPE_DIR;    /* 0xE54B26: literal word 1 - ACL object type (d
  */
 #define NAME_$MAX_LOCK_PROCS    58
 
+/*
+ * The first 0x3C bytes of the same module data area are two Pascal character
+ * sets that name_$validate_leaf (0x00E54414) tests with the bound-0xFF idiom
+ * `btst.b ch,((0xFF-ch)>>3,A5[+0x20])`: bit (ch & 7) of byte (0xFF - ch) >> 3.
+ * Image bytes (SAU2 map: D E7FD24 OLD_DIR size 4C0):
+ *   0xE7FD24  00 x16  7f ff ff ff ef ff ff ff ff ff 7f fe  00 00 00 00
+ *   0xE7FD44  00 x16  3f ff ff fe ff ff ff ff ff ff 3f fe
+ * i.e. every byte of a leaf may be 0x21..0x7E except '/' and '\'; the first
+ * byte additionally may not be '.', '`' or '~'.  The first set is a 32-byte
+ * `set of char`; the second is a 28-byte `set of chr(32)..chr(255)` and
+ * NAME_$LOCK_SLOT[0] begins right after it at A5+0x3C, so a first byte below
+ * 0x20 makes name_$validate_leaf read its bit out of that lock slot.
+ */
+#define NAME_$LEAF_SET_SIZE         32  /* A5+0x00..0x1F */
+#define NAME_$LEAF_FIRST_SET_SIZE   28  /* A5+0x20..0x3B */
+extern uint8_t NAME_$LEAF_CHAR_SET[NAME_$LEAF_SET_SIZE];              /* A5+0x000 = 0xE7FD24 */
+extern uint8_t NAME_$LEAF_FIRST_CHAR_SET[NAME_$LEAF_FIRST_SET_SIZE];  /* A5+0x020 = 0xE7FD44 */
+
 extern uint32_t NAME_$LOCK_SLOT[NAME_$MAX_LOCK_PROCS];   /* A5+0x03C = 0xE7FD60: FILE_$PRIV_LOCK slot */
 extern int16_t  NAME_$LOCK_MODE[NAME_$MAX_LOCK_PROCS];   /* A5+0x13E = 0xE7FE62: lock mode in effect */
 extern uint32_t NAME_$LOCK_HANDLE[NAME_$MAX_LOCK_PROCS]; /* A5+0x1BC = 0xE7FEE0: mapped directory base */

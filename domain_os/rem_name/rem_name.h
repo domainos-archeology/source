@@ -25,6 +25,40 @@
  */
 
 /*
+ * rem_name_$dir_entry_t - the 0x30-byte directory entry every REM_NAME lookup
+ * hands back (entry_ret / entries_ret).  Offsets from the stores in
+ * REM_NAME_$GET_ENTRY_BY_NAME (0x00E4A622-0x00E4A676) and REM_NAME_$READ_DIR
+ * (0x00E4AA74-0x00E4AB12; there the record is addressed from its END,
+ * `lea (0x0,A4,D0*0x1),A3` with D0 = count*0x30, so name_len is (-0x2e,A3)).
+ *   type      1 = ordinary entry (uid + extra filled), 3 = link (uid NIL,
+ *             extra 0 in the GET_ENTRY_BY_NAME case; left as found by
+ *             READ_DIR), 0 = not found
+ */
+typedef struct rem_name_$dir_entry_t {
+    int16_t     type;           /* 0x00 */
+    uint16_t    name_len;       /* 0x02 */
+    char        name[32];       /* 0x04: READ_DIR pads with spaces to 32 */
+    uid_t       uid;            /* 0x24 */
+    uint32_t    extra;          /* 0x2C */
+} rem_name_$dir_entry_t;
+
+_Static_assert(__builtin_offsetof(rem_name_$dir_entry_t, name)  == 0x04, "rem_name_$dir_entry_t.name");
+_Static_assert(__builtin_offsetof(rem_name_$dir_entry_t, uid)   == 0x24, "rem_name_$dir_entry_t.uid");
+_Static_assert(__builtin_offsetof(rem_name_$dir_entry_t, extra) == 0x2C, "rem_name_$dir_entry_t.extra");
+_Static_assert(sizeof(rem_name_$dir_entry_t) == 0x30, "sizeof rem_name_$dir_entry_t");
+
+/*
+ * rem_name_$rep_entry_t - one 0x12-byte replica record REM_NAME_$READ_REP
+ * copies out (four longwords and a word, 0x00E4AC06-0x00E4AC0E).
+ */
+typedef struct __attribute__((packed, aligned(2))) rem_name_$rep_entry_t {
+    uint32_t    words[4];       /* 0x00 */
+    uint16_t    tail;           /* 0x10 */
+} rem_name_$rep_entry_t;
+
+_Static_assert(sizeof(rem_name_$rep_entry_t) == 0x12, "sizeof rem_name_$rep_entry_t");
+
+/*
  * REM_NAME_SERVER_LOCAL - Check if naming server is on local node
  *
  * The one REM_NAME entry point whose name carries no `$'.
@@ -150,7 +184,8 @@ void REM_NAME_$GET_ENTRY_BY_UID(uint32_t net, uint32_t node, uid_t *dir_uid,
  *   net         - Network ID
  *   node        - Node ID of naming server
  *   dir_uid     - UID of directory to read
- *   start_index - Index of first entry to read
+ *   start_index - Index of first entry to read (a WORD: `move.w (0x14,A6)`
+ *                 at 0x00E4A992, zero-extended into the request)
  *   entries_ret - Output: array of directory entries (0x30 bytes each)
  *   max_entries - Maximum entries to return
  *   count_ret   - Output: actual number of entries returned
@@ -159,7 +194,7 @@ void REM_NAME_$GET_ENTRY_BY_UID(uint32_t net, uint32_t node, uid_t *dir_uid,
  * Original address: 0x00e4a984
  */
 void REM_NAME_$READ_DIR(uint32_t net, uint32_t node, uid_t *dir_uid,
-                        uint32_t start_index, void *entries_ret,
+                        uint16_t start_index, void *entries_ret,
                         uint16_t max_entries, uint16_t *count_ret,
                         status_$t *status_ret);
 
@@ -170,7 +205,8 @@ void REM_NAME_$READ_DIR(uint32_t net, uint32_t node, uid_t *dir_uid,
  *   net         - Network ID
  *   node        - Node ID of naming server
  *   dir_uid     - UID of directory
- *   start_index - Index of first replica entry
+ *   start_index - Index of first replica entry (a WORD: `move.w (0x14,A6)`
+ *                 at 0x00E4AB52, zero-extended into the request)
  *   rep_ret     - Output: array of replica entries (0x12 bytes each)
  *   max_entries - Maximum entries to return
  *   count_ret   - Output: actual number of entries returned
@@ -179,7 +215,7 @@ void REM_NAME_$READ_DIR(uint32_t net, uint32_t node, uid_t *dir_uid,
  * Original address: 0x00e4ab44
  */
 void REM_NAME_$READ_REP(uint32_t net, uint32_t node, uid_t *dir_uid,
-                        uint32_t start_index, void *rep_ret,
+                        uint16_t start_index, void *rep_ret,
                         uint16_t max_entries, uint16_t *count_ret,
                         status_$t *status_ret);
 

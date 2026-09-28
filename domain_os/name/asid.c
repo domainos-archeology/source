@@ -1,30 +1,20 @@
 /*
- * NAME ASID (Address Space ID) Management Functions
+ * NAME ASID (Address Space ID) management
  *
- * Functions to initialize, copy (fork), and free naming state
- * for address spaces (processes).
+ * Initialise, copy (fork) and free the per-address-space naming state held
+ * in NAME_$DATA (0xE80264):
+ *   ndir_mapped_info[]  +0x040, 16 bytes per ASID
+ *   ndir_uid[]          +0x3E0,  8 bytes per ASID
+ *   wdir_mapped_info[]  +0x5B0, 16 bytes per ASID
+ *   wdir_uid[]          +0x950,  8 bytes per ASID
+ *   node_uid            +0x030
  *
- * Each ASID has its own:
- *   - Working directory UID and mapped info (16 bytes at 0x950 + ASID*8 / 0x5B0 + ASID*16)
- *   - Naming directory UID and mapped info (16 bytes at 0x3E0 + ASID*8 / 0x040 + ASID*16)
- *
- * Original addresses:
- *   NAME_$INIT_ASID: 0x00e73cfc (318 bytes)
- *   NAME_$FORK:      0x00e73e44 (186 bytes)
- *   NAME_$FREE_ASID: 0x00e74da8 (130 bytes)
+ * SAU2 map:
+ *   NAME segment at E73CFC (size 0x204): NAME_$INIT_ASID E73CFC, NAME_$FORK E73E44
+ *   NAME segment at E74DA8 (size 0x84):  NAME_$FREE_ASID E74DA8
  */
 
 #include "name/name_internal.h"
-
-/* name_$unmap_dir_buffers declared in name/name_internal.h */
-
-/*
- * Per-ASID data lives in NAME_$DATA (0xE80264), see name/name.h:
- *   ndir_uid[]         at +0x3E0 (8 bytes per ASID)
- *   wdir_uid[]         at +0x950 (8 bytes per ASID)
- *   ndir_mapped_info[] at +0x040 (16 bytes per ASID)
- *   wdir_mapped_info[] at +0x5B0 (16 bytes per ASID)
- */
 
 /*
  * ============================================================================
@@ -33,8 +23,14 @@
  *
  * The compiler pooled these three literals just past NAME_$INIT_ASID; both
  * of its ACL_$RIGHTS calls address them with `pea (d,PC)` (PC = instruction
- * address + 2) and both pass the same three cells.
+ * address + 2) and both pass the same three cells.  Image bytes at 0xE73E3A:
+ * `00 01 ff 00 20 48 ff ff ff ff`.
  */
+
+/* 0x00E73E3A, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
+ * directory).  `pea (0x106,PC)` at 0x00E73D32 and `pea (0x7a,PC)` at
+ * 0x00E73DBE. */
+static const int16_t name_$init_asid_acl_opts_00e73e3a = 1;
 
 /* 0x00E73E3C, byte 0xFF: ACL_$RIGHTS' ignore_super argument (TRUE - the
  * super-user bypass is suppressed even though NAME_$INIT_ASID has just
@@ -46,160 +42,153 @@ static const boolean name_$init_asid_ignore_super_00e73e3c = true;
  * `pea (0x108,PC)` at 0x00E73D36 and `pea (0x7c,PC)` at 0x00E73DC2. */
 static const uint32_t name_$init_asid_rights_00e73e40 = 0xFFFFFFFFu;
 
-/* 0x00E73E3A, word 0x0001: ACL_$RIGHTS' option flags (object type 1,
- * directory).  `pea (0x106,PC)` at 0x00E73D32 and `pea (0x7a,PC)` at
- * 0x00E73DBE. */
-static const int16_t name_$init_asid_acl_opts_00e73e3a = 1;
-
 /*
- * NAME_$INIT_ASID - Initialize naming state for a new address space
+ * NAME_$INIT_ASID (0x00E73CFC, 318 bytes)
  *
- * Called when creating a new process. Copies the current process's
- * working and naming directories to the new ASID, checking ACL access.
+ * Give a new address space the current one's working and naming
+ * directories.  For each of the two: copy the current ASID's UID into a
+ * local, ask ACL_$RIGHTS about it, and if any right comes back map it for
+ * the new ASID and store the UID; no rights at all is silently status_$ok.
+ * A map failure sets bit 31 of the status and skips the rest.
  *
- * Parameters:
- *   new_asid   - Pointer to the new address space ID
- *   status_ret - Output: status code
- *
- * Original address: 0x00e73cfc
+ * Frame: (0x8,A6) new_asid -> A2, (0xc,A6) status_ret -> A3; the UID copy
+ * lives at A6-0x8.
  */
 void NAME_$INIT_ASID(int16_t *new_asid, status_$t *status_ret)
 {
-    uid_t current_uid;
-    uid_t *src_wdir = &NAME_$DATA.wdir_uid[PROC1_$AS_ID];
-    uid_t *dst_wdir = &NAME_$DATA.wdir_uid[*new_asid];
-    uid_t *src_ndir = &NAME_$DATA.ndir_uid[PROC1_$AS_ID];
-    uid_t *dst_ndir = &NAME_$DATA.ndir_uid[*new_asid];
+    uid_t   current_uid;                    /* A6-0x8 */
+    uid_t  *src;
+    uid_t  *dst;
 
-    ACL_$ENTER_SUPER();
+    ACL_$ENTER_SUPER();                                     /* 0x00E73D0C */
 
-    /* Copy and map working directory */
-    current_uid.high = src_wdir->high;
-    current_uid.low = src_wdir->low;
+    /* 0x00E73D12-0x00E73D2C: current_uid = wdir_uid[PROC1_$AS_ID] */
+    src = &NAME_$DATA.wdir_uid[PROC1_$AS_ID];
+    current_uid.high = src->high;
+    current_uid.low  = src->low;
 
-    /* Check ACL access for working directory.
-     * 0x00E73D4C `tst.l D0` + `sne` + `bpl`: the whole longword result. */
+    /* 0x00E73D30-0x00E73D52: `tst.l D0 / sne / tst.b / bpl` - any right. */
     if (ACL_$RIGHTS(&current_uid,
                     (boolean *)&name_$init_asid_ignore_super_00e73e3c,
                     (uint32_t *)&name_$init_asid_rights_00e73e40,
                     (int16_t *)&name_$init_asid_acl_opts_00e73e3a,
                     status_ret) != 0) {
-        /* Has access - map the directory for the new ASID */
+        /* 0x00E73D54-0x00E73D76 */
         name_$map_dir(&current_uid, *new_asid,
-                     &NAME_$DATA.wdir_mapped_info[*new_asid],
-                     status_ret);
-
-        if (*status_ret == status_$ok) {
-            dst_wdir->high = current_uid.high;
-            dst_wdir->low = current_uid.low;
-            goto do_ndir;
+                      &NAME_$DATA.wdir_mapped_info[*new_asid],
+                      status_ret);
+        if (*status_ret != status_$ok) {                    /* 0x00E73D7A */
+            goto map_failed;                                /* bne.w 0x00E73E06 */
         }
+        /* 0x00E73D80-0x00E73D96: wdir_uid[*new_asid] = current_uid */
+        dst = &NAME_$DATA.wdir_uid[*new_asid];
+        dst->high = current_uid.high;
+        dst->low  = current_uid.low;
     } else {
-        *status_ret = status_$ok;
-do_ndir:
-        /* Copy and map naming directory */
-        current_uid.high = src_ndir->high;
-        current_uid.low = src_ndir->low;
-
-        /* Check ACL access for naming directory.
-         * 0x00E73DD8 `tst.l D0` + `sne` + `bpl`. */
-        if (ACL_$RIGHTS(&current_uid,
-                        (boolean *)&name_$init_asid_ignore_super_00e73e3c,
-                        (uint32_t *)&name_$init_asid_rights_00e73e40,
-                        (int16_t *)&name_$init_asid_acl_opts_00e73e3a,
-                        status_ret) != 0) {
-            name_$map_dir(&current_uid, *new_asid,
-                         &NAME_$DATA.ndir_mapped_info[*new_asid],
-                         status_ret);
-
-            if (*status_ret == status_$ok) {
-                dst_ndir->high = current_uid.high;
-                dst_ndir->low = current_uid.low;
-                goto done;
-            }
-        } else {
-            *status_ret = status_$ok;
-            goto done;
-        }
+        *status_ret = status_$ok;                           /* 0x00E73D9C */
     }
 
-    /* Set high bit to indicate error */
-    *status_ret |= 0x80000000;  /* high bit of the first byte (m68k big-endian) */
+    /* 0x00E73D9E-0x00E73DB8: current_uid = ndir_uid[PROC1_$AS_ID] */
+    src = &NAME_$DATA.ndir_uid[PROC1_$AS_ID];
+    current_uid.high = src->high;
+    current_uid.low  = src->low;
+
+    /* 0x00E73DBC-0x00E73DDE */
+    if (ACL_$RIGHTS(&current_uid,
+                    (boolean *)&name_$init_asid_ignore_super_00e73e3c,
+                    (uint32_t *)&name_$init_asid_rights_00e73e40,
+                    (int16_t *)&name_$init_asid_acl_opts_00e73e3a,
+                    status_ret) != 0) {
+        /* 0x00E73DE0-0x00E73DFE */
+        name_$map_dir(&current_uid, *new_asid,
+                      &NAME_$DATA.ndir_mapped_info[*new_asid],
+                      status_ret);
+        if (*status_ret != status_$ok) {                    /* 0x00E73E02 */
+            goto map_failed;
+        }
+        /* 0x00E73E0C-0x00E73E22: ndir_uid[*new_asid] = current_uid */
+        dst = &NAME_$DATA.ndir_uid[*new_asid];
+        dst->high = current_uid.high;
+        dst->low  = current_uid.low;
+    } else {
+        *status_ret = status_$ok;                           /* 0x00E73E28 */
+    }
+    goto done;
+
+map_failed:
+    /* 0x00E73E06 `bset.b #0x7,(A3)`: bit 7 of the first byte = bit 31. */
+    *status_ret = (status_$t)((uint32_t)*status_ret | 0x80000000u);
 
 done:
-    ACL_$EXIT_SUPER();
+    ACL_$EXIT_SUPER();                                      /* 0x00E73E2A */
 }
 
 /*
- * NAME_$FORK - Copy naming state from parent to child during fork
+ * NAME_$FORK (0x00E73E44, 186 bytes)
  *
- * Copies the working directory, naming directory, and their mapped info
- * structures from the parent ASID to the child ASID.
+ * Copy the parent ASID's working/naming directory UIDs and both 16-byte
+ * mapped-info records to the child.  The two mapped-info copies are done
+ * TWICE in the image (0x00E73EA4-0x00E73EC6 and again 0x00E73ED0-0x00E73EF2,
+ * same source and destination); reproduced as found.
  *
- * Parameters:
- *   parent_asid - Pointer to parent address space ID
- *   child_asid  - Pointer to child address space ID
- *
- * Original address: 0x00e73e44
+ * Frame: (0x8,A6) parent_asid -> D2/A0, (0xc,A6) child_asid -> A2.
  */
 void NAME_$FORK(int16_t *parent_asid, int16_t *child_asid)
 {
-    uid_t *parent_wdir = &NAME_$DATA.wdir_uid[*parent_asid];
-    uid_t *child_wdir = &NAME_$DATA.wdir_uid[*child_asid];
-    uid_t *parent_ndir = &NAME_$DATA.ndir_uid[*parent_asid];
-    uid_t *child_ndir = &NAME_$DATA.ndir_uid[*child_asid];
+    uid_t *parent_wdir;
+    uid_t *child_wdir;
+    uid_t *parent_ndir;
+    uid_t *child_ndir;
 
-    /* Copy working directory UID */
+    /* 0x00E73E54-0x00E73E82: the two UIDs, indexed by the two asid words. */
+    parent_wdir = &NAME_$DATA.wdir_uid[*parent_asid];
+    child_wdir  = &NAME_$DATA.wdir_uid[*child_asid];
     child_wdir->high = parent_wdir->high;
-    child_wdir->low = parent_wdir->low;
+    child_wdir->low  = parent_wdir->low;
 
-    /* Copy naming directory UID */
+    parent_ndir = &NAME_$DATA.ndir_uid[*parent_asid];
+    child_ndir  = &NAME_$DATA.ndir_uid[*child_asid];
     child_ndir->high = parent_ndir->high;
-    child_ndir->low = parent_ndir->low;
+    child_ndir->low  = parent_ndir->low;
 
-    /* Copy working directory mapped info (16 bytes) */
+    /* 0x00E73E84-0x00E73EC6: wdir then ndir mapped info, 4 longwords each. */
     NAME_$DATA.wdir_mapped_info[*child_asid] = NAME_$DATA.wdir_mapped_info[*parent_asid];
-
-    /* Copy naming directory mapped info (16 bytes) */
     NAME_$DATA.ndir_mapped_info[*child_asid] = NAME_$DATA.ndir_mapped_info[*parent_asid];
 
-    /* The decompiled code shows it copies twice - this appears to be
-     * for redundancy or there may be two separate mapped info structures.
-     * Replicating the behavior here. */
+    /* 0x00E73EC8-0x00E73EF2: and the same two copies again. */
     NAME_$DATA.wdir_mapped_info[*child_asid] = NAME_$DATA.wdir_mapped_info[*parent_asid];
-
     NAME_$DATA.ndir_mapped_info[*child_asid] = NAME_$DATA.ndir_mapped_info[*parent_asid];
 }
 
 /*
- * NAME_$FREE_ASID - Free naming state for an address space
+ * NAME_$FREE_ASID (0x00E74DA8, 130 bytes)
  *
- * Called when a process terminates. Unmaps the directories and
- * resets the UIDs to the node directory UID.
+ * Unmap the ASID's working and naming directory buffers and reset both
+ * UIDs to this node's directory (NAME_$DATA+0x30).
  *
- * Parameters:
- *   asid - Pointer to the address space ID to free
- *
- * Original address: 0x00e74da8
+ * Frame: (0x8,A6) asid -> A2.
  */
 void NAME_$FREE_ASID(int16_t *asid)
 {
-    uid_t *wdir = &NAME_$DATA.wdir_uid[*asid];
-    uid_t *ndir = &NAME_$DATA.ndir_uid[*asid];
+    uid_t *wdir;
+    uid_t *ndir;
 
-    ACL_$ENTER_SUPER();
+    ACL_$ENTER_SUPER();                                     /* 0x00E74DB4 */
 
-    /* Unmap working directory */
+    /* 0x00E74DBA-0x00E74DD6: (asid, &wdir_mapped_info[asid]) */
     name_$unmap_dir_buffers(*asid, &NAME_$DATA.wdir_mapped_info[*asid]);
 
-    /* Unmap naming directory */
+    /* 0x00E74DD8-0x00E74DEC: (asid, &ndir_mapped_info[asid]) - the index
+     * still in D2w from the first call. */
     name_$unmap_dir_buffers(*asid, &NAME_$DATA.ndir_mapped_info[*asid]);
 
-    /* Reset both UIDs to node directory */
+    /* 0x00E74DEE-0x00E74E16: both UIDs <- node_uid (+0x30). */
+    wdir = &NAME_$DATA.wdir_uid[*asid];
+    ndir = &NAME_$DATA.ndir_uid[*asid];
     wdir->high = NAME_$NODE_UID.high;
-    wdir->low = NAME_$NODE_UID.low;
+    wdir->low  = NAME_$NODE_UID.low;
     ndir->high = NAME_$NODE_UID.high;
-    ndir->low = NAME_$NODE_UID.low;
+    ndir->low  = NAME_$NODE_UID.low;
 
-    ACL_$EXIT_SUPER();
+    ACL_$EXIT_SUPER();                                      /* 0x00E74E1A */
 }

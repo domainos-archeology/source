@@ -35,28 +35,31 @@ void NAME_$CR_FILE(char *path, int16_t *path_len, uid_t *file_ret, status_$t *st
     uid_t parent_dir_uid;
     status_$t status;
 
-    /* Resolve the parent directory and get filename position */
-    if (!name_$resolve_dir_and_leaf(path, *path_len, &filename_idx, &filename_len,
-                                    &parent_dir_uid, status_ret)) {
+    /* 0x00E4A32A-0x00E4A350: resolve the parent directory and the leaf;
+     * the boolean result is tested with `tst.b D0b / bpl` (false -> exit). */
+    if (name_$resolve_dir_and_leaf(path, *path_len, &filename_idx, &filename_len,
+                                   &parent_dir_uid, status_ret) >= 0) {
         return;
     }
 
-    /* Create the file object */
+    /* 0x00E4A352-0x00E4A360: create the file object */
     FILE_$CREATE(&parent_dir_uid, file_ret, status_ret);
 
-    /* Check status - original code only checks low word */
+    /* 0x00E4A364 `tst.w (0x2,A4)`: only the LOW word of the status is tested */
     if ((int16_t)*status_ret != 0) {
         return;
     }
 
-    /* Copy ACL from parent directory to new file */
+    /* 0x00E4A36A-0x00E4A38A: copy the parent's ACL to the new file;
+     * ACL_$FILE_ACL is 0xE17444 and ACL_$FILEIN_ACL 0xE17454 (map). */
     ACL_$COPY(&parent_dir_uid, file_ret, &ACL_$FILE_ACL, &ACL_$FILEIN_ACL, status_ret);
 
-    if (*status_ret != status_$ok) {
+    if (*status_ret != status_$ok) {                /* tst.l (A4) / bne */
         goto cleanup;
     }
 
-    /* Add the file entry to the directory */
+    /* 0x00E4A38C-0x00E4A3AC: add the entry; the name pointer is
+     * path + filename_idx - 1 (1-based index from the resolver). */
     DIR_$ADDU(&parent_dir_uid, path + (filename_idx - 1), &filename_len, file_ret, status_ret);
 
     if (*status_ret == status_$ok) {
@@ -65,7 +68,8 @@ void NAME_$CR_FILE(char *path, int16_t *path_len, uid_t *file_ret, status_$t *st
     }
 
 cleanup:
-    /* Failed - delete the file and return NIL */
+    /* 0x00E4A3AE-0x00E4A3C2: delete the file into a scratch status
+     * (A6-0xC, never read) and hand back UID_$NIL (0xE1737C). */
     FILE_$DELETE(file_ret, &status);
     file_ret->high = UID_$NIL.high;
     file_ret->low = UID_$NIL.low;

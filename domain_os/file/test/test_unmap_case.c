@@ -456,6 +456,98 @@ TEST(backslash_after_slash)
     ASSERT_MEM_EQ("/../", output, 4);
 }
 
+/*
+ * Test: ':#' with a non-hex FIRST digit.  0x00E54322 `ble.b 0x00E5432E`
+ * falls into the second-digit code with D0 = 0, so the second byte is
+ * consumed too (and, being non-hex, leaves 0).
+ */
+TEST(hex_escape_non_hex_first_digit_consumes_second)
+{
+    char output[64];
+    int16_t out_len;
+    uint8_t truncated;
+
+    memset(output, 0x55, sizeof(output));
+    run_unmap_case(":#zzq", 5, output, 64, &out_len, &truncated);
+
+    ASSERT_EQ(0, truncated);
+    ASSERT_EQ(2, out_len);
+    ASSERT_EQ(0x00, (uint8_t)output[0]);   /* zz -> 0 */
+    ASSERT_EQ('q', (uint8_t)output[1]);
+
+    /* non-hex first, hex second: 0 << 4 + 0xA */
+    memset(output, 0x55, sizeof(output));
+    run_unmap_case(":#za", 4, output, 64, &out_len, &truncated);
+    ASSERT_EQ(1, out_len);
+    ASSERT_EQ(0x0A, (uint8_t)output[0]);
+}
+
+/*
+ * Test: ':#' followed by exactly one hex digit (0x00E5432E `bge` ->
+ * 0x00E5438E) stores the unshifted digit; ':#' at the very end
+ * (0x00E542CE `bge` -> 0x00E5439C) stores nothing but still counts a slot.
+ */
+TEST(hex_escape_short_forms)
+{
+    char output[64];
+    int16_t out_len;
+    uint8_t truncated;
+
+    memset(output, 0x55, sizeof(output));
+    run_unmap_case(":#b", 3, output, 64, &out_len, &truncated);
+    ASSERT_EQ(0, truncated);
+    ASSERT_EQ(1, out_len);
+    ASSERT_EQ(0x0B, (uint8_t)output[0]);
+
+    /* hex first, non-hex second: keeps 0xB0 */
+    memset(output, 0x55, sizeof(output));
+    run_unmap_case(":#bz", 4, output, 64, &out_len, &truncated);
+    ASSERT_EQ(1, out_len);
+    ASSERT_EQ(0xB0, (uint8_t)output[0]);
+
+    memset(output, 0x55, sizeof(output));
+    run_unmap_case("a:#", 3, output, 64, &out_len, &truncated);
+    ASSERT_EQ(0, truncated);
+    ASSERT_EQ(2, out_len);
+    ASSERT_EQ('a', (uint8_t)output[0]);
+    ASSERT_EQ(0x55, (uint8_t)output[1]);   /* slot never written */
+}
+
+/*
+ * Test: the 0x00E54404 set is ['A'..'Z','`','~',':','.'] - all pass
+ * through unchanged after ':'.
+ */
+TEST(colon_escaped_literal_set)
+{
+    char output[64];
+    int16_t out_len;
+    uint8_t truncated;
+
+    memset(output, 0, sizeof(output));
+    run_unmap_case(":`:~:::.:Q", 10, output, 64, &out_len, &truncated);
+    ASSERT_EQ(0, truncated);
+    ASSERT_EQ(5, out_len);
+    ASSERT_MEM_EQ("`~:.Q", output, 5);
+}
+
+/*
+ * Test: a negative length is NOT the empty case (0x00E540EC `tst.w / bne`
+ * only catches zero): the loop is skipped and the epilogue runs, leaving
+ * out_len 0, a NUL, and truncated clear.
+ */
+TEST(negative_length_runs_epilogue)
+{
+    char output[64];
+    int16_t out_len = 77;
+    uint8_t truncated = 0x55;
+
+    memset(output, 0x55, sizeof(output));
+    run_unmap_case("abc", -3, output, 64, &out_len, &truncated);
+    ASSERT_EQ(0, truncated);
+    ASSERT_EQ(0, out_len);
+    ASSERT_EQ(0, (uint8_t)output[0]);
+}
+
 int main(void)
 {
     printf("UNMAP_CASE tests:\n");
@@ -479,6 +571,10 @@ int main(void)
     RUN_TEST(roundtrip);
     RUN_TEST(path_with_slashes);
     RUN_TEST(backslash_after_slash);
+    RUN_TEST(hex_escape_non_hex_first_digit_consumes_second);
+    RUN_TEST(hex_escape_short_forms);
+    RUN_TEST(colon_escaped_literal_set);
+    RUN_TEST(negative_length_runs_epilogue);
 
     printf("\nResults: %d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed > 0 ? 1 : 0;
