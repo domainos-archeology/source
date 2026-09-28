@@ -1,157 +1,103 @@
 /*
- * FLP_FORMAT_TRACK - Format a track on the floppy disk
+ * flp/format_track.c - FLP_FORMAT_TRACK (0x00E3DC78, 330 bytes)
  *
- * This function formats a single track on a floppy disk by:
- * 1. Building a format buffer with sector ID fields (C, H, R, N)
- * 2. Seeking to the correct cylinder if needed
- * 3. Setting up DMA to send the format buffer
- * 4. Sending the format track command to the controller
+ * Formats the track a request names: builds the FDC's per-sector ID table
+ * (C, H, R, N for each of the volume's sectors per track) in io_buffer,
+ * seeks if necessary, points DMAC channel 3 at the table and issues FORMAT
+ * TRACK.  Called only from FLP_DO_IO (0x00E3DE22), under its ML lock, and
+ * with its A5 - this routine does not reload the module base.
  *
- * The format buffer contains 4 bytes per sector:
- *   C - Cylinder number
- *   H - Head number
- *   R - Sector number (1-based)
- *   N - Bytes per sector code (usually 2 for 512 bytes)
+ * Frame (link.w A6,-0x20; A3 A2 D4 D3 D2 saved):
+ *   D2          vol       argument 1
+ *   D3          req       argument 2
+ *   D0          loop count / unit-head word
+ *   D1          sector number 1..n
+ *   A1          walks io_buffer four bytes at a time (A5 + 4 + 4*i, fields
+ *               at +0x7C..+0x7F, i.e. io_buffer[4*i..4*i+3])
  */
 
 #include "flp/flp_internal.h"
 
-/* Status codes */
-
-/* DMA controller base address */
-#define DMA_BASE       0x00ffa000
-
-/* DMA controller register offsets */
-#define DMA_MODE       0xc5   /* Mode register */
-#define DMA_CONTROL    0xc7   /* Control register */
-#define DMA_COUNT      0xca   /* Transfer count */
-#define DMA_ADDR       0xcc   /* Memory address */
-#define DMA_START      0xe9   /* Start transfer */
-
-/* DMA mode for write */
-#define DMA_MODE_WRITE 0x12
-
-/*
- * Request block structure (partial)
- *   +0x18: Pointer to disk info (controller number at offset 6)
- *   +0x1c: Unit number (word)
- *   +0x20: Sector count (word)
- *
- * Buffer structure (partial)
- *   +0x04: Cylinder number (word)
- *   +0x05: Track/cylinder high byte
- *   +0x06: Head number (byte)
- *   +0x0c: Status return (long)
- *   +0x1e: Error counter index (byte)
- */
-
-/*
- * FLP_FORMAT_TRACK - Format a track
- *
- * @param req  Request block
- * @param buf  Buffer descriptor with format parameters
- */
-void FLP_FORMAT_TRACK(void *req, void *buf)
+void FLP_FORMAT_TRACK(disk_$volume_t *vol, disk_io_req_t *req)
 {
-    int32_t status;
-    volatile flp_regs_t *regs;
-    volatile uint8_t *dma;
-    uint16_t sector_count;
-    uint16_t unit;
-    int16_t unit_cyl_offset;
-    uint8_t cylinder;
-    uint8_t head;
-    uint8_t *fmt_buf;
-    int success;
+    disk_device_entry_t *dev;           /* A1 */
+    uint16_t i;                         /* D0 */
+    uint16_t sector;                    /* D1 */
+    uint8_t *entry;                     /* A0 */
+    uint16_t unit;                      /* D1 */
+    status_$t status;                   /* D0 */
 
-    /* Get controller address from controller table */
-    void *disk_info = *(void **)((uint8_t *)req + 0x18);
-    uint16_t ctlr_num = *(uint16_t *)((uint8_t *)disk_info + 6);
-    uint32_t ctlr_offset = (uint32_t)ctlr_num * 8;
-    DAT_00e7b020 = *(int32_t *)(&DAT_00e7afe0[ctlr_offset + 4]);
-    regs = (volatile flp_regs_t *)(uintptr_t)DAT_00e7b020;
+    /* 0x00E3DC88-0x00E3DC9E: the register base from the controller's slot
+     * (vol +0x18 -> device entry +0x06 -> ctlr * 8). */
+    dev = (disk_device_entry_t *)vol->dev_info;
+    FLP_DATA.hw_addr = FLP_DATA.ctlr_table[dev->controller].hw_addr;
 
-    /* Get sector count */
-    sector_count = *(uint16_t *)((uint8_t *)req + 0x20);
-
-    /* Build format buffer with sector IDs */
-    if (sector_count != 0) {
-        cylinder = *(uint8_t *)((uint8_t *)buf + 5);  /* Track number */
-        head = *(uint8_t *)((uint8_t *)buf + 6);      /* Head number */
-
-        fmt_buf = FLP_IO_BUFFER;
-        for (uint16_t sec = 1; sec <= sector_count; sec++) {
-            *fmt_buf++ = cylinder;       /* C - Cylinder */
-            *fmt_buf++ = head;           /* H - Head */
-            *fmt_buf++ = (uint8_t)sec;   /* R - Sector number (1-based) */
-            *fmt_buf++ = DAT_00e7aff7;   /* N - Bytes per sector code */
+    /*
+     * 0x00E3DC9E-0x00E3DCD6: one 4-byte ID entry per sector (`dbf` with
+     * count - 1, so sec_per_track iterations, skipped when it is zero):
+     * the low byte of the request's cylinder word (req+5), its head byte
+     * (req+6), the sector number counting from 1, and the low byte of
+     * fmt_n (+0x103).
+     */
+    if (vol->sec_per_track != 0) {
+        sector = 1;
+        for (i = 0; i < vol->sec_per_track; i++) {
+            entry = &FLP_DATA.io_buffer[4 * i];
+            entry[0] = (uint8_t)((req->daddr >> 16) & 0xFF);
+            entry[1] = (uint8_t)((req->daddr >> 8) & 0xFF);
+            entry[2] = (uint8_t)sector;
+            entry[3] = (uint8_t)(FLP_DATA.fmt_n & 0xFF);
+            sector++;
         }
     }
 
-    /* Clear retry counter */
-    DAT_00e7b026 = 0;
-
-    /* Check if controller is busy */
-    if ((regs->status & FLP_STATUS_CMD_MASK) != 0) {
+    /* 0x00E3DCDA-0x00E3DCF4: no retries for a format; the FDC must be idle. */
+    FLP_DATA.cmd_retry = 0;
+    if ((FLP_REGS()->status & FLP_STATUS_CMD_MASK) != 0) {
         status = status_$disk_controller_busy;
-        goto set_error;
+        goto fail;
     }
 
-    /* Get unit and head info */
-    unit = *(uint16_t *)((uint8_t *)req + 0x1c);
-    head = *(uint8_t *)((uint8_t *)buf + 6);
+    /* 0x00E3DCF8-0x00E3DD08: the FORMAT TRACK block's unit/head word. */
+    FLP_DATA.fmt_cmd[1] = (uint16_t)(((req->daddr >> 8) & 0xFF) * 4
+                                     + vol->dev_unit);
 
-    /* Set up unit + head field */
-    DAT_00e7af22 = unit + head * 4;
-
-    status = 0;
-
-    /* Check if we need to seek to a new cylinder */
-    unit_cyl_offset = unit * 2;
-    if (*(int16_t *)(&DAT_00e7af6c[unit_cyl_offset]) != *(int16_t *)((uint8_t *)buf + 4)) {
-        /* Need to seek - set up seek command */
-        DAT_00e7b00e = DAT_00e7af22;  /* Copy unit + head */
-        DAT_00e7b010 = *(uint16_t *)((uint8_t *)buf + 4);  /* Cylinder */
-
-        status = EXCS(&DAT_00e7b00c, &DAT_00e3ddc2, req);
-
-        /* Update cached cylinder */
-        *(uint16_t *)(&DAT_00e7af6c[unit_cyl_offset]) = DAT_00e7af66;
+    /* 0x00E3DD0C-0x00E3DD40: seek with the separate SEEK block at +0x118
+     * (three words, 0x00E3DDC2) when the unit is elsewhere, recording the
+     * cylinder the FDC reports either way. */
+    unit = vol->dev_unit;
+    status = status_$ok;
+    if (FLP_DATA.unit_cyl[unit] != (uint16_t)(req->daddr >> 16)) {
+        FLP_DATA.seek_cmd[1] = FLP_DATA.fmt_cmd[1];
+        FLP_DATA.seek_cmd[2] = (uint16_t)(req->daddr >> 16);
+        status = EXCS(FLP_DATA.seek_cmd, &flp_word_three, vol);
+        FLP_DATA.unit_cyl[unit] = FLP_$SREGS[1];
     }
 
+    /* 0x00E3DD46-0x00E3DD48 */
     if (status != status_$ok) {
-        goto set_error;
+        goto fail;
     }
 
-    /* Set control register */
-    regs->control = 3;  /* Motor on, write direction */
+    /* 0x00E3DD4A-0x00E3DD7C: board control 3; DMAC channel 3 moves
+     * (sec_per_track << 2) >> 1 words from the wired table (memory to
+     * device, function code 1) and is started. */
+    FLP_REGS()->control = 3;
+    FLP_DMAC_MTC = (uint16_t)(((uint32_t)vol->sec_per_track << 2) >> 1);
+    FLP_DMAC_MAR = FLP_DATA.fmt_buf_pa;
+    FLP_DMAC_OCR = 0x12;
+    FLP_DMAC_MFC = 1;
+    FLP_DMAC_CCR = 0x80;
 
-    /* Configure DMA controller */
-    dma = (volatile uint8_t *)(uintptr_t)DMA_BASE;
-
-    /*
-     * DMA count is (sector_count * 4) / 2 = sector_count * 2
-     * Since each sector needs 4 bytes of ID info.
-     */
-    *(volatile uint16_t *)(dma + DMA_COUNT) = (uint16_t)((sector_count * 4) >> 1);
-    *(volatile uint32_t *)(dma + DMA_ADDR) = DAT_00e7aff0;  /* Physical addr of format buffer */
-    *(volatile uint8_t *)(dma + DMA_MODE) = DMA_MODE_WRITE;
-    *(volatile uint8_t *)(dma + DMA_START) = 1;      /* Start DMA */
-    *(volatile uint8_t *)(dma + DMA_CONTROL) = 0x80; /* Enable */
-
-    /* Execute format track command */
-    status = EXCS(&DAT_00e7af20, &DAT_00e3ddc4, req);
-
-    success = (status == status_$ok);
-    if (success) {
+    /* 0x00E3DD82-0x00E3DD96: FORMAT TRACK, six words (0x00E3DDC4). */
+    status = EXCS(FLP_DATA.fmt_cmd, &flp_word_six, vol);
+    if (status == status_$ok) {
         return;
     }
 
-set_error:
-    /* Clear error counter for this operation */
-    uint8_t err_idx = *(uint8_t *)((uint8_t *)buf + 0x1e);
-    DAT_00e7a55c[err_idx * 0x1c] = 0;
-
-    /* Store error status in buffer */
-    *(int32_t *)((uint8_t *)buf + 0x0c) = status;
+fail:
+    /* 0x00E3DD98-0x00E3DDB4: release the requesting process and record the
+     * status in the request. */
+    FLP_IO_PENDING(req->owner) = 0;
+    req->status = status;
 }

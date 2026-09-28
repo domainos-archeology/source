@@ -1,29 +1,16 @@
 /*
- * FLP_$REVALIDATE - Revalidate floppy disk
+ * flp/revalidate.c - FLP_$REVALIDATE (0x00E3DC54, 36 bytes)
  *
- * This function clears the disk change flag for a floppy unit.
- * It is called after the system has detected a disk change and
- * wants to allow further operations on the new disk.
- *
- * The disk change flag is set by the hardware when the disk is
- * ejected or changed, preventing I/O until revalidation.
+ * Jump-table entry +0x0C.  Clears the disk-change flag of the volume's
+ * unit so I/O may proceed after a new disk was noticed.  Saves and
+ * restores A5 around the module base (`pea (A5)` / `movea.l (-0x4,A6),A5`).
  */
 
 #include "flp/flp_internal.h"
 
-/*
- * FLP_$REVALIDATE - Clear disk change flag
- *
- * @param disk_info  Pointer to disk information structure
- *                   (offset 0x1c contains unit number)
- */
-void FLP_$REVALIDATE(void *disk_info)
+void FLP_$REVALIDATE(disk_$volume_t *vol)
 {
-    int16_t unit;
-
-    /* Extract unit number from disk info structure at offset 0x1c */
-    unit = *(int16_t *)((uint8_t *)disk_info + 0x1c);
-
-    /* Clear the disk change flag for this unit */
-    DAT_00e7b018[unit] = 0;
+    /* 0x00E3DC60-0x00E3DC6C: `move.w (0x1c,A0),D0w` is the volume's device
+     * unit; `clr.b (0x124,A1)` its disk_change byte.  No bounds check. */
+    FLP_DATA.disk_change[vol->dev_unit] = 0;
 }

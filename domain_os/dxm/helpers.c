@@ -1,8 +1,14 @@
 /*
  * dxm/helpers.c - DXM helper process entry points
  *
- * These functions are the main loops for DXM helper processes.
- * They wait for callbacks to be added and then execute them.
+ * Re-emitted from the image and verified block by block (DXM_$HELPER_COMMON
+ * 0x00E171E4 58 bytes, DXM_$HELPER_WIRED 0x00E1721E 40 bytes,
+ * DXM_$HELPER_UNWIRED 0x00E17246 42 bytes); the previous text was faithful.
+ * DXM_$HELPER_COMMON has no epilogue at all -- 0x00E1721C `bra.b` closes the
+ * loop and nothing follows -- and the two entry points reach the queues
+ * through A5 = 0xE2A7C0: (0x620,A5) = 0xE2ADE0 DXM_$WIRED_Q and (0x604,A5)
+ * = 0xE2ADC4 DXM_$UNWIRED_Q.  PROC1_$SET_LOCK is called with a result slot
+ * (`subq.l #2,SP`) it never fills.
  *
  * Original addresses:
  *   DXM_$HELPER_COMMON:   0x00E171E4

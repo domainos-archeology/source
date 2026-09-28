@@ -1,171 +1,117 @@
 /*
- * XPD Ptrace Options Functions
+ * xpd/ptrace_opts.c - the per-process ptrace option record
  *
- * These functions manage process trace options which control how
- * the debugger receives notifications about target process events.
+ *   XPD_$SET_PTRACE_OPTS         0x00E5AF9E  216 bytes
+ *   XPD_$INQ_PTRACE_OPTS         0x00E5B076  224 bytes
+ *   XPD_$RESET_PTRACE_OPTS       0x00E5B156   30 bytes
+ *   XPD_$INHERIT_PTRACE_OPTIONS  0x00E5B174   20 bytes
  *
- * Original addresses:
- *   XPD_$SET_PTRACE_OPTS:       0x00e5af9e
- *   XPD_$INQ_PTRACE_OPTS:       0x00e5b076
- *   XPD_$RESET_PTRACE_OPTS:     0x00e5b156
- *   XPD_$INHERIT_PTRACE_OPTIONS: 0x00e5b174
+ * The record lives at proc2_info_t +0xCE (`lea (-0x16,A0)`).  A NIL uid
+ * means the current process; otherwise the caller must be the process
+ * itself (+0x1C) or its debugger (+0x26), else proc_not_debug_target.
  */
 
 #include "xpd/xpd_internal.h"
 
 /*
- * Process table addresses and offsets
- */
-#define PROC_TABLE_BASE     0xEA551C
-#define PROC_ENTRY_SIZE     0xE4
-
-/* Offset from current process index to debugger mapping */
-#define CURRENT_TO_INDEX_OFFSET 0xEA93D2
-
-/* Offsets within process entry for ptrace options */
-#define PTRACE_OPTS_OFFSET  (-0x16)     /* 0xEA5506 relative to entry base */
-#define DEBUGGER_IDX_OFFSET (-0xBE)     /* Debugger index */
-#define PARENT_IDX_OFFSET   (-0xC8)     /* Parent process index */
-
-/*
- * XPD_$SET_PTRACE_OPTS - Set process trace options
+ * XPD_$SET_PTRACE_OPTS
  *
- * Sets trace options for a target process. If proc_uid is NIL,
- * operates on the current process. Otherwise, the caller must be
- * either the debugger or the parent of the target process.
+ * Frame (link.w A6,-0x24; A2 saved): A6-0x1C status, A6-0x18 uid copy,
+ * A6-0x10 the 14-byte copy of *opts (three longwords and a word).
  */
-void XPD_$SET_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts, status_$t *status_ret)
+void XPD_$SET_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts,
+                          status_$t *status_ret)
 {
-    int16_t index;
-    int32_t proc_offset;
-    status_$t status;
-    uid_t local_uid;
-    xpd_$ptrace_opts_t local_opts;
-    int16_t current_idx;
-    int16_t debugger_idx;
-    int16_t parent_idx;
+    status_$t st;                       /* A6-0x1C */
+    uid_t uid;                          /* A6-0x18 */
+    xpd_$ptrace_opts_t local;           /* A6-0x10 */
+    int16_t idx;                        /* D0 */
+    uint16_t current;                   /* D1 */
+    proc2_info_t *entry;                /* A0 */
 
-    /* Copy parameters to locals */
-    local_uid = *proc_uid;
-    local_opts = *opts;
-    status = status_$ok;
-
-    /* Lock the PROC2 data */
+    /* 0x00E5AFA4-0x00E5AFD0 */
+    uid = *proc_uid;
+    local = *opts;
+    st = status_$ok;
     ML_$LOCK(PROC2_LOCK_ID);
 
-    /* If UID is NIL, use the current process */
-    if (local_uid.high == UID_$NIL.high && local_uid.low == UID_$NIL.low) {
-        /* Get current process's index directly from the mapping table */
-        index = *(int16_t *)(CURRENT_TO_INDEX_OFFSET + (PROC1_$CURRENT * 2));
+    /* 0x00E5AFD2-0x00E5B00C: NIL -> the current index, else look it up */
+    if (uid.high == UID_$NIL.high && uid.low == UID_$NIL.low) {
+        idx = (int16_t)XPD_CURRENT_INDEX();
     } else {
-        /* Find the process by UID */
-        index = PROC2_$FIND_INDEX(&local_uid, &status);
+        idx = PROC2_$FIND_INDEX(&uid, &st);
     }
 
-    if (status == status_$ok) {
-        proc_offset = index * PROC_ENTRY_SIZE;
-
-        /* Get current process index */
-        current_idx = *(int16_t *)(CURRENT_TO_INDEX_OFFSET + (PROC1_$CURRENT * 2));
-
-        /* Get target's debugger and parent indices */
-        debugger_idx = *(int16_t *)(PROC_TABLE_BASE + proc_offset + DEBUGGER_IDX_OFFSET);
-        parent_idx = *(int16_t *)(PROC_TABLE_BASE + proc_offset + PARENT_IDX_OFFSET);
-
-        /* Verify caller is either the debugger or the parent */
-        if (current_idx == debugger_idx || current_idx == parent_idx) {
-            /* Copy ptrace options to the process entry (14 bytes) */
-            uint8_t *dst = (uint8_t *)(PROC_TABLE_BASE + proc_offset + PTRACE_OPTS_OFFSET);
-            uint8_t *src = (uint8_t *)&local_opts;
-
-            /* Copy 14 bytes (3 uint32_t + 2 bytes) */
-            *(uint32_t *)(dst + 0) = *(uint32_t *)(src + 0);
-            *(uint32_t *)(dst + 4) = *(uint32_t *)(src + 4);
-            *(uint32_t *)(dst + 8) = *(uint32_t *)(src + 8);
-            *(uint16_t *)(dst + 12) = *(uint16_t *)(src + 12);
+    /* 0x00E5B00E-0x00E5B058 */
+    if (st == status_$ok) {
+        entry = XPD_ENTRY(idx);
+        current = XPD_CURRENT_INDEX();
+        if (current == entry->debugger_idx || current == entry->self_index) {
+            *XPD_PTRACE_OPTS(entry) = local;
         } else {
-            status = status_$proc2_proc_not_debug_target;
+            st = status_$proc2_proc_not_debug_target;
         }
     }
 
+    /* 0x00E5B05A-0x00E5B06A */
     ML_$UNLOCK(PROC2_LOCK_ID);
-
-    *status_ret = status;
+    *status_ret = st;
 }
 
 /*
- * XPD_$INQ_PTRACE_OPTS - Inquire process trace options
+ * XPD_$INQ_PTRACE_OPTS
  *
- * Retrieves the current trace options for a target process.
+ * The same frame; the record is copied out to A6-0x10 under the lock and
+ * to *opts only after a good status (0x00E5B13A `bne`).  The two identity
+ * tests are made in the other order (self first).
  */
-void XPD_$INQ_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts, status_$t *status_ret)
+void XPD_$INQ_PTRACE_OPTS(uid_t *proc_uid, xpd_$ptrace_opts_t *opts,
+                          status_$t *status_ret)
 {
-    int16_t index;
-    int32_t proc_offset;
-    status_$t status;
-    uid_t local_uid;
-    xpd_$ptrace_opts_t local_opts;
-    int16_t current_idx;
-    int16_t debugger_idx;
-    int16_t parent_idx;
+    status_$t st;                       /* A6-0x1C */
+    uid_t uid;                          /* A6-0x18 */
+    xpd_$ptrace_opts_t local;           /* A6-0x10 */
+    int16_t idx;                        /* D0 */
+    uint16_t current;                   /* D1 */
+    proc2_info_t *entry;                /* A0 */
 
-    /* Copy UID to local */
-    local_uid = *proc_uid;
-    status = status_$ok;
-
-    /* Lock the PROC2 data */
+    /* 0x00E5B082-0x00E5B09E */
+    uid = *proc_uid;
+    st = status_$ok;
     ML_$LOCK(PROC2_LOCK_ID);
 
-    /* If UID is NIL, use the current process */
-    if (local_uid.high == UID_$NIL.high && local_uid.low == UID_$NIL.low) {
-        index = *(int16_t *)(CURRENT_TO_INDEX_OFFSET + (PROC1_$CURRENT * 2));
+    /* 0x00E5B0A0-0x00E5B0DA */
+    if (uid.high == UID_$NIL.high && uid.low == UID_$NIL.low) {
+        idx = (int16_t)XPD_CURRENT_INDEX();
     } else {
-        index = PROC2_$FIND_INDEX(&local_uid, &status);
+        idx = PROC2_$FIND_INDEX(&uid, &st);
     }
 
-    if (status == status_$ok) {
-        proc_offset = index * PROC_ENTRY_SIZE;
-
-        /* Get current process index */
-        current_idx = *(int16_t *)(CURRENT_TO_INDEX_OFFSET + (PROC1_$CURRENT * 2));
-
-        /* Get target's debugger and parent indices */
-        parent_idx = *(int16_t *)(PROC_TABLE_BASE + proc_offset + PARENT_IDX_OFFSET);
-        debugger_idx = *(int16_t *)(PROC_TABLE_BASE + proc_offset + DEBUGGER_IDX_OFFSET);
-
-        /* Verify caller is either the parent or debugger */
-        if (current_idx == parent_idx || current_idx == debugger_idx) {
-            /* Copy ptrace options from the process entry (14 bytes) */
-            uint8_t *src = (uint8_t *)(PROC_TABLE_BASE + proc_offset + PTRACE_OPTS_OFFSET);
-            uint8_t *dst = (uint8_t *)&local_opts;
-
-            *(uint32_t *)(dst + 0) = *(uint32_t *)(src + 0);
-            *(uint32_t *)(dst + 4) = *(uint32_t *)(src + 4);
-            *(uint32_t *)(dst + 8) = *(uint32_t *)(src + 8);
-            *(uint16_t *)(dst + 12) = *(uint16_t *)(src + 12);
+    /* 0x00E5B0DC-0x00E5B126 */
+    if (st == status_$ok) {
+        entry = XPD_ENTRY(idx);
+        current = XPD_CURRENT_INDEX();
+        if (current == entry->self_index || current == entry->debugger_idx) {
+            local = *XPD_PTRACE_OPTS(entry);
         } else {
-            status = status_$proc2_proc_not_debug_target;
+            st = status_$proc2_proc_not_debug_target;
         }
     }
 
+    /* 0x00E5B128-0x00E5B14A */
     ML_$UNLOCK(PROC2_LOCK_ID);
-
-    *status_ret = status;
-
-    /* Only copy options out if status is OK */
-    if (status == status_$ok) {
-        *opts = local_opts;
+    *status_ret = st;
+    if (st == status_$ok) {
+        *opts = local;
     }
 }
 
 /*
- * XPD_$RESET_PTRACE_OPTS - Reset ptrace options to defaults
- *
- * Clears all fields in the ptrace options structure to zero.
+ * XPD_$RESET_PTRACE_OPTS - clear a record (in the image's field order)
  */
 void XPD_$RESET_PTRACE_OPTS(xpd_$ptrace_opts_t *opts)
 {
-    /* Clear all fields */
+    /* 0x00E5B15E-0x00E5B16C */
     opts->flags = 0;
     opts->signal_mask = 0;
     opts->flags2 = 0;
@@ -174,22 +120,10 @@ void XPD_$RESET_PTRACE_OPTS(xpd_$ptrace_opts_t *opts)
 }
 
 /*
- * XPD_$INHERIT_PTRACE_OPTIONS - Check if ptrace options should inherit
- *
- * Checks if bit 3 (0x08) of the flags2 field is set, which indicates
- * that ptrace options should be inherited by child processes on fork.
- *
- * Returns -1 (0xFF) if inherit flag is set, 0 otherwise.
+ * XPD_$INHERIT_PTRACE_OPTIONS - flags2 bit 3, as a Domain boolean (`sne`)
  */
 int8_t XPD_$INHERIT_PTRACE_OPTIONS(xpd_$ptrace_opts_t *opts)
 {
-    /*
-     * Check bit 3 of flags2 (at offset 0x0D in the structure)
-     * The btst.b #0x3,(0xd,A0) instruction checks this bit
-     * sne D0b sets D0 to 0xFF if bit is set, 0 if not
-     */
-    if ((opts->flags2 & 0x08) != 0) {
-        return (int8_t)-1;  /* 0xFF = inherit */
-    }
-    return 0;               /* 0x00 = don't inherit */
+    /* 0x00E5B17C-0x00E5B182 */
+    return ((opts->flags2 & 0x08) != 0) ? -1 : 0;
 }

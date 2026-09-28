@@ -83,12 +83,13 @@ void PCHIST_$UNWIRE_CLEANUP(void);
 /*
  * PCHIST_$STOP_PROFILING - Stop system-wide profiling
  *
- * Decrements the system profiling count and cleans up if
- * count reaches zero.
+ * A nested procedure of PCHIST_$CNTL (0x00E5CD6C `movea.l (A6),A2` picks up
+ * the static link and 0x00E5CD82 reads CNTL's cmd pointer through it as
+ * (0x8,A2)); the uplevel reference is passed explicitly here.
  *
  * Original address: 0x00e5cd66
  */
-void PCHIST_$STOP_PROFILING(void);
+void PCHIST_$STOP_PROFILING(int16_t *cmd_ptr);
 
 /*
  * ============================================================================
@@ -116,5 +117,14 @@ void PCHIST_$STOP_PROFILING(void);
  */
 #define PCHIST_PROC_CLEAR(bitmap, pid) \
     ((bitmap)[((pid) - 1) >> 3] &= ~(0x80 >> (((pid) - 1) & 7)))
+
+/*
+ * PCHIST_$DOALIGN is the byte at PCHIST_$CONTROL + 0x126 (0xE2C32A):
+ * PCHIST_$CNTL writes it with `move.b D1b,(0x126,A5)` at 0x00E5CF36 and
+ * PCHIST_$UNWIRE_CLEANUP clears it with `clr.b (0x126,A5)` at 0x00E5CD16.
+ * It is the pchist_control_t.doalign field, not a separate object; the
+ * `extern int8_t PCHIST_$DOALIGN` in pchist.h is superseded by this alias.
+ */
+#define PCHIST_$DOALIGN (PCHIST_$CONTROL.doalign)
 
 #endif /* PCHIST_INTERNAL_H */

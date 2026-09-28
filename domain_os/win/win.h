@@ -152,6 +152,7 @@ _Static_assert(__builtin_offsetof(win_stats_t, dma_overrun) == 0x16, "win_stats_
  * Status codes
  */
 #define status_$disk_seek_error 0x00080015
+#define status_$disk_driver_logic_error 0x00080022
 #define status_$unknown_error_status_from_drive 0x00080023
 #define status_$unrecognized_drive_id 0x00080024
 
@@ -166,8 +167,12 @@ extern win_stats_t WIN_$CNT;
 
 /* Initialization */
 status_$t WIN_$CINIT(void *controller);
-uint32_t WIN_$DINIT(uint16_t vol_idx, uint16_t unit, void *param_3,
-                    void *param_4, void *param_5, void *param_6, void *param_7);
+/* WIN_$DINIT (0x00E19CE8): jump table +0x08, dinit(unit, controller, ...);
+ * the CONTROLLER word (argument 2) selects the unit record, and DISK_INIT
+ * is called with the two words swapped.  See win/dinit.c. */
+uint32_t WIN_$DINIT(uint16_t unit, uint16_t controller, void *num_blocks,
+                    void *sec_per_track, void *num_heads, void *pvlabel_info,
+                    void *param_7);
 
 /* I/O operations */
 /* WIN_$DO_IO is declared below win_$request_t. */
@@ -188,7 +193,11 @@ typedef struct win_$request_t {
                                      *       real pointer would break the
                                      *       layout on a 64-bit host.  Use
                                      *       ARCH_VA_TO_PTR. */
-    uint8_t   _unknown_04[8];       /* 0x04 */
+    uint16_t  cylinder;             /* 0x04: SEEK 0x00E19592 `move.w (0x4,A0)`,
+                                     *       WIN_$INT 0x00E19C5E */
+    uint8_t   head;                 /* 0x06: SEEK 0x00E1959C `move.b (0x6,A0)` */
+    uint8_t   sector;               /* 0x07 */
+    uint32_t  _unknown_08;          /* 0x08 */
     status_$t status;               /* 0x0C: WIN_$FORMAT_TRACK 0x00E19768
                                      *       `move.l D0,(0xc,A0)`, WIN_$DO_IO
                                      *       0x00E1994E */
@@ -208,6 +217,8 @@ typedef struct win_$request_t {
 } win_$request_t;
 
 _Static_assert(__builtin_offsetof(win_$request_t, next) == 0x00, "win_$request_t.next");
+_Static_assert(__builtin_offsetof(win_$request_t, cylinder) == 0x04, "win_$request_t.cylinder");
+_Static_assert(__builtin_offsetof(win_$request_t, head) == 0x06, "win_$request_t.head");
 _Static_assert(__builtin_offsetof(win_$request_t, status) == 0x0C, "win_$request_t.status");
 _Static_assert(__builtin_offsetof(win_$request_t, pa) == 0x10, "win_$request_t.pa");
 _Static_assert(__builtin_offsetof(win_$request_t, length) == 0x14, "win_$request_t.length");
@@ -222,16 +233,24 @@ _Static_assert(__builtin_offsetof(win_$request_t, flags) == 0x1F, "win_$request_
  */
 void WIN_$FORMAT_TRACK(void *dev_entry, win_$request_t *req);
 
+/* WIN_$DO_IO (0x00E19776): jump table +0x10, do_io(vol, req, param_3,
+ * result); `dev_entry` is the disk_$volume_t, whose dev_unit (+0x1C) is
+ * what SEEK and win_$reinit_drive are given. */
 void WIN_$DO_IO(void *dev_entry, win_$request_t *req, void *param_3,
-                uint8_t *result);
+                int8_t *result);
 
 /* Control operations */
 uint32_t WIN_$SPIN_DOWN(uint16_t *unit_ptr);
-uint32_t WIN_$INT(void *param);
+/* WIN_$INT (0x00E19BFA): the DCTE's cnum is the unit; returns Domain true. */
+int8_t WIN_$INT(dcte_t *dcte);
 
 /* Queue and stats */
-void WIN_$ERROR_QUE(uint8_t param_1, uint8_t *param_2);
-void WIN_$GET_STATS(int16_t param_1, int16_t param_2, void *stats);
+/* WIN_$ERROR_QUE (0x00E19D54): jump table +0x14, error_que(vol, is_timeout,
+ * result); clears *result and never loads D0. */
+void WIN_$ERROR_QUE(void *vol, uint16_t is_timeout, int8_t *result);
+/* WIN_$GET_STATS (0x00E19D62): jump table +0x18, get_stats(cnum, unit, stats);
+ * 22 bytes of WIN_$CNT for (0, 0), 22 zero bytes otherwise. */
+void WIN_$GET_STATS(int16_t cnum, int16_t unit, void *stats);
 
 /*
  * External functions used by WIN: EC_$* come from ec/ec.h, DISK_$REGISTER

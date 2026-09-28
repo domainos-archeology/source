@@ -122,9 +122,9 @@ extern pchist_proc_t PCHIST_$PROC_DATA[];   /* Per-process data at 0xe85704 */
 extern pchist_histogram_t PCHIST_$HISTOGRAM; /* Histogram at 0xe85c24 */
 
 /*
- * Alignment mode flag (for PCHIST_$CNTL command 3)
+ * Alignment mode flag (for PCHIST_$CNTL command 3): PCHIST_$CONTROL.doalign,
+ * see the PCHIST_$DOALIGN alias in pchist_internal.h.
  */
-extern int8_t PCHIST_$DOALIGN;
 
 /*
  * ============================================================================

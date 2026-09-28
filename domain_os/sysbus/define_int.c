@@ -1,30 +1,25 @@
 /*
- * SYSBUS_$DEFINE_INT - Define an interrupt (stub/error handler)
+ * SYSBUS_$DEFINE_INT - Crash: dynamic interrupt definition is not supported
  *
- * This function crashes the system with "Unknown Interrupt ID" error.
- * It appears to be a placeholder for an unimplemented feature that
- * was intended to allow dynamic interrupt definition.
+ * Re-emitted from the image (0x00E0ABBC..0x00E0ABCC, 18 bytes).  No
+ * references.
+ *
+ *   00e0abc0  pea (0xe,PC)            ; &0x00E0ABD0
+ *   00e0abc4  jsr CRASH_SYSTEM        ; the 4 bytes are left for unlk
+ *
+ * The cell at 0x00E0ABD0 holds 00 3e 00 02 = status 0x003E0002, "unknown
+ * interrupt ID"; the old body had 0x00080032, which is not what the image
+ * contains.
  *
  * From: 0x00e0abbc
- *
- * Original assembly:
- *   00e0abbc    link.w A6,0x0
- *   00e0abc0    pea (0xe,PC)               ; &Sysbus_Unknown_Interrupt_ID_Err
- *   00e0abc4    jsr 0x00e1e700.l           ; CRASH_SYSTEM
- *   00e0abca    unlk A6
- *   00e0abcc    rts
- *
- * The error string "Sysbus_Unknown_Interrupt_ID_Err" is located at
- * PC + 0xe = 0x00e0abce after the function.
  */
 
 #include "sysbus/sysbus_internal.h"
 
-/* Error status for unknown interrupt ID */
-const status_$t Sysbus_Unknown_Interrupt_ID_Err = 0x00080032;
+static const status_$t sysbus_$define_int_status_00e0abd0 =
+    status_$sysbus_unknown_interrupt_id;
 
 void SYSBUS_$DEFINE_INT(void)
 {
-    CRASH_SYSTEM(&Sysbus_Unknown_Interrupt_ID_Err);
-    /* Not reached - CRASH_SYSTEM doesn't return */
+    CRASH_SYSTEM(&sysbus_$define_int_status_00e0abd0);   /* 0x00E0ABC4 */
 }

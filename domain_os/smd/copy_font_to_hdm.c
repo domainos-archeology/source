@@ -1,131 +1,91 @@
 /*
- * smd/copy_font_to_hdm.c - Copy font bitmap data to hidden display memory
+ * smd/copy_font_to_hdm.c - SMD_$COPY_FONT_TO_HDM
  *
- * Copies font bitmap data from system memory to the hidden portion of
- * display memory. The copy process includes XOR'ing with a mask value
- * read from display memory for hardware compatibility.
+ * Re-emitted from the image.  The public entry 0x00E84934 is a 10-byte
+ * gate (`lea (-0x2,PC),A0` / `jmp 0x00E702F4`) and the body runs
+ * 0x00E702F4..0x00E70374 (132 bytes).  No link frame: after the eight-
+ * register movem (32 bytes) the arguments sit at (0x24,SP) display_base
+ * -> A3, (0x28,SP) font -> A2, (0x2C,SP) hdm_pos -> A4.  A5 = A0 (the gate
+ * address) is never used.
  *
- * The HDM is organized as scanlines below/beside the visible display area.
- * Font bitmaps are copied row-by-row with wrapping at scanline boundaries.
+ *   00e702fe  cmpi.w #1,(A2)
+ *   00e70304  v3: D0 = (0x2c,A2) long ; A2 += (0x28,A2) long
+ *   00e7030e  v1: D0 = (0x8,A2) word ; A2 += (0x2,A2) word (adda.w)
+ *   00e70316  D0 = ((D0 + 3) >> 2 (word)) - 1         ; longwords - 1
+ *   00e70326  D1 = hdm_pos->y ; D3 = 0x3FF - y ; D1 <<= 7 (y * 128 bytes)
+ *   00e70332  D4 = *(display_base + 0x1FFF0)          ; the XOR mask
+ *   00e70338  D6 = 0x64
+ *   00e7033e  A3 = display_base + y*128 + (hdm_pos->x >> 3)
+ *   loop 00e70348:
+ *     D2 = min(D0, 6) ; copy D2+1 longwords: *A3 = *A2++ ; *A3++ ^= D4
+ *     A3 += 0x64                                       ; to the next row
+ *     dbf D3 -> 00e7036c, else A3 -= 0x6FE4 ; D3 = 0xDF ; (HDM wrap)
+ *     00e7036c  D0 -= 7 ; bge loop
  *
- * Original addresses:
- *   0x00E84934 - Trampoline (loads A0 then jumps)
- *   0x00E702F4 - Actual implementation
+ * The old body advanced by 0x68 bytes per row and wrapped by 0x1BDF
+ * longwords; the image uses 0x64 bytes (7 longwords + 0x64 = one 128-byte
+ * scan line) and 0x6FE4 bytes.
  */
 
 #include "smd/smd_internal.h"
 
-/*
- * Display memory layout constants.
- * The XOR mask is stored at a fixed offset in display memory.
- */
-#define SMD_XOR_MASK_OFFSET     0x1FFF0     /* Offset to XOR mask in display mem */
-#define SMD_SCANLINE_WORDS      0x80        /* Words per scanline (128 bytes) */
-#define SMD_HDM_WRAP_ROW        0x3FF       /* Last row before wrap (1023) */
-#define SMD_ROWS_PER_SEGMENT    0xE0        /* Rows per HDM segment (224) */
-#define SMD_MAX_WORDS_PER_ITER  7           /* Max 32-bit words copied per row iteration */
-#define SMD_WORD_SKIP           0x68        /* Words to skip between row copies (0x1A * 4) */
+#define SMD_XOR_MASK_OFFSET     0x1FFF0u    /* 0x00E70332 */
+#define SMD_HDM_LAST_ROW        0x3FF       /* 0x00E7032A */
+#define SMD_HDM_ROW_STRIDE      0x64        /* 0x00E70338: bytes skipped after 7 longwords */
+#define SMD_HDM_WRAP_BACK       0x6FE4u     /* 0x00E70362 */
+#define SMD_HDM_WRAP_ROWS       0xDF        /* 0x00E70368 */
 
-/*
- * SMD_$COPY_FONT_TO_HDM - Copy font to hidden display memory
- *
- * Copies font bitmap data from system memory to HDM. The bitmap is
- * copied in 32-bit words, XOR'd with a mask value from display memory
- * for hardware compatibility.
- *
- * Parameters:
- *   display_base - Base address of display memory
- *   font         - Pointer to font header (version 1 or 3)
- *   hdm_pos      - Pointer to HDM position (y=start row, x=bit offset)
- *
- * Memory layout:
- *   - Display memory is organized as scanlines of 0x80 words each
- *   - HDM starts at row specified by hdm_pos->y
- *   - XOR mask read from display_base + 0x1FFF0
- *   - Copying wraps at row 0x3FF to row 0 with column offset
- *
- * Algorithm:
- *   - Reads font bitmap data offset from font header
- *   - Calculates total size in 32-bit words
- *   - Iterates copying up to 7 words per row
- *   - XORs each word with the mask
- *   - Wraps to next segment when reaching row 0x3FF
- */
 void SMD_$COPY_FONT_TO_HDM(uint32_t display_base, void *font, smd_hdm_pos_t *hdm_pos)
 {
-    smd_font_v1_t *font_v1 = (smd_font_v1_t *)font;
-    uint32_t data_size;
-    uint32_t data_offset;
-    uint32_t *src;              /* Source: font bitmap data */
-    uint32_t *dst;              /* Destination: HDM in display memory */
-    uint32_t xor_mask;          /* XOR mask from display memory */
-    int16_t rows_remaining;     /* Rows left before wrap */
-    int16_t words_remaining;    /* Total 32-bit words to copy */
-    int16_t words_this_row;     /* Words to copy this iteration */
-    int16_t i;
+    const uint8_t *src;              /* A2 */
+    uint8_t *dst;                    /* A3 */
+    uint32_t xor_mask;               /* D4 */
+    int16_t words_left;              /* D0 (low word) */
+    int16_t rows_left;               /* D3 */
+    int16_t n;                       /* D2 */
+    uint32_t w;
+    int i;
 
-    /*
-     * Get font bitmap data location and size based on version.
-     * Version 1: offset at 0x02, size at 0x08 (as word count)
-     * Version 3: offset at 0x28, size at 0x2C
-     */
-    if (font_v1->version == SMD_FONT_VERSION_1) {
-        data_offset = font_v1->data_offset;
-        data_size = font_v1->char_width;  /* Actually stores size in v1 */
+    /* 0x00E702FE-0x00E70316 */
+    if (((const smd_font_v1_t *)font)->version == SMD_FONT_VERSION_1) {
+        const smd_font_v1_t *v1 = (const smd_font_v1_t *)font;
+        words_left = (int16_t)v1->char_width;                       /* (0x8,A2) */
+        src = (const uint8_t *)font + (int16_t)v1->data_offset;      /* adda.w (0x2,A2) */
     } else {
-        /* Version 3 */
-        smd_font_v3_t *font_v3 = (smd_font_v3_t *)font;
-        data_offset = font_v3->data_offset;
-        data_size = font_v3->data_size;
+        const smd_font_v3_t *v3 = (const smd_font_v3_t *)font;
+        words_left = (int16_t)v3->data_size;                        /* (0x2c,A2) */
+        src = (const uint8_t *)font + v3->data_offset;               /* adda.l (0x28,A2) */
     }
+    /* 0x00E70316-0x00E7031A: addq.l #3 ; lsr.w #2 ; subq.l #1 */
+    words_left = (int16_t)((uint16_t)(words_left + 3) >> 2) - 1;
 
-    /* Calculate source pointer */
-    src = (uint32_t *)((uint8_t *)font + data_offset);
+    /* 0x00E7031C-0x00E70346 */
+    rows_left = (int16_t)(SMD_HDM_LAST_ROW - hdm_pos->y);
+    xor_mask = *(const uint32_t *)ARCH_VA_TO_PTR(display_base + SMD_XOR_MASK_OFFSET);
+    dst = (uint8_t *)ARCH_VA_TO_PTR(display_base + ((uint32_t)hdm_pos->y << 7)
+                                    + (int16_t)(hdm_pos->x >> 3));
 
-    /* Calculate size in 32-bit words, rounding up */
-    words_remaining = ((data_size + 3) >> 2) - 1;
-
-    /* Read XOR mask from display memory */
-    xor_mask = *(uint32_t *)(display_base + SMD_XOR_MASK_OFFSET);
-
-    /* Calculate initial destination in HDM */
-    dst = (uint32_t *)(display_base +
-                       (uint32_t)hdm_pos->y * SMD_SCANLINE_WORDS +
-                       (hdm_pos->x >> 3));
-
-    /* Calculate rows remaining before wrap */
-    rows_remaining = SMD_HDM_WRAP_ROW - hdm_pos->y;
-
-    /*
-     * Copy loop: process up to 7 words per row iteration.
-     * This matches the original assembly which uses dbf with D2=6.
-     */
+    /* 0x00E70348-0x00E7036E */
     do {
-        /* Limit words per iteration */
-        words_this_row = words_remaining;
-        if (words_this_row > (SMD_MAX_WORDS_PER_ITER - 1)) {
-            words_this_row = SMD_MAX_WORDS_PER_ITER - 1;
+        n = words_left;
+        if (n > 6) {
+            n = 6;                                                   /* 0x00E70350 */
         }
-
-        /* Copy words for this row segment */
-        for (i = words_this_row; i >= 0; i--) {
-            *dst = *src ^ xor_mask;
-            src++;
-            dst++;
+        for (i = 0; i <= n; i++) {                                   /* dbf D2 */
+            w = ((uint32_t)src[0] << 24) | ((uint32_t)src[1] << 16) |
+                ((uint32_t)src[2] << 8) | (uint32_t)src[3];
+            w ^= xor_mask;
+            dst[0] = (uint8_t)(w >> 24); dst[1] = (uint8_t)(w >> 16);
+            dst[2] = (uint8_t)(w >> 8);  dst[3] = (uint8_t)w;
+            src += 4;
+            dst += 4;
         }
-
-        /* Advance to next row (skip rest of scanline) */
-        dst += SMD_WORD_SKIP / 4;  /* 0x1A words = 0x68 bytes / 4 */
-
-        /* Check for row wrap */
-        rows_remaining--;
-        if (rows_remaining < 0) {
-            /* Wrap: go back by 0x1BDF words and reset row counter */
-            dst -= 0x1BDF;
-            rows_remaining = SMD_ROWS_PER_SEGMENT - 1;  /* 0xDF = 223 */
+        dst += SMD_HDM_ROW_STRIDE;                                   /* 0x00E7035C */
+        rows_left--;                                                 /* dbf D3 */
+        if (rows_left < 0) {
+            dst -= SMD_HDM_WRAP_BACK;                                /* 0x00E70362 */
+            rows_left = SMD_HDM_WRAP_ROWS;                           /* 0x00E70368 */
         }
-
-        /* Update remaining word count */
-        words_remaining -= (SMD_MAX_WORDS_PER_ITER);
-    } while (words_remaining >= 0);
+        words_left = (int16_t)(words_left - 7);                      /* 0x00E7036C */
+    } while (words_left >= 0);
 }

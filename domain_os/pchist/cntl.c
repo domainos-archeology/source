@@ -1,13 +1,28 @@
 /*
  * PCHIST_$CNTL - Control system-wide PC histogram
  *
- * Reverse engineered from Domain/OS at address 0x00e5cdb6
+ * Re-emitted from the image (0x00E5CDB6..0x00E5CFA8, 500 bytes) and verified
+ * block by block.  A5 = 0xE2C204 (PCHIST_$CONTROL), A2 = 0xE85718 so that
+ * (0x50C,A2) = PCHIST_$HISTOGRAM (0xE85C24) and (0x534,A2) = histogram[0].
+ *
+ * Frame (link.w A6,-0x2C): (0x8,A6) cmd ptr, (0xC,A6) range ptr -> A3,
+ * (0x10,A6) data ptr -> D5, (0x14,A6) status ptr -> A4 (cleared first).
+ * PCHIST_$STOP_PROFILING (0x00E5CD66) and PCHIST_$UNWIRE_CLEANUP
+ * (0x00E5CD02) are nested procedures reached with this frame as their
+ * static link (`movea.l (A6),A2` / `movea.l A6,A1`); STOP_PROFILING reads
+ * this frame's cmd ptr through it.
+ *
+ * Range arithmetic (0x00E5CDE6..0x00E5CE44):
+ *   size = (start == 0 && end == 0) ? 0 : (end < start ? 0x200 : end - start + 1)
+ *   size == 0 -> multiplier 0x100, bucket 0x1000000, shift 0x18
+ *   else buckets = size >> 8 (+1 if size & 0xFF); bucket = 2, shift = 1,
+ *        doubled while buckets > bucket; multiplier = (size + bucket - 1)
+ *        >> shift, and 0x100 when its LOW WORD is zero (tst.w D2w).
  */
 
 #include "pchist/pchist_internal.h"
 #include "mst/mst.h"
 #include "math/math.h"
-#include "mst/mst.h"
 #include "arch/arch.h"
 
 /*
@@ -16,11 +31,6 @@
  * MST_$WIRE_AREA may add to PCHIST_$WIRE_PAGES.
  */
 static const int16_t pchist_$max_wire_pages_00e5cfaa = 3;
-
-/*
- * Alignment flag for command 3
- */
-int8_t PCHIST_$DOALIGN;
 
 /*
  * Copy histogram data to output buffer
@@ -78,7 +88,7 @@ void PCHIST_$CNTL(
     if (cmd != 0 && cmd != 3) {
         /* Command 1 or 2: Stop profiling if cmd == 1, then return data */
         if (cmd == 1) {
-            PCHIST_$STOP_PROFILING();
+            PCHIST_$STOP_PROFILING(cmd_ptr);
         }
         /* Copy current histogram data to output */
         copy_histogram_data(data_ptr);
@@ -91,7 +101,7 @@ void PCHIST_$CNTL(
      */
 
     /* First stop any existing profiling */
-    PCHIST_$STOP_PROFILING();
+    PCHIST_$STOP_PROFILING(cmd_ptr);
 
     /*
      * Calculate profiling parameters from the range
@@ -141,7 +151,8 @@ void PCHIST_$CNTL(
 
             /* Calculate multiplier (entries per bucket) */
             multiplier = (bucket_size + range_size - 1) >> shift;
-            if (multiplier == 0) {
+            /* 0x00E5CE3E: tst.w D2w -- only the low word is tested */
+            if ((uint16_t)multiplier == 0) {
                 multiplier = 0x100;
             }
         }
@@ -156,9 +167,11 @@ void PCHIST_$CNTL(
 
     /*
      * Handle PID filter
-     * Negative value means it's a UPID that needs to be converted
+     * Negative value means it's a UPID that needs to be converted.
+     * 0x00E5CE6C `tst.w (0x8,A3)` / 0x00E5CE78 `move.w (0x8,A3)`: the WORD
+     * at range +8, i.e. the big-endian HIGH half of range_ptr[2].
      */
-    pid_param = (int16_t)range_ptr[2];
+    pid_param = (int16_t)(range_ptr[2] >> 16);
     if (pid_param < 0) {
         int16_t upid = -pid_param;
         PROC2_$UPID_TO_UID(&upid, &uid, status_ret);
@@ -188,8 +201,10 @@ void PCHIST_$CNTL(
     PCHIST_$HISTOGRAM.over_range = 0;
     PCHIST_$HISTOGRAM.under_range = 0;
     PCHIST_$HISTOGRAM.wrong_pid = 0;
-    PCHIST_$HISTOGRAM.doalign = -1;  /* 0xFF = true */
-    PCHIST_$HISTOGRAM.enabled = 1;
+    /* 0x00E5CEEC: st (0x50e,A2) -- the single byte at HISTOGRAM+0x02, the
+     * HIGH byte of the doalign word; the low byte is left alone. */
+    PCHIST_$HISTOGRAM.doalign = (int16_t)((PCHIST_$HISTOGRAM.doalign & 0x00FF) | 0xFF00);
+    PCHIST_$HISTOGRAM.enabled = 1;   /* 0x00E5CEF0: move.w #1,(0x50c,A2) */
 
     /*
      * Wire the histogram buffer pages so the sampler can touch them from an

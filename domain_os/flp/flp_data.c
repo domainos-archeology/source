@@ -2,16 +2,14 @@
  * flp/flp_data.c - FLP module data definitions
  *
  * Original M68K addresses:
- *   FLP_DATA        0x00E7AEF4  0x13C bytes ("D E7AEF4 FLP_ size = 13C")
- *   DAT_00e3ddc2    0x00E3DDC2  literal cells in the FLP_ code segment
- *   DAT_00e3ddc4    0x00E3DDC4
- *   DAT_00e3dfe0    0x00E3DFE0
- *   DAT_00e3e10e    0x00E3E10E
- *   DAT_00e3e110    0x00E3E110
- *   DAT_00e3e21c    0x00E3E21C
- *   DAT_00e3e21e    0x00E3E21E
- *   DAT_00e3e222    0x00E3E222
- *   DAT_00e3e226    0x00E3E226
+ *   FLP_DATA           0x00E7AEF4  0x13C bytes ("D E7AEF4 FLP_ size = 13C")
+ *   flp_word_three     0x00E3DDC2  literal cells in the FLP_ code segment
+ *   flp_word_six       0x00E3DDC4
+ *   flp_word_nine      0x00E3DFE0
+ *   flp_word_zero      0x00E3E10E
+ *   flp_word_one       0x00E3E110
+ *   flp_word_two       0x00E3E21C
+ *   flp_dinit_pvlabel  0x00E3E21E
  */
 
 #include "flp/flp_internal.h"
@@ -38,7 +36,7 @@ flp_data_t FLP_DATA = {
      * filler byte D=0x4E */
     .fmt_cmd = { 0x004d, 0x0000, 0x0003, 0x0008, 0x0074, 0x004e },
     /* +0x038 */
-    .result_regs = { 0, 0, 0, 0, 0, 0x001a, 0x0007, 0x0080, 0x0000 },
+    .w_038 = { 0, 0, 0, 0, 0, 0x001a, 0x0007, 0x0080, 0x0000 },
     /* +0x04A READ/WRITE DATA: cmd, unit/head, cyl, head, sector, N=3, EOT=8,
      * GPL=0x35, DTL=0xFF */
     .rw_cmd = { 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -49,9 +47,10 @@ flp_data_t FLP_DATA = {
     .w_06c = { 0x0000, 0x0000 },
     /* +0x070 FLP_$SREGS */
     .sregs = { 0x0000, 0x0000, 0x0000, 0x0000 },
-    .unit_cyl = { 0, 0, 0, 0, 0, 0, 0, 0 },
+    .unit_cyl = { 0, 0, 0, 0 },
     .io_buffer = { 0 },
-    .ctlr_table = { 0 },
+    .ctlr_table = { { 0, 0 }, { 0, 0 } },
+    .l_0f8 = 0x00000000,
     .fmt_buf_pa = 0x00000000,
     .w_100 = 0x0000,
     .fmt_n = 0x0003,
@@ -95,14 +94,17 @@ flp_data_t FLP_DATA = {
  *                          00 02 | 00 92 04 b2 | 00 00 00 01 | 00 00.
  */
 
-int16_t DAT_00e3ddc2 = 3;
-int16_t DAT_00e3ddc4 = 6;
-int16_t DAT_00e3dfe0 = 9;
+int16_t flp_word_three = 3;
+int16_t flp_word_six = 6;
+int16_t flp_word_nine = 9;
 
-int16_t DAT_00e3e10e = 0;
-int16_t DAT_00e3e110 = 1;
-int16_t DAT_00e3e21c = 2;
+int16_t flp_word_zero = 0;
+int16_t flp_word_one = 1;
+int16_t flp_word_two = 2;
 
-uint32_t DAT_00e3e21e = 0x009204B2;
-uint32_t DAT_00e3e222 = 0x00000001;
-uint16_t DAT_00e3e226 = 0x0000;
+flp_pvlabel_info_t flp_dinit_pvlabel = {
+    .l_00 = 0x009204B2,
+    .w_04 = 0x0000,
+    .w_06 = 0x0001,
+    .w_08 = 0x0000,
+};

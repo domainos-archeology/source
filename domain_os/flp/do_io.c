@@ -1,39 +1,18 @@
 /*
- * FLP_$DO_IO - Perform floppy disk I/O operation
+ * flp/do_io.c - FLP_$DO_IO (0x00E3DFE2, 32 bytes)
  *
- * This function is a wrapper that reformats the parameters and
- * calls the internal FLP_DO_IO function to perform the actual I/O.
- *
- * The LBA (Logical Block Address) is passed as a packed 32-bit value
- * and needs to be split into high and low portions for the internal
- * function.
+ * The jump-table entry (FLP_$JUMP_TABLE[4], +0x10) DISK_$DO_IO calls with
+ * its own four arguments.  It reserves a word result slot (`subq.l #0x2,SP`
+ * at 0x00E3DFE6), pushes result, a zero word, param_3, req and vol, and
+ * calls FLP_DO_IO; nothing reads the slot or D0 afterwards, so in C both
+ * routines are procedures.
  */
 
 #include "flp/flp_internal.h"
 
-/*
- * FLP_$DO_IO - Perform I/O operation
- *
- * @param param_1  I/O request block
- * @param param_2  Data buffer
- * @param param_3  Transfer count
- * @param param_4  Packed LBA (high 16 bits in upper word)
- */
-void FLP_$DO_IO(void *param_1, void *param_2, void *param_3, uint32_t param_4)
+void FLP_$DO_IO(disk_$volume_t *vol, struct disk_io_req_t *req, void *param_3,
+                int8_t *result)
 {
-    /*
-     * Split the packed LBA into high and low portions.
-     * The internal function expects:
-     *   p4_hi: Upper 16 bits (param_4 >> 16)
-     *   p4_lo: Full 32-bit value with an additional 16-bit prefix
-     *
-     * The assembly shows:
-     *   move.l (0x14,A6),-(SP)   ; push full param_4
-     *   clr.w -(SP)              ; push 0 (padding)
-     *   ...
-     * So we pass (param_4 >> 16) and ((param_4 & 0xFFFF) << 16) | 0
-     */
-    FLP_DO_IO(param_1, param_2, param_3,
-              (uint16_t)(param_4 >> 16),
-              ((uint32_t)(uint16_t)param_4 << 16));
+    /* 0x00E3DFE8-0x00E3DFFA */
+    FLP_DO_IO(vol, req, param_3, 0, result);
 }

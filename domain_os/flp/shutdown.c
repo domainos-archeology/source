@@ -1,35 +1,37 @@
 /*
- * FLP_$SHUTDOWN - Shutdown a floppy unit
+ * flp/shutdown.c - FLP_$SHUTDOWN (0x00E3E228, 64 bytes)
  *
- * This function marks a floppy unit as inactive and returns
- * the count of remaining active units. This is used during
- * system shutdown or when removing a drive from service.
+ * Jump-table entry +0x04, called as shutdown(controller, unit).  Marks the
+ * unit inactive and returns the number of units still active.
+ *
+ * Frame (link.w A6,-0xc; A5 D2 saved):
+ *   (0x8,A6)    ctlr    never read
+ *   (0xa,A6)    unit
+ *   D0          the count being returned
+ *   D1          dbf counter (3 -> four units)
+ *   D2          unit index
  */
 
 #include "flp/flp_internal.h"
 
-/*
- * FLP_$SHUTDOWN - Shutdown floppy unit
- *
- * @param unit  Unit number (0-3)
- * @return Number of remaining active units
- */
-int16_t FLP_$SHUTDOWN(uint16_t unit)
+int16_t FLP_$SHUTDOWN(uint16_t ctlr, uint16_t unit)
 {
-    int16_t active_count;
-    int16_t i;
+    int16_t count;                      /* D0 */
+    uint16_t i;                         /* D2 */
 
-    /* Mark this unit as inactive */
-    DAT_00e7b014[unit] = 0;
+    (void)ctlr;
 
-    /* Count remaining active units */
-    active_count = 0;
+    /* 0x00E3E236-0x00E3E242: no bounds check on unit. */
+    FLP_DATA.unit_active[unit] = 0;
+
+    /* 0x00E3E246-0x00E3E25A: `moveq #0x3,D1` / `dbf` - all four units;
+     * `tst.b` / `bpl` counts the Domain-true ones. */
+    count = 0;
     for (i = 0; i < FLP_MAX_UNITS; i++) {
-        /* High bit set indicates unit is active */
-        if ((int8_t)DAT_00e7b014[i] < 0) {
-            active_count++;
+        if (FLP_DATA.unit_active[i] < 0) {
+            count++;
         }
     }
 
-    return active_count;
+    return count;
 }

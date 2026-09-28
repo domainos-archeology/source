@@ -1,7 +1,21 @@
 /*
  * PCHIST_$UNIX_PROFIL_ADDUPC - Update profiling buffer
  *
- * Reverse engineered from Domain/OS at address 0x00e5cfac
+ * Re-emitted from the image (0x00E5CFAC..0x00E5D04C, 162 bytes) and verified
+ * block by block; the previous body was faithful.  A5 = 0xE2C204, A1 =
+ * 0xE85718 + pid*0x14 (PCHIST_$PROC_DATA[pid] biased by 0x14: (-0x4)
+ * overflow_ptr, (-0x8) scale, (-0xC) offset, (-0x10) bufsize, (-0x14)
+ * buffer).
+ *
+ *   00e5cfd4  overflow_ptr ? *overflow_ptr : PROC_PC[pid]     -> D1 = pc
+ *   00e5cfee  PROC_PC[pid] = 0
+ *   00e5cff6  pc < offset (bcs) -> exit ; D1 = pc - offset
+ *   00e5cffc  D2 = D1 >> 16 (clr.w/swap) ; M$MIU$LLL(D2, scale)  -> D2
+ *   00e5d012  D1 &= 0x7FFF ; M$MIU$LLL(D1, scale) ; clr.w/swap -> >> 16
+ *   00e5d02a  D1 = (hi + lo + 1) & ~1 (andi.b #-2 on the low byte)
+ *   00e5d034  D1 >= bufsize (bcc) -> exit ; else (buffer + D1) word ++
+ *
+ * Sole caller 0x00E215DC (FIM trace-fault delivery).
  */
 
 #include "pchist/pchist_internal.h"

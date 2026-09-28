@@ -1,58 +1,48 @@
 /*
- * DI_$ENQ - Enqueue a deferred interrupt element
+ * DI_$ENQ - Enqueue a deferred-interrupt element
  *
- * Adds an element to the head of the deferred interrupt queue.
- * The element must not already be enqueued (crashes if it is).
+ * Re-emitted from the image (0x00E209A8..0x00E209D4, 46 bytes).  Written in
+ * assembler (no link frame, arguments read straight off SP) but with the
+ * ordinary stack calling convention, so it is emitted as C:
  *
- * From: 0x00e209a8
+ *   00e209a8  movea.l (0xc,SP),A0          ; elem                 (arg 3)
+ *   00e209ac  tst.b (0xc,A0) / beq         ; elem->enqueued
+ *   00e209b2  pea (0x440,PC)               ; &0x00E20DF4 = 0x000A000C
+ *   00e209b6  bra.w 0x00e20b5a             ; -> jsr CRASH_SYSTEM ; bra.b 0x00e20b54
+ *   00e209ba  move.l (-0x3ba,PC),(A0)      ; elem->next = DI_$Q_HEAD (0xE20602)
+ *   00e209be  move.l A0,(0x00e20602).l     ; DI_$Q_HEAD = elem
+ *   00e209c4  move.l (0x4,SP),(0x4,A0)     ; elem->arg1 = arg 1
+ *   00e209ca  move.l (0x8,SP),(0x8,A0)     ; elem->arg2 = arg 2
+ *   00e209d0  st (0xc,A0)                  ; elem->enqueued = TRUE
  *
- * Original assembly:
- *   00e209a8    movea.l (0xc,SP),A0        ; Load elem pointer (3rd param)
- *   00e209ac    tst.b (0xc,A0)             ; Test enqueued flag
- *   00e209b0    beq.b 0x00e209ba           ; Branch if not enqueued
- *   00e209b2    pea (0x440,PC)             ; Push error status address
- *   00e209b6    bra.w 0x00e20b5a           ; Jump to CRASH_SYSTEM
- *   00e209ba    move.l (-0x3ba,PC),(A0)    ; elem->next = DI_$Q_HEAD
- *   00e209be    move.l A0,(0x00e20602).l   ; DI_$Q_HEAD = elem
- *   00e209c4    move.l (0x4,SP),(0x4,A0)   ; elem->arg1 = arg1
- *   00e209ca    move.l (0x8,SP),(0x8,A0)   ; elem->arg2 = arg2
- *   00e209d0    st (0xc,A0)                ; elem->enqueued = 0xFF
- *   00e209d4    rts
+ * The double-enqueue arm jumps to the shared crash stub at 0x00E20B5A; the
+ * `bra.b` after its `jsr CRASH_SYSTEM` lands in PROC1_$SET_LOCK's body, so
+ * DI_$ENQ never resumes and the element is not queued.  Callers:
+ * 0x00E2B226 and 0x00E2B25E (TIME).
  *
- * DI_$Q_HEAD is at address 0x00e20602.
+ * Original address: 0x00e209a8
  */
 
 #include "di/di_internal.h"
 #include "misc/crash_system.h"
 
-/* Global queue head - points to first element in queue */
+/* Head of the deferred-interrupt queue, 0xE20602 (SAU2 map: DI_$Q_HEAD). */
 di_queue_elem_t *DI_$Q_HEAD = NULL;
 
-/* Error status for double-enqueue condition */
-static const status_$t Proc1_Bad_deferred_interrupt_queue_Err = 0x000D0001;
+/* The status cell at 0x00E20DF4 (bytes 00 0a 00 0c). */
+static const status_$t di_$enq_crash_status_00e20df4 =
+    status_$proc1_bad_deferred_interrupt_queue;
 
 void DI_$ENQ(uint32_t arg1, uint32_t arg2, di_queue_elem_t *elem)
 {
-    /*
-     * Check if already enqueued - this is a fatal error.
-     * The original code crashes if the enqueued flag is non-zero.
-     */
+    /* 0x00E209AC: tst.b (0xc,A0) / beq.b 0x00E209BA */
     if (elem->enqueued != 0) {
-        CRASH_SYSTEM(&Proc1_Bad_deferred_interrupt_queue_Err);
-        /* CRASH_SYSTEM does not return, but add unreachable loop
-         * to match original decompiled code pattern */
-        for (;;) {
-            CRASH_SYSTEM(&Proc1_Bad_deferred_interrupt_queue_Err);
-        }
+        /* 0x00E209B2-0x00E209B6: crash and do not come back here */
+        CRASH_SYSTEM(&di_$enq_crash_status_00e20df4);
+        return;
     }
 
-    /*
-     * Insert at head of queue:
-     * 1. New element's next points to current head
-     * 2. Update head to point to new element
-     * 3. Store callback arguments
-     * 4. Mark as enqueued
-     */
+    /* 0x00E209BA-0x00E209D0 */
     elem->next = DI_$Q_HEAD;
     DI_$Q_HEAD = elem;
     elem->arg1 = arg1;

@@ -1,65 +1,41 @@
 /*
- * XPD_$INIT - Initialize the XPD (eXtended Process Debugging) subsystem
+ * xpd/init.c - XPD_$INIT (0x00E32304, 134 bytes; map `I E32304 XPD size = 90`)
  *
- * This function initializes the XPD data area by:
- * 1. Wiring the XPD and PROC2 data areas into memory
- * 2. Zeroing the XPD data area (0x4E8 bytes)
- * 3. Initializing eventcounts for all 57 process slots (0x14 bytes apart)
- * 4. Initializing eventcounts for debugger table slots (6 entries at 0x478 offset)
+ * Wires the XPD_$DATA..PROC2_$DATA range, zeroes XPD_$DATA and initialises
+ * its eventcounts.  A5 is set to 0x00E3514C (the module data cell at
+ * 0x00E35148 + 4) and never used.
  *
- * Original address: 0x00e32304
+ * Frame (link.w A6,-0x18; A5 A2 D2 saved):
+ *   A6-0x12  2  page_count   MST_$WIRE_AREA's fifth argument
+ *   A6-0x10 12  page_list    its third (up to 3 pages, the limit word)
  */
 
 #include "xpd/xpd_internal.h"
-#include "mst/mst.h"
-#include "os/os.h"
-
-/*
- * External data references
- *
- * XPD_$DATA starts at 0xEA5034 and contains:
- *   - 57 eventcounts at 0x14 byte intervals (for target processes)
- *   - 6 debugger eventcounts at offset 0x478 (for debugger slots)
- *
- * PTR_XPD_$DATA (0x00e32390) is declared in xpd_internal.h and
- * PTR_PROC2_$DATA (0x00e3238c) in proc2/proc2.h.
- */
 
 void XPD_$INIT(void)
 {
+    uint16_t page_count;                /* A6-0x12 */
+    uint32_t page_list[3];              /* A6-0x10 */
     int16_t i;
-    ec_$eventcount_t *ec;
-    uint8_t wire_params1[16];
-    uint8_t wire_params2[2];
 
-    /* Wire the XPD and PROC2 data areas into physical memory */
-    MST_$WIRE_AREA(&PTR_XPD_$DATA, &PTR_PROC2_$DATA, wire_params1,
-                   (void *)0x00e3238a, wire_params2);
+    /* 0x00E32312-0x00E3232C: the three cells at 0x00E3238A / 0x00E3238C /
+     * 0x00E32390, all by address. */
+    MST_$WIRE_AREA(&PTR_XPD_$DATA, &PTR_PROC2_$DATA, page_list,
+                   &xpd_$wire_limit, &page_count);
 
-    /* Zero the entire XPD data area (0x4E8 = 1256 bytes) */
-    OS_$DATA_ZERO(&XPD_$DATA, 0x4E8);
+    /* 0x00E32330-0x00E32340 */
+    OS_$DATA_ZERO(XPD_$DATA, XPD_DATA_SIZE);
 
-    /*
-     * Initialize eventcounts for all 57 process debug slots
-     * These are spaced 0x14 (20) bytes apart, starting at XPD_$DATA
-     * Each process slot has an eventcount used for debugger notification
-     */
-    ec = (ec_$eventcount_t *)&XPD_$DATA;
-    for (i = 0; i < 58; i++) {  /* 0x39 + 1 = 58 iterations (0-57) */
-        EC_$INIT(ec);
-        /* Move to next eventcount (0x14 bytes = 20 bytes) */
-        ec = (ec_$eventcount_t *)((char *)ec + 0x14);
+    /* 0x00E32342-0x00E3235A: `moveq #0x39` / `dbf` - 58 eventcounts at a
+     * 0x14 stride from +0, the last two of which lie in the debugger
+     * area (+0x474 and +0x488). */
+    for (i = 0; i < 58; i++) {
+        EC_$INIT(&XPD_TARGET(i)->ec);
     }
 
-    /*
-     * Initialize eventcounts for debugger table slots (6 entries)
-     * These are at offset 0x478 from XPD_$DATA, spaced 0x10 bytes apart
-     * Each debugger slot has an eventcount for event notification
-     */
-    ec = (ec_$eventcount_t *)((char *)&XPD_$DATA + 0x478);
-    for (i = 0; i < 6; i++) {   /* 0x5 + 1 = 6 iterations (0-5) */
-        EC_$INIT(ec);
-        /* Move to next eventcount (0x10 bytes = 16 bytes) */
-        ec = (ec_$eventcount_t *)((char *)ec + 0x10);
+    /* 0x00E3235E-0x00E3237C: `moveq #0x5` / `dbf` - the six debugger slots
+     * 1..6 (A2 = base + 0x10, then (0x478,A2)). */
+    for (i = 1; i <= XPD_MAX_DEBUGGERS; i++) {
+        EC_$INIT(&XPD_DEBUGGER(i)->ec);
     }
 }

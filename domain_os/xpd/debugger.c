@@ -1,302 +1,260 @@
 /*
- * XPD Debugger Registration Functions
+ * xpd/debugger.c - the debugger table
  *
- * These functions manage debugger registration and the debugger/target
- * relationship. The debugger table supports up to 6 debugger processes.
+ *   XPD_$FIND_DEBUGGER_INDEX   0x00E5BADC   66 bytes
+ *   XPD_$REGISTER_DEBUGGER     0x00E5BB1E  186 bytes
+ *   XPD_$SET_DEBUGGER          0x00E5BBD8  486 bytes
+ *   XPD_$UNREGISTER_DEBUGGER   0x00E74F7C  200 bytes (segment 0x00E74F7C)
  *
- * Original addresses:
- *   XPD_$SET_DEBUGGER:          0x00e5bbd8
- *   XPD_$FIND_DEBUGGER_INDEX:   0x00e5badc
- *   XPD_$REGISTER_DEBUGGER:     0x00e5bb1e
- *   XPD_$UNREGISTER_DEBUGGER:   0x00e74f7c
+ * The six slots are XPD_DEBUGGER(1..6); a slot is free when its asid word
+ * is 0.  A target's slot number sits in bits 9-11 of its state word.
  */
 
 #include "xpd/xpd_internal.h"
 
 /*
- * Debugger table layout:
- * Base: 0xEA5034 + 0x10 = 0xEA5044
- * Each entry: 16 bytes (0x10)
- *   Offset 0x00-0x0B: Eventcount (12 bytes)
- *   Offset 0x0C-0x0D: ASID of debugger (2 bytes, 0 = free slot)
- *   Offset 0x0E-0x0F: Padding (2 bytes)
+ * XPD_$FIND_DEBUGGER_INDEX - the slot registered for an address space
  *
- * ASID is at: base + entry * 0x10 + 0x484 - 0x10 = base + entry * 0x10 + 0x474
- * Actually from the code: 0xEA5044 + 0x484 = 0xEA54C8 for entry 0's ASID
- * So ASID is at: 0xEA5044 + entry_idx * 0x10 + 0x484 - 0x10
- * Simplified: 0xEA5034 + 0x484 + (entry_idx - 1) * 0x10 + 0x0C
- */
-#define XPD_DATA_BASE           0xEA5034
-#define DEBUGGER_ASID_OFFSET    0x484   /* Offset from entry base to ASID */
-
-/* Process table offsets */
-#define PROC_TABLE_BASE         0xEA551C
-#define PROC_ENTRY_SIZE         0xE4
-
-/* Offset within target state for debugger index (3 bits at 0x10) */
-#define TARGET_STATE_OFFSET     0x10
-
-/* PROC2 UID array base */
-#define PROC2_UID_BASE          0xE7BE94
-
-/*
- * XPD_$FIND_DEBUGGER_INDEX - Find debugger slot index
- *
- * Searches the debugger table for a slot with matching ASID.
- * Returns the 1-based index (1-6) or 0 if not found.
+ * 0x00E5BAEA-0x00E5BB0A: `moveq #0x5` / `dbf` over slots 1..6 comparing the
+ * asid word at +0x484 of A1 = base + 0x10*slot.  Not found -> not_a_debugger
+ * and 0.
  */
 int16_t XPD_$FIND_DEBUGGER_INDEX(int16_t asid, status_$t *status_ret)
 {
-    int16_t i;
-    int32_t addr;
+    int16_t slot;                       /* D1 */
 
-    /* Search 6 entries (indices 1-6) */
-    for (i = 1; i <= 6; i++) {
-        addr = XPD_DATA_BASE + 0x10 + (i - 1) * 0x10 + DEBUGGER_ASID_OFFSET;
-
-        if (*(int16_t *)addr == asid) {
+    for (slot = 1; slot <= XPD_MAX_DEBUGGERS; slot++) {
+        if (XPD_DEBUGGER(slot)->asid == (uint16_t)asid) {
             *status_ret = status_$ok;
-            return i;
+            return slot;
         }
     }
-
     *status_ret = status_$xpd_not_a_debugger;
     return 0;
 }
 
 /*
- * XPD_$REGISTER_DEBUGGER - Register as a debugger
+ * XPD_$REGISTER_DEBUGGER - claim a slot for an address space
  *
- * Allocates a debugger table slot for the given ASID.
- * Returns the 1-based index (1-6) or 0 if table is full or already registered.
+ * Under lock 2, one pass over the six slots remembers the first free one
+ * and refuses if the asid is already registered (already_a_debugger, and
+ * that slot is returned).  No free slot -> table_full and 0.  Otherwise
+ * the slot gets the asid and its eventcount VALUE is zeroed (0x00E5BBBA
+ * `clr.l (0x478,A3)` - only the first longword).
+ *
+ * Frame: D4 asid, D2 the free slot found, D3 the loop slot, A2 status.
  */
 int16_t XPD_$REGISTER_DEBUGGER(int16_t asid, status_$t *status_ret)
 {
-    int16_t i;
-    int16_t free_slot;
-    int32_t addr;
+    int16_t free_slot;                  /* D2 */
+    int16_t slot;                       /* D3 */
 
+    /* 0x00E5BB2A-0x00E5BB3A */
     ML_$LOCK(XPD_LOCK_ID);
 
+    /* 0x00E5BB3C-0x00E5BB7E */
     free_slot = 0;
-
-    /* Search for existing registration or free slot */
-    for (i = 1; i <= 6; i++) {
-        addr = XPD_DATA_BASE + 0x10 + (i - 1) * 0x10 + DEBUGGER_ASID_OFFSET;
-
-        if (*(int16_t *)addr == 0) {
-            /* Found a free slot - remember it if first one */
+    for (slot = 1; slot <= XPD_MAX_DEBUGGERS; slot++) {
+        if (XPD_DEBUGGER(slot)->asid == 0) {
             if (free_slot == 0) {
-                free_slot = i;
+                free_slot = slot;
             }
-        } else if (*(int16_t *)addr == asid) {
-            /* Already registered */
+        } else if (XPD_DEBUGGER(slot)->asid == (uint16_t)asid) {
+            /* 0x00E5BB62-0x00E5BB76 */
             ML_$UNLOCK(XPD_LOCK_ID);
             *status_ret = status_$xpd_already_a_debugger;
-            return i;
+            return slot;
         }
     }
 
+    /* 0x00E5BB82-0x00E5BB9A */
     if (free_slot == 0) {
-        /* No free slots */
         ML_$UNLOCK(XPD_LOCK_ID);
         *status_ret = status_$xpd_debugger_table_full;
         return 0;
     }
 
-    /* Allocate the slot */
-    addr = XPD_DATA_BASE + 0x10 + (free_slot - 1) * 0x10;
-    *(int16_t *)(addr + DEBUGGER_ASID_OFFSET) = asid;
-
-    /* Clear the EC at this slot */
-    *(uint32_t *)(addr + 0x478) = 0;    /* EC for this debugger's notifications */
-
+    /* 0x00E5BB9C-0x00E5BBCC */
+    XPD_DEBUGGER(free_slot)->asid = (uint16_t)asid;
+    XPD_DEBUGGER(free_slot)->ec.value = 0;
     ML_$UNLOCK(XPD_LOCK_ID);
     *status_ret = status_$ok;
     return free_slot;
 }
 
 /*
- * XPD_$UNREGISTER_DEBUGGER - Unregister as a debugger
+ * XPD_$SET_DEBUGGER - establish or break a debugger/target link
  *
- * Releases the debugger slot and continues all targets that were
- * being debugged by this process.
+ *   target NIL, debugger NIL  -> status_$ok, nothing done
+ *   target NIL                -> register the debugger's address space
+ *   debugger NIL              -> detach the target (and continue it if an
+ *                                event is pending)
+ *   debugger == target        -> unregister the debugger
+ *   otherwise                 -> put the debugger's slot into the target's
+ *                                state word; if it already had one, the
+ *                                new slot is written anyway and
+ *                                illegal_target_setup is reported
+ *
+ * Frame (link.w A6,-0x20; A3 A2 D3 D2 saved):
+ *   A6-0x1A  2  asid      PROC2_$FIND_ASID's result for the debugger
+ *   A6-0x14  4  st        FIND_ASID's status
+ *   A6-0x10  8  dbg_uid   copy of *debugger_uid
+ *   A6-0x08  8  tgt_uid   copy of *target_uid
+ *   D3          the target's index, D2 the debugger's slot, A2 status_ret,
+ *   A3          the target record
  */
-void XPD_$UNREGISTER_DEBUGGER(int16_t asid, status_$t *status_ret)
+void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid,
+                       status_$t *status_ret)
 {
-    int16_t i;
-    int16_t j;
-    int16_t debugger_idx;
-    int32_t addr;
-    uint16_t *target_state;
-    status_$t status;
-    uid_t *proc_uid;
+    uint16_t asid;                      /* A6-0x1A */
+    status_$t st;                       /* A6-0x14 */
+    uid_t dbg_uid;                      /* A6-0x10 */
+    uid_t tgt_uid;                      /* A6-0x08 */
+    uint16_t tidx;                      /* D3 */
+    int16_t slot;                       /* D2 */
+    xpd_$target_t *tgt;                 /* A3 */
 
-    ML_$LOCK(XPD_LOCK_ID);
+    /* 0x00E5BBE4-0x00E5BBF8 */
+    dbg_uid = *debugger_uid;
+    tgt_uid = *target_uid;
 
-    /* Find the debugger slot */
-    for (i = 1; i <= 6; i++) {
-        addr = XPD_DATA_BASE + 0x10 + (i - 1) * 0x10 + DEBUGGER_ASID_OFFSET;
-
-        if (*(int16_t *)addr == asid) {
-            /* Found the slot - clear it */
-            *(int16_t *)addr = 0;
-
-            /* Now iterate through all 57 target processes and release them */
-            for (j = 1; j <= 57; j++) {
-                target_state = (uint16_t *)(XPD_DATA_BASE + 0x14 + (j - 1) * 0x14 + TARGET_STATE_OFFSET);
-
-                /* Check if this target is being debugged by us */
-                debugger_idx = ((*target_state >> 8) & 0x0E) >> 1;  /* byte 0 (big-endian high byte) */
-
-                if (debugger_idx == i) {
-                    /* Clear the debugger bits (bits 1-3) */
-                    *target_state &= 0xF1FF;  /* andi.b #0xf1 on the high byte */
-
-                    /* If target is suspended by debugger, continue it */
-                    if ((*target_state & 0x1E0) != 0) {
-                        proc_uid = (uid_t *)(PROC2_UID_BASE + j * 8);
-                        XPD_$CONTINUE_PROC(proc_uid, (xpd_$response_t *)&xpd_continue_response, &status);
-                    }
-                }
-            }
-
-            ML_$UNLOCK(XPD_LOCK_ID);
-            *status_ret = status_$ok;
+    /* 0x00E5BBFC-0x00E5BC0E: target NIL? */
+    if (tgt_uid.high == UID_$NIL.high && tgt_uid.low == UID_$NIL.low) {
+        /* 0x00E5BC10-0x00E5BC22: both NIL -> ok */
+        if (dbg_uid.high == UID_$NIL.high && dbg_uid.low == UID_$NIL.low) {
+            *status_ret = status_$ok;                   /* 0x00E5BDB2 */
             return;
         }
-    }
-
-    ML_$UNLOCK(XPD_LOCK_ID);
-    *status_ret = status_$xpd_not_a_debugger;
-}
-
-/*
- * XPD_$SET_DEBUGGER - Set up debugger/target relationship
- *
- * This is the main entry point for establishing or removing a
- * debugging relationship between two processes.
- *
- * Cases:
- * 1. Both NIL: No operation
- * 2. Target NIL, debugger set: Register/unregister self as debugger
- * 3. Debugger NIL, target set: Remove debugger from target
- * 4. Both set, same UID: Self-debug setup (special case)
- * 5. Both set, different: Set debugger on target
- */
-void XPD_$SET_DEBUGGER(uid_t *debugger_uid, uid_t *target_uid, status_$t *status_ret)
-{
-    uid_t local_debugger;
-    uid_t local_target;
-    int16_t debugger_asid;
-    int16_t target_asid;
-    int16_t debugger_idx;
-    int32_t target_offset;
-    status_$t status;
-    uint16_t *target_state;
-
-    /* Copy UIDs to locals */
-    local_debugger = *debugger_uid;
-    local_target = *target_uid;
-
-    /* Case: Target is NIL */
-    if (local_target.high == UID_$NIL.high && local_target.low == UID_$NIL.low) {
-        /* Debugger is NIL too - nothing to do */
-        if (local_debugger.high == UID_$NIL.high && local_debugger.low == UID_$NIL.low) {
-            *status_ret = status_$ok;
-            return;
-        }
-
-        /* Target is NIL, debugger is set - register/unregister as debugger */
-        debugger_asid = PROC2_$FIND_ASID(&local_debugger, (int8_t *)&xpd_find_asid_flag, status_ret);
+        /* 0x00E5BC26-0x00E5BC4E: register; the slot returned is dropped */
+        asid = PROC2_$FIND_ASID(&dbg_uid, &xpd_$find_asid_flag, status_ret);
         if (*status_ret != status_$ok) {
             return;
         }
-
-        /* Unregister as debugger (clears slot and releases all targets) */
-        XPD_$UNREGISTER_DEBUGGER(debugger_asid, status_ret);
+        (void)XPD_$REGISTER_DEBUGGER((int16_t)asid, status_ret);
         return;
     }
 
-    /* Target is not NIL - find its ASID */
-    target_asid = PROC2_$FIND_ASID(&local_target, (int8_t *)&xpd_find_asid_flag, &status);
-    if (status != status_$ok) {
-        *status_ret = status;
+    /* 0x00E5BC52-0x00E5BC72: the target's index */
+    tidx = PROC2_$FIND_ASID(&tgt_uid, &xpd_$find_asid_flag, &st);
+    if (st != status_$ok) {
+        *status_ret = st;
         return;
     }
 
-    /* Case: Debugger is NIL - remove debugger from target */
-    if (local_debugger.high == UID_$NIL.high && local_debugger.low == UID_$NIL.low) {
-        target_offset = target_asid * 0x14;
-
-        ML_$LOCK(XPD_LOCK_ID);
-
-        target_state = (uint16_t *)(XPD_DATA_BASE + 0x10 + target_offset);
-
-        /* Check if target has a debugger */
-        if (((*target_state >> 8) & 0x0E) != 0) {  /* byte 0 (big-endian high byte) */
-            /* Clear debugger bits */
-            *target_state &= 0xF1FF;  /* andi.b #0xf1 on the high byte */
-
-            /* If target is suspended, continue it */
-            if ((*target_state & 0x1E0) != 0) {
-                ML_$UNLOCK(XPD_LOCK_ID);
-                XPD_$CONTINUE_PROC(&local_target, (xpd_$response_t *)&xpd_continue_response, status_ret);
-                goto done_ok;
-            }
+    /* 0x00E5BC76-0x00E5BC88: debugger NIL -> detach */
+    if (dbg_uid.high == UID_$NIL.high && dbg_uid.low == UID_$NIL.low) {
+        tgt = XPD_TARGET(tidx);
+        ML_$LOCK(XPD_LOCK_ID);                          /* 0x00E5BCA4 */
+        /* 0x00E5BCAC-0x00E5BCB4: no slot -> unlock, ok */
+        if (((tgt->state & XPD_STATE_DEBUGGER) >> XPD_STATE_DEBUGGER_SHIFT) == 0) {
+            goto unlock_ok;
         }
-
+        /* 0x00E5BCB8-0x00E5BCC8: drop the slot; no pending event -> ok */
+        tgt->state &= (uint16_t)~XPD_STATE_DEBUGGER;
+        if (((tgt->state & XPD_STATE_EVENT) >> XPD_STATE_EVENT_SHIFT) == 0) {
+            goto unlock_ok;
+        }
+        /* 0x00E5BCCC-0x00E5BCE8: let it go with response 2; its status is
+         * then overwritten with ok */
         ML_$UNLOCK(XPD_LOCK_ID);
-        goto done_ok;
+        XPD_$CONTINUE_PROC(&tgt_uid, &xpd_$response_two, status_ret);
+        *status_ret = status_$ok;                       /* 0x00E5BDB2 */
+        return;
     }
 
-    /* Both debugger and target are specified */
-
-    /* Find debugger's ASID */
-    debugger_asid = PROC2_$FIND_ASID(&local_debugger, (int8_t *)&xpd_find_asid_flag, &status);
-    if (status != status_$ok) {
+    /* 0x00E5BCEC-0x00E5BD12: the debugger's asid; not found ->
+     * debugger_not_found */
+    asid = PROC2_$FIND_ASID(&dbg_uid, &xpd_$find_asid_flag, &st);
+    if (st != status_$ok) {
         *status_ret = status_$xpd_debugger_not_found;
         return;
     }
 
-    /* Check if self-debugging (debugger == target) */
-    if (local_debugger.high == local_target.high && local_debugger.low == local_target.low) {
-        /* Self-debug - special handling via XPD_$UNREGISTER_DEBUGGER (0x00e74f7c) */
-        XPD_$UNREGISTER_DEBUGGER(debugger_asid, status_ret);
+    /* 0x00E5BD16-0x00E5BD34: the same process on both sides -> unregister
+     * (its status is the result) */
+    if (dbg_uid.high == tgt_uid.high && dbg_uid.low == tgt_uid.low) {
+        XPD_$UNREGISTER_DEBUGGER((int16_t)asid, status_ret);
         return;
     }
 
-    /* Register as debugger if not already */
-    debugger_idx = XPD_$REGISTER_DEBUGGER(debugger_asid, status_ret);
-    if (debugger_idx == 0) {
-        return;  /* Error already set */
+    /* 0x00E5BD36-0x00E5BD44 */
+    slot = XPD_$FIND_DEBUGGER_INDEX((int16_t)asid, status_ret);
+    if (slot == 0) {
+        return;
     }
 
-    /* Set up the target */
+    /* 0x00E5BD46-0x00E5BDA2 */
     ML_$LOCK(XPD_LOCK_ID);
-
-    target_offset = target_asid * 0x14;
-    target_state = (uint16_t *)(XPD_DATA_BASE + 0x10 + target_offset);
-
-    /* Check if target already has a different debugger */
-    if (((*target_state >> 8) & 0x0E) != 0) {  /* byte 0 (big-endian high byte) */
-        /* Clear old debugger */
-        *target_state &= 0xF1FF;  /* andi.b #0xf1 on the high byte */
-
-        /* Set new debugger index */
-        *target_state = (debugger_idx << 1) | (*target_state);
-
+    tgt = XPD_TARGET(tidx);
+    if (((tgt->state & XPD_STATE_DEBUGGER) >> XPD_STATE_DEBUGGER_SHIFT) != 0) {
+        /* 0x00E5BD6E-0x00E5BD92: already attached - the new slot is
+         * written regardless, then illegal_target_setup */
+        tgt->state = (uint16_t)((tgt->state & ~XPD_STATE_DEBUGGER) |
+                                (uint16_t)(((slot << 1) & 0x0E) << 8));
         ML_$UNLOCK(XPD_LOCK_ID);
         *status_ret = status_$xpd_illegal_target_setup;
         return;
     }
+    tgt->state = (uint16_t)((tgt->state & ~XPD_STATE_DEBUGGER) |
+                            (uint16_t)(((slot << 1) & 0x0E) << 8));
 
-    /* Set debugger index on target (bits 1-3) */
-    *target_state &= 0xF1FF;  /* andi.b #0xf1 on the high byte */
-    *target_state = (debugger_idx << 1) | (*target_state);
-
+unlock_ok:
+    /* 0x00E5BDA6-0x00E5BDB2 */
     ML_$UNLOCK(XPD_LOCK_ID);
-
-done_ok:
     *status_ret = status_$ok;
+}
+
+/*
+ * XPD_$UNREGISTER_DEBUGGER - free an address space's slot and its targets
+ *
+ * Under lock 2: find the slot; clear its asid; for every target record
+ * 1..57 attached to that slot, detach it and, if an event is pending,
+ * continue it with response 2 (the cell at 0x00E75044; the CONTINUE status
+ * goes to a local and is ignored).  Not found -> not_a_debugger.
+ *
+ * Frame (link.w A6,-0x1c; A4 A3 A2 D4 D3 D2 saved):
+ *   A6-0x08  4  cont_status
+ *   D2  asid, then the target loop counter; D3 the slot; D4 status_ret
+ *   A2  &PROC2_$UID[idx]; A3 the target record
+ */
+void XPD_$UNREGISTER_DEBUGGER(int16_t asid, status_$t *status_ret)
+{
+    status_$t cont_status;              /* A6-0x08 */
+    int16_t slot;                       /* D3 */
+    int16_t idx;
+    xpd_$target_t *tgt;                 /* A3 */
+
+    /* 0x00E74F88-0x00E74F98 */
+    ML_$LOCK(XPD_LOCK_ID);
+
+    /* 0x00E74F9A-0x00E75022: slots 1..6 */
+    for (slot = 1; slot <= XPD_MAX_DEBUGGERS; slot++) {
+        if (XPD_DEBUGGER(slot)->asid != (uint16_t)asid) {
+            continue;
+        }
+        /* 0x00E74FB0 */
+        XPD_DEBUGGER(slot)->asid = 0;
+
+        /* 0x00E74FB4-0x00E75006: `moveq #0x38` / `dbf` - targets 1..57 */
+        for (idx = 1; idx <= XPD_MAX_TARGETS; idx++) {
+            tgt = XPD_TARGET(idx);
+            if (((tgt->state & XPD_STATE_DEBUGGER) >> XPD_STATE_DEBUGGER_SHIFT) != slot) {
+                continue;
+            }
+            tgt->state &= (uint16_t)~XPD_STATE_DEBUGGER;
+            if (((tgt->state & XPD_STATE_EVENT) >> XPD_STATE_EVENT_SHIFT) != 0) {
+                XPD_$CONTINUE_PROC(&PROC2_$UID[idx], &xpd_$unreg_response,
+                                   &cont_status);
+            }
+        }
+
+        /* 0x00E7500A-0x00E75018 */
+        ML_$UNLOCK(XPD_LOCK_ID);
+        *status_ret = status_$ok;
+        return;
+    }
+
+    /* 0x00E75026-0x00E75034 */
+    ML_$UNLOCK(XPD_LOCK_ID);
+    *status_ret = status_$xpd_not_a_debugger;
 }

@@ -11,7 +11,16 @@
  *   Byte 3: Y high (6 bits, masked with 0x3f)
  *   Byte 4: Y low (6 bits, masked with 0x3f)
  *
- * From: 0x00e1ad18
+ * From: 0x00e1ad18 (424 bytes).  Re-emitted against the image (2026-09-27):
+ * A5 = 0xE2DD88 (SUMA_$STATE), the data byte is (0xC,A6) -- the high byte
+ * of the second argument's word slot -- and the five states dispatch through
+ * the word table at 0x00E1AD40.  Two fixes from that pass:
+ *   - state 0 (0x00E1AD62..0x00E1AD7E) clears the whole id byte at +0x1F
+ *     (`andi.w #-0xc1` and `andi.w #-0x4` on the word at +0x1E, then
+ *     `andi.b #-0x3d` on +0x1F) before OR-ing the nibble in; the old
+ *     body kept bits 7,6,1,0;
+ *   - the movement threshold is `move.b (0x2a,A5)`, the HIGH byte of the
+ *     threshold word (0x00E1ADDE), not its low byte.
  *
  * The function uses a state machine with states 0-4:
  *   State 0: Wait for sync byte (bit 6 set)
@@ -72,10 +81,18 @@ void SUMA_$RCV(uint32_t param_1, uint8_t data_byte)
         SUMA_$STATE.prev_y_high = SUMA_$STATE.cur_y_high;
         SUMA_$STATE.prev_y_low = SUMA_$STATE.cur_y_low;
 
-        /* Extract device ID from bits 5-2 and store shifted left by 2 */
-        /* Original: andi.b #0xf,D0b; lsl.b #0x2,D1b; or.b D1b,(0x1f,A5) */
+        /*
+         * 0x00E1AD62  andi.w #-0xc1,(0x1e,A5)   ; +0x1E &= 0xFF, +0x1F &= 0x3F
+         * 0x00E1AD68  andi.w #-0x4,(0x1e,A5)    ; +0x1F &= 0xFC
+         * 0x00E1AD6E  lsr.b #2 ; andi.b #0xf     ; the nibble
+         * 0x00E1AD74  andi.b #-0x3d,(0x1f,A5)   ; +0x1F &= 0xC3 -> 0 by now
+         * 0x00E1AD7E  or.b (nibble << 2),(0x1f,A5)
+         * The byte at +0x1E (cur_id_flags in suma_state_t) is untouched;
+         * the id lands in the byte at +0x1F (cur_reserved).
+         */
         id_nibble = (data_byte >> 2) & 0x0f;
-        SUMA_$STATE.cur_id_flags = (SUMA_$STATE.cur_id_flags & 0xc3) | (id_nibble << 2);
+        SUMA_$STATE.cur_reserved = (uint8_t)(((SUMA_$STATE.cur_reserved & 0x3F) & 0xFC & 0xC3)
+                                             | (id_nibble << 2));
         break;
 
     case 1:
@@ -103,13 +120,15 @@ void SUMA_$RCV(uint32_t param_1, uint8_t data_byte)
          * Only compare if device IDs match (bits 5-2).
          */
         is_duplicate = 0;
-        if (((SUMA_$STATE.prev_id_flags & 0x3c) >> 2) ==
-            ((SUMA_$STATE.cur_id_flags & 0x3c) >> 2)) {
+        /* 0x00E1ADB4-0x00E1ADC8: bytes +0x0F and +0x1F, masked 0x3C, >> 2 */
+        if (((SUMA_$STATE.prev_reserved & 0x3c) >> 2) ==
+            ((SUMA_$STATE.cur_reserved & 0x3c) >> 2)) {
             /*
              * Same device ID - check if movement exceeds threshold.
              * Compare X high and Y high bytes against threshold.
              */
-            threshold_byte = (uint8_t)SUMA_$STATE.threshold;
+            /* 0x00E1ADDE: move.b (0x2a,A5),D1b -- the HIGH byte of the word */
+            threshold_byte = (uint8_t)(SUMA_$STATE.threshold >> 8);
 
             /* Check X high difference */
             x_diff = ABS_DIFF(SUMA_$STATE.prev_x_high, SUMA_$STATE.cur_x_high);

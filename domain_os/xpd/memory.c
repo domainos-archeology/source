@@ -1,291 +1,243 @@
 /*
- * XPD Memory Access Functions
+ * xpd/memory.c - target memory access
  *
- * These functions provide memory read/write operations between
- * address spaces for debugging purposes.
+ *   XPD_$COPY_MEMORY      0x00E5B704  394 bytes
+ *   XPD_$READ_PROC_ASYNC  0x00E5B88E  198 bytes
+ *   XPD_$READ_PROC        0x00E5B954  142 bytes
+ *   XPD_$WRITE_PROC       0x00E5B9E2  142 bytes
+ *   XPD_$READ             0x00E5BA70   54 bytes
+ *   XPD_$WRITE            0x00E5BAA6   54 bytes
  *
- * Original addresses:
- *   XPD_$COPY_MEMORY:      0x00e5b704
- *   XPD_$READ_PROC:        0x00e5b954
- *   XPD_$READ_PROC_ASYNC:  0x00e5b88e
- *   XPD_$WRITE_PROC:       0x00e5b9e2
- *   XPD_$READ:             0x00e5ba70
- *   XPD_$WRITE:            0x00e5baa6
+ * The four entry points that take an address space by index set A5 to
+ * 0x00E81814 and never use it.
  */
 
 #include "xpd/xpd_internal.h"
-#include "fim/fim.h"
-#include "acl/acl.h"
 
-/* FIM trace status array base */
-#define FIM_TRACE_STS_BASE  0xE223A2
+/* XPD_$COPY_MEMORY's bounce buffer (A6-0x418, 0x400 bytes) */
+#define XPD_COPY_CHUNK  0x400
 
-/* Process table offsets */
-#define PROC_TABLE_BASE     0xEA551C
-#define PROC_ENTRY_SIZE     0xE4
-
-/* Process entry field offset for trace ASID */
-#define TRACE_ASID_OFFSET   (-0x4E)
-
-/* Current process index offset */
-#define CURRENT_TO_INDEX_OFFSET 0xEA93D2
-
-/* Copy buffer size for inter-address-space transfers */
-#define COPY_BUFFER_SIZE    0x400   /* 1KB */
+/* The value FIM_$TRACE_STS is left holding for both address spaces
+ * (0x00E5B856 `clr.l (0,A0,D0w)` then `ori.w #0x80,(0,A0,D0w)`: the word
+ * at the SAME address is the big-endian HIGH word of the longword, so the
+ * bit set is bit 23 - the marker bit XPD_$RESTART sets in the fault
+ * parameter and XPD_$GET_REGISTERS strips). */
+#define XPD_TRACE_STS_DONE  0x00800000
 
 /*
- * XPD_$COPY_MEMORY - Copy memory between address spaces
+ * XPD_$COPY_MEMORY - copy between address spaces through a 1K buffer
  *
- * This function copies data between two address spaces using a
- * temporary buffer. It handles guard faults and switches ASIDs
- * as needed to perform the copy.
+ * A cleanup handler (FIM_$CLEANUP) guards the copy: on the first return it
+ * reports status_$fault_cleanup_in_progress and the copy runs; if a fault
+ * unwinds to it, it returns that fault's status and the copy is skipped
+ * (FIM_$POP_SIGNAL instead of FIM_$RLS_CLEANUP).  Each chunk is read with
+ * the source AS selected and written with the destination AS selected;
+ * a guard fault in either (FIM_$TRACE_STS == status_$mst_guard_fault)
+ * ends the copy with that status.  Both AS's trace status is then set to
+ * 0x80 and the caller's AS re-selected if it changed.
  *
- * The copy is done in chunks of up to 1KB to limit the amount
- * of time spent in a foreign address space.
+ * Frame (link.w A6,-0x42c; A4 A3 A2 D7 D6 D5 D4 D3 D2 saved):
+ *   A6-0x42C  4  buf_ptr      the bounce buffer's address
+ *   A6-0x428  2  saved_asid   PROC1_$AS_ID at entry
+ *   A6-0x426  2  cur_asid     the AS last selected
+ *   A6-0x424  4  remaining
+ *   A6-0x418 400 buf
+ *   A6-0x018     cleanup      FIM_$CLEANUP's record
+ *   D4 dst, D5 src (advanced per chunk)
  */
 void XPD_$COPY_MEMORY(int16_t dst_asid, void *dst_addr, int16_t src_asid,
                       const void *src_addr, uint32_t len,
                       status_$t *status_ret)
 {
-    uint16_t saved_asid;
-    uint16_t current_asid;
-    uint32_t remaining;
-    uint32_t chunk_size;
-    const char *src_ptr;
-    char *dst_ptr;
-    char copy_buffer[COPY_BUFFER_SIZE];
-    uint8_t cleanup_state[24];
-    status_$t cleanup_status;
+    uint16_t saved_asid;                /* A6-0x428 */
+    uint16_t cur_asid;                  /* A6-0x426 */
+    uint32_t remaining;                 /* A6-0x424 */
+    uint8_t buf[XPD_COPY_CHUNK];        /* A6-0x418 */
+    uint8_t cleanup[0x18];              /* A6-0x18 */
+    uint8_t *dst;                       /* D4 */
+    const uint8_t *src;                 /* D5 */
+    status_$t st;                       /* D0 */
+    uint32_t chunk;                     /* D0 */
 
-    /* Save the current ASID */
-    saved_asid = PROC1_$AS_ID;
-    current_asid = saved_asid;
+    /* 0x00E5B70C-0x00E5B71C */
     remaining = len;
+    saved_asid = PROC1_$AS_ID;
+    cur_asid = saved_asid;
 
-    /* Set up cleanup handler for fault recovery */
-    cleanup_status = FIM_$CLEANUP(cleanup_state);
-    *status_ret = cleanup_status;
+    /* 0x00E5B722-0x00E5B73A */
+    st = FIM_$CLEANUP(cleanup);
+    *status_ret = st;
+    if (st == status_$fault_cleanup_in_progress) {
+        /* 0x00E5B73E-0x00E5B76A */
+        *status_ret = status_$ok;
+        FIM_$TRACE_STS[(uint16_t)src_asid] = 0;
+        FIM_$TRACE_STS[(uint16_t)dst_asid] = 0;
+        dst = (uint8_t *)dst_addr;
+        src = (const uint8_t *)src_addr;
 
-    if (cleanup_status != status_$cleanup_handler_set) {
-        /* Fault occurred or couldn't set handler */
-        FIM_$POP_SIGNAL(cleanup_state);
-        goto cleanup_and_exit;
+        /* 0x00E5B82A-0x00E5B82E / 0x00E5B76E-0x00E5B828 */
+        while (remaining != 0) {
+            /* read a chunk from the source AS */
+            PROC1_$SET_ASID((uint16_t)src_asid);
+            cur_asid = (uint16_t)src_asid;
+            chunk = XPD_COPY_CHUNK;
+            if (!(chunk <= remaining)) {
+                chunk = remaining;
+            }
+            OS_$DATA_COPY(src, buf, chunk);
+            if (FIM_$TRACE_STS[(uint16_t)src_asid] == status_$mst_guard_fault) {
+                *status_ret = status_$mst_guard_fault;      /* 0x00E5B822 */
+                break;
+            }
+            /* write it to the destination AS */
+            PROC1_$SET_ASID((uint16_t)dst_asid);
+            cur_asid = (uint16_t)dst_asid;
+            if (!(remaining <= XPD_COPY_CHUNK)) {
+                OS_$DATA_COPY(buf, dst, XPD_COPY_CHUNK);
+                remaining -= XPD_COPY_CHUNK;
+                dst += XPD_COPY_CHUNK;
+                src += XPD_COPY_CHUNK;
+            } else {
+                OS_$DATA_COPY(buf, dst, remaining);
+                remaining = 0;
+            }
+            if (FIM_$TRACE_STS[(uint16_t)dst_asid] == status_$mst_guard_fault) {
+                *status_ret = status_$mst_guard_fault;      /* 0x00E5B822 */
+                break;
+            }
+        }
+        /* 0x00E5B832-0x00E5B83C */
+        FIM_$RLS_CLEANUP(cleanup);
+    } else {
+        /* 0x00E5B83E-0x00E5B842: a fault unwound here */
+        FIM_$POP_SIGNAL(cleanup);
     }
 
-    *status_ret = status_$ok;
+    /* 0x00E5B84A-0x00E5B86A */
+    FIM_$TRACE_STS[(uint16_t)src_asid] = XPD_TRACE_STS_DONE;
+    FIM_$TRACE_STS[(uint16_t)dst_asid] = XPD_TRACE_STS_DONE;
 
-    /* Clear trace status for both ASIDs */
-    *(uint32_t *)(FIM_TRACE_STS_BASE + (src_asid << 2)) = 0;
-    *(uint32_t *)(FIM_TRACE_STS_BASE + (dst_asid << 2)) = 0;
-
-    src_ptr = (const char *)src_addr;
-    dst_ptr = (char *)dst_addr;
-
-    while (remaining > 0) {
-        /* Switch to source address space */
-        PROC1_$SET_ASID(src_asid);
-        current_asid = src_asid;
-
-        /* Calculate chunk size */
-        chunk_size = COPY_BUFFER_SIZE;
-        if (remaining < COPY_BUFFER_SIZE) {
-            chunk_size = remaining;
-        }
-
-        /* Copy from source to buffer */
-        OS_$DATA_COPY(src_ptr, copy_buffer, chunk_size);
-
-        /* Check for guard fault */
-        if (*(int32_t *)(FIM_TRACE_STS_BASE + (src_asid << 2)) == status_$mst_guard_fault) {
-            *status_ret = status_$mst_guard_fault;
-            break;
-        }
-
-        /* Switch to destination address space */
-        PROC1_$SET_ASID(dst_asid);
-        current_asid = dst_asid;
-
-        /* Copy from buffer to destination */
-        if (remaining <= COPY_BUFFER_SIZE) {
-            OS_$DATA_COPY(copy_buffer, dst_ptr, remaining);
-            remaining = 0;
-        } else {
-            OS_$DATA_COPY(copy_buffer, dst_ptr, COPY_BUFFER_SIZE);
-            remaining -= COPY_BUFFER_SIZE;
-            src_ptr += COPY_BUFFER_SIZE;
-            dst_ptr += COPY_BUFFER_SIZE;
-        }
-
-        /* Check for guard fault */
-        if (*(int32_t *)(FIM_TRACE_STS_BASE + (dst_asid << 2)) == status_$mst_guard_fault) {
-            *status_ret = status_$mst_guard_fault;
-            break;
-        }
-    }
-
-    /* Release cleanup handler */
-    FIM_$RLS_CLEANUP(cleanup_state);
-
-cleanup_and_exit:
-    /* Clear and mark trace status as handled for both ASIDs */
-    *(uint32_t *)(FIM_TRACE_STS_BASE + (src_asid << 2)) = 0;
-    *(uint16_t *)(FIM_TRACE_STS_BASE + (src_asid << 2)) |= 0x80;
-
-    *(uint32_t *)(FIM_TRACE_STS_BASE + (dst_asid << 2)) = 0;
-    *(uint16_t *)(FIM_TRACE_STS_BASE + (dst_asid << 2)) |= 0x80;
-
-    /* Restore original ASID if we changed it */
-    if (saved_asid != current_asid) {
+    /* 0x00E5B870-0x00E5B87E */
+    if (saved_asid != cur_asid) {
         PROC1_$SET_ASID(saved_asid);
     }
 }
 
 /*
- * XPD_$READ_PROC - Read from debug target's memory
+ * XPD_$READ_PROC_ASYNC - read a target without it being stopped
  *
- * Reads memory from a suspended debug target. The caller must be
- * the debugger for the target process.
- */
-void XPD_$READ_PROC(uid_t *proc_uid, void *addr, int32_t *len, void *buffer, status_$t *status_ret)
-{
-    int16_t index;
-    int32_t proc_offset;
-    int16_t target_trace_asid;
-    status_$t status;
-    uid_t local_uid;
-
-    local_uid = *proc_uid;
-
-    ML_$LOCK(PROC2_LOCK_ID);
-    index = XPD_$FIND_INDEX(&local_uid, &status);
-    ML_$UNLOCK(PROC2_LOCK_ID);
-
-    if (status == status_$ok) {
-        proc_offset = index * PROC_ENTRY_SIZE;
-
-        /* Get target's trace ASID */
-        target_trace_asid = *(int16_t *)(PROC_TABLE_BASE + proc_offset + TRACE_ASID_OFFSET);
-
-        /* Copy from target address space to caller's buffer */
-        XPD_$COPY_MEMORY(PROC1_$AS_ID, buffer, target_trace_asid, addr, *len, &status);
-    }
-
-    *status_ret = status;
-}
-
-/*
- * XPD_$READ_PROC_ASYNC - Read from target with permission check
+ * The target is found with PROC2_$FIND_INDEX under lock 4; the caller must
+ * be its debugger or (ACL_$CHECK_DEBUG_RIGHTS on the two PROC1 pids) hold
+ * debug rights over it, else proc2_no_debug_rights.
  *
- * Like READ_PROC but checks debug permissions when the caller
- * is not the debugger.
+ * Frame (link.w A6,-0x14; A5 A2 D2 saved): A6-0x0C status, A6-0x08 uid copy.
  */
 void XPD_$READ_PROC_ASYNC(uid_t *proc_uid, void *addr, int32_t *len,
                           void *buffer, status_$t *status_ret)
 {
-    int16_t index;
-    int32_t proc_offset;
-    int16_t target_trace_asid;
-    int16_t debugger_idx;
-    int16_t current_idx;
-    int8_t has_rights;
-    status_$t status;
-    uid_t local_uid;
+    status_$t st;                       /* A6-0x0C */
+    uid_t uid;                          /* A6-0x08 */
+    int16_t idx;                        /* D2 */
+    proc2_info_t *entry;                /* A2 */
 
-    local_uid = *proc_uid;
-
+    /* 0x00E5B89C-0x00E5B8D4 */
+    uid = *proc_uid;
     ML_$LOCK(PROC2_LOCK_ID);
-    index = PROC2_$FIND_INDEX(&local_uid, &status);
+    idx = PROC2_$FIND_INDEX(&uid, &st);
     ML_$UNLOCK(PROC2_LOCK_ID);
 
-    if (status == status_$ok) {
-        proc_offset = index * PROC_ENTRY_SIZE;
-
-        /* Get target's debugger index */
-        debugger_idx = *(int16_t *)(PROC_TABLE_BASE + proc_offset - 0xBE);
-
-        /* Get current process index */
-        current_idx = *(int16_t *)(CURRENT_TO_INDEX_OFFSET + (PROC1_$CURRENT * 2));
-
-        /* Check if we're the debugger or have debug rights */
-        if (debugger_idx != current_idx) {
-            /*
-             * 0x00E5B902: `pea (-0x4a,A2) / move.l #0xe20608,-(SP)` - both
-             * arguments are addresses of words: PROC1_$CURRENT (0xE20608)
-             * and the target entry's process-id word at entry-0x4A.
-             */
-            has_rights = ACL_$CHECK_DEBUG_RIGHTS(
-                &PROC1_$CURRENT,
-                (int16_t *)(proc_offset + PROC_TABLE_BASE - 0x4A));
-            if (has_rights >= 0) {
-                *status_ret = status_$proc2_permission_denied;
-                return;
-            }
+    if (st == status_$ok) {
+        /* 0x00E5B8DC-0x00E5B916 */
+        entry = XPD_ENTRY(idx);
+        if (entry->debugger_idx == XPD_CURRENT_INDEX() ||
+            ACL_$CHECK_DEBUG_RIGHTS((int16_t *)&PROC1_$CURRENT,
+                                    (int16_t *)&entry->level1_pid) < 0) {
+            /* 0x00E5B918-0x00E5B934 */
+            XPD_$COPY_MEMORY((int16_t)PROC1_$AS_ID, buffer,
+                             (int16_t)entry->asid, addr, (uint32_t)*len, &st);
+        } else {
+            st = status_$proc2_permission_denied;         /* 0x00E5B93A */
         }
-
-        /* Get target's trace ASID */
-        target_trace_asid = *(int16_t *)(PROC_TABLE_BASE + proc_offset + TRACE_ASID_OFFSET);
-
-        /* Copy from target address space to caller's buffer */
-        XPD_$COPY_MEMORY(PROC1_$AS_ID, buffer, target_trace_asid, addr, *len, &status);
     }
 
-    *status_ret = status;
+    /* 0x00E5B942-0x00E5B946 */
+    *status_ret = st;
 }
 
 /*
- * XPD_$WRITE_PROC - Write to debug target's memory
- *
- * Writes memory to a suspended debug target. The caller must be
- * the debugger for the target process.
+ * XPD_$READ_PROC - read a stopped target's memory into the caller's
  */
-void XPD_$WRITE_PROC(uid_t *proc_uid, void *addr, int32_t *data, void *buffer, status_$t *status_ret)
+void XPD_$READ_PROC(uid_t *proc_uid, void *addr, int32_t *len, void *buffer,
+                    status_$t *status_ret)
 {
-    int16_t index;
-    int32_t proc_offset;
-    int16_t target_trace_asid;
-    status_$t status;
-    uid_t local_uid;
+    status_$t st;                       /* A6-0x0C */
+    uid_t uid;                          /* A6-0x08 */
+    int16_t idx;                        /* D2 */
+    proc2_info_t *entry;                /* A2 */
 
-    local_uid = *proc_uid;
-
+    /* 0x00E5B962-0x00E5B998 */
+    uid = *proc_uid;
     ML_$LOCK(PROC2_LOCK_ID);
-    index = XPD_$FIND_INDEX(&local_uid, &status);
+    idx = XPD_$FIND_INDEX(&uid, &st);
     ML_$UNLOCK(PROC2_LOCK_ID);
 
-    if (status == status_$ok) {
-        proc_offset = index * PROC_ENTRY_SIZE;
-
-        /* Get target's trace ASID */
-        target_trace_asid = *(int16_t *)(PROC_TABLE_BASE + proc_offset + TRACE_ASID_OFFSET);
-
-        /* Copy from caller's buffer to target address space */
-        XPD_$COPY_MEMORY(target_trace_asid, addr, PROC1_$AS_ID, buffer, *data, &status);
+    if (st == status_$ok) {
+        /* 0x00E5B9A0-0x00E5B9CC: (dst AS_ID, buffer) <- (target, addr) */
+        entry = XPD_ENTRY(idx);
+        XPD_$COPY_MEMORY((int16_t)PROC1_$AS_ID, buffer, (int16_t)entry->asid,
+                         addr, (uint32_t)*len, &st);
     }
 
-    *status_ret = status;
+    /* 0x00E5B9D0-0x00E5B9D4 */
+    *status_ret = st;
 }
 
 /*
- * XPD_$READ - Read from address space by ASID
- *
- * A lower-level interface that reads directly from an address
- * space given its ASID, without process validation.
+ * XPD_$WRITE_PROC - write the caller's memory into a stopped target's
  */
-void XPD_$READ(uint16_t *asid, void *addr, int32_t *len, void *buffer, status_$t *status_ret)
+void XPD_$WRITE_PROC(uid_t *proc_uid, void *addr, const int32_t *len,
+                     const void *buffer, status_$t *status_ret)
 {
-    /* Copy from specified ASID to current process's buffer */
-    XPD_$COPY_MEMORY(PROC1_$AS_ID, buffer, *asid, addr, *len, status_ret);
+    status_$t st;                       /* A6-0x0C */
+    uid_t uid;                          /* A6-0x08 */
+    int16_t idx;                        /* D2 */
+    proc2_info_t *entry;                /* A2 */
+
+    /* 0x00E5B9F0-0x00E5BA26 */
+    uid = *proc_uid;
+    ML_$LOCK(PROC2_LOCK_ID);
+    idx = XPD_$FIND_INDEX(&uid, &st);
+    ML_$UNLOCK(PROC2_LOCK_ID);
+
+    if (st == status_$ok) {
+        /* 0x00E5BA2E-0x00E5BA5A: (target, addr) <- (AS_ID, buffer) */
+        entry = XPD_ENTRY(idx);
+        XPD_$COPY_MEMORY((int16_t)entry->asid, addr, (int16_t)PROC1_$AS_ID,
+                         buffer, (uint32_t)*len, &st);
+    }
+
+    /* 0x00E5BA5E-0x00E5BA62 */
+    *status_ret = st;
 }
 
 /*
- * XPD_$WRITE - Write to address space by ASID
- *
- * A lower-level interface that writes directly to an address
- * space given its ASID, without process validation.
+ * XPD_$READ - read from an address space given by index
+ */
+void XPD_$READ(uint16_t *asid, void *addr, int32_t *len, void *buffer,
+               status_$t *status_ret)
+{
+    /* 0x00E5BA7C-0x00E5BA9A */
+    XPD_$COPY_MEMORY((int16_t)PROC1_$AS_ID, buffer, (int16_t)*asid, addr,
+                     (uint32_t)*len, status_ret);
+}
+
+/*
+ * XPD_$WRITE - write to an address space given by index
  */
 void XPD_$WRITE(uint16_t *asid, void *addr, const int32_t *len,
                 const void *buffer, status_$t *status_ret)
 {
-    /* Copy from current process's buffer to specified ASID */
-    XPD_$COPY_MEMORY(*asid, addr, PROC1_$AS_ID, buffer, *len, status_ret);
+    /* 0x00E5BAB2-0x00E5BAD0 */
+    XPD_$COPY_MEMORY((int16_t)*asid, addr, (int16_t)PROC1_$AS_ID, buffer,
+                     (uint32_t)*len, status_ret);
 }

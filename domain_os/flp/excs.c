@@ -1,263 +1,215 @@
 /*
- * EXCS - Execute floppy command and check status
+ * flp/excs.c - EXCS (0x00E3E268, 566 bytes)
  *
- * This function executes a floppy command by:
- * 1. Sending the command via SHAKE handshake
- * 2. Waiting for command completion via event counter
- * 3. Checking for DMA and parity errors
- * 4. Interpreting the status registers to determine outcome
+ * Execute an FDC command and interpret its outcome: write the command
+ * words, wait for FLP_$INT to advance FLP_$EC (or for eight clock ticks),
+ * check the DMA and parity state, and turn the result registers into a
+ * status.  A status of FLP_$RETRY tells FLP_DO_IO to issue the command
+ * again; cmd_retry / dma_retry in FLP_DATA are the budgets.
  *
- * The function handles various error conditions including:
- * - Memory parity errors during writes
- * - DMA errors
- * - Drive not ready
- * - Write protection
- * - Data CRC errors
- * - Equipment check failures
- * - Format errors (bad disk format, wrong side count)
- * - DMA overruns
+ * Frame (link.w A6,-0x14; A5 A3 A2 D4 D3 D2 saved):
+ *   A6-0x0E  2  st3       SENSE DRIVE STATUS's result word
+ *   A6-0x08  4  target    FLP_$EC.value + 1, sampled before the command
+ *   A3          cmd       argument 1
+ *   A2          vol       argument 3
+ *   D2          result    the status being built
+ *   D3          which     EC_$WAIT's index (0 = FLP_$EC, 1 = the clock),
+ *                         later the unit number
+ *   D4          scratch
+ *
+ * Result-register bits (FLP_$SREGS, one FDC byte per word, so the low-byte
+ * `btst.b` in the image are bits of the word):
+ *   sregs[0] = ST0: 0x10 equipment check, 0x08 not ready, 0xC0 interrupt code
+ *   sregs[1] = ST1: 0x02 not writable, 0x85 end-of-cyl/no-data/missing-AM,
+ *                   0x20 data error, 0x10 overrun
+ *   sregs[2] = ST2: 0x10 wrong cylinder
  */
 
 #include "flp/flp_internal.h"
-#include "time/time.h"
 
-/* Status codes for floppy operations */
-#define status_$dma_not_at_end_of_range                0x0008001d
-#define status_$floppy_is_not_2_sided                  0x00080006
-#define status_$bad_disk_format                        0x00080008
-#define status_$unknown_status_returned_by_hardware    0x00080019
-
-/* Retry marker - indicates operation should be retried */
-#define FLP_RETRY_NEEDED  0x0008ffff
-
-/* FLP data area base address */
-#define FLP_DATA_BASE     0x00e7aef4
-
-/* Status register bit definitions */
-#define FLP_ST0_ABNORMAL_TERM    0x08  /* Abnormal termination */
-#define FLP_ST0_EQUIP_CHECK      0x10  /* Equipment check */
-#define FLP_ST0_NOT_READY        0xc0  /* Drive not ready */
-#define FLP_ST0_STATUS_MASK      0xd8  /* Relevant status bits */
-
-#define FLP_ST1_END_OF_CYL       0x80  /* End of cylinder */
-#define FLP_ST1_DATA_ERROR       0x20  /* Data error (CRC) */
-#define FLP_ST1_OVERRUN          0x10  /* Overrun */
-#define FLP_ST1_NO_DATA          0x04  /* No data */
-#define FLP_ST1_NOT_WRITABLE     0x02  /* Not writable */
-#define FLP_ST1_MISSING_AM       0x01  /* Missing address mark */
-
-#define FLP_ST2_CONTROL_MARK     0x40  /* Control mark */
-#define FLP_ST2_DATA_ERROR       0x20  /* Data error in data field */
-#define FLP_ST2_WRONG_CYL        0x10  /* Wrong cylinder */
-#define FLP_ST2_BAD_CYL          0x02  /* Bad cylinder */
-#define FLP_ST2_MISSING_DAM      0x01  /* Missing data address mark */
-
-/*
- * EXCS - Execute command and check status
- *
- * @param cmd_buf    Command buffer to send
- * @param count_ptr  Address of the word byte count (handed straight to SHAKE
- *                   at 0x00E3E28C)
- * @param req        Request block (contains flags at offset 0x29)
- * @return Status code (0 = success, 0x8ffff = retry, else error)
- */
-status_$t EXCS(uint16_t *cmd_buf, int16_t *count_ptr, void *req)
+status_$t EXCS(uint16_t *cmd, int16_t *count_ptr, disk_$volume_t *vol)
 {
-    status_$t status;
-    status_$t result;
-    int16_t wait_result;
-    int16_t parity_result;
-    uint16_t local_regs[3];  /* Local status register buffer */
-    volatile flp_regs_t *regs;
-    int32_t wait_value;      /* Target value for FLP_$EC */
+    uint16_t st3;                       /* A6-0x0E */
+    int32_t target;                     /* A6-0x08 */
+    status_$t status;                   /* D0 */
+    status_$t result;                   /* D2 */
+    int16_t which;                      /* D3 */
+    uint16_t unit;                      /* D3, from 0x00E3E414 */
+    volatile flp_regs_t *regs;          /* A0 */
 
-    /*
-     * Get event counter value + 1 for wait comparison
-     * 00e3e27e  move.l (0x60,A5),D0   ; A5 = 0xe7aef4, so (0x60,A5) = FLP_$EC
-     * 00e3e282  addq.l #0x1,D0
-     * 00e3e284  move.l D0,(-0x8,A6)
-     */
-    wait_value = FLP_$EC.value + 1;
+    /* 0x00E3E27E-0x00E3E284 */
+    target = FLP_$EC.value + 1;
 
-    /* Send command to controller via SHAKE */
-    status = SHAKE(cmd_buf, count_ptr, &DAT_00e3e110);
+    /* 0x00E3E288-0x00E3E29C: write the command (direction 1 at 0x00E3E110,
+     * pea (-0x17a,PC)); a handshake failure is returned as is. */
+    status = SHAKE(cmd, count_ptr, &flp_word_one);
     if (status != status_$ok) {
-        return status;
+        result = status;                            /* 0x00E3E32A */
+        return result;
     }
 
     /*
-     * Wait for command completion, with an 8-tick timeout on the system
-     * clock.  Arguments are pushed right-to-left (values first, then the
-     * pointers, which end up at the lower addresses):
-     *   00e3e2a0  clr.l -(SP)                  vals[2] = 0
-     *   00e3e2a2  move.l (0x00e2b0d4).l,D1
-     *   00e3e2a8  addq.l #0x8,D1
-     *   00e3e2aa  move.l D1,-(SP)              vals[1] = TIME_$CLOCKH + 8
-     *   00e3e2ac  move.l (-0x8,A6),-(SP)       vals[0] = FLP_$EC.value + 1
-     *   00e3e2b0  move.l #0x0,-(SP)            ecs[2] = NULL
-     *   00e3e2b6  move.l #0xe2b0d4,-(SP)       ecs[1] = &TIME_$CLOCKH
-     *   00e3e2bc  pea (0x60,A5)                ecs[0] = &FLP_$EC
-     *   00e3e2c0  jsr EC_$WAIT
-     *   00e3e2ca  move.w D0w,D3w               ; 0-based index
-     * wait_result != 0 therefore means the clock EC fired (timeout).
+     * 0x00E3E2A0-0x00E3E2CA: EC_$WAIT on FLP_$EC reaching target or
+     * TIME_$CLOCKH reaching now + 8; the third slot is NULL / 0.  The
+     * 0-based index comes back in D0.
      */
-    wait_result = EC_$WAIT(
-        (ec_$wait_ecs_t){{ &FLP_$EC, (ec_$eventcount_t *)&TIME_$CLOCKH, NULL }},
-        (ec_$wait_vals_t){{ wait_value, (int32_t)(TIME_$CLOCKH + 8), 0 }});
+    which = EC_$WAIT((ec_$wait_ecs_t){{ &FLP_$EC,
+                                        (ec_$eventcount_t *)&TIME_$CLOCKH,
+                                        NULL }},
+                     (ec_$wait_vals_t){{ target, TIME_$CLOCKH + 8, 0 }});
 
-    /* Check for DMA and parity errors (unless command was interrupt sense) */
-    if ((cmd_buf[0] & 7) != 7) {  /* Not sense interrupt command */
-        regs = (volatile flp_regs_t *)(uintptr_t)DAT_00e7b020;
-
-        /* Check for parity errors on write operations */
-        if ((regs->control & 2) != 0) {
-            /* Original: pea (1).w / move.l phys; tst.w D0w -- only the low
-             * word of the uint32_t result is tested. */
-            parity_result = (int16_t)PARITY_$CHK_IO(1, DAT_00e7b01c);
-            if ((int8_t)(-(parity_result != 0)) < 0) {
-                return status_$memory_parity_error_during_disk_write;
+    /* 0x00E3E2CC-0x00E3E2D6: the DMA / parity checks are skipped for a
+     * RECALIBRATE (command code 7). */
+    result = 0;
+    if ((cmd[0] & 7) != 7) {
+        regs = FLP_REGS();
+        /* 0x00E3E2D8-0x00E3E304: with bit 1 of the register word at +6 set,
+         * ask the parity checker about the transfer page; a non-zero low
+         * word (`tst.w D0w` / `sne`) is a parity error during the write. */
+        if ((regs->w_06 & 0x0002) != 0) {
+            if ((PARITY_$CHK_IO(1, FLP_DATA.buf_pa) & 0xFFFF) != 0) {
+                result = status_$memory_parity_error_during_disk_write;
+                return result;
             }
         }
-
-        /* Check for DMA errors */
-        status = DMA_$CHECK(3);
+        /* 0x00E3E308-0x00E3E32C: channel 3's DMA status; "not at end of
+         * range" is fine, anything else is retried while cmd_retry lasts,
+         * or returned. */
+        status = DMA_$CHECK(FLP_DMA_CHANNEL);
         if (status != status_$ok && status != status_$dma_not_at_end_of_range) {
-            goto check_retry;
+            if (FLP_DATA.cmd_retry != 0) {
+                goto retry;                         /* 0x00E3E326 bne 0x00E3E488 */
+            }
+            result = status;                        /* 0x00E3E32A */
+            return result;
         }
     }
 
-    /* If wait timed out, set status to indicate seek error */
-    if (wait_result != 0) {
-        FLP_$SREGS = 0x10;  /* Indicate abnormal termination */
+    /* 0x00E3E330-0x00E3E334: a wake-up by the clock rather than the
+     * interrupt is recorded as ST0 = equipment check. */
+    if (which != 0) {
+        FLP_$SREGS[0] = 0x10;
     }
 
-    /* Check if status indicates any error condition */
-    if ((FLP_$SREGS & FLP_ST0_STATUS_MASK) == 0) {
-        /* No errors - command completed successfully */
-        return status_$ok;
+    /* 0x00E3E33A-0x00E3E342: nothing of interest in ST0 - success. */
+    if ((FLP_$SREGS[0] & 0xD8) == 0) {
+        return result;
     }
 
-    /*
-     * Error detected - need to send sense interrupt status command
-     * to get detailed error information.
-     */
-    DAT_00e7b006 = cmd_buf[1];  /* Copy unit/head info */
-
-    /* Send sense drive status command */
-    status = SHAKE((uint16_t *)&DAT_00e7b004, &DAT_00e3e21c, &DAT_00e3e110);
-    if (status != status_$ok) {
-        result = status;
-        goto check_retry;
+    /* 0x00E3E346-0x00E3E37E: SENSE DRIVE STATUS for the command's unit/head
+     * word (two words written, 0x00E3E21C / 0x00E3E110), then one word read
+     * (0x00E3E110 / 0x00E3E10E).  st3 is loaded into D1 before the read's
+     * status is tested. */
+    FLP_DATA.sense_cmd[1] = cmd[1];
+    status = SHAKE(FLP_DATA.sense_cmd, &flp_word_two, &flp_word_one);
+    if (status == status_$ok) {
+        status = SHAKE(&st3, &flp_word_one, &flp_word_zero);
+        if (status == status_$ok) {
+            goto interpret;
+        }
     }
+    result = status;                                /* 0x00E3E380 */
+    goto tail;
 
-    /* Read result bytes */
-    status = SHAKE(local_regs, &DAT_00e3e110, &DAT_00e3e10e);
-    if (status != status_$ok) {
-        result = status;
-        goto check_retry;
-    }
-
-    /*
-     * Interpret status registers to determine error type.
-     * FLP_$SREGS[high byte] is ST0, [low byte] is ST1
-     * DAT_00e7af66[high byte] is ST2
-     */
-
-    /* Check for equipment check (ST0 bit 4) */
-    if ((FLP_$SREGS & FLP_ST0_EQUIP_CHECK) != 0) {
+interpret:
+    /* 0x00E3E386-0x00E3E394: ST0 bit 4 */
+    if ((FLP_$SREGS[0] & 0x10) != 0) {
         result = status_$disk_equipment_check;
-        goto check_retry;
+        goto tail;
     }
 
-    /* Check for abnormal termination (ST0 bit 3) */
-    if ((FLP_$SREGS & FLP_ST0_ABNORMAL_TERM) != 0) {
-        DAT_00e7b026 = 0;  /* Clear retry flag */
-
-        /* Check result register for specific conditions */
-        if ((local_regs[0] & 0x08) == 0 && (local_regs[0] & 0x20) != 0) {
-            /* Head 1 access on single-sided disk */
-            if (cmd_buf[1] >= 4) {  /* Head number > 0 */
-                result = status_$floppy_is_not_2_sided;
-                goto check_retry;
-            }
+    /* 0x00E3E398-0x00E3E3C8: ST0 bit 3 - not ready.  The retry budget is
+     * dropped; a two-sided request (unit/head word >= 4) on a drive whose
+     * ST3 says ready (bit 3 clear) and two-sided (bit 5 set) is reported
+     * as "floppy is not 2-sided" instead. */
+    if ((FLP_$SREGS[0] & 0x08) != 0) {
+        FLP_DATA.cmd_retry = 0;
+        if ((st3 & 0x08) == 0 && (st3 & 0x20) != 0 && cmd[1] >= 4) {
+            result = status_$floppy_is_not_2_sided;
+        } else {
+            result = status_$disk_not_ready;
         }
-        result = status_$disk_not_ready;
-        goto check_retry;
+        goto tail;
     }
 
-    /* Check if drive is not ready (ST0 bits 7:6) */
-    if ((~FLP_$SREGS & FLP_ST0_NOT_READY) == 0) {
+    /* 0x00E3E3CC-0x00E3E3DE: interrupt code 11 (both ST0 bits 7:6 set,
+     * `not.w` then `andi.w #0xc0` leaves zero) - drive not ready. */
+    if (((uint16_t)~FLP_$SREGS[0] & 0xC0) == 0) {
         result = status_$disk_not_ready;
-        goto clear_flag_and_return;
+        goto clear_retry;
     }
 
-    /* Check for write protected disk (ST1 bit 1) */
-    if ((DAT_00e7af66 & FLP_ST1_NOT_WRITABLE) != 0) {
+    /* 0x00E3E3E0-0x00E3E3EE: ST1 bit 1 */
+    if ((FLP_$SREGS[1] & 0x02) != 0) {
         result = status_$disk_write_protected;
-        goto clear_flag_and_return;
+        goto clear_retry;
     }
 
-    /* Check for bad format errors (ST1 bits 7,2,0) */
-    if ((DAT_00e7af66 & (FLP_ST1_END_OF_CYL | FLP_ST1_NO_DATA | FLP_ST1_MISSING_AM)) != 0) {
+    /* 0x00E3E3F0-0x00E3E446: ST1 end of cylinder / no data / missing
+     * address mark - bad format.  If ST2 says wrong cylinder and retries
+     * remain, spend them all on one RECALIBRATE of the unit (recursive
+     * EXCS, two words at 0x00E3E21C) and forget its cylinder. */
+    if ((FLP_$SREGS[1] & 0x85) != 0) {
         result = status_$bad_disk_format;
-
-        /* Check if we should retry with recalibrate */
-        if ((DAT_00e7af69 & FLP_ST2_WRONG_CYL) != 0 && DAT_00e7b026 != 0) {
-            DAT_00e7b026 = 1;  /* Set recalibrate flag */
-
-            /* Extract unit number and recalibrate */
-            uint16_t unit = cmd_buf[1] & 3;
-            DAT_00e7b00a = unit;
-
-            status = EXCS(DAT_00e7b008, &DAT_00e3e21c, req);
-
-            /* Clear unit status */
-            DAT_00e7af6c[unit * 2] = 0;
-
-            if (status != status_$ok) {
-                result = status;
-            }
-            goto check_retry;
+        if ((FLP_$SREGS[2] & 0x10) == 0) {
+            goto tail;
         }
-        goto check_retry;
+        if (FLP_DATA.cmd_retry == 0) {
+            goto tail;
+        }
+        FLP_DATA.cmd_retry = 1;
+        unit = cmd[1] & 3;
+        FLP_DATA.recal_cmd[1] = unit;
+        status = EXCS(FLP_DATA.recal_cmd, &flp_word_two, vol);
+        FLP_DATA.unit_cyl[unit] = 0;                /* 0x00E3E430-0x00E3E438 */
+        if (status == status_$ok) {
+            goto tail;
+        }
+        result = status;
+        goto clear_retry;
     }
 
-    /* Check for data error (ST1 bit 5) */
-    if ((DAT_00e7af66 & FLP_ST1_DATA_ERROR) != 0) {
+    /* 0x00E3E448-0x00E3E45E: ST1 bit 5 - data check.  With bit 1 of the
+     * volume's option byte at +0x29 set it is returned at once, otherwise
+     * it goes through the retry tail. */
+    if ((FLP_$SREGS[1] & 0x20) != 0) {
         result = status_$disk_data_check;
-
-        /* Check if caller has indicated to ignore data check errors */
-        if ((*(uint8_t *)((uint8_t *)req + 0x29) & 2) != 0) {
-            return status_$disk_data_check;
+        if ((vol->as_options & 0x0002) != 0) {
+            return result;
         }
-        goto check_retry;
+        goto tail;
     }
 
-    /* Check for DMA overrun (ST1 bit 4) */
-    if ((DAT_00e7af66 & FLP_ST1_OVERRUN) != 0) {
-        if (DAT_00e7b024 > 0) {
-            /* Retry available */
-            DAT_00e7b024--;
-            return FLP_RETRY_NEEDED;
+    /* 0x00E3E460-0x00E3E47A: ST1 bit 4 - overrun; retried from the DMA
+     * budget (bypassing cmd_retry), else reported. */
+    if ((FLP_$SREGS[1] & 0x10) != 0) {
+        if (FLP_DATA.dma_retry > 0) {
+            FLP_DATA.dma_retry--;
+            goto retry_marker;                      /* 0x00E3E472 bra 0x00E3E48C */
         }
         result = status_$DMA_overrun;
-        goto check_retry_and_exit;
+        return result;
     }
 
-    /* Unknown error condition */
+    /* 0x00E3E47C */
     result = status_$unknown_status_returned_by_hardware;
-    goto check_retry;
+    goto tail;
 
-clear_flag_and_return:
-    DAT_00e7b026 = 0;  /* Clear control flag */
-    /* Fall through to check_retry */
+clear_retry:
+    /* 0x00E3E442 */
+    FLP_DATA.cmd_retry = 0;
 
-check_retry:
-    if (DAT_00e7b026 != 0) {
-        DAT_00e7b026--;
-        return FLP_RETRY_NEEDED;
+tail:
+    /* 0x00E3E482-0x00E3E486: with retries left, spend one and ask for a
+     * retry instead of reporting the error. */
+    if (FLP_DATA.cmd_retry == 0) {
+        return result;
     }
-
-check_retry_and_exit:
+retry:
+    /* 0x00E3E488 */
+    FLP_DATA.cmd_retry--;
+retry_marker:
+    /* 0x00E3E48C-0x00E3E492 */
+    result = FLP_$RETRY;
     return result;
 }

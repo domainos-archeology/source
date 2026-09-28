@@ -1,24 +1,23 @@
 /*
- * LOG_$INIT - Initialize the logging subsystem
+ * log/init.c - LOG_$INIT (0x00E30048, 482 bytes)
  *
- * Resolves or creates the log file at //node_data/system_logs/sys_error,
- * maps it to memory, locks it, and wires the memory for reliable access.
- * Also processes any early log entries that were queued before initialization.
+ * Resolves (or creates) `node_data/system_logs/sys_error_log, maps its
+ * first page, locks the file, initialises an empty page, wires it, and then
+ * replays the two records that survive a reboot (LOG_$LAST_ENTRY and
+ * CRASH_$RECORD) before logging the init entry.  Every step is followed by
+ * log_$check_op_status, which prints a warning and abandons initialisation
+ * (LOG_$LOGFILE_PTR stays NULL, so LOG_$ADD is a no-op) when the step's
+ * status has a non-zero module half.
  *
- * Original address: 00e30048
- * Original size: 482 bytes
- *
- * Assembly (key parts):
- *   00e30048    link.w A6,-0x58
- *   00e30062    jsr NAME_$RESOLVE
- *   00e30088    jsr NAME_$CR_FILE
- *   00e300d8    jsr AST_$GET_COMMON_ATTRIBUTES
- *   00e30118    jsr MST_$MAPS
- *   00e3014e    jsr FILE_$LOCK
- *   00e30190    jsr MST_$WIRE
- *   00e301d4    jsr LOG_$ADD (early entry)
- *   00e3020a    jsr LOG_$ADD (crash entry)
- *   00e3021a    jsr LOG_$ADD (init entry)
+ * Frame (link.w A6,-0x58; A2 D3 D2 saved):
+ *   A6-0x48  4  lock_out    FILE_$LOCK's output
+ *   A6-0x44  4  status      shared with the nested procedure
+ *   A6-0x40  4  map_out     MST_$MAPS' output longword
+ *   A6-0x38 24  cattr       AST_$GET_COMMON_ATTRIBUTES' record
+ *   A6-0x20 32  desc        the object-location record (UID at +0x08)
+ *   D2          is_empty    Domain boolean: the file's length is zero
+ *   D3          page        MST_$MAPS' result (A0)
+ *   A2          the low-memory records
  */
 
 #include "log/log_internal.h"
@@ -27,119 +26,127 @@
 #include "mst/mst.h"
 #include "file/file.h"
 
-/* Status code for name not found */
+/* 0x00E3022C "wire%$", 0x00E30232 "lock%$", 0x00E3023E "map%$" NUL,
+ * 0x00E30244 "resolve%$" NUL, 0x00E30250 "create%$", 0x00E30258
+ * "get_attributes%$" - the operation names, in address order. */
+static const char log_$op_wire[] = "wire%$";
+static const char log_$op_lock[] = "lock%$";
+static const char log_$op_map[] = "map%$";
+static const char log_$op_resolve[] = "resolve%$";
+static const char log_$op_create[] = "create%$";
+static const char log_$op_get_attributes[] = "get_attributes%$";
 
-/* `move.w #0x2,-(SP)` at 0x00E300D0 - the AST_$GET_COMMON_ATTRIBUTES
- * selector LOG_$INIT uses. */
+/* `move.w #0x2,-(SP)` at 0x00E300D0 - the attribute selector. */
 #define LOG_CATTR_SELECTOR      0x0002
+
+/* MST_$MAPS' arguments at 0x00E30102-0x00E30116 */
+#define LOG_MAP_AREA_ID         0x16
+#define LOG_MAP_LENGTH          0x400
 
 void LOG_$INIT(void)
 {
-    status_$t status;
-    /* A6-0x20: the object-location descriptor AST_$GET_ATTRIBUTES reads the
-     * UID out of at +0x08 and overwrites in full on success. */
-    file_$obj_loc_t desc;
-    int32_t file_size;
-    ast_$common_attr_t cattr;   /* A6-0x38, 0x18 bytes */
-    uint32_t map_out;           /* A6-0x40, MST_$MAPS' output longword */
-    uint8_t lock_out[4];
-    int16_t *vpn;
-    int8_t is_new_file;
-    uint16_t lock_index;
-    uint16_t lock_mode;
-    uint8_t lock_rights;
+    uint32_t lock_out;                  /* A6-0x48 */
+    status_$t status;                   /* A6-0x44 */
+    uint32_t map_out;                   /* A6-0x40 */
+    ast_$common_attr_t cattr;           /* A6-0x38 */
+    file_$obj_loc_t desc;               /* A6-0x20 */
+    int8_t is_empty;                    /* D2 */
+    int16_t *page;                      /* D3 */
 
-    /* Try to resolve the log file path */
-    NAME_$RESOLVE((char *)LOG_FILE_PATH, &LOG_FILE_PATH_LEN, &LOG_$LOGFILE_UID, &status);
+    /* 0x00E30050-0x00E30068: the path cell at 0x00E30020 and its WORD
+     * length at 0x00E3022A (pea (-0x40,PC) / pea (0x1ce,PC)). */
+    NAME_$RESOLVE(log_$logfile_path, &log_$logfile_path_len,
+                  &LOG_$LOGFILE_UID, &status);
 
+    /* 0x00E3006C-0x00E3009E: not found -> create it, then check "create". */
     if (status == status_$naming_name_not_found) {
-        /* File doesn't exist, create it */
-        NAME_$CR_FILE((char *)LOG_FILE_PATH, &LOG_FILE_PATH_LEN, &LOG_$LOGFILE_UID, &status);
-        if (log_$check_op_status("create%$", &status) < 0) {
+        NAME_$CR_FILE(log_$logfile_path, &log_$logfile_path_len,
+                      &LOG_$LOGFILE_UID, &status);
+        if (log_$check_op_status(log_$op_create, &status) < 0) {
             return;
         }
     }
 
-    if (log_$check_op_status("resolve%$", &status) < 0) {
+    /* 0x00E300A2-0x00E300AE */
+    if (log_$check_op_status(log_$op_resolve, &status) < 0) {
         return;
     }
 
-    /* 0x00E300B8: the UID goes to descriptor+0x08, where
-     * AST_$GET_ATTRIBUTES reads it - not at the head of the record. */
+    /* 0x00E300B2-0x00E300C0: the UID goes to desc+0x08, and bit 6 of the
+     * flags byte at desc+0x1D is cleared; the rest of the record is left
+     * uninitialised. */
     desc.uid = LOG_$LOGFILE_UID;
-    /* 0x00E300C0 `bclr.b #0x6,(-0x3,A6)` = descriptor+0x1D. */
     desc.flags &= (int8_t)~FILE_OBJ_LOC_SCRATCH;
 
-    /* Get file attributes to check size (0x00E300D8) */
-    AST_$GET_COMMON_ATTRIBUTES(&desc, LOG_CATTR_SELECTOR, &cattr,
-                               &status);
-    if (log_$check_op_status("get_attributes%$", &status) < 0) {
+    /* 0x00E300C6-0x00E300EE: a word result slot is reserved and discarded
+     * (`subq.l #0x2,SP` ... `lea (0x10,SP),SP`). */
+    AST_$GET_COMMON_ATTRIBUTES(&desc, LOG_CATTR_SELECTOR, &cattr, &status);
+    if (log_$check_op_status(log_$op_get_attributes, &status) < 0) {
         return;
     }
 
-    /* 0x00E300F2 `tst.l (-0x34,A6)` with the record at A6-0x38: the object's
-     * length, at +0x04.  `seq` makes is_new_file 0xFF when it is zero. */
-    file_size = (int32_t)cattr.length;
-    is_new_file = (file_size == 0) ? (int8_t)-1 : 0;
+    /* 0x00E300F2-0x00E300F6: `tst.l (-0x34,A6)` = cattr.length; `seq`. */
+    is_empty = (cattr.length == 0) ? -1 : 0;
 
-    /* Map the log file into memory
-     * mode=0, flags=0xff00, offset=0, length=0x400, prot=0x16, hint=0
+    /*
+     * 0x00E300F8-0x00E30122: MST_$MAPS(asid 0, direction TRUE (`st -(SP)`),
+     * &uid, start 0, length 0x400, area 0x16, size 0, rights = is_empty
+     * (`move.b D2b,-(SP)`), &map_out, &status); the page address comes back
+     * in A0.
      */
-    /* 0x00E30114 `st -(SP)` pushes argument 2 as a Pascal BOOLEAN byte, and
-     * 0x00E30100 `move.b D2b,-(SP)` pushes argument 8 the same way (D2 is the
-     * `seq` result computed at 0x00E300F6). */
-    vpn = (int16_t *)MST_$MAPS(0, true, &LOG_$LOGFILE_UID, 0,
-                                LOG_BUFFER_SIZE, 0x16, 0, is_new_file,
-                                &map_out, &status);   /* 0x00E300FC */
-    if (log_$check_op_status("map%$", &status) < 0) {
+    page = (int16_t *)MST_$MAPS(0, true, &LOG_$LOGFILE_UID, 0, LOG_MAP_LENGTH,
+                                LOG_MAP_AREA_ID, 0, is_empty, &map_out,
+                                &status);
+    if (log_$check_op_status(log_$op_map, &status) < 0) {
         return;
     }
 
-    /* Lock the file for exclusive access
-     * The original code passes fixed addresses for lock parameters
-     */
-    lock_index = 0;
-    lock_mode = 0;
-    lock_rights = 0;
-    FILE_$LOCK(&LOG_$LOGFILE_UID, &lock_index, &lock_mode, &lock_rights, 0, &status);
-    if (log_$check_op_status("lock%$", &status) < 0) {
+    /* 0x00E30134-0x00E30164: FILE_$LOCK(&uid, index=&0 (0x00E30238),
+     * mode=&4 (0x00E3023A), rights=&0 (0x00E3023C), &lock_out, &status). */
+    FILE_$LOCK(&LOG_$LOGFILE_UID, &log_$lock_index, &log_$lock_mode,
+               &log_$lock_rights, &lock_out, &status);
+    if (log_$check_op_status(log_$op_lock, &status) < 0) {
         return;
     }
 
-    /* Initialize buffer header if new file or empty */
-    if (is_new_file < 0 || (vpn[0] == 0 && vpn[1] == 0)) {
-        vpn[0] = 0;         /* head = 0 */
-        vpn[1] = 1;         /* tail = 1 (first entry slot) */
-        LOG_$STATE.dirty_flag = (int8_t)-1;  /* Mark as modified */
+    /* 0x00E30168-0x00E30186: a zero-length file, or a page whose two index
+     * words are both zero, is initialised to head 0 / tail 1 with ONE
+     * longword store (`moveq #1` / `move.l D0,(A0)`) and the log is dirty. */
+    if (is_empty < 0 || (page[0] == 0 && page[1] == 0)) {
+        page[0] = 0;
+        page[1] = 1;
+        LOG_$STATE.dirty_flag = -1;
     }
 
-    /* Wire the log buffer page for reliable access */
-    LOG_$STATE.wired_handle = MST_$WIRE((uint32_t)vpn, &status);
-    if (log_$check_op_status("wire%$", &status) < 0) {
+    /* 0x00E3018A-0x00E301AE */
+    LOG_$STATE.wired_handle = MST_$WIRE(ARCH_PTR_TO_VA(page), &status);
+    if (log_$check_op_status(log_$op_wire, &status) < 0) {
         return;
     }
 
-    /* Store pointer to mapped buffer */
-    LOG_$LOGFILE_PTR = vpn;
+    /* 0x00E301B0-0x00E301B6: from here on LOG_$ADD writes to the page. */
+    LOG_$LOGFILE_PTR = page;
 
-    /* Process any early log entries from before init */
-
-    /* Check for extended early log entry at 0x00e0000c */
-    if (EARLY_LOG_EXTENDED.magic == LOG_PENDING_MAGIC) {
-        LOG_$ADD(EARLY_LOG_EXTENDED.type, EARLY_LOG_EXTENDED.data,
-                 EARLY_LOG_EXTENDED.data_len);
-        /* Copy timestamp to current entry */
+    /* 0x00E301BA-0x00E301EC: the entry that was being written when the
+     * system last went down is re-added with its original timestamp (the
+     * new entry's timestamp word is overwritten through
+     * current_entry_ptr), then the magic is cleared. */
+    if (LOG_$LAST_ENTRY.magic == LOG_PENDING_MAGIC) {
+        LOG_$ADD(LOG_$LAST_ENTRY.type, LOG_$LAST_ENTRY.data,
+                 LOG_$LAST_ENTRY.size);
         ((log_entry_header_t *)LOG_$STATE.current_entry_ptr)->timestamp =
-            EARLY_LOG_EXTENDED.timestamp;
-        EARLY_LOG_EXTENDED.magic = 0;  /* Clear the pending flag */
+            LOG_$LAST_ENTRY.timestamp;
+        LOG_$LAST_ENTRY.magic = 0;
     }
 
-    /* Check for crash log entry at 0x00e00000 */
-    if (EARLY_LOG.magic == LOG_PENDING_MAGIC) {
-        EARLY_LOG.magic = 0;  /* Clear first to avoid re-processing */
-        LOG_$ADD(LOG_TYPE_CRASH, EARLY_LOG.data, 8);
+    /* 0x00E301EE-0x00E30210: the crash record's 8 bytes as a type-5 entry;
+     * the magic is cleared BEFORE the add here. */
+    if (CRASH_$RECORD.magic == LOG_PENDING_MAGIC) {
+        CRASH_$RECORD.magic = 0;
+        LOG_$ADD(LOG_TYPE_CRASH, CRASH_$RECORD.data, 8);
     }
 
-    /* Add initialization log entry */
+    /* 0x00E30212-0x00E3021A: the init entry, type 0, no data (the zero cell
+     * at 0x00E2FFFC, pea (-0x21a,PC)). */
     LOG_$ADD(LOG_TYPE_INIT, &LOG_$VFMT_NO_ARG, 0);
 }

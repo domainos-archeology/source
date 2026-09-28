@@ -81,4 +81,11 @@ void DI_$INIT_Q_ELEM(di_queue_elem_t *elem);
  */
 void DI_$ENQ(uint32_t arg1, uint32_t arg2, di_queue_elem_t *elem);
 
+/*
+ * Status DI_$ENQ crashes with when an element is enqueued twice: the
+ * longword cell at 0x00E20DF4 (`pea (0x440,PC)` at 0x00E209B2), bytes
+ * 00 0a 00 0c, "bad deferred interrupt queue" (module 0x0A = PROC1).
+ */
+#define status_$proc1_bad_deferred_interrupt_queue 0x000A000C
+
 #endif /* DI_H */

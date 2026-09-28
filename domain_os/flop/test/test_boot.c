@@ -1,5 +1,7 @@
 /*
- * flop/test/test_boot.c - FLOP_$BOOT (0x00E3254C) constant cells
+ * flop/test/test_boot.c - FLOP_$BOOT (0x00E3254C) with its nested
+ * flop_$boot_errchk (0x00E323A8) and the constant cells it shares with
+ * flop_$mount_floppy (0x00E323E6).
  *
  * The regression this file exists for (source-y89n): MST_$MAP_AT's seventh
  * argument is `pea (-0x116,PC)` at 0x00E3264C, i.e. the byte at
@@ -7,8 +9,9 @@
  * FILE_$LOCK gets as `rights`.  It is NOT 0x00E32542 (0xFF), which is what
  * MST_$MAP receives at 0x00E325CE.
  *
- * Also covered: each remaining `pea (d,PC)` cell carries its image value, and
- * `start`/`extend` are one shared cell in both mapping calls.
+ * Both flop .c files are included, so the mocks sit below them: VOLX / DIR /
+ * NAME for the mount step, FILE / MST for the boot shell, and OS_$BOOT_ERRCHK
+ * to observe what the nested error check hands on.
  */
 
 #include <stdio.h>
@@ -63,36 +66,49 @@ static int tests_failed = 0;
 } while (0)
 
 /* ==========================================================================
+ * Globals the code under test references
+ * ========================================================================== */
+
+uid_t UID_$NIL = { 0, 0 };
+
+/* ==========================================================================
  * Mock bookkeeping
  * ========================================================================== */
 
-static status_$t mock_status_after_mount;
-static status_$t mock_status_after_resolve;
+static status_$t mock_status_after_mount;       /* VOLX_$MOUNT */
+static status_$t mock_status_after_resolve;     /* NAME_$RESOLVE */
 static status_$t mock_status_after_lock;
 static status_$t mock_status_after_map;
 static status_$t mock_status_after_unmap;
 static status_$t mock_status_after_map_at;
 
 static int         mock_mount_calls;
+static int         mock_dismount_calls;
+static int         mock_addu_calls;
+static int         mock_set_dad_calls;
+
 static int         mock_errchk_calls;
 static const char *mock_errchk_msg[8];
+static const char *mock_errchk_arg[8];
+static int16_t     mock_errchk_arg_len[8];
+static status_$t  *mock_errchk_status_ptr[8];
 
 static int              mock_resolve_calls;
-static char            *mock_resolve_path;
+static const char      *mock_resolve_path;
 static const int16_t   *mock_resolve_len_ptr;
 static int16_t          mock_resolve_len;
 
-static int             mock_lock_calls;
-static const uint16_t *mock_lock_index_ptr;
-static const uint16_t *mock_lock_mode_ptr;
-static const uint8_t  *mock_lock_rights_ptr;
+static int          mock_lock_calls;
+static const void  *mock_lock_index_ptr;
+static const void  *mock_lock_mode_ptr;
+static const void  *mock_lock_rights_ptr;
 
-static int             mock_map_calls;
-static void           *mock_map_start_ptr;
-static void           *mock_map_length_ptr;
-static void           *mock_map_mode_ptr;
-static void           *mock_map_extend_ptr;
-static void           *mock_map_concur_ptr;
+static int    mock_map_calls;
+static void  *mock_map_start_ptr;
+static void  *mock_map_length_ptr;
+static void  *mock_map_mode_ptr;
+static void  *mock_map_extend_ptr;
+static void  *mock_map_concur_ptr;
 
 static int    mock_map_at_calls;
 static void  *mock_map_at_va;
@@ -111,18 +127,65 @@ static uint32_t mock_file_image[8];
  * Mocks
  * ========================================================================== */
 
-void flop_$mount_floppy(status_$t *status_ret)
+void VOLX_$MOUNT(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
+                 int8_t *salvage_ok, int8_t *write_prot, uid_t *parent_uid,
+                 uid_t *dir_uid_ret, status_$t *status)
 {
+    (void)dev; (void)bus; (void)ctlr; (void)lv_num; (void)salvage_ok;
+    (void)write_prot; (void)parent_uid;
     mock_mount_calls++;
-    *status_ret = mock_status_after_mount;
+    dir_uid_ret->high = 0xF10BF10Bu;
+    dir_uid_ret->low  = 0x00000001u;
+    *status = mock_status_after_mount;
 }
 
-void flop_$boot_errchk(const char *msg)
+void VOLX_$DISMOUNT(int16_t *dev, int16_t *bus, int16_t *ctlr, int16_t *lv_num,
+                    uid_t *entry_uid, int8_t *force, status_$t *status)
+{
+    (void)dev; (void)bus; (void)ctlr; (void)lv_num; (void)entry_uid; (void)force;
+    mock_dismount_calls++;
+    *status = status_$ok;
+}
+
+void NAME_$GET_NODE_UID(uid_t *node_uid)
+{
+    node_uid->high = 0x0000A0DEu;
+    node_uid->low  = 0x00000002u;
+}
+
+void DIR_$ADDU(uid_t *dir_uid, char *name, int16_t *name_len, uid_t *entry_uid,
+               status_$t *status_ret)
+{
+    (void)dir_uid; (void)name; (void)name_len; (void)entry_uid;
+    mock_addu_calls++;
+    *status_ret = status_$ok;
+}
+
+void DIR_$SET_DAD(uid_t *dir_uid, uid_t *parent_uid, status_$t *status_ret)
+{
+    (void)dir_uid; (void)parent_uid;
+    mock_set_dad_calls++;
+    *status_ret = status_$ok;
+}
+
+void DIR_$DROPU(uid_t *dir_uid, char *name, uint16_t *name_len,
+                uid_t *entry_uid, status_$t *status_ret)
+{
+    (void)dir_uid; (void)name; (void)name_len; (void)entry_uid;
+    *status_ret = status_$ok;
+}
+
+char OS_$BOOT_ERRCHK(const char *format_str, const char *arg_str,
+                     short *line_ptr, status_$t *status)
 {
     if (mock_errchk_calls < 8) {
-        mock_errchk_msg[mock_errchk_calls] = msg;
+        mock_errchk_msg[mock_errchk_calls] = format_str;
+        mock_errchk_arg[mock_errchk_calls] = arg_str;
+        mock_errchk_arg_len[mock_errchk_calls] = *line_ptr;
+        mock_errchk_status_ptr[mock_errchk_calls] = status;
     }
     mock_errchk_calls++;
+    return (*status == status_$ok) ? (char)0xFF : 0;
 }
 
 void NAME_$RESOLVE(char *path, int16_t *path_len, uid_t *resolved_uid,
@@ -192,6 +255,7 @@ void MST_$MAP_AT(void *start, uid_t *uid, void *param1, void *param2,
  * Code under test
  * ========================================================================== */
 
+#include "../mount.c"
 #include "../boot.c"
 
 static void reset(void)
@@ -206,8 +270,14 @@ static void reset(void)
     mock_status_after_map_at  = status_$ok;
 
     mock_mount_calls = 0;
+    mock_dismount_calls = 0;
+    mock_addu_calls = 0;
+    mock_set_dad_calls = 0;
     mock_errchk_calls = 0;
     memset(mock_errchk_msg, 0, sizeof(mock_errchk_msg));
+    memset(mock_errchk_arg, 0, sizeof(mock_errchk_arg));
+    memset(mock_errchk_arg_len, 0, sizeof(mock_errchk_arg_len));
+    memset(mock_errchk_status_ptr, 0, sizeof(mock_errchk_status_ptr));
     mock_resolve_calls = 0;
     mock_lock_calls = 0;
     mock_map_calls = 0;
@@ -220,13 +290,14 @@ static void reset(void)
 
     /* the constant cells must survive a run unchanged */
     flop_zero_byte = 0x00;
-    flop_lock_mode = 0x0004;
-    flop_lock_index = 0x0001;
-    flop_map_concurrency = 0xFF;
+    flop_word_four = 0x0004;
+    flop_word_one = 0x0001;
+    flop_ff_byte = 0xFF;
     flop_map_mode = 0x0007;
     flop_map_length = 0x00100000;
     flop_map_start = 0;
     flop_boot_shell_path_len = 0x0013;
+    flop_trying_normal_shell_len = 0x0015;
 }
 
 /* ==========================================================================
@@ -238,9 +309,9 @@ TEST(constant_cell_values)
 {
     reset();
     ASSERT_EQ(0x00, flop_zero_byte);            /* 0x00E32538 */
-    ASSERT_EQ(0x0004, flop_lock_mode);          /* 0x00E3253A */
-    ASSERT_EQ(0x0001, flop_lock_index);         /* 0x00E32540 */
-    ASSERT_EQ(0xFF, flop_map_concurrency);      /* 0x00E32542 */
+    ASSERT_EQ(0x0004, flop_word_four);          /* 0x00E3253A */
+    ASSERT_EQ(0x0001, flop_word_one);           /* 0x00E32540 */
+    ASSERT_EQ(0xFF, flop_ff_byte);              /* 0x00E32542 */
     ASSERT_EQ(0x0007, flop_map_mode);           /* 0x00E326C6 */
     ASSERT_EQ(0x00100000, flop_map_length);     /* 0x00E3272C */
     ASSERT_EQ(0, flop_map_start);               /* 0x00E32730 */
@@ -257,6 +328,29 @@ TEST(message_strings)
     ASSERT_STR_EQ("can't map boot shell%", flop_cant_map_msg);
     ASSERT_STR_EQ("can't unmap boot shell%", flop_cant_unmap_msg);
     ASSERT_STR_EQ("can't map at indicated address%", flop_cant_map_at_msg);
+}
+
+/*
+ * 0x00E323CE/0x00E323D0: the fallback text is the 21-character
+ * "- trying normal shell" with its length word 0x0015, and the status the
+ * nested procedure passes on is FLOP_$BOOT's own status_ret (0x00E323B0
+ * reads it through the static link).
+ */
+TEST(errchk_passes_fallback_text_and_uplevel_status)
+{
+    uint32_t entry = 0;
+    status_$t status = 0;
+
+    reset();
+    (void)FLOP_$BOOT(&entry, &status);
+
+    ASSERT_EQ(5, mock_errchk_calls);
+    ASSERT_STR_EQ("- trying normal shell", mock_errchk_arg[0]);
+    ASSERT_EQ(21, strlen(mock_errchk_arg[0]));
+    ASSERT_EQ(0x0015, mock_errchk_arg_len[0]);
+    ASSERT_PTR_EQ(flop_trying_normal_shell, mock_errchk_arg[4]);
+    ASSERT_PTR_EQ(&status, mock_errchk_status_ptr[0]);
+    ASSERT_PTR_EQ(&status, mock_errchk_status_ptr[4]);
 }
 
 /*
@@ -279,7 +373,7 @@ TEST(map_at_concurrency_is_the_zero_byte_cell)
     ASSERT_PTR_EQ(mock_lock_rights_ptr, mock_map_at_concur_ptr);
 
     /* and NOT the 0xFF cell MST_$MAP got */
-    ASSERT_PTR_EQ(&flop_map_concurrency, mock_map_concur_ptr);
+    ASSERT_PTR_EQ(&flop_ff_byte, mock_map_concur_ptr);
     ASSERT_EQ(0xFF, *(const uint8_t *)mock_map_concur_ptr);
 }
 
@@ -303,7 +397,8 @@ TEST(start_and_extend_are_one_cell)
     ASSERT_PTR_EQ(&flop_map_mode, mock_map_at_mode_ptr);
 }
 
-/* FILE_$LOCK's three by-reference constants (0x00E3259A-0x00E325A2). */
+/* FILE_$LOCK's three by-reference constants (0x00E3259A-0x00E325A2) are the
+ * cells flop_$mount_floppy uses as dev/lv, the "/flp" length and write_prot. */
 TEST(file_lock_constants)
 {
     uint32_t entry = 0;
@@ -313,12 +408,13 @@ TEST(file_lock_constants)
     (void)FLOP_$BOOT(&entry, &status);
 
     ASSERT_EQ(1, mock_lock_calls);
-    ASSERT_PTR_EQ(&flop_lock_index, mock_lock_index_ptr);
-    ASSERT_PTR_EQ(&flop_lock_mode, mock_lock_mode_ptr);
+    ASSERT_PTR_EQ(&flop_word_one, mock_lock_index_ptr);
+    ASSERT_PTR_EQ(&flop_word_four, mock_lock_mode_ptr);
     ASSERT_PTR_EQ(&flop_zero_byte, mock_lock_rights_ptr);
 }
 
-/* NAME_$RESOLVE gets the path AND the length cell by address. */
+/* NAME_$RESOLVE gets the path AND the length cell by address.  (The mount
+ * step does not resolve anything when DIR_$ADDU succeeds.) */
 TEST(name_resolve_arguments)
 {
     uint32_t entry = 0;
@@ -366,6 +462,8 @@ TEST(mount_failure_stops_after_the_first_errchk)
 
     ASSERT_EQ(0, ok);
     ASSERT_EQ(0x000B0004, status);
+    ASSERT_EQ(1, mock_mount_calls);
+    ASSERT_EQ(0, mock_addu_calls);
     ASSERT_EQ(1, mock_errchk_calls);
     ASSERT_PTR_EQ(flop_bad_floppy_mount_msg, mock_errchk_msg[0]);
     ASSERT_EQ(0, mock_resolve_calls);
@@ -408,6 +506,7 @@ int main(void)
     printf("FLOP_$BOOT tests\n");
     RUN_TEST(constant_cell_values);
     RUN_TEST(message_strings);
+    RUN_TEST(errchk_passes_fallback_text_and_uplevel_status);
     RUN_TEST(map_at_concurrency_is_the_zero_byte_cell);
     RUN_TEST(start_and_extend_are_one_cell);
     RUN_TEST(file_lock_constants);

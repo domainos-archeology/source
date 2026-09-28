@@ -1,7 +1,22 @@
 /*
  * PCHIST_$COUNT - Record a PC sample
  *
- * Reverse engineered from Domain/OS at address 0x00e1a134
+ * Re-emitted from the image (0x00E1A134..0x00E1A1F4, 194 bytes) and verified
+ * block by block; the previous body was faithful.  A5 = 0xE2C204
+ * (PCHIST_$CONTROL), A2 = pc_ptr, A0 = mode_ptr, D2 = PROC1_$CURRENT.
+ *
+ *   00e1a150  cmpi.w #1,(A0)                    ; mode 1: per-process trace
+ *   00e1a156  D0b = pid - 1 ; byte (0x18,A5,D0>>3) ; bit 7 - (D0 & 7)
+ *   00e1a176  tst.l (0x1c,A5,pid*4) / bne       ; a PC is already pending
+ *   00e1a17c  store *pc ; FIM_$DELIVER_TRACE_FAULT(PROC1_$AS_ID) (result slot)
+ *   00e1a190  tst.b (0x124,A5) / bpl exit       ; histogram_enabled
+ *   00e1a19c  A1 = 0xE85718 ; (0x524)++         ; total_samples
+ *   00e1a1a0  (0x510) pid filter: 0, or == pid, else (0x530)++ wrong_pid
+ *   00e1a1ae  pc < (0x518) -> (0x52c)++ ; pc > (0x51c) -> (0x528)++
+ *   00e1a1c6  bin = (pc - start) >> (0x514) ; ext.l of the LOW WORD indexes
+ *             (0x534,A1,bin*4)                  ; histogram[(int16_t)bin]++
+ *
+ * Sole caller PCHIST_$INTERRUPT 0x00E1A202.
  */
 
 #include "pchist/pchist_internal.h"

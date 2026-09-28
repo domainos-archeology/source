@@ -1,22 +1,18 @@
 /*
- * LOG_$READ - Read log entries from the beginning
+ * log/read.c - LOG_$READ (0x00E17800, 40 bytes)
  *
- * Reads log data starting from offset 0. This is a wrapper around
- * the internal log_$read_internal function.
+ * Gate for log_$read_internal: reads from offset 0 with the word count the
+ * caller passes BY ADDRESS.
  *
- * Original address: 00e17800
- * Original size: 40 bytes
- *
- * Assembly:
- *   00e17800    link.w A6,0x0
- *   00e17804    pea (A5)
- *   00e17806    lea (0xe2b280).l,A5
- *   00e1780c    move.l (0x10,A6),-(SP)   ; actual_len
+ *   00e1780c    move.l (0x10,A6),-(SP)   ; actual_len (argument 3)
  *   00e17810    movea.l (0xc,A6),A0
- *   00e17814    move.w (A0),-(SP)        ; *max_len
- *   00e17816    clr.w -(SP)              ; offset = 0
- *   00e17818    move.l (0x8,A6),-(SP)    ; buffer
+ *   00e17814    move.w (A0),-(SP)        ; *max_len   (argument 2, by address)
+ *   00e17816    clr.w -(SP)              ; offset 0
+ *   00e17818    move.l (0x8,A6),-(SP)    ; buffer     (argument 1)
  *   00e1781c    bsr.w log_$read_internal
+ *
+ * A5 is saved and set to 0xE2B280 around the call (`pea (A5)` / `lea`); the
+ * body's A5 accesses are what need it.
  */
 
 #include "log/log_internal.h"

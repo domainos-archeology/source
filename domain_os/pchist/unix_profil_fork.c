@@ -1,7 +1,13 @@
 /*
  * PCHIST_$UNIX_PROFIL_FORK - Copy profiling state on fork
  *
- * Reverse engineered from Domain/OS at address 0x00e5cc32
+ * Re-emitted from the image (0x00E5CC32..0x00E5CD00, 208 bytes) and verified
+ * block by block; the previous body was faithful.  A5 = 0xE2C204, A2 =
+ * child_pid_ptr.  The parent's bitmap test uses the byte at 0xE20609 (the
+ * low byte of PROC1_$CURRENT), the child's test the byte at (0x1,A2); the
+ * 20-byte record copy is `moveq #4` / dbf from PCHIST_$PROC_DATA[parent] to
+ * [child] (0x00E5CC7E-0x00E5CC92); the final bit set uses the word index.
+ * Sole caller PROC2_$FORK 0x00E73000.
  */
 
 #include "pchist/pchist_internal.h"

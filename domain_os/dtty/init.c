@@ -1,6 +1,8 @@
 /*
  * dtty/init.c - DTTY_$INIT (0x00E34BD0, 286 bytes)
  *
+ * Re-verified against the image block by block (2026-09-22); faithful.
+ *
  * Initialise the Display TTY subsystem.
  *
  * Frame: `link.w A6,-0x44` / `movem.l {A2 D3 D2},-(SP)`.  Arguments:

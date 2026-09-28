@@ -62,9 +62,28 @@ uint32_t win_$host_clockh(void);
 #define WIN_CUR_REQ (*(void **)(WIN_DATA_BASE + WIN_REQ_PTR_OFFSET))
 
 /*
+ * The same two cells as 32-bit target VAs: +0x5C the disk_$volume_t
+ * WIN_$DO_IO was given and +0x60 the current request.  They are 4 bytes
+ * apart, so on a 64-bit host they must not be read as native pointers;
+ * WIN_$DO_IO and WIN_$INT use these with ARCH_VA_TO_PTR / ARCH_PTR_TO_VA.
+ */
+#define WIN_DEV_INFO_VA (*(uint32_t *)(WIN_DATA_BASE + WIN_DEV_INFO_OFFSET))
+#define WIN_CUR_REQ_VA  (*(uint32_t *)(WIN_DATA_BASE + WIN_REQ_PTR_OFFSET))
+
+/*
+ * 0x00E1940A: the zero word every ANSI command in the module passes as its
+ * input-parameter address (win/win_data.c).
+ */
+extern uint16_t WIN_ANSI_IN_PARAM;
+
+/*
  * Internal functions (nested Pascal procedures of the WIN module)
  */
-status_$t SEEK(uint16_t unit, uint16_t cylinder, void *req, uint8_t flags);
+/* SEEK (0x00E19576): the cylinder and head come from the REQUEST (+0x04,
+ * +0x06); argument 2 is the disk_$volume_t.dev_unit word the callers pass
+ * (WIN_$DO_IO 0x00E1982C, WIN_$INT 0x00E19CA2, WIN_$FORMAT_TRACK).  `flags`
+ * is a byte pushed in a word slot. */
+status_$t SEEK(uint16_t unit, uint16_t dev_unit, void *req, uint8_t flags);
 status_$t read_or_write_disk_record(uint16_t unit);
 /* DMA_$CHECK is declared in dma/dma.h (bead source-3uo). */
 
@@ -76,8 +95,17 @@ status_$t read_or_write_disk_record(uint16_t unit);
  * written WIN_REG_GO.
  */
 status_$t WAIT_FOR_CONTROLLER(uint16_t unit);
-status_$t FUN_00e194b4(uint16_t param_1, uint16_t cylinder);
-void FUN_00e19186(uint16_t unit, char status, uint16_t *out);
+/* win_$reinit_drive (0x00E194B4, was FUN_00e194b4): DISK_INIT the unit
+ * again, REZERO it (ANSI 0x04) with a 0x28-tick wait, then
+ * WIN_$CHECK_DISK_STATUS; bumps the counter at +0x64 and forgets the
+ * current cylinder / head (+0x74, +0x72 = -1).  No result slot: the status
+ * is simply D0. */
+status_$t win_$reinit_drive(uint16_t unit, uint16_t dev_unit);
+/* win_$sense_general_status (0x00E19186, was FUN_00e19186): argument 2 is a
+ * BYTE (read from the high half of its word slot, 0x00E19194 `move.b
+ * (0xa,A6)`); *out is the clearing command it wants sent (0, 1 or 2). */
+status_$t win_$sense_general_status(uint16_t unit, uint8_t general_status,
+                                    uint16_t *out);
 
 /*
  * The pending-I/O byte the WIN driver clears as it retires a request.

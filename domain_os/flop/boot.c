@@ -58,23 +58,17 @@ static int16_t flop_boot_shell_path_len = 0x0013;
  */
 
 /*
- * 0x00E32538: 00 00 - a zero byte.
- *
- * FILE_$LOCK reads it as `rights` (pea (-0x64,PC) at 0x00E3259A) and
- * MST_$MAP_AT reads it as `concurrency` (pea (-0x116,PC) at 0x00E3264C -
- * 0x00E3264E - 0x116 = 0x00E32538).  It is NOT the 0xFF cell at 0x00E32542
- * that MST_$MAP gets.  (source-y89n)
+ * 0x00E32538 (00), 0x00E3253A (00 04), 0x00E32540 (00 01) and 0x00E32542 (ff)
+ * are flop_zero_byte, flop_word_four, flop_word_one and flop_ff_byte, defined
+ * in mount.c: each is ONE cell that flop_$mount_floppy also reads.  Here:
+ *   FILE_$LOCK  lock_index = 0x00E32540 (pea (-0x64,PC) at 0x00E325A2)
+ *               lock_mode  = 0x00E3253A (pea (-0x66,PC) at 0x00E3259E)
+ *               rights     = 0x00E32538 (pea (-0x64,PC) at 0x00E3259A)
+ *   MST_$MAP    concurrency = 0x00E32542 (pea (-0x8e,PC) at 0x00E325CE)
+ *   MST_$MAP_AT concurrency = 0x00E32538 (pea (-0x116,PC) at 0x00E3264C -
+ *               0x00E3264E - 0x116 = 0x00E32538), NOT the 0xFF cell.
+ *               (source-y89n)
  */
-static uint8_t flop_zero_byte = 0x00;
-
-/* 0x00E3253A: 00 04 - FILE_$LOCK's lock mode (pea (-0x66,PC) at 0x00E3259E) */
-static uint16_t flop_lock_mode = 0x0004;
-
-/* 0x00E32540: 00 01 - FILE_$LOCK's lock index (pea (-0x64,PC) at 0x00E325A2) */
-static uint16_t flop_lock_index = 0x0001;
-
-/* 0x00E32542: ff - MST_$MAP's concurrency (pea (-0x8e,PC) at 0x00E325CE) */
-static uint8_t flop_map_concurrency = 0xFF;
 
 /* 0x00E326C6: 00 07 - the mapping mode word, wedged between two strings
  * (pea (0xee,PC) at 0x00E325D6 and pea (0x70,PC) at 0x00E32654) */
@@ -91,6 +85,32 @@ static uint32_t flop_map_length = 0x00100000;
  *   MST_$MAP_AT pea (0xde,PC)  at 0x00E32650 and pea (0xd2,PC)  at 0x00E3265C
  */
 static uint32_t flop_map_start = 0;
+
+/*
+ * ----------------------------------------------------------------------------
+ * flop_$boot_errchk (0x00E323A8, 38 bytes) - nested procedure of FLOP_$BOOT
+ *
+ * `movea.l (A6),A2` / `move.l (0xc,A2),-(SP)` (0x00E323AE-0x00E323B0) follows
+ * the static link to FLOP_$BOOT's frame and passes FLOP_$BOOT's second
+ * argument, status_ret, through; it is an explicit parameter here.  The
+ * fallback text is the 21-character "- trying normal shell" at 0x00E323D0
+ * (pea (0x16,PC) at 0x00E323B8) with its length word 0x0015 at 0x00E323CE
+ * (pea (0x18,PC) at 0x00E323B4).  OS_$BOOT_ERRCHK's result is not examined.
+ * ----------------------------------------------------------------------------
+ */
+
+/* 0x00E323CE: 00 15 */
+static int16_t flop_trying_normal_shell_len = 0x0015;
+
+/* 0x00E323D0: "- trying normal shell" NUL */
+static char flop_trying_normal_shell[] = "- trying normal shell";
+
+static void flop_$boot_errchk(const char *msg, status_$t *status_ret)
+{
+    /* 0x00E323B0-0x00E323C0 */
+    (void)OS_$BOOT_ERRCHK(msg, flop_trying_normal_shell,
+                          &flop_trying_normal_shell_len, status_ret);
+}
 
 /* 0x00E3260C `moveq #0x5,D0` + `move.l (A1)+,(A3)+` + `dbf`: 6 longwords. */
 #define FLOP_BOOT_HEADER_LONGS  6
@@ -133,7 +153,7 @@ int8_t FLOP_$BOOT(uint32_t *entry_point, status_$t *status_ret)
 
     /* 0x00E3255E-0x00E32566: the error check runs unconditionally; it is the
      * routine that decides whether the message is printed. */
-    flop_$boot_errchk(flop_bad_floppy_mount_msg);
+    flop_$boot_errchk(flop_bad_floppy_mount_msg, status_ret);
     if (*status_ret != status_$ok) {            /* 0x00E32568-0x00E3256E */
         goto done;
     }
@@ -146,9 +166,10 @@ int8_t FLOP_$BOOT(uint32_t *entry_point, status_$t *status_ret)
     }
 
     /* 0x00E32594-0x00E325B0 */
-    FILE_$LOCK(&boot_shell_uid, &flop_lock_index, &flop_lock_mode,
-               &flop_zero_byte, lock_info, status_ret);
-    flop_$boot_errchk(flop_cant_lock_msg);      /* 0x00E325B4 */
+    FILE_$LOCK(&boot_shell_uid, (const uint16_t *)&flop_word_one,
+               (const uint16_t *)&flop_word_four, &flop_zero_byte, lock_info,
+               status_ret);
+    flop_$boot_errchk(flop_cant_lock_msg, status_ret);      /* 0x00E325B4 */
     if (*status_ret != status_$ok) {            /* 0x00E325BE-0x00E325C4 */
         goto done;
     }
@@ -160,8 +181,8 @@ int8_t FLOP_$BOOT(uint32_t *entry_point, status_$t *status_ret)
      */
     mapped_addr = MST_$MAP(&boot_shell_uid, &flop_map_start, &flop_map_length,
                            &flop_map_mode, &flop_map_start,
-                           &flop_map_concurrency, &map_info, status_ret);
-    flop_$boot_errchk(flop_cant_map_msg);       /* 0x00E325F2 */
+                           &flop_ff_byte, &map_info, status_ret);
+    flop_$boot_errchk(flop_cant_map_msg, status_ret);       /* 0x00E325F2 */
     if (*status_ret != status_$ok) {            /* 0x00E325FC-0x00E32602 */
         goto done;
     }
@@ -175,7 +196,7 @@ int8_t FLOP_$BOOT(uint32_t *entry_point, status_$t *status_ret)
 
     /* 0x00E3261A-0x00E32630 */
     MST_$UNMAP(&boot_shell_uid, &mapped_va, &map_info, status_ret);
-    flop_$boot_errchk(flop_cant_unmap_msg);     /* 0x00E32634 */
+    flop_$boot_errchk(flop_cant_unmap_msg, status_ret);     /* 0x00E32634 */
     if (*status_ret != status_$ok) {            /* 0x00E3263E-0x00E32644 */
         goto done;
     }
@@ -190,7 +211,7 @@ int8_t FLOP_$BOOT(uint32_t *entry_point, status_$t *status_ret)
     MST_$MAP_AT(header, &boot_shell_uid, &flop_map_start, &flop_map_length,
                 &flop_map_mode, &flop_map_start, &flop_zero_byte,
                 &map_info, status_ret);
-    flop_$boot_errchk(flop_cant_map_at_msg);    /* 0x00E32672 */
+    flop_$boot_errchk(flop_cant_map_at_msg, status_ret);    /* 0x00E32672 */
     if (*status_ret != status_$ok) {            /* 0x00E3267C-0x00E32682 */
         goto done;
     }

@@ -75,298 +75,352 @@ typedef struct smd_str_init_result_t {
 /*
  * SMD_$WRITE_STR_CLIP - Write string with clipping
  *
- * Renders a string using the specified font, clipping each character
- * against the current clip window. Uses hardware BLT operations to
- * transfer glyph bitmaps from HDM to the visible display.
+ * Re-emitted from the image (2026-09-27): the body is smd_$write_str_clip_impl
+ * at 0x00E70390..0x00E706BC (816 bytes), reached through the 4-byte gate at
+ * 0x00E8493E.  The movem of ten registers precedes the `link.w A6,-0x2a`, so
+ * the arguments sit at (0x30,A6) pos, (0x34) font slot ptr, (0x38) buffer ->
+ * A4, (0x3C) length ptr, (0x40) flags ptr, (0x44) status_ret.  Locals:
+ * A6-0x1C the smd_str_init_result_t; -0x1E src_x, -0x20 dst_y, -0x22
+ * bit_pos, -0x26 x_extent, -0x28 dst_x, -0x2A clip_left.  Registers: D7 the
+ * dbf counter, D4 x, D5 y + 1, D3 the BLT control word, A2 font, A3 the BLT
+ * registers, A0 the hardware record (clip window at +0x56..+0x5C), A1 the
+ * glyph record.
+ *
+ * Shape of the loop (0x00E7041A..0x00E7061E), per character:
+ *   - map the character to a glyph; index 0 -> 0x00E706A2 adds the font's
+ *     default_missing + char_spacing and goes to the dbf;
+ *   - X: glyph_x = x - bearing_x; clip_left = clip_x1 - glyph_x (0 when
+ *     not positive); a glyph already right of clip_x2 either ADVANCES
+ *     (x - 0x7F <= clip_x2) or STOPS drawing (0x00E70620: the rest of the
+ *     string is only measured);
+ *   - right edge = x + width - 1; left of clip_x1 -> advance; clamped to
+ *     clip_x2; bit_pos = edge & 0xF; x_extent = -|edge>>4 - dst_x>>4| - 1;
+ *   - Y: the same shape with bearing_y / clip_y1 / clip_y2 and the font's
+ *     descent (v1 +0x16, v3 +0x48) deciding advance vs stop;
+ *   - the HDM source row (hdm.y + bitmap_row + clip_top) is folded into
+ *     0..0x3FF by stepping down 0xE0 rows and right 0xE0 columns
+ *     (0x00E70534..0x00E70544);
+ *   - bottom = y + height - 1; above clip_y1 -> the font's ascent (v1
+ *     +0x18, v3 +0x4A) decides stop vs advance; clamped to clip_y2;
+ *   - when the glyph crosses the HDM fold (rows to the fold < rows to
+ *     draw) TWO BLTs are issued, the second from HDM row 0x320 with the
+ *     source column advanced by 0xE0 (0x00E70598..0x00E705EE); otherwise
+ *     one (0x00E705F0..0x00E70600);
+ *   - x += advance + char_spacing (v1 +0x10, v3 +0x5A); dbf D7.
+ * Afterwards (0x00E7068C) the BLT engine is waited for, D4 is parked on the
+ * stack across SMD_$REL_DISPLAY (reached through the context table's +0x1C)
+ * and popped into D0: the procedure leaves the string's width in D0, which
+ * no caller reads.
+ *
+ * The old body had none of the fold handling, no split BLT and no stop
+ * path, and computed the extents differently.
  *
  * Parameters:
- *   pos        - Pointer to position (packed x,y)
- *   font       - Font slot or font pointer
- *   buffer     - Character buffer to render
- *   length     - Pointer to string length
- *   flags      - Rendering flags (bit 7: inverted mode)
- *   status_ret - Status return
- *
- * Notes:
- *   - Complex clipping logic handles partial glyph visibility
- *   - Supports both font version 1 (7-bit ASCII) and version 3 (8-bit)
- *   - Characters outside clip window advance position but don't render
- *   - Unknown characters use default width from font header
+ *   pos        - pointer to the packed position (x low word, y high word)
+ *   font       - pointer to the font SLOT word
+ *   buffer     - the characters
+ *   length     - pointer to the count word
+ *   flags      - pointer to a Domain boolean: negative = inverted
+ *   status_ret - the record's status
  */
 void SMD_$WRITE_STR_CLIP(uint32_t *pos, void *font, uint8_t *buffer,
                          uint16_t *length, int8_t *flags, status_$t *status_ret)
 {
-    smd_str_init_result_t init_result;
-    smd_hw_blt_regs_t *hw;
-    smd_display_info_t *info;
-    smd_font_v1_t *font_ptr;
-    smd_glyph_metrics_t *glyph;
-    uint16_t rop_mode;
-    int16_t x_pos, y_pos;
-    int16_t chars_remaining;
-    int16_t clip_x1, clip_y1, clip_x2, clip_y2;
-    int16_t glyph_x, glyph_y;
-    int16_t glyph_idx;
-    int16_t src_x, src_y, dst_x, dst_y;
-    int16_t width, height;
-    int16_t clip_left, clip_top;
+    smd_str_init_result_t r;             /* A6-0x1C */
+    smd_hw_blt_regs_t *blt;              /* A3 */
+    smd_font_v1_t *fnt;                  /* A2 */
+    smd_font_v3_t *fnt3;
+    smd_display_hw_t *hw;                /* A0 */
+    smd_glyph_metrics_t *g;              /* A1 */
+    const uint8_t *buf;                  /* A4 */
+    int16_t chars;                       /* D7 */
+    uint16_t rop;                        /* D3 */
+    int16_t x;                           /* D4 */
+    int16_t y;                           /* D5 */
+    int16_t d0, d1, d2, d6;
+    int16_t clip_left, dst_x, bit_pos, x_extent, dst_y, src_x;
     uint8_t c;
+    uint8_t idx;
 
-    /*
-     * 0x00E7039A: the font SLOT number is copied into the record's +0x18
-     * before the call, then 0x00E703A2 `pea (-0x1c,A6)` / 0x00E703A6
-     * `movea.l (0x14,A5),A0` / `jsr (A0)` runs SMD_$WS_INIT through the
-     * context table.  `font` is a pointer to that WORD, not to a font.
-     */
-    init_result.font_slot = *(const uint16_t *)font;
-    SMD_$WS_INIT((struct smd_ws_ctx_t *)&init_result);
+    /* 0x00E7039A-0x00E703AC */
+    r.font_slot = *(const uint16_t *)font;
+    SMD_$WS_INIT((struct smd_ws_ctx_t *)&r);
 
-    /*
-     * 0x00E703AE-0x00E703B6: the record's status goes straight out, and a
-     * non-zero one ends the call.
-     */
-    *status_ret = init_result.status;
-    if (init_result.status != status_$ok) {
+    /* 0x00E703AE-0x00E703B6 */
+    *status_ret = r.status;
+    if (r.status != status_$ok) {
         return;
     }
 
-    /* 0x00E703BA / 0x00E703BE. */
-    hw = init_result.blt_regs;
-    font_ptr = (smd_font_v1_t *)init_result.font;
-
-    /* 0x00E703C6-0x00E703D0: an empty string returns without acquiring. */
-    if ((int16_t)*length <= 0) {
+    /* 0x00E703BA-0x00E703D0 */
+    blt = r.blt_regs;
+    fnt = (smd_font_v1_t *)r.font;
+    fnt3 = (smd_font_v3_t *)r.font;
+    buf = buffer;
+    chars = (int16_t)*length;
+    if (chars <= 0) {
         return;
     }
-    chars_remaining = (int16_t)*length - 1;
+    chars--;
 
-    /*
-     * 0x00E703D2-0x00E703EE.  The lock mode is one of the two constant words
-     * in the context table - +0x24 holds 1 and +0x26 holds 0 - and the
-     * INVERTED flag selects the 0 one.  SMD_$ACQ_DISPLAY's result is OR'd
-     * with 0x800C to make the BLT control word.
-     */
-    rop_mode = (uint16_t)(SMD_$ACQ_DISPLAY(*flags < 0
-                                               ? &smd_$ws_acq_lock_mode
-                                               : &smd_$ws_one_lock_mode)
-                          | 0x800C);
+    /* 0x00E703D2-0x00E703EE */
+    rop = (uint16_t)(SMD_$ACQ_DISPLAY(*flags < 0 ? &smd_$ws_acq_lock_mode
+                                                 : &smd_$ws_one_lock_mode) | 0x800C);
 
-    /* 0x00E703F2-0x00E703FC: X is the low half, Y the high half plus one. */
-    x_pos = (int16_t)(*pos & 0xFFFF);
-    y_pos = (int16_t)((*pos >> 16) & 0xFFFF) + 1;
+    /* 0x00E703F2-0x00E703FC */
+    x = (int16_t)(*pos & 0xFFFF);
+    y = (int16_t)((*pos >> 16) + 1);
 
-    /*
-     * 0x00E703FE-0x00E70416: the clip window comes from the record's +0x0C
-     * hardware record.  There is no null check, and a degenerate window falls
-     * through to the width-measuring arm at 0x00E70628.
-     */
-    info = init_result.hw;
-    clip_x1 = info->clip_x1;
-    clip_x2 = info->clip_x2;
-    clip_y1 = info->clip_y1;
-    clip_y2 = info->clip_y2;
-
-    if (clip_x1 > clip_x2 || clip_y1 > clip_y2) {
-        goto skip_rendering;
+    /* 0x00E703FE-0x00E70416 */
+    hw = r.hw;
+    if (hw->clip_x1 > hw->clip_x2) {
+        goto measure;
+    }
+    if (hw->clip_y1 > hw->clip_y2) {
+        goto measure;
     }
 
-    /*
-     * Main character rendering loop.
-     * For each character:
-     *   1. Look up glyph index from character map
-     *   2. Get glyph metrics
-     *   3. Calculate screen position
-     *   4. Clip against window
-     *   5. Issue BLT if visible
-     *   6. Advance position
-     */
-    while (chars_remaining >= 0) {
-        c = *buffer++;
-        chars_remaining--;
+draw_loop:
+    /* 0x00E7041A-0x00E70452: character -> glyph record */
+    if (fnt->version != SMD_FONT_VERSION_1) {
+        c = *buf++;
+        idx = ((const uint8_t *)fnt3)[fnt3->char_map_offset + c];      /* 0x00E70426 */
+        if (idx == 0) {
+            goto missing;
+        }
+        g = (smd_glyph_metrics_t *)((uint8_t *)fnt3 - 8 + fnt3->glyph_data_offset + idx * 8);
+    } else {
+        c = (uint8_t)(*buf++ & 0x7F);                                   /* 0x00E7043E */
+        idx = fnt->char_map[c];
+        if (idx == 0) {
+            goto missing;
+        }
+        g = (smd_glyph_metrics_t *)((uint8_t *)fnt + 0x92 + idx * 8);
+    }
 
-        /* Look up glyph index based on font version */
-        if (font_ptr->version == SMD_FONT_VERSION_1) {
-            /* Version 1: 7-bit ASCII, mask high bit (0x00E7043E
-             * `move.w #0x7f,D0w` / `and.b (A4)+,D0b`). */
-            glyph_idx = font_ptr->char_map[c & 0x7F];
-            if (glyph_idx == 0) {
-                /* 0x00E706B4: default_missing (+0x12) then char_spacing (+0x10). */
-                x_pos += font_ptr->default_missing + font_ptr->char_spacing;
-                continue;
-            }
-            /* 0x00E7044E `lea (0x92,A2),A1` + `adda.w D1w,A1` with
-             * D1 = index * 8, i.e. the records are 1-based from 0x9A. */
-            glyph = (smd_glyph_metrics_t *)((uint8_t *)font_ptr + 0x92 + glyph_idx * 8);
+    /* 0x00E70454-0x00E7047E: X */
+    d1 = g->bearing_x;
+    d2 = d1;
+    d0 = (int16_t)(x - d1);                          /* glyph_x */
+    d1 = (int16_t)(hw->clip_x1 - d0);
+    if (d1 <= 0) {
+        if (d0 <= hw->clip_x2) {
+            d1 = 0;                                  /* 0x00E7047E */
         } else {
-            /* Version 3: full 8-bit lookup through the map OFFSET at +0x34
-             * (0x00E70426 `add.l (0x34,A2),D0` / 0x00E7042A
-             * `move.b (0x0,A2,D0*0x1),D1b`). */
-            smd_font_v3_t *font_v3 = (smd_font_v3_t *)font_ptr;
-            const uint8_t *char_map =
-                (const uint8_t *)font_v3 + font_v3->char_map_offset;
-
-            glyph_idx = char_map[c];
-            if (glyph_idx == 0) {
-                /* 0x00E706A8: default_missing (+0x6E) then char_spacing (+0x5A). */
-                x_pos += font_v3->default_missing + font_v3->char_spacing;
-                continue;
+            d0 = (int16_t)(x - 0x7F);                /* 0x00E7046C */
+            if (d0 > hw->clip_x2) {
+                goto stop;                           /* 0x00E70476 */
             }
-            glyph = (smd_glyph_metrics_t *)((uint8_t *)font_ptr +
-                    font_v3->glyph_data_offset + (glyph_idx - 1) * 8);
-        }
-
-        /* Calculate glyph screen position */
-        glyph_x = x_pos - glyph->bearing_x;
-        glyph_y = y_pos - glyph->bearing_y;
-
-        /* Clip left edge */
-        clip_left = clip_x1 - glyph_x;
-        if (clip_left > 0) {
-            if (glyph_x + glyph->width - 1 < clip_x1) {
-                /* Entirely to the left of clip window */
-                goto advance_position;
-            }
-        } else {
-            clip_left = 0;
-        }
-
-        /* Clip right edge */
-        dst_x = glyph_x + clip_left;
-        width = glyph->width - 1 - clip_left;
-        if (dst_x + width > clip_x2) {
-            width = clip_x2 - dst_x;
-        }
-
-        /* Clip top edge */
-        clip_top = clip_y1 - glyph_y;
-        if (clip_top > 0) {
-            if (glyph_y + glyph->height - 1 < clip_y1) {
-                goto advance_position;
-            }
-        } else {
-            clip_top = 0;
-        }
-
-        /* Clip bottom edge */
-        dst_y = glyph_y + clip_top;
-        height = glyph->height - 1 - clip_top;
-        if (dst_y + height > clip_y2) {
-            height = clip_y2 - dst_y;
-        }
-
-        if (width < 0 || height < 0) {
-            goto advance_position;
-        }
-
-        /* Calculate source position in font bitmap HDM */
-        src_x = glyph->bitmap_col + clip_left;
-        src_y = glyph->bitmap_row + clip_top;
-
-        /* Wait for previous BLT to complete */
-        while ((int16_t)hw->control < 0) {
-            /* Busy wait */
-        }
-
-        /* Program BLT registers */
-        hw->x_start = dst_x;
-        hw->y_start = dst_y;
-        hw->bit_pos = dst_x & 0x0F;
-        hw->x_extent = (dst_x >> 4) - ((dst_x + width) >> 4);
-        if (hw->x_extent > 0) {
-            hw->x_extent = -hw->x_extent;
-        }
-        hw->x_extent--;
-        hw->y_extent = height;
-        hw->mask = src_y;
-        hw->pattern = src_x;
-
-        /* Start BLT operation */
-        hw->control = rop_mode;
-
-advance_position:
-        /*
-         * 0x00E70602-0x00E70618: the glyph's advance (+0x04) plus the
-         * version's spacing word, v1 +0x10 (`add.w (0x10,A2),D0w`) or
-         * v3 +0x5A (`add.w (0x5a,A2),D0w`).
-         */
-        if (font_ptr->version == SMD_FONT_VERSION_1) {
-            x_pos += glyph->advance + font_ptr->char_spacing;
-        } else {
-            const smd_font_v3_t *font_v3 = (const smd_font_v3_t *)font_ptr;
-            x_pos += glyph->advance + font_v3->char_spacing;
+            goto advance;                            /* 0x00E7047A */
         }
     }
 
-    /* 0x00E7068C `tst.w (A3)` / `bmi.b`: wait for the final BLT. */
-    while ((int16_t)hw->control < 0) {
-        /* Busy wait */
+    /* 0x00E70482-0x00E704D8 */
+    clip_left = d1;
+    d0 = (int16_t)(d0 + d1);                         /* dst_x */
+    while ((int16_t)blt->control < 0) {
     }
+    blt->x_start = (uint16_t)d0;
+    dst_x = d0;
+    d1 = (int16_t)(g->width - 1);
+    d2 = (int16_t)(d2 + d1);
+    d0 = (int16_t)(d0 + d2);
+    d0 = (int16_t)(d0 - clip_left);                  /* right edge = x + width - 1 */
+    if (d0 < hw->clip_x1) {
+        goto advance;                                /* 0x00E704A8 */
+    }
+    if (d0 > hw->clip_x2) {
+        d0 = hw->clip_x2;                            /* 0x00E704B2 */
+    }
+    d2 = (int16_t)(d0 & 0xF);
+    blt->bit_pos = (uint16_t)d2;
+    bit_pos = d2;
+    d0 = (int16_t)((uint16_t)d0 >> 4);
+    d2 = (int16_t)((uint16_t)dst_x >> 4);
+    d0 = (int16_t)(d0 - d2);
+    if (d0 >= 0) {                                   /* blt skips the neg */
+        d0 = (int16_t)-d0;
+    }
+    d0--;
+    blt->x_extent = (uint16_t)d0;
+    x_extent = d0;
 
-    /*
-     * 0x00E70690-0x00E70698.  The accumulated width is parked on the stack
-     * across the call and popped back into D0 afterwards, which is why the
-     * measure-only arm and this one share the epilogue.  SMD_$REL_DISPLAY is
-     * reached through the context table's +0x1C.
-     */
-    SMD_$REL_DISPLAY();
-
-    return;
-
-skip_rendering:
-    /*
-     * 0x00E70628: the clip window is degenerate, so nothing is drawn - the
-     * loop only accumulates the string's width, and falls into the shared
-     * epilogue at 0x00E7068C above.  font_ptr and chars_remaining are already
-     * set; the original does not reload them.
-     */
-    while (chars_remaining >= 0) {
-        c = *buffer++;
-        chars_remaining--;
-
-        if (font_ptr->version == SMD_FONT_VERSION_1) {
-            /* 0x00E70660-0x00E70686. */
-            glyph_idx = font_ptr->char_map[c & 0x7F];
-            if (glyph_idx == 0) {
-                x_pos += font_ptr->default_missing + font_ptr->char_spacing;
-            } else {
-                glyph = (smd_glyph_metrics_t *)((uint8_t *)font_ptr + 0x92 + glyph_idx * 8);
-                x_pos += glyph->advance + font_ptr->char_spacing;
-            }
+    /* 0x00E704DC-0x00E70512: Y */
+    d1 = g->bearing_y;
+    d0 = (int16_t)(y - d1);                          /* glyph_y */
+    d1 = (int16_t)(hw->clip_y1 - d0);
+    if (d1 <= 0) {
+        if (d0 <= hw->clip_y2) {
+            d1 = 0;                                  /* 0x00E70512 */
         } else {
-            smd_font_v3_t *font_v3 = (smd_font_v3_t *)font_ptr;
-
-            /*
-             * ORIGINAL BUG, PRESERVED (bead source-2gs7).  0x00E70634 is
-             * `move.b (0x34,A2,D0w*0x1),D1b`: this path indexes the character
-             * map at font + 0x34, where +0x34 is the map's OFFSET FIELD, not
-             * the map.  The drawing path above adds the offset instead
-             * (0x00E70426).  Consequently characters 0..7 read the two offset
-             * longwords and 8..255 read whatever follows them in the header,
-             * so the width this arm computes is meaningless.  It only runs on
-             * the "string does not fit the clip window" path (0x00E7040A /
-             * 0x00E70416 branch to 0x00E70628), which measures instead of
-             * drawing.  Do not "fix" it.
-             */
-            const uint8_t *bogus_char_map =
-                (const uint8_t *)&font_v3->char_map_offset;
-
-            glyph_idx = bogus_char_map[c];
-            if (glyph_idx == 0) {
-                /* 0x00E7063A / 0x00E70652. */
-                x_pos += font_v3->default_missing + font_v3->char_spacing;
-            } else {
-                glyph = (smd_glyph_metrics_t *)((uint8_t *)font_ptr +
-                        font_v3->glyph_data_offset + (glyph_idx - 1) * 8);
-                /* 0x00E7064C / 0x00E70652. */
-                x_pos += glyph->advance + font_v3->char_spacing;
+            d0 = (int16_t)(y - (fnt->version == SMD_FONT_VERSION_1
+                                    ? fnt->descent : fnt3->descent));   /* 0x00E704F4 */
+            if (d0 > hw->clip_y2) {
+                goto stop;                           /* 0x00E7050A */
             }
+            goto advance;                            /* 0x00E7050E */
         }
     }
 
-    /* 0x00E7065C / 0x00E70688 `bra.w 0x00E7068C`: the two measuring loops
-     * rejoin the wait-and-release epilogue. */
-    while ((int16_t)hw->control < 0) {
-        /* Busy wait */
+    /* 0x00E70516-0x00E70552 */
+    d0 = (int16_t)(d0 + d1);                         /* dst_y */
+    blt->y_start = (uint16_t)d0;
+    dst_y = d0;
+    /* the record's +0x14 longword is the hdm position: y in its high word
+     * (A6-0x8), x in its low word (A6-0x6) */
+    d2 = (int16_t)((uint16_t)g->bitmap_col + (uint16_t)(r.hdm_pos & 0xFFFF));   /* 0x00E70520 */
+    d0 = (int16_t)((uint16_t)(r.hdm_pos >> 16) + g->bitmap_row + d1);          /* 0x00E7052A */
+    for (;;) {                                       /* 0x00E70534 */
+        d6 = (int16_t)(0x3FF - d0);
+        if (d6 >= 0) {
+            break;
+        }
+        d0 = (int16_t)(d0 - 0xE0);
+        d2 = (int16_t)(d2 + 0xE0);
+    }
+    d2 = (int16_t)(d2 + clip_left);                  /* 0x00E70546 */
+    blt->pattern = (uint16_t)d2;                     /* src column */
+    src_x = d2;
+    blt->mask = (uint16_t)d0;                        /* src row */
+
+    /* 0x00E70556-0x00E7058A: bottom edge */
+    d2 = (int16_t)(g->height + y - 1);
+    if (d2 < hw->clip_y1) {
+        d2 = (int16_t)((fnt->version == SMD_FONT_VERSION_1
+                            ? fnt->ascent : fnt3->ascent) + y);         /* 0x00E70566 */
+        if (d2 < hw->clip_y1) {
+            goto stop;                               /* 0x00E7057C */
+        }
+        goto advance;                                /* 0x00E70580 */
+    }
+    if (d2 > hw->clip_y2) {
+        d2 = hw->clip_y2;                            /* 0x00E7058A */
+    }
+    d0 = dst_y;
+    d2 = (int16_t)(d2 - d0);                         /* rows to draw - 1 */
+    if (d6 >= d2) {
+        /* 0x00E705F0-0x00E70600: one BLT */
+        d0 = (int16_t)(d0 + d2);
+        d0 = (int16_t)(d0 - dst_y);
+        if (d0 >= 0) {
+            d0 = (int16_t)-d0;
+        }
+        d0--;
+        blt->y_extent = (uint16_t)d0;
+        blt->control = rop;
+    } else {
+        /* 0x00E70598-0x00E705EE: the glyph crosses the HDM fold */
+        d0 = (int16_t)(d0 + d6);
+        d0 = (int16_t)(d0 - dst_y);
+        if (d0 >= 0) {
+            d0 = (int16_t)-d0;
+        }
+        d0--;
+        blt->y_extent = (uint16_t)d0;
+        d0 = (int16_t)(dst_y + d6);
+        blt->control = rop;                          /* first BLT */
+        d2 = (int16_t)(d2 + d0);
+        d2 = (int16_t)(d2 - d6);
+        d0++;
+        while ((int16_t)blt->control < 0) {
+        }
+        blt->y_start = (uint16_t)d0;
+        d2 = (int16_t)(d2 - d0);
+        if (d2 >= 0) {
+            d2 = (int16_t)-d2;
+        }
+        d2--;
+        blt->y_extent = (uint16_t)d2;
+        blt->mask = 0x320;                           /* 0x00E705CA */
+        blt->pattern = (uint16_t)(src_x + 0xE0);     /* 0x00E705D0 */
+        blt->bit_pos = (uint16_t)bit_pos;
+        blt->x_start = (uint16_t)dst_x;
+        blt->x_extent = (uint16_t)x_extent;
+        blt->control = rop;                          /* 0x00E70600: second BLT */
+    }
+
+advance:
+    /* 0x00E70602-0x00E7061E */
+    d0 = (int16_t)(g->advance + (fnt->version == SMD_FONT_VERSION_1
+                                     ? fnt->char_spacing : fnt3->char_spacing));
+    x = (int16_t)(x + d0);
+    if (chars-- != 0) {                              /* dbf D7 */
+        goto draw_loop;
+    }
+    goto done;
+
+missing:
+    /* 0x00E706A2-0x00E706BC */
+    if (fnt->version == SMD_FONT_VERSION_1) {
+        x = (int16_t)(x + fnt->default_missing);
+        x = (int16_t)(x + fnt->char_spacing);
+    } else {
+        x = (int16_t)(x + fnt3->default_missing);
+        x = (int16_t)(x + fnt3->char_spacing);
+    }
+    if (chars-- != 0) {
+        goto draw_loop;
+    }
+    goto done;
+
+stop:
+    /* 0x00E70620: the current glyph's advance, then measure the rest */
+    if (fnt->version == SMD_FONT_VERSION_1) {
+        goto v1_measure_glyph;
+    }
+    goto v3_measure_glyph;
+
+measure:
+    /* 0x00E70628: the clip window is degenerate -- only measure */
+    if (fnt->version == SMD_FONT_VERSION_1) {
+        goto v1_measure;
+    }
+
+v3_measure:
+    /*
+     * 0x00E7062E-0x00E7065C.  ORIGINAL BUG, PRESERVED (bead source-2gs7):
+     * `move.b (0x34,A2,D0w*0x1),D1b` indexes the character map AT +0x34,
+     * where +0x34 is the map's OFFSET field -- the drawing path above adds
+     * the offset instead (0x00E70426).  Do not "fix" it.
+     */
+    c = *buf++;
+    idx = ((const uint8_t *)&fnt3->char_map_offset)[c];
+    if (idx == 0) {
+        d0 = (int16_t)fnt3->default_missing;         /* 0x00E7063A */
+        goto v3_measure_add;
+    }
+    g = (smd_glyph_metrics_t *)((uint8_t *)fnt3 - 8 + fnt3->glyph_data_offset + idx * 8);
+v3_measure_glyph:
+    d0 = g->advance;                                 /* 0x00E7064C */
+v3_measure_add:
+    d0 = (int16_t)(d0 + fnt3->char_spacing);         /* 0x00E70652 */
+    x = (int16_t)(x + d0);
+    if (chars-- != 0) {
+        goto v3_measure;
+    }
+    goto done;
+
+v1_measure:
+    /* 0x00E70660-0x00E70688 */
+    c = (uint8_t)(*buf++ & 0x7F);
+    idx = fnt->char_map[c];
+    if (idx == 0) {
+        d0 = (int16_t)fnt->default_missing;          /* 0x00E7066E */
+        goto v1_measure_add;
+    }
+    g = (smd_glyph_metrics_t *)((uint8_t *)fnt + 0x92 + idx * 8);
+v1_measure_glyph:
+    d0 = g->advance;                                 /* 0x00E7067C */
+v1_measure_add:
+    d0 = (int16_t)(d0 + fnt->char_spacing);          /* 0x00E70682 */
+    x = (int16_t)(x + d0);
+    if (chars-- != 0) {
+        goto v1_measure;
+    }
+
+done:
+    /* 0x00E7068C-0x00E70698: wait for the engine, release, D0 = x (unused) */
+    while ((int16_t)blt->control < 0) {
     }
     SMD_$REL_DISPLAY();
 }

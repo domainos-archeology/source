@@ -1,41 +1,42 @@
 /*
- * WIN_$GET_STATS - Get Winchester Statistics
+ * win/get_stats.c - WIN_$GET_STATS (0x00E19D62, 84 bytes)
  *
- * Returns statistics counters for the Winchester driver.
- * If both params are 0, returns real counters; otherwise
- * returns zeroed structure.
+ * Jump-table entry +0x18, called by DISK_$GET_STATS as
+ * get_stats(cnum, unit, stats).  Copies the 22-byte counter block at
+ * WIN_$CNT (module +0x40) to `stats` for controller 0 / unit 0, and 22
+ * zero bytes for any other pair.
  *
- * @param param_1  First parameter (0 for real stats)
- * @param param_2  Second parameter (0 for real stats)
- * @param stats    Output: statistics structure (22 bytes)
+ * Frame (link.w A6,-0x18; A5 A2 D2 saved), A5 = 0xE2B89C:
+ *   A6-0x18 22  zeros       `clr.l (-0x18,A6)`, four `clr.l (A1)+` and a
+ *                           `clr.w (A1)+` from A6-0x14 (0x00E19D8A-0x00E19D9A)
+ *   A1          source, A2 destination
+ *   D2          dbf counter: 5 longwords, then one word
  */
 
 #include "win/win_internal.h"
 
-void WIN_$GET_STATS(int16_t param_1, int16_t param_2, void *stats)
+void WIN_$GET_STATS(int16_t cnum, int16_t unit, void *stats)
 {
-    uint8_t *win_data = WIN_DATA_BASE;
-    uint32_t *src;
-    uint32_t *dst = (uint32_t *)stats;
+    uint32_t zeros[6];                  /* A6-0x18, 22 bytes used */
+    const uint32_t *src;                /* A1 */
+    uint32_t *dst = (uint32_t *)stats;  /* A2 */
     int16_t i;
-    uint8_t local_stats[22];
 
-    /* Check if real stats requested */
-    if (param_1 == 0 && param_2 == 0) {
-        src = (uint32_t *)(win_data + WIN_CNT_OFFSET);
+    /* 0x00E19D7C-0x00E19D88 */
+    if (cnum == 0 && unit == 0) {
+        src = (const uint32_t *)(WIN_DATA_BASE + WIN_CNT_OFFSET);
     } else {
-        /* Return zeroed stats */
-        for (i = 0; i < 22; i++) {
-            local_stats[i] = 0;
+        /* 0x00E19D8A-0x00E19D9C */
+        for (i = 0; i < 6; i++) {
+            zeros[i] = 0;
         }
-        src = (uint32_t *)local_stats;
+        src = zeros;
     }
 
-    /* Copy 5 longs (20 bytes) */
+    /* 0x00E19DA0-0x00E19DAA: `moveq #0x4,D2` / `dbf` = 5 longwords, then
+     * one word. */
     for (i = 0; i < 5; i++) {
         *dst++ = *src++;
     }
-
-    /* Copy final word (2 bytes) */
-    *(uint16_t *)dst = *(uint16_t *)src;
+    *(uint16_t *)dst = *(const uint16_t *)src;
 }

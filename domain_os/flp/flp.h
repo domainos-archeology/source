@@ -1,12 +1,16 @@
 /*
- * FLP - Floppy Disk Driver
+ * FLP - Floppy Disk Driver (NEC uPD765 / 8272 class FDC, DN3xx)
  *
- * This module provides floppy disk support for Domain/OS.
- * It implements controller initialization, device initialization,
- * I/O operations, and interrupt handling.
+ * Map: code segment `I E3DC54 FLP_ size = 8CC` holding FLP_$REVALIDATE
+ * (0xE3DC54), FLP_FORMAT_TRACK (0xE3DC78), FLP_DO_IO (0xE3DDC6), FLP_$DO_IO
+ * (0xE3DFE2), FLP_$CINIT (0xE3E002), FLP_$DINIT (0xE3E112), FLP_$SHUTDOWN
+ * (0xE3E228), EXCS (0xE3E268) and SHAKE (0xE3E49E); FLP_$INT is a separate
+ * segment `I E19F6C FLP_ size = AC`; the data block is `D E7AEF4 FLP_ size =
+ * 13C` with the two interior symbols FLP_$EC (+0x60) and FLP_$SREGS (+0x70).
  *
- * The floppy controller uses memory-mapped I/O and generates
- * interrupts for completion notification.
+ * The controller's registers are reached through the base address the DCTE
+ * supplies (kept in FLP_DATA.hw_addr); the transfers use channel 3 of the
+ * DN300 M68450 DMAC at 0xFFA000.
  */
 
 #ifndef FLP_H
@@ -14,128 +18,161 @@
 
 #include "base/base.h"
 #include "ec/ec.h"
-#include "ml/ml.h"
-#include "parity/parity.h"
-#include "wp/wp.h"
-#include "dma/dma.h"   /* DMA_$CHECK */
-#include "io/io.h"   /* status_$io_controller_not_in_system */
+#include "disk/disk.h"      /* disk_$volume_t, disk_device_entry_t, status_$disk_* */
+#include "io/io.h"          /* dcte_t, io_$probe, status_$io_controller_not_in_system */
 
-/*
- * Maximum number of floppy units supported
- */
+/* The request record FLP_$DO_IO is handed (disk/disk_internal.h). */
+struct disk_io_req_t;
+
+/* Four drive units: FLP_$DINIT rejects unit > 3 (0x00E3E130). */
 #define FLP_MAX_UNITS 4
 
 /*
- * Floppy status codes
+ * Floppy-specific status codes (stcode.db.10.2, module 8 = disk).  The
+ * remaining codes the driver returns are the DISK ones in disk/disk.h.
  */
+#define status_$floppy_is_not_2_sided               0x00080006
+#define status_$bad_disk_format                     0x00080008
+#define status_$unknown_status_returned_by_hardware 0x00080019
+#define status_$dma_not_at_end_of_range             0x0008001d
+
+/* Driver-internal "retry the command" marker EXCS hands back (0x00E3E48C)
+ * and FLP_DO_IO loops on (0x00E3DF76).  Not a status-code database entry. */
+#define FLP_$RETRY                                  0x0008ffff
 
 /*
- * Floppy controller registers structure
- * Accessed via memory-mapped I/O at DAT_00e7b020
+ * ============================================================================
+ * Controller registers, byte offsets from FLP_DATA.hw_addr
+ * ============================================================================
  */
-typedef struct {
-  uint8_t _reserved[0x10];
-  uint8_t status; /* 0x10: Status register */
-  uint8_t _pad1;
-  uint8_t data; /* 0x12: Data register */
-  uint8_t _pad2;
-  uint8_t control; /* 0x14: Control register */
+typedef struct flp_regs_t {
+  uint8_t  _pad_00[6];
+  uint16_t w_06;        /* 0x06: EXCS tests bit 1 of this word (0x00E3E2DC)
+                         *   before consulting the memory parity checker;
+                         *   purpose otherwise unknown.  TODO: verify */
+  uint8_t  _pad_08[8];
+  uint8_t  status;      /* 0x10: FDC main status register */
+  uint8_t  _pad_11;
+  uint8_t  data;        /* 0x12: FDC data register */
+  uint8_t  _pad_13;
+  uint8_t  control;     /* 0x14: board control: 2 while reading, 3 otherwise */
 } flp_regs_t;
 
-/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(flp_regs_t, w_06) == 0x06, "flp_regs_t.w_06");
 _Static_assert(__builtin_offsetof(flp_regs_t, status) == 0x10, "flp_regs_t.status");
 _Static_assert(__builtin_offsetof(flp_regs_t, data) == 0x12, "flp_regs_t.data");
 _Static_assert(__builtin_offsetof(flp_regs_t, control) == 0x14, "flp_regs_t.control");
 
+/* Main status register bits */
+#define FLP_STATUS_RQM      0x80    /* request for master: data register ready */
+#define FLP_STATUS_DIO      0x40    /* data direction: set = FDC -> CPU */
+#define FLP_STATUS_CMD_MASK 0x1F    /* command busy + four drive-busy bits */
+
 /*
- * Status register bits
+ * ============================================================================
+ * The 10-byte record FLP_$DINIT fills in for the mounter
+ * ============================================================================
+ *
+ * Copied from the constant at 0x00E3E21E (00 92 04 B2 | 00 00 00 01 | 00 00)
+ * with `move.l (A0)+,(A1)+` twice and `move.w (A0)+,(A1)+` (0x00E3E202-
+ * 0x00E3E206), after which w_06 is set to 1 unconditionally (0x00E3E208).
  */
-#define FLP_STATUS_BUSY 0x80     /* Controller busy */
-#define FLP_STATUS_DIO 0x40      /* Data I/O direction */
-#define FLP_STATUS_CMD_MASK 0x1F /* Command status mask */
+typedef struct flp_pvlabel_info_t {
+  uint32_t l_00;        /* 0x00: 0x009204B2 */
+  uint16_t w_04;        /* 0x04: 0 */
+  uint16_t w_06;        /* 0x06: 1 */
+  uint16_t w_08;        /* 0x08: 0 */
+} __attribute__((packed, aligned(2))) flp_pvlabel_info_t;
+
+_Static_assert(sizeof(flp_pvlabel_info_t) == 10, "flp_pvlabel_info_t is 10 bytes");
 
 /*
  * ============================================================================
  * FLP_DATA - the floppy module's data block at 0x00E7AEF4
  * ============================================================================
  *
- * The SAU2 map has `D E7AEF4 FLP_ size = 13C`, running 0x00E7AEF4..0x00E7B030
- * (the OS_CAL_WIRED segment starts there).  Every FLP_ routine establishes it
- * with `lea (0xe7aef4).l,A5`, so all the cells the driver touches are fields
- * of this one block rather than separate objects; the names below that start
- * with DAT_ are the Ghidra labels for fields whose purpose is only partly
- * recovered (bead source-wk2f).
- *
- * The two interior symbols the map names are FLP_$EC (+0x60) and FLP_$SREGS
- * (+0x70).  The image contents come from `gsk read 0x00E7AEF4 0x13C`; the
- * command blocks in it are recognisable NEC 8272 FDC command strings, which
- * is what pins their extents:
+ * Every FLP_ routine establishes it with `lea (0xe7aef4).l,A5` (FLP_$INT with
+ * `movea.l #0xe7aef4,A2`), so all the cells the driver touches are fields of
+ * this one block.  The image contents come from `gsk read 0x00E7AEF4 0x13C`;
+ * the command blocks in it are NEC 8272 FDC command strings, one byte per
+ * word (SHAKE writes the low byte of each word, 0x00E3E4FC):
  *
  *   +0x02C  4D 00 03 08 74 4E              FORMAT TRACK, 6 words
  *                                          (the count cell at 0x00E3DDC4)
  *   +0x04A  00 00 00 00 00 03 08 35 FF     READ/WRITE DATA, 9 words
- *                                          (the count cell at 0x00E3DFE0)
+ *                                          (the count cell at 0x00E3DFE0);
+ *                                          its first 3 words double as SEEK
  *   +0x108  03 DF 3C                       SPECIFY, 3 words
- *                                          (the count cell at 0x00E3DDC2)
  *   +0x110  04 00                          SENSE DRIVE STATUS, 2 words
  *   +0x114  07 00                          RECALIBRATE, 2 words
- *                                          (the count cell at 0x00E3E21C)
- *   +0x118  0F 00 00                       SEEK, 3 words
+ *   +0x118  0F 00 00                       SEEK, 3 words (format path)
  */
+
+/* One controller's slot in the table at +0x0E8: FLP_$CINIT stores the DCTE
+ * and its register base at +0xE8 / +0xEC + ctlr*8 (0x00E3E048-0x00E3E050). */
+typedef struct flp_ctlr_entry_t {
+  uint32_t dcte_va;     /* +0: the dcte_t FLP_$CINIT was given (32-bit VA) */
+  uint32_t hw_addr;     /* +4: dcte->disk_dinit, the register base */
+} flp_ctlr_entry_t;
+
 typedef struct flp_data_t {
   /* +0x000 FLP_$JUMP_TABLE: the driver entry points DISK_$REGISTER is given */
   m68k_ptr_t jump_table[7];
-  /* +0x01C FLP_$SREGS_ARRAY */
+  /* +0x01C FLP_$SREGS_ARRAY (map name); not referenced by the code */
   uint16_t sregs_array[8];
   /* +0x02C FORMAT TRACK command block: cmd, unit/head, N, SC, GPL, D */
   uint16_t fmt_cmd[6];
-  /* +0x038 result-register array FLP_$INT fills from the FDC
-   * (flp/int.c: `(uint8_t *)&FLP_$JUMP_TABLE + 0x38`) */
-  uint16_t result_regs[9];
+  /* +0x038 nine words, not referenced by the code */
+  uint16_t w_038[9];
   /* +0x04A READ/WRITE DATA command block: cmd, unit/head, cyl, head, sector,
-   * N, EOT, GPL, DTL.  The first three words are also the SEEK command. */
+   * N, EOT, GPL, DTL.  The first three words are also the SEEK command
+   * FLP_DO_IO sends (0x00E3DEBE). */
   uint16_t rw_cmd[9];
   uint16_t w_05c[2];              /* +0x05C */
   ec_$eventcount_t ec;            /* +0x060 FLP_$EC */
   uint16_t w_06c[2];              /* +0x06C */
-  uint16_t sregs[4];              /* +0x070 FLP_$SREGS (ST0..ST3 result words) */
-  uint8_t unit_cyl[8];            /* +0x078 current cylinder, 2 bytes per unit */
-  uint8_t io_buffer[0x68];        /* +0x080 FLP_IO_BUFFER */
-  uint8_t ctlr_table[0x14];       /* +0x0E8 8 bytes per controller: info ptr
-                                   * at +0, hardware address at +4 */
+  uint16_t sregs[4];              /* +0x070 FLP_$SREGS: the result bytes
+                                   * FLP_$INT collects, one per word */
+  uint16_t unit_cyl[FLP_MAX_UNITS];  /* +0x078 current cylinder per unit */
+  uint8_t io_buffer[0x68];        /* +0x080 the format-table buffer */
+  flp_ctlr_entry_t ctlr_table[2]; /* +0x0E8 */
+  uint32_t l_0f8;                 /* +0x0F8 */
   uint32_t fmt_buf_pa;            /* +0x0FC physical address of io_buffer */
   uint16_t w_100;                 /* +0x100 */
-  uint16_t fmt_n;                 /* +0x102 sector-size code N; the driver
-                                   * writes only its low byte into the format
-                                   * buffer */
+  uint16_t fmt_n;                 /* +0x102 sector-size code N; only its low
+                                   * byte (+0x103) goes into the format table */
   uint16_t w_104;                 /* +0x104 */
   uint16_t base_cmd;              /* +0x106 MFM base command byte (0x40) */
   uint16_t specify_cmd[4];        /* +0x108 SPECIFY command block */
   uint16_t sense_cmd[2];          /* +0x110 SENSE DRIVE STATUS: cmd, unit/head */
   uint16_t recal_cmd[2];          /* +0x114 RECALIBRATE: cmd, unit */
   uint16_t seek_cmd[4];           /* +0x118 SEEK: cmd, unit/head, cylinder */
-  uint8_t unit_active[FLP_MAX_UNITS];  /* +0x120 */
-  uint8_t disk_change[FLP_MAX_UNITS];  /* +0x124 */
-  uint32_t buf_pa;                /* +0x128 physical address of the I/O buffer */
-  int32_t hw_addr;                /* +0x12C controller register base */
-  int16_t dma_retry;              /* +0x130 */
-  uint16_t cmd_retry;             /* +0x132 */
+  int8_t unit_active[FLP_MAX_UNITS];   /* +0x120 Domain booleans */
+  int8_t disk_change[FLP_MAX_UNITS];   /* +0x124 Domain booleans */
+  uint32_t buf_pa;                /* +0x128 the request's page (ppn) */
+  uint32_t hw_addr;               /* +0x12C controller register base (VA) */
+  int16_t dma_retry;              /* +0x130 DMA-overrun retries left */
+  int16_t cmd_retry;              /* +0x132 command retries left */
   uint16_t w_134;                 /* +0x134 */
   uint16_t unit_count;            /* +0x136 DISK_$REGISTER's unit-count word */
-  int8_t initialized;             /* +0x138 -1 once FLP_$DINIT has run */
+  int8_t initialized;             /* +0x138 -1 once FLP_$DINIT wired the buffer */
   uint8_t pad_139[3];             /* +0x139 */
 } flp_data_t;
 
-#if defined(ARCH_M68K)
+/* Everything up to the eventcount is pointer-free, so those offsets hold on
+ * every host; ec_$eventcount_t carries two native pointers, so the rest of
+ * the layout is only checked on the target. */
 _Static_assert(__builtin_offsetof(flp_data_t, sregs_array) == 0x01C, "flp_data_t.sregs_array");
 _Static_assert(__builtin_offsetof(flp_data_t, fmt_cmd) == 0x02C, "flp_data_t.fmt_cmd");
-_Static_assert(__builtin_offsetof(flp_data_t, result_regs) == 0x038, "flp_data_t.result_regs");
+_Static_assert(__builtin_offsetof(flp_data_t, w_038) == 0x038, "flp_data_t.w_038");
 _Static_assert(__builtin_offsetof(flp_data_t, rw_cmd) == 0x04A, "flp_data_t.rw_cmd");
 _Static_assert(__builtin_offsetof(flp_data_t, ec) == 0x060, "flp_data_t.ec");
+#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(flp_data_t, sregs) == 0x070, "flp_data_t.sregs");
 _Static_assert(__builtin_offsetof(flp_data_t, unit_cyl) == 0x078, "flp_data_t.unit_cyl");
 _Static_assert(__builtin_offsetof(flp_data_t, io_buffer) == 0x080, "flp_data_t.io_buffer");
 _Static_assert(__builtin_offsetof(flp_data_t, ctlr_table) == 0x0E8, "flp_data_t.ctlr_table");
+_Static_assert(__builtin_offsetof(flp_data_t, l_0f8) == 0x0F8, "flp_data_t.l_0f8");
 _Static_assert(__builtin_offsetof(flp_data_t, fmt_buf_pa) == 0x0FC, "flp_data_t.fmt_buf_pa");
 _Static_assert(__builtin_offsetof(flp_data_t, fmt_n) == 0x102, "flp_data_t.fmt_n");
 _Static_assert(__builtin_offsetof(flp_data_t, base_cmd) == 0x106, "flp_data_t.base_cmd");
@@ -157,111 +194,75 @@ _Static_assert(sizeof(flp_data_t) == 0x13C,
 
 extern flp_data_t FLP_DATA;
 
-/* Event counter for floppy operations (FLP_DATA + 0x60 = 0xe7af54) */
+/* Event counter for floppy operations (FLP_DATA + 0x60 = 0xE7AF54) */
 #define FLP_$EC (FLP_DATA.ec)
 
-/* FDC result status registers (FLP_DATA + 0x70 = 0xe7af64) */
-#define FLP_$SREGS (FLP_DATA.sregs[0])
+/* FDC result status registers (FLP_DATA + 0x70 = 0xE7AF64) */
+#define FLP_$SREGS (FLP_DATA.sregs)
 
-/* Jump table for floppy operations (FLP_DATA + 0x00 = 0xe7aef4) */
-#define FLP_$JUMP_TABLE (FLP_DATA.jump_table[0])
-
-/* Current controller address (FLP_DATA + 0x12c = 0xe7b020) */
-#define DAT_00e7b020 (FLP_DATA.hw_addr)
+/* Jump table for floppy operations (FLP_DATA + 0x00 = 0xE7AEF4) */
+#define FLP_$JUMP_TABLE (FLP_DATA.jump_table)
 
 /*
- * Function prototypes
+ * ============================================================================
+ * Entry points (all reached through FLP_$JUMP_TABLE except CINIT and INT)
+ * ============================================================================
  */
 
 /*
- * FLP_$CINIT - Controller initialization
+ * FLP_$CINIT (0x00E3E002) - controller initialisation
  *
- * Initializes a floppy disk controller and registers it with
- * the disk subsystem.
- *
- * @param ctlr_info  Controller information structure
- * @return Status code
+ * Probes the controller at dcte->disk_dinit, records it in the controller
+ * table, drains the FDC, sends SPECIFY and registers with DISK.  Returns
+ * status_$io_controller_not_in_system, status_$disk_controller_error (the
+ * FDC never went idle), SHAKE's status, or status_$ok.
  */
-status_$t FLP_$CINIT(void *ctlr_info);
+status_$t FLP_$CINIT(dcte_t *dcte);
 
 /*
- * FLP_$DINIT - Device initialization
+ * FLP_$DINIT (0x00E3E112) - unit initialisation (jump table +0x08)
  *
- * Initializes a specific floppy drive unit.
- *
- * @param unit      Unit number (0-3)
- * @param ctlr      Controller number
- * @param params    I/O: Disk parameters (cylinders, etc.)
- * @param heads     Output: Number of heads
- * @param sectors   Output: Sectors per track
- * @param geometry  Output: Geometry info
- * @param flags     Output: Drive flags
- * @return Status code
+ * Recalibrates `unit` on controller `ctlr`.  When that succeeds and
+ * *num_blocks <= 0 the geometry is filled in: 0x4D0 blocks, 8 sectors per
+ * track, 2 heads, flags 0, and the 10-byte label record from 0x00E3E21E.
+ * pvlabel_info->w_06 is set to 1 on every path, even failures.
  */
-status_$t FLP_$DINIT(uint16_t unit, uint16_t ctlr, int32_t *params,
-                     uint16_t *heads, uint16_t *sectors, uint32_t *geometry,
-                     uint16_t *flags);
+status_$t FLP_$DINIT(uint16_t unit, uint16_t ctlr, int32_t *num_blocks,
+                     uint16_t *sec_per_track, uint16_t *num_heads,
+                     flp_pvlabel_info_t *pvlabel_info, uint16_t *flags);
 
 /*
- * FLP_$SHUTDOWN - Shutdown a floppy unit
+ * FLP_$SHUTDOWN (0x00E3E228) - jump table +0x04, (controller, unit)
  *
- * Marks a floppy unit as inactive and returns count of remaining
- * active units.
- *
- * @param unit  Unit number to shut down
- * @return Number of remaining active units
+ * Clears unit_active[unit] and returns how many of the four units are still
+ * active.  `ctlr` is (0x8,A6) and never read (0x00E3E236 takes (0xa,A6)).
  */
-int16_t FLP_$SHUTDOWN(uint16_t unit);
+int16_t FLP_$SHUTDOWN(uint16_t ctlr, uint16_t unit);
 
 /*
- * FLP_$INT - Interrupt handler
+ * FLP_$INT (0x00E19F6C) - interrupt handler
  *
- * Handles floppy disk controller interrupts, reading status
- * and result bytes from the controller.
- *
- * @param int_info  Interrupt information structure
- * @return 0xFF (interrupt handled)
+ * Reads the result phase (issuing SENSE INTERRUPT STATUS first when the FDC
+ * is not already presenting results), keeps the first three bytes in
+ * FLP_$SREGS, flags a disk change, and advances FLP_$EC.  Returns Domain
+ * true (`st D0b`, 0x00E1A00C).
  */
-uint16_t FLP_$INT(void *int_info);
+int8_t FLP_$INT(dcte_t *dcte);
 
 /*
- * FLP_$REVALIDATE - Revalidate disk
+ * FLP_$REVALIDATE (0x00E3DC54) - jump table +0x0C
  *
- * Clears the disk change flag for a unit, allowing operations
- * to proceed after a disk change.
- *
- * @param disk_info  Disk information structure
+ * Clears the disk-change flag of the volume's unit.
  */
-void FLP_$REVALIDATE(void *disk_info);
+void FLP_$REVALIDATE(disk_$volume_t *vol);
 
 /*
- * FLP_$DO_IO - Perform I/O operation
+ * FLP_$DO_IO (0x00E3DFE2) - jump table +0x10
  *
- * Wrapper that calls the internal FLP_DO_IO function with
- * properly formatted parameters.
- *
- * @param param_1  I/O request block
- * @param param_2  Buffer
- * @param param_3  Count
- * @param param_4  LBA (packed)
+ * Gate that calls FLP_DO_IO with the same four arguments plus a zero word
+ * inserted before `result` (0x00E3DFEC `clr.w -(SP)`).
  */
-void FLP_$DO_IO(void *param_1, void *param_2, void *param_3, uint32_t param_4);
-
-/* Internal functions */
-void FLP_DO_IO(void *req, void *buf, void *param3, uint16_t lba_hi,
-               uint32_t lba_lo);
-status_$t SHAKE(uint16_t *data_buf, int16_t *count_ptr, int16_t *dir_ptr);
-/*
- * EXCS hands its second argument straight to SHAKE as the byte count
- * ("move.l (0xc,A6),-(SP)" at 0x00E3E28C), so it is the address of a word.
- */
-status_$t EXCS(uint16_t *cmd_buf, int16_t *count_ptr, void *req);
-void FLP_FORMAT_TRACK(void *req, void *buf);
-
-/* External functions used by FLP */
-/* WP_$WIRE declared in wp/wp.h */
-/* ML_$LOCK, ML_$UNLOCK declared in ml/ml.h */
-/* PARITY_$CHK_IO declared in parity/parity.h */
-/* DMA_$CHECK is declared in dma/dma.h (bead source-3uo). */
+void FLP_$DO_IO(disk_$volume_t *vol, struct disk_io_req_t *req, void *param_3,
+                int8_t *result);
 
 #endif /* FLP_H */

@@ -1,9 +1,12 @@
 /*
  * smd/map_display_memory.c - Map/unmap display memory (kernel-level stubs)
  *
- * These functions are stubs that return "unsupported" status.
- * They were likely intended for direct display memory mapping
- * but this feature was not fully implemented.
+ * Re-emitted from the image: SMD_$MAP_DISPLAY_MEMORY 0x00E700AA..0x00E700C6
+ * and SMD_$UNMAP_DISPLAY_MEMORY 0x00E700C8..0x00E700E4 (30 bytes each) are
+ * identical -- load A5 = 0xE82B8C, `movea.l (0x18,A6),A0` (the FIFTH
+ * argument), `move.l #0x130028,(A0)`: "non-conforming and main memory blts
+ * not implemented".  The first four arguments are never read.  Only the
+ * SVC table references them (0x00E7BC52 / the unmap slot).
  *
  * Original addresses:
  *   SMD_$MAP_DISPLAY_MEMORY:   0x00E700AA

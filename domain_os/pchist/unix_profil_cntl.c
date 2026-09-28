@@ -1,7 +1,21 @@
 /*
  * PCHIST_$UNIX_PROFIL_CNTL - Control per-process profiling (UNIX profil)
  *
- * Reverse engineered from Domain/OS at address 0x00e5ca58
+ * Re-emitted from the image (0x00E5CA58..0x00E5CC30, 474 bytes).  A5 =
+ * 0xE2C204 (PCHIST_$CONTROL); the per-process record is 0xE85718 +
+ * pid*0x14 biased by 0x14, i.e. PCHIST_$PROC_DATA[pid] with fields at
+ * (-0x14) buffer, (-0x10) bufsize, (-0xC) offset, (-0x8) scale, (-0x4)
+ * overflow_ptr.  Frame: (0x8,A6) cmd ptr, (0xC) buffer ptr -> A0, (0x10)
+ * bufsize ptr, (0x14) offset ptr, (0x18) scale ptr, (0x1C) status (cleared
+ * first); A6-0x22 = PROC1_$CURRENT (its low byte at -0x21 drives the
+ * bitmap byte index on the TEST paths, the full word on the SET/CLEAR
+ * paths); A6-0x18 the FIM cleanup record.
+ *
+ * The old body dropped the two page touches at 0x00E5CB02 / 0x00E5CB12
+ * (the first and last word of the user buffer are read under the cleanup
+ * handler before it is released).
+ *
+ * Callers: 0x00E3E900 (PROC2 cleanup) and the SVC table entry 0x00E7BD3A.
  */
 
 #include "pchist/pchist_internal.h"
@@ -62,7 +76,15 @@ void PCHIST_$UNIX_PROFIL_CNTL(
         cleanup_status = FIM_$CLEANUP(cleanup_data);
 
         if (cleanup_status == status_$cleanup_handler_set) {
-            /* Cleanup handler was already set - release it */
+            /*
+             * 0x00E5CAFA-0x00E5CB12: touch the first word of the buffer and
+             * the word at buffer + bufsize - 2 (both `move.w (A0),D0w`, the
+             * value discarded) while the cleanup handler is armed.
+             */
+            (void)*(volatile uint16_t *)proc_data->buffer;
+            (void)*(volatile uint16_t *)((uint8_t *)proc_data->buffer + proc_data->bufsize - 2);
+
+            /* 0x00E5CB14 */
             FIM_$RLS_CLEANUP(cleanup_data);
 
             ML_$EXCLUSION_START(&PCHIST_$CONTROL.lock);
@@ -78,8 +100,10 @@ void PCHIST_$UNIX_PROFIL_CNTL(
                 PCHIST_$CONTROL.proc_profiling_count++;
             }
 
-            /* Set the bit in the profiling bitmap */
-            PCHIST_$PROC_BITMAP[byte_index] |= (uint8_t)(0x80 >> ((current_pid - 1) & 7));
+            /* 0x00E5CB5C-0x00E5CB76: the SET path indexes with the full
+             * word (pid - 1) >> 3, not the low byte */
+            PCHIST_$PROC_BITMAP[(uint16_t)(current_pid - 1) >> 3] |=
+                (uint8_t)(0x80 >> ((current_pid - 1) & 7));
 
             /* Set up cleanup handler for process exit */
             PROC2_$SET_CLEANUP(0x0B);  /* PCHIST cleanup type */
@@ -120,8 +144,10 @@ void PCHIST_$UNIX_PROFIL_CNTL(
 
             ML_$EXCLUSION_STOP(&PCHIST_$CONTROL.lock);
 
-            /* Clear the bit in the profiling bitmap */
-            PCHIST_$PROC_BITMAP[byte_index] &= ~(uint8_t)(0x80 >> ((current_pid - 1) & 7));
+            /* 0x00E5CBF2-0x00E5CC0C: `move.l #-0x81,D2 ; lsr.l` gives
+             * ~(0x80 >> n) in the low byte; word-based index */
+            PCHIST_$PROC_BITMAP[(uint16_t)(current_pid - 1) >> 3] &=
+                (uint8_t)~(0x80 >> ((current_pid - 1) & 7));
         }
     }
     else if (cmd == 2) {

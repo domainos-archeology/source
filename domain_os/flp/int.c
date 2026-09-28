@@ -1,95 +1,78 @@
 /*
- * FLP_$INT - Floppy disk interrupt handler
+ * flp/int.c - FLP_$INT (0x00E19F6C, 172 bytes; map segment `I E19F6C FLP_
+ * size = AC`)
  *
- * This function handles interrupts from the floppy disk controller.
- * It reads status and result bytes from the controller's data register
- * and stores them in the saved registers array.
+ * The floppy interrupt handler.  Collects the FDC's result phase into
+ * FLP_$SREGS - issuing SENSE INTERRUPT STATUS first if the FDC is waiting
+ * for a command - marks the unit's disk as changed when ST0 says so, and
+ * advances FLP_$EC so EXCS wakes.
  *
- * The floppy controller generates interrupts when:
- * - A command completes
- * - Seek completes
- * - Disk change detected
- *
- * The controller status register indicates data direction (DIO bit)
- * which determines whether we should read result bytes.
+ * Frame (link.w A6,-0x14; A2 D2 saved):
+ *   A6-0x04  2  word    high byte cleared once, low byte (A6-0x03) is
+ *                       where each data byte lands
+ *   D0          count   result bytes stored so far
+ *   D1          done    Domain boolean
+ *   A1          destination in FLP_$SREGS
+ *   A2          FLP_DATA (`movea.l #0xe7aef4,A2`)
  */
 
 #include "flp/flp_internal.h"
 
-/*
- * FLP_$INT - Handle floppy interrupt
- *
- * @param int_info  Interrupt information structure
- *                  (offset 0x06 contains controller index)
- * @return 0xFF (interrupt handled)
- */
-uint16_t FLP_$INT(void *int_info)
+int8_t FLP_$INT(dcte_t *dcte)
 {
-    int16_t ctlr_index;
-    volatile flp_regs_t *regs;
-    int16_t result_count;
-    int8_t done;
-    uint16_t *result_ptr;
-    uint16_t status_byte;
+    uint16_t word;                      /* A6-0x04 */
+    uint16_t count;                     /* D0 */
+    int8_t done;                        /* D1 */
+    volatile flp_regs_t *regs;          /* A0 */
+    uint16_t *dst;                      /* A1 */
 
-    /* Get controller index from interrupt info */
-    ctlr_index = *(int16_t *)((uint8_t *)int_info + 6);
+    /* 0x00E19F74-0x00E19F8E: the register base from the DCTE's controller
+     * slot. */
+    FLP_DATA.hw_addr = FLP_DATA.ctlr_table[dcte->cnum].hw_addr;
 
-    /* Look up controller address from controller table */
-    DAT_00e7b020 = *(int32_t *)(&DAT_00e7afe0[ctlr_index * 8 + 4]);
-    regs = (volatile flp_regs_t *)(uintptr_t)DAT_00e7b020;
-
-    result_count = 0;
+    /* 0x00E19F94-0x00E19FA0 */
+    word = 0;
+    count = 0;
     done = 0;
-    result_ptr = (uint16_t *)((uint8_t *)&FLP_$JUMP_TABLE + 0x38);  /* SREGS array */
+    regs = FLP_REGS();
+    dst = FLP_$SREGS;
 
+    /*
+     * 0x00E19FA4-0x00E19FDA.  Each pass waits for RQM, then: with DIO set
+     * a result byte is read (and kept while fewer than three have been);
+     * with DIO clear and nothing read yet, SENSE INTERRUPT STATUS (8) is
+     * written; with DIO clear after results, the phase is over.
+     */
     do {
-        /* Wait for controller to be ready (not busy) */
-        while ((int8_t)regs->status >= 0) {
-            /* Busy-wait: status bit 7 (busy) is set */
+        while ((regs->status & FLP_STATUS_RQM) == 0) {
+            ARCH_SPIN_TICK();
         }
-
-        /* Check DIO bit to determine data direction */
-        if ((regs->status & FLP_STATUS_DIO) == 0) {
-            /*
-             * DIO=0: Controller to host direction (result phase)
-             * but no data available - this is unusual
-             */
-            if (result_count == 0) {
-                /* First byte - write to data register to request status */
-                regs->data = 8;  /* Sense interrupt status command */
-            } else {
-                /* We've read at least one byte, we're done */
-                done = -1;
+        if ((regs->status & FLP_STATUS_DIO) != 0) {
+            /* 0x00E19FB2-0x00E19FC8 */
+            word = (uint16_t)((word & 0xFF00) | FLP_FDC_READ_DATA(regs));
+            if (count < 3) {
+                *dst = word;
+                count++;
+                dst++;
             }
+        } else if (count == 0) {
+            /* 0x00E19FCE */
+            FLP_FDC_WRITE_DATA(regs, 8);
         } else {
-            /*
-             * DIO=1: Controller has data to send (result bytes)
-             * Read the data byte
-             */
-            status_byte = (uint16_t)regs->data;
-
-            if (result_count < 3) {
-                /* Store up to 3 result bytes */
-                *result_ptr = status_byte;
-                result_count++;
-                result_ptr++;
-            }
+            /* 0x00E19FD6 */
+            done = -1;
         }
     } while (done >= 0);
 
-    /*
-     * Check if this was a disk change interrupt.
-     * If status register bits [2:0] == 6, set disk change flag
-     * for the unit indicated by bits [1:0].
-     */
-    if ((FLP_$SREGS & 7) == 6) {
-        int16_t unit = FLP_$SREGS & 3;
-        DAT_00e7b018[unit] = 0xFF;
+    /* 0x00E19FDC-0x00E19FF8: ST0's low three bits equal to 6 flag a disk
+     * change on the unit in its low two bits. */
+    if ((FLP_$SREGS[0] & 7) == 6) {
+        FLP_DATA.disk_change[FLP_$SREGS[0] & 3] = -1;
     }
 
-    /* Signal completion via event counter */
+    /* 0x00E19FFC-0x00E1A006 */
     EC_$ADVANCE_WITHOUT_DISPATCH(&FLP_$EC);
 
-    return 0xFF;  /* Interrupt handled */
+    /* 0x00E1A00C: `st D0b` */
+    return -1;
 }

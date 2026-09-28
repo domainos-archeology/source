@@ -11,10 +11,11 @@
 #include "misc/crash_system.h"
 
 /*
- * Error status for unknown interrupt ID
- * Used by SYSBUS_$DEFINE_INT when called unexpectedly.
+ * The status cell SYSBUS_$DEFINE_INT crashes with: the longword at
+ * 0x00E0ABD0 (`pea (0xe,PC)` at 0x00E0ABC0), bytes 00 3e 00 02, "unknown
+ * interrupt ID" in the SR10.2 status database (module 0x3E).
  */
-extern const status_$t Sysbus_Unknown_Interrupt_ID_Err;
+#define status_$sysbus_unknown_interrupt_id 0x003E0002
 
 /*
  * External interrupt handler declarations

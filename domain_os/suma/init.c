@@ -6,7 +6,9 @@
  *   - Clears receive state to 0
  *   - Sets initial threshold to 0x200
  *
- * From: 0x00e33224
+ * From: 0x00e33224 (38 bytes).  Re-verified against the image (2026-09-27);
+ * faithful.  The byte written at +0x1E is suma_state_t.cur_id_flags; the id
+ * nibble SUMA_$RCV maintains lives in the next byte (+0x1F).
  *
  * Original assembly:
  *   00e33224    link.w A6,0x0

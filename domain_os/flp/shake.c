@@ -1,80 +1,71 @@
 /*
- * SHAKE - Low-level floppy controller register handshaking
+ * flp/shake.c - SHAKE (0x00E3E49E, 128 bytes)
  *
- * This function performs the low-level handshake protocol with the
- * floppy controller. It either reads or writes bytes to/from the
- * controller's data register, depending on the data direction (DIO)
- * bit in the status register.
+ * The FDC data-register handshake.  For each of *count_ptr words it waits
+ * (up to 2000 polls) for RQM, checks that the FDC's DIO bit matches the
+ * requested direction, and moves one byte: a read stores the byte as a
+ * word, a write sends the word's low byte.
  *
- * The handshake loop:
- * 1. Wait for controller to be ready (RQM bit set, status >= 0x80)
- * 2. Check DIO bit for data direction
- * 3. Read or write data byte
- * 4. Repeat for specified count
- *
- * Timeout occurs after 2000 iterations of waiting for ready.
+ * Frame (link.w A6,-0x10; A5 A3 A2 D2 saved):
+ *   A3/A2       data      argument 1, A2 walks it two bytes at a time
+ *   (0xc,A6)    count_ptr argument 2
+ *   A0          dir_ptr   argument 3
+ *   A1          the register base
+ *   D1          dbf counter (*count_ptr - 1)
+ *   D0          the 2000-poll budget, reloaded for every word
+ *   D2          the byte read, zero-extended
  */
 
 #include "flp/flp_internal.h"
 
-/* Status codes */
-
-/*
- * SHAKE - Handshake data with controller
- *
- * @param data_buf   Data buffer (read into or write from)
- * @param count_ptr  Pointer to count of bytes to transfer
- * @param dir_ptr    Pointer to direction: 0=read, 1=write
- * @return Status code
- */
-status_$t SHAKE(uint16_t *data_buf, int16_t *count_ptr, int16_t *dir_ptr)
+status_$t SHAKE(uint16_t *data, int16_t *count_ptr, int16_t *dir_ptr)
 {
-    volatile flp_regs_t *regs;
-    int16_t count;
-    int16_t timeout;
-    int16_t direction;
+    volatile flp_regs_t *regs;          /* A1 */
+    int16_t remaining;                  /* D1 */
+    int16_t polls;                      /* D0 */
+    uint16_t byte;                      /* D2 */
 
-    regs = (volatile flp_regs_t *)(uintptr_t)DAT_00e7b020;
-    direction = *dir_ptr;
-    count = *count_ptr - 1;
-
-    if (count < 0) {
-        /* No bytes to transfer */
-        return status_$ok;
+    /* 0x00E3E4AC-0x00E3E4BC: a count of zero (or less) is success at once. */
+    regs = FLP_REGS();
+    remaining = (int16_t)(*count_ptr - 1);
+    if (remaining < 0) {
+        return status_$ok;                          /* 0x00E3E512 */
     }
 
+    /* 0x00E3E4C6-0x00E3E50E: `dbf D1w` - *count_ptr iterations. */
     do {
-        /* Wait for controller ready with timeout */
-        timeout = 2000;
-        while ((int8_t)regs->status >= 0) {  /* Wait for RQM (bit 7) */
-            timeout--;
-            if (timeout <= 0) {
-                return status_$disk_controller_timeout;
+        polls = 0x7D0;                              /* 0x00E3E4C6 */
+
+        /* 0x00E3E4DA-0x00E3E4DE / 0x00E3E4CC-0x00E3E4D8: spin on RQM (the
+         * sign bit of the status byte); the budget is counted down first
+         * and tested with `bgt`, so 2000 polls are allowed. */
+        while ((int8_t)regs->status >= 0) {
+            polls--;
+            if (polls <= 0) {
+                return status_$disk_controller_timeout;     /* 0x00E3E4D2 */
             }
         }
 
-        /* Check data direction (DIO bit 6) */
         if ((regs->status & FLP_STATUS_DIO) != 0) {
-            /* DIO=1: Controller has data to send (read direction) */
-            if (direction != 0) {
-                /* Expected write but controller wants to send */
-                return status_$disk_controller_error;
+            /* 0x00E3E4E8-0x00E3E4F4: the FDC has a byte for us; only a read
+             * (direction 0) may take it. */
+            if (*dir_ptr != 0) {
+                return status_$disk_controller_error;       /* 0x00E3E504 */
             }
-            /* Read byte from controller */
-            *data_buf = (uint16_t)regs->data;
+            byte = regs->data;
+            *data = byte;
         } else {
-            /* DIO=0: Controller expects data (write direction) */
-            if (direction != 1) {
-                /* Expected read but controller wants data */
-                return status_$disk_controller_error;
+            /* 0x00E3E4F6-0x00E3E502: the FDC wants a byte; only a write
+             * (direction 1) may give it - the low byte of the word. */
+            if (*dir_ptr != 1) {
+                return status_$disk_controller_error;       /* 0x00E3E504 */
             }
-            /* Write byte to controller (low byte of word) */
-            regs->data = (uint8_t)*data_buf;
+            regs->data = (uint8_t)(*data & 0xFF);
         }
 
-        data_buf++;
-        count--;
-    } while (count >= 0);
+        data++;                                     /* 0x00E3E50C */
+        remaining--;
+    } while (remaining >= 0);
 
-    return status_$ok;
+    return status_$ok;                              /* 0x00E3E512 */
 }

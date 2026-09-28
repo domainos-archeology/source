@@ -1,43 +1,40 @@
 /*
- * WIN_$DINIT - Winchester Device Initialization
+ * win/dinit.c - WIN_$DINIT (0x00E19CE8, 108 bytes)
  *
- * Initializes a Winchester disk unit. Acquires the unit lock,
- * calls the common disk initialization, then releases the lock.
+ * Jump-table entry +0x08, called by DISK_$MNT_DINIT as
+ * dinit(unit, controller, vol_idx_ptr, num_blocks_ptr, sec_per_track_ptr,
+ * num_heads_ptr, pvlabel_info).  It takes the ML lock kept at +0x08 of the
+ * CONTROLLER's unit record (`move.w (0xa,A6),D2w` is argument 2), calls
+ * DISK_INIT with the two words SWAPPED (controller first, unit second:
+ * 0x00E19D2C pushes (0x8,A6) then 0x00E19D30 pushes D2) and the five
+ * pointers passed through, then unlocks.
  *
- * @param vol_idx   Volume index
- * @param unit      Unit number
- * @param param_3   Device parameter 3
- * @param param_4   Device parameter 4
- * @param param_5   Device parameter 5
- * @param param_6   Device parameter 6
- * @param param_7   Device parameter 7
- * @return          Result from DISK_INIT
+ * Frame (link.w A6,-0x8; A5 A2 D2 saved), A5 = 0xE2B89C:
+ *   A2          the controller's 12-byte unit record
+ *   D2          controller, then DISK_INIT's result across the unlock
  */
 
 #include "win/win_internal.h"
 
-uint32_t WIN_$DINIT(uint16_t vol_idx, uint16_t unit, void *param_3,
-                    void *param_4, void *param_5, void *param_6, void *param_7)
+uint32_t WIN_$DINIT(uint16_t unit, uint16_t controller, void *num_blocks,
+                    void *sec_per_track, void *num_heads, void *pvlabel_info,
+                    void *param_7)
 {
-    uint32_t result;
-    uint8_t *win_data = WIN_DATA_BASE;
-    int16_t lock_id;
-    uint32_t unit_offset;
+    int16_t lock_id;                    /* (0x8,A2) */
+    uint32_t result;                    /* D2 */
 
-    /* Calculate offset for this unit's lock */
-    unit_offset = (uint32_t)unit * WIN_UNIT_ENTRY_SIZE;
-    lock_id = *(int16_t *)(win_data + unit_offset + 0x08);
-
-    /* Acquire unit lock */
+    /* 0x00E19CF6-0x00E19D16: the lock word of record `controller`; the
+     * word result slot ML_$LOCK gets is discarded. */
+    lock_id = WIN_UNIT_LOCK(controller);
     ML_$LOCK(lock_id);
 
-    /* Call common disk initialization */
-    result = DISK_INIT(unit, vol_idx, (int32_t *)param_3, (uint16_t *)param_4,
-                       (uint16_t *)param_5, (uint16_t *)param_6,
-                       (uint16_t *)param_7);
+    /* 0x00E19D18-0x00E19D3A */
+    result = DISK_INIT(controller, unit, (int32_t *)num_blocks,
+                       (uint16_t *)sec_per_track, (uint16_t *)num_heads,
+                       (uint16_t *)pvlabel_info, (uint16_t *)param_7);
 
-    /* Release unit lock */
-    ML_$UNLOCK(lock_id);
+    /* 0x00E19D3C-0x00E19D48: the same lock word, re-read from the record. */
+    ML_$UNLOCK(WIN_UNIT_LOCK(controller));
 
     return result;
 }

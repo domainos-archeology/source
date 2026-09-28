@@ -2,6 +2,7 @@
  * smd/borrow_display.c - SMD_$BORROW_DISPLAY (0x00E6F584, 374 bytes)
  *
  * Temporarily take a display unit away from the screen manager.
+ * Re-verified against the image block by block (2026-09-27); faithful.
  *
  * Frame:  `link.w A6,-0xc` / `movem.l {A5 A4 A3 A2 D4 D3 D2},-(SP)`;
  *         `lea (0xe82b8c).l,A5` makes A5 the SMD module data base

@@ -48,8 +48,8 @@ static int tests_failed = 0;
 
 #include "log/log_internal.h"
 
-/* Backing store for the shared zero-argument sentinel (0x00e2fffc). */
-uint32_t LOG_$VFMT_NO_ARG = 0;
+/* The shared cells (0x00E2FFFC zero longword, the path and its lengths). */
+#include "../log_data.c"
 
 /*
  * VFMT_$WRITE10 mock.  The real routine is a thunk to VFMT_$WRITEN taking a

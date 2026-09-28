@@ -1,129 +1,136 @@
 /*
  * flp/flp_internal.h - Internal Floppy Driver Definitions
  *
- * Contains internal functions, data, and types used only within
- * the floppy subsystem. External consumers should use flp/flp.h.
+ * Contains the module-local routines (EXCS, SHAKE, FLP_DO_IO,
+ * FLP_FORMAT_TRACK), the `pea (d,PC)` constant cells of the FLP_ code
+ * segment, and the hardware hooks.  External consumers use flp/flp.h.
  */
 
 #ifndef FLP_INTERNAL_H
 #define FLP_INTERNAL_H
 
 #include "flp/flp.h"
-#include "ec/ec.h"
-#include "disk/disk.h"
-#include "io/io.h"   /* io_$probe */
+#include "disk/disk_internal.h" /* disk_io_req_t - TODO: move it to disk.h once
+                                 * disk/ is free (bead source-flp-req) */
+#include "ml/ml.h"              /* ML_$LOCK / ML_$UNLOCK */
+#include "wp/wp.h"              /* WP_$WIRE */
+#include "mmu/mmu.h"            /* MMU_$VTOP */
+#include "dma/dma.h"            /* DMA_$CHECK, the M68450 register offsets */
+#include "parity/parity.h"      /* PARITY_$CHK_IO */
+#include "time/time.h"          /* TIME_$CLOCKH */
 
 /*
  * ============================================================================
- * Fields of the FLP_DATA block (flp/flp.h) the driver reaches by their Ghidra
- * label names.  Each is an alias, not a separate object: the offset in the
- * comment is the cell's displacement from the block base 0x00E7AEF4, which is
- * the A5 value every FLP_ routine loads (bead source-wk2f).
+ * Hardware access
  * ============================================================================
  */
 
-/* +0x01C: the status-register array at FLP_$JUMP_TABLE + 0x1c */
-#define FLP_$SREGS_ARRAY  (FLP_DATA.sregs_array)
+/* The controller registers, through the base FLP_$CINIT / FLP_$DINIT /
+ * FLP_DO_IO / FLP_$INT copy into FLP_DATA.hw_addr (`movea.l (0x12c,A5),An`). */
+#define FLP_REGS()  ((volatile flp_regs_t *)ARCH_VA_TO_PTR(FLP_DATA.hw_addr))
 
-/* FORMAT TRACK command block, +0x02C..+0x038 */
-#define DAT_00e7af20      (FLP_DATA.fmt_cmd[0])   /* +0x02C command byte, 0x4D */
-#define DAT_00e7af22      (FLP_DATA.fmt_cmd[1])   /* +0x02E unit + head * 4  */
+/*
+ * The FDC data register is the one register with side effects on access
+ * (a read consumes a result byte, a write is a command byte), so the two
+ * accesses are named; a host test scripting the FDC redefines them before
+ * including the source.
+ */
+#ifndef FLP_FDC_READ_DATA
+#define FLP_FDC_READ_DATA(regs)      ((regs)->data)
+#define FLP_FDC_WRITE_DATA(regs, v)  ((regs)->data = (v))
+#endif
 
-/* READ/WRITE DATA command block, +0x04A..+0x05C (the first three words are
- * also the SEEK command EXCS sends with the 3-word count at 0x00E3DDC2) */
-#define DAT_00e7af3e      (FLP_DATA.rw_cmd[0])    /* +0x04A command byte      */
-#define DAT_00e7af40      (FLP_DATA.rw_cmd[1])    /* +0x04C unit + head * 4   */
-#define DAT_00e7af42      (FLP_DATA.rw_cmd[2])    /* +0x04E cylinder          */
-#define DAT_00e7af44      (FLP_DATA.rw_cmd[3])    /* +0x050 head number       */
-#define DAT_00e7af46      (FLP_DATA.rw_cmd[4])    /* +0x052 sector number     */
+/*
+ * The DN300 DMAC: FLP_DO_IO (0x00E3DE5E `move.l #0xffa000,D4`) and
+ * FLP_FORMAT_TRACK (0x00E3DD54) address it from 0xFFA000 with the channel-3
+ * offsets 0xC5 (OCR), 0xC7 (CCR), 0xCA (MTC), 0xCC (MAR) and 0xE9 (MFC).
+ * Host tests substitute a plain 0x100-byte array.
+ */
+#if defined(ARCH_HOST)
+extern volatile uint8_t flp_$dmac_cells[0x100];
+#define FLP_DMAC_BASE   (flp_$dmac_cells)
+#else
+#define FLP_DMAC_BASE   ((volatile uint8_t *)DN300_DMAC_BASE_ADDRESS)
+#endif
 
-/* FDC result status registers, +0x070..+0x078 (FLP_$SREGS is sregs[0]) */
-#define DAT_00e7af66      (FLP_DATA.sregs[1])     /* +0x072 ST1/ST2 word      */
-/* +0x075: the low byte of sregs[2].  Read-only in the driver, so the low byte
- * is taken with a mask rather than a byte pointer, which keeps the expression
- * correct on a little-endian host. */
-#define DAT_00e7af69      ((uint8_t)(FLP_DATA.sregs[2] & 0xFF))
+#define FLP_DMAC_CHAN3  (3 * DN300_DMAC_CHANNEL_SIZE)               /* 0xC0 */
+#define FLP_DMAC_OCR    (*(FLP_DMAC_BASE + FLP_DMAC_CHAN3 + M68450_REG_OCR))   /* 0xC5 */
+#define FLP_DMAC_CCR    (*(FLP_DMAC_BASE + FLP_DMAC_CHAN3 + M68450_REG_CCR))   /* 0xC7 */
+#define FLP_DMAC_MTC    (*(volatile uint16_t *)(FLP_DMAC_BASE + FLP_DMAC_CHAN3 + M68450_REG_MTCH)) /* 0xCA */
+#define FLP_DMAC_MAR    (*(volatile uint32_t *)(FLP_DMAC_BASE + FLP_DMAC_CHAN3 + M68450_REG_MARH)) /* 0xCC */
+#define FLP_DMAC_MFC    (*(FLP_DMAC_BASE + FLP_DMAC_CHAN3 + M68450_REG_MFC))   /* 0xE9 */
 
-/* +0x078: current cylinder per unit, 2 bytes each */
-#define DAT_00e7af6c      (FLP_DATA.unit_cyl)
+/* The DMAC channel DMA_$CHECK is asked about (0x00E3E30A `move.w #0x3`). */
+#define FLP_DMA_CHANNEL 3
 
-/* +0x080: the driver's own DMA buffer */
-#define FLP_IO_BUFFER     (FLP_DATA.io_buffer)
-
-/* +0x0E8: controller table, 8 bytes per controller.  DAT_00e7afdc names the
- * info-pointer slot and DAT_00e7afe0 the hardware-address slot; both index the
- * same array, which is why the callers add ctlr * 8 to either one. */
-#define DAT_00e7afdc      (&FLP_DATA.ctlr_table[0])
-#define DAT_00e7afe0      (&FLP_DATA.ctlr_table[4])
-
-#define DAT_00e7aff0      (FLP_DATA.fmt_buf_pa)   /* +0x0FC format buffer PA  */
-/* +0x103: the low byte of the sector-size word at +0x102.  Read-only. */
-#define DAT_00e7aff7      ((uint8_t)(FLP_DATA.fmt_n & 0xFF))
-#define DAT_00e7affa      (FLP_DATA.base_cmd)     /* +0x106 MFM base command  */
-#define DAT_00e7affc      (FLP_DATA.specify_cmd)  /* +0x108 SPECIFY block     */
-
-#define DAT_00e7b004      (FLP_DATA.sense_cmd[0]) /* +0x110 SENSE DRIVE STATUS */
-#define DAT_00e7b006      (FLP_DATA.sense_cmd[1]) /* +0x112 unit + head       */
-#define DAT_00e7b008      (FLP_DATA.recal_cmd)    /* +0x114 RECALIBRATE block */
-#define DAT_00e7b00a      (FLP_DATA.recal_cmd[1]) /* +0x116 current unit      */
-#define DAT_00e7b00c      (FLP_DATA.seek_cmd[0])  /* +0x118 SEEK command      */
-#define DAT_00e7b00e      (FLP_DATA.seek_cmd[1])  /* +0x11A unit + head       */
-#define DAT_00e7b010      (FLP_DATA.seek_cmd[2])  /* +0x11C cylinder          */
-
-#define DAT_00e7b014      (FLP_DATA.unit_active)  /* +0x120 per-unit flags    */
-#define DAT_00e7b018      (FLP_DATA.disk_change)  /* +0x124 per-unit flags    */
-#define DAT_00e7b01c      (FLP_DATA.buf_pa)       /* +0x128 I/O buffer PA     */
-#define DAT_00e7b024      (FLP_DATA.dma_retry)    /* +0x130 DMA retry count   */
-#define DAT_00e7b026      (FLP_DATA.cmd_retry)    /* +0x132 command retry     */
-#define DAT_00e7b02a      (FLP_DATA.unit_count)   /* +0x136 DISK_$REGISTER    */
-#define DAT_00e7b02c      (FLP_DATA.initialized)  /* +0x138 init flag         */
+/*
+ * The per-process "I/O pending" byte the driver clears when it fails a
+ * request: DISK_$DATA + 0x390 + pid*0x1C, i.e. disk_$per_proc_t.io_pending
+ * indexed by the process id at req+0x1E (FLP_FORMAT_TRACK 0x00E3DD98-
+ * 0x00E3DDB0, FLP_DO_IO 0x00E3DFA6-0x00E3DFBC; WIN uses the same code).
+ */
+#define FLP_IO_PENDING(pid) \
+    (((disk_$per_proc_t *)ARCH_VA_TO_PTR(DISK_PER_PROC_VA))[(pid)].io_pending)
 
 /*
  * ============================================================================
  * Literal cells in the FLP_ code region (map segment "I E3DC54 FLP_ size =
  * 8CC").  Domain Pascal passes VAR and const parameters by address, so each
  * literal argument becomes a cell in the code region whose address is pushed.
+ * Defined in flp_data.c with the image bytes.
  * ============================================================================
  */
 
-/* 0xE3DDC2: the word 3 - SHAKE/EXCS byte count (pea (-0x2bc,PC) @0xE3E07C) */
-extern int16_t DAT_00e3ddc2;
-/* 0xE3DDC4: the word 6 - format-track byte count (pea (0x3e,PC) @0xE3DD84) */
-extern int16_t DAT_00e3ddc4;
-/* 0xE3DFE0: the word 9 - read/write byte count (pea (0x8c,PC) @0xE3DF52) */
-extern int16_t DAT_00e3dfe0;
-
-/* 0xE3E10E: the word 0 - SHAKE's "read" direction, io_$probe's width */
-extern int16_t DAT_00e3e10e;
-/* 0xE3E110: the word 1 - SHAKE's "write" direction, and the count 1 */
-extern int16_t DAT_00e3e110;
-/* 0xE3E21C: the word 2 - the recalibrate/sense command word count */
-extern int16_t DAT_00e3e21c;
-
-/* 0xE3E21E, 0xE3E222, 0xE3E226: the drive geometry FLP_$DINIT copies out */
-extern uint32_t DAT_00e3e21e;
-extern uint32_t DAT_00e3e222;
-extern uint16_t DAT_00e3e226;
+/* 0x00E3DDC2: 00 03 - the SEEK / SPECIFY / result word count */
+extern int16_t flp_word_three;
+/* 0x00E3DDC4: 00 06 - the FORMAT TRACK word count */
+extern int16_t flp_word_six;
+/* 0x00E3DFE0: 00 09 - the READ/WRITE DATA word count */
+extern int16_t flp_word_nine;
+/* 0x00E3E10E: 00 00 - SHAKE's "read" direction; io_$probe's first argument */
+extern int16_t flp_word_zero;
+/* 0x00E3E110: 00 01 - SHAKE's "write" direction, the count 1, and
+ * DISK_$REGISTER's device type */
+extern int16_t flp_word_one;
+/* 0x00E3E21C: 00 02 - the RECALIBRATE / SENSE DRIVE STATUS word count */
+extern int16_t flp_word_two;
+/* 0x00E3E21E: 00 92 04 B2 00 00 00 01 00 00 - the label record FLP_$DINIT
+ * copies out */
+extern flp_pvlabel_info_t flp_dinit_pvlabel;
 
 /*
  * ============================================================================
- * The floppy error counter inside the DISK_ module block
+ * Internal routines
  * ============================================================================
- *
- * 0x00E7A55C is DISK_$DATA + 0x390 (disk/disk.h: `D E7A1CC DISK_ size = B90`).
- * The driver clears one counter per request with a 0x1C stride, so the counters
- * run on into the DISK_BPTBL region the map marks at 0x00E7A560 - the cell is
- * an alias into DISK_$DATA, not an object of its own.
  */
-#define DAT_00e7a55c      (&DISK_$DATA[0x390])
 
 /*
- * ============================================================================
- * Internal Functions
- * ============================================================================
+ * SHAKE (0x00E3E49E) - move *count_ptr bytes between `data` (one byte per
+ * word) and the FDC data register, in the direction *dir_ptr (0 = read,
+ * 1 = write), insisting the FDC's DIO bit agrees.  status_$ok,
+ * status_$disk_controller_timeout or status_$disk_controller_error.
  */
+status_$t SHAKE(uint16_t *data, int16_t *count_ptr, int16_t *dir_ptr);
 
-/* Hardware probe function */
-/* io_$probe is declared in io/io.h (bead source-3uo). */
+/*
+ * EXCS (0x00E3E268) - execute the command at `cmd` (*count_ptr words),
+ * wait for the interrupt, and interpret the result registers.  `vol` is the
+ * volume whose as_options bit 1 decides whether a data check is retried; it
+ * is passed on into the recursive RECALIBRATE.
+ */
+status_$t EXCS(uint16_t *cmd, int16_t *count_ptr, disk_$volume_t *vol);
+
+/*
+ * FLP_DO_IO (0x00E3DDC6) - the body FLP_$DO_IO gates to.  `zero` is the
+ * word FLP_$DO_IO inserts; it is never read.
+ */
+void FLP_DO_IO(disk_$volume_t *vol, disk_io_req_t *req, void *param_3,
+               int16_t zero, int8_t *result);
+
+/*
+ * FLP_FORMAT_TRACK (0x00E3DC78) - format the track a request names.  Does
+ * not reload A5: it runs with FLP_DO_IO's module base.
+ */
+void FLP_FORMAT_TRACK(disk_$volume_t *vol, disk_io_req_t *req);
 
 #endif /* FLP_INTERNAL_H */

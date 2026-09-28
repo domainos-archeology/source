@@ -1,53 +1,50 @@
 /*
- * WIN_$ANSI_COMMAND - Send ANSI command to Winchester drive
+ * win/ansi_command.c - WIN_$ANSI_COMMAND (0x00E19128, 94 bytes)
  *
- * Sends an ANSI standard command to the Winchester disk controller.
- * Some commands take input parameters, others return output parameters.
+ * Issues one ANSI command to a Winchester unit's controller block and
+ * waits for it.  Commands numbered 0x40 and above carry a parameter byte
+ * in; those below 0x3F return one.
  *
- * @param unit            Unit number
- * @param ansi_cmd        ANSI command code
- * @param ansi_in_param   Input parameter (used for commands >= 0x40)
- * @param ansi_out_param  Output parameter (used for commands < 0x40)
- * @return                Status code
+ * Frame (link.w A6,-0x18; A2 D4 D3 D2 saved), A5 = the WIN module base
+ * (0xE2B89C, established by the caller - this routine does not load it):
+ *   (0x8,A6)   unit           word
+ *   (0xa,A6)   ansi_cmd       word
+ *   (0xc,A6)   ansi_in_param  address of the input byte
+ *   (0x10,A6)  ansi_out_param address of the output byte
+ *   D3         has_input      `scc` after `cmpi.w #0x40`: 0xFF when
+ *                             ansi_cmd >= 0x40 (unsigned)
+ *   A2         the unit's register block (unit record +4, unit*12)
  */
 
 #include "win/win_internal.h"
 
-/* Uses declaration from win.h */
-
 status_$t WIN_$ANSI_COMMAND(uint16_t unit, uint16_t ansi_cmd,
                             char *ansi_in_param, char *ansi_out_param)
 {
-    uint8_t *win_data = WIN_DATA_BASE;
-    uint8_t *unit_data;
-    uint32_t unit_offset;
-    status_$t status;
-    int8_t has_input;
+    volatile uint8_t *regs;             /* A2 */
+    int8_t has_input;                   /* D3 */
+    status_$t status;                   /* D0 */
 
-    /* Get unit's command buffer */
-    unit_offset = (uint32_t)unit * WIN_UNIT_ENTRY_SIZE;
-    unit_data = *(uint8_t **)(win_data + unit_offset + 4);
+    /* 0x00E19134-0x00E1913C */
+    has_input = (ansi_cmd >= 0x40) ? -1 : 0;
 
-    /* Check if command takes input parameter (commands >= 0x40) */
-    has_input = -(ansi_cmd > 0x3f);
+    /* 0x00E1913E-0x00E19152: the register block, then the command byte. */
+    regs = WIN_UNIT_REGS(unit);
+    regs[WIN_REG_COMMAND] = (uint8_t)ansi_cmd;
 
-    /* Set command byte */
-    unit_data[0] = (char)ansi_cmd;
-
-    /* Copy input parameter if needed */
+    /* 0x00E19154-0x00E1915C */
     if (has_input < 0) {
-        unit_data[2] = *ansi_in_param;
+        regs[WIN_REG_PARAM] = (uint8_t)*ansi_in_param;
     }
 
-    /* Set command type in status byte */
-    unit_data[0x0e] = 5;
-
-    /* Execute command */
+    /* 0x00E19160-0x00E1916E: go (5 = ANSI command), then wait.  The word
+     * result slot is popped with the argument; D0 is the status. */
+    regs[WIN_REG_GO] = 5;
     status = WAIT_FOR_CONTROLLER(unit);
 
-    /* Copy output parameter if command returns data */
+    /* 0x00E19170-0x00E19178: the output byte, whatever the status. */
     if (has_input >= 0) {
-        *ansi_out_param = unit_data[2];
+        *ansi_out_param = (char)regs[WIN_REG_PARAM];
     }
 
     return status;

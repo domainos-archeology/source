@@ -2,6 +2,8 @@
  * smd/get_unit_event.c - SMD_$GET_UNIT_EVENT (0x00E6EEA8, 236 bytes)
  *
  * Retrieve the next event from the SMD event queue.
+ * Re-verified against the image block by block (2026-09-27), including the
+ * jump table bytes at 0x00E6EF16; faithful.
  *
  * Frame: `link.w A6,-0x18` / `movem.l {A5 A2 D2},-(SP)`;
  *        `lea (0xe82b8c).l,A5` makes A5 = &SMD_GLOBALS.

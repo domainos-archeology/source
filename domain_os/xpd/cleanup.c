@@ -1,155 +1,78 @@
 /*
- * XPD Cleanup and Event Posting Functions
- *
- * These functions handle process cleanup during exit and event
- * posting from target to debugger.
- *
- * Original addresses:
- *   XPD_$CLEANUP:      0x00e75046
- *   XPD_$POST_EVENT:   0x00e75090
+ * xpd/cleanup.c - XPD_$CLEANUP (0x00E75046, 68 bytes) and XPD_$POST_EVENT
+ * (0x00E75090, 166 bytes); map segment `I E74F7C XPD size = 1BC`.
  */
 
 #include "xpd/xpd_internal.h"
-#include "proc1/proc1.h"
-#include "ec/ec.h"
-
-/* XPD data base */
-#define XPD_DATA_BASE           0xEA5034
-
-/* Target state offsets */
-#define TARGET_STATE_BASE       0xEA5044     /* First target state entry */
-#define TARGET_STATE_SIZE       0x14         /* Size per target entry */
-
-/* Target state bit fields */
-#define TARGET_FLAG_ENABLED     0x80         /* Bit 7: debugging enabled */
-#define TARGET_FLAG_PROCESSED   0x40         /* Bit 6: event was processed */
-#define TARGET_DEBUGGER_MASK    0x0E         /* Bits 1-3: debugger index << 1 */
-#define EVENT_CODE_MASK         0x1E0        /* Bits 5-8: event code */
-#define RESPONSE_MASK           0x30         /* Bits 4-5: debugger response */
-
-/* Offsets within target entry */
-#define TARGET_EC_OFFSET        0x00         /* Eventcount */
-#define TARGET_STATUS_OFFSET    0x0C         /* Event status */
-#define TARGET_STATE_OFFSET     0x10         /* State flags */
-
-/* Special status values for event posting */
-#define XPD_POST_CLEANUP_MSG1   0xE7508A     /* Cleanup message 1 */
-#define XPD_POST_CLEANUP_MSG2   0xE7508C     /* Cleanup message 2 */
 
 /*
- * XPD_$CLEANUP - Clean up debug state when process exits
+ * XPD_$CLEANUP - the exit path's XPD teardown for the current process
  *
- * Called during process termination to:
- * 1. Post a cleanup event to any waiting debugger
- * 2. Unregister as a debugger if registered
- * 3. Clear debug flags for this process's target entry
+ * Posts event 3 (with a zero status) to its debugger if it has one, gives
+ * up its own debugger slot, and clears the enabled / debugger / event bits
+ * of ITS OWN target record - the one indexed by PROC1_$AS_ID (0x00E7506C),
+ * not by the PROC2 index the other routines use.
+ *
+ * Frame (link.w A6,-0x8): A6-0x06 the response word, A6-0x04 the status
+ * XPD_$UNREGISTER_DEBUGGER writes (never read).
  */
 void XPD_$CLEANUP(void)
 {
-    int32_t target_offset;
-    uint16_t *target_state;
-    xpd_$response_t response;
-    status_$t cleanup_status;
-    status_$t unreg_status;
+    xpd_$response_t response;           /* A6-0x06 */
+    status_$t unreg_status;             /* A6-0x04 */
 
-    /* Post cleanup event to debugger (if being debugged) */
-    XPD_$POST_EVENT((xpd_$event_type_t *)XPD_POST_CLEANUP_MSG1,
-                    (status_$t *)XPD_POST_CLEANUP_MSG2,
-                    &response);
+    /* 0x00E7504A-0x00E75058: the two cells at 0x00E7508A / 0x00E7508C */
+    XPD_$POST_EVENT(&xpd_$cleanup_event, &xpd_$cleanup_status, &response);
 
-    /* Unregister ourselves as a debugger (releases all our targets) */
-    XPD_$UNREGISTER_DEBUGGER(PROC1_$AS_ID, &unreg_status);
+    /* 0x00E7505C-0x00E75068 (a word result slot is reserved, and left to
+     * unlk) */
+    XPD_$UNREGISTER_DEBUGGER((int16_t)PROC1_$AS_ID, &unreg_status);
 
-    /* Clear debug flags in our own target entry */
-    target_offset = PROC1_$AS_ID * TARGET_STATE_SIZE;
-    target_state = (uint16_t *)(TARGET_STATE_BASE + target_offset);
-
-    /*
-     * Clear bits:
-     *   Bit 7: enabled
-     *   Bits 5-8: event code
-     *   Bits 9-10: additional flags
-     * Preserve:
-     *   Bits 0-4: debugger index and other state
-     *   Bits 12-15: other flags
-     *
-     * Mask 0x701F = 0111 0000 0001 1111
-     * This clears bits 5-11 (event code and related flags)
-     */
-    *target_state &= 0x701F;
+    /* 0x00E7506C-0x00E75080: `andi.w #0x701f` keeps bits 12-14 and 0-4. */
+    XPD_TARGET(PROC1_$AS_ID)->state &= 0x701F;
 }
 
 /*
- * XPD_$POST_EVENT - Post an event from target to debugger
+ * XPD_$POST_EVENT - a target tells its debugger about an event and waits
  *
- * Called by a target process to send an event to its debugger.
- * The target suspends until the debugger responds.
- *
- * Parameters:
- *   event_type   - Type of event being posted
- *   status_val   - Status value associated with the event
- *   response_ret - Debugger's response (output)
+ * Frame (link.w A6,-0x4; A4 A3 A2 saved):
+ *   A2  the current process's target record (PROC1_$AS_ID * 0x14)
+ *   A3  response_ret
  */
 void XPD_$POST_EVENT(xpd_$event_type_t *event_type, status_$t *status_val,
                      xpd_$response_t *response_ret)
 {
-    int32_t target_offset;
-    uint16_t *target_state_word;
-    ec_$eventcount_t *target_ec;
-    ec_$eventcount_t *debugger_ec;
-    int16_t debugger_idx;
-    uint8_t event_code;
+    xpd_$target_t *tgt;                 /* A2 */
+    uint16_t slot;                      /* D1 */
+    uint16_t code;                      /* D1 */
 
-    /* Calculate our target state location */
-    target_offset = PROC1_$AS_ID * TARGET_STATE_SIZE;
-    /*
-     * The m68k code mixes byte accesses to the first (big-endian high) byte
-     * of the state word with word accesses; the byte operations are
-     * expressed here as operations on the high byte of the word.
-     */
-    target_state_word = (uint16_t *)(TARGET_STATE_BASE + target_offset);
-    target_ec = (ec_$eventcount_t *)(XPD_DATA_BASE + target_offset);
-
-    /* Check if we have a debugger and are in debug mode */
-    debugger_idx = ((*target_state_word >> 8) & TARGET_DEBUGGER_MASK) >> 1;
-
-    if (debugger_idx == 0 || (int16_t)*target_state_word >= 0) {
-        /* No debugger or not enabled - return error response */
-        *response_ret = 2;  /* Error response code */
+    /* 0x00E75098-0x00E750C8: no debugger slot, or not enabled -> 2. */
+    tgt = XPD_TARGET(PROC1_$AS_ID);
+    slot = (uint16_t)((tgt->state & XPD_STATE_DEBUGGER) >> XPD_STATE_DEBUGGER_SHIFT);
+    if (slot == 0 || (tgt->state & XPD_STATE_ENABLED) == 0) {
+        *response_ret = 2;
         return;
     }
 
-    /* Clear target EC value (reset to 0) */
-    *(int32_t *)target_ec = 0;
+    /* 0x00E750CA-0x00E750EA: reset the eventcount's value, plant the event
+     * code (the LOW byte of *event_type, shifted into bits 5-8 with a word
+     * `or` - a code above 15 spills upward), the status, and clear ACKED. */
+    tgt->ec.value = 0;
+    code = (uint16_t)(*event_type & 0x00FF);
+    tgt->state = (uint16_t)(tgt->state & ~XPD_STATE_EVENT);
+    tgt->state |= (uint16_t)(code << XPD_STATE_EVENT_SHIFT);
+    tgt->status = *status_val;
+    tgt->state &= (uint16_t)~XPD_STATE_ACKED;
 
-    /* Get event code from event_type parameter (low byte of the big-endian word) */
-    event_code = (uint8_t)(*event_type & 0xFF);
+    /* 0x00E750F0-0x00E75108: wake the debugger */
+    slot = (uint16_t)((tgt->state & XPD_STATE_DEBUGGER) >> XPD_STATE_DEBUGGER_SHIFT);
+    EC_$ADVANCE(&XPD_DEBUGGER(slot)->ec);
 
-    /* Clear current event code and set new one */
-    *target_state_word &= ~EVENT_CODE_MASK;
-    *target_state_word |= ((uint16_t)event_code << 5);
+    /* 0x00E7510A-0x00E7511C: wait for our own eventcount to reach 1; the
+     * other two slots are NULL / 0 and the result is discarded. */
+    (void)EC_$WAIT((ec_$wait_ecs_t){{ &tgt->ec, NULL, NULL }},
+                   (ec_$wait_vals_t){{ 1, 0, 0 }});
 
-    /* Store the event status */
-    *(status_$t *)(TARGET_STATE_BASE + target_offset - 0x10 + TARGET_STATUS_OFFSET) = *status_val;
-
-    /* Clear the "processed" flag so debugger can see it */
-    *target_state_word &= (uint16_t)~((uint16_t)TARGET_FLAG_PROCESSED << 8);
-
-    /* Advance debugger's EC to notify it */
-    debugger_ec = (ec_$eventcount_t *)(XPD_DATA_BASE + (debugger_idx << 4) + 0x478);
-    EC_$ADVANCE(debugger_ec);
-
-    /*
-     * Wait on our own EC for the debugger's response.
-     *
-     * 0x00E7510A-0x00E7511C pushes six longwords: the three wait values
-     * (0, 0, 1 -- pushed last-to-first, so vals = {1, 0, 0}) and then the
-     * three eventcount pointers (NULL, NULL, A2 -- ecs = {target_ec, NULL,
-     * NULL}).  Both arrays go by value; the result in D0 is discarded.
-     */
-    (void)EC_$WAIT((ec_$wait_ecs_t){{target_ec, NULL, NULL}},
-                   (ec_$wait_vals_t){{1, 0, 0}});
-
-    /* Return the debugger's response (bits 4-5 of state byte) */
-    *response_ret = ((*target_state_word >> 8) & RESPONSE_MASK) >> 4;
+    /* 0x00E75122-0x00E7512A: the debugger's response, bits 12-13 */
+    *response_ret = (uint16_t)((tgt->state & XPD_STATE_RESPONSE) >> XPD_STATE_RESPONSE_SHIFT);
 }

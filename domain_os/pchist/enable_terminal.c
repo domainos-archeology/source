@@ -1,7 +1,12 @@
 /*
  * PCHIST_$ENABLE_TERMINAL - Enable/disable terminal profiling display
  *
- * Reverse engineered from Domain/OS at address 0x00e5ca00
+ * Re-emitted from the image (0x00E5CA00..0x00E5CA50, 82 bytes) and verified
+ * block by block; the previous body was faithful.  A5 (= 0xE2C204,
+ * PCHIST_$CONTROL) is inherited from the caller, never reloaded.  Frame:
+ * (0x8,A6) disabling word -> D2; A6-0xA the count word; A6-0x8 status.
+ * Callers: 0x00E5CB96, 0x00E5CBE4, 0x00E5CCCE (UNIX_PROFIL_CNTL),
+ * PCHIST_$CNTL 0x00E5CF68, PCHIST_$STOP_PROFILING 0x00E5CD92.
  */
 
 #include "pchist/pchist_internal.h"

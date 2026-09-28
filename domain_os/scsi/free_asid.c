@@ -7,8 +7,9 @@
  * PROC2_$CLEANUP_HANDLERS_INTERNAL) to release any SCSI-related
  * resources associated with a process's address space ID.
  *
- * In this Domain/OS build, SCSI support is not enabled, so this
- * function is a no-op - it simply returns immediately.
+ * Re-emitted from the image: a lone `rts` at 0x00E88800 (the 4-byte
+ * SCSI_WIRED_PROC segment, where the SAU2 map also puts SCSI_$PROC_START at
+ * the same address).  Sole caller 0x00E7444A (PROC2_$DELETE).
  *
  * Assembly:
  *   00e88800    rts

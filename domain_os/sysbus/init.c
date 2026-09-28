@@ -5,7 +5,9 @@
  * then iterates through the device controller table entry (DCTE) list
  * to populate the interrupt controller data structures.
  *
- * From: 0x00e0ab28
+ * From: 0x00e0ab28 (148 bytes).  Re-verified against the image (2026-09-27);
+ * faithful.  A5 = 0xE22904 (IO_$INT_CTRL); IO_$TRAP takes (vector word,
+ * handler) with a result slot the callee never fills.  No references.
  *
  * Original assembly:
  *   00e0ab28    link.w A6,-0x4
