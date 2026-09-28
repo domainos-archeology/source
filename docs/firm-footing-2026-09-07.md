@@ -143,3 +143,53 @@ route_$port_t 0x4C..0x57, the 2LONG1 counters, app header direction),
 the per-process-data design (source-0i3) awaiting review, and a few P3
 convention items (audit_data_t host pointers, PROC1_$TYPE base,
 0xE825DC's two names, AST_$TRUNCATE's remote DTM copy-back).
+
+## Addendum, 2026-09-28: re-emission of the unreviewed block
+
+The 647 files the 2026-09-08 correction listed were not verified; they
+were re-emitted from the disassembly.  Method, chosen by the owner on
+2026-09-08: the files were split into 21 batches by subsystem (645
+batch entries, some batches merged at commit time), and each batch was
+handled in a single pass by two Fable agents with no ping-pong between
+them.  The first agent re-emitted every file from `gsk analyze` under
+the same rules as the wave 7-17 fixes (argument order from the callee's
+frame, `pea (d,PC)` cells as named statics with the image bytes,
+byte-in-word parameters, 0xFF booleans, nested procedures as statics
+with explicit uplevel parameters, hand-written routines as byte-compared
+`<subsystem>/sau2/*.s`, `_Static_assert`ed layouts, a host test per
+non-trivial function).  A second, separate Fable agent then walked the
+whole batch block by block against the image, fixed deviations in
+place, and ran the gates; the coordinator committed only after that
+report.  From 2026-09-22 agents ran strictly one at a time.
+
+Result: 16 local commits between b18c8a9 and d484c88 touching 989 files
+under domain_os (88,120 insertions, 34,447 deletions).  66 hand-written
+routines now live as `sau2/*.s` files assembled and compared byte for
+byte against the image (mmu's whole MMU_ASM segment, the proc1 ready
+list, EC wait gates, xns IDP checksum, time's VT timer write, and
+others).  Defect shapes found in the old files matched the earlier
+waves, plus a few new ones: swapped selector bits and argument pairs
+(SIO_$K_SET_PARAM, SIO2681 set_baud_rate/set_line, WIN DISK_INIT), whole
+tables wrong from a given slot (SVC TRAP8 from 0x12), invented early
+returns and count==0 guards, uninitialised locals stored whole (RIP
+table entries), high-byte booleans passed as 0x00FF instead of 0xFF00
+(pmap purifier callback), one-based table indexing modelled as
+zero-based (MST pages, PROC1_$TYPE), and big-endian-only word slicing.
+The reviewers' own fixes on top of the emitters were small and specific
+(SIO state bits in the low byte, a 28-byte character set, a
+`dbf` label one instruction early in remove_virtual.s, an `andi`
+encoding, a flags-word mask, ASTE_FLAG_DIRTY's bit position).
+
+Gates on HEAD: 0 diagnostics from `make clean && make` (only
+unresolved-symbol link errors, 370 lines), no duplicate globals, 480
+host tests passing.  Two clean-build errors in the already-reviewed tree
+(clock_t arguments in proc2/get_cpu_usage.c and time/q_setup_timer.c)
+were found and fixed on the way.
+
+Still open: the seven source-0i3 per-process-data design steps (design
+approved 2026-09-08), the deferred translation beads, and the follow-up
+beads the agents filed during re-emission (mostly P3/P4: source-k3o7
+EC_$WAIT/WAITN as assembly, source-w78q mmu_$installi's register ABI,
+source-8yhy, source-u4mr, source-2eua, source-w0xm, source-fsw6,
+source-ilw0, source-cu7q, source-lryi, source-og4f, source-lu78,
+source-t3cp) alongside the research and convention items listed above.
