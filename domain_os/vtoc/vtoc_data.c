@@ -64,12 +64,10 @@ uid_t PPO_$NIL_ORG_UID = UID_CONST(0x00800080, 0);
 vtoc_$uid_cache_bucket_t vtoc_$uid_cache[VTOC_UID_CACHE_BUCKETS];
 
 /*
- * Block free list for truncation
- *
- * Address: 0xE78758 (offset 0x288 from vtoc_$data base)
- * Used to accumulate blocks to free during VTOCE_$TRUNCATE.
+ * The block list VTOCE_$TRUNCATE hands to BAT_$FREE (0xE78758) is
+ * vtoc_$data.free_list: it is OS_DISK_DATA + 0x288, inside the VTOC_ data
+ * segment (SAU2 map size 0x688), not a separate object.
  */
-uint32_t vtoc_$free_list[64];
 
 /*
  * VTOC_CACH_LOOKUPS (0xE7873C) and VTOC_CACH_HITS (0xE78738) live inside

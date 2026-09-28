@@ -305,6 +305,39 @@ _Static_assert(sizeof(vtoc_$vtoce_block_t) == 0x3F8,
 #endif
 
 /*
+ * File-map view of an on-disk VTOCE, as VTOCE_$TRUNCATE (0x00E39E42)
+ * addresses it: 32 direct block addresses plus the roots of the three
+ * indirect trees (256, 256*256 and 256*256*256 blocks).
+ *
+ * Old format (0xE3A046-0xE3A058: entry = block+4+i*0xCC, direct at
+ * lea (0x44,A2,D0) = entry+0x40, roots at A2+D0+0xC4 = entry+0xC0).
+ * New format (0xE3A004-0xE3A040: entry = block+8+i*0x150, roots at
+ * lea (0xcc,A0) = entry+0xC4, direct at lea (0xd8,A0) = entry+0xD0).
+ * Block addresses carry a flag in bit 31, masked off before freeing
+ * (andi.l #0x7fffffff at 0xE3A156 / 0xE39C8A).
+ */
+#define VTOCE_FM_DIRECT     32      /* direct blocks, logical 0..0x1F */
+
+typedef struct vtoce_$old_fm_t {
+    uint8_t     hdr[0x40];                  /* 0x00: see vtoce_$hdr_t */
+    uint32_t    direct[VTOCE_FM_DIRECT];    /* 0x40 */
+    uint32_t    indirect[3];                /* 0xC0: level 1, 2, 3 roots */
+} vtoce_$old_fm_t;
+
+typedef struct vtoce_$new_fm_t {
+    uint8_t     hdr[0xC4];                  /* 0x00: see vtoce_$hdr_t */
+    uint32_t    indirect[3];                /* 0xC4: level 1, 2, 3 roots */
+    uint32_t    direct[VTOCE_FM_DIRECT];    /* 0xD0 */
+} vtoce_$new_fm_t;
+
+_Static_assert(__builtin_offsetof(vtoce_$old_fm_t, direct) == 0x40, "vtoce_$old_fm_t.direct");
+_Static_assert(__builtin_offsetof(vtoce_$old_fm_t, indirect) == 0xC0, "vtoce_$old_fm_t.indirect");
+_Static_assert(sizeof(vtoce_$old_fm_t) == VTOCE_OLD_SIZE, "vtoce_$old_fm_t is 0xCC bytes");
+_Static_assert(__builtin_offsetof(vtoce_$new_fm_t, indirect) == 0xC4, "vtoce_$new_fm_t.indirect");
+_Static_assert(__builtin_offsetof(vtoce_$new_fm_t, direct) == 0xD0, "vtoce_$new_fm_t.direct");
+_Static_assert(sizeof(vtoce_$new_fm_t) == VTOCE_NEW_SIZE, "vtoce_$new_fm_t is 0x150 bytes");
+
+/*
  * Per-volume VTOC record (100 bytes)
  *
  * The kernel keeps A5 = OS_DISK_DATA and addresses this record with signed
@@ -479,9 +512,9 @@ void vtoc_$uid_cache_insert(uid_t *uid, int16_t vol_idx, uint32_t block_info);
 /* File map block allocation/traversal (vtoc_$fm_traverse, 0x00e397d0) */
 uint16_t vtoc_$fm_traverse(uint32_t *block_ptr, uint16_t level, uint32_t hint);
 
-/* Indirect block freeing helper (vtoc_$free_indirect, 0x00e39bc2) */
-void vtoc_$free_indirect(uint32_t block, uint16_t level, uint32_t limit,
-                         uint32_t step, char do_free);
+/* vtoc_$free_indirect (0x00E39BC2) is a Pascal procedure nested in
+ * VTOCE_$TRUNCATE (static link in A1); it is a static function in
+ * vtoc/truncate.c. */
 
 /*
  * ============================================================================

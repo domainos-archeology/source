@@ -341,23 +341,30 @@ void VTOCE_$LOOKUP_FM(void *vtoce_loc, uint16_t block_num, uint16_t flags,
                       status_$t *status);
 
 /*
- * VTOCE_$TRUNCATE - Truncate a file
+ * VTOCE_$TRUNCATE - Truncate or delete a local object's VTOCE file map
  *
- * Frees file blocks beyond the specified length and updates the VTOCE.
- * If new_length is negative, deletes the VTOCE entirely.
+ * Under the disk lock: frees every direct block at or beyond
+ * alloc_length (rounded up to 1K blocks) and walks the three indirect
+ * trees freeing whatever lies beyond it; with delete_it set it instead
+ * clears the VTOCE's in-use bit (and, on a new-format volume, its hash
+ * bucket slot and UID-cache entry) and frees the whole map.
  *
- * @param vtoce_loc VTOCE location (block << 4 | entry)
- * @param flags     Truncate flags
- * @param new_length New file length in bytes (-1 = delete)
- * @param param_4   Additional parameter
- * @param blocks_freed Receives count of blocks freed
- * @param status    Output status code
+ * Frame (0x00E39E42, link.w A6,-0x5c):
+ *   (0x08,A6) loc          object location record (vol_idx +0x1C,
+ *                          VTOCE location +0x04, UID +0x08)
+ *   (0x0C,A6) size         longword, never read (AST_$TRUNCATE pushes its
+ *                          new_size here)
+ *   (0x10,A6) alloc_length longword byte length to keep
+ *   (0x14,A6) delete_it    a BOOLEAN byte in a word slot (`tst.b (0x14,A6)`;
+ *                          AST_$TRUNCATE pushes `move.b D7b,-(SP)`)
+ *   (0x16,A6) blocks_freed receives the count of blocks freed
+ *   (0x1A,A6) status
  *
  * Original address: 0x00e39e42
  */
-void VTOCE_$TRUNCATE(void *vtoce_loc, uint32_t flags, int32_t new_length,
-                     int32_t param_4, uint32_t *blocks_freed,
-                     status_$t *status);
+void VTOCE_$TRUNCATE(vtoc_$lookup_req_t *loc, uint32_t size,
+                     int32_t alloc_length, boolean delete_it,
+                     uint32_t *blocks_freed, status_$t *status);
 
 /* PPO_$NIL_USER_UID (0xE174EC) and PPO_$NIL_ORG_UID (0xE17574) are cells of
  * the UID_LIST module (SAU2 map, 0xE1737C size 0x210) that uid/uid.h owns, so
@@ -406,7 +413,7 @@ extern uid_t VTOC_BKT_$UID;         /* 0xE173AC: VTOC bucket UID */
  *   base + 0x277 + vol_idx    : mount status (DAT_00e78747)
  *   base + 0x27F + vol_idx    : format flag (DAT_00e7874f)
  *   base + 0x286              : dirty flag (DAT_00e78756, initially 0xFF)
- *   base + 0x288              : vtoc_$free_list (0xE78758, 64 longs)
+ *   base + 0x288              : free_list (0xE78758, 256 longs, to 0x688)
  */
 typedef struct vtoc_$data_t {
     uint8_t     reserved[0x268];    /* 0x000: Per-volume data array */
@@ -418,7 +425,22 @@ typedef struct vtoc_$data_t {
     int8_t      format[7];          /* 0x27F: Format flag per volume (bit 7 = new format) */
     int8_t      dirty;              /* 0x286: DAT_00e78756 - pending disk-proc work flag */
     uint8_t     pad_287;            /* 0x287 */
+    uint32_t    free_list[256];     /* 0x288: blocks VTOCE_$TRUNCATE collects
+                                     *   for BAT_$FREE (`pea (0x288,A5)` at
+                                     *   0x00E3A1B0 / 0x00E39D32).  A Pascal
+                                     *   1-based array: entry n is stored at
+                                     *   (0x284,A5,n*4) (0x00E39C98), so C
+                                     *   index n-1.  256 longs because a
+                                     *   level-1 indirect block (256 entries)
+                                     *   is collected whole before the flush. */
 } vtoc_$data_t;
+
+/* SAU2 map: D VTOC_ at E784D0, size = 688 */
+_Static_assert(__builtin_offsetof(vtoc_$data_t, cach_hits) == 0x268, "vtoc_$data_t.cach_hits");
+_Static_assert(__builtin_offsetof(vtoc_$data_t, mounted) == 0x277, "vtoc_$data_t.mounted");
+_Static_assert(__builtin_offsetof(vtoc_$data_t, format) == 0x27F, "vtoc_$data_t.format");
+_Static_assert(__builtin_offsetof(vtoc_$data_t, free_list) == 0x288, "vtoc_$data_t.free_list");
+_Static_assert(sizeof(vtoc_$data_t) == 0x688, "vtoc_$data_t is the 0x688-byte VTOC_ data segment");
 
 /*
  * External references to VTOC global data

@@ -114,7 +114,7 @@ void EC_$ADVANCE(ec_$eventcount_t *ec) { (void)ec; advance_calls++; }
 static int clock_calls;
 void TIME_$CLOCK(clock_t *c) { clock_calls++; c->high = 0x1111; c->low = 0x22; }
 static int vtoce_calls; static uint32_t vtoce_size; static int32_t vtoce_rounded, vtoce_delete;
-void VTOCE_$TRUNCATE(void *loc, uint32_t size, int32_t rounded, int32_t del,
+void VTOCE_$TRUNCATE(vtoc_$lookup_req_t *loc, uint32_t size, int32_t rounded, boolean del,
                      uint32_t *freed, status_$t *st)
 {
     (void)loc; vtoce_calls++; vtoce_size = size; vtoce_rounded = rounded; vtoce_delete = del;

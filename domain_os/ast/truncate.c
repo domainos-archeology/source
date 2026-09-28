@@ -347,12 +347,11 @@ retry:
 
     /* 0x00E060DA..0x00E0611E: VTOCE_$TRUNCATE(&obj_loc, new_size,
      * rounded_size, is_delete byte, &freed, &status) with the AST lock
-     * released.  TODO(source-01tq): `move.b D7b,-(SP)` at 0x00E060F2 pushes
-     * ONE byte in a word slot (&freed sits at 0x16); vtoc/vtoc.h still
-     * declares that argument int32_t, hence the cast. */
+     * released.  `move.b D7b,-(SP)` at 0x00E060F2 pushes ONE byte in a
+     * word slot (&freed sits at 0x16), the boolean delete_it argument. */
     ML_$UNLOCK(AST_LOCK_ID);
-    VTOCE_$TRUNCATE(&aote->obj_uid, new_size, (int32_t)rounded_size,
-                    (int32_t)(int8_t)is_delete, &freed, &local_status);
+    VTOCE_$TRUNCATE((vtoc_$lookup_req_t *)(void *)&aote->obj_uid, new_size,
+                    (int32_t)rounded_size, is_delete, &freed, &local_status);
     ML_$LOCK(AST_LOCK_ID);
 
     /* 0x00E06120 */
