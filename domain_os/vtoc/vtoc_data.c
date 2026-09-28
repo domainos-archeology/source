@@ -77,3 +77,13 @@ uint32_t vtoc_$free_list[64];
  * write-protect flags that the original code addressed as
  * (&VTOC_CACH_LOOKUPS)[vol_idx + 3] are vtoc_$data.cach_wp_flag[vol_idx - 1].
  */
+
+/*
+ * 0x00E38F7E: the byte VTOC_$ALLOCATE (`pea (0x11e,PC)` at 0x00E38E5E) and
+ * VTOCE_$WRITE (`pea (-0x81c,PC)` at 0x00E39798) both hand to
+ * VTOCE_$NEW_TO_OLD as its by-reference flags argument.  Image bytes
+ * 00 00: "do not substitute the alternate parent UID".  It sits in the
+ * VTOC_ code region and is never written; it is not const only because
+ * VTOCE_$NEW_TO_OLD's parameter is a plain char *.
+ */
+char vtoc_$new_to_old_flags_00e38f7e = 0;

@@ -8,7 +8,7 @@
  *   OS_$SHUTDOWN_EC:         0xE1DC00 (12 bytes)  - Shutdown eventcount
  *   OS_$BOOT_DEVICE:         0xE82728 (8 bytes)   - Boot device record
  *   OS_$SHUTTING_DOWN_FLAG:  0xE82734 (1 byte)    - Shutdown in progress
- *   OS_$SHUTDOWN_WAIT_TIME:  0xE82738 (4 bytes)   - Shutdown wait time
+ *   OS_$SHUTDOWN_WAIT_TIME:  0xE82738 (6 bytes)   - Shutdown wait clock_t {3,0}
  */
 
 #include "os/os_internal.h"
@@ -72,7 +72,13 @@ char OS_$SHUTTING_DOWN_FLAG = 0;
  *
  * Original address: 0xE82738
  */
-uint32_t OS_$SHUTDOWN_WAIT_TIME = 3;
+/*
+ * The clock_t at 0xE82738 (+0x10 of the OS data segment, `D E82728 OS
+ * size = 18`): OS_$SHUTDOWN hands it to TIME_$WAIT as the delay
+ * (`pea (0x10,A5)` at 0x00E6D4CE).  Image bytes 00 00 00 03 00 00: three
+ * high-word ticks, low word zero.
+ */
+clock_t OS_$SHUTDOWN_WAIT_TIME = { 0x00000003u, 0x0000u };
 
 /*
  * ============================================================================

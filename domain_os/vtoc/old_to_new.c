@@ -6,15 +6,34 @@
  *
  * Converts an old format VTOCE (0xCC bytes) to new format (0x150 bytes).
  * Sets default values for ACL fields not present in old format.
+ *
+ * Frame (link.w A6,-0x8; D2/A2/A3 saved):
+ *   (0x8,A6)   old_vtoce   pointer -> A0 (source)
+ *   (0xc,A6)   new_vtoce   pointer -> A1 (destination); the highest store
+ *                          is the longword at +0x8C (0x00E19F32)
+ *
+ * The three UID cells are PPO_$NIL_USER_UID (0xE174EC, 0x00E19EDC),
+ * RGYC_$G_NIL_UID (0xE17524, 0x00E19EEA) and PPO_$NIL_ORG_UID (0xE17574,
+ * 0x00E19EF8); the 12 bytes copied to +0x68 come from the code-region cell
+ * at 0x00E19F60 (`lea (0x58,PC),A2` at 0x00E19F06).
+ *
+ * Both records are treated as byte arrays; every longword / word move is
+ * between same-sized fields at fixed offsets, so the copies are byte-order
+ * neutral.  Re-checked against the disassembly 2026-09-19 (0x00E19DB8 ..
+ * 0x00E19F5D): the only defect was the constant cell, which had been
+ * emitted as zeros.
  */
 
 #include "vtoc/vtoc_internal.h"
 
 /*
- * Default ACL data for new format conversion
- * Located at 0x00e19f60 in original binary
+ * Default ACL data for new format conversion: the three longwords copied
+ * to new+0x68 .. +0x73 (0x00E19F0E .. 0x00E19F12).  Code-region cell at
+ * 0x00E19F60, reached with `lea (0x58,PC),A2` at 0x00E19F06 (PC =
+ * 0x00E19F08).  Image bytes: 00 00 00 0C 00 00 00 0C 00 00 00 0C - the
+ * previous C had this cell as three zeros.
  */
-static const uint32_t default_acl_data[3] = { 0, 0, 0 };
+static const uint32_t default_acl_data_00e19f60[3] = { 0x0000000C, 0x0000000C, 0x0000000C };
 
 void VTOCE_$OLD_TO_NEW(void *old_vtoce_ptr, void *new_vtoce_ptr)
 {
@@ -142,9 +161,9 @@ void VTOCE_$OLD_TO_NEW(void *old_vtoce_ptr, void *new_vtoce_ptr)
     new_vtoce[0x17] = PPO_$NIL_ORG_UID.low;
 
     /* Set default ACL data at offset 0x68 */
-    new_vtoce[0x1A] = default_acl_data[0];
-    new_vtoce[0x1B] = default_acl_data[1];
-    new_vtoce[0x1C] = default_acl_data[2];
+    new_vtoce[0x1A] = default_acl_data_00e19f60[0];
+    new_vtoce[0x1B] = default_acl_data_00e19f60[1];
+    new_vtoce[0x1C] = default_acl_data_00e19f60[2];
 
     /* Set ACL mode bytes to 0x10 each at offset 0x60-0x62 */
     ((uint8_t *)new_vtoce)[0x60] = 0x10;

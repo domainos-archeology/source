@@ -900,12 +900,18 @@ _Static_assert(SVC_TRAP7_TABLE_SIZE * 4 == SVC_TRAP8_TABLE_ADDR - SVC_TRAP7_TABL
  * Note: TRAP #6 is not used for SVC calls (points to FIM_$UNDEF_TRAP).
  *
  * Original address: 0x00e7bd6a
+ *
+ * Re-checked entry by entry against the image 2026-09-27 (the 56 longwords
+ * at 0xE7BD6A read through the SAU2 link map): entries 0x03 and 0x0E-0x11
+ * are the VFMT trampolines at 0xE825F4 / 0xE825E4, and everything from
+ * 0x12 on was two slots early (CAL_$WRITE_CALENDAR and MSG_$RCV_CONTIG were
+ * missing).  SVC_$TRAP8_ARGCOUNT already matched the image.
  */
 void *SVC_$TRAP8_TABLE[SVC_TRAP8_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x00 */ MST_$MAP,                    /* 7 args */
     /* 0x01 */ MST_$MAP_AT,                 /* 8 args */
     /* 0x02 */ MST_$MAP_GLOBAL,             /* 7 args */
-    /* 0x03 */ SVC_$INVALID_SYSCALL,        /* 10 args (invalid) */
+    /* 0x03 */ VFMT_$WRITE10,               /* 10 args, 0xE825F4 (the VFMT_$WRITEN trampoline) */
     /* 0x04 */ VOLX_$DISMOUNT,              /* 6 args */
     /* 0x05 */ VOLX_$GET_UIDS,              /* 6 args */
     /* 0x06 */ SVC_$INVALID_SYSCALL,        /* 7 args (invalid) */
@@ -916,44 +922,44 @@ void *SVC_$TRAP8_TABLE[SVC_TRAP8_TABLE_SIZE] SVC_TABLE_SECTION = {
     /* 0x0B */ SVC_$INVALID_SYSCALL,        /* 6 args (invalid) */
     /* 0x0C */ SMD_$LOAD_CRSR_BITMAP,       /* 7 args */
     /* 0x0D */ SMD_$READ_CRSR_BITMAP,       /* 7 args */
-    /* 0x0E */ SVC_$INVALID_SYSCALL,        /* 13 args (invalid) */
-    /* 0x0F */ SVC_$INVALID_SYSCALL,        /* 8 args (invalid) */
-    /* 0x10 */ SVC_$INVALID_SYSCALL,        /* 13 args (invalid) */
-    /* 0x11 */ SVC_$INVALID_SYSCALL,        /* 8 args (invalid) */
-    /* 0x12 */ OSINFO_$GET_MMAP,            /* 6 args */
-    /* 0x13 */ ASKNODE_$INTERNET_INFO,      /* 8 args */
-    /* 0x14 */ MST_$GET_VA_INFO,            /* 6 args */
-    /* 0x15 */ SVC_$INVALID_SYSCALL,        /* 6 args (invalid) */
-    /* 0x16 */ MSG_$SENDI,                  /* 7 args */
-    /* 0x17 */ SVC_$INVALID_SYSCALL,        /* 13 args (invalid) */
+    /* 0x0E */ VFMT_$FORMATN,               /* 13 args, 0xE825E4 (the VFMT_$FORMAT10/ENCODE10 trampoline) */
+    /* 0x0F */ VFMT_$FORMATN,               /* 8 args, 0xE825E4 (VFMT_$FORMAT5/ENCODE5) */
+    /* 0x10 */ VFMT_$FORMATN,               /* 13 args, 0xE825E4 */
+    /* 0x11 */ VFMT_$FORMATN,               /* 8 args, 0xE825E4 (VFMT_$FORMAT2/ENCODE2) */
+    /* 0x12 */ CAL_$WRITE_CALENDAR,         /* 6 args */
+    /* 0x13 */ MSG_$RCV_CONTIG,             /* 8 args */
+    /* 0x14 */ OSINFO_$GET_MMAP,            /* 6 args */
+    /* 0x15 */ ASKNODE_$INTERNET_INFO,      /* 6 args */
+    /* 0x16 */ MST_$GET_VA_INFO,            /* 7 args */
+    /* 0x17 */ MSG_$SENDI,                  /* 13 args */
     /* 0x18 */ MSG_$RCVI,                   /* 15 args */
     /* 0x19 */ MSG_$RCV_CONTIGI,            /* 12 args */
     /* 0x1A */ MSG_$SARI,                   /* 17 args */
-    /* 0x1B */ MST_$GET_VA_INFO,            /* 6 args (duplicate?) */
-    /* 0x1C */ SVC_$UNIMPLEMENTED,          /* 14 args */
-    /* 0x1D */ MSG_$SEND_HW,                /* 7 args */
-    /* 0x1E */ SVC_$INVALID_SYSCALL,        /* 6 args (invalid) */
-    /* 0x1F */ MST_$MAP_TOP,                /* 8 args */
-    /* 0x20 */ NET_$SEND,                   /* 7 args */
-    /* 0x21 */ NET_$RCV,                    /* 8 args */
-    /* 0x22 */ DIR_$DIR_READU,              /* 8 args */
-    /* 0x23 */ DIR_$READ_LINKU,             /* 8 args */
-    /* 0x24 */ SVC_$UNIMPLEMENTED,          /* 7 args */
+    /* 0x1B */ SVC_$INVALID_SYSCALL,        /* 6 args (invalid) */
+    /* 0x1C */ MSG_$SEND_HW,                /* 14 args */
+    /* 0x1D */ SVC_$UNIMPLEMENTED,          /* 7 args */
+    /* 0x1E */ SVC_$UNIMPLEMENTED,          /* 6 args */
+    /* 0x1F */ SVC_$INVALID_SYSCALL,        /* 8 args (invalid) */
+    /* 0x20 */ MST_$MAP_TOP,                /* 7 args */
+    /* 0x21 */ NET_$SEND,                   /* 8 args */
+    /* 0x22 */ NET_$RCV,                    /* 8 args */
+    /* 0x23 */ DIR_$DIR_READU,              /* 8 args */
+    /* 0x24 */ DIR_$READ_LINKU,             /* 7 args */
     /* 0x25 */ SVC_$UNIMPLEMENTED,          /* 7 args */
-    /* 0x26 */ PROC2_$COMPLETE_VFORK,       /* 9 args */
-    /* 0x27 */ DIR_$RESOLVE,                /* 9 args */
-    /* 0x28 */ SVC_$INVALID_SYSCALL,        /* 7 args (invalid) */
-    /* 0x29 */ SVC_$UNIMPLEMENTED,          /* 7 args */
-    /* 0x2A */ VOLX_$MOUNT,                 /* 6 args */
-    /* 0x2B */ ACL_$IMAGE,                  /* 10 args */
-    /* 0x2C */ DISK_$PV_ASSIGN_N,           /* 8 args */
-    /* 0x2D */ DISK_$AS_XFER_MULTI,         /* 6 args */
-    /* 0x2E */ SVC_$UNIMPLEMENTED,          /* 9 args */
-    /* 0x2F */ PROC2_$FORK,                 /* 7 args */
-    /* 0x30 */ SVC_$UNIMPLEMENTED,          /* 7 args */
-    /* 0x31 */ PROC2_$CREATE,               /* 6 args */
+    /* 0x26 */ SVC_$INVALID_SYSCALL,        /* 9 args (invalid) */
+    /* 0x27 */ SVC_$INVALID_SYSCALL,        /* 9 args (invalid) */
+    /* 0x28 */ PROC2_$COMPLETE_VFORK,       /* 7 args */
+    /* 0x29 */ SVC_$INVALID_SYSCALL,        /* 7 args (invalid) */
+    /* 0x2A */ SVC_$INVALID_SYSCALL,        /* 6 args (invalid) */
+    /* 0x2B */ DIR_$RESOLVE,                /* 10 args */
+    /* 0x2C */ VOLX_$MOUNT,                 /* 8 args */
+    /* 0x2D */ ACL_$IMAGE,                  /* 6 args */
+    /* 0x2E */ DISK_$PV_ASSIGN_N,           /* 9 args */
+    /* 0x2F */ DISK_$AS_XFER_MULTI,         /* 7 args */
+    /* 0x30 */ PROC2_$FORK,                 /* 7 args */
+    /* 0x31 */ SVC_$UNIMPLEMENTED,          /* 6 args */
     /* 0x32 */ SVC_$UNIMPLEMENTED,          /* 7 args */
-    /* 0x33 */ SVC_$UNIMPLEMENTED,          /* 10 args */
+    /* 0x33 */ PROC2_$CREATE,               /* 10 args */
     /* 0x34 */ TPAD_$SET_UNIT_MODE,         /* 6 args */
     /* 0x35 */ TPAD_$INQUIRE_UNIT,          /* 6 args */
     /* 0x36 */ SVC_$UNIMPLEMENTED,          /* 11 args */

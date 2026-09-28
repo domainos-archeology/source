@@ -1,6 +1,8 @@
 #ifndef MATH_H
 #define MATH_H
 
+#include "base/base.h"
+
 #define HIGH16(x32) ((x32) >> 16)
 #define LOW16(x32) ((x32) & 0xffff)
 

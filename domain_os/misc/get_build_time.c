@@ -1,16 +1,34 @@
 /*
- * misc/get_build_time.c - GET_BUILD_TIME implementation
+ * misc/get_build_time.c - GET_BUILD_TIME
  *
- * Returns the kernel build version string including revision numbers,
- * SAU type, and optionally the build timestamp.
+ * Original address: 0x00E38052
+ * Size: 406 bytes (0x00E38052 .. 0x00E381E7); the format strings and the two
+ * constant cells it passes by reference follow at 0x00E381E8 .. 0x00E3824B.
  *
- * Original address: 0x00e38052
+ * Formats the kernel identification line into the caller's buffer with
+ * three VFMT_$FORMATN calls: "<name>[(<sau>)], revision ", then the
+ * revision numbers, then the build date/time.  A non-zero first longword
+ * of OS_$REV short-circuits everything to the single character '?'.
  *
- * The output format varies based on build configuration:
- *   - "?" if OS_$REV is non-zero (test/invalid build)
- *   - "Domain/OS kernel, revision 10.4.2" (no SAU, no VTOC)
- *   - "Domain/OS kernel(2), revision 10.4.2" (with SAU type)
- *   - Additional version components based on build flags
+ * Frame (link.w A6,-0x8; D2/D3/A2/A3/A5 saved; A5 = 0xE78400 = OS_$REV):
+ *   (0x8,A6)   buf         pointer -> A2
+ *   (0xc,A6)   len_p       pointer to a word -> A3; VFMT writes the first
+ *                          piece's length into it, the other two pieces are
+ *                          added to it (`add.w D0w,(A3)` 0x00E38172/0x00E381DC)
+ *   (-0x2,A6)  seg_len     word, the second / third piece's length
+ *   (-0x4,A6)  sau         word, the machine-id word at 0x100 (D2w)
+ *   (-0x6,A6)  remaining   word, 100 - *len_p
+ *
+ * VFMT_$FORMATN takes (format, buf, &max_len, &out_len, ...) with every
+ * variable argument BY REFERENCE: a %a consumes a string pointer and a
+ * pointer to its length, a %wd a pointer to a word.  The compiler emits
+ * the calls with either two or five variable arguments, padding the
+ * five-argument shape with pointers to the zero longword at 0x00E38224.
+ *
+ * Re-emitted from the disassembly 2026-09-22: the previous C passed the
+ * %a lengths by value (sizeof), put name_len at +0x68 instead of +0x60,
+ * used a stack max-length instead of the constant cell at 0x00E381E8,
+ * and dropped the padding arguments.
  */
 
 #include "misc/misc_internal.h"
@@ -19,160 +37,142 @@
 #include "vfmt/vfmt.h"
 
 /*
- * OS version data structure at 0xe78400
- *
- * This structure contains kernel version information populated
- * at build time. The layout is:
- *
- * Offset  Size  Field
- * ------  ----  -----
- * 0x00    4     OS_$REV - OS revision flag (0 = production)
- * 0x04    2     Major version (e.g., 10)
- * 0x06    2     Minor version (e.g., 4)
- * 0x08    2     Patch version (e.g., 2)
- * 0x0a    2     Build version flag (0 = normal)
- * 0x0c    4     Build ID/checksum
- * ...
- * 0x60    4     SAU info pointer/flags
- * 0x64    4     VTOC flag (non-zero = show timestamp)
- * 0x68    2     Kernel name length
- * 0x6c    N     Kernel name string ("Domain/OS kernel")
- * 0x8c    N     Build date string
- * 0xac    N     Build time string
+ * The part of the 204-byte OS_$REV block (0x00E78400, os/os.h) this routine
+ * reads, as the A5 displacements show it:
+ *   +0x00 long  os_rev       `tst.l (A5)`            0x00E3806E
+ *   +0x04 word  major        `pea (0x4,A5)`
+ *   +0x06 word  minor        `pea (0x6,A5)`
+ *   +0x08 word  patch        `tst.w (0x8,A5)`        0x00E38104
+ *   +0x0a word  build        `tst.w (0xa,A5)`        0x00E380CE
+ *   +0x60 long  name_len     `pea (0x60,A5)`         (image: 0x10)
+ *   +0x64 long  date_len     `tst.l (0x64,A5)`       0x00E38174 (image: 0)
+ *   +0x68 long  time_len     `pea (0x68,A5)`         (image: 0x1D)
+ *   +0x6c char  name[0x20]   "Domain/OS kernel" + blanks
+ *   +0x8c char  date[0x20]   blanks in this image
+ *   +0xac char  time[0x20]   "October 13, 1989  11:47:27 am"
  */
+typedef struct os_$rev_block_t {
+    uint32_t os_rev;            /* +0x00 */
+    int16_t  major;             /* +0x04 */
+    int16_t  minor;             /* +0x06 */
+    int16_t  patch;             /* +0x08 */
+    int16_t  build;             /* +0x0a */
+    uint8_t  reserved_0c[0x54]; /* +0x0c */
+    uint32_t name_len;          /* +0x60 */
+    uint32_t date_len;          /* +0x64 */
+    uint32_t time_len;          /* +0x68 */
+    char     name[0x20];        /* +0x6c */
+    char     date[0x20];        /* +0x8c */
+    char     time[0x20];        /* +0xac */
+} os_$rev_block_t;
 
-/*
- * The version block is the OS_$REV array (os/os.h, 0x00E78400, 204 bytes);
- * its first longword is the "OS revision flag" that must be 0 for a
- * production build.  PROM_$MACHINE_ID (0x00000100) comes from prom/prom.h.
- */
+_Static_assert(__builtin_offsetof(os_$rev_block_t, build) == 0x0a, "os_$rev_block_t.build");
+_Static_assert(__builtin_offsetof(os_$rev_block_t, name_len) == 0x60, "os_$rev_block_t.name_len");
+_Static_assert(__builtin_offsetof(os_$rev_block_t, date_len) == 0x64, "os_$rev_block_t.date_len");
+_Static_assert(__builtin_offsetof(os_$rev_block_t, time_len) == 0x68, "os_$rev_block_t.time_len");
+_Static_assert(__builtin_offsetof(os_$rev_block_t, name) == 0x6c, "os_$rev_block_t.name");
+_Static_assert(__builtin_offsetof(os_$rev_block_t, date) == 0x8c, "os_$rev_block_t.date");
+_Static_assert(__builtin_offsetof(os_$rev_block_t, time) == 0xac, "os_$rev_block_t.time");
+_Static_assert(sizeof(os_$rev_block_t) == 0xcc, "os_$rev_block_t is the 204-byte OS_$REV");
 
-/*
- * Version data offsets from version_base (0xe78400)
- * Using A5 as base pointer in original assembly.
- */
-typedef struct {
-    int32_t os_rev;              /* +0x00: OS revision flag */
-    int16_t major;               /* +0x04: Major version */
-    int16_t minor;               /* +0x06: Minor version */
-    int16_t patch;               /* +0x08: Patch version */
-    int16_t build_flag;          /* +0x0a: Build version flag */
-    int32_t build_id;            /* +0x0c: Build ID/checksum */
-    char    pad1[0x60 - 0x10];   /* Padding */
-    int32_t sau_info;            /* +0x60: SAU info */
-    int32_t vtoc_flag;           /* +0x64: VTOC flag (show timestamp?) */
-    int16_t name_len;            /* +0x68: Kernel name length */
-    char    pad2[2];             /* Padding */
-    char    name[0x40];          /* +0x6c: Kernel name string */
-    char    build_date[0x20];    /* +0x8c: Build date string */
-    char    build_time[0x20];    /* +0xac: Build time string */
-} os_version_t;
+/* Constant cells in the code region, all passed by reference (`pea (d,PC)`). */
+/* 0x00E381E8: 00 64 - the maximum length handed to the first FORMATN */
+static const int16_t get_build_time_max_len_00e381e8 = 100;
+/* 0x00E38224: 00 00 00 00 - the padding argument of the 9-argument calls */
+static const uint32_t get_build_time_zero_00e38224 = 0;
+/* 0x00E381EA */
+static const char get_build_time_fmt_date_00e381ea[] = " %a %$";
+/* 0x00E381F0 */
+static const char get_build_time_fmt_date_time_00e381f0[] = " %a  %a %$";
+/* 0x00E381FA */
+static const char get_build_time_fmt_rev3_00e381fa[] = "%wd.%wd.%wd,%$";
+/* 0x00E38208 */
+static const char get_build_time_fmt_rev2_00e38208[] = "%wd.%wd,%$";
+/* 0x00E38212 */
+static const char get_build_time_fmt_rev4_00e38212[] = "%wd.%wd.%wd.%wd,%$";
+/* 0x00E38228 */
+static const char get_build_time_fmt_name_00e38228[] = "%a, revision %$";
+/* 0x00E38238 */
+static const char get_build_time_fmt_name_sau_00e38238[] = "%a(%wd), revision %$";
 
-/* os_version_t is an overlay of OS_$REV (same address, same 204-byte size) */
-
-/* Format strings from the binary */
-static const char fmt_no_sau[] = "%a, revision %$";
-static const char fmt_with_sau[] = "%a(%wd), revision %$";
-static const char fmt_major_minor_patch[] = "%wd.%wd.%wd,%$";
-static const char fmt_major_minor[] = "%wd.%wd,%$";
-static const char fmt_full_version[] = "%wd.%wd.%wd.%wd,%$";
-static const char fmt_date_time[] = " %a  %a %$";
-static const char fmt_date_only[] = " %a %$";
-
-/*
- * GET_BUILD_TIME - Get kernel build version string
- *
- * Formats the kernel version information into the provided buffer.
- * The format includes:
- *   - Kernel name
- *   - SAU type (if applicable)
- *   - Revision numbers (major.minor.patch or variants)
- *   - Build date/time (if VTOC flag is set)
- *
- * Parameters:
- *   buf   - Output buffer for the version string
- *   len_p - Pointer to receive the actual output length
- */
 void GET_BUILD_TIME(char *buf, int16_t *len_p)
 {
-    int16_t max_len = 100;
-    int16_t written = 0;
-    int16_t segment_len;
-    int16_t remaining;
-    os_version_t *ver = (os_version_t *)OS_$REV;   /* 0x00E78400 */
+    os_$rev_block_t *rev = (os_$rev_block_t *)OS_$REV;   /* A5 = 0xE78400 */
+    int16_t sau;            /* (-0x4,A6) */
+    int16_t seg_len;        /* (-0x2,A6) */
+    int16_t remaining;      /* (-0x6,A6) */
 
     /*
-     * If OS_$REV is non-zero, this is a test or invalid build.
-     * Just return "?" to indicate unknown version.
+     * 0x00E38068 `move.w (0x00000100).l,D2w`: a 16-bit read of the machine
+     * id at 0x100.  prom/prom.h declares PROM_$MACHINE_ID as the 32-bit
+     * word there, so the word read is its high half.
      */
-    if (OS_$REV[0] != 0) {   /* tst.l (0x00E78400) */
+    sau = (int16_t)(PROM_$MACHINE_ID >> 16);
+
+    /* 0x00E3806E .. 0x00E3807A: a non-zero os_rev answers "?" */
+    if (rev->os_rev != 0) {
         *len_p = 1;
         *buf = '?';
         return;
     }
 
-    /*
-     * Format the kernel name with optional SAU type.
-     * SAU (System Architecture Unit) type indicates the CPU variant.
-     */
-    /*
-     * Original: move.w (0x00000100).l,D2w - a 16-bit read at 0x100.
-     * prom/prom.h declares PROM_$MACHINE_ID as a 32-bit word at that
-     * address, so on big-endian m68k the word read is the high half.
-     */
-    int16_t sau_and_aux = (int16_t)(PROM_$MACHINE_ID >> 16);
-    if (sau_and_aux == 0) {
-        /* No SAU type - simple format */
-        VFMT_$FORMATN(fmt_no_sau, buf, &max_len, len_p,
-                      ver->name, ver->name_len);
+    /* 0x00E3807E tst.w D2w / beq.b 0x00e380b0 */
+    if (sau != 0) {
+        /* 0x00E38082 .. 0x00E380AA: nine arguments, two of them padding */
+        VFMT_$FORMATN(get_build_time_fmt_name_sau_00e38238, buf,
+                      (int16_t *)&get_build_time_max_len_00e381e8, len_p,
+                      rev->name, &rev->name_len, &sau,
+                      &get_build_time_zero_00e38224, &get_build_time_zero_00e38224);
     } else {
-        /* Include SAU type in parentheses */
-        int16_t sau_type = sau_and_aux;
-        VFMT_$FORMATN(fmt_with_sau, buf, &max_len, len_p,
-                      ver->name, ver->name_len, &sau_type);
+        /* 0x00E380B0 .. 0x00E380CA: six arguments */
+        VFMT_$FORMATN(get_build_time_fmt_name_00e38228, buf,
+                      (int16_t *)&get_build_time_max_len_00e381e8, len_p,
+                      rev->name, &rev->name_len);
     }
-    written = *len_p;
 
-    /*
-     * Append version numbers.
-     * Format varies based on build_flag:
-     *   - build_flag != 0: major.minor.patch.build (4 components)
-     *   - build_flag == 0 && patch != 0: major.minor.patch (3 components)
-     *   - build_flag == 0 && patch == 0: major.minor (2 components)
-     */
-    remaining = 100 - written;
-
-    if (ver->build_flag != 0) {
-        /* Full 4-component version */
-        VFMT_$FORMATN(fmt_full_version, buf + written, &remaining, &segment_len,
-                      &ver->major, &ver->minor, &ver->patch, &ver->build_flag);
-    } else if (ver->patch != 0) {
-        /* 3-component version */
-        VFMT_$FORMATN(fmt_major_minor_patch, buf + written, &remaining, &segment_len,
-                      &ver->major, &ver->minor, &ver->patch);
+    /* 0x00E380CE tst.w (0xa,A5) / beq.b 0x00e38104 */
+    if (rev->build != 0) {
+        /* 0x00E380D4 .. 0x00E3816A: major.minor.patch.build plus one pad */
+        remaining = (int16_t)(100 - *len_p);
+        VFMT_$FORMATN(get_build_time_fmt_rev4_00e38212, buf + *len_p,
+                      &remaining, &seg_len,
+                      &rev->major, &rev->minor, &rev->patch, &rev->build,
+                      &get_build_time_zero_00e38224);
+    } else if (rev->patch == 0) {
+        /* 0x00E3810A .. 0x00E38132: major.minor, six arguments */
+        remaining = (int16_t)(100 - *len_p);
+        VFMT_$FORMATN(get_build_time_fmt_rev2_00e38208, buf + *len_p,
+                      &remaining, &seg_len,
+                      &rev->major, &rev->minor);
     } else {
-        /* 2-component version */
-        VFMT_$FORMATN(fmt_major_minor, buf + written, &remaining, &segment_len,
-                      &ver->major, &ver->minor);
+        /* 0x00E38138 .. 0x00E3816A: major.minor.patch plus two pads */
+        remaining = (int16_t)(100 - *len_p);
+        VFMT_$FORMATN(get_build_time_fmt_rev3_00e381fa, buf + *len_p,
+                      &remaining, &seg_len,
+                      &rev->major, &rev->minor, &rev->patch,
+                      &get_build_time_zero_00e38224, &get_build_time_zero_00e38224);
     }
-    written += segment_len;
-    *len_p = written;
 
-    /*
-     * Optionally append build date/time based on VTOC flag.
-     */
-    remaining = 100 - written;
+    /* 0x00E3816E .. 0x00E38172 */
+    *len_p = (int16_t)(*len_p + seg_len);
 
-    if (ver->vtoc_flag != 0) {
-        /* Include both date and time */
-        VFMT_$FORMATN(fmt_date_time, buf + written, &remaining, &segment_len,
-                      ver->build_date, (int16_t)sizeof(ver->build_date),
-                      ver->build_time, (int16_t)sizeof(ver->build_time));
+    /* 0x00E38174 tst.l (0x64,A5) / beq.b 0x00e381b0 */
+    if (rev->date_len != 0) {
+        /* 0x00E3817A .. 0x00E381A8: " date  time " plus one pad.  No stack
+         * cleanup follows this call; the frame is discarded by unlk. */
+        remaining = (int16_t)(100 - *len_p);
+        VFMT_$FORMATN(get_build_time_fmt_date_time_00e381f0, buf + *len_p,
+                      &remaining, &seg_len,
+                      rev->date, &rev->date_len, rev->time, &rev->time_len,
+                      &get_build_time_zero_00e38224);
     } else {
-        /* Just date, no time */
-        VFMT_$FORMATN(fmt_date_only, buf + written, &remaining, &segment_len,
-                      ver->build_date, (int16_t)sizeof(ver->build_date));
+        /* 0x00E381B0 .. 0x00E381D2: " time " only, six arguments */
+        remaining = (int16_t)(100 - *len_p);
+        VFMT_$FORMATN(get_build_time_fmt_date_00e381ea, buf + *len_p,
+                      &remaining, &seg_len,
+                      rev->time, &rev->time_len);
     }
-    written += segment_len;
-    *len_p = written;
+
+    /* 0x00E381D8 .. 0x00E381DC */
+    *len_p = (int16_t)(*len_p + seg_len);
 }

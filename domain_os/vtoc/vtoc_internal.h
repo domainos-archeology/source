@@ -314,6 +314,23 @@ _Static_assert(sizeof(vtoc_$vtoce_block_t) == 0x3F8,
  * VTOC_VOL(vol_idx) == OS_DISK_DATA + vol_idx*100 - 0x54.  Volume indices
  * are 1-based, so volume 1 occupies bytes 0x10..0x73 of vtoc_$data.
  */
+/*
+ * One entry of the per-volume VTOC partition table: `count` VTOC blocks
+ * (old format) or bucket blocks (new format) starting at disk block `base`.
+ * VTOC_$GET_UID walks ten of them on a new-format volume (`moveq #0x9,D5`
+ * at 0x00E39222) and eight on an old-format one (`moveq #0x7,D5` at
+ * 0x00E39238); the table itself has room for ten (0x18 .. 0x54).
+ */
+typedef struct __attribute__((packed)) vtoc_$vol_part_t {
+    uint16_t    count;              /* +0x00: blocks in this partition */
+    uint32_t    base;               /* +0x02: first disk block */
+} vtoc_$vol_part_t;
+
+#define VTOC_VOL_PARTS  10
+
+_Static_assert(sizeof(vtoc_$vol_part_t) == 6, "vtoc_$vol_part_t is 6 bytes");
+_Static_assert(__builtin_offsetof(vtoc_$vol_part_t, base) == 2, "vtoc_$vol_part_t.base");
+
 typedef struct vtoc_$vol_t {
     uint16_t    hash_type;          /* 0x00 (-0x54): 0=UID_$HASH, 2=shift-XOR, 3=XOR */
     uint16_t    hash_size;          /* 0x02 (-0x52): hash table size divisor */
@@ -323,8 +340,11 @@ typedef struct vtoc_$vol_t {
     uint32_t    name_dir2;          /* 0x0C (-0x48) */
     uint32_t    current_vtoce;      /* 0x10 (-0x44) */
     uint8_t     reserved_14[4];     /* 0x14 (-0x40) */
-    uint16_t    part_count;         /* 0x18 (-0x3C) */
-    uint8_t     partitions[0x3A];   /* 0x1A (-0x3A): 6-byte entries */
+    vtoc_$vol_part_t parts[VTOC_VOL_PARTS]; /* 0x18 (-0x3C): the VTOC partition
+                                     *   table, ten 6-byte {count, base} pairs
+                                     *   (VTOC_$GET_UID 0x00E39282 cmp.w (-0x3c,A0)
+                                     *   / 0x00E39298 add.l (-0x3a,A1,D7) with the
+                                     *   cursor advancing `addq.l #0x6,A0`) */
     uint32_t    cur_bkt_block;      /* 0x54 (+0x00): bucket block being filled
                                      *   (0xE38A9E tst.l (A3)) */
     uint16_t    cur_bkt_idx;        /* 0x58 (+0x04): next bucket in that block,
@@ -339,8 +359,10 @@ _Static_assert(__builtin_offsetof(vtoc_$vol_t, blocks_added) == 0x04,
                "vtoc_$vol_t.blocks_added must be at -0x50");
 _Static_assert(__builtin_offsetof(vtoc_$vol_t, current_vtoce) == 0x10,
                "vtoc_$vol_t.current_vtoce must be at -0x44");
-_Static_assert(__builtin_offsetof(vtoc_$vol_t, part_count) == 0x18,
-               "vtoc_$vol_t.part_count must be at -0x3C");
+_Static_assert(__builtin_offsetof(vtoc_$vol_t, parts) == 0x18,
+               "vtoc_$vol_t.parts must be at -0x3C");
+_Static_assert(__builtin_offsetof(vtoc_$vol_t, parts[9].base) == 0x50,
+               "vtoc_$vol_t.parts[9].base must be at -0x04");
 _Static_assert(__builtin_offsetof(vtoc_$vol_t, cur_bkt_block) == 0x54,
                "vtoc_$vol_t.cur_bkt_block must be at +0x00");
 _Static_assert(__builtin_offsetof(vtoc_$vol_t, cur_bkt_idx) == 0x58,
@@ -375,16 +397,38 @@ _Static_assert(__builtin_offsetof(vtoc_$vol_t, cur_bkt_idx) == 0x58,
 #define VTOC_UID_CACHE_BUCKETS  101
 #define VTOC_UID_CACHE_ENTRIES  4
 
+/*
+ * Layout recovered from vtoc_$uid_cache_insert (0x00E382A8) and
+ * vtoc_$uid_cache_lookup (0x00E38324):
+ *   +0x00  uid         compared with two cmpm.l (0x00E382E2 / 0x00E38362)
+ *   +0x08  block_info  `move.l (0xe,A6),(0x8,A2)` at 0x00E3830C, read back
+ *                      by the lookup at 0x00E3838A
+ *   +0x0C  vol         the WORD the insert stores its vol_idx argument in
+ *                      (0x00E38312); non-zero means the entry is valid
+ *                      (`tst.w (0xc,A0)` at 0x00E382EA / 0x00E3836A) and it
+ *                      is what the lookup returns through its flags pointer
+ *                      (0x00E38384)
+ *   +0x0E  age         cleared by the insert (0x00E38316), aged by the lookup
+ *                      (`cmpi.w #-0x2,(0xe,A0)` / `addq.w #0x1` at
+ *                      0x00E38390), largest wins replacement (0x00E382F0)
+ * The bucket index is the word at uid+2 (`move.w (0x2,A1),D0w`), i.e. the
+ * low half of uid.high, modulo 101.
+ */
 typedef struct vtoc_$uid_cache_entry_t {
     uid_t       uid;                /* 0x00: UID */
     uint32_t    block_info;         /* 0x08: Block info (block << 4 | entry) */
-    uint16_t    age;                /* 0x0C: Age counter */
-    uint16_t    valid;              /* 0x0E: Valid flag (0xFFFF = valid, 0 = invalid) */
+    uint16_t    vol;                /* 0x0C: volume index; 0 = entry invalid */
+    uint16_t    age;                /* 0x0E: age counter (saturates at 0xFFFE) */
 } vtoc_$uid_cache_entry_t;
 
 typedef struct vtoc_$uid_cache_bucket_t {
     vtoc_$uid_cache_entry_t entries[VTOC_UID_CACHE_ENTRIES];  /* 16 bytes each */
 } vtoc_$uid_cache_bucket_t;
+
+_Static_assert(sizeof(vtoc_$uid_cache_entry_t) == 0x10, "vtoc_$uid_cache_entry_t is 16 bytes");
+_Static_assert(__builtin_offsetof(vtoc_$uid_cache_entry_t, vol) == 0x0C, "vtoc_$uid_cache_entry_t.vol");
+_Static_assert(__builtin_offsetof(vtoc_$uid_cache_entry_t, age) == 0x0E, "vtoc_$uid_cache_entry_t.age");
+_Static_assert(sizeof(vtoc_$uid_cache_bucket_t) == 0x40, "vtoc_$uid_cache_bucket_t is 0x40 bytes (lsl.l #0x6)");
 
 extern vtoc_$uid_cache_bucket_t vtoc_$uid_cache[VTOC_UID_CACHE_BUCKETS];
 
@@ -420,8 +464,14 @@ extern vtoc_$uid_cache_bucket_t vtoc_$uid_cache[VTOC_UID_CACHE_BUCKETS];
 void vtoc_$hash_uid(uid_t *uid, short vol_idx, uint16_t *bucket_idx,
                     uint32_t *block, status_$t *status);
 
-/* UID cache lookup/update (vtoc_$uid_cache_lookup, 0x00e38324) */
-uint8_t vtoc_$uid_cache_lookup(uid_t *uid, uint16_t *flags, uint32_t *block_info, char update);
+/* UID cache lookup (vtoc_$uid_cache_lookup, 0x00e38324).  Returns a Domain
+ * boolean in D0b; `remove` is the byte at A6+0x14: negative empties the
+ * matching entry (`move.l #0xffff,(0xc,A0)` = vol 0, age 0xFFFF). */
+uint8_t vtoc_$uid_cache_lookup(uid_t *uid, uint16_t *flags, uint32_t *block_info, char remove);
+
+/* 0x00E38F7E: the NEW_TO_OLD flags byte shared by VTOC_$ALLOCATE and
+ * VTOCE_$WRITE (vtoc_data.c) */
+extern char vtoc_$new_to_old_flags_00e38f7e;
 
 /* UID cache insert (uid_cache.c) */
 void vtoc_$uid_cache_insert(uid_t *uid, int16_t vol_idx, uint32_t block_info);

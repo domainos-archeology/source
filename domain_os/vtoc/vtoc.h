@@ -173,15 +173,17 @@ void VTOC_$LOOKUP(vtoc_$lookup_req_t *req, status_$t *status);
  *
  * Retrieves the UID of a VTOCE given its block and entry index.
  *
- * @param vol_idx   Volume index
- * @param vtoc_idx  VTOC index (bucket for new format)
- * @param entry_idx Entry index within block
- * @param uid_ret   Receives the UID
+ * @param vol_idx   Volume index (word, by reference)
+ * @param vtoc_idx  VTOC block index (word, by reference); on a new-format
+ *                  volume its low two bits select the bucket
+ * @param entry_idx Entry index (WORD, by reference: `move.w (A2),D1w` at
+ *                  0x00E39210), counted across the block / bucket chain
+ * @param uid_ret   Receives the UID (always written)
  * @param status    Output status code
  *
  * Original address: 0x00e391f2
  */
-void VTOC_$GET_UID(int16_t *vol_idx, uint16_t *vtoc_idx, uint32_t *entry_idx,
+void VTOC_$GET_UID(int16_t *vol_idx, uint16_t *vtoc_idx, uint16_t *entry_idx,
                    uid_t *uid_ret, status_$t *status);
 
 /*

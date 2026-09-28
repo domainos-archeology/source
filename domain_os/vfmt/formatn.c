@@ -95,6 +95,12 @@ void VFMT_$FORMATN(const char *format, char *buf, int16_t *max_len,
      * directly since VFMT_$MAIN treats it as a pointer to an
      * array of 4-byte values.
      */
+    /*
+     * TODO(source-og4f): on m68k a va_list is the address of the 4-byte
+     * argument slots (the image's `pea (0x18,A6)`), but on hosts where
+     * va_list is a struct (x86-64) this hands VFMT_$MAIN the struct
+     * itself; the argument array needs an ARCH-isolated construction.
+     */
     VFMT_$MAIN(format, buf, max_len, out_len, (void *)ap);
 
     va_end(ap);

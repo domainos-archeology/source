@@ -6,6 +6,24 @@
  *
  * Initializes the VTOC subsystem for a volume after BAT_$MOUNT.
  * Reads the volume label block and copies VTOC configuration data.
+ *
+ * Frame (link.w A6,-0x4c; D2-D4/A2-A5 saved; A5 = 0xE784D0 = &vtoc_$data):
+ *   (0x8,A6)   vol_idx     word -> D2w
+ *   (0xa,A6)   param_2     word, stored at OS_DISK_DATA[vol_idx*2-2]
+ *                          (0x00E38646) and in the audit record (0x00E3870A)
+ *   (0xc,A6)   param_3     byte, forwarded to BAT_$MOUNT (0x00E385B6)
+ *   (0xe,A6)   param_4     byte -> D3b; negative = write-protect the disk
+ *                          first (0x00E3859E bpl); stored as the volume's
+ *                          write-protect flag (0x00E3863E)
+ *   (0x10,A6)  status_ret  pointer -> A2
+ *   (-0x38,A6) audit_rec   the 0x32-byte audit record
+ *   (-0x3c,A6) local_status  DISK_$WRITE_PROTECT's / DBUF_$SET_BUFF's status
+ *   (-0x40,A6) bat_status  BAT_$MOUNT's status
+ *   (-0x48,A6) audit_param word
+ *
+ * Re-checked against the disassembly 2026-09-19 (0x00E38584 .. 0x00E38761):
+ * the body was already faithful; the sign test on param_4 is now done on
+ * an int8_t so it does not depend on the host's `char` signedness.
  */
 
 #include "vtoc/vtoc_internal.h"
@@ -32,8 +50,10 @@ void VTOC_$MOUNT(int16_t vol_idx, uint16_t param_2, uint8_t param_3, char param_
      */
     vtoc_$audit_mount_rec_t audit_rec;
 
-    /* If param_4 negative, set write protection */
-    if (param_4 < 0) {
+    /* 0x00E38596 `move.b (0xe,A6),D3b` / 0x00E3859E `bpl.b`: a negative
+     * (Domain true) param_4 write-protects the disk first;
+     * DISK_$WRITE_PROTECT(0, vol_idx, &local_status) at 0x00E385A0 */
+    if ((int8_t)param_4 < 0) {
         DISK_$WRITE_PROTECT(0, vol_idx, &local_status);
     }
 

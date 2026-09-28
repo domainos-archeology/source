@@ -6,6 +6,27 @@
  *
  * Reads a VTOCE given lookup request. Converts old format to new format
  * if necessary.
+ *
+ * Frame (link.w A6,-0x14; D2-D6/A2-A5 saved; A5 = 0xE784D0 = &vtoc_$data):
+ *   (0x8,A6)   req         pointer -> A3
+ *   (0xc,A6)   result      pointer -> D5
+ *   (0x10,A6)  status_ret  pointer -> A4
+ *   (-0x4,A6)  cache_info  the location handed to vtoc_$uid_cache_insert:
+ *                          its low nibble starts as stack garbage
+ *                          (`andi.l #0xf,(-0x4,A6)` at 0x00E39630) and is
+ *                          overwritten with the entry number before every
+ *                          insert (0x00E39654 .. 0x00E3965C)
+ *   (-0xc,A6)  block       req->block_hint >> 4
+ *   D2w        vol_idx     req byte +0x1c, zero-extended
+ *   D3b        entry_idx   low nibble of req byte +7
+ *   D6         buf
+ *
+ * NETLOG_$LOG_IT is called with six pushes (0x00E3955A .. 0x00E39566:
+ * `clr.l`, `clr.w`, vol_idx, `clr.l`, &uid, 0x11) which fill the eight
+ * word/long slots of its prototype as (0x11, &uid, 0, 0, vol_idx, 0, 0, 0).
+ *
+ * Re-checked against the disassembly 2026-09-19 (0x00E394EC .. 0x00E396D5):
+ * the body was already faithful.
  */
 
 #include "vtoc/vtoc_internal.h"

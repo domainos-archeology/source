@@ -6,6 +6,20 @@
  *
  * Converts a new format VTOCE (0x150 bytes) to old format (0xCC bytes).
  * Some fields are lost in the conversion.
+ *
+ * Frame (link.w A6,0x0; A2/A3 saved):
+ *   (0x8,A6)   new_vtoce   pointer -> A0 (source)
+ *   (0xc,A6)   flags       pointer to a byte; negative selects the parent
+ *                          UID at new+0x04 and sets bit 3 of old byte 0x18
+ *                          (0x00E38502 .. 0x00E38518), otherwise the one
+ *                          at new+0x88 and the low nibble is cleared
+ *   (0x10,A6)  old_vtoce   pointer -> A1 (destination)
+ *
+ * Both records are treated as byte arrays; every longword / word move is
+ * between same-sized fields at fixed offsets, so the copies are byte-order
+ * neutral.  Re-checked against the disassembly 2026-09-19 (0x00E384C4 ..
+ * 0x00E38583): the body was already faithful; the two byte sign tests are
+ * now on int8_t rather than `char`.
  */
 
 #include "vtoc/vtoc_internal.h"
@@ -17,13 +31,14 @@ void VTOCE_$NEW_TO_OLD(void *new_vtoce_ptr, char *flags, void *old_vtoce_ptr)
     int16_t i;
     uint8_t *src;
     uint8_t *dst;
-    char ext_flags;
+    int8_t ext_flags;
 
     /* Copy first long (type_mode, flags, etc.) */
     old_vtoce[0] = new_vtoce[0];
 
-    /* Extract ext_flags bit 7 -> old status bit 1 */
-    ext_flags = ((char *)new_vtoce)[0x65];
+    /* 0x00E384D6 .. 0x00E384E6: ext_flags bit 7 -> old status bit 1
+     * (`smi` / `lsr.b #7` / `add.b D0b,D0b`) */
+    ext_flags = (int8_t)((uint8_t *)new_vtoce)[0x65];
     ((uint8_t *)old_vtoce)[2] &= 0xFD;
     if (ext_flags < 0) {
         ((uint8_t *)old_vtoce)[2] |= 0x02;
@@ -39,8 +54,8 @@ void VTOCE_$NEW_TO_OLD(void *new_vtoce_ptr, char *flags, void *old_vtoce_ptr)
         *dst++ = *src++;
     }
 
-    /* Copy parent UID based on flags */
-    if (*flags < 0) {
+    /* 0x00E384FE tst.b (A2) / bpl.b: copy the parent UID based on flags */
+    if ((int8_t)*flags < 0) {
         /* Use alternate parent from new offset 0x04 */
         old_vtoce[5] = new_vtoce[1];
         old_vtoce[6] = new_vtoce[2];

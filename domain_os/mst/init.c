@@ -16,6 +16,10 @@
  * with `movea.l (A6),A2` (0x00E30B1C), so the three frame slots it shares
  * with its parent - (-0x10,A6), (-0x12,A6) and (-0x14,A6) - are modelled
  * here as file statics.
+ *
+ * Re-checked against the disassembly 2026-09-19 (0x00E30B88 .. 0x00E30DA7,
+ * nested procedures 0x00E30AAE .. 0x00E30B09 and 0x00E30B10 .. 0x00E30B87):
+ * no changes were needed.
  */
 
 #include "mst/mst_internal.h"

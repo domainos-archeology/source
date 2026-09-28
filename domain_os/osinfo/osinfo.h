@@ -167,7 +167,9 @@ extern void OSINFO_$GET_SEG_TABLE(short *type_ptr, void *buffer,
 // @param ws_list: Buffer for working set list (if MMAP_FLAG_GET_WS_LIST)
 // @param uid_out: Buffer for UID output (if MMAP_FLAG_FIND_PAGE)
 // @param status: Pointer to receive status
-extern void OSINFO_$GET_MMAP(int flags, void *counters, void *info,
+// The first argument is a POINTER to the request record; byte 1 of that
+// record holds the MMAP_FLAG_* bits (`btst.b #n,(0x1,A1)`, 0x00E5C6B6).
+extern void OSINFO_$GET_MMAP(void *flags_p, void *counters, void *info,
                              void *ws_data, void *ws_list, void *uid_out,
                              status_$t *status);
 

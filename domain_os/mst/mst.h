@@ -413,7 +413,7 @@ uint32_t MST_$FIND(uint32_t virt_addr, uint16_t flags);
  * the body; `flags` is the byte at A6+0x14, forwarded to AST_$RELEASE_PAGES.
  */
 void MST_$REMOVE_SEG(locate_request_t *request, uint32_t param_2,
-                     uint16_t param_3, uint16_t param_4, uint8_t flags);
+                     uint16_t param_3, uint16_t param_4, boolean flags);
 uint32_t MST_$WIRE(uint32_t vpn, status_$t *status_ret);
 /*
  * MST_$WIRE_AREA - wire every page of [*start_va_ptr, *end_va_ptr]
@@ -443,11 +443,12 @@ void MST_$GET_UID_ASID(uint16_t *asid_p, uint32_t *va_ptr, uid_t *uid_out,
                        uint32_t *adjusted_va, status_$t *status_ret);
 /*
  * MST_$GET_VA_INFO (0x00E4404E): the fifth argument is forwarded unchanged
- * to mst_$va_to_pte as its prot_out word (`move.l (0x18,A6),-(SP)` at
- * 0x00E44094); active_flag is flags bit 15 (`smi`), modified_flag bit 14.
+ * to mst_$va_to_pte as its prot_out WORD (`move.l (0x18,A6),-(SP)` at
+ * 0x00E44094) - it stays `void *` here only so existing callers' mocks keep
+ * building; active_flag is flags bit 15 (`smi`), modified_flag bit 14.
  */
 void MST_$GET_VA_INFO(uint16_t *asid_p, uint32_t *va_ptr, uid_t *uid_out,
-                      uint32_t *adjusted_va, uint16_t *prot_out, boolean *active_flag,
+                      uint32_t *adjusted_va, void *prot_out, boolean *active_flag,
                       boolean *modified_flag, status_$t *status_ret);
 /*
  * MST_$GET_PRIVATE_SIZE (0x00E44AAE) takes four by-reference arguments, not

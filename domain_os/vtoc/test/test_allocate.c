@@ -416,7 +416,7 @@ static int test_old_format_allocates_free_entry(void)
     CHECK(new_to_old_src == (void *)new_vtoce_img);
     CHECK(new_to_old_dst == (void *)&blk->entries[1]);
     CHECK_EQ(0, new_to_old_flag_value);
-    CHECK(new_to_old_flag_ptr == &vtoc_$new_to_old_flags);
+    CHECK(new_to_old_flag_ptr == &vtoc_$new_to_old_flags_00e38f7e);
     /* 0xE38E6E: block released dirty (9), no writeback */
     CHECK_EQ(1, sb_count);
     CHECK(sb_calls[0].buffer == buf_a);

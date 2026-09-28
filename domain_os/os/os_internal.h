@@ -137,6 +137,8 @@ extern void *_BUS_ERROR_VEC;
  */
 
 /* FP_$SAVEP: see fp/fp.h */
+/* 0xE82738: the clock_t OS_$SHUTDOWN waits on (os_data.c) */
+extern clock_t OS_$SHUTDOWN_WAIT_TIME;
 extern m68k_ptr_t PTR_OS_PROC_SHUTWIRED;
 extern m68k_ptr_t PTR_OS_PROC_SHUTWIRED_END;
 /* PTR_OS_DATA_SHUTWIRED is declared in os/os.h (shared with stop/) */

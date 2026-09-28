@@ -1,57 +1,64 @@
-// OS_$DATA_COPY - Copy memory efficiently
-// Address: 0x00e11f04
-// Size: 62 bytes
-//
-// Optimized memory copy that uses 4-byte transfers when both source
-// and destination are at least 2-byte aligned.
+/*
+ * OS_$DATA_COPY - copy a block of memory
+ *
+ * Original address: 0x00E11F04
+ * Size: 62 bytes (0x00E11F04 .. 0x00E11F41)
+ *
+ * A hand-optimised copy without a link frame: the arguments are read
+ * straight off the caller's stack.  When both addresses are even the bulk
+ * is moved a longword at a time and the tail a byte at a time; otherwise
+ * everything goes byte by byte.  Only the LOW WORD of the length is used,
+ * and both loop counts are set up with `subq.w #1` / `blt`, so a low word
+ * of 0x8001 or more copies nothing in the byte loop.
+ *
+ *   0x00E11F04  movem.l (0x4,SP),{A0 A1}    A0 = arg1, A1 = arg2
+ *   0x00E11F0A  swap them                   A0 = dst (arg2), A1 = src (arg1)
+ *   0x00E11F10  move.l (0xc,SP),D0          len
+ *   0x00E11F14  btst.l #0,D1 (dst) / bne    odd dst -> byte loop
+ *   0x00E11F1C  btst.l #0,D1 (src) / bne    odd src -> byte loop
+ *   0x00E11F24  D1w = len; D0w = len & 3; D1w = (D1w >> 2) - 1; blt skip
+ *   0x00E11F30  move.l (A1)+,(A0)+ / dbf D1w
+ *   0x00E11F36  subq.w #1,D0w / blt done
+ *   0x00E11F3A  move.b (A1)+,(A0)+ / dbf D0w
+ *
+ * Verified against the disassembly 2026-09-27; the body was already
+ * faithful and is restated with the register widths made explicit.
+ */
 
 #include "os/os_internal.h"
 
 void OS_$DATA_COPY(const void *src_v, void *dst_v, uint32_t len)
 {
-    const char *src = (const char *)src_v;
-    char *dst = (char *)dst_v;
-    ushort remaining;
-    ushort count;
-    short i;
-    const ulong *src_long;
-    ulong *dst_long;
+    const uint8_t *src = (const uint8_t *)src_v;      /* A1 */
+    uint8_t *dst = (uint8_t *)dst_v;                  /* A0 */
+    uint16_t d0w = (uint16_t)len;                     /* D0w */
+    int16_t d1w;                                      /* D1w */
+    int16_t count;
 
-    remaining = (ushort)len;
-    count = remaining;
-
-    // Check if both pointers are at least 2-byte aligned
-    // (odd address check - if bit 0 is 0, pointer is even/aligned)
-    if (((uintptr_t)dst & 1) == 0 && ((uintptr_t)src & 1) == 0) {
-        // Both are aligned - copy 4 bytes at a time
-        count = remaining & 3;  // Remaining bytes after 4-byte copies
-        i = (remaining >> 2) - 1;  // Number of 4-byte words to copy
-
-        dst_long = (ulong *)dst;
-        src_long = (const ulong *)src;
-
-        if ((remaining >> 2) != 0) {
-            do {
-                *dst_long = *src_long;
-                src_long++;
-                dst_long++;
-                i--;
-            } while (i != -1);
-
-            // Update byte pointers for trailing bytes
-            dst = (char *)dst_long;
-            src = (const char *)src_long;
+    /* 0x00E11F14 .. 0x00E11F22: both addresses even? */
+    if ((ARCH_PTR_TO_VA(dst) & 1) == 0 && (ARCH_PTR_TO_VA(src) & 1) == 0) {
+        /* 0x00E11F24 .. 0x00E11F2E */
+        d1w = (int16_t)(d0w >> 2);
+        d0w &= 3;
+        d1w = (int16_t)(d1w - 1);
+        if (d1w >= 0) {
+            /* 0x00E11F30 .. 0x00E11F32: d1w + 1 longwords */
+            for (count = d1w; count != -1; count--) {
+                dst[0] = src[0];
+                dst[1] = src[1];
+                dst[2] = src[2];
+                dst[3] = src[3];
+                src += 4;
+                dst += 4;
+            }
         }
     }
 
-    // Copy remaining bytes (or all bytes if not aligned) one at a time
-    i = count - 1;
-    if ((short)count > 0) {
-        do {
-            *dst = *src;
-            dst++;
-            src++;
-            i--;
-        } while (i != -1);
+    /* 0x00E11F36 .. 0x00E11F3C: `subq.w #1` / `blt` - a signed test */
+    d1w = (int16_t)(d0w - 1);
+    if (d1w >= 0) {
+        for (count = d1w; count != -1; count--) {
+            *dst++ = *src++;
+        }
     }
 }

@@ -24,17 +24,24 @@
  * failure - the 0x20-byte location descriptor is rewritten (0xE38F24).
  *
  * A5 = 0xE784D0 = OS_DISK_DATA = &vtoc_$data throughout.
+ *
+ * Re-checked instruction by instruction against the disassembly 2026-09-19
+ * (0x00E388AC .. 0x00E38F7D): the DBUF_$GET_BLOCK word-pair arguments
+ * (`clr.l` = two zero words, `pea (0x10).w` = 0 then DBUF_GET_NO_READ), the
+ * bucket offset in D5 surviving from 0x00E38A5C to 0x00E38C8C, the +4 entry
+ * base of the old-format block (0x00E38E46/0x00E38E5A), the `cmpa.w #0,A3`
+ * test at 0x00E38EC0 and the constant cell 0x00E38F7E (image bytes 00 00).
+ * No changes were needed.
  */
 
 #include "vtoc/vtoc_internal.h"
 #include "proc1/proc1.h"
 
 /*
- * Constant cell at 0xE38F7E, passed by reference with `pea (0x11e,PC)` at
- * 0xE38E5E as VTOCE_$NEW_TO_OLD's second (var) argument.  The image holds
- * 0x00, i.e. "do not substitute the alternate parent UID".
+ * The cell at 0xE38F7E, passed by reference with `pea (0x11e,PC)` at
+ * 0xE38E5E as VTOCE_$NEW_TO_OLD's second (var) argument, is shared with
+ * VTOCE_$WRITE and defined in vtoc_data.c (vtoc_$new_to_old_flags_00e38f7e).
  */
-static char vtoc_$new_to_old_flags = 0;
 
 /*
  * Process type that performs the (expensive) duplicate-UID chain walk before
@@ -404,7 +411,7 @@ old_have_entry:                                         /* 0xE38E1E */
 
     /* 0xE38E5A-0xE38E66: the middle argument is the constant cell at
      * 0xE38F7E, passed by reference with pea (0x11e,PC). */
-    VTOCE_$NEW_TO_OLD(new_vtoce, &vtoc_$new_to_old_flags, ovt);
+    VTOCE_$NEW_TO_OLD(new_vtoce, &vtoc_$new_to_old_flags_00e38f7e, ovt);
 
     DBUF_$SET_BUFF(blk_buf, blk_dirty, status);         /* 0xE38E6E */
     if (*status != status_$ok) {                        /* 0xE38E88 */

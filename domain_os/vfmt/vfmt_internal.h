@@ -37,70 +37,11 @@
 #define VFMT_MOD_M          0x4D    /* 'M' - Width follows */
 
 /*
- * VFMT context structure
- *
- * Maintains state during format string processing.
- * Passed implicitly via the frame pointer in the original Pascal code.
+ * The nested procedures of VFMT_$MAIN (vfmt_output_char 0x00E6A9F6,
+ * vfmt_get_next_arg 0x00E6AA38, vfmt_parse_number 0x00E6AA4C,
+ * vfmt_parse_number_after_m 0x00E6AAB6 and vfmt_format_number 0x00E6A704)
+ * reach VFMT_$MAIN's frame through the Pascal static link and are static
+ * functions of vfmt/main.c; nothing outside that file calls them.
  */
-typedef struct {
-    const char *format;          /* Format string (1-based indexing) */
-    char *output;                /* Output buffer */
-    int16_t max_len;             /* Maximum output length */
-    int16_t *out_len_p;          /* Pointer to output length */
-    void **args;                 /* Current argument pointer */
-    int16_t format_pos;          /* Current position in format string */
-    int16_t arg_count;           /* Number of arguments consumed */
-    int16_t max_written;         /* Maximum position written to */
-    int16_t repeat_count;        /* Current repeat count */
-    int16_t repeat_pos;          /* Position to repeat from */
-} vfmt_ctx_t;
-
-/*
- * vfmt_output_char - Output a single character
- *
- * Writes a character to the output buffer if space remains.
- * This is a nested sub-procedure in the original Pascal.
- *
- * Original address: 0x00e6a9f6
- */
-void vfmt_output_char(vfmt_ctx_t *ctx, char c);
-
-/*
- * vfmt_parse_number - Parse numeric field width from format string
- *
- * Parses digits from the format string to build a field width value.
- * Returns -1 if no digits found.
- *
- * Original address: 0x00e6aa4c
- */
-int16_t vfmt_parse_number(vfmt_ctx_t *ctx);
-
-/*
- * vfmt_parse_number_after_m - Parse number after 'M' modifier
- *
- * Similar to vfmt_parse_number but starts parsing after an 'M'
- * modifier has been seen.
- *
- * Original address: 0x00e6aab6
- */
-int16_t vfmt_parse_number_after_m(vfmt_ctx_t *ctx);
-
-/*
- * vfmt_format_number - Format a numeric value
- *
- * Converts an integer to its string representation with the
- * specified base and formatting options.
- *
- * Parameters:
- *   spec       - Format specifier string
- *   value      - Pointer to value to format
- *   output     - Output buffer
- *   max_len    - Maximum output length
- *   out_len    - Receives actual output length
- *
- * Original address: 0x00e6a704
- */
-void vfmt_format_number(const char *spec, void *value, char *output,
-                        int16_t max_len, int16_t *out_len);
 
 #endif /* VFMT_INTERNAL_H */
