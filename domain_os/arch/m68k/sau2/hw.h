@@ -86,14 +86,62 @@
 #define SAU2_PEB_CS_PAGE        ((volatile uint16_t *)0x00FF7800u)
 
 /*
- * Memory error status (the MMU register page, map MMU 0xFFB400)
+ * The MMU register page (map MMU 0xFFB400) and the MMU's two tables
  *
+ * Register names and layouts are Apollo's, from the DN3xx chapter of the
+ * Domain Engineering Handbook (002398-04 Rev4, Jan87), pages 7-23..7-27;
+ * mmu/mmu.h documents the bits.  Only the hand-written MMU_ASM routines
+ * (mmu/sau2/*.s), FIM_$BUS_ERR, IO_$PROBE, PROC1_$DISPATCH, PARITY_$CHK
+ * and the FP context code (fp/sau2/fp_context.s, the FPU owner register)
+ * touch them; the .s files spell the same addresses as commented `.equ's,
+ * since they are not preprocessed.
+ *
+ * SAU2_MMU_REGS          - the register page itself, 0xFFB400.
+ * SAU2_MMU_CSR           - 0xFFB400 word: PID (high byte) / privilege /
+ *   PTT-access control and status (`move.w ...,(0xffb400).l' in every
+ *   MMU_ASM routine that brackets a table walk).
+ * SAU2_MMU_POWER_REG     - 0xFFB402 word: power / status control; its first
+ *   byte is the handbook's FPU Owner Register (write-only ASID of the FPU
+ *   owner), SAU2_MMU_FPU_OWNER_REG, which MMU_$INSTALL_ASID stores with
+ *   `move.b (0x00e218d5).l,(0x00ffb402).l' (0x00E2421C).  MMU_$POWER_OFF
+ *   reads the word (0x00E2428C).
+ * SAU2_MMU_STATUS_REG    - 0xFFB403 byte: fault / status (bit 4 = normal
+ *   mode, MMU_$NORMAL_MODE 0x00E24280).
+ * SAU2_MMU_MCR_M68010    - 0xFFB405 byte: memory control on a 68010 CPU.
+ * SAU2_MMU_MCR_MASK      - 0xFFB407 byte: its read-back mask.
+ * SAU2_MMU_MCR_M68020    - 0xFFB408 byte: memory control on a 68020 CPU
+ *   (MMU_$MCR_CHANGE 0x00E242A0).
+ * SAU2_MMU_HW_REV        - 0xFFB409 byte: the DN330 MMU hardware revision
+ *   MMU_$SET_SYSREV latches (0x00E24276).
+ * SAU2_MMU_PARITY_REG    - 0xFFB40A word: MMU parity register, DN3xx only
+ *   (FIM_$BUS_ERR).
  * SAU2_MEM_ERR_STATUS_LONG / _WORD - the latched memory error status,
  *   read as a longword at 0xFFB404 and as a word at 0xFFB406 and cleared
  *   through the word by PARITY_$CHK (parity/chk.c).
+ *
+ * SAU2_PTT_BASE - the page translation table window, 0x700000: one word
+ *   per PTT slot (the chain head's ppn), reached as 0x700000 + (va &
+ *   VA_TO_PTT_OFFSET_MASK) (`add.l #0x700000,Dn', MMU_$VTOP 0x00E2411C,
+ *   mmu_$installi 0x00E240D8; `lea (0x700000).l,A2', mmu_$remove_pmape
+ *   0x00E23DE6).  Only addressable while the CSR's PTT-access bit is set.
+ * SAU2_PFT_BASE - the page frame table, map PFT 0xFFB800: one longword per
+ *   physical page (`lea (0xffb800).l,An' throughout MMU_ASM).
  */
+#define SAU2_MMU_REGS            0x00FFB400u
+#define SAU2_MMU_CSR             ((volatile uint16_t *)0x00FFB400u)
+#define SAU2_MMU_POWER_REG       ((volatile uint16_t *)0x00FFB402u)
+#define SAU2_MMU_FPU_OWNER_REG   ((volatile uint8_t *)0x00FFB402u)
+#define SAU2_MMU_STATUS_REG      ((volatile uint8_t *)0x00FFB403u)
 #define SAU2_MEM_ERR_STATUS_LONG ((volatile uint32_t *)0x00FFB404u)
+#define SAU2_MMU_MCR_M68010      ((volatile uint8_t *)0x00FFB405u)
 #define SAU2_MEM_ERR_STATUS_WORD ((volatile uint16_t *)0x00FFB406u)
+#define SAU2_MMU_MCR_MASK        ((volatile uint8_t *)0x00FFB407u)
+#define SAU2_MMU_MCR_M68020      ((volatile uint8_t *)0x00FFB408u)
+#define SAU2_MMU_HW_REV          ((volatile uint8_t *)0x00FFB409u)
+#define SAU2_MMU_PARITY_REG      ((volatile uint16_t *)0x00FFB40Au)
+
+#define SAU2_PTT_BASE            ((uint16_t *)0x00700000u)
+#define SAU2_PFT_BASE            ((uint32_t *)0x00FFB800u)
 
 /*
  * IODEFS buffer pages: fixed virtual pages of the I/O region (map IODEFS

@@ -18,18 +18,21 @@ Classes (the ones the step's bead defines):
 
 | class | meaning | allowed | guards |
 |---|---|---|---|
-| a | `_Static_assert`s on a pointer-bearing record, true only on the 32-bit target | yes | 153 |
+| a | `_Static_assert`s on a pointer-bearing record, true only on the 32-bit target | yes | 152 |
 | b | host fallback body of a routine that is hand-written assembly on the target (`<subsystem>/sau2/*.s`) | yes | 35 |
 | c | `.text.<symbol>` section-attribute macro for the target's link order | yes | 5 |
 | d | hardware register access | only in `arch/` or a per-SAU header | 0 (see below) |
-| e | data declaration / definition or absolute-address macro | no: converted, or exempt for a tracked bead | 2 exempt |
+| e | data declaration / definition or absolute-address macro | no: converted, or exempt for a tracked bead | 0 (none exempt) |
 | f | anything else (decided per guard below) | yes | 5 |
 
-200 guards in all (213 at source-702z; source-gmxj converted the eleven
+197 guards in all (213 at source-702z; source-gmxj converted the eleven
 AST_ guards and added two assert guards for the AST_$DATA / AST_$AOT
 blocks; source-qiby, source-fyjc and source-4k71 converted the DIR, MMAP
 page table and STACK guards and dropped dir/dir_data.c's `DIR_$OP_TAB`
-assert guard, the table being a DIR_$DATA field asserted unconditionally).  At 2e17a86 there were 255: the first scan found 53 with a
+assert guard, the table being a DIR_$DATA field asserted unconditionally;
+source-o56c converted the two MMU guards and dropped mmu/mmu.h's
+`mmu_globals_t` assert guard, the cells being the pointer-free
+`MMU_$GLOBALS` block asserted unconditionally).  At 2e17a86 there were 255: the first scan found 53 with a
 forbidden form (11 absolute-address macros, 29 with externs, 13 with object
 definitions) and the macro-expanding scan four more (cal/cal.h, time/time.h,
 dir/dir_internal.h, volx/volx_internal.h).
@@ -70,11 +73,13 @@ code touching a SAU2 register defines the `SAU2_` name itself.
 name the guard defines; an entry that no longer matches a forbidden guard
 fails the check, so the table shrinks as the beads land.  source-qiby
 (`DIR_$DATA`), source-fyjc (`MMAP_$MMAPE`) and source-4k71 (`OS_$STACK`)
-landed on 2026-09-29; the MMU guards remain.
-
-| bead | guards | what |
-|---|---|---|
-| source-o56c | mmu/mmu.h, mmu/mmu_data.c | the MMU_ASM cells the mmu/sau2 assembly owns, `MMU_$PTTX`, and the MMU register page |
+landed on 2026-09-29, and source-o56c the same day: the MMU_ASM data run is
+the `MMU_$GLOBALS` block and the PTT index table the `MMU_$PTTX` block
+(mmu/mmu.h, mmu/mmu_data.c), which the mmu/sau2 files reach by name; the
+MMU register page and the PTT / PFT windows are `SAU2_MMU_*`,
+`SAU2_PTT_BASE` and `SAU2_PFT_BASE` in arch/m68k/sau2/hw.h; and
+`MMU_$SYSTEM_REV` / `MCR_SHADOW` are declared once and defined by the
+assembly that owns them.  The table is empty; the mechanism stays.
 
 ## Class f, decided
 
@@ -175,9 +180,6 @@ landed on 2026-09-29; the MMU guards remain.
 | mmu/install_private.c:26 | `#if !defined(ARCH_M68K)` | b | host fallback body of hand-written sau2 assembly: `MMU_$INSTALL_PRIVATE` |
 | mmu/internal.c:30 | `#if !defined(ARCH_M68K)` | b | host fallback body of hand-written sau2 assembly: `mmu_$remove_pmape`, `mmu_$unlink_from_hash` |
 | mmu/mcr_change.c:24 | `#if !defined(ARCH_M68K)` | b | host fallback body of hand-written sau2 assembly: `MMU_$MCR_CHANGE` |
-| mmu/mmu.h:98 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `mmu_globals_t` |
-| mmu/mmu.h:115 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `PTT_BASE`... - source-o56c |
-| mmu/mmu_data.c:26 | `#if !defined(ARCH_M68K)` | e (exempt) | still to convert: `mmu_ptt_base`... - source-o56c |
 | mmu/normal_mode.c:16 | `#if !defined(ARCH_M68K)` | b | host fallback body of hand-written sau2 assembly: `MMU_$NORMAL_MODE` |
 | mmu/power_off.c:16 | `#if !defined(ARCH_M68K)` | b | host fallback body of hand-written sau2 assembly: `MMU_$POWER_OFF` |
 | mmu/ptov.c:23 | `#if !defined(ARCH_M68K)` | b | host fallback body of hand-written sau2 assembly: `MMU_$PTOV` |

@@ -399,6 +399,22 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
    MMAP_$INIT, so their types are 0x400-aligned.  Two exempted guards
    remain (MMU, source-o56c).
 
+   Amended 2026-09-29 (source-o56c): blocks `MMU_$GLOBALS` (the data run
+   0xE23D2C..0xE23D37 at the head of the map's MMU_ASM code segment, 0xC:
+   MMU_$PID_PRIV, M68020, VA_TO_PTT_OFFSET_MASK, MMU_$VA_SHIFT and
+   MMU_$PTT_SHIFT with the image's 68010 defaults; MMU_$INIT's A5 is its
+   `m68020` field) and `MMU_$PTTX` (map MMU_$PTTX 0xEC2800 in OS_PMAPS,
+   0x2000, zero-filled: one word per ppn 0..0xFFF, the PTT index
+   mmu_$installi records - the old "ASID table").  The fifteen mmu/sau2
+   files reach them by `.set NAME, MMU_$GLOBALS + off` aliases and by
+   name; MMU_$INIT's `lea (-0xe,PC),A5` becomes `lea M68020,%a5` (abs.l),
+   the same widening the other PC-relative reads already had.  The MMU
+   register page and the PTT / PFT windows are `SAU2_MMU_*`,
+   `SAU2_PTT_BASE` and `SAU2_PFT_BASE` in arch/m68k/sau2/hw.h, which host
+   tests define as their own cells; `MMU_$SYSTEM_REV` and `MCR_SHADOW`,
+   cells inside the hand-written code, are declared once and defined by
+   the assembly.  No exempted guard remains.
+
 Keep the tree green throughout: a subsystem converts in one commit; the
 linker line and the object land together; other subsystems keep compiling
 because the public header still exports the same names (now fields or

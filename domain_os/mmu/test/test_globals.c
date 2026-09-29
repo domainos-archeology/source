@@ -34,26 +34,7 @@ static int tests_failed = 0;
 
 #include "mmu/mmu_internal.h"
 
-/* Host-side backing store for the module globals (see mmu/mmu_data.c). */
-uint16_t *mmu_ptt_base = (void *)0;
-uint32_t *mmu_pft_base = (void *)0;
-uint16_t *mmu_asid_table_base = (void *)0;
-volatile uint16_t *mmu_csr = (void *)0;
-volatile uint16_t *mmu_power_reg = (void *)0;
-volatile uint8_t *mmu_status_reg = (void *)0;
-volatile uint8_t *mmu_mcr_m68010 = (void *)0;
-volatile uint8_t *mmu_mcr_mask = (void *)0;
-volatile uint8_t *mmu_mcr_m68020 = (void *)0;
-volatile uint8_t *mmu_hw_rev = (void *)0;
 
-uint16_t mmu_m68020 = 0;
-uint16_t mmu_pid_priv = 0;
-uint32_t mmu_va_to_ptt_mask = 0x0FFC00;
-uint16_t mmu_va_shift = 3;
-uint16_t mmu_ptt_shift = 8;
-uint8_t mmu_sysrev = 0;
-uint16_t mmu_current_asid = 0;
-uint8_t mmu_mcr_shadow = 0;
 uint32_t MMU_$SYSTEM_REV = 0;
 
 /* Simulated MMU hardware registers. */
@@ -65,34 +46,24 @@ static volatile uint8_t hw_mcr_mask;
 static volatile uint8_t hw_mcr_020;
 static volatile uint8_t hw_rev;
 
-/* Simulated PFT / ASID tables (4 KB of PPN space is plenty). */
+/* Simulated PFT (MMU_$PTTX is the real block; 4 KB of PPN space is plenty). */
 static uint32_t pft_store[0x1000];
-static uint16_t asid_store[0x1000];
 
 static void reset_globals(void)
 {
-    mmu_pft_base = pft_store;
-    mmu_asid_table_base = asid_store;
-    mmu_csr = &hw_csr;
-    mmu_power_reg = &hw_power;
-    mmu_status_reg = &hw_status;
-    mmu_mcr_m68010 = &hw_mcr_010;
-    mmu_mcr_mask = &hw_mcr_mask;
-    mmu_mcr_m68020 = &hw_mcr_020;
-    mmu_hw_rev = &hw_rev;
 
-    mmu_m68020 = 0;
-    mmu_va_to_ptt_mask = 0x0FFC00;
-    mmu_va_shift = 3;
-    mmu_ptt_shift = 8;
-    mmu_mcr_shadow = 0;
+    M68020 = 0;
+    VA_TO_PTT_OFFSET_MASK = 0x0FFC00;
+    MMU_$VA_SHIFT = 3;
+    MMU_$PTT_SHIFT = 8;
+    MCR_SHADOW = 0;
     hw_mcr_010 = 0;
     hw_mcr_mask = 0;
     hw_mcr_020 = 0;
 
     for (int i = 0; i < 0x1000; i++) {
         pft_store[i] = 0;
-        asid_store[i] = 0;
+        MMU_$PTTX.entry[i] = 0;
     }
 }
 
@@ -112,11 +83,11 @@ static void reset_globals(void)
 static void test_flag_word_vs_byte_test(void)
 {
     reset_globals();
-    mmu_m68020 = 0x00FF;
+    M68020 = 0x00FF;
     ASSERT_EQ(1, M68020_IS_020_W() ? 1 : 0);
     ASSERT_EQ(0, M68020_IS_020_B() ? 1 : 0);
 
-    mmu_m68020 = 0xFF00;
+    M68020 = 0xFF00;
     ASSERT_EQ(1, M68020_IS_020_W() ? 1 : 0);
     ASSERT_EQ(1, M68020_IS_020_B() ? 1 : 0);
 }
@@ -132,12 +103,12 @@ static void test_ptov_uses_high_byte_flag(void)
     /* PPN 4: PMAPE low word must be a non-zero link, high nibble supplies
      * bits 16-19 of the result. */
     pft_store[4] = 0x00050001;
-    asid_store[4] = 0x0030;
+    MMU_$PTTX.entry[4] = 0x0030;
 
-    mmu_m68020 = 0xFF00;
+    M68020 = 0xFF00;
     ASSERT_EQ(((0x00050000u | 0x0030u) << 6) & 0xFFFFFFFFu, MMU_$PTOV(4));
 
-    mmu_m68020 = 0x0000;
+    M68020 = 0x0000;
     {
         uint32_t r = (0x00050000u & 0x000F0000u) | 0x0030u;
         r = ((r & 0xFFFF0000u) | ((r & 0xFFFFu) << 2)) << 4;
@@ -158,16 +129,16 @@ static void test_mcr_change_paths(void)
 {
     reset_globals();
 
-    mmu_m68020 = 0xFF00;
+    M68020 = 0xFF00;
     MMU_$MCR_CHANGE(3);                 /* 0xB - 3 = 8, & 7 = 0 */
     ASSERT_EQ(0x01, hw_mcr_020);
     MMU_$MCR_CHANGE(3);
     ASSERT_EQ(0x00, hw_mcr_020);
 
-    mmu_m68020 = 0x0000;
+    M68020 = 0x0000;
     hw_mcr_mask = 0x01;
     MMU_$MCR_CHANGE(5);
-    ASSERT_EQ(0x20, mmu_mcr_shadow);
+    ASSERT_EQ(0x20, MCR_SHADOW);
     ASSERT_EQ(0x21, hw_mcr_010);
 }
 
@@ -184,5 +155,23 @@ int main(void)
 }
 
 /* The real implementations under test. */
+/* The MMU module's data blocks (MMU_$GLOBALS with the image's contents,
+ * MMU_$PTTX), and MCR_SHADOW, which mmu/sau2/mcr_change.s defines on the
+ * target. */
+#include "../mmu_data.c"
+uint8_t MCR_SHADOW;
+
+/* The SAU2 MMU hardware (arch/m68k/sau2/hw.h) as this test's own cells. */
+#define SAU2_MMU_CSR            (&hw_csr)
+#define SAU2_MMU_POWER_REG      (&hw_power)
+#define SAU2_MMU_FPU_OWNER_REG  (&hw_fpu_owner)
+#define SAU2_MMU_STATUS_REG     (&hw_status)
+#define SAU2_MMU_MCR_M68010     (&hw_mcr_010)
+#define SAU2_MMU_MCR_MASK       (&hw_mcr_mask)
+#define SAU2_MMU_MCR_M68020     (&hw_mcr_020)
+#define SAU2_MMU_HW_REV         (&hw_rev)
+#define SAU2_PFT_BASE           pft_store
+#define SAU2_PTT_BASE           ptt_store
+
 #include "../ptov.c"
 #include "../mcr_change.c"

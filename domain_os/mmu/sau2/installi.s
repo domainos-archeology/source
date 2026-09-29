@@ -17,12 +17,14 @@
  *
  * Register ABI (the caller has IPL 7 and PTT access enabled):
  *   %d2 = ppn (word), %a4 = va, %d4 = the packed word pair: high word =
- *   asid / va bits, low word = protection << 4 with the low nibble clear.
+ *   asid (bits 9..15) and protection << 4, low word = the va bits that
+ *   select the PTT slot, (va & VA_TO_PTT_OFFSET_MASK) >> 6, low nibble
+ *   clear (MMU_$INSTALL's shift-and-rotate packing, 0xE24054-0xE24074).
  * Leaves %a3 = the page's PFT entry (MMU_$INSTALL_PRIVATE relies on it).
  *
  *   0xE2409C-0xE240B4  if the page's PFT entry has a link, unlink it first
  *                      (mmu_$remove_pmape with %d2)
- *   0xE240B6-0xE240C0  ASID_TABLE[ppn] := the high word of %d4
+ *   0xE240B6-0xE240C0  MMU_$PTTX[ppn] := the low word of %d4 (`move.w %d4,(%a0)')
  *   0xE240C2-0xE240D0  %d4 low word cleared; if the asid field (bits
  *                      25..31) is zero the GLOBAL bit (12) is set
  *   0xE240D2-0xE240E6  %a2 = the PTT entry for va
@@ -44,9 +46,10 @@
         .section ".text.mmu_$installi","ax",@progbits
         .even
 
-        .equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30  /* MMU_ASM data cell 0xE23D30, not yet an object: TODO(source-o56c) */
-        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
-        .equ    ASID_TABLE,     0x00EC2800  /* map MMU_$PTTX in OS_PMAPS, not yet an object: TODO(source-o56c) */
+        .extern MMU_$GLOBALS
+        .set    VA_TO_PTT_OFFSET_MASK, MMU_$GLOBALS + 0x4  /* map 0xE23D30, a field of the MMU_$GLOBALS block */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware, SAU2_PFT_BASE in arch/m68k/sau2/hw.h) */
+        .extern MMU_$PTTX               /* map MMU_$PTTX 0xEC2800 in OS_PMAPS, a MODULE_DATA block */
 
         .globl  mmu_$installi
         .globl  _mmu_$installi
@@ -62,7 +65,7 @@ _mmu_$installi:
         .short  0xc07c, 0x0fff          /* 0xE240AC  and.w #0xfff,%d0  */
         beq.s   1f                      /* 0xE240B0  67 04 in the image */
         jsr     mmu_$remove_pmape       /* 0xE240B2  61 00 fd 24 (bsr.w) in the image */
-1:      lea     ASID_TABLE,%a0          /* 0xE240B6  41 f9 00 ec 28 00 */
+1:      lea     MMU_$PTTX,%a0           /* 0xE240B6  41 f9 00 ec 28 00 */
         adda.w  %d2,%a0                 /* 0xE240BC  d0 c2             */
         adda.w  %d2,%a0                 /* 0xE240BE  d0 c2             */
         move.w  %d4,(%a0)               /* 0xE240C0  30 84             */

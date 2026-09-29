@@ -82,7 +82,7 @@ MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static uint32_t       test_pft[TEST_N_FRAMES];
 
 MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
-uint32_t       *mmu_pft_base     = test_pft;
+#define SAU2_PFT_BASE test_pft   /* the SAU2 PFT (arch/m68k/sau2/hw.h) */
 
 
 uint16_t PROC1_$CURRENT;

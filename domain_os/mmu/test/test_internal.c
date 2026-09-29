@@ -32,46 +32,42 @@ static int tests_failed = 0;
 
 int __host_intr_disable_count = 0;
 
-uint16_t *mmu_ptt_base;
-uint32_t *mmu_pft_base;
-uint16_t *mmu_asid_table_base;
-volatile uint16_t *mmu_csr;
-volatile uint16_t *mmu_power_reg;
-volatile uint8_t *mmu_status_reg;
-volatile uint8_t *mmu_mcr_m68010;
-volatile uint8_t *mmu_mcr_mask;
-volatile uint8_t *mmu_mcr_m68020;
-volatile uint8_t *mmu_hw_rev;
-uint16_t mmu_m68020;
-uint16_t mmu_pid_priv;
-uint32_t mmu_va_to_ptt_mask = 0x0FFC00;
-uint16_t mmu_va_shift = 3;
-uint16_t mmu_ptt_shift = 8;
-uint8_t mmu_sysrev;
-uint16_t mmu_current_asid;
-uint8_t mmu_mcr_shadow;
 uint32_t MMU_$SYSTEM_REV;
 
 static uint32_t pft_store[0x1000];
-static uint16_t asid_store[0x1000];
 static uint16_t ptt_store[0x4000];
+
+/* The MMU module's data blocks (MMU_$GLOBALS with the image's contents,
+ * MMU_$PTTX), and MCR_SHADOW, which mmu/sau2/mcr_change.s defines on the
+ * target. */
+#include "../mmu_data.c"
+uint8_t MCR_SHADOW;
+
+/* The SAU2 MMU hardware (arch/m68k/sau2/hw.h) as this test's own cells. */
+#define SAU2_MMU_CSR            (&hw_csr)
+#define SAU2_MMU_POWER_REG      (&hw_power)
+#define SAU2_MMU_FPU_OWNER_REG  (&hw_fpu_owner)
+#define SAU2_MMU_STATUS_REG     (&hw_status)
+#define SAU2_MMU_MCR_M68010     (&hw_mcr_010)
+#define SAU2_MMU_MCR_MASK       (&hw_mcr_mask)
+#define SAU2_MMU_MCR_M68020     (&hw_mcr_020)
+#define SAU2_MMU_HW_REV         (&hw_rev)
+#define SAU2_PFT_BASE           pft_store
+#define SAU2_PTT_BASE           ptt_store
 
 #include "../internal.c"
 
-/* chain 5 -> 7 -> 9 -> 5, hanging off PTT entry 0x80 (ASID_TABLE[*] = 4,
+/* chain 5 -> 7 -> 9 -> 5, hanging off PTT entry 0x80 (MMU_$PTTX[*] = 4,
  * 4 << 6 = 0x100 bytes = word index 0x80) */
 static void reset(void)
 {
-    mmu_pft_base = pft_store;
-    mmu_asid_table_base = asid_store;
-    mmu_ptt_base = ptt_store;
     memset(pft_store, 0, sizeof pft_store);
-    memset(asid_store, 0, sizeof asid_store);
+    memset(MMU_$PTTX.entry, 0, sizeof MMU_$PTTX.entry);
     memset(ptt_store, 0, sizeof ptt_store);
     pft_store[5] = 0xAAAA8007u;     /* head bit, link 7 */
     pft_store[7] = 0xBBBB7009u;     /* mod+ref+global, link 9 */
     pft_store[9] = 0xCCCC2005u;     /* ref, link back to 5 */
-    asid_store[5] = asid_store[7] = asid_store[9] = 4;
+    MMU_$PTTX.entry[5] = MMU_$PTTX.entry[7] = MMU_$PTTX.entry[9] = 4;
     ptt_store[0x80] = 5;
 }
 
@@ -104,7 +100,7 @@ TEST(single_entry_chain)
 {
     reset();
     pft_store[3] = 0x11119003u;     /* links to itself */
-    asid_store[3] = 2;              /* PTT word index 0x40 */
+    MMU_$PTTX.entry[3] = 2;              /* PTT word index 0x40 */
     ptt_store[0x40] = 3;
     mmu_$remove_pmape(3);
     ASSERT_EQ(0, ptt_store[0x40]);
@@ -115,7 +111,7 @@ TEST(unlinked_entry_untouched)
 {
     reset();
     pft_store[2] = 0x5555E000u;     /* link 0 */
-    asid_store[2] = 4;
+    MMU_$PTTX.entry[2] = 4;
     mmu_$remove_pmape(2);
     ASSERT_EQ(0x5555E000u, pft_store[2]);
     ASSERT_EQ(5, ptt_store[0x80]);

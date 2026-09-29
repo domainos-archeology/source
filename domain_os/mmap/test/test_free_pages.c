@@ -44,7 +44,7 @@ MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 /* The table holds ppn 0x200..0xFFF (mmap/mmap.h), so the test's page n is
  * ppn VP(n). */
 #define VP(n) (MMAP_MMAPE_FIRST_PPN + (n))
-uint32_t *mmu_pft_base    = pft_store;
+#define SAU2_PFT_BASE pft_store   /* the SAU2 PFT (arch/m68k/sau2/hw.h) */
 
 static int lock_calls, unlock_calls, crash_calls;
 static status_$t crash_status;

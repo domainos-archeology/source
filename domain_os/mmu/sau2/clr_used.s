@@ -17,7 +17,7 @@
         .section ".text.MMU_$CLR_USED","ax",@progbits
         .even
 
-        .equ    PFT_BASE, 0x00FFB800  /* SAU2 page frame table (hardware) */
+        .equ    PFT_BASE, 0x00FFB800  /* SAU2 page frame table (hardware, SAU2_PFT_BASE in arch/m68k/sau2/hw.h) */
 
         .globl  MMU_$CLR_USED
         .globl  _MMU_$CLR_USED

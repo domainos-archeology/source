@@ -36,6 +36,16 @@
  */
 
 /*
+ * MCR_SHADOW - the 68010 memory-control shadow byte, 0xE242D2: the first of
+ * the two bytes (image f0 00) between MMU_$MCR_CHANGE's last `rts' and
+ * CACHE_$CLEAR (0xE242D4), which the routine reaches with
+ * `lea (0x30,PC),A0' (0x00E242A0) and toggles with `bchg D0,(A0)'.  The map
+ * names nothing there (a module-local cell).  Defined by the hand-written
+ * mmu/sau2/mcr_change.s; a host test that runs the model defines it.
+ */
+extern uint8_t MCR_SHADOW;
+
+/*
  * ============================================================================
  * Internal Helper Functions
  * ============================================================================

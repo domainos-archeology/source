@@ -7,7 +7,7 @@
  *   0xE23DCC  mmu_$remove_internal  %d2 = ppn.  Sets %a3 = the PFT entry
  *                                   and falls into
  *   0xE23DD8  mmu_$remove_pmape     %d2 = ppn, %a3 = PFT entry.  %a2 = the
- *                                   PTT entry (PTT_BASE + ASID_TABLE[ppn]
+ *                                   PTT entry (PTT_BASE + MMU_$PTTX[ppn]
  *                                   << 6), %d3 = *%a3, %d1 = 0, then into
  *   0xE23DF4  mmu_$unlink_from_hash %d2 = ppn, %d1 = predecessor's PFT
  *                                   byte offset (0 = unknown), %d3 = the
@@ -47,9 +47,9 @@
         .section ".text.mmu_$remove_internal","ax",@progbits
         .even
 
-        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
-        .equ    ASID_TABLE,     0x00EC2800  /* map MMU_$PTTX in OS_PMAPS, not yet an object: TODO(source-o56c) */
-        .equ    PTT_BASE,       0x00700000  /* SAU2 page translation table window (hardware) */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware, SAU2_PFT_BASE in arch/m68k/sau2/hw.h) */
+        .extern MMU_$PTTX               /* map MMU_$PTTX 0xEC2800 in OS_PMAPS, a MODULE_DATA block */
+        .equ    PTT_BASE,       0x00700000  /* SAU2 page translation table window (hardware, SAU2_PTT_BASE in arch/m68k/sau2/hw.h) */
 
         .globl  mmu_$remove_internal
         .globl  _mmu_$remove_internal
@@ -67,7 +67,7 @@ _mmu_$remove_internal:
 mmu_$remove_pmape:
 _mmu_$remove_pmape:
         clr.l   %d0                     /* 0xE23DD8  42 80             */
-        lea     ASID_TABLE,%a2          /* 0xE23DDA  45 f9 00 ec 28 00 */
+        lea     MMU_$PTTX,%a2           /* 0xE23DDA  45 f9 00 ec 28 00 */
         adda.w  %d2,%a2                 /* 0xE23DE0  d4 c2             */
         adda.w  %d2,%a2                 /* 0xE23DE2  d4 c2             */
         move.w  (%a2),%d0               /* 0xE23DE4  30 12             */

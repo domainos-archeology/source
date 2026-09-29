@@ -4,7 +4,7 @@
  * Three fall-through entry points share one body in the image:
  *
  *   0x00E23DCC  mmu_$remove_internal   D2 = ppn; sets A3 = PFT entry, then
- *   0x00E23DD8  mmu_$remove_pmape      A2 = PTT entry from the ASID table,
+ *   0x00E23DD8  mmu_$remove_pmape      A2 = PTT entry from MMU_$PTTX,
  *                                      D3 = *A3, D1 = 0 (no known
  *                                      predecessor), then
  *   0x00E23DF4  mmu_$unlink_from_hash  D2 = ppn, D1 = predecessor offset or
@@ -31,12 +31,12 @@
 
 /*
  * 0x00E23DD8 - 0x00E23DF2 then falls into mmu_$unlink_from_hash.
- *   D0 = ASID_TABLE[ppn] (word) << 6, A2 = PTT_BASE + D0, D3 = *A3, D1 = 0.
+ *   D0 = MMU_$PTTX.entry[ppn] (word) << 6, A2 = PTT_BASE + D0, D3 = *A3, D1 = 0.
  */
 void mmu_$remove_pmape(uint16_t ppn)
 {
     uint32_t *pft_entry = PFT_FOR_PPN(ppn);
-    uint32_t off = (uint32_t)ASID_FOR_PPN(ppn) << 6;
+    uint32_t off = (uint32_t)PTTX_FOR_PPN(ppn) << 6;
     uint16_t *ptt_entry = (uint16_t *)((char *)PTT_BASE + off);
 
     mmu_$unlink_from_hash(ppn, 0, *pft_entry, ptt_entry, pft_entry);

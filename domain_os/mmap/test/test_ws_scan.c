@@ -81,7 +81,7 @@ MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 const status_$t mmap_$illegal_wsl_index_00e0c9e0 = status_$mmap_illegal_wsl_index;
 
 MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
-uint32_t *mmu_pft_base    = pft_store;
+#define SAU2_PFT_BASE pft_store   /* the SAU2 PFT (arch/m68k/sau2/hw.h) */
 /*
  * The 0xED4F80 segment map (pmap/pmap.h): MMAP_$WS_SCAN reaches it as
  * 0xED5000 + segment*0x80 + seg_offset*4 with a -0x80 displacement, i.e.

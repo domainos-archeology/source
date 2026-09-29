@@ -64,10 +64,8 @@ FORBIDDEN = ('object', 'extern', 'absaddr', 'record')
 # cites the bead that removes it.  Keep this list short: it is the
 # remainder of source-0i3, not a place for new guards.
 EXEMPT = [
-    # MMU_ASM cells the hand-written mmu/sau2 code owns, MMU_$PTTX, and the
-    # MMU register page (moves to arch/m68k/sau2/hw.h with them)
-    ('mmu/mmu.h', 'PTT_BASE', 'source-o56c'),
-    ('mmu/mmu_data.c', 'mmu_ptt_base', 'source-o56c'),
+    # Empty since source-o56c (2026-09-29) converted the last two, the MMU
+    # guards.  Entries look like ('mmu/mmu.h', 'PTT_BASE', 'source-o56c').
 ]
 
 # A cast of an integer literal to a pointer type:

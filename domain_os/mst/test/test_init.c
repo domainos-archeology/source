@@ -69,7 +69,7 @@ uint16_t MST[MST_TABLE_ENTRIES];
  * the block rather than the two scalars (bead source-mu8j).
  */
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
-uint16_t mmu_m68020;
+MODULE_DATA_DEFINE(mmu_$globals_t, MMU_$GLOBALS, 0x00E23D2C);   /* M68020 (mmu/mmu.h) */
 
 /* The four global-segment pages plus the MST pages land in this arena. */
 static uint8_t page_arena[0x4000];
@@ -149,7 +149,7 @@ static void reset_state(void)
     MST_$GLOBAL_A_SIZE = 0x80;      /* 2 pages */
     MST_$GLOBAL_B_SIZE = 0x80;      /* 2 more  */
 
-    mmu_m68020 = 0;                 /* `tst.b`/`bmi` at 0x00E30C84 not taken */
+    M68020 = 0;                 /* `tst.b`/`bmi` at 0x00E30C84 not taken */
     MMAP_$PAGEABLE_PAGES = 1000;
     MMAP_$REAL_PAGES = 1;
 

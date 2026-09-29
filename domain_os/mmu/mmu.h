@@ -9,7 +9,8 @@
  * Key data structures:
  * - PTT (Page Translation Table) at 0x700000 - indexed by virtual address
  * - PFT (Page Frame Table) at 0xFFB800 - 4 bytes per physical page
- * - ASID table at 0xEC2800 - Address Space Identifier per physical page
+ * - MMU_$PTTX at 0xEC2800 - the PTT index of every physical page (formerly
+ *   called the ASID table)
  *
  * Note: The MMAPE (Memory Map Page Entry) at 0xEB2800 is a separate 16-byte
  * per-page structure managed by the MMAP layer (see mmap/mmap.h).
@@ -74,69 +75,128 @@
 #define PTT_PPN_MASK 0x0FFF /* Physical page number */
 
 /*
- * ASID (Address Space Identifier) Table
+ * MMU_$PTTX - the PTT index of every physical page (map MMU_$PTTX 0xEC2800
+ * in "D EB4800 OS_PMAPS size = 10000", up to AUDIT_LIST's OS_PAGE_END
+ * 0xEC4800: 0x2000 bytes).
+ * Module data block MMU_$PTTX: Claude Opus 5.5 (source-o56c).
  *
- * Located at 0xEC2800, 2 bytes per physical page.
- * Contains the virtual address that maps to this physical page.
+ * One word per physical page, indexed by the ppn itself from 0 (no Pascal
+ * bias): mmu_$installi stores the LOW word of its packed argument there
+ * (`lea (0xec2800).l,A0 / adda.w D2w,A0 / adda.w D2w,A0 / move.w D4w,(A0)',
+ * 0x00E240B6-0x00E240C0) - the page's virtual-address bits that select its
+ * PTT slot, (va & VA_TO_PTT_OFFSET_MASK) >> 6 after MMU_$INSTALL's
+ * shift-and-rotate packing (0x00E24054-0x00E24074); the high word, ASID
+ * and protection, goes into the PFT entry instead.  mmu_$remove_pmape
+ * turns an entry back into that slot as
+ * PTT_BASE + (entry << 6) (`clr.l D0 / move.w (A2),D0w / lsl.l #6,D0',
+ * 0x00E23DD8-0x00E23DF0) and MMU_$PTOV into the page's VA ((PFT bits
+ * 16..19 | entry) << 6 on a 68020, 0x00E241CE-0x00E241E6).  The stride is
+ * 2 (the doubled adda.w; MMU_$PTOV indexes with ppn*4 >> 1), and ppn runs
+ * to 0xFFF (the PFT's 12-bit links), so the table is 0x1000 words - exactly
+ * the rest of OS_PMAPS after the MMAP page table (mmap/mmap.h).  Earlier
+ * trees called it the "ASID table"; it holds no ASID.
+ *
+ * The image carries no bytes for OS_PMAPS (the entries are written as
+ * pages are installed), so the block is zero-filled.
  */
+#define MMU_PTTX_COUNT  0x1000          /* ppn 0..0xFFF */
+#define MMU_$PTTX_SIZE  0x2000          /* MMU_$PTTX 0xEC2800 .. 0xEC4800 */
+
+typedef struct mmu_$pttx_t {
+    uint16_t entry[MMU_PTTX_COUNT];     /* entry[ppn] */
+} mmu_$pttx_t;
+
+_Static_assert(sizeof(((mmu_$pttx_t *)0)->entry[0]) == 2,
+               "MMU_$PTTX stride 2 (adda.w D2w,A0 twice, 0x00E240BC)");
+_Static_assert(sizeof(mmu_$pttx_t) == MMU_$PTTX_SIZE,
+               "MMU_$PTTX: 0xEC2800..0xEC4800 in OS_PMAPS");
+
+MODULE_DATA_DECLARE(mmu_$pttx_t, MMU_$PTTX, 0x00EC2800);
 
 /*
- * MMU Global Variables
+ * MMU_$GLOBALS - the data run at the head of the MMU_ASM segment.
+ * Module data block MMU_$GLOBALS: Claude Opus 5.5 (source-o56c).
+ *
+ * SAU2 map: "D E23D2C MMU_ASM size = 5B8" opens with MMU_$PID_PRIV
+ * (0xE23D2C) and M68020 (0xE23D2E) and its first routine, MMU_$INIT, is at
+ * 0xE23D38, so the run is 0xE23D2C..0xE23D37, 0xC bytes - data inside the
+ * hand-written code segment, like FIM_$WIRED_DATA inside FIM_WIRED.  The
+ * cells between M68020 and MMU_$INIT have no map symbols; MMU_$INIT names
+ * them by writing (0x2,A5), (0x6,A5) and (0x8,A5) with A5 = 0xE23D2E
+ * (`lea (-0xe,PC),A5' at 0x00E23D3A), and the other MMU_ASM routines read
+ * them PC-relative (MMU_$VTOP 0x00E24118 -> 0xE23D30, 0x00E24124 ->
+ * 0xE23D34, 0x00E2413A -> 0xE23D2C).  Since the code and the block are
+ * separate objects in our link, the mmu/sau2 files reach the cells as
+ * `.set NAME, MMU_$GLOBALS + off' aliases (absolute long operands where
+ * the image had (d16,PC); tools/asm_compare.py verifies each one).
+ *
+ * Image contents (`gsk read 0xe23d2c 12`):
+ *   00e23d2c  00 00 00 00 00 0f fc 00  00 03 00 08
+ * - the 68010 defaults: MMU_$INIT rewrites the mask and both shifts on a
+ * 68020.  Pointer-free, so the asserts hold on every build.
  */
+typedef struct mmu_$globals_t {
+    uint16_t pid_priv;              /* +0x0 0xE23D2C MMU_$PID_PRIV: the CSR
+                                     * image - PID in the HIGH byte
+                                     * (MMU_$SET_CSR / MMU_$INSTALL_ASID
+                                     * store it with move.b), privilege and
+                                     * PTT-access bits in the low byte */
+    uint16_t m68020;                /* +0x2 0xE23D2E M68020: 68020+ boolean,
+                                     * in the HIGH byte (see M68020_IS_*) */
+    uint32_t va_to_ptt_offset_mask; /* +0x4 0xE23D30 VA_TO_PTT_OFFSET_MASK:
+                                     * 0x0FFC00 (68010), 0x3FFC00 (68020) */
+    uint16_t va_shift;              /* +0x8 0xE23D34 MMU_$VA_SHIFT: 3 / 1 */
+    uint16_t ptt_shift;             /* +0xA 0xE23D36 MMU_$PTT_SHIFT: 8 / 6 */
+} mmu_$globals_t;
+
+#define MMU_$GLOBALS_SIZE 0xC           /* 0xE23D2C .. MMU_$INIT 0xE23D38 */
+
+_Static_assert(__builtin_offsetof(mmu_$globals_t, pid_priv) == 0x0,
+               "MMU_$PID_PRIV at 0xE23D2C");
+_Static_assert(__builtin_offsetof(mmu_$globals_t, m68020) == 0x2,
+               "M68020 at 0xE23D2E (A5 of MMU_$INIT)");
+_Static_assert(__builtin_offsetof(mmu_$globals_t, va_to_ptt_offset_mask) == 0x4,
+               "VA_TO_PTT_OFFSET_MASK at 0xE23D30 = (0x2,A5)");
+_Static_assert(__builtin_offsetof(mmu_$globals_t, va_shift) == 0x8,
+               "MMU_$VA_SHIFT at 0xE23D34 = (0x6,A5)");
+_Static_assert(__builtin_offsetof(mmu_$globals_t, ptt_shift) == 0xA,
+               "MMU_$PTT_SHIFT at 0xE23D36 = (0x8,A5)");
+_Static_assert(sizeof(mmu_$globals_t) == MMU_$GLOBALS_SIZE,
+               "MMU_ASM data run: 0xE23D2C..0xE23D37");
+
+MODULE_DATA_DECLARE(mmu_$globals_t, MMU_$GLOBALS, 0x00E23D2C);
+
+/* The cells under the map's names (and the unnamed ones under the names the
+ * mmu/sau2 files give them). */
+#define MMU_$PID_PRIV           (MMU_$GLOBALS.pid_priv)
+#define M68020                  (MMU_$GLOBALS.m68020)
+#define VA_TO_PTT_OFFSET_MASK   (MMU_$GLOBALS.va_to_ptt_offset_mask)
+#define MMU_$VA_SHIFT           (MMU_$GLOBALS.va_shift)
+#define MMU_$PTT_SHIFT          (MMU_$GLOBALS.ptt_shift)
+
 /*
- * Layout of the MMU module data block reached through A5 in MMU_$INIT
- * (A5 = 0xE23D2E).  Recovered from MMU_$INIT (0xE23D38) and the PC-relative
- * reads in MMU_$VTOP / MMU_$INSTALL* / MMU_$REMOVE_VIRTUAL.
+ * The MMU's hardware: the register page (map MMU 0xFFB400) and the PTT and
+ * PFT windows are SAU2 hardware addresses, arch/m68k/sau2/hw.h.  A host
+ * test that runs one of the host models below defines the SAU2_ names it
+ * needs as its own cells or arrays before including the code.
  */
-typedef struct mmu_globals_t {
-  uint16_t m68020;      /* 0x00 (0xE23D2E): 68020+ boolean, in the HIGH byte */
-  uint32_t va_ptt_mask; /* 0x02 (0xE23D30): VA to PTT offset mask */
-  uint16_t va_shift;    /* 0x06 (0xE23D34): VA shift count (MMU_$VA_SHIFT) */
-  uint16_t ptt_shift;   /* 0x08 (0xE23D36): PTT shift count (MMU_$PTT_SHIFT) */
-} __attribute__((packed)) mmu_globals_t;
+#define PTT_BASE                SAU2_PTT_BASE   /* 0x700000 */
+#define PFT_BASE                SAU2_PFT_BASE   /* 0xFFB800 */
 
-#if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(mmu_globals_t, m68020) == 0x00,
-               "mmu_globals_t.m68020 must be at 0x00 (0xE23D2E)");
-_Static_assert(__builtin_offsetof(mmu_globals_t, va_ptt_mask) == 0x02,
-               "mmu_globals_t.va_ptt_mask must be at 0x02 (0xE23D30)");
-_Static_assert(__builtin_offsetof(mmu_globals_t, va_shift) == 0x06,
-               "mmu_globals_t.va_shift must be at 0x06 (0xE23D34)");
-_Static_assert(__builtin_offsetof(mmu_globals_t, ptt_shift) == 0x08,
-               "mmu_globals_t.ptt_shift must be at 0x08 (0xE23D36)");
-_Static_assert(sizeof(mmu_globals_t) == 0x0A, "mmu_globals_t must be 10 bytes");
-#endif
-
+#define MMU_CSR                 (*SAU2_MMU_CSR)         /* 0xFFB400 PID/Priv/Power */
+#define MMU_POWER_REG           (*SAU2_MMU_POWER_REG)   /* 0xFFB402 power control */
 /*
- * Architecture-independent macros for MMU access
- * These isolate m68k-specific memory layout
+ * The first (most significant) byte of MMU_POWER_REG on its own, the
+ * handbook's FPU Owner Register.  MMU_$INSTALL_ASID stores it with a byte
+ * store, not a word read-modify-write: `move.b (0x00e218d5).l,(0x00ffb402).l'
+ * (0x00E2421C).
  */
-/* TODO(source-o56c): the MMU_ASM cells, MMU_$PTTX and the MMU registers are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-/* PTT - Page Translation Table (indexed by virtual address) */
-#define PTT_BASE ((uint16_t *)0x700000)
-
-/* PFT - Page Frame Table (4 bytes per physical page) */
-#define PFT_BASE ((uint32_t *)0xFFB800)
-
-/* ASID table - 2 bytes per physical page */
-#define ASID_TABLE_BASE ((uint16_t *)0xEC2800)
-
-/* MMU control registers */
-#define MMU_CSR (*(volatile uint16_t *)0xFFB400)       /* PID/Priv/Power */
-#define MMU_POWER_REG (*(volatile uint16_t *)0xFFB402) /* Power control */
-/*
- * The first (most significant) byte of MMU_POWER_REG on its own.
- * MMU_$INSTALL_ASID restores it with a byte store, not a word read-modify-
- * write: `move.b (0x00e218d5).l,(0x00ffb402).l` (0x00E2421C).
- */
-#define MMU_POWER_REG_BYTE (*(volatile uint8_t *)0xFFB402)
-#define MMU_STATUS_REG (*(volatile uint8_t *)0xFFB403) /* Status */
-#define MMU_MCR_M68010 (*(volatile uint8_t *)0xFFB405) /* MCR for 68010 */
-#define MMU_MCR_MASK (*(volatile uint8_t *)0xFFB407)   /* MCR mask */
-#define MMU_MCR_M68020 (*(volatile uint8_t *)0xFFB408) /* MCR for 68020 */
-#define DN330_MMU_HARDWARE_REV (*(volatile uint8_t *)0xFFB409) /* HW revision  \
-                                                                */
+#define MMU_POWER_REG_BYTE      (*SAU2_MMU_FPU_OWNER_REG)
+#define MMU_STATUS_REG          (*SAU2_MMU_STATUS_REG)  /* 0xFFB403 status */
+#define MMU_MCR_M68010          (*SAU2_MMU_MCR_M68010)  /* 0xFFB405 MCR, 68010 */
+#define MMU_MCR_MASK            (*SAU2_MMU_MCR_MASK)    /* 0xFFB407 MCR mask */
+#define MMU_MCR_M68020          (*SAU2_MMU_MCR_M68020)  /* 0xFFB408 MCR, 68020 */
+#define DN330_MMU_HARDWARE_REV  (*SAU2_MMU_HW_REV)      /* 0xFFB409 HW revision */
 
 /*
  * MMU Parity Register [800A-800B] = 0xFFB40A, DN3xx only.
@@ -171,7 +231,7 @@ _Static_assert(sizeof(mmu_globals_t) == 0x0A, "mmu_globals_t must be 10 bytes");
  * writes the word 0x4000 back: PFE set, WWP clear, and 0 into the two CLR
  * bits, which acknowledges the latched error and re-arms parity faults.
  */
-#define MMU_PARITY_REG (*(volatile uint16_t *)0xFFB40A)
+#define MMU_PARITY_REG (*SAU2_MMU_PARITY_REG)
 
 #define MMU_PARITY_PFTX_MASK 0x0FFF /* bits 11..0: failing PFT index */
 #define MMU_PARITY_PFT_ERR 0x1000   /* bit 12: PFT parity error (CLR) */
@@ -188,76 +248,12 @@ _Static_assert(sizeof(mmu_globals_t) == 0x0A, "mmu_globals_t must be 10 bytes");
 #define status_$mmu_timeout 0x00070006
 
 /*
- * MMU module globals.
- *
- * MMU_$INIT (0xE23D38) establishes its module base with
- * "lea (-0xe,PC),A5" at 0xE23D3A, giving A5 = 0xE23D2E; it then writes
- * (0x2,A5), (0x6,A5) and (0x8,A5).  Combined with the PC-relative reads in
- * MMU_$VTOP (0xE24118 -> 0xE23D30, 0xE24124 -> 0xE23D34, 0xE2413A ->
- * 0xE23D2C) this fixes the layout as:
- *
- *   0xE23D28  MMAP_$RMT_LIMIT (4 bytes, owned by mmap)
- *   0xE23D2C  MMU_$PID_PRIV          (word)
- *   0xE23D2E  M68020                 (word)
- *   0xE23D30  VA_TO_PTT_OFFSET_MASK  (long)
- *   0xE23D34  MMU_$VA_SHIFT          (word)
- *   0xE23D36  MMU_$PTT_SHIFT         (word)
+ * MMU_$SYSTEM_REV - map 0xE2426E, the longword just before MMU_$SET_SYSREV
+ * inside the MMU_ASM code (image 00 00 00 00).  Defined by the hand-written
+ * mmu/sau2/set_sysrev.s, which reaches it with `lea (-0x6,PC),A0' and
+ * stores the hardware revision byte into its LOW byte (3,A0) = 0xE24271;
+ * a host test that runs the model defines it.
  */
-#define MMU_$PID_PRIV (*(uint16_t *)0xE23D2C)
-#define M68020 (*(uint16_t *)0xE23D2E)
-#define VA_TO_PTT_OFFSET_MASK (*(uint32_t *)0xE23D30)
-#define MMU_$VA_SHIFT (*(uint16_t *)0xE23D34)
-#define MMU_$PTT_SHIFT (*(uint16_t *)0xE23D36)
-/* The byte MMU_$SET_SYSREV stores (0x00E24276 `move.b ...,(0x3,A0)` with
- * A0 = 0xE2426E): the LOW byte of the MMU_$SYSTEM_REV longword. */
-#define MMU_SYSREV (*(uint8_t *)0xE24271)
-
-/* Cache control MCR shadow (for 68010) */
-#define MCR_SHADOW (*(uint8_t *)0xE242D2)
-#else
-/* For non-m68k platforms, these will be provided by platform init */
-extern uint16_t *mmu_ptt_base;
-extern uint32_t *mmu_pft_base;
-extern uint16_t *mmu_asid_table_base;
-extern volatile uint16_t *mmu_csr;
-extern volatile uint16_t *mmu_power_reg;
-extern volatile uint8_t *mmu_status_reg;
-extern volatile uint8_t *mmu_mcr_m68010;
-extern volatile uint8_t *mmu_mcr_mask;
-extern volatile uint8_t *mmu_mcr_m68020;
-extern volatile uint8_t *mmu_hw_rev;
-
-extern uint16_t mmu_m68020;
-extern uint16_t mmu_pid_priv;
-extern uint32_t mmu_va_to_ptt_mask;
-extern uint16_t mmu_va_shift;
-extern uint16_t mmu_ptt_shift;
-extern uint8_t mmu_sysrev;
-extern uint16_t mmu_current_asid;
-extern uint8_t mmu_mcr_shadow;
-
-#define PTT_BASE mmu_ptt_base
-#define PFT_BASE mmu_pft_base
-#define ASID_TABLE_BASE mmu_asid_table_base
-#define MMU_CSR (*mmu_csr)
-#define MMU_POWER_REG (*mmu_power_reg)
-#define MMU_POWER_REG_BYTE (*(volatile uint8_t *)mmu_power_reg)
-#define MMU_STATUS_REG (*mmu_status_reg)
-#define MMU_MCR_M68010 (*mmu_mcr_m68010)
-#define MMU_MCR_MASK (*mmu_mcr_mask)
-#define MMU_MCR_M68020 (*mmu_mcr_m68020)
-#define DN330_MMU_HARDWARE_REV (*mmu_hw_rev)
-
-#define M68020 mmu_m68020
-#define MMU_$PID_PRIV mmu_pid_priv
-#define VA_TO_PTT_OFFSET_MASK mmu_va_to_ptt_mask
-#define MMU_$VA_SHIFT mmu_va_shift
-#define MMU_$PTT_SHIFT mmu_ptt_shift
-#define MMU_SYSREV mmu_sysrev
-#define MCR_SHADOW mmu_mcr_shadow
-#endif
-
-/* MMU data */
 extern uint32_t MMU_$SYSTEM_REV;
 
 /*
@@ -283,8 +279,8 @@ extern uint32_t MMU_$SYSTEM_REV;
 /* Get PFT entry for a physical page number */
 #define PFT_FOR_PPN(ppn) ((uint32_t *)((char *)PFT_BASE + ((ppn) << 2)))
 
-/* Get ASID entry for a physical page number */
-#define ASID_FOR_PPN(ppn) (ASID_TABLE_BASE[(ppn)])
+/* Get the MMU_$PTTX entry of a physical page number */
+#define PTTX_FOR_PPN(ppn) (MMU_$PTTX.entry[(ppn)])
 
 /*
  * PMAPE (Page Map Page Entry) macros

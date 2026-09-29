@@ -44,7 +44,7 @@ static int tests_failed = 0;
 static uint32_t pft_store[TEST_PAGES];
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
-uint32_t *mmu_pft_base    = pft_store;
+#define SAU2_PFT_BASE pft_store   /* the SAU2 PFT (arch/m68k/sau2/hw.h) */
 mem_range_t DUMP_$ADDRS[DUMP_ADDRS_RANGES];
 
 static int      vtop_calls;

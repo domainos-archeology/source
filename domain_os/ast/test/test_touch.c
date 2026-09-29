@@ -49,17 +49,20 @@ static void reset_state(void);
     }                                                                         \
 } while (0)
 
+#define TEST_N_FRAMES 0x1000
+/* The SAU2 page frame table (SAU2_PFT_BASE, arch/m68k/sau2/hw.h) as the
+ * test's own array; the code under test reaches it through PFT_BASE. */
+static uint32_t       test_pft[TEST_N_FRAMES];
+#define SAU2_PFT_BASE test_pft
+
 #include "ast/touch.c"
 
 #define TEST_N_PAGES 32
-#define TEST_N_FRAMES 0x1000
 /* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static uint32_t       test_pft[TEST_N_FRAMES];
 MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
-uint32_t       *mmu_pft_base    = test_pft;
 #include "proc1/proc1.h"
 MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 uint16_t  PROC1_$CURRENT;

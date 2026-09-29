@@ -25,8 +25,9 @@
         .section ".text.MMU_$REMOVE_LIST","ax",@progbits
         .even
 
-        .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
-        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
+        .extern MMU_$GLOBALS
+        .set    MMU_$PID_PRIV,  MMU_$GLOBALS + 0x0  /* map 0xE23D2C, a field of the MMU_$GLOBALS block */
+        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware, SAU2_MMU_CSR in arch/m68k/sau2/hw.h) */
 
         .globl  MMU_$REMOVE_LIST
         .globl  _MMU_$REMOVE_LIST

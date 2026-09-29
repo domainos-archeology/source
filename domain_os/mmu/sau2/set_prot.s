@@ -19,7 +19,7 @@
         .section ".text.MMU_$SET_PROT","ax",@progbits
         .even
 
-        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware, SAU2_PFT_BASE in arch/m68k/sau2/hw.h) */
 
         .globl  MMU_$SET_PROT
         .globl  _MMU_$SET_PROT

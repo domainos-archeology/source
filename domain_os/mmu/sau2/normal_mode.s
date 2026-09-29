@@ -13,7 +13,7 @@
         .section ".text.MMU_$NORMAL_MODE","ax",@progbits
         .even
 
-        .equ    MMU_STATUS_REG, 0x00FFB403  /* SAU2 MMU status register (hardware) */
+        .equ    MMU_STATUS_REG, 0x00FFB403  /* SAU2 MMU status register (hardware, SAU2_MMU_STATUS_REG in arch/m68k/sau2/hw.h) */
 
         .globl  MMU_$NORMAL_MODE
         .globl  _MMU_$NORMAL_MODE

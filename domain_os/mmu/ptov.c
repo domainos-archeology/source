@@ -9,7 +9,7 @@
  * Argument: (0x4,SP) ppn, longword (D1).
  *   D1w = ppn << 2 (word); D0 = PFT[D1w] (longword, D1w sign-extended as
  *   the index); if (D0w & 0xfff) == 0 return 0.
- *   D0 &= 0xF0000; D0w = ASID_TABLE[ppn];
+ *   D0 &= 0xF0000; D0w = MMU_$PTTX.entry[ppn];
  *   68020 (high byte of M68020): return D0 << 6
  *   68010: D0w <<= 2; return D0 << 4
  *
@@ -33,7 +33,7 @@ uint32_t MMU_$PTOV(uint32_t ppn)
 
     /* 0x00E241CE - 0x00E241DC */
     v &= 0x000F0000u;
-    v |= *(uint16_t *)((char *)ASID_TABLE_BASE + (int16_t)(idx >> 1));
+    v |= *(uint16_t *)((char *)MMU_$PTTX.entry + (int16_t)(idx >> 1));
 
     if (M68020_IS_020_B()) {                                        /* 0x00E241E0 */
         return v << 6;

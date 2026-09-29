@@ -44,12 +44,13 @@
         .section ".text.MMU_$VTOP","ax",@progbits
         .even
 
-        .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
-        .equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30  /* MMU_ASM data cell 0xE23D30, not yet an object: TODO(source-o56c) */
-        .equ    MMU_$VA_SHIFT,  0x00E23D34  /* MMU_ASM data cell 0xE23D34, not yet an object: TODO(source-o56c) */
+        .extern MMU_$GLOBALS
+        .set    MMU_$PID_PRIV,  MMU_$GLOBALS + 0x0  /* map 0xE23D2C, a field of the MMU_$GLOBALS block */
+        .set    VA_TO_PTT_OFFSET_MASK, MMU_$GLOBALS + 0x4  /* map 0xE23D30, a field of the MMU_$GLOBALS block */
+        .set    MMU_$VA_SHIFT,  MMU_$GLOBALS + 0x8  /* map 0xE23D34, a field of the MMU_$GLOBALS block */
         .extern PROC1_$AS_ID            /* uint16_t, proc1/proc1_data.c, map 0xE2060A (source-6psc) */
-        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
-        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
+        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware, SAU2_MMU_CSR in arch/m68k/sau2/hw.h) */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware, SAU2_PFT_BASE in arch/m68k/sau2/hw.h) */
 
         .globl  MMU_$VTOP
         .globl  _MMU_$VTOP

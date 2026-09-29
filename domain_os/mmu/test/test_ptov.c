@@ -33,35 +33,35 @@ static int tests_failed = 0;
 
 int __host_intr_disable_count = 0;
 
-uint16_t *mmu_ptt_base;
-uint32_t *mmu_pft_base;
-uint16_t *mmu_asid_table_base;
-volatile uint16_t *mmu_csr;
-volatile uint16_t *mmu_power_reg;
-volatile uint8_t *mmu_status_reg;
-volatile uint8_t *mmu_mcr_m68010;
-volatile uint8_t *mmu_mcr_mask;
-volatile uint8_t *mmu_mcr_m68020;
-volatile uint8_t *mmu_hw_rev;
-uint16_t mmu_m68020;
-uint16_t mmu_pid_priv;
-uint32_t mmu_va_to_ptt_mask = 0x0FFC00;
-uint16_t mmu_va_shift = 3;
-uint16_t mmu_ptt_shift = 8;
-uint8_t mmu_sysrev;
-uint16_t mmu_current_asid;
-uint8_t mmu_mcr_shadow;
 uint32_t MMU_$SYSTEM_REV;
 uint16_t PROC1_$AS_ID;
 uint16_t FP_$OWNER;
 
 static volatile uint16_t hw_csr, hw_power;
 static volatile uint8_t hw_status, hw_mcr_010, hw_mcr_mask, hw_mcr_020;
+static volatile uint8_t hw_fpu_owner;    /* the first byte of the power register, 0xFFB402 */
 static uint32_t pft_store[0x1000];
-static uint16_t asid_store[0x1000];
 static int cache_clears;
 
 uint32_t CACHE_$CLEAR(void) { cache_clears++; return 0; }
+
+/* The MMU module's data blocks (MMU_$GLOBALS with the image's contents,
+ * MMU_$PTTX), and MCR_SHADOW, which mmu/sau2/mcr_change.s defines on the
+ * target. */
+#include "../mmu_data.c"
+uint8_t MCR_SHADOW;
+
+/* The SAU2 MMU hardware (arch/m68k/sau2/hw.h) as this test's own cells. */
+#define SAU2_MMU_CSR            (&hw_csr)
+#define SAU2_MMU_POWER_REG      (&hw_power)
+#define SAU2_MMU_FPU_OWNER_REG  (&hw_fpu_owner)
+#define SAU2_MMU_STATUS_REG     (&hw_status)
+#define SAU2_MMU_MCR_M68010     (&hw_mcr_010)
+#define SAU2_MMU_MCR_MASK       (&hw_mcr_mask)
+#define SAU2_MMU_MCR_M68020     (&hw_mcr_020)
+#define SAU2_MMU_HW_REV         (&hw_rev)
+#define SAU2_PFT_BASE           pft_store
+#define SAU2_PTT_BASE           ptt_store
 
 #include "../ptov.c"
 #include "../mcr_change.c"
@@ -71,20 +71,13 @@ uint32_t CACHE_$CLEAR(void) { cache_clears++; return 0; }
 
 static void reset(void)
 {
-    mmu_pft_base = pft_store;
-    mmu_asid_table_base = asid_store;
-    mmu_csr = &hw_csr;
-    mmu_power_reg = &hw_power;
-    mmu_status_reg = &hw_status;
-    mmu_mcr_m68010 = &hw_mcr_010;
-    mmu_mcr_mask = &hw_mcr_mask;
-    mmu_mcr_m68020 = &hw_mcr_020;
     memset(pft_store, 0, sizeof pft_store);
-    memset(asid_store, 0, sizeof asid_store);
+    memset(MMU_$PTTX.entry, 0, sizeof MMU_$PTTX.entry);
     hw_csr = hw_power = 0;
     hw_status = hw_mcr_010 = hw_mcr_mask = hw_mcr_020 = 0;
-    mmu_mcr_shadow = 0;
-    mmu_m68020 = 0x0100;
+    hw_fpu_owner = 0;
+    MCR_SHADOW = 0;
+    M68020 = 0x0100;
     cache_clears = 0;
 }
 
@@ -99,7 +92,7 @@ TEST(ptov_68020)
 {
     reset();
     pft_store[0x40] = 0x000A0005u;
-    asid_store[0x40] = 0x1234;
+    MMU_$PTTX.entry[0x40] = 0x1234;
     ASSERT_EQ((0x000A0000u | 0x1234u) << 6, MMU_$PTOV(0x40));
 }
 
@@ -107,9 +100,9 @@ TEST(ptov_68020)
 TEST(ptov_68010_word_shift)
 {
     reset();
-    mmu_m68020 = 0;
+    M68020 = 0;
     pft_store[0x40] = 0x00050001u;
-    asid_store[0x40] = 0xC001;
+    MMU_$PTTX.entry[0x40] = 0xC001;
     ASSERT_EQ((0x00050000u | ((0xC001u << 2) & 0xFFFF)) << 4, MMU_$PTOV(0x40));
 }
 
@@ -127,13 +120,13 @@ TEST(mcr_change_68020_inverts_bit)
 TEST(mcr_change_68010_shadow)
 {
     reset();
-    mmu_m68020 = 0x0001;                /* low byte only: still "68010" */
+    M68020 = 0x0001;                /* low byte only: still "68010" */
     hw_mcr_mask = 0xFF;
     MMU_$MCR_CHANGE(6);
-    ASSERT_EQ(0x40, mmu_mcr_shadow);
+    ASSERT_EQ(0x40, MCR_SHADOW);
     ASSERT_EQ(0x41, hw_mcr_010);
     MMU_$MCR_CHANGE(9);                 /* 9 & 7 = 1 */
-    ASSERT_EQ(0x42, mmu_mcr_shadow);
+    ASSERT_EQ(0x42, MCR_SHADOW);
 }
 
 TEST(normal_mode_and_power_off)
@@ -152,13 +145,14 @@ TEST(normal_mode_and_power_off)
 TEST(install_asid_high_byte_and_cache)
 {
     reset();
-    mmu_pid_priv = 0x0303;
+    MMU_$PID_PRIV = 0x0303;
     FP_$OWNER = 0x1234;
     MMU_$INSTALL_ASID(0x0142);
     ASSERT_EQ(0x0142, PROC1_$AS_ID);
-    ASSERT_EQ(0x4203, mmu_pid_priv);
+    ASSERT_EQ(0x4203, MMU_$PID_PRIV);
     ASSERT_EQ(0x4203, hw_csr);
-    ASSERT_EQ(0x34, (uint8_t)hw_power);
+    ASSERT_EQ(0x34, hw_fpu_owner);      /* a byte store into 0xFFB402 */
+    ASSERT_EQ(0, hw_power);             /* no word read-modify-write */
     ASSERT_EQ(1, cache_clears);
 }
 

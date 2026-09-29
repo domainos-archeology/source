@@ -38,7 +38,7 @@ uint16_t MST_$PRIVATE_A_SIZE, MST_$SEG_PRIVATE_A_END, MST_$SEG_PRIVATE_B;
 uint16_t MST_$SEG_PRIVATE_B_END, MST_$SEG_PRIVATE_B_OFFSET, MST_$SEG_GLOBAL_B;
 uint16_t MST_$SEG_GLOBAL_B_OFFSET, MST_$SEG_HIGH, MST_$SEG_MEM_TOP, MST_$GLOBAL_B_SIZE;
 uint16_t MST_ASID_BASE[MST_MAX_ASIDS];
-uint16_t mmu_m68020;
+MODULE_DATA_DEFINE(mmu_$globals_t, MMU_$GLOBALS, 0x00E23D2C);   /* M68020 (mmu/mmu.h) */
 
 #include "mst/pre_init.c"
 
@@ -60,7 +60,7 @@ static void reset_state(void)
     MST_$SEG_MEM_TOP = 0x200;
     MST_$GLOBAL_B_SIZE = 0x60;
     memset(MST_ASID_BASE, 0xAA, sizeof(MST_ASID_BASE));
-    mmu_m68020 = 0;
+    M68020 = 0;
 }
 
 /* 68010 layout kept: 0x140 segments -> (0x140 + 63) / 64 = 5 words per ASID */
@@ -82,7 +82,7 @@ static void test_68010_keeps_layout_and_fills_bases(void)
 /* 68020: the fourteen words at 0xE2444A..0xE24464, then 0x680 -> 26 per ASID */
 static void test_68020_layout(void)
 {
-    mmu_m68020 = 0x8000;            /* `tst.b` of the high byte is negative */
+    M68020 = 0x8000;            /* `tst.b` of the high byte is negative */
 
     MST_$PRE_INIT();
 

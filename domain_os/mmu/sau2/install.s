@@ -50,10 +50,11 @@
         .section ".text.MMU_$INSTALL","ax",@progbits
         .even
 
-        .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
-        .equ    M68020,         0x00E23D2E  /* MMU_ASM data cell (map 0xE23D2E), not yet an object: TODO(source-o56c) */
-        .equ    MMU_$PTT_SHIFT, 0x00E23D36  /* MMU_ASM data cell 0xE23D36, not yet an object: TODO(source-o56c) */
-        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
+        .extern MMU_$GLOBALS
+        .set    MMU_$PID_PRIV,  MMU_$GLOBALS + 0x0  /* map 0xE23D2C, a field of the MMU_$GLOBALS block */
+        .set    M68020,         MMU_$GLOBALS + 0x2  /* map 0xE23D2E, a field of the MMU_$GLOBALS block */
+        .set    MMU_$PTT_SHIFT, MMU_$GLOBALS + 0xA  /* map 0xE23D36, a field of the MMU_$GLOBALS block */
+        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware, SAU2_MMU_CSR in arch/m68k/sau2/hw.h) */
 
         .globl  MMU_$INSTALL
         .globl  _MMU_$INSTALL

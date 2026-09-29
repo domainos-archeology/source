@@ -28,9 +28,10 @@
         .section ".text.MMU_$INSTALL_ASID","ax",@progbits
         .even
 
-        /* MMU_ASM data cell, still at its image address: the MMU module
-         * data is not yet an object in our tree.  TODO(source-o56c) */
-        .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
+        /* MMU_ASM data cell: a field of the MMU_$GLOBALS block (mmu/mmu.h,
+         * source-o56c). */
+        .extern MMU_$GLOBALS
+        .set    MMU_$PID_PRIV,  MMU_$GLOBALS + 0x0  /* map 0xE23D2C, a field of the MMU_$GLOBALS block */
         /* PROC1_$AS_ID (uint16_t, proc1/proc1_data.c, map 0xE2060A) and
          * FP_$OWNER (the 2-byte owner cell in fim/sau2/fim.s, map 0xE218D4;
          * the byte store reads its low byte) are used by name (source-6psc). */
@@ -38,8 +39,8 @@
         .extern FP_$OWNER
         .set    FP_$OWNER_LO,   FP_$OWNER + 1   /* 0x00E218D5 */
         /* SAU2 hardware registers, legitimately absolute. */
-        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
-        .equ    FPU_OWNER_REG,  0x00FFB402  /* SAU2 FPU owner register (hardware) */
+        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware, SAU2_MMU_CSR in arch/m68k/sau2/hw.h) */
+        .equ    FPU_OWNER_REG,  0x00FFB402  /* SAU2 FPU owner register (hardware, SAU2_MMU_FPU_OWNER_REG in arch/m68k/sau2/hw.h) */
 
         .globl  MMU_$INSTALL_ASID
         .globl  _MMU_$INSTALL_ASID

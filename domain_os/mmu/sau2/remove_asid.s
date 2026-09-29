@@ -32,12 +32,13 @@
         .section ".text.MMU_$REMOVE_ASID","ax",@progbits
         .even
 
-        .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
+        .extern MMU_$GLOBALS
+        .set    MMU_$PID_PRIV,  MMU_$GLOBALS + 0x0  /* map 0xE23D2C, a field of the MMU_$GLOBALS block */
         .extern MMAP_$DATA
         .equ    MMAP_$HPPN,     MMAP_$DATA + 0xA08  /* map 0xE23C8C, a field of the MMAP_$DATA block */
         .equ    MMAP_$LPPN,     MMAP_$DATA + 0xA0C  /* map 0xE23C90, a field of the MMAP_$DATA block */
-        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
-        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
+        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware, SAU2_MMU_CSR in arch/m68k/sau2/hw.h) */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware, SAU2_PFT_BASE in arch/m68k/sau2/hw.h) */
 
         .globl  MMU_$REMOVE_ASID
         .globl  _MMU_$REMOVE_ASID

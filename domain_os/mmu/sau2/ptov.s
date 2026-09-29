@@ -10,8 +10,8 @@
  *   00e241e8  4e 75 e5 48 e9 88 4e 75  42 80 4e 75
  *
  * Argument: (4,SP) ppn, longword -> %d1; %d1.w = ppn << 2 indexes the PFT
- * (sign-extended), %d1.w >> 1 the ASID table.  An entry with no link
- * returns 0.  Otherwise %d0 = (entry & 0xf0000) | ASID_TABLE[ppn] and:
+ * (sign-extended), %d1.w >> 1 MMU_$PTTX.  An entry with no link
+ * returns 0.  Otherwise %d0 = (entry & 0xf0000) | MMU_$PTTX[ppn] and:
  *   68020 (HIGH byte of M68020, `move.b'): return %d0 << 6
  *   68010: %d0.w <<= 2 (a WORD shift), return %d0 << 4
  *
@@ -24,9 +24,10 @@
         .section ".text.MMU_$PTOV","ax",@progbits
         .even
 
-        .equ    M68020,         0x00E23D2E  /* MMU_ASM data cell (map 0xE23D2E), not yet an object: TODO(source-o56c) */
-        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
-        .equ    ASID_TABLE,     0x00EC2800  /* map MMU_$PTTX in OS_PMAPS, not yet an object: TODO(source-o56c) */
+        .extern MMU_$GLOBALS
+        .set    M68020,         MMU_$GLOBALS + 0x2  /* map 0xE23D2E, a field of the MMU_$GLOBALS block */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware, SAU2_PFT_BASE in arch/m68k/sau2/hw.h) */
+        .extern MMU_$PTTX               /* map MMU_$PTTX 0xEC2800 in OS_PMAPS, a MODULE_DATA block */
 
         .globl  MMU_$PTOV
         .globl  _MMU_$PTOV
@@ -39,7 +40,7 @@ _MMU_$PTOV:
         move.l  (0,%a0,%d1.w),%d0       /* 0xE241C4  20 30 10 00       */
         .short  0xc07c, 0x0fff          /* 0xE241C8  and.w #0xfff,%d0  */
         beq.s   9f                      /* 0xE241CC  67 22             */
-        lea     ASID_TABLE,%a0          /* 0xE241CE  41 f9 00 ec 28 00 */
+        lea     MMU_$PTTX,%a0           /* 0xE241CE  41 f9 00 ec 28 00 */
         lsr.w   #1,%d1                  /* 0xE241D4  e2 49             */
         .short  0xc0bc                  /* 0xE241D6  and.l #0xf0000,%d0 */
         .long   0x000f0000

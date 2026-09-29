@@ -16,8 +16,11 @@ Classes:
 1. **hardware register or PROM cell** - legitimately absolute; kept as a
    named `.set`/`.equ` (or literal) with a comment.  arch/m68k/sau2/hw.h is
    C-only (casts), and the `.s` files are not preprocessed, so no shared
-   include was added; the display addresses cite hw.h, the MMU/PEB/timer
-   registers are not in hw.h yet (they move there as their modules convert).
+   include was added; the display addresses cite hw.h, and so, since
+   source-o56c, do the mmu/sau2 files' MMU register page and PTT / PFT
+   window constants (`SAU2_MMU_*`, `SAU2_PTT_BASE`, `SAU2_PFT_BASE`); the
+   PEB/timer registers are not in hw.h yet (they move there as their
+   modules convert).
 2. **data cell that is now a C object or a MODULE_DATA block field** - now
    the symbol, or a `.set NAME, BLOCK + off` alias next to the file's other
    aliases.
@@ -53,9 +56,9 @@ SMD code segment; the count is in the summary line, so a new one shows.
 | class | count |
 |---|---|
 | 1 hardware/PROM | 51 |
-| 2 data object | 20 |
+| 2 data object | 47 |
 | 3 code in tree | 21 |
-| 4 not yet translated | 32 |
+| 4 not yet translated | 5 |
 | 5 not an address | 43 |
 | total | 167 |
 
@@ -64,7 +67,10 @@ field of a MODULE_DATA block and the .s file spells it `BLOCK + offset` -
 the two interrupt-stack rows (source-4k71, `OS_$STACK`), MMAP_$HPPN /
 MMAP_$LPPN (source-alpj, `MMAP_$DATA`) and the PEB owner ASID byte
 (source-i1uu, `PEB_$INFO`).  The counts above and the per-subsystem table
-include all five; the class-4 rows left are the ones no block covers yet.)
+include all five; the class-4 rows left are the ones no block covers yet.
+The same day source-o56c moved the 27 MMU rows: the five MMU_ASM cells
+are `MMU_$GLOBALS + 0x0/0x2/0x4/0x8/0xA` and the three ASID-table rows
+`MMU_$PTTX`, both MODULE_DATA blocks in mmu/mmu.h.)
 
 Per subsystem (class: count):
 
@@ -76,7 +82,7 @@ Per subsystem (class: count):
 | fp | 1 | 0 | 0 | 0 | 0 |
 | io | 1 | 2 | 0 | 0 | 0 |
 | misc | 1 | 1 | 0 | 0 | 3 |
-| mmu | 32 | 5 | 1 | 27 | 5 |
+| mmu | 32 | 32 | 1 | 0 | 5 |
 | peb | 3 | 1 | 5 | 0 | 1 |
 | proc1 | 1 | 1 | 0 | 0 | 1 |
 | smd | 3 | 3 | 1 | 0 | 4 |
@@ -107,7 +113,7 @@ Per subsystem (class: count):
 |---|---|---|
 | source-k79b | 0xE213A0 FIM_UNWIRED common fault, 0xE213A4 FIM_$COM, 0xE21458 FIM_$SOFT_FAULT+0xC | fim/sau2/fim.s, fim/sau2/bus_err.s |
 | source-nojc | 0xE0DD40 MST_$TOUCH | fim/sau2/bus_err.s |
-| source-o56c | 0xE23D2C MMU_$PID_PRIV, 0xE23D2E M68020, 0xE23D30 VA_TO_PTT_OFFSET_MASK, 0xE23D34 MMU_$VA_SHIFT, 0xE23D36 MMU_$PTT_SHIFT, 0xEC2800 MMU_$PTTX | mmu/sau2/*.s (15 files) |
+| source-o56c (closed 2026-09-29) | 0xE23D2C MMU_$PID_PRIV, 0xE23D2E M68020, 0xE23D30 VA_TO_PTT_OFFSET_MASK, 0xE23D34 MMU_$VA_SHIFT, 0xE23D36 MMU_$PTT_SHIFT: now `MMU_$GLOBALS + 0x0 .. + 0xA`; 0xEC2800 MMU_$PTTX: now the `MMU_$PTTX` block (mmu/mmu.h) | mmu/sau2/*.s (15 files) |
 | source-alpj (closed 2026-09-29) | 0xE23C8C MMAP_$HPPN, 0xE23C90 MMAP_$LPPN: now `MMAP_$DATA + 0xA08 / + 0xA0C` (source-702z) | mmu/sau2/remove_asid.s |
 | source-4k71 (closed 2026-09-29) | 0xEB2BE8 interrupt stack top: now `OS_$STACK + 0x2BE8`, the map's STACK segment as a MODULE_DATA block (os/os.h); IO_$SAVED_INT_SR (0xEB2BF8) is `OS_$STACK + 0x2BF8` | io/sau2/use_int_stack.s, proc1/sau2/int_handler.s |
 | source-i1uu (closed 2026-09-29) | 0xE24C8E PEB owner ASID byte: now `PEB_$INFO + 0x16` (source-702z) | peb/sau2/int.s |
@@ -182,69 +188,69 @@ operands): source-kt66 (fim/sau2/fim.s, 18 of 23 runs), source-9jiy
 | misc/sau2/crash_system.s:62 | `move.l  #0xabcdef01, (%a1)+` | 0xABCDEF01 | 5 not an address | status code / mask / magic constant | kept |
 | misc/sau2/crash_system.s:218 | `move.l  #0x00fc0000, -(%sp)` | 0xFC0000 | 1 hardware/PROM | display frame buffer / I/O window base (hw.h SAU2_DISPLAY_MEM_BASE) | kept (.equ/.set or literal, commented) |
 | mmu/sau2/clr_used.s:20 | `.equ    PFT_BASE, 0x00FFB800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |
-| mmu/sau2/init.s:37 | `.equ    M68020, 0x00E23D2E` | 0xE23D2E | 4 not yet translated | M68020 (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/init.s:37 | `.equ    M68020, 0x00E23D2E` | 0xE23D2E | 2 data object | M68020, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x2 (source-o56c) |
 | mmu/sau2/init.s:48 | `move.l  #0x3ffc00,(2,%a5)` | 0x3FFC00 | 5 not an address | status code / mask / magic constant | kept |
-| mmu/sau2/install.s:53 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/install.s:54 | `.equ    M68020,         0x00E23D2E` | 0xE23D2E | 4 not yet translated | M68020 (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/install.s:55 | `.equ    MMU_$PTT_SHIFT, 0x00E23D36` | 0xE23D36 | 4 not yet translated | MMU_$PTT_SHIFT (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/install.s:53 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 2 data object | MMU_$PID_PRIV, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x0 (source-o56c) |
+| mmu/sau2/install.s:54 | `.equ    M68020,         0x00E23D2E` | 0xE23D2E | 2 data object | M68020, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x2 (source-o56c) |
+| mmu/sau2/install.s:55 | `.equ    MMU_$PTT_SHIFT, 0x00E23D36` | 0xE23D36 | 2 data object | MMU_$PTT_SHIFT, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0xA (source-o56c) |
 | mmu/sau2/install.s:56 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
-| mmu/sau2/install_asid.s:25 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/install_asid.s:25 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 2 data object | MMU_$PID_PRIV, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x0 (source-o56c) |
 | mmu/sau2/install_asid.s:26 | `.equ    PROC1_$AS_ID,   0x00E2060A` | 0xE2060A | 2 data object | uint16_t; move.w | -> PROC1_$AS_ID |
 | mmu/sau2/install_asid.s:27 | `.equ    FP_$OWNER_LO,   0x00E218D5` | 0xE218D5 | 2 data object | uint16_t, low byte; move.b | -> FP_$OWNER + 1 |
 | mmu/sau2/install_asid.s:28 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
 | mmu/sau2/install_asid.s:29 | `.equ    FPU_OWNER_REG,  0x00FFB402` | 0xFFB402 | 1 hardware/PROM | MMU power / FPU owner register | kept (.equ/.set or literal, commented) |
-| mmu/sau2/install_list.s:38 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/install_list.s:39 | `.equ    M68020,         0x00E23D2E` | 0xE23D2E | 4 not yet translated | M68020 (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/install_list.s:40 | `.equ    MMU_$PTT_SHIFT, 0x00E23D36` | 0xE23D36 | 4 not yet translated | MMU_$PTT_SHIFT (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/install_list.s:38 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 2 data object | MMU_$PID_PRIV, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x0 (source-o56c) |
+| mmu/sau2/install_list.s:39 | `.equ    M68020,         0x00E23D2E` | 0xE23D2E | 2 data object | M68020, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x2 (source-o56c) |
+| mmu/sau2/install_list.s:40 | `.equ    MMU_$PTT_SHIFT, 0x00E23D36` | 0xE23D36 | 2 data object | MMU_$PTT_SHIFT, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0xA (source-o56c) |
 | mmu/sau2/install_list.s:41 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
-| mmu/sau2/install_private.s:32 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/install_private.s:33 | `.equ    M68020,         0x00E23D2E` | 0xE23D2E | 4 not yet translated | M68020 (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/install_private.s:34 | `.equ    MMU_$PTT_SHIFT, 0x00E23D36` | 0xE23D36 | 4 not yet translated | MMU_$PTT_SHIFT (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/install_private.s:32 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 2 data object | MMU_$PID_PRIV, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x0 (source-o56c) |
+| mmu/sau2/install_private.s:33 | `.equ    M68020,         0x00E23D2E` | 0xE23D2E | 2 data object | M68020, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x2 (source-o56c) |
+| mmu/sau2/install_private.s:34 | `.equ    MMU_$PTT_SHIFT, 0x00E23D36` | 0xE23D36 | 2 data object | MMU_$PTT_SHIFT, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0xA (source-o56c) |
 | mmu/sau2/install_private.s:35 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
-| mmu/sau2/installi.s:47 | `.equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30` | 0xE23D30 | 4 not yet translated | VA_TO_PTT_OFFSET_MASK (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/installi.s:47 | `.equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30` | 0xE23D30 | 2 data object | VA_TO_PTT_OFFSET_MASK, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x4 (source-o56c) |
 | mmu/sau2/installi.s:48 | `.equ    PFT_BASE,       0x00FFB800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |
-| mmu/sau2/installi.s:49 | `.equ    ASID_TABLE,     0x00EC2800` | 0xEC2800 | 4 not yet translated | ASID table = map MMU_$PTTX (OS_PMAPS) | kept, TODO(source-o56c) |
+| mmu/sau2/installi.s:49 | `.equ    ASID_TABLE,     0x00EC2800` | 0xEC2800 | 2 data object | MMU_$PTTX (OS_PMAPS), the PTT index per ppn | -> MMU_$PTTX, a MODULE_DATA block (source-o56c) |
 | mmu/sau2/installi.s:70 | `move.l  #0xfe000000,%d0` | 0xFE000000 | 5 not an address | status code / mask / magic constant | kept |
 | mmu/sau2/installi.s:77 | `.long   0x00700000` | 0x700000 | 1 hardware/PROM | page translation table window (PTT) | kept (.equ/.set or literal, commented) |
 | mmu/sau2/internal.s:50 | `.equ    PFT_BASE,       0x00FFB800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |
-| mmu/sau2/internal.s:51 | `.equ    ASID_TABLE,     0x00EC2800` | 0xEC2800 | 4 not yet translated | ASID table = map MMU_$PTTX (OS_PMAPS) | kept, TODO(source-o56c) |
+| mmu/sau2/internal.s:51 | `.equ    ASID_TABLE,     0x00EC2800` | 0xEC2800 | 2 data object | MMU_$PTTX (OS_PMAPS), the PTT index per ppn | -> MMU_$PTTX, a MODULE_DATA block (source-o56c) |
 | mmu/sau2/internal.s:52 | `.equ    PTT_BASE,       0x00700000` | 0x700000 | 1 hardware/PROM | page translation table window (PTT) | kept (.equ/.set or literal, commented) |
-| mmu/sau2/mcr_change.s:29 | `.equ    M68020,         0x00E23D2E` | 0xE23D2E | 4 not yet translated | M68020 (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/mcr_change.s:29 | `.equ    M68020,         0x00E23D2E` | 0xE23D2E | 2 data object | M68020, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x2 (source-o56c) |
 | mmu/sau2/mcr_change.s:30 | `.equ    MCR_020,        0x00FFB408` | 0xFFB408 | 1 hardware/PROM | MCR (68020) | kept (.equ/.set or literal, commented) |
 | mmu/sau2/mcr_change.s:31 | `.equ    MCR_010,        0x00FFB405` | 0xFFB405 | 1 hardware/PROM | MCR (68010) | kept (.equ/.set or literal, commented) |
 | mmu/sau2/mcr_change.s:32 | `.equ    MCR_MASK,       0x00FFB407` | 0xFFB407 | 1 hardware/PROM | MCR mask | kept (.equ/.set or literal, commented) |
 | mmu/sau2/normal_mode.s:16 | `.equ    MMU_STATUS_REG, 0x00FFB403` | 0xFFB403 | 1 hardware/PROM | MMU status register | kept (.equ/.set or literal, commented) |
 | mmu/sau2/power_off.s:17 | `.equ    MMU_POWER_REG,  0x00FFB402` | 0xFFB402 | 1 hardware/PROM | MMU power / FPU owner register | kept (.equ/.set or literal, commented) |
-| mmu/sau2/ptov.s:27 | `.equ    M68020,         0x00E23D2E` | 0xE23D2E | 4 not yet translated | M68020 (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/ptov.s:27 | `.equ    M68020,         0x00E23D2E` | 0xE23D2E | 2 data object | M68020, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x2 (source-o56c) |
 | mmu/sau2/ptov.s:28 | `.equ    PFT_BASE,       0x00FFB800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |
-| mmu/sau2/ptov.s:29 | `.equ    ASID_TABLE,     0x00EC2800` | 0xEC2800 | 4 not yet translated | ASID table = map MMU_$PTTX (OS_PMAPS) | kept, TODO(source-o56c) |
+| mmu/sau2/ptov.s:29 | `.equ    ASID_TABLE,     0x00EC2800` | 0xEC2800 | 2 data object | MMU_$PTTX (OS_PMAPS), the PTT index per ppn | -> MMU_$PTTX, a MODULE_DATA block (source-o56c) |
 | mmu/sau2/ptov.s:45 | `.long   0x000f0000` | 0x0F0000 | 5 not an address | mask | kept |
-| mmu/sau2/remove.s:24 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/remove.s:24 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 2 data object | MMU_$PID_PRIV, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x0 (source-o56c) |
 | mmu/sau2/remove.s:25 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
-| mmu/sau2/remove_asid.s:35 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/remove_asid.s:35 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 2 data object | MMU_$PID_PRIV, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x0 (source-o56c) |
 | mmu/sau2/remove_asid.s:36 | `.equ    MMAP_$HPPN,     0x00E23C8C` | 0xE23C8C | 2 data object | MMAP_$HPPN, a field of the MMAP_ block | -> MMAP_$DATA + 0xA08 (source-alpj, source-702z) |
 | mmu/sau2/remove_asid.s:37 | `.equ    MMAP_$LPPN,     0x00E23C90` | 0xE23C90 | 2 data object | MMAP_$LPPN, a field of the MMAP_ block | -> MMAP_$DATA + 0xA0C (source-alpj, source-702z) |
 | mmu/sau2/remove_asid.s:38 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_asid.s:39 | `.equ    PFT_BASE,       0x00FFB800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_asid.s:57 | `move.l  #0xfe000000,%d6` | 0xFE000000 | 5 not an address | status code / mask / magic constant | kept |
 | mmu/sau2/remove_asid.s:73 | `.long   0x00ffb800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |
-| mmu/sau2/remove_list.s:28 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/remove_list.s:28 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 2 data object | MMU_$PID_PRIV, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x0 (source-o56c) |
 | mmu/sau2/remove_list.s:29 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
-| mmu/sau2/remove_virtual.s:53 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/remove_virtual.s:54 | `.equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30` | 0xE23D30 | 4 not yet translated | VA_TO_PTT_OFFSET_MASK (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/remove_virtual.s:55 | `.equ    MMU_$VA_SHIFT,  0x00E23D34` | 0xE23D34 | 4 not yet translated | MMU_$VA_SHIFT (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/remove_virtual.s:53 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 2 data object | MMU_$PID_PRIV, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x0 (source-o56c) |
+| mmu/sau2/remove_virtual.s:54 | `.equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30` | 0xE23D30 | 2 data object | VA_TO_PTT_OFFSET_MASK, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x4 (source-o56c) |
+| mmu/sau2/remove_virtual.s:55 | `.equ    MMU_$VA_SHIFT,  0x00E23D34` | 0xE23D34 | 2 data object | MMU_$VA_SHIFT, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x8 (source-o56c) |
 | mmu/sau2/remove_virtual.s:56 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_virtual.s:57 | `.equ    PFT_BASE,       0x00FFB800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_virtual.s:71 | `.long   0x00700000` | 0x700000 | 1 hardware/PROM | page translation table window (PTT) | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_virtual.s:114 | `cmpa.l  #0x800000,%a2` | 0x800000 | 1 hardware/PROM | end of the PTT window | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_virtual.s:117 | `movea.l #0x700000,%a2` | 0x700000 | 1 hardware/PROM | page translation table window (PTT) | kept (.equ/.set or literal, commented) |
-| mmu/sau2/set_csr.s:20 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/set_csr.s:20 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 2 data object | MMU_$PID_PRIV, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x0 (source-o56c) |
 | mmu/sau2/set_csr.s:21 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
 | mmu/sau2/set_prot.s:22 | `.equ    PFT_BASE,       0x00FFB800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |
 | mmu/sau2/set_sysrev.s:20 | `.equ    DN330_MMU_HARDWARE_REV, 0x00FFB409` | 0xFFB409 | 1 hardware/PROM | MMU hardware revision | kept (.equ/.set or literal, commented) |
-| mmu/sau2/vtop.s:43 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/vtop.s:44 | `.equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30` | 0xE23D30 | 4 not yet translated | VA_TO_PTT_OFFSET_MASK (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/vtop.s:45 | `.equ    MMU_$VA_SHIFT,  0x00E23D34` | 0xE23D34 | 4 not yet translated | MMU_$VA_SHIFT (MMU_ASM) | kept, TODO(source-o56c) |
+| mmu/sau2/vtop.s:43 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 2 data object | MMU_$PID_PRIV, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x0 (source-o56c) |
+| mmu/sau2/vtop.s:44 | `.equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30` | 0xE23D30 | 2 data object | VA_TO_PTT_OFFSET_MASK, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x4 (source-o56c) |
+| mmu/sau2/vtop.s:45 | `.equ    MMU_$VA_SHIFT,  0x00E23D34` | 0xE23D34 | 2 data object | MMU_$VA_SHIFT, a field of the MMU_ASM data run | -> MMU_$GLOBALS + 0x8 (source-o56c) |
 | mmu/sau2/vtop.s:46 | `.equ    PROC1_$AS_ID,   0x00E2060A` | 0xE2060A | 2 data object | uint16_t; move.w | -> PROC1_$AS_ID |
 | mmu/sau2/vtop.s:47 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
 | mmu/sau2/vtop.s:48 | `.equ    PFT_BASE,       0x00FFB800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |

@@ -23,9 +23,11 @@
  * routine's own `rts' at 0xE23D58 (`move.w (-0x4,PC),(0x5a6,A5)'), which
  * turns the cache-clear routine into a no-op.
  *
- * Deviation from the image bytes: `lea (-0xe,PC),A5' addresses a data cell
- * in another object; a 16-bit PC-relative displacement cannot survive
- * separate assembly, so it is `lea M68020,%a5' (6 bytes instead of 4).
+ * Deviation from the image bytes: `lea (-0xe,PC),A5' addresses M68020, which
+ * in our tree is the field MMU_$GLOBALS + 2 of the MMU_$GLOBALS block
+ * (mmu/mmu.h, source-o56c) - a separate object, so a 16-bit PC-relative
+ * displacement cannot survive separate assembly and it is
+ * `lea M68020,%a5' through the alias (abs.l, 6 bytes instead of 4).
  * The `(-0x4,PC)' read stays PC-relative because its target (local label
  * 1) is in this file.  The store into CACHE_$CLEAR, `(0x5a6,A5)' in the
  * image, is written `(CACHE_$CLEAR).l' (2 bytes longer): with A5 on the
@@ -38,7 +40,8 @@
         .even
 
         .extern CACHE_$CLEAR
-        .equ    M68020, 0x00E23D2E  /* MMU_ASM data cell (map 0xE23D2E), not yet an object: TODO(source-o56c) */
+        .extern MMU_$GLOBALS
+        .set    M68020,         MMU_$GLOBALS + 0x2  /* map 0xE23D2E, a field of the MMU_$GLOBALS block */
 
         .globl  MMU_$INIT
         .globl  _MMU_$INIT
