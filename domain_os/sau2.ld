@@ -186,7 +186,31 @@ SECTIONS {
         *(.rodata .rodata.*)
     }
 
-    .data : AT(LOADADDR(.rodata) + SIZEOF(.rodata)) {
+    /*
+     * Pascal module data blocks (source-0i3, docs/design-per-process-data.md
+     * section 3).  Each MODULE_DATA_DEFINE site (arch/m68k/arch.h) is one
+     * input section `.moddata.<name>', and this generated fragment gives it
+     * one output section at the block's original address, so the C object
+     * and any remaining absolute reference name the same memory.
+     *
+     * The fragment is build/sau2/moddata.ld, written by
+     * tools/gen_moddata_ld.py from the macro sites before every link (make
+     * passes -L build/sau2 so INCLUDE finds it); it is not checked in, so it
+     * cannot drift from the sources.  Its sections use the same file-offset
+     * rule as everything else here, VMA - _rfc_load_addr + 0x0C, and its
+     * ASSERTs fail the link if a block lands inside .text/.rodata.
+     *
+     * The RFC image therefore stops being one dense run: the gap between
+     * .rodata and the lowest block is zero fill in the file (binary output
+     * pads between load addresses).  Whether the RFC loader wants that or a
+     * sparse form is bead source-702z.
+     *
+     * The fragment ends by moving the location counter to the end of the
+     * highest block, so .data and .bss are laid out above every block.
+     */
+    INCLUDE moddata.ld
+
+    .data : AT(ADDR(.data) - _rfc_load_addr + 0x0C) {
         _data_start = .;
         *(.data .data.*)
         _data_end = .;

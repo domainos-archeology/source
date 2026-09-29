@@ -28,9 +28,13 @@
 | TIME_$CLOCK deltas to the slot and puts the trap word back.
 |
 | The module's data lives immediately after this code in the original image,
-| addressed as (off,A5) with A5 = 0x00E81814.  Here it is addressed by the C
-| symbols defined in stop/stop_data.c; each such reference carries the
-| original (off,A5) or PC-relative form in a comment.
+| addressed as (off,A5) with A5 = 0x00E81814.  Here it is the C object
+| STOP_$DATA (stop/stop_data.c, stop_$data_t in stop/stop_internal.h), which
+| the link places at the block's original address, 0x00E81BEC = A5+0x3D8.
+| The cells this file touches keep their old names as assembler-local
+| aliases for STOP_$DATA + field offset (below), so every instruction and its
+| encoding is unchanged; each reference carries the original (off,A5) or
+| PC-relative form in a comment.
 |
 | Slot field offsets (see stopwatch_slot_t in stop/stop_internal.h):
 |   0x00 patch1  0x04 patch2  0x08 parent  0x0C saved1  0x0E saved2
@@ -39,6 +43,13 @@
 |   0x2C entry_cput  0x30 entry_clock  0x34 entry_traps  0x38 entry_gtraps
 
         .text
+
+| Cells of STOP_$DATA.  Block offset = A5 displacement - 0x3D8; the offsets
+| are _Static_assert'ed against the struct in stop/stop_internal.h.
+        .set    STOP_$SAVED_REGS,  STOP_$DATA + 0x000  | (0x3d8,A5) 0x00E81BEC saved_regs
+        .set    STOP_$SW_OVERHEAD, STOP_$DATA + 0x01C  | (0x3f4,A5) 0x00E81C08 sw_overhead
+        .set    STOP_$TRAP_COUNTS, STOP_$DATA + 0x024  | (0x3fc,A5) 0x00E81C10 trap_counts
+        .set    STOPWATCH_SLOTS,   STOP_$DATA + 0x13C  | (0x514,A5) 0x00E81D28 slots
 
         .globl  STOP_$MEASURE_LOOP
         .globl  STOP_$NULL_PROC

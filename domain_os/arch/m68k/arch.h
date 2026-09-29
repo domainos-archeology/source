@@ -65,6 +65,53 @@
 #define ARCH_AUTOVECTOR(level) ARCH_VECTOR(24u + (level))
 
 /*
+ * MODULE_DATA_* - Pascal module data blocks at their original addresses
+ *
+ * Domain Pascal compiles each module's globals into one block addressed
+ * (off,A5).  A block is modelled as a single C object of a struct type whose
+ * fields sit at the A5 displacements (docs/design-per-process-data.md,
+ * section 3).  On the target the object must BE the original memory, so
+ * MODULE_DATA_DEFINE puts it in its own input section `.moddata.<name>' and
+ * the linker fragment that tools/gen_moddata_ld.py writes from these very
+ * macro sites (build/sau2/moddata.ld, INCLUDEd by sau2.ld) gives that
+ * section one output section at `addr'.  `make check-moddata' links a
+ * scratch ELF and proves with m68k-elf-nm that `name' landed at `addr'.
+ *
+ *   MODULE_DATA_DEFINE(T, name, addr)          zero-filled block
+ *   MODULE_DATA_DEFINE_INIT(T, name, addr, {...})
+ *                                              block with the image's
+ *                                              initial contents
+ *   MODULE_DATA_DECLARE(T, name, addr)         the extern, for a header
+ *   MODULE_DATA_ADDR(name)                     the block's address as a
+ *                                              32-bit target VA constant
+ *                                              (both in arch/arch.h)
+ *
+ * `addr' must be a literal (the generator reads it from the source text),
+ * even (68000-family word alignment; the generator and the _Static_assert
+ * below both refuse an odd one) and equal to the address in the block's
+ * MODULE_DATA_DECLARE, which must be in scope.  The section is progbits
+ * even for a zero-filled block, so the RFC image carries the block at its
+ * file offset like any other loaded byte.  `used' keeps an unreferenced
+ * block alive so its placement is still checked.
+ */
+#define MODULE_DATA_ATTRS_(name) \
+    __attribute__((section(".moddata." #name), aligned(2), used))
+
+#define MODULE_DATA_CHECK_ADDR_(name, addr)                                  \
+    _Static_assert(((addr) & 1u) == 0u,                                      \
+                   #name ": module data address must be even");              \
+    _Static_assert((addr) == moddata_addr_##name,                            \
+                   #name ": address differs from its MODULE_DATA_DECLARE")
+
+#define MODULE_DATA_DEFINE(T, name, addr)                                    \
+    MODULE_DATA_CHECK_ADDR_(name, addr);                                     \
+    T name MODULE_DATA_ATTRS_(name)
+
+#define MODULE_DATA_DEFINE_INIT(T, name, addr, ...)                          \
+    MODULE_DATA_CHECK_ADDR_(name, addr);                                     \
+    T name MODULE_DATA_ATTRS_(name) = __VA_ARGS__
+
+/*
  * M68K Global Register Variables
  *
  * The A5 register is used as the global data pointer in Domain/OS.

@@ -86,13 +86,18 @@
  * The stop path copies four longwords out of the slot starting at slot+0x14
  * (0x00E819CA-0x00E819D4: `lea (0x14,A1),A2 / moveq #3,D1 / move.l (A2),(A3)+
  * / clr.l (A2)+ / dbf`), zeroing each as it goes.
+ *
+ * (Called stop_$data_t until source-ik8r, which gave that name to the
+ * module data block in stop/stop_internal.h.)
  */
-typedef struct stop_$data_t {
+typedef struct stop_$totals_t {
     int32_t completions;   /* slot+0x14: measured intervals completed */
     int32_t reentries;     /* slot+0x18: traps taken while already running */
     int32_t cpu_time;      /* slot+0x1C: accumulated PROC1_$GET_CPUT delta */
     int32_t elapsed_time;  /* slot+0x20: accumulated TIME_$CLOCK delta */
-} stop_$data_t;
+} stop_$totals_t;
+
+_Static_assert(sizeof(stop_$totals_t) == 0x10, "stop_$totals_t size");
 
 /*
  * A patch record: the two code addresses whose instruction words
@@ -114,7 +119,7 @@ typedef struct stop_$patch_rec_t {
  *   parent    - word parent slot number, negative for none (operation 1)
  *   p4        - operation 0/1: stop_$patch_rec_t * describing what to patch
  *               operation 2..7: uint32_t * holding the address to access
- *   p5        - operation 0: stop_$data_t * receiving the slot totals
+ *   p5        - operation 0: stop_$totals_t * receiving the slot totals
  *               operation 2..7: uint32_t * holding the value (in for poke,
  *               out for peek)
  *   status    - returned status

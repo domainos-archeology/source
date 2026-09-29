@@ -183,20 +183,23 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
      * through, so the trace handler never takes a page fault.  The five
      * arguments are all PC-relative cells in this module's data, plus a
      * 16-byte scratch buffer carved out of the stack (`suba.w #0x10,SP`).
+     * `tst.w (0x510,A5)` = STOP_$DATA.wired; the pushes are
+     * `pea (0x47a,PC)` = &wired, `pea (0x478,PC)` = &wire_count, the
+     * buffer, `pea (0x46c,PC)` = &wire_end, `pea (0x464,PC)` = &wire_start.
      */
-    if (STOPWATCH_WIRED == 0) {
+    if (STOP_$DATA.wired == 0) {
         uint8_t wire_buf[16];
-        MST_$WIRE_AREA(&PTR_STOP_$WATCH, &PTR_OS_DATA_SHUTWIRED_00e81d20,
+        MST_$WIRE_AREA(&STOP_$DATA.wire_start, &STOP_$DATA.wire_end,
                        wire_buf,
-                       &STOPWATCH_WIRE_COUNT, &STOPWATCH_WIRED);
+                       &STOP_$DATA.wire_count, &STOP_$DATA.wired);
     }
 
     /*
      * 0x00E818C4-0x00E81900: one-time calibration.  There is no separate
-     * "initialised" flag: `tst.l (0x3f8,A5)` tests STOP_$CALIBRATION, whose
-     * low word is what the calibration stores.
+     * "initialised" flag: `tst.l (0x3f8,A5)` tests STOP_$DATA.calibration,
+     * whose low word is what the calibration stores.
      */
-    if (STOP_$CALIBRATION == 0) {
+    if (STOP_$DATA.calibration == 0) {
         int32_t base;    /* D3, saved across the block on the stack */
         int32_t measured;/* D1 */
 
@@ -204,10 +207,10 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
 
         /*
          * 0x00E818D0-0x00E818E0: hook slot 0 onto the bare rts that the
-         * measurement loop calls (A0 = &STOP_$CALIB_PATCH, A1 =
-         * &STOPWATCH_SLOTS[0], A2 = NULL, D0 = 0).
+         * measurement loop calls (A0 = &STOP_$DATA.calib_patch, A1 =
+         * &STOP_$DATA.slots[0], A2 = NULL, D0 = 0).
          */
-        stop_$hook(&STOP_$CALIB_PATCH, &STOPWATCH_SLOTS[0], NULL, 0);
+        stop_$hook(&STOP_$DATA.calib_patch, &STOP_$DATA.slots[0], NULL, 0);
 
         /* 0x00E818E4-0x00E818E6: run it again, now instrumented */
         measured = stop_$measure_loop() - base;
@@ -216,10 +219,10 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
          * 0x00E818E8-0x00E818EC: `divu.w #0x800,D1` -- the loop runs 1024
          * iterations and each takes an entry trap, so the divisor of 2048
          * charges half a trap's cost per event.  Only the low word of the
-         * quotient is stored, into the low half of STOP_$CALIBRATION.
+         * quotient is stored, into the low half of STOP_$DATA.calibration.
          */
-        STOP_$CALIBRATION =
-            (STOP_$CALIBRATION & (int32_t)0xFFFF0000) |
+        STOP_$DATA.calibration =
+            (STOP_$DATA.calibration & (int32_t)0xFFFF0000) |
             (int32_t)(uint16_t)(((uint32_t)measured) / 0x800);
 
         /*
@@ -229,12 +232,12 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
          * and CACHE_$CLEAR only touches D0).  Divisor 0x400 = the 1024
          * iterations.
          */
-        STOP_$SW_OVERHEAD =
-            (STOP_$SW_OVERHEAD & (int32_t)0xFFFF0000) |
-            (int32_t)(uint16_t)(((uint32_t)STOPWATCH_SLOTS[0].cpu_time) /
+        STOP_$DATA.sw_overhead =
+            (STOP_$DATA.sw_overhead & (int32_t)0xFFFF0000) |
+            (int32_t)(uint16_t)(((uint32_t)STOP_$DATA.slots[0].cpu_time) /
                                 0x400);
 
-        stop_$unhook(&STOPWATCH_SLOTS[0]); /* 0x00E818FC */
+        stop_$unhook(&STOP_$DATA.slots[0]); /* 0x00E818FC */
         /* 0x00E81900 restores D3 (the operation) from the stack */
     }
 
@@ -248,8 +251,8 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
             goto release_cleanup;
         }
 
-        /* 0x00E81940-0x00E81948: A1 = &STOPWATCH_SLOTS[slot_num] */
-        sl = &STOPWATCH_SLOTS[slot_num];
+        /* 0x00E81940-0x00E81948: A1 = &STOP_$DATA.slots[slot_num] */
+        sl = &STOP_$DATA.slots[slot_num];
 
         /* 0x00E8194A: tst.w D3 / ble -> the stop path */
         if (d3_operation > 0) {
@@ -275,7 +278,8 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
                     /*
                      * 0x00E81988 is `blt` only: the sole bound is "negative
                      * means no parent".  There is NO upper bound, so a
-                     * parent >= 16 indexes past STOPWATCH_SLOTS; reproduced.
+                     * parent >= 16 indexes past STOP_$DATA.slots;
+                     * reproduced.
                      *
                      * The scaling is done in 16 bits and the result is added
                      * to the base with `adda.w`, which sign-extends:
@@ -295,7 +299,7 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
                     if (slot_index >= 0x0200) {
                         slot_index -= 0x0400; /* the sign of adda.w */
                     }
-                    parent_slot = &STOPWATCH_SLOTS[0] + slot_index;
+                    parent_slot = &STOP_$DATA.slots[0] + slot_index;
                 }
 
                 stop_$hook((const stop_$patch_rec_t *)p4, sl, parent_slot,
@@ -329,11 +333,11 @@ void STOP_$WATCH(int16_t *operation, uint16_t *slot, int16_t *parent, void *p4,
 
                 /*
                  * 0x00E819A8-0x00E819C2.  `mulu.w` multiplies the low words
-                 * only: the low word of STOP_$CALIBRATION by the low word of
-                 * the event count.  Each `clr.l` clears a whole longword
+                 * only: the low word of STOP_$DATA.calibration by the low
+                 * word of the event count.  Each `clr.l` clears a whole longword
                  * event counter, and does so after the multiply has read it.
                  */
-                calibration = (uint32_t)STOP_$CALIBRATION;
+                calibration = (uint32_t)STOP_$DATA.calibration;
 
                 overhead = (uint32_t)(uint16_t)calibration *
                            (uint32_t)(uint16_t)sl->cpu_events;

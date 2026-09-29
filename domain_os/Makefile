@@ -22,6 +22,11 @@ ARFLAGS := rcs
 BUILD_DIR := build/$(TARGET_SAU)
 DIST_DIR := dist/$(TARGET_SAU)
 
+# Module data linker fragment (see the moddata rules below)
+MODDATA_GEN := tools/gen_moddata_ld.py
+MODDATA_LD := $(BUILD_DIR)/moddata.ld
+MODDATA_CHECK_ELF := $(BUILD_DIR)/moddata-check.elf
+
 # Host-side unit tests.  Each <subsystem>/test/test_<function>.c is a
 # self-contained program (it #includes the .c under test directly) built
 # with the host compiler and run natively.
@@ -36,7 +41,7 @@ SUBSYSTEM_LIBS := $(foreach sub,$(SUBSYSTEMS),$(BUILD_DIR)/lib$(sub).a)
 
 ALL_SUBSYSTEM_OBJS :=
 
-.PHONY: all clean domain_os test test-build clean-test
+.PHONY: all clean domain_os test test-build clean-test check check-moddata
 
 all:: domain_os
 
@@ -70,10 +75,36 @@ $(svc_ASM_OBJS): svc/$(TARGET_SAU)/svc_macros.inc
 # Main target
 domain_os: $(DIST_DIR)/domain_os
 
-$(DIST_DIR)/domain_os: $(ALL_SUBSYSTEM_OBJS) sau2.ld
+$(DIST_DIR)/domain_os: $(ALL_SUBSYSTEM_OBJS) sau2.ld $(MODDATA_LD)
 	@mkdir -p $(dir $@)
 	@echo "[LINK] $@"
-	@$(LD) $(LDFLAGS) -o $@ $(ALL_SUBSYSTEM_OBJS)
+	@$(LD) -L $(BUILD_DIR) $(LDFLAGS) -o $@ $(ALL_SUBSYSTEM_OBJS)
+
+# Module data blocks (source-0i3).  sau2.ld INCLUDEs moddata.ld, one output
+# section per MODULE_DATA_DEFINE site at the block's original address.
+# tools/gen_moddata_ld.py writes it from the macro sites (addresses) and the
+# compiled objects (sizes), and refuses odd addresses, overlapping blocks and
+# blocks outside the kernel range; the fragment's ld ASSERTs catch a block
+# inside the linked .text/.rodata.  It is regenerated before every link.
+$(MODDATA_LD): $(ALL_SUBSYSTEM_OBJS) $(MODDATA_GEN)
+	@mkdir -p $(dir $@)
+	@echo "[GEN] $@"
+	@python3 $(MODDATA_GEN) --build-dir $(BUILD_DIR) -o $@ $(ALL_SUBSYSTEM_OBJS)
+
+# `make check': static checks plus a scratch link.  The real link still has
+# hundreds of unresolved symbols, so the check links an ELF with
+# --unresolved-symbols=ignore-all and then verifies with m68k-elf-nm that
+# every block symbol sits at its declared address.
+check: check-moddata
+
+check-moddata: $(MODDATA_LD) $(ALL_SUBSYSTEM_OBJS) sau2.ld
+	@echo "[CHECK] module data: static checks"
+	@python3 $(MODDATA_GEN) --build-dir $(BUILD_DIR) --check-only $(ALL_SUBSYSTEM_OBJS)
+	@echo "[CHECK] module data: scratch link $(MODDATA_CHECK_ELF)"
+	@$(LD) -L $(BUILD_DIR) $(LDFLAGS) --oformat elf32-m68k \
+	    --unresolved-symbols=ignore-all -o $(MODDATA_CHECK_ELF) $(ALL_SUBSYSTEM_OBJS)
+	@echo "[CHECK] module data: placement"
+	@python3 $(MODDATA_GEN) --check-elf $(MODDATA_CHECK_ELF)
 
 # Generic C compilation rule
 $(BUILD_DIR)/%.o: %.c

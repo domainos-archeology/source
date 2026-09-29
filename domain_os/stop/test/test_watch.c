@@ -3,8 +3,9 @@
  *
  * The real stop/watch.c is #included below and driven through mocks for the
  * three hand-written assembly helpers (stop/sau2/watch.s), for FIM and for
- * MST_$WIRE_AREA.  The module data normally defined by stop/stop_data.c is
- * defined here instead so each test can reset it.
+ * MST_$WIRE_AREA.  The module data block STOP_$DATA comes from the real
+ * stop/stop_data.c, image contents included; each test resets the cells it
+ * depends on.
  *
  * Coverage: the FIM fault return, the wire-once and calibrate-once guards,
  * the slot bound check, both start and stop paths, the negative-operation
@@ -26,21 +27,16 @@
 int __host_intr_disable_count = 0;
 
 /* ------------------------------------------------------------------ */
-/* Module data (normally stop/stop_data.c)                             */
+/* Module data: the real STOP_$DATA block                              */
 /* ------------------------------------------------------------------ */
-uint32_t STOP_$SAVED_REGS[7];
-int32_t STOP_$SW_OVERHEAD;
-int32_t STOP_$CALIBRATION;
-int32_t STOP_$TRAP_COUNTS[STOP_TRAP_COUNT_ENTRIES];
-stop_$patch_rec_t STOP_$CALIB_PATCH;
-m68k_ptr_t PTR_STOP_$WATCH = 0x00E81814;
-int16_t STOPWATCH_WIRED;
-int16_t STOPWATCH_WIRE_COUNT = 4;
-stopwatch_slot_t STOPWATCH_SLOTS[STOP_MAX_SLOTS];
-boolean STOP_$WATCH_TRACE_FLAG;
 
-/* Owned by os/ and disk/, defined here for the test link */
-m68k_ptr_t PTR_OS_DATA_SHUTWIRED_00e81d20 = 0x00E82128;
+/* Stands in for the bare `rts` at 0x00E8193E (stop/sau2/watch.s), whose
+ * address STOP_$DATA.calib_patch carries. */
+void STOP_$NULL_PROC(void)
+{
+}
+
+#include "stop/stop_data.c"
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                               */
@@ -49,6 +45,10 @@ static status_$t mock_cleanup_result = status_$cleanup_handler_set;
 static int mock_cleanup_calls;
 static int mock_rls_cleanup_calls;
 static int mock_wire_calls;
+static const void *mock_wire_start;
+static const void *mock_wire_end;
+static const void *mock_wire_count;
+static void *mock_wire_flag;
 static int mock_measure_calls;
 static int32_t mock_measure_values[4];
 static int mock_hook_calls;
@@ -76,11 +76,11 @@ void MST_$WIRE_AREA(const void *start, const void *end, void *buf1,
                     const void *param4,
                     void *buf2)
 {
-    (void)start;
-    (void)end;
     (void)buf1;
-    (void)param4;
-    (void)buf2;
+    mock_wire_start = start;
+    mock_wire_end = end;
+    mock_wire_count = param4;
+    mock_wire_flag = buf2;
     mock_wire_calls++;
 }
 
@@ -96,8 +96,8 @@ int32_t stop_$measure_loop(void)
 {
     int32_t v = mock_measure_values[mock_measure_calls & 3];
     mock_measure_calls++;
-    if ((STOPWATCH_SLOTS[0].flags & STOP_SLOT_RUNNING) != 0) {
-        STOPWATCH_SLOTS[0].cpu_time += mock_measure_accum;
+    if ((STOP_$DATA.slots[0].flags & STOP_SLOT_RUNNING) != 0) {
+        STOP_$DATA.slots[0].cpu_time += mock_measure_accum;
     }
     return v;
 }
@@ -176,11 +176,11 @@ static int current_failed;
 
 static void reset_state(void)
 {
-    memset(STOPWATCH_SLOTS, 0, sizeof(STOPWATCH_SLOTS));
-    memset(STOP_$TRAP_COUNTS, 0, sizeof(STOP_$TRAP_COUNTS));
-    STOP_$CALIBRATION = 1; /* pretend calibration already happened */
-    STOP_$SW_OVERHEAD = 0;
-    STOPWATCH_WIRED = 1;   /* pretend the region is already wired */
+    memset(STOP_$DATA.slots, 0, sizeof(STOP_$DATA.slots));
+    memset(STOP_$DATA.trap_counts, 0, sizeof(STOP_$DATA.trap_counts));
+    STOP_$DATA.calibration = 1; /* pretend calibration already happened */
+    STOP_$DATA.sw_overhead = 0;
+    STOP_$DATA.wired = 1;   /* pretend the region is already wired */
     DISK_$DIAG = 0;
     mock_cleanup_result = status_$cleanup_handler_set;
     mock_cleanup_calls = 0;
@@ -230,33 +230,55 @@ static void test_fim_fault_return(void)
     CHECK_EQ(0, mock_hook_calls);
 }
 
-/* 0x00E8189C-0x00E818C0: MST_$WIRE_AREA runs only while STOPWATCH_WIRED == 0 */
+/* 0x00E8189C-0x00E818C0: MST_$WIRE_AREA runs only while STOP_$DATA.wired == 0 */
 static void test_wire_once(void)
 {
     stop_$patch_rec_t rec = {NULL, NULL};
 
-    STOPWATCH_WIRED = 0;
+    STOP_$DATA.wired = 0;
     (void)call_watch(STOP_OP_START, 0, -1, &rec, NULL);
     CHECK_EQ(1, mock_wire_calls);
+    /* every argument is a cell of the block, passed by reference */
+    CHECK_EQ(&STOP_$DATA.wire_start, mock_wire_start);
+    CHECK_EQ(&STOP_$DATA.wire_end, mock_wire_end);
+    CHECK_EQ(&STOP_$DATA.wire_count, mock_wire_count);
+    CHECK_EQ(&STOP_$DATA.wired, mock_wire_flag);
 
     /* The mock does not set the flag, so the guard is what we are testing:
      * with the flag set, no second call. */
-    STOPWATCH_WIRED = 1;
-    STOPWATCH_SLOTS[0].flags = 0;
+    STOP_$DATA.wired = 1;
+    STOP_$DATA.slots[0].flags = 0;
     (void)call_watch(STOP_OP_START, 0, -1, &rec, NULL);
     CHECK_EQ(1, mock_wire_calls);
 }
 
 /*
- * 0x00E818C4-0x00E81900: STOP_$CALIBRATION doubles as the "done" flag, and
+ * STOP_$DATA as the image ships it (stop/stop_data.c): at 0x00E81BEC, with
+ * the calibration patch record, the wired region's bounds and the wire count
+ * set and everything else zero.
+ */
+static void test_image_contents(void)
+{
+    CHECK_EQ(0x00E81BECu, MODULE_DATA_ADDR(STOP_$DATA));
+    CHECK_EQ((uintptr_t)STOP_$NULL_PROC,
+             (uintptr_t)STOP_$DATA.calib_patch.entry_addr);
+    CHECK_EQ(0, (uintptr_t)STOP_$DATA.calib_patch.exit_addr);
+    CHECK_EQ(0x00E81814u, STOP_$DATA.wire_start);
+    CHECK_EQ(0x00E82128u, STOP_$DATA.wire_end);
+    CHECK_EQ(4, STOP_$DATA.wire_count);
+    CHECK_EQ(0, STOP_$DATA.saved_regs[0]);
+}
+
+/*
+ * 0x00E818C4-0x00E81900: STOP_$DATA.calibration doubles as the "done" flag, and
  * only the low word of each of the two calibration cells is written.
  */
 static void test_calibration_once(void)
 {
     stop_$patch_rec_t rec = {NULL, NULL};
 
-    STOP_$CALIBRATION = 0;
-    STOP_$SW_OVERHEAD = (int32_t)0xAAAA0000;
+    STOP_$DATA.calibration = 0;
+    STOP_$DATA.sw_overhead = (int32_t)0xAAAA0000;
     /* base = 0x1000, instrumented = 0x1000 + 0x800 * 7 -> 7 per event */
     mock_measure_values[0] = 0x1000;
     mock_measure_values[1] = 0x1000 + 0x800 * 7;
@@ -266,16 +288,16 @@ static void test_calibration_once(void)
     (void)call_watch(STOP_OP_START, 1, -1, &rec, NULL);
 
     CHECK_EQ(2, mock_measure_calls);
-    CHECK_EQ(7, STOP_$CALIBRATION);
-    /* the high half of STOP_$SW_OVERHEAD must survive */
-    CHECK_EQ((int32_t)0xAAAA0005, STOP_$SW_OVERHEAD);
+    CHECK_EQ(7, STOP_$DATA.calibration);
+    /* the high half of STOP_$DATA.sw_overhead must survive */
+    CHECK_EQ((int32_t)0xAAAA0005, STOP_$DATA.sw_overhead);
     /* slot 0 hooked for the measurement, then unhooked */
-    CHECK_EQ(&STOPWATCH_SLOTS[0], mock_unhook_slot);
+    CHECK_EQ(&STOP_$DATA.slots[0], mock_unhook_slot);
     CHECK_EQ(1, mock_unhook_calls);
 
     /* second call: calibration is non-zero now, so it is skipped */
     mock_measure_calls = 0;
-    STOPWATCH_SLOTS[1].flags = 0;
+    STOP_$DATA.slots[1].flags = 0;
     (void)call_watch(STOP_OP_START, 1, -1, &rec, NULL);
     CHECK_EQ(0, mock_measure_calls);
 }
@@ -295,7 +317,7 @@ static void test_slot_bounds(void)
     /* 15 is in range */
     CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 15, -1, &rec, NULL));
     CHECK_EQ(1, mock_hook_calls);
-    CHECK_EQ(&STOPWATCH_SLOTS[15], mock_hook_slot);
+    CHECK_EQ(&STOP_$DATA.slots[15], mock_hook_slot);
 
     /* the bound applies to the stop path too (0x00E81902 is shared) */
     CHECK_EQ(status_$stop_bad_slot, call_watch(STOP_OP_STOP, 16, -1, NULL, NULL));
@@ -312,14 +334,14 @@ static void test_start(void)
     CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 3, -1, &rec, NULL));
     CHECK_EQ(1, mock_hook_calls);
     CHECK(mock_hook_rec == &rec);
-    CHECK_EQ(&STOPWATCH_SLOTS[3], mock_hook_slot);
+    CHECK_EQ(&STOP_$DATA.slots[3], mock_hook_slot);
     CHECK(mock_hook_parent == NULL); /* parent < 0 -> none */
     CHECK_EQ(3, mock_hook_slotno);
 
     /* a non-negative parent selects a slot */
-    STOPWATCH_SLOTS[4].flags = 0;
+    STOP_$DATA.slots[4].flags = 0;
     CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 4, 3, &rec, NULL));
-    CHECK_EQ(&STOPWATCH_SLOTS[3], mock_hook_parent);
+    CHECK_EQ(&STOP_$DATA.slots[3], mock_hook_parent);
     CHECK_EQ(4, mock_hook_slotno);
 }
 
@@ -328,7 +350,7 @@ static void test_start_already_running(void)
 {
     stop_$patch_rec_t rec = {NULL, NULL};
 
-    STOPWATCH_SLOTS[2].flags = STOP_SLOT_RUNNING;
+    STOP_$DATA.slots[2].flags = STOP_SLOT_RUNNING;
     CHECK_EQ(status_$stop_already_running,
              call_watch(STOP_OP_START, 2, -1, &rec, NULL));
     CHECK_EQ(0, mock_hook_calls);
@@ -337,7 +359,7 @@ static void test_start_already_running(void)
 /* 0x00E8199E: stopping a slot that is not running */
 static void test_stop_not_running(void)
 {
-    stop_$data_t out;
+    stop_$totals_t out;
 
     memset(&out, 0xEE, sizeof(out));
     CHECK_EQ(status_$stop_bad_slot, call_watch(STOP_OP_STOP, 5, -1, NULL, &out));
@@ -351,10 +373,10 @@ static void test_stop_not_running(void)
  */
 static void test_stop_harvest(void)
 {
-    stopwatch_slot_t *sl = &STOPWATCH_SLOTS[7];
-    stop_$data_t out;
+    stopwatch_slot_t *sl = &STOP_$DATA.slots[7];
+    stop_$totals_t out;
 
-    STOP_$CALIBRATION = 0x00010003; /* low word 3 is what mulu.w uses */
+    STOP_$DATA.calibration = 0x00010003; /* low word 3 is what mulu.w uses */
     sl->flags = STOP_SLOT_RUNNING;
     sl->completions = 11;
     sl->reentries = 22;
@@ -391,8 +413,8 @@ static void test_stop_harvest(void)
 /* 0x00E819DE: a negative operation also unhooks */
 static void test_stop_negative_unhooks(void)
 {
-    stopwatch_slot_t *sl = &STOPWATCH_SLOTS[8];
-    stop_$data_t out;
+    stopwatch_slot_t *sl = &STOP_$DATA.slots[8];
+    stop_$totals_t out;
 
     sl->flags = STOP_SLOT_RUNNING;
     CHECK_EQ(status_$ok, call_watch(-1, 8, -1, NULL, &out));
@@ -546,30 +568,30 @@ static void test_op_above_table(void)
  * source-3ena: the parent slot index is guarded only by `blt` (0x00E81988),
  * so any non-negative value is scaled and used.  The scaling is a 16-bit
  * `lsl.w #6` and the base is reached with a sign-extending `adda.w`, so
- * 0x200..0x3FF walk backwards from &STOPWATCH_SLOTS[0] and 0x400 wraps to
+ * 0x200..0x3FF walk backwards from &STOP_$DATA.slots[0] and 0x400 wraps to
  * exactly the base.
  */
 static void test_parent_unbounded(void)
 {
     stop_$patch_rec_t rec = {(uint16_t *)0x1234, NULL};
-    stopwatch_slot_t *base = &STOPWATCH_SLOTS[0];
+    stopwatch_slot_t *base = &STOP_$DATA.slots[0];
 
     /* past the end of the 16-slot table, still used */
     CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 0, 20, &rec, NULL));
     CHECK(mock_hook_parent == base + 20);
 
     /* 0x200 * 0x40 = 0x8000: negative once sign-extended by adda.w */
-    STOPWATCH_SLOTS[1].flags = 0;
+    STOP_$DATA.slots[1].flags = 0;
     CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 1, 0x200, &rec, NULL));
     CHECK(mock_hook_parent == base - 0x200);
 
     /* 0x400 * 0x40 wraps the word to 0, landing back on slot 0 */
-    STOPWATCH_SLOTS[2].flags = 0;
+    STOP_$DATA.slots[2].flags = 0;
     CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 2, 0x400, &rec, NULL));
     CHECK(mock_hook_parent == base);
 
     /* 0x401 comes back as slot 1, not slot 0x401 */
-    STOPWATCH_SLOTS[3].flags = 0;
+    STOP_$DATA.slots[3].flags = 0;
     CHECK_EQ(status_$ok, call_watch(STOP_OP_START, 3, 0x401, &rec, NULL));
     CHECK(mock_hook_parent == base + 1);
 }
@@ -579,6 +601,7 @@ int main(void)
     setvbuf(stdout, NULL, _IOLBF, 0);
     printf("STOP_$WATCH (0x00E81814) tests\n");
 
+    RUN(test_image_contents);
     RUN(test_fim_fault_return);
     RUN(test_wire_once);
     RUN(test_calibration_once);

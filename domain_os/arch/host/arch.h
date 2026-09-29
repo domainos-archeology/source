@@ -102,6 +102,31 @@ extern void *arch_$vector_table[ARCH_VECTOR_COUNT];
 #define ARCH_AUTOVECTOR(level) ARCH_VECTOR(24u + (level))
 
 /*
+ * MODULE_DATA_DEFINE / MODULE_DATA_DEFINE_INIT - Pascal module data blocks
+ * (see arch/m68k/arch.h; MODULE_DATA_DECLARE and MODULE_DATA_ADDR are the
+ * shared ones in arch/arch.h)
+ *
+ * On the host a block is an ordinary object wherever the compiler puts it,
+ * zero-initialised unless the defining _data.c supplies the image's
+ * contents; the original address lives only in the declaration's constant.
+ * The evenness check and the check against the declaration are the same as
+ * the target's, so a bad address fails on either build.
+ */
+#define MODULE_DATA_CHECK_ADDR_(name, addr)                                  \
+    _Static_assert(((addr) & 1u) == 0u,                                      \
+                   #name ": module data address must be even");              \
+    _Static_assert((addr) == moddata_addr_##name,                            \
+                   #name ": address differs from its MODULE_DATA_DECLARE")
+
+#define MODULE_DATA_DEFINE(T, name, addr)                                    \
+    MODULE_DATA_CHECK_ADDR_(name, addr);                                     \
+    T name
+
+#define MODULE_DATA_DEFINE_INIT(T, name, addr, ...)                          \
+    MODULE_DATA_CHECK_ADDR_(name, addr);                                     \
+    T name = __VA_ARGS__
+
+/*
  * A5 Global Data Pointer - NOT AVAILABLE on host
  *
  * Code that uses __A5_BASE() must be guarded with #if defined(ARCH_M68K)

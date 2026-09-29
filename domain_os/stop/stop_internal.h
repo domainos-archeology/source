@@ -7,31 +7,24 @@
  *     A5 = 0x00E81814 = STOP_$WATCH
  *
  * and every (off,A5) reference in the disassembly is an offset from that.
- * The offsets used by the module are:
+ * The SAU2 map's STOP_WATCH segment is 0x914 bytes from 0x00E81814, so it
+ * ends at 0x00E82128, where FILE_ (OS_DATA_SHUTWIRED) begins.  Its first
+ * 0x3D8 bytes are code (STOP_$WATCH, STOP_$WATCH_UII, STOP_$WATCH_TRACE and
+ * their helpers); the rest, A5+0x3D8 .. A5+0x914 = 0x00E81BEC .. 0x00E82128,
+ * is the module's data, modelled as the single object STOP_$DATA
+ * (stop_$data_t below).  The Ghidra labels of the old per-cell objects are
+ * kept in the field comments:
  *
- *   +0x3D8  0x00E81BEC  STOP_$SAVED_REGS[7]   register image handed from
- *                                             STOP_$WATCH_UII to
- *                                             STOP_$WATCH_TRACE
- *   +0x3F4  0x00E81C08  STOP_$SW_OVERHEAD     long; its low word (0x00E81C0A)
- *                                             is the measured per-event cost
- *                                             in stopwatch-accumulated units
- *   +0x3F8  0x00E81C0C  STOP_$CALIBRATION     long; its low word (0x00E81C0E)
- *                                             is the measured per-event cost
- *                                             in PROC1_$GET_CPUT units.  The
- *                                             whole long doubles as the
- *                                             "already calibrated" flag
- *                                             (`tst.l (0x3f8,A5)`, 0x00E818C4)
- *   +0x3FC  0x00E81C10  STOP_$TRAP_COUNTS[65] per-process trap counters,
- *                                             indexed by PROC1_$CURRENT;
- *                                             entry 0 doubles as the global
- *                                             trap counter
- *   +0x500  0x00E81D14  STOP_$CALIB_PATCH     patch record used to calibrate:
- *                                             { &STOP_$NULL_PROC, NULL }
- *   +0x508  0x00E81D1C  PTR_STOP_$WATCH       = 0x00E81814
- *   +0x50C  0x00E81D20  PTR_OS_DATA_SHUTWIRED_00e81d20 = 0x00E82128
- *   +0x510  0x00E81D24  STOPWATCH_WIRED       word
- *   +0x512  0x00E81D26  STOPWATCH_WIRE_COUNT  word, = 4 in the image
- *   +0x514  0x00E81D28  STOPWATCH_SLOTS[16]   64 bytes each
+ *   +0x3D8  0x00E81BEC  saved_regs[7]    STOP_$SAVED_REGS
+ *   +0x3F4  0x00E81C08  sw_overhead      STOP_$SW_OVERHEAD
+ *   +0x3F8  0x00E81C0C  calibration      STOP_$CALIBRATION
+ *   +0x3FC  0x00E81C10  trap_counts[65]  STOP_$TRAP_COUNTS
+ *   +0x500  0x00E81D14  calib_patch      STOP_$CALIB_PATCH
+ *   +0x508  0x00E81D1C  wire_start       PTR_STOP_$WATCH
+ *   +0x50C  0x00E81D20  wire_end         PTR_OS_DATA_SHUTWIRED_00e81d20
+ *   +0x510  0x00E81D24  wired            STOPWATCH_WIRED
+ *   +0x512  0x00E81D26  wire_count       STOPWATCH_WIRE_COUNT
+ *   +0x514  0x00E81D28  slots[16]        STOPWATCH_SLOTS
  *
  * External consumers should use stop/stop.h.
  */
@@ -107,7 +100,6 @@ _Static_assert(__builtin_offsetof(stopwatch_slot_t, entry_clock) == 0x30, "el");
 _Static_assert(__builtin_offsetof(stopwatch_slot_t, entry_traps) == 0x34, "et");
 _Static_assert(__builtin_offsetof(stopwatch_slot_t, entry_gtraps) == 0x38,
                "eg");
-_Static_assert(sizeof(stop_$data_t) == 0x10, "stop_$data_t size");
 #endif
 
 /*
@@ -118,20 +110,129 @@ _Static_assert(sizeof(stop_$data_t) == 0x10, "stop_$data_t size");
 
 /*
  * ============================================================================
- * Module data (A5 = 0x00E81814)
+ * Module data (A5 = 0x00E81814): STOP_$DATA, 0x00E81BEC .. 0x00E82128
  * ============================================================================
+ *
+ * Field offsets below are from the start of the block; the A5 displacement
+ * the code uses is always offset + STOP_DATA_A5_OFFSET.  Everything is zero
+ * in the image except calib_patch, wire_start, wire_end and wire_count; the
+ * stopwatch calibrates itself on the first call.
  */
-extern uint32_t STOP_$SAVED_REGS[7];   /* 0x00E81BEC */
-extern int32_t STOP_$SW_OVERHEAD;      /* 0x00E81C08 */
-extern int32_t STOP_$CALIBRATION;      /* 0x00E81C0C */
-extern int32_t STOP_$TRAP_COUNTS[STOP_TRAP_COUNT_ENTRIES]; /* 0x00E81C10 */
-extern stop_$patch_rec_t STOP_$CALIB_PATCH; /* 0x00E81D14 */
-extern m68k_ptr_t PTR_STOP_$WATCH;     /* 0x00E81D1C */
-/* 0x00E81D20 (A5+0x50C): the end address of the region STOP_$WATCH wires. */
-extern m68k_ptr_t PTR_OS_DATA_SHUTWIRED_00e81d20;
-extern int16_t STOPWATCH_WIRED;        /* 0x00E81D24 */
-extern int16_t STOPWATCH_WIRE_COUNT;   /* 0x00E81D26 */
-extern stopwatch_slot_t STOPWATCH_SLOTS[STOP_MAX_SLOTS]; /* 0x00E81D28 */
+#define STOP_DATA_A5         0x00E81814u /* STOP_$WATCH, `lea (-0xa,PC),A5' */
+#define STOP_DATA_A5_OFFSET  0x3D8       /* STOP_DATA_ADDR - STOP_DATA_A5 */
+#define STOP_DATA_SIZE       0x53C       /* to 0x00E82128 = A5 + 0x914,
+                                          * the end of the map's STOP_WATCH
+                                          * segment (size 0x914) */
+
+typedef struct stop_$data_t stop_$data_t;
+
+/* 0x00E81BEC = A5 + 0x3D8; the constant STOP_DATA_ADDR is this address. */
+MODULE_DATA_DECLARE(stop_$data_t, STOP_$DATA, 0x00E81BEC);
+#define STOP_DATA_ADDR       MODULE_DATA_ADDR(STOP_$DATA)
+
+struct stop_$data_t {
+    /*
+     * +0x000 (A5+0x3D8), 0x00E81BEC: D0/D1/D2/A0/A1/A2/A3 as saved by
+     * STOP_$WATCH_UII (`movem.l ...,(0x3d8,A2)` at 0x00E81AA0) and reloaded
+     * by STOP_$WATCH_TRACE (0x00E81AB6).  Ghidra: STOP_$SAVED_REGS.
+     */
+    uint32_t saved_regs[7];
+
+    /*
+     * +0x01C (A5+0x3F4), 0x00E81C08.  Only the low word (0x00E81C0A) is ever
+     * written, at 0x00E818F8; STOP_$WATCH_TRACE subtracts the whole longword
+     * from each measured interval (0x00E81B9C, 0x00E81BC8).
+     * Ghidra: STOP_$SW_OVERHEAD.
+     */
+    int32_t sw_overhead;
+
+    /*
+     * +0x020 (A5+0x3F8), 0x00E81C0C.  Only the low word (0x00E81C0E) is ever
+     * written, at 0x00E818EC.  `tst.l (0x3f8,A5)` at 0x00E818C4 uses the
+     * longword being non-zero as the "calibration already done" flag, so
+     * there is no separate initialised flag anywhere in this module.
+     * Ghidra: STOP_$CALIBRATION.
+     */
+    int32_t calibration;
+
+    /*
+     * +0x024 (A5+0x3FC), 0x00E81C10.  Indexed by PROC1_$CURRENT * 4 by the
+     * trace handler (0x00E81B0A), base element 0 = pid 0; entry 0 is also
+     * incremented unconditionally on every trap (`addq.l #1,(0x3fc,A2)` at
+     * 0x00E81B44) and is read as the global trap count at 0x00E81B1E /
+     * 0x00E81BD4.  Ghidra: STOP_$TRAP_COUNTS.
+     */
+    int32_t trap_counts[STOP_TRAP_COUNT_ENTRIES];
+
+    /*
+     * +0x128 (A5+0x500), 0x00E81D14: { 0x00E8193E, 0x00000000 }.  The
+     * calibration hooks slot 0 onto the bare `rts` at STOP_$NULL_PROC, the
+     * routine the measurement loop calls 1024 times, and leaves the exit
+     * address NULL so only the entry trap fires.  Ghidra: STOP_$CALIB_PATCH.
+     */
+    stop_$patch_rec_t calib_patch;
+
+    /*
+     * +0x130 (A5+0x508), 0x00E81D1C: start of the region STOP_$WATCH wires
+     * down, = 0x00E81814 (STOP_$WATCH itself).  Passed by reference as
+     * MST_$WIRE_AREA's `start' (`pea (0x464,PC)` at 0x00E818B6, the last push).
+     * Ghidra: PTR_STOP_$WATCH.
+     */
+    m68k_ptr_t wire_start;
+
+    /*
+     * +0x134 (A5+0x50C), 0x00E81D20: end of that region, = 0x00E82128 -- the
+     * stopwatch module's own copy of the OS_DATA_SHUTWIRED start address,
+     * not the one in OS_$SHUTDOWN's literal pool at 0x00E6D688
+     * (os/os_data.c).  STOP_$WATCH passes this cell's address as
+     * MST_$WIRE_AREA's `end' argument (`pea (0x46c,PC)` at 0x00E818B2).
+     * Ghidra: PTR_OS_DATA_SHUTWIRED_00e81d20.
+     */
+    m68k_ptr_t wire_end;
+
+    /* +0x138 (A5+0x510), 0x00E81D24: non-zero once MST_$WIRE_AREA has run.
+     * Ghidra: STOPWATCH_WIRED. */
+    int16_t wired;
+
+    /* +0x13A (A5+0x512), 0x00E81D26: 4 in the image.
+     * Ghidra: STOPWATCH_WIRE_COUNT. */
+    int16_t wire_count;
+
+    /* +0x13C (A5+0x514), 0x00E81D28 .. 0x00E82128.  Ghidra: STOPWATCH_SLOTS. */
+    stopwatch_slot_t slots[STOP_MAX_SLOTS];
+};
+
+/*
+ * Every field against its A5 displacement.  The fields up to and including
+ * calib_patch's offset are pointer-free and hold on every build; from
+ * calib_patch on the layout depends on stop_$patch_rec_t and
+ * stopwatch_slot_t, which hold host pointers, so those asserts need 32-bit
+ * pointers (true on the target).
+ */
+#define STOP_DATA_A5_OFF(field) \
+    (offsetof(stop_$data_t, field) + STOP_DATA_A5_OFFSET)
+_Static_assert(STOP_DATA_ADDR - STOP_DATA_A5 == STOP_DATA_A5_OFFSET,
+               "STOP_$DATA base");
+_Static_assert(STOP_DATA_A5_OFF(saved_regs)  == 0x3D8, "saved_regs");
+_Static_assert(STOP_DATA_A5_OFF(sw_overhead) == 0x3F4, "sw_overhead");
+_Static_assert(STOP_DATA_A5_OFF(calibration) == 0x3F8, "calibration");
+_Static_assert(STOP_DATA_A5_OFF(trap_counts) == 0x3FC, "trap_counts");
+_Static_assert(sizeof(((stop_$data_t *)0)->trap_counts) == 0x104,
+               "trap_counts runs to calib_patch");
+_Static_assert(STOP_DATA_A5_OFF(calib_patch) == 0x500, "calib_patch");
+#if ARCH_PTR_SIZE == 4
+_Static_assert(sizeof(stop_$patch_rec_t) == 8, "stop_$patch_rec_t size");
+_Static_assert(STOP_DATA_A5_OFF(wire_start)  == 0x508, "wire_start");
+_Static_assert(STOP_DATA_A5_OFF(wire_end)    == 0x50C, "wire_end");
+_Static_assert(STOP_DATA_A5_OFF(wired)       == 0x510, "wired");
+_Static_assert(STOP_DATA_A5_OFF(wire_count)  == 0x512, "wire_count");
+_Static_assert(STOP_DATA_A5_OFF(slots)       == 0x514, "slots");
+_Static_assert(sizeof(((stop_$data_t *)0)->slots[0]) == 0x40,
+               "slot stride (lsl.w #6)");
+_Static_assert(sizeof(stop_$data_t) == STOP_DATA_SIZE, "stop_$data_t size");
+_Static_assert(STOP_DATA_ADDR + STOP_DATA_SIZE == 0x00E82128u,
+               "STOP_$DATA ends where the STOP_WATCH segment ends");
+#endif
 
 /*
  * DISK_$DIAG (0x00E7ACCA, declared in disk/disk.h) gates the poke
